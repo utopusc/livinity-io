@@ -95,7 +95,7 @@ export class MatrixProvider implements ChannelProvider {
 
         // Save last chat ID for heartbeat delivery
         if (this.redis && roomId) {
-          this.redis.set(`nexus:matrix:last_chat_id`, roomId).catch(() => {});
+          this.redis.set(`liv:matrix:last_chat_id`, roomId).catch(() => {});
         }
 
         this.messageHandler(incoming).catch(err => {

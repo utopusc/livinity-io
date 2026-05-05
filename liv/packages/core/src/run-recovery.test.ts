@@ -6,7 +6,7 @@
  * process.env.REDIS_URL if the mock is unavailable; skip-with-warning if
  * neither path works.
  *
- * Run: `pnpm --filter @nexus/core exec tsx src/run-recovery.test.ts`
+ * Run: `pnpm --filter @liv/core exec tsx src/run-recovery.test.ts`
  *
  * Coverage (4 tests per Plan 73-05 Task 2 behavior):
  *   1. listRuns: empty Redis → []

@@ -2,7 +2,7 @@
  * LivVncScreen unit tests — Phase 71-02 (CU-FOUND-03 / CU-FOUND-04).
  *
  * Pure-helper extraction pattern (P67-04 D-25, P70-01 D-23, P70-06).
- * NO @testing-library/react. NO msw. NO @nexus/core import.
+ * NO @testing-library/react. NO msw. NO @liv/core import.
  *
  * Coverage matrix (must-haves from 71-02-PLAN.md):
  *   - buildWebsockifyUrl canonical URL (D-11)

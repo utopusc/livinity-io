@@ -9,7 +9,7 @@ import { logger } from '../logger.js';
 // and an in-memory queue for overflow messages that are drained automatically.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const REDIS_KEY = 'nexus:whatsapp:ratelimit';
+const REDIS_KEY = 'liv:whatsapp:ratelimit';
 const MAX_PER_MINUTE = 10;
 const MIN_DELAY_MS = 1000; // 1 second
 const MAX_DELAY_MS = 3000; // 3 seconds

@@ -59,8 +59,8 @@ interface SystemMetrics {
   uptime: string;
 }
 
-const REDIS_HEARTBEAT_STATE = 'nexus:heartbeat_state';
-const REDIS_HEARTBEAT_LAST_RECIPIENT = 'nexus:heartbeat_last_recipient';
+const REDIS_HEARTBEAT_STATE = 'liv:heartbeat_state';
+const REDIS_HEARTBEAT_LAST_RECIPIENT = 'liv:heartbeat_last_recipient';
 
 export class HeartbeatRunner {
   private redis: Redis;

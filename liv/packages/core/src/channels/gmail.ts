@@ -14,7 +14,7 @@ import { getRedisPrefix } from './types.js';
 // Redis Key Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const REDIS_PREFIX = 'nexus:gmail';
+const REDIS_PREFIX = 'liv:gmail';
 const KEY_CONFIG = `${REDIS_PREFIX}:config`;
 const KEY_TOKENS = `${REDIS_PREFIX}:tokens`;
 const KEY_PROFILE = `${REDIS_PREFIX}:profile`;
@@ -852,8 +852,8 @@ export class GmailProvider implements ChannelProvider {
         timestamp: Date.now(),
         error: error.message,
       };
-      await this.redis.lpush('nexus:notifications', JSON.stringify(notification));
-      await this.redis.ltrim('nexus:notifications', 0, 99); // Keep last 100 notifications
+      await this.redis.lpush('liv:notifications', JSON.stringify(notification));
+      await this.redis.ltrim('liv:notifications', 0, 99); // Keep last 100 notifications
     }
 
     // Send notification via Telegram/Discord if channelManager is available
@@ -863,7 +863,7 @@ export class GmailProvider implements ChannelProvider {
       for (const channelId of ['telegram', 'discord'] as const) {
         try {
           const lastChatId = this.redis
-            ? await this.redis.get(`nexus:${channelId}:last_chat_id`)
+            ? await this.redis.get(`liv:${channelId}:last_chat_id`)
             : null;
           if (lastChatId) {
             await this.channelManager.sendMessage(channelId, lastChatId, alertMessage);
@@ -913,7 +913,7 @@ export class GmailProvider implements ChannelProvider {
 
     try {
       const chatId = this.config.notifyChatId
-        || (this.redis ? await this.redis.get(`nexus:${channel}:last_chat_id`) : null);
+        || (this.redis ? await this.redis.get(`liv:${channel}:last_chat_id`) : null);
       if (!chatId) {
         logger.warn('GmailProvider: no chat ID for notification channel', { channel });
         return;
@@ -931,7 +931,7 @@ export class GmailProvider implements ChannelProvider {
   // ── Redis Helpers ─────────────────────────────────────────────────────
 
   private getRedirectUri(): string {
-    const base = process.env.NEXUS_PUBLIC_URL || `http://localhost:${process.env.API_PORT || '3200'}`;
+    const base = process.env.LIV_PUBLIC_URL || `http://localhost:${process.env.API_PORT || '3200'}`;
     return `${base}/api/gmail/oauth/callback`;
   }
 

@@ -85,7 +85,7 @@ export class SlackProvider implements ChannelProvider {
 
         // Save last chat ID for heartbeat delivery
         if (this.redis) {
-          await this.redis.set(`nexus:slack:last_chat_id`, msg.channel);
+          await this.redis.set(`liv:slack:last_chat_id`, msg.channel);
         }
 
         await this.messageHandler(incoming);

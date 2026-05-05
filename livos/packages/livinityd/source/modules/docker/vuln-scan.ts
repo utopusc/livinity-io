@@ -18,7 +18,7 @@ import type {VulnScanResult, CveEntry, Severity} from './types.js'
 const docker = new Dockerode()
 
 const TRIVY_IMAGE = 'aquasec/trivy:latest'
-const CACHE_PREFIX = 'nexus:vuln:'
+const CACHE_PREFIX = 'liv:vuln:'
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7 // 7 days
 const TRIVY_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
@@ -43,7 +43,7 @@ function getRedis(): Redis {
 }
 
 function cacheKey(digest: string): string {
-	// Strip sha256: prefix to match the spec from 19-CONTEXT.md (`nexus:vuln:<sha256>`)
+	// Strip sha256: prefix to match the spec from 19-CONTEXT.md (`liv:vuln:<sha256>`)
 	return CACHE_PREFIX + digest.replace(/^sha256:/, '')
 }
 

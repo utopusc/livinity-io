@@ -92,11 +92,11 @@ async function runTests() {
 				stdout:
 					'drwxr-xr-x 2 root root @nexus+core@1.0.0_xyz\n',
 			},
-			'readlink -f /opt/livos/node_modules/@nexus/core': {
+			'readlink -f /opt/livos/node_modules/@liv/core': {
 				stdout:
-					'/opt/livos/node_modules/.pnpm/@nexus+core@1.0.0_xyz/node_modules/@nexus/core\n',
+					'/opt/livos/node_modules/.pnpm/@nexus+core@1.0.0_xyz/node_modules/@liv/core\n',
 			},
-			'ls -la /opt/livos/node_modules/@nexus/core': {
+			'ls -la /opt/livos/node_modules/@liv/core': {
 				stdout:
 					'lrwxrwxrwx 1 root root 155 Apr 24 22:37 -> .pnpm/@nexus+core@1.0.0_xyz/...\n',
 			},
@@ -124,11 +124,11 @@ async function runTests() {
 				stdout:
 					'drwxr-xr-x 2 root root @nexus+core@1.0.0_a\ndrwxr-xr-x 2 root root @nexus+core@1.0.0_b\n',
 			},
-			'readlink -f /opt/livos/node_modules/@nexus/core': {
+			'readlink -f /opt/livos/node_modules/@liv/core': {
 				stdout:
-					'/opt/livos/node_modules/.pnpm/@nexus+core@1.0.0_a/node_modules/@nexus/core\n',
+					'/opt/livos/node_modules/.pnpm/@nexus+core@1.0.0_a/node_modules/@liv/core\n',
 			},
-			'ls -la /opt/livos/node_modules/@nexus/core': {stdout: '...\n'},
+			'ls -la /opt/livos/node_modules/@liv/core': {stdout: '...\n'},
 			'grep -c You are powered by the model named': {stdout: '0\n'},
 			'stat -c %Y': {stdout: '1700000000\n'},
 		})
@@ -148,11 +148,11 @@ async function runTests() {
 				stdout:
 					'drwxr-xr-x 2 root root @nexus+core@1.0.0_a\ndrwxr-xr-x 2 root root @nexus+core@1.0.0_b\n',
 			},
-			'readlink -f /opt/livos/node_modules/@nexus/core': {
+			'readlink -f /opt/livos/node_modules/@liv/core': {
 				stdout:
-					'/opt/livos/node_modules/.pnpm/@nexus+core@1.0.0_a/node_modules/@nexus/core\n',
+					'/opt/livos/node_modules/.pnpm/@nexus+core@1.0.0_a/node_modules/@liv/core\n',
 			},
-			'ls -la /opt/livos/node_modules/@nexus/core': {stdout: '...\n'},
+			'ls -la /opt/livos/node_modules/@liv/core': {stdout: '...\n'},
 			'grep -c You are powered by the model named': {stdout: '0\n'},
 			'stat -c %Y': {stdout: '1700000000\n'},
 		})
@@ -178,11 +178,11 @@ async function runTests() {
 					stdout:
 						'drwxr-xr-x 2 root root @nexus+core@1.0.0_xyz\n',
 				},
-				'readlink -f /opt/livos/node_modules/@nexus/core': {
+				'readlink -f /opt/livos/node_modules/@liv/core': {
 					stdout:
-						'/opt/livos/node_modules/.pnpm/@nexus+core@1.0.0_xyz/node_modules/@nexus/core\n',
+						'/opt/livos/node_modules/.pnpm/@nexus+core@1.0.0_xyz/node_modules/@liv/core\n',
 				},
-				'ls -la /opt/livos/node_modules/@nexus/core': {stdout: '...\n'},
+				'ls -la /opt/livos/node_modules/@liv/core': {stdout: '...\n'},
 				'grep -c You are powered by the model named': {stdout: '5\n'},
 				'stat -c %Y': {
 					stdout: String(Math.floor(Date.now() / 1000)) + '\n',
@@ -211,10 +211,10 @@ async function runTests() {
 					stdout:
 						'drwxr-xr-x 2 root root @nexus+core@1.0.0_xyz\n',
 				},
-				'readlink -f /opt/livos/node_modules/@nexus/core': {
+				'readlink -f /opt/livos/node_modules/@liv/core': {
 					stdout: '/path/x\n',
 				},
-				'ls -la /opt/livos/node_modules/@nexus/core': {stdout: '...\n'},
+				'ls -la /opt/livos/node_modules/@liv/core': {stdout: '...\n'},
 				'grep -c You are powered by the model named': {stdout: '5\n'},
 				'stat -c %Y': {
 					stdout: String(Math.floor(Date.now() / 1000)) + '\n',

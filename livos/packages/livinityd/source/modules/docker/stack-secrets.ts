@@ -9,7 +9,7 @@ import {Redis} from 'ioredis'
  * Secrets are:
  *  - encrypted with AES-256-GCM using a key derived from the daemon's JWT secret
  *    (SHA-256 of `/opt/livos/data/secrets/jwt`)
- *  - stored in Redis under `nexus:stack:secrets:{stackName}` as a hash
+ *  - stored in Redis under `liv:stack:secrets:{stackName}` as a hash
  *    `{key -> base64(iv || tag || ciphertext)}`
  *  - NEVER written to `/opt/livos/data/stacks/<name>/.env` on disk
  *
@@ -19,7 +19,7 @@ import {Redis} from 'ioredis'
  */
 
 // Redis key layout: nexus:stack:secrets:{stackName}  ->  hash {key -> base64(iv+tag+ciphertext)}
-const REDIS_KEY = (stack: string) => `nexus:stack:secrets:${stack}`
+const REDIS_KEY = (stack: string) => `liv:stack:secrets:${stack}`
 
 const JWT_SECRET_PATH = '/opt/livos/data/secrets/jwt'
 

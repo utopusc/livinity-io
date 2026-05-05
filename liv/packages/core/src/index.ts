@@ -2,9 +2,9 @@ import 'dotenv/config';
 import Redis from 'ioredis';
 
 // ── Public re-exports (Phase 67-01 — RunStore for LivAgentRunner / SSE handler) ──
-// These exports make `import { RunStore, type Chunk, type RunMeta } from '@nexus/core'`
+// These exports make `import { RunStore, type Chunk, type RunMeta } from '@liv/core'`
 // resolve through the package's main entry. The full public surface lives in lib.ts
-// (`@nexus/core/lib`); this top-level re-export is intentionally narrow to keep
+// (`@liv/core/lib`); this top-level re-export is intentionally narrow to keep
 // daemon-side side-effects out of consumers that only want the run-store types.
 export { RunStore } from './run-store.js';
 export type { Chunk, ChunkType, RunMeta, RunStatus } from './run-store.js';
@@ -89,8 +89,8 @@ import { logger } from './logger.js';
 import { CircuitBreaker } from './infra/circuit-breaker.js';
 import { formatErrorMessage } from './infra/errors.js';
 
-const NEXUS_BASE_DIR = process.env.NEXUS_BASE_DIR || '/opt/nexus';
-const NEXUS_SKILLS_DIR = process.env.NEXUS_SKILLS_DIR || '/opt/nexus/app/skills';
+const NEXUS_BASE_DIR = process.env.LIV_BASE_DIR || '/opt/nexus';
+const NEXUS_SKILLS_DIR = process.env.LIV_SKILLS_DIR || '/opt/nexus/app/skills';
 
 // Prevent unhandled errors from crashing the process (e.g. stream parse errors)
 process.on('unhandledRejection', (reason: any) => {
@@ -263,7 +263,7 @@ async function main() {
       if (['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(target)) {
         // Use ChannelManager for Telegram/Discord/Slack/Matrix/WhatsApp
         // Get the last chat ID from Redis for the target channel
-        const lastChatId = await redis.get(`nexus:${target}:last_chat_id`);
+        const lastChatId = await redis.get(`liv:${target}:last_chat_id`);
         if (lastChatId) {
           const success = await channelManager.sendMessage(target as 'telegram' | 'discord' | 'slack' | 'matrix' | 'whatsapp', lastChatId, message);
           if (success) {
@@ -277,7 +277,7 @@ async function main() {
       } else if (target === 'all') {
         // Deliver to all connected channels
         for (const channelId of ['telegram', 'discord', 'slack', 'matrix', 'whatsapp'] as const) {
-          const lastChatId = await redis.get(`nexus:${channelId}:last_chat_id`);
+          const lastChatId = await redis.get(`liv:${channelId}:last_chat_id`);
           if (lastChatId) {
             await channelManager.sendMessage(channelId, lastChatId, message);
             logger.info('HeartbeatRunner: delivered to channel', { channel: channelId, chatId: lastChatId });
@@ -285,7 +285,7 @@ async function main() {
         }
       } else {
         // Assume WhatsApp JID - push to WhatsApp outbox
-        await redis.lpush('nexus:wa_outbox', JSON.stringify({
+        await redis.lpush('liv:wa_outbox', JSON.stringify({
           to: target,
           message,
           source: 'heartbeat',
@@ -457,7 +457,7 @@ Conversation:`;
 
   // Load persisted registries from Redis (user-added registries survive restarts)
   try {
-    const savedRegistries = await redis.get('nexus:skills:registries');
+    const savedRegistries = await redis.get('liv:skills:registries');
     if (savedRegistries) {
       const urls: string[] = JSON.parse(savedRegistries);
       for (const url of urls) {
@@ -619,7 +619,7 @@ Conversation:`;
     while (true) {
       try {
         // BLPOP blocks until an item is available (timeout 0 = wait forever)
-        const result = await inboxRedis.blpop('nexus:inbox', 0);
+        const result = await inboxRedis.blpop('liv:inbox', 0);
         if (result) {
           const [, item] = result; // result is [key, value]
           try {
@@ -674,7 +674,7 @@ Conversation:`;
 
     // Save last chat ID for heartbeat delivery
     if (['telegram', 'discord', 'slack', 'matrix', 'whatsapp'].includes(msg.channel)) {
-      await redis.set(`nexus:${msg.channel}:last_chat_id`, msg.chatId);
+      await redis.set(`liv:${msg.channel}:last_chat_id`, msg.chatId);
     }
 
     // Add to daemon inbox for processing

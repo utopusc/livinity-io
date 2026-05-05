@@ -19,9 +19,9 @@ import type { ToolRegistry } from './tool-registry.js';
 import type { McpConfigManager } from './mcp-config-manager.js';
 import type { McpServerConfig, McpServerStatus } from './mcp-types.js';
 
-const STATUS_KEY_PREFIX = 'nexus:mcp:status:';
+const STATUS_KEY_PREFIX = 'liv:mcp:status:';
 const STATUS_TTL = 3600; // 1 hour
-const UPDATE_CHANNEL = 'nexus:config:updated';
+const UPDATE_CHANNEL = 'liv:config:updated';
 const CONNECT_TIMEOUT_MS = 30_000; // 30 seconds
 const RECONNECT_DELAY_MS = 5_000; // 5 seconds before reconnect attempt
 const MAX_RECONNECT_ATTEMPTS = 3;

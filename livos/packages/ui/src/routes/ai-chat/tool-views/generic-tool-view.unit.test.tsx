@@ -451,7 +451,7 @@ describe('types.ts source-text invariants', () => {
 		}
 	})
 
-	it('does NOT import from @nexus/core (D-NO-NEW-DEPS — server-only package)', () => {
+	it('does NOT import from @liv/core (D-NO-NEW-DEPS — server-only package)', () => {
 		expect(typesSource).not.toMatch(/from\s+['"]@nexus\/core/)
 	})
 })

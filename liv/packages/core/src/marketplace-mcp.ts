@@ -58,9 +58,9 @@ interface MarketplaceEntry {
 
 const MARKETPLACE_INDEX_URL =
   process.env.MARKETPLACE_URL || 'https://mcp.livinity.io/api/catalog';
-const REDIS_INDEX_KEY = 'nexus:marketplace:index';
+const REDIS_INDEX_KEY = 'liv:marketplace:index';
 const REDIS_INDEX_TTL = 3600; // 1 hour in seconds
-const REDIS_INSTALLED_PREFIX = 'nexus:marketplace:installed:';
+const REDIS_INSTALLED_PREFIX = 'liv:marketplace:installed:';
 const MAX_SEARCH_RESULTS = 20;
 
 // ── MarketplaceMcp ──────────────────────────────────────────────────────────
@@ -313,7 +313,7 @@ export class MarketplaceMcp {
                 enabled: true,
                 installedFrom: 'marketplace',
               };
-              await this.deps.redis.set(`nexus:hooks:${hookName}`, JSON.stringify(hookConfig));
+              await this.deps.redis.set(`liv:hooks:${hookName}`, JSON.stringify(hookConfig));
               installResult = `Hook "${hookName}" installed. Event: ${hookConfig.event}. Will fire on ${hookConfig.event} events.`;
               break;
             }

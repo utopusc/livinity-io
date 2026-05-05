@@ -2,7 +2,7 @@
  * RunQueue integration tests — Phase 73-02.
  *
  * Standalone tsx-runnable script (matches the existing test:phase39 pattern in
- * @nexus/core package.json + the P67-01 run-store.test.ts harness style).
+ * @liv/core package.json + the P67-01 run-store.test.ts harness style).
  *
  * Backend: REAL Redis (gated on `process.env.REDIS_URL`). BullMQ does NOT
  * support ioredis-mock natively (ioredis-mock can't fake the Redis stream

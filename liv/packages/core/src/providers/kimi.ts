@@ -33,8 +33,8 @@ const KIMI_MODELS: Record<string, string> = {
 };
 
 const BASE_URL = 'https://api.kimi.com/coding/v1';
-const API_KEY_REDIS_KEY = 'nexus:config:kimi_api_key';
-const MODELS_REDIS_KEY = 'nexus:config:kimi_models';
+const API_KEY_REDIS_KEY = 'liv:config:kimi_api_key';
+const MODELS_REDIS_KEY = 'liv:config:kimi_models';
 const MODEL_CACHE_TTL_MS = 60_000; // 60 seconds
 const KIMI_CLI_VERSION = '1.17.0';
 
@@ -340,7 +340,7 @@ export class KimiProvider implements AIProvider {
       // Also sync to Redis for status checks
       if (this.redis) {
         this.redis.set(API_KEY_REDIS_KEY, creds.access_token).catch(() => {});
-        this.redis.set('nexus:kimi:authenticated', '1').catch(() => {});
+        this.redis.set('liv:kimi:authenticated', '1').catch(() => {});
       }
       return creds.access_token;
     }
@@ -395,7 +395,7 @@ export class KimiProvider implements AIProvider {
     // Sync to Redis
     if (this.redis) {
       this.redis.set(API_KEY_REDIS_KEY, newCreds.access_token).catch(() => {});
-      this.redis.set('nexus:kimi:authenticated', '1').catch(() => {});
+      this.redis.set('liv:kimi:authenticated', '1').catch(() => {});
     }
 
     logger.info('KimiProvider: OAuth token refreshed successfully');

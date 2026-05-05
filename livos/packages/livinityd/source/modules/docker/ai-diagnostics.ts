@@ -10,7 +10,7 @@
 //
 // The drivers build task-specific prompts, redact secrets in inbound
 // payloads (logs / env), parse the Kimi response, and (for diagnose +
-// CVE explain) cache results in Redis under `nexus:ai:diag:*` for 5
+// CVE explain) cache results in Redis under `liv:ai:diag:*` for 5
 // minutes. Compose generation is intentionally NOT cached — every
 // natural-language prompt is unique by intent.
 //
@@ -31,7 +31,7 @@ import type {VulnScanResult, CveEntry} from './types.js'
 // Cache + transport constants
 // ---------------------------------------------------------------------------
 
-const CACHE_PREFIX = 'nexus:ai:diag:'
+const CACHE_PREFIX = 'liv:ai:diag:'
 const CACHE_TTL_SECONDS = 300 // 5 minutes — matches Phase 19 vuln-scan precedent
 const KIMI_TIMEOUT_MS = 90_000 // 90s client-side; nexus enforces its own 60s
 const LOG_TAIL_LINES = 200
@@ -51,7 +51,7 @@ function getRedis(): Redis {
 }
 
 function getNexusApiUrl(): string {
-	return process.env.NEXUS_API_URL || process.env.LIV_API_URL || 'http://localhost:3200'
+	return process.env.LIV_API_URL || 'http://localhost:3200'
 }
 
 function sha256Hex(input: string): string {

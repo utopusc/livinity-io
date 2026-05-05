@@ -90,23 +90,23 @@ export function estimateCost(model: string, inputTokens: number, outputTokens: n
 // ── Redis Key Helpers ──────────────────────────────────────────────────
 
 function sessionKey(sessionId: string): string {
-  return `nexus:usage:session:${sessionId}`;
+  return `liv:usage:session:${sessionId}`;
 }
 
 function dailyKey(date: string, userId: string): string {
-  return `nexus:usage:daily:${date}:${userId}`;
+  return `liv:usage:daily:${date}:${userId}`;
 }
 
 function cumulativeKey(userId: string): string {
-  return `nexus:usage:cumulative:${userId}`;
+  return `liv:usage:cumulative:${userId}`;
 }
 
 function displayKey(userId: string): string {
-  return `nexus:usage:display:${userId}`;
+  return `liv:usage:display:${userId}`;
 }
 
 function sessionsListKey(userId: string): string {
-  return `nexus:usage:sessions:${userId}`;
+  return `liv:usage:sessions:${userId}`;
 }
 
 function todayStr(): string {
@@ -332,7 +332,7 @@ export class UsageTracker {
       const keys: string[] = [];
       let cursor = '0';
       do {
-        const [nextCursor, found] = await this.redis.scan(cursor, 'MATCH', 'nexus:usage:cumulative:*', 'COUNT', 100);
+        const [nextCursor, found] = await this.redis.scan(cursor, 'MATCH', 'liv:usage:cumulative:*', 'COUNT', 100);
         cursor = nextCursor;
         keys.push(...found);
       } while (cursor !== '0');

@@ -98,7 +98,7 @@ export class DiscordProvider implements ChannelProvider {
         if (isGuild) {
           let activationMode = 'mention'; // default
           if (this.redis) {
-            const mode = await this.redis.get(`nexus:activation:${message.channelId}`);
+            const mode = await this.redis.get(`liv:activation:${message.channelId}`);
             if (mode) activationMode = mode;
           }
 

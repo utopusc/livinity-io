@@ -1,7 +1,7 @@
 import path from 'node:path';
 import winston from 'winston';
 
-const NEXUS_LOGS_DIR = process.env.NEXUS_LOGS_DIR || '/opt/nexus/logs';
+const NEXUS_LOGS_DIR = process.env.LIV_LOGS_DIR || '/opt/nexus/logs';
 
 export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',

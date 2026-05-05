@@ -16,7 +16,7 @@ import { logger } from '../logger.js';
  */
 export class WhatsAppAuthStore {
   private redis: Redis;
-  private readonly prefix = 'nexus:wa:auth';
+  private readonly prefix = 'liv:wa:auth';
 
   constructor(redis: Redis) {
     this.redis = redis;

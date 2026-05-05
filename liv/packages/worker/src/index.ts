@@ -33,7 +33,7 @@ const worker = new Worker(
 
     // Store result in Redis for retrieval
     await connection.set(
-      `nexus:result:${job.id}`,
+      `liv:result:${job.id}`,
       JSON.stringify(result),
       'EX',
       3600 // expire in 1 hour
@@ -52,7 +52,7 @@ worker.on('completed', (job) => {
   logger.info(`Job done: ${job.name}`, { id: job.id });
 });
 
-logger.info('Nexus Worker started. Waiting for jobs...');
+logger.info('Liv Worker started. Waiting for jobs...');
 
 process.on('SIGINT', async () => {
   await worker.close();

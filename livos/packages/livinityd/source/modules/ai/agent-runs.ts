@@ -2,7 +2,7 @@
  * agent-runs.ts — POST /api/agent/start, GET /api/agent/runs/:runId/stream,
  *                 POST /api/agent/runs/:runId/control. Phase 67-03.
  *
- * Wires @nexus/core RunStore + LivAgentRunner so browsers/clients can:
+ * Wires @liv/core RunStore + LivAgentRunner so browsers/clients can:
  *   - start an agent run (returns runId + sseUrl)
  *   - subscribe to chunks via SSE with `?after=<lastIdx>` resume
  *   - send a stop signal
@@ -13,7 +13,7 @@
  *
  * Sacred file `nexus/packages/core/src/sdk-agent-runner.ts`
  * (SHA `4f868d318abff71f8c8bfbcf443b2393a553018b`) is read-only — this module
- * imports `@nexus/core` types but never modifies sacred internals.
+ * imports `@liv/core` types but never modifies sacred internals.
  *
  * D-NO-BYOK / D-NO-NEW-DEPS preserved: no broker contact, no new package
  * deps. Auth uses livinityd's existing JWT secret + `Server.verifyToken()`.
@@ -33,9 +33,9 @@
  */
 
 import type {Application, Request, Response} from 'express'
-// Imports below resolve from '@nexus/core' via the package's `./lib` subpath
+// Imports below resolve from '@liv/core' via the package's `./lib` subpath
 // export — the lib entry is "safe to import without side effects" (the main
-// `@nexus/core` entry pulls in daemon side-effects like `dotenv/config`). Both
+// `@liv/core` entry pulls in daemon side-effects like `dotenv/config`). Both
 // entries re-export RunStore + LivAgentRunner + RunQueue per Phase 67-01/02
 // + 73-02 SUMMARY.
 import {
@@ -52,7 +52,7 @@ import type Livinityd from '../../index.js'
 // Phase 72-native-06: bytebot computer-use MCP server registration. Called
 // once at mount time AFTER McpConfigManager is constructed, BEFORE the
 // running nexus daemon's McpClientManager would reconcile (it reconciles
-// via Redis Pub/Sub on `nexus:config:updated`, which McpConfigManager.installServer
+// via Redis Pub/Sub on `liv:config:updated`, which McpConfigManager.installServer
 // publishes automatically). Default-disabled — no-op when BYTEBOT_MCP_ENABLED
 // is unset (D-NATIVE-10).
 import {registerBytebotMcpServer} from '../computer-use/index.js'
@@ -160,7 +160,7 @@ export async function mountAgentRunsRoutes(
 	// ── Phase 72-native-06: bytebot computer-use MCP server registration ─
 	// Construct an McpConfigManager backed by the same Redis livinityd
 	// already uses (the running nexus daemon shares this Redis and its
-	// McpClientManager subscribes to `nexus:config:updated`, so writing the
+	// McpClientManager subscribes to `liv:config:updated`, so writing the
 	// bytebot entry here is sufficient to spawn the child process there).
 	//
 	// Default-disabled: when BYTEBOT_MCP_ENABLED is unset the call is a

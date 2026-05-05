@@ -13,7 +13,7 @@
  *   - Cmd+I shortcut → toggles open/close
  *
  * NOTE: ToolCallSnapshot is locally re-declared here per CONTEXT D-14
- * because P67 has not yet shipped its `@nexus/core` re-export. Shape is
+ * because P67 has not yet shipped its `@liv/core` re-export. Shape is
  * verbatim from P67-CONTEXT D-12 — DO NOT alter without coordinating P67.
  */
 
@@ -29,7 +29,7 @@ export function isVisualTool(toolName: string): boolean {
 
 // Local re-declaration of P67's ToolCallSnapshot (CONTEXT D-14).
 // Source of truth: 67-CONTEXT.md D-12. Aligned via review when P67 ships
-// `@nexus/core` exports.
+// `@liv/core` exports.
 export type ToolCallSnapshot = {
 	toolId: string
 	toolName: string

@@ -2,7 +2,7 @@
  * ContextManager unit tests — Phase 73-01.
  *
  * Standalone tsx-runnable script (NOT vitest — matches the existing
- * run-store.test.ts harness pattern in @nexus/core).
+ * run-store.test.ts harness pattern in @liv/core).
  *
  * Test backend: ioredis-mock (in-process Redis emulator, already a devDep
  * since P67-01 per package.json:64). Fallback to process.env.REDIS_URL

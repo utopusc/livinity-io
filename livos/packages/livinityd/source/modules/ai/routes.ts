@@ -82,9 +82,9 @@ const NexusConfigSchema = z.object({
 	}).optional(),
 })
 
-/** Get Nexus API URL from env */
+/** Get Liv API URL from env */
 function getNexusApiUrl(): string {
-	return process.env.NEXUS_API_URL || process.env.LIV_API_URL || 'http://localhost:3200'
+	return process.env.LIV_API_URL || 'http://localhost:3200'
 }
 
 export default router({
@@ -138,7 +138,7 @@ export default router({
 				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 			})
 			if (!response.ok) {
-				throw new Error(`Nexus API error: ${response.status}`)
+				throw new Error(`Liv API error: ${response.status}`)
 			}
 			return (await response.json()) as {
 				authenticated: boolean
@@ -166,7 +166,7 @@ export default router({
 					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 					throw new TRPCError({
 						code: 'INTERNAL_SERVER_ERROR',
-						message: errorData.error || `Nexus API error: ${response.status}`,
+						message: errorData.error || `Liv API error: ${response.status}`,
 					})
 				}
 				return (await response.json()) as {
@@ -197,7 +197,7 @@ export default router({
 					if (response.status === 404) {
 						return {status: 'expired' as const}
 					}
-					throw new Error(`Nexus API error: ${response.status}`)
+					throw new Error(`Liv API error: ${response.status}`)
 				}
 				return (await response.json()) as {
 					status: 'starting' | 'waiting' | 'success' | 'error'
@@ -226,7 +226,7 @@ export default router({
 				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
-					message: errorData.error || `Nexus API error: ${response.status}`,
+					message: errorData.error || `Liv API error: ${response.status}`,
 				})
 			}
 			return (await response.json()) as {success: boolean}
@@ -250,7 +250,7 @@ export default router({
 				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 			})
 			if (!response.ok) {
-				throw new Error(`Nexus API error: ${response.status}`)
+				throw new Error(`Liv API error: ${response.status}`)
 			}
 			return (await response.json()) as {
 				authenticated: boolean
@@ -281,7 +281,7 @@ export default router({
 					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 					throw new TRPCError({
 						code: 'INTERNAL_SERVER_ERROR',
-						message: errorData.error || `Nexus API error: ${response.status}`,
+						message: errorData.error || `Liv API error: ${response.status}`,
 					})
 				}
 				return {success: true}
@@ -310,7 +310,7 @@ export default router({
 				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
-					message: errorData.error || `Nexus API error: ${response.status}`,
+					message: errorData.error || `Liv API error: ${response.status}`,
 				})
 			}
 			return (await response.json()) as Record<string, unknown>
@@ -342,7 +342,7 @@ export default router({
 					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 					throw new TRPCError({
 						code: 'INTERNAL_SERVER_ERROR',
-						message: errorData.error || `Nexus API error: ${response.status}`,
+						message: errorData.error || `Liv API error: ${response.status}`,
 					})
 				}
 				return {success: true}
@@ -371,7 +371,7 @@ export default router({
 				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
-					message: errorData.error || `Nexus API error: ${response.status}`,
+					message: errorData.error || `Liv API error: ${response.status}`,
 				})
 			}
 			return (await response.json()) as {success: boolean}
@@ -493,7 +493,7 @@ export default router({
 				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 			})
 			if (!response.ok) {
-				throw new Error(`Nexus API error: ${response.status}`)
+				throw new Error(`Liv API error: ${response.status}`)
 			}
 			return (await response.json()) as {
 				providers: Array<{name: string; available: boolean}>
@@ -524,7 +524,7 @@ export default router({
 					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 					throw new TRPCError({
 						code: 'INTERNAL_SERVER_ERROR',
-						message: errorData.error || `Nexus API error: ${response.status}`,
+						message: errorData.error || `Liv API error: ${response.status}`,
 					})
 				}
 				return (await response.json()) as {
@@ -552,12 +552,12 @@ export default router({
 				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 			})
 			if (!response.ok) {
-				throw new Error(`Nexus API error: ${response.status}`)
+				throw new Error(`Liv API error: ${response.status}`)
 			}
 			const data = (await response.json()) as {config?: Record<string, unknown>}
 			return {config: data.config || {}}
 		} catch (error) {
-			ctx.livinityd.logger.error('Failed to fetch Nexus config', error)
+			ctx.livinityd.logger.error('Failed to fetch Liv config', error)
 			// Return empty config on error so UI doesn't break
 			return {config: {}}
 		}
@@ -581,18 +581,18 @@ export default router({
 					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 					throw new TRPCError({
 						code: 'INTERNAL_SERVER_ERROR',
-						message: errorData.error || `Nexus API error: ${response.status}`,
+						message: errorData.error || `Liv API error: ${response.status}`,
 					})
 				}
 				const data = (await response.json()) as {success?: boolean; errors?: string[]}
-				ctx.livinityd.logger.log('Nexus config updated via Settings UI')
+				ctx.livinityd.logger.log('Liv config updated via Settings UI')
 				return {success: data.success, errors: data.errors}
 			} catch (error) {
 				if (error instanceof TRPCError) throw error
-				ctx.livinityd.logger.error('Failed to update Nexus config', error)
+				ctx.livinityd.logger.error('Failed to update Liv config', error)
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
-					message: getErrorMessage(error) || 'Failed to update Nexus config',
+					message: getErrorMessage(error) || 'Failed to update Liv config',
 				})
 			}
 		}),
@@ -606,15 +606,15 @@ export default router({
 				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 			})
 			if (!response.ok) {
-				throw new Error(`Nexus API error: ${response.status}`)
+				throw new Error(`Liv API error: ${response.status}`)
 			}
-			ctx.livinityd.logger.log('Nexus config reset via Settings UI')
+			ctx.livinityd.logger.log('Liv config reset via Settings UI')
 			return {success: true}
 		} catch (error) {
-			ctx.livinityd.logger.error('Failed to reset Nexus config', error)
+			ctx.livinityd.logger.error('Failed to reset Liv config', error)
 			throw new TRPCError({
 				code: 'INTERNAL_SERVER_ERROR',
-				message: getErrorMessage(error) || 'Failed to reset Nexus config',
+				message: getErrorMessage(error) || 'Failed to reset Liv config',
 			})
 		}
 	}),
@@ -854,7 +854,7 @@ export default router({
 				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 			})
 			if (!response.ok) {
-				throw new Error(`Nexus API error: ${response.status}`)
+				throw new Error(`Liv API error: ${response.status}`)
 			}
 			return await response.json()
 		} catch (error) {
@@ -894,7 +894,7 @@ export default router({
 					headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 				})
 				if (!response.ok) {
-					throw new Error(`Nexus API error: ${response.status}`)
+					throw new Error(`Liv API error: ${response.status}`)
 				}
 				return await response.json()
 			} catch (error) {
@@ -937,7 +937,7 @@ export default router({
 					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 					throw new TRPCError({
 						code: 'INTERNAL_SERVER_ERROR',
-						message: errorData.error || `Nexus API error: ${response.status}`,
+						message: errorData.error || `Liv API error: ${response.status}`,
 					})
 				}
 				return await response.json()
@@ -984,7 +984,7 @@ export default router({
 					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 					throw new TRPCError({
 						code: response.status === 404 ? 'NOT_FOUND' : 'INTERNAL_SERVER_ERROR',
-						message: errorData.error || `Nexus API error: ${response.status}`,
+						message: errorData.error || `Liv API error: ${response.status}`,
 					})
 				}
 				return await response.json()
@@ -1010,7 +1010,7 @@ export default router({
 				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 				throw new TRPCError({
 					code: response.status === 404 ? 'NOT_FOUND' : 'INTERNAL_SERVER_ERROR',
-					message: errorData.error || `Nexus API error: ${response.status}`,
+					message: errorData.error || `Liv API error: ${response.status}`,
 				})
 			}
 			return await response.json()
@@ -1050,7 +1050,7 @@ export default router({
 					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 					throw new TRPCError({
 						code: response.status === 404 ? 'NOT_FOUND' : 'INTERNAL_SERVER_ERROR',
-						message: errorData.error || `Nexus API error: ${response.status}`,
+						message: errorData.error || `Liv API error: ${response.status}`,
 					})
 				}
 				return await response.json()
@@ -1164,7 +1164,7 @@ export default router({
 				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 			})
 			if (!response.ok) {
-				throw new Error(`Nexus API error: ${response.status}`)
+				throw new Error(`Liv API error: ${response.status}`)
 			}
 			return await response.json()
 		} catch (error) {
@@ -1198,7 +1198,7 @@ export default router({
 					const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 					throw new TRPCError({
 						code: 'INTERNAL_SERVER_ERROR',
-						message: errorData.error || `Nexus API error: ${response.status}`,
+						message: errorData.error || `Liv API error: ${response.status}`,
 					})
 				}
 				return await response.json()
@@ -1224,7 +1224,7 @@ export default router({
 				const errorData = (await response.json().catch(() => ({}))) as {error?: string}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
-					message: errorData.error || `Nexus API error: ${response.status}`,
+					message: errorData.error || `Liv API error: ${response.status}`,
 				})
 			}
 			return await response.json()
@@ -1255,11 +1255,11 @@ export default router({
 						config = await getUserPreference(ctx.currentUser.id, `integration:${type}`)
 					}
 					if (!config) {
-						const configStr = await redis.get(`nexus:${type}:config`)
+						const configStr = await redis.get(`liv:${type}:config`)
 						config = configStr ? JSON.parse(configStr) : null
 					}
 
-					const statusStr = await redis.get(`nexus:${type}:status`)
+					const statusStr = await redis.get(`liv:${type}:status`)
 					const status = statusStr ? JSON.parse(statusStr) : null
 					return {
 						id: type,
@@ -1299,16 +1299,16 @@ export default router({
 
 					// Admin also syncs to Redis for nexus-core
 					if (ctx.currentUser.role === 'admin') {
-						await redis.set(`nexus:${input.type}:config`, JSON.stringify(newConfig))
-						await redis.publish('nexus:channel:updated', JSON.stringify({channel: input.type}))
+						await redis.set(`liv:${input.type}:config`, JSON.stringify(newConfig))
+						await redis.publish('liv:channel:updated', JSON.stringify({channel: input.type}))
 					}
 				} else {
 					// Legacy: write to Redis directly
-					const existingStr = await redis.get(`nexus:${input.type}:config`)
+					const existingStr = await redis.get(`liv:${input.type}:config`)
 					const existing = existingStr ? JSON.parse(existingStr) : {}
 					const newConfig = {...existing, ...input.config, enabled: true}
-					await redis.set(`nexus:${input.type}:config`, JSON.stringify(newConfig))
-					await redis.publish('nexus:channel:updated', JSON.stringify({channel: input.type}))
+					await redis.set(`liv:${input.type}:config`, JSON.stringify(newConfig))
+					await redis.publish('liv:channel:updated', JSON.stringify({channel: input.type}))
 				}
 
 				ctx.livinityd!.logger.log(`Channel config updated for ${input.type}`)
@@ -1344,7 +1344,7 @@ export default router({
 				}
 				// Legacy single-user: read from Redis
 				const redis = ctx.livinityd!.ai.redis
-				const key = `nexus:${input.channel}:config`
+				const key = `liv:${input.channel}:config`
 				const config = await redis.get(key)
 				if (!config) return null
 				return JSON.parse(config) as {
@@ -1375,12 +1375,12 @@ export default router({
 					config = await getUserPreference(ctx.currentUser.id, `integration:${input.channel}`)
 				}
 				if (!config) {
-					const configStr = await redis.get(`nexus:${input.channel}:config`)
+					const configStr = await redis.get(`liv:${input.channel}:config`)
 					config = configStr ? JSON.parse(configStr) : null
 				}
 
 				// Status is global (nexus-core manages the active bot)
-				const statusStr = await redis.get(`nexus:${input.channel}:status`)
+				const statusStr = await redis.get(`liv:${input.channel}:status`)
 				const status = statusStr ? JSON.parse(statusStr) : null
 
 				return {
@@ -1426,17 +1426,17 @@ export default router({
 
 					// Admin's config also syncs to global Redis for nexus-core
 					if (ctx.currentUser.role === 'admin') {
-						await redis.set(`nexus:${input.channel}:config`, JSON.stringify(newConfig))
-						await redis.publish('nexus:channel:updated', JSON.stringify({channel: input.channel}))
+						await redis.set(`liv:${input.channel}:config`, JSON.stringify(newConfig))
+						await redis.publish('liv:channel:updated', JSON.stringify({channel: input.channel}))
 					}
 				} else {
 					// Legacy single-user: write to Redis directly
-					const key = `nexus:${input.channel}:config`
+					const key = `liv:${input.channel}:config`
 					const existingStr = await redis.get(key)
 					const existing = existingStr ? JSON.parse(existingStr) : {}
 					const newConfig = {...existing, ...input.config}
 					await redis.set(key, JSON.stringify(newConfig))
-					await redis.publish('nexus:channel:updated', JSON.stringify({channel: input.channel}))
+					await redis.publish('liv:channel:updated', JSON.stringify({channel: input.channel}))
 				}
 
 				ctx.livinityd!.logger.log(`Integration config saved for ${input.channel}`)
@@ -1503,7 +1503,7 @@ export default router({
 	whatsappGetStatus: privateProcedure.query(async ({ctx}) => {
 		try {
 			const redis = ctx.livinityd!.ai.redis
-			const statusStr = await redis.get('nexus:whatsapp:status')
+			const statusStr = await redis.get('liv:whatsapp:status')
 			const status = statusStr ? JSON.parse(statusStr) : null
 			return {
 				enabled: status?.enabled ?? false,
@@ -1993,7 +1993,7 @@ export default router({
 				const err = (await response.json().catch(() => ({}))) as {error?: string}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
-					message: err.error || `Nexus API error: ${response.status}`,
+					message: err.error || `Liv API error: ${response.status}`,
 				})
 			}
 			return await response.json() as {id: string; url: string; secret: string}
@@ -2012,7 +2012,7 @@ export default router({
 				const err = (await response.json().catch(() => ({}))) as {error?: string}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
-					message: err.error || `Nexus API error: ${response.status}`,
+					message: err.error || `Liv API error: ${response.status}`,
 				})
 			}
 			return await response.json() as {ok: boolean; message: string}
@@ -2110,7 +2110,7 @@ export default router({
 				const err = (await response.json().catch(() => ({}))) as {error?: string}
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
-					message: err.error || `Nexus API error: ${response.status}`,
+					message: err.error || `Liv API error: ${response.status}`,
 				})
 			}
 			return await response.json() as {
@@ -2176,7 +2176,7 @@ export default router({
 		})
 		if (!response.ok) {
 			const err = (await response.json().catch(() => ({}))) as {error?: string}
-			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || `Nexus API error: ${response.status}`})
+			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || `Liv API error: ${response.status}`})
 		}
 		return await response.json() as {ok: boolean}
 	}),
@@ -2237,7 +2237,7 @@ export default router({
 		})
 		if (!response.ok) {
 			const err = (await response.json().catch(() => ({}))) as {error?: string}
-			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || `Nexus API error: ${response.status}`})
+			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || `Liv API error: ${response.status}`})
 		}
 		return await response.json() as {ok: boolean}
 	}),
@@ -2252,7 +2252,7 @@ export default router({
 		})
 		if (!response.ok) {
 			const err = (await response.json().catch(() => ({}))) as {error?: string}
-			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || `Nexus API error: ${response.status}`})
+			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || `Liv API error: ${response.status}`})
 		}
 		return await response.json() as {url: string}
 	}),
@@ -2283,7 +2283,7 @@ export default router({
 		})
 		if (!response.ok) {
 			const err = (await response.json().catch(() => ({}))) as {error?: string}
-			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || `Nexus API error: ${response.status}`})
+			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: err.error || `Liv API error: ${response.status}`})
 		}
 		return await response.json() as {ok: boolean; message: string}
 	}),
@@ -2365,7 +2365,7 @@ export default router({
 			})
 			if (!response.ok) {
 				if (response.status === 404) return null
-				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: `Nexus API error: ${response.status}`})
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: `Liv API error: ${response.status}`})
 			}
 			return await response.json() as {
 				id: string
@@ -2389,7 +2389,7 @@ export default router({
 				{headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {}},
 			)
 			if (!response.ok) {
-				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: `Nexus API error: ${response.status}`})
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: `Liv API error: ${response.status}`})
 			}
 			const data = await response.json() as {artifacts: Array<{
 				id: string
@@ -2414,7 +2414,7 @@ export default router({
 				headers: process.env.LIV_API_KEY ? {'X-API-Key': process.env.LIV_API_KEY} : {},
 			})
 			if (!response.ok) {
-				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: `Nexus API error: ${response.status}`})
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: `Liv API error: ${response.status}`})
 			}
 			return await response.json() as {success: boolean}
 		}),
@@ -2425,7 +2425,7 @@ export default router({
 	getComputerUseAutoConsent: privateProcedure.query(async ({ctx}) => {
 		try {
 			const redis = ctx.livinityd.ai.redis
-			const val = await redis.get('nexus:config:computer_use_auto_consent')
+			const val = await redis.get('liv:config:computer_use_auto_consent')
 			return {autoConsent: val === 'true' || val === '1'}
 		} catch {
 			return {autoConsent: false}
@@ -2437,7 +2437,7 @@ export default router({
 		.input(z.object({enabled: z.boolean()}))
 		.mutation(async ({ctx, input}) => {
 			const redis = ctx.livinityd.ai.redis
-			await redis.set('nexus:config:computer_use_auto_consent', input.enabled ? 'true' : 'false')
+			await redis.set('liv:config:computer_use_auto_consent', input.enabled ? 'true' : 'false')
 			return {ok: true, autoConsent: input.enabled}
 		}),
 
@@ -2694,7 +2694,7 @@ export default router({
 			try {
 				const redis = ctx.livinityd.ai.redis
 				if (redis) {
-					const entries = await redis.xrange('nexus:tool_calls', '-', '+', 'COUNT', 5000) as Array<[string, string[]]>
+					const entries = await redis.xrange('liv:tool_calls', '-', '+', 'COUNT', 5000) as Array<[string, string[]]>
 					if (entries.length > 0) {
 						// Aggregate per-tool stats
 						const toolMap = new Map<string, {calls: number; successes: number}>()
@@ -2770,7 +2770,7 @@ export default router({
 			const redis = ctx.livinityd.ai.redis
 			if (!redis) return {success: false}
 			try {
-				await redis.hset(`nexus:feedback:${input.conversationId}`, {
+				await redis.hset(`liv:feedback:${input.conversationId}`, {
 					rating: String(input.rating),
 					completed: input.completed ? '1' : '0',
 					timestamp: String(Date.now()),
@@ -2786,7 +2786,7 @@ export default router({
 						let cursor = '0'
 						const ratings: number[] = []
 						do {
-							const [newCursor, keys] = await redis.scan(cursor, 'MATCH', 'nexus:feedback:*', 'COUNT', 100)
+							const [newCursor, keys] = await redis.scan(cursor, 'MATCH', 'liv:feedback:*', 'COUNT', 100)
 							cursor = newCursor
 							for (const key of keys) {
 								const data = await redis.hgetall(key)

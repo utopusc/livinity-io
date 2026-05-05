@@ -16,7 +16,7 @@ export interface AppConfig {
   updatedAt: number;
 }
 
-const REDIS_APPS_KEY = 'nexus:apps';
+const REDIS_APPS_KEY = 'liv:apps';
 
 export class AppManager {
   private redis: Redis;

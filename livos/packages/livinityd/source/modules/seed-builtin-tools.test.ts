@@ -41,14 +41,14 @@ async function test_seed_writes_nine_tool_keys() {
 	const {redis, store} = makeFakeRedis()
 	await seedBuiltinTools(redis)
 
-	const toolKeys = [...store.keys()].filter((k) => k.startsWith('nexus:cap:tool:'))
+	const toolKeys = [...store.keys()].filter((k) => k.startsWith('liv:cap:tool:'))
 	assert.equal(toolKeys.length, 9, `expected 9 tool keys, got ${toolKeys.length}`)
 	assert.equal(toolKeys.length, BUILT_IN_TOOL_IDS.length)
 
 	for (const id of BUILT_IN_TOOL_IDS) {
 		const name = id.replace(/^tool:/, '')
 		assert.ok(
-			store.has(`nexus:cap:tool:${name}`),
+			store.has(`liv:cap:tool:${name}`),
 			`missing key for ${id}: nexus:cap:tool:${name}`,
 		)
 	}
@@ -60,7 +60,7 @@ async function test_each_manifest_has_required_fields() {
 
 	for (const id of BUILT_IN_TOOL_IDS) {
 		const name = id.replace(/^tool:/, '')
-		const raw = store.get(`nexus:cap:tool:${name}`)
+		const raw = store.get(`liv:cap:tool:${name}`)
 		assert.ok(raw, `no value for nexus:cap:tool:${name}`)
 		const m = JSON.parse(raw)
 		assert.equal(m.id, id, `id mismatch for ${id}`)
@@ -81,7 +81,7 @@ async function test_sentinel_key_is_set() {
 	await seedBuiltinTools(redis)
 	const after = Date.now()
 
-	const sentinel = store.get('nexus:cap:_meta:lastSeedAt')
+	const sentinel = store.get('liv:cap:_meta:lastSeedAt')
 	assert.ok(sentinel, 'sentinel nexus:cap:_meta:lastSeedAt not set')
 	const ts = Date.parse(sentinel)
 	assert.ok(!Number.isNaN(ts), `sentinel is not a valid ISO date: ${sentinel}`)
@@ -95,19 +95,19 @@ async function test_idempotent_reseed() {
 	await new Promise((r) => setTimeout(r, 2))
 	await seedBuiltinTools(redis)
 
-	const toolKeys = [...store.keys()].filter((k) => k.startsWith('nexus:cap:tool:'))
+	const toolKeys = [...store.keys()].filter((k) => k.startsWith('liv:cap:tool:'))
 	assert.equal(toolKeys.length, 9, `re-seed grew/shrunk key count: ${toolKeys.length}`)
 
 	for (const id of BUILT_IN_TOOL_IDS) {
 		const name = id.replace(/^tool:/, '')
-		const raw = store.get(`nexus:cap:tool:${name}`)
+		const raw = store.get(`liv:cap:tool:${name}`)
 		assert.ok(raw, `key ${name} disappeared after re-seed`)
 		const m = JSON.parse(raw)
 		assert.equal(m.id, id)
 		assert.equal(m.name, name)
 	}
 
-	const sentinel = store.get('nexus:cap:_meta:lastSeedAt')
+	const sentinel = store.get('liv:cap:_meta:lastSeedAt')
 	assert.ok(sentinel)
 }
 

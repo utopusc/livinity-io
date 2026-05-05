@@ -24,7 +24,7 @@ interface ActiveLoop {
   task: string;
 }
 
-const STATE_PREFIX = 'nexus:loop_state:';
+const STATE_PREFIX = 'liv:loop_state:';
 
 export class LoopRunner {
   private redis: Redis;

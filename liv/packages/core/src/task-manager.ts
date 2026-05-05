@@ -57,9 +57,9 @@ export interface SubmitTaskOptions {
 // ── Constants ─────────────────────────────────────────────────────────────
 
 const QUEUE_NAME = 'nexus-parallel-tasks';
-const TASK_KEY_PREFIX = 'nexus:tasks:';
+const TASK_KEY_PREFIX = 'liv:tasks:';
 const CANCEL_KEY_SUFFIX = ':cancel';
-const NOTIFY_PREFIX = 'nexus:notify:task:';
+const NOTIFY_PREFIX = 'liv:notify:task:';
 
 // ── TaskManager Class ─────────────────────────────────────────────────────
 

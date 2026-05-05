@@ -207,14 +207,14 @@ export class VoiceGateway {
   private subscribeVoiceResponse(): void {
     const sub = this.deps.redisSub;
 
-    sub.subscribe('nexus:voice:response').catch((err) => {
+    sub.subscribe('liv:voice:response').catch((err) => {
       logger.error('[VoiceGateway] Failed to subscribe to voice response channel', {
         error: (err as Error).message,
       });
     });
 
     sub.on('message', (channel: string, message: string) => {
-      if (channel !== 'nexus:voice:response') return;
+      if (channel !== 'liv:voice:response') return;
 
       try {
         const data = JSON.parse(message) as {
@@ -263,7 +263,7 @@ export class VoiceGateway {
   /** Gracefully stop: close all sessions, unsubscribe, and close the WSS. */
   stop(): void {
     // Unsubscribe from voice response channel
-    this.deps.redisSub.unsubscribe('nexus:voice:response').catch(() => {});
+    this.deps.redisSub.unsubscribe('liv:voice:response').catch(() => {});
 
     for (const [id, session] of this.sessions) {
       session.close();

@@ -51,7 +51,7 @@ const FALLBACK_DESCRIPTIONS: Record<string, string> = {
 	web_search: 'Search the web for information',
 }
 
-const REDIS_PREFIX = 'nexus:cap:'
+const REDIS_PREFIX = 'liv:cap:'
 const SENTINEL_KEY = `${REDIS_PREFIX}_meta:lastSeedAt`
 
 /**
