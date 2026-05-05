@@ -64,7 +64,7 @@
 		"@homebridge/dbus-native": "github:getumbrel/dbus-native#types",
 		"@livos/config": "workspace:*",
 		"@modelcontextprotocol/sdk": "^1.12.0",
-		"@nexus/core": "file:../../../nexus/packages/core",
+		"@liv/core": "file:../../../liv/packages/core",
 		"@novnc/novnc": "^1.6.0",
 		"@nut-tree-fork/nut-js": "^4.2.6",
 		"@parcel/watcher": "^2.5.1",
