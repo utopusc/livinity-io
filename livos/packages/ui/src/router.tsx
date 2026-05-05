@@ -52,6 +52,10 @@ const LivDesignSystemPlayground = React.lazy(() => import('./routes/playground/l
 // Visual QA for OKLCH tokens, Geist fonts, ThemeProvider.
 // Hidden from main nav; reachable only via /playground/v32-theme.
 const V32ThemePlayground = React.lazy(() => import('./routes/playground/v32-theme'))
+// Phase 81 — v32 chat UI dev preview.
+// Coexists with /ai-chat (legacy) until P90 cutover.
+// Accessible at /ai-chat-v2 for Wave 2 parallel development.
+const AiChatV32 = React.lazy(() => import('./routes/ai-chat/v32/index'))
 
 function SpotlightConnected() {
 	const {open, setOpen} = useCmdkOpen()
@@ -118,6 +122,13 @@ export const router = createBrowserRouter([
 			{
 				path: 'playground/v32-theme',
 				element: <V32ThemePlayground />,
+				ErrorBoundary: ErrorBoundaryComponentFallback,
+			},
+			// Phase 81 — v32 chat UI dev preview route.
+			// Coexists with /ai-chat (legacy). P90 will switch /ai-chat to v32/.
+			{
+				path: 'ai-chat-v2',
+				element: <AiChatV32 />,
 				ErrorBoundary: ErrorBoundaryComponentFallback,
 			},
 			{
