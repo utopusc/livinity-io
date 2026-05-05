@@ -48,6 +48,10 @@ const InviteAcceptPage = React.lazy(() => import('./routes/invite'))
 // Single visual reference for every primitive shipped by Plans 66-01..66-04.
 // Hidden from main nav (D-21); reachable only via direct URL.
 const LivDesignSystemPlayground = React.lazy(() => import('./routes/playground/liv-design-system'))
+// Phase 80 — v32 foundation playground.
+// Visual QA for OKLCH tokens, Geist fonts, ThemeProvider.
+// Hidden from main nav; reachable only via /playground/v32-theme.
+const V32ThemePlayground = React.lazy(() => import('./routes/playground/v32-theme'))
 
 function SpotlightConnected() {
 	const {open, setOpen} = useCmdkOpen()
@@ -106,6 +110,14 @@ export const router = createBrowserRouter([
 			{
 				path: 'playground/liv-design-system',
 				element: <LivDesignSystemPlayground />,
+				ErrorBoundary: ErrorBoundaryComponentFallback,
+			},
+			// Phase 80 — v32 theme playground.
+			// Visual QA for OKLCH tokens, Geist fonts, ThemeProvider.
+			// Gated behind EnsureLoggedIn (parent element); hidden from main nav.
+			{
+				path: 'playground/v32-theme',
+				element: <V32ThemePlayground />,
 				ErrorBoundary: ErrorBoundaryComponentFallback,
 			},
 			{

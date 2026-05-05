@@ -4,6 +4,7 @@
 
 @tailwind base;
 @import './styles/liv-tokens.css';
+@import './styles/v32-tokens.css';
 @tailwind components;
 @tailwind utilities;
 

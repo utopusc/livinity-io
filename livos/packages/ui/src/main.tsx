@@ -1,3 +1,7 @@
+// Geist Variable fonts — imported before index.css so Tailwind font-family cascade resolves correctly
+import '@fontsource-variable/geist'
+import '@fontsource-variable/geist-mono'
+
 import {RouterProvider} from 'react-router-dom'
 
 import {init} from '@/init'
@@ -10,6 +14,7 @@ import {GlobalFilesProvider} from './providers/global-files'
 import {RemoteLanguageInjector} from './providers/language'
 import {OnboardingPersonalizationSync} from './providers/onboarding-sync'
 import {Prefetcher} from './providers/prefetch'
+import {ThemeProvider} from './providers/theme-provider'
 import {RemoteWallpaperInjector, WallpaperProviderConnected} from './providers/wallpaper'
 import {router} from './router'
 import {TrpcProvider} from './trpc/trpc-provider'
@@ -17,6 +22,7 @@ import {TrpcProvider} from './trpc/trpc-provider'
 initTokenRenewal()
 
 init(
+	<ThemeProvider defaultTheme="system">
 	<TrpcProvider>
 		<AuthBootstrap />
 		<RemoteLanguageInjector />
@@ -33,5 +39,6 @@ init(
 		</WallpaperProviderConnected>
 		<OnboardingPersonalizationSync />
 		<Prefetcher />
-	</TrpcProvider>,
+	</TrpcProvider>
+	</ThemeProvider>,
 )
