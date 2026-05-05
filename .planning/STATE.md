@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
-status: 65-06 landed cleanly — sacred SHA preserved, active docs aligned with post-rename source tree, memory file updated with HARD RULES verbatim. Continue with 65-04 next.
-last_updated: "2026-05-05T15:55:50.551Z"
-last_activity: 2026-05-05 — 65-06 (active doc + memory update) shipped. Phase 65 will be marked SHIPPED once 65-04 + 65-05 execute.
+status: 65-04 landed cleanly — build/deploy scripts (update.sh, livos/install.sh, .github/workflows/deploy.yml + update-sh-smoke.yml) renamed @nexus → @liv. Server4 legacy deploy DELETED per HARD RULE 2026-04-27. Sacred SHA preserved. Single atomic commit 65d584dc. Continue with 65-05 (Mini PC migration script + LIVE CUTOVER user-walk).
+last_updated: "2026-05-05T15:55:00.000Z"
+last_activity: 2026-05-05 — 65-04 (build/deploy script rename) shipped. 65-05 (Mini PC migration script authoring + USER-WALK live cutover gate) is the only plan remaining for Phase 65 SHIPPED.
 progress:
   total_phases: 13
   completed_phases: 10
   total_plans: 88
-  completed_plans: 74
-  percent: 84
+  completed_plans: 75
+  percent: 85
 ---
 
 # Project State
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 65 (Liv Rename + Foundation Cleanup) — in progress, 4/6 plans complete
-Plans complete: 65-01 (preflight), 65-02 (git mv nexus → liv + 6 package.json), 65-03 (source-code identifier sweep — imports + env vars + Redis prefix + brand strings + .env.example), 65-06 (active documentation + memory file update — out-of-order per user brief: source-tree state ALREADY references `liv/` post 65-02/03, docs now align)
-Plans pending: 65-04 (build/deploy script updates — `update.sh` / `livos/install.sh` / `.github/workflows/deploy.yml`), 65-05 (Mini PC migration script + live cutover gate)
+Phase: 65 (Liv Rename + Foundation Cleanup) — in progress, 5/6 plans complete
+Plans complete: 65-01 (preflight), 65-02 (git mv nexus → liv + 6 package.json), 65-03 (source-code identifier sweep — imports + env vars + Redis prefix + brand strings + .env.example), 65-04 (build/deploy script rename — update.sh + livos/install.sh + .github/workflows/{deploy,update-sh-smoke}.yml; Server4 deploy DELETED per HARD RULE 2026-04-27), 65-06 (active documentation + memory file update — out-of-order per user brief: source-tree state ALREADY references `liv/` post 65-02/03, docs now align)
+Plans pending: 65-05 (Mini PC migration script + live cutover gate)
 
 Phase 64 (v30.5 Final Cleanup) — paused, 4/5 plans complete; 64-04 awaits user-walk (Mini PC redeploy + Suna smoke test)
-Status: 65-06 landed cleanly — sacred SHA preserved, active docs aligned with post-rename source tree, memory file updated with HARD RULES verbatim. Continue with 65-04 next.
-Last activity: 2026-05-05 — 65-06 (active doc + memory update) shipped. Phase 65 will be marked SHIPPED once 65-04 + 65-05 execute.
+Status: 65-04 landed cleanly — build/deploy scripts renamed @nexus → @liv (single atomic commit 65d584dc); Server4 legacy deploy DELETED per HARD RULE; sacred SHA preserved. Continue with 65-05 (Mini PC migration script + LIVE CUTOVER user-walk).
+Last activity: 2026-05-05 — 65-04 (build/deploy script rename) shipped. 65-05 is the only plan remaining for Phase 65 SHIPPED.
 
 ## Phase 64 Outstanding Items (user-walk required)
 
@@ -40,20 +40,26 @@ Last activity: 2026-05-05 — 65-06 (active doc + memory update) shipped. Phase 
 2. **64-04 Step B** — Browser smoke test: visit `https://suna.bruce.livinity.io/`, type "Navigate to google.com and tell me what you see", confirm agent describes Google homepage
 3. **64-02 deferred** — 11 of 14 v29.3-v29.5 carryforward UATs are `needs-human-walk`; 1 `failed` (Phase 49 fail2ban regression). See `64-UAT-MATRIX.md` for the full list and walk steps.
 
-## Phase 65 Progress (Liv Rename + Foundation Cleanup) — 4/6 plans complete
+## Phase 65 Progress (Liv Rename + Foundation Cleanup) — 5/6 plans complete
 
 - **65-01 ✅** Pre-flight snapshot + branch documentation. SUMMARY: `65-01-SUMMARY.md`. Sacred SHA `4f868d31...8b` baseline recorded.
 - **65-02 ✅** Atomic `git mv nexus liv` + 6 package.json `@nexus/*` → `@liv/*` edits. Commit `31bde121`. Sacred SHA preserved through git rename detection. SUMMARY: `65-02-SUMMARY.md`.
 - **65-03 ✅** Source-code identifier sweep (4 commits: `4324c839` `a62f31c2` `ed38c138` `4476385a`) — imports + env vars + Redis prefix + comments + user strings + .env.example. Sacred SHA preserved at 8 checkpoints; `@liv/{core,worker,mcp-server,memory}` all build clean; livinityd typecheck baseline 358 pre-existing errors unchanged. SUMMARY: `65-03-SUMMARY.md`.
-- **65-04** — pending (build/deploy script updates: `update.sh` 7 `/opt/nexus` + 7 `@nexus` + 21 `NEXUS_*` occurrences; `livos/install.sh` 26 env refs; `.github/workflows/deploy.yml` 8 occurrences).
+- **65-04 ✅** Build/deploy script rename — single atomic commit `65d584dc`. `update.sh` (NEXUS_DIR → LIV_DIR + 18 callsites; pnpm-store glob @nexus+core* → @liv+core*; banner + log strings normalized), `livos/install.sh` (NEXUS_API_URL → LIV_API_URL; /opt/nexus → /opt/liv across 3 systemd unit blocks + 5 build/deploy paths), `.github/workflows/deploy.yml` (legacy git-pull+pm2 deploy DELETED per HARD RULE D-NO-SERVER4 / 2026-04-27, replaced with workflow_dispatch no-op stub + explanatory disabled-comment block), `.github/workflows/update-sh-smoke.yml` (path filter nexus/** → liv/**, 4 build+verify pairs renamed @nexus/* → @liv/*). `livos/setup.sh` had zero refs (already clean). Sacred SHA preserved at start + end. `@liv/core` tsc clean. DRY-RUN-SAFE — no live deploy. Task 3 GitHub-secret-rename checkpoint emitted defensively (VACUOUS for this repo — deploy.yml had no NEXUS_* secret reference). SUMMARY: `65-04-SUMMARY.md`.
 - **65-05** — pending (Mini PC migration script `scripts/migrate-nexus-to-liv.sh` + paired rollback + LIVE CUTOVER user-walk gate per CONTEXT D-12).
-- **65-06 ✅** Active documentation update (RENAME-13). Updated: `STATE.md`, `ROADMAP.md`, `v31-DRAFT.md`, `README.md`, `ONBOARDING.md`, `liv/HEARTBEAT.md`, plus Claude memory file (`MEMORY.md`) with HARD RULES preserved verbatim. Sacred SHA preserved. Archived planning docs untouched per D-15. SUMMARY: `65-06-SUMMARY.md`. **Note:** 65-06 ran out-of-order ahead of 65-04/65-05 — documentation now describes the source-tree-renamed state shipped by 65-02/65-03; deploy scripts and Mini PC migration paths still reference `/opt/nexus/` until 65-04/65-05 land.
+- **65-06 ✅** Active documentation update (RENAME-13). Updated: `STATE.md`, `ROADMAP.md`, `v31-DRAFT.md`, `README.md`, `ONBOARDING.md`, `liv/HEARTBEAT.md`, plus Claude memory file (`MEMORY.md`) with HARD RULES preserved verbatim. Sacred SHA preserved. Archived planning docs untouched per D-15. SUMMARY: `65-06-SUMMARY.md`. **Note:** 65-06 ran out-of-order ahead of 65-04/65-05 — documentation now describes the source-tree-renamed state shipped by 65-02/65-03; Mini PC migration paths still reference `/opt/nexus/` until 65-05 lands.
 
 ## Phase 65 Outstanding Items
 
-1. **65-04** — Build/deploy script updates (autonomous-safe per CONTEXT D-NO-SERVER4 + execution_safety table).
-2. **65-05** — Mini PC migration script authoring (autonomous-safe) + LIVE CUTOVER user-walk gate (USER-SUPERVISED ONLY per CONTEXT execution_safety).
-3. **Phase 65 SHIPPED** banner will be added once 65-04 + 65-05 (script-write phase) land. The Mini PC live cutover is a separate user-walk gate beyond plan-execution scope.
+1. **65-05** — Mini PC migration script authoring (autonomous-safe) + LIVE CUTOVER user-walk gate (USER-SUPERVISED ONLY per CONTEXT execution_safety).
+2. **Phase 65 SHIPPED** banner will be added once 65-05 (script-write phase) lands. The Mini PC live cutover is a separate user-walk gate beyond plan-execution scope.
+
+## Phase 65 Decisions Logged
+
+- **65-04:** deploy.yml legacy git-pull+pm2 workflow DELETED per HARD RULE D-NO-SERVER4 (replaced with workflow_dispatch no-op stub + 12-line explanatory comment block); not rebranded to /opt/liv/. Mini PC deploy uses /opt/livos/update.sh directly, NOT this workflow.
+- **65-04:** GitHub secret rename Task 3 checkpoint VACUOUS for this repo (deploy.yml had zero `secrets.NEXUS_*` references — only SERVER_HOST/USER/SSH_KEY); emitted defensively per plan directive in case stale unused secret exists in GitHub Actions UI.
+- **65-04:** Build gate substitution: plan said `pnpm --filter '@liv/core' build` but `liv/` uses npm workspaces (not pnpm) per `liv/package.json`. Used `npm run build --workspace=packages/core` from `liv/` instead — same intent, correct invocation.
+- **65-04:** Pre-existing Windows postinstall failure in `livos/packages/ui` (mkdir -p + cp -r in @tabler/icons copy-script) is invariant under shell+yaml edits; verified pre-existing via git log on packages/ui/package.json (last touched in 71-02). pnpm install --ignore-scripts confirms dep resolution clean.
 
 ## Phase 66 Progress (Liv Design System v1) — 4/5 plans complete
 

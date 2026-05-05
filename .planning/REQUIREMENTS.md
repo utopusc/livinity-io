@@ -43,11 +43,15 @@
 **: `livos/install.sh` env var references updated (26 occurrences)
 - [x] **RENAME-08
 **: `.github/workflows/deploy.yml` updated (8 occurrences)
-- [ ] **RENAME-09**: Mini PC migration script (`scripts/migrate-nexus-to-liv.sh`) executes atomic move + symlink fallback
-- [ ] **RENAME-10**: Mini PC `/opt/nexus/` → `/opt/liv/` migration verified, all 4 systemd services green
-- [ ] **RENAME-11**: Smoke test: `curl https://bruce.livinity.io/api/agent/stream -d '{"task":"hello"}'` returns SSE
+- [x] **RENAME-09
+**: Mini PC migration script (`scripts/migrate-nexus-to-liv.sh`) executes atomic move + symlink fallback
+- [x] **RENAME-10
+**: Mini PC `/opt/nexus/` → `/opt/liv/` migration verified, all 4 systemd services green
+- [x] **RENAME-11
+**: Smoke test: `curl https://bruce.livinity.io/api/agent/stream -d '{"task":"hello"}'` returns SSE
 - [ ] **RENAME-12**: Subscription Claude responds via `/v1/messages` post-rename (sacred file functional verification)
-- [ ] **RENAME-13**: All `.planning/*.md`, `CLAUDE.md`, `README.md` updated; memory files updated
+- [x] **RENAME-13
+**: All `.planning/*.md`, `CLAUDE.md`, `README.md` updated; memory files updated (shipped 65-06 commit `4332e71a` — STATE/ROADMAP/v31-DRAFT/README/ONBOARDING/HEARTBEAT updated; `MEMORY.md` updated separately with HARD RULES preserved verbatim; archived planning docs untouched per D-15)
 
 ### DESIGN (Phase 66 — Liv Design System v1)
 

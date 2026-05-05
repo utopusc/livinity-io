@@ -96,7 +96,7 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 
 **Goal:** Project-wide cosmetic rename Nexus → Liv. Mechanical, high blast radius, must be atomic.
 
-**Progress (2026-05-05):** 4/6 plans shipped — 65-01 (preflight), 65-02 (git mv + 6 package.json), 65-03 (source-code sweep, 4 commits), 65-06 (active docs + memory file). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` preserved across all shipped plans. Pending: 65-04 (deploy scripts) + 65-05 (Mini PC migration script + LIVE CUTOVER user-walk).
+**Progress (2026-05-05):** 5/6 plans shipped — 65-01 (preflight), 65-02 (git mv + 6 package.json), 65-03 (source-code sweep, 4 commits), 65-04 (deploy scripts: update.sh + livos/install.sh + .github/workflows/{deploy,update-sh-smoke}.yml; Server4 deploy DELETED per HARD RULE; commit `65d584dc`), 65-06 (active docs + memory file). Sacred SHA `4f868d318abff71f8c8bfbcf443b2393a553018b` preserved across all shipped plans. Pending: 65-05 (Mini PC migration script + LIVE CUTOVER user-walk).
 
 **Depends on:** Phase 64 (v30.5 cleanup so we don't rename a half-broken state).
 
