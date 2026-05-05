@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T01:32:51.412Z"
-last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
+last_updated: "2026-05-05T01:43:43.999Z"
+last_activity: "2026-05-05 — P76-03 agent-templates tRPC routes shipped: 7/7 vitest pass (22/22 across full agent-templates suite, no regressions); commits `113841ef` (RED) + `9350b936` (GREEN). MARKET-04 + MARKET-05 marked complete. Sacred SHA `4f868d31...` unchanged."
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 57
-  completed_plans: 50
-  percent: 88
+  completed_plans: 51
+  percent: 89
 ---
 
 # Project State
@@ -111,10 +111,11 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **70-01:** Stop/send button + model badge rendered as `data-testid='liv-composer-stop-stub'` / `'liv-composer-model-badge-stub'` so 70-06 (`LivStopButton`) and 70-08 swap them cleanly without re-touching composer. Composer's prop shape (`isStreaming`, `onStop`, `onSend`, `disabled`, derived `hasContent`) IS the locked contract.
 - **70-01:** VoiceButton prop is `onTranscript` (not `onTranscription` as plan reference signature line 278 stated) — confirmed by reading `voice-button.tsx` lines 26-29 + 97. Used `onTranscript={text => onChange(value ? \`${value} ${text}\` : text)}` — string-concat with space-prefix when typing already in progress.
 
-## Phase 76 Progress (Agent Marketplace + Onboarding Tour) — 1/7 plans complete (Wave 1)
+## Phase 76 Progress (Agent Marketplace + Onboarding Tour) — 2/7 plans complete (Wave 1+2)
 
 - **76-01 ✅** agent_templates table + repo + tests foundation. Schema appends `CREATE TABLE IF NOT EXISTS agent_templates` (slug PK, tools_enabled jsonb, GIN(tags)) under `-- Phase 76: Agent Templates` namespaced header (avoids conflict with concurrent 75-* schema appends). New `agent-templates-repo.ts` (103 LOC) exports `listAgentTemplates` / `getAgentTemplate` / `incrementCloneCount` + `AgentTemplate` type — all queries use parameterized $1 placeholders (T-76-01-01); clone_count UPDATE is single-statement atomic (T-76-01-04). Barrel re-export added to `database/index.ts`. 9/9 vitest pass (mocked-pool pattern matching api-keys/database.test.ts + usage-tracking/database.test.ts; pg-mem not in livinityd devDeps). Sacred SHA `4f868d31...` unchanged. MARKET-03 marked complete. Commits `bdf90519` (RED test) + `49aaec94` (GREEN impl). SUMMARY: `76-01-SUMMARY.md`.
-- **76-02..76-07** — pending (8 seeds + boot seed runner, marketplace UI, tRPC routes, onboarding tour, polish).
+- **76-03 ✅** 3 tRPC procedures (`ai.listAgentTemplates`, `ai.getAgentTemplate`, `ai.cloneAgentTemplate`) appended in existing `router({...})` block at `livos/packages/livinityd/source/modules/ai/routes.ts` (123 LOC delta — every existing procedure preserved byte-for-byte). cloneAgentTemplate is the 4-step bridge to nexus `/api/subagents` (D-06, D-09 — re-use existing endpoint, do NOT create user_agents table): read template (404 short-circuit) → POST nexus → on 200 increment clone_count → return body. cloneId pattern: `${slug}-${userId.slice(0,8)}-${Date.now()}` truncated to 64 chars (T-76-03-01). 7/7 vitest pass (6 plan-mandated + 1 defensive T-76-03-05 guard); 22/22 across full agent-templates suite (no 76-01/76-02 regressions). Sacred SHA `4f868d31...` unchanged. MARKET-04 + MARKET-05 marked complete. Commits `113841ef` (RED) + `9350b936` (GREEN). SUMMARY: `76-03-SUMMARY.md`.
+- **76-02, 76-04..76-07** — pending (8 seeds + boot seed runner, marketplace UI, onboarding tour, polish).
 
 ### P76 Decisions Logged
 
@@ -122,6 +123,13 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **76-01:** Schema block namespaced under `-- Phase 76: Agent Templates` header for safe coexistence with concurrent Phase 75-01/75-03 schema appends in this batch — explicit comment locator makes diff hunks resolve cleanly without hand-merging.
 - **76-01:** `incrementCloneCount` uses single UPDATE statement (no SELECT-then-UPDATE pattern) — atomic at PG row level, T-76-01-04 mitigation.
 - **76-01:** Build gate substituted: plan must-have asserted `pnpm --filter @livos/livinityd build` exits 0, but `livinityd` package has no `build` script (runs TS directly via tsx per project memory). Verified with `pnpm typecheck` (`tsc --noEmit`) — zero errors on the 4 files touched. Pre-existing typecheck errors in unrelated files (user/routes.ts, widgets/routes.ts, file-store.ts) are out-of-scope (predate this plan).
+- **76-03:** ctx pool access path discovered as `getPool()` free-function from `'../database/index.js'` (NOT `ctx.livinityd.db.getPool()` as the plan's interfaces snippet showed). Plan's `<task>` step 3 explicitly directed verification — discovered shape locked + documented in test file header. Mirrors platform/routes.ts:48 and 17 other files in the codebase.
+- **76-03:** nexus subagent body field is `skills` (not `tools` as the plan's reference snippet showed). The existing `createSubagent` zod schema in this same file (lines 899-913) uses `skills: z.array(z.string()).default(['*'])`. Picked the canonical contract to maximize compatibility with the unmodified nexus handler (D-09 — re-use, don't duplicate). The cloneAgentTemplate body sends `skills: tpl.toolsEnabled`.
+- **76-03:** tRPC test pattern = `createCallerFactory + stub Context` (mirrors api-keys/routes.test.ts), NOT supertest, NOT app.listen(0) HTTP harness. The 6 must-have behaviors all live at the tRPC layer (input validation + repo-mock assertions + fetch-spy assertions on outbound POST), so HTTP-level routing is irrelevant. `vi.mock('../database/index.js')` stubs ALL exports the SUT imports including `getPool/listAgentTemplates/getAgentTemplate/incrementCloneCount/getUserPreference/setUserPreference`. `per-user-claude.js` also stubbed (touches node-pty + filesystem at module-load).
+- **76-03:** Repo function imports aliased as `repoListAgentTemplates`/`repoGetAgentTemplate`/`repoIncrementCloneCount` — avoids shadowing the new tRPC procedure field names within the same `router({...})` literal scope. TS would compile without aliases (different scopes) but readability + grep-clarity wins.
+- **76-03:** `ctx.livinityd!.logger` non-null assertion matches established style in this file (lines 778, 823, 1246, 1277). Zero new typecheck errors above plan-relevant baseline. Same approach as 76-01's typecheck-substitution decision.
+- **76-03:** Defensive 7th test added (T7) — guards the T-76-03-05 contract that `cloneAgentTemplate({slug:'nope'})` short-circuits BEFORE any nexus call AND BEFORE incrementing clone_count. Plan asked for 6 cases; 7 keeps the count-drift threat fully covered.
+- **76-03:** `let fetchSpy: any = null` (not `ReturnType<typeof vi.spyOn>`) — that generic resolves to `MockInstance<(this: unknown, ...args: unknown[]) => unknown>` which can't absorb `vi.spyOn(globalThis, 'fetch')`'s typed return. Casting to `any` matches `livinity-broker/mode-dispatch.test.ts`'s Pitfall-3 workaround.
 
 ## Phase 73 Progress (Reliability Layer) — 4/5 plans complete
 

@@ -197,7 +197,8 @@
 **: PostgreSQL `agent_templates` table (slug, name, description, system_prompt, tools_enabled, tags, clone_count, created_at)
 - [x] **MARKET-04
 **: 8-10 seed agent templates (General Assistant, Code Reviewer, Researcher, Computer Operator, MCP Manager, etc.)
-- [ ] **MARKET-05**: API `GET /api/agent-templates`, `POST /api/agent-templates/:slug/clone`; clone creates entry in existing `user_agents` table with copy of template config
+- [x] **MARKET-05
+**: API `GET /api/agent-templates`, `POST /api/agent-templates/:slug/clone`; clone creates entry in existing `user_agents` table with copy of template config
 - [x] **MARKET-06
 **: `liv-tour.tsx` first-run interactive tour (9 steps: welcome → composer → slash hint → agent picker → demo task → side panel → reasoning card → marketplace → done); skippable, replayable from settings
 - [ ] **MARKET-07**: Settings "Liv Agent" section — model picker, tool permissions, computer use toggle, idle timeout slider, reasoning visibility toggle, replay onboarding tour button
