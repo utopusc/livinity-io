@@ -461,3 +461,24 @@ CREATE TABLE IF NOT EXISTS agent_templates (
 
 CREATE INDEX IF NOT EXISTS idx_agent_templates_tags
   ON agent_templates USING GIN (tags);
+
+-- Phase 71: Computer Use Tasks
+-- (CU-FOUND-06) Per-user Bytebot container lifecycle.
+-- The partial unique index enforces "max 1 active container per user" at the
+-- DB layer — not just app-layer logic. Defense in depth.
+CREATE TABLE IF NOT EXISTS computer_use_tasks (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status        TEXT NOT NULL CHECK (status IN ('active', 'idle', 'stopped')),
+  container_id  TEXT,
+  port          INTEGER,
+  last_activity TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  stopped_at    TIMESTAMPTZ
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS computer_use_tasks_user_active_idx
+  ON computer_use_tasks(user_id) WHERE status = 'active';
+
+CREATE INDEX IF NOT EXISTS computer_use_tasks_active_last_activity_idx
+  ON computer_use_tasks(last_activity) WHERE status = 'active';
