@@ -272,6 +272,64 @@ class RunStore {
       return null;
     }
   }
+
+  /**
+   * Enumerate all runs persisted to Redis. Phase 73-05 — sole RunStore
+   * extension allowed in P73 per CONTEXT D-06. Used by the boot-time
+   * recovery scanner (`recoverIncompleteRuns` in `run-recovery.ts`) to
+   * surface orphaned/incomplete runs after a daemon crash.
+   *
+   * Implementation uses `SCAN MATCH liv:agent_run:*:meta COUNT 100` to
+   * iterate non-blockingly (CONTEXT D-27 — KEYS would block Redis on
+   * large datasets). Cursor is consumed until it returns to '0'.
+   *
+   * Each `:meta` key is regex-validated to recover the runId; malformed
+   * keys (regex non-match) and meta entries that fail JSON.parse are
+   * skipped silently — `getMeta` already returns `null` on parse failure
+   * (T-73-05-01 + T-73-05-05 mitigations).
+   *
+   * Filters compose with AND semantics: `{ userId, status }` returns only
+   * runs that match BOTH. Empty Redis ⇒ `[]` (never throws).
+   *
+   * Cost: O(scanned keys * 1 GET per match). Safe for v31 entry where
+   * the 24h-TTL window keeps the working set bounded; if datasets ever
+   * grow to where this becomes slow, refactor to MGET batches. Boot-time
+   * call cost is bounded by # of non-expired runs in the last 24h.
+   */
+  async listRuns(filter?: {
+    userId?: string;
+    status?: RunStatus;
+  }): Promise<Array<{ runId: string; meta: RunMeta }>> {
+    const results: Array<{ runId: string; meta: RunMeta }> = [];
+    let cursor = '0';
+    do {
+      // ioredis scan signature: scan(cursor, 'MATCH', pattern, 'COUNT', n).
+      // Returns [nextCursor, keys[]]. Cast through `any` because ioredis-mock
+      // and ioredis both support this varargs form but the typed signature
+      // varies across versions.
+      const [next, keys]: [string, string[]] = await (this.redis as any).scan(
+        cursor,
+        'MATCH',
+        `${KEY_PREFIX}:*:meta`,
+        'COUNT',
+        100,
+      );
+      cursor = next;
+      for (const key of keys) {
+        // Defensive — an unrelated key could match the pattern by accident
+        // (e.g. a manually-inserted debugging key); regex skip on non-match.
+        const match = key.match(/^liv:agent_run:(.+):meta$/);
+        if (!match) continue;
+        const runId = match[1];
+        const meta = await this.getMeta(runId);
+        if (!meta) continue; // skip TTL'd-out or malformed entries
+        if (filter?.userId && meta.userId !== filter.userId) continue;
+        if (filter?.status && meta.status !== filter.status) continue;
+        results.push({ runId, meta });
+      }
+    } while (cursor !== '0');
+    return results;
+  }
 }
 
 // ── Public exports ───────────────────────────────────────────────
