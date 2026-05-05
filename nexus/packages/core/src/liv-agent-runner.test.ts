@@ -530,6 +530,32 @@ async function main(): Promise<void> {
     assert(categorizeTool('foobar-quux') === 'generic', 'foobar-quux');
   });
 
+  // ── Test 7 (NEW — Plan 72-native-05): mcp_bytebot_* prefix patch ──────
+  // Per 72-native-05 D-NATIVE-11 / categorize patch must-have:
+  //   - `mcp_bytebot_*` MUST be the FIRST checked prefix and map to
+  //     'computer-use' (NOT 'mcp', which would otherwise win because the
+  //     existing `mcp_*` rule fires before any bytebot rule).
+  //   - Existing `mcp_*` for non-bytebot servers must still map to 'mcp'.
+  //   - Existing P67-02 `computer_use_*` fallback must still map to 'computer-use'.
+  await test('categorizeTool — mcp_bytebot_* prefix patch (Plan 72-native-05)', async () => {
+    assert(
+      categorizeTool('mcp_bytebot_computer_screenshot') === 'computer-use',
+      'mcp_bytebot_computer_screenshot must be computer-use',
+    );
+    assert(
+      categorizeTool('mcp_bytebot_set_task_status') === 'computer-use',
+      'mcp_bytebot_set_task_status must be computer-use',
+    );
+    assert(
+      categorizeTool('mcp_filesystem_read') === 'mcp',
+      'mcp_filesystem_read must remain mcp (regression)',
+    );
+    assert(
+      categorizeTool('computer_use_click') === 'computer-use',
+      'computer_use_click P67 fallback must remain computer-use',
+    );
+  });
+
   console.log(`\n${pass} pass, ${fail} fail`);
   process.exit(fail > 0 ? 1 : 0);
 }
