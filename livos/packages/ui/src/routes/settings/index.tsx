@@ -40,6 +40,8 @@ const AiConfigPage = React.lazy(() => import('@/routes/settings/ai-config'))
 const IntegrationsPage = React.lazy(() => import('@/routes/settings/integrations'))
 const DomainSetupPage = React.lazy(() => import('@/routes/settings/domain-setup'))
 const DmPairingPage = React.lazy(() => import('@/routes/settings/dm-pairing'))
+// Phase 76 / Plan 06 (MARKET-07) — Liv Agent thin settings page (D-12 — re-uses /subagents + links to /agent-marketplace).
+const LivAgentSettings = React.lazy(() => import('@/routes/settings/liv-agent'))
 
 // drawers
 const StartMigrationDrawerOrDialog = React.lazy(() =>
@@ -138,6 +140,7 @@ export function Settings() {
 						<Route path='/advanced/:advancedSelection?' Component={AdvancedSettingsDrawerOrDialog} />
 						{/* New settings pages - embedded, no popups */}
 						<Route path='/ai-config' Component={AiConfigPage} />
+						<Route path='/liv-agent' Component={LivAgentSettings} />
 						<Route path='/integrations' Component={IntegrationsPage} />
 						<Route path='/domain-setup' Component={DomainSetupPage} />
 						<Route path='/dm-pairing' Component={DmPairingPage} />

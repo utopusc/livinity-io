@@ -46,6 +46,7 @@ import {
 	TbServer2,
 	TbCalendarTime,
 	TbStethoscope,
+	TbRobot,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -116,6 +117,8 @@ const MemorySectionLazy = React.lazy(() =>
 	import('@/routes/settings/memory').then((m) => ({default: m.MemorySection})),
 )
 const AiConfigLazy = React.lazy(() => import('@/routes/settings/ai-config'))
+// Phase 76 / Plan 06 (MARKET-07) — Liv Agent thin settings page (D-12).
+const LivAgentLazy = React.lazy(() => import('@/routes/settings/liv-agent'))
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -129,6 +132,7 @@ type SettingsSection =
 	| 'wallpaper'
 	| '2fa'
 	| 'ai-config'
+	| 'liv-agent'
 	| 'integrations'
 	| 'gmail'
 	| 'dm-pairing'
@@ -168,6 +172,8 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'voice', icon: TbMicrophone, label: 'Voice', description: 'Push-to-talk voice mode'},
 	{id: 'usage', icon: TbChartBar, label: 'Usage', description: 'Token usage & cost tracking'},
 	{id: 'memory', icon: TbBrain, label: 'Memory', description: 'AI memory & conversations'},
+	// Phase 76 / Plan 06 (MARKET-07) — Liv Agent thin settings entry (per-user surface, NOT admin-only).
+	{id: 'liv-agent', icon: TbRobot, label: 'Liv Agent', description: 'Marketplace, my agents, onboarding tour'},
 	// Admin-only settings (server management)
 	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
 	{id: 'admin-devices', icon: TbServer2, label: 'Devices', description: 'All devices across all users', adminOnly: true},
@@ -450,6 +456,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <TwoFaSection />
 		case 'ai-config':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AiConfigLazy /></Suspense>
+		case 'liv-agent':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><LivAgentLazy /></Suspense>
 		case 'integrations':
 			return <IntegrationsSection />
 		case 'gmail':
