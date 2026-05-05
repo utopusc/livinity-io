@@ -25,6 +25,7 @@ import type { LearningEngine } from './learning-engine.js';
 import type { Tool } from './types.js';
 import type Redis from 'ioredis';
 import { logger } from './logger.js';
+import { McpConfigManager } from './mcp-config-manager.js';
 
 // ── Wire Protocol Types ──────────────────────────────────────
 
@@ -450,17 +451,86 @@ export class AgentSessionManager {
       sdkTools = this.toolRegistry ? buildSdkTools(this.toolRegistry, toolPolicy) : [];
     }
 
-    // Build allowedTools and MCP servers only if we have tools
+    // Build allowedTools and MCP servers
     const allowedTools: string[] = [];
     const mcpServers: Record<string, any> = {};
 
-    if (sdkTools.length > 0) {
+    // P79-01: nexus-tools wrapper is now OPT-IN via Redis flag (default OFF).
+    // User feedback 2026-05-05: "Ben Livinity_List li olan mcp server i kullanmak
+    // istemiyorum" — they want only their installed MCP servers (bytebot etc),
+    // not the legacy livinity_list / mcp_list / livinity_search wrapper.
+    //
+    // To re-enable: redis-cli SET liv:config:expose_legacy_tools true
+    let exposeLegacy = false;
+    if (this.redis) {
+      try {
+        exposeLegacy = (await this.redis.get('liv:config:expose_legacy_tools')) === 'true';
+      } catch (err) {
+        // Non-fatal: default to off
+      }
+    }
+
+    if (exposeLegacy && sdkTools.length > 0) {
       const mcpServer = createSdkMcpServer({
         name: 'nexus-tools',
         tools: sdkTools,
       });
       mcpServers['nexus-tools'] = mcpServer;
       allowedTools.push(...sdkTools.map((t: any) => `mcp__nexus-tools__${t.name}`));
+    }
+
+    // P79-01: Inject user-installed MCP servers from McpConfigManager registry
+    // (bytebot + any future ones the user installs). This is the path the user's
+    // chat UI actually uses (WebSocket -> AgentSessionManager); the legacy
+    // /api/agent/stream path through SdkAgentRunner has its own injection (P77-03).
+    if (this.redis) {
+      try {
+        const mcpConfigManager = new McpConfigManager(this.redis);
+        const servers = await mcpConfigManager.listServers();
+        const enabled = servers.filter((s) => s.enabled);
+        let injected = 0;
+        for (const s of enabled) {
+          // Reserved-name protection — never let a user MCP shadow built-ins.
+          if (s.name === 'nexus-tools' || s.name === 'chrome-devtools') {
+            logger.warn(`AgentSessionManager: skipping MCP server with reserved name '${s.name}'`);
+            continue;
+          }
+          if (s.transport === 'stdio') {
+            if (!s.command) {
+              logger.warn(`AgentSessionManager: stdio MCP '${s.name}' missing command, skipping`);
+              continue;
+            }
+            mcpServers[s.name] = {
+              type: 'stdio',
+              command: s.command,
+              args: s.args ?? [],
+              ...(s.env ? { env: s.env } : {}),
+            };
+            allowedTools.push(`mcp__${s.name}__*`);
+            injected++;
+          } else if (s.transport === 'streamableHttp') {
+            if (!s.url) {
+              logger.warn(`AgentSessionManager: http MCP '${s.name}' missing url, skipping`);
+              continue;
+            }
+            mcpServers[s.name] = {
+              type: 'http',
+              url: s.url,
+              ...(s.headers ? { headers: s.headers } : {}),
+            };
+            allowedTools.push(`mcp__${s.name}__*`);
+            injected++;
+          }
+        }
+        if (injected > 0) {
+          logger.info('AgentSessionManager: user MCP servers injected', {
+            injected,
+            names: enabled.map((s) => s.name).filter((n) => n !== 'nexus-tools' && n !== 'chrome-devtools'),
+          });
+        }
+      } catch (err: any) {
+        logger.warn('AgentSessionManager: MCP enumeration failed (non-fatal)', { error: err?.message });
+      }
     }
 
     // Build system prompt — dynamic composition from base + loaded capability instructions
