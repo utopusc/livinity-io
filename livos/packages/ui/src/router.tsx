@@ -65,6 +65,14 @@ const V32ToolViewsPlayground = React.lazy(() => import('./routes/playground/v32-
 // replaces at the P90 cutover). Both routes coexist during dev. Lazy-loaded
 // to mirror the existing app-store / agent-marketplace pattern.
 const Marketplace = React.lazy(() => import('./routes/marketplace'))
+// Phase 85 (UI slice) — v32 agent management routes.
+//   /agents       grid of all agents (own + 5 v32 system seeds)
+//   /agents/:id   two-pane editor (preview + Manual + Agent Builder Beta)
+// Both are gated by EnsureLoggedIn (parent <element>) and lazy-loaded so the
+// initial bundle stays lean. Dock entry intentionally NOT added in this
+// slice — P90 cutover will rewire dock holistically per v32-DRAFT.
+const AgentsRoute = React.lazy(() => import('./routes/agents'))
+const AgentEditorRoute = React.lazy(() => import('./routes/agents/agent-editor'))
 
 function SpotlightConnected() {
 	const {open, setOpen} = useCmdkOpen()

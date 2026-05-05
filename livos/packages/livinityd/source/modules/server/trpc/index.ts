@@ -42,6 +42,19 @@ import apiKeys from '../../api-keys/routes.js'
 // the mutations may take 1-15s (Bytebot spawn budget) and must survive WS
 // reconnect.
 import {computerUseRouter} from '../../computer-use/routes.js'
+// v32 Phase 85 (UI slice) — agents tRPC router (Wave 2). Consumes the Wave 1
+// agents-repo from database/index.ts. Eight procedures (list/get/create/
+// update/delete/publish/unpublish/clone) — all added to httpOnlyPaths in
+// ./common.ts so autosave mutations don't hang on a half-broken WS after
+// `systemctl restart livos` (memory pitfall B-12 / X-04).
+import agentsRouter from './agents-router.js'
+// v32 Phase 86 — Public marketplace router (V32-MKT-01..06). File-disjoint
+// from P85-UI's agents-router (same directory, separate router). Three
+// procedures: list (publicProcedure query — no auth, browseable pre-login),
+// tags (publicProcedure query — distinct public tag strings),
+// cloneToLibrary (privateProcedure mutation — wraps cloneAgentToLibrary).
+// All three procedure paths added to httpOnlyPaths in ./common.ts.
+import marketplaceRouter from './marketplace-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -79,6 +92,10 @@ const appRouter = router({
 	apiKeys,
 	// v31.0 Phase 71-05 — computerUse namespace (CU-FOUND-04).
 	computerUse: computerUseRouter,
+	// v32 Phase 85 (UI slice) — agents namespace (consumes Wave 1 agents-repo).
+	agents: agentsRouter,
+	// v32 Phase 86 — marketplace namespace (public browse + clone-to-library).
+	marketplace: marketplaceRouter,
 })
 
 export type AppRouter = typeof appRouter
