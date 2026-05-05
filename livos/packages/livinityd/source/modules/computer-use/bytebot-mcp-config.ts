@@ -65,11 +65,10 @@ export interface McpServerConfigInput {
 	installedAt: number
 }
 
-/** Stored config entries also have installedAt and may have extra fields we
- *  don't care about for shape comparison. */
-export interface McpServerConfigStored extends McpServerConfigInput {
-	[key: string]: unknown
-}
+/** Stored config entries — same as input shape. We never read extra fields,
+ *  so a strict type alias is sufficient and matches the real
+ *  McpConfigManager.listServers() return type. */
+export type McpServerConfigStored = McpServerConfigInput
 
 /**
  * Default deploy-time path for the bytebot computer-use MCP stdio server.

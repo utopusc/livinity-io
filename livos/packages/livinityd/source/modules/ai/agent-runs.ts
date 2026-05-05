@@ -42,11 +42,20 @@ import {
 	LivAgentRunner,
 	RunStore,
 	RunQueue,
+	McpConfigManager,
 	type Chunk,
 	type RunMeta,
 } from '@nexus/core/lib'
 
 import type Livinityd from '../../index.js'
+
+// Phase 72-native-06: bytebot computer-use MCP server registration. Called
+// once at mount time AFTER McpConfigManager is constructed, BEFORE the
+// running nexus daemon's McpClientManager would reconcile (it reconciles
+// via Redis Pub/Sub on `nexus:config:updated`, which McpConfigManager.installServer
+// publishes automatically). Default-disabled — no-op when BYTEBOT_MCP_ENABLED
+// is unset (D-NATIVE-10).
+import {registerBytebotMcpServer} from '../computer-use/index.js'
 
 /**
  * Factory that produces a fresh LivAgentRunner per agent run.
@@ -147,6 +156,41 @@ export async function mountAgentRunsRoutes(
 	// no in-memory state to fan out. Test path may inject a pre-built one.
 	const runStore =
 		options.runStoreOverride ?? new RunStore(livinityd.ai.redis)
+
+	// ── Phase 72-native-06: bytebot computer-use MCP server registration ─
+	// Construct an McpConfigManager backed by the same Redis livinityd
+	// already uses (the running nexus daemon shares this Redis and its
+	// McpClientManager subscribes to `nexus:config:updated`, so writing the
+	// bytebot entry here is sufficient to spawn the child process there).
+	//
+	// Default-disabled: when BYTEBOT_MCP_ENABLED is unset the call is a
+	// pure no-op (returns {registered:false}); livinityd boots normally
+	// and the agent simply has no `mcp_bytebot_*` tools (D-NATIVE-10
+	// graceful degradation). Failure here is also non-fatal — caught by
+	// the function's internal try/catch.
+	//
+	// Auto-deviation Rule 3 documented in 72-native-06-SUMMARY.md: livinityd
+	// did NOT previously instantiate McpConfigManager, so this construction
+	// + wire is an additive change. The plan's <interfaces> block left
+	// "the EXACT init point" to be verified at execution time; the chosen
+	// site is here, immediately after RunStore construction (analogous to
+	// other lifecycle wiring like P73-04 RunQueue below).
+	try {
+		const bytebotConfigManager = new McpConfigManager(livinityd.ai.redis)
+		await registerBytebotMcpServer(
+			livinityd.ai.redis,
+			process.env,
+			bytebotConfigManager,
+			{
+				log: (msg) => logger.log(msg),
+				error: (msg) => logger.error(msg),
+			},
+		)
+	} catch (err) {
+		// Defensive: bytebot registration must NEVER block agent-runs mount.
+		const msg = err instanceof Error ? err.message : String(err)
+		logger.error(`[bytebot-mcp-config] mount-time error (non-fatal): ${msg}`)
+	}
 
 	const factory = options.livAgentRunnerFactory
 
