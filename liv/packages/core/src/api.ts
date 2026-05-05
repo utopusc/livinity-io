@@ -612,7 +612,8 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       const pm = brain.getProviderManager();
       const providers = await pm.listProviders();
       const fallbackOrder = pm.getFallbackOrder();
-      const primaryProvider = await redis.get('liv:config:primary_provider') || 'kimi';
+      // P77-01: default to 'claude' (broker subscription path); 'kimi' was stale from v6.0
+      const primaryProvider = await redis.get('liv:config:primary_provider') || 'claude';
 
       res.json({
         providers,

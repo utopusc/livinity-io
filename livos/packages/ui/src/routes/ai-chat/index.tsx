@@ -262,7 +262,8 @@ export default function AiChat() {
 	const utils = trpcReact.useUtils()
 
 	const providersQuery = trpcReact.ai.getProviders.useQuery(undefined, {refetchInterval: 30_000})
-	const activeProvider = providersQuery.data?.primaryProvider ?? 'kimi'
+	// P77-01: default to 'claude' (broker subscription); 'kimi' was stale from v6.0
+	const activeProvider = providersQuery.data?.primaryProvider ?? 'claude'
 
 	const activeConversationId = searchParams.get('conv') ?? null
 

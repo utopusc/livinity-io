@@ -47,6 +47,8 @@ Real-API-key broker for external/open-source apps (Bolt.diy, Open WebUI, Continu
 - [ ] **Phase 74: F2-F5 Carryover from v30.5** (BROKER-CARRY-01..05) — token cadence streaming, multi-turn tool_result protocol, Caddy timeout for long agentic, identity preservation across turns
 - [ ] **Phase 75: Reasoning Cards + Lightweight Memory** (MEM-01..08) — Kimi reasoning_content collapsible amber card, Postgres tsvector FTS over conversations, pinned messages, conversation export
 - [ ] **Phase 76: Agent Marketplace + Onboarding Tour** (MARKET-01..07) — agent_templates table + 8-10 seed agents, Suna marketplace UX adapted, first-run interactive tour (9 steps), Settings "Liv Agent" section
+- [ ] **Phase 77: MCP Agent Loop Integration** (MCP-AGENT-01..04) — Wire McpClientManager-discovered tools into agent loop so registered MCP servers' tools reach Claude's `tools[]` array; close discovery gap identified by 2026-05-05 deploy investigation. Sacred file `liv/packages/core/src/sdk-agent-runner.ts` MUST remain untouched (D-NO-BYOK / sdk-subscription-only). Pattern: extend at `agent-runs.ts` factory boundary or via SDK option construction, NOT inside the sacred runner. Deliverables: McpConfigManager.listServers() → mcpServers config injection at runtime; Bytebot env-flag default-on (gated by linux+file-exists guards); integration tests for MCP tool snapshot emission end-to-end.
+- [ ] **Phase 78: Provider Endpoint + MCP Browser Dialog** (PROV-01..03 + MCP-UI-01..04) — Three coupled fixes for "Kimi" badge / MCP page / Suna inline-marketplace feel: (a) liv-core `/api/providers` endpoint reports broker active provider (Claude) so livinityd tRPC stops falling back to hardcoded `'kimi'`; (b) MCP panel install/uninstall buttons wired to actual tRPC mutations + currently-running-tools section; (c) `LivMcpBrowserDialog` component (Suna `BrowseDialog` parity) opened from composer `+ MCP` button + agent settings — `/agent-marketplace` route stays as community-agent destination (Suna parity confirmed).
 
 **Dependencies:**
 ```
@@ -54,7 +56,8 @@ P64 → P65 → P66 ─┬→ P67 ─┬→ P68 → P69 → P70
                   │        ├→ P73
                   │        ├→ P74
                   │        ├→ P75
-                  │        └→ P76
+                  │        ├→ P76
+                  │        └→ P77 → P78
                   └→ P71 → P72
 ```
 

@@ -1,8 +1,8 @@
-/** LivModelBadge — Phase 70-06. Inline model pill ("Liv Agent · Kimi").
+/** LivModelBadge — Phase 70-06. Inline model pill ("Liv Agent · Claude").
  *
  * Renders a clickable pill: `<IconBrain /> Liv Agent · <model>` where `<model>`
  * is read from `import.meta.env.VITE_LIV_MODEL_DEFAULT` at build time
- * (falls back to `'Kimi'` per CONTEXT D-31).
+ * (falls back to `'Claude'` per P77-01 — was `'Kimi'`, stale from v6.0).
  *
  * Click is a no-op for P70 (model switching is backlog) — logs intent so the
  * surface is greppable when P75/v32 wires real switching. Hover tooltip uses
@@ -19,10 +19,10 @@ import {IconBrain} from '@tabler/icons-react'
 import {cn} from '@/shadcn-lib/utils'
 
 /** Pure helper — selects displayed model name from a (possibly absent) env value.
- * Whitespace-only and empty strings fall back to `'Kimi'`. Exported for vitest. */
+ * Whitespace-only and empty strings fall back to `'Claude'`. Exported for vitest. */
 export function getModelBadgeText(envValue: string | undefined | null): string {
 	if (envValue && envValue.trim().length > 0) return envValue
-	return 'Kimi'
+	return 'Claude'
 }
 
 export interface LivModelBadgeProps {
