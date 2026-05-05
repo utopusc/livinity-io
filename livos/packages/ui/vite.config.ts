@@ -47,7 +47,15 @@ export default defineConfig({
 				],
 			},
 			workbox: {
+				// 2026-05-05: precache 16 MB → user reported "site çok yavaş" with 477 entries.
+				// Strategy: keep precaching (offline-first), but skip the heavy Shiki
+				// syntax-highlighter language chunks + xterm + wasm + recharts. These
+				// load on demand and runtime-cache via StaleWhileRevalidate below.
 				globPatterns: ['**/*.{js,css,html,woff2}'],
+				globIgnores: [
+					'**/assets/{cpp,wasm,emacs-lisp,wolfram,angular-ts,xterm,wgsl,zig,zenscript,yaml,xsl,xml,wikitext,wenyan,webhooks,wallpaper,terraform,tex,svelte,sql,sas,scheme,scala,rust,python,nginx,latex,kotlin,julia,html,gherkin,ruby,r,powershell,php,perl,objective,markdown,lua,less,kusto,javascript,handlebars,haml,go,gnuplot,glsl,fsharp,dart,csharp,cobol,clojure,bash,asm,actionscript,abap,pascal,d-c,nasm,toml,coffee}-*.js',
+					'**/assets/{generateCategoricalChart,FileSaver}-*.js',
+				],
 				navigateFallback: '/index.html',
 				navigateFallbackDenylist: [/^\/trpc/, /^\/api/, /^\/ws/],
 				runtimeCaching: [
@@ -65,6 +73,16 @@ export default defineConfig({
 						options: {
 							cacheName: 'app-icons',
 							expiration: {maxEntries: 50, maxAgeSeconds: 30 * 24 * 60 * 60},
+						},
+					},
+					{
+						// Runtime cache for big chunks excluded from precache (the 200 KB limit).
+						// StaleWhileRevalidate: serve cached, refresh in background.
+						urlPattern: /\/assets\/.*\.(js|css)$/,
+						handler: 'StaleWhileRevalidate',
+						options: {
+							cacheName: 'app-chunks',
+							expiration: {maxEntries: 200, maxAgeSeconds: 7 * 24 * 60 * 60},
 						},
 					},
 				],
