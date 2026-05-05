@@ -1,70 +1,28 @@
-name: Deploy to Server
+# Server4 deploy disabled per project HARD RULE 2026-04-27 — see MEMORY.md
+#
+# This workflow previously deployed to a legacy server via the
+# `git pull + pm2 restart` flow targeting /opt/livos/nexus and /opt/nexus/.
+# Per HARD RULE 2026-04-27 (user-confirmed: "We have nothing to do with
+# Server 4"), Server4 is OFF-LIMITS for LivOS work. The Mini PC
+# (bruce@10.69.31.68) is the user's only LivOS deployment that matters,
+# and it is updated via /opt/livos/update.sh — NOT via this workflow.
+#
+# Deploy logic intentionally deleted, not renamed to /opt/liv/. Re-enabling
+# any deploy from this workflow requires explicit user authorization that
+# overrides the HARD RULE.
+
+name: Deploy to Server (DISABLED)
 
 on:
-  push:
-    branches: [master]
   workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-disabled:
     runs-on: ubuntu-latest
-    environment: Livinity Server
-
     steps:
-      - name: Deploy to Server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            echo "=== Starting deployment ==="
-
-            # Pull latest code
-            cd /opt/livos
-            git fetch origin
-            git reset --hard origin/master
-
-            # Install LivOS dependencies (livos is a subdirectory in the repo)
-            cd livos
-            pnpm install --frozen-lockfile
-
-            # Build config package
-            cd packages/config
-            pnpm build
-            cd ../..
-
-            # Extract UI dist files
-            cd packages/ui
-            if [ -f "dist.tar.gz" ] && [ ! -d "dist" ]; then
-              echo "Extracting UI dist files..."
-              tar -xzf dist.tar.gz
-            fi
-            cd ../..
-
-            # Ensure UI symlink exists
-            if [ ! -L "packages/livinityd/ui" ]; then
-              echo "Creating UI symlink..."
-              ln -sf /opt/livos/livos/packages/ui/dist /opt/livos/livos/packages/livinityd/ui
-            fi
-
-            # Fix script permissions
-            chmod +x packages/livinityd/source/modules/apps/legacy-compat/app-script 2>/dev/null || true
-
-            # Build Nexus core (nexus is a sibling to livos in repo)
-            cd /opt/livos/nexus/packages/core
-            npm install
-            npm run build
-
-            # Update symlink if nexus was separate before
-            if [ -d "/opt/nexus/app" ] && [ ! -L "/opt/nexus/app" ]; then
-              echo "Migrating nexus to new location..."
-              rm -rf /opt/nexus/app
-              ln -sf /opt/livos/nexus /opt/nexus/app
-            fi
-
-            # Restart services
-            pm2 restart livos nexus-core
-
-            echo "=== Deployment complete ==="
-            pm2 status
+      - name: Server4 deploy disabled per HARD RULE 2026-04-27
+        run: |
+          echo "This workflow is disabled per project HARD RULE 2026-04-27."
+          echo "Mini PC deployment uses /opt/livos/update.sh (not this workflow)."
+          echo "See MEMORY.md for context."
+          exit 0

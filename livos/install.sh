@@ -18,7 +18,7 @@ main() {
 
     # ── Constants ─────────────────────────────────────────────
     LIVOS_DIR="/opt/livos"
-    NEXUS_DIR="/opt/nexus"
+    LIV_DIR="/opt/liv"
     REPO_URL="https://github.com/utopusc/livinity-io.git"
 
     # ── OS/Arch variables (set by detect_os/detect_arch) ──────
@@ -931,7 +931,7 @@ DAEMON_INTERVAL_MS=30000
 DEFAULT_MODEL=kimi-for-coding
 
 # === Service URLs ===
-NEXUS_API_URL=http://localhost:3200
+LIV_API_URL=http://localhost:3200
 MEMORY_SERVICE_URL=http://localhost:3300
 
 # === Integrations ===
@@ -982,10 +982,10 @@ ENVFILE
             mv "$saved_appdata" "$LIVOS_DIR/app-data"
         fi
 
-        # Move nexus to /opt/nexus
-        rm -rf /opt/nexus
-        mkdir -p /opt/nexus
-        cp -a "$temp_dir/nexus/." /opt/nexus/
+        # Move liv to /opt/liv
+        rm -rf /opt/liv
+        mkdir -p /opt/liv
+        cp -a "$temp_dir/liv/." /opt/liv/
 
         # Keep update script
         cp "$temp_dir/update.sh" "$LIVOS_DIR/update.sh" 2>/dev/null || true
@@ -1003,7 +1003,7 @@ ENVFILE
         step "Building project"
 
         cd "$LIVOS_DIR"
-        local nexus_dir="/opt/nexus"
+        local liv_dir="/opt/liv"
 
         # Install LivOS dependencies (pnpm workspaces)
         info "Installing LivOS dependencies..."
@@ -1025,21 +1025,21 @@ ENVFILE
 
         ok "UI built"
 
-        # Install Nexus dependencies
-        if [[ -d "$nexus_dir" ]]; then
-            info "Installing Nexus dependencies..."
-            cd "$nexus_dir"
+        # Install Liv dependencies
+        if [[ -d "$liv_dir" ]]; then
+            info "Installing Liv dependencies..."
+            cd "$liv_dir"
             npm install --production=false 2>/dev/null || npm install
             cd "$LIVOS_DIR"
-            ok "Nexus dependencies installed"
+            ok "Liv dependencies installed"
 
-            # Build Nexus packages individually (skip failures)
-            info "Building Nexus packages..."
-            cd "$nexus_dir"
+            # Build Liv packages individually (skip failures)
+            info "Building Liv packages..."
+            cd "$liv_dir"
 
             # Build core (required)
             cd packages/core && npx tsc && cd ../..
-            ok "Nexus core built"
+            ok "Liv core built"
 
             # Build worker (optional)
             cd packages/worker && npx tsc 2>/dev/null && cd ../.. || cd ../..
@@ -1051,29 +1051,29 @@ ENVFILE
             cd packages/memory && npx tsc 2>/dev/null && cd ../.. || cd ../..
 
             cd "$LIVOS_DIR"
-            ok "Nexus packages built"
+            ok "Liv packages built"
 
-            # Copy nexus core dist to all locations where livinityd expects it
-            if [[ -d "$nexus_dir/packages/core/dist" ]]; then
+            # Copy liv core dist to all locations where livinityd expects it
+            if [[ -d "$liv_dir/packages/core/dist" ]]; then
                 # Direct node_modules in livinityd
-                local livinityd_nexus="$LIVOS_DIR/packages/livinityd/node_modules/@nexus/core/dist"
-                mkdir -p "$livinityd_nexus"
-                cp -r "$nexus_dir/packages/core/dist/"* "$livinityd_nexus/"
-                ok "Nexus dist copied to livinityd node_modules"
+                local livinityd_liv="$LIVOS_DIR/packages/livinityd/node_modules/@liv/core/dist"
+                mkdir -p "$livinityd_liv"
+                cp -r "$liv_dir/packages/core/dist/"* "$livinityd_liv/"
+                ok "Liv dist copied to livinityd node_modules"
 
                 # Also copy to pnpm store if it exists
-                local pnpm_nexus_dir
-                pnpm_nexus_dir=$(find "$LIVOS_DIR/node_modules/.pnpm" -maxdepth 1 -name '@nexus+core*' -type d 2>/dev/null | head -1)
-                if [[ -n "$pnpm_nexus_dir" ]]; then
-                    cp -r "$nexus_dir/packages/core/dist" "$pnpm_nexus_dir/node_modules/@nexus/core/"
+                local pnpm_liv_dir
+                pnpm_liv_dir=$(find "$LIVOS_DIR/node_modules/.pnpm" -maxdepth 1 -name '@liv+core*' -type d 2>/dev/null | head -1)
+                if [[ -n "$pnpm_liv_dir" ]]; then
+                    cp -r "$liv_dir/packages/core/dist" "$pnpm_liv_dir/node_modules/@liv/core/"
                 fi
             fi
         fi
 
-        # Symlink .env for Nexus
-        if [[ -d "$nexus_dir" ]] && [[ ! -L "$nexus_dir/.env" ]]; then
-            ln -sf /opt/livos/.env "$nexus_dir/.env"
-            ok "Nexus .env symlinked"
+        # Symlink .env for Liv
+        if [[ -d "$liv_dir" ]] && [[ ! -L "$liv_dir/.env" ]]; then
+            ln -sf /opt/livos/.env "$liv_dir/.env"
+            ok "Liv .env symlinked"
         fi
 
         # Create directories
@@ -1193,7 +1193,7 @@ CADDYFILE
 
         # Set ownership
         chown -R livos:livos "$LIVOS_DIR"
-        chown -R livos:livos /opt/nexus
+        chown -R livos:livos /opt/liv
 
         # Create main service unit (runs as root for Docker/chown operations)
         cat > /etc/systemd/system/livos.service << 'UNIT'
@@ -1218,7 +1218,7 @@ EnvironmentFile=/opt/livos/.env
 WantedBy=multi-user.target
 UNIT
 
-        # Create liv-core service (Nexus AI daemon)
+        # Create liv-core service (Liv AI daemon)
         # Runs as root so MCP child processes (Playwright, npx, etc.) have full system access
         cat > /etc/systemd/system/liv-core.service << 'UNIT'
 [Unit]
@@ -1230,7 +1230,7 @@ Requires=redis.service
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/nexus
+WorkingDirectory=/opt/liv
 ExecStart=/usr/bin/node packages/core/dist/index.js
 Restart=on-failure
 RestartSec=5
@@ -1254,7 +1254,7 @@ Requires=redis.service
 Type=simple
 User=livos
 Group=livos
-WorkingDirectory=/opt/nexus/packages/memory
+WorkingDirectory=/opt/liv/packages/memory
 ExecStart=/usr/bin/node dist/index.js
 Restart=on-failure
 RestartSec=5
@@ -1265,7 +1265,7 @@ EnvironmentFile=/opt/livos/.env
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/opt/livos/data /opt/livos/logs /opt/nexus /home/livos
+ReadWritePaths=/opt/livos/data /opt/livos/logs /opt/liv /home/livos
 
 [Install]
 WantedBy=multi-user.target
@@ -1283,7 +1283,7 @@ Requires=redis.service
 Type=simple
 User=livos
 Group=livos
-WorkingDirectory=/opt/nexus
+WorkingDirectory=/opt/liv
 ExecStart=/usr/bin/node packages/worker/dist/index.js
 Restart=on-failure
 RestartSec=5
@@ -1293,7 +1293,7 @@ EnvironmentFile=/opt/livos/.env
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/opt/livos/data /opt/livos/logs /opt/nexus /home/livos
+ReadWritePaths=/opt/livos/data /opt/livos/logs /opt/liv /home/livos
 
 [Install]
 WantedBy=multi-user.target
@@ -1522,10 +1522,10 @@ FWSVC
 
     # === Kimi CLI (AI provider — optional, non-blocking) ===
     (
-        if [[ -f "$NEXUS_DIR/scripts/install-kimi.sh" ]]; then
+        if [[ -f "$LIV_DIR/scripts/install-kimi.sh" ]]; then
             if ! command -v kimi &>/dev/null; then
                 step "Installing Kimi CLI"
-                bash "$NEXUS_DIR/scripts/install-kimi.sh" 2>&1 | tail -5 || true
+                bash "$LIV_DIR/scripts/install-kimi.sh" 2>&1 | tail -5 || true
                 # Ensure kimi is globally accessible
                 if [[ -f /root/.local/bin/kimi ]]; then
                     ln -sf /root/.local/bin/kimi /usr/local/bin/kimi

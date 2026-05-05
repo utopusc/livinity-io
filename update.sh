@@ -173,7 +173,7 @@ trap 'exit 130' INT TERM HUP
 
 # ── Constants ─────────────────────────────────────────────
 LIVOS_DIR="/opt/livos"
-NEXUS_DIR="/opt/nexus"
+LIV_DIR="/opt/liv"
 REPO_URL="https://github.com/utopusc/livinity-io.git"
 
 # ── Colors ────────────────────────────────────────────────
@@ -390,30 +390,30 @@ rsync -a --delete \
     "$LIVOS_DIR/packages/config/"
 ok "Config package updated"
 
-# ── Step 3: Update Nexus source files ─────────────────────
-step "Updating Nexus source files"
+# ── Step 3: Update Liv source files ───────────────────────
+step "Updating Liv source files"
 
-if [[ -d "$NEXUS_DIR" ]]; then
-    # Update nexus packages source
+if [[ -d "$LIV_DIR" ]]; then
+    # Update liv packages source
     for pkg in core worker mcp-server memory; do
-        if [[ -d "$TEMP_DIR/nexus/packages/$pkg" ]]; then
-            info "Updating nexus/$pkg..."
+        if [[ -d "$TEMP_DIR/liv/packages/$pkg" ]]; then
+            info "Updating liv/$pkg..."
             rsync -a --delete \
-                "$TEMP_DIR/nexus/packages/$pkg/" \
-                "$NEXUS_DIR/packages/$pkg/"
+                "$TEMP_DIR/liv/packages/$pkg/" \
+                "$LIV_DIR/packages/$pkg/"
         fi
     done
 
-    # Update nexus root files
-    cp "$TEMP_DIR/nexus/package.json" "$NEXUS_DIR/package.json"
-    cp "$TEMP_DIR/nexus/package-lock.json" "$NEXUS_DIR/package-lock.json" 2>/dev/null || true
-    cp "$TEMP_DIR/nexus/tsconfig.json" "$NEXUS_DIR/tsconfig.json" 2>/dev/null || true
+    # Update liv root files
+    cp "$TEMP_DIR/liv/package.json" "$LIV_DIR/package.json"
+    cp "$TEMP_DIR/liv/package-lock.json" "$LIV_DIR/package-lock.json" 2>/dev/null || true
+    cp "$TEMP_DIR/liv/tsconfig.json" "$LIV_DIR/tsconfig.json" 2>/dev/null || true
 
-    ok "Nexus source updated"
+    ok "Liv source updated"
 else
-    info "Nexus not found, copying fresh..."
-    cp -r "$TEMP_DIR/nexus" "$NEXUS_DIR"
-    ok "Nexus installed fresh"
+    info "Liv not found, copying fresh..."
+    cp -r "$TEMP_DIR/liv" "$LIV_DIR"
+    ok "Liv installed fresh"
 fi
 
 # ── Step 4: Install dependencies ──────────────────────────
@@ -424,11 +424,11 @@ cd "$LIVOS_DIR"
 pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 ok "LivOS dependencies installed"
 
-if [[ -d "$NEXUS_DIR" ]]; then
-    info "Installing Nexus dependencies..."
-    cd "$NEXUS_DIR"
+if [[ -d "$LIV_DIR" ]]; then
+    info "Installing Liv dependencies..."
+    cd "$LIV_DIR"
     npm install --production=false 2>/dev/null || npm install
-    ok "Nexus dependencies installed"
+    ok "Liv dependencies installed"
 fi
 
 # ── Step 5: Build packages ────────────────────────────────
@@ -463,60 +463,60 @@ cd "$LIVOS_DIR"
 ln -sf "$LIVOS_DIR/packages/ui/dist" "$LIVOS_DIR/packages/livinityd/ui"
 ok "UI built and linked"
 
-# Build Nexus packages
-if [[ -d "$NEXUS_DIR" ]]; then
-    info "Building Nexus core..."
-    cd "$NEXUS_DIR/packages/core" && npx tsc && cd "$NEXUS_DIR"
-verify_build "@nexus/core" "/opt/nexus/packages/core/dist"
-    ok "Nexus core built"
+# Build Liv packages
+if [[ -d "$LIV_DIR" ]]; then
+    info "Building Liv core..."
+    cd "$LIV_DIR/packages/core" && npx tsc && cd "$LIV_DIR"
+verify_build "@liv/core" "/opt/liv/packages/core/dist"
+    ok "Liv core built"
 
     # Build memory service
-    if [[ -d "$NEXUS_DIR/packages/memory" ]]; then
-        info "Building Nexus memory..."
-        cd "$NEXUS_DIR/packages/memory"
+    if [[ -d "$LIV_DIR/packages/memory" ]]; then
+        info "Building Liv memory..."
+        cd "$LIV_DIR/packages/memory"
         npm run build 2>&1 | tail -3
-        cd "$NEXUS_DIR"
-        ok "Nexus memory built"
+        cd "$LIV_DIR"
+        ok "Liv memory built"
     fi
 
-    info "Building Nexus worker..."
-    cd "$NEXUS_DIR/packages/worker" && npx tsc 2>/dev/null && cd "$NEXUS_DIR" || cd "$NEXUS_DIR"
-verify_build "@nexus/worker" "/opt/nexus/packages/worker/dist"
+    info "Building Liv worker..."
+    cd "$LIV_DIR/packages/worker" && npx tsc 2>/dev/null && cd "$LIV_DIR" || cd "$LIV_DIR"
+verify_build "@liv/worker" "/opt/liv/packages/worker/dist"
 
-    info "Building Nexus mcp-server..."
-    cd "$NEXUS_DIR/packages/mcp-server" && npx tsc 2>/dev/null && cd "$NEXUS_DIR" || cd "$NEXUS_DIR"
-verify_build "@nexus/mcp-server" "/opt/nexus/packages/mcp-server/dist"
+    info "Building Liv mcp-server..."
+    cd "$LIV_DIR/packages/mcp-server" && npx tsc 2>/dev/null && cd "$LIV_DIR" || cd "$LIV_DIR"
+verify_build "@liv/mcp-server" "/opt/liv/packages/mcp-server/dist"
 
-    # Copy nexus dist to pnpm symlink location
+    # Copy liv dist to pnpm symlink location
     # ── Phase 31 BUILD-02: multi-dir dist-copy loop ──
     # Replaces the `find ... | head -1` single-target bug (BACKLOG 999.5b).
-    # Copies @nexus/core dist into ALL pnpm-store resolution dirs so livinityd
+    # Copies @liv/core dist into ALL pnpm-store resolution dirs so livinityd
     # always picks up fresh dist regardless of which dir its symlink resolves to.
-    NEXUS_CORE_DIST_SRC="$NEXUS_DIR/packages/core/dist"
-    if [[ ! -d "$NEXUS_CORE_DIST_SRC" ]] || [[ -z "$(find "$NEXUS_CORE_DIST_SRC" -type f 2>/dev/null | head -1)" ]]; then
-        echo "DIST-COPY-FAIL: source $NEXUS_CORE_DIST_SRC is empty — nexus core build did not emit" >&2
+    LIV_CORE_DIST_SRC="$LIV_DIR/packages/core/dist"
+    if [[ ! -d "$LIV_CORE_DIST_SRC" ]] || [[ -z "$(find "$LIV_CORE_DIST_SRC" -type f 2>/dev/null | head -1)" ]]; then
+        echo "DIST-COPY-FAIL: source $LIV_CORE_DIST_SRC is empty — liv core build did not emit" >&2
         exit 1
     fi
     COPY_COUNT=0
-    for store_dir in /opt/livos/node_modules/.pnpm/@nexus+core*/; do
+    for store_dir in /opt/livos/node_modules/.pnpm/@liv+core*/; do
         [[ -d "$store_dir" ]] || continue
-        target_parent="${store_dir}node_modules/@nexus/core"
+        target_parent="${store_dir}node_modules/@liv/core"
         target="${target_parent}/dist"
         mkdir -p "$target_parent"
         rm -rf "$target"
-        cp -r "$NEXUS_CORE_DIST_SRC" "$target"
+        cp -r "$LIV_CORE_DIST_SRC" "$target"
         if [[ -z "$(find "$target" -type f 2>/dev/null | head -1)" ]]; then
             echo "DIST-COPY-FAIL: post-copy target $target is empty" >&2
             exit 1
         fi
         COPY_COUNT=$((COPY_COUNT + 1))
-        echo "[VERIFY] nexus core dist copied to $store_dir"
+        echo "[VERIFY] liv core dist copied to $store_dir"
     done
     if [[ "$COPY_COUNT" -eq 0 ]]; then
-        echo "DIST-COPY-FAIL: no @nexus+core* dirs found under /opt/livos/node_modules/.pnpm/" >&2
+        echo "DIST-COPY-FAIL: no @liv+core* dirs found under /opt/livos/node_modules/.pnpm/" >&2
         exit 1
     fi
-    ok "Nexus dist linked to $COPY_COUNT pnpm-store resolution dir(s)"
+    ok "Liv dist linked to $COPY_COUNT pnpm-store resolution dir(s)"
 fi
 
 # ── Step 6: Update gallery cache ──────────────────────────
@@ -543,7 +543,7 @@ chmod +x "$LIVOS_DIR/packages/livinityd/source/modules/apps/legacy-compat/app-sc
 
 # Set ownership (livos user for most, root runs the service)
 chown -R root:root "$LIVOS_DIR" 2>/dev/null || true
-chown -R root:root "$NEXUS_DIR" 2>/dev/null || true
+chown -R root:root "$LIV_DIR" 2>/dev/null || true
 
 ok "Permissions fixed"
 
@@ -616,7 +616,7 @@ echo ""
 echo -e "  ${YELLOW}What was updated:${NC}"
 echo -e "    - livinityd source code"
 echo -e "    - UI (rebuilt from source)"
-echo -e "    - Nexus AI packages (core, worker, mcp-server)"
+echo -e "    - Liv AI packages (core, worker, mcp-server)"
 echo -e "    - Gallery app cache"
 echo -e "    - Dependencies"
 echo ""
