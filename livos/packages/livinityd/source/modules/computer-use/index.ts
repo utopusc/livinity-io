@@ -68,3 +68,15 @@ export {
 // `mcp/server.ts` is NOT re-exported here — it is an entry-point script
 // (spawned via `tsx mcp/server.ts`), not a library.
 export * from './native/index.js'
+
+// Phase 72-native-06 — Boot-time bytebot computer-use MCP server registration.
+// Called from livinityd lifecycle when BYTEBOT_MCP_ENABLED=true; writes the
+// stdio server config to nexus:mcp:config so the running nexus daemon's
+// McpClientManager spawns it and discovers `mcp_bytebot_*` tools (D-NATIVE-10).
+export {registerBytebotMcpServer, DEFAULT_BYTEBOT_MCP_SERVER_PATH} from './bytebot-mcp-config.js'
+export type {
+	McpConfigManagerLike,
+	McpServerConfigInput,
+	McpServerConfigStored,
+	BytebotMcpConfigLogger,
+} from './bytebot-mcp-config.js'
