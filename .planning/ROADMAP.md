@@ -221,13 +221,26 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 2. "Open Firefox and read https://news.ycombinator.com" → application tool launches, browser navigation, content extracted
 3. Agent stuck (e.g., login page) → emits NEEDS_HELP → user takes over → completes login → returns control → agent resumes
 
-**Plans:** 6 plans in 4 waves
-- [ ] 72-01-PLAN.md (Wave 1) — 16 Bytebot tool schemas verbatim copy in livinityd computer-use module (CU-LOOP-01)
-- [ ] 72-02-PLAN.md (Wave 1) — Bytebot system prompt verbatim copy with 3 narrow D-12 edits (You are Liv / 1280x960 / NEEDS_HELP+COMPLETED) (CU-LOOP-03)
-- [ ] 72-03-PLAN.md (Wave 2, deps: 72-01,72-02) — BytebotBridge HTTP client + createComputerUseRouter factory + LivAgentRunner D-16 stub replacement (preserves fallback) + agent-runs.ts wiring under BYTEBOT_BRIDGE_ENABLED gate (CU-LOOP-02, CU-LOOP-04)
-- [ ] 72-04-PLAN.md (Wave 2, deps: 72-01) — BYTEBOT_LLM_PROXY_URL env-var spec + D-NO-BYOK gate (validateBytebotLlmProxyUrl rejects api.anthropic/openai/kimi/moonshot) + buildBytebotComposeEnvBlock helper + operator doc (CU-LOOP-06)
-- [ ] 72-05-PLAN.md (Wave 3, deps: 72-03) — LivNeedsHelpCard with amber+GlowPulse + Take over/Provide guidance/Cancel + post-takeover button morph; useLivAgentStream extended with runMeta; LivToolPanel mount (autonomous=false, human-verify) (CU-LOOP-05)
-- [ ] 72-06-PLAN.md (Wave 4, deps: 72-01..72-05) — Integration test (fake bytebotd, 7 scenarios) + Mini PC UAT walk script (3 ROADMAP scenarios) (autonomous=false, human-verify, BLOCKED until P71 deployed) (CU-LOOP-07)
+**Plans:** 9 plans (2 shipped + 7 new native plans), 3 waves (RE-ARCHITECTED #2 2026-05-05 — NATIVE X11 PORT FINAL; old 72-03..06 + 72-mcp-01..06 all superseded; see 72-CONTEXT.md D-NATIVE-* register)
+- [x] 72-01-PLAN.md (Wave 0, shipped) — 17 Bytebot tool schemas verbatim copy in livinityd computer-use module (CU-LOOP-01) — REUSED by NEW#3 architecture
+- [x] 72-02-PLAN.md (Wave 0, shipped) — Bytebot system prompt verbatim copy; REUSED in NEW#3 (kept for future direct-prompt mode in P75) (CU-LOOP-03)
+- [~] 72-03-PLAN.md (DEPRECATED OLD#1 — bytebot-desktop container approach)
+- [~] 72-04-PLAN.md (DEPRECATED OLD#1 — BYTEBOT_LLM_PROXY_URL env-var spec)
+- [~] 72-05-PLAN.md (DEPRECATED OLD#1 — NEEDS_HELP UI via RunMeta)
+- [~] 72-06-PLAN.md (DEPRECATED OLD#1 — old integration test + UAT)
+- [~] 72-mcp-01-PLAN.md (DEPRECATED OLD#2 — bytebot-mcp MCP server wrapping bytebotd HTTP daemon)
+- [~] 72-mcp-02-PLAN.md (DEPRECATED OLD#2 — BytebotdHttpClient HTTP wrapper)
+- [~] 72-mcp-03-PLAN.md (DEPRECATED OLD#2 — categorize patch under MCP HTTP arch; carried forward into 72-native-05)
+- [~] 72-mcp-04-PLAN.md (DEPRECATED OLD#2 — registerBytebotMcpServer under MCP HTTP arch; carried forward into 72-native-06)
+- [~] 72-mcp-05-PLAN.md (DEPRECATED OLD#2 — LivNeedsHelpCard under MCP HTTP arch; carried forward into 72-native-05)
+- [~] 72-mcp-06-PLAN.md (DEPRECATED OLD#2 — UAT under MCP HTTP arch; superseded by 72-native-07)
+- [ ] 72-native-01-PLAN.md (Wave 1) — native/screenshot.ts via @nut-tree-fork/nut-js screen.capture (CU-LOOP-02)
+- [ ] 72-native-02-PLAN.md (Wave 1) — native/input.ts via nut-js mouse + keyboard (CU-LOOP-02)
+- [ ] 72-native-03-PLAN.md (Wave 1) — native/window.ts via wmctrl spawn (CU-LOOP-02)
+- [ ] 72-native-04-PLAN.md (Wave 1) — LivDesktopViewer UI (replaces deprecated react-vnc role) + computerUse.takeScreenshot tRPC (CU-LOOP-05)
+- [ ] 72-native-05-PLAN.md (Wave 2, deps: native-01..03) — mcp/server.ts + mcp/tools.ts + categorizeTool patch + LivNeedsHelpCard UI (CU-LOOP-04, CU-LOOP-05)
+- [ ] 72-native-06-PLAN.md (Wave 2, deps: native-01..03,05) — bytebot-mcp-config.ts + livinityd boot wire + ALLOWED_COMMANDS tsx patch (CU-LOOP-06)
+- [ ] 72-native-07-PLAN.md (Wave 3, deps: native-01..06) — Mini PC UAT walk + install.sh patch + computer-use-deploy.sh; autonomous=false, human-verify (CU-LOOP-07)
 
 ### Phase 73: Reliability Layer
 
