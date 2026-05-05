@@ -2507,6 +2507,62 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
     const approvalPolicy = nexusConfig?.approval?.policy ?? 'destructive';
 
+    // P77-03: Enumerate enabled MCP servers and convert to Claude SDK format.
+    // Closes the discovery gap (2026-05-05 deploy investigation): MCP servers
+    // registered in the McpConfigManager Redis registry never reached the
+    // agent's tools[] payload. Now they're injected via additionalMcpServers
+    // so SdkAgentRunner adds them alongside nexus-tools + chrome-devtools.
+    let additionalMcpServers: Record<string, unknown> | undefined = undefined;
+    if (mcpConfigManager) {
+      try {
+        const servers = await mcpConfigManager.listServers();
+        const enabled = servers.filter(s => s.enabled);
+        if (enabled.length > 0) {
+          additionalMcpServers = {};
+          for (const s of enabled) {
+            // Reserved-name skip happens inside SdkAgentRunner; we emit a
+            // warning here too so it's greppable from api.ts logs.
+            if (s.name === 'nexus-tools' || s.name === 'chrome-devtools') {
+              logger.warn(`/api/agent/stream: skipping MCP server with reserved name '${s.name}'`);
+              continue;
+            }
+            if (s.transport === 'stdio') {
+              if (!s.command) {
+                logger.warn(`/api/agent/stream: stdio MCP server '${s.name}' missing command, skipping`);
+                continue;
+              }
+              additionalMcpServers[s.name] = {
+                type: 'stdio',
+                command: s.command,
+                args: s.args ?? [],
+                ...(s.env ? { env: s.env } : {}),
+              };
+            } else if (s.transport === 'streamableHttp') {
+              if (!s.url) {
+                logger.warn(`/api/agent/stream: http MCP server '${s.name}' missing url, skipping`);
+                continue;
+              }
+              additionalMcpServers[s.name] = {
+                type: 'http',
+                url: s.url,
+                ...(s.headers ? { headers: s.headers } : {}),
+              };
+            }
+          }
+          logger.info('/api/agent/stream: enumerated MCP servers', {
+            total: servers.length,
+            enabled: enabled.length,
+            injected: Object.keys(additionalMcpServers).length,
+          });
+        }
+      } catch (err) {
+        // Non-fatal: agent can run without MCP servers; just emit warning.
+        logger.warn('/api/agent/stream: MCP enumeration failed (non-fatal)', {
+          error: formatErrorMessage(err),
+        });
+      }
+    }
+
     const agentConfig = {
       brain,
       toolRegistry,
@@ -2523,6 +2579,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       sessionId: randomUUID(),
       userPersonalization: userPersonalization || undefined,
       computerUseStepLimit: computer_use_step_limit || 50,
+      ...(additionalMcpServers ? { additionalMcpServers } : {}),
     };
 
     // v20.0: SDK is the default agent runner. AgentLoop preserved as fallback.

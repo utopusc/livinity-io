@@ -240,6 +240,40 @@ export class SdkAgentRunner extends EventEmitter {
       }
     }
 
+    // P77-02: Inject caller-provided MCP servers (e.g. Bytebot, user-installed
+    // servers from McpConfigManager registry). Reserved names are skipped to
+    // protect the built-in nexus-tools/chrome-devtools entries. Each accepted
+    // server gets a wildcard auto-approve in allowedTools so Claude Code does
+    // not gate every tool call.
+    const additionalServers = this.config.additionalMcpServers;
+    if (additionalServers && typeof additionalServers === 'object') {
+      const reserved = new Set(['nexus-tools', 'chrome-devtools']);
+      let added = 0;
+      let skipped = 0;
+      for (const [name, serverConfig] of Object.entries(additionalServers)) {
+        if (reserved.has(name)) {
+          logger.warn(`SdkAgentRunner: skipping additional MCP server with reserved name '${name}'`);
+          skipped++;
+          continue;
+        }
+        if (!serverConfig || typeof serverConfig !== 'object') {
+          logger.warn(`SdkAgentRunner: skipping additional MCP server '${name}' (invalid config shape)`);
+          skipped++;
+          continue;
+        }
+        mcpServers[name] = serverConfig;
+        allowedTools.push(`mcp__${name}__*`);
+        added++;
+      }
+      if (added > 0 || skipped > 0) {
+        logger.info('SdkAgentRunner: additional MCP servers injected', {
+          added,
+          skipped,
+          names: Object.keys(additionalServers),
+        });
+      }
+    }
+
     // Build system prompt.
     //
     // Phase 43.10 (model identity): @anthropic-ai/claude-agent-sdk 0.2.x
