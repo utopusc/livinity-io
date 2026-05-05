@@ -30,7 +30,7 @@
 
 ### RENAME (Phase 65 — Liv Rename Foundation)
 
-- [ ] **RENAME-01**: `nexus/` directory → `liv/` via `git mv`
+- [x] **RENAME-01**: `nexus/` directory → `liv/` via `git mv`
 - [ ] **RENAME-02**: All `@nexus/*` npm scope → `@liv/*` (6 package.json files + ~100 import statements)
 - [ ] **RENAME-03**: All `NEXUS_*` env vars → `LIV_*` (consolidate with existing LIV_BASE_DIR pattern)
 - [ ] **RENAME-04**: All `nexus:*` Redis key prefixes → `liv:*` (5 occurrences, all docs per scope analysis)
