@@ -15,6 +15,25 @@ export type {
 	DockerInspectFn,
 } from './container-manager.js'
 
+// Phase 71-05 — Desktop subdomain gateway (CU-FOUND-02 / CU-FOUND-04).
+// Path filter + auth + active-task gate + reverse proxy for the
+// `desktop.{user}.{mainDomain}` host. Wired into server/index.ts via
+// `mountDesktopGateway` + `mountDesktopWsUpgrade`. Note: ContainerStatus
+// is re-exported from container-manager (above) and matches structurally
+// with the gateway's ContainerManagerLike interface.
+export {
+	isAllowedDesktopPath,
+	pathRequiresActiveTask,
+	extractWebsockifyToken,
+	mountDesktopGateway,
+	mountDesktopWsUpgrade,
+} from './desktop-gateway.js'
+export type {
+	ContainerManagerLike,
+	GatewayLogger,
+	MountDesktopGatewayDeps,
+} from './desktop-gateway.js'
+
 // Phase 72-01 — Bytebot tool schemas (CU-LOOP-01). Verbatim Apache 2.0
 // copy from upstream Bytebot agent.tools.ts. See bytebot-tools.ts header
 // for source URL + snapshot date + license attribution.
