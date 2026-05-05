@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v32.0
 milestone_name: AI Chat Ground-up Rewrite + Hermes Background Runtime
-status: Wave 3 SHIPPED 2026-05-05 — P84 MCP Single Source of Truth (BrowseDialog + ConfigDialog + ConfiguredMcpList + Smithery secondary client + 6-procedure mcp tRPC router + legacy mcp-panel sidebar unwired). Sacred SHA f3538e1d preserved. Wave 4 next: P88+P89 paralel.
-last_updated: "2026-05-06T01:30:00.000Z"
-last_activity: 2026-05-06 — Wave 3 of v32 shipped (commit d719a175, 15 files +2426). 9/12 phases complete. Autonomous orchestration continuing.
+status: Wave 4 SHIPPED 2026-05-06 — P88 (WS→SSE migration via useLivAgentStream + status_detail consumption + AgentSelector) + P89 (ThemeToggle + keyboard shortcuts + a11y polish). Sacred SHA f3538e1d preserved. WCAG flag: --liv-muted-foreground 3.12:1 fails AA 4.5:1 (P91 UAT to address). Wave 5 next: P90 cutover → P91 UAT sequential.
+last_updated: "2026-05-06T03:00:00.000Z"
+last_activity: 2026-05-06 — Wave 4 of v32 shipped (commits 50156555 P89 + 464eba3b P88). 11/12 phases complete. Autonomous orchestration continuing.
 progress:
   total_phases: 12
-  completed_phases: 9
+  completed_phases: 11
   total_plans: 12
-  completed_plans: 9
-  percent: 75
+  completed_plans: 11
+  percent: 92
 ---
 
 # Project State
@@ -30,8 +30,8 @@ Milestone: v32.0 (active) — 8/12 phases complete
 Wave 1: ✅ COMPLETE — `759ef597` P80, `9a276a11` P85-schema, `628ed1ca` P87, `12aa473f` summaries
 Wave 2: ✅ COMPLETE — `4379ea89` P81, `6f758067` P82, `0df7475b` P83, `49d79510` P86, `52944d16` P85-UI
 Wave 3: ✅ COMPLETE — `d719a175` P84 (MCP SoT + Smithery secondary + legacy mcp-panel deprecated)
-Wave 4: ◆ NEXT — P88 (WS→SSE migration via useLivAgentStream) + P89 (theme toggle in chat header + Cmd-key shortcuts + ARIA + WCAG AA)
-Wave 5: P90 → P91 (cutover + UAT) — sequential
+Wave 4: ✅ COMPLETE — `50156555` P89 (ThemeToggle + Cmd-key shortcuts + a11y), `464eba3b` P88 (WS→SSE + status_detail UI + AgentSelector)
+Wave 5: ◆ NEXT — P90 cutover (set Redis flag liv:config:new_chat_enabled=true; switch /ai-chat default to v32; redirect /agent-marketplace → /marketplace; mount ThemeToggle in v32 chat header [P89 deferred]; wire localStorage liv-last-assistant in SSE handler [P89 deferred]) → P91 UAT (full smoke + WCAG fix for --liv-muted-foreground)
 
 ## Wave 1 Deliverables (shipped)
 
