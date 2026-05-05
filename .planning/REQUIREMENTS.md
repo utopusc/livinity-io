@@ -153,7 +153,8 @@
 - [x] **CU-LOOP-03
 **: `liv/packages/computer-use/src/system-prompt.ts` — verbatim port of Bytebot system prompt (1280x960 coordinate space, screenshot-before-act, 3-retry NEEDS_HELP, "Liv" branding)
 - [ ] **CU-LOOP-04**: `liv-agent-runner.ts` modified — detect computer-use task, route `computer_use_*` tool calls to `BytebotBridge.executeAction`, inject computer-use system prompt addendum, track NEEDS_HELP state
-- [ ] **CU-LOOP-05**: `liv-needs-help-card.tsx` (NEW) — when agent emits `set_task_status({status: 'NEEDS_HELP', message})`, side panel shows banner with "Take over" / "Provide guidance" / "Cancel task" buttons; user takeover pauses agent, returns control button
+- [x] **CU-LOOP-05
+**: `liv-needs-help-card.tsx` (NEW) — when agent emits `set_task_status({status: 'NEEDS_HELP', message})`, side panel shows banner with "Take over" / "Provide guidance" / "Cancel task" buttons; user takeover pauses agent, returns control button
 - [ ] **CU-LOOP-06**: BYTEBOT_LLM_PROXY_URL routing wired through Livinity broker → Kimi (no Bytebot agent code used)
 - [ ] **CU-LOOP-07**: End-to-end test: "navigate to google.com and search 'weather'" → side panel auto-opens with BrowserToolView in live mode, VNC iframe shows agent actions, screenshots captured per step
 
