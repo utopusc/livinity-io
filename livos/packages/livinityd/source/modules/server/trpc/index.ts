@@ -55,6 +55,15 @@ import agentsRouter from './agents-router.js'
 // cloneToLibrary (privateProcedure mutation — wraps cloneAgentToLibrary).
 // All three procedure paths added to httpOnlyPaths in ./common.ts.
 import marketplaceRouter from './marketplace-router.js'
+// v32 Phase 84 — MCP single-source-of-truth router (Wave 3). Six procedures
+// (search/getServer/installToAgent/removeFromAgent/smitheryConfigured/
+// setSmitheryKey). Dispatches to either the Official MCP Registry
+// (registry.modelcontextprotocol.io) or Smithery (server.smithery.ai;
+// gated by the liv:config:smithery_api_key Redis key). Consumes
+// agents-repo via database/index.ts barrel — does NOT touch agents-repo
+// or agents-router. All 6 procedure paths added to httpOnlyPaths in
+// ./common.ts (same WS-reconnect-survival rationale as P85-UI / P86).
+import mcpRouter from './mcp-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -96,6 +105,8 @@ const appRouter = router({
 	agents: agentsRouter,
 	// v32 Phase 86 — marketplace namespace (public browse + clone-to-library).
 	marketplace: marketplaceRouter,
+	// v32 Phase 84 — MCP single-source-of-truth namespace (Wave 3).
+	mcp: mcpRouter,
 })
 
 export type AppRouter = typeof appRouter

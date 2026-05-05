@@ -6,7 +6,7 @@ import {
 	IconTrash,
 	IconBrain,
 	IconLoader2,
-	IconPlug,
+	// Phase 84 V32-MCP — IconPlug removed (was only used by the deprecated MCP sidebar tab).
 	IconMenu2,
 	IconPuzzle,
 	IconCode,
@@ -55,7 +55,10 @@ import {LivTour} from '@/components/liv-tour'
 // `chat-input` still has a callsite. Active rendering uses LivComposer below.
 void _LegacyChatInput
 
-const McpPanel = lazy(() => import('./mcp-panel'))
+// Phase 84 V32-MCP — DEPRECATED: McpPanel sidebar tab is unwired (file
+// remains on disk for P90 cutover to delete). All new MCP UI lives in
+// MCPConfigurationNew (mounted in /agents/:id editor) per D-MCP-SOT.
+// const McpPanel = lazy(() => import('./mcp-panel'))
 const SkillsPanel = lazy(() => import('./skills-panel'))
 const AgentsPanel = lazy(() => import('./agents-panel'))
 const CanvasPanel = lazy(() => import('./canvas-panel').then((m) => ({default: m.CanvasPanel})))
@@ -65,7 +68,9 @@ const ComputerUsePanel = lazy(() => import('./computer-use-panel').then((m) => (
 // /agent-marketplace route stays for deep-links + LivTour step 8.
 const AgentMarketplace = lazy(() => import('@/routes/agent-marketplace'))
 
-type SidebarView = 'chat' | 'mcp' | 'skills' | 'agents' | 'marketplace'
+// Phase 84 V32-MCP — 'mcp' removed from SidebarView union (MCP UI now lives
+// in /agents/:id editor via MCPConfigurationNew). 'skills' kept until P90.
+type SidebarView = 'chat' | 'skills' | 'agents' | 'marketplace'
 
 /**
  * Phase 75-07 / CONTEXT D-21 — adapt the in-memory ChatMessage[] to the
@@ -155,15 +160,9 @@ function ConversationSidebar({
 					<IconMessageCircle size={14} />
 					Chat
 				</button>
-				<button
-					onClick={() => onViewChange('mcp')}
-					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'mcp' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
-					)}
-				>
-					<IconPlug size={14} />
-					MCP
-				</button>
+				{/* Phase 84 V32-MCP — MCP sidebar tab removed. MCP UI now lives in
+				    /agents/:id editor (MCPConfigurationNew). The legacy mcp-panel
+				    file remains on disk; P90 cutover deletes it. */}
 				<button
 					onClick={() => onViewChange('agents')}
 					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
@@ -232,7 +231,8 @@ function ConversationSidebar({
 				</div>
 			)}
 
-			{(activeView === 'mcp' || activeView === 'skills' || activeView === 'agents' || activeView === 'marketplace') && (
+			{/* Phase 84 V32-MCP — 'mcp' removed from union (sidebar tab unwired). */}
+			{(activeView === 'skills' || activeView === 'agents' || activeView === 'marketplace') && (
 				<div className='flex-1' />
 			)}
 
@@ -835,26 +835,10 @@ export default function AiChat() {
 				</div>
 			)}
 
-			{activeView === 'mcp' && (
-				<div className='flex flex-1 flex-col overflow-hidden'>
-					{isMobile && (
-						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
-							<div className='flex items-center justify-between'>
-								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
-									<IconArrowLeft size={20} />
-								</button>
-								<span className='text-body font-semibold text-text-primary'>MCP Servers</span>
-								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
-									<IconMenu2 size={20} />
-								</button>
-							</div>
-						</div>
-					)}
-					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
-						<McpPanel />
-					</Suspense>
-				</div>
-			)}
+			{/* Phase 84 V32-MCP — DEPRECATED: activeView === 'mcp' branch removed.
+			    The legacy McpPanel render path is no longer reachable from the
+			    sidebar. New MCP UI lives in /agents/:id editor (MCPConfigurationNew).
+			    The mcp-panel.tsx file remains on disk; P90 cutover deletes it. */}
 			{activeView === 'skills' && (
 				<div className='flex flex-1 flex-col overflow-hidden'>
 					{isMobile && (
