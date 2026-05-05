@@ -156,6 +156,19 @@ export const router = createBrowserRouter([
 				element: <V32ToolViewsPlayground />,
 				ErrorBoundary: ErrorBoundaryComponentFallback,
 			},
+			// Phase 85 (UI slice) — v32 agent management.
+			// /agents shows the grid; /agents/:id opens the two-pane editor.
+			// First-class routes (NOT inside SheetLayout) per v32-DRAFT.
+			{
+				path: 'agents',
+				element: <AgentsRoute />,
+				ErrorBoundary: ErrorBoundaryComponentFallback,
+			},
+			{
+				path: 'agents/:id',
+				element: <AgentEditorRoute />,
+				ErrorBoundary: ErrorBoundaryComponentFallback,
+			},
 			{
 				Component: SheetLayout,
 				children: [
