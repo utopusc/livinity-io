@@ -27,6 +27,20 @@ export interface ChatMessage {
 	toolCalls?: ChatToolCall[]
 	isStreaming?: boolean
 	timestamp: number
+	/**
+	 * Phase 75-07 / CONTEXT D-13..D-16. Optional Kimi `reasoning_content`
+	 * accumulated for assistant messages — when non-empty, rendered above
+	 * the assistant text as a collapsible amber `<LivReasoningCard>`. The
+	 * P67-04 streaming hook (useLivAgentStream) accumulates this on
+	 * `lastMsg.reasoning`; this socket hook can populate it via future
+	 * APPEND_REASONING action wiring without breaking the current shape.
+	 */
+	reasoning?: string
+	/**
+	 * Phase 75-07 / D-14 — optional duration display when streaming finishes.
+	 * Source: post-final reasoning-end timestamp delta; absent until set.
+	 */
+	reasoningDurationMs?: number
 }
 
 export interface AgentStatus {

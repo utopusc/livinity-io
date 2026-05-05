@@ -23,6 +23,8 @@ import {TextShimmer} from '@/components/motion-primitives/text-shimmer'
 import {trpcReact} from '@/trpc/trpc'
 
 import {LivAgentStatus} from './components/liv-agent-status'
+import {LivPinButton} from './components/liv-pin-button'
+import {LivReasoningCard} from './components/liv-reasoning-card'
 import {LivStreamingText} from './components/liv-streaming-text'
 import {LivTypingDots} from './components/liv-typing-dots'
 import {StreamingMessage as _LegacyStreamingMessage} from './streaming-message'
@@ -432,11 +434,23 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 
 // --- UserMessage ---
 
-export function UserMessage({message}: {message: ChatMessage}) {
+export function UserMessage({message, conversationId}: {message: ChatMessage; conversationId?: string}) {
 	return (
-		<div className='flex justify-end'>
-			<div className='max-w-[85%] rounded-2xl rounded-br-md bg-blue-600/90 px-4 py-2.5 text-white'>
+		<div className='flex justify-end group'>
+			<div className='max-w-[85%] rounded-2xl rounded-br-md bg-blue-600/90 px-4 py-2.5 text-white relative'>
 				<p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
+				{/* Phase 75-07 / D-17 — Pin button on hover (group-hover). Pinning a
+				    user message snapshots the prompt text for the system-prompt
+				    auto-injection (see livinityd ai/index.ts getContextString). */}
+				{conversationId && message.content && (
+					<div className='absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+						<LivPinButton
+							messageId={message.id}
+							conversationId={conversationId}
+							content={message.content}
+						/>
+					</div>
+				)}
 			</div>
 		</div>
 	)
@@ -444,15 +458,33 @@ export function UserMessage({message}: {message: ChatMessage}) {
 
 // --- AssistantMessage ---
 
-export function AssistantMessage({message}: {message: ChatMessage}) {
+export function AssistantMessage({message, conversationId, isLastMessage}: {message: ChatMessage; conversationId?: string; isLastMessage?: boolean}) {
 	const blocks = message.blocks && message.blocks.length > 0 ? message.blocks : null
 	const lastBlock = blocks ? blocks[blocks.length - 1] : null
 	// Show progress shimmer at bottom when: streaming AND (no blocks yet, OR last block is a tool, OR between turns)
 	const showBottomShimmer = message.isStreaming && (!lastBlock || lastBlock.type === 'tool')
 
+	// Phase 75-07 / CONTEXT D-13..D-16 — show LivReasoningCard above the
+	// assistant text whenever the message has accumulated `reasoning`.
+	// isStreaming is true only when this is the streaming last message
+	// (per CONTEXT D-16). durationMs is optional — falls back to absent
+	// when timing data is not yet wired through the stream hook.
+	const hasReasoning = !!message.reasoning && message.reasoning.length > 0
+	const reasoningIsStreaming = !!(message.isStreaming && isLastMessage)
+
 	return (
-		<div className='flex justify-start'>
-			<div className='min-w-0 max-w-[90%] border-l-2 border-violet-500/30 pl-4' style={{overflowWrap: 'break-word', wordBreak: 'break-word'}}>
+		<div className='flex justify-start group'>
+			<div className='min-w-0 max-w-[90%] border-l-2 border-violet-500/30 pl-4 relative' style={{overflowWrap: 'break-word', wordBreak: 'break-word'}}>
+				{/* Phase 75-07 — Reasoning card (CONTEXT D-13..D-16) renders ABOVE
+				    the assistant text whenever the message has reasoning content.
+				    Default collapsed; toggles to show the markdown body. */}
+				{hasReasoning && (
+					<LivReasoningCard
+						reasoning={message.reasoning!}
+						isStreaming={reasoningIsStreaming}
+						durationMs={message.reasoningDurationMs}
+					/>
+				)}
 				{/* Render blocks in order — text and tools interleaved */}
 				{blocks && blocks.map((block, idx) => {
 					if (block.type === 'text') {
@@ -480,6 +512,18 @@ export function AssistantMessage({message}: {message: ChatMessage}) {
 						<TextShimmer className='text-sm font-mono' duration={1.5}>
 							{!blocks ? 'Thinking...' : 'Processing...'}
 						</TextShimmer>
+					</div>
+				)}
+				{/* Phase 75-07 / D-17 — Pin button on hover (group-hover). Pin the
+				    assistant's response so the agent re-uses it as auto-context
+				    on subsequent turns. */}
+				{conversationId && message.content && !message.isStreaming && (
+					<div className='absolute top-0 -right-2 opacity-0 group-hover:opacity-100 transition-opacity'>
+						<LivPinButton
+							messageId={message.id}
+							conversationId={conversationId}
+							content={message.content}
+						/>
 					</div>
 				)}
 			</div>
@@ -522,13 +566,30 @@ function isErrorMessage(message: ChatMessage): boolean {
 	return message.id.startsWith('err_')
 }
 
-export function ChatMessageItem({message}: {message: ChatMessage}) {
+export function ChatMessageItem({
+	message,
+	conversationId,
+	isLastMessage,
+}: {
+	message: ChatMessage
+	/** Phase 75-07 — conversation context for the inline pin button (D-17). */
+	conversationId?: string
+	/** Phase 75-07 — is this message the most recent in the list? Drives the
+	 *  reasoning card's `isStreaming` flag (CONTEXT D-16). */
+	isLastMessage?: boolean
+}) {
 	if (message.role === 'user') {
-		return <UserMessage message={message} />
+		return <UserMessage message={message} conversationId={conversationId} />
 	}
 
 	if (message.role === 'assistant') {
-		return <AssistantMessage message={message} />
+		return (
+			<AssistantMessage
+				message={message}
+				conversationId={conversationId}
+				isLastMessage={isLastMessage}
+			/>
+		)
 	}
 
 	// System messages -- check if it's an error
