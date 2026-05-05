@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T01:53:25.433Z"
+last_updated: "2026-05-05T01:54:18.547Z"
 last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
 progress:
   total_phases: 10
   completed_phases: 8
   total_plans: 57
-  completed_plans: 53
-  percent: 93
+  completed_plans: 54
+  percent: 95
 ---
 
 # Project State
@@ -180,6 +180,9 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **68-06:** jsdom does NOT auto-derive `isContentEditable` from the `contenteditable` attribute (jsdom #1670). Worked around in the contenteditable test via `Object.defineProperty(div, 'isContentEditable', {value: true, configurable: true})` — exercises the hook's production code path verbatim (Rule 3 test-env gap auto-fix).
 - **68-06:** 13 tests > 5 minimum (extras: Cmd+Alt+I exclusion, modifier-only-no-letter, input-vs-textarea both tested, contenteditable, preventDefault asserted on activation AND on no-match). All cases match the CONTEXT D-29 truth table.
 - **68-06:** Race-included 2 files: explicitly ran `git add livos/packages/ui/src/routes/ai-chat/liv-tool-panel.tsx` (one specific file), but a parallel worktree's `tool-views/utils.tsx` + `tool-views/utils.unit.test.ts` were swept into commit `aa285532`. Per `<destructive_git_prohibition>` no `git reset` / `git rm` invoked. Same race-condition class as 68-05 Deviation #5. My +2-line liv-tool-panel.tsx diff is exactly correct; orphan files belong to a sibling agent's plan (likely 69-* per `tool-views/` directory).
+- **68-07:** Used react-dom/client harness for integration tests instead of @testing-library/react — D-NO-NEW-DEPS, established 68-05/68-06 precedent. waitFor() implemented locally as 16ms-poll/1000ms-cap loop (T-68-07-02 mitigation for AnimatePresence exit cycles). Test names embed CAPS-LOCKED contract phrases from STATE.md line 79 so failure logs immediately point to the violated decision (T-68-07-03). 8 integration tests = exact must_haves coverage; no over-hammering, no under-hammering.
+- **68-07:** Two prior P68 unit failures (dispatcher.unit.test.tsx + liv-tool-panel.unit.test.tsx "renders dispatched view") explicitly NOT fixed in 68-07 per `<scope_guard>` ("DO NOT modify any prior plan's source file"). Failures are caused by parallel-wave Phase 69 dispatcher specialization (CommandToolView, McpToolView etc. now route specific tools); my plan only added 1 new file (`liv-tool-panel.integration.test.tsx`). Deferred to P69 gap-closure (1-line testid renames in 2 test files).
+- **68-07:** P68 PHASE COMPLETE — all 7 plans shipped, sacred SHA `4f868d31...` unchanged across phase, ROADMAP success criteria #1..#4 ALL verified end-to-end via 8 integration tests (mapping in 68-07-SUMMARY.md "End-of-Phase P68 Contract Verification"). PANEL-AUTO-OPEN-E2E synthetic requirement satisfied. Recommendation to orchestrator: P68 contract is shippable; P69 (Per-Tool Views Suite) and P70 (Composer Polish) can run in parallel from here.
 
 ## v31.0 Milestone Summary
 
