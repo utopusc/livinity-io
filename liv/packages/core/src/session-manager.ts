@@ -34,8 +34,8 @@ export interface SessionManagerConfig {
   maxHistoryMessages?: number;
 }
 
-const REDIS_SESSIONS_PREFIX = 'nexus:session:';
-const REDIS_HISTORY_PREFIX = 'nexus:session_history:';
+const REDIS_SESSIONS_PREFIX = 'liv:session:';
+const REDIS_HISTORY_PREFIX = 'liv:session_history:';
 const DEFAULT_IDLE_MINUTES = 60;
 const DEFAULT_MAX_HISTORY = 100;
 const DEFAULT_RESET_TRIGGERS = ['/new', '/reset', '/clear'];

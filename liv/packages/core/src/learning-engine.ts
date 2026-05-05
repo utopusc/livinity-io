@@ -43,7 +43,7 @@ export interface ToolStats {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const STREAM_KEY = 'nexus:tool_calls';
+const STREAM_KEY = 'liv:tool_calls';
 const STREAM_MAX_LEN = 10000;
 const XRANGE_READ_COUNT = 5000;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes

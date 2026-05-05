@@ -3,9 +3,9 @@
  *
  * `ToolViewProps` is the binding contract for P69 per-tool view
  * components. `ToolCallSnapshot` mirrors P67 D-12 (CONTEXT D-14) — it
- * is RE-DECLARED locally (not imported from `@nexus/core`) because:
+ * is RE-DECLARED locally (not imported from `@liv/core`) because:
  *   - 68-01 (the panel store, also wave-1) may not yet have shipped.
- *   - `@nexus/core` is a server-only package and not a UI dep
+ *   - `@liv/core` is a server-only package and not a UI dep
  *     (D-NO-NEW-DEPS). Once P67 publishes the types in a UI-consumable
  *     form, 68-03 (dispatcher) MAY swap to importing from there.
  *

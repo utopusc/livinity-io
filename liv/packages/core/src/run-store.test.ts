@@ -2,7 +2,7 @@
  * RunStore unit tests — Phase 67-01.
  *
  * Standalone tsx-runnable script (NOT vitest — matches the existing test:phase39
- * pattern in @nexus/core package.json). Top-level async IIFE with try/catch per
+ * pattern in @liv/core package.json). Top-level async IIFE with try/catch per
  * test case, exit 0 on all-pass, exit 1 on any failure.
  *
  * Test backend: ioredis-mock (in-process Redis emulator). If the require fails

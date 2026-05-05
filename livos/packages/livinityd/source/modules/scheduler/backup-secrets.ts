@@ -2,7 +2,7 @@
 //
 // Per-jobId encrypted credential store. Mirrors docker/stack-secrets.ts:
 //   - AES-256-GCM encryption with key = sha256(JWT_SECRET file contents)
-//   - Storage in Redis hash at `nexus:scheduler:backup-creds:{jobId}`
+//   - Storage in Redis hash at `liv:scheduler:backup-creds:{jobId}`
 //     -> {field -> base64(iv(12) || tag(16) || ciphertext)}
 //   - NEVER persisted to disk and NEVER written into scheduled_jobs.config_json
 //
@@ -16,7 +16,7 @@ import {readFile} from 'node:fs/promises'
 
 import {Redis} from 'ioredis'
 
-const REDIS_KEY = (jobId: string) => `nexus:scheduler:backup-creds:${jobId}`
+const REDIS_KEY = (jobId: string) => `liv:scheduler:backup-creds:${jobId}`
 
 const JWT_SECRET_PATH = '/opt/livos/data/secrets/jwt'
 

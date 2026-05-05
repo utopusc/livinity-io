@@ -16,7 +16,7 @@
  *      PATH only. Plan 47-04's route layer redacts *_KEY/*_TOKEN/*_SECRET.
  *   4. pnpm-store @nexus+core* dir count — >1 ⇒ pnpm-store quirk active
  *      (memory: update.sh pnpm-store quirk). dist-drift risk gauge.
- *   5. readlink -f the resolved @nexus/core symlink — locates the dir
+ *   5. readlink -f the resolved @liv/core symlink — locates the dir
  *      livinityd actually imports from at runtime (M-09 fallback applies).
  *   6. Identity-line marker grep + dist mtime — confirms the v29.4 43.10
  *      identity-line patch is present in the resolved dist.
@@ -253,12 +253,12 @@ export function makeDiagnoseModelIdentity(deps: ModelIdentityDeps) {
 			try {
 				const rlR = await deps.execFile(
 					'readlink',
-					['-f', '/opt/livos/node_modules/@nexus/core'],
+					['-f', '/opt/livos/node_modules/@liv/core'],
 					{timeout: EXEC_TIMEOUT_MS},
 				)
 				const lsR = await deps.execFile(
 					'ls',
-					['-la', '/opt/livos/node_modules/@nexus/core'],
+					['-la', '/opt/livos/node_modules/@liv/core'],
 					{timeout: EXEC_TIMEOUT_MS},
 				)
 				step5 = {path: rlR.stdout.trim(), ls: lsR.stdout}
@@ -271,7 +271,7 @@ export function makeDiagnoseModelIdentity(deps: ModelIdentityDeps) {
 			try {
 				const distPath = step5.path
 					? `${step5.path}/dist/index.js`
-					: '/opt/livos/node_modules/@nexus/core/dist/index.js'
+					: '/opt/livos/node_modules/@liv/core/dist/index.js'
 				const grepR = await deps.execFile(
 					'grep',
 					['-c', IDENTITY_MARKER, distPath],

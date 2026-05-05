@@ -20,7 +20,7 @@
  * actually uses: set/get/incr/rpush/lrange/expire/publish/subscribe/
  * unsubscribe/duplicate/quit/on('message')). Avoids the cross-package
  * resolution issue that ioredis-mock would create (livinityd does NOT
- * depend on ioredis-mock; @nexus/core's devDep doesn't hoist into
+ * depend on ioredis-mock; @liv/core's devDep doesn't hoist into
  * livinityd's resolver).
  *
  * Coverage (must-have list, plan Task 2 step 2):

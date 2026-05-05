@@ -1,4 +1,4 @@
-// Frontend type mirrors of @nexus/core (Phase 67-02 LivAgentRunner outputs).
+// Frontend type mirrors of @liv/core (Phase 67-02 LivAgentRunner outputs).
 // MUST stay verbatim per CONTEXT.md D-12.
 //
 // Greppable invariants (asserted by use-liv-agent-stream.unit.test.tsx):
@@ -7,11 +7,11 @@
 //   - ToolCallSnapshot 7 fields (toolId, toolName, category, assistantCall,
 //     toolResult?, status, startedAt, completedAt?)
 //
-// Why redeclare instead of import @nexus/core? — verified at execute time
-// (Plan 67-04 Task 1 Step 3): @nexus/core is NOT a dependency of the UI
+// Why redeclare instead of import @liv/core? — verified at execute time
+// (Plan 67-04 Task 1 Step 3): @liv/core is NOT a dependency of the UI
 // package and is server-only (Node ESM). Redeclaring matches D-NO-NEW-DEPS
 // and keeps the UI bundle browser-clean. P67-02 ships the canonical shape
-// in @nexus/core; this file mirrors it byte-for-byte.
+// in @liv/core; this file mirrors it byte-for-byte.
 
 /**
  * Tool category — drives Tabler icon selection in P68/P69 per

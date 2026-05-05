@@ -7,8 +7,8 @@ import { Redis } from 'ioredis';
 import { NexusConfigSchema, NexusConfig, DEFAULT_NEXUS_CONFIG } from './schema.js';
 import { logger } from '../logger.js';
 
-const REDIS_CONFIG_KEY = 'nexus:config';
-const REDIS_CONFIG_VERSION_KEY = 'nexus:config:version';
+const REDIS_CONFIG_KEY = 'liv:config';
+const REDIS_CONFIG_VERSION_KEY = 'liv:config:version';
 
 export class ConfigManager {
   private redis: Redis;

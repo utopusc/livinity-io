@@ -43,11 +43,11 @@ export class ProviderManager {
     try {
       // Read primary_provider from Redis config (set by API or ConfigManager)
       // Try individual key first (set by PUT /api/provider/primary), then fall back to config blob
-      let primary = await this.redis.get('nexus:config:primary_provider');
+      let primary = await this.redis.get('liv:config:primary_provider');
 
       if (!primary) {
         // Try reading from the NexusConfig JSON blob
-        const configBlob = await this.redis.get('nexus:config');
+        const configBlob = await this.redis.get('liv:config');
         if (configBlob) {
           try {
             const config = JSON.parse(configBlob);

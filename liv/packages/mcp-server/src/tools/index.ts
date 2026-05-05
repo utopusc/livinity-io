@@ -12,20 +12,20 @@ async function requestAndPoll(
 ): Promise<string> {
   const requestId = `${action}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   await redis.lpush(
-    'nexus:inbox',
+    'liv:inbox',
     JSON.stringify({ message, source: 'mcp', requestId, params, timestamp: Date.now() }),
   );
 
   const maxIterations = Math.ceil(timeoutMs / 500);
   for (let i = 0; i < maxIterations; i++) {
-    const answer = await redis.get(`nexus:answer:${requestId}`);
+    const answer = await redis.get(`liv:answer:${requestId}`);
     if (answer) {
-      await redis.del(`nexus:answer:${requestId}`);
+      await redis.del(`liv:answer:${requestId}`);
       return answer;
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  return `[timeout] Nexus is still processing. Request ID: ${requestId}`;
+  return `[timeout] Liv is still processing. Request ID: ${requestId}`;
 }
 
 export function registerTools(server: McpServer, redis: IORedis) {
@@ -34,38 +34,38 @@ export function registerTools(server: McpServer, redis: IORedis) {
   // nexus_task - Submit a task to the daemon
   server.registerTool('nexus_task', {
     title: 'Submit Task',
-    description: 'Submit a task to the Nexus daemon for execution. Tasks can be: test, scrape, research, leadgen, or any free-form command.',
+    description: 'Submit a task to the Liv daemon for execution. Tasks can be: test, scrape, research, leadgen, or any free-form command.',
     inputSchema: {
       task: z.string().describe('Description of the task to execute'),
       priority: z.number().optional().describe('Priority 1-3 (1=highest)'),
     },
   }, async ({ task, priority }) => {
-    await redis.lpush('nexus:inbox', JSON.stringify({ message: task, source: 'mcp', priority: priority || 2, timestamp: Date.now() }));
+    await redis.lpush('liv:inbox', JSON.stringify({ message: task, source: 'mcp', priority: priority || 2, timestamp: Date.now() }));
     return { content: [{ type: 'text' as const, text: `Task queued: "${task}" (priority: ${priority || 2})` }] };
   });
 
   // nexus_status - Get daemon status
   server.registerTool('nexus_status', {
     title: 'Get Status',
-    description: 'Get the current status of Nexus daemon, running containers, and pending tasks.',
+    description: 'Get the current status of Liv daemon, running containers, and pending tasks.',
     inputSchema: {},
   }, async () => {
-    const inboxLen = await redis.llen('nexus:inbox');
-    const lastLog = await redis.get('nexus:last_log') || 'No recent activity';
-    const stats = await redis.get('nexus:stats') || '{}';
+    const inboxLen = await redis.llen('liv:inbox');
+    const lastLog = await redis.get('liv:last_log') || 'No recent activity';
+    const stats = await redis.get('liv:stats') || '{}';
     return { content: [{ type: 'text' as const, text: `Inbox: ${inboxLen} pending\nLast: ${lastLog}\nStats: ${stats}` }] };
   });
 
   // nexus_logs - Get recent logs
   server.registerTool('nexus_logs', {
     title: 'Get Logs',
-    description: 'Get the most recent Nexus daemon logs.',
+    description: 'Get the most recent Liv daemon logs.',
     inputSchema: {
       lines: z.number().optional().describe('Number of log lines to retrieve (default: 20)'),
     },
   }, async ({ lines }) => {
     const count = lines || 20;
-    const logs = await redis.lrange('nexus:logs', 0, count - 1);
+    const logs = await redis.lrange('liv:logs', 0, count - 1);
     return { content: [{ type: 'text' as const, text: logs.length ? logs.join('\n') : 'No logs yet.' }] };
   });
 
@@ -78,27 +78,27 @@ export function registerTools(server: McpServer, redis: IORedis) {
       format: z.enum(['markdown', 'text', 'html']).optional().describe('Output format'),
     },
   }, async ({ url, format }) => {
-    await redis.lpush('nexus:inbox', JSON.stringify({ message: `scrape: ${url}`, source: 'mcp', params: { url, format: format || 'markdown' }, timestamp: Date.now() }));
+    await redis.lpush('liv:inbox', JSON.stringify({ message: `scrape: ${url}`, source: 'mcp', params: { url, format: format || 'markdown' }, timestamp: Date.now() }));
     return { content: [{ type: 'text' as const, text: `Scraping queued: ${url} (format: ${format || 'markdown'})` }] };
   });
 
   // nexus_remember - Store in memory
   server.registerTool('nexus_remember', {
     title: 'Remember',
-    description: 'Store information in Nexus memory (Cognee knowledge graph). Use this to remember facts, notes, project context.',
+    description: 'Store information in Liv memory (Cognee knowledge graph). Use this to remember facts, notes, project context.',
     inputSchema: {
       content: z.string().describe('The information to remember'),
       tags: z.array(z.string()).optional().describe('Optional tags for categorization'),
     },
   }, async ({ content, tags }) => {
-    await redis.lpush('nexus:memory_queue', JSON.stringify({ content, tags: tags || [], timestamp: Date.now() }));
+    await redis.lpush('liv:memory_queue', JSON.stringify({ content, tags: tags || [], timestamp: Date.now() }));
     return { content: [{ type: 'text' as const, text: `Remembered: "${content.substring(0, 100)}..."` }] };
   });
 
   // nexus_ask - Ask the daemon a question
   server.registerTool('nexus_ask', {
-    title: 'Ask Nexus',
-    description: 'Ask Nexus a question. It will search its memory and recent context to answer.',
+    title: 'Ask Liv',
+    description: 'Ask Liv a question. It will search its memory and recent context to answer.',
     inputSchema: {
       question: z.string().describe('Your question'),
     },
@@ -117,7 +117,7 @@ export function registerTools(server: McpServer, redis: IORedis) {
     },
   }, async ({ command, path }) => {
     const testCmd = command || `npx playwright test ${path || ''}`;
-    await redis.lpush('nexus:inbox', JSON.stringify({ message: `test: ${testCmd}`, source: 'mcp', timestamp: Date.now() }));
+    await redis.lpush('liv:inbox', JSON.stringify({ message: `test: ${testCmd}`, source: 'mcp', timestamp: Date.now() }));
     return { content: [{ type: 'text' as const, text: `Test queued: ${testCmd}` }] };
   });
 
@@ -132,7 +132,7 @@ export function registerTools(server: McpServer, redis: IORedis) {
     },
   }, async ({ task, delay_minutes, repeat_hours }) => {
     const schedule = { task, delay_minutes, repeat_hours, created: Date.now() };
-    await redis.lpush('nexus:schedules', JSON.stringify(schedule));
+    await redis.lpush('liv:schedules', JSON.stringify(schedule));
     const when = delay_minutes ? `in ${delay_minutes} minutes` : repeat_hours ? `every ${repeat_hours} hours` : 'once';
     return { content: [{ type: 'text' as const, text: `Scheduled: "${task}" (${when})` }] };
   });
@@ -234,7 +234,7 @@ export function registerTools(server: McpServer, redis: IORedis) {
   // nexus_agent - Autonomous agent mode for complex multi-step tasks
   server.registerTool('nexus_agent', {
     title: 'Agent Mode',
-    description: 'Trigger Nexus autonomous agent mode for complex multi-step tasks. The agent uses a ReAct loop (Observe→Think→Act→Repeat) with access to all server tools (shell, docker, pm2, sysinfo, files). Use this for tasks requiring multiple steps, conditional logic, or investigation. Timeout: 5 minutes.',
+    description: 'Trigger Liv autonomous agent mode for complex multi-step tasks. The agent uses a ReAct loop (Observe→Think→Act→Repeat) with access to all server tools (shell, docker, pm2, sysinfo, files). Use this for tasks requiring multiple steps, conditional logic, or investigation. Timeout: 5 minutes.',
     inputSchema: {
       task: z.string().describe('Detailed description of the task for the agent to solve autonomously'),
       max_turns: z.number().optional().describe('Maximum reasoning turns (default: 10, max: 20)'),

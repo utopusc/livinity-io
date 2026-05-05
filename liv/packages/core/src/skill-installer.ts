@@ -33,7 +33,7 @@ interface InstalledSkillMeta {
  * stored in installDir as {skill-name}/SKILL.md + index.ts, and loaded
  * into the running SkillLoader on demand (no restart required).
  *
- * Install metadata is persisted in Redis under `nexus:skills:installed:{name}`.
+ * Install metadata is persisted in Redis under `liv:skills:installed:{name}`.
  */
 export class SkillInstaller {
   private skillLoader: SkillLoader;
@@ -153,7 +153,7 @@ export class SkillInstaller {
         source: 'marketplace',
       };
       await this.redis.set(
-        `nexus:skills:installed:${skillName}`,
+        `liv:skills:installed:${skillName}`,
         JSON.stringify(meta),
       );
 
@@ -186,7 +186,7 @@ export class SkillInstaller {
       this.skillLoader.unloadSkill(skillName);
 
       // Remove Redis metadata
-      await this.redis.del(`nexus:skills:installed:${skillName}`);
+      await this.redis.del(`liv:skills:installed:${skillName}`);
 
       // Delete skill directory
       const skillDir = join(this.installDir, skillName);
@@ -219,7 +219,7 @@ export class SkillInstaller {
         const [nextCursor, foundKeys] = await this.redis.scan(
           cursor,
           'MATCH',
-          'nexus:skills:installed:*',
+          'liv:skills:installed:*',
           'COUNT',
           100,
         );
@@ -263,7 +263,7 @@ export class SkillInstaller {
    * Check if a skill is installed (has Redis metadata).
    */
   async isInstalled(skillName: string): Promise<boolean> {
-    const exists = await this.redis.exists(`nexus:skills:installed:${skillName}`);
+    const exists = await this.redis.exists(`liv:skills:installed:${skillName}`);
     return exists === 1;
   }
 }

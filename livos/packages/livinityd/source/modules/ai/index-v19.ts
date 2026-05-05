@@ -473,7 +473,7 @@ export default class AiModule {
 								// Check auto-consent setting
 								let autoConsent = false
 								try {
-									const val = await this.redis.get('nexus:config:computer_use_auto_consent')
+									const val = await this.redis.get('liv:config:computer_use_auto_consent')
 									autoConsent = val === 'true' || val === '1'
 								} catch {}
 

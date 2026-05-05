@@ -80,9 +80,9 @@ interface CapabilityRegistryDeps {
 
 export class CapabilityRegistry {
   /** Redis key prefix: nexus:cap:{type}:{name} */
-  private static REDIS_PREFIX = 'nexus:cap:';
+  private static REDIS_PREFIX = 'liv:cap:';
   /** Pub/sub channel for config change events (shared with McpClientManager) */
-  private static UPDATE_CHANNEL = 'nexus:config:updated';
+  private static UPDATE_CHANNEL = 'liv:config:updated';
 
   /** In-memory cache for fast search (<200 entries expected) */
   private cache = new Map<string, CapabilityManifest>();

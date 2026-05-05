@@ -277,7 +277,7 @@ export class SkillLoader {
     const sendProgress = async (progressMessage: string): Promise<void> => {
       if (!redis || !from) return;
       try {
-        await redis.lpush('nexus:wa_outbox', JSON.stringify({
+        await redis.lpush('liv:wa_outbox', JSON.stringify({
           jid: from,
           text: progressMessage,
           timestamp: Date.now(),
@@ -326,7 +326,7 @@ export class SkillLoader {
 
   /** Build a scoped Redis helper for skill state persistence */
   private buildSkillRedis(redis?: Redis): SkillRedis {
-    const PREFIX = 'nexus:task_state:';
+    const PREFIX = 'liv:task_state:';
 
     if (!redis) {
       // Return no-op redis when not available

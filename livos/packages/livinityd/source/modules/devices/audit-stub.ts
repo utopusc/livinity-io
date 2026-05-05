@@ -2,7 +2,7 @@
  * Phase 12 AUTHZ-02: Stub device-authorization audit log.
  *
  * Writes failed-authorization events to a Redis list at key
- * `nexus:device:audit:failures`. Capped at 1000 entries via LTRIM.
+ * `liv:device:audit:failures`. Capped at 1000 entries via LTRIM.
  *
  * Phase 15 (AUDIT-01/AUDIT-02) will REPLACE this stub with an append-only
  * PostgreSQL `device_audit_log` table with INSERT/SELECT-only DB role.
@@ -16,7 +16,7 @@
 import type {Redis} from 'ioredis'
 import type {AuthFailReason} from './authorize.js'
 
-export const AUTH_FAILURES_REDIS_KEY = 'nexus:device:audit:failures'
+export const AUTH_FAILURES_REDIS_KEY = 'liv:device:audit:failures'
 export const AUTH_FAILURES_MAX_ENTRIES = 1000
 
 export interface AuthFailureEntry {

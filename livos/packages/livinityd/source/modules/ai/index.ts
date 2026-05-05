@@ -270,7 +270,7 @@ function formatCommand(name: string, params: Record<string, unknown>): string {
 }
 
 /**
- * Minimal duck-typed ToolRegistry for when @nexus/core/lib ToolRegistry is not importable.
+ * Minimal duck-typed ToolRegistry for when @liv/core/lib ToolRegistry is not importable.
  * Implements the subset of methods used by AgentSessionManager.consumeAndRelay():
  *   - register(), get(), list(), listFiltered(), execute(), size
  */
@@ -559,7 +559,7 @@ export default class AiModule {
 					requiresApproval?: boolean
 				}>
 
-				// Try to import ToolRegistry from @nexus/core/lib, fallback to minimal
+				// Try to import ToolRegistry from @liv/core/lib, fallback to minimal
 				let registry: any
 				try {
 					const mod = await import('@liv/core/lib') as any
@@ -590,7 +590,7 @@ export default class AiModule {
 								signal: AbortSignal.timeout(300_000), // 5 min timeout for long-running tools
 							})
 							if (!res.ok) {
-								return {success: false, output: '', error: `Nexus API error: ${res.status}`}
+								return {success: false, output: '', error: `Liv API error: ${res.status}`}
 							}
 							return await res.json()
 						},
@@ -836,7 +836,7 @@ export default class AiModule {
 								// Check auto-consent setting
 								let autoConsent = false
 								try {
-									const val = await this.redis.get('nexus:config:computer_use_auto_consent')
+									const val = await this.redis.get('liv:config:computer_use_auto_consent')
 									autoConsent = val === 'true' || val === '1'
 								} catch {}
 

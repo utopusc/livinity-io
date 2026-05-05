@@ -362,7 +362,7 @@ async function handleCompact(ctx: CommandContext): Promise<CommandResult> {
   }
 }
 
-const ACTIVATION_REDIS_PREFIX = 'nexus:activation:';
+const ACTIVATION_REDIS_PREFIX = 'liv:activation:';
 
 async function handleActivation(args: string[], ctx: CommandContext): Promise<CommandResult> {
   if (!ctx.redis) {

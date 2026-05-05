@@ -131,5 +131,5 @@ export function chunkText(text: string, limit: number): string[] {
 
 /** Get Redis key prefix for a channel */
 export function getRedisPrefix(channel: ChannelId): string {
-  return `nexus:${channel}`;
+  return `liv:${channel}`;
 }

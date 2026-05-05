@@ -30,15 +30,15 @@ const DEFAULT_POLICY: DmPolicy = 'pairing';
 // ─────────────────────────────────────────────────────────────────────────────
 
 function allowlistKey(channel: string): string {
-  return `nexus:dm:allowlist:${channel}`;
+  return `liv:dm:allowlist:${channel}`;
 }
 
 function pendingKey(channel: string): string {
-  return `nexus:dm:pending:${channel}`;
+  return `liv:dm:pending:${channel}`;
 }
 
 function policyKey(channel: string): string {
-  return `nexus:dm:policy:${channel}`;
+  return `liv:dm:policy:${channel}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

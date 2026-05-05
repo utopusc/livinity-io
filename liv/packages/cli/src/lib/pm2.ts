@@ -64,7 +64,7 @@ module.exports = {
       out_file:   LOGS_DIR + '/livos-out.log',
     },
 
-    // ── Nexus Core ────────────────────────────────────────
+    // ── Liv Core ──────────────────────────────────────────
     {
       name: 'nexus-core',
       script: 'packages/core/dist/index.js',
@@ -80,7 +80,7 @@ module.exports = {
       out_file:   LOGS_DIR + '/nexus-core-out.log',
     },
 
-    // ── Nexus Worker ──────────────────────────────────────
+    // ── Liv Worker ────────────────────────────────────────
     {
       name: 'nexus-worker',
       script: 'packages/worker/dist/index.js',
@@ -95,7 +95,7 @@ module.exports = {
       out_file:   LOGS_DIR + '/nexus-worker-out.log',
     },
 
-    // ── Nexus Memory (Python) ─────────────────────────────
+    // ── Liv Memory (Python) ───────────────────────────────
     {
       name: 'nexus-memory',
       interpreter: memoryInterpreter,
@@ -111,7 +111,7 @@ module.exports = {
       out_file:   LOGS_DIR + '/nexus-memory-out.log',
     },
 
-    // ── Nexus MCP Server ──────────────────────────────────
+    // ── Liv MCP Server ────────────────────────────────────
     {
       name: 'nexus-mcp',
       script: 'packages/mcp-server/dist/index.js',
@@ -208,9 +208,9 @@ export async function verifyHealth(ports: {
 }): Promise<HealthResult[]> {
   const checks: Array<{ service: string; port: number }> = [
     { service: 'LivOS', port: ports.livos },
-    { service: 'Nexus API (core)', port: ports.api },
-    { service: 'Nexus MCP', port: ports.mcp },
-    { service: 'Nexus Memory', port: ports.memory },
+    { service: 'Liv API (core)', port: ports.api },
+    { service: 'Liv MCP', port: ports.mcp },
+    { service: 'Liv Memory', port: ports.memory },
   ];
 
   const results: HealthResult[] = [];

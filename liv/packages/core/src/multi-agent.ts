@@ -12,7 +12,7 @@ import { logger } from './logger.js';
 // nexus:multi-agent:active           — SET of currently active (running/pending) session IDs
 // nexus:multi-agent:parent:{parentId} — SET of child session IDs for a parent
 
-const KEY_PREFIX = 'nexus:multi-agent';
+const KEY_PREFIX = 'liv:multi-agent';
 const SESSION_TTL = 3600; // 1 hour
 const MAX_HISTORY_MESSAGES = 50;
 

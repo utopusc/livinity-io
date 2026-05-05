@@ -99,45 +99,45 @@ export async function runSetup(options: SetupOptions): Promise<void> {
     p.log.info('UI dist symlinked');
   }
 
-  // ── 6. Install Nexus deps ─────────────────────────────────
-  s.start('Installing Nexus dependencies (npm install)...');
+  // ── 6. Install Liv deps ─────────────────────────────────
+  s.start('Installing Liv dependencies (npm install)...');
   try {
     run('npm install', nexusBaseDir, 180_000);
   } catch {
     // Non-fatal — some optional deps may fail
-    p.log.warn('Some Nexus dependencies may have failed to install');
+    p.log.warn('Some Liv dependencies may have failed to install');
   }
-  s.stop('Nexus dependencies installed');
+  s.stop('Liv dependencies installed');
 
-  // ── 7. Build Nexus core ────────────────────────────────────
-  s.start('Building Nexus core...');
+  // ── 7. Build Liv core ────────────────────────────────────
+  s.start('Building Liv core...');
   const coreDir = join(nexusBaseDir, 'packages', 'core');
   if (existsSync(coreDir)) {
     run('npx tsc', coreDir, 60_000);
   }
-  s.stop('Nexus core built');
+  s.stop('Liv core built');
 
-  // ── 8. Build Nexus worker (optional) ───────────────────────
+  // ── 8. Build Liv worker (optional) ───────────────────────
   const workerDir = join(nexusBaseDir, 'packages', 'worker');
   if (existsSync(workerDir)) {
-    s.start('Building Nexus worker...');
+    s.start('Building Liv worker...');
     try {
       run('npx tsc', workerDir, 60_000);
-      s.stop('Nexus worker built');
+      s.stop('Liv worker built');
     } catch {
-      s.stop('Nexus worker build skipped (optional)');
+      s.stop('Liv worker build skipped (optional)');
     }
   }
 
-  // ── 9. Build Nexus MCP (optional) ─────────────────────────
+  // ── 9. Build Liv MCP (optional) ─────────────────────────
   const mcpDir = join(nexusBaseDir, 'packages', 'mcp-server');
   if (existsSync(mcpDir)) {
-    s.start('Building Nexus MCP server...');
+    s.start('Building Liv MCP server...');
     try {
       run('npx tsc', mcpDir, 60_000);
-      s.stop('Nexus MCP server built');
+      s.stop('Liv MCP server built');
     } catch {
-      s.stop('Nexus MCP build skipped (optional)');
+      s.stop('Liv MCP build skipped (optional)');
     }
   }
 
@@ -161,16 +161,16 @@ export async function runSetup(options: SetupOptions): Promise<void> {
     }
   }
 
-  // ── 11. Symlink .env to Nexus ──────────────────────────────
+  // ── 11. Symlink .env to Liv ──────────────────────────────
   const livosEnv = join(livosBaseDir, '.env');
   const nexusEnv = join(nexusBaseDir, '.env');
   if (existsSync(livosEnv)) {
     try { unlinkSync(nexusEnv); } catch { /* may not exist */ }
     symlinkSync(livosEnv, nexusEnv);
-    rollback.push('symlinked .env to Nexus', () => {
+    rollback.push('symlinked .env to Liv', () => {
       try { unlinkSync(nexusEnv); } catch { /* ignore */ }
     });
-    p.log.info('.env symlinked to Nexus');
+    p.log.info('.env symlinked to Liv');
   }
 
   // ── 12. Generate PM2 ecosystem ─────────────────────────────

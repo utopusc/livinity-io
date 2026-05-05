@@ -129,7 +129,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       }
 
       // ── Rate limiting: 30 requests/minute per webhook ID ──
-      const rateKey = `nexus:webhook:rate:${id}`;
+      const rateKey = `liv:webhook:rate:${id}`;
       try {
         const count = await redis.incr(rateKey);
         if (count === 1) {
@@ -195,7 +195,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
     try {
       // Read credentials from Redis config (with env var fallback)
-      const configStr = await redis.get('nexus:gmail:config');
+      const configStr = await redis.get('liv:gmail:config');
       let clientId = process.env.GMAIL_CLIENT_ID || '';
       let clientSecret = process.env.GMAIL_CLIENT_SECRET || '';
       if (configStr) {
@@ -206,9 +206,9 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
         } catch { /* use env vars */ }
       }
       // Read stored public URL (saved during /oauth/start) with fallbacks
-      const storedPublicUrl = await redis.get('nexus:gmail:public_url');
+      const storedPublicUrl = await redis.get('liv:gmail:public_url');
       const publicUrl = storedPublicUrl
-        || process.env.NEXUS_PUBLIC_URL
+        || process.env.LIV_PUBLIC_URL
         || `http://localhost:${process.env.API_PORT || '3200'}`;
       const redirectUri = `${publicUrl}/api/gmail/oauth/callback`;
 
@@ -219,7 +219,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       res.redirect(`${publicUrl}/settings?gmail=connected`);
     } catch (err) {
       logger.error('Gmail OAuth callback error', { error: formatErrorMessage(err) });
-      const storedUrl = await redis.get('nexus:gmail:public_url');
+      const storedUrl = await redis.get('liv:gmail:public_url');
       const uiBase = storedUrl || process.env.LIVOS_UI_URL || 'http://localhost:2017';
       res.redirect(`${uiBase}/settings?gmail=error&message=${encodeURIComponent(formatErrorMessage(err))}`);
     }
@@ -245,8 +245,8 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       const raw = await readFile(credPath, 'utf-8');
       const creds = JSON.parse(raw) as { access_token?: string; expires_at?: number };
       if (creds.access_token) {
-        await redis.set('nexus:config:kimi_api_key', creds.access_token);
-        await redis.set('nexus:kimi:authenticated', '1');
+        await redis.set('liv:config:kimi_api_key', creds.access_token);
+        await redis.set('liv:kimi:authenticated', '1');
         logger.info('Kimi OAuth token synced to Redis from credentials file');
       }
     } catch (err) {
@@ -260,7 +260,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   /** Check if Kimi CLI is authenticated (uses Redis flag — no process spawn) */
   app.get('/api/kimi/status', async (_req, res) => {
     try {
-      const flag = await redis.get('nexus:kimi:authenticated');
+      const flag = await redis.get('liv:kimi:authenticated');
       res.json({
         authenticated: flag === '1',
         provider: 'kimi',
@@ -355,7 +355,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
           if ((session as any).status !== 'success') {
             if (code === 0) {
               (session as any).status = 'success';
-              redis.set('nexus:kimi:authenticated', '1').catch(() => {});
+              redis.set('liv:kimi:authenticated', '1').catch(() => {});
               logger.info('Kimi CLI login process exited successfully (code 0)');
             } else if (!urlResolved) {
               (session as any).status = 'error';
@@ -407,8 +407,8 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
         setTimeout(() => { proc.kill(); resolve(); }, 10000);
       });
       // Clear auth flag and any stored API key
-      await redis.del('nexus:kimi:authenticated');
-      await redis.del('nexus:config:kimi_api_key');
+      await redis.del('liv:kimi:authenticated');
+      await redis.del('liv:config:kimi_api_key');
       logger.info('Kimi CLI logout completed');
       res.json({ success: true });
     } catch (err) {
@@ -517,8 +517,8 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       }
 
       // Store key and set auth method
-      await redis.set('nexus:config:anthropic_api_key', apiKey);
-      await redis.set('nexus:config:claude_auth_method', 'api-key');
+      await redis.set('liv:config:anthropic_api_key', apiKey);
+      await redis.set('liv:config:claude_auth_method', 'api-key');
       logger.info('Claude API key set and validated');
       res.json({ success: true });
     } catch (err) {
@@ -537,7 +537,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
       // Check if Claude is actually usable (credentials file, API key, or CLI)
       const available = await provider.isAvailable();
-      const authMethod = (await redis.get('nexus:config:claude_auth_method')) || 'api-key';
+      const authMethod = (await redis.get('liv:config:claude_auth_method')) || 'api-key';
       res.json({ authenticated: available, method: authMethod, provider: 'claude' });
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
@@ -555,7 +555,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
       const result = await provider.startLogin();
       // Set auth method to sdk-subscription since user is using OAuth
-      await redis.set('nexus:config:claude_auth_method', 'sdk-subscription');
+      await redis.set('liv:config:claude_auth_method', 'sdk-subscription');
       res.json(result);
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
@@ -595,8 +595,8 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
       await provider.logout();
       // Clear Redis keys
-      await redis.del('nexus:config:anthropic_api_key');
-      await redis.del('nexus:config:claude_auth_method');
+      await redis.del('liv:config:anthropic_api_key');
+      await redis.del('liv:config:claude_auth_method');
       logger.info('Claude logout completed, auth state cleared');
       res.json({ success: true });
     } catch (err) {
@@ -612,7 +612,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       const pm = brain.getProviderManager();
       const providers = await pm.listProviders();
       const fallbackOrder = pm.getFallbackOrder();
-      const primaryProvider = await redis.get('nexus:config:primary_provider') || 'kimi';
+      const primaryProvider = await redis.get('liv:config:primary_provider') || 'kimi';
 
       res.json({
         providers,
@@ -635,17 +635,17 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       }
 
       // Store in Redis for persistence
-      await redis.set('nexus:config:primary_provider', provider);
+      await redis.set('liv:config:primary_provider', provider);
 
       // Also update the NexusConfig blob if it exists
-      const configBlob = await redis.get('nexus:config');
+      const configBlob = await redis.get('liv:config');
       if (configBlob) {
         try {
           const config = JSON.parse(configBlob);
           if (!config.provider) config.provider = {};
           config.provider.primaryProvider = provider;
           config.updatedAt = new Date().toISOString();
-          await redis.set('nexus:config', JSON.stringify(config));
+          await redis.set('liv:config', JSON.stringify(config));
         } catch { /* ignore parse errors */ }
       }
 
@@ -665,7 +665,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
   /** Helper: get Gmail credentials from Redis config (with env var fallback) */
   async function getGmailCredentials(): Promise<{ clientId: string; clientSecret: string }> {
-    const configStr = await redis.get('nexus:gmail:config');
+    const configStr = await redis.get('liv:gmail:config');
     if (configStr) {
       try {
         const config = JSON.parse(configStr);
@@ -748,12 +748,12 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
     // Public URL passed from livinityd (derived from the browser's request)
     const publicUrl = (req.query.publicUrl as string)
-      || process.env.NEXUS_PUBLIC_URL
+      || process.env.LIV_PUBLIC_URL
       || `http://localhost:${process.env.API_PORT || '3200'}`;
     const redirectUri = `${publicUrl}/api/gmail/oauth/callback`;
 
     // Store the public URL in Redis so the callback can reconstruct the redirect URI
-    await redis.set('nexus:gmail:public_url', publicUrl);
+    await redis.set('liv:gmail:public_url', publicUrl);
 
     try {
       const url = gmailProvider.getAuthUrl(clientId, clientSecret, redirectUri);
@@ -823,13 +823,13 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   app.get('/api/notifications', async (_req, res) => {
     try {
       const notifications: string[] = [];
-      const count = await redis.llen('nexus:notifications');
+      const count = await redis.llen('liv:notifications');
       if (count > 0) {
-        const items = await redis.lrange('nexus:notifications', 0, 9);
+        const items = await redis.lrange('liv:notifications', 0, 9);
         notifications.push(...items.map((i: string) => {
           try { return JSON.parse(i).message; } catch { return i; }
         }));
-        await redis.ltrim('nexus:notifications', items.length, -1);
+        await redis.ltrim('liv:notifications', items.length, -1);
       }
       res.json({ notifications });
     } catch {
@@ -841,10 +841,10 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     const { event, sessionId, cwd } = req.body;
     logger.info(`Session ${event}: ${sessionId}`, { cwd });
     if (event === 'session_start') {
-      await redis.set('nexus:active_session', JSON.stringify({ sessionId, cwd, timestamp: Date.now() }), 'EX', 86400);
-      const pending = await redis.llen('nexus:inbox');
+      await redis.set('liv:active_session', JSON.stringify({ sessionId, cwd, timestamp: Date.now() }), 'EX', 86400);
+      const pending = await redis.llen('liv:inbox');
       if (pending > 0) {
-        await redis.lpush('nexus:notifications', JSON.stringify({
+        await redis.lpush('liv:notifications', JSON.stringify({
           message: `Welcome back! You have ${pending} pending tasks.`,
           timestamp: Date.now(),
         }));
@@ -854,8 +854,8 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   });
 
   app.get('/api/status', async (_req, res) => {
-    const stats = await redis.get('nexus:stats');
-    const inbox = await redis.llen('nexus:inbox');
+    const stats = await redis.get('liv:stats');
+    const inbox = await redis.llen('liv:inbox');
     res.json({ inbox, stats: stats ? JSON.parse(stats) : {}, uptime: Math.floor(process.uptime()) });
   });
 
@@ -1143,7 +1143,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     res.status(201).json({ id, success: true });
   });
 
-  // ── Nexus Config API ────────────────────────────────────────────
+  // ── Liv Config API ──────────────────────────────────────────────
 
   app.get('/api/nexus/config', async (_req, res) => {
     try {
@@ -1509,7 +1509,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   /** Get WhatsApp QR code data URL from Redis */
   app.get('/api/channels/whatsapp/qr', async (_req, res) => {
     try {
-      const qr = await redis.get('nexus:whatsapp:qr');
+      const qr = await redis.get('liv:whatsapp:qr');
       res.json({ qr: qr || null });
     } catch (err) {
       logger.error('Get WhatsApp QR error', { error: formatErrorMessage(err) });
@@ -1542,8 +1542,8 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   /** Placeholder for pairing code — now unused, QR flow used instead */
   app.get('/api/channels/whatsapp/pairing-code', async (_req, res) => {
     try {
-      const code = await redis.get('nexus:whatsapp:pairing_code');
-      const error = await redis.get('nexus:whatsapp:pairing_error');
+      const code = await redis.get('liv:whatsapp:pairing_code');
+      const error = await redis.get('liv:whatsapp:pairing_error');
       res.json({ code: code || null, error: error || null });
     } catch (err) {
       res.status(500).json({ error: formatErrorMessage(err) });
@@ -1942,7 +1942,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       // Persist to Redis so registries survive restarts
       if (redis) {
         const registries = skillRegistryClient.getRegistries();
-        await redis.set('nexus:skills:registries', JSON.stringify(registries));
+        await redis.set('liv:skills:registries', JSON.stringify(registries));
       }
       res.json({ success: true, registries: skillRegistryClient.getRegistries() });
     } catch (err) {
@@ -1966,7 +1966,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       // Persist to Redis
       if (redis) {
         const registries = skillRegistryClient.getRegistries();
-        await redis.set('nexus:skills:registries', JSON.stringify(registries));
+        await redis.set('liv:skills:registries', JSON.stringify(registries));
       }
       res.json({ success: true, registries: skillRegistryClient.getRegistries() });
     } catch (err) {
@@ -2237,7 +2237,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
   /** Get voice pipeline configuration (API keys masked for security) */
   app.get('/api/voice/config', async (_req, res) => {
     try {
-      const configRaw = await redis.get('nexus:config');
+      const configRaw = await redis.get('liv:config');
       const config = configRaw ? JSON.parse(configRaw) : {};
       const voice = config.voice || {};
       res.json({
@@ -2259,7 +2259,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       const { deepgramApiKey, cartesiaApiKey, cartesiaVoiceId, sttLanguage, sttModel, enabled } = req.body;
 
       // Read current config
-      const configRaw = await redis.get('nexus:config');
+      const configRaw = await redis.get('liv:config');
       const config = configRaw ? JSON.parse(configRaw) : {};
       const voice = config.voice || {};
 
@@ -2272,10 +2272,10 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       if (enabled !== undefined) voice.enabled = enabled;
 
       config.voice = voice;
-      await redis.set('nexus:config', JSON.stringify(config));
+      await redis.set('liv:config', JSON.stringify(config));
 
       // Publish config update so VoiceGateway can hot-reload
-      await redis.publish('nexus:config:updated', 'voice');
+      await redis.publish('liv:config:updated', 'voice');
 
       logger.info('[Voice Config] Updated voice configuration', {
         enabled: voice.enabled,
@@ -2526,7 +2526,7 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
 
     // v20.0: SDK is the default agent runner. AgentLoop preserved as fallback.
     // To force legacy mode, set Redis key nexus:config:agent_runner to 'legacy'.
-    const runnerMode = (await redis.get('nexus:config:agent_runner')) || 'sdk';
+    const runnerMode = (await redis.get('liv:config:agent_runner')) || 'sdk';
     const agent = runnerMode === 'legacy'
       ? new AgentLoop(agentConfig)
       : new SdkAgentRunner(agentConfig);

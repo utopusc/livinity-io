@@ -26,7 +26,7 @@ export interface CreateCanvasOpts {
 }
 
 /** Redis key prefix for canvas artifacts */
-const CANVAS_KEY_PREFIX = 'nexus:canvas:';
+const CANVAS_KEY_PREFIX = 'liv:canvas:';
 
 /** TTL in seconds — canvas artifacts are ephemeral session data (2 hours) */
 const CANVAS_TTL_SECONDS = 7200;

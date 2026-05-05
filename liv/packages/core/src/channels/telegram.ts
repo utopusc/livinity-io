@@ -96,7 +96,7 @@ export class TelegramProvider implements ChannelProvider {
         // ── Deduplication: skip already-processed messages ──
         const msgUpdateId = ctx.update.update_id;
         if (this.redis) {
-          const dedupKey = `nexus:telegram:dedup:${msgUpdateId}`;
+          const dedupKey = `liv:telegram:dedup:${msgUpdateId}`;
           const already = await this.redis.set(dedupKey, '1', 'EX', 86400, 'NX');
           if (!already) {
             // NX returned null → key existed → already processed
@@ -107,7 +107,7 @@ export class TelegramProvider implements ChannelProvider {
 
         // Persist polling offset for restart recovery (even for stale/skipped messages)
         if (this.redis) {
-          await this.redis.set('nexus:telegram:offset', String(msgUpdateId + 1)).catch((err: any) => {
+          await this.redis.set('liv:telegram:offset', String(msgUpdateId + 1)).catch((err: any) => {
             logger.warn('TelegramProvider: failed to persist offset', { error: err.message });
           });
         }
@@ -130,7 +130,7 @@ export class TelegramProvider implements ChannelProvider {
         if (isGroup) {
           let activationMode = 'mention'; // default
           if (this.redis) {
-            const mode = await this.redis.get(`nexus:activation:${msg.chat.id}`);
+            const mode = await this.redis.get(`liv:activation:${msg.chat.id}`);
             if (mode) activationMode = mode;
           }
 
@@ -165,7 +165,7 @@ export class TelegramProvider implements ChannelProvider {
 
         // Track active chat for approval notifications
         if (this.redis) {
-          await this.redis.set('nexus:telegram:active_chat', String(msg.chat.id)).catch(() => {});
+          await this.redis.set('liv:telegram:active_chat', String(msg.chat.id)).catch(() => {});
         }
 
         const incomingMsg: IncomingMessage = {
@@ -254,7 +254,7 @@ export class TelegramProvider implements ChannelProvider {
       // ── Subscribe to approval requests and send inline keyboards ──
       if (this.redis && this.approvalManager) {
         this.approvalSubRedis = this.redis.duplicate();
-        this.approvalSubRedis.subscribe('nexus:notify:approval', (err) => {
+        this.approvalSubRedis.subscribe('liv:notify:approval', (err) => {
           if (err) {
             logger.error('TelegramProvider: failed to subscribe to approvals', { error: err.message });
           } else {
@@ -263,7 +263,7 @@ export class TelegramProvider implements ChannelProvider {
         });
 
         this.approvalSubRedis.on('message', async (channel, message) => {
-          if (channel !== 'nexus:notify:approval') return;
+          if (channel !== 'liv:notify:approval') return;
 
           try {
             const notification = JSON.parse(message);
@@ -273,7 +273,7 @@ export class TelegramProvider implements ChannelProvider {
             if (!request?.id || !this.bot || !this.status.connected) return;
 
             // Get the active chat ID to send approval to
-            const chatId = await this.redis?.get('nexus:telegram:active_chat');
+            const chatId = await this.redis?.get('liv:telegram:active_chat');
             if (!chatId) {
               logger.warn('TelegramProvider: no active chat for approval notification');
               return;
@@ -343,7 +343,7 @@ export class TelegramProvider implements ChannelProvider {
       // Load persisted polling offset from Redis for restart recovery
       let pollingOffset: number | undefined;
       if (this.redis) {
-        const savedOffset = await this.redis.get('nexus:telegram:offset');
+        const savedOffset = await this.redis.get('liv:telegram:offset');
         if (savedOffset) {
           pollingOffset = parseInt(savedOffset, 10);
           if (isNaN(pollingOffset)) pollingOffset = undefined;
@@ -377,7 +377,7 @@ export class TelegramProvider implements ChannelProvider {
     // Unsubscribe from approval notifications
     if (this.approvalSubRedis) {
       try {
-        await this.approvalSubRedis.unsubscribe('nexus:notify:approval');
+        await this.approvalSubRedis.unsubscribe('liv:notify:approval');
         await this.approvalSubRedis.quit();
       } catch {
         // Ignore

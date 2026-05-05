@@ -213,9 +213,9 @@ async function runTests(): Promise<void> {
 	await test('Test 2: diagnose categorization happy path', async () => {
 		const {redis} = makeFakeRedis({
 			seed: {
-				'nexus:cap:tool:shell': JSON.stringify({id: 'tool:shell', enabled: true}),
-				'nexus:cap:tool:docker_run': JSON.stringify({id: 'tool:docker_run', enabled: true}),
-				'nexus:cap:_meta:last_sync_at': '2026-05-01T12:00:00Z',
+				'liv:cap:tool:shell': JSON.stringify({id: 'tool:shell', enabled: true}),
+				'liv:cap:tool:docker_run': JSON.stringify({id: 'tool:docker_run', enabled: true}),
+				'liv:cap:_meta:last_sync_at': '2026-05-01T12:00:00Z',
 			},
 		})
 		const {pg} = makeFakePg({tableExists: false})
@@ -263,7 +263,7 @@ async function runTests(): Promise<void> {
 	await test('Test 4: disabledByUser overrides expected-and-present classification', async () => {
 		const {redis} = makeFakeRedis({
 			seed: {
-				'nexus:cap:tool:shell': JSON.stringify({id: 'tool:shell', enabled: false}),
+				'liv:cap:tool:shell': JSON.stringify({id: 'tool:shell', enabled: false}),
 			},
 		})
 		const {pg} = makeFakePg({
@@ -311,16 +311,16 @@ async function runTests(): Promise<void> {
 	await test('Test 6: atomic-swap concurrency — 50 parallel reads, zero null', async () => {
 		const {redis} = makeFakeRedis({
 			seed: {
-				'nexus:cap:tool:shell': JSON.stringify({id: 'tool:shell', enabled: true, ver: 'old'}),
+				'liv:cap:tool:shell': JSON.stringify({id: 'tool:shell', enabled: true, ver: 'old'}),
 			},
 		})
 		const {pg} = makeFakePg({tableExists: false})
-		const stubSync = makeStubSyncAll(redis, 'nexus:cap:', BUILT_IN_TOOL_IDS as unknown as string[])
+		const stubSync = makeStubSyncAll(redis, 'liv:cap:', BUILT_IN_TOOL_IDS as unknown as string[])
 		const f = makeFlushAndResync({redis, pg, syncAll: stubSync})
 
 		const reads: Array<Promise<string | null>> = []
 		for (let i = 0; i < 50; i++) {
-			reads.push(redis.get('nexus:cap:tool:shell'))
+			reads.push(redis.get('liv:cap:tool:shell'))
 		}
 		const flushPromise = f.run({scope: 'builtins', actorUserId: 'admin-1'})
 		const [readResults] = await Promise.all([Promise.all(reads), flushPromise])
@@ -339,14 +339,14 @@ async function runTests(): Promise<void> {
 			tableExists: true,
 			overrides: [{capability_id: 'tool:shell', enabled: false}],
 		})
-		const stubSync = makeStubSyncAll(redis, 'nexus:cap:', ['tool:shell'])
+		const stubSync = makeStubSyncAll(redis, 'liv:cap:', ['tool:shell'])
 		const f = makeFlushAndResync({redis, pg, syncAll: stubSync})
 		const r = await f.run({scope: 'builtins', actorUserId: 'admin-1'})
 		assert.ok(
 			r.overridesPreserved.includes('tool:shell'),
 			'overridesPreserved must include tool:shell',
 		)
-		const stored = JSON.parse(store.get('nexus:cap:tool:shell')!) as {enabled: boolean}
+		const stored = JSON.parse(store.get('liv:cap:tool:shell')!) as {enabled: boolean}
 		assert.equal(stored.enabled, false, 'override (enabled=false) MUST be re-applied after swap')
 	})
 
@@ -354,16 +354,16 @@ async function runTests(): Promise<void> {
 	await test('Test 8: meta keys preserved (W-14)', async () => {
 		const {redis, store} = makeFakeRedis({
 			seed: {
-				'nexus:cap:_meta:custom_key': 'sentinel',
-				'nexus:cap:tool:shell': '{}',
+				'liv:cap:_meta:custom_key': 'sentinel',
+				'liv:cap:tool:shell': '{}',
 			},
 		})
 		const {pg} = makeFakePg({tableExists: false})
-		const stubSync = makeStubSyncAll(redis, 'nexus:cap:', ['tool:shell'])
+		const stubSync = makeStubSyncAll(redis, 'liv:cap:', ['tool:shell'])
 		const f = makeFlushAndResync({redis, pg, syncAll: stubSync})
 		await f.run({scope: 'builtins'})
 		assert.equal(
-			store.get('nexus:cap:_meta:custom_key'),
+			store.get('liv:cap:_meta:custom_key'),
 			'sentinel',
 			'_meta:custom_key MUST survive the flush (W-14)',
 		)
@@ -373,22 +373,22 @@ async function runTests(): Promise<void> {
 	await test('Test 9: audit history list bounded at 100 (W-21)', async () => {
 		const {redis, lists} = makeFakeRedis({seed: {}})
 		const {pg} = makeFakePg({tableExists: false})
-		const stubSync = makeStubSyncAll(redis, 'nexus:cap:', ['tool:shell'])
+		const stubSync = makeStubSyncAll(redis, 'liv:cap:', ['tool:shell'])
 		const f = makeFlushAndResync({redis, pg, syncAll: stubSync})
 
 		for (let i = 0; i < 3; i++) await f.run({scope: 'builtins'})
 		assert.equal(
-			lists.get('nexus:cap:_audit_history')!.length,
+			lists.get('liv:cap:_audit_history')!.length,
 			3,
 			'after 3 runs, audit list length should be 3',
 		)
 
 		// Pre-seed 99 entries → next run pushes to 100; LTRIM 0 99 keeps 100.
 		const big = Array.from({length: 99}, (_, i) => `entry-${i}`)
-		lists.set('nexus:cap:_audit_history', big)
+		lists.set('liv:cap:_audit_history', big)
 		await f.run({scope: 'builtins'})
 		assert.equal(
-			lists.get('nexus:cap:_audit_history')!.length,
+			lists.get('liv:cap:_audit_history')!.length,
 			100,
 			'LTRIM 0 99 must keep exactly 100 entries',
 		)
@@ -398,16 +398,16 @@ async function runTests(): Promise<void> {
 	await test('Test 10: scope=builtins does NOT delete agent keys', async () => {
 		const {redis, store} = makeFakeRedis({
 			seed: {
-				'nexus:cap:agent:planner': JSON.stringify({id: 'agent:planner'}),
-				'nexus:cap:tool:shell': '{}',
+				'liv:cap:agent:planner': JSON.stringify({id: 'agent:planner'}),
+				'liv:cap:tool:shell': '{}',
 			},
 		})
 		const {pg} = makeFakePg({tableExists: false})
-		const stubSync = makeStubSyncAll(redis, 'nexus:cap:', ['tool:shell'])
+		const stubSync = makeStubSyncAll(redis, 'liv:cap:', ['tool:shell'])
 		const f = makeFlushAndResync({redis, pg, syncAll: stubSync})
 		await f.run({scope: 'builtins'})
 		assert.ok(
-			store.has('nexus:cap:agent:planner'),
+			store.has('liv:cap:agent:planner'),
 			'agent key MUST survive a builtins-scoped flush (only tool:* in scope)',
 		)
 	})

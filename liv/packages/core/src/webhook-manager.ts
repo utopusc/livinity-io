@@ -23,9 +23,9 @@ interface WebhookManagerDeps {
 
 // ── Redis Key Helpers ────────────────────────────────────────────
 
-const WEBHOOK_KEY = (id: string) => `nexus:webhooks:${id}`;
-const WEBHOOK_INDEX = 'nexus:webhooks:index';
-const DEDUP_KEY = (deliveryId: string) => `nexus:webhook:dedup:${deliveryId}`;
+const WEBHOOK_KEY = (id: string) => `liv:webhooks:${id}`;
+const WEBHOOK_INDEX = 'liv:webhooks:index';
+const DEDUP_KEY = (deliveryId: string) => `liv:webhook:dedup:${deliveryId}`;
 const DEDUP_TTL = 86400; // 24 hours
 
 // ── WebhookManager ──────────────────────────────────────────────

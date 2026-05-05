@@ -3,11 +3,11 @@ import type Redis from 'ioredis';
 import type { ApprovalRequest, ApprovalResponse } from './types.js';
 import { logger } from './logger.js';
 
-const APPROVAL_KEY_PREFIX = 'nexus:approval:';
-const APPROVAL_CHANNEL = 'nexus:notify:approval';
-const APPROVAL_RESPONSE_PREFIX = 'nexus:approval:response:';
+const APPROVAL_KEY_PREFIX = 'liv:approval:';
+const APPROVAL_CHANNEL = 'liv:notify:approval';
+const APPROVAL_RESPONSE_PREFIX = 'liv:approval:response:';
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-const AUDIT_KEY = 'nexus:approval:audit';
+const AUDIT_KEY = 'liv:approval:audit';
 
 export class ApprovalManager {
   constructor(private redis: Redis) {}

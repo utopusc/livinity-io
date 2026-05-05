@@ -9,7 +9,7 @@ import { logger } from './logger.js';
 import type { ThinkLevel, VerboseLevel } from './thinking.js';
 import type { ModelTier } from './brain.js';
 
-const USER_PREFIX = 'nexus:user:';
+const USER_PREFIX = 'liv:user:';
 const SESSION_TTL = 30 * 24 * 60 * 60; // 30 days
 
 export interface UserSession {

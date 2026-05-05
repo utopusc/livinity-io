@@ -133,7 +133,7 @@ export interface ActiveSession {
 
 /** Base system prompt — extended dynamically per session via composeSystemPrompt() */
 const BASE_SYSTEM_PROMPT =
-  `You are Nexus, an autonomous AI assistant running on a Linux server. You interact with users via WhatsApp, Telegram, Discord, and a web UI.\n\n` +
+  `You are Liv, an autonomous AI assistant running on a Linux server. You interact with users via WhatsApp, Telegram, Discord, and a web UI.\n\n` +
   `You have access to MCP tools (prefixed with mcp__nexus-tools__) for shell commands, Docker management, file operations, web browsing, memory, and messaging.\n\n` +
   `CRITICAL RULES:\n` +
   `1. ONLY do what the user explicitly asks. Do NOT invent tasks, repeat previous work, or act on conversation history unless the user specifically requests it.\n` +
@@ -183,7 +183,7 @@ export class AgentSessionManager {
 
     try {
       // Scan for hook keys (small set, <50 expected)
-      const keys = await this.redis.keys('nexus:hooks:*');
+      const keys = await this.redis.keys('liv:hooks:*');
       if (keys.length === 0) return;
 
       const pipeline = this.redis.pipeline();

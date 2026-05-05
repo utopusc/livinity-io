@@ -32,7 +32,7 @@ import type { SkillContext, SkillResult } from '../packages/core/dist/skill-type
 import { researchPrompt, planPrompt, executePrompt } from '../packages/core/dist/prompts.js';
 import { buildLearnedEntry, buildFailedEntry } from '../packages/core/dist/utils.js';
 
-const NEXUS_OUTPUT_DIR = process.env.NEXUS_OUTPUT_DIR || '/opt/nexus/output';
+const NEXUS_OUTPUT_DIR = process.env.LIV_OUTPUT_DIR || '/opt/nexus/output';
 
 export async function handler(ctx: SkillContext): Promise<SkillResult> {
   const topic = ctx.message.replace(/^[!\/]?\s*(research|investigate|deep dive|analyze)\s*/i, '').trim();

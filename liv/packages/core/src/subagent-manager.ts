@@ -53,9 +53,9 @@ export interface SubagentMessage {
   ts: number;
 }
 
-const PREFIX = 'nexus:subagent:';
-const HISTORY_PREFIX = 'nexus:subagent_history:';
-const INDEX_KEY = 'nexus:subagents';
+const PREFIX = 'liv:subagent:';
+const HISTORY_PREFIX = 'liv:subagent_history:';
+const INDEX_KEY = 'liv:subagents';
 
 export class SubagentManager {
   private redis: Redis;
@@ -63,7 +63,7 @@ export class SubagentManager {
 
   constructor(redis: Redis, dataDir?: string) {
     this.redis = redis;
-    this.dataDir = dataDir || join(process.env.NEXUS_DATA_DIR || process.env.DATA_DIR || '/opt/nexus/data', 'agents');
+    this.dataDir = dataDir || join(process.env.LIV_DATA_DIR || process.env.DATA_DIR || '/opt/nexus/data', 'agents');
   }
 
   /** Get workspace path for an agent */

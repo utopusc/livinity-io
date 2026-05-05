@@ -176,7 +176,7 @@ export class WsGateway {
   private setupPubSub(): void {
     const redisSub = this.deps.redisSub;
 
-    redisSub.psubscribe('nexus:notify:*', (err) => {
+    redisSub.psubscribe('liv:notify:*', (err) => {
       if (err) {
         logger.error('[WsGateway] Failed to psubscribe to nexus:notify:*', { error: err.message });
       } else {
@@ -207,7 +207,7 @@ export class WsGateway {
     }
 
     // Extract the sub-channel from Redis channel name (e.g., "global", "approval", "agent:abc-123")
-    const prefix = 'nexus:notify:';
+    const prefix = 'liv:notify:';
     const subChannel = redisChannel.startsWith(prefix) ? redisChannel.slice(prefix.length) : redisChannel;
 
     if (subChannel === 'global' || subChannel === 'approval') {
@@ -279,7 +279,7 @@ export class WsGateway {
       data,
       timestamp: Date.now(),
     };
-    const redisChannel = `nexus:notify:${channel}`;
+    const redisChannel = `liv:notify:${channel}`;
     this.deps.redis.publish(redisChannel, JSON.stringify(payload)).catch((err) => {
       logger.error('[WsGateway] Failed to publish notification', { channel: redisChannel, error: err.message });
     });
@@ -919,7 +919,7 @@ export class WsGateway {
     }
 
     // Unsubscribe from Redis pub/sub
-    this.deps.redisSub.punsubscribe('nexus:notify:*').catch(() => {});
+    this.deps.redisSub.punsubscribe('liv:notify:*').catch(() => {});
 
     // Cancel all sessions and close all connections
     for (const [, client] of this.clients) {

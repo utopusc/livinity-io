@@ -13,8 +13,8 @@ import assert from 'node:assert/strict';
 import { ClaudeProvider, ClaudeAuthMethodMismatchError } from './claude.js';
 import type { Redis } from 'ioredis';
 
-const REDIS_API_KEY = 'nexus:config:anthropic_api_key';
-const REDIS_AUTH_METHOD = 'nexus:config:claude_auth_method';
+const REDIS_API_KEY = 'liv:config:anthropic_api_key';
+const REDIS_AUTH_METHOD = 'liv:config:claude_auth_method';
 
 const D_39_05_MESSAGE =
   'ClaudeProvider.getClient() requires an explicit Anthropic API key in Redis (nexus:config:anthropic_api_key) or env (ANTHROPIC_API_KEY). Subscription users must route through SdkAgentRunner (sdk-subscription mode) — see nexus/packages/core/src/sdk-agent-runner.ts. Direct OAuth-token fallback removed in v29.3 Phase 39 (FR-RISK-01).';

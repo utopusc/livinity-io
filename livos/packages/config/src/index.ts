@@ -9,12 +9,12 @@ import { ServicesConfigSchema, type ServicesConfig } from './services.js';
  */
 export const paths: PathsConfig = Object.freeze(PathsConfigSchema.parse({
   base: process.env.LIVOS_BASE_DIR,
-  nexusBase: process.env.NEXUS_BASE_DIR,
+  nexusBase: process.env.LIV_BASE_DIR,
   data: process.env.LIVOS_DATA_DIR,
   logs: process.env.LIVOS_LOGS_DIR,
   skills: process.env.LIVOS_SKILLS_DIR,
-  nexusSkills: process.env.NEXUS_SKILLS_DIR,
-  workspace: process.env.NEXUS_WORKSPACE_DIR,
+  nexusSkills: process.env.LIV_SKILLS_DIR,
+  workspace: process.env.LIV_WORKSPACE_DIR,
   output: process.env.LIVOS_OUTPUT_DIR,
 }));
 
@@ -34,7 +34,7 @@ export const domains: DomainsConfig = Object.freeze(DomainsConfigSchema.parse({
  * Frozen to prevent runtime mutations.
  */
 export const services: ServicesConfig = Object.freeze(ServicesConfigSchema.parse({
-  nexusApi: process.env.NEXUS_API_URL,
+  nexusApi: process.env.LIV_API_URL,
   memoryService: process.env.MEMORY_SERVICE_URL,
   redis: process.env.REDIS_URL,
 }));

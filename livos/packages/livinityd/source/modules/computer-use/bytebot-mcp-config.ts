@@ -30,7 +30,7 @@
  *
  * Sacred file `nexus/packages/core/src/sdk-agent-runner.ts`
  * (SHA `4f868d318abff71f8c8bfbcf443b2393a553018b`) is read-only — this
- * module imports `@nexus/core/lib` types but never modifies sacred internals.
+ * module imports `@liv/core/lib` types but never modifies sacred internals.
  */
 
 import {access} from 'node:fs/promises'
@@ -39,7 +39,7 @@ import {access} from 'node:fs/promises'
 // otherwise unused in this module.
 import type {Redis} from 'ioredis'
 
-// Import types only — McpConfigManager is exported from @nexus/core/lib for
+// Import types only — McpConfigManager is exported from @liv/core/lib for
 // this purpose (Phase 72-native-06 lib.ts patch). We use a duck-typed
 // interface here so the test can inject a minimal stub without a Redis
 // dependency. The real McpConfigManager satisfies this contract.

@@ -1,5 +1,5 @@
 /**
- * Shared types for the Nexus Agent Framework.
+ * Shared types for the Liv Agent Framework.
  * Used by tool registry, agent loop, and skill system.
  */
 

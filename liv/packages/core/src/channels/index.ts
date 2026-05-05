@@ -57,7 +57,7 @@ export class ChannelManager {
     // Create a duplicate connection for pub/sub (required by ioredis)
     this.subRedis = redis.duplicate();
 
-    this.subRedis.subscribe('nexus:channel:updated', (err) => {
+    this.subRedis.subscribe('liv:channel:updated', (err) => {
       if (err) {
         logger.error('ChannelManager: failed to subscribe to config updates', { error: err.message });
       } else {
@@ -66,7 +66,7 @@ export class ChannelManager {
     });
 
     this.subRedis.on('message', async (channel, message) => {
-      if (channel === 'nexus:channel:updated') {
+      if (channel === 'liv:channel:updated') {
         try {
           const data = JSON.parse(message);
           const channelId = data.channel as ChannelId;
@@ -134,7 +134,7 @@ export class ChannelManager {
     // Unsubscribe from config updates
     if (this.subRedis) {
       try {
-        await this.subRedis.unsubscribe('nexus:channel:updated');
+        await this.subRedis.unsubscribe('liv:channel:updated');
         await this.subRedis.quit();
       } catch {
         // Ignore

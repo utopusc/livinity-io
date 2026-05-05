@@ -1,7 +1,7 @@
 import { exec } from 'child_process';
 import { logger } from './logger.js';
 
-const NEXUS_BASE_DIR = process.env.NEXUS_BASE_DIR || '/opt/nexus';
+const NEXUS_BASE_DIR = process.env.LIV_BASE_DIR || '/opt/nexus';
 
 const BLOCKED_PATTERNS = [
   /rm\s+-rf\s+\/(?!\w)/,         // rm -rf /

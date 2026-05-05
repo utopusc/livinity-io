@@ -1,5 +1,5 @@
 /**
- * Nexus Memory Service v2
+ * Liv Memory Service v2
  * Simple SQLite-based memory with vector embeddings
  * Inspired by OpenClaw's memory system
  */

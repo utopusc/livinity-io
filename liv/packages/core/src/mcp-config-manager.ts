@@ -1,14 +1,14 @@
 /**
  * Redis-backed CRUD for MCP server configurations.
- * Publishes 'mcp_config' to 'nexus:config:updated' on every change.
+ * Publishes 'mcp_config' to 'liv:config:updated' on every change.
  */
 
 import type Redis from 'ioredis';
 import { logger } from './logger.js';
 import type { McpConfig, McpServerConfig } from './mcp-types.js';
 
-const CONFIG_KEY = 'nexus:mcp:config';
-const UPDATE_CHANNEL = 'nexus:config:updated';
+const CONFIG_KEY = 'liv:mcp:config';
+const UPDATE_CHANNEL = 'liv:config:updated';
 
 /** Reserved names that would conflict with built-in tool prefixes */
 const RESERVED_NAMES = new Set([

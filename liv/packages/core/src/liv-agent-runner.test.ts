@@ -2,7 +2,7 @@
  * LivAgentRunner unit tests — Phase 67-02.
  *
  * Standalone tsx-runnable script (matches the test:phase39 pattern in
- * @nexus/core package.json — NOT vitest). Top-level async IIFE with try/catch
+ * @liv/core package.json — NOT vitest). Top-level async IIFE with try/catch
  * per test case, exit 0 on all-pass, exit 1 on any failure.
  *
  * Strategy:

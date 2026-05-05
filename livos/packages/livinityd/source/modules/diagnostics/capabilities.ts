@@ -12,7 +12,7 @@
  *
  * ── Atomic-swap protocol (B-06 BLOCKER mitigation) ──────────────────────────
  *
- * `flushAndResync()` rebuilds the live `nexus:cap:<type>:<name>` keyspace
+ * `flushAndResync()` rebuilds the live `liv:cap:<type>:<name>` keyspace
  * without an empty window from any concurrent reader's perspective:
  *
  *   1. Read user overrides from PG BEFORE the flush (B-07 mitigation).
@@ -20,7 +20,7 @@
  *      — if the table doesn't exist yet (G-03), log + skip without erroring.
  *   2. Count current live keys (BEFORE).
  *   3. Call injected `syncAll()` which writes manifests to the PENDING prefix
- *      `nexus:cap:_pending:<type>:<name>`. Production wiring uses a
+ *      `liv:cap:_pending:<type>:<name>`. Production wiring uses a
  *      `PrefixedWriteRedis` proxy that rewrites SET-key arguments while
  *      leaving read paths untouched — this lets the upstream
  *      `CapabilityRegistry.syncAll()` body run unmodified.
@@ -33,8 +33,8 @@
  *      row with sentinel `device_id='diagnostics-host'` (mirrors
  *      `fail2ban-admin/events.ts` sentinel pattern).
  *
- * The Lua script (ATOMIC_SWAP_LUA) preserves `nexus:cap:_meta:*` and
- * `nexus:cap:_audit*` keys — they are NOT in the type-prefixed scope (W-14).
+ * The Lua script (ATOMIC_SWAP_LUA) preserves `liv:cap:_meta:*` and
+ * `liv:cap:_audit*` keys — they are NOT in the type-prefixed scope (W-14).
  *
  * ── 3-way categorization (W-12 mitigation) ──────────────────────────────────
  *
@@ -171,7 +171,7 @@ export const BUILT_IN_TOOL_IDS: readonly string[] = [
 	'tool:web_search',
 ] as const
 
-const DEFAULT_REDIS_PREFIX = 'nexus:cap:'
+const DEFAULT_REDIS_PREFIX = 'liv:cap:'
 
 // ────────────────────────────────────────────────────────────────────────────
 // Atomic-swap Lua script (B-06 BLOCKER mitigation)
@@ -184,14 +184,14 @@ const DEFAULT_REDIS_PREFIX = 'nexus:cap:'
  *   1. KEYS pendingPrefix.<type>:* → for each pending key, RENAME to live prefix.
  *   2. KEYS livePrefix.<type>:*    → DEL any stale live keys not in the rename set.
  *
- * `nexus:cap:_meta:*` and `nexus:cap:_audit*` are NEVER touched (W-14) — the
+ * `liv:cap:_meta:*` and `liv:cap:_audit*` are NEVER touched (W-14) — the
  * KEYS patterns above only match `<type>:*` for the 5 capability types.
  *
  * The script also bumps `livePrefix._meta:last_sync_at` to ARGV[4] (an ISO
  * timestamp string) so `diagnoseRegistry()` can surface "synced 3s ago".
  *
  * Why a single-script swap: from the perspective of any non-Lua command
- * (including our own concurrent `redis.get('nexus:cap:tool:shell')` reads),
+ * (including our own concurrent `redis.get('liv:cap:tool:shell')` reads),
  * the swap is atomic — Redis serializes Lua execution against other commands.
  * No mid-swap "everything is empty" window can ever be observed.
  */
@@ -257,7 +257,7 @@ async function scopedKeys(redis: RedisLike, prefix: string, scope: FlushScope): 
  *
  * - `tool:web_search`              → SERPER_API_KEY env var must be set.
  * - `tool:gmail_*` / `tool:telegram_*` → service-connection flag in Redis at
- *                                       `nexus:integrations:<service>:connected`.
+ *                                       `liv:integrations:<service>:connected`.
  * - everything else                → unconditionally met (shell, docker_*, files_*).
  *
  * Reasons returned NEVER expose the secret value — only the var/flag name
@@ -273,7 +273,7 @@ function defaultPreconditionEvaluator(redis: RedisLike): PreconditionEvaluator {
 			const service = capabilityId.startsWith('tool:gmail_') ? 'gmail' : 'telegram'
 			let flag: string | null = null
 			try {
-				flag = await redis.get(`nexus:integrations:${service}:connected`)
+				flag = await redis.get(`liv:integrations:${service}:connected`)
 			} catch {
 				flag = null
 			}
@@ -680,7 +680,7 @@ export const realDiagnoseRegistry = makeDiagnoseRegistry({
  * a closure so the upstream nexus/core code stays untouched.
  *
  * For Phase 47 Wave 2, the proxy is a TODO — Wave 5 routes will pass through
- * to this function once the @nexus/core re-export of CapabilityRegistry lands.
+ * to this function once the @liv/core re-export of CapabilityRegistry lands.
  * The thin stub below logs a single warning and exits early so a misconfigured
  * production call surfaces immediately instead of silently rewriting nothing.
  */

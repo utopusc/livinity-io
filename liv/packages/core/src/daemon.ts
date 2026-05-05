@@ -41,7 +41,7 @@ import type { CanvasArtifact } from './canvas-manager.js';
 import { CapabilityRegistry } from './capability-registry.js';
 import type { CapabilityManifest } from './capability-registry.js';
 
-const NEXUS_LOGS_DIR = process.env.NEXUS_LOGS_DIR || '/opt/nexus/logs';
+const NEXUS_LOGS_DIR = process.env.LIV_LOGS_DIR || '/opt/nexus/logs';
 
 const SELF_IMPROVEMENT_TASK = `You are the Self-Improvement Agent. Your job is to identify and fill capability gaps in Nexus.
 
@@ -433,7 +433,7 @@ export class Daemon {
           // Store result for MCP polling
           if (item.requestId) {
             await this.config.redis.set(
-              `nexus:answer:${item.requestId}`,
+              `liv:answer:${item.requestId}`,
               skillResult.message,
               'EX',
               120,
@@ -473,7 +473,7 @@ export class Daemon {
         // If requestId present, store result for MCP polling
         if (item.requestId) {
           await this.config.redis.set(
-            `nexus:answer:${item.requestId}`,
+            `liv:answer:${item.requestId}`,
             responseText,
             'EX',
             120,
@@ -498,7 +498,7 @@ export class Daemon {
         // Also store error for MCP polling
         if (item.requestId) {
           await this.config.redis.set(
-            `nexus:answer:${item.requestId}`,
+            `liv:answer:${item.requestId}`,
             errorMsg,
             'EX',
             120,
@@ -624,7 +624,7 @@ export class Daemon {
         // Store result for MCP polling
         if (item.requestId) {
           await this.config.redis.set(
-            `nexus:answer:${item.requestId}`,
+            `liv:answer:${item.requestId}`,
             skillResult.message,
             'EX',
             120,
@@ -664,7 +664,7 @@ export class Daemon {
       // Store result for MCP polling
       if (item.requestId) {
         await this.config.redis.set(
-          `nexus:answer:${item.requestId}`,
+          `liv:answer:${item.requestId}`,
           responseText,
           'EX',
           120,
@@ -689,7 +689,7 @@ export class Daemon {
       // Also store error for MCP polling
       if (item.requestId) {
         await this.config.redis.set(
-          `nexus:answer:${item.requestId}`,
+          `liv:answer:${item.requestId}`,
           errorMsg,
           'EX',
           120,
@@ -1158,7 +1158,7 @@ export class Daemon {
           if (!text) return;
           voiceTextBuffer = '';
 
-          this.config.redis.publish('nexus:voice:response', JSON.stringify({
+          this.config.redis.publish('liv:voice:response', JSON.stringify({
             sessionId: voiceSessionId,
             text,
             isFinal,
@@ -1189,7 +1189,7 @@ export class Daemon {
               const sentence = sentenceMatch[1].trim();
               voiceTextBuffer = voiceTextBuffer.slice(sentenceMatch[0].length);
               if (sentence) {
-                this.config.redis.publish('nexus:voice:response', JSON.stringify({
+                this.config.redis.publish('liv:voice:response', JSON.stringify({
                   sessionId: voiceSessionId,
                   text: sentence,
                   isFinal: false,
@@ -1814,10 +1814,10 @@ ${task}`;
             if (!channelMgr) return { success: false, output: '', error: 'ChannelManager not available' };
 
             // Look up contact JID from name mapping
-            const jid = await this.config.redis.hget('nexus:wa_contacts', contact.toLowerCase());
+            const jid = await this.config.redis.hget('liv:wa_contacts', contact.toLowerCase());
             if (!jid) {
               // Try partial match
-              const allContacts = await this.config.redis.hgetall('nexus:wa_contacts');
+              const allContacts = await this.config.redis.hgetall('liv:wa_contacts');
               const match = Object.entries(allContacts).find(([name]) =>
                 name.includes(contact.toLowerCase()) || contact.toLowerCase().includes(name)
               );
@@ -1885,7 +1885,7 @@ ${task}`;
           }
 
           try {
-            const targetChatId = explicitChatId || await this.config.redis.get(`nexus:${channel}:last_chat_id`);
+            const targetChatId = explicitChatId || await this.config.redis.get(`liv:${channel}:last_chat_id`);
             if (!targetChatId) {
               return { success: false, output: '', error: `No chat ID for ${channel}. Send a message to the bot first to register a chat.` };
             }
@@ -2095,7 +2095,7 @@ ${task}`;
         const { operation, key, data, ttl } = params as { operation: string; key: string; data?: string; ttl?: number };
         if (!key && operation !== 'list') return { success: false, output: '', error: 'Key is required.' };
 
-        const prefix = 'nexus:task_state:';
+        const prefix = 'liv:task_state:';
         const redis = this.config.redis;
 
         try {
@@ -2160,7 +2160,7 @@ ${task}`;
 
           // Web/MCP: publish to Redis for WebSocket gateway
           if (ctx?.source === 'web' || ctx?.source === 'mcp') {
-            await this.config.redis.publish('nexus:agent_results', JSON.stringify({
+            await this.config.redis.publish('liv:agent_results', JSON.stringify({
               type: 'progress',
               text: message,
               timestamp: Date.now(),
@@ -2450,7 +2450,7 @@ ${task}`;
 
           // Store hook config in Redis
           await this.config.redis.set(
-            `nexus:hooks:${hookName}`,
+            `liv:hooks:${hookName}`,
             JSON.stringify(hookConfig),
           );
 
@@ -3453,7 +3453,7 @@ Types:
   /** Fetch recent channel conversation history (Telegram, Discord, WhatsApp, etc.) */
   private async getChannelHistory(channel: string, chatId: string): Promise<string> {
     try {
-      const key = `nexus:${channel}_history:${chatId}`;
+      const key = `liv:${channel}_history:${chatId}`;
       const items = await this.config.redis.lrange(key, 0, 19); // last 10 turns (20 entries)
       if (items.length === 0) return '';
 
@@ -3481,7 +3481,7 @@ Types:
    *  Falls back to the raw chatId if no mapping is cached (lazy creation by livinityd). */
   private async resolveCanonicalUserId(channel: string, chatId: string): Promise<string> {
     try {
-      const cached = await this.config.redis.get(`nexus:identity:${channel}:${chatId}`);
+      const cached = await this.config.redis.get(`liv:identity:${channel}:${chatId}`);
       if (cached) return cached;
     } catch {
       // Redis unavailable — fall back to chatId
@@ -3492,7 +3492,7 @@ Types:
   /** Cache a channel identity mapping in Redis for fast daemon-side lookups. */
   async linkIdentity(channel: string, channelUserId: string, canonicalUserId: string): Promise<void> {
     try {
-      await this.config.redis.set(`nexus:identity:${channel}:${channelUserId}`, canonicalUserId);
+      await this.config.redis.set(`liv:identity:${channel}:${channelUserId}`, canonicalUserId);
     } catch {
       // Best-effort — identity will be resolved lazily
     }
@@ -3501,7 +3501,7 @@ Types:
   /** Save a conversation turn to channel history */
   private async saveChannelTurn(channel: string, chatId: string, userMsg: string, response: string) {
     try {
-      const key = `nexus:${channel}_history:${chatId}`;
+      const key = `liv:${channel}_history:${chatId}`;
       await this.config.redis.lpush(key,
         JSON.stringify({ role: 'assistant', text: response.slice(0, 2000), ts: Date.now() }),
         JSON.stringify({ role: 'user', text: userMsg.slice(0, 500), ts: Date.now() }),
@@ -3599,7 +3599,7 @@ Types:
       });
     } else if (via === 'web' || via === 'mcp') {
       // Web/MCP: publish to Redis pubsub for WebSocket gateway pickup
-      await this.config.redis.publish('nexus:agent_results', JSON.stringify({
+      await this.config.redis.publish('liv:agent_results', JSON.stringify({
         subagentId: config.id,
         subagentName: config.name,
         text,
@@ -3746,7 +3746,7 @@ Types:
     logger.info('Self-reflection starting...');
 
     // Gather recent context
-    const keys = await this.config.redis.keys('nexus:wa_history:*');
+    const keys = await this.config.redis.keys('liv:wa_history:*');
     const recentMessages: string[] = [];
 
     for (const key of keys.slice(0, 5)) {
@@ -3814,7 +3814,7 @@ Types:
       }
 
       // Save reflection summary to Redis for debugging
-      await this.config.redis.set('nexus:last_reflection', JSON.stringify({
+      await this.config.redis.set('liv:last_reflection', JSON.stringify({
         ...reflection,
         timestamp: Date.now(),
       }), 'EX', 7 * 86400);

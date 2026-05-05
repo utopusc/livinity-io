@@ -88,7 +88,7 @@ export class IntentRouter {
 
     // 1. Cache check
     const hash = this.normalizeAndHash(message);
-    const cacheKey = `nexus:intent:${hash}`;
+    const cacheKey = `liv:intent:${hash}`;
 
     try {
       const cached = await this.deps.redis.get(cacheKey);
@@ -126,7 +126,7 @@ export class IntentRouter {
     // 5. Filter by threshold
     let threshold = DEFAULT_CONFIDENCE_THRESHOLD;
     try {
-      const configThreshold = await this.deps.redis.get('nexus:config:intent_threshold');
+      const configThreshold = await this.deps.redis.get('liv:config:intent_threshold');
       if (configThreshold) {
         const parsed = parseFloat(configThreshold);
         if (!isNaN(parsed) && parsed > 0 && parsed <= 1) {

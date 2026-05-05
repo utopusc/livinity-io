@@ -116,7 +116,7 @@ export class WhatsAppProvider implements ChannelProvider {
         try {
           const qrDataUrl = await qrToDataURL(qr, { width: 256 });
           if (this.redis) {
-            await this.redis.set('nexus:whatsapp:qr', qrDataUrl, 'EX', 60);
+            await this.redis.set('liv:whatsapp:qr', qrDataUrl, 'EX', 60);
           }
           logger.info('WhatsAppProvider: QR code generated');
         } catch (err: any) {
@@ -134,7 +134,7 @@ export class WhatsAppProvider implements ChannelProvider {
           botName: info?.pushname || info?.wid?.user || 'WhatsApp',
         };
         if (this.redis) {
-          await this.redis.del('nexus:whatsapp:qr');
+          await this.redis.del('liv:whatsapp:qr');
         }
         await this.saveStatus();
         logger.info('WhatsAppProvider: connected!', { name: this.status.botName });
@@ -213,7 +213,7 @@ export class WhatsAppProvider implements ChannelProvider {
       logger.info('WhatsAppProvider: session data cleared');
     } catch {}
     if (this.redis) {
-      await this.redis.del('nexus:whatsapp:qr');
+      await this.redis.del('liv:whatsapp:qr');
     }
     this.status = { enabled: false, connected: false };
     await this.saveStatus();

@@ -48,8 +48,8 @@ const CLAUDE_MODELS: Record<string, string> = {
   opus: 'claude-opus-4-6',
 };
 
-const REDIS_KEY = 'nexus:config:anthropic_api_key';
-const AUTH_METHOD_KEY = 'nexus:config:claude_auth_method';
+const REDIS_KEY = 'liv:config:anthropic_api_key';
+const AUTH_METHOD_KEY = 'liv:config:claude_auth_method';
 
 // OAuth PKCE constants (same as Claude Code CLI)
 const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
