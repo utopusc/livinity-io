@@ -157,6 +157,65 @@ export class KimiAgentRunner extends EventEmitter {
     }
   }
 
+  /**
+   * 4-pass JSON repair chain for Kimi tool call arguments. V32-HERMES-06.
+   *
+   * Kimi's streaming parser occasionally emits malformed JSON (trailing
+   * commas, Python-style None/True/False, unclosed braces). This chain
+   * attempts increasingly aggressive fixes before falling back to '{}'.
+   *
+   * Pass 1: direct parse — happy path.
+   * Pass 2: strip trailing commas + balance braces/brackets, retry.
+   * Pass 3: replace Python literals with JSON equivalents, retry.
+   * Pass 4: last resort — return '{}' (empty object).
+   */
+  private _repairToolArguments(raw: string): string {
+    // Pass 1: try direct parse — re-serialize for canonical form.
+    try {
+      return JSON.stringify(JSON.parse(raw));
+    } catch {
+      console.debug('[KimiAgentRunner] Pass 1 failed — attempting repair', { rawLen: raw.length });
+    }
+
+    // Pass 2: strip trailing commas and balance braces/brackets.
+    let attempt = raw.replace(/,(\s*[\]}])/g, '$1');
+
+    // Balance unclosed braces.
+    const openBraces = (attempt.match(/\{/g) ?? []).length;
+    const closeBraces = (attempt.match(/\}/g) ?? []).length;
+    if (openBraces > closeBraces) {
+      attempt += '}'.repeat(openBraces - closeBraces);
+    }
+
+    // Balance unclosed brackets.
+    const openBrackets = (attempt.match(/\[/g) ?? []).length;
+    const closeBrackets = (attempt.match(/\]/g) ?? []).length;
+    if (openBrackets > closeBrackets) {
+      attempt += ']'.repeat(openBrackets - closeBrackets);
+    }
+
+    try {
+      return JSON.stringify(JSON.parse(attempt));
+    } catch {
+      console.debug('[KimiAgentRunner] Pass 2 failed — attempting Python literal replacement');
+    }
+
+    // Pass 3: replace Python-style None/True/False with JSON equivalents.
+    attempt = attempt
+      .replace(/\bNone\b/g, 'null')
+      .replace(/\bTrue\b/g, 'true')
+      .replace(/\bFalse\b/g, 'false');
+
+    try {
+      return JSON.stringify(JSON.parse(attempt));
+    } catch {
+      console.debug('[KimiAgentRunner] Pass 3 failed — falling back to empty object');
+    }
+
+    // Pass 4: last resort — return empty object so the tool call doesn't crash.
+    return '{}';
+  }
+
   async run(task: string): Promise<AgentResult> {
     const runStartTime = Date.now();
     const sessionId = this.config.sessionId || randomUUID();
@@ -332,9 +391,11 @@ export class KimiAgentRunner extends EventEmitter {
             for (const tc of msg.tool_calls) {
               toolCallCount++;
               const toolName = tc.function.name;
+              // V32-HERMES-06: use repair chain instead of direct JSON.parse.
+              const repairedArgs = this._repairToolArguments(tc.function.arguments);
               let params: Record<string, unknown> = {};
               try {
-                params = JSON.parse(tc.function.arguments);
+                params = JSON.parse(repairedArgs);
               } catch {
                 params = { raw: tc.function.arguments };
               }

@@ -76,11 +76,13 @@
  * verified at task start AND end.
  */
 
+import { randomUUID } from 'node:crypto';
 import type Redis from 'ioredis';
 import type { SdkAgentRunner } from './sdk-agent-runner.js';
 import type { RunStore } from './run-store.js';
 import type { ToolRegistry } from './tool-registry.js';
 import type { Message } from './context-manager.js';
+import { pickThinkingVerb } from './lib/hermes-phrases.js';
 
 // Re-export the Message type so consumers (e.g. livinityd's bootstrap that
 // constructs the contextManagerHook callback) can import it from the same
@@ -123,6 +125,14 @@ export type ToolCallSnapshot = {
   status: 'running' | 'done' | 'error';
   startedAt: number;
   completedAt?: number;
+  /**
+   * Groups tools dispatched in the same SDK turn under a shared UUID.
+   * Populated by LivAgentRunner.openToolSnapshot — one UUID per assistant
+   * turn that contains tool_use blocks. Single-tool turns also receive a
+   * batchId (every call gets one) so UI consumers can rely on its presence.
+   * V32-HERMES-05; reserved for P83 UI grouping.
+   */
+  batchId?: string;
 };
 
 /**
@@ -168,6 +178,12 @@ export type LivAgentRunnerOptions = {
   computerUseRouter?: (
     snapshot: ToolCallSnapshot,
   ) => Promise<{ output: unknown; isError: boolean }>;
+  /**
+   * Maximum number of handleAssistantMessage invocations before the runner
+   * self-terminates with a MAX_ITERATIONS error. Matches Hermes IterationBudget
+   * default. V32-HERMES-03.
+   */
+  maxIterations?: number;
 };
 
 // ── SDK event payloads (the contract documented in the file header) ──────
@@ -274,6 +290,19 @@ export function categorizeTool(toolName: string): ToolCategory {
   return 'generic';
 }
 
+/**
+ * Pick a human-readable verb hint for a tool dispatch status_detail chunk.
+ * Heuristic based on tool name prefix/substring. V32-HERMES-01.
+ */
+function pickToolVerb(toolName: string): string {
+  const n = toolName.toLowerCase();
+  if (n.includes('read') || n.includes('list')) return 'inspecting';
+  if (n.includes('write') || n.includes('edit') || n.includes('str-replace') || n.includes('str_replace')) return 'modifying';
+  if (n.includes('bash') || n.includes('shell') || n.includes('execute') || n.includes('terminal')) return 'executing';
+  if (n.includes('screenshot') || n.includes('click') || n.includes('type') || n.includes('scroll')) return 'controlling';
+  return `using ${toolName}`;
+}
+
 // ── LivAgentRunner ──────────────────────────────────────────────────────
 
 /**
@@ -304,10 +333,34 @@ export class LivAgentRunner {
    */
   private currentHistory: Message[] = [];
 
+  // V32-HERMES-03: IterationBudget fields.
+  private _iterationCount = 0;
+  private readonly _maxIterations: number;
+
+  // V32-HERMES-01: run start time for elapsed calculation in status_detail.
+  private _runStartedAt = 0;
+
+  // V32-HERMES-04: single-shot steer guidance; drained before next SDK turn.
+  private _pendingSteer: string | null = null;
+
+  // V32-HERMES-05: batch UUID shared by all tool_use blocks in one assistant turn.
+  private _currentBatchId: string | null = null;
+
   constructor(private readonly opts: LivAgentRunnerOptions) {
     // No-op constructor: storing opts only. Per must-have, instantiating
     // does NOT call any method on sdkRunner — the runner is dormant until
     // `start()` is invoked.
+    this._maxIterations = opts.maxIterations ?? 90;
+  }
+
+  /**
+   * Inject steering guidance to be prepended as a synthetic system message
+   * on the NEXT assistant turn (single-shot drain). V32-HERMES-04.
+   *
+   * Callers: AgentSessionManager.injectSteer() → ws-agent.ts 'steer' handler.
+   */
+  public injectSteer(guidance: string): void {
+    this._pendingSteer = guidance;
   }
 
   /**
@@ -329,6 +382,10 @@ export class LivAgentRunner {
     this.stopRequested = false;
     this.snapshots.clear();
     this.finalAssistantText = '';
+    // V32-HERMES-03: reset iteration counter on each new run.
+    this._iterationCount = 0;
+    // V32-HERMES-01: record run start time for elapsed calculations.
+    this._runStartedAt = Date.now();
 
     // Seed `currentHistory` (Path B per CONTEXT D-20.1) with the user task
     // as the first message — gives `contextManagerHook` something to inspect
@@ -461,6 +518,9 @@ export class LivAgentRunner {
    * runner adopts it for subsequent iters and emits a 'context-summarized'
    * status chunk. After processing, this assistant message is appended to
    * `currentHistory` so the next iter sees up-to-date state.
+   *
+   * V32-HERMES-01/03/04/05: status_detail emission at start + tool dispatch
+   * + after tool result; IterationBudget enforcement; steer drain; batchId.
    */
   private async handleAssistantMessage(
     runId: string,
@@ -468,8 +528,56 @@ export class LivAgentRunner {
   ): Promise<void> {
     if (await this.checkStop(runId)) return;
 
+    // V32-HERMES-03: IterationBudget — increment before any processing.
+    this._iterationCount++;
+    if (this._iterationCount > this._maxIterations) {
+      await this.opts.runStore.appendChunk(runId, {
+        type: 'error',
+        payload: {
+          message: `Max iterations (${this._maxIterations}) reached`,
+          code: 'MAX_ITERATIONS',
+        },
+      });
+      await this.opts.runStore.markError(runId, {
+        message: `Max iterations (${this._maxIterations}) reached`,
+      });
+      this.stopRequested = true;
+      return;
+    }
+
+    // V32-HERMES-01: emit status_detail at start of every assistant turn.
+    await this.opts.runStore.appendChunk(runId, {
+      type: 'status_detail',
+      payload: {
+        phase: 'thinking',
+        phrase: pickThinkingVerb(),
+        elapsed: Date.now() - this._runStartedAt,
+      },
+    });
+
     // Plan 73-03 D-20.1: per-iter contextManagerHook BEFORE message processing.
     await this.invokeContextManagerHook(runId);
+
+    // V32-HERMES-04: drain pending steer guidance as a synthetic system message.
+    // The steer is applied by prepending to currentHistory so the context manager
+    // hook and next SDK query both see it. We use a 'system' role message wrapped
+    // in the <liv_steer> tag; this does NOT inject into the SDK messages array
+    // directly — it rides in currentHistory which the contextManagerHook may
+    // forward to the SDK on the next summarization pass. For immediate effect,
+    // we attach it as the last entry in the history the SDK receives indirectly.
+    // Single-shot drain: cleared after consuming.
+    if (this._pendingSteer !== null) {
+      const steerGuidance = this._pendingSteer;
+      this._pendingSteer = null; // single-shot drain
+      this.currentHistory.push({
+        role: 'system',
+        content: `<liv_steer>${steerGuidance}</liv_steer>`,
+      });
+    }
+
+    // V32-HERMES-05: assign a fresh batchId for all tool_use blocks in this turn.
+    // Every assistant turn gets its own UUID so UI can group tools by turn.
+    this._currentBatchId = randomUUID();
 
     if (typeof msg.reasoning_content === 'string' && msg.reasoning_content.length > 0) {
       await this.opts.runStore.appendChunk(runId, {
@@ -489,6 +597,15 @@ export class LivAgentRunner {
             payload: block.text,
           });
         } else if (block.type === 'tool_use') {
+          // V32-HERMES-01: emit status_detail for tool dispatch with heuristic verb.
+          await this.opts.runStore.appendChunk(runId, {
+            type: 'status_detail',
+            payload: {
+              phase: 'tool_use',
+              phrase: pickToolVerb(block.name),
+              elapsed: Date.now() - this._runStartedAt,
+            },
+          });
           await this.openToolSnapshot(runId, block);
         }
       }
@@ -517,6 +634,9 @@ export class LivAgentRunner {
    * before processing — same precedence pattern as handleAssistantMessage.
    * After processing, the tool_result is appended to `currentHistory` as
    * a `role: 'tool'` Message so the hook sees it on the next iter.
+   *
+   * V32-HERMES-01: after processing, emits status_detail phase:'thinking'
+   * to signal the runner is resuming reasoning after the tool call.
    */
   private async handleToolResult(
     runId: string,
@@ -555,6 +675,17 @@ export class LivAgentRunner {
       payload: merged,
     });
 
+    // V32-HERMES-01: after tool result, emit status_detail phase:'thinking'
+    // to signal the runner is resuming reasoning before the next assistant turn.
+    await this.opts.runStore.appendChunk(runId, {
+      type: 'status_detail',
+      payload: {
+        phase: 'thinking',
+        phrase: pickThinkingVerb(),
+        elapsed: Date.now() - this._runStartedAt,
+      },
+    });
+
     // Append the tool_result to the working history (Path B). The hook
     // will see this on the next iter.
     this.currentHistory.push({
@@ -573,6 +704,9 @@ export class LivAgentRunner {
   /**
    * Open a fresh tool snapshot (status 'running'), emit it, and apply
    * the D-16 computer-use stub if applicable.
+   *
+   * V32-HERMES-05: assigns `_currentBatchId` (set by handleAssistantMessage)
+   * so all tool_use blocks in the same SDK turn share a batchId.
    */
   private async openToolSnapshot(
     runId: string,
@@ -588,6 +722,7 @@ export class LivAgentRunner {
       assistantCall: { input: block.input, ts: startedAt },
       status: 'running',
       startedAt,
+      batchId: this._currentBatchId ?? undefined,
     };
     this.snapshots.set(block.id, snapshot);
 
