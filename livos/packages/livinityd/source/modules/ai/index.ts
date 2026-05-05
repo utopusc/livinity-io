@@ -20,6 +20,15 @@ import {isMultiUserMode} from './per-user-claude.js'
 export {mountAgentRunsRoutes} from './agent-runs.js'
 export type {LivAgentRunnerFactory, MountAgentRunsOptions} from './agent-runs.js'
 
+// Phase 75-06 — Re-export the conversation-search route mount helper. Mirrors
+// the agent-runs re-export above; the actual mount call lives in
+// server/index.ts alongside `mountAgentRunsRoutes`.
+export {mountConversationSearchRoute} from './conversation-search.js'
+export type {
+	MountConversationSearchOptions,
+	SearchRepoContract,
+} from './conversation-search.js'
+
 export interface AiModuleOptions {
 	livinityd: Livinityd
 	redisUrl?: string
