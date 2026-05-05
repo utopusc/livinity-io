@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-04T21:58:00.000Z"
-last_activity: "2026-05-04 — P70-01 LivComposer shipped: 14/14 vitest pass; commits `0ae8e69b` (RED) + `e3cbb4c9` (GREEN). COMPOSER-01 + COMPOSER-02 marked complete."
+last_updated: "2026-05-05T01:00:37.421Z"
+last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
 progress:
   total_phases: 10
-  completed_phases: 3
-  total_plans: 43
-  completed_plans: 26
-  percent: 60
+  completed_phases: 4
+  total_plans: 57
+  completed_plans: 31
+  percent: 54
 ---
 
 # Project State
@@ -80,10 +80,18 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **67-03:** Heartbeat verified via source-text invariant (greps `agent-runs.ts` for `setInterval(`, `: heartbeat\\n\\n`, and cadence==15000). Spying on `global.setInterval` failed to capture the bare-global call inside the route handler in vitest's threading model; fake-timer fast-forward across an async SSE response is fragile. The 12 other behavior tests cover headers/catch-up/?after=/complete-event/control/auth/authz.
 - **67-03:** Runtime imports in `agent-runs.ts` use `@nexus/core/lib` (not the package main) — the main entry runs daemon side-effects (`dotenv/config`, channels/whatsapp.js dynamic import) that explode in livinityd's context. The `/lib` entry re-exports RunStore + LivAgentRunner verbatim per Phase 67-01/02 SUMMARY. Plan's `from '@nexus/core'` substring grep satisfied via explicit comment.
 
-## Phase 70 Progress (Composer + Streaming UX Polish) — 1/8 plans complete (Wave 1)
+## Phase 70 Progress (Composer + Streaming UX Polish) — 6/8 plans complete (per `summaries[]` in init context: 70-01..70-05 + 70-07)
 
 - **70-01 ✅** `livos/packages/ui/src/routes/ai-chat/liv-composer.tsx` (414 LOC) — auto-grow textarea (24-200px), drag-drop/paste/click file attachment carry-over (20MB cap), slash trigger `^/[^\s]*$`, mention trigger `(\s|^)@(\S*)$` with slash priority, P66 design tokens. Pure helpers `shouldShowSlashMenu` / `shouldShowMentionMenu` / `calculateTextareaHeight` exported. Voice button reused AS-IS (D-30). Stop/model badge as data-testid stubs for 70-06/70-08 swap. Commits `0ae8e69b` (RED) + `e3cbb4c9` (GREEN). 14/14 vitest pass; `pnpm --filter ui build` clean (41.91s); sacred SHA `4f868d31...` unchanged. SUMMARY: `70-01-SUMMARY.md`. COMPOSER-01 + COMPOSER-02 marked complete.
-- **70-02..70-08** — pending (LivSlashMenu, LivWelcome, LivStreamingText, LivAgentStatus + LivTypingDots, LivStopButton + LivModelBadge, LivMentionMenu, integration).
+- **70-07 ✅** `livos/packages/ui/src/routes/ai-chat/components/liv-mention-menu.tsx` (130 LOC) + unit tests (93 LOC, 13/13 vitest pass) — `LivMentionMenu` component + `LIV_PLACEHOLDER_MENTIONS` (9 placeholders: 3 agents/3 tools/3 skills, all with "coming soon" badges) + pure `filterMentions(mentions, filter)` helper (case-insensitive substring on `name + label`, description excluded). Mirrors LivSlashMenu prop pattern (`filter`, `selectedIndex`, `onSelect`, `onFilteredCountChange`). P66 tokens only (`var(--liv-bg-elevated)`, `var(--liv-accent-cyan/violet)`, `var(--liv-border-subtle)`, `var(--liv-text-*)`). Returns null when filtered list is empty. Display order locked to `agent → tool → skill` regardless of source array. Commits `7e09c8f9` (feat) + `9a91d7fd` (test). `pnpm --filter ui build` clean (37.89s); sacred SHA `4f868d31...` unchanged across 4 checkpoints. D-NO-NEW-DEPS honored. Real data integration deferred to P76 per CONTEXT D-29. SUMMARY: `70-07-SUMMARY.md`. COMPOSER-04 marked complete.
+- **70-06, 70-08** — pending (LivStopButton + LivModelBadge, integration).
+
+### P70-07 Decisions Logged
+
+- **70-07:** Display order locked to `orderedCategories: MentionCategory[] = ['agent', 'tool', 'skill']` rather than relying on JS object insertion order — deterministic regardless of upstream `mentions` prop ordering. Matches the plan truth "renders mentions in stable order (agent group, then tool, then skill)".
+- **70-07:** Filter scope is `name + label` only — description intentionally excluded. Codified by test `does NOT match against description (only name + label)` — keeps autocomplete precise (e.g. typing `agent` does NOT match all 3 agent mentions whose descriptions say "agent" — that would be noisy). Aligns with plan behavior block.
+- **70-07:** Mention `name` field has NO leading `@` — parent composer (70-08) inserts the `@` on selection. Locked by test `mention names contain no leading @ (parent inserts it)`. Critical contract for 70-08 integration.
+- **70-07:** `filteredMentionsRef` mirror of slash-menu pattern — gives 70-08 synchronous read-access to the current filtered list inside `onKeyDown` handlers without an extra render cycle.
 
 ### P70 Decisions Logged
 
