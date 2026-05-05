@@ -130,7 +130,7 @@ export async function handleCommand(
 }
 
 async function handleHelp(ctx: CommandContext): Promise<CommandResult> {
-  const response = `🤖 *Nexus Commands*
+  const response = `🤖 *Liv Commands*
 
 *Thinking Level*
 \`/think <level>\`
@@ -459,7 +459,7 @@ async function handleStatus(ctx: CommandContext): Promise<CommandResult> {
 async function handleStats(ctx: CommandContext): Promise<CommandResult> {
   const stats = await ctx.userSession.getStats();
 
-  const response = `📊 *Nexus Statistics*
+  const response = `📊 *Liv Statistics*
 
 👥 Total users: ${stats.totalUsers}
 🟢 Active today: ${stats.activeToday}
