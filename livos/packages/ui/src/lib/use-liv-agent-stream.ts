@@ -36,6 +36,7 @@ import {
 	type Chunk,
 	type ConversationStreamState,
 	type Message,
+	type StatusDetailPayload,
 	type StreamStatus,
 	type ToolCallSnapshot,
 } from './liv-agent-types'
@@ -53,6 +54,12 @@ export type UseLivAgentStreamReturn = {
 	messages: Message[]
 	snapshots: Map<string, ToolCallSnapshot>
 	status: StreamStatus
+	/**
+	 * P88 — Latest `status_detail` payload from the stream. `null` between
+	 * runs and reset to `null` on terminal status. Powers the animated
+	 * phrase card in the v32 chat surface.
+	 */
+	currentStatus: StatusDetailPayload | null
 	sendMessage: (text: string) => Promise<void>
 	stop: () => Promise<void>
 	runId: string | null
@@ -157,6 +164,27 @@ export function applyChunk(
 		const s = typeof chunk.payload === 'string' ? chunk.payload : ''
 		if (s === 'complete' || s === 'error' || s === 'stopped') {
 			next.status = s as StreamStatus
+			// P88 — clear status_detail on terminal status so UI hides the
+			// animated phrase card when the run finishes.
+			next.currentStatus = null
+		}
+	} else if (chunk.type === 'status_detail') {
+		// P88 — Hermes-inspired phrase + phase + elapsed, surfaced to UI as
+		// an animated card above the streaming caret. Last-write-wins.
+		const payload = chunk.payload as Partial<StatusDetailPayload> | null
+		if (
+			payload &&
+			(payload.phase === 'thinking' ||
+				payload.phase === 'tool_use' ||
+				payload.phase === 'waiting') &&
+			typeof payload.phrase === 'string' &&
+			typeof payload.elapsed === 'number'
+		) {
+			next.currentStatus = {
+				phase: payload.phase,
+				phrase: payload.phrase,
+				elapsed: payload.elapsed,
+			}
 		}
 	}
 	// 'tool_call_partial' is a no-op for now — P75 will surface partial args.
@@ -517,6 +545,7 @@ export function useLivAgentStream(
 		messages: slice.messages,
 		snapshots: slice.snapshots,
 		status: slice.status,
+		currentStatus: slice.currentStatus ?? null,
 		sendMessage,
 		stop,
 		runId: slice.runId,

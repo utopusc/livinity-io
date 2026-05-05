@@ -3,7 +3,7 @@
 //
 // Greppable invariants (asserted by use-liv-agent-stream.unit.test.tsx):
 //   - 10-string ToolCategory union
-//   - 6-string ChunkType union
+//   - 7-string ChunkType union (status_detail added P88 to mirror P87 backend)
 //   - ToolCallSnapshot 7 fields (toolId, toolName, category, assistantCall,
 //     toolResult?, status, startedAt, completedAt?)
 //
@@ -51,13 +51,14 @@ export type ToolCallSnapshot = {
 }
 
 /**
- * Chunk type — D-09 verbatim. Six members:
+ * Chunk type — D-09 verbatim + P87 `status_detail` extension. Seven members:
  *   - 'text'              streaming assistant text
  *   - 'reasoning'         streaming Kimi `reasoning_content`
  *   - 'tool_snapshot'     paired tool_use+tool_result snapshot (D-15 dedupe)
  *   - 'tool_call_partial' partial tool args while still streaming (P75 use)
  *   - 'error'             terminal error chunk
  *   - 'status'            terminal status chunk ('complete'|'error'|'stopped')
+ *   - 'status_detail'     Hermes-inspired phrase + phase + elapsed ms (P87/P88)
  */
 export type ChunkType =
 	| 'text'
@@ -66,6 +67,26 @@ export type ChunkType =
 	| 'tool_call_partial'
 	| 'error'
 	| 'status'
+	| 'status_detail'
+
+/**
+ * Phase 87/88 — `status_detail` payload shape (mirrors backend
+ * liv-agent-runner emit). Surfaces the agent's "currently doing" state to
+ * the UI so it can render a Liv-styled animated phrase card.
+ *
+ * `phase` drives the icon variant in the UI:
+ *   - 'thinking'  → animated pulse dots
+ *   - 'tool_use'  → wrench icon
+ *   - 'waiting'   → hourglass icon
+ *
+ * `phrase` is one of THINKING_VERBS / WAITING_VERBS shipped by P87.
+ * `elapsed` is ms since run start (relative, not wall clock).
+ */
+export type StatusDetailPayload = {
+	phase: 'thinking' | 'tool_use' | 'waiting'
+	phrase: string
+	elapsed: number
+}
 
 export type Chunk = {
 	idx: number
@@ -109,6 +130,13 @@ export type ConversationStreamState = {
 	lastSeenIdx: number
 	reconnectAttempts: number
 	errorMessage?: string
+	/**
+	 * P88 — Latest `status_detail` payload from the stream. `null` until first
+	 * status_detail chunk arrives, and reset to `null` when the run reaches a
+	 * terminal status. UI consumers render an animated phrase card driven by
+	 * this field.
+	 */
+	currentStatus?: StatusDetailPayload | null
 }
 
 /**
@@ -126,5 +154,6 @@ export function makeEmptyConversationState(
 		snapshots: new Map(),
 		lastSeenIdx: -1,
 		reconnectAttempts: 0,
+		currentStatus: null,
 	}
 }
