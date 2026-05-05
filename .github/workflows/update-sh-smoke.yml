@@ -16,7 +16,7 @@ on:
   pull_request:
     paths:
       - 'livos/**'
-      - 'nexus/**'
+      - 'liv/**'
       - '.github/workflows/update-sh-smoke.yml'
       - '.planning/phases/3*/artifacts/*.sh'
       - 'livos/scripts/update.sh.minipc'
@@ -62,13 +62,13 @@ jobs:
           restore-keys: |
             pnpm-store-${{ runner.os }}-
 
-      - name: Cache nexus node_modules
+      - name: Cache liv node_modules
         uses: actions/cache@v4
         with:
-          path: nexus/node_modules
-          key: nexus-nm-${{ runner.os }}-${{ hashFiles('nexus/package-lock.json', 'nexus/packages/*/package-lock.json') }}
+          path: liv/node_modules
+          key: liv-nm-${{ runner.os }}-${{ hashFiles('liv/package-lock.json', 'liv/packages/*/package-lock.json') }}
           restore-keys: |
-            nexus-nm-${{ runner.os }}-
+            liv-nm-${{ runner.os }}-
 
       # ---- LivOS workspace install + builds ----
 
@@ -97,51 +97,51 @@ jobs:
             || (echo "FAIL: livos/packages/ui/dist missing or empty"; exit 1)
           echo "✓ @livos/ui dist OK ($(ls livos/packages/ui/dist | wc -l) entries)"
 
-      # ---- Nexus install + builds ----
+      # ---- Liv install + builds ----
 
-      - name: npm install (nexus root)
-        working-directory: nexus
+      - name: npm install (liv root)
+        working-directory: liv
         run: npm install --no-audit --no-fund
 
-      - name: Build @nexus/core
-        working-directory: nexus
+      - name: Build @liv/core
+        working-directory: liv
         run: npm run build --workspace=packages/core
 
-      - name: Verify nexus core dist
+      - name: Verify liv core dist
         run: |
-          test -s nexus/packages/core/dist/index.js \
-            || (echo "FAIL: nexus/packages/core/dist/index.js missing or empty"; exit 1)
-          echo "✓ @nexus/core dist OK"
+          test -s liv/packages/core/dist/index.js \
+            || (echo "FAIL: liv/packages/core/dist/index.js missing or empty"; exit 1)
+          echo "✓ @liv/core dist OK"
 
-      - name: Build @nexus/worker
-        working-directory: nexus
+      - name: Build @liv/worker
+        working-directory: liv
         run: npm run build --workspace=packages/worker
 
-      - name: Verify nexus worker dist
+      - name: Verify liv worker dist
         run: |
-          test -s nexus/packages/worker/dist/index.js \
-            || (echo "FAIL: nexus/packages/worker/dist/index.js missing or empty"; exit 1)
-          echo "✓ @nexus/worker dist OK"
+          test -s liv/packages/worker/dist/index.js \
+            || (echo "FAIL: liv/packages/worker/dist/index.js missing or empty"; exit 1)
+          echo "✓ @liv/worker dist OK"
 
-      - name: Build @nexus/mcp-server
-        working-directory: nexus
+      - name: Build @liv/mcp-server
+        working-directory: liv
         run: npm run build --workspace=packages/mcp-server
 
-      - name: Verify nexus mcp-server dist
+      - name: Verify liv mcp-server dist
         run: |
-          test -s nexus/packages/mcp-server/dist/index.js \
-            || (echo "FAIL: nexus/packages/mcp-server/dist/index.js missing or empty"; exit 1)
-          echo "✓ @nexus/mcp-server dist OK"
+          test -s liv/packages/mcp-server/dist/index.js \
+            || (echo "FAIL: liv/packages/mcp-server/dist/index.js missing or empty"; exit 1)
+          echo "✓ @liv/mcp-server dist OK"
 
-      - name: Build @nexus/memory
-        working-directory: nexus
+      - name: Build @liv/memory
+        working-directory: liv
         run: npm run build --workspace=packages/memory
 
-      - name: Verify nexus memory dist
+      - name: Verify liv memory dist
         run: |
-          test -s nexus/packages/memory/dist/index.js \
-            || (echo "FAIL: nexus/packages/memory/dist/index.js missing or empty"; exit 1)
-          echo "✓ @nexus/memory dist OK"
+          test -s liv/packages/memory/dist/index.js \
+            || (echo "FAIL: liv/packages/memory/dist/index.js missing or empty"; exit 1)
+          echo "✓ @liv/memory dist OK"
 
       # ---- Type-check livinityd (additional regression catch) ----
 
@@ -172,10 +172,10 @@ jobs:
           echo "  Build matrix:"
           echo "    @livos/config           : verified"
           echo "    @livos/ui               : verified"
-          echo "    @nexus/core             : verified"
-          echo "    @nexus/worker           : verified"
-          echo "    @nexus/mcp-server       : verified"
-          echo "    @nexus/memory           : verified"
+          echo "    @liv/core               : verified"
+          echo "    @liv/worker             : verified"
+          echo "    @liv/mcp-server         : verified"
+          echo "    @liv/memory             : verified"
           echo "    livinityd typecheck     : advisory (continue-on-error)"
           echo "    Phase 3*/artifacts/*.sh : bash -n verified"
           echo "═══════════════════════════════════════════════════════════════"
