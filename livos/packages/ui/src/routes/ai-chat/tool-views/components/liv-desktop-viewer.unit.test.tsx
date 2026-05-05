@@ -162,8 +162,9 @@ describe('LivDesktopViewer renders (T6, T8)', () => {
 describe('liv-desktop-viewer.tsx source-text invariants', () => {
 	it('T7: live-mode renders the loading sentinel data-testid="liv-desktop-viewer-loading" before first fetch', () => {
 		// Sentinel testid MUST appear in source — covers the pre-first-frame
-		// render branch the runtime takes when isLoading && !data.
-		expect(componentSource).toContain('data-testid="liv-desktop-viewer-loading"')
+		// render branch the runtime takes when isLoading && !data. JSX
+		// formatters in this repo use single quotes; the regex tolerates both.
+		expect(componentSource).toMatch(/data-testid=['"]liv-desktop-viewer-loading['"]/)
 	})
 
 	it('uses the trpcReact.computerUse.takeScreenshot procedure for live mode polling', () => {
@@ -203,7 +204,7 @@ describe('liv-desktop-viewer.tsx source-text invariants', () => {
 	it('error-recovery threshold is 3 consecutive failures (matches PLAN must-haves)', () => {
 		// Must-have: "if 3 consecutive fetches fail, shows … with retry button"
 		expect(componentSource).toMatch(/3/)
-		expect(componentSource).toContain('data-testid="liv-desktop-viewer-error"')
+		expect(componentSource).toMatch(/data-testid=['"]liv-desktop-viewer-error['"]/)
 	})
 
 	it('does NOT import @testing-library/react / msw (D-NO-NEW-DEPS)', () => {
