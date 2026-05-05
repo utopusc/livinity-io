@@ -415,6 +415,31 @@ CREATE INDEX IF NOT EXISTS idx_messages_content_tsv
   ON messages USING GIN (content_tsv);
 
 -- =========================================================================
+-- Phase 75-03: Pinned Messages (MEM-07)
+-- User-pinned chat messages auto-injected into the agent system prompt.
+-- content is snapshotted at pin time so deleted/edited messages still render.
+-- message_id may be null for free-form pins not tied to a specific message.
+-- conversation_id is also nullable — pins survive conversation deletion when
+-- the user pins free-form notes from outside any conversation context.
+-- UNIQUE(user_id, message_id) makes re-pinning the same message idempotent
+-- (the repo INSERT uses ON CONFLICT (user_id, message_id) DO NOTHING and
+-- falls back to a SELECT for the existing pin id).
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS pinned_messages (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  conversation_id TEXT REFERENCES conversations(id) ON DELETE CASCADE,
+  message_id      UUID REFERENCES messages(id) ON DELETE CASCADE,
+  content         TEXT NOT NULL,
+  label           TEXT,
+  pinned_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pinned_user_pinned
+  ON pinned_messages(user_id, pinned_at DESC);
+
+-- =========================================================================
 -- Phase 76: Agent Templates (MARKET-01) — global catalog of agent presets.
 -- Per-LivOS-install (NOT synced from Server5). 8 seeds run via boot
 -- seed runner (76-02). Cloning a template POSTs to nexus /api/subagents
