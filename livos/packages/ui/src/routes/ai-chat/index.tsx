@@ -60,8 +60,12 @@ const SkillsPanel = lazy(() => import('./skills-panel'))
 const AgentsPanel = lazy(() => import('./agents-panel'))
 const CanvasPanel = lazy(() => import('./canvas-panel').then((m) => ({default: m.CanvasPanel})))
 const ComputerUsePanel = lazy(() => import('./computer-use-panel').then((m) => ({default: m.ComputerUsePanel})))
+// P78-marketplace-inline: render Agent Marketplace inline in AI Chat window
+// (Suna-style — feels like marketplace lives WITH the chat, not a separate page).
+// /agent-marketplace route stays for deep-links + LivTour step 8.
+const AgentMarketplace = lazy(() => import('@/routes/agent-marketplace'))
 
-type SidebarView = 'chat' | 'mcp' | 'skills' | 'agents'
+type SidebarView = 'chat' | 'mcp' | 'skills' | 'agents' | 'marketplace'
 
 /**
  * Phase 75-07 / CONTEXT D-21 — adapt the in-memory ChatMessage[] to the
@@ -228,7 +232,7 @@ function ConversationSidebar({
 				</div>
 			)}
 
-			{(activeView === 'mcp' || activeView === 'skills' || activeView === 'agents') && (
+			{(activeView === 'mcp' || activeView === 'skills' || activeView === 'agents' || activeView === 'marketplace') && (
 				<div className='flex-1' />
 			)}
 
@@ -544,7 +548,9 @@ export default function AiChat() {
 		activeProvider,
 		onOpenMarketplace: () => {
 			setSidebarOpen(false)
-			navigate('/agent-marketplace')
+			// P78-marketplace-inline: open as panel inside AI chat window
+			// instead of navigating to /agent-marketplace route. Suna-style.
+			setActiveView('marketplace')
 		},
 	}
 
@@ -887,6 +893,35 @@ export default function AiChat() {
 					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
 						<AgentsPanel />
 					</Suspense>
+				</div>
+			)}
+			{activeView === 'marketplace' && (
+				<div className='flex flex-1 flex-col overflow-hidden'>
+					{/* Header bar with Back button + title — keeps panel feel rather than full-page-route feel. */}
+					<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+						<div className='flex items-center justify-between'>
+							<button
+								onClick={() => setActiveView('chat')}
+								className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+								title='Back to chat'
+							>
+								<IconArrowLeft size={20} />
+							</button>
+							<span className='text-body font-semibold text-text-primary'>Agent Marketplace</span>
+							{isMobile ? (
+								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+									<IconMenu2 size={20} />
+								</button>
+							) : (
+								<div className='h-11 w-11' />
+							)}
+						</div>
+					</div>
+					<div className='flex-1 overflow-auto'>
+						<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+							<AgentMarketplace />
+						</Suspense>
+					</div>
 				</div>
 			)}
 		</div>
