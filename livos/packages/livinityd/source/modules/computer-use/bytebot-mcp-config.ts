@@ -148,7 +148,13 @@ function buildBytebotConfig(
 		args: [resolvedPath],
 		env: {
 			DISPLAY: env.DISPLAY ?? ':0',
-			XAUTHORITY: env.XAUTHORITY ?? '/home/bruce/.Xauthority',
+			// 2026-05-05 P79-03: GDM-managed sessions (Ubuntu 24.04 default) put
+			// the Xauthority cookie at /run/user/<uid>/gdm/Xauthority — NOT
+			// /home/<user>/.Xauthority (that path doesn't exist for GDM logins).
+			// nut-js' screen.capture() hangs when X server is unreachable,
+			// triggering MCP SDK timeouts ('Connection closed' from client side).
+			// Default to the GDM path; allow override via env BYTEBOT_XAUTHORITY.
+			XAUTHORITY: env.BYTEBOT_XAUTHORITY ?? env.XAUTHORITY ?? '/run/user/1000/gdm/Xauthority',
 		},
 		enabled: true,
 		installedAt: Date.now(),
