@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v32.0
 milestone_name: AI Chat Ground-up Rewrite + Hermes Background Runtime
-status: Wave 4 SHIPPED 2026-05-06 — P88 (WS→SSE migration via useLivAgentStream + status_detail consumption + AgentSelector) + P89 (ThemeToggle + keyboard shortcuts + a11y polish). Sacred SHA f3538e1d preserved. WCAG flag: --liv-muted-foreground 3.12:1 fails AA 4.5:1 (P91 UAT to address). Wave 5 next: P90 cutover → P91 UAT sequential.
-last_updated: "2026-05-06T03:00:00.000Z"
-last_activity: 2026-05-06 — Wave 4 of v32 shipped (commits 50156555 P89 + 464eba3b P88). 11/12 phases complete. Autonomous orchestration continuing.
+status: v32 milestone CODE-COMPLETE 2026-05-06 — all 12 phases shipped (Waves 1-5). Sacred SHA f3538e1d preserved throughout. WCAG --liv-muted-foreground fixed (5.04:1 PASS). Pending only user-walked Mini PC UAT signoff (UAT-CHECKLIST.md, 10 sections A-J).
+last_updated: "2026-05-06T04:00:00.000Z"
+last_activity: 2026-05-06 — Wave 5 sequential shipped (commits af860aa9 P90 + 771b7712 P91). 12/12 phases complete. Lifecycle: code-complete; deploy + UAT signoff is user's hand-walk.
 progress:
   total_phases: 12
-  completed_phases: 11
+  completed_phases: 12
   total_plans: 12
-  completed_plans: 11
-  percent: 92
+  completed_plans: 12
+  percent: 100
 ---
 
 # Project State
@@ -20,9 +20,9 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v32.0 AI Chat Ground-up Rewrite + Hermes Background Runtime — Suna-faithful UI rewrite + Hermes runtime patterns + light theme; routed via `/gsd-autonomous`
-**Last shipped milestone:** v31.0 Liv Agent Reborn — closed 2026-05-05 (P64-P79 all complete; P77+P78+P79 hot-fix wave shipped 2026-05-05; bytebot MCP working end-to-end via host GNOME desktop)
-**Next action:** Wave 2 dispatch (P81 + P82 + P83 + P85-UI + P86) — 5 paralel agents in their own subdirectories of `livos/packages/ui/src/routes/`
+**Current milestone:** v32.0 AI Chat Ground-up Rewrite + Hermes Background Runtime — CODE-COMPLETE 2026-05-06; pending Mini PC UAT signoff
+**Last shipped milestone:** v31.0 Liv Agent Reborn — closed 2026-05-05 (P64-P79 all complete)
+**Next action:** USER WALK — Mini PC deploy + UAT-CHECKLIST.md (`.planning/phases/91-uat-polish/UAT-CHECKLIST.md`, 10 sections A-J). After UAT signoff: `/gsd-cleanup` to archive phase artifacts; then `/gsd-new-milestone` for v33.
 
 ## Current Position
 
@@ -31,7 +31,8 @@ Wave 1: ✅ COMPLETE — `759ef597` P80, `9a276a11` P85-schema, `628ed1ca` P87, 
 Wave 2: ✅ COMPLETE — `4379ea89` P81, `6f758067` P82, `0df7475b` P83, `49d79510` P86, `52944d16` P85-UI
 Wave 3: ✅ COMPLETE — `d719a175` P84 (MCP SoT + Smithery secondary + legacy mcp-panel deprecated)
 Wave 4: ✅ COMPLETE — `50156555` P89 (ThemeToggle + Cmd-key shortcuts + a11y), `464eba3b` P88 (WS→SSE + status_detail UI + AgentSelector)
-Wave 5: ◆ NEXT — P90 cutover (set Redis flag liv:config:new_chat_enabled=true; switch /ai-chat default to v32; redirect /agent-marketplace → /marketplace; mount ThemeToggle in v32 chat header [P89 deferred]; wire localStorage liv-last-assistant in SSE handler [P89 deferred]) → P91 UAT (full smoke + WCAG fix for --liv-muted-foreground)
+Wave 5: ✅ COMPLETE — `af860aa9` P90 (cutover + redirects + dock + 2 legacy file deletes), `771b7712` P91 (WCAG fix + UAT-CHECKLIST + static smoke)
+Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UAT: cleanup deferred to user invocation.
 
 ## Wave 1 Deliverables (shipped)
 
