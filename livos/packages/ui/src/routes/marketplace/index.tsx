@@ -25,6 +25,7 @@ import {useNavigate} from 'react-router-dom'
 import {toast} from 'sonner'
 import {IconLoader2, IconRefresh} from '@tabler/icons-react'
 
+import {ThemeToggle} from '@/components/theme-toggle'
 import {Button} from '@/shadcn-components/ui/button'
 import {trpcReact} from '@/trpc/trpc'
 
@@ -181,16 +182,19 @@ export default function MarketplacePage() {
 	return (
 		<div className='container mx-auto max-w-7xl px-4 py-8' data-testid='marketplace-page'>
 			{/* Hero */}
-			<div className='mb-8 space-y-2'>
-				<h1
-					className='text-display-2 font-semibold tracking-tight text-text-primary'
-					data-testid='marketplace-hero-title'
-				>
-					Discover Agents
-				</h1>
-				<p className='max-w-2xl text-body text-text-secondary'>
-					Browse curated AI agents and add them to your personal library with one click.
-				</p>
+			<div className='mb-8 flex items-start justify-between gap-4'>
+				<div className='space-y-2'>
+					<h1
+						className='text-display-2 font-semibold tracking-tight text-text-primary'
+						data-testid='marketplace-hero-title'
+					>
+						Discover Agents
+					</h1>
+					<p className='max-w-2xl text-body text-text-secondary'>
+						Browse curated AI agents and add them to your personal library with one click.
+					</p>
+				</div>
+				<ThemeToggle />
 			</div>
 
 			{/* Toolbar */}

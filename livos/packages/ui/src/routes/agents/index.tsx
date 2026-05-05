@@ -17,6 +17,7 @@ import {IconPlus, IconSearch} from '@tabler/icons-react'
 import {toast} from 'sonner'
 
 import {StaggerList} from '@/components/motion'
+import {ThemeToggle} from '@/components/theme-toggle'
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
 import {
@@ -164,6 +165,7 @@ export default function AgentsRoute() {
 							<IconPlus size={16} />
 							New Agent
 						</Button>
+						<ThemeToggle />
 					</div>
 				</div>
 

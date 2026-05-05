@@ -1,0 +1,62 @@
+/*
+ * v32 Accessibility Baseline (Phase 89)
+ *
+ * 1. focus-visible ring defaults — any interactive element that reaches this
+ *    rule gets a sensible Liv-branded focus indicator. Components that already
+ *    use focus-visible:ring-* Tailwind utilities are NOT affected (specificity
+ *    is equal; last-in order wins, but component-level utilities are declared
+ *    after this file via @tailwind utilities in index.css).
+ *
+ * 2. prefers-reduced-motion — collapses all transitions/animations for users
+ *    who have indicated they prefer reduced motion. Framer Motion already
+ *    respects this via its shouldReduceMotion() check; this rule catches any
+ *    CSS-only animations defined outside Framer.
+ */
+
+/* ── 1. Focus-visible ring catch-all ─────────────────────────────────────── */
+/*
+ * Only targets elements that do NOT have an outline or ring set by a more
+ * specific rule. The :where() pseudo-class gives zero specificity so
+ * component-level Tailwind classes always win.
+ */
+:where(a, button, input, textarea, select, [role='button'], [tabindex]):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--liv-ring, oklch(0.708 0 0)),
+    0 0 0 4px var(--liv-background, oklch(98.46% 0.002 247.84));
+}
+
+/*
+ * Inputs and textareas get a ring that uses the input border color as the
+ * offset so the ring is visually distinct from the element border.
+ */
+:where(input, textarea, select):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--liv-ring, oklch(0.708 0 0)),
+    0 0 0 4px var(--liv-background, oklch(98.46% 0.002 247.84));
+}
+
+/* ── 2. prefers-reduced-motion ────────────────────────────────────────────── */
+/*
+ * Collapses CSS-native animations/transitions. Framer Motion components are
+ * unaffected by this (Framer reads the media query internally via its own API
+ * and skips its JavaScript animations). This rule targets raw CSS @keyframes
+ * and transition: declarations that may exist outside Framer.
+ *
+ * Non-respecting animation sources identified in v32/:
+ *   - streaming-caret.tsx (CSS keyframe `blink` defined inline via JSX style)
+ *     -> flagged as P90 follow-up to wrap in prefers-reduced-motion check
+ *   - view-transition-old/new in index.css (animation-duration: 0.1s)
+ *     -> acceptable at 0.1s; already brief
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
