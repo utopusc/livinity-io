@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T04:51:27.017Z"
-last_activity: "2026-05-05 — 72-native-06 PLAN COMPLETE (registerBytebotMcpServer boot-wire + ALLOWED_COMMANDS+='tsx'); commits 8d04a7e1 + 8245ed83 + f606b7c3"
+last_updated: "2026-05-05T16:30:00.000Z"
+last_activity: "2026-05-05 — 65-03 source-code rename sweep complete (4 commits: `4324c839` `a62f31c2` `ed38c138` `4476385a`); sacred SHA `4f868d31...` preserved at 8 checkpoints; @liv/{core,worker,mcp-server,memory} all build clean; livinityd typecheck baseline 358 pre-existing errors unchanged"
 progress:
   total_phases: 13
   completed_phases: 10
   total_plans: 88
-  completed_plans: 71
-  percent: 81
+  completed_plans: 73
+  percent: 83
 ---
 
 # Project State
@@ -26,11 +26,13 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 64 (v30.5 Final Cleanup) — in progress, 4/5 plans complete
-Plans complete: 64-01 (compat matrix), 64-02 (UAT matrix), 64-03 (R-series matrix), 64-05 (quick-task triage)
-Plan paused: 64-04 (Suna sandbox fix) — Tasks 1+2 partial-deferred to user-walk; Task 3 = checkpoint:human-verify (browser smoke test)
-Status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)
+Phase: 65 (Liv Rename + Foundation Cleanup) — in progress, 3/6 plans complete
+Plans complete: 65-01 (preflight), 65-02 (git mv nexus → liv + 6 package.json), 65-03 (source-code identifier sweep — imports + env vars + Redis prefix + brand strings + .env.example)
+Plans pending: 65-04 (build/deploy script updates), 65-05 (Mini PC migration script + live cutover gate), 65-06 (active doc update)
+
+Phase 64 (v30.5 Final Cleanup) — paused, 4/5 plans complete; 64-04 awaits user-walk (Mini PC redeploy + Suna smoke test)
+Status: 65-03 landed cleanly — sacred SHA preserved, all @liv/* builds exit 0, D-NO-BYOK boundary verified (broker import-only diff). Continue with 65-04 next.
+Last activity: 2026-05-05 — 65-03 (Liv source-code rename sweep) shipped 4 atomic commits
 
 ## Phase 64 Outstanding Items (user-walk required)
 

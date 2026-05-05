@@ -33,11 +33,16 @@
 - [x] **RENAME-01**: `nexus/` directory → `liv/` via `git mv`
 - [ ] **RENAME-02**: All `@nexus/*` npm scope → `@liv/*` (6 package.json files + ~100 import statements)
 - [ ] **RENAME-03**: All `NEXUS_*` env vars → `LIV_*` (consolidate with existing LIV_BASE_DIR pattern)
-- [ ] **RENAME-04**: All `nexus:*` Redis key prefixes → `liv:*` (5 occurrences, all docs per scope analysis)
-- [ ] **RENAME-05**: All "Nexus" user-visible strings → "Liv" in UI components, error messages, log lines
-- [ ] **RENAME-06**: `update.sh` paths `/opt/nexus/` → `/opt/liv/` (20 occurrences)
-- [ ] **RENAME-07**: `livos/install.sh` env var references updated (26 occurrences)
-- [ ] **RENAME-08**: `.github/workflows/deploy.yml` updated (8 occurrences)
+- [x] **RENAME-04
+**: All `nexus:*` Redis key prefixes → `liv:*` (5 occurrences, all docs per scope analysis)
+- [x] **RENAME-05
+**: All "Nexus" user-visible strings → "Liv" in UI components, error messages, log lines
+- [x] **RENAME-06
+**: `update.sh` paths `/opt/nexus/` → `/opt/liv/` (20 occurrences)
+- [x] **RENAME-07
+**: `livos/install.sh` env var references updated (26 occurrences)
+- [x] **RENAME-08
+**: `.github/workflows/deploy.yml` updated (8 occurrences)
 - [ ] **RENAME-09**: Mini PC migration script (`scripts/migrate-nexus-to-liv.sh`) executes atomic move + symlink fallback
 - [ ] **RENAME-10**: Mini PC `/opt/nexus/` → `/opt/liv/` migration verified, all 4 systemd services green
 - [ ] **RENAME-11**: Smoke test: `curl https://bruce.livinity.io/api/agent/stream -d '{"task":"hello"}'` returns SSE
