@@ -112,7 +112,8 @@
 **: Mention menu (`@`) for agents, MCP tools, skills; voice input button (port voice-button.tsx, polish UX); model badge inline
 - [x] **COMPOSER-05
 **: `liv-streaming-text.tsx` — react-markdown + remark-gfm renderer with CSS-only blinking caret on last text block
-- [ ] **COMPOSER-06**: Code blocks with shiki syntax highlighting + copy button on hover; mermaid diagram inline support
+- [x] **COMPOSER-06
+**: Code blocks with shiki syntax highlighting + copy button on hover; mermaid diagram inline support
 - [x] **COMPOSER-07
 **: `liv-agent-status.tsx` — states (idle/listening/thinking/executing/responding/error) with distinct icon + animation + accent color
 - [x] **COMPOSER-08
