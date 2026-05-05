@@ -78,6 +78,19 @@ export { LearningEngine } from './learning-engine.js';
 // ── Marketplace MCP ──────────────────────────────────────────
 export { MarketplaceMcp } from './marketplace-mcp.js';
 
+// ── MCP Config Manager (Phase 72-native-06) ───────────────────
+// Redis-backed CRUD for MCP server configurations. livinityd uses this to
+// register the bytebot computer-use stdio server at boot when
+// BYTEBOT_MCP_ENABLED=true (D-NATIVE-10). Writes to `nexus:mcp:config`;
+// the running nexus daemon's McpClientManager reconciles via Pub/Sub
+// (`nexus:config:updated`) and spawns the child process.
+export { McpConfigManager } from './mcp-config-manager.js';
+export type {
+  McpServerConfig,
+  McpConfig,
+  McpServerStatus,
+} from './mcp-types.js';
+
 // ── Skill Types ─────────────────────────────────────────────
 export type {
   SkillFrontmatter,
