@@ -34,6 +34,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import {
   LivAgentRunner,
   categorizeTool,
+  type Message,
   type ToolCallSnapshot,
 } from './liv-agent-runner.js';
 
@@ -430,7 +431,81 @@ async function main(): Promise<void> {
     );
   });
 
-  // ── Test 5 (bonus): categorizeTool ────────────────────────────────────
+  // ── Test 5 (NEW — Phase 73-03): per-iter contextManagerHook ───────────
+  await test('context-manager-hook called per iter; summarized=true emits status chunk', async () => {
+    const fakeStore = new FakeRunStore();
+    const stub = new StubSdkRunner();
+
+    // Script: 3 assistant text events, 50ms apart. Each emission triggers
+    // an iter-handler invocation; the hook should be called per-iter.
+    stub.script = [
+      {
+        delayMs: 50,
+        emit: (s) =>
+          s.emit('liv:assistant_message', {
+            content: [{ type: 'text', text: 'one' }],
+          }),
+      },
+      {
+        delayMs: 50,
+        emit: (s) =>
+          s.emit('liv:assistant_message', {
+            content: [{ type: 'text', text: 'two' }],
+          }),
+      },
+      {
+        delayMs: 50,
+        emit: (s) =>
+          s.emit('liv:assistant_message', {
+            content: [{ type: 'text', text: 'three' }],
+          }),
+      },
+    ];
+
+    let callCount = 0;
+    const fakeHook = async (history: Message[]) => {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          history: [
+            ...history,
+            {
+              role: 'system' as const,
+              content:
+                '<context_summary>summed</context_summary>',
+            },
+          ],
+          summarized: true,
+        };
+      }
+      return undefined;
+    };
+
+    const runner = new LivAgentRunner({
+      runStore: fakeStore as unknown as ConstructorParameters<typeof LivAgentRunner>[0]['runStore'],
+      sdkRunner: stub as unknown as ConstructorParameters<typeof LivAgentRunner>[0]['sdkRunner'],
+      toolRegistry: {} as ConstructorParameters<typeof LivAgentRunner>[0]['toolRegistry'],
+      redisClient: {} as ConstructorParameters<typeof LivAgentRunner>[0]['redisClient'],
+      contextManagerHook: fakeHook,
+    });
+
+    await runner.start('run_ctx_test', 'task');
+
+    assert(callCount >= 1, `hook called ${callCount} times, expected >= 1`);
+
+    const statusChunkCalls = fakeStore.calls.filter(
+      (c) =>
+        c.method === 'appendChunk' &&
+        (c.args[1] as { type?: string }).type === 'status' &&
+        (c.args[1] as { payload?: unknown }).payload === 'context-summarized',
+    );
+    assert(
+      statusChunkCalls.length >= 1,
+      `expected at least one 'context-summarized' status chunk, got ${statusChunkCalls.length}`,
+    );
+  });
+
+  // ── Test 6 (bonus): categorizeTool ────────────────────────────────────
   await test('categorizeTool maps known patterns to correct categories', async () => {
     assert(categorizeTool('browser-navigate') === 'browser', 'browser-navigate');
     assert(categorizeTool('browser_click') === 'browser', 'browser_click');
