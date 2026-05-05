@@ -465,6 +465,52 @@ class Server {
 			}
 		})
 
+		// ── Computer Use Desktop Gateway (Phase 71-05 / CU-FOUND-02 / CU-FOUND-04) ──
+		// Sealed-off subdomain for Bytebot containers — runs AFTER the generic
+		// app-gateway (which falls through for multi-segment subdomains like
+		// `desktop.bruce` thanks to its `subdomain.includes('.')` check at
+		// line 338) and BEFORE the `/app/:appId` proxy. Path filter restricts
+		// to /computer-use*, /websockify*, /screenshot*, /health* — anything
+		// else returns 404. Active-task gate enforces the user has an open
+		// computer_use_tasks row (else 403). T-PRIVILEGED-CONTAINER mitigation.
+		{
+			const {mountDesktopGateway, mountDesktopWsUpgrade} = await import('../computer-use/index.js')
+			const manager = this.livinityd.computerUseManager
+			if (manager && this.server) {
+				const getMainDomain = async (): Promise<string | null> => {
+					const raw = await this.livinityd.ai.redis.get('livos:domain:config').catch(() => null)
+					if (!raw) return null
+					try {
+						const parsed = JSON.parse(raw)
+						return parsed.active && parsed.domain ? parsed.domain : null
+					} catch {
+						return null
+					}
+				}
+				const getMultiUserMode = async (): Promise<boolean> =>
+					(await this.livinityd.ai.redis.get('livos:system:multi_user').catch(() => null)) === 'true'
+
+				mountDesktopGateway({
+					app: this.app,
+					server: this.server,
+					manager,
+					getMainDomain,
+					getMultiUserMode,
+					verifyToken: (token: string) => this.verifyToken(token),
+					logger: this.logger,
+				})
+				mountDesktopWsUpgrade({
+					server: this.server,
+					manager,
+					getMainDomain,
+					getMultiUserMode,
+					verifyToken: (token: string) => this.verifyToken(token),
+					logger: this.logger,
+				})
+				this.logger.log('Computer Use desktop gateway mounted (desktop.{user}.{domain})')
+			}
+		}
+
 		// App proxy - routes /app/<appId>/* to the app's port
 		// This allows accessing apps without port numbers: http://localhost/app/tailscale
 		const appProxyCache = new Map<string, ReturnType<typeof createProxyMiddleware>>()

@@ -26,6 +26,11 @@ import {seedLocalEnvironment} from './modules/docker/environments.js'
 import {seedBuiltinTools} from './modules/seed-builtin-tools.js'
 import {seedDefaultAliases} from './modules/livinity-broker/seed-default-aliases.js'
 import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/api-keys/index.js'
+// Phase 71-05 — ComputerUseContainerManager wiring. Field added so the
+// desktop-gateway middleware (server/index.ts) and the computerUse tRPC
+// router (computer-use/routes.ts) can reach a shared lifecycle owner.
+import {ComputerUseContainerManager} from './modules/computer-use/container-manager.js'
+import {getPool} from './modules/database/index.js'
 
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
 import {overrideDevelopmentHostname} from './modules/development.js'
@@ -123,6 +128,12 @@ export default class Livinityd {
 	// inside flushLastUsed). Disposed by cli.ts cleanShutdown so pending
 	// last_used_at writes are flushed before SIGTERM/SIGINT exits the process.
 	apiKeyCache: ApiKeyCache
+	// Phase 71-05 — Bytebot desktop container lifecycle owner. Initialized
+	// in start() AFTER initDatabase() because the manager needs the pg pool.
+	// Optional because PostgreSQL may be unavailable on legacy YAML-only mode
+	// (initDatabase returns false). Consumers (desktop-gateway, computerUse
+	// tRPC router) gracefully no-op when undefined.
+	computerUseManager?: ComputerUseContainerManager
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -241,6 +252,28 @@ export default class Livinityd {
 			this.server.start(),
 			this.ai.start(),
 		])
+
+		// Phase 71-05 — Bytebot desktop container lifecycle. Initialized AFTER
+		// apps.start() (the manager re-uses apps.installForUser) and AFTER
+		// initDatabase() (manager needs the pg pool from 71-03's task-repository).
+		// Non-fatal — missing PG → manager stays undefined; desktop subdomain
+		// gateway and computerUse tRPC router gracefully no-op without it.
+		if (dbReady) {
+			try {
+				const pool = getPool()
+				if (pool) {
+					this.computerUseManager = new ComputerUseContainerManager({
+						apps: this.apps,
+						pool,
+						logger: this.logger,
+					})
+					this.computerUseManager.start()
+					this.logger.log('ComputerUseContainerManager started (5-min idle reaper armed)')
+				}
+			} catch (err) {
+				this.logger.error('Failed to start ComputerUseContainerManager (desktop subdomain disabled)', err)
+			}
+		}
 
 		// Phase 50 (v29.5 A1) — defensive eager seed of built-in tools to nexus:cap:tool:*
 		// Survives factory resets and the v29.4 syncAll() stub (D-WAVE5-SYNCALL-STUB).
