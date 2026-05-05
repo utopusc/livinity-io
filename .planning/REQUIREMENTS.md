@@ -159,8 +159,10 @@
 
 ### MEM (Phase 75 — Reasoning Cards + Lightweight Memory)
 
-- [ ] **MEM-01**: `liv-reasoning-card.tsx` — collapsible card (default collapsed) with amber glow icon + "Liv is thinking..." (streaming) or "Reasoning" (done) + duration
-- [ ] **MEM-02**: GlowPulse motion primitive (P66) animates card while streaming; Markdown-rendered reasoning_content body
+- [x] **MEM-01
+**: `liv-reasoning-card.tsx` — collapsible card (default collapsed) with amber glow icon + "Liv is thinking..." (streaming) or "Reasoning" (done) + duration
+- [x] **MEM-02
+**: GlowPulse motion primitive (P66) animates card while streaming; Markdown-rendered reasoning_content body
 - [ ] **MEM-03**: liv-agent-runner extracts Kimi `reasoning_content` field, emits `chunk.type='reasoning'`; chat-messages renders via `<LivReasoningCard>`
 - [ ] **MEM-04**: PostgreSQL `messages` table `tsvector` column + GIN index + backfill migration
 - [ ] **MEM-05**: API `GET /api/conversations/search?q=<query>` returns matching messages with snippets
