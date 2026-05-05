@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useRef, useState, Suspense, lazy} from 'react'
-import {useSearchParams} from 'react-router-dom'
+import {useNavigate, useSearchParams} from 'react-router-dom'
 import {
 	IconMessageCircle,
 	IconPlus,
@@ -15,6 +15,7 @@ import {
 	IconRobot,
 	IconArrowLeft,
 	IconDownload,
+	IconSparkles,
 } from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 
@@ -47,6 +48,7 @@ import {
 } from './utils/export-conversation'
 import {useLivAgentStream} from '@/lib/use-liv-agent-stream'
 import {useLivToolPanelStore} from '@/stores/liv-tool-panel-store'
+import {LivTour} from '@/components/liv-tour'
 
 // Legacy ChatInput retained per CONTEXT D-08 D-NO-DELETE — file remains on disk
 // and the import is kept here as a void reference so the source-grep for
@@ -104,6 +106,7 @@ function ConversationSidebar({
 	activeView,
 	onViewChange,
 	activeProvider,
+	onOpenMarketplace,
 	className,
 }: {
 	conversations: Array<{id: string; title: string; updatedAt: number; messageCount: number}>
@@ -114,6 +117,7 @@ function ConversationSidebar({
 	activeView: SidebarView
 	onViewChange: (view: SidebarView) => void
 	activeProvider: string
+	onOpenMarketplace: () => void
 	className?: string
 }) {
 	return (
@@ -227,12 +231,26 @@ function ConversationSidebar({
 			{(activeView === 'mcp' || activeView === 'skills' || activeView === 'agents') && (
 				<div className='flex-1' />
 			)}
+
+			{/* Phase 76-07 — Marketplace nav entry. Sibling-shaped to existing
+			    sidebar buttons; data-tour='marketplace-link' is the anchor for
+			    LIV_TOUR_STEPS step 8 ('marketplace') per CONTEXT D-15/D-16. */}
+			<button
+				data-tour='marketplace-link'
+				onClick={onOpenMarketplace}
+				className='flex w-full items-center gap-2 border-t border-border-default px-3 py-2.5 text-left text-body-sm text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary'
+				title='Browse Liv agent marketplace'
+			>
+				<IconSparkles size={16} className='flex-shrink-0 text-violet-400' />
+				<span>Marketplace</span>
+			</button>
 		</div>
 	)
 }
 
 export default function AiChat() {
 	const [searchParams, setSearchParams] = useSearchParams()
+	const navigate = useNavigate()
 	const [input, setInput] = useState('')
 	const [activeView, setActiveView] = useState<SidebarView>('chat')
 	const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -523,10 +541,21 @@ export default function AiChat() {
 		activeView,
 		onViewChange: setActiveView,
 		activeProvider,
+		onOpenMarketplace: () => {
+			setSidebarOpen(false)
+			navigate('/agent-marketplace')
+		},
 	}
 
 	return (
 		<div className='flex h-full overflow-hidden'>
+			{/* Phase 76-07 — LivTour mount (D-18). Self-gated on
+			    `localStorage.getItem('liv-tour-completed')`; renders null when
+			    flag is set. `onSetComposerDraft` wires step 5 (`demo-prompt`)
+			    to the composer's input state via the callback prop chosen in
+			    76-05's SUMMARY (Option A — type-safe + test-ergonomic). */}
+			<LivTour onSetComposerDraft={setInput} />
+
 			{!isMobile && <ConversationSidebar {...sidebarProps} />}
 
 			{isMobile && (

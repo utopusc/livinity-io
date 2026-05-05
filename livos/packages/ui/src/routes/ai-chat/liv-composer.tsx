@@ -374,6 +374,7 @@ export function LivComposer({
 				'liv-composer relative flex flex-col gap-2 rounded-xl border border-[color:var(--liv-border-subtle)] bg-[color:var(--liv-bg-elevated)] p-3 transition-colors',
 				isDragging && 'border-[color:var(--liv-accent-cyan)]',
 			)}
+			data-tour='composer'
 			data-show-slash={slashOpen}
 			data-show-mention={mention.show ? 'true' : 'false'}
 			data-mention-filter={mention.filter}
@@ -461,7 +462,10 @@ export function LivComposer({
 
 				<LivModelBadge />
 
-				<span className='ml-auto hidden text-xs text-[color:var(--liv-text-tertiary)] md:inline'>
+				<span
+					data-tour='slash-hint'
+					className='ml-auto hidden text-xs text-[color:var(--liv-text-tertiary)] md:inline'
+				>
 					Press <kbd className='rounded border border-[color:var(--liv-border-subtle)] bg-[color:var(--liv-bg-deep)] px-1 font-mono'>/</kbd> for commands
 				</span>
 
