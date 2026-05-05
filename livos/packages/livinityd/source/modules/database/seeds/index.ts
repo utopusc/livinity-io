@@ -3,3 +3,12 @@
 // Future seed runners (per-table) get added with another `export * from`.
 
 export * from './agent-templates.js'
+
+// Phase 85 V32-AGENT-03 — 5-agent v32 system seed catalog.
+export {
+	AGENT_SEEDS,
+	seedAgents,
+	type AgentSeed,
+	type ConfiguredMcpSeed,
+	type AgentpressToolsSeed,
+} from './agents.js'
