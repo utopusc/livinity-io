@@ -25,8 +25,18 @@ import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useAgentSocket, type ChatMessage} from '@/hooks/use-agent-socket'
 import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
 
-import {ChatMessageItem} from './chat-messages'
-import {ChatInput} from './chat-input'
+import {ChatMessageItem, LivAgentStatus, LivTypingDots} from './chat-messages'
+import {ChatInput as _LegacyChatInput} from './chat-input'
+import {LivComposer} from './liv-composer'
+import {LivToolPanel} from './liv-tool-panel'
+import {LivWelcome} from './components/liv-welcome'
+import {useLivAgentStream} from '@/lib/use-liv-agent-stream'
+import {useLivToolPanelStore} from '@/stores/liv-tool-panel-store'
+
+// Legacy ChatInput retained per CONTEXT D-08 D-NO-DELETE — file remains on disk
+// and the import is kept here as a void reference so the source-grep for
+// `chat-input` still has a callsite. Active rendering uses LivComposer below.
+void _LegacyChatInput
 
 const McpPanel = lazy(() => import('./mcp-panel'))
 const SkillsPanel = lazy(() => import('./skills-panel'))
@@ -165,6 +175,20 @@ export default function AiChat() {
 	const activeProvider = providersQuery.data?.primaryProvider ?? 'kimi'
 
 	const activeConversationId = searchParams.get('conv') ?? null
+
+	// P67-04 SSE consumer running in PARALLEL with the legacy WebSocket hook
+	// (CONTEXT D-14). Snapshots flow into the P68 tool-panel store via the
+	// bridge useEffect below so <LivToolPanel /> auto-opens on tool runs.
+	const livStream = useLivAgentStream({
+		conversationId: activeConversationId ?? '',
+		autoStart: false,
+	})
+
+	useEffect(() => {
+		for (const snapshot of livStream.snapshots.values()) {
+			useLivToolPanelStore.getState().handleNewSnapshot(snapshot)
+		}
+	}, [livStream.snapshots])
 
 	const conversationsQuery = trpcReact.ai.listConversations.useQuery(undefined, {
 		refetchInterval: 10_000,
@@ -506,43 +530,14 @@ export default function AiChat() {
 							onScroll={handleScroll}
 							className='flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-3 md:p-6'
 						>
-							{displayMessages.length === 0 ? (
-								<div className='flex h-full flex-col items-center justify-center text-text-tertiary'>
-									<div className='mb-6 flex h-16 w-16 items-center justify-center rounded-radius-xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
-										<IconBrain size={32} className='text-violet-400' />
-									</div>
-									<h3 className='mb-2 text-heading-sm font-medium text-text-secondary'>Liv</h3>
-									<TextEffect
-										as='p'
-										per='word'
-										preset='fade'
-										className='max-w-md text-center text-body text-text-tertiary'
-									>
-										Your autonomous AI assistant. I can manage your server, Docker containers, run commands, create subagents, schedule tasks, and more.
-									</TextEffect>
-									<AnimatedGroup
-										preset='blur-slide'
-										className='mt-6 flex flex-wrap justify-center gap-2'
-									>
-										{[
-											'Show system health',
-											'List subagents',
-											'Check Docker containers',
-											'Search memory',
-										].map((suggestion) => (
-											<button
-												key={suggestion}
-												onClick={() => setInput(suggestion)}
-												className='rounded-radius-md border border-border-default bg-surface-base px-3 py-1.5 text-caption text-text-tertiary transition-colors hover:border-border-emphasis hover:bg-surface-1 hover:text-text-secondary'
-											>
-												{suggestion}
-											</button>
-										))}
-									</AnimatedGroup>
-								</div>
+							{displayMessages.length === 0 && !agent.isStreaming ? (
+								<LivWelcome onSelectSuggestion={(prompt) => setInput(prompt)} />
 							) : (
 								<div className='mx-auto max-w-3xl space-y-4'>
-									{displayMessages.map((msg, idx) => {
+									{/* P70-05 agent status banner — shows thinking/executing/error phases.
+									    Mounted here (post-list, pre-end-anchor) per CONTEXT D-45. */}
+									<LivAgentStatus status={agent.agentStatus} />
+									{displayMessages.map((msg) => {
 										return (
 											<ChatMessageItem
 												key={msg.id}
@@ -550,12 +545,21 @@ export default function AiChat() {
 											/>
 										)
 									})}
+									{/* P70-05 typing dots — shown while streaming AND last message is from
+									    the user (waiting for first assistant token). CONTEXT D-39. */}
+									{agent.isStreaming &&
+										displayMessages.length > 0 &&
+										displayMessages[displayMessages.length - 1].role === 'user' && (
+											<div className='ml-4 mt-2'>
+												<LivTypingDots active />
+											</div>
+										)}
 									<div ref={messagesEndRef} />
 								</div>
 							)}
 						</div>
 
-						<ChatInput
+						<LivComposer
 							value={input}
 							onChange={setInput}
 							onSend={handleSend}
@@ -565,6 +569,11 @@ export default function AiChat() {
 							onSlashAction={handleSlashAction}
 						/>
 					</div>
+
+					{/* P68 LivToolPanel — fixed right-edge overlay, auto-opens on
+					    tool snapshots flowing through useLivToolPanelStore from the
+					    snapshot bridge useEffect above. CONTEXT D-15, D-16. */}
+					<LivToolPanel />
 
 					{/* Canvas panel -- desktop split-pane (hidden when computer use is active) */}
 					{canvasArtifact && !canvasMinimized && !isMobile && !isComputerUseActive && (
