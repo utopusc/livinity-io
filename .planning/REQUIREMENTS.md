@@ -81,8 +81,10 @@
 - [ ] **PANEL-05**: `livos/packages/ui/src/routes/ai-chat/tool-views/index.tsx` (NEW) — `getToolView(toolName)` switch dispatcher with `GenericToolView` fallback
 - [ ] **PANEL-06**: `livos/packages/ui/src/store/liv-chat-store.ts` (NEW Zustand) — state + actions + `appendSnapshot` auto-open logic for visual tools
 - [ ] **PANEL-07**: Auto-open behavior — Side panel auto-opens ONLY when tool name matches `/^(browser-|computer-use-|screenshot)/`; non-visual tools (shell/file/web-search/MCP) render inline ONLY
-- [ ] **PANEL-08**: Manual open works for all tool categories (click tool badge → open panel at that snapshot)
-- [ ] **PANEL-09**: User-closed panel re-opens automatically with new visual tool snapshot
+- [x] **PANEL-08
+**: Manual open works for all tool categories (click tool badge → open panel at that snapshot)
+- [x] **PANEL-09
+**: User-closed panel re-opens automatically with new visual tool snapshot
 - [ ] **PANEL-10**: Mobile portrait → panel full-width on click
 
 ### VIEWS (Phase 69 — Per-Tool Views Suite)
@@ -139,7 +141,8 @@
 
 ### RELIAB (Phase 73 — Reliability Layer)
 
-- [ ] **RELIAB-01**: `liv/packages/core/src/context-manager.ts` — token counting + 75% Kimi window threshold summarization (~150k of 200k); summarize oldest N messages via cheap Kimi call; persist summary checkpoint in Redis
+- [x] **RELIAB-01
+**: `liv/packages/core/src/context-manager.ts` — token counting + 75% Kimi window threshold summarization (~150k of 200k); summarize oldest N messages via cheap Kimi call; persist summary checkpoint in Redis
 - [ ] **RELIAB-02**: `liv/packages/core/src/queue/agent-queue.ts` — BullMQ queue `liv:agent-jobs`; per-user concurrency 1, global N; job data `{runId, userId, task, conversationHistory}`
 - [ ] **RELIAB-03**: `run-store.ts` extended with `pauseRun`, `resumeRun`, `forkRun`, `editMessage`
 - [ ] **RELIAB-04**: Frontend `use-liv-agent-stream.ts` reconnection with exponential backoff + UI banner "Reconnecting..."
