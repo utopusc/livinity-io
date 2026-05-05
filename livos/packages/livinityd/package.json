@@ -65,6 +65,7 @@
 		"@livos/config": "workspace:*",
 		"@nexus/core": "file:../../../nexus/packages/core",
 		"@novnc/novnc": "^1.6.0",
+		"@nut-tree-fork/nut-js": "^4.2.6",
 		"@parcel/watcher": "^2.5.1",
 		"@trpc/client": "^11.1.1",
 		"@trpc/server": "^11.1.1",
