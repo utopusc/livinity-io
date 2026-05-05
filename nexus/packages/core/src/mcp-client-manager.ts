@@ -27,8 +27,11 @@ const RECONNECT_DELAY_MS = 5_000; // 5 seconds before reconnect attempt
 const MAX_RECONNECT_ATTEMPTS = 3;
 
 /** Only these commands are allowed for stdio transport */
+// Phase 72-native-06: 'tsx' added — bytebot computer-use MCP server (D-NATIVE-10)
+// is a TypeScript file launched via `tsx mcp/server.ts`. Additive patch only;
+// all previous entries preserved.
 const ALLOWED_COMMANDS = new Set([
-  'npx', 'node', 'python', 'python3', 'uvx', 'docker', 'deno', 'bun',
+  'npx', 'node', 'python', 'python3', 'uvx', 'docker', 'deno', 'bun', 'tsx',
 ]);
 
 /** Block internal/private IPs for streamableHttp transport */
