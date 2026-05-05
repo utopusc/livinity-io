@@ -23,16 +23,28 @@
  * tests inject a stub; production wiring constructs an SdkAgentRunner backed
  * by livinityd.ai.toolRegistry and a Brain bound to livinityd.ai.redis.
  *
- * Queue-based dispatch is explicitly NOT used (D-18); the runner spawns
- * fire-and-forget within the same Node process. Concurrency control is P73.
+ * Phase 73-04: POST /api/agent/start now enqueues to RunQueue (BullMQ-backed,
+ * per-user concurrency=1) instead of fire-and-forget factory call. RunQueue
+ * is constructed at mount time (or injected via `runQueueOverride` in tests),
+ * and the worker is started ONCE before any route handlers register. Per
+ * CONTEXT D-23..D-25: always enqueue (no 429 rejection); the queue serializes
+ * naturally per-user. This replaces the original P67-03 D-18 fire-and-forget
+ * design — concurrency control was punted to P73 from day one.
  */
 
 import type {Application, Request, Response} from 'express'
 // Imports below resolve from '@nexus/core' via the package's `./lib` subpath
 // export — the lib entry is "safe to import without side effects" (the main
 // `@nexus/core` entry pulls in daemon side-effects like `dotenv/config`). Both
-// entries re-export RunStore + LivAgentRunner per Phase 67-01/02 SUMMARY.
-import {LivAgentRunner, RunStore, type Chunk, type RunMeta} from '@nexus/core/lib'
+// entries re-export RunStore + LivAgentRunner + RunQueue per Phase 67-01/02
+// + 73-02 SUMMARY.
+import {
+	LivAgentRunner,
+	RunStore,
+	RunQueue,
+	type Chunk,
+	type RunMeta,
+} from '@nexus/core/lib'
 
 import type Livinityd from '../../index.js'
 
@@ -69,6 +81,10 @@ export interface MountAgentRunsOptions {
 	 *  outside the route handlers). Defaults to a fresh RunStore over
 	 *  `livinityd.ai.redis`. */
 	runStoreOverride?: RunStore
+	/** Test-only: inject a pre-built RunQueue (so tests can stub BullMQ).
+	 *  Defaults to a fresh RunQueue over `livinityd.ai.redis` + the
+	 *  provided `livAgentRunnerFactory` when both are present. P73-04 D-24. */
+	runQueueOverride?: RunQueue
 }
 
 /** Heartbeat interval for SSE — D-22 specifies exactly 15s. */
@@ -120,11 +136,11 @@ async function resolveJwtUserId(
  *   - GET  /api/agent/runs/:runId/stream          — D-20/D-21/D-22
  *   - POST /api/agent/runs/:runId/control         — user-instruction
  */
-export function mountAgentRunsRoutes(
+export async function mountAgentRunsRoutes(
 	app: Application,
 	livinityd: Livinityd,
 	options: MountAgentRunsOptions = {},
-): void {
+): Promise<void> {
 	const logger = livinityd.logger.createChildLogger('agent-runs')
 
 	// One shared RunStore per daemon process — Redis is the source of truth so
@@ -134,10 +150,46 @@ export function mountAgentRunsRoutes(
 
 	const factory = options.livAgentRunnerFactory
 
+	// ── Phase 73-04: RunQueue construction + worker startup ─────────────
+	// CONTEXT D-23/D-24: tests inject a fake via `runQueueOverride`; production
+	// constructs a default RunQueue from the existing factory + redis +
+	// runStore. The factory option's signature returns LivAgentRunner;
+	// RunQueue's factory contract is `(runId, task) => Promise<void>` (it
+	// expects the FULL run to be awaited inside). Adapter wraps the existing
+	// factory: resolve it, then await runner.start() — same shape the P67-03
+	// fire-and-forget block used inline.
+	//
+	// Precedence: if both factory AND runQueueOverride are absent, runQueue
+	// is null and POST /start returns 503 (preserves the original P67-03
+	// path with a refined error message).
+	const runQueue: RunQueue | null =
+		options.runQueueOverride ??
+		(factory
+			? new RunQueue({
+					redisClient: livinityd.ai.redis,
+					runStore,
+					// Adapter: existing factory returns LivAgentRunner (or
+					// Promise of one); RunQueue's contract is `(runId, task)
+					// => Promise<void>` and expects the FULL run inside.
+					// `await factory(...)` accepts both sync and async returns.
+					livAgentRunnerFactory: async (jobRunId: string, jobTask: string) => {
+						const runner = await factory(jobRunId, jobTask)
+						await runner.start(jobRunId, jobTask)
+					},
+					perUserConcurrency: 1,
+					globalConcurrency: 5,
+				})
+			: null)
+
+	if (runQueue) {
+		await runQueue.start()
+		logger.log('[agent-runs] RunQueue started (per-user concurrency=1)')
+	}
+
 	// ── POST /api/agent/start ─────────────────────────────────────────────
 	// D-17: body { task, conversationId? }; JWT auth; calls runStore.createRun
-	// then spawns LivAgentRunner.start(runId, task) in-process (no queue
-	// dispatch per D-18). Returns { runId, sseUrl }.
+	// then enqueues to RunQueue (Phase 73-04 — replaces P67-03 D-18 fire-and-
+	// forget). Returns { runId, sseUrl }.
 	app.post('/api/agent/start', async (request: Request, response: Response) => {
 		// Auth — Bearer header or ?token= query (?token covers SSE-style
 		// browsers that may chain a POST /start through the same auth shape).
@@ -160,8 +212,12 @@ export function mountAgentRunsRoutes(
 			return response.status(400).json({error: 'task is required'})
 		}
 
-		if (!factory) {
-			logger.error('POST /api/agent/start: livAgentRunnerFactory not wired')
+		// Phase 73-04: 503 path now triggers when RunQueue is absent (factory
+		// missing AND no runQueueOverride). The factory itself is held by the
+		// queue at construction time; the route handler never calls factory()
+		// directly anymore.
+		if (!runQueue) {
+			logger.error('POST /api/agent/start: runQueue not wired (need livAgentRunnerFactory or runQueueOverride)')
 			return response.status(503).json({
 				error: 'agent runner not wired — pass livAgentRunnerFactory in mountAgentRunsRoutes options',
 			})
@@ -171,15 +227,18 @@ export function mountAgentRunsRoutes(
 			const runId = await runStore.createRun(userId, task)
 			logger.log(`POST /api/agent/start userId=${userId} runId=${runId}`)
 
-			// Fire-and-forget runner — D-18 explicitly forbids queue-based work
-			// dispatch in P67. Promise chain catches errors so they don't
-			// surface as unhandled rejections.
-			Promise.resolve(factory(runId, task))
-				.then((runner) => runner.start(runId, task))
-				.catch((err: unknown) => {
-					const msg = err instanceof Error ? err.message : String(err)
-					logger.error(`[agent-runs] runner failed for ${runId}: ${msg}`)
-				})
+			// Phase 73-04 (CONTEXT D-23): enqueue to RunQueue instead of
+			// fire-and-forget. The BullMQ worker (started above at mount time)
+			// pulls the job, applies the per-user concurrency=1 gate, then
+			// invokes the factory adapter which awaits runner.start(). Per
+			// CONTEXT D-25 we always enqueue — no 429 rejection — the queue
+			// serializes naturally per user.
+			await runQueue.enqueue({
+				runId,
+				userId,
+				task,
+				enqueuedAt: Date.now(),
+			})
 
 			return response.status(200).json({
 				runId,
