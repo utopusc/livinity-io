@@ -41,7 +41,8 @@ export type ChunkType =
   | 'tool_snapshot'
   | 'tool_call_partial'
   | 'error'
-  | 'status';
+  | 'status'
+  | 'status_detail';
 
 export type Chunk = {
   /** 0-based, monotonic per run. */

@@ -240,6 +240,15 @@ export function createAgentWebSocketHandler(opts: {
 				}
 
 				logger.verbose(`WS agent: received ${raw.type} from ${sessionKey}`)
+
+				// V32-HERMES-04: 'steer' is fire-and-forget — inject guidance into the
+				// active LivAgentRunner for this connection and send no reply.
+				// All other message types are delegated to sessionManager.handleMessage().
+				if (raw.type === 'steer') {
+					sessionManager.injectSteer(sessionKey, raw.guidance)
+					return
+				}
+
 				await sessionManager.handleMessage(sessionKey, raw, sendMessage, {
 					onTurnComplete: (turn: TurnData) => saveToConversation(turn, userId, ai, logger),
 				})

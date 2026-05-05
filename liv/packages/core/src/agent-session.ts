@@ -26,6 +26,7 @@ import type { Tool } from './types.js';
 import type Redis from 'ioredis';
 import { logger } from './logger.js';
 import { McpConfigManager } from './mcp-config-manager.js';
+import type { LivAgentRunner } from './liv-agent-runner.js';
 
 // ── Wire Protocol Types ──────────────────────────────────────
 
@@ -48,7 +49,9 @@ export type ClientWsMessage =
   | { type: 'start'; prompt: string; sessionId?: string; model?: string; conversationId?: string; attachments?: FileAttachment[] }
   | { type: 'message'; text: string }
   | { type: 'interrupt' }
-  | { type: 'cancel' };
+  | { type: 'cancel' }
+  /** V32-HERMES-04: steer guidance injected into the active agent turn. */
+  | { type: 'steer'; guidance: string };
 
 // ── Turn Data ───────────────────────────────────────────────
 
@@ -128,6 +131,11 @@ export interface ActiveSession {
   abortController: AbortController;
   inputChannel: ReturnType<typeof createInputChannel>;
   startedAt: number;
+  /**
+   * Optional LivAgentRunner attached to this session. When present, steer
+   * guidance from the WS 'steer' message is forwarded here. V32-HERMES-04.
+   */
+  livRunner?: LivAgentRunner;
 }
 
 // ── Base System Prompt ───────────────────────────────────────
@@ -221,6 +229,20 @@ export class AgentSessionManager {
   /** Get the active session for a user, if any */
   getSession(userId: string): ActiveSession | undefined {
     return this.sessions.get(userId);
+  }
+
+  /**
+   * Inject steer guidance into the active LivAgentRunner for a user.
+   * No-op if no active session or session has no attached LivAgentRunner.
+   * V32-HERMES-04: called by the WS 'steer' message handler in ws-agent.ts.
+   */
+  injectSteer(userId: string, guidance: string): void {
+    const session = this.sessions.get(userId);
+    if (!session?.livRunner) {
+      logger.debug?.('AgentSessionManager.injectSteer: no active LivAgentRunner for user', { userId });
+      return;
+    }
+    session.livRunner.injectSteer(guidance);
   }
 
   /**
@@ -856,6 +878,11 @@ export class AgentSessionManager {
       }
       case 'cancel': {
         this.cleanup(userId);
+        break;
+      }
+      case 'steer': {
+        // V32-HERMES-04: forward steer guidance to the active LivAgentRunner.
+        this.injectSteer(userId, msg.guidance);
         break;
       }
     }
