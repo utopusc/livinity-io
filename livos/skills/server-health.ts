@@ -13,7 +13,7 @@ model_tier: flash
 ---
 */
 
-import type { SkillContext, SkillResult } from '@nexus/core/lib';
+import type { SkillContext, SkillResult } from '@liv/core/lib';
 
 export async function handler(ctx: SkillContext): Promise<SkillResult> {
   const results: string[] = [];

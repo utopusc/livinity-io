@@ -21,7 +21,7 @@ timeout_ms: 120000
 ---
 */
 
-import type { SkillContext, SkillResult } from '@nexus/core/lib';
+import type { SkillContext, SkillResult } from '@liv/core/lib';
 
 // ============================================================================
 // TYPES
