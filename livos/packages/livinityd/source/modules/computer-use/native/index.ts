@@ -8,5 +8,5 @@
 export {captureScreenshot} from './screenshot.js'
 export type {ScreenshotResult} from './screenshot.js'
 
-// 72-native-02 input.ts barrel append here
+export * from './input.js'
 export * from './window.js'
