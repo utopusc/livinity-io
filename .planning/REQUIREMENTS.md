@@ -173,7 +173,8 @@
 - [ ] **MEM-04**: PostgreSQL `messages` table `tsvector` column + GIN index + backfill migration
 - [ ] **MEM-05**: API `GET /api/conversations/search?q=<query>` returns matching messages with snippets
 - [ ] **MEM-06**: Sessions sidebar search input (debounced 300ms) with HighlightedText snippet rendering
-- [ ] **MEM-07**: Pinned messages — right-click or hover menu pin; pinned auto-injected into agent context system prompt; "Pinned" sidebar section
+- [x] **MEM-07
+**: Pinned messages — right-click or hover menu pin; pinned auto-injected into agent context system prompt; "Pinned" sidebar section
 - [x] **MEM-08
 **: Conversation export as Markdown / JSON / PDF (bonus)
 

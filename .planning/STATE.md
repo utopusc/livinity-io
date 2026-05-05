@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T01:18:03.589Z"
-last_activity: "2026-05-04 — P76-01 agent_templates foundation shipped: 9/9 vitest pass; commits `bdf90519` (RED) + `49aaec94` (GREEN). MARKET-03 marked complete."
+last_updated: "2026-05-05T01:24:25.990Z"
+last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 57
-  completed_plans: 40
-  percent: 70
+  completed_plans: 41
+  percent: 72
 ---
 
 # Project State
