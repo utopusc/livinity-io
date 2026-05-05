@@ -4,7 +4,7 @@ import {ErrorBoundary} from 'react-error-boundary'
 import {ErrorBoundaryCardFallback} from '@/components/ui/error-boundary-card-fallback'
 import {Loading} from '@/components/ui/loading'
 
-const AiChatInner = React.lazy(() => import('@/routes/ai-chat'))
+const AiChatInner = React.lazy(() => import('@/routes/ai-chat-suna'))
 
 export default function AiChatWindowContent() {
 	return (

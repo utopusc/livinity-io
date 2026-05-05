@@ -37,6 +37,7 @@ const CommunityAppStore = React.lazy(() => import('./routes/community-app-store'
 // Phase 76 / Plan 76-04 — Agent Marketplace route. Sibling to /app-store
 // inside the SheetLayout. Lazy-loaded to keep the initial bundle lean
 // and to mirror the existing app-store / community-app-store pattern.
+// NOTE: /agent-marketplace route kept for deep-links; /agents /marketplace routes REMOVED (v32-redo-stage1a)
 const AgentMarketplace = React.lazy(() => import('./routes/agent-marketplace'))
 const MultiUserLogin = React.lazy(() => import('./routes/login/index'))
 const SetupWizard = React.lazy(() => import('./routes/onboarding/setup-wizard'))
@@ -48,31 +49,9 @@ const InviteAcceptPage = React.lazy(() => import('./routes/invite'))
 // Single visual reference for every primitive shipped by Plans 66-01..66-04.
 // Hidden from main nav (D-21); reachable only via direct URL.
 const LivDesignSystemPlayground = React.lazy(() => import('./routes/playground/liv-design-system'))
-// Phase 80 — v32 foundation playground.
-// Visual QA for OKLCH tokens, Geist fonts, ThemeProvider.
-// Hidden from main nav; reachable only via /playground/v32-theme.
-const V32ThemePlayground = React.lazy(() => import('./routes/playground/v32-theme'))
-// Phase 81 — v32 chat UI dev preview.
-// Coexists with /ai-chat (legacy) until P90 cutover.
-// Accessible at /ai-chat-v2 for Wave 2 parallel development.
-const AiChatV32 = React.lazy(() => import('./routes/ai-chat/v32/index'))
-// Phase 83 — v32 per-tool views playground.
-// Visual QA for all 9 tool view components + MCP content renderer.
-// Hidden from main nav; reachable only via /playground/v32-tool-views.
-const V32ToolViewsPlayground = React.lazy(() => import('./routes/playground/v32-tool-views'))
-// Phase 86 / V32-MKT — v32 public agent marketplace. NEW route at
-// /marketplace (sibling to legacy /agent-marketplace which it eventually
-// replaces at the P90 cutover). Both routes coexist during dev. Lazy-loaded
-// to mirror the existing app-store / agent-marketplace pattern.
-const Marketplace = React.lazy(() => import('./routes/marketplace'))
-// Phase 85 (UI slice) — v32 agent management routes.
-//   /agents       grid of all agents (own + 5 v32 system seeds)
-//   /agents/:id   two-pane editor (preview + Manual + Agent Builder Beta)
-// Both are gated by EnsureLoggedIn (parent <element>) and lazy-loaded so the
-// initial bundle stays lean. Dock entry intentionally NOT added in this
-// slice — P90 cutover will rewire dock holistically per v32-DRAFT.
-const AgentsRoute = React.lazy(() => import('./routes/agents'))
-const AgentEditorRoute = React.lazy(() => import('./routes/agents/agent-editor'))
+// v32-redo-stage1a: /playground/v32-theme, /playground/v32-tool-views, /ai-chat-v2,
+// /marketplace, /agents, /agents/:id routes REMOVED. Source dirs deleted.
+// /agent-marketplace kept for deep-links.
 
 function SpotlightConnected() {
 	const {open, setOpen} = useCmdkOpen()
@@ -133,42 +112,10 @@ export const router = createBrowserRouter([
 				element: <LivDesignSystemPlayground />,
 				ErrorBoundary: ErrorBoundaryComponentFallback,
 			},
-			// Phase 80 — v32 theme playground.
-			// Visual QA for OKLCH tokens, Geist fonts, ThemeProvider.
-			// Gated behind EnsureLoggedIn (parent element); hidden from main nav.
-			{
-				path: 'playground/v32-theme',
-				element: <V32ThemePlayground />,
-				ErrorBoundary: ErrorBoundaryComponentFallback,
-			},
-			// Phase 81 — v32 chat UI dev preview route.
-			// Coexists with /ai-chat (legacy). P90 will switch /ai-chat to v32/.
-			{
-				path: 'ai-chat-v2',
-				element: <AiChatV32 />,
-				ErrorBoundary: ErrorBoundaryComponentFallback,
-			},
-			// Phase 83 — v32 per-tool views playground.
-			// Visual QA for all 9 tool view components + MCP content renderer.
-			// Gated behind EnsureLoggedIn (parent element); hidden from main nav.
-			{
-				path: 'playground/v32-tool-views',
-				element: <V32ToolViewsPlayground />,
-				ErrorBoundary: ErrorBoundaryComponentFallback,
-			},
-			// Phase 85 (UI slice) — v32 agent management.
-			// /agents shows the grid; /agents/:id opens the two-pane editor.
-			// First-class routes (NOT inside SheetLayout) per v32-DRAFT.
-			{
-				path: 'agents',
-				element: <AgentsRoute />,
-				ErrorBoundary: ErrorBoundaryComponentFallback,
-			},
-			{
-				path: 'agents/:id',
-				element: <AgentEditorRoute />,
-				ErrorBoundary: ErrorBoundaryComponentFallback,
-			},
+			// v32-redo-stage1a: /playground/v32-theme, /playground/v32-tool-views,
+			// /ai-chat-v2, /agents, /agents/:id routes removed.
+			// Source dirs (routes/ai-chat/v32/, routes/agents/, routes/marketplace/,
+			// routes/playground/v32-*.tsx, components/mcp/) deleted.
 			{
 				Component: SheetLayout,
 				children: [
@@ -214,14 +161,7 @@ export const router = createBrowserRouter([
 						Component: AgentMarketplace,
 						ErrorBoundary: ErrorBoundaryComponentFallback,
 					},
-					{
-						// Phase 86 / V32-MKT — v32 public agent marketplace.
-						// Sibling to legacy /agent-marketplace which it replaces
-						// at the P90 cutover. Both coexist during dev.
-						path: 'marketplace',
-						Component: Marketplace,
-						ErrorBoundary: ErrorBoundaryComponentFallback,
-					},
+					// v32-redo-stage1a: /marketplace route removed (source dir deleted)
 				],
 			},
 		],
