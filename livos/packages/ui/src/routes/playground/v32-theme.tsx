@@ -20,7 +20,10 @@ import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
 import {Switch} from '@/shadcn-components/ui/switch'
 import {Card} from '@/components/ui/card'
+import {ThemeToggle} from '@/components/theme-toggle'
 import {useTheme} from '@/hooks/use-theme'
+
+// ThemeChoice type no longer needed — ThemeToggle component handles it internally.
 
 // All --liv-* tokens rendered as swatches
 const COLOR_SWATCHES: Array<{token: string; label: string}> = [
@@ -59,10 +62,8 @@ const TYPE_SCALE: Array<{className: string; label: string; sample: string}> = [
 	{className: 'text-base font-mono', label: 'text-base / Geist Mono', sample: 'const answer = 42; // code sample'},
 ]
 
-type ThemeChoice = 'light' | 'dark' | 'system'
-
 export default function V32ThemePlayground() {
-	const {theme, setTheme, resolvedTheme} = useTheme()
+	const {theme, resolvedTheme} = useTheme()
 	const [switchChecked, setSwitchChecked] = useState(false)
 
 	return (
@@ -93,21 +94,12 @@ export default function V32ThemePlayground() {
 						Phase 80 foundation — OKLCH tokens, Geist fonts, ThemeProvider.
 						Resolved: <span className="font-mono">{resolvedTheme}</span>
 					</p>
-					<div className="flex items-center gap-2 flex-wrap">
-						{(['light', 'dark', 'system'] as ThemeChoice[]).map((t) => (
-							<button
-								key={t}
-								onClick={() => setTheme(t)}
-								className={[
-									'px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
-									theme === t
-										? 'bg-liv-primary text-liv-primary-foreground border-liv-primary'
-										: 'bg-transparent text-liv-foreground border-liv-border hover:bg-liv-muted',
-								].join(' ')}
-							>
-								{t}
-							</button>
-						))}
+					{/* ThemeToggle component (Phase 89) — replaces the inline buttons. */}
+					<div className="flex items-center gap-3">
+						<ThemeToggle />
+						<span className="text-xs text-liv-muted-foreground font-mono">
+							active: {theme}
+						</span>
 					</div>
 				</section>
 

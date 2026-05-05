@@ -11,6 +11,7 @@ import {GlobalSystemStateProvider} from '@/providers/global-system-state/index'
 
 import {AuthBootstrap} from './providers/auth-bootstrap'
 import {GlobalFilesProvider} from './providers/global-files'
+import {KeyboardShortcutsProvider} from './providers/keyboard-shortcuts-provider'
 import {RemoteLanguageInjector} from './providers/language'
 import {OnboardingPersonalizationSync} from './providers/onboarding-sync'
 import {Prefetcher} from './providers/prefetch'
@@ -23,6 +24,7 @@ initTokenRenewal()
 
 init(
 	<ThemeProvider defaultTheme="system">
+	<KeyboardShortcutsProvider>
 	<TrpcProvider>
 		<AuthBootstrap />
 		<RemoteLanguageInjector />
@@ -40,5 +42,6 @@ init(
 		<OnboardingPersonalizationSync />
 		<Prefetcher />
 	</TrpcProvider>
+	</KeyboardShortcutsProvider>
 	</ThemeProvider>,
 )
