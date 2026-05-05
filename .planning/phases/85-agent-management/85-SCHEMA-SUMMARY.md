@@ -184,4 +184,6 @@ avoid a multi-write race).
 
 ## Commit SHA
 
-(Filled in by orchestrator after commit.)
+`9a276a11` — feat(85-schema): agents table + repo + 5 seed migration
+(10 files changed, 1738 insertions(+), 0 deletions). Not pushed; orchestrator
+batches Wave 1.
