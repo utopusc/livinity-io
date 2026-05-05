@@ -242,4 +242,32 @@ export const httpOnlyPaths = [
 	// Returns base64 PNG (~50-200KB); mutations route via HTTP for body-size
 	// reasons + WS reconnect resilience identical to siblings above.
 	'computerUse.takeScreenshot',
+	// v32 Phase 85 (UI slice) — agents.* tRPC router (Wave 2 — consumes Wave 1
+	// agents-repo). All 8 paths route via HTTP because:
+	//   - Mutations (create/update/delete/publish/unpublish/clone) include the
+	//     500 ms debounced autosave path. Routing via WS would silently hang
+	//     mutations on a half-broken WS after `systemctl restart livos` —
+	//     pitfall B-12 / X-04 (precedent: apiKeys.create/revoke at lines 209-212).
+	//   - Queries (list/get) are page-render dependencies; HTTP avoids the
+	//     WS-handshake-delay flicker on first paint (precedent: apiKeys.list
+	//     at line 210, usage.getMine at line 181).
+	'agents.list',
+	'agents.get',
+	'agents.create',
+	'agents.update',
+	'agents.delete',
+	'agents.publish',
+	'agents.unpublish',
+	'agents.clone',
+	// v32 Phase 86 — Public marketplace browse + clone (V32-MKT-01..06).
+	// list + tags are publicProcedure queries — they MUST work without a JWT
+	// (D-PUBLIC-BROWSE: marketplace is reachable on the login screen / pre-
+	// auth landing). The WS transport requires a token in the connect query
+	// string, so a pre-auth client has no WS at all — HTTP is the only path
+	// that works. cloneToLibrary is privateProcedure but routed via HTTP for
+	// the same WS-reconnect-survival reasons as the rest of the long-lived
+	// mutation cluster (memory pitfall B-12 / X-04).
+	'marketplace.list',
+	'marketplace.tags',
+	'marketplace.cloneToLibrary',
 ] as const
