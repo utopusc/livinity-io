@@ -228,10 +228,10 @@ describe('LivToolPanel rendering', () => {
 		render(<LivToolPanel />)
 		// Empty state suppressed.
 		expect(screen.queryByTestId('panel-empty-state')).toBeNull()
-		// Dispatcher → GenericToolView (P68 day-1 behaviour) is mounted in body.
+		// Dispatcher → CommandToolView post-69-05 (execute-command routes to specific view).
 		const body = screen.getByTestId('panel-body')
-		expect(body.querySelector('[data-testid="liv-generic-tool-view"]')).not.toBeNull()
-		// Tool name appears (header + GenericToolView header).
+		expect(body.querySelector('[data-testid="liv-command-tool-view"]')).not.toBeNull()
+		// Tool name appears in panel header (line 150 of liv-tool-panel.tsx).
 		expect(container?.textContent ?? '').toContain('execute-command')
 	})
 
