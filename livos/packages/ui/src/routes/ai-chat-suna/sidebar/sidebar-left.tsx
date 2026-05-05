@@ -15,7 +15,6 @@ import {Bot, Menu, Store} from 'lucide-react'
 
 import {NavAgents} from './nav-agents'
 import {NavUserWithTeams} from './nav-user-with-teams'
-import {KortixLogo} from './kortix-logo'
 import {CTACard} from './cta'
 import {
   Sidebar,
@@ -95,23 +94,13 @@ export function SidebarLeft({
     >
       <SidebarHeader className="px-2 py-2">
         <div className="flex h-[40px] items-center px-1 relative">
-          <Link to="/dashboard">
-            <KortixLogo />
-          </Link>
-          {state !== 'collapsed' && (
-            <div className="ml-2 transition-all duration-200 ease-in-out whitespace-nowrap">
-              {/* brand name intentionally blank — logo only */}
-            </div>
-          )}
-          <div className="ml-auto flex items-center gap-2">
-            {state !== 'collapsed' && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <SidebarTrigger className="h-8 w-8" />
-                </TooltipTrigger>
-                <TooltipContent>Toggle sidebar (CMD+B)</TooltipContent>
-              </Tooltip>
-            )}
+          <div className="flex items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <SidebarTrigger className="h-8 w-8" />
+              </TooltipTrigger>
+              <TooltipContent>Toggle sidebar (CMD+B)</TooltipContent>
+            </Tooltip>
             {isMobileLocal && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -166,16 +155,6 @@ export function SidebarLeft({
         </div>
       )}
       <SidebarFooter>
-        {state === 'collapsed' && (
-          <div className="mt-2 flex justify-center">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <SidebarTrigger className="h-8 w-8" />
-              </TooltipTrigger>
-              <TooltipContent>Expand sidebar (CMD+B)</TooltipContent>
-            </Tooltip>
-          </div>
-        )}
         <NavUserWithTeams user={user} />
       </SidebarFooter>
       <SidebarRail />

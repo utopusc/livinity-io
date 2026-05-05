@@ -120,7 +120,7 @@ function DashboardContent() {
 
   return (
     <>
-      <div className="flex flex-col h-screen w-full">
+      <div className="flex flex-col h-screen w-full items-center justify-center relative">
         {isMobile && (
           <div className="absolute top-4 left-4 z-10">
             <Tooltip>
@@ -140,33 +140,25 @@ function DashboardContent() {
           </div>
         )}
 
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[650px] max-w-[90%]">
-          <div className="flex flex-col items-center text-center w-full">
-            <div className="flex items-center gap-1">
-              <h1 className="tracking-tight text-4xl text-muted-foreground leading-tight">
-                Hey, I am
-              </h1>
-              <span
-                className={cn(
-                  'tracking-tight text-4xl font-semibold leading-tight cursor-pointer',
-                  secondaryGradient,
-                )}
-              >
-                Liv
-              </span>
-            </div>
-            <p className="tracking-tight text-3xl font-normal text-muted-foreground/80 mt-2">
-              What would you like to do today?
-            </p>
+        <div className="flex flex-col items-center text-center w-[650px] max-w-[90%]">
+          <div className="flex items-center gap-1">
+            <h1 className="tracking-tight text-4xl text-muted-foreground leading-tight">
+              Hey, I am
+            </h1>
+            <span
+              className={cn(
+                'tracking-tight text-4xl font-semibold leading-tight cursor-pointer',
+                secondaryGradient,
+              )}
+            >
+              Liv
+            </span>
           </div>
+          <p className="tracking-tight text-3xl font-normal text-muted-foreground/80 mt-2">
+            What would you like to do today?
+          </p>
 
-          <div
-            className={cn(
-              'w-full mt-6 mb-2',
-              'max-w-full',
-              'sm:max-w-3xl',
-            )}
-          >
+          <div className="w-full mt-6 mb-2">
             <MockComposer
               value={inputValue}
               onChange={setInputValue}
