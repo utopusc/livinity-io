@@ -149,7 +149,8 @@
 - [ ] **RELIAB-03**: `run-store.ts` extended with `pauseRun`, `resumeRun`, `forkRun`, `editMessage`
 - [ ] **RELIAB-04**: Frontend `use-liv-agent-stream.ts` reconnection with exponential backoff + UI banner "Reconnecting..."
 - [ ] **RELIAB-05**: Per-user resource limits (max 3 concurrent runs, 60min max duration, 500k max tokens per run) enforced in BullMQ worker + run-store
-- [ ] **RELIAB-06**: 3-hour agent run survives without context overflow error; browser refresh mid-run catches up; Stop button terminates within 1 iteration; Pause+Resume continues from exact state
+- [x] **RELIAB-06
+**: 3-hour agent run survives without context overflow error; browser refresh mid-run catches up; Stop button terminates within 1 iteration; Pause+Resume continues from exact state
 
 ### BROKER-CARRY (Phase 74 — F2-F5 Carryover from v30.5)
 
