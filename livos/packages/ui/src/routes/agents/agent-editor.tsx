@@ -66,6 +66,13 @@ import {
 	type SaveStatus,
 } from './agents-api'
 import {useDebouncedAutosave} from './use-debounced-autosave'
+// Phase 84 V32-MCP — MCPConfigurationNew section. Mounted in the Manual
+// tab below the existing form. Reads `configuredMcps` from the loaded
+// agent; install/remove mutations invalidate the agent.get cache so the
+// preview re-renders. Read-only mode (system seed / non-owned public)
+// is wired via the `disabled` prop.
+import {MCPConfigurationNew} from '@/components/mcp/MCPConfigurationNew'
+import type {ConfiguredMcp} from '@/components/mcp/types'
 
 const MODEL_TIERS = ['haiku', 'sonnet', 'opus'] as const
 type ModelTier = (typeof MODEL_TIERS)[number]
@@ -367,10 +374,23 @@ export default function AgentEditorRoute() {
 							<TabsTrigger value='beta'>Agent Builder Beta</TabsTrigger>
 						</TabsList>
 
-						<TabsContent value='manual' className='mt-4'>
+						<TabsContent value='manual' className='mt-4 space-y-4'>
 							<ManualForm
 								form={form}
 								onChange={(patch) => setForm((prev) => (prev ? {...prev, ...patch} : prev))}
+								disabled={isReadOnly}
+							/>
+
+							{/* Phase 84 — MCP Single Source of Truth section. Reads
+							    `configuredMcps` from the live agent (NOT the in-flight
+							    form snapshot — MCPs are managed via dedicated install/
+							    remove mutations, not the autosave path). Read-only mode
+							    propagates via `disabled` so system seeds + non-owned
+							    public agents render the list (visible) but lock the
+							    install/remove affordances. */}
+							<MCPConfigurationNew
+								agentId={agent.id}
+								configuredMcps={(agent.configuredMcps ?? []) as ConfiguredMcp[]}
 								disabled={isReadOnly}
 							/>
 						</TabsContent>

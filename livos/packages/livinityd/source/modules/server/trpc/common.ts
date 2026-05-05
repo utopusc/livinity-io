@@ -270,4 +270,26 @@ export const httpOnlyPaths = [
 	'marketplace.list',
 	'marketplace.tags',
 	'marketplace.cloneToLibrary',
+	// v32 Phase 84 — MCP single-source-of-truth router (Wave 3). All 6 paths
+	// route via HTTP because:
+	//   - mcp.search / mcp.getServer hit external registries
+	//     (registry.modelcontextprotocol.io OR server.smithery.ai); HTTP
+	//     fetches can take seconds. WS handshake adds an extra round trip
+	//     plus the WS-reconnect-survival cluster requirement (B-12 / X-04).
+	//   - mcp.installToAgent / mcp.removeFromAgent are autosave-adjacent
+	//     mutations that patch agents.configured_mcps JSONB. HTTP avoids
+	//     the silent-hang failure mode after `systemctl restart livos`
+	//     (precedent: agents.update at line 257, apiKeys.create at line 209).
+	//   - mcp.smitheryConfigured is publicProcedure — must work pre-auth so
+	//     the BrowseDialog can render the source toggle correctly when no
+	//     JWT is present. HTTP is the only path the WS transport can't
+	//     serve without a token query-param.
+	//   - mcp.setSmitheryKey is adminProcedure — settings-page mutation
+	//     consistency with the rest of the admin cluster.
+	'mcp.search',
+	'mcp.getServer',
+	'mcp.installToAgent',
+	'mcp.removeFromAgent',
+	'mcp.smitheryConfigured',
+	'mcp.setSmitheryKey',
 ] as const

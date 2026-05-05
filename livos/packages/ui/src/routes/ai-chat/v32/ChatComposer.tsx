@@ -5,6 +5,15 @@
 //
 // Pattern: adapted from Suna chat-input/chat-input.tsx.
 // Icons: @tabler/icons-react (no Lucide).
+//
+// TODO (Phase 84 V32-MCP / deferred to P88): wire a "+ MCP" button next to
+// the file-attachment button that opens BrowseDialog scoped to the
+// CURRENTLY SELECTED agent. Skipped for P84 because the v32 chat surface
+// does not yet have an agent selector — adding the button without one
+// would render a no-op (or worse, hardcode an agent id). The natural
+// place to add it is P88 (WS→SSE migration) when agent selection lands
+// in this composer. See .planning/phases/84-mcp-single-source-of-truth/
+// 84-CONTEXT.md §"ChatComposer + MCP decision".
 
 import {useRef, useState} from 'react'
 import {IconArrowUp, IconPlayerStop} from '@tabler/icons-react'
