@@ -85,7 +85,8 @@
 **: Manual open works for all tool categories (click tool badge → open panel at that snapshot)
 - [x] **PANEL-09
 **: User-closed panel re-opens automatically with new visual tool snapshot
-- [ ] **PANEL-10**: Mobile portrait → panel full-width on click
+- [x] **PANEL-10
+**: Mobile portrait → panel full-width on click
 
 ### VIEWS (Phase 69 — Per-Tool Views Suite)
 
@@ -94,9 +95,12 @@
 - [ ] **VIEWS-03**: `CommandToolView.tsx` — terminal-style dark bg, command at top, output streaming with caret, exit code badge in footer
 - [ ] **VIEWS-04**: `FileOperationToolView.tsx` — file icon + path header, operation type badge, content with shiki syntax highlighting
 - [ ] **VIEWS-05**: `StrReplaceToolView.tsx` — inline diff with generic 12-line `colorizeDiff` util in `tool-views/utils.ts` (+lines emerald, -lines rose)
-- [ ] **VIEWS-06**: `WebSearchToolView.tsx` — search query at top, results as cards (favicon + title + URL + snippet)
-- [ ] **VIEWS-07**: `WebCrawlToolView.tsx` — crawl target URL header, progress (pages/depth), result tree
-- [ ] **VIEWS-08**: `WebScrapeToolView.tsx` — URL + scraped content (markdown rendered) + extracted images gallery
+- [x] **VIEWS-06
+**: `WebSearchToolView.tsx` — search query at top, results as cards (favicon + title + URL + snippet)
+- [x] **VIEWS-07
+**: `WebCrawlToolView.tsx` — crawl target URL header, progress (pages/depth), result tree
+- [x] **VIEWS-08
+**: `WebScrapeToolView.tsx` — URL + scraped content (markdown rendered) + extracted images gallery
 - [ ] **VIEWS-09**: `McpToolView.tsx` — MCP server name badge + tool name + JSON args + content rendered via mcp-content-renderer
 - [ ] **VIEWS-10**: `GenericToolView.tsx` — raw JSON formatted with collapse for nested objects, fallback for unknown tools
 - [ ] **VIEWS-11**: `tool-views/utils.ts` — `getToolView`, `getToolIcon`, `getUserFriendlyToolName`, `colorizeDiff`, `extractScreenshot`, `isVisualTool` (used by PANEL-07 auto-open)

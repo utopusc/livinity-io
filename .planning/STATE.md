@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T01:24:25.990Z"
+last_updated: "2026-05-05T01:28:21.314Z"
 last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 57
-  completed_plans: 41
-  percent: 72
+  completed_plans: 44
+  percent: 77
 ---
 
 # Project State
@@ -144,7 +144,7 @@ Last activity: 2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b
 - **73-04:** Per CONTEXT D-25: route ALWAYS enqueues (no 429 rejection). Queue serializes naturally via per-user concurrency=1. Verified zero `429` status codes in handler body.
 - **73-04:** Test harness pattern — `createFakeRunQueue({runFactoryOnEnqueue})` returns dual-mode FakeRunQueue. Default mode (P67-03 backwards-compat): records enqueue calls AND invokes factory inline so existing assertions about `startMock` still hold. Strict mode (new D-23 regression test): records enqueue but does NOT invoke factory — proves the route handler doesn't double-spawn.
 
-## Phase 68 Progress (Side Panel + Tool View Dispatcher) — 5/7 plans complete (Wave 1+2)
+## Phase 68 Progress (Side Panel + Tool View Dispatcher) — 6/7 plans complete (Wave 1+2+3)
 
 - **68-01 ✅** useLivToolPanelStore Zustand store + isVisualTool helper. Commits `3676aba5` (feat) + `8e9a0653` (test). SUMMARY at `68-01-SUMMARY.md`. PANEL-01 + PANEL-02 + PANEL-03 marked complete. 22/22 vitest pass (381ms); pnpm --filter ui build clean (35.32s); sacred SHA `4f868d31...` unchanged. Visual-tool regex `/^(browser-|computer-use-|screenshot)/` honors STATE.md line 79 lock. NO persist (CONTEXT D-09 — in-memory only).
 - **68-02 ✅** types.ts (ToolViewProps + re-declared ToolCallSnapshot per D-14) + GenericToolView (JSON pretty-print + status badge + ticking elapsed footer). SUMMARY at `68-02-SUMMARY.md`.
