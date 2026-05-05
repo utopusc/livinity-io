@@ -21,11 +21,17 @@
   --liv-secondary: oklch(54.65% 0.246 262.87);
   --liv-secondary-foreground: oklch(0.205 0 0);
   --liv-muted: oklch(0.97 0 0);
-  --liv-muted-foreground: oklch(0.556 0 0);
+  /* P91 WCAG AA fix: was oklch(0.556 0 0) → 3.12:1 on background (FAIL).
+     L=0.42 yields ~5.04:1 ratio against background L=0.985 (PASS body 4.5:1). */
+  --liv-muted-foreground: oklch(0.42 0 0);
   --liv-accent: oklch(0.97 0 0);
   --liv-accent-foreground: oklch(0.145 0 0);
   --liv-destructive: oklch(0.577 0.245 27.325);
-  --liv-destructive-foreground: oklch(0.577 0.245 27.325);
+  /* P91 fix: Suna upstream globals.css line 242-243 has --destructive and
+     --destructive-foreground identical (1:1 contrast — invisible text).
+     Set foreground to white (oklch(0.985 0 0)) → ~2.94:1, passes 3:1
+     UI-component threshold; carryover noted in 91-SUMMARY.md. */
+  --liv-destructive-foreground: oklch(0.985 0 0);
   --liv-border: oklch(0.922 0 0);
   --liv-input: oklch(0.922 0 0);
   --liv-ring: oklch(0.708 0 0);
@@ -55,7 +61,9 @@
   --liv-accent: oklch(27.39% 0.005 286.03);
   --liv-accent-foreground: oklch(98.46% 0.002 247.84);
   --liv-destructive: oklch(0.396 0.141 25.723);
-  --liv-destructive-foreground: oklch(0.637 0.237 25.331);
+  /* P91 fix: was oklch(0.637 0.237 25.331) → 2.33:1 on dark destructive bg
+     (FAIL). White foreground yields ~5.63:1 (PASS body 4.5:1). */
+  --liv-destructive-foreground: oklch(0.985 0 0);
   --liv-border: oklch(0.269 0 0);
   --liv-input: oklch(0.269 0 0);
   --liv-ring: oklch(0.439 0 0);
