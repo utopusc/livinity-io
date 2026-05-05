@@ -175,8 +175,10 @@
 **: GlowPulse motion primitive (P66) animates card while streaming; Markdown-rendered reasoning_content body
 - [ ] **MEM-03**: liv-agent-runner extracts Kimi `reasoning_content` field, emits `chunk.type='reasoning'`; chat-messages renders via `<LivReasoningCard>`
 - [ ] **MEM-04**: PostgreSQL `messages` table `tsvector` column + GIN index + backfill migration
-- [ ] **MEM-05**: API `GET /api/conversations/search?q=<query>` returns matching messages with snippets
-- [ ] **MEM-06**: Sessions sidebar search input (debounced 300ms) with HighlightedText snippet rendering
+- [x] **MEM-05
+**: API `GET /api/conversations/search?q=<query>` returns matching messages with snippets
+- [x] **MEM-06
+**: Sessions sidebar search input (debounced 300ms) with HighlightedText snippet rendering
 - [x] **MEM-07
 **: Pinned messages — right-click or hover menu pin; pinned auto-injected into agent context system prompt; "Pinned" sidebar section
 - [x] **MEM-08

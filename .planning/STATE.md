@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: Server5 platform.apps.suna row updated (env-override fix shipped); scripts/suna-insert.sql synced; Mini PC redeploy + browser smoke test deferred to user-walk
-last_updated: "2026-05-05T01:29:05.373Z"
-last_activity: "2026-05-04 — P68-06 useLivToolPanelShortcut (Cmd+I) shipped: 13/13 vitest pass; commits `899320ac` (hook) + `fc70d40f` (tests) + `aa285532` (panel wiring). PANEL-10 marked complete. P68 now 6/7 plans complete."
+last_updated: "2026-05-05T01:30:18.072Z"
+last_activity: "2026-05-04 — 64-04 reached `## CHECKPOINT REACHED` (commit `d5b9efc4`)"
 progress:
   total_phases: 10
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 57
-  completed_plans: 45
-  percent: 79
+  completed_plans: 48
+  percent: 84
 ---
 
 # Project State
