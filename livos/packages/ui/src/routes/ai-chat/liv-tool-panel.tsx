@@ -34,6 +34,7 @@ import {useMemo} from 'react'
 
 import {Card} from '@/components/ui/card'
 import {GlowPulse, SlideInPanel} from '@/components/motion'
+import {useLivToolPanelShortcut} from '@/hooks/use-liv-tool-panel-shortcut'
 import {Badge} from '@/shadcn-components/ui/badge'
 import {Button} from '@/shadcn-components/ui/button'
 import {Slider} from '@/shadcn-components/ui/slider'
@@ -94,6 +95,7 @@ export function showJumpToLatest(
 // ─────────────────────────────────────────────────────────────────────
 
 export function LivToolPanel() {
+	useLivToolPanelShortcut()
 	const isOpen = useLivToolPanelStore((s) => s.isOpen)
 	const navigationMode = useLivToolPanelStore((s) => s.navigationMode)
 	const internalIndex = useLivToolPanelStore((s) => s.internalIndex)
