@@ -26,7 +26,8 @@
 //
 // D-NO-NEW-DEPS preserved — all imports are existing.
 
-import {useMemo, useState} from 'react'
+import {useEffect, useMemo, useState} from 'react'
+import {useNavigate} from 'react-router-dom'
 import {toast} from 'sonner'
 
 import {FadeIn, StaggerList} from '@/components/motion'
@@ -35,7 +36,29 @@ import {cn} from '@/shadcn-lib/utils'
 
 import {AgentCard, type AgentTemplate} from './agent-card'
 
-export default function AgentMarketplace() {
+// Phase 90 — Cutover. /agent-marketplace is deprecated in favor of
+// /marketplace (P86). The server emits an HTTP 301 (livinityd
+// server/index.ts), but in-app React Router push-state navigations bypass
+// the server. This component becomes a tiny client-side redirector that
+// pushes the user to /marketplace immediately on mount. The legacy
+// AgentMarketplace UI body below is preserved (commented out) so a future
+// audit can resurrect it for historical reference; v33 owns full deletion.
+export default function AgentMarketplaceRedirect() {
+	const navigate = useNavigate()
+	useEffect(() => {
+		navigate('/marketplace', {replace: true})
+	}, [navigate])
+	return (
+		<div className='flex h-full items-center justify-center'>
+			<p className='text-caption text-text-secondary'>Redirecting to /marketplace…</p>
+		</div>
+	)
+}
+
+// Legacy body retained as dead-code reference for v33 cleanup. Vite tree-shakes
+// uncalled exports — the underlying tRPC hooks here will not be invoked since
+// the default export above no longer renders this component.
+function _LegacyAgentMarketplaceBody() {
 	const [selectedTag, setSelectedTag] = useState<string | null>(null)
 
 	const utils = trpcReact.useUtils()

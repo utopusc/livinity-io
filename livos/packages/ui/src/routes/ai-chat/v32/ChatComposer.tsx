@@ -15,7 +15,7 @@
 // in this composer. See .planning/phases/84-mcp-single-source-of-truth/
 // 84-CONTEXT.md §"ChatComposer + MCP decision".
 
-import {useRef, useState} from 'react'
+import {useEffect, useRef, useState} from 'react'
 import {IconArrowUp, IconPlayerStop} from '@tabler/icons-react'
 import {cn} from '@/shadcn-lib/utils'
 import {MessageInput} from './MessageInput'
@@ -49,6 +49,16 @@ export function ChatComposer({
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Phase 90 — P89 deferred wire-up. P89's keyboard hook dispatches the
+  // `liv-composer-focus` CustomEvent on Cmd+K (or Ctrl+K). Focus the textarea
+  // when the event fires. Listener is window-scoped because the dispatch
+  // happens at document.body level.
+  useEffect(() => {
+    const handleFocus = () => textareaRef.current?.focus()
+    window.addEventListener('liv-composer-focus', handleFocus)
+    return () => window.removeEventListener('liv-composer-focus', handleFocus)
+  }, [])
 
   const canSend = (value.trim().length > 0 || attachments.length > 0) && !disabled
 

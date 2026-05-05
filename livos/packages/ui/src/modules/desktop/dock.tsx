@@ -173,6 +173,41 @@ export function Dock() {
 						)
 					}
 				/>
+				{/* Phase 90 — Cutover (D-90-05). v32 Agents and Marketplace land
+				    next to AI Chat for logical grouping (all three are LLM-domain
+				    surfaces). Placeholder icons until v33 ships dedicated SVGs. */}
+				<DockItem
+					appId='LIVINITY_agents'
+					iconSize={iconSize}
+					iconSizeZoomed={iconSizeZoomed}
+					open={pathname.startsWith('/agents')}
+					mouseX={mouseX}
+					onOpenWindow={(originRect) =>
+						handleOpenWindow(
+							'LIVINITY_agents',
+							'/agents',
+							'Agents',
+							systemAppsKeyed['LIVINITY_agents'].icon,
+							originRect,
+						)
+					}
+				/>
+				<DockItem
+					appId='LIVINITY_marketplace'
+					iconSize={iconSize}
+					iconSizeZoomed={iconSizeZoomed}
+					open={pathname.startsWith('/marketplace')}
+					mouseX={mouseX}
+					onOpenWindow={(originRect) =>
+						handleOpenWindow(
+							'LIVINITY_marketplace',
+							'/marketplace',
+							'Marketplace',
+							systemAppsKeyed['LIVINITY_marketplace'].icon,
+							originRect,
+						)
+					}
+				/>
 				{/* Phase 30 hot-patch round 11 (post-v28.0.2): Server Management
 				    restored to the dock per user request. Docker is intentionally
 				    NOT in the dock — user wants the original sleek server-control

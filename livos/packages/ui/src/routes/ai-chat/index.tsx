@@ -55,10 +55,12 @@ import {LivTour} from '@/components/liv-tour'
 // `chat-input` still has a callsite. Active rendering uses LivComposer below.
 void _LegacyChatInput
 
-// Phase 84 V32-MCP — DEPRECATED: McpPanel sidebar tab is unwired (file
-// remains on disk for P90 cutover to delete). All new MCP UI lives in
-// MCPConfigurationNew (mounted in /agents/:id editor) per D-MCP-SOT.
-// const McpPanel = lazy(() => import('./mcp-panel'))
+// Phase 90 — Cutover. McpPanel sidebar tab fully removed (file deleted on
+// disk by P90). All MCP UI lives in MCPConfigurationNew (mounted in
+// /agents/:id editor) per D-MCP-SOT (P84). This entire legacy chat module
+// (routes/ai-chat/index.tsx) is no longer mounted — the AI Chat window
+// renders routes/ai-chat/v32 directly. Module preserved on disk for
+// emergency rollback; v33 owns full deletion.
 const SkillsPanel = lazy(() => import('./skills-panel'))
 const AgentsPanel = lazy(() => import('./agents-panel'))
 const CanvasPanel = lazy(() => import('./canvas-panel').then((m) => ({default: m.CanvasPanel})))
@@ -835,10 +837,9 @@ export default function AiChat() {
 				</div>
 			)}
 
-			{/* Phase 84 V32-MCP — DEPRECATED: activeView === 'mcp' branch removed.
-			    The legacy McpPanel render path is no longer reachable from the
-			    sidebar. New MCP UI lives in /agents/:id editor (MCPConfigurationNew).
-			    The mcp-panel.tsx file remains on disk; P90 cutover deletes it. */}
+			{/* Phase 90 — Cutover. mcp-panel.tsx deleted on disk. The legacy
+			    McpPanel render path is no longer reachable from the sidebar.
+			    New MCP UI lives in /agents/:id editor (MCPConfigurationNew). */}
 			{activeView === 'skills' && (
 				<div className='flex flex-1 flex-col overflow-hidden'>
 					{isMobile && (

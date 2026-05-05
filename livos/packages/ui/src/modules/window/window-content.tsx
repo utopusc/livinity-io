@@ -16,6 +16,12 @@ const TerminalWindowContent = React.lazy(() => import('./app-contents/terminal-c
 const MyDevicesWindowContent = React.lazy(() => import('./app-contents/my-devices-content'))
 const RemoteDesktopContent = React.lazy(() => import('./app-contents/remote-desktop-content'))
 const ChromeWindowContent = React.lazy(() => import('./app-contents/chrome-content'))
+// Phase 90 — Cutover (D-90-06). v32 Agents + Marketplace dock entries open
+// the v32 routes inside a window. Both routes are self-contained React
+// components (already first-class routes in router.tsx); they render
+// identically inside or outside the window shell.
+const AgentsWindowContent = React.lazy(() => import('@/routes/agents'))
+const MarketplaceWindowContent = React.lazy(() => import('@/routes/marketplace'))
 
 type WindowContentProps = {
 	route: string
@@ -24,7 +30,9 @@ type WindowContentProps = {
 
 // Apps that manage their own scroll and layout (no wrapper padding/scroll)
 const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_remote-desktop', 'LIVINITY_chrome',
-	'LIVINITY_facebook', 'LIVINITY_gmail', 'LIVINITY_youtube', 'LIVINITY_whatsapp', 'LIVINITY_tradingview', 'LIVINITY_google', 'LIVINITY_yahoo'])
+	'LIVINITY_facebook', 'LIVINITY_gmail', 'LIVINITY_youtube', 'LIVINITY_whatsapp', 'LIVINITY_tradingview', 'LIVINITY_google', 'LIVINITY_yahoo',
+	// Phase 90 — Cutover. v32 Agents + Marketplace own their own scroll.
+	'LIVINITY_agents', 'LIVINITY_marketplace'])
 
 export function WindowContent({route, appId}: WindowContentProps) {
 	if (fullHeightApps.has(appId)) {
@@ -92,6 +100,13 @@ export function WindowAppContent({appId, initialRoute}: {appId: string; initialR
 		case 'LIVINITY_google':
 		case 'LIVINITY_yahoo':
 			return <ChromeWindowContent url={initialRoute.startsWith('http') ? initialRoute : undefined} />
+
+		// Phase 90 — Cutover (D-90-06).
+		case 'LIVINITY_agents':
+			return <AgentsWindowContent />
+
+		case 'LIVINITY_marketplace':
+			return <MarketplaceWindowContent />
 
 		default:
 			return (
