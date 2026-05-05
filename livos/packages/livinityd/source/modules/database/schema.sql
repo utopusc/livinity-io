@@ -413,3 +413,26 @@ CREATE INDEX IF NOT EXISTS idx_messages_user_created
   ON messages(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_content_tsv
   ON messages USING GIN (content_tsv);
+
+-- =========================================================================
+-- Phase 76: Agent Templates (MARKET-01) — global catalog of agent presets.
+-- Per-LivOS-install (NOT synced from Server5). 8 seeds run via boot
+-- seed runner (76-02). Cloning a template POSTs to nexus /api/subagents
+-- with system_prompt + tools_enabled (76-05). slug PK matches Server5
+-- platform.apps convention. tools_enabled jsonb (NOT text[]) for future
+-- per-tool config. GIN on tags for tag-filter queries.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS agent_templates (
+  slug          VARCHAR(64) PRIMARY KEY,
+  name          VARCHAR(128) NOT NULL,
+  description   TEXT NOT NULL,
+  system_prompt TEXT NOT NULL,
+  tools_enabled JSONB NOT NULL DEFAULT '[]'::jsonb,
+  tags          TEXT[] NOT NULL DEFAULT '{}',
+  mascot_emoji  VARCHAR(16) NOT NULL DEFAULT '🤖',
+  clone_count   INTEGER NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_templates_tags
+  ON agent_templates USING GIN (tags);
