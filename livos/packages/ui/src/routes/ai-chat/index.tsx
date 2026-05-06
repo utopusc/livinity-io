@@ -43,6 +43,7 @@ import {
 
 import {ChatMessageItem} from './chat-messages'
 import {ChatInput} from './chat-input'
+import {RightToolPanel} from './right-tool-panel'
 
 const McpPanel = lazy(() => import('./mcp-panel'))
 const SkillsPanel = lazy(() => import('./skills-panel'))
@@ -204,10 +205,19 @@ function ConversationSidebar({
 				</div>
 				<button
 					onClick={onNew}
-					className='rounded-lg p-1.5 text-liv-muted-foreground transition-colors hover:bg-liv-accent hover:text-liv-accent-foreground'
-					title='New conversation'
+					className={cn(
+						'flex items-center gap-1 rounded-lg px-2 py-1.5',
+						'bg-liv-primary text-liv-primary-foreground text-xs font-medium',
+						'transition-colors hover:opacity-90',
+						'focus:outline-none focus-visible:ring-2 focus-visible:ring-liv-ring',
+					)}
+					title='New conversation (⌘J)'
 				>
-					<IconPlus size={17} />
+					<IconPlus size={14} />
+					<span>New</span>
+					<kbd className='ml-0.5 rounded border border-liv-primary-foreground/20 bg-liv-primary-foreground/10 px-1 py-0 text-[9px] font-mono'>
+						⌘J
+					</kbd>
 				</button>
 			</div>
 
@@ -218,7 +228,7 @@ function ConversationSidebar({
 					className={cn(
 						'flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors',
 						activeView === 'chat'
-							? 'border-b-2 border-liv-primary text-liv-foreground'
+							? 'border-b-2 border-liv-primary text-liv-foreground font-semibold'
 							: 'text-liv-muted-foreground hover:text-liv-foreground',
 					)}
 				>
@@ -230,7 +240,7 @@ function ConversationSidebar({
 					className={cn(
 						'flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors',
 						activeView === 'mcp'
-							? 'border-b-2 border-liv-primary text-liv-foreground'
+							? 'border-b-2 border-liv-primary text-liv-foreground font-semibold'
 							: 'text-liv-muted-foreground hover:text-liv-foreground',
 					)}
 				>
@@ -242,7 +252,7 @@ function ConversationSidebar({
 					className={cn(
 						'flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors',
 						activeView === 'agents'
-							? 'border-b-2 border-liv-primary text-liv-foreground'
+							? 'border-b-2 border-liv-primary text-liv-foreground font-semibold'
 							: 'text-liv-muted-foreground hover:text-liv-foreground',
 					)}
 				>
@@ -333,6 +343,32 @@ export default function AiChat() {
 	})
 	const deleteMutation = trpcReact.ai.deleteConversation.useMutation()
 	const sendMutation = trpcReact.ai.send.useMutation()
+
+	// Tool panel state
+	const [toolPanelOpen, setToolPanelOpen] = useState(false)
+
+	// Auto-open panel when first tool call arrives during streaming
+	const prevToolCountRef = useRef(0)
+	useEffect(() => {
+		if (!agent.isStreaming) return
+		const toolCount = agent.messages.reduce((sum, m) => sum + (m.toolCalls?.length ?? 0), 0)
+		if (toolCount > prevToolCountRef.current && toolCount > 0) {
+			setToolPanelOpen(true)
+		}
+		prevToolCountRef.current = toolCount
+	}, [agent.messages, agent.isStreaming])
+
+	// Cmd+I / Ctrl+I toggles the tool panel
+	useEffect(() => {
+		const handler = (e: KeyboardEvent) => {
+			if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
+				e.preventDefault()
+				setToolPanelOpen((v) => !v)
+			}
+		}
+		document.addEventListener('keydown', handler)
+		return () => document.removeEventListener('keydown', handler)
+	}, [])
 
 	// Canvas state
 	const [canvasArtifact, setCanvasArtifact] = useState<{
@@ -677,12 +713,12 @@ export default function AiChat() {
 												<IconBrain size={32} className='text-violet-400' />
 											</div>
 										</div>
-										<h3 className='mb-3 text-xl font-semibold text-liv-foreground'>Liv</h3>
+										<h3 className='mb-3 text-3xl font-semibold text-liv-foreground'>Liv</h3>
 										<TextEffect
 											as='p'
 											per='word'
 											preset='fade'
-											className='mb-6 text-sm text-liv-muted-foreground'
+											className='mb-6 text-base text-liv-muted-foreground'
 										>
 											Your autonomous AI assistant. I can manage your server, Docker containers, run commands, create subagents, schedule tasks, and more.
 										</TextEffect>
@@ -700,8 +736,8 @@ export default function AiChat() {
 													key={suggestion}
 													onClick={() => setInput(suggestion)}
 													className={cn(
-														'rounded-full border border-liv-border bg-liv-muted px-3.5 py-1.5 text-xs font-medium text-liv-foreground',
-														'transition-colors hover:bg-liv-accent hover:text-liv-accent-foreground',
+														'rounded-full border border-liv-border bg-liv-muted px-4 py-2 text-sm font-medium text-liv-foreground',
+														'transition-all hover:bg-liv-accent hover:text-liv-accent-foreground hover:scale-[1.02]',
 													)}
 												>
 													{suggestion}
@@ -912,6 +948,14 @@ export default function AiChat() {
 					</Suspense>
 				</div>
 			)}
+
+			{/* Right-side tool activity panel — fixed overlay, Framer Motion slide-in */}
+			<RightToolPanel
+				messages={agent.messages}
+				isStreaming={agent.isStreaming}
+				open={toolPanelOpen}
+				onClose={() => setToolPanelOpen(false)}
+			/>
 		</div>
 	)
 }
