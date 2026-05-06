@@ -1,12 +1,15 @@
-// Ported from Suna: components/sidebar/sidebar-left.tsx
-// Substitutions:
+// v32-redo Stage 2b — sidebar shell. Mock user removed.
+// NavUserWithTeams now reads useCurrentUser internally so no user prop is
+// passed here. Agent Playground / Marketplace nav items retained (visual
+// only — the parent app routes those URLs).
+//
+// Substitutions vs original Suna source:
 //   'use client' removed
 //   next/link -> Link from react-router-dom
 //   usePathname -> useLocation (react-router-dom)
-//   createClient/supabase -> mock user from MOCK_USER
+//   createClient/supabase -> useCurrentUser() (in NavUserWithTeams)
 //   @/hooks/use-mobile -> local inline (in sidebar.tsx)
 //   @/components/ui/badge -> inline Badge from shadcn-components
-//   Agent Playground / Marketplace nav items retained (visual only)
 
 import * as React from 'react'
 import {Link} from 'react-router-dom'
@@ -34,7 +37,6 @@ import {
   TooltipTrigger,
 } from '@/shadcn-components/ui/tooltip'
 import {cn} from '@/shadcn-lib/utils'
-import {MOCK_USER} from '../lib/mock-data'
 
 // Inline Badge for "New" tag (avoids importing Suna's specific Badge variant)
 function NewBadge() {
@@ -61,12 +63,6 @@ export function SidebarLeft({
     mql.addEventListener('change', onChange)
     return () => mql.removeEventListener('change', onChange)
   }, [])
-
-  const user = {
-    name: MOCK_USER.display_name,
-    email: MOCK_USER.email,
-    avatar: MOCK_USER.avatar,
-  }
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -155,7 +151,7 @@ export function SidebarLeft({
         </div>
       )}
       <SidebarFooter>
-        <NavUserWithTeams user={user} />
+        <NavUserWithTeams />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

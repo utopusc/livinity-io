@@ -292,4 +292,22 @@ export const httpOnlyPaths = [
 	'mcp.removeFromAgent',
 	'mcp.smitheryConfigured',
 	'mcp.setSmitheryKey',
+	// v32-redo Stage 2b — conversations namespace (sidebar feed + thread view +
+	// composer persistence path). All 6 paths route via HTTP because:
+	//   - list / listMessages are page-render dependencies for the AI Chat
+	//     window: HTTP avoids the WS-handshake-delay flicker on first paint
+	//     (precedent: agents.list at line 254, usage.getMine at line 181).
+	//   - create / delete / appendMessage are mutations called immediately
+	//     before / after /api/agent/start. A WS half-broken after `systemctl
+	//     restart livos` would silently drop the persisted user or assistant
+	//     turn (memory pitfall B-12 / X-04 — same rationale as agents.create
+	//     at line 256, apiKeys.create at line 209).
+	//   - get is rare but kept on HTTP for transport consistency with the rest
+	//     of the namespace.
+	'conversations.list',
+	'conversations.get',
+	'conversations.create',
+	'conversations.delete',
+	'conversations.listMessages',
+	'conversations.appendMessage',
 ] as const
