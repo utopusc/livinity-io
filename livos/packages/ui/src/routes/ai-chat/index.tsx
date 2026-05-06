@@ -1,12 +1,12 @@
 import {useCallback, useEffect, useRef, useState, Suspense, lazy} from 'react'
-import {useNavigate, useSearchParams} from 'react-router-dom'
+import {useSearchParams} from 'react-router-dom'
 import {
 	IconMessageCircle,
 	IconPlus,
 	IconTrash,
 	IconBrain,
 	IconLoader2,
-	// Phase 84 V32-MCP — IconPlug removed (was only used by the deprecated MCP sidebar tab).
+	IconPlug,
 	IconMenu2,
 	IconPuzzle,
 	IconCode,
@@ -14,8 +14,6 @@ import {
 	IconDeviceDesktop,
 	IconRobot,
 	IconArrowLeft,
-	IconDownload,
-	IconSparkles,
 } from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 
@@ -26,85 +24,17 @@ import {trpcReact} from '@/trpc/trpc'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useAgentSocket, type ChatMessage} from '@/hooks/use-agent-socket'
 import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from '@/shadcn-components/ui/dropdown-menu'
 
-import {ChatMessageItem, LivAgentStatus, LivTypingDots} from './chat-messages'
-import {ChatInput as _LegacyChatInput} from './chat-input'
-import {LivComposer} from './liv-composer'
-import {LivToolPanel} from './liv-tool-panel'
-import {LivWelcome} from './components/liv-welcome'
-import {LivConversationSearch} from './components/liv-conversation-search'
-import {LivPinnedSidebarSection} from './components/liv-pinned-sidebar-section'
-import {
-	exportToJSON,
-	exportToMarkdown,
-	type ConversationData,
-	type ConversationMessage,
-} from './utils/export-conversation'
-import {useLivAgentStream} from '@/lib/use-liv-agent-stream'
-import {useLivToolPanelStore} from '@/stores/liv-tool-panel-store'
-import {LivTour} from '@/components/liv-tour'
+import {ChatMessageItem} from './chat-messages'
+import {ChatInput} from './chat-input'
 
-// Legacy ChatInput retained per CONTEXT D-08 D-NO-DELETE — file remains on disk
-// and the import is kept here as a void reference so the source-grep for
-// `chat-input` still has a callsite. Active rendering uses LivComposer below.
-void _LegacyChatInput
-
-// Phase 84 V32-MCP — DEPRECATED: McpPanel sidebar tab is unwired (file
-// remains on disk for P90 cutover to delete). All new MCP UI lives in
-// MCPConfigurationNew (mounted in /agents/:id editor) per D-MCP-SOT.
-// const McpPanel = lazy(() => import('./mcp-panel'))
+const McpPanel = lazy(() => import('./mcp-panel'))
 const SkillsPanel = lazy(() => import('./skills-panel'))
 const AgentsPanel = lazy(() => import('./agents-panel'))
 const CanvasPanel = lazy(() => import('./canvas-panel').then((m) => ({default: m.CanvasPanel})))
 const ComputerUsePanel = lazy(() => import('./computer-use-panel').then((m) => ({default: m.ComputerUsePanel})))
-// P78-marketplace-inline: render Agent Marketplace inline in AI Chat window
-// (Suna-style — feels like marketplace lives WITH the chat, not a separate page).
-// /agent-marketplace route stays for deep-links + LivTour step 8.
-const AgentMarketplace = lazy(() => import('@/routes/agent-marketplace'))
 
-// Phase 84 V32-MCP — 'mcp' removed from SidebarView union (MCP UI now lives
-// in /agents/:id editor via MCPConfigurationNew). 'skills' kept until P90.
-type SidebarView = 'chat' | 'skills' | 'agents' | 'marketplace'
-
-/**
- * Phase 75-07 / CONTEXT D-21 — adapt the in-memory ChatMessage[] to the
- * `ConversationData` shape consumed by `exportToMarkdown` / `exportToJSON`
- * (Plan 75-04). Uses the conversationId as both id + title fallback so the
- * downloaded file has a sane filename.
- */
-function buildConversationData(
-	conversationId: string,
-	messages: ChatMessage[],
-): ConversationData {
-	const title = `Conversation ${conversationId}`
-	const mapped: ConversationMessage[] = messages.map((m) => ({
-		id: m.id,
-		role: m.role === 'system' ? 'system' : (m.role as 'user' | 'assistant'),
-		content: m.content,
-		reasoning: m.reasoning,
-		toolCalls: (m.toolCalls ?? []).map((tc) => ({
-			name: tc.name,
-			input: tc.input,
-			output: tc.output,
-			isError: tc.status === 'error',
-		})),
-		ts: m.timestamp,
-	}))
-	const firstTs =
-		messages.length > 0 ? messages[0].timestamp : Date.now()
-	return {
-		id: conversationId,
-		title,
-		createdAt: firstTs,
-		messages: mapped,
-	}
-}
+type SidebarView = 'chat' | 'mcp' | 'skills' | 'agents'
 
 function ConversationSidebar({
 	conversations,
@@ -115,7 +45,6 @@ function ConversationSidebar({
 	activeView,
 	onViewChange,
 	activeProvider,
-	onOpenMarketplace,
 	className,
 }: {
 	conversations: Array<{id: string; title: string; updatedAt: number; messageCount: number}>
@@ -126,7 +55,6 @@ function ConversationSidebar({
 	activeView: SidebarView
 	onViewChange: (view: SidebarView) => void
 	activeProvider: string
-	onOpenMarketplace: () => void
 	className?: string
 }) {
 	return (
@@ -160,9 +88,15 @@ function ConversationSidebar({
 					<IconMessageCircle size={14} />
 					Chat
 				</button>
-				{/* Phase 84 V32-MCP — MCP sidebar tab removed. MCP UI now lives in
-				    /agents/:id editor (MCPConfigurationNew). The legacy mcp-panel
-				    file remains on disk; P90 cutover deletes it. */}
+				<button
+					onClick={() => onViewChange('mcp')}
+					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
+						activeView === 'mcp' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					)}
+				>
+					<IconPlug size={14} />
+					MCP
+				</button>
 				<button
 					onClick={() => onViewChange('agents')}
 					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
@@ -175,86 +109,48 @@ function ConversationSidebar({
 			</div>
 
 			{activeView === 'chat' && (
-				<div className='flex-1 overflow-y-auto overflow-x-hidden'>
-					{/* Phase 75-07 / CONTEXT D-26..D-28 — sidebar search input lands
-					    at the top of the chat tab. Empty query falls back to the
-					    conversation list below. JWT comes from localStorage. */}
-					<div className='px-2 pt-2'>
-						<LivConversationSearch
-							onSelectMessage={(_messageId, conversationId) =>
-								onSelect(conversationId)
-							}
-						/>
-					</div>
-
-					{/* Phase 75-07 / CONTEXT D-18 — pinned items list sits between the
-					    search input and the conversation list. Auto-hides when zero
-					    pins. Click a pin → jumps to its source conversation. */}
-					<LivPinnedSidebarSection
-						className='border-b border-border-default pb-2 mb-1'
-						onSelectMessage={(_messageId, conversationId) => {
-							if (conversationId) onSelect(conversationId)
-						}}
-					/>
-
-					<div className='p-2'>
-						{conversations.length === 0 && (
-							<p className='px-2 py-8 text-center text-caption text-text-tertiary'>No conversations yet</p>
-						)}
-						{conversations.map((conv) => (
+				<div className='flex-1 overflow-y-auto overflow-x-hidden p-2'>
+					{conversations.length === 0 && (
+						<p className='px-2 py-8 text-center text-caption text-text-tertiary'>No conversations yet</p>
+					)}
+					{conversations.map((conv) => (
+						<button
+							key={conv.id}
+							onClick={() => onSelect(conv.id)}
+							className={cn('group mb-1 flex w-full items-center gap-2 rounded-radius-sm px-3 py-2.5 text-left transition-colors',
+								activeId === conv.id ? 'bg-surface-3 text-text-primary' : 'text-text-secondary hover:bg-surface-1 hover:text-text-primary'
+							)}
+						>
+							<IconMessageCircle size={16} className='flex-shrink-0' />
+							<div className='min-w-0 flex-1'>
+								<span className='block truncate text-body-sm'>{conv.title}</span>
+								<span className='text-caption-sm text-text-tertiary'>
+									{formatDistanceToNow(conv.updatedAt, {addSuffix: true})}
+								</span>
+							</div>
 							<button
-								key={conv.id}
-								onClick={() => onSelect(conv.id)}
-								className={cn('group mb-1 flex w-full items-center gap-2 rounded-radius-sm px-3 py-2.5 text-left transition-colors',
-									activeId === conv.id ? 'bg-surface-3 text-text-primary' : 'text-text-secondary hover:bg-surface-1 hover:text-text-primary'
-								)}
+								onClick={(e) => {
+									e.stopPropagation()
+									onDelete(conv.id)
+								}}
+								className='hidden rounded p-0.5 text-text-tertiary hover:text-red-400 group-hover:block'
 							>
-								<IconMessageCircle size={16} className='flex-shrink-0' />
-								<div className='min-w-0 flex-1'>
-									<span className='block truncate text-body-sm'>{conv.title}</span>
-									<span className='text-caption-sm text-text-tertiary'>
-										{formatDistanceToNow(conv.updatedAt, {addSuffix: true})}
-									</span>
-								</div>
-								<button
-									onClick={(e) => {
-										e.stopPropagation()
-										onDelete(conv.id)
-									}}
-									className='hidden rounded p-0.5 text-text-tertiary hover:text-red-400 group-hover:block'
-								>
-									<IconTrash size={14} />
-								</button>
+								<IconTrash size={14} />
 							</button>
-						))}
-					</div>
+						</button>
+					))}
 				</div>
 			)}
 
-			{/* Phase 84 V32-MCP — 'mcp' removed from union (sidebar tab unwired). */}
-			{(activeView === 'skills' || activeView === 'agents' || activeView === 'marketplace') && (
+			{(activeView === 'mcp' || activeView === 'skills' || activeView === 'agents') && (
 				<div className='flex-1' />
 			)}
-
-			{/* Phase 76-07 — Marketplace nav entry. Sibling-shaped to existing
-			    sidebar buttons; data-tour='marketplace-link' is the anchor for
-			    LIV_TOUR_STEPS step 8 ('marketplace') per CONTEXT D-15/D-16. */}
-			<button
-				data-tour='marketplace-link'
-				onClick={onOpenMarketplace}
-				className='flex w-full items-center gap-2 border-t border-border-default px-3 py-2.5 text-left text-body-sm text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary'
-				title='Browse Liv agent marketplace'
-			>
-				<IconSparkles size={16} className='flex-shrink-0 text-violet-400' />
-				<span>Marketplace</span>
-			</button>
 		</div>
 	)
 }
 
 export default function AiChat() {
 	const [searchParams, setSearchParams] = useSearchParams()
-	const navigate = useNavigate()
 	const [input, setInput] = useState('')
 	const [activeView, setActiveView] = useState<SidebarView>('chat')
 	const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -266,24 +162,9 @@ export default function AiChat() {
 	const utils = trpcReact.useUtils()
 
 	const providersQuery = trpcReact.ai.getProviders.useQuery(undefined, {refetchInterval: 30_000})
-	// P77-01: default to 'claude' (broker subscription); 'kimi' was stale from v6.0
-	const activeProvider = providersQuery.data?.primaryProvider ?? 'claude'
+	const activeProvider = providersQuery.data?.primaryProvider ?? 'kimi'
 
 	const activeConversationId = searchParams.get('conv') ?? null
-
-	// P67-04 SSE consumer running in PARALLEL with the legacy WebSocket hook
-	// (CONTEXT D-14). Snapshots flow into the P68 tool-panel store via the
-	// bridge useEffect below so <LivToolPanel /> auto-opens on tool runs.
-	const livStream = useLivAgentStream({
-		conversationId: activeConversationId ?? '',
-		autoStart: false,
-	})
-
-	useEffect(() => {
-		for (const snapshot of livStream.snapshots.values()) {
-			useLivToolPanelStore.getState().handleNewSnapshot(snapshot)
-		}
-	}, [livStream.snapshots])
 
 	const conversationsQuery = trpcReact.ai.listConversations.useQuery(undefined, {
 		refetchInterval: 10_000,
@@ -546,23 +427,10 @@ export default function AiChat() {
 		activeView,
 		onViewChange: setActiveView,
 		activeProvider,
-		onOpenMarketplace: () => {
-			setSidebarOpen(false)
-			// P78-marketplace-inline: open as panel inside AI chat window
-			// instead of navigating to /agent-marketplace route. Suna-style.
-			setActiveView('marketplace')
-		},
 	}
 
 	return (
 		<div className='flex h-full overflow-hidden'>
-			{/* Phase 76-07 — LivTour mount (D-18). Self-gated on
-			    `localStorage.getItem('liv-tour-completed')`; renders null when
-			    flag is set. `onSetComposerDraft` wires step 5 (`demo-prompt`)
-			    to the composer's input state via the callback prop chosen in
-			    76-05's SUMMARY (Option A — type-safe + test-ergonomic). */}
-			<LivTour onSetComposerDraft={setInput} />
-
 			{!isMobile && <ConversationSidebar {...sidebarProps} />}
 
 			{isMobile && (
@@ -631,39 +499,6 @@ export default function AiChat() {
 									${agent.totalCost.toFixed(4)}
 								</span>
 							)}
-							{/* Phase 75-07 / CONTEXT D-22 — Export menu (Markdown + JSON).
-							    Renders only when there is an active conversation with at
-							    least one message — empty conversations have nothing to
-							    export. The dropdown lives at the right edge of the
-							    connection bar so it does not displace existing UI. */}
-							{activeConversationId && displayMessages.length > 0 && (
-								<DropdownMenu>
-									<DropdownMenuTrigger asChild>
-										<button
-											aria-label='Export conversation'
-											title='Export conversation'
-											className={cn(
-												agent.totalCost > 0 ? 'ml-2' : 'ml-auto',
-												'flex h-6 w-6 items-center justify-center rounded text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-primary',
-											)}
-										>
-											<IconDownload size={14} />
-										</button>
-									</DropdownMenuTrigger>
-									<DropdownMenuContent align='end'>
-										<DropdownMenuItem
-											onClick={() => exportToMarkdown(buildConversationData(activeConversationId, displayMessages))}
-										>
-											Export as Markdown
-										</DropdownMenuItem>
-										<DropdownMenuItem
-											onClick={() => exportToJSON(buildConversationData(activeConversationId, displayMessages))}
-										>
-											Export as JSON
-										</DropdownMenuItem>
-									</DropdownMenuContent>
-								</DropdownMenu>
-							)}
 						</div>
 
 						<div
@@ -671,39 +506,56 @@ export default function AiChat() {
 							onScroll={handleScroll}
 							className='flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-3 md:p-6'
 						>
-							{displayMessages.length === 0 && !agent.isStreaming ? (
-								<LivWelcome onSelectSuggestion={(prompt) => setInput(prompt)} />
+							{displayMessages.length === 0 ? (
+								<div className='flex h-full flex-col items-center justify-center text-text-tertiary'>
+									<div className='mb-6 flex h-16 w-16 items-center justify-center rounded-radius-xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
+										<IconBrain size={32} className='text-violet-400' />
+									</div>
+									<h3 className='mb-2 text-heading-sm font-medium text-text-secondary'>Liv</h3>
+									<TextEffect
+										as='p'
+										per='word'
+										preset='fade'
+										className='max-w-md text-center text-body text-text-tertiary'
+									>
+										Your autonomous AI assistant. I can manage your server, Docker containers, run commands, create subagents, schedule tasks, and more.
+									</TextEffect>
+									<AnimatedGroup
+										preset='blur-slide'
+										className='mt-6 flex flex-wrap justify-center gap-2'
+									>
+										{[
+											'Show system health',
+											'List subagents',
+											'Check Docker containers',
+											'Search memory',
+										].map((suggestion) => (
+											<button
+												key={suggestion}
+												onClick={() => setInput(suggestion)}
+												className='rounded-radius-md border border-border-default bg-surface-base px-3 py-1.5 text-caption text-text-tertiary transition-colors hover:border-border-emphasis hover:bg-surface-1 hover:text-text-secondary'
+											>
+												{suggestion}
+											</button>
+										))}
+									</AnimatedGroup>
+								</div>
 							) : (
 								<div className='mx-auto max-w-3xl space-y-4'>
-									{/* P70-05 agent status banner — shows thinking/executing/error phases.
-									    Mounted here (post-list, pre-end-anchor) per CONTEXT D-45. */}
-									<LivAgentStatus status={agent.agentStatus} />
 									{displayMessages.map((msg, idx) => {
-										const isLast = idx === displayMessages.length - 1
 										return (
 											<ChatMessageItem
 												key={msg.id}
 												message={msg}
-												conversationId={activeConversationId ?? undefined}
-												isLastMessage={isLast}
 											/>
 										)
 									})}
-									{/* P70-05 typing dots — shown while streaming AND last message is from
-									    the user (waiting for first assistant token). CONTEXT D-39. */}
-									{agent.isStreaming &&
-										displayMessages.length > 0 &&
-										displayMessages[displayMessages.length - 1].role === 'user' && (
-											<div className='ml-4 mt-2'>
-												<LivTypingDots active />
-											</div>
-										)}
 									<div ref={messagesEndRef} />
 								</div>
 							)}
 						</div>
 
-						<LivComposer
+						<ChatInput
 							value={input}
 							onChange={setInput}
 							onSend={handleSend}
@@ -713,11 +565,6 @@ export default function AiChat() {
 							onSlashAction={handleSlashAction}
 						/>
 					</div>
-
-					{/* P68 LivToolPanel — fixed right-edge overlay, auto-opens on
-					    tool snapshots flowing through useLivToolPanelStore from the
-					    snapshot bridge useEffect above. CONTEXT D-15, D-16. */}
-					<LivToolPanel />
 
 					{/* Canvas panel -- desktop split-pane (hidden when computer use is active) */}
 					{canvasArtifact && !canvasMinimized && !isMobile && !isComputerUseActive && (
@@ -835,10 +682,26 @@ export default function AiChat() {
 				</div>
 			)}
 
-			{/* Phase 84 V32-MCP — DEPRECATED: activeView === 'mcp' branch removed.
-			    The legacy McpPanel render path is no longer reachable from the
-			    sidebar. New MCP UI lives in /agents/:id editor (MCPConfigurationNew).
-			    The mcp-panel.tsx file remains on disk; P90 cutover deletes it. */}
+			{activeView === 'mcp' && (
+				<div className='flex flex-1 flex-col overflow-hidden'>
+					{isMobile && (
+						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+							<div className='flex items-center justify-between'>
+								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+									<IconArrowLeft size={20} />
+								</button>
+								<span className='text-body font-semibold text-text-primary'>MCP Servers</span>
+								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+									<IconMenu2 size={20} />
+								</button>
+							</div>
+						</div>
+					)}
+					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+						<McpPanel />
+					</Suspense>
+				</div>
+			)}
 			{activeView === 'skills' && (
 				<div className='flex flex-1 flex-col overflow-hidden'>
 					{isMobile && (
@@ -877,35 +740,6 @@ export default function AiChat() {
 					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
 						<AgentsPanel />
 					</Suspense>
-				</div>
-			)}
-			{activeView === 'marketplace' && (
-				<div className='flex flex-1 flex-col overflow-hidden'>
-					{/* Header bar with Back button + title — keeps panel feel rather than full-page-route feel. */}
-					<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
-						<div className='flex items-center justify-between'>
-							<button
-								onClick={() => setActiveView('chat')}
-								className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
-								title='Back to chat'
-							>
-								<IconArrowLeft size={20} />
-							</button>
-							<span className='text-body font-semibold text-text-primary'>Agent Marketplace</span>
-							{isMobile ? (
-								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
-									<IconMenu2 size={20} />
-								</button>
-							) : (
-								<div className='h-11 w-11' />
-							)}
-						</div>
-					</div>
-					<div className='flex-1 overflow-auto'>
-						<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
-							<AgentMarketplace />
-						</Suspense>
-					</div>
 				</div>
 			)}
 		</div>
