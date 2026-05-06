@@ -42,9 +42,13 @@ function useIsMobile() {
 
 const SIDEBAR_COOKIE_NAME = 'sidebar_state'
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = '16rem'
+// v32-redo Stage 2b-fix — sidebar tightened from 16rem (Suna default) to a
+// strict 256px so the chat surface gets more breathing room. Mobile sheet
+// stays at 18rem (touch ergonomics). Icon-mode width retained but unused
+// once sidebar-left.tsx flips to collapsible="offcanvas".
+const SIDEBAR_WIDTH = '256px'
 const SIDEBAR_WIDTH_MOBILE = '18rem'
-const SIDEBAR_WIDTH_ICON = '3rem'
+const SIDEBAR_WIDTH_ICON = '48px'
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b'
 
 type SidebarContextProps = {

@@ -84,7 +84,11 @@ export function SidebarLeft({
 
   return (
     <Sidebar
-      collapsible="icon"
+      // v32-redo Stage 2b-fix — was "icon" (collapsed to 48px strip), user
+      // wanted click → fully hidden. "offcanvas" slides the sidebar off-
+      // screen entirely; the SidebarTrigger in the main area top-left
+      // (rendered by ThreadPage / DashboardPage) brings it back.
+      collapsible="offcanvas"
       className="border-r-0 bg-background/95 backdrop-blur-sm [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
       {...props}
     >

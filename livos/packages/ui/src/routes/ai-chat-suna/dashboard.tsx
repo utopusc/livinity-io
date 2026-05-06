@@ -1,19 +1,9 @@
-// v32-redo Stage 2b — dashboard hero ("empty state" before any
-// conversation is selected). The mock composer is gone — we use the real
-// Composer, which on first send creates a conversation row and triggers
-// selectConversation, causing index.tsx to swap to <ThreadPage />.
-//
-// Substitutions vs original Suna source:
-//   'use client' removed
-//   useRouter -> useChatRouter (internal context, no URL change)
-//   ChatInput -> Composer (./composer.tsx, real SSE wiring)
-//   BillingError/BillingErrorAlert -> removed (no billing in LivOS)
-//   useInitiateAgentWithInvalidation -> Composer handles via useLivAgentStream
-//   useAccounts -> removed
-//   useModal -> removed
-//   AgentSelector -> simplified ("Liv" as static text — agent picker comes in 2c)
-//   Examples / suggestions / ModalProviders -> removed (Stage 2c+)
-//   PENDING_PROMPT_KEY -> removed (no localStorage relay)
+// v32-redo Stage 2b-fix — dashboard hero ("empty state" before any
+// conversation is selected). Same Suna-styled shell ("Hey, I am Liv"
+// gradient + tagline) as Stage 2b, but the composer is now the LEGACY
+// LivComposer wrapped by composer.tsx. First send creates a conversation
+// row and flips the chat-router to the new id, causing index.tsx to swap
+// to <ThreadPage />.
 
 import React, {Suspense} from 'react'
 import {Menu} from 'lucide-react'
@@ -30,7 +20,8 @@ import {Skeleton} from './ui/skeleton'
 
 import {Composer} from './composer'
 
-// Local mobile hook
+// Local mobile hook (kept inline so dashboard remains usable outside the
+// SidebarProvider context, e.g. in isolated component tests).
 function useIsMobile() {
 	const [isMobile, setIsMobile] = React.useState(
 		typeof window !== 'undefined' ? window.innerWidth < 768 : false,
@@ -46,14 +37,16 @@ function useIsMobile() {
 
 function DashboardContent() {
 	const isMobile = useIsMobile()
-	const {setOpenMobile} = useSidebar()
+	const {setOpenMobile, open, toggleSidebar} = useSidebar()
 
 	const secondaryGradient =
 		'bg-gradient-to-r from-blue-500 to-blue-500 bg-clip-text text-transparent'
 
 	return (
 		<div className="flex flex-col h-screen w-full items-center justify-center relative">
-			{isMobile && (
+			{/* Top-left toggle: mobile uses the sheet; desktop toggles the
+			    offcanvas sidebar back into view when it has been hidden. */}
+			{(isMobile || !open) && (
 				<div className="absolute top-4 left-4 z-10">
 					<Tooltip>
 						<TooltipTrigger asChild>
@@ -61,13 +54,16 @@ function DashboardContent() {
 								variant="ghost"
 								size="icon"
 								className="h-8 w-8"
-								onClick={() => setOpenMobile(true)}
+								onClick={() => {
+									if (isMobile) setOpenMobile(true)
+									else toggleSidebar()
+								}}
 							>
 								<Menu className="h-4 w-4" />
-								<span className="sr-only">Open menu</span>
+								<span className="sr-only">Open sidebar</span>
 							</Button>
 						</TooltipTrigger>
-						<TooltipContent>Open menu</TooltipContent>
+						<TooltipContent>Open sidebar</TooltipContent>
 					</Tooltip>
 				</div>
 			)}
@@ -91,10 +87,7 @@ function DashboardContent() {
 				</p>
 
 				<div className="w-full mt-6 mb-2">
-					<Composer
-						conversationId={null}
-						placeholder="Describe what you need help with…"
-					/>
+					<Composer conversationId={null} />
 				</div>
 			</div>
 		</div>
