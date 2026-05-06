@@ -14,6 +14,12 @@ import {
 	IconDeviceDesktop,
 	IconRobot,
 	IconArrowLeft,
+	IconChevronDown,
+	IconBook,
+	IconChartBar,
+	IconSettings,
+	IconKey,
+	IconPlugConnected,
 } from '@tabler/icons-react'
 import {formatDistanceToNow} from 'date-fns'
 
@@ -23,7 +29,17 @@ import {cn} from '@/shadcn-lib/utils'
 import {trpcReact} from '@/trpc/trpc'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useAgentSocket, type ChatMessage} from '@/hooks/use-agent-socket'
+import {useCurrentUser} from '@/hooks/use-current-user'
 import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from '@/shadcn-components/ui/dropdown-menu'
 
 import {ChatMessageItem} from './chat-messages'
 import {ChatInput} from './chat-input'
@@ -36,6 +52,117 @@ const ComputerUsePanel = lazy(() => import('./computer-use-panel').then((m) => (
 
 type SidebarView = 'chat' | 'mcp' | 'skills' | 'agents'
 
+// ---------------------------------------------------------------------------
+// Profile button + dropdown — bottom of ConversationSidebar
+// ---------------------------------------------------------------------------
+function ProfileMenuButton({onSwitchToMcp}: {onSwitchToMcp: () => void}) {
+	const {username} = useCurrentUser()
+	const displayName = username || 'User'
+	const initial = displayName.charAt(0).toUpperCase()
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<button
+					className={cn(
+						'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5',
+						'bg-liv-background border border-liv-border',
+						'text-liv-foreground transition-colors',
+						'hover:bg-liv-accent hover:text-liv-accent-foreground',
+						'focus:outline-none focus-visible:ring-2 focus-visible:ring-liv-ring',
+					)}
+				>
+					{/* Avatar circle */}
+					<span
+						className={cn(
+							'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full',
+							'bg-liv-primary text-liv-primary-foreground text-sm font-semibold select-none',
+						)}
+					>
+						{initial}
+					</span>
+
+					{/* Display name */}
+					<span className='flex-1 truncate text-left text-sm font-medium'>
+						{displayName}
+					</span>
+
+					{/* Chevron */}
+					<IconChevronDown size={14} className='flex-shrink-0 text-liv-muted-foreground' />
+				</button>
+			</DropdownMenuTrigger>
+
+			<DropdownMenuContent
+				side='top'
+				align='start'
+				sideOffset={6}
+				className='w-56'
+			>
+				{/* General group */}
+				<DropdownMenuLabel className='text-xs text-liv-muted-foreground font-medium uppercase tracking-wider px-2 py-1'>
+					General
+				</DropdownMenuLabel>
+				<DropdownMenuGroup>
+					<DropdownMenuItem
+						onClick={onSwitchToMcp}
+						className='flex items-center gap-2 cursor-pointer'
+					>
+						<IconPlug size={15} className='flex-shrink-0' />
+						MCP
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						onClick={() => console.log('TODO: Knowledge Base')}
+						className='flex items-center gap-2 cursor-pointer'
+					>
+						<IconBook size={15} className='flex-shrink-0' />
+						Knowledge Base
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						onClick={() => console.log('TODO: Usage')}
+						className='flex items-center gap-2 cursor-pointer'
+					>
+						<IconChartBar size={15} className='flex-shrink-0' />
+						Usage
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						onClick={() => console.log('TODO: Integrations')}
+						className='flex items-center gap-2 cursor-pointer'
+					>
+						<IconPlugConnected size={15} className='flex-shrink-0' />
+						Integrations
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						onClick={() => console.log('TODO: Settings')}
+						className='flex items-center gap-2 cursor-pointer'
+					>
+						<IconSettings size={15} className='flex-shrink-0' />
+						Settings
+					</DropdownMenuItem>
+				</DropdownMenuGroup>
+
+				<DropdownMenuSeparator />
+
+				{/* Advanced group */}
+				<DropdownMenuLabel className='text-xs text-liv-muted-foreground font-medium uppercase tracking-wider px-2 py-1'>
+					Advanced
+				</DropdownMenuLabel>
+				<DropdownMenuGroup>
+					<DropdownMenuItem
+						onClick={() => console.log('TODO: Local .Env Manager')}
+						className='flex items-center gap-2 cursor-pointer'
+					>
+						<IconKey size={15} className='flex-shrink-0' />
+						Local .Env Manager
+					</DropdownMenuItem>
+				</DropdownMenuGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	)
+}
+
+// ---------------------------------------------------------------------------
+// ConversationSidebar
+// ---------------------------------------------------------------------------
 function ConversationSidebar({
 	conversations,
 	activeId,
@@ -58,73 +185,100 @@ function ConversationSidebar({
 	className?: string
 }) {
 	return (
-		<div className={cn('flex h-full w-64 flex-shrink-0 flex-col border-r border-border-default bg-surface-base', className)}>
-			<div className='flex items-center justify-between border-b border-border-default p-4'>
+		<div
+			className={cn(
+				'flex h-full w-64 flex-shrink-0 flex-col border-r border-liv-border bg-liv-background',
+				className,
+			)}
+		>
+			{/* Header */}
+			<div className='flex items-center justify-between border-b border-liv-border px-4 py-3.5'>
 				<div className='flex items-center gap-2'>
 					<div className='flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/30 to-blue-500/30'>
 						<IconBrain size={14} className='text-violet-400' />
 					</div>
-					<h2 className='text-body font-semibold text-text-primary'>Liv AI</h2>
-					<span className='rounded-full bg-surface-2 px-2 py-0.5 text-caption-sm font-medium text-text-secondary capitalize'>
+					<h2 className='text-sm font-semibold text-liv-foreground'>Liv AI</h2>
+					<span className='rounded-full bg-liv-muted px-2 py-0.5 text-xs font-medium text-liv-muted-foreground capitalize'>
 						{activeProvider}
 					</span>
 				</div>
 				<button
 					onClick={onNew}
-					className='rounded-radius-sm p-1.5 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+					className='rounded-lg p-1.5 text-liv-muted-foreground transition-colors hover:bg-liv-accent hover:text-liv-accent-foreground'
 					title='New conversation'
 				>
-					<IconPlus size={18} />
+					<IconPlus size={17} />
 				</button>
 			</div>
 
-			<div className='flex border-b border-border-default'>
+			{/* View tabs */}
+			<div className='flex border-b border-liv-border'>
 				<button
 					onClick={() => onViewChange('chat')}
-					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'chat' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					className={cn(
+						'flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors',
+						activeView === 'chat'
+							? 'border-b-2 border-liv-primary text-liv-foreground'
+							: 'text-liv-muted-foreground hover:text-liv-foreground',
 					)}
 				>
-					<IconMessageCircle size={14} />
+					<IconMessageCircle size={13} />
 					Chat
 				</button>
 				<button
 					onClick={() => onViewChange('mcp')}
-					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'mcp' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					className={cn(
+						'flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors',
+						activeView === 'mcp'
+							? 'border-b-2 border-liv-primary text-liv-foreground'
+							: 'text-liv-muted-foreground hover:text-liv-foreground',
 					)}
 				>
-					<IconPlug size={14} />
+					<IconPlug size={13} />
 					MCP
 				</button>
 				<button
 					onClick={() => onViewChange('agents')}
-					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'agents' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					className={cn(
+						'flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors',
+						activeView === 'agents'
+							? 'border-b-2 border-liv-primary text-liv-foreground'
+							: 'text-liv-muted-foreground hover:text-liv-foreground',
 					)}
 				>
-					<IconRobot size={14} />
+					<IconRobot size={13} />
 					Agents
 				</button>
 			</div>
 
+			{/* Chat conversation list */}
 			{activeView === 'chat' && (
 				<div className='flex-1 overflow-y-auto overflow-x-hidden p-2'>
 					{conversations.length === 0 && (
-						<p className='px-2 py-8 text-center text-caption text-text-tertiary'>No conversations yet</p>
+						<div className='flex flex-col items-center justify-center px-4 py-10 text-center'>
+							<IconMessageCircle size={24} className='mb-2 text-liv-muted-foreground/50' />
+							<p className='text-xs text-liv-muted-foreground'>
+								No conversations yet.
+								<br />
+								Start one below.
+							</p>
+						</div>
 					)}
 					{conversations.map((conv) => (
 						<button
 							key={conv.id}
 							onClick={() => onSelect(conv.id)}
-							className={cn('group mb-1 flex w-full items-center gap-2 rounded-radius-sm px-3 py-2.5 text-left transition-colors',
-								activeId === conv.id ? 'bg-surface-3 text-text-primary' : 'text-text-secondary hover:bg-surface-1 hover:text-text-primary'
+							className={cn(
+								'group mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors',
+								activeId === conv.id
+									? 'bg-liv-accent text-liv-accent-foreground'
+									: 'text-liv-muted-foreground hover:bg-liv-accent/60 hover:text-liv-accent-foreground',
 							)}
 						>
-							<IconMessageCircle size={16} className='flex-shrink-0' />
+							<IconMessageCircle size={15} className='flex-shrink-0' />
 							<div className='min-w-0 flex-1'>
-								<span className='block truncate text-body-sm'>{conv.title}</span>
-								<span className='text-caption-sm text-text-tertiary'>
+								<span className='block truncate text-sm'>{conv.title}</span>
+								<span className='text-xs text-liv-muted-foreground'>
 									{formatDistanceToNow(conv.updatedAt, {addSuffix: true})}
 								</span>
 							</div>
@@ -133,9 +287,9 @@ function ConversationSidebar({
 									e.stopPropagation()
 									onDelete(conv.id)
 								}}
-								className='hidden rounded p-0.5 text-text-tertiary hover:text-red-400 group-hover:block'
+								className='hidden rounded p-0.5 text-liv-muted-foreground hover:text-red-400 group-hover:block'
 							>
-								<IconTrash size={14} />
+								<IconTrash size={13} />
 							</button>
 						</button>
 					))}
@@ -145,10 +299,18 @@ function ConversationSidebar({
 			{(activeView === 'mcp' || activeView === 'skills' || activeView === 'agents') && (
 				<div className='flex-1' />
 			)}
+
+			{/* Bottom-left profile button */}
+			<div className='border-t border-liv-border p-2'>
+				<ProfileMenuButton onSwitchToMcp={() => onViewChange('mcp')} />
+			</div>
 		</div>
 	)
 }
 
+// ---------------------------------------------------------------------------
+// Main AiChat page
+// ---------------------------------------------------------------------------
 export default function AiChat() {
 	const [searchParams, setSearchParams] = useSearchParams()
 	const [input, setInput] = useState('')
@@ -450,23 +612,23 @@ export default function AiChat() {
 							? 'w-1/2 min-w-[360px]' : 'flex-1',
 					)}>
 						{isMobile && (
-							<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+							<div className='flex-shrink-0 border-b border-liv-border bg-liv-background px-4 py-3'>
 								<div className='flex items-center justify-between'>
 									<button
 										onClick={() => setSidebarOpen(true)}
-										className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+										className='flex h-11 w-11 items-center justify-center rounded-lg text-liv-muted-foreground transition-colors hover:bg-liv-accent hover:text-liv-accent-foreground'
 									>
 										<IconMenu2 size={20} />
 									</button>
 									<div className='flex items-center gap-2'>
-									<span className='text-body font-semibold text-text-primary'>Liv AI</span>
-									<span className='rounded-full bg-surface-2 px-2 py-0.5 text-caption-sm font-medium text-text-secondary capitalize'>
-										{activeProvider}
-									</span>
-								</div>
+										<span className='text-sm font-semibold text-liv-foreground'>Liv AI</span>
+										<span className='rounded-full bg-liv-muted px-2 py-0.5 text-xs font-medium text-liv-muted-foreground capitalize'>
+											{activeProvider}
+										</span>
+									</div>
 									<button
 										onClick={handleNewConversation}
-										className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+										className='flex h-11 w-11 items-center justify-center rounded-lg text-liv-muted-foreground transition-colors hover:bg-liv-accent hover:text-liv-accent-foreground'
 									>
 										<IconPlus size={18} />
 									</button>
@@ -475,7 +637,7 @@ export default function AiChat() {
 						)}
 
 						{/* WebSocket connection status indicator */}
-						<div className='flex items-center gap-2 border-b border-border-default bg-surface-base px-4 py-1.5'>
+						<div className='flex items-center gap-2 border-b border-liv-border bg-liv-background px-4 py-1.5'>
 							<span
 								className={cn(
 									'inline-block h-2 w-2 rounded-full',
@@ -484,7 +646,7 @@ export default function AiChat() {
 									agent.connectionStatus === 'disconnected' && 'bg-red-500',
 								)}
 							/>
-							<span className='text-caption-sm text-text-tertiary'>
+							<span className='text-xs text-liv-muted-foreground'>
 								{agent.connectionStatus === 'connected'
 									? 'Agent connected'
 									: agent.connectionStatus === 'reconnecting'
@@ -493,7 +655,7 @@ export default function AiChat() {
 							</span>
 							{agent.totalCost > 0 && (
 								<span
-									className='ml-auto text-caption-sm font-mono text-text-tertiary'
+									className='ml-auto text-xs font-mono text-liv-muted-foreground'
 									title={agent.usageStats ? `Input: ${agent.usageStats.inputTokens.toLocaleString()} tokens | Output: ${agent.usageStats.outputTokens.toLocaleString()} tokens | ${(agent.usageStats.durationMs / 1000).toFixed(1)}s` : undefined}
 								>
 									${agent.totalCost.toFixed(4)}
@@ -507,38 +669,46 @@ export default function AiChat() {
 							className='flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-3 md:p-6'
 						>
 							{displayMessages.length === 0 ? (
-								<div className='flex h-full flex-col items-center justify-center text-text-tertiary'>
-									<div className='mb-6 flex h-16 w-16 items-center justify-center rounded-radius-xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
-										<IconBrain size={32} className='text-violet-400' />
+								<div className='flex h-full flex-col items-center justify-center'>
+									{/* Hero card */}
+									<div className='w-full max-w-md rounded-2xl border border-liv-border bg-liv-card px-8 py-10 text-center shadow-sm'>
+										<div className='mb-5 flex justify-center'>
+											<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
+												<IconBrain size={32} className='text-violet-400' />
+											</div>
+										</div>
+										<h3 className='mb-3 text-xl font-semibold text-liv-foreground'>Liv</h3>
+										<TextEffect
+											as='p'
+											per='word'
+											preset='fade'
+											className='mb-6 text-sm text-liv-muted-foreground'
+										>
+											Your autonomous AI assistant. I can manage your server, Docker containers, run commands, create subagents, schedule tasks, and more.
+										</TextEffect>
+										<AnimatedGroup
+											preset='blur-slide'
+											className='flex flex-wrap justify-center gap-2'
+										>
+											{[
+												'Show system health',
+												'List subagents',
+												'Check Docker containers',
+												'Search memory',
+											].map((suggestion) => (
+												<button
+													key={suggestion}
+													onClick={() => setInput(suggestion)}
+													className={cn(
+														'rounded-full border border-liv-border bg-liv-muted px-3.5 py-1.5 text-xs font-medium text-liv-foreground',
+														'transition-colors hover:bg-liv-accent hover:text-liv-accent-foreground',
+													)}
+												>
+													{suggestion}
+												</button>
+											))}
+										</AnimatedGroup>
 									</div>
-									<h3 className='mb-2 text-heading-sm font-medium text-text-secondary'>Liv</h3>
-									<TextEffect
-										as='p'
-										per='word'
-										preset='fade'
-										className='max-w-md text-center text-body text-text-tertiary'
-									>
-										Your autonomous AI assistant. I can manage your server, Docker containers, run commands, create subagents, schedule tasks, and more.
-									</TextEffect>
-									<AnimatedGroup
-										preset='blur-slide'
-										className='mt-6 flex flex-wrap justify-center gap-2'
-									>
-										{[
-											'Show system health',
-											'List subagents',
-											'Check Docker containers',
-											'Search memory',
-										].map((suggestion) => (
-											<button
-												key={suggestion}
-												onClick={() => setInput(suggestion)}
-												className='rounded-radius-md border border-border-default bg-surface-base px-3 py-1.5 text-caption text-text-tertiary transition-colors hover:border-border-emphasis hover:bg-surface-1 hover:text-text-secondary'
-											>
-												{suggestion}
-											</button>
-										))}
-									</AnimatedGroup>
 								</div>
 							) : (
 								<div className='mx-auto max-w-3xl space-y-4'>
@@ -568,7 +738,7 @@ export default function AiChat() {
 
 					{/* Canvas panel -- desktop split-pane (hidden when computer use is active) */}
 					{canvasArtifact && !canvasMinimized && !isMobile && !isComputerUseActive && (
-						<Suspense fallback={<div className='flex w-1/2 items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+						<Suspense fallback={<div className='flex w-1/2 items-center justify-center'><IconLoader2 size={24} className='animate-spin text-liv-muted-foreground' /></div>}>
 							<div className='w-1/2 min-w-[360px]'>
 								<CanvasPanel
 									artifact={canvasArtifact}
@@ -581,7 +751,7 @@ export default function AiChat() {
 					{/* Canvas panel -- mobile full overlay (hidden when computer use is active) */}
 					{canvasArtifact && !canvasMinimized && isMobile && !isComputerUseActive && (
 						<Suspense fallback={null}>
-							<div className='fixed inset-0 z-50 bg-surface-base'>
+							<div className='fixed inset-0 z-50 bg-liv-background'>
 								<CanvasPanel
 									artifact={canvasArtifact}
 									onClose={() => setCanvasMinimized(true)}
@@ -594,7 +764,7 @@ export default function AiChat() {
 					{canvasArtifact && canvasMinimized && !isComputerUseActive && (
 						<button
 							onClick={() => setCanvasMinimized(false)}
-							className='absolute right-4 top-4 z-10 flex items-center gap-2 rounded-radius-lg border border-border-default bg-surface-1 px-3 py-2 text-body-sm font-medium text-text-secondary shadow-elevation-1 transition-all hover:bg-surface-2 hover:text-text-primary'
+							className='absolute right-4 top-4 z-10 flex items-center gap-2 rounded-xl border border-liv-border bg-liv-card px-3 py-2 text-sm font-medium text-liv-muted-foreground shadow-sm transition-all hover:bg-liv-accent hover:text-liv-accent-foreground'
 						>
 							<IconCode size={16} className='text-cyan-400' />
 							{canvasArtifact.title}
@@ -604,7 +774,7 @@ export default function AiChat() {
 					{/* SEC-01: Consent dialog before computer use starts */}
 					{needsConsent && (
 						<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm'>
-							<div className='mx-4 w-full max-w-sm rounded-radius-xl border border-border-default bg-surface-base p-6 shadow-elevation-3'>
+							<div className='mx-4 w-full max-w-sm rounded-2xl border border-liv-border bg-liv-card p-6 shadow-lg'>
 								{/* Icon */}
 								<div className='mb-4 flex justify-center'>
 									<div className='flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10'>
@@ -612,24 +782,24 @@ export default function AiChat() {
 									</div>
 								</div>
 								{/* Title */}
-								<h3 className='mb-2 text-center text-heading-md font-semibold text-text-primary'>
+								<h3 className='mb-2 text-center text-base font-semibold text-liv-foreground'>
 									AI wants to control your device
 								</h3>
 								{/* Description */}
-								<p className='mb-6 text-center text-body-sm text-text-secondary'>
+								<p className='mb-6 text-center text-sm text-liv-muted-foreground'>
 									The AI is requesting permission to use your mouse and keyboard. You can stop control at any time.
 								</p>
 								{/* Buttons */}
 								<div className='flex gap-3'>
 									<button
 										onClick={() => denyConsentMutation.mutate({conversationId: activeConversationId!})}
-										className='flex-1 rounded-radius-lg border border-border-default bg-surface-1 px-4 py-2.5 text-body-sm font-medium text-text-secondary transition-colors hover:bg-surface-2'
+										className='flex-1 rounded-xl border border-liv-border bg-liv-muted px-4 py-2.5 text-sm font-medium text-liv-foreground transition-colors hover:bg-liv-accent'
 									>
 										Deny
 									</button>
 									<button
 										onClick={() => grantConsentMutation.mutate({conversationId: activeConversationId!})}
-										className='flex-1 rounded-radius-lg bg-accent-primary px-4 py-2.5 text-body-sm font-medium text-white transition-colors hover:bg-accent-primary-hover'
+										className='flex-1 rounded-xl bg-liv-primary px-4 py-2.5 text-sm font-medium text-liv-primary-foreground transition-colors hover:opacity-90'
 									>
 										Allow
 									</button>
@@ -640,7 +810,7 @@ export default function AiChat() {
 
 					{/* Computer Use Panel -- desktop split-pane (takes priority over canvas) */}
 					{isComputerUseActive && !computerUseMinimized && !isMobile && (
-						<Suspense fallback={<div className='flex w-1/2 items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+						<Suspense fallback={<div className='flex w-1/2 items-center justify-center'><IconLoader2 size={24} className='animate-spin text-liv-muted-foreground' /></div>}>
 							<div className='w-1/2 min-w-[360px]'>
 								<ComputerUsePanel
 									conversationId={activeConversationId!}
@@ -656,7 +826,7 @@ export default function AiChat() {
 					{/* Computer Use Panel -- mobile full overlay */}
 					{isComputerUseActive && !computerUseMinimized && isMobile && (
 						<Suspense fallback={null}>
-							<div className='fixed inset-0 z-50 bg-surface-base'>
+							<div className='fixed inset-0 z-50 bg-liv-background'>
 								<ComputerUsePanel
 									conversationId={activeConversationId!}
 									screenshot={computerUseData?.screenshot || null}
@@ -672,7 +842,7 @@ export default function AiChat() {
 					{isComputerUseActive && computerUseMinimized && (
 						<button
 							onClick={() => setComputerUseMinimized(false)}
-							className='absolute right-4 top-4 z-10 flex items-center gap-2 rounded-radius-lg border border-border-default bg-surface-1 px-3 py-2 text-body-sm font-medium text-text-secondary shadow-elevation-1 transition-all hover:bg-surface-2 hover:text-text-primary'
+							className='absolute right-4 top-4 z-10 flex items-center gap-2 rounded-xl border border-liv-border bg-liv-card px-3 py-2 text-sm font-medium text-liv-muted-foreground shadow-sm transition-all hover:bg-liv-accent hover:text-liv-accent-foreground'
 						>
 							<IconScreenshot size={16} className='text-green-400' />
 							Computer Use
@@ -685,19 +855,19 @@ export default function AiChat() {
 			{activeView === 'mcp' && (
 				<div className='flex flex-1 flex-col overflow-hidden'>
 					{isMobile && (
-						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+						<div className='flex-shrink-0 border-b border-liv-border bg-liv-background px-4 py-3'>
 							<div className='flex items-center justify-between'>
-								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-lg text-liv-muted-foreground transition-colors hover:bg-liv-accent hover:text-liv-accent-foreground'>
 									<IconArrowLeft size={20} />
 								</button>
-								<span className='text-body font-semibold text-text-primary'>MCP Servers</span>
-								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+								<span className='text-sm font-semibold text-liv-foreground'>MCP Servers</span>
+								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-lg text-liv-muted-foreground transition-colors hover:bg-liv-accent hover:text-liv-accent-foreground'>
 									<IconMenu2 size={20} />
 								</button>
 							</div>
 						</div>
 					)}
-					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-liv-muted-foreground' /></div>}>
 						<McpPanel />
 					</Suspense>
 				</div>
@@ -705,19 +875,19 @@ export default function AiChat() {
 			{activeView === 'skills' && (
 				<div className='flex flex-1 flex-col overflow-hidden'>
 					{isMobile && (
-						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+						<div className='flex-shrink-0 border-b border-liv-border bg-liv-background px-4 py-3'>
 							<div className='flex items-center justify-between'>
-								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-lg text-liv-muted-foreground transition-colors hover:bg-liv-accent hover:text-liv-accent-foreground'>
 									<IconArrowLeft size={20} />
 								</button>
-								<span className='text-body font-semibold text-text-primary'>Skills</span>
-								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+								<span className='text-sm font-semibold text-liv-foreground'>Skills</span>
+								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-lg text-liv-muted-foreground transition-colors hover:bg-liv-accent hover:text-liv-accent-foreground'>
 									<IconMenu2 size={20} />
 								</button>
 							</div>
 						</div>
 					)}
-					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-liv-muted-foreground' /></div>}>
 						<SkillsPanel />
 					</Suspense>
 				</div>
@@ -725,19 +895,19 @@ export default function AiChat() {
 			{activeView === 'agents' && (
 				<div className='flex flex-1 flex-col overflow-hidden'>
 					{isMobile && (
-						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+						<div className='flex-shrink-0 border-b border-liv-border bg-liv-background px-4 py-3'>
 							<div className='flex items-center justify-between'>
-								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-lg text-liv-muted-foreground transition-colors hover:bg-liv-accent hover:text-liv-accent-foreground'>
 									<IconArrowLeft size={20} />
 								</button>
-								<span className='text-body font-semibold text-text-primary'>Agents</span>
-								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+								<span className='text-sm font-semibold text-liv-foreground'>Agents</span>
+								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-lg text-liv-muted-foreground transition-colors hover:bg-liv-accent hover:text-liv-accent-foreground'>
 									<IconMenu2 size={20} />
 								</button>
 							</div>
 						</div>
 					)}
-					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-text-tertiary' /></div>}>
+					<Suspense fallback={<div className='flex h-full items-center justify-center'><IconLoader2 size={24} className='animate-spin text-liv-muted-foreground' /></div>}>
 						<AgentsPanel />
 					</Suspense>
 				</div>
