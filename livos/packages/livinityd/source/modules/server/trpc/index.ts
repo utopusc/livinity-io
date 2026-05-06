@@ -64,6 +64,13 @@ import marketplaceRouter from './marketplace-router.js'
 // or agents-router. All 6 procedure paths added to httpOnlyPaths in
 // ./common.ts (same WS-reconnect-survival rationale as P85-UI / P86).
 import mcpRouter from './mcp-router.js'
+// v32-redo Stage 2b — conversations namespace. Six procedures
+// (list/get/create/delete/listMessages/appendMessage) wrapping the existing
+// ConversationsRepository + MessagesRepository (Phase 75-01). Powers the
+// ai-chat-suna sidebar feed + thread view + composer persistence path. All
+// 6 paths added to httpOnlyPaths in ./common.ts (mutations must survive
+// `systemctl restart livos` mid-restart per pitfall B-12 / X-04).
+import conversationsRouter from './conversations-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -107,6 +114,8 @@ const appRouter = router({
 	marketplace: marketplaceRouter,
 	// v32 Phase 84 — MCP single-source-of-truth namespace (Wave 3).
 	mcp: mcpRouter,
+	// v32-redo Stage 2b — conversations namespace (sidebar feed + thread view).
+	conversations: conversationsRouter,
 })
 
 export type AppRouter = typeof appRouter
