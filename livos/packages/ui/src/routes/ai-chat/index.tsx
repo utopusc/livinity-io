@@ -27,6 +27,7 @@ import {Drawer, DrawerContent} from '@/shadcn-components/ui/drawer'
 
 import {ChatMessageItem} from './chat-messages'
 import {ChatInput} from './chat-input'
+import {BytebotThumbnail} from './bytebot-thumbnail'
 
 const McpPanel = lazy(() => import('./mcp-panel'))
 const SkillsPanel = lazy(() => import('./skills-panel'))
@@ -565,6 +566,8 @@ export default function AiChat() {
 							onSlashAction={handleSlashAction}
 						/>
 					</div>
+
+					<BytebotThumbnail messages={agent.messages} />
 
 					{/* Canvas panel -- desktop split-pane (hidden when computer use is active) */}
 					{canvasArtifact && !canvasMinimized && !isMobile && !isComputerUseActive && (
