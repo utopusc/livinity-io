@@ -62,6 +62,19 @@ function extractImageFromOutput(output: string | undefined): string | null {
 					(block as Record<string, unknown>).type === 'image'
 				) {
 					const imgBlock = block as Record<string, unknown>
+					// LivOS MCP server format: {type:'image', data, mimeType}
+					if (typeof imgBlock.data === 'string') {
+						const mediaType =
+							typeof imgBlock.mimeType === 'string'
+								? imgBlock.mimeType
+								: typeof imgBlock.media_type === 'string'
+									? imgBlock.media_type
+									: 'image/png'
+						const raw = imgBlock.data as string
+						if (raw.startsWith('data:') || raw.startsWith('http')) return raw
+						return `data:${mediaType};base64,${raw}`
+					}
+					// Anthropic format: {type:'image', source:{data, media_type}}
 					const source = imgBlock.source as Record<string, unknown> | undefined
 					if (source?.data && typeof source.data === 'string') {
 						const mediaType = typeof source.media_type === 'string' ? source.media_type : 'image/png'
