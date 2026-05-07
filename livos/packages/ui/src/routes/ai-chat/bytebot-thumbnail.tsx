@@ -176,8 +176,8 @@ export function BytebotThumbnail({messages}: BytebotThumbnailProps) {
 					animate={{opacity: 1, y: 0}}
 					exit={{opacity: 0, y: 16}}
 					transition={{type: 'spring', damping: 22, stiffness: 200}}
-					className='fixed bottom-4 right-4 z-40 w-60 overflow-hidden rounded-lg border border-border-default bg-surface-base shadow-elevation-2'
-					style={{width: 240}}
+					className='fixed bottom-4 right-4 z-40 overflow-hidden rounded-lg border border-border-default bg-surface-base shadow-elevation-2'
+					style={{width: 400}}
 				>
 					{/* Header bar */}
 					<div className='flex items-center justify-between bg-surface-1/60 px-2 py-1'>
