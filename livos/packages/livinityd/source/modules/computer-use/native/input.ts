@@ -93,6 +93,52 @@ const MODIFIER_KEY_NAMES: ReadonlySet<string> = new Set([
 	'Menu',
 ])
 
+/**
+ * Common short-form key aliases the LLM agent tends to emit. Mapped to the
+ * nut-js Key enum names. Without this, agents that pass `Alt`, `Ctrl`,
+ * `Shift`, `Esc`, `Cmd`, etc. would hit `Unknown key name` errors despite
+ * those being well-understood key labels.
+ */
+const KEY_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+	Alt: 'LeftAlt',
+	Ctrl: 'LeftControl',
+	Control: 'LeftControl',
+	Shift: 'LeftShift',
+	Super: 'LeftSuper',
+	Meta: 'LeftSuper',
+	Cmd: 'LeftSuper',
+	Command: 'LeftSuper',
+	Win: 'LeftSuper',
+	Windows: 'LeftSuper',
+	Esc: 'Escape',
+})
+
+function normalizeKeyToken(token: string): string {
+	const trimmed = token.trim()
+	return KEY_ALIASES[trimmed] ?? trimmed
+}
+
+/**
+ * Expand a single key token into one or more nut-js Key enum names.
+ * Handles two LLM-common patterns:
+ *   - Combined string: `"Alt+F4"` → `["LeftAlt", "F4"]`.
+ *   - Aliased name: `"Alt"` → `["LeftAlt"]`.
+ *
+ * The combo-vs-sequence detection in `typeKeys` runs against the EXPANDED
+ * list, so an agent calling `keys: ["Alt+F4"]` gets the same combo behavior
+ * as `keys: ["LeftAlt", "F4"]`.
+ */
+function expandKeyToken(name: string): string[] {
+	if (name.includes('+')) {
+		return name
+			.split('+')
+			.map((part) => part.trim())
+			.filter((p) => p.length > 0)
+			.map(normalizeKeyToken)
+	}
+	return [normalizeKeyToken(name)]
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types (mirror 72-01 BYTEBOT_TOOLS schema field shapes verbatim).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -141,7 +187,16 @@ function resolveKey(name: string): Key {
 }
 
 function resolveKeys(names: readonly string[]): Key[] {
-	return names.map(resolveKey)
+	// Expand aliases & "Alt+F4"-style combined tokens BEFORE enum lookup so
+	// the agent's looser key vocabulary still resolves cleanly.
+	const expanded = names.flatMap(expandKeyToken)
+	return expanded.map(resolveKey)
+}
+
+/** Same as resolveKeys but returns the expanded NAME list — used by typeKeys
+ *  to detect combo-vs-sequence after expansion. */
+function expandKeyNames(names: readonly string[]): string[] {
+	return names.flatMap(expandKeyToken)
 }
 
 /**
@@ -193,6 +248,23 @@ export async function traceMouse(path: readonly Coords[], holdKeys?: readonly st
  * Click a mouse button N times at optional coordinates. Mirrors
  * `_clickMouseTool` (computer_click_mouse). When `coordinates` is undefined,
  * clicks at the current cursor position (per upstream).
+ *
+ * 2026-05-07 P79-07 — Two-strategy click for Mutter compatibility:
+ *
+ *   - **xdotool path** (no holdKeys): `xdotool mousemove --sync X Y click 1`.
+ *     `--sync` waits for the X server to acknowledge each event before
+ *     returning, which is what GNOME Shell + Mutter need to register a
+ *     click as a real button activation. nut-js' synthetic `mouse.click()`
+ *     fires XTestFakeButtonEvent without a sync flush; on Mutter this lets
+ *     the X event loop drop or coalesce the press/release pair so GTK
+ *     modal dialog buttons (Cancel, OK) never trigger their handlers.
+ *     `--clearmodifiers` releases stuck modifier state before the click and
+ *     restores it after — avoids accidental Shift+click etc.
+ *
+ *   - **nut-js path** (holdKeys present, OR xdotool fails/missing): the
+ *     original modifier-aware path. xdotool's `--clearmodifiers` is
+ *     incompatible with deliberately-held keys, so we keep nut-js for the
+ *     drag-with-modifier / shift-click case.
  */
 export async function clickMouse(opts: {
 	coordinates?: Coords
@@ -200,14 +272,74 @@ export async function clickMouse(opts: {
 	clickCount: number
 	holdKeys?: readonly string[]
 }): Promise<void> {
+	const count = Math.max(1, Math.floor(opts.clickCount))
+
+	if (!opts.holdKeys || opts.holdKeys.length === 0) {
+		const ok = await tryXdotoolClick(opts.button, count, opts.coordinates)
+		if (ok) return
+		// Fall through to nut-js — xdotool not installed or failed.
+	}
+
 	const btn = BUTTON_MAP[opts.button]
 	await withHeldKeys(opts.holdKeys, async () => {
 		if (opts.coordinates) {
 			await mouse.setPosition(new Point(opts.coordinates.x, opts.coordinates.y))
 		}
-		const count = Math.max(1, Math.floor(opts.clickCount))
 		for (let i = 0; i < count; i++) {
 			await mouse.click(btn)
+		}
+	})
+}
+
+/** xdotool button numbers — X11 convention. */
+const XDOTOOL_BUTTON: Record<ButtonName, string> = {
+	left: '1',
+	middle: '2',
+	right: '3',
+}
+
+/**
+ * Run an xdotool chain: optional sync mouse-move + click N times. Returns
+ * true on success, false on any failure (ENOENT / non-zero exit / spawn
+ * error). Never throws — caller falls back to nut-js path.
+ *
+ * Implemented via `child_process.spawn` (not `execFile`) so the existing
+ * vitest mock — which replaces `node:child_process` with a `spawn`-only
+ * surface — still loads this module.
+ */
+async function tryXdotoolClick(
+	button: ButtonName,
+	count: number,
+	coordinates: Coords | undefined,
+): Promise<boolean> {
+	const args: string[] = []
+	if (coordinates) {
+		args.push('mousemove', '--sync', String(coordinates.x), String(coordinates.y))
+	}
+	const btnNum = XDOTOOL_BUTTON[button]
+	if (count > 1) {
+		// 150ms inter-click delay matches upstream Bytebot's clickMouse loop
+		// (packages/bytebotd/src/computer-use/computer-use.service.ts:147).
+		args.push('click', '--clearmodifiers', '--repeat', String(count), '--delay', '150', btnNum)
+	} else {
+		args.push('click', '--clearmodifiers', btnNum)
+	}
+	return await new Promise<boolean>((resolve) => {
+		let settled = false
+		const settle = (ok: boolean) => {
+			if (settled) return
+			settled = true
+			resolve(ok)
+		}
+		try {
+			const child = spawn('xdotool', args, {
+				stdio: 'ignore',
+				env: process.env,
+			})
+			child.on('error', () => settle(false))
+			child.on('close', (code: number | null) => settle(code === 0))
+		} catch {
+			settle(false)
 		}
 	})
 }
@@ -322,11 +454,15 @@ export async function scroll(opts: {
  */
 export async function typeKeys(keys: readonly string[], delay?: number): Promise<void> {
 	if (keys.length === 0) return
-	const resolved = resolveKeys(keys)
+	// Expand aliases ("Alt" → "LeftAlt") and combined tokens ("Alt+F4" →
+	// ["LeftAlt","F4"]) BEFORE detecting combo-vs-sequence — modifier presence
+	// must be checked on the expanded list, not the raw input.
+	const expandedNames = expandKeyNames(keys)
+	const resolved = expandedNames.map(resolveKey)
 	const stepDelay = typeof delay === 'number' && delay > 0 ? delay : 0
 
-	const hasModifier = keys.some((name) => MODIFIER_KEY_NAMES.has(name))
-	const isSingleKey = keys.length === 1
+	const hasModifier = expandedNames.some((name) => MODIFIER_KEY_NAMES.has(name))
+	const isSingleKey = expandedNames.length === 1
 	if (hasModifier || isSingleKey) {
 		// Combo path: simultaneous press, optional gap, reverse-order release.
 		await keyboard.pressKey(...resolved)
