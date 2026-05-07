@@ -553,3 +553,30 @@ WHERE NOT EXISTS (
   SELECT 1 FROM agents a
   WHERE a.name = t.name AND a.user_id IS NULL
 );
+
+-- =========================================================================
+-- Phase 92 V33-WEBAPP-01 — webapps table (v33 milestone Wave 1 leaf).
+--
+-- Mirrored from migrations/2026-05-07-p92-webapps.sql so that boot's
+-- idempotent schema apply (initDatabase) materializes the table on every
+-- LivOS install without a separate runner. See that file for the full
+-- design-decision commentary (NOT NULL user_id, nullable title/favicon_url
+-- for extraction-failure persistence, position-only index).
+--
+-- P92 ships only the read-side metadata extractor + this table schema;
+-- the CRUD repo functions + tRPC procedures (`webapps.create / list /
+-- delete / update`) land with the P94 desktop UI dialog. Until then the
+-- table is intentionally write-empty.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS webapps (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  url         TEXT NOT NULL,
+  title       TEXT,
+  favicon_url TEXT,
+  position    INTEGER NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS webapps_user_position_idx
+  ON webapps(user_id, position);
