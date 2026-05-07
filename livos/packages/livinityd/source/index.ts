@@ -30,6 +30,7 @@ import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/ap
 // desktop-gateway middleware (server/index.ts) and the computerUse tRPC
 // router (computer-use/routes.ts) can reach a shared lifecycle owner.
 import {ComputerUseContainerManager} from './modules/computer-use/container-manager.js'
+import type {StreamManager} from './modules/streaming/stream-manager.js'
 import {getPool} from './modules/database/index.js'
 
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
@@ -134,6 +135,10 @@ export default class Livinityd {
 	// (initDatabase returns false). Consumers (desktop-gateway, computerUse
 	// tRPC router) gracefully no-op when undefined.
 	computerUseManager?: ComputerUseContainerManager
+	// Phase 93 — Streaming subsystem (T93-05 StreamManager). Optional because
+	// T93-11 wires the lifecycle in start(); this field is declared up-front so
+	// the /ws/stream/:id upgrade handler in server/index.ts can typecheck.
+	streamManager?: StreamManager
 	isBackupRestoreFirstStart = false
 
 	constructor({
