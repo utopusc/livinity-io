@@ -8,7 +8,8 @@
 - ✅ **v30.0 Livinity Broker Professionalization (incl. v30.5 informal scope)** — Phases 56-63 (shipped local 2026-05-04 via `--accept-debt`) — see [milestones/v30.0-ROADMAP.md](milestones/v30.0-ROADMAP.md)
 - ✅ **v31.0 Liv Agent Reborn** — Phases 64-79 (closed 2026-05-05 — P77+P78+P79 hot-fix wave shipped same day; bytebot MCP working end-to-end via host GNOME desktop)
 - ✅ **v32.0 AI Chat Ground-up Rewrite + Hermes Background Runtime** — Phases 80-91 (CODE-COMPLETE 2026-05-06 via autonomous wave-based dispatch; pending Mini PC UAT signoff — see [.planning/phases/91-uat-polish/UAT-CHECKLIST.md](phases/91-uat-polish/UAT-CHECKLIST.md))
-- ⏸ **(deferred) Backup & Restore** — paused, 8 phases / 47 BAK-* reqs defined in [milestones/v30.0-DEFINED/](milestones/v30.0-DEFINED/) (resumes as future slot e.g. v33.0)
+- 🟢 **v33.0 WebApp Launcher + Teach/Auto Modes** — Phases 92-98 (OPENED 2026-05-07; runs parallel with v32 UAT) — see [v33-DRAFT.md](v33-DRAFT.md)
+- ⏸ **(deferred) Backup & Restore** — paused, 8 phases / 47 BAK-* reqs defined in [milestones/v30.0-DEFINED/](milestones/v30.0-DEFINED/) (resumes as future slot e.g. v34+)
 
 ---
 
@@ -101,6 +102,50 @@ P87 (Hermes runtime) ───────────────────�
 - All 5 Hermes patterns ported at P87
 - Light theme REQUIRED, theme toggle at P89
 - Sacred `sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED throughout v32
+
+---
+
+### 🟢 v33.0 WebApp Launcher + Teach/Auto Modes (Active — Phases 92-98)
+
+**Goal:** Right-click desktop → "Add WebApp" → URL → auto-detected favicon + title → desktop icon. Click → host Chrome (existing user profile, NOT containerized) opens new window at URL → window-scoped VNC stream + v32 AI panel below with Watch/Teach/Auto/Chat modes. Teach mode records user actions as reusable skills; Auto mode runs goal-driven bytebot loop using skill-as-context, scoped to that one Chrome window via `xdotool --window <wid>`.
+
+**Source plan:** [v33-DRAFT.md](v33-DRAFT.md) (v2 — host-direct after user pivot away from per-WebApp containers).
+
+**Estimated effort:** 17-26 days solo (4-6h/day) — 3-5 weeks.
+
+**Phase summary:**
+
+- [ ] **Phase 92: WebApp Metadata Extractor** (V33-META-01..04) — livinityd tRPC `webapp.extractMetadata({url})` returns `{title, faviconUrl, description, ogImage}`. Redis cache 24h. URL validation (reject file://, javascript:, intranet IPs). Postgres `webapps` table migration. Files: `livos/packages/livinityd/source/modules/webapps/{metadata-extractor,trpc-router}.ts`.
+- [ ] **Phase 93: Host Chrome Window Manager + x11vnc** (V33-WIN-01..07) — Spike (0.5d): verify `x11vnc -id <wid>` works on Mutter; fallback `ffmpeg x11grab` cropped or maim-loop MJPEG. WebAppWindowManager class: spawn (`google-chrome --new-window`), focus (wmctrl+xdotool), close, list. Per-window x11vnc + websockify, port allocation in Redis `liv:webapp:ports`. App gateway middleware proxy. Chrome window-close detection auto-tears stream.
+- [ ] **Phase 94: Desktop "Add WebApp" Context Menu + Persistence** (V33-DESK-01..04) — Extend `desktop-context-menu.tsx` with new ContextMenuItem. AddWebAppDialog (URL input + metadata preview). WebAppIcon component renders alongside Docker apps via `app-grid.tsx`. tRPC `webapps.{create,list,delete,update}`.
+- [ ] **Phase 95: WebApp Stream Window + AI Panel + Mode Selector** (V33-STREAM-01..07) — New window content type `webapp-stream` registered with window manager. Vertical split: 70% react-vnc/noVNC connected to wsUrl, 30% v32 chat panel. Toolbar (back/forward/refresh/copy URL/fullscreen). Mode selector pill (Watch/Teach/Auto/Chat). Per-WebApp agent session via `LivAgentRunner` SSE. Postgres `webapp_agent_sessions`.
+- [ ] **Phase 96: Teach Mode — Action Recording** (V33-TEACH-01..07) — `useTeachRecorder` hook captures VNC client mouse/keyboard events. Screenshot every event + 1s heartbeat. Save dialog → POST `webapps.skills.create`. Postgres `webapp_skills` table (JSONB action log + screenshot blob refs). Skills sidebar UI. Replay scrubber (timeline w/ thumbnails).
+- [ ] **Phase 97: Auto Mode — Skill-Guided Bytebot, Window-Scoped** (V33-AUTO-01..07) — Extend native primitives (`screenshot.ts`, `input.ts`) with `windowId?: number` param: `maim -i <wid>`, `xdotool --window <wid> ...`. New tool `webapp_replay_skill({skillId, freeFormGoal?})`. Skill context builder injects `<previously-learned-skill>` block into agent system prompt. Per-WebApp bytebot MCP spawn with `BYTEBOT_TARGET_WINDOW_ID` env. Vision-validated stepping. Failure recovery (3 strikes → needs help). Sacred SHA UNTOUCHED — extensions through `LivAgentRunner` + `LivMcpClientManager`.
+- [ ] **Phase 98: UAT + Polish + Docs** (V33-UAT-01..03) — Full flow test: 3 WebApps (facebook/gmail/x), profile sharing verified, teach a skill in each, run auto mode, verify autonomy + needs-help recovery. Resource verification. WebApp delete cascade (skills + sessions). User docs `docs/webapp-launcher.md`. ROADMAP close + memory updates.
+
+**Dependency graph:**
+```
+P92 (metadata) ─┬─→ P94 (context menu) ─┐
+                │                         ├─→ P95 (stream window + AI panel) ─┬─→ P96 (teach mode) ─┐
+P93 (window mgr+vnc) ─────────────────────┘                                    │                      ├─→ P98 (UAT)
+                                                                               └─→ P97 (auto mode)   ─┘
+```
+
+**Wave plan (parallel execution):**
+- **Wave 1** (paralel — backend foundation): P92 + P93 — 2 paralel agents
+- **Wave 2** (single — UI gateway): P94
+- **Wave 3** (single — heaviest UI phase): P95
+- **Wave 4** (paralel — agent capabilities): P96 + P97 — 2 paralel agents
+- **Wave 5** (final): P98
+
+**Locked decisions for v33 entry** (per v33-DRAFT.md §4):
+- Host Chrome with `--new-window` per WebApp (no Docker containers — user explicit)
+- Shared user Chrome profile across WebApps (Google login persists)
+- Window discovery via xdotool title-poll (CDP deferred to v34)
+- Per-window streaming via `x11vnc -id <wid>` + websockify (with ffmpeg/maim fallback if Mutter blocks)
+- Single Mini PC user only in v33 (multi-user → v34)
+- AI panel reuses v32 chat components (no new chat surface)
+- Sacred `sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED throughout v33
 
 ---
 
