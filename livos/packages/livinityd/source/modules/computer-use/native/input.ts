@@ -36,6 +36,28 @@ import {spawn} from 'node:child_process'
 import {mouse, keyboard, Point, Key, Button} from '@nut-tree-fork/nut-js'
 
 /**
+ * 2026-05-07 P79-06 — Match upstream Bytebot's autoDelayMs config.
+ *
+ * nut-js's default `autoDelayMs` is 10ms — the gap inserted between
+ * press/release inside `mouse.click()` and `keyboard.pressKey()`. Upstream
+ * Bytebot sets this to 100ms in NutService's constructor:
+ *   github.com/bytebot-ai/bytebot
+ *   packages/bytebotd/src/nut/nut.service.ts:126-127
+ *
+ * 10ms is fine on upstream's Xvfb + xfwm4 combo (permissive synthetic-event
+ * delivery). On real GNOME Shell + Mutter (our deploy target), 10ms is too
+ * fast — GTK/GNOME modal dialogs miss the click as a button activation
+ * because mutter coalesces or filters press/release pairs that arrive
+ * faster than its input-grab cycle. Symptom: mouse moves to "Cancel"
+ * button, click events fire, but the dialog never closes.
+ *
+ * Module-level config (vs NutService constructor) because we don't have a
+ * class wrapping (D-NATIVE-06: pure functions, no NestJS).
+ */
+mouse.config.autoDelayMs = 100
+keyboard.config.autoDelayMs = 100
+
+/**
  * Sleep N milliseconds. Uses the global `setTimeout` so vitest fake timers
  * (`vi.useFakeTimers()`) can advance through the wait without real wall time.
  * Avoids `node:timers/promises` whose setTimeout is harder to fake in vitest.
@@ -45,6 +67,31 @@ function sleep(ms: number): Promise<void> {
 		setTimeout(resolve, ms)
 	})
 }
+
+/**
+ * Modifier keys recognized by nut-js. typeKeys uses this to decide between
+ * combo-press (modifier+key, e.g. Ctrl+C) and sequential-press (Tab,Tab,Tab).
+ * nut-js's `pressKey(...keys)` spread form internally builds an X11 modifier
+ * flag mask — it throws "Invalid key flag specified" when ALL keys are
+ * non-modifiers because no modifier flag can be derived. Sequential typing
+ * must use per-key press+release.
+ */
+const MODIFIER_KEY_NAMES: ReadonlySet<string> = new Set([
+	'LeftAlt',
+	'RightAlt',
+	'LeftShift',
+	'RightShift',
+	'LeftControl',
+	'RightControl',
+	'LeftSuper',
+	'RightSuper',
+	'LeftWin',
+	'RightWin',
+	'LeftCmd',
+	'RightCmd',
+	'Fn',
+	'Menu',
+])
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types (mirror 72-01 BYTEBOT_TOOLS schema field shapes verbatim).
@@ -255,21 +302,48 @@ export async function scroll(opts: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Press a sequence of keys as a combo (e.g. ['LeftControl','C'] = Ctrl+C).
- * Mirrors `_typeKeysTool` (computer_type_keys). Press in given order, release
- * in REVERSE order (modifier-last release).
+ * Press a sequence of keys. Mirrors `_typeKeysTool` (computer_type_keys).
  *
- * Optional `delay` (ms) inserted BETWEEN press and release; matches upstream
- * Bytebot's "delay between key presses" tooltip.
+ * Two modes, auto-detected:
+ *   - **Combo** (any modifier present, e.g. ['LeftControl','C'] or ['LeftAlt','F4']):
+ *     simultaneous press of all keys, optional delay, simultaneous release in
+ *     reverse order. Matches upstream Bytebot's `sendKeys`
+ *     (packages/bytebotd/src/nut/nut.service.ts:148-154).
+ *   - **Sequence** (all non-modifiers, e.g. ['Tab','Tab','Tab']):
+ *     per-key press+release loop with optional inter-key delay. nut-js'
+ *     `pressKey(...spread)` throws "Invalid key flag specified" when no
+ *     modifier is present, so a list of plain keys MUST be typed sequentially.
+ *     Matches upstream's `typeText` per-key pattern (nut.service.ts:228-232).
+ *
+ * Single-key calls always use the combo path (it's a no-op simplification).
+ *
+ * Optional `delay` (ms): in combo mode inserted BETWEEN press and release;
+ * in sequence mode inserted BETWEEN consecutive keys.
  */
 export async function typeKeys(keys: readonly string[], delay?: number): Promise<void> {
 	if (keys.length === 0) return
 	const resolved = resolveKeys(keys)
-	await keyboard.pressKey(...resolved)
-	if (typeof delay === 'number' && delay > 0) {
-		await sleep(delay)
+	const stepDelay = typeof delay === 'number' && delay > 0 ? delay : 0
+
+	const hasModifier = keys.some((name) => MODIFIER_KEY_NAMES.has(name))
+	const isSingleKey = keys.length === 1
+	if (hasModifier || isSingleKey) {
+		// Combo path: simultaneous press, optional gap, reverse-order release.
+		await keyboard.pressKey(...resolved)
+		if (stepDelay > 0) await sleep(stepDelay)
+		await keyboard.releaseKey(...[...resolved].reverse())
+		return
 	}
-	await keyboard.releaseKey(...[...resolved].reverse())
+
+	// Sequence path: per-key press+release. Each key is fully pressed and
+	// released before the next one starts.
+	for (let i = 0; i < resolved.length; i++) {
+		await keyboard.pressKey(resolved[i]!)
+		await keyboard.releaseKey(resolved[i]!)
+		if (stepDelay > 0 && i < resolved.length - 1) {
+			await sleep(stepDelay)
+		}
+	}
 }
 
 /**
