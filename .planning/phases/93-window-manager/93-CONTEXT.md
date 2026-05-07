@@ -1,188 +1,165 @@
-# Phase 93 — Host Chrome Window Manager + per-window x11vnc — CONTEXT
+# Phase 93: Streaming Subsystem + Window Manager — Context
 
 **Wave:** 1 (parallel with P92 metadata extractor)
-**Status:** Planning
-**Sacred SHA gate:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (`liv/packages/core/src/sdk-agent-runner.ts`) — MUST be unchanged before AND after this phase.
+**Status:** Planning (rewritten 2026-05-07 after streaming-subsystem research)
+**Effort:** L (4–7 days; ~14 tasks)
+**Sacred SHA gate:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` — `liv/packages/core/src/sdk-agent-runner.ts` UNTOUCHED before AND after every commit.
 
 ---
 
-## 1. Goal
+## Goal (1 sentence)
 
-Given `(userId, webappId, url)`, spawn a Chrome window on the host Mini PC against the user's existing Chrome profile, attach a per-window VNC stream to that window, and return a websocket URL the LivOS browser frontend can connect to. Provide a programmatic surface (`spawn` / `focus` / `close` / `list`) that Phase 95 (stream window UI) and Phase 94 (desktop launcher) call, plus an idle cleanup loop that tears down the VNC stack when the underlying Chrome window goes away.
-
-This is the backend window-manager primitive for the v33 WebApp launcher. No UI in this phase.
+Ship a livinityd-owned streaming subsystem that captures the Mini PC's host X11 display (full-desktop or per-window) as low-latency H264/fMP4, fans out to authenticated browser WebSocket subscribers, and exposes the lifecycle plus a Chrome WebApp window manager via tRPC for downstream phases (P95 stream window UI, P97 auto-mode bytebot).
 
 ---
 
-## 2. Why
+## Why this phase exists
 
-- v33 vision (DRAFT v2 §1): clicking a WebApp icon must open a real Chrome window on the Mini PC and stream that **single window** back to the LivOS browser. The host-Chrome direction was locked by the user to preserve the shared Google profile (D-V33-01).
-- P95 (stream window) and P97 (auto-mode bytebot loop with `--window <wid>` scoping) both depend on a stable `(webappId) → wid + vnc port + ws url` mapping. P93 owns that mapping.
-- P79 just landed maim + xdotool fixes for the host GNOME / Mutter display. P93 is the first phase to consume those fixes for a real product surface.
+The 0.5-day spike (recorded below in §"Spike outcome") proved that all standard per-window X11 capture tools (`x11vnc -id`, `maim -i`, `import -window`, `ximagesrc xid=N`) are broken under GNOME Shell + Mutter — Mutter's compositor does not expose per-window pixmaps to XGetImage / XRender. That breaks the original D-V33-03 design (one x11vnc per WebApp). The streaming-subsystem research (`.planning/research/streaming-subsystem/FINDINGS.md`) recommends Rank 1 — `ffmpeg x11grab → fMP4 H264 → Node WS fan-out` — as the production path: composited-framebuffer capture works, MSE latency tunes to 100–200ms, integration is pure Node `child_process.spawn` with no Python sidecar. The user explicitly locked Rank 1 plus the PipeWire-portal upgrade for true per-window in v33 (not deferred), and asked for every binary used by livinityd to be installed by `install.sh` so the system reproduces from scratch on a fresh Mini PC.
 
 ---
 
-## 3. In-scope
+## In-scope
 
-| Item | Detail |
-|------|--------|
-| **Spike (T93-00)** | Verify `x11vnc -id <wid>` produces a non-black VNC stream of a Chrome window on host Mutter. If black like scrot was, document and pick fallback (a) `ffmpeg -f x11grab` cropped via `-video_size WxH -i :0+X,Y` from window geometry, or (b) maim-loop → MJPEG. The fallback choice locks the spawn implementation for the rest of the phase. |
-| **`window-discovery.ts`** | Thin wrappers around `xdotool search`, `xdotool getwindowname`, `xdotool getwindowgeometry`, `wmctrl -l`, `wmctrl -ia`, `xprop -id`. Returns typed `{wid, title, x, y, w, h}`. Polls with timeout for "new window matching X" after a Chrome spawn. |
-| **`x11vnc-spawn.ts`** | Spawns + supervises one `x11vnc -id <wid> -rfbport <port> -localhost -shared -forever` per active webapp. If P93 spike fell back to ffmpeg/maim, this module owns that fallback instead. Owns websockify `<wsPort> localhost:<port>` companion process per stream. Returns a handle with `pid`, `port`, `wsPort`, `kill()`. |
-| **`window-manager.ts`** | The `WebAppWindowManager` class with `spawn`, `focus`, `close`, `list`. Owns the `liv:webapp:ports` Redis pool (range to be picked in spike — recommend 14200-14999 reusing v1's reserved range). Owns the in-memory `webappId → handle` map. Idle-cleanup poller: every 5s, for each tracked webapp, runs `xprop -id <wid>` — if the window is gone, tears down x11vnc + websockify and emits an event the gateway middleware can listen to. |
-| **`webapp-gateway-middleware.ts`** | Express middleware mounted on `/webapp-vnc/:webappId`. Looks up the websockify port for that webappId, http-proxies the WebSocket upgrade. Returns 404 if no handle (window already torn down). Auth: reuses livinityd JWT cookie / header check, must verify `webapps.userId === ctx.currentUser.id` before proxying. |
-| **Port allocator** | Redis sorted set `liv:webapp:ports`. `SPOP`-style allocate from a free pool; release on close. First-time init seeds 14200-14999. Allocation is keyed `(userId, webappId)` so a re-spawn of the same webapp reuses its prior port if still free. |
-| **tRPC surface** | `webapps.spawn`, `webapps.focus`, `webapps.close`, `webapps.list` in the existing webapps router (created in P92). Each method is a thin wrapper around the WebAppWindowManager class, scoped to `ctx.currentUser.id`. |
-| **Logging / observability** | `winston` (or whatever livinityd uses today) logs at INFO level on each spawn/close, ERROR on x11vnc/websockify exit, DEBUG on idle-cleanup ticks. No metrics export in this phase. |
-| **Vitest unit tests** | Mock-only tests for window-discovery output parsing (xdotool / wmctrl text → typed records), port allocator (Redis-mock), and the idle-cleanup state machine. Spawn integration is **not** unit-testable here — covered by the spike + P98 UAT walk on the Mini PC. |
-
----
-
-## 4. Out-of-scope
-
-- **No Docker.** User locked the v2 pivot away from per-WebApp containers (DRAFT §2). Anything container-shaped belongs in v34 power-user mode.
-- **No CDP / `--remote-debugging-port` path.** Deferred to v34 per D-V33-02.
-- **No UI.** P95 owns the stream window component; P94 owns the launcher icon.
-- **No multi-user logic.** v33 is single Mini PC user (`bruce`) per D-V33-07. Pass `userId` through but don't branch on it; current user is always the only user.
-- **No skill recording.** P96 owns teach mode. This phase only sets up the substrate it will record against.
-- **No bytebot integration.** P97 wires `--window <wid>` into the bytebot tools. P93 only ensures `wid` is reliably discoverable + retrievable via `list({userId})`.
-- **No Mini PC deploy.** Phase ships code; P98 owns the live UAT walk.
-- **No VNC client.** Frontend (P95) brings novnc / react-vnc; P93 only exposes the websocket endpoint.
+| # | Item | Detail |
+|---|------|--------|
+| **A** | `install.sh` updates | Extend `install_x11vnc` (or add a new `install_streaming_subsystem` step) to apt-install: `ffmpeg`, `ydotool`, `ydotoold`, `xdotool`, `maim`, `scrot`, `gnome-screenshot`, `x11vnc`, `websockify`, `vncsnapshot`, `gstreamer1.0-tools`, `gstreamer1.0-plugins-good`, `gstreamer1.0-plugins-bad`, `gstreamer1.0-plugins-ugly`, `xdg-desktop-portal-gnome`, `vainfo`, `intel-media-va-driver`, `libdrm-intel1`. Also write `/etc/systemd/system/ydotoold.service` (currently exists only manually on Mini PC). |
+| **B** | VAAPI capability detection | Boot-time `vainfo` probe in livinityd that records `{vaapi: boolean, encoder: 'h264_vaapi'\|'libx264'}` to Redis (`liv:streaming:caps`). Used by encoder-arg builder to pick `-c:v h264_vaapi` vs `libx264 -preset ultrafast -tune zerolatency`. Falls back gracefully if `vainfo` absent or returns no `VAEntrypointEncSlice` for H264. |
+| **C** | `StreamManager` class | `Map<streamId, StreamSession>` lifecycle. `startStream(opts) → {streamId, wsUrl}`, `stopStream(streamId)`, `listStreams({userId})`. Each `StreamSession` holds the encoder `ChildProcess`, `initSegment: Buffer \| null`, `subscribers: Set<WebSocket>`, `mode: 'desktop' \| 'window' \| 'pipewire'`, lastActivity timestamp. |
+| **D** | Full-desktop streaming source | `ffmpeg -f x11grab -framerate 30 -video_size 1920x1080 -i :0.0 -draw_mouse 1 [encoder args] -f mp4 -movflags +frag_keyframe+empty_moov+default_base_moof+separate_moof -reset_timestamps 1 pipe:1`. Parse fMP4 init segment (ftyp+moov) on first chunks, then broadcast each fragment (moof+mdat). |
+| **E** | Per-window streaming via PipeWire portal | Node calls `org.freedesktop.portal.ScreenCast` via `dbus-next` → `CreateSession` → `SelectSources(types=window)` → `Start` → portal returns PipeWire node ID + file descriptor. Spawn `gst-launch-1.0 fdsrc ! pipewiresrc ! videoconvert ! x264enc tune=zerolatency speed-preset=ultrafast ! mp4mux fragment-duration=200 streamable=true ! fdsink fd=1`. Pipe stdout into the same fan-out as D. |
+| **F** | WebSocket fan-out | Per-stream `Set<WebSocket>` subscribers. On subscriber connect: send buffered init segment, then live fragments. On encoder stdout chunk: parse fMP4 box boundaries, broadcast each complete moof+mdat pair to all subscribers. On encoder exit: terminate all subscriber sockets with code 1011. Backpressure: if subscriber `bufferedAmount > 4 MB`, drop and close that subscriber. |
+| **G** | tRPC procedures | `streams.{start, stop, list}` and `webapps.window.{spawn, focus, close, list}`. All scoped to `ctx.currentUser.id`. Routes added to `httpOnlyPaths` in `common.ts` (long-running). `streams.start({mode, target})` returns `{streamId, wsUrl}`. `webapps.window.spawn` calls Chrome + window-discovery + (optionally) `streams.start` chained. |
+| **H** | WS endpoint `/ws/stream/:id` | New WebSocket-upgrade handler in `livos/packages/livinityd/source/modules/server/index.ts`, mounted alongside existing `/ws/desktop`. JWT-from-query (and cookie fallback) auth identical to `/ws/desktop` block at line 856. Verifies stream belongs to `currentUser` before joining the subscriber set. |
+| **I** | `WebAppWindowManager` | `spawn({userId, webappId, url, expectedTitle})` → `google-chrome --new-window <url>` (NO `--user-data-dir`); xdotool title-poll within 5s using two-pass match (hostname → page title) with baseline-wid diff (D-93-07). `focus({webappId})` → `wmctrl -ia <wid>` + `xdotool windowactivate --sync <wid>`. `close({webappId})` tears down associated stream + (optionally) `xdotool windowkill <wid>`. `list({userId})` returns active records. Idle-cleanup loop (`xprop -id <wid>` poll every 5s) detects window-gone and cascades. |
+| **J** | Geometry-tracker fallback | If PipeWire portal unavailable (no GNOME portal session, headless install), per-window mode falls back to ffmpeg x11grab cropped via `-grab_x N -grab_y N -video_size WxH -i :0.0` (NOT the `+X,Y` syntax — confirmed broken on Mini PC ffmpeg version). Geometry refreshed by polling `xdotool getwindowgeometry --shell <wid>` every 200ms; restart encoder if geometry drift > 10px. |
+| **K** | Integration test | Vitest + spawn smoke: start stream → connect WS → assert init segment + ≥3 fragments received within 3s → stop → assert encoder PID gone + subscriber socket closed. Mocks ffmpeg via test fixture binary that emits a canned fMP4 byte sequence (no real X server in CI). |
 
 ---
 
-## 5. Dependencies
+## Out-of-scope
 
-| Source | What we consume | Why |
-|--------|-----------------|-----|
-| **P79 (shipped)** | maim works on Mutter, xdotool 3.x installed on Mini PC, ydotoold systemd unit attached as slave pointer | Window discovery + the maim fallback (if spike forces it) both inherit P79's host-display fixes. Without P79, none of this works. |
-| **P92 (parallel, Wave 1)** | `webapps` Postgres table with `(id, userId, url, title, faviconUrl)`, the `webapps` tRPC router | P93 adds `spawn/focus/close/list` to that same router. Title from P92 is the candidate match string when polling xdotool for the new Chrome window. |
-| **livinityd existing infra** | Express server, tRPC context with `currentUser`, ioredis client, JWT auth | Middleware mount point + Redis pool live in livinityd. |
-| **Mini PC host** (runtime, not code) | `google-chrome`, `xdotool`, `wmctrl`, `xprop`, `x11vnc`, `websockify`, `ffmpeg`, `maim` binaries on PATH | Spike confirms versions and fallback choice. Install commands captured in SUMMARY for the deploy script. |
-| **Memory: ZeroTier instability** | Spike must batch all SSH probes into ONE ssh invocation, log to file, detach long ops | Avoids fail2ban + ZT drop-mid-run failures. |
+| Boundary | Phase that owns it |
+|----------|--------------------|
+| VNC client component (react-vnc / @novnc/novnc) and the WebApp Stream Window UI | P95 |
+| Mode selector pill (Watch / Teach / Auto / Chat) and chat panel mounting | P95 |
+| Teach-mode action recording + screenshot storage | P96 |
+| Auto-mode bytebot loop with `--window <wid>` scoping | P97 |
+| Bytebot `screenshot.ts` / `input.ts` `windowId` parameter extension | P97 |
+| Mini PC live deploy and 2-hour stream-stability UAT | P98 |
+| `webapps` Postgres table and metadata extractor (URL → title/favicon/og) | P92 |
+| Multi-user per-user Chrome profiles | v34 |
+| CDP `--remote-debugging-port` window control | v34 |
+| WebRTC streaming upgrade (replacing fMP4 path while keeping `{streamId, wsUrl}` API) | v34 |
+| Edits to `liv/packages/core/`, the broker, or anything under `livos/packages/livinityd/source/modules/livinity-broker/` | NEVER (sacred) |
 
 ---
 
-## 6. Sacred constraints
+## Dependencies
+
+**Code (existing):**
+- `livos/packages/livinityd/source/modules/server/index.ts` (`/ws/desktop` block at line 856 is the auth pattern to mirror)
+- `livos/packages/livinityd/source/modules/computer-use/native/screenshot.ts` (the `execFile` + spawn-to-temp-file pattern this phase generalises to spawn-to-stdout-pipe)
+- `livos/packages/livinityd/source/modules/computer-use/native/input.ts` (xdotool / ydotool wrapping; same wrapper style for new `window-discovery.ts`)
+- `livos/packages/livinityd/source/modules/livinityd/livinityd.ts` (ioredis client, logger, JWT verifier — DI surface for StreamManager)
+- tRPC `common.ts` `httpOnlyPaths` array (memory: long-running routes hang if WebSocket-routed)
+
+**Code (created in P92, parallel wave):**
+- `livos/packages/livinityd/source/modules/webapps/trpc-router.ts` — append new methods here
+- `webapps` Postgres table — read-only; this phase doesn't migrate
+
+**Phases:**
+- **P79 (shipped 2026-05-07)** — maim works on Mutter, xdotool 3.x and ydotoold attached as slave pointer, gdm-restart sequence verified. Without P79's host-display fixes, ffmpeg x11grab returns black.
+- **P92 (Wave 1, parallel)** — `webapps` table + metadata. Title from P92 is the page-title string for window-discovery's two-pass match.
+
+**External binaries (apt packages — ALL must land in install.sh per scope item A):**
+
+```
+ffmpeg
+ydotool
+ydotoold              (binary inside `ydotool` package on Ubuntu 24.04; verify in spike)
+xdotool
+maim
+scrot
+gnome-screenshot
+x11vnc
+websockify
+vncsnapshot
+gstreamer1.0-tools                  (provides gst-launch-1.0)
+gstreamer1.0-plugins-good           (videoconvert, mp4mux, fdsrc/fdsink)
+gstreamer1.0-plugins-bad            (pipewiresrc)
+gstreamer1.0-plugins-ugly           (x264enc)
+xdg-desktop-portal-gnome            (D-Bus screencast portal)
+vainfo                              (VAAPI probe)
+intel-media-va-driver               (Intel iGPU VAAPI driver)
+libdrm-intel1                       (DRM userspace lib)
+```
+
+**Node packages (new):**
+- `dbus-next` — D-Bus client for the PipeWire screencast portal call.
+- (Optional) `mp4frag` — fMP4 box parser; can hand-roll instead. Decide in T93-04.
+
+**Runtime data:**
+- Redis keys this phase introduces: `liv:streaming:caps` (HASH — vaapi probe result), `liv:streaming:ports:ws` (SET — pre-seeded 14000–14199, 200 ports for stream-WS endpoints, though most streams reuse the single livinityd port via path parameter so this may be unused; document final decision in plan).
+
+---
+
+## Sacred constraints
 
 - `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED. Verify via `git hash-object` before AND after every commit in this phase.
-- Subscription-only. No raw `@anthropic-ai/sdk` or BYOK paths added (none expected; this phase is pure OS plumbing).
-- No edits to `liv/packages/core/`. P93 lives entirely in `livos/packages/livinityd/source/`.
-- No edits to broker (`livos/packages/livinityd/source/modules/livinity-broker/`).
-- No edits to `sdk-agent-runner` callers — bytebot scoping (windowId) is P97's lane.
-- No emoji unless the user explicitly authors it.
-- New code only — no rewrites of existing modules. Only the existing webapps router (P92) gets new tRPC methods appended.
+- Subscription-only: no raw `@anthropic-ai/sdk` paths, no BYOK key surfacing. (None expected — this is OS plumbing.)
+- No edits to `liv/packages/core/`, no edits to broker (`livos/packages/livinityd/source/modules/livinity-broker/`).
+- No Docker. Pure Node `child_process.spawn` orchestration. GStreamer is acceptable as a spawned `gst-launch-1.0` child; signaling and lifecycle stay in Node.
+- No Python sidecar (rules out Selkies-GStreamer Rank 2).
+- New code only — no rewrites of existing modules. `install.sh` and the existing `webapps` tRPC router (P92) are the only "modify" targets.
+- No emoji unless user explicitly authors it.
 
 ---
 
-## 7. Gray areas (decide during planning / spike)
+## Locked decisions
+
+| ID | Decision | Source |
+|----|----------|--------|
+| **D-93-01** | **Architecture pivot: single shared x11vnc on full `:0` is REJECTED in favor of the streaming subsystem** — `ffmpeg x11grab + fMP4/H264 + Node WS fan-out` (Rank 1). Per-window goes through PipeWire portal (D-93-04), not browser-side CSS clip of a shared full-desktop VNC. The original "Spike outcome" + "Architecture pivot" addenda below remain as historical context for the rejection of x11vnc-id. | Locked 2026-05-07 by user after FINDINGS.md review |
+| **D-93-02** | Latency budget: 100–200ms tuned MSE acceptable. ffmpeg flags `-fflags nobuffer -probesize 32 -analyzeduration 0 -tune zerolatency -preset ultrafast` (libx264 path) or `-tune zerolatency` equivalent for h264_vaapi. <100ms is NOT a v33 hard requirement; that lives in v34's optional WebRTC upgrade. | Locked 2026-05-07 by user (FINDINGS.md Open Question #1) |
+| **D-93-03** | VAAPI on the Mini PC's Intel iGPU is the preferred encoder. Boot-time `vainfo` probe stored in Redis. If `VAEntrypointEncSlice` for H264 absent → fall back to `libx264 -preset ultrafast -tune zerolatency`. Cap concurrent streams at 5 in the libx264-fallback path; 10 with VAAPI. | Derived from FINDINGS.md Open Question #3 + user lock on Rank 1 |
+| **D-93-04** | **True per-window via PipeWire screencast portal IS in v33** (not deferred). Implementation: `dbus-next` → `org.freedesktop.portal.ScreenCast` → `CreateSession`/`SelectSources(types=window)`/`Start` → consume PipeWire node ID via `gst-launch-1.0 ... pipewiresrc ... mp4mux fragment-duration=200 ! fdsink`. Geometry-tracker (J) is the FALLBACK for systems without portal. | Locked 2026-05-07 by user (FINDINGS.md Open Question #2) |
+| **D-93-05** | **Cursor visible in the streamed view** — ffmpeg `-draw_mouse 1` (its default). Bytebot's existing `captureScreenshot()` path remains cursor-less (different concern, different code path, no shared state). | Locked 2026-05-07 by user (FINDINGS.md Open Question #4) |
+| **D-93-06** | **Auth model: existing JWT-from-query-param pattern** (same as `/ws/desktop` at `livos/packages/livinityd/source/modules/server/index.ts:856`). NO public/unauthenticated mode. New `/ws/stream/:id` MUST: (a) read token from `searchParams.get('token')` with `LIVINITY_SESSION` cookie fallback, (b) `verifyToken()`, (c) verify the stream's owning userId matches the verified user. | Locked 2026-05-07 by user (FINDINGS.md Open Question #5) |
+| **D-93-07** | install.sh installs every binary used by livinityd. The user's words: "Install.sh ile bu butun servisler kurulmali." The full apt-package list lives in §"Dependencies" above. Also write the systemd unit for `ydotoold` (currently only on Mini PC by hand). | Locked 2026-05-07 by user |
+| **D-93-08** | Two-pass window discovery (hostname → page title from P92), baseline-wid diff to filter pre-existing windows. 5s timeout, 100ms poll. If both passes time out → throw `WINDOW_NOT_FOUND` + propagate to UI. | Carried over from prior CONTEXT D-93-06/D-93-07 |
+
+---
+
+## Gray areas / open questions
 
 | GA | Question | Resolution path |
 |----|----------|-----------------|
-| **GA-93-01** | Does `x11vnc -id <wid>` produce a non-black stream against host Mutter, or does Mutter's compositor hide the window's pixmap from XGetImage the same way it broke scrot? | **T93-00 spike** is the first task. Outcome locks the streamer choice (x11vnc vs ffmpeg-x11grab vs maim-loop MJPEG). Document in `93-SPIKE.md` and reference from SUMMARY. |
-| GA-93-02 | Window-discovery race: how long does Chrome take to make a `--new-window` visible to xdotool after spawn? | Spike measures wall-clock from `spawn()` → first xdotool match across 10 trials with 50ms poll. Set the production timeout to `max(observed) + 1s`, capped at 5s. |
-| GA-93-03 | Title-match strategy: URL hostname vs page `<title>`? Page title is racy (loads after window). | Match in two passes: pass 1 — title contains hostname (fast, racy-tolerant); pass 2 (after 1s) — title contains the page `<title>` from P92 metadata. Use the most specific matched window. |
-| GA-93-04 | What if the user already has 5 Chrome windows open and our spawn races against one of those? | Snapshot wid set BEFORE `chrome --new-window` spawns; match new wids only (set diff). Belt-and-braces with title match on top. |
-| GA-93-05 | Port range — reuse v1's reserved 14200-14999 or pick fresh? | Reuse 14200-14999. Document in SUMMARY. Note a separate ws-port range (14000-14199) for websockify so they don't collide. |
-| GA-93-06 | When Chrome window closes via user clicking ✕, x11vnc should die naturally (parent-window-gone). Does it? Or do we need active polling? | Spike T93-00 confirms via 1-minute observe loop. If x11vnc lingers, idle-cleanup poller (xprop every 5s) is the safety net. Either way the poller ships — it's also the recovery path for x11vnc segfaults. |
-| GA-93-07 | Auth on `/webapp-vnc/:webappId` — JWT in cookie (browser default) or signed query token? Browsers can't set custom headers on WebSocket upgrade requests. | Use the existing livinityd JWT cookie. WebSocket upgrade reuses cookie auth automatically. Verify P92 router uses the same. If cookie is httpOnly + same-origin, this is the cleanest path. |
-| GA-93-08 | `focus({webappId})` when the wid is gone (user closed it): error or auto-respawn? | Error with `{code: 'WINDOW_GONE', webappId}`. P95 catches and prompts user "Window was closed. Reopen?" → calls `spawn`. No silent respawn. |
-| GA-93-09 | x11vnc password / auth — should the VNC stream itself be authenticated, or do we trust localhost-only binding? | Trust `-localhost`. Only websockify (which we control) can connect. Frontend goes through gateway middleware which is JWT-authed. No VNC password. |
+| **GA-93-01** | `ydotoold` package vs binary location on Ubuntu 24.04 — is it inside `ydotool` package or separate? | T93-01 spike inside install.sh draft: `apt-cache search ydotoold` and `dpkg -L ydotool \| grep ydotoold`. Document, lock the install line. |
+| **GA-93-02** | Does `xdg-desktop-portal-gnome` work over SSH session / autostart for a logged-in `bruce` desktop? Portals normally require an active D-Bus user session. | T93-08 (PipeWire path) tries the call live; if `org.freedesktop.portal.Desktop` not on the session bus, fall back to geometry-tracker (J) and log it. |
+| **GA-93-03** | fMP4 box parsing — hand-roll or use `mp4frag`? mp4frag adds a dep but battle-tested for this exact use case. | Decide in T93-04. Default to `mp4frag` unless it pulls in heavy transitive deps. |
+| **GA-93-04** | Geometry-tracker encoder restart cost on window-move — ~300ms ffmpeg respawn likely visible as a freeze. Acceptable? | Yes for v33 fallback path (PipeWire is the primary). Document in T93-09 acceptance. |
+| **GA-93-05** | When VAAPI encode is active and Chrome is also using the iGPU for compositing, can we starve compositing? | T93-03 includes a cap-and-monitor: 10 streams hard limit on VAAPI; if `vainfo` post-load shows `BAD_RESOURCE`, kill newest stream + log. |
+| **GA-93-06** | Should `/ws/stream/:id` reuse the existing livinityd HTTP port (8080), or open a separate streaming port? | Reuse existing port. WebSocket path-routing handles multiplexing; opening a second port complicates Caddy/firewall. Lock in T93-05. |
+| **GA-93-07** | `streams.start` idempotency — if `(userId, mode, target)` matches an existing stream, return that one or spawn fresh? | Return existing (idempotent). Otherwise users hammering "play" spawn parallel encoders. Document in T93-03. |
+| **GA-93-08** | Subscriber backpressure threshold (4 MB chosen) — too aggressive for slow clients, too lax for fast ones? | Configurable via env `LIVOS_STREAM_BACKPRESSURE_BYTES`, default 4 MB. Document in T93-06. |
 
 ---
 
-## 8. Success criteria
+## Success criteria
 
 | # | Criterion | Verification |
 |---|-----------|--------------|
-| S1 | Spike outcome documented with picked streamer (x11vnc / ffmpeg / maim) + measured frame rate + memory per stream | `93-SPIKE.md` exists with curl/screenshot evidence, decision recorded in SUMMARY |
-| S2 | `WebAppWindowManager.spawn(...)` returns `{vncWsUrl, windowId, port}` within 6s for a fresh Chrome window | Vitest mock test asserts the return shape; live verification in P98 UAT |
-| S2b | `spawn` is idempotent: calling twice for the same `(userId, webappId)` while a window is alive returns the existing handle (focus, don't double-spawn) | Vitest with mocked window-discovery returning the same wid |
-| S3 | `WebAppWindowManager.focus({webappId})` activates the window via wmctrl + xdotool windowactivate; returns `{ok: true}` or `{code: 'WINDOW_GONE'}` | Vitest with mocked discovery; live verification in P98 |
-| S4 | `WebAppWindowManager.close({webappId})` kills x11vnc + websockify; Chrome window survives unless `xdotool windowkill` flag passed | Vitest verifies kill calls; live in P98 |
-| S5 | `WebAppWindowManager.list({userId})` returns active webapps with `{webappId, windowId, port, wsPort, status}` | Vitest |
-| S6 | `/webapp-vnc/:webappId` proxies WebSocket upgrade to local websockify; returns 404 when no active handle, 401 when no/wrong JWT | Vitest with supertest + mocked websockify |
-| S7 | Idle-cleanup poller tears down x11vnc + websockify within ≤6s of the underlying Chrome window closing | Vitest with mocked xprop returning "window gone" + fake timers |
-| S8 | Port allocator: `liv:webapp:ports` Redis SET seeded 14200-14999 (VNC) + 14000-14199 (websockify); allocation/release round-trips correctly under contention | Vitest with redis-mock, 50 concurrent allocate calls — no duplicate ports |
-| S9 | Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` unchanged before AND after every commit | `git hash-object` in CI-style verify block at end of each task |
-| S10 | `pnpm --filter livinityd build` / `npm run build` (whichever this package uses) exits 0 | Local build at end of phase |
-| S11 | Vitest suite for the four new modules exits 0 | `npm test --filter livinityd` or local equivalent |
-| S12 | Zero `liv:capabilities:*` Redis keys touched (post-P65 prefix is `liv:cap:*`); the only new prefix introduced by this phase is `liv:webapp:*` | grep check in verify block |
-
----
-
-## 9. Decisions (locked at planning time)
-
-| ID | Decision | Rationale |
-|----|----------|-----------|
-| D-93-01 | Spike comes FIRST as Task 93-00 — no implementation begins until streamer is picked | Picking wrong streamer means rewriting `x11vnc-spawn.ts`. Spike de-risks the whole phase. |
-| D-93-02 | Streamer fallback order: x11vnc-id → ffmpeg-x11grab cropped → maim-loop MJPEG | x11vnc native VNC is lowest-latency. ffmpeg gives MJPEG-over-HTTP fallback that any browser can render. maim-loop is last resort. |
-| D-93-03 | Single livinityd process owns `liv:webapp:ports`; no cross-process locking needed in v33 | v33 is single Mini PC user, single livinityd. Redis is the pool record-keeper, not a lock. |
-| D-93-04 | Port ranges: `14200-14999` VNC, `14000-14199` websockify | Reuses v1's reserved VNC range (no collisions with existing services). Websockify range is 200 ports — supports up to 200 concurrent webapps which is far above realistic usage. |
-| D-93-05 | Idle-cleanup poll interval = 5s | Matches DRAFT spec. Fast enough to feel responsive, slow enough to keep CPU near zero (5 webapps × 1 xprop call / 5s). |
-| D-93-06 | Title-match for window discovery uses two-pass: (1) hostname, (2) page title from P92 metadata if step 1 returns multiple | Hostname is in title from frame 0 of Chrome's page load. Page title arrives later. Two-pass minimizes false matches without depending on page-load timing. |
-| D-93-07 | Snapshot wid set before spawn → diff after spawn → match within new wids only | Eliminates "user already has facebook.com open in another window" false-match. |
-| D-93-08 | tRPC routes added to existing webapps router from P92 — no new router file | One router per Postgres table. |
-| D-93-09 | Auth on `/webapp-vnc/:webappId`: livinityd JWT cookie. Verify webapp belongs to `currentUser.id` before proxying. | Standard livinityd auth. No new mechanism. |
-| D-93-10 | No VNC password (`-rfbauth`); rely on `-localhost` binding + gateway JWT | Defense-in-depth via two layers (loopback bind + JWT) is sufficient for single-user host. |
-| D-93-11 | `close({webappId})` does NOT kill the Chrome window by default; only kills the streamer stack | Chrome window is the user's. They close it via Chrome ✕. P95 may pass `{killWindow: true}` when user clicks the LivOS shell ✕. |
-| D-93-12 | Chrome spawned via `google-chrome --new-window <url>` — NO `--user-data-dir` flag | Per D-V33-01: shared profile is the user's hard requirement. |
-| D-93-13 | All four new files live under `livos/packages/livinityd/source/modules/webapps/` (window-manager, x11vnc-spawn, window-discovery) and `…/source/server/` (webapp-gateway-middleware) | Matches DRAFT §5 file list verbatim. |
-| D-93-14 | One commit per task (T93-00 ships `93-SPIKE.md` + decisions; subsequent tasks ship code) | Matches Phase 91 commit cadence. |
-
----
-
-## 10. Out of scope (explicit non-goals)
-
-- Any UI work (P94, P95).
-- Bytebot windowId scoping (P97 owns native primitive extension).
-- Skill recording (P96).
-- Multi-user / per-user Chrome profiles.
-- CDP-based window control.
-- WebRTC streaming.
-- Touching `liv/packages/core/` or the broker.
-- Mini PC deploy / live UAT (P98 owns).
-- Postgres migrations beyond what P92 already adds (this phase reads `webapps` rows but doesn't add columns).
-
----
-
-## 11. Files this phase creates / modifies
-
-**New files** (per DRAFT §5 verbatim):
-- `livos/packages/livinityd/source/modules/webapps/window-manager.ts`
-- `livos/packages/livinityd/source/modules/webapps/x11vnc-spawn.ts`
-- `livos/packages/livinityd/source/modules/webapps/window-discovery.ts`
-- `livos/packages/livinityd/source/server/webapp-gateway-middleware.ts`
-- `.planning/phases/93-window-manager/93-SPIKE.md` (spike artifact)
-- `.planning/phases/93-window-manager/93-SUMMARY.md` (after work lands)
-- Vitest spec files alongside each module (e.g. `window-discovery.test.ts`, `port-allocator.test.ts`).
-
-**Modified files**:
-- The existing webapps tRPC router from P92 — add four methods (`spawn`, `focus`, `close`, `list`). Filename TBD by P92; expected `livos/packages/livinityd/source/modules/webapps/trpc-router.ts`.
-- The livinityd Express server entry — mount `webapp-gateway-middleware`. Existing file (no creation).
-- `httpOnlyPaths` in tRPC `common.ts` if any of the four new tRPC methods need HTTP-only routing per the memory note (likely yes — `spawn` is long-running).
-
----
-
-## 12. Risk register (phase-local)
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| x11vnc returns black on Mutter (same root cause as scrot pre-P79) | M | H | Spike T93-00 catches it. Fallback is ffmpeg-x11grab (already verified to work for screen capture in non-Mutter environments). |
-| Window-discovery race — chrome new-window not visible to xdotool within 5s timeout | M | M | Spike measures actual timing. Snapshot-wid-set-then-diff catches the case even if title polling lags. |
-| websockify version pin drift on Mini PC | L | L | Capture exact version in `93-SPIKE.md`. P98 UAT verifies. |
-| `xdotool windowactivate` doesn't focus across virtual desktops | L | M | wmctrl `-ia` does the desktop switch first; xdotool finishes the focus. Both run in `focus()`. |
-| Port allocator races between two near-simultaneous spawns | L | M | Redis `SPOP` is atomic. Tests cover 50-way concurrent allocate. |
-| ZeroTier flap mid-spike causes false negatives | M | M | Per memory: batch all probes into ONE ssh invocation, run via `nohup …  &` with file log, poll log offline. |
-| Sacred SHA drift via accidental import re-export | L | H | `git hash-object` gate before AND after every task. Reviewed in commit message. |
-
----
-
-## 13. Notes
-
-- The user has explicitly OK'd `bytebot operates on host display` (P79) and the v2 pivot's "no Docker in v33" rule. We follow that.
-- This phase is the most uncertain in v33 because of GA-93-01. If the spike fails outright (none of x11vnc / ffmpeg / maim work), the phase escalates to user with the recorded evidence; we do NOT silently work around — too much downstream depends on a working stream.
-- Phase 91 set the precedent that the spike artifact (SPIKE.md) lives alongside SUMMARY.md inside the phase directory; we follow that.
+| **S1** | `install.sh` installs all 18 apt packages from §Dependencies AND writes `/etc/systemd/system/ydotoold.service` AND enables it on a fresh Ubuntu 24.04 Mini PC. | `bash livos/install.sh` on a clean VM/container; post-install `systemctl is-enabled ydotoold` returns `enabled`; `which ffmpeg gst-launch-1.0 dbus-send vainfo` all succeed. |
+| **S2** | VAAPI capability detection runs at livinityd boot; result in Redis `liv:streaming:caps`; encoder-arg builder selects `h264_vaapi` if present, else `libx264`. | Vitest with mocked `execFile` returning canned `vainfo` output (one PASS, one FAIL fixture); inspect built argv. |
+| **S3** | `StreamManager.startStream({mode: 'desktop'})` returns `{streamId, wsUrl}` within 1s and `subscribers.size === 0`; ffmpeg ChildProcess exists and is alive. | Vitest with stubbed spawn. |
+| **S4** | A WS subscriber connecting to `/ws/stream/:id` receives the buffered init segment as the FIRST binary frame, then ≥3 media fragments within 3s. | Vitest integration with fixture-binary fake-encoder emitting canned fMP4 bytes. |
+| **S5** | `StreamManager.stopStream(id)` SIGTERMs the encoder, escalates to SIGKILL after 2s, closes all subscriber sockets with WS close code 1011, removes the session from the map. | Vitest with EventEmitter stubs + fake timers. |
+| **S6** | tRPC `webapps.window.spawn({url, webappId})` calls Chrome, finds the window via two-pass match within 5s, returns `{windowId, streamId, wsUrl}`. Idempotent: second call with same `webappId` and a still-alive window returns the existing handle. | Vitest with mocked discovery + manager. |
+| **S7** | `/ws/stream/:id` rejects connections without a JWT (401), with an invalid JWT (401), and with a JWT that does not own the stream (404). | Vitest with supertest + a stub StreamManager + a fixture verifyToken. |
+| **S8** | PipeWire portal path: when `dbus-next` succeeds in calling `org.freedesktop.portal.ScreenCast.CreateSession`, GStreamer pipeline is spawned with the returned PipeWire node ID and emits fMP4 fragments. | Vitest mocks the dbus-next surface; a separate manual smoke (T93-13) validates against the real Mini PC if the user enables it during P98 UAT. |
+| **S9** | Geometry-tracker fallback: when portal returns "no such interface" (the simulated absence), the manager falls back to `ffmpeg x11grab -grab_x -grab_y` cropped, and restarts ffmpeg when `xdotool getwindowgeometry` reports >10px drift. | Vitest with mocked discovery driving simulated drift. |
+| **S10** | `liv/packages/core/src/sdk-agent-runner.ts` SHA equals `f3538e1d811992b782a9bb057d1b7f0a0189f95f` before AND after every commit. | `git hash-object` in each task's verify block. |
 
 ---
 
@@ -213,20 +190,4 @@ The 0.5-day spike (T93-00 in PLAN) was run early via Mini PC SSH with these resu
 - **Per-window `wmctrl windowactivate --sync <wid>`** when WebApp icon clicked, so the focused window is in the foreground of the cropped region.
 - **Privacy disclaimer** (D-V33-07 single-user scope makes this acceptable for v33): the underlying VNC stream contains the entire desktop. The crop is a CLIENT-SIDE convenience, not a security boundary. v34 multi-user upgrade will need per-WebApp ffmpeg cropped MJPEG OR per-WebApp Xvfb display (architectural change deferred).
 
-## Task list adjustments
-
-The original 9-task PLAN (T93-00..T93-08) is revised:
-
-- **T93-00 (spike)** — DONE pre-execution. Outcome documented above. The spike task remains in PLAN as a pointer to this CONTEXT addendum.
-- **T93-01..T93-04 (per-window x11vnc)** — REPLACED by new tasks centered on the single shared daemon + geometry-tracking + browser crop. Specifically:
-  - Single shared x11vnc systemd unit
-  - WebAppWindowManager class (spawn / focus / close / list — same surface, but spawn now JUST runs `chrome --new-window` + xdotool poll + record geometry; no per-WebApp x11vnc)
-  - Geometry-tracker: per-WebApp `xdotool getwindowgeometry <wid>` poll loop, emits over SSE
-  - websockify single instance bridging the shared x11vnc port
-- **T93-05..T93-08** — UNCHANGED (gateway middleware, idle-cleanup detection, tRPC `webapps.spawn/focus/close/list`, summary).
-
-The PLAN file SHOULD be updated to reflect the new task numbering when execution begins. For now this addendum is the source of truth — executor must read both PLAN.md AND this addendum.
-
-## Open question for user
-
-The single-shared-x11vnc + client-crop architecture means **the user's other windows are technically streamed** (just hidden by CSS clip). For single-user Mini PC v33 scope, this is acceptable. **Confirm**: ship v33 with this constraint, document it in `docs/webapp-launcher.md` (P98), and plan v34 multi-user privacy upgrade as a follow-on milestone?
+> **2026-05-07 follow-on** — the user reviewed `.planning/research/streaming-subsystem/FINDINGS.md` and **superseded** the single-shared-x11vnc + browser-crop pivot with the streaming subsystem (Rank 1 ffmpeg fMP4 + Node WS fan-out) AND scoped the PipeWire portal per-window path INTO v33. The "Spike outcome" + this section remain as the historical record of why x11vnc-id was rejected; the active architecture is D-93-01 through D-93-08 in §"Locked decisions".
