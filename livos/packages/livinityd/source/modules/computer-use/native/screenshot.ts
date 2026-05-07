@@ -47,27 +47,67 @@ export interface ScreenshotResult {
 /**
  * Capture a PNG screenshot of the host X server.
  *
+ * 2026-05-07 P79-05: Two-strategy chain — `maim` primary, `scrot` fallback.
+ *
+ * Diagnosis: live testing on Mini PC's GNOME Shell (Ubuntu 24.04, X11,
+ * Mutter compositor) showed `scrot` returning 100% pure-black 6 KB PNGs
+ * across both bruce and root contexts. `gnome-screenshot` couldn't reach
+ * the Shell D-Bus interface (session was online but inactive) and its
+ * X11 fallback path returned the same black frame. `ffmpeg -f x11grab`
+ * (same XGetImage backend) also returned black. `ffmpeg -f kmsgrab`
+ * failed with DRM_PRIME mapping errors on the Intel iGPU.
+ *
+ * The tool that worked: **`maim`** (5.7.4) — uses XCB directly with a
+ * different XGetImage path than scrot's imlib2-based one. Returned a
+ * proper 489 KB / >10000 unique-color PNG of the actual desktop. We make
+ * it the primary strategy and keep scrot as a fallback for non-composited
+ * environments or systems where maim is unavailable.
+ *
  * 2026-05-05 P79-04: Switched from `@nut-tree-fork/nut-js` (libnut native
- * binding) to `scrot` subprocess. Live test on Mini PC showed nut-js
- * returning blank/white frames inside the bytebot stdio child context,
- * even with correct DISPLAY/XAUTHORITY env. scrot reliably captures the
- * real X11 framebuffer with the same env. Cost: ~30-50ms subprocess fork
- * vs nut-js's in-process. Acceptable for screenshot tool latency.
+ * binding) to `scrot` subprocess. nut-js returned blank/white frames
+ * inside the bytebot stdio child context even with correct
+ * DISPLAY/XAUTHORITY env.
  *
  * Width/height parsed from PNG IHDR chunk header (bytes 16-23, big-endian
  * uint32 each) — avoids extra subprocess for xrandr.
  *
  * Returns: {base64, width, height, mimeType: 'image/png'}
  *
- * Throws clear errors when scrot is missing or DISPLAY unreachable.
+ * Throws clear errors when both strategies fail.
  */
 export async function captureScreenshot(): Promise<ScreenshotResult> {
 	const filename = randomUUID()
 	const dir = tmpdir()
 	const tempPath = join(dir, `${filename}.png`)
 
+	let primaryError: string | null = null
+
+	// Strategy 1: maim. XCB-based capture; works on composited GNOME Shell
+	// (X11) where scrot's imlib2-based XGetImage returns black.
 	try {
-		// `-z` (silent), `-o` (overwrite). Honours DISPLAY/XAUTHORITY env.
+		await execFileAsync('maim', [tempPath], {
+			env: process.env,
+			timeout: 10_000,
+		})
+		const buffer = await readFile(tempPath)
+		// Sanity guard: a real 1920×1080 desktop PNG is typically > 30 KB; an
+		// all-black PNG of the same dimensions compresses to ~6 KB via RLE.
+		// If maim somehow produced a uniform-pixel image, fall through to
+		// scrot rather than returning a useless black frame.
+		if (buffer.byteLength >= 10_000) {
+			await safeUnlink(tempPath)
+			return parsePngResult(buffer)
+		}
+		primaryError = `maim produced suspiciously small file (${buffer.byteLength} bytes — likely uniform pixels)`
+	} catch (err: unknown) {
+		primaryError = err instanceof Error ? err.message : String(err)
+	}
+	await safeUnlink(tempPath)
+
+	// Strategy 2: scrot fallback. `-z` (silent), `-o` (overwrite). Honours
+	// DISPLAY/XAUTHORITY env. Kept for environments where maim isn't
+	// installed (older systems, minimal containers).
+	try {
 		await execFileAsync('scrot', ['-z', '-o', tempPath], {
 			env: process.env,
 			timeout: 10_000,
@@ -75,37 +115,41 @@ export async function captureScreenshot(): Promise<ScreenshotResult> {
 	} catch (err: unknown) {
 		const message = err instanceof Error ? err.message : String(err)
 		throw new Error(
-			`scrot screenshot failed (DISPLAY=${process.env.DISPLAY ?? '<unset>'}): ${message}`,
+			`Both screenshot strategies failed (DISPLAY=${process.env.DISPLAY ?? '<unset>'}). ` +
+				`maim: ${primaryError}; scrot: ${message}`,
 		)
 	}
 
 	try {
 		const buffer = await readFile(tempPath)
-		// PNG IHDR chunk: header = 8 bytes signature + 4 length + 4 type ('IHDR') + 4 width + 4 height
-		// Bytes 16-19 = width (BE u32), bytes 20-23 = height (BE u32).
-		const width = buffer.readUInt32BE(16)
-		const height = buffer.readUInt32BE(20)
-		return {
-			base64: buffer.toString('base64'),
-			width,
-			height,
-			mimeType: 'image/png',
-		}
+		return parsePngResult(buffer)
 	} finally {
-		// Best-effort cleanup. Swallow ENOENT; rethrow real errors.
-		try {
-			await unlink(tempPath)
-		} catch (err: unknown) {
-			if (
-				err &&
-				typeof err === 'object' &&
-				'code' in err &&
-				(err as {code: unknown}).code === 'ENOENT'
-			) {
-				// fine — file already gone
-			} else {
-				throw err
-			}
-		}
+		await safeUnlink(tempPath)
+	}
+}
+
+/** Parse PNG IHDR width/height and wrap as ScreenshotResult. */
+function parsePngResult(buffer: Buffer): ScreenshotResult {
+	// PNG IHDR chunk: header = 8 bytes signature + 4 length + 4 type ('IHDR') + 4 width + 4 height
+	// Bytes 16-19 = width (BE u32), bytes 20-23 = height (BE u32).
+	const width = buffer.readUInt32BE(16)
+	const height = buffer.readUInt32BE(20)
+	return {
+		base64: buffer.toString('base64'),
+		width,
+		height,
+		mimeType: 'image/png',
+	}
+}
+
+/** Best-effort temp-file cleanup. Swallows all errors — cleanup must never
+ *  break the screenshot return value. */
+async function safeUnlink(path: string): Promise<void> {
+	try {
+		await unlink(path)
+	} catch {
+		// Ignore. ENOENT is normal (strategy 1 may have already cleaned up,
+		// or never created the file). Other errors here would just leak a
+		// temp file — not worth crashing the screenshot path.
 	}
 }
