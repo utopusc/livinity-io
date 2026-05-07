@@ -981,6 +981,90 @@ class Server {
 					return
 				}
 
+				// ── Phase 93 — Streaming Subsystem WS Endpoint ────────────
+				// /ws/stream/<streamId> attaches a browser to the StreamManager's
+				// per-stream Fmp4Fanout. JWT-from-query auth (LIVINITY_SESSION
+				// cookie fallback) per D-93-06. Ownership check: stream's owning
+				// userId must match the verified token's user. 404 (NOT 403) on
+				// foreign stream-id lookups to avoid existence leak (STRIDE I).
+				if (pathname.startsWith('/ws/stream/')) {
+					// 1. Extract streamId from path
+					const streamIdMatch = pathname.match(/^\/ws\/stream\/([0-9a-f-]+)$/i)
+					if (!streamIdMatch) {
+						this.logger.verbose('WS stream rejected: malformed streamId in path')
+						socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					const streamId = streamIdMatch[1]
+
+					// 2. JWT auth (token from query param or LIVINITY_SESSION cookie)
+					let streamToken = searchParams.get('token')
+					if (!streamToken) {
+						const cookieHeader = request.headers.cookie || ''
+						const sessionMatch = cookieHeader.match(/LIVINITY_SESSION=([^;]+)/)
+						if (sessionMatch) streamToken = sessionMatch[1]
+					}
+					if (!streamToken) {
+						this.logger.verbose(`WS stream ${streamId} rejected: no token`)
+						socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					const streamPayload = await this.verifyToken(streamToken).catch(() => null)
+					if (!streamPayload) {
+						this.logger.verbose(`WS stream ${streamId} rejected: invalid token`)
+						socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					// Legacy single-user JWT shape: {loggedIn:true} → maps to admin.
+					// Multi-user shape: {userId, role, sessionId}.
+					const streamUserId =
+						(streamPayload as {userId?: string}).userId ?? 'admin'
+
+					// 3. Stream lookup via StreamManager
+					const streamManager = this.livinityd.streamManager
+					if (!streamManager) {
+						this.logger.verbose(`WS stream ${streamId} rejected: StreamManager not available`)
+						socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n')
+						socket.destroy()
+						return
+					}
+					const ownedStreams = streamManager.listStreams({userId: streamUserId})
+					const ownedStream = ownedStreams.find((s) => s.streamId === streamId)
+					if (!ownedStream) {
+						this.logger.verbose(`WS stream ${streamId} rejected: not found for user ${streamUserId}`)
+						socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+						socket.destroy()
+						return
+					}
+
+					// 4. Upgrade to WS and attach to fanout
+					const streamWss = new WebSocketServer({noServer: true})
+					streamWss.handleUpgrade(request, socket, head, (ws) => {
+						streamWss.close()
+						ws.binaryType = 'nodebuffer'
+						const ok = streamManager.addSubscriber(streamId, ws)
+						if (!ok) {
+							this.logger.warn(`WS stream ${streamId}: addSubscriber returned false (race?)`)
+							ws.close(1011, 'stream gone')
+							return
+						}
+						ws.on('close', () => {
+							const fanout = streamManager.getFanout(streamId)
+							if (fanout) fanout.removeSubscriber(ws)
+						})
+						ws.on('error', (err) => {
+							this.logger.warn(`WS stream ${streamId}: client error`, err)
+							const fanout = streamManager.getFanout(streamId)
+							if (fanout) fanout.removeSubscriber(ws)
+						})
+					})
+
+					return
+				}
+
 				// See if we have a WebSocket server for this path in our router
 				const wss = this.webSocketRouter.get(pathname)
 
