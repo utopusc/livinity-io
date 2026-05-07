@@ -111,6 +111,14 @@ interface ScreenshotMatch {
 
 /**
  * Scan messages newest-first, return the most recent bytebot screenshot found.
+ *
+ * Source priority:
+ *   1. `tc.images[0]` — set by use-agent-socket from MCP image blocks. This
+ *      is the canonical path; the text-only filter on `tc.output` drops
+ *      base64 image data so we can't reliably recover it from `output`.
+ *   2. `extractImageFromOutput(tc.output)` — legacy fallback for tool calls
+ *      that serialize image data into the output string (older or non-MCP
+ *      bytebot adapters).
  */
 function findLatestScreenshot(messages: ChatMessage[]): ScreenshotMatch | null {
 	for (let i = messages.length - 1; i >= 0; i--) {
@@ -120,7 +128,7 @@ function findLatestScreenshot(messages: ChatMessage[]): ScreenshotMatch | null {
 		for (let j = toolCalls.length - 1; j >= 0; j--) {
 			const tc = toolCalls[j]
 			if (!isBytebotTool(tc.name)) continue
-			const imageUrl = extractImageFromOutput(tc.output)
+			const imageUrl = tc.images?.[0] ?? extractImageFromOutput(tc.output)
 			if (imageUrl) {
 				return {
 					key: tc.id,

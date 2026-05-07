@@ -12,6 +12,13 @@ export interface ChatToolCall {
 	output?: string
 	elapsedSeconds?: number
 	errorMessage?: string
+	/**
+	 * Data URIs extracted from `image` content blocks in MCP tool results
+	 * (e.g. bytebot computer_screenshot). The text-only filter on `output`
+	 * intentionally drops binary blocks so the chat stays readable; this
+	 * field preserves the image data for the floating screenshot thumbnail.
+	 */
+	images?: string[]
 }
 
 /** A content block — text or tool, rendered in order */
@@ -292,6 +299,7 @@ export function useAgentSocket() {
 						for (const block of contentBlocks) {
 							if (block.type === 'tool_result' && block.tool_use_id) {
 								let outputString = ''
+								let images: string[] | undefined
 								if (typeof block.content === 'string') {
 									outputString = block.content
 								} else if (Array.isArray(block.content)) {
@@ -301,6 +309,30 @@ export function useAgentSocket() {
 										// eslint-disable-next-line @typescript-eslint/no-explicit-any
 										.map((b: any) => b.text)
 										.join('\n')
+									// Extract image blocks separately for the floating thumbnail.
+									// Two shapes: LivOS MCP `{type:'image', data, mimeType}` and
+									// Anthropic `{type:'image', source:{data, media_type}}`.
+									const imageUris: string[] = []
+									for (const b of block.content) {
+										// eslint-disable-next-line @typescript-eslint/no-explicit-any
+										const blk = b as any
+										if (blk?.type !== 'image') continue
+										if (typeof blk.data === 'string' && blk.data.length > 0) {
+											const mt = typeof blk.mimeType === 'string' ? blk.mimeType : 'image/png'
+											const raw: string = blk.data
+											imageUris.push(
+												raw.startsWith('data:') || raw.startsWith('http')
+													? raw
+													: `data:${mt};base64,${raw}`,
+											)
+										} else if (blk.source && typeof blk.source.data === 'string') {
+											const mt = typeof blk.source.media_type === 'string' ? blk.source.media_type : 'image/png'
+											imageUris.push(`data:${mt};base64,${blk.source.data}`)
+										} else if (blk.source && typeof blk.source.url === 'string') {
+											imageUris.push(blk.source.url)
+										}
+									}
+									if (imageUris.length > 0) images = imageUris
 								}
 								const isError = block.is_error === true
 								dispatch({
@@ -310,6 +342,7 @@ export function useAgentSocket() {
 										status: isError ? 'error' : 'complete',
 										output: outputString,
 										...(isError ? {errorMessage: outputString} : {}),
+										...(images ? {images} : {}),
 									},
 								})
 							}
