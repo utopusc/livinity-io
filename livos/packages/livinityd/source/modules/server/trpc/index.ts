@@ -71,6 +71,13 @@ import mcpRouter from './mcp-router.js'
 // 6 paths added to httpOnlyPaths in ./common.ts (mutations must survive
 // `systemctl restart livos` mid-restart per pitfall B-12 / X-04).
 import conversationsRouter from './conversations-router.js'
+// v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01). Single procedure
+// `webapp.extractMetadata({url})` returning `{title, faviconUrl, description,
+// ogImage}`. The path is added to httpOnlyPaths in ./common.ts because clean
+// cache misses can take up to 8s (fetch + parse) and we don't want a
+// half-broken WS dropping the response after `systemctl restart livos`.
+// CRUD procedures (create/list/delete/update) are deferred to P94.
+import {webappRouter} from '../../webapps/index.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -116,6 +123,8 @@ const appRouter = router({
 	mcp: mcpRouter,
 	// v32-redo Stage 2b — conversations namespace (sidebar feed + thread view).
 	conversations: conversationsRouter,
+	// v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01).
+	webapp: webappRouter,
 })
 
 export type AppRouter = typeof appRouter

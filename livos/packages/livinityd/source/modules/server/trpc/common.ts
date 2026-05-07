@@ -310,4 +310,15 @@ export const httpOnlyPaths = [
 	'conversations.delete',
 	'conversations.listMessages',
 	'conversations.appendMessage',
+	// v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01). Routes via HTTP
+	// because:
+	//   - On a clean cache miss the procedure does an outbound HTTP fetch (up
+	//     to 8s wall-clock + 5 redirects + 2MB body) before returning. A
+	//     half-broken WS after `systemctl restart livos` would silently drop
+	//     the response (memory pitfall B-12 / X-04 — same rationale as
+	//     docker.scanImage at line 100, ai.executeSubagent at line 214).
+	//   - The procedure is a query but the latency profile is mutation-shaped;
+	//     HTTP avoids the WS-handshake-delay flicker on first paint AND the
+	//     reconnect-replay-confusion failure mode of long queries.
+	'webapp.extractMetadata',
 ] as const

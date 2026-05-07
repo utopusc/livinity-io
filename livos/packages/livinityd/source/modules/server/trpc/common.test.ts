@@ -227,7 +227,33 @@ function runTests() {
 		ok('Test 12: bare apiKeys names absent (namespaced convention preserved)')
 	}
 
-	console.log('\nAll common.test.ts tests passed (12/12)')
+	// v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01).
+	// Same WS-reconnect-survival reason as Phase 45/46/47/59 clusters. The
+	// procedure is a query but the latency profile is mutation-shaped (up to
+	// 8s on a clean cache miss including outbound fetch + parse), so HTTP
+	// transport prevents the silent-drop failure mode after `systemctl
+	// restart livos` (memory pitfall B-12 / X-04).
+	// Test 13: 'webapp.extractMetadata' present in httpOnlyPaths
+	{
+		assert.ok(
+			httpOnlyPaths.includes('webapp.extractMetadata' as any),
+			"httpOnlyPaths must include 'webapp.extractMetadata' (Phase 92 V33-WEBAPP-01 — outbound fetch can take up to 8s; query must survive WS reconnect after deploy/restart)",
+		)
+		ok("Test 13: 'webapp.extractMetadata' present in httpOnlyPaths")
+	}
+
+	// Test 14: bare-name footgun guard for Phase 92 entry. Mirrors Tests 4 /
+	// 7 / 9 / 12 — every existing entry follows <router>.<route> namespace
+	// convention.
+	{
+		assert.ok(
+			!httpOnlyPaths.includes('extractMetadata' as any),
+			"httpOnlyPaths must NOT include bare 'extractMetadata' (must be namespaced as 'webapp.extractMetadata')",
+		)
+		ok('Test 14: bare extractMetadata absent (namespaced convention preserved)')
+	}
+
+	console.log('\nAll common.test.ts tests passed (14/14)')
 }
 
 runTests()
