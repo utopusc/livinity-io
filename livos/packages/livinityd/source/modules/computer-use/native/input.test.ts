@@ -159,7 +159,11 @@ interface FakeChild extends EventEmitter {
 }
 
 let spawnResult: 'success' | 'enoent' | 'nonzero' = 'success'
-const spawnMock = vi.fn((..._args: unknown[]): FakeChild => {
+// xdotool is differentiated from xclip so clickMouse tests can exercise the
+// nut-js fallback path (default `enoent` = pretend xdotool isn't installed)
+// while pasteText tests continue to exercise xclip via `spawnResult`.
+let xdotoolResult: 'success' | 'enoent' | 'nonzero' = 'enoent'
+const spawnMock = vi.fn((command: string, ..._rest: unknown[]): FakeChild => {
 	const child = new EventEmitter() as FakeChild
 	const stdin = new Writable({
 		write(_chunk, _enc, cb) {
@@ -168,13 +172,14 @@ const spawnMock = vi.fn((..._args: unknown[]): FakeChild => {
 	})
 	child.stdin = stdin
 	child.exitCode = null
+	const result = command === 'xdotool' ? xdotoolResult : spawnResult
 	// Schedule async dispatch so callers can attach 'error' / 'close' listeners.
 	setImmediate(() => {
-		if (spawnResult === 'enoent') {
-			const err = new Error('spawn xclip ENOENT') as Error & {code: string}
+		if (result === 'enoent') {
+			const err = new Error(`spawn ${command} ENOENT`) as Error & {code: string}
 			err.code = 'ENOENT'
 			child.emit('error', err)
-		} else if (spawnResult === 'nonzero') {
+		} else if (result === 'nonzero') {
 			child.exitCode = 1
 			child.emit('close', 1)
 		} else {
@@ -212,6 +217,7 @@ beforeEach(() => {
 	PointSpy.mockClear()
 	spawnMock.mockClear()
 	spawnResult = 'success'
+	xdotoolResult = 'enoent' // default for clickMouse tests: nut-js fallback path
 })
 
 afterEach(() => {
