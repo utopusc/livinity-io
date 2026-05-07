@@ -588,14 +588,129 @@ LAUNCHER
     # ── Desktop Streaming (x11vnc) ─────────────────────────
 
     install_x11vnc() {
+        # Phase 93 — back-compat alias for install_streaming_subsystem.
+        # Old call sites (line 1491) still invoke install_x11vnc; route them
+        # to the new broader installer so the streaming subsystem comes up
+        # whenever HAS_GUI is set.
+        install_streaming_subsystem
+    }
+
+    # ── Streaming Subsystem (Phase 93) ─────────────────────
+    # Installs every binary livinityd's streaming + WebApp window manager
+    # spawn via child_process, plus VAAPI userspace + x11/screenshot tools.
+    # Locked decision D-93-07: "install.sh installs every binary used by
+    # livinityd". Idempotent — apt-get -y -qq is a no-op on already-installed
+    # packages.
+    install_streaming_subsystem() {
         if ! $HAS_GUI; then
-            info "Skipping x11vnc (no GUI detected)"
+            info "Skipping streaming subsystem (no GUI detected)"
             return 0
         fi
 
-        info "Installing desktop streaming dependencies..."
-        apt-get install -y -qq x11vnc xdotool x11-xserver-utils
-        ok "x11vnc + xdotool + xrandr installed"
+        info "Installing streaming subsystem dependencies (Phase 93)..."
+
+        # x11/screenshot family
+        apt-get install -y -qq \
+            x11vnc \
+            xdotool \
+            x11-xserver-utils \
+            ydotool \
+            maim \
+            scrot \
+            gnome-screenshot \
+            websockify \
+            vncsnapshot
+
+        # ffmpeg + GStreamer family (full pipeline incl. PipeWire src)
+        apt-get install -y -qq \
+            ffmpeg \
+            gstreamer1.0-tools \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad \
+            gstreamer1.0-plugins-ugly
+
+        # PipeWire screencast portal (D-Bus org.freedesktop.portal.ScreenCast)
+        apt-get install -y -qq \
+            xdg-desktop-portal-gnome
+
+        # VAAPI userspace for Intel iGPU (Mini PC). vainfo is the boot probe;
+        # intel-media-va-driver provides the H264 encode entry point;
+        # libdrm-intel1 is the DRM userspace lib.
+        apt-get install -y -qq \
+            vainfo \
+            intel-media-va-driver \
+            libdrm-intel1 \
+            || warn "VAAPI driver install failed — falling back to libx264 path"
+
+        ok "Streaming subsystem packages installed"
+
+        # ── Post-install verification ────────────────────────
+        # Per Phase 93 acceptance criteria: which-each binary so a missing
+        # package fails the install loudly rather than at first stream.
+        local missing=()
+        for bin in ffmpeg gst-launch-1.0 dbus-send vainfo xdotool maim; do
+            if ! command -v "$bin" >/dev/null 2>&1; then
+                missing+=("$bin")
+            fi
+        done
+        if (( ${#missing[@]} > 0 )); then
+            fail "Streaming subsystem post-install verify failed — missing: ${missing[*]}"
+        fi
+        ok "Streaming subsystem binaries verified: ffmpeg, gst-launch-1.0, dbus-send, vainfo, xdotool, maim"
+
+        # ── ydotoold systemd unit ────────────────────────────
+        setup_ydotoold_service
+    }
+
+    setup_ydotoold_service() {
+        # Phase 93 — write/enable /etc/systemd/system/ydotoold.service.
+        # ydotoold is the privileged daemon backing ydotool; livinityd's
+        # input.ts wraps ydotool and expects the socket at /tmp/.ydotool_socket.
+        # Currently exists only manually on Mini PC — D-93-07 requires
+        # install.sh to provision it.
+        if ! command -v ydotoold >/dev/null 2>&1; then
+            warn "ydotoold binary not found — skipping systemd unit"
+            return 0
+        fi
+
+        local desktop_user="${DESKTOP_USER:-}"
+        if [[ -z "$desktop_user" ]]; then
+            info "No desktop user detected — skipping ydotoold service"
+            return 0
+        fi
+        local desktop_uid
+        desktop_uid=$(id -u "$desktop_user" 2>/dev/null || echo "1000")
+
+        cat > /etc/systemd/system/ydotoold.service << UNIT
+[Unit]
+Description=LivOS ydotoold input daemon (Phase 93 streaming subsystem)
+After=graphical.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ydotoold --socket-path=/tmp/.ydotool_socket --socket-own=${desktop_uid}:${desktop_uid}
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target
+UNIT
+
+        systemctl daemon-reload
+        if systemctl enable ydotoold.service >/dev/null 2>&1; then
+            ok "ydotoold systemd unit installed and enabled"
+        else
+            warn "ydotoold systemd unit written but enable failed (no graphical.target?)"
+        fi
+
+        # Final verification gate: enable status must be 'enabled' or 'static'
+        local enable_state
+        enable_state=$(systemctl is-enabled ydotoold.service 2>/dev/null || echo "")
+        case "$enable_state" in
+            enabled|static|alias) ok "ydotoold is-enabled=${enable_state}" ;;
+            *) warn "ydotoold is-enabled=${enable_state:-unknown} — service may not autostart" ;;
+        esac
     }
 
     setup_desktop_streaming() {

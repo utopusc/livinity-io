@@ -329,6 +329,76 @@ LIVOS_UPDATE_TO_SHA=$(git -C "$TEMP_DIR" rev-parse HEAD 2>/dev/null || echo "")
 
 ok "Latest code fetched"
 
+# ── Step 1b: Phase 93 streaming subsystem apt packages ────
+# Idempotent apt-install so existing Mini PC deploys (which never re-ran
+# install.sh) pick up the streaming subsystem binaries on next update.
+# Locked decision D-93-07: "Install.sh ile bu butun servisler kurulmali"
+# applies to both install.sh (fresh) AND update.sh (incremental).
+# apt-get install -y -qq is a no-op on already-installed packages.
+step "Phase 93: streaming subsystem dependencies"
+if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
+    info "Ensuring streaming subsystem apt packages are installed..."
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        x11vnc xdotool x11-xserver-utils \
+        ydotool maim scrot gnome-screenshot \
+        websockify vncsnapshot \
+        ffmpeg \
+        gstreamer1.0-tools \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-bad \
+        gstreamer1.0-plugins-ugly \
+        xdg-desktop-portal-gnome \
+        2>&1 | tail -5 || warn "Some streaming packages failed to install (non-fatal)"
+
+    # VAAPI userspace — separate group so an Intel-iGPU-less host doesn't fail the run
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        vainfo intel-media-va-driver libdrm-intel1 \
+        2>&1 | tail -5 || warn "VAAPI userspace install failed — libx264 fallback will be used"
+
+    # Verify the critical streaming binaries are present after install
+    streaming_missing=()
+    for bin in ffmpeg gst-launch-1.0 dbus-send xdotool maim; do
+        if ! command -v "$bin" >/dev/null 2>&1; then
+            streaming_missing+=("$bin")
+        fi
+    done
+    if (( ${#streaming_missing[@]} > 0 )); then
+        warn "Streaming binaries still missing after apt: ${streaming_missing[*]}"
+    else
+        ok "Streaming subsystem binaries verified"
+    fi
+
+    # Provision ydotoold systemd unit if ydotoold is now available
+    if command -v ydotoold >/dev/null 2>&1 && [[ ! -f /etc/systemd/system/ydotoold.service ]]; then
+        # Pick the most likely desktop user — first non-system user with UID>=1000.
+        desktop_user_p93=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}')
+        if [[ -n "${desktop_user_p93:-}" ]]; then
+            desktop_uid_p93=$(id -u "$desktop_user_p93" 2>/dev/null || echo 1000)
+            cat > /etc/systemd/system/ydotoold.service << UNIT
+[Unit]
+Description=LivOS ydotoold input daemon (Phase 93 streaming subsystem)
+After=graphical.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ydotoold --socket-path=/tmp/.ydotool_socket --socket-own=${desktop_uid_p93}:${desktop_uid_p93}
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target
+UNIT
+            systemctl daemon-reload 2>/dev/null || true
+            systemctl enable ydotoold.service 2>/dev/null && \
+                ok "ydotoold systemd unit installed (user=${desktop_user_p93})" || \
+                warn "ydotoold unit written but enable failed"
+        fi
+    fi
+else
+    info "apt-get not available — skipping streaming subsystem install"
+fi
+
 # ── Step 2: Update LivOS source files ─────────────────────
 step "Updating LivOS source files"
 
