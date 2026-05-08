@@ -42,6 +42,11 @@ import {
 	findWebAppById,
 	type WebAppRow,
 } from './webapps-repository.js'
+import {
+	findWebAppAgentSession,
+	upsertWebAppAgentSession,
+	type WebAppAgentSessionRow,
+} from './webapp-agent-sessions-repository.js'
 
 // Map ExtractionError codes → tRPC TRPCError codes per CONTEXT gray-area #7.
 function trpcErrorForExtraction(code: ExtractionErrorCode): {
@@ -220,6 +225,84 @@ function requirePool() {
 	return pool
 }
 
+// Phase 95-05 — webapp.agent.session.* sub-router.
+//
+// Per-WebApp agent run state. The hook (use-webapp-agent.ts) reads on mount
+// and upserts after the first sendMessage produces a runId, then debounces
+// last_seen_idx upserts on each chunk processed (D-95-09 SSE reconnect).
+//
+// Both procedures verify ownership at the SQL layer — queries are scoped by
+// ctx.currentUser.id. A different user cannot read or upsert another user's
+// session row even if they know the webappId.
+const sessionGetInput = z.object({webappId: z.string().uuid()})
+
+const sessionUpsertInput = z.object({
+	webappId: z.string().uuid(),
+	runId: z.string().min(1).max(256).nullable().optional(),
+	lastSeenIdx: z.number().int().min(-1).optional(),
+})
+
+type SessionWireShape = {
+	id: string
+	userId: string
+	webappId: string
+	runId: string | null
+	createdAt: Date
+	lastActiveAt: Date
+	lastSeenIdx: number
+}
+
+function rowToSessionWire(row: WebAppAgentSessionRow): SessionWireShape {
+	return {
+		id: row.id,
+		userId: row.userId,
+		webappId: row.webappId,
+		runId: row.runId,
+		createdAt: row.createdAt,
+		lastActiveAt: row.lastActiveAt,
+		lastSeenIdx: row.lastSeenIdx,
+	}
+}
+
+const sessionRouter = router({
+	get: privateProcedure
+		.input(sessionGetInput)
+		.query(async ({ctx, input}): Promise<SessionWireShape | null> => {
+			const userId = ctx.currentUser?.id
+			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+			const pool = requirePool()
+			// Confirm webapp ownership before returning the session — prevents
+			// guessing webappIds across users.
+			const webapp = await findWebAppById(pool, userId, input.webappId)
+			if (!webapp) return null
+			const row = await findWebAppAgentSession(pool, userId, input.webappId)
+			return row ? rowToSessionWire(row) : null
+		}),
+
+	upsert: privateProcedure
+		.input(sessionUpsertInput)
+		.mutation(async ({ctx, input}): Promise<SessionWireShape> => {
+			const userId = ctx.currentUser?.id
+			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+			const pool = requirePool()
+			// Confirm webapp ownership before writing the session — defense in
+			// depth on top of the FK cascade.
+			const webapp = await findWebAppById(pool, userId, input.webappId)
+			if (!webapp) throw new TRPCError({code: 'NOT_FOUND', message: 'webapp not found'})
+			const row = await upsertWebAppAgentSession(pool, {
+				userId,
+				webappId: input.webappId,
+				...('runId' in input ? {runId: input.runId ?? null} : {}),
+				...('lastSeenIdx' in input ? {lastSeenIdx: input.lastSeenIdx ?? -1} : {}),
+			})
+			return rowToSessionWire(row)
+		}),
+})
+
+const agentRouter = router({
+	session: sessionRouter,
+})
+
 const webappRouter = router({
 	extractMetadata: privateProcedure
 		.input(extractMetadataInput)
@@ -305,6 +388,9 @@ const webappRouter = router({
 
 	// Phase 93-11 — window manager sub-router (webapp.window.*)
 	window: windowRouter,
+
+	// Phase 95-05 — per-WebApp agent session state (webapp.agent.session.{get, upsert}).
+	agent: agentRouter,
 })
 
 export default webappRouter

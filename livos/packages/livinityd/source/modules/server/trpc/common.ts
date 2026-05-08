@@ -361,4 +361,16 @@ export const httpOnlyPaths = [
 	'webapp.list',
 	'webapp.delete',
 	'webapp.update',
+	// v33 Phase 95 — per-WebApp agent session state (webapp_agent_sessions
+	// table). Two procedures:
+	//   - webapp.agent.session.get   — fetched on WebApp window mount; gates
+	//     resume-vs-fresh in the agent panel (D-95-09).
+	//   - webapp.agent.session.upsert — written after each sendMessage
+	//     (runId persist) AND on each chunk processed (last_seen_idx
+	//     debounced 500ms in the hook layer).
+	// Both route via HTTP for the same WS-reconnect-survival reasons as the
+	// rest of the long-lived mutation cluster (precedent: conversations.*
+	// lines 307-312, webapp.create line 360).
+	'webapp.agent.session.get',
+	'webapp.agent.session.upsert',
 ] as const

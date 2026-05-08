@@ -580,3 +580,30 @@ CREATE TABLE IF NOT EXISTS webapps (
 
 CREATE INDEX IF NOT EXISTS webapps_user_position_idx
   ON webapps(user_id, position);
+
+-- =========================================================================
+-- Phase 95 V33-WEBAPP-95-05 — webapp_agent_sessions table.
+--
+-- Mirrored from migrations/2026-05-07-p95-webapp-agent-sessions.sql so
+-- boot's idempotent schema apply materializes the table without a runner.
+-- See that file for the full design-decision commentary (cascade rules,
+-- nullable run_id, last_seen_idx -1 sentinel).
+--
+-- One row per (user_id, webapp_id) keys the per-WebApp LivAgentRunner
+-- conversation; the WebApp window UI fetches it on mount and upserts the
+-- runId once the first message produces one. last_seen_idx feeds the SSE
+-- reconnect ?after=<idx> path so reopening a WebApp window resumes the
+-- same conversation slice.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS webapp_agent_sessions (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  webapp_id       UUID NOT NULL REFERENCES webapps(id) ON DELETE CASCADE,
+  run_id          TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_active_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_idx   INTEGER NOT NULL DEFAULT -1
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS webapp_agent_sessions_user_webapp_uniq
+  ON webapp_agent_sessions(user_id, webapp_id);
