@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v32.0
-milestone_name: AI Chat Ground-up Rewrite + Hermes Background Runtime
-status: v32 milestone CODE-COMPLETE 2026-05-06 — all 12 phases shipped (Waves 1-5). Sacred SHA f3538e1d preserved throughout. WCAG --liv-muted-foreground fixed (5.04:1 PASS). Pending only user-walked Mini PC UAT signoff (UAT-CHECKLIST.md, 10 sections A-J).
-last_updated: "2026-05-07T19:00:00.000Z"
-last_activity: 2026-05-07 — v33 Phase 94 (Desktop "Add WebApp" Context Menu + Persistence) CODE-COMPLETE. 5 atomic commits dfac4bb5..4a822e05 (T94-01..T94-05) plus T94-06 SUMMARY. Sacred SHA f3538e1d UNTOUCHED. UI/livinityd typecheck baselines unchanged (560 / 371). useLaunchWebApp stub locks signature for P95 spawn-dispatch. Manual UAT (7 steps) deferred to v33 deploy phase.
+milestone: v33.0
+milestone_name: WebApp Launcher + Teach/Auto Modes
+status: v33 milestone CODE-COMPLETE 2026-05-08 — all 7 phases shipped (Waves 1-5). Sacred SHA f3538e1d811992b782a9bb057d1b7f0a0189f95f preserved throughout. P98 wired streamManager + webappWindowManager into livinityd.start() lifecycle. Pending Mini PC deploy + user-walked UAT signoff (.planning/phases/98-uat-polish/UAT-CHECKLIST.md, sections A-J + sign-off block). v32 UAT also still pending.
+last_updated: "2026-05-08T00:00:00.000Z"
+last_activity: 2026-05-08 — v33 Phase 98 (UAT + Polish + Docs + livinityd lifecycle hookup) CODE-COMPLETE. UAT-CHECKLIST.md authored (sections A-J + sign-off), docs/webapp-launcher.md authored (sections 1-11), ROADMAP closed (P92-P98 all [x], milestone heading flipped to CODE-COMPLETE pending UAT), project_v33_complete.md memory written. Lifecycle hookup wires streamManager + webappWindowManager singletons (previously undefined → tRPC SERVICE_UNAVAILABLE). Sacred SHA f3538e1d811992b782a9bb057d1b7f0a0189f95f unchanged before AND after every commit.
 progress:
-  total_phases: 12
-  completed_phases: 12
-  total_plans: 12
-  completed_plans: 12
+  total_phases: 7
+  completed_phases: 7
+  total_plans: 7
+  completed_plans: 7
   percent: 100
 ---
 

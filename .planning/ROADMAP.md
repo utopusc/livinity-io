@@ -8,7 +8,7 @@
 - ✅ **v30.0 Livinity Broker Professionalization (incl. v30.5 informal scope)** — Phases 56-63 (shipped local 2026-05-04 via `--accept-debt`) — see [milestones/v30.0-ROADMAP.md](milestones/v30.0-ROADMAP.md)
 - ✅ **v31.0 Liv Agent Reborn** — Phases 64-79 (closed 2026-05-05 — P77+P78+P79 hot-fix wave shipped same day; bytebot MCP working end-to-end via host GNOME desktop)
 - ✅ **v32.0 AI Chat Ground-up Rewrite + Hermes Background Runtime** — Phases 80-91 (CODE-COMPLETE 2026-05-06 via autonomous wave-based dispatch; pending Mini PC UAT signoff — see [.planning/phases/91-uat-polish/UAT-CHECKLIST.md](phases/91-uat-polish/UAT-CHECKLIST.md))
-- 🟢 **v33.0 WebApp Launcher + Teach/Auto Modes** — Phases 92-98 (OPENED 2026-05-07; runs parallel with v32 UAT) — see [v33-DRAFT.md](v33-DRAFT.md)
+- ✅ **v33.0 WebApp Launcher + Teach/Auto Modes** — Phases 92-98 (CODE-COMPLETE 2026-05-08; pending Mini PC UAT signoff — see [.planning/phases/98-uat-polish/UAT-CHECKLIST.md](phases/98-uat-polish/UAT-CHECKLIST.md))
 - ⏸ **(deferred) Backup & Restore** — paused, 8 phases / 47 BAK-* reqs defined in [milestones/v30.0-DEFINED/](milestones/v30.0-DEFINED/) (resumes as future slot e.g. v34+)
 
 ---
@@ -105,7 +105,24 @@ P87 (Hermes runtime) ───────────────────�
 
 ---
 
-### 🟢 v33.0 WebApp Launcher + Teach/Auto Modes (Active — Phases 92-98)
+### ✅ v33.0 WebApp Launcher + Teach/Auto Modes (CODE-COMPLETE 2026-05-08 — Phases 92-98)
+
+**Milestone closure summary (2026-05-08):**
+
+- **Code-complete:** all 7 phases (92-98) shipped in 7 waves, ~50 atomic commits across master since `743a414b` (P93 close).
+- **Commit ranges by phase:**
+  - P92 (metadata extractor): `d86d185e..318e2bb4` (5 commits)
+  - P93 (streaming + window manager): `cf61685d..743a414b` (14 commits)
+  - P94 (desktop launcher): `dfac4bb5..aa08a3e0` (6 commits)
+  - P95 (stream window + AI panel): `e303017b..966ea050` (8 commits) plus deploy hot-fix `952226c8` (libva-utils for vainfo)
+  - P96 (teach mode): `cfd83100..d85904bf` interleaved with P97 (6 commits + 1 fixture rollup `74f198c1`)
+  - P97 (auto mode): `072bb074..acb8354c` (8 commits)
+  - P98 (UAT + polish + lifecycle hookup): this commit batch
+- **Sacred SHA:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across **every** v33 commit. Verified before AND after every phase per `97-03` sacred-SHA verification harness.
+- **Tests:** 200/200 streaming + window-manager green (P93 baseline); ~95 new test cases added across the milestone.
+- **Lifecycle hookup:** P98 wired `streamManager` + `webappWindowManager` singletons into `livinityd.start()` so the tRPC `webapp.window.*` and `streams.*` routes return real responses (previously `SERVICE_UNAVAILABLE` because the optional fields were declared but never instantiated — see `93-SUMMARY.md` carry-over).
+- **Ship date (code-complete):** 2026-05-08. Final flip to `Shipped` deferred until user-walked Mini PC UAT (`UAT-CHECKLIST.md`) reports PASS — per `feedback_milestone_uat_gate.md`.
+
 
 **Goal:** Right-click desktop → "Add WebApp" → URL → auto-detected favicon + title → desktop icon. Click → host Chrome (existing user profile, NOT containerized) opens new window at URL → window-scoped VNC stream + v32 AI panel below with Watch/Teach/Auto/Chat modes. Teach mode records user actions as reusable skills; Auto mode runs goal-driven bytebot loop using skill-as-context, scoped to that one Chrome window via `xdotool --window <wid>`.
 
@@ -115,13 +132,13 @@ P87 (Hermes runtime) ───────────────────�
 
 **Phase summary:**
 
-- [ ] **Phase 92: WebApp Metadata Extractor** (V33-META-01..04) — livinityd tRPC `webapp.extractMetadata({url})` returns `{title, faviconUrl, description, ogImage}`. Redis cache 24h. URL validation (reject file://, javascript:, intranet IPs). Postgres `webapps` table migration. Files: `livos/packages/livinityd/source/modules/webapps/{metadata-extractor,trpc-router}.ts`.
+- [x] **Phase 92: WebApp Metadata Extractor** (V33-META-01..04) — livinityd tRPC `webapp.extractMetadata({url})` returns `{title, faviconUrl, description, ogImage}`. Redis cache 24h. URL validation (reject file://, javascript:, intranet IPs). Postgres `webapps` table migration. Files: `livos/packages/livinityd/source/modules/webapps/{metadata-extractor,trpc-router}.ts`.
 - [x] **Phase 93: Streaming Subsystem + Window Manager** (V33-WIN-01..07) — Code-complete 2026-05-07. ffmpeg fMP4 (libx264 / h264_vaapi) + Node WS fan-out replaces the rejected per-window x11vnc design (Mutter incompat). PipeWire screencast portal as primary per-window source (D-93-04); ffmpeg x11grab crop + GeometryTracker as fallback. install.sh + update.sh apt-install 18 binaries (ffmpeg/gstreamer/xdotool/ydotool/vainfo/portal/etc). New modules under livos/packages/livinityd/source/modules/{streaming,webapps}/. New tRPC namespaces streams.* (3) + webapp.window.* (4) — all 7 in httpOnlyPaths. WS endpoint `/ws/stream/:id` with JWT-from-query + ownership check (404 on foreign). Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED. 200/200 tests green incl. integration test with fake-encoder fixture. Mini PC live deploy + 2h UAT in P98.
-- [ ] **Phase 94: Desktop "Add WebApp" Context Menu + Persistence** (V33-DESK-01..04) — Extend `desktop-context-menu.tsx` with new ContextMenuItem. AddWebAppDialog (URL input + metadata preview). WebAppIcon component renders alongside Docker apps via `app-grid.tsx`. tRPC `webapps.{create,list,delete,update}`.
-- [ ] **Phase 95: WebApp Stream Window + AI Panel + Mode Selector** (V33-STREAM-01..07) — New window content type `webapp-stream` registered with window manager. Vertical split: 70% react-vnc/noVNC connected to wsUrl, 30% v32 chat panel. Toolbar (back/forward/refresh/copy URL/fullscreen). Mode selector pill (Watch/Teach/Auto/Chat). Per-WebApp agent session via `LivAgentRunner` SSE. Postgres `webapp_agent_sessions`.
-- [ ] **Phase 96: Teach Mode — Action Recording** (V33-TEACH-01..07) — `useTeachRecorder` hook captures VNC client mouse/keyboard events. Screenshot every event + 1s heartbeat. Save dialog → POST `webapps.skills.create`. Postgres `webapp_skills` table (JSONB action log + screenshot blob refs). Skills sidebar UI. Replay scrubber (timeline w/ thumbnails).
-- [ ] **Phase 97: Auto Mode — Skill-Guided Bytebot, Window-Scoped** (V33-AUTO-01..07) — Extend native primitives (`screenshot.ts`, `input.ts`) with `windowId?: number` param: `maim -i <wid>`, `xdotool --window <wid> ...`. New tool `webapp_replay_skill({skillId, freeFormGoal?})`. Skill context builder injects `<previously-learned-skill>` block into agent system prompt. Per-WebApp bytebot MCP spawn with `BYTEBOT_TARGET_WINDOW_ID` env. Vision-validated stepping. Failure recovery (3 strikes → needs help). Sacred SHA UNTOUCHED — extensions through `LivAgentRunner` + `LivMcpClientManager`.
-- [ ] **Phase 98: UAT + Polish + Docs** (V33-UAT-01..03) — Full flow test: 3 WebApps (facebook/gmail/x), profile sharing verified, teach a skill in each, run auto mode, verify autonomy + needs-help recovery. Resource verification. WebApp delete cascade (skills + sessions). User docs `docs/webapp-launcher.md`. ROADMAP close + memory updates.
+- [x] **Phase 94: Desktop "Add WebApp" Context Menu + Persistence** (V33-DESK-01..04) — Extend `desktop-context-menu.tsx` with new ContextMenuItem. AddWebAppDialog (URL input + metadata preview). WebAppIcon component renders alongside Docker apps via `app-grid.tsx`. tRPC `webapps.{create,list,delete,update}`.
+- [x] **Phase 95: WebApp Stream Window + AI Panel + Mode Selector** (V33-STREAM-01..07) — New window content type `webapp-stream` registered with window manager. Vertical split: 70% react-vnc/noVNC connected to wsUrl, 30% v32 chat panel. Toolbar (back/forward/refresh/copy URL/fullscreen). Mode selector pill (Watch/Teach/Auto/Chat). Per-WebApp agent session via `LivAgentRunner` SSE. Postgres `webapp_agent_sessions`.
+- [x] **Phase 96: Teach Mode — Action Recording** (V33-TEACH-01..07) — `useTeachRecorder` hook captures VNC client mouse/keyboard events. Screenshot every event + 1s heartbeat. Save dialog → POST `webapps.skills.create`. Postgres `webapp_skills` table (JSONB action log + screenshot blob refs). Skills sidebar UI. Replay scrubber (timeline w/ thumbnails).
+- [x] **Phase 97: Auto Mode — Skill-Guided Bytebot, Window-Scoped** (V33-AUTO-01..07) — Extend native primitives (`screenshot.ts`, `input.ts`) with `windowId?: number` param: `maim -i <wid>`, `xdotool --window <wid> ...`. New tool `webapp_replay_skill({skillId, freeFormGoal?})`. Skill context builder injects `<previously-learned-skill>` block into agent system prompt. Per-WebApp bytebot MCP spawn with `BYTEBOT_TARGET_WINDOW_ID` env. Vision-validated stepping. Failure recovery (3 strikes → needs help). Sacred SHA UNTOUCHED — extensions through `LivAgentRunner` + `LivMcpClientManager`.
+- [x] **Phase 98: UAT + Polish + Docs** (V33-UAT-01..03) — Full flow test: 3 WebApps (facebook/gmail/x), profile sharing verified, teach a skill in each, run auto mode, verify autonomy + needs-help recovery. Resource verification. WebApp delete cascade (skills + sessions). User docs `docs/webapp-launcher.md`. ROADMAP close + memory updates.
 
 **Dependency graph:**
 ```
@@ -431,8 +448,10 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 - v29.5 v29.4 Hot-Patch Recovery + Verification Discipline (shipped local 2026-05-02 via `--accept-debt`)
 - v30.0 Livinity Broker Professionalization (incl. v30.5 informal scope) (shipped local 2026-05-04 via `--accept-debt`)
 - **v31.0 Liv Agent Reborn** (active — Phases 64-76)
+- **v32.0 AI Chat Ground-up Rewrite + Hermes Background Runtime** (CODE-COMPLETE 2026-05-06 — Phases 80-91 — pending UAT)
+- **v33.0 WebApp Launcher + Teach/Auto Modes** (CODE-COMPLETE 2026-05-08 — Phases 92-98 — pending UAT)
 - (deferred) Backup & Restore — 8 phases defined in `milestones/v30.0-DEFINED/`, renumbered to future slot (likely v32.0)
 
 ---
 
-*Last updated: 2026-05-04 — v31.0 milestone opened with 13 phases (64-76); REQUIREMENTS.md derived from `.planning/v31-DRAFT.md` user-validated plan*
+*Last updated: 2026-05-08 — v33.0 milestone CODE-COMPLETE (Phases 92-98 shipped; final flip to ✅ Shipped deferred to post-UAT signoff per `feedback_milestone_uat_gate.md`).*
