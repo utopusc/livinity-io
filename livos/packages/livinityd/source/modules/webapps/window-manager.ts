@@ -205,23 +205,24 @@ export class WebAppWindowManager {
 		const baselineWids = await this.discovery.snapshotWindowIds()
 
 		// 3. Spawn Chrome (detached, NOT a livinityd child)
-		// 2026-05-08 hotfix: livinityd runs as root, but Chrome refuses to
-		// launch as root without --no-sandbox (security guard). Even with
-		// --no-sandbox, Chrome would try to use root's HOME (/root) for the
-		// profile dir and miss bruce's signed-in Google session.
-		// Instead, spawn via `sudo -u bruce -E` and reuse the existing
-		// LivOS Chrome profile at /home/bruce/.config/livos-chrome (the
-		// Mini PC has Chrome running there with --remote-debugging-port=9222
-		// for bytebot integration). The profile dir match means Chrome's
-		// IPC layer merges this --new-window request with the existing
-		// process → new top-level window appears under bruce's session.
+		// 2026-05-08 hotfix v2: livinityd's systemd env has no DISPLAY or
+		// XAUTHORITY, and Chrome refuses to launch as root without
+		// --no-sandbox. Spawning via `sudo -u bruce -E` doesn't fix it
+		// either — sudo strips DISPLAY/XAUTHORITY unless they're in
+		// sudoers `env_keep`, so Chrome dies with "Missing X server or
+		// $DISPLAY". Pass them as sudo command-prefix env vars
+		// (`sudo VAR=val cmd ...`), which is env_keep-independent.
+		// Reuse the existing LivOS Chrome profile so the IPC merge opens
+		// a new top-level window under bruce's signed-in session.
 		const chromeUser = process.env.LIVOS_CHROME_USER ?? 'bruce'
 		const chromeProfile =
 			process.env.LIVOS_CHROME_PROFILE ?? '/home/bruce/.config/livos-chrome'
 		const chromeArgs = [
+			'-n', // non-interactive (fail fast if password would be prompted)
 			'-u',
 			chromeUser,
-			'-E',
+			`DISPLAY=${WEBAPPS_X11_ENV.DISPLAY}`,
+			`XAUTHORITY=${WEBAPPS_X11_ENV.XAUTHORITY}`,
 			this.chromeBinary,
 			`--user-data-dir=${chromeProfile}`,
 			'--new-window',
