@@ -78,6 +78,7 @@ import conversationsRouter from './conversations-router.js'
 // half-broken WS dropping the response after `systemctl restart livos`.
 // CRUD procedures (create/list/delete/update) are deferred to P94.
 import {webappRouter} from '../../webapps/index.js'
+import streamsRouter from '../../streaming/trpc-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -124,7 +125,10 @@ const appRouter = router({
 	// v32-redo Stage 2b — conversations namespace (sidebar feed + thread view).
 	conversations: conversationsRouter,
 	// v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01).
+	// Phase 93-11 — webapp.window.* sub-router added in webappRouter.
 	webapp: webappRouter,
+	// v33 Phase 93 — streams.* (start/stop/list) namespace.
+	streams: streamsRouter,
 })
 
 export type AppRouter = typeof appRouter

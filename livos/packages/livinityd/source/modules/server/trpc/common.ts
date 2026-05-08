@@ -321,4 +321,26 @@ export const httpOnlyPaths = [
 	//     HTTP avoids the WS-handshake-delay flicker on first paint AND the
 	//     reconnect-replay-confusion failure mode of long queries.
 	'webapp.extractMetadata',
+	// v33 Phase 93 — streaming subsystem + WebApp window manager.
+	// All 7 paths route via HTTP because:
+	//   - streams.start spawns a ChildProcess (ffmpeg/gst-launch). HTTP avoids
+	//     the silent-hang failure mode after `systemctl restart livos` (memory
+	//     pitfall B-12 / X-04 — same rationale as docker.scanImage line 100,
+	//     ai.executeSubagent line 214).
+	//   - streams.stop sends SIGTERM with up-to-2s SIGKILL escalation; mutation
+	//     duration sits at the edge of the WS-reconnect window.
+	//   - streams.list is a query but returns long-lived encoder state — kept
+	//     on HTTP for transport consistency with the start/stop pair.
+	//   - webapp.window.spawn launches Chrome --new-window + 5s xdotool poll;
+	//     latency profile is mutation-shaped (P95 wires the UX to a "WebApp
+	//     opening…" toast that needs explicit success/error).
+	//   - webapp.window.{focus,close,list} cluster with .spawn for the same
+	//     WS-reconnect-survival reason.
+	'streams.start',
+	'streams.stop',
+	'streams.list',
+	'webapp.window.spawn',
+	'webapp.window.focus',
+	'webapp.window.close',
+	'webapp.window.list',
 ] as const

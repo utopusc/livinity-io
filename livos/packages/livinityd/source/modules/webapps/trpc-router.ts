@@ -24,6 +24,10 @@ import {
 	type ExtractionErrorCode,
 	type MetadataResult,
 } from './metadata-extractor.js'
+import {
+	WebappCapExceededError,
+	WindowNotFoundError,
+} from './window-manager.js'
 
 // Map ExtractionError codes → tRPC TRPCError codes per CONTEXT gray-area #7.
 function trpcErrorForExtraction(code: ExtractionErrorCode): {
@@ -51,6 +55,95 @@ const extractMetadataInput = z.object({
 	url: z.string().url().max(2048),
 })
 
+// Phase 93-11 — webapp.window.* sub-router.
+// Lives under the existing P92 `webapp` namespace (singular) — the plan
+// referenced `webapps.window.*` but the actual P92 namespace is `webapp`,
+// so we extend in place for transport consistency. httpOnlyPaths gets the
+// four `webapp.window.*` paths via this router's mount.
+const windowSpawnInput = z.object({
+	webappId: z.string().min(1).max(64),
+	url: z.string().url().max(2048),
+	expectedTitle: z.string().max(256).optional(),
+})
+
+const windowFocusInput = z.object({webappId: z.string().min(1).max(64)})
+const windowCloseInput = z.object({
+	webappId: z.string().min(1).max(64),
+	killWindow: z.boolean().optional(),
+})
+
+const windowRouter = router({
+	spawn: privateProcedure.input(windowSpawnInput).mutation(async ({ctx, input}) => {
+		const userId = ctx.currentUser?.id
+		if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+		const wm = ctx.livinityd?.webappWindowManager
+		if (!wm) {
+			throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'WebAppWindowManager not initialised'})
+		}
+		ctx.logger?.info?.(`webapp.window.spawn user=${userId} webappId=${input.webappId}`)
+		try {
+			return await wm.spawn({
+				userId,
+				webappId: input.webappId,
+				url: input.url,
+				expectedTitle: input.expectedTitle,
+			})
+		} catch (err) {
+			if (err instanceof WindowNotFoundError) {
+				throw new TRPCError({code: 'NOT_FOUND', message: err.message, cause: err})
+			}
+			if (err instanceof WebappCapExceededError) {
+				throw new TRPCError({
+					code: 'TOO_MANY_REQUESTS',
+					message: `webapp cap exceeded (limit ${err.limit})`,
+					cause: err,
+				})
+			}
+			throw err
+		}
+	}),
+
+	focus: privateProcedure.input(windowFocusInput).mutation(async ({ctx, input}) => {
+		const userId = ctx.currentUser?.id
+		if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+		const wm = ctx.livinityd?.webappWindowManager
+		if (!wm) {
+			throw new TRPCError({code: 'SERVICE_UNAVAILABLE'})
+		}
+		ctx.logger?.info?.(`webapp.window.focus user=${userId} webappId=${input.webappId}`)
+		const r = await wm.focus({webappId: input.webappId, userId})
+		if (!r.ok && r.code === 'NOT_FOUND') {
+			throw new TRPCError({code: 'NOT_FOUND'})
+		}
+		return r
+	}),
+
+	close: privateProcedure.input(windowCloseInput).mutation(async ({ctx, input}) => {
+		const userId = ctx.currentUser?.id
+		if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+		const wm = ctx.livinityd?.webappWindowManager
+		if (!wm) {
+			throw new TRPCError({code: 'SERVICE_UNAVAILABLE'})
+		}
+		ctx.logger?.info?.(`webapp.window.close user=${userId} webappId=${input.webappId}`)
+		const r = await wm.close({
+			webappId: input.webappId,
+			userId,
+			killWindow: input.killWindow,
+		})
+		if (!r.ok) throw new TRPCError({code: 'NOT_FOUND'})
+		return r
+	}),
+
+	list: privateProcedure.query(async ({ctx}) => {
+		const userId = ctx.currentUser?.id
+		if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+		const wm = ctx.livinityd?.webappWindowManager
+		if (!wm) return []
+		return wm.list({userId})
+	}),
+})
+
 const webappRouter = router({
 	extractMetadata: privateProcedure
 		.input(extractMetadataInput)
@@ -74,6 +167,8 @@ const webappRouter = router({
 				})
 			}
 		}),
+	// Phase 93-11 — window manager sub-router (webapp.window.*)
+	window: windowRouter,
 })
 
 export default webappRouter
