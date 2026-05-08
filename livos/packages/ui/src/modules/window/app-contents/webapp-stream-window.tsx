@@ -27,18 +27,28 @@
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {toast} from 'sonner'
-import {AlertTriangle, RefreshCw} from 'lucide-react'
+import {AlertTriangle, RefreshCw, Square} from 'lucide-react'
 
 import {trpcReact} from '@/trpc/trpc'
 import {cn} from '@/shadcn-lib/utils'
 import {useWebAppVnc} from '@/hooks/use-webapp-vnc'
 import {useWebAppAgent} from '@/hooks/use-webapp-agent'
+import {useTeachRecorder, type ActionLog} from '@/hooks/use-teach-recorder'
 
 import {WebAppToolbar} from '../webapp-toolbar'
 import {WebAppModeSelector, type WebAppMode} from '../webapp-mode-selector'
 
 import {ChatMessageItem} from '@/routes/ai-chat/chat-messages'
 import {ChatInput, type FileAttachment} from '@/routes/ai-chat/chat-input'
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@/shadcn-components/ui/dialog'
+import {Input} from '@/shadcn-components/ui/input'
 import {
 	ResizableHandle,
 	ResizablePanel,
@@ -57,6 +67,18 @@ const DEFAULT_TOP_PCT = 70
 const DEFAULT_BOTTOM_PCT = 30
 const MIN_PCT = 20
 const MAX_PCT = 90
+
+// Phase 96-04 — privacy-warning ack key (96-CONTEXT §gray-area #2).
+// Persisted in localStorage so the toast doesn't nag forever once the
+// user has acknowledged it. Per-session re-fire would be more naggy than
+// the per-install dismissal that the v32 toast convention favours.
+const TEACH_PRIVACY_ACK_KEY = 'liv:webapp:teach:warning-ack:v1'
+
+const TEACH_PRIVACY_TEXT =
+	'Do not enter passwords during teach mode. Screenshots may capture typed text.'
+
+// Slug-safe skill name validator — mirrors the SLUG_RE in skills-router.ts.
+const SKILL_NAME_RE = /^[A-Za-z0-9 _-]{1,80}$/
 
 interface WebAppStreamWindowProps {
 	webappId: string
@@ -164,6 +186,122 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 	// 5. Mode (D-95-10 default 'chat'; D-95-MODE-LOCAL = local state only).
 	const [mode, setMode] = useState<WebAppMode>('chat')
 
+	// 5a. Phase 96-04 — Teach-mode recorder + Save dialog state.
+	const recorder = useTeachRecorder()
+	const [pendingSave, setPendingSave] = useState<ActionLog | null>(null)
+	const skillCreateMutation = trpcReact.webapp.skills.create.useMutation()
+	const skillDiscardMutation = trpcReact.webapp.skills.discard.useMutation()
+	const skillsListUtils = trpcReact.useUtils()
+
+	// Privacy toast: fire on first Teach activation per install. The first
+	// time the user picks Teach we surface the dismissable warning; once
+	// acknowledged we persist the localStorage flag and never re-fire.
+	const armPrivacyWarningOnce = useCallback(() => {
+		try {
+			if (localStorage.getItem(TEACH_PRIVACY_ACK_KEY) === '1') return
+			toast.warning(TEACH_PRIVACY_TEXT, {
+				duration: 8000,
+				onDismiss: () => {
+					try {
+						localStorage.setItem(TEACH_PRIVACY_ACK_KEY, '1')
+					} catch {
+						/* localStorage may be unavailable */
+					}
+				},
+				onAutoClose: () => {
+					try {
+						localStorage.setItem(TEACH_PRIVACY_ACK_KEY, '1')
+					} catch {
+						/* localStorage may be unavailable */
+					}
+				},
+			})
+		} catch {
+			// localStorage / toast may be unavailable in JSDOM tests.
+		}
+	}, [])
+
+	// Mode change → arm/disarm recorder. Switching INTO teach starts the
+	// recorder; switching OUT (or unmount) stops + opens the Save dialog
+	// when there is at least one captured event. Empty recordings short-
+	// circuit straight to discard via the recorder's internal cleanup.
+	const handleModeChange = useCallback(
+		(next: WebAppMode) => {
+			const prev = mode
+			setMode(next)
+
+			if (prev === 'teach' && next !== 'teach') {
+				// Stop recording; if events captured, open Save dialog.
+				void recorder.stop().then((log) => {
+					if (log && log.events.length > 0) {
+						setPendingSave(log)
+					} else if (log && recorder.sessionId) {
+						// Empty recording → discard server-side.
+						skillDiscardMutation.mutate({sessionId: recorder.sessionId})
+					}
+				})
+			}
+
+			if (prev !== 'teach' && next === 'teach') {
+				armPrivacyWarningOnce()
+				recorder.start({webappId, vncRef: vnc.containerRef})
+			}
+		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[mode, recorder, webappId, vnc.containerRef, armPrivacyWarningOnce, skillDiscardMutation],
+	)
+
+	// On unmount while still recording → stop and discard (recorder hook
+	// already discards on unmount; we additionally close any pending Save
+	// dialog so it doesn't survive the parent unmount).
+	useEffect(() => {
+		return () => {
+			setPendingSave(null)
+		}
+	}, [])
+
+	const onStopRecording = useCallback(() => {
+		void recorder.stop().then((log) => {
+			if (log && log.events.length > 0) {
+				setPendingSave(log)
+			} else if (log && recorder.sessionId) {
+				skillDiscardMutation.mutate({sessionId: recorder.sessionId})
+			}
+			// Whether or not we open Save dialog, leave Teach mode.
+			setMode('watch')
+		})
+	}, [recorder, skillDiscardMutation])
+
+	const onSavePending = useCallback(
+		(name: string) => {
+			const log = pendingSave
+			if (!log) return
+			const sessionId = log.meta.sessionId
+			skillCreateMutation.mutate(
+				{webappId, name, sessionId, actionLog: log},
+				{
+					onSuccess: () => {
+						setPendingSave(null)
+						void skillsListUtils.webapp.skills.list.invalidate({webappId})
+						toast.success(`Saved skill "${name}"`)
+					},
+					onError: (err) => {
+						toast.error(err.message || 'Failed to save skill')
+					},
+				},
+			)
+		},
+		[pendingSave, skillCreateMutation, skillsListUtils, webappId],
+	)
+
+	const onCancelPending = useCallback(() => {
+		const log = pendingSave
+		if (log) {
+			skillDiscardMutation.mutate({sessionId: log.meta.sessionId})
+		}
+		setPendingSave(null)
+	}, [pendingSave, skillDiscardMutation])
+
 	// 6. Toolbar handlers.
 	const sendChord = useCallback(
 		(modifierKeysym: number, keyKeysym: number, code: string, modCode: string) => {
@@ -265,6 +403,19 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 							{vnc.status === 'error' && vnc.errorMessage ? (
 								<VncOverlay text={vnc.errorMessage} variant='error' />
 							) : null}
+							{recorder.recording ? (
+								<TeachRecordingOverlay
+									eventCount={recorder.eventCount}
+									droppedCount={recorder.droppedCount}
+									onStop={onStopRecording}
+								/>
+							) : null}
+							{recorder.autoStopped ? (
+								<TeachAutoStopBanner
+									onReview={onStopRecording}
+									onDismiss={recorder.resetAutoStop}
+								/>
+							) : null}
 						</div>
 					</div>
 				</ResizablePanel>
@@ -277,7 +428,7 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 					<WebAppAgentPanel
 						webappId={webappId}
 						mode={mode}
-						onModeChange={setMode}
+						onModeChange={handleModeChange}
 						composerValue={composerValue}
 						onComposerChange={setComposerValue}
 						composerDisabled={composerDisabled}
@@ -291,6 +442,16 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 					/>
 				</ResizablePanel>
 			</ResizablePanelGroup>
+			{pendingSave ? (
+				<SaveSkillDialog
+					open={pendingSave !== null}
+					eventCount={pendingSave.events.length}
+					durationMs={pendingSave.endedAt - pendingSave.startedAt}
+					onSave={onSavePending}
+					onCancel={onCancelPending}
+					saving={skillCreateMutation.isPending}
+				/>
+			) : null}
 		</div>
 	)
 }
@@ -429,5 +590,146 @@ function WebAppAgentPanel(props: WebAppAgentPanelProps) {
 				) : null}
 			</div>
 		</div>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Phase 96-04 — Teach-mode UI surfaces (overlay, banner, save dialog).
+// ─────────────────────────────────────────────────────────────────────
+
+interface TeachRecordingOverlayProps {
+	eventCount: number
+	droppedCount: number
+	onStop: () => void
+}
+
+function TeachRecordingOverlay({eventCount, droppedCount, onStop}: TeachRecordingOverlayProps) {
+	return (
+		<div className='absolute right-3 top-3 z-10 flex items-center gap-2 rounded-radius-sm bg-black/70 px-3 py-1.5 text-caption-sm text-white shadow-lg backdrop-blur-sm'>
+			<span
+				className='inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-red-500'
+				aria-label='Recording'
+				role='status'
+			/>
+			<span>
+				Recording{eventCount > 0 ? ` · ${eventCount} events` : ''}
+				{droppedCount > 0 ? ` · ${droppedCount} dropped` : ''}
+			</span>
+			<button
+				type='button'
+				onClick={onStop}
+				className='ml-1 inline-flex h-6 items-center gap-1 rounded-radius-xs bg-red-500/90 px-2 text-caption-xs text-white hover:bg-red-500'
+			>
+				<Square className='h-3 w-3' />
+				Stop
+			</button>
+		</div>
+	)
+}
+
+interface TeachAutoStopBannerProps {
+	onReview: () => void
+	onDismiss: () => void
+}
+
+function TeachAutoStopBanner({onReview, onDismiss}: TeachAutoStopBannerProps) {
+	return (
+		<div className='absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-radius-sm bg-amber-500/90 px-3 py-2 text-caption-sm text-black shadow-lg'>
+			<div className='flex items-center gap-3'>
+				<span>Recording auto-stopped at 10 minutes — review and save?</span>
+				<button
+					type='button'
+					onClick={onReview}
+					className='rounded-radius-xs bg-black/20 px-2 py-1 text-caption-xs text-black hover:bg-black/30'
+				>
+					Review
+				</button>
+				<button
+					type='button'
+					onClick={onDismiss}
+					className='rounded-radius-xs px-2 py-1 text-caption-xs text-black/80 hover:bg-black/10'
+				>
+					Dismiss
+				</button>
+			</div>
+		</div>
+	)
+}
+
+interface SaveSkillDialogProps {
+	open: boolean
+	eventCount: number
+	durationMs: number
+	saving: boolean
+	onSave: (name: string) => void
+	onCancel: () => void
+}
+
+function SaveSkillDialog({open, eventCount, durationMs, saving, onSave, onCancel}: SaveSkillDialogProps) {
+	const [name, setName] = useState('')
+	const trimmed = name.trim()
+	const valid = SKILL_NAME_RE.test(trimmed)
+
+	const submit = useCallback(() => {
+		if (!valid) return
+		onSave(trimmed)
+	}, [valid, trimmed, onSave])
+
+	return (
+		<Dialog
+			open={open}
+			onOpenChange={(o) => {
+				if (!o) onCancel()
+			}}
+		>
+			<DialogContent className='max-w-md'>
+				<DialogHeader>
+					<DialogTitle>Save skill</DialogTitle>
+					<DialogDescription>
+						{eventCount} actions captured over {(durationMs / 1000).toFixed(1)}s. Give the skill a
+						name to save it for this WebApp.
+					</DialogDescription>
+				</DialogHeader>
+				<div className='flex flex-col gap-2'>
+					<Input
+						autoFocus
+						value={name}
+						onChange={(e) => setName(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter' && valid) submit()
+						}}
+						placeholder='e.g. open-inbox'
+						maxLength={80}
+						aria-invalid={name.length > 0 && !valid}
+					/>
+					{name.length > 0 && !valid ? (
+						<div className='text-caption-xs text-red-400'>
+							Use 1-80 letters, digits, spaces, underscores or dashes.
+						</div>
+					) : null}
+				</div>
+				<DialogFooter>
+					<button
+						type='button'
+						onClick={onCancel}
+						className='inline-flex h-8 items-center rounded-radius-sm bg-surface-1 px-3 text-caption-sm text-text-primary hover:bg-surface-2'
+						disabled={saving}
+					>
+						Cancel
+					</button>
+					<button
+						type='button'
+						onClick={submit}
+						disabled={!valid || saving}
+						className={cn(
+							'inline-flex h-8 items-center rounded-radius-sm bg-blue-500 px-3 text-caption-sm text-white hover:bg-blue-600',
+							(!valid || saving) && 'cursor-not-allowed opacity-50',
+						)}
+					>
+						{saving ? 'Saving…' : 'Save'}
+					</button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	)
 }
