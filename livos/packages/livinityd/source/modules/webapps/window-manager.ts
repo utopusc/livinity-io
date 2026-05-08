@@ -205,7 +205,29 @@ export class WebAppWindowManager {
 		const baselineWids = await this.discovery.snapshotWindowIds()
 
 		// 3. Spawn Chrome (detached, NOT a livinityd child)
-		const chromeProc = this.spawnFactory(this.chromeBinary, ['--new-window', opts.url], {
+		// 2026-05-08 hotfix: livinityd runs as root, but Chrome refuses to
+		// launch as root without --no-sandbox (security guard). Even with
+		// --no-sandbox, Chrome would try to use root's HOME (/root) for the
+		// profile dir and miss bruce's signed-in Google session.
+		// Instead, spawn via `sudo -u bruce -E` and reuse the existing
+		// LivOS Chrome profile at /home/bruce/.config/livos-chrome (the
+		// Mini PC has Chrome running there with --remote-debugging-port=9222
+		// for bytebot integration). The profile dir match means Chrome's
+		// IPC layer merges this --new-window request with the existing
+		// process → new top-level window appears under bruce's session.
+		const chromeUser = process.env.LIVOS_CHROME_USER ?? 'bruce'
+		const chromeProfile =
+			process.env.LIVOS_CHROME_PROFILE ?? '/home/bruce/.config/livos-chrome'
+		const chromeArgs = [
+			'-u',
+			chromeUser,
+			'-E',
+			this.chromeBinary,
+			`--user-data-dir=${chromeProfile}`,
+			'--new-window',
+			opts.url,
+		]
+		const chromeProc = this.spawnFactory('sudo', chromeArgs, {
 			detached: true,
 			stdio: 'ignore',
 			env: {...process.env, ...WEBAPPS_X11_ENV},
