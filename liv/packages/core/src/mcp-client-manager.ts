@@ -56,6 +56,20 @@ interface ManagedServer {
   reconnectAttempts: number;
 }
 
+/**
+ * Phase 97-06 — typed error thrown when per-WebApp bytebot MCP registration
+ * is rejected because the soft cap is full. Callers (LivAgentRunner Auto-mode
+ * start path) catch this specifically to surface a clean UI message instead
+ * of a generic 5xx.
+ */
+export class McpInstanceCapError extends Error {
+  readonly code = 'MCP_INSTANCE_CAP_EXCEEDED' as const;
+  constructor(message: string) {
+    super(message);
+    this.name = 'McpInstanceCapError';
+  }
+}
+
 export class McpClientManager {
   private servers = new Map<string, ManagedServer>();
   private subscriber: Redis | null = null;
@@ -205,6 +219,97 @@ export class McpClientManager {
     }
 
     return result;
+  }
+
+  // ── Phase 97-06 — Per-WebApp bytebot MCP instance registration ───────────
+
+  /**
+   * Per-WebApp bytebot MCP server names follow the convention
+   * `bytebot:webapp:<instanceKey>` (set by bytebot-mcp-config.ts P97-05).
+   * The cap counts entries that match this prefix among the
+   * configManager's enabled-server set (regardless of whether they're
+   * currently connected — the cap is a registration-side resource gate
+   * that fires before disk/redis writes).
+   */
+  static readonly WEBAPP_INSTANCE_NAME_PREFIX = 'bytebot:webapp:';
+  static readonly WEBAPP_INSTANCE_CAP = 3;
+
+  /**
+   * P97-06 — register an additional bytebot MCP server scoped to a single
+   * WebApp window. The descriptor MUST already have `instanceKey` and
+   * `windowId` set; this method composes the right `McpServerConfig` (via
+   * the bytebot-mcp-config.ts buildBytebotConfig helper, called at the
+   * livinityd boundary) and persists it through the configManager.
+   *
+   * Caller (livinityd's auto-mode start path) is responsible for calling
+   * `buildBytebotConfig({...env}, path, descriptor)` first; this method
+   * accepts the already-built `McpServerConfig` directly so the wrapper
+   * has no compile-time dependency on the livinityd module path.
+   *
+   * Cap enforcement: at most `WEBAPP_INSTANCE_CAP` (= 3) per-WebApp
+   * registrations may be active at once. The 4th throws a typed error
+   * (`McpInstanceCapError`) before any persistence write.
+   *
+   * Idempotency: if a config entry with the same name already exists,
+   * this method overwrites it (the descriptor's windowId may have
+   * changed if the user reopened the WebApp window).
+   */
+  async registerWebAppInstance(serverName: string, config: McpServerConfig): Promise<void> {
+    if (!serverName.startsWith(McpClientManager.WEBAPP_INSTANCE_NAME_PREFIX)) {
+      throw new Error(
+        `registerWebAppInstance: server name must start with "${McpClientManager.WEBAPP_INSTANCE_NAME_PREFIX}", got "${serverName}"`,
+      );
+    }
+
+    // Cap check — count distinct active registrations (excluding the one
+    // we're about to upsert, since that's an idempotent re-register).
+    const currentNames = await this.listWebAppInstanceNames();
+    const isExistingUpsert = currentNames.includes(serverName);
+    if (!isExistingUpsert && currentNames.length >= McpClientManager.WEBAPP_INSTANCE_CAP) {
+      throw new McpInstanceCapError(
+        `Cannot register "${serverName}": ${McpClientManager.WEBAPP_INSTANCE_CAP} concurrent ` +
+          `per-WebApp bytebot MCP instances already active (active: ${currentNames.join(', ')}).`,
+      );
+    }
+
+    // Persist via configManager. Reconcile fires asynchronously via the
+    // 'mcp_config' update channel — the new instance comes online without
+    // a direct `connectServer` call here.
+    await this.configManager.installServer(config);
+  }
+
+  /**
+   * P97-06 — list active per-WebApp bytebot MCP instance names. Reads
+   * configManager (the source of truth for what's enabled) rather than
+   * `this.servers` (which only reflects already-connected ones — cap
+   * must apply at registration time, even before reconcile fires).
+   */
+  async listWebAppInstanceNames(): Promise<string[]> {
+    const config = await this.configManager.getConfig();
+    return Object.entries(config.mcpServers)
+      .filter(([name, c]) => c.enabled && name.startsWith(McpClientManager.WEBAPP_INSTANCE_NAME_PREFIX))
+      .map(([name]) => name);
+  }
+
+  /**
+   * P97-06 — deregister a per-WebApp bytebot MCP instance. Called from
+   * the wrapper when:
+   *   - P93's window-manager signals the WebApp Chrome window closed.
+   *   - The 5-minute idle reap fires (gray-area Q5 default).
+   *
+   * Best-effort: if the entry doesn't exist, returns silently. The
+   * disconnect from the running server happens via the reconcile loop
+   * once configManager.removeServer publishes the 'mcp_config' channel
+   * update — no direct `disconnectServer` call here keeps the path
+   * symmetric with `registerWebAppInstance`.
+   */
+  async deregisterWebAppInstance(serverName: string): Promise<void> {
+    if (!serverName.startsWith(McpClientManager.WEBAPP_INSTANCE_NAME_PREFIX)) {
+      return; // ignore non-WebApp names
+    }
+    const config = await this.configManager.getConfig();
+    if (!config.mcpServers[serverName]) return;
+    await this.configManager.removeServer(serverName);
   }
 
   /** Validate that a stdio command is in the allowlist */
