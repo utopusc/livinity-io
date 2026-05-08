@@ -31,6 +31,7 @@ import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/ap
 // router (computer-use/routes.ts) can reach a shared lifecycle owner.
 import {ComputerUseContainerManager} from './modules/computer-use/container-manager.js'
 import type {StreamManager} from './modules/streaming/stream-manager.js'
+import type {WebAppWindowManager} from './modules/webapps/window-manager.js'
 import {getPool} from './modules/database/index.js'
 
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
@@ -139,6 +140,11 @@ export default class Livinityd {
 	// T93-11 wires the lifecycle in start(); this field is declared up-front so
 	// the /ws/stream/:id upgrade handler in server/index.ts can typecheck.
 	streamManager?: StreamManager
+	// Phase 93 — WebApp Window Manager (T93-10 spawn/focus/close/list).
+	// Composes window-discovery + portal/geometry-tracker + StreamManager
+	// for the v33 WebApp UX. Optional for the same wiring reason as
+	// streamManager — T93-11 owns lifecycle init in start().
+	webappWindowManager?: WebAppWindowManager
 	isBackupRestoreFirstStart = false
 
 	constructor({
