@@ -79,6 +79,44 @@ export type McpServerConfigStored = McpServerConfigInput
 export const DEFAULT_BYTEBOT_MCP_SERVER_PATH =
 	'/opt/livos/packages/livinityd/source/modules/computer-use/mcp/server.ts'
 
+/**
+ * Phase 97-05 — soft cap on per-WebApp bytebot MCP instances.
+ *
+ * Provisional default per gray-area Q4 in 97-CONTEXT: 3 concurrent Auto-mode
+ * sessions. Each spawned instance is a Node child process (~30-60 MB RSS)
+ * plus per-tool transient maim/xdotool spawns. 3 leaves headroom for the
+ * host-display debug/ad-hoc instance and the rest of livinityd.
+ *
+ * The cap *value* lives here; `mcp-client-manager.ts` (97-06) is the
+ * resource owner that refuses registration above the cap.
+ */
+export const PER_WEBAPP_BYTEBOT_INSTANCE_CAP = 3
+
+/**
+ * Phase 97-05 — env var that signals a bytebot MCP child process to scope
+ * all native primitive calls to a specific X11 window id by default. The
+ * server reads this once at boot; tools.ts threads it into native primitive
+ * calls when a tool's input doesn't explicitly override it.
+ */
+export const BYTEBOT_TARGET_WINDOW_ID_ENV = 'BYTEBOT_TARGET_WINDOW_ID'
+
+/**
+ * Phase 97-05 — descriptor for a per-WebApp bytebot MCP server instance.
+ *
+ * `instanceKey` namespaces the entry in McpConfigManager (e.g. registered
+ * under server name `bytebot:webapp:<instanceKey>` instead of the bare
+ * `bytebot`). Two simultaneous WebApp instances will not collide even if
+ * they happen to wrap the same Chrome window id at different times.
+ *
+ * `windowId` is plumbed into the spawned child's env as
+ * BYTEBOT_TARGET_WINDOW_ID, where mcp/server.ts picks it up and tools.ts
+ * uses it as the default windowId for every primitive call.
+ */
+export interface PerWebAppMcpDescriptor {
+	instanceKey: string
+	windowId: number
+}
+
 /** Minimal logger contract — only .log + .error are used. Compatible with
  *  livinityd's createLogger and console. */
 export interface BytebotMcpConfigLogger {
@@ -136,26 +174,37 @@ async function checkPreconditions(
 /**
  * Build the canonical bytebot MCP server config. The same shape is used for
  * fresh installs AND idempotency comparison.
+ *
+ * Phase 97-05 — when `descriptor` is provided, returns a per-WebApp variant:
+ *   - name: `bytebot:webapp:<instanceKey>` (so two instances coexist with the
+ *     bare host-display `bytebot` entry).
+ *   - env: BYTEBOT_TARGET_WINDOW_ID is set so the spawned child scopes its
+ *     native primitive calls to that X11 window by default.
  */
-function buildBytebotConfig(
+export function buildBytebotConfig(
 	env: NodeJS.ProcessEnv,
 	resolvedPath: string,
+	descriptor?: PerWebAppMcpDescriptor,
 ): McpServerConfigInput {
+	const baseEnv: Record<string, string> = {
+		DISPLAY: env.DISPLAY ?? ':0',
+		// 2026-05-05 P79-03: GDM-managed sessions (Ubuntu 24.04 default) put
+		// the Xauthority cookie at /run/user/<uid>/gdm/Xauthority — NOT
+		// /home/<user>/.Xauthority (that path doesn't exist for GDM logins).
+		// nut-js' screen.capture() hangs when X server is unreachable,
+		// triggering MCP SDK timeouts ('Connection closed' from client side).
+		// Default to the GDM path; allow override via env BYTEBOT_XAUTHORITY.
+		XAUTHORITY: env.BYTEBOT_XAUTHORITY ?? env.XAUTHORITY ?? '/run/user/1000/gdm/Xauthority',
+	}
+	if (descriptor) {
+		baseEnv[BYTEBOT_TARGET_WINDOW_ID_ENV] = String(descriptor.windowId)
+	}
 	return {
-		name: 'bytebot',
+		name: descriptor ? `bytebot:webapp:${descriptor.instanceKey}` : 'bytebot',
 		transport: 'stdio',
 		command: 'tsx',
 		args: [resolvedPath],
-		env: {
-			DISPLAY: env.DISPLAY ?? ':0',
-			// 2026-05-05 P79-03: GDM-managed sessions (Ubuntu 24.04 default) put
-			// the Xauthority cookie at /run/user/<uid>/gdm/Xauthority — NOT
-			// /home/<user>/.Xauthority (that path doesn't exist for GDM logins).
-			// nut-js' screen.capture() hangs when X server is unreachable,
-			// triggering MCP SDK timeouts ('Connection closed' from client side).
-			// Default to the GDM path; allow override via env BYTEBOT_XAUTHORITY.
-			XAUTHORITY: env.BYTEBOT_XAUTHORITY ?? env.XAUTHORITY ?? '/run/user/1000/gdm/Xauthority',
-		},
+		env: baseEnv,
 		enabled: true,
 		installedAt: Date.now(),
 	}
