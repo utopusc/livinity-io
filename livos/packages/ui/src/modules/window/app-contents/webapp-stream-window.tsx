@@ -137,10 +137,24 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 	const [wsUrl, setWsUrl] = useState<string | null>(null)
 	const [spawnError, setSpawnError] = useState<{code: string; message: string} | null>(null)
 
+	// 2026-05-08 hotfix: useMutation returns a new object reference every
+	// render, so any callback that closes over `spawnMutation` is unstable.
+	// Putting `triggerSpawn` in a useEffect dep array caused the spawn call
+	// to fire on every render → ERR_INSUFFICIENT_RESOURCES (browser ran out
+	// of connection slots). Two-layer fix:
+	//   1. Mutation reference is parked in a ref so triggerSpawn's deps
+	//      reduce to {webapp, webappId} (stable across renders).
+	//   2. spawnedForRef guards "fire once per webappId" — even if upstream
+	//      churn rebuilds triggerSpawn, the effect won't re-fire the spawn.
+	//      Ref resets only when the user navigates to a different WebApp.
+	const spawnMutationRef = useRef(spawnMutation)
+	spawnMutationRef.current = spawnMutation
+	const spawnedForRef = useRef<string | null>(null)
+
 	const triggerSpawn = useCallback(() => {
 		if (!webapp) return
 		setSpawnError(null)
-		spawnMutation.mutate(
+		spawnMutationRef.current.mutate(
 			{webappId, url: webapp.url, expectedTitle: webapp.title ?? undefined},
 			{
 				onSuccess: (res) => {
@@ -156,12 +170,14 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 				},
 			},
 		)
-	}, [spawnMutation, webapp, webappId])
+	}, [webapp, webappId])
 
 	useEffect(() => {
 		if (!webapp || wsUrl || spawnError) return
+		if (spawnedForRef.current === webappId) return
+		spawnedForRef.current = webappId
 		triggerSpawn()
-	}, [webapp, wsUrl, spawnError, triggerSpawn])
+	}, [webapp, wsUrl, spawnError, webappId, triggerSpawn])
 
 	// 3. Cleanup on unmount — fire-and-forget close (D-95-CLEANUP). The
 	// window manager owns idle cleanup as a backstop; failure here is
