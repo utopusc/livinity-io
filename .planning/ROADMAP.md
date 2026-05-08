@@ -442,6 +442,38 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 
 ---
 
+### Phase 100: Multi-Stream + Stream-Window Redesign
+
+**Goal:** Close the four UAT gaps from Phase 99 so v33 (WebApp Launcher) can ship: (1) two concurrent WebApps must each get their own independent stream + own x11vnc port + own stream window component; (2) drop URL bar from stream window — URL is bound to the WebApp icon and redundant inside the stream view; (3) stream area fills the window (no inline toolbar/agent panel chrome below it, only the standard top drag-strip + close-X); (4) Chat / Teach / Watch / Auto inline pane removed and replaced with a floating icon-button row anchored to the stream window's bottom edge (mirrors the existing top drag/close pattern), each button opening its own slide-in drawer (~35% window width). Backend root-cause work is empirical-first on the Mini PC: 100-01 verifies which of H1..H4 (Chrome `--new-window` IPC merge vs. xdotool matcher race vs. frontend single-render vs. wid-collision-via-merge) is the real cause; 100-02 implements the locked fix (default candidate: swap `--new-window URL` → `--app=URL` site-specific-browser mode, which also delivers full-bleed chromeless windows for free → solves G-99-UAT-2 in the same commit). 100-03/100-04 do the frontend rewire. 100-05 deploys to Mini PC + walks UAT-CHECKLIST.md A-J with the user.
+
+**Depends on:** Phase 99 (PARTIAL-PASS — RFB protocol swap shipped; Phase 100 inherits `vnc-bridge.ts`, `stream-manager.ts` discriminated union, WS dispatch, fresh `VNC_PORT_COUNTER` ring 15900..16099 — all locked / unmodified).
+
+**Requirements:** V33-MULTI-01..05
+
+**Locked decisions (D-100-*):**
+- **D-100-SACRED:** `liv/packages/core/src/sdk-agent-runner.ts` SHA must equal `f3538e1d811992b782a9bb057d1b7f0a0189f95f` before AND after every commit (pre/post `git hash-object` gate).
+- **D-100-NO-SERVER4:** Mini PC `bruce@10.69.31.68` only.
+- **D-100-NO-BYOK:** Subscription-only Agent SDK; no `@anthropic-ai/sdk` paths.
+- **D-100-FMP4-ALIVE:** `Fmp4Fanout`, `encoder-args`, `pipewire-portal`, `geometry-tracker` preserved byte-for-byte (desktop-stream native app keeps using them).
+- **D-100-SHARED-PROFILE:** Chrome continues to share `/home/bruce/.config/livos-chrome` (no per-WebApp profile dir; loses Google login if split).
+- **D-100-X11VNC-CANONICAL:** Phase 99-02 `spawnVncForWindow` argv recipe is locked, not modified.
+- **D-100-LIVE-VERIFY-FIRST:** No 100-02 backend change ships until 100-01 has empirically pinned the real root cause on the Mini PC.
+
+**Success criteria (UAT-walkable):**
+1. Open WebApp A → stream window opens at port 15900, RFB handshake, captured Chrome visible.
+2. Open WebApp B → SECOND stream window opens at port 15901, independent RFB handshake, independent Chrome window with different URL captured.
+3. Both stream windows render simultaneously; mouse input in one does not reach the other.
+4. Each window has NO URL bar — only the standard drag-strip + close-X.
+5. Stream area fills the window (no inline toolbar/agent panel below it).
+6. Bottom edge of each window has a row of 4 icon-buttons (Chat / Teach / Watch / Auto).
+7. Clicking Chat opens a slide-in drawer with the chat surface; second click closes; opens again on Chat-icon click.
+8. Clicking Teach opens the teach-recorder UI in a slide-in drawer; same close behavior; same swap-on-other-button-click behavior.
+9. Bytebot Auto mode in WebApp A does not interfere with WebApp B (per-window MCP env confirmed via `BYTEBOT_TARGET_WINDOW_ID`).
+10. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all Phase 100 commits.
+11. Mini PC user-walked UAT signoff documented in `UAT-CHECKLIST.md` sections A-J → v33 milestone flips to ✅ Shipped.
+
+---
+
 ## Coverage
 
 All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-LOOP/RELIAB/BROKER-CARRY/MEM/MARKET) mapped to phases 64-76. 100% coverage. See REQUIREMENTS.md Traceability table (filled by phase planning).
