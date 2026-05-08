@@ -35,6 +35,18 @@ import {
 	type StreamMode,
 } from './encoder-args.js'
 import type {VaapiProbeResult} from './vaapi-probe.js'
+import {spawnVncForWindow} from './vnc-bridge.js'
+
+// Phase 99 — VNC rfbPort allocator. In-process counter; LivOS-private
+// range [15900, 16100). Bind race covered by attachVncBridge's 3×100ms
+// retry (Pitfall 4 mitigation in vnc-bridge.ts).
+let VNC_PORT_COUNTER = 15900
+function allocateVncPort(): number {
+	const port = VNC_PORT_COUNTER
+	VNC_PORT_COUNTER += 1
+	if (VNC_PORT_COUNTER >= 16100) VNC_PORT_COUNTER = 15900
+	return port
+}
 
 export type VncWindowTarget = {wid: number}
 
@@ -165,6 +177,59 @@ export class StreamManager extends EventEmitter {
 			throw new StreamCapExceededError(cap)
 		}
 
+		// 2.5 Phase 99 — vnc-window branch (D-99-04). Returns BEFORE the
+		// ffmpeg/gst argv builder so encoder-args is never invoked for vnc.
+		if (opts.mode === 'vnc-window') {
+			const target = opts.target as VncWindowTarget
+			if (!Number.isInteger(target.wid) || target.wid <= 0) {
+				throw new Error(
+					`stream-manager: vnc-window target.wid must be a positive integer (got ${target.wid})`,
+				)
+			}
+			const rfbPort = allocateVncPort()
+			const x11vnc = spawnVncForWindow({
+				wid: target.wid,
+				rfbPort,
+				spawnFactory: this.spawnFactory as never,
+				logger: this.logger,
+			})
+			const streamId = randomUUID()
+			const vncSession: VncSession = {
+				kind: 'vnc',
+				streamId,
+				userId: opts.userId,
+				mode: 'vnc-window',
+				target,
+				targetKey,
+				x11vnc,
+				rfbPort,
+				wid: target.wid,
+				startedAt: Date.now(),
+				status: 'alive',
+				stopRequested: false,
+			}
+			this.streams.set(streamId, vncSession)
+			x11vnc.on('exit', (code, signal) => {
+				if (vncSession.stopRequested) {
+					this.logger?.info?.(
+						`stream ${streamId}: x11vnc exited cleanly (stop requested)`,
+					)
+					return
+				}
+				if (code !== 0 && code !== null) {
+					this.logger?.error?.(
+						`stream ${streamId}: x11vnc crashed (code=${code} signal=${signal} wid=${target.wid})`,
+					)
+					vncSession.status = 'crashed'
+					this.emit('crash', {streamId, code, signal})
+				}
+			})
+			this.logger?.info?.(
+				`stream ${streamId} started (user=${opts.userId} mode=vnc-window wid=${target.wid} rfbPort=${rfbPort})`,
+			)
+			return {streamId, wsUrl: wsUrlFor(streamId)}
+		}
+
 		// 3. Build argv
 		let cmd: string
 		let argv: string[]
@@ -266,13 +331,33 @@ export class StreamManager extends EventEmitter {
 		if (session.stopRequested) return {stopped: true}
 		session.stopRequested = true
 
-		// Phase 99 — vnc kind dispatch lands in Task 2; for now only fmp4 is
-		// constructed by startStream so the cast is safe.
-		if (session.kind !== 'fmp4') {
-			throw new Error(
-				`stream-manager: stopStream for kind='${session.kind}' not yet wired (lands in plan 99-03 task 2)`,
+		// Phase 99 — vnc cascade: SIGTERM x11vnc, wait up to 500ms for clean
+		// exit, then delete from map. No SIGKILL escalation: x11vnc handles
+		// SIGTERM cleanly.
+		if (session.kind === 'vnc') {
+			try {
+				session.x11vnc.kill('SIGTERM')
+			} catch (err) {
+				this.logger?.warn?.(`stream ${streamId}: x11vnc SIGTERM threw`, err)
+			}
+			await new Promise<void>((resolve) => {
+				let resolved = false
+				const onExit = () => {
+					if (resolved) return
+					resolved = true
+					clearTimeout(timer)
+					resolve()
+				}
+				const timer = setTimeout(onExit, 500)
+				session.x11vnc.once('exit', onExit)
+			})
+			this.streams.delete(streamId)
+			this.logger?.info?.(
+				`stream ${streamId} stopped (vnc, wid=${session.wid})`,
 			)
+			return {stopped: true}
 		}
+
 		const encoder = session.encoder
 		const fanout = session.fanout
 
@@ -327,6 +412,16 @@ export class StreamManager extends EventEmitter {
 		const session = this.streams.get(streamId)
 		if (!session) return null
 		return this.toRecord(session)
+	}
+
+	/**
+	 * Phase 99 — return the discriminated-union session for the
+	 * `/ws/stream/:streamId` handler so it can dispatch on `session.kind`
+	 * (fmp4 → addSubscriber; vnc → attachVncBridge). Returns null if no
+	 * matching session is registered.
+	 */
+	getSession(streamId: string): StreamSession | null {
+		return this.streams.get(streamId) ?? null
 	}
 
 	getFanout(streamId: string): Fmp4Fanout | null {
