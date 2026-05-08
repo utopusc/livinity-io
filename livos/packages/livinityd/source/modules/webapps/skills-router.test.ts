@@ -294,3 +294,37 @@ describe('httpOnlyPaths includes webapp.skills.* entries', () => {
 		}
 	})
 })
+
+describe('P97 fixture: sample-skill.json round-trips through skills.create', () => {
+	test('T11 — fixture validates as canonical action log', async () => {
+		findWebAppByIdMock.mockResolvedValueOnce({id: WEBAPP, userId: USER})
+		queryMock.mockResolvedValueOnce({
+			rows: [
+				{
+					id: SKILL,
+					user_id: USER,
+					webapp_id: WEBAPP,
+					skill_name: 'fixture-test',
+					action_log: {},
+					created_at: new Date(),
+				},
+			],
+			rowCount: 1,
+		})
+		// Import the fixture and re-target webappId at our test WEBAPP so the
+		// router's zod validator + ownership check both pass.
+		const fixturePath = join(__dirname, '__fixtures__', 'sample-skill.json')
+		const raw = await fs.readFile(fixturePath, 'utf8')
+		const parsed = JSON.parse(raw)
+		parsed.webappId = WEBAPP
+		const caller = skillsRouter.createCaller(makeCtx(USER) as any)
+		await expect(
+			caller.create({
+				webappId: WEBAPP,
+				name: 'fixture-test',
+				sessionId: parsed.meta.sessionId,
+				actionLog: parsed,
+			}),
+		).resolves.toMatchObject({id: SKILL})
+	})
+})
