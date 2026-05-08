@@ -26,7 +26,7 @@
 
 import type {VaapiProbeResult} from './vaapi-probe.js'
 
-export type StreamMode = 'desktop' | 'window-crop' | 'pipewire-fd'
+export type StreamMode = 'desktop' | 'window-crop' | 'pipewire-fd' | 'vnc-window'
 
 export type DesktopOpts = {
 	mode: 'desktop'
@@ -65,6 +65,11 @@ const VAAPI_DEVICE = '/dev/dri/renderD128'
  * Returns the array of strings passed to `child_process.spawn('ffmpeg', argv)`.
  */
 export function buildFfmpegArgs(opts: BuildArgsOpts): string[] {
+	if ((opts as {mode?: string}).mode === 'vnc-window') {
+		throw new Error(
+			'encoder-args: vnc-window mode does not use ffmpeg — see stream-manager.ts vnc branch',
+		)
+	}
 	const framerate = opts.framerate ?? DEFAULT_FRAMERATE
 	const fragmentMs = opts.fragmentDurationMs ?? DEFAULT_FRAGMENT_MS
 	const zeroLatency = opts.zeroLatency !== false // default on
@@ -136,6 +141,11 @@ export function buildFfmpegArgs(opts: BuildArgsOpts): string[] {
  * (T93-08). We expose it to gst via the `path=N` property on `pipewiresrc`.
  */
 export function buildGstWindowArgs(opts: PipewireFdOpts): string[] {
+	if ((opts as {mode?: string}).mode === 'vnc-window') {
+		throw new Error(
+			'encoder-args: vnc-window mode does not use gst — see stream-manager.ts vnc branch',
+		)
+	}
 	const framerate = opts.framerate ?? DEFAULT_FRAMERATE
 	return [
 		'-q', // quiet — suppresses gstreamer's own progress chatter

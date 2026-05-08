@@ -36,10 +36,13 @@ import {
 } from './encoder-args.js'
 import type {VaapiProbeResult} from './vaapi-probe.js'
 
+export type VncWindowTarget = {wid: number}
+
 export type StreamTarget =
 	| Omit<DesktopOpts, 'mode'>
 	| Omit<WindowCropOpts, 'mode'>
 	| Omit<PipewireFdOpts, 'mode'>
+	| VncWindowTarget
 
 export type StartStreamOpts = {
 	userId: string
@@ -60,12 +63,15 @@ export type StreamRecord = {
 	status: StreamStatus
 	startedAt: number
 	wsUrl: string
+	/** Phase 99: discriminator — `'fmp4'` for ffmpeg/gst-backed sessions, `'vnc'` for x11vnc-backed. */
+	kind: 'fmp4' | 'vnc'
 }
 
-type StreamSession = {
+type FmpSession = {
+	kind: 'fmp4'
 	streamId: string
 	userId: string
-	mode: StreamMode
+	mode: 'desktop' | 'window-crop' | 'pipewire-fd'
 	target: StreamTarget
 	targetKey: string
 	encoder: ChildProcess
@@ -74,6 +80,23 @@ type StreamSession = {
 	status: StreamStatus
 	stopRequested: boolean
 }
+
+type VncSession = {
+	kind: 'vnc'
+	streamId: string
+	userId: string
+	mode: 'vnc-window'
+	target: VncWindowTarget
+	targetKey: string
+	x11vnc: ChildProcess
+	rfbPort: number
+	wid: number
+	startedAt: number
+	status: StreamStatus
+	stopRequested: boolean
+}
+
+export type StreamSession = FmpSession | VncSession
 
 export type SpawnFactory = (cmd: string, args: string[]) => ChildProcess
 
@@ -164,10 +187,11 @@ export class StreamManager extends EventEmitter {
 		const streamId = randomUUID()
 		const fanout = new Fmp4Fanout({logger: this.logger})
 
-		const session: StreamSession = {
+		const session: FmpSession = {
+			kind: 'fmp4',
 			streamId,
 			userId: opts.userId,
-			mode: opts.mode,
+			mode: opts.mode as 'desktop' | 'window-crop' | 'pipewire-fd',
 			target: opts.target,
 			targetKey,
 			encoder,
@@ -242,6 +266,13 @@ export class StreamManager extends EventEmitter {
 		if (session.stopRequested) return {stopped: true}
 		session.stopRequested = true
 
+		// Phase 99 — vnc kind dispatch lands in Task 2; for now only fmp4 is
+		// constructed by startStream so the cast is safe.
+		if (session.kind !== 'fmp4') {
+			throw new Error(
+				`stream-manager: stopStream for kind='${session.kind}' not yet wired (lands in plan 99-03 task 2)`,
+			)
+		}
 		const encoder = session.encoder
 		const fanout = session.fanout
 
@@ -299,12 +330,14 @@ export class StreamManager extends EventEmitter {
 	}
 
 	getFanout(streamId: string): Fmp4Fanout | null {
-		return this.streams.get(streamId)?.fanout ?? null
+		const session = this.streams.get(streamId)
+		if (!session || session.kind !== 'fmp4') return null
+		return session.fanout
 	}
 
 	addSubscriber(streamId: string, ws: SubscriberSocket): boolean {
 		const session = this.streams.get(streamId)
-		if (!session) return false
+		if (!session || session.kind !== 'fmp4') return false
 		session.fanout.addSubscriber(ws)
 		return true
 	}
@@ -315,10 +348,12 @@ export class StreamManager extends EventEmitter {
 			userId: session.userId,
 			mode: session.mode,
 			target: session.target,
-			subscriberCount: session.fanout.getSubscriberCount(),
+			subscriberCount:
+				session.kind === 'fmp4' ? session.fanout.getSubscriberCount() : 0,
 			status: session.status,
 			startedAt: session.startedAt,
 			wsUrl: wsUrlFor(session.streamId),
+			kind: session.kind,
 		}
 	}
 
@@ -326,7 +361,8 @@ export class StreamManager extends EventEmitter {
 	_clearForTests(): void {
 		for (const session of this.streams.values()) {
 			try {
-				session.fanout.close('test-clear')
+				if (session.kind === 'fmp4') session.fanout.close('test-clear')
+				else session.x11vnc.kill('SIGKILL')
 			} catch {
 				/* noop */
 			}
