@@ -96,7 +96,30 @@ All 11 lines end with `f3538e1d811992b782a9bb057d1b7f0a0189f95f`.
 
 ## UAT outcome
 
-(filled in by Task 4 after the user-walked Mini PC UAT signs off)
+**Result:** PARTIAL-PASS (date: 2026-05-08; user-walked).
+
+**What works (PASS):**
+- Mini PC deploy via `bash /opt/livos/update.sh` completed cleanly (deployed SHA `cd6f442`); all 4 services (`livos`, `liv-core`, `liv-worker`, `liv-memory`) report `active`; livos.service journal clean (only normal tunnel keepalive reconnects).
+- Single WebApp click → stream window opens → noVNC RFB handshake succeeds (no `Invalid server version ftypiso` error); captured Chrome window pixels are visible.
+- Mouse + keyboard input pass through to the captured Chrome window (xdotool `--window <wid>` works).
+- The original Phase 99 trigger (P93 fMP4 vs noVNC RFB protocol mismatch) is RESOLVED for the single-stream case.
+
+**What does NOT work (gaps requiring follow-up):**
+- **G-99-UAT-1 — Multi-stream concurrent broken:** clicking a SECOND WebApp does not produce a second independent stream. User reports "tek pencere üzerinden çalışıyor" (works only through one window). Expected: each WebApp click → its own window + its own stream port. Bytebot per-window window-switching also blocked by this.
+- **G-99-UAT-2 — Stream window UI has unwanted URL bar:** the top toolbar (`webapp-toolbar.tsx`, ~95-07.A) shows a URL input that the user does not want. Each WebApp's URL is already bound to the WebApp; showing it inside the stream window is redundant.
+- **G-99-UAT-3 — Stream area should fill window:** stream pane should consume the full window; no chrome around it. Current layout has the toolbar above + the AgentPanel (mode selector + chat) below, which compresses the actual stream.
+- **G-99-UAT-4 — Chat/Teach/Watch/Auto inline is wrong shape:** these controls are currently inside the same window as the stream. User wants them as **floating icon buttons positioned outside the stream window** (like the existing top drag-to-move and close buttons). Each button opens its own panel/popup (Chat, Teach, Watch, Auto) rather than being inline.
+
+**Status flip:** Phase 99 — `[ ]` → `[~]` in ROADMAP.md (partial-PASS pending Phase 100 follow-up).
+
+**v33 milestone status:** all 8 phases (92-99) now CODE-COMPLETE; the v33-VNC-* requirement set is partially met. Phase 100 (added to ROADMAP) closes the gaps before v33 ships. The protocol-level mismatch that triggered Phase 99 is resolved; remaining issues are concurrency + UI redesign, not wire-format.
+
+**Carryover to Phase 100 — Multi-Stream + Stream-Window Redesign:**
+1. Diagnose multi-stream root cause (likely Chrome `--user-data-dir` IPC merge: a 2nd `--new-window` invocation against the same profile may merge into the existing browser process, so xdotool either finds the same wid OR finds a new wid that the frontend doesn't open a fresh window for). Mini PC live verification required (kill-gate).
+2. Backend fix: depending on diagnosis — switch to `--app=URL` site-specific-browser mode (no IPC merge, also gives a chromeless window which solves G-99-UAT-2 partially) OR per-WebApp `--user-data-dir` (heavier; loses shared Google login).
+3. Frontend redesign: `webapp-stream-window.tsx` + `webapp-toolbar.tsx` — drop URL bar, full-bleed stream area.
+4. Frontend redesign: replace inline `webapp-mode-selector.tsx` + agent panel with **floating action button row** (icon-only, anchored to the stream window's bottom edge similar to the top drag/close buttons). Each button (Chat / Teach / Watch / Auto) opens its own panel as a popover/sheet.
+5. Mini PC deploy + user-walked UAT close (must verify 2 concurrent streams + new UI shape).
 
 ## Carryovers
 
@@ -108,4 +131,4 @@ All 11 lines end with `f3538e1d811992b782a9bb057d1b7f0a0189f95f`.
 
 ---
 
-**Closing sacred-SHA gate:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (verified pre-deploy; will re-verify post-UAT in Task 4).
+**Closing sacred-SHA gate:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (verified pre-deploy AND post-deploy; protocol swap functionally LIVE on Mini PC; multi-stream + UI redesign deferred to Phase 100).
