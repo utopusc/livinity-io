@@ -633,11 +633,13 @@ LAUNCHER
         apt-get install -y -qq \
             xdg-desktop-portal-gnome
 
-        # VAAPI userspace for Intel iGPU (Mini PC). vainfo is the boot probe;
-        # intel-media-va-driver provides the H264 encode entry point;
-        # libdrm-intel1 is the DRM userspace lib.
+        # VAAPI userspace for Intel iGPU (Mini PC). libva-utils provides `vainfo`
+        # (the boot probe binary); intel-media-va-driver provides the H264
+        # encode entry point; libdrm-intel1 is the DRM userspace lib. The apt
+        # package is `libva-utils`, NOT `vainfo` — `vainfo` is just the binary
+        # name shipped inside libva-utils.
         apt-get install -y -qq \
-            vainfo \
+            libva-utils \
             intel-media-va-driver \
             libdrm-intel1 \
             || warn "VAAPI driver install failed — falling back to libx264 path"

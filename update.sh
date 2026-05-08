@@ -350,9 +350,10 @@ if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
         xdg-desktop-portal-gnome \
         2>&1 | tail -5 || warn "Some streaming packages failed to install (non-fatal)"
 
-    # VAAPI userspace — separate group so an Intel-iGPU-less host doesn't fail the run
+    # VAAPI userspace — separate group so an Intel-iGPU-less host doesn't fail the run.
+    # apt package is `libva-utils` (provides the `vainfo` binary), NOT `vainfo`.
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        vainfo intel-media-va-driver libdrm-intel1 \
+        libva-utils intel-media-va-driver libdrm-intel1 \
         2>&1 | tail -5 || warn "VAAPI userspace install failed — libx264 fallback will be used"
 
     # Verify the critical streaming binaries are present after install
