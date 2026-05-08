@@ -227,9 +227,61 @@ async function withHeldKeys<T>(holdKeys: readonly string[] | undefined, action: 
 /**
  * Move the mouse cursor to absolute coordinates. Mirrors `_moveMouseTool`
  * (computer_move_mouse). Required-coordinates per upstream schema.
+ *
+ * 2026-05-08 P97-02 — Optional `windowId`. When set, dispatch via
+ * `xdotool mousemove --window <wid> --sync X Y` so the cursor warp targets
+ * the specified window's coordinate space (xdotool documents `--window`
+ * for `mousemove` as relative-to-window coordinates with `mousemove_relative`
+ * semantics; we use it on absolute mode here for consistency with click).
+ * On xdotool failure, falls back to nut-js host-display setPosition.
  */
-export async function moveMouse(coordinates: Coords): Promise<void> {
+export async function moveMouse(coordinates: Coords, windowId?: number): Promise<void> {
+	if (typeof windowId === 'number') {
+		const ok = await tryXdotoolMouseMove(coordinates, windowId)
+		if (ok) return
+	}
 	await mouse.setPosition(new Point(coordinates.x, coordinates.y))
+}
+
+/**
+ * P97-02: spawn `xdotool mousemove --window <wid> --sync X Y`. Returns true
+ * on clean exit; false otherwise. Never throws.
+ */
+async function tryXdotoolMouseMove(coords: Coords, windowId: number): Promise<boolean> {
+	const args = [
+		'mousemove',
+		'--window',
+		String(windowId),
+		'--sync',
+		String(coords.x),
+		String(coords.y),
+	]
+	return await spawnXdotool(args)
+}
+
+/**
+ * P97-02: shared xdotool spawn helper. Returns true on clean exit; false on
+ * ENOENT / spawn error / non-zero exit. Never throws.
+ */
+function spawnXdotool(args: readonly string[]): Promise<boolean> {
+	return new Promise<boolean>((resolve) => {
+		let settled = false
+		const settle = (ok: boolean) => {
+			if (settled) return
+			settled = true
+			resolve(ok)
+		}
+		try {
+			const child = spawn('xdotool', args as string[], {
+				stdio: 'ignore',
+				env: process.env,
+			})
+			child.on('error', () => settle(false))
+			child.on('close', (code: number | null) => settle(code === 0))
+		} catch {
+			settle(false)
+		}
+	})
 }
 
 /**
@@ -265,19 +317,29 @@ export async function traceMouse(path: readonly Coords[], holdKeys?: readonly st
  *     original modifier-aware path. xdotool's `--clearmodifiers` is
  *     incompatible with deliberately-held keys, so we keep nut-js for the
  *     drag-with-modifier / shift-click case.
+ *
+ * 2026-05-08 P97-02 — Optional `windowId`. When set, the xdotool argv is
+ * prefixed with `--window <wid>` so events target that window even if a
+ * different window is currently focused. The nut-js fallback path is
+ * host-display only (window scoping there is out of scope).
  */
 export async function clickMouse(opts: {
 	coordinates?: Coords
 	button: ButtonName
 	clickCount: number
 	holdKeys?: readonly string[]
+	/** P97-02: target a specific X11 window via `xdotool --window <wid>`. */
+	windowId?: number
 }): Promise<void> {
 	const count = Math.max(1, Math.floor(opts.clickCount))
 
 	if (!opts.holdKeys || opts.holdKeys.length === 0) {
-		const ok = await tryXdotoolClick(opts.button, count, opts.coordinates)
+		const ok = await tryXdotoolClick(opts.button, count, opts.coordinates, opts.windowId)
 		if (ok) return
-		// Fall through to nut-js — xdotool not installed or failed.
+		// Fall through to nut-js — xdotool not installed or failed. nut-js
+		// has no per-window scoping; if windowId was set, the event will
+		// land on the focused window. Caller should treat windowed clicks
+		// as best-effort when xdotool isn't available.
 	}
 
 	const btn = BUTTON_MAP[opts.button]
@@ -306,23 +368,31 @@ const XDOTOOL_BUTTON: Record<ButtonName, string> = {
  * Implemented via `child_process.spawn` (not `execFile`) so the existing
  * vitest mock — which replaces `node:child_process` with a `spawn`-only
  * surface — still loads this module.
+ *
+ * 2026-05-08 P97-02 — Optional `windowId`. When set, every command in the
+ * xdotool argv chain is prefixed with `--window <wid>`. xdotool documents
+ * `--window` as a per-command override that pins the event target to a
+ * specific X11 window id. We apply it to both `mousemove` and `click` so
+ * cursor warp and button event both land on the same window.
  */
 async function tryXdotoolClick(
 	button: ButtonName,
 	count: number,
 	coordinates: Coords | undefined,
+	windowId?: number,
 ): Promise<boolean> {
 	const args: string[] = []
+	const winFlag: string[] = typeof windowId === 'number' ? ['--window', String(windowId)] : []
 	if (coordinates) {
-		args.push('mousemove', '--sync', String(coordinates.x), String(coordinates.y))
+		args.push('mousemove', ...winFlag, '--sync', String(coordinates.x), String(coordinates.y))
 	}
 	const btnNum = XDOTOOL_BUTTON[button]
 	if (count > 1) {
 		// 150ms inter-click delay matches upstream Bytebot's clickMouse loop
 		// (packages/bytebotd/src/computer-use/computer-use.service.ts:147).
-		args.push('click', '--clearmodifiers', '--repeat', String(count), '--delay', '150', btnNum)
+		args.push('click', ...winFlag, '--clearmodifiers', '--repeat', String(count), '--delay', '150', btnNum)
 	} else {
-		args.push('click', '--clearmodifiers', btnNum)
+		args.push('click', ...winFlag, '--clearmodifiers', btnNum)
 	}
 	return await new Promise<boolean>((resolve) => {
 		let settled = false
@@ -452,8 +522,16 @@ export async function scroll(opts: {
  * Optional `delay` (ms): in combo mode inserted BETWEEN press and release;
  * in sequence mode inserted BETWEEN consecutive keys.
  */
-export async function typeKeys(keys: readonly string[], delay?: number): Promise<void> {
+export async function typeKeys(keys: readonly string[], delay?: number, windowId?: number): Promise<void> {
 	if (keys.length === 0) return
+	// P97-02: window-scoped path. xdotool `key --window <wid> <combo>` accepts
+	// the X11 keysym names directly. We map nut-js-style names to xdotool
+	// keysyms via the existing alias expansion + a small xdotool name table.
+	if (typeof windowId === 'number') {
+		const ok = await tryXdotoolKey(keys, windowId, false, delay)
+		if (ok) return
+		// Falls through to nut-js (host-display) if xdotool unavailable.
+	}
 	// Expand aliases ("Alt" → "LeftAlt") and combined tokens ("Alt+F4" →
 	// ["LeftAlt","F4"]) BEFORE detecting combo-vs-sequence — modifier presence
 	// must be checked on the expanded list, not the raw input.
@@ -486,15 +564,135 @@ export async function typeKeys(keys: readonly string[], delay?: number): Promise
  * Press or release a set of keys (without auto-release). Mirrors
  * `_pressKeysTool` (computer_press_keys). Used by agents that want explicit
  * modifier-state control.
+ *
+ * 2026-05-08 P97-02 — Optional `windowId`. When set, dispatch via
+ * `xdotool keydown/keyup --window <wid> <keysym>...`.
  */
-export async function pressKeys(keys: readonly string[], press: PressMode): Promise<void> {
+export async function pressKeys(keys: readonly string[], press: PressMode, windowId?: number): Promise<void> {
 	if (keys.length === 0) return
+	if (typeof windowId === 'number') {
+		const ok = await tryXdotoolPressRelease(keys, windowId, press)
+		if (ok) return
+	}
 	const resolved = resolveKeys(keys)
 	if (press === 'down') {
 		await keyboard.pressKey(...resolved)
 	} else {
 		await keyboard.releaseKey(...resolved)
 	}
+}
+
+/**
+ * P97-02 — map nut-js-style key names to xdotool X11 keysyms.
+ *
+ * xdotool accepts standard X11 keysyms. nut-js Key enum names mostly map
+ * directly (e.g. 'F1' → 'F1', 'Tab' → 'Tab', 'A' → 'a' lowercase for
+ * xdotool's keysym, 'Enter' → 'Return'). Modifier names need translation.
+ *
+ * Unknown names pass through unchanged so callers can still send xdotool
+ * keysyms directly (e.g. 'plus', 'minus', 'comma').
+ */
+const NUTJS_TO_XDOTOOL_KEY: Readonly<Record<string, string>> = Object.freeze({
+	LeftAlt: 'alt',
+	RightAlt: 'alt',
+	LeftShift: 'shift',
+	RightShift: 'shift',
+	LeftControl: 'ctrl',
+	RightControl: 'ctrl',
+	LeftSuper: 'super',
+	RightSuper: 'super',
+	LeftMeta: 'super',
+	RightMeta: 'super',
+	LeftCmd: 'super',
+	RightCmd: 'super',
+	LeftWin: 'super',
+	RightWin: 'super',
+	Enter: 'Return',
+	Backspace: 'BackSpace',
+	Delete: 'Delete',
+	Escape: 'Escape',
+	Tab: 'Tab',
+	Space: 'space',
+	PageUp: 'Page_Up',
+	PageDown: 'Page_Down',
+	Home: 'Home',
+	End: 'End',
+	Up: 'Up',
+	Down: 'Down',
+	Left: 'Left',
+	Right: 'Right',
+})
+
+function toXdotoolKeysym(name: string): string {
+	const mapped = NUTJS_TO_XDOTOOL_KEY[name]
+	if (mapped !== undefined) return mapped
+	// Single uppercase letters (A-Z) → lowercase for xdotool's keysym name.
+	if (/^[A-Z]$/.test(name)) return name.toLowerCase()
+	return name
+}
+
+/**
+ * P97-02: dispatch typeKeys via xdotool. Returns true on clean exit; false
+ * otherwise (caller falls back to nut-js).
+ *
+ * Strategy:
+ *   - For combo (modifier present or single key), build a single
+ *     `xdotool key --window <wid> --clearmodifiers <a>+<b>+...`.
+ *   - For sequence (no modifiers, multi-key), one xdotool key per key
+ *     with optional inter-key delay (xdotool's `--delay` is ms between
+ *     keystrokes when typing strings, but `key` is one keysym; we sleep
+ *     in JS instead).
+ */
+async function tryXdotoolKey(
+	keys: readonly string[],
+	windowId: number,
+	_alreadyExpanded: boolean,
+	delay?: number,
+): Promise<boolean> {
+	const expanded = expandKeyNames(keys)
+	const xkeys = expanded.map(toXdotoolKeysym)
+	const stepDelay = typeof delay === 'number' && delay > 0 ? delay : 0
+	const hasModifier = expanded.some((n) => MODIFIER_KEY_NAMES.has(n))
+	const isSingleKey = expanded.length === 1
+
+	if (hasModifier || isSingleKey) {
+		const combo = xkeys.join('+')
+		return await spawnXdotool([
+			'key',
+			'--window',
+			String(windowId),
+			'--clearmodifiers',
+			combo,
+		])
+	}
+	// Sequence mode: one keysym per spawn, sleep between.
+	for (let i = 0; i < xkeys.length; i++) {
+		const ok = await spawnXdotool([
+			'key',
+			'--window',
+			String(windowId),
+			'--clearmodifiers',
+			xkeys[i]!,
+		])
+		if (!ok) return false
+		if (stepDelay > 0 && i < xkeys.length - 1) await sleep(stepDelay)
+	}
+	return true
+}
+
+/**
+ * P97-02: dispatch pressKeys (down or up) via xdotool keydown/keyup. All
+ * keys go in a single spawn. Returns true on clean exit.
+ */
+async function tryXdotoolPressRelease(
+	keys: readonly string[],
+	windowId: number,
+	press: PressMode,
+): Promise<boolean> {
+	const verb = press === 'down' ? 'keydown' : 'keyup'
+	const expanded = expandKeyNames(keys)
+	const xkeys = expanded.map(toXdotoolKeysym)
+	return await spawnXdotool([verb, '--window', String(windowId), '--clearmodifiers', ...xkeys])
 }
 
 /**
@@ -505,10 +703,23 @@ export async function pressKeys(keys: readonly string[], press: PressMode): Prom
  * sensitive]` message replaces any per-call logging that would otherwise
  * include the raw text. (T-72N2-01 mitigation.)
  */
-export async function typeText(text: string, delay?: number, isSensitive?: boolean): Promise<void> {
+export async function typeText(text: string, delay?: number, isSensitive?: boolean, windowId?: number): Promise<void> {
 	if (isSensitive) {
 		// eslint-disable-next-line no-console -- log redaction is a security feature.
 		console.log(`[REDACTED — typed ${text.length} chars sensitive]`)
+	}
+	// P97-02: window-scoped path via xdotool. xdotool's `type --window <wid>
+	// --delay <ms> <text>` natively supports per-window typing with inter-
+	// character delays (unlike `key`, which we have to loop in JS).
+	if (typeof windowId === 'number') {
+		const args = ['type', '--window', String(windowId)]
+		if (typeof delay === 'number' && delay > 0) {
+			args.push('--delay', String(delay))
+		}
+		// `--` ensures `text` starting with '-' isn't parsed as a flag.
+		args.push('--', text)
+		const ok = await spawnXdotool(args)
+		if (ok) return
 	}
 	if (typeof delay === 'number' && delay > 0) {
 		// Char-by-char with inter-character sleep.
