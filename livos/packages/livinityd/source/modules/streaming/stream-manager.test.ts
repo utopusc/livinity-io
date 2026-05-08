@@ -245,3 +245,124 @@ describe('StreamManager', () => {
 		mgr._clearForTests()
 	})
 })
+
+// ============================================================================
+// Phase 99-03 — vnc-window mode tests (5 new cases)
+// ============================================================================
+
+function makeFakeX11vnc() {
+	const proc: any = Object.assign(new EventEmitter(), {
+		stdin: null,
+		stdout: null,
+		stderr: new EventEmitter(),
+		killCalls: [] as string[],
+		kill(sig: NodeJS.Signals = 'SIGTERM') {
+			this.killCalls.push(sig as string)
+			// Async exit so stopStream's await-promise resolves naturally
+			setTimeout(() => this.emit('exit', 0, sig), 0)
+			return true
+		},
+		pid: Math.floor(Math.random() * 100000),
+	})
+	return proc
+}
+
+function makeVncManager() {
+	const spawned: {cmd: string; args: string[]; child: any}[] = []
+	const spawn = vi.fn((cmd: string, args: string[]) => {
+		const c = makeFakeX11vnc()
+		spawned.push({cmd, args, child: c})
+		return c as any
+	})
+	const mgr = new StreamManager({
+		caps: NO_VAAPI as any,
+		spawn: spawn as any,
+		stopTimeoutMs: 50,
+	} as any)
+	return {mgr, spawn, spawned}
+}
+
+describe('StreamManager — vnc-window mode (Phase 99-03)', () => {
+	it('Test 11: startStream({mode:"vnc-window"}) spawns x11vnc with canonical D-99-01 argv and registers kind:"vnc" session', () => {
+		const {mgr, spawn} = makeVncManager()
+		const {streamId, wsUrl} = mgr.startStream({
+			userId: 'admin',
+			mode: 'vnc-window' as any,
+			target: {wid: 0xabcdef} as any,
+		})
+		expect(streamId).toMatch(/^[0-9a-f-]{36}$/)
+		expect(wsUrl).toBe(`/ws/stream/${streamId}`)
+		expect(spawn).toHaveBeenCalledTimes(1)
+		const [cmd, args] = spawn.mock.calls[0] as [string, string[]]
+		expect(cmd).toBe('sudo')
+		expect(args).toContain('-id')
+		expect(args).toContain('0xabcdef')
+		expect(args).toContain('-localhost')
+		expect(args).toContain('-noxdamage')
+		expect(args).toContain('/usr/bin/x11vnc')
+		const session = mgr.getSession(streamId)
+		expect(session?.kind).toBe('vnc')
+		if (session?.kind === 'vnc') {
+			expect(session.wid).toBe(0xabcdef)
+			expect(typeof session.rfbPort).toBe('number')
+			expect(session.rfbPort).toBeGreaterThan(0)
+		}
+		mgr._clearForTests()
+	})
+
+	it('Test 12: stopStream({vnc-kind}) SIGTERMs x11vnc and removes session from map', async () => {
+		const {mgr, spawned} = makeVncManager()
+		const {streamId} = mgr.startStream({
+			userId: 'admin',
+			mode: 'vnc-window' as any,
+			target: {wid: 0x1000} as any,
+		})
+		await mgr.stopStream(streamId)
+		const fakeX11vnc = spawned[0].child
+		expect(fakeX11vnc.killCalls).toContain('SIGTERM')
+		expect(mgr.getSession(streamId)).toBeNull()
+	})
+
+	it('Test 13: getSession returns kind:"vnc" for vnc, kind:"fmp4" for fmp4, null for unknown', () => {
+		const {mgr} = makeVncManager()
+		const {streamId} = mgr.startStream({
+			userId: 'admin',
+			mode: 'vnc-window' as any,
+			target: {wid: 0x2000} as any,
+		})
+		expect(mgr.getSession(streamId)?.kind).toBe('vnc')
+		expect(mgr.getSession('00000000-0000-0000-0000-000000000000')).toBeNull()
+		mgr._clearForTests()
+	})
+
+	it('Test 14: idempotent — same (userId, "vnc-window", {wid}) returns same streamId, x11vnc spawned ONCE', () => {
+		const {mgr, spawn} = makeVncManager()
+		const a = mgr.startStream({
+			userId: 'admin',
+			mode: 'vnc-window' as any,
+			target: {wid: 0x3000} as any,
+		})
+		const b = mgr.startStream({
+			userId: 'admin',
+			mode: 'vnc-window' as any,
+			target: {wid: 0x3000} as any,
+		})
+		expect(b.streamId).toBe(a.streamId)
+		expect(spawn).toHaveBeenCalledTimes(1)
+		mgr._clearForTests()
+	})
+
+	it('Test 15: listStreams returns kind:"vnc" with subscriberCount=0 for vnc sessions', () => {
+		const {mgr} = makeVncManager()
+		mgr.startStream({
+			userId: 'admin',
+			mode: 'vnc-window' as any,
+			target: {wid: 0x4000} as any,
+		})
+		const records = mgr.listStreams({userId: 'admin'})
+		expect(records).toHaveLength(1)
+		expect(records[0].kind).toBe('vnc')
+		expect(records[0].subscriberCount).toBe(0)
+		mgr._clearForTests()
+	})
+})
