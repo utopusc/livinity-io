@@ -243,6 +243,43 @@ export async function getWindowGeometry(wid: number): Promise<Geometry | null> {
 	}
 }
 
+/**
+ * Read root display dimensions via `xdpyinfo | grep dimensions`.
+ * 2026-05-08: needed to clamp window-crop ffmpeg geometry — xdotool can
+ * report a window as larger than the screen (e.g. maximized Chrome with
+ * frame extents) and ffmpeg x11grab rejects out-of-bounds capture areas
+ * with "Capture area outside the screen size" → EINVAL.
+ */
+export async function getScreenSize(): Promise<{w: number; h: number} | null> {
+	try {
+		const result = await execFileAsync('xdpyinfo', [], {timeout: DEFAULT_TIMEOUT_MS})
+		// dimensions:    1920x1080 pixels (508x286 millimeters)
+		const m = result.stdout.match(/dimensions:\s+(\d+)x(\d+)\s+pixels/)
+		if (!m) return null
+		return {w: parseInt(m[1], 10), h: parseInt(m[2], 10)}
+	} catch {
+		return null
+	}
+}
+
+/**
+ * Clamp a window geometry to fit inside the given screen bounds. ffmpeg's
+ * x11grab demuxer rejects capture areas that extend past the root window,
+ * so callers feeding `getWindowGeometry` output into encoder-args must
+ * clamp first when the WM allows windows to overflow (Chrome maximized
+ * with shadow/frame extents commonly does).
+ */
+export function clampGeometryToScreen(
+	geom: Geometry,
+	screen: {w: number; h: number},
+): Geometry {
+	const x = Math.max(0, Math.min(geom.x, Math.max(0, screen.w - 1)))
+	const y = Math.max(0, Math.min(geom.y, Math.max(0, screen.h - 1)))
+	const w = Math.max(1, Math.min(geom.w, screen.w - x))
+	const h = Math.max(1, Math.min(geom.h, screen.h - y))
+	return {x, y, w, h}
+}
+
 export async function activateWindow(wid: number): Promise<boolean> {
 	if (!Number.isInteger(wid) || wid <= 0) return false
 	try {
