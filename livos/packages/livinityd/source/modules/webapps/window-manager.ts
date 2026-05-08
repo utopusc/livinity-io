@@ -109,7 +109,7 @@ type ActiveWebApp = {
 	webappId: string
 	userId: string
 	wid: number
-	mode: 'pipewire-fd' | 'window-crop'
+	mode: 'pipewire-fd' | 'window-crop' | 'vnc-window'
 	streamId: string
 	wsUrl: string
 	portalSession: WindowSessionResult | null
@@ -258,63 +258,33 @@ export class WebAppWindowManager {
 		})
 		if (!newWin) throw new WindowNotFoundError(opts.url)
 
-		// 5/6. Try PipeWire portal first
-		let mode: 'pipewire-fd' | 'window-crop' = 'window-crop'
-		let portalSession: WindowSessionResult | null = null
-		let geometryTracker: GeometryTracker | null = null
-		let streamStart: {streamId: string; wsUrl: string}
-
-		const portalUp = await this.portal.isPortalAvailable().catch(() => false)
-		if (portalUp) {
-			try {
-				portalSession = await this.portal.requestWindowSession({
-					desktopUid: opts.desktopUid ?? 1000,
-				})
-				mode = 'pipewire-fd'
-				streamStart = this.streamManager.startStream({
-					userId: opts.userId,
-					mode: 'pipewire-fd',
-					target: {pwNodeId: portalSession.pwNodeId, fd: portalSession.fd},
-				})
-			} catch (err) {
-				if (!(err instanceof PortalUnavailable)) {
-					this.logger?.warn?.('webapp window-manager: portal failed, falling back', err)
-				}
-				portalSession = null
-			}
-		}
-
-		if (!portalSession) {
-			// Fallback: geometry-tracker + ffmpeg crop
-			mode = 'window-crop'
-			// 2026-05-08: clamp geometry to root display bounds. Chrome
-			// maximized windows can report a logical geometry that overflows
-			// the screen (frame extents / shadow), and ffmpeg x11grab rejects
-			// out-of-bounds capture areas with EINVAL ("Capture area WxH at
-			// position X,Y outside the screen size SxS").
-			const screen = await getScreenSize()
-			const geom: Geometry = screen
-				? clampGeometryToScreen(newWin.geometry, screen)
-				: newWin.geometry
+		// 5/6. Phase 99 swap (D-99-04): WebApp windows always use mode:'vnc-window'.
+		// PipeWire portal probe REMOVED — x11vnc -id <wid> reads the per-window
+		// pixmap directly via XComposite (D-99-01) without portal user-consent.
+		// Geometry-clamp from commit 4c55b173 PRESERVED for diagnostic logging
+		// only — preserved for ffmpeg-fallback path; unused under x11vnc mode (D-99-05).
+		const screen = await getScreenSize().catch(() => null)
+		if (screen) {
+			const geom: Geometry = clampGeometryToScreen(newWin.geometry, screen)
 			if (
-				screen &&
-				(geom.x !== newWin.geometry.x ||
-					geom.y !== newWin.geometry.y ||
-					geom.w !== newWin.geometry.w ||
-					geom.h !== newWin.geometry.h)
+				geom.x !== newWin.geometry.x ||
+				geom.y !== newWin.geometry.y ||
+				geom.w !== newWin.geometry.w ||
+				geom.h !== newWin.geometry.h
 			) {
 				this.logger?.warn?.(
-					`webapp ${opts.webappId}: clamped geometry ${JSON.stringify(newWin.geometry)} → ${JSON.stringify(geom)} (screen=${screen.w}x${screen.h})`,
+					`webapp ${opts.webappId}: geometry exceeds screen ${JSON.stringify(newWin.geometry)} → clamped ${JSON.stringify(geom)} (screen=${screen.w}x${screen.h}); preserved for ffmpeg-fallback path; unused under x11vnc mode`,
 				)
 			}
-			streamStart = this.streamManager.startStream({
-				userId: opts.userId,
-				mode: 'window-crop',
-				target: {display: ':0.0', geometry: geom},
-			})
-			geometryTracker = new this.GeometryTrackerCtor()
-			geometryTracker.start(newWin.wid)
 		}
+		const mode: 'vnc-window' = 'vnc-window'
+		const portalSession: WindowSessionResult | null = null
+		const geometryTracker: GeometryTracker | null = null
+		const streamStart = this.streamManager.startStream({
+			userId: opts.userId,
+			mode: 'vnc-window',
+			target: {wid: newWin.wid},
+		})
 
 		// 7. Store entry
 		const entry: ActiveWebApp = {
@@ -410,7 +380,7 @@ export class WebAppWindowManager {
 		windowId: number
 		streamId: string
 		wsUrl: string
-		mode: 'pipewire-fd' | 'window-crop'
+		mode: 'pipewire-fd' | 'window-crop' | 'vnc-window'
 		url: string
 	}> {
 		const out: Array<{
@@ -418,7 +388,7 @@ export class WebAppWindowManager {
 			windowId: number
 			streamId: string
 			wsUrl: string
-			mode: 'pipewire-fd' | 'window-crop'
+			mode: 'pipewire-fd' | 'window-crop' | 'vnc-window'
 			url: string
 		}> = []
 		for (const a of this.active.values()) {

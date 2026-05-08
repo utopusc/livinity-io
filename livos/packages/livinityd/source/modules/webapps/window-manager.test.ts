@@ -120,14 +120,15 @@ describe('WebAppWindowManager', () => {
 		vi.useRealTimers()
 	})
 
-	it('Test 1: spawn happy path with portal returns {webappId,windowId,streamId,wsUrl}', async () => {
+	it('Test 1: spawn happy path returns {webappId,windowId,streamId,wsUrl} with mode:"vnc-window" (Phase 99-04 swap)', async () => {
 		const {mgr, streamManager, started} = makeManager()
 		const r = await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'})
 		expect(r.windowId).toBe(0x200)
 		expect(r.streamId).toMatch(/^stream-/)
 		expect(r.wsUrl).toMatch(/^\/ws\/stream\//)
 		expect(streamManager.startStream).toHaveBeenCalledOnce()
-		expect(started[0].mode).toBe('pipewire-fd')
+		expect(started[0].mode).toBe('vnc-window')
+		expect(started[0].target).toEqual({wid: 0x200})
 		mgr._clearForTests()
 	})
 
@@ -140,13 +141,17 @@ describe('WebAppWindowManager', () => {
 		mgr._clearForTests()
 	})
 
-	it('Test 3: spawn falls back to geometry-tracker when portal unavailable', async () => {
+	it('Test 3: spawn ignores portal availability — always uses vnc-window, no GeometryTracker (Phase 99-04 swap)', async () => {
 		const portalBundle = makePortal({available: false})
-		const {mgr, started, trackerInstances} = makeManager({portalBundle})
+		const {mgr, started, trackerInstances, portal} = makeManager({portalBundle})
 		const r = await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'})
-		expect(started[0].mode).toBe('window-crop')
-		expect(trackerInstances).toHaveLength(1)
-		expect(trackerInstances[0].start).toHaveBeenCalledWith(0x200)
+		expect(started[0].mode).toBe('vnc-window')
+		expect(started[0].target).toEqual({wid: 0x200})
+		// Portal probe is GONE — D-99-04: x11vnc -id <wid> needs no PipeWire portal
+		expect(portal.isPortalAvailable).not.toHaveBeenCalled()
+		expect(portal.requestWindowSession).not.toHaveBeenCalled()
+		// GeometryTracker is GONE — x11vnc reads pixmap by wid, not by geometry
+		expect(trackerInstances).toHaveLength(0)
 		expect(r.streamId).toMatch(/^stream-/)
 		mgr._clearForTests()
 	})
@@ -191,14 +196,16 @@ describe('WebAppWindowManager', () => {
 		expect(mgr.list({userId: 'u1'})).toEqual([])
 	})
 
-	it('Test 8: close stops stream + closes portal session + cleans tracker', async () => {
+	it('Test 8: close cascades stopStream and clears entry (Phase 99-04: portal session is null for vnc-window)', async () => {
 		const portalBundle = makePortal({available: true})
 		const {mgr, streamManager, closeSession} = makeManager({portalBundle})
 		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'})
 		const result = await mgr.close({webappId: 'app1', userId: 'u1'})
 		expect(result.ok).toBe(true)
 		expect(streamManager.stopStream).toHaveBeenCalled()
-		expect(closeSession).toHaveBeenCalled()
+		// Portal session is null under vnc-window mode (D-99-04) — closeSession
+		// path becomes dead code for WebApp entries.
+		expect(closeSession).not.toHaveBeenCalled()
 		expect(mgr.list({userId: 'u1'})).toEqual([])
 	})
 
@@ -230,13 +237,62 @@ describe('WebAppWindowManager', () => {
 		mgr._clearForTests()
 	})
 
-	it('Test 11: portal request error (non-PortalUnavailable) is logged and falls back to crop', async () => {
+	it('Test 11: spawn ignores portal request errors entirely — portal is never called (Phase 99-04 swap)', async () => {
+		// Even if the portal would throw, we never call it. The setup proves the
+		// regression lock: WebApp spawns are unconditional vnc-window.
 		const portalBundle = makePortal({available: true, throwOnRequest: new Error('something else')})
-		const {mgr, started, trackerInstances, logger} = makeManager({portalBundle})
+		const {mgr, started, trackerInstances, portal} = makeManager({portalBundle})
 		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'})
-		expect(started[0].mode).toBe('window-crop')
-		expect(trackerInstances).toHaveLength(1)
-		expect(logger.warn).toHaveBeenCalled()
+		expect(started[0].mode).toBe('vnc-window')
+		expect(portal.isPortalAvailable).not.toHaveBeenCalled()
+		expect(portal.requestWindowSession).not.toHaveBeenCalled()
+		expect(trackerInstances).toHaveLength(0)
+		mgr._clearForTests()
+	})
+})
+
+// ============================================================================
+// Phase 99-04 — vnc-window swap regression locks (3 new cases)
+// ============================================================================
+
+describe('WebAppWindowManager — vnc-window swap (Phase 99-04)', () => {
+	beforeEach(() => {
+		vi.useRealTimers()
+	})
+	afterEach(() => {
+		vi.useRealTimers()
+	})
+
+	it('Test 12: spawn() calls streamManager.startStream with mode:"vnc-window" and target:{wid}', async () => {
+		const {mgr, streamManager, started} = makeManager()
+		const r = await mgr.spawn({userId: 'admin', webappId: 'wa-1', url: 'https://example.com'})
+		expect(streamManager.startStream).toHaveBeenCalledTimes(1)
+		expect(started[0].mode).toBe('vnc-window')
+		expect(started[0].target).toEqual({wid: 0x200})
+		expect(r.streamId).toMatch(/^stream-/)
+		mgr._clearForTests()
+	})
+
+	it('Test 13: close() cascades stopStream for vnc-window entries', async () => {
+		const {mgr, streamManager} = makeManager()
+		await mgr.spawn({userId: 'admin', webappId: 'wa-2', url: 'https://example.com'})
+		await mgr.close({webappId: 'wa-2', userId: 'admin'})
+		expect(streamManager.stopStream).toHaveBeenCalledWith(expect.stringMatching(/^stream-/))
+	})
+
+	it('Test 14: idleCleanupTick cascades close+stopStream when window-gone (Assumption A5 lock)', async () => {
+		vi.useFakeTimers()
+		const discovery = makeDiscovery()
+		const {mgr, streamManager} = makeManager({discovery, idlePollMs: 100})
+		await mgr.spawn({userId: 'admin', webappId: 'wa-3', url: 'https://example.com'})
+		expect(mgr.list({userId: 'admin'})).toHaveLength(1)
+		discovery.isWindowAlive.mockResolvedValue(false)
+		mgr.startIdleCleanup()
+		await vi.advanceTimersByTimeAsync(150)
+		await vi.advanceTimersByTimeAsync(50)
+		expect(mgr.list({userId: 'admin'})).toEqual([])
+		expect(streamManager.stopStream).toHaveBeenCalled()
+		mgr.stopIdleCleanup()
 		mgr._clearForTests()
 	})
 })
