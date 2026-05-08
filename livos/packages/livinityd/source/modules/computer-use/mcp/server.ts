@@ -32,14 +32,37 @@ import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js'
 import {registerBytebotTools} from './tools.js'
 
 async function main(): Promise<void> {
+	// Phase 97-05 — optional per-WebApp window scoping. When the parent
+	// (mcp-client-manager.ts via bytebot-mcp-config.ts buildBytebotConfig
+	// with a PerWebAppMcpDescriptor) sets BYTEBOT_TARGET_WINDOW_ID in this
+	// child's env, every native primitive call defaults to that wid unless
+	// the tool input explicitly overrides it. When unset, host-display
+	// behavior is preserved (existing pre-P97 default).
+	const targetWindowEnv = process.env.BYTEBOT_TARGET_WINDOW_ID
+	let defaultWindowId: number | undefined
+	if (typeof targetWindowEnv === 'string' && targetWindowEnv.length > 0) {
+		const parsed = Number(targetWindowEnv)
+		if (Number.isFinite(parsed) && Number.isInteger(parsed) && parsed > 0) {
+			defaultWindowId = parsed
+		} else {
+			process.stderr.write(
+				`[bytebot-mcp] warning: BYTEBOT_TARGET_WINDOW_ID=${JSON.stringify(targetWindowEnv)} is not a positive integer; ignoring (host-display default)\n`,
+			)
+		}
+	}
+
 	const server = new McpServer({name: 'bytebot', version: '1.0.0'})
-	registerBytebotTools(server as never)
+	registerBytebotTools(server as never, {defaultWindowId})
 
 	const transport = new StdioServerTransport()
 	await server.connect(transport)
 
 	// Log to STDERR so the MCP stdout wire stays clean.
-	process.stderr.write('[bytebot-mcp] connected via stdio transport\n')
+	process.stderr.write(
+		`[bytebot-mcp] connected via stdio transport${
+			defaultWindowId !== undefined ? ` (windowId=${defaultWindowId})` : ''
+		}\n`,
+	)
 }
 
 main().catch((err) => {

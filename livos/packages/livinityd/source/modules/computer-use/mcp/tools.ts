@@ -92,16 +92,46 @@ export interface McpServerLike {
 const POST_ACTION_SETTLE_MS = 750
 
 /**
+ * Phase 97-05 — runtime options for the bytebot MCP tool dispatcher.
+ *
+ * `defaultWindowId` is the env-derived (BYTEBOT_TARGET_WINDOW_ID) X11 window
+ * id every native primitive call defaults to when the per-tool input does
+ * not explicitly override it. When undefined, host-display behavior is
+ * preserved (the existing pre-P97 single-instance default).
+ */
+export interface BytebotToolsOptions {
+	defaultWindowId?: number
+}
+
+/**
+ * Resolve the windowId a primitive should use. Tool input wins over the
+ * server-level default. `undefined` here means host-display.
+ */
+function resolveWindowId(
+	args: Record<string, unknown>,
+	defaultWindowId: number | undefined,
+): number | undefined {
+	const fromArgs = args.windowId
+	if (typeof fromArgs === 'number' && Number.isFinite(fromArgs)) return fromArgs
+	return defaultWindowId
+}
+
+/**
  * Wrap a state-changing native action in: run → 750ms settle → screenshot.
  * Returns a CallToolResult with [text summary, post-action image].
+ *
+ * Phase 97-05: post-action screenshot inherits the same `windowId` as the
+ * action — otherwise the agent would see the full host display after a
+ * window-scoped click, defeating the purpose.
  */
 async function withPostScreenshot(
 	actionSummary: string,
 	fn: () => Promise<void>,
+	windowId?: number,
 ): Promise<LivCallToolResult> {
 	await fn()
 	await sleep(POST_ACTION_SETTLE_MS)
-	const shot = await captureScreenshot()
+	const shot = await captureScreenshot(typeof windowId === 'number' ? {windowId} : undefined)
 	return {
 		content: [
 			{type: 'text', text: actionSummary},
@@ -133,11 +163,26 @@ function summarizeArgs(args: Record<string, unknown>): string {
 // HANDLERS — handler map for all 17 BYTEBOT_TOOLS (D-NATIVE-04)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const HANDLERS: Record<string, Handler> = {
+/**
+ * Phase 97-05 — handler factory. The pre-P97 `HANDLERS` was a static record
+ * (host-display only). Per-WebApp instances need handlers that thread an
+ * env-derived `defaultWindowId` into every native primitive call. The
+ * factory takes the options once at registration, returns the handler map.
+ *
+ * The legacy `HANDLERS` constant below is preserved as the host-display
+ * default (`buildHandlers({})`) so existing callers / tests that import
+ * `HANDLERS` directly keep working.
+ */
+export function buildHandlers(options: BytebotToolsOptions = {}): Record<string, Handler> {
+	const defaultWindowId = options.defaultWindowId
+	const wid = (args: Record<string, unknown>): number | undefined =>
+		resolveWindowId(args, defaultWindowId)
+	return {
 	// ── Mouse primitives ──────────────────────────────────────────────────────
 
-	computer_screenshot: async () => {
-		const shot = await captureScreenshot()
+	computer_screenshot: async (args) => {
+		const w = wid(args)
+		const shot = await captureScreenshot(typeof w === 'number' ? {windowId: w} : undefined)
 		return {
 			content: [
 				{type: 'image', data: shot.base64, mimeType: shot.mimeType},
@@ -149,37 +194,45 @@ export const HANDLERS: Record<string, Handler> = {
 
 	computer_move_mouse: async (args) => {
 		const coordinates = args.coordinates as {x: number; y: number}
+		const w = wid(args)
 		return withPostScreenshot(
 			`moveMouse → (${coordinates.x}, ${coordinates.y})`,
-			() => moveMouse(coordinates),
+			() => moveMouse(coordinates, w),
+			w,
 		)
 	},
 
 	computer_trace_mouse: async (args) => {
 		const path = args.path as ReadonlyArray<{x: number; y: number}>
 		const holdKeys = args.holdKeys as ReadonlyArray<string> | undefined
+		const w = wid(args)
 		return withPostScreenshot(
 			`traceMouse path of ${path.length} points`,
 			() => traceMouse(path, holdKeys ?? undefined),
+			w,
 		)
 	},
 
 	computer_click_mouse: async (args) => {
+		const w = wid(args)
 		return withPostScreenshot(
 			`clickMouse ${summarizeArgs(args)}`,
 			() =>
-				clickMouse(
-					args as unknown as {
+				clickMouse({
+					...(args as unknown as {
 						coordinates?: {x: number; y: number}
 						button: 'left' | 'right' | 'middle'
 						clickCount: number
 						holdKeys?: readonly string[]
-					},
-				),
+					}),
+					windowId: w,
+				}),
+			w,
 		)
 	},
 
 	computer_press_mouse: async (args) => {
+		const w = wid(args)
 		return withPostScreenshot(
 			`pressMouse ${summarizeArgs(args)}`,
 			() =>
@@ -190,6 +243,7 @@ export const HANDLERS: Record<string, Handler> = {
 						press: 'up' | 'down'
 					},
 				),
+			w,
 		)
 	},
 
@@ -197,13 +251,16 @@ export const HANDLERS: Record<string, Handler> = {
 		const path = args.path as ReadonlyArray<{x: number; y: number}>
 		const button = args.button as 'left' | 'right' | 'middle'
 		const holdKeys = args.holdKeys as ReadonlyArray<string> | undefined
+		const w = wid(args)
 		return withPostScreenshot(
 			`dragMouse ${button} along ${path.length} points`,
 			() => dragMouse(path, button, holdKeys ?? undefined),
+			w,
 		)
 	},
 
 	computer_scroll: async (args) => {
+		const w = wid(args)
 		return withPostScreenshot(
 			`scroll ${summarizeArgs(args)}`,
 			() =>
@@ -215,6 +272,7 @@ export const HANDLERS: Record<string, Handler> = {
 						holdKeys?: readonly string[]
 					},
 				),
+			w,
 		)
 	},
 
@@ -223,18 +281,22 @@ export const HANDLERS: Record<string, Handler> = {
 	computer_type_keys: async (args) => {
 		const keys = args.keys as ReadonlyArray<string>
 		const delay = args.delay as number | undefined
+		const w = wid(args)
 		return withPostScreenshot(
 			`typeKeys [${keys.join('+')}]`,
-			() => typeKeys(keys, delay ?? undefined),
+			() => typeKeys(keys, delay ?? undefined, w),
+			w,
 		)
 	},
 
 	computer_press_keys: async (args) => {
 		const keys = args.keys as ReadonlyArray<string>
 		const press = args.press as 'up' | 'down'
+		const w = wid(args)
 		return withPostScreenshot(
 			`pressKeys [${keys.join(', ')}] ${press}`,
-			() => pressKeys(keys, press),
+			() => pressKeys(keys, press, w),
+			w,
 		)
 	},
 
@@ -243,9 +305,11 @@ export const HANDLERS: Record<string, Handler> = {
 		const delay = args.delay as number | undefined
 		const isSensitive = args.isSensitive as boolean | undefined
 		const safeText = isSensitive ? `<${text.length} sensitive chars>` : text
+		const w = wid(args)
 		return withPostScreenshot(
 			`typeText ${JSON.stringify(safeText)}`,
-			() => typeText(text, delay ?? undefined, isSensitive ?? undefined),
+			() => typeText(text, delay ?? undefined, isSensitive ?? undefined, w),
+			w,
 		)
 	},
 
@@ -253,9 +317,11 @@ export const HANDLERS: Record<string, Handler> = {
 		const text = args.text as string
 		const isSensitive = args.isSensitive as boolean | undefined
 		const safeText = isSensitive ? `<${text.length} sensitive chars>` : text
+		const w = wid(args)
 		return withPostScreenshot(
 			`pasteText ${JSON.stringify(safeText)}`,
 			() => pasteText(text, isSensitive ?? undefined),
+			w,
 		)
 	},
 
@@ -354,7 +420,16 @@ export const HANDLERS: Record<string, Handler> = {
 			},
 		}
 	},
+	}
 }
+
+/**
+ * Legacy host-display HANDLERS — backed by `buildHandlers({})` so existing
+ * imports from this module keep working. Per-WebApp instances should use
+ * `buildHandlers({defaultWindowId})` instead and pass the resulting map
+ * into `registerBytebotTools(server, opts)`.
+ */
+export const HANDLERS: Record<string, Handler> = buildHandlers({})
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Registration
@@ -417,7 +492,8 @@ function jsonSchemaToZodRawShape(rootSchema: {type: 'object'; properties: Record
 	return shape
 }
 
-export function registerBytebotTools(server: McpServerLike): void {
+export function registerBytebotTools(server: McpServerLike, options?: BytebotToolsOptions): void {
+	const handlers = options?.defaultWindowId !== undefined ? buildHandlers(options) : HANDLERS
 	for (const tool of BYTEBOT_TOOLS) {
 		server.registerTool(
 			tool.name,
@@ -429,7 +505,7 @@ export function registerBytebotTools(server: McpServerLike): void {
 				inputSchema: jsonSchemaToZodRawShape(tool.input_schema),
 			},
 			async (args: Record<string, unknown>) => {
-				const handler = HANDLERS[tool.name]
+				const handler = handlers[tool.name]
 				if (!handler) {
 					return {
 						content: [{type: 'text', text: `Error: no handler registered for tool "${tool.name}"`}],
