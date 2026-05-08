@@ -12,6 +12,7 @@ import {AppGrid, AppGridItem, DesktopLayout} from './app-grid/app-grid'
 import {AppIcon, AppIconConnected} from './app-icon'
 import {DesktopFolder} from './desktop-folder'
 import {DockSpacer} from './dock'
+import {WebAppIcon} from './webapp-icon'
 import {WidgetMeta, getWidgetSize} from './widgets/widget-types'
 import {WidgetRenderer} from './widgets/widget-renderer'
 import {WidgetContextMenu} from './widgets/widget-context-menu'
@@ -197,7 +198,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 	const getQuery = trpcReact.user.get.useQuery()
 	const name = getQuery.data?.name
 
-	const {userApps, isLoading} = useApps()
+	const {userApps, isLoading, webapps} = useApps()
 	const {folders, update: updateFolders} = useDesktopFolders()
 	const {widgets, update: updateWidgets} = useDesktopWidgets()
 	const {layout, updateLayout} = useDesktopLayout()
@@ -251,6 +252,23 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 				</motion.div>
 			),
 		}))
+
+		// Phase 94-05 — persisted user-defined WebApps appear immediately
+		// after Docker apps (and before the hardcoded LIVINITY_* shortcuts).
+		// Drag-arrange ordering deferred to v34.
+		const webappItems: AppGridItem[] = webapps.map((wa) => ({
+			id: `webapp-${wa.id}`,
+			node: (
+				<motion.div
+					initial={{opacity: 0, scale: 0}}
+					animate={{opacity: 1, scale: 1}}
+					transition={{type: 'spring', stiffness: 400, damping: 25}}
+				>
+					<WebAppIcon id={wa.id} url={wa.url} title={wa.title} faviconUrl={wa.faviconUrl} />
+				</motion.div>
+			),
+		}))
+		appItems.push(...webappItems)
 
 		// System apps shown in grid on mobile (dock is hidden)
 		if (isMobile) {
@@ -418,7 +436,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		})
 
 		return [...appItems, ...folderItems, ...widgetItems]
-	}, [userApps, folders, widgets, openStreamApp, isMobile, openApp, windowManager])
+	}, [userApps, webapps, folders, widgets, openStreamApp, isMobile, openApp, windowManager])
 
 	return (
 		<motion.div className='flex h-full w-full select-none flex-col' variants={variants} animate={variant} initial={{opacity: 1}} transition={{duration: 0.15, ease: 'easeOut'}}>
