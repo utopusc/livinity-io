@@ -37,6 +37,7 @@ import {useTeachRecorder, type ActionLog} from '@/hooks/use-teach-recorder'
 
 import {WebAppToolbar} from '../webapp-toolbar'
 import {WebAppModeSelector, type WebAppMode} from '../webapp-mode-selector'
+import {WebAppSkillsSidebar} from '../webapp-skills-sidebar'
 
 import {ChatMessageItem} from '@/routes/ai-chat/chat-messages'
 import {ChatInput, type FileAttachment} from '@/routes/ai-chat/chat-input'
@@ -186,7 +187,13 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 	// 5. Mode (D-95-10 default 'chat'; D-95-MODE-LOCAL = local state only).
 	const [mode, setMode] = useState<WebAppMode>('chat')
 
-	// 5a. Phase 96-04 — Teach-mode recorder + Save dialog state.
+	// 5a. Phase 96-05 — Skills sidebar collapse state + selected skill.
+	// selectedSkillId is consumed by the SkillReplayScrubber in 96-06.
+	const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+	const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null)
+	void selectedSkillId // wired in 96-06
+
+	// 5b. Phase 96-04 — Teach-mode recorder + Save dialog state.
 	const recorder = useTeachRecorder()
 	const [pendingSave, setPendingSave] = useState<ActionLog | null>(null)
 	const skillCreateMutation = trpcReact.webapp.skills.create.useMutation()
@@ -374,8 +381,12 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 	// 9. Render.
 	const url = webapp?.url ?? ''
 
+	// 9a. Skills sidebar visibility — hidden in Auto mode (P97 reveals
+	// the same data differently). Per PLAN 96-05.
+	const showSkillsSidebar = mode !== 'auto'
+
 	return (
-		<div className='flex h-full w-full flex-col bg-surface-base'>
+		<div className='flex h-full w-full flex-row bg-surface-base'>
 			<ResizablePanelGroup
 				direction='vertical'
 				onLayout={onLayoutChange}
@@ -442,6 +453,14 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 					/>
 				</ResizablePanel>
 			</ResizablePanelGroup>
+			{showSkillsSidebar ? (
+				<WebAppSkillsSidebar
+					webappId={webappId}
+					onSelectSkill={(skillId) => setSelectedSkillId(skillId)}
+					collapsed={sidebarCollapsed}
+					onToggleCollapsed={setSidebarCollapsed}
+				/>
+			) : null}
 			{pendingSave ? (
 				<SaveSkillDialog
 					open={pendingSave !== null}
