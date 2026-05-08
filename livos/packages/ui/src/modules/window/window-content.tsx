@@ -16,18 +16,32 @@ const TerminalWindowContent = React.lazy(() => import('./app-contents/terminal-c
 const MyDevicesWindowContent = React.lazy(() => import('./app-contents/my-devices-content'))
 const RemoteDesktopContent = React.lazy(() => import('./app-contents/remote-desktop-content'))
 const ChromeWindowContent = React.lazy(() => import('./app-contents/chrome-content'))
+// Phase 95-02 — WebApp stream content (VNC pane + AI panel + mode selector).
+// The discriminator is the `WEBAPP_<webappId>` prefix on `appId` (per CONTEXT
+// C-95-05 and PLAN 95-02). The real component lands in 95-08; 95-02 ships a
+// placeholder so the lazy import resolves at build time.
+const WebAppStreamWindowContent = React.lazy(() => import('./app-contents/webapp-stream-window'))
+
+const WEBAPP_APP_ID_PREFIX = 'WEBAPP_'
+
+/** True when the appId belongs to a WebApp window (P95). */
+function isWebAppKind(appId: string): boolean {
+	return appId.startsWith(WEBAPP_APP_ID_PREFIX)
+}
 
 type WindowContentProps = {
 	route: string
 	appId: string
 }
 
-// Apps that manage their own scroll and layout (no wrapper padding/scroll)
+// Apps that manage their own scroll and layout (no wrapper padding/scroll).
+// WebApps (any appId starting with WEBAPP_) are full-height too — handled
+// via `isWebAppKind(appId)` in `WindowContent` rather than expanding this set.
 const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_remote-desktop', 'LIVINITY_chrome',
 	'LIVINITY_facebook', 'LIVINITY_gmail', 'LIVINITY_youtube', 'LIVINITY_whatsapp', 'LIVINITY_tradingview', 'LIVINITY_google', 'LIVINITY_yahoo'])
 
 export function WindowContent({route, appId}: WindowContentProps) {
-	if (fullHeightApps.has(appId)) {
+	if (fullHeightApps.has(appId) || isWebAppKind(appId)) {
 		return (
 			<div className='h-full overflow-hidden'>
 				<Suspense fallback={<Loading />}>
@@ -49,6 +63,14 @@ export function WindowContent({route, appId}: WindowContentProps) {
 }
 
 export function WindowAppContent({appId, initialRoute}: {appId: string; initialRoute: string}) {
+	// Phase 95-02 — WebApp stream window. appId is `WEBAPP_<webappId>`; the
+	// webappId is sliced off and passed to the lazy-loaded component. Match
+	// before the `switch` so the prefix wins over any future literal collision.
+	if (isWebAppKind(appId)) {
+		const webappId = appId.slice(WEBAPP_APP_ID_PREFIX.length)
+		return <WebAppStreamWindowContent webappId={webappId} />
+	}
+
 	switch (appId) {
 		case 'LIVINITY_app-store':
 			return <AppStoreWindowContent />
