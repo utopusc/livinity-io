@@ -1,4 +1,4 @@
-import {createContext, useContext} from 'react'
+import {createContext, useContext, useMemo} from 'react'
 import {filter} from 'remeda'
 
 import {trpcReact, UserApp} from '@/trpc/trpc'
@@ -11,6 +11,20 @@ export type AppT = {
 	systemApp?: boolean
 	systemAppTo?: string
 }
+
+// Phase 94-05 — unified desktop entries for the AppGrid consumer.
+// Discriminated union so the grid renderer can pick the right icon
+// component without inspecting the row shape.
+export type WebAppEntry = {
+	id: string
+	url: string
+	title: string | null
+	faviconUrl: string | null
+	createdAt: Date | string
+}
+export type DesktopEntry =
+	| {kind: 'app'; app: UserApp}
+	| {kind: 'webapp'; webapp: WebAppEntry}
 
 // `LIVINITY_` prefix to make extra clear the distinction between system app IDs and user installable ids.
 export const systemApps = [
@@ -184,12 +198,30 @@ type AppsContextT = {
 	allApps: AppT[]
 	allAppsKeyed: Record<string, AppT>
 	isLoading: boolean
+	// Phase 94-05 — persisted user-defined WebApps (paste-a-URL desktop icons).
+	webapps: WebAppEntry[]
+	// Unified ordered list for the desktop grid: Docker apps first (their
+	// existing order), then WebApps by createdAt ASC. Drag-arrange ordering
+	// is deferred to v34 (CONTEXT gray-area #order).
+	desktopEntries: DesktopEntry[]
 }
 const AppsContext = createContext<AppsContextT | null>(null)
 
 export function AppsProvider({children}: {children: React.ReactNode}) {
 	const appsQ = trpcReact.apps.list.useQuery()
 	const myAppsQ = trpcReact.apps.myApps.useQuery()
+	// Phase 94-05 — pull the user's persisted WebApp rows. The fetch is
+	// fire-and-forget on first render; the desktop grid's loading state is
+	// driven by `appsQ` (Docker apps) only, to avoid a late-arriving WebApp
+	// list flickering icons in after the desktop has rendered (CONTEXT gray
+	// area "Provider's loading state").
+	const webappsQ = trpcReact.webapp.list.useQuery(undefined, {
+		// Cheap query — keep cache fresh-ish so a delete from another tab
+		// reflects soon. Invalidations from create/delete mutations remain
+		// the primary refresh path.
+		staleTime: 30 * 1000,
+		retry: false,
+	})
 
 	// Remove apps that have an error
 	// TODO: consider passing these down in some places (like the desktop)
@@ -225,6 +257,33 @@ export function AppsProvider({children}: {children: React.ReactNode}) {
 	const allApps = [...userApps, ...systemApps]
 	const allAppsKeyed = keyBy(allApps, 'id')
 
+	// Phase 94-05 — normalize WebApp rows into the discriminated entry shape.
+	// Sort ASC by createdAt so newer WebApps appear after older ones (matches
+	// CONTEXT gray-area "Order of WebApps in grid"). Memoized so the
+	// downstream grid useMemo identity is stable when nothing changed.
+	const webapps: WebAppEntry[] = useMemo(() => {
+		const rows = webappsQ.data ?? []
+		return [...rows]
+			.map((row) => ({
+				id: row.id,
+				url: row.url,
+				title: row.title,
+				faviconUrl: row.faviconUrl,
+				createdAt: row.createdAt,
+			}))
+			.sort((a, b) => {
+				const ta = new Date(a.createdAt).getTime()
+				const tb = new Date(b.createdAt).getTime()
+				return ta - tb
+			})
+	}, [webappsQ.data])
+
+	const desktopEntries: DesktopEntry[] = useMemo(() => {
+		const appEntries: DesktopEntry[] = userApps.map((app) => ({kind: 'app' as const, app}))
+		const webappEntries: DesktopEntry[] = webapps.map((w) => ({kind: 'webapp' as const, webapp: w}))
+		return [...appEntries, ...webappEntries]
+	}, [userApps, webapps])
+
 	return (
 		<AppsContext.Provider
 			value={{
@@ -234,7 +293,11 @@ export function AppsProvider({children}: {children: React.ReactNode}) {
 				systemAppsKeyed,
 				allApps,
 				allAppsKeyed,
+				// Loading is driven by Docker apps only — WebApps load lazily
+				// behind the existing skeleton without flickering icons in late.
 				isLoading: appsQ.isLoading,
+				webapps,
+				desktopEntries,
 			}}
 		>
 			{children}
