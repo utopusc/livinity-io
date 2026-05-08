@@ -457,6 +457,23 @@ export const BYTEBOT_TOOLS: readonly AnthropicTool[] = [
 ] as const
 
 /**
+ * Phase 97-07 — Auto-mode-only tools, additive to BYTEBOT_TOOLS.
+ *
+ * Registered ONLY on per-WebApp bytebot MCP instances (i.e. when the
+ * spawned child has `BYTEBOT_TARGET_WINDOW_ID` in env). The host-display
+ * single-instance MCP does NOT register these — that path has no WebApp
+ * scope, so a `skillId` parameter would be ambiguous.
+ *
+ * The tool implementation lives in skill-replay-tool.ts; the schema is
+ * pulled from there to keep one source of truth.
+ */
+import {WEBAPP_REPLAY_SKILL_TOOL} from './skill-replay-tool.js'
+
+export const BYTEBOT_AUTO_MODE_EXTRA_TOOLS: readonly AnthropicTool[] = [
+	WEBAPP_REPLAY_SKILL_TOOL as unknown as AnthropicTool,
+] as const
+
+/**
  * Snake-case names of all Bytebot tools, derived from `BYTEBOT_TOOLS`.
  * Used by `LivAgentRunner` (P72-03) to recognize whether an incoming
  * tool call name is a Bytebot computer-use tool that should be routed
