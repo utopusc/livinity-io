@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-08T18:56:33.688Z"
+last_updated: "2026-05-08T23:31:54.183Z"
 progress:
-  total_phases: 40
-  completed_phases: 17
-  total_plans: 100
-  completed_plans: 95
+  total_phases: 41
+  completed_phases: 18
+  total_plans: 105
+  completed_plans: 100
   percent: 95
 ---
 
@@ -62,7 +62,9 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 99 (WebApp VNC Swap) — 5 plans — 2026-05-08T18:53:23.845Z
+**Planned Phase:** 100 (multi-stream-window-redesign) — 5 plans — 2026-05-08T23:31:54.172Z
+
+**Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
 ## Phase 99 — PARTIAL-PASS (2026-05-08)
 
