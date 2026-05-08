@@ -1760,6 +1760,52 @@ class Server {
 			response.json({running: exitCode === 0, debugging_port: exitCode === 0 ? 9222 : null})
 		})
 
+		// ── Phase 96-06 — Teach-mode skill frame stream ─────────────────────
+		// GET /api/webapp-skills/:sessionId/:filename
+		//   - Auth: LIVINITY_SESSION cookie. userId sourced from token.
+		//   - sessionId: UUID v4 (path-traversal-safe via UUID_RE check).
+		//   - filename: <ts>.jpg or <ts>.thumb.jpg (regex enforced).
+		//   - Streams the JPEG bytes from
+		//     <LIV_DATA_ROOT>/webapp-skills/<userId>/<sessionId>/<filename>.
+		// Lower friction than a tRPC frameUrl procedure: the scrubber's
+		// <img src> tags can hit this endpoint directly with credentials,
+		// no base64 round-trip, no extra round-trip for cache headers.
+		this.app.get('/api/webapp-skills/:sessionId/:filename', async (request, response) => {
+			try {
+				const sessionToken = request.cookies?.LIVINITY_SESSION
+				if (!sessionToken) return response.status(401).json({error: 'unauthorized'})
+				const payload = await this.verifyToken(sessionToken).catch(() => null)
+				if (!payload || typeof payload !== 'object' || !('loggedIn' in payload) || !payload.loggedIn) {
+					return response.status(401).json({error: 'unauthorized'})
+				}
+				const userId =
+					'userId' in payload && typeof payload.userId === 'string' && payload.userId
+						? (payload.userId as string)
+						: null
+				if (!userId) return response.status(401).json({error: 'unauthorized'})
+
+				const sessionId = request.params.sessionId
+				const filename = request.params.filename
+				const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+				const FRAME_RE = /^([0-9]+)(\.thumb)?\.jpg$/
+				if (!UUID_RE.test(sessionId)) return response.status(400).json({error: 'bad sessionId'})
+				const m = filename.match(FRAME_RE)
+				if (!m) return response.status(400).json({error: 'bad filename'})
+				const ts = m[1]
+				const variant = m[2] === '.thumb' ? 'thumb' : 'full'
+
+				const {loadFrame} = await import('../webapps/skills-storage.js')
+				const bytes = await loadFrame({userId, sessionId, ts, variant: variant as 'thumb' | 'full'})
+				if (!bytes) return response.status(404).json({error: 'not found'})
+				response.setHeader('Content-Type', 'image/jpeg')
+				response.setHeader('Cache-Control', 'private, max-age=3600')
+				response.send(bytes)
+			} catch (err: any) {
+				this.logger.error(`webapp-skills frame error`, err)
+				if (!response.headersSent) response.status(500).json({error: err.message})
+			}
+		})
+
 		// If we have no API route hits then serve the ui at the root.
 		// We proxy through to the ui dev server during development with
 		// process.env.LIVINITY_UI_PROXY otherwise in production we

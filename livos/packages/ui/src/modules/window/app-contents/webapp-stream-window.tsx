@@ -38,6 +38,7 @@ import {useTeachRecorder, type ActionLog} from '@/hooks/use-teach-recorder'
 import {WebAppToolbar} from '../webapp-toolbar'
 import {WebAppModeSelector, type WebAppMode} from '../webapp-mode-selector'
 import {WebAppSkillsSidebar} from '../webapp-skills-sidebar'
+import {SkillReplayScrubber} from '../skill-replay-scrubber'
 
 import {ChatMessageItem} from '@/routes/ai-chat/chat-messages'
 import {ChatInput, type FileAttachment} from '@/routes/ai-chat/chat-input'
@@ -188,10 +189,9 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 	const [mode, setMode] = useState<WebAppMode>('chat')
 
 	// 5a. Phase 96-05 — Skills sidebar collapse state + selected skill.
-	// selectedSkillId is consumed by the SkillReplayScrubber in 96-06.
+	// selectedSkillId is consumed by SkillReplayScrubber (96-06).
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 	const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null)
-	void selectedSkillId // wired in 96-06
 
 	// 5b. Phase 96-04 — Teach-mode recorder + Save dialog state.
 	const recorder = useTeachRecorder()
@@ -425,6 +425,12 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 								<TeachAutoStopBanner
 									onReview={onStopRecording}
 									onDismiss={recorder.resetAutoStop}
+								/>
+							) : null}
+							{selectedSkillId ? (
+								<SkillReplayScrubber
+									skillId={selectedSkillId}
+									onClose={() => setSelectedSkillId(null)}
 								/>
 							) : null}
 						</div>
