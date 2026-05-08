@@ -131,3 +131,28 @@ describe('/ws/stream/:id WebSocket upgrade handler', () => {
 		expect(block).toContain('503 Service Unavailable')
 	})
 })
+
+// ============================================================================
+// Phase 99-04 — VNC dispatch source-string assertions (2 new cases)
+// ============================================================================
+
+describe('/ws/stream/:id WebSocket upgrade handler — VNC dispatch (Phase 99-04)', () => {
+	it('Test 14: imports attachVncBridge from ../streaming/vnc-bridge.js', () => {
+		expect(serverSource).toMatch(
+			/import\s*\{\s*attachVncBridge\s*\}\s*from\s*['"]\.\.\/streaming\/vnc-bridge\.js['"]/,
+		)
+	})
+
+	it('Test 15: dispatches on session.kind: vnc → attachVncBridge; else → addSubscriber', () => {
+		const block = extractStreamBlock(serverSource)
+		// The vnc branch must reference attachVncBridge, host:'127.0.0.1', and session.rfbPort.
+		expect(block).toMatch(/streamManager\.getSession\(streamId\)/)
+		expect(block).toMatch(/session\.kind\s*===?\s*['"]vnc['"]/)
+		expect(block).toMatch(/attachVncBridge\(\s*ws/)
+		expect(block).toMatch(/host:\s*['"]127\.0\.0\.1['"]/)
+		expect(block).toMatch(/port:\s*session\.rfbPort/)
+		// The else branch (fmp4) MUST still call addSubscriber — D-99-04 preserves
+		// the existing fmp4 fanout path for mode:'desktop'.
+		expect(block).toMatch(/streamManager\.addSubscriber\(streamId,\s*ws\)/)
+	})
+})

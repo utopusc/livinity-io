@@ -23,6 +23,7 @@ import {domains} from '@livos/config'
 
 import type Livinityd from '../../index.js'
 import * as jwt from '../jwt.js'
+import {attachVncBridge} from '../streaming/vnc-bridge.js'
 import {trpcExpressHandler, trpcWssHandler} from './trpc/index.js'
 import createTerminalWebSocketHandler from './terminal-socket.js'
 import createDockerExecHandler from '../docker/docker-exec-socket.js'
@@ -1040,11 +1041,37 @@ class Server {
 						return
 					}
 
-					// 4. Upgrade to WS and attach to fanout
+					// Phase 99-04: dispatch on session.kind. Auth + ownership already
+					// verified above (D-99-02 — auth gate stays in livinityd, NOT in
+					// websockify). The vnc branch byte-pipes RFB frames between the
+					// browser's noVNC client and a per-window x11vnc TCP rfbport. The
+					// fmp4 branch preserves the existing Fmp4Fanout subscriber path
+					// for mode:'desktop' (D-99-04).
+					const session = streamManager.getSession(streamId)
+					if (!session) {
+						this.logger.verbose(`WS stream ${streamId} rejected: getSession returned null (race?)`)
+						socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+						socket.destroy()
+						return
+					}
+
+					// 4. Upgrade to WS and dispatch on kind
 					const streamWss = new WebSocketServer({noServer: true})
 					streamWss.handleUpgrade(request, socket, head, (ws) => {
 						streamWss.close()
 						ws.binaryType = 'nodebuffer'
+						if (session.kind === 'vnc') {
+							// Phase 99 VNC bridge — pure-Node WS↔TCP byte pipe to x11vnc.
+							// Handles close propagation, 4 MB backpressure drop, and
+							// 3×100ms ECONNREFUSED retry (Pitfall 4).
+							attachVncBridge(ws as never, {
+								host: '127.0.0.1',
+								port: session.rfbPort,
+								logger: this.logger,
+							})
+							return
+						}
+						// fmp4 path (existing — D-99-04 preserved for mode:'desktop')
 						const ok = streamManager.addSubscriber(streamId, ws)
 						if (!ok) {
 							this.logger.warn(`WS stream ${streamId}: addSubscriber returned false (race?)`)
