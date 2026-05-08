@@ -186,6 +186,27 @@ export type LivAgentRunnerOptions = {
   maxIterations?: number;
 };
 
+/**
+ * Phase 97-06 — Auto-mode extension options.
+ *
+ * Passed to `start()` (NOT to the constructor) so a single LivAgentRunner
+ * instance can drive Watch/Teach/Auto sessions back-to-back without
+ * carrying Auto-mode state across runs.
+ *
+ * `skillPromptBlock`: rendered output from skill-context-builder.ts (P97-04).
+ *   Prepended to the user task message so the agent sees the skill on its
+ *   first turn. The sacred SDK runner accepts a single `task` string; we
+ *   compose at the wrapper boundary, never reaching into the runner.
+ *
+ * `validationStrikeLimit`: how many consecutive `validation:fail` lines
+ *   trigger the `needs_help` SSE chunk + run pause. Default 3 (gray-area
+ *   Q3 / Q6 default).
+ */
+export type LivAutoModeOptions = {
+  skillPromptBlock?: string;
+  validationStrikeLimit?: number;
+};
+
 // ── SDK event payloads (the contract documented in the file header) ──────
 
 type AssistantContentBlock =
@@ -346,6 +367,18 @@ export class LivAgentRunner {
   // V32-HERMES-05: batch UUID shared by all tool_use blocks in one assistant turn.
   private _currentBatchId: string | null = null;
 
+  // ── Phase 97-06 — Auto-mode state (per-run, reset on each start()) ──────
+  /**
+   * Consecutive `validation:fail` lines observed in the current run. Reset
+   * to zero on `validation:pass`. When this hits `_validationStrikeLimit`,
+   * emits a `needs_help` chunk and sets `stopRequested` so further turns
+   * are not dispatched. Counter is per-Auto-run (gray-area Q6 default).
+   */
+  private _consecutiveValidationFails = 0;
+  private _validationStrikeLimit = 3;
+  /** Auto-mode flag: true between start() and the run's terminal callback. */
+  private _autoModeActive = false;
+
   constructor(private readonly opts: LivAgentRunnerOptions) {
     // No-op constructor: storing opts only. Per must-have, instantiating
     // does NOT call any method on sdkRunner — the runner is dormant until
@@ -377,7 +410,7 @@ export class LivAgentRunner {
    * markError because stop is a graceful user-initiated termination, not
    * a failure — documented choice per must-have wording "pick one").
    */
-  async start(runId: string, task: string): Promise<void> {
+  async start(runId: string, task: string, autoMode?: LivAutoModeOptions): Promise<void> {
     this.currentRunId = runId;
     this.stopRequested = false;
     this.snapshots.clear();
@@ -387,10 +420,27 @@ export class LivAgentRunner {
     // V32-HERMES-01: record run start time for elapsed calculations.
     this._runStartedAt = Date.now();
 
+    // ── Phase 97-06 — Auto-mode setup ────────────────────────────────────
+    // Reset per-run validation counter (gray-area Q6: per-Auto-run scope —
+    // a fresh Run() call deserves a clean slate even if a previous run
+    // ended in a paused needs-help state).
+    this._consecutiveValidationFails = 0;
+    this._validationStrikeLimit = autoMode?.validationStrikeLimit ?? 3;
+    this._autoModeActive = autoMode != null;
+
+    // Skill-prompt injection (P97-06 + P97-04). The sacred SDK runner takes
+    // a single `task` string; we compose the final task at the wrapper
+    // boundary by prepending the rendered skill block. This satisfies the
+    // hard constraint: NO modification to sdk-agent-runner.ts.
+    let effectiveTask = task;
+    if (autoMode?.skillPromptBlock && autoMode.skillPromptBlock.trim().length > 0) {
+      effectiveTask = `${autoMode.skillPromptBlock}\n\n${task}`;
+    }
+
     // Seed `currentHistory` (Path B per CONTEXT D-20.1) with the user task
     // as the first message — gives `contextManagerHook` something to inspect
     // on the very first iter, before any assistant message comes back.
-    this.currentHistory = [{ role: 'user', content: task }];
+    this.currentHistory = [{ role: 'user', content: effectiveTask }];
 
     // Status chunk announces transition to running.
     await this.opts.runStore.appendChunk(runId, {
@@ -427,7 +477,7 @@ export class LivAgentRunner {
 
     let stopFinalized = false;
     try {
-      await this.opts.sdkRunner.run(task);
+      await this.opts.sdkRunner.run(effectiveTask);
       // Drain any handler invocations that the SDK fired during run().
       // Re-scan inFlight after each settle in case a handler chain queued
       // additional follow-up work.
@@ -596,6 +646,15 @@ export class LivAgentRunner {
             type: 'text',
             payload: block.text,
           });
+          // Phase 97-06 — Auto-mode validation tracking. Scan the text for
+          // `validation:` lines emitted by the agent (per gray-area Q2's
+          // structured-self-report decision). Format expected:
+          //   `validation:pass`  or  `validation:fail [reason...]`
+          // Counter resets on pass; 3 consecutive fails emit `needs_help`
+          // and stop further turn dispatch.
+          if (this._autoModeActive) {
+            await this.processValidationLines(runId, block.text);
+          }
         } else if (block.type === 'tool_use') {
           // V32-HERMES-01: emit status_detail for tool dispatch with heuristic verb.
           await this.opts.runStore.appendChunk(runId, {
@@ -831,5 +890,67 @@ export class LivAgentRunner {
     }
 
     return false;
+  }
+
+  /**
+   * Phase 97-06 — scan an assistant text block for `validation:` lines
+   * emitted under the Auto-mode prompt template (gray-area Q2 default
+   * structured agent self-report).
+   *
+   * Format the wrapper expects (set by the system-prompt addition Auto-mode
+   * prepends at start time — see also gray-area Q2 in 97-CONTEXT):
+   *
+   *   validation:pass
+   *   validation:fail because <reason>
+   *
+   * Counter rules:
+   *   - On `pass`: reset to 0.
+   *   - On `fail`: increment; if it reaches `_validationStrikeLimit`,
+   *     emit a `needs_help` SSE chunk with {webappId?, lastValidationReason,
+   *     strikeCount} payload AND set `stopRequested = true` so further
+   *     turns are not dispatched. The wrapper's outer loop in start()
+   *     drains in-flight handlers, then returns control to the caller.
+   *
+   * Multiple `validation:` lines in one assistant message are processed
+   * in order; if both pass and fail appear, the LAST one wins (rare;
+   * the prompt asks for one per step).
+   */
+  private async processValidationLines(runId: string, text: string): Promise<void> {
+    const lines = text.split(/\r?\n/);
+    let lastVerdict: 'pass' | 'fail' | null = null;
+    let lastReason = '';
+    for (const raw of lines) {
+      const m = /^\s*validation\s*:\s*(pass|fail)\b\s*(.*)$/i.exec(raw);
+      if (!m) continue;
+      const verdict = m[1]!.toLowerCase() as 'pass' | 'fail';
+      const reason = (m[2] ?? '').trim();
+      lastVerdict = verdict;
+      lastReason = reason;
+    }
+    if (lastVerdict === null) return;
+
+    if (lastVerdict === 'pass') {
+      this._consecutiveValidationFails = 0;
+      return;
+    }
+    // fail
+    this._consecutiveValidationFails++;
+    if (this._consecutiveValidationFails >= this._validationStrikeLimit) {
+      // Emit needs_help chunk. SSE relayer translates this to a
+      // discriminated chunk type the UI can render. Payload shape kept
+      // minimal — webappId is owned by the caller; the wrapper only
+      // surfaces what it knows from the run.
+      await this.opts.runStore.appendChunk(runId, {
+        type: 'needs_help' as never,
+        payload: {
+          source: 'auto-mode-validation',
+          strikeCount: this._consecutiveValidationFails,
+          lastValidationReason: lastReason || 'unspecified',
+        },
+      } as never);
+      // Stop further turn dispatch. Resume requires the caller to start a
+      // fresh run (which resets the counter — gray-area Q6 default).
+      this.stopRequested = true;
+    }
   }
 }
