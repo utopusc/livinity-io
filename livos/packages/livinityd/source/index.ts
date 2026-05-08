@@ -1,4 +1,5 @@
 import path from 'node:path'
+import {spawn as childProcessSpawn} from 'node:child_process'
 import fse from 'fs-extra'
 
 // TODO: import packageJson from '../package.json' assert {type: 'json'}
@@ -30,8 +31,12 @@ import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/ap
 // desktop-gateway middleware (server/index.ts) and the computerUse tRPC
 // router (computer-use/routes.ts) can reach a shared lifecycle owner.
 import {ComputerUseContainerManager} from './modules/computer-use/container-manager.js'
-import type {StreamManager} from './modules/streaming/stream-manager.js'
-import type {WebAppWindowManager} from './modules/webapps/window-manager.js'
+// Phase 93/98 — streaming subsystem + WebApp window manager. Singletons are
+// instantiated in start() AFTER ai.start() (StreamManager needs the boot-time
+// `vainfo` probe persisted to ai.redis as `liv:streaming:caps`).
+import {StreamManager} from './modules/streaming/stream-manager.js'
+import {WebAppWindowManager} from './modules/webapps/window-manager.js'
+import {probeVaapi, persistVaapiCaps} from './modules/streaming/vaapi-probe.js'
 import {getPool} from './modules/database/index.js'
 
 import {commitOsPartition, setupPiCpuGovernor, restoreWiFi, waitForSystemTime} from './modules/system/system.js'
@@ -307,6 +312,84 @@ export default class Livinityd {
 			this.logger.error('Failed to seed broker model aliases', err)
 		}
 
+		// Phase 98-04 — wire StreamManager + WebAppWindowManager singletons
+		// into the livinityd lifecycle. P93 declared the optional fields but
+		// left them `undefined` at runtime; until this hookup lands, the
+		// `webapp.window.{spawn,focus,close,list}` and `streams.*` tRPC
+		// routes return `SERVICE_UNAVAILABLE`. We do this AFTER `ai.start()`
+		// so `this.ai.redis` is connected and the boot-time `vainfo` probe
+		// can persist `liv:streaming:caps` for the encoder-args module.
+		// Adapt livinityd's logger surface (`log` / `verbose` / `error`) to
+		// the StreamManager/WebAppWindowManager logger interface
+		// (`info` / `warn` / `error` / `verbose`) without rewriting the
+		// underlying logger.
+		try {
+			const streamingLogger = (() => {
+				const child = this.logger.createChildLogger('streaming')
+				return {
+					info: (msg: string) => child.log(msg),
+					warn: (msg: string, error?: unknown) =>
+						child.error(msg, error),
+					error: (msg: string, error?: unknown) =>
+						child.error(msg, error),
+					verbose: (msg: string) => child.verbose(msg),
+				}
+			})()
+
+			const caps = await probeVaapi()
+			try {
+				await persistVaapiCaps(this.ai.redis, caps)
+				streamingLogger.info(
+					`vainfo probe complete (vaapi=${caps.vaapi} profiles=${caps.profiles.join(',') || 'none'})`,
+				)
+			} catch (persistErr) {
+				streamingLogger.warn(
+					'failed to persist vaapi caps to redis (StreamManager will still run with in-memory caps)',
+					persistErr,
+				)
+			}
+
+			this.streamManager = new StreamManager({
+				caps,
+				spawn: childProcessSpawn,
+				logger: streamingLogger,
+			})
+			streamingLogger.info(
+				`StreamManager started (cap=${this.streamManager.getCap()})`,
+			)
+
+			const webappLogger = (() => {
+				const child = this.logger.createChildLogger('webapps')
+				return {
+					info: (msg: string) => child.log(msg),
+					warn: (msg: string, error?: unknown) =>
+						child.error(msg, error),
+					error: (msg: string, error?: unknown) =>
+						child.error(msg, error),
+					verbose: (msg: string) => child.verbose(msg),
+				}
+			})()
+			this.webappWindowManager = new WebAppWindowManager({
+				streamManager: this.streamManager,
+				spawn: childProcessSpawn as unknown as ConstructorParameters<
+					typeof WebAppWindowManager
+				>[0]['spawn'],
+				logger: webappLogger,
+			})
+			this.webappWindowManager.startIdleCleanup()
+			webappLogger.info(
+				'WebAppWindowManager started (5s idle-cleanup poll armed)',
+			)
+		} catch (err) {
+			// Non-fatal — boot continues. Streaming + WebApp launcher will
+			// degrade to SERVICE_UNAVAILABLE for the affected tRPC routes
+			// until the next service restart resolves the problem.
+			this.logger.error(
+				'Failed to start streaming subsystem / WebAppWindowManager',
+				err,
+			)
+		}
+
 		// Initialize TunnelClient after ai.start() creates the Redis connection
 		this.tunnelClient = new TunnelClient({redis: this.ai.redis})
 		await this.tunnelClient.start()
@@ -350,6 +433,15 @@ export default class Livinityd {
 		try {
 			// Stop backups first because it depends on files
 			await this.backups.stop()
+
+			// Phase 98-04 — stop the WebApp idle-cleanup poller before the
+			// rest of shutdown so we don't keep firing xprop probes against a
+			// torn-down environment.
+			try {
+				this.webappWindowManager?.stopIdleCleanup()
+			} catch (err) {
+				this.logger.error('Failed to stop WebAppWindowManager idle cleanup', err)
+			}
 
 			// Stop modules
 			await Promise.all([this.files.stop(), this.apps.stop(), this.appStore.stop(), this.dbus.stop(), this.ai.stop(), this.tunnelClient.stop(), this.scheduler.stop()])
