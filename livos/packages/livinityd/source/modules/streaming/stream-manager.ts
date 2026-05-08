@@ -192,14 +192,36 @@ export class StreamManager extends EventEmitter {
 			})
 		}
 
-		// 6. Crash detection
+		// 7. Stderr passthrough — keep ffmpeg's diagnostics in livinityd logs.
+		// Also keep a rolling tail so crash diagnostics include the encoder's
+		// own error messages (otherwise we only see "code=234" with no clue
+		// which argument ffmpeg rejected).
+		const stderrTail: string[] = []
+		if (encoder.stderr) {
+			encoder.stderr.on('data', (chunk: Buffer) => {
+				const line = chunk.toString('utf-8').trim()
+				if (!line) return
+				this.logger?.verbose?.(`stream ${streamId} stderr: ${line}`)
+				stderrTail.push(line)
+				if (stderrTail.length > 50) stderrTail.shift()
+			})
+		}
+
+		// 6. Crash detection (ordered after stderr wiring so the tail is
+		// populated by the time the exit handler runs).
 		encoder.on('exit', (code, signal) => {
 			if (session.stopRequested) {
 				this.logger?.info?.(`stream ${streamId}: encoder exited cleanly (stop requested)`)
 				return
 			}
 			if (code !== 0 && code !== null) {
-				this.logger?.error?.(`stream ${streamId}: encoder crashed (code=${code} signal=${signal})`)
+				const tailMsg =
+					stderrTail.length > 0
+						? `\n--- ffmpeg stderr (last ${stderrTail.length}) ---\n${stderrTail.join('\n')}`
+						: ' (no stderr captured)'
+				this.logger?.error?.(
+					`stream ${streamId}: encoder crashed (code=${code} signal=${signal} argv=${JSON.stringify(argv)})${tailMsg}`,
+				)
 				session.status = 'crashed'
 				try {
 					fanout.close('encoder-crashed')
@@ -209,14 +231,6 @@ export class StreamManager extends EventEmitter {
 				this.emit('crash', {streamId, code, signal})
 			}
 		})
-
-		// 7. Stderr passthrough — keep ffmpeg's diagnostics in livinityd logs
-		if (encoder.stderr) {
-			encoder.stderr.on('data', (chunk: Buffer) => {
-				const line = chunk.toString('utf-8').trim()
-				if (line) this.logger?.verbose?.(`stream ${streamId} stderr: ${line}`)
-			})
-		}
 
 		this.logger?.info?.(`stream ${streamId} started (user=${opts.userId} mode=${opts.mode} cmd=${cmd})`)
 		return {streamId, wsUrl: wsUrlFor(streamId)}
