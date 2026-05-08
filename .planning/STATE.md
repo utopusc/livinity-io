@@ -1,16 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v33.0
-milestone_name: WebApp Launcher + Teach/Auto Modes
-status: v33 milestone CODE-COMPLETE 2026-05-08 — all 7 phases shipped (Waves 1-5). Sacred SHA f3538e1d811992b782a9bb057d1b7f0a0189f95f preserved throughout. P98 wired streamManager + webappWindowManager into livinityd.start() lifecycle. Pending Mini PC deploy + user-walked UAT signoff (.planning/phases/98-uat-polish/UAT-CHECKLIST.md, sections A-J + sign-off block). v32 UAT also still pending.
-last_updated: "2026-05-08T00:00:00.000Z"
-last_activity: 2026-05-08 — v33 Phase 98 (UAT + Polish + Docs + livinityd lifecycle hookup) CODE-COMPLETE. UAT-CHECKLIST.md authored (sections A-J + sign-off), docs/webapp-launcher.md authored (sections 1-11), ROADMAP closed (P92-P98 all [x], milestone heading flipped to CODE-COMPLETE pending UAT), project_v33_complete.md memory written. Lifecycle hookup wires streamManager + webappWindowManager singletons (previously undefined → tRPC SERVICE_UNAVAILABLE). Sacred SHA f3538e1d811992b782a9bb057d1b7f0a0189f95f unchanged before AND after every commit.
+milestone: v31.0
+milestone_name: Liv Agent Reborn
+status: unknown
+last_updated: "2026-05-08T18:53:23.858Z"
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 7
-  completed_plans: 7
-  percent: 100
+  total_phases: 40
+  completed_phases: 17
+  total_plans: 100
+  completed_plans: 95
+  percent: 95
 ---
 
 # Project State
@@ -60,3 +59,5 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
   - `.planning/phases/80-foundation-tokens-fonts-theme/80-SUMMARY.md`
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
+
+**Planned Phase:** 99 (WebApp VNC Swap) — 5 plans — 2026-05-08T18:53:23.845Z
