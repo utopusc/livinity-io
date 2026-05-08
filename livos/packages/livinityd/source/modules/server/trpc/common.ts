@@ -373,4 +373,25 @@ export const httpOnlyPaths = [
 	// lines 307-312, webapp.create line 360).
 	'webapp.agent.session.get',
 	'webapp.agent.session.upsert',
+	// v33 Phase 96 — Teach-mode skills (webapp_skills table). Six paths:
+	//   - webapp.skills.uploadFrame — fired at frame rate (1Hz heartbeat +
+	//     per-input-event captures). Half-broken WS after `systemctl
+	//     restart livos` would silently drop recorder frames mid-session.
+	//   - webapp.skills.create — single mutation called on Save; failure
+	//     mode of a silent WS drop would leave the user thinking they
+	//     saved when they didn't (memory pitfall B-12 / X-04).
+	//   - webapp.skills.list — sidebar render dependency; HTTP avoids the
+	//     WS-handshake-delay flicker (precedent: webapp.list line 361).
+	//   - webapp.skills.get — scrubber render dependency; transport
+	//     consistency with .list.
+	//   - webapp.skills.delete — autosave-adjacent mutation; transport
+	//     consistency with .create.
+	//   - webapp.skills.discard — fired on Save-dialog cancel to free the
+	//     on-disk session directory; cluster with the rest.
+	'webapp.skills.create',
+	'webapp.skills.list',
+	'webapp.skills.get',
+	'webapp.skills.delete',
+	'webapp.skills.discard',
+	'webapp.skills.uploadFrame',
 ] as const
