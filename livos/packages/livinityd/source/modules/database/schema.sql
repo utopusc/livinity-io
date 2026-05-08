@@ -607,3 +607,35 @@ CREATE TABLE IF NOT EXISTS webapp_agent_sessions (
 
 CREATE UNIQUE INDEX IF NOT EXISTS webapp_agent_sessions_user_webapp_uniq
   ON webapp_agent_sessions(user_id, webapp_id);
+
+-- =========================================================================
+-- Phase 96 V33-WEBAPP-96-01 — webapp_skills table.
+--
+-- Mirrored from migrations/2026-05-08-p96-webapp-skills.sql so boot's
+-- idempotent schema apply materializes the table without a runner. See
+-- that file for the full design-decision commentary (cascade rules,
+-- skill_name uniqueness scope, dual-index rationale).
+--
+-- Each row is a recorded Teach-mode action log (clicks / keys / scrolls
+-- / heartbeats) plus the user-chosen name. action_log JSONB carries the
+-- canonical version-1 schema documented in 96-CONTEXT (top-level {
+-- version, webappId, startedAt, endedAt, events[] }, ActionEvent
+-- discriminated union by `type`).
+--
+-- skill_name is unique within (user_id, webapp_id) so the same name can
+-- exist across different WebApps without collision but never within one.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS webapp_skills (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  webapp_id   UUID NOT NULL REFERENCES webapps(id) ON DELETE CASCADE,
+  skill_name  TEXT NOT NULL,
+  action_log  JSONB NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS webapp_skills_user_webapp_name_uniq
+  ON webapp_skills(user_id, webapp_id, skill_name);
+
+CREATE INDEX IF NOT EXISTS webapp_skills_user_webapp_idx
+  ON webapp_skills(user_id, webapp_id);
