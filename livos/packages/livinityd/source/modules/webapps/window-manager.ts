@@ -36,6 +36,8 @@ import {
 	isWindowAlive,
 	activateWindow,
 	getWindowGeometry,
+	getScreenSize,
+	clampGeometryToScreen,
 	WEBAPPS_X11_ENV,
 	type WindowInfo,
 	type Geometry,
@@ -69,6 +71,7 @@ export class WindowNotFoundError extends Error {
 export type SpawnFactory = (cmd: string, args: string[], options: {
 	detached?: boolean
 	stdio?: 'ignore' | 'pipe' | 'inherit'
+	env?: NodeJS.ProcessEnv
 }) => ChildProcess
 
 export type WebAppWindowManagerOpts = {
@@ -284,7 +287,26 @@ export class WebAppWindowManager {
 		if (!portalSession) {
 			// Fallback: geometry-tracker + ffmpeg crop
 			mode = 'window-crop'
-			const geom: Geometry = newWin.geometry
+			// 2026-05-08: clamp geometry to root display bounds. Chrome
+			// maximized windows can report a logical geometry that overflows
+			// the screen (frame extents / shadow), and ffmpeg x11grab rejects
+			// out-of-bounds capture areas with EINVAL ("Capture area WxH at
+			// position X,Y outside the screen size SxS").
+			const screen = await getScreenSize()
+			const geom: Geometry = screen
+				? clampGeometryToScreen(newWin.geometry, screen)
+				: newWin.geometry
+			if (
+				screen &&
+				(geom.x !== newWin.geometry.x ||
+					geom.y !== newWin.geometry.y ||
+					geom.w !== newWin.geometry.w ||
+					geom.h !== newWin.geometry.h)
+			) {
+				this.logger?.warn?.(
+					`webapp ${opts.webappId}: clamped geometry ${JSON.stringify(newWin.geometry)} → ${JSON.stringify(geom)} (screen=${screen.w}x${screen.h})`,
+				)
+			}
 			streamStart = this.streamManager.startStream({
 				userId: opts.userId,
 				mode: 'window-crop',
