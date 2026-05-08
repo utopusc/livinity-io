@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v32.0
 milestone_name: AI Chat Ground-up Rewrite + Hermes Background Runtime
 status: v32 milestone CODE-COMPLETE 2026-05-06 — all 12 phases shipped (Waves 1-5). Sacred SHA f3538e1d preserved throughout. WCAG --liv-muted-foreground fixed (5.04:1 PASS). Pending only user-walked Mini PC UAT signoff (UAT-CHECKLIST.md, 10 sections A-J).
-last_updated: "2026-05-07T17:10:00.000Z"
-last_activity: 2026-05-07 — v33 Phase 93 (Streaming Subsystem + Window Manager) CODE-COMPLETE. 13 atomic commits cf61685d..d670847e under v33 Wave 1 parallel with P92. Sacred SHA f3538e1d UNTOUCHED. 200/200 tests green incl. fake-encoder integration test. Mini PC live deploy + 2h stream-stability UAT carried over to P98.
+last_updated: "2026-05-07T19:00:00.000Z"
+last_activity: 2026-05-07 — v33 Phase 94 (Desktop "Add WebApp" Context Menu + Persistence) CODE-COMPLETE. 5 atomic commits dfac4bb5..4a822e05 (T94-01..T94-05) plus T94-06 SUMMARY. Sacred SHA f3538e1d UNTOUCHED. UI/livinityd typecheck baselines unchanged (560 / 371). useLaunchWebApp stub locks signature for P95 spawn-dispatch. Manual UAT (7 steps) deferred to v33 deploy phase.
 progress:
   total_phases: 12
   completed_phases: 12
