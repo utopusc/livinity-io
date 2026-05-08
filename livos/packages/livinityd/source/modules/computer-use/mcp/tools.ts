@@ -35,7 +35,7 @@ import {setTimeout as sleep} from 'node:timers/promises'
 
 import {z, type ZodTypeAny} from 'zod'
 
-import {BYTEBOT_TOOLS} from '../bytebot-tools.js'
+import {BYTEBOT_TOOLS, BYTEBOT_AUTO_MODE_EXTRA_TOOLS} from '../bytebot-tools.js'
 import {
 	captureScreenshot,
 	moveMouse,
@@ -53,6 +53,7 @@ import {
 	listWindows,
 	readFileBase64,
 } from '../native/index.js'
+import {executeWebAppReplaySkill} from '../skill-replay-tool.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types — local to this module (avoids importing the full @modelcontextprotocol
@@ -98,9 +99,19 @@ const POST_ACTION_SETTLE_MS = 750
  * id every native primitive call defaults to when the per-tool input does
  * not explicitly override it. When undefined, host-display behavior is
  * preserved (the existing pre-P97 single-instance default).
+ *
+ * Phase 97-07 — `skillReplayDeps` carries the DB pool + authenticated userId
+ * needed by the `webapp_replay_skill` tool. When provided, the tool is
+ * registered alongside the standard BYTEBOT_TOOLS. When omitted, the tool
+ * is not registered — the caller (mcp/server.ts) only sets it on per-WebApp
+ * instances spawned by the Auto-mode start path.
  */
 export interface BytebotToolsOptions {
 	defaultWindowId?: number
+	skillReplayDeps?: {
+		pool: import('pg').Pool
+		userId: string
+	}
 }
 
 /**
@@ -420,6 +431,29 @@ export function buildHandlers(options: BytebotToolsOptions = {}): Record<string,
 			},
 		}
 	},
+
+	// ── Phase 97-07 — Auto-mode skill replay (per-WebApp instances only) ──
+
+	webapp_replay_skill: async (args) => {
+		if (!options.skillReplayDeps) {
+			return {
+				content: [
+					{
+						type: 'text',
+						text:
+							'Error: webapp_replay_skill is only available on per-WebApp ' +
+							'bytebot MCP instances (Auto mode). The current MCP server has ' +
+							'no skill-replay dependencies wired.',
+					},
+				],
+				isError: true,
+			}
+		}
+		return executeWebAppReplaySkill(options.skillReplayDeps, {
+			skillId: args.skillId as string,
+			freeFormGoal: args.freeFormGoal as string | undefined,
+		}) as Promise<LivCallToolResult>
+	},
 	}
 }
 
@@ -493,8 +527,17 @@ function jsonSchemaToZodRawShape(rootSchema: {type: 'object'; properties: Record
 }
 
 export function registerBytebotTools(server: McpServerLike, options?: BytebotToolsOptions): void {
-	const handlers = options?.defaultWindowId !== undefined ? buildHandlers(options) : HANDLERS
-	for (const tool of BYTEBOT_TOOLS) {
+	const handlers =
+		options?.defaultWindowId !== undefined || options?.skillReplayDeps !== undefined
+			? buildHandlers(options)
+			: HANDLERS
+	// Phase 97-07: only register Auto-mode-only tools when skillReplayDeps
+	// is wired (i.e. this is a per-WebApp instance spawned by Auto mode).
+	const allTools =
+		options?.skillReplayDeps !== undefined
+			? [...BYTEBOT_TOOLS, ...BYTEBOT_AUTO_MODE_EXTRA_TOOLS]
+			: BYTEBOT_TOOLS
+	for (const tool of allTools) {
 		server.registerTool(
 			tool.name,
 			{
