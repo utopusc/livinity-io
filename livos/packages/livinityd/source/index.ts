@@ -36,6 +36,20 @@ import {ComputerUseContainerManager} from './modules/computer-use/container-mana
 // `vainfo` probe persisted to ai.redis as `liv:streaming:caps`).
 import {StreamManager} from './modules/streaming/stream-manager.js'
 import {WebAppWindowManager} from './modules/webapps/window-manager.js'
+import {WEBAPPS_X11_ENV} from './modules/webapps/window-discovery.js'
+
+// 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
+// DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
+// ffmpeg x11grab, webapps' sudo→chrome) need these to reach the host
+// display. Wrap the raw `child_process.spawn` so every child inherits
+// the right env without each caller re-doing the merge. Caller-supplied
+// `env` still wins (sudo command-prefix vars in webapps still take
+// effect).
+const x11Spawn = ((cmd: string, args: ReadonlyArray<string>, opts: any = {}) =>
+	childProcessSpawn(cmd, args as string[], {
+		...opts,
+		env: {...process.env, ...WEBAPPS_X11_ENV, ...(opts.env ?? {})},
+	})) as typeof childProcessSpawn
 import {probeVaapi, persistVaapiCaps} from './modules/streaming/vaapi-probe.js'
 import {getPool} from './modules/database/index.js'
 
@@ -351,7 +365,7 @@ export default class Livinityd {
 
 			this.streamManager = new StreamManager({
 				caps,
-				spawn: childProcessSpawn,
+				spawn: x11Spawn,
 				logger: streamingLogger,
 			})
 			streamingLogger.info(
@@ -371,7 +385,7 @@ export default class Livinityd {
 			})()
 			this.webappWindowManager = new WebAppWindowManager({
 				streamManager: this.streamManager,
-				spawn: childProcessSpawn as unknown as ConstructorParameters<
+				spawn: x11Spawn as unknown as ConstructorParameters<
 					typeof WebAppWindowManager
 				>[0]['spawn'],
 				logger: webappLogger,
