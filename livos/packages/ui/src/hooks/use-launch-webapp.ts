@@ -1,26 +1,40 @@
-// Phase 94-04 — useLaunchWebApp hook (stub).
+// Phase 95-08 carry-fix (2026-05-08) — useLaunchWebApp wires WebApp click
+// → window manager spawn flow that mounts WebAppStreamWindow.
 //
-// Hook signature is locked here so P95 (window manager spawn flow) can fill
-// in the body without retrofitting every desktop touchpoint that calls it:
+// Usage from a desktop icon:
 //
 //   const launch = useLaunchWebApp()
-//   launch(webappId)()  // returns a stable click handler
+//   const onClick = launch({id, url, title, iconUrl})
 //
-// P94 ships only the stub: clicking emits a console.warn pointing at P95.
-// The icon component is the only call site today.
+// Window-manager appId is `WEBAPP_<webappId>`. WindowContent registry routes
+// that prefix to the lazy WebAppStreamWindow component (P95-02). The actual
+// stream spawn (Chrome --new-window + x11vnc + websockify) happens server-
+// side via tRPC `webapp.window.spawn` triggered by useWebAppVNC inside the
+// stream window component.
+//
+// Falls back to a console.warn if no WindowManagerProvider is mounted (e.g.
+// /login screen) — same defensive pattern as apple-spotlight.
 
-const WARNED = new Set<string>()
+import {useWindowManagerOptional} from '@/providers/window-manager'
 
-export function useLaunchWebApp(): (webappId: string) => () => void {
-	return (webappId: string) => () => {
-		// eslint-disable-next-line no-console
-		console.log(`[P94] launch intent webappId=${webappId}`)
-		// Warn once per session per webappId so a panel of pinned WebApps
-		// doesn't spam the dev console on each click.
-		if (!WARNED.has(webappId)) {
-			WARNED.add(webappId)
+export interface LaunchWebAppArgs {
+	id: string
+	url: string
+	title: string
+	iconUrl: string
+}
+
+export function useLaunchWebApp(): (args: LaunchWebAppArgs) => () => void {
+	const windowManager = useWindowManagerOptional()
+	return ({id, url, title, iconUrl}) => () => {
+		const appId = `WEBAPP_${id}`
+		if (windowManager) {
+			windowManager.openWindow(appId, url, title, iconUrl)
+		} else {
 			// eslint-disable-next-line no-console
-			console.warn('P95 not yet shipped — full launch dispatch lands in Phase 95.')
+			console.warn(
+				`[useLaunchWebApp] WindowManager unavailable — cannot launch ${title} (${id})`,
+			)
 		}
 	}
 }

@@ -59,7 +59,12 @@ export function WebAppIcon({id, url, title, faviconUrl}: WebAppIconProps) {
 	const label = title?.trim() || hostnameOrUrl(url)
 	const iconSrc = faviconUrl || ''
 
-	const handleClick = launch(id)
+	const handleClick = launch({
+		id,
+		url,
+		title: label,
+		iconUrl: iconSrc,
+	})
 
 	const handleRemove = async () => {
 		try {
