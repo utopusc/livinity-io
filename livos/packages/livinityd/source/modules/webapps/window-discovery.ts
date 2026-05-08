@@ -166,6 +166,25 @@ export async function findNewWindowMatching(
 				if (w.title.toLowerCase().includes(needle)) return w
 			}
 		}
+		// 2026-05-08 hotfix: title hints (URL hostname / page title) often
+		// don't appear verbatim in actual Chrome window titles (e.g.
+		// "Inbox (123) - user@gmail.com - Gmail - Google Chrome" doesn't
+		// contain "mail.google.com"). After 60% of the timeout has elapsed
+		// without a title match, fall back to "any new window with Chrome
+		// or Firefox in the title" — `--new-window` reliably produces such
+		// a window so this is a safe last-resort match.
+		const elapsed = timeoutMs - (deadline - Date.now())
+		if (elapsed > timeoutMs * 0.6) {
+			for (const w of newWindows) {
+				const lower = w.title.toLowerCase()
+				if (lower.includes('chrome') || lower.includes('chromium') || lower.includes('firefox')) {
+					return w
+				}
+			}
+			// Still no match? Last resort — any new top-level window. Better
+			// to return a wrong wid (caller can verify) than fail outright.
+			if (newWindows.length > 0) return newWindows[0]
+		}
 		const remaining = deadline - Date.now()
 		if (remaining <= 0) break
 		await sleep(Math.min(pollMs, remaining))
