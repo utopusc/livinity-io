@@ -47,6 +47,7 @@ import {
 	upsertWebAppAgentSession,
 	type WebAppAgentSessionRow,
 } from './webapp-agent-sessions-repository.js'
+import skillsRouter from './skills-router.js'
 
 // Map ExtractionError codes → tRPC TRPCError codes per CONTEXT gray-area #7.
 function trpcErrorForExtraction(code: ExtractionErrorCode): {
@@ -391,6 +392,15 @@ const webappRouter = router({
 
 	// Phase 95-05 — per-WebApp agent session state (webapp.agent.session.{get, upsert}).
 	agent: agentRouter,
+
+	// Phase 96-02 — Teach-mode skills sub-router (webapp.skills.{create,
+	// list, get, delete, discard, uploadFrame}). httpOnlyPaths entries
+	// added in common.ts for the same WS-reconnect-survival reasons as
+	// the rest of the long-lived mutation cluster (memory pitfall B-12 /
+	// X-04). uploadFrame in particular is mutation-shaped at frame rate
+	// (1Hz heartbeat + per-input-event captures) — silent WS hangs
+	// during a half-broken reconnect would lose recorder data.
+	skills: skillsRouter,
 })
 
 export default webappRouter
