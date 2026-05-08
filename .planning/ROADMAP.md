@@ -143,6 +143,13 @@ P87 (Hermes runtime) ───────────────────�
 - [x] **Phase 98: UAT + Polish + Docs** (V33-UAT-01..03) — Full flow test: 3 WebApps (facebook/gmail/x), profile sharing verified, teach a skill in each, run auto mode, verify autonomy + needs-help recovery. Resource verification. WebApp delete cascade (skills + sessions). User docs `docs/webapp-launcher.md`. ROADMAP close + memory updates.
 - [ ] **Phase 99: WebApp VNC Swap — fMP4 → x11vnc** (V33-VNC-01..05) — UAT (2026-05-08) found protocol mismatch: P93 streams fMP4 (`ftypisom...`) over `/ws/stream/:streamId` but frontend `use-webapp-vnc.ts` is a noVNC RFB client expecting `RFB 003.008\n`. Swap backend to per-window `x11vnc -id <wid>` + WS↔TCP bridge so the existing wire endpoint speaks RFB. Frontend zero changes. New module `vnc-bridge.ts`; `webapps/window-manager.ts` switches from `streamManager.startStream({mode:'window-crop'})` to `vncBridge.spawnVncForWindow(wid)`; `/ws/stream/:streamId` handler bridges to VNC TCP socket instead of fMP4 fanout. `Fmp4Fanout` and ffmpeg encoder path retained for non-WebApp uses (e.g. desktop-stream native app). Dependencies (`x11vnc 0.9.16` + `/usr/local/bin/websockify`) verified present on Mini PC 2026-05-08. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED.
 
+  **Plans:** 5 plans
+  - [ ] 99-01-PLAN.md — Mini PC live verification + canonical x11vnc argv lock (kill-gate; autonomous=false; user-walked SSH)
+  - [ ] 99-02-PLAN.md — vnc-bridge.ts (spawn x11vnc + WS↔TCP byte pipe + 4 MB backpressure + 3×100ms ECONNREFUSED retry); 9 vitest cases (TDD RED→GREEN)
+  - [ ] 99-03-PLAN.md — StreamSession discriminated-union (kind:fmp4|vnc); startStream({mode:vnc-window}); getSession(); stopStream cascade for vnc kind; 5 new vitest cases
+  - [ ] 99-04-PLAN.md — WebAppWindowManager.spawn() swaps to mode:vnc-window (geometry-clamp preserved per D-99-05); /ws/stream/:streamId dispatches on session.kind; 5 new vitest cases
+  - [ ] 99-05-PLAN.md — git push + Mini PC deploy via update.sh + user-walked end-to-end UAT + UAT-CHECKLIST row + 99-SUMMARY.md + ROADMAP/STATE close (autonomous=false)
+
 **Dependency graph:**
 ```
 P92 (metadata) ─┬─→ P94 (context menu) ─┐
