@@ -36,6 +36,7 @@ import {
 	isWindowAlive,
 	activateWindow,
 	getWindowGeometry,
+	WEBAPPS_X11_ENV,
 	type WindowInfo,
 	type Geometry,
 } from './window-discovery.js'
@@ -207,6 +208,7 @@ export class WebAppWindowManager {
 		const chromeProc = this.spawnFactory(this.chromeBinary, ['--new-window', opts.url], {
 			detached: true,
 			stdio: 'ignore',
+			env: {...process.env, ...WEBAPPS_X11_ENV},
 		})
 		try {
 			chromeProc.unref?.()
@@ -345,6 +347,7 @@ export class WebAppWindowManager {
 			try {
 				const child = this.spawnFactory('xdotool', ['windowkill', String(entry.wid)], {
 					stdio: 'ignore',
+					env: {...process.env, ...WEBAPPS_X11_ENV},
 				})
 				child.unref?.()
 			} catch (err) {

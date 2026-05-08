@@ -35,9 +35,33 @@ const DEFAULT_FIND_TIMEOUT_MS = 5000
 const DEFAULT_POLL_INTERVAL_MS = 100
 
 /**
+ * X11 env defaults injected into every binary spawn from this module.
+ *
+ * 2026-05-08 hotfix: livinityd's systemd unit env has only PATH/USER/HOME —
+ * no DISPLAY, no XAUTHORITY. Direct xdotool/wmctrl/xprop calls failed with
+ * `Cannot open display.` Bytebot MCP child process does set these explicitly
+ * (`bytebot-mcp-config.ts:149-158`); the new P93 streaming + window-manager
+ * code path missed the same step. Inject here so every helper inherits.
+ *
+ * Override via env vars `LIVOS_X11_DISPLAY` / `LIVOS_X11_XAUTHORITY` for
+ * non-default Mini PC layouts (e.g. multi-seat hosts).
+ */
+const X11_ENV = {
+	DISPLAY: process.env.LIVOS_X11_DISPLAY ?? ':0',
+	XAUTHORITY: process.env.LIVOS_X11_XAUTHORITY ?? '/run/user/1000/gdm/Xauthority',
+} as const
+
+/** Public re-export so other webapps modules (window-manager, etc.) reuse the
+ *  same defaults instead of duplicating literals. */
+export const WEBAPPS_X11_ENV = X11_ENV
+
+/**
  * Promise wrapper around `execFile`. Hand-rolled instead of util.promisify
  * because Node's execFile has a custom promisify symbol that bypasses
  * vi.mock of node:child_process (vaapi-probe.ts uses the same pattern).
+ *
+ * Always merges X11_ENV into the spawn env so wmctrl/xdotool/xprop reach
+ * the host display.
  */
 function execFileAsync(
 	cmd: string,
@@ -45,7 +69,7 @@ function execFileAsync(
 	opts: {timeout?: number; maxBuffer?: number} = {},
 ): Promise<{stdout: string; stderr: string}> {
 	return new Promise((resolve, reject) => {
-		execFile(cmd, args, opts, (err, stdout, stderr) => {
+		execFile(cmd, args, {...opts, env: {...process.env, ...X11_ENV}}, (err, stdout, stderr) => {
 			if (err) {
 				;(err as Error & {stdout?: string; stderr?: string}).stdout = String(stdout || '')
 				;(err as Error & {stdout?: string; stderr?: string}).stderr = String(stderr || '')
