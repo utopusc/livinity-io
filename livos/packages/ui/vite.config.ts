@@ -110,6 +110,13 @@ export default defineConfig({
 		},
 	},
 	build: {
+		// 2026-05-08 hotfix: bump from default `modules` (es2020) to `es2022` so
+		// top-level-await in @novnc/novnc's RFB.js compiles. P95-03 added the
+		// novnc dep; default vite target rejects TLA with:
+		//   "Top-level await is not available in the configured target
+		//   environment (chrome87, edge88, es2020, firefox78, safari14)"
+		// es2022 is supported by chrome89+, firefox89+, safari15+, edge89+.
+		target: 'es2022',
 		rollupOptions: {
 			output: {
 				minifyInternalExports: true,
