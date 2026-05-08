@@ -105,7 +105,9 @@ P87 (Hermes runtime) ───────────────────�
 
 ---
 
-### ✅ v33.0 WebApp Launcher + Teach/Auto Modes (CODE-COMPLETE 2026-05-08 — Phases 92-98)
+### 🟡 v33.0 WebApp Launcher + Teach/Auto Modes (HOT-FIX IN PROGRESS — Phases 92-99)
+
+**Status (2026-05-08):** P92-P98 code-complete; UAT discovered protocol mismatch — backend ships fMP4 but frontend (`use-webapp-vnc.ts`) is a noVNC RFB client. Phase 99 added to swap backend to per-window `x11vnc -id <wid>` (the original D-V33-03 design that P93 spike incorrectly rejected). 5 host-Chrome fixes shipped 2026-05-08 (`5e126607..4c55b173`) preserved through swap.
 
 **Milestone closure summary (2026-05-08):**
 
@@ -139,12 +141,13 @@ P87 (Hermes runtime) ───────────────────�
 - [x] **Phase 96: Teach Mode — Action Recording** (V33-TEACH-01..07) — `useTeachRecorder` hook captures VNC client mouse/keyboard events. Screenshot every event + 1s heartbeat. Save dialog → POST `webapps.skills.create`. Postgres `webapp_skills` table (JSONB action log + screenshot blob refs). Skills sidebar UI. Replay scrubber (timeline w/ thumbnails).
 - [x] **Phase 97: Auto Mode — Skill-Guided Bytebot, Window-Scoped** (V33-AUTO-01..07) — Extend native primitives (`screenshot.ts`, `input.ts`) with `windowId?: number` param: `maim -i <wid>`, `xdotool --window <wid> ...`. New tool `webapp_replay_skill({skillId, freeFormGoal?})`. Skill context builder injects `<previously-learned-skill>` block into agent system prompt. Per-WebApp bytebot MCP spawn with `BYTEBOT_TARGET_WINDOW_ID` env. Vision-validated stepping. Failure recovery (3 strikes → needs help). Sacred SHA UNTOUCHED — extensions through `LivAgentRunner` + `LivMcpClientManager`.
 - [x] **Phase 98: UAT + Polish + Docs** (V33-UAT-01..03) — Full flow test: 3 WebApps (facebook/gmail/x), profile sharing verified, teach a skill in each, run auto mode, verify autonomy + needs-help recovery. Resource verification. WebApp delete cascade (skills + sessions). User docs `docs/webapp-launcher.md`. ROADMAP close + memory updates.
+- [ ] **Phase 99: WebApp VNC Swap — fMP4 → x11vnc** (V33-VNC-01..05) — UAT (2026-05-08) found protocol mismatch: P93 streams fMP4 (`ftypisom...`) over `/ws/stream/:streamId` but frontend `use-webapp-vnc.ts` is a noVNC RFB client expecting `RFB 003.008\n`. Swap backend to per-window `x11vnc -id <wid>` + WS↔TCP bridge so the existing wire endpoint speaks RFB. Frontend zero changes. New module `vnc-bridge.ts`; `webapps/window-manager.ts` switches from `streamManager.startStream({mode:'window-crop'})` to `vncBridge.spawnVncForWindow(wid)`; `/ws/stream/:streamId` handler bridges to VNC TCP socket instead of fMP4 fanout. `Fmp4Fanout` and ffmpeg encoder path retained for non-WebApp uses (e.g. desktop-stream native app). Dependencies (`x11vnc 0.9.16` + `/usr/local/bin/websockify`) verified present on Mini PC 2026-05-08. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED.
 
 **Dependency graph:**
 ```
 P92 (metadata) ─┬─→ P94 (context menu) ─┐
                 │                         ├─→ P95 (stream window + AI panel) ─┬─→ P96 (teach mode) ─┐
-P93 (window mgr+vnc) ─────────────────────┘                                    │                      ├─→ P98 (UAT)
+P93 (window mgr+vnc) ─────────────────────┘                                    │                      ├─→ P98 (UAT) ─→ P99 (VNC swap)
                                                                                └─→ P97 (auto mode)   ─┘
 ```
 
