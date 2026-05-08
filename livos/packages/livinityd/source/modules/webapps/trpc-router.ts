@@ -1,22 +1,28 @@
-// Phase 92-09 — `webapp` tRPC namespace.
+// Phase 92-09 + Phase 94-01 — `webapp` tRPC namespace.
 //
-// Single procedure for v33 Phase 92:
+// P92 shipped:
 //   webapp.extractMetadata({url}) → MetadataResult
 //
-// Wired in to the root router under namespace `webapp` from
-// server/trpc/index.ts. The procedure path `webapp.extractMetadata` is
-// registered in `httpOnlyPaths` (server/trpc/common.ts) so the React
-// client routes the call over HTTP — fetch can take up to 8s on a clean
-// cache miss and we don't want to risk a half-broken WS dropping the
-// response after a `systemctl restart livos` (memory pitfall B-12 / X-04).
+// P93 added the window sub-router:
+//   webapp.window.{spawn, focus, close, list}
 //
-// CRUD procedures (`webapp.create / list / delete / update`) are deferred
-// to P94 with the desktop UI dialog — see CONTEXT.md Out-of-scope.
+// P94 adds CRUD on the persisted `webapps` Postgres table (mounted on the
+// same singular `webapp` namespace per CONTEXT — extend in place rather
+// than introducing a parallel `webapps.*` namespace):
+//   webapp.create  ({url, title?, faviconUrl?, description?}) → WebApp (idempotent on (userId, url))
+//   webapp.list    () → WebApp[]
+//   webapp.delete  ({id}) → {ok: true}
+//   webapp.update  ({id, patch}) → WebApp
+//
+// All four CRUD paths are registered in `httpOnlyPaths` (server/trpc/common.ts)
+// for the same WS-reconnect-survival reasons as the rest of the long-lived
+// mutation cluster (memory pitfall B-12 / X-04).
 
 import {z} from 'zod'
 import {TRPCError} from '@trpc/server'
 
 import {privateProcedure, router} from '../server/trpc/trpc.js'
+import {getPool} from '../database/index.js'
 
 import {
 	extractMetadata as runExtractMetadata,
@@ -28,6 +34,14 @@ import {
 	WebappCapExceededError,
 	WindowNotFoundError,
 } from './window-manager.js'
+import {
+	createWebApp,
+	listWebApps,
+	deleteWebApp,
+	updateWebApp,
+	findWebAppById,
+	type WebAppRow,
+} from './webapps-repository.js'
 
 // Map ExtractionError codes → tRPC TRPCError codes per CONTEXT gray-area #7.
 function trpcErrorForExtraction(code: ExtractionErrorCode): {
@@ -144,6 +158,68 @@ const windowRouter = router({
 	}),
 })
 
+// Phase 94-01 — CRUD inputs.
+//
+// `description` is accepted on the input surface for forward-compat with the
+// dialog UI (which extracts and displays description in the preview card),
+// but the current `webapps` table has no description column — the value is
+// silently dropped at the repo layer. v34 may add a column + migration if
+// the persistent description becomes a real product surface.
+const webappCreateInput = z.object({
+	url: z.string().url().max(2048),
+	title: z.string().max(512).nullable().optional(),
+	faviconUrl: z.string().url().max(2048).nullable().optional(),
+	description: z.string().max(2048).nullable().optional(),
+})
+
+const webappUpdateInput = z.object({
+	id: z.string().uuid(),
+	patch: z.object({
+		title: z.string().max(512).nullable().optional(),
+		faviconUrl: z.string().url().max(2048).nullable().optional(),
+		description: z.string().max(2048).nullable().optional(),
+	}),
+})
+
+const webappDeleteInput = z.object({
+	id: z.string().uuid(),
+})
+
+// Public output shape — exported via the router type so the React client
+// can reference it. `description` is always null on the wire today (no DB
+// column) but kept on the surface for forward-compat with the dialog.
+export type WebApp = {
+	id: string
+	userId: string
+	url: string
+	title: string | null
+	faviconUrl: string | null
+	description: string | null
+	position: number
+	createdAt: Date
+}
+
+function rowToWebApp(row: WebAppRow): WebApp {
+	return {
+		id: row.id,
+		userId: row.userId,
+		url: row.url,
+		title: row.title,
+		faviconUrl: row.faviconUrl,
+		description: null,
+		position: row.position,
+		createdAt: row.createdAt,
+	}
+}
+
+function requirePool() {
+	const pool = getPool()
+	if (!pool) {
+		throw new TRPCError({code: 'SERVICE_UNAVAILABLE', message: 'database not initialised'})
+	}
+	return pool
+}
+
 const webappRouter = router({
 	extractMetadata: privateProcedure
 		.input(extractMetadataInput)
@@ -167,6 +243,66 @@ const webappRouter = router({
 				})
 			}
 		}),
+
+	// Phase 94-01 — CRUD on the persisted `webapps` Postgres table.
+	create: privateProcedure
+		.input(webappCreateInput)
+		.mutation(async ({ctx, input}): Promise<WebApp> => {
+			const userId = ctx.currentUser?.id
+			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+			const pool = requirePool()
+			const row = await createWebApp(pool, {
+				userId,
+				url: input.url,
+				title: input.title ?? null,
+				faviconUrl: input.faviconUrl ?? null,
+			})
+			ctx.logger?.log?.(`webapp.create user=${userId} id=${row.id} url=${row.url}`)
+			return rowToWebApp(row)
+		}),
+
+	list: privateProcedure.query(async ({ctx}): Promise<WebApp[]> => {
+		const userId = ctx.currentUser?.id
+		if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+		const pool = requirePool()
+		const rows = await listWebApps(pool, userId)
+		return rows.map(rowToWebApp)
+	}),
+
+	delete: privateProcedure
+		.input(webappDeleteInput)
+		.mutation(async ({ctx, input}): Promise<{ok: true}> => {
+			const userId = ctx.currentUser?.id
+			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+			const pool = requirePool()
+			const ok = await deleteWebApp(pool, userId, input.id)
+			if (!ok) throw new TRPCError({code: 'NOT_FOUND'})
+			ctx.logger?.log?.(`webapp.delete user=${userId} id=${input.id}`)
+			return {ok: true}
+		}),
+
+	update: privateProcedure
+		.input(webappUpdateInput)
+		.mutation(async ({ctx, input}): Promise<WebApp> => {
+			const userId = ctx.currentUser?.id
+			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+			const pool = requirePool()
+			// Only include keys actually present on the wire — otherwise an
+			// undefined value would be passed to the repo and the explicit
+			// `'title' in patch` check there would treat it as "clear to null".
+			const repoPatch: {title?: string | null; faviconUrl?: string | null} = {}
+			if ('title' in input.patch) repoPatch.title = input.patch.title ?? null
+			if ('faviconUrl' in input.patch) repoPatch.faviconUrl = input.patch.faviconUrl ?? null
+			const updated = await updateWebApp(pool, userId, input.id, repoPatch)
+			if (!updated) {
+				const exists = await findWebAppById(pool, userId, input.id)
+				if (!exists) throw new TRPCError({code: 'NOT_FOUND'})
+				return rowToWebApp(exists)
+			}
+			ctx.logger?.log?.(`webapp.update user=${userId} id=${updated.id}`)
+			return rowToWebApp(updated)
+		}),
+
 	// Phase 93-11 — window manager sub-router (webapp.window.*)
 	window: windowRouter,
 })

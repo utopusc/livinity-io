@@ -343,4 +343,22 @@ export const httpOnlyPaths = [
 	'webapp.window.focus',
 	'webapp.window.close',
 	'webapp.window.list',
+	// v33 Phase 94 — webapp CRUD on the persisted `webapps` Postgres table
+	// (V33-WEBAPP-94-01). All four paths route via HTTP because:
+	//   - Mutations (create/delete/update) are autosave-adjacent — the
+	//     desktop "Add WebApp" dialog calls webapp.create, then immediately
+	//     invalidates webapp.list. A half-broken WS after `systemctl restart
+	//     livos` would silently drop the create response and the icon would
+	//     never appear (memory pitfall B-12 / X-04 — same rationale as
+	//     conversations.appendMessage line 312, agents.create line 256).
+	//   - list is a page-render dependency (apps provider merges it with
+	//     Docker apps on every desktop render). HTTP avoids the WS-handshake
+	//     flicker on first paint (precedent: conversations.list line 307,
+	//     agents.list line 254, usage.getMine line 181).
+	//   - Transport consistency with the rest of the `webapp.*` namespace
+	//     (extractMetadata at line 323, window.* at lines 342-345).
+	'webapp.create',
+	'webapp.list',
+	'webapp.delete',
+	'webapp.update',
 ] as const
