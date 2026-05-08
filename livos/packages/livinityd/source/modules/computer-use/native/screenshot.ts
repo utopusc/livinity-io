@@ -45,7 +45,33 @@ export interface ScreenshotResult {
 }
 
 /**
- * Capture a PNG screenshot of the host X server.
+ * Optional capture options.
+ *
+ * 2026-05-08 P97-01 — `windowId` enables per-WebApp window-scoped captures.
+ *
+ * When `windowId` is set we route through `maim -i <wid> <path>`, which uses
+ * XCB to capture the geometry of the X11 window with that id rather than the
+ * whole root display. xdotool / wmctrl can be used to discover wids; this
+ * function is the consumer side, not the discovery side.
+ *
+ * Failure mode (P79 verified): `maim -i <wid>` on Mutter-composited windows
+ * can return uniform-pixel (all black) frames if the window is occluded /
+ * unmapped / minimized when the snapshot fires. Empirically rare on the Mini
+ * PC's GNOME Shell when the target window is mapped + visible, but possible.
+ * On size sanity-check failure we fall back to a host-display capture and
+ * surface the windowId in the error/log context so the caller can diagnose.
+ */
+export interface CaptureScreenshotOptions {
+	/**
+	 * X11 window id to scope the capture to. When undefined, captures the full
+	 * host display (existing pre-P97 behavior — the default branch).
+	 */
+	windowId?: number
+}
+
+/**
+ * Capture a PNG screenshot of the host X server, or of a specific X11 window
+ * when `options.windowId` is provided.
  *
  * 2026-05-07 P79-05: Two-strategy chain — `maim` primary, `scrot` fallback.
  *
@@ -75,17 +101,23 @@ export interface ScreenshotResult {
  *
  * Throws clear errors when both strategies fail.
  */
-export async function captureScreenshot(): Promise<ScreenshotResult> {
+export async function captureScreenshot(options?: CaptureScreenshotOptions): Promise<ScreenshotResult> {
 	const filename = randomUUID()
 	const dir = tmpdir()
 	const tempPath = join(dir, `${filename}.png`)
+	const windowId = options?.windowId
 
 	let primaryError: string | null = null
+
+	// Build maim argv. Window-scoped path: `maim -i <wid> <path>`. Default
+	// (host-display) path: `maim <path>` — unchanged pre-P97 behavior.
+	const maimArgs =
+		typeof windowId === 'number' ? ['-i', String(windowId), tempPath] : [tempPath]
 
 	// Strategy 1: maim. XCB-based capture; works on composited GNOME Shell
 	// (X11) where scrot's imlib2-based XGetImage returns black.
 	try {
-		await execFileAsync('maim', [tempPath], {
+		await execFileAsync('maim', maimArgs, {
 			env: process.env,
 			timeout: 10_000,
 		})
@@ -94,19 +126,36 @@ export async function captureScreenshot(): Promise<ScreenshotResult> {
 		// all-black PNG of the same dimensions compresses to ~6 KB via RLE.
 		// If maim somehow produced a uniform-pixel image, fall through to
 		// scrot rather than returning a useless black frame.
-		if (buffer.byteLength >= 10_000) {
+		//
+		// P97-01: per-window captures are smaller (e.g. a 1024x768 Chrome
+		// window). Use a smaller threshold when windowId is set so legitimate
+		// small-window captures aren't flagged as black. 2 KB still excludes
+		// the 6 KB all-black case for tiny windows because uniform pixels
+		// compress almost identically regardless of dimensions, but a real
+		// rendered window has enough entropy to easily exceed 2 KB.
+		const blackThreshold = typeof windowId === 'number' ? 2_000 : 10_000
+		if (buffer.byteLength >= blackThreshold) {
 			await safeUnlink(tempPath)
 			return parsePngResult(buffer)
 		}
-		primaryError = `maim produced suspiciously small file (${buffer.byteLength} bytes — likely uniform pixels)`
+		primaryError = `maim produced suspiciously small file (${buffer.byteLength} bytes — likely uniform pixels${
+			typeof windowId === 'number' ? `; windowId=${windowId} may be occluded/minimized` : ''
+		})`
 	} catch (err: unknown) {
-		primaryError = err instanceof Error ? err.message : String(err)
+		const baseMessage = err instanceof Error ? err.message : String(err)
+		primaryError =
+			typeof windowId === 'number' ? `${baseMessage} (windowId=${windowId})` : baseMessage
 	}
 	await safeUnlink(tempPath)
 
 	// Strategy 2: scrot fallback. `-z` (silent), `-o` (overwrite). Honours
 	// DISPLAY/XAUTHORITY env. Kept for environments where maim isn't
 	// installed (older systems, minimal containers).
+	//
+	// P97-01: scrot has no documented per-window capture flag matching
+	// `maim -i <wid>` semantics. When the windowed maim path fails we
+	// degrade to host-display capture rather than no capture; the caller
+	// gets the wider context plus a windowId-tagged error message.
 	try {
 		await execFileAsync('scrot', ['-z', '-o', tempPath], {
 			env: process.env,
@@ -114,8 +163,9 @@ export async function captureScreenshot(): Promise<ScreenshotResult> {
 		})
 	} catch (err: unknown) {
 		const message = err instanceof Error ? err.message : String(err)
+		const wContext = typeof windowId === 'number' ? ` windowId=${windowId}.` : ''
 		throw new Error(
-			`Both screenshot strategies failed (DISPLAY=${process.env.DISPLAY ?? '<unset>'}). ` +
+			`Both screenshot strategies failed (DISPLAY=${process.env.DISPLAY ?? '<unset>'}).${wContext} ` +
 				`maim: ${primaryError}; scrot: ${message}`,
 		)
 	}
