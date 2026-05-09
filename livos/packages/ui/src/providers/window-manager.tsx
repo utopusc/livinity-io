@@ -191,7 +191,11 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 
 	const openWindow = useCallback((appId: string, route: string, title: string, icon: string, originRect?: OriginRect): WindowId => {
 		const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)
-		const baseSize = DEFAULT_WINDOW_SIZES[appId] || DEFAULT_WINDOW_SIZES.default
+		// Phase 100-06: WebApp windows ship with a stable 1280x720 base size
+		// regardless of viewport (honored within getResponsiveSize clamp).
+		const baseSize = appId.startsWith('WEBAPP_')
+			? {width: 1280, height: 720}
+			: (DEFAULT_WINDOW_SIZES[appId] || DEFAULT_WINDOW_SIZES.default)
 		const size = getResponsiveSize(baseSize.width, baseSize.height)
 		// Use current state.windows.length at call time, not as dependency
 		const windowCount = state.windows.length
