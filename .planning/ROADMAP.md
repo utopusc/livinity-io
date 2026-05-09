@@ -145,19 +145,12 @@ P87 (Hermes runtime) ───────────────────�
 
 - [ ] **Phase 100: Multi-Stream + Stream-Window Redesign** (V33-MULTI-01..05) — Close the four UAT gaps from Phase 99: (1) two concurrent WebApps must each have their OWN stream + own x11vnc port + own stream window (current single-stream-only is the kill-gate); (2) drop URL bar from stream window (URL is bound to the WebApp; redundant inside); (3) stream area fills the window (no toolbar chrome); (4) Chat/Teach/Watch/Auto inline panel REMOVED — replaced with a floating icon-button row anchored to the stream window's bottom edge (mirroring the existing top drag-to-move + close button pattern). Each button opens its own popover/sheet on click. Backend: investigate Chrome `--new-window` IPC merge against `--user-data-dir=/home/bruce/.config/livos-chrome` (likely root cause of single-stream symptom); if confirmed, switch to `--app=URL` site-specific-browser mode (no IPC merge AND chromeless windows — partial fix for G-99-UAT-2). Frontend: rewire `webapp-stream-window.tsx` + `webapp-toolbar.tsx` + `webapp-mode-selector.tsx` to the new shape. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED throughout (no `liv/packages/core/` edits).
 
-  **Plans:** TBD (write via `/gsd-plan-phase 100` after `/clear`)
-  - 100-01-PLAN.md (kill-gate; autonomous=false; user-walked SSH) — Mini PC live verification of multi-stream root cause (test 2 concurrent `--new-window` invocations + xdotool wid discovery + `--app=URL` mode comparison)
-  - 100-02-PLAN.md (autonomous, TDD) — Backend fix for multi-stream (likely: switch Chrome spawn argv from `--new-window` to `--app=URL`, OR keep `--new-window` if root cause is frontend-only)
-  - 100-03-PLAN.md (autonomous, TDD) — Frontend: drop URL bar, full-bleed stream layout in `webapp-stream-window.tsx` + `webapp-toolbar.tsx`
-  - 100-04-PLAN.md (autonomous, TDD) — Frontend: floating action-button row (Chat / Teach / Watch / Auto icon buttons anchored to stream window bottom edge); each button opens its own popover/sheet; replaces inline `webapp-mode-selector.tsx` placement
-  - 100-05-PLAN.md (autonomous=false; UAT walk) — git push + Mini PC deploy via update.sh + user-walked end-to-end UAT (2 concurrent WebApps + new UI shape verified) + ROADMAP/STATE close
-
-  **Plans:** 5 plans
-  - [ ] 99-01-PLAN.md — Mini PC live verification + canonical x11vnc argv lock (kill-gate; autonomous=false; user-walked SSH)
-  - [ ] 99-02-PLAN.md — vnc-bridge.ts (spawn x11vnc + WS↔TCP byte pipe + 4 MB backpressure + 3×100ms ECONNREFUSED retry); 9 vitest cases (TDD RED→GREEN)
-  - [ ] 99-03-PLAN.md — StreamSession discriminated-union (kind:fmp4|vnc); startStream({mode:vnc-window}); getSession(); stopStream cascade for vnc kind; 5 new vitest cases
-  - [ ] 99-04-PLAN.md — WebAppWindowManager.spawn() swaps to mode:vnc-window (geometry-clamp preserved per D-99-05); /ws/stream/:streamId dispatches on session.kind; 5 new vitest cases
-  - [ ] 99-05-PLAN.md — git push + Mini PC deploy via update.sh + user-walked end-to-end UAT + UAT-CHECKLIST row + 99-SUMMARY.md + ROADMAP/STATE close (autonomous=false)
+  **Plans:** 5 plans (written 2026-05-08)
+  - [x] 100-01-PLAN.md — Mini PC kill-gate (autonomous=false, user-walked SSH) — empirical H1..H4 root-cause probe + sacred-SHA pre-commit hook bootstrap (✓ 2026-05-08, commits a6c519fd + bb36e8d1: H1 verified, B1 fix locked)
+  - [ ] 100-02-PLAN.md — Backend argv swap `--new-window URL` → `--app=URL` (autonomous, TDD; depends on 100-01)
+  - [ ] 100-03-PLAN.md — Frontend full-bleed: drop URL bar + ResizablePanelGroup; root flex-col (autonomous, TDD; depends on 100-02)
+  - [ ] 100-04-PLAN.md — Frontend bottom 4-icon action-bar + slide-in drawers Chat/Teach/Watch/Auto (autonomous, TDD; depends on 100-03)
+  - [ ] 100-05-PLAN.md — git push + Mini PC deploy via update.sh + user-walked UAT (11 success criteria) + ROADMAP/STATE close + v33 ✅ Shipped flip (autonomous=false)
 
 **Dependency graph:**
 ```
