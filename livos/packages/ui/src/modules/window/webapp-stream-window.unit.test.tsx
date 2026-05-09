@@ -77,6 +77,38 @@ describe('WebAppStreamWindow — source-text invariants', () => {
 		// the bottom reservation and UAT Row 5 will surface the regression.
 		expect(SRC).toMatch(/pb-9/)
 	})
+
+	// ─────────────────────────────────────────────────────────────────
+	// Phase 100-04 — bottom action-bar + drawer wiring invariants.
+	// ─────────────────────────────────────────────────────────────────
+
+	it('imports Sheet drawer from shadcn (G-100-D D2)', () => {
+		expect(SRC).toMatch(/from\s+['"]@\/shadcn-components\/ui\/sheet['"]/)
+		expect(SRC).toMatch(/<Sheet\b/)
+		expect(SRC).toMatch(/closeButton=\{false\}/)
+		expect(SRC).toMatch(/!w-\[35%\]/)
+	})
+
+	it('renders 4-button bottom action row with Lucide icons (V33-MULTI-03)', () => {
+		expect(SRC).toMatch(/MessageCircle/)
+		expect(SRC).toMatch(/GraduationCap/)
+		expect(SRC).toMatch(/\bEye\b/)
+		expect(SRC).toMatch(/\bBot\b/)
+		// Anchored absolute to the bottom edge inside the window border (G-100-C C1):
+		expect(SRC).toMatch(/absolute\s+inset-x-0\s+bottom-0/)
+	})
+
+	it('wires openDrawer state with second-click-closes (G-100-D D2 / V33-MULTI-04)', () => {
+		expect(SRC).toMatch(/openDrawer/)
+		expect(SRC).toMatch(/setOpenDrawer/)
+		// Second click of the same button toggles back to null:
+		expect(SRC).toMatch(/current\s*===\s*next\s*\?\s*null\s*:\s*next/)
+	})
+
+	it('preserves WEBAPP_MODE_CHANGE_EVENT dispatch on mode toggle (Phase 96/97 listener compat)', () => {
+		expect(SRC).toMatch(/WEBAPP_MODE_CHANGE_EVENT/)
+		expect(SRC).toMatch(/dispatchEvent\(/)
+	})
 })
 
 describe('WebAppStreamWindow — smoke import', () => {
