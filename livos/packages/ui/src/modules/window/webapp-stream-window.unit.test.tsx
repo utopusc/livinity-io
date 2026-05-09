@@ -89,25 +89,56 @@ describe('WebAppStreamWindow — source-text invariants', () => {
 		expect(SRC).toMatch(/!w-\[35%\]/)
 	})
 
-	it('renders 4-button bottom action row with Lucide icons (V33-MULTI-03)', () => {
-		expect(SRC).toMatch(/MessageCircle/)
-		expect(SRC).toMatch(/GraduationCap/)
-		expect(SRC).toMatch(/\bEye\b/)
-		expect(SRC).toMatch(/\bBot\b/)
-		// Anchored absolute to the bottom edge inside the window border (G-100-C C1):
-		expect(SRC).toMatch(/absolute\s+inset-x-0\s+bottom-0/)
+	it('Phase 100-06: action-bar render moved OUT of stream-window (lives in webapp-floating-action-bar.tsx)', () => {
+		// The bar's icon imports are no longer in this component:
+		expect(SRC).not.toMatch(/\bMessageCircle\b/)
+		expect(SRC).not.toMatch(/\bGraduationCap\b/)
+		expect(SRC).not.toMatch(/\bBot\b/)
+		expect(SRC).not.toMatch(/\bEye\b/) // Watch dropped entirely
+		// And no inline overlay bar absolute-positioned at the bottom:
+		expect(SRC).not.toMatch(/absolute\s+inset-x-0\s+bottom-0\s+z-20/)
 	})
 
-	it('wires openDrawer state with second-click-closes (G-100-D D2 / V33-MULTI-04)', () => {
-		expect(SRC).toMatch(/openDrawer/)
-		expect(SRC).toMatch(/setOpenDrawer/)
-		// Second click of the same button toggles back to null:
-		expect(SRC).toMatch(/current\s*===\s*next\s*\?\s*null\s*:\s*next/)
+	it('subscribes to webapp-drawer-store for openDrawer state (Phase 100-06)', () => {
+		expect(SRC).toMatch(/from\s+['"]\.\.\/webapp-drawer-store['"]/)
+		expect(SRC).toMatch(/useWebAppDrawerStore/)
+		expect(SRC).toMatch(/openByWebappId\[webappId\]/)
+	})
+})
+
+describe('WebAppFloatingActionBar — source-text invariants (Phase 100-06)', () => {
+	const BAR_SRC = readFileSync(
+		resolve(__dirname, 'webapp-floating-action-bar.tsx'),
+		'utf8',
+	)
+
+	it('renders 3 modes only — Watch dropped', () => {
+		expect(BAR_SRC).toMatch(/MessageCircle/)
+		expect(BAR_SRC).toMatch(/GraduationCap/)
+		expect(BAR_SRC).toMatch(/\bBot\b/)
+		expect(BAR_SRC).not.toMatch(/\bEye\b/)
 	})
 
-	it('preserves WEBAPP_MODE_CHANGE_EVENT dispatch on mode toggle (Phase 96/97 listener compat)', () => {
-		expect(SRC).toMatch(/WEBAPP_MODE_CHANGE_EVENT/)
-		expect(SRC).toMatch(/dispatchEvent\(/)
+	it('uses round buttons with backdrop-blur + soft shadow (mirrors window-chrome.tsx)', () => {
+		expect(BAR_SRC).toMatch(/rounded-full/)
+		expect(BAR_SRC).toMatch(/backdrop-blur-xl/)
+		expect(BAR_SRC).toMatch(/shadow-\[0_2px_8px/)
+	})
+
+	it('positions the bar OUTSIDE the window using fixed coords + Magnetic wrapper', () => {
+		expect(BAR_SRC).toMatch(/className=['"]fixed select-none['"]/)
+		expect(BAR_SRC).toMatch(/windowBottomY/)
+		expect(BAR_SRC).toMatch(/<Magnetic\b/)
+	})
+
+	it('preserves WEBAPP_MODE_CHANGE_EVENT dispatch (Phase 96/97 listener compat)', () => {
+		expect(BAR_SRC).toMatch(/WEBAPP_MODE_CHANGE_EVENT/)
+		expect(BAR_SRC).toMatch(/dispatchEvent\(/)
+	})
+
+	it('subscribes to webapp-drawer-store', () => {
+		expect(BAR_SRC).toMatch(/useWebAppDrawerStore/)
+		expect(BAR_SRC).toMatch(/from\s+['"]\.\/webapp-drawer-store['"]/)
 	})
 })
 

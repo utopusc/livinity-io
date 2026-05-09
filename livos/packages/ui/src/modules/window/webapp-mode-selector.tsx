@@ -15,8 +15,9 @@
 // gone (no `<WebAppModeSelector>` JSX usage survives anywhere in
 // livos/packages/ui/src/).
 
-export type WebAppMode = 'chat' | 'teach' | 'watch' | 'auto'
+// Phase 100-06: dropped 'watch' mode per user request (only 3 modes ship).
+export type WebAppMode = 'chat' | 'teach' | 'auto'
 
-export const MODE_ORDER: ReadonlyArray<WebAppMode> = ['chat', 'teach', 'watch', 'auto']
+export const MODE_ORDER: ReadonlyArray<WebAppMode> = ['chat', 'teach', 'auto']
 
 export const WEBAPP_MODE_CHANGE_EVENT = 'liv-webapp-mode-change'
