@@ -150,7 +150,9 @@ P87 (Hermes runtime) ───────────────────�
   - [x] 100-02-PLAN.md — Backend argv swap `--new-window URL` → `--app=URL` (✓ 2026-05-08, commits 3bbcfb2f + 00a5b0bd: argv swap shipped, Test 11 invariant locked, 226/226 webapps+streaming tests green, sacred SHA preserved)
   - [x] 100-03-PLAN.md — Frontend full-bleed: drop URL bar + ResizablePanelGroup; root flex-col (✓ 2026-05-08, commits ff99ebfd + 6702780c: webapp-toolbar.tsx deleted, webapp-stream-window.tsx slimmed 776→524 lines, root flex-col + pb-9 reservation locked, 13/13 invariant tests green, sacred SHA preserved)
   - [x] 100-04-PLAN.md — Frontend bottom 4-icon action-bar + slide-in drawers Chat/Teach/Watch/Auto (✓ 2026-05-08, commits b2145d09 + b7e19f60 + af77d2e6: 4 drawer components shipped, bottom-bar at `absolute inset-x-0 bottom-0 z-20` wired with Sheet host `!w-[35%]` + `closeButton={false}`, second-click closes, WEBAPP_MODE_CHANGE_EVENT dispatch preserved, mode-selector collapsed to 22-line constants module, 17/17 invariant tests green, sacred SHA preserved)
-  - [ ] 100-05-PLAN.md — git push + Mini PC deploy via update.sh + user-walked UAT (11 success criteria) + ROADMAP/STATE close + v33 ✅ Shipped flip (autonomous=false)
+  - [~] 100-05-PLAN.md — git push + Mini PC deploy via update.sh + user-walked UAT (✓ deploy GREEN 2026-05-08 — Mini PC `4954d9ba`; UAT 9/11 PASS via interactive checkpoint; FAIL on Row 3 click routing + Row 9 chat → bytebot scope; v33 milestone flip BLOCKED — Plan 100-06 queued for routing fix). Sacred SHA `f3538e1d…` preserved on disk + at HEAD.
+
+  **Phase 100 status: PARTIAL-PASS 2026-05-08** — visual rewire + multi-stream creation work; routing fix queued as Plan 100-06 (creative: click bypass via `xdotool --window <wid>` tRPC + chat MCP scoping system-prompt fix). v33 milestone remains CODE-COMPLETE-PENDING-UAT-SIGNOFF until 100-06 ships and Phase 100 UAT re-walks 11/11. PHASE-SUMMARY.md committed.
 
 **Dependency graph:**
 ```

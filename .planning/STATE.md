@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-08T23:31:54.183Z"
+last_updated: "2026-05-08T23:47:32.097Z"
 progress:
   total_phases: 41
   completed_phases: 18
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 99 (WebApp VNC Swap) — EXECUTING
+Phase: 100 (multi-stream-window-redesign) — EXECUTING
 Plan: 1 of 5
 Milestone: v32.0 (active) — 8/12 phases complete
 Wave 1: ✅ COMPLETE — `759ef597` P80, `9a276a11` P85-schema, `628ed1ca` P87, `12aa473f` summaries
@@ -73,10 +73,24 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
 - **What does NOT work (deferred to Phase 100):** multi-stream (2nd WebApp click does not produce an independent stream); URL bar in stream window unwanted; stream should fill window; Chat/Teach/Watch/Auto must move out of inline pane into floating icon-button row.
 - **Sacred SHA:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 12 commits (verified pre + post deploy).
 
-## Phase 100 — Multi-Stream + Stream-Window Redesign (PLANNED, NOT YET PLANNED-OUT)
+## Phase 100 — PARTIAL-PASS (2026-05-08)
 
-- CONTEXT.md written: `.planning/phases/100-multi-stream-window-redesign/100-CONTEXT.md`
-- ROADMAP.md updated with Phase 100 entry + 5-plan skeleton.
-- Next step: user runs `/clear` then `/gsd-plan-phase 100` to generate the actual PLAN.md files.
+- **Shipped:** all 5 plans (13 execution commits `a6c519fd..4954d9ba`, +8 prior planning iterations); pushed to GitHub master; deployed to Mini PC (`/opt/livos/.deployed-sha` = `4954d9ba`; all 4 services `active`, including liv-memory which was NOT in the carry-over restart loop on this deploy).
+- **What works (PASS — 9/11 UAT):**
+  - Multi-stream creation: 2 concurrent WebApps render distinct streams on independent x11vnc ports (R1, R2).
+  - Visual rewire: no URL bar / stream fills window / 4-icon bottom action-bar / Chat + Teach drawers slide-in (R4-R8).
+  - Sacred SHA preserved on Mini PC (R10).
+- **What does NOT work (FAIL — 2/11 UAT, deferred to Plan 100-06):**
+  - Row 3 — click input routing: clicks on stream window A always operate on the LAST-opened WebApp's Chrome wid (x11vnc `-id <wid>` binds capture only; input forwards via `XTestFakeKey/MotionEvent` to focused window).
+  - Row 9 — chat → bytebot scope routing: typing in WebApp A's Chat drawer always operates on the LAST-opened WebApp's bytebot (per-WebApp MCP servers ARE registered, but agent loop tool routing doesn't enforce per-chat scope).
+- **Sacred SHA:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 13 execution commits + post-deploy verification (verified live on `/opt/liv/packages/core/src/sdk-agent-runner.ts`). Pre-commit hook (`.husky/pre-commit` + `scripts/check-sacred.sh`) installed by 100-01 fired and passed on every commit.
+- **PHASE-SUMMARY:** `.planning/phases/100-multi-stream-window-redesign/PHASE-SUMMARY.md` (committed).
+- **UAT detail:** `.planning/phases/98-uat-polish/UAT-CHECKLIST.md` "Phase 100 — Multi-Stream + Stream-Window Redesign (PARTIAL-PASS 2026-05-08)" section.
 
-**v33 milestone status:** all 8 phases (92-99) CODE-COMPLETE; Phase 99 PARTIAL-PASS; Phase 100 closes the four UAT gaps before v33 ships.
+## Plan 100-06 — Routing Fix (QUEUED, NOT YET PLANNED)
+
+- Creative solution proposed (in `100-05-SUMMARY.md`): (a) click bypass via `xdotool --window <wid>` tRPC mutation; (b) chat MCP scoping — pin agent's tool whitelist to `mcp__bytebot:webapp:<wid>__*` per chat surface; (c) every bytebot tool call passes explicit `windowId` param (already supported by `tools.ts:98 defaultWindowId`).
+- User chose path "(a) ship 100-02..04 + new 100-06 routing-fix" during the 100-01 checkpoint.
+- Next step: user runs `/clear` then `/gsd-plan-phase 100-06` (or `/gsd-discuss-phase 100-06`) to spec the routing-fix plan.
+
+**v33 milestone status:** all 9 phases (92-100) CODE-COMPLETE; Phase 99 PARTIAL-PASS, Phase 100 PARTIAL-PASS. v33 does NOT flip to ✅ Shipped in ROADMAP.md until Plan 100-06 ships AND Phase 100 UAT re-walks 11/11.
