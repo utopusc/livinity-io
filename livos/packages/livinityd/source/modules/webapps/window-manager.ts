@@ -9,9 +9,11 @@
  * Algorithm — spawn():
  *   1. Idempotency check (existing alive entry → return existing handle)
  *   2. Snapshot wid baseline (D-93-08)
- *   3. child_process.spawn('google-chrome', ['--new-window', url],
+ *   3. child_process.spawn('google-chrome', [`--app=${url}`],
  *      {detached:true, stdio:'ignore'}) then unref() — Chrome is NOT a
- *      livinityd child (D-V33-01: shared profile, no --user-data-dir)
+ *      livinityd child (D-V33-01: shared profile, no --user-data-dir).
+ *      P100-02 (V33-MULTI-01 / G-100-B B1): site-specific-browser mode
+ *      replaces `--new-window URL` to break Chrome IPC merge.
  *   4. findNewWindowMatching({titleHints, baselineWids, timeoutMs:5000})
  *   5. Timeout → throw {code:'WINDOW_NOT_FOUND', url}
  *   6. Try pipewirePortal.requestWindowSession() (primary, D-93-04)
@@ -228,8 +230,7 @@ export class WebAppWindowManager {
 			`XAUTHORITY=${WEBAPPS_X11_ENV.XAUTHORITY}`,
 			this.chromeBinary,
 			`--user-data-dir=${chromeProfile}`,
-			'--new-window',
-			opts.url,
+			`--app=${opts.url}`,   // P100-02 (G-100-B B1): site-specific-browser mode. Replaces `--new-window URL` to break Chrome IPC merge (V33-MULTI-01) and produce chromeless windows (V33-MULTI-02 bonus).
 		]
 		const chromeProc = this.spawnFactory('sudo', chromeArgs, {
 			detached: true,
