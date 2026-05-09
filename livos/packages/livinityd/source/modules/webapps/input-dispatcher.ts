@@ -84,14 +84,18 @@ export async function dispatchPointer(
 	const ix = Math.max(0, Math.round(x))
 	const iy = Math.max(0, Math.round(y))
 	const widStr = String(wid)
-	// One xdotool invocation, three sub-commands, all chained:
-	//   activate → mousemove (wid-relative) → click (focused).
+	// One xdotool invocation, four sub-commands, all chained:
+	//   activate (raise + WM focus) → windowfocus (X11 input focus directly,
+	//   bypasses any WM transfer asymmetry for Chrome --app= chromeless
+	//   windows) → mousemove (wid-relative) → click (focused).
+	// `--clearmodifiers` resets stuck modifiers from prior xdotool calls.
 	await execFileAsync(
 		'xdotool',
 		[
 			'windowactivate', '--sync', widStr,
+			'windowfocus', '--sync', widStr,
 			'mousemove', '--window', widStr, '--sync', String(ix), String(iy),
-			kind, String(button),
+			kind, '--clearmodifiers', String(button),
 		],
 		{timeout: DEFAULT_TIMEOUT_MS},
 	)
@@ -119,7 +123,11 @@ export async function dispatchKey(
 	const widStr = String(wid)
 	await execFileAsync(
 		'xdotool',
-		['windowactivate', '--sync', widStr, kind, key],
+		[
+			'windowactivate', '--sync', widStr,
+			'windowfocus', '--sync', widStr,
+			kind, '--clearmodifiers', key,
+		],
 		{timeout: DEFAULT_TIMEOUT_MS},
 	)
 }
@@ -137,7 +145,11 @@ export async function dispatchType(wid: number, text: string): Promise<void> {
 	const widStr = String(wid)
 	await execFileAsync(
 		'xdotool',
-		['windowactivate', '--sync', widStr, 'type', '--delay', '0', text],
+		[
+			'windowactivate', '--sync', widStr,
+			'windowfocus', '--sync', widStr,
+			'type', '--clearmodifiers', '--delay', '0', text,
+		],
 		{timeout: DEFAULT_TIMEOUT_MS},
 	)
 }
