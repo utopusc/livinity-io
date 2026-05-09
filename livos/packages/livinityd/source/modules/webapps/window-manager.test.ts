@@ -295,4 +295,16 @@ describe('WebAppWindowManager — vnc-window swap (Phase 99-04)', () => {
 		mgr.stopIdleCleanup()
 		mgr._clearForTests()
 	})
+
+	it('Test 11: spawn argv uses --app=<url> (V33-MULTI-01 / G-100-B B1) — no --new-window flag', async () => {
+		const {mgr, spawn} = makeManager()
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://duckduckgo.com'})
+		// First spawn call is the Chrome spawn (sudo google-chrome ...).
+		const [cmd, args] = spawn.mock.calls[0] as [string, string[]]
+		expect(cmd).toBe('sudo')
+		expect(args).toContain('--app=https://duckduckgo.com')
+		expect(args).not.toContain('--new-window')
+		expect(args).toContain('--user-data-dir=/home/bruce/.config/livos-chrome')
+		mgr._clearForTests()
+	})
 })
