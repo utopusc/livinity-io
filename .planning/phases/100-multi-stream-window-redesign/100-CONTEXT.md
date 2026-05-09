@@ -60,6 +60,7 @@ The 100-01 plan must empirically verify which of these is the real cause:
 | **H2** Chrome opens 2 windows but `xdotool search --name <hostname>` matches the wrong one | Verify both wids exist (xdotool sees them) but the `findNewWindowMatching` title filter is racy | Tighten window matcher (use `_NET_WM_PID` + creation timestamp instead of title match) |
 | **H3** Backend opens 2 streams correctly but FRONTEND only renders one stream window component | Verify two `webapps.window.spawn` tRPC calls return distinct `streamId`s; verify `livos/packages/ui/src/modules/window/window-content.tsx` opens two WebAppStreamWindow instances | Frontend: ensure each WebApp click pushes a new window into the window-manager Zustand store with a distinct key |
 | **H4** Chrome merges into ONE window; X11 has only ONE wid; the 2nd `findNewWindowMatching` returns the same wid as the first; idempotency check returns existing stream | Same probe as H1 — count distinct wids | Same fix as H1 |
+| **Verified 2026-05-08:** H1 — Chrome IPC-merges by `--user-data-dir` (single PID 4129324 for 2× `--app=URL` calls; +1 distinct wid per invocation, uniquely titled). | Probe B (Mini PC bruce@10.69.31.68); see `100-01-SUMMARY.md` Evidence table. | **B1 locked** (`--app=${opts.url}`) — applied by 100-02. |
 
 The 100-01 plan runs the probe on the Mini PC and writes the canonical "what fix to apply" recommendation into `100-01-SUMMARY.md`. 100-02 implements the fix.
 
