@@ -226,13 +226,23 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 		const onMouseUp = (ev: MouseEvent) => {
 			ev.preventDefault()
 			const {x, y} = eventToFbCoords(ev)
-			inputClickMutation.mutate({
-				webappId,
-				x,
-				y,
-				button: xdotoolButton(ev.button),
-				kind: 'click',
-			})
+			// eslint-disable-next-line no-console
+			console.info(`[100-07.2] click → tRPC webappId=${webappId} x=${x} y=${y} btn=${xdotoolButton(ev.button)}`)
+			inputClickMutation.mutate(
+				{
+					webappId,
+					x,
+					y,
+					button: xdotoolButton(ev.button),
+					kind: 'click',
+				},
+				{
+					onError: (err) => {
+						// eslint-disable-next-line no-console
+						console.error(`[100-07.2] click mutation failed`, err)
+					},
+				},
+			)
 		}
 
 		const onContextMenu = (ev: MouseEvent) => {
@@ -300,16 +310,25 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 			}
 		}
 
-		container.addEventListener('mousedown', onMouseDown)
-		container.addEventListener('mouseup', onMouseUp)
-		container.addEventListener('contextmenu', onContextMenu)
-		container.addEventListener('keydown', onKeyDown)
+		// Phase 100-07.2: capture phase so OUR handlers fire BEFORE noVNC's
+		// canvas listeners (defensive — noVNC viewOnly=true should already
+		// no-op its handlers, but capture phase is the belt-and-suspenders
+		// guarantee).
+		const opts = {capture: true} as const
+		container.addEventListener('mousedown', onMouseDown, opts)
+		container.addEventListener('mouseup', onMouseUp, opts)
+		container.addEventListener('contextmenu', onContextMenu, opts)
+		container.addEventListener('keydown', onKeyDown, opts)
+		// Diagnostic — log once on mount so we can verify in browser console
+		// that the new wiring is loaded (vs. service-worker-cached old UI).
+		// eslint-disable-next-line no-console
+		console.info(`[100-07.2] canvas input handlers attached webappId=${webappId}`)
 
 		return () => {
-			container.removeEventListener('mousedown', onMouseDown)
-			container.removeEventListener('mouseup', onMouseUp)
-			container.removeEventListener('contextmenu', onContextMenu)
-			container.removeEventListener('keydown', onKeyDown)
+			container.removeEventListener('mousedown', onMouseDown, opts)
+			container.removeEventListener('mouseup', onMouseUp, opts)
+			container.removeEventListener('contextmenu', onContextMenu, opts)
+			container.removeEventListener('keydown', onKeyDown, opts)
 		}
 	}, [vnc.containerRef, webappId, inputClickMutation, inputKeyMutation, inputTypeMutation])
 

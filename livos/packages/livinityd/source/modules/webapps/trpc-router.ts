@@ -220,6 +220,7 @@ const inputRouter = router({
 			if (wid == null) {
 				throw new TRPCError({code: 'NOT_FOUND', message: `no live window for webapp ${input.webappId}`})
 			}
+			ctx.logger?.info?.(`[100-07.2] webapp.input.click webappId=${input.webappId} wid=${wid} x=${input.x} y=${input.y} btn=${input.button} kind=${input.kind}`)
 			try {
 				await dispatchPointer(wid, input.x, input.y, input.button, input.kind as ClickKind)
 				return {ok: true as const}
