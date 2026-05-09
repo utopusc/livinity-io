@@ -27,7 +27,7 @@
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {toast} from 'sonner'
-import {AlertTriangle, RefreshCw, Square} from 'lucide-react'
+import {AlertTriangle, Bot, Eye, GraduationCap, MessageCircle, RefreshCw, Square} from 'lucide-react'
 
 import {trpcReact} from '@/trpc/trpc'
 import {cn} from '@/shadcn-lib/utils'
@@ -35,8 +35,16 @@ import {useWebAppVnc} from '@/hooks/use-webapp-vnc'
 import {useWebAppAgent} from '@/hooks/use-webapp-agent'
 import {useTeachRecorder, type ActionLog} from '@/hooks/use-teach-recorder'
 
-import {type WebAppMode} from '../webapp-mode-selector'
+import {WEBAPP_MODE_CHANGE_EVENT, type WebAppMode} from '../webapp-mode-selector'
 import {SkillReplayScrubber} from '../skill-replay-scrubber'
+
+import {WebAppChatDrawer} from './webapp-chat-drawer'
+import {WebAppTeachDrawer} from './webapp-teach-drawer'
+import {WebAppWatchDrawer} from './webapp-watch-drawer'
+import {WebAppAutoDrawer} from './webapp-auto-drawer'
+
+import {Sheet, SheetContent} from '@/shadcn-components/ui/sheet'
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/shadcn-components/ui/tooltip'
 
 import {
 	Dialog,
@@ -68,6 +76,25 @@ const TEACH_PRIVACY_TEXT =
 
 // Slug-safe skill name validator — mirrors the SLUG_RE in skills-router.ts.
 const SKILL_NAME_RE = /^[A-Za-z0-9 _-]{1,80}$/
+
+// Phase 100-04 — bottom action-bar drawer mode constants. Each icon
+// toggles its own Sheet drawer (G-100-D D2). Lucide icon set is the
+// project convention for window subsystem files.
+type DrawerMode = 'chat' | 'teach' | 'watch' | 'auto'
+
+const MODE_ICONS = {
+	chat: MessageCircle,
+	teach: GraduationCap,
+	watch: Eye,
+	auto: Bot,
+} as const
+
+const MODE_LABELS = {
+	chat: 'Chat',
+	teach: 'Teach',
+	watch: 'Watch',
+	auto: 'Auto',
+} as const
 
 interface WebAppStreamWindowProps {
 	webappId: string
@@ -158,6 +185,24 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 
 	// 5. Mode (D-95-10 default 'chat'; D-95-MODE-LOCAL = local state only).
 	const [mode, setMode] = useState<WebAppMode>('chat')
+
+	// Phase 100-04 — drawer-open state coupled to the bottom action-bar
+	// (G-100-D D2). Second click of the active icon closes; switching
+	// swaps content. Toggling also fires the existing
+	// WEBAPP_MODE_CHANGE_EVENT so Phase 96/97 listeners stay informed
+	// without prop-drilling.
+	const [openDrawer, setOpenDrawer] = useState<DrawerMode | null>(null)
+
+	const toggleDrawer = useCallback((next: DrawerMode) => {
+		setOpenDrawer((current) => (current === next ? null : next))
+		try {
+			window.dispatchEvent(
+				new CustomEvent(WEBAPP_MODE_CHANGE_EVENT, {detail: {mode: next}}),
+			)
+		} catch {
+			// JSDOM / older browsers may lack CustomEvent — non-blocking.
+		}
+	}, [])
 
 	// 5a. Phase 96-05 — Skills sidebar collapse state + selected skill.
 	// selectedSkillId is consumed by SkillReplayScrubber (96-06).
@@ -339,6 +384,62 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 					saving={skillCreateMutation.isPending}
 				/>
 			) : null}
+
+			{/* Phase 100-04 — Bottom action-bar (V33-MULTI-03, G-100-C C1).
+			    Plan A locked: overlays the stream wrapper's pb-9 reservation;
+			    canonical z-index z-20. */}
+			<TooltipProvider delayDuration={300}>
+				<div
+					className='absolute inset-x-0 bottom-0 z-20 flex h-9 items-center justify-center gap-1 border-t border-border-default bg-white/90 backdrop-blur-xl px-2'
+				>
+					{(['chat', 'teach', 'watch', 'auto'] as const).map((m) => {
+						const Icon = MODE_ICONS[m]
+						const active = openDrawer === m
+						return (
+							<Tooltip key={m}>
+								<TooltipTrigger asChild>
+									<button
+										type='button'
+										onClick={() => toggleDrawer(m)}
+										aria-pressed={active}
+										aria-label={MODE_LABELS[m]}
+										className={cn(
+											'flex h-8 w-8 items-center justify-center rounded-radius-sm transition-colors',
+											active
+												? 'bg-surface-2 text-text-primary'
+												: 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
+										)}
+									>
+										<Icon size={16} />
+									</button>
+								</TooltipTrigger>
+								<TooltipContent side='top'>{MODE_LABELS[m]}</TooltipContent>
+							</Tooltip>
+						)
+					})}
+				</div>
+			</TooltipProvider>
+
+			{/* Phase 100-04 — Drawer host (V33-MULTI-04, G-100-D D2). */}
+			<Sheet
+				open={openDrawer !== null}
+				onOpenChange={(o) => {
+					if (!o) setOpenDrawer(null)
+				}}
+			>
+				<SheetContent
+					side='right'
+					className='!w-[35%] !max-w-none overflow-hidden'
+					closeButton={false}
+				>
+					<div className='relative z-10 flex h-full flex-col'>
+						{openDrawer === 'chat' ? <WebAppChatDrawer webappId={webappId} /> : null}
+						{openDrawer === 'teach' ? <WebAppTeachDrawer webappId={webappId} /> : null}
+						{openDrawer === 'watch' ? <WebAppWatchDrawer webappId={webappId} /> : null}
+						{openDrawer === 'auto' ? <WebAppAutoDrawer webappId={webappId} /> : null}
+					</div>
+				</SheetContent>
+			</Sheet>
 		</div>
 	)
 }
