@@ -213,17 +213,14 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 		// Map DOM MouseEvent.button (0/1/2) → xdotool 1/2/3.
 		const xdotoolButton = (b: number): 1 | 2 | 3 => (b === 2 ? 3 : b === 1 ? 2 : 1)
 
+		// Phase 100-07.1: dispatch a single combined click on mouseup (NOT
+		// separate mousedown+mouseup). xdotool's `click` is mousedown+mouseup
+		// in a single sub-command — atomic, doesn't double-thrash the
+		// `windowactivate --sync` step. Drag-and-double-click are out of MVP
+		// scope; can be re-added later if needed.
 		const onMouseDown = (ev: MouseEvent) => {
 			ev.preventDefault()
 			container.focus()
-			const {x, y} = eventToFbCoords(ev)
-			inputClickMutation.mutate({
-				webappId,
-				x,
-				y,
-				button: xdotoolButton(ev.button),
-				kind: 'mousedown',
-			})
 		}
 
 		const onMouseUp = (ev: MouseEvent) => {
@@ -234,7 +231,7 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 				x,
 				y,
 				button: xdotoolButton(ev.button),
-				kind: 'mouseup',
+				kind: 'click',
 			})
 		}
 
