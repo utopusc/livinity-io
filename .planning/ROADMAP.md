@@ -149,7 +149,7 @@ P87 (Hermes runtime) ───────────────────�
   - [x] 100-01-PLAN.md — Mini PC kill-gate (autonomous=false, user-walked SSH) — empirical H1..H4 root-cause probe + sacred-SHA pre-commit hook bootstrap (✓ 2026-05-08, commits a6c519fd + bb36e8d1: H1 verified, B1 fix locked)
   - [x] 100-02-PLAN.md — Backend argv swap `--new-window URL` → `--app=URL` (✓ 2026-05-08, commits 3bbcfb2f + 00a5b0bd: argv swap shipped, Test 11 invariant locked, 226/226 webapps+streaming tests green, sacred SHA preserved)
   - [x] 100-03-PLAN.md — Frontend full-bleed: drop URL bar + ResizablePanelGroup; root flex-col (✓ 2026-05-08, commits ff99ebfd + 6702780c: webapp-toolbar.tsx deleted, webapp-stream-window.tsx slimmed 776→524 lines, root flex-col + pb-9 reservation locked, 13/13 invariant tests green, sacred SHA preserved)
-  - [ ] 100-04-PLAN.md — Frontend bottom 4-icon action-bar + slide-in drawers Chat/Teach/Watch/Auto (autonomous, TDD; depends on 100-03)
+  - [x] 100-04-PLAN.md — Frontend bottom 4-icon action-bar + slide-in drawers Chat/Teach/Watch/Auto (✓ 2026-05-08, commits b2145d09 + b7e19f60 + af77d2e6: 4 drawer components shipped, bottom-bar at `absolute inset-x-0 bottom-0 z-20` wired with Sheet host `!w-[35%]` + `closeButton={false}`, second-click closes, WEBAPP_MODE_CHANGE_EVENT dispatch preserved, mode-selector collapsed to 22-line constants module, 17/17 invariant tests green, sacred SHA preserved)
   - [ ] 100-05-PLAN.md — git push + Mini PC deploy via update.sh + user-walked UAT (11 success criteria) + ROADMAP/STATE close + v33 ✅ Shipped flip (autonomous=false)
 
 **Dependency graph:**
