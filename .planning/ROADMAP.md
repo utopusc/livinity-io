@@ -147,7 +147,7 @@ P87 (Hermes runtime) ───────────────────�
 
   **Plans:** 5 plans (written 2026-05-08)
   - [x] 100-01-PLAN.md — Mini PC kill-gate (autonomous=false, user-walked SSH) — empirical H1..H4 root-cause probe + sacred-SHA pre-commit hook bootstrap (✓ 2026-05-08, commits a6c519fd + bb36e8d1: H1 verified, B1 fix locked)
-  - [ ] 100-02-PLAN.md — Backend argv swap `--new-window URL` → `--app=URL` (autonomous, TDD; depends on 100-01)
+  - [x] 100-02-PLAN.md — Backend argv swap `--new-window URL` → `--app=URL` (✓ 2026-05-08, commits 3bbcfb2f + 00a5b0bd: argv swap shipped, Test 11 invariant locked, 226/226 webapps+streaming tests green, sacred SHA preserved)
   - [ ] 100-03-PLAN.md — Frontend full-bleed: drop URL bar + ResizablePanelGroup; root flex-col (autonomous, TDD; depends on 100-02)
   - [ ] 100-04-PLAN.md — Frontend bottom 4-icon action-bar + slide-in drawers Chat/Teach/Watch/Auto (autonomous, TDD; depends on 100-03)
   - [ ] 100-05-PLAN.md — git push + Mini PC deploy via update.sh + user-walked UAT (11 success criteria) + ROADMAP/STATE close + v33 ✅ Shipped flip (autonomous=false)
