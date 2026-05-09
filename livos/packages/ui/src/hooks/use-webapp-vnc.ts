@@ -29,6 +29,11 @@ interface RfbInstance {
 	scaleViewport: boolean
 	clipViewport: boolean
 	resizeSession: boolean
+	/** Phase 100-07: when true, RFB does not forward mouse/keyboard input to
+	 *  x11vnc. We dispatch input via tRPC (`webapp.input.*`) instead so each
+	 *  event targets the bound wid via `xdotool --window <wid>` rather than
+	 *  the X11 focused window. */
+	viewOnly: boolean
 	disconnect: () => void
 	sendKey: (keysym: number, code: string, down?: boolean) => void
 	addEventListener: (name: RfbEventName, listener: RfbEventListener) => void
@@ -145,6 +150,13 @@ export function useWebAppVnc(wsUrl: string | undefined, options?: UseWebAppVncOp
 		rfb.scaleViewport = true
 		rfb.clipViewport = false
 		// resizeSession deliberately left at the noVNC default (false).
+
+		// Phase 100-07: input forwarding through RFB is OFF when the consumer
+		// asks for viewOnly (default true for WebApp streams). Mouse + keyboard
+		// events are intercepted on the canvas and dispatched via tRPC
+		// `webapp.input.*` so they target the bound wid via `xdotool --window`
+		// instead of the X11 focused window.
+		rfb.viewOnly = optionsRef.current?.viewOnly !== false
 
 		rfbRef.current = rfb
 

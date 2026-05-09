@@ -343,6 +343,13 @@ export const httpOnlyPaths = [
 	'webapp.window.focus',
 	'webapp.window.close',
 	'webapp.window.list',
+	// Phase 100-07 — input dispatch routes. HTTP-only (per the same
+	// WS-reconnect-survival rationale as the rest of the webapp.* mutation
+	// cluster). High call rate during interactive use is OK — each call is
+	// a small POST.
+	'webapp.input.click',
+	'webapp.input.keypress',
+	'webapp.input.type',
 	// v33 Phase 94 — webapp CRUD on the persisted `webapps` Postgres table
 	// (V33-WEBAPP-94-01). All four paths route via HTTP because:
 	//   - Mutations (create/delete/update) are autosave-adjacent — the

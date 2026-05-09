@@ -378,6 +378,16 @@ export class WebAppWindowManager {
 		return {ok: true}
 	}
 
+	/**
+	 * Phase 100-07: resolve webappId → wid for input dispatch.
+	 * Returns null if the user has no live entry for this webappId.
+	 */
+	getWidForWebapp(webappId: string, userId: string): number | null {
+		const entry = this.active.get(webappId)
+		if (!entry || entry.userId !== userId) return null
+		return entry.wid
+	}
+
 	list(filter: {userId: string}): Array<{
 		webappId: string
 		windowId: number
