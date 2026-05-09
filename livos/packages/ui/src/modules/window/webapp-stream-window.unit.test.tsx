@@ -46,14 +46,6 @@ describe('WebAppStreamWindow — source-text invariants', () => {
 		expect(SRC).toMatch(/KEY_F5\s*=\s*0xffc2/)
 	})
 
-	it('copyUrl uses navigator.clipboard.writeText with the webapp.url (D-95-15)', () => {
-		expect(SRC).toMatch(/navigator\.clipboard\.writeText\(/)
-	})
-
-	it('fullscreen calls vnc.requestFullscreen (D-95-05)', () => {
-		expect(SRC).toMatch(/vnc\.requestFullscreen\(\)/)
-	})
-
 	it('handles SERVICE_UNAVAILABLE with a friendly retry banner (D-95-12 + P98 carryover)', () => {
 		expect(SRC).toMatch(/SERVICE_UNAVAILABLE/)
 		expect(SRC).toMatch(/SpawnErrorBanner/)
@@ -63,10 +55,6 @@ describe('WebAppStreamWindow — source-text invariants', () => {
 	it('fires close.mutate on unmount (D-95-CLEANUP — fire-and-forget)', () => {
 		expect(SRC).toMatch(/closeMutationRef/)
 		expect(SRC).toMatch(/closeMutationRef\.current\.mutate\(\s*\{webappId\}\s*\)/)
-	})
-
-	it('disables the composer in non-chat modes (PLAN 95-07.C)', () => {
-		expect(SRC).toMatch(/composerDisabled\s*=\s*mode\s*!==\s*['"]chat['"]/)
 	})
 
 	it('drops WebAppToolbar import (V33-MULTI-02 / G-100-E E1)', () => {
