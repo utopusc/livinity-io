@@ -382,17 +382,32 @@ async function tryXdotoolClick(
 	windowId?: number,
 ): Promise<boolean> {
 	const args: string[] = []
-	const winFlag: string[] = typeof windowId === 'number' ? ['--window', String(windowId)] : []
+	// 2026-05-08 P100-07.3 — Chrome (and many GTK apps) drop `xdotool click
+	// --window <wid>` because they filter synthetic XSendEvents
+	// (`send_event=True`). We must use the activate-first pattern instead:
+	// activate the bound wid, focus it, move the cursor (wid-relative if
+	// --window is passed to mousemove for coord translation), then click
+	// WITHOUT --window so xdotool dispatches a real button event to the
+	// now-focused window. Same fix as input-dispatcher.ts (Phase 100-07.1).
+	if (typeof windowId === 'number') {
+		const widStr = String(windowId)
+		args.push('windowactivate', '--sync', widStr, 'windowfocus', '--sync', widStr)
+	}
 	if (coordinates) {
-		args.push('mousemove', ...winFlag, '--sync', String(coordinates.x), String(coordinates.y))
+		// `--window <wid>` on mousemove tells xdotool the coords are
+		// wid-relative — translation only, NOT XSendEvent. Safe to keep.
+		const moveWin: string[] = typeof windowId === 'number' ? ['--window', String(windowId)] : []
+		args.push('mousemove', ...moveWin, '--sync', String(coordinates.x), String(coordinates.y))
 	}
 	const btnNum = XDOTOOL_BUTTON[button]
+	// `click` does NOT carry --window — fires a real button event to the
+	// X11-focused window (= the wid we just activated above).
 	if (count > 1) {
 		// 150ms inter-click delay matches upstream Bytebot's clickMouse loop
 		// (packages/bytebotd/src/computer-use/computer-use.service.ts:147).
-		args.push('click', ...winFlag, '--clearmodifiers', '--repeat', String(count), '--delay', '150', btnNum)
+		args.push('click', '--clearmodifiers', '--repeat', String(count), '--delay', '150', btnNum)
 	} else {
-		args.push('click', ...winFlag, '--clearmodifiers', btnNum)
+		args.push('click', '--clearmodifiers', btnNum)
 	}
 	return await new Promise<boolean>((resolve) => {
 		let settled = false
@@ -655,25 +670,20 @@ async function tryXdotoolKey(
 	const hasModifier = expanded.some((n) => MODIFIER_KEY_NAMES.has(n))
 	const isSingleKey = expanded.length === 1
 
+	// 2026-05-08 P100-07.3 — Same Chrome synthetic-event filter as click.
+	// `key --window <wid>` dispatches XSendEvent which Chrome drops. Use
+	// activate-first: focus the wid, then send a real key event.
+	const widStr = String(windowId)
+	const activatePrefix = ['windowactivate', '--sync', widStr, 'windowfocus', '--sync', widStr]
+
 	if (hasModifier || isSingleKey) {
 		const combo = xkeys.join('+')
-		return await spawnXdotool([
-			'key',
-			'--window',
-			String(windowId),
-			'--clearmodifiers',
-			combo,
-		])
+		return await spawnXdotool([...activatePrefix, 'key', '--clearmodifiers', combo])
 	}
-	// Sequence mode: one keysym per spawn, sleep between.
+	// Sequence mode: one keysym per spawn (re-activate each time so focus
+	// stays on the bound wid even if the user clicks elsewhere).
 	for (let i = 0; i < xkeys.length; i++) {
-		const ok = await spawnXdotool([
-			'key',
-			'--window',
-			String(windowId),
-			'--clearmodifiers',
-			xkeys[i]!,
-		])
+		const ok = await spawnXdotool([...activatePrefix, 'key', '--clearmodifiers', xkeys[i]!])
 		if (!ok) return false
 		if (stepDelay > 0 && i < xkeys.length - 1) await sleep(stepDelay)
 	}
@@ -681,8 +691,10 @@ async function tryXdotoolKey(
 }
 
 /**
- * P97-02: dispatch pressKeys (down or up) via xdotool keydown/keyup. All
- * keys go in a single spawn. Returns true on clean exit.
+ * P97-02: dispatch pressKeys (down or up) via xdotool keydown/keyup.
+ *
+ * 2026-05-08 P100-07.3: activate-first pattern (Chrome filters synthetic
+ * --window keydown/keyup the same way it filters --window click).
  */
 async function tryXdotoolPressRelease(
 	keys: readonly string[],
@@ -692,7 +704,12 @@ async function tryXdotoolPressRelease(
 	const verb = press === 'down' ? 'keydown' : 'keyup'
 	const expanded = expandKeyNames(keys)
 	const xkeys = expanded.map(toXdotoolKeysym)
-	return await spawnXdotool([verb, '--window', String(windowId), '--clearmodifiers', ...xkeys])
+	const widStr = String(windowId)
+	return await spawnXdotool([
+		'windowactivate', '--sync', widStr,
+		'windowfocus', '--sync', widStr,
+		verb, '--clearmodifiers', ...xkeys,
+	])
 }
 
 /**
@@ -712,7 +729,14 @@ export async function typeText(text: string, delay?: number, isSensitive?: boole
 	// --delay <ms> <text>` natively supports per-window typing with inter-
 	// character delays (unlike `key`, which we have to loop in JS).
 	if (typeof windowId === 'number') {
-		const args = ['type', '--window', String(windowId)]
+		// 2026-05-08 P100-07.3 — activate-first pattern; `type --window`
+		// hits the same Chrome synthetic-event filter as `key --window`.
+		const widStr = String(windowId)
+		const args: string[] = [
+			'windowactivate', '--sync', widStr,
+			'windowfocus', '--sync', widStr,
+			'type',
+		]
 		if (typeof delay === 'number' && delay > 0) {
 			args.push('--delay', String(delay))
 		}
