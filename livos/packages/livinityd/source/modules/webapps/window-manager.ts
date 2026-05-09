@@ -230,6 +230,8 @@ export class WebAppWindowManager {
 			`XAUTHORITY=${WEBAPPS_X11_ENV.XAUTHORITY}`,
 			this.chromeBinary,
 			`--user-data-dir=${chromeProfile}`,
+			'--window-size=1280,720', // P100-06.1: explicit landscape resolution; Chrome --app= mode otherwise inherits whatever the last app-window remembered (often portrait/tiny).
+			'--window-position=0,0',  // P100-06.1: predictable spawn coords (window-discovery's matcher prefers wids whose geometry doesn't overlap existing windows).
 			`--app=${opts.url}`,   // P100-02 (G-100-B B1): site-specific-browser mode. Replaces `--new-window URL` to break Chrome IPC merge (V33-MULTI-01) and produce chromeless windows (V33-MULTI-02 bonus).
 		]
 		const chromeProc = this.spawnFactory('sudo', chromeArgs, {
