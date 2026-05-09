@@ -32,29 +32,6 @@ describe('WebAppStreamWindow — source-text invariants', () => {
 		expect(SRC).toMatch(/useWebAppAgent\(/)
 	})
 
-	it('composes the toolbar + mode selector from 95-07', () => {
-		expect(SRC).toMatch(/from\s+['"]\.\.\/webapp-toolbar['"]/)
-		expect(SRC).toMatch(/from\s+['"]\.\.\/webapp-mode-selector['"]/)
-		expect(SRC).toMatch(/<WebAppToolbar\b/)
-		expect(SRC).toMatch(/<WebAppModeSelector\b/)
-	})
-
-	it('uses ResizablePanelGroup vertical split (D-95-03)', () => {
-		expect(SRC).toMatch(/ResizablePanelGroup/)
-		expect(SRC).toMatch(/direction=['"]vertical['"]/)
-	})
-
-	it('uses the per-WebApp localStorage key shape (D-95-04)', () => {
-		expect(SRC).toMatch(/['"]liv:webapp-stream:split:['"]/)
-	})
-
-	it('falls back to 70/30 with [20,90] guard for out-of-range persisted values', () => {
-		expect(SRC).toMatch(/DEFAULT_TOP_PCT\s*=\s*70/)
-		expect(SRC).toMatch(/DEFAULT_BOTTOM_PCT\s*=\s*30/)
-		expect(SRC).toMatch(/MIN_PCT\s*=\s*20/)
-		expect(SRC).toMatch(/MAX_PCT\s*=\s*90/)
-	})
-
 	it('default mode is "chat" (D-95-10)', () => {
 		expect(SRC).toMatch(/useState<WebAppMode>\(\s*['"]chat['"]\s*\)/)
 	})
@@ -92,9 +69,25 @@ describe('WebAppStreamWindow — source-text invariants', () => {
 		expect(SRC).toMatch(/composerDisabled\s*=\s*mode\s*!==\s*['"]chat['"]/)
 	})
 
-	it('persists the layout via onLayout (not autoSaveId) so the key stays under liv:', () => {
-		expect(SRC).toMatch(/onLayout=\{onLayoutChange\}/)
-		expect(SRC).toMatch(/writePersistedLayout\(/)
+	it('drops WebAppToolbar import (V33-MULTI-02 / G-100-E E1)', () => {
+		expect(SRC).not.toMatch(/from\s+['"]\.\.\/webapp-toolbar['"]/)
+		expect(SRC).not.toMatch(/<WebAppToolbar\b/)
+	})
+
+	it('drops ResizablePanelGroup vertical split (no inline agent panel below stream)', () => {
+		expect(SRC).not.toMatch(/ResizablePanelGroup/)
+	})
+
+	it('uses flex-col root container (full-bleed; 100-04 bottom-bar will anchor here)', () => {
+		expect(SRC).toMatch(/flex h-full w-full flex-col/)
+	})
+
+	it('reserves bottom space via pb-9 (Plan A locked — bottom-bar overlay anchored over reserved 36px)', () => {
+		// Locks the canonical bottom-bar layout: stream wrapper has pb-9 so the
+		// overlay bar (absolute inset-x-0 bottom-0 z-20 h-9 from 100-04) never
+		// occludes stream pixels. Failing this guard means a future edit removed
+		// the bottom reservation and UAT Row 5 will surface the regression.
+		expect(SRC).toMatch(/pb-9/)
 	})
 })
 
