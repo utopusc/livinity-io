@@ -306,6 +306,11 @@ export class WebAppWindowManager {
 			`webapp ${opts.webappId} spawned (user=${opts.userId} wid=${newWin.wid} mode=${mode})`,
 		)
 
+		// Phase 100-07.4 — broadcast active wid to bytebot MCP child process
+		// via /tmp/livos-active-webapp-wid (cross-process IPC fallback so
+		// bytebot host MCP auto-scopes to the single active WebApp).
+		this.broadcastActiveWid()
+
 		return {
 			webappId: opts.webappId,
 			windowId: newWin.wid,
@@ -375,7 +380,39 @@ export class WebAppWindowManager {
 
 		this.active.delete(opts.webappId)
 		this.logger?.info?.(`webapp ${opts.webappId} closed (killWindow=${!!opts.killWindow})`)
+
+		// Phase 100-07.4 — re-broadcast after close so bytebot fallback sees
+		// the new active state (single remaining wid, ambiguous, or none).
+		this.broadcastActiveWid()
+
 		return {ok: true}
+	}
+
+	/**
+	 * Phase 100-07.4 — write the SOLE active WebApp's wid to
+	 * `/tmp/livos-active-webapp-wid` for the bytebot MCP child to read at
+	 * tool dispatch time (cross-process fallback). Multiple active WebApps
+	 * → empty file (ambiguous, host-display fallback). Zero active → file
+	 * removed.
+	 */
+	private broadcastActiveWid(): void {
+		const marker = '/tmp/livos-active-webapp-wid'
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const fs = require('node:fs') as typeof import('node:fs')
+			const wid = this.getSingleActiveWid()
+			if (this.active.size === 0) {
+				try {
+					fs.unlinkSync(marker)
+				} catch {
+					/* file may not exist — fine */
+				}
+				return
+			}
+			fs.writeFileSync(marker, wid !== undefined ? String(wid) : '', {encoding: 'utf8'})
+		} catch (err) {
+			this.logger?.warn?.(`failed to broadcast active wid to ${marker}`, err)
+		}
 	}
 
 	/**
@@ -386,6 +423,25 @@ export class WebAppWindowManager {
 		const entry = this.active.get(webappId)
 		if (!entry || entry.userId !== userId) return null
 		return entry.wid
+	}
+
+	/**
+	 * Phase 100-07.4 — fallback resolver for the host-display bytebot.
+	 * When the agent invokes a tool without an explicit windowId AND
+	 * BYTEBOT_TARGET_WINDOW_ID is unset, return the wid of the SOLE active
+	 * WebApp (across all users). Returns undefined when there are 0 OR ≥2
+	 * active WebApps — caller should be explicit in those ambiguous cases.
+	 *
+	 * This is a pragmatic single-WebApp UX fix until the per-WebApp MCP
+	 * registration lifecycle is wired into spawn/close (out of scope here).
+	 */
+	getSingleActiveWid(): number | undefined {
+		const wids: number[] = []
+		for (const entry of this.active.values()) {
+			wids.push(entry.wid)
+			if (wids.length > 1) return undefined
+		}
+		return wids[0]
 	}
 
 	list(filter: {userId: string}): Array<{

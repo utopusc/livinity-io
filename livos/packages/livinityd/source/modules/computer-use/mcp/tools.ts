@@ -112,19 +112,89 @@ export interface BytebotToolsOptions {
 		pool: import('pg').Pool
 		userId: string
 	}
+	/**
+	 * Phase 100-07.4 — runtime fallback resolver. When neither args.windowId
+	 * nor defaultWindowId is set, tools call this to ask "is there an active
+	 * WebApp window I should target?" Used by the host-display bytebot to
+	 * auto-scope to a single live WebApp without requiring a per-WebApp
+	 * MCP instance. Returns undefined for true host-display intent (no
+	 * active WebApps, OR multiple — caller should be explicit).
+	 */
+	activeWebappWidResolver?: () => number | undefined
 }
 
 /**
  * Resolve the windowId a primitive should use. Tool input wins over the
- * server-level default. `undefined` here means host-display.
+ * server-level default. Phase 100-07.4 — when neither is set, fall back
+ * to `activeWebappWidResolver` (auto-route to single active WebApp).
+ * `undefined` means host-display.
  */
 function resolveWindowId(
 	args: Record<string, unknown>,
 	defaultWindowId: number | undefined,
+	activeWebappWidResolver?: () => number | undefined,
 ): number | undefined {
 	const fromArgs = args.windowId
 	if (typeof fromArgs === 'number' && Number.isFinite(fromArgs)) return fromArgs
-	return defaultWindowId
+	if (defaultWindowId !== undefined) return defaultWindowId
+	if (activeWebappWidResolver !== undefined) {
+		const resolved = activeWebappWidResolver()
+		if (resolved !== undefined) return resolved
+	}
+	// Phase 100-07.4 — file-based cross-process fallback. livinityd's
+	// window-manager writes the wid of the SOLE active WebApp to this file
+	// on spawn (and clears/rewrites on close). The bytebot MCP child process
+	// runs in its own JS context and can't reach the parent's runtime state
+	// directly, so a file-based marker is the simplest safe IPC.
+	return readSingleActiveWebappWidFromFile()
+}
+
+/**
+ * File-based fallback for cross-process wid lookup. The marker file is
+ * written by livinityd's window-manager (Phase 100-07.4) and contains a
+ * single positive integer (the wid of the only active WebApp), or is
+ * absent (no active WebApps), or contains an empty string (multiple active
+ * WebApps — caller should be explicit).
+ *
+ * Cached for 250ms because tools may be called in tight loops and we don't
+ * want to thrash readFileSync on the hot path. Cache invalidates if the
+ * file's mtime changed.
+ */
+const ACTIVE_WID_MARKER = '/tmp/livos-active-webapp-wid'
+let widCache: {wid: number | undefined; cachedAt: number; mtimeMs: number} | null = null
+const WID_CACHE_TTL_MS = 250
+
+function readSingleActiveWebappWidFromFile(): number | undefined {
+	// Linux-only: the marker file is a Mini PC convention; in dev/test on
+	// Windows or Mac, fall through to host-display.
+	if (process.platform !== 'linux') return undefined
+	const now = Date.now()
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const fs = require('node:fs') as typeof import('node:fs')
+		let mtimeMs = 0
+		try {
+			mtimeMs = fs.statSync(ACTIVE_WID_MARKER).mtimeMs
+		} catch {
+			widCache = null
+			return undefined
+		}
+		if (widCache && widCache.mtimeMs === mtimeMs && now - widCache.cachedAt < WID_CACHE_TTL_MS) {
+			return widCache.wid
+		}
+		const raw = fs.readFileSync(ACTIVE_WID_MARKER, 'utf8').trim()
+		if (raw.length === 0) {
+			widCache = {wid: undefined, cachedAt: now, mtimeMs}
+			return undefined
+		}
+		const parsed = Number(raw)
+		const wid =
+			Number.isFinite(parsed) && Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+		widCache = {wid, cachedAt: now, mtimeMs}
+		return wid
+	} catch {
+		return undefined
+	}
 }
 
 /**
@@ -186,8 +256,9 @@ function summarizeArgs(args: Record<string, unknown>): string {
  */
 export function buildHandlers(options: BytebotToolsOptions = {}): Record<string, Handler> {
 	const defaultWindowId = options.defaultWindowId
+	const widResolver = options.activeWebappWidResolver
 	const wid = (args: Record<string, unknown>): number | undefined =>
-		resolveWindowId(args, defaultWindowId)
+		resolveWindowId(args, defaultWindowId, widResolver)
 	return {
 	// ── Mouse primitives ──────────────────────────────────────────────────────
 
