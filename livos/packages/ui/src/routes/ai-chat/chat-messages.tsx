@@ -321,8 +321,17 @@ function toolInputSummary(toolCall: ChatToolCall, maxLen = 80): string {
 	const keys = Object.keys(toolCall.input).slice(0, 2)
 	if (keys.length === 0) return ''
 	return keys.map(k => {
-		const v = String(toolCall.input[k]).slice(0, 40)
-		return `${k}=${v}`
+		// Phase 100-07.3: render objects via JSON.stringify so e.g.
+		// `coordinates: {x: 123, y: 456}` shows as `{"x":123,"y":456}`
+		// instead of `[object Object]`.
+		const raw = toolCall.input[k]
+		const str =
+			raw == null
+				? 'null'
+				: typeof raw === 'object'
+					? JSON.stringify(raw)
+					: String(raw)
+		return `${k}=${str.slice(0, 60)}`
 	}).join(', ')
 }
 
