@@ -87,10 +87,23 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
 - **PHASE-SUMMARY:** `.planning/phases/100-multi-stream-window-redesign/PHASE-SUMMARY.md` (committed).
 - **UAT detail:** `.planning/phases/98-uat-polish/UAT-CHECKLIST.md` "Phase 100 — Multi-Stream + Stream-Window Redesign (PARTIAL-PASS 2026-05-08)" section.
 
-## Plan 100-06 — Routing Fix (QUEUED, NOT YET PLANNED)
+## Plan 100-06 — UI Revisions (SHIPPED 2026-05-08)
 
-- Creative solution proposed (in `100-05-SUMMARY.md`): (a) click bypass via `xdotool --window <wid>` tRPC mutation; (b) chat MCP scoping — pin agent's tool whitelist to `mcp__bytebot:webapp:<wid>__*` per chat surface; (c) every bytebot tool call passes explicit `windowId` param (already supported by `tools.ts:98 defaultWindowId`).
-- User chose path "(a) ship 100-02..04 + new 100-06 routing-fix" during the 100-01 checkpoint.
-- Next step: user runs `/clear` then `/gsd-plan-phase 100-06` (or `/gsd-discuss-phase 100-06`) to spec the routing-fix plan.
+- **Shipped commit:** `f18c8973` (atomic, +277 / -140 across 8 files; sacred SHA `f3538e1d…` UNTOUCHED).
+- **Deployed:** `bash /opt/livos/update.sh` 2026-05-08 19:41 PT — all 4 services `active`; deployed SHA `f18c897309299f44698f9a8aa79ab5836091d720`; sacred SHA `f3538e1d…` on Mini PC verified.
+- **What landed (4 user-requested UI corrections):**
+  1. Bottom action bar moved OUTSIDE the WebApp window (NEW `webapp-floating-action-bar.tsx` — fixed-positioned `motion.div` mirroring `window-chrome.tsx` close button; rendered in `windows-container.tsx` for any `WEBAPP_` window). 16px below the window's bottom edge, centered, with `<Magnetic>` wrapper.
+  2. Round buttons (`rounded-full bg-white/90 backdrop-blur-xl border + soft shadow` — close-button parity).
+  3. Watch mode dropped entirely (`webapp-watch-drawer.tsx` deleted; `WebAppMode` collapsed `chat | teach | watch | auto` → `chat | teach | auto`).
+  4. WebApp windows ship at fixed `1280×720` base size (`window-manager.tsx openWindow` checks `WEBAPP_` prefix; falls through `getResponsiveSize()` for viewport clamping).
+- **State coupling:** new `webapp-drawer-store.ts` (Zustand keyed by webappId). The floating action bar (outside the window) and the Sheet drawer host (inside webapp-stream-window.tsx) both subscribe.
+- **Tests:** 21/21 stream-window invariants PASS (4 flipped + 5 new for `WebAppFloatingActionBar`); build clean (`vite build` 35.92s).
+- **SUMMARY:** `.planning/phases/100-multi-stream-window-redesign/100-06-SUMMARY.md`.
 
-**v33 milestone status:** all 9 phases (92-100) CODE-COMPLETE; Phase 99 PARTIAL-PASS, Phase 100 PARTIAL-PASS. v33 does NOT flip to ✅ Shipped in ROADMAP.md until Plan 100-06 ships AND Phase 100 UAT re-walks 11/11.
+## Plan 100-07 — Routing Fix (QUEUED, NOT YET PLANNED)
+
+- Creative solution proposed during the 100-01 checkpoint: (a) click bypass via `xdotool --window <wid>` tRPC mutation; (b) chat MCP scoping — pin agent's tool whitelist to `mcp__bytebot:webapp:<wid>__*` per chat surface; (c) every bytebot tool call passes explicit `windowId` param (`tools.ts:98 defaultWindowId` already supports per-call override).
+- This was originally Plan 100-06's scope; renumbered to 100-07 when the user redirected 100-06 to UI revisions on 2026-05-08.
+- Next step: user runs `/gsd-plan-phase 100-07` (or `/gsd-discuss-phase 100-07`) to spec the routing-fix plan.
+
+**v33 milestone status:** all 9 phases (92-100) CODE-COMPLETE; Phase 99 PARTIAL-PASS, Phase 100 PARTIAL-PASS (UAT 9/11 + 100-06 UI revisions shipped). v33 does NOT flip to ✅ Shipped in ROADMAP.md until Plan 100-07 ships AND Phase 100 UAT re-walks the routing rows (R3 + R9) PASS.
