@@ -54,8 +54,23 @@ export type ClickKind = 'click' | 'mousedown' | 'mouseup' | 'doubleclick'
 
 /**
  * Dispatch a click (or mousedown/up) at (x, y) inside the given X11 wid.
- * `xdotool --window <wid>` ensures the event targets the bound window
- * regardless of X11 focus.
+ *
+ * **Why `windowactivate` instead of `--window` on click:** Chrome (and many
+ * GTK apps) ignore synthetic XSendEvent — `xdotool click --window <wid>`
+ * dispatches the event but Chrome filters it as `send_event=True` and
+ * drops it. The reliable pattern is:
+ *   1. `xdotool windowactivate --sync <wid>` — give the bound window X11
+ *      focus (sends _NET_ACTIVE_WINDOW; WM honors it; --sync waits for
+ *      the focus-out/focus-in events).
+ *   2. `xdotool mousemove --window <wid> --sync <x> <y>` — move cursor
+ *      to wid-relative (x, y); xdotool internally translates to screen
+ *      coords using the wid's geometry.
+ *   3. `xdotool click <btn>` (NO --window) — sends a real button event
+ *      to the focused window (= the wid we just activated).
+ *
+ * Side effect: the bound wid steals X11 focus on every click. This is
+ * actually desirable for multi-stream — the active stream IS the one the
+ * user is clicking, so focus tracking matches user intent.
  */
 export async function dispatchPointer(
 	wid: number,
@@ -69,21 +84,14 @@ export async function dispatchPointer(
 	const ix = Math.max(0, Math.round(x))
 	const iy = Math.max(0, Math.round(y))
 	const widStr = String(wid)
-	// Move to coords, THEN dispatch the click — xdotool resets the --window
-	// scope between sub-commands, so we pass --window twice.
+	// One xdotool invocation, three sub-commands, all chained:
+	//   activate → mousemove (wid-relative) → click (focused).
 	await execFileAsync(
 		'xdotool',
 		[
-			'mousemove',
-			'--window',
-			widStr,
-			'--sync',
-			String(ix),
-			String(iy),
-			kind,
-			'--window',
-			widStr,
-			String(button),
+			'windowactivate', '--sync', widStr,
+			'mousemove', '--window', widStr, '--sync', String(ix), String(iy),
+			kind, String(button),
 		],
 		{timeout: DEFAULT_TIMEOUT_MS},
 	)
@@ -91,6 +99,10 @@ export async function dispatchPointer(
 
 /**
  * Dispatch a single key press (or keydown/keyup) inside the given wid.
+ * Same activate-first pattern as `dispatchPointer` (Chrome ignores
+ * synthetic key events sent via `--window`; we focus the wid then send
+ * a real key event to the focused window).
+ *
  * `key` is an X11 keysym name (e.g. `Return`, `BackSpace`, `Escape`,
  * `ctrl+a`). For typing arbitrary text, use `dispatchType` instead.
  */
@@ -101,30 +113,31 @@ export async function dispatchKey(
 ): Promise<void> {
 	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
 	if (typeof key !== 'string' || !key.trim()) throw new Error('invalid key')
-	// Prevent shell-metachar injection: xdotool key names are alphanumeric +
-	// `+ - _` (modifier separators). Reject anything else.
 	if (!/^[A-Za-z0-9_+\-]{1,64}$/.test(key)) {
 		throw new Error(`invalid key syntax: ${JSON.stringify(key)}`)
 	}
+	const widStr = String(wid)
 	await execFileAsync(
 		'xdotool',
-		[kind, '--window', String(wid), key],
+		['windowactivate', '--sync', widStr, kind, key],
 		{timeout: DEFAULT_TIMEOUT_MS},
 	)
 }
 
 /**
- * Type literal text inside the given wid. `text` is passed verbatim to
- * `xdotool type --window <wid>` which dispatches one keysym per char.
+ * Type literal text inside the given wid. Activate-first pattern (Chrome
+ * ignores synthetic key events; the activate ensures the focused window
+ * is the bound wid before xdotool's `type` dispatches keystrokes).
  */
 export async function dispatchType(wid: number, text: string): Promise<void> {
 	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
 	if (typeof text !== 'string') throw new Error('invalid text')
 	if (text.length > 4096) throw new Error('text too long (4096 char limit)')
 	if (text.length === 0) return
+	const widStr = String(wid)
 	await execFileAsync(
 		'xdotool',
-		['type', '--window', String(wid), '--delay', '0', text],
+		['windowactivate', '--sync', widStr, 'type', '--delay', '0', text],
 		{timeout: DEFAULT_TIMEOUT_MS},
 	)
 }
