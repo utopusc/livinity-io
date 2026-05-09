@@ -49,15 +49,45 @@ type WindowManagerContextT = {
 	updateWindowSize: (windowId: WindowId, size: Size) => void
 }
 
-// Get responsive window size based on screen dimensions
-function getResponsiveSize(baseWidth: number, baseHeight: number): Size {
+// Get responsive window size based on screen dimensions.
+//
+// `preserveAspect` (Phase 100-06.2): when true, the window scales down
+// proportionally if it doesn't fit the viewport — preserves W/H aspect.
+// Used for WebApp windows so a 1280x720 (16:9) base never becomes portrait
+// just because the user's browser is narrow. Non-WebApp apps keep the
+// original independent clamp behavior so a 1500x750 store window degrades
+// to "max width, max height" independently.
+function getResponsiveSize(
+	baseWidth: number,
+	baseHeight: number,
+	preserveAspect = false,
+): Size {
 	const screenW = typeof window !== 'undefined' ? window.innerWidth : 1920
 	const screenH = typeof window !== 'undefined' ? window.innerHeight : 1080
+	const maxAllowedW = screenW * 0.85
+	const maxAllowedH = screenH * 0.85
 
-	// Max 85% of screen, min reasonable size
-	const maxW = Math.min(baseWidth, screenW * 0.85)
-	const maxH = Math.min(baseHeight, screenH * 0.85)
+	if (preserveAspect) {
+		const aspect = baseWidth / baseHeight
+		let w = baseWidth
+		let h = baseHeight
+		if (w > maxAllowedW) {
+			w = maxAllowedW
+			h = w / aspect
+		}
+		if (h > maxAllowedH) {
+			h = maxAllowedH
+			w = h * aspect
+		}
+		return {
+			width: Math.max(400, Math.round(w)),
+			height: Math.max(400, Math.round(h)),
+		}
+	}
 
+	// Original independent clamp (non-WebApp apps).
+	const maxW = Math.min(baseWidth, maxAllowedW)
+	const maxH = Math.min(baseHeight, maxAllowedH)
 	return {
 		width: Math.max(400, maxW),
 		height: Math.max(400, maxH),
@@ -193,10 +223,14 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)
 		// Phase 100-06: WebApp windows ship with a stable 1280x720 base size
 		// regardless of viewport (honored within getResponsiveSize clamp).
-		const baseSize = appId.startsWith('WEBAPP_')
+		// Phase 100-06.2: preserve 16:9 aspect when clamping — narrow
+		// viewports were producing portrait windows because W and H were
+		// being clamped independently.
+		const isWebApp = appId.startsWith('WEBAPP_')
+		const baseSize = isWebApp
 			? {width: 1280, height: 720}
 			: (DEFAULT_WINDOW_SIZES[appId] || DEFAULT_WINDOW_SIZES.default)
-		const size = getResponsiveSize(baseSize.width, baseSize.height)
+		const size = getResponsiveSize(baseSize.width, baseSize.height, isWebApp)
 		// Use current state.windows.length at call time, not as dependency
 		const windowCount = state.windows.length
 
