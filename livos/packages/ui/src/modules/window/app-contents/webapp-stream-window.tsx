@@ -171,8 +171,150 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 	}, [webappId])
 
 	// 4. VNC + agent hooks.
-	const vnc = useWebAppVnc(wsUrl ?? undefined)
+	// Phase 100-07: viewOnly=true disables RFB input forwarding. Mouse +
+	// keyboard events are intercepted on the canvas below and dispatched
+	// via tRPC `webapp.input.*` so they target the bound wid via
+	// `xdotool --window <wid>` (X11-focus-independent).
+	const vnc = useWebAppVnc(wsUrl ?? undefined, {viewOnly: true})
 	const agent = useWebAppAgent(webappId)
+
+	// Phase 100-07: tRPC input dispatch mutations.
+	const inputClickMutation = trpcReact.webapp.input.click.useMutation()
+	const inputKeyMutation = trpcReact.webapp.input.keypress.useMutation()
+	const inputTypeMutation = trpcReact.webapp.input.type.useMutation()
+
+	// Phase 100-07: canvas event interception. Translates browser mouse +
+	// keyboard events into framebuffer-space coords (Chrome is locked to
+	// 1280x720 by Phase 100-06.1) and forwards via tRPC. RFB transport is
+	// viewOnly so x11vnc's XTestFakeKey/MotionEvent dispatch is bypassed.
+	useEffect(() => {
+		const container = vnc.containerRef.current
+		if (!container) return
+		// noVNC creates a child <canvas> after connect. Listen on the container
+		// so events arrive even before the canvas exists, but resolve coords
+		// against whichever inner element actually has the bounding rect.
+		container.tabIndex = 0 // make focusable for keyboard events
+		container.style.outline = 'none' // suppress focus ring
+
+		const fbW = 1280
+		const fbH = 720
+
+		const eventToFbCoords = (ev: MouseEvent): {x: number; y: number} => {
+			const rect = container.getBoundingClientRect()
+			if (rect.width === 0 || rect.height === 0) return {x: 0, y: 0}
+			const cx = (ev.clientX - rect.left) * (fbW / rect.width)
+			const cy = (ev.clientY - rect.top) * (fbH / rect.height)
+			return {
+				x: Math.max(0, Math.min(fbW, Math.round(cx))),
+				y: Math.max(0, Math.min(fbH, Math.round(cy))),
+			}
+		}
+
+		// Map DOM MouseEvent.button (0/1/2) → xdotool 1/2/3.
+		const xdotoolButton = (b: number): 1 | 2 | 3 => (b === 2 ? 3 : b === 1 ? 2 : 1)
+
+		const onMouseDown = (ev: MouseEvent) => {
+			ev.preventDefault()
+			container.focus()
+			const {x, y} = eventToFbCoords(ev)
+			inputClickMutation.mutate({
+				webappId,
+				x,
+				y,
+				button: xdotoolButton(ev.button),
+				kind: 'mousedown',
+			})
+		}
+
+		const onMouseUp = (ev: MouseEvent) => {
+			ev.preventDefault()
+			const {x, y} = eventToFbCoords(ev)
+			inputClickMutation.mutate({
+				webappId,
+				x,
+				y,
+				button: xdotoolButton(ev.button),
+				kind: 'mouseup',
+			})
+		}
+
+		const onContextMenu = (ev: MouseEvent) => {
+			// Suppress browser-native context menu on the stream — right-click
+			// is dispatched through onMouseDown/Up as button=3.
+			ev.preventDefault()
+		}
+
+		// Translate DOM key.event to xdotool keysym names. For printable
+		// characters we fall through to dispatchType so xdotool's IME does the
+		// keysym mapping; for special keys we send the keysym name directly.
+		const SPECIAL_KEYS: Record<string, string> = {
+			Enter: 'Return',
+			Escape: 'Escape',
+			Backspace: 'BackSpace',
+			Tab: 'Tab',
+			Delete: 'Delete',
+			ArrowUp: 'Up',
+			ArrowDown: 'Down',
+			ArrowLeft: 'Left',
+			ArrowRight: 'Right',
+			Home: 'Home',
+			End: 'End',
+			PageUp: 'Page_Up',
+			PageDown: 'Page_Down',
+			' ': 'space',
+			F1: 'F1', F2: 'F2', F3: 'F3', F4: 'F4', F5: 'F5', F6: 'F6',
+			F7: 'F7', F8: 'F8', F9: 'F9', F10: 'F10', F11: 'F11', F12: 'F12',
+		}
+
+		const onKeyDown = (ev: KeyboardEvent) => {
+			// Only act when our container is the active element (focus-scoped).
+			if (document.activeElement !== container) return
+			const special = SPECIAL_KEYS[ev.key]
+			if (special) {
+				ev.preventDefault()
+				const mods: string[] = []
+				if (ev.ctrlKey) mods.push('ctrl')
+				if (ev.shiftKey) mods.push('shift')
+				if (ev.altKey) mods.push('alt')
+				if (ev.metaKey) mods.push('super')
+				const keysym = mods.length > 0 ? `${mods.join('+')}+${special}` : special
+				inputKeyMutation.mutate({webappId, key: keysym, kind: 'key'})
+				return
+			}
+			// Modifier-bearing letter shortcuts (e.g. Ctrl+A, Ctrl+L). When a
+			// modifier is held with a printable key, route via keypress so
+			// xdotool dispatches the chord; otherwise let onKeyPress (below)
+			// handle plain text via type.
+			if ((ev.ctrlKey || ev.altKey || ev.metaKey) && ev.key.length === 1) {
+				ev.preventDefault()
+				const mods: string[] = []
+				if (ev.ctrlKey) mods.push('ctrl')
+				if (ev.shiftKey) mods.push('shift')
+				if (ev.altKey) mods.push('alt')
+				if (ev.metaKey) mods.push('super')
+				const keysym = `${mods.join('+')}+${ev.key.toLowerCase()}`
+				inputKeyMutation.mutate({webappId, key: keysym, kind: 'key'})
+				return
+			}
+			// Plain printable: emit via type so unicode chars work without keysym lookup.
+			if (ev.key.length === 1) {
+				ev.preventDefault()
+				inputTypeMutation.mutate({webappId, text: ev.key})
+			}
+		}
+
+		container.addEventListener('mousedown', onMouseDown)
+		container.addEventListener('mouseup', onMouseUp)
+		container.addEventListener('contextmenu', onContextMenu)
+		container.addEventListener('keydown', onKeyDown)
+
+		return () => {
+			container.removeEventListener('mousedown', onMouseDown)
+			container.removeEventListener('mouseup', onMouseUp)
+			container.removeEventListener('contextmenu', onContextMenu)
+			container.removeEventListener('keydown', onKeyDown)
+		}
+	}, [vnc.containerRef, webappId, inputClickMutation, inputKeyMutation, inputTypeMutation])
 
 	// 5. Mode (D-95-10 default 'chat'; D-95-MODE-LOCAL = local state only).
 	const [mode, setMode] = useState<WebAppMode>('chat')
