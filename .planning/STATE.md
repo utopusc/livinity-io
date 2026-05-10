@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-10T03:24:11.171Z"
+last_updated: "2026-05-10T21:53:03.462Z"
 progress:
   total_phases: 41
   completed_phases: 18
-  total_plans: 111
-  completed_plans: 107
-  percent: 96
+  total_plans: 127
+  completed_plans: 120
+  percent: 94
 ---
 
 # Project State
@@ -30,6 +30,7 @@ Plan: 5/6 of 100-08 complete (100-08-06 pending user-walked Mini PC deploy)
 Milestone: v33.0 (active) — Phase 100 PARTIAL-PASS; 100-08 closes residual bugs from 100-07
 
 ## 100-08 Wave Status (2026-05-10)
+
 - Wave 1: ✅ COMPLETE — `6e0e028e..a37fe4de` (5 commits) — Xvfb :1 + fluxbox lifecycle + apt deps
 - Wave 2: ✅ COMPLETE — `e775eb00..30b053e1` (4 commits) — WEBAPPS_X11_ENV :0→:1 cutover + XAUTHORITY drop
 - Wave 3: ✅ COMPLETE — `410187d0..13781de7` (4 commits) — PerWebAppMcpDescriptor.display field
@@ -61,6 +62,7 @@ Stream area inside WebApp window rendered `wmctrl -lG: Cannot get client list pr
 Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 9 hot-fix commits (+ 21 prior 09-01..06 commits).
 
 **Pending user actions:**
+
 1. Mini PC redeploy — pulls 09-07/08/09 fixes. `bash /opt/livos/update.sh` on `bruce@10.69.31.68`
 2. Plan 100-08-06 — formal Mini PC deploy + 11-step UAT (multi-stream + per-WebApp control already informally validated)
 3. Plan 100-09-04 — mouse latency probe + patch (user-walked SSH)
@@ -71,6 +73,7 @@ Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 9 hot
 `.planning/phases/100-multi-stream-window-redesign/100-10-CONTEXT.md` (committed `dc4cfbc7`) — comprehensive 8-issue + 10-decision + 7-plan-outline context. User said `/clear` next, then run `/gsd-plan-phase 100-10`.
 
 Key decisions captured:
+
 - D-100-10-A: Per-WebApp Xvfb (`:10+index`) — solves multi-stream overlap + Chrome direct capture
 - D-100-10-B: Bytebot → Luse rename (project-wide, like Nexus→Liv P65)
 - D-100-10-C: Luse new tools (list_windows, screenshot_window, focus, create_stream, etc.)
@@ -118,7 +121,7 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 100-08 (selfclaude-adoption-mcp-routing) — 6 plans — 2026-05-10T03:17:39.831Z
+**Planned Phase:** 100-10 (Luse rename + per-WebApp Xvfb + UI polish) — 7 plans — 2026-05-10T21:53:03.450Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
