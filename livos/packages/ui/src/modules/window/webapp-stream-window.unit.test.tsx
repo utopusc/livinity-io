@@ -399,3 +399,101 @@ describe('Phase 100-09-09 teach button red + click count badge', () => {
 		expect(popupSrc).not.toMatch(/seconds/i)
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 100-10-05 — UI cleanup (D-100-10-D, F, G).
+//
+// Three coordinated fixes:
+//   D-100-10-D: Skill button moved OUTSIDE the WebApp window at
+//   top-right. New file `webapp-floating-skills-button.tsx`. The
+//   inside-window `<WebAppSkillsPopover/>` JSX render is removed.
+//   D-100-10-F: noVNC canvas wrapper gets `object-fit: cover` (or
+//   equivalent Tailwind `object-cover`) so the stream fills the
+//   entire WebApp window content area (no more black space below).
+//   D-100-10-G: Auto button removed from the floating action bar.
+//   `webapp-auto-drawer.tsx` DELETED. `WebAppMode` + `WebAppDrawerMode`
+//   types narrowed from `'chat' | 'teach' | 'auto'` to `'chat' | 'teach'`.
+//   Backend P97 capability stays untouched — UI-only removal.
+//
+// Source-text invariants (D-NO-NEW-DEPS — no React Testing Library)
+// matching the file's established precedent.
+// ─────────────────────────────────────────────────────────────────
+
+const FLOATING_SKILLS_BUTTON_PATH = resolve(
+	__dirname,
+	'webapp-floating-skills-button.tsx',
+)
+const AUTO_DRAWER_PATH = resolve(
+	__dirname,
+	'app-contents/webapp-auto-drawer.tsx',
+)
+const MODE_SELECTOR_PATH = resolve(__dirname, 'webapp-mode-selector.tsx')
+const WINDOWS_CONTAINER_PATH = resolve(__dirname, 'windows-container.tsx')
+
+describe('Phase 100-10-05 UI cleanup: skill outside + stream full-fit + remove Auto', () => {
+	it('T-10-05-01: new file webapp-floating-skills-button.tsx exists and exports WebAppFloatingSkillsButton', () => {
+		const src = safeRead(FLOATING_SKILLS_BUTTON_PATH)
+		expect(src.length).toBeGreaterThan(0)
+		expect(src).toMatch(/export function WebAppFloatingSkillsButton/)
+	})
+
+	it('T-10-05-02: webapp-floating-skills-button.tsx uses fixed positioning + windowX + windowWidth props (mirrors floating action bar pattern)', () => {
+		const src = safeRead(FLOATING_SKILLS_BUTTON_PATH)
+		expect(src).toMatch(/['"]fixed/)
+		expect(src).toMatch(/windowX/)
+		expect(src).toMatch(/windowWidth/)
+	})
+
+	it('T-10-05-03: webapp-stream-window.tsx no longer renders <WebAppSkillsPopover/> inline', () => {
+		expect(SRC).not.toMatch(/<WebAppSkillsPopover\b/)
+	})
+
+	it('T-10-05-04: webapp-stream-window.tsx no longer imports WebAppSkillsPopover', () => {
+		expect(SRC).not.toMatch(/from\s+['"]\.\/webapp-skills-popover['"]/)
+	})
+
+	it('T-10-05-05: webapp-stream-window.tsx contains no WebAppAutoDrawer reference (import + JSX gone)', () => {
+		expect(SRC).not.toMatch(/WebAppAutoDrawer/)
+	})
+
+	it('T-10-05-06: webapp-auto-drawer.tsx file does NOT exist on disk', () => {
+		// Use existsSync directly — safeRead returns empty string for both
+		// missing files AND empty files; existsSync disambiguates.
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const {existsSync} = require('node:fs') as typeof import('node:fs')
+		expect(existsSync(AUTO_DRAWER_PATH)).toBe(false)
+	})
+
+	it("T-10-05-07: webapp-drawer-store.ts WebAppDrawerMode type is 'chat' | 'teach' (no 'auto')", () => {
+		const storeSrc = safeRead(STORE_PATH)
+		expect(storeSrc).toMatch(/export type WebAppDrawerMode\s*=\s*['"]chat['"]\s*\|\s*['"]teach['"]/)
+		// Also negative: the type def line must not include the 'auto' literal.
+		// We grep the specific line shape to avoid false positives elsewhere.
+		expect(storeSrc).not.toMatch(/export type WebAppDrawerMode[^;\n]*['"]auto['"]/)
+	})
+
+	it("T-10-05-08: webapp-mode-selector.tsx WebAppMode is 'chat' | 'teach' (no 'auto') and MODE_ORDER drops 'auto'", () => {
+		const selectorSrc = safeRead(MODE_SELECTOR_PATH)
+		expect(selectorSrc).toMatch(/export type WebAppMode\s*=\s*['"]chat['"]\s*\|\s*['"]teach['"]/)
+		expect(selectorSrc).not.toMatch(/export type WebAppMode[^;\n]*['"]auto['"]/)
+		// MODE_ORDER array must not include 'auto' literal.
+		expect(selectorSrc).not.toMatch(/MODE_ORDER[^=]*=[^;\n]*['"]auto['"]/)
+	})
+
+	it("T-10-05-09: webapp-floating-action-bar.tsx MODES array does NOT contain id: 'auto'", () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		expect(barSrc).not.toMatch(/id:\s*['"]auto['"]/)
+	})
+
+	it('T-10-05-10: webapp-stream-window.tsx noVNC canvas wrapper applies object-cover / object-fit: cover (D-100-10-F)', () => {
+		// Locks the CSS-cover invariant per G-100-10-D default. Either the
+		// Tailwind `object-cover` class OR a literal `object-fit: cover`
+		// inline style satisfies the contract.
+		expect(SRC).toMatch(/object-cover|object-fit:\s*['"]?cover/)
+	})
+
+	it('T-10-05-11: windows-container.tsx renders WebAppFloatingSkillsButton outside the WebApp window', () => {
+		const containerSrc = safeRead(WINDOWS_CONTAINER_PATH)
+		expect(containerSrc).toMatch(/WebAppFloatingSkillsButton/)
+	})
+})
