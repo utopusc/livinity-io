@@ -31,12 +31,12 @@ afterEach(() => {
 
 describe('xvfb-display', () => {
 	it('exports startXvfb function', async () => {
-		const mod = await import('./xvfb-display')
+		const mod = await import('./xvfb-display.js')
 		expect(typeof mod.startXvfb).toBe('function')
 	})
 
 	it('spawns Xvfb with display :1, resolution 1920x1080x24, -nolisten tcp, -ac', async () => {
-		const {startXvfb} = await import('./xvfb-display')
+		const {startXvfb} = await import('./xvfb-display.js')
 		const handle = startXvfb({display: ':1', resolution: '1920x1080x24'})
 		// Allow the spawn to register synchronously
 		await Promise.resolve()
@@ -53,7 +53,7 @@ describe('xvfb-display', () => {
 	})
 
 	it('spawns under sudo -n -u bruce by default', async () => {
-		const {startXvfb} = await import('./xvfb-display')
+		const {startXvfb} = await import('./xvfb-display.js')
 		void startXvfb({})
 		await Promise.resolve()
 		expect(spawnCalls[0]?.cmd).toBe('sudo')
@@ -65,7 +65,7 @@ describe('xvfb-display', () => {
 
 	it('stop() sends SIGTERM then SIGKILL after 2s', async () => {
 		vi.useFakeTimers()
-		const {startXvfb} = await import('./xvfb-display')
+		const {startXvfb} = await import('./xvfb-display.js')
 		const handle = await startXvfb({})
 		// First call: SIGTERM
 		const stopP = handle.stop()
