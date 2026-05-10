@@ -1,3 +1,13 @@
+// Phase 100-09-05 — DEPRECATED.
+//
+// This component is no longer rendered by webapp-stream-window.tsx —
+// the inline `WebAppChatBottomBar` (webapp-chat-bottom-bar.tsx) replaces
+// it per user intent ("Chat penceresi olmasin sadece yazi yazalim").
+//
+// File and named export retained for backwards-compat (downstream tests
+// or future re-purposing may still import it). DO NOT add new
+// functionality here — extend WebAppChatBottomBar instead.
+
 // Phase 100-04 — WebAppChatDrawer.
 //
 // V33-MULTI-04 / G-100-D D2: hosts the v32 chat surface lifted from the

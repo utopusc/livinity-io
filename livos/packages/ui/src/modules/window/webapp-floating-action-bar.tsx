@@ -9,6 +9,14 @@
 // State coupling: useWebAppDrawerStore (Zustand). The Sheet drawer host
 // in webapp-stream-window.tsx subscribes to the same store.
 //
+// Phase 100-09-05: Chat icon REPURPOSED. Instead of `toggle(webappId,
+// 'chat')` opening the Sheet drawer, it dispatches `toggleChatLog` on
+// the same store, which expands/collapses the inline message log inside
+// `WebAppChatBottomBar` (anchored at the bottom of the stream window).
+// Active state for the Chat icon now reflects `chatLogExpanded`. Teach
+// + Auto buttons unchanged. Per user "Chat penceresi olmasin sadece yazi
+// yazalim. Butonlar kalsin o sirada."
+//
 // Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts unchanged.
 
 import {motion} from 'framer-motion'
@@ -48,6 +56,10 @@ export function WebAppFloatingActionBar({
 }: WebAppFloatingActionBarProps) {
 	const open = useWebAppDrawerStore((s) => s.openByWebappId[webappId] ?? null)
 	const toggle = useWebAppDrawerStore((s) => s.toggle)
+	// Phase 100-09-05: Chat icon toggles the inline bottom-bar message log
+	// instead of opening the Sheet drawer.
+	const toggleChatLog = useWebAppDrawerStore((s) => s.toggleChatLog)
+	const chatLogExpanded = useWebAppDrawerStore((s) => s.chatLogExpandedByWebappId[webappId] ?? false)
 
 	return (
 		<motion.div
@@ -66,7 +78,9 @@ export function WebAppFloatingActionBar({
 			<TooltipProvider delayDuration={300}>
 				<div className='flex items-center gap-3'>
 					{MODES.map(({id, label, Icon}) => {
-						const active = open === id
+						// Phase 100-09-05: Chat icon's active state mirrors the inline
+						// bottom-bar log expanded state; Teach/Auto retain drawer state.
+						const active = id === 'chat' ? chatLogExpanded : open === id
 						return (
 							<Tooltip key={id}>
 								<TooltipTrigger asChild>
@@ -79,7 +93,13 @@ export function WebAppFloatingActionBar({
 											type='button'
 											onClick={(e) => {
 												e.stopPropagation()
-												toggle(webappId, id)
+												if (id === 'chat') {
+													// Phase 100-09-05: Chat icon toggles the inline
+													// bottom-bar log (drawer Chat mode REMOVED).
+													toggleChatLog(webappId)
+												} else {
+													toggle(webappId, id)
+												}
 												try {
 													window.dispatchEvent(
 														new CustomEvent(WEBAPP_MODE_CHANGE_EVENT, {
