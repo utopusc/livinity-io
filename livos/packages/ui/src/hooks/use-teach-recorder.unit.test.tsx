@@ -87,12 +87,32 @@ describe('useTeachRecorder — source-text invariants', () => {
 		expect(HOOK_SRC).toMatch(/screenshotRef:/)
 	})
 
-	it('action log version is 1 with strict shape (96-CONTEXT §gray-area #3)', () => {
-		expect(HOOK_SRC).toMatch(/version:\s*1/)
+	it('action log version is 2 with strict shape (Phase 100-09-06: bumped from 1; v1 records still validate via skills-router discriminated union)', () => {
+		// Phase 100-09-06 — new recordings emit version 2. The runtime ActionLog
+		// type union still admits version: 1 for backwards-compat, but the
+		// stop() output literal is 2.
+		expect(HOOK_SRC).toMatch(/version:\s*2/)
+		expect(HOOK_SRC).toMatch(/version:\s*1\s*\|\s*2/)
 		expect(HOOK_SRC).toMatch(/webappId:\s*wid/)
 		expect(HOOK_SRC).toMatch(/startedAt:\s*0/)
 		expect(HOOK_SRC).toMatch(/endedAt,/)
 		expect(HOOK_SRC).toMatch(/events,/)
+	})
+
+	it('Phase 100-09-06: emits session-level metadata at stop()', () => {
+		expect(HOOK_SRC).toMatch(/metadata:\s*\{/)
+		expect(HOOK_SRC).toMatch(/browser_url/)
+		expect(HOOK_SRC).toMatch(/page_title/)
+		expect(HOOK_SRC).toMatch(/recorded_by_user_id/)
+	})
+
+	it('Phase 100-09-06: per-event viewport snapshot (handles window resize)', () => {
+		expect(HOOK_SRC).toMatch(/snapshotViewport/)
+		expect(HOOK_SRC).toMatch(/viewport,?\s*\/\/\s*Phase 100-09-06/)
+	})
+
+	it('Phase 100-09-06: exposes events readonly view for WebAppTeachPopupHost', () => {
+		expect(HOOK_SRC).toMatch(/events:\s*readonly\s+ActionEvent\[\]/)
 	})
 
 	it('stamps meta.sessionId + droppedCount on the returned log', () => {

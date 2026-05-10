@@ -39,6 +39,10 @@ export type ActionEventClick = {
 	coords: {x: number; y: number}
 	ts: number
 	screenshotRef: string
+	/** Phase 100-09-06: optional inline thumbnail base64 (256x256). */
+	screenshot_b64?: string
+	/** Phase 100-09-06: viewport at capture time (handles window resize). */
+	viewport?: {w: number; h: number}
 }
 
 export type ActionEventKey = {
@@ -47,6 +51,10 @@ export type ActionEventKey = {
 	modifiers: string[]
 	ts: number
 	screenshotRef: string
+	/** Phase 100-09-06: optional inline thumbnail base64 (256x256). */
+	screenshot_b64?: string
+	/** Phase 100-09-06: viewport at capture time (handles window resize). */
+	viewport?: {w: number; h: number}
 }
 
 export type ActionEventWheel = {
@@ -55,6 +63,10 @@ export type ActionEventWheel = {
 	dy: number
 	ts: number
 	screenshotRef: string
+	/** Phase 100-09-06: optional inline thumbnail base64 (256x256). */
+	screenshot_b64?: string
+	/** Phase 100-09-06: viewport at capture time (handles window resize). */
+	viewport?: {w: number; h: number}
 }
 
 export type ActionEventScroll = {
@@ -64,6 +76,10 @@ export type ActionEventScroll = {
 	dy: number
 	ts: number
 	screenshotRef: string
+	/** Phase 100-09-06: optional inline thumbnail base64 (256x256). */
+	screenshot_b64?: string
+	/** Phase 100-09-06: viewport at capture time (handles window resize). */
+	viewport?: {w: number; h: number}
 }
 
 export type ActionEventWait = {
@@ -71,6 +87,10 @@ export type ActionEventWait = {
 	durationMs: number
 	ts: number
 	screenshotRef: string
+	/** Phase 100-09-06: optional inline thumbnail base64 (256x256). */
+	screenshot_b64?: string
+	/** Phase 100-09-06: viewport at capture time (handles window resize). */
+	viewport?: {w: number; h: number}
 }
 
 export type ActionEvent =
@@ -80,8 +100,13 @@ export type ActionEvent =
 	| ActionEventScroll
 	| ActionEventWait
 
+// Phase 100-09-06 — version 2 schema is emitted on all NEW recordings.
+// v1 logs remain valid in storage; the daemon-side discriminated union
+// (skills-router.ts) accepts BOTH literals so existing webapp_skills rows
+// from the P96 era continue to load + replay. The lazy-upgrade pattern
+// avoids any DB migration (action_log is JSONB; additive fields).
 export type ActionLog = {
-	version: 1
+	version: 1 | 2
 	webappId: string
 	startedAt: number
 	endedAt: number
@@ -89,6 +114,12 @@ export type ActionLog = {
 	meta: {
 		droppedCount: number
 		sessionId: string
+	}
+	/** Phase 100-09-06: optional session-level metadata (v2 only — populated on stop()). */
+	metadata?: {
+		browser_url?: string
+		page_title?: string
+		recorded_by_user_id?: string
 	}
 }
 
@@ -103,6 +134,8 @@ export interface UseTeachRecorderResult {
 	eventCount: number
 	droppedCount: number
 	autoStopped: boolean
+	/** Phase 100-09-06: read-only view of captured events for popup-per-event UI. */
+	events: readonly ActionEvent[]
 	start: (input: StartInput) => void
 	stop: () => Promise<ActionLog | null>
 	resetAutoStop: () => void
@@ -165,6 +198,11 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 	const [droppedCount, setDroppedCount] = useState(0)
 	const [sessionId, setSessionId] = useState<string | null>(null)
 	const [autoStopped, setAutoStopped] = useState(false)
+	// Phase 100-09-06 — expose events array to consumers (WebAppTeachPopupHost
+	// subscribes to this slice for per-event toast emission). The internal
+	// eventsRef remains the canonical fast-push target for async capture
+	// callbacks; events state is mirrored on each push.
+	const [events, setEvents] = useState<ActionEvent[]>([])
 
 	// Live state lives in refs so async event handlers always see fresh values.
 	const stateRef = useRef<TeachRecorderState>('idle')
@@ -210,6 +248,9 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 	const pushEvent = useCallback((event: ActionEvent) => {
 		eventsRef.current.push(event)
 		setEventCount(eventsRef.current.length)
+		// Phase 100-09-06 — mirror to React state so consumers (popup host)
+		// re-render. New array reference on every push so React detects change.
+		setEvents(eventsRef.current.slice())
 	}, [])
 
 	const bumpDropped = useCallback(() => {
@@ -252,13 +293,22 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 		stateRef.current = 'idle'
 		setState('idle')
 		if (!sid || !wid) return null
+		// Phase 100-09-06 — emit version 2 logs with optional session-level
+		// metadata (browser_url + page_title from the recorder's window/document
+		// context; recorded_by_user_id is left undefined here for the daemon
+		// to inject server-side from ctx.currentUser.id at create time).
 		const log: ActionLog = {
-			version: 1,
+			version: 2,
 			webappId: wid,
 			startedAt: 0,
 			endedAt,
 			events,
 			meta: {droppedCount: dropped, sessionId: sid},
+			metadata: {
+				browser_url: typeof window !== 'undefined' ? window.location.href : undefined,
+				page_title: typeof document !== 'undefined' ? document.title : undefined,
+				recorded_by_user_id: undefined,
+			},
 		}
 		return log
 	}, [detachAll])
@@ -290,6 +340,8 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 			setEventCount(0)
 			setDroppedCount(0)
 			setAutoStopped(false)
+			// Phase 100-09-06 — reset events state at start of recording.
+			setEvents([])
 			stateRef.current = 'recording'
 			setState('recording')
 
@@ -299,6 +351,20 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 				// capture anything; UI surfaces this via state == 'recording'
 				// + zero events.
 				return
+			}
+
+			// Phase 100-09-06 — viewport snapshotter. Reads the host element's
+			// bounding rect at capture time (handles window resize between
+			// recording start and event capture). Returns undefined if rect
+			// unavailable so the optional schema field stays absent.
+			const snapshotViewport = (): {w: number; h: number} | undefined => {
+				try {
+					const rect = host.getBoundingClientRect()
+					if (rect.width === 0 || rect.height === 0) return undefined
+					return {w: Math.round(rect.width), h: Math.round(rect.height)}
+				} catch {
+					return undefined
+				}
 			}
 
 			// ── DOM event listeners. ──────────────────────────────────────
@@ -312,6 +378,7 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 				}
 				const coords = {x: Math.round(ev.offsetX), y: Math.round(ev.offsetY)}
 				const ts = Date.now() - startedAtRef.current
+				const viewport = snapshotViewport()
 				void captureFrame(ts).then((ref) => {
 					pushEvent({
 						type: 'click',
@@ -319,6 +386,7 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 						coords,
 						ts,
 						screenshotRef: ref ?? '',
+						viewport, // Phase 100-09-06
 					})
 				})
 			}
@@ -328,6 +396,7 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 					return
 				}
 				const ts = Date.now() - startedAtRef.current
+				const viewport = snapshotViewport()
 				void captureFrame(ts).then((ref) => {
 					pushEvent({
 						type: 'key',
@@ -335,11 +404,13 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 						modifiers: keyboardModifiers(ev),
 						ts,
 						screenshotRef: ref ?? '',
+						viewport, // Phase 100-09-06
 					})
 				})
 			}
 			const onWheel = (ev: WheelEvent) => {
 				const ts = Date.now() - startedAtRef.current
+				const viewport = snapshotViewport()
 				void captureFrame(ts).then((ref) => {
 					pushEvent({
 						type: 'wheel',
@@ -347,6 +418,7 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 						dy: ev.deltaY,
 						ts,
 						screenshotRef: ref ?? '',
+						viewport, // Phase 100-09-06
 					})
 				})
 			}
@@ -356,6 +428,7 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 					? {x: target.scrollLeft | 0, y: target.scrollTop | 0}
 					: {x: 0, y: 0}
 				const ts = Date.now() - startedAtRef.current
+				const viewport = snapshotViewport()
 				void captureFrame(ts).then((ref) => {
 					pushEvent({
 						type: 'scroll',
@@ -364,6 +437,7 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 						dy: 0,
 						ts,
 						screenshotRef: ref ?? '',
+						viewport, // Phase 100-09-06
 					})
 				})
 			}
@@ -387,12 +461,14 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 			heartbeatRef.current = setInterval(() => {
 				if (stateRef.current !== 'recording') return
 				const ts = Date.now() - startedAtRef.current
+				const viewport = snapshotViewport()
 				void captureFrame(ts).then((ref) => {
 					pushEvent({
 						type: 'wait',
 						durationMs: HEARTBEAT_MS,
 						ts,
 						screenshotRef: ref ?? '',
+						viewport, // Phase 100-09-06
 					})
 				})
 			}, HEARTBEAT_MS)
@@ -446,6 +522,8 @@ export function useTeachRecorder(): UseTeachRecorderResult {
 		eventCount,
 		droppedCount,
 		autoStopped,
+		// Phase 100-09-06 — read-only events view for popup-per-event UI.
+		events,
 		start,
 		stop,
 		resetAutoStop,
