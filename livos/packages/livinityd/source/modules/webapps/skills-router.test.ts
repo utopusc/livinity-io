@@ -328,3 +328,63 @@ describe('P97 fixture: sample-skill.json round-trips through skills.create', () 
 		).resolves.toMatchObject({id: SKILL})
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 100-09-06 — action_log v1|v2 discriminated-union schema.
+// ─────────────────────────────────────────────────────────────────
+describe('Phase 100-09-06 action_log v1|v2 schema (backwards-compat)', () => {
+	const v1Sample = {
+		version: 1 as const,
+		webappId: '00000000-0000-0000-0000-000000000001',
+		startedAt: 0,
+		endedAt: 1000,
+		events: [
+			{type: 'click' as const, button: 'left' as const, coords: {x: 10, y: 20}, ts: 100, screenshotRef: 'ref-1'},
+		],
+		meta: {droppedCount: 0, sessionId: '00000000-0000-0000-0000-000000000002'},
+	}
+
+	const v2Sample = {
+		version: 2 as const,
+		webappId: '00000000-0000-0000-0000-000000000001',
+		startedAt: 0,
+		endedAt: 1000,
+		events: [
+			{
+				type: 'click' as const,
+				button: 'left' as const,
+				coords: {x: 10, y: 20},
+				ts: 100,
+				screenshotRef: 'ref-1',
+				screenshot_b64: 'AAA',
+				viewport: {w: 1280, h: 720},
+			},
+		],
+		meta: {droppedCount: 0, sessionId: '00000000-0000-0000-0000-000000000002'},
+		metadata: {
+			browser_url: 'https://gmail.com',
+			page_title: 'Gmail',
+			recorded_by_user_id: '00000000-0000-0000-0000-000000000003',
+		},
+	}
+
+	test('T-09-06-S1: v1 record validates (backwards-compat)', () => {
+		const schema = (skillsRouterModule as any).actionLogSchema
+		expect(schema).toBeDefined()
+		const result = schema.safeParse(v1Sample)
+		expect(result.success).toBe(true)
+	})
+
+	test('T-09-06-S2: v2 record with new fields validates', () => {
+		const schema = (skillsRouterModule as any).actionLogSchema
+		const result = schema.safeParse(v2Sample)
+		expect(result.success).toBe(true)
+	})
+
+	test('T-09-06-S3: v3 record is rejected (discriminated union safety)', () => {
+		const schema = (skillsRouterModule as any).actionLogSchema
+		const v3Sample = {...v1Sample, version: 3}
+		const result = schema.safeParse(v3Sample)
+		expect(result.success).toBe(false)
+	})
+})
