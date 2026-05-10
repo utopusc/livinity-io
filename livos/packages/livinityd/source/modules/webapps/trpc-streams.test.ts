@@ -16,13 +16,31 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {readFileSync} from 'node:fs'
 import {join} from 'node:path'
 
+// Phase 100-09-02 — mock node:child_process BEFORE importing input-dispatcher
+// (which uses execFile). Mock is benign for the pre-existing tests because
+// they exercise router code with stubbed managers and never hit xdotool.
+vi.mock('node:child_process', () => ({
+	execFile: vi.fn(),
+}))
+
+import {execFile} from 'node:child_process'
 import streamsRouter from '../streaming/trpc-router.js'
 import webappRouter from './trpc-router.js'
 import {WindowNotFoundError} from './window-manager.js'
+import {dispatchScroll} from './input-dispatcher.js'
+
+const mockedExecFile = execFile as unknown as ReturnType<typeof vi.fn>
+
+function findCallback(args: any[]): ((err: any, stdout?: string, stderr?: string) => void) | null {
+	for (let i = args.length - 1; i >= 0; i--) {
+		if (typeof args[i] === 'function') return args[i]
+	}
+	return null
+}
 
 function makeCtx(opts: {
 	currentUser?: {id: string; role: 'admin' | 'member' | 'guest'} | null
@@ -214,5 +232,67 @@ describe('httpOnlyPaths registration', () => {
 		expect(src).toContain("'webapp.window.focus'")
 		expect(src).toContain("'webapp.window.close'")
 		expect(src).toContain("'webapp.window.list'")
+	})
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 100-09-02 — webapp.input.scroll dispatch tests.
+//
+// Closes Bug 2 from the 100-08 deploy live test (scroll-down doesn't work).
+// The user-canvas RFB transport is viewOnly:true (P100-07), so wheel events
+// must round-trip via tRPC → dispatchScroll → xdotool activate-first chain.
+// Same Chrome XSendEvent filter that broke clicks (fixed in P100-07.3) breaks
+// `xdotool click --window <wid> 5` for scroll-down too — fix is the same
+// activate-first pattern as `dispatchPointer`.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('Phase 100-09-02 webapp.input.scroll dispatch', () => {
+	const recorded: Array<{cmd: string; args: string[]}> = []
+
+	beforeEach(() => {
+		mockedExecFile.mockReset()
+		recorded.length = 0
+		mockedExecFile.mockImplementation((...callArgs: any[]) => {
+			const cmd = String(callArgs[0])
+			const args = Array.isArray(callArgs[1]) ? [...callArgs[1]] : []
+			recorded.push({cmd, args})
+			const cb = findCallback(callArgs)
+			if (cb) cb(null, '', '')
+		})
+	})
+
+	it('T-09-02-01: dispatchScroll(wid, x, y, 5) → xdotool click 5 with activate-first chain', async () => {
+		await dispatchScroll(0x4280002, 100, 200, 5)
+		const xdotoolCall = recorded.find((c) => c.cmd === 'xdotool')
+		expect(xdotoolCall).toBeDefined()
+		const args = xdotoolCall!.args
+		// Activate-first chain present.
+		expect(args).toContain('windowactivate')
+		expect(args).toContain('--sync')
+		expect(args).toContain(String(0x4280002))
+		expect(args).toContain('windowfocus')
+		// Scroll button 5 (scroll-down) dispatched after the click verb.
+		const clickIdx = args.indexOf('click')
+		expect(clickIdx).toBeGreaterThan(-1)
+		// click should appear AFTER mousemove (activate → focus → mousemove → click).
+		const mousemoveIdx = args.indexOf('mousemove')
+		expect(mousemoveIdx).toBeGreaterThan(-1)
+		expect(clickIdx).toBeGreaterThan(mousemoveIdx)
+		const tail = args.slice(clickIdx)
+		expect(tail).toContain('--clearmodifiers')
+		expect(tail).toContain('5')
+	})
+
+	it('T-09-02-02: dispatchScroll(wid, x, y, 4) → xdotool click 4 (scroll-up)', async () => {
+		await dispatchScroll(0x4280002, 100, 200, 4)
+		const xdotoolCall = recorded.find((c) => c.cmd === 'xdotool')
+		expect(xdotoolCall).toBeDefined()
+		const args = xdotoolCall!.args
+		const clickIdx = args.indexOf('click')
+		expect(clickIdx).toBeGreaterThan(-1)
+		expect(args.slice(clickIdx)).toContain('4')
+	})
+
+	it('T-09-02-03: dispatchScroll throws on invalid button', async () => {
+		await expect(dispatchScroll(0x4280002, 100, 200, 99 as 4)).rejects.toThrow(/invalid scroll button/)
 	})
 })
