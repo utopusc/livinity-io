@@ -29,17 +29,25 @@
 // butun olarak inputa donusmesi lazimdi"): the persistent inline
 // `WebAppChatBottomBar` from 09-05 is WRONG. The user wants the floating
 // action-bar AREA itself to transform. Same area, two modes:
-//   mode='icons'      → 4-button row (Chat / Teach / Auto), default.
+//   mode='icons'      → icon-button row, default.
 //   mode='chat-input' → text input + Send + Close (X).
 // Click Chat icon → mode='chat-input'. Send / Enter → sends + back to
-// 'icons'. Close (X) / Escape → back to 'icons' without sending. Teach
-// + Auto icons (09-06 wires) unchanged.
+// 'icons'. Close (X) / Escape → back to 'icons' without sending.
+//
+// Phase 100-10-05 D-100-10-G: Auto icon button + the lucide robot-icon
+// import REMOVED. Per user "Auto butonu varya onu kaldir." The icon row
+// now renders exactly 2 buttons (Chat + Teach). Backend P97 auto-mode
+// capability is untouched — only the UI surface was retired.
 //
 // Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts unchanged.
 
 import {useCallback, useEffect, useRef, useState} from 'react'
 import {motion} from 'framer-motion'
-import {Bot, GraduationCap, MessageCircle, Send, X, type LucideIcon} from 'lucide-react'
+// Phase 100-10-05 D-100-10-G: the robot-icon lucide import dropped — the
+// Auto icon button was removed from the floating action bar per user
+// "Auto butonu varya onu kaldir." Backend P97 auto-mode capability stays
+// untouched; only the UI surface was retired.
+import {GraduationCap, MessageCircle, Send, X, type LucideIcon} from 'lucide-react'
 
 import {Magnetic} from '@/components/motion-primitives/magnetic'
 import {useWebAppAgent} from '@/hooks/use-webapp-agent'
@@ -49,10 +57,12 @@ import {cn} from '@/shadcn-lib/utils'
 import {EMPTY_TEACH_EVENTS, useWebAppDrawerStore, type WebAppDrawerMode} from './webapp-drawer-store'
 import {WEBAPP_MODE_CHANGE_EVENT} from './webapp-mode-selector'
 
+// Phase 100-10-05 D-100-10-G: the auto-mode entry (with the robot lucide
+// icon) dropped — Auto button removed from the floating action bar
+// entirely (T-10-05-09 source-text invariant locks the negative).
 const MODES: ReadonlyArray<{id: WebAppDrawerMode; label: string; Icon: LucideIcon}> = [
 	{id: 'chat', label: 'Chat', Icon: MessageCircle},
 	{id: 'teach', label: 'Teach', Icon: GraduationCap},
-	{id: 'auto', label: 'Auto', Icon: Bot},
 ]
 
 interface WebAppFloatingActionBarProps {
@@ -103,12 +113,12 @@ export function WebAppFloatingActionBar(props: WebAppFloatingActionBarProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Mode 1: IconBar — 4-button row (Chat / Teach / Auto).
+// Mode 1: IconBar — 2-button row (Chat / Teach).
 //
 // Chat icon (id='chat') click flips floating-bar mode to 'chat-input'
 // (Phase 100-09-08 — replaces the 09-05 `toggleChatLog` wire). Teach
 // icon (id='teach') click flips per-webappId recording flag (Phase
-// 100-09-06). Auto icon (id='auto') opens the Sheet drawer for now.
+// 100-09-06). Auto icon dropped 100-10-05 D-100-10-G.
 // ─────────────────────────────────────────────────────────────────────
 
 interface IconBarProps {
