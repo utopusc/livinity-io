@@ -163,7 +163,19 @@ function messagesReducer(state: ChatMessage[], action: MessageAction): ChatMessa
 
 // --- Hook ---
 
-export function useAgentSocket() {
+/**
+ * Phase 100-08-05 — opts for chat-surface tool-scope routing.
+ * When `webappId` is set, sendMessage tags the WS envelope so livinityd's
+ * broker forwards `webappId` in the `/api/agent/stream` body. liv-core
+ * then filters `additionalMcpServers` down to `bytebot:webapp:<id>` (or
+ * falls through to host scope on liv-core reconcile lag — logged WARN).
+ * Default `{}` preserves the v32 host-chat path (no webappId → host scope).
+ */
+export interface UseAgentSocketOpts {
+	webappId?: string
+}
+
+export function useAgentSocket(opts: UseAgentSocketOpts = {}) {
 	const [messages, dispatch] = useReducer(messagesReducer, [])
 	const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected')
 	const [isStreaming, setIsStreaming] = useState(false)
@@ -509,9 +521,14 @@ export function useAgentSocket() {
 			if (model) payload.model = model
 			if (conversationIdRef.current) payload.conversationId = conversationIdRef.current
 			if (attachments?.length) payload.attachments = attachments
+			// Phase 100-08-05 — chat-surface scope (host vs WebApp A vs WebApp B).
+			// livinityd broker forwards this to liv `/api/agent/stream`, where
+			// filterAdditionalMcpServers narrows MCP tools to the matching
+			// `bytebot:webapp:<id>` child (or falls through to host bytebot on lag).
+			if (opts.webappId) payload.webappId = opts.webappId
 			ws.send(JSON.stringify(payload))
 		},
-		[currentSessionId],
+		[currentSessionId, opts.webappId],
 	)
 
 	const sendFollowUp = useCallback(

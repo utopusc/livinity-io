@@ -69,6 +69,15 @@ export async function* createSdkAgentRunnerForUser(opts: {
 	systemPromptOverride?: string
 	maxTurns?: number
 	signal?: AbortSignal
+	/**
+	 * Phase 100-08-05 — when present, scopes the agent loop's MCP tools to
+	 * the matching `bytebot:webapp:<webappId>` MCP child (registered by
+	 * 100-08-04 in WebAppWindowManager.spawn). Forwarded verbatim in the
+	 * request body to liv `/api/agent/stream`. On lag (target child not
+	 * yet visible to liv-core's reconcile), api.ts falls through to host
+	 * bytebot for that turn (logged WARN, scope='lag-fallback').
+	 */
+	webappId?: string
 }): AsyncGenerator<AgentEvent, AgentResult, void> {
 	const {livinityd, userId, task, contextPrefix, systemPromptOverride, maxTurns = 30, signal} = opts
 	const livApiUrl = process.env.LIV_API_URL || 'http://localhost:3200'
@@ -87,6 +96,8 @@ export async function* createSdkAgentRunnerForUser(opts: {
 		conversationId: `broker-${userId}-${Date.now()}`,
 		contextPrefix,
 		systemPromptOverride,
+		// Phase 100-08-05 — pass-through webappId for chat-surface tool scope.
+		...(opts.webappId ? {webappId: opts.webappId} : {}),
 	}
 
 	const response = await fetch(`${livApiUrl}/api/agent/stream`, {
