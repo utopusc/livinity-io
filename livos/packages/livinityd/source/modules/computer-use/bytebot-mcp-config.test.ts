@@ -45,7 +45,11 @@ vi.mock('node:fs/promises', () => ({
 	access: mocks.accessMock,
 }))
 
-import {registerBytebotMcpServer} from './bytebot-mcp-config.js'
+import {
+	registerBytebotMcpServer,
+	buildBytebotConfig,
+	BYTEBOT_TARGET_WINDOW_ID_ENV,
+} from './bytebot-mcp-config.js'
 
 const DEFAULT_PATH =
 	'/opt/livos/packages/livinityd/source/modules/computer-use/mcp/server.ts'
@@ -252,5 +256,62 @@ describe('registerBytebotMcpServer', () => {
 
 		expect(result.registered).toBe(false)
 		expect(result.reason).toContain('redis kaboom')
+	})
+})
+
+// ─── Phase 100-08-03 — descriptor.display branch ─────────────────────
+//
+// V33-08-03-DESCRIPTOR-DISPLAY: extend PerWebAppMcpDescriptor with optional
+// `display` field (default `:1` per D-100-08-A). When the descriptor branch
+// fires, the spawned bytebot MCP child's env carries DISPLAY=<descriptor.display
+// ?? ':1'> so child xdotool/maim/xclip spawns inherit it via process.env.
+// The host bytebot variant (descriptor=undefined) keeps `process.env.DISPLAY
+// ?? ':0'` for backward compat with desktop-stream native app.
+describe('buildBytebotConfig — Phase 100-08-03 descriptor.display', () => {
+	it('per-WebApp variant defaults DISPLAY to :1 when descriptor.display is omitted', () => {
+		const cfg = buildBytebotConfig(
+			{DISPLAY: ':0'} as NodeJS.ProcessEnv,
+			'/some/path/server.ts',
+			{instanceKey: 'webapp-123', windowId: 0xa1b2c3},
+		)
+		expect(cfg.env?.DISPLAY).toBe(':1')
+		expect(cfg.env?.[BYTEBOT_TARGET_WINDOW_ID_ENV]).toBe(String(0xa1b2c3))
+		expect(cfg.env?.XAUTHORITY).toBeUndefined()
+		expect(cfg.name).toBe('bytebot:webapp:webapp-123')
+	})
+
+	it('per-WebApp variant honors explicit descriptor.display', () => {
+		const cfg = buildBytebotConfig(
+			{DISPLAY: ':99'} as NodeJS.ProcessEnv,
+			'/some/path/server.ts',
+			{instanceKey: 'webapp-456', windowId: 42, display: ':2'},
+		)
+		expect(cfg.env?.DISPLAY).toBe(':2')
+	})
+
+	it('host variant preserves DISPLAY from process env (default :0) AND XAUTHORITY', () => {
+		const cfg = buildBytebotConfig(
+			{
+				DISPLAY: ':0',
+				XAUTHORITY: '/run/user/1000/gdm/Xauthority',
+			} as NodeJS.ProcessEnv,
+			'/some/path/server.ts',
+		)
+		expect(cfg.env?.DISPLAY).toBe(':0')
+		expect(cfg.env?.XAUTHORITY).toBe('/run/user/1000/gdm/Xauthority')
+		expect(cfg.env?.[BYTEBOT_TARGET_WINDOW_ID_ENV]).toBeUndefined()
+		expect(cfg.name).toBe('bytebot')
+	})
+
+	it('host variant uses BYTEBOT_XAUTHORITY override when set', () => {
+		const cfg = buildBytebotConfig(
+			{
+				DISPLAY: ':0',
+				XAUTHORITY: '/run/user/1000/gdm/Xauthority',
+				BYTEBOT_XAUTHORITY: '/custom/xauth',
+			} as NodeJS.ProcessEnv,
+			'/some/path/server.ts',
+		)
+		expect(cfg.env?.XAUTHORITY).toBe('/custom/xauth')
 	})
 })
