@@ -40,6 +40,13 @@ import {WEBAPPS_X11_ENV} from './modules/webapps/window-discovery.js'
 // Phase 100-08-01 — dedicated Xvfb :1 + fluxbox WM lifecycle (D-100-08-A).
 import {startXvfb, type XvfbHandle} from './modules/webapps/xvfb-display.js'
 import {startFluxbox, type FluxboxHandle} from './modules/webapps/fluxbox-wm.js'
+// Phase 100-08-04 — McpConfigManager + bytebot server path threaded into
+// WebAppWindowManager so spawn/close lifecycle registers a per-WebApp
+// bytebot MCP child via Redis pub-sub (liv-core's McpClientManager
+// reconciles asynchronously). Canonical pattern documented in
+// agent-runs.ts:52-58, 161-164.
+import {McpConfigManager} from '@liv/core/lib'
+import {DEFAULT_BYTEBOT_MCP_SERVER_PATH} from './modules/computer-use/bytebot-mcp-config.js'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -419,12 +426,26 @@ export default class Livinityd {
 					verbose: (msg: string) => child.verbose(msg),
 				}
 			})()
+			// Phase 100-08-04 — construct an McpConfigManager backed by the
+			// SAME Redis livinityd already uses (this.ai.redis). Liv-core's
+			// McpClientManager runs in a separate process and subscribes to
+			// `liv:config:updated`, the channel McpConfigManager publishes
+			// on every install/update/remove. This is the canonical pattern
+			// documented in agent-runs.ts:52-58, 161-164. We do NOT call
+			// liv-core's McpClientManager directly (different process at
+			// port 3200).
+			const webappMcpConfigManager = new McpConfigManager(this.ai.redis)
+			const bytebotServerPath =
+				process.env.BYTEBOT_MCP_SERVER_PATH ?? DEFAULT_BYTEBOT_MCP_SERVER_PATH
 			this.webappWindowManager = new WebAppWindowManager({
 				streamManager: this.streamManager,
 				spawn: x11Spawn as unknown as ConstructorParameters<
 					typeof WebAppWindowManager
 				>[0]['spawn'],
 				logger: webappLogger,
+				mcpConfigManager: webappMcpConfigManager,
+				bytebotServerPath,
+				bytebotMcpEnv: process.env,
 			})
 			this.webappWindowManager.startIdleCleanup()
 			webappLogger.info(
