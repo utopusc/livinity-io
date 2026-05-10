@@ -219,6 +219,10 @@ export class WebAppWindowManager {
 		// (`sudo VAR=val cmd ...`), which is env_keep-independent.
 		// Reuse the existing LivOS Chrome profile so the IPC merge opens
 		// a new top-level window under bruce's signed-in session.
+		// 2026-05-09 P100-08-02: WebApp Chromes now run on dedicated Xvfb
+		// :1 (D-100-08-A). XAUTHORITY no longer needed (Xvfb -ac mode
+		// requires no Xauthority cookie). The argv-prefix XAUTHORITY=...
+		// line is dropped; DISPLAY=:1 still flows in via WEBAPPS_X11_ENV.
 		const chromeUser = process.env.LIVOS_CHROME_USER ?? 'bruce'
 		const chromeProfile =
 			process.env.LIVOS_CHROME_PROFILE ?? '/home/bruce/.config/livos-chrome'
@@ -227,7 +231,9 @@ export class WebAppWindowManager {
 			'-u',
 			chromeUser,
 			`DISPLAY=${WEBAPPS_X11_ENV.DISPLAY}`,
-			`XAUTHORITY=${WEBAPPS_X11_ENV.XAUTHORITY}`,
+			// P100-08-02: XAUTHORITY removed — Xvfb :1 runs with `-ac` (no Xauthority cookie).
+			// LIVOS_X11_XAUTHORITY env still recognized in window-discovery.ts comment for
+			// future xauth-protected Xvfb configs, but not propagated by default.
 			this.chromeBinary,
 			`--user-data-dir=${chromeProfile}`,
 			'--window-size=1280,720', // P100-06.1: explicit landscape resolution; Chrome --app= mode otherwise inherits whatever the last app-window remembered (often portrait/tiny).

@@ -307,4 +307,24 @@ describe('WebAppWindowManager — vnc-window swap (Phase 99-04)', () => {
 		expect(args).toContain('--user-data-dir=/home/bruce/.config/livos-chrome')
 		mgr._clearForTests()
 	})
+
+	it('Test 15: XAUTHORITY does NOT leak into Chrome spawn argv (P100-08-02 W1)', async () => {
+		const prev = process.env.XAUTHORITY
+		process.env.XAUTHORITY = '/should/not/leak'
+		try {
+			const {mgr, spawn} = makeManager()
+			await mgr.spawn({userId: 'u1', webappId: 'app-leak', url: 'https://duckduckgo.com'})
+			const [, args] = spawn.mock.calls[0] as unknown as [string, string[]]
+			// P100-08-02 W1: the Chrome spawn argv must NOT carry an
+			// XAUTHORITY=... prefix (we removed that line from
+			// window-manager.ts because Xvfb :1 runs with -ac).
+			expect(args.find(a => typeof a === 'string' && a.startsWith('XAUTHORITY='))).toBeUndefined()
+			// The argv MUST carry DISPLAY=:1 (or whatever WEBAPPS_X11_ENV.DISPLAY resolves to).
+			expect(args.find(a => typeof a === 'string' && a.startsWith('DISPLAY='))).toBe('DISPLAY=:1')
+			mgr._clearForTests()
+		} finally {
+			if (prev === undefined) delete process.env.XAUTHORITY
+			else process.env.XAUTHORITY = prev
+		}
+	})
 })
