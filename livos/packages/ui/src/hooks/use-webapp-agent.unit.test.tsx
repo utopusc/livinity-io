@@ -85,3 +85,28 @@ describe('useWebAppAgent — smoke import', () => {
 		expect(typeof mod.useWebAppAgent).toBe('function')
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 100-10-06 — stopStreaming alias for the chat-response Stop button.
+//
+// D-100-10-E spec refers to the cancel action as `stopStreaming`. The
+// hook already exposes `interrupt` (which calls the real runtime cancel
+// in useAgentSocket — sends `{type: 'interrupt'}` over the WS). The
+// alias forwards to the SAME `agent.interrupt` reference so the chain
+// `useWebAppAgent.stopStreaming → agent.interrupt → ws.send(interrupt)`
+// stays a single, real cancel — NOT a no-op.
+// ─────────────────────────────────────────────────────────────────
+
+describe('Phase 100-10-06 useWebAppAgent.stopStreaming alias', () => {
+	it('T-10-06-HOOK-01: UseWebAppAgentResult interface declares stopStreaming: () => void', () => {
+		expect(HOOK_SRC).toMatch(/stopStreaming:\s*\(\)\s*=>\s*void/)
+	})
+
+	it('T-10-06-HOOK-02: stopStreaming implementation aliases agent.interrupt (real runtime cancel chain)', () => {
+		// The return statement must forward stopStreaming to agent.interrupt
+		// (which sends `{type: 'interrupt'}` over the WS — see use-agent-socket.ts).
+		// Either `stopStreaming: agent.interrupt` (shorthand) or the legacy
+		// pattern `stopStreaming.*=.*interrupt` is accepted by the regex.
+		expect(HOOK_SRC).toMatch(/stopStreaming:\s*agent\.interrupt|stopStreaming.*=.*interrupt/)
+	})
+})
