@@ -38,15 +38,36 @@
 // in place for now (used by the deprecated `webapp-chat-bottom-bar.tsx`;
 // removed in v34 cleanup).
 //
+// Phase 100-09-09: extended with `teachEventsByWebappId` +
+// `setTeachEvents` so the IconBar (in `webapp-floating-action-bar.tsx`)
+// can read the live click count off the recorder. The recorder hook
+// itself (`useTeachRecorder`) lives inside `webapp-stream-window.tsx`
+// and emits a fresh array on each event push — the stream-window
+// mirrors that array to the store via a useEffect, and the floating
+// bar's IconBar subscribes to derive `events.length` for the badge.
+// Per user "tikladiktan sonra kirmizi buton olsun teach. sag yukarida
+// stop butonu olmasin ve sure saymasin sadece clickleri saysin": the
+// Teach icon button itself turns red and shows the click count badge;
+// the top-right `TeachRecordingOverlay` from 09-06 is removed.
+//
 // Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts is unchanged
 // (file untouched). This is a UI-only addition.
 
 import {create} from 'zustand'
 
+import type {ActionEvent} from '@/hooks/use-teach-recorder'
+
 export type WebAppDrawerMode = 'chat' | 'teach' | 'auto'
 
 /** Phase 100-09-08: floating action bar 2-mode state machine. */
 export type ChatInputMode = 'icons' | 'chat-input'
+
+/** Phase 100-09-09: shared empty-array sentinel for `teachEventsByWebappId`
+ *  default reads. Returning a fresh `[]` from a Zustand selector breaks
+ *  shallow-equality and re-renders forever; this stable reference keeps
+ *  the default selector path identity-stable across renders.
+ */
+export const EMPTY_TEACH_EVENTS: readonly ActionEvent[] = Object.freeze([])
 
 interface WebAppDrawerState {
 	openByWebappId: Record<string, WebAppDrawerMode | null>
@@ -56,6 +77,11 @@ interface WebAppDrawerState {
 	isRecordingByWebappId: Record<string, boolean>
 	/** Phase 100-09-08: per-webappId floating-bar mode (icons | chat-input). */
 	chatInputModeByWebappId: Record<string, ChatInputMode>
+	/** Phase 100-09-09: per-webappId mirror of the active recorder's events
+	 *  (live array reference; reset to empty on stop). IconBar reads this
+	 *  to derive `events.length` for the click-count badge.
+	 */
+	teachEventsByWebappId: Record<string, readonly ActionEvent[]>
 	getOpen: (webappId: string) => WebAppDrawerMode | null
 	toggle: (webappId: string, mode: WebAppDrawerMode) => void
 	close: (webappId: string) => void
@@ -67,6 +93,10 @@ interface WebAppDrawerState {
 	setChatInputMode: (webappId: string, mode: ChatInputMode) => void
 	/** Phase 100-09-08: toggle between 'icons' and 'chat-input'. */
 	toggleChatInputMode: (webappId: string) => void
+	/** Phase 100-09-09: replace the events mirror for a WebApp (called from
+	 *  webapp-stream-window.tsx whenever `recorder.events` updates).
+	 */
+	setTeachEvents: (webappId: string, events: readonly ActionEvent[]) => void
 }
 
 export const useWebAppDrawerStore = create<WebAppDrawerState>((set, get) => ({
@@ -74,6 +104,7 @@ export const useWebAppDrawerStore = create<WebAppDrawerState>((set, get) => ({
 	chatLogExpandedByWebappId: {},
 	isRecordingByWebappId: {}, // Phase 100-09-06
 	chatInputModeByWebappId: {}, // Phase 100-09-08
+	teachEventsByWebappId: {}, // Phase 100-09-09
 	getOpen: (webappId) => get().openByWebappId[webappId] ?? null,
 	toggle: (webappId, mode) =>
 		set((state) => {
@@ -125,6 +156,20 @@ export const useWebAppDrawerStore = create<WebAppDrawerState>((set, get) => ({
 			chatInputModeByWebappId: {
 				...state.chatInputModeByWebappId,
 				[webappId]: (state.chatInputModeByWebappId[webappId] ?? 'icons') === 'icons' ? 'chat-input' : 'icons',
+			},
+		})),
+	// Phase 100-09-09 — mirror the recorder's events array. The
+	// stream-window's existing recorder.events state is the canonical
+	// source; this store slot is a read-side mirror for the floating
+	// action bar's IconBar (which can't access the recorder directly
+	// because it lives outside the WebApp window subtree). Stable
+	// identity matters: pass through the recorder's array reference
+	// directly so consumers' shallow-equality selectors stay correct.
+	setTeachEvents: (webappId, events) =>
+		set((state) => ({
+			teachEventsByWebappId: {
+				...state.teachEventsByWebappId,
+				[webappId]: events,
 			},
 		})),
 }))
