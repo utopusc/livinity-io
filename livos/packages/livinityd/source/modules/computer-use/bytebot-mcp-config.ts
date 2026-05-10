@@ -115,6 +115,18 @@ export const BYTEBOT_TARGET_WINDOW_ID_ENV = 'BYTEBOT_TARGET_WINDOW_ID'
 export interface PerWebAppMcpDescriptor {
 	instanceKey: string
 	windowId: number
+	/**
+	 * Phase 100-08-03 — X11 display the spawned bytebot MCP child should
+	 * target via its `DISPLAY` env var. Defaults to `:1` (D-100-08-A: Xvfb
+	 * dedicated to WebApp Chromes).
+	 *
+	 * Native xdotool/maim/xclip calls inside the child process (see
+	 * ./native/input.ts which spawns these binaries with default
+	 * process.env) inherit DISPLAY from the spawned env, so setting it
+	 * once at MCP child boot makes all primitive calls target the right
+	 * display.
+	 */
+	display?: string
 }
 
 /** Minimal logger contract — only .log + .error are used. Compatible with
@@ -186,19 +198,28 @@ export function buildBytebotConfig(
 	resolvedPath: string,
 	descriptor?: PerWebAppMcpDescriptor,
 ): McpServerConfigInput {
-	const baseEnv: Record<string, string> = {
-		DISPLAY: env.DISPLAY ?? ':0',
-		// 2026-05-05 P79-03: GDM-managed sessions (Ubuntu 24.04 default) put
-		// the Xauthority cookie at /run/user/<uid>/gdm/Xauthority — NOT
-		// /home/<user>/.Xauthority (that path doesn't exist for GDM logins).
-		// nut-js' screen.capture() hangs when X server is unreachable,
-		// triggering MCP SDK timeouts ('Connection closed' from client side).
-		// Default to the GDM path; allow override via env BYTEBOT_XAUTHORITY.
-		XAUTHORITY: env.BYTEBOT_XAUTHORITY ?? env.XAUTHORITY ?? '/run/user/1000/gdm/Xauthority',
-	}
-	if (descriptor) {
-		baseEnv[BYTEBOT_TARGET_WINDOW_ID_ENV] = String(descriptor.windowId)
-	}
+	// Phase 100-08-03 — branch on descriptor presence:
+	//   - per-WebApp variant: DISPLAY from descriptor.display (default :1,
+	//     D-100-08-A); XAUTHORITY dropped (Xvfb :1 runs with -ac, no cookie
+	//     required). BYTEBOT_TARGET_WINDOW_ID propagated from descriptor.windowId.
+	//   - host variant (desktop-stream native app): DISPLAY from process.env
+	//     (default :0); XAUTHORITY preserved at the GDM-managed path
+	//     (2026-05-05 P79-03 — GDM sessions on Ubuntu 24.04). nut-js'
+	//     screen.capture() hangs when X server is unreachable, triggering MCP
+	//     SDK timeouts ('Connection closed' from client side); the GDM path
+	//     fixes that. Override via env BYTEBOT_XAUTHORITY.
+	const baseEnv: Record<string, string> = descriptor
+		? {
+				DISPLAY: descriptor.display ?? ':1',
+				[BYTEBOT_TARGET_WINDOW_ID_ENV]: String(descriptor.windowId),
+			}
+		: {
+				DISPLAY: env.DISPLAY ?? ':0',
+				XAUTHORITY:
+					env.BYTEBOT_XAUTHORITY ??
+					env.XAUTHORITY ??
+					'/run/user/1000/gdm/Xauthority',
+			}
 	return {
 		name: descriptor ? `bytebot:webapp:${descriptor.instanceKey}` : 'bytebot',
 		transport: 'stdio',
