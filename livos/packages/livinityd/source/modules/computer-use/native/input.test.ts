@@ -69,7 +69,7 @@ const ButtonEnum = {LEFT: 'LEFT', RIGHT: 'RIGHT', MIDDLE: 'MIDDLE'} as const
 const KeyEnum: Record<string, string | undefined> = new Proxy({} as Record<string, string | undefined>, {
 	get(_, prop) {
 		if (typeof prop !== 'string') return undefined
-		// Accept the same key names the upstream Bytebot system prompt advertises.
+		// Accept the same key names the Luse system prompt advertises.
 		// Reject obvious invalid ones to exercise the guard branch (T13).
 		const VALID = new Set([
 			'LeftShift',

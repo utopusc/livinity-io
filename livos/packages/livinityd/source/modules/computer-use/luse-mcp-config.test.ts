@@ -1,27 +1,28 @@
 /**
- * Phase 72-native-06 — registerBytebotMcpServer unit tests.
+ * Phase 72-native-06 — registerLuseMcpServer unit tests (renamed P100-10-02
+ * from registerBytebotMcpServer per D-100-10-B).
  *
  * Spec source: 72-native-06-PLAN.md `<task type="auto" tdd="true">` Task 2,
  * behavior block test cases T1..T7.
  *
  * Coverage (must-have list, plan behavior section):
- *   T1 — env without BYTEBOT_MCP_ENABLED → returns {registered:false,
- *        reason:'BYTEBOT_MCP_ENABLED unset'}; configManager.installServer
+ *   T1 — env without LUSE_MCP_ENABLED → returns {registered:false,
+ *        reason:'LUSE_MCP_ENABLED unset'}; configManager.installServer
  *        NOT called.
- *   T2 — BYTEBOT_MCP_ENABLED='true' but process.platform mocked as 'win32' →
+ *   T2 — LUSE_MCP_ENABLED='true' but process.platform mocked as 'win32' →
  *        {registered:false, reason:'platform not linux'}; install NOT called.
  *   T3 — linux + enabled but server file fs.access throws ENOENT →
  *        {registered:false, reason: includes 'server file not found'}.
- *   T4 — All preconditions met + listServers returns no existing 'bytebot'
+ *   T4 — All preconditions met + listServers returns no existing 'luse'
  *        entry → calls installServer with the documented config shape
  *        (assert exact arg).
- *   T5 — All preconditions met + listServers returns existing 'bytebot' with
+ *   T5 — All preconditions met + listServers returns existing 'luse' with
  *        matching shape → calls neither installServer nor updateServer
  *        (no-op); returns {registered:true, reason:'no-op (matched existing)'}.
- *   T6 — All preconditions met + listServers returns existing 'bytebot' with
+ *   T6 — All preconditions met + listServers returns existing 'luse' with
  *        DIFFERENT shape → calls updateServer with the new partial; returns
  *        {registered:true, reason:'updated existing'}.
- *   T7 — BYTEBOT_MCP_SERVER_PATH custom env override is honored — installServer
+ *   T7 — LUSE_MCP_SERVER_PATH custom env override is honored — installServer
  *        args[0] equals the custom path.
  *
  * Mocks:
@@ -30,7 +31,7 @@
  *   - process.platform — Object.defineProperty pattern with
  *     {value, configurable: true} so each test can flip and restore.
  *   - configManager — minimal duck-typed test double with vi.fn() spies for
- *     installServer / updateServer / listServers. registerBytebotMcpServer
+ *     installServer / updateServer / listServers. registerLuseMcpServer
  *     calls only these three methods.
  */
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
@@ -46,10 +47,10 @@ vi.mock('node:fs/promises', () => ({
 }))
 
 import {
-	registerBytebotMcpServer,
-	buildBytebotConfig,
-	BYTEBOT_TARGET_WINDOW_ID_ENV,
-} from './bytebot-mcp-config.js'
+	registerLuseMcpServer,
+	buildLuseConfig,
+	LUSE_TARGET_WINDOW_ID_ENV,
+} from './luse-mcp-config.js'
 
 const DEFAULT_PATH =
 	'/opt/livos/packages/livinityd/source/modules/computer-use/mcp/server.ts'
@@ -68,7 +69,7 @@ function makeConfigManager(existing: any[] = []): FakeConfigManager {
 	}
 }
 
-const fakeRedis = {} as any // not actually used by registerBytebotMcpServer
+const fakeRedis = {} as any // not actually used by registerLuseMcpServer
 
 let originalPlatform: PropertyDescriptor | undefined
 
@@ -97,15 +98,15 @@ afterEach(() => {
 	restorePlatform()
 })
 
-describe('registerBytebotMcpServer', () => {
+describe('registerLuseMcpServer', () => {
 	// ── T1 ────────────────────────────────────────────────────────────
-	it('T1: returns registered:false when BYTEBOT_MCP_ENABLED is unset', async () => {
+	it('T1: returns registered:false when LUSE_MCP_ENABLED is unset', async () => {
 		setPlatform('linux')
 		const cm = makeConfigManager()
-		const result = await registerBytebotMcpServer(fakeRedis, {} as any, cm as any)
+		const result = await registerLuseMcpServer(fakeRedis, {} as any, cm as any)
 
 		expect(result.registered).toBe(false)
-		expect(result.reason).toContain('BYTEBOT_MCP_ENABLED')
+		expect(result.reason).toContain('LUSE_MCP_ENABLED')
 		expect(cm.installServer).not.toHaveBeenCalled()
 		expect(cm.updateServer).not.toHaveBeenCalled()
 	})
@@ -114,8 +115,8 @@ describe('registerBytebotMcpServer', () => {
 	it('T2: returns registered:false on non-linux platform', async () => {
 		setPlatform('win32')
 		const cm = makeConfigManager()
-		const env = {BYTEBOT_MCP_ENABLED: 'true'} as any
-		const result = await registerBytebotMcpServer(fakeRedis, env, cm as any)
+		const env = {LUSE_MCP_ENABLED: 'true'} as any
+		const result = await registerLuseMcpServer(fakeRedis, env, cm as any)
 
 		expect(result.registered).toBe(false)
 		expect(result.reason).toContain('linux')
@@ -132,8 +133,8 @@ describe('registerBytebotMcpServer', () => {
 		mocks.accessMock.mockRejectedValueOnce(enoent)
 
 		const cm = makeConfigManager()
-		const env = {BYTEBOT_MCP_ENABLED: 'true'} as any
-		const result = await registerBytebotMcpServer(fakeRedis, env, cm as any)
+		const env = {LUSE_MCP_ENABLED: 'true'} as any
+		const result = await registerLuseMcpServer(fakeRedis, env, cm as any)
 
 		expect(result.registered).toBe(false)
 		expect(result.reason).toMatch(/server file not found/i)
@@ -146,18 +147,18 @@ describe('registerBytebotMcpServer', () => {
 		setPlatform('linux')
 		const cm = makeConfigManager([])
 		const env = {
-			BYTEBOT_MCP_ENABLED: 'true',
+			LUSE_MCP_ENABLED: 'true',
 			DISPLAY: ':1',
 			XAUTHORITY: '/home/test/.Xauthority',
 		} as any
-		const result = await registerBytebotMcpServer(fakeRedis, env, cm as any)
+		const result = await registerLuseMcpServer(fakeRedis, env, cm as any)
 
 		expect(result.registered).toBe(true)
 		expect(cm.installServer).toHaveBeenCalledTimes(1)
 		expect(cm.updateServer).not.toHaveBeenCalled()
 
 		const arg = cm.installServer.mock.calls[0][0]
-		expect(arg.name).toBe('bytebot')
+		expect(arg.name).toBe('luse')
 		expect(arg.transport).toBe('stdio')
 		expect(arg.command).toBe('tsx')
 		expect(arg.args).toEqual([DEFAULT_PATH])
@@ -171,9 +172,9 @@ describe('registerBytebotMcpServer', () => {
 	// ── T5 ────────────────────────────────────────────────────────────
 	it('T5: idempotent no-op when matching config already exists', async () => {
 		setPlatform('linux')
-		const env = {BYTEBOT_MCP_ENABLED: 'true'} as any
+		const env = {LUSE_MCP_ENABLED: 'true'} as any
 		const existingMatch = {
-			name: 'bytebot',
+			name: 'luse',
 			transport: 'stdio',
 			command: 'tsx',
 			args: [DEFAULT_PATH],
@@ -185,7 +186,7 @@ describe('registerBytebotMcpServer', () => {
 			installedAt: 1700000000000,
 		}
 		const cm = makeConfigManager([existingMatch])
-		const result = await registerBytebotMcpServer(fakeRedis, env, cm as any)
+		const result = await registerLuseMcpServer(fakeRedis, env, cm as any)
 
 		expect(result.registered).toBe(true)
 		expect(result.reason).toMatch(/no-op|matched/i)
@@ -197,11 +198,11 @@ describe('registerBytebotMcpServer', () => {
 	it('T6: updates existing when shape differs', async () => {
 		setPlatform('linux')
 		const env = {
-			BYTEBOT_MCP_ENABLED: 'true',
+			LUSE_MCP_ENABLED: 'true',
 			DISPLAY: ':2', // differs from existing ':0'
 		} as any
 		const existingDiffer = {
-			name: 'bytebot',
+			name: 'luse',
 			transport: 'stdio',
 			command: 'tsx',
 			args: [DEFAULT_PATH],
@@ -213,13 +214,13 @@ describe('registerBytebotMcpServer', () => {
 			installedAt: 1700000000000,
 		}
 		const cm = makeConfigManager([existingDiffer])
-		const result = await registerBytebotMcpServer(fakeRedis, env, cm as any)
+		const result = await registerLuseMcpServer(fakeRedis, env, cm as any)
 
 		expect(result.registered).toBe(true)
 		expect(result.reason).toMatch(/updated/i)
 		expect(cm.installServer).not.toHaveBeenCalled()
 		expect(cm.updateServer).toHaveBeenCalledTimes(1)
-		expect(cm.updateServer.mock.calls[0][0]).toBe('bytebot')
+		expect(cm.updateServer.mock.calls[0][0]).toBe('luse')
 		const partial = cm.updateServer.mock.calls[0][1]
 		expect(partial.env).toEqual({
 			DISPLAY: ':2',
@@ -228,15 +229,15 @@ describe('registerBytebotMcpServer', () => {
 	})
 
 	// ── T7 ────────────────────────────────────────────────────────────
-	it('T7: BYTEBOT_MCP_SERVER_PATH override is honored', async () => {
+	it('T7: LUSE_MCP_SERVER_PATH override is honored', async () => {
 		setPlatform('linux')
 		const customPath = '/custom/path/to/server.ts'
 		const cm = makeConfigManager([])
 		const env = {
-			BYTEBOT_MCP_ENABLED: 'true',
-			BYTEBOT_MCP_SERVER_PATH: customPath,
+			LUSE_MCP_ENABLED: 'true',
+			LUSE_MCP_SERVER_PATH: customPath,
 		} as any
-		const result = await registerBytebotMcpServer(fakeRedis, env, cm as any)
+		const result = await registerLuseMcpServer(fakeRedis, env, cm as any)
 
 		expect(result.registered).toBe(true)
 		expect(cm.installServer).toHaveBeenCalledTimes(1)
@@ -251,8 +252,8 @@ describe('registerBytebotMcpServer', () => {
 		setPlatform('linux')
 		const cm = makeConfigManager([])
 		cm.listServers.mockRejectedValueOnce(new Error('redis kaboom'))
-		const env = {BYTEBOT_MCP_ENABLED: 'true'} as any
-		const result = await registerBytebotMcpServer(fakeRedis, env, cm as any)
+		const env = {LUSE_MCP_ENABLED: 'true'} as any
+		const result = await registerLuseMcpServer(fakeRedis, env, cm as any)
 
 		expect(result.registered).toBe(false)
 		expect(result.reason).toContain('redis kaboom')
@@ -263,25 +264,25 @@ describe('registerBytebotMcpServer', () => {
 //
 // V33-08-03-DESCRIPTOR-DISPLAY: extend PerWebAppMcpDescriptor with optional
 // `display` field (default `:1` per D-100-08-A). When the descriptor branch
-// fires, the spawned bytebot MCP child's env carries DISPLAY=<descriptor.display
+// fires, the spawned Luse MCP child's env carries DISPLAY=<descriptor.display
 // ?? ':1'> so child xdotool/maim/xclip spawns inherit it via process.env.
-// The host bytebot variant (descriptor=undefined) keeps `process.env.DISPLAY
+// The host Luse variant (descriptor=undefined) keeps `process.env.DISPLAY
 // ?? ':0'` for backward compat with desktop-stream native app.
-describe('buildBytebotConfig — Phase 100-08-03 descriptor.display', () => {
+describe('buildLuseConfig — Phase 100-08-03 descriptor.display', () => {
 	it('per-WebApp variant defaults DISPLAY to :1 when descriptor.display is omitted', () => {
-		const cfg = buildBytebotConfig(
+		const cfg = buildLuseConfig(
 			{DISPLAY: ':0'} as NodeJS.ProcessEnv,
 			'/some/path/server.ts',
 			{instanceKey: 'webapp-123', windowId: 0xa1b2c3},
 		)
 		expect(cfg.env?.DISPLAY).toBe(':1')
-		expect(cfg.env?.[BYTEBOT_TARGET_WINDOW_ID_ENV]).toBe(String(0xa1b2c3))
+		expect(cfg.env?.[LUSE_TARGET_WINDOW_ID_ENV]).toBe(String(0xa1b2c3))
 		expect(cfg.env?.XAUTHORITY).toBeUndefined()
-		expect(cfg.name).toBe('bytebot:webapp:webapp-123')
+		expect(cfg.name).toBe('luse:webapp:webapp-123')
 	})
 
 	it('per-WebApp variant honors explicit descriptor.display', () => {
-		const cfg = buildBytebotConfig(
+		const cfg = buildLuseConfig(
 			{DISPLAY: ':99'} as NodeJS.ProcessEnv,
 			'/some/path/server.ts',
 			{instanceKey: 'webapp-456', windowId: 42, display: ':2'},
@@ -290,7 +291,7 @@ describe('buildBytebotConfig — Phase 100-08-03 descriptor.display', () => {
 	})
 
 	it('host variant preserves DISPLAY from process env (default :0) AND XAUTHORITY', () => {
-		const cfg = buildBytebotConfig(
+		const cfg = buildLuseConfig(
 			{
 				DISPLAY: ':0',
 				XAUTHORITY: '/run/user/1000/gdm/Xauthority',
@@ -299,16 +300,16 @@ describe('buildBytebotConfig — Phase 100-08-03 descriptor.display', () => {
 		)
 		expect(cfg.env?.DISPLAY).toBe(':0')
 		expect(cfg.env?.XAUTHORITY).toBe('/run/user/1000/gdm/Xauthority')
-		expect(cfg.env?.[BYTEBOT_TARGET_WINDOW_ID_ENV]).toBeUndefined()
-		expect(cfg.name).toBe('bytebot')
+		expect(cfg.env?.[LUSE_TARGET_WINDOW_ID_ENV]).toBeUndefined()
+		expect(cfg.name).toBe('luse')
 	})
 
-	it('host variant uses BYTEBOT_XAUTHORITY override when set', () => {
-		const cfg = buildBytebotConfig(
+	it('host variant uses LUSE_XAUTHORITY override when set', () => {
+		const cfg = buildLuseConfig(
 			{
 				DISPLAY: ':0',
 				XAUTHORITY: '/run/user/1000/gdm/Xauthority',
-				BYTEBOT_XAUTHORITY: '/custom/xauth',
+				LUSE_XAUTHORITY: '/custom/xauth',
 			} as NodeJS.ProcessEnv,
 			'/some/path/server.ts',
 		)

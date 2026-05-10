@@ -1,24 +1,26 @@
 /**
- * Phase 72-native-06 — registerBytebotMcpServer.
+ * Phase 72-native-06 — registerLuseMcpServer (renamed P100-10-02 from
+ * registerBytebotMcpServer per D-100-10-B; legacy bytebot tooling derived
+ * from upstream https://github.com/bytebot-ai/bytebot Apache 2.0).
  *
- * Boot-time MCP config installer for the bytebot computer-use stdio server
+ * Boot-time MCP config installer for the Luse computer-use stdio server
  * (D-NATIVE-10). Called from livinityd's lifecycle (mountAgentRunsRoutes /
  * AiModule.start chain) AFTER the daemon's redis connection is up.
  *
  * Behavior:
  *   1. Gating — registers ONLY when ALL of:
- *      a) env.BYTEBOT_MCP_ENABLED === 'true' (default-disabled per D-NATIVE-10)
+ *      a) env.LUSE_MCP_ENABLED === 'true' (default-disabled per D-NATIVE-10)
  *      b) process.platform === 'linux' (X11 + xdotool/wmctrl/xclip are linux-only)
  *      c) the resolved server entry-point file exists at the resolved path
  *         (probed via fs.access)
  *   2. Resolved server path:
- *        env.BYTEBOT_MCP_SERVER_PATH ?? '/opt/livos/.../mcp/server.ts'
+ *        env.LUSE_MCP_SERVER_PATH ?? '/opt/livos/.../mcp/server.ts'
  *      The default is hardcoded to the Mini PC deploy path; operator can
  *      override via .env if needed for dev or migration.
  *   3. On register, calls McpConfigManager.installServer with stdio transport,
  *      command 'tsx', args=[<resolved path>], env={DISPLAY, XAUTHORITY},
  *      enabled=true, installedAt=Date.now().
- *   4. Idempotency — if a 'bytebot' server already exists in the config:
+ *   4. Idempotency — if a 'luse' server already exists in the config:
  *        - matching shape  → no-op (return registered:true,
  *                            reason:'no-op (matched existing)')
  *        - differing shape → updateServer with the partial (return
@@ -26,10 +28,10 @@
  *   5. Graceful degradation — any error caught and converted to
  *      {registered:false, reason: err.message}. livinityd boots normally
  *      even if registration fails; the agent's MCP tool list simply won't
- *      include `mcp_bytebot_*` tools.
+ *      include `mcp_luse_*` tools.
  *
- * Sacred file `nexus/packages/core/src/sdk-agent-runner.ts`
- * (SHA `4f868d318abff71f8c8bfbcf443b2393a553018b`) is read-only — this
+ * Sacred file `liv/packages/core/src/sdk-agent-runner.ts`
+ * (SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f`) is read-only — this
  * module imports `@liv/core/lib` types but never modifies sacred internals.
  */
 
@@ -71,16 +73,16 @@ export interface McpServerConfigInput {
 export type McpServerConfigStored = McpServerConfigInput
 
 /**
- * Default deploy-time path for the bytebot computer-use MCP stdio server.
+ * Default deploy-time path for the Luse computer-use MCP stdio server.
  * The MCP server lives in livos/packages/livinityd/source/modules/computer-use/mcp/server.ts
  * (created by 72-native-05). On Mini PC the rsync deploy lays this out at
  * /opt/livos/packages/livinityd/source/modules/computer-use/mcp/server.ts.
  */
-export const DEFAULT_BYTEBOT_MCP_SERVER_PATH =
+export const DEFAULT_LUSE_MCP_SERVER_PATH =
 	'/opt/livos/packages/livinityd/source/modules/computer-use/mcp/server.ts'
 
 /**
- * Phase 97-05 — soft cap on per-WebApp bytebot MCP instances.
+ * Phase 97-05 — soft cap on per-WebApp Luse MCP instances.
  *
  * Provisional default per gray-area Q4 in 97-CONTEXT: 3 concurrent Auto-mode
  * sessions. Each spawned instance is a Node child process (~30-60 MB RSS)
@@ -90,33 +92,33 @@ export const DEFAULT_BYTEBOT_MCP_SERVER_PATH =
  * The cap *value* lives here; `mcp-client-manager.ts` (97-06) is the
  * resource owner that refuses registration above the cap.
  */
-export const PER_WEBAPP_BYTEBOT_INSTANCE_CAP = 3
+export const PER_WEBAPP_LUSE_INSTANCE_CAP = 3
 
 /**
- * Phase 97-05 — env var that signals a bytebot MCP child process to scope
+ * Phase 97-05 — env var that signals a Luse MCP child process to scope
  * all native primitive calls to a specific X11 window id by default. The
  * server reads this once at boot; tools.ts threads it into native primitive
  * calls when a tool's input doesn't explicitly override it.
  */
-export const BYTEBOT_TARGET_WINDOW_ID_ENV = 'BYTEBOT_TARGET_WINDOW_ID'
+export const LUSE_TARGET_WINDOW_ID_ENV = 'LUSE_TARGET_WINDOW_ID'
 
 /**
- * Phase 97-05 — descriptor for a per-WebApp bytebot MCP server instance.
+ * Phase 97-05 — descriptor for a per-WebApp Luse MCP server instance.
  *
  * `instanceKey` namespaces the entry in McpConfigManager (e.g. registered
- * under server name `bytebot:webapp:<instanceKey>` instead of the bare
- * `bytebot`). Two simultaneous WebApp instances will not collide even if
+ * under server name `luse:webapp:<instanceKey>` instead of the bare
+ * `luse`). Two simultaneous WebApp instances will not collide even if
  * they happen to wrap the same Chrome window id at different times.
  *
  * `windowId` is plumbed into the spawned child's env as
- * BYTEBOT_TARGET_WINDOW_ID, where mcp/server.ts picks it up and tools.ts
+ * LUSE_TARGET_WINDOW_ID, where mcp/server.ts picks it up and tools.ts
  * uses it as the default windowId for every primitive call.
  */
 export interface PerWebAppMcpDescriptor {
 	instanceKey: string
 	windowId: number
 	/**
-	 * Phase 100-08-03 — X11 display the spawned bytebot MCP child should
+	 * Phase 100-08-03 — X11 display the spawned Luse MCP child should
 	 * target via its `DISPLAY` env var. Defaults to `:1` (D-100-08-A: Xvfb
 	 * dedicated to WebApp Chromes).
 	 *
@@ -131,24 +133,24 @@ export interface PerWebAppMcpDescriptor {
 
 /** Minimal logger contract — only .log + .error are used. Compatible with
  *  livinityd's createLogger and console. */
-export interface BytebotMcpConfigLogger {
+export interface LuseMcpConfigLogger {
 	log(message: string, ...args: unknown[]): void
 	error(message: string, ...args: unknown[]): void
 }
 
 /** Default logger — defers to console so test path doesn't have to wire one. */
-const defaultLogger: BytebotMcpConfigLogger = {
+const defaultLogger: LuseMcpConfigLogger = {
 	log: (msg, ...rest) => console.log(msg, ...rest),
 	error: (msg, ...rest) => console.error(msg, ...rest),
 }
 
 /** Resolve the path the server file should live at — env override or default. */
 function resolveServerPath(env: NodeJS.ProcessEnv): string {
-	const override = env.BYTEBOT_MCP_SERVER_PATH
+	const override = env.LUSE_MCP_SERVER_PATH
 	if (typeof override === 'string' && override.trim().length > 0) {
 		return override
 	}
-	return DEFAULT_BYTEBOT_MCP_SERVER_PATH
+	return DEFAULT_LUSE_MCP_SERVER_PATH
 }
 
 interface PreconditionResult {
@@ -161,13 +163,13 @@ interface PreconditionResult {
 async function checkPreconditions(
 	env: NodeJS.ProcessEnv,
 ): Promise<PreconditionResult> {
-	if (env.BYTEBOT_MCP_ENABLED !== 'true') {
-		return {ok: false, reason: 'BYTEBOT_MCP_ENABLED unset (default-disabled)'}
+	if (env.LUSE_MCP_ENABLED !== 'true') {
+		return {ok: false, reason: 'LUSE_MCP_ENABLED unset (default-disabled)'}
 	}
 	if (process.platform !== 'linux') {
 		return {
 			ok: false,
-			reason: `platform not linux (got ${process.platform}); bytebot MCP requires X11`,
+			reason: `platform not linux (got ${process.platform}); Luse MCP requires X11`,
 		}
 	}
 	const path = resolveServerPath(env)
@@ -184,16 +186,16 @@ async function checkPreconditions(
 }
 
 /**
- * Build the canonical bytebot MCP server config. The same shape is used for
+ * Build the canonical Luse MCP server config. The same shape is used for
  * fresh installs AND idempotency comparison.
  *
  * Phase 97-05 — when `descriptor` is provided, returns a per-WebApp variant:
- *   - name: `bytebot:webapp:<instanceKey>` (so two instances coexist with the
- *     bare host-display `bytebot` entry).
- *   - env: BYTEBOT_TARGET_WINDOW_ID is set so the spawned child scopes its
+ *   - name: `luse:webapp:<instanceKey>` (so two instances coexist with the
+ *     bare host-display `luse` entry).
+ *   - env: LUSE_TARGET_WINDOW_ID is set so the spawned child scopes its
  *     native primitive calls to that X11 window by default.
  */
-export function buildBytebotConfig(
+export function buildLuseConfig(
 	env: NodeJS.ProcessEnv,
 	resolvedPath: string,
 	descriptor?: PerWebAppMcpDescriptor,
@@ -201,27 +203,27 @@ export function buildBytebotConfig(
 	// Phase 100-08-03 — branch on descriptor presence:
 	//   - per-WebApp variant: DISPLAY from descriptor.display (default :1,
 	//     D-100-08-A); XAUTHORITY dropped (Xvfb :1 runs with -ac, no cookie
-	//     required). BYTEBOT_TARGET_WINDOW_ID propagated from descriptor.windowId.
+	//     required). LUSE_TARGET_WINDOW_ID propagated from descriptor.windowId.
 	//   - host variant (desktop-stream native app): DISPLAY from process.env
 	//     (default :0); XAUTHORITY preserved at the GDM-managed path
 	//     (2026-05-05 P79-03 — GDM sessions on Ubuntu 24.04). nut-js'
 	//     screen.capture() hangs when X server is unreachable, triggering MCP
 	//     SDK timeouts ('Connection closed' from client side); the GDM path
-	//     fixes that. Override via env BYTEBOT_XAUTHORITY.
+	//     fixes that. Override via env LUSE_XAUTHORITY.
 	const baseEnv: Record<string, string> = descriptor
 		? {
 				DISPLAY: descriptor.display ?? ':1',
-				[BYTEBOT_TARGET_WINDOW_ID_ENV]: String(descriptor.windowId),
+				[LUSE_TARGET_WINDOW_ID_ENV]: String(descriptor.windowId),
 			}
 		: {
 				DISPLAY: env.DISPLAY ?? ':0',
 				XAUTHORITY:
-					env.BYTEBOT_XAUTHORITY ??
+					env.LUSE_XAUTHORITY ??
 					env.XAUTHORITY ??
 					'/run/user/1000/gdm/Xauthority',
 			}
 	return {
-		name: descriptor ? `bytebot:webapp:${descriptor.instanceKey}` : 'bytebot',
+		name: descriptor ? `luse:webapp:${descriptor.instanceKey}` : 'luse',
 		transport: 'stdio',
 		command: 'tsx',
 		args: [resolvedPath],
@@ -268,44 +270,44 @@ function configsMatch(
 }
 
 /**
- * Register the bytebot computer-use MCP server in the McpConfigManager,
- * gated by BYTEBOT_MCP_ENABLED + linux + server-file-exists. Idempotent
+ * Register the Luse computer-use MCP server in the McpConfigManager,
+ * gated by LUSE_MCP_ENABLED + linux + server-file-exists. Idempotent
  * across boot invocations.
  *
  * @param redis  livinityd's existing Redis client (unused here; reserved for
  *               future use — the McpConfigManager already owns its own Redis
  *               handle. Kept in the signature per plan interfaces block).
- * @param env    process.env (or test env). Must include BYTEBOT_MCP_ENABLED.
+ * @param env    process.env (or test env). Must include LUSE_MCP_ENABLED.
  * @param configManager  McpConfigManager (or a duck-typed test stub).
  * @param logger optional logger (defaults to console).
  * @returns      {registered: boolean; reason?: string}
  */
-export async function registerBytebotMcpServer(
+export async function registerLuseMcpServer(
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	redis: Redis,
 	env: NodeJS.ProcessEnv,
 	configManager: McpConfigManagerLike,
-	logger: BytebotMcpConfigLogger = defaultLogger,
+	logger: LuseMcpConfigLogger = defaultLogger,
 ): Promise<{registered: boolean; reason?: string}> {
 	try {
 		// Gate 1+2+3: env flag, linux platform, file exists.
 		const pre = await checkPreconditions(env)
 		if (!pre.ok || !pre.path) {
-			logger.log(`[bytebot-mcp-config] skipped: ${pre.reason}`)
+			logger.log(`[luse-mcp-config] skipped: ${pre.reason}`)
 			return {registered: false, reason: pre.reason}
 		}
 
-		const candidate = buildBytebotConfig(env, pre.path)
+		const candidate = buildLuseConfig(env, pre.path)
 
 		// Idempotency check.
 		const existing = (await configManager.listServers()).find(
-			(s) => s.name === 'bytebot',
+			(s) => s.name === 'luse',
 		)
 
 		if (existing) {
 			if (configsMatch(existing, candidate)) {
 				logger.log(
-					`[bytebot-mcp-config] registered: no-op (matched existing) path=${pre.path}`,
+					`[luse-mcp-config] registered: no-op (matched existing) path=${pre.path}`,
 				)
 				return {registered: true, reason: 'no-op (matched existing)'}
 			}
@@ -317,9 +319,9 @@ export async function registerBytebotMcpServer(
 				env: candidate.env,
 				enabled: candidate.enabled,
 			}
-			await configManager.updateServer('bytebot', partial)
+			await configManager.updateServer('luse', partial)
 			logger.log(
-				`[bytebot-mcp-config] registered: updated existing path=${pre.path}`,
+				`[luse-mcp-config] registered: updated existing path=${pre.path}`,
 			)
 			return {registered: true, reason: 'updated existing'}
 		}
@@ -327,12 +329,12 @@ export async function registerBytebotMcpServer(
 		// Fresh install.
 		await configManager.installServer(candidate)
 		logger.log(
-			`[bytebot-mcp-config] registered: fresh path=${pre.path}`,
+			`[luse-mcp-config] registered: fresh path=${pre.path}`,
 		)
 		return {registered: true, reason: 'fresh install'}
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err)
-		logger.error(`[bytebot-mcp-config] error: ${message}`)
+		logger.error(`[luse-mcp-config] error: ${message}`)
 		return {registered: false, reason: message}
 	}
 }

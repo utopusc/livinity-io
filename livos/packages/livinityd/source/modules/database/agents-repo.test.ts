@@ -217,7 +217,7 @@ describe('agents-repo (Phase 85 V32-AGENT-02)', () => {
 
 		const result = await createAgent(fakePool, SAMPLE_USER_ID, {
 			name: 'New Agent',
-			configuredMcps: [{name: 'bytebot', enabledTools: ['screenshot']}],
+			configuredMcps: [{name: 'luse', enabledTools: ['screenshot']}],
 			agentpressTools: {terminal: true, files: false},
 			tags: ['new'],
 		})
@@ -237,7 +237,7 @@ describe('agents-repo (Phase 85 V32-AGENT-02)', () => {
 		expect(params[4]).toBe('You are a helpful assistant.')
 		expect(params[5]).toBe('sonnet')
 		expect(JSON.parse(params[6])).toEqual([
-			{name: 'bytebot', enabledTools: ['screenshot']},
+			{name: 'luse', enabledTools: ['screenshot']},
 		])
 		expect(JSON.parse(params[7])).toEqual({terminal: true, files: false})
 		expect(params[10]).toBe(false)
@@ -334,7 +334,7 @@ describe('agents-repo (Phase 85 V32-AGENT-02)', () => {
 			user_id: null,
 			is_public: true,
 			name: '🔬 Researcher',
-			configured_mcps: [{name: 'bytebot', enabledTools: ['screenshot']}],
+			configured_mcps: [{name: 'luse', enabledTools: ['screenshot']}],
 			agentpress_tools: {web_search: true},
 			tags: ['research'],
 		})

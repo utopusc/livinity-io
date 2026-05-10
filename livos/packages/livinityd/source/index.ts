@@ -45,13 +45,14 @@ import {startFluxbox, type FluxboxHandle} from './modules/webapps/fluxbox-wm.js'
 // fluxbox + x11vnc whole-display capture. Eliminates cross-window stacking
 // (Issue 2) and lets x11vnc capture Chrome's full pixels (Issue 1).
 import {createDisplayAllocator} from './modules/webapps/display-allocator.js'
-// Phase 100-08-04 — McpConfigManager + bytebot server path threaded into
+// Phase 100-08-04 — McpConfigManager + Luse server path threaded into
 // WebAppWindowManager so spawn/close lifecycle registers a per-WebApp
-// bytebot MCP child via Redis pub-sub (liv-core's McpClientManager
+// Luse MCP child via Redis pub-sub (liv-core's McpClientManager
 // reconciles asynchronously). Canonical pattern documented in
-// agent-runs.ts:52-58, 161-164.
+// agent-runs.ts:52-58, 161-164. (Renamed P100-10-02 from bytebot per
+// D-100-10-B.)
 import {McpConfigManager} from '@liv/core/lib'
-import {DEFAULT_BYTEBOT_MCP_SERVER_PATH} from './modules/computer-use/bytebot-mcp-config.js'
+import {DEFAULT_LUSE_MCP_SERVER_PATH} from './modules/computer-use/luse-mcp-config.js'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -164,8 +165,8 @@ export default class Livinityd {
 	// inside flushLastUsed). Disposed by cli.ts cleanShutdown so pending
 	// last_used_at writes are flushed before SIGTERM/SIGINT exits the process.
 	apiKeyCache: ApiKeyCache
-	// Phase 71-05 — Bytebot desktop container lifecycle owner. Initialized
-	// in start() AFTER initDatabase() because the manager needs the pg pool.
+	// Phase 71-05 — upstream-bytebot desktop container lifecycle owner.
+	// Initialized in start() AFTER initDatabase() because the manager needs the pg pool.
 	// Optional because PostgreSQL may be unavailable on legacy YAML-only mode
 	// (initDatabase returns false). Consumers (desktop-gateway, computerUse
 	// tRPC router) gracefully no-op when undefined.
@@ -304,8 +305,8 @@ export default class Livinityd {
 			this.ai.start(),
 		])
 
-		// Phase 71-05 — Bytebot desktop container lifecycle. Initialized AFTER
-		// apps.start() (the manager re-uses apps.installForUser) and AFTER
+		// Phase 71-05 — upstream-bytebot desktop container lifecycle. Initialized
+		// AFTER apps.start() (the manager re-uses apps.installForUser) and AFTER
 		// initDatabase() (manager needs the pg pool from 71-03's task-repository).
 		// Non-fatal — missing PG → manager stays undefined; desktop subdomain
 		// gateway and computerUse tRPC router gracefully no-op without it.
@@ -445,8 +446,8 @@ export default class Livinityd {
 			// liv-core's McpClientManager directly (different process at
 			// port 3200).
 			const webappMcpConfigManager = new McpConfigManager(this.ai.redis)
-			const bytebotServerPath =
-				process.env.BYTEBOT_MCP_SERVER_PATH ?? DEFAULT_BYTEBOT_MCP_SERVER_PATH
+			const luseServerPath =
+				process.env.LUSE_MCP_SERVER_PATH ?? DEFAULT_LUSE_MCP_SERVER_PATH
 			// Phase 100-10-01 — per-WebApp X display allocator (D-100-10-A).
 			// Hands out `:10`, `:11`, ... per WebApp spawn. WebAppWindowManager
 			// stands up an Xvfb + fluxbox on each allocated display before
@@ -459,8 +460,8 @@ export default class Livinityd {
 				>[0]['spawn'],
 				logger: webappLogger,
 				mcpConfigManager: webappMcpConfigManager,
-				bytebotServerPath,
-				bytebotMcpEnv: process.env,
+				luseServerPath,
+				luseMcpEnv: process.env,
 				// Phase 100-10-01: wire the per-WebApp display allocator. Each
 				// WebApp spawn now gets `:10`+/`:11`+/... + its own Xvfb +
 				// fluxbox; close() releases the slot.

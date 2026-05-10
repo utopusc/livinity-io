@@ -14,7 +14,7 @@ export interface ChatToolCall {
 	errorMessage?: string
 	/**
 	 * Data URIs extracted from `image` content blocks in MCP tool results
-	 * (e.g. bytebot computer_screenshot). The text-only filter on `output`
+	 * (e.g. Luse computer_screenshot). The text-only filter on `output`
 	 * intentionally drops binary blocks so the chat stays readable; this
 	 * field preserves the image data for the floating screenshot thumbnail.
 	 */
@@ -167,7 +167,7 @@ function messagesReducer(state: ChatMessage[], action: MessageAction): ChatMessa
  * Phase 100-08-05 — opts for chat-surface tool-scope routing.
  * When `webappId` is set, sendMessage tags the WS envelope so livinityd's
  * broker forwards `webappId` in the `/api/agent/stream` body. liv-core
- * then filters `additionalMcpServers` down to `bytebot:webapp:<id>` (or
+ * then filters `additionalMcpServers` down to `luse:webapp:<id>` (or
  * falls through to host scope on liv-core reconcile lag — logged WARN).
  * Default `{}` preserves the v32 host-chat path (no webappId → host scope).
  */
@@ -524,7 +524,7 @@ export function useAgentSocket(opts: UseAgentSocketOpts = {}) {
 			// Phase 100-08-05 — chat-surface scope (host vs WebApp A vs WebApp B).
 			// livinityd broker forwards this to liv `/api/agent/stream`, where
 			// filterAdditionalMcpServers narrows MCP tools to the matching
-			// `bytebot:webapp:<id>` child (or falls through to host bytebot on lag).
+			// `luse:webapp:<id>` child (or falls through to host Luse on lag).
 			if (opts.webappId) payload.webappId = opts.webappId
 			ws.send(JSON.stringify(payload))
 		},

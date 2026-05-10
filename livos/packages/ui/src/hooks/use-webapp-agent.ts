@@ -77,7 +77,7 @@ export function useWebAppAgent(webappId: string): UseWebAppAgentResult {
 	// Phase 100-08-05 — pass webappId through to useAgentSocket so the WS
 	// `start` envelope carries it, livinityd broker forwards it to liv
 	// `/api/agent/stream`, and api.ts narrows additionalMcpServers to the
-	// matching `bytebot:webapp:<webappId>` child (host bytebot on lag).
+	// matching `luse:webapp:<webappId>` child (host Luse on lag).
 	const agent = useAgentSocket({webappId})
 	const utils = trpcReact.useUtils()
 

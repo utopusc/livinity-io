@@ -7,10 +7,14 @@ import type {ChatMessage, ChatToolCall} from '@/hooks/use-agent-socket'
 
 // --- Image extraction helpers ---
 
-const BYTEBOT_TOOL_RE = /mcp[_]{1,2}bytebot[_]{1,2}|computer.?use|screenshot/i
+// Match both legacy `mcp__bytebot__*` / `mcp_bytebot_*` (pre-P100-10-02 rename;
+// in-flight skills per D-100-10-I) AND new `mcp__luse__*` / `mcp_luse_*` tool
+// names. Also matches generic `computer.*use` and `screenshot` patterns so
+// the thumbnail still kicks in for tools that don't use the MCP prefix form.
+const LUSE_TOOL_RE = /mcp[_]{1,2}(?:luse|bytebot)[_]{1,2}|computer.?use|screenshot/i
 
-function isBytebotTool(name: string): boolean {
-	return BYTEBOT_TOOL_RE.test(name)
+function isLuseTool(name: string): boolean {
+	return LUSE_TOOL_RE.test(name)
 }
 
 /**
@@ -110,7 +114,7 @@ interface ScreenshotMatch {
 }
 
 /**
- * Scan messages newest-first, return the most recent bytebot screenshot found.
+ * Scan messages newest-first, return the most recent Luse screenshot found.
  *
  * Source priority:
  *   1. `tc.images[0]` — set by use-agent-socket from MCP image blocks. This
@@ -118,7 +122,7 @@ interface ScreenshotMatch {
  *      base64 image data so we can't reliably recover it from `output`.
  *   2. `extractImageFromOutput(tc.output)` — legacy fallback for tool calls
  *      that serialize image data into the output string (older or non-MCP
- *      bytebot adapters).
+ *      Luse adapters).
  */
 function findLatestScreenshot(messages: ChatMessage[]): ScreenshotMatch | null {
 	for (let i = messages.length - 1; i >= 0; i--) {
@@ -127,7 +131,7 @@ function findLatestScreenshot(messages: ChatMessage[]): ScreenshotMatch | null {
 		// Scan tool calls newest-last (last in array = most recently added)
 		for (let j = toolCalls.length - 1; j >= 0; j--) {
 			const tc = toolCalls[j]
-			if (!isBytebotTool(tc.name)) continue
+			if (!isLuseTool(tc.name)) continue
 			const imageUrl = tc.images?.[0] ?? extractImageFromOutput(tc.output)
 			if (imageUrl) {
 				return {
@@ -144,11 +148,11 @@ function findLatestScreenshot(messages: ChatMessage[]): ScreenshotMatch | null {
 
 // --- Component ---
 
-interface BytebotThumbnailProps {
+interface LuseThumbnailProps {
 	messages: ChatMessage[]
 }
 
-export function BytebotThumbnail({messages}: BytebotThumbnailProps) {
+export function LuseThumbnail({messages}: LuseThumbnailProps) {
 	const [dismissedKey, setDismissedKey] = useState<string | null>(null)
 
 	const match = findLatestScreenshot(messages)

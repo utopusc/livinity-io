@@ -146,30 +146,30 @@ describe('buildHandlers (P97-05)', () => {
 	})
 })
 
-describe('registerBytebotTools — Auto-mode tool gating (P97-07)', () => {
+describe('registerLuseTools — Auto-mode tool gating (P97-07)', () => {
 	it('without skillReplayDeps: webapp_replay_skill NOT registered', async () => {
-		const {registerBytebotTools} = await import('./tools.js')
+		const {registerLuseTools} = await import('./tools.js')
 		const registered: string[] = []
 		const fakeServer = {
 			registerTool: (name: string) => {
 				registered.push(name)
 			},
 		}
-		registerBytebotTools(fakeServer as never)
+		registerLuseTools(fakeServer as never)
 		expect(registered.includes('webapp_replay_skill')).toBe(false)
-		// Sanity: standard bytebot tools are present.
+		// Sanity: standard Luse tools are present.
 		expect(registered.includes('computer_screenshot')).toBe(true)
 	})
 
 	it('with skillReplayDeps: webapp_replay_skill IS registered', async () => {
-		const {registerBytebotTools} = await import('./tools.js')
+		const {registerLuseTools} = await import('./tools.js')
 		const registered: string[] = []
 		const fakeServer = {
 			registerTool: (name: string) => {
 				registered.push(name)
 			},
 		}
-		registerBytebotTools(fakeServer as never, {
+		registerLuseTools(fakeServer as never, {
 			defaultWindowId: 1,
 			skillReplayDeps: {pool: {} as never, userId: '00000000-0000-0000-0000-000000000001'},
 		})

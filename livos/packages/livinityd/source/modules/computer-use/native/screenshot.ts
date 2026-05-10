@@ -11,7 +11,7 @@
  * Strategy: capture PNG to temp file via nut-js, read into Buffer, base64-encode,
  * unlink the temp file. Returned shape carries width/height so MCP tool handlers
  * (Plan 72-native-05) can include resolution metadata when bridging the
- * `computer_screenshot` tool defined in `bytebot-tools.ts` (72-01).
+ * `computer_screenshot` tool defined in `luse-tools.ts` (72-01).
  *
  * Apache 2.0 NOTICE: full license text mirrored at
  * `.planning/licenses/bytebot-LICENSE.txt` (file already present from
@@ -116,8 +116,8 @@ export async function captureScreenshot(options?: CaptureScreenshotOptions): Pro
 	// representation across the LivOS codebase (see streaming/vnc-bridge.ts:61
 	// `widHex = '0x' + opts.wid.toString(16)`, xdotool wid args throughout
 	// input.ts, all _NET_WM_* property reads). Empirical fix for the
-	// 100-08 deploy live-test bug where bytebot's computer_screenshot tool
-	// returned full Xvfb :1 (1920x1080) despite BYTEBOT_TARGET_WINDOW_ID
+	// 100-08 deploy live-test bug where Luse's computer_screenshot tool
+	// returned full Xvfb :1 (1920x1080) despite LUSE_TARGET_WINDOW_ID
 	// being correctly set: `maim -i <decimal>` silently degraded to root
 	// capture on Ubuntu 24.04 maim 5.7.4 (decimal-vs-hex parsing
 	// inconsistency). Hex form parses unambiguously.

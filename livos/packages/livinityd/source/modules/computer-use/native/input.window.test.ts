@@ -349,7 +349,7 @@ describe('typeText — windowId (P97-02)', () => {
  * a linearly-interpolated path between current and target positions in
  * `steps` increments, dispatching each step via `xdotool mousemove --sync`
  * with a `delayMs` sleep between steps. Replaces the teleport-style
- * one-shot mousemove that bytebot's click chain previously emitted.
+ * one-shot mousemove that Luse's click chain previously emitted.
  *
  * Tests:
  *   - T-09-03-01 — interpolation correctness (5 steps from (0,0) → (100,100)).

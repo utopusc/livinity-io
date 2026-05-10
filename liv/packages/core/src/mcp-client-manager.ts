@@ -27,7 +27,8 @@ const RECONNECT_DELAY_MS = 5_000; // 5 seconds before reconnect attempt
 const MAX_RECONNECT_ATTEMPTS = 3;
 
 /** Only these commands are allowed for stdio transport */
-// Phase 72-native-06: 'tsx' added — bytebot computer-use MCP server (D-NATIVE-10)
+// Phase 72-native-06: 'tsx' added — Luse computer-use MCP server (D-NATIVE-10,
+// renamed P100-10-02 from bytebot per D-100-10-B)
 // is a TypeScript file launched via `tsx mcp/server.ts`. Additive patch only;
 // all previous entries preserved.
 const ALLOWED_COMMANDS = new Set([
@@ -57,10 +58,10 @@ interface ManagedServer {
 }
 
 /**
- * Phase 97-06 — typed error thrown when per-WebApp bytebot MCP registration
+ * Phase 97-06 — typed error thrown when per-WebApp Luse MCP registration
  * is rejected because the soft cap is full. Callers (LivAgentRunner Auto-mode
  * start path) catch this specifically to surface a clean UI message instead
- * of a generic 5xx.
+ * of a generic 5xx. (Renamed P100-10-02 from bytebot per D-100-10-B.)
  */
 export class McpInstanceCapError extends Error {
   readonly code = 'MCP_INSTANCE_CAP_EXCEEDED' as const;
@@ -221,28 +222,29 @@ export class McpClientManager {
     return result;
   }
 
-  // ── Phase 97-06 — Per-WebApp bytebot MCP instance registration ───────────
+  // ── Phase 97-06 — Per-WebApp Luse MCP instance registration ───────────
+  // (Renamed P100-10-02 from bytebot per D-100-10-B.)
 
   /**
-   * Per-WebApp bytebot MCP server names follow the convention
-   * `bytebot:webapp:<instanceKey>` (set by bytebot-mcp-config.ts P97-05).
+   * Per-WebApp Luse MCP server names follow the convention
+   * `luse:webapp:<instanceKey>` (set by luse-mcp-config.ts P97-05).
    * The cap counts entries that match this prefix among the
    * configManager's enabled-server set (regardless of whether they're
    * currently connected — the cap is a registration-side resource gate
    * that fires before disk/redis writes).
    */
-  static readonly WEBAPP_INSTANCE_NAME_PREFIX = 'bytebot:webapp:';
+  static readonly WEBAPP_INSTANCE_NAME_PREFIX = 'luse:webapp:';
   static readonly WEBAPP_INSTANCE_CAP = 3;
 
   /**
-   * P97-06 — register an additional bytebot MCP server scoped to a single
+   * P97-06 — register an additional Luse MCP server scoped to a single
    * WebApp window. The descriptor MUST already have `instanceKey` and
    * `windowId` set; this method composes the right `McpServerConfig` (via
-   * the bytebot-mcp-config.ts buildBytebotConfig helper, called at the
+   * the luse-mcp-config.ts buildLuseConfig helper, called at the
    * livinityd boundary) and persists it through the configManager.
    *
    * Caller (livinityd's auto-mode start path) is responsible for calling
-   * `buildBytebotConfig({...env}, path, descriptor)` first; this method
+   * `buildLuseConfig({...env}, path, descriptor)` first; this method
    * accepts the already-built `McpServerConfig` directly so the wrapper
    * has no compile-time dependency on the livinityd module path.
    *
@@ -268,7 +270,7 @@ export class McpClientManager {
     if (!isExistingUpsert && currentNames.length >= McpClientManager.WEBAPP_INSTANCE_CAP) {
       throw new McpInstanceCapError(
         `Cannot register "${serverName}": ${McpClientManager.WEBAPP_INSTANCE_CAP} concurrent ` +
-          `per-WebApp bytebot MCP instances already active (active: ${currentNames.join(', ')}).`,
+          `per-WebApp Luse MCP instances already active (active: ${currentNames.join(', ')}).`,
       );
     }
 
@@ -279,7 +281,7 @@ export class McpClientManager {
   }
 
   /**
-   * P97-06 — list active per-WebApp bytebot MCP instance names. Reads
+   * P97-06 — list active per-WebApp Luse MCP instance names. Reads
    * configManager (the source of truth for what's enabled) rather than
    * `this.servers` (which only reflects already-connected ones — cap
    * must apply at registration time, even before reconcile fires).
@@ -292,7 +294,7 @@ export class McpClientManager {
   }
 
   /**
-   * P97-06 — deregister a per-WebApp bytebot MCP instance. Called from
+   * P97-06 — deregister a per-WebApp Luse MCP instance. Called from
    * the wrapper when:
    *   - P93's window-manager signals the WebApp Chrome window closed.
    *   - The 5-minute idle reap fires (gray-area Q5 default).

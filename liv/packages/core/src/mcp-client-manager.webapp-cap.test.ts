@@ -8,7 +8,7 @@
  *   T3 — 4th distinct registration throws McpInstanceCapError.
  *   T4 — Re-registering an existing instanceKey is an idempotent upsert
  *        (does NOT count toward the cap a second time).
- *   T5 — listWebAppInstanceNames filters to enabled bytebot:webapp:* entries.
+ *   T5 — listWebAppInstanceNames filters to enabled luse:webapp:* entries.
  *   T6 — deregisterWebAppInstance calls configManager.removeServer.
  *   T7 — deregisterWebAppInstance for a non-prefix name is a no-op.
  *
@@ -64,7 +64,7 @@ function buildConfig(name: string, windowId: number): McpServerConfig {
 		transport: 'stdio',
 		command: 'tsx',
 		args: ['/opt/livos/server.ts'],
-		env: {DISPLAY: ':0', BYTEBOT_TARGET_WINDOW_ID: String(windowId)},
+		env: {DISPLAY: ':0', LUSE_TARGET_WINDOW_ID: String(windowId)},
 		enabled: true,
 		installedAt: Date.now(),
 	} as McpServerConfig;
@@ -75,10 +75,10 @@ function buildConfig(name: string, windowId: number): McpServerConfig {
 
 	await test('T1: prefix-correct name installs via configManager', async () => {
 		const {mgr, cm} = makeManager();
-		await mgr.registerWebAppInstance('bytebot:webapp:abc', buildConfig('bytebot:webapp:abc', 1));
+		await mgr.registerWebAppInstance('luse:webapp:abc', buildConfig('luse:webapp:abc', 1));
 		const installed = cm.calls.filter((c) => c.op === 'installServer');
 		if (installed.length !== 1) throw new Error(`expected 1 install call, got ${installed.length}`);
-		if (!cm.mcpServers['bytebot:webapp:abc']) throw new Error('config entry not persisted');
+		if (!cm.mcpServers['luse:webapp:abc']) throw new Error('config entry not persisted');
 	});
 
 	await test('T2: wrong prefix throws', async () => {
@@ -94,11 +94,11 @@ function buildConfig(name: string, windowId: number): McpServerConfig {
 
 	await test('T3: 4th registration throws McpInstanceCapError', async () => {
 		const {mgr} = makeManager();
-		await mgr.registerWebAppInstance('bytebot:webapp:a', buildConfig('bytebot:webapp:a', 1));
-		await mgr.registerWebAppInstance('bytebot:webapp:b', buildConfig('bytebot:webapp:b', 2));
-		await mgr.registerWebAppInstance('bytebot:webapp:c', buildConfig('bytebot:webapp:c', 3));
+		await mgr.registerWebAppInstance('luse:webapp:a', buildConfig('luse:webapp:a', 1));
+		await mgr.registerWebAppInstance('luse:webapp:b', buildConfig('luse:webapp:b', 2));
+		await mgr.registerWebAppInstance('luse:webapp:c', buildConfig('luse:webapp:c', 3));
 		try {
-			await mgr.registerWebAppInstance('bytebot:webapp:d', buildConfig('bytebot:webapp:d', 4));
+			await mgr.registerWebAppInstance('luse:webapp:d', buildConfig('luse:webapp:d', 4));
 			throw new Error('expected cap error');
 		} catch (err) {
 			if (!(err instanceof McpInstanceCapError)) {
@@ -112,41 +112,41 @@ function buildConfig(name: string, windowId: number): McpServerConfig {
 
 	await test('T4: idempotent upsert — re-register same instanceKey is allowed', async () => {
 		const {mgr, cm} = makeManager();
-		await mgr.registerWebAppInstance('bytebot:webapp:a', buildConfig('bytebot:webapp:a', 1));
-		await mgr.registerWebAppInstance('bytebot:webapp:b', buildConfig('bytebot:webapp:b', 2));
-		await mgr.registerWebAppInstance('bytebot:webapp:c', buildConfig('bytebot:webapp:c', 3));
+		await mgr.registerWebAppInstance('luse:webapp:a', buildConfig('luse:webapp:a', 1));
+		await mgr.registerWebAppInstance('luse:webapp:b', buildConfig('luse:webapp:b', 2));
+		await mgr.registerWebAppInstance('luse:webapp:c', buildConfig('luse:webapp:c', 3));
 		// Now re-register 'a' with a different windowId — must NOT throw,
 		// must NOT count against the cap.
-		await mgr.registerWebAppInstance('bytebot:webapp:a', buildConfig('bytebot:webapp:a', 99));
+		await mgr.registerWebAppInstance('luse:webapp:a', buildConfig('luse:webapp:a', 99));
 		// The latest install should overwrite the env.
-		const updated = cm.mcpServers['bytebot:webapp:a'];
-		if (updated?.env?.BYTEBOT_TARGET_WINDOW_ID !== '99') {
+		const updated = cm.mcpServers['luse:webapp:a'];
+		if (updated?.env?.LUSE_TARGET_WINDOW_ID !== '99') {
 			throw new Error(`upsert failed; env: ${JSON.stringify(updated?.env)}`);
 		}
 	});
 
-	await test('T5: listWebAppInstanceNames filters to enabled bytebot:webapp:*', async () => {
+	await test('T5: listWebAppInstanceNames filters to enabled luse:webapp:*', async () => {
 		const {mgr, cm} = makeManager();
-		await mgr.registerWebAppInstance('bytebot:webapp:a', buildConfig('bytebot:webapp:a', 1));
+		await mgr.registerWebAppInstance('luse:webapp:a', buildConfig('luse:webapp:a', 1));
 		// Add a non-prefix entry directly.
 		cm.mcpServers['ordinary'] = buildConfig('ordinary', 0) as McpServerConfig;
 		// Add a disabled prefix entry.
-		const disabled = buildConfig('bytebot:webapp:disabled', 5);
+		const disabled = buildConfig('luse:webapp:disabled', 5);
 		(disabled as {enabled: boolean}).enabled = false;
-		cm.mcpServers['bytebot:webapp:disabled'] = disabled;
+		cm.mcpServers['luse:webapp:disabled'] = disabled;
 		const names = await mgr.listWebAppInstanceNames();
-		if (names.length !== 1 || names[0] !== 'bytebot:webapp:a') {
-			throw new Error(`expected ['bytebot:webapp:a'], got ${JSON.stringify(names)}`);
+		if (names.length !== 1 || names[0] !== 'luse:webapp:a') {
+			throw new Error(`expected ['luse:webapp:a'], got ${JSON.stringify(names)}`);
 		}
 	});
 
 	await test('T6: deregisterWebAppInstance calls configManager.removeServer', async () => {
 		const {mgr, cm} = makeManager();
-		await mgr.registerWebAppInstance('bytebot:webapp:a', buildConfig('bytebot:webapp:a', 1));
-		await mgr.deregisterWebAppInstance('bytebot:webapp:a');
+		await mgr.registerWebAppInstance('luse:webapp:a', buildConfig('luse:webapp:a', 1));
+		await mgr.deregisterWebAppInstance('luse:webapp:a');
 		const removed = cm.calls.filter((c) => c.op === 'removeServer');
 		if (removed.length !== 1) throw new Error(`expected 1 remove call, got ${removed.length}`);
-		if (cm.mcpServers['bytebot:webapp:a']) throw new Error('entry not removed');
+		if (cm.mcpServers['luse:webapp:a']) throw new Error('entry not removed');
 	});
 
 	await test('T7: deregister non-prefix name is no-op', async () => {

@@ -1,17 +1,18 @@
 /**
- * Bytebot MCP tool handlers — dispatch each Bytebot tool call to the
- * matching native primitive function (72-native-01..03).
+ * Luse MCP tool handlers (renamed P100-10-02 from Bytebot per D-100-10-B) —
+ * dispatch each Luse tool call to the matching native primitive function
+ * (72-native-01..03).
  *
  * Apache 2.0 attribution
  * ─────────────────────────
- * The 17 tool schemas this module dispatches over (BYTEBOT_TOOLS) are a
- * verbatim copy of upstream Bytebot agent.tools.ts (Apache 2.0):
+ * The 17 tool schemas this module dispatches over (LUSE_TOOLS) are a
+ * verbatim copy of upstream bytebot project's agent.tools.ts (Apache 2.0):
  *   https://github.com/bytebot-ai/bytebot
  *   File: packages/bytebot-agent/src/agent/agent.tools.ts
  *   Snapshot date: 2026-05-04 (via Plan 72-01).
  *
  * The action-dispatch strategy (post-action 750ms settle + screenshot, etc.)
- * is also derived from Bytebot's bytebotd:
+ * is also derived from upstream's bytebotd:
  *   File: packages/bytebotd/src/computer-use/computer-use.service.ts
  *
  * Apache 2.0 NOTICE: full license text mirrored at
@@ -22,7 +23,7 @@
  *   D-NATIVE-05 — 750ms post-action settle delay before post-action screenshot.
  *   D-NATIVE-08 — `_liv_meta` extension field on CallToolResult for needs-help
  *                 / completed / task-created signals.
- *   D-NATIVE-10 — MCP server name is `bytebot` (matched by `mcp_bytebot_*`
+ *   D-NATIVE-10 — MCP server name is `luse` (matched by `mcp_luse_*`
  *                 categorize patch in liv-agent-runner.ts).
  *
  * Strategy: handler-map (NOT giant switch). Each tool name maps to an async
@@ -35,7 +36,7 @@ import {setTimeout as sleep} from 'node:timers/promises'
 
 import {z, type ZodTypeAny} from 'zod'
 
-import {BYTEBOT_TOOLS, BYTEBOT_AUTO_MODE_EXTRA_TOOLS} from '../bytebot-tools.js'
+import {LUSE_TOOLS, LUSE_AUTO_MODE_EXTRA_TOOLS} from '../luse-tools.js'
 import {
 	captureScreenshot,
 	moveMouse,
@@ -74,7 +75,7 @@ export type LivCallToolResult = {
 
 export type Handler = (args: Record<string, unknown>) => Promise<LivCallToolResult>
 
-/** Subset of McpServer surface registerBytebotTools touches. Avoids a hard
+/** Subset of McpServer surface registerLuseTools touches. Avoids a hard
  *  import of `@modelcontextprotocol/sdk` types into this dispatcher module
  *  (the runtime import lives in mcp/server.ts). */
 export interface McpServerLike {
@@ -93,20 +94,20 @@ export interface McpServerLike {
 const POST_ACTION_SETTLE_MS = 750
 
 /**
- * Phase 97-05 — runtime options for the bytebot MCP tool dispatcher.
+ * Phase 97-05 — runtime options for the Luse MCP tool dispatcher.
  *
- * `defaultWindowId` is the env-derived (BYTEBOT_TARGET_WINDOW_ID) X11 window
+ * `defaultWindowId` is the env-derived (LUSE_TARGET_WINDOW_ID) X11 window
  * id every native primitive call defaults to when the per-tool input does
  * not explicitly override it. When undefined, host-display behavior is
  * preserved (the existing pre-P97 single-instance default).
  *
  * Phase 97-07 — `skillReplayDeps` carries the DB pool + authenticated userId
  * needed by the `webapp_replay_skill` tool. When provided, the tool is
- * registered alongside the standard BYTEBOT_TOOLS. When omitted, the tool
+ * registered alongside the standard LUSE_TOOLS. When omitted, the tool
  * is not registered — the caller (mcp/server.ts) only sets it on per-WebApp
  * instances spawned by the Auto-mode start path.
  */
-export interface BytebotToolsOptions {
+export interface LuseToolsOptions {
 	defaultWindowId?: number
 	skillReplayDeps?: {
 		pool: import('pg').Pool
@@ -115,7 +116,7 @@ export interface BytebotToolsOptions {
 	/**
 	 * Phase 100-07.4 — runtime fallback resolver. When neither args.windowId
 	 * nor defaultWindowId is set, tools call this to ask "is there an active
-	 * WebApp window I should target?" Used by the host-display bytebot to
+	 * WebApp window I should target?" Used by the host-display Luse to
 	 * auto-scope to a single live WebApp without requiring a per-WebApp
 	 * MCP instance. Returns undefined for true host-display intent (no
 	 * active WebApps, OR multiple — caller should be explicit).
@@ -143,7 +144,7 @@ function resolveWindowId(
 	}
 	// Phase 100-07.4 — file-based cross-process fallback. livinityd's
 	// window-manager writes the wid of the SOLE active WebApp to this file
-	// on spawn (and clears/rewrites on close). The bytebot MCP child process
+	// on spawn (and clears/rewrites on close). The Luse MCP child process
 	// runs in its own JS context and can't reach the parent's runtime state
 	// directly, so a file-based marker is the simplest safe IPC.
 	return readSingleActiveWebappWidFromFile()
@@ -241,7 +242,7 @@ function summarizeArgs(args: Record<string, unknown>): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HANDLERS — handler map for all 17 BYTEBOT_TOOLS (D-NATIVE-04)
+// HANDLERS — handler map for all 17 LUSE_TOOLS (D-NATIVE-04)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -254,7 +255,7 @@ function summarizeArgs(args: Record<string, unknown>): string {
  * default (`buildHandlers({})`) so existing callers / tests that import
  * `HANDLERS` directly keep working.
  */
-export function buildHandlers(options: BytebotToolsOptions = {}): Record<string, Handler> {
+export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Handler> {
 	const defaultWindowId = options.defaultWindowId
 	const widResolver = options.activeWebappWidResolver
 	const wid = (args: Record<string, unknown>): number | undefined =>
@@ -480,7 +481,7 @@ export function buildHandlers(options: BytebotToolsOptions = {}): Record<string,
 				_liv_meta: {
 					kind: 'needs-help',
 					message: description,
-					tool: 'mcp_bytebot_set_task_status',
+					tool: 'mcp_luse_set_task_status',
 				},
 			}
 		}
@@ -519,7 +520,7 @@ export function buildHandlers(options: BytebotToolsOptions = {}): Record<string,
 						type: 'text',
 						text:
 							'Error: webapp_replay_skill is only available on per-WebApp ' +
-							'bytebot MCP instances (Auto mode). The current MCP server has ' +
+							'Luse MCP instances (Auto mode). The current MCP server has ' +
 							'no skill-replay dependencies wired.',
 					},
 				],
@@ -538,7 +539,7 @@ export function buildHandlers(options: BytebotToolsOptions = {}): Record<string,
  * Legacy host-display HANDLERS — backed by `buildHandlers({})` so existing
  * imports from this module keep working. Per-WebApp instances should use
  * `buildHandlers({defaultWindowId})` instead and pass the resulting map
- * into `registerBytebotTools(server, opts)`.
+ * into `registerLuseTools(server, opts)`.
  */
 export const HANDLERS: Record<string, Handler> = buildHandlers({})
 
@@ -547,21 +548,21 @@ export const HANDLERS: Record<string, Handler> = buildHandlers({})
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Register all BYTEBOT_TOOLS handlers on the given MCP server. Loops the
- * BYTEBOT_TOOLS array and dispatches by name to the HANDLERS map. Each
+ * Register all LUSE_TOOLS handlers on the given MCP server. Loops the
+ * LUSE_TOOLS array and dispatches by name to the HANDLERS map. Each
  * handler is wrapped in a try/catch that converts thrown errors into
  * `{ isError: true, content: [{ type:'text', text:'Error: ...' }] }`.
  */
 /**
  * Convert a JSON-Schema node (Anthropic / OpenAPI subset) to a Zod type.
- * Handles the shapes Bytebot uses: object, string, number, boolean, array,
+ * Handles the shapes Luse uses: object, string, number, boolean, array,
  * enum strings, nested objects. Unknown shapes fall back to `z.any()`.
  *
  * P79-02 (2026-05-05): MCP SDK 1.25.x's registerTool calls
  * `inputSchema.safeParseAsync()` at runtime — passing a plain JSON-Schema
  * object throws `v3Schema.safeParseAsync is not a function`. The SDK
  * expects either a Zod shape (record of ZodTypeAny) OR an AnySchema with
- * Zod-style methods. We convert at registration time so the bytebot tool
+ * Zod-style methods. We convert at registration time so the Luse tool
  * schemas (verbatim JSON Schema from upstream) keep their authoring
  * format while the SDK gets what it needs.
  */
@@ -603,7 +604,7 @@ function jsonSchemaToZodRawShape(rootSchema: {type: 'object'; properties: Record
 	return shape
 }
 
-export function registerBytebotTools(server: McpServerLike, options?: BytebotToolsOptions): void {
+export function registerLuseTools(server: McpServerLike, options?: LuseToolsOptions): void {
 	const handlers =
 		options?.defaultWindowId !== undefined || options?.skillReplayDeps !== undefined
 			? buildHandlers(options)
@@ -612,14 +613,14 @@ export function registerBytebotTools(server: McpServerLike, options?: BytebotToo
 	// is wired (i.e. this is a per-WebApp instance spawned by Auto mode).
 	const allTools =
 		options?.skillReplayDeps !== undefined
-			? [...BYTEBOT_TOOLS, ...BYTEBOT_AUTO_MODE_EXTRA_TOOLS]
-			: BYTEBOT_TOOLS
+			? [...LUSE_TOOLS, ...LUSE_AUTO_MODE_EXTRA_TOOLS]
+			: LUSE_TOOLS
 	for (const tool of allTools) {
 		server.registerTool(
 			tool.name,
 			{
 				description: tool.description,
-				// P79-02 fix: convert JSON-Schema (Anthropic / Bytebot upstream
+				// P79-02 fix: convert JSON-Schema (Anthropic / Luse upstream
 				// authoring format) to ZodRawShape since MCP SDK 1.25.x calls
 				// `safeParseAsync` on this object at tool dispatch time.
 				inputSchema: jsonSchemaToZodRawShape(tool.input_schema),

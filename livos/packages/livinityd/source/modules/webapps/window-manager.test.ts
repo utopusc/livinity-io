@@ -111,8 +111,8 @@ function makeManager(overrides: any = {}) {
 		// Phase 100-08-04 — optional MCP config-manager opts (Redis pub-sub
 		// path; liv-core's McpClientManager reconciles async).
 		mcpConfigManager: overrides.mcpConfigManager,
-		bytebotServerPath: overrides.bytebotServerPath,
-		bytebotMcpEnv: overrides.bytebotMcpEnv,
+		luseServerPath: overrides.luseServerPath,
+		luseMcpEnv: overrides.luseMcpEnv,
 		// Phase 100-10-01 — per-WebApp Xvfb display allocator + start fns.
 		displayAllocator: overrides.displayAllocator,
 		xvfbStartFn: overrides.xvfbStartFn,
@@ -339,10 +339,11 @@ describe('WebAppWindowManager — vnc-window swap (Phase 99-04)', () => {
 })
 
 // ============================================================================
-// Phase 100-08-04 per-WebApp bytebot MCP lifecycle (Redis pub-sub) — 5 tests
+// Phase 100-08-04 per-WebApp Luse MCP lifecycle (Redis pub-sub) — 5 tests
+// (Renamed P100-10-02 from bytebot per D-100-10-B.)
 // ============================================================================
 
-describe('WebAppWindowManager — Phase 100-08-04 per-WebApp bytebot MCP lifecycle (Redis pub-sub)', () => {
+describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle (Redis pub-sub)', () => {
 	beforeEach(() => {
 		vi.useRealTimers()
 	})
@@ -350,7 +351,7 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp bytebot MCP lifecyc
 		vi.useRealTimers()
 	})
 
-	it('Test 16: spawn() calls mcpConfigManager.installServer with bytebot:webapp:<webappId> + descriptor env (DISPLAY=:1, BYTEBOT_TARGET_WINDOW_ID)', async () => {
+	it('Test 16: spawn() calls mcpConfigManager.installServer with luse:webapp:<webappId> + descriptor env (DISPLAY=:1, LUSE_TARGET_WINDOW_ID)', async () => {
 		const installCalls: any[] = []
 		const mcpConfigManager = {
 			installServer: vi.fn(async (config: any) => {
@@ -361,18 +362,18 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp bytebot MCP lifecyc
 		}
 		const {mgr} = makeManager({
 			mcpConfigManager,
-			bytebotServerPath: '/tmp/server.ts',
+			luseServerPath: '/tmp/server.ts',
 		})
 		await mgr.spawn({userId: 'user-1', webappId: 'webapp-abc', url: 'https://example.com'})
 		expect(installCalls).toHaveLength(1)
-		expect(installCalls[0]!.name).toBe('bytebot:webapp:webapp-abc')
+		expect(installCalls[0]!.name).toBe('luse:webapp:webapp-abc')
 		expect(installCalls[0]!.transport).toBe('stdio')
-		expect(installCalls[0]!.env?.BYTEBOT_TARGET_WINDOW_ID).toBe(String(0x200))
+		expect(installCalls[0]!.env?.LUSE_TARGET_WINDOW_ID).toBe(String(0x200))
 		expect(installCalls[0]!.env?.DISPLAY).toBe(':1')
 		mgr._clearForTests()
 	})
 
-	it('Test 17: close() calls mcpConfigManager.removeServer with bytebot:webapp:<webappId>', async () => {
+	it('Test 17: close() calls mcpConfigManager.removeServer with luse:webapp:<webappId>', async () => {
 		const removeCalls: string[] = []
 		const mcpConfigManager = {
 			installServer: vi.fn(async () => {}),
@@ -384,18 +385,18 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp bytebot MCP lifecyc
 		}
 		const {mgr} = makeManager({
 			mcpConfigManager,
-			bytebotServerPath: '/tmp/server.ts',
+			luseServerPath: '/tmp/server.ts',
 		})
 		await mgr.spawn({userId: 'user-1', webappId: 'webapp-abc', url: 'https://example.com'})
 		await mgr.close({webappId: 'webapp-abc', userId: 'user-1'})
-		expect(removeCalls).toEqual(['bytebot:webapp:webapp-abc'])
+		expect(removeCalls).toEqual(['luse:webapp:webapp-abc'])
 	})
 
 	it('Test 18: spawn() falls back to updateServer when installServer throws (idempotent re-spawn / regex rejection)', async () => {
 		const updateCalls: any[] = []
 		const mcpConfigManager = {
 			installServer: vi.fn(async () => {
-				throw new Error('Server "bytebot:webapp:webapp-abc" is already installed')
+				throw new Error('Server "luse:webapp:webapp-abc" is already installed')
 			}),
 			updateServer: vi.fn(async (name: string, _updates: any) => {
 				updateCalls.push({name})
@@ -405,11 +406,11 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp bytebot MCP lifecyc
 		}
 		const {mgr} = makeManager({
 			mcpConfigManager,
-			bytebotServerPath: '/tmp/server.ts',
+			luseServerPath: '/tmp/server.ts',
 		})
 		await mgr.spawn({userId: 'user-1', webappId: 'webapp-abc', url: 'https://example.com'})
 		expect(updateCalls).toHaveLength(1)
-		expect(updateCalls[0]!.name).toBe('bytebot:webapp:webapp-abc')
+		expect(updateCalls[0]!.name).toBe('luse:webapp:webapp-abc')
 		mgr._clearForTests()
 	})
 
@@ -423,7 +424,7 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp bytebot MCP lifecyc
 		}
 		const {mgr} = makeManager({
 			mcpConfigManager,
-			bytebotServerPath: '/tmp/server.ts',
+			luseServerPath: '/tmp/server.ts',
 		})
 		const result = await mgr.spawn({
 			userId: 'user-1',

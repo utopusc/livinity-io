@@ -39,8 +39,8 @@ const DEFAULT_POLL_INTERVAL_MS = 100
  *
  * 2026-05-08 hotfix: livinityd's systemd unit env has only PATH/USER/HOME —
  * no DISPLAY, no XAUTHORITY. Direct xdotool/wmctrl/xprop calls failed with
- * `Cannot open display.` Bytebot MCP child process does set these explicitly
- * (`bytebot-mcp-config.ts:149-158`); the new P93 streaming + window-manager
+ * `Cannot open display.` Luse MCP child process does set these explicitly
+ * (`luse-mcp-config.ts:149-158`); the new P93 streaming + window-manager
  * code path missed the same step. Inject here so every helper inherits.
  *
  * Phase 100-08-02 — WebApp X11 environment.
