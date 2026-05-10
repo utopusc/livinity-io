@@ -37,6 +37,9 @@ import {ComputerUseContainerManager} from './modules/computer-use/container-mana
 import {StreamManager} from './modules/streaming/stream-manager.js'
 import {WebAppWindowManager} from './modules/webapps/window-manager.js'
 import {WEBAPPS_X11_ENV} from './modules/webapps/window-discovery.js'
+// Phase 100-08-01 — dedicated Xvfb :1 + fluxbox WM lifecycle (D-100-08-A).
+import {startXvfb, type XvfbHandle} from './modules/webapps/xvfb-display.js'
+import {startFluxbox, type FluxboxHandle} from './modules/webapps/fluxbox-wm.js'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -164,6 +167,12 @@ export default class Livinityd {
 	// for the v33 WebApp UX. Optional for the same wiring reason as
 	// streamManager — T93-11 owns lifecycle init in start().
 	webappWindowManager?: WebAppWindowManager
+	// Phase 100-08-01 — dedicated Xvfb :1 + fluxbox WM lifecycle (D-100-08-A).
+	// Lifecycle owned by start()/stop(); both fields stay undefined if Xvfb
+	// or fluxbox fail to spawn (non-fatal — webapp.window.spawn returns
+	// SERVICE_UNAVAILABLE downstream).
+	xvfbHandle?: XvfbHandle
+	fluxboxHandle?: FluxboxHandle
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -372,6 +381,33 @@ export default class Livinityd {
 				`StreamManager started (cap=${this.streamManager.getCap()})`,
 			)
 
+			// Phase 100-08-01 — Xvfb :1 + fluxbox WM lifecycle (D-100-08-A).
+			// Must come BEFORE WebAppWindowManager because subsequent Chrome
+			// spawns target :1 (100-08-02 cutover).
+			try {
+				this.xvfbHandle = await startXvfb({
+					display: ':1',
+					resolution: '1920x1080x24',
+					logger: streamingLogger,
+				})
+				streamingLogger.info(`Xvfb :1 up (pid=${this.xvfbHandle.pid})`)
+				// 500ms grace so X server is ready before fluxbox connects:
+				await new Promise((resolve) => setTimeout(resolve, 500))
+				this.fluxboxHandle = await startFluxbox({
+					display: ':1',
+					logger: streamingLogger,
+				})
+				streamingLogger.info(`fluxbox up on :1 (pid=${this.fluxboxHandle.pid})`)
+			} catch (err) {
+				// Non-fatal — livinityd still boots; webapp.window.spawn will
+				// return SERVICE_UNAVAILABLE because Chromes can't reach :1.
+				// Operator restart (`systemctl restart livos`) recovers.
+				streamingLogger.error(
+					'Failed to start Xvfb :1 / fluxbox; WebApps will be broken until recovery',
+					err,
+				)
+			}
+
 			const webappLogger = (() => {
 				const child = this.logger.createChildLogger('webapps')
 				return {
@@ -455,6 +491,19 @@ export default class Livinityd {
 				this.webappWindowManager?.stopIdleCleanup()
 			} catch (err) {
 				this.logger.error('Failed to stop WebAppWindowManager idle cleanup', err)
+			}
+
+			// Phase 100-08-01 — tear down fluxbox first (depends on Xvfb),
+			// then Xvfb. Both helpers SIGTERM → 2s grace → SIGKILL.
+			try {
+				await this.fluxboxHandle?.stop()
+			} catch (err) {
+				this.logger.error('Failed to stop fluxbox', err)
+			}
+			try {
+				await this.xvfbHandle?.stop()
+			} catch (err) {
+				this.logger.error('Failed to stop Xvfb', err)
 			}
 
 			// Stop modules
