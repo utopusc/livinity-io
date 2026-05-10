@@ -111,6 +111,56 @@ function maskSensitiveValues(servers: any[]): any[] {
   });
 }
 
+/**
+ * Phase 100-08-05 — pure scope-filter helper for /api/agent/stream
+ * `additionalMcpServers` enumeration.
+ *
+ * Decides which MCP servers to inject into the agent loop based on the
+ * request's optional `webappId`:
+ *
+ *   - webappId present AND `bytebot:webapp:<webappId>` exists in servers:
+ *       scope = 'webapp'; only that one server is included.
+ *   - webappId present AND no matching server (LIV-CORE RECONCILE LAG —
+ *       see 100-08-04-SUMMARY.md "Risk model — Redis reconciliation lag"):
+ *       scope = 'lag-fallback'; host bytebot + user-installed MCPs included;
+ *       per-WebApp instances excluded; logger.warn fires with `webappScope`
+ *       + `fallback: 'lag'` for greppable trace.
+ *   - webappId absent: scope = 'host'; host bytebot + user-installed MCPs
+ *       included; per-WebApp instances excluded (back-compat with v32 chat
+ *       home — host scope sees host bytebot, NEVER per-WebApp children).
+ *
+ * Pure (no I/O). Tested by api.scope-filter.test.ts (4 cases: webapp scope,
+ * lag fallback, host scope, other-webapp registered → no leak).
+ *
+ * Reserved-name skip ('nexus-tools', 'chrome-devtools') stays inline at the
+ * call site (it's a logging concern, not a scope concern).
+ */
+export function filterAdditionalMcpServers<T extends {name: string; transport: string}>(
+  enabledServers: ReadonlyArray<T>,
+  reqWebappId: string | null,
+  logger: {warn: (msg: string, meta?: unknown) => void},
+): {scope: 'webapp' | 'host' | 'lag-fallback'; servers: T[]} {
+  if (reqWebappId) {
+    const targetName = `bytebot:webapp:${reqWebappId}`;
+    const matching = enabledServers.find(s => s.name === targetName);
+    if (matching) {
+      return {scope: 'webapp', servers: [matching]};
+    }
+    logger.warn(
+      '/api/agent/stream: webappId scope-filter lag fallback — no matching `bytebot:webapp:<id>` server registered yet',
+      {webappScope: reqWebappId, fallback: 'lag'},
+    );
+    return {
+      scope: 'lag-fallback',
+      servers: enabledServers.filter(s => !s.name.startsWith('bytebot:webapp:')),
+    };
+  }
+  return {
+    scope: 'host',
+    servers: enabledServers.filter(s => !s.name.startsWith('bytebot:webapp:')),
+  };
+}
+
 export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigManager, mcpRegistryClient, mcpClientManager, channelManager, approvalManager, taskManager, skillInstaller, skillRegistryClient, skillLoader, dmPairingManager, usageTracker, webhookManager, capabilityRegistry }: ApiDeps) {
   const app = express();
 
@@ -2404,6 +2454,14 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       return;
     }
 
+    // Phase 100-08-05 — optional webappId for tool-scope filtering. When present,
+    // additionalMcpServers is filtered down to the matching `bytebot:webapp:<id>`
+    // child via filterAdditionalMcpServers (lag-fallback to host scope on miss).
+    const reqWebappId: string | null =
+      typeof req.body?.webappId === 'string' && req.body.webappId.length > 0
+        ? req.body.webappId
+        : null;
+
     // Extract userId from JWT for per-user session isolation
     const userId = await extractUserIdFromRequest(req);
     // webJid uses JWT-derived userId only (NOT header-derived) — session tracking is
@@ -2518,8 +2576,17 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
         const servers = await mcpConfigManager.listServers();
         const enabled = servers.filter(s => s.enabled);
         if (enabled.length > 0) {
+          // Phase 100-08-05 — apply chat-surface scope filter (D-100-08-B).
+          // See filterAdditionalMcpServers for the 3-state contract:
+          //   webapp | host | lag-fallback (with WARN log).
+          const { scope, servers: scoped } = filterAdditionalMcpServers(
+            enabled,
+            reqWebappId,
+            logger,
+          );
+
           additionalMcpServers = {};
-          for (const s of enabled) {
+          for (const s of scoped) {
             // Reserved-name skip happens inside SdkAgentRunner; we emit a
             // warning here too so it's greppable from api.ts logs.
             if (s.name === 'nexus-tools' || s.name === 'chrome-devtools') {
@@ -2553,6 +2620,8 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
             total: servers.length,
             enabled: enabled.length,
             injected: Object.keys(additionalMcpServers).length,
+            webappScope: reqWebappId ?? 'host',
+            scope,
           });
         }
       } catch (err) {
