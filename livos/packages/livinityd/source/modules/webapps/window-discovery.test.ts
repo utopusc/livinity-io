@@ -165,4 +165,81 @@ describe('window-discovery', () => {
 		setOk('')
 		expect(await activateWindow(123)).toBe(true)
 	})
+
+	// ---- Phase 100-09-07 — xdotool fallback when wmctrl can't see _NET_CLIENT_LIST ----
+
+	it('T-09-07-W1: xdotool fallback engages when wmctrl errors with _NET_CLIENT_LIST', async () => {
+		mockedExecFile.mockImplementation((...callArgs: any[]) => {
+			const cmd = callArgs[0] as string
+			const args = callArgs[1] as string[]
+			const cb = findCallback(callArgs)
+			if (!cb) return
+			if (cmd === 'wmctrl') {
+				// Reject with the EWMH error pattern observed live on Mini PC.
+				const err: any = new Error('wmctrl failed')
+				err.code = 1
+				err.stderr = 'Cannot get client list properties. (_NET_CLIENT_LIST or _WIN_CLIENT_LIST)\n'
+				cb(err, '', err.stderr)
+				return
+			}
+			if (cmd === 'xdotool' && args[0] === 'search') {
+				cb(null, '12345\n67890\n', '')
+				return
+			}
+			if (cmd === 'xdotool' && args[0] === 'getwindowgeometry') {
+				// args = ['getwindowgeometry', '--shell', '0x...']
+				const wid = args[args.length - 1]
+				const x = wid.includes('3039') ? '100' : '200' // 12345=0x3039, 67890=0x10932
+				cb(null, `WINDOW=${wid}\nX=${x}\nY=200\nWIDTH=800\nHEIGHT=600\nSCREEN=0\n`, '')
+				return
+			}
+			if (cmd === 'xdotool' && args[0] === 'getwindowname') {
+				const wid = args[args.length - 1]
+				cb(null, `Window ${wid}\n`, '')
+				return
+			}
+			cb(null, '', '')
+		})
+		const windows = await listAllWindows()
+		expect(windows).toHaveLength(2)
+		expect(windows[0].wid).toBe(12345)
+		expect(windows[1].wid).toBe(67890)
+		// Geometry parsed from xdotool --shell output:
+		expect(windows[0].geometry.w).toBe(800)
+		expect(windows[0].geometry.h).toBe(600)
+		// xdotool was invoked (fallback engaged):
+		const cmds = mockedExecFile.mock.calls.map((c: any[]) => c[0] as string)
+		expect(cmds).toContain('xdotool')
+	})
+
+	it('T-09-07-W2: returns [] when wmctrl AND xdotool both fail', async () => {
+		mockedExecFile.mockImplementation((...callArgs: any[]) => {
+			const cmd = callArgs[0] as string
+			const cb = findCallback(callArgs)
+			if (!cb) return
+			if (cmd === 'wmctrl') {
+				const err: any = new Error('wmctrl failed')
+				err.code = 1
+				err.stderr = 'Cannot get client list properties. (_NET_CLIENT_LIST or _WIN_CLIENT_LIST)\n'
+				cb(err, '', err.stderr)
+				return
+			}
+			if (cmd === 'xdotool') {
+				const err: any = new Error('spawn xdotool ENOENT')
+				err.code = 'ENOENT'
+				cb(err, '', '')
+				return
+			}
+			cb(null, '', '')
+		})
+		const windows = await listAllWindows()
+		expect(windows).toEqual([])
+	})
+
+	it('T-09-07-W3: regression — wmctrl success path does NOT invoke xdotool', async () => {
+		setOk(WMCTRL_OUTPUT)
+		await listAllWindows()
+		const cmds = mockedExecFile.mock.calls.map((c: any[]) => c[0] as string)
+		expect(cmds).not.toContain('xdotool')
+	})
 })
