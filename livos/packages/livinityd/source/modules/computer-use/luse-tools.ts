@@ -497,6 +497,54 @@ const _focusWindowTool = {
 	},
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// P100-10-04 — Luse stream-management tools (D-100-10-C / G-100-10-E).
+//
+// `create_stream` lets the agent spawn a new x11vnc on any X display
+// (e.g. a sibling WebApp's `:11`) so it can see + drive that surface
+// inter-WebApp. Because that's a privilege-escalation surface (LLM-
+// controlled creation of new network listeners), it is GATED behind
+// the Redis flag `liv:config:luse_can_create_streams` — default `false`
+// for production, `true` for dev. The tool is REGISTERED unconditionally
+// so its schema is discoverable; the handler reads the flag at call-time
+// and rejects with `isError:true` when the flag is off.
+//
+// `list_streams` is read-only and user-scoped (uses the existing
+// `streamManager.listStreams({userId})` filter — no privilege gate).
+// ─────────────────────────────────────────────────────────────────────────
+
+const _createStreamTool = {
+	name: 'create_stream',
+	description:
+		'Create a new x11vnc stream on a given X display. Returns {streamId, wsUrl, port}. Gated behind the Redis flag `liv:config:luse_can_create_streams` (G-100-10-E) — returns isError:true when the flag is unset or not exactly the string "true".',
+	input_schema: {
+		type: 'object' as const,
+		properties: {
+			display: {
+				type: 'string' as const,
+				description:
+					'X display string like ":10". The Xvfb must already be running (typically a sibling WebApp\'s allocated display).',
+			},
+			port: {
+				type: 'number' as const,
+				description:
+					'Optional explicit rfbPort. Defaults to next free in the 15900..16099 ring allocated by StreamManager.',
+			},
+		},
+		required: ['display'],
+	},
+}
+
+const _listStreamsTool = {
+	name: 'list_streams',
+	description:
+		'List currently-active streams for the calling user. Returns an array of `{streamId, mode, port, wsUrl, target}`. Read-only; no privilege gate.',
+	input_schema: {
+		type: 'object' as const,
+		properties: {},
+	},
+}
+
 /**
  * The complete set of Luse tool schemas, in upstream order plus the
  * P100-10-03 window-aware extension. Pass this to the Anthropic / Kimi
@@ -525,6 +573,9 @@ export const LUSE_TOOLS: readonly AnthropicTool[] = [
 	_listWindowsTool,
 	_screenshotWindowTool,
 	_focusWindowTool,
+	// P100-10-04 — stream-management tools (D-100-10-C, G-100-10-E gate)
+	_createStreamTool,
+	_listStreamsTool,
 ] as const
 
 /**
