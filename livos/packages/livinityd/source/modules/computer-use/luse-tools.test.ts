@@ -119,3 +119,33 @@ describe('Phase 100-10-03 luse window-aware tool schemas', () => {
 		expect(required).toContain('wid')
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 100-10-04 — luse stream-management tool schemas (D-100-10-C)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Phase 100-10-04 luse stream-management tool schemas', () => {
+	it('T-10-04-SCHEMA-01: create_stream tool is defined; requires display, optional port (D-100-10-C)', () => {
+		const tool = LUSE_TOOLS.find((t) => t.name === 'create_stream')
+		expect(tool).toBeDefined()
+		expect(tool!.input_schema.type).toBe('object')
+		const props = tool!.input_schema.properties as Record<string, {type?: string}>
+		expect(props.display).toBeDefined()
+		expect(props.display.type).toBe('string')
+		expect(props.port).toBeDefined()
+		expect(props.port.type).toMatch(/^(number|integer)$/)
+		const required = tool!.input_schema.required ?? []
+		expect(required).toContain('display')
+		expect(required).not.toContain('port')
+	})
+
+	it('T-10-04-SCHEMA-02: list_streams tool is defined with empty input_schema (D-100-10-C)', () => {
+		const tool = LUSE_TOOLS.find((t) => t.name === 'list_streams')
+		expect(tool).toBeDefined()
+		expect(tool!.input_schema.type).toBe('object')
+		const props = tool!.input_schema.properties ?? {}
+		expect(Object.keys(props)).toHaveLength(0)
+		const required = tool!.input_schema.required ?? []
+		expect(required).toHaveLength(0)
+	})
+})

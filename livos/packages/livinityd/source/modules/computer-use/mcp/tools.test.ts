@@ -466,3 +466,167 @@ describe('Phase 100-10-03 luse window-aware tool handlers', () => {
 		expect(opts.env!.DISPLAY).toBe(':10')
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 100-10-04 — luse stream-management tool handlers (D-100-10-C + G-100-10-E)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Phase 100-10-04 luse stream-management tool handlers', () => {
+	type RedisLike = {
+		get: ReturnType<typeof vi.fn>
+	}
+	type StreamManagerLike = {
+		startStream: ReturnType<typeof vi.fn>
+		listStreams: ReturnType<typeof vi.fn>
+	}
+
+	function makeMockRedis(getValue: string | null | Error = 'true'): RedisLike {
+		return {
+			get: vi.fn().mockImplementation(async () => {
+				if (getValue instanceof Error) throw getValue
+				return getValue
+			}),
+		}
+	}
+
+	function makeMockStreamManager(): StreamManagerLike {
+		return {
+			startStream: vi.fn().mockReturnValue({
+				streamId: 'stream-uuid-abc',
+				wsUrl: '/ws/stream/stream-uuid-abc',
+			}),
+			listStreams: vi.fn().mockReturnValue([
+				{
+					streamId: 'stream-uuid-abc',
+					mode: 'vnc-window',
+					wsUrl: '/ws/stream/stream-uuid-abc',
+					kind: 'vnc',
+				},
+			]),
+		}
+	}
+
+	it('T-10-04-HANDLER-01: registerLuseTools registers mcp__luse__create_stream when streamManager + redis provided', () => {
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never, {
+			streamManager: makeMockStreamManager(),
+			redis: makeMockRedis(),
+			userId: 'u1',
+			defaultDisplay: ':10',
+		} as never)
+		const registered = stub.registered.find(
+			(r) => r.name === 'mcp__luse__create_stream',
+		)
+		expect(registered).toBeDefined()
+	})
+
+	it('T-10-04-HANDLER-02: registerLuseTools registers mcp__luse__list_streams when streamManager provided', () => {
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never, {
+			streamManager: makeMockStreamManager(),
+			redis: makeMockRedis(),
+			userId: 'u1',
+			defaultDisplay: ':10',
+		} as never)
+		const registered = stub.registered.find(
+			(r) => r.name === 'mcp__luse__list_streams',
+		)
+		expect(registered).toBeDefined()
+	})
+
+	it('T-10-04-HANDLER-03: create_stream — flag=true → calls startStream({mode, target:{display}, userId})', async () => {
+		const stub = new StubMcpServer()
+		const sm = makeMockStreamManager()
+		const redis = makeMockRedis('true')
+		registerLuseTools(stub as never, {
+			streamManager: sm,
+			redis,
+			userId: 'u1',
+			defaultDisplay: ':10',
+		} as never)
+		const handler = stub.getHandler('mcp__luse__create_stream')!
+		const result = (await handler({display: ':10'})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		expect(redis.get).toHaveBeenCalledWith('liv:config:luse_can_create_streams')
+		expect(sm.startStream).toHaveBeenCalledTimes(1)
+		const callArg = sm.startStream.mock.calls[0][0]
+		expect(callArg.mode).toBe('vnc-window')
+		expect(callArg.target).toEqual({display: ':10'})
+		expect(callArg.userId).toBe('u1')
+		expect(result.isError).toBe(false)
+		// Result content should contain JSON with streamId + wsUrl.
+		const concat = JSON.stringify(result.content)
+		expect(concat).toMatch(/stream-uuid-abc/)
+		expect(concat).toMatch(/\/ws\/stream\/stream-uuid-abc/)
+	})
+
+	it('T-10-04-HANDLER-04: create_stream — flag=null (default disabled) → isError:true with message', async () => {
+		const stub = new StubMcpServer()
+		const sm = makeMockStreamManager()
+		const redis = makeMockRedis(null)
+		registerLuseTools(stub as never, {
+			streamManager: sm,
+			redis,
+			userId: 'u1',
+			defaultDisplay: ':10',
+		} as never)
+		const handler = stub.getHandler('mcp__luse__create_stream')!
+		const result = (await handler({display: ':10'})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		expect(redis.get).toHaveBeenCalledWith('liv:config:luse_can_create_streams')
+		// streamManager.startStream must NOT have been called (fail-closed).
+		expect(sm.startStream).not.toHaveBeenCalled()
+		expect(result.isError).toBe(true)
+		expect(result.content[0].text).toMatch(/luse_can_create_streams disabled/)
+	})
+
+	it('T-10-04-HANDLER-05: list_streams — calls streamManager.listStreams({userId}) and returns JSON array', async () => {
+		const stub = new StubMcpServer()
+		const sm = makeMockStreamManager()
+		const redis = makeMockRedis()
+		registerLuseTools(stub as never, {
+			streamManager: sm,
+			redis,
+			userId: 'u1',
+			defaultDisplay: ':10',
+		} as never)
+		const handler = stub.getHandler('mcp__luse__list_streams')!
+		const result = (await handler({})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		expect(sm.listStreams).toHaveBeenCalledTimes(1)
+		expect(sm.listStreams.mock.calls[0][0]).toEqual({userId: 'u1'})
+		expect(result.isError).toBe(false)
+		expect(result.content).toHaveLength(1)
+		expect(result.content[0].type).toBe('text')
+		const parsed = JSON.parse(result.content[0].text!)
+		expect(Array.isArray(parsed)).toBe(true)
+		expect(parsed[0].streamId).toBe('stream-uuid-abc')
+	})
+
+	it('T-10-04-HANDLER-06: create_stream — redis.get throws → isError:true (graceful degradation)', async () => {
+		const stub = new StubMcpServer()
+		const sm = makeMockStreamManager()
+		const redis = makeMockRedis(new Error('Redis connection refused'))
+		registerLuseTools(stub as never, {
+			streamManager: sm,
+			redis,
+			userId: 'u1',
+			defaultDisplay: ':10',
+		} as never)
+		const handler = stub.getHandler('mcp__luse__create_stream')!
+		const result = (await handler({display: ':10'})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		// Fail-closed: must not throw, must return isError:true.
+		expect(result.isError).toBe(true)
+		// Must NOT have invoked startStream.
+		expect(sm.startStream).not.toHaveBeenCalled()
+	})
+})
