@@ -109,10 +109,20 @@ export async function captureScreenshot(options?: CaptureScreenshotOptions): Pro
 
 	let primaryError: string | null = null
 
-	// Build maim argv. Window-scoped path: `maim -i <wid> <path>`. Default
+	// Build maim argv. Window-scoped path: `maim -i 0x<hex> <path>`. Default
 	// (host-display) path: `maim <path>` — unchanged pre-P97 behavior.
-	const maimArgs =
-		typeof windowId === 'number' ? ['-i', String(windowId), tempPath] : [tempPath]
+	//
+	// 2026-05-10 P100-09-01: hex form (`0x<hex>`) is the canonical X11 wid
+	// representation across the LivOS codebase (see streaming/vnc-bridge.ts:61
+	// `widHex = '0x' + opts.wid.toString(16)`, xdotool wid args throughout
+	// input.ts, all _NET_WM_* property reads). Empirical fix for the
+	// 100-08 deploy live-test bug where bytebot's computer_screenshot tool
+	// returned full Xvfb :1 (1920x1080) despite BYTEBOT_TARGET_WINDOW_ID
+	// being correctly set: `maim -i <decimal>` silently degraded to root
+	// capture on Ubuntu 24.04 maim 5.7.4 (decimal-vs-hex parsing
+	// inconsistency). Hex form parses unambiguously.
+	const widHex = typeof windowId === 'number' ? '0x' + windowId.toString(16) : null
+	const maimArgs = widHex !== null ? ['-i', widHex, tempPath] : [tempPath]
 
 	// Strategy 1: maim. XCB-based capture; works on composited GNOME Shell
 	// (X11) where scrot's imlib2-based XGetImage returns black.
@@ -139,12 +149,12 @@ export async function captureScreenshot(options?: CaptureScreenshotOptions): Pro
 			return parsePngResult(buffer)
 		}
 		primaryError = `maim produced suspiciously small file (${buffer.byteLength} bytes — likely uniform pixels${
-			typeof windowId === 'number' ? `; windowId=${windowId} may be occluded/minimized` : ''
+			widHex !== null ? `; windowId=${widHex} may be occluded/minimized` : ''
 		})`
 	} catch (err: unknown) {
 		const baseMessage = err instanceof Error ? err.message : String(err)
 		primaryError =
-			typeof windowId === 'number' ? `${baseMessage} (windowId=${windowId})` : baseMessage
+			widHex !== null ? `${baseMessage} (windowId=${widHex})` : baseMessage
 	}
 	await safeUnlink(tempPath)
 
@@ -163,7 +173,7 @@ export async function captureScreenshot(options?: CaptureScreenshotOptions): Pro
 		})
 	} catch (err: unknown) {
 		const message = err instanceof Error ? err.message : String(err)
-		const wContext = typeof windowId === 'number' ? ` windowId=${windowId}.` : ''
+		const wContext = widHex !== null ? ` windowId=${widHex}.` : ''
 		throw new Error(
 			`Both screenshot strategies failed (DISPLAY=${process.env.DISPLAY ?? '<unset>'}).${wContext} ` +
 				`maim: ${primaryError}; scrot: ${message}`,
