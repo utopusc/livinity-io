@@ -11,6 +11,22 @@
  * fluxbox keybindings (Alt+F1, Alt+Tab, etc.) would otherwise swallow
  * keys the WebApp expects.
  *
+ * P100-09-07 — stderr capture + early-exit health check.
+ *
+ * Original spawn used `stdio: 'ignore'` which silently swallowed fluxbox's
+ * stderr. When sudo NOPASSWD for `bruce` was missing on Mini PC (or PATH
+ * missed fluxbox, or :1 was unreachable, etc.), the child died on startup
+ * with no log trail. Downstream: no WM on :1 → root window has no
+ * `_NET_CLIENT_LIST` atom → every `wmctrl -lG` call returned
+ * `Cannot get client list properties (_NET_CLIENT_LIST or _WIN_CLIENT_LIST)`,
+ * and that error string surfaced where the user expected the Chrome stream
+ * to render.
+ *
+ * Fix: capture stderr to `stderrChunks`, forward each chunk to
+ * `logger.warn`, and race a 500ms timer against the child's `exit` event.
+ * If the child dies inside the window, throw an Error carrying the captured
+ * stderr in the message so deploys can diagnose the real cause loudly.
+ *
  * Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f (D-100-SACRED) — never touched.
  */
 import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
@@ -61,9 +77,23 @@ export async function startFluxbox(opts: StartFluxboxOpts = {}): Promise<Fluxbox
 	]
 	const child = spawnFn('sudo', args, {
 		detached: true,
-		stdio: 'ignore',
+		// P100-09-07: pipe stderr/stdout instead of 'ignore' so we can surface
+		// startup failures (sudo NOPASSWD missing, PATH issue, etc.) via logger
+		// instead of dying silently and leaving callers staring at downstream
+		// wmctrl `_NET_CLIENT_LIST` errors.
+		stdio: ['ignore', 'pipe', 'pipe'],
 		env: {...process.env, DISPLAY: display},
 	}) as ChildProcess
+
+	// P100-09-07: capture stderr chunks so the early-exit handler can put the
+	// real reason into the thrown Error, AND so a stderr-but-alive child still
+	// gets its complaints written to the log.
+	const stderrChunks: string[] = []
+	child.stderr?.on('data', (chunk: Buffer | string) => {
+		const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+		stderrChunks.push(text)
+		logger?.warn?.(`fluxbox stderr: ${text.trim()}`)
+	})
 
 	const exited = new Promise<{code: number | null; signal: NodeJS.Signals | null}>((resolve) => {
 		child.on('exit', (code, signal) => {
@@ -71,6 +101,28 @@ export async function startFluxbox(opts: StartFluxboxOpts = {}): Promise<Fluxbox
 			resolve({code, signal})
 		})
 	})
+
+	// P100-09-07: 500ms health check. If fluxbox dies inside this window the
+	// caller learns the actual stderr reason instead of getting a "successful"
+	// handle that points at a corpse.
+	const earlyExitRace = new Promise<{code: number | null; signal: NodeJS.Signals | null} | null>(
+		(resolve) => {
+			const timer = setTimeout(() => resolve(null), 500)
+			child.once('exit', (code, signal) => {
+				clearTimeout(timer)
+				resolve({code, signal})
+			})
+		},
+	)
+	const earlyExit = await earlyExitRace
+	if (earlyExit !== null) {
+		const stderrText = stderrChunks.join('').trim()
+		const reason = stderrText || 'no stderr output'
+		logger?.error?.(
+			`fluxbox FAILED to start within 500ms (code=${earlyExit.code} signal=${earlyExit.signal}). stderr: ${reason}`,
+		)
+		throw new Error(`fluxbox failed to start on ${display}: ${reason}`)
+	}
 
 	try {
 		child.unref?.()
