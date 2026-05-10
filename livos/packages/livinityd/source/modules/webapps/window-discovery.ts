@@ -43,12 +43,24 @@ const DEFAULT_POLL_INTERVAL_MS = 100
  * (`bytebot-mcp-config.ts:149-158`); the new P93 streaming + window-manager
  * code path missed the same step. Inject here so every helper inherits.
  *
- * Override via env vars `LIVOS_X11_DISPLAY` / `LIVOS_X11_XAUTHORITY` for
- * non-default Mini PC layouts (e.g. multi-seat hosts).
+ * Phase 100-08-02 — WebApp X11 environment.
+ *
+ * D-100-08-A: WebApps run on dedicated Xvfb :1 launched by livinityd
+ * (see ./xvfb-display.ts), NOT bruce's GNOME :0. Default flipped from
+ * `:0` to `:1`. LIVOS_X11_DISPLAY env override remains, so dev/staging
+ * boxes that haven't run xvfb yet can still set it back to `:0` for
+ * the legacy single-display path.
+ *
+ * Xauthority — Xvfb spawns with `-ac` (no host-based access control)
+ * so no Xauthority cookie is required. The GDM Xauthority path
+ * `/run/user/1000/gdm/Xauthority` is :0-specific and doesn't apply on
+ * :1 — leaving it propagated would point Chrome at the wrong cookie.
+ * The XAUTHORITY field is removed from WEBAPPS_X11_ENV; consumers that
+ * want to re-add it (e.g., a future xauth-protected Xvfb config) can
+ * read LIVOS_X11_XAUTHORITY directly.
  */
 const X11_ENV = {
-	DISPLAY: process.env.LIVOS_X11_DISPLAY ?? ':0',
-	XAUTHORITY: process.env.LIVOS_X11_XAUTHORITY ?? '/run/user/1000/gdm/Xauthority',
+	DISPLAY: process.env.LIVOS_X11_DISPLAY ?? ':1',
 } as const
 
 /** Public re-export so other webapps modules (window-manager, etc.) reuse the
