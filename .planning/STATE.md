@@ -64,7 +64,26 @@ Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 9 hot
 1. Mini PC redeploy — pulls 09-07/08/09 fixes. `bash /opt/livos/update.sh` on `bruce@10.69.31.68`
 2. Plan 100-08-06 — formal Mini PC deploy + 11-step UAT (multi-stream + per-WebApp control already informally validated)
 3. Plan 100-09-04 — mouse latency probe + patch (user-walked SSH)
-4. Plan 100-10 (future) — formal UAT walk for 100-09's bug fixes + UX rewrites
+4. **Plan 100-10 — Luse rename + per-WebApp Xvfb + UI polish** — CONTEXT written 2026-05-10 (commit `dc4cfbc7`). 8 user-reported issues. After `/clear` next session, run `/gsd-plan-phase 100-10`.
+
+## 100-10 Context (2026-05-10) — READY FOR PLANNING
+
+`.planning/phases/100-multi-stream-window-redesign/100-10-CONTEXT.md` (committed `dc4cfbc7`) — comprehensive 8-issue + 10-decision + 7-plan-outline context. User said `/clear` next, then run `/gsd-plan-phase 100-10`.
+
+Key decisions captured:
+- D-100-10-A: Per-WebApp Xvfb (`:10+index`) — solves multi-stream overlap + Chrome direct capture
+- D-100-10-B: Bytebot → Luse rename (project-wide, like Nexus→Liv P65)
+- D-100-10-C: Luse new tools (list_windows, screenshot_window, focus, create_stream, etc.)
+- D-100-10-D..G: UI cleanup (Skill button outside, Chat in-place, full-fit, remove Auto)
+- D-100-10-H: Sacred SHA preserved throughout
+- D-100-10-I: action_log backwards-compat shim (mcp__bytebot__* → mcp__luse__* lazy translate)
+
+Wave 1: 10-01 (Xvfb allocator foundation)
+Wave 2: 10-02 (Bytebot→Luse rename foundation)
+Wave 3: 10-03 + 10-04 + 10-05 + 10-06 (parallel: Luse tools + UI cleanup + chat response mode)
+Wave 4: 10-07 (user-walked deploy + 15-step UAT)
+
+Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` will stay UNTOUCHED throughout (sacred file has zero bytebot references; rename pass doesn't touch it).
 Wave 1: ✅ COMPLETE — `759ef597` P80, `9a276a11` P85-schema, `628ed1ca` P87, `12aa473f` summaries
 Wave 2: ✅ COMPLETE — `4379ea89` P81, `6f758067` P82, `0df7475b` P83, `49d79510` P86, `52944d16` P85-UI
 Wave 3: ✅ COMPLETE — `d719a175` P84 (MCP SoT + Smithery secondary + legacy mcp-panel deprecated)
