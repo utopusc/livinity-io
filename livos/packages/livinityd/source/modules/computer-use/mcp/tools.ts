@@ -346,14 +346,20 @@ export function buildHandlers(options: BytebotToolsOptions = {}): Record<string,
 		return withPostScreenshot(
 			`scroll ${summarizeArgs(args)}`,
 			() =>
-				scroll(
-					args as unknown as {
+				scroll({
+					...(args as unknown as {
 						coordinates: {x: number; y: number}
 						direction: 'up' | 'down' | 'left' | 'right'
 						scrollCount: number
 						holdKeys?: readonly string[]
-					},
-				),
+					}),
+					// P100-09-02: thread the bound wid into scroll so tryXdotoolScroll
+					// activates the target window before dispatching button 4/5/6/7
+					// (Chrome filters nut-js's synthetic XTestFakeButtonEvent —
+					// same fix as P100-07.3 click). Without this, scroll-down
+					// against a WebApp Chrome silently no-ops.
+					windowId: w,
+				}),
 			w,
 		)
 	},
