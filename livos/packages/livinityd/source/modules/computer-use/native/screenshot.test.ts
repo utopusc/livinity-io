@@ -144,3 +144,126 @@ describe('captureScreenshot', () => {
 		await expect(captureScreenshot()).rejects.toThrow(/EPERM/)
 	})
 })
+
+/**
+ * Phase 100-09-01 — hex wid argv assertion tests.
+ *
+ * These tests target the post-P79-04 / post-P79-05 implementation that uses
+ * `execFile('maim', ...)` rather than nut-js. They mock `node:child_process`
+ * to capture the argv passed to maim and assert on the `-i 0x<hex>` shape.
+ *
+ * The existing T1-T5 above predate the execFile rewrite and depend on the
+ * legacy nut-js mocks; they are documented as broken in 100-08-04-SUMMARY
+ * (out-of-scope here). This new describe block uses an isolated mock setup
+ * that does NOT depend on nut-js so it runs cleanly on the current source.
+ *
+ * Spec: 100-09-01-PLAN.md Task 1.
+ *   T-09-01-01 — windowId=0x4280002 → argv[0..1] = ['-i', '0x4280002'].
+ *   T-09-01-02 — no opts → argv = [<tempPath>] (no `-i`, host-display path
+ *                UNCHANGED — preserves host bytebot stream-desktop captures).
+ *   T-09-01-03 — windowId=10597059 (0xa1b2c3) → argv contains `0xa1b2c3`,
+ *                argv MUST NOT contain decimal `'10597059'`.
+ */
+
+// Hoisted mock state for execFile-based tests. These are NEW symbols that
+// don't collide with the nut-js mocks above (which target a different module).
+const execMocks = vi.hoisted(() => ({
+	// Recorded calls — each test reads this to assert argv shape.
+	recorded: [] as Array<{cmd: string; args: string[]}>,
+	// execFile signature: (file, args?, options?, callback) — promisified to
+	// (file, args?, options?). We mock the underlying callback form.
+	execFileImpl: vi.fn<
+		(
+			cmd: string,
+			args: string[],
+			options: unknown,
+			cb: (err: Error | null, stdout: string, stderr: string) => void,
+		) => void
+	>(),
+	// Stub valid-PNG buffer (size > 10_000 to pass blackThreshold guard).
+	// Header is real PNG signature + IHDR with width=1280, height=720 BE u32.
+	stubPngBuffer: Buffer.alloc(0),
+	// fs/promises mocks for the execFile path's readFile + unlink.
+	readFile2: vi.fn<(path: string) => Promise<Buffer>>(),
+	unlink2: vi.fn<(path: string) => Promise<void>>(),
+}))
+
+vi.mock('node:child_process', () => ({
+	execFile: execMocks.execFileImpl,
+}))
+
+// NOTE: node:fs/promises is already mocked above for the nut-js suite. The
+// `readFile`/`unlink` mocks declared in `mocks.readFileMock`/`mocks.unlinkMock`
+// (which feed `vi.mock('node:fs/promises', ...)`) are SHARED — but the
+// nut-js suite resets them in beforeEach and the new suite below resets them
+// in its own beforeEach to a different impl. This is fine: vi.mock factories
+// run once per file; per-test impls are switched via mockImplementation.
+
+describe('captureScreenshot — Phase 100-09-01 hex wid argv (window-scoped capture)', () => {
+	// 1280x720 PNG with valid IHDR + 12 KB body to pass blackThreshold (10_000)
+	// and the 2_000 windowed threshold. We craft real PNG header bytes so
+	// parsePngResult() at the end of captureScreenshot() returns sane width/height.
+	function makeStubPng(): Buffer {
+		const header = Buffer.from([
+			0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, // PNG signature
+			0x00, 0x00, 0x00, 0x0d, // IHDR length = 13
+			0x49, 0x48, 0x44, 0x52, // 'IHDR'
+			0x00, 0x00, 0x05, 0x00, // width = 1280 (BE u32)
+			0x00, 0x00, 0x02, 0xd0, // height = 720 (BE u32)
+		])
+		// Pad to 12 KB so byteLength > blackThreshold (10_000) for both windowed
+		// (2_000) and host-display (10_000) capture paths.
+		return Buffer.concat([header, Buffer.alloc(12_000, 0xff)])
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		execMocks.recorded.length = 0
+
+		// Mock execFile: record argv, write stub PNG, invoke callback success.
+		execMocks.execFileImpl.mockImplementation((cmd, args, _options, cb) => {
+			execMocks.recorded.push({cmd, args: [...args]})
+			// Don't actually write a file — readFile mock returns the stub buffer
+			// regardless of path. Just invoke success callback.
+			setImmediate(() => cb(null, '', ''))
+		})
+
+		// fs/promises mocks (shared with nut-js suite — re-stub for this suite).
+		const stubBuf = makeStubPng()
+		mocks.readFileMock.mockResolvedValue(stubBuf)
+		mocks.unlinkMock.mockResolvedValue(undefined)
+	})
+
+	it('T-09-01-01: passes -i 0x<hex> to maim when windowId is 0x4280002', async () => {
+		await captureScreenshot({windowId: 0x4280002})
+
+		const maimCall = execMocks.recorded.find(c => c.cmd === 'maim')
+		expect(maimCall).toBeDefined()
+		expect(maimCall!.args[0]).toBe('-i')
+		expect(maimCall!.args[1]).toBe('0x4280002')
+		// tempPath at args[2] — randomized; assert structurally.
+		expect(maimCall!.args[2]).toMatch(/\.png$/)
+	})
+
+	it('T-09-01-02: omits -i flag when windowId is not set (host-display path UNCHANGED)', async () => {
+		await captureScreenshot()
+
+		const maimCall = execMocks.recorded.find(c => c.cmd === 'maim')
+		expect(maimCall).toBeDefined()
+		expect(maimCall!.args[0]).not.toBe('-i')
+		// Single-arg form: just the tempPath.
+		expect(maimCall!.args).toHaveLength(1)
+		expect(maimCall!.args[0]).toMatch(/\.png$/)
+	})
+
+	it('T-09-01-03: windowId=10597059 (decimal) → argv contains 0xa1b2c3 (hex)', async () => {
+		await captureScreenshot({windowId: 10597059}) // 0xa1b2c3
+
+		const maimCall = execMocks.recorded.find(c => c.cmd === 'maim')
+		expect(maimCall).toBeDefined()
+		expect(maimCall!.args).toContain('-i')
+		expect(maimCall!.args).toContain('0xa1b2c3')
+		// Negative assertion: decimal form must NOT appear in argv.
+		expect(maimCall!.args).not.toContain('10597059')
+	})
+})
