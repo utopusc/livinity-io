@@ -366,3 +366,46 @@ describe('StreamManager — vnc-window mode (Phase 99-03)', () => {
 		mgr._clearForTests()
 	})
 })
+
+// ============================================================================
+// Phase 100-10-04 — vnc-window mode with {display} target (D-100-10-C / -A)
+// ============================================================================
+
+describe('StreamManager — vnc-window mode with {display} target (Phase 100-10-04)', () => {
+	it('T-10-04-SM-01: startStream({mode:"vnc-window", target:{display:":10"}}) spawns x11vnc with -display :10 argv', () => {
+		const {mgr, spawn} = makeVncManager()
+		const {streamId} = mgr.startStream({
+			userId: 'u1',
+			mode: 'vnc-window' as any,
+			target: {display: ':10'} as any,
+		})
+		expect(streamId).toMatch(/^[0-9a-f-]{36}$/)
+		expect(spawn).toHaveBeenCalledTimes(1)
+		const [cmd, args] = spawn.mock.calls[0] as [string, string[]]
+		expect(cmd).toBe('sudo')
+		// Display-mode argv includes -display :10 (NOT -id 0xHEX).
+		expect(args).toContain('-display')
+		expect(args).toContain(':10')
+		// -id form should NOT appear when target.display is set.
+		expect(args).not.toContain('-id')
+		mgr._clearForTests()
+	})
+
+	it('T-10-04-SM-02: idempotency key distinguishes {display} vs {wid} — different streamIds + spawns', () => {
+		const {mgr, spawn} = makeVncManager()
+		const a = mgr.startStream({
+			userId: 'u1',
+			mode: 'vnc-window' as any,
+			target: {display: ':10'} as any,
+		})
+		const b = mgr.startStream({
+			userId: 'u1',
+			mode: 'vnc-window' as any,
+			target: {wid: 0xabc} as any,
+		})
+		// Two distinct streamIds — display target and wid target share neither idempotency key nor port.
+		expect(a.streamId).not.toBe(b.streamId)
+		expect(spawn).toHaveBeenCalledTimes(2)
+		mgr._clearForTests()
+	})
+})
