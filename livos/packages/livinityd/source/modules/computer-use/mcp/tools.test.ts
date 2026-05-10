@@ -124,25 +124,55 @@ describe('registerLuseTools', () => {
 		mocks.setTimeoutMock.mockResolvedValue(undefined)
 	})
 
-	it('T1: registers LUSE_TOOLS.length handlers (17 upstream + 3 P100-10-03 window-aware = 20)', () => {
-		const stub = new StubMcpServer()
-		registerLuseTools(stub as never)
-		// LUSE_TOOLS has 20 entries post-P100-10-03 (17 upstream + 3 window-aware).
-		// The dispatcher registers all 20, but the 3 window-aware tools are
-		// registered under their `mcp__luse__*` prefixed names while the 17
-		// upstream tools register under their bare `tool.name` literals.
-		expect(LUSE_TOOLS).toHaveLength(20)
-		expect(stub.registered).toHaveLength(20)
+	it('T1: registers expected handler count (17 upstream + 3 P100-10-03 window-aware = 20 without streamManager; +2 P100-10-04 stream tools when streamManager opt-in)', () => {
+		// LUSE_TOOLS has 22 entries post-P100-10-04 (17 upstream + 3 window-aware
+		// + 2 stream-management). The standard loop registers 17 upstream tools
+		// under bare names; the 3 window-aware tools register under
+		// `mcp__luse__*` prefixed names; the 2 stream-management tools register
+		// under `mcp__luse__*` prefixed names ONLY when `streamManager` is
+		// wired into options (opt-in pattern mirrors skillReplayDeps from
+		// P97-07). Without options, stream tools are skipped → 20 total.
+		expect(LUSE_TOOLS).toHaveLength(22)
+		const stubBare = new StubMcpServer()
+		registerLuseTools(stubBare as never)
+		expect(stubBare.registered).toHaveLength(20)
+
+		// With streamManager opt-in, the 2 stream tools register too → 22 total.
+		const stubFull = new StubMcpServer()
+		registerLuseTools(stubFull as never, {
+			streamManager: {
+				startStream: () => ({streamId: 's', wsUrl: '/ws/s'}),
+				listStreams: () => [],
+			},
+			redis: {get: async () => null},
+			userId: 'admin',
+		} as never)
+		expect(stubFull.registered).toHaveLength(22)
 	})
 
-	it('T2: every LUSE_TOOL_NAMES entry has a registered handler (window-aware via mcp__luse__ prefix)', () => {
+	it('T2: every LUSE_TOOL_NAMES entry has a registered handler (window-aware + stream tools via mcp__luse__ prefix)', () => {
 		const stub = new StubMcpServer()
-		registerLuseTools(stub as never)
+		registerLuseTools(stub as never, {
+			streamManager: {
+				startStream: () => ({streamId: 's', wsUrl: '/ws/s'}),
+				listStreams: () => [],
+			},
+			redis: {get: async () => null},
+			userId: 'admin',
+		} as never)
 		const registeredNames = new Set(stub.registered.map((r) => r.name))
-		const windowAware = new Set(['list_windows', 'screenshot_window', 'focus_window'])
+		const prefixed = new Set([
+			// P100-10-03
+			'list_windows',
+			'screenshot_window',
+			'focus_window',
+			// P100-10-04
+			'create_stream',
+			'list_streams',
+		])
 		for (const name of LUSE_TOOL_NAMES) {
-			if (windowAware.has(name)) {
-				// P100-10-03 — registered under `mcp__luse__<name>` instead of bare name.
+			if (prefixed.has(name)) {
+				// Registered under `mcp__luse__<name>` instead of bare name.
 				expect(registeredNames.has(`mcp__luse__${name}`)).toBe(true)
 			} else {
 				expect(registeredNames.has(name)).toBe(true)

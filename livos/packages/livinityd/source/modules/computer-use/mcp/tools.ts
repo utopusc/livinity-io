@@ -136,6 +136,46 @@ export interface LuseToolsOptions {
 	 * stays scoped to its allocated Xvfb (`:10`, `:11`, ...) by default.
 	 */
 	defaultDisplay?: string
+	/**
+	 * Phase 100-10-04 — StreamManager handle for the stream-management
+	 * tools (`mcp__luse__create_stream`, `mcp__luse__list_streams`).
+	 * When omitted, the stream tools are NOT registered (the schema
+	 * entries in LUSE_TOOLS remain visible, but the server-side
+	 * registration is skipped — matches the `skillReplayDeps` pattern
+	 * from P97-07). Tests inject a mock.
+	 *
+	 * Duck-typed to avoid a hard dep cycle between computer-use and
+	 * streaming modules.
+	 */
+	streamManager?: {
+		startStream(opts: {
+			userId: string
+			mode: string
+			target: Record<string, unknown>
+		}): {streamId: string; wsUrl: string}
+		listStreams(filter: {userId: string}): Array<Record<string, unknown>>
+	}
+	/**
+	 * Phase 100-10-04 — Redis client used at call-time by
+	 * `mcp__luse__create_stream` to read the privilege-gate flag
+	 * `liv:config:luse_can_create_streams` (G-100-10-E). When `redis`
+	 * is null/undefined OR `redis.get` rejects, the handler fails closed
+	 * (returns isError:true). The MCP child process constructs its OWN
+	 * fresh ioredis client from `process.env.LUSE_REDIS_URL` at startup
+	 * (see `mcp/server.ts`) — NOT shared with the parent livinityd
+	 * process.
+	 */
+	redis?: {
+		get(key: string): Promise<string | null>
+	} | null
+	/**
+	 * Phase 100-10-04 — userId scope for the stream tools. `create_stream`
+	 * passes this to `streamManager.startStream({userId})` so the new
+	 * session is owned by the caller; `list_streams` passes this to
+	 * `streamManager.listStreams({userId})` so the agent only sees its
+	 * own sessions (user-scoped read).
+	 */
+	userId?: string
 }
 
 /**
@@ -619,7 +659,7 @@ function jsonSchemaToZodRawShape(rootSchema: {type: 'object'; properties: Record
 }
 
 /**
- * P100-10-03 — the 3 window-aware tools are registered on the server with
+ * P100-10-03 + P100-10-04 — these tools are registered on the server with
  * the explicit `mcp__luse__*` prefix (NOT through the standard
  * tool.name registration loop) so the agent calls them by their
  * fully-qualified host-side dispatcher name. Their schemas live in
@@ -627,9 +667,13 @@ function jsonSchemaToZodRawShape(rootSchema: {type: 'object'; properties: Record
  * the standard loop to avoid double-registration.
  */
 const LUSE_WINDOW_TOOL_NAMES = new Set<string>([
+	// P100-10-03
 	'list_windows',
 	'screenshot_window',
 	'focus_window',
+	// P100-10-04 — stream-management
+	'create_stream',
+	'list_streams',
 ])
 
 export function registerLuseTools(server: McpServerLike, options?: LuseToolsOptions): void {
@@ -683,6 +727,9 @@ export function registerLuseTools(server: McpServerLike, options?: LuseToolsOpti
 
 	// ── P100-10-03 — window-aware tool registrations (D-100-10-C) ─────────────
 	registerLuseWindowTools(server, options)
+
+	// ── P100-10-04 — stream-management tool registrations (D-100-10-C, G-100-10-E) ──
+	registerLuseStreamTools(server, options)
 }
 
 /**
@@ -834,6 +881,124 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 						text: JSON.stringify({ok: true, wid: Math.trunc(widRaw), widHex, display}),
 					},
 				],
+				isError: false,
+			}
+		}),
+	)
+}
+
+/**
+ * P100-10-04 — Register the two stream-management tools
+ * (`mcp__luse__create_stream`, `mcp__luse__list_streams`) under their
+ * fully-qualified prefixed names (D-100-10-C).
+ *
+ * Both tools require `options.streamManager`. `create_stream` additionally
+ * gates on a Redis flag (G-100-10-E `liv:config:luse_can_create_streams`)
+ * — when the flag is unset / not exactly the string `"true"` / Redis
+ * rejects, the handler returns `isError:true` (fail-closed). If
+ * `streamManager` is undefined, NEITHER tool is registered (matches the
+ * `skillReplayDeps` opt-in pattern from P97-07).
+ *
+ * `list_streams` is read-only and user-scoped via the existing
+ * `streamManager.listStreams({userId})` filter — no privilege gate.
+ */
+function registerLuseStreamTools(
+	server: McpServerLike,
+	options?: LuseToolsOptions,
+): void {
+	const sm = options?.streamManager
+	if (!sm) {
+		// Opt-in registration. Tools are visible in LUSE_TOOLS schema but the
+		// host-side handlers are not wired — matches skillReplayDeps pattern.
+		return
+	}
+	const userId = options?.userId ?? 'admin'
+	const redis = options?.redis ?? null
+
+	const createStreamTool = LUSE_TOOLS.find((t) => t.name === 'create_stream')!
+	const listStreamsTool = LUSE_TOOLS.find((t) => t.name === 'list_streams')!
+
+	const wrapHandler = (
+		fn: (args: Record<string, unknown>) => Promise<LivCallToolResult>,
+	) => async (args: Record<string, unknown>) => {
+		try {
+			return await fn(args ?? {})
+		} catch (err) {
+			return {
+				content: [{type: 'text', text: `Error: ${(err as Error).message}`}],
+				isError: true,
+			}
+		}
+	}
+
+	// mcp__luse__create_stream — privilege-gated stream spawn.
+	server.registerTool(
+		'mcp__luse__create_stream',
+		{
+			description: createStreamTool.description,
+			inputSchema: jsonSchemaToZodRawShape(createStreamTool.input_schema),
+		},
+		wrapHandler(async (args) => {
+			// G-100-10-E privilege gate — fail-closed by default. Redis client
+			// is the FRESH ioredis instance constructed by mcp/server.ts from
+			// process.env.LUSE_REDIS_URL (NOT shared with the parent livinityd).
+			let canCreate = false
+			if (redis) {
+				try {
+					canCreate = (await redis.get('liv:config:luse_can_create_streams')) === 'true'
+				} catch {
+					canCreate = false // Redis unavailable → deny.
+				}
+			}
+			if (!canCreate) {
+				return {
+					content: [
+						{
+							type: 'text',
+							text: 'Error: luse_can_create_streams disabled (set Redis liv:config:luse_can_create_streams=true to enable)',
+						},
+					],
+					isError: true,
+				}
+			}
+			const display = args.display as string | undefined
+			if (typeof display !== 'string' || display.length === 0) {
+				return {
+					content: [{type: 'text', text: 'Error: display is required and must be a non-empty string'}],
+					isError: true,
+				}
+			}
+			const result = sm.startStream({
+				mode: 'vnc-window',
+				target: {display},
+				userId,
+			})
+			return {
+				content: [
+					{
+						type: 'text',
+						text: JSON.stringify({
+							streamId: result.streamId,
+							wsUrl: result.wsUrl,
+						}),
+					},
+				],
+				isError: false,
+			}
+		}),
+	)
+
+	// mcp__luse__list_streams — read-only, user-scoped.
+	server.registerTool(
+		'mcp__luse__list_streams',
+		{
+			description: listStreamsTool.description,
+			inputSchema: jsonSchemaToZodRawShape(listStreamsTool.input_schema),
+		},
+		wrapHandler(async () => {
+			const records = sm.listStreams({userId})
+			return {
+				content: [{type: 'text', text: JSON.stringify(records)}],
 				isError: false,
 			}
 		}),

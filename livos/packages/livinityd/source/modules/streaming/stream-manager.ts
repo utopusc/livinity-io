@@ -48,7 +48,12 @@ function allocateVncPort(): number {
 	return port
 }
 
-export type VncWindowTarget = {wid: number}
+// Phase 100-10-04 (D-100-10-C): vnc-window mode now accepts {display} target
+// for whole-display capture (luse__create_stream tool surface). When the union
+// member with `display` is supplied, the spawn path uses vnc-bridge's
+// `-display :N` mode (already added in 100-10-01) and the idempotency cache
+// key (JSON.stringify(target)) naturally distinguishes {display} from {wid}.
+export type VncWindowTarget = {wid: number} | {display: string}
 
 export type StreamTarget =
 	| Omit<DesktopOpts, 'mode'>
@@ -102,7 +107,14 @@ type VncSession = {
 	targetKey: string
 	x11vnc: ChildProcess
 	rfbPort: number
-	wid: number
+	/** Phase 100-10-04 — wid is now optional: present for legacy single-window
+	 *  capture, undefined for whole-display capture (when target carries
+	 *  `display` instead). */
+	wid?: number
+	/** Phase 100-10-04 — display string when target captures the whole
+	 *  Xvfb (D-100-10-A `:10`, `:11`, ...); undefined for legacy single-window
+	 *  capture. */
+	display?: string
 	startedAt: number
 	status: StreamStatus
 	stopRequested: boolean
@@ -179,16 +191,34 @@ export class StreamManager extends EventEmitter {
 
 		// 2.5 Phase 99 — vnc-window branch (D-99-04). Returns BEFORE the
 		// ffmpeg/gst argv builder so encoder-args is never invoked for vnc.
+		//
+		// Phase 100-10-04 (D-100-10-C): vnc-window mode now accepts EITHER
+		// `{wid: number}` (legacy single-window capture, x11vnc -id 0xHEX) OR
+		// `{display: string}` (whole-display capture, x11vnc -display :N — used
+		// by the luse__create_stream tool surface). The discriminated union
+		// picks the right spawnVncForWindow argv shape; the idempotency key
+		// (JSON.stringify(target)) naturally separates the two variants.
 		if (opts.mode === 'vnc-window') {
 			const target = opts.target as VncWindowTarget
-			if (!Number.isInteger(target.wid) || target.wid <= 0) {
+			const hasWid = 'wid' in target && typeof target.wid === 'number'
+			const hasDisplay =
+				'display' in target && typeof target.display === 'string' && target.display.length > 0
+			if (!hasWid && !hasDisplay) {
 				throw new Error(
-					`stream-manager: vnc-window target.wid must be a positive integer (got ${target.wid})`,
+					`stream-manager: vnc-window target must include either {wid: positive int} or {display: string} (got ${JSON.stringify(target)})`,
 				)
 			}
+			if (hasWid && (!Number.isInteger((target as {wid: number}).wid) || (target as {wid: number}).wid <= 0)) {
+				throw new Error(
+					`stream-manager: vnc-window target.wid must be a positive integer (got ${(target as {wid: number}).wid})`,
+				)
+			}
+			const widValue = hasWid ? (target as {wid: number}).wid : undefined
+			const displayValue = hasDisplay ? (target as {display: string}).display : undefined
 			const rfbPort = allocateVncPort()
 			const x11vnc = spawnVncForWindow({
-				wid: target.wid,
+				wid: widValue,
+				display: displayValue,
 				rfbPort,
 				spawnFactory: this.spawnFactory as never,
 				logger: this.logger,
@@ -203,12 +233,14 @@ export class StreamManager extends EventEmitter {
 				targetKey,
 				x11vnc,
 				rfbPort,
-				wid: target.wid,
+				wid: widValue,
+				display: displayValue,
 				startedAt: Date.now(),
 				status: 'alive',
 				stopRequested: false,
 			}
 			this.streams.set(streamId, vncSession)
+			const targetLabel = hasDisplay ? `display=${displayValue}` : `wid=${widValue}`
 			x11vnc.on('exit', (code, signal) => {
 				if (vncSession.stopRequested) {
 					this.logger?.info?.(
@@ -218,14 +250,14 @@ export class StreamManager extends EventEmitter {
 				}
 				if (code !== 0 && code !== null) {
 					this.logger?.error?.(
-						`stream ${streamId}: x11vnc crashed (code=${code} signal=${signal} wid=${target.wid})`,
+						`stream ${streamId}: x11vnc crashed (code=${code} signal=${signal} ${targetLabel})`,
 					)
 					vncSession.status = 'crashed'
 					this.emit('crash', {streamId, code, signal})
 				}
 			})
 			this.logger?.info?.(
-				`stream ${streamId} started (user=${opts.userId} mode=vnc-window wid=${target.wid} rfbPort=${rfbPort})`,
+				`stream ${streamId} started (user=${opts.userId} mode=vnc-window ${targetLabel} rfbPort=${rfbPort})`,
 			)
 			return {streamId, wsUrl: wsUrlFor(streamId)}
 		}
@@ -352,8 +384,12 @@ export class StreamManager extends EventEmitter {
 				session.x11vnc.once('exit', onExit)
 			})
 			this.streams.delete(streamId)
+			const targetLabel =
+				session.display !== undefined
+					? `display=${session.display}`
+					: `wid=${session.wid}`
 			this.logger?.info?.(
-				`stream ${streamId} stopped (vnc, wid=${session.wid})`,
+				`stream ${streamId} stopped (vnc, ${targetLabel})`,
 			)
 			return {stopped: true}
 		}

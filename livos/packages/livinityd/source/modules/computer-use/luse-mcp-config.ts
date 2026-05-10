@@ -210,10 +210,23 @@ export function buildLuseConfig(
 	//     screen.capture() hangs when X server is unreachable, triggering MCP
 	//     SDK timeouts ('Connection closed' from client side); the GDM path
 	//     fixes that. Override via env LUSE_XAUTHORITY.
+	//
+	// Phase 100-10-04 (D-100-10-C, G-100-10-E) — LUSE_REDIS_URL threads
+	// livinityd's resolved Redis connection URL into the spawned MCP child.
+	// The MCP server is a SEPARATE Node.js process; it cannot reuse the
+	// parent's ioredis client. Instead, `mcp/server.ts` constructs its OWN
+	// fresh `new Redis(luseRedisUrl, ...)` at boot and passes it into
+	// `registerLuseTools({redis})` so the `mcp__luse__create_stream` handler
+	// can read the privilege-gate flag `liv:config:luse_can_create_streams`
+	// at call-time. When `process.env.REDIS_URL` is unset, the empty string
+	// passes through and the MCP child falls back to "no Redis" semantics
+	// (gate denies — fail-closed).
+	const luseRedisUrl = env.REDIS_URL ?? ''
 	const baseEnv: Record<string, string> = descriptor
 		? {
 				DISPLAY: descriptor.display ?? ':1',
 				[LUSE_TARGET_WINDOW_ID_ENV]: String(descriptor.windowId),
+				LUSE_REDIS_URL: luseRedisUrl,
 			}
 		: {
 				DISPLAY: env.DISPLAY ?? ':0',
@@ -221,6 +234,7 @@ export function buildLuseConfig(
 					env.LUSE_XAUTHORITY ??
 					env.XAUTHORITY ??
 					'/run/user/1000/gdm/Xauthority',
+				LUSE_REDIS_URL: luseRedisUrl,
 			}
 	return {
 		name: descriptor ? `luse:webapp:${descriptor.instanceKey}` : 'luse',
