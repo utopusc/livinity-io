@@ -148,3 +148,56 @@ describe('WebAppStreamWindow — smoke import', () => {
 		expect(typeof mod.default).toBe('function')
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 100-09-05 — drawer Chat replaced by inline bottom bar.
+// ─────────────────────────────────────────────────────────────────
+
+const BOTTOM_BAR_PATH = resolve(__dirname, 'app-contents/webapp-chat-bottom-bar.tsx')
+const STORE_PATH = resolve(__dirname, 'webapp-drawer-store.ts')
+const FLOATING_BAR_PATH = resolve(__dirname, 'webapp-floating-action-bar.tsx')
+
+function safeRead(path: string): string {
+	try {
+		return readFileSync(path, 'utf8')
+	} catch {
+		return ''
+	}
+}
+
+describe('Phase 100-09-05 inline chat at bottom', () => {
+	it("T-09-05-01: renders <WebAppChatBottomBar/> inside webapp-stream-window.tsx", () => {
+		expect(SRC).toMatch(/<WebAppChatBottomBar\b/)
+		expect(SRC).toMatch(/from '\.\/webapp-chat-bottom-bar'/)
+	})
+
+	it('T-09-05-02: Sheet drawer host no longer renders chat branch', () => {
+		expect(SRC).not.toMatch(/openDrawer === 'chat'\s*\?\s*<WebAppChatDrawer/)
+		// The Sheet open prop should explicitly exclude 'chat':
+		expect(SRC).toMatch(/openDrawer !== null && openDrawer !== 'chat'/)
+	})
+
+	it('T-09-05-05: WebAppChatBottomBar component file exists, anchored absolute bottom, uses required hooks', () => {
+		const bottomSrc = safeRead(BOTTOM_BAR_PATH)
+		expect(bottomSrc.length).toBeGreaterThan(0)
+		expect(bottomSrc).toMatch(/absolute\s+inset-x-0\s+bottom-0/)
+		expect(bottomSrc).toMatch(/useWebAppAgent/)
+		expect(bottomSrc).toMatch(/chatLogExpandedByWebappId/)
+		expect(bottomSrc).toMatch(/ChatInput/)
+	})
+})
+
+describe('Phase 100-09-05 drawer store + floating bar', () => {
+	it('T-09-05-03: drawer store has toggleChatLog action + chatLogExpandedByWebappId state', () => {
+		const storeSrc = safeRead(STORE_PATH)
+		expect(storeSrc).toMatch(/toggleChatLog/)
+		expect(storeSrc).toMatch(/chatLogExpandedByWebappId/)
+	})
+
+	it('T-09-05-04: floating bar Chat icon calls toggleChatLog (not drawer toggle for chat)', () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		expect(barSrc).toMatch(/toggleChatLog\(webappId\)/)
+		// Sentinel: chat must be branch-distinguished:
+		expect(barSrc).toMatch(/id === 'chat'/)
+	})
+})
