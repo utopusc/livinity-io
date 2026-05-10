@@ -125,10 +125,59 @@ function spawnAndForget(command: string, args: string[]): void {
 
 /**
  * Run `wmctrl -lx` and return its stdout. Errors propagate up.
+ *
+ * 2026-05-10 P100-10-03 — optional `display` parameter threads through as
+ * a `DISPLAY=<value>` env override on the exec call so wmctrl talks to
+ * the caller's per-WebApp Xvfb display (LUSE_DISPLAY) rather than the
+ * default host display. W4 lock: backend stays on wmctrl (NOT xdotool
+ * search) to preserve the 240+ existing tests' invariants.
  */
-async function getWmctrlListOutput(): Promise<string> {
+async function getWmctrlListOutput(display?: string): Promise<string> {
+	if (display !== undefined) {
+		const {stdout} = await exec('wmctrl -lx', {env: {...process.env, DISPLAY: display}})
+		return stdout
+	}
 	const {stdout} = await exec('wmctrl -lx')
 	return stdout
+}
+
+/**
+ * 2026-05-10 P100-10-03 — Run `wmctrl -lG` and return its stdout.
+ *
+ * Unlike `wmctrl -lx` (which lists wm-class + title), the `-lG` flag emits
+ * the per-window geometry tuple: `<wid_hex> <desktop> <x> <y> <w> <h>
+ * <host> <title...>`. The agent needs this for click-coordinate planning
+ * in window-relative space.
+ *
+ * W4 lock (D-100-10-C / 100-10-CONTEXT.md): we deliberately stay on
+ * wmctrl rather than swapping to `xdotool search --onlyvisible --name .`
+ * — the existing module is wmctrl-based; switching backends would
+ * invalidate the existing 240+ tests' invariants.
+ */
+async function getWmctrlGeometryOutput(display: string): Promise<string> {
+	const {stdout} = await exec('wmctrl -lG', {env: {...process.env, DISPLAY: display}})
+	return stdout
+}
+
+/**
+ * Parse a single `wmctrl -lG` output line into a window record with
+ * geometry. Line format: `<wid_hex>  <desktop>  <x>  <y>  <w>  <h>
+ * <host>  <title...>`. Returns null for malformed lines.
+ */
+function parseWmctrlGeometryLine(
+	line: string,
+): {id: string; geometry: {x: number; y: number; w: number; h: number}; title: string} | null {
+	const parts = line.split(/\s+/)
+	if (parts.length < 8) return null
+	const [id, , xStr, yStr, wStr, hStr, , ...titleParts] = parts
+	if (!id) return null
+	const x = Number(xStr)
+	const y = Number(yStr)
+	const w = Number(wStr)
+	const h = Number(hStr)
+	if (![x, y, w, h].every((n) => Number.isFinite(n))) return null
+	const title = titleParts.join(' ').trim()
+	return {id, geometry: {x, y, w, h}, title}
 }
 
 /**
@@ -244,28 +293,103 @@ export async function openOrFocus(
 }
 
 /**
- * listWindows — return all open windows as `{id, class, title}` records.
+ * listWindows — return all open windows.
  *
- * Wraps `wmctrl -lx`. Malformed lines are skipped with a console.warn (T-72N3-03 — output
- * is bounded by # of open windows, low cardinality).
+ * **Legacy (no-arg) call:** wraps `wmctrl -lx`, returns
+ * `Array<{id, class, title}>`. Used by existing `openOrFocus` flows and
+ * pre-P100-10-03 callers. Malformed lines are skipped with a
+ * console.warn (T-72N3-03 — output is bounded by # of open windows,
+ * low cardinality).
+ *
+ * **Display-scoped (P100-10-03) call:** when `opts.display` is set (or
+ * defaults from `LUSE_DISPLAY` / `DISPLAY` env), wraps `wmctrl -lG`
+ * with `DISPLAY=<display>` env override and returns
+ * `Array<{id, class, title, geometry: {x,y,w,h}, display}>`. The
+ * per-WebApp Luse MCP child reads `LUSE_DISPLAY` from env via the
+ * default-fill in `mcp__luse__list_windows`. W4 lock — stays on wmctrl
+ * (NOT xdotool search) per D-100-10-C / 100-10-CONTEXT.md.
+ *
+ * The two call-shapes are distinguished by whether `opts` is undefined
+ * vs an explicit `{display?: string}` object. Calling `listWindows()`
+ * with no args preserves the pre-P100-10-03 return shape; calling
+ * `listWindows({})` or `listWindows({display: ':10'})` returns the
+ * geometry-extended shape with `display` field populated.
  */
-export async function listWindows(): Promise<
-	Array<{id: string; class: string; title: string}>
-> {
+export type ListWindowsLegacy = {id: string; class: string; title: string}
+export type ListWindowsExtended = {
+	id: string
+	class: string
+	title: string
+	geometry: {x: number; y: number; w: number; h: number}
+	display: string
+}
+
+export function listWindows(): Promise<Array<ListWindowsLegacy>>
+export function listWindows(opts: {display?: string}): Promise<Array<ListWindowsExtended>>
+export async function listWindows(
+	opts?: {display?: string},
+): Promise<Array<ListWindowsLegacy> | Array<ListWindowsExtended>> {
 	ensureLinuxOrThrow('listWindows')
 
-	const stdout = await getWmctrlListOutput()
-	const lines = stdout.split('\n').filter(line => line.trim().length > 0)
-	const result: Array<{id: string; class: string; title: string}> = []
-	for (const line of lines) {
-		const parsed = parseWmctrlLine(line)
-		if (parsed) {
-			result.push(parsed)
-		} else {
-			console.warn(
-				`[native/window] skipping malformed wmctrl -lx line: ${JSON.stringify(line)}`,
-			)
+	// Legacy no-arg path — preserved verbatim for back-compat callers
+	// (openOrFocus + tests T6/T7).
+	if (opts === undefined) {
+		const stdout = await getWmctrlListOutput()
+		const lines = stdout.split('\n').filter((line) => line.trim().length > 0)
+		const result: Array<ListWindowsLegacy> = []
+		for (const line of lines) {
+			const parsed = parseWmctrlLine(line)
+			if (parsed) {
+				result.push(parsed)
+			} else {
+				console.warn(
+					`[native/window] skipping malformed wmctrl -lx line: ${JSON.stringify(line)}`,
+				)
+			}
 		}
+		return result
+	}
+
+	// P100-10-03 display-scoped path. Resolution priority:
+	//   1. opts.display (explicit)
+	//   2. LUSE_DISPLAY env (per-WebApp Luse MCP child)
+	//   3. DISPLAY env (process default)
+	//   4. ':0' (host default)
+	const display = opts.display ?? process.env.LUSE_DISPLAY ?? process.env.DISPLAY ?? ':0'
+
+	// Issue TWO wmctrl commands in parallel so we can correlate geometry +
+	// wm-class for each wid. -lG gives geometry but not class; -lx gives
+	// class but not geometry. Both are bounded by window count.
+	const [geomStdout, classStdout] = await Promise.all([
+		getWmctrlGeometryOutput(display),
+		getWmctrlListOutput(display),
+	])
+
+	// Build a wid → class lookup from -lx output.
+	const classMap = new Map<string, string>()
+	for (const line of classStdout.split('\n')) {
+		if (line.trim().length === 0) continue
+		const parsed = parseWmctrlLine(line)
+		if (parsed) classMap.set(parsed.id, parsed.class)
+	}
+
+	const result: Array<ListWindowsExtended> = []
+	for (const line of geomStdout.split('\n')) {
+		if (line.trim().length === 0) continue
+		const parsed = parseWmctrlGeometryLine(line)
+		if (!parsed) {
+			console.warn(
+				`[native/window] skipping malformed wmctrl -lG line: ${JSON.stringify(line)}`,
+			)
+			continue
+		}
+		result.push({
+			id: parsed.id,
+			class: classMap.get(parsed.id) ?? '',
+			title: parsed.title,
+			geometry: parsed.geometry,
+			display,
+		})
 	}
 	return result
 }

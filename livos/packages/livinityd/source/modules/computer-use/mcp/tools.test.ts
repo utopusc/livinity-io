@@ -124,20 +124,30 @@ describe('registerLuseTools', () => {
 		mocks.setTimeoutMock.mockResolvedValue(undefined)
 	})
 
-	it('T1: registers exactly LUSE_TOOLS.length handlers (17)', () => {
+	it('T1: registers LUSE_TOOLS.length handlers (17 upstream + 3 P100-10-03 window-aware = 20)', () => {
 		const stub = new StubMcpServer()
 		registerLuseTools(stub as never)
-		expect(stub.registered).toHaveLength(LUSE_TOOLS.length)
-		expect(stub.registered).toHaveLength(17)
+		// LUSE_TOOLS has 20 entries post-P100-10-03 (17 upstream + 3 window-aware).
+		// The dispatcher registers all 20, but the 3 window-aware tools are
+		// registered under their `mcp__luse__*` prefixed names while the 17
+		// upstream tools register under their bare `tool.name` literals.
+		expect(LUSE_TOOLS).toHaveLength(20)
+		expect(stub.registered).toHaveLength(20)
 	})
 
-	it('T2: every LUSE_TOOL_NAMES entry has a registered handler', () => {
+	it('T2: every LUSE_TOOL_NAMES entry has a registered handler (window-aware via mcp__luse__ prefix)', () => {
 		const stub = new StubMcpServer()
 		registerLuseTools(stub as never)
 		const registeredNames = new Set(stub.registered.map((r) => r.name))
+		const windowAware = new Set(['list_windows', 'screenshot_window', 'focus_window'])
 		for (const name of LUSE_TOOL_NAMES) {
-			expect(registeredNames.has(name)).toBe(true)
-			expect(typeof HANDLERS[name]).toBe('function')
+			if (windowAware.has(name)) {
+				// P100-10-03 — registered under `mcp__luse__<name>` instead of bare name.
+				expect(registeredNames.has(`mcp__luse__${name}`)).toBe(true)
+			} else {
+				expect(registeredNames.has(name)).toBe(true)
+				expect(typeof HANDLERS[name]).toBe('function')
+			}
 		}
 	})
 
@@ -410,7 +420,7 @@ describe('Phase 100-10-03 luse window-aware tool handlers', () => {
 		const handler = stub.getHandler('mcp__luse__list_windows')!
 		await handler({})
 		expect(mocks.listWindows).toHaveBeenCalledTimes(1)
-		const callArg = mocks.listWindows.mock.calls[0]![0] as {display?: string} | undefined
+		const callArg = (mocks.listWindows.mock.calls as unknown as Array<Array<{display?: string} | undefined>>)[0]?.[0]
 		expect(callArg).toBeDefined()
 		expect(callArg!.display).toBe(':10')
 	})
@@ -424,9 +434,10 @@ describe('Phase 100-10-03 luse window-aware tool handlers', () => {
 			isError: boolean
 		}
 		expect(mocks.captureScreenshot).toHaveBeenCalledTimes(1)
-		const arg = mocks.captureScreenshot.mock.calls[0]![0] as {wid?: number; windowId?: number}
+		const arg = (mocks.captureScreenshot.mock.calls as unknown as Array<Array<{wid?: number; windowId?: number}>>)[0]?.[0]
 		// Accept either {wid} (new API) or {windowId} (back-compat with screenshot.ts P97-01)
-		expect(arg.wid ?? arg.windowId).toBe(0xabc)
+		expect(arg).toBeDefined()
+		expect(arg!.wid ?? arg!.windowId).toBe(0xabc)
 		expect(result.isError).toBe(false)
 		const imageBlock = result.content.find((c) => c.type === 'image')
 		expect(imageBlock).toBeDefined()

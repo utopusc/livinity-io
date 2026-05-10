@@ -52,8 +52,15 @@ async function main(): Promise<void> {
 		}
 	}
 
+	// P100-10-03 — `LUSE_DISPLAY` env (set by 100-10-01's WebAppWindowManager
+	// via 100-10-02's LuseMcpConfig descriptor) scopes the window-aware tools
+	// (`mcp__luse__list_windows`, etc.) to this WebApp's allocated Xvfb
+	// display (`:10`, `:11`, ...). When unset, fall back to `DISPLAY` so
+	// host-display Luse instances still work (legacy behavior).
+	const defaultDisplay = process.env.LUSE_DISPLAY ?? process.env.DISPLAY
+
 	const server = new McpServer({name: 'luse', version: '1.0.0'})
-	registerLuseTools(server as never, {defaultWindowId})
+	registerLuseTools(server as never, {defaultWindowId, defaultDisplay})
 
 	const transport = new StdioServerTransport()
 	await server.connect(transport)
@@ -62,7 +69,7 @@ async function main(): Promise<void> {
 	process.stderr.write(
 		`[luse-mcp] connected via stdio transport${
 			defaultWindowId !== undefined ? ` (windowId=${defaultWindowId})` : ''
-		}\n`,
+		}${defaultDisplay !== undefined ? ` (display=${defaultDisplay})` : ''}\n`,
 	)
 }
 
