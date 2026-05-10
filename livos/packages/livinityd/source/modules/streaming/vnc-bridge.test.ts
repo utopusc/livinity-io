@@ -55,18 +55,19 @@ function makeSpawnReturning(stderr?: EventEmitter): {
 // ---------- Tests ----------
 
 describe('vnc-bridge — spawnVncForWindow', () => {
-	it('spawn argv: passes canonical D-99-01 sudo + DISPLAY/XAUTHORITY + x11vnc flags with hex wid', () => {
+	it('spawn argv: passes canonical D-99-01 sudo + DISPLAY=:1 + x11vnc flags with hex wid (P100-08-02 — no XAUTHORITY argv)', () => {
 		const {factory} = makeSpawnReturning()
 		spawnVncForWindow({wid: 0xabcdef, rfbPort: 15999, spawnFactory: factory as never})
 		expect(factory).toHaveBeenCalledTimes(1)
 		const [cmd, args] = factory.mock.calls[0] as [string, string[]]
 		expect(cmd).toBe('sudo')
+		// P100-08-02: DISPLAY flipped :0 → :1 (D-100-08-A); XAUTHORITY argv
+		// element dropped (Xvfb :1 runs with -ac, no cookie required).
 		expect(args).toEqual([
 			'-n',
 			'-u',
 			'bruce',
-			'DISPLAY=:0',
-			'XAUTHORITY=/run/user/1000/gdm/Xauthority',
+			'DISPLAY=:1',
 			'/usr/bin/x11vnc',
 			'-id',
 			'0xabcdef',
@@ -78,6 +79,9 @@ describe('vnc-bridge — spawnVncForWindow', () => {
 			'-noxdamage',
 			'-nopw',
 		])
+		// W1 leak guard: even if process.env.XAUTHORITY is set, no XAUTHORITY=
+		// argv element should sneak into the spawn argv.
+		expect(args.find(a => typeof a === 'string' && a.startsWith('XAUTHORITY='))).toBeUndefined()
 	})
 
 	it('exits non-zero with stderr tail: logger.error includes argv + last stderr lines', () => {
