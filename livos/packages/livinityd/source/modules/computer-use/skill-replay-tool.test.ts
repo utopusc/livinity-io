@@ -12,7 +12,11 @@
 
 import {describe, it, expect, vi, beforeEach} from 'vitest'
 
-import {executeWebAppReplaySkill, WEBAPP_REPLAY_SKILL_TOOL} from './skill-replay-tool.js'
+import {
+	executeWebAppReplaySkill,
+	WEBAPP_REPLAY_SKILL_TOOL,
+	translateLegacyBytebotToolNames,
+} from './skill-replay-tool.js'
 
 vi.mock('../webapps/skills-repository.js', () => ({
 	getWebAppSkill: vi.fn(),
@@ -149,5 +153,45 @@ describe('webapp_replay_skill (P97-07)', () => {
 			{skillId: FAKE_SKILL_ID, freeFormGoal: big},
 		)
 		expect(r.isError).toBe(true)
+	})
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 100-10-02 — backwards-compat shim for action_log v2 legacy tool names.
+//
+// Pre-100-10-02 action_log entries reference tool names with the
+// `mcp__bytebot__<name>` Claude Code SDK prefix. After D-100-10-B (Bytebot→Luse
+// rename), the registered MCP server is `luse` and tool names are
+// `mcp__luse__<name>`. The shim lazy-translates legacy events on READ for
+// skill versions <= 2 (D-100-10-I). Removal target v34 (G-100-10-F).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('Phase 100-10-02 backwards-compat: legacy bytebot tool names', () => {
+	it('T-10-02-COMPAT-01: translateLegacyBytebotToolNames is exported', () => {
+		expect(typeof translateLegacyBytebotToolNames).toBe('function')
+	})
+
+	it('T-10-02-COMPAT-02: skillVersion=2 → mcp__bytebot__* translates to mcp__luse__*', () => {
+		const events = [
+			{tool: 'mcp__bytebot__click_mouse', args: {x: 100, y: 100}},
+			{tool: 'mcp__bytebot__screenshot', args: {}},
+		] as const
+		const out = translateLegacyBytebotToolNames(events, 2)
+		expect(out).toEqual([
+			{tool: 'mcp__luse__click_mouse', args: {x: 100, y: 100}},
+			{tool: 'mcp__luse__screenshot', args: {}},
+		])
+	})
+
+	it('T-10-02-COMPAT-03: skillVersion=3 (post-rename) → events pass through unchanged', () => {
+		const events = [
+			{tool: 'mcp__bytebot__click_mouse', args: {x: 100, y: 100}},
+			{tool: 'mcp__bytebot__screenshot', args: {}},
+		] as const
+		const out = translateLegacyBytebotToolNames(events, 3)
+		// No double-translation; legacy literals preserved verbatim at v3+.
+		expect(out).toEqual([
+			{tool: 'mcp__bytebot__click_mouse', args: {x: 100, y: 100}},
+			{tool: 'mcp__bytebot__screenshot', args: {}},
+		])
 	})
 })
