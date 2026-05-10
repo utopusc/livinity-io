@@ -89,7 +89,43 @@ const actionEventSchema = z.discriminatedUnion('type', [
 	waitEventSchema,
 ])
 
-const actionLogSchema = z.object({
+// Phase 100-09-06 — V2 event schemas extend V1 with optional inline thumbs
+// + viewport (per D-100-09-F "biraz daha detayli kayit edilsin"). The
+// inline thumb is a 256x256 base64 cap (~2MB max accommodates 4-channel
+// PNG worst-case). v1 events DO NOT carry these fields; v2 events MAY
+// (zod .optional() means missing or present-but-undefined both pass).
+const v2EventBase = {
+	screenshot_b64: z.string().max(2_000_000).optional(),
+	viewport: z.object({w: z.number().int(), h: z.number().int()}).optional(),
+}
+
+const v2ClickEventSchema = clickEventSchema.extend(v2EventBase)
+const v2KeyEventSchema = keyEventSchema.extend(v2EventBase)
+const v2WheelEventSchema = wheelEventSchema.extend(v2EventBase)
+const v2ScrollEventSchema = scrollEventSchema.extend(v2EventBase)
+const v2WaitEventSchema = waitEventSchema.extend(v2EventBase)
+
+const v2ActionEventSchema = z.discriminatedUnion('type', [
+	v2ClickEventSchema,
+	v2KeyEventSchema,
+	v2WheelEventSchema,
+	v2ScrollEventSchema,
+	v2WaitEventSchema,
+])
+
+// Phase 100-09-06 — session-level metadata for v2 logs. browser_url +
+// page_title sourced from window/document at recorder.stop() time;
+// recorded_by_user_id is server-injected (the create path resolves
+// currentUser.id and stamps it — clients SHOULD NOT trust this from input).
+const sessionMetadataSchema = z
+	.object({
+		browser_url: z.string().max(2048).optional(),
+		page_title: z.string().max(512).optional(),
+		recorded_by_user_id: z.string().uuid().optional(),
+	})
+	.optional()
+
+const actionLogV1Schema = z.object({
 	version: z.literal(1),
 	webappId: z.string().uuid(),
 	startedAt: z.number().int().min(0),
@@ -102,6 +138,37 @@ const actionLogSchema = z.object({
 		})
 		.optional(),
 })
+
+const actionLogV2Schema = z.object({
+	version: z.literal(2),
+	webappId: z.string().uuid(),
+	startedAt: z.number().int().min(0),
+	endedAt: z.number().int().min(0),
+	events: z.array(v2ActionEventSchema).max(20_000),
+	meta: z
+		.object({
+			droppedCount: z.number().int().min(0).optional(),
+			sessionId: z.string().uuid().optional(),
+		})
+		.optional(),
+	metadata: sessionMetadataSchema,
+})
+
+/**
+ * Phase 100-09-06 — action_log discriminated union on `version` literal.
+ *
+ * v1 records still validate (backwards-compat for existing rows in
+ * webapp_skills.action_log JSONB column from P96 era). v2 adds optional
+ * inline thumbnails per event + session-level metadata (D-100-09-F).
+ * v3+ records are rejected by zod's discriminated union — see
+ * skills-router.test.ts T-09-06-S3.
+ *
+ * Exported so the unit test can directly safeParse fixtures.
+ */
+export const actionLogSchema = z.discriminatedUnion('version', [
+	actionLogV1Schema,
+	actionLogV2Schema,
+])
 
 // Slug-safe validator: 1-80 chars, [A-Za-z0-9 _-] only. Trim-collapse the
 // router's caller responsibility (UI does the trim before submitting).
