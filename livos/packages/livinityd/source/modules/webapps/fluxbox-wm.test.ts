@@ -25,12 +25,12 @@ afterEach(() => {
 
 describe('fluxbox-wm', () => {
 	it('exports startFluxbox function', async () => {
-		const mod = await import('./fluxbox-wm')
+		const mod = await import('./fluxbox-wm.js')
 		expect(typeof mod.startFluxbox).toBe('function')
 	})
 
 	it('spawns fluxbox with -display :1 and DISPLAY=:1 env', async () => {
-		const {startFluxbox} = await import('./fluxbox-wm')
+		const {startFluxbox} = await import('./fluxbox-wm.js')
 		void startFluxbox({display: ':1'})
 		await Promise.resolve()
 		const call = spawnCalls[0]!
@@ -43,7 +43,7 @@ describe('fluxbox-wm', () => {
 	})
 
 	it('spawns under sudo -n -u bruce by default', async () => {
-		const {startFluxbox} = await import('./fluxbox-wm')
+		const {startFluxbox} = await import('./fluxbox-wm.js')
 		void startFluxbox({})
 		await Promise.resolve()
 		expect(spawnCalls[0]?.cmd).toBe('sudo')
@@ -53,7 +53,7 @@ describe('fluxbox-wm', () => {
 
 	it('stop() sends SIGTERM then SIGKILL after 2s', async () => {
 		vi.useFakeTimers()
-		const {startFluxbox} = await import('./fluxbox-wm')
+		const {startFluxbox} = await import('./fluxbox-wm.js')
 		const handle = await startFluxbox({})
 		const stopP = handle.stop()
 		expect(mockChild.kill).toHaveBeenCalledWith('SIGTERM')
