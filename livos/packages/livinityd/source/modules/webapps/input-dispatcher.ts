@@ -153,3 +153,52 @@ export async function dispatchType(wid: number, text: string): Promise<void> {
 		{timeout: DEFAULT_TIMEOUT_MS},
 	)
 }
+
+/**
+ * X11 wheel button conventions:
+ *   button 4 = scroll up
+ *   button 5 = scroll down
+ *   button 6 = scroll left
+ *   button 7 = scroll right
+ */
+export type ScrollButton = 4 | 5 | 6 | 7
+
+/**
+ * Phase 100-09-02 — Dispatch a scroll wheel event at (x, y) inside the
+ * given X11 wid. Same activate-first pattern as `dispatchPointer`.
+ *
+ * Chrome filters synthetic XSendEvent — `xdotool click --window <wid> 5`
+ * dispatches the event but Chrome drops it (same fix as P100-07.3 for
+ * regular click). The reliable pattern is: activate the wid, focus it,
+ * move the cursor wid-relative, then click (without --window) so xdotool
+ * sends a real button event to the X11-focused window.
+ *
+ * Closes 100-09 Bug 2 (scroll-down doesn't work) — frontend wheel
+ * listener (webapp-stream-window.tsx) maps deltaY > 0 → button 5,
+ * deltaY < 0 → button 4, deltaX > 0 → button 7, deltaX < 0 → button 6.
+ */
+export async function dispatchScroll(
+	wid: number,
+	x: number,
+	y: number,
+	button: ScrollButton,
+): Promise<void> {
+	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
+	if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error('invalid coords')
+	if (button !== 4 && button !== 5 && button !== 6 && button !== 7) {
+		throw new Error(`invalid scroll button: ${button} (must be 4/5/6/7)`)
+	}
+	const ix = Math.max(0, Math.round(x))
+	const iy = Math.max(0, Math.round(y))
+	const widStr = String(wid)
+	await execFileAsync(
+		'xdotool',
+		[
+			'windowactivate', '--sync', widStr,
+			'windowfocus', '--sync', widStr,
+			'mousemove', '--window', widStr, '--sync', String(ix), String(iy),
+			'click', '--clearmodifiers', String(button),
+		],
+		{timeout: DEFAULT_TIMEOUT_MS},
+	)
+}

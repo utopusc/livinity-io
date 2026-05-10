@@ -38,6 +38,7 @@ import {
 	dispatchPointer,
 	dispatchKey,
 	dispatchType,
+	dispatchScroll,
 	type ClickKind,
 } from './input-dispatcher.js'
 import {
@@ -206,6 +207,22 @@ const inputTypeInput = z.object({
 	text: z.string().max(4096),
 })
 
+// Phase 100-09-02 — wheel scroll input. Maps to xdotool click 4/5/6/7 with
+// activate-first chain (same Chrome XSendEvent filter as click — see
+// dispatchScroll docstring). Frontend wheel handler emits deltaY > 0 → 5
+// (down), deltaY < 0 → 4 (up), deltaX > 0 → 7, deltaX < 0 → 6.
+const inputScrollInput = z.object({
+	webappId: z.string().min(1).max(64),
+	x: z.number().int().nonnegative().max(8192),
+	y: z.number().int().nonnegative().max(8192),
+	button: z.union([
+		z.literal(4),  // scroll up
+		z.literal(5),  // scroll down
+		z.literal(6),  // scroll left
+		z.literal(7),  // scroll right
+	]),
+})
+
 const inputRouter = router({
 	click: privateProcedure
 		.input(inputClickInput)
@@ -266,6 +283,33 @@ const inputRouter = router({
 				return {ok: true as const}
 			} catch (err) {
 				ctx.logger?.warn?.(`webapp.input.type failed user=${userId} webappId=${input.webappId} wid=${wid}`, err)
+				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
+			}
+		}),
+
+	// Phase 100-09-02 — wheel scroll. Closes Bug 2 from 100-08 deploy live
+	// test (scroll-down didn't work). Frontend (webapp-stream-window.tsx)
+	// attaches a `wheel` capture-phase listener and routes deltaY/deltaX
+	// here as button 4/5/6/7 (X11 wheel convention).
+	scroll: privateProcedure
+		.input(inputScrollInput)
+		.mutation(async ({ctx, input}) => {
+			const userId = ctx.currentUser?.id
+			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+			const wm = ctx.livinityd?.webappWindowManager
+			if (!wm) throw new TRPCError({code: 'SERVICE_UNAVAILABLE'})
+			const wid = wm.getWidForWebapp(input.webappId, userId)
+			if (wid == null) {
+				throw new TRPCError({code: 'NOT_FOUND', message: `no live window for webapp ${input.webappId}`})
+			}
+			ctx.logger?.info?.(
+				`[100-09-02] webapp.input.scroll webappId=${input.webappId} wid=${wid} x=${input.x} y=${input.y} btn=${input.button}`,
+			)
+			try {
+				await dispatchScroll(wid, input.x, input.y, input.button)
+				return {ok: true as const}
+			} catch (err) {
+				ctx.logger?.warn?.(`webapp.input.scroll failed user=${userId} webappId=${input.webappId} wid=${wid}`, err)
 				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
 			}
 		}),

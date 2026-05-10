@@ -350,6 +350,7 @@ export const httpOnlyPaths = [
 	'webapp.input.click',
 	'webapp.input.keypress',
 	'webapp.input.type',
+	'webapp.input.scroll',  // Phase 100-09-02 — wheel scroll events (deltaY/deltaX → button 4/5/6/7)
 	// v33 Phase 94 — webapp CRUD on the persisted `webapps` Postgres table
 	// (V33-WEBAPP-94-01). All four paths route via HTTP because:
 	//   - Mutations (create/delete/update) are autosave-adjacent — the
