@@ -39,15 +39,33 @@
 // now renders exactly 2 buttons (Chat + Teach). Backend P97 auto-mode
 // capability is untouched — only the UI surface was retired.
 //
+// Phase 100-10-06 D-100-10-E: 2-mode state machine EXTENDED to 3-mode.
+// 'chat-response' branch added. Per user (Issue 6 / D-100-10-E): when
+// the user types + Enter from the chat-input bar, the response should
+// render IN PLACE OF the input — not somewhere else. New flow:
+//   1. Click Chat icon → 'chat-input' (existing).
+//   2. Type + Enter (or click Send) → sendMessage(text) THEN flip mode
+//      to 'chat-response' (NOT back to 'icons' — superseding the 09-08
+//      behavior). Input area is REPLACED by a streaming response panel.
+//   3. While streaming: Stop button (right side) calls agent.stopStreaming()
+//      — alias for the existing useAgentSocket.interrupt (sends
+//      `{type: 'interrupt'}` over the WS).
+//   4. Stream completes: Stop becomes a "New message" (+) button that
+//      flips back to 'chat-input' with response cleared.
+//   5. Click Close (X) at any point in 'chat-response' → back to 'icons'.
+//   6. Press Escape from 'chat-response' → back to 'icons'.
+//
 // Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts unchanged.
 
-import {useCallback, useEffect, useRef, useState} from 'react'
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {motion} from 'framer-motion'
 // Phase 100-10-05 D-100-10-G: the robot-icon lucide import dropped — the
 // Auto icon button was removed from the floating action bar per user
 // "Auto butonu varya onu kaldir." Backend P97 auto-mode capability stays
 // untouched; only the UI surface was retired.
-import {GraduationCap, MessageCircle, Send, X, type LucideIcon} from 'lucide-react'
+// Phase 100-10-06: Square (Stop) + Plus (New message) icons added for
+// the new ChatResponseBar component.
+import {GraduationCap, MessageCircle, Plus, Send, Square, X, type LucideIcon} from 'lucide-react'
 
 import {Magnetic} from '@/components/motion-primitives/magnetic'
 import {useWebAppAgent} from '@/hooks/use-webapp-agent'
@@ -100,8 +118,26 @@ export function WebAppFloatingActionBar(props: WebAppFloatingActionBarProps) {
 			transition={{type: 'spring', stiffness: 500, damping: 35}}
 			layout
 		>
-			{mode === 'chat-input' ? (
-				<ChatInputBar webappId={webappId} onClose={() => setChatInputMode(webappId, 'icons')} />
+			{/* Phase 100-10-06 D-100-10-E: 3-mode dispatch.
+			    - 'chat-response' branch renders the ChatResponseBar (streaming
+			      response panel + Stop button while streaming + Close X).
+			    - 'chat-input' branch renders the ChatInputBar (text input +
+			      Send + Close X). Send/Enter now flips to 'chat-response'
+			      (NOT back to 'icons' — superseding 09-08's behavior).
+			    - Default 'icons' branch renders the IconBar (Chat + Teach).
+			*/}
+			{mode === 'chat-response' ? (
+				<ChatResponseBar
+					webappId={webappId}
+					onClose={() => setChatInputMode(webappId, 'icons')}
+					onNew={() => setChatInputMode(webappId, 'chat-input')}
+				/>
+			) : mode === 'chat-input' ? (
+				<ChatInputBar
+					webappId={webappId}
+					onClose={() => setChatInputMode(webappId, 'icons')}
+					onSent={() => setChatInputMode(webappId, 'chat-response')}
+				/>
 			) : (
 				<IconBar
 					webappId={webappId}
@@ -270,15 +306,24 @@ function IconBar({webappId, onChatClick}: IconBarProps) {
 // Phase 100-09-08. Replaces the persistent inline `WebAppChatBottomBar`
 // from 09-05 per user feedback. Auto-focuses on mount, listens for the
 // Escape key to bail back to 'icons', sends on Send button click /
-// Enter key, then returns to 'icons'.
+// Enter key.
+//
+// Phase 100-10-06 D-100-10-E: Send/Enter no longer flips back to 'icons'.
+// Instead it calls `onSent()` which transitions to 'chat-response' so the
+// streaming assistant reply renders IN PLACE OF the input area. Close (X)
+// + Escape still flip back to 'icons' without sending.
 // ─────────────────────────────────────────────────────────────────────
 
 interface ChatInputBarProps {
 	webappId: string
 	onClose: () => void
+	/** Phase 100-10-06 D-100-10-E — called AFTER agent.sendMessage(text)
+	 *  dispatches. Wired by the parent to flip mode to 'chat-response'
+	 *  so the response area renders in-place. */
+	onSent: () => void
 }
 
-function ChatInputBar({webappId, onClose}: ChatInputBarProps) {
+function ChatInputBar({webappId, onClose, onSent}: ChatInputBarProps) {
 	const agent = useWebAppAgent(webappId)
 	const [input, setInput] = useState('')
 	const inputRef = useRef<HTMLInputElement>(null)
@@ -302,10 +347,12 @@ function ChatInputBar({webappId, onClose}: ChatInputBarProps) {
 		if (!text || agent.isStreaming) return
 		agent.sendMessage(text)
 		setInput('')
-		// Return to icon bar after dispatching the message — matches the
-		// plan's "Send / Enter → sends + back to 'icons'" contract.
-		onClose()
-	}, [agent, input, onClose])
+		// Phase 100-10-06 D-100-10-E: flip to 'chat-response' so the
+		// streaming assistant reply renders IN PLACE OF the input area
+		// (replaces the 09-08 wire which returned to 'icons' directly).
+		// The parent flips mode via setChatInputMode(webappId, 'chat-response').
+		onSent()
+	}, [agent, input, onSent])
 
 	return (
 		<Magnetic intensity={0.2}>
@@ -344,6 +391,100 @@ function ChatInputBar({webappId, onClose}: ChatInputBarProps) {
 					onClick={onClose}
 					aria-label='Close chat input'
 					className='flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 transition-colors'
+				>
+					<X className='h-3.5 w-3.5' strokeWidth={2.25} />
+				</button>
+			</div>
+		</Magnetic>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Mode 3: ChatResponseBar — live response panel + Stop / New + Close.
+//
+// Phase 100-10-06 D-100-10-E. Renders the latest assistant message text
+// from `useWebAppAgent(webappId).messages` with a streaming caret while
+// `agent.isStreaming` is true. The right-side button is Stop (Square
+// icon) while streaming — clicking calls `agent.stopStreaming()`, which
+// is an alias for the existing `useAgentSocket.interrupt` runtime cancel
+// (sends `{type: 'interrupt'}` over the WS — see use-agent-socket.ts
+// L551-558). After streaming completes, the Stop button transitions to a
+// "New message" (Plus icon) affordance that flips back to 'chat-input'
+// with the response cleared (via parent's onNew callback wiring through
+// setChatInputMode → 'chat-input'). The Close (X) button always returns
+// to 'icons'. Escape key also returns to 'icons' (mirrors ChatInputBar).
+// ─────────────────────────────────────────────────────────────────────
+
+interface ChatResponseBarProps {
+	webappId: string
+	/** X button + Escape key → return to 'icons' mode. */
+	onClose: () => void
+	/** "New message" (+) button click after streaming completes → flip
+	 *  back to 'chat-input' so the user can type a follow-up. */
+	onNew: () => void
+}
+
+function ChatResponseBar({webappId, onClose, onNew}: ChatResponseBarProps) {
+	const agent = useWebAppAgent(webappId)
+	// Find the latest assistant message (the streaming reply). Using
+	// useMemo so the lookup is stable across re-renders when messages
+	// array reference hasn't changed.
+	const lastAssistant = useMemo(() => {
+		const messages = agent.messages
+		for (let i = messages.length - 1; i >= 0; i--) {
+			if (messages[i].role === 'assistant') return messages[i]
+		}
+		return null
+	}, [agent.messages])
+
+	// Auto-bind Escape → onClose at window level (mirrors ChatInputBar).
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') {
+				e.preventDefault()
+				onClose()
+			}
+		}
+		window.addEventListener('keydown', onKey)
+		return () => window.removeEventListener('keydown', onKey)
+	}, [onClose])
+
+	return (
+		<Magnetic intensity={0.2}>
+			<div className='flex items-start gap-2 rounded-2xl bg-white/95 backdrop-blur-xl border border-neutral-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.08)] px-4 py-3 max-w-[480px]'>
+				<div className='flex-1 text-caption-sm text-text-primary whitespace-pre-wrap min-h-[20px]'>
+					{lastAssistant?.content ?? ''}
+					{agent.isStreaming ? (
+						<span
+							className='inline-block w-1.5 h-3.5 ml-1 bg-primary animate-pulse align-middle'
+							aria-hidden='true'
+						/>
+					) : null}
+				</div>
+				{agent.isStreaming ? (
+					<button
+						type='button'
+						onClick={() => agent.stopStreaming()}
+						aria-label='Stop streaming'
+						className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors'
+					>
+						<Square className='h-3.5 w-3.5' strokeWidth={2.25} />
+					</button>
+				) : (
+					<button
+						type='button'
+						onClick={onNew}
+						aria-label='New message'
+						className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-white hover:bg-primary/90 transition-colors'
+					>
+						<Plus className='h-3.5 w-3.5' strokeWidth={2.25} />
+					</button>
+				)}
+				<button
+					type='button'
+					onClick={onClose}
+					aria-label='Close chat response'
+					className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 transition-colors'
 				>
 					<X className='h-3.5 w-3.5' strokeWidth={2.25} />
 				</button>

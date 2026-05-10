@@ -58,6 +58,16 @@ export interface UseWebAppAgentResult {
 	sessionStatus: WebAppSessionStatus
 	sendMessage: (text: string, attachments?: Array<{name: string; mimeType: string; data: string; size: number}>) => void
 	interrupt: () => void
+	/** Phase 100-10-06 D-100-10-E — semantic alias for `interrupt`.
+	 *  The chat-response Stop button in the floating action bar refers to
+	 *  the action as `stopStreaming` (per D-100-10-E spec). Both names
+	 *  resolve to the SAME `useAgentSocket.interrupt` function reference,
+	 *  which sends `{type: 'interrupt'}` over the WebSocket — a REAL
+	 *  runtime cancel that halts the in-flight stream. Verify chain:
+	 *  useWebAppAgent.stopStreaming → agent.interrupt →
+	 *  useAgentSocket.interrupt → ws.send({type: 'interrupt'}).
+	 */
+	stopStreaming: () => void
 	clearMessages: () => void
 	startNewSession: () => void
 }
@@ -197,6 +207,13 @@ export function useWebAppAgent(webappId: string): UseWebAppAgentResult {
 		sessionStatus,
 		sendMessage,
 		interrupt: agent.interrupt,
+		// Phase 100-10-06 D-100-10-E — `stopStreaming` is a thin alias for
+		// `interrupt`. Both reference the same `useAgentSocket.interrupt`
+		// function, which sends `{type: 'interrupt'}` over the WebSocket
+		// (see use-agent-socket.ts L551-558). This is a REAL runtime cancel,
+		// NOT a no-op. The Stop button in the chat-response floating bar
+		// (webapp-floating-action-bar.tsx ChatResponseBar) calls this.
+		stopStreaming: agent.interrupt,
 		clearMessages: agent.clearMessages,
 		startNewSession,
 	}
