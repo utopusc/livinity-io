@@ -1,3 +1,19 @@
+// DEPRECATED 2026-05-10 (P100-09-08): persistent inline chat bar removed.
+//
+// The action bar (webapp-floating-action-bar.tsx) now transforms to a
+// chat input row on Chat icon click — a 2-mode state machine (icons |
+// chat-input) replacing this component. Per user feedback after 09-05
+// deploy: "Message Liv... kismi pencerenin icinde olmamasi lazimdi
+// assagida message iconuna tikladigimda o kisimin butun olarak inputa
+// donusmesi lazimdi" (the chat surface shouldn't be inside the window;
+// clicking the message icon should transform that area into the input).
+//
+// This file is retained for revert safety; the JSX render in
+// webapp-stream-window.tsx is gone and there are no other consumers.
+// v34 cleanup may delete this file outright.
+//
+// ── Below: original 09-05 docstring preserved for archeology. ────────
+//
 // Phase 100-09-05 — WebAppChatBottomBar.
 //
 // V33-MULTI-09-05-INLINE-CHAT: replaces the Chat shadcn Sheet drawer

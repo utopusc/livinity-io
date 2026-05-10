@@ -166,10 +166,10 @@ function safeRead(path: string): string {
 }
 
 describe('Phase 100-09-05 inline chat at bottom', () => {
-	it("T-09-05-01: renders <WebAppChatBottomBar/> inside webapp-stream-window.tsx", () => {
-		expect(SRC).toMatch(/<WebAppChatBottomBar\b/)
-		expect(SRC).toMatch(/from '\.\/webapp-chat-bottom-bar'/)
-	})
+	// T-09-05-01 RETIRED 2026-05-10 (P100-09-08). The 09-05 contract was:
+	// "webapp-stream-window.tsx renders <WebAppChatBottomBar/> inline."
+	// Per user feedback this was wrong — see 09-08 plan + T-09-08-04.
+	// The inverse invariant (no JSX render) is now T-09-08-04.
 
 	it('T-09-05-02: Sheet drawer host no longer renders chat branch', () => {
 		expect(SRC).not.toMatch(/openDrawer === 'chat'\s*\?\s*<WebAppChatDrawer/)
@@ -177,7 +177,11 @@ describe('Phase 100-09-05 inline chat at bottom', () => {
 		expect(SRC).toMatch(/openDrawer !== null && openDrawer !== 'chat'/)
 	})
 
-	it('T-09-05-05: WebAppChatBottomBar component file exists, anchored absolute bottom, uses required hooks', () => {
+	it('T-09-05-05: WebAppChatBottomBar component file is preserved (DEPRECATED reference target)', () => {
+		// Phase 100-09-08: file kept for revert safety; v34 cleanup may
+		// delete it if no consumers surface. The original 09-05 internal
+		// shape (absolute inset-x-0 bottom-0, useWebAppAgent, ChatInput)
+		// is still inside the file but no longer rendered anywhere.
 		const bottomSrc = safeRead(BOTTOM_BAR_PATH)
 		expect(bottomSrc.length).toBeGreaterThan(0)
 		expect(bottomSrc).toMatch(/absolute\s+inset-x-0\s+bottom-0/)
@@ -188,18 +192,19 @@ describe('Phase 100-09-05 inline chat at bottom', () => {
 })
 
 describe('Phase 100-09-05 drawer store + floating bar', () => {
-	it('T-09-05-03: drawer store has toggleChatLog action + chatLogExpandedByWebappId state', () => {
+	it('T-09-05-03: drawer store retains toggleChatLog action + chatLogExpandedByWebappId state', () => {
+		// Phase 100-09-08: slots preserved for back-compat with the
+		// (now-unrendered) WebAppChatBottomBar. v34 cleanup may remove
+		// alongside the deprecated component.
 		const storeSrc = safeRead(STORE_PATH)
 		expect(storeSrc).toMatch(/toggleChatLog/)
 		expect(storeSrc).toMatch(/chatLogExpandedByWebappId/)
 	})
 
-	it('T-09-05-04: floating bar Chat icon calls toggleChatLog (not drawer toggle for chat)', () => {
-		const barSrc = safeRead(FLOATING_BAR_PATH)
-		expect(barSrc).toMatch(/toggleChatLog\(webappId\)/)
-		// Sentinel: chat must be branch-distinguished:
-		expect(barSrc).toMatch(/id === 'chat'/)
-	})
+	// T-09-05-04 RETIRED 2026-05-10 (P100-09-08). The 09-05 contract was:
+	// "floating bar Chat icon calls toggleChatLog." Per user feedback this
+	// was wrong — Chat icon now flips floating-bar mode to 'chat-input'
+	// via setChatInputMode. The new invariant is T-09-08-02.
 })
 
 // ─────────────────────────────────────────────────────────────────

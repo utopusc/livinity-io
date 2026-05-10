@@ -41,15 +41,25 @@ import {type WebAppMode} from '../webapp-mode-selector'
 import {SkillReplayScrubber} from '../skill-replay-scrubber'
 
 // Phase 100-09-05: WebAppChatDrawer import dropped — chat surface moved
-// inline via <WebAppChatBottomBar/> below. The drawer file is retained as
-// DEPRECATED reference target (see webapp-chat-drawer.tsx banner).
+// inline via WebAppChatBottomBar (since superseded; see 09-08 below).
+// The drawer file is retained as DEPRECATED reference target (see
+// webapp-chat-drawer.tsx banner).
 //
 // Phase 100-09-06: WebAppTeachDrawer import dropped — teach surface moved
 // to popup-per-event toasts (<WebAppTeachPopupHost/>) + top-right Skills
 // popover (<WebAppSkillsPopover/>). The drawer file is retained as
 // DEPRECATED reference target (see webapp-teach-drawer.tsx banner).
+//
+// Phase 100-09-08: WebAppChatBottomBar render + import REMOVED. Per user
+// feedback after 09-05 deploy ("Message Liv... kismi pencerenin icinde
+// olmamasi lazimdi assagida message iconuna tikladigimda o kisimin
+// butun olarak inputa donusmesi lazimdi"): the persistent inline chat
+// bar inside the window was wrong. Chat input now lives on the floating
+// action bar (outside the window per 100-06) as a 2-mode state machine
+// — see webapp-floating-action-bar.tsx. The component file is retained
+// as DEPRECATED reference target for revert safety; v34 cleanup may
+// delete it if no consumers surface.
 import {WebAppAutoDrawer} from './webapp-auto-drawer'
-import {WebAppChatBottomBar} from './webapp-chat-bottom-bar'
 import {WebAppTeachPopupHost} from './webapp-teach-popup-host'
 import {WebAppSkillsPopover} from './webapp-skills-popover'
 
@@ -576,13 +586,15 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 						onClose={() => setSelectedSkillId(null)}
 					/>
 				) : null}
-				{/* Phase 100-09-05 — Inline chat at bottom (replaces Sheet Chat
-				    drawer). Per user "Chat penceresi olmasin sadece yazi
-				    yazalim. Yazilar sadece Alt kisimda gozuksun." Anchored
-				    `absolute inset-x-0 bottom-0 z-10` over the existing pb-9
-				    reservation; collapsed by default; floating Chat icon
-				    (100-06) toggles expanded/collapsed. */}
-				<WebAppChatBottomBar webappId={webappId} />
+				{/* Phase 100-09-08 — inline chat bar REMOVED. Chat input now
+				    lives on the floating action bar as a 2-mode state
+				    machine (see webapp-floating-action-bar.tsx). Per user
+				    "Message Liv... kismi pencerenin icinde olmamasi lazimdi
+				    assagida message iconuna tikladigimda o kisimin butun
+				    olarak inputa donusmesi lazimdi". The 09-05 inline
+				    WebAppChatBottomBar render call lived here; the
+				    component file is retained as a DEPRECATED reference
+				    target for revert safety. */}
 
 				{/* Phase 100-09-06 — Teach popup host (sonner toast portal,
 				    one toast per captured event during recording).
@@ -617,11 +629,13 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 			    State coupling is via `useWebAppDrawerStore` (Zustand). */}
 
 			{/* Phase 100-04 — Drawer host (V33-MULTI-04, G-100-D D2).
-			    Phase 100-09-05: 'chat' branch REMOVED (chat is now inline at
-			    the bottom of the stream wrapper via <WebAppChatBottomBar/>).
+			    Phase 100-09-05: 'chat' branch REMOVED (chat was inline at
+			    the bottom of the stream wrapper; superseded by 09-08).
 			    Phase 100-09-06: 'teach' branch REMOVED (teach is now driven
-			    by isRecordingByWebappId flag + <WebAppTeachPopupHost/> +
-			    <WebAppSkillsPopover/>). Only 'auto' remains hosted here. */}
+			    by isRecordingByWebappId flag + the popup host + skills popover).
+			    Phase 100-09-08: chat is now on the floating action bar as
+			    a 2-mode state machine (icons | chat-input). Only 'auto'
+			    remains hosted here. */}
 			<Sheet
 				open={openDrawer !== null && openDrawer !== 'chat' && openDrawer !== 'teach'}
 				onOpenChange={(o) => {
