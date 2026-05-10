@@ -40,9 +40,12 @@ import {useTeachRecorder, type ActionLog} from '@/hooks/use-teach-recorder'
 import {type WebAppMode} from '../webapp-mode-selector'
 import {SkillReplayScrubber} from '../skill-replay-scrubber'
 
-import {WebAppChatDrawer} from './webapp-chat-drawer'
+// Phase 100-09-05: WebAppChatDrawer import dropped — chat surface moved
+// inline via <WebAppChatBottomBar/> below. The drawer file is retained as
+// DEPRECATED reference target (see webapp-chat-drawer.tsx banner).
 import {WebAppTeachDrawer} from './webapp-teach-drawer'
 import {WebAppAutoDrawer} from './webapp-auto-drawer'
+import {WebAppChatBottomBar} from './webapp-chat-bottom-bar'
 
 import {Sheet, SheetContent} from '@/shadcn-components/ui/sheet'
 import {useWebAppDrawerStore} from '../webapp-drawer-store'
@@ -562,6 +565,13 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 						onClose={() => setSelectedSkillId(null)}
 					/>
 				) : null}
+				{/* Phase 100-09-05 — Inline chat at bottom (replaces Sheet Chat
+				    drawer). Per user "Chat penceresi olmasin sadece yazi
+				    yazalim. Yazilar sadece Alt kisimda gozuksun." Anchored
+				    `absolute inset-x-0 bottom-0 z-10` over the existing pb-9
+				    reservation; collapsed by default; floating Chat icon
+				    (100-06) toggles expanded/collapsed. */}
+				<WebAppChatBottomBar webappId={webappId} />
 			</div>
 			{pendingSave ? (
 				<SaveSkillDialog
@@ -578,9 +588,13 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 			    (`webapp-floating-action-bar.tsx` rendered in windows-container.tsx).
 			    State coupling is via `useWebAppDrawerStore` (Zustand). */}
 
-			{/* Phase 100-04 — Drawer host (V33-MULTI-04, G-100-D D2). */}
+			{/* Phase 100-04 — Drawer host (V33-MULTI-04, G-100-D D2).
+			    Phase 100-09-05: 'chat' branch REMOVED (chat is now inline at
+			    the bottom of the stream wrapper via <WebAppChatBottomBar/>).
+			    'teach' and 'auto' branches retained; 09-06 reworks 'teach'
+			    next (popup-per-event + save modal). */}
 			<Sheet
-				open={openDrawer !== null}
+				open={openDrawer !== null && openDrawer !== 'chat'}
 				onOpenChange={(o) => {
 					if (!o) setOpenDrawer(webappId)
 				}}
@@ -591,7 +605,6 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 					closeButton={false}
 				>
 					<div className='relative z-10 flex h-full flex-col'>
-						{openDrawer === 'chat' ? <WebAppChatDrawer webappId={webappId} /> : null}
 						{openDrawer === 'teach' ? <WebAppTeachDrawer webappId={webappId} /> : null}
 						{openDrawer === 'auto' ? <WebAppAutoDrawer webappId={webappId} /> : null}
 					</div>
