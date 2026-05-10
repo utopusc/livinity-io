@@ -77,3 +77,45 @@ describe('LUSE_TOOLS', () => {
 		expect(isLuseToolName('not_a_real_tool_xyz')).toBe(false)
 	})
 })
+
+describe('Phase 100-10-03 luse window-aware tool schemas', () => {
+	it('T-10-03-SCHEMA-01: list_windows tool is defined with optional display arg (D-100-10-C)', () => {
+		const tool = LUSE_TOOLS.find((t) => t.name === 'list_windows')
+		expect(tool).toBeDefined()
+		expect(tool!.input_schema.type).toBe('object')
+		// `display` is an optional string property (not in required[]).
+		const props = tool!.input_schema.properties as Record<string, {type?: string}>
+		expect(props.display).toBeDefined()
+		expect(props.display.type).toBe('string')
+		const required = tool!.input_schema.required ?? []
+		expect(required).not.toContain('display')
+	})
+
+	it('T-10-03-SCHEMA-02: screenshot_window tool accepts either {wid} or {display} (D-100-10-C)', () => {
+		const tool = LUSE_TOOLS.find((t) => t.name === 'screenshot_window')
+		expect(tool).toBeDefined()
+		expect(tool!.input_schema.type).toBe('object')
+		// Both wid (number) and display (string) properties should be declared.
+		const props = tool!.input_schema.properties as Record<string, {type?: string}>
+		expect(props.wid).toBeDefined()
+		expect(props.wid.type).toMatch(/^(number|integer)$/)
+		expect(props.display).toBeDefined()
+		expect(props.display.type).toBe('string')
+		// Neither is strictly required — the handler enforces the
+		// "must provide wid OR display" contract at runtime.
+		const required = tool!.input_schema.required ?? []
+		expect(required).not.toContain('wid')
+		expect(required).not.toContain('display')
+	})
+
+	it('T-10-03-SCHEMA-03: focus_window tool requires wid (D-100-10-C)', () => {
+		const tool = LUSE_TOOLS.find((t) => t.name === 'focus_window')
+		expect(tool).toBeDefined()
+		expect(tool!.input_schema.type).toBe('object')
+		const props = tool!.input_schema.properties as Record<string, {type?: string}>
+		expect(props.wid).toBeDefined()
+		expect(props.wid.type).toMatch(/^(number|integer)$/)
+		const required = tool!.input_schema.required ?? []
+		expect(required).toContain('wid')
+	})
+})
