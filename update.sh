@@ -338,6 +338,8 @@ ok "Latest code fetched"
 step "Phase 93: streaming subsystem dependencies"
 if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
     info "Ensuring streaming subsystem apt packages are installed..."
+    # Phase 100-08-01: xvfb + fluxbox added for dedicated WebApp display :1
+    # (D-100-08-A — livinityd spawns Xvfb :1 + fluxbox on boot).
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
         x11vnc xdotool x11-xserver-utils \
         ydotool maim scrot gnome-screenshot \
@@ -348,6 +350,7 @@ if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
         gstreamer1.0-plugins-bad \
         gstreamer1.0-plugins-ugly \
         xdg-desktop-portal-gnome \
+        xvfb fluxbox \
         2>&1 | tail -5 || warn "Some streaming packages failed to install (non-fatal)"
 
     # VAAPI userspace — separate group so an Intel-iGPU-less host doesn't fail the run.
@@ -358,7 +361,7 @@ if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
 
     # Verify the critical streaming binaries are present after install
     streaming_missing=()
-    for bin in ffmpeg gst-launch-1.0 dbus-send xdotool maim; do
+    for bin in ffmpeg gst-launch-1.0 dbus-send xdotool maim Xvfb fluxbox; do
         if ! command -v "$bin" >/dev/null 2>&1; then
             streaming_missing+=("$bin")
         fi
