@@ -46,7 +46,7 @@ import {useWebAppAgent} from '@/hooks/use-webapp-agent'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/shadcn-components/ui/tooltip'
 import {cn} from '@/shadcn-lib/utils'
 
-import {useWebAppDrawerStore, type WebAppDrawerMode} from './webapp-drawer-store'
+import {EMPTY_TEACH_EVENTS, useWebAppDrawerStore, type WebAppDrawerMode} from './webapp-drawer-store'
 import {WEBAPP_MODE_CHANGE_EVENT} from './webapp-mode-selector'
 
 const MODES: ReadonlyArray<{id: WebAppDrawerMode; label: string; Icon: LucideIcon}> = [
@@ -123,6 +123,17 @@ function IconBar({webappId, onChatClick}: IconBarProps) {
 	// (drives recorder lifecycle from webapp-stream-window.tsx).
 	const toggleTeachRecording = useWebAppDrawerStore((s) => s.toggleTeachRecording)
 	const isRecording = useWebAppDrawerStore((s) => s.isRecordingByWebappId[webappId] ?? false)
+	// Phase 100-09-09: subscribe to the events mirror so the Teach button
+	// can display a live click-count badge while recording. The events
+	// array reference comes straight from the recorder's React state
+	// (stream-window mirrors it to this slot on each push), so
+	// `events.length` reflects the live count without any extra wiring.
+	// Per user "tikladiktan sonra kirmizi buton olsun teach. sag yukarida
+	// stop butonu olmasin ve sure saymasin sadece clickleri saysin."
+	const events = useWebAppDrawerStore(
+		(s) => s.teachEventsByWebappId[webappId] ?? EMPTY_TEACH_EVENTS,
+	)
+	const clickCount = events.length
 
 	return (
 		<TooltipProvider delayDuration={300}>
@@ -139,6 +150,14 @@ function IconBar({webappId, onChatClick}: IconBarProps) {
 							: id === 'teach'
 								? isRecording
 								: open === id
+					// Phase 100-09-09: Teach icon gets a special red treatment
+					// when recording — the button itself turns red, replacing
+					// the 09-06 top-right `TeachRecordingOverlay` widget. The
+					// Stop affordance is now the same button that started the
+					// recording (clicking the red button → toggleTeachRecording
+					// → recorder.stop → SaveSkillDialog opens — unchanged from
+					// 09-06's stop pipeline; only the trigger surface moved).
+					const teachRecording = id === 'teach' && isRecording
 					return (
 						<Tooltip key={id}>
 							<TooltipTrigger asChild>
@@ -159,6 +178,9 @@ function IconBar({webappId, onChatClick}: IconBarProps) {
 											} else if (id === 'teach') {
 												// Phase 100-09-06: Teach icon toggles per-webappId
 												// recording flag (drawer Teach mode REMOVED).
+												// Phase 100-09-09: same wire — second click on the
+												// now-red button stops + opens save modal via the
+												// existing useEffect in webapp-stream-window.tsx.
 												toggleTeachRecording(webappId)
 											} else {
 												toggle(webappId, id)
@@ -174,22 +196,56 @@ function IconBar({webappId, onChatClick}: IconBarProps) {
 											}
 										}}
 										aria-pressed={active}
-										aria-label={label}
+										aria-label={
+											teachRecording
+												? `Stop teaching (${clickCount} clicks)`
+												: label
+										}
 										className={cn(
-											'group flex items-center justify-center w-9 h-9 rounded-full backdrop-blur-xl border shadow-[0_2px_8px_rgba(0,0,0,0.08)] transition-all duration-200',
-											active
-												? 'bg-primary border-primary/80 text-white'
-												: 'bg-white/90 border-neutral-200/60 text-neutral-500 hover:bg-primary hover:border-primary/80 hover:text-white',
+											'group relative flex items-center justify-center w-9 h-9 rounded-full backdrop-blur-xl border shadow-[0_2px_8px_rgba(0,0,0,0.08)] transition-all duration-200',
+											// Phase 100-09-09: red-button-when-recording branch
+											// takes precedence over the generic `active` styling
+											// for the Teach icon. `bg-red-500/90` matches the
+											// plan's interfaces sketch + the success criteria
+											// (truth: "Teach icon button background is red
+											// (`bg-red-500/90` or equivalent) when `isRecording`
+											// is true"). The literal `isRecording &&
+											// 'bg-red-500/90 ...'` shape is locked by
+											// T-09-09-01 in webapp-stream-window.unit.test.tsx.
+											id === 'teach' && isRecording && 'bg-red-500/90 border-red-500/80 text-white hover:bg-red-500',
+											(id !== 'teach' || !isRecording) && (
+												active
+													? 'bg-primary border-primary/80 text-white'
+													: 'bg-white/90 border-neutral-200/60 text-neutral-500 hover:bg-primary hover:border-primary/80 hover:text-white'
+											),
 										)}
 									>
 										<Icon
 											className='h-4 w-4 transition-colors'
 											strokeWidth={2.25}
 										/>
+										{/* Phase 100-09-09: numeric click-count badge — only
+										    shown for the Teach icon while recording AND at
+										    least one event has been captured. Uses the
+										    `events.length` derived from the recorder's live
+										    events array (mirrored into the drawer store via
+										    `setTeachEvents` from webapp-stream-window.tsx).
+										    Per user "sure saymasin sadece clickleri saysin"
+										    (don't count time, only count clicks). */}
+										{id === 'teach' && isRecording && clickCount > 0 && (
+											<span
+												className='absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-red-600 text-white text-[10px] font-semibold flex items-center justify-center px-1 ring-2 ring-white'
+												aria-label={`${clickCount} clicks captured`}
+											>
+												{clickCount}
+											</span>
+										)}
 									</button>
 								</Magnetic>
 							</TooltipTrigger>
-							<TooltipContent side='bottom'>{label}</TooltipContent>
+							<TooltipContent side='bottom'>
+								{teachRecording ? `Stop teaching (${clickCount} clicks)` : label}
+							</TooltipContent>
 						</Tooltip>
 					)
 				})}

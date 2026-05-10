@@ -29,7 +29,12 @@
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {toast} from 'sonner'
-import {AlertTriangle, RefreshCw, Square} from 'lucide-react'
+// Phase 100-09-09: Square icon import dropped — the top-right
+// `TeachRecordingOverlay` (which carried a Stop button styled with the
+// Square icon) has been removed. The Stop affordance is now the same
+// Teach icon button in the floating action bar (it turns red while
+// recording — see webapp-floating-action-bar.tsx).
+import {AlertTriangle, RefreshCw} from 'lucide-react'
 
 import {trpcReact} from '@/trpc/trpc'
 import {cn} from '@/shadcn-lib/utils'
@@ -419,6 +424,11 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 	// Phase 100-09-06 — recording flag drives recorder lifecycle (see useEffect below).
 	const isRecording = useWebAppDrawerStore((s) => s.isRecordingByWebappId[webappId] ?? false)
 	const toggleTeachRecording = useWebAppDrawerStore((s) => s.toggleTeachRecording)
+	// Phase 100-09-09 — mirror recorder.events to the drawer store so the
+	// floating action bar's IconBar (rendered OUTSIDE this window) can
+	// derive `events.length` for the click-count badge on the Teach icon
+	// button. The sync useEffect lives below near the recorder setup.
+	const setTeachEvents = useWebAppDrawerStore((s) => s.setTeachEvents)
 	// Phase 100-06: bar render moved to webapp-floating-action-bar.tsx;
 	// WEBAPP_MODE_CHANGE_EVENT dispatch lives there now. This component
 	// only subscribes to drawer state for the Sheet body.
@@ -434,6 +444,17 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 	const skillCreateMutation = trpcReact.webapp.skills.create.useMutation()
 	const skillDiscardMutation = trpcReact.webapp.skills.discard.useMutation()
 	const skillsListUtils = trpcReact.useUtils()
+
+	// Phase 100-09-09 — mirror recorder.events into the drawer store so the
+	// floating action bar's IconBar can render the click-count badge on
+	// the Teach icon button. The recorder hook emits a new array reference
+	// on each push (`setEvents(eventsRef.current.slice())`) so the effect
+	// fires exactly when there's something new to show. When recording
+	// stops, the slot is reset to the shared empty-array sentinel so the
+	// badge disappears.
+	useEffect(() => {
+		setTeachEvents(webappId, recorder.events)
+	}, [webappId, recorder.events, setTeachEvents])
 
 	// Privacy toast: fire on first Teach activation per install. The first
 	// time the user picks Teach we surface the dismissable warning; once
@@ -567,13 +588,15 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 				{vnc.status === 'error' && vnc.errorMessage ? (
 					<VncOverlay text={vnc.errorMessage} variant='error' />
 				) : null}
-				{recorder.recording ? (
-					<TeachRecordingOverlay
-						eventCount={recorder.eventCount}
-						droppedCount={recorder.droppedCount}
-						onStop={onStopRecording}
-					/>
-				) : null}
+				{/* Phase 100-09-09 — top-right TeachRecordingOverlay REMOVED.
+				    Per user "sag yukarida stop butonu olmasin ve sure saymasin
+				    sadece clickleri saysin": no top-right widget, no time
+				    counter, only count clicks. The Stop affordance + click
+				    count are now ON the Teach icon button in the floating
+				    action bar (the button itself turns red, with a small
+				    numeric badge showing events.length). See
+				    webapp-floating-action-bar.tsx IconBar for the new
+				    Teach-button JSX + red+badge state branch. */}
 				{recorder.autoStopped ? (
 					<TeachAutoStopBanner
 						onReview={onStopRecording}
@@ -699,35 +722,14 @@ function VncOverlay({text, variant}: {text: string; variant?: 'error'}) {
 // Phase 96-04 — Teach-mode UI surfaces (overlay, banner, save dialog).
 // ─────────────────────────────────────────────────────────────────────
 
-interface TeachRecordingOverlayProps {
-	eventCount: number
-	droppedCount: number
-	onStop: () => void
-}
-
-function TeachRecordingOverlay({eventCount, droppedCount, onStop}: TeachRecordingOverlayProps) {
-	return (
-		<div className='absolute right-3 top-3 z-10 flex items-center gap-2 rounded-radius-sm bg-black/70 px-3 py-1.5 text-caption-sm text-white shadow-lg backdrop-blur-sm'>
-			<span
-				className='inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-red-500'
-				aria-label='Recording'
-				role='status'
-			/>
-			<span>
-				Recording{eventCount > 0 ? ` · ${eventCount} events` : ''}
-				{droppedCount > 0 ? ` · ${droppedCount} dropped` : ''}
-			</span>
-			<button
-				type='button'
-				onClick={onStop}
-				className='ml-1 inline-flex h-6 items-center gap-1 rounded-radius-xs bg-red-500/90 px-2 text-caption-xs text-white hover:bg-red-500'
-			>
-				<Square className='h-3 w-3' />
-				Stop
-			</button>
-		</div>
-	)
-}
+// Phase 100-09-09 — `TeachRecordingOverlay` function + props interface
+// DELETED. Per user "sag yukarida stop butonu olmasin ve sure saymasin
+// sadece clickleri saysin": the top-right pulse-red badge with Stop
+// button + time/event counter has been removed entirely. The recording
+// affordance (start, click count, stop) now lives ON the Teach icon
+// button itself in the floating action bar — the button turns red while
+// recording and shows the click count as a small numeric badge. See
+// `webapp-floating-action-bar.tsx` IconBar.
 
 interface TeachAutoStopBannerProps {
 	onReview: () => void
