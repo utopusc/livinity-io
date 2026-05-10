@@ -105,23 +105,57 @@ interface FakeChild extends EventEmitter {
 }
 
 let xdotoolResult: 'success' | 'enoent' | 'nonzero' = 'success'
+/**
+ * Phase 100-09-03 — Optional per-call override for spawn behaviour. When set,
+ * the matcher decides per-call whether to succeed/fail. Used by smoothMove
+ * "fail-first" test to assert the helper halts after the first failure.
+ */
+let spawnPerCallResult: ((args: readonly string[], callIndex: number) => 'success' | 'nonzero' | 'enoent') | null = null
+/**
+ * Phase 100-09-03 — Stdout supplier for the cursor-position query used by
+ * `getCursorPositionViaXdotool` (which spawns `xdotool getmouselocation
+ * --shell` and parses `X=...Y=...` from stdout). Tests that exercise the
+ * smoothMove integration with `tryXdotoolClick` set this so the helper
+ * resolves a real start point.
+ */
+let getMouseLocationStdout: string | null = null
 const spawnCalls: Array<{cmd: string; args: string[]}> = []
 const spawnMock = vi.fn((command: string, args?: readonly string[], _opts?: unknown): FakeChild => {
-	spawnCalls.push({cmd: command, args: [...(args ?? [])]})
+	const argv = [...(args ?? [])]
+	const callIndex = spawnCalls.length
+	spawnCalls.push({cmd: command, args: argv})
 	const child = new EventEmitter() as FakeChild
 	child.stdin = new Writable({
 		write(_c, _e, cb) {
 			cb()
 		},
 	})
+	// Phase 100-09-03 — synthesize a stdout pipe so getCursorPositionViaXdotool
+	// can read X=/Y= lines. EventEmitter cast with a `pipe`-shaped emitter.
+	const stdoutEmitter = new EventEmitter() as EventEmitter & {readable?: boolean}
+	;(child as unknown as {stdout: EventEmitter}).stdout = stdoutEmitter
 	child.exitCode = null
-	const result = command === 'xdotool' ? xdotoolResult : 'success'
+	let result: 'success' | 'enoent' | 'nonzero' = 'success'
+	if (command === 'xdotool') {
+		if (spawnPerCallResult) {
+			result = spawnPerCallResult(argv, callIndex)
+		} else {
+			result = xdotoolResult
+		}
+	}
 	setImmediate(() => {
 		if (result === 'enoent') {
 			const err = new Error(`spawn ${command} ENOENT`) as Error & {code: string}
 			err.code = 'ENOENT'
 			child.emit('error', err)
-		} else if (result === 'nonzero') {
+			return
+		}
+		// Emit stdout for getmouselocation calls (success path) so the
+		// cursor-position helper can parse X=/Y= lines.
+		if (command === 'xdotool' && argv[0] === 'getmouselocation' && getMouseLocationStdout !== null) {
+			stdoutEmitter.emit('data', Buffer.from(getMouseLocationStdout, 'utf-8'))
+		}
+		if (result === 'nonzero') {
 			child.exitCode = 1
 			child.emit('close', 1)
 		} else {
@@ -148,6 +182,8 @@ beforeEach(() => {
 	spawnMock.mockClear()
 	spawnCalls.length = 0
 	xdotoolResult = 'success'
+	spawnPerCallResult = null
+	getMouseLocationStdout = null
 })
 
 const xdotoolCalls = () => spawnCalls.filter((c) => c.cmd === 'xdotool')
@@ -294,5 +330,80 @@ describe('typeText — windowId (P97-02)', () => {
 		await SUT.typeText('hello')
 		expect(xdotoolCalls()).toHaveLength(0)
 		expect(keyboardMock.type).toHaveBeenCalled()
+	})
+})
+
+/**
+ * Phase 100-09-03 — smoothMove (selfclaude interpolation pattern).
+ *
+ * SelfClaude (https://github.com/utopusc/selfclaude) walks the cursor along
+ * a linearly-interpolated path between current and target positions in
+ * `steps` increments, dispatching each step via `xdotool mousemove --sync`
+ * with a `delayMs` sleep between steps. Replaces the teleport-style
+ * one-shot mousemove that bytebot's click chain previously emitted.
+ *
+ * Tests:
+ *   - T-09-03-01 — interpolation correctness (5 steps from (0,0) → (100,100)).
+ *   - T-09-03-02 — halt-on-failure (no half-trajectory).
+ *   - T-09-03-03 — tryXdotoolClick invokes smoothMove BEFORE the click chain.
+ */
+describe('Phase 100-09-03 smoothMove (selfclaude interpolation)', () => {
+	beforeEach(() => {
+		// Inherit the file-level beforeEach reset; nothing extra.
+	})
+
+	it('T-09-03-01: smoothMove(100,100,0,0,5,0) calls spawnXdotool 5x with interpolated mousemove argv', async () => {
+		const ok = await SUT.smoothMove(100, 100, 0, 0, 5, 0)
+		expect(ok).toBe(true)
+		const moveCalls = xdotoolCalls().filter((c) => c.args[0] === 'mousemove')
+		expect(moveCalls).toHaveLength(5)
+		// Step 1: t=0.2 → (20, 20).
+		expect(moveCalls[0]!.args).toEqual(['mousemove', '--sync', '20', '20'])
+		// Step 3: t=0.6 → (60, 60).
+		expect(moveCalls[2]!.args).toEqual(['mousemove', '--sync', '60', '60'])
+		// Step 5: t=1.0 → (100, 100).
+		expect(moveCalls[4]!.args).toEqual(['mousemove', '--sync', '100', '100'])
+	})
+
+	it('T-09-03-02: smoothMove halts on first xdotool failure (no half-trajectory)', async () => {
+		// Per-call override: first xdotool call fails (nonzero), all subsequent
+		// would succeed — but smoothMove MUST stop after the first failure so
+		// no further xdotool invocations are made.
+		spawnPerCallResult = (_args, callIndex) => (callIndex === 0 ? 'nonzero' : 'success')
+		const ok = await SUT.smoothMove(100, 100, 0, 0, 5, 0)
+		expect(ok).toBe(false)
+		// Only ONE spawn invoked (the failing one); no further interpolation.
+		const moveCalls = xdotoolCalls().filter((c) => c.args[0] === 'mousemove')
+		expect(moveCalls).toHaveLength(1)
+	})
+
+	it('T-09-03-03: tryXdotoolClick(coordinates, windowId) invokes smoothMove BEFORE the focused click chain', async () => {
+		// Mock getmouselocation to return X=50, Y=50.
+		getMouseLocationStdout = 'X=50\nY=50\nSCREEN=0\nWINDOW=0\n'
+		await SUT.clickMouse({
+			coordinates: {x: 200, y: 200},
+			button: 'left',
+			clickCount: 1,
+			windowId: 0xa1b2c3,
+		})
+		const calls = xdotoolCalls()
+		// First xdotool call must be getmouselocation (smoothMove start lookup).
+		expect(calls[0]?.args[0]).toBe('getmouselocation')
+		// Default steps=20: at least 20 mousemove calls follow.
+		const moveCalls = calls.filter((c) => c.args[0] === 'mousemove')
+		expect(moveCalls.length).toBeGreaterThanOrEqual(20)
+		// Final mousemove (step 20) lands on the target.
+		const lastMove = moveCalls[moveCalls.length - 1]!.args
+		expect(lastMove).toEqual(['mousemove', '--sync', '200', '200'])
+		// The click chain (windowactivate ... click) is dispatched in a SINGLE
+		// xdotool spawn AFTER all smoothMove steps.
+		const clickChain = calls.find((c) => c.args[0] === 'windowactivate')
+		expect(clickChain).toBeDefined()
+		expect(clickChain!.args).toContain('click')
+		// The click chain must come AFTER the last mousemove call (smoothMove
+		// before click — the assertion that proves Bug 3 is closed).
+		const clickChainIdx = calls.indexOf(clickChain!)
+		const lastMoveIdx = calls.lastIndexOf(moveCalls[moveCalls.length - 1]!)
+		expect(clickChainIdx).toBeGreaterThan(lastMoveIdx)
 	})
 })
