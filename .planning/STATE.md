@@ -100,10 +100,31 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
 - **Tests:** 21/21 stream-window invariants PASS (4 flipped + 5 new for `WebAppFloatingActionBar`); build clean (`vite build` 35.92s).
 - **SUMMARY:** `.planning/phases/100-multi-stream-window-redesign/100-06-SUMMARY.md`.
 
-## Plan 100-07 — Routing Fix (QUEUED, NOT YET PLANNED)
+## Plan 100-07 — Routing Fix (PARTIAL-SHIPPED, residual bugs)
 
-- Creative solution proposed during the 100-01 checkpoint: (a) click bypass via `xdotool --window <wid>` tRPC mutation; (b) chat MCP scoping — pin agent's tool whitelist to `mcp__bytebot:webapp:<wid>__*` per chat surface; (c) every bytebot tool call passes explicit `windowId` param (`tools.ts:98 defaultWindowId` already supports per-call override).
-- This was originally Plan 100-06's scope; renumbered to 100-07 when the user redirected 100-06 to UI revisions on 2026-05-08.
-- Next step: user runs `/gsd-plan-phase 100-07` (or `/gsd-discuss-phase 100-07`) to spec the routing-fix plan.
+**Hot-fixes shipped 2026-05-08** (deployed Mini PC `2f973413`):
+- **100-07.1/.2** (`dbb48d32` / `1487bba4`): user canvas click bypass — RFB viewOnly + tRPC `webapp.input.{click, keypress, type}` + xdotool windowactivate-first pattern
+- **100-07.3** (`6540c55b`): bytebot `tryXdotoolClick` activate-first pattern + chat UI object render fix
+- **100-07.4** (`73739355`): bytebot host MCP auto-scope to single active WebApp via `/tmp/livos-active-webapp-wid` shared-file IPC
+- **100-06.1/.2** (`5ed4b39f` / `2f973413`): Chrome `--window-size=1280,720 --window-position=0,0` + getResponsiveSize aspect-preserve
 
-**v33 milestone status:** all 9 phases (92-100) CODE-COMPLETE; Phase 99 PARTIAL-PASS, Phase 100 PARTIAL-PASS (UAT 9/11 + 100-06 UI revisions shipped). v33 does NOT flip to ✅ Shipped in ROADMAP.md until Plan 100-07 ships AND Phase 100 UAT re-walks the routing rows (R3 + R9) PASS.
+**RESIDUAL BUGS (user-reported persist):**
+1. Stream still opens vertical despite 100-06.2 — likely cache OR Chrome IPC merge with --start-maximized host inheritance
+2. Multi-stream control: when WebApp B opens, WebApp A bytebot stops working (single-active-wid file empty for 2 active webapps → host-display fallback)
+
+**Detailed handoff:** `.planning/phases/100-multi-stream-window-redesign/CONTINUE.md`
+
+**User reference (hackathon project that solves same use case):** https://github.com/utopusc/selfclaude
+
+## Plan 100-08 — SelfClaude study + proper per-WebApp MCP wiring (QUEUED)
+
+- Study https://github.com/utopusc/selfclaude — patterns user shipped today that work
+- Bring patterns back into LivOS: per-WebApp MCP child spawn lifecycle, proper chat-surface tool-routing, kill-host-Chrome-before-spawn for window-size honor
+- Likely path:
+  ```
+  /gsd-discuss-phase 100-08    # spec selfclaude study + adoption
+  /gsd-plan-phase 100-08
+  /gsd-execute-phase 100-08
+  ```
+
+**v33 milestone status:** Phases 92-100 CODE-COMPLETE; Phase 99 + Phase 100 PARTIAL-PASS. v33 does NOT flip to ✅ Shipped until 100-08 ships AND Phase 100 UAT re-walks all 11 rows PASS.
