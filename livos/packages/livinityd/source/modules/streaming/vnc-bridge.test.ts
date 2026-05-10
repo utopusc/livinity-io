@@ -283,3 +283,53 @@ describe('vnc-bridge — attachVncBridge — ECONNREFUSED retry (Pitfall 4)', ()
 		expect(ws.close).toHaveBeenCalledWith(1011, 'vnc backend unreachable')
 	})
 })
+
+// ============================================================================
+// Phase 100-10-01 -display capture mode (D-100-10-A)
+//
+// Per-WebApp Xvfb means x11vnc switches from `-id 0xHEX` (single-window) to
+// `-display :N` (whole-display capture). Whole-display capture sees Chrome's
+// full pixels regardless of window state and eliminates the cross-window
+// black-overlap from the shared-:1 era.
+// ============================================================================
+
+describe('Phase 100-10-01 -display capture mode', () => {
+	it('T-VNC-10-01-01: spawnVncForWindow({display: ":10", rfbPort, ...}) emits argv with -display :10 and NO -id flag', () => {
+		const {factory} = makeSpawnReturning()
+		spawnVncForWindow({
+			display: ':10',
+			rfbPort: 15900,
+			spawnFactory: factory as never,
+		} as never)
+		expect(factory).toHaveBeenCalledTimes(1)
+		const [cmd, args] = factory.mock.calls[0] as [string, string[]]
+		expect(cmd).toBe('sudo')
+		// argv must contain -display :10
+		const dispIdx = args.indexOf('-display')
+		expect(dispIdx).toBeGreaterThanOrEqual(0)
+		expect(args[dispIdx + 1]).toBe(':10')
+		// argv must NOT contain -id (whole-display capture, not per-window)
+		expect(args).not.toContain('-id')
+		// Sanity: canonical x11vnc flags still present
+		expect(args).toContain('-rfbport')
+		expect(args).toContain('15900')
+		expect(args).toContain('-localhost')
+		expect(args).toContain('-shared')
+		expect(args).toContain('-forever')
+		expect(args).toContain('-noxdamage')
+		expect(args).toContain('-nopw')
+	})
+
+	it('T-VNC-10-01-02: spawnVncForWindow({wid: 0xabc, rfbPort, ...}) (no display arg) preserves legacy -id 0xabc behavior', () => {
+		const {factory} = makeSpawnReturning()
+		spawnVncForWindow({wid: 0xabc, rfbPort: 15901, spawnFactory: factory as never})
+		expect(factory).toHaveBeenCalledTimes(1)
+		const [, args] = factory.mock.calls[0] as [string, string[]]
+		// Legacy single-window capture argv
+		const idIdx = args.indexOf('-id')
+		expect(idIdx).toBeGreaterThanOrEqual(0)
+		expect(args[idIdx + 1]).toBe('0xabc')
+		// And NO -display flag in legacy mode
+		expect(args).not.toContain('-display')
+	})
+})
