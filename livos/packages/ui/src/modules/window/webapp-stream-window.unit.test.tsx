@@ -234,3 +234,79 @@ describe('Phase 100-09-06 teach popup + skills popover + drawer store', () => {
 		expect(barSrc).toMatch(/id === 'teach'/)
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 100-09-08 — Chat UX rewrite: action bar 2-mode state machine.
+//
+// 09-05 shipped a persistent inline `WebAppChatBottomBar` INSIDE the
+// WebApp window — user feedback says this is wrong: "Message Liv...
+// kismi pencerenin icinde olmamasi lazimdi assagida message iconuna
+// tikladigimda o kisimin butun olarak inputa donusmesi lazimdi". The
+// fix: the floating action bar (rendered OUTSIDE the window per 100-06)
+// becomes a 2-mode state machine — default mode='icons' (4 buttons),
+// Chat icon click flips to mode='chat-input' (text input + Send + Close).
+// Send/Enter sends + returns to icons. Close/Escape returns to icons
+// without sending. The persistent inline `WebAppChatBottomBar` JSX
+// render is REMOVED from `webapp-stream-window.tsx`.
+//
+// Following the file's established source-text invariant precedent
+// (D-NO-NEW-DEPS — no React Testing Library), these assertions lock the
+// contract via regex over the affected file sources.
+// ─────────────────────────────────────────────────────────────────
+
+describe('Phase 100-09-08 action bar 2-mode chat input', () => {
+	it('T-09-08-01: drawer store exposes chatInputModeByWebappId + setChatInputMode', () => {
+		const storeSrc = safeRead(STORE_PATH)
+		expect(storeSrc).toMatch(/chatInputModeByWebappId/)
+		expect(storeSrc).toMatch(/setChatInputMode/)
+		// Mode union type must include both states:
+		expect(storeSrc).toMatch(/['"]icons['"]/)
+		expect(storeSrc).toMatch(/['"]chat-input['"]/)
+	})
+
+	it("T-09-08-02: floating bar is a 2-mode state machine — Chat icon click sets mode='chat-input'", () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		// Subscribe to the per-webappId mode slot:
+		expect(barSrc).toMatch(/chatInputModeByWebappId/)
+		// Chat icon's onClick must flip mode to 'chat-input' (NOT the old
+		// `toggleChatLog` wire from 09-05).
+		expect(barSrc).toMatch(/setChatInputMode\(\s*webappId\s*,\s*['"]chat-input['"]/)
+		// The 09-05 `toggleChatLog` wire is replaced — assert it's no longer
+		// the Chat icon's onClick. Grep the literal store accessor to make
+		// sure the subscription line is gone too.
+		expect(barSrc).not.toMatch(/toggleChatLog\(webappId\)/)
+		expect(barSrc).not.toMatch(/chatLogExpandedByWebappId\[webappId\]/)
+	})
+
+	it("T-09-08-03: floating bar ChatInputBar exits to mode='icons' on Send and Close paths", () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		// Send + Close + Escape paths all call setChatInputMode(..., 'icons').
+		// Lock the literal call shape so a future edit can't silently break
+		// the return-to-icons invariant.
+		expect(barSrc).toMatch(/setChatInputMode\(\s*webappId\s*,\s*['"]icons['"]/)
+		// The chat-input branch must wire Escape key handling to the same exit.
+		expect(barSrc).toMatch(/['"]Escape['"]/)
+		// useWebAppAgent powers Send/Enter — chat-input branch must consume it.
+		expect(barSrc).toMatch(/useWebAppAgent/)
+		// Send + close icons from lucide-react (or @tabler) — we only assert
+		// SOME send-affordance + close-affordance exists. The icons we ship
+		// match the <interfaces> sketch's `Send` + `X` lucide imports.
+		expect(barSrc).toMatch(/\b(Send|IconSend)\b/)
+		expect(barSrc).toMatch(/\b(X|IconX)\b/)
+	})
+
+	it('T-09-08-04: webapp-stream-window.tsx no longer renders <WebAppChatBottomBar/>', () => {
+		// Sentinel: the persistent inline bar from 09-05 is gone. The JSX
+		// render call is removed AND its import is removed. The file retains
+		// references to the component name in the deprecation comment, so we
+		// assert the JSX opening tag specifically.
+		expect(SRC).not.toMatch(/<WebAppChatBottomBar\b/)
+		expect(SRC).not.toMatch(/from '\.\/webapp-chat-bottom-bar'/)
+	})
+
+	it('T-09-08-05: webapp-chat-bottom-bar.tsx carries DEPRECATED 2026-05-10 (P100-09-08) banner', () => {
+		const bottomSrc = safeRead(BOTTOM_BAR_PATH)
+		// File preserved for revert safety — must carry the deprecation note.
+		expect(bottomSrc).toMatch(/DEPRECATED 2026-05-10 \(P100-09-08\)/)
+	})
+})
