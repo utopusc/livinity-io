@@ -182,6 +182,8 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 	const inputClickMutation = trpcReact.webapp.input.click.useMutation()
 	const inputKeyMutation = trpcReact.webapp.input.keypress.useMutation()
 	const inputTypeMutation = trpcReact.webapp.input.type.useMutation()
+	// Phase 100-09-02: scroll wheel mutation (closes Bug 2 — scroll-down).
+	const inputScrollMutation = trpcReact.webapp.input.scroll.useMutation()
 
 	// Phase 100-07: canvas event interception. Translates browser mouse +
 	// keyboard events into framebuffer-space coords (Chrome is locked to
@@ -310,6 +312,43 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 			}
 		}
 
+		// Phase 100-09-02: wheel handler. preventDefault REQUIRES passive: false
+		// on addEventListener (capture phase). Maps DOM WheelEvent deltaY/deltaX
+		// to X11 scroll button conventions:
+		//   button 4 = scroll up   (deltaY < 0)
+		//   button 5 = scroll down (deltaY > 0)
+		//   button 6 = scroll left (deltaX < 0)
+		//   button 7 = scroll right(deltaX > 0)
+		// Browsers (touchpads in particular) may emit both deltaY and deltaX
+		// simultaneously. Dispatch each axis as its own event since xdotool
+		// scroll buttons are not combinable.
+		const onWheel = (ev: WheelEvent) => {
+			// Suppress browser-native scroll — events route through tRPC to the
+			// captured Chrome via xdotool (the noVNC canvas is viewOnly:true so
+			// scroll never reaches the captured Chrome via RFB). preventDefault
+			// requires passive:false on the listener registration below.
+			ev.preventDefault()
+			const {x, y} = eventToFbCoords(ev)
+			if (ev.deltaY !== 0) {
+				const button = ev.deltaY > 0 ? 5 : 4
+				// eslint-disable-next-line no-console
+				console.info(`[100-09-02] wheel-Y → tRPC webappId=${webappId} btn=${button} dy=${ev.deltaY}`)
+				inputScrollMutation.mutate(
+					{webappId, x, y, button: button as 4 | 5},
+					{
+						onError: (err) => {
+							// eslint-disable-next-line no-console
+							console.error(`[100-09-02] scroll mutation failed`, err)
+						},
+					},
+				)
+			}
+			if (ev.deltaX !== 0) {
+				const button = ev.deltaX > 0 ? 7 : 6
+				inputScrollMutation.mutate({webappId, x, y, button: button as 6 | 7})
+			}
+		}
+
 		// Phase 100-07.2: capture phase so OUR handlers fire BEFORE noVNC's
 		// canvas listeners (defensive — noVNC viewOnly=true should already
 		// no-op its handlers, but capture phase is the belt-and-suspenders
@@ -319,6 +358,13 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 		container.addEventListener('mouseup', onMouseUp, opts)
 		container.addEventListener('contextmenu', onContextMenu, opts)
 		container.addEventListener('keydown', onKeyDown, opts)
+		// Phase 100-09-02: wheel listener — capture + passive:false so
+		// preventDefault() can suppress native browser scroll. Browsers default
+		// wheel listeners to passive:true if not specified, which silently
+		// drops preventDefault() calls — the explicit object literal here is
+		// LOAD-BEARING for the scroll-routing-via-tRPC behavior.
+		const wheelOpts = {capture: true, passive: false} as const
+		container.addEventListener('wheel', onWheel, wheelOpts)
 		// Diagnostic — log once on mount so we can verify in browser console
 		// that the new wiring is loaded (vs. service-worker-cached old UI).
 		// eslint-disable-next-line no-console
@@ -329,8 +375,9 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 			container.removeEventListener('mouseup', onMouseUp, opts)
 			container.removeEventListener('contextmenu', onContextMenu, opts)
 			container.removeEventListener('keydown', onKeyDown, opts)
+			container.removeEventListener('wheel', onWheel, wheelOpts)
 		}
-	}, [vnc.containerRef, webappId, inputClickMutation, inputKeyMutation, inputTypeMutation])
+	}, [vnc.containerRef, webappId, inputClickMutation, inputKeyMutation, inputTypeMutation, inputScrollMutation])
 
 	// 5. Mode (D-95-10 default 'chat'; D-95-MODE-LOCAL = local state only).
 	const [mode, setMode] = useState<WebAppMode>('chat')

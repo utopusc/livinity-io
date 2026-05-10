@@ -361,6 +361,19 @@ const XDOTOOL_BUTTON: Record<ButtonName, string> = {
 }
 
 /**
+ * Phase 100-09-02 — X11 wheel button mapping. Mirrors the SAME convention
+ * as input-dispatcher.ts ScrollButton (4=up, 5=down, 6=left, 7=right). Kept
+ * in sync between bytebot path and user-canvas path; if a future plan adds
+ * horizontal-scroll surfacing, consider centralising into a shared module.
+ */
+const SCROLL_BUTTON: Record<ScrollDirection, '4' | '5' | '6' | '7'> = {
+	up: '4',
+	down: '5',
+	left: '6',
+	right: '7',
+}
+
+/**
  * Run an xdotool chain: optional sync mouse-move + click N times. Returns
  * true on success, false on any failure (ENOENT / non-zero exit / spawn
  * error). Never throws — caller falls back to nut-js path.
@@ -430,6 +443,36 @@ async function tryXdotoolClick(
 }
 
 /**
+ * Phase 100-09-02 — xdotool scroll via activate-first chain. Same Chrome
+ * synthetic-event filter that broke clicks (P100-07.3) breaks nut-js
+ * scrollDown/scrollUp too — Chrome filters synthetic XTestFakeButtonEvent
+ * the same way it filters synthetic clicks. Returns true on clean exit;
+ * false otherwise (caller falls back to nut-js host-display path).
+ * Never throws.
+ */
+async function tryXdotoolScroll(
+	direction: ScrollDirection,
+	count: number,
+	coordinates: Coords,
+	windowId: number,
+): Promise<boolean> {
+	const widStr = String(windowId)
+	const btn = SCROLL_BUTTON[direction]
+	const args: string[] = [
+		'windowactivate', '--sync', widStr,
+		'windowfocus', '--sync', widStr,
+		'mousemove', '--window', widStr, '--sync', String(coordinates.x), String(coordinates.y),
+	]
+	// xdotool's `click --repeat N --delay <ms> <btn>` for N>1 scroll notches.
+	if (count > 1) {
+		args.push('click', '--clearmodifiers', '--repeat', String(count), '--delay', '50', btn)
+	} else {
+		args.push('click', '--clearmodifiers', btn)
+	}
+	return await spawnXdotool(args)
+}
+
+/**
  * Press or release a mouse button. Mirrors `_pressMouseTool`
  * (computer_press_mouse). Used by agents that want explicit control over
  * button state (e.g. drag-with-modifier).
@@ -487,16 +530,32 @@ export async function dragMouse(
  * Scroll the wheel in a direction at coordinates. Mirrors `_scrollTool`
  * (computer_scroll). nut-js exposes 4 separate scroll* APIs; we dispatch
  * by direction.
+ *
+ * 2026-05-10 P100-09-02 — when `windowId` is set AND no holdKeys are held,
+ * route via `tryXdotoolScroll` (activate-first xdotool click 4/5/6/7 chain).
+ * Closes 100-09 Bug 2 — Chrome filters nut-js's synthetic
+ * XTestFakeButtonEvent the same way it filters synthetic clicks (same fix
+ * pattern as P100-07.3 `tryXdotoolClick`). Falls through to nut-js when
+ * xdotool unavailable OR holdKeys present (xdotool's `--clearmodifiers`
+ * conflicts with deliberately-held modifier keys).
  */
 export async function scroll(opts: {
 	coordinates: Coords
 	direction: ScrollDirection
 	scrollCount: number
 	holdKeys?: readonly string[]
+	/** P100-09-02: target a specific X11 window via xdotool activate-first chain. */
+	windowId?: number
 }): Promise<void> {
+	const n = Math.max(1, Math.floor(opts.scrollCount))
+	if (typeof opts.windowId === 'number' && (!opts.holdKeys || opts.holdKeys.length === 0)) {
+		const ok = await tryXdotoolScroll(opts.direction, n, opts.coordinates, opts.windowId)
+		if (ok) return
+		// Fall through to nut-js — xdotool unavailable. Host-display only;
+		// the nut-js path has no per-window scoping.
+	}
 	await withHeldKeys(opts.holdKeys, async () => {
 		await mouse.setPosition(new Point(opts.coordinates.x, opts.coordinates.y))
-		const n = Math.max(1, Math.floor(opts.scrollCount))
 		switch (opts.direction) {
 			case 'up':
 				await mouse.scrollUp(n)
