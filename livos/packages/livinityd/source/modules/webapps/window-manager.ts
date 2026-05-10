@@ -58,6 +58,14 @@ import {
 	type McpServerConfigInput,
 	type PerWebAppMcpDescriptor,
 } from '../computer-use/bytebot-mcp-config.js'
+// Phase 100-10-01 — per-WebApp Xvfb display allocator + lifecycle (D-100-10-A).
+// When opts.displayAllocator is provided, spawn() allocates a display per
+// WebApp (`:10`, `:11`, ...), spawns Xvfb + fluxbox on it, and threads
+// DISPLAY=<allocated> into the Chrome spawn env. close() tears down fluxbox
+// then Xvfb, then releases the display number for reuse.
+import type {DisplayAllocator} from './display-allocator.js'
+import {startXvfb, type XvfbHandle} from './xvfb-display.js'
+import {startFluxbox, type FluxboxHandle} from './fluxbox-wm.js'
 
 const DEFAULT_TITLE_TIMEOUT_MS = 5000
 const DEFAULT_IDLE_POLL_MS = 5000
@@ -133,6 +141,23 @@ export type WebAppWindowManagerOpts = {
 	bytebotServerPath?: string
 	/** Phase 100-08-04 — env passed to buildBytebotConfig. Defaults to process.env. */
 	bytebotMcpEnv?: NodeJS.ProcessEnv
+	/**
+	 * Phase 100-10-01 — per-WebApp X display allocator (D-100-10-A). When
+	 * provided, spawn() allocates `:10`, `:11`, ... for each WebApp, spawns
+	 * Xvfb + fluxbox on the allocated display, and passes
+	 * `DISPLAY=<allocated>` to the Chrome spawn env. close() reverses: kills
+	 * fluxbox + Xvfb on that display then releases the slot for reuse.
+	 *
+	 * When undefined (legacy / test paths), spawn() falls back to
+	 * WEBAPPS_X11_ENV.DISPLAY (`:1` post P100-08-02). The 100-08-01 global
+	 * Xvfb `:1` + fluxbox `:1` started in `livinityd.start()` covers that
+	 * fallback.
+	 */
+	displayAllocator?: DisplayAllocator
+	/** Phase 100-10-01 — Xvfb start fn override (test stub). Defaults to `startXvfb` from xvfb-display.ts. */
+	xvfbStartFn?: typeof startXvfb
+	/** Phase 100-10-01 — fluxbox start fn override (test stub). Defaults to `startFluxbox` from fluxbox-wm.ts. */
+	fluxboxStartFn?: typeof startFluxbox
 }
 
 type ActiveWebApp = {
@@ -145,6 +170,12 @@ type ActiveWebApp = {
 	portalSession: WindowSessionResult | null
 	geometryTracker: GeometryTracker | null
 	url: string
+	// Phase 100-10-01 — per-WebApp X display lifecycle. Populated only when
+	// the manager was constructed with a displayAllocator. close() uses these
+	// to tear down fluxbox + Xvfb and release the display number.
+	display: string | null
+	xvfb: XvfbHandle | null
+	fluxbox: FluxboxHandle | null
 }
 
 export type SpawnOpts = {
@@ -179,6 +210,10 @@ export class WebAppWindowManager {
 	private readonly mcpConfigManager: WebAppWindowManagerOpts['mcpConfigManager']
 	private readonly bytebotServerPath: string | undefined
 	private readonly bytebotMcpEnv: NodeJS.ProcessEnv
+	// Phase 100-10-01 — per-WebApp X display allocator + spawn fns (D-100-10-A).
+	private readonly displayAllocator: DisplayAllocator | undefined
+	private readonly xvfbStartFn: typeof startXvfb
+	private readonly fluxboxStartFn: typeof startFluxbox
 
 	constructor(opts: WebAppWindowManagerOpts) {
 		this.streamManager = opts.streamManager
@@ -204,6 +239,13 @@ export class WebAppWindowManager {
 		this.mcpConfigManager = opts.mcpConfigManager
 		this.bytebotServerPath = opts.bytebotServerPath
 		this.bytebotMcpEnv = opts.bytebotMcpEnv ?? process.env
+		// Phase 100-10-01 — per-WebApp X display allocator wiring (D-100-10-A).
+		// When opts.displayAllocator is undefined, all per-spawn Xvfb/fluxbox/release
+		// logic short-circuits and the manager falls back to the global
+		// WEBAPPS_X11_ENV.DISPLAY (`:1`) used pre-100-10-01.
+		this.displayAllocator = opts.displayAllocator
+		this.xvfbStartFn = opts.xvfbStartFn ?? startXvfb
+		this.fluxboxStartFn = opts.fluxboxStartFn ?? startFluxbox
 	}
 
 	startIdleCleanup(): void {
@@ -248,6 +290,76 @@ export class WebAppWindowManager {
 		// 2. Baseline wid snapshot
 		const baselineWids = await this.discovery.snapshotWindowIds()
 
+		// Phase 100-10-01 — Per-WebApp Xvfb display lifecycle (D-100-10-A).
+		// When a displayAllocator is wired in, allocate the next free display
+		// slot (`:10`, `:11`, ...) and stand up a dedicated Xvfb + fluxbox WM
+		// on it BEFORE Chrome spawn. The DISPLAY env passed to Chrome flips
+		// from the global `:1` to the allocated display — every WebApp ends
+		// up isolated on its own X server (eliminates Issue 2 cross-window
+		// stacking + lets x11vnc -display :N capture Chrome's full pixels).
+		// Legacy back-compat: when displayAllocator is undefined, fall back
+		// to WEBAPPS_X11_ENV.DISPLAY (the 100-08-01 global :1 path).
+		let allocatedDisplay: string | null = null
+		let xvfb: XvfbHandle | null = null
+		let fluxbox: FluxboxHandle | null = null
+		if (this.displayAllocator) {
+			allocatedDisplay = this.displayAllocator.allocate()
+			try {
+				xvfb = await this.xvfbStartFn({
+					display: allocatedDisplay,
+					user: 'bruce',
+					logger: this.logger
+						? {
+								info: (m: string) => this.logger!.info(m),
+								warn: (m: string, e?: unknown) => this.logger!.warn(m, e),
+								error: (m: string, e?: unknown) => this.logger!.error(m, e),
+							}
+						: undefined,
+				})
+				// 500ms grace so X server is ready before fluxbox connects (matches
+				// 100-08-01 livinityd boot path; selfclaude-validated).
+				await new Promise((resolve) => setTimeout(resolve, 500))
+				fluxbox = await this.fluxboxStartFn({
+					display: allocatedDisplay,
+					user: 'bruce',
+					logger: this.logger
+						? {
+								info: (m: string) => this.logger!.info(m),
+								warn: (m: string, e?: unknown) => this.logger!.warn(m, e),
+								error: (m: string, e?: unknown) => this.logger!.error(m, e),
+							}
+						: undefined,
+				})
+			} catch (err) {
+				// Per-WebApp Xvfb/fluxbox spawn failed — release the slot, log,
+				// and rethrow so the spawn() caller sees the failure (the tRPC
+				// route surfaces SERVICE_UNAVAILABLE upstream).
+				if (allocatedDisplay) {
+					try {
+						this.displayAllocator.release(allocatedDisplay)
+					} catch {
+						/* allocator release should be infallible per T-10-01-03 */
+					}
+				}
+				try {
+					await fluxbox?.stop()
+				} catch {
+					/* noop */
+				}
+				try {
+					await xvfb?.stop()
+				} catch {
+					/* noop */
+				}
+				this.logger?.error?.(
+					`webapp ${opts.webappId}: per-WebApp Xvfb/fluxbox spawn failed on ${allocatedDisplay}`,
+					err,
+				)
+				throw err
+			}
+		}
+		const chromeDisplay = allocatedDisplay ?? WEBAPPS_X11_ENV.DISPLAY
+
 		// 3. Spawn Chrome (detached, NOT a livinityd child)
 		// 2026-05-08 hotfix v2: livinityd's systemd env has no DISPLAY or
 		// XAUTHORITY, and Chrome refuses to launch as root without
@@ -269,8 +381,11 @@ export class WebAppWindowManager {
 			'-n', // non-interactive (fail fast if password would be prompted)
 			'-u',
 			chromeUser,
-			`DISPLAY=${WEBAPPS_X11_ENV.DISPLAY}`,
-			// P100-08-02: XAUTHORITY removed — Xvfb :1 runs with `-ac` (no Xauthority cookie).
+			// Phase 100-10-01: when displayAllocator is wired, chromeDisplay is
+			// the per-WebApp `:10` / `:11` / ...; otherwise falls back to
+			// WEBAPPS_X11_ENV.DISPLAY (`:1`, post 100-08-02).
+			`DISPLAY=${chromeDisplay}`,
+			// P100-08-02: XAUTHORITY removed — Xvfb runs with `-ac` (no Xauthority cookie).
 			// LIVOS_X11_XAUTHORITY env still recognized in window-discovery.ts comment for
 			// future xauth-protected Xvfb configs, but not propagated by default.
 			this.chromeBinary,
@@ -282,7 +397,9 @@ export class WebAppWindowManager {
 		const chromeProc = this.spawnFactory('sudo', chromeArgs, {
 			detached: true,
 			stdio: 'ignore',
-			env: {...process.env, ...WEBAPPS_X11_ENV},
+			// Phase 100-10-01: also flip the spawn-options env DISPLAY so any
+			// child-process pickup uses the per-WebApp display.
+			env: {...process.env, ...WEBAPPS_X11_ENV, DISPLAY: chromeDisplay},
 		})
 		try {
 			chromeProc.unref?.()
@@ -345,6 +462,12 @@ export class WebAppWindowManager {
 			portalSession,
 			geometryTracker,
 			url: opts.url,
+			// Phase 100-10-01 — per-WebApp X display lifecycle handles. Stay
+			// null on legacy (no allocator) path; close() short-circuits the
+			// fluxbox/xvfb/release steps when they're null.
+			display: allocatedDisplay,
+			xvfb,
+			fluxbox,
 		}
 		this.active.set(opts.webappId, entry)
 		this.logger?.info?.(
@@ -356,7 +479,7 @@ export class WebAppWindowManager {
 		// (different process) reconciles async (~1-2s). Non-fatal: on error,
 		// host bytebot via /tmp/livos-active-webapp-wid fallback below still
 		// serves the agent during the lag.
-		await this.registerWebAppMcp(opts.webappId, newWin.wid)
+		await this.registerWebAppMcp(opts.webappId, newWin.wid, chromeDisplay)
 
 		// Phase 100-07.4 — broadcast active wid (kept as belt-and-braces
 		// fallback and bridges the liv-core reconcile lag).
@@ -437,6 +560,38 @@ export class WebAppWindowManager {
 		// instance isn't yet (or no longer) registered. Non-fatal on error.
 		await this.deregisterWebAppMcp(opts.webappId)
 
+		// Phase 100-10-01 — tear down per-WebApp fluxbox + Xvfb on this
+		// WebApp's display, then release the display number back to the
+		// allocator's free pool. All steps non-fatal on error so close()
+		// still resolves and drops the entry on a partial failure (the next
+		// spawn() would just allocate the next-higher slot anyway).
+		if (entry.fluxbox) {
+			try {
+				await entry.fluxbox.stop()
+			} catch (err) {
+				this.logger?.warn?.(`webapp ${opts.webappId}: fluxbox.stop threw`, err)
+			}
+		}
+		if (entry.xvfb) {
+			try {
+				await entry.xvfb.stop()
+			} catch (err) {
+				this.logger?.warn?.(`webapp ${opts.webappId}: xvfb.stop threw`, err)
+			}
+		}
+		if (this.displayAllocator && entry.display) {
+			try {
+				this.displayAllocator.release(entry.display)
+			} catch (err) {
+				// release is documented as infallible (T-10-01-03 unknown-no-op);
+				// log defensively in case a future impl regresses.
+				this.logger?.warn?.(
+					`webapp ${opts.webappId}: displayAllocator.release threw for ${entry.display}`,
+					err,
+				)
+			}
+		}
+
 		this.active.delete(opts.webappId)
 		this.logger?.info?.(`webapp ${opts.webappId} closed (killWindow=${!!opts.killWindow})`)
 
@@ -465,13 +620,20 @@ export class WebAppWindowManager {
 	 * /tmp/livos-active-webapp-wid (broadcastActiveWid) still serves the
 	 * agent during the ~1-2s reconcile lag.
 	 */
-	private async registerWebAppMcp(webappId: string, wid: number): Promise<void> {
+	private async registerWebAppMcp(
+		webappId: string,
+		wid: number,
+		display: string = ':1',
+	): Promise<void> {
 		if (!this.mcpConfigManager || !this.bytebotServerPath) return
 		try {
 			const descriptor: PerWebAppMcpDescriptor = {
 				instanceKey: webappId,
 				windowId: wid,
-				display: ':1', // D-100-08-A
+				// Phase 100-10-01: descriptor display reflects the per-WebApp
+				// Xvfb when displayAllocator is wired (`:10`, `:11`, ...);
+				// otherwise falls back to `:1` (D-100-08-A back-compat).
+				display,
 			}
 			const config = buildBytebotConfig(this.bytebotMcpEnv, this.bytebotServerPath, descriptor)
 			const name = this.mcpServerNameFor(webappId)
