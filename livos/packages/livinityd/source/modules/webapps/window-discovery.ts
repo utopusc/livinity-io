@@ -96,6 +96,18 @@ function execFileAsync(
 /**
  * List all visible top-level X11 windows. Uses `wmctrl -lG` which emits
  * `<wid_hex> <desktop> <x> <y> <w> <h> <hostname> <title...>` per line.
+ *
+ * P100-09-07 — xdotool fallback for absent/broken WM.
+ *
+ * `wmctrl -lG` reads `_NET_CLIENT_LIST` off the X11 root window. That atom
+ * is published by the window manager (e.g. fluxbox per P100-08-01). If the
+ * WM died silently or never started — the exact failure mode we just fixed
+ * one layer up in fluxbox-wm.ts — wmctrl prints
+ * `Cannot get client list properties (_NET_CLIENT_LIST or _WIN_CLIENT_LIST)`
+ * and exits non-zero. Falling back to `xdotool search` lets us walk the
+ * X11 window tree directly (no EWMH atoms required) so window discovery
+ * still works without a WM. This is the defense-in-depth layer behind the
+ * fluxbox stderr capture.
  */
 export async function listAllWindows(): Promise<WindowInfo[]> {
 	let stdout: string
@@ -105,8 +117,14 @@ export async function listAllWindows(): Promise<WindowInfo[]> {
 	} catch (err) {
 		// wmctrl missing or X server unreachable — return empty list, callers
 		// see "no windows" not an exception.
-		const e = err as NodeJS.ErrnoException
+		const e = err as NodeJS.ErrnoException & {stderr?: string}
 		if (e.code === 'ENOENT') return []
+		// P100-09-07: WM absent (no _NET_CLIENT_LIST atom). Fall through to
+		// xdotool which walks the X11 tree directly.
+		const errText = String(e.stderr ?? '')
+		if (errText.includes('Cannot get client list') || errText.includes('_NET_CLIENT_LIST')) {
+			return listAllWindowsViaXdotool()
+		}
 		throw err
 	}
 
@@ -126,6 +144,82 @@ export async function listAllWindows(): Promise<WindowInfo[]> {
 		out.push({wid, title, geometry: {x, y, w, h}})
 	}
 	return out
+}
+
+/**
+ * P100-09-07: xdotool fallback. `xdotool search --name ''` matches the empty
+ * regex (i.e., every window) and emits one decimal wid per line. Per-wid we
+ * fetch geometry via `xdotool getwindowgeometry --shell <wid_hex>` and the
+ * window title via `xdotool getwindowname <wid_hex>`. Both binaries operate
+ * directly on the X11 window tree — no EWMH atoms required — so this path
+ * works even when no WM is running on the target display.
+ */
+async function listAllWindowsViaXdotool(): Promise<WindowInfo[]> {
+	let stdout: string
+	try {
+		const result = await execFileAsync('xdotool', ['search', '--name', ''], {
+			timeout: DEFAULT_TIMEOUT_MS,
+		})
+		stdout = result.stdout
+	} catch (err) {
+		const e = err as NodeJS.ErrnoException
+		// Both wmctrl AND xdotool failed (binary missing / X unreachable). Graceful
+		// degradation — return empty list rather than throwing, matching the
+		// original wmctrl ENOENT short-circuit.
+		if (e.code === 'ENOENT') return []
+		return []
+	}
+	const out: WindowInfo[] = []
+	const widLines = stdout.split(/\r?\n/).filter(Boolean)
+	for (const widDecimal of widLines) {
+		const wid = parseInt(widDecimal.trim(), 10)
+		if (!Number.isFinite(wid) || wid <= 0) continue
+		const widHex = `0x${wid.toString(16)}`
+		try {
+			const [geoResult, nameResult] = await Promise.all([
+				execFileAsync('xdotool', ['getwindowgeometry', '--shell', widHex], {
+					timeout: 1000,
+				}).catch(() => ({stdout: '', stderr: ''})),
+				execFileAsync('xdotool', ['getwindowname', widHex], {
+					timeout: 1000,
+				}).catch(() => ({stdout: '', stderr: ''})),
+			])
+			const geom = parseXdotoolShellGeom(geoResult.stdout)
+			const title = nameResult.stdout.trim()
+			if (geom) out.push({wid, title, geometry: geom})
+		} catch {
+			// Window vanished mid-iteration; skip.
+		}
+	}
+	return out
+}
+
+/**
+ * Parse the `xdotool getwindowgeometry --shell <wid>` output:
+ *   WINDOW=12345
+ *   X=100
+ *   Y=200
+ *   WIDTH=800
+ *   HEIGHT=600
+ *   SCREEN=0
+ *
+ * Returns null when any of X / Y / WIDTH / HEIGHT are missing.
+ */
+function parseXdotoolShellGeom(text: string): Geometry | null {
+	const map: Record<string, string> = {}
+	for (const line of text.split(/\r?\n/)) {
+		const m = line.match(/^([A-Z]+)=(.*)$/)
+		if (m) map[m[1]] = m[2]
+	}
+	if (!('X' in map) || !('Y' in map) || !('WIDTH' in map) || !('HEIGHT' in map)) {
+		return null
+	}
+	const x = parseInt(map.X, 10)
+	const y = parseInt(map.Y, 10)
+	const w = parseInt(map.WIDTH, 10)
+	const h = parseInt(map.HEIGHT, 10)
+	if (![x, y, w, h].every((n) => Number.isFinite(n))) return null
+	return {x, y, w, h}
 }
 
 /**

@@ -125,6 +125,9 @@ describe('fluxbox-wm', () => {
 		const logger = {info, warn, error}
 		const {startFluxbox} = await import('./fluxbox-wm.js')
 		const startP = startFluxbox({logger})
+		// Attach catch handler synchronously so the rejection is observed even
+		// while we step through fake-timer assertions below.
+		const rejection = startP.catch((e: unknown) => e)
 		// Emit stderr then immediate exit to simulate sudo NOPASSWD missing.
 		await Promise.resolve()
 		mockChild.stderr?.emit(
@@ -133,15 +136,18 @@ describe('fluxbox-wm', () => {
 		)
 		mockChild.emit('exit', 1, null)
 		await vi.advanceTimersByTimeAsync(50)
-		await expect(startP).rejects.toThrow(/fluxbox failed to start/)
-		// Verify the thrown message contains the stderr context.
-		try {
-			await startFluxbox({logger}) // not the same promise — but ensure error log path also called previously
-		} catch {
-			/* noop */
-		}
+		const err = (await rejection) as Error
+		expect(err).toBeInstanceOf(Error)
+		expect(err.message).toMatch(/fluxbox failed to start/)
+		// Thrown message must carry the captured stderr context.
+		expect(err.message).toMatch(/password is required/)
 		const errorMessages = error.mock.calls.map((c) => String(c[0]))
-		expect(errorMessages.some((m) => m.includes('fluxbox FAILED to start') || m.includes('fluxbox failed to start'))).toBe(true)
+		expect(
+			errorMessages.some(
+				(m) =>
+					m.includes('fluxbox FAILED to start') || m.includes('fluxbox failed to start'),
+			),
+		).toBe(true)
 		expect(errorMessages.some((m) => m.includes('password is required') || m.includes('sudo'))).toBe(true)
 	})
 
