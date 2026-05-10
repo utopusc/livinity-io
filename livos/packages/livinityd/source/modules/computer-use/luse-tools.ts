@@ -432,10 +432,76 @@ const _readFileTool = {
 // Export all tools as an array — VERBATIM from upstream lines 384-405
 // ─────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────
+// P100-10-03 — Luse window-aware tools (D-100-10-C).
+//
+// These extend the verbatim upstream tool set with three LivOS-native
+// window primitives the agent needs for the per-WebApp Xvfb model
+// (D-100-10-A): list windows on its display, screenshot any window or
+// the whole display, focus any window by wid.
+//
+// Per the registerLuseTools flow, input_schema is in JSON-Schema form
+// here and converted to a Zod raw shape at registration time (P79-02).
+// ─────────────────────────────────────────────────────────────────────────
+
+const _listWindowsTool = {
+	name: 'list_windows',
+	description:
+		'List all windows on a specific X display. Returns wid, title, class, and geometry. Defaults to the caller-bound LUSE_DISPLAY env when no display arg is passed (per-WebApp Xvfb scope per D-100-10-A).',
+	input_schema: {
+		type: 'object' as const,
+		properties: {
+			display: {
+				type: 'string' as const,
+				description:
+					'X display string like ":10". Defaults to caller LUSE_DISPLAY env.',
+			},
+		},
+	},
+}
+
+const _screenshotWindowTool = {
+	name: 'screenshot_window',
+	description:
+		'Capture a screenshot of a specific window (by wid) OR an entire X display. Returns base64 PNG. Exactly one of `wid` or `display` should be provided; if both are omitted, the handler returns an error.',
+	input_schema: {
+		type: 'object' as const,
+		properties: {
+			wid: {
+				type: 'number' as const,
+				description:
+					'X11 window id (decimal). When set, capture only this window. Takes precedence over `display`.',
+			},
+			display: {
+				type: 'string' as const,
+				description:
+					'X display string like ":10". When set (and `wid` is not), capture the entire display.',
+			},
+		},
+	},
+}
+
+const _focusWindowTool = {
+	name: 'focus_window',
+	description:
+		'Activate (focus) a window by wid. Equivalent to `xdotool windowactivate --sync <wid>`. Use this to switch the X input focus between windows on the caller display.',
+	input_schema: {
+		type: 'object' as const,
+		properties: {
+			wid: {
+				type: 'number' as const,
+				description: 'X11 window id (decimal).',
+			},
+		},
+		required: ['wid'],
+	},
+}
+
 /**
- * The complete set of Luse tool schemas, in upstream order. Pass this
- * to the Anthropic / Kimi `tools[]` request field for the LivAgentRunner
- * computer-use loop (P72-03 wires this through `computerUseRouter`).
+ * The complete set of Luse tool schemas, in upstream order plus the
+ * P100-10-03 window-aware extension. Pass this to the Anthropic / Kimi
+ * `tools[]` request field for the LivAgentRunner computer-use loop
+ * (P72-03 wires this through `computerUseRouter`).
  */
 export const LUSE_TOOLS: readonly AnthropicTool[] = [
 	_moveMouseTool,
@@ -455,6 +521,10 @@ export const LUSE_TOOLS: readonly AnthropicTool[] = [
 	_setTaskStatusTool,
 	_createTaskTool,
 	_readFileTool,
+	// P100-10-03 — window-aware tools (D-100-10-C)
+	_listWindowsTool,
+	_screenshotWindowTool,
+	_focusWindowTool,
 ] as const
 
 /**

@@ -32,6 +32,7 @@
  * thrown errors into `{ isError: true, content: [{ type:'text', text:'Error: ...' }] }`
  * — the MCP protocol expects an `isError` flag, not exceptions.
  */
+import {spawn} from 'node:child_process'
 import {setTimeout as sleep} from 'node:timers/promises'
 
 import {z, type ZodTypeAny} from 'zod'
@@ -122,6 +123,19 @@ export interface LuseToolsOptions {
 	 * active WebApps, OR multiple — caller should be explicit).
 	 */
 	activeWebappWidResolver?: () => number | undefined
+	/**
+	 * Phase 100-10-03 — caller's per-WebApp X display (LUSE_DISPLAY env)
+	 * for the window-aware tools (`mcp__luse__list_windows`,
+	 * `mcp__luse__screenshot_window`, `mcp__luse__focus_window`).
+	 *
+	 * The per-WebApp Luse MCP child reads `LUSE_DISPLAY` from env (set
+	 * by 100-10-01's WebAppWindowManager → 100-10-02's LuseMcpConfig
+	 * descriptor) and `mcp/server.ts` passes it here at registration.
+	 * Window-aware tools default to this display when the tool input
+	 * does not specify one, so the agent's "list my windows" call
+	 * stays scoped to its allocated Xvfb (`:10`, `:11`, ...) by default.
+	 */
+	defaultDisplay?: string
 }
 
 /**
@@ -604,6 +618,20 @@ function jsonSchemaToZodRawShape(rootSchema: {type: 'object'; properties: Record
 	return shape
 }
 
+/**
+ * P100-10-03 — the 3 window-aware tools are registered on the server with
+ * the explicit `mcp__luse__*` prefix (NOT through the standard
+ * tool.name registration loop) so the agent calls them by their
+ * fully-qualified host-side dispatcher name. Their schemas live in
+ * LUSE_TOOLS for the agent's tools[] enumeration, but we skip them in
+ * the standard loop to avoid double-registration.
+ */
+const LUSE_WINDOW_TOOL_NAMES = new Set<string>([
+	'list_windows',
+	'screenshot_window',
+	'focus_window',
+])
+
 export function registerLuseTools(server: McpServerLike, options?: LuseToolsOptions): void {
 	const handlers =
 		options?.defaultWindowId !== undefined || options?.skillReplayDeps !== undefined
@@ -616,6 +644,9 @@ export function registerLuseTools(server: McpServerLike, options?: LuseToolsOpti
 			? [...LUSE_TOOLS, ...LUSE_AUTO_MODE_EXTRA_TOOLS]
 			: LUSE_TOOLS
 	for (const tool of allTools) {
+		// P100-10-03 — the window-aware tools are registered separately
+		// under `mcp__luse__*` prefixed names; skip them here.
+		if (LUSE_WINDOW_TOOL_NAMES.has(tool.name)) continue
 		server.registerTool(
 			tool.name,
 			{
@@ -649,4 +680,189 @@ export function registerLuseTools(server: McpServerLike, options?: LuseToolsOpti
 			},
 		)
 	}
+
+	// ── P100-10-03 — window-aware tool registrations (D-100-10-C) ─────────────
+	registerLuseWindowTools(server, options)
+}
+
+/**
+ * P100-10-03 — Register the three window-aware tools
+ * (`mcp__luse__list_windows`, `mcp__luse__screenshot_window`,
+ * `mcp__luse__focus_window`) under their fully-qualified prefixed
+ * names. Defaults to `options.defaultDisplay` (typically LUSE_DISPLAY)
+ * when the tool input does not specify a display.
+ */
+function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptions): void {
+	const defaultDisplay =
+		options?.defaultDisplay ?? process.env.LUSE_DISPLAY ?? process.env.DISPLAY
+
+	const listWindowsTool = LUSE_TOOLS.find((t) => t.name === 'list_windows')!
+	const screenshotWindowTool = LUSE_TOOLS.find((t) => t.name === 'screenshot_window')!
+	const focusWindowTool = LUSE_TOOLS.find((t) => t.name === 'focus_window')!
+
+	const wrapHandler = (
+		fn: (args: Record<string, unknown>) => Promise<LivCallToolResult>,
+	) => async (args: Record<string, unknown>) => {
+		try {
+			return await fn(args ?? {})
+		} catch (err) {
+			return {
+				content: [{type: 'text', text: `Error: ${(err as Error).message}`}],
+				isError: true,
+			}
+		}
+	}
+
+	// mcp__luse__list_windows — wmctrl-based window enumeration on the
+	// caller's display (W4 lock: wmctrl, not xdotool search).
+	server.registerTool(
+		'mcp__luse__list_windows',
+		{
+			description: listWindowsTool.description,
+			inputSchema: jsonSchemaToZodRawShape(listWindowsTool.input_schema),
+		},
+		wrapHandler(async (args) => {
+			const display =
+				(typeof args.display === 'string' && args.display.length > 0
+					? args.display
+					: undefined) ?? defaultDisplay
+			const windows = display !== undefined
+				? await listWindows({display})
+				: await listWindows({})
+			return {
+				content: [{type: 'text', text: JSON.stringify(windows)}],
+				isError: false,
+			}
+		}),
+	)
+
+	// mcp__luse__screenshot_window — accepts `{wid}` for window-bound
+	// capture OR `{display}` for whole-display capture. Falls back to
+	// the bound default display when neither is provided (matches the
+	// "default to caller scope" pattern used by list_windows).
+	server.registerTool(
+		'mcp__luse__screenshot_window',
+		{
+			description: screenshotWindowTool.description,
+			inputSchema: jsonSchemaToZodRawShape(screenshotWindowTool.input_schema),
+		},
+		wrapHandler(async (args) => {
+			const widRaw = args.wid
+			if (typeof widRaw === 'number' && Number.isFinite(widRaw)) {
+				// Window-bound capture. captureScreenshot's signature is
+				// `{windowId}` (P97-01 naming); we accept the `wid` alias
+				// at the MCP boundary and translate here.
+				const shot = await captureScreenshot({windowId: widRaw})
+				return {
+					content: [
+						{type: 'image', data: shot.base64, mimeType: shot.mimeType},
+						{
+							type: 'text',
+							text: `screenshot_window wid=0x${widRaw.toString(16)} (${shot.width}x${shot.height})`,
+						},
+					],
+					isError: false,
+				}
+			}
+			const displayArg =
+				typeof args.display === 'string' && args.display.length > 0
+					? args.display
+					: undefined
+			if (displayArg === undefined && defaultDisplay === undefined) {
+				return {
+					content: [
+						{type: 'text', text: 'Error: must provide wid or display'},
+					],
+					isError: true,
+				}
+			}
+			// Whole-display capture. captureScreenshot reads DISPLAY from
+			// process.env transitively via maim/scrot subprocess inheritance
+			// — when running inside the per-WebApp Luse MCP child, that env
+			// is already correct. For explicit cross-display capture (display
+			// arg differs from process.env.DISPLAY), we override here.
+			const targetDisplay = displayArg ?? defaultDisplay!
+			const prevDisplay = process.env.DISPLAY
+			try {
+				process.env.DISPLAY = targetDisplay
+				const shot = await captureScreenshot()
+				return {
+					content: [
+						{type: 'image', data: shot.base64, mimeType: shot.mimeType},
+						{
+							type: 'text',
+							text: `screenshot_window display=${targetDisplay} (${shot.width}x${shot.height})`,
+						},
+					],
+					isError: false,
+				}
+			} finally {
+				if (prevDisplay === undefined) delete process.env.DISPLAY
+				else process.env.DISPLAY = prevDisplay
+			}
+		}),
+	)
+
+	// mcp__luse__focus_window — xdotool windowactivate --sync <wid>.
+	// Honors the per-WebApp display via the spawn env override so xdotool
+	// queries the correct X server.
+	server.registerTool(
+		'mcp__luse__focus_window',
+		{
+			description: focusWindowTool.description,
+			inputSchema: jsonSchemaToZodRawShape(focusWindowTool.input_schema),
+		},
+		wrapHandler(async (args) => {
+			const widRaw = args.wid
+			if (typeof widRaw !== 'number' || !Number.isFinite(widRaw)) {
+				return {
+					content: [{type: 'text', text: 'Error: wid is required and must be a positive integer'}],
+					isError: true,
+				}
+			}
+			const widHex = '0x' + Math.trunc(widRaw).toString(16)
+			const display = defaultDisplay ?? ':0'
+			await spawnAndAwait(
+				'xdotool',
+				['windowactivate', '--sync', widHex],
+				{...process.env, DISPLAY: display},
+			)
+			return {
+				content: [
+					{
+						type: 'text',
+						text: JSON.stringify({ok: true, wid: Math.trunc(widRaw), widHex, display}),
+					},
+				],
+				isError: false,
+			}
+		}),
+	)
+}
+
+/**
+ * P100-10-03 — spawn a short-lived process, await its `close` event, and
+ * reject on non-zero exit. Used by `mcp__luse__focus_window` so xdotool's
+ * `--sync` semantics propagate up (caller awaits focus completion).
+ */
+function spawnAndAwait(
+	command: string,
+	args: string[],
+	env: NodeJS.ProcessEnv,
+): Promise<void> {
+	return new Promise((resolve, reject) => {
+		let stderr = ''
+		const child = spawn(command, args, {
+			env,
+			stdio: ['ignore', 'ignore', 'pipe'],
+		})
+		child.stderr?.on('data', (chunk: Buffer) => {
+			stderr += chunk.toString()
+		})
+		child.on('error', (err) => reject(err))
+		child.on('close', (code) => {
+			if (code === 0) resolve()
+			else reject(new Error(`${command} exited with code ${code}: ${stderr.trim()}`))
+		})
+	})
 }
