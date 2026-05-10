@@ -326,3 +326,132 @@ describe('registerLuseTools', () => {
 		expect(concat).toMatch(/foo\.txt|ZmlsZQ==/)
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 100-10-03 — luse window-aware tool handlers (D-100-10-C)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Mock node:child_process so focus_window's xdotool spawn doesn't actually
+// fork an OS process. Hoisted alongside the existing native/index.js mock.
+const procMocks = vi.hoisted(() => ({
+	spawn: vi.fn(),
+}))
+
+vi.mock('node:child_process', () => ({
+	spawn: procMocks.spawn,
+}))
+
+describe('Phase 100-10-03 luse window-aware tool handlers', () => {
+	beforeEach(() => {
+		for (const fn of Object.values(mocks)) {
+			fn.mockReset()
+		}
+		mocks.captureScreenshot.mockResolvedValue(SCREENSHOT_RESULT)
+		mocks.listWindows.mockResolvedValue([
+			{id: '0xabc', class: 'chrome.Chrome', title: 'Test Window'},
+		])
+		mocks.setTimeoutMock.mockResolvedValue(undefined)
+		procMocks.spawn.mockReset()
+		// xdotool spawn returns a stub child with a 'close' event firing exit code 0
+		// and unref / on / once methods. focus_window awaits exit.
+		procMocks.spawn.mockImplementation(() => {
+			const listeners: Record<string, Array<(...args: unknown[]) => void>> = {}
+			const child: {
+				on: (e: string, cb: (...args: unknown[]) => void) => unknown
+				once: (e: string, cb: (...args: unknown[]) => void) => unknown
+				unref: () => void
+				stderr: {on: (e: string, cb: (chunk: Buffer) => void) => unknown}
+				stdout: {on: (e: string, cb: (chunk: Buffer) => void) => unknown}
+			} = {
+				on(e, cb) {
+					listeners[e] ??= []
+					listeners[e].push(cb)
+					// schedule a synthetic clean exit
+					if (e === 'close' || e === 'exit') {
+						setImmediate(() => cb(0))
+					}
+					return child
+				},
+				once(e, cb) {
+					return child.on(e, cb)
+				},
+				unref() {},
+				stderr: {on: () => undefined},
+				stdout: {on: () => undefined},
+			}
+			return child
+		})
+	})
+
+	it('T-10-03-HANDLER-01: registerLuseTools registers mcp__luse__list_windows', () => {
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
+		const registered = stub.registered.find((r) => r.name === 'mcp__luse__list_windows')
+		expect(registered).toBeDefined()
+	})
+
+	it('T-10-03-HANDLER-02: registerLuseTools registers mcp__luse__screenshot_window', () => {
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
+		const registered = stub.registered.find((r) => r.name === 'mcp__luse__screenshot_window')
+		expect(registered).toBeDefined()
+	})
+
+	it('T-10-03-HANDLER-03: registerLuseTools registers mcp__luse__focus_window', () => {
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
+		const registered = stub.registered.find((r) => r.name === 'mcp__luse__focus_window')
+		expect(registered).toBeDefined()
+	})
+
+	it('T-10-03-HANDLER-04: mcp__luse__list_windows defaults to opts.defaultDisplay (:10)', async () => {
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
+		const handler = stub.getHandler('mcp__luse__list_windows')!
+		await handler({})
+		expect(mocks.listWindows).toHaveBeenCalledTimes(1)
+		const callArg = mocks.listWindows.mock.calls[0]![0] as {display?: string} | undefined
+		expect(callArg).toBeDefined()
+		expect(callArg!.display).toBe(':10')
+	})
+
+	it('T-10-03-HANDLER-05: mcp__luse__screenshot_window with {wid} calls captureScreenshot({wid}) and returns image content', async () => {
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
+		const handler = stub.getHandler('mcp__luse__screenshot_window')!
+		const result = (await handler({wid: 0xabc})) as {
+			content: Array<{type: string; data?: string; mimeType?: string}>
+			isError: boolean
+		}
+		expect(mocks.captureScreenshot).toHaveBeenCalledTimes(1)
+		const arg = mocks.captureScreenshot.mock.calls[0]![0] as {wid?: number; windowId?: number}
+		// Accept either {wid} (new API) or {windowId} (back-compat with screenshot.ts P97-01)
+		expect(arg.wid ?? arg.windowId).toBe(0xabc)
+		expect(result.isError).toBe(false)
+		const imageBlock = result.content.find((c) => c.type === 'image')
+		expect(imageBlock).toBeDefined()
+		expect(imageBlock!.mimeType).toBe('image/png')
+	})
+
+	it('T-10-03-HANDLER-06: mcp__luse__focus_window with {wid} spawns xdotool windowactivate --sync <hex>', async () => {
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
+		const handler = stub.getHandler('mcp__luse__focus_window')!
+		const result = (await handler({wid: 0xabc})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		expect(result.isError).toBe(false)
+		// xdotool was spawned with argv containing 'windowactivate', '--sync', and '0xabc'.
+		const xdotoolCall = procMocks.spawn.mock.calls.find((call) => {
+			const [cmd, args] = call as [string, string[]]
+			if (cmd !== 'xdotool' || !Array.isArray(args)) return false
+			return args.includes('windowactivate') && args.includes('--sync') && args.includes('0xabc')
+		})
+		expect(xdotoolCall).toBeDefined()
+		// And the spawn env carried DISPLAY=:10 (the defaultDisplay).
+		const opts = xdotoolCall![2] as {env?: Record<string, string>}
+		expect(opts.env).toBeDefined()
+		expect(opts.env!.DISPLAY).toBe(':10')
+	})
+})

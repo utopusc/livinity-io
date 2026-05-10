@@ -241,3 +241,48 @@ describe('native/window — readFileBase64', () => {
 		expect(result.mimeType).toMatch(/^text\/plain/)
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 100-10-03 — native/window.listWindows accepts display arg (D-100-10-C / W4 lock)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Phase 100-10-03 native/window.listWindows accepts display arg', () => {
+	it('T-10-03-NATIVE-01: listWindows({display: ":10"}) spawns wmctrl with DISPLAY=:10 in env (W4 lock — wmctrl, not xdotool)', async () => {
+		// wmctrl -lG output: <wid_hex> <desktop> <x> <y> <w> <h> <host> <title...>
+		const stdout =
+			'0x01000003 -1 100 200 800 600 bruce-EQ Mozilla Firefox\n' +
+			'0x02000005 -1 0 0 1920 1080 bruce-EQ Test Window\n'
+		// Capture exec invocations so we can assert the env / argv shape.
+		const execCalls: Array<{cmd: string; options: unknown}> = []
+		execMock.mockImplementation(
+			(cmd: string, optionsOrCb: unknown, maybeCb?: unknown) => {
+				// promisified exec(cmd, options, callback) — callback may be 2nd or 3rd arg.
+				const opts = typeof optionsOrCb === 'function' ? undefined : optionsOrCb
+				const cb = (typeof optionsOrCb === 'function' ? optionsOrCb : maybeCb) as (
+					err: Error | null,
+					out: {stdout: string; stderr: string},
+				) => void
+				execCalls.push({cmd, options: opts})
+				setImmediate(() => cb(null, {stdout, stderr: ''}))
+				return {} as unknown
+			},
+		)
+		const mod = await import('./window.js')
+		const result = await mod.listWindows({display: ':10'})
+		// Result is an array of records with id/title/geometry/display fields.
+		expect(Array.isArray(result)).toBe(true)
+		expect(result.length).toBeGreaterThan(0)
+		// W4 lock: the underlying exec call MUST be wmctrl-based (NOT xdotool search).
+		// `-lG` is the wmctrl flag combo for "list + geometry".
+		const wmctrlCall = execCalls.find((c) => c.cmd.includes('wmctrl') && c.cmd.includes('-lG'))
+		expect(wmctrlCall).toBeDefined()
+		// DISPLAY override threads into the spawn opts so wmctrl talks to the
+		// target Xvfb display (per-WebApp LUSE_DISPLAY).
+		const opts = wmctrlCall!.options as {env?: Record<string, string>} | undefined
+		expect(opts).toBeDefined()
+		expect(opts!.env).toBeDefined()
+		expect(opts!.env!.DISPLAY).toBe(':10')
+		// Returned entries carry the display tag for downstream agent visibility.
+		expect(result[0].display).toBe(':10')
+	})
+})
