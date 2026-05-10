@@ -190,12 +190,21 @@ const xdotoolCalls = () => spawnCalls.filter((c) => c.cmd === 'xdotool')
 
 describe('clickMouse — windowId (P97-02)', () => {
 	it('without windowId: xdotool argv has no --window', async () => {
+		// Phase 100-09-03 — provide getmouselocation stdout so the smoothMove
+		// path runs to completion. Then the click verb is dispatched in a
+		// SEPARATE spawn (no mousemove sub-command — smoothMove handled
+		// approach).
+		getMouseLocationStdout = 'X=0\nY=0\nSCREEN=0\nWINDOW=0\n'
 		await SUT.clickMouse({coordinates: {x: 10, y: 20}, button: 'left', clickCount: 1})
 		const calls = xdotoolCalls()
 		expect(calls.length).toBeGreaterThan(0)
-		const args = calls[0]!.args
-		expect(args.includes('--window')).toBe(false)
-		expect(args).toContain('mousemove')
+		// The click-chain spawn is the one containing 'click' verb.
+		const clickChain = calls.find((c) => c.args.includes('click'))
+		expect(clickChain).toBeDefined()
+		expect(clickChain!.args.includes('--window')).toBe(false)
+		// smoothMove ran ≥1 mousemove spawn — assert at least one happened.
+		const moveCalls = calls.filter((c) => c.args[0] === 'mousemove')
+		expect(moveCalls.length).toBeGreaterThan(0)
 	})
 
 	it('with windowId: xdotool argv includes --window <wid> on both mousemove and click', async () => {

@@ -285,6 +285,81 @@ function spawnXdotool(args: readonly string[]): Promise<boolean> {
 }
 
 /**
+ * Phase 100-09-03 — Smooth-move pattern from selfclaude
+ * (https://github.com/utopusc/selfclaude — read-only reference). Walks the
+ * cursor along a linearly-interpolated path between (currentX, currentY) and
+ * (targetX, targetY) in `steps` increments, dispatching each step via
+ * `xdotool mousemove --sync` and sleeping `delayMs` between steps.
+ *
+ * Defaults (steps=20, delayMs=5) → ~100ms total trajectory. Smooth perceived
+ * motion at the cost of 100ms latency. Acceptable for bytebot's
+ * human-looking mouse (NOT for real-time interactive cursor warp — that
+ * still uses `moveMouse`'s one-shot path).
+ *
+ * Closes 100-09 Bug 3 — bytebot mouse teleports.
+ *
+ * Returns true on full success (all steps clean exit). Returns false if ANY
+ * step fails — caller falls back to teleport so the final cursor still
+ * reaches the target without a half-trajectory left behind.
+ */
+export async function smoothMove(
+	targetX: number,
+	targetY: number,
+	currentX: number,
+	currentY: number,
+	steps: number = 20,
+	delayMs: number = 5,
+): Promise<boolean> {
+	if (steps <= 0) return false
+	for (let i = 1; i <= steps; i++) {
+		const t = i / steps
+		const x = Math.round(currentX + (targetX - currentX) * t)
+		const y = Math.round(currentY + (targetY - currentY) * t)
+		const ok = await spawnXdotool(['mousemove', '--sync', String(x), String(y)])
+		if (!ok) return false
+		if (i < steps && delayMs > 0) await sleep(delayMs)
+	}
+	return true
+}
+
+/**
+ * Phase 100-09-03 — query current cursor position via xdotool
+ * `getmouselocation --shell`. Used by smoothMove integrations to compute the
+ * starting point of an interpolated trajectory. Returns undefined on failure
+ * (caller falls back to teleport). Never throws.
+ */
+async function getCursorPositionViaXdotool(): Promise<{x: number; y: number} | undefined> {
+	return await new Promise<{x: number; y: number} | undefined>((resolve) => {
+		let settled = false
+		let stdout = ''
+		const settle = (val: {x: number; y: number} | undefined) => {
+			if (settled) return
+			settled = true
+			resolve(val)
+		}
+		try {
+			const child = spawn('xdotool', ['getmouselocation', '--shell'], {
+				stdio: ['ignore', 'pipe', 'ignore'],
+				env: process.env,
+			})
+			child.stdout?.on('data', (chunk: Buffer) => {
+				stdout += chunk.toString('utf-8')
+			})
+			child.on('error', () => settle(undefined))
+			child.on('close', (code: number | null) => {
+				if (code !== 0) return settle(undefined)
+				const xMatch = stdout.match(/^X=(-?\d+)/m)
+				const yMatch = stdout.match(/^Y=(-?\d+)/m)
+				if (!xMatch || !yMatch) return settle(undefined)
+				settle({x: parseInt(xMatch[1]!, 10), y: parseInt(yMatch[1]!, 10)})
+			})
+		} catch {
+			settle(undefined)
+		}
+	})
+}
+
+/**
  * Walk the cursor through a path of points (no buttons held). Mirrors
  * `_traceMouseTool` (computer_trace_mouse). Optional holdKeys.
  */
@@ -394,6 +469,20 @@ async function tryXdotoolClick(
 	coordinates: Coords | undefined,
 	windowId?: number,
 ): Promise<boolean> {
+	// Phase 100-09-03 — interpolated approach for smooth trajectory. When
+	// coordinates are set, query current cursor, walk a smooth path to the
+	// target via smoothMove, THEN dispatch the focused click chain (without
+	// a separate mousemove sub-command). Closes 100-09 Bug 3.
+	let usedSmoothMove = false
+	if (coordinates) {
+		const start = await getCursorPositionViaXdotool()
+		if (start) {
+			usedSmoothMove = await smoothMove(coordinates.x, coordinates.y, start.x, start.y)
+		}
+		// If start lookup or smoothMove failed, usedSmoothMove stays false;
+		// fall back to one-shot teleport in the chain below (pre-09-03 path).
+	}
+
 	const args: string[] = []
 	// 2026-05-08 P100-07.3 — Chrome (and many GTK apps) drop `xdotool click
 	// --window <wid>` because they filter synthetic XSendEvents
@@ -406,7 +495,10 @@ async function tryXdotoolClick(
 		const widStr = String(windowId)
 		args.push('windowactivate', '--sync', widStr, 'windowfocus', '--sync', widStr)
 	}
-	if (coordinates) {
+	if (coordinates && !usedSmoothMove) {
+		// Phase 100-09-03 fallback: smoothMove unavailable or failed —
+		// legacy one-shot teleport (pre-09-03 behavior so the click still
+		// lands at the right spot).
 		// `--window <wid>` on mousemove tells xdotool the coords are
 		// wid-relative — translation only, NOT XSendEvent. Safe to keep.
 		const moveWin: string[] = typeof windowId === 'number' ? ['--window', String(windowId)] : []
