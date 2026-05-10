@@ -14,6 +14,15 @@
 // `chat` branch is removed in webapp-stream-window.tsx; the floating
 // Chat icon dispatches `toggleChatLog(webappId)` instead of `toggle`.
 //
+// Phase 100-09-06: extended with `isRecordingByWebappId` +
+// `toggleTeachRecording` for the popup-driven Teach mode (replaces the
+// Teach shadcn Sheet drawer per user "altadki teach mode da da aynisi
+// gecerli tiklandiginda panel acilmasin"). The drawer host's `teach`
+// branch is removed in webapp-stream-window.tsx; the floating Teach
+// icon dispatches `toggleTeachRecording(webappId)` and the recorder
+// hook lifecycle is driven from this Zustand state via a useEffect in
+// webapp-stream-window.tsx.
+//
 // Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts is unchanged
 // (file untouched). This is a UI-only addition.
 
@@ -25,16 +34,21 @@ interface WebAppDrawerState {
 	openByWebappId: Record<string, WebAppDrawerMode | null>
 	/** Phase 100-09-05: per-webappId expanded state for the inline bottom chat log. */
 	chatLogExpandedByWebappId: Record<string, boolean>
+	/** Phase 100-09-06: per-webappId teach recording active flag. */
+	isRecordingByWebappId: Record<string, boolean>
 	getOpen: (webappId: string) => WebAppDrawerMode | null
 	toggle: (webappId: string, mode: WebAppDrawerMode) => void
 	close: (webappId: string) => void
 	/** Phase 100-09-05: flip expanded state for the inline chat log. */
 	toggleChatLog: (webappId: string) => void
+	/** Phase 100-09-06: flip recording state for the WebApp's teach mode. */
+	toggleTeachRecording: (webappId: string) => void
 }
 
 export const useWebAppDrawerStore = create<WebAppDrawerState>((set, get) => ({
 	openByWebappId: {},
 	chatLogExpandedByWebappId: {},
+	isRecordingByWebappId: {}, // Phase 100-09-06
 	getOpen: (webappId) => get().openByWebappId[webappId] ?? null,
 	toggle: (webappId, mode) =>
 		set((state) => {
@@ -55,6 +69,16 @@ export const useWebAppDrawerStore = create<WebAppDrawerState>((set, get) => ({
 			chatLogExpandedByWebappId: {
 				...state.chatLogExpandedByWebappId,
 				[webappId]: !state.chatLogExpandedByWebappId[webappId],
+			},
+		})),
+	// Phase 100-09-06 — flip the teach recording flag. The recorder hook
+	// lifecycle (start/stop) is driven from a useEffect in
+	// webapp-stream-window.tsx that subscribes to this slot.
+	toggleTeachRecording: (webappId) =>
+		set((state) => ({
+			isRecordingByWebappId: {
+				...state.isRecordingByWebappId,
+				[webappId]: !state.isRecordingByWebappId[webappId],
 			},
 		})),
 }))
