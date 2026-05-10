@@ -57,6 +57,14 @@ import {create} from 'zustand'
 
 import type {ActionEvent} from '@/hooks/use-teach-recorder'
 
+// Phase 100-10-06 D-100-10-E: ChatInputMode union extended from 2-state
+// ('icons' | 'chat-input') to 3-state ('icons' | 'chat-input' |
+// 'chat-response'). Send/Enter from ChatInputBar now transitions to
+// 'chat-response' (NOT back to 'icons') so the assistant streaming reply
+// renders in-place where the input was. The Stop button in 'chat-response'
+// mode calls useWebAppAgent.stopStreaming (alias for the existing
+// useAgentSocket.interrupt — sends `{type: 'interrupt'}` over the WS).
+//
 // Phase 100-10-05 D-100-10-G: 'auto' branch narrowed out of the drawer
 // mode union. The Auto icon button + WebAppAutoDrawer component were
 // removed from the UI surface entirely; only Chat + Teach modes remain
@@ -67,8 +75,14 @@ import type {ActionEvent} from '@/hooks/use-teach-recorder'
 // Sheet drawer host (which still exists for revert safety) compiles.
 export type WebAppDrawerMode = 'chat' | 'teach'
 
-/** Phase 100-09-08: floating action bar 2-mode state machine. */
-export type ChatInputMode = 'icons' | 'chat-input'
+/** Phase 100-09-08: floating action bar 2-mode state machine.
+ *  Phase 100-10-06 D-100-10-E: extended to a 3-mode state machine. The
+ *  new 'chat-response' mode replaces the input area in-place with a live
+ *  streaming response panel + Stop button + Close (X) — Send/Enter no
+ *  longer returns directly to 'icons'; it transitions to 'chat-response'
+ *  so the assistant reply renders where the user just typed.
+ */
+export type ChatInputMode = 'icons' | 'chat-input' | 'chat-response'
 
 /** Phase 100-09-09: shared empty-array sentinel for `teachEventsByWebappId`
  *  default reads. Returning a fresh `[]` from a Zustand selector breaks
@@ -169,8 +183,12 @@ export const useWebAppDrawerStore = create<WebAppDrawerState>((set, get) => ({
 		})),
 	// Phase 100-09-08 — toggle between icons and chat-input. Convenience
 	// for keyboard / programmatic flips; the primary wires (Chat icon
-	// click → 'chat-input'; Send/Escape/Close → 'icons') use the explicit
-	// `setChatInputMode` path so the action is grep-friendly.
+	// click → 'chat-input'; Send → 'chat-response'; Escape/Close → 'icons')
+	// use the explicit `setChatInputMode` path so the action is grep-friendly.
+	// Phase 100-10-06: kept as a 2-state flip (icons ↔ chat-input) for
+	// back-compat. The new 'chat-response' mode is only reachable via
+	// explicit `setChatInputMode(webappId, 'chat-response')` from the
+	// ChatInputBar Send/Enter handler.
 	toggleChatInputMode: (webappId) =>
 		set((state) => ({
 			chatInputModeByWebappId: {
