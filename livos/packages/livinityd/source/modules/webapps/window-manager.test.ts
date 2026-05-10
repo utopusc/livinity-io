@@ -113,6 +113,10 @@ function makeManager(overrides: any = {}) {
 		mcpConfigManager: overrides.mcpConfigManager,
 		bytebotServerPath: overrides.bytebotServerPath,
 		bytebotMcpEnv: overrides.bytebotMcpEnv,
+		// Phase 100-10-01 — per-WebApp Xvfb display allocator + start fns.
+		displayAllocator: overrides.displayAllocator,
+		xvfbStartFn: overrides.xvfbStartFn,
+		fluxboxStartFn: overrides.fluxboxStartFn,
 	})
 	return {mgr, streamManager, started, stopped, discovery, portal, closeSession, spawn, trackerInstances, logger}
 }
@@ -440,5 +444,148 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp bytebot MCP lifecyc
 		await expect(
 			mgr.close({webappId: 'webapp-bare', userId: 'user-1'}),
 		).resolves.toEqual({ok: true})
+	})
+})
+
+// ============================================================================
+// Phase 100-10-01 per-spawn Xvfb lifecycle (D-100-10-A) — 4 tests
+// ============================================================================
+
+describe('Phase 100-10-01 per-spawn Xvfb lifecycle', () => {
+	function makeAllocator() {
+		const allocCalls: string[] = []
+		const releaseCalls: string[] = []
+		let counter = 10
+		const allocator = {
+			allocate: vi.fn(() => {
+				const d = `:${counter++}`
+				allocCalls.push(d)
+				return d
+			}),
+			release: vi.fn((display: string) => {
+				releaseCalls.push(display)
+			}),
+			inUse: vi.fn(() => allocCalls.filter((d) => !releaseCalls.includes(d))),
+			on: vi.fn(),
+			emit: vi.fn(),
+			once: vi.fn(),
+			off: vi.fn(),
+		}
+		return {allocator: allocator as any, allocCalls, releaseCalls}
+	}
+
+	function makeXvfbStartFn() {
+		const calls: any[] = []
+		const stopFns: ReturnType<typeof vi.fn>[] = []
+		const fn = vi.fn(async (opts: any) => {
+			calls.push(opts)
+			const stop = vi.fn(async () => {})
+			stopFns.push(stop)
+			return {pid: 1234 + calls.length, display: opts.display, exited: new Promise(() => {}), stop}
+		})
+		return {fn: fn as any, calls, stopFns}
+	}
+
+	function makeFluxboxStartFn() {
+		const calls: any[] = []
+		const stopFns: ReturnType<typeof vi.fn>[] = []
+		const fn = vi.fn(async (opts: any) => {
+			calls.push(opts)
+			const stop = vi.fn(async () => {})
+			stopFns.push(stop)
+			return {pid: 5678 + calls.length, display: opts.display, exited: new Promise(() => {}), stop}
+		})
+		return {fn: fn as any, calls, stopFns}
+	}
+
+	beforeEach(() => {
+		vi.useRealTimers()
+	})
+	afterEach(() => {
+		vi.useRealTimers()
+	})
+
+	it('T-WM-10-01-01: spawn() calls displayAllocator.allocate() exactly once before invoking spawnFn for Chrome', async () => {
+		const {allocator} = makeAllocator()
+		const xvfb = makeXvfbStartFn()
+		const fluxbox = makeFluxboxStartFn()
+		const {mgr, spawn} = makeManager({
+			displayAllocator: allocator,
+			xvfbStartFn: xvfb.fn,
+			fluxboxStartFn: fluxbox.fn,
+		})
+		// Capture the call order: allocate() must fire BEFORE spawn() is called for Chrome.
+		// We assert the relative ordering by checking that allocate has been called by the
+		// time spawn() (Chrome) is invoked.
+		let chromeCalledAfterAllocate = false
+		spawn.mockImplementation(((..._args: any[]) => {
+			if ((allocator.allocate as any).mock.calls.length > 0) {
+				chromeCalledAfterAllocate = true
+			}
+			return new FakeChild() as any
+		}) as any)
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		expect(allocator.allocate).toHaveBeenCalledTimes(1)
+		expect(chromeCalledAfterAllocate).toBe(true)
+		mgr._clearForTests()
+	})
+
+	it('T-WM-10-01-02: DISPLAY env passed to Chrome spawnFn equals the allocated display (:10 for first WebApp, :11 for second)', async () => {
+		const {allocator} = makeAllocator()
+		const xvfb = makeXvfbStartFn()
+		const fluxbox = makeFluxboxStartFn()
+		const {mgr, spawn} = makeManager({
+			displayAllocator: allocator,
+			xvfbStartFn: xvfb.fn,
+			fluxboxStartFn: fluxbox.fn,
+		})
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		// First spawn() call to mock spawn (Chrome). Argv prefix carries DISPLAY=<allocated>.
+		const [, args1] = spawn.mock.calls[0] as unknown as [string, string[]]
+		const displayArg1 = args1.find((a: string) => typeof a === 'string' && a.startsWith('DISPLAY='))
+		expect(displayArg1).toBe('DISPLAY=:10')
+
+		// Second WebApp gets :11
+		await mgr.spawn({userId: 'u1', webappId: 'app2', url: 'https://example.com'})
+		const [, args2] = spawn.mock.calls[1] as unknown as [string, string[]]
+		const displayArg2 = args2.find((a: string) => typeof a === 'string' && a.startsWith('DISPLAY='))
+		expect(displayArg2).toBe('DISPLAY=:11')
+		mgr._clearForTests()
+	})
+
+	it('T-WM-10-01-03: close() calls displayAllocator.release(<that webapp\'s display>) exactly once', async () => {
+		const {allocator, releaseCalls} = makeAllocator()
+		const xvfb = makeXvfbStartFn()
+		const fluxbox = makeFluxboxStartFn()
+		const {mgr} = makeManager({
+			displayAllocator: allocator,
+			xvfbStartFn: xvfb.fn,
+			fluxboxStartFn: fluxbox.fn,
+		})
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		await mgr.close({webappId: 'app1', userId: 'u1'})
+		expect(allocator.release).toHaveBeenCalledTimes(1)
+		expect(releaseCalls).toEqual([':10'])
+	})
+
+	it('T-WM-10-01-04: legacy back-compat — when displayAllocator is undefined, spawn falls back to WEBAPPS_X11_ENV.DISPLAY (:1) and never calls allocate', async () => {
+		const {allocator} = makeAllocator()
+		const xvfb = makeXvfbStartFn()
+		const fluxbox = makeFluxboxStartFn()
+		// No displayAllocator passed — legacy path
+		const {mgr, spawn} = makeManager({
+			xvfbStartFn: xvfb.fn,
+			fluxboxStartFn: fluxbox.fn,
+		})
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		const [, args] = spawn.mock.calls[0] as unknown as [string, string[]]
+		const displayArg = args.find((a: string) => typeof a === 'string' && a.startsWith('DISPLAY='))
+		// Falls back to WEBAPPS_X11_ENV.DISPLAY which is :1 (post P100-08-02)
+		expect(displayArg).toBe('DISPLAY=:1')
+		// Allocator was never even constructed; no Xvfb/fluxbox calls either.
+		expect(allocator.allocate).not.toHaveBeenCalled()
+		expect(xvfb.fn).not.toHaveBeenCalled()
+		expect(fluxbox.fn).not.toHaveBeenCalled()
+		mgr._clearForTests()
 	})
 })
