@@ -7,6 +7,13 @@
 // mode (or null). Setting a different mode on a webappId swaps content;
 // setting the SAME mode toggles closed.
 //
+// Phase 100-09-05: extended with `chatLogExpandedByWebappId` +
+// `toggleChatLog` for the inline bottom-bar chat (replaces the Chat
+// shadcn Sheet drawer per user "Chat penceresi olmasin sadece yazi
+// yazalim. Yazilar sadece Alt kisimda gozuksun."). The drawer host's
+// `chat` branch is removed in webapp-stream-window.tsx; the floating
+// Chat icon dispatches `toggleChatLog(webappId)` instead of `toggle`.
+//
 // Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts is unchanged
 // (file untouched). This is a UI-only addition.
 
@@ -16,13 +23,18 @@ export type WebAppDrawerMode = 'chat' | 'teach' | 'auto'
 
 interface WebAppDrawerState {
 	openByWebappId: Record<string, WebAppDrawerMode | null>
+	/** Phase 100-09-05: per-webappId expanded state for the inline bottom chat log. */
+	chatLogExpandedByWebappId: Record<string, boolean>
 	getOpen: (webappId: string) => WebAppDrawerMode | null
 	toggle: (webappId: string, mode: WebAppDrawerMode) => void
 	close: (webappId: string) => void
+	/** Phase 100-09-05: flip expanded state for the inline chat log. */
+	toggleChatLog: (webappId: string) => void
 }
 
 export const useWebAppDrawerStore = create<WebAppDrawerState>((set, get) => ({
 	openByWebappId: {},
+	chatLogExpandedByWebappId: {},
 	getOpen: (webappId) => get().openByWebappId[webappId] ?? null,
 	toggle: (webappId, mode) =>
 		set((state) => {
@@ -37,5 +49,12 @@ export const useWebAppDrawerStore = create<WebAppDrawerState>((set, get) => ({
 	close: (webappId) =>
 		set((state) => ({
 			openByWebappId: {...state.openByWebappId, [webappId]: null},
+		})),
+	toggleChatLog: (webappId) =>
+		set((state) => ({
+			chatLogExpandedByWebappId: {
+				...state.chatLogExpandedByWebappId,
+				[webappId]: !state.chatLogExpandedByWebappId[webappId],
+			},
 		})),
 }))
