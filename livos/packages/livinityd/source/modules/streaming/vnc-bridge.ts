@@ -60,15 +60,16 @@ export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 	const factory = opts.spawnFactory ?? nodeSpawn
 	const widHex = '0x' + opts.wid.toString(16)
 	// D-99-01 canonical argv (locked in 99-01-SUMMARY.md). Hex wid with 0x prefix.
-	// The sudo -n -u bruce + DISPLAY/XAUTHORITY pattern matches window-manager.ts
-	// Chrome spawn (commit 96f2527b). Pitfall 1 mitigation: x11vnc inherits
-	// bruce's X session via the env injection, NOT via env_keep on sudoers.
+	// The sudo -n -u bruce + DISPLAY pattern matches window-manager.ts Chrome
+	// spawn. Pitfall 1 mitigation: x11vnc inherits bruce's X session via the
+	// env injection, NOT via env_keep on sudoers.
+	// P100-08-02: XAUTHORITY removed — x11vnc on Xvfb :1 (Xvfb -ac) needs no cookie.
+	// D-100-X11VNC-CANONICAL relaxed for this single env change per 100-08-CONTEXT.
 	const args = [
 		'-n',
 		'-u',
 		'bruce',
 		`DISPLAY=${WEBAPPS_X11_ENV.DISPLAY}`,
-		`XAUTHORITY=${WEBAPPS_X11_ENV.XAUTHORITY}`,
 		'/usr/bin/x11vnc',
 		'-id',
 		widHex,
