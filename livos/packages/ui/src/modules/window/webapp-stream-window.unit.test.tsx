@@ -112,10 +112,14 @@ describe('WebAppFloatingActionBar — source-text invariants (Phase 100-06)', ()
 		'utf8',
 	)
 
-	it('renders 3 modes only — Watch dropped', () => {
+	// Phase 100-10-05 D-100-10-G — Auto icon removed from the bar; the
+	// "renders 3 modes" invariant from 100-06 is now "renders 2 modes".
+	// The Bot import is gone (T-10-05-09). Watch was already dropped in
+	// 100-06.
+	it('renders 2 modes only — Chat + Teach (Auto dropped 10-05, Watch dropped 06)', () => {
 		expect(BAR_SRC).toMatch(/MessageCircle/)
 		expect(BAR_SRC).toMatch(/GraduationCap/)
-		expect(BAR_SRC).toMatch(/\bBot\b/)
+		expect(BAR_SRC).not.toMatch(/\bBot\b/)
 		expect(BAR_SRC).not.toMatch(/\bEye\b/)
 	})
 
@@ -217,10 +221,15 @@ describe('Phase 100-09-06 teach popup + skills popover + drawer store', () => {
 		expect(SRC).toMatch(/from '\.\/webapp-teach-popup-host'/)
 	})
 
-	it('T-09-06-U2: <WebAppSkillsPopover/> rendered in webapp-stream-window.tsx', () => {
-		expect(SRC).toMatch(/<WebAppSkillsPopover\b/)
-		expect(SRC).toMatch(/from '\.\/webapp-skills-popover'/)
-	})
+	// T-09-06-U2 RETIRED 2026-05-10 (P100-10-05 / D-100-10-D). The 09-06
+	// contract was: "webapp-stream-window.tsx renders <WebAppSkillsPopover/>
+	// inline at top-right INSIDE the WebApp window." Per user feedback the
+	// Skills trigger should live OUTSIDE the window at top-right (mirroring
+	// the 100-06.1 floating action bar OUTSIDE pattern). The new invariants
+	// are T-10-05-01 (new file exists), T-10-05-02 (uses fixed + windowX
+	// + windowWidth), T-10-05-03 (no inline render in stream-window),
+	// T-10-05-04 (no import in stream-window), T-10-05-11 (rendered in
+	// windows-container.tsx).
 
 	it('T-09-06-U3: Sheet drawer host excludes both chat AND teach branches', () => {
 		expect(SRC).not.toMatch(/openDrawer === 'teach'\s*\?\s*<WebAppTeachDrawer/)

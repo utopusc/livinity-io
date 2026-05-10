@@ -16,8 +16,12 @@
 // livos/packages/ui/src/).
 
 // Phase 100-06: dropped 'watch' mode per user request (only 3 modes ship).
-export type WebAppMode = 'chat' | 'teach' | 'auto'
+// Phase 100-10-05 D-100-10-G: 'auto' narrowed out — Auto icon button +
+// webapp-auto-drawer.tsx were removed from the UI surface entirely. Backend
+// P97 auto-mode capability stays untouched (Luse skill replay still uses
+// it via mcp__luse__replay_skill from the agent loop).
+export type WebAppMode = 'chat' | 'teach'
 
-export const MODE_ORDER: ReadonlyArray<WebAppMode> = ['chat', 'teach', 'auto']
+export const MODE_ORDER: ReadonlyArray<WebAppMode> = ['chat', 'teach']
 
 export const WEBAPP_MODE_CHANGE_EVENT = 'liv-webapp-mode-change'

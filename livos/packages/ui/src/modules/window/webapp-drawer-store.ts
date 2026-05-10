@@ -57,7 +57,15 @@ import {create} from 'zustand'
 
 import type {ActionEvent} from '@/hooks/use-teach-recorder'
 
-export type WebAppDrawerMode = 'chat' | 'teach' | 'auto'
+// Phase 100-10-05 D-100-10-G: 'auto' branch narrowed out of the drawer
+// mode union. The Auto icon button + WebAppAutoDrawer component were
+// removed from the UI surface entirely; only Chat + Teach modes remain
+// (and both are now driven via dedicated flag slots — chatInputMode +
+// isRecording — not the legacy openByWebappId drawer slot). The slot
+// is preserved for type-narrowing safety: openByWebappId entries are
+// effectively always null in current code, but the slot stays so the
+// Sheet drawer host (which still exists for revert safety) compiles.
+export type WebAppDrawerMode = 'chat' | 'teach'
 
 /** Phase 100-09-08: floating action bar 2-mode state machine. */
 export type ChatInputMode = 'icons' | 'chat-input'
@@ -82,6 +90,12 @@ interface WebAppDrawerState {
 	 *  to derive `events.length` for the click-count badge.
 	 */
 	teachEventsByWebappId: Record<string, readonly ActionEvent[]>
+	/** Phase 100-10-05 D-100-10-D: per-webappId selected skill id (drives
+	 *  the SkillReplayScrubber inside webapp-stream-window.tsx). The new
+	 *  outside-window floating skills button writes here via setSelectedSkillId;
+	 *  the stream-window reads it to render the scrubber overlay.
+	 */
+	selectedSkillIdByWebappId: Record<string, string | null>
 	getOpen: (webappId: string) => WebAppDrawerMode | null
 	toggle: (webappId: string, mode: WebAppDrawerMode) => void
 	close: (webappId: string) => void
@@ -97,6 +111,11 @@ interface WebAppDrawerState {
 	 *  webapp-stream-window.tsx whenever `recorder.events` updates).
 	 */
 	setTeachEvents: (webappId: string, events: readonly ActionEvent[]) => void
+	/** Phase 100-10-05 D-100-10-D: set the selected skill id (called from
+	 *  the outside-window WebAppFloatingSkillsButton when user clicks Play).
+	 *  Pass null to clear (scrubber close path).
+	 */
+	setSelectedSkillId: (webappId: string, skillId: string | null) => void
 }
 
 export const useWebAppDrawerStore = create<WebAppDrawerState>((set, get) => ({
@@ -105,6 +124,7 @@ export const useWebAppDrawerStore = create<WebAppDrawerState>((set, get) => ({
 	isRecordingByWebappId: {}, // Phase 100-09-06
 	chatInputModeByWebappId: {}, // Phase 100-09-08
 	teachEventsByWebappId: {}, // Phase 100-09-09
+	selectedSkillIdByWebappId: {}, // Phase 100-10-05
 	getOpen: (webappId) => get().openByWebappId[webappId] ?? null,
 	toggle: (webappId, mode) =>
 		set((state) => {
@@ -170,6 +190,16 @@ export const useWebAppDrawerStore = create<WebAppDrawerState>((set, get) => ({
 			teachEventsByWebappId: {
 				...state.teachEventsByWebappId,
 				[webappId]: events,
+			},
+		})),
+	// Phase 100-10-05 D-100-10-D — write the per-webappId selected skill id
+	// from the outside-window floating skills button. The stream-window
+	// subscribes to read it and render the SkillReplayScrubber overlay.
+	setSelectedSkillId: (webappId, skillId) =>
+		set((state) => ({
+			selectedSkillIdByWebappId: {
+				...state.selectedSkillIdByWebappId,
+				[webappId]: skillId,
 			},
 		})),
 }))

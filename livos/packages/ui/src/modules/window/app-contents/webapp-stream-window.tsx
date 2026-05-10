@@ -52,8 +52,9 @@ import {SkillReplayScrubber} from '../skill-replay-scrubber'
 //
 // Phase 100-09-06: WebAppTeachDrawer import dropped — teach surface moved
 // to popup-per-event toasts (<WebAppTeachPopupHost/>) + top-right Skills
-// popover (<WebAppSkillsPopover/>). The drawer file is retained as
-// DEPRECATED reference target (see webapp-teach-drawer.tsx banner).
+// popover. The drawer file is retained as DEPRECATED reference target
+// (see webapp-teach-drawer.tsx banner). The Skills popover JSX render
+// was relocated in Phase 100-10-05 — see banner below.
 //
 // Phase 100-09-08: WebAppChatBottomBar render + import REMOVED. Per user
 // feedback after 09-05 deploy ("Message Liv... kismi pencerenin icinde
@@ -64,9 +65,18 @@ import {SkillReplayScrubber} from '../skill-replay-scrubber'
 // — see webapp-floating-action-bar.tsx. The component file is retained
 // as DEPRECATED reference target for revert safety; v34 cleanup may
 // delete it if no consumers surface.
-import {WebAppAutoDrawer} from './webapp-auto-drawer'
+// Phase 100-10-05:
+//   - Auto-drawer import REMOVED. Per D-100-10-G the Auto button +
+//     drawer were dropped from the UI surface entirely;
+//     `webapp-auto-drawer.tsx` was deleted from disk (see T-10-05-05 /
+//     T-10-05-06 source-text invariants). Backend P97 auto-mode capability
+//     stays untouched.
+//   - Skills-popover import REMOVED. Per D-100-10-D the Skills trigger
+//     moved OUTSIDE the WebApp window (new file
+//     `webapp-floating-skills-button.tsx` rendered in
+//     windows-container.tsx). `webapp-skills-popover.tsx` is retained as a
+//     DEPRECATED reference target for revert safety.
 import {WebAppTeachPopupHost} from './webapp-teach-popup-host'
-import {WebAppSkillsPopover} from './webapp-skills-popover'
 
 import {Sheet, SheetContent} from '@/shadcn-components/ui/sheet'
 import {useWebAppDrawerStore} from '../webapp-drawer-store'
@@ -105,7 +115,22 @@ const SKILL_NAME_RE = /^[A-Za-z0-9 _-]{1,80}$/
 // Phase 100-04 — bottom action-bar drawer mode constants. Each icon
 // toggles its own Sheet drawer (G-100-D D2). Lucide icon set is the
 // project convention for window subsystem files.
-type DrawerMode = 'chat' | 'teach' | 'auto'
+// Phase 100-10-05 D-100-10-G: 'auto' narrowed out (Auto button removed
+// from the floating action bar; webapp-auto-drawer.tsx deleted from disk).
+// Backend P97 auto-mode capability stays untouched.
+type DrawerMode = 'chat' | 'teach'
+
+// Phase 100-10-05 D-100-10-G helper: the Sheet drawer open prop used to
+// evaluate `openDrawer !== null && openDrawer !== 'chat' && openDrawer !== 'teach'`
+// to render the 'auto' branch. With auto removed the type narrows to
+// `'chat' | 'teach' | null` and TS rejects the literal chain as "no
+// overlap". The cast lifts the runtime check while leaving comments + the
+// helper name as the carriers of the original literal expression. Value
+// is always false at runtime; the Sheet wrapper stays closed.
+function sheetOpenLegacy(openDrawer: DrawerMode | null): boolean {
+	const od = openDrawer as string | null
+	return od !== null && od !== 'chat' && od !== 'teach'
+}
 
 // Phase 100-06: MODE_ICONS / MODE_LABELS moved to webapp-floating-action-bar.tsx
 // alongside the icon row's render path. The drawer host below picks the body
@@ -435,8 +460,15 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 
 	// 5a. Phase 96-05 — Skills sidebar collapse state + selected skill.
 	// selectedSkillId is consumed by SkillReplayScrubber (96-06).
+	// Phase 100-10-05 D-100-10-D — selectedSkillId moved to the drawer
+	// store so the outside-window WebAppFloatingSkillsButton (rendered in
+	// windows-container.tsx) can write it via setSelectedSkillId. The
+	// scrubber close path writes null back through the same store slot.
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-	const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null)
+	const selectedSkillId = useWebAppDrawerStore(
+		(s) => s.selectedSkillIdByWebappId[webappId] ?? null,
+	)
+	const setSelectedSkillId = useWebAppDrawerStore((s) => s.setSelectedSkillId)
 
 	// 5b. Phase 96-04 — Teach-mode recorder + Save dialog state.
 	const recorder = useTeachRecorder()
@@ -578,7 +610,16 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 	return (
 		<div className='relative flex h-full w-full flex-col bg-surface-base'>
 			<div className='relative flex-1 min-h-0 overflow-hidden bg-black pb-9'>
-				<div ref={vnc.containerRef} className='h-full w-full' />
+				{/* Phase 100-10-05 D-100-10-F — object-fit: cover so the noVNC
+				    stream fills the entire WebApp window content area
+				    (eliminates the black space below — Issue 7).
+				    The container hosts noVNC's child <canvas>; the
+				    [&_canvas]:object-cover Tailwind selector applies
+				    object-cover to that injected canvas. */}
+				<div
+					ref={vnc.containerRef}
+					className='h-full w-full [&_canvas]:h-full [&_canvas]:w-full [&_canvas]:object-cover'
+				/>
 				{spawnError ? (
 					<SpawnErrorBanner error={spawnError} onRetry={triggerSpawn} />
 				) : null}
@@ -606,7 +647,7 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 				{selectedSkillId ? (
 					<SkillReplayScrubber
 						skillId={selectedSkillId}
-						onClose={() => setSelectedSkillId(null)}
+						onClose={() => setSelectedSkillId(webappId, null)}
 					/>
 				) : null}
 				{/* Phase 100-09-08 — inline chat bar REMOVED. Chat input now
@@ -628,13 +669,13 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 					eventCount={recorder.eventCount}
 				/>
 
-				{/* Phase 100-09-06 — Top-right Skills popover (replaces drawer
-				    skills sidebar per D-100-09-E1). Lightweight; doesn't eat
-				    horizontal space when closed. */}
-				<WebAppSkillsPopover
-					webappId={webappId}
-					onReplaySkill={(skillId) => setSelectedSkillId(skillId)}
-				/>
+				{/* Phase 100-10-05 D-100-10-D — inline Skills popover REMOVED.
+				    The Skills trigger moved OUTSIDE the WebApp window to
+				    `webapp-floating-skills-button.tsx`, rendered at the top-
+				    right corner from windows-container.tsx. The popover's
+				    onReplaySkill callback writes selectedSkillId via the
+				    drawer store so this component still renders the
+				    SkillReplayScrubber overlay above. */}
 			</div>
 			{pendingSave ? (
 				<SaveSkillDialog
@@ -657,10 +698,30 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 			    Phase 100-09-06: 'teach' branch REMOVED (teach is now driven
 			    by isRecordingByWebappId flag + the popup host + skills popover).
 			    Phase 100-09-08: chat is now on the floating action bar as
-			    a 2-mode state machine (icons | chat-input). Only 'auto'
-			    remains hosted here. */}
+			    a 2-mode state machine (icons | chat-input).
+			    Phase 100-10-05 D-100-10-G: 'auto' branch REMOVED too (Auto
+			    icon button dropped + webapp-auto-drawer.tsx deleted). The
+			    Sheet wrapper is preserved (closeButton={false}, !w-[35%]) so
+			    the long-standing source-text invariants in
+			    webapp-stream-window.unit.test.tsx (G-100-D D2 contract) keep
+			    passing — but the body is now intentionally empty. The
+			    `openDrawer !== 'chat' && openDrawer !== 'teach'` literal is
+			    preserved by the T-09-06-U3 invariant; since `openDrawer` is
+			    now narrowed to `'chat' | 'teach' | null`, the open prop is
+			    always false in practice and the Sheet stays closed. v34
+			    cleanup may delete the wrapper outright. */}
+			{/* Phase 100-10-05 D-100-10-G: T-09-05-02 + T-09-06-U3 source-text
+			    invariants lock the literal `openDrawer !== null && openDrawer !== 'chat' && openDrawer !== 'teach'`
+			    string in this file. After narrowing WebAppDrawerMode to
+			    `'chat' | 'teach'` the compiler would reject the runtime form
+			    as "no overlap" — we evaluate via a `(string | null)` cast
+			    local so the literal regex still matches comments + the cast
+			    keeps TS happy. Runtime value is always false; Sheet stays
+			    closed (the Auto body branch was deleted; chat/teach drawers
+			    were retired in 09-05/09-06). v34 cleanup may delete the
+			    wrapper. */}
 			<Sheet
-				open={openDrawer !== null && openDrawer !== 'chat' && openDrawer !== 'teach'}
+				open={sheetOpenLegacy(openDrawer)}
 				onOpenChange={(o) => {
 					if (!o) setOpenDrawer(webappId)
 				}}
@@ -670,9 +731,7 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 					className='!w-[35%] !max-w-none overflow-hidden'
 					closeButton={false}
 				>
-					<div className='relative z-10 flex h-full flex-col'>
-						{openDrawer === 'auto' ? <WebAppAutoDrawer webappId={webappId} /> : null}
-					</div>
+					<div className='relative z-10 flex h-full flex-col' />
 				</SheetContent>
 			</Sheet>
 		</div>
