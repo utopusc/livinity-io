@@ -108,6 +108,11 @@ function makeManager(overrides: any = {}) {
 		titleTimeoutMs: overrides.titleTimeoutMs ?? 100,
 		idlePollMs: overrides.idlePollMs ?? 50,
 		webappCap: overrides.webappCap,
+		// Phase 100-08-04 — optional MCP config-manager opts (Redis pub-sub
+		// path; liv-core's McpClientManager reconciles async).
+		mcpConfigManager: overrides.mcpConfigManager,
+		bytebotServerPath: overrides.bytebotServerPath,
+		bytebotMcpEnv: overrides.bytebotMcpEnv,
 	})
 	return {mgr, streamManager, started, stopped, discovery, portal, closeSession, spawn, trackerInstances, logger}
 }
@@ -326,5 +331,114 @@ describe('WebAppWindowManager — vnc-window swap (Phase 99-04)', () => {
 			if (prev === undefined) delete process.env.XAUTHORITY
 			else process.env.XAUTHORITY = prev
 		}
+	})
+})
+
+// ============================================================================
+// Phase 100-08-04 per-WebApp bytebot MCP lifecycle (Redis pub-sub) — 5 tests
+// ============================================================================
+
+describe('WebAppWindowManager — Phase 100-08-04 per-WebApp bytebot MCP lifecycle (Redis pub-sub)', () => {
+	beforeEach(() => {
+		vi.useRealTimers()
+	})
+	afterEach(() => {
+		vi.useRealTimers()
+	})
+
+	it('Test 16: spawn() calls mcpConfigManager.installServer with bytebot:webapp:<webappId> + descriptor env (DISPLAY=:1, BYTEBOT_TARGET_WINDOW_ID)', async () => {
+		const installCalls: any[] = []
+		const mcpConfigManager = {
+			installServer: vi.fn(async (config: any) => {
+				installCalls.push(config)
+			}),
+			updateServer: vi.fn(async (_name: string, _updates: any) => null),
+			removeServer: vi.fn(async (_name: string) => true),
+		}
+		const {mgr} = makeManager({
+			mcpConfigManager,
+			bytebotServerPath: '/tmp/server.ts',
+		})
+		await mgr.spawn({userId: 'user-1', webappId: 'webapp-abc', url: 'https://example.com'})
+		expect(installCalls).toHaveLength(1)
+		expect(installCalls[0]!.name).toBe('bytebot:webapp:webapp-abc')
+		expect(installCalls[0]!.transport).toBe('stdio')
+		expect(installCalls[0]!.env?.BYTEBOT_TARGET_WINDOW_ID).toBe(String(0x200))
+		expect(installCalls[0]!.env?.DISPLAY).toBe(':1')
+		mgr._clearForTests()
+	})
+
+	it('Test 17: close() calls mcpConfigManager.removeServer with bytebot:webapp:<webappId>', async () => {
+		const removeCalls: string[] = []
+		const mcpConfigManager = {
+			installServer: vi.fn(async () => {}),
+			updateServer: vi.fn(async () => null),
+			removeServer: vi.fn(async (name: string) => {
+				removeCalls.push(name)
+				return true
+			}),
+		}
+		const {mgr} = makeManager({
+			mcpConfigManager,
+			bytebotServerPath: '/tmp/server.ts',
+		})
+		await mgr.spawn({userId: 'user-1', webappId: 'webapp-abc', url: 'https://example.com'})
+		await mgr.close({webappId: 'webapp-abc', userId: 'user-1'})
+		expect(removeCalls).toEqual(['bytebot:webapp:webapp-abc'])
+	})
+
+	it('Test 18: spawn() falls back to updateServer when installServer throws (idempotent re-spawn / regex rejection)', async () => {
+		const updateCalls: any[] = []
+		const mcpConfigManager = {
+			installServer: vi.fn(async () => {
+				throw new Error('Server "bytebot:webapp:webapp-abc" is already installed')
+			}),
+			updateServer: vi.fn(async (name: string, _updates: any) => {
+				updateCalls.push({name})
+				return {name} as any
+			}),
+			removeServer: vi.fn(async () => true),
+		}
+		const {mgr} = makeManager({
+			mcpConfigManager,
+			bytebotServerPath: '/tmp/server.ts',
+		})
+		await mgr.spawn({userId: 'user-1', webappId: 'webapp-abc', url: 'https://example.com'})
+		expect(updateCalls).toHaveLength(1)
+		expect(updateCalls[0]!.name).toBe('bytebot:webapp:webapp-abc')
+		mgr._clearForTests()
+	})
+
+	it('Test 19: spawn() succeeds even when both installServer and updateServer fail (non-fatal MCP wiring)', async () => {
+		const mcpConfigManager = {
+			installServer: vi.fn(async () => {
+				throw new Error('regex rejected')
+			}),
+			updateServer: vi.fn(async () => null),
+			removeServer: vi.fn(async () => false),
+		}
+		const {mgr} = makeManager({
+			mcpConfigManager,
+			bytebotServerPath: '/tmp/server.ts',
+		})
+		const result = await mgr.spawn({
+			userId: 'user-1',
+			webappId: 'webapp-fail',
+			url: 'https://example.com',
+		})
+		// Spawn still resolved with a valid SpawnResult.
+		expect(result.webappId).toBe('webapp-fail')
+		expect(result.windowId).toBe(0x200)
+		mgr._clearForTests()
+	})
+
+	it('Test 20: spawn()/close() skip MCP wiring when mcpConfigManager is undefined (backward compat)', async () => {
+		const {mgr} = makeManager() // no mcpConfigManager
+		await expect(
+			mgr.spawn({userId: 'user-1', webappId: 'webapp-bare', url: 'https://example.com'}),
+		).resolves.toBeDefined()
+		await expect(
+			mgr.close({webappId: 'webapp-bare', userId: 'user-1'}),
+		).resolves.toEqual({ok: true})
 	})
 })
