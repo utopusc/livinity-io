@@ -201,3 +201,36 @@ describe('Phase 100-09-05 drawer store + floating bar', () => {
 		expect(barSrc).toMatch(/id === 'chat'/)
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 100-09-06 — drawer Teach replaced by popup host + skills popover.
+// ─────────────────────────────────────────────────────────────────
+
+describe('Phase 100-09-06 teach popup + skills popover + drawer store', () => {
+	it('T-09-06-U1: <WebAppTeachPopupHost/> rendered in webapp-stream-window.tsx', () => {
+		expect(SRC).toMatch(/<WebAppTeachPopupHost\b/)
+		expect(SRC).toMatch(/from '\.\/webapp-teach-popup-host'/)
+	})
+
+	it('T-09-06-U2: <WebAppSkillsPopover/> rendered in webapp-stream-window.tsx', () => {
+		expect(SRC).toMatch(/<WebAppSkillsPopover\b/)
+		expect(SRC).toMatch(/from '\.\/webapp-skills-popover'/)
+	})
+
+	it('T-09-06-U3: Sheet drawer host excludes both chat AND teach branches', () => {
+		expect(SRC).not.toMatch(/openDrawer === 'teach'\s*\?\s*<WebAppTeachDrawer/)
+		expect(SRC).toMatch(/openDrawer !== null && openDrawer !== 'chat' && openDrawer !== 'teach'/)
+	})
+
+	it('T-09-06-U4: drawer store has isRecordingByWebappId + toggleTeachRecording', () => {
+		const storeSrc = safeRead(STORE_PATH)
+		expect(storeSrc).toMatch(/isRecordingByWebappId/)
+		expect(storeSrc).toMatch(/toggleTeachRecording/)
+	})
+
+	it('T-09-06-U5: floating bar Teach icon calls toggleTeachRecording (not drawer toggle for teach)', () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		expect(barSrc).toMatch(/toggleTeachRecording\(webappId\)/)
+		expect(barSrc).toMatch(/id === 'teach'/)
+	})
+})
