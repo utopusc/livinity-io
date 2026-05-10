@@ -49,13 +49,13 @@ import {
 
 import type Livinityd from '../../index.js'
 
-// Phase 72-native-06: bytebot computer-use MCP server registration. Called
+// Phase 72-native-06: Luse computer-use MCP server registration. Called
 // once at mount time AFTER McpConfigManager is constructed, BEFORE the
-// running nexus daemon's McpClientManager would reconcile (it reconciles
+// running liv-core daemon's McpClientManager would reconcile (it reconciles
 // via Redis Pub/Sub on `liv:config:updated`, which McpConfigManager.installServer
-// publishes automatically). Default-disabled — no-op when BYTEBOT_MCP_ENABLED
-// is unset (D-NATIVE-10).
-import {registerBytebotMcpServer} from '../computer-use/index.js'
+// publishes automatically). Default-disabled — no-op when LUSE_MCP_ENABLED
+// is unset (D-NATIVE-10). (Renamed P100-10-02 from bytebot per D-100-10-B.)
+import {registerLuseMcpServer} from '../computer-use/index.js'
 
 /**
  * Factory that produces a fresh LivAgentRunner per agent run.
@@ -157,15 +157,16 @@ export async function mountAgentRunsRoutes(
 	const runStore =
 		options.runStoreOverride ?? new RunStore(livinityd.ai.redis)
 
-	// ── Phase 72-native-06: bytebot computer-use MCP server registration ─
-	// Construct an McpConfigManager backed by the same Redis livinityd
-	// already uses (the running nexus daemon shares this Redis and its
-	// McpClientManager subscribes to `liv:config:updated`, so writing the
-	// bytebot entry here is sufficient to spawn the child process there).
+	// ── Phase 72-native-06: Luse computer-use MCP server registration ─
+	// (Renamed P100-10-02 from bytebot per D-100-10-B.) Construct an
+	// McpConfigManager backed by the same Redis livinityd already uses
+	// (the running liv-core daemon shares this Redis and its McpClientManager
+	// subscribes to `liv:config:updated`, so writing the Luse entry here is
+	// sufficient to spawn the child process there).
 	//
-	// Default-disabled: when BYTEBOT_MCP_ENABLED is unset the call is a
+	// Default-disabled: when LUSE_MCP_ENABLED is unset the call is a
 	// pure no-op (returns {registered:false}); livinityd boots normally
-	// and the agent simply has no `mcp_bytebot_*` tools (D-NATIVE-10
+	// and the agent simply has no `mcp_luse_*` tools (D-NATIVE-10
 	// graceful degradation). Failure here is also non-fatal — caught by
 	// the function's internal try/catch.
 	//
@@ -176,20 +177,20 @@ export async function mountAgentRunsRoutes(
 	// site is here, immediately after RunStore construction (analogous to
 	// other lifecycle wiring like P73-04 RunQueue below).
 	try {
-		const bytebotConfigManager = new McpConfigManager(livinityd.ai.redis)
-		await registerBytebotMcpServer(
+		const luseConfigManager = new McpConfigManager(livinityd.ai.redis)
+		await registerLuseMcpServer(
 			livinityd.ai.redis,
 			process.env,
-			bytebotConfigManager,
+			luseConfigManager,
 			{
 				log: (msg) => logger.log(msg),
 				error: (msg) => logger.error(msg),
 			},
 		)
 	} catch (err) {
-		// Defensive: bytebot registration must NEVER block agent-runs mount.
+		// Defensive: Luse registration must NEVER block agent-runs mount.
 		const msg = err instanceof Error ? err.message : String(err)
-		logger.error(`[bytebot-mcp-config] mount-time error (non-fatal): ${msg}`)
+		logger.error(`[luse-mcp-config] mount-time error (non-fatal): ${msg}`)
 	}
 
 	const factory = options.livAgentRunnerFactory

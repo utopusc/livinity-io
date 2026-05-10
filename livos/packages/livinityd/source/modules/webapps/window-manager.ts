@@ -51,13 +51,14 @@ import {
 	type WindowSessionResult,
 } from './pipewire-portal.js'
 import {GeometryTracker} from './geometry-tracker.js'
-// Phase 100-08-04 — per-WebApp bytebot MCP child registration via livinityd's
+// Phase 100-08-04 — per-WebApp Luse MCP child registration via livinityd's
 // own McpConfigManager (Redis pub-sub bridge to liv-core's McpClientManager).
+// (Renamed P100-10-02 from bytebot per D-100-10-B.)
 import {
-	buildBytebotConfig,
+	buildLuseConfig,
 	type McpServerConfigInput,
 	type PerWebAppMcpDescriptor,
-} from '../computer-use/bytebot-mcp-config.js'
+} from '../computer-use/luse-mcp-config.js'
 // Phase 100-10-01 — per-WebApp Xvfb display allocator + lifecycle (D-100-10-A).
 // When opts.displayAllocator is provided, spawn() allocates a display per
 // WebApp (`:10`, `:11`, ...), spawns Xvfb + fluxbox on it, and threads
@@ -123,10 +124,11 @@ export type WebAppWindowManagerOpts = {
 	/**
 	 * Phase 100-08-04 — optional MCP config-manager handle (livinityd's own,
 	 * backed by the daemon's Redis). When provided, spawn() persists a
-	 * per-WebApp bytebot MCP entry under name `bytebot:webapp:<webappId>` and
+	 * per-WebApp Luse MCP entry under name `luse:webapp:<webappId>` and
 	 * close() removes it. The McpConfigManager's saveAndPublish auto-publishes
 	 * `liv:config:updated`, which liv-core's McpClientManager (separate
 	 * process) subscribes to and reconciles asynchronously (~1-2s lag).
+	 * (Renamed P100-10-02 from bytebot per D-100-10-B.)
 	 *
 	 * NOT to be confused with liv-core's McpClientManager — that one is in a
 	 * different process and cannot be called from livinityd. The Redis pub-sub
@@ -137,10 +139,10 @@ export type WebAppWindowManagerOpts = {
 		updateServer(name: string, updates: Partial<McpServerConfigInput>): Promise<unknown>
 		removeServer(name: string): Promise<boolean>
 	}
-	/** Phase 100-08-04 — resolved path to the bytebot MCP stdio server. Required when mcpConfigManager is set. */
-	bytebotServerPath?: string
-	/** Phase 100-08-04 — env passed to buildBytebotConfig. Defaults to process.env. */
-	bytebotMcpEnv?: NodeJS.ProcessEnv
+	/** Phase 100-08-04 — resolved path to the Luse MCP stdio server. Required when mcpConfigManager is set. */
+	luseServerPath?: string
+	/** Phase 100-08-04 — env passed to buildLuseConfig. Defaults to process.env. */
+	luseMcpEnv?: NodeJS.ProcessEnv
 	/**
 	 * Phase 100-10-01 — per-WebApp X display allocator (D-100-10-A). When
 	 * provided, spawn() allocates `:10`, `:11`, ... for each WebApp, spawns
@@ -206,10 +208,11 @@ export class WebAppWindowManager {
 	private readonly titleTimeoutMs: number
 	private readonly idlePollMs: number
 	private readonly webappCap: number
-	// Phase 100-08-04 — per-WebApp bytebot MCP wiring (Redis pub-sub path).
+	// Phase 100-08-04 — per-WebApp Luse MCP wiring (Redis pub-sub path).
+	// (Renamed P100-10-02 from bytebot per D-100-10-B.)
 	private readonly mcpConfigManager: WebAppWindowManagerOpts['mcpConfigManager']
-	private readonly bytebotServerPath: string | undefined
-	private readonly bytebotMcpEnv: NodeJS.ProcessEnv
+	private readonly luseServerPath: string | undefined
+	private readonly luseMcpEnv: NodeJS.ProcessEnv
 	// Phase 100-10-01 — per-WebApp X display allocator + spawn fns (D-100-10-A).
 	private readonly displayAllocator: DisplayAllocator | undefined
 	private readonly xvfbStartFn: typeof startXvfb
@@ -237,8 +240,8 @@ export class WebAppWindowManager {
 		// becomes a no-op via early-return guards in registerWebAppMcp /
 		// deregisterWebAppMcp.
 		this.mcpConfigManager = opts.mcpConfigManager
-		this.bytebotServerPath = opts.bytebotServerPath
-		this.bytebotMcpEnv = opts.bytebotMcpEnv ?? process.env
+		this.luseServerPath = opts.luseServerPath
+		this.luseMcpEnv = opts.luseMcpEnv ?? process.env
 		// Phase 100-10-01 — per-WebApp X display allocator wiring (D-100-10-A).
 		// When opts.displayAllocator is undefined, all per-spawn Xvfb/fluxbox/release
 		// logic short-circuits and the manager falls back to the global
@@ -474,11 +477,12 @@ export class WebAppWindowManager {
 			`webapp ${opts.webappId} spawned (user=${opts.userId} wid=${newWin.wid} mode=${mode})`,
 		)
 
-		// Phase 100-08-04 — register per-WebApp bytebot MCP entry via
+		// Phase 100-08-04 — register per-WebApp Luse MCP entry via
 		// McpConfigManager (Redis pub-sub path). Liv-core's McpClientManager
 		// (different process) reconciles async (~1-2s). Non-fatal: on error,
-		// host bytebot via /tmp/livos-active-webapp-wid fallback below still
-		// serves the agent during the lag.
+		// host Luse via /tmp/livos-active-webapp-wid fallback below still
+		// serves the agent during the lag. (Renamed P100-10-02 from bytebot per
+		// D-100-10-B.)
 		await this.registerWebAppMcp(opts.webappId, newWin.wid, chromeDisplay)
 
 		// Phase 100-07.4 — broadcast active wid (kept as belt-and-braces
@@ -552,12 +556,13 @@ export class WebAppWindowManager {
 			}
 		}
 
-		// Phase 100-08-04 — deregister per-WebApp bytebot MCP entry BEFORE
+		// Phase 100-08-04 — deregister per-WebApp Luse MCP entry BEFORE
 		// we drop the active entry. Liv-core's reconcile is async — there's
 		// a brief window where liv-core may still see the entry as
 		// registered. The 08-05 chat-surface scope filter handles this lag
-		// with a host-bytebot fallback when the matching per-WebApp
-		// instance isn't yet (or no longer) registered. Non-fatal on error.
+		// with a host-Luse fallback when the matching per-WebApp instance
+		// isn't yet (or no longer) registered. Non-fatal on error.
+		// (Renamed P100-10-02 from bytebot per D-100-10-B.)
 		await this.deregisterWebAppMcp(opts.webappId)
 
 		// Phase 100-10-01 — tear down per-WebApp fluxbox + Xvfb on this
@@ -595,28 +600,30 @@ export class WebAppWindowManager {
 		this.active.delete(opts.webappId)
 		this.logger?.info?.(`webapp ${opts.webappId} closed (killWindow=${!!opts.killWindow})`)
 
-		// Phase 100-07.4 — re-broadcast after close so bytebot fallback sees
+		// Phase 100-07.4 — re-broadcast after close so Luse fallback sees
 		// the new active state (single remaining wid, ambiguous, or none).
 		this.broadcastActiveWid()
 
 		return {ok: true}
 	}
 
-	/** Phase 100-08-04 — server name format for the per-WebApp bytebot MCP child. */
+	/** Phase 100-08-04 — server name format for the per-WebApp Luse MCP child.
+	 *  (Renamed P100-10-02 from `bytebot:webapp:` per D-100-10-B.) */
 	private mcpServerNameFor(webappId: string): string {
-		return `bytebot:webapp:${webappId}`
+		return `luse:webapp:${webappId}`
 	}
 
 	/**
-	 * Phase 100-08-04 — register a per-WebApp bytebot MCP child via
+	 * Phase 100-08-04 — register a per-WebApp Luse MCP child via
 	 * McpConfigManager (Redis pub-sub path). Liv-core's McpClientManager,
 	 * running in a separate process, picks up the change asynchronously
-	 * (~1-2s lag) via its `liv:config:updated` subscription.
+	 * (~1-2s lag) via its `liv:config:updated` subscription. (Renamed
+	 * P100-10-02 from bytebot per D-100-10-B.)
 	 *
 	 * Idempotency / regex fallback: tries installServer first; on duplicate
 	 * name OR regex rejection (the validator regex `/^[a-z0-9][a-z0-9_-]*$/`
 	 * rejects names with colons), falls back to updateServer (no regex,
-	 * idempotent). Non-fatal on error — the host bytebot fallback via
+	 * idempotent). Non-fatal on error — the host Luse fallback via
 	 * /tmp/livos-active-webapp-wid (broadcastActiveWid) still serves the
 	 * agent during the ~1-2s reconcile lag.
 	 */
@@ -625,7 +632,7 @@ export class WebAppWindowManager {
 		wid: number,
 		display: string = ':1',
 	): Promise<void> {
-		if (!this.mcpConfigManager || !this.bytebotServerPath) return
+		if (!this.mcpConfigManager || !this.luseServerPath) return
 		try {
 			const descriptor: PerWebAppMcpDescriptor = {
 				instanceKey: webappId,
@@ -635,7 +642,7 @@ export class WebAppWindowManager {
 				// otherwise falls back to `:1` (D-100-08-A back-compat).
 				display,
 			}
-			const config = buildBytebotConfig(this.bytebotMcpEnv, this.bytebotServerPath, descriptor)
+			const config = buildLuseConfig(this.luseMcpEnv, this.luseServerPath, descriptor)
 			const name = this.mcpServerNameFor(webappId)
 			try {
 				await this.mcpConfigManager.installServer(config)
@@ -643,7 +650,7 @@ export class WebAppWindowManager {
 				// installServer can throw on:
 				//   - duplicate name (idempotent re-spawn)
 				//   - regex-rejected name (colons; the validator regex
-				//     `/^[a-z0-9][a-z0-9_-]*$/` rejects `bytebot:webapp:<id>`)
+				//     `/^[a-z0-9][a-z0-9_-]*$/` rejects `luse:webapp:<id>`)
 				// Both cases: fall back to updateServer (no regex, no
 				// duplicate check). If updateServer returns null the entry
 				// doesn't exist AND installServer refused — re-throw the
@@ -654,30 +661,31 @@ export class WebAppWindowManager {
 				}
 			}
 			this.logger?.info?.(
-				`webapp ${webappId} per-WebApp bytebot MCP registered (wid=${wid}); ` +
+				`webapp ${webappId} per-WebApp Luse MCP registered (wid=${wid}); ` +
 					`liv-core reconcile is async via Redis pub-sub liv:config:updated (~1-2s lag)`,
 			)
 		} catch (err) {
 			this.logger?.warn?.(
-				`webapp ${webappId} per-WebApp bytebot MCP registration failed (non-fatal); ` +
-					`host bytebot fallback (broadcastActiveWid IPC) remains active`,
+				`webapp ${webappId} per-WebApp Luse MCP registration failed (non-fatal); ` +
+					`host Luse fallback (broadcastActiveWid IPC) remains active`,
 				err,
 			)
 		}
 	}
 
-	/** Phase 100-08-04 — deregister a per-WebApp bytebot MCP child. Non-fatal on error. */
+	/** Phase 100-08-04 — deregister a per-WebApp Luse MCP child. Non-fatal on error.
+	 *  (Renamed P100-10-02 from bytebot per D-100-10-B.) */
 	private async deregisterWebAppMcp(webappId: string): Promise<void> {
 		if (!this.mcpConfigManager) return
 		try {
 			await this.mcpConfigManager.removeServer(this.mcpServerNameFor(webappId))
 			this.logger?.info?.(
-				`webapp ${webappId} per-WebApp bytebot MCP deregistered ` +
+				`webapp ${webappId} per-WebApp Luse MCP deregistered ` +
 					`(liv-core reconcile is async via Redis pub-sub)`,
 			)
 		} catch (err) {
 			this.logger?.warn?.(
-				`webapp ${webappId} per-WebApp bytebot MCP deregistration failed (non-fatal)`,
+				`webapp ${webappId} per-WebApp Luse MCP deregistration failed (non-fatal)`,
 				err,
 			)
 		}
@@ -685,7 +693,7 @@ export class WebAppWindowManager {
 
 	/**
 	 * Phase 100-07.4 — write the SOLE active WebApp's wid to
-	 * `/tmp/livos-active-webapp-wid` for the bytebot MCP child to read at
+	 * `/tmp/livos-active-webapp-wid` for the Luse MCP child to read at
 	 * tool dispatch time (cross-process fallback). Multiple active WebApps
 	 * → empty file (ambiguous, host-display fallback). Zero active → file
 	 * removed.
@@ -721,11 +729,12 @@ export class WebAppWindowManager {
 	}
 
 	/**
-	 * Phase 100-07.4 — fallback resolver for the host-display bytebot.
+	 * Phase 100-07.4 — fallback resolver for the host-display Luse.
 	 * When the agent invokes a tool without an explicit windowId AND
-	 * BYTEBOT_TARGET_WINDOW_ID is unset, return the wid of the SOLE active
+	 * LUSE_TARGET_WINDOW_ID is unset, return the wid of the SOLE active
 	 * WebApp (across all users). Returns undefined when there are 0 OR ≥2
 	 * active WebApps — caller should be explicit in those ambiguous cases.
+	 * (Renamed P100-10-02 from bytebot per D-100-10-B.)
 	 *
 	 * This is a pragmatic single-WebApp UX fix until the per-WebApp MCP
 	 * registration lifecycle is wired into spawn/close (out of scope here).

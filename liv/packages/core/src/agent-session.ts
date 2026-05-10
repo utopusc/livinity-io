@@ -479,7 +479,7 @@ export class AgentSessionManager {
 
     // P79-01: nexus-tools wrapper is now OPT-IN via Redis flag (default OFF).
     // User feedback 2026-05-05: "Ben Livinity_List li olan mcp server i kullanmak
-    // istemiyorum" — they want only their installed MCP servers (bytebot etc),
+    // istemiyorum" — they want only their installed MCP servers (Luse etc),
     // not the legacy livinity_list / mcp_list / livinity_search wrapper.
     //
     // To re-enable: redis-cli SET liv:config:expose_legacy_tools true
@@ -502,7 +502,7 @@ export class AgentSessionManager {
     }
 
     // P79-01: Inject user-installed MCP servers from McpConfigManager registry
-    // (bytebot + any future ones the user installs). This is the path the user's
+    // (Luse + any future ones the user installs). This is the path the user's
     // chat UI actually uses (WebSocket -> AgentSessionManager); the legacy
     // /api/agent/stream path through SdkAgentRunner has its own injection (P77-03).
     if (this.redis) {

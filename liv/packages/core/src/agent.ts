@@ -82,7 +82,7 @@ export interface AgentConfig {
    * P77-02: Additional MCP servers to inject into Claude's mcpServers config.
    *
    * Built dynamically by api.ts agent-stream handler from McpConfigManager
-   * .listServers() (enabled-only). Allows registered MCP servers (Bytebot,
+   * .listServers() (enabled-only). Allows registered MCP servers (Luse,
    * future ones) to reach Claude's `tools[]` array — closes the discovery
    * gap identified by the 2026-05-05 deploy investigation.
    *

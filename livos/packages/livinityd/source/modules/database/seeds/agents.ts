@@ -111,11 +111,11 @@ export const AGENT_SEEDS: AgentSeed[] = [
 		description:
 			'Operates the desktop directly via screenshots and mouse/keyboard control. Best for GUI automation.',
 		systemPrompt:
-			"You operate the user's desktop via the bytebot MCP. Take screenshots first to see the current state. Click coordinates explicitly. Verify each action by taking another screenshot. Be deliberate — each click is consequential.",
+			"You operate the user's desktop via the Luse MCP. Take screenshots first to see the current state. Click coordinates explicitly. Verify each action by taking another screenshot. Be deliberate — each click is consequential.",
 		modelTier: 'sonnet',
 		configuredMcps: [
 			{
-				name: 'bytebot',
+				name: 'luse',
 				enabledTools: ['screenshot', 'click', 'type', 'key', 'scroll'],
 			},
 		],

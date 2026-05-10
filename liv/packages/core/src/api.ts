@@ -118,16 +118,18 @@ function maskSensitiveValues(servers: any[]): any[] {
  * Decides which MCP servers to inject into the agent loop based on the
  * request's optional `webappId`:
  *
- *   - webappId present AND `bytebot:webapp:<webappId>` exists in servers:
+ *   - webappId present AND `luse:webapp:<webappId>` exists in servers:
  *       scope = 'webapp'; only that one server is included.
  *   - webappId present AND no matching server (LIV-CORE RECONCILE LAG —
  *       see 100-08-04-SUMMARY.md "Risk model — Redis reconciliation lag"):
- *       scope = 'lag-fallback'; host bytebot + user-installed MCPs included;
+ *       scope = 'lag-fallback'; host Luse + user-installed MCPs included;
  *       per-WebApp instances excluded; logger.warn fires with `webappScope`
  *       + `fallback: 'lag'` for greppable trace.
- *   - webappId absent: scope = 'host'; host bytebot + user-installed MCPs
+ *   - webappId absent: scope = 'host'; host Luse + user-installed MCPs
  *       included; per-WebApp instances excluded (back-compat with v32 chat
- *       home — host scope sees host bytebot, NEVER per-WebApp children).
+ *       home — host scope sees host Luse, NEVER per-WebApp children).
+ *
+ * (Renamed P100-10-02 from `bytebot:webapp:` per D-100-10-B.)
  *
  * Pure (no I/O). Tested by api.scope-filter.test.ts (4 cases: webapp scope,
  * lag fallback, host scope, other-webapp registered → no leak).
@@ -141,23 +143,30 @@ export function filterAdditionalMcpServers<T extends {name: string; transport: s
   logger: {warn: (msg: string, meta?: unknown) => void},
 ): {scope: 'webapp' | 'host' | 'lag-fallback'; servers: T[]} {
   if (reqWebappId) {
-    const targetName = `bytebot:webapp:${reqWebappId}`;
+    const targetName = `luse:webapp:${reqWebappId}`;
     const matching = enabledServers.find(s => s.name === targetName);
     if (matching) {
       return {scope: 'webapp', servers: [matching]};
     }
     logger.warn(
-      '/api/agent/stream: webappId scope-filter lag fallback — no matching `bytebot:webapp:<id>` server registered yet',
+      '/api/agent/stream: webappId scope-filter lag fallback — no matching `luse:webapp:<id>` server registered yet',
       {webappScope: reqWebappId, fallback: 'lag'},
     );
     return {
       scope: 'lag-fallback',
-      servers: enabledServers.filter(s => !s.name.startsWith('bytebot:webapp:')),
+      // Exclude both legacy `bytebot:webapp:*` (in-flight skills per D-100-10-I)
+      // and current `luse:webapp:*` per-WebApp instances from the lag-fallback set.
+      servers: enabledServers.filter(
+        s => !s.name.startsWith('luse:webapp:') && !s.name.startsWith('bytebot:webapp:'),
+      ),
     };
   }
   return {
     scope: 'host',
-    servers: enabledServers.filter(s => !s.name.startsWith('bytebot:webapp:')),
+    // Exclude both legacy `bytebot:webapp:*` and current `luse:webapp:*` from host scope.
+    servers: enabledServers.filter(
+      s => !s.name.startsWith('luse:webapp:') && !s.name.startsWith('bytebot:webapp:'),
+    ),
   };
 }
 
@@ -2455,8 +2464,9 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
     }
 
     // Phase 100-08-05 — optional webappId for tool-scope filtering. When present,
-    // additionalMcpServers is filtered down to the matching `bytebot:webapp:<id>`
+    // additionalMcpServers is filtered down to the matching `luse:webapp:<id>`
     // child via filterAdditionalMcpServers (lag-fallback to host scope on miss).
+    // (Renamed P100-10-02 from bytebot per D-100-10-B.)
     const reqWebappId: string | null =
       typeof req.body?.webappId === 'string' && req.body.webappId.length > 0
         ? req.body.webappId

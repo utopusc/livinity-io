@@ -1,7 +1,8 @@
 /**
- * Bytebot Computer-Use Tool Schemas
+ * Luse Computer-Use Tool Schemas (renamed P100-10-02 from Bytebot per
+ * D-100-10-B; legacy LivOS layer name was "Bytebot tools".)
  *
- * Copied verbatim from Bytebot's open-source agent code (Apache 2.0):
+ * Copied verbatim from upstream's open-source agent code (Apache 2.0):
  *   Source: https://github.com/bytebot-ai/bytebot
  *   File:   packages/bytebot-agent/src/agent/agent.tools.ts
  *   Snapshot date: 2026-05-04
@@ -24,8 +25,8 @@
  */
 
 /**
- * Anthropic / Kimi tool format. Every entry in BYTEBOT_TOOLS conforms to
- * this shape — the format Bytebot's agent passes through to Anthropic
+ * Anthropic / Kimi tool format. Every entry in LUSE_TOOLS conforms to
+ * this shape — the format the agent passes through to Anthropic
  * Claude / OpenAI / Kimi via tools[]. See 72-01-PLAN.md `<interfaces>`.
  */
 export type AnthropicTool = {
@@ -432,11 +433,11 @@ const _readFileTool = {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * The complete set of Bytebot tool schemas, in upstream order. Pass this
+ * The complete set of Luse tool schemas, in upstream order. Pass this
  * to the Anthropic / Kimi `tools[]` request field for the LivAgentRunner
  * computer-use loop (P72-03 wires this through `computerUseRouter`).
  */
-export const BYTEBOT_TOOLS: readonly AnthropicTool[] = [
+export const LUSE_TOOLS: readonly AnthropicTool[] = [
 	_moveMouseTool,
 	_traceMouseTool,
 	_clickMouseTool,
@@ -457,10 +458,10 @@ export const BYTEBOT_TOOLS: readonly AnthropicTool[] = [
 ] as const
 
 /**
- * Phase 97-07 — Auto-mode-only tools, additive to BYTEBOT_TOOLS.
+ * Phase 97-07 — Auto-mode-only tools, additive to LUSE_TOOLS.
  *
- * Registered ONLY on per-WebApp bytebot MCP instances (i.e. when the
- * spawned child has `BYTEBOT_TARGET_WINDOW_ID` in env). The host-display
+ * Registered ONLY on per-WebApp Luse MCP instances (i.e. when the
+ * spawned child has `LUSE_TARGET_WINDOW_ID` in env). The host-display
  * single-instance MCP does NOT register these — that path has no WebApp
  * scope, so a `skillId` parameter would be ambiguous.
  *
@@ -469,32 +470,32 @@ export const BYTEBOT_TOOLS: readonly AnthropicTool[] = [
  */
 import {WEBAPP_REPLAY_SKILL_TOOL} from './skill-replay-tool.js'
 
-export const BYTEBOT_AUTO_MODE_EXTRA_TOOLS: readonly AnthropicTool[] = [
+export const LUSE_AUTO_MODE_EXTRA_TOOLS: readonly AnthropicTool[] = [
 	WEBAPP_REPLAY_SKILL_TOOL as unknown as AnthropicTool,
 ] as const
 
 /**
- * Snake-case names of all Bytebot tools, derived from `BYTEBOT_TOOLS`.
+ * Snake-case names of all Luse tools, derived from `LUSE_TOOLS`.
  * Used by `LivAgentRunner` (P72-03) to recognize whether an incoming
- * tool call name is a Bytebot computer-use tool that should be routed
- * to the BytebotBridge HTTP API.
+ * tool call name is a Luse computer-use tool that should be routed
+ * to the LuseBridge HTTP API.
  */
-export const BYTEBOT_TOOL_NAMES: readonly string[] = BYTEBOT_TOOLS.map(
+export const LUSE_TOOL_NAMES: readonly string[] = LUSE_TOOLS.map(
 	(t) => t.name,
 )
 
 /**
- * Union of all Bytebot tool names as a string-literal type. Useful for
+ * Union of all Luse tool names as a string-literal type. Useful for
  * type-narrowing inside switch statements that dispatch on tool name.
  */
-export type BytebotToolName = (typeof BYTEBOT_TOOLS)[number]['name']
+export type LuseToolName = (typeof LUSE_TOOLS)[number]['name']
 
 /**
- * Type guard for Bytebot tool names. Returns true if the given string is
- * one of the names in `BYTEBOT_TOOL_NAMES`. Used by P72-03 wiring to
- * decide whether to dispatch a tool call to BytebotBridge or to the
+ * Type guard for Luse tool names. Returns true if the given string is
+ * one of the names in `LUSE_TOOL_NAMES`. Used by P72-03 wiring to
+ * decide whether to dispatch a tool call to LuseBridge or to the
  * other tool category routers.
  */
-export function isBytebotToolName(name: string): name is BytebotToolName {
-	return (BYTEBOT_TOOL_NAMES as readonly string[]).includes(name)
+export function isLuseToolName(name: string): name is LuseToolName {
+	return (LUSE_TOOL_NAMES as readonly string[]).includes(name)
 }

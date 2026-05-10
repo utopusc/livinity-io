@@ -71,11 +71,12 @@ export async function* createSdkAgentRunnerForUser(opts: {
 	signal?: AbortSignal
 	/**
 	 * Phase 100-08-05 — when present, scopes the agent loop's MCP tools to
-	 * the matching `bytebot:webapp:<webappId>` MCP child (registered by
+	 * the matching `luse:webapp:<webappId>` MCP child (registered by
 	 * 100-08-04 in WebAppWindowManager.spawn). Forwarded verbatim in the
 	 * request body to liv `/api/agent/stream`. On lag (target child not
 	 * yet visible to liv-core's reconcile), api.ts falls through to host
-	 * bytebot for that turn (logged WARN, scope='lag-fallback').
+	 * Luse for that turn (logged WARN, scope='lag-fallback').
+	 * (Renamed P100-10-02 from bytebot per D-100-10-B.)
 	 */
 	webappId?: string
 }): AsyncGenerator<AgentEvent, AgentResult, void> {

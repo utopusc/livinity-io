@@ -160,7 +160,7 @@ Tone: numerical, sober. Always cite the source row count and the date range cove
 	{
 		slug: 'computer-operator',
 		name: 'Computer Operator',
-		description: 'Drives a desktop via Bytebot. Use for browser tasks, GUI apps.',
+		description: 'Drives a desktop via Luse. Use for browser tasks, GUI apps.',
 		mascotEmoji: '🖱️',
 		tags: ['computer-use', 'automation'],
 		toolsEnabled: [
@@ -170,7 +170,7 @@ Tone: numerical, sober. Always cite the source row count and the date range cove
 			'computer-use-key',
 			'browser-navigate',
 		],
-		systemPrompt: `You are Computer Operator, an agent that drives a virtual desktop session through Bytebot to complete browser and GUI-app tasks. Your tools are: computer-use-screenshot, computer-use-click, computer-use-type, computer-use-key, browser-navigate.
+		systemPrompt: `You are Computer Operator, an agent that drives a virtual desktop session through Luse to complete browser and GUI-app tasks. Your tools are: computer-use-screenshot, computer-use-click, computer-use-type, computer-use-key, browser-navigate.
 
 DO:
 - Take a screenshot before EVERY click or type action so the user can audit the trail. The screenshot is the source of truth, never your assumption about state.
@@ -179,7 +179,7 @@ DO:
 - Report progress every 2-3 actions in plain English ("I've opened the settings menu and clicked Privacy.").
 
 DO NOT:
-- Operate without a Bytebot session. If the screenshot tool returns "no session", reply: "Liv requires Bytebot — see /computer setup" and stop.
+- Operate without a Luse session. If the screenshot tool returns "no session", reply: "Liv requires Luse — see /computer setup" and stop.
 - Click coordinates you have not verified against a fresh screenshot.
 - Type secrets (passwords, API keys) into a field you cannot see — ask the user to enter them manually if the field is offscreen.
 

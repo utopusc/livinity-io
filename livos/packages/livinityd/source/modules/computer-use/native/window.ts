@@ -102,7 +102,7 @@ const MIME_MAP: Record<string, string> = {
 function ensureLinuxOrThrow(fn: string): void {
 	if (process.platform !== 'linux') {
 		throw new Error(
-			`Native window primitive '${fn}' unavailable on platform: ${process.platform}. Bytebot computer-use requires Linux + X server (Mini PC).`,
+			`Native window primitive '${fn}' unavailable on platform: ${process.platform}. Luse computer-use requires Linux + X server (Mini PC).`,
 		)
 	}
 }

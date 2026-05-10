@@ -2,7 +2,7 @@
 export * from './task-repository.js'
 
 // Phase 71-04 — ComputerUseContainerManager lifecycle owner (CU-FOUND-06).
-// Single entry point for Bytebot container ensure/stop + 30-min idle reaper.
+// Single entry point for the upstream bytebot container ensure/stop + 30-min idle reaper.
 export {
 	ComputerUseContainerManager,
 	IDLE_THRESHOLD_MS,
@@ -41,24 +41,26 @@ export type {
 export {computerUseRouter} from './routes.js'
 export type {ComputerUseRouter} from './routes.js'
 
-// Phase 72-01 — Bytebot tool schemas (CU-LOOP-01). Verbatim Apache 2.0
-// copy from upstream Bytebot agent.tools.ts. See bytebot-tools.ts header
-// for source URL + snapshot date + license attribution.
+// Phase 72-01 — Luse tool schemas (CU-LOOP-01) — renamed P100-10-02 from
+// Bytebot per D-100-10-B. Verbatim Apache 2.0 copy from upstream bytebot
+// project's agent.tools.ts. See luse-tools.ts header for source URL +
+// snapshot date + license attribution.
 export {
-	BYTEBOT_TOOLS,
-	BYTEBOT_TOOL_NAMES,
-	isBytebotToolName,
-} from './bytebot-tools.js'
-export type {AnthropicTool, BytebotToolName} from './bytebot-tools.js'
+	LUSE_TOOLS,
+	LUSE_TOOL_NAMES,
+	isLuseToolName,
+} from './luse-tools.js'
+export type {AnthropicTool, LuseToolName} from './luse-tools.js'
 
-// Phase 72-02 — Bytebot system prompt (CU-LOOP-03). Verbatim Apache 2.0
-// copy from upstream Bytebot agent.constants.ts with 3 narrow D-12 edits
-// (You are Liv / 1280x960 / NEEDS_HELP+COMPLETED retained). See
-// bytebot-system-prompt.ts header for source URL + snapshot date + diff.
+// Phase 72-02 — Luse system prompt (CU-LOOP-03) — renamed P100-10-02 from
+// Bytebot per D-100-10-B. Verbatim Apache 2.0 copy from upstream bytebot
+// project's agent.constants.ts with 3 narrow D-12 edits (You are Liv /
+// 1280x960 / NEEDS_HELP+COMPLETED retained). See luse-system-prompt.ts
+// header for source URL + snapshot date + diff.
 export {
-	BYTEBOT_SYSTEM_PROMPT,
+	LUSE_SYSTEM_PROMPT,
 	injectComputerUseSystemPrompt,
-} from './bytebot-system-prompt.js'
+} from './luse-system-prompt.js'
 
 // Phase 72-native (Wave 1) — native X11 primitives barrel. Re-exports
 // captureScreenshot + 11 input primitives + window/file fns from
@@ -69,14 +71,15 @@ export {
 // (spawned via `tsx mcp/server.ts`), not a library.
 export * from './native/index.js'
 
-// Phase 72-native-06 — Boot-time bytebot computer-use MCP server registration.
-// Called from livinityd lifecycle when BYTEBOT_MCP_ENABLED=true; writes the
-// stdio server config to nexus:mcp:config so the running nexus daemon's
-// McpClientManager spawns it and discovers `mcp_bytebot_*` tools (D-NATIVE-10).
-export {registerBytebotMcpServer, DEFAULT_BYTEBOT_MCP_SERVER_PATH} from './bytebot-mcp-config.js'
+// Phase 72-native-06 — Boot-time Luse computer-use MCP server registration
+// (renamed P100-10-02 from bytebot per D-100-10-B). Called from livinityd
+// lifecycle when LUSE_MCP_ENABLED=true; writes the stdio server config to
+// liv:mcp:config so the running liv-core daemon's McpClientManager spawns
+// it and discovers `mcp_luse_*` tools (D-NATIVE-10).
+export {registerLuseMcpServer, DEFAULT_LUSE_MCP_SERVER_PATH} from './luse-mcp-config.js'
 export type {
 	McpConfigManagerLike,
 	McpServerConfigInput,
 	McpServerConfigStored,
-	BytebotMcpConfigLogger,
-} from './bytebot-mcp-config.js'
+	LuseMcpConfigLogger,
+} from './luse-mcp-config.js'

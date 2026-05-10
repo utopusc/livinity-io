@@ -4,8 +4,8 @@
  * Spec source: 72-native-05-PLAN.md `<task type="auto" tdd="true">` Task 1.
  *
  * Coverage (12 cases per plan must-have list):
- *   T1:  registerBytebotTools registers exactly BYTEBOT_TOOLS.length handlers (17).
- *   T2:  Each tool name from BYTEBOT_TOOL_NAMES has a registered handler.
+ *   T1:  registerLuseTools registers exactly LUSE_TOOLS.length handlers (17).
+ *   T2:  Each tool name from LUSE_TOOL_NAMES has a registered handler.
  *   T3:  computer_screenshot returns image content + isError:false; captureScreenshot called once.
  *   T4:  computer_click_mouse calls clickMouse(args), waits 750ms, takes post-action screenshot.
  *   T5:  computer_wait with duration=500 awaits 500ms timer, returns text-only content.
@@ -67,10 +67,10 @@ vi.mock('node:timers/promises', () => ({
 }))
 
 // SUT — imported AFTER vi.mock above (top-of-file vi.mock is hoisted by vitest).
-import {BYTEBOT_TOOLS, BYTEBOT_TOOL_NAMES} from '../bytebot-tools.js'
-import {registerBytebotTools, HANDLERS} from './tools.js'
+import {LUSE_TOOLS, LUSE_TOOL_NAMES} from '../luse-tools.js'
+import {registerLuseTools, HANDLERS} from './tools.js'
 
-// Minimal stub of the McpServer surface registerBytebotTools touches.
+// Minimal stub of the McpServer surface registerLuseTools touches.
 class StubMcpServer {
 	registered: Array<{name: string; description: string; inputSchema: unknown; handler: (args: Record<string, unknown>) => Promise<unknown>}> = []
 
@@ -94,7 +94,7 @@ const SCREENSHOT_RESULT = {
 	mimeType: 'image/png' as const,
 }
 
-describe('registerBytebotTools', () => {
+describe('registerLuseTools', () => {
 	beforeEach(() => {
 		// Reset all spies between cases.
 		for (const fn of Object.values(mocks)) {
@@ -124,18 +124,18 @@ describe('registerBytebotTools', () => {
 		mocks.setTimeoutMock.mockResolvedValue(undefined)
 	})
 
-	it('T1: registers exactly BYTEBOT_TOOLS.length handlers (17)', () => {
+	it('T1: registers exactly LUSE_TOOLS.length handlers (17)', () => {
 		const stub = new StubMcpServer()
-		registerBytebotTools(stub as never)
-		expect(stub.registered).toHaveLength(BYTEBOT_TOOLS.length)
+		registerLuseTools(stub as never)
+		expect(stub.registered).toHaveLength(LUSE_TOOLS.length)
 		expect(stub.registered).toHaveLength(17)
 	})
 
-	it('T2: every BYTEBOT_TOOL_NAMES entry has a registered handler', () => {
+	it('T2: every LUSE_TOOL_NAMES entry has a registered handler', () => {
 		const stub = new StubMcpServer()
-		registerBytebotTools(stub as never)
+		registerLuseTools(stub as never)
 		const registeredNames = new Set(stub.registered.map((r) => r.name))
-		for (const name of BYTEBOT_TOOL_NAMES) {
+		for (const name of LUSE_TOOL_NAMES) {
 			expect(registeredNames.has(name)).toBe(true)
 			expect(typeof HANDLERS[name]).toBe('function')
 		}
@@ -143,7 +143,7 @@ describe('registerBytebotTools', () => {
 
 	it('T3: computer_screenshot returns image content + isError:false; captureScreenshot called once', async () => {
 		const stub = new StubMcpServer()
-		registerBytebotTools(stub as never)
+		registerLuseTools(stub as never)
 		const handler = stub.getHandler('computer_screenshot')!
 		const result = (await handler({})) as {
 			content: Array<{type: string; data?: string; mimeType?: string; text?: string}>
@@ -159,7 +159,7 @@ describe('registerBytebotTools', () => {
 
 	it('T4: computer_click_mouse calls clickMouse(args), waits 750ms, takes post-action screenshot', async () => {
 		const stub = new StubMcpServer()
-		registerBytebotTools(stub as never)
+		registerLuseTools(stub as never)
 		const handler = stub.getHandler('computer_click_mouse')!
 		const args = {coordinates: {x: 50, y: 60}, button: 'left' as const, clickCount: 1}
 		const result = (await handler(args)) as {
@@ -182,7 +182,7 @@ describe('registerBytebotTools', () => {
 
 	it('T5: computer_wait with duration=500 awaits 500ms timer, returns text-only content', async () => {
 		const stub = new StubMcpServer()
-		registerBytebotTools(stub as never)
+		registerLuseTools(stub as never)
 		const handler = stub.getHandler('computer_wait')!
 		const result = (await handler({duration: 500})) as {
 			content: Array<{type: string; text?: string}>
@@ -200,7 +200,7 @@ describe('registerBytebotTools', () => {
 
 	it('T6: computer_cursor_position calls getCursorPosition, returns text-only (no screenshot)', async () => {
 		const stub = new StubMcpServer()
-		registerBytebotTools(stub as never)
+		registerLuseTools(stub as never)
 		const handler = stub.getHandler('computer_cursor_position')!
 		const result = (await handler({})) as {
 			content: Array<{type: string; text?: string}>
@@ -218,7 +218,7 @@ describe('registerBytebotTools', () => {
 
 	it('T7: set_task_status status=needs_help returns _liv_meta with kind:needs-help', async () => {
 		const stub = new StubMcpServer()
-		registerBytebotTools(stub as never)
+		registerLuseTools(stub as never)
 		const handler = stub.getHandler('set_task_status')!
 		const result = (await handler({status: 'needs_help', description: 'cannot find login form'})) as {
 			content: Array<{type: string; text?: string}>
@@ -230,14 +230,14 @@ describe('registerBytebotTools', () => {
 		expect(result._liv_meta).toBeDefined()
 		expect(result._liv_meta?.kind).toBe('needs-help')
 		expect(result._liv_meta?.message).toBe('cannot find login form')
-		expect(result._liv_meta?.tool).toBe('mcp_bytebot_set_task_status')
+		expect(result._liv_meta?.tool).toBe('mcp_luse_set_task_status')
 		// content text starts with NEEDS_HELP literal per D-NATIVE-08.
 		expect(result.content[0].text).toMatch(/^NEEDS_HELP:/)
 	})
 
 	it('T8: set_task_status status=completed returns _liv_meta kind:completed', async () => {
 		const stub = new StubMcpServer()
-		registerBytebotTools(stub as never)
+		registerLuseTools(stub as never)
 		const handler = stub.getHandler('set_task_status')!
 		const result = (await handler({status: 'completed', description: 'all done'})) as {
 			content: Array<{type: string; text?: string}>
@@ -253,7 +253,7 @@ describe('registerBytebotTools', () => {
 
 	it('T9: create_task returns _liv_meta kind:task-created with args', async () => {
 		const stub = new StubMcpServer()
-		registerBytebotTools(stub as never)
+		registerLuseTools(stub as never)
 		const handler = stub.getHandler('create_task')!
 		const args = {description: 'do thing', type: 'IMMEDIATE', priority: 'HIGH'}
 		const result = (await handler(args)) as {
@@ -272,7 +272,7 @@ describe('registerBytebotTools', () => {
 	it('T10: handler that throws (mocked clickMouse) returns isError:true with error message', async () => {
 		mocks.clickMouse.mockRejectedValueOnce(new Error('nut-js exploded'))
 		const stub = new StubMcpServer()
-		registerBytebotTools(stub as never)
+		registerLuseTools(stub as never)
 		const handler = stub.getHandler('computer_click_mouse')!
 		const result = (await handler({
 			coordinates: {x: 1, y: 2},
@@ -291,7 +291,7 @@ describe('registerBytebotTools', () => {
 
 	it('T11: computer_application valid name calls openOrFocus; invalid name → isError:true', async () => {
 		const stub = new StubMcpServer()
-		registerBytebotTools(stub as never)
+		registerLuseTools(stub as never)
 		const handler = stub.getHandler('computer_application')!
 
 		// Valid: openOrFocus mock returns success.
@@ -311,7 +311,7 @@ describe('registerBytebotTools', () => {
 
 	it('T12: computer_read_file calls readFileBase64 and wraps result as MCP content', async () => {
 		const stub = new StubMcpServer()
-		registerBytebotTools(stub as never)
+		registerLuseTools(stub as never)
 		const handler = stub.getHandler('computer_read_file')!
 		const result = (await handler({path: '/tmp/foo.txt'})) as {
 			content: Array<{type: string; text?: string; data?: string; mimeType?: string}>

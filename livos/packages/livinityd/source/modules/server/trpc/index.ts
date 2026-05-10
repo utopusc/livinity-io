@@ -39,7 +39,7 @@ import apiKeys from '../../api-keys/routes.js'
 // v31.0 Phase 71-05 — Computer Use desktop session control (CU-FOUND-04).
 // Top-level `computerUse` namespace exposes getStatus / startStandaloneSession
 // / stopSession. All three are added to httpOnlyPaths in ./common.ts because
-// the mutations may take 1-15s (Bytebot spawn budget) and must survive WS
+// the mutations may take 1-15s (upstream-bytebot container spawn budget) and must survive WS
 // reconnect.
 import {computerUseRouter} from '../../computer-use/routes.js'
 // v32 Phase 85 (UI slice) — agents tRPC router (Wave 2). Consumes the Wave 1

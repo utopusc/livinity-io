@@ -160,7 +160,7 @@ describe('captureScreenshot', () => {
  * Spec: 100-09-01-PLAN.md Task 1.
  *   T-09-01-01 — windowId=0x4280002 → argv[0..1] = ['-i', '0x4280002'].
  *   T-09-01-02 — no opts → argv = [<tempPath>] (no `-i`, host-display path
- *                UNCHANGED — preserves host bytebot stream-desktop captures).
+ *                UNCHANGED — preserves host Luse stream-desktop captures).
  *   T-09-01-03 — windowId=10597059 (0xa1b2c3) → argv contains `0xa1b2c3`,
  *                argv MUST NOT contain decimal `'10597059'`.
  */

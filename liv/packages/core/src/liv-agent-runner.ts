@@ -31,8 +31,8 @@
  *     matching `tool_result` arrives.
  *   - D-16 computer-use stub: when `categorizeTool(name) === 'computer-use'`,
  *     emit running snapshot AND IMMEDIATELY emit error snapshot with literal
- *     "Computer use not available until P71 (Bytebot integration)" — never
- *     calls into the SDK's actual execution path. Real Bytebot bridge is P71.
+ *     "Computer use not available until P71 (Luse integration)" — never
+ *     calls into the SDK's actual execution path. Real Luse bridge is P71.
  *   - Cooperative stop signal: poll `runStore.getControl(runId)` at the top
  *     of every event handler invocation (Strategy A — every event = 1 iter).
  *     Satisfies ROADMAP P67 success criterion #2 ("stop within 1 iter").
@@ -238,7 +238,9 @@ const SDK_EVENT_TOOL_RESULT = 'liv:tool_result';
 
 /**
  * Map tool name → ToolCategory. Pattern coverage matches must-have list:
- *   - mcp_bytebot_*                   ⇒ 'computer-use'  (Plan 72-native-05 D-NATIVE-11)
+ *   - mcp_luse_* / mcp_bytebot_*      ⇒ 'computer-use'  (Plan 72-native-05 D-NATIVE-11;
+ *                                                        legacy bytebot prefix kept for
+ *                                                        in-flight skills per D-100-10-I)
  *   - computer_use_* / bytebot_*      ⇒ 'computer-use'  (P67-02 D-16 fallback)
  *   - mcp_* / mcp-*                   ⇒ 'mcp'
  *   - browser-* / browser_*           ⇒ 'browser'
@@ -250,20 +252,29 @@ const SDK_EVENT_TOOL_RESULT = 'liv:tool_result';
  *   - web-scrape / web_scrape         ⇒ 'webScrape'
  *   - everything else                 ⇒ 'generic'
  *
- * Order matters: the `mcp_bytebot_*` check fires BEFORE the generic `mcp_*`
- * rule so the bytebot MCP server's tools route to the computer-use UI track
- * (LivNeedsHelpCard / LivDesktopViewer) instead of the generic MCP fallback.
- * The `computer_use_*` / `bytebot_*` prefix check is preserved for any
- * legacy non-MCP-prefixed tool names (P67-02 D-16 stub fallback).
+ * Order matters: the `mcp_luse_*` / `mcp_bytebot_*` check fires BEFORE the
+ * generic `mcp_*` rule so the Luse MCP server's tools route to the
+ * computer-use UI track (LivNeedsHelpCard / LivDesktopViewer) instead of the
+ * generic MCP fallback. The `computer_use_*` / `bytebot_*` prefix check is
+ * preserved for any legacy non-MCP-prefixed tool names (P67-02 D-16 stub
+ * fallback). The legacy `mcp_bytebot_*` prefix is retained as a categorize
+ * fallback so in-flight v<=2 skills (D-100-10-I) still hit computer-use
+ * during the v34 retirement window.
  */
 export function categorizeTool(toolName: string): ToolCategory {
-  // Plan 72-native-05 D-NATIVE-11 — bytebot MCP server's tools (named
-  // `mcp_bytebot_<bytebot-tool>` by the McpClientManager prefixing rule)
-  // must hit the computer-use track BEFORE the generic mcp_* rule wins.
-  if (toolName.startsWith('mcp_bytebot_')) {
+  // Plan 72-native-05 D-NATIVE-11 — Luse MCP server's tools (named
+  // `mcp_luse_<luse-tool>` by the McpClientManager prefixing rule, post
+  // P100-10-02 rename from bytebot) must hit the computer-use track BEFORE
+  // the generic mcp_* rule wins. Legacy `mcp_bytebot_*` prefix is kept here
+  // as a categorize fallback for in-flight v<=2 skills (D-100-10-I).
+  if (toolName.startsWith('mcp_luse_') || toolName.startsWith('mcp_bytebot_')) {
     return 'computer-use';
   }
-  if (toolName.startsWith('computer_use_') || toolName.startsWith('bytebot_')) {
+  if (
+    toolName.startsWith('computer_use_') ||
+    toolName.startsWith('luse_') ||
+    toolName.startsWith('bytebot_')
+  ) {
     return 'computer-use';
   }
   if (toolName.startsWith('mcp_') || toolName.startsWith('mcp-')) {
@@ -802,13 +813,13 @@ export class LivAgentRunner {
       // Use console.warn (logger import would create a side-effect cycle
       // for tests; the warning is a one-off operator hint, not load-bearing).
       console.warn(
-        `[LivAgentRunner] computer-use tool "${block.name}" stubbed until P71 (Bytebot integration)`,
+        `[LivAgentRunner] computer-use tool "${block.name}" stubbed until P71 (Luse integration)`,
       );
 
       const stubbed: ToolCallSnapshot = {
         ...snapshot,
         toolResult: {
-          output: 'Computer use not available until P71 (Bytebot integration)',
+          output: 'Computer use not available until P71 (Luse integration)',
           isError: true,
           ts: Date.now(),
         },

@@ -12,7 +12,7 @@
  *              keyboard.* (pressKey, releaseKey, type), Point, Key, Button — all from
  *              @nut-tree-fork/nut-js@^4.2.6.
  *
- * Strategy: pure async functions, one per 72-01 BYTEBOT_TOOLS schema. Param shapes match
+ * Strategy: pure async functions, one per 72-01 LUSE_TOOLS schema. Param shapes match
  * the upstream tool schemas verbatim so 72-native-05's MCP handlers are direct dispatchers.
  *
  * Apache 2.0 NOTICE: full license text mirrored at
@@ -140,7 +140,7 @@ function expandKeyToken(name: string): string[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared types (mirror 72-01 BYTEBOT_TOOLS schema field shapes verbatim).
+// Shared types (mirror 72-01 LUSE_TOOLS schema field shapes verbatim).
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface Coords {

@@ -467,7 +467,7 @@ class Server {
 		})
 
 		// ── Computer Use Desktop Gateway (Phase 71-05 / CU-FOUND-02 / CU-FOUND-04) ──
-		// Sealed-off subdomain for Bytebot containers — runs AFTER the generic
+		// Sealed-off subdomain for upstream-bytebot containers — runs AFTER the generic
 		// app-gateway (which falls through for multi-segment subdomains like
 		// `desktop.bruce` thanks to its `subdomain.includes('.')` check at
 		// line 338) and BEFORE the `/app/:appId` proxy. Path filter restricts

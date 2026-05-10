@@ -1,7 +1,8 @@
 /**
- * Bytebot Agent System Prompt
+ * Luse Agent System Prompt (renamed P100-10-02 from Bytebot per D-100-10-B;
+ * legacy LivOS layer name was "Bytebot system prompt".)
  *
- * Copied verbatim from Bytebot's open-source agent code (Apache 2.0):
+ * Copied verbatim from upstream's open-source agent code (Apache 2.0):
  *   Source: https://github.com/bytebot-ai/bytebot
  *   File:   packages/bytebot-agent/src/agent/agent.constants.ts
  *           (verified at WebFetch on 2026-05-04;
@@ -40,7 +41,7 @@
  * mirrored at .planning/licenses/bytebot-LICENSE.txt.
  */
 
-export const BYTEBOT_SYSTEM_PROMPT: string = `
+export const LUSE_SYSTEM_PROMPT: string = `
 You are Liv, a highly-reliable AI engineer operating a virtual computer whose display measures 1280 x 960 pixels.
 
 The current date is ${new Date().toLocaleDateString()}. The current time is ${new Date().toLocaleTimeString()}. The current timezone is ${Intl.DateTimeFormat().resolvedOptions().timeZone}.
@@ -201,7 +202,7 @@ Think before each move, keep the desktop clean when you're done, and **always** 
 `;
 
 /**
- * Concatenates a base system prompt with the Bytebot computer-use prompt.
+ * Concatenates a base system prompt with the Luse computer-use prompt.
  *
  * Used by Plan 72-03 (LivAgentRunner wiring) to merge the computer-use
  * instructions into the runner's system prompt when the active task is
@@ -209,8 +210,8 @@ Think before each move, keep the desktop clean when you're done, and **always** 
  * boundary visually clean for both the model and any debug log readers.
  *
  * @param basePrompt - The caller's base system prompt (e.g. LivAgentRunner default)
- * @returns `${basePrompt}\n\n${BYTEBOT_SYSTEM_PROMPT}`
+ * @returns `${basePrompt}\n\n${LUSE_SYSTEM_PROMPT}`
  */
 export function injectComputerUseSystemPrompt(basePrompt: string): string {
-	return `${basePrompt}\n\n${BYTEBOT_SYSTEM_PROMPT}`;
+	return `${basePrompt}\n\n${LUSE_SYSTEM_PROMPT}`;
 }

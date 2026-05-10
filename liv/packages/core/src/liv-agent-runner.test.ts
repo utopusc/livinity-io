@@ -530,21 +530,27 @@ async function main(): Promise<void> {
     assert(categorizeTool('foobar-quux') === 'generic', 'foobar-quux');
   });
 
-  // ── Test 7 (NEW — Plan 72-native-05): mcp_bytebot_* prefix patch ──────
+  // ── Test 7 (NEW — Plan 72-native-05; renamed P100-10-02): mcp_luse_* prefix patch ─
   // Per 72-native-05 D-NATIVE-11 / categorize patch must-have:
-  //   - `mcp_bytebot_*` MUST be the FIRST checked prefix and map to
+  //   - `mcp_luse_*` MUST be among the FIRST checked prefixes and map to
   //     'computer-use' (NOT 'mcp', which would otherwise win because the
-  //     existing `mcp_*` rule fires before any bytebot rule).
-  //   - Existing `mcp_*` for non-bytebot servers must still map to 'mcp'.
+  //     existing `mcp_*` rule fires before any Luse rule).
+  //   - Existing `mcp_*` for non-Luse servers must still map to 'mcp'.
   //   - Existing P67-02 `computer_use_*` fallback must still map to 'computer-use'.
-  await test('categorizeTool — mcp_bytebot_* prefix patch (Plan 72-native-05)', async () => {
+  //   - Legacy `mcp_bytebot_*` retained as in-flight skill fallback (D-100-10-I).
+  await test('categorizeTool — mcp_luse_* prefix patch (P100-10-02 rename)', async () => {
     assert(
-      categorizeTool('mcp_bytebot_computer_screenshot') === 'computer-use',
-      'mcp_bytebot_computer_screenshot must be computer-use',
+      categorizeTool('mcp_luse_computer_screenshot') === 'computer-use',
+      'mcp_luse_computer_screenshot must be computer-use',
     );
     assert(
-      categorizeTool('mcp_bytebot_set_task_status') === 'computer-use',
-      'mcp_bytebot_set_task_status must be computer-use',
+      categorizeTool('mcp_luse_set_task_status') === 'computer-use',
+      'mcp_luse_set_task_status must be computer-use',
+    );
+    // D-100-10-I — legacy bytebot prefix still routes correctly for in-flight skills.
+    assert(
+      categorizeTool('mcp_bytebot_computer_screenshot') === 'computer-use',
+      'legacy mcp_bytebot_* must still route to computer-use (D-100-10-I)',
     );
     assert(
       categorizeTool('mcp_filesystem_read') === 'mcp',
