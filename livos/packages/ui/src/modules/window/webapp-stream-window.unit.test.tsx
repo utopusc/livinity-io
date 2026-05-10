@@ -315,3 +315,87 @@ describe('Phase 100-09-08 action bar 2-mode chat input', () => {
 		expect(bottomSrc).toMatch(/DEPRECATED 2026-05-10 \(P100-09-08\)/)
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 100-09-09 — Teach UX rewrite v2: red icon button + click count.
+//
+// 09-06 shipped a `TeachRecordingOverlay` at the top-right of the WebApp
+// window — a pulse-red badge showing "Recording · N events" with a
+// separate Stop button. User feedback after the 09-06 deploy: "Suan
+// teach e tikliyorum geri tikladigimda duruyor bu guzel ama tikladiktan
+// sonra kirmizi buton olsun teach. sag yukarida stop butonu olmasin ve
+// sure saymasin sadece clickleri saysin."
+//
+// Translation: "Right now I click teach, click again it stops — that's
+// good. But after clicking, the teach button should be red. No stop
+// button at top-right, no time counter, only count clicks."
+//
+// Fix: the Teach ICON BUTTON in the floating action bar (the same one
+// that started recording) becomes red while `isRecording` is true and
+// renders a small numeric badge showing the click count
+// (`events.length` from `useTeachRecorder`). The top-right
+// `TeachRecordingOverlay` JSX render is REMOVED from
+// `webapp-stream-window.tsx`. Clicking the now-red Teach icon button
+// stops recording — same flow as before (drawer-store toggle → existing
+// useEffect → recorder.stop + SaveSkillDialog).
+//
+// Source-text invariants (D-NO-NEW-DEPS — no React Testing Library)
+// matching the file's established precedent.
+// ─────────────────────────────────────────────────────────────────
+
+describe('Phase 100-09-09 teach button red + click count badge', () => {
+	it('T-09-09-01: floating bar IconBar Teach button background flips to bg-red-500 when isRecording', () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		// The Teach icon button's className must include a conditional
+		// `bg-red-500` (with optional opacity suffix) tied to the recording
+		// state. Lock the literal class + the conditional shape.
+		expect(barSrc).toMatch(/bg-red-500/)
+		// The active-state branch must be `isRecording` (NOT the open-drawer
+		// `active` flag from 09-06's earlier wire — that one used `bg-primary`).
+		// Look for an `isRecording &&` conditional applying a red class.
+		expect(barSrc).toMatch(/isRecording\s*&&\s*['"`][^'"`]*bg-red-500/)
+	})
+
+	it('T-09-09-02: floating bar IconBar reads clickCount from recorder events.length', () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		// Lock the literal `events.length` access — the plan's must_haves
+		// key_link pattern. Click count is derived from the recorder's
+		// events array (not a time elapsed counter).
+		expect(barSrc).toMatch(/events\.length/)
+		// And it must NOT be a `Date.now()` / time-elapsed accessor.
+		expect(barSrc).not.toMatch(/Date\.now\(\)\s*-\s*startedAt/)
+	})
+
+	it('T-09-09-03: floating bar IconBar renders a numeric click-count badge when isRecording && count > 0', () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		// The badge JSX is positioned at the top-right corner of the button
+		// (`-top-1 -right-1` per the plan's interfaces sketch). Lock the
+		// literal class shape so a future edit can't silently break the
+		// badge position.
+		expect(barSrc).toMatch(/-top-1\s+-right-1/)
+		// And the conditional: render badge only when recording AND count > 0.
+		expect(barSrc).toMatch(/isRecording\s*&&\s*clickCount\s*>\s*0/)
+	})
+
+	it('T-09-09-04: webapp-stream-window.tsx no longer renders <TeachRecordingOverlay/> (top-right widget removed)', () => {
+		// Sentinel: the 09-06 top-right recording overlay JSX render is gone.
+		// The component function definition may stay (revert safety) but
+		// there must be no JSX render call.
+		expect(SRC).not.toMatch(/<TeachRecordingOverlay\b/)
+		// And no recorder.recording-gated render block that includes the
+		// stop button + event count text (the canonical shape of the old
+		// overlay — `Recording · N events` text + Stop button).
+		expect(SRC).not.toMatch(/recorder\.recording\s*\?\s*\(\s*<TeachRecordingOverlay/)
+	})
+
+	it('T-09-09-05: webapp-teach-popup-host.tsx contains no Date.now / elapsed / seconds time-display', () => {
+		const popupSrc = safeRead(resolve(__dirname, 'app-contents/webapp-teach-popup-host.tsx'))
+		expect(popupSrc.length).toBeGreaterThan(0)
+		// No Date.now() — toast text must not compute elapsed time.
+		expect(popupSrc).not.toMatch(/Date\.now\(/)
+		// No "elapsed" word in any string literal.
+		expect(popupSrc).not.toMatch(/elapsed/i)
+		// No "seconds" word in any string literal.
+		expect(popupSrc).not.toMatch(/seconds/i)
+	})
+})
