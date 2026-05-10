@@ -1,4 +1,25 @@
-// Phase 100-04 — WebAppTeachDrawer.
+// Phase 100-09-06 — DEPRECATED.
+//
+// Replaced by:
+//   - WebAppTeachPopupHost (toast popups during recording — top-right,
+//     ~2s auto-dismiss per captured event)
+//   - WebAppSkillsPopover (top-right Skills button + Radix popover
+//     listing saved skills with Play/Delete; replaces this drawer's
+//     skills sidebar per D-100-09-E1)
+//   - SaveSkillDialog (already in webapp-stream-window.tsx; opens on
+//     stop-recording when events captured)
+//
+// Per user intent ("teach mode da da aynisi gecerli tiklandiginda panel
+// acilmasin onun yerine Click yapildiktan sonra Pop up a yazsin step i").
+//
+// File and named export retained for backwards-compat. Sheet drawer host
+// in webapp-stream-window.tsx no longer renders this component (the
+// `teach` branch is excluded from the Sheet's `open` prop and from the
+// drawer body). Future v34 cleanup may delete the file if no consumers
+// surface during UAT.
+//
+// ─────────────────────────────────────────────────────────────────
+// Phase 100-04 — WebAppTeachDrawer (historical context).
 //
 // V33-MULTI-04 / G-100-D D2: hosts the Teach-mode surfaces (skills
 // sidebar + replay scrubber + recorder controls). Mounted by

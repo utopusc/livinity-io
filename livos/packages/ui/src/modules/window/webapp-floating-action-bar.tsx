@@ -17,6 +17,15 @@
 // + Auto buttons unchanged. Per user "Chat penceresi olmasin sadece yazi
 // yazalim. Butonlar kalsin o sirada."
 //
+// Phase 100-09-06: Teach icon REPURPOSED. Instead of `toggle(webappId,
+// 'teach')` opening the Sheet drawer, it dispatches `toggleTeachRecording`
+// on the same store, which flips the per-webappId recording flag. The
+// recorder lifecycle (start/stop) is driven from a useEffect inside
+// webapp-stream-window.tsx that subscribes to the flag. Active state
+// for the Teach icon now reflects `isRecording`. Auto button unchanged
+// (still opens Sheet drawer). Per user "altadki teach mode da da aynisi
+// gecerli tiklandiginda panel acilmasin".
+//
 // Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts unchanged.
 
 import {motion} from 'framer-motion'
@@ -60,6 +69,10 @@ export function WebAppFloatingActionBar({
 	// instead of opening the Sheet drawer.
 	const toggleChatLog = useWebAppDrawerStore((s) => s.toggleChatLog)
 	const chatLogExpanded = useWebAppDrawerStore((s) => s.chatLogExpandedByWebappId[webappId] ?? false)
+	// Phase 100-09-06: Teach icon toggles the per-webappId recording flag
+	// (drives recorder lifecycle from webapp-stream-window.tsx). NOT the drawer.
+	const toggleTeachRecording = useWebAppDrawerStore((s) => s.toggleTeachRecording)
+	const isRecording = useWebAppDrawerStore((s) => s.isRecordingByWebappId[webappId] ?? false)
 
 	return (
 		<motion.div
@@ -79,8 +92,16 @@ export function WebAppFloatingActionBar({
 				<div className='flex items-center gap-3'>
 					{MODES.map(({id, label, Icon}) => {
 						// Phase 100-09-05: Chat icon's active state mirrors the inline
-						// bottom-bar log expanded state; Teach/Auto retain drawer state.
-						const active = id === 'chat' ? chatLogExpanded : open === id
+						// bottom-bar log expanded state.
+						// Phase 100-09-06: Teach icon's active state mirrors the
+						// per-webappId recording flag (drawer Teach mode REMOVED).
+						// Auto retains drawer state.
+						const active =
+							id === 'chat'
+								? chatLogExpanded
+								: id === 'teach'
+									? isRecording
+									: open === id
 						return (
 							<Tooltip key={id}>
 								<TooltipTrigger asChild>
@@ -97,6 +118,10 @@ export function WebAppFloatingActionBar({
 													// Phase 100-09-05: Chat icon toggles the inline
 													// bottom-bar log (drawer Chat mode REMOVED).
 													toggleChatLog(webappId)
+												} else if (id === 'teach') {
+													// Phase 100-09-06: Teach icon toggles per-webappId
+													// recording flag (drawer Teach mode REMOVED).
+													toggleTeachRecording(webappId)
 												} else {
 													toggle(webappId, id)
 												}
