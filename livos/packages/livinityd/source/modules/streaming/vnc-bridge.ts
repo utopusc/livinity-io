@@ -44,35 +44,60 @@ export type VncSpawnFactory = (
 ) => ChildProcess
 
 export type SpawnVncOpts = {
-	wid: number
+	/** Single-window capture (legacy / pre-100-10-01) — `x11vnc -id 0xHEX`. */
+	wid?: number
+	/** Whole-display capture (Phase 100-10-01 / D-100-10-A) — `x11vnc -display :N`.
+	 *  When set, takes precedence over `wid`. The DISPLAY env prefix is also
+	 *  flipped to this value so x11vnc connects to the per-WebApp Xvfb. */
+	display?: string
 	rfbPort: number
 	spawnFactory?: VncSpawnFactory
 	logger?: VncBridgeLogger
 }
 
 /**
- * Spawn x11vnc bound to a single Chrome window (D-99-01 canonical argv).
+ * Spawn x11vnc bound to either a single Chrome window (D-99-01 legacy mode,
+ * `-id 0xHEX`) OR a whole X display (Phase 100-10-01 D-100-10-A,
+ * `-display :N`). When `opts.display` is provided it takes precedence — the
+ * argv switches to whole-display capture and DISPLAY in the env prefix is
+ * pinned to that display so x11vnc connects to the per-WebApp Xvfb.
+ *
+ * Whole-display mode is what eliminates the ISSUE 2 black-overlap from
+ * 100-10-CONTEXT (each WebApp owns its display, no compositor stacking) and
+ * the ISSUE 1 "Chrome itself" capture (whole-display capture sees Chrome's
+ * full pixels regardless of window state).
  *
  * Returns the ChildProcess. Caller is responsible for killing it on
  * lifecycle close (window-gone, streams.stop).
  */
 export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 	const factory = opts.spawnFactory ?? nodeSpawn
-	const widHex = '0x' + opts.wid.toString(16)
-	// D-99-01 canonical argv (locked in 99-01-SUMMARY.md). Hex wid with 0x prefix.
-	// The sudo -n -u bruce + DISPLAY pattern matches window-manager.ts Chrome
-	// spawn. Pitfall 1 mitigation: x11vnc inherits bruce's X session via the
-	// env injection, NOT via env_keep on sudoers.
-	// P100-08-02: XAUTHORITY removed — x11vnc on Xvfb :1 (Xvfb -ac) needs no cookie.
-	// D-100-X11VNC-CANONICAL relaxed for this single env change per 100-08-CONTEXT.
+	// Phase 100-10-01: -display takes precedence over -id when both are
+	// provided. Display string also overrides the env-prefix DISPLAY so the
+	// x11vnc child connects to the per-WebApp Xvfb (`:10`, `:11`, ...) instead
+	// of the global :1.
+	const displayForEnv = opts.display ?? WEBAPPS_X11_ENV.DISPLAY
+	const captureFlags: string[] =
+		opts.display !== undefined
+			? ['-display', opts.display]
+			: ['-id', '0x' + (opts.wid ?? 0).toString(16)]
+	if (opts.display === undefined && (opts.wid === undefined || opts.wid <= 0)) {
+		throw new Error(
+			`vnc-bridge.spawnVncForWindow: must provide either {display} or {wid>0} (got display=${opts.display}, wid=${opts.wid})`,
+		)
+	}
+	// D-99-01 canonical argv (locked in 99-01-SUMMARY.md) + D-100-10-A whole-display
+	// branch. The sudo -n -u bruce + DISPLAY pattern matches window-manager.ts
+	// Chrome spawn. Pitfall 1 mitigation: x11vnc inherits bruce's X session via
+	// the env injection, NOT via env_keep on sudoers.
+	// P100-08-02: XAUTHORITY removed — x11vnc on Xvfb (-ac) needs no cookie.
 	const args = [
 		'-n',
 		'-u',
 		'bruce',
-		`DISPLAY=${WEBAPPS_X11_ENV.DISPLAY}`,
+		`DISPLAY=${displayForEnv}`,
 		'/usr/bin/x11vnc',
-		'-id',
-		widHex,
+		...captureFlags,
 		'-rfbport',
 		String(opts.rfbPort),
 		'-localhost',
@@ -90,11 +115,14 @@ export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 	// D-99-07: stderr tail diagnostic (mirrors stream-manager.ts encoder pattern,
 	// originally landed in commit 782cafeb for ffmpeg). Last 50 lines kept;
 	// dumped to logger.error on non-zero exit.
+	// Phase 100-10-01: log tag reflects capture mode — `display=:N` for whole-display,
+	// `wid=0xHEX` for legacy single-window.
+	const logTag = opts.display !== undefined ? `display=${opts.display}` : `wid=${opts.wid}`
 	const stderrTail: string[] = []
 	proc.stderr?.on('data', (chunk: Buffer) => {
 		const line = chunk.toString('utf-8').trim()
 		if (!line) return
-		opts.logger?.verbose?.(`x11vnc[wid=${opts.wid}] stderr: ${line}`)
+		opts.logger?.verbose?.(`x11vnc[${logTag}] stderr: ${line}`)
 		stderrTail.push(line)
 		if (stderrTail.length > 50) stderrTail.shift()
 	})
@@ -106,7 +134,7 @@ export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 					? `\n--- x11vnc stderr (last ${stderrTail.length}) ---\n${stderrTail.join('\n')}`
 					: ' (no stderr captured)'
 			opts.logger?.error(
-				`x11vnc[wid=${opts.wid}] crashed (code=${code} signal=${signal} argv=${JSON.stringify(args)})${tailMsg}`,
+				`x11vnc[${logTag}] crashed (code=${code} signal=${signal} argv=${JSON.stringify(args)})${tailMsg}`,
 			)
 		}
 	})

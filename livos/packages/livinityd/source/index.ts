@@ -40,6 +40,11 @@ import {WEBAPPS_X11_ENV} from './modules/webapps/window-discovery.js'
 // Phase 100-08-01 — dedicated Xvfb :1 + fluxbox WM lifecycle (D-100-08-A).
 import {startXvfb, type XvfbHandle} from './modules/webapps/xvfb-display.js'
 import {startFluxbox, type FluxboxHandle} from './modules/webapps/fluxbox-wm.js'
+// Phase 100-10-01 — per-WebApp X display allocator (D-100-10-A). Hands out
+// `:10`, `:11`, ... per WebApp spawn so each WebApp owns its own Xvfb +
+// fluxbox + x11vnc whole-display capture. Eliminates cross-window stacking
+// (Issue 2) and lets x11vnc capture Chrome's full pixels (Issue 1).
+import {createDisplayAllocator} from './modules/webapps/display-allocator.js'
 // Phase 100-08-04 — McpConfigManager + bytebot server path threaded into
 // WebAppWindowManager so spawn/close lifecycle registers a per-WebApp
 // bytebot MCP child via Redis pub-sub (liv-core's McpClientManager
@@ -388,9 +393,13 @@ export default class Livinityd {
 				`StreamManager started (cap=${this.streamManager.getCap()})`,
 			)
 
-			// Phase 100-08-01 — Xvfb :1 + fluxbox WM lifecycle (D-100-08-A).
-			// Must come BEFORE WebAppWindowManager because subsequent Chrome
-			// spawns target :1 (100-08-02 cutover).
+			// Phase 100-08-01 fallback Xvfb on :1 — back-compat for non-WebApp
+			// surfaces; per-WebApp Xvfb in 100-10-01 supersedes for WebApp
+			// spawns (each WebApp now allocates its own :10, :11, ... via the
+			// DisplayAllocator below). The :1 + fluxbox lifecycle here stays
+			// so legacy code paths that don't go through WebAppWindowManager
+			// (computer-use container streams, ad-hoc x11 surfaces, etc.)
+			// continue to find a working display.
 			try {
 				this.xvfbHandle = await startXvfb({
 					display: ':1',
@@ -406,11 +415,12 @@ export default class Livinityd {
 				})
 				streamingLogger.info(`fluxbox up on :1 (pid=${this.fluxboxHandle.pid})`)
 			} catch (err) {
-				// Non-fatal — livinityd still boots; webapp.window.spawn will
-				// return SERVICE_UNAVAILABLE because Chromes can't reach :1.
-				// Operator restart (`systemctl restart livos`) recovers.
+				// Non-fatal — livinityd still boots; legacy non-WebApp X11
+				// consumers will be broken until recovery. Per-WebApp paths
+				// still work because they allocate their own :10/:11/...
+				// independent of this :1 fallback.
 				streamingLogger.error(
-					'Failed to start Xvfb :1 / fluxbox; WebApps will be broken until recovery',
+					'Failed to start Xvfb :1 / fluxbox (legacy fallback); per-WebApp displays still allocatable',
 					err,
 				)
 			}
@@ -437,6 +447,11 @@ export default class Livinityd {
 			const webappMcpConfigManager = new McpConfigManager(this.ai.redis)
 			const bytebotServerPath =
 				process.env.BYTEBOT_MCP_SERVER_PATH ?? DEFAULT_BYTEBOT_MCP_SERVER_PATH
+			// Phase 100-10-01 — per-WebApp X display allocator (D-100-10-A).
+			// Hands out `:10`, `:11`, ... per WebApp spawn. WebAppWindowManager
+			// stands up an Xvfb + fluxbox on each allocated display before
+			// Chrome spawns. close() tears them down and releases the slot.
+			const displayAllocator = createDisplayAllocator()
 			this.webappWindowManager = new WebAppWindowManager({
 				streamManager: this.streamManager,
 				spawn: x11Spawn as unknown as ConstructorParameters<
@@ -446,6 +461,10 @@ export default class Livinityd {
 				mcpConfigManager: webappMcpConfigManager,
 				bytebotServerPath,
 				bytebotMcpEnv: process.env,
+				// Phase 100-10-01: wire the per-WebApp display allocator. Each
+				// WebApp spawn now gets `:10`+/`:11`+/... + its own Xvfb +
+				// fluxbox; close() releases the slot.
+				displayAllocator,
 			})
 			this.webappWindowManager.startIdleCleanup()
 			webappLogger.info(
