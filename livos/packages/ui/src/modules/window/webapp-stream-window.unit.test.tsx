@@ -506,3 +506,62 @@ describe('Phase 100-10-05 UI cleanup: skill outside + stream full-fit + remove A
 		expect(containerSrc).toMatch(/WebAppFloatingSkillsButton/)
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 100-10-06 — chat in-place response (D-100-10-E / Issue 6).
+//
+// 09-08 shipped a 2-mode action bar ('icons' | 'chat-input') where
+// Send/Enter immediately returned to 'icons' mode. User feedback in
+// 100-10-CONTEXT (Issue 6) clarified that after sending, the response
+// should appear IN PLACE OF the input area — not somewhere else.
+//
+// Fix: extend the state machine to a 3-mode shape:
+//   'icons'         → default icon row (Chat / Teach).
+//   'chat-input'    → text input + Send + Close (X).
+//   'chat-response' → response area + Stop (while streaming) + Close (X).
+//
+// After Send/Enter, the bar flips to 'chat-response' (NOT 'icons'). The
+// response area reads `messages` + `isStreaming` from useWebAppAgent and
+// renders the latest assistant message with a streaming caret. The Stop
+// button (visible while streaming) calls `agent.stopStreaming()` — a new
+// alias for the existing `useAgentSocket.interrupt` runtime cancel (the
+// real cancel sends `{type: 'interrupt'}` over the WebSocket).
+//
+// Source-text invariants (D-NO-NEW-DEPS — no React Testing Library)
+// matching the file's established precedent.
+// ─────────────────────────────────────────────────────────────────
+
+describe('Phase 100-10-06 chat-response 3-mode state machine', () => {
+	it("T-10-06-01: webapp-drawer-store.ts ChatInputMode union extended to 'icons' | 'chat-input' | 'chat-response'", () => {
+		const storeSrc = safeRead(STORE_PATH)
+		expect(storeSrc).toMatch(
+			/export type ChatInputMode\s*=\s*['"]icons['"]\s*\|\s*['"]chat-input['"]\s*\|\s*['"]chat-response['"]/,
+		)
+	})
+
+	it("T-10-06-02: webapp-floating-action-bar.tsx has a `mode === 'chat-response'` branch", () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		expect(barSrc).toMatch(/mode\s*===\s*['"]chat-response['"]/)
+	})
+
+	it('T-10-06-03: webapp-floating-action-bar.tsx defines a ChatResponseBar component', () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		expect(barSrc).toMatch(/function ChatResponseBar\b/)
+	})
+
+	it("T-10-06-04: ChatInputBar Send/Enter wires to setChatInputMode(webappId, 'chat-response')", () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		expect(barSrc).toMatch(/setChatInputMode\(\s*webappId\s*,\s*['"]chat-response['"]/)
+	})
+
+	it('T-10-06-05: ChatResponseBar Stop button click handler calls agent.stopStreaming()', () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		expect(barSrc).toMatch(/agent\.stopStreaming\(\)/)
+	})
+
+	it('T-10-06-06: ChatResponseBar reads agent.isStreaming AND messages for the live response panel', () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		expect(barSrc).toMatch(/agent\.isStreaming/)
+		expect(barSrc).toMatch(/\bmessages\b/)
+	})
+})
