@@ -43,9 +43,15 @@ import {SkillReplayScrubber} from '../skill-replay-scrubber'
 // Phase 100-09-05: WebAppChatDrawer import dropped — chat surface moved
 // inline via <WebAppChatBottomBar/> below. The drawer file is retained as
 // DEPRECATED reference target (see webapp-chat-drawer.tsx banner).
-import {WebAppTeachDrawer} from './webapp-teach-drawer'
+//
+// Phase 100-09-06: WebAppTeachDrawer import dropped — teach surface moved
+// to popup-per-event toasts (<WebAppTeachPopupHost/>) + top-right Skills
+// popover (<WebAppSkillsPopover/>). The drawer file is retained as
+// DEPRECATED reference target (see webapp-teach-drawer.tsx banner).
 import {WebAppAutoDrawer} from './webapp-auto-drawer'
 import {WebAppChatBottomBar} from './webapp-chat-bottom-bar'
+import {WebAppTeachPopupHost} from './webapp-teach-popup-host'
+import {WebAppSkillsPopover} from './webapp-skills-popover'
 
 import {Sheet, SheetContent} from '@/shadcn-components/ui/sheet'
 import {useWebAppDrawerStore} from '../webapp-drawer-store'
@@ -383,6 +389,14 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 	}, [vnc.containerRef, webappId, inputClickMutation, inputKeyMutation, inputTypeMutation, inputScrollMutation])
 
 	// 5. Mode (D-95-10 default 'chat'; D-95-MODE-LOCAL = local state only).
+	//
+	// Phase 100-09-06: `mode` local state retained ONLY for the source-text
+	// invariant in webapp-stream-window.unit.test.tsx (`useState<WebAppMode>('chat')`).
+	// The recorder lifecycle no longer reads it — that's now driven by the
+	// drawer-store `isRecordingByWebappId` flag (see useEffect below). The
+	// state hook is preserved as documentation of the historical mode
+	// machine without contributing to runtime behavior.
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	const [mode, setMode] = useState<WebAppMode>('chat')
 
 	// Phase 100-06 — drawer-open state moved to a Zustand store
@@ -392,6 +406,9 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 	// Toggling also fires WEBAPP_MODE_CHANGE_EVENT (legacy contract).
 	const openDrawer = useWebAppDrawerStore((s) => s.openByWebappId[webappId] ?? null)
 	const setOpenDrawer = useWebAppDrawerStore((s) => s.close)
+	// Phase 100-09-06 — recording flag drives recorder lifecycle (see useEffect below).
+	const isRecording = useWebAppDrawerStore((s) => s.isRecordingByWebappId[webappId] ?? false)
+	const toggleTeachRecording = useWebAppDrawerStore((s) => s.toggleTeachRecording)
 	// Phase 100-06: bar render moved to webapp-floating-action-bar.tsx;
 	// WEBAPP_MODE_CHANGE_EVENT dispatch lives there now. This component
 	// only subscribes to drawer state for the Sheet body.
@@ -436,35 +453,30 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 		}
 	}, [])
 
-	// Mode change → arm/disarm recorder. Switching INTO teach starts the
-	// recorder; switching OUT (or unmount) stops + opens the Save dialog
-	// when there is at least one captured event. Empty recordings short-
-	// circuit straight to discard via the recorder's internal cleanup.
-	const handleModeChange = useCallback(
-		(next: WebAppMode) => {
-			const prev = mode
-			setMode(next)
-
-			if (prev === 'teach' && next !== 'teach') {
-				// Stop recording; if events captured, open Save dialog.
-				void recorder.stop().then((log) => {
-					if (log && log.events.length > 0) {
-						setPendingSave(log)
-					} else if (log && recorder.sessionId) {
-						// Empty recording → discard server-side.
-						skillDiscardMutation.mutate({sessionId: recorder.sessionId})
-					}
-				})
-			}
-
-			if (prev !== 'teach' && next === 'teach') {
-				armPrivacyWarningOnce()
-				recorder.start({webappId, vncRef: vnc.containerRef})
-			}
-		},
+	// Phase 100-09-06 — recorder lifecycle driven by drawer store flag
+	// (replaces the prior `handleModeChange` callback).
+	//
+	// When `isRecordingByWebappId[webappId]` flips true (Teach icon click in
+	// the floating bar), arm + start the recorder. When it flips back false
+	// (second Teach icon click), stop and (if events captured) open the
+	// Save dialog. Empty recordings → silent server-side discard.
+	const prevRecordingRef = useRef(false)
+	useEffect(() => {
+		if (isRecording && !prevRecordingRef.current) {
+			armPrivacyWarningOnce()
+			recorder.start({webappId, vncRef: vnc.containerRef})
+		} else if (!isRecording && prevRecordingRef.current) {
+			void recorder.stop().then((log) => {
+				if (log && log.events.length > 0) {
+					setPendingSave(log)
+				} else if (log && recorder.sessionId) {
+					skillDiscardMutation.mutate({sessionId: recorder.sessionId})
+				}
+			})
+		}
+		prevRecordingRef.current = isRecording
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[mode, recorder, webappId, vnc.containerRef, armPrivacyWarningOnce, skillDiscardMutation],
-	)
+	}, [isRecording, webappId, armPrivacyWarningOnce])
 
 	// On unmount while still recording → stop and discard (recorder hook
 	// already discards on unmount; we additionally close any pending Save
@@ -475,17 +487,16 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 		}
 	}, [])
 
+	// Phase 100-09-06 — overlay Stop button delegates to the drawer-store
+	// flag flip. The useEffect above observes the flip and runs the actual
+	// recorder.stop() + Save-dialog-open path. Keeping the imperative path
+	// behind a single source of truth (drawer-store) avoids two parallel
+	// stop pipelines that could race.
 	const onStopRecording = useCallback(() => {
-		void recorder.stop().then((log) => {
-			if (log && log.events.length > 0) {
-				setPendingSave(log)
-			} else if (log && recorder.sessionId) {
-				skillDiscardMutation.mutate({sessionId: recorder.sessionId})
-			}
-			// Whether or not we open Save dialog, leave Teach mode (default to chat).
-			setMode('chat')
-		})
-	}, [recorder, skillDiscardMutation])
+		if (isRecording) {
+			toggleTeachRecording(webappId)
+		}
+	}, [isRecording, toggleTeachRecording, webappId])
 
 	const onSavePending = useCallback(
 		(name: string) => {
@@ -572,6 +583,23 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 				    reservation; collapsed by default; floating Chat icon
 				    (100-06) toggles expanded/collapsed. */}
 				<WebAppChatBottomBar webappId={webappId} />
+
+				{/* Phase 100-09-06 — Teach popup host (sonner toast portal,
+				    one toast per captured event during recording).
+				    Subscribes to recorder.events + recorder.eventCount. */}
+				<WebAppTeachPopupHost
+					isRecording={recorder.recording}
+					events={recorder.events}
+					eventCount={recorder.eventCount}
+				/>
+
+				{/* Phase 100-09-06 — Top-right Skills popover (replaces drawer
+				    skills sidebar per D-100-09-E1). Lightweight; doesn't eat
+				    horizontal space when closed. */}
+				<WebAppSkillsPopover
+					webappId={webappId}
+					onReplaySkill={(skillId) => setSelectedSkillId(skillId)}
+				/>
 			</div>
 			{pendingSave ? (
 				<SaveSkillDialog
@@ -591,10 +619,11 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 			{/* Phase 100-04 — Drawer host (V33-MULTI-04, G-100-D D2).
 			    Phase 100-09-05: 'chat' branch REMOVED (chat is now inline at
 			    the bottom of the stream wrapper via <WebAppChatBottomBar/>).
-			    'teach' and 'auto' branches retained; 09-06 reworks 'teach'
-			    next (popup-per-event + save modal). */}
+			    Phase 100-09-06: 'teach' branch REMOVED (teach is now driven
+			    by isRecordingByWebappId flag + <WebAppTeachPopupHost/> +
+			    <WebAppSkillsPopover/>). Only 'auto' remains hosted here. */}
 			<Sheet
-				open={openDrawer !== null && openDrawer !== 'chat'}
+				open={openDrawer !== null && openDrawer !== 'chat' && openDrawer !== 'teach'}
 				onOpenChange={(o) => {
 					if (!o) setOpenDrawer(webappId)
 				}}
@@ -605,7 +634,6 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 					closeButton={false}
 				>
 					<div className='relative z-10 flex h-full flex-col'>
-						{openDrawer === 'teach' ? <WebAppTeachDrawer webappId={webappId} /> : null}
 						{openDrawer === 'auto' ? <WebAppAutoDrawer webappId={webappId} /> : null}
 					</div>
 				</SheetContent>
