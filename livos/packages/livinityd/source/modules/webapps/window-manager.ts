@@ -51,6 +51,13 @@ import {
 	type WindowSessionResult,
 } from './pipewire-portal.js'
 import {GeometryTracker} from './geometry-tracker.js'
+// Phase 100-08-04 — per-WebApp bytebot MCP child registration via livinityd's
+// own McpConfigManager (Redis pub-sub bridge to liv-core's McpClientManager).
+import {
+	buildBytebotConfig,
+	type McpServerConfigInput,
+	type PerWebAppMcpDescriptor,
+} from '../computer-use/bytebot-mcp-config.js'
 
 const DEFAULT_TITLE_TIMEOUT_MS = 5000
 const DEFAULT_IDLE_POLL_MS = 5000
@@ -105,6 +112,27 @@ export type WebAppWindowManagerOpts = {
 	titleTimeoutMs?: number
 	idlePollMs?: number
 	webappCap?: number
+	/**
+	 * Phase 100-08-04 — optional MCP config-manager handle (livinityd's own,
+	 * backed by the daemon's Redis). When provided, spawn() persists a
+	 * per-WebApp bytebot MCP entry under name `bytebot:webapp:<webappId>` and
+	 * close() removes it. The McpConfigManager's saveAndPublish auto-publishes
+	 * `liv:config:updated`, which liv-core's McpClientManager (separate
+	 * process) subscribes to and reconciles asynchronously (~1-2s lag).
+	 *
+	 * NOT to be confused with liv-core's McpClientManager — that one is in a
+	 * different process and cannot be called from livinityd. The Redis pub-sub
+	 * path is the canonical bridge (see agent-runs.ts:54-58, 161-164).
+	 */
+	mcpConfigManager?: {
+		installServer(server: McpServerConfigInput): Promise<void>
+		updateServer(name: string, updates: Partial<McpServerConfigInput>): Promise<unknown>
+		removeServer(name: string): Promise<boolean>
+	}
+	/** Phase 100-08-04 — resolved path to the bytebot MCP stdio server. Required when mcpConfigManager is set. */
+	bytebotServerPath?: string
+	/** Phase 100-08-04 — env passed to buildBytebotConfig. Defaults to process.env. */
+	bytebotMcpEnv?: NodeJS.ProcessEnv
 }
 
 type ActiveWebApp = {
@@ -147,6 +175,10 @@ export class WebAppWindowManager {
 	private readonly titleTimeoutMs: number
 	private readonly idlePollMs: number
 	private readonly webappCap: number
+	// Phase 100-08-04 — per-WebApp bytebot MCP wiring (Redis pub-sub path).
+	private readonly mcpConfigManager: WebAppWindowManagerOpts['mcpConfigManager']
+	private readonly bytebotServerPath: string | undefined
+	private readonly bytebotMcpEnv: NodeJS.ProcessEnv
 
 	constructor(opts: WebAppWindowManagerOpts) {
 		this.streamManager = opts.streamManager
@@ -165,6 +197,13 @@ export class WebAppWindowManager {
 		this.titleTimeoutMs = opts.titleTimeoutMs ?? DEFAULT_TITLE_TIMEOUT_MS
 		this.idlePollMs = opts.idlePollMs ?? DEFAULT_IDLE_POLL_MS
 		this.webappCap = opts.webappCap ?? DEFAULT_WEBAPP_CAP
+		// Phase 100-08-04 — wire optional MCP config-manager handle. When
+		// undefined (test paths / backward compat), all per-WebApp MCP wiring
+		// becomes a no-op via early-return guards in registerWebAppMcp /
+		// deregisterWebAppMcp.
+		this.mcpConfigManager = opts.mcpConfigManager
+		this.bytebotServerPath = opts.bytebotServerPath
+		this.bytebotMcpEnv = opts.bytebotMcpEnv ?? process.env
 	}
 
 	startIdleCleanup(): void {
@@ -312,9 +351,15 @@ export class WebAppWindowManager {
 			`webapp ${opts.webappId} spawned (user=${opts.userId} wid=${newWin.wid} mode=${mode})`,
 		)
 
-		// Phase 100-07.4 — broadcast active wid to bytebot MCP child process
-		// via /tmp/livos-active-webapp-wid (cross-process IPC fallback so
-		// bytebot host MCP auto-scopes to the single active WebApp).
+		// Phase 100-08-04 — register per-WebApp bytebot MCP entry via
+		// McpConfigManager (Redis pub-sub path). Liv-core's McpClientManager
+		// (different process) reconciles async (~1-2s). Non-fatal: on error,
+		// host bytebot via /tmp/livos-active-webapp-wid fallback below still
+		// serves the agent during the lag.
+		await this.registerWebAppMcp(opts.webappId, newWin.wid)
+
+		// Phase 100-07.4 — broadcast active wid (kept as belt-and-braces
+		// fallback and bridges the liv-core reconcile lag).
 		this.broadcastActiveWid()
 
 		return {
@@ -384,6 +429,14 @@ export class WebAppWindowManager {
 			}
 		}
 
+		// Phase 100-08-04 — deregister per-WebApp bytebot MCP entry BEFORE
+		// we drop the active entry. Liv-core's reconcile is async — there's
+		// a brief window where liv-core may still see the entry as
+		// registered. The 08-05 chat-surface scope filter handles this lag
+		// with a host-bytebot fallback when the matching per-WebApp
+		// instance isn't yet (or no longer) registered. Non-fatal on error.
+		await this.deregisterWebAppMcp(opts.webappId)
+
 		this.active.delete(opts.webappId)
 		this.logger?.info?.(`webapp ${opts.webappId} closed (killWindow=${!!opts.killWindow})`)
 
@@ -392,6 +445,80 @@ export class WebAppWindowManager {
 		this.broadcastActiveWid()
 
 		return {ok: true}
+	}
+
+	/** Phase 100-08-04 — server name format for the per-WebApp bytebot MCP child. */
+	private mcpServerNameFor(webappId: string): string {
+		return `bytebot:webapp:${webappId}`
+	}
+
+	/**
+	 * Phase 100-08-04 — register a per-WebApp bytebot MCP child via
+	 * McpConfigManager (Redis pub-sub path). Liv-core's McpClientManager,
+	 * running in a separate process, picks up the change asynchronously
+	 * (~1-2s lag) via its `liv:config:updated` subscription.
+	 *
+	 * Idempotency / regex fallback: tries installServer first; on duplicate
+	 * name OR regex rejection (the validator regex `/^[a-z0-9][a-z0-9_-]*$/`
+	 * rejects names with colons), falls back to updateServer (no regex,
+	 * idempotent). Non-fatal on error — the host bytebot fallback via
+	 * /tmp/livos-active-webapp-wid (broadcastActiveWid) still serves the
+	 * agent during the ~1-2s reconcile lag.
+	 */
+	private async registerWebAppMcp(webappId: string, wid: number): Promise<void> {
+		if (!this.mcpConfigManager || !this.bytebotServerPath) return
+		try {
+			const descriptor: PerWebAppMcpDescriptor = {
+				instanceKey: webappId,
+				windowId: wid,
+				display: ':1', // D-100-08-A
+			}
+			const config = buildBytebotConfig(this.bytebotMcpEnv, this.bytebotServerPath, descriptor)
+			const name = this.mcpServerNameFor(webappId)
+			try {
+				await this.mcpConfigManager.installServer(config)
+			} catch (installErr) {
+				// installServer can throw on:
+				//   - duplicate name (idempotent re-spawn)
+				//   - regex-rejected name (colons; the validator regex
+				//     `/^[a-z0-9][a-z0-9_-]*$/` rejects `bytebot:webapp:<id>`)
+				// Both cases: fall back to updateServer (no regex, no
+				// duplicate check). If updateServer returns null the entry
+				// doesn't exist AND installServer refused — re-throw the
+				// original install error so the outer catch logs it.
+				const updated = await this.mcpConfigManager.updateServer(name, config)
+				if (updated == null) {
+					throw installErr
+				}
+			}
+			this.logger?.info?.(
+				`webapp ${webappId} per-WebApp bytebot MCP registered (wid=${wid}); ` +
+					`liv-core reconcile is async via Redis pub-sub liv:config:updated (~1-2s lag)`,
+			)
+		} catch (err) {
+			this.logger?.warn?.(
+				`webapp ${webappId} per-WebApp bytebot MCP registration failed (non-fatal); ` +
+					`host bytebot fallback (broadcastActiveWid IPC) remains active`,
+				err,
+			)
+		}
+	}
+
+	/** Phase 100-08-04 — deregister a per-WebApp bytebot MCP child. Non-fatal on error. */
+	private async deregisterWebAppMcp(webappId: string): Promise<void> {
+		if (!this.mcpConfigManager) return
+		try {
+			await this.mcpConfigManager.removeServer(this.mcpServerNameFor(webappId))
+			this.logger?.info?.(
+				`webapp ${webappId} per-WebApp bytebot MCP deregistered ` +
+					`(liv-core reconcile is async via Redis pub-sub)`,
+			)
+		} catch (err) {
+			this.logger?.warn?.(
+				`webapp ${webappId} per-WebApp bytebot MCP deregistration failed (non-fatal)`,
+				err,
+			)
+		}
 	}
 
 	/**
