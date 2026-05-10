@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-08T23:47:32.097Z"
+last_updated: "2026-05-10T03:24:11.171Z"
 progress:
   total_phases: 41
   completed_phases: 18
-  total_plans: 105
-  completed_plans: 100
-  percent: 95
+  total_plans: 111
+  completed_plans: 107
+  percent: 96
 ---
 
 # Project State
@@ -25,9 +25,18 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 100 (multi-stream-window-redesign) — EXECUTING
-Plan: 1 of 5
-Milestone: v32.0 (active) — 8/12 phases complete
+Phase: 100 (multi-stream-window-redesign) — sub-plan 100-08 EXECUTING
+Plan: 5/6 of 100-08 complete (100-08-06 pending user-walked Mini PC deploy)
+Milestone: v33.0 (active) — Phase 100 PARTIAL-PASS; 100-08 closes residual bugs from 100-07
+
+## 100-08 Wave Status (2026-05-10)
+- Wave 1: ✅ COMPLETE — `6e0e028e..a37fe4de` (5 commits) — Xvfb :1 + fluxbox lifecycle + apt deps
+- Wave 2: ✅ COMPLETE — `e775eb00..30b053e1` (4 commits) — WEBAPPS_X11_ENV :0→:1 cutover + XAUTHORITY drop
+- Wave 3: ✅ COMPLETE — `410187d0..13781de7` (4 commits) — PerWebAppMcpDescriptor.display field
+- Wave 4: ✅ COMPLETE — `45922fd1..d90186d0` (4 commits) — per-WebApp bytebot MCP via mcpConfigManager Redis pub-sub
+- Wave 5: ✅ COMPLETE — `0ff00a94..a1988508` (4 commits) — chat-surface webappId scope filter + lag fallback (api.scope-filter.test.ts NEW)
+- Wave 6: ⏸ PENDING — 100-08-06 user-walked Mini PC deploy + 11-step UAT (autonomous: false)
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 21 commits
 Wave 1: ✅ COMPLETE — `759ef597` P80, `9a276a11` P85-schema, `628ed1ca` P87, `12aa473f` summaries
 Wave 2: ✅ COMPLETE — `4379ea89` P81, `6f758067` P82, `0df7475b` P83, `49d79510` P86, `52944d16` P85-UI
 Wave 3: ✅ COMPLETE — `d719a175` P84 (MCP SoT + Smithery secondary + legacy mcp-panel deprecated)
@@ -62,7 +71,7 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 100 (multi-stream-window-redesign) — 5 plans — 2026-05-08T23:31:54.172Z
+**Planned Phase:** 100-08 (selfclaude-adoption-mcp-routing) — 6 plans — 2026-05-10T03:17:39.831Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
@@ -103,12 +112,14 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
 ## Plan 100-07 — Routing Fix (PARTIAL-SHIPPED, residual bugs)
 
 **Hot-fixes shipped 2026-05-08** (deployed Mini PC `2f973413`):
+
 - **100-07.1/.2** (`dbb48d32` / `1487bba4`): user canvas click bypass — RFB viewOnly + tRPC `webapp.input.{click, keypress, type}` + xdotool windowactivate-first pattern
 - **100-07.3** (`6540c55b`): bytebot `tryXdotoolClick` activate-first pattern + chat UI object render fix
 - **100-07.4** (`73739355`): bytebot host MCP auto-scope to single active WebApp via `/tmp/livos-active-webapp-wid` shared-file IPC
 - **100-06.1/.2** (`5ed4b39f` / `2f973413`): Chrome `--window-size=1280,720 --window-position=0,0` + getResponsiveSize aspect-preserve
 
 **RESIDUAL BUGS (user-reported persist):**
+
 1. Stream still opens vertical despite 100-06.2 — likely cache OR Chrome IPC merge with --start-maximized host inheritance
 2. Multi-stream control: when WebApp B opens, WebApp A bytebot stops working (single-active-wid file empty for 2 active webapps → host-display fallback)
 
