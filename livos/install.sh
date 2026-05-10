@@ -610,6 +610,8 @@ LAUNCHER
         info "Installing streaming subsystem dependencies (Phase 93)..."
 
         # x11/screenshot family
+        # Phase 100-08-01: xvfb + fluxbox added for dedicated WebApp display :1
+        # (D-100-08-A — eliminates host-Chrome IPC merge that drops --window-size).
         apt-get install -y -qq \
             x11vnc \
             xdotool \
@@ -619,7 +621,9 @@ LAUNCHER
             scrot \
             gnome-screenshot \
             websockify \
-            vncsnapshot
+            vncsnapshot \
+            xvfb \
+            fluxbox
 
         # ffmpeg + GStreamer family (full pipeline incl. PipeWire src)
         apt-get install -y -qq \
