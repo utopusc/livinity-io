@@ -565,3 +565,108 @@ describe('Phase 100-10-06 chat-response 3-mode state machine', () => {
 		expect(barSrc).toMatch(/\bmessages\b/)
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 100-10-10 — chat-response wire-up + per-tool streaming UI.
+//
+// User UAT 2026-05-10 reported TWO bugs on the floating action bar
+// chat surface:
+//
+// Bug A (RESPONSE-01): clicking the chat icon, typing text + Enter,
+// produces NO reply rendered in ChatResponseBar — the bar transitions
+// from chat-input → chat-response correctly, but the assistant reply
+// never appears. Root cause (confirmed by source inspection):
+// `useWebAppAgent(webappId)` is called TWICE — once in ChatInputBar
+// and once in ChatResponseBar. Each call internally invokes
+// `useAgentSocket({webappId})`, which opens its OWN WebSocket and
+// owns its OWN messages state. When the user clicks Send, the parent
+// flips mode to 'chat-response', which UNMOUNTS ChatInputBar (closing
+// its WS, dropping its messages array) BEFORE the assistant chunks
+// arrive. ChatResponseBar mounts a FRESH WS with empty messages — so
+// the reply, which was streamed onto ChatInputBar's now-closed WS, is
+// lost. Fix: lift `useWebAppAgent(webappId)` to the parent
+// `WebAppFloatingActionBar` so a single WS persists across mode flips,
+// and pass `agent` as a prop into ChatInputBar + ChatResponseBar.
+//
+// Bug B (STATUS-01/02): while streaming, the user wants a small status
+// line showing per-tool progress ("Using tool: list_windows...",
+// "Thinking...", "Responding...") in the same area where the chat
+// response renders. Today, ChatResponseBar shows only the final text
+// + a pulsing caret; no status text. Backend Phase 87 status_detail
+// chunks (with {phase, phrase, elapsed}) are emitted by liv-agent-
+// runner.ts BUT NOT by the SDK agent-session.ts path that the chat WS
+// uses today (the chat WS path uses Claude SDK query() directly via
+// AgentSessionManager — Hermes status_detail chunks ride on a
+// separate runStore that the chat WS doesn't relay). Fallback:
+// render the existing `agentStatus.phase` + `agentStatus.currentTool`
+// (already populated correctly by use-agent-socket.ts content_block_
+// start for tool_use and stream_delta for text). Phrase wiring lands
+// in a future plan once the agent-session relay learns to forward
+// runStore status_detail chunks.
+// ─────────────────────────────────────────────────────────────────
+
+describe('Phase 100-10-10 chat-response wire-up + per-tool streaming UI', () => {
+	it("T-10-10-RESPONSE-01: useWebAppAgent(webappId) is lifted to the parent — exactly ONE call site in the floating bar", () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		// The fix: `useWebAppAgent(webappId)` must appear EXACTLY ONCE in
+		// webapp-floating-action-bar.tsx — and that single call lives in
+		// the parent `WebAppFloatingActionBar` (not in ChatInputBar or
+		// ChatResponseBar). The two sub-components receive `agent` as a
+		// prop so they share a single WebSocket + messages array across
+		// the mode flip. Pre-fix the file has TWO call sites (one in
+		// ChatInputBar, one in ChatResponseBar) — this regex count locks
+		// the lift to a single source-of-truth.
+		const matches = barSrc.match(/useWebAppAgent\(/g) ?? []
+		expect(matches.length).toBe(1)
+	})
+
+	it("T-10-10-RESPONSE-02: ChatInputBar + ChatResponseBar receive `agent` as a prop (not via their own useWebAppAgent call)", () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		// Both sub-component prop interfaces must declare an `agent` field.
+		// Lock the interface shape so a future edit can't silently
+		// re-introduce per-component useWebAppAgent calls.
+		expect(barSrc).toMatch(/interface ChatInputBarProps[\s\S]*?\bagent:/)
+		expect(barSrc).toMatch(/interface ChatResponseBarProps[\s\S]*?\bagent:/)
+		// Parent must pass agent={agent} into both branches.
+		expect(barSrc).toMatch(/<ChatInputBar[\s\S]*?agent=\{agent\}/)
+		expect(barSrc).toMatch(/<ChatResponseBar[\s\S]*?agent=\{agent\}/)
+	})
+
+	it("T-10-10-STATUS-01: ChatResponseBar renders a status line gated on agent.isStreaming + (phrase || currentTool)", () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		// While streaming, a status sub-line shows either the Hermes
+		// phrase (future wire-up) or the currentTool name (works today
+		// via use-agent-socket.ts content_block_start → setAgentStatus
+		// {phase:'executing', currentTool: <name>}). The conditional
+		// gate `agent.isStreaming && (agent.agentStatus?.phrase ||
+		// agent.agentStatus?.currentTool)` locks BOTH the streaming
+		// gate AND the dual-field render fallback.
+		expect(barSrc).toMatch(/agent\.agentStatus\?\.phrase/)
+		expect(barSrc).toMatch(/agent\.agentStatus\?\.currentTool/)
+	})
+
+	it("T-10-10-STATUS-02: ChatInputBar also renders the per-tool status line while streaming (sub-line beneath input)", () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		// Same status line affordance under the input bar so the user
+		// sees the tool-call progress even before the mode flips to
+		// 'chat-response'. The duplicated render shape means BOTH
+		// sub-components must reference `agentStatus?.phrase` and
+		// `agentStatus?.currentTool` — locked via match-count >= 2 on
+		// each grep pattern.
+		const phraseMatches = barSrc.match(/agentStatus\?\.phrase/g) ?? []
+		const toolMatches = barSrc.match(/agentStatus\?\.currentTool/g) ?? []
+		expect(phraseMatches.length).toBeGreaterThanOrEqual(2)
+		expect(toolMatches.length).toBeGreaterThanOrEqual(2)
+	})
+
+	it("T-10-10-STATUS-03: status line auto-clears when isStreaming flips false (conditional unmount)", () => {
+		const barSrc = safeRead(FLOATING_BAR_PATH)
+		// The render path uses a ternary or `&&` guarded on `agent.isStreaming`
+		// — when streaming completes, the conditional yields null and the
+		// status line unmounts. Lock the literal `agent.isStreaming &&` shape
+		// adjacent to the agentStatus check so a future edit can't drop the
+		// streaming gate.
+		expect(barSrc).toMatch(/agent\.isStreaming\s*&&\s*\(agent\.agentStatus\?\.phrase/)
+	})
+})
+
