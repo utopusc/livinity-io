@@ -32,6 +32,14 @@ import {
 	nativeAppConfigSchema,
 	type NativeAppConfigStore,
 } from './native-app-config.js'
+import {spawnNativeApp} from './native-app-spawner.js'
+import {
+	bindNativeAppWindow,
+	inferWmClass,
+	NativeAppWindowNotFoundError,
+	type StreamStartFn,
+} from './native-app-binder.js'
+import type {StreamManager} from '../streaming/stream-manager.js'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -52,10 +60,45 @@ function requireStore(ctx: {livinityd?: {nativeAppConfigStore?: NativeAppConfigS
 	return store
 }
 
+/**
+ * Resolve the StreamManager off ctx.livinityd. Phase 101-05 spawn route uses
+ * it as the stream-start collaborator AND as the source of the shared
+ * PortAllocator (via getPortAllocator()). Matches the streams.* router pattern
+ * at streaming/trpc-router.ts:64.
+ */
+function requireStreamManager(ctx: {livinityd?: {streamManager?: StreamManager | null}}): StreamManager {
+	const sm = ctx.livinityd?.streamManager
+	if (!sm) {
+		throw new TRPCError({
+			code: 'SERVICE_UNAVAILABLE',
+			message: 'StreamManager not initialised (Pillar B streaming unavailable)',
+		})
+	}
+	return sm
+}
+
+/**
+ * Build the `startStreamFn` adapter that the native-app-binder uses. Wraps
+ * `StreamManager.startStream(...)` (sync, takes a {userId, mode, target}
+ * envelope) into the Promise<{streamId, wsUrl}> shape the binder expects,
+ * pinning the mode to `vnc-window` and the target to `{wid}` — the binder
+ * NEVER captures whole-display for a native app.
+ */
+function makeStartStreamFn(sm: StreamManager, userId: string): StreamStartFn {
+	return async ({wid}) => {
+		return sm.startStream({
+			userId,
+			mode: 'vnc-window',
+			target: {wid},
+		})
+	}
+}
+
 // ─── Input schemas ──────────────────────────────────────────────────────────
 
 const getInput = z.object({id: z.string().uuid()})
 const deleteInput = z.object({id: z.string().uuid()})
+const spawnInput = z.object({id: z.string().uuid()})
 
 // ─── Router ─────────────────────────────────────────────────────────────────
 
@@ -119,6 +162,130 @@ export const nativeAppsRouter = router({
 			const store = requireStore(ctx)
 			const deleted = await store.delete(input.id)
 			return {deleted}
+		}),
+
+	/**
+	 * apps.native.spawn — orchestrate the full Pillar B lifecycle:
+	 *
+	 *   1. store.get(id)          — look up the persisted config
+	 *   2. spawnNativeApp(cfg)    — fire DISPLAY=:1 child_process.spawn (101-03)
+	 *   3. bindNativeAppWindow(.) — poll xdotool for the new WM_CLASS-matching wid,
+	 *                                allocate a stream port from the shared
+	 *                                PortAllocator (101-02), start the x11vnc
+	 *                                stream (101-05)
+	 *   4. return {id, pid, wid, port, streamId, wsUrl} to the dock UI
+	 *
+	 * This is the single entry the LivOS dock icon-click handler invokes —
+	 * everything from binary launch to stream URL flows through here.
+	 *
+	 * Privacy/auth: privateProcedure (any logged-in user). The admin gate is
+	 * on create/delete (config persistence); spawn just instantiates an
+	 * already-validated config so a regular user clicking the dock icon is
+	 * not gated by admin role.
+	 *
+	 * Error paths:
+	 *   - config not found            → NOT_FOUND
+	 *   - StreamManager not booted    → SERVICE_UNAVAILABLE (requireStreamManager)
+	 *   - spawn failure (binary path) → INTERNAL_SERVER_ERROR (NativeAppSpawnError msg)
+	 *   - window-poll timeout (5s)    → FAILED_PRECONDITION (window never appeared;
+	 *                                    the spawned child stays alive so user can debug)
+	 *   - x11vnc start failure        → INTERNAL_SERVER_ERROR (port already released
+	 *                                    via the binder's cleanup-on-throw path)
+	 */
+	spawn: privateProcedure
+		.input(spawnInput)
+		.mutation(async ({ctx, input}) => {
+			const store = requireStore(ctx)
+			const sm = requireStreamManager(ctx)
+			const cfg = await store.get(input.id)
+			if (!cfg) {
+				throw new TRPCError({
+					code: 'NOT_FOUND',
+					message: `native app config ${input.id} not found`,
+				})
+			}
+
+			const userId = ctx.currentUser?.id
+			if (!userId) {
+				throw new TRPCError({
+					code: 'UNAUTHORIZED',
+					message: 'native-app spawn requires an authenticated user',
+				})
+			}
+
+			// Adapt the livinityd base logger (log/verbose/error) into the
+			// info/warn/error/verbose surface the spawner + binder modules
+			// expect. log() → info, error() → warn AND error (no distinct
+			// warn level in the base logger — collapse to error like the
+			// streamingLogger does in source/index.ts:386-392).
+			const logger = ctx.logger
+			const adaptLogger = logger
+				? {
+						info: (m: string) => logger.log(m),
+						warn: (m: string) => logger.error(m),
+						error: (m: string) => logger.error(m),
+						verbose: (m: string) => logger.verbose(m),
+					}
+				: undefined
+			const binderLogger = adaptLogger
+			const spawnerLogger = adaptLogger
+
+			// Step 1: launch the binary detached on :1 (101-03).
+			let pid: number
+			try {
+				const spawnResult = await spawnNativeApp({cfg, logger: spawnerLogger})
+				pid = spawnResult.pid
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err)
+				logger?.error(`apps.native.spawn: spawn failed for ${cfg.name}: ${msg}`)
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: `native-app spawn failed: ${msg}`,
+				})
+			}
+
+			// Step 2: poll for the WM_CLASS-matching window + allocate port +
+			// start the stream (101-05). The binder pulls the PortAllocator off
+			// the StreamManager so the shared [15900, 16000) pool is honored
+			// across WebApps and native apps.
+			const wmClass = cfg.wmClassHint ?? inferWmClass(cfg.binaryPath)
+			const startStreamFn = makeStartStreamFn(sm, userId)
+			try {
+				const bound = await bindNativeAppWindow({
+					pid,
+					wmClass,
+					portAllocator: sm.getPortAllocator(),
+					startStreamFn,
+					logger: binderLogger,
+					label: cfg.name,
+				})
+				logger?.log(
+					`apps.native.spawn: ${cfg.name} pid=${pid} wid=${bound.wid} port=${bound.port}`,
+				)
+				return {
+					id: cfg.id,
+					pid,
+					wid: bound.wid,
+					port: bound.port,
+					streamId: bound.streamId,
+					wsUrl: bound.wsUrl,
+				}
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err)
+				logger?.error(
+					`apps.native.spawn: bind failed for ${cfg.name} pid=${pid}: ${msg} (child left running so user can debug)`,
+				)
+				if (err instanceof NativeAppWindowNotFoundError) {
+					throw new TRPCError({
+						code: 'PRECONDITION_FAILED',
+						message: `native-app window did not appear in time: ${msg}`,
+					})
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: `native-app bind failed: ${msg}`,
+				})
+			}
 		}),
 })
 
