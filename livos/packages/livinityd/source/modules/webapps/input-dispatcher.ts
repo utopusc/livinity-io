@@ -78,11 +78,31 @@ export async function dispatchPointer(
 	y: number,
 	button: MouseButton = 1,
 	kind: ClickKind = 'click',
+	display?: string,
 ): Promise<void> {
-	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
 	if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error('invalid coords')
 	const ix = Math.max(0, Math.round(x))
 	const iy = Math.max(0, Math.round(y))
+
+	// Phase 102 deploy fix — display-mode dispatch. When wid is 0 (Phase
+	// 102 per-app Xvfb, no WID tracking) AND a display is supplied, scope
+	// xdotool to that display directly via `--display :N`. Coords are
+	// absolute in display space (1280x720 Xvfb) which matches the
+	// frontend canvas coords 1:1 (no WID-relative translation needed).
+	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
+		await execFileAsync(
+			'xdotool',
+			[
+				'--display', display,
+				'mousemove', '--sync', String(ix), String(iy),
+				kind, '--clearmodifiers', String(button),
+			],
+			{timeout: DEFAULT_TIMEOUT_MS},
+		)
+		return
+	}
+
+	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
 	const widStr = String(wid)
 	// One xdotool invocation, four sub-commands, all chained:
 	//   activate (raise + WM focus) → windowfocus (X11 input focus directly,
@@ -114,12 +134,22 @@ export async function dispatchKey(
 	wid: number,
 	key: string,
 	kind: 'key' | 'keydown' | 'keyup' = 'key',
+	display?: string,
 ): Promise<void> {
-	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
 	if (typeof key !== 'string' || !key.trim()) throw new Error('invalid key')
 	if (!/^[A-Za-z0-9_+\-]{1,64}$/.test(key)) {
 		throw new Error(`invalid key syntax: ${JSON.stringify(key)}`)
 	}
+	// Phase 102 — display-mode key dispatch
+	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
+		await execFileAsync(
+			'xdotool',
+			['--display', display, kind, '--clearmodifiers', key],
+			{timeout: DEFAULT_TIMEOUT_MS},
+		)
+		return
+	}
+	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
 	const widStr = String(wid)
 	await execFileAsync(
 		'xdotool',
@@ -137,11 +167,20 @@ export async function dispatchKey(
  * ignores synthetic key events; the activate ensures the focused window
  * is the bound wid before xdotool's `type` dispatches keystrokes).
  */
-export async function dispatchType(wid: number, text: string): Promise<void> {
-	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
+export async function dispatchType(wid: number, text: string, display?: string): Promise<void> {
 	if (typeof text !== 'string') throw new Error('invalid text')
 	if (text.length > 4096) throw new Error('text too long (4096 char limit)')
 	if (text.length === 0) return
+	// Phase 102 — display-mode type dispatch
+	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
+		await execFileAsync(
+			'xdotool',
+			['--display', display, 'type', '--clearmodifiers', '--delay', '0', text],
+			{timeout: DEFAULT_TIMEOUT_MS},
+		)
+		return
+	}
+	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
 	const widStr = String(wid)
 	await execFileAsync(
 		'xdotool',
@@ -182,14 +221,28 @@ export async function dispatchScroll(
 	x: number,
 	y: number,
 	button: ScrollButton,
+	display?: string,
 ): Promise<void> {
-	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
 	if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error('invalid coords')
 	if (button !== 4 && button !== 5 && button !== 6 && button !== 7) {
 		throw new Error(`invalid scroll button: ${button} (must be 4/5/6/7)`)
 	}
 	const ix = Math.max(0, Math.round(x))
 	const iy = Math.max(0, Math.round(y))
+	// Phase 102 — display-mode scroll
+	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
+		await execFileAsync(
+			'xdotool',
+			[
+				'--display', display,
+				'mousemove', '--sync', String(ix), String(iy),
+				'click', '--clearmodifiers', String(button),
+			],
+			{timeout: DEFAULT_TIMEOUT_MS},
+		)
+		return
+	}
+	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
 	const widStr = String(wid)
 	await execFileAsync(
 		'xdotool',

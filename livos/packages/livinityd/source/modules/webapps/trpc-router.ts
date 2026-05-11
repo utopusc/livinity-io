@@ -237,12 +237,14 @@ const inputRouter = router({
 			if (wid == null) {
 				throw new TRPCError({code: 'NOT_FOUND', message: `no live window for webapp ${input.webappId}`})
 			}
-			ctx.logger?.info?.(`[100-07.2] webapp.input.click webappId=${input.webappId} wid=${wid} x=${input.x} y=${input.y} btn=${input.button} kind=${input.kind}`)
+			// Phase 102 — display-mode dispatch when wid is 0 (per-app Xvfb).
+			const display = wm.getDisplayForWebapp(input.webappId, userId) ?? undefined
+			ctx.logger?.info?.(`[102] webapp.input.click webappId=${input.webappId} wid=${wid} display=${display} x=${input.x} y=${input.y} btn=${input.button} kind=${input.kind}`)
 			try {
-				await dispatchPointer(wid, input.x, input.y, input.button, input.kind as ClickKind)
+				await dispatchPointer(wid, input.x, input.y, input.button, input.kind as ClickKind, display)
 				return {ok: true as const}
 			} catch (err) {
-				ctx.logger?.warn?.(`webapp.input.click failed user=${userId} webappId=${input.webappId} wid=${wid}`, err)
+				ctx.logger?.warn?.(`webapp.input.click failed user=${userId} webappId=${input.webappId} wid=${wid} display=${display}`, err)
 				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
 			}
 		}),
@@ -258,11 +260,12 @@ const inputRouter = router({
 			if (wid == null) {
 				throw new TRPCError({code: 'NOT_FOUND'})
 			}
+			const display = wm.getDisplayForWebapp(input.webappId, userId) ?? undefined
 			try {
-				await dispatchKey(wid, input.key, input.kind)
+				await dispatchKey(wid, input.key, input.kind, display)
 				return {ok: true as const}
 			} catch (err) {
-				ctx.logger?.warn?.(`webapp.input.keypress failed user=${userId} webappId=${input.webappId} wid=${wid}`, err)
+				ctx.logger?.warn?.(`webapp.input.keypress failed user=${userId} webappId=${input.webappId} wid=${wid} display=${display}`, err)
 				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
 			}
 		}),
@@ -278,11 +281,12 @@ const inputRouter = router({
 			if (wid == null) {
 				throw new TRPCError({code: 'NOT_FOUND'})
 			}
+			const display = wm.getDisplayForWebapp(input.webappId, userId) ?? undefined
 			try {
-				await dispatchType(wid, input.text)
+				await dispatchType(wid, input.text, display)
 				return {ok: true as const}
 			} catch (err) {
-				ctx.logger?.warn?.(`webapp.input.type failed user=${userId} webappId=${input.webappId} wid=${wid}`, err)
+				ctx.logger?.warn?.(`webapp.input.type failed user=${userId} webappId=${input.webappId} wid=${wid} display=${display}`, err)
 				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
 			}
 		}),
@@ -302,14 +306,15 @@ const inputRouter = router({
 			if (wid == null) {
 				throw new TRPCError({code: 'NOT_FOUND', message: `no live window for webapp ${input.webappId}`})
 			}
+			const display = wm.getDisplayForWebapp(input.webappId, userId) ?? undefined
 			ctx.logger?.info?.(
-				`[100-09-02] webapp.input.scroll webappId=${input.webappId} wid=${wid} x=${input.x} y=${input.y} btn=${input.button}`,
+				`[102] webapp.input.scroll webappId=${input.webappId} wid=${wid} display=${display} x=${input.x} y=${input.y} btn=${input.button}`,
 			)
 			try {
-				await dispatchScroll(wid, input.x, input.y, input.button)
+				await dispatchScroll(wid, input.x, input.y, input.button, display)
 				return {ok: true as const}
 			} catch (err) {
-				ctx.logger?.warn?.(`webapp.input.scroll failed user=${userId} webappId=${input.webappId} wid=${wid}`, err)
+				ctx.logger?.warn?.(`webapp.input.scroll failed user=${userId} webappId=${input.webappId} wid=${wid} display=${display}`, err)
 				throw new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: 'xdotool dispatch failed', cause: err})
 			}
 		}),

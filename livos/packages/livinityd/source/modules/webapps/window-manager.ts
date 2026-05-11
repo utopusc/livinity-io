@@ -350,7 +350,11 @@ export class WebAppWindowManager {
 		this.profileSeeder = opts.profileSeeder
 		this.xvfbSpawnFn = opts.xvfbSpawnFn ?? spawnXvfb
 		this.chromeSpawnFn = opts.chromeSpawnFn ?? spawnChromeProcess
-		this.withWindowManager = opts.withWindowManager ?? false
+		// Phase 102 deploy fix: default TRUE. The A2 risk realized — Chrome
+		// --start-fullscreen + --app=URL on a bare Xvfb (no WM) creates an
+		// unmanaged toplevel window that doesn't render visibly. fluxbox
+		// per-app display maps the window and triggers fullscreen layout.
+		this.withWindowManager = opts.withWindowManager ?? true
 		this.fluxboxSpawnFn = opts.fluxboxSpawnFn
 	}
 
@@ -829,6 +833,20 @@ export class WebAppWindowManager {
 		const entry = this.active.get(webappId)
 		if (!entry || entry.userId !== userId) return null
 		return entry.wid
+	}
+
+	/**
+	 * Phase 102 — resolve webappId → display string (:N) for display-mode
+	 * input dispatch. Under Phase 102 each WebApp owns a dedicated Xvfb,
+	 * so input events route to `xdotool --display :N` instead of by wid
+	 * (which is always 0 under display-mode).
+	 *
+	 * Returns null if the user has no live entry for this webappId.
+	 */
+	getDisplayForWebapp(webappId: string, userId: string): string | null {
+		const entry = this.active.get(webappId)
+		if (!entry || entry.userId !== userId) return null
+		return entry.display
 	}
 
 	/**
