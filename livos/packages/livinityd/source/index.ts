@@ -59,6 +59,14 @@ import {DEFAULT_LUSE_MCP_SERVER_PATH} from './modules/computer-use/luse-mcp-conf
 // `liv:apps:native:*` namespace (D-101-NATIVE-APPS) and is consumed by the
 // tRPC `apps.native.{list,get,create,delete}` router.
 import {NativeAppConfigStore} from './modules/apps/native-app-config.js'
+// Phase 101-01 + 101-04 — singleton Chrome bootstrap + typed CDP client.
+// `bootstrapChrome` spawns Chrome with --remote-debugging-port=9222 and
+// waits for /json/version to return 200. `ChromeCdpClient` owns the
+// persistent CDP connection. Phase 101-04 calls `setChromePid()` after
+// bootstrap resolves so `WebAppWindowManager.spawn()` can baseline
+// `xdotool search --pid <pid>` BEFORE issuing CDP createTarget
+// (RESEARCH Q1 RESOLVED — PID-narrowed wid lookup replaces title race).
+import {bootstrapChrome, ChromeCdpClient} from './modules/chrome-cdp/index.js'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -197,6 +205,13 @@ export default class Livinityd {
 	// been wired (boot edge before ai.start() finishes, or Redis offline).
 	// Instantiated in start() AFTER ai.start() so it can borrow this.ai.redis.
 	nativeAppConfigStore?: NativeAppConfigStore
+	// Phase 101-01 — singleton Chrome CDP client. Stays `undefined` when
+	// `bootstrapChrome` fails at start() (Pillar A degraded; rest of the
+	// daemon keeps running). 101-04 reads this field at
+	// WebAppWindowManager construction so spawn()/close() can drive Chrome
+	// via CDP (Target.createTarget for new windows; closeTarget for tear
+	// down) instead of the legacy `sudo google-chrome ...` argv path.
+	chromeCdpClient?: ChromeCdpClient
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -476,6 +491,12 @@ export default class Livinityd {
 				})
 				this.chromeCdpClient = new ChromeCdpClient({logger: chromeCdpLogger})
 				await this.chromeCdpClient.connect()
+				// Phase 101-04 — cache the Chrome pid on the client so
+				// WebAppWindowManager.spawn() can baseline `xdotool search --pid <pid>`
+				// BEFORE driving CDP createTarget. Without this, getChromePid()
+				// throws inside spawn(), and Pillar A fails on every WebApp launch
+				// even though bootstrap succeeded.
+				this.chromeCdpClient.setChromePid(chromePid)
 				chromeCdpLogger.info(`Chrome CDP ready (pid=${chromePid})`)
 				// Minimize the about:blank shell window so it never shows up in
 				// fluxbox. Uses the dedicated getWindowIdForTarget helper +
@@ -550,6 +571,13 @@ export default class Livinityd {
 				// WebApp spawn now gets `:10`+/`:11`+/... + its own Xvfb +
 				// fluxbox; close() releases the slot.
 				displayAllocator,
+				// Phase 101-04 — inject the live ChromeCdpClient so spawn() can
+				// drive Chrome via CDP createWindowForUrl / closeTarget instead
+				// of the legacy `sudo google-chrome --app=URL ...` argv path.
+				// Pass `undefined` when bootstrap failed: spawn() then throws
+				// WebAppCdpUnavailableError so Pillar A degrades loudly and the
+				// tRPC route returns SERVICE_UNAVAILABLE rather than hanging.
+				chromeCdpClient: this.chromeCdpClient,
 			})
 			this.webappWindowManager.startIdleCleanup()
 			webappLogger.info(
