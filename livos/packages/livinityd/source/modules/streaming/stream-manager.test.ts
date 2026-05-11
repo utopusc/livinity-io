@@ -492,6 +492,82 @@ describe('StreamManager — PortAllocator wire-up (Phase 101-02)', () => {
 		mgr._clearForTests()
 	})
 
+	// (re-allocate round-trip test follows immediately below)
+
+	it('T-102-09-SM-01: startStream({target: {display: ":10"}, port: ...}) routes through vnc-bridge -display :10 (canonical Phase 102+)', () => {
+		const allocator = new PortAllocator()
+		const {mgr, spawn} = makeVncManagerWithAllocator(allocator)
+		const {streamId} = mgr.startStream({
+			userId: 'u',
+			mode: 'vnc-window' as any,
+			target: {display: ':10'} as any,
+		})
+		expect(streamId).toMatch(/^[0-9a-f-]{36}$/)
+		expect(spawn).toHaveBeenCalledTimes(1)
+		const [cmd, args] = spawn.mock.calls[0] as [string, string[]]
+		expect(cmd).toBe('sudo')
+		// Canonical Phase 102-09 — -display branch, NOT -id.
+		expect(args).toContain('-display')
+		expect(args).toContain(':10')
+		expect(args).not.toContain('-id')
+		// DISPLAY env-prefix pinned to per-app :10 so x11vnc opens the
+		// correct Xvfb (not the shared :1 baseline).
+		expect(args).toContain('DISPLAY=:10')
+		// rfbPort is allocator-driven (default range starts at 15900).
+		const session = mgr.getSession(streamId)
+		if (session?.kind === 'vnc') {
+			expect(session.rfbPort).toBe(15900)
+			// VncSession.display field populated for canonical target.
+			expect(session.display).toBe(':10')
+			expect(session.wid).toBeUndefined()
+		} else {
+			throw new Error('expected vnc session with display target')
+		}
+		mgr._clearForTests()
+	})
+
+	it('T-102-09-SM-02: startStream({target: {wid: ...}}) still works (legacy back-compat path)', () => {
+		const allocator = new PortAllocator()
+		const {mgr, spawn} = makeVncManagerWithAllocator(allocator)
+		const {streamId} = mgr.startStream({
+			userId: 'u',
+			mode: 'vnc-window' as any,
+			target: {wid: 0x123} as any,
+		})
+		expect(spawn).toHaveBeenCalledTimes(1)
+		const [, args] = spawn.mock.calls[0] as [string, string[]]
+		// Legacy single-window argv — -id 0x123, NO -display.
+		expect(args).toContain('-id')
+		expect(args).toContain('0x123')
+		expect(args).not.toContain('-display')
+		const session = mgr.getSession(streamId)
+		if (session?.kind === 'vnc') {
+			expect(session.wid).toBe(0x123)
+			expect(session.display).toBeUndefined()
+		} else {
+			throw new Error('expected vnc session with wid target')
+		}
+		mgr._clearForTests()
+	})
+
+	it('T-102-09-SM-03: stopStream({display}-target session) releases rfbPort via portAllocator.release', async () => {
+		const allocator = new PortAllocator()
+		const releaseSpy = vi.spyOn(allocator, 'release')
+		const {mgr} = makeVncManagerWithAllocator(allocator)
+		const {streamId} = mgr.startStream({
+			userId: 'u',
+			mode: 'vnc-window' as any,
+			target: {display: ':11'} as any,
+		})
+		expect(allocator.inUseCount).toBe(1)
+		await mgr.stopStream(streamId)
+		// release MUST fire with the allocated port (first allocate → 15900).
+		expect(releaseSpy).toHaveBeenCalledWith(15900)
+		expect(allocator.inUseCount).toBe(0)
+		// Session removed from map after stop.
+		expect(mgr.getSession(streamId)).toBeNull()
+	})
+
 	it('T-101-02-SM-04: re-allocate after stop returns pool to single-live-stream count (round-trip)', async () => {
 		const allocator = new PortAllocator()
 		const {mgr} = makeVncManagerWithAllocator(allocator)
