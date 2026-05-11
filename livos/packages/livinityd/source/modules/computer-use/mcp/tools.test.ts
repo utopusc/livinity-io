@@ -171,11 +171,13 @@ describe('registerLuseTools', () => {
 			'list_streams',
 		])
 		for (const name of LUSE_TOOL_NAMES) {
-			if (prefixed.has(name)) {
-				// Registered under `mcp__luse__<name>` instead of bare name.
-				expect(registeredNames.has(`mcp__luse__${name}`)).toBe(true)
-			} else {
-				expect(registeredNames.has(name)).toBe(true)
+			// Phase 100-10-14: all Luse tools (including window-aware + stream-mgmt)
+			// register as BARE name so UI displays them consistently with the
+			// other Luse tools (computer_*, set_task_status, etc.). The MCP
+			// runtime handles any per-server prefix display; the server itself
+			// uses unprefixed names.
+			expect(registeredNames.has(name)).toBe(true)
+			if (!prefixed.has(name)) {
 				expect(typeof HANDLERS[name]).toBe('function')
 			}
 		}
@@ -426,28 +428,28 @@ describe('Phase 100-10-03 luse window-aware tool handlers', () => {
 	it('T-10-03-HANDLER-01: registerLuseTools registers mcp__luse__list_windows', () => {
 		const stub = new StubMcpServer()
 		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
-		const registered = stub.registered.find((r) => r.name === 'mcp__luse__list_windows')
+		const registered = stub.registered.find((r) => r.name === 'list_windows')
 		expect(registered).toBeDefined()
 	})
 
 	it('T-10-03-HANDLER-02: registerLuseTools registers mcp__luse__screenshot_window', () => {
 		const stub = new StubMcpServer()
 		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
-		const registered = stub.registered.find((r) => r.name === 'mcp__luse__screenshot_window')
+		const registered = stub.registered.find((r) => r.name === 'screenshot_window')
 		expect(registered).toBeDefined()
 	})
 
 	it('T-10-03-HANDLER-03: registerLuseTools registers mcp__luse__focus_window', () => {
 		const stub = new StubMcpServer()
 		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
-		const registered = stub.registered.find((r) => r.name === 'mcp__luse__focus_window')
+		const registered = stub.registered.find((r) => r.name === 'focus_window')
 		expect(registered).toBeDefined()
 	})
 
 	it('T-10-03-HANDLER-04: mcp__luse__list_windows defaults to opts.defaultDisplay (:10)', async () => {
 		const stub = new StubMcpServer()
 		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
-		const handler = stub.getHandler('mcp__luse__list_windows')!
+		const handler = stub.getHandler('list_windows')!
 		await handler({})
 		expect(mocks.listWindows).toHaveBeenCalledTimes(1)
 		const callArg = (mocks.listWindows.mock.calls as unknown as Array<Array<{display?: string} | undefined>>)[0]?.[0]
@@ -458,7 +460,7 @@ describe('Phase 100-10-03 luse window-aware tool handlers', () => {
 	it('T-10-03-HANDLER-05: mcp__luse__screenshot_window with {wid} calls captureScreenshot({wid}) and returns image content', async () => {
 		const stub = new StubMcpServer()
 		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
-		const handler = stub.getHandler('mcp__luse__screenshot_window')!
+		const handler = stub.getHandler('screenshot_window')!
 		const result = (await handler({wid: 0xabc})) as {
 			content: Array<{type: string; data?: string; mimeType?: string}>
 			isError: boolean
@@ -477,7 +479,7 @@ describe('Phase 100-10-03 luse window-aware tool handlers', () => {
 	it('T-10-03-HANDLER-06: mcp__luse__focus_window with {wid} spawns xdotool windowactivate --sync <hex>', async () => {
 		const stub = new StubMcpServer()
 		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
-		const handler = stub.getHandler('mcp__luse__focus_window')!
+		const handler = stub.getHandler('focus_window')!
 		const result = (await handler({wid: 0xabc})) as {
 			content: Array<{type: string; text?: string}>
 			isError: boolean
@@ -545,7 +547,7 @@ describe('Phase 100-10-04 luse stream-management tool handlers', () => {
 			defaultDisplay: ':10',
 		} as never)
 		const registered = stub.registered.find(
-			(r) => r.name === 'mcp__luse__create_stream',
+			(r) => r.name === 'create_stream',
 		)
 		expect(registered).toBeDefined()
 	})
@@ -559,7 +561,7 @@ describe('Phase 100-10-04 luse stream-management tool handlers', () => {
 			defaultDisplay: ':10',
 		} as never)
 		const registered = stub.registered.find(
-			(r) => r.name === 'mcp__luse__list_streams',
+			(r) => r.name === 'list_streams',
 		)
 		expect(registered).toBeDefined()
 	})
@@ -574,7 +576,7 @@ describe('Phase 100-10-04 luse stream-management tool handlers', () => {
 			userId: 'u1',
 			defaultDisplay: ':10',
 		} as never)
-		const handler = stub.getHandler('mcp__luse__create_stream')!
+		const handler = stub.getHandler('create_stream')!
 		const result = (await handler({display: ':10'})) as {
 			content: Array<{type: string; text?: string}>
 			isError: boolean
@@ -602,7 +604,7 @@ describe('Phase 100-10-04 luse stream-management tool handlers', () => {
 			userId: 'u1',
 			defaultDisplay: ':10',
 		} as never)
-		const handler = stub.getHandler('mcp__luse__create_stream')!
+		const handler = stub.getHandler('create_stream')!
 		const result = (await handler({display: ':10'})) as {
 			content: Array<{type: string; text?: string}>
 			isError: boolean
@@ -624,7 +626,7 @@ describe('Phase 100-10-04 luse stream-management tool handlers', () => {
 			userId: 'u1',
 			defaultDisplay: ':10',
 		} as never)
-		const handler = stub.getHandler('mcp__luse__list_streams')!
+		const handler = stub.getHandler('list_streams')!
 		const result = (await handler({})) as {
 			content: Array<{type: string; text?: string}>
 			isError: boolean
@@ -649,7 +651,7 @@ describe('Phase 100-10-04 luse stream-management tool handlers', () => {
 			userId: 'u1',
 			defaultDisplay: ':10',
 		} as never)
-		const handler = stub.getHandler('mcp__luse__create_stream')!
+		const handler = stub.getHandler('create_stream')!
 		const result = (await handler({display: ':10'})) as {
 			content: Array<{type: string; text?: string}>
 			isError: boolean
