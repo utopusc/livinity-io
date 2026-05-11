@@ -577,22 +577,110 @@ export class WebAppWindowManager {
 		return {ok: true}
 	}
 
+	/**
+	 * Phase 102-08 — full D-102-CLOSE-LIFECYCLE ordered teardown.
+	 *
+	 * Ordered 8-step shutdown for a WebApp instance. Each step wrapped in
+	 * try/catch so a failure in (e.g.) chromeHandle.stop NEVER prevents
+	 * subsequent releases — `displayAllocator.release` ALWAYS runs as long
+	 * as the entry was registered.
+	 *
+	 *   1. chromeHandle.stop()           SIGTERM Chrome → 2s grace → SIGKILL
+	 *      (the spawnChromeProcess handle owns the kill ladder internally).
+	 *   2. streamManager.stopStream      kills x11vnc + releases its own port.
+	 *   3. xvfbHandle.stop()             SIGTERM Xvfb (102-01 readiness-polled
+	 *      spawner handle owns the SIGKILL fallback if needed).
+	 *   4. profileSeeder.cleanup(uuid)   rm -rf /tmp/livos-chrome-app-<uuid>.
+	 *   5. displayAllocator.release(N)   :N back to the [10..99) pool.
+	 *   6. portAllocator.release(port)   tracking port back (stream-manager
+	 *      already released its own; second release on the same allocator is
+	 *      a no-op per 101-02 contract).
+	 *   7. deregisterWebAppMcp(webappId) drop Luse MCP child (Redis pub-sub
+	 *      reconcile is async — ~1-2s lag is acceptable).
+	 *   8. active.delete(webappId)       remove map entry.
+	 *
+	 * Idempotency: if `active.get(opts.webappId)` is absent (already-closed
+	 * webappId or never-spawned), return {ok: true} immediately — no
+	 * subsequent step fires. To prevent a concurrent close() racing with
+	 * the same id, we eagerly delete from `active` BEFORE running teardown.
+	 *
+	 * userId scope: the legacy contract returned {ok: false} when userId
+	 * didn't match. Preserved here.
+	 */
 	async close(opts: {
 		webappId: string
 		userId: string
 		killWindow?: boolean
 	}): Promise<{ok: boolean}> {
 		const entry = this.active.get(opts.webappId)
-		if (!entry || entry.userId !== opts.userId) return {ok: false}
+		if (!entry) return {ok: true} // idempotent — no-op for missing entries
+		if (entry.userId !== opts.userId) return {ok: false}
 
-		// Stop stream (releases its own port + x11vnc child).
+		// Eagerly remove from active so a concurrent close() races short-circuits
+		// on the missing-entry path above. All teardown work happens AFTER this
+		// line; failures don't put the entry back.
+		this.active.delete(opts.webappId)
+
+		// 1. Chrome SIGTERM → 2s grace → SIGKILL (handle owns the kill ladder).
+		if (entry.chromeHandle) {
+			try {
+				await entry.chromeHandle.stop()
+			} catch (err) {
+				this.logger?.warn?.(`webapp ${opts.webappId}: chromeHandle.stop threw (non-fatal)`, err)
+			}
+		}
+
+		// 2. x11vnc (via stream-manager — also releases its allocated port).
 		try {
 			await this.streamManager.stopStream(entry.streamId)
 		} catch (err) {
-			this.logger?.warn?.(`webapp ${opts.webappId}: stopStream threw`, err)
+			this.logger?.warn?.(`webapp ${opts.webappId}: streamManager.stopStream threw (non-fatal)`, err)
 		}
 
-		// Close portal session if any (legacy field, null under 102-04).
+		// 3. Xvfb.
+		if (entry.xvfbHandle) {
+			try {
+				await entry.xvfbHandle.stop()
+			} catch (err) {
+				this.logger?.warn?.(`webapp ${opts.webappId}: xvfbHandle.stop threw (non-fatal)`, err)
+			}
+		}
+
+		// 4. /tmp profile cleanup (rm -rf /tmp/livos-chrome-app-<uuid>).
+		if (entry.profileUuid) {
+			try {
+				await this.profileSeeder.cleanup(entry.profileUuid)
+			} catch (err) {
+				this.logger?.warn?.(
+					`webapp ${opts.webappId}: profileSeeder.cleanup threw (non-fatal)`,
+					err,
+				)
+			}
+		}
+
+		// 5. Release display slot.
+		try {
+			this.displayAllocator.release(entry.displayN)
+		} catch (err) {
+			this.logger?.warn?.(
+				`webapp ${opts.webappId}: displayAllocator.release threw (non-fatal)`,
+				err,
+			)
+		}
+
+		// 6. Release tracking port slot (idempotent — stream-manager already released
+		// its own port; second release on the shared allocator is a no-op).
+		if (typeof entry.port === 'number') {
+			try {
+				this.portAllocator.release(entry.port)
+			} catch (err) {
+				this.logger?.warn?.(`webapp ${opts.webappId}: portAllocator.release threw (non-fatal)`, err)
+			}
+		}
+
+		// Legacy/non-Phase-102 cleanup paths kept for callers that still set
+		// portalSession or geometryTracker on the entry. Under 102-04 both are
+		// null so these are dead-code branches; preserved for back-compat.
 		if (entry.portalSession) {
 			try {
 				await entry.portalSession.closeSession()
@@ -600,8 +688,6 @@ export class WebAppWindowManager {
 				this.logger?.warn?.(`webapp ${opts.webappId}: closeSession threw`, err)
 			}
 		}
-
-		// Stop geometry tracker if any (legacy field, null under 102-04).
 		if (entry.geometryTracker) {
 			try {
 				entry.geometryTracker.stop()
@@ -610,10 +696,8 @@ export class WebAppWindowManager {
 			}
 		}
 
-		// Optional: kill the Chrome window via xdotool (legacy wid path). Under
-		// 102-04 wid is 0 so this is effectively a no-op; full per-app close
-		// (chrome.stop + xvfb.stop + profile.cleanup + display.release) lands
-		// in 102-08.
+		// Optional xdotool windowkill (legacy wid path; vestigial under 102-04
+		// because entry.wid is always 0).
 		if (opts.killWindow && entry.wid > 0) {
 			try {
 				const child = this.spawnFactory('xdotool', ['windowkill', String(entry.wid)], {
@@ -626,17 +710,19 @@ export class WebAppWindowManager {
 			}
 		}
 
-		// Phase 100-08-04 — deregister per-WebApp Luse MCP entry.
-		await this.deregisterWebAppMcp(opts.webappId)
+		// 7. Phase 100-08-04 — deregister per-WebApp Luse MCP entry.
+		try {
+			await this.deregisterWebAppMcp(opts.webappId)
+		} catch (err) {
+			this.logger?.warn?.(
+				`webapp ${opts.webappId}: deregisterWebAppMcp threw (non-fatal)`,
+				err,
+			)
+		}
 
-		// Phase 102-04 close() is a stream-only teardown placeholder. Full
-		// per-app lifecycle teardown (chrome.stop + xvfb.stop + profile.cleanup
-		// + port.release + display.release) lands in Wave 3 plan 102-08.
-		// Releasing here would short-circuit the 102-08 ordering tests.
-
-		this.active.delete(opts.webappId)
+		// 8. active.delete already happened above (eager). Broadcast SOLE-active
+		// wid for legacy IPC fallback.
 		this.logger?.info?.(`webapp ${opts.webappId} closed (killWindow=${!!opts.killWindow})`)
-
 		this.broadcastActiveWid()
 
 		return {ok: true}
