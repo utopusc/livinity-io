@@ -36,17 +36,15 @@ import {
 } from './encoder-args.js'
 import type {VaapiProbeResult} from './vaapi-probe.js'
 import {spawnVncForWindow} from './vnc-bridge.js'
+import {PortAllocator} from './port-allocator.js'
 
-// Phase 99 — VNC rfbPort allocator. In-process counter; LivOS-private
-// range [15900, 16100). Bind race covered by attachVncBridge's 3×100ms
-// retry (Pitfall 4 mitigation in vnc-bridge.ts).
-let VNC_PORT_COUNTER = 15900
-function allocateVncPort(): number {
-	const port = VNC_PORT_COUNTER
-	VNC_PORT_COUNTER += 1
-	if (VNC_PORT_COUNTER >= 16100) VNC_PORT_COUNTER = 15900
-	return port
-}
+// Phase 101-02 (D-101-PORT-ALLOC / D-101-PORT-RANGE-EXTEND): the inline
+// Phase-99 counter that lived here has been replaced by the constructor-
+// injected `PortAllocator` (default range [15900, 16000)). Allocator supports
+// explicit release() so closed apps' ports return to the pool — Phase 101
+// grows concurrent stream count from 2-3 → up to 100. Bind race remains
+// covered by attachVncBridge's 3×100ms retry (Pitfall 4 mitigation in
+// vnc-bridge.ts).
 
 // Phase 100-10-04 (D-100-10-C): vnc-window mode now accepts {display} target
 // for whole-display capture (luse__create_stream tool surface). When the union
@@ -135,6 +133,13 @@ export type StreamManagerOpts = {
 	}
 	/** Override the default 2s SIGTERM→SIGKILL escalation (test hook). */
 	stopTimeoutMs?: number
+	/**
+	 * Phase 101-02: optional injected `PortAllocator`. When omitted, the
+	 * manager constructs its own default-range allocator ([15900, 16000)).
+	 * Tests can inject a custom allocator (e.g. narrow range, spy) to verify
+	 * allocate/release wiring without touching real ports.
+	 */
+	portAllocator?: PortAllocator
 }
 
 const DEFAULT_STOP_TIMEOUT_MS = 2000
@@ -152,6 +157,7 @@ export class StreamManager extends EventEmitter {
 	private readonly spawnFactory: SpawnFactory
 	private readonly logger: StreamManagerOpts['logger']
 	private readonly stopTimeoutMs: number
+	private readonly portAllocator: PortAllocator
 
 	constructor(opts: StreamManagerOpts) {
 		super()
@@ -159,6 +165,14 @@ export class StreamManager extends EventEmitter {
 		this.spawnFactory = opts.spawn
 		this.logger = opts.logger
 		this.stopTimeoutMs = opts.stopTimeoutMs ?? DEFAULT_STOP_TIMEOUT_MS
+		// Phase 101-02: use injected allocator when provided, else default
+		// [15900, 16000) range (D-101-PORT-ALLOC / D-101-PORT-RANGE-EXTEND).
+		this.portAllocator = opts.portAllocator ?? new PortAllocator()
+	}
+
+	/** Phase 101-02: expose allocator for boot-time wiring + diagnostics. */
+	getPortAllocator(): PortAllocator {
+		return this.portAllocator
 	}
 
 	/** Concurrent-stream cap: 10 with VAAPI, 5 with libx264 fallback. */
@@ -215,7 +229,9 @@ export class StreamManager extends EventEmitter {
 			}
 			const widValue = hasWid ? (target as {wid: number}).wid : undefined
 			const displayValue = hasDisplay ? (target as {display: string}).display : undefined
-			const rfbPort = allocateVncPort()
+			// Phase 101-02: PortAllocator replaces the legacy inline counter.
+			// Throws PortRangeExhaustedError when all 100 slots are in use.
+			const rfbPort = this.portAllocator.allocate()
 			const x11vnc = spawnVncForWindow({
 				wid: widValue,
 				display: displayValue,
@@ -242,6 +258,10 @@ export class StreamManager extends EventEmitter {
 			this.streams.set(streamId, vncSession)
 			const targetLabel = hasDisplay ? `display=${displayValue}` : `wid=${widValue}`
 			x11vnc.on('exit', (code, signal) => {
+				// Phase 101-02 (WARNING #6): release port on EVERY x11vnc-close
+				// path — clean exit AND crash. release() is idempotent so the
+				// duplicate call from stopStream's vnc branch is a no-op.
+				this.portAllocator.release(rfbPort)
 				if (vncSession.stopRequested) {
 					this.logger?.info?.(
 						`stream ${streamId}: x11vnc exited cleanly (stop requested)`,
@@ -383,6 +403,12 @@ export class StreamManager extends EventEmitter {
 				const timer = setTimeout(onExit, 500)
 				session.x11vnc.once('exit', onExit)
 			})
+			// Phase 101-02 (WARNING #6): defensive release on stop path. If the
+			// x11vnc 'exit' handler already fired, this is a no-op (release is
+			// idempotent). If the timeout above raced and the exit handler
+			// hasn't run yet (e.g. SIGTERM stalled), this ensures the port
+			// still returns to the pool.
+			this.portAllocator.release(session.rfbPort)
 			this.streams.delete(streamId)
 			const targetLabel =
 				session.display !== undefined
