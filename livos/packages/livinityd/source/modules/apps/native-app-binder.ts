@@ -32,8 +32,11 @@
  */
 
 import {basename} from 'node:path'
+import type {ChildProcess} from 'node:child_process'
 
 import type {PortAllocator} from '../streaming/port-allocator.js'
+import type {DisplayAllocator} from '../streaming/display-allocator.js'
+import type {XvfbHandle} from '../streaming/xvfb-spawner.js'
 
 /**
  * The contract a stream-start callback must satisfy. Production wraps
@@ -111,4 +114,167 @@ export async function bind(
 		opts.portAllocator.release(port)
 		throw err
 	}
+}
+
+/**
+ * Phase 102-08 — Active native-app entry shape consumed by `closeNativeApp`.
+ *
+ * Matches the production map (`activeNative` in `apps/native-routes.ts`) field-
+ * for-field for the keys the teardown needs. Re-declared here (rather than
+ * imported from native-routes.ts) to keep the binder module dependency-free
+ * of the route layer — preserves the Phase 102-05 inversion (`bind` is a
+ * primitive; the route composes it).
+ */
+export interface NativeActiveEntry {
+	id: string
+	displayN: number
+	display: string
+	port: number
+	streamId: string
+	wsUrl: string
+	xvfb: XvfbHandle
+	child: ChildProcess
+	startedAt: number
+}
+
+/**
+ * Phase 102-08 — kill ladder grace in ms before SIGKILL is sent if the binary
+ * has not yet exited after SIGTERM. Matches the Chrome handle in
+ * `webapps/chrome-process-spawner.ts`.
+ */
+const NATIVE_KILL_GRACE_MS = 2000
+
+export interface CloseNativeOpts {
+	/** The native-app UUID — same as ActiveNativeApp.id. */
+	id: string
+	/** The module-scope activeNative map (route owns the singleton). */
+	active: Map<string, NativeActiveEntry>
+	/** DisplayAllocator instance (102-01) — call release(N) on teardown. */
+	displayAllocator: DisplayAllocator
+	/**
+	 * PortAllocator instance (101-02). The stream-manager already calls
+	 * `release(port)` internally on stopStream — this second release is a
+	 * no-op per 101-02's idempotent contract but is invoked for symmetry with
+	 * the WebApp close path (window-manager.ts Phase 102-08).
+	 */
+	portAllocator: PortAllocator
+	/**
+	 * Stream-manager surface (only `stopStream` is needed for teardown). The
+	 * production `StreamManager.stopStream` resolves to `{stopped: boolean}`;
+	 * we accept any return shape because the binder doesn't read it.
+	 */
+	streamManager: {stopStream(id: string): Promise<unknown>}
+	logger?: BinderLogger
+	/**
+	 * Override the kill-grace in ms (test hook). Default 2000ms before SIGKILL
+	 * is fired if SIGTERM didn't take.
+	 */
+	killGraceMs?: number
+}
+
+/**
+ * D-102-CLOSE-LIFECYCLE — ordered shutdown for a native-app instance:
+ *
+ *   1. child.kill('SIGTERM')         (graceful 2s)
+ *   2. child.kill('SIGKILL')         (if still alive after grace)
+ *   3. streamManager.stopStream      (kills x11vnc + releases stream port)
+ *   4. xvfb.stop()                   (SIGTERM Xvfb)
+ *   5. displayAllocator.release(N)
+ *   6. portAllocator.release(port)   (idempotent — stream-manager already released)
+ *   7. active.delete(id)             (performed eagerly first — concurrent-close guard)
+ *
+ * No master-profile cleanup (D-102-MASTER-PROFILE-SEED is WebApps-only —
+ * native binaries manage their own state).
+ *
+ * Idempotency: if `active.get(id)` is missing, return immediately (no-op).
+ * Eager `active.delete` before any teardown work prevents concurrent closes
+ * from running the same teardown twice. Every step wrapped in try/catch —
+ * a failure in (e.g.) child.kill or xvfb.stop NEVER blocks subsequent releases.
+ */
+export async function closeNativeApp(opts: CloseNativeOpts): Promise<void> {
+	const entry = opts.active.get(opts.id)
+	if (!entry) return // idempotent — no-op for missing entries
+
+	// Eagerly remove so a concurrent close() short-circuits on the missing-entry
+	// path above. All teardown work happens AFTER this line; failures don't put
+	// the entry back.
+	opts.active.delete(opts.id)
+
+	const graceMs = opts.killGraceMs ?? NATIVE_KILL_GRACE_MS
+
+	// 1. SIGTERM the binary.
+	try {
+		entry.child.kill('SIGTERM')
+	} catch (err) {
+		opts.logger?.warn(
+			`closeNativeApp(${opts.id}): child.kill('SIGTERM') threw (non-fatal): ` +
+				(err instanceof Error ? err.message : String(err)),
+		)
+	}
+
+	// 2. Wait up to grace for exit, then SIGKILL if still alive. We race a timer
+	// against the child's exit event; whichever wins, we move on.
+	if (entry.child.exitCode === null && entry.child.signalCode === null) {
+		const exited = new Promise<void>((resolve) => {
+			entry.child.once('exit', () => resolve())
+			entry.child.once('error', () => resolve())
+		})
+		const killer = new Promise<'killed'>((resolve) => {
+			setTimeout(() => {
+				try {
+					entry.child.kill('SIGKILL')
+				} catch (err) {
+					opts.logger?.warn(
+						`closeNativeApp(${opts.id}): child.kill('SIGKILL') threw (non-fatal): ` +
+							(err instanceof Error ? err.message : String(err)),
+					)
+				}
+				resolve('killed')
+			}, graceMs).unref?.()
+		})
+		// Wait for either exit or the killer to fire (whichever comes first).
+		await Promise.race([exited, killer]).catch(() => undefined)
+	}
+
+	// 3. Stop the x11vnc stream (releases its allocated port internally).
+	try {
+		await opts.streamManager.stopStream(entry.streamId)
+	} catch (err) {
+		opts.logger?.warn(
+			`closeNativeApp(${opts.id}): streamManager.stopStream threw (non-fatal): ` +
+				(err instanceof Error ? err.message : String(err)),
+		)
+	}
+
+	// 4. Stop Xvfb.
+	try {
+		await entry.xvfb.stop()
+	} catch (err) {
+		opts.logger?.warn(
+			`closeNativeApp(${opts.id}): xvfb.stop threw (non-fatal): ` +
+				(err instanceof Error ? err.message : String(err)),
+		)
+	}
+
+	// 5. Release display slot.
+	try {
+		opts.displayAllocator.release(entry.displayN)
+	} catch (err) {
+		opts.logger?.warn(
+			`closeNativeApp(${opts.id}): displayAllocator.release threw (non-fatal): ` +
+				(err instanceof Error ? err.message : String(err)),
+		)
+	}
+
+	// 6. Release tracking port slot (idempotent at allocator).
+	try {
+		opts.portAllocator.release(entry.port)
+	} catch (err) {
+		opts.logger?.warn(
+			`closeNativeApp(${opts.id}): portAllocator.release threw (non-fatal): ` +
+				(err instanceof Error ? err.message : String(err)),
+		)
+	}
+
+	opts.logger?.info(`closeNativeApp(${opts.id}): complete`)
 }
