@@ -49,7 +49,7 @@ vi.mock('node:fs/promises', () => ({
 import {
 	registerLuseMcpServer,
 	buildLuseConfig,
-	LUSE_TARGET_WINDOW_ID_ENV,
+	LUSE_TARGET_DISPLAY_ENV,
 } from './luse-mcp-config.js'
 
 const DEFAULT_PATH =
@@ -260,54 +260,94 @@ describe('registerLuseMcpServer', () => {
 	})
 })
 
-// ─── Phase 100-08-03 — descriptor.display branch ─────────────────────
+// ─── Phase 102-06 — descriptor.display required + LUSE_TARGET_DISPLAY env ───
 //
-// V33-08-03-DESCRIPTOR-DISPLAY: extend PerWebAppMcpDescriptor with optional
-// `display` field (default `:1` per D-100-08-A). When the descriptor branch
-// fires, the spawned Luse MCP child's env carries DISPLAY=<descriptor.display
-// ?? ':1'> so child xdotool/maim/xclip spawns inherit it via process.env.
-// The host Luse variant (descriptor=undefined) keeps `process.env.DISPLAY
-// ?? ':0'` for backward compat with desktop-stream native app.
-describe('buildLuseConfig — Phase 100-08-03 descriptor.display', () => {
-	it('per-WebApp variant defaults DISPLAY to :1 when descriptor.display is omitted', () => {
+// Phase 102 pivots per-WebApp Luse MCP instances to scope by X11 display
+// (`:10`, `:11`, …) instead of by Chrome window-id. PerWebAppMcpDescriptor
+// drops `windowId` and makes `display` REQUIRED (`^:[1-9][0-9]?$` — 1..99).
+// The spawned child's env carries `LUSE_TARGET_DISPLAY` (canonical) alongside
+// `DISPLAY` (kept for child-spawned xdotool/maim/xclip inheritance).
+//
+// T-102-06 threat: caller-controlled `display` string is interpolated into
+// the spawned child's env, which downstream tools concatenate into X11 socket
+// paths and xdotool argv. Validate against /^:[1-9][0-9]?$/ to deny shell-meta
+// or path-traversal payloads (`":1 ; rm -rf"` etc).
+describe('buildLuseConfig — Phase 102-06 LUSE_TARGET_DISPLAY env', () => {
+	it('per-WebApp variant: descriptor.display becomes BOTH DISPLAY and LUSE_TARGET_DISPLAY env', () => {
 		const cfg = buildLuseConfig(
 			{DISPLAY: ':0'} as NodeJS.ProcessEnv,
 			'/some/path/server.ts',
-			{instanceKey: 'webapp-123', windowId: 0xa1b2c3},
+			{instanceKey: 'webapp-123', display: ':10'},
 		)
-		expect(cfg.env?.DISPLAY).toBe(':1')
-		expect(cfg.env?.[LUSE_TARGET_WINDOW_ID_ENV]).toBe(String(0xa1b2c3))
+		expect(cfg.env?.DISPLAY).toBe(':10')
+		expect(cfg.env?.[LUSE_TARGET_DISPLAY_ENV]).toBe(':10')
 		expect(cfg.env?.XAUTHORITY).toBeUndefined()
 		expect(cfg.name).toBe('luse:webapp:webapp-123')
 	})
 
-	// Phase 100-10-08 (D-100-10-A reverted): explicit non-:1 descriptor.display
-	// is no longer driven by any live caller; the override path is retained as
-	// Phase 101 CDP scaffolding. Test stays as a contract lock for CDP work.
-	it('per-WebApp variant honors explicit descriptor.display (Phase 101 CDP scaffolding)', () => {
+	it('per-WebApp variant: env block does NOT carry legacy LUSE_TARGET_WINDOW_ID', () => {
 		const cfg = buildLuseConfig(
-			{DISPLAY: ':99'} as NodeJS.ProcessEnv,
+			{DISPLAY: ':0'} as NodeJS.ProcessEnv,
 			'/some/path/server.ts',
-			{instanceKey: 'webapp-456', windowId: 42, display: ':2'},
+			{instanceKey: 'webapp-abc', display: ':11'},
 		)
-		expect(cfg.env?.DISPLAY).toBe(':2')
+		// LUSE_TARGET_WINDOW_ID is the pre-102 env name; per-WebApp variant
+		// no longer emits it (mcp/server.ts host-variant path still reads it
+		// as legacy fallback — see mcp/server.ts comments).
+		expect(cfg.env?.LUSE_TARGET_WINDOW_ID).toBeUndefined()
 	})
 
-	// Phase 100-10-08 — default contract: when descriptor omits display, the
-	// per-WebApp variant pins DISPLAY=:1 (singleton from 100-08-01).
-	it('per-WebApp variant DEFAULTS DISPLAY to :1 when descriptor.display is omitted (D-100-10-A reverted)', () => {
-		const cfg = buildLuseConfig(
-			{DISPLAY: ':99'} as NodeJS.ProcessEnv,
-			'/some/path/server.ts',
-			{instanceKey: 'webapp-789', windowId: 99},
-		)
-		expect(cfg.env?.DISPLAY).toBe(':1')
+	it('per-WebApp variant: invalid display (over 99) throws with regex-violation message (T-102-06)', () => {
+		expect(() =>
+			buildLuseConfig(
+				{} as NodeJS.ProcessEnv,
+				'/srv/server.ts',
+				{instanceKey: 'webapp-bad', display: ':100'},
+			),
+		).toThrow(/display must match/i)
 	})
 
-	// Phase 100-10-09 — host variant DISPLAY default flipped from :0 → :1.
-	// Inherited DISPLAY=:0 from systemd routes the MCP child to Bruce's GNOME
-	// (blind to WebApp Chrome on :1); LUSE_DISPLAY override is the only path
-	// for explicit non-:1 host targeting. XAUTHORITY contract unchanged.
+	it('per-WebApp variant: invalid display (shell-meta) throws (T-102-06)', () => {
+		expect(() =>
+			buildLuseConfig(
+				{} as NodeJS.ProcessEnv,
+				'/srv/server.ts',
+				{instanceKey: 'webapp-evil', display: ':1; rm -rf /'},
+			),
+		).toThrow(/display must match/i)
+	})
+
+	it('per-WebApp variant: invalid display (no colon prefix) throws (T-102-06)', () => {
+		expect(() =>
+			buildLuseConfig(
+				{} as NodeJS.ProcessEnv,
+				'/srv/server.ts',
+				{instanceKey: 'webapp-x', display: '10'},
+			),
+		).toThrow(/display must match/i)
+	})
+
+	it('per-WebApp variant: valid edge case displays :1 and :99 are accepted', () => {
+		const lo = buildLuseConfig(
+			{} as NodeJS.ProcessEnv,
+			'/srv/server.ts',
+			{instanceKey: 'webapp-lo', display: ':1'},
+		)
+		expect(lo.env?.[LUSE_TARGET_DISPLAY_ENV]).toBe(':1')
+		const hi = buildLuseConfig(
+			{} as NodeJS.ProcessEnv,
+			'/srv/server.ts',
+			{instanceKey: 'webapp-hi', display: ':99'},
+		)
+		expect(hi.env?.[LUSE_TARGET_DISPLAY_ENV]).toBe(':99')
+	})
+
+	it('LUSE_TARGET_DISPLAY_ENV constant equals "LUSE_TARGET_DISPLAY"', () => {
+		expect(LUSE_TARGET_DISPLAY_ENV).toBe('LUSE_TARGET_DISPLAY')
+	})
+
+	// Host variant tests (no descriptor) — Phase 100-10-09 contract preserved.
+
 	it('host variant defaults DISPLAY to :1 AND preserves XAUTHORITY (Phase 100-10-09)', () => {
 		const cfg = buildLuseConfig(
 			{
@@ -317,7 +357,7 @@ describe('buildLuseConfig — Phase 100-08-03 descriptor.display', () => {
 		)
 		expect(cfg.env?.DISPLAY).toBe(':1')
 		expect(cfg.env?.XAUTHORITY).toBe('/run/user/1000/gdm/Xauthority')
-		expect(cfg.env?.[LUSE_TARGET_WINDOW_ID_ENV]).toBeUndefined()
+		expect(cfg.env?.[LUSE_TARGET_DISPLAY_ENV]).toBeUndefined()
 		expect(cfg.name).toBe('luse')
 	})
 
@@ -332,12 +372,8 @@ describe('buildLuseConfig — Phase 100-08-03 descriptor.display', () => {
 		expect(cfg.env?.XAUTHORITY).toBe('/custom/xauth')
 	})
 
-	// ─── Phase 100-10-09 — host variant DISPLAY default :1 ─────────────
-	//
-	// Live UAT 2026-05-10: Luse MCP child inherited DISPLAY=:0 from
-	// systemd's livinityd unit env → list_windows returned Bruce's GNOME
-	// windows instead of WebApp Chromes on Xvfb :1. Fix: default :1; require
-	// explicit LUSE_DISPLAY override for host-desktop legacy path.
+	// ─── Phase 100-10-09 — host variant DISPLAY default :1 (preserved) ──
+
 	it('T-10-09-DISPLAY-01: host variant defaults DISPLAY to :1', () => {
 		const cfg = buildLuseConfig({} as NodeJS.ProcessEnv, '/srv/server.ts')
 		expect(cfg.env?.DISPLAY).toBe(':1')
