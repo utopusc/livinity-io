@@ -1,6 +1,7 @@
 import type {AgentEvent, AgentResult} from '@liv/core'
 import type Livinityd from '../../index.js'
 import {
+	buildActiveDisplaySnippet,
 	buildActiveWindowSnippet,
 	type ActiveAppMeta,
 } from '../ai/agent-prompt-builder.js'
@@ -131,6 +132,25 @@ export async function* createSdkAgentRunnerForUser(opts: {
 	 * `buildActiveWindowSnippet` before interpolation (T-101-03).
 	 */
 	activeWid?: number
+	/**
+	 * Phase 102-06 (Pillar C) - Active Display Context auto-injection.
+	 *
+	 * When BOTH `activeDisplay` (X11 display string :N) and `activeAppMeta`
+	 * are present, the broker prepends a `## Active Display Context` markdown
+	 * snippet (built by `agent-prompt-builder.buildActiveDisplaySnippet`)
+	 * into the request's `contextPrefix` before forwarding to liv
+	 * `/api/agent/stream`. Replaces the pre-102 wid-based `activeWid` path
+	 * (which remains supported for back-compat but is deprecated as the
+	 * per-WebApp Luse now scopes by display, not wid).
+	 *
+	 * If both `activeDisplay` and `activeWid` are present, `activeDisplay`
+	 * takes precedence; `activeWid` is ignored to avoid emitting two
+	 * snippets that contradict each other.
+	 *
+	 * Per T-102-06b, `activeDisplay` is regex-validated inside
+	 * `buildActiveDisplaySnippet` before interpolation.
+	 */
+	activeDisplay?: string
 	activeAppMeta?: ActiveAppMeta
 }): AsyncGenerator<AgentBrokerEvent, AgentResult, void> {
 	const {livinityd, userId, task, contextPrefix, systemPromptOverride, maxTurns = 30, signal} = opts
@@ -151,7 +171,24 @@ export async function* createSdkAgentRunnerForUser(opts: {
 	// a half-empty snippet. Existing contextPrefix is preserved as a prefix
 	// to the snippet (joined with a blank line for visual separation).
 	let injectedContextPrefix = contextPrefix
-	if (opts.activeWid !== undefined && opts.activeAppMeta) {
+	// Phase 102-06 - display-scoped snippet has precedence over the legacy
+	// wid-scoped snippet. When both `activeDisplay` and `activeWid` are
+	// supplied (during the migration window between pre-102 and 102+ broker
+	// payloads), we prefer the display path and skip the wid path entirely.
+	if (typeof opts.activeDisplay === 'string' && opts.activeAppMeta) {
+		const snippet = buildActiveDisplaySnippet({
+			activeDisplay: opts.activeDisplay,
+			appMeta: opts.activeAppMeta,
+		})
+		if (snippet) {
+			injectedContextPrefix = injectedContextPrefix
+				? `${injectedContextPrefix}\n\n${snippet}`
+				: snippet
+		}
+	} else if (opts.activeWid !== undefined && opts.activeAppMeta) {
+		// @deprecated path - buildActiveWindowSnippet retained for pre-102
+		// callers that haven't migrated to activeDisplay yet. Once all
+		// callers send activeDisplay this branch is dead code.
 		const snippet = buildActiveWindowSnippet({
 			activeWid: opts.activeWid,
 			appMeta: opts.activeAppMeta,

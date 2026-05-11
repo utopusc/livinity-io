@@ -398,3 +398,116 @@ describe('createSdkAgentRunnerForUser — Phase 101-09 Pillar F (Hermes status_d
 		expect(unknown.data).toEqual({arbitrary: 'shape'})
 	})
 })
+
+// Phase 102-06 - Active Display Context (replaces wid-based path)
+//
+// New `activeDisplay` opt takes precedence over legacy `activeWid` when both
+// are present; new snippet emits "## Active Display Context" with the :N
+// display + 1280x720 resolution hint.
+
+describe('createSdkAgentRunnerForUser - Phase 102-06 Active Display Context', () => {
+	let stub: ReturnType<typeof captureUpstreamPost>
+
+	beforeEach(() => {
+		stub = captureUpstreamPost()
+		vi.unstubAllEnvs()
+	})
+
+	afterEach(() => {
+		stub.restore()
+		vi.unstubAllEnvs()
+	})
+
+	it('injects "## Active Display Context" when activeDisplay + activeAppMeta present', async () => {
+		const gen = createSdkAgentRunnerForUser({
+			livinityd: makeFakeLivinityd(),
+			userId: 'u1',
+			task: 'do thing',
+			activeDisplay: ':10',
+			activeAppMeta: {
+				appId: 'webapp-x',
+				kind: 'webapp',
+				url: 'https://example.com/x',
+				title: 'Test App',
+			},
+		})
+		await drainRunner(gen)
+		const cp: string = stub.captured.body.contextPrefix
+		expect(cp).toContain('## Active Display Context')
+		expect(cp).toContain(':10')
+		expect(cp).toContain('1280x720')
+		expect(cp).toContain('LUSE_TARGET_DISPLAY')
+		expect(cp).toContain('Test App')
+	})
+
+	it('activeDisplay takes precedence over activeWid when both are present', async () => {
+		const gen = createSdkAgentRunnerForUser({
+			livinityd: makeFakeLivinityd(),
+			userId: 'u1',
+			task: 'do thing',
+			activeWid: 9999,
+			activeDisplay: ':11',
+			activeAppMeta: {
+				appId: 'webapp-x',
+				kind: 'webapp',
+				url: 'https://x.com',
+				title: 'X',
+			},
+		})
+		await drainRunner(gen)
+		const cp: string = stub.captured.body.contextPrefix
+		// New display snippet present:
+		expect(cp).toContain('## Active Display Context')
+		expect(cp).toContain(':11')
+		// Legacy window snippet NOT injected (precedence rule):
+		expect(cp).not.toContain('## Active Window Context')
+		expect(cp).not.toContain('Window ID: 9999')
+	})
+
+	it('falls back to legacy activeWid path when only activeWid is supplied (back-compat)', async () => {
+		const gen = createSdkAgentRunnerForUser({
+			livinityd: makeFakeLivinityd(),
+			userId: 'u1',
+			task: 'do thing',
+			activeWid: 42,
+			activeAppMeta: {
+				appId: 'webapp-x',
+				kind: 'webapp',
+				url: 'https://x.com',
+				title: 'X',
+			},
+		})
+		await drainRunner(gen)
+		const cp: string = stub.captured.body.contextPrefix
+		expect(cp).toContain('## Active Window Context')
+		expect(cp).toContain('Window ID: 42')
+	})
+
+	it('does NOT inject when activeDisplay is malformed (regex-guard fail-open)', async () => {
+		const gen = createSdkAgentRunnerForUser({
+			livinityd: makeFakeLivinityd(),
+			userId: 'u1',
+			task: 'do thing',
+			activeDisplay: ':abc; rm -rf /',
+			activeAppMeta: {
+				appId: 'a',
+				kind: 'webapp',
+				title: 'X',
+			},
+		})
+		await drainRunner(gen)
+		// regex-guard returns empty string -> no injection
+		expect(stub.captured.body.contextPrefix).toBeUndefined()
+	})
+
+	it('does NOT inject when only activeDisplay is supplied (no activeAppMeta)', async () => {
+		const gen = createSdkAgentRunnerForUser({
+			livinityd: makeFakeLivinityd(),
+			userId: 'u1',
+			task: 'do thing',
+			activeDisplay: ':10',
+		})
+		await drainRunner(gen)
+		expect(stub.captured.body.contextPrefix).toBeUndefined()
+	})
+})

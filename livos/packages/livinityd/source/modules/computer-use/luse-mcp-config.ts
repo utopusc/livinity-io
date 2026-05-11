@@ -101,46 +101,68 @@ export const DEFAULT_LUSE_MCP_SERVER_PATH =
 export const PER_WEBAPP_LUSE_INSTANCE_CAP = 3
 
 /**
- * Phase 97-05 — env var that signals a Luse MCP child process to scope
- * all native primitive calls to a specific X11 window id by default. The
- * server reads this once at boot; tools.ts threads it into native primitive
- * calls when a tool's input doesn't explicitly override it.
+ * Phase 102-06 — env var that signals a Luse MCP child process to scope all
+ * native primitive calls to a specific X11 display (e.g. `:10`, `:11`).
+ *
+ * Replaces the pre-102 `LUSE_TARGET_WINDOW_ID` per-WebApp env (which scoped by
+ * X11 window-id, not display). The per-WebApp Luse child now runs against its
+ * own dedicated Xvfb display (D-102-PER-APP-XVFB / D-102-LUSE-DISPLAY-SCOPING)
+ * so every xdotool / maim / xclip call inherits `DISPLAY=:N` from the child's
+ * environment — no window-coord translation, no offset, no scaling.
+ *
+ * `LUSE_TARGET_WINDOW_ID` (the legacy env name) is NO LONGER set in the
+ * per-WebApp descriptor branch; mcp/server.ts retains a read of it as a
+ * deprecated legacy fallback for the host-display Luse instance only.
  */
-export const LUSE_TARGET_WINDOW_ID_ENV = 'LUSE_TARGET_WINDOW_ID'
+export const LUSE_TARGET_DISPLAY_ENV = 'LUSE_TARGET_DISPLAY'
 
 /**
- * Phase 97-05 — descriptor for a per-WebApp Luse MCP server instance.
+ * Phase 102-06 — display-value validation regex.
+ *
+ * Threat T-102-06 (env injection): the per-WebApp descriptor's `display` is a
+ * caller-controlled string that flows into the spawned child's env, where
+ * downstream xdotool / maim / xclip concatenate it into X11 socket paths and
+ * argv. Permitting arbitrary strings would let an attacker inject shell-meta
+ * or path-traversal payloads (`:1 ; rm -rf` etc).
+ *
+ * Allowed shape: `:N` where N is an integer in [1, 99]. This matches the
+ * DisplayAllocator range [10, 100) (102-01) plus the host-display singletons
+ * `:0` … `:9`. The lower bound is `:1` (not `:0`) because `:0` is the local
+ * console and never enters per-WebApp territory.
+ */
+const DISPLAY_RE = /^:[1-9][0-9]?$/
+
+function validateDescriptorDisplay(d: PerWebAppMcpDescriptor): void {
+	if (!DISPLAY_RE.test(d.display)) {
+		throw new Error(
+			`PerWebAppMcpDescriptor.display must match /^:[1-9][0-9]?$/ (:1..:99), got: ${JSON.stringify(d.display)}`,
+		)
+	}
+}
+
+/**
+ * Phase 102-06 — descriptor for a per-WebApp Luse MCP server instance.
  *
  * `instanceKey` namespaces the entry in McpConfigManager (e.g. registered
  * under server name `luse:webapp:<instanceKey>` instead of the bare
- * `luse`). Two simultaneous WebApp instances will not collide even if
- * they happen to wrap the same Chrome window id at different times.
+ * `luse`). Two simultaneous WebApp instances do not collide even if they
+ * happen to render the same underlying URL on different displays.
  *
- * `windowId` is plumbed into the spawned child's env as
- * LUSE_TARGET_WINDOW_ID, where mcp/server.ts picks it up and tools.ts
- * uses it as the default windowId for every primitive call.
+ * `display` is the X11 display (`:10`, `:11`, …) the spawned Luse MCP child
+ * should target via its `DISPLAY` env var. REQUIRED by Phase 102 — every
+ * per-WebApp Luse child runs on its own dedicated Xvfb display (D-102-PER-
+ * APP-XVFB). Native xdotool/maim/xclip calls inside the child process (see
+ * ./native/input.ts which spawns these binaries with default process.env)
+ * inherit DISPLAY from the spawned env, so setting it once at MCP child
+ * boot makes all primitive calls target the right display.
+ *
+ * NOTE on pre-102 `windowId` field: dropped in Phase 102 — per-WebApp Luse
+ * is no longer wid-scoped (display IS the unit of isolation). Callers that
+ * still reference `.windowId` must be updated to pass `display: ':N'`.
  */
 export interface PerWebAppMcpDescriptor {
 	instanceKey: string
-	windowId: number
-	/**
-	 * Phase 100-08-03 — X11 display the spawned Luse MCP child should
-	 * target via its `DISPLAY` env var. Defaults to `:1` (D-100-08-A: Xvfb
-	 * dedicated to WebApp Chromes).
-	 *
-	 * Phase 100-10-08 (D-100-10-A reverted): all callers now pass `:1`
-	 * (the singleton display from 100-08-01). The optional override is
-	 * RETAINED for Phase 101 CDP scaffolding — when CDP-driven multi-target
-	 * Chrome lands, the descriptor display will reflect the CDP-bound
-	 * target display per WebApp.
-	 *
-	 * Native xdotool/maim/xclip calls inside the child process (see
-	 * ./native/input.ts which spawns these binaries with default
-	 * process.env) inherit DISPLAY from the spawned env, so setting it
-	 * once at MCP child boot makes all primitive calls target the right
-	 * display.
-	 */
-	display?: string
+	display: string
 }
 
 /** Minimal logger contract — only .log + .error are used. Compatible with
@@ -212,12 +234,13 @@ export function buildLuseConfig(
 	resolvedPath: string,
 	descriptor?: PerWebAppMcpDescriptor,
 ): McpServerConfigInput {
-	// Phase 100-08-03 — branch on descriptor presence:
-	//   - per-WebApp variant: DISPLAY from descriptor.display (default :1,
-	//     D-100-08-A); XAUTHORITY dropped (Xvfb :1 runs with -ac, no cookie
-	//     required). LUSE_TARGET_WINDOW_ID propagated from descriptor.windowId.
-	//     Phase 100-10-08 (D-100-10-A reverted): current callers always pass
-	//     `:1`; the optional override stays for Phase 101 CDP scaffolding.
+	// Phase 102-06 — branch on descriptor presence:
+	//   - per-WebApp variant: descriptor.display is REQUIRED (D-102-PER-APP-
+	//     XVFB) and validated against /^:[1-9][0-9]?$/ to deny env-injection
+	//     payloads (T-102-06). Set BOTH `DISPLAY` (for xdotool/maim/xclip
+	//     inheritance) AND `LUSE_TARGET_DISPLAY` (canonical Phase 102 env
+	//     read by mcp/server.ts). XAUTHORITY dropped (per-WebApp Xvfb runs
+	//     with -ac, no cookie required).
 	//   - host variant (desktop-stream native app): DISPLAY default `:1`
 	//     (Phase 100-10-09 — flipped from previous `env.DISPLAY ?? ':0'`).
 	//     Rationale: Chrome WebApps spawn on the Xvfb display `:1` (Phase
@@ -243,11 +266,12 @@ export function buildLuseConfig(
 	// at call-time. When `process.env.REDIS_URL` is unset, the empty string
 	// passes through and the MCP child falls back to "no Redis" semantics
 	// (gate denies — fail-closed).
+	if (descriptor) validateDescriptorDisplay(descriptor)
 	const luseRedisUrl = env.REDIS_URL ?? ''
 	const baseEnv: Record<string, string> = descriptor
 		? {
-				DISPLAY: descriptor.display ?? ':1',
-				[LUSE_TARGET_WINDOW_ID_ENV]: String(descriptor.windowId),
+				DISPLAY: descriptor.display,
+				[LUSE_TARGET_DISPLAY_ENV]: descriptor.display,
 				LUSE_REDIS_URL: luseRedisUrl,
 			}
 		: {

@@ -27,15 +27,6 @@ import {
 	WebappCapExceededError,
 } from './window-manager.js'
 import {PortalUnavailable} from './pipewire-portal.js'
-// Phase 102-04 — new fixtures for the per-app Xvfb + Chrome subprocess rewrite
-// of `spawn()`. These types model the Wave 1 primitives (102-01 DisplayAllocator
-// + spawnXvfb, 102-02 spawnChromeProcess, 102-03 ProfileSeederHandle) that
-// 102-04 wires into WebAppWindowManager. Re-imported indirectly so the test
-// file's TypeScript references match the production opt shapes the rewrite adds.
-import type {DisplayAllocator, XvfbHandle} from '../streaming/index.js'
-import type {ChromeProcessHandle} from './chrome-process-spawner.js'
-import type {ProfileSeederHandle} from '../chrome-master/index.js'
-import type {PortAllocator} from '../streaming/port-allocator.js'
 
 class FakeChild extends EventEmitter {
 	unref = vi.fn()
@@ -152,34 +143,54 @@ function makeGeometryTrackerCtor() {
 	return {ctor: ctor as any, instances}
 }
 
-/**
- * Phase 102-04 — legacy makeManager now wraps makeManager102 so the historical
- * test bodies can keep their fixture shape without needing to know about the
- * new per-app primitives. Tests that previously asserted CDP behavior have
- * been retired (see describe.skip below) but tests that exercise general
- * manager surface (spawn happy path, idempotency, list filter, close cascade)
- * still need a working manager.
- *
- * The returned bundle preserves the original `chromeCdpBundle` field so older
- * call sites that destructured it still type-check; under 102-04 the bundle
- * is a no-op record (its mocks are never invoked by spawn() anymore).
- */
 function makeManager(overrides: any = {}) {
+	const {streamManager, started, stopped} = makeStreamManager()
+	const discovery = overrides.discovery ?? makeDiscovery()
+	const {portal, closeSession} = overrides.portalBundle ?? makePortal()
+	const {ctor: GeometryTrackerCtor, instances: trackerInstances} =
+		overrides.trackerBundle ?? makeGeometryTrackerCtor()
+	const spawn = vi.fn(() => new FakeChild() as any)
+	const logger = {info: vi.fn(), warn: vi.fn(), error: vi.fn(), verbose: vi.fn()}
+	// Phase 101-04 — every manager now needs a ChromeCdpClient. Tests that don't
+	// override one get the default mock so the constructor satisfies the new
+	// required opt. Bundle is exposed in the return so tests can assert against
+	// createWindowForUrl / closeTarget call counts.
 	const chromeCdpBundle = overrides.chromeCdpBundle ?? makeChromeCdpClient()
-	const m102 = makeManager102(overrides)
-	const trackerInstances: Array<{start: any; stop: any}> = []
+	const mgr = new WebAppWindowManager({
+		streamManager,
+		spawn,
+		logger,
+		discovery,
+		portal,
+		GeometryTrackerCtor,
+		titleTimeoutMs: overrides.titleTimeoutMs ?? 100,
+		idlePollMs: overrides.idlePollMs ?? 50,
+		webappCap: overrides.webappCap,
+		// Phase 100-08-04 — optional MCP config-manager opts (Redis pub-sub
+		// path; liv-core's McpClientManager reconciles async).
+		mcpConfigManager: overrides.mcpConfigManager,
+		luseServerPath: overrides.luseServerPath,
+		luseMcpEnv: overrides.luseMcpEnv,
+		// Phase 100-10-01 — per-WebApp Xvfb display allocator + start fns.
+		displayAllocator: overrides.displayAllocator,
+		xvfbStartFn: overrides.xvfbStartFn,
+		fluxboxStartFn: overrides.fluxboxStartFn,
+		// Phase 101-04 — CDP-driven spawn. Injected for every manager so the
+		// new spawn body has a CDP surface to talk to.
+		chromeCdpClient: chromeCdpBundle.client as any,
+	})
 	return {
-		mgr: m102.mgr,
-		streamManager: m102.streamManager,
-		started: m102.started,
-		stopped: m102.stopped,
-		discovery: m102.discovery,
-		portal: m102.portal,
-		closeSession: vi.fn(),
-		spawn: m102.spawn,
-		trackerInstances, // empty under 102-04; geometry-tracker is null
-		logger: m102.logger,
-		chromeCdpBundle, // unused under 102-04 — kept for legacy destructuring
+		mgr,
+		streamManager,
+		started,
+		stopped,
+		discovery,
+		portal,
+		closeSession,
+		spawn,
+		trackerInstances,
+		logger,
+		chromeCdpBundle,
 	}
 }
 
@@ -191,17 +202,15 @@ describe('WebAppWindowManager', () => {
 		vi.useRealTimers()
 	})
 
-	it('Test 1: spawn happy path returns {webappId,windowId:0,streamId,wsUrl} with mode:"vnc-window" + target:{display} (Phase 102-04: per-app-display path)', async () => {
+	it('Test 1: spawn happy path returns {webappId,windowId,streamId,wsUrl} with mode:"vnc-window" (Phase 99-04 swap)', async () => {
 		const {mgr, streamManager, started} = makeManager()
 		const r = await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'})
-		// Phase 102-04: windowId is vestigial 0 (display is the unit of identity).
-		expect(r.windowId).toBe(0)
+		expect(r.windowId).toBe(0x200)
 		expect(r.streamId).toMatch(/^stream-/)
 		expect(r.wsUrl).toMatch(/^\/ws\/stream\//)
 		expect(streamManager.startStream).toHaveBeenCalledOnce()
 		expect(started[0].mode).toBe('vnc-window')
-		// Phase 102-04: target is {display: ':10'} (whole-display capture).
-		expect(started[0].target).toEqual({display: ':10'})
+		expect(started[0].target).toEqual({wid: 0x200})
 		mgr._clearForTests()
 	})
 
@@ -214,28 +223,33 @@ describe('WebAppWindowManager', () => {
 		mgr._clearForTests()
 	})
 
-	it('Test 3: spawn uses vnc-window with target:{display} regardless of portal state (Phase 102-04 swap)', async () => {
+	it('Test 3: spawn ignores portal availability — always uses vnc-window, no GeometryTracker (Phase 99-04 swap)', async () => {
 		const portalBundle = makePortal({available: false})
 		const {mgr, started, trackerInstances, portal} = makeManager({portalBundle})
 		const r = await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'})
 		expect(started[0].mode).toBe('vnc-window')
-		// Phase 102-04: target is {display}; whole-display capture via x11vnc -display :N
-		expect(started[0].target).toEqual({display: ':10'})
-		// Portal probe is GONE — D-99-04: x11vnc -display :N needs no PipeWire portal
+		expect(started[0].target).toEqual({wid: 0x200})
+		// Portal probe is GONE — D-99-04: x11vnc -id <wid> needs no PipeWire portal
 		expect(portal.isPortalAvailable).not.toHaveBeenCalled()
 		expect(portal.requestWindowSession).not.toHaveBeenCalled()
-		// GeometryTracker is GONE — x11vnc reads the whole display
+		// GeometryTracker is GONE — x11vnc reads pixmap by wid, not by geometry
 		expect(trackerInstances).toHaveLength(0)
 		expect(r.streamId).toMatch(/^stream-/)
 		mgr._clearForTests()
 	})
 
-	it.skip('Test 4 [Phase 102-04 RETIRED]: WINDOW_NOT_FOUND via title race — per-app-display has no race window', () => {
-		// Under Phase 102-04 the window is its own display (1:1). There is no
-		// title-match race, no PID-narrowed lookup, no findNewWindowByPid call,
-		// and therefore no WINDOW_NOT_FOUND failure mode. Compensating cleanup
-		// on Xvfb/Chrome/seed failure is verified by Phase 102-04's own
-		// T-102-04-05/06/07 in this file.
+	it('Test 4: spawn throws WINDOW_NOT_FOUND when findNewWindowByPid times out (Phase 101-04 — PID-narrowed lookup replaces title-match)', async () => {
+		const discovery = makeDiscovery()
+		// Phase 101-04 — the spawn body no longer calls findNewWindowMatching.
+		// The PID-narrowed lookup is the only timeout path now.
+		discovery.findNewWindowByPid = vi.fn(async () => null)
+		const {mgr, chromeCdpBundle} = makeManager({discovery})
+		await expect(
+			mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'}),
+		).rejects.toBeInstanceOf(WindowNotFoundError)
+		// Degenerate cleanup: the CDP target that was created must be closed
+		// before the throw so we don't leak a Chrome window.
+		expect(chromeCdpBundle.closed).toHaveLength(1)
 	})
 
 	it('Test 5: spawn enforces per-user webapp cap → TOO_MANY_WEBAPPS', async () => {
@@ -248,22 +262,25 @@ describe('WebAppWindowManager', () => {
 		mgr._clearForTests()
 	})
 
-	it('Test 6 [Phase 102-04 adapted]: focus on existing entry returns ok:true (no wid-based activateWindow under per-app-display)', async () => {
+	it('Test 6: focus on alive window calls activateWindow', async () => {
 		const {mgr, discovery} = makeManager()
 		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'})
 		const r = await mgr.focus({webappId: 'app1', userId: 'u1'})
 		expect(r.ok).toBe(true)
-		// Phase 102-04: no wid → no activateWindow call. 102-08 will replace
-		// focus with display-level xdotool activate (or display swap).
-		expect(discovery.activateWindow).not.toHaveBeenCalled()
+		expect(discovery.activateWindow).toHaveBeenCalledWith(0x200)
 		mgr._clearForTests()
 	})
 
-	it.skip('Test 7 [Phase 102-04 RETIRED]: focus WINDOW_GONE auto-close — no wid liveness probe under per-app-display', () => {
-		// Under Phase 102-04 the wid is always 0; the entry's liveness is
-		// keyed on display existence (xdpyinfo :N). 102-08 will re-introduce
-		// a display-alive probe; until then focus() is always ok:true while
-		// the entry is in the map.
+	it('Test 7: focus on dead window returns WINDOW_GONE + auto-closes entry', async () => {
+		const discovery = makeDiscovery()
+		const {mgr} = makeManager({discovery})
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'})
+		// Now simulate the window dying
+		discovery.isWindowAlive.mockResolvedValue(false)
+		const r = await mgr.focus({webappId: 'app1', userId: 'u1'})
+		expect(r.ok).toBe(false)
+		expect(r.code).toBe('WINDOW_GONE')
+		expect(mgr.list({userId: 'u1'})).toEqual([])
 	})
 
 	it('Test 8: close cascades stopStream and clears entry (Phase 99-04: portal session is null for vnc-window)', async () => {
@@ -289,10 +306,22 @@ describe('WebAppWindowManager', () => {
 		mgr._clearForTests()
 	})
 
-	it.skip('Test 10 [Phase 102-04 RETIRED]: idle-cleanup wid-alive probe — per-app-display will use display-alive in 102-08', () => {
-		// 102-04 idleCleanupTick is a no-op when wid=0 (always under per-app
-		// path). 102-08 will replace with xdpyinfo :N alive check + cascading
-		// chrome.stop / xvfb.stop / profile.cleanup / display.release.
+	it('Test 10: idle-cleanup tick cascades close on window-gone', async () => {
+		vi.useFakeTimers()
+		const discovery = makeDiscovery()
+		const {mgr, streamManager} = makeManager({discovery, idlePollMs: 100})
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'})
+		expect(mgr.list({userId: 'u1'})).toHaveLength(1)
+
+		discovery.isWindowAlive.mockResolvedValue(false)
+		mgr.startIdleCleanup()
+		await vi.advanceTimersByTimeAsync(150)
+		// give microtasks a chance after the async tick resolves
+		await vi.advanceTimersByTimeAsync(50)
+		expect(mgr.list({userId: 'u1'})).toEqual([])
+		expect(streamManager.stopStream).toHaveBeenCalled()
+		mgr.stopIdleCleanup()
+		mgr._clearForTests()
 	})
 
 	it('Test 11: spawn ignores portal request errors entirely — portal is never called (Phase 99-04 swap)', async () => {
@@ -321,13 +350,12 @@ describe('WebAppWindowManager — vnc-window swap (Phase 99-04)', () => {
 		vi.useRealTimers()
 	})
 
-	it('Test 12 [Phase 102-04 adapted]: spawn() calls streamManager.startStream with mode:"vnc-window" and target:{display}', async () => {
+	it('Test 12: spawn() calls streamManager.startStream with mode:"vnc-window" and target:{wid}', async () => {
 		const {mgr, streamManager, started} = makeManager()
 		const r = await mgr.spawn({userId: 'admin', webappId: 'wa-1', url: 'https://example.com'})
 		expect(streamManager.startStream).toHaveBeenCalledTimes(1)
 		expect(started[0].mode).toBe('vnc-window')
-		// Phase 102-04: target shape is {display} (was {wid} under Phase 99-04).
-		expect(started[0].target).toEqual({display: ':10'})
+		expect(started[0].target).toEqual({wid: 0x200})
 		expect(r.streamId).toMatch(/^stream-/)
 		mgr._clearForTests()
 	})
@@ -339,19 +367,36 @@ describe('WebAppWindowManager — vnc-window swap (Phase 99-04)', () => {
 		expect(streamManager.stopStream).toHaveBeenCalledWith(expect.stringMatching(/^stream-/))
 	})
 
-	it.skip('Test 14 [Phase 102-04 RETIRED]: idleCleanupTick wid-alive probe — supersedes by 102-08 display-alive', () => {
-		// Same rationale as Test 10. Re-enable under 102-08 when display-alive
-		// (xdpyinfo :N) replaces the wid-alive probe.
+	it('Test 14: idleCleanupTick cascades close+stopStream when window-gone (Assumption A5 lock)', async () => {
+		vi.useFakeTimers()
+		const discovery = makeDiscovery()
+		const {mgr, streamManager} = makeManager({discovery, idlePollMs: 100})
+		await mgr.spawn({userId: 'admin', webappId: 'wa-3', url: 'https://example.com'})
+		expect(mgr.list({userId: 'admin'})).toHaveLength(1)
+		discovery.isWindowAlive.mockResolvedValue(false)
+		mgr.startIdleCleanup()
+		await vi.advanceTimersByTimeAsync(150)
+		await vi.advanceTimersByTimeAsync(50)
+		expect(mgr.list({userId: 'admin'})).toEqual([])
+		expect(streamManager.stopStream).toHaveBeenCalled()
+		mgr.stopIdleCleanup()
+		mgr._clearForTests()
 	})
 
-	it('Test 11 [Phase 102-04 adapted]: spawn does NOT call the legacy raw spawn factory; Chrome is launched via injected chromeSpawnFn', async () => {
-		// Phase 102-04: Chrome is launched by the injected chromeSpawnFn
-		// (defaulting to spawnChromeProcess from chrome-process-spawner.ts).
-		// The raw spawn factory (this.spawnFactory) is reserved for ad-hoc
-		// xdotool ops (e.g. close({killWindow:true})), never for Chrome.
-		const {mgr, spawn} = makeManager()
+	it('Test 11 [Phase 101-04 RETIRED]: legacy --app=<url> argv path is gone; spawn drives Chrome via CDP createWindowForUrl', async () => {
+		// Phase 101-04: the `sudo google-chrome --app=<url>` argv path is DEAD.
+		// CDP createTarget({newWindow:true}) is the only way to get distinct
+		// windows under a shared `--user-data-dir`. This assertion is the
+		// regression lock — if anyone re-introduces the argv path, this test
+		// fails BEFORE Mini PC UAT hits the IPC-merge bug again.
+		const {mgr, spawn, chromeCdpBundle} = makeManager()
 		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://duckduckgo.com'})
+		// No spawnFactory invocation for Chrome (close path with killWindow is
+		// the only legitimate spawnFactory use, and we didn't call close here).
 		expect(spawn).not.toHaveBeenCalled()
+		// CDP path is exercised exactly once with the requested URL.
+		expect(chromeCdpBundle.created).toHaveLength(1)
+		expect(chromeCdpBundle.created[0]!.url).toBe('https://duckduckgo.com')
 		mgr._clearForTests()
 	})
 
@@ -390,7 +435,11 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		vi.useRealTimers()
 	})
 
-	it('Test 16 [Phase 102-04 adapted]: spawn() calls mcpConfigManager.installServer with luse:webapp:<webappId> + descriptor env (DISPLAY=:N, LUSE_TARGET_WINDOW_ID=0)', async () => {
+	it('Test 16 [Phase 102-06 adapted]: spawn() calls mcpConfigManager.installServer with luse:webapp:<webappId> + descriptor env (DISPLAY + LUSE_TARGET_DISPLAY)', async () => {
+		// Phase 102-06: descriptor no longer carries windowId; the per-WebApp
+		// Luse child is scoped by X11 display (`:N` from DisplayAllocator), not
+		// by wid. Env block sets BOTH `DISPLAY` (for xdotool/maim inheritance)
+		// AND `LUSE_TARGET_DISPLAY` (canonical Phase 102 env read by mcp/server).
 		const installCalls: any[] = []
 		const mcpConfigManager = {
 			installServer: vi.fn(async (config: any) => {
@@ -407,13 +456,15 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		expect(installCalls).toHaveLength(1)
 		expect(installCalls[0]!.name).toBe('luse:webapp:webapp-abc')
 		expect(installCalls[0]!.transport).toBe('stdio')
-		// Phase 102-04/102-06: DISPLAY matches the per-app allocated display
-		// (:10 for the first WebApp). LUSE_TARGET_DISPLAY is the canonical
-		// Phase 102 env (replaces LUSE_TARGET_WINDOW_ID from pre-102-06).
-		expect(installCalls[0]!.env?.DISPLAY).toBe(':10')
-		expect(installCalls[0]!.env?.LUSE_TARGET_DISPLAY).toBe(':10')
-		// LUSE_TARGET_WINDOW_ID is no longer set per-WebApp (102-06).
-		expect(installCalls[0]!.env?.LUSE_TARGET_WINDOW_ID).toBeUndefined()
+		// Phase 102-06: env carries the display string under both keys; the
+		// exact `:N` value depends on which Xvfb the 102-04 spawn path allocated.
+		// At minimum: both env keys must be present, must match each other, and
+		// must satisfy the `:N` shape (denies LUSE_TARGET_WINDOW_ID leak).
+		const envBlock = installCalls[0]!.env ?? {}
+		expect(envBlock.LUSE_TARGET_WINDOW_ID).toBeUndefined()
+		expect(typeof envBlock.LUSE_TARGET_DISPLAY).toBe('string')
+		expect(envBlock.LUSE_TARGET_DISPLAY).toMatch(/^:[1-9][0-9]?$/)
+		expect(envBlock.DISPLAY).toBe(envBlock.LUSE_TARGET_DISPLAY)
 		mgr._clearForTests()
 	})
 
@@ -458,7 +509,7 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		mgr._clearForTests()
 	})
 
-	it('Test 19 [Phase 102-04 adapted]: spawn() succeeds even when both installServer and updateServer fail (non-fatal MCP wiring)', async () => {
+	it('Test 19: spawn() succeeds even when both installServer and updateServer fail (non-fatal MCP wiring)', async () => {
 		const mcpConfigManager = {
 			installServer: vi.fn(async () => {
 				throw new Error('regex rejected')
@@ -477,8 +528,7 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		})
 		// Spawn still resolved with a valid SpawnResult.
 		expect(result.webappId).toBe('webapp-fail')
-		// Phase 102-04: windowId is vestigial 0 (display is the unit).
-		expect(result.windowId).toBe(0)
+		expect(result.windowId).toBe(0x200)
 		mgr._clearForTests()
 	})
 
@@ -505,7 +555,7 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 // only behavior) and renamed T-WM-10-08-01 to reflect the new contract.
 // ============================================================================
 
-describe.skip('Phase 100-10-08 single-:1 display contract — RETIRED by 102-04 per-app-display rewrite', () => {
+describe('Phase 100-10-08 single-:1 display contract (D-100-10-A reverted)', () => {
 	function makeAllocator() {
 		const allocCalls: string[] = []
 		const releaseCalls: string[] = []
@@ -637,7 +687,7 @@ describe.skip('Phase 100-10-08 single-:1 display contract — RETIRED by 102-04 
 // Sacred SHA f3538e1d811992b782a9bb057d1b7f0a0189f95f UNTOUCHED.
 // ============================================================================
 
-describe.skip('Phase 100-10-11 per-WebApp cascade — RETIRED by 102-04 (per-app-display makes overlap impossible)', () => {
+describe('Phase 100-10-11 per-WebApp cascade window-position', () => {
 	beforeEach(() => {
 		vi.useRealTimers()
 	})
@@ -741,7 +791,7 @@ describe.skip('Phase 100-10-11 per-WebApp cascade — RETIRED by 102-04 (per-app
 // Sacred SHA f3538e1d811992b782a9bb057d1b7f0a0189f95f UNTOUCHED.
 // ============================================================================
 
-describe.skip('Phase 101-04 CDP-driven spawn body — RETIRED by 102-04 (CDP path replaced by per-app Xvfb+Chrome subprocess)', () => {
+describe('Phase 101-04 — CDP-driven spawn body (replaces --app=URL argv + title-match)', () => {
 	beforeEach(() => {
 		vi.useRealTimers()
 	})
@@ -885,411 +935,6 @@ describe.skip('Phase 101-04 CDP-driven spawn body — RETIRED by 102-04 (CDP pat
 		// Degenerate-case cleanup: closeTarget must have been called on the
 		// orphan CDP target so we don't leak a window.
 		expect(chromeCdpBundle.closed).toEqual(['tgt-1'])
-		mgr._clearForTests()
-	})
-})
-
-// ============================================================================
-// Phase 102-04 — Per-app Xvfb + Chrome subprocess rewrite of spawn() body
-//
-// Replaces the Phase 101-04 CDP-driven flow (chromeCdpClient.createWindowForUrl
-// + PID-narrowed wid lookup against a singleton Chrome) with per-app primitives
-// from Wave 1:
-//   1. displayAllocator.allocate() → N
-//   2. spawnXvfb({display: `:${N}`, ...}) — A2 fluxbox-or-not toggle
-//   3. profileSeeder.seed({uuid: webappId}) → /tmp/livos-chrome-app-<uuid>
-//   4. spawnChromeProcess({display, userDataDir, url, ...}) — per-app Chrome
-//   5. portAllocator.allocate() → port
-//   6. streamManager.startStream({mode:'vnc-window', target:{display}, ...})
-//   7. ActiveWebApp map entry stores all handles for 102-08 close lifecycle
-//   8. Return {streamId, wsUrl, display, port}
-//
-// Compensating cleanup: on any partial failure release display + port,
-// stop xvfb + chrome, cleanup profile.
-//
-// Sacred SHA f3538e1d811992b782a9bb057d1b7f0a0189f95f UNTOUCHED.
-// ============================================================================
-
-function makeFakeDisplayAllocator(opts: {nextN?: number} = {}) {
-	const allocCalls: number[] = []
-	const releaseCalls: number[] = []
-	let next = opts.nextN ?? 10
-	const allocate = vi.fn(() => {
-		const n = next++
-		allocCalls.push(n)
-		return n
-	})
-	const release = vi.fn((n: number) => {
-		releaseCalls.push(n)
-	})
-	const allocator = {
-		allocate,
-		release,
-		// Match DisplayAllocator public surface used by callers (none of these
-		// are dereferenced by spawn(), but keep the class shape compatible).
-		inUseCount: 0,
-		capacity: 90,
-	} as unknown as DisplayAllocator
-	return {allocator, allocCalls, releaseCalls}
-}
-
-function makeFakeProfileSeeder(opts: {seedUuid?: string} = {}): {
-	seeder: ProfileSeederHandle
-	seedCalls: Array<{uuid?: string}>
-	cleanupCalls: string[]
-} {
-	const seedCalls: Array<{uuid?: string}> = []
-	const cleanupCalls: string[] = []
-	const seed = vi.fn(async (seedOpts: {uuid?: string} = {}) => {
-		seedCalls.push({uuid: seedOpts.uuid})
-		const uuid = seedOpts.uuid ?? opts.seedUuid ?? 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
-		return {uuid, appDir: `/tmp/livos-chrome-app-${uuid}`}
-	})
-	const cleanup = vi.fn(async (uuid: string) => {
-		cleanupCalls.push(uuid)
-	})
-	const ensureMasterExists = vi.fn(async () => {})
-	const sweepOrphans = vi.fn(async () => 0)
-	const seeder: ProfileSeederHandle = {seed, ensureMasterExists, cleanup, sweepOrphans}
-	return {seeder, seedCalls, cleanupCalls}
-}
-
-function makeFakeXvfbSpawnFn(opts: {rejectWith?: Error} = {}) {
-	const calls: Array<{display: string; width?: number; height?: number}> = []
-	const stopCalls: string[] = []
-	const fn = vi.fn(async (xvfbOpts: any) => {
-		if (opts.rejectWith) throw opts.rejectWith
-		calls.push({display: xvfbOpts.display, width: xvfbOpts.width, height: xvfbOpts.height})
-		const stop = vi.fn(async () => {
-			stopCalls.push(xvfbOpts.display)
-		})
-		const handle: XvfbHandle = {
-			pid: 11000 + calls.length,
-			display: xvfbOpts.display,
-			exited: new Promise(() => {}), // never resolves in tests
-			stop,
-		}
-		return handle
-	}) as unknown as (xvfbOpts: any) => Promise<XvfbHandle>
-	return {fn, calls, stopCalls}
-}
-
-function makeFakeChromeSpawnFn(opts: {rejectWith?: Error} = {}) {
-	const calls: Array<{display: string; userDataDir: string; url: string}> = []
-	const stopCalls: string[] = []
-	const fn = vi.fn(async (chromeOpts: any) => {
-		if (opts.rejectWith) throw opts.rejectWith
-		calls.push({
-			display: chromeOpts.display,
-			userDataDir: chromeOpts.userDataDir,
-			url: chromeOpts.url,
-		})
-		const stop = vi.fn(async () => {
-			stopCalls.push(chromeOpts.display)
-		})
-		const handle: ChromeProcessHandle = {
-			pid: 22000 + calls.length,
-			child: new FakeChild() as unknown as ChromeProcessHandle['child'],
-			display: chromeOpts.display,
-			userDataDir: chromeOpts.userDataDir,
-			stop,
-		}
-		return handle
-	}) as unknown as (chromeOpts: any) => Promise<ChromeProcessHandle>
-	return {fn, calls, stopCalls}
-}
-
-function makeFakePortAllocator(opts: {nextPort?: number} = {}) {
-	const allocCalls: number[] = []
-	const releaseCalls: number[] = []
-	let next = opts.nextPort ?? 15900
-	const allocate = vi.fn(() => {
-		const p = next++
-		allocCalls.push(p)
-		return p
-	})
-	const release = vi.fn((p: number) => {
-		releaseCalls.push(p)
-	})
-	const allocator = {
-		allocate,
-		release,
-		inUseCount: 0,
-		capacity: 100,
-	} as unknown as PortAllocator
-	return {allocator, allocCalls, releaseCalls}
-}
-
-/**
- * Builder for a manager configured with the Phase 102-04 per-app primitives.
- * Mirrors makeManager() but injects the new opts (displayAllocator,
- * xvfbSpawnFn, chromeSpawnFn, profileSeeder, portAllocator, withWindowManager).
- *
- * Streams, discovery, and portal still use the existing helpers because Phase
- * 102 does NOT change those surfaces — display targeting flows through the
- * existing stream-manager `{display}` branch (Phase 100-10-04).
- */
-function makeManager102(overrides: any = {}) {
-	const {streamManager, started, stopped} = makeStreamManager()
-	const discovery = overrides.discovery ?? makeDiscovery()
-	const {portal} = overrides.portalBundle ?? makePortal()
-	const {ctor: GeometryTrackerCtor} = makeGeometryTrackerCtor()
-	const spawn = vi.fn(() => new FakeChild() as any)
-	const logger = {info: vi.fn(), warn: vi.fn(), error: vi.fn(), verbose: vi.fn()}
-
-	const displayBundle = overrides.displayBundle ?? makeFakeDisplayAllocator()
-	const portBundle = overrides.portBundle ?? makeFakePortAllocator()
-	const profileBundle = overrides.profileBundle ?? makeFakeProfileSeeder()
-	const xvfbBundle = overrides.xvfbBundle ?? makeFakeXvfbSpawnFn()
-	const chromeBundle = overrides.chromeBundle ?? makeFakeChromeSpawnFn()
-	const fluxboxFn = overrides.fluxboxFn
-
-	const mgr = new WebAppWindowManager({
-		streamManager,
-		spawn,
-		logger,
-		discovery,
-		portal,
-		GeometryTrackerCtor,
-		titleTimeoutMs: 100,
-		idlePollMs: 50,
-		webappCap: overrides.webappCap,
-		mcpConfigManager: overrides.mcpConfigManager,
-		luseServerPath: overrides.luseServerPath,
-		luseMcpEnv: overrides.luseMcpEnv,
-		// Phase 102-04 — required deps for the per-app spawn body.
-		displayAllocator: displayBundle.allocator,
-		portAllocator: portBundle.allocator,
-		profileSeeder: profileBundle.seeder,
-		xvfbSpawnFn: xvfbBundle.fn,
-		chromeSpawnFn: chromeBundle.fn,
-		withWindowManager: overrides.withWindowManager,
-		fluxboxSpawnFn: fluxboxFn,
-		// chromeCdpClient intentionally OMITTED — 102-04 removes the CDP path.
-	} as any)
-
-	return {
-		mgr,
-		streamManager,
-		started,
-		stopped,
-		discovery,
-		portal,
-		spawn,
-		logger,
-		displayBundle,
-		portBundle,
-		profileBundle,
-		xvfbBundle,
-		chromeBundle,
-	}
-}
-
-describe('Phase 102-04 — per-app Xvfb + Chrome subprocess spawn body', () => {
-	beforeEach(() => {
-		vi.useRealTimers()
-	})
-	afterEach(() => {
-		vi.useRealTimers()
-	})
-
-	it('T-102-04-01: spawn calls primitives in order — displayAllocator → spawnXvfb → profileSeeder.seed → spawnChromeProcess → portAllocator → streamManager.startStream', async () => {
-		const {mgr, displayBundle, profileBundle, xvfbBundle, chromeBundle, portBundle, streamManager} =
-			makeManager102()
-
-		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
-
-		// All primitives called exactly once.
-		expect(displayBundle.allocator.allocate).toHaveBeenCalledTimes(1)
-		expect(xvfbBundle.fn).toHaveBeenCalledTimes(1)
-		expect(profileBundle.seeder.seed).toHaveBeenCalledTimes(1)
-		expect(chromeBundle.fn).toHaveBeenCalledTimes(1)
-		expect(portBundle.allocator.allocate).toHaveBeenCalledTimes(1)
-		expect(streamManager.startStream).toHaveBeenCalledTimes(1)
-
-		// Sequence: each subsequent call must occur AFTER the prior.
-		const order = {
-			allocate: (displayBundle.allocator.allocate as any).mock.invocationCallOrder[0],
-			xvfb: (xvfbBundle.fn as any).mock.invocationCallOrder[0],
-			seed: (profileBundle.seeder.seed as any).mock.invocationCallOrder[0],
-			chrome: (chromeBundle.fn as any).mock.invocationCallOrder[0],
-			port: (portBundle.allocator.allocate as any).mock.invocationCallOrder[0],
-			stream: (streamManager.startStream as any).mock.invocationCallOrder[0],
-		}
-		expect(order.allocate).toBeLessThan(order.xvfb)
-		expect(order.xvfb).toBeLessThan(order.seed)
-		expect(order.seed).toBeLessThan(order.chrome)
-		expect(order.chrome).toBeLessThan(order.port)
-		expect(order.port).toBeLessThan(order.stream)
-		mgr._clearForTests()
-	})
-
-	it('T-102-04-02: spawn does NOT use any chromeCdpClient surface (CDP path removed)', async () => {
-		// Per 102-04, the chromeCdpClient ctor opt is dropped. Manager builds
-		// fine without it, and spawn never invokes any chrome CDP API.
-		const {mgr, spawn} = makeManager102()
-		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
-		// No spawnFactory invocation either — Chrome is spawned via injected
-		// chromeSpawnFn, not via the legacy `sudo google-chrome ...` argv.
-		expect(spawn).not.toHaveBeenCalled()
-		mgr._clearForTests()
-	})
-
-	it('T-102-04-03: spawn passes the WebApp URL to spawnChromeProcess (it then translates to --app=URL argv)', async () => {
-		const {mgr, chromeBundle} = makeManager102()
-		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://duckduckgo.com'})
-		expect(chromeBundle.calls).toHaveLength(1)
-		expect(chromeBundle.calls[0]!.url).toBe('https://duckduckgo.com')
-		expect(chromeBundle.calls[0]!.display).toBe(':10')
-		expect(chromeBundle.calls[0]!.userDataDir).toMatch(/^\/tmp\/livos-chrome-app-/)
-		// stream target is {display:':10'} (NOT {wid:...}).
-		expect((chromeBundle.calls[0] as any).userDataDir).toMatch(/^\/tmp\/livos-chrome-app-/)
-		mgr._clearForTests()
-	})
-
-	it('T-102-04-04: ActiveWebApp entry stores {display, displayN, port, streamId, profileUuid, xvfbHandle, chromeHandle}', async () => {
-		const {mgr, profileBundle, streamManager, started} = makeManager102()
-		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
-
-		// list() exposes a subset; for full inspection, we rely on close() to
-		// re-route through stored handles (Test 4 + T-102-04-08).
-		const entries = mgr.list({userId: 'u1'})
-		expect(entries).toHaveLength(1)
-		expect(entries[0]).toMatchObject({webappId: 'app1', mode: 'vnc-window'})
-
-		// stream target carried {display: ':10'} (not {wid}).
-		expect(started[0].target).toEqual({display: ':10'})
-
-		// profileSeeder.seed was called with the webappId as uuid (so the
-		// per-app temp dir is traceable to the WebApp).
-		expect(profileBundle.seedCalls[0]!.uuid).toBe('app1')
-		mgr._clearForTests()
-	})
-
-	it('T-102-04-05: compensating cleanup on Xvfb failure — release display, do not call profile/chrome/port/stream', async () => {
-		const xvfbBundle = makeFakeXvfbSpawnFn({rejectWith: new Error('xvfb boom')})
-		const {mgr, displayBundle, profileBundle, chromeBundle, portBundle, streamManager} =
-			makeManager102({xvfbBundle})
-
-		await expect(
-			mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'}),
-		).rejects.toThrow(/xvfb boom/)
-
-		expect(displayBundle.releaseCalls).toEqual([10]) // released after partial failure
-		expect(profileBundle.seeder.seed).not.toHaveBeenCalled()
-		expect(chromeBundle.fn).not.toHaveBeenCalled()
-		expect(portBundle.allocator.allocate).not.toHaveBeenCalled()
-		expect(streamManager.startStream).not.toHaveBeenCalled()
-	})
-
-	it('T-102-04-06: compensating cleanup on Chrome failure — stop xvfb, cleanup profile, release display, do not allocate port or start stream', async () => {
-		const chromeBundle = makeFakeChromeSpawnFn({rejectWith: new Error('chrome boom')})
-		const {mgr, displayBundle, profileBundle, xvfbBundle, portBundle, streamManager} =
-			makeManager102({chromeBundle})
-
-		await expect(
-			mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'}),
-		).rejects.toThrow(/chrome boom/)
-
-		expect(xvfbBundle.stopCalls).toEqual([':10']) // xvfb.stop() called
-		expect(profileBundle.cleanupCalls).toHaveLength(1) // profileSeeder.cleanup(uuid)
-		expect(displayBundle.releaseCalls).toEqual([10])
-		expect(portBundle.allocator.allocate).not.toHaveBeenCalled()
-		expect(streamManager.startStream).not.toHaveBeenCalled()
-	})
-
-	it('T-102-04-07: compensating cleanup on stream failure — chrome.stop, xvfb.stop, profile.cleanup, port.release, display.release', async () => {
-		// Force streamManager.startStream to throw.
-		const failingStreamManager = makeStreamManager()
-		failingStreamManager.streamManager.startStream = vi.fn(() => {
-			throw new Error('stream boom')
-		})
-		const displayBundle = makeFakeDisplayAllocator()
-		const portBundle = makeFakePortAllocator()
-		const profileBundle = makeFakeProfileSeeder()
-		const xvfbBundle = makeFakeXvfbSpawnFn()
-		const chromeBundle = makeFakeChromeSpawnFn()
-
-		const spawn = vi.fn(() => new FakeChild() as any)
-		const logger = {info: vi.fn(), warn: vi.fn(), error: vi.fn(), verbose: vi.fn()}
-		const {portal} = makePortal()
-		const {ctor: GeometryTrackerCtor} = makeGeometryTrackerCtor()
-		const mgr = new WebAppWindowManager({
-			streamManager: failingStreamManager.streamManager,
-			spawn,
-			logger,
-			discovery: makeDiscovery(),
-			portal,
-			GeometryTrackerCtor,
-			titleTimeoutMs: 100,
-			idlePollMs: 50,
-			displayAllocator: displayBundle.allocator,
-			portAllocator: portBundle.allocator,
-			profileSeeder: profileBundle.seeder,
-			xvfbSpawnFn: xvfbBundle.fn,
-			chromeSpawnFn: chromeBundle.fn,
-		} as any)
-
-		await expect(
-			mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'}),
-		).rejects.toThrow(/stream boom/)
-
-		expect(chromeBundle.stopCalls).toEqual([':10']) // chrome.stop
-		expect(profileBundle.cleanupCalls).toHaveLength(1) // profile cleanup
-		expect(xvfbBundle.stopCalls).toEqual([':10']) // xvfb.stop
-		expect(portBundle.releaseCalls).toEqual([15900]) // port released
-		expect(displayBundle.releaseCalls).toEqual([10]) // display released
-	})
-
-	it('T-102-04-08: idempotency — second spawn with same webappId does NOT re-allocate display / spawn xvfb / spawn chrome / seed profile', async () => {
-		const {mgr, displayBundle, profileBundle, xvfbBundle, chromeBundle, portBundle, streamManager} =
-			makeManager102()
-
-		const r1 = await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
-		const r2 = await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
-
-		expect(r1.streamId).toBe(r2.streamId)
-		expect(displayBundle.allocator.allocate).toHaveBeenCalledTimes(1)
-		expect(xvfbBundle.fn).toHaveBeenCalledTimes(1)
-		expect(profileBundle.seeder.seed).toHaveBeenCalledTimes(1)
-		expect(chromeBundle.fn).toHaveBeenCalledTimes(1)
-		expect(portBundle.allocator.allocate).toHaveBeenCalledTimes(1)
-		expect(streamManager.startStream).toHaveBeenCalledTimes(1)
-		mgr._clearForTests()
-	})
-
-	it('T-102-04-09: A2 fluxbox-or-not — withWindowManager opt defaults false; fluxbox NEVER spawned', async () => {
-		// Default ctor: withWindowManager omitted → false → no fluxbox.
-		const fluxboxFn = vi.fn(async () => ({
-			pid: 33333,
-			display: ':10',
-			exited: new Promise(() => {}),
-			stop: vi.fn(async () => {}),
-		}))
-		const {mgr} = makeManager102({fluxboxFn})
-		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
-		expect(fluxboxFn).not.toHaveBeenCalled()
-		mgr._clearForTests()
-	})
-
-	it('T-102-04-09b: A2 fluxbox-or-not — withWindowManager:true → fluxbox IS spawned for the allocated display', async () => {
-		const fluxboxFn = vi.fn(async () => ({
-			pid: 33333,
-			display: ':10',
-			exited: new Promise(() => {}),
-			stop: vi.fn(async () => {}),
-		}))
-		const {mgr, xvfbBundle, chromeBundle} = makeManager102({withWindowManager: true, fluxboxFn})
-		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
-
-		// fluxbox spawned after xvfb readiness, before chrome spawn.
-		expect(fluxboxFn).toHaveBeenCalledTimes(1)
-		expect((fluxboxFn as any).mock.calls[0][0].display).toBe(':10')
-		const xvfbOrder = (xvfbBundle.fn as any).mock.invocationCallOrder[0]
-		const fluxboxOrder = (fluxboxFn as any).mock.invocationCallOrder[0]
-		const chromeOrder = (chromeBundle.fn as any).mock.invocationCallOrder[0]
-		expect(xvfbOrder).toBeLessThan(fluxboxOrder)
-		expect(fluxboxOrder).toBeLessThan(chromeOrder)
 		mgr._clearForTests()
 	})
 })
