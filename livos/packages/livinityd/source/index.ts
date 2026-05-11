@@ -51,6 +51,7 @@ import {startFluxbox, type FluxboxHandle} from './modules/webapps/fluxbox-wm.js'
 // lives at `streaming/display-allocator.ts` (composed with `streaming/
 // xvfb-spawner.ts` for per-app X display orchestration). Phase 102-04 wires
 // `new DisplayAllocator()` into `WebAppWindowManager` ctor (below).
+import {DisplayAllocator} from './modules/streaming/display-allocator.js'
 // Phase 100-08-04 — McpConfigManager + Luse server path threaded into
 // WebAppWindowManager so spawn/close lifecycle registers a per-WebApp
 // Luse MCP child via Redis pub-sub (liv-core's McpClientManager
@@ -620,11 +621,11 @@ export default class Livinityd {
 			const webappMcpConfigManager = new McpConfigManager(this.ai.redis)
 			const luseServerPath =
 				process.env.LUSE_MCP_SERVER_PATH ?? DEFAULT_LUSE_MCP_SERVER_PATH
-			// Phase 102-01 — legacy createDisplayAllocator() call removed
-			// (webapps/display-allocator.ts DELETED). Wave 2 plan 102-04 will
-			// wire `new DisplayAllocator()` from streaming/display-allocator.ts
-			// + spawnXvfb from streaming/xvfb-spawner.ts into the spawn body;
-			// until then no allocator is pre-constructed at boot.
+			// Phase 102-04 — per-app display allocator (number-returning,
+			// range [10, 100); 90 slots). Construct here so the same instance
+			// flows into WebAppWindowManager.spawn() display orchestration AND
+			// (in 102-05) into native-app-binder for parallel Native apps.
+			const webappDisplayAllocator = new DisplayAllocator()
 			this.webappWindowManager = new WebAppWindowManager({
 				streamManager: this.streamManager,
 				spawn: x11Spawn as unknown as ConstructorParameters<
@@ -634,16 +635,19 @@ export default class Livinityd {
 				mcpConfigManager: webappMcpConfigManager,
 				luseServerPath,
 				luseMcpEnv: process.env,
-				// Phase 102-01 — `displayAllocator` opt dropped from the
-				// construction call (was a no-op since 100-10-08 anyway). Wave 2
-				// plan 102-04 will pass new allocator + spawnXvfb factory once
-				// the spawn body composes them.
-				// Phase 101-04 — inject the live ChromeCdpClient so spawn() can
-				// drive Chrome via CDP createWindowForUrl / closeTarget instead
-				// of the legacy `sudo google-chrome --app=URL ...` argv path.
-				// Pass `undefined` when bootstrap failed: spawn() then throws
-				// WebAppCdpUnavailableError so Pillar A degrades loudly and the
-				// tRPC route returns SERVICE_UNAVAILABLE rather than hanging.
+				// Phase 102-04 — required per-app primitives (Wave 1 deliverables).
+				displayAllocator: webappDisplayAllocator,
+				portAllocator: sharedPortAllocator,
+				profileSeeder: this.profileSeeder!,
+				// xvfbSpawnFn + chromeSpawnFn fall back to module defaults
+				// (streaming/xvfb-spawner.ts + webapps/chrome-process-spawner.ts).
+				// A2 risk mitigation: default `false` (bare Xvfb is validated to
+				// work with Chrome --start-fullscreen). Flip per-deploy via env
+				// LIVOS_WEBAPP_USE_WM=1 if a specific WebApp needs WM hints.
+				withWindowManager: process.env.LIVOS_WEBAPP_USE_WM === '1',
+				// Phase 101-04 chromeCdpClient retained as IGNORED back-compat slot
+				// (102-04 spawn body no longer consults it; the CDP bootstrap at
+				// livinityd.start() still happens for other CDP consumers).
 				chromeCdpClient: this.chromeCdpClient,
 			})
 			this.webappWindowManager.startIdleCleanup()
