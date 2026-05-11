@@ -79,6 +79,22 @@ describe('WebAppTeachPopupHost — source-text invariants (BLOCKER #4)', () => {
 
 import {WebAppTeachPopupHost} from './webapp-teach-popup-host'
 
+/**
+ * React 18 synthetic-event-aware input setter. React reads `value` through
+ * its tracked descriptor; setting `.value` directly bypasses React's
+ * change tracker so `onChange` never fires. The standard workaround: use
+ * the prototype's native setter so React sees the value mutate, then
+ * dispatch the `input` event manually.
+ */
+function setReactInputValue(input: HTMLInputElement, value: string): void {
+	const nativeSetter = Object.getOwnPropertyDescriptor(
+		HTMLInputElement.prototype,
+		'value',
+	)?.set
+	nativeSetter!.call(input, value)
+	input.dispatchEvent(new Event('input', {bubbles: true}))
+}
+
 type FakeRecorder = {
 	state: 'idle' | 'recording' | 'saving'
 	recording: boolean
@@ -180,8 +196,7 @@ describe('WebAppTeachPopupHost — behavior (BLOCKER #4 — 3 cases)', () => {
 			) as HTMLInputElement
 			expect(input).toBeTruthy()
 			act(() => {
-				input.value = 'search bar'
-				input.dispatchEvent(new Event('input', {bubbles: true}))
+				setReactInputValue(input, 'search bar')
 			})
 			const saveBtn = Array.from(document.querySelectorAll('button')).find(
 				(b) => b.textContent?.trim() === 'Save',
@@ -220,8 +235,7 @@ describe('WebAppTeachPopupHost — behavior (BLOCKER #4 — 3 cases)', () => {
 			// Commit the first with "step one".
 			const input1 = inputs1[0] as HTMLInputElement
 			act(() => {
-				input1.value = 'step one'
-				input1.dispatchEvent(new Event('input', {bubbles: true}))
+				setReactInputValue(input1, 'step one')
 			})
 			const saveBtn1 = Array.from(document.querySelectorAll('button')).find(
 				(b) => b.textContent?.trim() === 'Save',
@@ -239,8 +253,7 @@ describe('WebAppTeachPopupHost — behavior (BLOCKER #4 — 3 cases)', () => {
 			expect(input2).toBeTruthy()
 			expect(input2.value).toBe('') // fresh draft
 			act(() => {
-				input2.value = 'step two'
-				input2.dispatchEvent(new Event('input', {bubbles: true}))
+				setReactInputValue(input2, 'step two')
 			})
 			const saveBtn2 = Array.from(document.querySelectorAll('button')).find(
 				(b) => b.textContent?.trim() === 'Save',
