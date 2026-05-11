@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-11T21:09:17.521Z"
+last_updated: "2026-05-11T21:14:51.018Z"
 progress:
   total_phases: 52
   completed_phases: 25
   total_plans: 203
-  completed_plans: 193
-  percent: 95
+  completed_plans: 194
+  percent: 96
 ---
 
 # Project State
@@ -26,8 +26,17 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — EXECUTING
-Plan: 3 of 6 (103-01 ✅ shipped; 103-03 ✅ shipped; 103-02 + 103-04/05/06 outstanding)
+Plan: 5 of 6 (103-01 ✅ shipped; 103-03 ✅ shipped; 103-04 ✅ shipped; 103-02 + 103-05/06 outstanding)
 Milestone: v33.0 (active) — Phase 100 PARTIAL-PASS; 100-08 closes residual bugs from 100-07
+
+## 103-04 Status (2026-05-11) — Sub-goal B prompt update: Prescriptive display-arg instruction
+
+- Wave 1 (103-04): ✅ COMPLETE — `dc86a7c2..cab8b331` (2 commits, TDD RED+GREEN) — `buildActiveDisplaySnippet` flipped from descriptive "implicitly scoped via LUSE_TARGET_DISPLAY" to prescriptive "MUST pass display: \":N\" as a tool argument" form. Agent now has unambiguous instruction matching the 103-03 tool-schema contract. Failure-mode disclosure ("falls back to host display :1") added as self-correction signal.
+- Tests: agent-prompt-builder.test.ts 26/26 pass (22 existing + 4 new under `Phase 102-06 Pillar C` — prescriptive form, env-name absence, "implicitly scoped" phrase absence, double-quoted interpolation).
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across both commits.
+- Decision: env name `LUSE_TARGET_DISPLAY` intentionally removed from snippet OUTPUT (agent does not need to know about runtime fallbacks; mentioning it invites "I don't need the arg because env is set" reasoning). Still referenced in JSDoc comments (informational, not prompt-emitted). Belt-and-suspenders runtime fallback preserved in `agent-runner-factory` + `parseDisplayArg → options.defaultDisplay`.
+
+**Carry-forward to 103-05:** Agent instruction now closes the loop on Sub-goal B. 103-05 can flip `LIVOS_PER_APP_LUSE` default to `'0'` — per-WebApp MCP registration becomes redundant because the agent reliably scopes per-call to single global luse MCP via `display: ":N"` arg.
 
 ## 103-03 Status (2026-05-11) — Sub-goal B: Single-MCP display-aware tool schema
 
