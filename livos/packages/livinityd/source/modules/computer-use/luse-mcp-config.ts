@@ -52,6 +52,12 @@ export interface McpConfigManagerLike {
 		updates: Partial<McpServerConfigInput>,
 	): Promise<unknown>
 	listServers(): Promise<McpServerConfigStored[]>
+	/**
+	 * Phase 100-10-09 — optional for back-compat with the duck-typed test stubs
+	 * in other test files. The real McpConfigManager (in @liv/core) implements
+	 * this method; cleanupLegacyBytebotState narrows on existence at call time.
+	 */
+	removeServer?(name: string): Promise<boolean>
 }
 
 /** Minimal subset of McpServerConfig that we read from listServers and write
@@ -212,12 +218,20 @@ export function buildLuseConfig(
 	//     required). LUSE_TARGET_WINDOW_ID propagated from descriptor.windowId.
 	//     Phase 100-10-08 (D-100-10-A reverted): current callers always pass
 	//     `:1`; the optional override stays for Phase 101 CDP scaffolding.
-	//   - host variant (desktop-stream native app): DISPLAY from process.env
-	//     (default :0); XAUTHORITY preserved at the GDM-managed path
-	//     (2026-05-05 P79-03 — GDM sessions on Ubuntu 24.04). nut-js'
-	//     screen.capture() hangs when X server is unreachable, triggering MCP
-	//     SDK timeouts ('Connection closed' from client side); the GDM path
-	//     fixes that. Override via env LUSE_XAUTHORITY.
+	//   - host variant (desktop-stream native app): DISPLAY default `:1`
+	//     (Phase 100-10-09 — flipped from previous `env.DISPLAY ?? ':0'`).
+	//     Rationale: Chrome WebApps spawn on the Xvfb display `:1` (Phase
+	//     100-08-01 baseline, preserved through 100-10-08 revert). The MCP
+	//     child MUST target the same display so list_windows / screenshot /
+	//     focus see the Chrome WebApp windows the AI is meant to interact
+	//     with. systemd-inherited `DISPLAY=:0` on Mini PC routed the child
+	//     to Bruce's GNOME desktop and blinded the AI to WebApp state
+	//     (live UAT 2026-05-10). Explicit `LUSE_DISPLAY` env override is
+	//     still honored for the legacy host-desktop-stream native app path.
+	//     XAUTHORITY preserved at the GDM-managed path (2026-05-05 P79-03 —
+	//     GDM sessions on Ubuntu 24.04). nut-js' screen.capture() hangs
+	//     when X server is unreachable, triggering MCP SDK timeouts; the
+	//     GDM path fixes that. Override via env LUSE_XAUTHORITY.
 	//
 	// Phase 100-10-04 (D-100-10-C, G-100-10-E) — LUSE_REDIS_URL threads
 	// livinityd's resolved Redis connection URL into the spawned MCP child.
@@ -237,7 +251,7 @@ export function buildLuseConfig(
 				LUSE_REDIS_URL: luseRedisUrl,
 			}
 		: {
-				DISPLAY: env.DISPLAY ?? ':0',
+				DISPLAY: env.LUSE_DISPLAY ?? ':1',
 				XAUTHORITY:
 					env.LUSE_XAUTHORITY ??
 					env.XAUTHORITY ??
