@@ -570,3 +570,111 @@ describe('Phase 100-10-08 single-:1 display contract (D-100-10-A reverted)', () 
 		mgr._clearForTests()
 	})
 })
+
+// ============================================================================
+// Phase 100-10-11 — Per-WebApp cascade window-position
+//
+// User UAT 2026-05-10: opening two concurrent WebApps causes visual overlap
+// because every WebApp spawns at --window-position=0,0 on the shared :1
+// display. The second Chrome window stacks on the same display origin and
+// x11vnc captures whichever fluxbox raised most recently — user sees only one
+// WebApp's pixels even though both are alive.
+//
+// Fix: cascade per-spawn --window-position by `n * 120` where `n` is the
+// current count of active WebApps. Modulo wrap at 10 slots so we never
+// generate off-screen positions on the Xvfb 1920x1080 :1 display.
+//
+// Sacred SHA f3538e1d811992b782a9bb057d1b7f0a0189f95f UNTOUCHED.
+// ============================================================================
+
+describe('Phase 100-10-11 per-WebApp cascade window-position', () => {
+	beforeEach(() => {
+		vi.useRealTimers()
+	})
+	afterEach(() => {
+		vi.useRealTimers()
+	})
+
+	// findNewWindowMatching returns the same fake wid 0x200 for every spawn in
+	// the default makeDiscovery() helper, which would cause idempotency to
+	// short-circuit subsequent spawns. We need per-spawn wids so the cascade
+	// test can spawn 11 distinct WebApps.
+	function makeDiscoveryWithUniqueWids() {
+		let nextWid = 0x200
+		const isWindowAlive = vi.fn(async () => true)
+		const activateWindow = vi.fn(async () => true)
+		const snapshotWindowIds = vi.fn(async () => new Set<number>([0x100]))
+		const findNewWindowMatching = vi.fn(async () => ({
+			wid: nextWid++,
+			title: 'WebApp',
+			geometry: {x: 0, y: 0, w: 800, h: 600},
+		}))
+		const getWindowGeometry = vi.fn(async () => ({x: 0, y: 0, w: 800, h: 600}))
+		return {
+			isWindowAlive,
+			activateWindow,
+			snapshotWindowIds,
+			findNewWindowMatching,
+			getWindowGeometry,
+		}
+	}
+
+	it('T-10-11-CASCADE-01: per-WebApp window-position cascades (0,0) → (120,120) → (240,240)', async () => {
+		const discovery = makeDiscoveryWithUniqueWids()
+		const {mgr, spawn} = makeManager({discovery})
+		await mgr.spawn({userId: 'u1', webappId: 'app-a', url: 'https://a.test'})
+		await mgr.spawn({userId: 'u1', webappId: 'app-b', url: 'https://b.test'})
+		await mgr.spawn({userId: 'u1', webappId: 'app-c', url: 'https://c.test'})
+
+		// Each Chrome spawn is exactly one entry in spawn.mock.calls (no other
+		// spawn calls happen along the happy path — xdotool windowkill only
+		// fires from close({killWindow:true})).
+		const argv1 = (spawn.mock.calls[0] as unknown as [string, string[]])[1]
+		const argv2 = (spawn.mock.calls[1] as unknown as [string, string[]])[1]
+		const argv3 = (spawn.mock.calls[2] as unknown as [string, string[]])[1]
+
+		expect(argv1).toContain('--window-position=0,0')
+		expect(argv2).toContain('--window-position=120,120')
+		expect(argv3).toContain('--window-position=240,240')
+
+		mgr._clearForTests()
+	})
+
+	it('T-10-11-CASCADE-02: wraps around to avoid off-screen positions', async () => {
+		const discovery = makeDiscoveryWithUniqueWids()
+		const {mgr, spawn} = makeManager({discovery})
+		for (let i = 0; i < 11; i++) {
+			await mgr.spawn({userId: 'u1', webappId: `app-${i}`, url: `https://test-${i}.local`})
+		}
+		// 11 Chrome spawns recorded in order.
+		const argvs = spawn.mock.calls.map((c) => (c as unknown as [string, string[]])[1])
+		const positions = argvs.map((argv) =>
+			argv.find((arg: string) => arg.startsWith('--window-position=')),
+		)
+
+		// Every spawn must have a window-position argv.
+		for (const p of positions) expect(p).toBeDefined()
+
+		// All positions must be on-screen (Xvfb :1 is 1920x1080).
+		for (const p of positions) {
+			const m = p!.match(/--window-position=(\d+),(\d+)/)
+			expect(m).toBeTruthy()
+			const x = parseInt(m![1]!, 10)
+			const y = parseInt(m![2]!, 10)
+			expect(x).toBeGreaterThanOrEqual(0)
+			expect(x).toBeLessThan(1920)
+			expect(y).toBeGreaterThanOrEqual(0)
+			expect(y).toBeLessThan(1080)
+		}
+
+		// Cascade pattern must produce DISTINCT positions for the first 10
+		// spawns (regression lock against the pre-fix constant `0,0` shape).
+		const firstTen = new Set(positions.slice(0, 10))
+		expect(firstTen.size).toBe(10)
+
+		// 11th spawn (index 10) is slot 10 % 10 = 0 → wraps back to (0,0).
+		expect(positions[10]).toBe('--window-position=0,0')
+
+		mgr._clearForTests()
+	})
+})
