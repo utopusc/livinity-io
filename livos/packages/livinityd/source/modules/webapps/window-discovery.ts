@@ -298,6 +298,85 @@ export async function findNewWindowMatching(
 	return null
 }
 
+/**
+ * Phase 101-04 — list wids belonging to a specific Chrome pid via
+ * `xdotool search --pid <pid>`. Returns the wids as DECIMAL STRINGS (one per
+ * line of stdout). Empty array if Chrome has no windows on the X server (or
+ * if xdotool/X11 is unreachable — see the same `ENOENT` short-circuit as
+ * `listAllWindows`).
+ *
+ * Per RESEARCH Q1 RESOLVED, this is the BASELINE side of the PID-narrowed
+ * wid lookup that replaces the title-match race in `findNewWindowMatching`.
+ * The decimal-string return type is preserved on the wire so callers can do
+ * Set-based diffing without parsing/serializing both sides.
+ */
+export async function listWindowIdsForPid(pid: number): Promise<string[]> {
+	if (!Number.isInteger(pid) || pid <= 0) return []
+	try {
+		const {stdout} = await execFileAsync('xdotool', ['search', '--pid', String(pid)], {
+			timeout: DEFAULT_TIMEOUT_MS,
+		})
+		return stdout
+			.split(/\r?\n/)
+			.map((s) => s.trim())
+			.filter(Boolean)
+	} catch (err) {
+		const e = err as NodeJS.ErrnoException & {stderr?: string; stdout?: string}
+		// xdotool missing or X server unreachable — graceful empty (matches
+		// the listAllWindows policy: caller sees "no windows" not an exception).
+		// `xdotool search --pid <pid>` exits non-zero AND prints nothing when
+		// the pid has zero windows; treat empty-stdout failures as empty too.
+		if (e.code === 'ENOENT') return []
+		if (!e.stdout && !e.stderr) return []
+		return []
+	}
+}
+
+/**
+ * Phase 101-04 — PID-narrowed baseline-and-poll. The deterministic replacement
+ * for `findNewWindowMatching`'s title-hint race (RESEARCH Q1 RESOLVED).
+ *
+ * Algorithm:
+ *   1. Caller has already snapshotted `baselineWids` via `listWindowIdsForPid`
+ *      BEFORE issuing CDP `Target.createTarget`.
+ *   2. CDP createTarget runs and the new top-level Chrome window appears
+ *      under the SAME pid (single Chrome process per livinityd).
+ *   3. This function polls `xdotool search --pid <pid>` and returns the
+ *      first wid that is NOT in `baselineWids` — that's the new window.
+ *
+ * Determinism: only one `createTarget` call runs between snapshot and poll,
+ * so only one new wid can appear for this pid (no title-match heuristics,
+ * no cross-window race). Returns `null` only on timeout (caller throws
+ * WINDOW_NOT_FOUND and tears down the orphan CDP target).
+ *
+ * Return value is `{wid: string}` so the decimal-string baseline can be
+ * compared via Set without parsing. Consumers that need a number can
+ * `parseInt(wid, 10)`.
+ */
+export async function findNewWindowByPid(opts: {
+	chromePid: number
+	baselineWids: string[]
+	timeoutMs: number
+	pollIntervalMs?: number
+}): Promise<{wid: string} | null> {
+	const pollMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS
+	const deadline = Date.now() + opts.timeoutMs
+	const baseline = new Set(opts.baselineWids)
+	while (Date.now() < deadline) {
+		const current = await listWindowIdsForPid(opts.chromePid)
+		const fresh = current.filter((w) => !baseline.has(w))
+		if (fresh.length > 0) {
+			// First new wid is ours — deterministic given the single
+			// createTarget call between snapshot and poll.
+			return {wid: fresh[0]!}
+		}
+		const remaining = deadline - Date.now()
+		if (remaining <= 0) break
+		await sleep(Math.min(pollMs, remaining))
+	}
+	return null
+}
+
 export async function isWindowAlive(wid: number): Promise<boolean> {
 	if (!Number.isInteger(wid) || wid <= 0) return false
 	try {
