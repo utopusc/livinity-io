@@ -75,7 +75,7 @@ importers:
         version: https://codeload.github.com/getumbrel/dbus-native/tar.gz/b7cc1f59c387c4349a740ab68bcee9d779f9e660
       '@liv/core':
         specifier: file:../../../liv/packages/core
-        version: file:../liv/packages/core(@types/express@4.17.25)(hono@4.11.7)(sharp@0.34.5)(zod@3.25.76)
+        version: file:../liv/packages/core(@types/express@4.17.25)(hono@4.11.7)(sharp@0.33.5)(zod@3.25.76)
       '@livos/config':
         specifier: workspace:*
         version: link:../config
@@ -133,6 +133,9 @@ importers:
       check-disk-space:
         specifier: ^3.4.0
         version: 3.4.0
+      chrome-remote-interface:
+        specifier: ^0.34.0
+        version: 0.34.0
       compose-spec-schema:
         specifier: ^1.0.0
         version: 1.0.0
@@ -256,6 +259,9 @@ importers:
       session-file-store:
         specifier: ^1.5.0
         version: 1.5.0
+      sharp:
+        specifier: ^0.33.5
+        version: 0.33.5
       simple-git:
         specifier: ^3.27.0
         version: 3.36.0
@@ -299,6 +305,9 @@ importers:
       '@types/bytes':
         specifier: ^3.1.5
         version: 3.1.5
+      '@types/chrome-remote-interface':
+        specifier: ^0.33.0
+        version: 0.33.0
       '@types/cors':
         specifier: ^2.8.13
         version: 2.8.19
@@ -610,7 +619,7 @@ importers:
         version: 1.0.26(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-vnc:
         specifier: ^2.0.3
-        version: 2.0.3(react-dom@18.3.1(react@18.3.1))(react-scripts@5.0.1(@babel/plugin-syntax-flow@7.28.6(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.28.6(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3))(react@18.3.1)(rollup@2.80.0)(tslib@2.8.1)(typescript@5.9.3)
+        version: 2.0.3(react-dom@18.3.1(react@18.3.1))(react-scripts@5.0.1(@babel/plugin-syntax-flow@7.28.6(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.28.6(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3))(react@18.3.1)(rollup@4.57.0)(tslib@2.8.1)(typescript@5.9.3)
       react-window:
         specifier: ^1.8.11
         version: 1.8.11(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -794,10 +803,10 @@ importers:
         version: 4.5.14(@types/node@20.8.7)(lightningcss@1.31.1)(terser@5.46.1)
       vite-bundle-visualizer:
         specifier: ^0.11.0
-        version: 0.11.0(rollup@2.80.0)
+        version: 0.11.0(rollup@4.57.0)
       vite-imagetools:
         specifier: ^7.0.5
-        version: 7.1.1(rollup@2.80.0)
+        version: 7.1.1(rollup@4.57.0)
       vite-plugin-pwa:
         specifier: ^1.2.0
         version: 1.2.0(vite@4.5.14(@types/node@20.8.7)(lightningcss@1.31.1)(terser@5.46.1))(workbox-build@7.4.0(@types/babel__core@7.20.5))(workbox-window@7.4.0)
@@ -5135,6 +5144,9 @@ packages:
   '@types/bytes@3.1.5':
     resolution: {integrity: sha512-VgZkrJckypj85YxEsEavcMmmSOIzkUHqWmM4CCyia5dc54YwsXzJ5uT4fYxBQNEXx+oF1krlhgCbvfubXqZYsQ==}
 
+  '@types/chrome-remote-interface@0.33.0':
+    resolution: {integrity: sha512-c+VcrTFcgvpwbAF/MgWIuVzagzOSX6hDuZEwkRW3Bk1yu/xMlAh5G4ogYpQGtW7fVydVGSQ9WD/mEwqQehu73w==}
+
   '@types/connect-history-api-fallback@1.5.4':
     resolution: {integrity: sha512-n6Cr2xS1h4uAulPRdlw6Jl6s1oG8KrVilPN2yUITEs+K48EzMJJ3W1xy8K5eWuFvjp3R74AOIGSmp2UfBJ8HFw==}
 
@@ -6546,6 +6558,10 @@ packages:
     resolution: {integrity: sha512-bIomtDF5KGpdogkLd9VspvFzk9KfpyyGlS8YFVZl7TGPBHL5snIOnxeshwVgPteQ9b4Eydl+pVbIyE1DcvCWgQ==}
     engines: {node: '>=10'}
 
+  chrome-remote-interface@0.34.0:
+    resolution: {integrity: sha512-rTTcTZ3zemx8I+nvBii7d8BAF0Ms8LLEroypfvwwZOwSpyNGLE28nStXyCA6VwGp2YSQfmCrQH21F/E+oBFvMw==}
+    hasBin: true
+
   chrome-trace-event@1.0.4:
     resolution: {integrity: sha512-rNjApaLzuwaOTjCiT8lSDdGN1APCiqkChLMJxJPWLunPAt5fy8xgU9/jNOchV84wfIxrA0lRQB7oCT8jrn/wrQ==}
     engines: {node: '>=6.0'}
@@ -6679,6 +6695,9 @@ packages:
 
   comma-separated-tokens@2.0.3:
     resolution: {integrity: sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg==}
+
+  commander@2.11.0:
+    resolution: {integrity: sha512-b0553uYA5YAEGgyYIGYROzKQ7X5RAqedkfjiZxwi0kL1g3bOaBNNZfYkzt/CL0umgD5wc9Jec2FbB98CjkMRvQ==}
 
   commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
@@ -7344,6 +7363,9 @@ packages:
 
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
+
+  devtools-protocol@0.0.1173815:
+    resolution: {integrity: sha512-CmsjkudmgCMeae8FSJB4GV8COZwOk6dJKyE9HS2F/ih/sA8uTdbPKHg5F7DsrOYLEET/QKK00LJCU4YoyG+uHg==}
 
   didyoumean@1.2.2:
     resolution: {integrity: sha512-gxtyfqMg7GKyhQmb056K7M3xszy/myH8w+B4RT+QXBQsvAOdc3XymqDDPHx1BgPgsdAA5SIifona89YtRATDzw==}
@@ -16605,14 +16627,14 @@ snapshots:
     transitivePeerDependencies:
       - debug
 
-  '@liv/core@file:../liv/packages/core(@types/express@4.17.25)(hono@4.11.7)(sharp@0.34.5)(zod@3.25.76)':
+  '@liv/core@file:../liv/packages/core(@types/express@4.17.25)(hono@4.11.7)(sharp@0.33.5)(zod@3.25.76)':
     dependencies:
       '@anthropic-ai/claude-agent-sdk': 0.2.85(zod@3.25.76)
       '@anthropic-ai/sdk': 0.80.0(zod@3.25.76)
       '@line/bot-sdk': 9.9.0
       '@modelcontextprotocol/sdk': 1.25.3(hono@4.11.7)(zod@3.25.76)
       '@slack/bolt': 4.6.0(@types/express@4.17.25)
-      baileys: 6.7.21(sharp@0.34.5)
+      baileys: 6.7.21(sharp@0.33.5)
       bullmq: 5.67.1
       discord.js: 14.25.1
       dockerode: 4.0.9
@@ -18042,13 +18064,13 @@ snapshots:
     optionalDependencies:
       rollup: 2.80.0
 
-  '@rollup/plugin-typescript@11.1.6(rollup@2.80.0)(tslib@2.8.1)(typescript@5.9.3)':
+  '@rollup/plugin-typescript@11.1.6(rollup@4.57.0)(tslib@2.8.1)(typescript@5.9.3)':
     dependencies:
-      '@rollup/pluginutils': 5.3.0(rollup@2.80.0)
+      '@rollup/pluginutils': 5.3.0(rollup@4.57.0)
       resolve: 1.22.11
       typescript: 5.9.3
     optionalDependencies:
-      rollup: 2.80.0
+      rollup: 4.57.0
       tslib: 2.8.1
 
   '@rollup/pluginutils@3.1.0(rollup@2.80.0)':
@@ -18065,6 +18087,14 @@ snapshots:
       picomatch: 4.0.3
     optionalDependencies:
       rollup: 2.80.0
+
+  '@rollup/pluginutils@5.3.0(rollup@4.57.0)':
+    dependencies:
+      '@types/estree': 1.0.8
+      estree-walker: 2.0.2
+      picomatch: 4.0.3
+    optionalDependencies:
+      rollup: 4.57.0
 
   '@rollup/rollup-android-arm-eabi@4.57.0':
     optional: true
@@ -18923,6 +18953,10 @@ snapshots:
       '@types/node': 22.19.7
 
   '@types/bytes@3.1.5': {}
+
+  '@types/chrome-remote-interface@0.33.0':
+    dependencies:
+      devtools-protocol: 0.0.1173815
 
   '@types/connect-history-api-fallback@1.5.4':
     dependencies:
@@ -20257,7 +20291,7 @@ snapshots:
 
   bail@2.0.2: {}
 
-  baileys@6.7.21(sharp@0.34.5):
+  baileys@6.7.21(sharp@0.33.5):
     dependencies:
       '@cacheable/node-cache': 1.7.6
       '@hapi/boom': 9.1.4
@@ -20267,7 +20301,7 @@ snapshots:
       music-metadata: 11.12.3
       pino: 9.14.0
       protobufjs: 7.5.4
-      sharp: 0.34.5
+      sharp: 0.33.5
       ws: 8.19.0
     transitivePeerDependencies:
       - bufferutil
@@ -20628,6 +20662,14 @@ snapshots:
   chownr@2.0.0:
     optional: true
 
+  chrome-remote-interface@0.34.0:
+    dependencies:
+      commander: 2.11.0
+      ws: 7.5.10
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   chrome-trace-event@1.0.4: {}
 
   ci-info@3.9.0: {}
@@ -20763,6 +20805,8 @@ snapshots:
       delayed-stream: 1.0.0
 
   comma-separated-tokens@2.0.3: {}
+
+  commander@2.11.0: {}
 
   commander@2.20.3: {}
 
@@ -21444,6 +21488,8 @@ snapshots:
   devlop@1.1.0:
     dependencies:
       dequal: 2.0.3
+
+  devtools-protocol@0.0.1173815: {}
 
   didyoumean@1.2.2: {}
 
@@ -26819,9 +26865,9 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
-  react-vnc@2.0.3(react-dom@18.3.1(react@18.3.1))(react-scripts@5.0.1(@babel/plugin-syntax-flow@7.28.6(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.28.6(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3))(react@18.3.1)(rollup@2.80.0)(tslib@2.8.1)(typescript@5.9.3):
+  react-vnc@2.0.3(react-dom@18.3.1(react@18.3.1))(react-scripts@5.0.1(@babel/plugin-syntax-flow@7.28.6(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.28.6(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3))(react@18.3.1)(rollup@4.57.0)(tslib@2.8.1)(typescript@5.9.3):
     dependencies:
-      '@rollup/plugin-typescript': 11.1.6(rollup@2.80.0)(tslib@2.8.1)(typescript@5.9.3)
+      '@rollup/plugin-typescript': 11.1.6(rollup@4.57.0)(tslib@2.8.1)(typescript@5.9.3)
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       react-scripts: 5.0.1(@babel/plugin-syntax-flow@7.28.6(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.28.6(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3)
@@ -27191,14 +27237,14 @@ snapshots:
       serialize-javascript: 4.0.0
       terser: 5.46.1
 
-  rollup-plugin-visualizer@5.14.0(rollup@2.80.0):
+  rollup-plugin-visualizer@5.14.0(rollup@4.57.0):
     dependencies:
       open: 8.4.2
       picomatch: 4.0.3
       source-map: 0.7.6
       yargs: 17.7.2
     optionalDependencies:
-      rollup: 2.80.0
+      rollup: 4.57.0
 
   rollup@2.80.0:
     optionalDependencies:
@@ -28793,18 +28839,18 @@ snapshots:
       d3-time: 3.1.0
       d3-timer: 3.0.1
 
-  vite-bundle-visualizer@0.11.0(rollup@2.80.0):
+  vite-bundle-visualizer@0.11.0(rollup@4.57.0):
     dependencies:
       cac: 6.7.14
-      rollup-plugin-visualizer: 5.14.0(rollup@2.80.0)
+      rollup-plugin-visualizer: 5.14.0(rollup@4.57.0)
       tmp: 0.2.5
     transitivePeerDependencies:
       - rolldown
       - rollup
 
-  vite-imagetools@7.1.1(rollup@2.80.0):
+  vite-imagetools@7.1.1(rollup@4.57.0):
     dependencies:
-      '@rollup/pluginutils': 5.3.0(rollup@2.80.0)
+      '@rollup/pluginutils': 5.3.0(rollup@4.57.0)
       imagetools-core: 7.1.0
       sharp: 0.34.5
     transitivePeerDependencies:
