@@ -23,6 +23,7 @@
 		"tsc": "tsc --noEmit",
 		"size": "vite-bundle-visualizer",
 		"playwright": "playwright test",
+		"test:run": "vitest run",
 		"copy-tabler-icons": "mkdir -p public/generated-tabler-icons && cp -r ./node_modules/@tabler/icons/icons/. ./public/generated-tabler-icons",
 		"postinstall": "npm run copy-tabler-icons"
 	},
