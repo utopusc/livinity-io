@@ -660,13 +660,18 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 				    component file is retained as a DEPRECATED reference
 				    target for revert safety. */}
 
-				{/* Phase 100-09-06 — Teach popup host (sonner toast portal,
-				    one toast per captured event during recording).
-				    Subscribes to recorder.events + recorder.eventCount. */}
+				{/* Phase 101-08 — Teach popup host (Radix popover anchored at
+				    click coords). Subscribes to recorder.setOnAfterClick;
+				    on each click renders <TeachPopover> with instruction
+				    input, commits via recorder.pushNote (FIFO queue for
+				    rapid clicks). Sonner-toast path replaced.
+				    events/eventCount props retained as deprecated noop for
+				    backwards-compat with prior callers. */}
 				<WebAppTeachPopupHost
 					isRecording={recorder.recording}
 					events={recorder.events}
 					eventCount={recorder.eventCount}
+					recorder={recorder}
 				/>
 
 				{/* Phase 100-10-05 D-100-10-D — inline Skills popover REMOVED.
@@ -847,7 +852,7 @@ function SaveSkillDialog({open, eventCount, durationMs, saving, onSave, onCancel
 		>
 			<DialogContent className='max-w-md'>
 				<DialogHeader>
-					<DialogTitle>Save skill</DialogTitle>
+					<DialogTitle>Adlandır</DialogTitle>
 					<DialogDescription>
 						{eventCount} actions captured over {(durationMs / 1000).toFixed(1)}s. Give the skill a
 						name to save it for this WebApp.

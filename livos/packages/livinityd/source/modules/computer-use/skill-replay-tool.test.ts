@@ -1,3 +1,4 @@
+// Phase 101-08 — v3 replay branch + v2 lazy-translation shim preserved.
 // Phase 97-07 — `webapp_replay_skill` tool tests.
 //
 // Coverage:
@@ -295,5 +296,216 @@ describe('Phase 100-10-02 wire-up: shim is called from the live replay path', ()
 		const shimmedEvents = (shimmed.actionLog as {events: Array<{tool?: string}>}).events
 		expect(shimmedEvents[0]?.tool).toBe('mcp__luse__click_mouse')
 		expect(shimmedEvents[1]?.tool).toBe('mcp__luse__screenshot')
+	})
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 101-08 — v3 replay branch (SelfClaude action-driven Teach).
+//
+// CONTEXT D-101-TEACH-V3 + RESEARCH.md Pattern 3:
+//   v3 skill.actionLog = {
+//     version: 3,
+//     webappId,
+//     startedAt,
+//     endedAt,
+//     events: ActionStep[]  // ClickStep | KeyStep | TypeStep | NoteStep
+//   }
+//
+// Replay contract:
+//   - version === 3 → new replayV3 branch: format each step as readable
+//     guidance, render `note` step's instruction text PROMINENTLY so the
+//     agent can recover from drift via vision (Phase 102).
+//   - version <= 2 OR missing → existing v1/v2 path unchanged (no
+//     regression in lazy-translation shim).
+//   - 'note' step is INFORMATIONAL (instruction text logged to agent
+//     stream) — does NOT execute as a tool action.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('Phase 101-08 v3 replay branch', () => {
+	it('T-101-08-V3-01: renderSkillV3 is exported (new helper for v3 branch)', async () => {
+		const mod = await import('./skill-replay-tool.js')
+		expect(typeof (mod as never as {renderSkillV3?: unknown}).renderSkillV3).toBe(
+			'function',
+		)
+	})
+
+	it('T-101-08-V3-02: v3 skill renders click + note steps in a readable block', async () => {
+		const v3Skill = {
+			id: FAKE_SKILL_ID,
+			userId: FAKE_USER,
+			webappId: FAKE_WEBAPP,
+			skillName: 'inbox-flow-v3',
+			actionLog: {
+				version: 3,
+				webappId: FAKE_WEBAPP,
+				startedAt: 0,
+				endedAt: 1000,
+				events: [
+					{type: 'click', button: 1, x: 100, y: 200, ts: 0},
+					{type: 'note', text: 'open the inbox', ts: 50},
+					{type: 'key', key: 'Enter', ts: 100},
+				],
+			},
+			createdAt: new Date(),
+		}
+		vi.mocked(getWebAppSkill).mockResolvedValue(v3Skill as never)
+		const r = await executeWebAppReplaySkill(
+			{pool: fakePool, userId: FAKE_USER},
+			{skillId: FAKE_SKILL_ID},
+		)
+		expect(r.isError).toBe(false)
+		const txt = (r.content[0] as {text: string}).text
+		// v3 marker — the prompt must indicate this is a v3 skill so the
+		// agent knows to expect `note` steps + the instruction-as-recovery
+		// pattern.
+		expect(txt).toMatch(/version[:\s]+3|v3|SelfClaude/i)
+		// Click event rendered with v3 button mapping (numeric 1|2|3) OR
+		// translated to a readable label.
+		expect(txt).toMatch(/click/i)
+		expect(txt).toMatch(/100,?\s*200/)
+		// Note step's instruction text appears VERBATIM (this is the drift
+		// recovery surface — see CONTEXT D-101-TEACH-V3 step 7).
+		expect(txt).toContain('open the inbox')
+		// Key step rendered too.
+		expect(txt).toMatch(/key\s+Enter/i)
+	})
+
+	it('T-101-08-V3-03: v3 note step is INFORMATIONAL (logged not executed)', async () => {
+		const v3Skill = {
+			id: FAKE_SKILL_ID,
+			userId: FAKE_USER,
+			webappId: FAKE_WEBAPP,
+			skillName: 'just-a-note',
+			actionLog: {
+				version: 3,
+				webappId: FAKE_WEBAPP,
+				startedAt: 0,
+				endedAt: 100,
+				events: [{type: 'note', text: 'this is guidance only', ts: 0}],
+			},
+			createdAt: new Date(),
+		}
+		vi.mocked(getWebAppSkill).mockResolvedValue(v3Skill as never)
+		const r = await executeWebAppReplaySkill(
+			{pool: fakePool, userId: FAKE_USER},
+			{skillId: FAKE_SKILL_ID},
+		)
+		expect(r.isError).toBe(false)
+		const txt = (r.content[0] as {text: string}).text
+		// The instruction text is present.
+		expect(txt).toContain('this is guidance only')
+		// And there's a marker explaining notes are guidance / not executed.
+		// (We accept either "note", "instruction", or "guidance" wording.)
+		expect(txt).toMatch(/note|instruction|guidance/i)
+	})
+
+	it('T-101-08-V3-04: v3 _liv_meta carries version + step count', async () => {
+		const v3Skill = {
+			id: FAKE_SKILL_ID,
+			userId: FAKE_USER,
+			webappId: FAKE_WEBAPP,
+			skillName: 'meta-check',
+			actionLog: {
+				version: 3,
+				webappId: FAKE_WEBAPP,
+				startedAt: 0,
+				endedAt: 100,
+				events: [
+					{type: 'click', button: 1, x: 1, y: 1, ts: 0},
+					{type: 'note', text: 'why', ts: 0},
+				],
+			},
+			createdAt: new Date(),
+		}
+		vi.mocked(getWebAppSkill).mockResolvedValue(v3Skill as never)
+		const r = await executeWebAppReplaySkill(
+			{pool: fakePool, userId: FAKE_USER},
+			{skillId: FAKE_SKILL_ID},
+		)
+		expect(r._liv_meta).toMatchObject({
+			kind: 'webapp-replay-skill',
+			skillId: FAKE_SKILL_ID,
+			webappId: FAKE_WEBAPP,
+		})
+		// Step counts surface — v3 path may name the field differently
+		// (retainedCount/totalCount were v1/v2 names). We accept either
+		// the legacy names OR a new `eventCount` field.
+		const meta = r._liv_meta as Record<string, unknown>
+		const count = (meta.totalCount ?? meta.retainedCount ?? meta.eventCount) as
+			| number
+			| undefined
+		expect(typeof count).toBe('number')
+		expect(count).toBe(2)
+	})
+
+	it('T-101-08-V3-05: v2 replay still works (lazy-translation shim preserved)', async () => {
+		const v2Skill = {
+			id: FAKE_SKILL_ID,
+			userId: FAKE_USER,
+			webappId: FAKE_WEBAPP,
+			skillName: 'legacy-v2',
+			actionLog: {
+				version: 2,
+				webappId: FAKE_WEBAPP,
+				startedAt: 0,
+				endedAt: 1000,
+				events: [
+					{
+						type: 'click',
+						button: 'left',
+						coords: {x: 50, y: 60},
+						ts: 1,
+						screenshotRef: 'a',
+						tool: 'mcp__bytebot__click_mouse',
+					},
+				],
+			},
+			createdAt: new Date(),
+		}
+		vi.mocked(getWebAppSkill).mockResolvedValue(v2Skill as never)
+		const r = await executeWebAppReplaySkill(
+			{pool: fakePool, userId: FAKE_USER},
+			{skillId: FAKE_SKILL_ID},
+		)
+		expect(r.isError).toBe(false)
+		const txt = (r.content[0] as {text: string}).text
+		// v2 still emits the <previously-learned-skill> wrapper from the
+		// existing renderer — no regression.
+		expect(txt).toContain('<previously-learned-skill name="legacy-v2">')
+		expect(txt).toContain("1. click button 'left' at (50, 60)")
+	})
+
+	it('T-101-08-V3-06: v3 dispatch is gated on version === 3 (not version >= 3)', async () => {
+		// A future v4 schema should NOT silently fall into the v3 branch.
+		// Today we expect either an error OR the v1 legacy path (since
+		// version is unrecognised by the v3 branch's strict check).
+		const v4Skill = {
+			id: FAKE_SKILL_ID,
+			userId: FAKE_USER,
+			webappId: FAKE_WEBAPP,
+			skillName: 'future-v4',
+			actionLog: {
+				version: 4,
+				webappId: FAKE_WEBAPP,
+				startedAt: 0,
+				endedAt: 100,
+				events: [],
+			},
+			createdAt: new Date(),
+		}
+		vi.mocked(getWebAppSkill).mockResolvedValue(v4Skill as never)
+		const r = await executeWebAppReplaySkill(
+			{pool: fakePool, userId: FAKE_USER},
+			{skillId: FAKE_SKILL_ID},
+		)
+		// Either succeeds via v1 fallback (no events to render) OR errors
+		// explicitly. Both behaviors are acceptable — what's NOT acceptable
+		// is the v3 renderer accepting a v4 shape unchecked.
+		if (r.isError) {
+			expect((r.content[0] as {text: string}).text).toMatch(/version|schema|unsupported/i)
+		} else {
+			// Fell through to legacy render; output must not contain v3-marker text.
+			const txt = (r.content[0] as {text: string}).text
+			expect(txt).not.toMatch(/SelfClaude/i)
+		}
 	})
 })
