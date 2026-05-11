@@ -410,7 +410,7 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		})
 		await mgr.spawn({userId: 'user-1', webappId: 'webapp-abc', url: 'https://example.com'})
 		expect(installCalls).toHaveLength(1)
-		expect(installCalls[0]!.name).toBe('luse:webapp:webapp-abc')
+		expect(installCalls[0]!.name).toBe('luse:webapp:example-weba')
 		expect(installCalls[0]!.transport).toBe('stdio')
 		// Phase 102-04/102-06: DISPLAY matches the per-app allocated display
 		// (:10 for the first WebApp). LUSE_TARGET_DISPLAY is the canonical
@@ -441,7 +441,7 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		})
 		await mgr.spawn({userId: 'user-1', webappId: 'webapp-abc', url: 'https://example.com'})
 		await mgr.close({webappId: 'webapp-abc', userId: 'user-1'})
-		expect(removeCalls).toEqual(['luse:webapp:webapp-abc'])
+		expect(removeCalls).toEqual(['luse:webapp:example-weba'])
 	})
 
 	it('Test 18: spawn() falls back to updateServer when installServer throws (idempotent re-spawn / regex rejection)', async () => {
@@ -451,7 +451,7 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		const updateCalls: any[] = []
 		const mcpConfigManager = {
 			installServer: vi.fn(async () => {
-				throw new Error('Server "luse:webapp:webapp-abc" is already installed')
+				throw new Error('Server "luse:webapp:example-weba" is already installed')
 			}),
 			updateServer: vi.fn(async (name: string, _updates: any) => {
 				updateCalls.push({name})
@@ -465,7 +465,7 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		})
 		await mgr.spawn({userId: 'user-1', webappId: 'webapp-abc', url: 'https://example.com'})
 		expect(updateCalls).toHaveLength(1)
-		expect(updateCalls[0]!.name).toBe('luse:webapp:webapp-abc')
+		expect(updateCalls[0]!.name).toBe('luse:webapp:example-weba')
 		mgr._clearForTests()
 		if (prevEnv === undefined) delete process.env.LIVOS_PER_APP_LUSE
 		else process.env.LIVOS_PER_APP_LUSE = prevEnv
