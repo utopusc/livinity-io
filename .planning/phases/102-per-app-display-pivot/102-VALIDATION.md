@@ -42,8 +42,8 @@ Phase 102 has NO separate Wave 0 stub plan — each plan creates its own test fi
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
 | 102-01-01 | 01 | 1 | D-102-DISPLAY-ALLOCATOR | — | range [10, 100), idempotent release | unit | `pnpm --filter @livos/livinityd test:run streaming/display-allocator.test.ts` | ❌ create | ⬜ pending |
 | 102-01-02 | 01 | 1 | D-102-PER-APP-XVFB | — | xvfb-spawner readiness wait + cleanup | unit | `pnpm --filter @livos/livinityd test:run streaming/xvfb-spawner.test.ts` | ❌ create | ⬜ pending |
-| 102-02-01 | 02 | 1 | D-102-PER-APP-CHROME | T-102-02 (Chrome arg injection) | URL validated (no shell-meta) before --app= | unit | `pnpm --filter @livos/livinityd test:run webapps/chrome-process-spawner.test.ts` | ✅ created | ❌ red |
-| 102-02-02 | 02 | 1 | D-102-PER-APP-CHROME | — | --start-fullscreen + --app=URL + --user-data-dir per-app verified in argv | unit | same as 102-02-01 | ✅ created | ❌ red |
+| 102-02-01 | 02 | 1 | D-102-PER-APP-CHROME | T-102-02 (Chrome arg injection) | URL validated (no shell-meta) before --app= | unit | `pnpm --filter @livos/livinityd test:run webapps/chrome-process-spawner.test.ts` | ✅ created | ✅ green |
+| 102-02-02 | 02 | 1 | D-102-PER-APP-CHROME | — | --start-fullscreen + --app=URL + --user-data-dir per-app verified in argv | unit | same as 102-02-01 | ✅ created | ✅ green |
 | 102-03-01 | 03 | 1 | D-102-MASTER-PROFILE-SEED | T-102-03 (path traversal) | dest path must be /tmp/livos-chrome-app-<uuid> (regex) | unit | `pnpm --filter @livos/livinityd test:run chrome-master/profile-seeder.test.ts` | ❌ create | ⬜ pending |
 | 102-03-02 | 03 | 1 | D-102-MASTER-PROFILE-SEED | — | Cookies + Login Data + Local State copied; cleanup on app close | integration | same as 102-03-01 | ❌ create | ⬜ pending |
 | 102-04-01 | 04 | 2 | D-102-PER-APP-XVFB | T-102-02 | window-manager.spawn() routes via XvfbSpawner+ChromeProcessSpawner not CDP | unit | `pnpm --filter @livos/livinityd test:run webapps/window-manager.test.ts` | ✅ (extend) | ⬜ pending |
