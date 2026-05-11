@@ -1,31 +1,32 @@
 /**
- * Phase 101-03 Task 3 — tRPC routes apps.native.{list,get,create,delete}.
+ * Phase 102-05 — tRPC routes apps.native.{list,get,create,delete,spawn}.
  *
- * Surface (UUID-keyed CRUD over the `liv:apps:native:*` Redis namespace):
- *   - apps.native.list   query    (privateProcedure)  — any logged-in user
- *   - apps.native.get    query    (privateProcedure)  — any logged-in user
- *   - apps.native.create mutation (adminProcedure)    — admin only
- *   - apps.native.delete mutation (adminProcedure)    — admin only
+ * Per-app-display orchestration (D-102-NATIVE-APP-PARITY):
+ *   1. DisplayAllocator.allocate() returns :N (per-app dedicated Xvfb display)
+ *   2. spawnXvfb({display, width: 1280, height: 720}) — readiness-polled
+ *   3. spawnFluxbox({display}) — best-effort WM (Antigravity, VSCode need a WM)
+ *   4. spawnNativeApp({cfg, display}) returns child with DISPLAY=:N env
+ *   5. bind({display, portAllocator, startStreamFn, label})
+ *      starts x11vnc -display :N at the allocated port
+ *   6. Persist {displayN, port, streamId, xvfb, child} in activeNative map
+ *      so close-lifecycle (102-08) can tear down.
  *
- * Routes are admin-gated on mutations per the T-101-02 threat-register row:
- * binaryPath ultimately executes as the bruce service user, so only admins
- * may add or remove native-app configs. Reads are open to any logged-in
- * user (the dock needs to render the icons for everyone).
+ * Phase 101-05 (WM_CLASS xdotool poll on shared :1) flow REPLACED. Each
+ * native app owns its own Xvfb display, eliminating cross-app interference
+ * and 1920x1080 coord drift on Luse screenshots.
  *
- * httpOnlyPaths: all four paths are registered in server/trpc/common.ts
- * so the React client routes them over Express HTTP (mutations survive
- * `systemctl restart livos` mid-flight; matches the conventions documented
- * in common.ts for apiKeys.*, agents.*, webapp.* etc.).
+ * No master-profile seeding for native apps (D-102-MASTER-PROFILE-SEED is
+ * WebApps-only). Native binaries manage their own state.
  *
- * Construction: this file exports `buildNativeAppsRouter(ctxAccessor)`,
- * where the accessor pulls the store off `ctx.livinityd.nativeAppConfigStore`
- * (wired by Task 4 in `livos/packages/livinityd/source/index.ts`). When
- * the store is undefined (e.g. boot edge before Livinityd.start() finishes
- * or Redis unavailable), the routes throw a clean SERVICE_UNAVAILABLE.
+ * Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f (D-102-SACRED) — untouched.
+ *
+ * Threat model: T-101-02 (binary path validation) carried forward via
+ * nativeAppConfigSchema re-parse at spawn time (defense in depth).
  */
 
 import {z} from 'zod'
 import {TRPCError} from '@trpc/server'
+import type {ChildProcess} from 'node:child_process'
 
 import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
 import {
@@ -33,22 +34,65 @@ import {
 	type NativeAppConfigStore,
 } from './native-app-config.js'
 import {spawnNativeApp} from './native-app-spawner.js'
+import {bind, inferWmClass, type StreamStartFn} from './native-app-binder.js'
 import {
-	bindNativeAppWindow,
-	inferWmClass,
-	NativeAppWindowNotFoundError,
-	type StreamStartFn,
-} from './native-app-binder.js'
+	DisplayAllocator,
+	spawnXvfb,
+	type XvfbHandle,
+} from '../streaming/index.js'
 import type {StreamManager} from '../streaming/stream-manager.js'
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// Module-scope singletons
 
 /**
- * Resolve the NativeAppConfigStore off ctx.livinityd. Throws a clean
- * `SERVICE_UNAVAILABLE` TRPCError when the store has not been wired yet
- * (boot edge, Redis offline, etc.) — same pattern as `requirePool()` in
- * agents-router.ts.
+ * Shared DisplayAllocator for native-app spawns. Range [10, 100) (90 slots)
+ * matches D-102-DISPLAY-ALLOCATOR. Module-scope rather than ctx-injected
+ * because the allocator is a process-global resource — every spawn from
+ * every user shares the same display-number pool. Wave 2 102-04 mirrors
+ * this for the WebApp side.
  */
+const nativeDisplayAllocator = new DisplayAllocator()
+
+/** Default Xvfb spawn factory. Tests override via _setXvfbSpawnFnForTest. */
+let xvfbSpawnFn: typeof spawnXvfb = spawnXvfb
+
+/**
+ * Per-app lifecycle handles. Phase 102-08 (close lifecycle) will consume
+ * this map to SIGTERM the binary, stop x11vnc, kill Xvfb, release allocator
+ * slots, and remove map entries. Keyed by native-app UUID.
+ */
+export interface ActiveNativeApp {
+	id: string
+	displayN: number
+	display: string
+	port: number
+	streamId: string
+	wsUrl: string
+	xvfb: XvfbHandle
+	child: ChildProcess
+	startedAt: number
+}
+
+const activeNative = new Map<string, ActiveNativeApp>()
+
+// Test injection (do not use in production)
+
+export function _setXvfbSpawnFnForTest(fn: typeof spawnXvfb): typeof spawnXvfb {
+	const prev = xvfbSpawnFn
+	xvfbSpawnFn = fn
+	return prev
+}
+
+export function _snapshotActiveNativeForTest(): Map<string, ActiveNativeApp> {
+	return new Map(activeNative)
+}
+
+export function _clearActiveNativeForTest(): void {
+	activeNative.clear()
+}
+
+// Helpers
+
 function requireStore(ctx: {livinityd?: {nativeAppConfigStore?: NativeAppConfigStore | null}}): NativeAppConfigStore {
 	const store = ctx.livinityd?.nativeAppConfigStore
 	if (!store) {
@@ -60,12 +104,6 @@ function requireStore(ctx: {livinityd?: {nativeAppConfigStore?: NativeAppConfigS
 	return store
 }
 
-/**
- * Resolve the StreamManager off ctx.livinityd. Phase 101-05 spawn route uses
- * it as the stream-start collaborator AND as the source of the shared
- * PortAllocator (via getPortAllocator()). Matches the streams.* router pattern
- * at streaming/trpc-router.ts:64.
- */
 function requireStreamManager(ctx: {livinityd?: {streamManager?: StreamManager | null}}): StreamManager {
 	const sm = ctx.livinityd?.streamManager
 	if (!sm) {
@@ -78,55 +116,33 @@ function requireStreamManager(ctx: {livinityd?: {streamManager?: StreamManager |
 }
 
 /**
- * Build the `startStreamFn` adapter that the native-app-binder uses. Wraps
- * `StreamManager.startStream(...)` (sync, takes a {userId, mode, target}
- * envelope) into the Promise<{streamId, wsUrl}> shape the binder expects,
- * pinning the mode to `vnc-window` and the target to `{wid}` — the binder
- * NEVER captures whole-display for a native app.
+ * Build the startStreamFn adapter that the native-app-binder uses. Pins
+ * mode to vnc-window and target to {display} (D-102-X11VNC-WHOLE-DISPLAY).
  */
 function makeStartStreamFn(sm: StreamManager, userId: string): StreamStartFn {
-	return async ({wid}) => {
+	return async ({display}) => {
 		return sm.startStream({
 			userId,
 			mode: 'vnc-window',
-			target: {wid},
+			target: {display},
 		})
 	}
 }
 
-// ─── Input schemas ──────────────────────────────────────────────────────────
+// Input schemas
 
 const getInput = z.object({id: z.string().uuid()})
 const deleteInput = z.object({id: z.string().uuid()})
 const spawnInput = z.object({id: z.string().uuid()})
 
-// ─── Router ─────────────────────────────────────────────────────────────────
+// Router (CRUD)
 
-/**
- * tRPC router for `apps.native.*`. Returned as a plain `router({...})` so
- * the parent composition in server/trpc/index.ts can either:
- *   (a) merge into the existing `apps` router via `t.mergeRouters` with a
- *       wrapper `router({native: nativeAppsRouter})`, OR
- *   (b) attach as a nested router under any other namespace if the
- *       composition evolves.
- *
- * Tests can construct the router directly and exercise it against any
- * NativeAppConfigStore (production: ioredis-backed; tests: FakeRedis).
- */
 export const nativeAppsRouter = router({
-	/**
-	 * apps.native.list — return every config in `liv:apps:native:*`.
-	 * Open to any logged-in user so the dock can render icons.
-	 */
 	list: privateProcedure.query(async ({ctx}) => {
 		const store = requireStore(ctx)
 		return store.list()
 	}),
 
-	/**
-	 * apps.native.get — fetch a single config by UUID. Returns null when
-	 * the config does not exist (caller's UI shows a "not found" state).
-	 */
 	get: privateProcedure
 		.input(getInput)
 		.query(async ({ctx, input}) => {
@@ -134,16 +150,6 @@ export const nativeAppsRouter = router({
 			return store.get(input.id)
 		}),
 
-	/**
-	 * apps.native.create — upsert a config (idempotent; same UUID overwrites).
-	 *
-	 * Admin-only per T-101-02. The `nativeAppConfigSchema` input gate is the
-	 * authoritative validation — the spawner re-parses defense-in-depth, but
-	 * if a config is rejected here it never reaches Redis.
-	 *
-	 * Returns `{id}` so the UI can immediately invalidate `apps.native.list`
-	 * and (in P101-07) navigate to the new icon.
-	 */
 	create: adminProcedure
 		.input(nativeAppConfigSchema)
 		.mutation(async ({ctx, input}) => {
@@ -152,10 +158,6 @@ export const nativeAppsRouter = router({
 			return {id: input.id}
 		}),
 
-	/**
-	 * apps.native.delete — remove a config by UUID. Idempotent (repeat
-	 * deletes of the same id return `{deleted: false}` instead of throwing).
-	 */
 	delete: adminProcedure
 		.input(deleteInput)
 		.mutation(async ({ctx, input}) => {
@@ -165,32 +167,18 @@ export const nativeAppsRouter = router({
 		}),
 
 	/**
-	 * apps.native.spawn — orchestrate the full Pillar B lifecycle:
+	 * apps.native.spawn — Phase 102 per-app-display orchestration.
 	 *
-	 *   1. store.get(id)          — look up the persisted config
-	 *   2. spawnNativeApp(cfg)    — fire DISPLAY=:1 child_process.spawn (101-03)
-	 *   3. bindNativeAppWindow(.) — poll xdotool for the new WM_CLASS-matching wid,
-	 *                                allocate a stream port from the shared
-	 *                                PortAllocator (101-02), start the x11vnc
-	 *                                stream (101-05)
-	 *   4. return {id, pid, wid, port, streamId, wsUrl} to the dock UI
+	 *   1. DisplayAllocator.allocate() returns :N
+	 *   2. spawnXvfb({display, 1280x720}) (readiness-polled)
+	 *   3. spawnFluxbox({display}) (best-effort)
+	 *   4. spawnNativeApp({cfg, display}) — binary inherits DISPLAY=:N
+	 *   5. bind({display, portAllocator, startStreamFn}) — starts x11vnc + stream
+	 *   6. Persist handle in activeNative for 102-08 close lifecycle.
 	 *
-	 * This is the single entry the LivOS dock icon-click handler invokes —
-	 * everything from binary launch to stream URL flows through here.
-	 *
-	 * Privacy/auth: privateProcedure (any logged-in user). The admin gate is
-	 * on create/delete (config persistence); spawn just instantiates an
-	 * already-validated config so a regular user clicking the dock icon is
-	 * not gated by admin role.
-	 *
-	 * Error paths:
-	 *   - config not found            → NOT_FOUND
-	 *   - StreamManager not booted    → SERVICE_UNAVAILABLE (requireStreamManager)
-	 *   - spawn failure (binary path) → INTERNAL_SERVER_ERROR (NativeAppSpawnError msg)
-	 *   - window-poll timeout (5s)    → FAILED_PRECONDITION (window never appeared;
-	 *                                    the spawned child stays alive so user can debug)
-	 *   - x11vnc start failure        → INTERNAL_SERVER_ERROR (port already released
-	 *                                    via the binder's cleanup-on-throw path)
+	 * On failure between (1) and (5): tear down Xvfb + release display slot
+	 * before rethrowing. The binary (if (4) succeeded) is intentionally
+	 * LEFT RUNNING so the user can debug — matches Phase 101-05.
 	 */
 	spawn: privateProcedure
 		.input(spawnInput)
@@ -201,7 +189,7 @@ export const nativeAppsRouter = router({
 			if (!cfg) {
 				throw new TRPCError({
 					code: 'NOT_FOUND',
-					message: `native app config ${input.id} not found`,
+					message: 'native app config ' + input.id + ' not found',
 				})
 			}
 
@@ -213,11 +201,6 @@ export const nativeAppsRouter = router({
 				})
 			}
 
-			// Adapt the livinityd base logger (log/verbose/error) into the
-			// info/warn/error/verbose surface the spawner + binder modules
-			// expect. log() → info, error() → warn AND error (no distinct
-			// warn level in the base logger — collapse to error like the
-			// streamingLogger does in source/index.ts:386-392).
 			const logger = ctx.logger
 			const adaptLogger = logger
 				? {
@@ -227,63 +210,99 @@ export const nativeAppsRouter = router({
 						verbose: (m: string) => logger.verbose(m),
 					}
 				: undefined
-			const binderLogger = adaptLogger
-			const spawnerLogger = adaptLogger
 
-			// Step 1: launch the binary detached on :1 (101-03).
-			let pid: number
+			// 1. Allocate display.
+			const displayN = nativeDisplayAllocator.allocate()
+			const display = ':' + displayN
+			let xvfb: XvfbHandle | null = null
+			let child: ChildProcess | null = null
 			try {
-				const spawnResult = await spawnNativeApp({cfg, logger: spawnerLogger})
-				pid = spawnResult.pid
-			} catch (err) {
-				const msg = err instanceof Error ? err.message : String(err)
-				logger?.error(`apps.native.spawn: spawn failed for ${cfg.name}: ${msg}`)
-				throw new TRPCError({
-					code: 'INTERNAL_SERVER_ERROR',
-					message: `native-app spawn failed: ${msg}`,
+				// 2. Spawn Xvfb on :N (1280x720x24), readiness-polled.
+				xvfb = await xvfbSpawnFn({
+					display,
+					width: 1280,
+					height: 720,
+					logger: adaptLogger,
 				})
-			}
 
-			// Step 2: poll for the WM_CLASS-matching window + allocate port +
-			// start the stream (101-05). The binder pulls the PortAllocator off
-			// the StreamManager so the shared [15900, 16000) pool is honored
-			// across WebApps and native apps.
-			const wmClass = cfg.wmClassHint ?? inferWmClass(cfg.binaryPath)
-			const startStreamFn = makeStartStreamFn(sm, userId)
-			try {
-				const bound = await bindNativeAppWindow({
-					pid,
-					wmClass,
+				// 3. Best-effort fluxbox on :N.
+				try {
+					const fluxMod = await import('../webapps/fluxbox-wm.js')
+					await fluxMod.startFluxbox({display, logger: adaptLogger})
+				} catch (err) {
+					adaptLogger?.warn('fluxbox spawn on ' + display + ' failed (non-fatal): ' + (err instanceof Error ? err.message : String(err)))
+				}
+
+				// 4. Spawn the native binary with DISPLAY=:N.
+				let spawnedPid: number
+				try {
+					const spawnResult = await spawnNativeApp({cfg, display, logger: adaptLogger})
+					spawnedPid = spawnResult.pid
+					child = spawnResult.child
+				} catch (err) {
+					const msg = err instanceof Error ? err.message : String(err)
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: 'native-app spawn failed: ' + msg,
+					})
+				}
+
+				// 5. Bind display to stream port via new display-based binder.
+				const startStreamFn = makeStartStreamFn(sm, userId)
+				const bound = await bind({
+					display,
 					portAllocator: sm.getPortAllocator(),
 					startStreamFn,
-					logger: binderLogger,
+					logger: adaptLogger,
 					label: cfg.name,
 				})
+
+				// 6. Persist active-app handle for 102-08 close lifecycle.
+				const handle: ActiveNativeApp = {
+					id: cfg.id,
+					displayN,
+					display,
+					port: bound.port,
+					streamId: bound.streamId,
+					wsUrl: bound.wsUrl,
+					xvfb,
+					child,
+					startedAt: Date.now(),
+				}
+				activeNative.set(cfg.id, handle)
+
 				logger?.log(
-					`apps.native.spawn: ${cfg.name} pid=${pid} wid=${bound.wid} port=${bound.port}`,
+					'apps.native.spawn: ' + cfg.name + ' pid=' + spawnedPid + ' display=' + display + ' port=' + bound.port + ' streamId=' + bound.streamId,
 				)
+				const wmClassMeta = cfg.wmClassHint ?? inferWmClass(cfg.binaryPath)
+				adaptLogger?.verbose?.('apps.native.spawn: wmClass metadata=' + wmClassMeta + ' (informational only)')
+
 				return {
 					id: cfg.id,
-					pid,
-					wid: bound.wid,
+					pid: spawnedPid,
+					display,
+					displayN,
 					port: bound.port,
 					streamId: bound.streamId,
 					wsUrl: bound.wsUrl,
 				}
 			} catch (err) {
-				const msg = err instanceof Error ? err.message : String(err)
-				logger?.error(
-					`apps.native.spawn: bind failed for ${cfg.name} pid=${pid}: ${msg} (child left running so user can debug)`,
-				)
-				if (err instanceof NativeAppWindowNotFoundError) {
-					throw new TRPCError({
-						code: 'PRECONDITION_FAILED',
-						message: `native-app window did not appear in time: ${msg}`,
-					})
+				if (xvfb) {
+					try {
+						await xvfb.stop()
+					} catch (stopErr) {
+						adaptLogger?.warn('apps.native.spawn cleanup: xvfb.stop() failed: ' + (stopErr instanceof Error ? stopErr.message : String(stopErr)))
+					}
 				}
+				nativeDisplayAllocator.release(displayN)
+				void child
+
+				if (err instanceof TRPCError) throw err
+				const msg = err instanceof Error ? err.message : String(err)
+				logger?.error('apps.native.spawn: orchestration failed for ' + cfg.name + ': ' + msg)
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
-					message: `native-app bind failed: ${msg}`,
+					message: 'native-app orchestration failed: ' + msg,
 				})
 			}
 		}),
