@@ -397,44 +397,64 @@ function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
 
 	return (
 		<Magnetic intensity={0.2}>
-			<div className='flex items-center gap-2 rounded-full bg-white/95 backdrop-blur-xl border border-neutral-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.08)] px-3 py-2'>
-				<input
-					ref={inputRef}
-					type='text'
-					value={input}
-					onChange={(e) => setInput(e.target.value)}
-					onKeyDown={(e) => {
-						if (e.key === 'Enter') {
-							e.preventDefault()
-							handleSend()
-						}
-					}}
-					placeholder='Mesaj yaz...'
-					disabled={agent.isStreaming}
-					className='w-[360px] bg-transparent text-caption-sm text-text-primary placeholder:text-text-tertiary outline-none border-none focus-visible:ring-0 disabled:opacity-50'
-				/>
-				<button
-					type='button'
-					onClick={handleSend}
-					disabled={!input.trim() || agent.isStreaming}
-					aria-label='Send'
-					className={cn(
-						'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-						input.trim() && !agent.isStreaming
-							? 'bg-primary text-white hover:bg-primary/90'
-							: 'bg-neutral-100 text-neutral-400 cursor-not-allowed',
-					)}
-				>
-					<Send className='h-3.5 w-3.5' strokeWidth={2.25} />
-				</button>
-				<button
-					type='button'
-					onClick={onClose}
-					aria-label='Close chat input'
-					className='flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 transition-colors'
-				>
-					<X className='h-3.5 w-3.5' strokeWidth={2.25} />
-				</button>
+			{/* Phase 100-10-10 Bug B — the input pill stays a flex-row; a
+			    secondary status line (per-tool streaming) renders BELOW
+			    the pill via a column wrapper, but only while agent is
+			    streaming. The wrapper is `inline-flex flex-col items-center`
+			    so the row stays its original ~360px width and the status
+			    line centers beneath it without disturbing the layout. */}
+			<div className='inline-flex flex-col items-center gap-1.5'>
+				<div className='flex items-center gap-2 rounded-full bg-white/95 backdrop-blur-xl border border-neutral-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.08)] px-3 py-2'>
+					<input
+						ref={inputRef}
+						type='text'
+						value={input}
+						onChange={(e) => setInput(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault()
+								handleSend()
+							}
+						}}
+						placeholder='Mesaj yaz...'
+						disabled={agent.isStreaming}
+						className='w-[360px] bg-transparent text-caption-sm text-text-primary placeholder:text-text-tertiary outline-none border-none focus-visible:ring-0 disabled:opacity-50'
+					/>
+					<button
+						type='button'
+						onClick={handleSend}
+						disabled={!input.trim() || agent.isStreaming}
+						aria-label='Send'
+						className={cn(
+							'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
+							input.trim() && !agent.isStreaming
+								? 'bg-primary text-white hover:bg-primary/90'
+								: 'bg-neutral-100 text-neutral-400 cursor-not-allowed',
+						)}
+					>
+						<Send className='h-3.5 w-3.5' strokeWidth={2.25} />
+					</button>
+					<button
+						type='button'
+						onClick={onClose}
+						aria-label='Close chat input'
+						className='flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 transition-colors'
+					>
+						<X className='h-3.5 w-3.5' strokeWidth={2.25} />
+					</button>
+				</div>
+				{/* Phase 100-10-10 Bug B — per-tool streaming status sub-line.
+				    Mirrors the line inside ChatResponseBar so the user sees
+				    tool-call progress even before the mode flips (and during
+				    the brief window between Send and mode-flip). Gated on
+				    `agent.isStreaming` AND (Hermes `phrase` OR `currentTool`)
+				    — see ChatResponseBar comment for backend wiring notes. */}
+				{agent.isStreaming && (agent.agentStatus?.phrase || agent.agentStatus?.currentTool) ? (
+					<div className='text-caption-xs text-text-tertiary flex items-center gap-1.5'>
+						<span className='inline-block w-1 h-1 rounded-full bg-text-tertiary animate-pulse' aria-hidden='true' />
+						<span>{agent.agentStatus.phrase ?? `Using ${agent.agentStatus.currentTool}…`}</span>
+					</div>
+				) : null}
 			</div>
 		</Magnetic>
 	)
@@ -512,6 +532,22 @@ function ChatResponseBar({webappId, agent, onClose, onNew}: ChatResponseBarProps
 							className='inline-block w-1.5 h-3.5 ml-1 bg-primary animate-pulse align-middle'
 							aria-hidden='true'
 						/>
+					) : null}
+					{/* Phase 100-10-10 Bug B — per-tool streaming status line.
+					    User UAT 2026-05-10 wanted to see "parça parça" which
+					    tool the agent is using while it streams. Renders ONLY
+					    while `agent.isStreaming` AND (Hermes `phrase` OR
+					    `currentTool` is set). The chat WS path today does not
+					    carry Phase 87 status_detail chunks (agent-session.ts
+					    doesn't relay runStore status_detail) — so `phrase`
+					    will be null and the fallback shows `Using <tool>…`
+					    from `agentStatus.currentTool` (populated by
+					    use-agent-socket.ts content_block_start handler). */}
+					{agent.isStreaming && (agent.agentStatus?.phrase || agent.agentStatus?.currentTool) ? (
+						<div className='text-caption-xs text-text-tertiary mt-1.5 flex items-center gap-1.5'>
+							<span className='inline-block w-1 h-1 rounded-full bg-text-tertiary animate-pulse' aria-hidden='true' />
+							<span>{agent.agentStatus.phrase ?? `Using ${agent.agentStatus.currentTool}…`}</span>
+						</div>
 					) : null}
 				</div>
 				{agent.isStreaming ? (
