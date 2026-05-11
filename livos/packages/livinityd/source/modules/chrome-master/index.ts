@@ -21,3 +21,18 @@ export type {
 	AccessFn,
 	MkdirFn,
 } from './profile-seeder.js'
+
+// Phase 102-07 - Chrome Master Login tRPC routes (D-102-MASTER-LOGIN-UI).
+// chromeMasterRouter is the production-default router (real fs +
+// child_process); createChromeMasterRouter is the factory tests use to
+// inject mocks. MASTER_BACKUP_DIR sits next to MASTER_PROFILE_DIR for the
+// T-102-07c reset-with-backup flow.
+export {
+	chromeMasterRouter,
+	createChromeMasterRouter,
+	MASTER_BACKUP_DIR,
+} from './master-login-routes.js'
+export type {
+	MasterLoginInjectables,
+	ChromeMasterRouter,
+} from './master-login-routes.js'

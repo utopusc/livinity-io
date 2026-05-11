@@ -431,4 +431,15 @@ export const httpOnlyPaths = [
 	//     subscribe to immediately; a silent WS-drop after `systemctl restart
 	//     livos` would lose the connection token (memory pitfall B-12 / X-04).
 	'apps.native.spawn',
+	// Phase 102-07 - Chrome Master Login tRPC routes (D-102-MASTER-LOGIN-UI).
+	// chromeMaster.startLogin spawns master Chrome on bruce's :0 display.
+	// chromeMaster.reset / .restoreBackup touch /opt/livos/data/chrome-master
+	// under privileged adminProcedure-gated caller (T-102-07). All three
+	// mutations must survive `systemctl restart livos` mid-call (memory
+	// pitfall B-12 / X-04). chromeMaster.status is a query kept on HTTP for
+	// transport consistency with the mutation cluster.
+	'chromeMaster.startLogin',
+	'chromeMaster.reset',
+	'chromeMaster.restoreBackup',
+	'chromeMaster.status',
 ] as const
