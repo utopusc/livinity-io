@@ -87,6 +87,20 @@ export class ChromeCdpClient {
 	private readonly cdpFactory: CdpFactory
 	private readonly connectTimeoutMs: number
 	private readonly connectRetries: number
+	// Phase 101-04 — pid of the Chrome process this client is connected to.
+	// Populated by `setChromePid()` from the livinityd.start() try/catch
+	// AFTER `bootstrapChrome` resolves (pid is the `pid` field of the
+	// `ChromeBootstrapHandle`). Consumed by `getChromePid()` so the
+	// WebAppWindowManager can baseline `xdotool search --pid <pid>` BEFORE
+	// driving CDP createTarget — the only way to narrow the wid race to the
+	// connected Chrome rather than the whole X11 root.
+	//
+	// Implementation choice (a) in PLAN Task 2: cache from bootstrap. The
+	// alternative (b) — derive via /json/version + pgrep — is heavier and
+	// only needed for clients that didn't run bootstrap (none today). If a
+	// future caller calls `getChromePid()` without `setChromePid()` first,
+	// the method throws so the bug is loud, not silent.
+	private chromePid: number | null = null
 
 	constructor(opts: ChromeCdpClientOpts = {}) {
 		this.host = opts.host ?? '127.0.0.1'
@@ -95,6 +109,35 @@ export class ChromeCdpClient {
 		this.cdpFactory = opts.cdpFactory ?? ((o) => CDP(o as any) as unknown as Promise<any>)
 		this.connectTimeoutMs = opts.connectTimeoutMs ?? 5_000
 		this.connectRetries = opts.connectRetries ?? 5
+	}
+
+	/**
+	 * Phase 101-04 — cache the pid of the connected Chrome process. Called
+	 * by `livinityd.start()` right after `bootstrapChrome` resolves with a
+	 * `ChromeBootstrapHandle`. Allows `getChromePid()` to return a value
+	 * without re-shelling out to `/json/version` + `pgrep`.
+	 */
+	setChromePid(pid: number): void {
+		this.chromePid = pid
+	}
+
+	/**
+	 * Phase 101-04 — return the cached pid set by `setChromePid()`. Throws
+	 * if the pid has not been wired in yet (loud failure rather than
+	 * silently returning 0, which `xdotool search --pid 0` would mis-target).
+	 *
+	 * Returns `Promise<number>` for symmetry with the other async methods
+	 * even though the cached read is sync — keeps the consumer surface
+	 * uniform and leaves room for the future implementation choice (b)
+	 * (derive via `/json/version` + `pgrep`) without churning callers.
+	 */
+	async getChromePid(): Promise<number> {
+		if (this.chromePid == null) {
+			throw new Error(
+				'chrome-cdp: getChromePid() called before setChromePid() — bootstrap must complete first',
+			)
+		}
+		return this.chromePid
 	}
 
 	/**

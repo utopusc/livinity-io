@@ -751,7 +751,7 @@ describe('Phase 100-10-11 per-WebApp cascade window-position', () => {
 		// Cascade pattern must produce DISTINCT positions for the first 10
 		// spawns (regression lock against the pre-fix constant `0,0` shape).
 		const firstTen = new Set(
-			chromeCdpBundle.created.slice(0, 10).map((c) => `${c.opts.left},${c.opts.top}`),
+			chromeCdpBundle.created.slice(0, 10).map((c: any) => `${c.opts.left},${c.opts.top}`),
 		)
 		expect(firstTen.size).toBe(10)
 
