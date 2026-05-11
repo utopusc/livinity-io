@@ -187,7 +187,9 @@ interface StreamManagerLike {
 		mode: 'vnc-window'
 		target: {display: string}
 	}): {streamId: string; wsUrl: string}
-	stopStream(streamId: string): Promise<void>
+	// Real StreamManager returns Promise<{stopped: boolean}>; tests may return
+	// Promise<void>. Either is fine — we await it but never inspect the result.
+	stopStream(streamId: string): Promise<unknown>
 	getPortAllocator(): PortAllocatorLike
 }
 interface ProfileSeederLike {
