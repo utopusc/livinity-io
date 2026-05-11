@@ -221,6 +221,14 @@ export interface ActiveAppMetaPayload {
 export interface UseAgentSocketOpts {
 	webappId?: string
 	activeWid?: number
+	/**
+	 * Phase 102-06 - X11 display string (`:10`, `:11`, ...) the active app
+	 * is rendering on. Replaces the legacy `activeWid` path; both are sent
+	 * during the migration window so livinityd's broker can pick whichever
+	 * snippet builder is available. When backend reads `activeDisplay`,
+	 * `activeWid` is ignored.
+	 */
+	activeDisplay?: string
 	activeAppMeta?: ActiveAppMetaPayload
 }
 
@@ -580,10 +588,13 @@ export function useAgentSocket(opts: UseAgentSocketOpts = {}) {
 			// `## Active Window Context` snippet to the agent's system prompt
 			// (see agent-runner-factory.ts + agent-prompt-builder.ts).
 			if (opts.activeWid !== undefined) payload.activeWid = opts.activeWid
+			// Phase 102-06 - new display-scoped path (livinityd broker prefers
+			// activeDisplay over activeWid when both are present).
+			if (opts.activeDisplay !== undefined) payload.activeDisplay = opts.activeDisplay
 			if (opts.activeAppMeta) payload.activeAppMeta = opts.activeAppMeta
 			ws.send(JSON.stringify(payload))
 		},
-		[currentSessionId, opts.webappId, opts.activeWid, opts.activeAppMeta],
+		[currentSessionId, opts.webappId, opts.activeWid, opts.activeDisplay, opts.activeAppMeta],
 	)
 
 	const sendFollowUp = useCallback(
