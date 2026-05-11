@@ -47,6 +47,7 @@ import {
 	TbCalendarTime,
 	TbStethoscope,
 	TbRobot,
+	TbBrandChrome,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -119,6 +120,8 @@ const MemorySectionLazy = React.lazy(() =>
 const AiConfigLazy = React.lazy(() => import('@/routes/settings/ai-config'))
 // Phase 76 / Plan 06 (MARKET-07) — Liv Agent thin settings page (D-12).
 const LivAgentLazy = React.lazy(() => import('@/routes/settings/liv-agent'))
+// Phase 102-07 — Chrome Master Login (D-102-MASTER-LOGIN-UI).
+const ChromeMasterLazy = React.lazy(() => import('@/routes/settings/chrome-master'))
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -133,6 +136,7 @@ type SettingsSection =
 	| '2fa'
 	| 'ai-config'
 	| 'liv-agent'
+	| 'chrome-master'
 	| 'integrations'
 	| 'gmail'
 	| 'dm-pairing'
@@ -178,6 +182,8 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
 	{id: 'admin-devices', icon: TbServer2, label: 'Devices', description: 'All devices across all users', adminOnly: true},
 	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'AI providers & model', adminOnly: true},
+	// Phase 102-07 — master Chrome profile for WebApp browser inheritance.
+	{id: 'chrome-master', icon: TbBrandChrome, label: 'Chrome Profile', description: 'Master Chrome login for WebApps', adminOnly: true},
 	{id: 'my-domains', icon: TbWorld, label: 'My Domains', description: 'Domains synced from livinity.io', adminOnly: true},
 	{id: 'scheduler', icon: TbCalendarTime, label: 'Scheduler', description: 'Scheduled backup & maintenance jobs', adminOnly: true},
 	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore', adminOnly: true},
@@ -458,6 +464,8 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AiConfigLazy /></Suspense>
 		case 'liv-agent':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><LivAgentLazy /></Suspense>
+		case 'chrome-master':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><ChromeMasterLazy /></Suspense>
 		case 'integrations':
 			return <IntegrationsSection />
 		case 'gmail':
