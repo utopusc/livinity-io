@@ -231,3 +231,170 @@ describe('createSdkAgentRunnerForUser — Phase 101-06 Pillar C (Active Window C
 		expect(stub.captured.body.contextPrefix).toBe('just the prefix')
 	})
 })
+
+/**
+ * Phase 101-09 Task 3 (Pillar F) — status_detail relay tests.
+ *
+ * Closes the 100-10-10 backend gap: when liv-core RunStore emits
+ * `status_detail` chunks (V32-HERMES-01 — phase/phrase/elapsed) over the
+ * SSE stream, `createSdkAgentRunnerForUser` MUST re-yield them as
+ * AgentEvent-shaped objects so the livinityd broker can forward them to
+ * the WebSocket clients (today: through the SSE → WS bridge layer).
+ *
+ * Test strategy: extend captureUpstreamPost with a custom SSE script so
+ * we can enqueue arbitrary chunk types (status_detail, tool_call, etc.)
+ * BEFORE the terminating `done` event. The async generator drains; we
+ * collect yielded events into an array and assert the expected shape.
+ */
+
+interface ScriptedEvent {
+	type: string
+	data?: unknown
+	[k: string]: unknown
+}
+
+function captureWithScript(events: ScriptedEvent[]): {captured: CapturedBody; restore: () => void} {
+	const captured: CapturedBody = {body: null, headers: {}, url: ''}
+	const original = globalThis.fetch
+	globalThis.fetch = (async (input: any, init?: any) => {
+		const urlStr = typeof input === 'string' ? input : input?.url || ''
+		if (!urlStr.includes('/api/agent/stream')) {
+			return original(input, init)
+		}
+		captured.url = urlStr
+		captured.headers = (init?.headers ?? {}) as Record<string, string>
+		try {
+			captured.body = JSON.parse(init?.body ?? '{}')
+		} catch {
+			captured.body = init?.body
+		}
+		// Build SSE body: each scripted event + terminating done so the
+		// async generator's loop exits cleanly.
+		const allEvents = [...events]
+		const hasDone = events.some((e) => e.type === 'done')
+		if (!hasDone) {
+			allEvents.push({type: 'done', data: {success: true, answer: '', turns: 0}})
+		}
+		const sse = allEvents
+			.map((ev) => `data: ${JSON.stringify(ev)}\n\n`)
+			.join('')
+		const stream = new ReadableStream({
+			start(controller) {
+				controller.enqueue(new TextEncoder().encode(sse))
+				controller.close()
+			},
+		})
+		return new Response(stream, {
+			status: 200,
+			headers: {'Content-Type': 'text/event-stream'},
+		})
+	}) as any
+	return {
+		captured,
+		restore: () => {
+			globalThis.fetch = original
+		},
+	}
+}
+
+async function collectYielded(
+	gen: AsyncGenerator<any, any, void>,
+): Promise<any[]> {
+	const out: any[] = []
+	for await (const ev of gen) {
+		out.push(ev)
+	}
+	return out
+}
+
+describe('createSdkAgentRunnerForUser — Phase 101-09 Pillar F (Hermes status_detail relay)', () => {
+	let stub: ReturnType<typeof captureWithScript>
+
+	afterEach(() => {
+		if (stub) stub.restore()
+		vi.unstubAllEnvs()
+	})
+
+	it('re-yields status_detail chunks emitted by liv-core SSE with the same shape', async () => {
+		stub = captureWithScript([
+			{
+				type: 'status_detail',
+				data: {phase: 'thinking', phrase: 'reasoning', elapsed: 123},
+			},
+		])
+		const gen = createSdkAgentRunnerForUser({
+			livinityd: makeFakeLivinityd(),
+			userId: 'u1',
+			task: 'do thing',
+		})
+		const events = await collectYielded(gen)
+		// Find the status_detail re-yield.
+		const sd = events.find((e) => e.type === 'status_detail')
+		expect(sd).toBeDefined()
+		expect(sd.data).toEqual({phase: 'thinking', phrase: 'reasoning', elapsed: 123})
+	})
+
+	it('re-yields status_detail with phase=tool_use + phrase=inspecting (tool dispatch verb)', async () => {
+		stub = captureWithScript([
+			{
+				type: 'status_detail',
+				data: {phase: 'tool_use', phrase: 'inspecting', elapsed: 456},
+			},
+		])
+		const gen = createSdkAgentRunnerForUser({
+			livinityd: makeFakeLivinityd(),
+			userId: 'u1',
+			task: 'do thing',
+		})
+		const events = await collectYielded(gen)
+		const sd = events.find((e) => e.type === 'status_detail')
+		expect(sd).toBeDefined()
+		expect(sd.data).toMatchObject({phase: 'tool_use', phrase: 'inspecting'})
+	})
+
+	it('preserves existing chunk types (thinking, tool_call, observation) alongside status_detail', async () => {
+		stub = captureWithScript([
+			{type: 'thinking', turn: 1, data: {}},
+			{type: 'status_detail', data: {phase: 'thinking', phrase: 'reasoning', elapsed: 10}},
+			{type: 'tool_call', turn: 1, data: {tool: 'list_windows', params: {}}},
+			{type: 'observation', turn: 1, data: {tool: 'list_windows', success: true, output: '[]'}},
+			{type: 'status_detail', data: {phase: 'tool_use', phrase: 'calling', elapsed: 25}},
+		])
+		const gen = createSdkAgentRunnerForUser({
+			livinityd: makeFakeLivinityd(),
+			userId: 'u1',
+			task: 'do thing',
+		})
+		const events = await collectYielded(gen)
+		// Existing chunk types pass through unchanged.
+		expect(events.find((e) => e.type === 'thinking')).toBeDefined()
+		expect(events.find((e) => e.type === 'tool_call')).toBeDefined()
+		expect(events.find((e) => e.type === 'observation')).toBeDefined()
+		// Both status_detail chunks relayed.
+		const detailEvents = events.filter((e) => e.type === 'status_detail')
+		expect(detailEvents.length).toBe(2)
+		expect(detailEvents[0].data).toMatchObject({phase: 'thinking'})
+		expect(detailEvents[1].data).toMatchObject({phase: 'tool_use'})
+	})
+
+	it('unknown chunk types fall through unchanged (forward-compat)', async () => {
+		// Forward-compat: future liv-core chunk types we have not heard of
+		// must still be re-yielded so consumers (e.g. UI hooks) can decide
+		// to ignore or handle them. The broker is a pass-through, not a
+		// filter. (The `done` event is treated specially because it
+		// signals async-generator termination; everything else passes
+		// through.)
+		stub = captureWithScript([
+			{type: 'future_chunk_type_xyz', data: {arbitrary: 'shape'}},
+		])
+		const gen = createSdkAgentRunnerForUser({
+			livinityd: makeFakeLivinityd(),
+			userId: 'u1',
+			task: 'do thing',
+		})
+		const events = await collectYielded(gen)
+		const unknown = events.find((e) => e.type === 'future_chunk_type_xyz')
+		expect(unknown).toBeDefined()
+		expect(unknown.data).toEqual({arbitrary: 'shape'})
+	})
+})

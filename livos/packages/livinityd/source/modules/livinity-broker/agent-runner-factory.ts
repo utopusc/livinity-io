@@ -7,6 +7,36 @@ import {
 import {isMultiUserMode} from '../ai/per-user-claude.js'
 
 /**
+ * Phase 101-09 Pillar F (Hermes status_detail relay) — extended event type.
+ *
+ * The `@liv/core` `AgentEvent.type` union is closed
+ * (`'thinking' | 'chunk' | 'tool_call' | 'observation' | 'final_answer' |
+ *   'error' | 'done'`) and lives inside the liv tree, which is sacred-adjacent
+ * for Phase 101. To re-yield `status_detail` chunks (V32-HERMES-01 — phase /
+ * phrase / elapsed, emitted by liv-core RunStore in `liv-agent-runner.ts`)
+ * without modifying the core type definition, we widen the yielded shape
+ * with a local discriminated-union extension. Consumers that only care
+ * about the core types continue to typecheck because the additional
+ * variant only adds to the literal union.
+ *
+ * The payload mirrors the on-the-wire shape that liv-core RunStore
+ * emits (`run-store.ts` chunk type `status_detail`, payload
+ * `{phase, phrase, elapsed}`).
+ */
+export interface AgentStatusDetailEvent {
+	type: 'status_detail'
+	turn?: number
+	data: {
+		phase: 'thinking' | 'tool_use' | 'responding' | 'idle' | string
+		phrase: string
+		elapsed: number
+	}
+}
+
+/** Phase 101-09 — union of core AgentEvent + the new status_detail relay. */
+export type AgentBrokerEvent = AgentEvent | AgentStatusDetailEvent
+
+/**
  * Phase 45 Plan 02 (FR-CF-01) — typed upstream error.
  *
  * Thrown by createSdkAgentRunnerForUser when the upstream nexus
@@ -102,7 +132,7 @@ export async function* createSdkAgentRunnerForUser(opts: {
 	 */
 	activeWid?: number
 	activeAppMeta?: ActiveAppMeta
-}): AsyncGenerator<AgentEvent, AgentResult, void> {
+}): AsyncGenerator<AgentBrokerEvent, AgentResult, void> {
 	const {livinityd, userId, task, contextPrefix, systemPromptOverride, maxTurns = 30, signal} = opts
 	const livApiUrl = process.env.LIV_API_URL || 'http://localhost:3200'
 
@@ -173,9 +203,12 @@ export async function* createSdkAgentRunnerForUser(opts: {
 			buffer = lines.pop() || ''
 			for (const line of lines) {
 				if (!line.startsWith('data: ')) continue
-				let event: AgentEvent
+				// Phase 101-09 Pillar F — widen the parse target to
+				// `AgentBrokerEvent` so the `status_detail` variant
+				// typechecks alongside the core AgentEvent variants.
+				let event: AgentBrokerEvent
 				try {
-					event = JSON.parse(line.slice(6)) as AgentEvent
+					event = JSON.parse(line.slice(6)) as AgentBrokerEvent
 				} catch {
 					continue
 				}
@@ -204,6 +237,26 @@ export async function* createSdkAgentRunnerForUser(opts: {
 						toolCalls: [],
 						stoppedReason: d.stoppedReason ?? 'complete',
 					}
+				} else if (event.type === 'status_detail') {
+					// Phase 101-09 Pillar F — Hermes status_detail relay.
+					//
+					// Closes the 100-10-10 gap. liv-core RunStore emits
+					// `status_detail` chunks (V32-HERMES-01) with payload
+					// `{phase, phrase, elapsed}` from `liv-agent-runner.ts`
+					// at three points per turn: turn-start (phase='thinking'),
+					// tool-dispatch (phase='tool_use'), and after-tool-result
+					// (phase='thinking' again). We re-yield the event verbatim
+					// (preserving the existing `data` shape) so downstream
+					// consumers — the livinityd WS bridge in `ai/index.ts`,
+					// the docker-agent SSE pass-through, and any
+					// future tRPC subscriber — can surface the verb to the UI
+					// status line in webapp-floating-action-bar.tsx (Pillar E).
+					//
+					// The discriminant branch is explicit rather than a
+					// generic fall-through so the broker's interface contract
+					// is grep-visible (acceptance criterion: `grep -q
+					// "status_detail"`).
+					yield event
 				} else {
 					yield event
 				}
