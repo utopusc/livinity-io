@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-11T21:27:52.000Z"
+last_updated: "2026-05-11T22:00:00.000Z"
 progress:
   total_phases: 52
   completed_phases: 25
-  total_plans: 203
-  completed_plans: 195
+  total_plans: 204
+  completed_plans: 196
   percent: 96
 ---
 
@@ -26,8 +26,17 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — EXECUTING
-Plan: 4 of 6 outstanding (103-01 ✅; 103-02 ✅; 103-03 ✅; 103-04 ✅; 103-05 + 103-06 outstanding)
+Plan: 5 of 6 outstanding (103-01 ✅; 103-02 ✅; 103-03 ✅; 103-04 ✅; 103-05 ✅; 103-06 outstanding — user-walked Mini PC deploy + UAT)
 Milestone: v33.0 (active) — Phase 100 PARTIAL-PASS; 100-08 closes residual bugs from 100-07
+
+## 103-05 Status (2026-05-11) — Sub-goal B closure: LIVOS_PER_APP_LUSE default-off + orphan sweep
+
+- Wave 2 (103-05): ✅ COMPLETE — `f2e7f2a2..ca1b1f79` (4 commits, TDD RED+GREEN × 2 tasks) — `LIVOS_PER_APP_LUSE` gate in `WebAppWindowManager.spawn()` flipped from `!== '0'` (default ON) to `=== '1'` (default OFF, only literal '1' opts in). New `cleanupOrphanedPerWebAppLuseEntries({mcpConfigManager, logger?})` exported from `legacy-bytebot-cleanup.ts` and wired into `agent-runs.ts` boot block between `cleanupLegacyBytebotState` (line 203) and `registerLuseMcpServer` (line 238) at line 227. Idempotent + non-fatal at three levels (internal listServers catch, internal per-entry removeServer catch, outer `.catch()` in agent-runs.ts).
+- Tests: window-manager.test.ts 40/40 pass (35 prior + 5 new under "Phase 103-05 — LIVOS_PER_APP_LUSE default-off env coverage"). legacy-bytebot-cleanup.test.ts 11/11 pass (5 existing + 6 new orphan-sweep tests under "Phase 103-05"). Broader webapps/ suite 232/254 + computer-use/ 227/244 (17 pre-existing platform-specific failures unchanged from baseline).
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 4 commits (verified pre + post each commit).
+- Decisions: (1) strict-string opt-in (`=== '1'`) over loose match — mirrors Bytebot opt-in pattern; (2) defensive non-string-name filter added beyond plan spec (T-103-05-SWEEP-06) — Redis JSON blobs survive pathological entries silently rather than crashing boot; (3) removeServer-not-implemented guard mirrors `cleanupLegacyBytebotState` pattern (interface declares the method optional).
+
+**Carry-forward to 103-06:** Sub-goal B code is complete. 103-06 is the user-walked Mini PC deploy + UAT — `bash /opt/livos/update.sh` then verify `journalctl -u livos --since today | grep "Phase 103-05 default-off\|orphan-sweep"` shows the SKIPPED logs + clean-state / removing-N log on first post-deploy boot. Token budget should reduce from ~85 → ~17 MCP tools with 5 WebApps open. Operator escape hatch: `LIVOS_PER_APP_LUSE=1` in `/opt/livos/.env` re-enables legacy per-app MCP registration for debug.
 
 ## 103-02 Status (2026-05-11) — Sub-goal A UI: Embedded noVNC viewer + input dispatch
 

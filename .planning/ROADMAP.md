@@ -607,7 +607,7 @@ Plans:
 - [x] 103-02-PLAN.md — Sub-goal A UI: embedded noVNC viewer + input dispatch in master-chrome-login.tsx (Wave 2) — ✅ Shipped 2026-05-11 (`c5eb9360`, 1 commit, TDD RED+GREEN, sacred SHA preserved)
 - [x] 103-03-PLAN.md — Sub-goal B native: withScopedDisplay + display arg on 13 X11-touching luse tools (Wave 1) — ✅ Shipped 2026-05-11 (`d38af35f..2bd32a25`, 3 commits, sacred SHA preserved)
 - [x] 103-04-PLAN.md — Sub-goal B prompt: buildActiveDisplaySnippet prescriptive "MUST pass display" instruction (Wave 1) — ✅ Shipped 2026-05-11 (`dc86a7c2..cab8b331`, 2 commits TDD RED+GREEN, sacred SHA preserved)
-- [ ] 103-05-PLAN.md — Sub-goal B production: flip LIVOS_PER_APP_LUSE default OFF + orphan-sweep boot pass (Wave 2)
+- [x] 103-05-PLAN.md — Sub-goal B production: flip LIVOS_PER_APP_LUSE default OFF + orphan-sweep boot pass (Wave 2) — ✅ Shipped 2026-05-11 (`f2e7f2a2..ca1b1f79`, 4 commits TDD RED+GREEN × 2 tasks, sacred SHA preserved)
 - [ ] 103-06-PLAN.md — Deploy + 12-row UAT walk (Wave 3, autonomous: false)
 
 **Non-goals (deferred to later phase):**
