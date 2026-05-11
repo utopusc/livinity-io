@@ -13,3 +13,15 @@
 
 export {extractMetadata, type MetadataResult} from './metadata-extractor.js'
 export {default as webappRouter} from './trpc-router.js'
+
+// Phase 102-02 — per-app Chrome subprocess spawner (D-102-PER-APP-CHROME).
+// Wave 2 plan 102-04 (window-manager.ts rewrite) consumes this barrel to
+// orchestrate per-app Chrome alongside DisplayAllocator + XvfbSpawner +
+// ProfileSeeder.
+export {spawnChromeProcess, ChromeProcessSpawnError} from './chrome-process-spawner.js'
+export type {
+	ChromeSpawnOpts,
+	ChromeProcessHandle,
+	ChromeSpawnFn,
+	ChromeProcessSpawnerLogger,
+} from './chrome-process-spawner.js'
