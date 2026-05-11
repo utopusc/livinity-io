@@ -598,7 +598,17 @@ Plans:
 
 **Depends on:** Phase 102 (Wave 0-3 SHIPPED; sub-goal A reuses 102-01 DisplayAllocator + 102-02 ChromeProcessSpawner shape + 102-09 x11vnc -display capture path; sub-goal B drops 102-06 per-app luse-mcp-config and re-shapes its `LUSE_TARGET_DISPLAY` env into a per-call MCP tool arg).
 
-**Status:** Not yet planned. Run `/gsd-plan-phase 103`.
+**Status:** Planned 2026-05-11 (6 plans, 3 waves). Run `/gsd-execute-phase 103` to begin Wave 1.
+
+**Plans:** 6 plans
+
+Plans:
+- [ ] 103-01-PLAN.md — Sub-goal A backend: widen chrome-process-spawner USER_DATA_DIR_RE + refactor master-login-routes to factory-injected router with startLogin/stopLogin/input.* (Wave 1)
+- [ ] 103-02-PLAN.md — Sub-goal A UI: embedded noVNC viewer + input dispatch in master-chrome-login.tsx (Wave 2)
+- [ ] 103-03-PLAN.md — Sub-goal B native: withScopedDisplay + display arg on 13 X11-touching luse tools (Wave 1)
+- [ ] 103-04-PLAN.md — Sub-goal B prompt: buildActiveDisplaySnippet prescriptive "MUST pass display" instruction (Wave 1)
+- [ ] 103-05-PLAN.md — Sub-goal B production: flip LIVOS_PER_APP_LUSE default OFF + orphan-sweep boot pass (Wave 2)
+- [ ] 103-06-PLAN.md — Deploy + 12-row UAT walk (Wave 3, autonomous: false)
 
 **Non-goals (deferred to later phase):**
 - Two-way profile sync (auth changes in app A propagate back to master) — keep one-way master → apps from Phase 102
@@ -639,3 +649,4 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 ---
 
 *Last updated: 2026-05-08 — v33.0 milestone CODE-COMPLETE (Phases 92-98 shipped; final flip to ✅ Shipped deferred to post-UAT signoff per `feedback_milestone_uat_gate.md`).*
+

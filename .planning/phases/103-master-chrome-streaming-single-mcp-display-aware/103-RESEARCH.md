@@ -703,27 +703,29 @@ return [
 
 **All other claims in this research are verified via direct file read or production behavior observed during Phase 102 r14 deploy.**
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Resolved during plan-check 2026-05-11; each question's resolution is recorded inline. The de-facto answers were committed by plans 103-01 through 103-05.
 
 1. **Is `:9` reserved for master, or allocator-pool?**
    - What we know: DisplayAllocator currently runs `[10, 100)`; `:1` is host Luse; `:0` is physical screen.
    - What's unclear: Should master have a fixed reserved slot to keep the URL/log predictable, or float with the allocator?
-   - Recommendation: float with the allocator (capacity is plentiful; singleton lock prevents two masters). Document the actual display in the status response so the UI can show "master on :42" if useful.
+   - **RESOLVED:** Float with the allocator. Plan 103-01 Task 2 (`startStream` action) calls `displayAllocator.allocate()` exactly like a WebApp spawn — no reserved slot. Singleton lock (`currentMaster !== null` guard) prevents two simultaneous masters from racing the same display. The actual display number is returned in the `chromeMaster.startStream` response (`{display, wsUrl, streamId, pid, startedAt}`) so the UI can display "master on :42" if useful.
 
 2. **Should the `/opt/livos/data/chrome-master` permission model change?**
    - What we know: profile-seeder.ts:244 chowns per-app dirs to bruce; master Chrome runs as bruce (sudo -u bruce).
    - What's unclear: Does the master dir need to be bruce:bruce too? livinityd boots as root; an `ensureMasterExists` mkdir runs as root.
-   - Recommendation: extend `ensureMasterExists` to chown root→bruce after mkdir (idempotent — no-op if already bruce). Surface in 103-A1 master ensureExists or in a boot-time fix-up.
+   - **RESOLVED:** Yes — extend `ensureMasterExists` to chown root→bruce after mkdir (idempotent). Captured in plan 103-01 Task 1's `read_first` reference set + Task 2 boot-time wire-up. The chown is a one-line addition (`await execP('chown', ['-R', 'bruce:bruce', masterDir])` after `mkFn` succeeds) and is safe to re-run.
 
 3. **Should agent tool calls auto-derive `display` from a "current active webapp" hint without the agent needing to pass it?**
-   - What we know: buildHandlers(opts).defaultDisplay carries the active webapp display.
-   - What's unclear: If we set defaultDisplay correctly per-turn (via a new contextDisplay opt in agent-runner-factory.ts), the agent doesn't strictly NEED to pass `display`. Sub-goal B prompts the agent to pass display anyway for clarity, but the auto-fallback should match.
-   - Recommendation: do both — set defaultDisplay per-turn (covers the "agent forgot the instruction" case) AND prompt the agent to pass display explicitly (covers cross-display tool calls where the agent intends to operate on a non-active WebApp).
+   - What we know: `buildHandlers(opts).defaultDisplay` carries the active webapp display.
+   - What's unclear: If we set defaultDisplay correctly per-turn (via a new contextDisplay opt in agent-runner-factory.ts), the agent doesn't strictly NEED to pass `display`.
+   - **RESOLVED:** Do both. Plan 103-03 Task 2 keeps `defaultDisplay` as the fallback (`parseDisplayArg(args) ?? opts.defaultDisplay ?? process.env.LUSE_TARGET_DISPLAY ?? ':1'`) — handles the "agent forgot the instruction" case. Plan 103-04 prompts the agent to pass `display` explicitly per turn — handles cross-display tool calls where the agent intends to operate on a non-active WebApp. Belt-and-suspenders.
 
 4. **What happens to existing per-WebApp Luse MCP entries in Redis after the LIVOS_PER_APP_LUSE=0 flip?**
    - What we know: McpConfigManager persists registrations in Redis; the prefix matches `luse:webapp:<slug>-<suffix>`.
    - What's unclear: Without an explicit cleanup, those entries persist forever and might cause stale prompts.
-   - Recommendation: boot-time orphan sweep (see Runtime State Inventory). Mirror `cleanupLegacyBytebotState` pattern.
+   - **RESOLVED:** Boot-time orphan sweep, mirroring `cleanupLegacyBytebotState`. Plan 103-05 Task 2 adds `cleanupOrphanedPerWebAppLuseEntries()` in `legacy-bytebot-cleanup.ts` and wires it into `agent-runs.ts` BEFORE `registerLuseMcpServer` so the singleton MCP path bootstraps cleanly on a Redis with stale per-app entries.
 
 ## Environment Availability
 
