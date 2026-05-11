@@ -24,6 +24,17 @@
  * keys off.
  */
 
+/*
+ * Phase 103-B (REQ-103-B1) — LivOS extension on top of the upstream verbatim copy.
+ *
+ * Every X11-touching tool gains an optional `display: ":N"` property in
+ * input_schema. The upstream Bytebot agent.tools.ts does NOT have this
+ * field (its tool set assumes a single host X display). The addition is
+ * ADDITIVE — `required` is unchanged, so all existing callers continue
+ * to work. The handler factory (mcp/tools.ts) regex-guards the value at
+ * call time before mutating process.env.DISPLAY.
+ */
+
 /**
  * Anthropic / Kimi tool format. Every entry in LUSE_TOOLS conforms to
  * this shape — the format the agent passes through to Anthropic
@@ -85,6 +96,12 @@ const _moveMouseTool = {
 				...coordinateSchema,
 				description: 'Target coordinates for mouse movement',
 			},
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X11 display to scope this tool call to (e.g. ":11"). When set, overrides the MCP server\'s default display (LUSE_TARGET_DISPLAY env). Use this to drive a specific per-WebApp Xvfb when one global `luse` MCP serves multiple WebApps. Format: ":N" where N is 1-99. Phase 103-B (LivOS extension on top of verbatim upstream schema).',
+				nullable: true,
+			},
 		},
 		required: ['coordinates'],
 	},
@@ -102,6 +119,12 @@ const _traceMouseTool = {
 				description: 'Array of coordinate objects representing the path',
 			},
 			holdKeys: holdKeysSchema,
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X11 display to scope this tool call to (e.g. ":11"). When set, overrides the MCP server\'s default display (LUSE_TARGET_DISPLAY env). Use this to drive a specific per-WebApp Xvfb when one global `luse` MCP serves multiple WebApps. Format: ":N" where N is 1-99. Phase 103-B (LivOS extension on top of verbatim upstream schema).',
+				nullable: true,
+			},
 		},
 		required: ['path'],
 	},
@@ -127,6 +150,12 @@ const _clickMouseTool = {
 				description: 'Number of clicks to perform (e.g., 2 for double-click)',
 				default: 1,
 			},
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X11 display to scope this tool call to (e.g. ":11"). When set, overrides the MCP server\'s default display (LUSE_TARGET_DISPLAY env). Use this to drive a specific per-WebApp Xvfb when one global `luse` MCP serves multiple WebApps. Format: ":N" where N is 1-99. Phase 103-B (LivOS extension on top of verbatim upstream schema).',
+				nullable: true,
+			},
 		},
 		required: ['button', 'clickCount'],
 	},
@@ -149,6 +178,12 @@ const _pressMouseTool = {
 				enum: ['up', 'down'],
 				description: 'Whether to press down or release up',
 			},
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X11 display to scope this tool call to (e.g. ":11"). When set, overrides the MCP server\'s default display (LUSE_TARGET_DISPLAY env). Use this to drive a specific per-WebApp Xvfb when one global `luse` MCP serves multiple WebApps. Format: ":N" where N is 1-99. Phase 103-B (LivOS extension on top of verbatim upstream schema).',
+				nullable: true,
+			},
 		},
 		required: ['button', 'press'],
 	},
@@ -167,6 +202,12 @@ const _dragMouseTool = {
 			},
 			button: buttonSchema,
 			holdKeys: holdKeysSchema,
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X11 display to scope this tool call to (e.g. ":11"). When set, overrides the MCP server\'s default display (LUSE_TARGET_DISPLAY env). Use this to drive a specific per-WebApp Xvfb when one global `luse` MCP serves multiple WebApps. Format: ":N" where N is 1-99. Phase 103-B (LivOS extension on top of verbatim upstream schema).',
+				nullable: true,
+			},
 		},
 		required: ['path', 'button'],
 	},
@@ -192,6 +233,12 @@ const _scrollTool = {
 				description: 'Number of scroll steps',
 			},
 			holdKeys: holdKeysSchema,
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X11 display to scope this tool call to (e.g. ":11"). When set, overrides the MCP server\'s default display (LUSE_TARGET_DISPLAY env). Use this to drive a specific per-WebApp Xvfb when one global `luse` MCP serves multiple WebApps. Format: ":N" where N is 1-99. Phase 103-B (LivOS extension on top of verbatim upstream schema).',
+				nullable: true,
+			},
 		},
 		required: ['coordinates', 'direction', 'scrollCount'],
 	},
@@ -217,6 +264,12 @@ const _typeKeysTool = {
 				description: 'Optional delay in milliseconds between key presses',
 				nullable: true,
 			},
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X11 display to scope this tool call to (e.g. ":11"). When set, overrides the MCP server\'s default display (LUSE_TARGET_DISPLAY env). Use this to drive a specific per-WebApp Xvfb when one global `luse` MCP serves multiple WebApps. Format: ":N" where N is 1-99. Phase 103-B (LivOS extension on top of verbatim upstream schema).',
+				nullable: true,
+			},
 		},
 		required: ['keys'],
 	},
@@ -238,6 +291,12 @@ const _pressKeysTool = {
 				type: 'string' as const,
 				enum: ['up', 'down'],
 				description: 'Whether to press down or release up',
+			},
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X11 display to scope this tool call to (e.g. ":11"). When set, overrides the MCP server\'s default display (LUSE_TARGET_DISPLAY env). Use this to drive a specific per-WebApp Xvfb when one global `luse` MCP serves multiple WebApps. Format: ":N" where N is 1-99. Phase 103-B (LivOS extension on top of verbatim upstream schema).',
+				nullable: true,
 			},
 		},
 		required: ['keys', 'press'],
@@ -265,6 +324,12 @@ const _typeTextTool = {
 				description: 'Flag to indicate sensitive information',
 				nullable: true,
 			},
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X11 display to scope this tool call to (e.g. ":11"). When set, overrides the MCP server\'s default display (LUSE_TARGET_DISPLAY env). Use this to drive a specific per-WebApp Xvfb when one global `luse` MCP serves multiple WebApps. Format: ":N" where N is 1-99. Phase 103-B (LivOS extension on top of verbatim upstream schema).',
+				nullable: true,
+			},
 		},
 		required: ['text'],
 	},
@@ -284,6 +349,12 @@ const _pasteTextTool = {
 			isSensitive: {
 				type: 'boolean' as const,
 				description: 'Flag to indicate sensitive information',
+				nullable: true,
+			},
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X11 display to scope this tool call to (e.g. ":11"). When set, overrides the MCP server\'s default display (LUSE_TARGET_DISPLAY env). Use this to drive a specific per-WebApp Xvfb when one global `luse` MCP serves multiple WebApps. Format: ":N" where N is 1-99. Phase 103-B (LivOS extension on top of verbatim upstream schema).',
 				nullable: true,
 			},
 		},
@@ -316,7 +387,14 @@ const _screenshotTool = {
 	description: 'Captures a screenshot of the current screen',
 	input_schema: {
 		type: 'object' as const,
-		properties: {},
+		properties: {
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X11 display to scope this tool call to (e.g. ":11"). When set, overrides the MCP server\'s default display (LUSE_TARGET_DISPLAY env). Use this to drive a specific per-WebApp Xvfb when one global `luse` MCP serves multiple WebApps. Format: ":N" where N is 1-99. Phase 103-B (LivOS extension on top of verbatim upstream schema).',
+				nullable: true,
+			},
+		},
 	},
 }
 
@@ -325,7 +403,14 @@ const _cursorPositionTool = {
 	description: 'Gets the current (x, y) coordinates of the mouse cursor',
 	input_schema: {
 		type: 'object' as const,
-		properties: {},
+		properties: {
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X11 display to scope this tool call to (e.g. ":11"). When set, overrides the MCP server\'s default display (LUSE_TARGET_DISPLAY env). Use this to drive a specific per-WebApp Xvfb when one global `luse` MCP serves multiple WebApps. Format: ":N" where N is 1-99. Phase 103-B (LivOS extension on top of verbatim upstream schema).',
+				nullable: true,
+			},
+		},
 	},
 }
 
