@@ -1,63 +1,49 @@
 /**
- * Phase 101-05 — Native-app window binder.
+ * Phase 102-05 — Native-app display binder (display-only flow).
  *
- * After `spawnNativeApp()` (101-03) hands back `{pid, child}`, this module
- * answers the question "which X11 window did that binary just open?" by
- * polling `xdotool` for a new WM_CLASS-matching wid on the target display,
- * then allocates a stream port from the shared `PortAllocator` (101-02)
- * and starts the x11vnc-backed stream against the matched wid.
+ * Replaces the Phase 101-05 WM_CLASS poll on shared `:1`. Under Phase 102
+ * (D-102-NATIVE-APP-PARITY) each native app gets a dedicated `:N` Xvfb
+ * display allocated by `streaming/display-allocator.ts` + brought up by
+ * `streaming/xvfb-spawner.ts`, so the binder no longer needs to find a wid
+ * on a shared display — x11vnc captures the whole display (`-display :N`)
+ * and the display IS the binding unit.
  *
- * Algorithm (baseline-and-poll, mirrors webapps/window-discovery.ts):
- *   1. Snapshot every currently-visible wid on the display (the "baseline").
- *   2. Loop until deadline:
- *      - Run `xdotool search --onlyvisible --class <wmClass>` on the display.
- *      - Pick the first wid in stdout that was NOT in the baseline.
- *      - On match: break.
- *      - On miss: wait `pollIntervalMs`, try again.
- *   3. If deadline elapses without a match, throw NativeAppWindowNotFoundError
- *      and leave the spawned child running so the user can retry / debug
- *      manually via `xdotool` or `wmctrl`.
- *   4. After the wid is matched, allocate a port from the PortAllocator
- *      (THIS ORDER MATTERS — we don't burn a port slot if the bind times out)
- *      and call `startStreamFn({wid, port, label})`. If that throws, release
- *      the port back to the allocator so the slot is reusable.
+ * Algorithm (all subprocess work happens upstream in the route):
+ *   1. Allocate a port from the shared PortAllocator (101-02). If
+ *      `startStreamFn` later rejects, release the port (cleanup safety).
+ *   2. Call `startStreamFn({display, port, label})` — production wraps
+ *      `StreamManager.startStream({mode: 'vnc-window', target: {display}})`.
+ *   3. Return `{display, port, streamId, wsUrl}` on success.
  *
- * Defaults:
- *   - display: `:1` (matches livinityd's singleton Xvfb per 100-08-01)
- *   - deadlineMs: 5_000 (D-101-NATIVE-APPS — 5s budget for the WM_CLASS poll)
- *   - pollIntervalMs: 100 (matches webapps/window-discovery.ts cadence)
+ * What this module DOES NOT do anymore (was Phase 101-05):
+ *   - No xdotool / WM_CLASS poll loop. The shared-display ambiguity is gone.
+ *   - No baseline-and-poll diff. No `snapshotWindowIds` export.
+ *   - No `NativeAppWindowNotFoundError`. The window IS the display.
+ *   - No `execFileFn` injection. No subprocess invocation of any kind.
  *
- * No shell expansion ever: all args are passed through `execFile` (argv),
- * not `exec` (shell string). The wmClass + display strings are also bound
- * by the upstream nativeAppConfigSchema (`wmClassHint` regex `^[\w-]{1,64}$`,
- * display is owned by livinityd code paths, not user input).
+ * What this module STILL exposes (used by upstream callers):
+ *   - `inferWmClass(binaryPath)`: pure basename helper — still useful for
+ *     persisting `wmClassHint` metadata on the native-app config (D-101
+ *     `nativeAppConfigSchema`). Not used by `bind` itself anymore.
+ *   - `bind(opts)`: the display-based bind primitive.
+ *   - `StreamStartFn`: the contract a callback must satisfy.
+ *
+ * Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f (D-102-SACRED) — untouched.
  */
 
-import {execFile} from 'node:child_process'
 import {basename} from 'node:path'
-import {promisify} from 'node:util'
 
 import type {PortAllocator} from '../streaming/port-allocator.js'
 
-const execFileP = promisify(execFile)
-
 /**
- * Shape of an `execFile`-style async function. Production code injects the
- * Node built-in; tests inject `vi.fn()` returning queued stdouts.
- */
-export type ExecFileFn = (
-	cmd: string,
-	args: string[],
-	opts?: {env?: NodeJS.ProcessEnv},
-) => Promise<{stdout: string; stderr: string}>
-
-/**
- * The contract a stream-start callback must satisfy. In production it adapts
- * `StreamManager.startStream(...)` (sync, returns `{streamId, wsUrl}`) into a
- * Promise-returning function. Tests provide a `vi.fn()` directly.
+ * The contract a stream-start callback must satisfy. Production wraps
+ * `StreamManager.startStream({userId, mode: 'vnc-window', target: {display}})`
+ * into the Promise-returning shape the binder expects. Tests supply a
+ * `vi.fn()` directly. The legacy Phase 101-05 shape was `{wid, port, label?}`
+ * — Phase 102 swaps `wid` for `display` (D-102-NATIVE-APP-PARITY).
  */
 export interface StreamStartFn {
-	(opts: {wid: number; port: number; label?: string}): Promise<{
+	(opts: {display: string; port: number; label?: string}): Promise<{
 		streamId: string
 		wsUrl: string
 	}>
@@ -71,160 +57,57 @@ export interface BinderLogger {
 	verbose?(msg: string): void
 }
 
-/** Thrown when no new matching window appears within the deadline. */
-export class NativeAppWindowNotFoundError extends Error {
-	code = 'NATIVE_APP_WINDOW_NOT_FOUND'
-	constructor(public wmClass: string) {
-		super(
-			`no new window matching WM_CLASS=${wmClass} appeared within the binder deadline`,
-		)
-		this.name = 'NativeAppWindowNotFoundError'
-	}
-}
-
-const DEFAULT_DISPLAY = ':1'
-const DEFAULT_DEADLINE_MS = 5_000
-const DEFAULT_POLL_INTERVAL_MS = 100
-
 /**
- * Infer a sensible `--class` value from a binary path. The basename is
- * lowercased and any trailing file extension is stripped. This is the
- * fallback used when `cfg.wmClassHint` is absent — most Linux apps register
- * a WM_CLASS that matches their executable's basename (Antigravity sets
- * `Antigravity`, VSCode sets `code`, etc.).
- *
- * Examples:
- *   inferWmClass('/usr/bin/code')             → 'code'
- *   inferWmClass('/opt/Antigravity/antigravity') → 'antigravity'
- *   inferWmClass('/opt/foo/bar.bin')          → 'bar'
+ * Infer a sensible WM_CLASS-style identifier from a binary path. The basename
+ * is lowercased and any trailing file extension is stripped. The result is
+ * persisted on the native-app config under `wmClassHint` for diagnostic /
+ * future-feature use; the binder itself does NOT consume it anymore (Phase
+ * 102 binds by display, not by WM_CLASS).
  */
 export function inferWmClass(binaryPath: string): string {
 	const base = basename(binaryPath).toLowerCase()
 	return base.replace(/\.[^.]+$/, '')
 }
 
-/**
- * Snapshot every currently-visible top-level wid on the display. Used as
- * the baseline against which post-spawn polls are diffed.
- *
- * Failures (xdotool missing / X server unreachable) are caught silently and
- * an empty Set is returned. The caller's poll loop will simply consider
- * every match a "new" window — acceptable because if xdotool is broken the
- * bind path is broken too and the deadline will catch the no-match case.
- */
-export async function snapshotWindowIds(
-	display: string,
-	execFileFn?: ExecFileFn,
-): Promise<Set<number>> {
-	const fn = execFileFn ?? (execFileP as unknown as ExecFileFn)
-	try {
-		const {stdout} = await fn(
-			'xdotool',
-			['search', '--onlyvisible', ''],
-			{env: {...process.env, DISPLAY: display}},
-		)
-		const set = new Set<number>()
-		for (const line of stdout.split(/\r?\n/)) {
-			const trimmed = line.trim()
-			if (!trimmed) continue
-			const n = parseInt(trimmed, 10)
-			if (Number.isFinite(n)) set.add(n)
-		}
-		return set
-	} catch {
-		return new Set()
-	}
-}
-
 export interface BindOpts {
-	/** pid of the spawned process (informational — used only for logging). */
-	pid: number
-	/** WM_CLASS to match. Pass the cfg.wmClassHint or the inferWmClass(binaryPath) result. */
-	wmClass: string
-	/** X11 display, default `:1`. */
-	display?: string
+	/** Dedicated Xvfb display, e.g. `:12` (allocated upstream by DisplayAllocator). */
+	display: string
 	/** Shared PortAllocator instance (101-02). */
 	portAllocator: PortAllocator
-	/** Stream-start callback (adapts StreamManager.startStream in production). */
+	/** Stream-start callback (wraps StreamManager.startStream in production). */
 	startStreamFn: StreamStartFn
-	/** Optional execFile injection for tests; defaults to node:child_process.execFile (promisified). */
-	execFileFn?: ExecFileFn
-	/** Total bind budget in ms; default 5000 (D-101-NATIVE-APPS). */
-	deadlineMs?: number
-	/** Poll cadence in ms; default 100. Tests pass 0 to run instantly. */
-	pollIntervalMs?: number
 	/** Optional human-readable label propagated to the stream (used in logs). */
 	label?: string
 	logger?: BinderLogger
 }
 
 /**
- * Poll xdotool for a new WM_CLASS-matching wid, then allocate a port and
- * start the stream. See module header for the full algorithm.
+ * Bind a per-app dedicated Xvfb display to a freshly-allocated stream port.
  *
- * Returns `{wid, port, streamId, wsUrl}` on success. Throws
- * `NativeAppWindowNotFoundError` on deadline; rethrows any error from
- * `startStreamFn` after releasing the allocated port (cleanup safety).
+ * Returns `{display, port, streamId, wsUrl}` on success. If `startStreamFn`
+ * rejects, the allocated port is released back to the pool and the original
+ * error is re-thrown verbatim — callers see no allocator leak.
+ *
+ * This function performs zero subprocess work. All Xvfb/x11vnc/Chrome/binary
+ * spawning is orchestrated by the upstream route (`apps/native-routes.ts`)
+ * before this call.
  */
-export async function bindNativeAppWindow(
+export async function bind(
 	opts: BindOpts,
-): Promise<{wid: number; port: number; streamId: string; wsUrl: string}> {
-	const display = opts.display ?? DEFAULT_DISPLAY
-	const execFn: ExecFileFn = opts.execFileFn ?? (execFileP as unknown as ExecFileFn)
-	const deadline = Date.now() + (opts.deadlineMs ?? DEFAULT_DEADLINE_MS)
-	const poll = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS
-	const env: NodeJS.ProcessEnv = {...process.env, DISPLAY: display}
-
-	const baseline = await snapshotWindowIds(display, execFn)
-
-	let wid: number | undefined
-	while (Date.now() < deadline) {
-		try {
-			const {stdout} = await execFn(
-				'xdotool',
-				['search', '--onlyvisible', '--class', opts.wmClass],
-				{env},
-			)
-			const candidates: number[] = []
-			for (const line of stdout.split(/\r?\n/)) {
-				const trimmed = line.trim()
-				if (!trimmed) continue
-				const n = parseInt(trimmed, 10)
-				if (Number.isFinite(n)) candidates.push(n)
-			}
-			const cand = candidates.find((w) => !baseline.has(w))
-			if (cand !== undefined) {
-				wid = cand
-				break
-			}
-		} catch {
-			// xdotool exits non-zero when zero windows match — keep polling.
-		}
-		if (Date.now() >= deadline) break
-		// pollIntervalMs===0 still yields to the macrotask queue (setTimeout 0
-		// is one tick) so the loop is cooperatively cancellable.
-		await new Promise((r) => setTimeout(r, poll))
-	}
-
-	if (wid === undefined) {
-		throw new NativeAppWindowNotFoundError(opts.wmClass)
-	}
-
-	// Allocate the port AFTER the wid match — if the bind had timed out we
-	// would NOT have consumed a slot from the [15900, 16000) pool.
+): Promise<{display: string; port: number; streamId: string; wsUrl: string}> {
 	const port = opts.portAllocator.allocate()
 	try {
 		const {streamId, wsUrl} = await opts.startStreamFn({
-			wid,
+			display: opts.display,
 			port,
 			label: opts.label,
 		})
 		opts.logger?.info(
-			`native-app bound pid=${opts.pid} wid=${wid} port=${port} streamId=${streamId}`,
+			`native-app bound display=${opts.display} port=${port} streamId=${streamId}`,
 		)
-		return {wid, port, streamId, wsUrl}
+		return {display: opts.display, port, streamId, wsUrl}
 	} catch (err) {
-		// Cleanup safety: release the slot so the next bind can use it.
+		// Cleanup safety: release the port so the next bind can use the slot.
 		opts.portAllocator.release(port)
 		throw err
 	}
