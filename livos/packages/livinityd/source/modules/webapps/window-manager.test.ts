@@ -27,6 +27,15 @@ import {
 	WebappCapExceededError,
 } from './window-manager.js'
 import {PortalUnavailable} from './pipewire-portal.js'
+// Phase 102-04 — new fixtures for the per-app Xvfb + Chrome subprocess rewrite
+// of `spawn()`. These types model the Wave 1 primitives (102-01 DisplayAllocator
+// + spawnXvfb, 102-02 spawnChromeProcess, 102-03 ProfileSeederHandle) that
+// 102-04 wires into WebAppWindowManager. Re-imported indirectly so the test
+// file's TypeScript references match the production opt shapes the rewrite adds.
+import type {DisplayAllocator, XvfbHandle} from '../streaming/index.js'
+import type {ChromeProcessHandle} from './chrome-process-spawner.js'
+import type {ProfileSeederHandle} from '../chrome-master/index.js'
+import type {PortAllocator} from '../streaming/port-allocator.js'
 
 class FakeChild extends EventEmitter {
 	unref = vi.fn()
@@ -924,6 +933,411 @@ describe('Phase 101-04 — CDP-driven spawn body (replaces --app=URL argv + titl
 		// Degenerate-case cleanup: closeTarget must have been called on the
 		// orphan CDP target so we don't leak a window.
 		expect(chromeCdpBundle.closed).toEqual(['tgt-1'])
+		mgr._clearForTests()
+	})
+})
+
+// ============================================================================
+// Phase 102-04 — Per-app Xvfb + Chrome subprocess rewrite of spawn() body
+//
+// Replaces the Phase 101-04 CDP-driven flow (chromeCdpClient.createWindowForUrl
+// + PID-narrowed wid lookup against a singleton Chrome) with per-app primitives
+// from Wave 1:
+//   1. displayAllocator.allocate() → N
+//   2. spawnXvfb({display: `:${N}`, ...}) — A2 fluxbox-or-not toggle
+//   3. profileSeeder.seed({uuid: webappId}) → /tmp/livos-chrome-app-<uuid>
+//   4. spawnChromeProcess({display, userDataDir, url, ...}) — per-app Chrome
+//   5. portAllocator.allocate() → port
+//   6. streamManager.startStream({mode:'vnc-window', target:{display}, ...})
+//   7. ActiveWebApp map entry stores all handles for 102-08 close lifecycle
+//   8. Return {streamId, wsUrl, display, port}
+//
+// Compensating cleanup: on any partial failure release display + port,
+// stop xvfb + chrome, cleanup profile.
+//
+// Sacred SHA f3538e1d811992b782a9bb057d1b7f0a0189f95f UNTOUCHED.
+// ============================================================================
+
+function makeFakeDisplayAllocator(opts: {nextN?: number} = {}) {
+	const allocCalls: number[] = []
+	const releaseCalls: number[] = []
+	let next = opts.nextN ?? 10
+	const allocate = vi.fn(() => {
+		const n = next++
+		allocCalls.push(n)
+		return n
+	})
+	const release = vi.fn((n: number) => {
+		releaseCalls.push(n)
+	})
+	const allocator = {
+		allocate,
+		release,
+		// Match DisplayAllocator public surface used by callers (none of these
+		// are dereferenced by spawn(), but keep the class shape compatible).
+		inUseCount: 0,
+		capacity: 90,
+	} as unknown as DisplayAllocator
+	return {allocator, allocCalls, releaseCalls}
+}
+
+function makeFakeProfileSeeder(opts: {seedUuid?: string} = {}): {
+	seeder: ProfileSeederHandle
+	seedCalls: Array<{uuid?: string}>
+	cleanupCalls: string[]
+} {
+	const seedCalls: Array<{uuid?: string}> = []
+	const cleanupCalls: string[] = []
+	const seed = vi.fn(async (seedOpts: {uuid?: string} = {}) => {
+		seedCalls.push({uuid: seedOpts.uuid})
+		const uuid = seedOpts.uuid ?? opts.seedUuid ?? 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+		return {uuid, appDir: `/tmp/livos-chrome-app-${uuid}`}
+	})
+	const cleanup = vi.fn(async (uuid: string) => {
+		cleanupCalls.push(uuid)
+	})
+	const ensureMasterExists = vi.fn(async () => {})
+	const sweepOrphans = vi.fn(async () => 0)
+	const seeder: ProfileSeederHandle = {seed, ensureMasterExists, cleanup, sweepOrphans}
+	return {seeder, seedCalls, cleanupCalls}
+}
+
+function makeFakeXvfbSpawnFn(opts: {rejectWith?: Error} = {}) {
+	const calls: Array<{display: string; width?: number; height?: number}> = []
+	const stopCalls: string[] = []
+	const fn = vi.fn(async (xvfbOpts: any) => {
+		if (opts.rejectWith) throw opts.rejectWith
+		calls.push({display: xvfbOpts.display, width: xvfbOpts.width, height: xvfbOpts.height})
+		const stop = vi.fn(async () => {
+			stopCalls.push(xvfbOpts.display)
+		})
+		const handle: XvfbHandle = {
+			pid: 11000 + calls.length,
+			display: xvfbOpts.display,
+			exited: new Promise(() => {}), // never resolves in tests
+			stop,
+		}
+		return handle
+	}) as unknown as (xvfbOpts: any) => Promise<XvfbHandle>
+	return {fn, calls, stopCalls}
+}
+
+function makeFakeChromeSpawnFn(opts: {rejectWith?: Error} = {}) {
+	const calls: Array<{display: string; userDataDir: string; url: string}> = []
+	const stopCalls: string[] = []
+	const fn = vi.fn(async (chromeOpts: any) => {
+		if (opts.rejectWith) throw opts.rejectWith
+		calls.push({
+			display: chromeOpts.display,
+			userDataDir: chromeOpts.userDataDir,
+			url: chromeOpts.url,
+		})
+		const stop = vi.fn(async () => {
+			stopCalls.push(chromeOpts.display)
+		})
+		const handle: ChromeProcessHandle = {
+			pid: 22000 + calls.length,
+			child: new FakeChild() as unknown as ChromeProcessHandle['child'],
+			display: chromeOpts.display,
+			userDataDir: chromeOpts.userDataDir,
+			stop,
+		}
+		return handle
+	}) as unknown as (chromeOpts: any) => Promise<ChromeProcessHandle>
+	return {fn, calls, stopCalls}
+}
+
+function makeFakePortAllocator(opts: {nextPort?: number} = {}) {
+	const allocCalls: number[] = []
+	const releaseCalls: number[] = []
+	let next = opts.nextPort ?? 15900
+	const allocate = vi.fn(() => {
+		const p = next++
+		allocCalls.push(p)
+		return p
+	})
+	const release = vi.fn((p: number) => {
+		releaseCalls.push(p)
+	})
+	const allocator = {
+		allocate,
+		release,
+		inUseCount: 0,
+		capacity: 100,
+	} as unknown as PortAllocator
+	return {allocator, allocCalls, releaseCalls}
+}
+
+/**
+ * Builder for a manager configured with the Phase 102-04 per-app primitives.
+ * Mirrors makeManager() but injects the new opts (displayAllocator,
+ * xvfbSpawnFn, chromeSpawnFn, profileSeeder, portAllocator, withWindowManager).
+ *
+ * Streams, discovery, and portal still use the existing helpers because Phase
+ * 102 does NOT change those surfaces — display targeting flows through the
+ * existing stream-manager `{display}` branch (Phase 100-10-04).
+ */
+function makeManager102(overrides: any = {}) {
+	const {streamManager, started, stopped} = makeStreamManager()
+	const discovery = overrides.discovery ?? makeDiscovery()
+	const {portal} = overrides.portalBundle ?? makePortal()
+	const {ctor: GeometryTrackerCtor} = makeGeometryTrackerCtor()
+	const spawn = vi.fn(() => new FakeChild() as any)
+	const logger = {info: vi.fn(), warn: vi.fn(), error: vi.fn(), verbose: vi.fn()}
+
+	const displayBundle = overrides.displayBundle ?? makeFakeDisplayAllocator()
+	const portBundle = overrides.portBundle ?? makeFakePortAllocator()
+	const profileBundle = overrides.profileBundle ?? makeFakeProfileSeeder()
+	const xvfbBundle = overrides.xvfbBundle ?? makeFakeXvfbSpawnFn()
+	const chromeBundle = overrides.chromeBundle ?? makeFakeChromeSpawnFn()
+	const fluxboxFn = overrides.fluxboxFn
+
+	const mgr = new WebAppWindowManager({
+		streamManager,
+		spawn,
+		logger,
+		discovery,
+		portal,
+		GeometryTrackerCtor,
+		titleTimeoutMs: 100,
+		idlePollMs: 50,
+		webappCap: overrides.webappCap,
+		mcpConfigManager: overrides.mcpConfigManager,
+		luseServerPath: overrides.luseServerPath,
+		luseMcpEnv: overrides.luseMcpEnv,
+		// Phase 102-04 — required deps for the per-app spawn body.
+		displayAllocator: displayBundle.allocator,
+		portAllocator: portBundle.allocator,
+		profileSeeder: profileBundle.seeder,
+		xvfbSpawnFn: xvfbBundle.fn,
+		chromeSpawnFn: chromeBundle.fn,
+		withWindowManager: overrides.withWindowManager,
+		fluxboxSpawnFn: fluxboxFn,
+		// chromeCdpClient intentionally OMITTED — 102-04 removes the CDP path.
+	} as any)
+
+	return {
+		mgr,
+		streamManager,
+		started,
+		stopped,
+		discovery,
+		portal,
+		spawn,
+		logger,
+		displayBundle,
+		portBundle,
+		profileBundle,
+		xvfbBundle,
+		chromeBundle,
+	}
+}
+
+describe('Phase 102-04 — per-app Xvfb + Chrome subprocess spawn body', () => {
+	beforeEach(() => {
+		vi.useRealTimers()
+	})
+	afterEach(() => {
+		vi.useRealTimers()
+	})
+
+	it('T-102-04-01: spawn calls primitives in order — displayAllocator → spawnXvfb → profileSeeder.seed → spawnChromeProcess → portAllocator → streamManager.startStream', async () => {
+		const {mgr, displayBundle, profileBundle, xvfbBundle, chromeBundle, portBundle, streamManager} =
+			makeManager102()
+
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+
+		// All primitives called exactly once.
+		expect(displayBundle.allocator.allocate).toHaveBeenCalledTimes(1)
+		expect(xvfbBundle.fn).toHaveBeenCalledTimes(1)
+		expect(profileBundle.seeder.seed).toHaveBeenCalledTimes(1)
+		expect(chromeBundle.fn).toHaveBeenCalledTimes(1)
+		expect(portBundle.allocator.allocate).toHaveBeenCalledTimes(1)
+		expect(streamManager.startStream).toHaveBeenCalledTimes(1)
+
+		// Sequence: each subsequent call must occur AFTER the prior.
+		const order = {
+			allocate: (displayBundle.allocator.allocate as any).mock.invocationCallOrder[0],
+			xvfb: (xvfbBundle.fn as any).mock.invocationCallOrder[0],
+			seed: (profileBundle.seeder.seed as any).mock.invocationCallOrder[0],
+			chrome: (chromeBundle.fn as any).mock.invocationCallOrder[0],
+			port: (portBundle.allocator.allocate as any).mock.invocationCallOrder[0],
+			stream: (streamManager.startStream as any).mock.invocationCallOrder[0],
+		}
+		expect(order.allocate).toBeLessThan(order.xvfb)
+		expect(order.xvfb).toBeLessThan(order.seed)
+		expect(order.seed).toBeLessThan(order.chrome)
+		expect(order.chrome).toBeLessThan(order.port)
+		expect(order.port).toBeLessThan(order.stream)
+		mgr._clearForTests()
+	})
+
+	it('T-102-04-02: spawn does NOT use any chromeCdpClient surface (CDP path removed)', async () => {
+		// Per 102-04, the chromeCdpClient ctor opt is dropped. Manager builds
+		// fine without it, and spawn never invokes any chrome CDP API.
+		const {mgr, spawn} = makeManager102()
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		// No spawnFactory invocation either — Chrome is spawned via injected
+		// chromeSpawnFn, not via the legacy `sudo google-chrome ...` argv.
+		expect(spawn).not.toHaveBeenCalled()
+		mgr._clearForTests()
+	})
+
+	it('T-102-04-03: spawn passes the WebApp URL to spawnChromeProcess (it then translates to --app=URL argv)', async () => {
+		const {mgr, chromeBundle} = makeManager102()
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://duckduckgo.com'})
+		expect(chromeBundle.calls).toHaveLength(1)
+		expect(chromeBundle.calls[0]!.url).toBe('https://duckduckgo.com')
+		expect(chromeBundle.calls[0]!.display).toBe(':10')
+		expect(chromeBundle.calls[0]!.userDataDir).toMatch(/^\/tmp\/livos-chrome-app-/)
+		// stream target is {display:':10'} (NOT {wid:...}).
+		expect((chromeBundle.calls[0] as any).userDataDir).toMatch(/^\/tmp\/livos-chrome-app-/)
+		mgr._clearForTests()
+	})
+
+	it('T-102-04-04: ActiveWebApp entry stores {display, displayN, port, streamId, profileUuid, xvfbHandle, chromeHandle}', async () => {
+		const {mgr, profileBundle, streamManager, started} = makeManager102()
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+
+		// list() exposes a subset; for full inspection, we rely on close() to
+		// re-route through stored handles (Test 4 + T-102-04-08).
+		const entries = mgr.list({userId: 'u1'})
+		expect(entries).toHaveLength(1)
+		expect(entries[0]).toMatchObject({webappId: 'app1', mode: 'vnc-window'})
+
+		// stream target carried {display: ':10'} (not {wid}).
+		expect(started[0].target).toEqual({display: ':10'})
+
+		// profileSeeder.seed was called with the webappId as uuid (so the
+		// per-app temp dir is traceable to the WebApp).
+		expect(profileBundle.seedCalls[0]!.uuid).toBe('app1')
+		mgr._clearForTests()
+	})
+
+	it('T-102-04-05: compensating cleanup on Xvfb failure — release display, do not call profile/chrome/port/stream', async () => {
+		const xvfbBundle = makeFakeXvfbSpawnFn({rejectWith: new Error('xvfb boom')})
+		const {mgr, displayBundle, profileBundle, chromeBundle, portBundle, streamManager} =
+			makeManager102({xvfbBundle})
+
+		await expect(
+			mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'}),
+		).rejects.toThrow(/xvfb boom/)
+
+		expect(displayBundle.releaseCalls).toEqual([10]) // released after partial failure
+		expect(profileBundle.seeder.seed).not.toHaveBeenCalled()
+		expect(chromeBundle.fn).not.toHaveBeenCalled()
+		expect(portBundle.allocator.allocate).not.toHaveBeenCalled()
+		expect(streamManager.startStream).not.toHaveBeenCalled()
+	})
+
+	it('T-102-04-06: compensating cleanup on Chrome failure — stop xvfb, cleanup profile, release display, do not allocate port or start stream', async () => {
+		const chromeBundle = makeFakeChromeSpawnFn({rejectWith: new Error('chrome boom')})
+		const {mgr, displayBundle, profileBundle, xvfbBundle, portBundle, streamManager} =
+			makeManager102({chromeBundle})
+
+		await expect(
+			mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'}),
+		).rejects.toThrow(/chrome boom/)
+
+		expect(xvfbBundle.stopCalls).toEqual([':10']) // xvfb.stop() called
+		expect(profileBundle.cleanupCalls).toHaveLength(1) // profileSeeder.cleanup(uuid)
+		expect(displayBundle.releaseCalls).toEqual([10])
+		expect(portBundle.allocator.allocate).not.toHaveBeenCalled()
+		expect(streamManager.startStream).not.toHaveBeenCalled()
+	})
+
+	it('T-102-04-07: compensating cleanup on stream failure — chrome.stop, xvfb.stop, profile.cleanup, port.release, display.release', async () => {
+		// Force streamManager.startStream to throw.
+		const failingStreamManager = makeStreamManager()
+		failingStreamManager.streamManager.startStream = vi.fn(() => {
+			throw new Error('stream boom')
+		})
+		const displayBundle = makeFakeDisplayAllocator()
+		const portBundle = makeFakePortAllocator()
+		const profileBundle = makeFakeProfileSeeder()
+		const xvfbBundle = makeFakeXvfbSpawnFn()
+		const chromeBundle = makeFakeChromeSpawnFn()
+
+		const spawn = vi.fn(() => new FakeChild() as any)
+		const logger = {info: vi.fn(), warn: vi.fn(), error: vi.fn(), verbose: vi.fn()}
+		const {portal} = makePortal()
+		const {ctor: GeometryTrackerCtor} = makeGeometryTrackerCtor()
+		const mgr = new WebAppWindowManager({
+			streamManager: failingStreamManager.streamManager,
+			spawn,
+			logger,
+			discovery: makeDiscovery(),
+			portal,
+			GeometryTrackerCtor,
+			titleTimeoutMs: 100,
+			idlePollMs: 50,
+			displayAllocator: displayBundle.allocator,
+			portAllocator: portBundle.allocator,
+			profileSeeder: profileBundle.seeder,
+			xvfbSpawnFn: xvfbBundle.fn,
+			chromeSpawnFn: chromeBundle.fn,
+		} as any)
+
+		await expect(
+			mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'}),
+		).rejects.toThrow(/stream boom/)
+
+		expect(chromeBundle.stopCalls).toEqual([':10']) // chrome.stop
+		expect(profileBundle.cleanupCalls).toHaveLength(1) // profile cleanup
+		expect(xvfbBundle.stopCalls).toEqual([':10']) // xvfb.stop
+		expect(portBundle.releaseCalls).toEqual([15900]) // port released
+		expect(displayBundle.releaseCalls).toEqual([10]) // display released
+	})
+
+	it('T-102-04-08: idempotency — second spawn with same webappId does NOT re-allocate display / spawn xvfb / spawn chrome / seed profile', async () => {
+		const {mgr, displayBundle, profileBundle, xvfbBundle, chromeBundle, portBundle, streamManager} =
+			makeManager102()
+
+		const r1 = await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		const r2 = await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+
+		expect(r1.streamId).toBe(r2.streamId)
+		expect(displayBundle.allocator.allocate).toHaveBeenCalledTimes(1)
+		expect(xvfbBundle.fn).toHaveBeenCalledTimes(1)
+		expect(profileBundle.seeder.seed).toHaveBeenCalledTimes(1)
+		expect(chromeBundle.fn).toHaveBeenCalledTimes(1)
+		expect(portBundle.allocator.allocate).toHaveBeenCalledTimes(1)
+		expect(streamManager.startStream).toHaveBeenCalledTimes(1)
+		mgr._clearForTests()
+	})
+
+	it('T-102-04-09: A2 fluxbox-or-not — withWindowManager opt defaults false; fluxbox NEVER spawned', async () => {
+		// Default ctor: withWindowManager omitted → false → no fluxbox.
+		const fluxboxFn = vi.fn(async () => ({
+			pid: 33333,
+			display: ':10',
+			exited: new Promise(() => {}),
+			stop: vi.fn(async () => {}),
+		}))
+		const {mgr} = makeManager102({fluxboxFn})
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		expect(fluxboxFn).not.toHaveBeenCalled()
+		mgr._clearForTests()
+	})
+
+	it('T-102-04-09b: A2 fluxbox-or-not — withWindowManager:true → fluxbox IS spawned for the allocated display', async () => {
+		const fluxboxFn = vi.fn(async () => ({
+			pid: 33333,
+			display: ':10',
+			exited: new Promise(() => {}),
+			stop: vi.fn(async () => {}),
+		}))
+		const {mgr, xvfbBundle, chromeBundle} = makeManager102({withWindowManager: true, fluxboxFn})
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+
+		// fluxbox spawned after xvfb readiness, before chrome spawn.
+		expect(fluxboxFn).toHaveBeenCalledTimes(1)
+		expect((fluxboxFn as any).mock.calls[0][0].display).toBe(':10')
+		const xvfbOrder = (xvfbBundle.fn as any).mock.invocationCallOrder[0]
+		const fluxboxOrder = (fluxboxFn as any).mock.invocationCallOrder[0]
+		const chromeOrder = (chromeBundle.fn as any).mock.invocationCallOrder[0]
+		expect(xvfbOrder).toBeLessThan(fluxboxOrder)
+		expect(fluxboxOrder).toBeLessThan(chromeOrder)
 		mgr._clearForTests()
 	})
 })
