@@ -90,6 +90,7 @@ import {
 	rm as nodeRm,
 	rename as nodeRename,
 	mkdir as nodeMkdir,
+	unlink as nodeUnlink,
 } from 'node:fs/promises'
 import {constants as fsConstants} from 'node:fs'
 
@@ -209,6 +210,9 @@ export interface MasterLoginInjectables {
 	rmFn?: typeof nodeRm
 	renameFn?: typeof nodeRename
 	mkdirFn?: typeof nodeMkdir
+	// Phase 103.1 — stale singleton lock cleanup before Chrome spawn
+	unlinkFn?: typeof nodeUnlink
+	logger?: {info?: (msg: string) => void; warn?: (msg: string, err?: unknown) => void}
 	// Phase 103-01 — Xvfb-driven master pipeline.
 	displayAllocator?: DisplayAllocatorLike
 	streamManager?: StreamManagerLike
@@ -265,11 +269,70 @@ export function _resetMasterStateForTest(): void {
  * status() + reset() + restoreBackup() work without Phase 103 deps; they
  * only rely on the existing fs primitives.
  */
+/**
+ * Phase 103.1 — list of Chromium process-singleton artifacts to clear before
+ * a fresh master Chrome spawn. When a prior master session crashed or got
+ * SIGKILLed (e.g. host restart, OOM kill), these files persist with an
+ * embedded dead PID. Chromium's process_singleton_posix.cc reads them,
+ * attempts to message the dead PID, and the new instance exits with non-zero
+ * code → our `chrome.on('exit')` fires → cleanupMaster runs → the stream we
+ * just registered gets stopStream'd → client WS attempt 404s.
+ *
+ * Clearing them is safe: a LIVE Chrome holds advisory locks on these files
+ * via flock(); if a prior instance is still alive it'll re-create them on
+ * its next IPC round-trip. The only side-effect of a wrongful delete is the
+ * tiny risk of two Chromes contending — which Chromium itself recovers from
+ * (the loser exits gracefully). The current bug (stale lock blocking new
+ * Chrome) is the dominant failure mode for an OS that auto-restarts livinityd.
+ */
+const CHROME_SINGLETON_LOCK_FILES = [
+	'SingletonLock',
+	'SingletonCookie',
+	'SingletonSocket',
+] as const
+
+/**
+ * Delete any stale Chromium singleton-lock artifacts in `dir`. Each missing
+ * file is silently ignored (ENOENT is the happy path). Non-ENOENT errors
+ * are logged but never thrown — failure to clear should not block startup,
+ * Chrome will just hit the same lock and the user will see the same bug
+ * (no regression vs pre-103.1 behavior).
+ */
+async function clearStaleSingletonLocks(
+	dir: string,
+	unlinkFn: typeof nodeUnlink,
+	logger?: MasterLoginInjectables['logger'],
+): Promise<number> {
+	let cleared = 0
+	for (const f of CHROME_SINGLETON_LOCK_FILES) {
+		try {
+			await unlinkFn(`${dir}/${f}`)
+			cleared += 1
+		} catch (err) {
+			const code = (err as NodeJS.ErrnoException).code
+			if (code !== 'ENOENT') {
+				logger?.warn?.(
+					`[chrome-master] clearStaleSingletonLocks: could not unlink ${f}`,
+					err,
+				)
+			}
+		}
+	}
+	if (cleared > 0) {
+		logger?.info?.(
+			`[chrome-master] cleared ${cleared} stale Chromium singleton-lock file(s) from ${dir} (Phase 103.1)`,
+		)
+	}
+	return cleared
+}
+
 export function createChromeMasterRouter(injectables: MasterLoginInjectables = {}) {
 	const accessFn = injectables.accessFn ?? nodeAccess
 	const rmFn = injectables.rmFn ?? nodeRm
 	const renameFn = injectables.renameFn ?? nodeRename
 	const mkdirFn = injectables.mkdirFn ?? nodeMkdir
+	const unlinkFn = injectables.unlinkFn ?? nodeUnlink
+	const logger = injectables.logger
 	// Phase 103-01 — capture injectables in closure so cleanupMaster() can
 	// reach them from chrome.on('exit') AND stopLogin via the same handles.
 	const displayAllocator = injectables.displayAllocator
@@ -409,6 +472,14 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 			}
 
 			await profileSeeder.ensureMasterExists()
+
+			// Phase 103.1 — clear stale Chromium singleton lock files (root
+			// cause of the WS 1006 bug seen in 103-01 deploy UAT 2026-05-11:
+			// stream registered then immediately stopRequested because Chrome
+			// exited within ms of spawn). Failure to clear is non-fatal —
+			// Chrome will hit the same lock and the user sees the same bug,
+			// which is no worse than before 103.1.
+			await clearStaleSingletonLocks(MASTER_PROFILE_DIR, unlinkFn, logger)
 
 			const displayN = displayAllocator.allocate()
 			const display = `:${displayN}`
