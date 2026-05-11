@@ -472,6 +472,25 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 
 ---
 
+### Phase 101: CDP-driven Luse Orchestration
+
+**Goal:** Enable Luse to drive multi-target Chrome via Chrome DevTools Protocol while preserving the shared `--user-data-dir` profile (same Google login across WebApps). Reopens the multi-display capability path that 100-10-01 attempted via per-WebApp Xvfb and that 100-10-08 reverted because Chrome's singleton lock + shared profile are architecturally incompatible with per-process per-display spawns.
+
+**Trigger:** 2026-05-10 live diagnostic on Mini PC during Phase 100-10. Per-WebApp Xvfb (`:10`, `:11`, ...) was code-correct but every new `--app=URL` spawn IPC-redirected to the existing Chrome PID on `:10`, so no window appeared on `:11`. User chose to keep shared profile → 100-10-08 restored Phase 99 single-display + per-wid x11vnc behavior. The user's actual long-term vision — Luse opens ports + spawns multi-screen Chrome targets + navigates between windows + teaching mode compatible — needs a different architecture: drive ONE Chrome process via CDP, create multiple Target/Browser contexts, and bind x11vnc / capture per-target.
+
+**Direction (high-level — Phase 101 CONTEXT will harden):**
+- Run a single Chrome with `--remote-debugging-port=<N>` against `/home/bruce/.config/livos-chrome` (singleton-friendly).
+- Use CDP `Target.createBrowserContext` / `Target.createTarget({url, browserContextId})` to spawn isolated tab/window targets while sharing the user-data-dir.
+- Each Luse-driven target gets its own wid (via `Browser.getWindowForTarget` + `Browser.setWindowBounds`); x11vnc per-wid (D-99-01 baseline) captures it.
+- Luse MCP tools (`mcp__luse__list_windows`, `screenshot_window`, `focus_window`, `create_stream`, `list_streams` from 100-10-03/04) keep their public shape; their internals shift from xdotool/wmctrl primitives to CDP-aware calls.
+- The 100-10-08 scaffolding (`DisplayAllocator`, `xvfbStartFn`/`fluxboxStartFn` opts, `-display :N` branch in `vnc-bridge.ts`, `VncWindowTarget = {display: string}` variant, `LuseMcpDescriptor.display` override) is retained for the case where Phase 101 needs per-display targets for parity (e.g., second physical display, remote rendering, debug surfaces).
+
+**Sacred:** `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` MUST stay untouched. Pre-commit hook continues to enforce.
+
+**Status:** Planned. CONTEXT to be authored after v33.0 ships and the 100-10-08 deploy is UAT-confirmed.
+
+---
+
 ## Coverage
 
 All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-LOOP/RELIAB/BROKER-CARRY/MEM/MARKET) mapped to phases 64-76. 100% coverage. See REQUIREMENTS.md Traceability table (filled by phase planning).

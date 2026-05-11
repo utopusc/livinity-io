@@ -403,3 +403,49 @@ After 100-10 deploy:
 The planner will read this CONTEXT and produce 7 PLAN.md files (or whatever decomposition it judges best) per the wave structure above. After plans verified by plan-checker, `/gsd-execute-phase 100-10` runs the chain.
 
 Estimated total: ~30 atomic commits across 4 waves. Sacred SHA stays `f3538e1d…` throughout.
+
+---
+
+## REVERSED DECISIONS (post-execution amendment, 2026-05-10)
+
+### D-100-10-A reverted (per-WebApp Xvfb withdrawn) — see Plan 100-10-08
+
+**Status:** REVERTED in `100-10-08-PLAN.md` after live diagnostic on Mini PC.
+
+**Why:**
+
+1. D-100-10-A locked above describes per-WebApp Xvfb displays (`:10`, `:11`, ...) plus `x11vnc -display :N` whole-display capture, predicated on each WebApp Chrome spawning on its own X server.
+
+2. Live diagnostic post-100-10-01 ship proved D-100-10-A is architecturally incompatible with D-100-SHARED-PROFILE (Chrome `--user-data-dir=/home/bruce/.config/livos-chrome`). Chrome enforces a singleton lock per `--user-data-dir`. New `--app=URL` spawns with `DISPLAY=:11` get IPC-redirected to the existing Chrome PID on `:10`, so no window ever appears on `:11` → `findNewWindowMatching` times out → `WindowNotFoundError: no new window matching <url> appeared within timeout`. Multi-stream WebApp open fails entirely.
+
+3. **User decision:** keep the shared profile (same Google login multi-stream is more valuable than per-WebApp display isolation). Per-WebApp display capability is parked until Phase 101 CDP architecture.
+
+**What 100-10-08 reverts:**
+
+- `WebAppWindowManager.spawn()` no longer calls `DisplayAllocator.allocate()`. `chromeDisplay = ':1'` (the singleton from 100-08-01 livinityd.start()).
+- `WebAppWindowManager.close()` no longer calls `xvfb.stop() / fluxbox.stop() / displayAllocator.release()` — those handles aren't created per-spawn anymore.
+- `ActiveWebApp` type drops `xvfb` / `fluxbox` fields; `display` is always `:1`.
+- `vnc-bridge.ts` callers default to `-id <wid>` (Phase 99 / 100-08 baseline); the `-display :N` branch is RETAINED in the discriminated union and the argv builder as Phase 101 CDP scaffolding.
+- `PerWebAppMcpDescriptor.display` defaults to `:1`; the optional override stays as Phase 101 scaffolding.
+
+**What 100-10-08 KEEPS (scaffolding for Phase 101 CDP):**
+
+- `DisplayAllocator` (`display-allocator.ts`) — still in tree, no live caller.
+- `xvfb-display.ts` / `fluxbox-wm.ts` — still in tree (lifecycle owned by livinityd.start() singleton).
+- `WebAppWindowManagerOpts.{displayAllocator, xvfbStartFn, fluxboxStartFn}` — opts accepted, never dereferenced.
+- `vnc-bridge.ts` discriminated union `{wid: number} | {display: string}` + the `-display :N` argv branch.
+- `VncWindowTarget = {wid: number} | {display: string}` in stream-manager.
+- `luse__create_stream({display, port?})` MCP tool parameter (from 100-10-04).
+- `PerWebAppMcpDescriptor.display` override.
+
+**What 100-10-08 PRESERVES from 100-10-02/03/04/05/06:**
+
+- 100-10-02 Bytebot → Luse rename (D-100-10-B) ✓
+- 100-10-03 Luse window tools (`list_windows`, `screenshot_window`, `focus_window`) ✓ (operate on `:1`)
+- 100-10-04 Luse stream tools (`create_stream` privilege-gated + `list_streams`) ✓ (default display `:1`)
+- 100-10-05 UI cleanup (skill button outside, full-fit, remove Auto) ✓
+- 100-10-06 chat-response 3-mode action bar ✓
+
+**Long-term path:** Phase 101 (ROADMAP entry added) — CDP-driven Luse orchestration. Single Chrome with `--remote-debugging-port`, multiple CDP Target contexts, per-target wid for x11vnc capture, shared profile preserved.
+
+**Sacred:** `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 100-10-08 commits.
