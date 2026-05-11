@@ -12,3 +12,13 @@
 
 export {PortAllocator, PortRangeExhaustedError} from './port-allocator.js'
 export type {PortAllocatorOpts} from './port-allocator.js'
+
+// Phase 102-01 — DisplayAllocator (number-returning, [10, 100), 90 slots) +
+// XvfbSpawner (xdpyinfo readiness-polled spawn). Wave 2 plans 102-04
+// (window-manager rewrite) and 102-05 (native-app-binder) compose these for
+// per-app X display orchestration. Replaces the legacy string-returning
+// webapps/display-allocator.ts (deleted in 102-01-04).
+export {DisplayAllocator, DisplayRangeExhaustedError} from './display-allocator.js'
+export type {DisplayAllocatorOpts} from './display-allocator.js'
+export {spawnXvfb, XvfbReadyTimeoutError} from './xvfb-spawner.js'
+export type {XvfbSpawnOpts, XvfbHandle, XvfbSpawnFn, XvfbExecFileFn, XvfbLogger} from './xvfb-spawner.js'
