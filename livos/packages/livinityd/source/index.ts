@@ -53,13 +53,12 @@ import {createDisplayAllocator} from './modules/webapps/display-allocator.js'
 // D-100-10-B.)
 import {McpConfigManager} from '@liv/core/lib'
 import {DEFAULT_LUSE_MCP_SERVER_PATH} from './modules/computer-use/luse-mcp-config.js'
-// Phase 101-01 — Chrome CDP bootstrap + typed wrapper. Spawn singleton Chrome
-// with --remote-debugging-port=9222 (T-101-01 mitigation: bound to 127.0.0.1
-// only) at livinityd boot. ChromeCdpClient holds the persistent CDP connection
-// the Wave 2+ webapps/window-manager rewrite drives. Bootstrap failure is
-// non-fatal — Pillar A degrades, livinityd keeps running (mirror of the
-// streaming-subsystem try/catch at lines 474-482).
-import {bootstrapChrome, ChromeCdpClient} from './modules/chrome-cdp/index.js'
+// Phase 101-03 — Native-app config store. Backed by `this.ai.redis` so it
+// shares the same Redis connection (and pub-sub channel `liv:config:updated`)
+// used by McpConfigManager. Surfaces UUID-keyed CRUD at the
+// `liv:apps:native:*` namespace (D-101-NATIVE-APPS) and is consumed by the
+// tRPC `apps.native.{list,get,create,delete}` router.
+import {NativeAppConfigStore} from './modules/apps/native-app-config.js'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -193,12 +192,11 @@ export default class Livinityd {
 	// SERVICE_UNAVAILABLE downstream).
 	xvfbHandle?: XvfbHandle
 	fluxboxHandle?: FluxboxHandle
-	// Phase 101-01 — Chrome CDP client singleton. Constructed + connected in
-	// start() AFTER StreamManager and BEFORE WebAppWindowManager so the Wave 2
-	// window-manager rewrite (Plan 101-04) can consume it via constructor opt.
-	// Stays null when bootstrap fails (Pillar A degraded — livinityd boot
-	// continues per the streaming subsystem try/catch pattern).
-	chromeCdpClient: ChromeCdpClient | null = null
+	// Phase 101-03 — Native-app config store (D-101-NATIVE-APPS). Optional
+	// because the tRPC routes return SERVICE_UNAVAILABLE if it has not yet
+	// been wired (boot edge before ai.start() finishes, or Redis offline).
+	// Instantiated in start() AFTER ai.start() so it can borrow this.ai.redis.
+	nativeAppConfigStore?: NativeAppConfigStore
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -339,6 +337,15 @@ export default class Livinityd {
 				this.logger.error('Failed to start ComputerUseContainerManager (desktop subdomain disabled)', err)
 			}
 		}
+
+		// Phase 101-03 — Wire the NativeAppConfigStore now that this.ai.redis
+		// is live. Construction is side-effect-free (just stashes the redis
+		// reference), so we do it eagerly here BEFORE anything that might
+		// fail downstream — the tRPC `apps.native.*` routes resolve the store
+		// off `ctx.livinityd.nativeAppConfigStore` and would return
+		// SERVICE_UNAVAILABLE if this field were undefined.
+		this.nativeAppConfigStore = new NativeAppConfigStore(this.ai.redis)
+		this.logger.log('NativeAppConfigStore wired (liv:apps:native:* namespace)')
 
 		// Phase 50 (v29.5 A1) — defensive eager seed of built-in tools to nexus:cap:tool:*
 		// Survives factory resets and the v29.4 syncAll() stub (D-WAVE5-SYNCALL-STUB).
