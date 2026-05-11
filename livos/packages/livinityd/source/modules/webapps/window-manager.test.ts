@@ -435,7 +435,11 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		vi.useRealTimers()
 	})
 
-	it('Test 16: spawn() calls mcpConfigManager.installServer with luse:webapp:<webappId> + descriptor env (DISPLAY=:1, LUSE_TARGET_WINDOW_ID)', async () => {
+	it('Test 16 [Phase 102-06 adapted]: spawn() calls mcpConfigManager.installServer with luse:webapp:<webappId> + descriptor env (DISPLAY + LUSE_TARGET_DISPLAY)', async () => {
+		// Phase 102-06: descriptor no longer carries windowId; the per-WebApp
+		// Luse child is scoped by X11 display (`:N` from DisplayAllocator), not
+		// by wid. Env block sets BOTH `DISPLAY` (for xdotool/maim inheritance)
+		// AND `LUSE_TARGET_DISPLAY` (canonical Phase 102 env read by mcp/server).
 		const installCalls: any[] = []
 		const mcpConfigManager = {
 			installServer: vi.fn(async (config: any) => {
@@ -452,8 +456,15 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		expect(installCalls).toHaveLength(1)
 		expect(installCalls[0]!.name).toBe('luse:webapp:webapp-abc')
 		expect(installCalls[0]!.transport).toBe('stdio')
-		expect(installCalls[0]!.env?.LUSE_TARGET_WINDOW_ID).toBe(String(0x200))
-		expect(installCalls[0]!.env?.DISPLAY).toBe(':1')
+		// Phase 102-06: env carries the display string under both keys; the
+		// exact `:N` value depends on which Xvfb the 102-04 spawn path allocated.
+		// At minimum: both env keys must be present, must match each other, and
+		// must satisfy the `:N` shape (denies LUSE_TARGET_WINDOW_ID leak).
+		const envBlock = installCalls[0]!.env ?? {}
+		expect(envBlock.LUSE_TARGET_WINDOW_ID).toBeUndefined()
+		expect(typeof envBlock.LUSE_TARGET_DISPLAY).toBe('string')
+		expect(envBlock.LUSE_TARGET_DISPLAY).toMatch(/^:[1-9][0-9]?$/)
+		expect(envBlock.DISPLAY).toBe(envBlock.LUSE_TARGET_DISPLAY)
 		mgr._clearForTests()
 	})
 
