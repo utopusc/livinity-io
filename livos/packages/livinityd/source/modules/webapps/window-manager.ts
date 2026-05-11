@@ -82,11 +82,14 @@ import {
 // displays: every new spawn IPC-merges to the existing PID on the FIRST
 // display, so no window appears on `:11`/`:12`/... User chose to keep the
 // shared profile (same Google login across WebApps). All WebApp Chromes
-// now spawn on the singleton `:1` display set up by 100-08-01. DisplayAllocator
-// + xvfb-display + fluxbox-wm files STAY in tree as scaffolding for the
-// Phase 101 CDP architecture (where Luse drives multi-target Chrome via
-// DevTools Protocol while preserving shared profile).
-import type {DisplayAllocator} from './display-allocator.js'
+// now spawn on the singleton `:1` display set up by 100-08-01.
+//
+// Phase 102-01: legacy `./display-allocator.js` (string-returning) DELETED.
+// Wave 2 plan 102-04 will re-wire the spawn body to consume the new
+// number-returning `streaming/display-allocator.ts` + `streaming/xvfb-spawner.ts`
+// for per-app display orchestration. Until then, the `displayAllocator` opt
+// stays as `unknown` so existing test fixtures keep type-checking; spawn()
+// still never dereferences it.
 import type {startXvfb} from './xvfb-display.js'
 import type {startFluxbox} from './fluxbox-wm.js'
 
@@ -199,7 +202,7 @@ export type WebAppWindowManagerOpts = {
 	 * support is parked until Phase 101 CDP architecture (where Luse drives
 	 * multi-target Chrome via DevTools Protocol).
 	 */
-	displayAllocator?: DisplayAllocator
+	displayAllocator?: unknown
 	/**
 	 * Phase 100-10-08 — D-100-10-A reverted. Test stub opt retained for
 	 * fixture compatibility; spawn() no longer invokes per-spawn Xvfb start.
@@ -291,7 +294,7 @@ export class WebAppWindowManager {
 	// keep compiling, but spawn() no longer CALLS them. Field is retained as
 	// `displayAllocator` for type-readable provenance; never dereferenced in
 	// the live spawn path.
-	private readonly displayAllocator: DisplayAllocator | undefined
+	private readonly displayAllocator: unknown
 	// Phase 101-04 — the live ChromeCdpClient (constructor-injected from
 	// livinityd.start()). `undefined` when CDP bootstrap failed at boot;
 	// spawn() throws `WebAppCdpUnavailableError` in that case so the failure

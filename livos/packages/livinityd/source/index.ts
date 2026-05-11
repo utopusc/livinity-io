@@ -46,11 +46,12 @@ import {WEBAPPS_X11_ENV} from './modules/webapps/window-discovery.js'
 // Phase 100-08-01 — dedicated Xvfb :1 + fluxbox WM lifecycle (D-100-08-A).
 import {startXvfb, type XvfbHandle} from './modules/webapps/xvfb-display.js'
 import {startFluxbox, type FluxboxHandle} from './modules/webapps/fluxbox-wm.js'
-// Phase 100-10-01 — per-WebApp X display allocator (D-100-10-A). Hands out
-// `:10`, `:11`, ... per WebApp spawn so each WebApp owns its own Xvfb +
-// fluxbox + x11vnc whole-display capture. Eliminates cross-window stacking
-// (Issue 2) and lets x11vnc capture Chrome's full pixels (Issue 1).
-import {createDisplayAllocator} from './modules/webapps/display-allocator.js'
+// Phase 102-01 — legacy `webapps/display-allocator.ts` (string-returning,
+// Phase 100-10-01 scaffolding) DELETED. The number-returning replacement
+// lives at `streaming/display-allocator.ts` (composed with `streaming/
+// xvfb-spawner.ts` for per-app X display orchestration). Wave 2 plan 102-04
+// will wire WebAppWindowManager to consume both modules in the spawn body;
+// for now livinityd no longer pre-constructs an allocator at boot.
 // Phase 100-08-04 — McpConfigManager + Luse server path threaded into
 // WebAppWindowManager so spawn/close lifecycle registers a per-WebApp
 // Luse MCP child via Redis pub-sub (liv-core's McpClientManager
@@ -567,11 +568,11 @@ export default class Livinityd {
 			const webappMcpConfigManager = new McpConfigManager(this.ai.redis)
 			const luseServerPath =
 				process.env.LUSE_MCP_SERVER_PATH ?? DEFAULT_LUSE_MCP_SERVER_PATH
-			// Phase 100-10-01 — per-WebApp X display allocator (D-100-10-A).
-			// Hands out `:10`, `:11`, ... per WebApp spawn. WebAppWindowManager
-			// stands up an Xvfb + fluxbox on each allocated display before
-			// Chrome spawns. close() tears them down and releases the slot.
-			const displayAllocator = createDisplayAllocator()
+			// Phase 102-01 — legacy createDisplayAllocator() call removed
+			// (webapps/display-allocator.ts DELETED). Wave 2 plan 102-04 will
+			// wire `new DisplayAllocator()` from streaming/display-allocator.ts
+			// + spawnXvfb from streaming/xvfb-spawner.ts into the spawn body;
+			// until then no allocator is pre-constructed at boot.
 			this.webappWindowManager = new WebAppWindowManager({
 				streamManager: this.streamManager,
 				spawn: x11Spawn as unknown as ConstructorParameters<
@@ -581,10 +582,10 @@ export default class Livinityd {
 				mcpConfigManager: webappMcpConfigManager,
 				luseServerPath,
 				luseMcpEnv: process.env,
-				// Phase 100-10-01: wire the per-WebApp display allocator. Each
-				// WebApp spawn now gets `:10`+/`:11`+/... + its own Xvfb +
-				// fluxbox; close() releases the slot.
-				displayAllocator,
+				// Phase 102-01 — `displayAllocator` opt dropped from the
+				// construction call (was a no-op since 100-10-08 anyway). Wave 2
+				// plan 102-04 will pass new allocator + spawnXvfb factory once
+				// the spawn body composes them.
 				// Phase 101-04 — inject the live ChromeCdpClient so spawn() can
 				// drive Chrome via CDP createWindowForUrl / closeTarget instead
 				// of the legacy `sudo google-chrome --app=URL ...` argv path.
