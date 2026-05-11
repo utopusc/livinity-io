@@ -236,4 +236,51 @@ describe('102-02-01 ChromeProcessSpawner', () => {
 			expect(args).not.toContain('google-chrome')
 		})
 	})
+
+	// Phase 103-01 Task 1 — widen USER_DATA_DIR_RE to accept the master profile
+	// constant. T-103-01-02: master path is hardcoded in master-login-routes.ts
+	// (MASTER_PROFILE_DIR), not caller-controlled. Both alternatives are fully
+	// anchored (^...$) so path traversal and trailing-suffix injection remain
+	// rejected for both branches.
+	describe('103-01 — userDataDir master path acceptance', () => {
+		it('accepts the master profile path /opt/livos/data/chrome-master', async () => {
+			const {spawnFn, opts} = makeValidOpts({
+				userDataDir: '/opt/livos/data/chrome-master' as any,
+				display: ':42' as any,
+				url: 'https://accounts.google.com' as any,
+			})
+			await spawnChromeProcess(opts as any)
+			expect(spawnFn).toHaveBeenCalledTimes(1)
+			const args = spawnFn.mock.calls[0][1] as string[]
+			expect(args).toContain('--user-data-dir=/opt/livos/data/chrome-master')
+		})
+
+		it('accepts the legacy per-app uuid path', async () => {
+			const {spawnFn, opts} = makeValidOpts({
+				userDataDir: '/tmp/livos-chrome-app-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' as any,
+			})
+			await spawnChromeProcess(opts as any)
+			expect(spawnFn).toHaveBeenCalledTimes(1)
+		})
+
+		it('rejects /etc/passwd as userDataDir', async () => {
+			const {spawnFn, opts} = makeValidOpts({userDataDir: '/etc/passwd' as any})
+			await expect(spawnChromeProcess(opts as any)).rejects.toMatchObject({
+				name: 'ChromeProcessSpawnError',
+				code: 'CHROME_INVALID_USERDATADIR',
+			})
+			expect(spawnFn).not.toHaveBeenCalled()
+		})
+
+		it('rejects /opt/livos/data/chrome-master/foo trailing path', async () => {
+			const {spawnFn, opts} = makeValidOpts({
+				userDataDir: '/opt/livos/data/chrome-master/foo' as any,
+			})
+			await expect(spawnChromeProcess(opts as any)).rejects.toMatchObject({
+				name: 'ChromeProcessSpawnError',
+				code: 'CHROME_INVALID_USERDATADIR',
+			})
+			expect(spawnFn).not.toHaveBeenCalled()
+		})
+	})
 })
