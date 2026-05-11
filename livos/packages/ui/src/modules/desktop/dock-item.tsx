@@ -28,6 +28,16 @@ import {
 import {NotificationBadge} from '@/components/ui/notification-badge'
 import {cn} from '@/shadcn-lib/utils'
 
+// Phase 101-07 Task 3 — Dock composes both WebApps and native apps. The
+// actual data-driven rendering of NativeAppIcon happens in the dock host
+// (desktop-content.tsx alongside WebAppIcon — see lines ~259-271 there),
+// but the discriminated render contract is owned here: any dock surface
+// that wants to render a native app passes <NativeAppIcon id name iconUrl>.
+// Re-export so dock composers have a single import surface for the
+// dock-item discriminator family (DockItem for system apps, WebAppIcon
+// for WebApps, NativeAppIcon for native apps).
+export {NativeAppIcon} from '../dock/native-app-icon'
+
 // Map app IDs to their display names
 const DOCK_LABELS: Record<string, string> = {
 	'LIVINITY_home': 'Home',
