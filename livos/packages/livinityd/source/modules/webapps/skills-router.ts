@@ -154,20 +154,69 @@ const actionLogV2Schema = z.object({
 	metadata: sessionMetadataSchema,
 })
 
+// Phase 101-08 — v3 ActionLog (SelfClaude action-driven Teach).
+//
+// Schema per CONTEXT D-101-TEACH-V3 + RESEARCH.md Pattern 3 lines 492-499:
+//   {version: 3, webappId, name?, startedAt, endedAt, events: ActionStep[]}
+//
+// Per Q4-RESOLVED: NO screenshot_before/screenshot_after fields on steps;
+// replay just dispatches actions and uses the `note` step's instruction
+// text for drift recovery (Phase 102). The backend stores the steps
+// array as opaque JSONB — detailed shape lives in the v3 client
+// (use-teach-recorder.ts) since the daemon only persists.
+const v3ClickStepSchema = z.object({
+	type: z.literal('click'),
+	button: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+	x: z.number().int(),
+	y: z.number().int(),
+	ts: z.number().int(),
+})
+const v3KeyStepSchema = z.object({
+	type: z.literal('key'),
+	key: z.string().min(1).max(64),
+	ts: z.number().int(),
+})
+const v3TypeStepSchema = z.object({
+	type: z.literal('type'),
+	text: z.string().max(1024),
+	ts: z.number().int(),
+})
+const v3NoteStepSchema = z.object({
+	type: z.literal('note'),
+	text: z.string().min(1).max(1024),
+	ts: z.number().int(),
+})
+const v3ActionStepSchema = z.discriminatedUnion('type', [
+	v3ClickStepSchema,
+	v3KeyStepSchema,
+	v3TypeStepSchema,
+	v3NoteStepSchema,
+])
+
+const actionLogV3Schema = z.object({
+	version: z.literal(3),
+	webappId: z.string().uuid(),
+	name: z.string().min(1).max(80).optional(),
+	startedAt: z.number().int().min(0),
+	endedAt: z.number().int().min(0),
+	events: z.array(v3ActionStepSchema).max(20_000),
+})
+
 /**
- * Phase 100-09-06 — action_log discriminated union on `version` literal.
+ * Phase 101-08 — action_log discriminated union on `version` literal.
  *
  * v1 records still validate (backwards-compat for existing rows in
  * webapp_skills.action_log JSONB column from P96 era). v2 adds optional
  * inline thumbnails per event + session-level metadata (D-100-09-F).
- * v3+ records are rejected by zod's discriminated union — see
- * skills-router.test.ts T-09-06-S3.
+ * v3 (Phase 101-08) is the SelfClaude action-driven shape with explicit
+ * instruction `note` steps per CONTEXT D-101-TEACH-V3.
  *
  * Exported so the unit test can directly safeParse fixtures.
  */
 export const actionLogSchema = z.discriminatedUnion('version', [
 	actionLogV1Schema,
 	actionLogV2Schema,
+	actionLogV3Schema,
 ])
 
 // Slug-safe validator: 1-80 chars, [A-Za-z0-9 _-] only. Trim-collapse the
@@ -255,13 +304,24 @@ const skillsRouter = router({
 
 			// Stamp sessionId into meta if not already present so future
 			// `delete` cascades can clean up disk without parsing refs.
-			const stampedLog = {
-				...input.actionLog,
-				meta: {
-					...(input.actionLog.meta ?? {}),
-					sessionId: input.actionLog.meta?.sessionId ?? input.sessionId,
-				},
-			}
+			// Phase 101-08: v3 logs have NO `meta` shape — they store the
+			// sessionId via the input.sessionId (mutation-level) only. The
+			// disk-GC path (uniqueSessionIds) falls back to parsing
+			// screenshotRef strings for v1/v2; v3 has no screenshotRef
+			// fields per Q4-RESOLVED, so the explicit `meta` stamp is
+			// preserved only for v1/v2 to avoid losing the disk-cleanup
+			// trail.
+			const stampedLog =
+				input.actionLog.version === 3
+					? input.actionLog
+					: {
+							...input.actionLog,
+							meta: {
+								...(input.actionLog.meta ?? {}),
+								sessionId:
+									input.actionLog.meta?.sessionId ?? input.sessionId,
+							},
+					  }
 
 			try {
 				const row = await createWebAppSkill(pool, {
