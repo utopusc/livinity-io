@@ -54,8 +54,12 @@ export class McpConfigManager {
 
   /** Install (add) a new MCP server */
   async installServer(server: McpServerConfig): Promise<void> {
-    if (!/^[a-z0-9][a-z0-9_-]*$/.test(server.name)) {
-      throw new Error(`Invalid server name "${server.name}": must be lowercase alphanumeric with hyphens/underscores`);
+    // Phase 100-10-13: allow `:` so per-WebApp Luse instances can register
+// under `luse:webapp:<uuid>` (introduced in 100-08-04, broken by regex
+// hardening before per-WebApp shipped). Backwards-compat for any pre-rename
+// `bytebot:webapp:<uuid>` names (now cleaned by 100-10-09 anyway).
+if (!/^[a-z0-9][a-z0-9_:-]*$/.test(server.name)) {
+      throw new Error(`Invalid server name "${server.name}": must be lowercase alphanumeric with hyphens/underscores/colons`);
     }
     if (RESERVED_NAMES.has(server.name)) {
       throw new Error(
@@ -141,8 +145,9 @@ export class McpConfigManager {
     }
     // Validate all server names
     for (const name of Object.keys(parsed.mcpServers)) {
-      if (!/^[a-z0-9][a-z0-9_-]*$/.test(name)) {
-        throw new Error(`Invalid server name "${name}": must be lowercase alphanumeric with hyphens/underscores`);
+      // Phase 100-10-13: allow `:` for per-WebApp Luse naming `luse:webapp:<uuid>`.
+if (!/^[a-z0-9][a-z0-9_:-]*$/.test(name)) {
+        throw new Error(`Invalid server name "${name}": must be lowercase alphanumeric with hyphens/underscores/colons`);
       }
       if (RESERVED_NAMES.has(name)) {
         throw new Error(`Server name "${name}" is reserved and would conflict with built-in tools`);
