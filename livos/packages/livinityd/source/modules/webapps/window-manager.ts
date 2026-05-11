@@ -649,14 +649,17 @@ export class WebAppWindowManager {
 
 	private async registerWebAppMcp(
 		webappId: string,
-		wid: number,
+		_wid: number,
 		display: string = ':1',
 	): Promise<void> {
 		if (!this.mcpConfigManager || !this.luseServerPath) return
 		try {
+			// Phase 102-06 — PerWebAppMcpDescriptor was tightened to {instanceKey,
+			// display} only; the legacy windowId is no longer carried. The wid
+			// arg above is kept in the signature for v33 call-site compat but
+			// intentionally unused.
 			const descriptor: PerWebAppMcpDescriptor = {
 				instanceKey: webappId,
-				windowId: wid,
 				display,
 			}
 			const config = buildLuseConfig(this.luseMcpEnv, this.luseServerPath, descriptor)
