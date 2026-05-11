@@ -29,18 +29,19 @@ Phase: 103.1 (Master Chrome Hot-Fix + Luse Cross-Display Aggregation) — DEPLOY
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v33.0 (active)
 
-## 103.1 Status (2026-05-11) — Hot-fix: stale singleton lock + list_windows cross-display aggregation
+## 103.1 Status (2026-05-11) — Hot-fix: stale singleton lock + chrome daemonization filter + list_windows cross-display aggregation
 
-User-walked Phase 103 UAT on Mini PC (deployed SHA `c89f7139`) surfaced 2 real-hardware bugs not catchable by unit tests:
+User-walked Phase 103 UAT on Mini PC (deployed SHA `c89f7139`) surfaced bugs not catchable by unit tests:
 
-- **Bug 1 (WS 1006):** Master Chrome stream got `(stop requested)` ms after start → Chrome exited from stale `SingletonLock`/`SingletonCookie`/`SingletonSocket` artifacts in `/opt/livos/data/chrome-master`. Fix: `clearStaleSingletonLocks()` before `chromeSpawnFn`. Commit `37f0bfb4`.
-- **Bug 2 (list_windows blind):** Agent in global chat called `list_windows` w/o display arg → defaultDisplay `:1` (host) only → missed Dinkytown on `:11`. Fix: aggregate across `/tmp/.X11-unix/X<N>` socket-scanned displays when neither display arg nor defaultDisplay is set. Commit `d634ffe4`.
+- **Bug 1A (stale singleton lock):** `clearStaleSingletonLocks()` removes `SingletonLock`/`SingletonCookie`/`SingletonSocket` before `chromeSpawnFn`. Commit `37f0bfb4`. Necessary but NOT sufficient.
+- **Bug 1B (REAL WS 1006 cause — chrome daemonization):** `chromeMaster.startLogin` watched `chrome.child` (the `sudo google-chrome` wrapper). Chrome forks to background on startup; launcher exits with code=0. Pre-fix the exit handler treated ANY exit as a crash → `cleanupMaster` → `stopStream` → client WS 404 → browser code=1006. Fix: filter exit — `code=0+signal=null` → no-op (daemonization), only real crashes (`code!=0` or signal) trigger cleanup. Commit `e531b3c4`. Live-verified on Mini PC via tRPC curl: stream `e2462d48` got `(stop requested)` ms after start pre-1B-fix despite locks cleared. Bug 1 is a 2-cause stack (lock cleanup needed for refusal-to-start; daemonization filter needed for clean-spawn-survival).
+- **Bug 2 (list_windows blind to other displays):** When neither display arg NOR defaultDisplay is set (global luse MCP, post-103-05 default-off model), aggregate across `/tmp/.X11-unix/X<N>` socket-scanned displays. Each result row carries its own `display` field. Commit `d634ffe4`.
 
-Tests: 22/22 master-login (3 new) + 44/44 mcp tools (5 new). Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across both commits.
+Tests: 24/24 master-login (5 new including 15b daemonization + 15c signal-cleanup + 3 lock-cleanup) + 44/44 mcp tools (5 new). Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 4 commits (`37f0bfb4`, `d634ffe4`, `f8957fc0` docs, `e531b3c4`).
 
-Pushed `c89f7139..d634ffe4` 2026-05-11. Mini PC deploy in flight (`bash /opt/livos/update.sh`).
+Pushed `c89f7139..e531b3c4` 2026-05-11. Mini PC re-deploy in flight.
 
-Out of scope for 103.1 (deferred): duplicate x11vnc spawn cleanup in chromeMaster.startLogin; active-WebApp roster prompt snippet (agent can discover via aggregation now).
+Out of scope for 103.1 (deferred to a follow-on patch): duplicate x11vnc spawn cleanup in chromeMaster.startLogin (`vncSpawnFn` orphan, harmless but wasteful); active-WebApp roster prompt snippet (agent can discover via aggregation now); post-daemonization Chrome crash auto-detection via /proc PID polling (user recovers via "Close Master Chrome" button).
 
 In parallel: research agent drafting `.planning/research/local-livinity-setup.md` for `<username>.livinity.local` domain-free local setup (next-phase 104+ scope).
 
