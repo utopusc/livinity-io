@@ -239,9 +239,30 @@ describe('buildActiveDisplaySnippet — Phase 102-06 Pillar C', () => {
 		expect(out).toContain('1280x720')
 	})
 
-	it('includes LUSE_TARGET_DISPLAY reference', () => {
+	// Phase 103-04 — instruction flipped from descriptive "implicitly scoped via
+	// LUSE_TARGET_DISPLAY" to prescriptive "MUST pass display arg". The env name
+	// is no longer surfaced to the agent (runtime fallback only).
+	it('instructs agent to pass display arg explicitly (prescriptive form)', () => {
 		const out = buildActiveDisplaySnippet({activeDisplay: ':10', appMeta: baseMeta})
-		expect(out).toContain('LUSE_TARGET_DISPLAY')
+		expect(out).toContain('MUST pass display')
+	})
+
+	it('omits the obsolete LUSE_TARGET_DISPLAY env name from the agent prompt (runtime fallback only — agent does not need to know)', () => {
+		const out = buildActiveDisplaySnippet({activeDisplay: ':10', appMeta: baseMeta})
+		expect(out).not.toContain('LUSE_TARGET_DISPLAY')
+	})
+
+	it('omits the obsolete "implicitly scoped" descriptive phrase (Phase 103-04 instruction flip)', () => {
+		const out = buildActiveDisplaySnippet({activeDisplay: ':10', appMeta: baseMeta})
+		expect(out).not.toContain('implicitly scoped')
+	})
+
+	it('interpolates the active display in the MUST pass display instruction with double quotes around the value', () => {
+		const out = buildActiveDisplaySnippet({
+			activeDisplay: ':11',
+			appMeta: {appId: 'a', kind: 'webapp', title: 't', url: 'https://x'},
+		})
+		expect(out).toContain('display: ":11"')
 	})
 
 	it('returns empty string when activeDisplay does not match regex (T-102-06b)', () => {
