@@ -180,15 +180,48 @@ function messagesReducer(state: ChatMessage[], action: MessageAction): ChatMessa
 // --- Hook ---
 
 /**
+ * Phase 101-06 (Pillar C) — Active Window Context meta payload.
+ *
+ * Mirror of livinityd's `ActiveAppMeta` (kept inline here so the UI
+ * package doesn't have to import from livinityd — they're separate
+ * packages with no cross-deps). The shape MUST match the backend
+ * `ActiveAppMeta` interface in
+ * `livos/packages/livinityd/source/modules/ai/agent-prompt-builder.ts`.
+ */
+export interface ActiveAppMetaPayload {
+	appId: string
+	kind: 'webapp' | 'native'
+	url?: string
+	binary?: string
+	title: string
+}
+
+/**
  * Phase 100-08-05 — opts for chat-surface tool-scope routing.
  * When `webappId` is set, sendMessage tags the WS envelope so livinityd's
  * broker forwards `webappId` in the `/api/agent/stream` body. liv-core
  * then filters `additionalMcpServers` down to `luse:webapp:<id>` (or
  * falls through to host scope on liv-core reconcile lag — logged WARN).
  * Default `{}` preserves the v32 host-chat path (no webappId → host scope).
+ *
+ * Phase 101-06 (Pillar C) — Active Window Context auto-injection.
+ *
+ * When `activeWid` AND `activeAppMeta` are both set, the WS `start`
+ * envelope carries them so livinityd's broker prepends the
+ * `## Active Window Context` snippet to the agent's system prompt (see
+ * `agent-runner-factory.ts` + `agent-prompt-builder.ts`). This lets the
+ * agent know which LivOS app window is active without an explicit
+ * `list_windows` round-trip.
+ *
+ * Either field missing → backend skips injection (graceful, no half
+ * snippets). Sanitization for T-101-03 happens server-side inside
+ * `buildActiveWindowSnippet`; the UI side passes the raw values it
+ * already has locally (webapp.title from `webapp.list`, etc.).
  */
 export interface UseAgentSocketOpts {
 	webappId?: string
+	activeWid?: number
+	activeAppMeta?: ActiveAppMetaPayload
 }
 
 export function useAgentSocket(opts: UseAgentSocketOpts = {}) {
@@ -542,9 +575,15 @@ export function useAgentSocket(opts: UseAgentSocketOpts = {}) {
 			// filterAdditionalMcpServers narrows MCP tools to the matching
 			// `luse:webapp:<id>` child (or falls through to host Luse on lag).
 			if (opts.webappId) payload.webappId = opts.webappId
+			// Phase 101-06 (Pillar C) — Active Window Context auto-injection.
+			// livinityd broker reads these and prepends the
+			// `## Active Window Context` snippet to the agent's system prompt
+			// (see agent-runner-factory.ts + agent-prompt-builder.ts).
+			if (opts.activeWid !== undefined) payload.activeWid = opts.activeWid
+			if (opts.activeAppMeta) payload.activeAppMeta = opts.activeAppMeta
 			ws.send(JSON.stringify(payload))
 		},
-		[currentSessionId, opts.webappId],
+		[currentSessionId, opts.webappId, opts.activeWid, opts.activeAppMeta],
 	)
 
 	const sendFollowUp = useCallback(
