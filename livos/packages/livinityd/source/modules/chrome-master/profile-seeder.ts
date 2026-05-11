@@ -40,10 +40,34 @@
  */
 
 import {execFile} from 'node:child_process'
-import {access, mkdir} from 'node:fs/promises'
+import {access, mkdir, writeFile} from 'node:fs/promises'
 import {constants as fsConstants} from 'node:fs'
 import {randomUUID} from 'node:crypto'
 import {promisify} from 'node:util'
+
+// Phase 102 r13 — minimal `Default/Preferences` JSON that primes a fresh
+// per-app user-data-dir so Chrome's profile-setup ("Welcome! Add a name or
+// label…") modal does not appear at first launch. The modal blocks the
+// rendered web page below it and swallows synthetic keyboard events sent
+// via xdotool — even after the user clicks past it, internal Chrome focus
+// remains in an inconsistent state. By materialising a `name`/`avatar`
+// pair in Preferences before Chrome boots we satisfy the profile-naming
+// guard in chrome/browser/profiles/profile_attributes_entry.cc and the
+// modal is suppressed for the entire session.
+//
+// Only invoked when the cp -r from chrome-master leaves the per-app dir
+// without a Default/Preferences (i.e. the master was never populated by
+// the user via Settings → Chrome Master Login).
+const DEFAULT_PREFERENCES_JSON = JSON.stringify({
+	profile: {
+		name: 'LivOS WebApp',
+		using_default_name: false,
+		avatar_index: 0,
+		avatar_is_default: true,
+		exit_type: 'Normal',
+		exited_cleanly: true,
+	},
+})
 
 export const MASTER_PROFILE_DIR = '/opt/livos/data/chrome-master'
 export const APP_PROFILE_PREFIX = '/tmp/livos-chrome-app-'
@@ -220,6 +244,36 @@ export function createProfileSeeder(opts: ProfileSeederOpts = {}): ProfileSeeder
 				await execP('chown', ['-R', 'bruce:bruce', appDir])
 			} catch (err) {
 				log.warn?.(`profile-seeder: chown ${appDir} → bruce failed (non-fatal — only required when livinityd is root)`, err)
+			}
+
+			// Phase 102 r13 — suppress Chrome's first-launch profile-setup
+			// modal by ensuring `<appDir>/Default/Preferences` exists. When
+			// the master at `/opt/livos/data/chrome-master/` is empty (the
+			// user has not yet run Settings → Chrome Master Login), the
+			// cp -r above leaves the per-app dir without Preferences and
+			// Chrome shows a "Welcome! Add a name or label" modal that
+			// blocks the rendered page AND breaks xdotool key/type dispatch.
+			// Write a minimal Preferences only if one doesn't already exist
+			// (master-populated dirs keep their richer state). chown to
+			// bruce so Chrome — running as bruce — can read/write it.
+			try {
+				const defaultDir = `${appDir}/Default`
+				const prefsPath = `${defaultDir}/Preferences`
+				try {
+					await accFn(prefsPath, fsConstants.R_OK)
+					// Already present from master — no-op.
+				} catch {
+					await mkFn(defaultDir, {recursive: true})
+					await writeFile(prefsPath, DEFAULT_PREFERENCES_JSON, {encoding: 'utf8'})
+					try {
+						await execP('chown', ['bruce:bruce', defaultDir, prefsPath])
+					} catch (err) {
+						log.warn?.(`profile-seeder: chown Default/Preferences failed (non-fatal)`, err)
+					}
+					log.verbose?.(`profile-seeder: primed minimal Preferences at ${prefsPath}`)
+				}
+			} catch (err) {
+				log.warn?.(`profile-seeder: failed to prime Default/Preferences at ${appDir} (non-fatal — Chrome may show first-launch modal)`, err)
 			}
 
 			log.info?.(`profile-seeder: seeded ${appDir} from ${masterDir} in ${Date.now() - t0}ms`)
