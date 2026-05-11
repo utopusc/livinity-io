@@ -1,5 +1,6 @@
 /**
- * Phase 102-07 — Chrome Master Login tRPC routes (D-102-MASTER-LOGIN-UI).
+ * Phase 102-07 + Phase 103-01 — Chrome Master Login tRPC routes
+ * (D-102-MASTER-LOGIN-UI / REQ-103-A1 / REQ-103-A3 / REQ-103-A4).
  *
  * Admin-gated routes for managing the master Chrome profile that lives at
  * /opt/livos/data/chrome-master/ (also exported as `MASTER_PROFILE_DIR`).
@@ -8,54 +9,77 @@
  *                                /opt/livos/data/chrome-master/Default/Cookies
  *                                presence (does NOT decrypt the contents) and
  *                                returns {hasCookies, dir, running, pid?,
- *                                startedAt?} so the Settings UI can render the
- *                                "Logged in" / "Not logged in" indicator
- *                                plus the running-master state.
+ *                                startedAt?, display?, wsUrl?, streamId?}.
  *
- *   chromeMaster.startLogin    — adminProcedure mutation (T-102-07); spawns
- *                                google-chrome under bruce on the physical
- *                                :0 display with
- *                                --user-data-dir=/opt/livos/data/chrome-master.
- *                                The user logs into Google then closes the
- *                                window; profile-seeder.seed() (102-03) copies
- *                                this dir into per-app /tmp/livos-chrome-app-*
- *                                profiles, so every subsequent WebApp inherits
- *                                the login state.
+ *   chromeMaster.startLogin    — adminProcedure mutation (T-102-07 + T-103-01-01);
+ *                                allocates an Xvfb display via DisplayAllocator,
+ *                                spawns Xvfb on :N, spawns chrome with
+ *                                --user-data-dir=/opt/livos/data/chrome-master,
+ *                                spawns x11vnc bound to the display, then opens
+ *                                a StreamManager 'vnc-window' session. Returns
+ *                                {pid, startedAt, display, wsUrl, streamId}.
+ *
+ *                                Phase 103 supersedes the Phase 102-07 `:0`
+ *                                physical-screen path — headless Mini PCs have
+ *                                no monitor and the old path produced an
+ *                                invisible browser window. Streaming the
+ *                                managed Xvfb display via the noVNC pipeline
+ *                                (the same one used by every per-app WebApp)
+ *                                lets the user reach the master Chrome through
+ *                                the UI viewer (plan 103-02).
+ *
+ *   chromeMaster.stopLogin     — adminProcedure mutation; cleans up master
+ *                                state (stream → x11vnc → chrome → xvfb →
+ *                                port/display release) idempotently. Returns
+ *                                {ok:true}. PRECONDITION_FAILED if not running.
+ *
+ *   chromeMaster.input.click   — adminProcedure mutation; dispatches
+ *                                xdotool against the master display via the
+ *                                shared input-dispatcher (wid=0 display-mode
+ *                                branch). Same surface for .key / .type /
+ *                                .scroll.
  *
  *   chromeMaster.reset         — adminProcedure mutation (T-102-07c); wipes
  *                                /opt/livos/data/chrome-master, optionally
  *                                renaming to .backup first (default
- *                                backup=true). Re-creates the master dir so
- *                                profile-seeder.ensureMasterExists short-
- *                                circuits cleanly on the next spawn.
+ *                                backup=true).
  *
  *   chromeMaster.restoreBackup — adminProcedure mutation; renames
- *                                /opt/livos/data/chrome-master.backup back
- *                                over /opt/livos/data/chrome-master.
+ *                                .backup back over master.
  *
  * Threat mitigations:
  *
- *   T-102-07  Elevation of Privilege — adminProcedure gate on the three
- *             mutations. The procedure middleware (requireRole('admin'))
- *             throws TRPCError({code:'FORBIDDEN'}) for non-admin sessions
- *             BEFORE the handler runs, so spawn()/rm()/rename() are never
- *             invoked by a non-admin caller. Test 1 + Test 8 exercise this.
+ *   T-102-07  Elevation of Privilege — adminProcedure gate on every mutation.
  *
  *   T-102-07b Tampering (concurrent master spawns) — module-singleton
- *             `currentMaster` is checked at the top of startLogin; second
- *             concurrent call throws CONFLICT. The child exit watcher clears
- *             `currentMaster` so retry works after the user closes Chrome.
+ *             `currentMaster` lock; second concurrent startLogin throws
+ *             CONFLICT. The child exit watcher + stopLogin clear it.
  *
  *   T-102-07c Data Loss (accidental reset) — default backup=true renames
  *             master → master.backup BEFORE delete. UI confirms via
  *             AlertDialog before invoking. restoreBackup is also
  *             adminProcedure-gated.
  *
- *   T-102-07d Information Disclosure (Cookies content) — accepted.
- *             status() checks file existence only, never reads bytes.
+ *   T-103-01-01 Elevation (chromeMaster.startLogin / stopLogin / input.*) —
+ *             adminProcedure middleware enforces role=admin BEFORE handler;
+ *             non-admin caller gets FORBIDDEN before any spawn/dispatch runs.
  *
- * Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f (D-102-SACRED) —
- * never touched.
+ *   T-103-01-02 Tampering (chrome-process-spawner USER_DATA_DIR_RE) — addressed
+ *             by 103-01 Task 1 (regex widening); the caller here passes the
+ *             hardcoded MASTER_PROFILE_DIR constant, not a caller-controlled
+ *             path.
+ *
+ *   T-103-01-03 Tampering (input.click x/y/button payload) — zod schema rejects
+ *             non-finite x/y, out-of-range button, bad kind enum. The `display`
+ *             argument is NOT accepted from the caller — it's read from
+ *             currentMaster.display so no injection surface exists.
+ *
+ *   T-103-01-04 DenialOfService (resource leak on master Chrome crash) —
+ *             cleanupMaster() runs on chrome.on('exit'), on explicit stopLogin,
+ *             AND on startLogin compensating-cleanup. PortAllocator.release +
+ *             DisplayAllocator.release paired with every allocate.
+ *
+ * Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f — never touched.
  */
 
 import {z} from 'zod'
@@ -70,28 +94,147 @@ import {
 import {constants as fsConstants} from 'node:fs'
 
 import {router, adminProcedure, privateProcedure} from '../server/trpc/trpc.js'
+import {spawnXvfb} from '../streaming/xvfb-spawner.js'
+import {spawnChromeProcess} from '../webapps/chrome-process-spawner.js'
+import {spawnVncForDisplay} from '../streaming/vnc-bridge.js'
+import {
+	dispatchPointer as defaultDispatchPointer,
+	dispatchKey as defaultDispatchKey,
+	dispatchType as defaultDispatchType,
+	dispatchScroll as defaultDispatchScroll,
+} from '../webapps/input-dispatcher.js'
 
 export const MASTER_PROFILE_DIR = '/opt/livos/data/chrome-master'
 export const MASTER_BACKUP_DIR = '/opt/livos/data/chrome-master.backup'
 const COOKIES_PATH = `${MASTER_PROFILE_DIR}/Default/Cookies`
 
+// Phase 103-01 — direction enum for scroll dispatch. dispatchScroll consumes
+// 'up'|'down'|'left'|'right' (its newer signature) rather than X11 button
+// numbers; we forward the literal direction unchanged.
+type ScrollDirection = 'up' | 'down' | 'left' | 'right'
+
 /**
- * Injection bag for unit tests. Production callers use defaults (node:fs +
- * node:child_process). Tests pass mocks via createChromeMasterRouter({...})
- * — mirrors the apps/native-routes.ts factory-injection pattern.
+ * Lightweight type-only handles for the Phase 103-01 native primitives.
+ * These mirror the shapes exported by streaming/xvfb-spawner.ts,
+ * webapps/chrome-process-spawner.ts and streaming/vnc-bridge.ts but are
+ * re-declared here as structural types so tests can pass plain mocks
+ * without importing the real classes.
+ */
+interface XvfbHandleLike {
+	display: string
+	pid: number
+	stop(): Promise<void>
+}
+interface ChromeProcessHandleLike {
+	pid: number
+	child: ChildProcess
+	stop(): Promise<void>
+}
+
+type XvfbSpawnFnLike = (opts: {
+	display: string
+	width: number
+	height: number
+	logger?: unknown
+}) => Promise<XvfbHandleLike>
+type ChromeSpawnFnLike = (opts: {
+	display: string
+	userDataDir: string
+	url: string
+	logger?: unknown
+}) => Promise<ChromeProcessHandleLike>
+type VncSpawnFnLike = (opts: {
+	display: string
+	rfbPort: number
+	logger?: unknown
+}) => ChildProcess
+
+type DispatchPointerFnLike = (
+	wid: number,
+	x: number,
+	y: number,
+	button: 1 | 2 | 3,
+	kind: 'click' | 'mousedown' | 'mouseup' | 'doubleclick',
+	display?: string,
+) => Promise<void>
+type DispatchKeyFnLike = (
+	wid: number,
+	key: string,
+	kind?: 'key' | 'keydown' | 'keyup',
+	display?: string,
+) => Promise<void>
+type DispatchTypeFnLike = (wid: number, text: string, display?: string) => Promise<void>
+type DispatchScrollFnLike = (
+	wid: number,
+	x: number,
+	y: number,
+	direction: ScrollDirection,
+	clicks: number,
+	display?: string,
+) => Promise<void>
+
+interface DisplayAllocatorLike {
+	allocate(): number
+	release(n: number): void
+}
+interface PortAllocatorLike {
+	allocate(): number
+	release(n: number): void
+}
+interface StreamManagerLike {
+	startStream(opts: {
+		userId: string
+		mode: 'vnc-window'
+		target: {display: string}
+	}): {streamId: string; wsUrl: string}
+	stopStream(streamId: string): Promise<void>
+	getPortAllocator(): PortAllocatorLike
+}
+interface ProfileSeederLike {
+	ensureMasterExists(): Promise<void>
+}
+
+/**
+ * Injection bag for unit tests. Production callers (livinityd index.ts —
+ * Phase 103-01 Task 3) wire the Phase 103-01 fields with real allocator /
+ * streamManager / profileSeeder instances. Tests pass mocks via
+ * createChromeMasterRouter({...}).
  */
 export interface MasterLoginInjectables {
+	// EXISTING Phase 102-07 fields (status / reset / restoreBackup paths)
 	spawnFn?: typeof nodeSpawn
 	accessFn?: typeof nodeAccess
 	rmFn?: typeof nodeRm
 	renameFn?: typeof nodeRename
 	mkdirFn?: typeof nodeMkdir
+	// Phase 103-01 — Xvfb-driven master pipeline.
+	displayAllocator?: DisplayAllocatorLike
+	streamManager?: StreamManagerLike
+	profileSeeder?: ProfileSeederLike
+	// Native-primitive injection (test-only; production resolves at module level).
+	xvfbSpawnFn?: XvfbSpawnFnLike
+	chromeSpawnFn?: ChromeSpawnFnLike
+	vncSpawnFn?: VncSpawnFnLike
+	// Input dispatcher injection (default = real input-dispatcher exports).
+	dispatchPointerFn?: DispatchPointerFnLike
+	dispatchKeyFn?: DispatchKeyFnLike
+	dispatchTypeFn?: DispatchTypeFnLike
+	dispatchScrollFn?: DispatchScrollFnLike
 }
 
 interface CurrentMaster {
 	pid: number
 	child: ChildProcess
 	startedAt: number
+	// Phase 103-01 fields
+	displayN: number
+	display: string
+	rfbPort: number
+	streamId: string
+	wsUrl: string
+	xvfb: {stop(): Promise<void>}
+	x11vnc: ChildProcess
+	chrome: {stop(): Promise<void>}
 }
 
 // Module-singleton state (per livinityd boot). T-102-07b: prevents concurrent
@@ -100,8 +243,7 @@ let currentMaster: CurrentMaster | null = null
 
 /**
  * Test-only state reset. The router uses a module-scoped `currentMaster`
- * singleton (T-102-07b lock); test 3 then test 8 both call startLogin so
- * we need a way to clear the lock between tests. NOT exported from
+ * singleton (T-102-07b lock); tests reset between cases. NOT exported from
  * index.ts barrel — internal-only.
  */
 export function _resetMasterStateForTest(): void {
@@ -109,33 +251,111 @@ export function _resetMasterStateForTest(): void {
 }
 
 /**
- * Factory: returns a tRPC router with injected fs+child_process primitives.
+ * Factory: returns a tRPC router with injected fs+child_process+streaming
+ * primitives.
  *
- * The default export `chromeMasterRouter` calls this with empty injectables
- * (production code path); tests build their own caller with mocks. Mirrors
- * the apps/native-routes.ts `nativeAppsRouter` shape so the index.ts root
- * router composition (`router({chromeMaster: chromeMasterRouter})`) Just
- * Works.
+ * The default export `chromeMasterRouter` (kept for back-compat with the
+ * server/trpc/index.ts composition site) calls this with empty injectables.
+ * Without injection the Phase 103-01 routes (startLogin / stopLogin /
+ * input.*) throw INTERNAL_SERVER_ERROR — production wire-up lives in
+ * livinityd/source/index.ts (Phase 103-01 Task 3).
+ *
+ * status() + reset() + restoreBackup() work without Phase 103 deps; they
+ * only rely on the existing fs primitives.
  */
 export function createChromeMasterRouter(injectables: MasterLoginInjectables = {}) {
-	const spawnFn = injectables.spawnFn ?? nodeSpawn
 	const accessFn = injectables.accessFn ?? nodeAccess
 	const rmFn = injectables.rmFn ?? nodeRm
 	const renameFn = injectables.renameFn ?? nodeRename
 	const mkdirFn = injectables.mkdirFn ?? nodeMkdir
+	// Phase 103-01 — capture injectables in closure so cleanupMaster() can
+	// reach them from chrome.on('exit') AND stopLogin via the same handles.
+	const displayAllocator = injectables.displayAllocator
+	const streamManager = injectables.streamManager
+	const profileSeeder = injectables.profileSeeder
+	const xvfbSpawnFn = injectables.xvfbSpawnFn ?? (spawnXvfb as unknown as XvfbSpawnFnLike)
+	const chromeSpawnFn =
+		injectables.chromeSpawnFn ?? (spawnChromeProcess as unknown as ChromeSpawnFnLike)
+	const vncSpawnFn =
+		injectables.vncSpawnFn ?? (spawnVncForDisplay as unknown as VncSpawnFnLike)
+	const dispatchPointerFn =
+		injectables.dispatchPointerFn ?? (defaultDispatchPointer as DispatchPointerFnLike)
+	const dispatchKeyFn = injectables.dispatchKeyFn ?? (defaultDispatchKey as DispatchKeyFnLike)
+	const dispatchTypeFn =
+		injectables.dispatchTypeFn ?? (defaultDispatchType as DispatchTypeFnLike)
+	const dispatchScrollFn =
+		injectables.dispatchScrollFn ?? (defaultDispatchScroll as unknown as DispatchScrollFnLike)
+
+	function depsMissingError(): TRPCError {
+		return new TRPCError({
+			code: 'INTERNAL_SERVER_ERROR',
+			message:
+				'chromeMaster routes require displayAllocator + streamManager + profileSeeder injection (see livinityd index.ts wire-up)',
+		})
+	}
+
+	/**
+	 * Idempotent teardown — runs through ALL exit paths (chrome.on('exit'),
+	 * explicit stopLogin, startLogin compensating cleanup). Each step in its
+	 * own try/catch so a failure in (e.g.) stopStream doesn't prevent the
+	 * displayAllocator.release at the end. Pairs every allocate with a
+	 * release. REQ-103-A4 invariant.
+	 */
+	async function cleanupMaster(): Promise<void> {
+		if (currentMaster === null) return
+		const m = currentMaster
+		currentMaster = null
+		// 1. stop stream (StreamManager.stopStream sends SIGTERM to its x11vnc)
+		if (streamManager) {
+			try {
+				await streamManager.stopStream(m.streamId)
+			} catch {
+				/* non-fatal */
+			}
+		}
+		// 2. SIGTERM x11vnc directly as belt-and-braces (idempotent double-kill)
+		try {
+			m.x11vnc.kill('SIGTERM')
+		} catch {
+			/* non-fatal */
+		}
+		// 3. SIGTERM chrome (if not already exited)
+		try {
+			await m.chrome.stop()
+		} catch {
+			/* non-fatal */
+		}
+		// 4. SIGTERM xvfb
+		try {
+			await m.xvfb.stop()
+		} catch {
+			/* non-fatal */
+		}
+		// 5. release port + display
+		if (streamManager) {
+			try {
+				streamManager.getPortAllocator().release(m.rfbPort)
+			} catch {
+				/* non-fatal */
+			}
+		}
+		if (displayAllocator) {
+			try {
+				displayAllocator.release(m.displayN)
+			} catch {
+				/* non-fatal */
+			}
+		}
+	}
 
 	return router({
 		/**
 		 * chromeMaster.status — privateProcedure (any authenticated user can
-		 * read the status; the *mutations* are admin-only). Returns:
+		 * read; mutations are admin-only). Returns:
 		 *
-		 *   - hasCookies: Default/Cookies file exists (user has logged in at
-		 *                 least once)
-		 *   - dir:        canonical master path (for UI display)
-		 *   - running:    a master Chrome was spawned by this livinityd and
-		 *                 hasn't yet exited
-		 *   - pid?:       running master Chrome PID (only when running)
-		 *   - startedAt?: monotonic spawn timestamp (only when running)
+		 *   - hasCookies / dir — Phase 102-07 (master profile presence)
+		 *   - running / pid / startedAt — Phase 102-07b (singleton state)
+		 *   - display / wsUrl / streamId — Phase 103-01 (active stream binding)
 		 */
 		status: privateProcedure.query(async () => {
 			let hasCookies = false
@@ -151,60 +371,276 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 				running: currentMaster !== null,
 				pid: currentMaster?.pid,
 				startedAt: currentMaster?.startedAt,
+				// Phase 103-01:
+				display: currentMaster?.display,
+				wsUrl: currentMaster?.wsUrl,
+				streamId: currentMaster?.streamId,
 			}
 		}),
 
 		/**
-		 * chromeMaster.startLogin — adminProcedure mutation (T-102-07).
+		 * chromeMaster.startLogin — adminProcedure mutation (T-102-07 + T-103-01-01).
 		 *
-		 * Spawns:
-		 *   sudo -n -u bruce DISPLAY=:0 google-chrome \
-		 *     --user-data-dir=/opt/livos/data/chrome-master \
-		 *     --no-first-run --no-default-browser-check
+		 * Phase 103-01 pipeline:
+		 *   1. profileSeeder.ensureMasterExists — idempotent mkdir on MASTER_PROFILE_DIR.
+		 *   2. displayAllocator.allocate → :N
+		 *   3. spawnXvfb({display, width: 1280, height: 720})
+		 *   4. spawnChromeProcess({display, userDataDir: MASTER_PROFILE_DIR, url})
+		 *   5. portAllocator.allocate → rfbPort
+		 *   6. spawnVncForDisplay({display, rfbPort})
+		 *   7. streamManager.startStream({mode: 'vnc-window', target: {display}})
+		 *   8. chrome.on('exit', cleanupMaster) — REQ-103-A4 exit watcher
 		 *
-		 * `sudo -n -u bruce` keeps the privilege model identical to every
-		 * other LivOS app subprocess (Xvfb, x11vnc, native apps). DISPLAY=:0
-		 * targets the physical screen so the user can interact with the
-		 * Google sign-in flow directly. The Chrome window appears, the user
-		 * logs in, the user closes Chrome — at which point the exit watcher
-		 * clears `currentMaster` and the master profile dir contains a fresh
-		 * Default/Cookies with Google OAuth tokens.
+		 * Compensating-cleanup REVERSE order on any throw. Singleton lock from
+		 * Phase 102-07b preserved.
 		 */
-		startLogin: adminProcedure.mutation(async () => {
+		startLogin: adminProcedure.mutation(async ({ctx}) => {
+			if (!displayAllocator || !streamManager || !profileSeeder) {
+				throw depsMissingError()
+			}
 			if (currentMaster !== null) {
 				throw new TRPCError({
 					code: 'CONFLICT',
-					message: 'master chrome already running; close the existing window before starting a new login',
+					message:
+						'master chrome already running; close the existing window before starting a new login',
 				})
 			}
-			const args = [
-				'-n',
-				'-u',
-				'bruce',
-				'DISPLAY=:0',
-				'google-chrome',
-				`--user-data-dir=${MASTER_PROFILE_DIR}`,
-				'--no-first-run',
-				'--no-default-browser-check',
-			]
-			const child = spawnFn('sudo', args, {
-				detached: false,
-				stdio: ['ignore', 'ignore', 'pipe'],
-			})
-			if (!child.pid) {
+
+			await profileSeeder.ensureMasterExists()
+
+			const displayN = displayAllocator.allocate()
+			const display = `:${displayN}`
+
+			let xvfb: XvfbHandleLike | null = null
+			let chrome: ChromeProcessHandleLike | null = null
+			let port: number | null = null
+			let x11vnc: ChildProcess | null = null
+			let stream: {streamId: string; wsUrl: string} | null = null
+
+			try {
+				// 3. Xvfb on :N with readiness poll.
+				xvfb = await xvfbSpawnFn({display, width: 1280, height: 720})
+
+				// 4. Per-master Chrome subprocess on :N pointed at the master profile.
+				chrome = await chromeSpawnFn({
+					display,
+					userDataDir: MASTER_PROFILE_DIR,
+					url: 'https://accounts.google.com',
+				})
+
+				// 5. Allocate RFB port from the shared StreamManager port pool.
+				port = streamManager.getPortAllocator().allocate()
+
+				// 6. Spawn x11vnc bound to the whole display.
+				x11vnc = vncSpawnFn({display, rfbPort: port})
+
+				// 7. StreamManager 'vnc-window' session on the same display.
+				// adminProcedure guarantees ctx.currentUser is set (privateProcedure
+				// -> isAuthenticated -> requireRole('admin')) but the inferred
+				// Context type still marks it optional, so use `?.id ?? 'admin'`.
+				stream = streamManager.startStream({
+					userId: ctx.currentUser?.id ?? 'admin',
+					mode: 'vnc-window',
+					target: {display},
+				})
+
+				const startedAt = Date.now()
+				currentMaster = {
+					pid: chrome.pid,
+					child: chrome.child,
+					startedAt,
+					displayN,
+					display,
+					rfbPort: port,
+					streamId: stream.streamId,
+					wsUrl: stream.wsUrl,
+					xvfb,
+					x11vnc,
+					chrome,
+				}
+
+				// 8. REQ-103-A4 — chrome exit watcher → cleanupMaster cascade.
+				chrome.child.on('exit', () => {
+					void cleanupMaster()
+				})
+
+				return {
+					pid: chrome.pid,
+					startedAt,
+					display,
+					streamId: stream.streamId,
+					wsUrl: stream.wsUrl,
+				}
+			} catch (err) {
+				// Compensating cleanup — REVERSE order. Each step try/catch so a
+				// failure does not prevent later releases.
+				if (stream) {
+					try {
+						await streamManager.stopStream(stream.streamId)
+					} catch {
+						/* non-fatal */
+					}
+				}
+				if (x11vnc) {
+					try {
+						x11vnc.kill('SIGTERM')
+					} catch {
+						/* non-fatal */
+					}
+				}
+				if (chrome) {
+					try {
+						await chrome.stop()
+					} catch {
+						/* non-fatal */
+					}
+				}
+				if (xvfb) {
+					try {
+						await xvfb.stop()
+					} catch {
+						/* non-fatal */
+					}
+				}
+				if (port !== null) {
+					try {
+						streamManager.getPortAllocator().release(port)
+					} catch {
+						/* non-fatal */
+					}
+				}
+				try {
+					displayAllocator.release(displayN)
+				} catch {
+					/* non-fatal */
+				}
+				throw err
+			}
+		}),
+
+		/**
+		 * chromeMaster.stopLogin — adminProcedure mutation (Phase 103-01).
+		 *
+		 * Idempotent teardown invoked via cleanupMaster. PRECONDITION_FAILED
+		 * if no master is currently running.
+		 */
+		stopLogin: adminProcedure.mutation(async () => {
+			if (!displayAllocator || !streamManager || !profileSeeder) {
+				throw depsMissingError()
+			}
+			if (currentMaster === null) {
 				throw new TRPCError({
-					code: 'INTERNAL_SERVER_ERROR',
-					message: 'chrome failed to spawn (no pid)',
+					code: 'PRECONDITION_FAILED',
+					message: 'no master Chrome running',
 				})
 			}
-			const startedAt = Date.now()
-			currentMaster = {pid: child.pid, child, startedAt}
-			// Clear singleton on Chrome exit (user closes window). T-102-07b
-			// retry-after-close path.
-			child.on('exit', () => {
-				currentMaster = null
-			})
-			return {pid: child.pid, startedAt}
+			await cleanupMaster()
+			return {ok: true}
+		}),
+
+		/**
+		 * Phase 103-01 — input dispatch sub-router. Every mutation is
+		 * admin-gated (T-103-01-01) and zod-validated (T-103-01-03). The
+		 * `display` argument is NOT accepted from the caller — it's read from
+		 * currentMaster.display so callers cannot drive xdotool against
+		 * arbitrary X displays.
+		 */
+		input: router({
+			click: adminProcedure
+				.input(
+					z.object({
+						x: z.number().finite(),
+						y: z.number().finite(),
+						button: z.number().int().min(1).max(3),
+						kind: z
+							.enum(['click', 'mousedown', 'mouseup', 'doubleclick'])
+							.default('click'),
+					}),
+				)
+				.mutation(async ({input}) => {
+					if (!displayAllocator || !streamManager || !profileSeeder) {
+						throw depsMissingError()
+					}
+					if (currentMaster === null) {
+						throw new TRPCError({
+							code: 'PRECONDITION_FAILED',
+							message: 'no master Chrome running',
+						})
+					}
+					await dispatchPointerFn(
+						0,
+						input.x,
+						input.y,
+						input.button as 1 | 2 | 3,
+						input.kind,
+						currentMaster.display,
+					)
+					return {ok: true}
+				}),
+			key: adminProcedure
+				.input(
+					z.object({
+						key: z.string().min(1).max(64),
+						kind: z.enum(['key', 'keydown', 'keyup']).default('key'),
+					}),
+				)
+				.mutation(async ({input}) => {
+					if (!displayAllocator || !streamManager || !profileSeeder) {
+						throw depsMissingError()
+					}
+					if (currentMaster === null) {
+						throw new TRPCError({
+							code: 'PRECONDITION_FAILED',
+							message: 'no master Chrome running',
+						})
+					}
+					await dispatchKeyFn(0, input.key, input.kind, currentMaster.display)
+					return {ok: true}
+				}),
+			type: adminProcedure
+				.input(z.object({text: z.string().max(4096)}))
+				.mutation(async ({input}) => {
+					if (!displayAllocator || !streamManager || !profileSeeder) {
+						throw depsMissingError()
+					}
+					if (currentMaster === null) {
+						throw new TRPCError({
+							code: 'PRECONDITION_FAILED',
+							message: 'no master Chrome running',
+						})
+					}
+					await dispatchTypeFn(0, input.text, currentMaster.display)
+					return {ok: true}
+				}),
+			scroll: adminProcedure
+				.input(
+					z.object({
+						x: z.number().finite(),
+						y: z.number().finite(),
+						direction: z.enum(['up', 'down', 'left', 'right']),
+						clicks: z.number().int().min(1).max(50).default(1),
+					}),
+				)
+				.mutation(async ({input}) => {
+					if (!displayAllocator || !streamManager || !profileSeeder) {
+						throw depsMissingError()
+					}
+					if (currentMaster === null) {
+						throw new TRPCError({
+							code: 'PRECONDITION_FAILED',
+							message: 'no master Chrome running',
+						})
+					}
+					await dispatchScrollFn(
+						0,
+						input.x,
+						input.y,
+						input.direction,
+						input.clicks,
+						currentMaster.display,
+					)
+					return {ok: true}
+				}),
 		}),
 
 		/**
@@ -225,14 +661,11 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 				if (currentMaster !== null) {
 					throw new TRPCError({
 						code: 'CONFLICT',
-						message: 'master chrome is still running; close it before resetting the profile',
+						message:
+							'master chrome is still running; close it before resetting the profile',
 					})
 				}
 				if (input.backup) {
-					// Try to back up; if master doesn't exist this branch is a no-op
-					// for the rename, but mkdir still runs below so the directory
-					// always exists at end-of-reset (profile-seeder.ensureMasterExists
-					// will then be a no-op rather than re-creating it).
 					let masterPresent = true
 					try {
 						await accessFn(MASTER_PROFILE_DIR, fsConstants.F_OK)
@@ -240,7 +673,6 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 						masterPresent = false
 					}
 					if (masterPresent) {
-						// Clear stale backup first so rename can succeed.
 						try {
 							await rmFn(MASTER_BACKUP_DIR, {recursive: true, force: true})
 						} catch {
@@ -264,7 +696,8 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 			if (currentMaster !== null) {
 				throw new TRPCError({
 					code: 'CONFLICT',
-					message: 'master chrome is still running; close it before restoring the backup',
+					message:
+						'master chrome is still running; close it before restoring the backup',
 				})
 			}
 			try {
@@ -287,10 +720,11 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 }
 
 /**
- * Default export used by the root tRPC composition site
- * (server/trpc/index.ts) — production code path with real fs +
- * child_process primitives. Tests build their own caller via
- * createChromeMasterRouter({...mocks}).
+ * Default export — empty-injection back-compat router. Production wire-up in
+ * livinityd/source/index.ts calls createChromeMasterRouter({...real deps...})
+ * explicitly (Phase 103-01 Task 3). status() + reset() + restoreBackup() work
+ * without Phase 103 deps; startLogin / stopLogin / input.* throw
+ * INTERNAL_SERVER_ERROR if injection is missing.
  */
 export const chromeMasterRouter = createChromeMasterRouter()
 

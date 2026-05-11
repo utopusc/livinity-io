@@ -1,38 +1,60 @@
 /**
- * Phase 102-07-01 RED — chromeMaster tRPC router vitest spec.
+ * Phase 102-07-01 + Phase 103-01 — chromeMaster tRPC router vitest spec.
  *
- * Created BEFORE master-login-routes.ts exists. `pnpm --filter
- * @livos/livinityd test:run chrome-master/master-login-routes.test.ts` MUST
- * fail with "Cannot find module './master-login-routes.js'" at this
- * checkpoint. Task 2 (GREEN) lands the implementation which turns the 9
+ * Phase 102-07-01 (Tests 1-9) — created BEFORE master-login-routes.ts existed.
+ * Task 2 (GREEN) of 102-07-01 landed the implementation that turns the 9
  * tests below into passes.
  *
- * Coverage (D-102-MASTER-LOGIN-UI + T-102-07 admin gate + T-102-07b
- * singleton lock + T-102-07c backup-before-delete):
+ * Phase 103-01 (Tests 10-19) — extends the original 9 with the factory-
+ * injected Xvfb/Chrome/x11vnc/StreamManager pipeline (REQ-103-A1, REQ-103-A3,
+ * REQ-103-A4). Master Chrome now runs on a managed Xvfb display (e.g. :42),
+ * NOT :0. Headless Mini PCs can master-login without a physical monitor.
  *
- *   1. T-102-07 admin gate on startLogin — non-admin caller throws
- *      FORBIDDEN (requireRole). spawn() never invoked.
- *   2. startLogin happy path — admin caller, spawn argv includes
- *      sudo -n -u bruce DISPLAY=:0 google-chrome --user-data-dir=
- *      /opt/livos/data/chrome-master, --no-first-run,
- *      --no-default-browser-check.
- *   3. T-102-07b singleton lock — second concurrent startLogin throws
- *      CONFLICT ("master chrome already running").
- *   4. status when Cookies file present — returns {hasCookies: true}.
- *   5. status when Cookies file absent — returns {hasCookies: false}.
- *   6. T-102-07c reset({backup: true}) — renames master → master.backup
- *      BEFORE creating fresh master dir (rename happens before mkdir).
- *   7. reset({backup: false}) — rm -rf master directly, no rename.
- *   8. T-102-07 admin gate on reset — non-admin caller throws FORBIDDEN.
- *   9. httpOnlyPaths registration — common.ts httpOnlyPaths includes
- *      chromeMaster.{startLogin,reset,restoreBackup,status}.
+ * Coverage:
+ *
+ * 102-07-01 (admin gate + singleton lock + status + reset + httpOnlyPaths):
+ *   1. T-102-07 admin gate on startLogin
+ *   2. startLogin :0 happy path (LEGACY — Phase 103 deprecates the :0 path
+ *      but the old test asserted argv shape. Updated below to exercise the
+ *      injected Xvfb path instead — same intent, new pipeline.)
+ *   3. T-102-07b singleton lock — second startLogin throws CONFLICT
+ *   4. status returns hasCookies:true when accessFn resolves
+ *   5. status returns hasCookies:false when accessFn rejects
+ *   6. T-102-07c reset({backup:true}) — rename before mkdir
+ *   7. reset({backup:false}) — rm -rf directly
+ *   8. T-102-07 admin gate on reset
+ *   9. httpOnlyPaths registration (chromeMaster.{startLogin,reset,...})
+ *
+ * 103-01 (Xvfb pipeline + stopLogin + input.*):
+ *  10. createChromeMasterRouter returns full surface (status / startLogin /
+ *      stopLogin / input.{click,key,type,scroll} / reset / restoreBackup).
+ *  11. startLogin admin happy path — allocates display via mock allocator,
+ *      spawns Xvfb + chrome + x11vnc, returns {pid, startedAt, wsUrl, streamId, display}.
+ *  12. Concurrent startLogin throws CONFLICT (102-07b lock preserved).
+ *  13. T-103-01-01 — non-admin startLogin throws FORBIDDEN before any spawn.
+ *  14. T-103-01-04 — startLogin compensating cleanup when chromeSpawnFn rejects:
+ *      xvfb.stop called, displayAllocator.release called, no port/stream allocated.
+ *  15. chrome.on('exit') triggers cleanupMaster — stopStream + x11vnc.kill +
+ *      chrome.stop + xvfb.stop + portAllocator.release + displayAllocator.release;
+ *      currentMaster cleared (status.running=false). REQ-103-A4 invariant.
+ *  16. input.click admin dispatches dispatchPointer(0, x, y, button, kind,
+ *      currentMaster.display). Throws PRECONDITION_FAILED when not running.
+ *  17. input.click zod schema rejects x:NaN, button:0, button:4, kind:'foo'.
+ *  18. status when master running returns {display, wsUrl, streamId, pid,
+ *      startedAt, running:true, hasCookies, dir}.
+ *  19. stopLogin admin invokes cleanupMaster (same effects as test 15);
+ *      returns {ok:true}; PRECONDITION_FAILED when not running.
+ *
+ * Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f.
  */
 
 import {readFileSync} from 'node:fs'
 import {dirname, join} from 'node:path'
 import {fileURLToPath} from 'node:url'
 
-import {beforeEach, describe, expect, test, vi} from 'vitest'
+import {EventEmitter} from 'node:events'
+
+import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest'
 import {TRPCError} from '@trpc/server'
 
 import {
@@ -65,15 +87,16 @@ function makeFakeChild(pid = 12345) {
 	return {
 		pid,
 		stderr: null,
-		on: (ev: string, cb: (...a: unknown[]) => void) => {
+		on: vi.fn((ev: string, cb: (...a: unknown[]) => void) => {
 			listeners[ev] = listeners[ev] ?? []
 			listeners[ev].push(cb)
-		},
+		}),
 		once: (ev: string, cb: (...a: unknown[]) => void) => {
 			listeners[ev] = listeners[ev] ?? []
 			listeners[ev].push(cb)
 		},
 		unref: () => {},
+		kill: vi.fn(),
 		__listeners: listeners,
 		__emit: (ev: string, ...args: unknown[]) => {
 			for (const cb of listeners[ev] ?? []) cb(...args)
@@ -99,84 +122,142 @@ function makeMkdir() {
 	return vi.fn(async (_p: string, _opts: {recursive: boolean}) => undefined)
 }
 
+// ─── Phase 103-01 mock helpers ─────────────────────────────────────────────
+
+function makeFakeDisplayAllocator(initial = 42) {
+	const allocate = vi.fn(() => initial)
+	const release = vi.fn((_n: number) => undefined)
+	return {allocate, release}
+}
+
+function makeFakeXvfbHandle(display = ':42') {
+	const stop = vi.fn(async () => undefined)
+	return {display, pid: 1001, stop}
+}
+
+function makeFakeChromeHandle(pid = 54321) {
+	const child = makeFakeChild(pid)
+	const stop = vi.fn(async () => undefined)
+	return {pid, child, stop}
+}
+
+function makeFakeX11vnc() {
+	const kill = vi.fn()
+	const emitter = new EventEmitter() as EventEmitter & {kill: typeof kill}
+	emitter.kill = kill
+	return emitter
+}
+
+function makeFakePortAllocator(initial = 15942) {
+	const allocate = vi.fn(() => initial)
+	const release = vi.fn((_n: number) => undefined)
+	return {allocate, release}
+}
+
+function makeFakeStreamManager(
+	portAllocator: ReturnType<typeof makeFakePortAllocator>,
+	wsUrl = 'ws://localhost:8080/ws/stream/abc',
+	streamId = 'stream-abc',
+) {
+	const startStream = vi.fn(
+		(_opts: {userId: string; mode: 'vnc-window'; target: {display: string}}) => ({
+			streamId,
+			wsUrl,
+		}),
+	)
+	const stopStream = vi.fn(async (_id: string) => undefined)
+	const getPortAllocator = vi.fn(() => portAllocator)
+	return {startStream, stopStream, getPortAllocator}
+}
+
+function makeFakeProfileSeeder() {
+	const ensureMasterExists = vi.fn(async () => undefined)
+	return {ensureMasterExists}
+}
+
+function makeDispatchMocks() {
+	return {
+		dispatchPointerFn: vi.fn(async () => undefined),
+		dispatchKeyFn: vi.fn(async () => undefined),
+		dispatchTypeFn: vi.fn(async () => undefined),
+		dispatchScrollFn: vi.fn(async () => undefined),
+	}
+}
+
+/**
+ * Build the full set of injectables Phase 103-01 needs for the spawn pipeline.
+ * Includes the Phase 102-07 fs/spawn mocks (still required for status / reset
+ * / restoreBackup) PLUS the Phase 103-01 native primitive mocks.
+ */
+function makeFull103Injectables(
+	overrides: Partial<
+		ReturnType<typeof _bareInjectables>
+	> = {},
+): ReturnType<typeof _bareInjectables> {
+	return {..._bareInjectables(), ...overrides}
+}
+
+function _bareInjectables() {
+	const portAllocator = makeFakePortAllocator(15942)
+	const displayAllocator = makeFakeDisplayAllocator(42)
+	const streamManager = makeFakeStreamManager(portAllocator)
+	const profileSeeder = makeFakeProfileSeeder()
+	const xvfb = makeFakeXvfbHandle(':42')
+	const chrome = makeFakeChromeHandle(54321)
+	const x11vnc = makeFakeX11vnc()
+	const xvfbSpawnFn = vi.fn(async (_opts: never) => xvfb as never)
+	const chromeSpawnFn = vi.fn(async (_opts: never) => chrome as never)
+	const vncSpawnFn = vi.fn((_opts: never) => x11vnc as never)
+	const dispatch = makeDispatchMocks()
+	return {
+		spawnFn: vi.fn(() => makeFakeChild() as never),
+		accessFn: makeOkAccess(),
+		rmFn: makeRm(),
+		renameFn: makeRename(),
+		mkdirFn: makeMkdir(),
+		displayAllocator,
+		streamManager,
+		profileSeeder,
+		xvfbSpawnFn,
+		chromeSpawnFn,
+		vncSpawnFn,
+		// dispatchers
+		dispatchPointerFn: dispatch.dispatchPointerFn,
+		dispatchKeyFn: dispatch.dispatchKeyFn,
+		dispatchTypeFn: dispatch.dispatchTypeFn,
+		dispatchScrollFn: dispatch.dispatchScrollFn,
+		// expose fakes for assertions
+		_fakes: {portAllocator, xvfb, chrome, x11vnc},
+	}
+}
+
 describe('102-07-01 chromeMaster tRPC router', () => {
 	beforeEach(() => {
 		_resetMasterStateForTest()
 	})
+	afterEach(() => {
+		_resetMasterStateForTest()
+	})
 
-	describe('startLogin — T-102-07 admin gate', () => {
-		test('Test 1: non-admin caller throws FORBIDDEN; spawnFn never invoked', async () => {
-			const spawnFn = vi.fn(() => makeFakeChild() as never)
-			const chromeMasterRouter = createChromeMasterRouter({
-				spawnFn: spawnFn as never,
-				accessFn: makeOkAccess() as never,
-				rmFn: makeRm() as never,
-				renameFn: makeRename() as never,
-				mkdirFn: makeMkdir() as never,
-			})
+	describe('startLogin — T-102-07 admin gate (legacy 102 shape preserved)', () => {
+		test('Test 1: non-admin caller throws FORBIDDEN; allocator never invoked', async () => {
+			const inj = makeFull103Injectables()
+			const chromeMasterRouter = createChromeMasterRouter(inj as never)
 			const caller = t.createCallerFactory(chromeMasterRouter)(makeCtx({role: 'member'}))
 			await expect(caller.startLogin()).rejects.toThrow(TRPCError)
 			await expect(caller.startLogin()).rejects.toMatchObject({code: 'FORBIDDEN'})
-			expect(spawnFn).not.toHaveBeenCalled()
+			expect(inj.displayAllocator.allocate).not.toHaveBeenCalled()
+			expect(inj.xvfbSpawnFn).not.toHaveBeenCalled()
+			expect(inj.chromeSpawnFn).not.toHaveBeenCalled()
 		})
 	})
 
-	describe('startLogin — happy path', () => {
-		test('Test 2: admin caller spawns sudo -n -u bruce DISPLAY=:0 google-chrome with --user-data-dir=/opt/livos/data/chrome-master', async () => {
-			const spawnFn = vi.fn(() => makeFakeChild(54321) as never)
-			const chromeMasterRouter = createChromeMasterRouter({
-				spawnFn: spawnFn as never,
-				accessFn: makeOkAccess() as never,
-				rmFn: makeRm() as never,
-				renameFn: makeRename() as never,
-				mkdirFn: makeMkdir() as never,
-			})
-			const caller = t.createCallerFactory(chromeMasterRouter)(makeCtx({role: 'admin'}))
-			const result = await caller.startLogin()
-			expect(result.pid).toBe(54321)
-			expect(typeof result.startedAt).toBe('number')
-			expect(spawnFn).toHaveBeenCalledTimes(1)
-			const [cmd, args] = spawnFn.mock.calls[0] as unknown as [string, string[]]
-			expect(cmd).toBe('sudo')
-			expect(args).toContain('-n')
-			expect(args).toContain('-u')
-			expect(args).toContain('bruce')
-			expect(args).toContain('DISPLAY=:0')
-			expect(args).toContain('google-chrome')
-			expect(args).toContain(`--user-data-dir=${MASTER_PROFILE_DIR}`)
-			expect(args).toContain('--no-first-run')
-			expect(args).toContain('--no-default-browser-check')
-		})
-	})
-
-	describe('startLogin — T-102-07b singleton lock', () => {
-		test('Test 3: second concurrent startLogin throws CONFLICT', async () => {
-			const spawnFn = vi.fn(() => makeFakeChild(98765) as never)
-			const chromeMasterRouter = createChromeMasterRouter({
-				spawnFn: spawnFn as never,
-				accessFn: makeOkAccess() as never,
-				rmFn: makeRm() as never,
-				renameFn: makeRename() as never,
-				mkdirFn: makeMkdir() as never,
-			})
-			const caller = t.createCallerFactory(chromeMasterRouter)(makeCtx({role: 'admin'}))
-			await caller.startLogin()
-			await expect(caller.startLogin()).rejects.toMatchObject({code: 'CONFLICT'})
-			// Only the first spawn happened
-			expect(spawnFn).toHaveBeenCalledTimes(1)
-		})
-	})
-
+	// Tests 4-8 retained from Phase 102-07-01 — fs primitive paths (status / reset).
 	describe('status', () => {
 		test('Test 4: returns {hasCookies: true} when accessFn resolves', async () => {
 			const accessFn = makeOkAccess()
-			const chromeMasterRouter = createChromeMasterRouter({
-				spawnFn: vi.fn(() => makeFakeChild() as never) as never,
-				accessFn: accessFn as never,
-				rmFn: makeRm() as never,
-				renameFn: makeRename() as never,
-				mkdirFn: makeMkdir() as never,
-			})
+			const inj = makeFull103Injectables({accessFn})
+			const chromeMasterRouter = createChromeMasterRouter(inj as never)
 			const caller = t.createCallerFactory(chromeMasterRouter)(makeCtx({role: 'member'}))
 			const result = await caller.status()
 			expect(result.hasCookies).toBe(true)
@@ -186,13 +267,8 @@ describe('102-07-01 chromeMaster tRPC router', () => {
 		})
 
 		test('Test 5: returns {hasCookies: false} when accessFn rejects', async () => {
-			const chromeMasterRouter = createChromeMasterRouter({
-				spawnFn: vi.fn(() => makeFakeChild() as never) as never,
-				accessFn: makeFailAccess() as never,
-				rmFn: makeRm() as never,
-				renameFn: makeRename() as never,
-				mkdirFn: makeMkdir() as never,
-			})
+			const inj = makeFull103Injectables({accessFn: makeFailAccess()})
+			const chromeMasterRouter = createChromeMasterRouter(inj as never)
 			const caller = t.createCallerFactory(chromeMasterRouter)(makeCtx({role: 'member'}))
 			const result = await caller.status()
 			expect(result.hasCookies).toBe(false)
@@ -215,23 +291,16 @@ describe('102-07-01 chromeMaster tRPC router', () => {
 			const mkdirFn = vi.fn(async (_p: string, _opts: {recursive: boolean}) => {
 				callOrder.push('mkdir')
 			})
-			const chromeMasterRouter = createChromeMasterRouter({
-				spawnFn: vi.fn(() => makeFakeChild() as never) as never,
-				accessFn: accessFn as never,
-				rmFn: rmFn as never,
-				renameFn: renameFn as never,
-				mkdirFn: mkdirFn as never,
-			})
+			const inj = makeFull103Injectables({accessFn, rmFn, renameFn, mkdirFn})
+			const chromeMasterRouter = createChromeMasterRouter(inj as never)
 			const caller = t.createCallerFactory(chromeMasterRouter)(makeCtx({role: 'admin'}))
 			const result = await caller.reset({backup: true})
 			expect(result.ok).toBe(true)
-			// rename happens BEFORE mkdir of master
 			expect(renameFn).toHaveBeenCalled()
 			expect(mkdirFn).toHaveBeenCalled()
 			const renameCall = renameFn.mock.calls[0] as unknown as [string, string]
 			expect(renameCall[0]).toBe(MASTER_PROFILE_DIR)
 			expect(renameCall[1]).toBe(MASTER_BACKUP_DIR)
-			// Ordering: 'rename' must precede 'mkdir' in callOrder
 			expect(callOrder.indexOf('rename')).toBeLessThan(callOrder.indexOf('mkdir'))
 		})
 	})
@@ -240,14 +309,8 @@ describe('102-07-01 chromeMaster tRPC router', () => {
 		test('Test 7: reset({backup: false}) rm -rf master directly; renameFn never invoked', async () => {
 			const renameFn = makeRename()
 			const rmFn = makeRm()
-			const mkdirFn = makeMkdir()
-			const chromeMasterRouter = createChromeMasterRouter({
-				spawnFn: vi.fn(() => makeFakeChild() as never) as never,
-				accessFn: makeOkAccess() as never,
-				rmFn: rmFn as never,
-				renameFn: renameFn as never,
-				mkdirFn: mkdirFn as never,
-			})
+			const inj = makeFull103Injectables({renameFn, rmFn})
+			const chromeMasterRouter = createChromeMasterRouter(inj as never)
 			const caller = t.createCallerFactory(chromeMasterRouter)(makeCtx({role: 'admin'}))
 			const result = await caller.reset({backup: false})
 			expect(result.ok).toBe(true)
@@ -262,13 +325,8 @@ describe('102-07-01 chromeMaster tRPC router', () => {
 	describe('reset — T-102-07 admin gate', () => {
 		test('Test 8: non-admin caller throws FORBIDDEN; rmFn never invoked', async () => {
 			const rmFn = makeRm()
-			const chromeMasterRouter = createChromeMasterRouter({
-				spawnFn: vi.fn(() => makeFakeChild() as never) as never,
-				accessFn: makeOkAccess() as never,
-				rmFn: rmFn as never,
-				renameFn: makeRename() as never,
-				mkdirFn: makeMkdir() as never,
-			})
+			const inj = makeFull103Injectables({rmFn})
+			const chromeMasterRouter = createChromeMasterRouter(inj as never)
 			const caller = t.createCallerFactory(chromeMasterRouter)(makeCtx({role: 'member'}))
 			await expect(caller.reset({backup: false})).rejects.toMatchObject({code: 'FORBIDDEN'})
 			expect(rmFn).not.toHaveBeenCalled()
@@ -286,5 +344,249 @@ describe('102-07-01 chromeMaster tRPC router', () => {
 			expect(commonSrc).toContain("'chromeMaster.restoreBackup'")
 			expect(commonSrc).toContain("'chromeMaster.status'")
 		})
+	})
+})
+
+// ───────────────────────────────────────────────────────────────────────────
+// Phase 103-01 — Xvfb-driven master Chrome streaming pipeline.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe('103-01 chromeMaster tRPC router — Xvfb streaming pipeline', () => {
+	beforeEach(() => {
+		_resetMasterStateForTest()
+	})
+	afterEach(() => {
+		_resetMasterStateForTest()
+	})
+
+	test('Test 10: createChromeMasterRouter returns full surface', () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		// tRPC v11 router has _def with procedures map
+		const procedures = (r as unknown as {_def: {procedures: Record<string, unknown>}})._def
+			.procedures
+		expect(procedures).toHaveProperty('status')
+		expect(procedures).toHaveProperty('startLogin')
+		expect(procedures).toHaveProperty('stopLogin')
+		expect(procedures).toHaveProperty('reset')
+		expect(procedures).toHaveProperty('restoreBackup')
+		// input sub-router shows up as input.click / input.key / input.type / input.scroll
+		expect(procedures).toHaveProperty('input.click')
+		expect(procedures).toHaveProperty('input.key')
+		expect(procedures).toHaveProperty('input.type')
+		expect(procedures).toHaveProperty('input.scroll')
+	})
+
+	test('Test 11: startLogin happy path — Xvfb + chrome + x11vnc + stream', async () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin', userId: 'admin-1'}))
+
+		const result = await caller.startLogin()
+
+		expect(result.pid).toBe(54321)
+		expect(result.display).toBe(':42')
+		expect(result.streamId).toBe('stream-abc')
+		expect(result.wsUrl).toBe('ws://localhost:8080/ws/stream/abc')
+		expect(typeof result.startedAt).toBe('number')
+
+		// Allocator + profile-seeder + spawn chain assertions
+		expect(inj.profileSeeder.ensureMasterExists).toHaveBeenCalledTimes(1)
+		expect(inj.displayAllocator.allocate).toHaveBeenCalledTimes(1)
+		expect(inj.xvfbSpawnFn).toHaveBeenCalledWith(
+			expect.objectContaining({display: ':42', width: 1280, height: 720}),
+		)
+		expect(inj.chromeSpawnFn).toHaveBeenCalledWith(
+			expect.objectContaining({
+				display: ':42',
+				userDataDir: '/opt/livos/data/chrome-master',
+				url: 'https://accounts.google.com',
+			}),
+		)
+		const portAlloc = inj._fakes.portAllocator
+		expect(portAlloc.allocate).toHaveBeenCalledTimes(1)
+		expect(inj.vncSpawnFn).toHaveBeenCalledWith(
+			expect.objectContaining({display: ':42', rfbPort: 15942}),
+		)
+		expect(inj.streamManager.startStream).toHaveBeenCalledWith(
+			expect.objectContaining({
+				userId: 'admin-1',
+				mode: 'vnc-window',
+				target: {display: ':42'},
+			}),
+		)
+	})
+
+	test('Test 12: second concurrent startLogin throws CONFLICT', async () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+
+		await caller.startLogin()
+		await expect(caller.startLogin()).rejects.toMatchObject({code: 'CONFLICT'})
+		// Only one spawn cascade ran
+		expect(inj.chromeSpawnFn).toHaveBeenCalledTimes(1)
+	})
+
+	test('Test 13: T-103-01-01 non-admin startLogin throws FORBIDDEN before any spawn', async () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'member'}))
+		await expect(caller.startLogin()).rejects.toMatchObject({code: 'FORBIDDEN'})
+		expect(inj.displayAllocator.allocate).not.toHaveBeenCalled()
+		expect(inj.xvfbSpawnFn).not.toHaveBeenCalled()
+		expect(inj.chromeSpawnFn).not.toHaveBeenCalled()
+		expect(inj.profileSeeder.ensureMasterExists).not.toHaveBeenCalled()
+	})
+
+	test('Test 14: T-103-01-04 startLogin compensating cleanup when chromeSpawnFn rejects', async () => {
+		const inj = makeFull103Injectables()
+		const boom = new Error('chrome spawn failed')
+		inj.chromeSpawnFn.mockRejectedValueOnce(boom as never)
+
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+
+		await expect(caller.startLogin()).rejects.toThrow(boom)
+
+		// xvfb was started and then stopped
+		expect(inj.xvfbSpawnFn).toHaveBeenCalledTimes(1)
+		expect(inj._fakes.xvfb.stop).toHaveBeenCalledTimes(1)
+
+		// display was released
+		expect(inj.displayAllocator.release).toHaveBeenCalledWith(42)
+
+		// no port allocated, no stream started, no x11vnc spawned
+		expect(inj._fakes.portAllocator.allocate).not.toHaveBeenCalled()
+		expect(inj.vncSpawnFn).not.toHaveBeenCalled()
+		expect(inj.streamManager.startStream).not.toHaveBeenCalled()
+	})
+
+	test('Test 15: chrome.on(exit) triggers cleanupMaster — full release cascade', async () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await caller.startLogin()
+
+		// Capture chrome.child.on('exit', cb) listener
+		const chromeChild = inj._fakes.chrome.child
+		const exitListener = (
+			chromeChild.on.mock.calls.find((c) => c[0] === 'exit') as
+				| [string, () => void]
+				| undefined
+		)?.[1]
+		expect(exitListener).toBeDefined()
+		exitListener!()
+		// cleanupMaster runs `void` style; wait a tick for awaited steps.
+		await new Promise((resolve) => setTimeout(resolve, 10))
+
+		// All cleanup actions fired
+		expect(inj.streamManager.stopStream).toHaveBeenCalledWith('stream-abc')
+		expect(inj._fakes.x11vnc.kill).toHaveBeenCalledWith('SIGTERM')
+		expect(inj._fakes.chrome.stop).toHaveBeenCalledTimes(1)
+		expect(inj._fakes.xvfb.stop).toHaveBeenCalledTimes(1)
+		expect(inj._fakes.portAllocator.release).toHaveBeenCalledWith(15942)
+		expect(inj.displayAllocator.release).toHaveBeenCalledWith(42)
+
+		// status reflects cleared singleton
+		const s = await caller.status()
+		expect(s.running).toBe(false)
+		expect(s.pid).toBeUndefined()
+		expect(s.display).toBeUndefined()
+	})
+
+	test('Test 16: input.click admin dispatches dispatchPointer(0, x, y, btn, kind, display)', async () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+
+		// PRECONDITION when no master running
+		await expect(
+			caller.input.click({x: 10, y: 20, button: 1, kind: 'click'}),
+		).rejects.toMatchObject({code: 'PRECONDITION_FAILED'})
+
+		// Spawn master, then dispatch
+		await caller.startLogin()
+		await caller.input.click({x: 100, y: 200, button: 1, kind: 'click'})
+
+		expect(inj.dispatchPointerFn).toHaveBeenCalledWith(0, 100, 200, 1, 'click', ':42')
+	})
+
+	test('Test 17: input.click zod schema rejects NaN x / out-of-range button / bad kind', async () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await caller.startLogin()
+
+		await expect(
+			caller.input.click({x: NaN, y: 0, button: 1, kind: 'click'}),
+		).rejects.toThrow()
+		await expect(
+			caller.input.click({x: 0, y: 0, button: 0, kind: 'click'} as never),
+		).rejects.toThrow()
+		await expect(
+			caller.input.click({x: 0, y: 0, button: 4, kind: 'click'} as never),
+		).rejects.toThrow()
+		await expect(
+			caller.input.click({x: 0, y: 0, button: 1, kind: 'foo'} as never),
+		).rejects.toThrow()
+	})
+
+	test('Test 18: status when master running returns display + wsUrl + streamId', async () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await caller.startLogin()
+		const s = await caller.status()
+		expect(s.running).toBe(true)
+		expect(s.pid).toBe(54321)
+		expect(s.display).toBe(':42')
+		expect(s.wsUrl).toBe('ws://localhost:8080/ws/stream/abc')
+		expect(s.streamId).toBe('stream-abc')
+		expect(s.hasCookies).toBe(true)
+		expect(s.dir).toBe(MASTER_PROFILE_DIR)
+	})
+
+	test('Test 19: stopLogin admin invokes cleanupMaster; PRECONDITION_FAILED when not running', async () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+
+		// not running → precondition failure
+		await expect(caller.stopLogin()).rejects.toMatchObject({code: 'PRECONDITION_FAILED'})
+
+		await caller.startLogin()
+		const result = await caller.stopLogin()
+		expect(result.ok).toBe(true)
+		// Cleanup cascade observed
+		expect(inj.streamManager.stopStream).toHaveBeenCalledWith('stream-abc')
+		expect(inj._fakes.xvfb.stop).toHaveBeenCalled()
+		expect(inj.displayAllocator.release).toHaveBeenCalledWith(42)
+		// singleton cleared
+		const s = await caller.status()
+		expect(s.running).toBe(false)
+	})
+
+	test('Test 20: missing-deps bare default router — startLogin returns INTERNAL_SERVER_ERROR', async () => {
+		// Bare factory (no Phase 103 injection)
+		const r = createChromeMasterRouter()
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await expect(caller.startLogin()).rejects.toMatchObject({code: 'INTERNAL_SERVER_ERROR'})
+	})
+
+	test('Test 21: input.key / input.type / input.scroll dispatch correctly with display arg', async () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await caller.startLogin()
+
+		await caller.input.key({key: 'Return', kind: 'key'})
+		expect(inj.dispatchKeyFn).toHaveBeenCalledWith(0, 'Return', 'key', ':42')
+
+		await caller.input.type({text: 'hello@example.com'})
+		expect(inj.dispatchTypeFn).toHaveBeenCalledWith(0, 'hello@example.com', ':42')
+
+		await caller.input.scroll({x: 50, y: 60, direction: 'down', clicks: 3})
+		expect(inj.dispatchScrollFn).toHaveBeenCalledWith(0, 50, 60, 'down', 3, ':42')
 	})
 })
