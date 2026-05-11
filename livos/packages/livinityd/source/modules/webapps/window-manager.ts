@@ -490,18 +490,18 @@ export class WebAppWindowManager {
 				`webapp ${opts.webappId} spawned (user=${opts.userId} display=${display} chromePid=${chrome.pid} streamId=${entry.streamId})`,
 			)
 
-			// Phase 102 deploy UAT round 4 (2026-05-11) — user feedback:
-			// "bir surü mcp oluşturuyor tek mcp" — 5 per-WebApp Luse MCPs
-			// clutter the agent tool list (5 × 20 tools = 100 tools). Skip
-			// per-WebApp MCP registration; rely on the GLOBAL `luse` MCP +
-			// activeDisplay context injection (buildActiveDisplaySnippet
-			// from 102-06) so the agent's system prompt knows which display
-			// to scope tool calls to. Opt-back-in via env LIVOS_PER_APP_LUSE=1.
-			if (process.env.LIVOS_PER_APP_LUSE === '1') {
+			// Phase 102 deploy UAT round 7 (2026-05-11) — REVERT default: the
+			// "tek MCP" approach broke Luse inspection — global luse is scoped
+			// to :1 (bruce desktop), it can't see per-app :10/:11 displays.
+			// User tested "kac display acik" via list_windows → answered "1"
+			// even after opening 2nd WebApp. Per-WebApp Luse MCP IS REQUIRED
+			// until Phase 103 ships display-aware tool args. Default back ON;
+			// opt-out via LIVOS_PER_APP_LUSE=0 (e.g. for token-budget testing).
+			if (process.env.LIVOS_PER_APP_LUSE !== '0') {
 				await this.registerWebAppMcp(opts.webappId, 0, display)
 			} else {
 				this.logger?.info?.(
-					`webapp ${opts.webappId}: skipping per-WebApp Luse MCP registration (global luse + activeDisplay context handles scoping). Set LIVOS_PER_APP_LUSE=1 to re-enable per-app MCPs.`,
+					`webapp ${opts.webappId}: per-WebApp Luse MCP SKIPPED (LIVOS_PER_APP_LUSE=0). Agent will NOT see per-app windows via list_windows — only :1.`,
 				)
 			}
 
