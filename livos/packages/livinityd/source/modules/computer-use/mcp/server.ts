@@ -45,13 +45,51 @@ import {Redis} from 'ioredis'
 
 import {registerLuseTools} from './tools.js'
 
+/**
+ * Phase 102-06 — display-target resolution with precedence:
+ *   1. LUSE_TARGET_DISPLAY (canonical Phase 102 env — must satisfy
+ *      /^:[1-9][0-9]?$/ or it's dropped with a stderr warning).
+ *   2. LUSE_DISPLAY (legacy alias from Phase 100-10-03).
+ *   3. DISPLAY (system default).
+ *
+ * Returns the chosen display string, or `undefined` if none of the env vars
+ * are set. Pure function — testable without booting the MCP server.
+ *
+ * Exported so `mcp/server.test.ts` can cover env precedence without booting
+ * a stdio MCP server (the McpServer instance lifecycle is hard to unit test
+ * cleanly; the env-read is the only Phase-102 behavior change).
+ */
+export interface ResolveDisplayDeps {
+	env?: NodeJS.ProcessEnv
+	writeWarn?: (message: string) => void
+}
+
+export function resolveDisplay(deps: ResolveDisplayDeps = {}): string | undefined {
+	const env = deps.env ?? process.env
+	const writeWarn = deps.writeWarn ?? ((msg) => process.stderr.write(msg))
+	const DISPLAY_RE = /^:[1-9][0-9]?$/
+	const rawTargetDisplay = env.LUSE_TARGET_DISPLAY
+	if (typeof rawTargetDisplay === 'string' && rawTargetDisplay.length > 0) {
+		if (DISPLAY_RE.test(rawTargetDisplay)) {
+			return rawTargetDisplay
+		}
+		writeWarn(
+			`[luse-mcp] warning: LUSE_TARGET_DISPLAY=${JSON.stringify(rawTargetDisplay)} does not match /^:[1-9][0-9]?$/; falling through to LUSE_DISPLAY/DISPLAY
+`,
+		)
+	}
+	return env.LUSE_DISPLAY ?? env.DISPLAY
+}
+
 async function main(): Promise<void> {
-	// Phase 97-05 — optional per-WebApp window scoping. When the parent
-	// (mcp-client-manager.ts via luse-mcp-config.ts buildLuseConfig
-	// with a PerWebAppMcpDescriptor) sets LUSE_TARGET_WINDOW_ID in this
-	// child's env, every native primitive call defaults to that wid unless
-	// the tool input explicitly overrides it. When unset, host-display
-	// behavior is preserved (existing pre-P97 default).
+	// @deprecated since Phase 102-06 — `LUSE_TARGET_WINDOW_ID` is no longer
+	// set by the per-WebApp descriptor (see luse-mcp-config.ts: the descriptor
+	// branch now emits `LUSE_TARGET_DISPLAY` instead). This env read remains
+	// as a legacy fallback ONLY for the host-display Luse instance (which is
+	// spawned without a descriptor and which never had LUSE_TARGET_WINDOW_ID
+	// set by livinityd anyway — operators can still set it manually for
+	// host-level wid-scoping during ad-hoc debugging). When unset, host-display
+	// behavior is preserved.
 	const targetWindowEnv = process.env.LUSE_TARGET_WINDOW_ID
 	let defaultWindowId: number | undefined
 	if (typeof targetWindowEnv === 'string' && targetWindowEnv.length > 0) {
@@ -65,12 +103,9 @@ async function main(): Promise<void> {
 		}
 	}
 
-	// P100-10-03 — `LUSE_DISPLAY` env (set by 100-10-01's WebAppWindowManager
-	// via 100-10-02's LuseMcpConfig descriptor) scopes the window-aware tools
-	// (`mcp__luse__list_windows`, etc.) to this WebApp's allocated Xvfb
-	// display (`:10`, `:11`, ...). When unset, fall back to `DISPLAY` so
-	// host-display Luse instances still work (legacy behavior).
-	const defaultDisplay = process.env.LUSE_DISPLAY ?? process.env.DISPLAY
+	// Phase 102-06 — see resolveDisplay() above for precedence:
+	//   LUSE_TARGET_DISPLAY (canonical, regex-validated) → LUSE_DISPLAY → DISPLAY.
+	const defaultDisplay = resolveDisplay()
 
 	// P100-10-04 — construct a FRESH ioredis client from LUSE_REDIS_URL.
 	// The parent livinityd process owns its own ioredis instance; this MCP
