@@ -1258,15 +1258,17 @@ describe('Phase 102-04 — per-app Xvfb + Chrome subprocess spawn body', () => {
 		mgr._clearForTests()
 	})
 
-	it('T-102-04-09: A2 fluxbox-or-not — withWindowManager opt defaults false; fluxbox NEVER spawned', async () => {
-		// Default ctor: withWindowManager omitted → false → no fluxbox.
+	it('T-102-04-09: A2 fluxbox-or-not — withWindowManager:false → fluxbox NEVER spawned', async () => {
+		// Phase 102 deploy fix flipped default to true (Chrome --start-fullscreen
+		// requires WM to render visibly). This test asserts the opt-out path:
+		// explicit `withWindowManager: false` → no fluxbox spawn.
 		const fluxboxFn = vi.fn(async () => ({
 			pid: 33333,
 			display: ':10',
 			exited: new Promise(() => {}),
 			stop: vi.fn(async () => {}),
 		}))
-		const {mgr} = makeManager102({fluxboxFn})
+		const {mgr} = makeManager102({withWindowManager: false, fluxboxFn})
 		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
 		expect(fluxboxFn).not.toHaveBeenCalled()
 		mgr._clearForTests()
