@@ -79,12 +79,23 @@ import conversationsRouter from './conversations-router.js'
 // CRUD procedures (create/list/delete/update) are deferred to P94.
 import {webappRouter} from '../../webapps/index.js'
 import streamsRouter from '../../streaming/trpc-router.js'
+// Phase 101-03 — Native-app CRUD router (apps.native.{list,get,create,delete}).
+// Merged into the existing `apps` namespace below alongside Phase 47
+// healthProbe. All 4 paths are added to httpOnlyPaths in ./common.ts.
+import {nativeAppsRouter} from '../../apps/native-routes.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
 
-// Merge Phase 47 healthProbe into the existing apps router (tRPC v11 mergeRouters).
-const apps = t.mergeRouters(appsBase, diagnosticsRoutes.appsHealthRouter)
+// Merge Phase 47 healthProbe + Phase 101-03 native-app sub-router into the
+// existing apps router (tRPC v11 mergeRouters). The wrapper `router({native:
+// nativeAppsRouter})` creates the `apps.native.*` sub-namespace path shape;
+// merging it with the base preserves all pre-existing `apps.*` procedures.
+const apps = t.mergeRouters(
+	appsBase,
+	diagnosticsRoutes.appsHealthRouter,
+	router({native: nativeAppsRouter}),
+)
 
 const appRouter = router({
 	migration,

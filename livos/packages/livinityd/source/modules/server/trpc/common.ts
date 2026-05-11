@@ -402,4 +402,21 @@ export const httpOnlyPaths = [
 	'webapp.skills.delete',
 	'webapp.skills.discard',
 	'webapp.skills.uploadFrame',
+	// Phase 101-03 — Native-app CRUD (Pillar B / D-101-NATIVE-APPS). All four
+	// paths route via HTTP because:
+	//   - Mutations (create/delete) are admin-gated (T-101-02). Same
+	//     WS-reconnect-survival rationale as the rest of the admin mutation
+	//     cluster (apiKeys.create/revoke lines 209/211, mcp.installToAgent
+	//     line 291) — a half-broken WS after `systemctl restart livos` would
+	//     silently drop the dock's "Add Native App" save.
+	//   - Queries (list/get) are dock-render dependencies; HTTP avoids the
+	//     WS-handshake-delay flicker on first paint (precedent: webapp.list
+	//     line 369, agents.list line 254).
+	//   - The legacy systemd-service native paths (apps.nativeStart/Stop/Status
+	//     at lines 84-86) live in a separate namespace — these UUID-keyed
+	//     CRUD routes are the Phase 101 dock-integration surface.
+	'apps.native.list',
+	'apps.native.get',
+	'apps.native.create',
+	'apps.native.delete',
 ] as const
