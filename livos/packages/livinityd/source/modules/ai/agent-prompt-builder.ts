@@ -181,15 +181,30 @@ const DISPLAY_RE_PROMPT = /^:\d{1,3}$/
  * regex (graceful skip — caller appends nothing rather than emitting a
  * half-formed snippet that the LLM might parse as instruction).
  *
- * Wire format (must match D-102-LUSE-DISPLAY-SCOPING in 102-CONTEXT.md):
+ * Wire format (must match D-103-04-AGENT-INSTRUCTION; supersedes the earlier
+ * D-102-LUSE-DISPLAY-SCOPING descriptive form):
  *
  * ```
  * ## Active Display Context
  * You are operating in the context of the LivOS app: <title> (<kind>).
  * Active X11 display: <activeDisplay> (resolution 1280x720)
  * URL/Binary: <url ?? binary ?? '(unknown)'>
- * All your Luse tool calls (screenshot, click, key) are implicitly scoped to <activeDisplay> via LUSE_TARGET_DISPLAY. Coordinate space is 1280x720 native — no offset, no scaling.
+ * IMPORTANT: Every Luse tool call (...) MUST pass display: "<activeDisplay>" as a tool argument ...
  * ```
+ *
+ * ## Phase 103-04 — Prescriptive instruction flip
+ *
+ * Phase 103-03 added an optional `display?: ":N"` arg to 13 X11-touching Luse
+ * tools (`luse-tools.ts` + `mcp/tools.ts withScopedDisplay`). The agent must
+ * be told to pass that arg on EVERY tool call — descriptive "implicitly
+ * scoped via LUSE_TARGET_DISPLAY" wording would not surface the new contract.
+ *
+ * Belt-and-suspenders: agent-runner-factory still seeds `LUSE_TARGET_DISPLAY`
+ * per-turn, so an agent that omits the arg still resolves to the right
+ * display via the env fallback (`parseDisplayArg → options.defaultDisplay`).
+ * The env name is intentionally NOT mentioned in the prompt — the agent
+ * doesn't need to know about runtime fallbacks; the instruction is
+ * unambiguous: pass the arg.
  */
 export function buildActiveDisplaySnippet(input: ActiveDisplayContext): string {
 	if (
@@ -205,6 +220,6 @@ export function buildActiveDisplaySnippet(input: ActiveDisplayContext): string {
 		`You are operating in the context of the LivOS app: ${safe.title} (${safe.kind}).`,
 		`Active X11 display: ${input.activeDisplay} (resolution 1280x720)`,
 		`URL/Binary: ${target}`,
-		`All your Luse tool calls (screenshot, click, key) are implicitly scoped to ${input.activeDisplay} via LUSE_TARGET_DISPLAY. Coordinate space is 1280x720 native — no offset, no scaling.`,
+		`IMPORTANT: Every Luse tool call (computer_screenshot, computer_click_mouse, computer_type_text, computer_press_keys, computer_scroll, list_windows, etc.) MUST pass display: "${input.activeDisplay}" as a tool argument so the operation is scoped to this WebApp's dedicated X server. If you omit the display argument, the tool falls back to the host display (:1) and you will NOT see or interact with this WebApp. Coordinate space is 1280x720 native — no offset, no scaling.`,
 	].join('\n')
 }
