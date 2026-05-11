@@ -27,10 +27,20 @@ export type {
 // child_process); createChromeMasterRouter is the factory tests use to
 // inject mocks. MASTER_BACKUP_DIR sits next to MASTER_PROFILE_DIR for the
 // T-102-07c reset-with-backup flow.
+//
+// MASTER_PROFILE_DIR is already re-exported above from profile-seeder.js
+// (same `/opt/livos/data/chrome-master` constant); a duplicate re-export from
+// master-login-routes.ts would collide on the barrel binding.
+//
+// Phase 103-01 — also re-export _resetMasterStateForTest for test-suite
+// singleton-lock isolation (the cross-file test in master-login-routes.test.ts
+// imports it directly from master-login-routes.js but barrel exposure makes
+// it reachable from external integration tests).
 export {
 	chromeMasterRouter,
 	createChromeMasterRouter,
 	MASTER_BACKUP_DIR,
+	_resetMasterStateForTest,
 } from './master-login-routes.js'
 export type {
 	MasterLoginInjectables,
