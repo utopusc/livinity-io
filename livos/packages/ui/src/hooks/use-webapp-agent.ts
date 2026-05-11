@@ -38,7 +38,12 @@
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 
-import {useAgentSocket, type AgentStatus, type ChatMessage} from '@/hooks/use-agent-socket'
+import {
+	useAgentSocket,
+	type ActiveAppMetaPayload,
+	type AgentStatus,
+	type ChatMessage,
+} from '@/hooks/use-agent-socket'
 import {trpcReact} from '@/trpc/trpc'
 
 export type WebAppSessionStatus = 'loading' | 'ready' | 'no-session' | 'session-ended'
@@ -93,11 +98,70 @@ function makeFreshConversationId(webappId: string): string {
 }
 
 export function useWebAppAgent(webappId: string): UseWebAppAgentResult {
+	// Phase 101-06 (Pillar C) — Active Window Context.
+	//
+	// We surface this WebApp's wid + title/url to useAgentSocket so the WS
+	// `start` envelope carries `activeWid` + `activeAppMeta`. livinityd's
+	// broker prepends the `## Active Window Context` snippet into the
+	// agent's system prompt (see agent-runner-factory.ts +
+	// agent-prompt-builder.ts) so the agent knows which window is active
+	// without an explicit `list_windows` round-trip.
+	//
+	// Source of truth:
+	//   - activeWid → `webapp.window.list` row's `windowId` (X11 wid set by
+	//     the WebAppWindowManager.spawn flow after the discovery handshake).
+	//   - activeAppMeta.{title, url} → `webapp.list` row (the user-defined
+	//     title + url that was used to spawn).
+	//
+	// If either source is loading or missing, the fields are omitted from
+	// the WS envelope and the broker gracefully skips snippet injection.
+	// Always-enabled queries with low staleTime keep the values fresh as
+	// the user navigates between WebApps; the `webappId` UUID guard prevents
+	// zod errors on the wire before a real id resolves.
+	const isUuid = !!webappId && /^[0-9a-f-]{36}$/i.test(webappId)
+	const webappListQuery = trpcReact.webapp.list.useQuery(undefined, {
+		enabled: isUuid,
+		staleTime: 30_000,
+	})
+	const webappWindowListQuery = trpcReact.webapp.window.list.useQuery(undefined, {
+		enabled: isUuid,
+		// Active window state changes more often than the WebApp directory,
+		// so a shorter staleTime keeps the wid reasonably fresh.
+		staleTime: 5_000,
+		refetchOnWindowFocus: true,
+	})
+	const webappRow = useMemo(
+		() => webappListQuery.data?.find((w) => w.id === webappId) ?? null,
+		[webappListQuery.data, webappId],
+	)
+	const webappWindowRow = useMemo(
+		() => webappWindowListQuery.data?.find((w) => w.webappId === webappId) ?? null,
+		[webappWindowListQuery.data, webappId],
+	)
+	const activeAppMeta = useMemo<ActiveAppMetaPayload | undefined>(() => {
+		if (!webappRow) return undefined
+		// `webapp.window.list` doesn't carry a live title (only the spawn-time
+		// row), so we use the static `webapp.list` title field — which is the
+		// user-supplied label they see on the desktop icon (and in the title
+		// bar via Chrome `--app=` mode). Falls back to URL when title is blank.
+		const title = (webappRow.title?.trim() || webappRow.url || '').toString()
+		return {
+			appId: webappId,
+			kind: 'webapp',
+			url: webappRow.url,
+			title,
+		}
+	}, [webappId, webappRow])
+	const activeWid: number | undefined =
+		webappWindowRow && typeof webappWindowRow.windowId === 'number'
+			? webappWindowRow.windowId
+			: undefined
+
 	// Phase 100-08-05 — pass webappId through to useAgentSocket so the WS
 	// `start` envelope carries it, livinityd broker forwards it to liv
 	// `/api/agent/stream`, and api.ts narrows additionalMcpServers to the
 	// matching `luse:webapp:<webappId>` child (host Luse on lag).
-	const agent = useAgentSocket({webappId})
+	const agent = useAgentSocket({webappId, activeWid, activeAppMeta})
 	const utils = trpcReact.useUtils()
 
 	const sessionQuery = trpcReact.webapp.agent.session.get.useQuery(
