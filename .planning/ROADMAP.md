@@ -571,6 +571,42 @@ Plans:
 
 ---
 
+### Phase 103: Master Chrome Streaming + Single-MCP Display-Aware
+
+**Goal:** Close the two functional loose ends from Phase 102 by (a) making the Master Chrome Login flow usable on a headless Mini PC via the existing per-app streaming pipeline (Xvfb + x11vnc + noVNC viewer embedded in the Settings panel), and (b) replacing the 1-MCP-server-per-WebApp luse architecture with a single global display-aware MCP whose tools accept an optional `display: ":N"` arg — eliminating the Claude Code wildcard-permission prompt the user explicitly rejected ("permissionu vermek istemiyorum bunu tek mcp den coz").
+
+**Trigger:** 2026-05-11 user UAT on Phase 102 r14 deploy. (1) Master Chrome Login button spawns Chrome on the host `:0` display which is invisible on a headless box ("Open Master Chrome buna tikliyorum ama acilmiyor en azindan streaming baslasa pencereden iyi olurdu"). (2) Phase 102 r12 hot-fix Bug B mandate: per-WebApp Luse MCP creates one MCP entry per WebApp (`luse:webapp:<slug>-<uuid>`), forcing Claude Code to prompt for wildcard permission per registration. User explicitly chose single-MCP redesign over per-app: "permissionu vermek istemiyorum bunu tek mcp den coz".
+
+**Direction:**
+- **Master Chrome streaming (sub-goal A):**
+  - Allocate a managed Xvfb display (DisplayAllocator) for the master login session — NOT `:0`
+  - Reuse `chrome-process-spawner.ts` shape but with `--user-data-dir=/opt/livos/data/chrome-master/` (skip profile-seeder; the master IS the seed source)
+  - Spawn `x11vnc -display :N -rfbport <allocated>` + create a StreamSession via existing stream-manager
+  - `chromeMaster.startLogin` returns `{wsUrl, streamId, display, pid, startedAt}`
+  - UI: master-chrome-login.tsx renders `useWebAppVnc(wsUrl)` viewer inline when running; existing canvas + tRPC click/key/scroll dispatch reused (master is a special WebApp under the hood)
+  - Lifecycle: master Chrome exit (user closes window in noVNC) → stream stops + Xvfb killed + display released; profile is now populated and persisted in `/opt/livos/data/chrome-master/` for subsequent per-app `cp -r` seeds
+- **Single-MCP display-aware (sub-goal B):**
+  - Default `LIVOS_PER_APP_LUSE=0` (skip per-app MCP registration entirely)
+  - Modify global `luse` MCP server (`livos/packages/livinityd/source/modules/computer-use/mcp/server.ts`) — add optional `display: ":N"` param to relevant tools (list_windows, computer_screenshot, computer_click_mouse, computer_type, computer_press_keys, computer_drag_mouse, etc.); tool handlers set `DISPLAY=:N` env when executing X11 ops via execFile; default fallback `LUSE_TARGET_DISPLAY` (=`:1`)
+  - Modify `buildActiveDisplaySnippet` (carried from 102-06): instruct agent in system prompt to ALWAYS pass `display: ":N"` arg when scoping to active WebApp
+  - Result: 1 global MCP, ~20 tools, scoping via param — cleaner tool surface for the agent and no Claude Code wildcard permission prompt
+- **UX polish carry-overs:**
+  - Settings → Chrome Profile theme-aware text colours (already shipped in r14a — Phase 103 carries the regression test)
+  - Master Chrome inner-block duplicate header removal (already shipped in r14a)
+
+**Sacred:** `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED.
+
+**Depends on:** Phase 102 (Wave 0-3 SHIPPED; sub-goal A reuses 102-01 DisplayAllocator + 102-02 ChromeProcessSpawner shape + 102-09 x11vnc -display capture path; sub-goal B drops 102-06 per-app luse-mcp-config and re-shapes its `LUSE_TARGET_DISPLAY` env into a per-call MCP tool arg).
+
+**Status:** Not yet planned. Run `/gsd-plan-phase 103`.
+
+**Non-goals (deferred to later phase):**
+- Two-way profile sync (auth changes in app A propagate back to master) — keep one-way master → apps from Phase 102
+- Per-app profile retention (user marks "save this app's state for next launch")
+- Master Chrome multi-account (multiple Google identities) — single profile only
+
+---
+
 ## Coverage
 
 All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-LOOP/RELIAB/BROKER-CARRY/MEM/MARKET) mapped to phases 64-76. 100% coverage. See REQUIREMENTS.md Traceability table (filled by phase planning).
