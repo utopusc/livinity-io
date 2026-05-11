@@ -285,51 +285,33 @@ describe('vnc-bridge — attachVncBridge — ECONNREFUSED retry (Pitfall 4)', ()
 })
 
 // ============================================================================
-// Phase 100-10-01 -display capture mode (D-100-10-A)
+// Phase 100-10-08 — D-100-10-A REVERTED.
 //
-// Per-WebApp Xvfb means x11vnc switches from `-id 0xHEX` (single-window) to
-// `-display :N` (whole-display capture). Whole-display capture sees Chrome's
-// full pixels regardless of window state and eliminates the cross-window
-// black-overlap from the shared-:1 era.
+// The `-display :N` whole-display capture mode introduced in 100-10-01 stays
+// in the code as scaffolding for Phase 101 CDP architecture, but the live
+// caller (window-manager.ts → stream-manager → spawnVncForWindow) defaults
+// back to `-id 0xHEX` (D-99-01 / 100-08 baseline). T-VNC-10-01-01 is skipped
+// — re-enable when Phase 101 CDP lands. T-VNC-10-01-02 (back-compat
+// regression lock) is preserved and is now the ALWAYS-ON default.
 // ============================================================================
 
-describe('Phase 100-10-01 -display capture mode', () => {
-	it('T-VNC-10-01-01: spawnVncForWindow({display: ":10", rfbPort, ...}) emits argv with -display :10 and NO -id flag', () => {
-		const {factory} = makeSpawnReturning()
-		spawnVncForWindow({
-			display: ':10',
-			rfbPort: 15900,
-			spawnFactory: factory as never,
-		} as never)
-		expect(factory).toHaveBeenCalledTimes(1)
-		const [cmd, args] = factory.mock.calls[0] as [string, string[]]
-		expect(cmd).toBe('sudo')
-		// argv must contain -display :10
-		const dispIdx = args.indexOf('-display')
-		expect(dispIdx).toBeGreaterThanOrEqual(0)
-		expect(args[dispIdx + 1]).toBe(':10')
-		// argv must NOT contain -id (whole-display capture, not per-window)
-		expect(args).not.toContain('-id')
-		// Sanity: canonical x11vnc flags still present
-		expect(args).toContain('-rfbport')
-		expect(args).toContain('15900')
-		expect(args).toContain('-localhost')
-		expect(args).toContain('-shared')
-		expect(args).toContain('-forever')
-		expect(args).toContain('-noxdamage')
-		expect(args).toContain('-nopw')
+describe('Phase 100-10-08 single-display capture contract (D-100-10-A reverted)', () => {
+	it.skip('T-VNC-10-01-01 [SKIPPED in 100-10-08]: -display whole-display mode — re-enable when Phase 101 CDP lands', () => {
+		// Re-enable when Phase 101 introduces CDP-driven multi-display Chrome
+		// targeting while preserving shared `--user-data-dir` profile.
 	})
 
-	it('T-VNC-10-01-02: spawnVncForWindow({wid: 0xabc, rfbPort, ...}) (no display arg) preserves legacy -id 0xabc behavior', () => {
+	it('T-VNC-10-01-02 (now always-on default): spawnVncForWindow({wid: 0xabc, rfbPort, ...}) emits legacy -id 0xabc argv with no -display flag', () => {
 		const {factory} = makeSpawnReturning()
 		spawnVncForWindow({wid: 0xabc, rfbPort: 15901, spawnFactory: factory as never})
 		expect(factory).toHaveBeenCalledTimes(1)
 		const [, args] = factory.mock.calls[0] as [string, string[]]
-		// Legacy single-window capture argv
+		// Single-window capture argv (D-99-01 / 100-08 baseline, restored
+		// as default in 100-10-08).
 		const idIdx = args.indexOf('-id')
 		expect(idIdx).toBeGreaterThanOrEqual(0)
 		expect(args[idIdx + 1]).toBe('0xabc')
-		// And NO -display flag in legacy mode
+		// And NO -display flag in the default mode.
 		expect(args).not.toContain('-display')
 	})
 })
