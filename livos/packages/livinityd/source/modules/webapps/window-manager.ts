@@ -490,10 +490,20 @@ export class WebAppWindowManager {
 				`webapp ${opts.webappId} spawned (user=${opts.userId} display=${display} chromePid=${chrome.pid} streamId=${entry.streamId})`,
 			)
 
-			// Phase 100-08-04 — register per-WebApp Luse MCP entry. Non-fatal.
-			// 102-04 passes wid=0 because wid is no longer meaningful; 102-06
-			// will rewrite this helper to use display instead.
-			await this.registerWebAppMcp(opts.webappId, 0, display)
+			// Phase 102 deploy UAT round 4 (2026-05-11) — user feedback:
+			// "bir surü mcp oluşturuyor tek mcp" — 5 per-WebApp Luse MCPs
+			// clutter the agent tool list (5 × 20 tools = 100 tools). Skip
+			// per-WebApp MCP registration; rely on the GLOBAL `luse` MCP +
+			// activeDisplay context injection (buildActiveDisplaySnippet
+			// from 102-06) so the agent's system prompt knows which display
+			// to scope tool calls to. Opt-back-in via env LIVOS_PER_APP_LUSE=1.
+			if (process.env.LIVOS_PER_APP_LUSE === '1') {
+				await this.registerWebAppMcp(opts.webappId, 0, display)
+			} else {
+				this.logger?.info?.(
+					`webapp ${opts.webappId}: skipping per-WebApp Luse MCP registration (global luse + activeDisplay context handles scoping). Set LIVOS_PER_APP_LUSE=1 to re-enable per-app MCPs.`,
+				)
+			}
 
 			// Phase 100-07.4 — broadcast active wid (kept as belt-and-braces
 			// fallback). Under 102-04 the value is always 0; 102-06 will

@@ -391,6 +391,11 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 	})
 
 	it('Test 16 [Phase 102-04 adapted]: spawn() calls mcpConfigManager.installServer with luse:webapp:<webappId> + descriptor env (DISPLAY=:N, LUSE_TARGET_WINDOW_ID=0)', async () => {
+		// Phase 102 deploy UAT round 4 — per-WebApp Luse MCP registration
+		// now gated behind LIVOS_PER_APP_LUSE=1 env (default skip to reduce
+		// agent tool clutter). Set env for this test.
+		const prevEnv = process.env.LIVOS_PER_APP_LUSE
+		process.env.LIVOS_PER_APP_LUSE = '1'
 		const installCalls: any[] = []
 		const mcpConfigManager = {
 			installServer: vi.fn(async (config: any) => {
@@ -415,6 +420,9 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		// LUSE_TARGET_WINDOW_ID is no longer set per-WebApp (102-06).
 		expect(installCalls[0]!.env?.LUSE_TARGET_WINDOW_ID).toBeUndefined()
 		mgr._clearForTests()
+		// Restore env to avoid bleeding into subsequent tests.
+		if (prevEnv === undefined) delete process.env.LIVOS_PER_APP_LUSE
+		else process.env.LIVOS_PER_APP_LUSE = prevEnv
 	})
 
 	it('Test 17: close() calls mcpConfigManager.removeServer with luse:webapp:<webappId>', async () => {
@@ -437,6 +445,9 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 	})
 
 	it('Test 18: spawn() falls back to updateServer when installServer throws (idempotent re-spawn / regex rejection)', async () => {
+		// Phase 102 deploy UAT round 4 — gated behind LIVOS_PER_APP_LUSE=1.
+		const prevEnv = process.env.LIVOS_PER_APP_LUSE
+		process.env.LIVOS_PER_APP_LUSE = '1'
 		const updateCalls: any[] = []
 		const mcpConfigManager = {
 			installServer: vi.fn(async () => {
@@ -456,6 +467,8 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		expect(updateCalls).toHaveLength(1)
 		expect(updateCalls[0]!.name).toBe('luse:webapp:webapp-abc')
 		mgr._clearForTests()
+		if (prevEnv === undefined) delete process.env.LIVOS_PER_APP_LUSE
+		else process.env.LIVOS_PER_APP_LUSE = prevEnv
 	})
 
 	it('Test 19 [Phase 102-04 adapted]: spawn() succeeds even when both installServer and updateServer fail (non-fatal MCP wiring)', async () => {
