@@ -214,6 +214,13 @@ function _bareInjectables() {
 	const unlinkFn = vi.fn(async (_p: string) => {
 		throw Object.assign(new Error('ENOENT'), {code: 'ENOENT'})
 	})
+	// Phase 103.1-3 — chownExecFn defaults to a no-op success. Tests can
+	// override to assert the chown was invoked with bruce:bruce + the
+	// master dir.
+	const chownExecFn = vi.fn(async (_cmd: string, _args: string[]) => ({
+		stdout: '',
+		stderr: '',
+	}))
 	return {
 		spawnFn: vi.fn(() => makeFakeChild() as never),
 		accessFn: makeOkAccess(),
@@ -221,6 +228,7 @@ function _bareInjectables() {
 		renameFn: makeRename(),
 		mkdirFn: makeMkdir(),
 		unlinkFn,
+		chownExecFn,
 		displayAllocator,
 		streamManager,
 		profileSeeder,
@@ -501,6 +509,53 @@ describe('103-01 chromeMaster tRPC router — Xvfb streaming pipeline', () => {
 		const r = createChromeMasterRouter(inj as never)
 		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
 		// Should resolve, not throw
+		await expect(caller.startLogin()).resolves.toMatchObject({pid: 54321})
+		expect(inj.chromeSpawnFn).toHaveBeenCalledTimes(1)
+	})
+
+	test('Test 14d (103.1-3): startLogin chowns master dir to bruce:bruce BEFORE chromeSpawnFn', async () => {
+		const callOrder: string[] = []
+		const inj = makeFull103Injectables()
+		inj.chownExecFn = vi.fn(async (cmd: string, args: string[]) => {
+			callOrder.push(`chown:${cmd}:${args.join(",")}`)
+			return {stdout: '', stderr: ''}
+		})
+		const origChromeSpawn = inj.chromeSpawnFn
+		inj.chromeSpawnFn = vi.fn(async (opts: never) => {
+			callOrder.push('chromeSpawnFn')
+			return origChromeSpawn(opts)
+		})
+
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await caller.startLogin()
+
+		// chown called with bruce:bruce + MASTER_PROFILE_DIR
+		const chownCalls = (
+			inj.chownExecFn as ReturnType<typeof vi.fn>
+		).mock.calls as Array<[string, string[]]>
+		expect(chownCalls).toEqual(
+			expect.arrayContaining([
+				['chown', ['bruce:bruce', '/opt/livos/data/chrome-master']],
+			]),
+		)
+		// And chown ran BEFORE chromeSpawnFn (otherwise Chrome would still fail with code=21)
+		const chownIdx = callOrder.findIndex((s) =>
+			s.startsWith('chown:chown:bruce:bruce'),
+		)
+		const chromeIdx = callOrder.indexOf('chromeSpawnFn')
+		expect(chownIdx).toBeGreaterThanOrEqual(0)
+		expect(chromeIdx).toBeGreaterThanOrEqual(0)
+		expect(chownIdx).toBeLessThan(chromeIdx)
+	})
+
+	test('Test 14e (103.1-3): startLogin swallows chown failures (non-fatal — Chrome may still succeed if dir was already bruce-owned)', async () => {
+		const inj = makeFull103Injectables()
+		inj.chownExecFn = vi.fn(async (_cmd: string, _args: string[]) => {
+			throw new Error('Operation not permitted')
+		})
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
 		await expect(caller.startLogin()).resolves.toMatchObject({pid: 54321})
 		expect(inj.chromeSpawnFn).toHaveBeenCalledTimes(1)
 	})

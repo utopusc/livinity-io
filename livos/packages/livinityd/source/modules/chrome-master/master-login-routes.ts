@@ -84,7 +84,7 @@
 
 import {z} from 'zod'
 import {TRPCError} from '@trpc/server'
-import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
+import {execFile as execFileCb, spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
 import {
 	access as nodeAccess,
 	rm as nodeRm,
@@ -93,6 +93,9 @@ import {
 	unlink as nodeUnlink,
 } from 'node:fs/promises'
 import {constants as fsConstants} from 'node:fs'
+import {promisify} from 'node:util'
+
+const execFile = promisify(execFileCb)
 
 import {router, adminProcedure, privateProcedure} from '../server/trpc/trpc.js'
 import {spawnXvfb} from '../streaming/xvfb-spawner.js'
@@ -212,6 +215,8 @@ export interface MasterLoginInjectables {
 	mkdirFn?: typeof nodeMkdir
 	// Phase 103.1 — stale singleton lock cleanup before Chrome spawn
 	unlinkFn?: typeof nodeUnlink
+	// Phase 103.1-3 — chown master dir to bruce so SingletonLock can be written by `sudo -u bruce google-chrome`
+	chownExecFn?: (cmd: string, args: string[]) => Promise<{stdout: string; stderr: string}>
 	logger?: {info?: (msg: string) => void; warn?: (msg: string, err?: unknown) => void}
 	// Phase 103-01 — Xvfb-driven master pipeline.
 	displayAllocator?: DisplayAllocatorLike
@@ -269,6 +274,49 @@ export function _resetMasterStateForTest(): void {
  * status() + reset() + restoreBackup() work without Phase 103 deps; they
  * only rely on the existing fs primitives.
  */
+/**
+ * Phase 103.1-3 — chown the master profile dir to `bruce:bruce` so the
+ * `sudo -u bruce google-chrome` process can create its
+ * SingletonLock/SingletonCookie/SingletonSocket files at startup.
+ *
+ * Background: `livinityd` runs as root and its `profileSeeder.ensureMasterExists()`
+ * does `mkdir({recursive: true})` against /opt/livos/data/chrome-master/. That
+ * leaves the dir as `root:root:drwxr-xr-x`. Chrome then runs as bruce via
+ * `sudo -n -u bruce` and tries to write `SingletonLock` in the dir — denied
+ * with `Permission denied (13)`, Chrome exits with `code=21` and the message
+ *
+ *   Failed to create /opt/livos/data/chrome-master/SingletonLock: Permission denied (13)
+ *   Failed to create a ProcessSingleton for your profile directory.
+ *   Aborting now to avoid profile corruption.
+ *
+ * The same pattern is already handled for per-app WebApp profile dirs in
+ * `profile-seeder.ts:244` (`execP('chown', ['-R', 'bruce:bruce', appDir])`).
+ * Master path was missed because the master dir is rarely re-created (one-shot
+ * via Settings → Chrome Profile login).
+ *
+ * Live diagnostic 2026-05-11: `sudo -u bruce google-chrome ... master-dir` on
+ * Mini PC reproduces `EXIT FIRED: code=21 signal=null` with the above stderr.
+ *
+ * Idempotent — re-running chown on an already-bruce-owned dir is a no-op.
+ * Non-fatal: if chown fails (e.g. dir doesn't exist yet, or bruce user is
+ * absent on a non-Linux test host), we log and let `chromeSpawnFn` surface
+ * the underlying error (no regression vs pre-103.1-3 behavior).
+ */
+async function ensureMasterDirWritableByBruce(
+	dir: string,
+	chownExecFn: (cmd: string, args: string[]) => Promise<{stdout: string; stderr: string}>,
+	logger?: MasterLoginInjectables['logger'],
+): Promise<void> {
+	try {
+		await chownExecFn('chown', ['bruce:bruce', dir])
+	} catch (err) {
+		logger?.warn?.(
+			`[chrome-master] ensureMasterDirWritableByBruce: chown ${dir} failed (non-fatal — Chrome may fail to start)`,
+			err,
+		)
+	}
+}
+
 /**
  * Phase 103.1 — list of Chromium process-singleton artifacts to clear before
  * a fresh master Chrome spawn. When a prior master session crashed or got
@@ -332,6 +380,10 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 	const renameFn = injectables.renameFn ?? nodeRename
 	const mkdirFn = injectables.mkdirFn ?? nodeMkdir
 	const unlinkFn = injectables.unlinkFn ?? nodeUnlink
+	const chownExecFn =
+		injectables.chownExecFn ??
+		((cmd: string, args: string[]) =>
+			execFile(cmd, args) as Promise<{stdout: string; stderr: string}>)
 	const logger = injectables.logger
 	// Phase 103-01 — capture injectables in closure so cleanupMaster() can
 	// reach them from chrome.on('exit') AND stopLogin via the same handles.
@@ -473,12 +525,21 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 
 			await profileSeeder.ensureMasterExists()
 
-			// Phase 103.1 — clear stale Chromium singleton lock files (root
-			// cause of the WS 1006 bug seen in 103-01 deploy UAT 2026-05-11:
-			// stream registered then immediately stopRequested because Chrome
-			// exited within ms of spawn). Failure to clear is non-fatal —
-			// Chrome will hit the same lock and the user sees the same bug,
-			// which is no worse than before 103.1.
+			// Phase 103.1-3 — chown master dir to bruce so `sudo -u bruce
+			// google-chrome` can create its SingletonLock. profileSeeder's
+			// mkdir runs as root and leaves the dir root:root:755, which
+			// causes Chrome to exit code=21 with "Failed to create
+			// SingletonLock: Permission denied" — the TRUE blocking root
+			// cause of the WS 1006 bug, deeper than the stale-lock and
+			// daemonization-filter fixes.
+			await ensureMasterDirWritableByBruce(MASTER_PROFILE_DIR, chownExecFn, logger)
+
+			// Phase 103.1 — clear stale Chromium singleton lock files (one
+			// layer of the WS 1006 bug; another being the wrong dir owner
+			// fixed by ensureMasterDirWritableByBruce above, and the third
+			// being the daemonization filter on chrome.on('exit') below).
+			// Failure to clear is non-fatal — Chrome will hit the same lock
+			// and the user sees the same bug, which is no worse than before.
 			await clearStaleSingletonLocks(MASTER_PROFILE_DIR, unlinkFn, logger)
 
 			const displayN = displayAllocator.allocate()
