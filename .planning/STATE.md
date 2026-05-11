@@ -25,9 +25,24 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — EXECUTING
-Plan: 5 of 6 outstanding (103-01 ✅; 103-02 ✅; 103-03 ✅; 103-04 ✅; 103-05 ✅; 103-06 outstanding — user-walked Mini PC deploy + UAT)
-Milestone: v33.0 (active) — Phase 100 PARTIAL-PASS; 100-08 closes residual bugs from 100-07
+Phase: 103.1 (Master Chrome Hot-Fix + Luse Cross-Display Aggregation) — DEPLOY+VERIFY
+Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
+Milestone: v33.0 (active)
+
+## 103.1 Status (2026-05-11) — Hot-fix: stale singleton lock + list_windows cross-display aggregation
+
+User-walked Phase 103 UAT on Mini PC (deployed SHA `c89f7139`) surfaced 2 real-hardware bugs not catchable by unit tests:
+
+- **Bug 1 (WS 1006):** Master Chrome stream got `(stop requested)` ms after start → Chrome exited from stale `SingletonLock`/`SingletonCookie`/`SingletonSocket` artifacts in `/opt/livos/data/chrome-master`. Fix: `clearStaleSingletonLocks()` before `chromeSpawnFn`. Commit `37f0bfb4`.
+- **Bug 2 (list_windows blind):** Agent in global chat called `list_windows` w/o display arg → defaultDisplay `:1` (host) only → missed Dinkytown on `:11`. Fix: aggregate across `/tmp/.X11-unix/X<N>` socket-scanned displays when neither display arg nor defaultDisplay is set. Commit `d634ffe4`.
+
+Tests: 22/22 master-login (3 new) + 44/44 mcp tools (5 new). Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across both commits.
+
+Pushed `c89f7139..d634ffe4` 2026-05-11. Mini PC deploy in flight (`bash /opt/livos/update.sh`).
+
+Out of scope for 103.1 (deferred): duplicate x11vnc spawn cleanup in chromeMaster.startLogin; active-WebApp roster prompt snippet (agent can discover via aggregation now).
+
+In parallel: research agent drafting `.planning/research/local-livinity-setup.md` for `<username>.livinity.local` domain-free local setup (next-phase 104+ scope).
 
 ## 103-05 Status (2026-05-11) — Sub-goal B closure: LIVOS_PER_APP_LUSE default-off + orphan sweep
 
