@@ -46,9 +46,9 @@ Phase 102 has NO separate Wave 0 stub plan — each plan creates its own test fi
 | 102-02-02 | 02 | 1 | D-102-PER-APP-CHROME | — | --start-fullscreen + --app=URL + --user-data-dir per-app verified in argv | unit | same as 102-02-01 | ❌ create | ⬜ pending |
 | 102-03-01 | 03 | 1 | D-102-MASTER-PROFILE-SEED | T-102-03 (path traversal) | dest path must be /tmp/livos-chrome-app-<uuid> (regex) | unit | `pnpm --filter @livos/livinityd test:run chrome-master/profile-seeder.test.ts` | ✅ created | ✅ green |
 | 102-03-02 | 03 | 1 | D-102-MASTER-PROFILE-SEED | — | Cookies + Login Data + Local State copied; cleanup on app close | integration | same as 102-03-01 | ✅ created | ✅ green |
-| 102-04-01 | 04 | 2 | D-102-PER-APP-XVFB | T-102-02 | window-manager.spawn() routes via XvfbSpawner+ChromeProcessSpawner not CDP | unit | `pnpm --filter @livos/livinityd test:run webapps/window-manager.test.ts` | ✅ (extend) | ❌ red |
-| 102-04-02 | 04 | 2 | D-102-PHASE-101-SALVAGE | — | --app=URL flag REPLACES CDP createTarget in spawn body | unit | same as 102-04-01 | ✅ (extend) | ❌ red |
-| 102-04-03 | 04 | 2 | D-102-CLOSE-LIFECYCLE | — | close() invokes Chrome+x11vnc+Xvfb kill + /tmp rm | unit | same as 102-04-01 | ✅ (extend) | ❌ red |
+| 102-04-01 | 04 | 2 | D-102-PER-APP-XVFB | T-102-02 | window-manager.spawn() routes via XvfbSpawner+ChromeProcessSpawner not CDP | unit | `pnpm --filter @livos/livinityd test:run webapps/window-manager.test.ts` | ✅ (extend) | ✅ green |
+| 102-04-02 | 04 | 2 | D-102-PHASE-101-SALVAGE | — | --app=URL flag REPLACES CDP createTarget in spawn body | unit | same as 102-04-01 | ✅ (extend) | ✅ green |
+| 102-04-03 | 04 | 2 | D-102-CLOSE-LIFECYCLE | — | close() invokes Chrome+x11vnc+Xvfb kill + /tmp rm | unit | same as 102-04-01 | ✅ (extend) | ⚠️ partial (full 8-step close lifecycle ships in 102-08) |
 | 102-05-01 | 05 | 2 | D-102-NATIVE-APP-PARITY | — | native-app-binder uses DisplayAllocator+XvfbSpawner (no WM_CLASS poll on shared :1) | unit | `pnpm --filter @livos/livinityd test:run apps/native-app-binder.test.ts` | ✅ (extend) | ❌ red |
 | 102-05-02 | 05 | 2 | D-102-NATIVE-APP-PARITY | — | native app spawns with DISPLAY=:N env | integration | same as 102-05-01 | ✅ (extend) | ❌ red |
 | 102-06-01 | 06 | 2 | D-102-LUSE-DISPLAY-SCOPING | T-102-06 (display injection) | LUSE_TARGET_DISPLAY pattern match `:[1-9][0-9]?$` (1..99) | unit | `pnpm --filter @livos/livinityd test:run livinity-broker/agent-runner-factory.test.ts` | ✅ (extend) | ❌ red |
