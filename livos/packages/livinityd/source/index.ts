@@ -641,10 +641,13 @@ export default class Livinityd {
 				profileSeeder: this.profileSeeder!,
 				// xvfbSpawnFn + chromeSpawnFn fall back to module defaults
 				// (streaming/xvfb-spawner.ts + webapps/chrome-process-spawner.ts).
-				// A2 risk mitigation: default `false` (bare Xvfb is validated to
-				// work with Chrome --start-fullscreen). Flip per-deploy via env
-				// LIVOS_WEBAPP_USE_WM=1 if a specific WebApp needs WM hints.
-				withWindowManager: process.env.LIVOS_WEBAPP_USE_WM === '1',
+				// A2 risk REALIZED in Phase 102 deploy UAT (2026-05-11): bare
+				// Xvfb without WM caused Chrome --start-fullscreen to render
+				// undersized window with black letterbox bars left/right.
+				// Defaulting TRUE — fluxbox per-app display gives Chrome
+				// correct fullscreen geometry. Opt-out via LIVOS_WEBAPP_USE_WM=0
+				// for dev/debug.
+				withWindowManager: process.env.LIVOS_WEBAPP_USE_WM !== '0',
 				// Phase 101-04 chromeCdpClient retained as IGNORED back-compat slot
 				// (102-04 spawn body no longer consults it; the CDP bootstrap at
 				// livinityd.start() still happens for other CDP consumers).
