@@ -442,4 +442,16 @@ export const httpOnlyPaths = [
 	'chromeMaster.reset',
 	'chromeMaster.restoreBackup',
 	'chromeMaster.status',
+	// Phase 103-01/02 - Chrome Master Xvfb pipeline + embedded noVNC viewer.
+	// chromeMaster.stopLogin tears down the Xvfb + x11vnc + StreamManager
+	// cascade and clears currentMaster. chromeMaster.input.{click,key,type,
+	// scroll} dispatch xdotool against currentMaster.display (display NOT
+	// caller-controlled — T-103-01-03). Same admin-mid-restart resilience
+	// guarantee as the 102-07 cluster — HTTP keeps the request/response
+	// semantics needed to survive a `systemctl restart livos` mid-call.
+	'chromeMaster.stopLogin',
+	'chromeMaster.input.click',
+	'chromeMaster.input.key',
+	'chromeMaster.input.type',
+	'chromeMaster.input.scroll',
 ] as const
