@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-11T21:14:51.018Z"
+last_updated: "2026-05-11T21:27:52.000Z"
 progress:
   total_phases: 52
   completed_phases: 25
   total_plans: 203
-  completed_plans: 194
+  completed_plans: 195
   percent: 96
 ---
 
@@ -26,8 +26,18 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — EXECUTING
-Plan: 5 of 6 (103-01 ✅ shipped; 103-03 ✅ shipped; 103-04 ✅ shipped; 103-02 + 103-05/06 outstanding)
+Plan: 4 of 6 outstanding (103-01 ✅; 103-02 ✅; 103-03 ✅; 103-04 ✅; 103-05 + 103-06 outstanding)
 Milestone: v33.0 (active) — Phase 100 PARTIAL-PASS; 100-08 closes residual bugs from 100-07
+
+## 103-02 Status (2026-05-11) — Sub-goal A UI: Embedded noVNC viewer + input dispatch
+
+- Wave 2 (103-02): ✅ COMPLETE — `c5eb9360` (1 commit, TDD RED+GREEN) — `MasterChromeLogin` Settings panel now renders inline noVNC viewer when `chromeMaster.status` returns `{running:true, wsUrl}`. DOM mouse/keyboard/wheel events on the viewer container forward via `chromeMaster.input.{click,key,type,scroll}` mutations. Close Master Chrome destructive button wires `chromeMaster.stopLogin`. Modifier chords (Ctrl+L) route via key not type (mirrors `webapp-stream-window.tsx`). Printable-char keydowns batched into 250ms debounced `inputTypeMut` flush.
+- httpOnlyPaths: +5 entries (stopLogin + 4 input.*) — admin-mid-`systemctl restart livos` resilience parity with 102-07 cluster.
+- Tests: master-chrome-login.test.tsx 41/41 pass (16 original + 25 new = 6 viewer-mount + 16 input-dispatch + 3 theme preservation under r14a). chrome-master suite 29/29 still pass (no router regression). Source-text-grep invariants pattern preserved (D-NO-NEW-DEPS — `@testing-library/react` not added).
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED.
+- Decision: behavioral Tests 1-8 from plan encoded as wiring-pattern grep over handler body source (not @testing-library/react render-and-fire) — same convention as existing 102-07-04 test file (`683c9912`).
+
+**Carry-forward to 103-05:** Sub-goal A UI complete. Settings → Chrome Profile panel is now functional on headless Mini PC (Open → embedded viewer renders → click/type Google login → Close). 103-05 can proceed with `LIVOS_PER_APP_LUSE='0'` flip (Sub-goal B closure) independent of Master Chrome UI.
 
 ## 103-04 Status (2026-05-11) — Sub-goal B prompt update: Prescriptive display-arg instruction
 

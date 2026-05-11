@@ -604,7 +604,7 @@ Plans:
 
 Plans:
 - [x] 103-01-PLAN.md — Sub-goal A backend: widen chrome-process-spawner USER_DATA_DIR_RE + refactor master-login-routes to factory-injected router with startLogin/stopLogin/input.* (Wave 1) — ✅ Shipped 2026-05-11 (`978f7bae..f0f09922`, 3 commits, sacred SHA preserved)
-- [ ] 103-02-PLAN.md — Sub-goal A UI: embedded noVNC viewer + input dispatch in master-chrome-login.tsx (Wave 2)
+- [x] 103-02-PLAN.md — Sub-goal A UI: embedded noVNC viewer + input dispatch in master-chrome-login.tsx (Wave 2) — ✅ Shipped 2026-05-11 (`c5eb9360`, 1 commit, TDD RED+GREEN, sacred SHA preserved)
 - [x] 103-03-PLAN.md — Sub-goal B native: withScopedDisplay + display arg on 13 X11-touching luse tools (Wave 1) — ✅ Shipped 2026-05-11 (`d38af35f..2bd32a25`, 3 commits, sacred SHA preserved)
 - [x] 103-04-PLAN.md — Sub-goal B prompt: buildActiveDisplaySnippet prescriptive "MUST pass display" instruction (Wave 1) — ✅ Shipped 2026-05-11 (`dc86a7c2..cab8b331`, 2 commits TDD RED+GREEN, sacred SHA preserved)
 - [ ] 103-05-PLAN.md — Sub-goal B production: flip LIVOS_PER_APP_LUSE default OFF + orphan-sweep boot pass (Wave 2)
