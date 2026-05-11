@@ -508,9 +508,10 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 - **Wave 3 (3 plans, parallel):** 101-07 LivOS dock native app UI, 101-08 SelfClaude Teach v3 refactor, 101-09 chat animations + Hermes phrase relay
 - **Wave 4 (1 plan, user-walked):** 101-10 Mini PC deploy + 20-row UAT
 
-**Plans:** 10 plans
+**Plans:** 11 plans (Wave 0 scaffolding plan added — 101-00)
 
 Plans:
+- [x] 101-00-PLAN.md — Wave 0 test-stub scaffolding + chrome-remote-interface install + test:run scripts (SHIPPED 2026-05-11 `1cfafcfe..39297f8c`)
 - [ ] 101-01-PLAN.md — Chrome CDP bootstrap + chrome-remote-interface install + livinityd wire-up
 - [ ] 101-02-PLAN.md — Per-app stream port allocator (15900..15999) + StreamManager refactor
 - [ ] 101-03-PLAN.md — Native app spawner + Redis config store + tRPC apps.native.{list,create,delete,get}
