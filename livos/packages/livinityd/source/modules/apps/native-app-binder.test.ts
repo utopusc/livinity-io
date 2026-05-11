@@ -115,7 +115,7 @@ describe('102-05 bind (display-based)', () => {
 			label: 'Antigravity IDE',
 		})
 
-		expect(startStreamFn.mock.calls[0][0].label).toBe('Antigravity IDE')
+		expect((startStreamFn.mock.calls as any[])[0][0].label).toBe('Antigravity IDE')
 	})
 
 	it('matches the StreamStartFn signature ({display, port, label?}) => Promise<{streamId, wsUrl}>', async () => {
