@@ -304,15 +304,18 @@ describe('buildLuseConfig — Phase 100-08-03 descriptor.display', () => {
 		expect(cfg.env?.DISPLAY).toBe(':1')
 	})
 
-	it('host variant preserves DISPLAY from process env (default :0) AND XAUTHORITY', () => {
+	// Phase 100-10-09 — host variant DISPLAY default flipped from :0 → :1.
+	// Inherited DISPLAY=:0 from systemd routes the MCP child to Bruce's GNOME
+	// (blind to WebApp Chrome on :1); LUSE_DISPLAY override is the only path
+	// for explicit non-:1 host targeting. XAUTHORITY contract unchanged.
+	it('host variant defaults DISPLAY to :1 AND preserves XAUTHORITY (Phase 100-10-09)', () => {
 		const cfg = buildLuseConfig(
 			{
-				DISPLAY: ':0',
 				XAUTHORITY: '/run/user/1000/gdm/Xauthority',
 			} as NodeJS.ProcessEnv,
 			'/some/path/server.ts',
 		)
-		expect(cfg.env?.DISPLAY).toBe(':0')
+		expect(cfg.env?.DISPLAY).toBe(':1')
 		expect(cfg.env?.XAUTHORITY).toBe('/run/user/1000/gdm/Xauthority')
 		expect(cfg.env?.[LUSE_TARGET_WINDOW_ID_ENV]).toBeUndefined()
 		expect(cfg.name).toBe('luse')
@@ -321,12 +324,41 @@ describe('buildLuseConfig — Phase 100-08-03 descriptor.display', () => {
 	it('host variant uses LUSE_XAUTHORITY override when set', () => {
 		const cfg = buildLuseConfig(
 			{
-				DISPLAY: ':0',
 				XAUTHORITY: '/run/user/1000/gdm/Xauthority',
 				LUSE_XAUTHORITY: '/custom/xauth',
 			} as NodeJS.ProcessEnv,
 			'/some/path/server.ts',
 		)
 		expect(cfg.env?.XAUTHORITY).toBe('/custom/xauth')
+	})
+
+	// ─── Phase 100-10-09 — host variant DISPLAY default :1 ─────────────
+	//
+	// Live UAT 2026-05-10: Luse MCP child inherited DISPLAY=:0 from
+	// systemd's livinityd unit env → list_windows returned Bruce's GNOME
+	// windows instead of WebApp Chromes on Xvfb :1. Fix: default :1; require
+	// explicit LUSE_DISPLAY override for host-desktop legacy path.
+	it('T-10-09-DISPLAY-01: host variant defaults DISPLAY to :1', () => {
+		const cfg = buildLuseConfig({} as NodeJS.ProcessEnv, '/srv/server.ts')
+		expect(cfg.env?.DISPLAY).toBe(':1')
+	})
+
+	it('T-10-09-DISPLAY-02: LUSE_DISPLAY override wins over default', () => {
+		const cfg = buildLuseConfig(
+			{LUSE_DISPLAY: ':2'} as NodeJS.ProcessEnv,
+			'/srv/server.ts',
+		)
+		expect(cfg.env?.DISPLAY).toBe(':2')
+	})
+
+	it('T-10-09-DISPLAY-03: inherited DISPLAY=:0 does NOT propagate to host variant', () => {
+		// Even when livinityd process has DISPLAY=:0 inherited from systemd
+		// (which happens on Mini PC), buildLuseConfig must NOT propagate :0
+		// to the spawned MCP child. Default :1 is the WebApp Xvfb display.
+		const cfg = buildLuseConfig(
+			{DISPLAY: ':0'} as NodeJS.ProcessEnv,
+			'/srv/server.ts',
+		)
+		expect(cfg.env?.DISPLAY).toBe(':1')
 	})
 })
