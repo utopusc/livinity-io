@@ -209,12 +209,18 @@ function _bareInjectables() {
 	const chromeSpawnFn = vi.fn(async (_opts: never) => chrome as never)
 	const vncSpawnFn = vi.fn((_opts: never) => x11vnc as never)
 	const dispatch = makeDispatchMocks()
+	// Phase 103.1 — unlinkFn defaults to a no-op that pretends ENOENT (no
+	// lock files exist). Tests can override to assert specific paths.
+	const unlinkFn = vi.fn(async (_p: string) => {
+		throw Object.assign(new Error('ENOENT'), {code: 'ENOENT'})
+	})
 	return {
 		spawnFn: vi.fn(() => makeFakeChild() as never),
 		accessFn: makeOkAccess(),
 		rmFn: makeRm(),
 		renameFn: makeRename(),
 		mkdirFn: makeMkdir(),
+		unlinkFn,
 		displayAllocator,
 		streamManager,
 		profileSeeder,
@@ -437,6 +443,79 @@ describe('103-01 chromeMaster tRPC router — Xvfb streaming pipeline', () => {
 		expect(inj.xvfbSpawnFn).not.toHaveBeenCalled()
 		expect(inj.chromeSpawnFn).not.toHaveBeenCalled()
 		expect(inj.profileSeeder.ensureMasterExists).not.toHaveBeenCalled()
+	})
+
+	// ── Phase 103.1 — stale Chromium singleton lock cleanup ─────────────────
+	//
+	// User-walked Phase 103 UAT (2026-05-11) surfaced WS 1006 on first Open:
+	// stream registered then immediately got `stop requested` because Chrome
+	// exited within ms of spawn. Root cause: stale `SingletonLock` +
+	// `SingletonCookie` + `SingletonSocket` artifacts left in the master
+	// profile dir by a prior crashed Chrome. Chromium's
+	// process_singleton_posix.cc reads them, can't message the dead PID, and
+	// exits with non-zero → `chrome.on('exit')` fires → cleanupMaster runs →
+	// stopStream removes the just-registered stream → client WS 404s.
+	//
+	// Fix: clear all three artifacts in `MASTER_PROFILE_DIR` before chromeSpawnFn.
+
+	test('Test 14a (103.1): startLogin clears stale Chromium singleton lock files before chromeSpawnFn', async () => {
+		const callOrder: string[] = []
+		const inj = makeFull103Injectables()
+		// Override unlinkFn to succeed (simulates stale files present)
+		inj.unlinkFn = vi.fn(async (path: string) => {
+			callOrder.push(`unlink:${path}`)
+		})
+		// Wrap chromeSpawnFn to track when it ran relative to unlinks
+		const origChromeSpawn = inj.chromeSpawnFn
+		inj.chromeSpawnFn = vi.fn(async (opts: never) => {
+			callOrder.push('chromeSpawnFn')
+			return origChromeSpawn(opts)
+		})
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+
+		await caller.startLogin()
+
+		// All three Chromium singleton artifacts attempted to be unlinked
+		const unlinkArgs = (inj.unlinkFn as ReturnType<typeof vi.fn>).mock.calls.map(
+			(c) => c[0] as string,
+		)
+		expect(unlinkArgs).toEqual(
+			expect.arrayContaining([
+				'/opt/livos/data/chrome-master/SingletonLock',
+				'/opt/livos/data/chrome-master/SingletonCookie',
+				'/opt/livos/data/chrome-master/SingletonSocket',
+			]),
+		)
+		// Order: all three unlinks happen BEFORE chromeSpawnFn
+		const chromeSpawnIdx = callOrder.indexOf('chromeSpawnFn')
+		const allBefore = callOrder
+			.slice(0, chromeSpawnIdx)
+			.filter((s) => s.startsWith('unlink:'))
+		expect(allBefore.length).toBe(3)
+	})
+
+	test('Test 14b (103.1): startLogin swallows ENOENT from unlinkFn (clean profile happy path)', async () => {
+		const inj = makeFull103Injectables()
+		// Default unlinkFn throws ENOENT — startLogin must NOT propagate
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		// Should resolve, not throw
+		await expect(caller.startLogin()).resolves.toMatchObject({pid: 54321})
+		expect(inj.chromeSpawnFn).toHaveBeenCalledTimes(1)
+	})
+
+	test('Test 14c (103.1): startLogin swallows non-ENOENT unlinkFn errors (non-fatal)', async () => {
+		const inj = makeFull103Injectables()
+		// Simulate EPERM (e.g. lock file owned by another user). Should not
+		// block — Chrome may still hit the same lock and fail, but at least
+		// the spawn chain proceeds (no regression vs pre-103.1).
+		inj.unlinkFn = vi.fn(async (_p: string) => {
+			throw Object.assign(new Error('EPERM'), {code: 'EPERM'})
+		})
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await expect(caller.startLogin()).resolves.toMatchObject({pid: 54321})
 	})
 
 	test('Test 14: T-103-01-04 startLogin compensating cleanup when chromeSpawnFn rejects', async () => {
