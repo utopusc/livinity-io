@@ -281,13 +281,27 @@ describe('buildLuseConfig — Phase 100-08-03 descriptor.display', () => {
 		expect(cfg.name).toBe('luse:webapp:webapp-123')
 	})
 
-	it('per-WebApp variant honors explicit descriptor.display', () => {
+	// Phase 100-10-08 (D-100-10-A reverted): explicit non-:1 descriptor.display
+	// is no longer driven by any live caller; the override path is retained as
+	// Phase 101 CDP scaffolding. Test stays as a contract lock for CDP work.
+	it('per-WebApp variant honors explicit descriptor.display (Phase 101 CDP scaffolding)', () => {
 		const cfg = buildLuseConfig(
 			{DISPLAY: ':99'} as NodeJS.ProcessEnv,
 			'/some/path/server.ts',
 			{instanceKey: 'webapp-456', windowId: 42, display: ':2'},
 		)
 		expect(cfg.env?.DISPLAY).toBe(':2')
+	})
+
+	// Phase 100-10-08 — default contract: when descriptor omits display, the
+	// per-WebApp variant pins DISPLAY=:1 (singleton from 100-08-01).
+	it('per-WebApp variant DEFAULTS DISPLAY to :1 when descriptor.display is omitted (D-100-10-A reverted)', () => {
+		const cfg = buildLuseConfig(
+			{DISPLAY: ':99'} as NodeJS.ProcessEnv,
+			'/some/path/server.ts',
+			{instanceKey: 'webapp-789', windowId: 99},
+		)
+		expect(cfg.env?.DISPLAY).toBe(':1')
 	})
 
 	it('host variant preserves DISPLAY from process env (default :0) AND XAUTHORITY', () => {
