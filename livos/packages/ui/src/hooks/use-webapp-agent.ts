@@ -38,7 +38,7 @@
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 
-import {useAgentSocket, type ChatMessage} from '@/hooks/use-agent-socket'
+import {useAgentSocket, type AgentStatus, type ChatMessage} from '@/hooks/use-agent-socket'
 import {trpcReact} from '@/trpc/trpc'
 
 export type WebAppSessionStatus = 'loading' | 'ready' | 'no-session' | 'session-ended'
@@ -51,7 +51,16 @@ export interface UseWebAppAgentResult {
 	connectionStatus: 'connected' | 'disconnected' | 'reconnecting'
 	totalCost: number
 	usageStats: {inputTokens: number; outputTokens: number; durationMs: number; numTurns: number} | null
-	agentStatus: {phase: 'idle' | 'thinking' | 'executing' | 'responding'; currentTool: string | null}
+	/**
+	 * Phase 100-10-10 Bug B — re-exported as the canonical `AgentStatus`
+	 * type from use-agent-socket so the optional Hermes `phrase` field
+	 * is part of the interface. The chat-WS path doesn't carry
+	 * status_detail chunks today (agent-session.ts doesn't relay
+	 * runStore chunks), so `phrase` is null in practice — but the
+	 * consumer can render `phrase ?? \`Using ${currentTool}…\`` as a
+	 * forward-compatible UI.
+	 */
+	agentStatus: AgentStatus
 
 	// Session-aware actions
 	conversationId: string | null

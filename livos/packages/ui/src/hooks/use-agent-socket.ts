@@ -53,6 +53,22 @@ export interface ChatMessage {
 export interface AgentStatus {
 	phase: 'idle' | 'thinking' | 'executing' | 'responding'
 	currentTool: string | null
+	/**
+	 * Phase 100-10-10 Bug B — optional Hermes-style status phrase.
+	 *
+	 * Phase 87 V32-HERMES emits `status_detail` chunks with shape
+	 * `{phase, phrase, elapsed}` from `liv-agent-runner.ts`. The chat
+	 * WebSocket path today goes through `agent-session.ts`
+	 * (AgentSessionManager → Claude SDK query()) which does NOT relay
+	 * those runStore chunks — so this field is null on the chat WS
+	 * surface today. The slot is forward-compatible: when a future plan
+	 * teaches agent-session.ts to forward runStore status_detail
+	 * chunks, this field will populate without UI changes downstream.
+	 *
+	 * UI fallback in the meantime: render `currentTool` when set, else
+	 * a static phase label ('Thinking…' / 'Responding…').
+	 */
+	phrase?: string | null
 }
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting'
