@@ -709,12 +709,13 @@ export class WebAppWindowManager {
 	): Promise<void> {
 		if (!this.mcpConfigManager || !this.luseServerPath) return
 		try {
+			// Phase 102-06 — PerWebAppMcpDescriptor.windowId dropped (per-WebApp
+			// Luse now scopes by X11 display, not window-id). The `wid` argument
+			// remains in this method signature for legacy log/IPC paths; only the
+			// MCP descriptor stops carrying it. `display` (the dedicated Xvfb :N
+			// for this WebApp from 102-01's DisplayAllocator) is the scope unit.
 			const descriptor: PerWebAppMcpDescriptor = {
 				instanceKey: webappId,
-				windowId: wid,
-				// Phase 100-10-08 (D-100-10-A reverted): always `:1` (singleton
-				// Xvfb from 100-08-01). `display` arg still flows for the future
-				// Phase 101 CDP path; current caller always passes `:1`.
 				display,
 			}
 			const config = buildLuseConfig(this.luseMcpEnv, this.luseServerPath, descriptor)
