@@ -533,7 +533,37 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 				}
 
 				// 8. REQ-103-A4 — chrome exit watcher → cleanupMaster cascade.
-				chrome.child.on('exit', () => {
+				//
+				// Phase 103.1 — `chrome.child` is the `sudo -n -u bruce
+				// google-chrome ...` wrapper process. Google Chrome forks
+				// itself into the background on startup; the launcher
+				// (the one sudo execs) then exits with code=0. That is NOT
+				// a Chrome crash — the actual Chrome process continues
+				// running detached on the assigned Xvfb. Pre-103.1 the
+				// exit handler treated code=0 as a crash and tore down
+				// the stream within ms of spawn, causing the WS 1006 bug
+				// the user surfaced on 2026-05-11. Filter:
+				//
+				//   code=0 + signal=null  → daemonization (no-op)
+				//   code!=0               → real crash (cleanup)
+				//   code=null + signal    → SIGTERM/SIGKILL (cleanup)
+				//
+				// Trade-off: a clean post-daemonization Chrome crash will
+				// not be auto-detected (the launcher already returned).
+				// User can recover by clicking "Close Master Chrome" which
+				// calls cleanupMaster explicitly. A future patch could
+				// poll the daemonized PID via /proc; out of scope for the
+				// 103.1 hot-fix.
+				chrome.child.on('exit', (code, signal) => {
+					if (code === 0 && signal === null) {
+						logger?.info?.(
+							`[chrome-master] sudo wrapper exited code=0 (Chrome daemonized to background) — keeping stream alive (Phase 103.1)`,
+						)
+						return
+					}
+					logger?.warn?.(
+						`[chrome-master] chrome wrapper exited code=${code} signal=${signal} — running cleanupMaster cascade`,
+					)
 					void cleanupMaster()
 				})
 

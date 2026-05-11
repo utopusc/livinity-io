@@ -541,7 +541,7 @@ describe('103-01 chromeMaster tRPC router — Xvfb streaming pipeline', () => {
 		expect(inj.streamManager.startStream).not.toHaveBeenCalled()
 	})
 
-	test('Test 15: chrome.on(exit) triggers cleanupMaster — full release cascade', async () => {
+	test('Test 15: chrome.on(exit) with non-zero code triggers cleanupMaster — full release cascade', async () => {
 		const inj = makeFull103Injectables()
 		const r = createChromeMasterRouter(inj as never)
 		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
@@ -551,11 +551,14 @@ describe('103-01 chromeMaster tRPC router — Xvfb streaming pipeline', () => {
 		const chromeChild = inj._fakes.chrome.child
 		const exitListener = (
 			chromeChild.on.mock.calls.find((c) => c[0] === 'exit') as
-				| [string, () => void]
+				| [string, (code: number | null, signal: NodeJS.Signals | null) => void]
 				| undefined
 		)?.[1]
 		expect(exitListener).toBeDefined()
-		exitListener!()
+		// Phase 103.1: simulate a REAL crash (non-zero exit code). code=0
+		// is now reserved for the sudo wrapper's clean exit on Chrome
+		// daemonization and must NOT trigger cleanup (see Test 15b).
+		exitListener!(11, null)
 		// cleanupMaster runs `void` style; wait a tick for awaited steps.
 		await new Promise((resolve) => setTimeout(resolve, 10))
 
@@ -572,6 +575,57 @@ describe('103-01 chromeMaster tRPC router — Xvfb streaming pipeline', () => {
 		expect(s.running).toBe(false)
 		expect(s.pid).toBeUndefined()
 		expect(s.display).toBeUndefined()
+	})
+
+	test('Test 15b (103.1): chrome.on(exit) with code=0 + signal=null is treated as daemonization — NO cleanup, stream stays alive', async () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await caller.startLogin()
+
+		const chromeChild = inj._fakes.chrome.child
+		const exitListener = (
+			chromeChild.on.mock.calls.find((c) => c[0] === 'exit') as
+				| [string, (code: number | null, signal: NodeJS.Signals | null) => void]
+				| undefined
+		)?.[1]
+		expect(exitListener).toBeDefined()
+		// Simulate `sudo google-chrome` daemonization: launcher returns code=0.
+		exitListener!(0, null)
+		await new Promise((resolve) => setTimeout(resolve, 10))
+
+		// Cleanup MUST NOT have fired — Chrome is daemonized but alive.
+		expect(inj.streamManager.stopStream).not.toHaveBeenCalled()
+		expect(inj._fakes.x11vnc.kill).not.toHaveBeenCalled()
+		expect(inj._fakes.chrome.stop).not.toHaveBeenCalled()
+		expect(inj._fakes.xvfb.stop).not.toHaveBeenCalled()
+		expect(inj.displayAllocator.release).not.toHaveBeenCalled()
+
+		// status still shows master running.
+		const s = await caller.status()
+		expect(s.running).toBe(true)
+		expect(s.display).toBe(':42')
+	})
+
+	test('Test 15c (103.1): chrome.on(exit) with signal=SIGTERM triggers cleanup (external kill is a real death)', async () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await caller.startLogin()
+
+		const chromeChild = inj._fakes.chrome.child
+		const exitListener = (
+			chromeChild.on.mock.calls.find((c) => c[0] === 'exit') as
+				| [string, (code: number | null, signal: NodeJS.Signals | null) => void]
+				| undefined
+		)?.[1]
+		exitListener!(null, 'SIGTERM' as NodeJS.Signals)
+		await new Promise((resolve) => setTimeout(resolve, 10))
+
+		// SIGTERM → cleanup fires (Chrome was killed externally).
+		expect(inj.streamManager.stopStream).toHaveBeenCalledWith('stream-abc')
+		expect(inj._fakes.chrome.stop).toHaveBeenCalled()
+		expect(inj.displayAllocator.release).toHaveBeenCalledWith(42)
 	})
 
 	test('Test 16: input.click admin dispatches dispatchPointer(0, x, y, btn, kind, display)', async () => {
