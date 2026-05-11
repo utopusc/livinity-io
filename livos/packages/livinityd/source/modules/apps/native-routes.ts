@@ -34,7 +34,7 @@ import {
 	type NativeAppConfigStore,
 } from './native-app-config.js'
 import {spawnNativeApp} from './native-app-spawner.js'
-import {bind, inferWmClass, type StreamStartFn} from './native-app-binder.js'
+import {bind, closeNativeApp, inferWmClass, type StreamStartFn} from './native-app-binder.js'
 import {
 	DisplayAllocator,
 	spawnXvfb,
@@ -134,6 +134,7 @@ function makeStartStreamFn(sm: StreamManager, userId: string): StreamStartFn {
 const getInput = z.object({id: z.string().uuid()})
 const deleteInput = z.object({id: z.string().uuid()})
 const spawnInput = z.object({id: z.string().uuid()})
+const closeInput = z.object({id: z.string().uuid()})
 
 // Router (CRUD)
 
@@ -305,6 +306,44 @@ export const nativeAppsRouter = router({
 					message: 'native-app orchestration failed: ' + msg,
 				})
 			}
+		}),
+
+	/**
+	 * apps.native.close — Phase 102-08 D-102-CLOSE-LIFECYCLE.
+	 *
+	 * Adminprocedure gate (T-101-02 carry — adminProcedure on every mutation
+	 * that can spawn or shut down a binary process). Input validates as
+	 * `z.string().uuid()` before lookup.
+	 *
+	 * Returns `{ok: true}` whether the id was active or not — close is
+	 * idempotent. The `closeNativeApp` primitive in native-app-binder.ts
+	 * owns the ordered teardown (SIGTERM child → grace → SIGKILL → stopStream
+	 * → xvfb.stop → display.release → port.release → active.delete).
+	 */
+	close: adminProcedure
+		.input(closeInput)
+		.mutation(async ({ctx, input}) => {
+			const sm = requireStreamManager(ctx)
+			const logger = ctx.logger
+			const adaptLogger = logger
+				? {
+						info: (m: string) => logger.log(m),
+						warn: (m: string) => logger.error(m),
+						error: (m: string) => logger.error(m),
+						verbose: (m: string) => logger.verbose(m),
+					}
+				: undefined
+
+			await closeNativeApp({
+				id: input.id,
+				active: activeNative,
+				displayAllocator: nativeDisplayAllocator,
+				portAllocator: sm.getPortAllocator(),
+				streamManager: sm,
+				logger: adaptLogger,
+			})
+
+			return {ok: true as const}
 		}),
 })
 
