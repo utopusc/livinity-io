@@ -48,16 +48,16 @@ created: 2026-05-10
 | 101-04-02 | 04 | 2 | D-101-CDP-SPAWN | — | WID from getWindowForTarget matches setWindowBounds target | integration | `pnpm --filter @livos/livinityd test:run webapps/window-manager.test.ts` | ✅ (extend) | ⬜ pending |
 | 101-05-01 | 05 | 2 | D-101-NATIVE-APPS | T-101-02 | WM_CLASS poll match within 5s timeout | unit | `pnpm --filter @livos/livinityd test:run apps/native-app-binder.test.ts` | ❌ W0 | ⬜ pending |
 | 101-05-02 | 05 | 2 | D-101-NATIVE-APPS | — | Port bind on first matching wid | integration | same as 101-05-01 | ❌ W0 | ⬜ pending |
-| 101-06-01 | 06 | 2 | D-101-LUSE-CONTEXT | T-101-03 (prompt injection) | activeWid+activeAppMeta sanitized before injection | unit | `pnpm --filter @livos/livinityd test:run ai/agent-session.test.ts` | ✅ (extend) | ⬜ pending |
-| 101-06-02 | 06 | 2 | D-101-LUSE-CONTEXT | — | System prompt contains "Active Window Context" snippet | unit | `pnpm --filter @livos/livinityd test:run ai/agent-prompt-builder.test.ts` | ✅ (extend) | ⬜ pending |
+| 101-06-01 | 06 | 2 | D-101-LUSE-CONTEXT | T-101-03 (prompt injection) | activeWid+activeAppMeta sanitized before injection | unit | `pnpm --filter @livos/livinityd test:run livinity-broker/agent-runner-factory.test.ts` | ❌ W0 | ⬜ pending |
+| 101-06-02 | 06 | 2 | D-101-LUSE-CONTEXT | — | System prompt contains "Active Window Context" snippet | unit | `pnpm --filter @livos/livinityd test:run ai/agent-prompt-builder.test.ts` | ❌ W0 | ⬜ pending |
 | 101-07-01 | 07 | 3 | D-101-NATIVE-APPS | — | Native app form validates binaryPath non-empty + iconUrl pattern | unit | `pnpm --filter @livos/ui test:run dock/native-app-form.test.tsx` | ❌ W0 | ⬜ pending |
 | 101-07-02 | 07 | 3 | D-101-NATIVE-APPS | — | tRPC apps.native.create wire works | integration | `pnpm --filter @livos/ui test:run dock/native-app-icon.test.tsx` | ❌ W0 | ⬜ pending |
 | 101-08-01 | 08 | 3 | D-101-TEACH-V3 | T-101-04 (popover XSS) | Instruction text sanitized via DOMPurify before render | unit | `pnpm --filter @livos/ui test:run window/teach-popover.test.tsx` | ❌ W0 | ⬜ pending |
 | 101-08-02 | 08 | 3 | D-101-TEACH-V3 | — | Click capture via canvas mousedown listener | unit | `pnpm --filter @livos/livinityd test:run webapps/teach-recorder.test.ts` | ✅ (extend) | ⬜ pending |
 | 101-08-03 | 08 | 3 | D-101-BACKWARDS-COMPAT | — | v2 skill replay still passes via lazy-translation shim | unit | `pnpm --filter @livos/livinityd test:run skills/skill-replay-tool.test.ts` | ✅ (extend) | ⬜ pending |
 | 101-09-01 | 09 | 3 | D-101-CHAT-ANIMS | — | Thinking dots render when isStreaming && messages.length === lastSent | unit | `pnpm --filter @livos/ui test:run window/webapp-floating-action-bar.test.tsx` | ✅ (extend) | ⬜ pending |
-| 101-09-02 | 09 | 3 | (Pillar F) | — | RunStore status_detail relays to agent-session WebSocket | unit | `pnpm --filter @livos/livinityd test:run ai/agent-session.test.ts` | ✅ (extend) | ⬜ pending |
-| 101-09-03 | 09 | 3 | D-101-CHAT-ANIMS | — | prefers-reduced-motion honored (no animation when set) | unit | `pnpm --filter @livos/ui test:run window/webapp-chat-bottom-bar.test.tsx` | ❌ W0 | ⬜ pending |
+| 101-09-02 | 09 | 3 | (Pillar F) | — | RunStore status_detail relays to agent-session WebSocket | unit | `pnpm --filter @livos/livinityd test:run livinity-broker/agent-runner-factory.test.ts` | ❌ W0 | ⬜ pending |
+| 101-09-03 | 09 | 3 | D-101-CHAT-ANIMS | — | prefers-reduced-motion honored (no animation when set) | unit | `pnpm --filter @livos/ui test:run window/webapp-floating-action-bar.test.tsx` | ✅ (extend) | ⬜ pending |
 | 101-10-01 | 10 | 4 | (UAT) | — | Sacred SHA `f3538e1d…` verified on Mini PC | manual | `ssh bruce@10.69.31.68 'git -C /opt/liv hash-object packages/core/src/sdk-agent-runner.ts'` | — | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
@@ -74,8 +74,10 @@ created: 2026-05-10
 - [ ] `livos/packages/ui/src/modules/dock/native-app-form.test.tsx` — stubs for dock UI form
 - [ ] `livos/packages/ui/src/modules/dock/native-app-icon.test.tsx` — stubs for dock icon
 - [ ] `livos/packages/ui/src/modules/window/teach-popover.test.tsx` — stubs for Teach v3 popover
-- [ ] `livos/packages/ui/src/modules/window/webapp-chat-bottom-bar.test.tsx` — stubs for idle pulse + prefers-reduced-motion
+- [ ] `livos/packages/livinityd/source/modules/livinity-broker/agent-runner-factory.test.ts` — stubs for activeWid+activeAppMeta sanitization + status_detail relay (extend if exists)
+- [ ] `livos/packages/livinityd/source/modules/ai/agent-prompt-builder.test.ts` — stubs for Active Window Context snippet
 - [ ] Install `chrome-remote-interface@^0.34.0` + `@types/chrome-remote-interface@^0.33.0` in livinityd workspace
+- [ ] (NOTE: `webapp-chat-bottom-bar.test.tsx` REMOVED from Wave 0 — bottom-bar is DEPRECATED per PATTERNS.md risk #1; animations land in `webapp-floating-action-bar.tsx` instead, which already has a test file to extend)
 
 *Shared fixtures: existing `vitest.config.ts` + `__mocks__/` directory already covers most patterns. CDP mock pattern documented in RESEARCH.md.*
 

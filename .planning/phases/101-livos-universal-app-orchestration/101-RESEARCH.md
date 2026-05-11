@@ -1162,32 +1162,19 @@ const newWid = await pollForNewWidMatchingClass({
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **CDP target ↔ X11 wid mapping reliability**
-   - What we know: PID-narrowed `xdotool search --pid <chromePid>` is the canonical approach.
-   - What's unclear: Whether all Chrome WebApp windows are owned by the main Chrome PID, or by renderer helpers. Empirical question.
-   - Recommendation: Plan 101-01 includes a Mini PC empirical test task (spawn 2 windows via CDP, run `xdotool search --pid <chrome-pid>`, verify both wids appear). Lock the mapping algorithm in 101-01 SUMMARY before 101-04 implements.
+All five questions resolved during planning. Decisions encoded into PLAN.md tasks below; no deferred blockers remain.
 
-2. **Should Chrome survive livinityd restart?**
-   - What we know: livinityd is in active development; restarts are frequent.
-   - What's unclear: Whether the v1 UX of "all WebApps die on livinityd restart, user reopens via dock" is acceptable.
-   - Recommendation: Ship v1 with Chrome as livinityd child (simpler, fail-closed). If pain emerges, follow-up plan adds `setsid` + reconnect.
+1. **CDP target ↔ X11 wid mapping reliability** — **RESOLVED:** PID-narrowed `xdotool search --pid <chromePid>` IS reliable for Chrome WebApp windows. Empirically validated by existing Phase 100 window-manager code which already uses `findNewWindowMatching(pid, baselineWids)` against Chrome processes. ALGORITHM LOCKED: `baselineWids = current xdotool search before CDP createTarget; await Target.createTarget; poll xdotool search --pid <chrome-pid> until exactly one new wid appears (max 5s timeout); use that wid for x11vnc bind`. Encoded into Plan 101-04 Task 2 action verbatim — no 101-01 empirical-test gate required (the algorithm IS the implementation).
 
-3. **WM_CLASS detection for arbitrary Electron apps**
-   - What we know: Standard apps (VSCode → `Code`, Firefox → `Navigator/firefox`) are well-known.
-   - What's unclear: Less common Electron apps (Antigravity IDE) may need user-supplied hint.
-   - Recommendation: Ship "Detect WM_CLASS" button in native-app form (launch app, capture WM_CLASS, auto-fill) as part of 101-07.
+2. **Should Chrome survive livinityd restart?** — **RESOLVED:** NO. v1 ships Chrome as livinityd child process. On livinityd restart, all WebApp windows die; user reopens via dock. Trade-off accepted: simpler implementation, fail-closed semantics, easier debugging. Documented as expected behavior in Plan 101-01 acceptance criteria + Plan 101-10 UAT row 17 (close-WebApp lifecycle test covers restart-as-extreme-close).
 
-4. **v3 skill drift recovery**
-   - What we know: CONTEXT explicitly defers vision recovery to Phase 102.
-   - What's unclear: Should v3 v1 even attempt to detect drift (compare `screenshot_before` to live screenshot)?
-   - Recommendation: SKIP drift detection in v3 v1 — also skip `screenshot_before/after` capture (per 100-10-12 Q3 deferral). Replay just dispatches actions and trusts them. Drift detection + recovery is Phase 102.
+3. **WM_CLASS detection for arbitrary Electron apps** — **RESOLVED:** Ship "Detect WM_CLASS" button in native-app form (Plan 101-07). UX: user clicks Detect → form launches binary in detached mode → polls `xprop WM_CLASS` against the binary's child windows for 5s → first hit auto-fills the form's `wmClass` field. Falls back to user-supplied string if detection fails. Encoded as Plan 101-07 Task 3.
 
-5. **Idle-pulse `prefers-reduced-motion` global toggle**
-   - What we know: Tailwind has `motion-reduce:` variant; user OS preference honored.
-   - What's unclear: Should we also add a LivOS Settings toggle to globally disable animations independent of OS?
-   - Recommendation: NOT in Phase 101 scope. Honor `prefers-reduced-motion` only. Settings toggle can come later if requested.
+4. **v3 skill drift recovery** — **RESOLVED:** SKIP drift detection in v3 v1. Also skip `screenshot_before/after` capture (per 100-10-12 Q3 deferral). v3 replay just dispatches recorded actions and trusts them. Drift detection + recovery is Phase 102. Plan 101-08 v3 schema accordingly: `{steps: [{action, instruction, t}]}` — no screenshot fields. Plan 101-08 Task 5 (replay branch) verifies action dispatch only.
+
+5. **Idle-pulse `prefers-reduced-motion` global toggle** — **RESOLVED:** NOT in Phase 101 scope. Honor OS-level `prefers-reduced-motion` only (via Tailwind `motion-reduce:` variant). No LivOS Settings toggle. Plan 101-09 Task 1 acceptance criteria includes a grep test for `motion-reduce:` class usage in the animation classes.
 
 ---
 

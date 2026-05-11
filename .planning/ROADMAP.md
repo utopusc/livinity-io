@@ -508,6 +508,20 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 - **Wave 3 (3 plans, parallel):** 101-07 LivOS dock native app UI, 101-08 SelfClaude Teach v3 refactor, 101-09 chat animations + Hermes phrase relay
 - **Wave 4 (1 plan, user-walked):** 101-10 Mini PC deploy + 20-row UAT
 
+**Plans:** 10 plans
+
+Plans:
+- [ ] 101-01-PLAN.md — Chrome CDP bootstrap + chrome-remote-interface install + livinityd wire-up
+- [ ] 101-02-PLAN.md — Per-app stream port allocator (15900..15999) + StreamManager refactor
+- [ ] 101-03-PLAN.md — Native app spawner + Redis config store + tRPC apps.native.{list,create,delete,get}
+- [ ] 101-04-PLAN.md — CDP-driven WebApp spawn (rewrites window-manager.spawn body)
+- [ ] 101-05-PLAN.md — Native app window-bind + apps.native.spawn(id) stream wire-up
+- [ ] 101-06-PLAN.md — Luse auto-context injection (activeWid + activeAppMeta in WS envelope)
+- [ ] 101-07-PLAN.md — Dock native-app form + icon + launch hook (UI)
+- [ ] 101-08-PLAN.md — SelfClaude Teach v3 (event-driven recorder + popover + v3 replay)
+- [ ] 101-09-PLAN.md — Chat thinking-dots + idle-pulse + Hermes status_detail relay (Pillar E+F)
+- [ ] 101-10-PLAN.md — Mini PC deploy + 20-row UAT walk (autonomous: false)
+
 ---
 
 ## Coverage
