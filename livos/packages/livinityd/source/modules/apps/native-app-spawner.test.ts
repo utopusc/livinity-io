@@ -67,7 +67,7 @@ function makeValidConfig(overrides: Partial<NativeAppConfig> = {}): NativeAppCon
 describe('spawnNativeApp', () => {
 	it('invokes spawnFn with cfg.binaryPath as the command', async () => {
 		const child = new FakeChild()
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		const cfg = makeValidConfig({binaryPath: '/opt/antigravity/bin/antigravity'})
 		await spawnNativeApp({cfg, spawnFn, logger: makeLogger()})
 		expect(spawnFn).toHaveBeenCalledTimes(1)
@@ -76,7 +76,7 @@ describe('spawnNativeApp', () => {
 
 	it('passes cfg.args verbatim to spawnFn as the args array', async () => {
 		const child = new FakeChild()
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		const cfg = makeValidConfig({args: ['--new-window', '--disable-gpu']})
 		await spawnNativeApp({cfg, spawnFn, logger: makeLogger()})
 		const args = spawnFn.mock.calls[0][1]
@@ -85,7 +85,7 @@ describe('spawnNativeApp', () => {
 
 	it('defaults to DISPLAY=:1 when no display override is passed', async () => {
 		const child = new FakeChild()
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		await spawnNativeApp({cfg: makeValidConfig(), spawnFn, logger: makeLogger()})
 		const opts = spawnFn.mock.calls[0][2]
 		expect(opts?.env?.DISPLAY).toBe(':1')
@@ -93,7 +93,7 @@ describe('spawnNativeApp', () => {
 
 	it('respects the display override when provided', async () => {
 		const child = new FakeChild()
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		await spawnNativeApp({cfg: makeValidConfig(), display: ':42', spawnFn, logger: makeLogger()})
 		const opts = spawnFn.mock.calls[0][2]
 		expect(opts?.env?.DISPLAY).toBe(':42')
@@ -101,7 +101,7 @@ describe('spawnNativeApp', () => {
 
 	it('merges cfg.env into spawn env (DISPLAY always wins last)', async () => {
 		const child = new FakeChild()
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		const cfg = makeValidConfig({env: {MY_FLAG: 'on', NODE_ENV: 'production'}})
 		await spawnNativeApp({cfg, spawnFn, logger: makeLogger()})
 		const opts = spawnFn.mock.calls[0][2]
@@ -112,7 +112,7 @@ describe('spawnNativeApp', () => {
 
 	it("pins detached:true and stdio:['ignore','ignore','pipe'] in spawn opts", async () => {
 		const child = new FakeChild()
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		await spawnNativeApp({cfg: makeValidConfig(), spawnFn, logger: makeLogger()})
 		const opts = spawnFn.mock.calls[0][2]
 		expect(opts?.detached).toBe(true)
@@ -121,7 +121,7 @@ describe('spawnNativeApp', () => {
 
 	it('calls child.unref() when present (so livinityd does not block on exit)', async () => {
 		const child = new FakeChild()
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		await spawnNativeApp({cfg: makeValidConfig(), spawnFn, logger: makeLogger()})
 		expect(child.unref).toHaveBeenCalledTimes(1)
 	})
@@ -129,7 +129,7 @@ describe('spawnNativeApp', () => {
 	it('returns {pid, child} on success', async () => {
 		const child = new FakeChild()
 		child.pid = 9001
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		const result = await spawnNativeApp({cfg: makeValidConfig(), spawnFn, logger: makeLogger()})
 		expect(result.pid).toBe(9001)
 		expect(result.child).toBe(child)
@@ -137,7 +137,7 @@ describe('spawnNativeApp', () => {
 
 	it('throws NativeAppSpawnError when binaryPath is relative (defense in depth)', async () => {
 		const child = new FakeChild()
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		const cfg = {...makeValidConfig(), binaryPath: 'google-chrome'} as NativeAppConfig
 		await expect(
 			spawnNativeApp({cfg, spawnFn, logger: makeLogger()}),
@@ -149,7 +149,7 @@ describe('spawnNativeApp', () => {
 
 	it('throws NativeAppSpawnError when env contains LD_PRELOAD (re-validates at spawn time)', async () => {
 		const child = new FakeChild()
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		const cfg: NativeAppConfig = {
 			...makeValidConfig(),
 			env: {LD_PRELOAD: '/tmp/evil.so'},
@@ -163,7 +163,7 @@ describe('spawnNativeApp', () => {
 	it('throws NativeAppSpawnError when the spawned child has no pid', async () => {
 		const child = new FakeChild()
 		child.pid = undefined
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		await expect(
 			spawnNativeApp({cfg: makeValidConfig(), spawnFn, logger: makeLogger()}),
 		).rejects.toBeInstanceOf(NativeAppSpawnError)
@@ -171,7 +171,7 @@ describe('spawnNativeApp', () => {
 
 	it('captures stderr-tail and warns on non-zero exit', async () => {
 		const child = new FakeChild()
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		const logger = makeLogger()
 		const result = await spawnNativeApp({cfg: makeValidConfig({name: 'Crashy'}), spawnFn, logger})
 		// Simulate stderr output then a non-zero exit.
@@ -188,7 +188,7 @@ describe('spawnNativeApp', () => {
 
 	it('does NOT warn when the child exits cleanly (code=0)', async () => {
 		const child = new FakeChild()
-		const spawnFn = vi.fn(() => child as any)
+		const spawnFn = vi.fn((..._args: any[]) => child as any)
 		const logger = makeLogger()
 		await spawnNativeApp({cfg: makeValidConfig(), spawnFn, logger})
 		child.emit('exit', 0, null)
