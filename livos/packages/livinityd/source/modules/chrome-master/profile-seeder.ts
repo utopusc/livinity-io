@@ -201,6 +201,27 @@ export function createProfileSeeder(opts: ProfileSeederOpts = {}): ProfileSeeder
 				log.warn?.(`profile-seeder: Singleton{Lock,Cookie,Socket} cleanup failed (non-fatal)`, err)
 			}
 
+			// Phase 102 deploy fix — livinityd runs as root via systemd, but
+			// Chrome is spawned with `sudo -n -u bruce …` (see
+			// chrome-process-spawner.ts). The `cp -r` above creates appDir
+			// owned by root, which prevents Chrome (running as bruce) from
+			// writing the SingletonLock + Cookies + state DBs:
+			//
+			//   ERROR:chrome/browser/process_singleton_posix.cc:345]
+			//     Failed to create .../SingletonLock: Permission denied (13)
+			//   Failed to create a ProcessSingleton for your profile directory.
+			//   Aborting now to avoid profile corruption.
+			//
+			// Chown the per-app profile to bruce so the spawned Chrome can
+			// own its own profile state. Non-fatal — if chown rejects (e.g.,
+			// dev box where livinityd runs as non-root), Chrome would have
+			// the right perms already.
+			try {
+				await execP('chown', ['-R', 'bruce:bruce', appDir])
+			} catch (err) {
+				log.warn?.(`profile-seeder: chown ${appDir} → bruce failed (non-fatal — only required when livinityd is root)`, err)
+			}
+
 			log.info?.(`profile-seeder: seeded ${appDir} from ${masterDir} in ${Date.now() - t0}ms`)
 			return {uuid, appDir}
 		},
