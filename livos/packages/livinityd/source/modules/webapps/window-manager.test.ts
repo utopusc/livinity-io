@@ -449,10 +449,18 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 })
 
 // ============================================================================
-// Phase 100-10-01 per-spawn Xvfb lifecycle (D-100-10-A) — 4 tests
+// Phase 100-10-08 — D-100-10-A REVERTED (per-WebApp Xvfb withdrawn).
+//
+// The per-spawn allocate/Xvfb/fluxbox assertions from 100-10-01 (T-WM-10-01-01,
+// T-WM-10-01-02, T-WM-10-01-03) are SKIPPED — they encoded the inverse of the
+// post-revert contract. Re-enabling those tests is appropriate only when the
+// Phase 101 CDP architecture lands (where Luse drives multi-target Chrome via
+// DevTools Protocol while preserving shared profile). T-WM-10-01-04 is
+// PROMOTED to the always-on path (legacy single-display behavior is now the
+// only behavior) and renamed T-WM-10-08-01 to reflect the new contract.
 // ============================================================================
 
-describe('Phase 100-10-01 per-spawn Xvfb lifecycle', () => {
+describe('Phase 100-10-08 single-:1 display contract (D-100-10-A reverted)', () => {
 	function makeAllocator() {
 		const allocCalls: string[] = []
 		const releaseCalls: string[] = []
@@ -476,27 +484,23 @@ describe('Phase 100-10-01 per-spawn Xvfb lifecycle', () => {
 	}
 
 	function makeXvfbStartFn() {
-		const calls: any[] = []
-		const stopFns: ReturnType<typeof vi.fn>[] = []
-		const fn = vi.fn(async (opts: any) => {
-			calls.push(opts)
-			const stop = vi.fn(async () => {})
-			stopFns.push(stop)
-			return {pid: 1234 + calls.length, display: opts.display, exited: new Promise(() => {}), stop}
-		})
-		return {fn: fn as any, calls, stopFns}
+		const fn = vi.fn(async () => ({
+			pid: 1234,
+			display: ':1',
+			exited: new Promise(() => {}),
+			stop: vi.fn(async () => {}),
+		}))
+		return {fn: fn as any}
 	}
 
 	function makeFluxboxStartFn() {
-		const calls: any[] = []
-		const stopFns: ReturnType<typeof vi.fn>[] = []
-		const fn = vi.fn(async (opts: any) => {
-			calls.push(opts)
-			const stop = vi.fn(async () => {})
-			stopFns.push(stop)
-			return {pid: 5678 + calls.length, display: opts.display, exited: new Promise(() => {}), stop}
-		})
-		return {fn: fn as any, calls, stopFns}
+		const fn = vi.fn(async () => ({
+			pid: 5678,
+			display: ':1',
+			exited: new Promise(() => {}),
+			stop: vi.fn(async () => {}),
+		}))
+		return {fn: fn as any}
 	}
 
 	beforeEach(() => {
@@ -506,32 +510,20 @@ describe('Phase 100-10-01 per-spawn Xvfb lifecycle', () => {
 		vi.useRealTimers()
 	})
 
-	it('T-WM-10-01-01: spawn() calls displayAllocator.allocate() exactly once before invoking spawnFn for Chrome', async () => {
-		const {allocator} = makeAllocator()
-		const xvfb = makeXvfbStartFn()
-		const fluxbox = makeFluxboxStartFn()
-		const {mgr, spawn} = makeManager({
-			displayAllocator: allocator,
-			xvfbStartFn: xvfb.fn,
-			fluxboxStartFn: fluxbox.fn,
-		})
-		// Capture the call order: allocate() must fire BEFORE spawn() is called for Chrome.
-		// We assert the relative ordering by checking that allocate has been called by the
-		// time spawn() (Chrome) is invoked.
-		let chromeCalledAfterAllocate = false
-		spawn.mockImplementation(((..._args: any[]) => {
-			if ((allocator.allocate as any).mock.calls.length > 0) {
-				chromeCalledAfterAllocate = true
-			}
-			return new FakeChild() as any
-		}) as any)
-		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
-		expect(allocator.allocate).toHaveBeenCalledTimes(1)
-		expect(chromeCalledAfterAllocate).toBe(true)
-		mgr._clearForTests()
+	// --- 100-10-01 per-spawn assertions: SKIPPED post-revert (Phase 101 only) ---
+	it.skip('T-WM-10-01-01 [SKIPPED in 100-10-08]: spawn() calls displayAllocator.allocate() — re-enable when Phase 101 CDP lands', () => {
+		// Re-enable when Phase 101 introduces a CDP-driven Chrome that can target
+		// per-display via DevTools Protocol while keeping shared profile.
+	})
+	it.skip('T-WM-10-01-02 [SKIPPED in 100-10-08]: DISPLAY env equals allocated :10/:11 — re-enable in Phase 101 CDP', () => {
+		// Re-enable when Phase 101 CDP architecture allows per-display targeting.
+	})
+	it.skip('T-WM-10-01-03 [SKIPPED in 100-10-08]: close() calls displayAllocator.release — re-enable in Phase 101 CDP', () => {
+		// Re-enable when Phase 101 CDP architecture allows per-display lifecycle.
 	})
 
-	it('T-WM-10-01-02: DISPLAY env passed to Chrome spawnFn equals the allocated display (:10 for first WebApp, :11 for second)', async () => {
+	// --- Post-revert always-on contract ---
+	it('T-WM-10-08-01: spawn() NEVER calls displayAllocator.allocate() even when allocator is provided (D-100-10-A reverted)', async () => {
 		const {allocator} = makeAllocator()
 		const xvfb = makeXvfbStartFn()
 		const fluxbox = makeFluxboxStartFn()
@@ -541,39 +533,30 @@ describe('Phase 100-10-01 per-spawn Xvfb lifecycle', () => {
 			fluxboxStartFn: fluxbox.fn,
 		})
 		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
-		// First spawn() call to mock spawn (Chrome). Argv prefix carries DISPLAY=<allocated>.
-		const [, args1] = spawn.mock.calls[0] as unknown as [string, string[]]
-		const displayArg1 = args1.find((a: string) => typeof a === 'string' && a.startsWith('DISPLAY='))
-		expect(displayArg1).toBe('DISPLAY=:10')
-
-		// Second WebApp gets :11
-		await mgr.spawn({userId: 'u1', webappId: 'app2', url: 'https://example.com'})
-		const [, args2] = spawn.mock.calls[1] as unknown as [string, string[]]
-		const displayArg2 = args2.find((a: string) => typeof a === 'string' && a.startsWith('DISPLAY='))
-		expect(displayArg2).toBe('DISPLAY=:11')
+		// Post-100-10-08: allocate is a no-op even when allocator is wired in.
+		expect(allocator.allocate).not.toHaveBeenCalled()
+		// Singleton :1 display => no per-spawn Xvfb / fluxbox start either.
+		expect(xvfb.fn).not.toHaveBeenCalled()
+		expect(fluxbox.fn).not.toHaveBeenCalled()
+		// Chrome spawn argv carries DISPLAY=:1 (the 100-08-01 baseline).
+		const [, args] = spawn.mock.calls[0] as unknown as [string, string[]]
+		const displayArg = args.find((a: string) => typeof a === 'string' && a.startsWith('DISPLAY='))
+		expect(displayArg).toBe('DISPLAY=:1')
 		mgr._clearForTests()
 	})
 
-	it('T-WM-10-01-03: close() calls displayAllocator.release(<that webapp\'s display>) exactly once', async () => {
-		const {allocator, releaseCalls} = makeAllocator()
-		const xvfb = makeXvfbStartFn()
-		const fluxbox = makeFluxboxStartFn()
-		const {mgr} = makeManager({
-			displayAllocator: allocator,
-			xvfbStartFn: xvfb.fn,
-			fluxboxStartFn: fluxbox.fn,
-		})
+	it('T-WM-10-08-02: close() NEVER calls displayAllocator.release (D-100-10-A reverted; lifecycle moves out of spawn/close)', async () => {
+		const {allocator} = makeAllocator()
+		const {mgr} = makeManager({displayAllocator: allocator})
 		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
 		await mgr.close({webappId: 'app1', userId: 'u1'})
-		expect(allocator.release).toHaveBeenCalledTimes(1)
-		expect(releaseCalls).toEqual([':10'])
+		expect(allocator.release).not.toHaveBeenCalled()
 	})
 
-	it('T-WM-10-01-04: legacy back-compat — when displayAllocator is undefined, spawn falls back to WEBAPPS_X11_ENV.DISPLAY (:1) and never calls allocate', async () => {
-		const {allocator} = makeAllocator()
+	it('T-WM-10-08-03 (back-compat regression lock; was T-WM-10-01-04): no allocator → DISPLAY=:1, no per-spawn X11 spawns', async () => {
 		const xvfb = makeXvfbStartFn()
 		const fluxbox = makeFluxboxStartFn()
-		// No displayAllocator passed — legacy path
+		// No displayAllocator passed — matches the new always-on contract.
 		const {mgr, spawn} = makeManager({
 			xvfbStartFn: xvfb.fn,
 			fluxboxStartFn: fluxbox.fn,
@@ -581,10 +564,7 @@ describe('Phase 100-10-01 per-spawn Xvfb lifecycle', () => {
 		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
 		const [, args] = spawn.mock.calls[0] as unknown as [string, string[]]
 		const displayArg = args.find((a: string) => typeof a === 'string' && a.startsWith('DISPLAY='))
-		// Falls back to WEBAPPS_X11_ENV.DISPLAY which is :1 (post P100-08-02)
 		expect(displayArg).toBe('DISPLAY=:1')
-		// Allocator was never even constructed; no Xvfb/fluxbox calls either.
-		expect(allocator.allocate).not.toHaveBeenCalled()
 		expect(xvfb.fn).not.toHaveBeenCalled()
 		expect(fluxbox.fn).not.toHaveBeenCalled()
 		mgr._clearForTests()
