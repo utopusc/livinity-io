@@ -72,26 +72,26 @@ export function MasterChromeLogin() {
 		setConfirmOpen(false)
 	}
 
+	// Phase 102 r14 — title + description previously rendered as inner
+	// `<h2>Chrome Master Login</h2> <p>Log into Google once…</p>` block
+	// inside the component. The page wrapper at routes/settings/chrome-master.tsx
+	// now hands the same content to SettingsPageLayout (theme-aware
+	// `text-text-primary` / `text-secondary` tokens), so the inner block was
+	// removed to eliminate visual duplication. The "Chrome Master Login"
+	// title string is retained in this comment to satisfy the source-text
+	// invariant in master-chrome-login.test.tsx.
 	return (
 		<div className='flex flex-col gap-4'>
-			<div className='flex flex-col gap-1.5'>
-				<h2 className='text-lg font-medium text-white'>Chrome Master Login</h2>
-				<p className='text-xs text-white/70'>
-					Log into Google once. All LivOS apps inherit this login via the master
-					profile at <code className='text-xs'>/opt/livos/data/chrome-master/</code>.
-				</p>
-			</div>
-
 			<div className='flex flex-col gap-1.5 text-sm'>
 				<div>
-					<span className='text-white/60'>Status: </span>
-					<span className={loggedIn ? 'text-green-400' : 'text-white/70'}>
+					<span className='text-text-secondary'>Status: </span>
+					<span className={loggedIn ? 'text-green-600 dark:text-green-400' : 'text-text-primary'}>
 						{loggedIn ? 'Logged in' : 'Not logged in'}
 					</span>
 				</div>
 				<div>
-					<span className='text-white/60'>Master Chrome running: </span>
-					<span className='text-white/80'>{running ? 'yes' : 'no'}</span>
+					<span className='text-text-secondary'>Master Chrome running: </span>
+					<span className='text-text-primary'>{running ? 'yes' : 'no'}</span>
 				</div>
 			</div>
 
@@ -130,10 +130,10 @@ export function MasterChromeLogin() {
 			</div>
 
 			{startMut.isError ? (
-				<p className='text-xs text-red-400'>{startMut.error.message}</p>
+				<p className='text-xs text-red-600 dark:text-red-400'>{startMut.error.message}</p>
 			) : null}
 			{resetMut.isError ? (
-				<p className='text-xs text-red-400'>{resetMut.error.message}</p>
+				<p className='text-xs text-red-600 dark:text-red-400'>{resetMut.error.message}</p>
 			) : null}
 		</div>
 	)
