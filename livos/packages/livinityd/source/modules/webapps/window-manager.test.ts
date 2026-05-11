@@ -59,8 +59,61 @@ function makeDiscovery() {
 		title: 'GitHub',
 		geometry: {x: 100, y: 100, w: 800, h: 600},
 	}))
+	// Phase 101-04 — PID-narrowed wid resolution (RESEARCH Q1 RESOLVED).
+	// Mocks added alongside the legacy title-match mock so the discovery shape
+	// satisfies both pre-101-04 callers (during incremental migration) and
+	// the new CDP-driven spawn body. The returned wid string is `'512'` so
+	// `parseInt(wid, 10)` matches the legacy mock's numeric `0x200` (= 512);
+	// keeps the existing `r.windowId).toBe(0x200)` assertions stable across
+	// the title-match → PID-narrowed swap.
+	const listWindowIdsForPid = vi.fn(async (_pid: number) => [] as string[])
+	const findNewWindowByPid = vi.fn(
+		async (_opts: {chromePid: number; baselineWids: string[]; timeoutMs: number}) =>
+			({wid: '512'}) as {wid: string} | null,
+	)
 	const getWindowGeometry = vi.fn(async () => ({x: 100, y: 100, w: 800, h: 600}))
-	return {isWindowAlive, activateWindow, snapshotWindowIds, findNewWindowMatching, getWindowGeometry}
+	return {
+		isWindowAlive,
+		activateWindow,
+		snapshotWindowIds,
+		findNewWindowMatching,
+		findNewWindowByPid,
+		listWindowIdsForPid,
+		getWindowGeometry,
+	}
+}
+
+// Phase 101-04 — mock ChromeCdpClient. Records createWindowForUrl + closeTarget
+// calls so tests can assert the CDP-driven spawn body talks to the right CDP
+// surface in the right order. getChromePid returns 12345 so the PID-narrowed
+// discovery mock can baseline against a stable value.
+function makeChromeCdpClient(opts: {createWindowFn?: typeof vi.fn} = {}) {
+	const created: Array<{url: string; opts: any}> = []
+	const closed: string[] = []
+	const createWindowForUrl =
+		opts.createWindowFn ??
+		vi.fn(async (url: string, o: any) => {
+			created.push({url, opts: o})
+			return {targetId: `tgt-${created.length}`, windowId: created.length}
+		})
+	const closeTarget = vi.fn(async (targetId: string) => {
+		closed.push(targetId)
+	})
+	const findTargetByUrl = vi.fn(async () => null)
+	const minimizeWindow = vi.fn(async () => {})
+	const getChromePid = vi.fn(async () => 12345)
+	const getWindowIdForTarget = vi.fn(async () => 1)
+	const setChromePid = vi.fn((_pid: number) => {})
+	const client = {
+		createWindowForUrl,
+		closeTarget,
+		findTargetByUrl,
+		minimizeWindow,
+		getChromePid,
+		getWindowIdForTarget,
+		setChromePid,
+	}
+	return {client, created, closed}
 }
 
 function makePortal(opts: {available?: boolean; canceled?: boolean; throwOnRequest?: Error} = {}) {
@@ -98,6 +151,11 @@ function makeManager(overrides: any = {}) {
 		overrides.trackerBundle ?? makeGeometryTrackerCtor()
 	const spawn = vi.fn(() => new FakeChild() as any)
 	const logger = {info: vi.fn(), warn: vi.fn(), error: vi.fn(), verbose: vi.fn()}
+	// Phase 101-04 — every manager now needs a ChromeCdpClient. Tests that don't
+	// override one get the default mock so the constructor satisfies the new
+	// required opt. Bundle is exposed in the return so tests can assert against
+	// createWindowForUrl / closeTarget call counts.
+	const chromeCdpBundle = overrides.chromeCdpBundle ?? makeChromeCdpClient()
 	const mgr = new WebAppWindowManager({
 		streamManager,
 		spawn,
@@ -117,8 +175,23 @@ function makeManager(overrides: any = {}) {
 		displayAllocator: overrides.displayAllocator,
 		xvfbStartFn: overrides.xvfbStartFn,
 		fluxboxStartFn: overrides.fluxboxStartFn,
+		// Phase 101-04 — CDP-driven spawn. Injected for every manager so the
+		// new spawn body has a CDP surface to talk to.
+		chromeCdpClient: chromeCdpBundle.client as any,
 	})
-	return {mgr, streamManager, started, stopped, discovery, portal, closeSession, spawn, trackerInstances, logger}
+	return {
+		mgr,
+		streamManager,
+		started,
+		stopped,
+		discovery,
+		portal,
+		closeSession,
+		spawn,
+		trackerInstances,
+		logger,
+		chromeCdpBundle,
+	}
 }
 
 describe('WebAppWindowManager', () => {
@@ -165,13 +238,18 @@ describe('WebAppWindowManager', () => {
 		mgr._clearForTests()
 	})
 
-	it('Test 4: spawn throws WINDOW_NOT_FOUND when findNewWindowMatching times out', async () => {
+	it('Test 4: spawn throws WINDOW_NOT_FOUND when findNewWindowByPid times out (Phase 101-04 — PID-narrowed lookup replaces title-match)', async () => {
 		const discovery = makeDiscovery()
-		discovery.findNewWindowMatching = vi.fn(async () => null)
-		const {mgr} = makeManager({discovery})
+		// Phase 101-04 — the spawn body no longer calls findNewWindowMatching.
+		// The PID-narrowed lookup is the only timeout path now.
+		discovery.findNewWindowByPid = vi.fn(async () => null)
+		const {mgr, chromeCdpBundle} = makeManager({discovery})
 		await expect(
 			mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://github.com'}),
 		).rejects.toBeInstanceOf(WindowNotFoundError)
+		// Degenerate cleanup: the CDP target that was created must be closed
+		// before the throw so we don't leak a Chrome window.
+		expect(chromeCdpBundle.closed).toHaveLength(1)
 	})
 
 	it('Test 5: spawn enforces per-user webapp cap → TOO_MANY_WEBAPPS', async () => {
@@ -305,31 +383,37 @@ describe('WebAppWindowManager — vnc-window swap (Phase 99-04)', () => {
 		mgr._clearForTests()
 	})
 
-	it('Test 11: spawn argv uses --app=<url> (V33-MULTI-01 / G-100-B B1) — no --new-window flag', async () => {
-		const {mgr, spawn} = makeManager()
+	it('Test 11 [Phase 101-04 RETIRED]: legacy --app=<url> argv path is gone; spawn drives Chrome via CDP createWindowForUrl', async () => {
+		// Phase 101-04: the `sudo google-chrome --app=<url>` argv path is DEAD.
+		// CDP createTarget({newWindow:true}) is the only way to get distinct
+		// windows under a shared `--user-data-dir`. This assertion is the
+		// regression lock — if anyone re-introduces the argv path, this test
+		// fails BEFORE Mini PC UAT hits the IPC-merge bug again.
+		const {mgr, spawn, chromeCdpBundle} = makeManager()
 		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://duckduckgo.com'})
-		// First spawn call is the Chrome spawn (sudo google-chrome ...).
-		const [cmd, args] = spawn.mock.calls[0] as [string, string[]]
-		expect(cmd).toBe('sudo')
-		expect(args).toContain('--app=https://duckduckgo.com')
-		expect(args).not.toContain('--new-window')
-		expect(args).toContain('--user-data-dir=/home/bruce/.config/livos-chrome')
+		// No spawnFactory invocation for Chrome (close path with killWindow is
+		// the only legitimate spawnFactory use, and we didn't call close here).
+		expect(spawn).not.toHaveBeenCalled()
+		// CDP path is exercised exactly once with the requested URL.
+		expect(chromeCdpBundle.created).toHaveLength(1)
+		expect(chromeCdpBundle.created[0]!.url).toBe('https://duckduckgo.com')
 		mgr._clearForTests()
 	})
 
-	it('Test 15: XAUTHORITY does NOT leak into Chrome spawn argv (P100-08-02 W1)', async () => {
+	it('Test 15 [Phase 101-04 RETIRED]: XAUTHORITY leak regression no longer applies — CDP path has no argv env-prefix surface', async () => {
+		// The XAUTHORITY-leak test was a P100-08-02 regression lock on the
+		// `sudo VAR=val google-chrome ...` argv shape. Post-101-04 there's no
+		// argv to leak into — Chrome is booted once at livinityd.start() and
+		// per-WebApp windows are CDP targets. Test promoted to a smoke check:
+		// spawn() does NOT invoke spawnFactory at all on the happy path.
 		const prev = process.env.XAUTHORITY
 		process.env.XAUTHORITY = '/should/not/leak'
 		try {
 			const {mgr, spawn} = makeManager()
 			await mgr.spawn({userId: 'u1', webappId: 'app-leak', url: 'https://duckduckgo.com'})
-			const [, args] = spawn.mock.calls[0] as unknown as [string, string[]]
-			// P100-08-02 W1: the Chrome spawn argv must NOT carry an
-			// XAUTHORITY=... prefix (we removed that line from
-			// window-manager.ts because Xvfb :1 runs with -ac).
-			expect(args.find(a => typeof a === 'string' && a.startsWith('XAUTHORITY='))).toBeUndefined()
-			// The argv MUST carry DISPLAY=:1 (or whatever WEBAPPS_X11_ENV.DISPLAY resolves to).
-			expect(args.find(a => typeof a === 'string' && a.startsWith('DISPLAY='))).toBe('DISPLAY=:1')
+			// No spawnFactory call → no argv surface to leak through. Stronger
+			// invariant than the original test.
+			expect(spawn).not.toHaveBeenCalled()
 			mgr._clearForTests()
 		} finally {
 			if (prev === undefined) delete process.env.XAUTHORITY
@@ -523,11 +607,11 @@ describe('Phase 100-10-08 single-:1 display contract (D-100-10-A reverted)', () 
 	})
 
 	// --- Post-revert always-on contract ---
-	it('T-WM-10-08-01: spawn() NEVER calls displayAllocator.allocate() even when allocator is provided (D-100-10-A reverted)', async () => {
+	it('T-WM-10-08-01: spawn() NEVER calls displayAllocator.allocate() even when allocator is provided (D-100-10-A reverted; Phase 101-04 CDP path)', async () => {
 		const {allocator} = makeAllocator()
 		const xvfb = makeXvfbStartFn()
 		const fluxbox = makeFluxboxStartFn()
-		const {mgr, spawn} = makeManager({
+		const {mgr, spawn, chromeCdpBundle} = makeManager({
 			displayAllocator: allocator,
 			xvfbStartFn: xvfb.fn,
 			fluxboxStartFn: fluxbox.fn,
@@ -538,10 +622,12 @@ describe('Phase 100-10-08 single-:1 display contract (D-100-10-A reverted)', () 
 		// Singleton :1 display => no per-spawn Xvfb / fluxbox start either.
 		expect(xvfb.fn).not.toHaveBeenCalled()
 		expect(fluxbox.fn).not.toHaveBeenCalled()
-		// Chrome spawn argv carries DISPLAY=:1 (the 100-08-01 baseline).
-		const [, args] = spawn.mock.calls[0] as unknown as [string, string[]]
-		const displayArg = args.find((a: string) => typeof a === 'string' && a.startsWith('DISPLAY='))
-		expect(displayArg).toBe('DISPLAY=:1')
+		// Phase 101-04: Chrome is booted ONCE at livinityd.start(); per-WebApp
+		// spawn does NOT invoke spawnFactory at all on the happy path. The
+		// (display, --user-data-dir, --app=URL) flags now live in bootstrap.ts.
+		expect(spawn).not.toHaveBeenCalled()
+		// And the URL is delivered via CDP createWindowForUrl, not argv.
+		expect(chromeCdpBundle.created).toHaveLength(1)
 		mgr._clearForTests()
 	})
 
@@ -553,18 +639,21 @@ describe('Phase 100-10-08 single-:1 display contract (D-100-10-A reverted)', () 
 		expect(allocator.release).not.toHaveBeenCalled()
 	})
 
-	it('T-WM-10-08-03 (back-compat regression lock; was T-WM-10-01-04): no allocator → DISPLAY=:1, no per-spawn X11 spawns', async () => {
+	it('T-WM-10-08-03 (back-compat regression lock; was T-WM-10-01-04): no allocator → no per-spawn X11 spawns (Phase 101-04: CDP path means no Chrome spawn at all)', async () => {
 		const xvfb = makeXvfbStartFn()
 		const fluxbox = makeFluxboxStartFn()
 		// No displayAllocator passed — matches the new always-on contract.
-		const {mgr, spawn} = makeManager({
+		const {mgr, spawn, chromeCdpBundle} = makeManager({
 			xvfbStartFn: xvfb.fn,
 			fluxboxStartFn: fluxbox.fn,
 		})
 		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
-		const [, args] = spawn.mock.calls[0] as unknown as [string, string[]]
-		const displayArg = args.find((a: string) => typeof a === 'string' && a.startsWith('DISPLAY='))
-		expect(displayArg).toBe('DISPLAY=:1')
+		// Phase 101-04: no spawnFactory invocation on happy path; URL is
+		// delivered via CDP createWindowForUrl. Xvfb/fluxbox lifecycle moved
+		// to livinityd.start() (100-08-01 baseline).
+		expect(spawn).not.toHaveBeenCalled()
+		expect(chromeCdpBundle.created).toHaveLength(1)
+		expect(chromeCdpBundle.created[0]!.url).toBe('https://example.com')
 		expect(xvfb.fn).not.toHaveBeenCalled()
 		expect(fluxbox.fn).not.toHaveBeenCalled()
 		mgr._clearForTests()
@@ -595,86 +684,246 @@ describe('Phase 100-10-11 per-WebApp cascade window-position', () => {
 		vi.useRealTimers()
 	})
 
-	// findNewWindowMatching returns the same fake wid 0x200 for every spawn in
-	// the default makeDiscovery() helper, which would cause idempotency to
-	// short-circuit subsequent spawns. We need per-spawn wids so the cascade
-	// test can spawn 11 distinct WebApps.
+	// Phase 101-04 — cascade is now passed to CDP createWindowForUrl({left, top})
+	// instead of the legacy `--window-position=X,Y` argv. The PID-narrowed
+	// discovery mock returns a unique wid string per call so idempotency
+	// doesn't short-circuit subsequent spawns. Default `makeDiscovery()`
+	// returns a constant `'512'`, so we override here.
 	function makeDiscoveryWithUniqueWids() {
 		let nextWid = 0x200
 		const isWindowAlive = vi.fn(async () => true)
 		const activateWindow = vi.fn(async () => true)
 		const snapshotWindowIds = vi.fn(async () => new Set<number>([0x100]))
 		const findNewWindowMatching = vi.fn(async () => ({
-			wid: nextWid++,
+			wid: nextWid,
 			title: 'WebApp',
 			geometry: {x: 0, y: 0, w: 800, h: 600},
 		}))
+		const listWindowIdsForPid = vi.fn(async (_pid: number) => [] as string[])
+		const findNewWindowByPid = vi.fn(
+			async (_opts: {chromePid: number; baselineWids: string[]; timeoutMs: number}) => ({
+				wid: String(nextWid++),
+			}) as {wid: string} | null,
+		)
 		const getWindowGeometry = vi.fn(async () => ({x: 0, y: 0, w: 800, h: 600}))
 		return {
 			isWindowAlive,
 			activateWindow,
 			snapshotWindowIds,
 			findNewWindowMatching,
+			findNewWindowByPid,
+			listWindowIdsForPid,
 			getWindowGeometry,
 		}
 	}
 
-	it('T-10-11-CASCADE-01: per-WebApp window-position cascades (0,0) → (120,120) → (240,240)', async () => {
+	it('T-10-11-CASCADE-01: per-WebApp CDP bounds cascade (0,0) → (120,120) → (240,240) (Phase 101-04: now passed as createWindowForUrl bounds, not --window-position argv)', async () => {
 		const discovery = makeDiscoveryWithUniqueWids()
-		const {mgr, spawn} = makeManager({discovery})
+		const {mgr, chromeCdpBundle} = makeManager({discovery})
 		await mgr.spawn({userId: 'u1', webappId: 'app-a', url: 'https://a.test'})
 		await mgr.spawn({userId: 'u1', webappId: 'app-b', url: 'https://b.test'})
 		await mgr.spawn({userId: 'u1', webappId: 'app-c', url: 'https://c.test'})
 
-		// Each Chrome spawn is exactly one entry in spawn.mock.calls (no other
-		// spawn calls happen along the happy path — xdotool windowkill only
-		// fires from close({killWindow:true})).
-		const argv1 = (spawn.mock.calls[0] as unknown as [string, string[]])[1]
-		const argv2 = (spawn.mock.calls[1] as unknown as [string, string[]])[1]
-		const argv3 = (spawn.mock.calls[2] as unknown as [string, string[]])[1]
-
-		expect(argv1).toContain('--window-position=0,0')
-		expect(argv2).toContain('--window-position=120,120')
-		expect(argv3).toContain('--window-position=240,240')
+		expect(chromeCdpBundle.created).toHaveLength(3)
+		expect(chromeCdpBundle.created[0]!.opts).toMatchObject({left: 0, top: 0, width: 1280, height: 720})
+		expect(chromeCdpBundle.created[1]!.opts).toMatchObject({left: 120, top: 120, width: 1280, height: 720})
+		expect(chromeCdpBundle.created[2]!.opts).toMatchObject({left: 240, top: 240, width: 1280, height: 720})
 
 		mgr._clearForTests()
 	})
 
-	it('T-10-11-CASCADE-02: wraps around to avoid off-screen positions', async () => {
+	it('T-10-11-CASCADE-02: cascade wraps around to avoid off-screen positions (CDP bounds, Phase 101-04)', async () => {
 		const discovery = makeDiscoveryWithUniqueWids()
-		const {mgr, spawn} = makeManager({discovery})
+		const {mgr, chromeCdpBundle} = makeManager({discovery})
 		for (let i = 0; i < 11; i++) {
 			await mgr.spawn({userId: 'u1', webappId: `app-${i}`, url: `https://test-${i}.local`})
 		}
-		// 11 Chrome spawns recorded in order.
-		const argvs = spawn.mock.calls.map((c) => (c as unknown as [string, string[]])[1])
-		const positions = argvs.map((argv) =>
-			argv.find((arg: string) => arg.startsWith('--window-position=')),
-		)
-
-		// Every spawn must have a window-position argv.
-		for (const p of positions) expect(p).toBeDefined()
+		expect(chromeCdpBundle.created).toHaveLength(11)
 
 		// All positions must be on-screen (Xvfb :1 is 1920x1080).
-		for (const p of positions) {
-			const m = p!.match(/--window-position=(\d+),(\d+)/)
-			expect(m).toBeTruthy()
-			const x = parseInt(m![1]!, 10)
-			const y = parseInt(m![2]!, 10)
-			expect(x).toBeGreaterThanOrEqual(0)
-			expect(x).toBeLessThan(1920)
-			expect(y).toBeGreaterThanOrEqual(0)
-			expect(y).toBeLessThan(1080)
+		for (const c of chromeCdpBundle.created) {
+			expect(c.opts.left).toBeGreaterThanOrEqual(0)
+			expect(c.opts.left).toBeLessThan(1920)
+			expect(c.opts.top).toBeGreaterThanOrEqual(0)
+			expect(c.opts.top).toBeLessThan(1080)
 		}
 
 		// Cascade pattern must produce DISTINCT positions for the first 10
 		// spawns (regression lock against the pre-fix constant `0,0` shape).
-		const firstTen = new Set(positions.slice(0, 10))
+		const firstTen = new Set(
+			chromeCdpBundle.created.slice(0, 10).map((c) => `${c.opts.left},${c.opts.top}`),
+		)
 		expect(firstTen.size).toBe(10)
 
 		// 11th spawn (index 10) is slot 10 % 10 = 0 → wraps back to (0,0).
-		expect(positions[10]).toBe('--window-position=0,0')
+		expect(chromeCdpBundle.created[10]!.opts.left).toBe(0)
+		expect(chromeCdpBundle.created[10]!.opts.top).toBe(0)
 
+		mgr._clearForTests()
+	})
+})
+
+// ============================================================================
+// Phase 101-04 — CDP-driven WebApp Spawn (Window-Manager Rewrite)
+//
+// The `sudo google-chrome --app=URL --user-data-dir=...` argv path is GONE.
+// Instead, the spawn body drives Chrome via:
+//   1. chromeCdpClient.getChromePid()      — pid of the connected Chrome
+//   2. discovery.listWindowIdsForPid(pid)  — baseline wids BEFORE createTarget
+//   3. chromeCdpClient.createWindowForUrl(url, {width,height,left,top}) — new window
+//   4. discovery.findNewWindowByPid({chromePid, baselineWids, timeoutMs:5000})
+//      — first new wid for THIS PID is ours (deterministic; no title race)
+//
+// On close: chromeCdpClient.closeTarget(targetId) releases the CDP target
+// (and therefore the Chrome window) so port releases align with target life.
+//
+// Sacred SHA f3538e1d811992b782a9bb057d1b7f0a0189f95f UNTOUCHED.
+// ============================================================================
+
+describe('Phase 101-04 — CDP-driven spawn body (replaces --app=URL argv + title-match)', () => {
+	beforeEach(() => {
+		vi.useRealTimers()
+	})
+	afterEach(() => {
+		vi.useRealTimers()
+	})
+
+	it('T-101-04-01: spawn calls chromeCdpClient.createWindowForUrl with {url, width:1280, height:720, left, top}', async () => {
+		const {mgr, chromeCdpBundle} = makeManager()
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		expect(chromeCdpBundle.created).toHaveLength(1)
+		expect(chromeCdpBundle.created[0]!.url).toBe('https://example.com')
+		expect(chromeCdpBundle.created[0]!.opts).toMatchObject({
+			width: 1280,
+			height: 720,
+			left: 0,
+			top: 0,
+		})
+		mgr._clearForTests()
+	})
+
+	it('T-101-04-02: spawn calls discovery.findNewWindowByPid with {chromePid, baselineWids, timeoutMs:5000} (RESEARCH Q1 RESOLVED)', async () => {
+		const discovery = makeDiscovery()
+		const {mgr, chromeCdpBundle} = makeManager({discovery})
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		expect(discovery.findNewWindowByPid).toHaveBeenCalledTimes(1)
+		const call = (discovery.findNewWindowByPid as any).mock.calls[0]![0]
+		expect(call.chromePid).toBe(12345)
+		expect(call.baselineWids).toEqual([])
+		expect(call.timeoutMs).toBe(5000)
+		// getChromePid was called BEFORE listWindowIdsForPid was called BEFORE
+		// createWindowForUrl was called BEFORE findNewWindowByPid.
+		expect(chromeCdpBundle.client.getChromePid).toHaveBeenCalled()
+		mgr._clearForTests()
+	})
+
+	it('T-101-04-03: spawn does NOT call discovery.findNewWindowMatching (legacy title-match path is gone from window-manager.ts)', async () => {
+		const discovery = makeDiscovery()
+		const {mgr} = makeManager({discovery})
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		expect(discovery.findNewWindowMatching).not.toHaveBeenCalled()
+		mgr._clearForTests()
+	})
+
+	it('T-101-04-04: spawn snapshots baselineWids via discovery.listWindowIdsForPid(chromePid) BEFORE createWindowForUrl', async () => {
+		const discovery = makeDiscovery()
+		// Make listWindowIdsForPid return a specific baseline so we can prove
+		// it was the baseline passed to findNewWindowByPid.
+		const baselineSnapshot = ['111', '222']
+		discovery.listWindowIdsForPid = vi.fn(async (_pid: number) => baselineSnapshot)
+		const {mgr, chromeCdpBundle} = makeManager({discovery})
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		expect(discovery.listWindowIdsForPid).toHaveBeenCalledWith(12345)
+		// Order: listWindowIdsForPid call returned BEFORE createWindowForUrl was
+		// invoked. We can prove this by checking the invocationCallOrder fields.
+		const baselineOrder = (discovery.listWindowIdsForPid as any).mock.invocationCallOrder[0]
+		const createOrder = (chromeCdpBundle.client.createWindowForUrl as any).mock.invocationCallOrder[0]
+		expect(baselineOrder).toBeLessThan(createOrder)
+		// And the baseline returned by listWindowIdsForPid is what flowed into
+		// findNewWindowByPid as `baselineWids`.
+		const findCall = (discovery.findNewWindowByPid as any).mock.calls[0]![0]
+		expect(findCall.baselineWids).toEqual(baselineSnapshot)
+		mgr._clearForTests()
+	})
+
+	it('T-101-04-05: spawn does NOT call spawnFactory("sudo", ...) — argv path is dead', async () => {
+		const {mgr, spawn} = makeManager()
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		// Inspect every spawn call: none must have cmd === 'sudo'.
+		for (const call of spawn.mock.calls) {
+			const [cmd] = call as unknown as [string, string[]]
+			expect(cmd).not.toBe('sudo')
+		}
+		mgr._clearForTests()
+	})
+
+	it('T-101-04-06: spawn does NOT call spawnFactory("google-chrome", ...) — argv path is dead', async () => {
+		const {mgr, spawn} = makeManager()
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		for (const call of spawn.mock.calls) {
+			const [cmd] = call as unknown as [string, string[]]
+			expect(cmd).not.toBe('google-chrome')
+		}
+		mgr._clearForTests()
+	})
+
+	it('T-101-04-07: cascade offset starts at (0,0) and steps by 120 with wrap at 10 active (Phase 101-04 carries 100-10-11 invariant)', async () => {
+		let nextWid = 1000
+		const discovery = makeDiscovery()
+		discovery.findNewWindowByPid = vi.fn(
+			async (_opts: any) => ({wid: String(nextWid++)}) as {wid: string} | null,
+		)
+		const {mgr, chromeCdpBundle} = makeManager({discovery})
+		// Spawn 11 to prove wrap.
+		for (let i = 0; i < 11; i++) {
+			await mgr.spawn({userId: 'u1', webappId: `app-${i}`, url: `https://t-${i}.test`})
+		}
+		expect(chromeCdpBundle.created).toHaveLength(11)
+		expect(chromeCdpBundle.created[0]!.opts.left).toBe(0)
+		expect(chromeCdpBundle.created[0]!.opts.top).toBe(0)
+		expect(chromeCdpBundle.created[1]!.opts.left).toBe(120)
+		expect(chromeCdpBundle.created[1]!.opts.top).toBe(120)
+		expect(chromeCdpBundle.created[10]!.opts.left).toBe(0)
+		expect(chromeCdpBundle.created[10]!.opts.top).toBe(0)
+		mgr._clearForTests()
+	})
+
+	it('T-101-04-08: spawn stashes targetId on the per-entry record (so close() can route through CDP closeTarget)', async () => {
+		const {mgr, chromeCdpBundle} = makeManager()
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+		// We can't directly read the ActiveWebApp map without a test helper; but
+		// closing the WebApp must invoke closeTarget with the SAME targetId that
+		// createWindowForUrl returned (`'tgt-1'`).
+		await mgr.close({webappId: 'app1', userId: 'u1'})
+		expect(chromeCdpBundle.closed).toEqual(['tgt-1'])
+		mgr._clearForTests()
+	})
+
+	it('T-101-04-09: close path calls chromeCdpClient.closeTarget(targetId) for the entry', async () => {
+		const {mgr, chromeCdpBundle} = makeManager()
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://a.test'})
+		await mgr.spawn({userId: 'u1', webappId: 'app2', url: 'https://b.test'})
+		// Two CDP creates → two targets.
+		expect(chromeCdpBundle.created).toHaveLength(2)
+		// Close ONLY app1 — closeTarget must be called with 'tgt-1' but NOT 'tgt-2'.
+		await mgr.close({webappId: 'app1', userId: 'u1'})
+		expect(chromeCdpBundle.closed).toEqual(['tgt-1'])
+		// app2 still alive — close it now and assert tgt-2 also routed through CDP.
+		await mgr.close({webappId: 'app2', userId: 'u1'})
+		expect(chromeCdpBundle.closed).toEqual(['tgt-1', 'tgt-2'])
+		mgr._clearForTests()
+	})
+
+	it('T-101-04-10: WindowNotFoundError thrown when findNewWindowByPid returns null; CDP target is cleaned up via closeTarget before throwing', async () => {
+		const discovery = makeDiscovery()
+		discovery.findNewWindowByPid = vi.fn(async () => null)
+		const {mgr, chromeCdpBundle} = makeManager({discovery})
+		await expect(
+			mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'}),
+		).rejects.toBeInstanceOf(WindowNotFoundError)
+		// Degenerate-case cleanup: closeTarget must have been called on the
+		// orphan CDP target so we don't leak a window.
+		expect(chromeCdpBundle.closed).toEqual(['tgt-1'])
 		mgr._clearForTests()
 	})
 })
