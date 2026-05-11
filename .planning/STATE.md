@@ -29,6 +29,24 @@ Phase: 103.1 (Master Chrome Hot-Fix + Luse Cross-Display Aggregation) — DEPLOY
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v33.0 (active)
 
+## 103.1 Status (2026-05-11) — SHIPPED + LIVE-VERIFIED on Mini PC
+
+Three-layer bug fix shipped and live-verified end-to-end via tRPC curl on
+Mini PC at SHA `f3d471ac`:
+
+- `startLogin` returned `{pid:1151469, display:":10", streamId:"bb999df0..."}`
+- 10s post-spawn: `status.running:true` (daemonization filter survived
+  the sudo wrapper code=0 exit)
+- `hasCookies:true` (Chrome wrote to bruce-owned dir — chown succeeded)
+- `ps -ef | grep google-chrome` → 2 processes alive
+- Log shows `stream bb999df0 started` with NO subsequent `(stop requested)`
+- `stopLogin` returns `{ok:true}` (clean shutdown)
+
+Stale singleton locks were also verified cleaned (3 fake files I injected
+earlier are gone after restartLogin).
+
+---
+
 ## 103.1 Status (2026-05-11) — Hot-fix: stale singleton lock + chrome daemonization filter + list_windows cross-display aggregation
 
 User-walked Phase 103 UAT on Mini PC (deployed SHA `c89f7139`) surfaced bugs not catchable by unit tests:
