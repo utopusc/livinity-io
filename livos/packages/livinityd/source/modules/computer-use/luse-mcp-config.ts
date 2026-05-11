@@ -122,6 +122,12 @@ export interface PerWebAppMcpDescriptor {
 	 * target via its `DISPLAY` env var. Defaults to `:1` (D-100-08-A: Xvfb
 	 * dedicated to WebApp Chromes).
 	 *
+	 * Phase 100-10-08 (D-100-10-A reverted): all callers now pass `:1`
+	 * (the singleton display from 100-08-01). The optional override is
+	 * RETAINED for Phase 101 CDP scaffolding — when CDP-driven multi-target
+	 * Chrome lands, the descriptor display will reflect the CDP-bound
+	 * target display per WebApp.
+	 *
 	 * Native xdotool/maim/xclip calls inside the child process (see
 	 * ./native/input.ts which spawns these binaries with default
 	 * process.env) inherit DISPLAY from the spawned env, so setting it
@@ -204,6 +210,8 @@ export function buildLuseConfig(
 	//   - per-WebApp variant: DISPLAY from descriptor.display (default :1,
 	//     D-100-08-A); XAUTHORITY dropped (Xvfb :1 runs with -ac, no cookie
 	//     required). LUSE_TARGET_WINDOW_ID propagated from descriptor.windowId.
+	//     Phase 100-10-08 (D-100-10-A reverted): current callers always pass
+	//     `:1`; the optional override stays for Phase 101 CDP scaffolding.
 	//   - host variant (desktop-stream native app): DISPLAY from process.env
 	//     (default :0); XAUTHORITY preserved at the GDM-managed path
 	//     (2026-05-05 P79-03 — GDM sessions on Ubuntu 24.04). nut-js'
