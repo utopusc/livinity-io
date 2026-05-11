@@ -42,6 +42,8 @@ const DomainSetupPage = React.lazy(() => import('@/routes/settings/domain-setup'
 const DmPairingPage = React.lazy(() => import('@/routes/settings/dm-pairing'))
 // Phase 76 / Plan 06 (MARKET-07) — Liv Agent thin settings page (D-12 — re-uses /subagents + links to /agent-marketplace).
 const LivAgentSettings = React.lazy(() => import('@/routes/settings/liv-agent'))
+// Phase 102-07 — Chrome Master Login settings page (D-102-MASTER-LOGIN-UI).
+const ChromeMasterPage = React.lazy(() => import('@/routes/settings/chrome-master'))
 
 // drawers
 const StartMigrationDrawerOrDialog = React.lazy(() =>
@@ -144,6 +146,7 @@ export function Settings() {
 						<Route path='/integrations' Component={IntegrationsPage} />
 						<Route path='/domain-setup' Component={DomainSetupPage} />
 						<Route path='/dm-pairing' Component={DmPairingPage} />
+						<Route path='/chrome-master' Component={ChromeMasterPage} />
 					</Routes>
 					<QueryStringDialog />
 				</Suspense>
