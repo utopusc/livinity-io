@@ -214,7 +214,11 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		staleTime: 30 * 1000,
 		retry: false,
 	})
-	const nativeApps = nativeAppsQ.data ?? []
+	// React #185 fix: `?? []` creates a NEW empty array every render when
+	// data is undefined → unstable reference in the gridItems useMemo dep
+	// list (line ~471) → infinite re-render loop in production. Memoize
+	// against the query result so the empty fallback is reference-stable.
+	const nativeApps = useMemo(() => nativeAppsQ.data ?? [], [nativeAppsQ.data])
 
 	const isMobile = useIsMobile()
 	const {openApp} = useMobileApp()
