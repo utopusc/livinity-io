@@ -253,6 +253,62 @@ function readSingleActiveWebappWidFromFile(): number | undefined {
 }
 
 /**
+ * Phase 103-B (REQ-103-B2 / Pitfall 2) — temporarily scope process.env.DISPLAY
+ * for the duration of an async native-primitive call, then restore.
+ *
+ * Resolution: explicit `display` arg wins; otherwise fall back to
+ * `defaultDisplay` (typically the LuseToolsOptions.defaultDisplay seeded
+ * from LUSE_TARGET_DISPLAY env). When BOTH are undefined, do NOT mutate
+ * process.env.DISPLAY at all — preserves the host-display behavior for
+ * callers without scoping intent.
+ *
+ * The MCP child process serializes tool calls via JSON-RPC stdio (one
+ * request, one response, one at a time), so concurrent handler races
+ * are not possible in production. Vitest `singleThread:true` serializes
+ * tests. Documented assumption: future v2 (execFile env arg) deferred
+ * unless production race observed.
+ */
+async function withScopedDisplay<T>(
+	display: string | undefined,
+	defaultDisplay: string | undefined,
+	fn: () => Promise<T>,
+): Promise<T> {
+	const target = display ?? defaultDisplay
+	if (target === undefined) return fn()
+	const prev = process.env.DISPLAY
+	try {
+		process.env.DISPLAY = target
+		return await fn()
+	} finally {
+		if (prev === undefined) delete process.env.DISPLAY
+		else process.env.DISPLAY = prev
+	}
+}
+
+/**
+ * Phase 103-B (T-103-03-01) — parse and validate the optional `display`
+ * arg passed to an X11-touching tool. Returns undefined for any string
+ * that does not match /^:[1-9][0-9]?$/ (so the handler falls back to
+ * defaultDisplay rather than mutating process.env.DISPLAY with a hostile
+ * value).
+ *
+ * Same regex as PerWebAppMcpDescriptor.display in luse-mcp-config.ts:133
+ * — consistent gate everywhere a display string crosses a trust boundary.
+ */
+const DISPLAY_ARG_RE = /^:[1-9][0-9]?$/
+function parseDisplayArg(args: Record<string, unknown>): string | undefined {
+	const raw = args.display
+	if (typeof raw !== 'string') return undefined
+	if (!DISPLAY_ARG_RE.test(raw)) return undefined
+	return raw
+}
+
+/** @internal — exported for Phase 103-B tests (tools.test.ts). The MCP
+ *  child process serializes tool calls so there are no production callers
+ *  outside this file. */
+export {withScopedDisplay, parseDisplayArg}
+
+/**
  * Wrap a state-changing native action in: run → 750ms settle → screenshot.
  * Returns a CallToolResult with [text summary, post-action image].
  *
@@ -319,23 +375,40 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 
 	computer_screenshot: async (args) => {
 		const w = wid(args)
-		const shot = await captureScreenshot(typeof w === 'number' ? {windowId: w} : undefined)
-		return {
-			content: [
-				{type: 'image', data: shot.base64, mimeType: shot.mimeType},
-				{type: 'text', text: `Screenshot captured (${shot.width}x${shot.height})`},
-			],
-			isError: false,
-		}
+		const displayArg = parseDisplayArg(args)
+		// Phase 103-B: thread per-call display through to captureScreenshot.
+		// When `wid` is set, captureScreenshot uses maim's window-bound capture
+		// path which inherits DISPLAY from process.env transitively; when wid
+		// is absent, captureScreenshot grabs the whole display — also via env.
+		// Either way the withScopedDisplay wrapper ensures DISPLAY points at
+		// the right Xvfb for the duration of the maim subprocess.
+		return withScopedDisplay(displayArg, options.defaultDisplay, async () => {
+			const shot = await captureScreenshot(typeof w === 'number' ? {windowId: w} : undefined)
+			return {
+				content: [
+					{type: 'image', data: shot.base64, mimeType: shot.mimeType},
+					{
+						type: 'text',
+						text: `Screenshot captured (${shot.width}x${shot.height})${
+							displayArg ? ` display=${displayArg}` : ''
+						}`,
+					},
+				],
+				isError: false,
+			}
+		})
 	},
 
 	computer_move_mouse: async (args) => {
 		const coordinates = args.coordinates as {x: number; y: number}
 		const w = wid(args)
-		return withPostScreenshot(
-			`moveMouse → (${coordinates.x}, ${coordinates.y})`,
-			() => moveMouse(coordinates, w),
-			w,
+		const displayArg = parseDisplayArg(args)
+		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+			withPostScreenshot(
+				`moveMouse → (${coordinates.x}, ${coordinates.y})${displayArg ? ` display=${displayArg}` : ''}`,
+				() => moveMouse(coordinates, w),
+				w,
+			),
 		)
 	},
 
@@ -343,44 +416,53 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		const path = args.path as ReadonlyArray<{x: number; y: number}>
 		const holdKeys = args.holdKeys as ReadonlyArray<string> | undefined
 		const w = wid(args)
-		return withPostScreenshot(
-			`traceMouse path of ${path.length} points`,
-			() => traceMouse(path, holdKeys ?? undefined),
-			w,
+		const displayArg = parseDisplayArg(args)
+		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+			withPostScreenshot(
+				`traceMouse path of ${path.length} points${displayArg ? ` display=${displayArg}` : ''}`,
+				() => traceMouse(path, holdKeys ?? undefined),
+				w,
+			),
 		)
 	},
 
 	computer_click_mouse: async (args) => {
 		const w = wid(args)
-		return withPostScreenshot(
-			`clickMouse ${summarizeArgs(args)}`,
-			() =>
-				clickMouse({
-					...(args as unknown as {
-						coordinates?: {x: number; y: number}
-						button: 'left' | 'right' | 'middle'
-						clickCount: number
-						holdKeys?: readonly string[]
+		const displayArg = parseDisplayArg(args)
+		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+			withPostScreenshot(
+				`clickMouse ${summarizeArgs(args)}${displayArg ? ` display=${displayArg}` : ''}`,
+				() =>
+					clickMouse({
+						...(args as unknown as {
+							coordinates?: {x: number; y: number}
+							button: 'left' | 'right' | 'middle'
+							clickCount: number
+							holdKeys?: readonly string[]
+						}),
+						windowId: w,
 					}),
-					windowId: w,
-				}),
-			w,
+				w,
+			),
 		)
 	},
 
 	computer_press_mouse: async (args) => {
 		const w = wid(args)
-		return withPostScreenshot(
-			`pressMouse ${summarizeArgs(args)}`,
-			() =>
-				pressMouse(
-					args as unknown as {
-						coordinates?: {x: number; y: number}
-						button: 'left' | 'right' | 'middle'
-						press: 'up' | 'down'
-					},
-				),
-			w,
+		const displayArg = parseDisplayArg(args)
+		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+			withPostScreenshot(
+				`pressMouse ${summarizeArgs(args)}${displayArg ? ` display=${displayArg}` : ''}`,
+				() =>
+					pressMouse(
+						args as unknown as {
+							coordinates?: {x: number; y: number}
+							button: 'left' | 'right' | 'middle'
+							press: 'up' | 'down'
+						},
+					),
+				w,
+			),
 		)
 	},
 
@@ -389,33 +471,39 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		const button = args.button as 'left' | 'right' | 'middle'
 		const holdKeys = args.holdKeys as ReadonlyArray<string> | undefined
 		const w = wid(args)
-		return withPostScreenshot(
-			`dragMouse ${button} along ${path.length} points`,
-			() => dragMouse(path, button, holdKeys ?? undefined),
-			w,
+		const displayArg = parseDisplayArg(args)
+		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+			withPostScreenshot(
+				`dragMouse ${button} along ${path.length} points${displayArg ? ` display=${displayArg}` : ''}`,
+				() => dragMouse(path, button, holdKeys ?? undefined),
+				w,
+			),
 		)
 	},
 
 	computer_scroll: async (args) => {
 		const w = wid(args)
-		return withPostScreenshot(
-			`scroll ${summarizeArgs(args)}`,
-			() =>
-				scroll({
-					...(args as unknown as {
-						coordinates: {x: number; y: number}
-						direction: 'up' | 'down' | 'left' | 'right'
-						scrollCount: number
-						holdKeys?: readonly string[]
+		const displayArg = parseDisplayArg(args)
+		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+			withPostScreenshot(
+				`scroll ${summarizeArgs(args)}${displayArg ? ` display=${displayArg}` : ''}`,
+				() =>
+					scroll({
+						...(args as unknown as {
+							coordinates: {x: number; y: number}
+							direction: 'up' | 'down' | 'left' | 'right'
+							scrollCount: number
+							holdKeys?: readonly string[]
+						}),
+						// P100-09-02: thread the bound wid into scroll so tryXdotoolScroll
+						// activates the target window before dispatching button 4/5/6/7
+						// (Chrome filters nut-js's synthetic XTestFakeButtonEvent —
+						// same fix as P100-07.3 click). Without this, scroll-down
+						// against a WebApp Chrome silently no-ops.
+						windowId: w,
 					}),
-					// P100-09-02: thread the bound wid into scroll so tryXdotoolScroll
-					// activates the target window before dispatching button 4/5/6/7
-					// (Chrome filters nut-js's synthetic XTestFakeButtonEvent —
-					// same fix as P100-07.3 click). Without this, scroll-down
-					// against a WebApp Chrome silently no-ops.
-					windowId: w,
-				}),
-			w,
+				w,
+			),
 		)
 	},
 
@@ -425,10 +513,13 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		const keys = args.keys as ReadonlyArray<string>
 		const delay = args.delay as number | undefined
 		const w = wid(args)
-		return withPostScreenshot(
-			`typeKeys [${keys.join('+')}]`,
-			() => typeKeys(keys, delay ?? undefined, w),
-			w,
+		const displayArg = parseDisplayArg(args)
+		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+			withPostScreenshot(
+				`typeKeys [${keys.join('+')}]${displayArg ? ` display=${displayArg}` : ''}`,
+				() => typeKeys(keys, delay ?? undefined, w),
+				w,
+			),
 		)
 	},
 
@@ -436,10 +527,13 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		const keys = args.keys as ReadonlyArray<string>
 		const press = args.press as 'up' | 'down'
 		const w = wid(args)
-		return withPostScreenshot(
-			`pressKeys [${keys.join(', ')}] ${press}`,
-			() => pressKeys(keys, press, w),
-			w,
+		const displayArg = parseDisplayArg(args)
+		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+			withPostScreenshot(
+				`pressKeys [${keys.join(', ')}] ${press}${displayArg ? ` display=${displayArg}` : ''}`,
+				() => pressKeys(keys, press, w),
+				w,
+			),
 		)
 	},
 
@@ -449,10 +543,13 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		const isSensitive = args.isSensitive as boolean | undefined
 		const safeText = isSensitive ? `<${text.length} sensitive chars>` : text
 		const w = wid(args)
-		return withPostScreenshot(
-			`typeText ${JSON.stringify(safeText)}`,
-			() => typeText(text, delay ?? undefined, isSensitive ?? undefined, w),
-			w,
+		const displayArg = parseDisplayArg(args)
+		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+			withPostScreenshot(
+				`typeText ${JSON.stringify(safeText)}${displayArg ? ` display=${displayArg}` : ''}`,
+				() => typeText(text, delay ?? undefined, isSensitive ?? undefined, w),
+				w,
+			),
 		)
 	},
 
@@ -461,10 +558,13 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		const isSensitive = args.isSensitive as boolean | undefined
 		const safeText = isSensitive ? `<${text.length} sensitive chars>` : text
 		const w = wid(args)
-		return withPostScreenshot(
-			`pasteText ${JSON.stringify(safeText)}`,
-			() => pasteText(text, isSensitive ?? undefined),
-			w,
+		const displayArg = parseDisplayArg(args)
+		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+			withPostScreenshot(
+				`pasteText ${JSON.stringify(safeText)}${displayArg ? ` display=${displayArg}` : ''}`,
+				() => pasteText(text, isSensitive ?? undefined),
+				w,
+			),
 		)
 	},
 
@@ -480,13 +580,22 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		}
 	},
 
-	computer_cursor_position: async () => {
+	computer_cursor_position: async (args) => {
 		// Read-only action — no state change, no post-action screenshot.
-		const pos = await getCursorPosition()
-		return {
-			content: [{type: 'text', text: `Cursor at (${pos.x}, ${pos.y})`}],
-			isError: false,
-		}
+		// Phase 103-B: scope DISPLAY for the xdotool getmouselocation subprocess.
+		const displayArg = parseDisplayArg(args)
+		return withScopedDisplay(displayArg, options.defaultDisplay, async () => {
+			const pos = await getCursorPosition()
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `Cursor at (${pos.x}, ${pos.y})${displayArg ? ` display=${displayArg}` : ''}`,
+					},
+				],
+				isError: false,
+			}
+		})
 	},
 
 	computer_application: async (args) => {
@@ -766,6 +875,11 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 	// call) so UI displays it consistently with the other Luse tools
 	// (computer_*, set_task_status, etc.). MCP runtime is responsible
 	// for any server-prefix display, not the server itself.
+	//
+	// Phase 103-B: regex-guard the display arg through parseDisplayArg
+	// before threading into both the native listWindows({display}) call
+	// AND the process.env.DISPLAY scope (so the native primitive sees
+	// the same value transitively in case it spawns wmctrl/xdotool).
 	server.registerTool(
 		'list_windows',
 		{
@@ -773,17 +887,20 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 			inputSchema: jsonSchemaToZodRawShape(listWindowsTool.input_schema),
 		},
 		wrapHandler(async (args) => {
-			const display =
-				(typeof args.display === 'string' && args.display.length > 0
-					? args.display
-					: undefined) ?? defaultDisplay
-			const windows = display !== undefined
-				? await listWindows({display})
-				: await listWindows({})
-			return {
-				content: [{type: 'text', text: JSON.stringify(windows)}],
-				isError: false,
-			}
+			const displayArg = parseDisplayArg(args)
+			// If the arg failed regex validation but was a non-empty string,
+			// fall back to defaultDisplay (per spec). If validation passed,
+			// use the validated string.
+			const resolvedDisplay = displayArg ?? defaultDisplay
+			return withScopedDisplay(displayArg, defaultDisplay, async () => {
+				const windows = resolvedDisplay !== undefined
+					? await listWindows({display: resolvedDisplay})
+					: await listWindows({})
+				return {
+					content: [{type: 'text', text: JSON.stringify(windows)}],
+					isError: false,
+				}
+			})
 		}),
 	)
 
