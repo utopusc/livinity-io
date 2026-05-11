@@ -47,10 +47,28 @@ export interface FluxboxHandle {
 	stop(): Promise<void>
 }
 
-/** Empty-keybindings stub config so fluxbox doesn't swallow Alt+F1 etc. */
+/** Empty-keybindings stub config so fluxbox doesn't swallow Alt+F1 etc.
+ *
+ * Phase 102 UAT round 9 (2026-05-11): user reported "yayın ilk açıldığında
+ * tıklanılan konumlar doğru değil" — click coords off by fluxbox decoration
+ * offset. fluxbox adds a title bar (~16px) + borders (~2px) to every window
+ * by default. Chrome at (0,0) actually renders content at (~2, ~18) → user
+ * clicks at canvas (100, 100) → xdotool dispatches to :N (100, 100) → that's
+ * on the title bar, not Chrome content.
+ *
+ * Fix: `session.screen0.fullMaximization: true` makes maximized windows
+ * cover the FULL display including over/under decorations. Also setting
+ * decoration-related options to "NONE" to suppress title bars on Chrome.
+ */
 const EMPTY_RC = `# livinityd-managed; empty so WebApp keys pass through
 session.screen0.toolbar.visible: false
 session.screen0.workspaces: 1
+session.screen0.fullMaximization: true
+session.screen0.defaultDeco: NONE
+session.screen0.maxOverSlit: true
+session.screen0.maxIgnoreIncrement: true
+session.screen0.windowPlacement: RowMinOverlapPlacement
+session.screen0.allowRemoteActions: false
 `
 
 export async function startFluxbox(opts: StartFluxboxOpts = {}): Promise<FluxboxHandle> {
