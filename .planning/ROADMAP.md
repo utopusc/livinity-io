@@ -525,6 +525,52 @@ Plans:
 
 ---
 
+### Phase 102: Per-App Display Pivot
+
+**Goal:** Correct Phase 101's CDP-on-shared-`:1` architecture mistake (user UAT 2026-05-11). Each app gets a DEDICATED Xvfb display + its own Chrome process. Master profile seed-copy at spawn time gives same Google login across all apps without sharing user-data-dir (singleton lock isolated). x11vnc captures whole display (no WID polling). Luse coords 1:1 with 1280x720 (no 1920x1080 drift).
+
+**Full context:** `.planning/phases/102-per-app-display-pivot/102-CONTEXT.md` (10 sub-plans, 4 parallel waves, locked decisions D-102-*, 25-row UAT)
+
+**Trigger:** 2026-05-11 user UAT verbatim: "Yeni screen derken ayri Xvfb display mi istiyorsun evet. Ayni screen de iki farkli yayin yapiyorsun ustuste bindiginde sorun cikiyor. Luse duzgun kullanamiyor ayrica luse ssleri 1920x1080 aliyor bizim screen res farkli." SelfClaude reference works well (per-app user-data-dir pattern). Phase 102 adopts it + master profile seed-copy for shared Google login.
+
+**Direction:**
+- Per-app Xvfb `:N` (N ∈ 10..99) at 1280x720x24
+- Per-app Chrome subprocess with own `--user-data-dir=/tmp/livos-chrome-app-<uuid>` (singleton-isolated)
+- Master profile at `/opt/livos/data/chrome-master/` seeded via `cp -r` at every spawn (~10MB, ~200ms)
+- Chromeless fullscreen Chrome via `--app=URL --start-fullscreen` flags
+- x11vnc `-display :N` whole-screen capture (no `-id <wid>` WID filter)
+- Luse env switches `LUSE_TARGET_WINDOW_ID` → `LUSE_TARGET_DISPLAY=:N` (all X11 ops scope to :N)
+- Master Chrome Login UI in Settings (one-time login → all apps inherit)
+- Clean shutdown lifecycle (Chrome + x11vnc + Xvfb + /tmp dir cleanup)
+
+**Sacred:** `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED.
+
+**Phase 101 salvage:** ~70% retained (PortAllocator, NativeAppSpawner, Luse auto-context, dock UI, Teach v3, chat anims, Hermes relay). Replaced: 101-04 CDP-driven spawn → 102-04 Xvfb + Chrome subprocess spawn. Optional: 101-01 ChromeCdpClient kept but not wired in v1 (per-app Chrome doesn't need CDP control unless Luse later requires it).
+
+**Status:** CONTEXT authored 2026-05-11 (102-CONTEXT.md). Ready for `/gsd-autonomous --only 102`.
+
+**Decomposition:** 10 sub-plans across 4 parallel waves:
+- **Wave 1 (3 plans, parallel):** 102-01 DisplayAllocator + XvfbSpawner, 102-02 ChromeProcessSpawner, 102-03 MasterProfileSeeder
+- **Wave 2 (3 plans, parallel):** 102-04 window-manager rewrite (Xvfb + Chrome subprocess flow), 102-05 native-app-binder display swap, 102-06 Luse env switch (LUSE_TARGET_DISPLAY)
+- **Wave 3 (3 plans, parallel):** 102-07 Master Chrome Login UI, 102-08 close lifecycle (kill Chrome+x11vnc+Xvfb+rm /tmp), 102-09 x11vnc -display :N rewrite
+- **Wave 4 (1 plan, user-walked):** 102-10 Mini PC deploy + 25-row UAT
+
+**Plans:** 10 plans (Wave 0 not needed — test stubs added per-plan)
+
+Plans:
+- [ ] 102-01-PLAN.md — DisplayAllocator + XvfbSpawner
+- [ ] 102-02-PLAN.md — ChromeProcessSpawner (per-app subprocess + --app=URL fullscreen)
+- [ ] 102-03-PLAN.md — MasterProfileSeeder (cp -r master → app dir)
+- [ ] 102-04-PLAN.md — window-manager rewrite (Xvfb + Chrome process + x11vnc orchestrator)
+- [ ] 102-05-PLAN.md — native-app-binder display swap (DisplayAllocator instead of WM_CLASS)
+- [ ] 102-06-PLAN.md — Luse LUSE_TARGET_DISPLAY env switch
+- [ ] 102-07-PLAN.md — Master Chrome Login UI in Settings
+- [ ] 102-08-PLAN.md — App close lifecycle (clean Chrome+x11vnc+Xvfb+/tmp)
+- [ ] 102-09-PLAN.md — x11vnc -display :N whole-screen rewrite
+- [ ] 102-10-PLAN.md — Mini PC deploy + 25-row UAT walk (autonomous: false)
+
+---
+
 ## Coverage
 
 All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-LOOP/RELIAB/BROKER-CARRY/MEM/MARKET) mapped to phases 64-76. 100% coverage. See REQUIREMENTS.md Traceability table (filled by phase planning).
