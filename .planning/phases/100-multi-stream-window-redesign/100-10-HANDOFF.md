@@ -117,7 +117,22 @@ ROADMAP.md:475'te Phase 101 entry mevcut. Sub-goals A/B/C planted. Başlamak iç
 
 - ✅ 11 sub-plan (100-10-01..06, 08, 09, 10, 11, 12) ship edildi
 - ✅ 1 deploy 100-10-01..08 (Mini PC SHA `12f7b75`)
-- ⏳ 1 batch deploy (100-10-09 + 10 + 11) tetiklendi, ZT timeout'a takıldı — verify pending
+- ✅ 1 batch deploy (100-10-09 + 10 + 11) — Mini PC `LivOS updated successfully` confirmed (log tail)
+- ⚠ Detaylı env probe yapılamadı (ZeroTier flap'leri SSH'ları araya kesiyor) — verify checklist için aşağıya bak.
+
+**Verify edilemeyenler (ZT instability nedeniyle):**
+- MCP child process'in `DISPLAY=:1` env'i taşıyıp taşımadığı — son probe `pgrep` PID 196202 buldu ama `cat /proc/PID/environ` çıktısı boş döndü (timeout veya izin race). Manuel verify gerekiyor (handoff verify komutları aşağıda).
+- Redis bytebot count = 1 (idi 20 — büyük çoğunluk silindi). Hangi anahtarın kaldığını verify et:
+  ```bash
+  ssh ... bruce@10.69.31.68 \
+    "sudo redis-cli -a 'a3bb23cb283fa2afdd9ad8946166d4505b5679ef107b9565' KEYS 'liv:cap:*bytebot*'" 2>&1 | grep -v Warning
+  ```
+  Eğer 1 anahtar kalmışsa (büyük olasılıkla `liv:cap:mcp:bytebot` ana entry), elle sil:
+  ```bash
+  ssh ... bruce@10.69.31.68 \
+    "sudo redis-cli -a 'a3bb23cb283fa2afdd9ad8946166d4505b5679ef107b9565' DEL liv:cap:mcp:bytebot"
+  ```
+  Sonra `systemctl restart livos` ki UI MCP listesi refresh olsun.
 - ✅ Auth sorunları çözüldü (multi_user OFF, sdk-subscription, Chrome singleton clean)
 - ✅ Phase 101 roadmap entry + 3 sub-goal planted
 - ✅ UAT-CHECKLIST.md güncellendi (post 09/10/11 row updates + new row 16 per-tool streaming)
