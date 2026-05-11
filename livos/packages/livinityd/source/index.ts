@@ -49,9 +49,8 @@ import {startFluxbox, type FluxboxHandle} from './modules/webapps/fluxbox-wm.js'
 // Phase 102-01 — legacy `webapps/display-allocator.ts` (string-returning,
 // Phase 100-10-01 scaffolding) DELETED. The number-returning replacement
 // lives at `streaming/display-allocator.ts` (composed with `streaming/
-// xvfb-spawner.ts` for per-app X display orchestration). Wave 2 plan 102-04
-// will wire WebAppWindowManager to consume both modules in the spawn body;
-// for now livinityd no longer pre-constructs an allocator at boot.
+// xvfb-spawner.ts` for per-app X display orchestration). Phase 102-04 wires
+// `new DisplayAllocator()` into `WebAppWindowManager` ctor (below).
 // Phase 100-08-04 — McpConfigManager + Luse server path threaded into
 // WebAppWindowManager so spawn/close lifecycle registers a per-WebApp
 // Luse MCP child via Redis pub-sub (liv-core's McpClientManager
