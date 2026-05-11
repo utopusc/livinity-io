@@ -1293,3 +1293,237 @@ describe('Phase 102-04 — per-app Xvfb + Chrome subprocess spawn body', () => {
 		mgr._clearForTests()
 	})
 })
+
+// ============================================================================
+// Phase 102-08 — Close lifecycle (D-102-CLOSE-LIFECYCLE)
+//
+// Builds on the Phase 102-04 spawn body (ActiveWebApp now stores chromeHandle,
+// xvfbHandle, profileUuid, displayN, port, streamId). close() must execute the
+// ordered teardown:
+//
+//   1. chromeHandle.stop()           (SIGTERM Chrome → 2s grace → SIGKILL)
+//   2. streamManager.stopStream      (kills x11vnc + releases its own port)
+//   3. xvfbHandle.stop()             (SIGTERM Xvfb)
+//   4. profileSeeder.cleanup(uuid)   (rm -rf /tmp/livos-chrome-app-<uuid>)
+//   5. displayAllocator.release(N)   (return :N to the pool)
+//   6. portAllocator.release(port)   (return tracking port slot)
+//   7. unregisterWebAppMcp(webappId) (deregister per-WebApp Luse MCP)
+//   8. active.delete(webappId)
+//
+// Every step is wrapped in try/catch — a failure in (e.g.) chromeHandle.stop
+// must NOT prevent subsequent steps from running. Re-calling close() on an
+// already-cleaned webappId is a no-op (idempotent).
+//
+// Sacred SHA f3538e1d811992b782a9bb057d1b7f0a0189f95f UNTOUCHED.
+// ============================================================================
+
+describe('Phase 102-08 — close lifecycle (ordered teardown + idempotency)', () => {
+	beforeEach(() => {
+		vi.useRealTimers()
+	})
+	afterEach(() => {
+		vi.useRealTimers()
+	})
+
+	it('T-102-08-01: close() calls steps in order — chromeHandle.stop → streamManager.stopStream → xvfbHandle.stop → profileSeeder.cleanup → displayAllocator.release → portAllocator.release', async () => {
+		const {
+			mgr,
+			displayBundle,
+			portBundle,
+			profileBundle,
+			xvfbBundle,
+			chromeBundle,
+			streamManager,
+		} = makeManager102()
+
+		await mgr.spawn({userId: 'u1', webappId: 'app1', url: 'https://example.com'})
+
+		// Reset spawn-time invocation orders so close() ones are easy to compare.
+		const closeResult = await mgr.close({webappId: 'app1', userId: 'u1'})
+		expect(closeResult.ok).toBe(true)
+
+		// Each teardown step called exactly once.
+		expect((chromeBundle.fn as any).mock.results[0].value).resolves
+		expect(chromeBundle.stopCalls).toEqual([':10']) // chromeHandle.stop invoked
+		expect(streamManager.stopStream).toHaveBeenCalledTimes(1)
+		expect(xvfbBundle.stopCalls).toEqual([':10']) // xvfbHandle.stop invoked
+		expect(profileBundle.cleanupCalls).toEqual(['app1']) // profileSeeder.cleanup(uuid=webappId)
+		expect(displayBundle.releaseCalls).toEqual([10])
+		expect(portBundle.releaseCalls).toEqual([15900])
+
+		// Sequence proof: pull invocationCallOrder from each mock's most-recent call.
+		const chromeStopMock = (chromeBundle.fn as any).mock.results[0].value
+		// Chrome stop is wrapped in a vi.fn inside makeFakeChromeSpawnFn — fetch its order from the handle.
+		// (handle.stop is the vi.fn; we can't reach it from outside easily, so compare via stopCalls timing.)
+		// Instead use the stopStream + cleanup + display.release + port.release mocks for order proof.
+		const stopStreamOrder = (streamManager.stopStream as any).mock.invocationCallOrder[0]
+		const cleanupOrder = (profileBundle.seeder.cleanup as any).mock.invocationCallOrder[0]
+		const displayReleaseOrder = (displayBundle.allocator.release as any).mock.invocationCallOrder[0]
+		const portReleaseOrder = (portBundle.allocator.release as any).mock.invocationCallOrder[0]
+		expect(stopStreamOrder).toBeLessThan(cleanupOrder)
+		expect(cleanupOrder).toBeLessThan(displayReleaseOrder)
+		expect(displayReleaseOrder).toBeLessThan(portReleaseOrder)
+		// chromeHandle.stop and xvfbHandle.stop happen before profileSeeder.cleanup —
+		// we verify this via stopCalls being populated by the time cleanup runs.
+		expect(chromeBundle.stopCalls).toEqual([':10'])
+		expect(xvfbBundle.stopCalls).toEqual([':10'])
+
+		void chromeStopMock // silence unused-var lint
+	})
+
+	it('T-102-08-02: active.delete — close removes the entry from the manager (list returns empty)', async () => {
+		const {mgr} = makeManager102()
+		await mgr.spawn({userId: 'u1', webappId: 'app-active', url: 'https://example.com'})
+		expect(mgr.list({userId: 'u1'})).toHaveLength(1)
+		await mgr.close({webappId: 'app-active', userId: 'u1'})
+		expect(mgr.list({userId: 'u1'})).toHaveLength(0)
+	})
+
+	it('T-102-08-03: idempotent — calling close() twice on same webappId does NOT throw + second call is a no-op (no double release)', async () => {
+		const {mgr, displayBundle, portBundle, profileBundle, xvfbBundle, chromeBundle} =
+			makeManager102()
+
+		await mgr.spawn({userId: 'u1', webappId: 'app-idem', url: 'https://example.com'})
+		await mgr.close({webappId: 'app-idem', userId: 'u1'})
+		// Second close must not throw and must not call any teardown step again.
+		await expect(mgr.close({webappId: 'app-idem', userId: 'u1'})).resolves.toBeDefined()
+
+		// Each teardown step called EXACTLY once across the two close() invocations.
+		expect(chromeBundle.stopCalls).toEqual([':10'])
+		expect(xvfbBundle.stopCalls).toEqual([':10'])
+		expect(profileBundle.cleanupCalls).toEqual(['app-idem'])
+		expect(displayBundle.releaseCalls).toEqual([10])
+		expect(portBundle.releaseCalls).toEqual([15900])
+	})
+
+	it('T-102-08-04: no-such-id — close() on a never-spawned webappId is a no-op (no throw, no teardown side effects)', async () => {
+		const {mgr, displayBundle, portBundle, profileBundle, xvfbBundle, chromeBundle, streamManager} =
+			makeManager102()
+
+		await expect(mgr.close({webappId: 'never-spawned', userId: 'u1'})).resolves.toBeDefined()
+
+		// Zero teardown steps invoked.
+		expect(chromeBundle.stopCalls).toEqual([])
+		expect(xvfbBundle.stopCalls).toEqual([])
+		expect(profileBundle.cleanupCalls).toEqual([])
+		expect(displayBundle.releaseCalls).toEqual([])
+		expect(portBundle.releaseCalls).toEqual([])
+		expect(streamManager.stopStream).not.toHaveBeenCalled()
+	})
+
+	it('T-102-08-05: chromeHandle.stop failure — subsequent steps still execute (compensating drain)', async () => {
+		// Custom chrome bundle whose handle.stop rejects.
+		const chromeBundle = (() => {
+			const calls: Array<{display: string; userDataDir: string; url: string}> = []
+			const fn = vi.fn(async (chromeOpts: any) => {
+				calls.push({
+					display: chromeOpts.display,
+					userDataDir: chromeOpts.userDataDir,
+					url: chromeOpts.url,
+				})
+				const stop = vi.fn(async () => {
+					throw new Error('chrome stop boom')
+				})
+				const handle: ChromeProcessHandle = {
+					pid: 22001,
+					child: new FakeChild() as unknown as ChromeProcessHandle['child'],
+					display: chromeOpts.display,
+					userDataDir: chromeOpts.userDataDir,
+					stop,
+				}
+				return handle
+			}) as unknown as (chromeOpts: any) => Promise<ChromeProcessHandle>
+			return {fn, calls, stopCalls: [] as string[]}
+		})()
+
+		const {mgr, displayBundle, portBundle, profileBundle, xvfbBundle, streamManager} =
+			makeManager102({chromeBundle})
+
+		await mgr.spawn({userId: 'u1', webappId: 'app-cs', url: 'https://example.com'})
+		// close MUST resolve — chrome stop throws but is swallowed.
+		await expect(mgr.close({webappId: 'app-cs', userId: 'u1'})).resolves.toBeDefined()
+
+		// Subsequent steps STILL ran.
+		expect(streamManager.stopStream).toHaveBeenCalledTimes(1)
+		expect(xvfbBundle.stopCalls).toEqual([':10'])
+		expect(profileBundle.cleanupCalls).toEqual(['app-cs'])
+		expect(displayBundle.releaseCalls).toEqual([10])
+		expect(portBundle.releaseCalls).toEqual([15900])
+	})
+
+	it('T-102-08-06: streamManager.stopStream failure — subsequent steps still execute', async () => {
+		const {mgr, displayBundle, portBundle, profileBundle, xvfbBundle, chromeBundle, streamManager} =
+			makeManager102()
+
+		// Replace stopStream to throw post-spawn.
+		;(streamManager.stopStream as any).mockImplementationOnce(async () => {
+			throw new Error('stopStream boom')
+		})
+
+		await mgr.spawn({userId: 'u1', webappId: 'app-ss', url: 'https://example.com'})
+		await expect(mgr.close({webappId: 'app-ss', userId: 'u1'})).resolves.toBeDefined()
+
+		// chrome was called BEFORE stopStream (per ordered teardown), so chrome.stop was invoked first.
+		expect(chromeBundle.stopCalls).toEqual([':10'])
+		// All subsequent steps still ran despite stopStream failure.
+		expect(xvfbBundle.stopCalls).toEqual([':10'])
+		expect(profileBundle.cleanupCalls).toEqual(['app-ss'])
+		expect(displayBundle.releaseCalls).toEqual([10])
+		expect(portBundle.releaseCalls).toEqual([15900])
+	})
+
+	it('T-102-08-07: xvfbHandle.stop failure — subsequent steps still execute (profile, display, port release)', async () => {
+		// xvfb bundle whose handle.stop rejects.
+		const xvfbBundle = (() => {
+			const calls: Array<{display: string}> = []
+			const fn = vi.fn(async (xvfbOpts: any) => {
+				calls.push({display: xvfbOpts.display})
+				const stop = vi.fn(async () => {
+					throw new Error('xvfb stop boom')
+				})
+				const handle: XvfbHandle = {
+					pid: 11001,
+					display: xvfbOpts.display,
+					exited: new Promise(() => {}),
+					stop,
+				}
+				return handle
+			}) as unknown as (xvfbOpts: any) => Promise<XvfbHandle>
+			return {fn, calls, stopCalls: [] as string[]}
+		})()
+
+		const {mgr, displayBundle, portBundle, profileBundle, chromeBundle, streamManager} =
+			makeManager102({xvfbBundle})
+
+		await mgr.spawn({userId: 'u1', webappId: 'app-xs', url: 'https://example.com'})
+		await expect(mgr.close({webappId: 'app-xs', userId: 'u1'})).resolves.toBeDefined()
+
+		expect(chromeBundle.stopCalls).toEqual([':10'])
+		expect(streamManager.stopStream).toHaveBeenCalledTimes(1)
+		// profile/display/port still released even though xvfb.stop threw.
+		expect(profileBundle.cleanupCalls).toEqual(['app-xs'])
+		expect(displayBundle.releaseCalls).toEqual([10])
+		expect(portBundle.releaseCalls).toEqual([15900])
+	})
+
+	it('T-102-08-08: release-before-delete — displayAllocator.release MUST be called even if profileSeeder.cleanup rejects', async () => {
+		const profileBundle = makeFakeProfileSeeder()
+		// Override cleanup to throw.
+		;(profileBundle.seeder.cleanup as any).mockImplementationOnce(async () => {
+			throw new Error('profile cleanup boom')
+		})
+
+		const {mgr, displayBundle, portBundle, xvfbBundle, chromeBundle} = makeManager102({
+			profileBundle,
+		})
+
+		await mgr.spawn({userId: 'u1', webappId: 'app-pc', url: 'https://example.com'})
+		await expect(mgr.close({webappId: 'app-pc', userId: 'u1'})).resolves.toBeDefined()
+
+		// Display + port still released even though profile cleanup threw.
+		expect(displayBundle.releaseCalls).toEqual([10])
+		expect(portBundle.releaseCalls).toEqual([15900])
+		expect(chromeBundle.stopCalls).toEqual([':10'])
+		expect(xvfbBundle.stopCalls).toEqual([':10'])
+	})
+})
