@@ -337,8 +337,17 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 		}
 
 		const onKeyDown = (ev: KeyboardEvent) => {
-			// Only act when our container is the active element (focus-scoped).
-			if (document.activeElement !== container) return
+			// Phase 102 r13b — focus-scoped guard accepts the container OR any
+			// of its descendants. After a click, noVNC's <canvas> child often
+			// steals focus from the container even though we call
+			// `container.focus()` in onMouseDown — clicking a canvas focuses
+			// it implicitly in most browsers. The previous strict equality
+			// guard then dropped every keystroke (server saw zero
+			// webapp.input.type / keypress entries despite the user typing).
+			// `container.contains(activeElement)` lets the descendant case
+			// through while still scoping keys to this WebApp window.
+			const ae = document.activeElement
+			if (ae !== container && !container.contains(ae)) return
 			const special = SPECIAL_KEYS[ev.key]
 			if (special) {
 				ev.preventDefault()
