@@ -34,15 +34,18 @@
 import {spawn as nodeSpawn, type ChildProcess, type SpawnOptions} from 'node:child_process'
 
 /**
- * userDataDir regex — `/tmp/livos-chrome-app-<uuid v4-shaped>`.
+ * userDataDir regex — either `/tmp/livos-chrome-app-<uuid v4>` (per-app)
+ * OR the master profile constant `/opt/livos/data/chrome-master`.
  *
- * UUID v4 grammar (8-4-4-4-12 hex). Allows lowercase hex only; the profile-
- * seeder (102-03) always emits lowercase via `crypto.randomUUID()`. Anything
- * outside this shape (path traversal, alternate /tmp paths, non-UUID suffix)
- * is rejected.
+ * Phase 103-01 widening rationale (T-103-01-02): master path is a
+ * hardcoded constant in master-login-routes.ts (MASTER_PROFILE_DIR), not
+ * a caller-controlled value. Adding it as a second alternative (NOT a
+ * pattern) preserves T-102-02 protection for the per-app branch — no
+ * /etc/passwd, /opt/livos/data/chrome-master/.. or trailing-path injection
+ * is possible because both alternatives are fully anchored (^ ... $).
  */
 const USER_DATA_DIR_RE =
-	/^\/tmp\/livos-chrome-app-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
+	/^(\/tmp\/livos-chrome-app-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|\/opt\/livos\/data\/chrome-master)$/
 
 /**
  * Display regex — `:1` .. `:99` only.
