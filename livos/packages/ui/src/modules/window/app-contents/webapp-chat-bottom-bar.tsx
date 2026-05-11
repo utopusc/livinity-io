@@ -1,5 +1,8 @@
 // DEPRECATED 2026-05-10 (P100-09-08): persistent inline chat bar removed.
 //
+// Phase 101-09: animations land in webapp-floating-action-bar.tsx, NOT here.
+// See 101-PATTERNS.md risk note #1.
+//
 // The action bar (webapp-floating-action-bar.tsx) now transforms to a
 // chat input row on Chat icon click — a 2-mode state machine (icons |
 // chat-input) replacing this component. Per user feedback after 09-05
