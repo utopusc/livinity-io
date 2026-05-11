@@ -498,7 +498,7 @@ export class WebAppWindowManager {
 			// until Phase 103 ships display-aware tool args. Default back ON;
 			// opt-out via LIVOS_PER_APP_LUSE=0 (e.g. for token-budget testing).
 			if (process.env.LIVOS_PER_APP_LUSE !== '0') {
-				await this.registerWebAppMcp(opts.webappId, 0, display)
+				await this.registerWebAppMcp(opts.webappId, 0, display, opts.url)
 			} else {
 				this.logger?.info?.(
 					`webapp ${opts.webappId}: per-WebApp Luse MCP SKIPPED (LIVOS_PER_APP_LUSE=0). Agent will NOT see per-app windows via list_windows — only :1.`,
@@ -726,8 +726,10 @@ export class WebAppWindowManager {
 		}
 
 		// 7. Phase 100-08-04 — deregister per-WebApp Luse MCP entry.
+		// Phase 102 r8: pass entry.url so deregister can re-derive the slug-
+		// based name (matches what register installed).
 		try {
-			await this.deregisterWebAppMcp(opts.webappId)
+			await this.deregisterWebAppMcp(opts.webappId, entry.url)
 		} catch (err) {
 			this.logger?.warn?.(
 				`webapp ${opts.webappId}: deregisterWebAppMcp threw (non-fatal)`,
@@ -743,15 +745,36 @@ export class WebAppWindowManager {
 		return {ok: true}
 	}
 
-	/** Phase 100-08-04 — server name format for the per-WebApp Luse MCP child. */
-	private mcpServerNameFor(webappId: string): string {
-		return `luse:webapp:${webappId}`
+	/**
+	 * Phase 100-08-04 — server name format for the per-WebApp Luse MCP child.
+	 *
+	 * Phase 102 UAT round 8 (2026-05-11): user feedback "kod yerine yandex
+	 * yazsa app adi" — replace UUID with URL-derived slug. We append the
+	 * first 4 chars of the webappId to keep names unique when the user opens
+	 * the same domain multiple times (e.g. `luse:webapp:yandex-91c9` and
+	 * `luse:webapp:yandex-a3a1`). Falls back to webappId-only if url is
+	 * missing (deregister path during error recovery).
+	 */
+	private mcpServerNameFor(webappId: string, url?: string): string {
+		if (!url) return `luse:webapp:${webappId}`
+		let slug = 'webapp'
+		try {
+			const host = new URL(url).hostname.replace(/^www\./, '')
+			// "yandex.com" → "yandex"; "livinity.io" → "livinity"
+			slug = (host.split('.')[0] || 'webapp').toLowerCase().replace(/[^a-z0-9]/g, '')
+			if (!slug) slug = 'webapp'
+		} catch {
+			// Invalid URL — keep fallback "webapp"
+		}
+		const suffix = webappId.substring(0, 4)
+		return `luse:webapp:${slug}-${suffix}`
 	}
 
 	private async registerWebAppMcp(
 		webappId: string,
 		_wid: number,
 		display: string = ':1',
+		url?: string,
 	): Promise<void> {
 		if (!this.mcpConfigManager || !this.luseServerPath) return
 		try {
@@ -760,12 +783,18 @@ export class WebAppWindowManager {
 			// remains in this method signature for legacy log/IPC paths; only the
 			// MCP descriptor stops carrying it. `display` (the dedicated Xvfb :N
 			// for this WebApp from 102-01's DisplayAllocator) is the scope unit.
+			//
+			// Phase 102 UAT r8: server name is now URL-slug-based (e.g.
+			// `luse:webapp:yandex-91c9`) for readability — see mcpServerNameFor.
 			const descriptor: PerWebAppMcpDescriptor = {
 				instanceKey: webappId,
 				display,
 			}
 			const config = buildLuseConfig(this.luseMcpEnv, this.luseServerPath, descriptor)
-			const name = this.mcpServerNameFor(webappId)
+			const name = this.mcpServerNameFor(webappId, url)
+			// Override the auto-generated config.name with our slug-based name
+			// (buildLuseConfig may default to instanceKey-based name).
+			;(config as {name?: string}).name = name
 			try {
 				await this.mcpConfigManager.installServer(config)
 			} catch (installErr) {
@@ -787,10 +816,10 @@ export class WebAppWindowManager {
 		}
 	}
 
-	private async deregisterWebAppMcp(webappId: string): Promise<void> {
+	private async deregisterWebAppMcp(webappId: string, url?: string): Promise<void> {
 		if (!this.mcpConfigManager) return
 		try {
-			await this.mcpConfigManager.removeServer(this.mcpServerNameFor(webappId))
+			await this.mcpConfigManager.removeServer(this.mcpServerNameFor(webappId, url))
 			this.logger?.info?.(
 				`webapp ${webappId} per-WebApp Luse MCP deregistered ` +
 					`(liv-core reconcile is async via Redis pub-sub)`,
