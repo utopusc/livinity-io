@@ -654,10 +654,11 @@ export class WebAppWindowManager {
 	): Promise<void> {
 		if (!this.mcpConfigManager || !this.luseServerPath) return
 		try {
-			// Phase 102-06 — PerWebAppMcpDescriptor was tightened to {instanceKey,
-			// display} only; the legacy windowId is no longer carried. The wid
-			// arg above is kept in the signature for v33 call-site compat but
-			// intentionally unused.
+			// Phase 102-06 — PerWebAppMcpDescriptor.windowId dropped (per-WebApp
+			// Luse now scopes by X11 display, not window-id). The `wid` argument
+			// remains in this method signature for legacy log/IPC paths; only the
+			// MCP descriptor stops carrying it. `display` (the dedicated Xvfb :N
+			// for this WebApp from 102-01's DisplayAllocator) is the scope unit.
 			const descriptor: PerWebAppMcpDescriptor = {
 				instanceKey: webappId,
 				display,
