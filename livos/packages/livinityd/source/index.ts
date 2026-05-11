@@ -74,6 +74,15 @@ import {NativeAppConfigStore} from './modules/apps/native-app-config.js'
 // `xdotool search --pid <pid>` BEFORE issuing CDP createTarget
 // (RESEARCH Q1 RESOLVED — PID-narrowed wid lookup replaces title race).
 import {bootstrapChrome, ChromeCdpClient} from './modules/chrome-cdp/index.js'
+// Phase 102-03 — Master Chrome profile seeder (D-102-MASTER-PROFILE-SEED).
+// Boot-time `ensureMasterExists()` creates `/opt/livos/data/chrome-master/`
+// if absent (user populates by running Settings → Chrome Master Login from
+// plan 102-07). Boot-time `sweepOrphans()` removes leftover
+// `/tmp/livos-chrome-app-*` dirs from any prior livinityd crash (cleanup
+// gate from D-102-CLOSE-LIFECYCLE). Wave 2 plan 102-04 (window-manager
+// rewrite) will consume `this.profileSeeder` to copy master → per-app dir
+// at every WebApp spawn.
+import {createProfileSeeder, type ProfileSeederHandle} from './modules/chrome-master/index.js'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -219,6 +228,12 @@ export default class Livinityd {
 	// via CDP (Target.createTarget for new windows; closeTarget for tear
 	// down) instead of the legacy `sudo google-chrome ...` argv path.
 	chromeCdpClient?: ChromeCdpClient
+	// Phase 102-03 — Master profile seeder handle. Constructed in start()
+	// AFTER StreamManager (matches the streamManager/webappWindowManager
+	// lifecycle pattern). Null while livinityd is still booting — Wave 2
+	// plan 102-04 (window-manager rewrite) will consume this once the
+	// per-app spawn flow is rewritten.
+	profileSeeder: ProfileSeederHandle | null = null
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -443,6 +458,44 @@ export default class Livinityd {
 			streamingLogger.info(
 				`StreamManager started (cap=${this.streamManager.getCap()}, port-range=[15900,16000))`,
 			)
+
+			// Phase 102-03 — Master Chrome profile seeder
+			// (D-102-MASTER-PROFILE-SEED).
+			//
+			// ensureMasterExists() creates /opt/livos/data/chrome-master/
+			// when absent so the Master Chrome Login flow (plan 102-07) can
+			// later populate it via `--user-data-dir`. sweepOrphans() drops
+			// any /tmp/livos-chrome-app-* leftovers from a prior livinityd
+			// crash (D-102-CLOSE-LIFECYCLE — boot-time gate). Both steps
+			// are non-fatal: failure logs warn/error but boot continues
+			// (the per-app spawn path that consumes profileSeeder is added
+			// by Wave 2 plan 102-04; until then, this is plumbing only).
+			const profileSeederLogger = (() => {
+				const c = this.logger.createChildLogger('profile-seeder')
+				return {
+					info: (msg: string) => c.log(msg),
+					warn: (msg: string, error?: unknown) => c.error(msg, error),
+					error: (msg: string, error?: unknown) => c.error(msg, error),
+					verbose: (msg: string) => c.verbose(msg),
+				}
+			})()
+			this.profileSeeder = createProfileSeeder({logger: profileSeederLogger})
+			try {
+				await this.profileSeeder.ensureMasterExists()
+			} catch (err) {
+				this.logger.error(
+					'profile-seeder.ensureMasterExists failed (non-fatal — Master Login UI will surface remediation)',
+					err,
+				)
+			}
+			try {
+				await this.profileSeeder.sweepOrphans()
+			} catch (err) {
+				this.logger.error(
+					'profile-seeder.sweepOrphans failed (non-fatal — orphan /tmp dirs may linger until manual cleanup)',
+					err,
+				)
+			}
 
 			// Phase 100-08-01 fallback Xvfb on :1 — back-compat for non-WebApp
 			// surfaces; per-WebApp Xvfb in 100-10-01 supersedes for WebApp
