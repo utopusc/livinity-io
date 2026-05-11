@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-11T12:13:19.481Z"
+last_updated: "2026-05-11T22:00:00.000Z"
 progress:
-  total_phases: 51
+  total_phases: 52
   completed_phases: 25
-  total_plans: 197
-  completed_plans: 191
-  percent: 97
+  total_plans: 203
+  completed_plans: 192
+  percent: 94
 ---
 
 # Project State
@@ -25,9 +25,17 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 101 (LivOS Universal App Orchestration) — EXECUTING
-Plan: 2 of 11
+Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — EXECUTING
+Plan: 2 of 6 (103-01 ✅ shipped; 103-02 next)
 Milestone: v33.0 (active) — Phase 100 PARTIAL-PASS; 100-08 closes residual bugs from 100-07
+
+## 103-01 Status (2026-05-11) — Sub-goal A backend: Master Chrome Xvfb pipeline
+
+- Wave 1 (103-01): ✅ COMPLETE — `978f7bae..f0f09922` (3 commits) — chrome-process-spawner USER_DATA_DIR_RE widened + master-login-routes refactored to factory-injected router with startLogin/stopLogin/input.{click,key,type,scroll} + production wire-up via setProductionAppRouter swap pattern
+- Tests: chrome-master (29 pass) + webapps (191/213) + streaming (92/93) suites green; +10 new master-login-routes tests + 4 new chrome-process-spawner tests
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 3 commits
+
+**Carry-forward to 103-02:** `chromeMaster.status` returns `{display, wsUrl, streamId}` when running. UI must gate `useWebAppVnc(wsUrl)` on `wsUrl !== null` (Pitfall 4). `input.*` mutations are admin-gated and derive `display` from currentMaster — UI sends only `{x, y, button, kind}` etc.
 
 ## 101-00 Wave Status (2026-05-11) — Wave 0 Scaffolding
 
@@ -131,7 +139,7 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 101 (LivOS Universal App Orchestration) — 11 plans — 2026-05-11T06:06:50.334Z
+**Planned Phase:** 103 (Master Chrome Streaming + Single-MCP Display-Aware) — 6 plans — 2026-05-11T20:08:40.551Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
