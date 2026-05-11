@@ -46,18 +46,28 @@ import {PortAllocator} from './port-allocator.js'
 // covered by attachVncBridge's 3×100ms retry (Pitfall 4 mitigation in
 // vnc-bridge.ts).
 
-// Phase 100-10-04 (D-100-10-C): vnc-window mode now accepts {display} target
-// for whole-display capture (luse__create_stream tool surface). When the union
-// member with `display` is supplied, the spawn path uses vnc-bridge's
-// `-display :N` mode (already added in 100-10-01) and the idempotency cache
-// key (JSON.stringify(target)) naturally distinguishes {display} from {wid}.
-export type VncWindowTarget = {wid: number} | {display: string}
+// Phase 102-09 (D-102-X11VNC-WHOLE-DISPLAY): VncStreamTarget is the canonical
+// name for the vnc-window target discriminated union. {display: ':N'} captures
+// the whole Xvfb display (Phase 102+ default — per-app Xvfb from
+// DisplayAllocator gives each app a dedicated 1280x720 canvas). {wid: number}
+// is the legacy single-window region capture path (Phase 99 baseline; back-
+// compat for v33 idle-cleanup poller and integration tests).
+//
+// New callers should use VncStreamTarget and prefer the {display} variant.
+// The legacy alias VncWindowTarget is kept for back-compat with existing
+// imports (Phase 100-10-04 scaffolding) and resolves to the same type.
+//
+// The idempotency cache key (JSON.stringify(target)) naturally distinguishes
+// {display} from {wid} so the two variants never collide.
+export type VncStreamTarget = {display: string} | {wid: number}
+/** @deprecated Renamed to VncStreamTarget in Phase 102-09. Kept as alias for back-compat. */
+export type VncWindowTarget = VncStreamTarget
 
 export type StreamTarget =
 	| Omit<DesktopOpts, 'mode'>
 	| Omit<WindowCropOpts, 'mode'>
 	| Omit<PipewireFdOpts, 'mode'>
-	| VncWindowTarget
+	| VncStreamTarget
 
 export type StartStreamOpts = {
 	userId: string
@@ -101,7 +111,7 @@ type VncSession = {
 	streamId: string
 	userId: string
 	mode: 'vnc-window'
-	target: VncWindowTarget
+	target: VncStreamTarget
 	targetKey: string
 	x11vnc: ChildProcess
 	rfbPort: number
@@ -206,14 +216,18 @@ export class StreamManager extends EventEmitter {
 		// 2.5 Phase 99 — vnc-window branch (D-99-04). Returns BEFORE the
 		// ffmpeg/gst argv builder so encoder-args is never invoked for vnc.
 		//
-		// Phase 100-10-04 (D-100-10-C): vnc-window mode now accepts EITHER
-		// `{wid: number}` (legacy single-window capture, x11vnc -id 0xHEX) OR
-		// `{display: string}` (whole-display capture, x11vnc -display :N — used
-		// by the luse__create_stream tool surface). The discriminated union
-		// picks the right spawnVncForWindow argv shape; the idempotency key
-		// (JSON.stringify(target)) naturally separates the two variants.
+		// Phase 102-09 (D-102-X11VNC-WHOLE-DISPLAY): {display} is the
+		// canonical target — per-app Xvfb gives each app a dedicated 1280x720
+		// canvas and x11vnc captures it whole via `-display :N`. {wid} is
+		// retained for v33 idle-cleanup poller compat; new callers should use
+		// the display variant.
+		//
+		// The discriminated union picks the right spawnVncForWindow argv
+		// shape; the idempotency key (JSON.stringify(target)) naturally
+		// separates the two variants so a {display} stream and a {wid}
+		// stream never collide in the cache.
 		if (opts.mode === 'vnc-window') {
-			const target = opts.target as VncWindowTarget
+			const target = opts.target as VncStreamTarget
 			const hasWid = 'wid' in target && typeof target.wid === 'number'
 			const hasDisplay =
 				'display' in target && typeof target.display === 'string' && target.display.length > 0
