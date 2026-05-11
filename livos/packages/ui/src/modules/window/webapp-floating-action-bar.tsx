@@ -367,6 +367,14 @@ function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
 	// removed so a single WS instance is shared across the mode flip.
 	void webappId
 	const [input, setInput] = useState('')
+	// Phase 101-09 (D-101-CHAT-ANIMS) — focus state drives the idle-pulse
+	// gating predicate. The Input element fires onFocus/onBlur into this
+	// local boolean; the `chat-input-idle` utility class is applied to the
+	// pill border ONLY when `!isFocused && input.length === 0 &&
+	// !agent.isStreaming`. See index.css `@keyframes idleBreath` (4s
+	// ease-in-out, opacity 0.3↔0.8) and the prefers-reduced-motion override
+	// (Q5 RESOLVED — OS-level only, no per-user Settings toggle).
+	const [isFocused, setIsFocused] = useState(false)
 	const inputRef = useRef<HTMLInputElement>(null)
 
 	// Auto-focus on mount + bind Escape-to-close at window level so the
@@ -395,6 +403,37 @@ function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
 		onSent()
 	}, [agent, input, onSent])
 
+	// Phase 101-09 (D-101-CHAT-ANIMS, Pillar E) — thinking-dots gate.
+	//
+	// CONTEXT line 122 specifies: render the 3 staggered dots when
+	// `isStreaming && messages.length === lastSentCount` (user sent, no
+	// response token yet). `useWebAppAgent` does not expose
+	// `lastSentCount` directly, so we derive the same predicate from the
+	// observable messages array: the latest assistant message either does
+	// not exist yet OR has empty content. The dots vanish as soon as the
+	// first text delta arrives via APPEND_TEXT (assistant message gets
+	// non-empty `content`) — which is exactly the "first response token"
+	// edge that CONTEXT line 122 references.
+	const lastAssistantHasContent = useMemo(() => {
+		const messages = agent.messages
+		for (let i = messages.length - 1; i >= 0; i--) {
+			if (messages[i].role === 'assistant') {
+				return (messages[i].content || '').length > 0
+			}
+		}
+		return false
+	}, [agent.messages])
+	// thinking-dots: streaming AND no assistant token yet.
+	const showThinkingDots = agent.isStreaming && !lastAssistantHasContent
+
+	// Phase 101-09 idle-pulse gate: input unfocused + empty + not streaming.
+	// The utility class is defined in `livos/packages/ui/src/index.css`
+	// (Task 2 of plan 101-09) and the rule is suppressed under
+	// `prefers-reduced-motion: reduce`. The Tailwind `motion-reduce:`
+	// variant on the outer wrapper also short-circuits the animate-*
+	// utilities for users who set reduced motion at the OS level.
+	const idlePulseActive = !isFocused && input.length === 0 && !agent.isStreaming
+
 	return (
 		<Magnetic intensity={0.2}>
 			{/* Phase 100-10-10 Bug B — the input pill stays a flex-row; a
@@ -402,14 +441,36 @@ function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
 			    the pill via a column wrapper, but only while agent is
 			    streaming. The wrapper is `inline-flex flex-col items-center`
 			    so the row stays its original ~360px width and the status
-			    line centers beneath it without disturbing the layout. */}
-			<div className='inline-flex flex-col items-center gap-1.5'>
-				<div className='flex items-center gap-2 rounded-full bg-white/95 backdrop-blur-xl border border-neutral-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.08)] px-3 py-2'>
+			    line centers beneath it without disturbing the layout.
+
+			    Phase 101-09 — the wrapper carries the Tailwind
+			    `motion-reduce:[&_*]:!animate-none` variant so that all
+			    nested animations (thinking dots, idle-pulse, status pulse,
+			    streaming caret) are suppressed for users with
+			    prefers-reduced-motion: reduce. The CSS-level @media rule
+			    in index.css backstops this for the .chat-input-idle
+			    utility + raw .animate-pulse class (Q5 RESOLVED). */}
+			<div className='inline-flex flex-col items-center gap-1.5 motion-reduce:[&_*]:!animate-none'>
+				<div
+					className={cn(
+						'flex items-center gap-2 rounded-full bg-white/95 backdrop-blur-xl border border-neutral-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.08)] px-3 py-2',
+						// Phase 101-09 (D-101-CHAT-ANIMS) — idle-pulse on the
+						// pill border. The `chat-input-idle` class targets the
+						// @keyframes idleBreath rule (4s ease-in-out, opacity
+						// 0.3↔0.8) defined in index.css. Honors
+						// prefers-reduced-motion: reduce via the index.css
+						// @media override + Tailwind motion-reduce: variant
+						// on the outer wrapper.
+						idlePulseActive && 'chat-input-idle motion-reduce:animate-none',
+					)}
+				>
 					<input
 						ref={inputRef}
 						type='text'
 						value={input}
 						onChange={(e) => setInput(e.target.value)}
+						onFocus={() => setIsFocused(true)}
+						onBlur={() => setIsFocused(false)}
 						onKeyDown={(e) => {
 							if (e.key === 'Enter') {
 								e.preventDefault()
@@ -443,12 +504,42 @@ function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
 						<X className='h-3.5 w-3.5' strokeWidth={2.25} />
 					</button>
 				</div>
+				{/* Phase 101-09 (D-101-CHAT-ANIMS, Pillar E) — thinking-dots.
+				    Rendered when `agent.isStreaming` is true AND no assistant
+				    response token has arrived yet (lastAssistantHasContent is
+				    false). The 3 spans pulse with staggered animation-delay
+				    values 0ms / 150ms / 300ms (CONTEXT lines 122-129 verbatim).
+				    Tailwind arbitrary-value syntax `[animation-delay:Nms]`
+				    compiles to inline animation-delay declarations.
+				    motion-reduce on the wrapper above suppresses animate-pulse
+				    when prefers-reduced-motion is set. */}
+				{showThinkingDots ? (
+					<div
+						className='text-caption-xs text-text-tertiary flex items-center gap-1.5'
+						aria-label='thinking-dots'
+						aria-live='polite'
+					>
+						<span className='inline-flex gap-1' aria-hidden='true'>
+							<span className='w-1.5 h-1.5 rounded-full bg-text-tertiary animate-pulse [animation-delay:0ms]' />
+							<span className='w-1.5 h-1.5 rounded-full bg-text-tertiary animate-pulse [animation-delay:150ms]' />
+							<span className='w-1.5 h-1.5 rounded-full bg-text-tertiary animate-pulse [animation-delay:300ms]' />
+						</span>
+					</div>
+				) : null}
 				{/* Phase 100-10-10 Bug B — per-tool streaming status sub-line.
 				    Mirrors the line inside ChatResponseBar so the user sees
 				    tool-call progress even before the mode flips (and during
 				    the brief window between Send and mode-flip). Gated on
 				    `agent.isStreaming` AND (Hermes `phrase` OR `currentTool`)
-				    — see ChatResponseBar comment for backend wiring notes. */}
+				    — see ChatResponseBar comment for backend wiring notes.
+
+				    Phase 101-09 Pillar F: the status_detail relay landed in
+				    agent-runner-factory.ts (Task 3) means `phrase` now
+				    carries the real Hermes verb ("inspecting", "calling",
+				    etc.) once the WS path also forwards it. The chat-WS
+				    path through AgentSessionManager (liv-core agent-session.ts)
+				    is a separate hop and is NOT modified by 101-09 — but the
+				    SSE broker pass-through (createSdkAgentRunnerForUser) is. */}
 				{agent.isStreaming && (agent.agentStatus?.phrase || agent.agentStatus?.currentTool) ? (
 					<div className='text-caption-xs text-text-tertiary flex items-center gap-1.5'>
 						<span className='inline-block w-1 h-1 rounded-full bg-text-tertiary animate-pulse' aria-hidden='true' />

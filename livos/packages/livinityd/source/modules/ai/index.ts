@@ -95,6 +95,15 @@ interface LivStreamEventData {
 	awaitingApproval?: boolean
 	thought?: string
 	screenshot?: string  // base64 screenshot data from device screenshot tools
+	// Phase 101-09 Pillar F — Hermes status_detail chunk fields. The
+	// `status_detail` SSE event from liv-core RunStore (emitted by
+	// `liv-agent-runner.ts` per V32-HERMES-01) carries `{phase, phrase,
+	// elapsed}` in `event.data`. We widen LivStreamEventData with these
+	// optional fields so the forward-loop branch (below) and the onEvent
+	// callback receive a typed payload instead of an `unknown` cast.
+	phase?: string
+	phrase?: string
+	elapsed?: number
 }
 
 /** SSE event from Liv AI daemon */
@@ -799,7 +808,36 @@ export default class AiModule {
 						this.chatStatus.set(conversationId, {status: 'Thinking...', steps: prev?.steps ?? [], commands: prev?.commands ?? [], turn: event.turn})
 					}
 
+					// Phase 101-09 Pillar F (Hermes status_detail relay) —
+					// closes the 100-10-10 backend gap. liv-core RunStore
+					// emits `status_detail` chunks (V32-HERMES-01) at
+					// turn-start, tool-dispatch, and after-tool-result with
+					// payload `{phase, phrase, elapsed}`. We surface the
+					// human-readable phrase ("inspecting", "calling",
+					// "reasoning", …) into chatStatus so any HTTP-SSE
+					// consumer can read it via `getChatStatus()`. The
+					// `onEvent` callback below ALSO forwards the verbatim
+					// chunk so SSE/WS bridge layers re-yield it to clients.
+					if (event.type === 'status_detail' && isEventData(event.data)) {
+						const prev = this.chatStatus.get(conversationId)
+						const phrase = event.data.phrase
+						if (typeof phrase === 'string' && phrase.length > 0) {
+							this.chatStatus.set(conversationId, {
+								...prev,
+								status: phrase,
+								steps: prev?.steps ?? [],
+								commands: prev?.commands ?? [],
+								turn: event.turn,
+							})
+						}
+					}
+
 					if (onEvent) {
+						// Phase 101-09 — the cast widens the AgentEvent type
+						// to accept the new 'status_detail' discriminant. The
+						// onEvent consumer (livinity-broker / WS bridge) is
+						// responsible for forwarding the verbatim event to
+						// downstream clients.
 						onEvent({type: event.type as AgentEvent['type'], turn: event.turn, data: event.data})
 					}
 

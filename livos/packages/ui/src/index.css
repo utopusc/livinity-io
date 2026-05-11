@@ -334,6 +334,38 @@ a {
 	50% { filter: drop-shadow(0 0 40px rgba(0, 0, 0, 0.10)); }
 }
 
+/* Phase 101-09 (D-101-CHAT-ANIMS, Pillar E) — chat input idle-breath.
+ *
+ * The pill border around the chat input (webapp-floating-action-bar.tsx
+ * ChatInputBar) breathes opacity 0.3 ↔ 0.8 on a 4-second ease-in-out
+ * cycle while the input is unfocused, empty, AND the agent is not
+ * streaming. The class is applied conditionally via the React `cn()`
+ * helper from `idlePulseActive`.
+ *
+ * prefers-reduced-motion: reduce overrides BOTH .chat-input-idle and
+ * the generic .animate-pulse rule (Tailwind utility used by the
+ * thinking-dots + streaming caret + per-tool status pulse). Q5
+ * RESOLVED — accessibility is honored at the OS level only, no
+ * per-user Settings toggle. The React component additionally carries
+ * a Tailwind `motion-reduce:` variant on its outer wrapper for
+ * defense-in-depth (same predicate compiles to the same @media query).
+ */
+@keyframes idleBreath {
+	0%, 100% { opacity: 0.3; }
+	50% { opacity: 0.8; }
+}
+.chat-input-idle {
+	animation: idleBreath 4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+	.chat-input-idle {
+		animation: none !important;
+	}
+	.animate-pulse {
+		animation: none !important;
+	}
+}
+
 /* Permanent Marker self-hosted font */
 @font-face {
 	font-weight: 400;
