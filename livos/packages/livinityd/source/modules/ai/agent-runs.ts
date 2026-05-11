@@ -56,6 +56,12 @@ import type Livinityd from '../../index.js'
 // publishes automatically). Default-disabled — no-op when LUSE_MCP_ENABLED
 // is unset (D-NATIVE-10). (Renamed P100-10-02 from bytebot per D-100-10-B.)
 import {registerLuseMcpServer} from '../computer-use/index.js'
+// Phase 100-10-09 — boot-time cleanup of legacy bytebot Redis state +
+// stale McpConfigManager entry. Runs ONCE per livinityd start, BEFORE
+// registerLuseMcpServer, so the McpConfigManager entry list is free of
+// the orphan 'bytebot' server before fresh Luse install. Idempotent +
+// non-fatal (cleanup failures are logged, boot continues).
+import {cleanupLegacyBytebotState} from '../computer-use/legacy-bytebot-cleanup.js'
 
 /**
  * Factory that produces a fresh LivAgentRunner per agent run.
@@ -178,6 +184,29 @@ export async function mountAgentRunsRoutes(
 	// other lifecycle wiring like P73-04 RunQueue below).
 	try {
 		const luseConfigManager = new McpConfigManager(livinityd.ai.redis)
+
+		// Phase 100-10-09 — sweep legacy 'bytebot' Redis state + McpConfigManager
+		// entry BEFORE installing the fresh 'luse' entry. Idempotent + non-fatal:
+		// any error is caught internally and logged; livinityd boot continues.
+		// This closes the live UAT gap where the UI still surfaced "bytebot" as
+		// the MCP server name even after the 100-10-02 source rename, because
+		// Redis-stored cap-registry state + McpConfigManager mcpServers entries
+		// survived the rename.
+		await cleanupLegacyBytebotState({
+			redis: livinityd.ai.redis,
+			mcpConfigManager: luseConfigManager,
+			logger: {
+				log: (msg) => logger.log(msg),
+				error: (msg) => logger.error(msg),
+			},
+		}).catch((err) => {
+			// Defensive: cleanupLegacyBytebotState should not throw (its internal
+			// try/catch already handles all known failure modes), but if anything
+			// slips through, swallow it — boot must continue.
+			const m = err instanceof Error ? err.message : String(err)
+			logger.error(`[100-10-09 cleanup] unexpected error (non-fatal): ${m}`)
+		})
+
 		await registerLuseMcpServer(
 			livinityd.ai.redis,
 			process.env,
