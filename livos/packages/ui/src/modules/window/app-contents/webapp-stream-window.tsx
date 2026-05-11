@@ -251,7 +251,19 @@ export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) 
 		const fbH = 720
 
 		const eventToFbCoords = (ev: MouseEvent): {x: number; y: number} => {
-			const rect = container.getBoundingClientRect()
+			// Phase 102 r12 — coord math uses the noVNC <canvas> rect, NOT the
+			// container rect. With scaleViewport=true (use-webapp-vnc.ts:150),
+			// noVNC scales the canvas via CSS transform to fit the container
+			// while preserving the 1280:720 aspect — letterbox space appears
+			// on whichever axis doesn't match. The canvas IS the rendered
+			// framebuffer surface, so its rect maps 1:1 to FB pixels; the
+			// container's rect includes the letterbox margin and produces a
+			// wrong coord when the user clicks near the canvas edge.
+			// Fallback to the container if the canvas hasn't mounted yet
+			// (handlers attach before noVNC's first connect).
+			const canvas = container.querySelector('canvas')
+			const target = canvas ?? container
+			const rect = target.getBoundingClientRect()
 			if (rect.width === 0 || rect.height === 0) return {x: 0, y: 0}
 			const cx = (ev.clientX - rect.left) * (fbW / rect.width)
 			const cy = (ev.clientY - rect.top) * (fbH / rect.height)
