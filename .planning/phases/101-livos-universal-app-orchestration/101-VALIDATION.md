@@ -3,7 +3,7 @@ phase: 101
 slug: livos-universal-app-orchestration
 status: draft
 nyquist_compliant: false
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-05-10
 ---
 
@@ -66,17 +66,18 @@ created: 2026-05-10
 
 ## Wave 0 Requirements
 
-- [ ] `livos/packages/livinityd/source/modules/chrome-cdp/bootstrap.test.ts` — stubs for D-101-CHROME-CDP
-- [ ] `livos/packages/livinityd/source/modules/chrome-cdp/client.test.ts` — stubs for chrome-remote-interface wrapper
-- [ ] `livos/packages/livinityd/source/modules/streaming/port-allocator.test.ts` — stubs for D-101-PORT-ALLOC
-- [ ] `livos/packages/livinityd/source/modules/apps/native-app-spawner.test.ts` — stubs for D-101-NATIVE-APPS
-- [ ] `livos/packages/livinityd/source/modules/apps/native-app-binder.test.ts` — stubs for WM_CLASS binding
-- [ ] `livos/packages/ui/src/modules/dock/native-app-form.test.tsx` — stubs for dock UI form
-- [ ] `livos/packages/ui/src/modules/dock/native-app-icon.test.tsx` — stubs for dock icon
-- [ ] `livos/packages/ui/src/modules/window/teach-popover.test.tsx` — stubs for Teach v3 popover
-- [ ] `livos/packages/livinityd/source/modules/livinity-broker/agent-runner-factory.test.ts` — stubs for activeWid+activeAppMeta sanitization + status_detail relay (extend if exists)
-- [ ] `livos/packages/livinityd/source/modules/ai/agent-prompt-builder.test.ts` — stubs for Active Window Context snippet
-- [ ] Install `chrome-remote-interface@^0.34.0` + `@types/chrome-remote-interface@^0.33.0` in livinityd workspace
+- [x] `livos/packages/livinityd/source/modules/chrome-cdp/bootstrap.test.ts` — stubs for D-101-CHROME-CDP (101-00-02 0f87f687)
+- [x] `livos/packages/livinityd/source/modules/chrome-cdp/client.test.ts` — stubs for chrome-remote-interface wrapper (101-00-02 0f87f687)
+- [x] `livos/packages/livinityd/source/modules/streaming/port-allocator.test.ts` — stubs for D-101-PORT-ALLOC (101-00-02 0f87f687)
+- [x] `livos/packages/livinityd/source/modules/apps/native-app-spawner.test.ts` — stubs for D-101-NATIVE-APPS (101-00-02 0f87f687)
+- [x] `livos/packages/livinityd/source/modules/apps/native-app-binder.test.ts` — stubs for WM_CLASS binding (101-00-02 0f87f687)
+- [x] `livos/packages/ui/src/modules/dock/native-app-form.test.tsx` — stubs for dock UI form (101-00-02 0f87f687)
+- [x] `livos/packages/ui/src/modules/dock/native-app-icon.test.tsx` — stubs for dock icon (101-00-02 0f87f687)
+- [x] `livos/packages/ui/src/modules/window/teach-popover.test.tsx` — stubs for Teach v3 popover (101-00-02 0f87f687)
+- [x] `livos/packages/ui/src/modules/window/app-contents/webapp-teach-popup-host.test.tsx` — stubs for Teach v3 popup-host (rapid-click queueing, commit-clears-pending, mount-with-event) (101-00-02 0f87f687; added per Plan 101-00 Task 3, BLOCKER #4 fix)
+- [ ] `livos/packages/livinityd/source/modules/livinity-broker/agent-runner-factory.test.ts` — stubs for activeWid+activeAppMeta sanitization + status_detail relay (DEFERRED to Plan 101-06 / 101-09 — not in 101-00 files_modified)
+- [x] `livos/packages/livinityd/source/modules/ai/agent-prompt-builder.test.ts` — stubs for Active Window Context snippet (101-00-02 0f87f687)
+- [x] Install `chrome-remote-interface@^0.34.0` + `@types/chrome-remote-interface@^0.33.0` in livinityd workspace (101-00-01 1cfafcfe)
 - [ ] (NOTE: `webapp-chat-bottom-bar.test.tsx` REMOVED from Wave 0 — bottom-bar is DEPRECATED per PATTERNS.md risk #1; animations land in `webapp-floating-action-bar.tsx` instead, which already has a test file to extend)
 
 *Shared fixtures: existing `vitest.config.ts` + `__mocks__/` directory already covers most patterns. CDP mock pattern documented in RESEARCH.md.*
