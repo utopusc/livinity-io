@@ -419,4 +419,16 @@ export const httpOnlyPaths = [
 	'apps.native.get',
 	'apps.native.create',
 	'apps.native.delete',
+	// Phase 101-05 — Native-app spawn orchestrator (D-101-NATIVE-APPS). The
+	// dock-icon click handler hits this single route; backend chains
+	// store.get → spawnNativeApp → bindNativeAppWindow → StreamManager.startStream.
+	// Latency profile: 5s WM_CLASS poll deadline + x11vnc spawn. Routes via HTTP
+	// because:
+	//   - Mutation timing is mutation-shaped (1-5s) — same WS-reconnect-survival
+	//     rationale as apps.native.create above and streams.start at line 339
+	//     (precedent: agents.create line 256, apiKeys.create line 209).
+	//   - The response carries a fresh streamId + wsUrl the dock UI needs to
+	//     subscribe to immediately; a silent WS-drop after `systemctl restart
+	//     livos` would lose the connection token (memory pitfall B-12 / X-04).
+	'apps.native.spawn',
 ] as const
