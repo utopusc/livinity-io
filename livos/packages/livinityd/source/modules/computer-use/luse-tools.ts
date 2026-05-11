@@ -532,14 +532,14 @@ const _readFileTool = {
 const _listWindowsTool = {
 	name: 'list_windows',
 	description:
-		'List all windows on a specific X display. Returns wid, title, class, and geometry. Defaults to the caller-bound LUSE_DISPLAY env when no display arg is passed (per-WebApp Xvfb scope per D-100-10-A).',
+		'List all open windows. With a `display` arg (":N"), scope to that single X display. WITHOUT a display arg, aggregate across every active X display discovered via /tmp/.X11-unix/ — useful for "what windows are open right now?" roster queries when the agent does not yet know which display a target WebApp lives on. Each result row carries its own `display` field so follow-up click/type/focus calls can re-scope with the correct display: ":N" arg. Returns wid, title, class, geometry, and display per row (Phase 103.1).',
 	input_schema: {
 		type: 'object' as const,
 		properties: {
 			display: {
 				type: 'string' as const,
 				description:
-					'X display string like ":10". Defaults to caller LUSE_DISPLAY env.',
+					'Optional X display string like ":10". When set, scope to that display only. When omitted, aggregate across all active displays (Phase 103.1).',
 			},
 		},
 	},
