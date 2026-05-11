@@ -117,6 +117,13 @@ export function sanitizeActiveAppMeta(meta: ActiveAppMeta): ActiveAppMeta {
  * URL/Binary: <url ?? binary ?? '(unknown)'>
  * Default LUSE_TARGET_WINDOW_ID for all your tool calls is <activeWid> unless you override explicitly.
  * ```
+ *
+ * @deprecated since Phase 102 — superseded by `buildActiveDisplaySnippet`
+ * (Phase 102-06). Per-WebApp Luse children now scope by X11 display (`:N`)
+ * not window-id; the LLM prompt accordingly reports "Active Display Context"
+ * with `LUSE_TARGET_DISPLAY=:N`. Kept temporarily for callers that still
+ * pass `activeWid` (pre-102 broker payloads); remove once all WS envelope
+ * sites are migrated.
  */
 export function buildActiveWindowSnippet(input: ActiveWindowContext): string {
 	if (typeof input.activeWid !== 'number' || !Number.isInteger(input.activeWid)) {
@@ -130,5 +137,74 @@ export function buildActiveWindowSnippet(input: ActiveWindowContext): string {
 		`Window ID: ${input.activeWid}`,
 		`URL/Binary: ${target}`,
 		`Default LUSE_TARGET_WINDOW_ID for all your tool calls is ${input.activeWid} unless you override explicitly.`,
+	].join('\n')
+}
+
+/**
+ * Phase 102-06 (Pillar C — Active Display Context) — display-scoped variant
+ * of `buildActiveWindowSnippet`.
+ *
+ * Per-WebApp Luse MCP children now run on dedicated Xvfb displays (D-102-PER-
+ * APP-XVFB / D-102-LUSE-DISPLAY-SCOPING). The LLM prompt context must reflect
+ * this: instead of "Window ID: 0x123abc + LUSE_TARGET_WINDOW_ID for tool
+ * calls", the agent is told "Active X11 display: :10 (1280x720)" with
+ * `LUSE_TARGET_DISPLAY=:10` already injected into the child env — meaning
+ * every tool call's screenshot/click/key implicitly targets :10 with no
+ * coordinate offset and no scaling (1:1 native).
+ */
+
+export interface ActiveDisplayContext {
+	activeDisplay: string
+	appMeta: ActiveAppMeta
+}
+
+/**
+ * Phase 102-06 — regex guard for `activeDisplay` interpolation.
+ *
+ * Threat T-102-06b (prompt injection via display string): `activeDisplay`
+ * comes from the WS envelope client-side and is interpolated verbatim into
+ * the LLM system prompt. A wider regex than `^:\d{1,3}$` would allow an
+ * attacker to inject newlines or shell-meta that escape the snippet
+ * structure. We accept up to 3 digits to leave headroom for future Xvfb
+ * server allocations beyond :99 (the strict descriptor regex in
+ * luse-mcp-config.ts pins :1..:99; the prompt regex is intentionally a
+ * superset since the prompt is descriptive — the env validation is the
+ * authoritative gate).
+ */
+const DISPLAY_RE_PROMPT = /^:\d{1,3}$/
+
+/**
+ * Build the `## Active Display Context` markdown snippet for the agent's
+ * system prompt.
+ *
+ * Returns the empty string if `activeDisplay` does not match the prompt
+ * regex (graceful skip — caller appends nothing rather than emitting a
+ * half-formed snippet that the LLM might parse as instruction).
+ *
+ * Wire format (must match D-102-LUSE-DISPLAY-SCOPING in 102-CONTEXT.md):
+ *
+ * ```
+ * ## Active Display Context
+ * You are operating in the context of the LivOS app: <title> (<kind>).
+ * Active X11 display: <activeDisplay> (resolution 1280x720)
+ * URL/Binary: <url ?? binary ?? '(unknown)'>
+ * All your Luse tool calls (screenshot, click, key) are implicitly scoped to <activeDisplay> via LUSE_TARGET_DISPLAY. Coordinate space is 1280x720 native — no offset, no scaling.
+ * ```
+ */
+export function buildActiveDisplaySnippet(input: ActiveDisplayContext): string {
+	if (
+		typeof input.activeDisplay !== 'string' ||
+		!DISPLAY_RE_PROMPT.test(input.activeDisplay)
+	) {
+		return ''
+	}
+	const safe = sanitizeActiveAppMeta(input.appMeta)
+	const target = safe.url ?? safe.binary ?? '(unknown)'
+	return [
+		'## Active Display Context',
+		`You are operating in the context of the LivOS app: ${safe.title} (${safe.kind}).`,
+		`Active X11 display: ${input.activeDisplay} (resolution 1280x720)`,
+		`URL/Binary: ${target}`,
+		`All your Luse tool calls (screenshot, click, key) are implicitly scoped to ${input.activeDisplay} via LUSE_TARGET_DISPLAY. Coordinate space is 1280x720 native — no offset, no scaling.`,
 	].join('\n')
 }
