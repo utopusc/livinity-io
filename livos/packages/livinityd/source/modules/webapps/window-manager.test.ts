@@ -395,7 +395,7 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		// now gated behind LIVOS_PER_APP_LUSE=1 env (default skip to reduce
 		// agent tool clutter). Set env for this test.
 		const prevEnv = process.env.LIVOS_PER_APP_LUSE
-		process.env.LIVOS_PER_APP_LUSE = '1'
+		// Phase 102 r7: default ON; no env override needed
 		const installCalls: any[] = []
 		const mcpConfigManager = {
 			installServer: vi.fn(async (config: any) => {
@@ -447,7 +447,7 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 	it('Test 18: spawn() falls back to updateServer when installServer throws (idempotent re-spawn / regex rejection)', async () => {
 		// Phase 102 deploy UAT round 4 — gated behind LIVOS_PER_APP_LUSE=1.
 		const prevEnv = process.env.LIVOS_PER_APP_LUSE
-		process.env.LIVOS_PER_APP_LUSE = '1'
+		// Phase 102 r7: default ON; no env override needed
 		const updateCalls: any[] = []
 		const mcpConfigManager = {
 			installServer: vi.fn(async () => {
