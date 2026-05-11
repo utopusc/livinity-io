@@ -606,17 +606,19 @@ describe('Phase 100-10-06 chat-response 3-mode state machine', () => {
 // ─────────────────────────────────────────────────────────────────
 
 describe('Phase 100-10-10 chat-response wire-up + per-tool streaming UI', () => {
-	it("T-10-10-RESPONSE-01: useWebAppAgent(webappId) is lifted to the parent — exactly ONE call site in the floating bar", () => {
+	it("T-10-10-RESPONSE-01: useWebAppAgent(webappId) is lifted to the parent — exactly ONE invocation call site in the floating bar", () => {
 		const barSrc = safeRead(FLOATING_BAR_PATH)
-		// The fix: `useWebAppAgent(webappId)` must appear EXACTLY ONCE in
-		// webapp-floating-action-bar.tsx — and that single call lives in
-		// the parent `WebAppFloatingActionBar` (not in ChatInputBar or
-		// ChatResponseBar). The two sub-components receive `agent` as a
-		// prop so they share a single WebSocket + messages array across
-		// the mode flip. Pre-fix the file has TWO call sites (one in
-		// ChatInputBar, one in ChatResponseBar) — this regex count locks
-		// the lift to a single source-of-truth.
-		const matches = barSrc.match(/useWebAppAgent\(/g) ?? []
+		// The fix: the ACTUAL invocation `const agent = useWebAppAgent(`
+		// must appear EXACTLY ONCE in webapp-floating-action-bar.tsx — and
+		// that single call lives in the parent `WebAppFloatingActionBar`
+		// (not in ChatInputBar or ChatResponseBar). The two sub-components
+		// receive `agent` as a prop so they share a single WebSocket +
+		// messages array across the mode flip. Pre-fix the file has TWO
+		// invocation sites (one in ChatInputBar, one in ChatResponseBar) —
+		// this regex-count locks the lift to a single source-of-truth.
+		// (`const agent = ` shape excludes comment-only mentions like
+		// "the previous useWebAppAgent(webappId) call site …".)
+		const matches = barSrc.match(/const\s+agent\s*=\s*useWebAppAgent\(/g) ?? []
 		expect(matches.length).toBe(1)
 	})
 
