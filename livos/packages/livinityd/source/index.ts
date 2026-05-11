@@ -35,6 +35,12 @@ import {ComputerUseContainerManager} from './modules/computer-use/container-mana
 // instantiated in start() AFTER ai.start() (StreamManager needs the boot-time
 // `vainfo` probe persisted to ai.redis as `liv:streaming:caps`).
 import {StreamManager} from './modules/streaming/stream-manager.js'
+// Phase 101-05 — shared PortAllocator instance. ONE allocator backs BOTH the
+// StreamManager's vnc-window spawn path AND the native-app binder's
+// stream-port wiring (apps.native.spawn route). Sharing the allocator is what
+// D-101-PORT-ALLOC requires: WebApps + native apps draw from the same
+// [15900, 16000) pool with no collision risk.
+import {PortAllocator} from './modules/streaming/port-allocator.js'
 import {WebAppWindowManager} from './modules/webapps/window-manager.js'
 import {WEBAPPS_X11_ENV} from './modules/webapps/window-discovery.js'
 // Phase 100-08-01 — dedicated Xvfb :1 + fluxbox WM lifecycle (D-100-08-A).
@@ -405,13 +411,21 @@ export default class Livinityd {
 				)
 			}
 
+			// Phase 101-05 — construct the SHARED PortAllocator once and inject
+			// it into both StreamManager (its vnc-window spawn path) and (via
+			// streamManager.getPortAllocator() at the apps.native.spawn route)
+			// the native-app binder. Default range [15900, 16000) per
+			// D-101-PORT-ALLOC. Single instance = no port collisions between
+			// WebApps and native apps.
+			const sharedPortAllocator = new PortAllocator()
 			this.streamManager = new StreamManager({
 				caps,
 				spawn: x11Spawn,
 				logger: streamingLogger,
+				portAllocator: sharedPortAllocator,
 			})
 			streamingLogger.info(
-				`StreamManager started (cap=${this.streamManager.getCap()})`,
+				`StreamManager started (cap=${this.streamManager.getCap()}, port-range=[15900,16000))`,
 			)
 
 			// Phase 100-08-01 fallback Xvfb on :1 — back-compat for non-WebApp
