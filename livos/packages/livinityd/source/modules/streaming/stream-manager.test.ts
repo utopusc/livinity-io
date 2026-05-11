@@ -18,6 +18,7 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {EventEmitter} from 'node:events'
 import {StreamManager, StreamCapExceededError} from './stream-manager.js'
+import {PortAllocator} from './port-allocator.js'
 
 // FakeChildProcess — minimal subset of node:child_process.ChildProcess we need
 class FakeChildProcess extends EventEmitter {
@@ -406,6 +407,117 @@ describe('StreamManager — vnc-window mode with {display} target (Phase 100-10-
 		// Two distinct streamIds — display target and wid target share neither idempotency key nor port.
 		expect(a.streamId).not.toBe(b.streamId)
 		expect(spawn).toHaveBeenCalledTimes(2)
+		mgr._clearForTests()
+	})
+})
+
+// ============================================================================
+// Phase 101-02 — PortAllocator wire-up (D-101-PORT-ALLOC / WARNING #6)
+// ============================================================================
+
+function makeVncManagerWithAllocator(allocator?: PortAllocator) {
+	const spawned: {cmd: string; args: string[]; child: any}[] = []
+	const spawn = vi.fn((cmd: string, args: string[]) => {
+		const c = makeFakeX11vnc()
+		spawned.push({cmd, args, child: c})
+		return c as any
+	})
+	const mgr = new StreamManager({
+		caps: NO_VAAPI as any,
+		spawn: spawn as any,
+		stopTimeoutMs: 50,
+		portAllocator: allocator,
+	} as any)
+	return {mgr, spawn, spawned, allocator: allocator ?? (mgr as any).portAllocator as PortAllocator}
+}
+
+describe('StreamManager — PortAllocator wire-up (Phase 101-02)', () => {
+	it('T-101-02-SM-01: startStream(vnc-window) calls portAllocator.allocate (rfbPort taken from allocator)', () => {
+		const allocator = new PortAllocator()
+		const allocateSpy = vi.spyOn(allocator, 'allocate')
+		const {mgr} = makeVncManagerWithAllocator(allocator)
+		const {streamId} = mgr.startStream({
+			userId: 'admin',
+			mode: 'vnc-window' as any,
+			target: {wid: 0xa1a1} as any,
+		})
+		expect(allocateSpy).toHaveBeenCalledOnce()
+		const session = mgr.getSession(streamId)
+		// First allocate from default range → 15900.
+		if (session?.kind === 'vnc') {
+			expect(session.rfbPort).toBe(15900)
+		} else {
+			throw new Error('expected vnc session')
+		}
+		mgr._clearForTests()
+	})
+
+	it('T-101-02-SM-02: stopStream triggers portAllocator.release(port)', async () => {
+		const allocator = new PortAllocator()
+		const releaseSpy = vi.spyOn(allocator, 'release')
+		const {mgr} = makeVncManagerWithAllocator(allocator)
+		const {streamId} = mgr.startStream({
+			userId: 'admin',
+			mode: 'vnc-window' as any,
+			target: {wid: 0xb2b2} as any,
+		})
+		expect(allocator.inUseCount).toBe(1)
+		await mgr.stopStream(streamId)
+		// release MUST have been called with the allocated port (15900).
+		expect(releaseSpy).toHaveBeenCalledWith(15900)
+		// And inUseCount returns to zero (regardless of idempotent duplicate calls).
+		expect(allocator.inUseCount).toBe(0)
+	})
+
+	it('T-101-02-SM-03: x11vnc crash exit also releases the port (WARNING #6 — every close path)', async () => {
+		const allocator = new PortAllocator()
+		const releaseSpy = vi.spyOn(allocator, 'release')
+		const {mgr, spawned} = makeVncManagerWithAllocator(allocator)
+		const crashSpy = vi.fn()
+		mgr.on('crash', crashSpy)
+		mgr.startStream({
+			userId: 'admin',
+			mode: 'vnc-window' as any,
+			target: {wid: 0xc3c3} as any,
+		})
+		expect(allocator.inUseCount).toBe(1)
+		const fakeX11vnc = spawned[0].child
+		// Simulate x11vnc crash (non-zero exit code while stopRequested=false).
+		fakeX11vnc.emit('exit', 1, null)
+		await Promise.resolve()
+		expect(crashSpy).toHaveBeenCalledOnce()
+		// Port released on crash path.
+		expect(releaseSpy).toHaveBeenCalledWith(15900)
+		expect(allocator.inUseCount).toBe(0)
+		mgr._clearForTests()
+	})
+
+	it('T-101-02-SM-04: re-allocate after stop returns pool to single-live-stream count (round-trip)', async () => {
+		const allocator = new PortAllocator()
+		const {mgr} = makeVncManagerWithAllocator(allocator)
+		const first = mgr.startStream({
+			userId: 'admin',
+			mode: 'vnc-window' as any,
+			target: {wid: 0xdead} as any,
+		})
+		const firstPort = (mgr.getSession(first.streamId) as any).rfbPort
+		expect(firstPort).toBe(15900)
+		await mgr.stopStream(first.streamId)
+		expect(allocator.inUseCount).toBe(0)
+		// After stop the cursor has advanced (linear walker semantics — see
+		// port-allocator.test.ts Test 4), so the next allocate hands out the
+		// next port in sequence rather than the just-freed 15900. The
+		// important invariant for StreamManager is that the pool tracks
+		// exactly one live stream after the round-trip.
+		const second = mgr.startStream({
+			userId: 'admin',
+			mode: 'vnc-window' as any,
+			target: {wid: 0xbeef} as any,
+		})
+		const secondPort = (mgr.getSession(second.streamId) as any).rfbPort
+		expect(secondPort).toBe(15901)
+		expect(secondPort).not.toBe(firstPort)
+		expect(allocator.inUseCount).toBe(1)
 		mgr._clearForTests()
 	})
 })
