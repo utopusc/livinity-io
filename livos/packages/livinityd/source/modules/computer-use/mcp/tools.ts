@@ -33,6 +33,7 @@
  * — the MCP protocol expects an `isError` flag, not exceptions.
  */
 import {spawn} from 'node:child_process'
+import {readdir as nodeReaddir} from 'node:fs/promises'
 import {setTimeout as sleep} from 'node:timers/promises'
 
 import {z, type ZodTypeAny} from 'zod'
@@ -282,6 +283,61 @@ async function withScopedDisplay<T>(
 	} finally {
 		if (prev === undefined) delete process.env.DISPLAY
 		else process.env.DISPLAY = prev
+	}
+}
+
+/**
+ * Phase 103.1 — discover all active X11 displays by scanning
+ * `/tmp/.X11-unix/` for `X<N>` socket files. Each running Xvfb / Xorg
+ * creates its socket on startup and removes it on shutdown, so this scan
+ * is always up to date without any IPC.
+ *
+ * Used by the `list_windows` handler when no display arg is passed AND
+ * no per-WebApp scope is set, so a global luse MCP serving all displays
+ * returns the cross-display window roster (the right answer for the
+ * 103-05 default-off single-MCP world).
+ *
+ * Display `:0` is intentionally excluded — Mini PC is headless and `:0`
+ * doesn't exist; including it would just produce empty results and an
+ * extra wmctrl spawn. The host LivOS canvas lives on `:1`
+ * (WEBAPPS_X11_ENV); per-app WebApp Xvfbs are `:10+` (DisplayAllocator
+ * range).
+ *
+ * Allows test injection of `readdirFn` for unit tests on Windows / Mac
+ * where `/tmp/.X11-unix/` doesn't exist.
+ *
+ * Returns an empty array when the socket dir is unreachable (non-Linux,
+ * permission denied, etc.) — callers fall back to single-display scope.
+ */
+/**
+ * Test-only seam — vitest cannot spyOn the ESM-frozen node:fs/promises.readdir
+ * binding, so we expose a mutable resolver. Production callers go through the
+ * default which delegates to `nodeReaddir`. Reset to `undefined` between
+ * tests via `__setReaddirForTest(undefined)`.
+ */
+let __readdirOverride: typeof nodeReaddir | undefined
+export function __setReaddirForTest(
+	fn: typeof nodeReaddir | undefined,
+): void {
+	__readdirOverride = fn
+}
+
+async function discoverActiveX11Displays(): Promise<string[]> {
+	const readdirFn = __readdirOverride ?? nodeReaddir
+	try {
+		const entries = await readdirFn('/tmp/.X11-unix')
+		const displays: number[] = []
+		for (const name of entries) {
+			const m = /^X(\d+)$/.exec(name)
+			if (!m) continue
+			const n = Number(m[1])
+			if (!Number.isInteger(n) || n < 1 || n > 999) continue
+			displays.push(n)
+		}
+		displays.sort((a, b) => a - b)
+		return displays.map((n) => `:${n}`)
+	} catch {
+		return []
 	}
 }
 
@@ -888,9 +944,65 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 		},
 		wrapHandler(async (args) => {
 			const displayArg = parseDisplayArg(args)
-			// If the arg failed regex validation but was a non-empty string,
-			// fall back to defaultDisplay (per spec). If validation passed,
-			// use the validated string.
+
+			// Phase 103.1 — when neither the call-time display arg nor the
+			// server-level defaultDisplay is set, aggregate across ALL active
+			// X11 displays discovered via /tmp/.X11-unix/X<N> socket scan.
+			// This is the "what windows exist?" query for a global luse MCP
+			// serving all displays (103-05 default-off model). Each result row
+			// already carries a `display` field (ListWindowsExtended shape from
+			// native/window.ts), so the agent can dispatch follow-up click /
+			// type / focus calls with the right per-call display: ":N" arg.
+			//
+			// Aggregation kicks in ONLY when both displayArg AND defaultDisplay
+			// are absent — a per-WebApp Luse MCP with LUSE_DISPLAY set still
+			// gets scoped behavior (its agent already knows the right display).
+			const rawDisplayInput =
+				typeof args.display === 'string' ? args.display : undefined
+			const aggregateMode =
+				displayArg === undefined &&
+				defaultDisplay === undefined &&
+				rawDisplayInput === undefined
+			if (aggregateMode) {
+				const activeDisplays = await discoverActiveX11Displays()
+				if (activeDisplays.length === 0) {
+					// No active displays found — fall through to default-scope
+					// path (returns empty array via listWindows({})).
+					const windows = await listWindows({})
+					return {
+						content: [{type: 'text', text: JSON.stringify(windows)}],
+						isError: false,
+					}
+				}
+				const aggregated: Array<unknown> = []
+				for (const d of activeDisplays) {
+					try {
+						// Per-display scan. Each call mutates process.env.DISPLAY
+						// for its own duration via withScopedDisplay so a wmctrl
+						// spawn (if listWindows uses one) sees the right value.
+						// The MCP child serializes tool calls so we don't race
+						// other handlers on the env var (per withScopedDisplay
+						// docs).
+						// eslint-disable-next-line no-await-in-loop
+						const windows = await withScopedDisplay(d, undefined, () =>
+							listWindows({display: d}),
+						)
+						for (const w of windows) aggregated.push(w)
+					} catch {
+						// Display gone away mid-scan (Xvfb exited between
+						// readdir and wmctrl spawn) — skip silently.
+					}
+				}
+				return {
+					content: [{type: 'text', text: JSON.stringify(aggregated)}],
+					isError: false,
+				}
+			}
+
+			// Single-display path (pre-103.1 behavior preserved). If the arg
+			// failed regex validation but was a non-empty string, fall back
+			// to defaultDisplay (per spec). If validation passed, use the
+			// validated string.
 			const resolvedDisplay = displayArg ?? defaultDisplay
 			return withScopedDisplay(displayArg, defaultDisplay, async () => {
 				const windows = resolvedDisplay !== undefined

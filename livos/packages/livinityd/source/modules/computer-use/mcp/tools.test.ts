@@ -68,7 +68,7 @@ vi.mock('node:timers/promises', () => ({
 
 // SUT — imported AFTER vi.mock above (top-of-file vi.mock is hoisted by vitest).
 import {LUSE_TOOLS, LUSE_TOOL_NAMES} from '../luse-tools.js'
-import {registerLuseTools, HANDLERS} from './tools.js'
+import {registerLuseTools, HANDLERS, __setReaddirForTest} from './tools.js'
 
 // Minimal stub of the McpServer surface registerLuseTools touches.
 class StubMcpServer {
@@ -910,6 +910,196 @@ describe('Phase 103-B — withScopedDisplay + display arg threading', () => {
 		await handlers.computer_screenshot({display: ':11'})
 		expect(displayAtCall).toBe(':11')
 		expect(process.env.DISPLAY).toBe(':orig')
+	})
+
+	// ── Phase 103.1: list_windows aggregation across active X11 displays ──
+	//
+	// User-walked Phase 103 UAT (2026-05-11) showed: agent in a global chat
+	// asked "find Dinkytown open"; agent called list_windows; response was 1
+	// window from the host display (:1) and missed the Dinkytown WebApp on
+	// its own per-app Xvfb (:11). Fix: when called without a display arg AND
+	// no per-WebApp defaultDisplay scope is set, list_windows aggregates
+	// across every active X display by scanning /tmp/.X11-unix/X<N> sockets.
+
+	it('T103.1-01: list_windows with NO display arg AND NO defaultDisplay aggregates across all active displays', async () => {
+		__setReaddirForTest(
+			(async (_p: string) => ['X1', 'X10', 'X11']) as never,
+		)
+		try {
+			// listWindows returns a different window per display so we can verify aggregation
+			let nextWid = 1
+			mocks.listWindows.mockImplementation(
+				async (opts: unknown): Promise<unknown> => {
+					const display = (opts as {display?: string})?.display ?? '???'
+					return [
+						{
+							id: `0x${(nextWid++).toString(16).padStart(8, '0')}`,
+							class: 'Test.Test',
+							title: `window on ${display}`,
+							geometry: {x: 0, y: 0, w: 1280, h: 720},
+							display,
+						},
+					]
+				},
+			)
+
+			const stub = new StubMcpServer()
+			registerLuseTools(stub as never)
+			const handler = stub.getHandler('list_windows')!
+			const result = (await handler({})) as {
+				content: Array<{type: string; text: string}>
+				isError: boolean
+			}
+			expect(result.isError).toBe(false)
+			const parsed = JSON.parse(result.content[0].text) as Array<{display: string}>
+			// Aggregation produces one window per active display.
+			const displays = parsed.map((w) => w.display)
+			expect(displays).toEqual(expect.arrayContaining([':1', ':10', ':11']))
+			expect(parsed.length).toBe(3)
+			// Three listWindows calls, one per discovered display.
+			expect(mocks.listWindows).toHaveBeenCalledTimes(3)
+		} finally {
+			__setReaddirForTest(undefined)
+		}
+	})
+
+	it('T103.1-02: list_windows with explicit display arg stays scoped (no aggregation)', async () => {
+		__setReaddirForTest(
+			(async (_p: string) => ['X1', 'X10', 'X11']) as never,
+		)
+		try {
+			mocks.listWindows.mockResolvedValue([
+				{
+					id: '0x1',
+					class: 'X.X',
+					title: 'on 12',
+					geometry: {x: 0, y: 0, w: 1, h: 1},
+					display: ':12',
+				},
+			] as never)
+
+			const stub = new StubMcpServer()
+			registerLuseTools(stub as never)
+			const handler = stub.getHandler('list_windows')!
+			const result = (await handler({display: ':12'})) as {
+				content: Array<{type: string; text: string}>
+				isError: boolean
+			}
+			expect(result.isError).toBe(false)
+			expect(mocks.listWindows).toHaveBeenCalledTimes(1)
+			const callArg = (mocks.listWindows.mock.calls as unknown as Array<Array<{display?: string}>>)[0]?.[0]
+			expect(callArg?.display).toBe(':12')
+		} finally {
+			__setReaddirForTest(undefined)
+		}
+	})
+
+	it('T103.1-03: list_windows with defaultDisplay set (per-WebApp scope) stays scoped (no aggregation)', async () => {
+		__setReaddirForTest(
+			(async (_p: string) => ['X1', 'X10', 'X11']) as never,
+		)
+		try {
+			mocks.listWindows.mockResolvedValue([
+				{
+					id: '0x1',
+					class: 'X.X',
+					title: 'on 10',
+					geometry: {x: 0, y: 0, w: 1, h: 1},
+					display: ':10',
+				},
+			] as never)
+
+			const stub = new StubMcpServer()
+			// defaultDisplay set — per-WebApp Luse MCP scenario
+			registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
+			const handler = stub.getHandler('list_windows')!
+			await handler({})
+			// Should NOT have aggregated — defaultDisplay scopes to :10 only.
+			expect(mocks.listWindows).toHaveBeenCalledTimes(1)
+			const callArg = (mocks.listWindows.mock.calls as unknown as Array<Array<{display?: string}>>)[0]?.[0]
+			expect(callArg?.display).toBe(':10')
+		} finally {
+			__setReaddirForTest(undefined)
+		}
+	})
+
+	it('T103.1-04: list_windows ignores X0 (physical screen, headless on Mini PC) during aggregation', async () => {
+		__setReaddirForTest(
+			(async (_p: string) => ['X0', 'X1', 'X11']) as never,
+		)
+		try {
+			mocks.listWindows.mockImplementation(
+				async (opts: unknown): Promise<unknown> => {
+					const display = (opts as {display?: string})?.display ?? '???'
+					return [
+						{
+							id: '0x1',
+							class: 'X.X',
+							title: `on ${display}`,
+							geometry: {x: 0, y: 0, w: 1, h: 1},
+							display,
+						},
+					]
+				},
+			)
+
+			const stub = new StubMcpServer()
+			registerLuseTools(stub as never)
+			const handler = stub.getHandler('list_windows')!
+			const result = (await handler({})) as {
+				content: Array<{type: string; text: string}>
+				isError: boolean
+			}
+			const parsed = JSON.parse(result.content[0].text) as Array<{display: string}>
+			const displays = parsed.map((w) => w.display)
+			// :0 (physical screen, Phase 103.1 exclusion) absent; :1 and :11 present.
+			expect(displays).not.toContain(':0')
+			expect(displays).toEqual(expect.arrayContaining([':1', ':11']))
+			expect(mocks.listWindows).toHaveBeenCalledTimes(2)
+		} finally {
+			__setReaddirForTest(undefined)
+		}
+	})
+
+	it('T103.1-05: list_windows tolerates mid-scan listWindows failures (e.g. Xvfb went away)', async () => {
+		__setReaddirForTest(
+			(async (_p: string) => ['X1', 'X10', 'X11']) as never,
+		)
+		try {
+			mocks.listWindows.mockImplementation(
+				async (opts: unknown): Promise<unknown> => {
+					const display = (opts as {display?: string})?.display ?? '???'
+					if (display === ':10') {
+						throw new Error('Xvfb gone away')
+					}
+					return [
+						{
+							id: '0x1',
+							class: 'X.X',
+							title: `on ${display}`,
+							geometry: {x: 0, y: 0, w: 1, h: 1},
+							display,
+						},
+					]
+				},
+			)
+
+			const stub = new StubMcpServer()
+			registerLuseTools(stub as never)
+			const handler = stub.getHandler('list_windows')!
+			const result = (await handler({})) as {
+				content: Array<{type: string; text: string}>
+				isError: boolean
+			}
+			// Failures skipped silently — :1 and :11 results included; :10 absent.
+			const parsed = JSON.parse(result.content[0].text) as Array<{display: string}>
+			const displays = parsed.map((w) => w.display)
+			expect(displays).toEqual(expect.arrayContaining([':1', ':11']))
+			expect(displays).not.toContain(':10')
+			expect(result.isError).toBe(false)
+		} finally {
+			__setReaddirForTest(undefined)
+		}
 	})
 
 	// ── parseDisplayArg unit tests (T-103-03-01 boundary guard) ───────────
