@@ -20,7 +20,7 @@
  *   7. display range — :99 accepted, :100 rejected
  *   8. Stderr tail accumulates last 50 lines, logger.error fires on exit code !=0
  *   9. handle.stop() — SIGTERM immediately, SIGKILL after 2000ms grace
- *  10. STATIC_ARGS contains canonical flags (--start-fullscreen + others)
+ *  10. STATIC_ARGS contains canonical flags (--start-maximized + others)
  *  11. Custom chromeBinary substitutes into argv
  *
  * FakeChild mirrors `vnc-bridge.test.ts:46-53` / `native-app-spawner.test.ts:39-45`.
@@ -94,7 +94,7 @@ describe('102-02-01 ChromeProcessSpawner', () => {
 					`DISPLAY=${VALID_DISPLAY}`,
 					'google-chrome',
 					`--user-data-dir=${VALID_USERDATADIR}`,
-					'--start-fullscreen',
+					'--start-maximized',
 					// Phase 102 deploy UAT round 4: switched from --app=URL
 					// (chromeless) to URL positional (normal Chrome with
 					// tabs + address bar visible). Test asserts URL is the
@@ -216,11 +216,11 @@ describe('102-02-01 ChromeProcessSpawner', () => {
 	})
 
 	describe('STATIC_ARGS canonical flags', () => {
-		it('Test 10: argv contains --start-fullscreen + --no-first-run + --no-default-browser-check + disable-features', async () => {
+		it('Test 10: argv contains --start-maximized + --no-first-run + --no-default-browser-check + disable-features', async () => {
 			const {spawnFn, opts} = makeValidOpts()
 			await spawnChromeProcess(opts as any)
 			const args = spawnFn.mock.calls[0][1] as string[]
-			expect(args).toContain('--start-fullscreen')
+			expect(args).toContain('--start-maximized')
 			expect(args).toContain('--no-first-run')
 			expect(args).toContain('--no-default-browser-check')
 			expect(args).toContain('--disable-features=ChromeWhatsNewUI,TranslateUI,InfoBars')

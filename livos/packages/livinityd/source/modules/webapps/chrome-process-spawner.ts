@@ -75,7 +75,13 @@ const STATIC_ARGS = [
 	'--no-first-run',
 	'--no-default-browser-check',
 	'--no-sandbox',
-	'--start-fullscreen',
+	// Phase 102 UAT round 6 (2026-05-11): --start-fullscreen put Chrome in
+	// F11-equivalent mode (tabs hidden) and user couldn't re-enter normal
+	// view. Switch to --start-maximized + --window-size=1280,720 so Chrome
+	// fills the 1280x720 Xvfb canvas with tabs+address bar visible at top.
+	'--start-maximized',
+	'--window-size=1280,720',
+	'--window-position=0,0',
 	'--disable-features=ChromeWhatsNewUI,TranslateUI,InfoBars',
 	'--disable-infobars',
 	'--test-type',
