@@ -42,6 +42,7 @@
 
 import {URL} from 'node:url'
 import {randomUUID} from 'node:crypto'
+import * as fsSync from 'node:fs'
 import type {ChildProcess} from 'node:child_process'
 
 import type {StreamManager} from '../streaming/stream-manager.js'
@@ -798,18 +799,23 @@ export class WebAppWindowManager {
 	private broadcastActiveWid(): void {
 		const marker = '/tmp/livos-active-webapp-wid'
 		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
-			const fs = require('node:fs') as typeof import('node:fs')
+			// Phase 102 deploy fix — livinityd is ESM, `require()` is undefined
+			// here. Use the synchronous node:fs API imported at module top
+			// (writeFileSync/unlinkSync are pure POSIX wrappers, no async cost).
+			// Under Phase 102 the per-app wid is always 0 (display-based
+			// scoping replaces WID-based scoping); broadcastActiveDisplay
+			// supersedes this helper but the file is kept written-empty for
+			// backwards compat with any v33 Luse instance still reading it.
 			const wid = this.getSingleActiveWid()
 			if (this.active.size === 0) {
 				try {
-					fs.unlinkSync(marker)
+					fsSync.unlinkSync(marker)
 				} catch {
 					/* file may not exist — fine */
 				}
 				return
 			}
-			fs.writeFileSync(marker, wid !== undefined ? String(wid) : '', {encoding: 'utf8'})
+			fsSync.writeFileSync(marker, wid !== undefined ? String(wid) : '', {encoding: 'utf8'})
 		} catch (err) {
 			this.logger?.warn?.(`failed to broadcast active wid to ${marker}`, err)
 		}
