@@ -22,7 +22,7 @@
  *   - `node:timers/promises` — fake setTimeout that resolves immediately so we
  *     can assert it was called with the right delay without real wall time.
  */
-import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 
 // Hoisted mock state so vi.mock factories below can close over them safely.
 const mocks = vi.hoisted(() => ({
@@ -660,5 +660,272 @@ describe('Phase 100-10-04 luse stream-management tool handlers', () => {
 		expect(result.isError).toBe(true)
 		// Must NOT have invoked startStream.
 		expect(sm.startStream).not.toHaveBeenCalled()
+	})
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 103-B — withScopedDisplay + display arg threading (REQ-103-B2 / B3)
+//
+// Verifies the per-call DISPLAY scoping introduced by 103-03:
+//   - withScopedDisplay sets process.env.DISPLAY for the duration of the
+//     wrapped async fn, then restores in finally
+//   - parseDisplayArg validates the arg against /^:[1-9][0-9]?$/, treating
+//     anything else as undefined (T-103-03-01 trust boundary)
+//   - X11-touching handlers (computer_click_mouse, computer_screenshot,
+//     list_windows) thread the per-call display through to the native
+//     primitive via process.env.DISPLAY mutation
+// ─────────────────────────────────────────────────────────────────────────────
+
+import {withScopedDisplay, parseDisplayArg, buildHandlers} from './tools.js'
+
+describe('Phase 103-B — withScopedDisplay + display arg threading', () => {
+	let originalDisplay: string | undefined
+
+	beforeEach(() => {
+		originalDisplay = process.env.DISPLAY
+		// Reset mock spies between cases.
+		for (const fn of Object.values(mocks)) {
+			fn.mockReset()
+		}
+		mocks.captureScreenshot.mockResolvedValue(SCREENSHOT_RESULT)
+		mocks.clickMouse.mockResolvedValue(undefined)
+		mocks.listWindows.mockResolvedValue([
+			{id: '0x123', class: 'chrome.Chrome', title: 'Window'},
+		])
+		mocks.setTimeoutMock.mockResolvedValue(undefined)
+	})
+
+	afterEach(() => {
+		if (originalDisplay === undefined) delete process.env.DISPLAY
+		else process.env.DISPLAY = originalDisplay
+	})
+
+	// ── Test 1: withScopedDisplay sets target, restores in finally ─────────
+	it('T103B-01: withScopedDisplay(":11", ":1") sets DISPLAY=":11" inside fn, restores afterwards', async () => {
+		process.env.DISPLAY = ':orig'
+		let observed: string | undefined
+		const result = await withScopedDisplay(':11', ':1', async () => {
+			observed = process.env.DISPLAY
+			return 'ok'
+		})
+		expect(observed).toBe(':11')
+		expect(result).toBe('ok')
+		// Restored.
+		expect(process.env.DISPLAY).toBe(':orig')
+	})
+
+	// ── Test 2: fallback to defaultDisplay ─────────────────────────────────
+	it('T103B-02: withScopedDisplay(undefined, ":1") sets DISPLAY=":1" (default fallback)', async () => {
+		process.env.DISPLAY = ':orig'
+		let observed: string | undefined
+		await withScopedDisplay(undefined, ':1', async () => {
+			observed = process.env.DISPLAY
+		})
+		expect(observed).toBe(':1')
+		expect(process.env.DISPLAY).toBe(':orig')
+	})
+
+	// ── Test 3: both undefined → no mutation ───────────────────────────────
+	it('T103B-03: withScopedDisplay(undefined, undefined) does NOT mutate process.env.DISPLAY', async () => {
+		process.env.DISPLAY = ':orig'
+		let observed: string | undefined
+		await withScopedDisplay(undefined, undefined, async () => {
+			observed = process.env.DISPLAY
+		})
+		expect(observed).toBe(':orig')
+		expect(process.env.DISPLAY).toBe(':orig')
+	})
+
+	// ── Test 3b: prev unset, target set → cleanup deletes after ────────────
+	it('T103B-03b: when prev DISPLAY is unset, withScopedDisplay deletes DISPLAY in finally', async () => {
+		delete process.env.DISPLAY
+		await withScopedDisplay(':11', undefined, async () => {
+			expect(process.env.DISPLAY).toBe(':11')
+		})
+		expect(process.env.DISPLAY).toBeUndefined()
+	})
+
+	// ── Test 4: restoration on throw ────────────────────────────────────────
+	it('T103B-04: withScopedDisplay restores DISPLAY even when fn throws', async () => {
+		process.env.DISPLAY = ':orig'
+		await expect(
+			withScopedDisplay(':11', ':1', async () => {
+				expect(process.env.DISPLAY).toBe(':11')
+				throw new Error('boom')
+			}),
+		).rejects.toThrow('boom')
+		// Even after the throw, prev is restored.
+		expect(process.env.DISPLAY).toBe(':orig')
+	})
+
+	// ── Test 5: handler with display=":11" mutates DISPLAY for clickMouse ──
+	it('T103B-05: computer_click_mouse handler with display=":11" runs clickMouse while DISPLAY=":11"', async () => {
+		process.env.DISPLAY = ':orig'
+		// Snapshot DISPLAY at call time inside the clickMouse mock.
+		let displayAtCall: string | undefined
+		mocks.clickMouse.mockImplementation(async () => {
+			displayAtCall = process.env.DISPLAY
+		})
+		const handlers = buildHandlers({defaultDisplay: ':1'})
+		await handlers.computer_click_mouse({
+			coordinates: {x: 5, y: 6},
+			button: 'left',
+			clickCount: 1,
+			display: ':11',
+		})
+		expect(displayAtCall).toBe(':11')
+		// Restored after handler returns.
+		expect(process.env.DISPLAY).toBe(':orig')
+	})
+
+	// ── Test 6: no display arg → falls back to options.defaultDisplay ──────
+	it('T103B-06: computer_click_mouse handler with NO display arg uses options.defaultDisplay=":10"', async () => {
+		process.env.DISPLAY = ':orig'
+		let displayAtCall: string | undefined
+		mocks.clickMouse.mockImplementation(async () => {
+			displayAtCall = process.env.DISPLAY
+		})
+		const handlers = buildHandlers({defaultDisplay: ':10'})
+		await handlers.computer_click_mouse({
+			coordinates: {x: 5, y: 6},
+			button: 'left',
+			clickCount: 1,
+		})
+		expect(displayAtCall).toBe(':10')
+		expect(process.env.DISPLAY).toBe(':orig')
+	})
+
+	// ── Test 7: no display arg, no defaultDisplay → no override ────────────
+	it('T103B-07: computer_click_mouse with NO display and NO defaultDisplay preserves caller DISPLAY', async () => {
+		process.env.DISPLAY = ':orig'
+		let displayAtCall: string | undefined
+		mocks.clickMouse.mockImplementation(async () => {
+			displayAtCall = process.env.DISPLAY
+		})
+		const handlers = buildHandlers({})
+		await handlers.computer_click_mouse({
+			coordinates: {x: 5, y: 6},
+			button: 'left',
+			clickCount: 1,
+		})
+		expect(displayAtCall).toBe(':orig')
+		expect(process.env.DISPLAY).toBe(':orig')
+	})
+
+	// ── Test 8: invalid display string ("foo") → fallback to default ───────
+	it('T103B-08: computer_click_mouse with invalid display="foo" falls back to options.defaultDisplay', async () => {
+		process.env.DISPLAY = ':orig'
+		let displayAtCall: string | undefined
+		mocks.clickMouse.mockImplementation(async () => {
+			displayAtCall = process.env.DISPLAY
+		})
+		const handlers = buildHandlers({defaultDisplay: ':10'})
+		await handlers.computer_click_mouse({
+			coordinates: {x: 1, y: 2},
+			button: 'left',
+			clickCount: 1,
+			display: 'foo',
+		})
+		expect(displayAtCall).toBe(':10')
+	})
+
+	// ── Test 9: forbidden display=":0" → fallback to default ───────────────
+	it('T103B-09: computer_click_mouse with display=":0" (forbidden) falls back to defaultDisplay', async () => {
+		process.env.DISPLAY = ':orig'
+		let displayAtCall: string | undefined
+		mocks.clickMouse.mockImplementation(async () => {
+			displayAtCall = process.env.DISPLAY
+		})
+		const handlers = buildHandlers({defaultDisplay: ':10'})
+		await handlers.computer_click_mouse({
+			coordinates: {x: 1, y: 2},
+			button: 'left',
+			clickCount: 1,
+			display: ':0',
+		})
+		// :0 is rejected (regex: :1..:99 only) → fall back to default
+		expect(displayAtCall).toBe(':10')
+	})
+
+	// ── Test 9b: display=":100" (out of range) → fallback ──────────────────
+	it('T103B-09b: computer_click_mouse with display=":100" (3-digit, out of range) falls back to defaultDisplay', async () => {
+		process.env.DISPLAY = ':orig'
+		let displayAtCall: string | undefined
+		mocks.clickMouse.mockImplementation(async () => {
+			displayAtCall = process.env.DISPLAY
+		})
+		const handlers = buildHandlers({defaultDisplay: ':10'})
+		await handlers.computer_click_mouse({
+			coordinates: {x: 1, y: 2},
+			button: 'left',
+			clickCount: 1,
+			display: ':100',
+		})
+		expect(displayAtCall).toBe(':10')
+	})
+
+	// ── Test 9c: empty string display → fallback ───────────────────────────
+	it('T103B-09c: computer_click_mouse with display="" (empty) falls back to defaultDisplay', async () => {
+		process.env.DISPLAY = ':orig'
+		let displayAtCall: string | undefined
+		mocks.clickMouse.mockImplementation(async () => {
+			displayAtCall = process.env.DISPLAY
+		})
+		const handlers = buildHandlers({defaultDisplay: ':10'})
+		await handlers.computer_click_mouse({
+			coordinates: {x: 1, y: 2},
+			button: 'left',
+			clickCount: 1,
+			display: '',
+		})
+		expect(displayAtCall).toBe(':10')
+	})
+
+	// ── Test 10: list_windows handler threads display ──────────────────────
+	it('T103B-10: list_windows handler with args.display=":12" runs listWindows while DISPLAY=":12"', async () => {
+		process.env.DISPLAY = ':orig'
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
+		const handler = stub.getHandler('list_windows')!
+		await handler({display: ':12'})
+		// listWindows mock was called once
+		expect(mocks.listWindows).toHaveBeenCalledTimes(1)
+		// The handler should have called listWindows with the display arg
+		// passed through OR mutated process.env.DISPLAY to :12 for the call.
+		// (Existing list_windows handler passes display down via {display:...}
+		// to the native primitive; the threaded value should still be :12.)
+		const callArg = (mocks.listWindows.mock.calls as unknown as Array<Array<{display?: string}>>)[0]?.[0]
+		expect(callArg?.display).toBe(':12')
+	})
+
+	// ── Test 11: computer_screenshot threads display ───────────────────────
+	it('T103B-11: computer_screenshot handler with display=":11" runs captureScreenshot while DISPLAY=":11"', async () => {
+		process.env.DISPLAY = ':orig'
+		let displayAtCall: string | undefined
+		mocks.captureScreenshot.mockImplementation(async () => {
+			displayAtCall = process.env.DISPLAY
+			return SCREENSHOT_RESULT
+		})
+		const handlers = buildHandlers({defaultDisplay: ':1'})
+		await handlers.computer_screenshot({display: ':11'})
+		expect(displayAtCall).toBe(':11')
+		expect(process.env.DISPLAY).toBe(':orig')
+	})
+
+	// ── parseDisplayArg unit tests (T-103-03-01 boundary guard) ───────────
+	it('T103B-12: parseDisplayArg accepts valid ":1".. ":99", rejects everything else', () => {
+		// Valid
+		expect(parseDisplayArg({display: ':1'})).toBe(':1')
+		expect(parseDisplayArg({display: ':10'})).toBe(':10')
+		expect(parseDisplayArg({display: ':99'})).toBe(':99')
+		// Invalid — fall back to undefined
+		expect(parseDisplayArg({display: ':0'})).toBeUndefined()
+		expect(parseDisplayArg({display: ':100'})).toBeUndefined()
+		expect(parseDisplayArg({display: 'foo'})).toBeUndefined()
+		expect(parseDisplayArg({display: ''})).toBeUndefined()
+		expect(parseDisplayArg({display: ':'})).toBeUndefined()
+		expect(parseDisplayArg({display: ':-1'})).toBeUndefined()
+		expect(parseDisplayArg({display: 11})).toBeUndefined() // non-string
+		expect(parseDisplayArg({})).toBeUndefined() // missing
 	})
 })
