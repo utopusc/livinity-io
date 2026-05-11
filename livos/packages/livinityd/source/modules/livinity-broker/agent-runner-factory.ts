@@ -1,5 +1,9 @@
 import type {AgentEvent, AgentResult} from '@liv/core'
 import type Livinityd from '../../index.js'
+import {
+	buildActiveWindowSnippet,
+	type ActiveAppMeta,
+} from '../ai/agent-prompt-builder.js'
 import {isMultiUserMode} from '../ai/per-user-claude.js'
 
 /**
@@ -79,6 +83,25 @@ export async function* createSdkAgentRunnerForUser(opts: {
 	 * (Renamed P100-10-02 from bytebot per D-100-10-B.)
 	 */
 	webappId?: string
+	/**
+	 * Phase 101-06 (Pillar C) — Auto-context injection.
+	 *
+	 * When BOTH `activeWid` (X11 window id, integer) and `activeAppMeta`
+	 * (the active app's identity record) are present, the broker prepends
+	 * an `## Active Window Context` markdown snippet (built by
+	 * `agent-prompt-builder.buildActiveWindowSnippet`) into the request's
+	 * `contextPrefix` before forwarding to liv `/api/agent/stream`. The
+	 * snippet tells the agent which LivOS app window is active so it can
+	 * default `LUSE_TARGET_WINDOW_ID` for tool calls without an explicit
+	 * `list_windows` round-trip (D-101-LUSE-CONTEXT).
+	 *
+	 * Either field missing → no snippet injection (graceful skip).
+	 *
+	 * Per the threat model, `activeAppMeta.title` is sanitized inside
+	 * `buildActiveWindowSnippet` before interpolation (T-101-03).
+	 */
+	activeWid?: number
+	activeAppMeta?: ActiveAppMeta
 }): AsyncGenerator<AgentEvent, AgentResult, void> {
 	const {livinityd, userId, task, contextPrefix, systemPromptOverride, maxTurns = 30, signal} = opts
 	const livApiUrl = process.env.LIV_API_URL || 'http://localhost:3200'
@@ -91,11 +114,30 @@ export async function* createSdkAgentRunnerForUser(opts: {
 	// When set, every broker request shares the daemon's HOME (single subscription mode).
 	if (multiUser && !forceRootHome) headers['X-LivOS-User-Id'] = userId // Plan 41-04 wires nexus to consume
 
+	// Phase 101-06 (Pillar C) — build and prepend the Active Window Context
+	// snippet onto contextPrefix when both fields are present + valid. The
+	// snippet builder returns empty string for invalid wid (non-integer);
+	// we also gate on activeAppMeta presence so partial data doesn't render
+	// a half-empty snippet. Existing contextPrefix is preserved as a prefix
+	// to the snippet (joined with a blank line for visual separation).
+	let injectedContextPrefix = contextPrefix
+	if (opts.activeWid !== undefined && opts.activeAppMeta) {
+		const snippet = buildActiveWindowSnippet({
+			activeWid: opts.activeWid,
+			appMeta: opts.activeAppMeta,
+		})
+		if (snippet) {
+			injectedContextPrefix = injectedContextPrefix
+				? `${injectedContextPrefix}\n\n${snippet}`
+				: snippet
+		}
+	}
+
 	const body = {
 		task,
 		max_turns: maxTurns,
 		conversationId: `broker-${userId}-${Date.now()}`,
-		contextPrefix,
+		contextPrefix: injectedContextPrefix,
 		systemPromptOverride,
 		// Phase 100-08-05 — pass-through webappId for chat-surface tool scope.
 		...(opts.webappId ? {webappId: opts.webappId} : {}),
