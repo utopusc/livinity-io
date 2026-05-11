@@ -324,6 +324,42 @@ export class WebAppWindowManager {
 		// xvfb-display + fluxbox-wm files stay in tree for Phase 101 CDP work.
 		const chromeDisplay = ':1'
 
+		// Phase 100-10-11 — cascade --window-position so concurrent WebApps
+		// don't all land at (0, 0) on the shared `:1` display and visually
+		// overlap. Pattern: 120px diagonal cascade with PER-AXIS modulo wrap
+		// to keep every cascade slot strictly on-screen.
+		//
+		// Xvfb :1 is 1920x1080 with Chrome --window-size=1280,720. The plan's
+		// CASCADE_WRAP=10 slot count is preserved (so the 11th WebApp wraps
+		// back to slot 0, matching the plan's prose intent), but the slot
+		// offset is computed against per-axis pixel modulos (X_RANGE=1200,
+		// Y_RANGE=600) rather than letting a unified `slot * 120` shape ride
+		// off the bottom edge. With Y_RANGE=600, slot 5 wraps y back to 0 so
+		// the cascade becomes a 2-row staircase rather than a diagonal that
+		// runs off the screen at slot 9 (9 * 120 = 1080 = screen height,
+		// strictly off-screen for a 720px-tall window).
+		//
+		// Per-slot positions for slots 0..9:
+		//   0: (0,   0)    5: (600, 0)
+		//   1: (120, 120)  6: (720, 120)
+		//   2: (240, 240)  7: (840, 240)
+		//   3: (360, 360)  8: (960, 360)
+		//   4: (480, 480)  9: (1080, 480)
+		// Slot 10 wraps back to (0, 0). All 10 distinct, all on-screen.
+		//
+		// `this.active.size` is read BEFORE the new entry is added to the map
+		// (the `this.active.set(...)` call lives further down at the end of
+		// spawn()), so the first WebApp gets slot 0 (offset 0,0 — unchanged
+		// from pre-fix baseline) and subsequent WebApps cascade upward.
+		const CASCADE_PIXELS = 120
+		const CASCADE_WRAP = 10
+		const CASCADE_X_RANGE = 1200
+		const CASCADE_Y_RANGE = 600
+		const cascadeSlot = this.active.size % CASCADE_WRAP
+		const cascadeOffsetX = (cascadeSlot * CASCADE_PIXELS) % CASCADE_X_RANGE
+		const cascadeOffsetY = (cascadeSlot * CASCADE_PIXELS) % CASCADE_Y_RANGE
+		const cascadeWindowPosition = `${cascadeOffsetX},${cascadeOffsetY}`
+
 		// 3. Spawn Chrome (detached, NOT a livinityd child)
 		// 2026-05-08 hotfix v2: livinityd's systemd env has no DISPLAY or
 		// XAUTHORITY, and Chrome refuses to launch as root without
@@ -354,7 +390,7 @@ export class WebAppWindowManager {
 			this.chromeBinary,
 			`--user-data-dir=${chromeProfile}`,
 			'--window-size=1280,720', // P100-06.1: explicit landscape resolution; Chrome --app= mode otherwise inherits whatever the last app-window remembered (often portrait/tiny).
-			'--window-position=0,0',  // P100-06.1: predictable spawn coords (window-discovery's matcher prefers wids whose geometry doesn't overlap existing windows).
+			`--window-position=${cascadeWindowPosition}`, // P100-10-11: cascade per-WebApp by 120px diagonal (slot 0 = 0,0 — unchanged baseline; slot 1 = 120,120; ...; wrap at slot 10 % 10 = 0). Prevents the multi-WebApp overlap reported in UAT 2026-05-10.
 			`--app=${opts.url}`,   // P100-02 (G-100-B B1): site-specific-browser mode. Replaces `--new-window URL` to break Chrome IPC merge (V33-MULTI-01) and produce chromeless windows (V33-MULTI-02 bonus).
 		]
 		const chromeProc = this.spawnFactory('sudo', chromeArgs, {
