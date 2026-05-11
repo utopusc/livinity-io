@@ -61,7 +61,15 @@ import {registerLuseMcpServer} from '../computer-use/index.js'
 // registerLuseMcpServer, so the McpConfigManager entry list is free of
 // the orphan 'bytebot' server before fresh Luse install. Idempotent +
 // non-fatal (cleanup failures are logged, boot continues).
-import {cleanupLegacyBytebotState} from '../computer-use/legacy-bytebot-cleanup.js'
+//
+// Phase 103-05 (Pitfall 5 from 103-RESEARCH) — boot-time sweep of stale
+// `luse:webapp:*` McpConfigManager entries from pre-103 deploys. Same
+// idempotent + non-fatal contract as cleanupLegacyBytebotState; runs in
+// the same boot block AFTER bytebot cleanup, BEFORE registerLuseMcpServer.
+import {
+	cleanupLegacyBytebotState,
+	cleanupOrphanedPerWebAppLuseEntries,
+} from '../computer-use/legacy-bytebot-cleanup.js'
 
 /**
  * Factory that produces a fresh LivAgentRunner per agent run.
@@ -205,6 +213,26 @@ export async function mountAgentRunsRoutes(
 			// slips through, swallow it — boot must continue.
 			const m = err instanceof Error ? err.message : String(err)
 			logger.error(`[100-10-09 cleanup] unexpected error (non-fatal): ${m}`)
+		})
+
+		// Phase 103-05 (Pitfall 5) — orphan-sweep of legacy `luse:webapp:*`
+		// entries from pre-103 deploys. Idempotent + non-fatal; mirrors the
+		// cleanupLegacyBytebotState shape above. Must run BEFORE
+		// registerLuseMcpServer so the fresh `luse` registration is the only
+		// `luse*` entry visible to liv-core after boot — preventing the
+		// Claude Code wildcard-permission prompt storm REQ-103-B5 addresses.
+		//
+		// Boot order: cleanupLegacyBytebotState → cleanupOrphanedPerWebAppLuseEntries
+		//             → registerLuseMcpServer.
+		await cleanupOrphanedPerWebAppLuseEntries({
+			mcpConfigManager: luseConfigManager,
+			logger: {
+				log: (msg) => logger.log(msg),
+				error: (msg) => logger.error(msg),
+			},
+		}).catch((err) => {
+			const m = err instanceof Error ? err.message : String(err)
+			logger.error(`[103-05 orphan-sweep] unexpected error (non-fatal): ${m}`)
 		})
 
 		await registerLuseMcpServer(
