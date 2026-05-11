@@ -112,7 +112,7 @@ describe('bindNativeAppWindow', () => {
 			'4242', // first --class search → new wid
 		])
 		const allocator = new PortAllocator({min: 15900, max: 15905})
-		const startStreamFn = vi.fn(async () => ({streamId: 's1', wsUrl: 'ws://x/s1'}))
+		const startStreamFn = vi.fn(async (..._args: any[]) => ({streamId: 's1', wsUrl: 'ws://x/s1'}))
 
 		const result = await bindNativeAppWindow({
 			pid: 100,
@@ -137,7 +137,7 @@ describe('bindNativeAppWindow', () => {
 			'1111\n2222\n3333', // second poll: 3333 is the new wid
 		])
 		const allocator = new PortAllocator({min: 15900, max: 15905})
-		const startStreamFn = vi.fn(async () => ({streamId: 'sx', wsUrl: 'ws://x/sx'}))
+		const startStreamFn = vi.fn(async (..._args: any[]) => ({streamId: 'sx', wsUrl: 'ws://x/sx'}))
 
 		const result = await bindNativeAppWindow({
 			pid: 100,
@@ -165,7 +165,7 @@ describe('bindNativeAppWindow', () => {
 			return {stdout: '', stderr: ''}
 		})
 		const allocator = new PortAllocator({min: 15900, max: 15905})
-		const startStreamFn = vi.fn(async () => ({streamId: 'sx', wsUrl: 'ws://x/sx'}))
+		const startStreamFn = vi.fn(async (..._args: any[]) => ({streamId: 'sx', wsUrl: 'ws://x/sx'}))
 
 		await expect(
 			bindNativeAppWindow({
@@ -193,7 +193,7 @@ describe('bindNativeAppWindow', () => {
 		])
 		const allocator = new PortAllocator({min: 15900, max: 15905})
 		const allocateSpy = vi.spyOn(allocator, 'allocate')
-		const startStreamFn = vi.fn(async () => ({streamId: 's1', wsUrl: 'ws://x/s1'}))
+		const startStreamFn = vi.fn(async (..._args: any[]) => ({streamId: 's1', wsUrl: 'ws://x/s1'}))
 
 		await bindNativeAppWindow({
 			pid: 100,
@@ -248,7 +248,7 @@ describe('bindNativeAppWindow', () => {
 	it('propagates the optional label to startStreamFn (so logs are useful)', async () => {
 		const exec = queuedExecFile(['', '7777'])
 		const allocator = new PortAllocator({min: 15900, max: 15905})
-		const startStreamFn = vi.fn(async () => ({streamId: 's1', wsUrl: 'ws://x/s1'}))
+		const startStreamFn = vi.fn(async (..._args: any[]) => ({streamId: 's1', wsUrl: 'ws://x/s1'}))
 
 		await bindNativeAppWindow({
 			pid: 100,
@@ -267,7 +267,7 @@ describe('bindNativeAppWindow', () => {
 	it('logs an info line when the bind succeeds', async () => {
 		const exec = queuedExecFile(['', '8888'])
 		const allocator = new PortAllocator({min: 15900, max: 15905})
-		const startStreamFn = vi.fn(async () => ({streamId: 's1', wsUrl: 'ws://x/s1'}))
+		const startStreamFn = vi.fn(async (..._args: any[]) => ({streamId: 's1', wsUrl: 'ws://x/s1'}))
 		const logger = makeLogger()
 
 		await bindNativeAppWindow({
@@ -291,7 +291,7 @@ describe('bindNativeAppWindow', () => {
 	it('uses :1 as the default display when display is not provided', async () => {
 		const exec = queuedExecFile(['', '4242'])
 		const allocator = new PortAllocator({min: 15900, max: 15905})
-		const startStreamFn = vi.fn(async () => ({streamId: 's1', wsUrl: 'ws://x/s1'}))
+		const startStreamFn = vi.fn(async (..._args: any[]) => ({streamId: 's1', wsUrl: 'ws://x/s1'}))
 
 		await bindNativeAppWindow({
 			pid: 100,
