@@ -1,30 +1,36 @@
 /**
- * Phase 93-10 — WebAppWindowManager.
+ * Phase 93-10 — WebAppWindowManager (Phase 101-04 CDP rewrite).
  *
  * Orchestrator class. Composes window-discovery + pipewire-portal (or
- * geometry-tracker fallback) + StreamManager into the spawn / focus /
- * close / list surface for WebApps. Owns Map<webappId, ActiveWebApp> and
- * the idle-cleanup poller (5s xprop poll).
+ * geometry-tracker fallback) + StreamManager + ChromeCdpClient into the
+ * spawn / focus / close / list surface for WebApps. Owns
+ * Map<webappId, ActiveWebApp> and the idle-cleanup poller (5s xprop poll).
  *
- * Algorithm — spawn():
- *   1. Idempotency check (existing alive entry → return existing handle)
- *   2. Snapshot wid baseline (D-93-08)
- *   3. child_process.spawn('google-chrome', [`--app=${url}`],
- *      {detached:true, stdio:'ignore'}) then unref() — Chrome is NOT a
- *      livinityd child (D-V33-01: shared profile, no --user-data-dir).
- *      P100-02 (V33-MULTI-01 / G-100-B B1): site-specific-browser mode
- *      replaces `--new-window URL` to break Chrome IPC merge.
- *   4. findNewWindowMatching({titleHints, baselineWids, timeoutMs:5000})
- *   5. Timeout → throw {code:'WINDOW_NOT_FOUND', url}
- *   6. Try pipewirePortal.requestWindowSession() (primary, D-93-04)
- *   7. On PORTAL_UNAVAILABLE → fall back to GeometryTracker + crop ffmpeg
- *   8. streamManager.startStream({mode:'pipewire-fd' | 'window-crop', target})
- *   9. Store {webappId, userId, wid, mode, streamId, ...} in map
- *  10. Return {windowId, streamId, wsUrl}
+ * Algorithm — spawn() (Phase 101-04 CDP-driven):
+ *   1. Idempotency check (existing alive entry → return existing handle).
+ *   2. Per-user webapp cap (STRIDE D).
+ *   3. PID-narrowed baseline snapshot: discovery.listWindowIdsForPid(chromePid)
+ *      BEFORE CDP createTarget (RESEARCH Q1 RESOLVED).
+ *   4. chromeCdpClient.createWindowForUrl(url, {width, height, left, top})
+ *      drives the singleton Chrome (booted at livinityd.start()) to open a
+ *      new top-level window under the shared `--user-data-dir`. The legacy
+ *      `sudo google-chrome (legacy site-specific-browser argv) ...` is GONE — it IPC-merged
+ *      into the singleton (100-10-08 root cause) and silently swallowed every
+ *      spawn after the first.
+ *   5. discovery.findNewWindowByPid({chromePid, baselineWids, timeoutMs:5000})
+ *      returns the first wid that's new for THIS pid — deterministic, no
+ *      title-match race.
+ *   6. Timeout → throw {code:'WINDOW_NOT_FOUND', url}; CDP target is closed
+ *      so we don't leak an orphan window.
+ *   7. streamManager.startStream({mode:'vnc-window', target:{wid}}) (D-99-04).
+ *   8. Store {webappId, userId, wid, targetId, mode, streamId, ...} in map.
+ *   9. Return {windowId, streamId, wsUrl}.
  *
- * close({webappId, killWindow?}): stop stream → close portal session OR
- *   stop geometry tracker → optional `xdotool windowkill <wid>` →
- *   release map entry.
+ * close({webappId, killWindow?}): stop stream → chromeCdpClient.closeTarget(
+ *   entry.targetId) → optional `xdotool windowkill <wid>` (defense-in-depth)
+ *   → release map entry. The CDP closeTarget aligns Chrome-window teardown
+ *   with port releases — deterministic, not best-effort like the prior
+ *   `xdotool windowkill` flow.
  */
 
 import {URL} from 'node:url'
@@ -34,7 +40,11 @@ import type {ChildProcess} from 'node:child_process'
 import type {StreamManager} from '../streaming/stream-manager.js'
 import {
 	snapshotWindowIds,
-	findNewWindowMatching,
+	// Phase 101-04 — legacy title-match helper is no longer imported here.
+	// It still lives in window-discovery.ts for any out-of-band caller, but
+	// the WebApp spawn body uses PID-narrowed lookup exclusively.
+	findNewWindowByPid,
+	listWindowIdsForPid,
 	isWindowAlive,
 	activateWindow,
 	getWindowGeometry,
@@ -44,6 +54,13 @@ import {
 	type WindowInfo,
 	type Geometry,
 } from './window-discovery.js'
+// Phase 101-04 — CDP-driven spawn path. Replaces the sudo→google-chrome
+// argv path with `chromeCdpClient.createWindowForUrl(url, bounds)` so all
+// WebApps share the singleton Chrome (D-101-SHARED-PROFILE) without
+// IPC-merge swallowing every spawn (100-10-08 root cause). The PID-narrowed
+// wid lookup replaces the title-match race that caused x11vnc to pick up
+// the wrong window in 100-10-08 carryover.
+import type {ChromeCdpClient} from '../chrome-cdp/client.js'
 import {
 	requestWindowSession,
 	isPortalAvailable,
@@ -91,6 +108,21 @@ export class WindowNotFoundError extends Error {
 	}
 }
 
+/**
+ * Phase 101-04 — thrown when WebAppWindowManager is asked to spawn but the
+ * Chrome CDP client is unavailable (bootstrap failed at livinityd.start()).
+ * Pillar A degrades to "unavailable" but the rest of the daemon stays up.
+ * The 101-10 UAT row 3 ("multi-WebApp distinct windows") fails without CDP.
+ */
+export class WebAppCdpUnavailableError extends Error {
+	code = 'WEBAPP_CDP_UNAVAILABLE'
+	constructor() {
+		super(
+			'webapp window manager: chrome CDP client not wired — bootstrapChrome must succeed before spawn',
+		)
+	}
+}
+
 export type SpawnFactory = (cmd: string, args: string[], options: {
 	detached?: boolean
 	stdio?: 'ignore' | 'pipe' | 'inherit'
@@ -109,7 +141,11 @@ export type WebAppWindowManagerOpts = {
 	/** Override the discovery surface for tests. */
 	discovery?: {
 		snapshotWindowIds: typeof snapshotWindowIds
-		findNewWindowMatching: typeof findNewWindowMatching
+		// Phase 101-04 — PID-narrowed wid resolution. The legacy title-match
+		// helper is no longer referenced from window-manager.ts (removed from
+		// imports + types per RESEARCH Q1 RESOLVED).
+		findNewWindowByPid: typeof findNewWindowByPid
+		listWindowIdsForPid: typeof listWindowIdsForPid
 		isWindowAlive: typeof isWindowAlive
 		activateWindow: typeof activateWindow
 		getWindowGeometry: typeof getWindowGeometry
@@ -176,12 +212,33 @@ export type WebAppWindowManagerOpts = {
 	 * Phase 101 CDP work may re-introduce this with CDP-aware semantics.
 	 */
 	fluxboxStartFn?: typeof startFluxbox
+	/**
+	 * Phase 101-04 — Chrome CDP client wired by livinityd.start() after
+	 * `bootstrapChrome` resolves. REQUIRED — without it, `spawn()` throws
+	 * `WebAppCdpUnavailableError` at the very first call. The constructor
+	 * accepts `undefined` for backward-compat with test fixtures that
+	 * pre-date 101-04, BUT spawning a WebApp without a wired client is an
+	 * unrecoverable degraded state (Pillar A offline), so we mark the
+	 * absence as a code-level invariant violated only when CDP bootstrap
+	 * failed at livinityd.start(). Live callers MUST inject the live
+	 * client; tests inject a mock.
+	 */
+	chromeCdpClient?: Pick<
+		ChromeCdpClient,
+		'createWindowForUrl' | 'closeTarget' | 'findTargetByUrl' | 'getChromePid'
+	>
 }
 
 type ActiveWebApp = {
 	webappId: string
 	userId: string
 	wid: number
+	// Phase 101-04 — CDP targetId stashed at spawn so close() can route the
+	// Chrome-window teardown through `chromeCdpClient.closeTarget(targetId)`
+	// (deterministic — port releases align with target lifetime instead of
+	// the previous best-effort `xdotool windowkill`). Optional so legacy
+	// entries created before 101-04 don't trip the type-check.
+	targetId?: string
 	mode: 'pipewire-fd' | 'window-crop' | 'vnc-window'
 	streamId: string
 	wsUrl: string
@@ -235,6 +292,11 @@ export class WebAppWindowManager {
 	// `displayAllocator` for type-readable provenance; never dereferenced in
 	// the live spawn path.
 	private readonly displayAllocator: DisplayAllocator | undefined
+	// Phase 101-04 — the live ChromeCdpClient (constructor-injected from
+	// livinityd.start()). `undefined` when CDP bootstrap failed at boot;
+	// spawn() throws `WebAppCdpUnavailableError` in that case so the failure
+	// mode is loud, not silent.
+	private readonly chromeCdpClient: WebAppWindowManagerOpts['chromeCdpClient']
 
 	constructor(opts: WebAppWindowManagerOpts) {
 		this.streamManager = opts.streamManager
@@ -242,7 +304,9 @@ export class WebAppWindowManager {
 		this.logger = opts.logger
 		this.discovery = opts.discovery ?? {
 			snapshotWindowIds,
-			findNewWindowMatching,
+			// Phase 101-04 — PID-narrowed wid resolution defaults.
+			findNewWindowByPid,
+			listWindowIdsForPid,
 			isWindowAlive,
 			activateWindow,
 			getWindowGeometry,
@@ -267,6 +331,10 @@ export class WebAppWindowManager {
 		// stored — singleton :1 Xvfb + fluxbox lifecycle lives in
 		// livinityd.start() (100-08-01 baseline).
 		this.displayAllocator = opts.displayAllocator
+		// Phase 101-04 — CDP client injection. `undefined` when bootstrap
+		// failed at livinityd.start(); spawn() then throws
+		// WebAppCdpUnavailableError so Pillar A degrades loudly.
+		this.chromeCdpClient = opts.chromeCdpClient
 	}
 
 	startIdleCleanup(): void {
@@ -308,38 +376,41 @@ export class WebAppWindowManager {
 			throw new WebappCapExceededError(this.webappCap)
 		}
 
-		// 2. Baseline wid snapshot
-		const baselineWids = await this.discovery.snapshotWindowIds()
+		// Phase 101-04 — guardrail: CDP client must be wired. Bootstrap failure
+		// at livinityd.start() means Pillar A is offline; rather than spawn a
+		// detached Chrome (the legacy argv path) we throw so the caller knows
+		// the platform is degraded and the WebApp tRPC route returns a clear
+		// SERVICE_UNAVAILABLE.
+		if (!this.chromeCdpClient) {
+			throw new WebAppCdpUnavailableError()
+		}
 
 		// Phase 100-10-08 — Per-WebApp Xvfb REVERTED (D-100-10-A revert).
-		// All WebApp Chromes spawn on the singleton `:1` display set up by
-		// 100-08-01's livinityd.start() lifecycle. Chrome's IPC merge under
-		// `--user-data-dir=/home/bruce/.config/livos-chrome` (D-100-SHARED-PROFILE)
-		// is INCOMPATIBLE with per-WebApp displays — every spawn redirects to
-		// the existing PID on the first display, no window appears on the
-		// allocated `:11`/`:12`/...  Chrome singleton naturally supports
-		// multi-window on the same display (one process, multiple `--app=URL`
-		// windows); per-WebApp `x11vnc -id <wid>` captures each window
-		// independently (Phase 99 baseline). The DisplayAllocator scaffold +
-		// xvfb-display + fluxbox-wm files stay in tree for Phase 101 CDP work.
+		// All WebApp windows live under the singleton `:1` display set up by
+		// 100-08-01's livinityd.start() lifecycle. The singleton Chrome process
+		// (booted at livinityd.start() by Plan 101-01) owns ALL WebApp windows
+		// under a shared `--user-data-dir=/home/bruce/.config/livos-chrome`
+		// (D-101-SHARED-PROFILE: same Google login across WebApps). Phase 101-04
+		// drives that singleton via CDP `Target.createTarget({newWindow:true})`
+		// — the ONLY way to produce distinct top-level windows under a shared
+		// profile (the legacy site-specific-browser argv path IPC-merged into the
+		// singleton and silently swallowed every spawn after the first; that
+		// was the 100-10-08 root cause).
 		const chromeDisplay = ':1'
 
-		// Phase 100-10-11 — cascade --window-position so concurrent WebApps
-		// don't all land at (0, 0) on the shared `:1` display and visually
-		// overlap. Pattern: 120px diagonal cascade with PER-AXIS modulo wrap
-		// to keep every cascade slot strictly on-screen.
+		// Phase 100-10-11 — cascade window position so concurrent WebApps don't
+		// all land at (0, 0) on the shared `:1` display and visually overlap.
+		// Pattern: 120px diagonal cascade with per-axis modulo wrap to keep
+		// every cascade slot strictly on-screen.
 		//
-		// Xvfb :1 is 1920x1080 with Chrome --window-size=1280,720. The plan's
+		// Xvfb :1 is 1920x1080 with WebApp windows sized 1280x720. The plan's
 		// CASCADE_WRAP=10 slot count is preserved (so the 11th WebApp wraps
-		// back to slot 0, matching the plan's prose intent), but the slot
-		// offset is computed against per-axis pixel modulos (X_RANGE=1200,
-		// Y_RANGE=600) rather than letting a unified `slot * 120` shape ride
-		// off the bottom edge. With Y_RANGE=600, slot 5 wraps y back to 0 so
-		// the cascade becomes a 2-row staircase rather than a diagonal that
-		// runs off the screen at slot 9 (9 * 120 = 1080 = screen height,
-		// strictly off-screen for a 720px-tall window).
+		// back to slot 0). The cascade offset now flows into the CDP
+		// `createWindowForUrl` bounds rather than the legacy
+		// `--window-position=X,Y` argv flag — same per-slot positions, same
+		// visual layout, same regression locks; just a different transport.
 		//
-		// Per-slot positions for slots 0..9:
+		// Per-slot positions for slots 0..9 (unchanged from 100-10-11):
 		//   0: (0,   0)    5: (600, 0)
 		//   1: (120, 120)  6: (720, 120)
 		//   2: (240, 240)  7: (840, 240)
@@ -347,10 +418,9 @@ export class WebAppWindowManager {
 		//   4: (480, 480)  9: (1080, 480)
 		// Slot 10 wraps back to (0, 0). All 10 distinct, all on-screen.
 		//
-		// `this.active.size` is read BEFORE the new entry is added to the map
-		// (the `this.active.set(...)` call lives further down at the end of
-		// spawn()), so the first WebApp gets slot 0 (offset 0,0 — unchanged
-		// from pre-fix baseline) and subsequent WebApps cascade upward.
+		// `this.active.size` is read BEFORE the new entry is added to the map,
+		// so the first WebApp gets slot 0 (offset 0,0) and subsequent WebApps
+		// cascade upward.
 		const CASCADE_PIXELS = 120
 		const CASCADE_WRAP = 10
 		const CASCADE_X_RANGE = 1200
@@ -358,69 +428,82 @@ export class WebAppWindowManager {
 		const cascadeSlot = this.active.size % CASCADE_WRAP
 		const cascadeOffsetX = (cascadeSlot * CASCADE_PIXELS) % CASCADE_X_RANGE
 		const cascadeOffsetY = (cascadeSlot * CASCADE_PIXELS) % CASCADE_Y_RANGE
-		const cascadeWindowPosition = `${cascadeOffsetX},${cascadeOffsetY}`
 
-		// 3. Spawn Chrome (detached, NOT a livinityd child)
-		// 2026-05-08 hotfix v2: livinityd's systemd env has no DISPLAY or
-		// XAUTHORITY, and Chrome refuses to launch as root without
-		// --no-sandbox. Spawning via `sudo -u bruce -E` doesn't fix it
-		// either — sudo strips DISPLAY/XAUTHORITY unless they're in
-		// sudoers `env_keep`, so Chrome dies with "Missing X server or
-		// $DISPLAY". Pass them as sudo command-prefix env vars
-		// (`sudo VAR=val cmd ...`), which is env_keep-independent.
-		// Reuse the existing LivOS Chrome profile so the IPC merge opens
-		// a new top-level window under bruce's signed-in session.
-		// 2026-05-09 P100-08-02: WebApp Chromes now run on dedicated Xvfb
-		// :1 (D-100-08-A). XAUTHORITY no longer needed (Xvfb -ac mode
-		// requires no Xauthority cookie). The argv-prefix XAUTHORITY=...
-		// line is dropped; DISPLAY=:1 still flows in via WEBAPPS_X11_ENV.
-		const chromeUser = process.env.LIVOS_CHROME_USER ?? 'bruce'
-		const chromeProfile =
-			process.env.LIVOS_CHROME_PROFILE ?? '/home/bruce/.config/livos-chrome'
-		const chromeArgs = [
-			'-n', // non-interactive (fail fast if password would be prompted)
-			'-u',
-			chromeUser,
-			// Phase 100-10-08: D-100-10-A reverted. chromeDisplay is the singleton
-			// `:1` set up by livinityd.start() (100-08-01 baseline).
-			`DISPLAY=${chromeDisplay}`,
-			// P100-08-02: XAUTHORITY removed — Xvfb runs with `-ac` (no Xauthority cookie).
-			// LIVOS_X11_XAUTHORITY env still recognized in window-discovery.ts comment for
-			// future xauth-protected Xvfb configs, but not propagated by default.
-			this.chromeBinary,
-			`--user-data-dir=${chromeProfile}`,
-			'--window-size=1280,720', // P100-06.1: explicit landscape resolution; Chrome --app= mode otherwise inherits whatever the last app-window remembered (often portrait/tiny).
-			`--window-position=${cascadeWindowPosition}`, // P100-10-11: cascade per-WebApp by 120px diagonal (slot 0 = 0,0 — unchanged baseline; slot 1 = 120,120; ...; wrap at slot 10 % 10 = 0). Prevents the multi-WebApp overlap reported in UAT 2026-05-10.
-			`--app=${opts.url}`,   // P100-02 (G-100-B B1): site-specific-browser mode. Replaces `--new-window URL` to break Chrome IPC merge (V33-MULTI-01) and produce chromeless windows (V33-MULTI-02 bonus).
-		]
-		const chromeProc = this.spawnFactory('sudo', chromeArgs, {
-			detached: true,
-			stdio: 'ignore',
-			// Phase 100-10-08 (D-100-10-A reverted): spawn-options env DISPLAY
-			// pinned to singleton :1 (chromeDisplay).
-			env: {...process.env, ...WEBAPPS_X11_ENV, DISPLAY: chromeDisplay},
+		// Phase 101-04 — CDP-driven window creation + PID-narrowed wid resolution.
+		// RESEARCH.md Open Question #1 RESOLVED: title-match is dropped in favor
+		// of `xdotool search --pid <chrome-pid>` baseline-and-poll. Deterministic
+		// — first new wid for THIS PID after createTarget is ours.
+		//
+		// Algorithm (encoded verbatim per RESEARCH Q1 RESOLVED):
+		//   1. Snapshot baseline wids filtered by Chrome pid BEFORE createTarget.
+		//   2. Drive CDP createTarget({newWindow:true}) for the URL.
+		//   3. Poll `xdotool search --pid <pid>` until a NEW wid appears.
+		const chromePid = await this.chromeCdpClient.getChromePid()
+		const baselineWidsForPid = await this.discovery.listWindowIdsForPid(chromePid)
+		const {targetId, windowId: cdpWindowId} =
+			await this.chromeCdpClient.createWindowForUrl(opts.url, {
+				width: 1280,
+				height: 720,
+				left: cascadeOffsetX,
+				top: cascadeOffsetY,
+			})
+		const newWin = await this.discovery.findNewWindowByPid({
+			chromePid,
+			baselineWids: baselineWidsForPid,
+			timeoutMs: 5000,
 		})
-		try {
-			chromeProc.unref?.()
-		} catch {
-			/* noop */
+		if (!newWin) {
+			// Degenerate: CDP created the target but xdotool couldn't see the
+			// wid within 5s. Clean up the orphan target so the Chrome window
+			// doesn't leak. closeTarget is best-effort — if it throws too,
+			// just propagate the original WindowNotFoundError.
+			try {
+				await this.chromeCdpClient.closeTarget(targetId)
+			} catch (err) {
+				this.logger?.warn?.(
+					`webapp ${opts.webappId}: closeTarget cleanup after WINDOW_NOT_FOUND threw (non-fatal)`,
+					err,
+				)
+			}
+			throw new WindowNotFoundError(opts.url)
 		}
-
-		// 4. Find new window matching hostname → page title (D-93-08)
-		const titleHints: string[] = []
-		try {
-			titleHints.push(new URL(opts.url).hostname)
-		} catch {
-			/* invalid URL — caller should have validated, but we don't crash */
+		// PID-narrowed lookup returns the wid as a decimal string. Parse to
+		// number for the rest of the manager (ActiveWebApp.wid is number, and
+		// every downstream consumer — xdotool, streamManager target — expects
+		// numeric wid).
+		const newWindowWidNumber = parseInt(newWin.wid, 10)
+		if (!Number.isFinite(newWindowWidNumber) || newWindowWidNumber <= 0) {
+			// Should never happen — xdotool emits decimal-integer wids. Defense
+			// in depth: clean up + fail loud.
+			try {
+				await this.chromeCdpClient.closeTarget(targetId)
+			} catch {
+				/* noop */
+			}
+			throw new WindowNotFoundError(opts.url)
 		}
-		if (opts.expectedTitle) titleHints.push(opts.expectedTitle)
-
-		const newWin = await this.discovery.findNewWindowMatching({
-			titleHints,
-			baselineWids,
-			timeoutMs: this.titleTimeoutMs,
-		})
-		if (!newWin) throw new WindowNotFoundError(opts.url)
+		// Shape the wid into the legacy WindowInfo struct so the geometry-clamp
+		// + downstream code below keeps working with the existing field names.
+		// CDP doesn't expose geometry at createTarget — fall back to wmctrl/xdotool
+		// via getWindowGeometry on the resolved wid.
+		const geometryFromX = await this.discovery
+			.getWindowGeometry(newWindowWidNumber)
+			.catch(() => null)
+		const newWinInfo: WindowInfo = {
+			wid: newWindowWidNumber,
+			title: '',
+			geometry: geometryFromX ?? {
+				x: cascadeOffsetX,
+				y: cascadeOffsetY,
+				w: 1280,
+				h: 720,
+			},
+		}
+		// `cdpWindowId` is the CDP browser-windowId — stashed in the log line
+		// only for now (future minimize/restore paths may want it).
+		this.logger?.verbose?.(
+			`webapp ${opts.webappId}: CDP created target=${targetId} cdpWindowId=${cdpWindowId} wid=${newWindowWidNumber}`,
+		)
 
 		// 5/6. Phase 99 swap (D-99-04): WebApp windows always use mode:'vnc-window'.
 		// PipeWire portal probe REMOVED — x11vnc -id <wid> reads the per-window
@@ -429,15 +512,15 @@ export class WebAppWindowManager {
 		// only — preserved for ffmpeg-fallback path; unused under x11vnc mode (D-99-05).
 		const screen = await getScreenSize().catch(() => null)
 		if (screen) {
-			const geom: Geometry = clampGeometryToScreen(newWin.geometry, screen)
+			const geom: Geometry = clampGeometryToScreen(newWinInfo.geometry, screen)
 			if (
-				geom.x !== newWin.geometry.x ||
-				geom.y !== newWin.geometry.y ||
-				geom.w !== newWin.geometry.w ||
-				geom.h !== newWin.geometry.h
+				geom.x !== newWinInfo.geometry.x ||
+				geom.y !== newWinInfo.geometry.y ||
+				geom.w !== newWinInfo.geometry.w ||
+				geom.h !== newWinInfo.geometry.h
 			) {
 				this.logger?.warn?.(
-					`webapp ${opts.webappId}: geometry exceeds screen ${JSON.stringify(newWin.geometry)} → clamped ${JSON.stringify(geom)} (screen=${screen.w}x${screen.h}); preserved for ffmpeg-fallback path; unused under x11vnc mode`,
+					`webapp ${opts.webappId}: geometry exceeds screen ${JSON.stringify(newWinInfo.geometry)} → clamped ${JSON.stringify(geom)} (screen=${screen.w}x${screen.h}); preserved for ffmpeg-fallback path; unused under x11vnc mode`,
 				)
 			}
 		}
@@ -447,14 +530,18 @@ export class WebAppWindowManager {
 		const streamStart = this.streamManager.startStream({
 			userId: opts.userId,
 			mode: 'vnc-window',
-			target: {wid: newWin.wid},
+			target: {wid: newWinInfo.wid},
 		})
 
 		// 7. Store entry
 		const entry: ActiveWebApp = {
 			webappId: opts.webappId,
 			userId: opts.userId,
-			wid: newWin.wid,
+			wid: newWinInfo.wid,
+			// Phase 101-04 — stash the CDP targetId so close() can route the
+			// Chrome-window teardown through `chromeCdpClient.closeTarget(targetId)`
+			// (deterministic — port releases align with target lifetime).
+			targetId,
 			mode,
 			streamId: streamStart!.streamId,
 			wsUrl: streamStart!.wsUrl,
@@ -466,7 +553,7 @@ export class WebAppWindowManager {
 		}
 		this.active.set(opts.webappId, entry)
 		this.logger?.info?.(
-			`webapp ${opts.webappId} spawned (user=${opts.userId} wid=${newWin.wid} mode=${mode})`,
+			`webapp ${opts.webappId} spawned (user=${opts.userId} wid=${newWinInfo.wid} mode=${mode} targetId=${targetId})`,
 		)
 
 		// Phase 100-08-04 — register per-WebApp Luse MCP entry via
@@ -475,7 +562,7 @@ export class WebAppWindowManager {
 		// host Luse via /tmp/livos-active-webapp-wid fallback below still
 		// serves the agent during the lag. (Renamed P100-10-02 from bytebot per
 		// D-100-10-B.)
-		await this.registerWebAppMcp(opts.webappId, newWin.wid, chromeDisplay)
+		await this.registerWebAppMcp(opts.webappId, newWinInfo.wid, chromeDisplay)
 
 		// Phase 100-07.4 — broadcast active wid (kept as belt-and-braces
 		// fallback and bridges the liv-core reconcile lag).
@@ -483,7 +570,7 @@ export class WebAppWindowManager {
 
 		return {
 			webappId: opts.webappId,
-			windowId: newWin.wid,
+			windowId: newWinInfo.wid,
 			streamId: entry.streamId,
 			wsUrl: entry.wsUrl,
 		}
@@ -514,6 +601,23 @@ export class WebAppWindowManager {
 			await this.streamManager.stopStream(entry.streamId)
 		} catch (err) {
 			this.logger?.warn?.(`webapp ${opts.webappId}: stopStream threw`, err)
+		}
+
+		// Phase 101-04 — route Chrome-window teardown through CDP closeTarget
+		// so the singleton Chrome releases the window deterministically (and
+		// any per-target ports / streams aligned to target lifetime release in
+		// lockstep). Best-effort — Chrome may have crashed, CDP may have been
+		// disconnected; legacy `xdotool windowkill` path below still runs when
+		// `killWindow:true` is set, as a defense-in-depth backstop.
+		if (entry.targetId && this.chromeCdpClient) {
+			try {
+				await this.chromeCdpClient.closeTarget(entry.targetId)
+			} catch (err) {
+				this.logger?.warn?.(
+					`webapp ${opts.webappId}: chromeCdpClient.closeTarget(${entry.targetId}) threw (non-fatal)`,
+					err,
+				)
+			}
 		}
 
 		// Close portal session if any
