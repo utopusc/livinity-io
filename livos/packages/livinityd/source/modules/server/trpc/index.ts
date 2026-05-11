@@ -89,7 +89,19 @@ import {nativeAppsRouter} from '../../apps/native-routes.js'
 // All 4 procedure paths are added to httpOnlyPaths in ./common.ts so
 // long-running spawn mutations don't hang on a half-broken WS after
 // `systemctl restart livos` (memory pitfall B-12 / X-04).
-import {chromeMasterRouter} from '../../chrome-master/index.js'
+//
+// Phase 103-01 — `chromeMasterRouter` here is the empty-injection
+// back-compat default; startLogin / stopLogin / input.* throw
+// INTERNAL_SERVER_ERROR until the production wire-up at
+// livinityd/source/index.ts calls `setProductionAppRouter(...)` with a
+// router built via `createAppRouter({chromeMaster: createChromeMasterRouter
+// ({displayAllocator, streamManager, profileSeeder})})`. The middleware
+// proxies (trpcExpressHandler / trpcWssHandler) re-resolve to the swapped
+// router on every request.
+import {
+	chromeMasterRouter,
+	createChromeMasterRouter,
+} from '../../chrome-master/index.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -104,65 +116,129 @@ const apps = t.mergeRouters(
 	router({native: nativeAppsRouter}),
 )
 
-const appRouter = router({
-	migration,
-	system,
-	wifi,
-	user,
-	preferences,
-	appStore,
-	apps,
-	widget,
-	files,
-	notifications,
-	eventBus,
-	backups,
-	ai,
-	usage,
-	domain,
-	docker,
-	scheduler,
-	monitoring,
-	pm2,
-	devices,
-	audit,
-	devicesAdmin,
-	fail2ban,
-	// v29.4 Phase 47 Plan 05 — AI Diagnostics admin namespace (FR-TOOL-01/02 + FR-MODEL-01).
-	capabilities: diagnosticsRoutes.capabilitiesRouter,
-	// v30.0 Phase 59 Plan 04 — apiKeys namespace (FR-BROKER-B1-04).
-	apiKeys,
-	// v31.0 Phase 71-05 — computerUse namespace (CU-FOUND-04).
-	computerUse: computerUseRouter,
-	// v32 Phase 85 (UI slice) — agents namespace (consumes Wave 1 agents-repo).
-	agents: agentsRouter,
-	// v32 Phase 86 — marketplace namespace (public browse + clone-to-library).
-	marketplace: marketplaceRouter,
-	// v32 Phase 84 — MCP single-source-of-truth namespace (Wave 3).
-	mcp: mcpRouter,
-	// v32-redo Stage 2b — conversations namespace (sidebar feed + thread view).
-	conversations: conversationsRouter,
-	// v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01).
-	// Phase 93-11 — webapp.window.* sub-router added in webappRouter.
-	webapp: webappRouter,
-	// v33 Phase 93 — streams.* (start/stop/list) namespace.
-	streams: streamsRouter,
-	// Phase 102-07 - chromeMaster.* (status / startLogin / reset /
-	// restoreBackup) namespace. Master Chrome profile management for the
-	// D-102-MASTER-PROFILE-SEED flow.
-	chromeMaster: chromeMasterRouter,
-})
+/**
+ * Phase 103-01 — factory form of the appRouter. Production wire-up
+ * (livinityd/source/index.ts after streamManager + profileSeeder + display
+ * allocator exist) calls this with a chromeMaster router built via
+ * createChromeMasterRouter({...real deps...}). The empty-default
+ * `chromeMasterRouter` still works for back-compat with status / reset /
+ * restoreBackup; startLogin / stopLogin / input.* throw INTERNAL_SERVER_ERROR
+ * until the production swap lands.
+ */
+export function createAppRouter(opts: {
+	chromeMaster: ReturnType<typeof createChromeMasterRouter>
+}) {
+	return router({
+		migration,
+		system,
+		wifi,
+		user,
+		preferences,
+		appStore,
+		apps,
+		widget,
+		files,
+		notifications,
+		eventBus,
+		backups,
+		ai,
+		usage,
+		domain,
+		docker,
+		scheduler,
+		monitoring,
+		pm2,
+		devices,
+		audit,
+		devicesAdmin,
+		fail2ban,
+		// v29.4 Phase 47 Plan 05 — AI Diagnostics admin namespace (FR-TOOL-01/02 + FR-MODEL-01).
+		capabilities: diagnosticsRoutes.capabilitiesRouter,
+		// v30.0 Phase 59 Plan 04 — apiKeys namespace (FR-BROKER-B1-04).
+		apiKeys,
+		// v31.0 Phase 71-05 — computerUse namespace (CU-FOUND-04).
+		computerUse: computerUseRouter,
+		// v32 Phase 85 (UI slice) — agents namespace (consumes Wave 1 agents-repo).
+		agents: agentsRouter,
+		// v32 Phase 86 — marketplace namespace (public browse + clone-to-library).
+		marketplace: marketplaceRouter,
+		// v32 Phase 84 — MCP single-source-of-truth namespace (Wave 3).
+		mcp: mcpRouter,
+		// v32-redo Stage 2b — conversations namespace (sidebar feed + thread view).
+		conversations: conversationsRouter,
+		// v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01).
+		// Phase 93-11 — webapp.window.* sub-router added in webappRouter.
+		webapp: webappRouter,
+		// v33 Phase 93 — streams.* (start/stop/list) namespace.
+		streams: streamsRouter,
+		// Phase 102-07 / Phase 103-01 — chromeMaster.* injected via factory.
+		// Default appRouter passes the bare chromeMasterRouter (back-compat);
+		// production livinityd boot replaces it via setProductionAppRouter().
+		chromeMaster: opts.chromeMaster,
+	})
+}
+
+// Phase 103-01 — default appRouter for type inference + back-compat with the
+// tRPC client (createTRPCClient<AppRouter>). Production livinityd boot
+// rebuilds an injected router and calls setProductionAppRouter(r) so the
+// express + WSS handlers serve the chromeMaster routes with real deps.
+const appRouter = createAppRouter({chromeMaster: chromeMasterRouter})
 
 export type AppRouter = typeof appRouter
 
-export const trpcExpressHandler = createExpressMiddleware({
-	router: appRouter,
+// Mutable late-binding slot. Defaults to the bare appRouter so tests + any
+// caller that imports trpcExpressHandler BEFORE livinityd start() runs (the
+// Server class does exactly that) keep working. Once livinityd start() builds
+// the injected router, it calls setProductionAppRouter(r) and every
+// subsequent middleware invocation routes through the injected router.
+let activeAppRouter: ReturnType<typeof createAppRouter> = appRouter
+
+/**
+ * Phase 103-01 — production wire-up swap. Called from livinityd/source/index.ts
+ * after StreamManager + ProfileSeeder + DisplayAllocator are constructed so
+ * the chromeMaster routes can spawn Xvfb + Chrome + x11vnc + stream sessions.
+ *
+ * Safe to call multiple times — every swap re-creates the cached
+ * createExpressMiddleware closure so the route table picks up the new router.
+ */
+export function setProductionAppRouter(r: ReturnType<typeof createAppRouter>): void {
+	activeAppRouter = r
+	cachedExpressInner = createExpressMiddleware({
+		router: activeAppRouter,
+		createContext: createContextExpress,
+		onError({error, ctx}) {
+			ctx?.logger?.error(`${ctx?.request?.method} ${ctx?.request?.path}`, error)
+		},
+	})
+}
+
+// Cached express middleware closure. Re-created on every setProductionAppRouter
+// call so the new router is the one serving /trpc requests.
+let cachedExpressInner = createExpressMiddleware({
+	router: activeAppRouter,
 	createContext: createContextExpress,
 	onError({error, ctx}) {
-		ctx?.logger.error(`${ctx?.request?.method} ${ctx?.request?.path}`, error)
+		ctx?.logger?.error(`${ctx?.request?.method} ${ctx?.request?.path}`, error)
 	},
 })
 
+/**
+ * Express-middleware proxy. Delegates each request to the currently-cached
+ * inner handler — which the production swap rebuilds against the injected
+ * appRouter. Type matches the express RequestHandler signature.
+ */
+export const trpcExpressHandler: ReturnType<typeof createExpressMiddleware> = ((
+	req,
+	res,
+	next,
+) => cachedExpressInner(req, res, next)) as ReturnType<typeof createExpressMiddleware>
+
+/**
+ * WSS handler factory — invoked once per WebSocketServer mount. Uses the
+ * current activeAppRouter so production swap is picked up at WSS install time
+ * (livinityd starts the WS upgrade pipeline AFTER streaming subsystem comes
+ * up — empirically the swap fires first).
+ */
 export const trpcWssHandler = ({
 	wss,
 	livinityd,
@@ -174,7 +250,7 @@ export const trpcWssHandler = ({
 }) => {
 	return applyWSSHandler({
 		wss,
-		router: appRouter,
+		router: activeAppRouter,
 		createContext: ({req}) => createContextWss({livinityd, logger, req}),
 		onError({error, ctx, path}) {
 			logger.error(`WS ${path}`, error)

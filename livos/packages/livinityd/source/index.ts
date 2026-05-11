@@ -83,6 +83,15 @@ import {bootstrapChrome, ChromeCdpClient} from './modules/chrome-cdp/index.js'
 // rewrite) will consume `this.profileSeeder` to copy master → per-app dir
 // at every WebApp spawn.
 import {createProfileSeeder, type ProfileSeederHandle} from './modules/chrome-master/index.js'
+// Phase 103-01 Task 3 — production wire-up of the chromeMaster router.
+// `createChromeMasterRouter({displayAllocator, streamManager, profileSeeder})`
+// produces a router that can spawn master Chrome on a managed Xvfb display.
+// `createAppRouter({chromeMaster})` rebuilds the top-level appRouter with
+// the injected sub-router. `setProductionAppRouter(r)` swaps the
+// trpcExpressHandler proxy's cached middleware closure so /trpc requests
+// route through the injected router from this swap forward.
+import {createChromeMasterRouter} from './modules/chrome-master/index.js'
+import {createAppRouter, setProductionAppRouter} from './modules/server/trpc/index.js'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -656,6 +665,31 @@ export default class Livinityd {
 			this.webappWindowManager.startIdleCleanup()
 			webappLogger.info(
 				'WebAppWindowManager started (5s idle-cleanup poll armed)',
+			)
+
+			// Phase 103-01 Task 3 — wire the chromeMaster router with the same
+			// shared deps the WebAppWindowManager already consumes. Master Chrome
+			// uses the same display pool; singleton lock prevents conflict.
+			//
+			// This swap MUST run after profileSeeder + streamManager +
+			// webappDisplayAllocator are constructed. The trpcExpressHandler
+			// proxy and trpcWssHandler factory inside server/trpc/index.ts
+			// re-resolve to the swapped appRouter on every request (express)
+			// and every WSS mount (ws). Server.start() may already have mounted
+			// the express middleware with the bare default appRouter — but the
+			// middleware proxy delegates to a mutable closure that this swap
+			// rebuilds against the injected router.
+			const chromeMasterRouterInjected = createChromeMasterRouter({
+				displayAllocator: webappDisplayAllocator,
+				streamManager: this.streamManager,
+				profileSeeder: this.profileSeeder!,
+			})
+			const productionAppRouter = createAppRouter({
+				chromeMaster: chromeMasterRouterInjected,
+			})
+			setProductionAppRouter(productionAppRouter)
+			webappLogger.info(
+				'Phase 103-01 — chromeMaster router wired with displayAllocator + streamManager + profileSeeder (master Chrome can now stream via Xvfb)',
 			)
 		} catch (err) {
 			// Non-fatal — boot continues. Streaming + WebApp launcher will
