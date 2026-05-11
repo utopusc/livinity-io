@@ -83,6 +83,13 @@ import streamsRouter from '../../streaming/trpc-router.js'
 // Merged into the existing `apps` namespace below alongside Phase 47
 // healthProbe. All 4 paths are added to httpOnlyPaths in ./common.ts.
 import {nativeAppsRouter} from '../../apps/native-routes.js'
+// Phase 102-07 - Chrome Master Login tRPC routes (D-102-MASTER-LOGIN-UI).
+// Top-level `chromeMaster` namespace exposes status / startLogin / reset /
+// restoreBackup. The three mutations are adminProcedure-gated (T-102-07).
+// All 4 procedure paths are added to httpOnlyPaths in ./common.ts so
+// long-running spawn mutations don't hang on a half-broken WS after
+// `systemctl restart livos` (memory pitfall B-12 / X-04).
+import {chromeMasterRouter} from '../../chrome-master/index.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -140,6 +147,10 @@ const appRouter = router({
 	webapp: webappRouter,
 	// v33 Phase 93 — streams.* (start/stop/list) namespace.
 	streams: streamsRouter,
+	// Phase 102-07 - chromeMaster.* (status / startLogin / reset /
+	// restoreBackup) namespace. Master Chrome profile management for the
+	// D-102-MASTER-PROFILE-SEED flow.
+	chromeMaster: chromeMasterRouter,
 })
 
 export type AppRouter = typeof appRouter
