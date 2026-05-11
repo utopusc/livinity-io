@@ -472,9 +472,17 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 
 ---
 
-### Phase 101: CDP-driven Luse Orchestration
+### Phase 101: LivOS Universal App Orchestration
 
-**Goal:** Enable Luse to drive multi-target Chrome via Chrome DevTools Protocol while preserving the shared `--user-data-dir` profile (same Google login across WebApps). Reopens the multi-display capability path that 100-10-01 attempted via per-WebApp Xvfb and that 100-10-08 reverted because Chrome's singleton lock + shared profile are architecturally incompatible with per-process per-display spawns.
+**Goal:** Six-pillar orchestration upgrade per user UAT 2026-05-10:
+- (A) Tek Chrome process + multi-port per-app stream (same Google login across all)
+- (B) Ubuntu native apps as first-class LivOS citizens (dock-launchable + auto-stream)
+- (C) Luse window-context auto-awareness (chat session knows hangi pencerede)
+- (D) SelfClaude action-driven Teach (click → instruction popover → step)
+- (E) Chat animations (thinking dots + idle pulse)
+- (F) Hermes per-tool phrase relay (close 100-10-10 backend gap)
+
+**Full context:** `.planning/phases/101-livos-universal-app-orchestration/101-CONTEXT.md` (10 sub-plans, 4 parallel waves, locked decisions D-101-*, 20-row UAT)
 
 **Trigger:** 2026-05-10 live diagnostic on Mini PC during Phase 100-10. Per-WebApp Xvfb (`:10`, `:11`, ...) was code-correct but every new `--app=URL` spawn IPC-redirected to the existing Chrome PID on `:10`, so no window appeared on `:11`. User chose to keep shared profile → 100-10-08 restored Phase 99 single-display + per-wid x11vnc behavior. The user's actual long-term vision — Luse opens ports + spawns multi-screen Chrome targets + navigates between windows + teaching mode compatible — needs a different architecture: drive ONE Chrome process via CDP, create multiple Target/Browser contexts, and bind x11vnc / capture per-target.
 
@@ -492,7 +500,13 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 - B. SelfClaude action-driven Teach pattern — event-driven click + per-step instruction prompt; replaces today's interval-based frame capture. See `.planning/phases/100-multi-stream-window-redesign/100-10-12-RESEARCH.md` for design input.
 - C. Per-tool streaming backend bridge — agent-session.ts → runStore status_detail relay so Hermes phrase reaches WebApp chat UI (gap identified in 100-10-10 SUMMARY)
 
-**Status:** Planned. CONTEXT to be authored after v33.0 ships and the 100-10-08 deploy is UAT-confirmed.
+**Status:** CONTEXT authored 2026-05-10 (101-CONTEXT.md). Ready for `/gsd-plan-phase 101 --chain` or `/gsd-autonomous --only 101`.
+
+**Decomposition:** 10 sub-plans across 4 parallel waves:
+- **Wave 1 (3 plans, parallel):** 101-01 Chrome CDP bootstrap, 101-02 port allocator (15900..15999), 101-03 native app spawner
+- **Wave 2 (3 plans, parallel):** 101-04 CDP WebApp spawn (replaces window-manager argv), 101-05 native app stream binder, 101-06 Luse auto-context injection
+- **Wave 3 (3 plans, parallel):** 101-07 LivOS dock native app UI, 101-08 SelfClaude Teach v3 refactor, 101-09 chat animations + Hermes phrase relay
+- **Wave 4 (1 plan, user-walked):** 101-10 Mini PC deploy + 20-row UAT
 
 ---
 
