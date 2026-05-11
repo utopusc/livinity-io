@@ -760,10 +760,14 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 		}
 	}
 
-	// mcp__luse__list_windows — wmctrl-based window enumeration on the
-	// caller's display (W4 lock: wmctrl, not xdotool search).
+	// list_windows — wmctrl-based window enumeration on the caller's
+	// display (W4 lock: wmctrl, not xdotool search). Phase 100-10-14:
+	// registered as BARE NAME (no `mcp__luse__` prefix in registerTool
+	// call) so UI displays it consistently with the other Luse tools
+	// (computer_*, set_task_status, etc.). MCP runtime is responsible
+	// for any server-prefix display, not the server itself.
 	server.registerTool(
-		'mcp__luse__list_windows',
+		'list_windows',
 		{
 			description: listWindowsTool.description,
 			inputSchema: jsonSchemaToZodRawShape(listWindowsTool.input_schema),
@@ -783,12 +787,12 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 		}),
 	)
 
-	// mcp__luse__screenshot_window — accepts `{wid}` for window-bound
+	// screenshot_window — accepts `{wid}` for window-bound
 	// capture OR `{display}` for whole-display capture. Falls back to
 	// the bound default display when neither is provided (matches the
 	// "default to caller scope" pattern used by list_windows).
 	server.registerTool(
-		'mcp__luse__screenshot_window',
+		'screenshot_window',
 		{
 			description: screenshotWindowTool.description,
 			inputSchema: jsonSchemaToZodRawShape(screenshotWindowTool.input_schema),
@@ -850,11 +854,11 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 		}),
 	)
 
-	// mcp__luse__focus_window — xdotool windowactivate --sync <wid>.
+	// focus_window — xdotool windowactivate --sync <wid>.
 	// Honors the per-WebApp display via the spawn env override so xdotool
 	// queries the correct X server.
 	server.registerTool(
-		'mcp__luse__focus_window',
+		'focus_window',
 		{
 			description: focusWindowTool.description,
 			inputSchema: jsonSchemaToZodRawShape(focusWindowTool.input_schema),
@@ -931,9 +935,9 @@ function registerLuseStreamTools(
 		}
 	}
 
-	// mcp__luse__create_stream — privilege-gated stream spawn.
+	// create_stream — privilege-gated stream spawn.
 	server.registerTool(
-		'mcp__luse__create_stream',
+		'create_stream',
 		{
 			description: createStreamTool.description,
 			inputSchema: jsonSchemaToZodRawShape(createStreamTool.input_schema),
@@ -988,9 +992,9 @@ function registerLuseStreamTools(
 		}),
 	)
 
-	// mcp__luse__list_streams — read-only, user-scoped.
+	// list_streams — read-only, user-scoped.
 	server.registerTool(
-		'mcp__luse__list_streams',
+		'list_streams',
 		{
 			description: listStreamsTool.description,
 			inputSchema: jsonSchemaToZodRawShape(listStreamsTool.input_schema),
