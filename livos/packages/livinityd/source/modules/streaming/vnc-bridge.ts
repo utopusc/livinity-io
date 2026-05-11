@@ -44,11 +44,25 @@ export type VncSpawnFactory = (
 ) => ChildProcess
 
 export type SpawnVncOpts = {
-	/** Single-window capture (legacy / pre-100-10-01) — `x11vnc -id 0xHEX`. */
+	/** Single-window capture (D-99-01 baseline; post-100-10-08 default path) —
+	 *  `x11vnc -id 0xHEX`. Each WebApp gets its own x11vnc bound to its wid;
+	 *  Chrome's singleton lock naturally serializes multi-window on a single
+	 *  display, so per-wid capture isolates each WebApp's pixels.
+	 *
+	 *  Note: under shared `:1` display, two windows on the same display CAN
+	 *  occlude each other; the per-wid pixmap read via XComposite-aware x11vnc
+	 *  still returns the window's framebuffer (not the visible region),
+	 *  carrying forward the Phase 99 behavior. */
 	wid?: number
-	/** Whole-display capture (Phase 100-10-01 / D-100-10-A) — `x11vnc -display :N`.
-	 *  When set, takes precedence over `wid`. The DISPLAY env prefix is also
-	 *  flipped to this value so x11vnc connects to the per-WebApp Xvfb. */
+	/** Whole-display capture (originally Phase 100-10-01 / D-100-10-A —
+	 *  REVERTED in 100-10-08 because Chrome singleton lock + shared
+	 *  `--user-data-dir` are architecturally incompatible with per-WebApp
+	 *  displays). The branch is RETAINED in code as scaffolding for the
+	 *  Phase 101 CDP architecture (Luse drives multi-target Chrome via
+	 *  DevTools Protocol). When set, takes precedence over `wid`; the
+	 *  DISPLAY env prefix flips to this value. CURRENT CALLERS DO NOT SET
+	 *  THIS; setting it ad-hoc requires that the consumer manages the
+	 *  display's Xvfb lifecycle separately. */
 	display?: string
 	rfbPort: number
 	spawnFactory?: VncSpawnFactory
@@ -56,26 +70,27 @@ export type SpawnVncOpts = {
 }
 
 /**
- * Spawn x11vnc bound to either a single Chrome window (D-99-01 legacy mode,
- * `-id 0xHEX`) OR a whole X display (Phase 100-10-01 D-100-10-A,
- * `-display :N`). When `opts.display` is provided it takes precedence — the
- * argv switches to whole-display capture and DISPLAY in the env prefix is
- * pinned to that display so x11vnc connects to the per-WebApp Xvfb.
+ * Spawn x11vnc bound to either a single Chrome window (D-99-01 / 100-08
+ * baseline, RESTORED in 100-10-08 as the default path; `-id 0xHEX`) OR a
+ * whole X display (originally 100-10-01 D-100-10-A; REVERTED in 100-10-08
+ * but the `-display :N` branch is kept as Phase 101 CDP scaffolding).
+ * When `opts.display` is provided it takes precedence — the argv switches
+ * to whole-display capture and DISPLAY in the env prefix is pinned to that
+ * display.
  *
- * Whole-display mode is what eliminates the ISSUE 2 black-overlap from
- * 100-10-CONTEXT (each WebApp owns its display, no compositor stacking) and
- * the ISSUE 1 "Chrome itself" capture (whole-display capture sees Chrome's
- * full pixels regardless of window state).
+ * Post-100-10-08 callers (window-manager + stream-manager vnc-window) pass
+ * `{wid}` only. The `display` path waits on Phase 101.
  *
  * Returns the ChildProcess. Caller is responsible for killing it on
  * lifecycle close (window-gone, streams.stop).
  */
 export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 	const factory = opts.spawnFactory ?? nodeSpawn
-	// Phase 100-10-01: -display takes precedence over -id when both are
-	// provided. Display string also overrides the env-prefix DISPLAY so the
-	// x11vnc child connects to the per-WebApp Xvfb (`:10`, `:11`, ...) instead
-	// of the global :1.
+	// Phase 100-10-08 (D-100-10-A reverted): -display branch RETAINED for
+	// Phase 101 CDP scaffolding but the post-revert default-callers don't
+	// set `opts.display`, so `displayForEnv` resolves to WEBAPPS_X11_ENV.DISPLAY
+	// (`:1`, the 100-08-01 singleton). When `opts.display` is provided (Phase
+	// 101 CDP path or test fixtures), the env-prefix flips appropriately.
 	const displayForEnv = opts.display ?? WEBAPPS_X11_ENV.DISPLAY
 	const captureFlags: string[] =
 		opts.display !== undefined
@@ -86,10 +101,12 @@ export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 			`vnc-bridge.spawnVncForWindow: must provide either {display} or {wid>0} (got display=${opts.display}, wid=${opts.wid})`,
 		)
 	}
-	// D-99-01 canonical argv (locked in 99-01-SUMMARY.md) + D-100-10-A whole-display
-	// branch. The sudo -n -u bruce + DISPLAY pattern matches window-manager.ts
-	// Chrome spawn. Pitfall 1 mitigation: x11vnc inherits bruce's X session via
-	// the env injection, NOT via env_keep on sudoers.
+	// D-99-01 canonical argv (locked in 99-01-SUMMARY.md). The whole-display
+	// branch from 100-10-01 (D-100-10-A) is RETAINED here but reverted out of
+	// the live path in 100-10-08 (single :1 + shared profile). The sudo -n -u
+	// bruce + DISPLAY pattern matches window-manager.ts Chrome spawn. Pitfall
+	// 1 mitigation: x11vnc inherits bruce's X session via the env injection,
+	// NOT via env_keep on sudoers.
 	// P100-08-02: XAUTHORITY removed — x11vnc on Xvfb (-ac) needs no cookie.
 	const args = [
 		'-n',
@@ -115,8 +132,8 @@ export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 	// D-99-07: stderr tail diagnostic (mirrors stream-manager.ts encoder pattern,
 	// originally landed in commit 782cafeb for ffmpeg). Last 50 lines kept;
 	// dumped to logger.error on non-zero exit.
-	// Phase 100-10-01: log tag reflects capture mode — `display=:N` for whole-display,
-	// `wid=0xHEX` for legacy single-window.
+	// Phase 100-10-08 (D-100-10-A reverted): log tag reflects capture mode —
+	// `wid=0xHEX` (post-revert default) vs. `display=:N` (Phase 101 scaffold).
 	const logTag = opts.display !== undefined ? `display=${opts.display}` : `wid=${opts.wid}`
 	const stderrTail: string[] = []
 	proc.stderr?.on('data', (chunk: Buffer) => {
