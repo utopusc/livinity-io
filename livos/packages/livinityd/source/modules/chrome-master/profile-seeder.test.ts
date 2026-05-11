@@ -62,7 +62,9 @@ function makeFailAccess() {
 }
 
 function makeOkMkdir() {
-	return vi.fn(async () => undefined)
+	// Typed mkdir(path, opts) — vitest infers parameter tuple from this
+	// signature so `mock.calls[0][0]` / `[0][1]` are addressable in tests.
+	return vi.fn(async (_path: string, _opts: {recursive: boolean}) => undefined)
 }
 
 describe('102-03-01 MasterProfileSeeder', () => {
