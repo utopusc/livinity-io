@@ -381,10 +381,34 @@ describe('Phase 100-09-06 action_log v1|v2 schema (backwards-compat)', () => {
 		expect(result.success).toBe(true)
 	})
 
-	test('T-09-06-S3: v3 record is rejected (discriminated union safety)', () => {
+	// Phase 101-08 — REPURPOSED from "v3 rejected" to "v3 accepted with the
+	// SelfClaude shape" (CONTEXT D-101-TEACH-V3). v3 logs use a different
+	// step schema (flat x/y, numeric button 1|2|3, new `note` step type) so
+	// reshaping a v1Sample with just `version:3` STILL fails — but a proper
+	// v3 sample DOES validate.
+	test('T-101-08-S3: v3 record validates with the SelfClaude action shape', () => {
 		const schema = (skillsRouterModule as any).actionLogSchema
-		const v3Sample = {...v1Sample, version: 3}
+		const v3Sample = {
+			version: 3 as const,
+			webappId: '00000000-0000-0000-0000-000000000001',
+			startedAt: 0,
+			endedAt: 1000,
+			events: [
+				{type: 'click' as const, button: 1 as const, x: 10, y: 20, ts: 100},
+				{type: 'note' as const, text: 'open the inbox', ts: 200},
+			],
+		}
 		const result = schema.safeParse(v3Sample)
+		expect(result.success).toBe(true)
+	})
+
+	test('T-101-08-S3b: malformed v3 (legacy v1 click shape with version:3) is rejected', () => {
+		const schema = (skillsRouterModule as any).actionLogSchema
+		// v1 click events use `coords:{x,y}` + string button — incompatible
+		// with v3's flat x/y + numeric 1|2|3 button. Reshaping a v1 sample
+		// to version:3 MUST still fail.
+		const v3Malformed = {...v1Sample, version: 3 as const}
+		const result = schema.safeParse(v3Malformed)
 		expect(result.success).toBe(false)
 	})
 })

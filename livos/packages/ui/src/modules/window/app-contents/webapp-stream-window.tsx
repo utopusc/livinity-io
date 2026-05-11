@@ -852,7 +852,7 @@ function SaveSkillDialog({open, eventCount, durationMs, saving, onSave, onCancel
 		>
 			<DialogContent className='max-w-md'>
 				<DialogHeader>
-					<DialogTitle>Save skill</DialogTitle>
+					<DialogTitle>Adlandır</DialogTitle>
 					<DialogDescription>
 						{eventCount} actions captured over {(durationMs / 1000).toFixed(1)}s. Give the skill a
 						name to save it for this WebApp.
