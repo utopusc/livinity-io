@@ -114,3 +114,94 @@ export async function cleanupLegacyBytebotState(
 
 	return result
 }
+
+/**
+ * Phase 103-05 (Pitfall 5 from 103-RESEARCH) — boot-time sweep of stale
+ * `luse:webapp:*` MCP registrations.
+ *
+ * Pre-103 deploys called WebAppWindowManager.registerWebAppMcp() on every
+ * spawn, persisting per-WebApp entries to McpConfigManager (Redis-backed).
+ * Phase 103-05 flips LIVOS_PER_APP_LUSE default OFF — but those stale
+ * entries SURVIVE the code change because Redis persists across boots.
+ * Without this cleanup, liv-core still sees ~10 stale `luse:webapp:*`
+ * entries and fires Claude Code permission prompts for each on first
+ * connect.
+ *
+ * Strategy: list every server registered with McpConfigManager, filter
+ * by `typeof name === 'string' && name.startsWith('luse:webapp:')`, call
+ * removeServer on each. The global `luse` entry, `memory`, and any other
+ * server are LEFT ALONE — only the per-WebApp orphans match the prefix.
+ *
+ * Idempotent: re-running on a clean Redis is a no-op (orphans gone → no
+ * removeServer calls).
+ *
+ * Non-fatal: any error (listServers throws, removeServer throws on a
+ * specific entry) is caught + logged via opts.logger.error + recorded in
+ * the returned `errors` array; livinityd boot continues regardless. Boot
+ * order constraint: this MUST run BEFORE registerLuseMcpServer so the
+ * fresh `luse` registration is the only `luse*` entry visible to liv-core
+ * after boot (see agent-runs.ts).
+ *
+ * Mirrors the idempotent + non-fatal style of cleanupLegacyBytebotState
+ * above (Phase 100-10-09).
+ */
+export async function cleanupOrphanedPerWebAppLuseEntries(opts: {
+	mcpConfigManager: McpConfigManagerLike
+	logger?: {
+		log(msg: string, ...args: unknown[]): void
+		error(msg: string, ...args: unknown[]): void
+	}
+}): Promise<{mcpServersRemoved: number; errors: string[]}> {
+	const log = opts.logger ?? {log: () => {}, error: () => {}}
+	const result: {mcpServersRemoved: number; errors: string[]} = {
+		mcpServersRemoved: 0,
+		errors: [],
+	}
+
+	let servers: Array<{name: string}>
+	try {
+		servers = (await opts.mcpConfigManager.listServers()) as Array<{name: string}>
+	} catch (err) {
+		const msg = `listServers failed: ${(err as Error).message}`
+		log.error(`[103-05 orphan-sweep] ${msg}`)
+		result.errors.push(msg)
+		return result
+	}
+
+	// Defensive: filter by strict prefix + string-name check. The McpConfigManager
+	// blob comes from Redis JSON; a pathologically-shaped entry must not crash
+	// boot. Only `luse:webapp:*` strings reach removeServer — T-103-05-01.
+	const orphans = servers.filter(
+		(s) => typeof s.name === 'string' && s.name.startsWith('luse:webapp:'),
+	)
+	if (orphans.length === 0) {
+		log.log(
+			`[103-05 orphan-sweep] no luse:webapp:* entries found (clean state)`,
+		)
+		return result
+	}
+
+	log.log(
+		`[103-05 orphan-sweep] removing ${orphans.length} stale luse:webapp:* entries`,
+	)
+	for (const s of orphans) {
+		try {
+			if (typeof opts.mcpConfigManager.removeServer !== 'function') {
+				const msg = `removeServer not implemented on McpConfigManager (cannot remove ${s.name})`
+				log.error(`[103-05 orphan-sweep] ${msg}`)
+				result.errors.push(msg)
+				continue
+			}
+			await opts.mcpConfigManager.removeServer(s.name)
+			result.mcpServersRemoved += 1
+		} catch (err) {
+			const msg = `removeServer(${s.name}) failed: ${(err as Error).message}`
+			log.error(`[103-05 orphan-sweep] ${msg}`)
+			result.errors.push(msg)
+		}
+	}
+	log.log(
+		`[103-05 orphan-sweep] complete — mcpServersRemoved=${result.mcpServersRemoved} errors=${result.errors.length}`,
+	)
+	return result
+}
