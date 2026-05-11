@@ -8,6 +8,8 @@ import {useApps, systemAppsKeyed} from '@/providers/apps'
 import {useWindowManagerOptional} from '@/providers/window-manager'
 import {trpcReact} from '@/trpc/trpc'
 
+import {NativeAppIcon} from '../dock/native-app-icon'
+
 import {AppGrid, AppGridItem, DesktopLayout} from './app-grid/app-grid'
 import {AppIcon, AppIconConnected} from './app-icon'
 import {DesktopFolder} from './desktop-folder'
@@ -203,6 +205,17 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 	const {widgets, update: updateWidgets} = useDesktopWidgets()
 	const {layout, updateLayout} = useDesktopLayout()
 
+	// Phase 101-07 — pull persisted native-app configs (apps.native.list).
+	// Direct query rather than threading through useApps to minimize blast
+	// radius on the shared provider. Same staleTime/retry policy as
+	// webappsQ above for parity. Invalidations from create/delete mutations
+	// inside NativeAppForm / NativeAppIcon remain the primary refresh path.
+	const nativeAppsQ = trpcReact.apps.native.list.useQuery(undefined, {
+		staleTime: 30 * 1000,
+		retry: false,
+	})
+	const nativeApps = nativeAppsQ.data ?? []
+
 	const isMobile = useIsMobile()
 	const {openApp} = useMobileApp()
 
@@ -269,6 +282,25 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 			),
 		}))
 		appItems.push(...webappItems)
+
+		// Phase 101-07 — persisted native apps (apps.native.list). Discriminated
+		// from WebApps by the data source — same desktop grid surface, same
+		// motion animation, swap WebAppIcon → NativeAppIcon. Native icons sort
+		// after WebApps in the initial MVP; drag-arrange ordering is shared
+		// with WebApps and deferred to v34.
+		const nativeAppItems: AppGridItem[] = nativeApps.map((cfg) => ({
+			id: `native-app-${cfg.id}`,
+			node: (
+				<motion.div
+					initial={{opacity: 0, scale: 0}}
+					animate={{opacity: 1, scale: 1}}
+					transition={{type: 'spring', stiffness: 400, damping: 25}}
+				>
+					<NativeAppIcon id={cfg.id} name={cfg.name} iconUrl={cfg.iconUrl} />
+				</motion.div>
+			),
+		}))
+		appItems.push(...nativeAppItems)
 
 		// System apps shown in grid on mobile (dock is hidden)
 		if (isMobile) {
@@ -436,7 +468,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		})
 
 		return [...appItems, ...folderItems, ...widgetItems]
-	}, [userApps, webapps, folders, widgets, openStreamApp, isMobile, openApp, windowManager])
+	}, [userApps, webapps, nativeApps, folders, widgets, openStreamApp, isMobile, openApp, windowManager])
 
 	return (
 		<motion.div className='flex h-full w-full select-none flex-col' variants={variants} animate={variant} initial={{opacity: 1}} transition={{duration: 0.15, ease: 'easeOut'}}>
