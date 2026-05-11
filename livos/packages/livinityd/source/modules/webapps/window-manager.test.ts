@@ -395,7 +395,9 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		// now gated behind LIVOS_PER_APP_LUSE=1 env (default skip to reduce
 		// agent tool clutter). Set env for this test.
 		const prevEnv = process.env.LIVOS_PER_APP_LUSE
-		// Phase 102 r7: default ON; no env override needed
+		// Phase 103-05: default flipped OFF. Explicit opt-in '1' is now
+		// required to trigger registerWebAppMcp (was "anything-but-0").
+		process.env.LIVOS_PER_APP_LUSE = '1'
 		const installCalls: any[] = []
 		const mcpConfigManager = {
 			installServer: vi.fn(async (config: any) => {
@@ -447,7 +449,8 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 	it('Test 18: spawn() falls back to updateServer when installServer throws (idempotent re-spawn / regex rejection)', async () => {
 		// Phase 102 deploy UAT round 4 — gated behind LIVOS_PER_APP_LUSE=1.
 		const prevEnv = process.env.LIVOS_PER_APP_LUSE
-		// Phase 102 r7: default ON; no env override needed
+		// Phase 103-05: default flipped OFF — must set '1' explicitly.
+		process.env.LIVOS_PER_APP_LUSE = '1'
 		const updateCalls: any[] = []
 		const mcpConfigManager = {
 			installServer: vi.fn(async () => {
@@ -503,6 +506,107 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 		await expect(
 			mgr.close({webappId: 'webapp-bare', userId: 'user-1'}),
 		).resolves.toEqual({ok: true})
+	})
+
+	// ========================================================================
+	// Phase 103-05 (REQ-103-B5) — LIVOS_PER_APP_LUSE default flip env-coverage.
+	//
+	// Before 103-05: gate was `process.env.LIVOS_PER_APP_LUSE !== '0'` —
+	// registration on by default; only literal '0' opted out.
+	// After 103-05: gate is `process.env.LIVOS_PER_APP_LUSE === '1'` —
+	// registration off by default; ONLY literal '1' opts in.
+	//
+	// Rationale: 103-03 + 103-04 ship the single-MCP display-aware path; the
+	// global `luse` MCP accepts per-call `display: ":N"` on every X11 tool
+	// and the prompt instructs the agent to pass it. Per-WebApp MCP regs
+	// became redundant + triggered Claude Code wildcard permission prompts.
+	// ========================================================================
+
+	describe('Phase 103-05 — LIVOS_PER_APP_LUSE default-off env coverage', () => {
+		function makeMcpSpy() {
+			const installCalls: any[] = []
+			return {
+				installServer: vi.fn(async (config: any) => {
+					installCalls.push(config)
+				}),
+				updateServer: vi.fn(async (_n: string, _u: any) => null),
+				removeServer: vi.fn(async (_n: string) => true),
+				installCalls,
+			}
+		}
+
+		// Save / restore the env across each test so we don't bleed.
+		let prevEnv: string | undefined
+		beforeEach(() => {
+			prevEnv = process.env.LIVOS_PER_APP_LUSE
+			delete process.env.LIVOS_PER_APP_LUSE
+		})
+		afterEach(() => {
+			if (prevEnv === undefined) delete process.env.LIVOS_PER_APP_LUSE
+			else process.env.LIVOS_PER_APP_LUSE = prevEnv
+		})
+
+		it('Test 21 [REQ-103-B5]: default (env unset) → spawn() does NOT call installServer (registration skipped)', async () => {
+			// env was deleted in beforeEach → simulates fresh process with no flag
+			const mcp = makeMcpSpy()
+			const {mgr} = makeManager({mcpConfigManager: mcp, luseServerPath: '/tmp/server.ts'})
+			await mgr.spawn({userId: 'user-1', webappId: 'webapp-default', url: 'https://example.com'})
+			expect(mcp.installServer).not.toHaveBeenCalled()
+			expect(mcp.installCalls).toHaveLength(0)
+			mgr._clearForTests()
+		})
+
+		it('Test 22 [REQ-103-B5]: explicit LIVOS_PER_APP_LUSE=0 → spawn() does NOT call installServer', async () => {
+			process.env.LIVOS_PER_APP_LUSE = '0'
+			const mcp = makeMcpSpy()
+			const {mgr} = makeManager({mcpConfigManager: mcp, luseServerPath: '/tmp/server.ts'})
+			await mgr.spawn({userId: 'user-1', webappId: 'webapp-zero', url: 'https://example.com'})
+			expect(mcp.installServer).not.toHaveBeenCalled()
+			mgr._clearForTests()
+		})
+
+		it("Test 23 [REQ-103-B5]: explicit LIVOS_PER_APP_LUSE='1' → spawn() CALLS installServer exactly once (legacy per-app opt-in)", async () => {
+			process.env.LIVOS_PER_APP_LUSE = '1'
+			const mcp = makeMcpSpy()
+			const {mgr} = makeManager({mcpConfigManager: mcp, luseServerPath: '/tmp/server.ts'})
+			await mgr.spawn({userId: 'user-1', webappId: 'webapp-one', url: 'https://example.com'})
+			expect(mcp.installServer).toHaveBeenCalledTimes(1)
+			expect(mcp.installCalls[0]!.name).toBe('luse:webapp:example-webap')
+			mgr._clearForTests()
+		})
+
+		it("Test 24 [REQ-103-B5]: ambiguous strings ('true'/'yes'/'on') → spawn() does NOT call installServer (only literal '1' opts in)", async () => {
+			for (const val of ['true', 'yes', 'on', 'TRUE', '2', ' 1 ']) {
+				process.env.LIVOS_PER_APP_LUSE = val
+				const mcp = makeMcpSpy()
+				const {mgr} = makeManager({mcpConfigManager: mcp, luseServerPath: '/tmp/server.ts'})
+				await mgr.spawn({
+					userId: 'user-1',
+					webappId: `webapp-${val.replace(/\s/g, 'x')}`,
+					url: 'https://example.com',
+				})
+				expect(
+					mcp.installServer,
+					`expected installServer NOT called for LIVOS_PER_APP_LUSE='${val}'`,
+				).not.toHaveBeenCalled()
+				mgr._clearForTests()
+			}
+		})
+
+		it('Test 25 [REQ-103-B5]: skip path emits "per-WebApp Luse MCP SKIPPED" info log mentioning Phase 103-05 default-off', async () => {
+			// env unset → skip branch
+			const mcp = makeMcpSpy()
+			const {mgr, logger} = makeManager({mcpConfigManager: mcp, luseServerPath: '/tmp/server.ts'})
+			await mgr.spawn({userId: 'user-1', webappId: 'webapp-log', url: 'https://example.com'})
+			// logger.info is a vi.fn() in makeManager102 — find a call mentioning the skip.
+			const infoCalls = (logger.info as any).mock.calls.map((c: any[]) => String(c[0]))
+			const skipLine = infoCalls.find((line: string) =>
+				line.includes('per-WebApp Luse MCP SKIPPED'),
+			)
+			expect(skipLine).toBeDefined()
+			expect(skipLine).toMatch(/Phase 103-05|default-off/)
+			mgr._clearForTests()
+		})
 	})
 })
 
