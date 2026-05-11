@@ -53,6 +53,13 @@ import {createDisplayAllocator} from './modules/webapps/display-allocator.js'
 // D-100-10-B.)
 import {McpConfigManager} from '@liv/core/lib'
 import {DEFAULT_LUSE_MCP_SERVER_PATH} from './modules/computer-use/luse-mcp-config.js'
+// Phase 101-01 — Chrome CDP bootstrap + typed wrapper. Spawn singleton Chrome
+// with --remote-debugging-port=9222 (T-101-01 mitigation: bound to 127.0.0.1
+// only) at livinityd boot. ChromeCdpClient holds the persistent CDP connection
+// the Wave 2+ webapps/window-manager rewrite drives. Bootstrap failure is
+// non-fatal — Pillar A degrades, livinityd keeps running (mirror of the
+// streaming-subsystem try/catch at lines 474-482).
+import {bootstrapChrome, ChromeCdpClient} from './modules/chrome-cdp/index.js'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -186,6 +193,12 @@ export default class Livinityd {
 	// SERVICE_UNAVAILABLE downstream).
 	xvfbHandle?: XvfbHandle
 	fluxboxHandle?: FluxboxHandle
+	// Phase 101-01 — Chrome CDP client singleton. Constructed + connected in
+	// start() AFTER StreamManager and BEFORE WebAppWindowManager so the Wave 2
+	// window-manager rewrite (Plan 101-04) can consume it via constructor opt.
+	// Stays null when bootstrap fails (Pillar A degraded — livinityd boot
+	// continues per the streaming subsystem try/catch pattern).
+	chromeCdpClient: ChromeCdpClient | null = null
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -422,6 +435,70 @@ export default class Livinityd {
 				// independent of this :1 fallback.
 				streamingLogger.error(
 					'Failed to start Xvfb :1 / fluxbox (legacy fallback); per-WebApp displays still allocatable',
+					err,
+				)
+			}
+
+			// Phase 101-01 — Chrome CDP bootstrap. Spawn the singleton Chrome with
+			// --remote-debugging-port=9222 bound to 127.0.0.1 only (T-101-01
+			// mitigation), wait for /json/version to return 200, then open a
+			// persistent CDP connection. The about:blank shell window opened by
+			// --new-window=about:blank is minimized via a SEPARATE setWindowBounds
+			// call after connect (RESEARCH correction #1: CDP rejects state+bounds
+			// in one call). All of this is wrapped in try/catch — bootstrap failure
+			// degrades Pillar A (multi-stream WebApps) but livinityd boot keeps
+			// going. The Wave 2+ window-manager rewrite (Plan 101-04) will pull
+			// chromeCdpClient off `this` once it's not null.
+			try {
+				const chromeCdpLogger = (() => {
+					const c = this.logger.createChildLogger('chrome-cdp')
+					// Adapter shape matches the streamingLogger/webappLogger pattern
+					// elsewhere in start() — livinityd's logger has (msg, error?)
+					// signatures while our chrome-cdp modules expect ChromeCdpLogger
+					// with rest-args. Collapse to error+verbose without rest.
+					return {
+						info: (msg: string) => c.log(msg),
+						warn: (msg: string, error?: unknown) => c.error(msg, error),
+						error: (msg: string, error?: unknown) => c.error(msg, error),
+						verbose: (msg: string) => c.verbose(msg),
+					}
+				})()
+				const {pid: chromePid} = await bootstrapChrome({
+					display: process.env.WEBAPPS_X11_DISPLAY ?? ':1',
+					logger: chromeCdpLogger,
+				})
+				this.chromeCdpClient = new ChromeCdpClient({logger: chromeCdpLogger})
+				await this.chromeCdpClient.connect()
+				chromeCdpLogger.info(`Chrome CDP ready (pid=${chromePid})`)
+				// Minimize the about:blank shell window so it never shows up in
+				// fluxbox. Uses the dedicated getWindowIdForTarget helper +
+				// minimizeWindow (issues setWindowBounds with windowState ONLY —
+				// the second flank of RESEARCH correction #1).
+				try {
+					const blank = await this.chromeCdpClient.findTargetByUrl(
+						(u) => u === 'about:blank' || u.startsWith('about:blank'),
+					)
+					if (blank) {
+						const windowId =
+							await this.chromeCdpClient.getWindowIdForTarget(blank.targetId)
+						await this.chromeCdpClient.minimizeWindow(windowId)
+						chromeCdpLogger.verbose(
+							`minimized about:blank shell window (windowId=${windowId})`,
+						)
+					}
+				} catch (e) {
+					chromeCdpLogger.warn(
+						`Could not minimize about:blank shell: ${(e as Error).message}`,
+					)
+				}
+			} catch (err) {
+				// Non-fatal — Pillar A (multi-stream WebApps via CDP) degrades to
+				// "unavailable" until next livinityd restart, but the rest of the
+				// daemon stays up. Same shape as the outer streaming-subsystem
+				// try/catch (lines 474-482). chromeCdpClient stays null;
+				// downstream callers must check.
+				this.logger.error(
+					'Chrome CDP bootstrap failed; continuing without CDP (Pillar A degraded)',
 					err,
 				)
 			}
