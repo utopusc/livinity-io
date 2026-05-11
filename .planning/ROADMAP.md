@@ -487,6 +487,11 @@ P65 (rename) blocks all subsequent. P66 (design system) provides tokens for P68/
 
 **Sacred:** `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` MUST stay untouched. Pre-commit hook continues to enforce.
 
+**Phase 101 sub-goals (tracked):**
+- A. CDP-driven Luse orchestration — same-profile multi-target Chrome via Chrome DevTools Protocol (see Direction above)
+- B. SelfClaude action-driven Teach pattern — event-driven click + per-step instruction prompt; replaces today's interval-based frame capture. See `.planning/phases/100-multi-stream-window-redesign/100-10-12-RESEARCH.md` for design input.
+- C. Per-tool streaming backend bridge — agent-session.ts → runStore status_detail relay so Hermes phrase reaches WebApp chat UI (gap identified in 100-10-10 SUMMARY)
+
 **Status:** Planned. CONTEXT to be authored after v33.0 ships and the 100-10-08 deploy is UAT-confirmed.
 
 ---
