@@ -1,8 +1,24 @@
 /**
- * Phase 99-02 — vnc-bridge.ts.
+ * Phase 102-09 — vnc-bridge.ts.
+ *
+ * D-102-X11VNC-WHOLE-DISPLAY — `x11vnc -display :N` whole-display capture is
+ * the CANONICAL spawn mode. Per-app Xvfb (Phase 102-01 DisplayAllocator +
+ * XvfbSpawner) gives each app its own 1280x720 X server; x11vnc captures the
+ * entire canvas with no window-coord translation, no WID polling, no
+ * 1920x1080 resolution drift.
+ *
+ * Phase 102+ callers should use `spawnVncForDisplay({display, rfbPort})` —
+ * the sugar wrapper exported at the bottom of this file hides the legacy
+ * `{wid}` opt and gives a clean API surface that's display-only.
+ *
+ * Legacy: `x11vnc -id 0xHEX` (single-window region capture from the Phase 99
+ * baseline) is retained on the `spawnVncForWindow({wid})` path for back-compat
+ * with any caller that still tracks individual window IDs (v33 idle-cleanup
+ * poller, integration tests). The `wid` opt is marked @deprecated in
+ * SpawnVncOpts; new callers should prefer the display path.
  *
  * Owns:
- *   - Per-window x11vnc spawn (D-99-01 canonical argv from 99-01-SUMMARY.md).
+ *   - x11vnc spawn — whole-display (canonical) and per-window (legacy).
  *   - WS↔TCP byte bridge (D-99-02 — pure-Node, no websockify subprocess).
  *   - 4 MB backpressure drop (mirrors fmp4-fanout.ts:246).
  *   - Bidirectional close propagation.
@@ -44,25 +60,32 @@ export type VncSpawnFactory = (
 ) => ChildProcess
 
 export type SpawnVncOpts = {
-	/** Single-window capture (D-99-01 baseline; post-100-10-08 default path) —
-	 *  `x11vnc -id 0xHEX`. Each WebApp gets its own x11vnc bound to its wid;
-	 *  Chrome's singleton lock naturally serializes multi-window on a single
-	 *  display, so per-wid capture isolates each WebApp's pixels.
+	/**
+	 * @deprecated Legacy single-window region capture (`x11vnc -id 0xHEX`).
 	 *
-	 *  Note: under shared `:1` display, two windows on the same display CAN
-	 *  occlude each other; the per-wid pixmap read via XComposite-aware x11vnc
-	 *  still returns the window's framebuffer (not the visible region),
-	 *  carrying forward the Phase 99 behavior. */
+	 * Phase 99/100-08 baseline that bound each WebApp's x11vnc to a specific
+	 * X window ID under the shared `:1` display. Retained for back-compat
+	 * with callers that still track individual window IDs (v33 idle-cleanup
+	 * poller, legacy integration tests). New callers should use the canonical
+	 * `display` path or — better — the `spawnVncForDisplay()` sugar wrapper
+	 * that hides this opt entirely.
+	 */
 	wid?: number
-	/** Whole-display capture (originally Phase 100-10-01 / D-100-10-A —
-	 *  REVERTED in 100-10-08 because Chrome singleton lock + shared
-	 *  `--user-data-dir` are architecturally incompatible with per-WebApp
-	 *  displays). The branch is RETAINED in code as scaffolding for the
-	 *  Phase 101 CDP architecture (Luse drives multi-target Chrome via
-	 *  DevTools Protocol). When set, takes precedence over `wid`; the
-	 *  DISPLAY env prefix flips to this value. CURRENT CALLERS DO NOT SET
-	 *  THIS; setting it ad-hoc requires that the consumer manages the
-	 *  display's Xvfb lifecycle separately. */
+	/**
+	 * Canonical whole-display capture (`x11vnc -display :N`).
+	 *
+	 * Phase 102 (D-102-X11VNC-WHOLE-DISPLAY) — per-app Xvfb (via
+	 * DisplayAllocator + XvfbSpawner) gives each app its own 1280x720 X
+	 * server, so x11vnc captures the entire canvas. No window-coord
+	 * translation, no WM_CLASS filtering, no WID polling for streaming.
+	 *
+	 * When set, takes precedence over `wid`; the DISPLAY env prefix flips
+	 * to this value. The Xvfb display lifecycle (start/stop) is managed
+	 * upstream by the caller (window-manager / native-app-binder).
+	 *
+	 * Phase 102+ callers should prefer `spawnVncForDisplay({display, rfbPort})`
+	 * for a cleaner API surface that doesn't carry the legacy `wid` opt.
+	 */
 	display?: string
 	rfbPort: number
 	spawnFactory?: VncSpawnFactory
@@ -70,27 +93,37 @@ export type SpawnVncOpts = {
 }
 
 /**
- * Spawn x11vnc bound to either a single Chrome window (D-99-01 / 100-08
- * baseline, RESTORED in 100-10-08 as the default path; `-id 0xHEX`) OR a
- * whole X display (originally 100-10-01 D-100-10-A; REVERTED in 100-10-08
- * but the `-display :N` branch is kept as Phase 101 CDP scaffolding).
- * When `opts.display` is provided it takes precedence — the argv switches
- * to whole-display capture and DISPLAY in the env prefix is pinned to that
- * display.
+ * Spawn x11vnc bound to either (a) a whole X display (canonical, Phase
+ * 102 D-102-X11VNC-WHOLE-DISPLAY — `x11vnc -display :N`) when `opts.display`
+ * is provided, OR (b) a single window (legacy, Phase 99 baseline —
+ * `x11vnc -id 0xHEX`) when only `opts.wid` is provided.
  *
- * Post-100-10-08 callers (window-manager + stream-manager vnc-window) pass
- * `{wid}` only. The `display` path waits on Phase 101.
+ * Phase 102+ Default Path
+ *   The display branch is the canonical mode. Per-app Xvfb (from
+ *   DisplayAllocator + XvfbSpawner in Phase 102-01) gives each app a
+ *   dedicated 1280x720 X server, so x11vnc captures the entire canvas
+ *   directly — no window-coord translation, no resolution drift, no WID
+ *   polling for streaming. When `opts.display` is set, the DISPLAY env
+ *   prefix is pinned to that value so x11vnc opens the correct X server.
+ *
+ *   Prefer the `spawnVncForDisplay({display, rfbPort})` sugar wrapper
+ *   below over calling this function directly — it gives a cleaner API
+ *   surface without the legacy `wid` opt.
+ *
+ * Legacy Path
+ *   The `-id 0xHEX` branch is retained for back-compat with callers that
+ *   still track individual window IDs (idle-cleanup poller, integration
+ *   tests). The `wid` field is marked @deprecated in SpawnVncOpts.
  *
  * Returns the ChildProcess. Caller is responsible for killing it on
- * lifecycle close (window-gone, streams.stop).
+ * lifecycle close (stream stop, app close).
  */
 export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 	const factory = opts.spawnFactory ?? nodeSpawn
-	// Phase 100-10-08 (D-100-10-A reverted): -display branch RETAINED for
-	// Phase 101 CDP scaffolding but the post-revert default-callers don't
-	// set `opts.display`, so `displayForEnv` resolves to WEBAPPS_X11_ENV.DISPLAY
-	// (`:1`, the 100-08-01 singleton). When `opts.display` is provided (Phase
-	// 101 CDP path or test fixtures), the env-prefix flips appropriately.
+	// Phase 102-09 — when `opts.display` is set (canonical path) the DISPLAY
+	// env prefix is pinned to that per-app Xvfb (`:10`, `:11`, ...). When
+	// only `opts.wid` is set (legacy path), DISPLAY falls back to the
+	// shared `:1` from WEBAPPS_X11_ENV (Phase 99/100-08 baseline).
 	const displayForEnv = opts.display ?? WEBAPPS_X11_ENV.DISPLAY
 	const captureFlags: string[] =
 		opts.display !== undefined
@@ -101,12 +134,10 @@ export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 			`vnc-bridge.spawnVncForWindow: must provide either {display} or {wid>0} (got display=${opts.display}, wid=${opts.wid})`,
 		)
 	}
-	// D-99-01 canonical argv (locked in 99-01-SUMMARY.md). The whole-display
-	// branch from 100-10-01 (D-100-10-A) is RETAINED here but reverted out of
-	// the live path in 100-10-08 (single :1 + shared profile). The sudo -n -u
-	// bruce + DISPLAY pattern matches window-manager.ts Chrome spawn. Pitfall
-	// 1 mitigation: x11vnc inherits bruce's X session via the env injection,
-	// NOT via env_keep on sudoers.
+	// D-99-01 canonical argv (locked in 99-01-SUMMARY.md). Same sudo -n -u
+	// bruce + DISPLAY pattern as window-manager.ts Chrome spawn. Pitfall 1
+	// mitigation: x11vnc inherits bruce's X session via env injection, NOT
+	// via env_keep on sudoers.
 	// P100-08-02: XAUTHORITY removed — x11vnc on Xvfb (-ac) needs no cookie.
 	const args = [
 		'-n',
@@ -132,8 +163,8 @@ export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 	// D-99-07: stderr tail diagnostic (mirrors stream-manager.ts encoder pattern,
 	// originally landed in commit 782cafeb for ffmpeg). Last 50 lines kept;
 	// dumped to logger.error on non-zero exit.
-	// Phase 100-10-08 (D-100-10-A reverted): log tag reflects capture mode —
-	// `wid=0xHEX` (post-revert default) vs. `display=:N` (Phase 101 scaffold).
+	// Phase 102-09: log tag reflects capture mode — `display=:N` (canonical,
+	// D-102-X11VNC-WHOLE-DISPLAY) vs. `wid=0xHEX` (legacy single-window path).
 	const logTag = opts.display !== undefined ? `display=${opts.display}` : `wid=${opts.wid}`
 	const stderrTail: string[] = []
 	proc.stderr?.on('data', (chunk: Buffer) => {
@@ -157,6 +188,43 @@ export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 	})
 
 	return proc
+}
+
+// ============================================================================
+// Phase 102-09 — spawnVncForDisplay sugar (D-102-X11VNC-WHOLE-DISPLAY).
+//
+// Clean API surface for callers that operate strictly under the per-app
+// Xvfb model (Phase 102-04 window-manager, Phase 102-05 native-app-binder).
+// Identical behaviour to `spawnVncForWindow({display, rfbPort, ...})` but
+// the type signature does not expose the legacy `wid` opt, so consumers
+// can't accidentally fall back to single-window capture.
+// ============================================================================
+
+export type SpawnVncForDisplayOpts = {
+	/** Canonical Phase 102+ — capture whole Xvfb display (`:10`, `:11`, ...). */
+	display: string
+	/** RFB TCP port — typically allocated by PortAllocator (range 15900..15999). */
+	rfbPort: number
+	spawnFactory?: VncSpawnFactory
+	logger?: VncBridgeLogger
+}
+
+/**
+ * Phase 102-09 — sugar wrapper that spawns x11vnc bound to the whole Xvfb
+ * display `opts.display`. Equivalent to calling
+ * `spawnVncForWindow({display, rfbPort, ...})` but the API surface omits
+ * the legacy `wid` opt entirely.
+ *
+ * D-102-X11VNC-WHOLE-DISPLAY — this is the canonical Phase 102+ entry point
+ * for x11vnc spawn. Prefer it over `spawnVncForWindow` for new callers.
+ */
+export function spawnVncForDisplay(opts: SpawnVncForDisplayOpts): ChildProcess {
+	return spawnVncForWindow({
+		display: opts.display,
+		rfbPort: opts.rfbPort,
+		spawnFactory: opts.spawnFactory,
+		logger: opts.logger,
+	})
 }
 
 // ============================================================================
