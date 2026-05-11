@@ -490,18 +490,32 @@ export class WebAppWindowManager {
 				`webapp ${opts.webappId} spawned (user=${opts.userId} display=${display} chromePid=${chrome.pid} streamId=${entry.streamId})`,
 			)
 
-			// Phase 102 deploy UAT round 7 (2026-05-11) — REVERT default: the
-			// "tek MCP" approach broke Luse inspection — global luse is scoped
-			// to :1 (bruce desktop), it can't see per-app :10/:11 displays.
-			// User tested "kac display acik" via list_windows → answered "1"
-			// even after opening 2nd WebApp. Per-WebApp Luse MCP IS REQUIRED
-			// until Phase 103 ships display-aware tool args. Default back ON;
-			// opt-out via LIVOS_PER_APP_LUSE=0 (e.g. for token-budget testing).
-			if (process.env.LIVOS_PER_APP_LUSE !== '0') {
+			// Phase 103-05 (REQ-103-B5) — flip default OFF. Phase 103-03 + 103-04
+			// ship the single-MCP display-aware path: the global `luse` MCP accepts
+			// a per-call `display: ":N"` arg on every X11 tool (REQ-103-B1/B2), and
+			// the system-prompt snippet (REQ-103-B4) instructs the agent to pass
+			// it. With that path live, per-WebApp MCP registration is redundant
+			// AND triggers Claude Code wildcard-permission prompts (one per
+			// registration). Default OFF eliminates the prompts; operators wanting
+			// the legacy per-app path for debug / token-budget testing set
+			// LIVOS_PER_APP_LUSE=1 explicitly.
+			//
+			// Semantics: ONLY the literal string '1' opts in. Any other value
+			// (including unset, '0', 'true', 'yes', 'on', ' 1 ', '2') skips
+			// registration. Mirrors the strict-string env-flag pattern used by
+			// Bytebot opt-ins elsewhere in the codebase.
+			//
+			// Pre-103-05 behavior (now retired): `process.env.LIVOS_PER_APP_LUSE
+			// !== '0'` — default ON, opt-out via '0'. The "tek MCP" approach
+			// failed in Phase 102 r7 UAT because the global luse MCP was scoped
+			// to :1 only. 103-03 fixed that root cause by adding per-call display
+			// scoping; 103-05 closes the loop by removing the redundant per-app
+			// MCPs from the default boot path.
+			if (process.env.LIVOS_PER_APP_LUSE === '1') {
 				await this.registerWebAppMcp(opts.webappId, 0, display, opts.url)
 			} else {
 				this.logger?.info?.(
-					`webapp ${opts.webappId}: per-WebApp Luse MCP SKIPPED (LIVOS_PER_APP_LUSE=0). Agent will NOT see per-app windows via list_windows — only :1.`,
+					`webapp ${opts.webappId}: per-WebApp Luse MCP SKIPPED (LIVOS_PER_APP_LUSE != '1', Phase 103-05 default-off). Agent uses the single global 'luse' MCP with per-call display arg.`,
 				)
 			}
 
