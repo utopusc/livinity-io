@@ -131,7 +131,8 @@ describe('bootstrapChrome', () => {
 			readyTimeoutMs: 500,
 		})
 		expect(spawnFn).toHaveBeenCalledTimes(1)
-		const [, args] = spawnFn.mock.calls[0]
+		const call0 = spawnFn.mock.calls[0] as unknown as [string, string[], unknown]
+		const args = call0[1]
 		expect(args).toContain('--remote-debugging-port=9222')
 		// T-101-01 mitigation: bind CDP socket to loopback only.
 		expect(args).toContain('--remote-debugging-address=127.0.0.1')
