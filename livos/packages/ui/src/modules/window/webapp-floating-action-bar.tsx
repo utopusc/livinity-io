@@ -55,6 +55,19 @@
 //   5. Click Close (X) at any point in 'chat-response' → back to 'icons'.
 //   6. Press Escape from 'chat-response' → back to 'icons'.
 //
+// Phase 100-10-10 — Bug A fix. ChatInputBar + ChatResponseBar each used to
+// call `useWebAppAgent(webappId)` separately. Each call opens its OWN
+// WebSocket (per-hook-instance wsRef inside useAgentSocket) and owns its
+// OWN messages state (per-hook-instance useReducer). When the parent
+// flipped mode from 'chat-input' → 'chat-response', ChatInputBar
+// unmounted and closed its WS — BEFORE the assistant chunks arrived —
+// so ChatResponseBar mounted a fresh WS with an empty messages array.
+// The streaming reply was lost. Fix: HOIST `useWebAppAgent(webappId)`
+// to the parent `WebAppFloatingActionBar` and pass `agent` as a prop
+// into both sub-components. Single WebSocket persists across the mode
+// flip; both sub-components share the same messages + isStreaming +
+// agentStatus state via reference identity.
+//
 // Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts unchanged.
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
@@ -68,7 +81,7 @@ import {motion} from 'framer-motion'
 import {GraduationCap, MessageCircle, Plus, Send, Square, X, type LucideIcon} from 'lucide-react'
 
 import {Magnetic} from '@/components/motion-primitives/magnetic'
-import {useWebAppAgent} from '@/hooks/use-webapp-agent'
+import {useWebAppAgent, type UseWebAppAgentResult} from '@/hooks/use-webapp-agent'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/shadcn-components/ui/tooltip'
 import {cn} from '@/shadcn-lib/utils'
 
@@ -103,6 +116,18 @@ export function WebAppFloatingActionBar(props: WebAppFloatingActionBarProps) {
 	const mode = useWebAppDrawerStore((s) => s.chatInputModeByWebappId[webappId] ?? 'icons')
 	const setChatInputMode = useWebAppDrawerStore((s) => s.setChatInputMode)
 
+	// Phase 100-10-10 Bug A fix — useWebAppAgent(webappId) is HOISTED
+	// here, in the parent. Pre-fix, both ChatInputBar AND ChatResponseBar
+	// called the hook themselves, each opening its OWN WebSocket. On
+	// mode flip, ChatInputBar unmounted (closing WS#A) BEFORE the
+	// assistant chunks arrived; ChatResponseBar mounted with a FRESH WS
+	// and empty messages array. The reply was lost. With the hook
+	// hoisted to the parent: a single WS persists across the mode flip,
+	// and `agent` (the shared reference) is passed as a prop into both
+	// sub-components so they observe the SAME messages + isStreaming +
+	// agentStatus state.
+	const agent = useWebAppAgent(webappId)
+
 	return (
 		<motion.div
 			className='fixed select-none'
@@ -125,16 +150,22 @@ export function WebAppFloatingActionBar(props: WebAppFloatingActionBarProps) {
 			      Send + Close X). Send/Enter now flips to 'chat-response'
 			      (NOT back to 'icons' — superseding 09-08's behavior).
 			    - Default 'icons' branch renders the IconBar (Chat + Teach).
+			    Phase 100-10-10 Bug A fix: `agent` is passed as a prop into
+			    both ChatInputBar and ChatResponseBar so the shared hook
+			    state survives the mode flip (single WS, single messages
+			    array).
 			*/}
 			{mode === 'chat-response' ? (
 				<ChatResponseBar
 					webappId={webappId}
+					agent={agent}
 					onClose={() => setChatInputMode(webappId, 'icons')}
 					onNew={() => setChatInputMode(webappId, 'chat-input')}
 				/>
 			) : mode === 'chat-input' ? (
 				<ChatInputBar
 					webappId={webappId}
+					agent={agent}
 					onClose={() => setChatInputMode(webappId, 'icons')}
 					onSent={() => setChatInputMode(webappId, 'chat-response')}
 				/>
@@ -316,6 +347,13 @@ function IconBar({webappId, onChatClick}: IconBarProps) {
 
 interface ChatInputBarProps {
 	webappId: string
+	/** Phase 100-10-10 Bug A fix — `agent` is now hoisted to the parent
+	 *  `WebAppFloatingActionBar` and passed through. Pre-fix this
+	 *  component called `useWebAppAgent(webappId)` itself, which opened
+	 *  its OWN WebSocket; on unmount (mode flip to 'chat-response'),
+	 *  that WS closed and the assistant reply was lost. With the hoist,
+	 *  the WS persists across mode flips. */
+	agent: UseWebAppAgentResult
 	onClose: () => void
 	/** Phase 100-10-06 D-100-10-E — called AFTER agent.sendMessage(text)
 	 *  dispatches. Wired by the parent to flip mode to 'chat-response'
@@ -323,8 +361,11 @@ interface ChatInputBarProps {
 	onSent: () => void
 }
 
-function ChatInputBar({webappId, onClose, onSent}: ChatInputBarProps) {
-	const agent = useWebAppAgent(webappId)
+function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
+	// Phase 100-10-10 Bug A fix — `agent` is a prop now (hoisted from
+	// parent). The previous `useWebAppAgent(webappId)` call site here is
+	// removed so a single WS instance is shared across the mode flip.
+	void webappId
 	const [input, setInput] = useState('')
 	const inputRef = useRef<HTMLInputElement>(null)
 
@@ -417,6 +458,14 @@ function ChatInputBar({webappId, onClose, onSent}: ChatInputBarProps) {
 
 interface ChatResponseBarProps {
 	webappId: string
+	/** Phase 100-10-10 Bug A fix — `agent` is hoisted to the parent
+	 *  `WebAppFloatingActionBar`. Pre-fix this component called
+	 *  `useWebAppAgent(webappId)` itself, opening a FRESH WebSocket on
+	 *  mount (with an empty messages array). The assistant reply
+	 *  streamed to the now-closed ChatInputBar WS, was lost, and never
+	 *  rendered here. With the hoist, the shared `agent` keeps the
+	 *  same WS + messages array across the mode flip. */
+	agent: UseWebAppAgentResult
 	/** X button + Escape key → return to 'icons' mode. */
 	onClose: () => void
 	/** "New message" (+) button click after streaming completes → flip
@@ -424,8 +473,12 @@ interface ChatResponseBarProps {
 	onNew: () => void
 }
 
-function ChatResponseBar({webappId, onClose, onNew}: ChatResponseBarProps) {
-	const agent = useWebAppAgent(webappId)
+function ChatResponseBar({webappId, agent, onClose, onNew}: ChatResponseBarProps) {
+	// Phase 100-10-10 Bug A fix — `agent` is a prop now (hoisted from
+	// parent). The previous `useWebAppAgent(webappId)` call site here is
+	// removed so the WS opened by ChatInputBar's parent persists into
+	// this mode and the assistant chunks land in this component's view.
+	void webappId
 	// Find the latest assistant message (the streaming reply). Using
 	// useMemo so the lookup is stable across re-renders when messages
 	// array reference hasn't changed.
