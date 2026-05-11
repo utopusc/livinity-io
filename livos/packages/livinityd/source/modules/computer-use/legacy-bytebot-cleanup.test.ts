@@ -15,8 +15,11 @@
  * Failure semantics: ANY error in cleanup is logged but does NOT throw.
  * livinityd boot continues regardless — cleanup is best-effort hygiene.
  */
-import {test, expect, describe} from 'vitest'
-import {cleanupLegacyBytebotState} from './legacy-bytebot-cleanup.js'
+import {test, expect, describe, vi} from 'vitest'
+import {
+	cleanupLegacyBytebotState,
+	cleanupOrphanedPerWebAppLuseEntries,
+} from './legacy-bytebot-cleanup.js'
 
 // Minimal fake redis — only `del` + `scan` are exercised.
 function makeFakeRedis() {
@@ -172,3 +175,195 @@ describe('cleanupLegacyBytebotState', () => {
 		expect(result.errors.length).toBeGreaterThan(0)
 	})
 })
+
+// ============================================================================
+// Phase 103-05 (Pitfall 5 from 103-RESEARCH) — boot-time sweep of stale
+// `luse:webapp:*` McpConfigManager entries left over from pre-103 deploys.
+//
+// Pre-103 deploys called WebAppWindowManager.registerWebAppMcp() on every
+// spawn, persisting per-WebApp entries to McpConfigManager (Redis-backed).
+// Phase 103-05 flips LIVOS_PER_APP_LUSE default OFF — but those stale entries
+// SURVIVE the code change because Redis persists across boots. Without this
+// cleanup, liv-core still sees ~10 stale `luse:webapp:*` entries and fires
+// Claude Code permission prompts for each on first connect.
+//
+// The sweep MUST be idempotent (re-running on a clean state is a no-op) and
+// non-fatal (any error is caught + logged + livinityd boot continues).
+// ============================================================================
+
+describe('cleanupOrphanedPerWebAppLuseEntries (Phase 103-05)', () => {
+	function makeMcp(opts: {
+		servers?: Array<{name: string}>
+		listThrows?: Error
+		removeImpl?: (name: string) => Promise<boolean>
+	}) {
+		const servers = opts.servers ?? []
+		const listServers = opts.listThrows
+			? vi.fn(async () => {
+					throw opts.listThrows
+				})
+			: vi.fn(async () => servers.slice() as any)
+		const defaultRemove = async (name: string): Promise<boolean> => {
+			const idx = servers.findIndex((s) => s.name === name)
+			if (idx >= 0) {
+				servers.splice(idx, 1)
+				return true
+			}
+			return false
+		}
+		const removeServer = vi.fn(opts.removeImpl ?? defaultRemove)
+		return {
+			listServers,
+			removeServer,
+			installServer: vi.fn(),
+			updateServer: vi.fn(),
+			__servers: servers,
+		}
+	}
+
+	test('T-103-05-SWEEP-01: removes ONLY luse:webapp:* entries; leaves luse + memory + bytebot etc. intact', async () => {
+		const mcp = makeMcp({
+			servers: [
+				{name: 'luse'},
+				{name: 'luse:webapp:yandex-91c9'},
+				{name: 'luse:webapp:google-a3a1'},
+				{name: 'memory'},
+				{name: 'bytebot'}, // legacy entry — separate cleanup owns this
+			],
+		})
+
+		const result = await cleanupOrphanedPerWebAppLuseEntries({
+			mcpConfigManager: mcp as any,
+		})
+
+		expect(result.mcpServersRemoved).toBe(2)
+		expect(result.errors).toEqual([])
+		expect(mcp.removeServer).toHaveBeenCalledTimes(2)
+		expect(mcp.removeServer).toHaveBeenCalledWith('luse:webapp:yandex-91c9')
+		expect(mcp.removeServer).toHaveBeenCalledWith('luse:webapp:google-a3a1')
+		// Untouched entries — the strict prefix filter MUST NOT mutate them.
+		const remainingNames = mcp.__servers.map((s) => s.name).sort()
+		expect(remainingNames).toEqual(['bytebot', 'luse', 'memory'])
+	})
+
+	test('T-103-05-SWEEP-02: listServers throws → caught, logged via opts.logger.error, returns CleanupResult with errors entry; does NOT re-throw', async () => {
+		const logger = {log: vi.fn(), error: vi.fn()}
+		const mcp = makeMcp({listThrows: new Error('redis pub-sub timeout')})
+
+		// Must NOT throw.
+		const result = await cleanupOrphanedPerWebAppLuseEntries({
+			mcpConfigManager: mcp as any,
+			logger,
+		})
+
+		expect(result.mcpServersRemoved).toBe(0)
+		expect(result.errors).toHaveLength(1)
+		expect(result.errors[0]).toMatch(/listServers/i)
+		expect(result.errors[0]).toMatch(/redis pub-sub timeout/)
+		expect(logger.error).toHaveBeenCalled()
+		const errMsg = String((logger.error as any).mock.calls[0][0])
+		expect(errMsg).toContain('103-05 orphan-sweep')
+	})
+
+	test('T-103-05-SWEEP-03: removeServer throws for one entry → continues, records error, removes the successes', async () => {
+		const calls: string[] = []
+		const removeImpl = async (name: string) => {
+			calls.push(name)
+			if (name === 'luse:webapp:yandex-91c9') {
+				throw new Error('redis CAS conflict')
+			}
+			return true
+		}
+		const logger = {log: vi.fn(), error: vi.fn()}
+		const mcp = makeMcp({
+			servers: [
+				{name: 'luse:webapp:yandex-91c9'},
+				{name: 'luse:webapp:google-a3a1'},
+				{name: 'luse:webapp:livinityio-bb22'},
+			],
+			removeImpl,
+		})
+
+		const result = await cleanupOrphanedPerWebAppLuseEntries({
+			mcpConfigManager: mcp as any,
+			logger,
+		})
+
+		// All 3 were ATTEMPTED.
+		expect(calls).toHaveLength(3)
+		// 2 succeeded.
+		expect(result.mcpServersRemoved).toBe(2)
+		// 1 error recorded.
+		expect(result.errors).toHaveLength(1)
+		expect(result.errors[0]).toContain('luse:webapp:yandex-91c9')
+		expect(result.errors[0]).toMatch(/redis CAS conflict/)
+		expect(logger.error).toHaveBeenCalled()
+	})
+
+	test('T-103-05-SWEEP-04: empty listServers → 0 removed, 0 errors, no throw, log line emitted', async () => {
+		const logger = {log: vi.fn(), error: vi.fn()}
+		const mcp = makeMcp({servers: []})
+
+		const result = await cleanupOrphanedPerWebAppLuseEntries({
+			mcpConfigManager: mcp as any,
+			logger,
+		})
+
+		expect(result.mcpServersRemoved).toBe(0)
+		expect(result.errors).toHaveLength(0)
+		expect(mcp.removeServer).not.toHaveBeenCalled()
+		// Clean-state log fires so operators see the sweep did run.
+		const logCalls = (logger.log as any).mock.calls.map((c: any[]) => String(c[0]))
+		expect(logCalls.some((l: string) => l.includes('clean state'))).toBe(true)
+	})
+
+	test('T-103-05-SWEEP-05: idempotent — second run is a no-op (entries already gone)', async () => {
+		const mcp = makeMcp({
+			servers: [
+				{name: 'luse'},
+				{name: 'luse:webapp:yandex-91c9'},
+				{name: 'luse:webapp:google-a3a1'},
+			],
+		})
+
+		const r1 = await cleanupOrphanedPerWebAppLuseEntries({
+			mcpConfigManager: mcp as any,
+		})
+		const r2 = await cleanupOrphanedPerWebAppLuseEntries({
+			mcpConfigManager: mcp as any,
+		})
+
+		expect(r1.mcpServersRemoved).toBe(2)
+		expect(r1.errors).toEqual([])
+		// Second run finds 0 orphans → 0 removeServer calls.
+		expect(r2.mcpServersRemoved).toBe(0)
+		expect(r2.errors).toEqual([])
+		// removeServer total across both runs = 2 (only from r1).
+		expect(mcp.removeServer).toHaveBeenCalledTimes(2)
+		// Final state: the non-orphan `luse` entry survives both runs.
+		expect(mcp.__servers.map((s) => s.name)).toEqual(['luse'])
+	})
+
+	test('T-103-05-SWEEP-06: tolerates entries with non-string name field (defensive — never throw)', async () => {
+		// Real McpConfigManager always returns string names, but the input is
+		// a JSON blob from Redis — defensive: filter must not blow up on
+		// pathologically-shaped entries.
+		const mcp = makeMcp({
+			servers: [
+				{name: 'luse:webapp:yandex-91c9'} as any,
+				{name: 123 as any} as any, // non-string name — should be filtered out
+				{name: null as any} as any,
+			],
+		})
+
+		const result = await cleanupOrphanedPerWebAppLuseEntries({
+			mcpConfigManager: mcp as any,
+		})
+
+		// Only the one string-name luse:webapp entry is removed; the pathological
+		// entries are silently filtered out by `typeof s.name === 'string'`.
+		expect(result.mcpServersRemoved).toBe(1)
+		expect(result.errors).toEqual([])
+	})
+})
+
