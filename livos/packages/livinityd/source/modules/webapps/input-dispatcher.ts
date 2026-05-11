@@ -29,13 +29,20 @@ const DEFAULT_TIMEOUT_MS = 1500
 function execFileAsync(
 	cmd: string,
 	args: string[],
-	opts: {timeout?: number} = {},
+	opts: {timeout?: number; display?: string} = {},
 ): Promise<{stdout: string; stderr: string}> {
 	return new Promise((resolve, reject) => {
+		// Phase 102 — xdotool scope-by-display: xdotool reads $DISPLAY env,
+		// it has NO `--display` CLI flag (verified via stderr "unrecognized
+		// option '--display'" from production logs 2026-05-11). When the
+		// caller supplies opts.display (Phase 102 per-app Xvfb routing), we
+		// override DISPLAY in the spawn env so the X11 op scopes to :N.
+		const env: NodeJS.ProcessEnv = {...process.env, ...WEBAPPS_X11_ENV}
+		if (opts.display) env.DISPLAY = opts.display
 		execFile(
 			cmd,
 			args,
-			{...opts, env: {...process.env, ...WEBAPPS_X11_ENV}},
+			{timeout: opts.timeout, env},
 			(err, stdout, stderr) => {
 				if (err) {
 					;(err as Error & {stdout?: string; stderr?: string}).stdout = String(stdout || '')
@@ -90,14 +97,15 @@ export async function dispatchPointer(
 	// absolute in display space (1280x720 Xvfb) which matches the
 	// frontend canvas coords 1:1 (no WID-relative translation needed).
 	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
+		// Phase 102 display-mode: xdotool scope via DISPLAY env (no --display
+		// CLI flag exists). Coords are absolute in display canvas.
 		await execFileAsync(
 			'xdotool',
 			[
-				'--display', display,
 				'mousemove', '--sync', String(ix), String(iy),
 				kind, '--clearmodifiers', String(button),
 			],
-			{timeout: DEFAULT_TIMEOUT_MS},
+			{timeout: DEFAULT_TIMEOUT_MS, display},
 		)
 		return
 	}
@@ -140,12 +148,12 @@ export async function dispatchKey(
 	if (!/^[A-Za-z0-9_+\-]{1,64}$/.test(key)) {
 		throw new Error(`invalid key syntax: ${JSON.stringify(key)}`)
 	}
-	// Phase 102 — display-mode key dispatch
+	// Phase 102 — display-mode key dispatch via DISPLAY env
 	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
 		await execFileAsync(
 			'xdotool',
-			['--display', display, kind, '--clearmodifiers', key],
-			{timeout: DEFAULT_TIMEOUT_MS},
+			[kind, '--clearmodifiers', key],
+			{timeout: DEFAULT_TIMEOUT_MS, display},
 		)
 		return
 	}
@@ -171,12 +179,12 @@ export async function dispatchType(wid: number, text: string, display?: string):
 	if (typeof text !== 'string') throw new Error('invalid text')
 	if (text.length > 4096) throw new Error('text too long (4096 char limit)')
 	if (text.length === 0) return
-	// Phase 102 — display-mode type dispatch
+	// Phase 102 — display-mode type dispatch via DISPLAY env
 	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
 		await execFileAsync(
 			'xdotool',
-			['--display', display, 'type', '--clearmodifiers', '--delay', '0', text],
-			{timeout: DEFAULT_TIMEOUT_MS},
+			['type', '--clearmodifiers', '--delay', '0', text],
+			{timeout: DEFAULT_TIMEOUT_MS, display},
 		)
 		return
 	}
@@ -229,16 +237,15 @@ export async function dispatchScroll(
 	}
 	const ix = Math.max(0, Math.round(x))
 	const iy = Math.max(0, Math.round(y))
-	// Phase 102 — display-mode scroll
+	// Phase 102 — display-mode scroll via DISPLAY env
 	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
 		await execFileAsync(
 			'xdotool',
 			[
-				'--display', display,
 				'mousemove', '--sync', String(ix), String(iy),
 				'click', '--clearmodifiers', String(button),
 			],
-			{timeout: DEFAULT_TIMEOUT_MS},
+			{timeout: DEFAULT_TIMEOUT_MS, display},
 		)
 		return
 	}
