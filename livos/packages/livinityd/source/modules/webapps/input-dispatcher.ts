@@ -91,17 +91,22 @@ export async function dispatchPointer(
 	const ix = Math.max(0, Math.round(x))
 	const iy = Math.max(0, Math.round(y))
 
-	// Phase 102 deploy fix — display-mode dispatch. When wid is 0 (Phase
-	// 102 per-app Xvfb, no WID tracking) AND a display is supplied, scope
-	// xdotool to that display directly via `--display :N`. Coords are
-	// absolute in display space (1280x720 Xvfb) which matches the
-	// frontend canvas coords 1:1 (no WID-relative translation needed).
+	// Phase 102 r12 — display-mode dispatch with Chrome-XSendEvent-filter
+	// mitigation. The earlier r9 path (just `mousemove + click`) made the
+	// cursor move but Chrome silently dropped the resulting synthetic button
+	// events (Chrome filters XSendEvent send_event=True), and keystrokes
+	// landed nowhere because no X11 window was focused on the per-app Xvfb.
+	// Fix: prepend `search --onlyvisible --class chrome windowactivate %@
+	// windowfocus %@` so Chrome has X11 focus before the click/key fires.
+	// The wid is discovered on-display here rather than passed in — under
+	// Phase 102-04 the dispatcher receives wid=0 (display-based scoping).
 	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
-		// Phase 102 display-mode: xdotool scope via DISPLAY env (no --display
-		// CLI flag exists). Coords are absolute in display canvas.
 		await execFileAsync(
 			'xdotool',
 			[
+				'search', '--onlyvisible', '--limit', '1', '--class', 'chrome',
+				'windowactivate', '--sync', '%@',
+				'windowfocus', '--sync', '%@',
 				'mousemove', '--sync', String(ix), String(iy),
 				kind, '--clearmodifiers', String(button),
 			],
@@ -148,11 +153,19 @@ export async function dispatchKey(
 	if (!/^[A-Za-z0-9_+\-]{1,64}$/.test(key)) {
 		throw new Error(`invalid key syntax: ${JSON.stringify(key)}`)
 	}
-	// Phase 102 — display-mode key dispatch via DISPLAY env
+	// Phase 102 r12 — display-mode key dispatch with search + windowfocus
+	// chain. Without focus on the per-app Chrome window, XTestFakeKeyEvent
+	// has no destination and the key is silently dropped. Same root cause
+	// and fix shape as dispatchPointer above.
 	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
 		await execFileAsync(
 			'xdotool',
-			[kind, '--clearmodifiers', key],
+			[
+				'search', '--onlyvisible', '--limit', '1', '--class', 'chrome',
+				'windowactivate', '--sync', '%@',
+				'windowfocus', '--sync', '%@',
+				kind, '--clearmodifiers', key,
+			],
 			{timeout: DEFAULT_TIMEOUT_MS, display},
 		)
 		return
@@ -179,11 +192,19 @@ export async function dispatchType(wid: number, text: string, display?: string):
 	if (typeof text !== 'string') throw new Error('invalid text')
 	if (text.length > 4096) throw new Error('text too long (4096 char limit)')
 	if (text.length === 0) return
-	// Phase 102 — display-mode type dispatch via DISPLAY env
+	// Phase 102 r12 — display-mode type dispatch with search + windowfocus
+	// chain. Same Chrome-XSendEvent-filter mitigation pattern as
+	// dispatchPointer / dispatchKey: focus the Chrome window first so the
+	// typed characters land in the focused input element.
 	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
 		await execFileAsync(
 			'xdotool',
-			['type', '--clearmodifiers', '--delay', '0', text],
+			[
+				'search', '--onlyvisible', '--limit', '1', '--class', 'chrome',
+				'windowactivate', '--sync', '%@',
+				'windowfocus', '--sync', '%@',
+				'type', '--clearmodifiers', '--delay', '0', text,
+			],
 			{timeout: DEFAULT_TIMEOUT_MS, display},
 		)
 		return
@@ -237,11 +258,16 @@ export async function dispatchScroll(
 	}
 	const ix = Math.max(0, Math.round(x))
 	const iy = Math.max(0, Math.round(y))
-	// Phase 102 — display-mode scroll via DISPLAY env
+	// Phase 102 r12 — display-mode scroll with search + windowfocus chain.
+	// Mirrors dispatchPointer's mitigation: Chrome ignores synthetic wheel
+	// events unless the target Chrome window has X11 focus before the click.
 	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
 		await execFileAsync(
 			'xdotool',
 			[
+				'search', '--onlyvisible', '--limit', '1', '--class', 'chrome',
+				'windowactivate', '--sync', '%@',
+				'windowfocus', '--sync', '%@',
 				'mousemove', '--sync', String(ix), String(iy),
 				'click', '--clearmodifiers', String(button),
 			],
