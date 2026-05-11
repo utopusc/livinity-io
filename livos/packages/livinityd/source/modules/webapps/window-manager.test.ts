@@ -571,7 +571,9 @@ describe('WebAppWindowManager — Phase 100-08-04 per-WebApp Luse MCP lifecycle 
 			const {mgr} = makeManager({mcpConfigManager: mcp, luseServerPath: '/tmp/server.ts'})
 			await mgr.spawn({userId: 'user-1', webappId: 'webapp-one', url: 'https://example.com'})
 			expect(mcp.installServer).toHaveBeenCalledTimes(1)
-			expect(mcp.installCalls[0]!.name).toBe('luse:webapp:example-webap')
+			// suffix = 'webapp-one'.substring(0,4) === 'weba'; slug from
+			// hostname 'example.com' (first path segment) === 'example'.
+			expect(mcp.installCalls[0]!.name).toBe('luse:webapp:example-weba')
 			mgr._clearForTests()
 		})
 
