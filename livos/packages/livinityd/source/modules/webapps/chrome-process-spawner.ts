@@ -225,7 +225,12 @@ export async function spawnChromeProcess(
 		bin,
 		`--user-data-dir=${opts.userDataDir}`,
 		...STATIC_ARGS,
-		`--app=${opts.url}`,
+		// Phase 102 deploy UAT round 4 (2026-05-11): user explicitly wants
+		// Chrome's tabs + address bar visible at top ("Yukarida gormem
+		// gerekiyordu"). `--app=URL` mode is chromeless; switching to URL
+		// positional arg gives normal Chrome window — tabs, address bar,
+		// nav buttons all visible. `--start-fullscreen` still fills 1280x720.
+		opts.url,
 	]
 
 	const child = spawnFn('sudo', args, {

@@ -95,9 +95,14 @@ describe('102-02-01 ChromeProcessSpawner', () => {
 					'google-chrome',
 					`--user-data-dir=${VALID_USERDATADIR}`,
 					'--start-fullscreen',
-					`--app=${VALID_URL}`,
+					// Phase 102 deploy UAT round 4: switched from --app=URL
+					// (chromeless) to URL positional (normal Chrome with
+					// tabs + address bar visible). Test asserts URL is the
+					// LAST arg, not embedded in --app=.
+					VALID_URL,
 				]),
 			)
+			expect(args[args.length - 1]).toBe(VALID_URL)
 			expect(spawnOpts).toEqual(
 				expect.objectContaining({
 					detached: true,
