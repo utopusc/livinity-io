@@ -59,14 +59,19 @@ import {
 	type McpServerConfigInput,
 	type PerWebAppMcpDescriptor,
 } from '../computer-use/luse-mcp-config.js'
-// Phase 100-10-01 — per-WebApp Xvfb display allocator + lifecycle (D-100-10-A).
-// When opts.displayAllocator is provided, spawn() allocates a display per
-// WebApp (`:10`, `:11`, ...), spawns Xvfb + fluxbox on it, and threads
-// DISPLAY=<allocated> into the Chrome spawn env. close() tears down fluxbox
-// then Xvfb, then releases the display number for reuse.
+// Phase 100-10-08 — REVERTED per-WebApp Xvfb (D-100-10-A reverted).
+// Live diagnostic on Mini PC proved Chrome singleton lock + shared
+// `--user-data-dir` are architecturally incompatible with per-WebApp
+// displays: every new spawn IPC-merges to the existing PID on the FIRST
+// display, so no window appears on `:11`/`:12`/... User chose to keep the
+// shared profile (same Google login across WebApps). All WebApp Chromes
+// now spawn on the singleton `:1` display set up by 100-08-01. DisplayAllocator
+// + xvfb-display + fluxbox-wm files STAY in tree as scaffolding for the
+// Phase 101 CDP architecture (where Luse drives multi-target Chrome via
+// DevTools Protocol while preserving shared profile).
 import type {DisplayAllocator} from './display-allocator.js'
-import {startXvfb, type XvfbHandle} from './xvfb-display.js'
-import {startFluxbox, type FluxboxHandle} from './fluxbox-wm.js'
+import type {startXvfb} from './xvfb-display.js'
+import type {startFluxbox} from './fluxbox-wm.js'
 
 const DEFAULT_TITLE_TIMEOUT_MS = 5000
 const DEFAULT_IDLE_POLL_MS = 5000
@@ -144,21 +149,32 @@ export type WebAppWindowManagerOpts = {
 	/** Phase 100-08-04 — env passed to buildLuseConfig. Defaults to process.env. */
 	luseMcpEnv?: NodeJS.ProcessEnv
 	/**
-	 * Phase 100-10-01 — per-WebApp X display allocator (D-100-10-A). When
-	 * provided, spawn() allocates `:10`, `:11`, ... for each WebApp, spawns
-	 * Xvfb + fluxbox on the allocated display, and passes
-	 * `DISPLAY=<allocated>` to the Chrome spawn env. close() reverses: kills
-	 * fluxbox + Xvfb on that display then releases the slot for reuse.
+	 * Phase 100-10-08 — D-100-10-A REVERTED. `displayAllocator` is accepted
+	 * for opt-in compatibility (existing test fixtures + livinityd.start()
+	 * wiring + Phase 101 CDP scaffold) but spawn() NO LONGER calls
+	 * `allocate()` / `release()`. All WebApp Chromes spawn on the singleton
+	 * `:1` display set up by 100-08-01's livinityd.start() lifecycle.
 	 *
-	 * When undefined (legacy / test paths), spawn() falls back to
-	 * WEBAPPS_X11_ENV.DISPLAY (`:1` post P100-08-02). The 100-08-01 global
-	 * Xvfb `:1` + fluxbox `:1` started in `livinityd.start()` covers that
-	 * fallback.
+	 * Background: per-WebApp displays (`:10`, `:11`, ...) are architecturally
+	 * incompatible with shared Chrome profile (`--user-data-dir`) — Chrome's
+	 * singleton lock IPC-merges all new spawns to the existing PID on the
+	 * first display, so no window appears on subsequent displays. User chose
+	 * shared profile (same Google login across WebApps); per-WebApp display
+	 * support is parked until Phase 101 CDP architecture (where Luse drives
+	 * multi-target Chrome via DevTools Protocol).
 	 */
 	displayAllocator?: DisplayAllocator
-	/** Phase 100-10-01 — Xvfb start fn override (test stub). Defaults to `startXvfb` from xvfb-display.ts. */
+	/**
+	 * Phase 100-10-08 — D-100-10-A reverted. Test stub opt retained for
+	 * fixture compatibility; spawn() no longer invokes per-spawn Xvfb start.
+	 * Phase 101 CDP work may re-introduce this with CDP-aware semantics.
+	 */
 	xvfbStartFn?: typeof startXvfb
-	/** Phase 100-10-01 — fluxbox start fn override (test stub). Defaults to `startFluxbox` from fluxbox-wm.ts. */
+	/**
+	 * Phase 100-10-08 — D-100-10-A reverted. Test stub opt retained for
+	 * fixture compatibility; spawn() no longer invokes per-spawn fluxbox start.
+	 * Phase 101 CDP work may re-introduce this with CDP-aware semantics.
+	 */
 	fluxboxStartFn?: typeof startFluxbox
 }
 
@@ -172,12 +188,12 @@ type ActiveWebApp = {
 	portalSession: WindowSessionResult | null
 	geometryTracker: GeometryTracker | null
 	url: string
-	// Phase 100-10-01 — per-WebApp X display lifecycle. Populated only when
-	// the manager was constructed with a displayAllocator. close() uses these
-	// to tear down fluxbox + Xvfb and release the display number.
-	display: string | null
-	xvfb: XvfbHandle | null
-	fluxbox: FluxboxHandle | null
+	// Phase 100-10-08 — per-WebApp Xvfb fields REMOVED with D-100-10-A revert.
+	// All WebApps now share the singleton `:1` display (100-08-01 baseline).
+	// `display` retained as readable hint for log messages; xvfb/fluxbox
+	// handles dropped (their lifecycle belongs to livinityd.start(), not
+	// per-spawn).
+	display: string
 }
 
 export type SpawnOpts = {
@@ -213,10 +229,12 @@ export class WebAppWindowManager {
 	private readonly mcpConfigManager: WebAppWindowManagerOpts['mcpConfigManager']
 	private readonly luseServerPath: string | undefined
 	private readonly luseMcpEnv: NodeJS.ProcessEnv
-	// Phase 100-10-01 — per-WebApp X display allocator + spawn fns (D-100-10-A).
+	// Phase 100-10-08 — D-100-10-A reverted. The allocator + start fns stay
+	// accepted as opts so existing test fixtures and the Phase 101 CDP scaffold
+	// keep compiling, but spawn() no longer CALLS them. Field is retained as
+	// `displayAllocator` for type-readable provenance; never dereferenced in
+	// the live spawn path.
 	private readonly displayAllocator: DisplayAllocator | undefined
-	private readonly xvfbStartFn: typeof startXvfb
-	private readonly fluxboxStartFn: typeof startFluxbox
 
 	constructor(opts: WebAppWindowManagerOpts) {
 		this.streamManager = opts.streamManager
@@ -242,13 +260,13 @@ export class WebAppWindowManager {
 		this.mcpConfigManager = opts.mcpConfigManager
 		this.luseServerPath = opts.luseServerPath
 		this.luseMcpEnv = opts.luseMcpEnv ?? process.env
-		// Phase 100-10-01 — per-WebApp X display allocator wiring (D-100-10-A).
-		// When opts.displayAllocator is undefined, all per-spawn Xvfb/fluxbox/release
-		// logic short-circuits and the manager falls back to the global
-		// WEBAPPS_X11_ENV.DISPLAY (`:1`) used pre-100-10-01.
+		// Phase 100-10-08 — D-100-10-A reverted. displayAllocator is accepted
+		// for opt-in compatibility (so the existing wire-up in
+		// livinityd.start() and tests still type-checks) but spawn() no longer
+		// dereferences it. xvfbStartFn / fluxboxStartFn opts are no longer
+		// stored — singleton :1 Xvfb + fluxbox lifecycle lives in
+		// livinityd.start() (100-08-01 baseline).
 		this.displayAllocator = opts.displayAllocator
-		this.xvfbStartFn = opts.xvfbStartFn ?? startXvfb
-		this.fluxboxStartFn = opts.fluxboxStartFn ?? startFluxbox
 	}
 
 	startIdleCleanup(): void {
@@ -293,75 +311,18 @@ export class WebAppWindowManager {
 		// 2. Baseline wid snapshot
 		const baselineWids = await this.discovery.snapshotWindowIds()
 
-		// Phase 100-10-01 — Per-WebApp Xvfb display lifecycle (D-100-10-A).
-		// When a displayAllocator is wired in, allocate the next free display
-		// slot (`:10`, `:11`, ...) and stand up a dedicated Xvfb + fluxbox WM
-		// on it BEFORE Chrome spawn. The DISPLAY env passed to Chrome flips
-		// from the global `:1` to the allocated display — every WebApp ends
-		// up isolated on its own X server (eliminates Issue 2 cross-window
-		// stacking + lets x11vnc -display :N capture Chrome's full pixels).
-		// Legacy back-compat: when displayAllocator is undefined, fall back
-		// to WEBAPPS_X11_ENV.DISPLAY (the 100-08-01 global :1 path).
-		let allocatedDisplay: string | null = null
-		let xvfb: XvfbHandle | null = null
-		let fluxbox: FluxboxHandle | null = null
-		if (this.displayAllocator) {
-			allocatedDisplay = this.displayAllocator.allocate()
-			try {
-				xvfb = await this.xvfbStartFn({
-					display: allocatedDisplay,
-					user: 'bruce',
-					logger: this.logger
-						? {
-								info: (m: string) => this.logger!.info(m),
-								warn: (m: string, e?: unknown) => this.logger!.warn(m, e),
-								error: (m: string, e?: unknown) => this.logger!.error(m, e),
-							}
-						: undefined,
-				})
-				// 500ms grace so X server is ready before fluxbox connects (matches
-				// 100-08-01 livinityd boot path; selfclaude-validated).
-				await new Promise((resolve) => setTimeout(resolve, 500))
-				fluxbox = await this.fluxboxStartFn({
-					display: allocatedDisplay,
-					user: 'bruce',
-					logger: this.logger
-						? {
-								info: (m: string) => this.logger!.info(m),
-								warn: (m: string, e?: unknown) => this.logger!.warn(m, e),
-								error: (m: string, e?: unknown) => this.logger!.error(m, e),
-							}
-						: undefined,
-				})
-			} catch (err) {
-				// Per-WebApp Xvfb/fluxbox spawn failed — release the slot, log,
-				// and rethrow so the spawn() caller sees the failure (the tRPC
-				// route surfaces SERVICE_UNAVAILABLE upstream).
-				if (allocatedDisplay) {
-					try {
-						this.displayAllocator.release(allocatedDisplay)
-					} catch {
-						/* allocator release should be infallible per T-10-01-03 */
-					}
-				}
-				try {
-					await fluxbox?.stop()
-				} catch {
-					/* noop */
-				}
-				try {
-					await xvfb?.stop()
-				} catch {
-					/* noop */
-				}
-				this.logger?.error?.(
-					`webapp ${opts.webappId}: per-WebApp Xvfb/fluxbox spawn failed on ${allocatedDisplay}`,
-					err,
-				)
-				throw err
-			}
-		}
-		const chromeDisplay = allocatedDisplay ?? WEBAPPS_X11_ENV.DISPLAY
+		// Phase 100-10-08 — Per-WebApp Xvfb REVERTED (D-100-10-A revert).
+		// All WebApp Chromes spawn on the singleton `:1` display set up by
+		// 100-08-01's livinityd.start() lifecycle. Chrome's IPC merge under
+		// `--user-data-dir=/home/bruce/.config/livos-chrome` (D-100-SHARED-PROFILE)
+		// is INCOMPATIBLE with per-WebApp displays — every spawn redirects to
+		// the existing PID on the first display, no window appears on the
+		// allocated `:11`/`:12`/...  Chrome singleton naturally supports
+		// multi-window on the same display (one process, multiple `--app=URL`
+		// windows); per-WebApp `x11vnc -id <wid>` captures each window
+		// independently (Phase 99 baseline). The DisplayAllocator scaffold +
+		// xvfb-display + fluxbox-wm files stay in tree for Phase 101 CDP work.
+		const chromeDisplay = ':1'
 
 		// 3. Spawn Chrome (detached, NOT a livinityd child)
 		// 2026-05-08 hotfix v2: livinityd's systemd env has no DISPLAY or
@@ -384,9 +345,8 @@ export class WebAppWindowManager {
 			'-n', // non-interactive (fail fast if password would be prompted)
 			'-u',
 			chromeUser,
-			// Phase 100-10-01: when displayAllocator is wired, chromeDisplay is
-			// the per-WebApp `:10` / `:11` / ...; otherwise falls back to
-			// WEBAPPS_X11_ENV.DISPLAY (`:1`, post 100-08-02).
+			// Phase 100-10-08: D-100-10-A reverted. chromeDisplay is the singleton
+			// `:1` set up by livinityd.start() (100-08-01 baseline).
 			`DISPLAY=${chromeDisplay}`,
 			// P100-08-02: XAUTHORITY removed — Xvfb runs with `-ac` (no Xauthority cookie).
 			// LIVOS_X11_XAUTHORITY env still recognized in window-discovery.ts comment for
@@ -400,8 +360,8 @@ export class WebAppWindowManager {
 		const chromeProc = this.spawnFactory('sudo', chromeArgs, {
 			detached: true,
 			stdio: 'ignore',
-			// Phase 100-10-01: also flip the spawn-options env DISPLAY so any
-			// child-process pickup uses the per-WebApp display.
+			// Phase 100-10-08 (D-100-10-A reverted): spawn-options env DISPLAY
+			// pinned to singleton :1 (chromeDisplay).
 			env: {...process.env, ...WEBAPPS_X11_ENV, DISPLAY: chromeDisplay},
 		})
 		try {
@@ -465,12 +425,8 @@ export class WebAppWindowManager {
 			portalSession,
 			geometryTracker,
 			url: opts.url,
-			// Phase 100-10-01 — per-WebApp X display lifecycle handles. Stay
-			// null on legacy (no allocator) path; close() short-circuits the
-			// fluxbox/xvfb/release steps when they're null.
-			display: allocatedDisplay,
-			xvfb,
-			fluxbox,
+			// Phase 100-10-08 — D-100-10-A reverted; always `:1` (shared display).
+			display: chromeDisplay,
 		}
 		this.active.set(opts.webappId, entry)
 		this.logger?.info?.(
@@ -565,37 +521,13 @@ export class WebAppWindowManager {
 		// (Renamed P100-10-02 from bytebot per D-100-10-B.)
 		await this.deregisterWebAppMcp(opts.webappId)
 
-		// Phase 100-10-01 — tear down per-WebApp fluxbox + Xvfb on this
-		// WebApp's display, then release the display number back to the
-		// allocator's free pool. All steps non-fatal on error so close()
-		// still resolves and drops the entry on a partial failure (the next
-		// spawn() would just allocate the next-higher slot anyway).
-		if (entry.fluxbox) {
-			try {
-				await entry.fluxbox.stop()
-			} catch (err) {
-				this.logger?.warn?.(`webapp ${opts.webappId}: fluxbox.stop threw`, err)
-			}
-		}
-		if (entry.xvfb) {
-			try {
-				await entry.xvfb.stop()
-			} catch (err) {
-				this.logger?.warn?.(`webapp ${opts.webappId}: xvfb.stop threw`, err)
-			}
-		}
-		if (this.displayAllocator && entry.display) {
-			try {
-				this.displayAllocator.release(entry.display)
-			} catch (err) {
-				// release is documented as infallible (T-10-01-03 unknown-no-op);
-				// log defensively in case a future impl regresses.
-				this.logger?.warn?.(
-					`webapp ${opts.webappId}: displayAllocator.release threw for ${entry.display}`,
-					err,
-				)
-			}
-		}
+		// Phase 100-10-08 — D-100-10-A reverted: NO per-WebApp Xvfb/fluxbox
+		// teardown and NO displayAllocator release in close(). The singleton
+		// `:1` Xvfb + fluxbox started by livinityd.start() (100-08-01) is the
+		// source of truth and persists across WebApp lifecycle. Only Chrome
+		// (best-effort `xdotool windowkill` above) + stream + MCP entry are
+		// teared down. DisplayAllocator handle remains accepted in opts for
+		// future Phase 101 CDP use but is never called here.
 
 		this.active.delete(opts.webappId)
 		this.logger?.info?.(`webapp ${opts.webappId} closed (killWindow=${!!opts.killWindow})`)
@@ -637,9 +569,9 @@ export class WebAppWindowManager {
 			const descriptor: PerWebAppMcpDescriptor = {
 				instanceKey: webappId,
 				windowId: wid,
-				// Phase 100-10-01: descriptor display reflects the per-WebApp
-				// Xvfb when displayAllocator is wired (`:10`, `:11`, ...);
-				// otherwise falls back to `:1` (D-100-08-A back-compat).
+				// Phase 100-10-08 (D-100-10-A reverted): always `:1` (singleton
+				// Xvfb from 100-08-01). `display` arg still flows for the future
+				// Phase 101 CDP path; current caller always passes `:1`.
 				display,
 			}
 			const config = buildLuseConfig(this.luseMcpEnv, this.luseServerPath, descriptor)
