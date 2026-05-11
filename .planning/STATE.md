@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-11T22:00:00.000Z"
+last_updated: "2026-05-11T21:09:17.521Z"
 progress:
   total_phases: 52
   completed_phases: 25
   total_plans: 203
-  completed_plans: 192
-  percent: 94
+  completed_plans: 193
+  percent: 95
 ---
 
 # Project State
@@ -26,8 +26,17 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — EXECUTING
-Plan: 2 of 6 (103-01 ✅ shipped; 103-02 next)
+Plan: 3 of 6 (103-01 ✅ shipped; 103-03 ✅ shipped; 103-02 + 103-04/05/06 outstanding)
 Milestone: v33.0 (active) — Phase 100 PARTIAL-PASS; 100-08 closes residual bugs from 100-07
+
+## 103-03 Status (2026-05-11) — Sub-goal B: Single-MCP display-aware tool schema
+
+- Wave 1 (103-03): ✅ COMPLETE — `d38af35f..2bd32a25` (3 commits) — luse-tools.ts schema gains optional `display:":N"` on 13 X11-touching tools (additive, verbatim-contract-extended); tools.ts adds `withScopedDisplay()` + `parseDisplayArg()` helpers; 12 buildHandlers + 1 list_windows thread per-call display through to native primitives via try/finally process.env.DISPLAY scope
+- Tests: tools.test.ts 39/39 pass (24 existing + 15 new under `Phase 103-B`); broader computer-use suite 221/238 pass (17 pre-existing platform failures unchanged from baseline)
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 3 commits
+- Decision: process.env.DISPLAY mutation v1 (relies on MCP stdio JSON-RPC serialization invariant) chosen over execFile env arg v2; documented in withScopedDisplay JSDoc as Pitfall 2 mitigation
+
+**Carry-forward to 103-04/05:** `display:":N"` is now a valid input_schema property on 13 luse tools — 103-04's buildActiveDisplaySnippet should instruct the agent to ALWAYS pass it when scoping to active WebApp; 103-05 can then flip `LIVOS_PER_APP_LUSE` default to `'0'` (skip per-WebApp MCP registration). Invalid display strings ('foo', ':0', ':100', '') fall back to `LUSE_TARGET_DISPLAY` env via the regex guard, so belt-and-suspenders agent compliance is built in.
 
 ## 103-01 Status (2026-05-11) — Sub-goal A backend: Master Chrome Xvfb pipeline
 
