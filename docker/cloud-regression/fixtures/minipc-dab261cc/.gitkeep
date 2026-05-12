@@ -1,0 +1,30 @@
+# Placeholder so this directory exists in git.
+#
+# The real fixtures for the Mini PC baseline at deployed SHA dab261cc are
+# captured by docker/cloud-regression/scripts/capture-minipc-baseline.sh
+# (one-time operator step — requires SSH to bruce@10.69.31.68 via
+# pem/minipc key + reachable ZeroTier link).
+#
+# Expected fixture files after capture:
+#   Caddyfile                       raw /etc/caddy/Caddyfile from Mini PC
+#   Caddyfile.normalized            whitespace-stripped variant
+#   Caddyfile.normalized.sha256     sha256 of normalized variant
+#   livos.service                   /etc/systemd/system/livos.service
+#   livos.service.sha256            sha256 of livos.service
+#   liv-core.service                /etc/systemd/system/liv-core.service
+#   liv-core.service.sha256         sha256
+#   liv-worker.service              /etc/systemd/system/liv-worker.service
+#   liv-worker.service.sha256       sha256
+#   liv-memory.service              /etc/systemd/system/liv-memory.service
+#   liv-memory.service.sha256       sha256
+#   caddy.service                   /etc/systemd/system/caddy.service
+#   caddy.service.sha256            sha256
+#   env.shape                       keys only from /opt/livos/.env (no values!)
+#   apt-packages.txt                names only from dpkg -l (no versions)
+#   deployed-sha.txt                contents of /opt/livos/.deployed-sha
+#   captured-at.txt                 ISO-8601 timestamp of capture
+#
+# Without these fixtures, test-cloud-byte-equivalence.sh runs in NEGATIVE-
+# CHECKS-ONLY mode (still asserts AC-104-3 D-104-NO-PROD-IMPACT invariants:
+# no pki-global.conf, no dnsmasq config, no local-lan Caddyfile directives;
+# AC-104-12: caddy.service enabled).
