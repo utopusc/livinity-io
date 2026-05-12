@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-11T22:00:00.000Z"
+last_updated: "2026-05-12T06:35:42.094Z"
 progress:
-  total_phases: 52
+  total_phases: 54
   completed_phases: 25
-  total_plans: 204
-  completed_plans: 196
-  percent: 96
+  total_plans: 210
+  completed_plans: 198
+  percent: 94
 ---
 
 # Project State
@@ -25,9 +25,19 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 103.1 (Master Chrome Hot-Fix + Luse Cross-Display Aggregation) — DEPLOY+VERIFY
+Phase: 104 (One-shot Local Install + Docker Ubuntu GUI UAT) — EXECUTING
+Plan: 2 of 7 (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`, runtime verify pending Docker Desktop)
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v33.0 (active)
+
+## 104-01 Status (2026-05-12) — Docker UAT scaffolding SHIPPED (runtime verify pending)
+
+- Wave 1 (104-01): ✅ COMPLETE — `e0c4fc6c..500b4912` (2 commits) — `docker/local-uat/{Dockerfile,docker-compose.yml,entrypoint.sh,README.md,uat-driver/walk.mjs,scripts/test-install-sh.sh}` all created. D-104-UAT-IMAGE (`trfore/docker-ubuntu2404-systemd:latest`) + D-104-UAT-CDP-BIND (`--remote-debugging-address=0.0.0.0` + port 9223) wired. Readiness sentinel `/tmp/livos-uat-ready` established as stable contract for downstream plans (104-02..104-07).
+- Rule 1 auto-fix: plan apt list said `dig` (no such Ubuntu package); replaced with `dnsutils` so `docker compose build` apt step won't fail. Documented in 104-01-SUMMARY.md "Deviations".
+- Tests: structural acceptance (file existence + content invariants + mode bits + `node --check walk.mjs`) ALL PASS. Runtime end-to-end (`bash docker/local-uat/scripts/test-install-sh.sh`) DEFERRED — Docker Desktop daemon was unavailable on Windows host at execution time (`docker info` failed: `failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine`). Recommended next action: developer starts Docker Desktop, runs the wrapper script, verifies AC-104-13 + AC-104-14 pass.
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across both commits (verified pre + post each commit via `git hash-object liv/packages/core/src/sdk-agent-runner.ts`).
+
+**Carry-forward to 104-02:** `docker/local-uat/` scaffolding is content-only and the compose file already mounts `../..:/livinity-io:ro`. As soon as 104-02 creates `scripts/install.sh`, the entrypoint's `if [[ -f "$INSTALL_SH" ]]` branch will auto-dispatch — no further Dockerfile/compose edits needed. The `test-install-sh.sh` wrapper provides the host-side build/up/poll/walk/down lifecycle every later plan can reuse.
 
 ## 103.1 Status (2026-05-11) — 5-LAYER FIX, fully live-verified on Mini PC
 
@@ -42,6 +52,7 @@ Layer E (commit `3d9fe041`):
 
 - **Symptom:** "klavyeye yaziyorum 'a' geç basıyor, delete çalışmıyor,
   mouse tıklamaları çalışmıyor".
+
 - **Root cause:** Chrome detects `exited_cleanly:false` in Local State
   (legacy from prior livinityd restart) and pops a "Profile error occurred"
   modal. The modal is its own chrome-class top-level window with geometry
@@ -49,13 +60,12 @@ Layer E (commit `3d9fe041`):
   input dispatcher's `search --class chrome --limit 1 windowactivate` keeps
   re-picking the modal; every key/click lands on a non-input dialog and
   is dropped.
+
 - **Fix:** post-spawn polling loop (`dismissProfileErrorAndActivateMain`)
   that (a) windowkills any "Profile error" window and (b) finds the
   largest-area chrome-class window and pre-activates it, so subsequent
   dispatch lands on the main Chrome browser. Awaited before startLogin
   returns so the wsUrl handed to the client points at a usable session.
-
-
 
 Three-layer bug fix shipped and live-verified end-to-end via tRPC curl on
 Mini PC at SHA `f3d471ac`:
@@ -63,6 +73,7 @@ Mini PC at SHA `f3d471ac`:
 - `startLogin` returned `{pid:1151469, display:":10", streamId:"bb999df0..."}`
 - 10s post-spawn: `status.running:true` (daemonization filter survived
   the sudo wrapper code=0 exit)
+
 - `hasCookies:true` (Chrome wrote to bruce-owned dir — chown succeeded)
 - `ps -ef | grep google-chrome` → 2 processes alive
 - Log shows `stream bb999df0 started` with NO subsequent `(stop requested)`
@@ -236,7 +247,7 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 103 (Master Chrome Streaming + Single-MCP Display-Aware) — 6 plans — 2026-05-11T20:08:40.551Z
+**Planned Phase:** 104 (One-shot Local Install + Docker Ubuntu GUI UAT) — 7 plans — 2026-05-12T06:26:35.818Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 

@@ -636,9 +636,18 @@ Plans:
 
 **Depends on:** Phase 103 (Master Chrome streaming + single-MCP shipped). Cloud Mini PC deploy at `dab261cc` must keep working byte-for-byte — `D-104-NO-PROD-IMPACT` locked decision.
 
-**Status:** CONTEXT.md committed 2026-05-11 (`5cd3a194`). Ready for /gsd-plan-phase 104.
+**Status:** Planned 2026-05-11 (7 plans, 6 waves). Run `/gsd-execute-phase 104` to begin Wave 1.
 
-**Plans:** TBD (gsd-planner produces; CONTEXT.md proposes 6-wave layout)
+**Plans:** 7 plans
+
+Plans:
+- [x] 104-01-PLAN.md - Docker UAT container scaffolding (Wave 1, autonomous) — Shipped 2026-05-12 (`e0c4fc6c..500b4912`; runtime verify pending Docker Desktop)
+- [ ] 104-02-PLAN.md - install.sh skeleton with --mode dispatch + helpers (Wave 2, autonomous)
+- [ ] 104-03-PLAN.md - local-lan backend: dnsmasq + Caddy pki-global.conf + livinityd local-dns module (Wave 3, autonomous, parallel with 104-04)
+- [ ] 104-04-PLAN.md - hybrid backend: Cloudflare DNS-01 + Server5 control-plane subdomain mint (Wave 3, autonomous, parallel with 104-03)
+- [ ] 104-05-PLAN.md - Settings -> Local Access enrollment wizard UI (Wave 4, autonomous)
+- [ ] 104-06-PLAN.md - cloud-mode regression test: install.sh --mode cloud byte-equivalent to Mini PC dab261cc (Wave 5, autonomous)
+- [ ] 104-07-PLAN.md - End-to-end UAT walk + user-walked Apple verification (Wave 6, autonomous: false)
 
 **Non-goals (HARD):**
 - Must NOT break existing cloud `<username>.livinity.io` deploy path on Mini PC
