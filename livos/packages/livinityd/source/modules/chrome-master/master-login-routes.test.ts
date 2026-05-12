@@ -211,6 +211,8 @@ function _bareInjectables() {
 	// Phase 103.1-4 — fluxbox handle on master display so xdotool input dispatch finds focus
 	const fluxbox = {pid: 9999, display: ':42', stop: vi.fn(async () => undefined)}
 	const fluxboxSpawnFn = vi.fn(async (_opts: never) => fluxbox as never)
+	// Phase 103.1-5 — no-op dialog dismissal (real one polls xdotool which isn't on the test host)
+	const dismissProfileDialogFn = vi.fn(async (_display: string) => undefined)
 	const dispatch = makeDispatchMocks()
 	// Phase 103.1 — unlinkFn defaults to a no-op that pretends ENOENT (no
 	// lock files exist). Tests can override to assert specific paths.
@@ -239,6 +241,7 @@ function _bareInjectables() {
 		chromeSpawnFn,
 		vncSpawnFn,
 		fluxboxSpawnFn,
+		dismissProfileDialogFn,
 		// dispatchers
 		dispatchPointerFn: dispatch.dispatchPointerFn,
 		dispatchKeyFn: dispatch.dispatchKeyFn,
@@ -584,6 +587,33 @@ describe('103-01 chromeMaster tRPC router — Xvfb streaming pipeline', () => {
 		expect(inj.fluxboxSpawnFn).toHaveBeenCalledWith(
 			expect.objectContaining({display: ':42'}),
 		)
+	})
+
+	test('Test 14h (103.1-5): startLogin awaits dismissProfileDialogFn AFTER chromeSpawnFn (so input dispatcher lands on main window not modal)', async () => {
+		const callOrder: string[] = []
+		const inj = makeFull103Injectables()
+		const origChromeSpawn = inj.chromeSpawnFn
+		inj.chromeSpawnFn = vi.fn(async (opts: never) => {
+			callOrder.push('chromeSpawnFn')
+			return origChromeSpawn(opts)
+		})
+		inj.dismissProfileDialogFn = vi.fn(async (display: string) => {
+			callOrder.push(`dismiss:${display}`)
+		})
+
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await caller.startLogin()
+
+		// Dismiss called once with the master display.
+		expect(inj.dismissProfileDialogFn).toHaveBeenCalledTimes(1)
+		expect(inj.dismissProfileDialogFn).toHaveBeenCalledWith(':42')
+		// Order: chromeSpawnFn → dismiss
+		const chromeIdx = callOrder.indexOf('chromeSpawnFn')
+		const dismissIdx = callOrder.indexOf('dismiss::42')
+		expect(chromeIdx).toBeGreaterThanOrEqual(0)
+		expect(dismissIdx).toBeGreaterThanOrEqual(0)
+		expect(chromeIdx).toBeLessThan(dismissIdx)
 	})
 
 	test('Test 14g (103.1-4): cleanupMaster cascade stops fluxbox before xvfb', async () => {
