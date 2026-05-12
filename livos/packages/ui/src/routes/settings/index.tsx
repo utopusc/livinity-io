@@ -44,6 +44,8 @@ const DmPairingPage = React.lazy(() => import('@/routes/settings/dm-pairing'))
 const LivAgentSettings = React.lazy(() => import('@/routes/settings/liv-agent'))
 // Phase 102-07 — Chrome Master Login settings page (D-102-MASTER-LOGIN-UI).
 const ChromeMasterPage = React.lazy(() => import('@/routes/settings/chrome-master'))
+// Phase 104 plan 104-05 — Local Access enrollment wizard (AC-104-9, AC-104-10).
+const LocalAccessPage = React.lazy(() => import('@/routes/settings/local-access'))
 
 // drawers
 const StartMigrationDrawerOrDialog = React.lazy(() =>
@@ -147,6 +149,7 @@ export function Settings() {
 						<Route path='/domain-setup' Component={DomainSetupPage} />
 						<Route path='/dm-pairing' Component={DmPairingPage} />
 						<Route path='/chrome-master' Component={ChromeMasterPage} />
+						<Route path='/local-access' Component={LocalAccessPage} />
 					</Routes>
 					<QueryStringDialog />
 				</Suspense>
