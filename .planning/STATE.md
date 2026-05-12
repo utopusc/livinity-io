@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-12T07:10:04.538Z"
+last_updated: "2026-05-12T07:30:51.285Z"
 progress:
   total_phases: 54
   completed_phases: 25
   total_plans: 210
-  completed_plans: 200
-  percent: 95
+  completed_plans: 201
+  percent: 96
 ---
 
 # Project State
@@ -26,9 +26,24 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 104 (One-shot Local Install + Docker Ubuntu GUI UAT) — EXECUTING
-Plan: 4 of 7 (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`; 104-02 ✅ shipped 2026-05-12 `2a1a274b..1361f483`; 104-03 ✅ shipped 2026-05-12 `9bba50ba..8d8cec66` — local-lan backend code-complete, 24/24 vitest pass, runtime AC-104-4..7 deferred to 104-07 UAT)
+Plan: 5 of 7 (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`; 104-02 ✅ shipped 2026-05-12 `2a1a274b..1361f483`; 104-03 ✅ shipped 2026-05-12 `9bba50ba..8d8cec66` — local-lan backend code-complete, 24/24 vitest pass, runtime AC-104-4..7 deferred to 104-07 UAT; 104-04 ✅ shipped 2026-05-12 `9a9801c8..62a526b1` — hybrid backend code-complete, 52/52 vitest pass, AC-104-15 runtime tcpdump deferred to 104-07 UAT)
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v33.0 (active)
+
+## 104-04 Status (2026-05-12) — hybrid backend SHIPPED (52/52 vitest pass, runtime UAT deferred)
+
+- Wave 3 (104-04): ✅ COMPLETE — `9a9801c8..62a526b1` (3 commits) — full HYBRID backend wired end-to-end. Three commits:
+  1. `9a9801c8` hybrid-provision.ts + .test.ts: Server5 control-plane subdomain mint helper (`POST https://livinity.io/api/hybrid/provision`); `ServerSideProvisionUnavailable` recoverable error class; strict response-shape validation (HYBRID_DOMAIN_RE forces `<label>.home.livinity.io` apex); token redaction in errors (T-104-04-I1); `writeCfTokenSecret` 0600-mode EnvironmentFile writer; `HYBRID_TOKEN_SECRET_PATH` constant.
+  2. `edfc4a80` APPEND-only edits to 5 files (Wave 3 parallel-safety contract honored): caddy.ts gains `generateHybridCaddyfile` + `validateHybridDomain`; caddy.test.ts gains 13 new tests (5 validateHybridDomain + 5 generateHybridCaddyfile incl. 127.0.0.1-only reverse_proxy invariant + 1 cloud-mode regression + 2 D-104-RELAY-ZERO-DATA-PLANE negative-grep); routes.ts gains 2 procedures (`local.activateHybrid` mutation + `local.getHybridStatus` query) + `hybridActivateSchema` + 3 Redis-key constants; routes.test.ts gains 5 new tests + mock extension; common.ts gains 2 httpOnlyPaths entries.
+  3. `62a526b1` mode-hybrid.sh real body: `_verify_caddy_cloudflare_plugin` (xcaddy build path with graceful exit on uninstallable xcaddy / build failure — never aborts install.sh); `_write_cf_token_secret` (umask 0077 + chmod 0600 + 0700 parent dir + systemd EnvironmentFile drop-in with `grep -qF` idempotency guard); `_provision_hybrid_subdomain` (curl --max-time 30 → interactive prompt or non-interactive skip on Server5 unreachable; jq fallback to grep+sed JSON parse). Token never echoed (verified via grep).
+- Tests: 52/52 PASSED (5 dnsmasq + 4 pki + 10 hybrid-provision NEW + 25 caddy [12 existing + 13 new] + 8 routes [3 existing + 5 new]). Target was ≥19 new assertions; achieved 28 new. Negative-grep assertions for Server5 IP `45.137.194.102` AND Server4 IP `45.137.194.103` absent from `generateHybridCaddyfile` output PASS ×2.
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 3 commits (verified pre + post each commit via `git hash-object liv/packages/core/src/sdk-agent-runner.ts`).
+- Deviations: NONE — plan executed exactly as written. Note: plan's `<verify>` `pnpm --filter @livos/livinityd` filter doesn't match actual package name (`livinityd`, not `@livos/livinityd`); used `npx vitest run` from package dir — assertion semantics identical.
+- Decisions: (1) D-104-RELAY-ZERO-DATA-PLANE realized at generator level — negative-grep test proves Server5/Server4 IPs CANNOT appear in generated Caddyfile (static unit complement to plan 104-07 runtime tcpdump). (2) D-104-NO-PROD-IMPACT preserved — generateFullCaddyfile UNTOUCHED + cloud-mode regression test re-asserts no `dns cloudflare {env...}` directive leak. (3) Append-only Wave 3 contract honored on all 5 shared files; existing test/procedure/export count unchanged.
+
+**Carry-forward to 104-05 (Enrollment Wizard UI, Wave 4):** `trpcReact.local.activateHybrid.useMutation()` accepts `{subdomain, zoneId, hostIp, subdomains?}`. `trpcReact.local.getHybridStatus.useQuery()` returns `{subdomain, zoneId, hostIp, cfTokenAvailable}` — wizard's done-step blocks "Activate" if `cfTokenAvailable: false` with "set CLOUDFLARE_API_TOKEN" toast. ModePickStep should label hybrid as **Recommended** (per D-104-DEFAULT-MODE).
+
+**Runtime verification deferred to 104-07:** AC-104-15 runtime tcpdump assertion (page load has zero Server5 traffic) STAYS IN 104-07. Negative-grep static check here PROVES the generator can't route data-plane via Server5; tcpdump confirms the running Caddy instance honors it at the kernel/syscall level.
 
 ## 104-03 Status (2026-05-12) — local-lan backend SHIPPED (24/24 vitest pass, runtime UAT deferred)
 
