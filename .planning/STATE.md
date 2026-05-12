@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-12T12:00:00.000Z"
+last_updated: "2026-05-12T19:22:35.386Z"
 progress:
-  total_phases: 54
-  completed_phases: 25
-  total_plans: 216
-  completed_plans: 209
+  total_phases: 55
+  completed_phases: 26
+  total_plans: 217
+  completed_plans: 210
   percent: 97
 ---
 
@@ -146,6 +146,7 @@ Milestone: v33.0 (active)
 **Carry-forward to 104-07 (UAT end-to-end walk, Wave 6, user-walked):** D-104-NO-PROD-IMPACT regression gate is LIVE. The docker/cloud-regression/ container pattern (trfore systemd base + entrypoint.sh + ports-coexist-with-local-uat + test harness) provides a template 104-07 can mirror for its hybrid-mode UAT walk. `LIVOS_REGRESSION_MODE=cloud` env-var idiom + `livos-cloud-regression.service` systemd unit shape are reusable.
 
 **Operator action items (one-time, can run any time before merge):**
+
 1. `bash docker/cloud-regression/scripts/capture-minipc-baseline.sh` — requires Mini PC reachable via ZeroTier (10.69.31.68); pem/minipc key. Single batched ssh; captures fixtures to docker/cloud-regression/fixtures/minipc-dab261cc/.
 2. `git add docker/cloud-regression/fixtures/minipc-dab261cc/ && git commit -m "baseline(104-06): capture Mini PC at deployed SHA dab261cc"`.
 3. After fixtures committed, `bash docker/cloud-regression/scripts/test-cloud-byte-equivalence.sh` runs the FULL byte-equivalence regression (negative checks + positive diff). Until then, it runs in NEGATIVE-CHECKS-ONLY mode (still gates D-104-NO-PROD-IMPACT).
@@ -426,7 +427,7 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 104 (One-shot Local Install + Docker Ubuntu GUI UAT) — 7 plans — 2026-05-12T06:26:35.818Z
+**Planned Phase:** 105 (deploy-livinityd 1:1 Mini-PC update.sh Port) — 4 plans — 2026-05-12T19:22:35.353Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 

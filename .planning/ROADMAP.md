@@ -699,7 +699,13 @@ Plans:
 
 **Depends on:** Phase 104 (TLS layer + 104-11 deploy-livinityd helpers as starting scaffold). Mini PC `update.sh` at repo HEAD as canonical reference (production-tested, do not modify).
 
-**Status:** Drafted 2026-05-12. Run `/gsd-plan-phase 105` to author plans.
+**Status:** Planned 2026-05-12 (4 plans, 3 waves). Run `/gsd-execute-phase 105` to begin Wave 1.
+
+**Plans:** 4 plans in 3 waves
+- [ ] 105-01-PLAN.md (Wave 1, autonomous) — Pipeline refactor + _dld_verify_build helper extraction + anchored /docker/ exclude fix + env-before-pnpm reorder (NO new behavior beyond the bug fix + extraction; existing 71+18+24 PASS green; +TEST 16/19/31 → 79 PASS)
+- [ ] 105-02-PLAN.md (Wave 2, autonomous, deps: 105-01) — Gap closure G2-G9: apt streaming packages + ydotoold systemd unit (update.sh:339-405) + atomic update.sh self-rsync (.new + mv) + gallery cache helper + chmod +x app-script + chown -R configurable owner + temp dir cleanup + .deployed-sha forward-compat + UI rm -rf dist before vite build
+- [ ] 105-03-PLAN.md (Wave 2 parallel with 105-02, autonomous, deps: 105-01) — Test harness extension: +36 assertions across TESTs 17, 18, 20-28, 28b/c/d, 29, 30, 32a-e covering G2-G9 + Hazard #1 PGPASSWORD shell-scope guard + Hazard #2/#3 pipeline-order + D-105-STEP8 sub-decision positive-greps + sacred SHA negative-grep + update.sh write-protection negative-grep (target: 115 PASS in test-deploy-livinityd; combined 18+24+115=157 PASS) — revised iteration 1 after plan-checker flagged TEST 32 broken regex (split to 32a-e), TEST 33 duplicate (removed), Hazard #1 missing (added TEST 29), and 3 STEP8 gaps (added 28b/c/d)
+- [ ] 105-04-PLAN.md (Wave 3, autonomous: false — OPERATOR WALK, deps: 105-02 + 105-03) — Live VPS UAT: provision fresh Ubuntu 24.04 VPS, run install.sh --mode hybrid --domain X --cf-token Y --cf-zone-id Z, verify 5 GO/NO-GO criteria (4× services active + HTTPS LivOS HTML + browser green-padlock + sacred SHA preserved + update.sh re-run idempotent), capture evidence in UAT-EVIDENCE/
 
 **Non-goals (HARD):**
 - Must NOT modify Mini PC's `update.sh` (only deploy-livinityd.sh and its test harness)
