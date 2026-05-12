@@ -1,0 +1,40 @@
+# docker/cloud-regression/docker-compose.yml
+# Phase 104 plan 104-06 — UAT container for cloud-mode regression (AC-104-3).
+#
+# Port mapping: 8090 / 8453 on host (NOT 80 / 443) to avoid collision with
+# docker/local-uat/docker-compose.yml which already binds 80 / 443. Both
+# containers can run simultaneously during dev.
+
+services:
+  livos-cloud-regression:
+    build:
+      context: ../..        # repo root — install.sh + scripts/install/* visible
+      dockerfile: docker/cloud-regression/Dockerfile
+    image: livos-cloud-regression:dev
+    container_name: livos-cloud-regression
+    privileged: true
+    cgroup: host
+    # If compose client is too old for `cgroup: host`, use:
+    # cgroupns_mode: host
+    tmpfs:
+      - /run
+      - /tmp
+      - /run/lock
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ../..:/livinity-io:ro                    # repo mount (read-only)
+      - ./fixtures:/livinity-io-fixtures:ro       # baseline fixtures (read-only inside)
+    ports:
+      # Host ports differ from local-uat (which uses 80/443) so both containers
+      # can run side-by-side.
+      - '8090:80'
+      - '8453:443'
+    environment:
+      - LIVOS_REGRESSION_MODE=cloud
+      # Dummy CF token: install.sh --mode cloud does NOT call Cloudflare in
+      # the bootstrap path (cert issuance is livinityd's job, not install.sh's).
+      # The token is present for syntax-validation parity with production.
+      - CLOUDFLARE_API_TOKEN=dummy-token-for-syntax-validation-only
+      - CONFIG_DOMAIN=bruce.livinity.io
+      - CONFIG_USE_HTTPS=true
+    stop_signal: SIGRTMIN+3
