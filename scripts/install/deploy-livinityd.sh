@@ -284,9 +284,17 @@ _dld_clone_source() {
             cp "$_DLD_STAGE_DIR/livos/$f" "$_DLD_LIVOS_DIR/$f"
         fi
     done
+    # 105-02 (G3): atomic self-rsync of update.sh — port update.sh:425-430 verbatim.
+    # cp to .new sibling then mv ensures running bash on a re-run won't read partial
+    # new content through its open fd and crash mid-run. Same inode → atomic.
     if [[ -f "$_DLD_STAGE_DIR/update.sh" ]]; then
-        cp "$_DLD_STAGE_DIR/update.sh" "$_DLD_LIVOS_DIR/update.sh"
-        chmod +x "$_DLD_LIVOS_DIR/update.sh" 2>/dev/null || true
+        info "Updating update.sh (atomic .new + mv)..."
+        cp "$_DLD_STAGE_DIR/update.sh" "$_DLD_LIVOS_DIR/update.sh.new"
+        chmod +x "$_DLD_LIVOS_DIR/update.sh.new"
+        mv "$_DLD_LIVOS_DIR/update.sh.new" "$_DLD_LIVOS_DIR/update.sh"
+        ok "update.sh updated (next run will use new version)"
+    else
+        warn "update.sh not in stage dir — skipping self-update"
     fi
     ok "livos source rsynced to $_DLD_LIVOS_DIR/ (flat)"
 
@@ -306,7 +314,86 @@ _dld_clone_source() {
     ok "liv source rsynced to $_DLD_LIV_DIR/"
 }
 
-# ── 4b. Write pnpm .npmrc with block-exotic-subdeps=false (104-13 hotfix) ───
+# ── 4b. Streaming subsystem apt packages (105-02 G2 — update.sh:339-405) ────
+# Idempotent apt-install for ffmpeg, x11/xdotool, ydotool, xvfb, fluxbox,
+# gstreamer, websockify, VAAPI userspace + ydotoold systemd unit.
+# Closes RESEARCH gap G2 — without these, Master Chrome / WebApp Launcher
+# (Phase 100+) silently fail on fresh VPS hosts.
+# Verbatim port of update.sh:339-404 — DEBIAN_FRONTEND=noninteractive ensures
+# unattended install. WARN-not-FAIL on VAAPI (no Intel iGPU → libx264 fallback).
+_dld_install_streaming_packages() {
+    step "105-02 (G2) — streaming subsystem dependencies (update.sh:339-405)"
+
+    if [[ ! -x /usr/bin/apt-get ]] || ! command -v apt-get >/dev/null 2>&1; then
+        info "apt-get not available — skipping streaming subsystem install"
+        return 0
+    fi
+
+    info "Ensuring streaming subsystem apt packages are installed..."
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        x11vnc xdotool x11-xserver-utils \
+        ydotool maim scrot gnome-screenshot \
+        websockify vncsnapshot \
+        ffmpeg \
+        gstreamer1.0-tools \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-bad \
+        gstreamer1.0-plugins-ugly \
+        xdg-desktop-portal-gnome \
+        xvfb fluxbox \
+        2>&1 | tail -5 || warn "Some streaming packages failed to install (non-fatal)"
+
+    # VAAPI userspace — separate group so an Intel-iGPU-less host doesn't fail the run.
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        libva-utils intel-media-va-driver libdrm-intel1 \
+        2>&1 | tail -5 || warn "VAAPI userspace install failed — libx264 fallback will be used"
+
+    # Verify the critical streaming binaries are present after install
+    local streaming_missing=()
+    local bin
+    for bin in ffmpeg gst-launch-1.0 dbus-send xdotool maim Xvfb fluxbox; do
+        if ! command -v "$bin" >/dev/null 2>&1; then
+            streaming_missing+=("$bin")
+        fi
+    done
+    if (( ${#streaming_missing[@]} > 0 )); then
+        warn "Streaming binaries still missing after apt: ${streaming_missing[*]}"
+    else
+        ok "Streaming subsystem binaries verified"
+    fi
+
+    # Provision ydotoold systemd unit if ydotoold is now available
+    if command -v ydotoold >/dev/null 2>&1 && [[ ! -f /etc/systemd/system/ydotoold.service ]]; then
+        local desktop_user_p93 desktop_uid_p93
+        desktop_user_p93=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}')
+        if [[ -n "${desktop_user_p93:-}" ]]; then
+            desktop_uid_p93=$(id -u "$desktop_user_p93" 2>/dev/null || echo 1000)
+            cat > /etc/systemd/system/ydotoold.service << UNIT
+[Unit]
+Description=LivOS ydotoold input daemon (Phase 93 streaming subsystem)
+After=graphical.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ydotoold --socket-path=/tmp/.ydotool_socket --socket-own=${desktop_uid_p93}:${desktop_uid_p93}
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target
+UNIT
+            systemctl daemon-reload 2>/dev/null || true
+            systemctl enable ydotoold.service 2>/dev/null && \
+                ok "ydotoold systemd unit installed (user=${desktop_user_p93})" || \
+                warn "ydotoold unit written but enable failed"
+        else
+            info "No desktop user (UID≥1000) found — ydotoold unit skipped (caveat for fresh VPS without operator account)"
+        fi
+    fi
+}
+
+# ── 4c. Write pnpm .npmrc with block-exotic-subdeps=false (104-13 hotfix) ───
 # Plan 104-13: pnpm 11+'s `blockExoticSubdeps` (enabled-by-default supply-chain
 # safety check) refuses to install `libsignal` — a legitimate `baileys` WhatsApp
 # integration subdep (Phase 25) that is resolved from a git-repository URL
@@ -394,7 +481,12 @@ _dld_build_packages() {
     ok "@livos/config built"
 
     # Build UI (vite production bundle)
+    # 105-02 (G8): rm -rf dist BEFORE build forces vite to regenerate from source.
+    # Phase 51 v29.5 A2 defensive fresh-build — prevents stale dist surviving
+    # deploys when vite's cache hash matches by accident OR when a prior build
+    # silently failed.
     info "Building UI (vite production bundle; ~1-2 min)"
+    rm -rf "$_DLD_LIVOS_DIR/packages/ui/dist"
     pnpm --filter ui build 2>&1 | tail -5 || fail "UI build failed"
     _dld_verify_build "@livos/ui" "$_DLD_LIVOS_DIR/packages/ui/dist"
     ok "UI built"
