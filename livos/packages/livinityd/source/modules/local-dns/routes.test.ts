@@ -3,11 +3,20 @@ import {describe, it, expect, vi} from 'vitest'
 
 // Mock caddy.ts so we don't hit disk
 vi.mock('../domain/caddy.js', () => ({
-	generateLocalCaddyfile: vi.fn().mockReturnValue('# generated\n'),
+	generateLocalCaddyfile: vi.fn().mockReturnValue('# generated local\n'),
+	generateHybridCaddyfile: vi.fn().mockReturnValue('# generated hybrid\n'),
 	validateLocalTld: (t: string) =>
 		/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(
 			t,
 		),
+	validateHybridDomain: (d: string) =>
+		typeof d === 'string' &&
+		d.length > 0 &&
+		d.length <= 253 &&
+		!d.endsWith('.local') &&
+		!d.includes('..') &&
+		!d.includes('/') &&
+		/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(d),
 	writeCaddyfile: vi.fn().mockResolvedValue(undefined),
 	reloadCaddy: vi.fn().mockResolvedValue(undefined),
 }))
@@ -94,5 +103,109 @@ describe('local-dns/routes — Phase 104 plan 104-03', () => {
 		expect(caddyMod.generateLocalCaddyfile).toHaveBeenCalled()
 		expect(caddyMod.writeCaddyfile).toHaveBeenCalled()
 		expect(caddyMod.reloadCaddy).toHaveBeenCalled()
+	})
+})
+
+describe('local-dns/routes — Phase 104 plan 104-04 — hybrid procedures', () => {
+	it('local.activateHybrid rejects invalid subdomain (.local)', async () => {
+		const redis = makeFakeRedis()
+		const localRouter = (await import('./routes.js')).default
+		const caller = (localRouter as any).createCaller({
+			livinityd: {ai: {redis}},
+			currentUser: {id: 'test-user', role: 'admin', username: 'admin'},
+			dangerouslyBypassAuthentication: true,
+			logger: {error: () => {}, info: () => {}, warn: () => {}, verbose: () => {}},
+		})
+		await expect(
+			caller.activateHybrid({
+				subdomain: 'bruce.livinity.local',
+				zoneId: 'cf-z',
+				hostIp: '192.168.1.100',
+			}),
+		).rejects.toThrow()
+	})
+
+	it('local.activateHybrid rejects invalid hostIp', async () => {
+		const redis = makeFakeRedis()
+		const localRouter = (await import('./routes.js')).default
+		const caller = (localRouter as any).createCaller({
+			livinityd: {ai: {redis}},
+			currentUser: {id: 'test-user', role: 'admin', username: 'admin'},
+			dangerouslyBypassAuthentication: true,
+			logger: {error: () => {}, info: () => {}, warn: () => {}, verbose: () => {}},
+		})
+		await expect(
+			caller.activateHybrid({
+				subdomain: 'ab12cd34.home.livinity.io',
+				zoneId: 'cf-z',
+				hostIp: '999.999.999.999',
+			}),
+		).rejects.toThrow()
+	})
+
+	it('local.activateHybrid writes Redis keys + calls generateHybridCaddyfile', async () => {
+		const redis = makeFakeRedis()
+		const caddyMod = await import('../domain/caddy.js')
+		const localRouter = (await import('./routes.js')).default
+		const caller = (localRouter as any).createCaller({
+			livinityd: {ai: {redis}},
+			currentUser: {id: 'test-user', role: 'admin', username: 'admin'},
+			dangerouslyBypassAuthentication: true,
+			logger: {error: () => {}, info: () => {}, warn: () => {}, verbose: () => {}},
+		})
+		const r = await caller.activateHybrid({
+			subdomain: 'ab12cd34.home.livinity.io',
+			zoneId: 'cf-zone-abc',
+			hostIp: '192.168.1.100',
+		})
+		expect(r.success).toBe(true)
+		expect(r.mode).toBe('hybrid')
+		expect(r.subdomain).toBe('ab12cd34.home.livinity.io')
+		expect(await redis.get('livos:domain:local_mode')).toBe('hybrid')
+		expect(await redis.get('livos:domain:hybrid_subdomain')).toBe(
+			'ab12cd34.home.livinity.io',
+		)
+		expect(await redis.get('livos:domain:hybrid_zone_id')).toBe('cf-zone-abc')
+		expect(await redis.get('livos:domain:host_ip')).toBe('192.168.1.100')
+		expect(caddyMod.generateHybridCaddyfile).toHaveBeenCalled()
+		expect(caddyMod.writeCaddyfile).toHaveBeenCalled()
+		expect(caddyMod.reloadCaddy).toHaveBeenCalled()
+	})
+
+	it('local.getHybridStatus returns hybrid subdomain/zone shape', async () => {
+		const redis = makeFakeRedis()
+		await redis.set('livos:domain:hybrid_subdomain', 'ab12cd34.home.livinity.io')
+		await redis.set('livos:domain:hybrid_zone_id', 'cf-z')
+		await redis.set('livos:domain:host_ip', '192.168.1.100')
+		const localRouter = (await import('./routes.js')).default
+		const caller = (localRouter as any).createCaller({
+			livinityd: {ai: {redis}},
+			currentUser: {id: 'test-user', role: 'admin', username: 'admin'},
+			dangerouslyBypassAuthentication: true,
+			logger: {error: () => {}, info: () => {}, warn: () => {}, verbose: () => {}},
+		})
+		const status = await caller.getHybridStatus()
+		expect(status.subdomain).toBe('ab12cd34.home.livinity.io')
+		expect(status.zoneId).toBe('cf-z')
+		expect(status.hostIp).toBe('192.168.1.100')
+		// cfTokenAvailable will be false (no real file in test env)
+		expect(typeof status.cfTokenAvailable).toBe('boolean')
+		expect(status.cfTokenAvailable).toBe(false)
+	})
+
+	it('local.getHybridStatus returns nulls when no Redis state', async () => {
+		const redis = makeFakeRedis()
+		const localRouter = (await import('./routes.js')).default
+		const caller = (localRouter as any).createCaller({
+			livinityd: {ai: {redis}},
+			currentUser: {id: 'test-user', role: 'admin', username: 'admin'},
+			dangerouslyBypassAuthentication: true,
+			logger: {error: () => {}, info: () => {}, warn: () => {}, verbose: () => {}},
+		})
+		const status = await caller.getHybridStatus()
+		expect(status.subdomain).toBeNull()
+		expect(status.zoneId).toBeNull()
+		expect(status.hostIp).toBeNull()
+		expect(status.cfTokenAvailable).toBe(false)
 	})
 })

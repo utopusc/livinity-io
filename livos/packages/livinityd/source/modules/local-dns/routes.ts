@@ -10,7 +10,9 @@ import {z} from 'zod'
 import {router, privateProcedure} from '../server/trpc/trpc.js'
 import {
 	generateLocalCaddyfile,
+	generateHybridCaddyfile,
 	validateLocalTld,
+	validateHybridDomain,
 	writeCaddyfile,
 	reloadCaddy,
 	type LocalSubdomainConfig,
@@ -20,6 +22,10 @@ import {readRootCert} from './pki.js'
 const REDIS_LOCAL_MODE = 'livos:domain:local_mode'
 const REDIS_LOCAL_TLD = 'livos:domain:local_tld'
 const REDIS_HOST_IP = 'livos:domain:host_ip'
+// Phase 104 plan 104-04 — hybrid mode Redis keys
+const REDIS_HYBRID_SUBDOMAIN = 'livos:domain:hybrid_subdomain'
+const REDIS_HYBRID_ZONE_ID = 'livos:domain:hybrid_zone_id'
+const REDIS_CF_TOKEN_PATH = 'livos:domain:cf_api_token_secret_ref'
 
 // IPv4 regex — strict (4 octets, each 0-255). Matches install.sh detection output.
 const IPV4_RE =
@@ -34,6 +40,20 @@ const localActivateSchema = z.object({
 	hostIp: z
 		.string()
 		.refine((v) => IPV4_RE.test(v), {message: 'Invalid IPv4'}),
+	subdomains: z
+		.array(z.object({name: z.string(), port: z.number().int().positive()}))
+		.optional(),
+})
+
+// Phase 104 plan 104-04 — hybrid mode activation schema
+const hybridActivateSchema = z.object({
+	subdomain: z
+		.string()
+		.min(1)
+		.max(253)
+		.refine(validateHybridDomain, {message: 'Invalid hybrid domain shape'}),
+	zoneId: z.string().min(1).max(100),
+	hostIp: z.string().refine((v) => IPV4_RE.test(v), {message: 'Invalid IPv4'}),
 	subdomains: z
 		.array(z.object({name: z.string(), port: z.number().int().positive()}))
 		.optional(),
@@ -89,6 +109,54 @@ const local = router({
 	getCaCert: privateProcedure.query(async () => {
 		const pem = await readRootCert()
 		return {pem}
+	}),
+
+	// ─── Phase 104 plan 104-04 — hybrid mode procedures ─────────────────
+
+	activateHybrid: privateProcedure
+		.input(hybridActivateSchema)
+		.mutation(async ({ctx, input}) => {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const redis = (ctx as any).livinityd.ai.redis
+			const subdomains: LocalSubdomainConfig[] = input.subdomains ?? []
+			const caddyfile = generateHybridCaddyfile(input.subdomain, subdomains, true)
+			await writeCaddyfile(caddyfile)
+			await reloadCaddy()
+			await Promise.all([
+				redis.set(REDIS_LOCAL_MODE, 'hybrid'),
+				redis.set(REDIS_HYBRID_SUBDOMAIN, input.subdomain),
+				redis.set(REDIS_HYBRID_ZONE_ID, input.zoneId),
+				redis.set(REDIS_HOST_IP, input.hostIp),
+			])
+			return {success: true, mode: 'hybrid' as const, subdomain: input.subdomain}
+		}),
+
+	getHybridStatus: privateProcedure.query(async ({ctx}) => {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const redis = (ctx as any).livinityd.ai.redis
+		const [subdomain, zoneId, hostIp, cfTokenPath] = await Promise.all([
+			redis.get(REDIS_HYBRID_SUBDOMAIN),
+			redis.get(REDIS_HYBRID_ZONE_ID),
+			redis.get(REDIS_HOST_IP),
+			redis.get(REDIS_CF_TOKEN_PATH),
+		])
+		// Probe whether the CF token file exists (best-effort; do NOT read it)
+		let cfTokenAvailable = false
+		if (cfTokenPath) {
+			try {
+				const {stat} = await import('node:fs/promises')
+				await stat(cfTokenPath)
+				cfTokenAvailable = true
+			} catch {
+				cfTokenAvailable = false
+			}
+		}
+		return {
+			subdomain: subdomain ?? null,
+			zoneId: zoneId ?? null,
+			hostIp: hostIp ?? null,
+			cfTokenAvailable,
+		}
 	}),
 })
 

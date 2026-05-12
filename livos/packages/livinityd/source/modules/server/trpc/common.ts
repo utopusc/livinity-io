@@ -78,6 +78,12 @@ export const httpOnlyPaths = [
 	'local.activate',
 	'local.getStatus',
 	'local.getCaCert',
+	// Phase 104 plan 104-04 — hybrid mode tRPC routes. Same WS-reconnect-survival
+	// rationale as the local-lan trio above: activateHybrid writes 4 Redis keys,
+	// regenerates the Caddyfile, and reloads Caddy (1-5s wall-clock). getHybridStatus
+	// also touches the filesystem (stat /etc/livos/secrets/cf-token best-effort).
+	'local.activateHybrid',
+	'local.getHybridStatus',
 	// File operations — use HTTP for reliability through relay tunnel
 	'files.createDirectory',
 	'files.copy',

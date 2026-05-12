@@ -219,6 +219,79 @@ export function generateLocalCaddyfile(
 	return blocks.join('\n\n') + '\n'
 }
 
+// ─── Phase 104 plan 104-04 — hybrid mode generator + validator ─────────
+
+/**
+ * Validate a hybrid-mode domain shape. Accepts user-owned domains AND the
+ * LivOS-provisioned <random>.home.livinity.io pattern. Rejects:
+ *   - .local TLD (caller should route to generateLocalCaddyfile instead)
+ *   - IP-shaped strings
+ *   - Path-traversal patterns
+ *   - Domains shorter than two labels (TLDs alone)
+ */
+const HYBRID_DOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i
+
+export function validateHybridDomain(domain: string): boolean {
+	if (typeof domain !== 'string') return false
+	if (domain.length === 0 || domain.length > 253) return false
+	if (domain.includes('..') || domain.includes('/')) return false
+	if (IPV4_RE_CADDY.test(domain)) return false
+	if (domain.endsWith('.local')) return false // hybrid path is NOT for .local
+	return HYBRID_DOMAIN_RE.test(domain)
+}
+
+/**
+ * Generate a Caddyfile for hybrid mode. Uses Cloudflare DNS-01 for Let's Encrypt
+ * wildcard cert issuance — no internal PKI, no CA enrollment needed on clients.
+ *
+ * The `dns cloudflare {env.CLOUDFLARE_API_TOKEN}` directive requires the
+ * `caddy-dns/cloudflare` plugin (xcaddy build OR official caddy with cf plugin).
+ * Token is loaded via systemd EnvironmentFile=/etc/livos/secrets/cf-token.
+ *
+ * Per D-104-NO-PROD-IMPACT: this is purely ADDITIVE — generateFullCaddyfile is
+ * not modified. Per D-104-RELAY-ZERO-DATA-PLANE: this generator emits ONLY
+ * reverse_proxy entries pointing at 127.0.0.1 — data-plane stays LAN-direct.
+ * Server5 is touched ONLY for (a) one-time subdomain mint and (b) periodic
+ * ACME DNS-01 TXT writes; neither path is in this Caddyfile output.
+ */
+export function generateHybridCaddyfile(
+	hybridDomain: string,
+	subdomains: LocalSubdomainConfig[] = [],
+	multiUser: boolean = true,
+): string {
+	const blocks: string[] = []
+
+	// Wildcard virtual host with Cloudflare DNS-01 ACME
+	blocks.push(`*.${hybridDomain} {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    }
+    reverse_proxy 127.0.0.1:8080
+}`)
+
+	// Bare apex virtual host (same cert)
+	blocks.push(`${hybridDomain} {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    }
+    reverse_proxy 127.0.0.1:8080
+}`)
+
+	// Per-subdomain custom port routing (multi-user app gateway hint)
+	if (multiUser) {
+		for (const sub of subdomains) {
+			blocks.push(`${sub.name}.${hybridDomain} {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    }
+    reverse_proxy 127.0.0.1:${sub.port}
+}`)
+		}
+	}
+
+	return blocks.join('\n\n') + '\n'
+}
+
 /**
  * Generate a simple Caddyfile for just the main domain (legacy support).
  */
