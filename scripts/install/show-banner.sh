@@ -24,8 +24,25 @@ print_banner() {
             echo "           Use --mode hybrid for Apple support."
             ;;
         hybrid)
-            echo "  Next: open https://<user>.<random>.home.livinity.io"
-            echo "  (Public DNS + LE wildcard cert; works on all Apple devices)"
+            # Plan 104-08 — user-owned-domain banner branch. The wildcard cert
+            # covers both `livos.${LIVOS_DOMAIN}` and bare `${LIVOS_DOMAIN}`.
+            if [[ -n "${LIVOS_DOMAIN:-}" ]]; then
+                echo "  Next: open https://livos.${LIVOS_DOMAIN}/"
+                echo "        or:   https://${LIVOS_DOMAIN}/"
+                echo "  DNS A-record: ${LIVOS_DOMAIN} → ${host_ip} (created via Cloudflare API)"
+                echo "  TLS: Let's Encrypt DNS-01 wildcard (no Server5 in the data plane)"
+            else
+                echo "  Next: open https://<user>.<random>.home.livinity.io"
+                echo "  (Public DNS + LE wildcard cert; works on all Apple devices)"
+            fi
+            # CGNAT advisory — repeats the warning from detect_cgnat if it fired,
+            # so the operator sees it even if they scrolled past the install log.
+            if [[ "${CGNAT_DETECTED:-0}" == "1" ]]; then
+                echo
+                echo "  NOTE: CGNAT detected (public IP in 100.64.0.0/10)."
+                echo "  External clients (e.g. iPhone on cellular) will NOT reach"
+                echo "  this host until you have a public IP or v34 Tunnel ships."
+            fi
             ;;
     esac
     echo "================================================================"
