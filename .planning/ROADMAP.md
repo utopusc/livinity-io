@@ -617,6 +617,36 @@ Plans:
 
 ---
 
+### Phase 104: One-shot Local Install + Docker Ubuntu GUI UAT
+
+**Goal:** Make it possible for any user to install LivOS fully locally on their own machine with a single `install.sh` invocation and access the system via `<username>.livinity.local` from any LAN device — no cloud domain, no Cloudflare account, no port-forward required. The install path must be self-testable inside a GUI-enabled Ubuntu Docker container so the orchestrator can prove end-to-end correctness before shipping to real hardware.
+
+**Trigger:** Post-v33 carry-over. User wants a "local-first" install mode in parallel with the existing cloud Mini PC path. CONTEXT.md (5cd3a194) and research doc (e5864b2b — `.planning/research/local-livinity-setup.md`) are the authoritative source-of-truth for this phase.
+
+**Direction:**
+- **Single `install.sh` entry point** (mode resolution — A: `--mode local|cloud` flag, B: two scripts, C: env var — decision deferred to /gsd-plan-phase)
+- **dnsmasq + local TLD:** `address=/.livinity.local/<host-ip>` wildcard; Q3 (macOS/iOS mDNS interception) validated during planning or punted to `.livos.home` fallback
+- **Caddy `tls internal` named-CA:** `LivOS Local CA` PKI block + wildcard `*.livinity.local` virtual host pointing at livinityd `:8080`; CA root cert served at `http://<host>:80/api/local/ca.crt` for one-click trust
+- **Mode persistence:** Redis `livos:domain:local_mode=true` so livinityd boot path skips ACME / Cloudflare DNS challenge
+- **Docker UAT GO/NO-GO gate:** `docker/local-uat/` with Ubuntu 24.04 + systemd-in-docker + Xvfb + fluxbox + x11vnc + noVNC bridge; Claude drives a browser via Chrome DevTools MCP against `http://localhost:6080`, takes screenshot of working `https://bruce.livinity.local` UI, verifies dnsmasq + Caddy + livinityd stack healthy — all without touching the real Mini PC
+- **Enrollment wizard UI:** Settings → Local Access tab with QR code + per-platform trust instructions (LocalSetupWizard.tsx, QrCodeStep.tsx, PlatformInstructions.tsx)
+- **Cloud-mode regression test:** `install.sh --mode cloud` reproduces existing Mini PC behavior byte-for-byte against a second container; CI gate after every install.sh change
+
+**Sacred:** `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED.
+
+**Depends on:** Phase 103 (Master Chrome streaming + single-MCP shipped). Cloud Mini PC deploy at `dab261cc` must keep working byte-for-byte — `D-104-NO-PROD-IMPACT` locked decision.
+
+**Status:** CONTEXT.md committed 2026-05-11 (`5cd3a194`). Ready for /gsd-plan-phase 104.
+
+**Plans:** TBD (gsd-planner produces; CONTEXT.md proposes 6-wave layout)
+
+**Non-goals (HARD):**
+- Must NOT break existing cloud `<username>.livinity.io` deploy path on Mini PC
+- Must NOT touch sacred `sdk-agent-runner.ts` SHA
+- Remote access from outside the LAN is OUT OF SCOPE — Tailscale/WireGuard layered on top later by users who want that
+
+---
+
 ## Coverage
 
 All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-LOOP/RELIAB/BROKER-CARRY/MEM/MARKET) mapped to phases 64-76. 100% coverage. See REQUIREMENTS.md Traceability table (filled by phase planning).
