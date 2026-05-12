@@ -394,10 +394,61 @@ else
     fail "dist sync should run AFTER liv build (build=$build_line sync=$sync_line)"
 fi
 
+# ── TEST 15: 104-13 — pnpm block-exotic-subdeps .npmrc helper ───────────────
+# Plan 104-13 adds `_dld_write_pnpm_npmrc` to allow baileys → libsignal
+# git-repository subdep on pnpm 11+. Helper must:
+#   (a) be defined,
+#   (b) target $_DLD_LIVOS_DIR/.npmrc,
+#   (c) write the literal `block-exotic-subdeps=false` directive,
+#   (d) be idempotent (re-run no-op when directive already present),
+#   (e) be called in deploy_livinityd AFTER _dld_clone_source and BEFORE
+#       _dld_build_packages so pnpm sees the file at install time.
+info "TEST 15: 104-13 — _dld_write_pnpm_npmrc helper"
+
+if grep -qE '^_dld_write_pnpm_npmrc\(\)' "$DEPLOY_SH"; then
+    pass "_dld_write_pnpm_npmrc() function defined"
+else
+    fail "_dld_write_pnpm_npmrc() function NOT found"
+fi
+
+# Helper body must write `block-exotic-subdeps=false` literal
+if grep -qE '^block-exotic-subdeps=false' "$DEPLOY_SH"; then
+    pass "block-exotic-subdeps=false literal present in deploy-livinityd.sh"
+else
+    fail "block-exotic-subdeps=false literal NOT found"
+fi
+
+# Helper must target .npmrc under _DLD_LIVOS_DIR
+if grep -qE 'npmrc=.*_DLD_LIVOS_DIR.*\.npmrc|_DLD_LIVOS_DIR.*\.npmrc' "$DEPLOY_SH"; then
+    pass "_dld_write_pnpm_npmrc targets .npmrc under _DLD_LIVOS_DIR"
+else
+    fail "_dld_write_pnpm_npmrc should target \$_DLD_LIVOS_DIR/.npmrc"
+fi
+
+# Idempotency: helper greps for existing directive before appending
+if grep -qE 'grep -q "\^block-exotic-subdeps='"'"'?=|grep -q .\^block-exotic-subdeps=' "$DEPLOY_SH"; then
+    pass "_dld_write_pnpm_npmrc idempotent (grep -q ^block-exotic-subdeps= guard)"
+else
+    fail "_dld_write_pnpm_npmrc should be idempotent (grep -q for existing directive)"
+fi
+
+# Call order: AFTER _dld_clone_source, BEFORE _dld_build_packages.
+# Reuse same awk-based extraction pattern as TEST 14.
+order_body_13=$(awk '/^deploy_livinityd\(\)/,/^}/' "$DEPLOY_SH")
+clone_line=$(echo "$order_body_13" | grep -n '_dld_clone_source' | head -1 | cut -d: -f1)
+npmrc_line=$(echo "$order_body_13" | grep -n '_dld_write_pnpm_npmrc' | head -1 | cut -d: -f1)
+build_line=$(echo "$order_body_13" | grep -n '_dld_build_packages' | head -1 | cut -d: -f1)
+if [[ -n "$clone_line" ]] && [[ -n "$npmrc_line" ]] && [[ -n "$build_line" ]] \
+   && (( clone_line < npmrc_line )) && (( npmrc_line < build_line )); then
+    pass "_dld_write_pnpm_npmrc called AFTER clone ($clone_line) and BEFORE build ($build_line) at line $npmrc_line"
+else
+    fail "_dld_write_pnpm_npmrc must be between clone and build (clone=$clone_line npmrc=$npmrc_line build=$build_line)"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "================================================================"
-echo "  Plan 104-11 test results: $pass_count PASS, $fail_count FAIL"
+echo "  Plan 104-11/12/13 test results: $pass_count PASS, $fail_count FAIL"
 echo "================================================================"
 if (( fail_count > 0 )); then
     exit 1
