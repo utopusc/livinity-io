@@ -60,14 +60,14 @@ _configure_caddy_for_cloud() {
     if [[ "$use_https" == "true" ]] && [[ "$domain" != "localhost" ]]; then
         cat > /etc/caddy/Caddyfile <<CADDYFILE
 ${domain} {
-    reverse_proxy localhost:8080
+    reverse_proxy 127.0.0.1:8080
 }
 CADDYFILE
         ok "Caddy configured: ${domain} (auto-TLS via livinityd domain module)"
     else
         cat > /etc/caddy/Caddyfile <<'CADDYFILE'
 :80 {
-    reverse_proxy localhost:8080
+    reverse_proxy 127.0.0.1:8080
 }
 CADDYFILE
         ok "Caddy configured: :80 -> localhost:8080 (HTTP only; cloud-mode bootstrap)"
