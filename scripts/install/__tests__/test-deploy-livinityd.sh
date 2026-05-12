@@ -868,10 +868,83 @@ else
     fail "ydotoold.service heredoc NOT found (105-02 G2 regression)"
 fi
 
+# ── Plan 105-05 regression tests (Bug #1-#5 UAT back-port) ──────────────────
+# Five assertions covering each in-scope bug discovered during Phase 105
+# live UAT walk on mainserver 154.53.56.75 (Ubuntu 24.04.3 + pnpm 11.1.1).
+# See UAT-CHECKLIST.md "Bugs discovered during UAT" section for full
+# root-cause + reproduction details.
+
+# TEST 34: Bug #1 — pnpm install uses --config.dangerously-allow-all-builds=true
+# pnpm 11+ exits non-zero on ERR_PNPM_IGNORED_BUILDS; Mini PC's older pnpm doesn't.
+# Both --frozen-lockfile and fallback paths need the flag.
+info "TEST 34 (Bug #1): pnpm install uses --config.dangerously-allow-all-builds=true"
+
+pnpm_lines=$(grep -cE 'pnpm install --config\.dangerously-allow-all-builds=true' "$DEPLOY_SH" || echo 0)
+if (( pnpm_lines >= 3 )); then
+    pass "pnpm install passes --config.dangerously-allow-all-builds=true on all 3 invocations (105-05 Bug #1)"
+else
+    fail "pnpm install MISSING --config.dangerously-allow-all-builds=true on some/all invocations (found $pnpm_lines, expected ≥3)"
+fi
+
+# TEST 35: Bug #2 — _dld_update_gallery_cache find pipeline tolerates missing dir
+# Under set -euo pipefail, `find /nonexistent | head -1` kills script silently
+# at the local-var assignment. Append `|| true` to make missing-dir tolerable.
+info "TEST 35 (Bug #2): gallery_cache_dir find pipeline has || true"
+
+if grep -qE "gallery_cache_dir=\\\$\\(find.*-name '\\*livinity-apps\\*'.*\\| head -1\\) \\|\\| true" "$DEPLOY_SH"; then
+    pass "gallery_cache_dir find pipeline tolerates missing /opt/livos/data/app-stores/ via || true (105-05 Bug #2)"
+else
+    fail "gallery_cache_dir find pipeline MISSING || true tail — set -euo pipefail will kill script on fresh VPS (105-05 Bug #2 regression)"
+fi
+
+# TEST 36: Bug #3 — _dld_fix_permissions chmods source/cli.ts to +x
+# After rsync, cli.ts inherits 0600 (no +x). systemd ExecStart invokes
+# ./source/cli.ts via shebang → Permission denied without +x.
+info "TEST 36 (Bug #3): _dld_fix_permissions chmods source/cli.ts +x"
+
+if awk '/^_dld_fix_permissions\(\) \{/,/^\}/' "$DEPLOY_SH" | grep -qE 'chmod \+x .*packages/livinityd/source/cli\.ts'; then
+    pass "_dld_fix_permissions chmods cli.ts +x (105-05 Bug #3)"
+else
+    fail "_dld_fix_permissions does NOT chmod cli.ts +x — livos.service will fail with Permission denied (105-05 Bug #3 regression)"
+fi
+
+# TEST 37: Bug #4 — _dld_update_caddy_to_livinityd chmods Caddyfile 0644
+# Default root umask writes Caddyfile 0600; caddy user can't read.
+# (Cannot use awk function-body extraction here — Caddyfile heredocs contain
+#  literal `}` that prematurely end awk's /^\}/ range. Use direct grep.)
+info "TEST 37 (Bug #4): _dld_update_caddy_to_livinityd chmods Caddyfile 0644"
+
+if grep -qE 'chmod 0644 "\$_DLD_CADDYFILE"' "$DEPLOY_SH"; then
+    pass "_dld_update_caddy_to_livinityd chmods Caddyfile 0644 (105-05 Bug #4)"
+else
+    fail "_dld_update_caddy_to_livinityd does NOT chmod Caddyfile 0644 — caddy user will get permission denied (105-05 Bug #4 regression)"
+fi
+
+# TEST 38: Bug #5 — livos.service ExecStart uses npx tsx + --data-directory + --port
+# The previous `pnpm --filter livinityd start` runs cli.ts WITHOUT args; livinityd
+# constructor crashes at path.resolve(undefined). Must match Mini PC pattern.
+info "TEST 38 (Bug #5): livos.service ExecStart uses npx tsx with --data-directory + --port"
+
+if awk '/^_dld_write_systemd_unit\(\) \{/,/^\}/' "$DEPLOY_SH" | grep -qE 'ExecStart=/usr/bin/npx tsx .*cli\.ts --data-directory .* --port'; then
+    pass "livos.service ExecStart matches Mini PC pattern (npx tsx + --data-directory + --port) (105-05 Bug #5)"
+else
+    fail "livos.service ExecStart does NOT match Mini PC pattern — livinityd will crash at path.resolve(undefined) (105-05 Bug #5 regression)"
+fi
+
+# Negative: pnpm --filter livinityd start MUST NOT appear in unit-write helper
+# (the old broken pattern). Catches any partial revert.
+info "TEST 38b (Bug #5 negative): no 'pnpm --filter livinityd start' in livos.service"
+
+if awk '/^_dld_write_systemd_unit\(\) \{/,/^\}/' "$DEPLOY_SH" | grep -qE 'ExecStart=.*pnpm --filter livinityd start'; then
+    fail "livos.service still uses 'pnpm --filter livinityd start' — this is the buggy pattern from Phase 104-11 that 105-05 Bug #5 fixes"
+else
+    pass "livos.service does not use buggy 'pnpm --filter livinityd start' pattern (105-05 Bug #5 negative)"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "================================================================"
-echo "  Plan 104-11/12/13 + 105-01/02/03 test results: $pass_count PASS, $fail_count FAIL"
+echo "  Plan 104-11/12/13 + 105-01/02/03/05 test results: $pass_count PASS, $fail_count FAIL"
 echo "================================================================"
 if (( fail_count > 0 )); then
     exit 1
