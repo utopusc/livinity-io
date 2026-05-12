@@ -116,130 +116,48 @@ export function MasterChromeLogin() {
 	// Pitfall 4 (103-RESEARCH.md) — only initiate the noVNC connection when
 	// wsUrl is actually known. Pass `undefined` to the hook otherwise; the
 	// hook idles + returns 'idle' status with no RFB construction attempt.
+	//
+	// Phase 103.1-10 — flip `viewOnly: false`. WebApp WebApps need viewOnly:true
+	// because their x11vnc captures via `-id <wid>` and input via XTestFake
+	// re-routes to whatever has X11 focus (wrong wid on multi-stream). Master
+	// Chrome's x11vnc captures the WHOLE display (`-display :N`) and there is
+	// EXACTLY ONE Chrome window on that display, so RFB-native input from the
+	// noVNC viewer goes through x11vnc → XTestFakeKey/MotionEvent → lands on
+	// the Chrome window unambiguously. Live UAT 2026-05-11: raw xdotool on the
+	// master display delivered input correctly (md5 of screenshot changed
+	// before/after every action), but tRPC-driven dispatch produced no visible
+	// effect — the dispatch round-trip latency / coord-conversion / xdotool
+	// chained semantics broke something we couldn't pin down. RFB-native input
+	// bypasses all of that.
 	const vnc = useWebAppVnc(running && wsUrl !== undefined ? wsUrl : undefined, {
-		viewOnly: true,
+		viewOnly: false,
 	})
 
-	// Printable-char keydown batching: accumulate single-char keypresses into
-	// printableBuffer, flush via inputTypeMut after 250 ms idle OR when a
-	// non-printable key (e.g. Enter) arrives. Same approach as keeping
-	// xdotool "type" batches coherent without spamming one mutation per
-	// character.
-	const printableBuffer = useRef('')
-	const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	// Phase 103.1-10 — JS-driven input dispatch removed. noVNC RFB protocol
+	// (viewOnly:false) carries pointer + key + wheel events straight through
+	// to x11vnc → X server → Chrome. The earlier printableBuffer / flushType /
+	// toFB infrastructure became dead code; we keep the imports + tRPC
+	// mutations declared above for future programmatic dispatch (e.g. an
+	// agent driving master Chrome via chromeMaster.input.* routes).
 
-	const flushType = useCallback(() => {
-		const text = printableBuffer.current
-		printableBuffer.current = ''
-		if (flushTimerRef.current) {
-			clearTimeout(flushTimerRef.current)
-			flushTimerRef.current = null
-		}
-		if (text.length > 0) {
-			inputTypeMut.mutate({text})
-		}
-	}, [inputTypeMut])
-
-	const toFB = useCallback(
-		(clientX: number, clientY: number, rect: DOMRect): {x: number; y: number} | null => {
-			if (rect.width <= 0 || rect.height <= 0) return null
-			const x = Math.round((clientX - rect.left) * (FB_WIDTH / rect.width))
-			const y = Math.round((clientY - rect.top) * (FB_HEIGHT / rect.height))
-			if (!Number.isFinite(x) || !Number.isFinite(y)) return null
-			return {
-				x: Math.max(0, Math.min(FB_WIDTH - 1, x)),
-				y: Math.max(0, Math.min(FB_HEIGHT - 1, y)),
-			}
-		},
-		[],
-	)
-
-	// Attach DOM listeners to the noVNC container only when the viewer is
-	// mounted (running + wsUrl). The container ref comes from the hook;
-	// React mounts the <div ref={vnc.containerRef}> below.
+	// Phase 103.1-10 — viewOnly:false above hands all click/key/wheel events
+	// straight to the noVNC RFB protocol. No JS event listeners required:
+	// noVNC's internal RFB pointer/key encoders run on the connected stream's
+	// WebSocket. We keep onContextMenu to suppress the browser-native context
+	// menu so right-click reaches the RFB layer as button 3 rather than
+	// opening Chrome-host context menu.
 	useEffect(() => {
 		const el = vnc.containerRef.current
 		if (!el || !running || wsUrl === undefined) return
-
-		const onMouseDown = (e: MouseEvent) => {
-			const fb = toFB(e.clientX, e.clientY, el.getBoundingClientRect())
-			if (!fb) return
-			const button = e.button === 1 ? 2 : e.button === 2 ? 3 : 1
-			inputClickMut.mutate({x: fb.x, y: fb.y, button, kind: 'mousedown'})
-		}
-		const onMouseUp = (e: MouseEvent) => {
-			const fb = toFB(e.clientX, e.clientY, el.getBoundingClientRect())
-			if (!fb) return
-			const button = e.button === 1 ? 2 : e.button === 2 ? 3 : 1
-			inputClickMut.mutate({x: fb.x, y: fb.y, button, kind: 'mouseup'})
-		}
 		const onContextMenu = (e: MouseEvent) => {
-			// Suppress browser-native context menu — right-click routes
-			// through onMouseDown/Up as button=3.
 			e.preventDefault()
 		}
-		const onWheel = (e: WheelEvent) => {
-			e.preventDefault()
-			const fb = toFB(e.clientX, e.clientY, el.getBoundingClientRect())
-			if (!fb) return
-			const direction =
-				e.deltaY > 0 ? 'down' : e.deltaY < 0 ? 'up' : e.deltaX > 0 ? 'right' : 'left'
-			const magnitude = Math.abs(e.deltaY || e.deltaX)
-			const clicks = Math.max(1, Math.min(50, Math.round(magnitude / 100) || 1))
-			inputScrollMut.mutate({x: fb.x, y: fb.y, direction, clicks})
-		}
-		const onKeyDown = (e: KeyboardEvent) => {
-			const mapped = KEYSYM_MAP[e.key]
-			if (mapped !== undefined) {
-				// Flush any pending printable batch before the special key so
-				// xdotool sees the type sequence in event order.
-				flushType()
-				inputKeyMut.mutate({key: mapped, kind: 'keydown'})
-				e.preventDefault()
-				return
-			}
-			// Modifier-bearing letter chord (e.g. Ctrl+L). Route via key with
-			// a `mods+key` xdotool keysym; do NOT batch into type.
-			if ((e.ctrlKey || e.altKey || e.metaKey) && e.key.length === 1) {
-				flushType()
-				const mods: string[] = []
-				if (e.ctrlKey) mods.push('ctrl')
-				if (e.shiftKey) mods.push('shift')
-				if (e.altKey) mods.push('alt')
-				if (e.metaKey) mods.push('super')
-				const keysym = `${mods.join('+')}+${e.key.toLowerCase()}`
-				inputKeyMut.mutate({key: keysym, kind: 'keydown'})
-				e.preventDefault()
-				return
-			}
-			// Plain single-char printable — batch into the type buffer.
-			if (e.key.length === 1) {
-				printableBuffer.current += e.key
-				if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
-				flushTimerRef.current = setTimeout(flushType, 250)
-				e.preventDefault()
-			}
-		}
-
-		el.addEventListener('mousedown', onMouseDown)
-		el.addEventListener('mouseup', onMouseUp)
 		el.addEventListener('contextmenu', onContextMenu)
-		el.addEventListener('wheel', onWheel, {passive: false})
-		el.addEventListener('keydown', onKeyDown)
 		el.setAttribute('tabindex', '0')
-
 		return () => {
-			el.removeEventListener('mousedown', onMouseDown)
-			el.removeEventListener('mouseup', onMouseUp)
 			el.removeEventListener('contextmenu', onContextMenu)
-			el.removeEventListener('wheel', onWheel)
-			el.removeEventListener('keydown', onKeyDown)
-			if (flushTimerRef.current) {
-				clearTimeout(flushTimerRef.current)
-				flushTimerRef.current = null
-			}
 		}
-	}, [vnc.containerRef, running, wsUrl, inputClickMut, inputKeyMut, inputScrollMut, toFB, flushType])
+	}, [vnc.containerRef, running, wsUrl])
 
 	const onOpenMasterClick = () => {
 		startMut.mutate()
