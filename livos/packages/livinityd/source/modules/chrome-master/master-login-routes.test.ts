@@ -213,6 +213,9 @@ function _bareInjectables() {
 	const fluxboxSpawnFn = vi.fn(async (_opts: never) => fluxbox as never)
 	// Phase 103.1-5 — no-op dialog dismissal (real one polls xdotool which isn't on the test host)
 	const dismissProfileDialogFn = vi.fn(async (_display: string) => undefined)
+	// Phase 103.1-7 — stub resolves to a fake Chrome wid so input routes can
+	// exercise the explicit-wid path. Tests can override per-case.
+	const resolveMasterChromeWidFn = vi.fn(async (_display: string) => 0xdeadbeef)
 	const dispatch = makeDispatchMocks()
 	// Phase 103.1 — unlinkFn defaults to a no-op that pretends ENOENT (no
 	// lock files exist). Tests can override to assert specific paths.
@@ -242,6 +245,7 @@ function _bareInjectables() {
 		vncSpawnFn,
 		fluxboxSpawnFn,
 		dismissProfileDialogFn,
+		resolveMasterChromeWidFn,
 		// dispatchers
 		dispatchPointerFn: dispatch.dispatchPointerFn,
 		dispatchKeyFn: dispatch.dispatchKeyFn,
@@ -763,7 +767,7 @@ describe('103-01 chromeMaster tRPC router — Xvfb streaming pipeline', () => {
 		expect(inj.displayAllocator.release).toHaveBeenCalledWith(42)
 	})
 
-	test('Test 16: input.click admin dispatches dispatchPointer(0, x, y, btn, kind, display)', async () => {
+	test('Test 16 (103.1-7): input.click resolves the master Chrome wid and dispatches with explicit wid (WebApp parity)', async () => {
 		const inj = makeFull103Injectables()
 		const r = createChromeMasterRouter(inj as never)
 		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
@@ -773,11 +777,32 @@ describe('103-01 chromeMaster tRPC router — Xvfb streaming pipeline', () => {
 			caller.input.click({x: 10, y: 20, button: 1, kind: 'click'}),
 		).rejects.toMatchObject({code: 'PRECONDITION_FAILED'})
 
-		// Spawn master, then dispatch
+		// Spawn master, then dispatch — should resolve wid and pass it to the dispatcher
 		await caller.startLogin()
 		await caller.input.click({x: 100, y: 200, button: 1, kind: 'click'})
 
-		expect(inj.dispatchPointerFn).toHaveBeenCalledWith(0, 100, 200, 1, 'click', ':42')
+		// resolveMasterChromeWidFn called with the master display
+		expect(inj.resolveMasterChromeWidFn).toHaveBeenCalledWith(':42')
+		// dispatchPointer called with the resolved wid (0xdeadbeef from stub)
+		expect(inj.dispatchPointerFn).toHaveBeenCalledWith(
+			0xdeadbeef,
+			100,
+			200,
+			1,
+			'click',
+			':42',
+		)
+	})
+
+	test('Test 16b (103.1-7): if resolveMasterChromeWidFn returns undefined, dispatch falls back to wid=0 (display-mode)', async () => {
+		const inj = makeFull103Injectables()
+		inj.resolveMasterChromeWidFn = vi.fn(async (_display: string) => undefined)
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await caller.startLogin()
+		await caller.input.click({x: 1, y: 2, button: 1, kind: 'click'})
+		// wid=0 → dispatcher uses its display-mode fallback (existing 102 path)
+		expect(inj.dispatchPointerFn).toHaveBeenCalledWith(0, 1, 2, 1, 'click', ':42')
 	})
 
 	test('Test 17: input.click zod schema rejects NaN x / out-of-range button / bad kind', async () => {
@@ -842,19 +867,19 @@ describe('103-01 chromeMaster tRPC router — Xvfb streaming pipeline', () => {
 		await expect(caller.startLogin()).rejects.toMatchObject({code: 'INTERNAL_SERVER_ERROR'})
 	})
 
-	test('Test 21: input.key / input.type / input.scroll dispatch correctly with display arg', async () => {
+	test('Test 21 (103.1-7): input.key / input.type / input.scroll resolve wid and dispatch with explicit wid', async () => {
 		const inj = makeFull103Injectables()
 		const r = createChromeMasterRouter(inj as never)
 		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
 		await caller.startLogin()
 
 		await caller.input.key({key: 'Return', kind: 'key'})
-		expect(inj.dispatchKeyFn).toHaveBeenCalledWith(0, 'Return', 'key', ':42')
+		expect(inj.dispatchKeyFn).toHaveBeenCalledWith(0xdeadbeef, 'Return', 'key', ':42')
 
 		await caller.input.type({text: 'hello@example.com'})
-		expect(inj.dispatchTypeFn).toHaveBeenCalledWith(0, 'hello@example.com', ':42')
+		expect(inj.dispatchTypeFn).toHaveBeenCalledWith(0xdeadbeef, 'hello@example.com', ':42')
 
 		await caller.input.scroll({x: 50, y: 60, direction: 'down', clicks: 3})
-		expect(inj.dispatchScrollFn).toHaveBeenCalledWith(0, 50, 60, 'down', 3, ':42')
+		expect(inj.dispatchScrollFn).toHaveBeenCalledWith(0xdeadbeef, 50, 60, 'down', 3, ':42')
 	})
 })
