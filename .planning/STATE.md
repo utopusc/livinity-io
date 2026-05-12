@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v31.0
-milestone_name: Liv Agent Reborn
-status: unknown
-last_updated: "2026-05-12T19:28:52.012Z"
+milestone: v34.0
+milestone_name: Bootstrap Polish + First-Run UX
+status: code-complete-pending-mainserver-uat
+last_updated: "2026-05-12T22:30:00.000Z"
 progress:
-  total_phases: 55
-  completed_phases: 26
-  total_plans: 217
-  completed_plans: 210
-  percent: 97
+  total_phases: 5
+  completed_phases: 0   # Phase 106 is code-complete pending mainserver UAT walk (Task 8 checkpoint:human-verify) — flips to 1 after operator approval
+  total_plans: 1
+  completed_plans: 1    # 106-01 source-side complete (7 source commits + SUMMARY); UAT carry-forward
+  percent: 50           # 1 of 2 SDLC gates closed (code-complete); UAT-validation gate still open
 ---
 
 # Project State
@@ -25,10 +25,29 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 105 (deploy-livinityd 1:1 Mini-PC update.sh Port) — EXECUTING
-Plan: 1 of 4
+Phase: 106 (deploy-livinityd Bootstrap-Layer Hotfix Back-Port) — CODE-COMPLETE 2026-05-12 (7 source commits + SUMMARY commit pending); mainserver UAT (Task 8 checkpoint:human-verify) deferred to operator
+Plan: 1 of 1 (complete; SUMMARY at `.planning/phases/106-deploy-livinityd-bootstrap-layer-hotfix-back-port/106-01-SUMMARY.md`)
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
-Milestone: v33.0 (active)
+Milestone: v34.0 (active)
+
+## 106-01 Status (2026-05-12) — Bootstrap-Layer Hotfix Back-Port CODE-COMPLETE (190 PASS combined; 7 source commits + SUMMARY; sacred SHA preserved 7/7; mainserver UAT carry-forward)
+
+- **BACK-PORT** (single plan in Phase 106, 8 tasks): closes the gap discovered in Phase 105's 2× UAT on mainserver `154.53.56.75` where 6 bootstrap-layer bugs surfaced AFTER the canonical 1:1 update.sh port shipped. All 6 fixes back-ported to repo so a fresh `bash install.sh --mode hybrid ...` on Ubuntu 24.04 is byte-equivalent to the manually-hotfixed mainserver state. Seven source commits (`c3f13dd2..262e28f4`) + this SUMMARY commit:
+  1. `c3f13dd2` Bug #7 — `_dld_install_system_packages` adds `mender-client4` (WARN-not-FAIL; silences `spawn mender ENOENT` log spam from livinityd update-check)
+  2. `f31dc494` Bug #8 — `_dld_install_system_packages` adds `samba samba-common-bin` (main apt array — required, not optional; livinityd Files module needs smbpasswd + /etc/samba/smb.conf)
+  3. `ba6e084d` Bug #9 — NEW helper `_dld_install_google_chrome` + pipeline wire (FATAL bug — WebApp Launcher blocker; livinityd's Streaming module spawned `google-chrome` → ENOENT → flap; signed-keyring pattern, /usr/share/keyrings/google-chrome.gpg, WARN-not-FAIL; wired between streaming_packages and setup_docker_images)
+  4. `3fd11273` Bug #10 — NEW helper `_dld_create_desktop_user` + new constants `_DLD_DESKTOP_USER:-bruce` / `_DLD_DESKTOP_UID:-1000` + pipeline wire (`sudo: unknown user bruce` fix; idempotent useradd + usermod -aG sudo[,docker] + /etc/sudoers.d/99-bruce NOPASSWD:ALL drop-in validated by visudo -cf; existing `_DLD_LIVOS_USER:-root` PRESERVED — different purpose: file-tree owner vs. GUI/sudo human login; D-104-NO-PROD-IMPACT preserved)
+  5. `1bc488a9` Bug #11 — `_dld_generate_jwt_secret` rewrite: `openssl rand -hex 32 | tr -d '\n'` (exactly 64 hex chars, no terminator) matches `validateSecret` regex `/^[0-9a-fA-F]+$/ AND length === 64` in `livos/packages/livinityd/source/modules/jwt.ts`. REUSE path detects old base64 format, backs up as `.pre-106.bak`, rotates to hex (forced re-login is better than continued crash-loop). Post-write self-check guards fs glitches.
+  6. `4205b902` Bug #12 — `livos/packages/livinityd/source/modules/user/user.ts:exists()` returns `Boolean(user?.hashedPassword)` instead of `user !== undefined`. FileStore seeds `user: {}` (empty hash) on first run → old check false-positived → fresh-install register flow rejected with "user is already registered". All 5 callers (register guard, login redirect, startup migrations, tRPC procedures) ALREADY want hashedPassword-present semantics per plan §3.
+  7. `262e28f4` +22 regression assertions in `scripts/install/__tests__/test-deploy-livinityd.sh` (126 → 148 PASS). Breakdown: TEST_BUG_7 (1 assert), TEST_BUG_8 (1), TEST_BUG_9 (4 incl. pipeline-order check), TEST_BUG_10 (8 incl. D-104-NO-PROD-IMPACT preservation), TEST_BUG_11 (5 incl. negative-grep on old base64 form), TEST_BUG_12 (3). Combined regression smoke: deploy-livinityd 148 + mode-hybrid-args 18 + mode-tunnel-args 24 = **190 PASS, 0 FAIL** (up from 168 pre-106).
+  8. `(this commit)` 106-01-SUMMARY.md + STATE.md + ROADMAP.md updates (single commit per `state` handler protocol).
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 7 source commits (`git hash-object liv/packages/core/src/sdk-agent-runner.ts` re-checked after each commit; pre-commit hook gated every commit; no `--no-verify` bypasses).
+- D-104-NO-PROD-IMPACT preserved: `git diff c3f13dd2~1..262e28f4 -- livos/install.sh livos/update.sh | wc -l` → 0. Mini PC's source-of-truth scripts UNTOUCHED.
+- D-104-RELAY-ZERO-DATA-PLANE preserved: `grep -E '45\.137\.194\.10[23]|livinity\.io|nexus\.livinity|relay\.livinity|server5' scripts/install/deploy-livinityd.sh` → exit 1 (no matches). No new Server5/livinity.io control-plane traffic added by Phase 106.
+- D-106-NEW-CONSTANT-PATTERN: Bug #10 introduced a NEW constant `_DLD_DESKTOP_USER` rather than reusing existing `_DLD_LIVOS_USER`. Rationale: they serve different purposes — `_DLD_LIVOS_USER` owns `/opt/livos/` + `/opt/liv/` trees (defaults `root` to match Mini PC at first-install per update.sh:619-620); `_DLD_DESKTOP_USER` is the human-friendly GUI/sudo login (defaults `bruce`). Conflating them would break either Mini PC ownership semantics OR the new desktop-user identity. Test gate (TEST_BUG_10 D-104-NO-PROD-IMPACT assertion) verifies `_DLD_LIVOS_USER:-root` default preserved.
+- D-106-WARN-NOT-FAIL: Bugs #7 (mender) and #9 (chrome) accept install failure as WARN-not-FAIL. Rationale: hard-fail would brick deploys on minimal containers / universe-less Ubuntu derivatives. Bug #7 fixes verbose log spam (non-critical); Bug #9 hard-fails Streaming module if chrome absent but the deploy completes so operator can debug ENOENT. Bug #8 (samba) and #10 (sudoers) and #11 (JWT format) are required and use hard-fail (or `fail` on JWT post-write self-check).
+- Deviations: ONE Rule 1 deviation (Task 6 / Bug #12). `npx vitest run source/modules/user/user.integration.test.ts` failed in the Windows worktree with `Cannot find package '...@anthropic-ai/claude-agent-sdk/index.js'` imported from `@liv/core/dist/sdk-agent-runner.js` — pre-existing pnpm workspace dependency-resolution issue in the local test rig, NOT caused by this change. Out of scope per Rule SCOPE-BOUNDARY (only auto-fix issues DIRECTLY caused by current task's changes). Bug #12 fix is statically test-safe per plan §4 (empty store → `Boolean(undefined) === false`; post-register → `Boolean(hash) === true`). Carry-forward to a v34.x test-hygiene plan — does not block plan completion.
+- Carry-forward: **mainserver `154.53.56.75` re-install UAT (Task 8 checkpoint:human-verify) is the BINDING GATE for closing Phase 106.** Operator-walked. Procedure documented in `106-01-SUMMARY.md:Mainserver UAT Carry-Forward` section: SSH to mainserver, `git pull`, `bash install.sh --mode hybrid --domain test.livinity.live --cf-token X --cf-zone-id Y`, then verify (i) all 4 systemd services active, (ii) `NRestarts=0`, (iii) `journalctl -u livos.service -n 50 | grep -E "spawn ENOENT|Invalid JWT|user is already registered"` → exit 1, (iv) `id bruce` shows uid 1000 + sudo + docker groups, (v) `/etc/sudoers.d/99-bruce` exists mode 0440, (vi) chrome+samba+smbpasswd on PATH, (vii) JWT secret is 64 hex chars no newline, (viii) browser `https://test.livinity.live` shows REGISTER screen (NOT login — Bug #12 unblocked) and register succeeds. Until that PASSes, status is `code-complete-pending-mainserver-uat`, not `shipped`.
 
 ## 104-13 Status (2026-05-12) — pnpm blockExoticSubdeps hotfix SHIPPED (71/71 host-side bash test PASS; unblocks baileys → libsignal git-repository subdep on pnpm 11+)
 
@@ -427,7 +446,7 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 105 (deploy-livinityd 1:1 Mini-PC update.sh Port) — 4 plans — 2026-05-12T19:22:35.353Z
+**Planned Phase:** 106 (deploy-livinityd Bootstrap-Layer Hotfix Back-Port) — 1 plans — 2026-05-12T22:20:46.839Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
