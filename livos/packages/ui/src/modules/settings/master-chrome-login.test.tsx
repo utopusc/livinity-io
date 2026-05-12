@@ -158,10 +158,16 @@ describe('MasterChromeLogin — Phase 103-02 viewer mount gating (REQ-103-A2)', 
 		expect(ternaryGate || ampGate).toBe(true)
 	})
 
-	it('viewer hook called with viewOnly: true', () => {
-		// Hook contract: viewOnly:true disables RFB input forwarding so DOM
-		// listeners on the container drive chromeMaster.input.* instead.
-		expect(SRC).toMatch(/useWebAppVnc\([^)]*viewOnly:\s*true/)
+	it('viewer hook called with viewOnly: false (Phase 103.1-10 RFB-native input)', () => {
+		// Hook contract flipped in 103.1-10: noVNC sends RFB pointer/key
+		// events directly to x11vnc → XTestFake → Chrome. The earlier
+		// viewOnly:true + tRPC dispatch path produced no visible effect on
+		// Chrome despite xdotool returning success (root cause never pinned
+		// down — coord conversion vs Chrome XSendEvent filter vs dispatch
+		// race). Master Chrome's x11vnc captures the WHOLE display so RFB
+		// input is unambiguous: there is exactly ONE Chrome window on the
+		// display, no per-WebApp wid routing needed.
+		expect(SRC).toMatch(/useWebAppVnc\([^)]*viewOnly:\s*false/)
 	})
 })
 
@@ -203,21 +209,29 @@ describe('MasterChromeLogin — Phase 103-02 input dispatch wiring (REQ-103-A3)'
 		expect(SRC).toMatch(/trpcReact\.chromeMaster\.input\.scroll\.useMutation/)
 	})
 
-	it('Test 5 — mousedown handler dispatches inputClickMut.mutate({x, y, button, kind})', () => {
-		// Handler shape per plan action step 5:
-		//   inputClickMut.mutate({x: fb.x, y: fb.y, button, kind: 'mousedown'})
-		expect(SRC).toMatch(/inputClickMut\.mutate\(\s*\{[^}]*x:\s*fb\.x[^}]*y:\s*fb\.y[^}]*button[^}]*kind:\s*['"]mousedown['"]/)
-		expect(SRC).toMatch(/inputClickMut\.mutate\(\s*\{[^}]*kind:\s*['"]mouseup['"]/)
-		// Button mapping mirrors webapp-stream-window.tsx: e.button===0 → 1
-		expect(SRC).toMatch(/e\.button\s*===\s*1\s*\?\s*2\s*:\s*e\.button\s*===\s*2\s*\?\s*3\s*:\s*1/)
+	it('Test 5 (103.1-10): mouse dispatch is RFB-native — no JS mousedown/mouseup listeners hook into chromeMaster.input.click', () => {
+		// 103.1-10 switched to viewOnly:false → noVNC RFB protocol delivers
+		// pointer events directly. The earlier JS listener+tRPC dispatch
+		// produced no visible effect; root cause not pinned down (likely
+		// coord conversion or Chrome's XSendEvent filter). The source MUST
+		// NOT add mousedown/mouseup listeners that mutate inputClickMut —
+		// that would double-dispatch and produce confusing race conditions.
+		const hasMousedownDispatch = /addEventListener\(['"]mousedown['"][^)]*inputClickMut/.test(
+			SRC,
+		)
+		expect(hasMousedownDispatch).toBe(false)
+		const hasMouseupDispatch = /addEventListener\(['"]mouseup['"][^)]*inputClickMut/.test(
+			SRC,
+		)
+		expect(hasMouseupDispatch).toBe(false)
 	})
 
-	it('Test 6 — wheel handler dispatches inputScrollMut.mutate with direction + clicks', () => {
-		// Plan step 5: direction='down' if deltaY > 0, clicks bounded [1, 50]
-		expect(SRC).toMatch(/inputScrollMut\.mutate\(\s*\{[^}]*direction[^}]*clicks/)
-		expect(SRC).toMatch(/deltaY\s*>\s*0\s*\?\s*['"]down['"]/)
-		// clicks bounded
-		expect(SRC).toMatch(/Math\.max\(1,\s*Math\.min\(50,/)
+	it('Test 6 (103.1-10): wheel dispatch is RFB-native — no JS wheel listener mutating inputScrollMut', () => {
+		// Same as Test 5 but for wheel events.
+		const hasWheelDispatch = /addEventListener\(['"]wheel['"][^)]*inputScrollMut/.test(
+			SRC,
+		)
+		expect(hasWheelDispatch).toBe(false)
 	})
 
 	it('Test 7a — Enter key maps to "Return" via KEYSYM_MAP', () => {
@@ -233,50 +247,49 @@ describe('MasterChromeLogin — Phase 103-02 input dispatch wiring (REQ-103-A3)'
 		expect(SRC).toMatch(/ArrowRight:\s*['"]Right['"]/)
 	})
 
-	it('Test 7b — special keys dispatch via inputKeyMut.mutate({key: mapped, kind: "keydown"})', () => {
-		expect(SRC).toMatch(/inputKeyMut\.mutate\(\s*\{[^}]*key:\s*mapped[^}]*kind:\s*['"]keydown['"]/)
+	it('Test 7b (103.1-10): key dispatch is RFB-native — no JS keydown listener mutating inputKeyMut', () => {
+		const hasKeyDispatch = /addEventListener\(['"]keydown['"][^)]*inputKeyMut/.test(
+			SRC,
+		)
+		expect(hasKeyDispatch).toBe(false)
 	})
 
-	it('Test 7c — printable chars batched into inputTypeMut.mutate({text}) with 250ms debounce', () => {
-		// Batching buffer + debounce flush:
-		//   printableBuffer.current += e.key
-		//   setTimeout(flushType, 250)
-		//   inputTypeMut.mutate({text})
-		expect(SRC).toMatch(/printableBuffer/)
-		expect(SRC).toMatch(/setTimeout\(\s*flushType\s*,\s*250/)
-		expect(SRC).toMatch(/inputTypeMut\.mutate\(\s*\{\s*text/)
-		// Single-char printable detection
-		expect(SRC).toMatch(/e\.key\.length\s*===\s*1/)
+	it('Test 7c (103.1-10): text dispatch is RFB-native — no inputTypeMut.mutate({text}) batching', () => {
+		// noVNC RFB sends individual key events; no need for an
+		// xdotool-style "type batch" via the dispatcher.
+		const hasTypeDispatch = /inputTypeMut\.mutate\(\s*\{\s*text/.test(SRC)
+		expect(hasTypeDispatch).toBe(false)
 	})
 
-	it('Test 8 — useEffect cleanup removes DOM listeners + clears flush timer', () => {
-		// Cleanup return: removeEventListener for each + clearTimeout(flushTimerRef)
-		expect(SRC).toMatch(/removeEventListener\(['"]mousedown['"]/)
-		expect(SRC).toMatch(/removeEventListener\(['"]mouseup['"]/)
-		expect(SRC).toMatch(/removeEventListener\(['"]wheel['"]/)
-		expect(SRC).toMatch(/removeEventListener\(['"]keydown['"]/)
-		expect(SRC).toMatch(/clearTimeout\(flushTimerRef/)
+	it('Test 8 (103.1-10): useEffect cleanup keeps contextmenu suppression only — RFB input handled by noVNC internally', () => {
+		// Only the contextmenu listener remains (so right-click reaches RFB
+		// as button 3 rather than opening the host browser's menu).
+		expect(SRC).toMatch(/removeEventListener\(['"]contextmenu['"]/)
+		// And no mousedown/mouseup/wheel/keydown listener teardown is needed.
+		const cleanupRemovesMousedown = /removeEventListener\(['"]mousedown['"]/.test(
+			SRC,
+		)
+		expect(cleanupRemovesMousedown).toBe(false)
 	})
 
-	it('coord math — toFB converts client coords to FB coords with width/height guard', () => {
-		// FB sizes locked to master Xvfb resolution
+	it('FB resolution constants remain pinned to master Xvfb (1280×720)', () => {
+		// Phase 103.1-10 removed the JS coord conversion path (RFB-native
+		// input handles coords inside the noVNC client). The constants are
+		// kept so backend test invariants and any future programmatic
+		// dispatch path use the same canvas size.
 		expect(SRC).toMatch(/FB_WIDTH\s*=\s*1280/)
 		expect(SRC).toMatch(/FB_HEIGHT\s*=\s*720/)
-		// rect.width<=0 guard
-		expect(SRC).toMatch(/rect\.width\s*<=\s*0/)
-		// Integer rounding
-		expect(SRC).toMatch(/Math\.round\(/)
 	})
 
-	it('input.* mutations omit the `display` argument (T-103-01-03 — derived from singleton)', () => {
-		// Plan invariant: UI never passes display in mutation payload; the
-		// backend reads currentMaster.display itself. Verify no input.*.mutate
-		// call body contains a `display:` literal.
-		const inputMutateBodies = SRC.match(/input(?:Click|Key|Type|Scroll)Mut\.mutate\(\s*\{[^}]+\}/g) ?? []
-		expect(inputMutateBodies.length).toBeGreaterThan(0)
-		for (const body of inputMutateBodies) {
-			expect(body).not.toMatch(/\bdisplay\s*:/)
-		}
+	it('Phase 103.1-10: input.* mutations remain declared (for future programmatic dispatch) but UI itself does not call them from event handlers', () => {
+		// The four mutations are still declared at the top of the component
+		// so tests asserting useMutation wiring (above) pass.
+		expect(SRC).toMatch(/inputClickMut\s*=\s*trpcReact\.chromeMaster\.input\.click\.useMutation/)
+		// No event handler invokes them — RFB-native input takes over.
+		const eventHandlerInvocations = SRC.match(
+			/(?:addEventListener|onMouseDown|onMouseUp|onKeyDown)[\s\S]{0,300}?input(?:Click|Key|Type|Scroll)Mut\.mutate/g,
+		)
+		expect(eventHandlerInvocations).toBeNull()
 	})
 })
 
