@@ -80,11 +80,15 @@ if grep -qE '^deploy_livinityd\(\)' "$DEPLOY_SH"; then
 else
     fail "deploy_livinityd() function NOT found in $DEPLOY_SH"
 fi
-# Internal helpers (prefixed with _dld_) should all be defined
+# Internal helpers (prefixed with _dld_) should all be defined.
+# 104-12 adds: _dld_build_liv_packages, _dld_sync_liv_dist_into_pnpm_store,
+# _dld_write_liv_systemd_units.
 for fn in _dld_install_system_packages _dld_setup_postgres _dld_setup_redis \
           _dld_clone_source _dld_build_packages _dld_generate_jwt_secret \
           _dld_write_env_file _dld_write_systemd_unit _dld_health_check \
-          _dld_update_caddy_to_livinityd; do
+          _dld_update_caddy_to_livinityd \
+          _dld_build_liv_packages _dld_sync_liv_dist_into_pnpm_store \
+          _dld_write_liv_systemd_units; do
     if grep -qE "^${fn}\(\)" "$DEPLOY_SH"; then
         pass "internal helper ${fn}() defined"
     else
@@ -229,20 +233,51 @@ else
     fail "deploy-livinityd.sh should back up .env to .env.bak before rewrite"
 fi
 
-# ── TEST 10: Scope boundary — liv-core/liv-worker NOT deployed by this plan ─
-info "TEST 10: liv-core/liv-worker NOT in deploy-livinityd.sh"
-# Should NOT have systemctl invocations for liv-core / liv-worker / liv-memory.
-# These are documented as deferred to Plan 104-12.
-if grep -qE 'systemctl.*liv-core|systemctl.*liv-worker|systemctl.*liv-memory' "$DEPLOY_SH"; then
-    fail "deploy-livinityd.sh references liv-core/worker/memory (scope boundary violation)"
+# ── TEST 10: 104-12 scope — liv-core/liv-worker/liv-memory ARE NOW deployed ─
+# Plan 104-12 extends 104-11 to deploy the liv/ sibling packages. The scope
+# boundary that 104-11 carried forward is now CLOSED — this test was
+# previously a NEGATIVE-grep (assert absence); 104-12 inverts it to assert
+# the systemd units + build helper are PRESENT.
+info "TEST 10: 104-12 — liv-core/liv-worker/liv-memory systemd units written"
+# liv-core / liv-worker / liv-memory systemd unit templates must all be
+# embedded in deploy-livinityd.sh (heredoc-style; we grep for the Description=
+# line of each unit).
+for svc in liv-core liv-worker liv-memory; do
+    if grep -qE "(Description=Liv (core|worker|memory)|@liv/${svc#liv-}|liv-${svc#liv-}\.service)" "$DEPLOY_SH"; then
+        pass "${svc}.service template present in deploy-livinityd.sh"
+    else
+        fail "${svc}.service template NOT found"
+    fi
+done
+# systemctl enable/start calls for each liv service
+if grep -qE 'systemctl.*enable.*liv-' "$DEPLOY_SH" || grep -qE 'systemctl enable.*\$\{svc\}\.service|systemctl enable "\$\{svc\}\.service"' "$DEPLOY_SH"; then
+    pass "systemctl enable for liv-* services present"
 else
-    pass "no liv-core/liv-worker/liv-memory systemctl calls (scope boundary preserved)"
+    fail "systemctl enable for liv-* NOT found"
 fi
-# And the file must mention Plan 104-12 to document the carry-forward
-if grep -qE '104-12|liv-core.*defer|DEFER.*liv-core|DEFERRED' "$DEPLOY_SH"; then
-    pass "deploy-livinityd.sh documents Plan 104-12 carry-forward for liv-core"
+# Dist-copy loop: iterates ALL @liv+<pkg>* dirs (not head -1 — Phase 31 BUILD-02 fix)
+if grep -qE '@liv\+\$\{pkg\}|@liv\+core|@liv\+worker|@liv\+memory|@liv\+mcp-server' "$DEPLOY_SH"; then
+    pass "pnpm-store iteration pattern (@liv+\${pkg}*) present"
 else
-    fail "deploy-livinityd.sh should document Plan 104-12 carry-forward"
+    fail "pnpm-store iteration pattern NOT found"
+fi
+# rsync --delete in dist-copy (purges stale files from prior builds)
+if grep -qE 'rsync.*--delete.*dist|rsync -a --delete' "$DEPLOY_SH"; then
+    pass "rsync --delete pattern in dist-copy (purges stale)"
+else
+    fail "rsync --delete NOT found in dist-copy"
+fi
+# Also assert the rsync of repo/liv/ → /opt/liv/ (sibling sync)
+if grep -qE 'rsync.*liv/.*_DLD_LIV_DIR|STAGE_DIR/liv/' "$DEPLOY_SH"; then
+    pass "rsync repo/liv/ → /opt/liv/ present (sibling sync — closes ENOENT bug)"
+else
+    fail "rsync repo/liv/ → /opt/liv/ NOT found"
+fi
+# mcp-server should NOT have a systemd unit (livinityd spawns on-demand)
+if grep -qE '_DLD_SYSTEMD_LIV_MCP|liv-mcp-server\.service|Description=Liv mcp-server' "$DEPLOY_SH"; then
+    fail "liv-mcp-server.service should NOT exist (livinityd spawns on-demand)"
+else
+    pass "no liv-mcp-server systemd unit (correct — on-demand spawn)"
 fi
 
 # ── TEST 11: 104-08 + 104-09 regression — those tests still pass ────────────
@@ -256,6 +291,107 @@ if bash "$REPO_ROOT/scripts/install/__tests__/test-mode-tunnel-args.sh" >/dev/nu
     pass "104-09 test-mode-tunnel-args.sh still PASSes (regression smoke)"
 else
     fail "104-09 test-mode-tunnel-args.sh FAILED — D-104-NO-PROD-IMPACT regression"
+fi
+
+# ── TEST 12: 104-12 path-bug fix — no live /opt/livos/livos/ paths ──────────
+# Critical assertion: the nested /opt/livos/livos/ layout is gone. Any
+# remaining references must be COMMENTS documenting the old bug (lines
+# starting with optional whitespace + `#`).
+info "TEST 12: 104-12 path-bug fix — /opt/livos/livos/ only in comments"
+live_hits=$(grep -nE '/opt/livos/livos' "$DEPLOY_SH" 2>/dev/null | grep -v '^[0-9]*:[[:space:]]*#' || true)
+if [[ -z "$live_hits" ]]; then
+    pass "no LIVE /opt/livos/livos/ paths (all remaining hits are comments documenting old bug)"
+else
+    fail "LIVE /opt/livos/livos/ paths still present:"
+    echo "$live_hits"
+fi
+# Also assert _DLD_LIVOS_SRC is fully retired (was the nested-path constant)
+if grep -qE '^[^#]*_DLD_LIVOS_SRC' "$DEPLOY_SH"; then
+    fail "_DLD_LIVOS_SRC still referenced in non-comment lines (should be retired)"
+else
+    pass "_DLD_LIVOS_SRC fully retired (104-12)"
+fi
+# And the flat-layout sibling _DLD_LIV_DIR constant IS defined
+if grep -qE '^_DLD_LIV_DIR=' "$DEPLOY_SH"; then
+    pass "_DLD_LIV_DIR constant defined (104-12 sibling path)"
+else
+    fail "_DLD_LIV_DIR constant NOT defined"
+fi
+# The pre-flight check (assert /opt/liv/packages/core/ exists before pnpm install)
+if grep -qE 'PRE-FLIGHT-FAIL.*core|packages/core.*missing' "$DEPLOY_SH"; then
+    pass "pre-flight check for /opt/liv/packages/core/ present (catches ENOENT loudly)"
+else
+    fail "pre-flight check for /opt/liv/packages/core/ NOT found"
+fi
+# systemd WorkingDirectory for livos.service must be /opt/livos (NOT nested).
+# Match the heredoc body which writes `WorkingDirectory=${_DLD_LIVOS_DIR}`.
+if grep -qE 'WorkingDirectory=\$\{?_DLD_LIVOS_DIR' "$DEPLOY_SH"; then
+    pass "livos.service WorkingDirectory uses _DLD_LIVOS_DIR (flat /opt/livos)"
+else
+    fail "livos.service WorkingDirectory should reference _DLD_LIVOS_DIR (flat)"
+fi
+# schema.sql path uses _DLD_LIVOS_DIR (flat) — NOT _DLD_LIVOS_SRC (nested)
+if grep -qE 'schema_file=.*_DLD_LIVOS_DIR.*packages/livinityd' "$DEPLOY_SH"; then
+    pass "schema.sql path uses _DLD_LIVOS_DIR (flat layout)"
+else
+    fail "schema.sql path should use _DLD_LIVOS_DIR"
+fi
+
+# ── TEST 13: 104-12 liv-stack build calls present ───────────────────────────
+info "TEST 13: 104-12 liv-stack build pipeline"
+# npm install in /opt/liv (NOT pnpm — liv uses npm per Mini PC reference)
+if grep -qE 'npm install.*omit=optional|cd.*_DLD_LIV_DIR.*npm install' "$DEPLOY_SH" \
+   || grep -qE 'cd "?\$_DLD_LIV_DIR"?' "$DEPLOY_SH"; then
+    pass "liv: cd into _DLD_LIV_DIR + npm install pattern"
+else
+    fail "liv: npm install pattern NOT found"
+fi
+# Build loop iterates core, worker, mcp-server, memory
+if grep -qE 'core worker mcp-server memory|core.*worker.*mcp-server.*memory' "$DEPLOY_SH"; then
+    pass "liv build loop iterates all 4 packages (core/worker/mcp-server/memory)"
+else
+    fail "liv build loop should iterate core/worker/mcp-server/memory"
+fi
+# BUILD-FAIL guard on liv dist (mirrors update.sh:287-295 pattern)
+if grep -qE 'BUILD-FAIL.*@liv|BUILD-FAIL.*liv/' "$DEPLOY_SH"; then
+    pass "BUILD-FAIL guard on @liv/* dist (non-empty assertion)"
+else
+    fail "BUILD-FAIL guard on @liv/* should be present"
+fi
+# Entry point detection: node $entry where entry = $pkg_dir/dist/index.js
+if grep -qE 'dist/index\.js' "$DEPLOY_SH"; then
+    pass "liv systemd ExecStart uses node dist/index.js"
+else
+    fail "liv systemd ExecStart should use node dist/index.js"
+fi
+
+# ── TEST 14: deploy_livinityd order — liv units BEFORE livos.service ────────
+# livos.service has `After=liv-core.service` so the unit needs to exist when
+# livos.service is enabled. Assert the call order in deploy_livinityd().
+info "TEST 14: deploy_livinityd call order — liv stack before livos unit"
+# Extract the body of deploy_livinityd() (lines between `^deploy_livinityd\(\)` and
+# the matching closing `^}`).
+order_body=$(awk '/^deploy_livinityd\(\)/,/^}/' "$DEPLOY_SH")
+liv_line=$(echo "$order_body" | grep -n '_dld_write_liv_systemd_units' | head -1 | cut -d: -f1)
+livos_line=$(echo "$order_body" | grep -n '_dld_write_systemd_unit' | grep -v 'liv' | head -1 | cut -d: -f1)
+if [[ -n "$liv_line" ]] && [[ -n "$livos_line" ]] && (( liv_line < livos_line )); then
+    pass "_dld_write_liv_systemd_units called BEFORE _dld_write_systemd_unit (line $liv_line < $livos_line)"
+else
+    fail "liv units should be written BEFORE livos.service (liv=$liv_line livos=$livos_line)"
+fi
+# Build liv BEFORE writing units (otherwise dist/index.js wouldn't exist)
+build_line=$(echo "$order_body" | grep -n '_dld_build_liv_packages' | head -1 | cut -d: -f1)
+if [[ -n "$build_line" ]] && [[ -n "$liv_line" ]] && (( build_line < liv_line )); then
+    pass "_dld_build_liv_packages called BEFORE _dld_write_liv_systemd_units (line $build_line < $liv_line)"
+else
+    fail "liv build should happen BEFORE writing units (build=$build_line units=$liv_line)"
+fi
+# Dist-sync into pnpm store after liv build but before livos systemd unit
+sync_line=$(echo "$order_body" | grep -n '_dld_sync_liv_dist_into_pnpm_store' | head -1 | cut -d: -f1)
+if [[ -n "$sync_line" ]] && [[ -n "$build_line" ]] && (( build_line < sync_line )); then
+    pass "dist sync runs AFTER liv build (line $sync_line > $build_line)"
+else
+    fail "dist sync should run AFTER liv build (build=$build_line sync=$sync_line)"
 fi
 
 # ── Summary ─────────────────────────────────────────────────────────────────
