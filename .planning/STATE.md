@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-12T07:30:51.285Z"
+last_updated: "2026-05-12T07:42:45.756Z"
 progress:
   total_phases: 54
   completed_phases: 25
   total_plans: 210
-  completed_plans: 201
+  completed_plans: 202
   percent: 96
 ---
 
@@ -26,9 +26,24 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 104 (One-shot Local Install + Docker Ubuntu GUI UAT) — EXECUTING
-Plan: 5 of 7 (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`; 104-02 ✅ shipped 2026-05-12 `2a1a274b..1361f483`; 104-03 ✅ shipped 2026-05-12 `9bba50ba..8d8cec66` — local-lan backend code-complete, 24/24 vitest pass, runtime AC-104-4..7 deferred to 104-07 UAT; 104-04 ✅ shipped 2026-05-12 `9a9801c8..62a526b1` — hybrid backend code-complete, 52/52 vitest pass, AC-104-15 runtime tcpdump deferred to 104-07 UAT)
+Plan: 6 of 7 (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`; 104-02 ✅ shipped 2026-05-12 `2a1a274b..1361f483`; 104-03 ✅ shipped 2026-05-12 `9bba50ba..8d8cec66` — local-lan backend code-complete, 24/24 vitest pass, runtime AC-104-4..7 deferred to 104-07 UAT; 104-04 ✅ shipped 2026-05-12 `9a9801c8..62a526b1` — hybrid backend code-complete, 52/52 vitest pass, AC-104-15 runtime tcpdump deferred to 104-07 UAT; 104-05 ✅ shipped 2026-05-12 `4c853ce0..18a097f3` — enrollment wizard UI code-complete, 17/17 vitest pass, runtime AC-104-9/-10/-15 surfaces deferred to 104-07 UAT)
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v33.0 (active)
+
+## 104-05 Status (2026-05-12) — enrollment wizard UI SHIPPED (17/17 vitest pass, runtime UAT deferred)
+
+- Wave 4 (104-05): ✅ COMPLETE — `4c853ce0..18a097f3` (2 commits) — Settings → Local Access wizard UI shipped end-to-end. Two commits:
+  1. `4c853ce0` types.ts (discriminated-union WizardStep with LOCAL_LAN_STEPS / HYBRID_STEPS / CLOUD_STEPS branches + initialWizardState) + LocalSetupWizard.tsx (root component owning state, inlining LocalLanConfigStep/HybridConfigStep/HybridVerifyStep/VerifyStep, wiring `trpcReact.local.{getStatus,activate,activateHybrid,getHybridStatus}`) + ModePickStep.tsx (3-mode picker with hybrid as 'Hybrid (recommended)' + 'default' badge per D-104-DEFAULT-MODE) + routes/settings/local-access.tsx (SettingsPageLayout wrapper) + routes/settings/index.tsx (Route registration — Rule 2 auto-fix, since plan didn't include the Route entry but AC-104-9 demands wizard reachable from Settings).
+  2. `18a097f3` QrCodeStep.tsx (QR via `api.qrserver.com` public endpoint encoding `/api/local/ca.crt` URL — D-NO-NEW-DEPS surfaced) + PlatformInstructions.tsx (5-tab per-OS: linux/macos/ios/windows/android; macOS + iOS panels prominently warn `does NOT support .local TLDs`) + HybridDnsSetup.tsx (Cloudflare API token flow + 'Zero data-plane Server5 traffic' messaging — D-104-RELAY-ZERO-DATA-PLANE UI surface) + __tests__/LocalSetupWizard.test.tsx (17 source-text grep invariants over the 5 component files — pattern: `livos/packages/ui/src/modules/settings/master-chrome-login.test.tsx` — no `@testing-library/react` add).
+- Tests: 17/17 PASSED (4 tRPC wiring + 3 mode-pick + 3 QR + 5 platform-coverage + 2 hybrid Cloudflare-flow). `npx vitest run src/features/local-setup` exits 0 in 4ms (998ms total wall time).
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across both commits (verified pre + post each commit via `git hash-object liv/packages/core/src/sdk-agent-runner.ts`).
+- No new npm deps: `git diff HEAD~2 HEAD -- livos/packages/ui/package.json` returns empty. QR via public endpoint (NOT the `react-qr-code@2.0.12` already in deps, by plan choice — tested invariant: `expect(qrSrc).toMatch(/api\.qrserver\.com.*create-qr-code/)`). Tests via `readFileSync` + `expect.toMatch` (NOT `@testing-library/react`).
+- Deviations: (1) Rule 2 — settings/index.tsx Route registration added (plan's read_first wrongly claimed route auto-discovery; actual codebase uses explicit `<Route>` per sibling page like chrome-master/domain-setup — without this edit AC-104-9 'wizard reachable from Settings' fails). Append-only: new lazy-import + new Route, no existing line touched. (2) Pre-existing `pnpm --filter ui build` failure logged for awareness (vite-plugin-pwa → workbox-build → terser → @jridgewell/source-map → can't resolve @jridgewell/gen-mapping); verified by stashing our changes — same error, no 104-05 file in stack — SCOPE BOUNDARY pre-existing infra problem.
+- Decisions: (1) D-104-DEFAULT-MODE realized in ModePickStep — hybrid is first in MODES array with `recommended:true` flag rendering 'default' badge. (2) Cloud branch is a redirect (`cloud-redirect` step links to existing `/settings/domain-setup`) — no cloud-wizard reimplementation. (3) D-NO-NEW-DEPS via api.qrserver.com (decorative) + source-grep tests (no @testing-library/react). (4) D-104-RELAY-ZERO-DATA-PLANE messaging in 3 places: ModePickStep hybrid row, HybridConfigStep info-blue panel, HybridDnsSetup blue-50 alert.
+
+**Carry-forward to 104-06 (`--mode cloud` regression test, Wave 5):** wizard UI shipped; cloud branch correctly redirects to legacy `/settings/domain-setup` without duplicating the cloud onboarding flow. 104-06 will run install.sh `--mode cloud` inside a second UAT container and assert Mini PC `dab261cc` services come up byte-for-byte (livinityd + liv-core + liv-worker + liv-memory + Caddy with Cloudflare DNS-01).
+
+**Runtime verification deferred to 104-07:** AC-104-9 multi-tenant runtime UAT (subdomain entered in LocalLanConfigStep / HybridConfigStep flows through to per-user routing), AC-104-10 green-padlock-after-CA-install runtime assertion across the 5 platform tabs, AC-104-15 zero-Server5-data-plane tcpdump — all STAY IN 104-07. The 17 vitest assertions confirm the UI surfaces exist; 104-07 confirms they wire to live infra.
 
 ## 104-04 Status (2026-05-12) — hybrid backend SHIPPED (52/52 vitest pass, runtime UAT deferred)
 

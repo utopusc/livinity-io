@@ -645,7 +645,7 @@ Plans:
 - [x] 104-02-PLAN.md - install.sh skeleton with --mode dispatch + helpers (Wave 2, autonomous) — Shipped 2026-05-12 (`2a1a274b..1361f483`; AC-104-16 verified, AC-104-1 scaffold-path + AC-104-2 idempotency runtime verify pending Docker Desktop)
 - [x] 104-03-PLAN.md - local-lan backend: dnsmasq + Caddy pki-global.conf + livinityd local-dns module (Wave 3, autonomous, parallel with 104-04) — Shipped 2026-05-12 (`9bba50ba..8d8cec66`; 24/24 vitest pass; AC-104-8 + D-104-NO-PROD-IMPACT enforced; runtime AC-104-4..7 deferred to 104-07 UAT)
 - [x] 104-04-PLAN.md - hybrid backend: Cloudflare DNS-01 + Server5 control-plane subdomain mint (Wave 3, autonomous, parallel with 104-03) — Shipped 2026-05-12 (`9a9801c8..62a526b1`; 52/52 vitest pass; D-104-RELAY-ZERO-DATA-PLANE static negative-grep PASS; D-104-NO-PROD-IMPACT enforced; runtime AC-104-15 tcpdump deferred to 104-07 UAT)
-- [ ] 104-05-PLAN.md - Settings -> Local Access enrollment wizard UI (Wave 4, autonomous)
+- [x] 104-05-PLAN.md - Settings -> Local Access enrollment wizard UI (Wave 4, autonomous) — Shipped 2026-05-12 (`4c853ce0..18a097f3`; 17/17 vitest pass; D-104-DEFAULT-MODE + D-NO-NEW-DEPS + D-104-RELAY-ZERO-DATA-PLANE UI surfaces enforced; runtime AC-104-9/-10/-15 end-to-end UAT deferred to 104-07)
 - [ ] 104-06-PLAN.md - cloud-mode regression test: install.sh --mode cloud byte-equivalent to Mini PC dab261cc (Wave 5, autonomous)
 - [ ] 104-07-PLAN.md - End-to-end UAT walk + user-walked Apple verification (Wave 6, autonomous: false)
 
