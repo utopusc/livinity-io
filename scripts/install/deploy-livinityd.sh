@@ -110,6 +110,14 @@ _dld_install_system_packages() {
         redis-server \
         build-essential python3 git rsync openssl
     ok "System packages installed"
+
+    # Phase 106 Bug #7: mender-client4 silences `spawn mender ENOENT` log spam
+    # emitted by livinityd's periodic update-check. WARN-not-FAIL — some Ubuntu
+    # derivatives lack mender-client4 in universe; absence is non-fatal (the
+    # log line is verbose-level, not critical).
+    info "Installing mender-client4 (Bug #7 — silences ENOENT log spam)"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mender-client4 2>&1 | tail -3 \
+        || warn "mender-client4 install failed (non-fatal — ENOENT log spam will persist)"
 }
 
 # ── 2. PostgreSQL setup ─────────────────────────────────────────────────────
