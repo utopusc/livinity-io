@@ -296,6 +296,46 @@ _dld_clone_source() {
     ok "liv source rsynced to $_DLD_LIV_DIR/"
 }
 
+# ── 4b. Write pnpm .npmrc with block-exotic-subdeps=false (104-13 hotfix) ───
+# Plan 104-13: pnpm 11+'s `blockExoticSubdeps` (enabled-by-default supply-chain
+# safety check) refuses to install `libsignal` — a legitimate `baileys` WhatsApp
+# integration subdep (Phase 25) that is resolved from a git-repository URL
+# rather than an npm-published version. The Mini PC ships with an older pnpm
+# that does NOT enforce this gate, so `bash /opt/livos/update.sh` works there;
+# fresh Ubuntu 24.04 hosts (mainserver 154.53.56.75) installing pnpm via
+# `npm install -g pnpm@latest` get pnpm 11.1.1+ and fail at `pnpm install`
+# with `[ERR_PNPM_EXOTIC_SUBDEP] Exotic dependency "libsignal" ... not allowed
+# in subdependencies when blockExoticSubdeps is enabled`.
+#
+# SECURITY NOTE: setting `block-exotic-subdeps=false` relaxes pnpm's
+# supply-chain safety for ALL git-resolved subdeps in the dep tree, not
+# just the `libsignal` one we actually need. A production audit MUST:
+#   (a) Review every git-resolved subdep in pnpm-lock.yaml — confirm each
+#       is a known good upstream (no typo-squat / takeover risk).
+#   (b) Pin `baileys` to a libsignal-free version when one becomes available
+#       (or switch to the npm-published `libsignal-client` package).
+#   (c) Consider a wrapper / vendored copy of libsignal so the check can be
+#       re-enabled.
+# Deferred review tracked in .planning/phases/104-local-install-and-docker-uat/104-13-SUMMARY.md.
+#
+# Idempotent: if the directive is already present (any value), we leave it.
+_dld_write_pnpm_npmrc() {
+    step "Plan 104-13 — write pnpm .npmrc (block-exotic-subdeps=false for baileys → libsignal)"
+
+    local npmrc="${_DLD_LIVOS_DIR}/.npmrc"
+    if [[ -f "$npmrc" ]] && grep -q "^block-exotic-subdeps=" "$npmrc"; then
+        ok ".npmrc already has block-exotic-subdeps directive at $npmrc"
+        return 0
+    fi
+    cat >> "$npmrc" <<'EOF'
+# Plan 104-13: allow baileys → libsignal git-repository subdep (Phase 25 WhatsApp).
+# SECURITY: relaxes pnpm's supply-chain safety for ALL git-resolved subdeps.
+# See 104-13-SUMMARY.md for the deferred audit checklist.
+block-exotic-subdeps=false
+EOF
+    ok "Wrote block-exotic-subdeps=false to $npmrc"
+}
+
 # ── 5. Build livos (pnpm install + @livos/config + ui) ─────────────────────
 # 104-12 path fix: cd into _DLD_LIVOS_DIR (flat) instead of the retired
 # _DLD_LIVOS_SRC (nested). pnpm install resolves `@liv/core: "file:../../../liv/packages/core"`
@@ -749,10 +789,12 @@ CADDYFILE
 }
 
 # ── Public entry point ──────────────────────────────────────────────────────
-# 104-12: extended pipeline now also builds liv stack + writes liv-core/
-# liv-worker/liv-memory systemd units. Order matters:
+# 104-12 + 104-13: extended pipeline now also builds liv stack + writes liv-core/
+# liv-worker/liv-memory systemd units AND writes /opt/livos/.npmrc to allow
+# baileys → libsignal git-repository subdep on pnpm 11+. Order matters:
 #   1. system pkgs → postgres → redis (infra ready)
-#   2. clone (both livos + liv) → build livos (pnpm) → build liv (npm)
+#   2. clone (both livos + liv) → write .npmrc (104-13 — BEFORE pnpm install)
+#      → build livos (pnpm) → build liv (npm)
 #   3. sync liv dist into livinityd's pnpm-store (closes Mini PC pitfall)
 #   4. jwt + .env (livinityd reads these)
 #   5. liv systemd units FIRST (so livos.service `After=liv-core` is satisfied)
@@ -772,6 +814,7 @@ deploy_livinityd() {
     _dld_setup_postgres
     _dld_setup_redis
     _dld_clone_source
+    _dld_write_pnpm_npmrc
     _dld_build_packages
     _dld_build_liv_packages
     _dld_sync_liv_dist_into_pnpm_store
@@ -782,5 +825,5 @@ deploy_livinityd() {
     _dld_health_check
     _dld_update_caddy_to_livinityd
 
-    ok "Plan 104-11/104-12 — livinityd + liv stack deploy complete"
+    ok "Plan 104-11/104-12/104-13 — livinityd + liv stack deploy complete"
 }
