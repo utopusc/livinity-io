@@ -448,10 +448,84 @@ else
     fail "_dld_write_pnpm_npmrc must be between clone and build (clone=$clone_line npmrc=$npmrc_line build=$build_line)"
 fi
 
+# ── TEST 16: 105-01 — _dld_verify_build helper extracted (was inlined) ─────
+# Plan 105-01 ports update.sh:287-295 verify_build() to a named helper for
+# reuse + grepability. Closes RESEARCH G1.
+info "TEST 16: 105-01 — _dld_verify_build helper extraction"
+
+if grep -qE '^_dld_verify_build\(\)' "$DEPLOY_SH"; then
+    pass "_dld_verify_build() function defined"
+else
+    fail "_dld_verify_build() function NOT found"
+fi
+
+# Helper body must contain the canonical update.sh:289-294 logic
+if grep -qE 'BUILD-FAIL.*produced empty' "$DEPLOY_SH"; then
+    pass "BUILD-FAIL literal preserved (matches update.sh:291)"
+else
+    fail "BUILD-FAIL literal missing"
+fi
+
+# At least 3 call sites: @livos/config + @livos/ui + @liv/<pkg> loop
+verify_count=$(grep -cE '_dld_verify_build ' "$DEPLOY_SH")
+if (( verify_count >= 4 )); then
+    pass "_dld_verify_build called >=4x (1 def + 3+ sites): $verify_count occurrences"
+else
+    fail "_dld_verify_build only $verify_count occurrences (expected >=4: 1 def + 3 sites)"
+fi
+
+# No remaining inlined BUILD-FAIL `if [[ ! -d ... ]]` checks (negative — Task 1 should
+# have replaced all three). Comments referencing BUILD-FAIL are OK.
+inline_count=$(grep -cE '\[\[ ! -d "?\$\{?_DLD_LIVOS_DIR.*dist|\[\[ ! -d "?\$pkg_dir/dist' "$DEPLOY_SH")
+if (( inline_count == 0 )); then
+    pass "no inlined BUILD-FAIL [[ ! -d ... ]] guards remain (extracted to helper)"
+else
+    fail "$inline_count inlined BUILD-FAIL guards still present (should be 0 after extraction)"
+fi
+
+# ── TEST 19: 105-01 — anchored docker exclude (D-105-STEP2-EXCLUDE-ANCHORED) ─
+# update.sh and CONTEXT.md require --exclude='/docker/' (anchored) NOT
+# --exclude='docker/' which over-matched packages/ui/src/routes/docker/.
+# Bug documented in memory: project_p104_deploy_gap.md bug #4.
+info "TEST 19: 105-01 — anchored /docker/ rsync exclude"
+
+# Positive: anchored form must be present
+if grep -qE "exclude='/docker/'" "$DEPLOY_SH"; then
+    pass "anchored --exclude='/docker/' present"
+else
+    fail "anchored --exclude='/docker/' NOT found"
+fi
+
+# Negative: un-anchored form must be GONE (was the bug)
+if grep -qE "exclude='docker/'" "$DEPLOY_SH"; then
+    fail "un-anchored --exclude='docker/' STILL present (over-matches UI routes/docker/)"
+else
+    pass "un-anchored --exclude='docker/' fully removed"
+fi
+
+# ── TEST 31: 105-01 — _DLD_TEMP_DIR alias matches update.sh:174-178 convention ─
+# update.sh uses TEMP_DIR="/tmp/livinity-update-$$". deploy-livinityd retains
+# the persistent _DLD_STAGE_DIR for re-run speed but adds an alias for grep
+# parity. PID-scoped + cleanup deferred to 105-02 (G7).
+info "TEST 31: 105-01 — _DLD_TEMP_DIR alias defined"
+
+if grep -qE '^_DLD_TEMP_DIR=' "$DEPLOY_SH"; then
+    pass "_DLD_TEMP_DIR alias constant defined"
+else
+    fail "_DLD_TEMP_DIR alias NOT defined"
+fi
+
+# Alias references the existing _DLD_STAGE_DIR (proves it's an alias, not a divergent path)
+if grep -qE '_DLD_TEMP_DIR="?\$\{?_DLD_STAGE_DIR' "$DEPLOY_SH"; then
+    pass "_DLD_TEMP_DIR aliases _DLD_STAGE_DIR (persistent semantics preserved)"
+else
+    fail "_DLD_TEMP_DIR should alias _DLD_STAGE_DIR (got divergent path)"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "================================================================"
-echo "  Plan 104-11/12/13 test results: $pass_count PASS, $fail_count FAIL"
+echo "  Plan 104-11/12/13 + 105-01 test results: $pass_count PASS, $fail_count FAIL"
 echo "================================================================"
 if (( fail_count > 0 )); then
     exit 1
