@@ -39,6 +39,14 @@ LIVOS_CF_ZONE_ID="${LIVOS_CF_ZONE_ID:-}"
 LIVOS_CF_TUNNEL_TOKEN="${LIVOS_CF_TUNNEL_TOKEN:-}"
 LIVOS_API_KEY="${LIVOS_API_KEY:-}"
 
+# Plan 104-11 — --skip-deploy flag. When set, install.sh runs TLS/DNS/Caddy
+# bootstrap (the legacy 104-08 / 104-09 behavior) but skips the new
+# deploy_livinityd step. Useful for operators who only want the network
+# scaffolding (e.g. testing CF DNS pipeline without spinning up Postgres).
+# Default behavior: DEPLOY (SKIP_DEPLOY=0) — the "single line install" UX
+# that lands you at the LivOS UI in the browser.
+SKIP_DEPLOY="${SKIP_DEPLOY:-0}"
+
 print_help() {
     cat <<'HELP'
 Usage: install.sh [--mode MODE] [mode-specific flags] [--api-key KEY] [--help]
@@ -86,6 +94,17 @@ Marketplace API key (optional, works in all modes):
                            /etc/livos/secrets/api-key (mode 0600) for future
                            marketplace integration. Refuses keys not prefixed
                            with `liv_k_` (matches Server5 schema).
+
+Application deploy (Plan 104-11):
+  --skip-deploy            Skip the full livinityd deploy step (install
+                           Node + pnpm + Postgres + Redis, clone source,
+                           build UI, write /opt/livos/.env, install
+                           livos.service systemd unit, health-check :8080,
+                           update Caddyfile to reverse_proxy :8080). When
+                           set, install.sh only runs the TLS/DNS/Caddy
+                           bootstrap — equivalent to the pre-104-11
+                           behavior. DEFAULT: deploy (UI loads in browser
+                           after install.sh exits 0).
 
 Examples:
   # Default hybrid via Server5 mint (greenfield install)
@@ -138,6 +157,7 @@ parse_cli() {
             --cf-zone-id) LIVOS_CF_ZONE_ID="${2:-}"; shift 2 ;;
             --cf-tunnel-token) LIVOS_CF_TUNNEL_TOKEN="${2:-}"; shift 2 ;;
             --api-key) LIVOS_API_KEY="${2:-}"; shift 2 ;;
+            --skip-deploy) SKIP_DEPLOY=1; shift ;;
             --help|-h) print_help; exit 0 ;;
             --) shift; break ;;
             *) warn "ignoring unknown arg: $1"; shift ;;
@@ -230,6 +250,8 @@ parse_cli() {
     # — `source` already shares scope, but mode-hybrid.sh's curl call to the CF
     # API runs in a subshell-friendly pattern so we make the env unambiguous.
     # Plan 104-09 — export tunnel-mode + api-key vars too.
+    # Plan 104-11 — export SKIP_DEPLOY too (read by install.sh tail dispatch).
     export LIVOS_DOMAIN LIVOS_CF_TOKEN LIVOS_CF_ZONE_ID \
-           LIVOS_CF_TUNNEL_TOKEN LIVOS_API_KEY
+           LIVOS_CF_TUNNEL_TOKEN LIVOS_API_KEY \
+           SKIP_DEPLOY
 }
