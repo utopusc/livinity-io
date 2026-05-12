@@ -1,5 +1,5 @@
 # scripts/install/deploy-livinityd.sh
-# Phase 104 plan 104-11 — full livinityd deployment helper.
+# Phase 104 plans 104-11 (initial) + 104-12 (path-bug hotfix + liv-stack).
 #
 # After install.sh's mode dispatch finishes wiring Caddy + TLS + DNS, THIS file
 # installs the actual LivOS application stack so the user sees the LivOS UI in
@@ -9,11 +9,14 @@
 #   1. System packages (Node 22 LTS, pnpm, postgresql, redis-server, build deps)
 #   2. PostgreSQL setup (livos user + livos DB + schema.sql apply)
 #   3. Redis setup (requirepass random)
-#   4. Source clone (GitHub → /tmp → rsync to /opt/livos/livos/)
-#   5. Build (pnpm install + @livos/config tsc + ui vite build)
+#   4. Source clone (GitHub → /tmp → rsync `livos/` → /opt/livos/ + `liv/` → /opt/liv/)
+#   5. Build livos (pnpm install + @livos/config tsc + ui vite build)
+#   5b. Build liv (npm install + tsc per package: core, worker, mcp-server, memory) [104-12]
+#   5c. Copy liv dist into pnpm-store resolution dirs for livinityd [104-12]
 #   6. /opt/livos/.env (random passwords, mode 600, REUSE existing on re-run)
 #   7. JWT secret (/opt/livos/data/secrets/jwt 0600, reuse existing)
-#   8. systemd unit livos.service (After/Requires postgresql + redis)
+#   8. systemd units: livos.service + liv-core.service + liv-worker.service +
+#      liv-memory.service (mcp-server is spawned on-demand by livinityd) [104-12]
 #   9. Health check (curl :8080, 30s budget)
 #   10. Caddy reverse_proxy 127.0.0.1:8080 (final Caddyfile)
 #
@@ -24,21 +27,40 @@
 # update.sh. This helper's re-run semantics MUST preserve existing creds
 # (read /opt/livos/.env back; reuse PG + Redis passwords; never rotate).
 #
-# Scope boundary: liv-core / liv-worker / liv-memory are DEFERRED to Plan
-# 104-12 (or v34). This helper deploys livinityd only — enough for the UI
-# to load + the login screen to render.
+# ── 104-12 path-bug fix ────────────────────────────────────────────────────
+# Plan 104-11 originally rsynced `livos/` → /opt/livos/livos/ (NESTED) which
+# broke livinityd's `@liv/core: "file:../../../liv/packages/core"` dep — the
+# relative path resolves from /opt/livos/packages/livinityd/, three levels up
+# is /opt/liv/. The nested layout pointed `../../../liv` at /liv (which does
+# not exist) and broke `pnpm install` with ENOENT.
+#
+# Correct layout (matches Mini PC + Phase 65 rename memory):
+#   /opt/livos/packages/{livinityd,ui,config}/   ← livos/ contents (FLAT)
+#   /opt/liv/packages/{core,worker,mcp-server,memory}/   ← liv/ sibling
+#
+# All path constants now reflect this. The legacy nested $_DLD_LIVOS_SRC
+# var is retired; use _DLD_LIVOS_DIR everywhere.
+#
+# ── 104-12 liv-stack scope ─────────────────────────────────────────────────
+# 104-12 also extends this helper to deploy the liv/ sibling packages and
+# write systemd units for liv-core / liv-worker / liv-memory — closing the
+# scope boundary that 104-11 documented as deferred. mcp-server is built but
+# NOT given a systemd unit; livinityd spawns it on-demand.
 #
 # Sacred SHA invariant: liv/packages/core/src/sdk-agent-runner.ts MUST equal
 # f3538e1d811992b782a9bb057d1b7f0a0189f95f. This file does NOT touch that
-# path — it only orchestrates apt + systemctl + rsync + pnpm + curl.
+# path — it only orchestrates apt + systemctl + rsync + pnpm + npm + curl.
 
-# Constants
+# Constants — 104-12 flat layout (livos/ contents → /opt/livos/, liv/ → /opt/liv/)
 _DLD_LIVOS_DIR="/opt/livos"
-_DLD_LIVOS_SRC="${_DLD_LIVOS_DIR}/livos"
+_DLD_LIV_DIR="/opt/liv"
 _DLD_ENV_FILE="${_DLD_LIVOS_DIR}/.env"
 _DLD_SECRETS_DIR="${_DLD_LIVOS_DIR}/data/secrets"
 _DLD_JWT_FILE="${_DLD_SECRETS_DIR}/jwt"
 _DLD_SYSTEMD_UNIT="/etc/systemd/system/livos.service"
+_DLD_SYSTEMD_LIV_CORE_UNIT="/etc/systemd/system/liv-core.service"
+_DLD_SYSTEMD_LIV_WORKER_UNIT="/etc/systemd/system/liv-worker.service"
+_DLD_SYSTEMD_LIV_MEMORY_UNIT="/etc/systemd/system/liv-memory.service"
 _DLD_REPO_URL="https://github.com/utopusc/livinity-io.git"
 _DLD_STAGE_DIR="/tmp/livos-install-stage"
 _DLD_CADDYFILE="/etc/caddy/Caddyfile"
@@ -140,7 +162,8 @@ _dld_setup_postgres() {
     fi
 
     # Apply schema (idempotent — every CREATE TABLE uses IF NOT EXISTS)
-    local schema_file="${_DLD_LIVOS_SRC}/packages/livinityd/source/modules/database/schema.sql"
+    # 104-12 path fix: flat layout — schema lives at /opt/livos/packages/...
+    local schema_file="${_DLD_LIVOS_DIR}/packages/livinityd/source/modules/database/schema.sql"
     if [[ -f "$schema_file" ]]; then
         info "Applying schema.sql"
         # PGPASSWORD env so password never lands on argv (T-104-11-1 mitigation)
@@ -207,8 +230,11 @@ _dld_setup_redis() {
 }
 
 # ── 4. Source clone ─────────────────────────────────────────────────────────
+# 104-12 path fix: rsync `repo/livos/` → /opt/livos/ (FLAT, not nested at
+# /opt/livos/livos/). Plus rsync `repo/liv/` → /opt/liv/ for the sibling
+# packages (104-12 scope addition).
 _dld_clone_source() {
-    step "Plan 104-11 — clone livinity-io source"
+    step "Plan 104-11/104-12 — clone livinity-io source"
 
     if [[ -d "$_DLD_STAGE_DIR/.git" ]]; then
         info "Updating existing stage dir at $_DLD_STAGE_DIR"
@@ -225,32 +251,65 @@ _dld_clone_source() {
     fi
     ok "Source staged at $_DLD_STAGE_DIR"
 
-    # rsync stage → /opt/livos/livos/ (exclude .planning + docker — UAT-only +
-    # planning artifacts not needed at runtime).
-    info "rsync to $_DLD_LIVOS_SRC"
-    mkdir -p "$_DLD_LIVOS_SRC"
-    rsync -a --delete \
+    # rsync stage `livos/` subdir → /opt/livos/ (FLAT — packages/{livinityd,ui,config}/
+    # land directly under /opt/livos/, NOT nested at /opt/livos/livos/).
+    # See Phase 65 rename memory + Mini PC layout reference. Exclude .planning
+    # + docker (UAT-only + planning artifacts not needed at runtime).
+    info "rsync repo/livos/ → $_DLD_LIVOS_DIR/ (flat layout)"
+    mkdir -p "$_DLD_LIVOS_DIR"
+    rsync -a \
         --exclude='.git/' \
         --exclude='.planning/' \
         --exclude='docker/' \
         --exclude='node_modules/' \
-        "$_DLD_STAGE_DIR/livos/" "$_DLD_LIVOS_SRC/"
-    # Also copy update.sh + pnpm-* root files
-    for f in package.json pnpm-lock.yaml pnpm-workspace.yaml update.sh; do
+        --exclude='/.env' \
+        --exclude='/.env.bak' \
+        --exclude='/data/' \
+        --exclude='/update.sh' \
+        "$_DLD_STAGE_DIR/livos/" "$_DLD_LIVOS_DIR/"
+    # Also copy update.sh + pnpm-* root files (update.sh lives at repo root,
+    # NOT under livos/; the existing livos/ rsync above skips it explicitly).
+    for f in package.json pnpm-lock.yaml pnpm-workspace.yaml; do
         if [[ -f "$_DLD_STAGE_DIR/livos/$f" ]]; then
-            cp "$_DLD_STAGE_DIR/livos/$f" "$_DLD_LIVOS_SRC/$f"
-        elif [[ -f "$_DLD_STAGE_DIR/$f" ]]; then
-            cp "$_DLD_STAGE_DIR/$f" "$_DLD_LIVOS_DIR/$f"
+            cp "$_DLD_STAGE_DIR/livos/$f" "$_DLD_LIVOS_DIR/$f"
         fi
     done
-    ok "Source rsynced to $_DLD_LIVOS_SRC"
+    if [[ -f "$_DLD_STAGE_DIR/update.sh" ]]; then
+        cp "$_DLD_STAGE_DIR/update.sh" "$_DLD_LIVOS_DIR/update.sh"
+        chmod +x "$_DLD_LIVOS_DIR/update.sh" 2>/dev/null || true
+    fi
+    ok "livos source rsynced to $_DLD_LIVOS_DIR/ (flat)"
+
+    # 104-12: rsync stage `liv/` subdir → /opt/liv/ (sibling). Required because
+    # livinityd's package.json declares `"@liv/core": "file:../../../liv/packages/core"`
+    # — that relative path resolves from /opt/livos/packages/livinityd/ to
+    # /opt/liv/packages/core/. Without this rsync, `pnpm install` fails with
+    # ENOENT (the live mainserver 154.53.56.75 failure mode that triggered 104-12).
+    info "rsync repo/liv/ → $_DLD_LIV_DIR/ (sibling, sacred SHA preserved)"
+    mkdir -p "$_DLD_LIV_DIR"
+    rsync -a \
+        --exclude='.git/' \
+        --exclude='node_modules/' \
+        --exclude='dist/' \
+        --exclude='*.log' \
+        "$_DLD_STAGE_DIR/liv/" "$_DLD_LIV_DIR/"
+    ok "liv source rsynced to $_DLD_LIV_DIR/"
 }
 
-# ── 5. Build (pnpm install + @livos/config + ui) ────────────────────────────
+# ── 5. Build livos (pnpm install + @livos/config + ui) ─────────────────────
+# 104-12 path fix: cd into _DLD_LIVOS_DIR (flat) instead of the retired
+# _DLD_LIVOS_SRC (nested). pnpm install resolves `@liv/core: "file:../../../liv/packages/core"`
+# from /opt/livos/packages/livinityd/, three levels up = /opt/liv/packages/core.
 _dld_build_packages() {
-    step "Plan 104-11 — pnpm install + build (@livos/config + ui)"
+    step "Plan 104-11/104-12 — pnpm install + build (@livos/config + ui)"
 
-    cd "$_DLD_LIVOS_SRC" || fail "cannot cd to $_DLD_LIVOS_SRC"
+    cd "$_DLD_LIVOS_DIR" || fail "cannot cd to $_DLD_LIVOS_DIR"
+
+    # 104-12 pre-flight: ensure /opt/liv/ exists with packages/core/ at minimum.
+    # Without it, pnpm install fails with ENOENT on the file:../../../liv URL.
+    if [[ ! -d "$_DLD_LIV_DIR/packages/core" ]]; then
+        fail "PRE-FLIGHT-FAIL: $_DLD_LIV_DIR/packages/core missing — _dld_clone_source did not rsync liv/. Cannot resolve @liv/core file dep."
+    fi
 
     info "pnpm install (this may take 3-5 min)"
     if [[ -f "pnpm-lock.yaml" ]]; then
@@ -266,8 +325,8 @@ _dld_build_packages() {
     # Build @livos/config (tsc)
     info "Building @livos/config"
     pnpm --filter @livos/config build 2>&1 | tail -5 || fail "@livos/config build failed"
-    if [[ ! -d "$_DLD_LIVOS_SRC/packages/config/dist" ]] \
-        || [[ -z "$(find "$_DLD_LIVOS_SRC/packages/config/dist" -type f 2>/dev/null | head -1)" ]]; then
+    if [[ ! -d "$_DLD_LIVOS_DIR/packages/config/dist" ]] \
+        || [[ -z "$(find "$_DLD_LIVOS_DIR/packages/config/dist" -type f 2>/dev/null | head -1)" ]]; then
         fail "BUILD-FAIL: @livos/config produced empty dist"
     fi
     ok "@livos/config built"
@@ -275,15 +334,118 @@ _dld_build_packages() {
     # Build UI (vite production bundle)
     info "Building UI (vite production bundle; ~1-2 min)"
     pnpm --filter ui build 2>&1 | tail -5 || fail "UI build failed"
-    if [[ ! -d "$_DLD_LIVOS_SRC/packages/ui/dist" ]] \
-        || [[ -z "$(find "$_DLD_LIVOS_SRC/packages/ui/dist" -type f 2>/dev/null | head -1)" ]]; then
+    if [[ ! -d "$_DLD_LIVOS_DIR/packages/ui/dist" ]] \
+        || [[ -z "$(find "$_DLD_LIVOS_DIR/packages/ui/dist" -type f 2>/dev/null | head -1)" ]]; then
         fail "BUILD-FAIL: @livos/ui produced empty dist"
     fi
     ok "UI built"
 
     # Ensure livinityd's ui symlink (mirrors update.sh:537)
-    ln -sfn "$_DLD_LIVOS_SRC/packages/ui/dist" "$_DLD_LIVOS_SRC/packages/livinityd/ui"
+    ln -sfn "$_DLD_LIVOS_DIR/packages/ui/dist" "$_DLD_LIVOS_DIR/packages/livinityd/ui"
     ok "UI symlinked into livinityd"
+}
+
+# ── 5b. Build liv stack (104-12: core, worker, mcp-server, memory) ──────────
+# Mirrors update.sh:493-562 — liv uses npm (NOT pnpm) per the canonical Mini PC
+# layout. Each package builds via `npm run build` (which is `tsc` per their
+# package.json scripts). mcp-server is built but does NOT get a systemd unit;
+# livinityd spawns it on-demand as a child process.
+_dld_build_liv_packages() {
+    step "Plan 104-12 — npm install + build liv stack (core, worker, mcp-server, memory)"
+
+    if [[ ! -d "$_DLD_LIV_DIR" ]]; then
+        warn "$_DLD_LIV_DIR not found — skipping liv build (clone step may have failed)"
+        return 0
+    fi
+
+    cd "$_DLD_LIV_DIR" || fail "cannot cd to $_DLD_LIV_DIR"
+
+    info "npm install for liv stack (this may take 2-3 min)"
+    # --omit=optional reduces install time on hosts that don't need optional
+    # native deps. Mirrors update.sh:504 `npm install --production=false` (we
+    # need devDeps because we build via tsc which IS a devDep).
+    if [[ -f "package-lock.json" ]]; then
+        npm install --omit=optional 2>&1 | tail -10 || {
+            warn "liv npm install --omit=optional failed; retrying plain"
+            npm install 2>&1 | tail -10 || fail "liv npm install failed"
+        }
+    else
+        npm install 2>&1 | tail -10 || fail "liv npm install failed"
+    fi
+    ok "liv npm install complete"
+
+    # Build each package via its `build` script (tsc). 104-12 closes the
+    # update.sh:548 bug where memory was never built (per project memory:
+    # "liv-memory.service in restart loop because dist/index.js never compiled").
+    local pkg
+    for pkg in core worker mcp-server memory; do
+        local pkg_dir="$_DLD_LIV_DIR/packages/${pkg}"
+        if [[ ! -f "$pkg_dir/package.json" ]]; then
+            warn "liv/${pkg}: package.json missing — skipping"
+            continue
+        fi
+        info "Building @liv/${pkg} (tsc)..."
+        if (cd "$pkg_dir" && npm run build 2>&1 | tail -5); then
+            if [[ ! -d "$pkg_dir/dist" ]] \
+                || [[ -z "$(find "$pkg_dir/dist" -type f 2>/dev/null | head -1)" ]]; then
+                fail "BUILD-FAIL: @liv/${pkg} produced empty dist at $pkg_dir/dist"
+            fi
+            ok "@liv/${pkg} built"
+        else
+            fail "@liv/${pkg} build failed; check $pkg_dir for errors"
+        fi
+    done
+    ok "All liv packages built"
+}
+
+# ── 5c. Sync liv dist into pnpm-store resolution dirs (104-12 pitfall fix) ──
+# Per project memory: "update.sh pnpm-store quirk: copies liv dist into the
+# FIRST @liv+core* dir matched by find -maxdepth 1. If pnpm has multiple
+# resolution dirs (sharp version drift), it can copy to the wrong one and
+# livinityd still imports the stale dist."
+#
+# Our pattern: iterate ALL matching dirs (not just `head -1`) so livinityd's
+# pnpm-store symlink ALWAYS resolves to fresh dist regardless of which store
+# dir it picked. This is the canonical Phase 31 BUILD-02 multi-dir pattern
+# from update.sh:564-593, applied to all four liv packages (104-12 extension).
+_dld_sync_liv_dist_into_pnpm_store() {
+    step "Plan 104-12 — sync liv dist into livinityd's pnpm-store"
+
+    local pkg
+    local total_synced=0
+    for pkg in core worker mcp-server memory; do
+        local dist_src="$_DLD_LIV_DIR/packages/${pkg}/dist"
+        if [[ ! -d "$dist_src" ]] \
+            || [[ -z "$(find "$dist_src" -type f 2>/dev/null | head -1)" ]]; then
+            warn "@liv/${pkg}: dist empty or missing — skipping pnpm-store sync"
+            continue
+        fi
+
+        local synced_count=0
+        # Iterate ALL @liv+<pkg>* dirs (NOT head -1 — the canonical fix).
+        for store_dir in "$_DLD_LIVOS_DIR/node_modules/.pnpm/@liv+${pkg}"*/; do
+            [[ -d "$store_dir" ]] || continue
+            local target_parent="${store_dir}node_modules/@liv/${pkg}"
+            local target="${target_parent}/dist"
+            mkdir -p "$target_parent"
+            # rsync --delete to ensure stale files from prior builds are purged.
+            rsync -a --delete "$dist_src/" "$target/" 2>/dev/null \
+                || { warn "rsync to $target failed"; continue; }
+            if [[ -z "$(find "$target" -type f 2>/dev/null | head -1)" ]]; then
+                warn "post-rsync target $target is empty"
+                continue
+            fi
+            synced_count=$((synced_count + 1))
+        done
+
+        if (( synced_count == 0 )); then
+            info "@liv/${pkg}: no @liv+${pkg}* dir in pnpm store yet (livinityd may not import this pkg directly — non-fatal)"
+        else
+            ok "@liv/${pkg} dist synced to ${synced_count} pnpm-store dir(s)"
+            total_synced=$((total_synced + synced_count))
+        fi
+    done
+    ok "liv dist sync complete (${total_synced} total store dirs updated)"
 }
 
 # ── 7. JWT secret (run BEFORE .env write so .env can reference its path) ────
@@ -347,8 +509,9 @@ EOF
 }
 
 # ── 8. systemd unit livos.service ───────────────────────────────────────────
+# 104-12 path fix: WorkingDirectory=/opt/livos (flat, not nested).
 _dld_write_systemd_unit() {
-    step "Plan 104-11 — systemd unit livos.service"
+    step "Plan 104-11/104-12 — systemd unit livos.service"
 
     # Find pnpm absolute path (varies: /usr/bin/pnpm or /usr/local/bin/pnpm)
     local pnpm_bin
@@ -357,14 +520,14 @@ _dld_write_systemd_unit() {
 
     cat > "$_DLD_SYSTEMD_UNIT" <<EOF
 [Unit]
-Description=LivOS server (livinityd) — Plan 104-11
-After=postgresql.service redis-server.service network.target
+Description=LivOS server (livinityd) — Plan 104-11/104-12
+After=postgresql.service redis-server.service liv-core.service network.target
 Requires=postgresql.service redis-server.service
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=${_DLD_LIVOS_SRC}
+WorkingDirectory=${_DLD_LIVOS_DIR}
 EnvironmentFile=${_DLD_ENV_FILE}
 ExecStart=${pnpm_bin} --filter livinityd start
 Restart=on-failure
@@ -379,7 +542,7 @@ EOF
     chmod 0644 "$_DLD_SYSTEMD_UNIT"
     systemctl daemon-reload
     systemctl enable livos.service >/dev/null 2>&1 || true
-    ok "livos.service written at $_DLD_SYSTEMD_UNIT"
+    ok "livos.service written at $_DLD_SYSTEMD_UNIT (WorkingDirectory=${_DLD_LIVOS_DIR})"
 
     # Start (or restart if already running from a previous deploy)
     if systemctl is-active --quiet livos.service; then
@@ -390,6 +553,90 @@ EOF
         systemctl start livos.service
     fi
     ok "livos.service started"
+}
+
+# ── 8b. systemd units for liv-core, liv-worker, liv-memory (104-12) ─────────
+# Each unit follows the same template: After=postgresql+redis+network,
+# EnvironmentFile=/opt/livos/.env (shared env), ExecStart=node dist/index.js
+# (per their package.json "start" script — verified from liv/packages/*/package.json).
+# Reference: Mini PC has these as `liv-core.service`, `liv-worker.service`,
+# `liv-memory.service` (post Phase 65 rename from nexus-*). update.sh:629-655
+# is the canonical Mini PC restart logic — we mirror its service names exactly.
+#
+# mcp-server: deliberately NO systemd unit. livinityd spawns it on-demand as a
+# child process (per memory: project_v31_p77_complete.md — `additionalMcpServers`
+# config option in SdkAgentRunner spawns bytebot MCP child process).
+_dld_write_liv_systemd_units() {
+    step "Plan 104-12 — systemd units for liv-core/liv-worker/liv-memory"
+
+    local node_bin
+    node_bin=$(command -v node)
+    [[ -z "$node_bin" ]] && fail "node not on PATH after install — cannot wire liv systemd ExecStart"
+
+    local pkg
+    local unit_path
+    for pkg in core worker memory; do
+        local pkg_dir="$_DLD_LIV_DIR/packages/${pkg}"
+        local entry="${pkg_dir}/dist/index.js"
+        case "$pkg" in
+            core)   unit_path="$_DLD_SYSTEMD_LIV_CORE_UNIT"   ;;
+            worker) unit_path="$_DLD_SYSTEMD_LIV_WORKER_UNIT" ;;
+            memory) unit_path="$_DLD_SYSTEMD_LIV_MEMORY_UNIT" ;;
+        esac
+
+        if [[ ! -f "$entry" ]]; then
+            warn "liv-${pkg}: entry $entry missing — build did not emit dist/index.js (skipping systemd unit)"
+            continue
+        fi
+
+        cat > "$unit_path" <<EOF
+[Unit]
+Description=Liv ${pkg} (@liv/${pkg}) — Plan 104-12
+After=postgresql.service redis-server.service network.target
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${pkg_dir}
+EnvironmentFile=${_DLD_ENV_FILE}
+ExecStart=${node_bin} ${entry}
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        chmod 0644 "$unit_path"
+        ok "liv-${pkg}.service written at $unit_path"
+    done
+
+    systemctl daemon-reload
+
+    # Enable + start in dependency-friendly order: memory → worker → core.
+    # (core depends on memory + worker being available for bullmq queues +
+    # memory lookups; the exact ordering is via After= rather than hard deps so
+    # a single missing service doesn't cascade-fail.)
+    local svc
+    for svc in liv-memory liv-worker liv-core; do
+        local unit_file="/etc/systemd/system/${svc}.service"
+        if [[ ! -f "$unit_file" ]]; then
+            info "${svc}.service unit not written (entry was missing) — skipping enable/start"
+            continue
+        fi
+        systemctl enable "${svc}.service" >/dev/null 2>&1 || true
+        if systemctl is-active --quiet "${svc}.service"; then
+            info "${svc}.service already running — restarting to pick up new build"
+            systemctl restart "${svc}.service" 2>/dev/null || warn "${svc}.service restart failed"
+        else
+            info "Starting ${svc}.service"
+            systemctl start "${svc}.service" 2>/dev/null || warn "${svc}.service failed to start; check journalctl -u ${svc} -n 30"
+        fi
+    done
+    ok "liv-core/liv-worker/liv-memory systemd units installed + started"
 }
 
 # ── 9. Health check (livinityd actually bound to :8080?) ────────────────────
@@ -502,26 +749,38 @@ CADDYFILE
 }
 
 # ── Public entry point ──────────────────────────────────────────────────────
+# 104-12: extended pipeline now also builds liv stack + writes liv-core/
+# liv-worker/liv-memory systemd units. Order matters:
+#   1. system pkgs → postgres → redis (infra ready)
+#   2. clone (both livos + liv) → build livos (pnpm) → build liv (npm)
+#   3. sync liv dist into livinityd's pnpm-store (closes Mini PC pitfall)
+#   4. jwt + .env (livinityd reads these)
+#   5. liv systemd units FIRST (so livos.service `After=liv-core` is satisfied)
+#   6. livos systemd unit (the cap-stone)
+#   7. health-check + caddy reload
 deploy_livinityd() {
     if [[ "${SKIP_DEPLOY:-0}" == "1" ]]; then
         info "Plan 104-11 — --skip-deploy set; skipping livinityd deploy"
         return 0
     fi
 
-    step "Plan 104-11 — deploying livinityd (full LivOS application stack)"
+    step "Plan 104-11/104-12 — deploying livinityd + liv stack (full LivOS application stack)"
     info "After this completes, the LivOS UI should load in the browser."
-    info "Scope: livinityd only. liv-core/liv-worker DEFERRED to Plan 104-12."
+    info "Scope: livinityd (Plan 104-11) + liv-core/liv-worker/liv-memory (Plan 104-12)."
 
     _dld_install_system_packages
     _dld_setup_postgres
     _dld_setup_redis
     _dld_clone_source
     _dld_build_packages
+    _dld_build_liv_packages
+    _dld_sync_liv_dist_into_pnpm_store
     _dld_generate_jwt_secret
     _dld_write_env_file
+    _dld_write_liv_systemd_units
     _dld_write_systemd_unit
     _dld_health_check
     _dld_update_caddy_to_livinityd
 
-    ok "Plan 104-11 — livinityd deploy complete"
+    ok "Plan 104-11/104-12 — livinityd + liv stack deploy complete"
 }
