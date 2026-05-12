@@ -82,6 +82,18 @@ esac
 #    take and defaults to cloud, breaking local-lan and hybrid) ──
 set_livos_redis_key "livos:domain:local_mode" "$MODE"
 
+# ── Plan 104-11 — full livinityd deploy (system pkgs + Postgres + Redis +
+#    UI build + systemd unit + Caddy reverse_proxy :8080). Default: deploy.
+#    Skip with --skip-deploy (legacy 104-08/104-09 behavior — TLS/DNS only). ──
+if [[ "${SKIP_DEPLOY:-0}" != "1" ]]; then
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/deploy-livinityd.sh"
+    deploy_livinityd
+else
+    info "Plan 104-11 — --skip-deploy set; skipping livinityd deploy step"
+    info "  Run with --skip-deploy removed (or omit it) to get the full UI install."
+fi
+
 # ── Done ──
 print_banner "$MODE"
 exit 0
