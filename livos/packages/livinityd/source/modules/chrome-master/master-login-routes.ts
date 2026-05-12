@@ -222,6 +222,8 @@ export interface MasterLoginInjectables {
 	unlinkFn?: typeof nodeUnlink
 	// Phase 103.1-3 — chown master dir to bruce so SingletonLock can be written by `sudo -u bruce google-chrome`
 	chownExecFn?: (cmd: string, args: string[]) => Promise<{stdout: string; stderr: string}>
+	// Phase 103.1-5 — post-spawn dialog dismissal + main window activation. Tests inject a no-op.
+	dismissProfileDialogFn?: (display: string) => Promise<void>
 	logger?: {info?: (msg: string) => void; warn?: (msg: string, err?: unknown) => void}
 	// Phase 103-01 — Xvfb-driven master pipeline.
 	displayAllocator?: DisplayAllocatorLike
@@ -284,6 +286,126 @@ export function _resetMasterStateForTest(): void {
  * status() + reset() + restoreBackup() work without Phase 103 deps; they
  * only rely on the existing fs primitives.
  */
+/**
+ * Phase 103.1-5 — after master Chrome spawn, dismiss any "Profile error
+ * occurred" modal dialog and pre-activate the main Chrome window.
+ *
+ * Why: when livinityd restarts mid-master-session, the previous Chrome
+ * process is killed without a clean shutdown. On the next spawn Chrome
+ * detects `exited_cleanly:false` in `Local State` and pops a modal:
+ *   "Profile error occurred — Some settings may not be available."
+ * The dialog is its own top-level Chrome window with `class=Chrome` and
+ * geometry like 400x213. xdotool's display-mode input dispatch uses
+ * `search --class chrome --limit 1 windowactivate` which can match the
+ * dialog instead of the main Chrome window. Result: every keystroke /
+ * click the user sends from the master viewer lands on the dialog (or
+ * disappears), and login is impossible — the exact 2026-05-11 symptom:
+ *   "klavyeye yaziyorum 'a' geç basiyor, delete çalışmıyor".
+ *
+ * Fix: post-spawn polling loop (5 × 500ms) that:
+ *   1. Searches for any window whose title starts with "Profile error"
+ *      and sends `windowkill` to close it.
+ *   2. Searches for the main Chrome window (largest visible Chrome window
+ *      on the display, excluding the dialog) and `windowactivate --sync`
+ *      it so subsequent dispatcher `search --limit 1` calls land on it.
+ *
+ * Failures are logged but non-fatal: if xdotool is absent or no window
+ * is found yet, the loop retries; if we exhaust retries, dispatch falls
+ * back to the existing search-and-activate logic in input-dispatcher.ts.
+ */
+async function dismissProfileErrorAndActivateMain(
+	display: string,
+	execFileFn: typeof execFile,
+	logger?: MasterLoginInjectables['logger'],
+): Promise<void> {
+	const env = {...process.env, DISPLAY: display} as NodeJS.ProcessEnv
+	for (let attempt = 0; attempt < 5; attempt++) {
+		// 1. Try to find + kill the "Profile error" dialog.
+		try {
+			const {stdout} = await execFileFn(
+				'xdotool',
+				['search', '--onlyvisible', '--name', '^Profile error'],
+				// node:util.promisify-style options bag
+				{env, timeout: 1000} as never,
+			)
+			const wids = String(stdout).trim().split('\n').filter(Boolean)
+			for (const wid of wids) {
+				try {
+					await execFileFn(
+						'xdotool',
+						['windowkill', wid],
+						{env, timeout: 1000} as never,
+					)
+					logger?.info?.(
+						`[chrome-master] dismissed "Profile error" dialog wid=${wid} on ${display}`,
+					)
+				} catch {
+					/* windowkill failed — non-fatal */
+				}
+			}
+		} catch {
+			/* search throws when no match — that is the happy path */
+		}
+
+		// 2. Find the main Chrome window (largest visible chrome class) and activate it.
+		try {
+			const {stdout} = await execFileFn(
+				'xdotool',
+				['search', '--onlyvisible', '--class', 'chrome'],
+				{env, timeout: 1000} as never,
+			)
+			const wids = String(stdout)
+				.trim()
+				.split('\n')
+				.filter(Boolean)
+			let bestWid: string | undefined
+			let bestArea = 0
+			for (const wid of wids) {
+				try {
+					const {stdout: geomOut} = await execFileFn(
+						'xdotool',
+						['getwindowgeometry', '--shell', wid],
+						{env, timeout: 1000} as never,
+					)
+					const wm = /^WIDTH=(\d+)$/m.exec(String(geomOut))
+					const hm = /^HEIGHT=(\d+)$/m.exec(String(geomOut))
+					const w = wm ? Number(wm[1]) : 0
+					const h = hm ? Number(hm[1]) : 0
+					const area = w * h
+					if (area > bestArea) {
+						bestArea = area
+						bestWid = wid
+					}
+				} catch {
+					/* skip wid we couldn't probe */
+				}
+			}
+			if (bestWid !== undefined) {
+				try {
+					await execFileFn(
+						'xdotool',
+						['windowactivate', '--sync', bestWid, 'windowfocus', '--sync', bestWid],
+						{env, timeout: 1000} as never,
+					)
+					logger?.info?.(
+						`[chrome-master] activated main Chrome window wid=${bestWid} (area=${bestArea}) on ${display}`,
+					)
+					return // success — done.
+				} catch {
+					/* will retry */
+				}
+			}
+		} catch {
+			/* xdotool search failed (no windows yet) — retry */
+		}
+
+		await new Promise((r) => setTimeout(r, 500))
+	}
+	logger?.warn?.(
+		`[chrome-master] dismissProfileErrorAndActivateMain exhausted retries on ${display}; dispatch will fall back to first-match`,
+	)
+}
+
 /**
  * Phase 103.1-3 — chown the master profile dir to `bruce:bruce` so the
  * `sudo -u bruce google-chrome` process can create its
@@ -395,6 +517,9 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 		((cmd: string, args: string[]) =>
 			execFile(cmd, args) as Promise<{stdout: string; stderr: string}>)
 	const logger = injectables.logger
+	const dismissProfileDialogFn =
+		injectables.dismissProfileDialogFn ??
+		((display: string) => dismissProfileErrorAndActivateMain(display, execFile, logger))
 	// Phase 103-01 — capture injectables in closure so cleanupMaster() can
 	// reach them from chrome.on('exit') AND stopLogin via the same handles.
 	const displayAllocator = injectables.displayAllocator
@@ -594,6 +719,16 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 					userDataDir: MASTER_PROFILE_DIR,
 					url: 'https://accounts.google.com',
 				})
+
+				// 4.5 Phase 103.1-5 — dismiss the "Profile error occurred" modal
+				// (if Chrome detects exited_cleanly:false from a prior livinityd
+				// restart) and pre-activate the main Chrome window. The input
+				// dispatcher uses `search --class chrome --limit 1` which can
+				// pick the dialog instead of the main window — that breaks every
+				// keystroke / click in the master viewer. Await this so the
+				// returned wsUrl is only handed back when input dispatch will
+				// reach the right window. Worst-case adds ~2.5s to startLogin.
+				await dismissProfileDialogFn(display)
 
 				// 5. Allocate RFB port from the shared StreamManager port pool.
 				port = streamManager.getPortAllocator().allocate()
