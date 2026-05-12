@@ -975,10 +975,151 @@ else
     fail "deploy_livinityd pipeline does NOT call _dld_setup_docker_images right after _dld_install_streaming_packages (105-05 Bug #6 regression)"
 fi
 
+# ── Phase 106 — bootstrap-layer hotfix back-port regression tests ───────────
+
+# ── TEST_BUG_7_MENDER: _dld_install_system_packages contains mender-client4 ─
+info "TEST_BUG_7_MENDER: _dld_install_system_packages installs mender-client4 (Bug #7 — silences ENOENT log spam)"
+if awk '/^_dld_install_system_packages\(\)/,/^}/' "$DEPLOY_SH" | grep -q "mender-client4"; then
+    pass "Bug #7: mender-client4 present in _dld_install_system_packages"
+else
+    fail "Bug #7: mender-client4 NOT in _dld_install_system_packages body"
+fi
+
+# ── TEST_BUG_8_SAMBA: _dld_install_system_packages contains samba + samba-common-bin ─
+info "TEST_BUG_8_SAMBA: _dld_install_system_packages installs samba samba-common-bin (Bug #8 — Files module smbpasswd)"
+if awk '/^_dld_install_system_packages\(\)/,/^}/' "$DEPLOY_SH" | grep -q "samba samba-common-bin"; then
+    pass "Bug #8: samba + samba-common-bin present in _dld_install_system_packages"
+else
+    fail "Bug #8: samba + samba-common-bin NOT in _dld_install_system_packages body"
+fi
+
+# ── TEST_BUG_9_GOOGLE_CHROME: _dld_install_google_chrome defined + wired ────
+info "TEST_BUG_9_GOOGLE_CHROME: _dld_install_google_chrome helper + pipeline wire (Bug #9 — WebApp Launcher blocker)"
+if grep -qE "^_dld_install_google_chrome\(\)" "$DEPLOY_SH"; then
+    pass "Bug #9: _dld_install_google_chrome function defined"
+else
+    fail "Bug #9: _dld_install_google_chrome function NOT defined"
+fi
+if awk '/^_dld_install_google_chrome\(\)/,/^}/' "$DEPLOY_SH" | grep -q "google-chrome-stable"; then
+    pass "Bug #9: helper body installs google-chrome-stable"
+else
+    fail "Bug #9: helper body missing google-chrome-stable install"
+fi
+if awk '/^_dld_install_google_chrome\(\)/,/^}/' "$DEPLOY_SH" | grep -q "google-chrome.gpg"; then
+    pass "Bug #9: helper body uses signed keyring (/usr/share/keyrings/google-chrome.gpg)"
+else
+    fail "Bug #9: helper body missing signed keyring pattern"
+fi
+# Pipeline order: streaming < google_chrome < docker_images
+bug9_order=$(awk '/^deploy_livinityd\(\)/,/^}/' "$DEPLOY_SH" | grep -nE "_dld_install_streaming_packages|_dld_install_google_chrome|_dld_setup_docker_images" | awk -F: '{print $1}')
+bug9_a=$(echo "$bug9_order" | sed -n 1p)
+bug9_b=$(echo "$bug9_order" | sed -n 2p)
+bug9_c=$(echo "$bug9_order" | sed -n 3p)
+if [[ -n "$bug9_a" ]] && [[ -n "$bug9_b" ]] && [[ -n "$bug9_c" ]] && (( bug9_a < bug9_b && bug9_b < bug9_c )); then
+    pass "Bug #9: pipeline order streaming(${bug9_a}) < google_chrome(${bug9_b}) < docker_images(${bug9_c})"
+else
+    fail "Bug #9: pipeline order broken (streaming=${bug9_a:-MISSING}, google_chrome=${bug9_b:-MISSING}, docker_images=${bug9_c:-MISSING})"
+fi
+
+# ── TEST_BUG_10_DESKTOP_USER: _dld_create_desktop_user defined + sudoers ────
+info "TEST_BUG_10_DESKTOP_USER: _dld_create_desktop_user helper + visudo validation (Bug #10 — bruce user + sudoers)"
+if grep -qE "^_dld_create_desktop_user\(\)" "$DEPLOY_SH"; then
+    pass "Bug #10: _dld_create_desktop_user function defined"
+else
+    fail "Bug #10: _dld_create_desktop_user function NOT defined"
+fi
+if grep -qE "^_DLD_DESKTOP_USER=" "$DEPLOY_SH" && grep -qE '_DLD_DESKTOP_USER:-bruce' "$DEPLOY_SH"; then
+    pass "Bug #10: _DLD_DESKTOP_USER constant defined with :-bruce default"
+else
+    fail "Bug #10: _DLD_DESKTOP_USER constant missing or wrong default"
+fi
+if awk '/^_dld_create_desktop_user\(\)/,/^}/' "$DEPLOY_SH" | grep -q "useradd -m"; then
+    pass "Bug #10: helper body uses useradd -m"
+else
+    fail "Bug #10: helper body missing useradd -m"
+fi
+if awk '/^_dld_create_desktop_user\(\)/,/^}/' "$DEPLOY_SH" | grep -q "usermod -aG"; then
+    pass "Bug #10: helper body adds groups via usermod -aG"
+else
+    fail "Bug #10: helper body missing usermod -aG"
+fi
+if awk '/^_dld_create_desktop_user\(\)/,/^}/' "$DEPLOY_SH" | grep -q "/etc/sudoers.d/99-"; then
+    pass "Bug #10: helper body writes /etc/sudoers.d/99-<user>"
+else
+    fail "Bug #10: helper body missing /etc/sudoers.d/99- drop-in"
+fi
+if awk '/^_dld_create_desktop_user\(\)/,/^}/' "$DEPLOY_SH" | grep -q "visudo -cf"; then
+    pass "Bug #10: helper body validates sudoers via visudo -cf"
+else
+    fail "Bug #10: helper body missing visudo -cf validation"
+fi
+if awk '/^_dld_create_desktop_user\(\)/,/^}/' "$DEPLOY_SH" | grep -q "NOPASSWD:ALL"; then
+    pass "Bug #10: sudoers drop-in is NOPASSWD:ALL"
+else
+    fail "Bug #10: sudoers drop-in missing NOPASSWD:ALL"
+fi
+# D-104-NO-PROD-IMPACT: existing _DLD_LIVOS_USER:-root default UNTOUCHED
+if grep -qE '_DLD_LIVOS_USER=.*:-root' "$DEPLOY_SH"; then
+    pass "Bug #10: existing _DLD_LIVOS_USER:-root default preserved (D-104-NO-PROD-IMPACT)"
+else
+    fail "Bug #10: D-104-NO-PROD-IMPACT broken — _DLD_LIVOS_USER:-root default lost"
+fi
+
+# ── TEST_BUG_11_JWT_HEX: _dld_generate_jwt_secret uses hex32 + no newline ───
+info "TEST_BUG_11_JWT_HEX: _dld_generate_jwt_secret uses openssl rand -hex 32 with newline strip (Bug #11 — validateSecret 64-hex)"
+if awk '/^_dld_generate_jwt_secret\(\)/,/^}/' "$DEPLOY_SH" | grep -q "openssl rand -hex 32"; then
+    pass "Bug #11: helper uses openssl rand -hex 32"
+else
+    fail "Bug #11: helper does NOT use openssl rand -hex 32"
+fi
+if awk '/^_dld_generate_jwt_secret\(\)/,/^}/' "$DEPLOY_SH" | grep -qF "tr -d '\n'"; then
+    pass "Bug #11: helper strips trailing newline via tr -d '\\n'"
+else
+    fail "Bug #11: helper does NOT strip trailing newline"
+fi
+if awk '/^_dld_generate_jwt_secret\(\)/,/^}/' "$DEPLOY_SH" | grep -q "openssl rand -base64 32"; then
+    fail "Bug #11: REGRESSION — old 'openssl rand -base64 32' still present"
+else
+    pass "Bug #11: old 'openssl rand -base64 32' removed"
+fi
+if awk '/^_dld_generate_jwt_secret\(\)/,/^}/' "$DEPLOY_SH" | grep -qE '\[0-9a-fA-F\]\{64\}'; then
+    pass "Bug #11: helper validates 64-hex format (rotation gate + post-write self-check)"
+else
+    fail "Bug #11: helper missing 64-hex format validation"
+fi
+if awk '/^_dld_generate_jwt_secret\(\)/,/^}/' "$DEPLOY_SH" | grep -q ".pre-106.bak"; then
+    pass "Bug #11: rotation preserves old secret as .pre-106.bak"
+else
+    fail "Bug #11: rotation does not back up old secret"
+fi
+
+# ── TEST_BUG_12_USER_EXISTS: user.ts:exists() checks hashedPassword ─────────
+info "TEST_BUG_12_USER_EXISTS: user.ts:exists() returns Boolean(user?.hashedPassword) (Bug #12 — fresh-install register unblock)"
+USER_TS="$REPO_ROOT/livos/packages/livinityd/source/modules/user/user.ts"
+if [[ ! -f "$USER_TS" ]]; then
+    fail "Bug #12: user.ts not found at $USER_TS"
+else
+    if grep -q "Boolean(user?.hashedPassword)" "$USER_TS"; then
+        pass "Bug #12: exists() uses Boolean(user?.hashedPassword)"
+    else
+        fail "Bug #12: exists() does NOT use Boolean(user?.hashedPassword)"
+    fi
+    if grep -q "return user !== undefined" "$USER_TS"; then
+        fail "Bug #12: REGRESSION — old 'return user !== undefined' still present"
+    else
+        pass "Bug #12: old 'return user !== undefined' removed"
+    fi
+    if grep -q "Phase 106 Bug #12" "$USER_TS"; then
+        pass "Bug #12: provenance comment present in user.ts"
+    else
+        fail "Bug #12: provenance comment missing in user.ts (Phase 106 Bug #12 marker)"
+    fi
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "================================================================"
-echo "  Plan 104-11/12/13 + 105-01/02/03/05 (+Bug6) test results: $pass_count PASS, $fail_count FAIL"
+echo "  Plan 104-11/12/13 + 105-01/02/03/05 (+Bug6) + 106 test results: $pass_count PASS, $fail_count FAIL"
 echo "================================================================"
 if (( fail_count > 0 )); then
     exit 1
