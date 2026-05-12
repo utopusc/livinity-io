@@ -27,8 +27,10 @@ log "starting UAT container"
 docker compose -f "$COMPOSE_FILE" up -d || fail "docker compose up failed"
 
 log "waiting for readiness sentinel (/tmp/livos-uat-ready inside container)"
+# MSYS_NO_PATHCONV scoped to the docker exec subprocess only — Git Bash on Windows
+# otherwise mangles `/tmp/livos-uat-ready` into `C:/...Temp/livos-uat-ready`.
 for i in $(seq 1 30); do
-    if docker exec livos-uat test -f /tmp/livos-uat-ready 2>/dev/null; then
+    if MSYS_NO_PATHCONV=1 docker exec livos-uat test -f /tmp/livos-uat-ready 2>/dev/null; then
         pass "container reached READY state"
         break
     fi

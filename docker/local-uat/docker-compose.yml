@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   livos-uat:
     build:
@@ -23,7 +21,10 @@ services:
       - '443:443'
       - '53:53/udp'
       - '6080:6080'
-      - '9223:9223'
+      # Chrome 121+ ignores --remote-debugging-address=0.0.0.0 and binds 127.0.0.1:9223
+      # inside the container. The entrypoint runs `socat 0.0.0.0:9224 → 127.0.0.1:9223`
+      # to expose CDP to the host. So host :9223 → container :9224 (D-104-UAT-CDP-BIND).
+      - '9223:9224'
     environment:
       - DISPLAY=:0
       - LIVOS_UAT_MODE=local-lan
