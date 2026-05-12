@@ -1139,6 +1139,34 @@ class Server {
 			response.json({state: 'success', progress: 100, description: '', updateTo: ''})
 		})
 
+		// Phase 104 plan 104-03 — Local-mode CA root certificate.
+		// PUBLIC (unauthenticated) by design (V13): devices need this BEFORE they can
+		// trust HTTPS from livinityd. Mode-gated by Redis flag — 404s in cloud/hybrid.
+		// Path is intentionally exact-match (not a prefix) to prevent leaking other
+		// endpoints (research §V13 security pitfall).
+		this.app.get('/api/local/ca.crt', async (_request, response) => {
+			const mode = await this.livinityd.ai.redis
+				.get('livos:domain:local_mode')
+				.catch(() => null)
+			if (mode !== 'local-lan') {
+				response.status(404).json({error: 'local-lan mode not active'})
+				return
+			}
+			try {
+				const {readRootCert} = await import('../local-dns/pki.js')
+				const pem = await readRootCert()
+				response.setHeader('Content-Type', 'application/x-x509-ca-cert')
+				response.setHeader(
+					'Content-Disposition',
+					'attachment; filename="livos-local-ca.crt"',
+				)
+				response.send(pem)
+			} catch (err) {
+				this.logger.error('failed to read liv-local CA cert', err)
+				response.status(500).json({error: 'failed to read CA cert'})
+			}
+		})
+
 		// Proxy MCP API requests to liv-core (Nexus) on port 3200
 		this.app.use('/api/mcp', async (request, response, next) => {
 			try {

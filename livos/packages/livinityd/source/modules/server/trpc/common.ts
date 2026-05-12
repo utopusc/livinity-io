@@ -72,6 +72,12 @@ export const httpOnlyPaths = [
 	'domain.platform.listCustomDomains',
 	'domain.platform.updateAppMapping',
 	'domain.platform.removeCustomDomain',
+	// Phase 104 plan 104-03 — local-lan mode tRPC routes do systemctl reload + file I/O,
+	// can take 1-5 seconds. Force HTTP transport (survives WS reconnect during
+	// `systemctl restart livos`). Cluster with domain.* for namespace locality.
+	'local.activate',
+	'local.getStatus',
+	'local.getCaCert',
 	// File operations — use HTTP for reliability through relay tunnel
 	'files.createDirectory',
 	'files.copy',

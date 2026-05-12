@@ -17,6 +17,10 @@ import backups from '../../backups/routes.js'
 import ai from '../../ai/routes.js'
 import usage from '../../usage-tracking/routes.js'
 import domain from '../../domain/routes.js'
+// Phase 104 plan 104-03 — local-lan mode tRPC routes (local.{getStatus,activate,getCaCert}).
+// All 3 paths route via HTTP per common.ts httpOnlyPaths — local.activate does
+// systemctl reload + file I/O (1-5s) that must survive `systemctl restart livos`.
+import localDns from '../../local-dns/routes.js'
 import docker from '../../docker/routes.js'
 import scheduler from '../../scheduler/routes.js'
 import monitoring from '../../monitoring/routes.js'
@@ -144,6 +148,8 @@ export function createAppRouter(opts: {
 		ai,
 		usage,
 		domain,
+		// Phase 104 plan 104-03 — local-lan mode namespace.
+		local: localDns,
 		docker,
 		scheduler,
 		monitoring,
