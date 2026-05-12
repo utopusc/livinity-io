@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-12T07:20:00.000Z"
+last_updated: "2026-05-12T07:10:04.538Z"
 progress:
   total_phases: 54
   completed_phases: 25
   total_plans: 210
-  completed_plans: 199
+  completed_plans: 200
   percent: 95
 ---
 
@@ -26,9 +26,28 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 104 (One-shot Local Install + Docker Ubuntu GUI UAT) — EXECUTING
-Plan: 3 of 7 (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`; 104-02 ✅ shipped 2026-05-12 `2a1a274b..1361f483`; runtime verify pending Docker Desktop)
+Plan: 4 of 7 (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`; 104-02 ✅ shipped 2026-05-12 `2a1a274b..1361f483`; 104-03 ✅ shipped 2026-05-12 `9bba50ba..8d8cec66` — local-lan backend code-complete, 24/24 vitest pass, runtime AC-104-4..7 deferred to 104-07 UAT)
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v33.0 (active)
+
+## 104-03 Status (2026-05-12) — local-lan backend SHIPPED (24/24 vitest pass, runtime UAT deferred)
+
+- Wave 3 (104-03): ✅ COMPLETE — `9bba50ba..8d8cec66` (3 commits) — full LOCAL-LAN backend wired end-to-end. Three commits:
+  1. `9bba50ba` mode-local-lan.sh: dnsmasq install (idempotent, systemd-resolved port-53 fix via `DNSStubListener=no`) + atomic /etc/dnsmasq.d/livinity.conf write + /etc/caddy/pki-global.conf provision with `ca liv-local` named CA block
+  2. `4c942de2` local-dns module (dnsmasq-config.ts + pki.ts + routes.ts) + 3 test files + caddy.ts gains generateLocalCaddyfile + validateLocalTld + LocalSubdomainConfig + caddy.test.ts (12 tests including cloud-mode regression)
+  3. `8d8cec66` server/index.ts public `GET /api/local/ca.crt` mode-gated endpoint at line 1147 + tRPC `local.*` router registration + 3 httpOnlyPaths entries
+- Tests: 24/24 PASSED (5 dnsmasq + 4 pki + 3 routes + 12 caddy). Target was ≥18. AC-104-8 (pki-global.conf is first non-blank line) PASS. D-104-NO-PROD-IMPACT regression test (generateFullCaddyfile output has NO pki/import/ca-liv-local) PASS ×2.
+- TypeScript: ZERO new errors in our edits (verified by stash-diff: pre-edit and post-edit error counts in server/index.ts both `19` — all pre-existing unrelated).
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 3 commits (verified pre + post each commit).
+- Deviations (Rule 1 + Rule 3):
+  1. pki.test.ts `startsWith` assertion normalized for Windows path.join backslash (POSIX behavior unchanged).
+  2. routes.test.ts used `dangerouslyBypassAuthentication: true` to skip isAuthenticated middleware (existing escape hatch in is-authenticated.ts:12).
+  3. Plan referenced `SubdomainConfig` from caddy.ts but existing type is `{subdomain, appId, port, enabled}` (cloud-mode marketplace). Added new exported `LocalSubdomainConfig` interface `{name, port}` sibling — D-104-NO-PROD-IMPACT preserved.
+- Decision: D-104-CADDY-PKI-IMPORT realized. pki block lives in /etc/caddy/pki-global.conf (one file), livinityd's generateLocalCaddyfile emits ONLY `import /etc/caddy/pki-global.conf` line — pki block NEVER inlined, survives Caddyfile regeneration (Pitfall 1).
+
+**Carry-forward to 104-04 (parallel-planned):** caddy.ts has append-ready `generateHybridCaddyfile` slot next to `generateLocalCaddyfile`. caddy.test.ts can append hybrid describe block; cloud-mode regression test continues guarding generateFullCaddyfile. local-dns/routes.ts has 3 procedures — 104-04 can append `local.activateHybrid` or introduce sibling `hybrid-dns/routes.ts`. common.ts cluster has append slot after `local.getCaCert`. All exports named (no default-export collisions).
+
+**Runtime verification deferred to 104-07:** AC-104-4 (dig @localhost bruce.livinity.local), AC-104-5 (survives systemctl restart), AC-104-6 (curl /api/local/ca.crt → PEM), AC-104-7 (curl --cacert https://bruce.livinity.local → 200) all require Docker UAT container live — verified inside 104-07's end-to-end UAT walk.
 
 ## 104-02 Status (2026-05-12) — install.sh `--mode` dispatch + sourced helpers SHIPPED (runtime verify pending)
 
