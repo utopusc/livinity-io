@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-12T06:35:42.094Z"
+last_updated: "2026-05-12T07:20:00.000Z"
 progress:
   total_phases: 54
   completed_phases: 25
   total_plans: 210
-  completed_plans: 198
-  percent: 94
+  completed_plans: 199
+  percent: 95
 ---
 
 # Project State
@@ -26,9 +26,19 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 104 (One-shot Local Install + Docker Ubuntu GUI UAT) — EXECUTING
-Plan: 2 of 7 (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`, runtime verify pending Docker Desktop)
+Plan: 3 of 7 (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`; 104-02 ✅ shipped 2026-05-12 `2a1a274b..1361f483`; runtime verify pending Docker Desktop)
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v33.0 (active)
+
+## 104-02 Status (2026-05-12) — install.sh `--mode` dispatch + sourced helpers SHIPPED (runtime verify pending)
+
+- Wave 2 (104-02): ✅ COMPLETE — `2a1a274b..1361f483` (2 commits) — `scripts/install.sh` (mode 0755) + 5 sourced helpers (`scripts/install/{_logging,parse-cli,detect-platform,common-deps,show-banner}.sh`) + 3 mode stubs (`scripts/install/mode-{cloud,local-lan,hybrid}.sh`) + `docker/local-uat/scripts/test-install-idempotency.sh` (mode 0755). D-104-INSTALL-ENTRY (single install.sh + --mode flag) + D-104-DEFAULT-MODE (hybrid default) realized.
+- Structural acceptance: install.sh `--help` exits 0 + lists all 3 modes with `Default` + `Apple devices NOT supported` substrings; `--mode foo` exits 64 with `invalid --mode 'foo'` stderr (AC-104-16 ✓); `--mode "; rm -rf /"` rejected before any side effect (Threat T-104-02-T1 mitigated by whitelist); all 3 stubs export `install_mode_<mode>` function name; install.sh contains `set -euo pipefail` + `trap 'on_error $LINENO' ERR` + writes `livos:domain:local_mode=$MODE` via `set_livos_redis_key`.
+- Runtime acceptance (DEFERRED — Docker daemon unavailable on Windows host, same situation as 104-01): AC-104-1 scaffold-path + AC-104-2 idempotency require `docker compose exec` to run. Expected: container reaches READY; entrypoint dispatches to `/livinity-io/scripts/install.sh --mode local-lan`; `install_mode_local_lan` stub prints + writes 2 Redis keys; test-install-idempotency.sh exits 0 with empty diff across systemctl/file-sha256/Redis snapshots.
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across both 104-02 task commits (verified pre + post each commit via `git hash-object liv/packages/core/src/sdk-agent-runner.ts`).
+- Decisions: (1) EUID root-check positioned AFTER parse_cli + detect_* but BEFORE install_common_deps — --help and --mode validation must work for any user; (2) `dig` → `dnsutils` in common-deps.sh apt list, same correction as 104-01 (Ubuntu's `dig` binary ships in `dnsutils`); (3) git update-index --chmod=+x for install.sh + idempotency harness (Windows filesystem doesn't carry +x; same Windows-cross-platform pattern as 104-01).
+
+**Carry-forward to 104-03/04/06:** `install_mode_<mode>` function-name contract is locked. Plans 104-03 (local-lan body — dnsmasq + Caddy PKI), 104-04 (hybrid body — Cloudflare DNS-01 + Server5 subdomain mint), 104-06 (cloud body — Mini PC parity regression) each replace ONE stub function body without touching install.sh or the 5 shared helpers. `livos/install.sh` UNTOUCHED — D-104-NO-PROD-IMPACT preserved; Mini PC `update.sh` flow unaffected.
 
 ## 104-01 Status (2026-05-12) — Docker UAT scaffolding SHIPPED (runtime verify pending)
 
