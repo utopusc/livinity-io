@@ -78,6 +78,13 @@ _DLD_CADDYFILE="/etc/caddy/Caddyfile"
 # install via manual chown. Future install.sh `--user` flag deferred.
 _DLD_LIVOS_USER="${_DLD_LIVOS_USER:-root}"
 
+# 106 Bug #10: desktop session user (sudo + docker groups, NOPASSWD sudoers).
+# Distinct from _DLD_LIVOS_USER — that one owns /opt/livos/ + /opt/liv/ trees
+# (defaults to root to match Mini PC first-install). This one is the
+# human-friendly login the operator uses for GUI sessions + sudo elevation.
+_DLD_DESKTOP_USER="${_DLD_DESKTOP_USER:-bruce}"
+_DLD_DESKTOP_UID="${_DLD_DESKTOP_UID:-1000}"
+
 # ── 1. System packages ──────────────────────────────────────────────────────
 _dld_install_system_packages() {
     step "Plan 104-11 — system packages (Node 22 + pnpm + postgresql + redis-server)"
@@ -252,6 +259,84 @@ _dld_setup_redis() {
     fi
 
     _DLD_REDIS_PASS="$redis_pass"
+}
+
+# ── 3b. Desktop session user (Phase 106 Bug #10 — bruce + sudoers + groups) ──
+# Creates the human-friendly login `bruce` (configurable via _DLD_DESKTOP_USER)
+# with sudo + docker group membership and a NOPASSWD sudoers drop-in.
+# Without this, livinityd's Streaming module crashes with `sudo: unknown user
+# bruce` on per-host display features. fluxbox is already installed by
+# _dld_install_streaming_packages — no apt install here.
+#
+# Idempotent:
+#   - `id -u "$user"` short-circuits when user exists
+#   - `usermod -aG` is no-op when membership already present
+#   - sudoers drop-in overwritten unconditionally (single-line, we control content)
+#   - visudo -cf validates BEFORE leaving the file in place; failure → rm + warn
+_dld_create_desktop_user() {
+    step "Phase 106 Bug #10 — create desktop user (sudo + docker + NOPASSWD sudoers)"
+
+    local user="${_DLD_DESKTOP_USER:-bruce}"
+    local uid="${_DLD_DESKTOP_UID:-1000}"
+    local sudoers_file="/etc/sudoers.d/99-${user}"
+
+    # Sanity: useradd only available on Linux. Skip silently on non-Linux hosts.
+    if ! command -v useradd >/dev/null 2>&1; then
+        info "useradd not available — skipping desktop user creation (non-Linux host)"
+        return 0
+    fi
+
+    # Create user if not exists (idempotent).
+    if id -u "$user" >/dev/null 2>&1; then
+        ok "Desktop user '${user}' already exists (uid=$(id -u "$user"))"
+    else
+        info "Creating desktop user '${user}' (uid=${uid})"
+        # -m: create home dir, -s: shell, -u: explicit uid (allows :1000 if free)
+        if useradd -m -u "$uid" -s /bin/bash "$user" 2>&1; then
+            ok "Desktop user '${user}' created (uid=${uid})"
+        else
+            # uid may be taken — retry without explicit uid
+            warn "useradd with uid=${uid} failed — retrying with auto-assigned uid"
+            useradd -m -s /bin/bash "$user" 2>&1 \
+                || { warn "Failed to create user '${user}' — Bug #10 NOT fixed on this host"; return 0; }
+            ok "Desktop user '${user}' created (auto-assigned uid=$(id -u "$user"))"
+        fi
+    fi
+
+    # Add to sudo + docker groups. usermod -aG is no-op on existing membership.
+    # `docker` group may not exist yet if Docker isn't installed — getent guard.
+    local groups_to_add="sudo"
+    if getent group docker >/dev/null 2>&1; then
+        groups_to_add="${groups_to_add},docker"
+    else
+        info "docker group not yet present — adding ${user} to sudo only (docker group will be created on Docker install)"
+    fi
+    if usermod -aG "$groups_to_add" "$user" 2>&1; then
+        ok "Desktop user '${user}' in groups: $(id -nG "$user" 2>/dev/null)"
+    else
+        warn "Failed to add ${user} to groups ${groups_to_add} (non-fatal)"
+    fi
+
+    # NOPASSWD sudoers drop-in. Write to a tmp file first, validate with
+    # `visudo -cf`, then mv to /etc/sudoers.d/. visudo failure → rm tmp + warn
+    # (do NOT leave a broken sudoers file in place — that bricks sudo).
+    local tmp_sudoers
+    tmp_sudoers=$(mktemp /tmp/sudoers-${user}-XXXXXX) || {
+        warn "mktemp failed — skipping sudoers drop-in for '${user}'"
+        return 0
+    }
+    printf '%s\n' "${user} ALL=(ALL) NOPASSWD:ALL" > "$tmp_sudoers"
+    chmod 0440 "$tmp_sudoers"
+
+    if visudo -cf "$tmp_sudoers" >/dev/null 2>&1; then
+        mv "$tmp_sudoers" "$sudoers_file"
+        chmod 0440 "$sudoers_file"
+        chown root:root "$sudoers_file" 2>/dev/null || true
+        ok "Sudoers drop-in written: ${sudoers_file} (validated by visudo -cf)"
+    else
+        warn "visudo -cf failed on tmp file — sudoers drop-in NOT installed for '${user}'"
+        rm -f "$tmp_sudoers"
+    fi
 }
 
 # ── 4. Source clone ─────────────────────────────────────────────────────────
@@ -1178,6 +1263,7 @@ deploy_livinityd() {
     _dld_install_system_packages
     _dld_setup_postgres
     _dld_setup_redis
+    _dld_create_desktop_user              # 106 Bug #10 — bruce user + sudo + docker groups + NOPASSWD sudoers
     _dld_clone_source
     _dld_install_streaming_packages       # 105-02 G2 — streaming apt + ydotoold unit
     _dld_install_google_chrome            # 106 Bug #9 — google-chrome-stable (WebApp Launcher blocker)
