@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  livos-uat:
+    build:
+      context: ../..        # repo root, so install.sh can be COPYed/mounted
+      dockerfile: docker/local-uat/Dockerfile
+    image: livos-uat:dev
+    container_name: livos-uat
+    privileged: true
+    cgroup: host
+    # If compose client is too old for `cgroup: host`, use:
+    # cgroupns_mode: host
+    tmpfs:
+      - /run
+      - /tmp
+      - /run/lock
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ../..:/livinity-io:ro     # mount repo so entrypoint can run scripts/install.sh
+    ports:
+      - '80:80'
+      - '443:443'
+      - '53:53/udp'
+      - '6080:6080'
+      - '9223:9223'
+    environment:
+      - DISPLAY=:0
+      - LIVOS_UAT_MODE=local-lan
+      - LIVINITY_LOCAL_TLD=livinity.local
+    stop_signal: SIGRTMIN+3
