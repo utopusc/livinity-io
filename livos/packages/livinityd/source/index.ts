@@ -27,6 +27,12 @@ import {seedLocalEnvironment} from './modules/docker/environments.js'
 import {seedBuiltinTools} from './modules/seed-builtin-tools.js'
 import {seedDefaultAliases} from './modules/livinity-broker/seed-default-aliases.js'
 import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/api-keys/index.js'
+// Phase 104 plan 104-10 — LivOS → livinity.io heartbeat client. Wired AFTER
+// ai.start() so this.ai.redis is connected. Only armed when the operator
+// passed `--api-key liv_k_...` at install time (104-09 wrote the file +
+// Redis key); otherwise we skip silently so plain LAN-only installs don't
+// spam the journal with "API key unavailable" warnings.
+import {startHeartbeat, REDIS_KEY_API_KEY_PATH, type StopHandle as HeartbeatStopHandle} from './modules/account/index.js'
 // Phase 71-05 — ComputerUseContainerManager wiring. Field added so the
 // desktop-gateway middleware (server/index.ts) and the computerUse tRPC
 // router (computer-use/routes.ts) can reach a shared lifecycle owner.
@@ -204,6 +210,12 @@ export default class Livinityd {
 	// inside flushLastUsed). Disposed by cli.ts cleanShutdown so pending
 	// last_used_at writes are flushed before SIGTERM/SIGINT exits the process.
 	apiKeyCache: ApiKeyCache
+	// Phase 104 plan 104-10 — handle returned by startHeartbeat(). Undefined
+	// when the operator did not pass --api-key at install time (104-09) — in
+	// that case the heartbeat is never armed. Set in start(), called in stop()
+	// for graceful shutdown so the self-rescheduling setTimeout chain unwinds
+	// cleanly on SIGTERM/SIGINT.
+	private stopHeartbeat?: HeartbeatStopHandle
 	// Phase 71-05 — upstream-bytebot desktop container lifecycle owner.
 	// Initialized in start() AFTER initDatabase() because the manager needs the pg pool.
 	// Optional because PostgreSQL may be unavailable on legacy YAML-only mode
@@ -412,6 +424,71 @@ export default class Livinityd {
 			this.logger.log('Seeded broker model aliases to livinity:broker:alias:*')
 		} catch (err) {
 			this.logger.error('Failed to seed broker model aliases', err)
+		}
+
+		// Phase 104 plan 104-10 — LivOS → livinity.io heartbeat client (FIRST
+		// client-side piece of v34). Only armed when the operator passed
+		// --api-key liv_k_... at install time (104-09 persisted both the
+		// file at /etc/livos/secrets/api-key AND the Redis pointer key).
+		// When the Redis key is absent we silently skip — plain LAN-only
+		// installs (no marketplace integration) get NO heartbeat traffic
+		// and NO log spam.
+		//
+		// Forward-compat: until v34.x ships Server5's
+		// `/api/devices/heartbeat` route the POST returns 404. The sender
+		// logs a single warn line per livinityd restart and keeps polling
+		// silently. When Server5 ships the endpoint, dashboards light up
+		// without any LivOS-side change.
+		//
+		// D-104-RELAY-ZERO-DATA-PLANE: heartbeat is control-plane traffic
+		// (~200 bytes / 60s = ~12KB/day) — explicitly allowed per the
+		// Phase 104 invariant. Data-plane (Master Chrome streams, agent
+		// payloads, file uploads) stays LAN-direct.
+		try {
+			const apiKeyPath = await this.ai.redis.get(REDIS_KEY_API_KEY_PATH)
+			if (apiKeyPath) {
+				const heartbeatLogger = (() => {
+					const c = this.logger.createChildLogger('heartbeat')
+					return {
+						info: (msg: string) => c.log(msg),
+						warn: (msg: string, error?: unknown) =>
+							error === undefined ? c.log(msg) : c.error(msg, error),
+						error: (msg: string, error?: unknown) =>
+							error === undefined ? c.error(msg) : c.error(msg, error),
+						verbose: (msg: string) => c.verbose(msg),
+					}
+				})()
+				const url =
+					process.env.LIVOS_HEARTBEAT_URL ??
+					'https://livinity.io/api/devices/heartbeat'
+				const intervalSec = Number(
+					process.env.LIVOS_HEARTBEAT_INTERVAL_SEC ?? '60',
+				)
+				this.stopHeartbeat = startHeartbeat({
+					url,
+					intervalSec: Number.isFinite(intervalSec) && intervalSec > 0
+						? intervalSec
+						: 60,
+					redis: this.ai.redis,
+					version: this.version,
+					logger: heartbeatLogger,
+				})
+				this.logger.log(
+					`Heartbeat sender wired (url=${url} interval=${intervalSec}s; api-key path=${apiKeyPath})`,
+				)
+			} else {
+				this.logger.verbose(
+					`Heartbeat sender NOT armed (no --api-key at install time; ${REDIS_KEY_API_KEY_PATH} unset)`,
+				)
+			}
+		} catch (err) {
+			// Non-fatal — heartbeat is observability sugar, not a hard
+			// dependency. livinityd boot continues; operator can re-run
+			// install.sh --api-key ... and restart livinityd to re-arm.
+			this.logger.error(
+				'Failed to wire heartbeat sender (non-fatal — livinityd boot continues)',
+				err,
+			)
 		}
 
 		// Phase 98-04 — wire StreamManager + WebAppWindowManager singletons
@@ -744,6 +821,16 @@ export default class Livinityd {
 		try {
 			// Stop backups first because it depends on files
 			await this.backups.stop()
+
+			// Phase 104 plan 104-10 — stop the heartbeat sender BEFORE the rest
+			// of shutdown so its in-flight POST (and self-rescheduling
+			// setTimeout) wind down while the redis client + fetch impl are
+			// still healthy. No-op when the heartbeat was never armed.
+			try {
+				this.stopHeartbeat?.()
+			} catch (err) {
+				this.logger.error('Failed to stop heartbeat sender', err)
+			}
 
 			// Phase 98-04 — stop the WebApp idle-cleanup poller before the
 			// rest of shutdown so we don't keep firing xprop probes against a
