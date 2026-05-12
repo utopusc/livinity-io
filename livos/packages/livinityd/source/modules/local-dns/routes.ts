@@ -18,6 +18,9 @@ import {
 	type LocalSubdomainConfig,
 } from '../domain/caddy.js'
 import {readRootCert} from './pki.js'
+// Phase 104 review fix WIZ-01 + PROVIDE-01: wire UI to the TS provisioner so
+// the Cloudflare API token never leaves the LivOS host (was: dead UI + bash-only).
+import {provisionHybridSubdomain, ServerSideProvisionUnavailable} from './hybrid-provision.js'
 
 const REDIS_LOCAL_MODE = 'livos:domain:local_mode'
 const REDIS_LOCAL_TLD = 'livos:domain:local_tld'
@@ -43,6 +46,14 @@ const localActivateSchema = z.object({
 	subdomains: z
 		.array(z.object({name: z.string(), port: z.number().int().positive()}))
 		.optional(),
+})
+
+// Phase 104 review fix WIZ-01 + PROVIDE-01 — provisionHybrid input schema.
+// Wraps provisionHybridSubdomain so the wizard can call Server5 via livinityd
+// (which holds the CF token server-side) instead of dead prompt() calls.
+const provisionHybridSchema = z.object({
+	hostIp: z.string().refine((v) => IPV4_RE.test(v), {message: 'Invalid IPv4'}),
+	cloudflareApiToken: z.string().min(1).max(4096),
 })
 
 // Phase 104 plan 104-04 — hybrid mode activation schema
@@ -112,6 +123,32 @@ const local = router({
 	}),
 
 	// ─── Phase 104 plan 104-04 — hybrid mode procedures ─────────────────
+
+	// Phase 104 review fix WIZ-01 + PROVIDE-01: wire UI ↔ Server5 control-plane
+	// through livinityd so the Cloudflare API token never leaves the host. This
+	// replaces the dead `prompt()` flow in HybridDnsSetup.tsx and removes the
+	// drift risk between the bash provisioner in mode-hybrid.sh and the TS
+	// helper in hybrid-provision.ts (which previously had no production caller).
+	provisionHybrid: privateProcedure
+		.input(provisionHybridSchema)
+		.mutation(async ({input}) => {
+			try {
+				const result = await provisionHybridSubdomain({
+					hostIp: input.hostIp,
+					cloudflareApiToken: input.cloudflareApiToken,
+				})
+				return {success: true as const, subdomain: result.subdomain, zoneId: result.zoneId}
+			} catch (err) {
+				// IMPORTANT: do NOT echo the input back in the error. The
+				// underlying helper already strips the CF token from its own
+				// messages (hybrid-provision.ts T-104-04-I1); we only need to
+				// preserve the recoverable-vs-fatal distinction for the UI.
+				if (err instanceof ServerSideProvisionUnavailable) {
+					throw new Error(`Server5 control-plane unavailable: ${err.message}`)
+				}
+				throw err instanceof Error ? err : new Error(String(err))
+			}
+		}),
 
 	activateHybrid: privateProcedure
 		.input(hybridActivateSchema)

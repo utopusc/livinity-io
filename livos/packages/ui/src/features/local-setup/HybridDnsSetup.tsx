@@ -1,8 +1,14 @@
 // livos/packages/ui/src/features/local-setup/HybridDnsSetup.tsx
 // Phase 104 plan 104-05 — hybrid step 2: provision subdomain via Server5 +
 // walk through Cloudflare TXT challenge (informational; ACME handles the actual write).
+//
+// Phase 104 review fix WIZ-01 + PROVIDE-01: calls `local.provisionHybrid` tRPC
+// mutation (server-side helper provisionHybridSubdomain) so the CF token
+// stays on the LivOS host instead of being typed/pasted into prompt() dialogs.
 import {useState} from 'react'
 import {IconArrowLeft, IconExternalLink, IconLoader2} from '@tabler/icons-react'
+
+import {trpcReact} from '@/trpc/trpc'
 
 export interface HybridDnsSetupProps {
 	cfToken: string
@@ -13,30 +19,25 @@ export interface HybridDnsSetupProps {
 
 export function HybridDnsSetup({cfToken, hostIp, onProvisioned, onBack}: HybridDnsSetupProps) {
 	const [error, setError] = useState<string | null>(null)
-	const [busy, setBusy] = useState(false)
+	const provisionM = trpcReact.local.provisionHybrid.useMutation()
+	const busy = provisionM.isPending
 
 	const handleProvision = async () => {
-		setBusy(true)
 		setError(null)
+		if (!cfToken) {
+			setError('Cloudflare API token required.')
+			return
+		}
+		if (!hostIp) {
+			setError('Host IP required.')
+			return
+		}
 		try {
-			// Call Server5 control-plane directly from the browser (CORS-permitting)
-			// OR — better — proxy via livinityd which holds the token securely.
-			// For UI simplicity, prompt user to run install.sh which has the token,
-			// then enter the subdomain manually:
-			const subdomain = prompt(
-				'Server5 will mint a subdomain. Enter the value install.sh logged (e.g. ab12cd34.home.livinity.io):',
-			)
-			const zoneId = prompt('Cloudflare zone ID logged by install.sh:')
-			if (subdomain && zoneId) {
-				onProvisioned(subdomain, zoneId)
-			} else {
-				setError('Both subdomain and zoneId required.')
-			}
+			const result = await provisionM.mutateAsync({hostIp, cloudflareApiToken: cfToken})
+			onProvisioned(result.subdomain, result.zoneId)
 		} catch (e: unknown) {
 			const message = e instanceof Error ? e.message : String(e)
 			setError(message)
-		} finally {
-			setBusy(false)
 		}
 	}
 
