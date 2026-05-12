@@ -824,17 +824,53 @@ _dld_sync_liv_dist_into_pnpm_store() {
 }
 
 # ── 7. JWT secret (run BEFORE .env write so .env can reference its path) ────
+# Phase 106 Bug #11: format MUST be exactly 64 hex chars (no newline).
+# validateSecret in livos/packages/livinityd/source/modules/jwt.ts:29-36 enforces
+#   /^[0-9a-fA-F]+$/ AND secret.length === 64
+# The pre-106 helper wrote `openssl rand -base64 32` (44 b64 chars + newline =
+# 45 bytes, with non-hex `+`/`/`/`=` chars) → BOTH checks fail → livinityd
+# crashes at startup with "Invalid JWT secret, expected 256bit hex string".
+#
+# Format check on REUSE: if an old base64 secret exists from a prior pre-106
+# install, detect format mismatch and ROTATE to hex. Rotation forces a re-login
+# of all active sessions (week-long JWTs), which is far better than continued
+# livinityd crash-loop. Rotation only fires when the existing file fails the
+# 64-char hex check — operators with already-correct hex secrets see no rotation.
 _dld_generate_jwt_secret() {
-    step "Plan 104-11 — JWT secret"
+    step "Plan 104-11 / 106 Bug #11 — JWT secret (64-hex, no newline)"
     mkdir -p "$_DLD_SECRETS_DIR"
     chmod 0700 "$_DLD_SECRETS_DIR"
+
+    local needs_generate=1
     if [[ -s "$_DLD_JWT_FILE" ]]; then
-        ok "JWT secret already exists at $_DLD_JWT_FILE (reuse)"
-    else
+        # Existing file — check format. 64 bytes EXACTLY (no newline) AND all hex.
+        local byte_count
+        byte_count=$(wc -c < "$_DLD_JWT_FILE" 2>/dev/null | tr -d ' ')
+        if [[ "$byte_count" == "64" ]] && grep -qE '^[0-9a-fA-F]{64}$' "$_DLD_JWT_FILE" 2>/dev/null; then
+            ok "JWT secret already in 64-hex format at $_DLD_JWT_FILE (reuse)"
+            needs_generate=0
+        else
+            warn "JWT secret at $_DLD_JWT_FILE is wrong format (${byte_count} bytes, may be old base64) — ROTATING to 64-hex"
+            warn "  → All active sessions will be invalidated (forced re-login on next request)"
+            cp "$_DLD_JWT_FILE" "${_DLD_JWT_FILE}.pre-106.bak" 2>/dev/null || true
+            chmod 0600 "${_DLD_JWT_FILE}.pre-106.bak" 2>/dev/null || true
+        fi
+    fi
+
+    if [[ "$needs_generate" == "1" ]]; then
         umask 0077
-        openssl rand -base64 32 > "$_DLD_JWT_FILE"
+        # Hex32 no-newline. tr -d '\n' strips the trailing newline openssl
+        # appends; the resulting file is exactly 64 bytes (one 64-char line
+        # with no terminator) — matches validateSecret's length === 64 check.
+        openssl rand -hex 32 | tr -d '\n' > "$_DLD_JWT_FILE"
         chmod 0600 "$_DLD_JWT_FILE"
-        ok "JWT secret generated at $_DLD_JWT_FILE (mode 0600)"
+        # Post-write self-check — fail loudly if for any reason the file is wrong
+        local post_count
+        post_count=$(wc -c < "$_DLD_JWT_FILE" 2>/dev/null | tr -d ' ')
+        if [[ "$post_count" != "64" ]] || ! grep -qE '^[0-9a-fA-F]{64}$' "$_DLD_JWT_FILE" 2>/dev/null; then
+            fail "JWT post-write self-check FAILED: ${post_count} bytes (expected 64 hex chars no newline). livinityd will crash — abort install."
+        fi
+        ok "JWT secret generated at $_DLD_JWT_FILE (64 hex chars, no newline, mode 0600)"
     fi
 }
 
