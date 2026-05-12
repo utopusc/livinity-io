@@ -9,7 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # (Caddy/dnsmasq/Node/Postgres/Redis are installed by install.sh at runtime to
 #  exercise the real install path — keep the Dockerfile thin.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates gnupg2 wget jq dnsutils openssl sudo \
+    curl ca-certificates gnupg2 wget jq dnsutils openssl sudo socat \
     xvfb fluxbox x11vnc websockify novnc \
     xfonts-base xfonts-100dpi xfonts-75dpi fonts-liberation fonts-noto-color-emoji \
     dbus-x11 procps net-tools iproute2 systemd \
@@ -40,7 +40,7 @@ StandardError=journal
 WantedBy=multi-user.target
 UNIT
 
-EXPOSE 80 443 53/udp 6080 9223
+EXPOSE 80 443 53/udp 6080 9224
 
 # systemd is PID 1 (provided by trfore base image's ENTRYPOINT/CMD).
 # Do NOT override ENTRYPOINT — trfore image already sets it to /sbin/init.

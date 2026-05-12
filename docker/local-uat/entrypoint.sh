@@ -39,22 +39,35 @@ else
     log "proceeding to launch Chrome so AC-104-1 + AC-104-13 + AC-104-14 can be smoke-tested"
 fi
 
-# ── Launch Chrome with CDP on 0.0.0.0 (D-104-UAT-CDP-BIND) ──
-log "launching Chrome on CDP :9223 (--remote-debugging-address=0.0.0.0)"
+# ── Launch Chrome on CDP :9223 (forced to 127.0.0.1 in Chrome 121+) ──
+# D-104-UAT-CDP-BIND: Chrome 121+ silently ignores --remote-debugging-address=0.0.0.0
+# and binds 127.0.0.1 anyway. We bridge :9224 → 127.0.0.1:9223 via socat below.
+# The compose port-map exposes container :9224 as host :9223.
+log "launching Chrome on CDP 127.0.0.1:9223 (Chrome 121+ ignores 0.0.0.0 flag)"
 google-chrome \
     --remote-debugging-port=9223 \
-    --remote-debugging-address=0.0.0.0 \
     --user-data-dir=/tmp/uat-chrome \
     --no-sandbox \
     --disable-dev-shm-usage \
     --display=:0 \
     "about:blank" &
 
+# Wait for Chrome's CDP socket before starting the bridge
+for i in $(seq 1 30); do
+    if ss -tlnp 2>/dev/null | grep -q '127.0.0.1:9223'; then break; fi
+    sleep 0.5
+done
+
+# ── CDP bridge: socat 0.0.0.0:9224 → 127.0.0.1:9223 (D-104-UAT-CDP-BIND) ──
+log "starting socat bridge 0.0.0.0:9224 → 127.0.0.1:9223 for host CDP access"
+nohup socat TCP-LISTEN:9224,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:9223 \
+    >/var/log/livos-uat-cdp-bridge.log 2>&1 &
+
 # ── Readiness sentinel: write a file the test harness can wait on ──
 # walk.mjs polls for this file to know the entrypoint is past Chrome launch.
-sleep 3
+sleep 2
 echo "ready=$(date -u +%FT%TZ)" > /tmp/livos-uat-ready
-log "READY: noVNC http://<host>:6080/vnc.html, CDP http://<host>:9223"
+log "READY: noVNC http://<host>:6080/vnc.html, CDP http://<host>:9223 (via socat bridge → 127.0.0.1:9223)"
 
 # ── Block forever; systemd manages process tree ──
 wait
