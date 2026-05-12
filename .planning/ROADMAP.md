@@ -24,6 +24,116 @@ Real-API-key broker for external/open-source apps (Bolt.diy, Open WebUI, Continu
 
 </details>
 
+### 🟢 v34.0 Bootstrap Polish + First-Run UX (Active — Phases 106-110)
+
+**Status (2026-05-12):** Opened after Phase 105 (deploy-livinityd 1:1 update.sh port) shipped + 2× UAT live-validated on mainserver `154.53.56.75`. Phase 105 UAT surfaced 4 categories of follow-up work that are out of Phase 105 scope (which was strictly the update.sh deploy port) but block "fresh-VPS install → working UX" parity with Mini PC. v34 batches these into a dedicated milestone so they can be planned, executed, and tested cleanly.
+
+**Trigger:** Phase 105 PARTIAL→FULL PASS UAT (2026-05-12T23:16Z) revealed: (a) bootstrap-layer apt-installs (Bug #7-#10: mender, samba, google-chrome, bruce-user + fluxbox) all on-server hotfixed but NOT in `deploy-livinityd.sh`; (b) JWT secret format Bug #11 — `_dld_generate_jwt_secret` writes 65-byte file (64 hex + newline) but `validateSecret` requires exactly 64 — fixed on-server; (c) Bug #12 — yaml `user: {}` empty hash makes `user.exists()` return `true` falsely; (d) hardcoded webapp shortcuts (Facebook/Chrome/WhatsApp gibi) in dock not user-friendly for fresh installs; (e) App Store requires Server5 API key — local mode is missing; (f) MCP servers (Luse, bytebot, etc.) not seeded — admin must manually configure; (g) Phase 99 WebApp Launcher VNC swap carry-over from v33.
+
+**Direction:**
+- Each issue gets its own phase (clean scope, individual UAT, atomic commits)
+- Test count target: maintain 168 PASS combined static + add new regression tests per phase
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved through every commit
+- D-NO-PROD-IMPACT on Mini PC's `livos/install.sh` and `update.sh` (read-only references)
+- All phases gated by operator UAT walk per `feedback_milestone_uat_gate.md`
+
+**Sacred:** `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED.
+
+**Depends on:** Phase 105 ✅ Shipped (`290885bc..332239e2` — 14 commits). Mainserver `154.53.56.75` available as UAT target (currently running last-test state).
+
+**Phases (5 total — to be planned individually via `/gsd-plan-phase`):**
+
+---
+
+### Phase 106: deploy-livinityd Bootstrap-Layer Hotfix Back-Port
+
+**Goal:** Back-port the 6 in-scope deploy bugs discovered during Phase 105 UAT into `scripts/install/deploy-livinityd.sh` so fresh-VPS installs are byte-equivalent to the manually-hotfixed mainserver state. Covers:
+
+- **Bug #11 (refined):** `_dld_generate_jwt_secret` MUST write exactly 64 bytes (no trailing newline). Fix: `openssl rand -hex 32 | tr -d '\n' > /opt/livos/data/secrets/jwt`. validateSecret regex is strict.
+- **Bug #12:** Schema/migration leaves `user: {}` empty hash in livinity.yaml → `user.exists()` true → register blocked. Fix: either (a) don't seed yaml `user` key at all, (b) seed only after first register-API call, or (c) change `exists()` to check `user.hashedPassword !== undefined` instead of `user !== undefined`.
+- **Bug #7 (mender):** silence WARN log spam by gating `mender commit` call on `command -v mender` check, OR install actual `mender` binary from official apt repo (smaller scope: gate the call).
+- **Bug #8 (samba):** add `samba samba-common-bin` to apt-install list in `_dld_install_streaming_packages` (or a new `_dld_install_files_packages` helper). Mini PC has this from initial bootstrap.
+- **Bug #9 (google-chrome):** add Google Chrome stable APT repo + install in deploy-livinityd. WebApp Launcher won't work without it. Reference: Mini PC `livos/install.sh:~700`.
+- **Bug #10 (bruce + fluxbox):** create `bruce` user (uid=1000, sudo + docker groups) + install fluxbox if not present + write `/etc/sudoers.d/99-bruce` NOPASSWD entry. Make user-name configurable via `_DLD_LIVOS_USER` env (already partially supported).
+
+**Plan count estimate:** 1 plan with 4-6 tasks (one per bug, atomic commits).
+**Test extension:** +6 regression assertions (one per bug fix, positive grep on the relevant helper body).
+**UAT:** fresh VPS install → verify livinityd NRestarts=0 after install (no manual hotfix needed) + 168→174 PASS combined tests.
+
+---
+
+### Phase 107: First-Run Polish + Default Apps Cleanup
+
+**Goal:** Make a fresh-install LivOS dashboard look clean and useful out-of-the-box. Currently the dock shows hardcoded shortcuts (Facebook, Chrome, WhatsApp, etc.) that don't make sense for a new user — they should be discoverable via App Store, not pre-pinned.
+
+**Direction:**
+- Identify where hardcoded webapp shortcuts come from (UI source `apps.tsx` provider vs DB seed migration vs onboarding wizard) — needs investigation
+- Remove the legacy default-app pre-pin list — leave only: Files, Settings, App Store, Live Usage, AI Chat (genuine system apps)
+- Add a "Suggested apps from App Store" carousel on the dashboard if dock is empty (UX delight, optional)
+- D-107-NO-MINI-PC-REGRESSION: Mini PC's existing dock state must NOT change (only affect fresh installs)
+
+**Plan count estimate:** 2 plans (P107-01 investigation + removal, P107-02 UX enhancement if scope allows).
+**UAT:** fresh install → dock shows only system apps (Files/Settings/AppStore/LiveUsage/AIChat) — no Facebook/Chrome/WhatsApp pre-pinned.
+
+---
+
+### Phase 108: App Store Local Mode (No API Key Required)
+
+**Goal:** Make `/app-store` route functional on a fresh VPS install without requiring the user to register their LivOS instance with the Livinity platform first. Currently the App Store shows "Connect to Livinity Platform" prompt requiring an API key from livinity.io (`app-store-content.tsx:92`).
+
+**Direction:**
+- Allow local-mode App Store catalog: serve manifests directly from `/opt/livos/data/app-stores/utopusc-livinity-apps-github-*` (gallery cache already populated by Phase 105 `_dld_update_gallery_cache` helper — 304 manifests on disk)
+- Add `livos:appstore:mode=local|platform` Redis key with `local` default for fresh installs
+- Hide "Connect to Livinity Platform" prompt when in local mode — show local catalog instead
+- Optional: still allow users to opt into platform mode (API key) for shared apps + cloud sync features
+- D-108-NO-API-KEY-FOR-LOCAL: zero outbound calls to livinity.io required for local-mode App Store browsing or installing
+
+**Plan count estimate:** 2-3 plans (P108-01 backend local-mode + manifests endpoint, P108-02 UI dual-mode rendering, P108-03 install flow without platform sync if needed).
+**UAT:** fresh install → click App Store → see 304+ apps from local catalog, install one (e.g. AdGuard) — no API key prompt, no livinity.io calls.
+
+---
+
+### Phase 109: MCP Servers Auto-Seed (Luse, bytebot, etc.)
+
+**Goal:** Auto-register the default set of MCP servers (Luse, bytebot, etc.) during install so the AI side has tool-use capabilities out-of-the-box. Currently `liv:mcp:*` Redis namespace is empty on fresh install — admin must manually configure each MCP server.
+
+**Direction:**
+- Discover Mini PC's current MCP server set via `redis-cli KEYS 'liv:mcp:*'` (likely ~5-15 entries)
+- Export Mini PC MCP server config to a seed file (e.g. `scripts/install/seeds/mcp-servers.json`)
+- Add `_dld_seed_mcp_servers` helper to `deploy-livinityd.sh` that reads the seed file and INSERTs/SETs into Redis (idempotent on re-run)
+- Bake the seed file's content into the install package — no external network fetch
+- D-109-IDEMPOTENT: re-running install.sh does NOT duplicate or overwrite user-customized MCP server configs
+- D-109-VERSIONED: seed file pinned to a specific Mini PC export date; future MCP server additions need new export
+
+**Plan count estimate:** 2 plans (P109-01 export from Mini PC + commit seed file to repo, P109-02 deploy-livinityd helper + tests).
+**UAT:** fresh install → open AI Chat → confirm Luse + bytebot + others appear as available MCP tools.
+
+---
+
+### Phase 110: Phase 99 WebApp Launcher VNC Swap (carry-over)
+
+**Goal:** Complete the v33 WebApp Launcher protocol swap from fMP4 to per-window x11vnc that was started in `99-webapp-vnc-swap/` but left incomplete. Without this, clicking a WebApp opens Chrome successfully but the browser-side stream fails (`vnc backend closed (code 1011)`) because `vnc-bridge.ts` tries to connect to an x11vnc server that was never spawned for that window.
+
+**Direction:**
+- Read `.planning/phases/99-webapp-vnc-swap/CONTINUE.md` for prior context
+- Implement x11vnc per-window spawn logic in `streaming/vnc-bridge.ts` (`-id <wid>` mode per memory `project_v33_protocol_mismatch.md`)
+- Wire the spawned x11vnc port into the VNC bridge's TCP backend lookup
+- Keep the existing fMP4 fallback path for legacy contexts (don't regress Phase 93 work)
+- D-110-NO-FMPEG-REGRESSION: Phase 93 streaming subsystem (`StreamManager`, ffmpeg pipeline) untouched — this phase only adds the x11vnc path alongside
+
+**Plan count estimate:** 3-4 plans (P110-01 x11vnc spawner + per-window port allocation, P110-02 vnc-bridge router, P110-03 frontend reconnect logic, P110-04 UAT walk).
+**UAT:** fresh install → open WebApp (Google) → see actual Google homepage rendered in browser (not "vnc backend closed" error).
+
+---
+
+**Non-goals (HARD):**
+- Must NOT modify Mini PC's `update.sh` or `livos/install.sh` (read-only canonical refs)
+- Must NOT touch sacred `sdk-agent-runner.ts` SHA
+- Must NOT bundle large binaries in repo (chrome, mender → apt-install at deploy time)
+- Phase 99/v33's existing 5 host-Chrome fixes preserved (no regression)
+
+---
+
 ### 🟢 v31.0 Liv Agent Reborn (Active — Phases 64-76)
 
 **Goal:** Make AI Chat the WOW centerpiece of LivOS. Replace "Nexus" cosmetic identity with "Liv" project-wide. Adopt Suna's UI patterns verbatim (side panel + per-tool views + browser/computer-use display). Add computer use via Bytebot desktop image. Polish streaming UX, reasoning cards, lightweight memory, agent marketplace.
@@ -747,5 +857,5 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 
 ---
 
-*Last updated: 2026-05-08 — v33.0 milestone CODE-COMPLETE (Phases 92-98 shipped; final flip to ✅ Shipped deferred to post-UAT signoff per `feedback_milestone_uat_gate.md`).*
+*Last updated: 2026-05-12 — v34.0 milestone OPENED (Bootstrap Polish + First-Run UX, Phases 106-110); Phase 105 ✅ Shipped + 2× UAT live-validated on mainserver `154.53.56.75` (`290885bc..332239e2`, 14 commits, sacred SHA preserved 14/14, 168 PASS combined static tests).*
 

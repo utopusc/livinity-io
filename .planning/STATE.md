@@ -19,9 +19,9 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** v32.0 AI Chat Ground-up Rewrite + Hermes Background Runtime — CODE-COMPLETE 2026-05-06; pending Mini PC UAT signoff
-**Last shipped milestone:** v31.0 Liv Agent Reborn — closed 2026-05-05 (P64-P79 all complete)
-**Next action:** USER WALK — Mini PC deploy + UAT-CHECKLIST.md (`.planning/phases/91-uat-polish/UAT-CHECKLIST.md`, 10 sections A-J). After UAT signoff: `/gsd-cleanup` to archive phase artifacts; then `/gsd-new-milestone` for v33.
+**Current milestone:** **v34.0 Bootstrap Polish + First-Run UX** — OPENED 2026-05-12 (Phases 106-110 skeleton'ed in ROADMAP.md, individual planning pending).
+**Last shipped phase:** Phase 105 deploy-livinityd 1:1 update.sh port — Shipped 2026-05-12, 2× UAT live-validated on mainserver `154.53.56.75` (register/login/UI working, 168 PASS combined tests, sacred SHA preserved 14/14 commits `290885bc..332239e2`).
+**Next action:** `/gsd-plan-phase 106` to plan bootstrap-layer hotfix back-port (Bug #7-#12 from Phase 105 UAT). Roadmap: 106 (bootstrap apt-install + JWT format + yaml seed) → 107 (default apps cleanup) → 108 (App Store local mode) → 109 (MCP servers auto-seed) → 110 (Phase 99 WebApp Launcher VNC swap carry-over). v32 + v33 UAT walks still pending on Mini PC (separate from v34 fresh-VPS install scope).
 
 ## Current Position
 
