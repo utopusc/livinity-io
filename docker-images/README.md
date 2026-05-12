@@ -1,7 +1,18 @@
-# LivOS Docker Images — Manual Push to Docker Hub
+# LivOS Docker Images — Local Retag Reference (Mini PC Pattern Adopted)
 
-This directory contains the two `livos/*` Docker images that livinityd's legacy-compat
-docker-compose.yml expects but that are not currently published on Docker Hub.
+**As of 2026-05-12 (Plan 105-05 Bug #6 fix):** The canonical bootstrap path is now
+the **Mini PC pattern** — `deploy-livinityd.sh` auto-pulls `getumbrel/auth-server:1.0.5`
+and `getumbrel/tor:0.4.7.8` and re-tags them locally as `livos/auth-server:1.0.5` and
+`livos/tor:0.4.7.8` (+ `:latest` alias) during install via the new
+`_dld_setup_docker_images` helper. **No Docker Hub push is required for normal
+operation.** livinityd's legacy-compat docker-compose finds the local re-tags
+automatically.
+
+This directory still contains the same images as `.tar.gz` archives for **offline /
+airgapped install** scenarios (Option C below). The `push-to-dockerhub.sh` helper is
+preserved as an optional backup path for organizations that want to publish images
+under their own Docker Hub namespace (e.g., for CI/CD, mirroring, or to avoid
+runtime egress to docker.io).
 
 ## Provenance
 

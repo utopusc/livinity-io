@@ -318,6 +318,65 @@ _dld_clone_source() {
     ok "liv source rsynced to $_DLD_LIV_DIR/"
 }
 
+# ── 4c. LivOS Docker images (Phase 105-05 UAT Bug #6 fix) ───────────────────
+# Mirror of Mini PC's livos/install.sh:408-443 setup_docker_images() helper.
+# legacy-compat/docker-compose.yml references `livos/auth-server:1.0.5` and
+# `livos/tor:0.4.7.8` by image: field. These images don't exist on Docker Hub
+# under the `livos/` namespace — they're local re-tags of Umbrel's official
+# images. Without this helper, livinityd's Apps module crashes on first
+# `docker compose up` (UAT Bug #6 from Phase 105 mainserver test 2026-05-12).
+#
+# Upstream provenance (both MIT, byte-identical):
+#   getumbrel/auth-server:1.0.5  →  livos/auth-server:1.0.5  +  :latest alias
+#   getumbrel/tor:0.4.7.8        →  livos/tor:0.4.7.8        +  :latest alias
+#
+# Idempotent: if `livos/<name>:<tag>` already exists locally, skip pull/retag.
+# FAIL hard on pull failure — these images are required for livinityd Apps
+# module startup; first-install cannot proceed without them.
+_dld_setup_docker_images() {
+    step "Plan 105-05 Bug #6 — setup LivOS Docker images (livos/auth-server + livos/tor)"
+
+    if ! command -v docker >/dev/null 2>&1; then
+        fail "docker CLI not on PATH — install Docker first or use a system that already has it"
+    fi
+    if ! docker info >/dev/null 2>&1; then
+        fail "Docker daemon not reachable — start docker.service before re-running install"
+    fi
+
+    # Pull-and-retag table: source-image|destination-image (Mini PC pattern,
+    # livos/install.sh:412-414 verbatim equivalent).
+    local images=(
+        "getumbrel/auth-server:1.0.5|livos/auth-server:1.0.5"
+        "getumbrel/tor:0.4.7.8|livos/tor:0.4.7.8"
+    )
+
+    for entry in "${images[@]}"; do
+        local src="${entry%%|*}"
+        local dst="${entry##*|}"
+
+        if docker image inspect "$dst" >/dev/null 2>&1; then
+            ok "Image $dst already present — skipping pull"
+            continue
+        fi
+
+        info "Pulling $src..."
+        if ! docker pull "$src" 2>&1 | tail -3; then
+            fail "Failed to pull $src — check internet egress to Docker Hub or retry"
+        fi
+
+        info "Tagging $src → $dst"
+        docker tag "$src" "$dst" || fail "Failed to tag $src as $dst"
+
+        # Also alias as :latest so docker-compose `image: livos/<name>` (no tag)
+        # references resolve. Mirrors Mini PC line 437.
+        local dst_latest="${dst%%:*}:latest"
+        docker tag "$src" "$dst_latest" || true
+        ok "Image $dst (+ ${dst_latest}) ready"
+    done
+
+    ok "LivOS Docker images configured"
+}
+
 # ── 4b. Streaming subsystem apt packages (105-02 G2 — update.sh:339-405) ────
 # Idempotent apt-install for ffmpeg, x11/xdotool, ydotool, xvfb, fluxbox,
 # gstreamer, websockify, VAAPI userspace + ydotoold systemd unit.
@@ -1048,6 +1107,7 @@ deploy_livinityd() {
     _dld_setup_redis
     _dld_clone_source
     _dld_install_streaming_packages       # 105-02 G2 — streaming apt + ydotoold unit
+    _dld_setup_docker_images              # 105-05 Bug #6 — pull+retag getumbrel/* → livos/* (Mini PC pattern)
     _dld_generate_jwt_secret              # 105-01: moved earlier — secrets BEFORE pnpm install per CONTEXT pipeline order
     _dld_write_env_file                   # 105-01: moved earlier
     _dld_write_pnpm_npmrc
