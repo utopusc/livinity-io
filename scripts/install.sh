@@ -67,11 +67,13 @@ fi
 # ── Shared deps (every mode needs Caddy + apt prereqs) ──
 install_common_deps
 
-# ── Dispatch to mode helper (stubs at this wave — bodies land in 104-03/04/06) ─
+# ── Dispatch to mode helper (Plan 104-09 adds tunnel mode — CF Tunnel /
+#    cloudflared outbound-only; works behind CGNAT; zero Server5 data plane) ──
 case "$MODE" in
     cloud)     source "$SCRIPT_DIR/mode-cloud.sh"; install_mode_cloud ;;
     local-lan) source "$SCRIPT_DIR/mode-local-lan.sh"; install_mode_local_lan ;;
     hybrid)    source "$SCRIPT_DIR/mode-hybrid.sh"; install_mode_hybrid ;;
+    tunnel)    source "$SCRIPT_DIR/mode-tunnel.sh"; install_mode_tunnel ;;
     *)         fail "internal error: unhandled MODE=$MODE" 64 ;;
 esac
 
