@@ -7,7 +7,7 @@
 //   - local.getCaCert   (query)     — return PEM of liv-local root CA
 
 import {z} from 'zod'
-import {router, privateProcedure} from '../server/trpc/trpc.js'
+import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
 import {
 	generateLocalCaddyfile,
 	generateHybridCaddyfile,
@@ -95,7 +95,12 @@ const local = router({
 		}
 	}),
 
-	activate: privateProcedure
+	// PRIV-01 (Phase 104 review fix): system-wide TLS-mode mutation.
+	// Rewriting /etc/caddy/Caddyfile + flipping Redis mode keys + reloading
+	// Caddy is admin-only. Legacy single-user installs pass through because
+	// requireRole('admin') early-returns when ctx.currentUser is unset
+	// (is-authenticated.ts:76).
+	activate: adminProcedure
 		.input(localActivateSchema)
 		.mutation(async ({ctx, input}) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,7 +134,9 @@ const local = router({
 	// replaces the dead `prompt()` flow in HybridDnsSetup.tsx and removes the
 	// drift risk between the bash provisioner in mode-hybrid.sh and the TS
 	// helper in hybrid-provision.ts (which previously had no production caller).
-	provisionHybrid: privateProcedure
+	// PRIV-01: provisioning mutates apex DNS at Server5 + persists a CF token
+	// reference path in Redis. Admin-only.
+	provisionHybrid: adminProcedure
 		.input(provisionHybridSchema)
 		.mutation(async ({input}) => {
 			try {
@@ -150,7 +157,8 @@ const local = router({
 			}
 		}),
 
-	activateHybrid: privateProcedure
+	// PRIV-01: same critique as `activate` — system-wide Caddyfile + Redis mutation.
+	activateHybrid: adminProcedure
 		.input(hybridActivateSchema)
 		.mutation(async ({ctx, input}) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
