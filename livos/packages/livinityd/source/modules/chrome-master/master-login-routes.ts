@@ -224,6 +224,9 @@ export interface MasterLoginInjectables {
 	chownExecFn?: (cmd: string, args: string[]) => Promise<{stdout: string; stderr: string}>
 	// Phase 103.1-5 — post-spawn dialog dismissal + main window activation. Tests inject a no-op.
 	dismissProfileDialogFn?: (display: string) => Promise<void>
+	// Phase 103.1-7 — resolve the master Chrome wid on each input call so dispatch
+	// uses the explicit-wid xdotool path (same as WebApp). Tests inject a stub.
+	resolveMasterChromeWidFn?: (display: string) => Promise<number | undefined>
 	logger?: {info?: (msg: string) => void; warn?: (msg: string, err?: unknown) => void}
 	// Phase 103-01 — Xvfb-driven master pipeline.
 	displayAllocator?: DisplayAllocatorLike
@@ -287,8 +290,77 @@ export function _resetMasterStateForTest(): void {
  * only rely on the existing fs primitives.
  */
 /**
- * Phase 103.1-5 — after master Chrome spawn, dismiss any "Profile error
- * occurred" modal dialog and pre-activate the main Chrome window.
+ * Phase 103.1-7 — resolve the master Chrome window's actual X11 wid on the
+ * master display, EXCLUDING any "Profile error" dialog. Used by the input
+ * routes so each click/key/type/scroll dispatches via the WebApp's
+ * explicit-wid xdotool path (windowactivate --sync wid → windowfocus
+ * --sync wid → mousemove --window wid → click) instead of the brittle
+ * display-mode search-and-pick-first path. WebApp parity: input on master
+ * Chrome now behaves byte-for-byte the same as input on a per-WebApp
+ * Chrome window.
+ *
+ * Returns undefined if no chrome-class window is visible on the display
+ * (caller treats as "not ready yet, fall back to display-mode dispatch").
+ */
+async function resolveMasterChromeWid(
+	display: string,
+	execFileFn: typeof execFile,
+): Promise<number | undefined> {
+	const env = {...process.env, DISPLAY: display} as NodeJS.ProcessEnv
+	let candidates: string[]
+	try {
+		const {stdout} = await execFileFn(
+			'xdotool',
+			['search', '--onlyvisible', '--class', 'chrome'],
+			{env, timeout: 1500} as never,
+		)
+		candidates = String(stdout).trim().split('\n').filter(Boolean)
+	} catch {
+		return undefined
+	}
+	if (candidates.length === 0) return undefined
+
+	// Pick the largest geometry — that's the main Chrome window, not the
+	// small "Profile error" dialog (~400x213) or DevTools popup.
+	let bestWid: number | undefined
+	let bestArea = 0
+	for (const widStr of candidates) {
+		const wid = Number(widStr)
+		if (!Number.isInteger(wid) || wid <= 0) continue
+		try {
+			// First, skip "Profile error" dialogs by name. xdotool returns
+			// "Profile error occurred" verbatim for the modal.
+			const {stdout: nameOut} = await execFileFn(
+				'xdotool',
+				['getwindowname', String(wid)],
+				{env, timeout: 800} as never,
+			)
+			const name = String(nameOut).trim()
+			if (/^Profile error/.test(name)) continue
+			const {stdout: geomOut} = await execFileFn(
+				'xdotool',
+				['getwindowgeometry', '--shell', String(wid)],
+				{env, timeout: 800} as never,
+			)
+			const wm = /^WIDTH=(\d+)$/m.exec(String(geomOut))
+			const hm = /^HEIGHT=(\d+)$/m.exec(String(geomOut))
+			const w = wm ? Number(wm[1]) : 0
+			const h = hm ? Number(hm[1]) : 0
+			const area = w * h
+			if (area > bestArea) {
+				bestArea = area
+				bestWid = wid
+			}
+		} catch {
+			// skip this candidate
+		}
+	}
+	return bestWid
+}
+
+/**
+ * Phase 103.1-5 — after master Chrome spawn, dismiss any "Profile error"
+ * modal dialog and pre-activate the main Chrome window.
  *
  * Why: when livinityd restarts mid-master-session, the previous Chrome
  * process is killed without a clean shutdown. On the next spawn Chrome
@@ -532,6 +604,9 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 	const dismissProfileDialogFn =
 		injectables.dismissProfileDialogFn ??
 		((display: string) => dismissProfileErrorAndActivateMain(display, execFile, logger))
+	const resolveMasterChromeWidFn =
+		injectables.resolveMasterChromeWidFn ??
+		((display: string) => resolveMasterChromeWid(display, execFile))
 	// Phase 103-01 — capture injectables in closure so cleanupMaster() can
 	// reach them from chrome.on('exit') AND stopLogin via the same handles.
 	const displayAllocator = injectables.displayAllocator
@@ -925,8 +1000,13 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 							message: 'no master Chrome running',
 						})
 					}
+					// Phase 103.1-7 — WebApp parity: resolve the real Chrome
+					// wid on each call and dispatch via the explicit-wid xdotool
+					// path. wid=0 falls back to display-mode which is fragile
+					// when the Profile error modal is open.
+					const wid = (await resolveMasterChromeWidFn(currentMaster.display)) ?? 0
 					await dispatchPointerFn(
-						0,
+						wid,
 						input.x,
 						input.y,
 						input.button as 1 | 2 | 3,
@@ -952,7 +1032,8 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 							message: 'no master Chrome running',
 						})
 					}
-					await dispatchKeyFn(0, input.key, input.kind, currentMaster.display)
+					const wid = (await resolveMasterChromeWidFn(currentMaster.display)) ?? 0
+					await dispatchKeyFn(wid, input.key, input.kind, currentMaster.display)
 					return {ok: true}
 				}),
 			type: adminProcedure
@@ -967,7 +1048,8 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 							message: 'no master Chrome running',
 						})
 					}
-					await dispatchTypeFn(0, input.text, currentMaster.display)
+					const wid = (await resolveMasterChromeWidFn(currentMaster.display)) ?? 0
+					await dispatchTypeFn(wid, input.text, currentMaster.display)
 					return {ok: true}
 				}),
 			scroll: adminProcedure
@@ -989,8 +1071,9 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 							message: 'no master Chrome running',
 						})
 					}
+					const wid = (await resolveMasterChromeWidFn(currentMaster.display)) ?? 0
 					await dispatchScrollFn(
-						0,
+						wid,
 						input.x,
 						input.y,
 						input.direction,
