@@ -446,15 +446,46 @@ describe('Phase 100-10-03 luse window-aware tool handlers', () => {
 		expect(registered).toBeDefined()
 	})
 
-	it('T-10-03-HANDLER-04: mcp__luse__list_windows defaults to opts.defaultDisplay (:10)', async () => {
-		const stub = new StubMcpServer()
-		registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
-		const handler = stub.getHandler('list_windows')!
-		await handler({})
-		expect(mocks.listWindows).toHaveBeenCalledTimes(1)
-		const callArg = (mocks.listWindows.mock.calls as unknown as Array<Array<{display?: string} | undefined>>)[0]?.[0]
-		expect(callArg).toBeDefined()
-		expect(callArg!.display).toBe(':10')
+	it('T-10-03-HANDLER-04 (103.1-4): mcp__luse__list_windows with no arg aggregates across active displays even when defaultDisplay is set', async () => {
+		// Phase 103.1-4 behavior change: defaultDisplay no longer gates
+		// aggregation. The right answer to "what windows are open?" is
+		// EVERY display, regardless of which one is the env fallback for
+		// other tools (click/type/etc.). Per-WebApp Luse MCP still works
+		// because its agent prompt prescribes explicit display arg on every
+		// call (see T103B-10 and 103-04 plan).
+		__setReaddirForTest(
+			(async (_p: string) => ['X1', 'X10']) as never,
+		)
+		try {
+			mocks.listWindows.mockImplementation(
+				async (opts: unknown): Promise<unknown> => {
+					const display = (opts as {display?: string})?.display ?? '???'
+					return [
+						{
+							id: '0x1',
+							class: 'X.X',
+							title: `on ${display}`,
+							geometry: {x: 0, y: 0, w: 1, h: 1},
+							display,
+						},
+					]
+				},
+			)
+			const stub = new StubMcpServer()
+			registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
+			const handler = stub.getHandler('list_windows')!
+			const result = (await handler({})) as {
+				content: Array<{type: string; text: string}>
+				isError: boolean
+			}
+			const parsed = JSON.parse(result.content[0].text) as Array<{display: string}>
+			expect(parsed.map((w) => w.display)).toEqual(
+				expect.arrayContaining([':1', ':10']),
+			)
+			expect(mocks.listWindows).toHaveBeenCalledTimes(2)
+		} finally {
+			__setReaddirForTest(undefined)
+		}
 	})
 
 	it('T-10-03-HANDLER-05: mcp__luse__screenshot_window with {wid} calls captureScreenshot({wid}) and returns image content', async () => {
@@ -994,7 +1025,11 @@ describe('Phase 103-B — withScopedDisplay + display arg threading', () => {
 		}
 	})
 
-	it('T103.1-03: list_windows with defaultDisplay set (per-WebApp scope) stays scoped (no aggregation)', async () => {
+	it('T103.1-03 (103.1-4 revision): list_windows with explicit display arg ALWAYS scopes (even when defaultDisplay differs)', async () => {
+		// 103.1-4 changed the semantics: defaultDisplay no longer gates
+		// aggregation. The remaining "stay scoped" path is the explicit
+		// per-call display arg — that path must still scope to the arg's
+		// display regardless of defaultDisplay value.
 		__setReaddirForTest(
 			(async (_p: string) => ['X1', 'X10', 'X11']) as never,
 		)
@@ -1003,21 +1038,19 @@ describe('Phase 103-B — withScopedDisplay + display arg threading', () => {
 				{
 					id: '0x1',
 					class: 'X.X',
-					title: 'on 10',
+					title: 'on 11',
 					geometry: {x: 0, y: 0, w: 1, h: 1},
-					display: ':10',
+					display: ':11',
 				},
 			] as never)
 
 			const stub = new StubMcpServer()
-			// defaultDisplay set — per-WebApp Luse MCP scenario
 			registerLuseTools(stub as never, {defaultDisplay: ':10'} as never)
 			const handler = stub.getHandler('list_windows')!
-			await handler({})
-			// Should NOT have aggregated — defaultDisplay scopes to :10 only.
+			await handler({display: ':11'})
 			expect(mocks.listWindows).toHaveBeenCalledTimes(1)
 			const callArg = (mocks.listWindows.mock.calls as unknown as Array<Array<{display?: string}>>)[0]?.[0]
-			expect(callArg?.display).toBe(':10')
+			expect(callArg?.display).toBe(':11')
 		} finally {
 			__setReaddirForTest(undefined)
 		}

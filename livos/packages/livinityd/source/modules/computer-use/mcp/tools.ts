@@ -945,24 +945,26 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 		wrapHandler(async (args) => {
 			const displayArg = parseDisplayArg(args)
 
-			// Phase 103.1 — when neither the call-time display arg nor the
-			// server-level defaultDisplay is set, aggregate across ALL active
-			// X11 displays discovered via /tmp/.X11-unix/X<N> socket scan.
-			// This is the "what windows exist?" query for a global luse MCP
-			// serving all displays (103-05 default-off model). Each result row
-			// already carries a `display` field (ListWindowsExtended shape from
-			// native/window.ts), so the agent can dispatch follow-up click /
-			// type / focus calls with the right per-call display: ":N" arg.
+			// Phase 103.1-4 — aggregate whenever the call-time display arg is
+			// absent. defaultDisplay (LUSE_TARGET_DISPLAY env, typically `:1`
+			// for the host LivOS canvas) is NOT a gate: list_windows-without-arg
+			// is the "what's open right now?" roster query, and the right answer
+			// is ALL windows tagged with their owning display. The agent then
+			// dispatches follow-up click / type / focus with the correct
+			// display: ":N" arg per result row.
 			//
-			// Aggregation kicks in ONLY when both displayArg AND defaultDisplay
-			// are absent — a per-WebApp Luse MCP with LUSE_DISPLAY set still
-			// gets scoped behavior (its agent already knows the right display).
+			// Per-WebApp Luse MCP (opt-in via LIVOS_PER_APP_LUSE=1) still works
+			// because its agent prompt prescribes display:":N" on every call —
+			// displayArg IS set and aggregation is skipped naturally.
+			//
+			// Without this fix, the 103-05 default-off global luse MCP scoped
+			// list_windows to its defaultDisplay (=":1", host LivOS Xvfb) and
+			// missed Dinkytown WebApp on its per-app Xvfb (`:11`/`:12`) — the
+			// exact 2026-05-11 UAT regression the user surfaced.
 			const rawDisplayInput =
 				typeof args.display === 'string' ? args.display : undefined
 			const aggregateMode =
-				displayArg === undefined &&
-				defaultDisplay === undefined &&
-				rawDisplayInput === undefined
+				displayArg === undefined && rawDisplayInput === undefined
 			if (aggregateMode) {
 				const activeDisplays = await discoverActiveX11Displays()
 				if (activeDisplays.length === 0) {
