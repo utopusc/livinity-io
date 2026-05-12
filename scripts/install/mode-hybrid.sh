@@ -113,14 +113,22 @@ _provision_hybrid_subdomain() {
     fi
     # Probe Server5 endpoint; on failure, fall back to user-prompt (interactive
     # only) or leave the wizard to handle on first run (non-interactive).
+    #
+    # CF-01 (Phase 104 review fix): build payload in a local var and feed via
+    # stdin (`--data-binary @-`). Passing the token in `curl --data` argv would
+    # expose it via `ps auxww` to any local user during the ≤30s call window.
     local endpoint="https://livinity.io/api/hybrid/provision"
     local response
-    if ! response=$(curl -fsSL -X POST \
+    local payload
+    payload=$(printf '{"hostIp":"%s","cloudflareApiToken":"%s"}' \
+        "$HOST_IP" "$CLOUDFLARE_API_TOKEN")
+    if ! response=$(printf '%s' "$payload" | curl -fsSL -X POST \
         -H "content-type: application/json" \
         -H "user-agent: LivOS-install.sh/Phase104" \
-        --data "{\"hostIp\":\"${HOST_IP}\",\"cloudflareApiToken\":\"${CLOUDFLARE_API_TOKEN}\"}" \
+        --data-binary @- \
         --max-time 30 \
         "$endpoint" 2>/dev/null); then
+        unset payload
         warn "Server5 control-plane unreachable at ${endpoint}"
         warn "Falling back to manual subdomain entry."
         # Prompt only if interactive; otherwise leave Redis key empty and let UI handle.
@@ -138,6 +146,8 @@ _provision_hybrid_subdomain() {
         fi
         return 0
     fi
+    # CF-01: clear payload from local scope on success path too
+    unset payload
     # Parse JSON response (use jq if available, fall back to grep)
     local subdomain zone_id
     if command -v jq &>/dev/null; then
