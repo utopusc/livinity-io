@@ -131,12 +131,25 @@ export async function dispatchPointer(
 	//   bypasses any WM transfer asymmetry for Chrome --app= chromeless
 	//   windows) → mousemove (wid-relative) → click (focused).
 	// `--clearmodifiers` resets stuck modifiers from prior xdotool calls.
+	// Phase 103.1-9 — xdotool `mousemove --window <wid> --sync` HANGS on master
+	// Chrome's per-app Xvfb (live probe 2026-05-11: timed out at 5s with no
+	// stderr). Same wid + display works with absolute `mousemove x y` in 4ms.
+	// Root cause hypothesis: --sync waits for ConfigureNotify / wid-relative
+	// pointer ack that fluxbox-on-:N doesn't deliver. Since every LivOS
+	// Chrome window is spawned at `--window-position=0,0 --window-size=1280,720`
+	// (Phase 100-06.1, applies to per-app WebApps AND master Chrome), screen-
+	// absolute coords == window-relative coords. Skip --window --sync when a
+	// cross-display dispatch is happening (caller provided `display`).
+	const mousemoveArgs =
+		display && /^:[1-9][0-9]?$/.test(display)
+			? ['mousemove', String(ix), String(iy)]
+			: ['mousemove', '--window', widStr, '--sync', String(ix), String(iy)]
 	await execFileAsync(
 		'xdotool',
 		[
 			'windowactivate', '--sync', widStr,
 			'windowfocus', '--sync', widStr,
-			'mousemove', '--window', widStr, '--sync', String(ix), String(iy),
+			...mousemoveArgs,
 			kind, '--clearmodifiers', String(button),
 		],
 		optsForWidPath,
@@ -315,12 +328,19 @@ export async function dispatchScroll(
 	const optsForWidPath = display && /^:[1-9][0-9]?$/.test(display)
 		? {timeout: DEFAULT_TIMEOUT_MS, display}
 		: {timeout: DEFAULT_TIMEOUT_MS}
+	// Phase 103.1-9 — same `mousemove --window --sync` hang fix as
+	// dispatchPointer. Absolute coords are fine because every Chrome window
+	// LivOS spawns sits at (0,0) on its own Xvfb.
+	const scrollMousemove =
+		display && /^:[1-9][0-9]?$/.test(display)
+			? ['mousemove', String(ix), String(iy)]
+			: ['mousemove', '--window', widStr, '--sync', String(ix), String(iy)]
 	await execFileAsync(
 		'xdotool',
 		[
 			'windowactivate', '--sync', widStr,
 			'windowfocus', '--sync', widStr,
-			'mousemove', '--window', widStr, '--sync', String(ix), String(iy),
+			...scrollMousemove,
 			'click', '--clearmodifiers', String(button),
 		],
 		optsForWidPath,
