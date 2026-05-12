@@ -29,7 +29,33 @@ Phase: 103.1 (Master Chrome Hot-Fix + Luse Cross-Display Aggregation) — DEPLOY
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v33.0 (active)
 
-## 103.1 Status (2026-05-11) — SHIPPED + LIVE-VERIFIED on Mini PC
+## 103.1 Status (2026-05-11) — 5-LAYER FIX, fully live-verified on Mini PC
+
+Bug 2 (list_windows aggregation) FULLY RESOLVED — user-walked verify 2026-05-11:
+agent in global chat correctly enumerated 3 active displays (`:1`, `:11`, `:12`),
+clicked into Dinkytown WebApp on `:12`, took screenshots and navigated
+calculators end-to-end.
+
+Bug 1 (master Chrome input) needed FIVE separate fixes (each surfaced by
+re-running the live UAT). Layers A/B/C/D shipped in earlier 103.1-* commits.
+Layer E (commit `3d9fe041`):
+
+- **Symptom:** "klavyeye yaziyorum 'a' geç basıyor, delete çalışmıyor,
+  mouse tıklamaları çalışmıyor".
+- **Root cause:** Chrome detects `exited_cleanly:false` in Local State
+  (legacy from prior livinityd restart) and pops a "Profile error occurred"
+  modal. The modal is its own chrome-class top-level window with geometry
+  ~400x213; fluxbox auto-focuses the last-opened window (the modal); the
+  input dispatcher's `search --class chrome --limit 1 windowactivate` keeps
+  re-picking the modal; every key/click lands on a non-input dialog and
+  is dropped.
+- **Fix:** post-spawn polling loop (`dismissProfileErrorAndActivateMain`)
+  that (a) windowkills any "Profile error" window and (b) finds the
+  largest-area chrome-class window and pre-activates it, so subsequent
+  dispatch lands on the main Chrome browser. Awaited before startLogin
+  returns so the wsUrl handed to the client points at a usable session.
+
+
 
 Three-layer bug fix shipped and live-verified end-to-end via tRPC curl on
 Mini PC at SHA `f3d471ac`:
