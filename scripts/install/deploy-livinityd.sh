@@ -468,13 +468,19 @@ _dld_build_packages() {
     fi
 
     info "pnpm install (this may take 3-5 min)"
+    # Plan 105-05 Bug #1: pnpm 11+ exits non-zero on ERR_PNPM_IGNORED_BUILDS.
+    # Mini PC's older pnpm doesn't enforce this gate. --config.dangerously-allow-all-builds=true
+    # tells pnpm to silently run postinstall scripts for all packages without prompting.
+    # The repo's package.json `pnpm.onlyBuiltDependencies` allowlist is honored when this
+    # flag is OFF, but with our 20+ legitimate build-script packages (sharp, esbuild, node-pty,
+    # baileys, etc.) the cleanest first-install path is to allow all.
     if [[ -f "pnpm-lock.yaml" ]]; then
-        pnpm install --frozen-lockfile 2>&1 | tail -10 || {
+        pnpm install --config.dangerously-allow-all-builds=true --frozen-lockfile 2>&1 | tail -10 || {
             warn "frozen-lockfile install failed; retrying without lockfile"
-            pnpm install 2>&1 | tail -10 || fail "pnpm install failed"
+            pnpm install --config.dangerously-allow-all-builds=true 2>&1 | tail -10 || fail "pnpm install failed"
         }
     else
-        pnpm install 2>&1 | tail -10 || fail "pnpm install failed"
+        pnpm install --config.dangerously-allow-all-builds=true 2>&1 | tail -10 || fail "pnpm install failed"
     fi
     ok "pnpm install complete"
 
@@ -663,16 +669,22 @@ EOF
 # ── 8. systemd unit livos.service ───────────────────────────────────────────
 # 104-12 path fix: WorkingDirectory=/opt/livos (flat, not nested).
 _dld_write_systemd_unit() {
-    step "Plan 104-11/104-12 — systemd unit livos.service"
+    step "Plan 104-11/104-12/105-05 — systemd unit livos.service"
 
-    # Find pnpm absolute path (varies: /usr/bin/pnpm or /usr/local/bin/pnpm)
-    local pnpm_bin
-    pnpm_bin=$(command -v pnpm)
-    [[ -z "$pnpm_bin" ]] && fail "pnpm not on PATH after install — cannot wire systemd ExecStart"
+    # Plan 105-05 Bug #5: ExecStart MUST match Mini PC's pattern (livos/install.sh:1332):
+    #   /usr/bin/npx tsx /opt/livos/packages/livinityd/source/cli.ts --data-directory /opt/livos/data --port 8080
+    # The previous `pnpm --filter livinityd start` invocation runs ./source/cli.ts WITHOUT
+    # the --data-directory/--port flags → livinityd constructor crashes at
+    # `path.resolve(undefined)` (source/index.ts:267). Switching to direct npx-tsx with
+    # explicit args matches the working Mini PC convention.
+    # _DLD_LIVOS_DATA_DIR defaults to ${_DLD_LIVOS_DIR}/data (e.g., /opt/livos/data).
+    local livos_data_dir="${_DLD_LIVOS_DATA_DIR:-${_DLD_LIVOS_DIR}/data}"
+    local livos_port="${_DLD_LIVOS_PORT:-8080}"
+    mkdir -p "$livos_data_dir"
 
     cat > "$_DLD_SYSTEMD_UNIT" <<EOF
 [Unit]
-Description=LivOS server (livinityd) — Plan 104-11/104-12
+Description=LivOS server (livinityd) — Plan 104-11/104-12/105-05
 After=postgresql.service redis-server.service liv-core.service network.target
 Requires=postgresql.service redis-server.service
 
@@ -681,7 +693,7 @@ Type=simple
 User=root
 WorkingDirectory=${_DLD_LIVOS_DIR}
 EnvironmentFile=${_DLD_ENV_FILE}
-ExecStart=${pnpm_bin} --filter livinityd start
+ExecStart=/usr/bin/npx tsx ${_DLD_LIVOS_DIR}/packages/livinityd/source/cli.ts --data-directory ${livos_data_dir} --port ${livos_port}
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -887,6 +899,12 @@ CADDYFILE
             ;;
     esac
 
+    # Plan 105-05 Bug #4: Caddyfile MUST be world-readable. By default, `cat > /etc/caddy/Caddyfile`
+    # inherits umask 0077 on freshly-provisioned VPS (root umask), producing 0600 root:root.
+    # Caddy systemd unit runs as `caddy` user → permission denied reading the config.
+    # 0644 makes it readable by caddy without exposing write to anyone.
+    chmod 0644 "$_DLD_CADDYFILE" 2>/dev/null || true
+
     # Validate config before reload
     if caddy validate --config "$_DLD_CADDYFILE" 2>/dev/null; then
         ok "Caddyfile validates"
@@ -907,7 +925,12 @@ _dld_update_gallery_cache() {
     step "105-02 (G5) — update gallery cache (update.sh:596-610)"
 
     local gallery_cache_dir
-    gallery_cache_dir=$(find "${_DLD_LIVOS_DIR}/data/app-stores/" -maxdepth 1 -name '*livinity-apps*' -type d 2>/dev/null | head -1)
+    # Plan 105-05 Bug #2: When /opt/livos/data/app-stores/ doesn't exist (fresh VPS),
+    # `find` exits 1. Under `set -o pipefail`, that propagates through `head -1`, and the
+    # `local x=$(...)` assignment fails set -e → entire deploy_livinityd aborts silently.
+    # Append `|| true` so missing-dir is tolerated (the `[[ -n "$gallery_cache_dir" ]]`
+    # check below already handles empty-string case).
+    gallery_cache_dir=$(find "${_DLD_LIVOS_DIR}/data/app-stores/" -maxdepth 1 -name '*livinity-apps*' -type d 2>/dev/null | head -1) || true
     if [[ -n "$gallery_cache_dir" ]] && [[ -d "$gallery_cache_dir/.git" ]]; then
         info "Updating gallery cache at $gallery_cache_dir..."
         cd "$gallery_cache_dir"
@@ -932,6 +955,11 @@ _dld_fix_permissions() {
 
     # Make app-script executable (legacy-compat path required by tRPC apps router)
     chmod +x "$_DLD_LIVOS_DIR/packages/livinityd/source/modules/apps/legacy-compat/app-script" 2>/dev/null || true
+
+    # Plan 105-05 Bug #3: Make cli.ts executable. After rsync, source/cli.ts inherits
+    # 0600 (rsync -a preserves source mode = repo's tracked mode). systemd ExecStart
+    # invokes ./source/cli.ts directly via shebang; without +x → Permission denied.
+    chmod +x "$_DLD_LIVOS_DIR/packages/livinityd/source/cli.ts" 2>/dev/null || true
 
     # Set ownership (default root:root; configurable via _DLD_LIVOS_USER env)
     chown -R "${livos_user}:${livos_user}" "$_DLD_LIVOS_DIR" 2>/dev/null || true
