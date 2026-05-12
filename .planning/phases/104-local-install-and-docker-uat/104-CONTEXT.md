@@ -2,8 +2,9 @@
 phase: 104
 title: One-shot local install (install.sh) + Docker Ubuntu GUI UAT
 parent_research: .planning/research/local-livinity-setup.md
+phase_research: .planning/phases/104-local-install-and-docker-uat/104-RESEARCH.md
 created: 2026-05-11
-status: draft (awaiting /gsd-plan-phase 104)
+status: ready-for-planning (post-research refinements locked 2026-05-11)
 upstream_milestone: v33.0
 ---
 
@@ -206,3 +207,126 @@ asking redundant questions.
 `f3538e1d811992b782a9bb057d1b7f0a0189f95f` after every Phase 104 commit.
 The pre-commit hook installed in Phase 100-01 enforces this; no Phase 104
 plan should touch that file.
+
+---
+
+## Post-research refinements (2026-05-11 — after 104-RESEARCH.md `6bac9e31`)
+
+These supersede the gray-area / open-question entries above. The planner
+MUST treat the following as **LOCKED**:
+
+### D-104-INSTALL-ENTRY (resolved) — single `install.sh` with `--mode` flag
+
+User decision 2026-05-11: **Option A** — one `install.sh` artifact, mode
+resolved via `--mode {cloud|local-lan|hybrid}` flag (Options B/C from the
+matrix above are retired).
+
+### D-104-INSTALL-MODES (NEW, locked) — three modes
+
+| Mode | TLD | DNS | TLS | Apple LAN clients | Server5 relay traffic |
+|------|-----|-----|-----|--------------------|----------------------|
+| `cloud` | `*.livinity.io` | Cloudflare DNS-only → Server5 → tunnel → Mini PC | Let's Encrypt DNS-01 (Cloudflare API token) | ✅ | YES (existing Mini PC at `dab261cc` — unchanged) |
+| `local-lan` | `*.livinity.local` | dnsmasq → host LAN IP | Caddy `tls internal` named-CA `LivOS Local CA` | ❌ macOS/iOS broken (RFC 6762 + macOS 26 mDNS interception) — documented air-gap mode | NONE |
+| **`hybrid` (DEFAULT)** | `*.<random>.home.livinity.io` (LivOS-provisioned) OR `*.home.<user-domain>` | Public DNS A-record → LAN IP `192.168.x.y` | Let's Encrypt DNS-01 (Cloudflare API token; LivOS holds the apex zone for `home.livinity.io`) | ✅ All Apple devices work | NONE (DNS is the only Server5 touch; traffic goes LAN-direct) |
+
+### D-104-DEFAULT-MODE (NEW, locked) — `hybrid`
+
+`install.sh` without an explicit `--mode` argument defaults to `hybrid`.
+Wizard step 1 confirms before proceeding. Reasoning: covers iPhone/iPad/Mac
+users (largest LAN-client segment), zero relay traffic, only requires LivOS
+to host one apex DNS zone (`home.livinity.io`) on Server5.
+
+### D-104-LOCAL-DOMAIN (revised) — TLD per mode (was `.livinity.local` only)
+
+The original `.livinity.local` lock is RETIRED. Research 6bac9e31 §Q3-RESOLVED
+proves it is broken on every Apple client (RFC 6762 §3 mDNS interception)
+AND macOS 26 extends interception to ALL custom TLDs (`.internal`,
+`.home.arpa`, `.lan`, `.test`). Per-mode TLDs are now D-104-INSTALL-MODES
+above.
+
+### D-104-RELAY-ZERO-DATA-PLANE (NEW, locked) — minimize Server5 traffic
+
+User strategic concern 2026-05-11: "cogu sey livintiy de relay kullaniyor bu
+cok can sikici" — relay traffic on Server5 is actively painful. Phase 104
+LOCKS this principle: `local-lan` and `hybrid` modes MUST NOT route any
+user data-plane traffic through Server5. Acceptable Server5 touches in
+these modes: (a) apex DNS zone hosting for `home.livinity.io`, (b)
+Let's Encrypt ACME DNS-01 challenges (periodic, control-plane), (c)
+optional one-time invite redemption. Anything else MUST go LAN-direct or
+direct-to-Cloudflare. (Separate audit phase will map cloud-mode relay
+paths post 104 — `.planning/research/server5-relay-audit.md` in flight.)
+
+### D-104-CADDY-PKI-IMPORT (NEW, locked) — global block pattern
+
+For `local-lan` mode, the `pki { ca liv-local { ... } }` global block lives
+in `/etc/caddy/pki-global.conf`, provisioned once by install.sh. livinityd's
+`generateLocalCaddyfile()` emits an `import /etc/caddy/pki-global.conf`
+line at the top — it NEVER inlines or regenerates the pki block. This
+prevents the "named CA disappears on Caddyfile regeneration" pitfall
+(research 6bac9e31 §Pitfall 1). For `hybrid` mode, Caddy uses Cloudflare
+DNS-01 (no pki block needed — Let's Encrypt issues directly).
+
+### D-104-UAT-IMAGE (NEW, locked) — base Docker image
+
+Docker UAT base: `trfore/docker-ubuntu2404-systemd:latest`. Run flags:
+`--privileged --cgroupns=host --tmpfs /run --tmpfs /tmp -v /sys/fs/cgroup:rw`.
+WSL 2.5.1+ required on Windows hosts for cgroup v2 default (developer
+runs Windows — verify before Docker UAT plan ships).
+
+### D-104-UAT-CDP-BIND (NEW, locked) — Chrome DevTools MCP gotcha
+
+Chrome inside the UAT container MUST launch with BOTH
+`--remote-debugging-port=9223` AND `--remote-debugging-address=0.0.0.0`.
+Default 127.0.0.1 bind silently breaks host→container CDP — the host's
+`chrome-devtools-mcp --browserUrl http://127.0.0.1:9223` connects but
+every command times out. This is the single most-likely UAT failure mode
+to mis-diagnose.
+
+### Q1–Q5 status after research
+
+- **Q1 (Android CA trust):** PUNTED — stock Chrome on Android 14+ cannot
+  trust user-installed CAs. Recommendation: ship Firefox-on-Android
+  instructions for `local-lan`; `hybrid` mode sidesteps the problem
+  entirely (real Let's Encrypt cert).
+- **Q2 (dnsmasq DHCP option 6):** RESOLVED — local-lan provisions a single
+  `address=/.livinity.local/<host-ip>` rule; DHCP option 6 is the user's
+  router responsibility (documented in wizard, not automated by install.sh).
+- **Q3 (.local on macOS/iOS):** RESOLVED — broken on all Apple, see
+  D-104-INSTALL-MODES above.
+- **Q4 (multi-NIC host IP):** RESOLVED — install.sh prompts for host IP
+  with `hostname -I | awk '{print $1}'` as a default; user confirms or
+  overrides.
+- **Q5 (Caddy `tls internal` cert lifetime / rotation):** RESOLVED — default
+  12 hours intermediate, 90 days root, automated rotation. Root CA cert
+  download endpoint serves the current root; if rotation happens, all
+  existing trust stores need re-enrollment. Acceptable for `local-lan`
+  (typically homelabs with low device churn); not a concern for `hybrid`
+  (real LE certs).
+
+### Suggested wave layout (revised — overrides "Suggested wave layout" above)
+
+| Wave | Plans | What it builds |
+|------|-------|----------------|
+| 1 | 104-01 | `docker/local-uat/` scaffolding — Dockerfile from `trfore/docker-ubuntu2404-systemd:latest`, compose, entrypoint, noVNC bridge, Chrome with `--remote-debugging-address=0.0.0.0`. Sanity: `docker compose up` boots Ubuntu with systemd + noVNC + browsable Chrome from host. |
+| 2 | 104-02 | `install.sh` skeleton with `--mode {cloud,local-lan,hybrid}` flag dispatch + shared helpers (`scripts/install/mode-*.sh`); idempotent system-package install; host-IP detection; non-interactive Cloudflare API token capture. |
+| 3 | 104-03 | `local-lan` mode: dnsmasq install/config + `import /etc/caddy/pki-global.conf` provision + `generateLocalCaddyfile()` in livinityd. |
+| 3 | 104-04 | `hybrid` mode: Cloudflare DNS-01 via existing Caddy module + LivOS-provisioned `<random>.home.livinity.io` apex zone delegation; wizard step that mints the random subdomain via Server5 (one-time control-plane API call). |
+| 4 | 104-05 | Enrollment wizard UI (`Settings → Local Access` tab) — mode picker, QR code, per-platform trust instructions, CA cert download (local-lan only). |
+| 5 | 104-06 | `cloud` mode regression test: install.sh `--mode cloud` runs inside a second UAT container and reproduces Mini PC `dab261cc` services byte-for-byte (livinityd, liv-core, liv-worker, liv-memory all healthy; Caddy uses Cloudflare DNS-01). |
+| 6 | 104-07 | Docker UAT end-to-end run for `hybrid` (default): Claude drives noVNC, signs into a fake user, confirms wildcard subdomain routing, screenshots green padlock on Mac-equivalent Chrome. |
+
+Plan count: 7 (was 6 in initial CONTEXT.md). Wave 3 has two parallel plans
+(local-lan vs hybrid backends).
+
+### What changes about non-goals
+
+The "Remote access from outside the LAN is OUT OF SCOPE" non-goal stands.
+The "Must NOT break cloud Mini PC deploy" non-goal stands and is now
+testable via 104-06's `--mode cloud` regression test. The "Must NOT touch
+sacred sdk-agent-runner.ts" non-goal stands.
+
+NEW non-goal: Migrating an existing `cloud`-mode Mini PC to `hybrid` is
+OUT OF SCOPE for Phase 104. A `--migrate-from cloud-to-hybrid` flag may
+ship in a follow-up; Phase 104 only handles greenfield installs.
+
+
