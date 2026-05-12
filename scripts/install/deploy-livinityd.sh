@@ -73,6 +73,10 @@ _DLD_STAGE_DIR="/tmp/livos-install-stage"
 # Plan 105-02 (G7) will swap to PID-scoped /tmp/livinity-update-$$ + add cleanup.
 _DLD_TEMP_DIR="$_DLD_STAGE_DIR"
 _DLD_CADDYFILE="/etc/caddy/Caddyfile"
+# 105-02 (G6): configurable owner for chown -R. Default root for first-install
+# (matches update.sh:619-620 `chown -R root:root`). Mini PC uses `bruce` post-
+# install via manual chown. Future install.sh `--user` flag deferred.
+_DLD_LIVOS_USER="${_DLD_LIVOS_USER:-root}"
 
 # ── 1. System packages ──────────────────────────────────────────────────────
 _dld_install_system_packages() {
@@ -896,20 +900,106 @@ CADDYFILE
     ok "Caddy reloaded"
 }
 
+# ── 11. Gallery cache (105-02 G5 — update.sh:596-610) ───────────────────────
+# Idempotent git pull on /opt/livos/data/app-stores/*livinity-apps* clone.
+# Graceful skip if cache dir or .git is absent (lazy-created on first store access).
+_dld_update_gallery_cache() {
+    step "105-02 (G5) — update gallery cache (update.sh:596-610)"
+
+    local gallery_cache_dir
+    gallery_cache_dir=$(find "${_DLD_LIVOS_DIR}/data/app-stores/" -maxdepth 1 -name '*livinity-apps*' -type d 2>/dev/null | head -1)
+    if [[ -n "$gallery_cache_dir" ]] && [[ -d "$gallery_cache_dir/.git" ]]; then
+        info "Updating gallery cache at $gallery_cache_dir..."
+        cd "$gallery_cache_dir"
+        git config --global --add safe.directory "$gallery_cache_dir" 2>/dev/null || true
+        git fetch origin 2>/dev/null || true
+        git reset --hard origin/main 2>/dev/null || git reset --hard origin/master 2>/dev/null || warn "Gallery cache update failed"
+        cd "$_DLD_LIVOS_DIR"
+        ok "Gallery cache updated"
+    else
+        info "No gallery cache found - will be created on first App Store access"
+    fi
+}
+
+# ── 12. Permissions (105-02 G6 — update.sh:612-622) ─────────────────────────
+# chmod +x legacy-compat app-script + chown -R both trees to $_DLD_LIVOS_USER.
+# app-script chmod closes the tRPC apps-router 500 that fires when the script
+# isn't executable on first-install hosts.
+_dld_fix_permissions() {
+    step "105-02 (G6) — fix permissions (update.sh:612-622)"
+
+    local livos_user="${_DLD_LIVOS_USER:-root}"
+
+    # Make app-script executable (legacy-compat path required by tRPC apps router)
+    chmod +x "$_DLD_LIVOS_DIR/packages/livinityd/source/modules/apps/legacy-compat/app-script" 2>/dev/null || true
+
+    # Set ownership (default root:root; configurable via _DLD_LIVOS_USER env)
+    chown -R "${livos_user}:${livos_user}" "$_DLD_LIVOS_DIR" 2>/dev/null || true
+    if [[ -d "$_DLD_LIV_DIR" ]]; then
+        chown -R "${livos_user}:${livos_user}" "$_DLD_LIV_DIR" 2>/dev/null || true
+    fi
+
+    ok "Permissions fixed (owner=${livos_user})"
+}
+
+# ── 13. Cleanup + .deployed-sha (105-02 G7+G9 — update.sh:657-682) ──────────
+# Stage dir preservation matches 104-11 reuse semantics (faster re-runs).
+# Operators wanting strict update.sh parity: `export _DLD_CLEAR_STAGE=1` to
+# purge. Also writes /opt/livos/.deployed-sha forward-compat with update.sh's
+# Phase 30 UPD-03 SHA-tracking — without it, first `bash /opt/livos/update.sh`
+# logs FROM_SHA=unknown (cosmetic).
+_dld_cleanup_temp_dir() {
+    step "105-02 (G7+G9) — cleanup + .deployed-sha (update.sh:657-682)"
+
+    # G9: .deployed-sha write — read SHA from stage dir BEFORE optional purge
+    if [[ -d "$_DLD_STAGE_DIR/.git" ]]; then
+        local deployed_sha
+        deployed_sha=$(cd "$_DLD_STAGE_DIR" && git rev-parse HEAD 2>/dev/null || echo "")
+        if [[ -n "$deployed_sha" ]]; then
+            echo "$deployed_sha" > "$_DLD_LIVOS_DIR/.deployed-sha"
+            chmod 644 "$_DLD_LIVOS_DIR/.deployed-sha" 2>/dev/null || true
+            ok ".deployed-sha recorded ($(echo "$deployed_sha" | cut -c1-7))"
+        else
+            warn "Could not extract HEAD SHA from stage dir"
+        fi
+    fi
+
+    # G7: cleanup (gated on _DLD_CLEAR_STAGE for re-run cache preservation)
+    if [[ "${_DLD_CLEAR_STAGE:-0}" == "1" ]]; then
+        if [[ -d "$_DLD_STAGE_DIR" ]]; then
+            rm -rf "$_DLD_STAGE_DIR"
+            ok "Stage dir purged ($_DLD_STAGE_DIR)"
+        fi
+    else
+        info "Stage dir preserved at $_DLD_STAGE_DIR (re-run cache; export _DLD_CLEAR_STAGE=1 to purge)"
+    fi
+
+    # update.sh's completion sentinel (forward-compat with future phase33_finalize trap)
+    export LIVOS_UPDATE_COMPLETED=1
+}
+
 # ── Public entry point ──────────────────────────────────────────────────────
+# 105-02 (this plan): closes RESEARCH gaps G2 (apt streaming + ydotoold unit),
+# G3 (atomic update.sh self-rsync), G5 (gallery cache), G6 (chown + app-script
+# chmod), G7 (cleanup), G8 (UI rm -rf dist), G9 (.deployed-sha forward-compat).
+# Pipeline now matches CONTEXT.md §"Pipeline Order" 16-step canonical sequence.
+#
 # 104-12 + 104-13 + 105-01: extended pipeline now also builds liv stack + writes
 # liv-core/liv-worker/liv-memory systemd units AND writes /opt/livos/.npmrc to
 # allow baileys → libsignal git-repository subdep on pnpm 11+. Order matters:
 #   1. system pkgs → postgres → redis (infra ready)
-#   2. clone (both livos + liv)
-#   3. JWT + .env (105-01: moved BEFORE pnpm install per CONTEXT pipeline order;
+#   2. clone (both livos + liv) — now also does atomic update.sh self-rsync (105-02 G3)
+#   3. streaming apt packages + ydotoold unit (105-02 G2)
+#   4. JWT + .env (105-01: moved BEFORE pnpm install per CONTEXT pipeline order;
 #      secrets must exist before any pnpm step that might inspect env)
-#   4. write .npmrc (104-13 — BEFORE pnpm install)
-#      → build livos (pnpm) → build liv (npm)
-#   5. sync liv dist into livinityd's pnpm-store (closes Mini PC pitfall)
-#   6. liv systemd units FIRST (so livos.service `After=liv-core` is satisfied)
-#   7. livos systemd unit (the cap-stone)
-#   8. health-check + caddy reload
+#   5. write .npmrc (104-13 — BEFORE pnpm install)
+#      → build livos (pnpm; UI build now `rm -rf dist` first per 105-02 G8) → build liv (npm)
+#   6. sync liv dist into livinityd's pnpm-store (closes Mini PC pitfall)
+#   7. gallery cache (105-02 G5) + permissions (105-02 G6)
+#   8. liv systemd units FIRST (so livos.service `After=liv-core` is satisfied)
+#   9. livos systemd unit (the cap-stone)
+#  10. health-check + caddy reload
+#  11. cleanup + .deployed-sha write (105-02 G7+G9)
 #
 # 105-01 refactor:
 #   - _dld_verify_build helper extracted (was inlined in 3 sites)
@@ -921,24 +1011,28 @@ deploy_livinityd() {
         return 0
     fi
 
-    step "Plan 104-11/104-12 — deploying livinityd + liv stack (full LivOS application stack)"
+    step "Plan 104-11/104-12/105-02 — deploying livinityd + liv stack (full LivOS application stack)"
     info "After this completes, the LivOS UI should load in the browser."
-    info "Scope: livinityd (Plan 104-11) + liv-core/liv-worker/liv-memory (Plan 104-12)."
+    info "Scope: livinityd (Plan 104-11) + liv-core/liv-worker/liv-memory (Plan 104-12) + update.sh 1:1 port (105-02)."
 
     _dld_install_system_packages
     _dld_setup_postgres
     _dld_setup_redis
     _dld_clone_source
-    _dld_generate_jwt_secret         # 105-01: moved earlier — secrets BEFORE pnpm install per CONTEXT pipeline order
-    _dld_write_env_file              # 105-01: moved earlier
+    _dld_install_streaming_packages       # 105-02 G2 — streaming apt + ydotoold unit
+    _dld_generate_jwt_secret              # 105-01: moved earlier — secrets BEFORE pnpm install per CONTEXT pipeline order
+    _dld_write_env_file                   # 105-01: moved earlier
     _dld_write_pnpm_npmrc
     _dld_build_packages
     _dld_build_liv_packages
     _dld_sync_liv_dist_into_pnpm_store
+    _dld_update_gallery_cache             # 105-02 G5 — gallery cache git pull
+    _dld_fix_permissions                  # 105-02 G6 — chown + app-script chmod
     _dld_write_liv_systemd_units
     _dld_write_systemd_unit
     _dld_health_check
     _dld_update_caddy_to_livinityd
+    _dld_cleanup_temp_dir                 # 105-02 G7+G9 — cleanup + .deployed-sha
 
-    ok "Plan 104-11/104-12/104-13/105-01 — livinityd + liv stack deploy complete"
+    ok "Plan 104-11/104-12/104-13/105-01/105-02 — livinityd + liv stack deploy complete"
 }
