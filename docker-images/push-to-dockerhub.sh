@@ -24,13 +24,40 @@ if ! docker info >/dev/null 2>&1; then
     exit 1
 fi
 
-# Confirm we're logged in (any registry counts — Docker Hub is the default)
-LOGGED_IN=$(docker info 2>/dev/null | grep -oE 'Username: \S+' || true)
-if [[ -z "$LOGGED_IN" ]]; then
-    echo "ERROR: not logged in to Docker Hub. Run: docker login" >&2
+# Confirm we're logged in. Try three signals (in order of reliability):
+#   1) `docker info` Username field — works for `docker login -u <user>` mode
+#   2) ~/.docker/config.json `auths` field — works for Docker Desktop web-based login
+#   3) credsStore=desktop in config — Docker Desktop manages credentials externally
+# If ANY signal indicates login, proceed (Docker will give a clear push-time error
+# if creds are actually invalid). The previous strict-only-signal-1 check failed
+# on Docker Desktop's web-based login flow.
+LOGGED_IN_USER=""
+if command -v docker >/dev/null 2>&1; then
+    LOGGED_IN_USER=$(docker info 2>/dev/null | grep -oE 'Username: \S+' | awk '{print $2}' || true)
+fi
+DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+HAS_AUTHS=""
+HAS_CREDSTORE=""
+if [[ -f "$DOCKER_CONFIG" ]]; then
+    HAS_AUTHS=$(grep -oE '"auths"[[:space:]]*:[[:space:]]*\{[^}]' "$DOCKER_CONFIG" 2>/dev/null || true)
+    HAS_CREDSTORE=$(grep -oE '"credsStore"[[:space:]]*:[[:space:]]*"[a-z]+"' "$DOCKER_CONFIG" 2>/dev/null || true)
+fi
+
+if [[ -z "$LOGGED_IN_USER" && -z "$HAS_AUTHS" && -z "$HAS_CREDSTORE" ]]; then
+    echo "ERROR: No Docker Hub login detected." >&2
+    echo "       Run: docker login" >&2
+    echo "       (If Docker Desktop has logged you in but this still errors, run" >&2
+    echo "        the docker push commands manually — see docker-images/README.md.)" >&2
     exit 2
 fi
-echo "[INFO] Logged in as: $LOGGED_IN"
+
+if [[ -n "$LOGGED_IN_USER" ]]; then
+    echo "[INFO] Logged in as: $LOGGED_IN_USER"
+elif [[ -n "$HAS_CREDSTORE" ]]; then
+    echo "[INFO] Docker Desktop credential store detected (login managed externally)"
+else
+    echo "[INFO] Docker config.json contains auths entries — assuming logged in"
+fi
 echo "[INFO] Target namespace: $NS"
 echo ""
 
