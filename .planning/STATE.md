@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-12T07:54:56.087Z"
+last_updated: "2026-05-12T08:30:00.000Z"
 progress:
   total_phases: 54
   completed_phases: 25
-  total_plans: 210
-  completed_plans: 203
+  total_plans: 211
+  completed_plans: 204
   percent: 97
 ---
 
@@ -25,10 +25,23 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 104 (One-shot Local Install + Docker Ubuntu GUI UAT) — **TASK-1 COMPLETE, AWAITING USER-WALKED APPLE UAT (Task 2 checkpoint:human-verify)**
-Plan: 7 of 7 — 104-07 Task 1 ✅ shipped 2026-05-12 `8c143b7b` (walk.mjs full AC walk + lib/chrome-cdp.mjs + lib/tcpdump-check.mjs + UAT-CHECKLIST.md + UAT-EVIDENCE/.gitkeep); **Task 2 awaiting operator walk** on real Apple devices (iPhone Safari + iPad Safari + macOS Safari + macOS Chrome green padlock) + Mini PC update.sh AC-104-12 + real tcpdump AC-104-15 → checklist sign-off at `.planning/phases/104-local-install-and-docker-uat/UAT-CHECKLIST.md`. (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`; 104-02 ✅ shipped 2026-05-12 `2a1a274b..1361f483`; 104-03 ✅ shipped 2026-05-12 `9bba50ba..8d8cec66` — local-lan backend code-complete, 24/24 vitest pass, runtime AC-104-4..7 deferred to 104-07 UAT; 104-04 ✅ shipped 2026-05-12 `9a9801c8..62a526b1` — hybrid backend code-complete, 52/52 vitest pass, AC-104-15 runtime tcpdump deferred to 104-07 UAT; 104-05 ✅ shipped 2026-05-12 `4c853ce0..18a097f3` — enrollment wizard UI code-complete, 17/17 vitest pass, runtime AC-104-9/-10/-15 surfaces deferred to 104-07 UAT; 104-06 ✅ shipped 2026-05-12 `1e6f1f01..e9e3c125` — cloud-mode regression test SHIPPED; D-104-NO-PROD-IMPACT regression gate live; mode-cloud.sh real body + docker/cloud-regression/ UAT container + capture-minipc-baseline.sh helper; `docker compose build` succeeds locally; full byte-equivalence diff requires one-time operator capture of Mini PC baseline fixtures)
+Phase: 104 (One-shot Local Install + Docker Ubuntu GUI UAT) — **HOTFIX 104-08 SHIPPED 2026-05-12; 104-07 Task 2 STILL awaiting operator Apple-device walk**
+Plan: 8 of 8 — 104-08 ✅ shipped 2026-05-12 `3f8d20bc..(Task-3-pending)` — user-owned-domain hybrid hotfix. `--mode hybrid --domain X --cf-token Y --cf-zone-id Z` skips the Server5 mint entirely and creates the CF DNS A-record on the user's own zone (idempotent list-first-then-create); 18/18 host-side bash test PASS; D-104-RELAY-ZERO-DATA-PLANE realized at install-time. 104-07 Task 1 ✅ shipped 2026-05-12 `8c143b7b` (walk.mjs full AC walk + lib/chrome-cdp.mjs + lib/tcpdump-check.mjs + UAT-CHECKLIST.md + UAT-EVIDENCE/.gitkeep); **Task 2 STILL awaiting operator walk** on real Apple devices (iPhone Safari + iPad Safari + macOS Safari + macOS Chrome green padlock) + Mini PC update.sh AC-104-12 + real tcpdump AC-104-15 → checklist sign-off at `.planning/phases/104-local-install-and-docker-uat/UAT-CHECKLIST.md`. (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`; 104-02 ✅ shipped 2026-05-12 `2a1a274b..1361f483`; 104-03 ✅ shipped 2026-05-12 `9bba50ba..8d8cec66` — local-lan backend code-complete, 24/24 vitest pass, runtime AC-104-4..7 deferred to 104-07 UAT; 104-04 ✅ shipped 2026-05-12 `9a9801c8..62a526b1` — hybrid backend code-complete, 52/52 vitest pass, AC-104-15 runtime tcpdump deferred to 104-07 UAT; 104-05 ✅ shipped 2026-05-12 `4c853ce0..18a097f3` — enrollment wizard UI code-complete, 17/17 vitest pass, runtime AC-104-9/-10/-15 surfaces deferred to 104-07 UAT; 104-06 ✅ shipped 2026-05-12 `1e6f1f01..e9e3c125` — cloud-mode regression test SHIPPED; D-104-NO-PROD-IMPACT regression gate live; mode-cloud.sh real body + docker/cloud-regression/ UAT container + capture-minipc-baseline.sh helper; `docker compose build` succeeds locally; full byte-equivalence diff requires one-time operator capture of Mini PC baseline fixtures)
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v33.0 (active)
+
+## 104-08 Status (2026-05-12) — user-owned-domain hybrid HOTFIX SHIPPED (18/18 host-side bash test PASS)
+
+- **HOTFIX** (added to phase mid-flight after 104-07 Task 1): 104-08 adds `--domain` + `--cf-token` + `--cf-zone-id` flags + `LIVOS_*` env vars to install.sh. When supplied, `mode-hybrid.sh` skips the Server5 control-plane mint entirely and instead creates a Cloudflare DNS A-record on the user's own zone (idempotent list-first-then-create per T-104-04-R1). Realizes D-104-RELAY-ZERO-DATA-PLANE at install-time — for power users with their own domain, the entire Server5 touch is eliminated. Three commits:
+  1. `3f8d20bc` parse-cli.sh (3 new CLI flags + 3 env-var bindings + partner-flag validation + --help rewrite with user-owned-domain bypass example + CGNAT limitation block) + detect-platform.sh (`detect_cgnat` advisory — RFC 6598 100.64.0.0/10 probe via ifconfig.me, WARN-not-FAIL semantics) + install.sh (1-line wire of `detect_cgnat`).
+  2. `d9b2af27` mode-hybrid.sh (NEW `_provision_user_owned_domain` function + `LIVOS_DOMAIN`-non-empty early-exit in `_provision_hybrid_subdomain` + branch dispatch in `install_mode_hybrid` + `LIVOS_CF_TOKEN` fallback in `_write_cf_token_secret`) + show-banner.sh (user-owned-domain post-install URL + CGNAT advisory).
+  3. `(Task-3 pending below)` __tests__/test-mode-hybrid-args.sh (NEW, executable, 18 assertions covering AC-104-08-{1..5} + bash -n syntax check + env-var equivalence) + 104-08-SUMMARY.md + STATE.md + ROADMAP.md.
+- Security (AC-104-08-5): CF API token NEVER lands on curl argv. Uses `curl -K -` (config from stdin) for both GET (list-records) and POST (create-record) so `header = "Authorization: Bearer <token>"` flows via pipe, not argv. POST body is `mktemp` 0600 + `--data-binary @<file>` + `rm -f`. Body contains only DNS record payload, never the token. Verified by grep — `grep -E 'curl.*Authorization.*Bearer.*\$' mode-hybrid.sh` returns only the documenting comment.
+- Backward compat (AC-104-08-2): when `--domain` is NOT supplied, the legacy 104-04 Server5 mint flow runs unchanged. Static grep confirms `_provision_hybrid_subdomain` + `livinity.io/api/hybrid/provision` endpoint + `LIVOS_DOMAIN`-empty branch are all preserved. `CLOUDFLARE_API_TOKEN=xyz bash install.sh --mode hybrid` continues to work identically to 104-04 behavior.
+- Test results: `bash scripts/install/__tests__/test-mode-hybrid-args.sh` → 18 PASS, 0 FAIL. Covers all five plan-08 ACs + bash -n syntax check on 5 modified files + `LIVOS_DOMAIN` env-var equivalence to `--domain` CLI flag.
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 3 commits.
+- Deviations: (1) Rule 1 — initial grep loop in test script failed on `--cf-token` arg (interpreted as grep option); fixed inline with `grep -qF -- "$flag"` separator. (2) Rule 1 — first draft of `_provision_user_owned_domain` used `_CF_AUTH_TOKEN="$cf_token" curl -H "Authorization: Bearer ${_CF_AUTH_TOKEN}"` which still expanded token onto argv; caught during own AC-104-08-5 pre-commit verification; replaced with `curl -K -` pattern in same commit so broken interim form never landed in git. (3) Rule 2 — CGNAT detection promoted from "optional" to "shipped" because without it, behind-CGNAT operators silently debug hybrid mode for hours. WARN-not-FAIL so it doesn't block legitimate LAN-only Apple installs.
+- Carry-forward to 104-07 Task 2: hotfix is orthogonal to the operator Apple-device walk. UAT-CHECKLIST.md section A can OPTIONALLY append `--domain $DOMAIN --cf-token $TOKEN --cf-zone-id $ZONE_ID` to the install.sh invocation when testing with an operator-owned Cloudflare-managed domain (one fewer external dependency in the UAT walk).
 
 ## 104-07 Status (2026-05-12) — Task 1 SHIPPED (walk.mjs full AC coverage + UAT-CHECKLIST.md); Task 2 (Apple-device verify) AWAITING USER WALK
 

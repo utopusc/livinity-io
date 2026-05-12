@@ -638,7 +638,7 @@ Plans:
 
 **Status:** Planned 2026-05-11 (7 plans, 6 waves). Run `/gsd-execute-phase 104` to begin Wave 1.
 
-**Plans:** 7 plans
+**Plans:** 8 plans (7 + 104-08 hotfix)
 
 Plans:
 - [x] 104-01-PLAN.md - Docker UAT container scaffolding (Wave 1, autonomous) — Shipped 2026-05-12 (`e0c4fc6c..500b4912`; runtime verify pending Docker Desktop)
@@ -648,6 +648,7 @@ Plans:
 - [x] 104-05-PLAN.md - Settings -> Local Access enrollment wizard UI (Wave 4, autonomous) — Shipped 2026-05-12 (`4c853ce0..18a097f3`; 17/17 vitest pass; D-104-DEFAULT-MODE + D-NO-NEW-DEPS + D-104-RELAY-ZERO-DATA-PLANE UI surfaces enforced; runtime AC-104-9/-10/-15 end-to-end UAT deferred to 104-07)
 - [x] 104-06-PLAN.md - cloud-mode regression test: install.sh --mode cloud byte-equivalent to Mini PC dab261cc (Wave 5, autonomous) — Shipped 2026-05-12 (`1e6f1f01..e9e3c125`; mode-cloud.sh body refactored as strict subset of livos/install.sh; docker/cloud-regression/ UAT container with always-on D-104-NO-PROD-IMPACT negative checks + conditional byte-equivalence diff; `docker compose build` succeeds locally; operator runs capture-minipc-baseline.sh once to land fixtures)
 - [/] 104-07-PLAN.md - End-to-end UAT walk + user-walked Apple verification (Wave 6, autonomous: false) — **Task 1 SHIPPED** 2026-05-12 (`8c143b7b`; walk.mjs 10-test full AC walk + lib/chrome-cdp.mjs + lib/tcpdump-check.mjs + UAT-CHECKLIST.md + UAT-EVIDENCE/.gitkeep; D-NO-NEW-DEPS honored; Sacred SHA preserved). **Task 2 AWAITING operator Apple-device walk** via `.planning/phases/104-local-install-and-docker-uat/UAT-CHECKLIST.md`. Phase 104 final disposition pending operator sign-off.
+- [x] 104-08-PLAN.md - User-owned-domain hybrid HOTFIX: `--mode hybrid --domain X --cf-token Y --cf-zone-id Z` skips Server5 mint, creates CF DNS A-record on user's own zone (Wave 7 hotfix, autonomous) — Shipped 2026-05-12 (`3f8d20bc..(Task-3-pending)`; 18/18 host-side bash test PASS — `scripts/install/__tests__/test-mode-hybrid-args.sh`; AC-104-08-{1..5} all green; D-104-RELAY-ZERO-DATA-PLANE realized at install-time; D-104-NO-PROD-IMPACT preserved — when --domain unset, legacy Server5 mint runs unchanged; `curl -K -` config-from-stdin pattern keeps CF API token off curl argv (AC-104-08-5); CGNAT detection via ifconfig.me + RFC 6598 100.64.0.0/10 regex, WARN-not-FAIL semantics; Sacred SHA preserved across all 3 commits)
 
 **Non-goals (HARD):**
 - Must NOT break existing cloud `<username>.livinity.io` deploy path on Mini PC
