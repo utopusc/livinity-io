@@ -36,11 +36,20 @@ export async function readRootCert(): Promise<string> {
 	}
 }
 
-/** Find the actual root.crt path under /var/lib/caddy in case Caddy moved it. */
+/**
+ * Find the actual root.crt path under /var/lib/caddy in case Caddy moved it.
+ *
+ * FS-01 (Phase 104 review fix): bounded by `-maxdepth 6` and a 5s exec timeout.
+ * The Caddy authority dir lives at /var/lib/caddy/.local/share/caddy/pki/authorities/<name>
+ * — 6 levels covers the real path with a slack of 1. On a misconfigured
+ * /var/lib/caddy (NFS bind-mount, symlink to /, etc.) the bounded traversal
+ * still terminates instead of stalling the route handler.
+ */
 export async function findRootCertPath(): Promise<string | null> {
 	try {
 		const {stdout} = await execAsync(
-			"find /var/lib/caddy -name root.crt -type f -path '*liv-local*' -print -quit",
+			"find /var/lib/caddy -maxdepth 6 -name root.crt -type f -path '*liv-local*' -print -quit",
+			{timeout: 5000},
 		)
 		const trimmed = stdout.trim()
 		return trimmed.length > 0 ? trimmed : null
