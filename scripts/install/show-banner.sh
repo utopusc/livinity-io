@@ -41,8 +41,22 @@ print_banner() {
                 echo
                 echo "  NOTE: CGNAT detected (public IP in 100.64.0.0/10)."
                 echo "  External clients (e.g. iPhone on cellular) will NOT reach"
-                echo "  this host until you have a public IP or v34 Tunnel ships."
+                echo "  this host. Re-run with --mode tunnel instead (Plan 104-09)"
+                echo "  — Cloudflare Tunnel is outbound-only and works behind CGNAT."
             fi
+            ;;
+        tunnel)
+            # Plan 104-09 — Cloudflare Tunnel banner. CF edge terminates TLS;
+            # Caddy serves plain HTTP on :80 locally; cloudflared dials outbound
+            # to the CF edge. No public IP required.
+            local dom="${LIVOS_DOMAIN:-<your-domain>}"
+            echo "  Next: open https://<subdomain>.${dom}/"
+            echo "        (subdomain routing configured in CF Tunnels dashboard)"
+            echo
+            echo "  Tunnel:  cloudflared → CF edge → ${dom}"
+            echo "  TLS:     CF-managed cert at the edge (no LE on this host)"
+            echo "  Public IP: NOT required (outbound-only — CGNAT-compatible)"
+            echo "  Server5 relay: ZERO traffic (D-104-RELAY-ZERO-DATA-PLANE)"
             ;;
     esac
     echo "================================================================"
