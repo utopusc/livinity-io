@@ -72,8 +72,7 @@ const hybridActivateSchema = z.object({
 
 const local = router({
 	getStatus: privateProcedure.query(async ({ctx}) => {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const redis = (ctx as any).livinityd.ai.redis
+		const redis = ctx.livinityd.ai.redis
 		const [mode, tld, hostIp] = await Promise.all([
 			redis.get(REDIS_LOCAL_MODE),
 			redis.get(REDIS_LOCAL_TLD),
@@ -103,8 +102,7 @@ const local = router({
 	activate: adminProcedure
 		.input(localActivateSchema)
 		.mutation(async ({ctx, input}) => {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const redis = (ctx as any).livinityd.ai.redis
+			const redis = ctx.livinityd.ai.redis
 			const subdomains: LocalSubdomainConfig[] = input.subdomains ?? []
 			const caddyfile = generateLocalCaddyfile(
 				input.tld,
@@ -161,8 +159,7 @@ const local = router({
 	activateHybrid: adminProcedure
 		.input(hybridActivateSchema)
 		.mutation(async ({ctx, input}) => {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const redis = (ctx as any).livinityd.ai.redis
+			const redis = ctx.livinityd.ai.redis
 			const subdomains: LocalSubdomainConfig[] = input.subdomains ?? []
 			const caddyfile = generateHybridCaddyfile(input.subdomain, subdomains, true)
 			await writeCaddyfile(caddyfile)
@@ -177,8 +174,7 @@ const local = router({
 		}),
 
 	getHybridStatus: privateProcedure.query(async ({ctx}) => {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const redis = (ctx as any).livinityd.ai.redis
+		const redis = ctx.livinityd.ai.redis
 		const [subdomain, zoneId, hostIp, cfTokenPath] = await Promise.all([
 			redis.get(REDIS_HYBRID_SUBDOMAIN),
 			redis.get(REDIS_HYBRID_ZONE_ID),
