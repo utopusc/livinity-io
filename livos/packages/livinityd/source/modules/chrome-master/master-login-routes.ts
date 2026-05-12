@@ -100,6 +100,7 @@ const execFile = promisify(execFileCb)
 import {router, adminProcedure, privateProcedure} from '../server/trpc/trpc.js'
 import {spawnXvfb} from '../streaming/xvfb-spawner.js'
 import {spawnChromeProcess} from '../webapps/chrome-process-spawner.js'
+import {startFluxbox, type FluxboxHandle} from '../webapps/fluxbox-wm.js'
 import {spawnVncForDisplay} from '../streaming/vnc-bridge.js'
 import {
 	dispatchPointer as defaultDispatchPointer,
@@ -152,6 +153,10 @@ type VncSpawnFnLike = (opts: {
 	rfbPort: number
 	logger?: unknown
 }) => ChildProcess
+type FluxboxSpawnFnLike = (opts: {
+	display: string
+	logger?: unknown
+}) => Promise<{pid: number; display: string; stop(): Promise<void>}>
 
 type DispatchPointerFnLike = (
 	wid: number,
@@ -226,6 +231,9 @@ export interface MasterLoginInjectables {
 	xvfbSpawnFn?: XvfbSpawnFnLike
 	chromeSpawnFn?: ChromeSpawnFnLike
 	vncSpawnFn?: VncSpawnFnLike
+	// Phase 103.1-4 — fluxbox spawn for master display so window focus works
+	// (xdotool input dispatch needs a WM to deliver to the right window).
+	fluxboxSpawnFn?: FluxboxSpawnFnLike
 	// Input dispatcher injection (default = real input-dispatcher exports).
 	dispatchPointerFn?: DispatchPointerFnLike
 	dispatchKeyFn?: DispatchKeyFnLike
@@ -246,6 +254,8 @@ interface CurrentMaster {
 	xvfb: {stop(): Promise<void>}
 	x11vnc: ChildProcess
 	chrome: {stop(): Promise<void>}
+	// Phase 103.1-4 — fluxbox handle for cleanupMaster cascade
+	fluxbox?: {stop(): Promise<void>}
 }
 
 // Module-singleton state (per livinityd boot). T-102-07b: prevents concurrent
@@ -395,6 +405,10 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 		injectables.chromeSpawnFn ?? (spawnChromeProcess as unknown as ChromeSpawnFnLike)
 	const vncSpawnFn =
 		injectables.vncSpawnFn ?? (spawnVncForDisplay as unknown as VncSpawnFnLike)
+	const fluxboxSpawnFn: FluxboxSpawnFnLike =
+		injectables.fluxboxSpawnFn ??
+		(((opts: {display: string}) =>
+			startFluxbox({display: opts.display})) as FluxboxSpawnFnLike)
 	const dispatchPointerFn =
 		injectables.dispatchPointerFn ?? (defaultDispatchPointer as DispatchPointerFnLike)
 	const dispatchKeyFn = injectables.dispatchKeyFn ?? (defaultDispatchKey as DispatchKeyFnLike)
@@ -441,6 +455,14 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 			await m.chrome.stop()
 		} catch {
 			/* non-fatal */
+		}
+		// 3.5 SIGTERM fluxbox (103.1-4)
+		if (m.fluxbox) {
+			try {
+				await m.fluxbox.stop()
+			} catch {
+				/* non-fatal */
+			}
 		}
 		// 4. SIGTERM xvfb
 		try {
@@ -550,10 +572,21 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 			let port: number | null = null
 			let x11vnc: ChildProcess | null = null
 			let stream: {streamId: string; wsUrl: string} | null = null
+			let fluxbox: {pid: number; display: string; stop(): Promise<void>} | null = null
 
 			try {
 				// 3. Xvfb on :N with readiness poll.
 				xvfb = await xvfbSpawnFn({display, width: 1280, height: 720})
+
+				// 3.5 Phase 103.1-4 — fluxbox WM on the same display so that:
+				//   (a) xdotool input dispatch finds a focused window (otherwise
+				//       keystrokes/clicks land in the void — user-visible bug
+				//       2026-05-11 "Chrome görüyorum ama ekrani kullanamiyorum"),
+				//   (b) wmctrl can publish `_NET_CLIENT_LIST` so list_windows
+				//       aggregation actually finds the master Chrome window
+				//       instead of skipping the display silently.
+				// Same pattern WebApp window-manager uses on per-app Xvfbs.
+				fluxbox = await fluxboxSpawnFn({display})
 
 				// 4. Per-master Chrome subprocess on :N pointed at the master profile.
 				chrome = await chromeSpawnFn({
@@ -591,6 +624,7 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 					xvfb,
 					x11vnc,
 					chrome,
+					fluxbox: fluxbox ?? undefined,
 				}
 
 				// 8. REQ-103-A4 — chrome exit watcher → cleanupMaster cascade.
@@ -655,6 +689,13 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 				if (chrome) {
 					try {
 						await chrome.stop()
+					} catch {
+						/* non-fatal */
+					}
+				}
+				if (fluxbox) {
+					try {
+						await fluxbox.stop()
 					} catch {
 						/* non-fatal */
 					}

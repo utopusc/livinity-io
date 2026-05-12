@@ -208,6 +208,9 @@ function _bareInjectables() {
 	const xvfbSpawnFn = vi.fn(async (_opts: never) => xvfb as never)
 	const chromeSpawnFn = vi.fn(async (_opts: never) => chrome as never)
 	const vncSpawnFn = vi.fn((_opts: never) => x11vnc as never)
+	// Phase 103.1-4 — fluxbox handle on master display so xdotool input dispatch finds focus
+	const fluxbox = {pid: 9999, display: ':42', stop: vi.fn(async () => undefined)}
+	const fluxboxSpawnFn = vi.fn(async (_opts: never) => fluxbox as never)
 	const dispatch = makeDispatchMocks()
 	// Phase 103.1 — unlinkFn defaults to a no-op that pretends ENOENT (no
 	// lock files exist). Tests can override to assert specific paths.
@@ -235,13 +238,14 @@ function _bareInjectables() {
 		xvfbSpawnFn,
 		chromeSpawnFn,
 		vncSpawnFn,
+		fluxboxSpawnFn,
 		// dispatchers
 		dispatchPointerFn: dispatch.dispatchPointerFn,
 		dispatchKeyFn: dispatch.dispatchKeyFn,
 		dispatchTypeFn: dispatch.dispatchTypeFn,
 		dispatchScrollFn: dispatch.dispatchScrollFn,
 		// expose fakes for assertions
-		_fakes: {portAllocator, xvfb, chrome, x11vnc},
+		_fakes: {portAllocator, xvfb, chrome, x11vnc, fluxbox},
 	}
 }
 
@@ -547,6 +551,52 @@ describe('103-01 chromeMaster tRPC router — Xvfb streaming pipeline', () => {
 		expect(chownIdx).toBeGreaterThanOrEqual(0)
 		expect(chromeIdx).toBeGreaterThanOrEqual(0)
 		expect(chownIdx).toBeLessThan(chromeIdx)
+	})
+
+	test('Test 14f (103.1-4): startLogin spawns fluxbox on master display BETWEEN xvfb and chrome', async () => {
+		const callOrder: string[] = []
+		const inj = makeFull103Injectables()
+		inj.xvfbSpawnFn = vi.fn(async (opts: never) => {
+			callOrder.push('xvfbSpawnFn')
+			return inj._fakes.xvfb as never
+		})
+		inj.fluxboxSpawnFn = vi.fn(async (opts: never) => {
+			callOrder.push('fluxboxSpawnFn')
+			return inj._fakes.fluxbox as never
+		})
+		inj.chromeSpawnFn = vi.fn(async (opts: never) => {
+			callOrder.push('chromeSpawnFn')
+			return inj._fakes.chrome as never
+		})
+
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await caller.startLogin()
+
+		// Order: xvfb → fluxbox → chrome
+		expect(callOrder.indexOf('xvfbSpawnFn')).toBeLessThan(
+			callOrder.indexOf('fluxboxSpawnFn'),
+		)
+		expect(callOrder.indexOf('fluxboxSpawnFn')).toBeLessThan(
+			callOrder.indexOf('chromeSpawnFn'),
+		)
+		// fluxbox called with the master display
+		expect(inj.fluxboxSpawnFn).toHaveBeenCalledWith(
+			expect.objectContaining({display: ':42'}),
+		)
+	})
+
+	test('Test 14g (103.1-4): cleanupMaster cascade stops fluxbox before xvfb', async () => {
+		const inj = makeFull103Injectables()
+		const r = createChromeMasterRouter(inj as never)
+		const caller = t.createCallerFactory(r)(makeCtx({role: 'admin'}))
+		await caller.startLogin()
+
+		// Explicit stopLogin (clean teardown path).
+		await caller.stopLogin()
+
+		expect(inj._fakes.fluxbox.stop).toHaveBeenCalledTimes(1)
+		expect(inj._fakes.xvfb.stop).toHaveBeenCalledTimes(1)
 	})
 
 	test('Test 14e (103.1-3): startLogin swallows chown failures (non-fatal — Chrome may still succeed if dir was already bruce-owned)', async () => {
