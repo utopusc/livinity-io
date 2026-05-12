@@ -662,6 +662,53 @@ Plans:
 
 ---
 
+### Phase 105: deploy-livinityd 1:1 Mini-PC update.sh Port
+
+**Goal:** Replace the half-baked `scripts/install/deploy-livinityd.sh` (shipped in Plans 104-11/12/13) with a faithful 1:1 port of the Mini PC's production-tested `update.sh` (703 lines). Every quirk that `update.sh` has accreted over Phases 29-65 (pnpm flags, rsync excludes, `.env` reuse-vs-write order, systemd unit shape, liv-dist copy into pnpm-store, multi-store iteration, JWT secret bootstrap, gallery cache, ydotool apt step) MUST be mirrored in `deploy-livinityd.sh` so a fresh-install on a clean Ubuntu 24.04 VPS produces an identical filesystem + service topology to the live Mini PC. The live test on mainserver `154.53.56.75` for Phase 104 hit six cascading bugs — this phase is the dedicated cleanup that gets `install.sh --mode hybrid --domain X --cf-token Y --cf-zone-id Z` end-to-end-green on a fresh VPS: `https://X` shows the actual LivOS login UI (NOT a Caddy placeholder, NOT a build error page) and all 4 systemd services are `active`.
+
+**Trigger:** USER DECISION 2026-05-12 (Path A locked in memory `project_p104_deploy_gap.md`). Phase 104's TLS pipeline (xcaddy + caddy-dns/cloudflare + LE DNS-01) is production-ready and stays untouched. Phase 104's deploy layer (Plans 11/12/13) is the gap — instead of patching it bug-by-bug, port what already works on Mini PC.
+
+**Direction:**
+- **Canonical reference:** `update.sh` at repo root. Read line-by-line, map each step to a deploy-livinityd helper.
+- **Step mapping (update.sh → deploy-livinityd.sh):**
+  - Pre-flight (cgroup escape, log file, SHA tracking, precheck) → OMIT for first-install (no existing service to escape, no prior SHA to compare) but PRESERVE the verify_build helper + JSON history-log directory scaffolding for forward-compat with future `update.sh` runs
+  - Step 1 (git pull → /tmp + capture target SHA) → replace `git pull` with `git clone` (first-install has no checkout to update)
+  - Step 1b (apt packages: ffmpeg, x11-utils, x11-xserver-utils, ydotool, xdotool, scrot, imagemagick, ydotoold systemd unit) → port verbatim, idempotent
+  - Step 2 (rsync `/tmp/livos/` → `/opt/livos/` with `--delete --exclude='.git'`) → port verbatim. Critical: do NOT use over-broad `--exclude='docker/'` (kills UI routes per memory) — anchor pattern `--exclude='/docker/'`
+  - Step 3 (rsync `/tmp/liv/` → `/opt/liv/` sibling sync) → port verbatim
+  - Step 4 (`pnpm install --frozen-lockfile || pnpm install` in /opt/livos; `npm install --omit=optional` in /opt/liv) → port verbatim BUT add `block-exotic-subdeps=false` to `/opt/livos/.npmrc` BEFORE pnpm install (Plan 104-13 retained; pnpm 11 vs Mini PC's older pnpm divergence)
+  - Step 5 (build: `pnpm --filter @livos/config build && pnpm --filter ui build` in /opt/livos; per-package `cd packages/X && npm run build` for liv core/worker/mcp-server/memory + dist-copy to ALL `@liv+<pkg>*` pnpm-store dirs) → port verbatim. Honor `verify_build` BUILD-FAIL guard pattern (update.sh:287-295)
+  - Step 6 (gallery cache git pull, idempotent on missing dir) → port as-is
+  - Step 7 (chown -R bruce:bruce /opt/livos /opt/liv) → port BUT make user configurable (deploy-livinityd defaults to root but should accept --user flag)
+  - Step 8 (systemctl daemon-reload + restart livos, liv-core, liv-worker, liv-memory in order) → for first-install, replace `restart` with `enable --now` + write all 4 unit files (104-12 has 3 of these; verify mcp-server intentionally has NO systemd unit per P77)
+  - Step 9 (cleanup /tmp) → port verbatim
+- **First-install-only additions (NOT in update.sh):**
+  - PostgreSQL role/DB/schema.sql apply (104-11 helper) — runs ONCE on fresh VPS
+  - Redis `requirepass` bootstrap (104-11 helper) — runs ONCE
+  - JWT secret `/opt/livos/data/secrets/jwt` generation (104-11 helper) — runs ONCE
+  - `.env` generation with random PG/Redis passwords (104-11 helper) — preserve REUSE-on-rerun semantics (D-104-11-REUSE-NOT-ROTATE)
+  - Caddy reload at the end (104-11 helper) — runs each install
+- **Sacred:** `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED.
+- **D-105-MINIPC-PARITY:** deploy-livinityd.sh after this phase must produce a directory tree under `/opt/livos/` and `/opt/liv/` that is byte-equivalent to what `update.sh` produces on Mini PC (modulo first-install-only files: data/, .env, jwt secret). Verifiable via a `tree --noreport /opt/livos /opt/liv` diff harness during UAT.
+- **D-105-NO-PROD-IMPACT:** Mini PC's `update.sh` is NOT modified by this phase — only `deploy-livinityd.sh` and its test suite. Mini PC keeps running update.sh exactly as it does today. (104-NO-PROD-IMPACT preserved.)
+- **D-105-NO-NEW-TLS:** TLS pipeline (104-08 + 104-09) is untouched. This phase ONLY rewires deploy-livinityd. install.sh CLI surface (--mode hybrid --domain X --cf-token Y --cf-zone-id Z) MUST work byte-equivalent to 104-13's behavior.
+- **Live test GO/NO-GO gate:** Rent a fresh Ubuntu 24.04 VPS (or re-use cleaned mainserver `154.53.56.75`). Run `bash install.sh --mode hybrid --domain <user-domain> --cf-token <token> --cf-zone-id <zone>`. PASS = all 5 of: (a) `systemctl is-active livos liv-core liv-worker liv-memory` returns 4× "active"; (b) `curl -sk https://<domain>` returns LivOS login HTML (not Caddy placeholder, not 502); (c) browser-side green padlock + LivOS UI renders; (d) Sacred SHA preserved via `git hash-object liv/packages/core/src/sdk-agent-runner.ts`; (e) `update.sh` re-run on the same box succeeds idempotently (i.e., the layout produced by `deploy-livinityd.sh` is compatible with subsequent `update.sh` invocations — proves parity).
+- **Plan count estimate:** 3-5 plans (1 plan per major update.sh step group + 1 dedicated live-VPS UAT plan).
+
+**Sacred:** `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED.
+
+**Depends on:** Phase 104 (TLS layer + 104-11 deploy-livinityd helpers as starting scaffold). Mini PC `update.sh` at repo HEAD as canonical reference (production-tested, do not modify).
+
+**Status:** Drafted 2026-05-12. Run `/gsd-plan-phase 105` to author plans.
+
+**Non-goals (HARD):**
+- Must NOT modify Mini PC's `update.sh` (only deploy-livinityd.sh and its test harness)
+- Must NOT regress TLS pipeline from 104-08 / 104-09 (zero changes to caddy/CF/LE wiring)
+- Must NOT touch sacred `sdk-agent-runner.ts` SHA
+- Must NOT add a parallel deploy implementation (Docker compose or Ansible — those are Path B / Path C; this phase is Path A only)
+
+---
+
 ## Coverage
 
 All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-LOOP/RELIAB/BROKER-CARRY/MEM/MARKET) mapped to phases 64-76. 100% coverage. See REQUIREMENTS.md Traceability table (filled by phase planning).
