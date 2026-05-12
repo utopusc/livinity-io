@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
-status: code-complete-pending-mainserver-uat
+status: ready_to_plan
 last_updated: "2026-05-12T22:30:00.000Z"
 progress:
   total_phases: 5
-  completed_phases: 0   # Phase 106 is code-complete pending mainserver UAT walk (Task 8 checkpoint:human-verify) — flips to 1 after operator approval
+  completed_phases: 1   # Phase 106 is code-complete pending mainserver UAT walk (Task 8 checkpoint:human-verify) — flips to 1 after operator approval
   total_plans: 1
   completed_plans: 1    # 106-01 source-side complete (7 source commits + SUMMARY); UAT carry-forward
-  percent: 50           # 1 of 2 SDLC gates closed (code-complete); UAT-validation gate still open
+  percent: 20           # 1 of 2 SDLC gates closed (code-complete); UAT-validation gate still open
 ---
 
 # Project State
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 106 (deploy-livinityd Bootstrap-Layer Hotfix Back-Port) — CODE-COMPLETE 2026-05-12 (7 source commits + SUMMARY commit pending); mainserver UAT (Task 8 checkpoint:human-verify) deferred to operator
-Plan: 1 of 1 (complete; SUMMARY at `.planning/phases/106-deploy-livinityd-bootstrap-layer-hotfix-back-port/106-01-SUMMARY.md`)
+Phase: 107
+Plan: Not started
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v34.0 (active)
 

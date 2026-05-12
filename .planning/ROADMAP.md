@@ -58,7 +58,7 @@ Real-API-key broker for external/open-source apps (Bolt.diy, Open WebUI, Continu
 
 **Plan count estimate:** 1 plan with 8 tasks (6 source fixes + 1 test extension + 1 SUMMARY, atomic commits).
 
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [x] **106-01-PLAN.md** — CODE-COMPLETE 2026-05-12. Back-ported Bugs #7-#12 into deploy-livinityd.sh + user.exists() fix + +22 regression assertions + SUMMARY. **Commits:** `c3f13dd2..262e28f4` (7 source commits + this SUMMARY commit). **Test delta:** 126 → 148 PASS in test-deploy-livinityd.sh; combined 168 → **190 PASS** (deploy 148 + hybrid 18 + tunnel 24). **Sacred SHA preserved 7/7.** **D-104-NO-PROD-IMPACT preserved:** `livos/install.sh` + `update.sh` UNTOUCHED. **D-104-RELAY-ZERO-DATA-PLANE preserved:** zero new Server5/livinity.io refs in deploy-livinityd.sh. **One Rule-1 deviation:** vitest test-rig has pre-existing `@anthropic-ai/claude-agent-sdk` import resolution issue in Windows worktree (out of scope; Bug #12 fix is statically test-safe per plan §4). **SUMMARY:** `.planning/phases/106-deploy-livinityd-bootstrap-layer-hotfix-back-port/106-01-SUMMARY.md`. **Status flip to ✅ Shipped pending operator-walked mainserver UAT** (Task 8 checkpoint:human-verify) — full procedure in SUMMARY's `Mainserver UAT Carry-Forward` section.
