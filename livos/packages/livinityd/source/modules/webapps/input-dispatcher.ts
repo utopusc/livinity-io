@@ -116,7 +116,16 @@ export async function dispatchPointer(
 	}
 
 	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
+	// Phase 103.1-8 — when caller scopes to a non-default display (e.g.
+	// master Chrome on `:10`), pass it through to execFileAsync so xdotool's
+	// $DISPLAY matches the X server where this wid actually exists.
+	// Without this, the explicit-wid xdotool path inherits WEBAPPS_X11_ENV's
+	// default `:1` and reports `BadWindow (invalid Window parameter)` when
+	// the caller's wid is on `:10`/`:11`/etc. Live UAT 2026-05-11 repro.
 	const widStr = String(wid)
+	const optsForWidPath = display && /^:[1-9][0-9]?$/.test(display)
+		? {timeout: DEFAULT_TIMEOUT_MS, display}
+		: {timeout: DEFAULT_TIMEOUT_MS}
 	// One xdotool invocation, four sub-commands, all chained:
 	//   activate (raise + WM focus) → windowfocus (X11 input focus directly,
 	//   bypasses any WM transfer asymmetry for Chrome --app= chromeless
@@ -130,7 +139,7 @@ export async function dispatchPointer(
 			'mousemove', '--window', widStr, '--sync', String(ix), String(iy),
 			kind, '--clearmodifiers', String(button),
 		],
-		{timeout: DEFAULT_TIMEOUT_MS},
+		optsForWidPath,
 	)
 }
 
@@ -171,7 +180,16 @@ export async function dispatchKey(
 		return
 	}
 	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
+	// Phase 103.1-8 — when caller scopes to a non-default display (e.g.
+	// master Chrome on `:10`), pass it through to execFileAsync so xdotool's
+	// $DISPLAY matches the X server where this wid actually exists.
+	// Without this, the explicit-wid xdotool path inherits WEBAPPS_X11_ENV's
+	// default `:1` and reports `BadWindow (invalid Window parameter)` when
+	// the caller's wid is on `:10`/`:11`/etc. Live UAT 2026-05-11 repro.
 	const widStr = String(wid)
+	const optsForWidPath = display && /^:[1-9][0-9]?$/.test(display)
+		? {timeout: DEFAULT_TIMEOUT_MS, display}
+		: {timeout: DEFAULT_TIMEOUT_MS}
 	await execFileAsync(
 		'xdotool',
 		[
@@ -179,7 +197,9 @@ export async function dispatchKey(
 			'windowfocus', '--sync', widStr,
 			kind, '--clearmodifiers', key,
 		],
-		{timeout: DEFAULT_TIMEOUT_MS},
+		display && /^:[1-9][0-9]?$/.test(display)
+			? {timeout: DEFAULT_TIMEOUT_MS, display}
+			: {timeout: DEFAULT_TIMEOUT_MS},
 	)
 }
 
@@ -210,7 +230,16 @@ export async function dispatchType(wid: number, text: string, display?: string):
 		return
 	}
 	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
+	// Phase 103.1-8 — when caller scopes to a non-default display (e.g.
+	// master Chrome on `:10`), pass it through to execFileAsync so xdotool's
+	// $DISPLAY matches the X server where this wid actually exists.
+	// Without this, the explicit-wid xdotool path inherits WEBAPPS_X11_ENV's
+	// default `:1` and reports `BadWindow (invalid Window parameter)` when
+	// the caller's wid is on `:10`/`:11`/etc. Live UAT 2026-05-11 repro.
 	const widStr = String(wid)
+	const optsForWidPath = display && /^:[1-9][0-9]?$/.test(display)
+		? {timeout: DEFAULT_TIMEOUT_MS, display}
+		: {timeout: DEFAULT_TIMEOUT_MS}
 	await execFileAsync(
 		'xdotool',
 		[
@@ -218,7 +247,7 @@ export async function dispatchType(wid: number, text: string, display?: string):
 			'windowfocus', '--sync', widStr,
 			'type', '--clearmodifiers', '--delay', '0', text,
 		],
-		{timeout: DEFAULT_TIMEOUT_MS},
+		optsForWidPath,
 	)
 }
 
@@ -276,7 +305,16 @@ export async function dispatchScroll(
 		return
 	}
 	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
+	// Phase 103.1-8 — when caller scopes to a non-default display (e.g.
+	// master Chrome on `:10`), pass it through to execFileAsync so xdotool's
+	// $DISPLAY matches the X server where this wid actually exists.
+	// Without this, the explicit-wid xdotool path inherits WEBAPPS_X11_ENV's
+	// default `:1` and reports `BadWindow (invalid Window parameter)` when
+	// the caller's wid is on `:10`/`:11`/etc. Live UAT 2026-05-11 repro.
 	const widStr = String(wid)
+	const optsForWidPath = display && /^:[1-9][0-9]?$/.test(display)
+		? {timeout: DEFAULT_TIMEOUT_MS, display}
+		: {timeout: DEFAULT_TIMEOUT_MS}
 	await execFileAsync(
 		'xdotool',
 		[
@@ -285,6 +323,6 @@ export async function dispatchScroll(
 			'mousemove', '--window', widStr, '--sync', String(ix), String(iy),
 			'click', '--clearmodifiers', String(button),
 		],
-		{timeout: DEFAULT_TIMEOUT_MS},
+		optsForWidPath,
 	)
 }
