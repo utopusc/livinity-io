@@ -35,3 +35,8 @@ logs/
 # Archives (local cleanup storage)
 _archive/
 agent-app/release/
+
+# Docker image tarballs — too large for GitHub (>100MB).
+# Push to Docker Hub instead. See docker-images/README.md.
+docker-images/*.tar
+docker-images/*.tar.gz
