@@ -56,7 +56,12 @@ Real-API-key broker for external/open-source apps (Bolt.diy, Open WebUI, Continu
 - **Bug #9 (google-chrome):** add Google Chrome stable APT repo + install in deploy-livinityd. WebApp Launcher won't work without it. Reference: Mini PC `livos/install.sh:~700`.
 - **Bug #10 (bruce + fluxbox):** create `bruce` user (uid=1000, sudo + docker groups) + install fluxbox if not present + write `/etc/sudoers.d/99-bruce` NOPASSWD entry. Make user-name configurable via `_DLD_LIVOS_USER` env (already partially supported).
 
-**Plan count estimate:** 1 plan with 4-6 tasks (one per bug, atomic commits).
+**Plan count estimate:** 1 plan with 8 tasks (6 source fixes + 1 test extension + 1 SUMMARY, atomic commits).
+
+**Plans:** 1 plan
+
+Plans:
+- [ ] 106-01-PLAN.md — back-port Bugs #7-#12 into deploy-livinityd.sh + user.exists() fix + +6 regression assertions + SUMMARY
 **Test extension:** +6 regression assertions (one per bug fix, positive grep on the relevant helper body).
 **UAT:** fresh VPS install → verify livinityd NRestarts=0 after install (no manual hotfix needed) + 168→174 PASS combined tests.
 
