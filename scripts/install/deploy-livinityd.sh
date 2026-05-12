@@ -104,11 +104,15 @@ _dld_install_system_packages() {
     fi
 
     # PostgreSQL + Redis + build deps (apt-get install -y is no-op on installed pkgs)
-    info "Installing PostgreSQL + Redis + build deps"
+    # Phase 106 Bug #8: samba + samba-common-bin required for livinityd Files
+    # module (smbpasswd binary + /etc/samba/smb.conf management). Mini PC has
+    # these from initial bootstrap; fresh VPS does not.
+    info "Installing PostgreSQL + Redis + build deps + samba (Bug #8)"
     apt-get install -y -qq \
         postgresql postgresql-client \
         redis-server \
-        build-essential python3 git rsync openssl
+        build-essential python3 git rsync openssl \
+        samba samba-common-bin
     ok "System packages installed"
 
     # Phase 106 Bug #7: mender-client4 silences `spawn mender ENOENT` log spam
