@@ -55,6 +55,9 @@ step "Detecting platform"
 detect_os
 detect_arch
 detect_host_ip
+# Plan 104-08 hotfix — CGNAT check (warn-only, hybrid mode only). Skipped silently
+# in other modes and when ifconfig.me is unreachable. See detect-platform.sh.
+detect_cgnat
 
 # ── Sudo check (apt-get install needs root for common-deps + mode bodies) ──
 if [[ $EUID -ne 0 ]]; then

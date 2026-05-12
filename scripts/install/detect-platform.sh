@@ -47,3 +47,45 @@ detect_host_ip() {
     [[ -z "$HOST_IP" ]] && fail "Could not detect host IP. Set LIVINITY_HOST_IP=<ip> and re-run." 73
     ok "Detected host IP: $HOST_IP"
 }
+
+# detect_cgnat — best-effort CGNAT detection (plan 104-08 hotfix).
+# Hybrid mode requires a public IP for inbound LAN-direct connections; if the
+# ISP places the host behind CGNAT (typical for apartment/condo/cellular ISPs),
+# clients outside the local LAN cannot reach the host and hybrid mode silently
+# fails. We curl ifconfig.me to grab the public-facing IP, then test whether it
+# falls in the CGNAT shared-address range 100.64.0.0/10 (RFC 6598). On hit, we
+# WARN — we don't fail, because: (a) some operators legitimately want hybrid
+# for LAN-only Apple support even behind CGNAT (the LE cert is the win), (b)
+# the IP probe may falsely flag dual-NAT setups where the user's router is
+# *inside* a CGNAT block but they have port-forwards configured. Warning, not
+# blocking — operator decides.
+#
+# Sets CGNAT_DETECTED=1 if a CGNAT IP was observed (consumers can choose to
+# print extra guidance in the post-install banner). Silent no-op when offline
+# or when ifconfig.me is unreachable (probe has 5s timeout).
+CGNAT_DETECTED=0
+detect_cgnat() {
+    [[ "${MODE:-}" == "hybrid" ]] || return 0  # CGNAT only matters in hybrid mode
+    local pub_ip
+    pub_ip=$(curl -fsSL --max-time 5 https://ifconfig.me 2>/dev/null || true)
+    if [[ -z "$pub_ip" ]]; then
+        info "CGNAT check skipped (ifconfig.me unreachable; offline install?)"
+        return 0
+    fi
+    # CGNAT shared-address space per RFC 6598: 100.64.0.0/10
+    # i.e. 100.64.x.x through 100.127.x.x
+    if [[ "$pub_ip" =~ ^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\. ]]; then
+        CGNAT_DETECTED=1
+        warn "Public IP ${pub_ip} is in the CGNAT range (100.64.0.0/10)."
+        warn "Hybrid mode requires inbound LAN-direct connectivity from your"
+        warn "clients. Behind CGNAT, clients OUTSIDE your LAN (e.g. iPhone on"
+        warn "cellular) WILL NOT REACH this host — the public DNS A-record"
+        warn "will resolve, but TCP SYN to ${pub_ip} dies at your ISP's CGNAT."
+        warn "Workarounds:"
+        warn "  - Use --mode local-lan if you only care about LAN clients"
+        warn "  - Wait for v34 Cloudflare Tunnel support (relays the data plane)"
+        warn "Continuing install — operator decides."
+    else
+        ok "CGNAT check: public IP ${pub_ip} is outside 100.64.0.0/10 (OK)"
+    fi
+}
