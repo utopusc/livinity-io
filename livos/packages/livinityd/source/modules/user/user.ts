@@ -22,10 +22,16 @@ export default class User {
 		return this.#store.get('user')
 	}
 
-	// Check if a user exists
+	// Check if a user exists.
+	// Phase 106 Bug #12: FileStore seeds `user: {}` on first run (per StoreSchema
+	// default) so the previous `user !== undefined` check false-positived on
+	// fresh installs → register flow rejected with "user is already registered".
+	// A user is only meaningfully registered once a password hash exists; check
+	// that instead. All callers (register guard, login redirect, startup
+	// migrations, tRPC setup-vs-login dispatch) ALREADY want this semantics.
 	async exists() {
 		const user = await this.get()
-		return user !== undefined
+		return Boolean(user?.hashedPassword)
 	}
 
 	// Set the users name
