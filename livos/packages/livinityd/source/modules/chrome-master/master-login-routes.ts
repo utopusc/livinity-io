@@ -320,12 +320,17 @@ async function dismissProfileErrorAndActivateMain(
 ): Promise<void> {
 	const env = {...process.env, DISPLAY: display} as NodeJS.ProcessEnv
 	for (let attempt = 0; attempt < 5; attempt++) {
-		// 1. Try to find + kill the "Profile error" dialog.
+		// 1. Try to find the "Profile error" dialog and dismiss it via
+		//    `windowactivate + key Escape`. We deliberately do NOT use
+		//    `windowkill` here — killing the X11 window can cascade-kill
+		//    the parent Chrome process (live UAT 2026-05-11 showed Chrome
+		//    rendering nothing when windowkill was the dismissal). Escape
+		//    on a Chrome modal dialog tells Chrome to close it gracefully,
+		//    same as the user clicking the X button.
 		try {
 			const {stdout} = await execFileFn(
 				'xdotool',
 				['search', '--onlyvisible', '--name', '^Profile error'],
-				// node:util.promisify-style options bag
 				{env, timeout: 1000} as never,
 			)
 			const wids = String(stdout).trim().split('\n').filter(Boolean)
@@ -333,14 +338,21 @@ async function dismissProfileErrorAndActivateMain(
 				try {
 					await execFileFn(
 						'xdotool',
-						['windowkill', wid],
+						[
+							'windowactivate',
+							'--sync',
+							wid,
+							'key',
+							'--clearmodifiers',
+							'Escape',
+						],
 						{env, timeout: 1000} as never,
 					)
 					logger?.info?.(
-						`[chrome-master] dismissed "Profile error" dialog wid=${wid} on ${display}`,
+						`[chrome-master] sent Escape to "Profile error" dialog wid=${wid} on ${display}`,
 					)
 				} catch {
-					/* windowkill failed — non-fatal */
+					/* dismissal failed — non-fatal */
 				}
 			}
 		} catch {
@@ -722,13 +734,19 @@ export function createChromeMasterRouter(injectables: MasterLoginInjectables = {
 
 				// 4.5 Phase 103.1-5 — dismiss the "Profile error occurred" modal
 				// (if Chrome detects exited_cleanly:false from a prior livinityd
-				// restart) and pre-activate the main Chrome window. The input
-				// dispatcher uses `search --class chrome --limit 1` which can
-				// pick the dialog instead of the main window — that breaks every
-				// keystroke / click in the master viewer. Await this so the
-				// returned wsUrl is only handed back when input dispatch will
-				// reach the right window. Worst-case adds ~2.5s to startLogin.
-				await dismissProfileDialogFn(display)
+				// restart) and pre-activate the main Chrome window.
+				//
+				// Fire-and-forget on a separate tick so the awaited startLogin
+				// path does NOT interfere with Chrome's startup race — earlier
+				// `await dismissProfileDialogFn` caused Chrome to die silently
+				// (live UAT 2026-05-11: status returned running:true but no
+				// window rendered on the master Xvfb). The dispatcher's own
+				// activate-first chain handles per-call routing; this helper
+				// just nudges the X11 focus to the main window for the first
+				// few seconds while the user might be racing the dialog.
+				void dismissProfileDialogFn(display).catch(() => {
+					/* non-fatal — dispatcher fallback is sufficient */
+				})
 
 				// 5. Allocate RFB port from the shared StreamManager port pool.
 				port = streamManager.getPortAllocator().allocate()
