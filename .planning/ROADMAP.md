@@ -646,7 +646,7 @@ Plans:
 - [x] 104-03-PLAN.md - local-lan backend: dnsmasq + Caddy pki-global.conf + livinityd local-dns module (Wave 3, autonomous, parallel with 104-04) — Shipped 2026-05-12 (`9bba50ba..8d8cec66`; 24/24 vitest pass; AC-104-8 + D-104-NO-PROD-IMPACT enforced; runtime AC-104-4..7 deferred to 104-07 UAT)
 - [x] 104-04-PLAN.md - hybrid backend: Cloudflare DNS-01 + Server5 control-plane subdomain mint (Wave 3, autonomous, parallel with 104-03) — Shipped 2026-05-12 (`9a9801c8..62a526b1`; 52/52 vitest pass; D-104-RELAY-ZERO-DATA-PLANE static negative-grep PASS; D-104-NO-PROD-IMPACT enforced; runtime AC-104-15 tcpdump deferred to 104-07 UAT)
 - [x] 104-05-PLAN.md - Settings -> Local Access enrollment wizard UI (Wave 4, autonomous) — Shipped 2026-05-12 (`4c853ce0..18a097f3`; 17/17 vitest pass; D-104-DEFAULT-MODE + D-NO-NEW-DEPS + D-104-RELAY-ZERO-DATA-PLANE UI surfaces enforced; runtime AC-104-9/-10/-15 end-to-end UAT deferred to 104-07)
-- [ ] 104-06-PLAN.md - cloud-mode regression test: install.sh --mode cloud byte-equivalent to Mini PC dab261cc (Wave 5, autonomous)
+- [x] 104-06-PLAN.md - cloud-mode regression test: install.sh --mode cloud byte-equivalent to Mini PC dab261cc (Wave 5, autonomous) — Shipped 2026-05-12 (`1e6f1f01..e9e3c125`; mode-cloud.sh body refactored as strict subset of livos/install.sh; docker/cloud-regression/ UAT container with always-on D-104-NO-PROD-IMPACT negative checks + conditional byte-equivalence diff; `docker compose build` succeeds locally; operator runs capture-minipc-baseline.sh once to land fixtures)
 - [ ] 104-07-PLAN.md - End-to-end UAT walk + user-walked Apple verification (Wave 6, autonomous: false)
 
 **Non-goals (HARD):**

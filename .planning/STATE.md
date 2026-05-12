@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Liv Agent Reborn
 status: unknown
-last_updated: "2026-05-12T07:42:45.756Z"
+last_updated: "2026-05-12T07:54:56.087Z"
 progress:
   total_phases: 54
   completed_phases: 25
   total_plans: 210
-  completed_plans: 202
-  percent: 96
+  completed_plans: 203
+  percent: 97
 ---
 
 # Project State
@@ -26,9 +26,27 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 104 (One-shot Local Install + Docker Ubuntu GUI UAT) — EXECUTING
-Plan: 6 of 7 (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`; 104-02 ✅ shipped 2026-05-12 `2a1a274b..1361f483`; 104-03 ✅ shipped 2026-05-12 `9bba50ba..8d8cec66` — local-lan backend code-complete, 24/24 vitest pass, runtime AC-104-4..7 deferred to 104-07 UAT; 104-04 ✅ shipped 2026-05-12 `9a9801c8..62a526b1` — hybrid backend code-complete, 52/52 vitest pass, AC-104-15 runtime tcpdump deferred to 104-07 UAT; 104-05 ✅ shipped 2026-05-12 `4c853ce0..18a097f3` — enrollment wizard UI code-complete, 17/17 vitest pass, runtime AC-104-9/-10/-15 surfaces deferred to 104-07 UAT)
+Plan: 7 of 7 (104-01 ✅ shipped 2026-05-12 `e0c4fc6c..500b4912`; 104-02 ✅ shipped 2026-05-12 `2a1a274b..1361f483`; 104-03 ✅ shipped 2026-05-12 `9bba50ba..8d8cec66` — local-lan backend code-complete, 24/24 vitest pass, runtime AC-104-4..7 deferred to 104-07 UAT; 104-04 ✅ shipped 2026-05-12 `9a9801c8..62a526b1` — hybrid backend code-complete, 52/52 vitest pass, AC-104-15 runtime tcpdump deferred to 104-07 UAT; 104-05 ✅ shipped 2026-05-12 `4c853ce0..18a097f3` — enrollment wizard UI code-complete, 17/17 vitest pass, runtime AC-104-9/-10/-15 surfaces deferred to 104-07 UAT; 104-06 ✅ shipped 2026-05-12 `1e6f1f01..e9e3c125` — cloud-mode regression test SHIPPED; D-104-NO-PROD-IMPACT regression gate live; mode-cloud.sh real body + docker/cloud-regression/ UAT container + capture-minipc-baseline.sh helper; `docker compose build` succeeds locally; full byte-equivalence diff requires one-time operator capture of Mini PC baseline fixtures)
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v33.0 (active)
+
+## 104-06 Status (2026-05-12) — cloud-mode regression test SHIPPED (D-104-NO-PROD-IMPACT gate live; baseline capture pending operator)
+
+- Wave 5 (104-06): ✅ COMPLETE — `1e6f1f01..e9e3c125` (3 commits) — D-104-NO-PROD-IMPACT regression gate shipped end-to-end. Three commits:
+  1. `1e6f1f01` scripts/install/mode-cloud.sh (BODY filled — was stub from 104-02): three private helpers (`_install_cloudflared_for_cloud` direct .deb from GitHub releases per livos/install.sh:509; `_configure_caddy_for_cloud` minimal Caddyfile mirroring livos/install.sh:1271-1295; `_persist_cloud_mode_redis` writes `livos:domain:host_ip`) + public `install_mode_cloud()` entry point. Strict subset of livos/install.sh — every action source-mapped 1:1 to legacy line ranges. + docker/cloud-regression/scripts/capture-minipc-baseline.sh (one-time operator helper, single batched ssh per memory feedback_ssh_rate_limit.md, fail2ban-friendly; captures Caddyfile + systemd units + env KEY shape (no values per T-104-06-I1) + apt names + deployed-sha; verifies SHA matches dab261cc; gracefully exits if Mini PC unreachable).
+  2. `35011ce7` chore: `git update-index --chmod=+x` on capture-minipc-baseline.sh (Windows filesystem doesn't carry exec bit; same pattern as 104-01/02 install.sh + idempotency harness).
+  3. `e9e3c125` docker/cloud-regression/ UAT container: Dockerfile (trfore systemd base, no GUI), docker-compose.yml (ports 8090/8453 to coexist with local-uat 80/443), entrypoint.sh (runs install.sh --mode cloud + captures /tmp/regression-snapshot + always-on D-104-NO-PROD-IMPACT negative checks: no pki-global.conf, no dnsmasq config, no local-lan Caddyfile directives), scripts/test-cloud-byte-equivalence.sh (host-side CI gate; negative checks always; positive byte-equivalence diff if fixtures present; FAIL on negative-check violation or caddy.service not enabled — AC-104-12), fixtures/minipc-dab261cc/.gitkeep placeholder, README.md operator docs.
+- Validated locally: `bash -n` clean on all .sh files; `--help` exits 0 on both scripts; `docker compose config` validates; `docker compose -f docker/cloud-regression/docker-compose.yml build` succeeds (image livos-cloud-regression:dev produced); `install_mode_cloud` declared (`declare -F`); required strings present (cloudflared, reverse_proxy localhost:8080, livos:domain:host_ip, caddy validate); no forbidden directives in non-comment lines (pki / tls internal / ca liv-local / dns cloudflare / dnsmasq absent from executable code).
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 3 commits (verified pre + post each commit via `git hash-object liv/packages/core/src/sdk-agent-runner.ts`).
+- Deviations: Rule 1 auto-fix — cloudflared install path uses direct .deb from GitHub releases (livos/install.sh:509 idiom) instead of the plan's apt-repo path; otherwise a NEW source.list file would surface as drift in the byte-equivalence diff. Inline NOTE comment documents the rationale.
+- Decisions: (1) Refactor-as-subset rule strictly applied — mode-cloud.sh body is a strict subset of livos/install.sh's cloud-mode flow with inline source-map comments. (2) Always-run negative checks + conditional positive diff — D-104-NO-PROD-IMPACT invariants (no pki-global.conf, no dnsmasq, no local-lan Caddyfile directives) ALWAYS run regardless of fixture availability; positive byte-equivalence diff only runs when fixtures present, falling back to NEGATIVE-CHECKS-ONLY mode with clear WARN. (3) WARN vs FAIL split: systemd unit drift is WARN (units come from update.sh rsync, not install.sh); negative-check violations + caddy validate errors + caddy.service-not-enabled are hard FAIL. (4) Port mapping 8090/8453 (NOT 80/443) so cloud-regression container coexists with docker/local-uat.
+
+**Carry-forward to 104-07 (UAT end-to-end walk, Wave 6, user-walked):** D-104-NO-PROD-IMPACT regression gate is LIVE. The docker/cloud-regression/ container pattern (trfore systemd base + entrypoint.sh + ports-coexist-with-local-uat + test harness) provides a template 104-07 can mirror for its hybrid-mode UAT walk. `LIVOS_REGRESSION_MODE=cloud` env-var idiom + `livos-cloud-regression.service` systemd unit shape are reusable.
+
+**Operator action items (one-time, can run any time before merge):**
+1. `bash docker/cloud-regression/scripts/capture-minipc-baseline.sh` — requires Mini PC reachable via ZeroTier (10.69.31.68); pem/minipc key. Single batched ssh; captures fixtures to docker/cloud-regression/fixtures/minipc-dab261cc/.
+2. `git add docker/cloud-regression/fixtures/minipc-dab261cc/ && git commit -m "baseline(104-06): capture Mini PC at deployed SHA dab261cc"`.
+3. After fixtures committed, `bash docker/cloud-regression/scripts/test-cloud-byte-equivalence.sh` runs the FULL byte-equivalence regression (negative checks + positive diff). Until then, it runs in NEGATIVE-CHECKS-ONLY mode (still gates D-104-NO-PROD-IMPACT).
 
 ## 104-05 Status (2026-05-12) — enrollment wizard UI SHIPPED (17/17 vitest pass, runtime UAT deferred)
 
