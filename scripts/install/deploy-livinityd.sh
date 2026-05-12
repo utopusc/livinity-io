@@ -317,6 +317,26 @@ _dld_create_desktop_user() {
         warn "Failed to add ${user} to groups ${groups_to_add} (non-fatal)"
     fi
 
+    # Phase 106-02 hotfix: defensive chown of /home/${user}.
+    # `useradd -m` alone is NOT sufficient — if ${user} was pre-existing from a
+    # manual `useradd ${user}` (no -m flag, e.g. Phase 105 on-server hotfix),
+    # OR if /home/${user} was racily created by another root process (chrome
+    # crashpad_handler / fluxbox mkdir) before useradd ran, the dir is left
+    # root-owned and ${user} cannot write to its own home. Symptom: WebApp
+    # Launcher chrome spawns then dies with SIGTRAP on first write to
+    # ~/.config/google-chrome/Crash Reports; fluxbox fails with Permission
+    # denied on ~/.fluxbox; xdotool can't find the window → /webapp.input.click
+    # returns 500. See memory: feedback_bruce_home_ownership.md.
+    if [[ -d "/home/$user" ]]; then
+        if chown -R "$user:$user" "/home/$user" 2>&1; then
+            ok "Home dir /home/${user} ownership normalized to ${user}:${user}"
+        else
+            warn "Failed to chown /home/${user} — WebApp Launcher Chrome may SIGTRAP"
+        fi
+    else
+        warn "/home/${user} missing — useradd may have failed; WebApp Launcher will not work"
+    fi
+
     # NOPASSWD sudoers drop-in. Write to a tmp file first, validate with
     # `visudo -cf`, then mv to /etc/sudoers.d/. visudo failure → rm tmp + warn
     # (do NOT leave a broken sudoers file in place — that bricks sudo).
