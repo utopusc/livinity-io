@@ -1064,6 +1064,17 @@ if grep -qE '_DLD_LIVOS_USER=.*:-root' "$DEPLOY_SH"; then
 else
     fail "Bug #10: D-104-NO-PROD-IMPACT broken — _DLD_LIVOS_USER:-root default lost"
 fi
+# 106-02 hotfix: defensive chown of /home/${user} after user-existence guarantee.
+# Without this, /home/${user} can be root-owned (pre-existing manual useradd
+# without -m, or racy mkdir from chrome crashpad). Symptom: WebApp Chrome dies
+# SIGTRAP on first write to ~/.config/google-chrome. See memory:
+# feedback_bruce_home_ownership.md. Live-verified on mainserver 154.53.56.75
+# 2026-05-13 — single `chown -R bruce:bruce /home/bruce` unblocked all WebApps.
+if awk '/^_dld_create_desktop_user\(\)/,/^}/' "$DEPLOY_SH" | grep -qF 'chown -R "$user:$user" "/home/$user"'; then
+    pass "Bug #10 (106-02 hotfix): helper defensively chowns /home/\${user} to \${user}:\${user}"
+else
+    fail "Bug #10 (106-02 hotfix): helper missing defensive chown of /home/\${user} — WebApp Chrome will SIGTRAP on root-owned home"
+fi
 
 # ── TEST_BUG_11_JWT_HEX: _dld_generate_jwt_secret uses hex32 + no newline ───
 info "TEST_BUG_11_JWT_HEX: _dld_generate_jwt_secret uses openssl rand -hex 32 with newline strip (Bug #11 — validateSecret 64-hex)"
