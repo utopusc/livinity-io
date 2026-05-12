@@ -1,6 +1,12 @@
 # scripts/install/deploy-livinityd.sh
 # Phase 104 plans 104-11 (initial) + 104-12 (path-bug hotfix + liv-stack).
 #
+# 105-01 (this plan): Pipeline refactor in preparation for 1:1 update.sh port.
+# - Extracted _dld_verify_build helper (105-01) — was inlined in 3 sites.
+# - Fixed anchored --exclude='/docker/' (was 'docker/' — D-105-STEP2-EXCLUDE-ANCHORED).
+# - Reordered deploy_livinityd to write secrets BEFORE pnpm install.
+# - NO new behavior beyond the bug fix + extraction. See 105-CONTEXT.md.
+#
 # After install.sh's mode dispatch finishes wiring Caddy + TLS + DNS, THIS file
 # installs the actual LivOS application stack so the user sees the LivOS UI in
 # the browser (not just a green padlock on a Caddy placeholder).
@@ -63,6 +69,9 @@ _DLD_SYSTEMD_LIV_WORKER_UNIT="/etc/systemd/system/liv-worker.service"
 _DLD_SYSTEMD_LIV_MEMORY_UNIT="/etc/systemd/system/liv-memory.service"
 _DLD_REPO_URL="https://github.com/utopusc/livinity-io.git"
 _DLD_STAGE_DIR="/tmp/livos-install-stage"
+# 105-01: alias matching update.sh:174-178 naming convention; persistent semantics preserved.
+# Plan 105-02 (G7) will swap to PID-scoped /tmp/livinity-update-$$ + add cleanup.
+_DLD_TEMP_DIR="$_DLD_STAGE_DIR"
 _DLD_CADDYFILE="/etc/caddy/Caddyfile"
 
 # ── 1. System packages ──────────────────────────────────────────────────────
@@ -257,10 +266,11 @@ _dld_clone_source() {
     # + docker (UAT-only + planning artifacts not needed at runtime).
     info "rsync repo/livos/ → $_DLD_LIVOS_DIR/ (flat layout)"
     mkdir -p "$_DLD_LIVOS_DIR"
+    # 105-01: anchored — was 'docker/' which over-matched packages/ui/src/routes/docker/
     rsync -a \
         --exclude='.git/' \
         --exclude='.planning/' \
-        --exclude='docker/' \
+        --exclude='/docker/' \
         --exclude='node_modules/' \
         --exclude='/.env' \
         --exclude='/.env.bak' \
@@ -336,6 +346,21 @@ EOF
     ok "Wrote block-exotic-subdeps=false to $npmrc"
 }
 
+# ── _dld_verify_build helper (105-01: extracted from inlined checks) ─────────
+# Ports update.sh:287-295 verbatim. Assert a build produced non-empty output.
+# Call AFTER every build invocation. Failure prints `BUILD-FAIL: <pkg> produced
+# empty <dir>` to stderr and exits 1 — matches update.sh's silent-success guard.
+# Usage: _dld_verify_build "@livos/config" "/opt/livos/packages/config/dist"
+_dld_verify_build() {
+    local pkg="$1"
+    local outdir="$2"
+    if [[ ! -d "$outdir" ]] || [[ -z "$(find "$outdir" -type f 2>/dev/null | head -1)" ]]; then
+        echo "BUILD-FAIL: $pkg produced empty $outdir" >&2
+        exit 1
+    fi
+    echo "[VERIFY] $pkg dist OK ($outdir)"
+}
+
 # ── 5. Build livos (pnpm install + @livos/config + ui) ─────────────────────
 # 104-12 path fix: cd into _DLD_LIVOS_DIR (flat) instead of the retired
 # _DLD_LIVOS_SRC (nested). pnpm install resolves `@liv/core: "file:../../../liv/packages/core"`
@@ -365,19 +390,13 @@ _dld_build_packages() {
     # Build @livos/config (tsc)
     info "Building @livos/config"
     pnpm --filter @livos/config build 2>&1 | tail -5 || fail "@livos/config build failed"
-    if [[ ! -d "$_DLD_LIVOS_DIR/packages/config/dist" ]] \
-        || [[ -z "$(find "$_DLD_LIVOS_DIR/packages/config/dist" -type f 2>/dev/null | head -1)" ]]; then
-        fail "BUILD-FAIL: @livos/config produced empty dist"
-    fi
+    _dld_verify_build "@livos/config" "$_DLD_LIVOS_DIR/packages/config/dist"
     ok "@livos/config built"
 
     # Build UI (vite production bundle)
     info "Building UI (vite production bundle; ~1-2 min)"
     pnpm --filter ui build 2>&1 | tail -5 || fail "UI build failed"
-    if [[ ! -d "$_DLD_LIVOS_DIR/packages/ui/dist" ]] \
-        || [[ -z "$(find "$_DLD_LIVOS_DIR/packages/ui/dist" -type f 2>/dev/null | head -1)" ]]; then
-        fail "BUILD-FAIL: @livos/ui produced empty dist"
-    fi
+    _dld_verify_build "@livos/ui" "$_DLD_LIVOS_DIR/packages/ui/dist"
     ok "UI built"
 
     # Ensure livinityd's ui symlink (mirrors update.sh:537)
@@ -426,10 +445,7 @@ _dld_build_liv_packages() {
         fi
         info "Building @liv/${pkg} (tsc)..."
         if (cd "$pkg_dir" && npm run build 2>&1 | tail -5); then
-            if [[ ! -d "$pkg_dir/dist" ]] \
-                || [[ -z "$(find "$pkg_dir/dist" -type f 2>/dev/null | head -1)" ]]; then
-                fail "BUILD-FAIL: @liv/${pkg} produced empty dist at $pkg_dir/dist"
-            fi
+            _dld_verify_build "@liv/${pkg}" "$pkg_dir/dist"
             ok "@liv/${pkg} built"
         else
             fail "@liv/${pkg} build failed; check $pkg_dir for errors"
@@ -789,17 +805,24 @@ CADDYFILE
 }
 
 # ── Public entry point ──────────────────────────────────────────────────────
-# 104-12 + 104-13: extended pipeline now also builds liv stack + writes liv-core/
-# liv-worker/liv-memory systemd units AND writes /opt/livos/.npmrc to allow
-# baileys → libsignal git-repository subdep on pnpm 11+. Order matters:
+# 104-12 + 104-13 + 105-01: extended pipeline now also builds liv stack + writes
+# liv-core/liv-worker/liv-memory systemd units AND writes /opt/livos/.npmrc to
+# allow baileys → libsignal git-repository subdep on pnpm 11+. Order matters:
 #   1. system pkgs → postgres → redis (infra ready)
-#   2. clone (both livos + liv) → write .npmrc (104-13 — BEFORE pnpm install)
+#   2. clone (both livos + liv)
+#   3. JWT + .env (105-01: moved BEFORE pnpm install per CONTEXT pipeline order;
+#      secrets must exist before any pnpm step that might inspect env)
+#   4. write .npmrc (104-13 — BEFORE pnpm install)
 #      → build livos (pnpm) → build liv (npm)
-#   3. sync liv dist into livinityd's pnpm-store (closes Mini PC pitfall)
-#   4. jwt + .env (livinityd reads these)
-#   5. liv systemd units FIRST (so livos.service `After=liv-core` is satisfied)
-#   6. livos systemd unit (the cap-stone)
-#   7. health-check + caddy reload
+#   5. sync liv dist into livinityd's pnpm-store (closes Mini PC pitfall)
+#   6. liv systemd units FIRST (so livos.service `After=liv-core` is satisfied)
+#   7. livos systemd unit (the cap-stone)
+#   8. health-check + caddy reload
+#
+# 105-01 refactor:
+#   - _dld_verify_build helper extracted (was inlined in 3 sites)
+#   - Anchored --exclude='/docker/' (was 'docker/' — D-105-STEP2-EXCLUDE-ANCHORED)
+#   - Pipeline reorder: secrets moved BEFORE pnpm install
 deploy_livinityd() {
     if [[ "${SKIP_DEPLOY:-0}" == "1" ]]; then
         info "Plan 104-11 — --skip-deploy set; skipping livinityd deploy"
@@ -814,16 +837,16 @@ deploy_livinityd() {
     _dld_setup_postgres
     _dld_setup_redis
     _dld_clone_source
+    _dld_generate_jwt_secret         # 105-01: moved earlier — secrets BEFORE pnpm install per CONTEXT pipeline order
+    _dld_write_env_file              # 105-01: moved earlier
     _dld_write_pnpm_npmrc
     _dld_build_packages
     _dld_build_liv_packages
     _dld_sync_liv_dist_into_pnpm_store
-    _dld_generate_jwt_secret
-    _dld_write_env_file
     _dld_write_liv_systemd_units
     _dld_write_systemd_unit
     _dld_health_check
     _dld_update_caddy_to_livinityd
 
-    ok "Plan 104-11/104-12/104-13 — livinityd + liv stack deploy complete"
+    ok "Plan 104-11/104-12/104-13/105-01 — livinityd + liv stack deploy complete"
 }

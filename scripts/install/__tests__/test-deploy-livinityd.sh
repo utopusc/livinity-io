@@ -353,7 +353,10 @@ else
     fail "liv build loop should iterate core/worker/mcp-server/memory"
 fi
 # BUILD-FAIL guard on liv dist (mirrors update.sh:287-295 pattern)
-if grep -qE 'BUILD-FAIL.*@liv|BUILD-FAIL.*liv/' "$DEPLOY_SH"; then
+# 105-01 update: helper extracted to _dld_verify_build — accept either the
+# inline BUILD-FAIL literal (pre-105-01) OR a _dld_verify_build call with
+# an @liv/* argument (post-105-01). The semantic invariant is preserved.
+if grep -qE 'BUILD-FAIL.*@liv|BUILD-FAIL.*liv/|_dld_verify_build "@liv/' "$DEPLOY_SH"; then
     pass "BUILD-FAIL guard on @liv/* dist (non-empty assertion)"
 else
     fail "BUILD-FAIL guard on @liv/* should be present"
