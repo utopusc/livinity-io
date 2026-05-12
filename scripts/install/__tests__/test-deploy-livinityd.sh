@@ -522,10 +522,356 @@ else
     fail "_DLD_TEMP_DIR should alias _DLD_STAGE_DIR (got divergent path)"
 fi
 
+# ── TEST 17: 105-02 (G2) — apt streaming packages block ────────────────────
+# update.sh:339-353: full list of streaming pkgs (ffmpeg + xdotool + ydotool +
+# xvfb + fluxbox + VAAPI). Helper _dld_install_streaming_packages must port
+# the block verbatim.
+info "TEST 17: 105-02 G2 — streaming packages"
+
+if grep -qE '^_dld_install_streaming_packages\(\)' "$DEPLOY_SH"; then
+    pass "_dld_install_streaming_packages() function defined"
+else
+    fail "_dld_install_streaming_packages() function NOT found"
+fi
+
+# Extract the _dld_install_streaming_packages function body and grep for each
+# package name as a whole word. The function uses multi-line apt-get install
+# with backslash continuations, so a single-line regex against `apt-get install.*pkg`
+# is insufficient — we need to grep within the function body for each pkg name.
+streaming_fn_body=$(awk '/^_dld_install_streaming_packages\(\)/,/^}/' "$DEPLOY_SH")
+for pkg in ffmpeg xdotool ydotool xvfb fluxbox; do
+    if echo "$streaming_fn_body" | grep -qE "(^|[[:space:]])${pkg}([[:space:]]|\\\\|\$)"; then
+        pass "apt-get install lists ${pkg}"
+    else
+        fail "apt-get install missing ${pkg}"
+    fi
+done
+
+# ── TEST 18: 105-02 (G2) — ydotoold systemd unit template ──────────────────
+# update.sh:381-395: conditional ydotoold.service write (only if desktop user
+# UID≥1000 found). Template embedded as heredoc in deploy-livinityd.
+info "TEST 18: 105-02 G2 — ydotoold systemd unit"
+
+if grep -qE '/etc/systemd/system/ydotoold\.service' "$DEPLOY_SH"; then
+    pass "ydotoold.service target path present"
+else
+    fail "ydotoold.service target path NOT found"
+fi
+
+if grep -qE 'ExecStart=/usr/bin/ydotoold' "$DEPLOY_SH"; then
+    pass "ydotoold ExecStart present"
+else
+    fail "ydotoold ExecStart NOT found"
+fi
+
+if grep -qE 'getent passwd.*UID.*1000|awk.*1000' "$DEPLOY_SH"; then
+    pass "desktop-user detection (UID≥1000) present"
+else
+    fail "desktop-user detection NOT found"
+fi
+
+# ── TEST 20: 105-02 (G3) — atomic update.sh self-rsync (.new + mv) ─────────
+# update.sh:419-430: cp to .new + mv pattern. Atomic rename ensures running
+# bash on a re-run doesn't read partial new content mid-execution.
+info "TEST 20: 105-02 G3 — atomic update.sh self-rsync (.new + mv)"
+
+if grep -qE 'update\.sh\.new' "$DEPLOY_SH"; then
+    pass "update.sh.new staging path present"
+else
+    fail "update.sh.new staging path NOT found"
+fi
+
+if grep -qE 'mv.*update\.sh\.new.*update\.sh' "$DEPLOY_SH"; then
+    pass "atomic mv update.sh.new → update.sh present"
+else
+    fail "atomic mv pattern NOT found"
+fi
+
+# ── TEST 21: 105-02 (G5) — gallery cache helper ────────────────────────────
+# update.sh:596-610: find $LIVOS_DIR/data/app-stores/*livinity-apps* + git
+# fetch + git reset --hard origin/main. Idempotent on missing .git.
+info "TEST 21: 105-02 G5 — gallery cache update"
+
+if grep -qE '^_dld_update_gallery_cache\(\)' "$DEPLOY_SH"; then
+    pass "_dld_update_gallery_cache() function defined"
+else
+    fail "_dld_update_gallery_cache() function NOT found"
+fi
+
+if grep -qE 'app-stores.*livinity-apps' "$DEPLOY_SH"; then
+    pass "gallery cache target (app-stores/*livinity-apps*) present"
+else
+    fail "gallery cache target NOT found"
+fi
+
+if grep -qE 'git fetch.*origin' "$DEPLOY_SH"; then
+    pass "git fetch origin pattern present"
+else
+    fail "git fetch origin NOT found"
+fi
+
+# ── TEST 22: 105-02 (G6) — chown -R helper ─────────────────────────────────
+# update.sh:619-620: chown -R LIVOS_USER:LIVOS_USER on /opt/livos + /opt/liv.
+# Default LIVOS_USER=root for first-install (matches update.sh).
+info "TEST 22: 105-02 G6 — chown helper"
+
+if grep -qE '^_dld_fix_permissions\(\)' "$DEPLOY_SH"; then
+    pass "_dld_fix_permissions() function defined"
+else
+    fail "_dld_fix_permissions() function NOT found"
+fi
+
+if grep -qE 'chown -R.*_DLD_LIVOS_DIR|chown -R.*_DLD_LIVOS_USER.*_DLD_LIVOS_DIR|chown -R.*livos_user.*_DLD_LIVOS_DIR' "$DEPLOY_SH"; then
+    pass "chown -R targets _DLD_LIVOS_DIR"
+else
+    fail "chown -R for _DLD_LIVOS_DIR NOT found"
+fi
+
+if grep -qE 'chown -R.*_DLD_LIV_DIR|chown -R.*_DLD_LIVOS_USER.*_DLD_LIV_DIR|chown -R.*livos_user.*_DLD_LIV_DIR' "$DEPLOY_SH"; then
+    pass "chown -R targets _DLD_LIV_DIR"
+else
+    fail "chown -R for _DLD_LIV_DIR NOT found"
+fi
+
+# ── TEST 23: 105-02 (G6) — app-script chmod +x ─────────────────────────────
+# update.sh:616: chmod +x on legacy-compat/app-script. Without it, tRPC apps
+# router returns 500 on first-install hosts.
+info "TEST 23: 105-02 G6 — app-script chmod +x"
+
+if grep -qE 'chmod \+x.*legacy-compat/app-script' "$DEPLOY_SH"; then
+    pass "chmod +x on legacy-compat/app-script present"
+else
+    fail "chmod +x on legacy-compat/app-script NOT found"
+fi
+
+# ── TEST 24: 105-02 (G7) — temp dir cleanup ────────────────────────────────
+# update.sh:672-682: rm -rf TEMP_DIR + LIVOS_UPDATE_COMPLETED=1 sentinel.
+# Gated on _DLD_CLEAR_STAGE for re-run cache preservation.
+info "TEST 24: 105-02 G7 — temp dir cleanup"
+
+if grep -qE '^_dld_cleanup_temp_dir\(\)' "$DEPLOY_SH"; then
+    pass "_dld_cleanup_temp_dir() function defined"
+else
+    fail "_dld_cleanup_temp_dir() function NOT found"
+fi
+
+if grep -qE 'LIVOS_UPDATE_COMPLETED=1' "$DEPLOY_SH"; then
+    pass "LIVOS_UPDATE_COMPLETED=1 sentinel exported (forward-compat with update.sh phase33_finalize)"
+else
+    fail "LIVOS_UPDATE_COMPLETED=1 sentinel NOT found"
+fi
+
+# ── TEST 25: 105-02 (G8) — UI rm -rf dist before vite build ────────────────
+# update.sh:531: rm -rf dist BEFORE vite build (Phase 51 v29.5 A2 defensive
+# fresh-build). Prevents stale dist surviving deploys.
+info "TEST 25: 105-02 G8 — UI rm -rf dist"
+
+if awk '/_dld_build_packages\(\)/,/^}/' "$DEPLOY_SH" | grep -qE 'rm -rf.*packages/ui/dist'; then
+    pass "rm -rf packages/ui/dist present inside _dld_build_packages"
+else
+    fail "rm -rf packages/ui/dist NOT found inside _dld_build_packages"
+fi
+
+# ── TEST 26: D-105-NO-PROD-IMPACT — update.sh never opened for write ───────
+# Critical invariant: deploy-livinityd ONLY READS from $_DLD_STAGE_DIR/update.sh
+# (cp source) and WRITES to $_DLD_LIVOS_DIR/update.sh (cp target, atomic .new+mv).
+# It MUST NEVER write directly to the repo's update.sh (canonical reference).
+info "TEST 26: D-105-NO-PROD-IMPACT — repo update.sh never opened for write"
+
+# Negative: no `> update.sh` or `cat ... > update.sh` redirect targeting the
+# bare filename (the repo root version). Allowed: writes to $_DLD_LIVOS_DIR/update.sh
+# and .new sibling — both qualify the path with $_DLD_LIVOS_DIR or absolute /opt/livos.
+if grep -qE '^[^#]*>[[:space:]]*update\.sh[[:space:]]*$' "$DEPLOY_SH"; then
+    fail "deploy-livinityd has bare > update.sh redirect (violates D-105-NO-PROD-IMPACT)"
+else
+    pass "no bare > update.sh redirect (repo update.sh untouched)"
+fi
+
+if grep -qE 'sed -i.*update\.sh[^A-Za-z._]|sed -i.*update\.sh$' "$DEPLOY_SH"; then
+    fail "deploy-livinityd has sed -i on update.sh (violates D-105-NO-PROD-IMPACT)"
+else
+    pass "no sed -i on update.sh (repo canonical reference preserved)"
+fi
+
+# ── TEST 27: Pipeline order — health BEFORE caddy reload (Hazard #2) ───────
+# RESEARCH §4 Hazard #2: if Caddy reloads before livos.service is verified up,
+# Caddy reverse_proxies to a dead :8080 → 502 window 5-30s during install.
+info "TEST 27: pipeline order — _dld_health_check BEFORE _dld_update_caddy_to_livinityd"
+
+order_body_p105=$(awk '/^deploy_livinityd\(\)/,/^}/' "$DEPLOY_SH")
+health_line=$(echo "$order_body_p105" | grep -n '_dld_health_check' | head -1 | cut -d: -f1)
+caddy_line=$(echo "$order_body_p105" | grep -n '_dld_update_caddy_to_livinityd' | head -1 | cut -d: -f1)
+if [[ -n "$health_line" ]] && [[ -n "$caddy_line" ]] && (( health_line < caddy_line )); then
+    pass "_dld_health_check before _dld_update_caddy_to_livinityd (health=$health_line caddy=$caddy_line)"
+else
+    fail "health check must come BEFORE caddy reload (health=$health_line caddy=$caddy_line)"
+fi
+
+# ── TEST 28: Pipeline order — dist-copy BEFORE livos.service (Hazard #3) ───
+# RESEARCH §4 Hazard #3: if dist-copy runs AFTER livos.service start, livinityd
+# boots with stale @liv/* dist and crashes on first SDK runner spawn.
+info "TEST 28: pipeline order — _dld_sync_liv_dist_into_pnpm_store BEFORE _dld_write_systemd_unit"
+
+sync_line_p105=$(echo "$order_body_p105" | grep -n '_dld_sync_liv_dist_into_pnpm_store' | head -1 | cut -d: -f1)
+livos_unit_line=$(echo "$order_body_p105" | grep -n '_dld_write_systemd_unit' | grep -v 'liv' | head -1 | cut -d: -f1)
+if [[ -n "$sync_line_p105" ]] && [[ -n "$livos_unit_line" ]] && (( sync_line_p105 < livos_unit_line )); then
+    pass "dist-copy before livos.service unit (sync=$sync_line_p105 livos=$livos_unit_line)"
+else
+    fail "dist-copy must come BEFORE livos.service unit (sync=$sync_line_p105 livos=$livos_unit_line)"
+fi
+
+# ── TEST 28b: D-105-STEP8-DAEMON-RELOAD — explicit daemon-reload before enable ─
+# Without daemon-reload between unit writes and systemctl enable, systemd may
+# enable stale-cached unit definitions. update.sh:629 always pairs unit writes
+# with daemon-reload — deploy-livinityd must mirror this.
+info "TEST 28b: D-105-STEP8-DAEMON-RELOAD — systemctl daemon-reload present"
+
+if grep -qE 'systemctl[[:space:]]+daemon-reload' "$DEPLOY_SH"; then
+    pass "systemctl daemon-reload present (guards against stale unit caching)"
+else
+    fail "systemctl daemon-reload NOT found (D-105-STEP8-DAEMON-RELOAD regression)"
+fi
+
+# ── TEST 28c: D-105-STEP8-START-ORDER — memory → worker → core start order ──
+# update.sh:664 starts liv-* services in memory → worker → core order so that
+# core (which depends on memory + worker over IPC) finds them alive when
+# initializing. The for-loop iteration order encodes this dependency.
+info "TEST 28c: D-105-STEP8-START-ORDER — for svc in memory worker core"
+
+if grep -qE 'for[[:space:]]+svc[[:space:]]+in[[:space:]]+liv-memory[[:space:]]+liv-worker[[:space:]]+liv-core' "$DEPLOY_SH"; then
+    pass "for-loop iterates liv-memory → liv-worker → liv-core (matches update.sh)"
+elif grep -qE 'for[[:space:]]+svc[[:space:]]+in[[:space:]]+memory[[:space:]]+worker[[:space:]]+core' "$DEPLOY_SH"; then
+    pass "for-loop iterates memory → worker → core (bare-package form, matches update.sh order)"
+else
+    fail "liv-* start order NOT in memory→worker→core sequence (D-105-STEP8-START-ORDER regression)"
+fi
+
+# ── TEST 28d: D-105-STEP8-HEALTH-CHECK — WARN, not FAIL on :8080 unreachable ─
+# Per CONTEXT D-105-STEP8-HEALTH-CHECK: health check times out at 30s but does
+# NOT fail() the installer — the operator must investigate post-install via
+# journalctl. Without this WARN-semantic, a slow-boot livinityd kills the
+# entire deploy on hosts with cold-cache pnpm.
+info "TEST 28d: D-105-STEP8-HEALTH-CHECK — warn-semantic on :8080 timeout"
+
+# Extract _dld_health_check body, look for warn + 'did not respond' / 'Continuing'
+# pattern. NEGATIVE check: no `fail` call inside the health-check function body.
+health_body=$(awk '/^_dld_health_check\(\)/,/^}/' "$DEPLOY_SH")
+if echo "$health_body" | grep -qE 'warn[[:space:]].*(did not respond|did not pass|timed out|investigate)'; then
+    pass "health check uses warn (not fail) on :8080 timeout"
+else
+    fail "health check missing warn-semantic on timeout (D-105-STEP8-HEALTH-CHECK regression)"
+fi
+if echo "$health_body" | grep -qE '^[[:space:]]*fail[[:space:]]+"'; then
+    fail "health check contains fail() call — D-105-STEP8-HEALTH-CHECK requires warn-only"
+else
+    pass "health check has no fail() call inside body (WARN-only semantic preserved)"
+fi
+
+# ── TEST 29: Hazard #1 — _dld_setup_postgres uses shell-scope $pg_pass / $_DLD_PG_PASS ─
+# RESEARCH §4 Hazard #1: after Plan 105-01 reorders _dld_write_env_file earlier
+# in the pipeline, _dld_setup_postgres must NOT regress to inline-grepping
+# DATABASE_URL out of the env-file at the PGPASSWORD assignment line. The
+# password must come from a shell-scope variable (local pg_pass or exported
+# _DLD_PG_PASS) so the schema apply works on first-install where .env may be
+# empty/partial at that moment.
+info "TEST 29: Hazard #1 — postgres password sourced from shell-scope, not env-file grep at PGPASSWORD"
+
+# Extract _dld_setup_postgres function body
+pg_fn_body=$(awk '/^_dld_setup_postgres\(\) \{/,/^\}/' "$DEPLOY_SH")
+
+# POSITIVE: PGPASSWORD assignment uses shell-scope variable (pg_pass or _DLD_PG_PASS)
+if echo "$pg_fn_body" | grep -qE 'PGPASSWORD="?\$\{?(pg_pass|_DLD_PG_PASS)\}?"?'; then
+    pass "PGPASSWORD uses shell-scope \$pg_pass or \$_DLD_PG_PASS (correct)"
+else
+    fail "PGPASSWORD must use shell-scope variable (\$pg_pass / \$_DLD_PG_PASS) — Hazard #1 regression"
+fi
+
+# NEGATIVE: no inline grep substitution on env-file AT the PGPASSWORD assignment
+# (a `$(grep ... env-file)` substitution feeding PGPASSWORD is the regression
+# pattern we want to catch). Allowed: a grep earlier in the function to reuse
+# an existing password into the LOCAL pg_pass variable, then PGPASSWORD="$pg_pass".
+if echo "$pg_fn_body" | grep -qE 'PGPASSWORD="?\$\(grep'; then
+    fail "PGPASSWORD assigned from inline \$(grep ... env-file) — Hazard #1 regression"
+else
+    pass "no inline \$(grep ... env-file) feeding PGPASSWORD (correct)"
+fi
+
+# ── TEST 30: Sacred SHA — sdk-agent-runner.ts NEVER opened for write ───────
+# Sacred constraint: liv/packages/core/src/sdk-agent-runner.ts SHA
+# f3538e1d811992b782a9bb057d1b7f0a0189f95f must never change. deploy-livinityd
+# only READS the file (via rsync of /opt/liv from clone) and never WRITES to it.
+info "TEST 30: sacred SHA — sdk-agent-runner.ts negative-grep on writes"
+
+if grep -qE '^[^#]*>[[:space:]]*.*sdk-agent-runner' "$DEPLOY_SH"; then
+    fail "deploy-livinityd has redirect targeting sdk-agent-runner.ts (sacred SHA violation)"
+else
+    pass "no redirect targeting sdk-agent-runner.ts"
+fi
+
+if grep -qE 'sed -i.*sdk-agent-runner|sed.*-i.*sdk-agent-runner' "$DEPLOY_SH"; then
+    fail "deploy-livinityd has sed -i on sdk-agent-runner.ts (sacred SHA violation)"
+else
+    pass "no sed -i on sdk-agent-runner.ts"
+fi
+
+# ── TEST 32a: livos.service heredoc-write via $_DLD_SYSTEMD_UNIT ───────────
+# deploy-livinityd.sh line 561 area: `cat > "$_DLD_SYSTEMD_UNIT" <<EOF`.
+# Note: the unit target path is via variable reference (NOT literal
+# /etc/systemd/system/livos.service in the heredoc redirect line).
+info "TEST 32a: livos.service heredoc-write via \$_DLD_SYSTEMD_UNIT"
+
+if grep -qE 'cat > "?\$\{?_DLD_SYSTEMD_UNIT\}?"? *<<' "$DEPLOY_SH"; then
+    pass "cat > \$_DLD_SYSTEMD_UNIT heredoc present (livos.service write)"
+else
+    fail "cat > \$_DLD_SYSTEMD_UNIT heredoc NOT found"
+fi
+
+# ── TEST 32b: _DLD_SYSTEMD_LIV_CORE_UNIT constant defined ──────────────────
+# liv-* units are written inside a for-loop via `cat > "$unit_path" <<EOF`.
+# The unit_path comes from one of three constants — we positive-grep each.
+info "TEST 32b: _DLD_SYSTEMD_LIV_CORE_UNIT constant defined"
+
+if grep -qE '^_DLD_SYSTEMD_LIV_CORE_UNIT=.*liv-core\.service' "$DEPLOY_SH"; then
+    pass "_DLD_SYSTEMD_LIV_CORE_UNIT defined and points at liv-core.service"
+else
+    fail "_DLD_SYSTEMD_LIV_CORE_UNIT constant NOT found or wrong target"
+fi
+
+# ── TEST 32c: _DLD_SYSTEMD_LIV_WORKER_UNIT constant defined ────────────────
+info "TEST 32c: _DLD_SYSTEMD_LIV_WORKER_UNIT constant defined"
+
+if grep -qE '^_DLD_SYSTEMD_LIV_WORKER_UNIT=.*liv-worker\.service' "$DEPLOY_SH"; then
+    pass "_DLD_SYSTEMD_LIV_WORKER_UNIT defined and points at liv-worker.service"
+else
+    fail "_DLD_SYSTEMD_LIV_WORKER_UNIT constant NOT found or wrong target"
+fi
+
+# ── TEST 32d: _DLD_SYSTEMD_LIV_MEMORY_UNIT constant defined ────────────────
+info "TEST 32d: _DLD_SYSTEMD_LIV_MEMORY_UNIT constant defined"
+
+if grep -qE '^_DLD_SYSTEMD_LIV_MEMORY_UNIT=.*liv-memory\.service' "$DEPLOY_SH"; then
+    pass "_DLD_SYSTEMD_LIV_MEMORY_UNIT defined and points at liv-memory.service"
+else
+    fail "_DLD_SYSTEMD_LIV_MEMORY_UNIT constant NOT found or wrong target"
+fi
+
+# ── TEST 32e: ydotoold.service heredoc (literal path — 105-02 G2 addition) ─
+# Plan 105-02 G2 adds an unconditional ydotoold.service heredoc with the
+# literal /etc/systemd/system/ydotoold.service path inside the heredoc
+# redirect line. This is the ONLY systemd unit written with a literal path
+# (the 4 liv* units use variable refs).
+info "TEST 32e: ydotoold.service heredoc with literal /etc/systemd/system path"
+
+if grep -qE 'cat > /etc/systemd/system/ydotoold\.service' "$DEPLOY_SH"; then
+    pass "ydotoold.service literal-path heredoc present (105-02 G2)"
+else
+    fail "ydotoold.service heredoc NOT found (105-02 G2 regression)"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "================================================================"
-echo "  Plan 104-11/12/13 + 105-01 test results: $pass_count PASS, $fail_count FAIL"
+echo "  Plan 104-11/12/13 + 105-01/02/03 test results: $pass_count PASS, $fail_count FAIL"
 echo "================================================================"
 if (( fail_count > 0 )); then
     exit 1
