@@ -468,6 +468,67 @@ UNIT
     fi
 }
 
+# ── 4d. Google Chrome stable (Phase 106 Bug #9 — WebApp Launcher blocker) ──
+# FATAL on fresh VPS without this: livinityd's Streaming module spawns
+# `google-chrome` → ENOENT → unhandled error event → livinityd process
+# crashes and systemd restart-loops it. This is the #1 mainserver flap cause.
+#
+# Pattern mirrors Mini PC's livos/install.sh approach: signed apt repo, keyring
+# in /usr/share/keyrings/ (NOT the deprecated apt-key), DEBIAN_FRONTEND noninteractive,
+# WARN-not-FAIL (some libc environments — minimal Alpine-derived images —
+# may not support chrome stable; the streaming subsystem will fall back to
+# chromium where available).
+#
+# Idempotent:
+#   - gpg --dearmor --yes overwrites existing keyring without prompt
+#   - sources.list overwrite is unconditional (cheaper than grep-then-append;
+#     content is a single line we control)
+#   - apt-get install is re-entrant (no-op on already-installed)
+_dld_install_google_chrome() {
+    step "Phase 106 Bug #9 — install google-chrome-stable (WebApp Launcher blocker)"
+
+    if [[ ! -x /usr/bin/apt-get ]] || ! command -v apt-get >/dev/null 2>&1; then
+        info "apt-get not available — skipping google-chrome install (non-Debian-family host)"
+        return 0
+    fi
+
+    # Short-circuit if already installed (re-run cache)
+    if command -v google-chrome >/dev/null 2>&1 || command -v google-chrome-stable >/dev/null 2>&1; then
+        ok "google-chrome already installed: $(google-chrome --version 2>/dev/null || google-chrome-stable --version 2>/dev/null)"
+        return 0
+    fi
+
+    info "Adding Google Chrome stable apt repo (signed keyring)"
+    # Dearmor signing key into a dedicated keyring (apt-key is deprecated).
+    # --yes overwrites existing keyring without prompt → idempotent on re-run.
+    if ! curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub \
+            | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null; then
+        warn "Failed to download/dearmor Google Chrome signing key — skipping chrome install (Bug #9 will recur)"
+        return 0
+    fi
+    chmod 0644 /usr/share/keyrings/google-chrome.gpg 2>/dev/null || true
+
+    # Sources list overwrite (single-line, unconditional — same content every run).
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
+        > /etc/apt/sources.list.d/google-chrome.list
+    chmod 0644 /etc/apt/sources.list.d/google-chrome.list 2>/dev/null || true
+
+    info "Updating apt index + installing google-chrome-stable"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 | tail -3 \
+        || warn "apt-get update failed after chrome repo add (non-fatal — install may still succeed from cached metadata)"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq google-chrome-stable 2>&1 | tail -5 \
+        || warn "google-chrome-stable install failed — Streaming module will crash with ENOENT (Bug #9 NOT fixed on this host)"
+
+    # Verify install — log version, but do not FAIL the deploy.
+    if command -v google-chrome >/dev/null 2>&1; then
+        ok "google-chrome installed: $(google-chrome --version 2>/dev/null)"
+    elif command -v google-chrome-stable >/dev/null 2>&1; then
+        ok "google-chrome-stable installed: $(google-chrome-stable --version 2>/dev/null)"
+    else
+        warn "google-chrome binary NOT on PATH after install — Bug #9 will recur (operator must debug)"
+    fi
+}
+
 # ── 4c. Write pnpm .npmrc with block-exotic-subdeps=false (104-13 hotfix) ───
 # Plan 104-13: pnpm 11+'s `blockExoticSubdeps` (enabled-by-default supply-chain
 # safety check) refuses to install `libsignal` — a legitimate `baileys` WhatsApp
@@ -1119,6 +1180,7 @@ deploy_livinityd() {
     _dld_setup_redis
     _dld_clone_source
     _dld_install_streaming_packages       # 105-02 G2 — streaming apt + ydotoold unit
+    _dld_install_google_chrome            # 106 Bug #9 — google-chrome-stable (WebApp Launcher blocker)
     _dld_setup_docker_images              # 105-05 Bug #6 — pull+retag getumbrel/* → livos/* (Mini PC pattern)
     _dld_generate_jwt_secret              # 105-01: moved earlier — secrets BEFORE pnpm install per CONTEXT pipeline order
     _dld_write_env_file                   # 105-01: moved earlier
