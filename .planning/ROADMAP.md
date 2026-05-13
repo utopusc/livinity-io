@@ -137,35 +137,46 @@ Plans:
 
 ---
 
-### Phase 111: Server5 Dashboard — API Key Generator + Install Command Generator + Mode Documentation
+### Phase 111: Server5 Dashboard — Install Wizard (Mode Selection + Auto-Generated Install Command)
 
-**Goal:** Add a self-service section to the Server5 livinity.io dashboard (`platform/web/` Next.js app at `45.137.194.102`) where a logged-in user can:
-1. Generate a new LivOS marketplace API key (`liv_k_*`) with one click
-2. See a ready-to-paste install command pre-filled with their API key + their account-default Cloudflare token (or placeholder if not yet configured)
-3. Read documentation for the 4 install modes — only 2 active for now
+**Goal:** Add a first-login onboarding wizard to the Server5 livinity.io dashboard (`platform/web/` Next.js app at `45.137.194.102`) where a new (or existing) user picks an install type, fills in mode-specific fields, and gets a **ready-to-paste one-liner install command with all secrets baked in** (API key auto-generated, user's CF token + domain pre-filled). User pastes the one-liner on a fresh VPS → install completes end-to-end → App Store works without any manual API key entry in Settings.
 
-**Driver:** Phase 108 + v34 mainserver UAT (2026-05-13) revealed a UX dead-end: install.sh's `--api-key liv_k_...` flag wasn't auto-seeding `livos:platform:api_key` Redis (App Store stayed gated on manual entry), AND there's no public-facing way for users to *get* an API key short of poking the platform DB. The mainserver-side fix is shipped (`adcc5a5d feat(v34): _dld_seed_platform_api_key`); Phase 111 ships the dashboard-side counterpart so the loop closes end-to-end.
+**User-stated vision (2026-05-13):**
+> livinity.io/dashboard'da kullanıcı yeni ise şu soru sorulsun. Local mi kuracaksın Hybrid mi? Hybrid'de kendi domainini cloudflare tokenini vs eklemen gerekercek ve bu token'i kullanacaksın. Sen zaten UI'dan eklediğinde biz sana hali hazır kod vereceğiz, bu kod ile sen ancak indirip kurabilirsin bu kodun içinde livinity api key de olacak sen bu şekilde markete bağlanabilirsin.
+
+**Driver:** Phase 108 + v34 mainserver UAT (2026-05-13) revealed the missing UX loop. `install.sh` already accepts `--api-key liv_k_...` (Plan 104-09) and as of `adcc5a5d feat(v34): _dld_seed_platform_api_key` the helper auto-seeds Redis on install → App Store iframe works end-to-end. The dashboard counterpart (issue the key + generate the command) is the last missing piece.
 
 **Direction:**
-- New dashboard route `/account/install` (or `/account/api-keys`) under existing auth middleware
-- "Generate API Key" button → POSTs to existing or new `/api/account/api-keys` route → INSERTs into `platform.api_keys` (key_hash + prefix; show plain key ONCE in toast/modal, never persisted plain)
-- API key list view (prefix + created_at + last_used_at + revoke button)
-- Install command generator: dropdown for mode (Local | Hybrid | Own-Cloud (Coming Soon, disabled) | Cloud (Coming Soon, disabled)) + auto-fills the `bash install.sh ...` one-liner with the active key + saved CF token (if any) + placeholder for missing fields
-- Mode documentation panel — 4 sections (one per mode) with: pre-reqs, what it does, when to use, security tradeoffs. Local + Hybrid full content; Own-Cloud + Cloud labelled "Coming Soon" with brief description only
-- Copy-to-clipboard on install command
-- D-111-NO-LIVOS-CHANGE: this phase is Server5-side only. `livos/` and `liv/` source trees in this repo are NOT modified. Only `platform/web/` on Server5.
-- D-111-EXISTING-AUTH: reuse existing Server5 user auth (`platform.users` table, login already implemented per memory `project_v34_account_tunnel_marketplace_vision`)
-- D-111-KEY-NEVER-LOGGED: plain-text API key shown ONCE in modal, never stored plain, never logged
+- **Onboarding wizard** (4 steps):
+  1. **Welcome / mode selection:** Radio cards for `Local` (LAN-only) | `Hybrid` (own domain + Cloudflare) | `Own-Cloud` (Coming Soon, disabled) | `Cloud` (Coming Soon, disabled). For now only Local + Hybrid are functional.
+  2. **Mode-specific fields:**
+     - **Local:** domain auto-resolved to `<machine-name>.local`; no extra fields. Skip to step 3.
+     - **Hybrid:** form for `domain` (e.g. `test.livinity.live`), `cf-token` (Cloudflare API token with DNS:Edit + Zone:Read scope), `cf-zone-id` (auto-resolved from `domain` via CF API GET `/zones?name=<domain>` using their token).
+     - Inline doc links: "How to get a Cloudflare API token" (link to CF docs).
+  3. **Generated install command:** display the one-liner with all flags baked in. Show as `<pre>` block with copy-to-clipboard button. Behind the scenes:
+     - Generate a fresh `liv_k_*` API key for this user (POST `/api/account/api-keys`)
+     - Format: `curl -fsSL https://livinity.io/install.sh | sudo bash -s -- --mode <MODE> --domain <DOMAIN> --cf-token <TOKEN> --cf-zone-id <ZONE> --api-key liv_k_<GENERATED>`
+     - Local mode: `curl ... | sudo bash -s -- --mode local-lan --domain <hostname>.local --api-key liv_k_<GENERATED>`
+  4. **Verification (auto-detect):** After user pastes the one-liner on their VPS, dashboard polls `livos:platform:api_key` heartbeat. Within 5–10 min show "✓ Your LivOS instance is online at https://<DOMAIN>".
+- **D-111-INSTALL-CMD-COPY-FRIENDLY:** the generated one-liner must be exactly ONE shell line, no continuation backslashes (those break in some terminals/copy-paste flows). Use `&&`-chains or `set -e` script vs multi-line `bash -s --`.
+- **D-111-KEY-NEVER-RE-SHOWN:** the plain `liv_k_*` token is shown ONCE inside the command. If the user navigates away before copying, "regenerate key" is the only path (old token revoked).
+- **D-111-CF-TOKEN-NEVER-PERSISTED:** the CF token is never stored on Server5 — passed through to the one-liner display only. User's responsibility to keep it safe.
+- **D-111-EXISTING-AUTH:** reuse existing Server5 user auth (`platform.users` table, login already implemented per memory `project_v34_account_tunnel_marketplace_vision`).
+- **D-111-NO-LIVOS-CHANGE:** this phase is Server5-side only. `livos/` and `liv/` source trees in this repo are NOT modified.
 
-**Plan count estimate:** 3-4 plans:
-- P111-01: API route — POST /api/account/api-keys (generate liv_k_) + GET (list) + DELETE (revoke); PG insert with proper hash
-- P111-02: UI page `/account/install` — Generate button + key list + install command generator
-- P111-03: Mode documentation content — Local + Hybrid full; Own-Cloud + Cloud "Coming Soon"
-- P111-04 (optional): Email/notification on first key generation (skip if scope creeps)
+**Plan count estimate:** 4-5 plans:
+- P111-01: API routes — POST `/api/account/api-keys` (generate liv_k_) + GET (list) + DELETE (revoke). Use bcryptjs cost 10 (matches existing Server5 hash). Multi-key per user requires DROP CONSTRAINT `api_keys_user_id_key`.
+- P111-02: API route `/api/cf/resolve-zone` — given `(domain, cf-token)`, calls Cloudflare GET `/zones?name=<root-domain>` to resolve zone ID (proxy, no token persistence)
+- P111-03: UI wizard `/onboarding/install` — 4-step flow with mode cards, conditional Hybrid form, install command display, copy-to-clipboard
+- P111-04: Mode documentation panel — Local + Hybrid full sections with pre-reqs, what-it-does, security tradeoffs; Own-Cloud + Cloud labelled "Coming Soon" placeholder content
+- P111-05 (optional): Verification polling — after user copies command, dashboard polls heartbeat endpoint to detect install completion
 
-**Repo for Server5 changes:** Server5 has its own repo (`/opt/platform/web/` likely cloned from a separate GitHub project). Phase 111 plans must specify which repo to edit + which branch. Discover during `/gsd-plan-phase 111`.
+**Repo for Server5 changes:** Server5 has its own repo at `/opt/platform/web/` (separate from this `livinity-io` repo). Phase 111 plans must:
+- Discover the actual Git remote during `/gsd-plan-phase 111`
+- Branch + PR there
+- Keep mainserver (this repo) untouched
 
-**UAT:** Login to livinity.io dashboard → Click "Install LivOS" → Generate API key → Copy install command → Paste on fresh VPS → install completes → open VPS UI → App Store iframe loads automatically (no manual API key entry).
+**UAT:** Open livinity.io/dashboard as a new user → see onboarding wizard → pick `Hybrid` → enter domain + CF token → copy generated one-liner → paste on fresh VPS → install completes → open `https://<your-domain>` → App Store loads with full marketplace catalog (no manual key prompt). Then click on a featured app (e.g. n8n) → install completes → app appears in dock.
 
 ---
 
