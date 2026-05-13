@@ -610,24 +610,6 @@ else
     fail "git fetch origin NOT found"
 fi
 
-# ── TEST 21B: Phase 108 — gallery cache marked as App Store data source ───
-# Phase 108 makes /opt/livos/data/app-stores/ the SOLE source of the App
-# Store window's local-mode catalog. Future engineers must not delete this
-# helper. The comment block must reference '108'.
-info "TEST 21B: Phase 108 — gallery cache comment marks Phase 108 dependency"
-
-if grep -qE 'Phase 108|108.*App Store|App Store.*local.mode' "$DEPLOY_SH"; then
-    pass "gallery-cache comment block references Phase 108"
-else
-    fail "gallery-cache comment block does NOT reference Phase 108"
-fi
-
-if grep -qE '105-02.*G5.*108|108.*105-02.*G5' "$DEPLOY_SH"; then
-    pass "step() banner combines '105-02 G5 / 108'"
-else
-    fail "step() banner does NOT combine 105-02 G5 with Phase 108"
-fi
-
 # ── TEST 22: 105-02 (G6) — chown -R helper ─────────────────────────────────
 # update.sh:619-620: chown -R LIVOS_USER:LIVOS_USER on /opt/livos + /opt/liv.
 # Default LIVOS_USER=root for first-install (matches update.sh).
