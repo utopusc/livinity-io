@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
-status: code-complete-pending-mainserver-uat
+status: ready_to_plan
 last_updated: "2026-05-13T16:59:42.855Z"
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 2
   completed_plans: 2
-  percent: 100
+  percent: 60
 ---
 
 # Project State
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 109
-Plan: 01 — CODE-COMPLETE 2026-05-13 (pending mainserver UAT)
+Phase: 110
+Plan: Not started
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v34.0 (active)
 
