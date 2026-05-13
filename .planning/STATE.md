@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
-status: ready_to_plan
-last_updated: "2026-05-12T22:30:00.000Z"
+status: code-complete-pending-mainserver-uat
+last_updated: "2026-05-13T16:59:42.855Z"
 progress:
   total_phases: 5
-  completed_phases: 1   # Phase 106 is code-complete pending mainserver UAT walk (Task 8 checkpoint:human-verify) — flips to 1 after operator approval
-  total_plans: 1
-  completed_plans: 1    # 106-01 source-side complete (7 source commits + SUMMARY); UAT carry-forward
-  percent: 20           # 1 of 2 SDLC gates closed (code-complete); UAT-validation gate still open
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,24 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 107
-Plan: Not started
+Phase: 109
+Plan: 01 — CODE-COMPLETE 2026-05-13 (pending mainserver UAT)
 Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
 Milestone: v34.0 (active)
+
+## 109-01 Status (2026-05-13) — MCP Servers Auto-Seed CODE-COMPLETE (195 PASS combined; 3 source commits + SUMMARY; sacred SHA preserved 3/3; mainserver UAT carry-forward)
+
+- **AUTO-SEED** (single plan in Phase 109, 4 tasks): closes the first-run UX gap discovered after Phase 105/106 shipped, where fresh installs came up with AI Chat present but tool-use empty (`liv:mcp:config` unset → MCP panel showed "No servers installed — Browse the Marketplace to add MCP servers"). New install pipeline auto-registers 2 default MCP servers (`sequential-thinking` + `luse`) by seeding Redis key `liv:mcp:config` from a templated JSON file. Three source commits (`863c2125..214c2b38`) + this SUMMARY commit:
+  1. `863c2125` Task 1 — `scripts/install/seeds/mcp-servers.json` (NEW file, new directory). Verbatim Mini PC `liv:mcp:config` export with two host-specific fields templated: `luse.env.LUSE_REDIS_URL` → `__LIVOS_REDIS_URL__` placeholder (D-109-PASSWORD-NEVER-IN-REPO); both `installedAt` epochs → `0` (D-109-INSTALLED-AT-ZERO). 33 lines.
+  2. `3780fd4b` Task 2 — `_dld_seed_mcp_servers` helper (~85 lines) + pipeline wire in `deploy-livinityd.sh`. Idempotent: `EXISTS liv:mcp:config` short-circuit before SET (D-109-IDEMPOTENT — preserves user customizations across `update.sh` re-runs). Fail-soft: every `redis-cli` error path is `warn`-then-`return 0` (D-109-FAIL-SOFT — a failed MCP seed must NOT brick install). Substitution: `sed "s|__LIVOS_REDIS_URL__|${redis_url}|g"` with pipe delimiter (REDIS_URL contains `/`). Pipeline wire: between `_dld_write_env_file` (line 1328) and `_dld_write_pnpm_npmrc` (line 1330) — `.env` exists FIRST so helper can read `REDIS_URL` from it.
+  3. `214c2b38` Task 3 — `+4` regression assertions (`TEST_PHASE_109_MCP_SEED` block) in `test-deploy-livinityd.sh`: (1) seed file present + valid JSON + placeholder + both server entries, (2) helper defined, (3) helper body has 4 required tokens (`__LIVOS_REDIS_URL__` / `EXISTS liv:mcp:config` / `SET liv:mcp:config` / `sed` substitution), (4) pipeline order via `grep -n + awk -F:` extracting line numbers + `(( a < b < c ))`. Summary echo updated to mention `+ 109`. Deploy-livinityd: 149 → 153 PASS. **Combined: 153 (deploy) + 18 (hybrid) + 24 (tunnel) = 195 PASS, 0 FAIL** (up from 190 in Phase 106 SUMMARY — slight baseline drift accounts for the +1 over the planned 194 target, but +4 from deploy-livinityd is exact).
+  4. `(this commit)` 109-01-SUMMARY.md + STATE.md update.
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 3 source commits (`git ls-tree HEAD~3 / HEAD~2 / HEAD~1 / HEAD liv/packages/core/src/sdk-agent-runner.ts` all return the same SHA; pre-commit hook gated every commit; no `--no-verify` bypasses).
+- D-NO-PROD-IMPACT preserved: `git diff 863c2125~1..214c2b38 -- livos/install.sh livos/update.sh | wc -l` → 0. Mini PC's source-of-truth scripts UNTOUCHED.
+- D-104-RELAY-ZERO-DATA-PLANE preserved: seed file contains zero Server5 / livinity.io / nexus.livinity references. Helper additions reference only localhost (127.0.0.1:6379 via Redis URL).
+- D-109-PASSWORD-NEVER-IN-REPO upheld: `git diff 863c2125~1..214c2b38 | grep -c "a3bb23cb"` → 0. The seed file's only Redis-related token is the literal `__LIVOS_REDIS_URL__` placeholder; the real REDIS_URL is substituted at install-time on the target host.
+- Deviations: NONE. Plan was specific about file contents, helper body (verbatim), pipeline insertion site, and test assertion shape. One minor cross-platform adaptation: the plan's `grep -Pzoq` pattern for Task 3 Assertion 4 fails on Windows Git Bash without `LC_ALL=C.UTF-8`; switched to the Bug #9 pattern (Phase 106 line 1014) — `grep -n + awk -F:` for line numbers + `(( a < b < c ))` — semantically equivalent, cross-platform robust, more informative on failure.
+- Carry-forward: **mainserver `154.53.56.75` re-install UAT (Task 4 binding gate) is operator-walked.** Procedure documented in `109-01-SUMMARY.md:Mainserver UAT Carry-Forward` section (Steps A-F: push → fresh install → wait + journal → `redis-cli KEYS / GET` verify → idempotency proof via manual mutation + helper re-execute → UI smoke check at `https://test.livinity.live/` AI Chat → MCP panel showing 2 servers). Until that PASSes, status is `code-complete-pending-mainserver-uat`, not `shipped`.
 
 ## 106-01 Status (2026-05-12) — Bootstrap-Layer Hotfix Back-Port CODE-COMPLETE (190 PASS combined; 7 source commits + SUMMARY; sacred SHA preserved 7/7; mainserver UAT carry-forward)
 
@@ -446,7 +460,7 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 106 (deploy-livinityd Bootstrap-Layer Hotfix Back-Port) — 1 plans — 2026-05-12T22:20:46.839Z
+**Planned Phase:** 109 () — 0 plans — 2026-05-13T16:52:28.701Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 

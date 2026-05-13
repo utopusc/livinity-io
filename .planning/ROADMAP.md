@@ -112,7 +112,7 @@ Plans:
 - D-109-VERSIONED: seed file pinned to a specific Mini PC export date; future MCP server additions need new export
 
 **Plans:** 1 plan in 1 wave (planned 2026-05-13 — small scope, consolidated from estimated 2 plans into single 4-task plan)
-- [ ] 109-01-PLAN.md (Wave 1, autonomous) — Seed `liv:mcp:config` Redis key from `scripts/install/seeds/mcp-servers.json` (sequential-thinking + luse, exported from Mini PC 2026-05-13) via new `_dld_seed_mcp_servers` helper in `deploy-livinityd.sh`. Idempotent (EXISTS gate), fail-soft, password substituted from `/opt/livos/.env` at install-time (D-109-PASSWORD-NEVER-IN-REPO). +4 regression assertions (target 190 → 194 combined). Mainserver UAT on 154.53.56.75.
+- [x] 109-01-PLAN.md (Wave 1, autonomous) — Seed `liv:mcp:config` Redis key from `scripts/install/seeds/mcp-servers.json` (sequential-thinking + luse, exported from Mini PC 2026-05-13) via new `_dld_seed_mcp_servers` helper in `deploy-livinityd.sh`. Idempotent (EXISTS gate), fail-soft, password substituted from `/opt/livos/.env` at install-time (D-109-PASSWORD-NEVER-IN-REPO). +4 regression assertions (149 → 153 deploy; 190 → 195 combined). **CODE-COMPLETE 2026-05-13** (commits `863c2125..214c2b38`, 3 source + SUMMARY, sacred SHA preserved 3/3). Mainserver UAT on 154.53.56.75 — operator-pending (procedure in 109-01-SUMMARY.md Steps A-F).
 
 **UAT:** fresh install → open AI Chat → MCP panel shows `sequential-thinking` + `luse` (not "No servers installed"). Re-run install → user customizations preserved (idempotency).
 
