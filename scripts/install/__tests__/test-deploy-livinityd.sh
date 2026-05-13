@@ -1127,10 +1127,56 @@ else
     fi
 fi
 
+# ── TEST_PHASE_109_MCP_SEED: scripts/install/seeds/mcp-servers.json + _dld_seed_mcp_servers helper ───
+info "TEST_PHASE_109_MCP_SEED: seed file + _dld_seed_mcp_servers helper + pipeline wire (Phase 109 — MCP auto-seed)"
+SEED_FILE="$REPO_ROOT/scripts/install/seeds/mcp-servers.json"
+
+# Assertion 1: seed file exists, valid JSON, contains placeholder + both server names
+if [[ ! -f "$SEED_FILE" ]]; then
+    fail "Phase 109: seed file not found at $SEED_FILE"
+elif ! python3 -m json.tool "$SEED_FILE" > /dev/null 2>&1 && ! python -m json.tool "$SEED_FILE" > /dev/null 2>&1; then
+    fail "Phase 109: seed file is not valid JSON"
+elif ! grep -q "__LIVOS_REDIS_URL__" "$SEED_FILE"; then
+    fail "Phase 109: seed file missing __LIVOS_REDIS_URL__ placeholder (D-109-PASSWORD-NEVER-IN-REPO)"
+elif ! grep -q "sequential-thinking" "$SEED_FILE" || ! grep -q "\"luse\"" "$SEED_FILE"; then
+    fail "Phase 109: seed file missing sequential-thinking or luse server entry"
+else
+    pass "Phase 109: seed file valid JSON with placeholder + both server entries"
+fi
+
+# Assertion 2: _dld_seed_mcp_servers function defined in deploy-livinityd.sh
+if grep -qE "^_dld_seed_mcp_servers\(\) \{" "$DEPLOY_SH"; then
+    pass "Phase 109: _dld_seed_mcp_servers helper defined in deploy-livinityd.sh"
+else
+    fail "Phase 109: _dld_seed_mcp_servers helper NOT defined in deploy-livinityd.sh"
+fi
+
+# Assertion 3: helper body has the four required tokens (substitution + SET + idempotency gate)
+phase109_body=$(awk '/^_dld_seed_mcp_servers\(\)/,/^}/' "$DEPLOY_SH")
+if echo "$phase109_body" | grep -q "__LIVOS_REDIS_URL__" \
+   && echo "$phase109_body" | grep -q "SET liv:mcp:config" \
+   && echo "$phase109_body" | grep -q "EXISTS liv:mcp:config" \
+   && echo "$phase109_body" | grep -qE "sed.*__LIVOS_REDIS_URL__"; then
+    pass "Phase 109: helper has placeholder substitution + SET + EXISTS idempotency gate"
+else
+    fail "Phase 109: helper missing one of __LIVOS_REDIS_URL__ / SET liv:mcp:config / EXISTS liv:mcp:config / sed-substitution"
+fi
+
+# Assertion 4: pipeline contains _dld_seed_mcp_servers between _dld_write_env_file and _dld_write_pnpm_npmrc
+phase109_order=$(awk '/^deploy_livinityd\(\)/,/^}/' "$DEPLOY_SH" | grep -nE "_dld_write_env_file|_dld_seed_mcp_servers|_dld_write_pnpm_npmrc" | awk -F: '{print $1}')
+phase109_a=$(echo "$phase109_order" | sed -n 1p)
+phase109_b=$(echo "$phase109_order" | sed -n 2p)
+phase109_c=$(echo "$phase109_order" | sed -n 3p)
+if [[ -n "$phase109_a" ]] && [[ -n "$phase109_b" ]] && [[ -n "$phase109_c" ]] && (( phase109_a < phase109_b && phase109_b < phase109_c )); then
+    pass "Phase 109: pipeline order write_env_file(${phase109_a}) < seed_mcp_servers(${phase109_b}) < write_pnpm_npmrc(${phase109_c})"
+else
+    fail "Phase 109: pipeline order broken (write_env_file=${phase109_a:-MISSING}, seed_mcp_servers=${phase109_b:-MISSING}, write_pnpm_npmrc=${phase109_c:-MISSING})"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "================================================================"
-echo "  Plan 104-11/12/13 + 105-01/02/03/05 (+Bug6) + 106 test results: $pass_count PASS, $fail_count FAIL"
+echo "  Plan 104-11/12/13 + 105-01/02/03/05 (+Bug6) + 106 + 109 test results: $pass_count PASS, $fail_count FAIL"
 echo "================================================================"
 if (( fail_count > 0 )); then
     exit 1
