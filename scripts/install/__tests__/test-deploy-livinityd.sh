@@ -1185,10 +1185,36 @@ else
     fail "Phase 109: pipeline order broken (write_env_file=${phase109_a:-MISSING}, seed_mcp_servers=${phase109_b:-MISSING}, write_pnpm_npmrc=${phase109_c:-MISSING})"
 fi
 
+# ── TEST_V34_PLATFORM_API_KEY_SEED: install-time --api-key → Redis ──────────
+info "TEST_V34_PLATFORM_API_KEY_SEED: _dld_seed_platform_api_key writes Redis livos:platform:api_key (v34 — no manual entry)"
+if grep -qE "^_dld_seed_platform_api_key\(\)" "$DEPLOY_SH"; then
+    pass "v34: _dld_seed_platform_api_key function defined"
+else
+    fail "v34: _dld_seed_platform_api_key function NOT defined"
+fi
+v34_body=$(awk '/^_dld_seed_platform_api_key\(\)/,/^}/' "$DEPLOY_SH")
+if echo "$v34_body" | grep -q 'livos:platform:api_key' \
+   && echo "$v34_body" | grep -q 'livos:platform:enabled' \
+   && echo "$v34_body" | grep -q 'LIVOS_API_KEY'; then
+    pass "v34: helper body sets livos:platform:api_key + livos:platform:enabled from \$LIVOS_API_KEY"
+else
+    fail "v34: helper body missing one of livos:platform:api_key / livos:platform:enabled / LIVOS_API_KEY"
+fi
+if echo "$v34_body" | grep -qE "GET livos:platform:api_key.*\|\|.*echo"; then
+    pass "v34: helper has idempotency gate (GET-and-compare before SET)"
+else
+    fail "v34: helper missing idempotency gate"
+fi
+if awk '/^deploy_livinityd\(\)/,/^}/' "$DEPLOY_SH" | grep -q "_dld_seed_platform_api_key"; then
+    pass "v34: deploy_livinityd pipeline wires _dld_seed_platform_api_key"
+else
+    fail "v34: pipeline does NOT call _dld_seed_platform_api_key"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "================================================================"
-echo "  Plan 104-11/12/13 + 105-01/02/03/05 (+Bug6) + 106 + 109 test results: $pass_count PASS, $fail_count FAIL"
+echo "  Plan 104-11/12/13 + 105-01/02/03/05 (+Bug6) + 106 + 109 + v34 test results: $pass_count PASS, $fail_count FAIL"
 echo "================================================================"
 if (( fail_count > 0 )); then
     exit 1
