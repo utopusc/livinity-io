@@ -21,6 +21,7 @@ import {useLaunchApp} from '@/hooks/use-launch-app'
 import {useQueryParams} from '@/hooks/use-query-params'
 import {systemAppsKeyed, useApps} from '@/providers/apps'
 import {useAvailableApps} from '@/providers/available-apps'
+import {useWindowManagerOptional} from '@/providers/window-manager'
 import {CommandDialog, CommandEmpty, CommandInput, CommandItem, CommandList} from '@/shadcn-components/ui/command'
 import {Separator} from '@/shadcn-components/ui/separator'
 import {cn} from '@/shadcn-lib/utils'
@@ -76,6 +77,7 @@ export function CmdkMenu() {
 function CmdkContent() {
 	const {setOpen} = useCmdkOpen()
 	const navigate = useNavigate()
+	const windowManager = useWindowManagerOptional()
 	const {addLinkSearchParams} = useQueryParams()
 	const userApps = useApps()
 	const scrollRef = useRef<HTMLDivElement>(null)
@@ -236,7 +238,12 @@ function CmdkContent() {
 					icon={app.icon}
 					key={app.id}
 					onSelect={() => {
-						navigate(`/app-store/${app.id}`)
+						// Phase 107 (2026-05-13): open App Store iframe window instead
+						// of the dead native /app-store/<id> route (Phase 108 reverted).
+						const appStoreApp = systemAppsKeyed['LIVINITY_app-store']
+						if (appStoreApp) {
+							windowManager?.openWindow('LIVINITY_app-store', '/app-store', 'App Store', appStoreApp.icon)
+						}
 						setOpen(false)
 					}}
 				>
@@ -251,7 +258,11 @@ function CmdkContent() {
 					icon={app.icon}
 					key={app.id}
 					onSelect={() => {
-						navigate(`/app-store/${app.id}`)
+						// Phase 107: open App Store iframe window (native route removed in 108 revert).
+						const appStoreApp = systemAppsKeyed['LIVINITY_app-store']
+						if (appStoreApp) {
+							windowManager?.openWindow('LIVINITY_app-store', '/app-store', 'App Store', appStoreApp.icon)
+						}
 						setOpen(false)
 					}}
 				>
