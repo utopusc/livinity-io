@@ -445,12 +445,19 @@ export default class TunnelClient {
 
 		// Auto-configure domain for LivOS when connected via Livinity tunnel
 		// This makes App Store, subdomain routing, and domain-dependent features work
+		//
+		// Phase 114 (2026-05-13): NEVER overwrite an already-active domain config.
+		// Hybrid-mode users have their own custom domain (e.g. test.livinity.live) seeded
+		// by Phase 112's _dld_seed_domain_config + boot-time fallback. Previously this
+		// check used `existing.domain !== domain`, which clobbered the user's domain with
+		// the tunnel's assigned URL (utopusc.livinity.io) every reconnect — breaking the
+		// user's primary domain routing AND Phase 112's n8n gateway fix on hybrid installs.
+		// Tunnel now only seeds livos:domain:config when no active domain exists yet.
 		try {
 			const domain = msg.assignedUrl.replace('https://', '').replace('http://', '')
 			const existingConfig = await this.redis.get('livos:domain:config')
 			const existing = existingConfig ? JSON.parse(existingConfig) : null
-			// Only set if no domain configured or domain changed
-			if (!existing || !existing.active || existing.domain !== domain) {
+			if (!existing || !existing.active) {
 				const domainConfig = {
 					domain,
 					active: true,
@@ -459,6 +466,8 @@ export default class TunnelClient {
 				}
 				await this.redis.set('livos:domain:config', JSON.stringify(domainConfig))
 				this.logger.log(`[tunnel] Domain auto-configured: ${domain}`)
+			} else {
+				this.logger.log(`[tunnel] Existing active domain "${existing.domain}" preserved (source: ${existing.source ?? 'unknown'}) — tunnel-assigned URL not applied`)
 			}
 		} catch (err) {
 			this.logger.error(`[tunnel] Failed to auto-configure domain: ${err}`)
