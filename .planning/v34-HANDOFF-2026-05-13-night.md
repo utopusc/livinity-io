@@ -136,6 +136,40 @@
 
 3 VERIFICATION.md files with `human_needed` status (Phase 62, 105, 106). Plus now **Phase 111 binding UAT** added to the list. Run `/gsd-audit-uat` to review when ready.
 
+## ⚠ POST-HANDOFF FIX (2026-05-13 late night)
+
+User reported `test.livinity.live` App Store inaccessible ("Connect to Livinity Platform" prompt) AND `bruce.livinity.io` offline. Two fixes shipped:
+
+### Fix A — Mainserver App Store restored + kick war eliminated
+- `1fccc743` feat(tunnel): honor `livos:platform:tunnel_disabled` flag in `tunnel-client.ts` (start + connect both gated). When set to '1', tunnel stays idle but api_key remains valid for App Store iframe gate.
+- Mainserver (`154.53.56.75`) `update.sh` re-run → patched source picked up
+- `redis-cli SET livos:platform:tunnel_disabled 1` on mainserver Redis + `systemctl restart livos`
+- `redis-cli SET livos:platform:api_key liv_k_gcOHv6skaLtcOffBiv4n` on mainserver Redis (restored)
+- Result: `test.livinity.live` HTTP 200 + App Store iframe HTTP 200 + Mini PC tunnel solo (0 closes/30s vs prior 10/30s during kick war)
+
+### Fix B — `bruce.livinity.io` routing restored
+- INSERT into Server5 `platform.custom_domains` for user `utopusc`, domain `bruce.livinity.io`, status `dns_verified` (id `273faeaa-f762-4055-93f9-a711a26149b7`)
+- **Discovery:** that alone wasn't enough because `bruce.livinity.io` matches `*.livinity.io` Caddy block → relay → `parseSubdomain` extracts username `"bruce"` (which doesn't match any user) → falls into username-routing path BEFORE custom_domain check → 503
+- **Server5 relay hot-patch:** `/opt/platform/relay/src/server.ts` — removed `if (!username) {` guard around custom_domain block so it runs FIRST regardless of subdomain parse. Backup: `server.ts.pre-customdomain-fallback.bak`. Patch is on Server5 only (Server5 is NOT a git repo here — same Phase 111-style cross-repo pattern).
+- `pm2 restart relay` + DEL stale negative caches (`relay:custom-domain:bruce.livinity.io`, `relay:custom-domain-auth:bruce.livinity.io`)
+- Result: `bruce.livinity.io` HTTP 200 (routes to Mini PC tunnel via custom_domain lookup)
+
+### Final verified state (all five URLs HTTP 200)
+
+| URL | Path | Status |
+|---|---|---|
+| `https://test.livinity.live/` | mainserver direct DNS → mainserver Caddy → livinityd (no tunnel) | 200 |
+| `https://bruce.livinity.io/` | CF → Server5 Caddy → relay → custom_domain lookup → Mini PC tunnel | 200 |
+| `https://utopusc.livinity.io/` | CF → Server5 Caddy → relay → username path → Mini PC tunnel | 200 |
+| `https://livinity.io/store?...&instance=test.livinity.live` | App Store iframe (mainserver token) | 200 |
+| `https://livinity.io/store?...&instance=bruce.livinity.io` | App Store iframe (Mini PC token) | 200 |
+
+### Architectural follow-ups added by this fix
+
+1. **Server5 relay code drift** — the `server.ts` patch lives on Server5 only. The platform repo (separate from this `livinity-io` repo) needs a corresponding commit. **Operator decision:** locate the platform repo (likely `utopusc/livinity-platform` or similar) and back-port the patch as a proper PR.
+2. **`tunnel_disabled` flag** — shipped in livinityd source `1fccc743`. Will reach Mini PC on next `update.sh` run there (currently Mini PC has tunnel ENABLED — correct, since it's the primary). Needs documentation in `livos/packages/livinityd/source/modules/platform/README.md` if such a file exists, or in the new install wizard flow as a "secondary install" toggle.
+3. **Multi-tunnel proper fix** — `tunnel_disabled` is a workaround. The real architectural fix is dropping `tunnel_connections.user_id_key UNIQUE` and re-keying the relay registry by `(user_id, device_id)` so multiple installs can hold separate tunnel slots. Already in v34.x followups list above.
+
 ## Critical invariants maintained this session
 
 - Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across 6 commits (live grep verified)
