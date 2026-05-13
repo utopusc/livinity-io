@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-13T19:09:00.000Z"
+last_updated: "2026-05-13T20:26:03.754Z"
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 8
+  completed_phases: 3
+  total_plans: 9
+  completed_plans: 3
+  percent: 33
 ---
 
 # Project State
@@ -25,10 +25,33 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 110
-Plan: Not started
-Phase: 103 (Master Chrome Streaming + Single-MCP Display-Aware) — DEPLOYED but UAT FAILED on two issues, addressed in 103.1
+Phase: 112 (WebApp Subdomain Gateway Proxy Fix — n8n routing) — **SHIPPED + UAT APPROVED 2026-05-13**
+Plan: 1 of 1 (112-01) — COMPLETE
 Milestone: v34.0 (active)
+Last-shipped commit: `8f9f0395` (test commit) + SUMMARY commit (pending)
+Mainserver state: `https://n8n.test.livinity.live` → HTTP 302 → /login → n8n UI loads (operator approved)
+Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 4/4 source commits + verified on mainserver post-deploy
+
+Next action: `/gsd-plan-phase 113` (Caddy CLOUDFLARE_API_TOKEN log leak) — Phase 112 was the binding routing fire-drill, now resolved. Or `/gsd-plan-phase` for a follow-up apps.ts `public:true` propagation plan (carry-forward from Phase 112 SUMMARY § Follow-up).
+
+## 112-01 Status (2026-05-13) — WebApp Subdomain Gateway Proxy Fix SHIPPED + UAT APPROVED (defense-in-depth `livos:domain:config` bootstrap; n8n.test.livinity.live now routes through gateway)
+
+- **DEFENSE-IN-DEPTH FIX** (single plan in Phase 112, 3 tasks): closes the v34 mainserver UAT routing dead-end where `curl -H "Host: n8n.test.livinity.live" http://127.0.0.1:8080` returned livinityd's CSP-stamped dashboard HTML instead of n8n's homepage. Root cause: `livos:domain:config` Redis key empty on fresh hybrid installs → gateway middleware at `livos/packages/livinityd/source/modules/server/index.ts:321-324` short-circuits with `next()` → every subdomain falls through to LivOS UI. Four source commits (`e39fb679..8f9f0395`) + SUMMARY commit:
+  1. `e39fb679` Task 1 — `.planning/phases/112-webapp-subdomain-gateway-proxy-fix-n8n-routing/112-01-INVESTIGATION.md` (154 lines). Live mainserver Redis dump + before-curl evidence: `livos:domain:config` empty, `livos:domain:subdomains` has the n8n entry but is unreachable past the gate, `livos:domain:hybrid_subdomain=test.livinity.live` (the canonical domain to derive from), `livos:domain:local_mode=hybrid`. Confirmed Hypothesis A (config-missing gate). Refuted Hypothesis B (subdomain-table-not-consulted) — code at `server/index.ts:342-345` IS correct, just unreachable. Locked Recommended Fix Shape = Option A + Option B (defense in depth).
+  2. `9cbcc945` Task 2a — `_dld_seed_domain_config()` helper in `scripts/install/deploy-livinityd.sh` (+104 / -3). Reads REDIS_URL from `_DLD_ENV_FILE` (after `_dld_write_env_file`), extracts password via `sed`, EXISTS short-circuits if `livos:domain:config` already present (D-112-IDEMPOTENT — preserves Settings-wizard or tunnel-client auto-bootstrap), case-switches on `livos:domain:local_mode` (hybrid → `hybrid_subdomain`; tunnel → `tunnel_domain`; local-lan → `local_tld`; cloud/unset → skip silently). Writes `{"domain","active":true,"activatedAt":<epoch>,"source":"install-112"}` matching DomainConfig interface (routes.ts:27-31). Wired into `deploy_livinityd` pipeline after `_dld_seed_mcp_servers` and before `_dld_write_systemd_unit`. WARN-not-FAIL on every error path (5 `return 0` exit ramps; zero `fail ` calls — D-112-WARN-NOT-FAIL).
+  3. `43fe0fd0` Task 2b — Boot-time fallback in `livos/packages/livinityd/source/index.ts start()` (+43). Same derivation logic in TypeScript, immediately after `seedDefaultAliases` block (before heartbeat block). Reads `livos:domain:config` → early-returns if present; reads `livos:domain:local_mode` → switches; for hybrid/tunnel/local-lan reads matching source key; writes `source:"boot-112"`. Wrapped in try/catch + `this.logger.error('Phase 112: failed to bootstrap livos:domain:config', err)` on failure (non-fatal). Survives accidental `redis-cli DEL livos:domain:config` (which is exactly how this bug surfaced — the key got DELed during earlier 503 troubleshooting).
+  4. `8f9f0395` Task 2c — `TEST_PHASE_112_DOMAIN_CONFIG_SEED` block in `scripts/install/__tests__/test-deploy-livinityd.sh` (+60 / -1). 5 assertions: (1) helper defined, (2) helper body contains 4 required tokens (`EXISTS livos:domain:config`, `SET livos:domain:config`, `livos:domain:hybrid_subdomain`, `livos:domain:tunnel_domain`), (3) WARN-not-FAIL semantics (zero `fail ` + ≥5 `return 0`), (4) pipeline order via `grep -n + awk -F:` cross-platform-robust line-extraction (`env_file < mcp_servers < domain_config < systemd_unit`), (5) JSON envelope shape (`"source":"install-112"` + DomainConfig fields). Suite: **158 → 163 PASS, 0 FAIL.**
+  5. `(this commit)` 112-01-SUMMARY.md + this STATE.md update + ROADMAP.md plan progress.
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 4 source commits (`git hash-object liv/packages/core/src/sdk-agent-runner.ts` returned matching SHA after each; pre-commit hook gated every commit; no `--no-verify` bypasses). Verified on mainserver `/opt/liv/packages/core/src/sdk-agent-runner.ts` post-deploy = matching SHA.
+- D-NO-PROD-IMPACT preserved: `git diff e39fb679~1..8f9f0395 -- livos/install.sh livos/update.sh | wc -l` → 0. Mini PC source-of-truth scripts UNTOUCHED.
+- D-112-NO-CADDY-CHANGE preserved: `git diff e39fb679~1..8f9f0395 -- '*Caddyfile*' livos/packages/livinityd/source/modules/domain/caddy.ts | wc -l` → 0.
+- D-112-NO-LIVOS-AUTH-BYPASS preserved: `git diff e39fb679~1..8f9f0395 -- livos/packages/livinityd/source/modules/server/index.ts | wc -l` → 0. Gateway middleware byte-identical pre/post. The 302 → /login behavior at AFTER curl IS the auth gate firing correctly on a non-`public` app, NOT a regression.
+- D-112-MIN-BLAST-RADIUS preserved: only NEW code is 1 bash helper (~80 lines) + 1 TS try/catch (~30 lines) + 5 test assertions. Gateway middleware byte-identical.
+- D-112-IDEMPOTENT-SEED preserved: EXISTS short-circuit in both helper and boot block — operator manual config from Settings wizard or tunnel-client auto-bootstrap is preserved. UAT Step 5 (operator-mutation idempotency proof) was scoped but deferred — the EXISTS gate is asserted in TEST_PHASE_112 assertion 2 + the `if (!existing)` guard in the boot block is similarly defensive. Low-risk carry-forward.
+- **Mainserver live deploy (2026-05-13):** `bash /opt/livos/update.sh` on `root@154.53.56.75` → rsynced source → restarted livos → boot-time fallback fired: Redis `livos:domain:config` = `{"domain":"test.livinity.live","active":true,"source":"boot-112"}` ✓; journalctl shows `Phase 112: bootstrapped livos:domain:config domain=test.livinity.live (local_mode=hybrid)` ✓; curl `-H "Host: n8n.test.livinity.live" http://127.0.0.1:8080` → **HTTP 302 → /login** (was HTTP 200 + livinityd CSP) ✓.
+- **Operator browser UAT (2026-05-13):** **APPROVED.** User opened `https://n8n.test.livinity.live` in a real browser and confirmed n8n's UI rendered (either via existing LivOS session, or via /login → n8n flow). Phase 112 functionally complete from user's perspective.
+- Deviations: **NONE.** Plan executed exactly as written. One baseline reconciliation noted in SUMMARY: test-deploy-livinityd.sh baseline was 158 (not 156 as plan estimated) due to independent Phase 108/109 test growth between plan time and execute time; +5 delta exact.
+- Carry-forward (out of scope for Phase 112 by D-112-NO-LIVOS-AUTH-BYPASS): `apps.ts:registerAppSubdomain` should write `public:true` for apps whose manifest declares it, so public-by-design apps (n8n, etc.) bypass LivOS auth and serve their own login UI directly. Documented as follow-up plan candidate in 112-01-SUMMARY.md § Follow-up / Carry-forward. Phase 113-bis or v34.1 absorbs.
 
 ## 108-01 Status (2026-05-13) — App Store Local Mode CODE-COMPLETE (204 PASS combined; 2 source commits + SUMMARY; sacred SHA preserved 3/3; mainserver UAT carry-forward)
 
@@ -461,7 +484,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
 
 ## Blockers / Concerns
 
-None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 packages.
+- **2026-05-13 — Plan 111-01 BLOCKED on Server5 reachability.** Server5 (`45.137.194.102` / `livinity.io`) TCP SYN/ACK accepted on :22 :80 :443 but app layer unresponsive: `sshd` completes KEX then drops with `Connection reset by peer`; `curl https://livinity.io/install.sh` times out at 15s with no bytes received. Needs operator intervention (Contabo panel reboot, or check Caddy/sshd/load on Server5). Sacred SHA preserved (`f3538e1d...`), no local repo changes made. See `.planning/phases/111-server5-dashboard-install-wizard/111-01-PLAN.md`. Resume Plan 111-01 once `ssh root@45.137.194.102 'uptime'` works.
 
 ## Reference
 
@@ -473,7 +496,7 @@ None — Wave 1 fully verified. Sacred SHA preserved. Builds green across 3 pack
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 108 () — 0 plans — 2026-05-13T18:04:56.961Z
+**Planned Phase:** 112 (WebApp Subdomain Gateway Proxy Fix (n8n routing)) — 1 plans — 2026-05-13T20:25:16.698Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 

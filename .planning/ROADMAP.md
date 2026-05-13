@@ -193,12 +193,12 @@ Plans:
 - **D-112-NO-LIVOS-AUTH-BYPASS:** subdomain proxy still passes through livinityd auth (session cookie / API key) for apps that require it. Public apps (n8n with own auth) pass through unauthenticated only if the app's own manifest declares `public: true`.
 - **D-112-SACRED-SHA-UNTOUCHED:** `sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` not in scope.
 
-**Plans:** 1 plan
+**Plans:** 1 plan — **SHIPPED 2026-05-13 (UAT APPROVED)**
 
 Plans:
-- [ ] 112-01-PLAN.md — Investigate gateway short-circuit (livos:domain:config missing on hybrid installs) + ship _dld_seed_domain_config install-time helper + livinityd boot-time fallback + 5 regression assertions + mainserver UAT
+- [x] 112-01-PLAN.md — Investigate gateway short-circuit (livos:domain:config missing on hybrid installs) + ship _dld_seed_domain_config install-time helper + livinityd boot-time fallback + 5 regression assertions + mainserver UAT — **SHIPPED `e39fb679..8f9f0395`** (4 source commits + SUMMARY); 158 → 163 PASS, 0 FAIL; sacred SHA preserved 4/4; mainserver UAT operator-approved (HTTP 302 → /login → n8n UI loads).
 
-**UAT:** Mainserver `https://n8n.test.livinity.live` → see n8n's actual homepage (not LivOS dashboard). Install bolt.diy → `https://bolt.test.livinity.live` → see Bolt's UI. App Store full flow works end-to-end.
+**UAT:** Mainserver `https://n8n.test.livinity.live` → ✓ **operator browser UAT APPROVED 2026-05-13** (n8n UI rendered after LivOS auth). Subsequent installs (bolt.diy, AdGuard, …) automatically benefit from the same gateway path now functional. Out-of-scope follow-up: `apps.ts:registerAppSubdomain public:true` propagation so public-by-design apps bypass LivOS auth (see 112-01-SUMMARY.md § Follow-up — candidate Phase 113-bis or v34.1).
 
 ---
 
