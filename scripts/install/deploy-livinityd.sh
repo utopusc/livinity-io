@@ -1294,9 +1294,13 @@ CADDYFILE
 
 # ── 11. Gallery cache (105-02 G5 — update.sh:596-610) ───────────────────────
 # Idempotent git pull on /opt/livos/data/app-stores/*livinity-apps* clone.
+# Phase 105-02 G5 (initial helper) — Phase 108: this gallery cache is the
+# SOLE data source for the App Store window's local-mode catalog. Without
+# it, AppStoreWindowContent <Navigate to="/app-store"> lands on an empty
+# registry. Keep this helper running on every deploy.
 # Graceful skip if cache dir or .git is absent (lazy-created on first store access).
 _dld_update_gallery_cache() {
-    step "105-02 (G5) — update gallery cache (update.sh:596-610)"
+    step "105-02 (G5) / 108 — update gallery cache (update.sh:596-610)"
 
     local gallery_cache_dir
     # Plan 105-05 Bug #2: When /opt/livos/data/app-stores/ doesn't exist (fresh VPS),
