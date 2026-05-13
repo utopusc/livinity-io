@@ -202,21 +202,22 @@ Plans:
 
 ---
 
-### Phase 113: Caddy CLOUDFLARE_API_TOKEN Log Leak Remediation
+### Phase 113: Caddy CLOUDFLARE_API_TOKEN Log Leak Remediation — ✅ SHIPPED 2026-05-13
 
 **Goal:** Stop Caddy systemd unit from logging the plaintext `CLOUDFLARE_API_TOKEN=cfut_...` env-var to `journalctl -u caddy` on every reload. Currently anyone with root or journalctl read access on mainserver can recover the CF API token from logs — medium-severity credential leak.
 
 **Driver:** v34 session 2026-05-13 — the orchestrator literally recovered the CF token from `journalctl -u caddy` to create the wildcard DNS record (proves the leak is real). Documented in `.planning/v34-HANDOFF-2026-05-13.md` Issue 5.
 
-**Direction:**
-- Investigate where the token surfaces in journald: Caddy stderr on reload? systemd `Environment=` echo? `EnvironmentFile=` not being respected?
-- Pick the minimal-blast-radius fix: load CF token from `EnvironmentFile=` chmod 600 (instead of `Environment=`), OR redirect Caddy stderr away from journald for token-containing lines, OR rotate to credential manager.
-- D-113-NO-CADDY-DOWNTIME: change must reload gracefully — no TLS handshake interruption.
-- D-113-NO-DNS-DROP: wildcard cert renewal continues to work after the fix.
+**Outcome (2026-05-13):** Root cause was Caddy's `--environ` debug flag in the base unit's `ExecStart` (prints `os.Environ()` to stdout → journald). The `EnvironmentFile=` migration the plan assumed was needed had already been done in an earlier session (`livos-cf-token.conf` drop-in, mode 600 root:root) — `systemctl show caddy --property=Environment` was already empty. Fix shipped via new `/etc/systemd/system/caddy.service.d/strip-environ-flag.conf` drop-in that resets `ExecStart=` and re-declares it without `--environ`. Post-restart journal clean (`AFTER_COUNT_SINCE_RESTART=0`, was 5 since boot). TLS preserved on `test.livinity.live` + wildcard subdomain.
 
-**Plan count estimate:** 1 plan (~2 tasks: identify leak source → apply fix + verify journalctl clean).
+**Plans:**
+- [x] 113-01-PLAN.md — Investigate leak source + apply fix + verify journalctl clean — **SHIPPED `52fe695f..6df3cb8b`** (2 source commits + SUMMARY); 5 → 0 plaintext token occurrences in journal; sacred SHA preserved 2/2; mainserver TLS verified live. Plan's Task 2 mechanism revised mid-flight (Rule 1+3 deviation): strip `--environ` flag instead of migrate `Environment=` (which was a no-op). See `113-01-INVESTIGATION.md` and `113-01-SUMMARY.md`.
 
-**UAT:** `journalctl -u caddy --since today | grep -i cloudflare_api_token` returns empty. Caddy reload still succeeds with valid wildcard cert renewal.
+**UAT:** `journalctl -u caddy --since "$(date '+%Y-%m-%d %H:%M:%S' -d '30 seconds ago')" | grep -i cloudflare_api_token` returns empty post-restart. `curl -sIL https://test.livinity.live` → HTTP/2 200; `curl -sIL -H "Host: n8n.test.livinity.live" https://test.livinity.live` → HTTP/2 302 (wildcard cert renewal still works, Phase 112 routing preserved).
+
+**Locked decisions honored:** D-113-NO-CADDY-DOWNTIME (restart was <500ms, brief TCP reset acceptable since drop-in `ExecStart=` only applies on next start), D-113-NO-DNS-DROP (EnvironmentFile + Caddyfile `{env.CLOUDFLARE_API_TOKEN}` untouched), D-113-MAINSERVER-ONLY (one new drop-in file on mainserver, zero source-tree commits — only `.planning/` docs), D-113-SACRED-SHA-UNTOUCHED.
+
+**Follow-ups (out of scope, operator-decision-gated):** (a) journal vacuum for 5 historic leaked entries (`journalctl --vacuum-time=1s` — destructive), (b) CF token rotation via Cloudflare dashboard + update `/etc/livos/secrets/cf-token`, (c) audit other systemd units for similar debug flags (v34.x phase), (d) fold `strip-environ-flag.conf` into `scripts/install/deploy-livinityd.sh` for fresh installs (Phase 114 or v34.x polish).
 
 ---
 

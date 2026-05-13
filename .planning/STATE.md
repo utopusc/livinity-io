@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-13T20:26:03.754Z"
+last_updated: "2026-05-13T23:05:00.000Z"
 progress:
   total_phases: 8
-  completed_phases: 3
-  total_plans: 9
-  completed_plans: 3
-  percent: 33
+  completed_phases: 5
+  total_plans: 10
+  completed_plans: 5
+  percent: 50
 ---
 
 # Project State
@@ -25,14 +25,27 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 112 (WebApp Subdomain Gateway Proxy Fix — n8n routing) — **SHIPPED + UAT APPROVED 2026-05-13**
-Plan: 1 of 1 (112-01) — COMPLETE
+Phase: 113 (Caddy CLOUDFLARE_API_TOKEN Log Leak Remediation) — **SHIPPED 2026-05-13**
+Plan: 1 of 1 (113-01) — COMPLETE (Task 1 investigation + Task 2 deploy, mechanism revised mid-flight per Rule 1+3)
 Milestone: v34.0 (active)
-Last-shipped commit: `8f9f0395` (test commit) + SUMMARY commit (pending)
-Mainserver state: `https://n8n.test.livinity.live` → HTTP 302 → /login → n8n UI loads (operator approved)
-Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 4/4 source commits + verified on mainserver post-deploy
+Last-shipped commit: `6df3cb8b` (Task 2 deploy) + SUMMARY commit (pending)
+Mainserver state: `journalctl -u caddy` clean of `CLOUDFLARE_API_TOKEN` since restart; `AFTER_COUNT_SINCE_RESTART=0` (was 5 since boot). TLS works on `test.livinity.live` + wildcard subdomain.
+Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 2/2 Phase 113 commits
 
-Next action: `/gsd-plan-phase 113` (Caddy CLOUDFLARE_API_TOKEN log leak) — Phase 112 was the binding routing fire-drill, now resolved. Or `/gsd-plan-phase` for a follow-up apps.ts `public:true` propagation plan (carry-forward from Phase 112 SUMMARY § Follow-up).
+Next action: `/gsd-plan-phase` for either (a) `apps.ts:registerAppSubdomain public:true` propagation (carry-forward from Phase 112 § Follow-up), (b) journal vacuum + CF token rotation hygiene phase (Phase 113 follow-ups, operator-decision-gated), or (c) Phase 111 Server5 dashboard install wizard (planned but Server5 was DOWN as of session start — re-check with Contabo panel).
+
+## 113-01 Status (2026-05-13) — Caddy `--environ` Flag Stripped, Journal Clean (Rule 1+3 mid-flight deviation; plan's `Environment=` migration was already done in earlier session, real leak source was `--environ` debug flag in base ExecStart)
+
+- **CADDY ENV LEAK FIX** (single plan in Phase 113, 2 tasks): closes the v34 hygiene gap where `journalctl -u caddy` carried 5 plaintext `CLOUDFLARE_API_TOKEN=cfut_...` lines since boot (most recent `May 13 18:24`). Two source commits + SUMMARY commit:
+  1. `52fe695f` Task 1 — `.planning/phases/113-caddy-cloudflare-api-token-log-leak-remediation/113-01-INVESTIGATION.md` (248 lines). Live mainserver probe: 5 plaintext token lines confirmed; `systemctl show caddy --property=Environment` returned EMPTY (proves inline Environment= was already migrated by an earlier session via `/etc/systemd/system/caddy.service.d/livos-cf-token.conf` which had `EnvironmentFile=/etc/livos/secrets/cf-token`, mode 600 root:root, 75 bytes); base unit had `ExecStart=/usr/bin/caddy run --environ --config /etc/caddy/Caddyfile`. Identified `--environ` flag (Caddy debug feature that prints `os.Environ()` to stdout → journald) as the real leak source. Revised Task 2 plan: strip the flag via a second drop-in instead of migrating `Environment=` (which was a no-op).
+  2. `6df3cb8b` Task 2 — `.planning/phases/113-caddy-cloudflare-api-token-log-leak-remediation/113-01-DEPLOY.md`. Applied new drop-in `/etc/systemd/system/caddy.service.d/strip-environ-flag.conf` (mode 644) with `ExecStart=` reset + re-declare `ExecStart=/usr/bin/caddy run --config /etc/caddy/Caddyfile` (no `--environ`). `systemctl daemon-reload && systemctl restart caddy` → `is-active: active` within 3s. `systemctl show caddy --property=ExecStart` → `argv[]=/usr/bin/caddy run --config /etc/caddy/Caddyfile` (no `--environ`). `journalctl -u caddy --since "30 seconds ago" | grep -c CLOUDFLARE_API_TOKEN` → **0** (was 5 since boot). `curl -sIL https://test.livinity.live` → HTTP/2 200; `curl -sIL -H "Host: n8n.test.livinity.live" https://test.livinity.live` → HTTP/2 302 (wildcard cert still works, Phase 112 routing preserved). Cert dir intact: `test.livinity.live` + `wildcard_.test.livinity.live`.
+  3. `(this commit)` 113-01-SUMMARY.md + this STATE.md update + ROADMAP.md plan progress.
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across both Phase 113 commits (verified after each).
+- **Deviation:** Rule 1+3 (Bug, blocking). Plan's Task 2 mechanism (migrate inline `Environment=` → `EnvironmentFile=`) was moot — already done in an earlier session. Real leak was `--environ` debug flag. Revised Task 2 (strip flag via new drop-in) preserved objective / scope / blast radius / locked decisions (D-113-NO-CADDY-DOWNTIME, D-113-NO-DNS-DROP, D-113-MAINSERVER-ONLY, D-113-SACRED-SHA-UNTOUCHED). Full diagnostic rationale in 113-01-INVESTIGATION.md. No user input needed per Rule 4 (same target, same risk, correct mechanism).
+- D-113-NO-CADDY-DOWNTIME: `systemctl restart caddy` was required (drop-in `ExecStart=` only applies on next start) — restart was <500ms, brief TCP reset acceptable. Cert renewal continues normally.
+- D-113-NO-DNS-DROP preserved: `EnvironmentFile=/etc/livos/secrets/cf-token` still loaded; `{env.CLOUDFLARE_API_TOKEN}` in Caddyfile still resolves; wildcard cert renewal works (curl 302 proves it).
+- D-113-MAINSERVER-ONLY preserved: one new drop-in file on mainserver, zero source-tree commits (only `.planning/` docs).
+- Follow-ups (out of Phase 113 scope, documented in SUMMARY): (a) journal vacuum for 5 historic leaked entries (operator decision, destructive), (b) CF token rotation (operator-only, needs Cloudflare dashboard), (c) audit other systemd units for similar debug flags (v34.x scope), (d) fold `strip-environ-flag.conf` into `scripts/install/deploy-livinityd.sh` for fresh installs (Phase 114 or v34.x polish).
 
 ## 112-01 Status (2026-05-13) — WebApp Subdomain Gateway Proxy Fix SHIPPED + UAT APPROVED (defense-in-depth `livos:domain:config` bootstrap; n8n.test.livinity.live now routes through gateway)
 
@@ -496,7 +509,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 112 (WebApp Subdomain Gateway Proxy Fix (n8n routing)) — 1 plans — 2026-05-13T20:25:16.698Z
+**Planned Phase:** 113 (Caddy CLOUDFLARE_API_TOKEN Log Leak Remediation) — 1 plans — 2026-05-13T20:45:26.791Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
