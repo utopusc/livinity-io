@@ -963,9 +963,25 @@ EOF
 _dld_seed_mcp_servers() {
     step "Phase 109 — seed liv:mcp:config (sequential-thinking + luse)"
 
-    local seed_file="${_DLD_LIVOS_DIR}/scripts/install/seeds/mcp-servers.json"
-    if [[ ! -f "$seed_file" ]]; then
-        info "Seed file not found at $seed_file — skipping MCP seed (forward-compat)"
+    # Phase 109-02 hotfix: multi-candidate seed file lookup.
+    # `scripts/install/seeds/` lives in the repo root, NOT in the `livos/`
+    # subtree that gets rsync'd to `/opt/livos/`. So `${_DLD_LIVOS_DIR}/...`
+    # never finds the file on a fresh install. Use BASH_SOURCE dirname first
+    # (resolves to wherever install.sh sourced us from — e.g. /tmp/livos-fresh/
+    # scripts/install/), fall back to the post-rsync path for forward-compat
+    # in case a future plan also copies seeds/ into /opt/livos/.
+    local seed_file=""
+    local candidate
+    for candidate in \
+        "$(dirname "${BASH_SOURCE[0]}")/seeds/mcp-servers.json" \
+        "${_DLD_LIVOS_DIR}/scripts/install/seeds/mcp-servers.json"; do
+        if [[ -f "$candidate" ]]; then
+            seed_file="$candidate"
+            break
+        fi
+    done
+    if [[ -z "$seed_file" ]]; then
+        info "Seed file not found in any candidate path — skipping MCP seed (forward-compat)"
         return 0
     fi
 
