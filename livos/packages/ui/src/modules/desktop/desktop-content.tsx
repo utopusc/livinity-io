@@ -239,7 +239,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 	const windowManager = useWindowManagerOptional()
 
 	// Stream apps share a single window — close previous before opening new
-	const streamAppIds = useMemo(() => new Set(['LIVINITY_chrome', 'LIVINITY_remote-desktop', 'LIVINITY_gmail', 'LIVINITY_facebook', 'LIVINITY_whatsapp', 'LIVINITY_youtube']), [])
+	const streamAppIds = useMemo(() => new Set(['LIVINITY_chrome', 'LIVINITY_remote-desktop', 'LIVINITY_gmail']), [])
 	const openStreamApp = useCallback((appId: string, route: string, title: string, icon: string) => {
 		if (isMobile) {
 			openApp(appId, route, title, icon)

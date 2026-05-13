@@ -10,7 +10,8 @@ import {useAppInstall} from '@/hooks/use-app-install'
 import {useLaunchApp} from '@/hooks/use-launch-app'
 import {LIVINITY_APP_STORE_ID} from '@/modules/app-store/constants'
 import {getAppStoreAppFromInstalledApp} from '@/modules/app-store/utils'
-import {useUserApp} from '@/providers/apps'
+import {systemAppsKeyed, useUserApp} from '@/providers/apps'
+import {useWindowManagerOptional} from '@/providers/window-manager'
 import {ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger} from '@/shadcn-components/ui/context-menu'
 import {contextMenuClasses} from '@/shadcn-components/ui/shared/menu'
 import {cn} from '@/shadcn-lib/utils'
@@ -315,6 +316,7 @@ export function AppIconConnected({appId}: {appId: string}) {
 
 function ContextMenuItemLinkToAppStore({appId}: {appId: string}) {
 	const navigate = useNavigate()
+	const windowManager = useWindowManagerOptional()
 	return (
 		<ContextMenuItem asChild>
 			<button
@@ -326,7 +328,12 @@ function ContextMenuItemLinkToAppStore({appId}: {appId: string}) {
 					if (registryId !== LIVINITY_APP_STORE_ID) {
 						navigate(`/community-app-store/${registryId}/${appId}`)
 					} else {
-						navigate(`/app-store/${appId}`)
+						// Phase 107 (2026-05-13): native /app-store/<id> route removed
+						// in Phase 108 revert — open App Store iframe window instead.
+						const appStoreEntry = systemAppsKeyed['LIVINITY_app-store']
+						if (appStoreEntry) {
+							windowManager?.openWindow('LIVINITY_app-store', '/app-store', 'App Store', appStoreEntry.icon)
+						}
 					}
 				}}
 			>

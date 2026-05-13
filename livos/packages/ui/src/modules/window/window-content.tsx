@@ -38,7 +38,7 @@ type WindowContentProps = {
 // WebApps (any appId starting with WEBAPP_) are full-height too — handled
 // via `isWebAppKind(appId)` in `WindowContent` rather than expanding this set.
 const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_remote-desktop', 'LIVINITY_chrome',
-	'LIVINITY_facebook', 'LIVINITY_gmail', 'LIVINITY_youtube', 'LIVINITY_whatsapp', 'LIVINITY_tradingview', 'LIVINITY_google', 'LIVINITY_yahoo'])
+	'LIVINITY_gmail'])
 
 export function WindowContent({route, appId}: WindowContentProps) {
 	if (fullHeightApps.has(appId) || isWebAppKind(appId)) {
@@ -106,13 +106,7 @@ export function WindowAppContent({appId, initialRoute}: {appId: string; initialR
 			return <RemoteDesktopContent />
 
 		case 'LIVINITY_chrome':
-		case 'LIVINITY_facebook':
 		case 'LIVINITY_gmail':
-		case 'LIVINITY_youtube':
-		case 'LIVINITY_whatsapp':
-		case 'LIVINITY_tradingview':
-		case 'LIVINITY_google':
-		case 'LIVINITY_yahoo':
 			return <ChromeWindowContent url={initialRoute.startsWith('http') ? initialRoute : undefined} />
 
 		default:
