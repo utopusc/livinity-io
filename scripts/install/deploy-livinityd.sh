@@ -1040,6 +1040,77 @@ _dld_seed_mcp_servers() {
     ok "Seeded liv:mcp:config with 2 MCP servers (sequential-thinking, luse) — substituted REDIS_URL"
 }
 
+# ── 7b. v34 — auto-seed livos:platform:api_key from --api-key install flag ──
+# When operator runs `bash install.sh --api-key liv_k_...` (a key issued by
+# livinity.io dashboard), this helper writes the key DIRECTLY into Redis as
+# `livos:platform:api_key` + sets `livos:platform:enabled=1`. Without this,
+# the App Store window (livos/packages/ui/.../app-store-content.tsx) reads
+# `domain.platform.getApiKey` → returns null → renders "Connect to Livinity
+# Platform" prompt forcing the user to manually paste the key in Settings.
+#
+# This mirrors what the `domain.platform.setApiKey` tRPC mutation does at
+# routes.ts:25-33 (redis.set api_key + redis.set enabled='1'), but skips the
+# `tunnelClient.connect()` call (which is best-effort and not required for
+# the App Store iframe URL to load — Server5 just validates `?token=...`).
+#
+# Existing helper `_write_api_key_secret_if_provided` in mode-tunnel.sh
+# already writes the key to /etc/livos/secrets/api-key + sets
+# `livos:account:api_key_path` pointer. That pair is used by the 104-10
+# heartbeat client (livos/packages/livinityd/source/modules/account/). We
+# ADD the platform-key seed here (NOT in mode-tunnel.sh) so it covers ALL
+# install modes (hybrid, tunnel, local-lan, cloud).
+#
+# Idempotency: if `livos:platform:api_key` already equals the provided
+# value, skip (no-op). If it differs, update (operator may have rotated
+# their key on the dashboard).
+#
+# Fail-soft: any Redis error → warn + return 0. App Store will fall back
+# to the Settings-prompt path (existing behavior).
+_dld_seed_platform_api_key() {
+    if [[ -z "${LIVOS_API_KEY:-}" ]]; then
+        info "No --api-key provided — App Store will require manual entry in Settings (skipping platform key seed)"
+        return 0
+    fi
+
+    step "v34 — seed livos:platform:api_key from --api-key flag"
+
+    # Read Redis password from .env (already written by _dld_write_env_file)
+    local redis_url=""
+    if [[ -f "$_DLD_ENV_FILE" ]]; then
+        redis_url=$(grep -E '^REDIS_URL=' "$_DLD_ENV_FILE" 2>/dev/null \
+            | sed -E 's|^REDIS_URL=(.*)$|\1|' \
+            | head -1)
+    fi
+    if [[ -z "$redis_url" ]]; then
+        warn "Could not read REDIS_URL from $_DLD_ENV_FILE — skipping platform API key seed"
+        return 0
+    fi
+
+    local redis_pass
+    redis_pass=$(echo "$redis_url" | sed -E 's|^redis://default:([^@]+)@.*|\1|')
+    if [[ -z "$redis_pass" || "$redis_pass" == "$redis_url" ]]; then
+        warn "Could not extract Redis password — skipping platform API key seed"
+        return 0
+    fi
+
+    # Idempotency: if existing key equals provided value, skip
+    local existing
+    existing=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:platform:api_key 2>/dev/null || echo "")
+    if [[ "$existing" == "$LIVOS_API_KEY" ]]; then
+        ok "livos:platform:api_key already matches provided value (idempotent skip)"
+        return 0
+    fi
+
+    # SET the platform API key + enabled flag (mirrors setApiKey tRPC mutation,
+    # minus tunnelClient.connect() which is not needed for App Store iframe).
+    if redis-cli -a "$redis_pass" --no-auth-warning SET livos:platform:api_key "$LIVOS_API_KEY" 2>&1 | head -1 | grep -q "^OK$"; then
+        redis-cli -a "$redis_pass" --no-auth-warning SET livos:platform:enabled "1" >/dev/null 2>&1
+        ok "Seeded livos:platform:api_key + livos:platform:enabled=1 (App Store iframe will load from livinity.io/store)"
+    else
+        warn "Failed to SET livos:platform:api_key — App Store will require manual entry in Settings"
+    fi
+}
+
 # ── 8. systemd unit livos.service ───────────────────────────────────────────
 # 104-12 path fix: WorkingDirectory=/opt/livos (flat, not nested).
 _dld_write_systemd_unit() {
@@ -1428,6 +1499,7 @@ deploy_livinityd() {
     _dld_generate_jwt_secret              # 105-01: moved earlier — secrets BEFORE pnpm install per CONTEXT pipeline order
     _dld_write_env_file                   # 105-01: moved earlier
     _dld_seed_mcp_servers                 # Phase 109 — auto-seed liv:mcp:config (sequential-thinking + luse)
+    _dld_seed_platform_api_key            # v34 — auto-seed livos:platform:api_key from --api-key flag (App Store no-prompt UX)
     _dld_write_pnpm_npmrc
     _dld_build_packages
     _dld_build_liv_packages
