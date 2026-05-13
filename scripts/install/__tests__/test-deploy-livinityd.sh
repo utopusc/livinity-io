@@ -1211,10 +1211,69 @@ else
     fail "v34: pipeline does NOT call _dld_seed_platform_api_key"
 fi
 
+# ── TEST_PHASE_112_DOMAIN_CONFIG_SEED: _dld_seed_domain_config helper + pipeline wire + JSON shape ───
+info "TEST_PHASE_112_DOMAIN_CONFIG_SEED: _dld_seed_domain_config helper + pipeline wire (Phase 112 — App Gateway gate seed)"
+
+# Assertion 1: _dld_seed_domain_config function defined in deploy-livinityd.sh
+if grep -qE "^_dld_seed_domain_config\(\) \{" "$DEPLOY_SH"; then
+    pass "Phase 112: _dld_seed_domain_config helper defined in deploy-livinityd.sh"
+else
+    fail "Phase 112: _dld_seed_domain_config helper NOT defined in deploy-livinityd.sh"
+fi
+
+# Assertion 2: helper body contains the 4 required tokens (EXISTS idempotency,
+# SET, both local-mode source keys, all are essential for the fix)
+phase112_body=$(awk '/^_dld_seed_domain_config\(\)/,/^}/' "$DEPLOY_SH")
+if echo "$phase112_body" | grep -q "EXISTS livos:domain:config" \
+   && echo "$phase112_body" | grep -q "SET livos:domain:config" \
+   && echo "$phase112_body" | grep -q "livos:domain:hybrid_subdomain" \
+   && echo "$phase112_body" | grep -q "livos:domain:tunnel_domain"; then
+    pass "Phase 112: helper has EXISTS-idempotency + SET + hybrid_subdomain + tunnel_domain tokens"
+else
+    fail "Phase 112: helper missing one of EXISTS livos:domain:config / SET livos:domain:config / hybrid_subdomain / tunnel_domain"
+fi
+
+# Assertion 3: WARN-not-FAIL semantics (D-112-WARN-NOT-FAIL).
+# No `fail ` calls inside the helper body; at least 5 `return 0` paths (one per error branch).
+phase112_fail_calls=$(echo "$phase112_body" | grep -cE "^[[:space:]]*fail[[:space:]]")
+phase112_return_zero_calls=$(echo "$phase112_body" | grep -cE "return 0")
+if (( phase112_fail_calls == 0 )) && (( phase112_return_zero_calls >= 5 )); then
+    pass "Phase 112: helper is WARN-not-FAIL (fail-calls=${phase112_fail_calls}, return-0=${phase112_return_zero_calls} >= 5)"
+else
+    fail "Phase 112: helper not WARN-not-FAIL (fail-calls=${phase112_fail_calls} must be 0, return-0=${phase112_return_zero_calls} must be >= 5)"
+fi
+
+# Assertion 4: pipeline order — _dld_write_env_file < _dld_seed_mcp_servers <
+# _dld_seed_domain_config < _dld_write_systemd_unit. Extract line numbers in
+# deploy_livinityd() body via grep -n + awk -F: (Phase 109 cross-platform pattern).
+phase112_order=$(awk '/^deploy_livinityd\(\)/,/^}/' "$DEPLOY_SH" | grep -nE "_dld_write_env_file|_dld_seed_mcp_servers|_dld_seed_domain_config|_dld_write_systemd_unit" | awk -F: '{print $1, $2}')
+phase112_env=$(echo "$phase112_order" | awk '/_dld_write_env_file/{print $1; exit}')
+phase112_mcp=$(echo "$phase112_order" | awk '/_dld_seed_mcp_servers/{print $1; exit}')
+phase112_dom=$(echo "$phase112_order" | awk '/_dld_seed_domain_config/{print $1; exit}')
+phase112_sys=$(echo "$phase112_order" | awk '/_dld_write_systemd_unit/{print $1; exit}')
+if [[ -n "$phase112_env" ]] && [[ -n "$phase112_mcp" ]] && [[ -n "$phase112_dom" ]] && [[ -n "$phase112_sys" ]] \
+   && (( phase112_env < phase112_mcp && phase112_mcp < phase112_dom && phase112_dom < phase112_sys )); then
+    pass "Phase 112: pipeline order write_env_file(${phase112_env}) < seed_mcp_servers(${phase112_mcp}) < seed_domain_config(${phase112_dom}) < write_systemd_unit(${phase112_sys})"
+else
+    fail "Phase 112: pipeline order broken (write_env_file=${phase112_env:-MISSING}, seed_mcp_servers=${phase112_mcp:-MISSING}, seed_domain_config=${phase112_dom:-MISSING}, write_systemd_unit=${phase112_sys:-MISSING})"
+fi
+
+# Assertion 5: JSON envelope shape — must contain "source":"install-112" + the
+# 3 required DomainConfig keys (domain, active, activatedAt). Locks the wire
+# format the gateway middleware + boot-time fallback both consume.
+if echo "$phase112_body" | grep -q '"source":"install-112"' \
+   && echo "$phase112_body" | grep -q '"domain":"%s"' \
+   && echo "$phase112_body" | grep -q '"active":true' \
+   && echo "$phase112_body" | grep -q '"activatedAt":%s'; then
+    pass "Phase 112: JSON envelope matches DomainConfig (domain + active + activatedAt + source=install-112)"
+else
+    fail "Phase 112: JSON envelope missing one of domain / active:true / activatedAt / source:install-112"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "================================================================"
-echo "  Plan 104-11/12/13 + 105-01/02/03/05 (+Bug6) + 106 + 109 + v34 test results: $pass_count PASS, $fail_count FAIL"
+echo "  Plan 104-11/12/13 + 105-01/02/03/05 (+Bug6) + 106 + 109 + v34 + 112 test results: $pass_count PASS, $fail_count FAIL"
 echo "================================================================"
 if (( fail_count > 0 )); then
     exit 1
