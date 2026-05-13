@@ -164,17 +164,16 @@ Plans:
 - **D-111-EXISTING-AUTH:** reuse existing Server5 user auth (`platform.users` table, login already implemented per memory `project_v34_account_tunnel_marketplace_vision`).
 - **D-111-NO-LIVOS-CHANGE:** this phase is Server5-side only. `livos/` and `liv/` source trees in this repo are NOT modified.
 
-**Plan count estimate:** 4-5 plans:
-- P111-01: API routes — POST `/api/account/api-keys` (generate liv_k_) + GET (list) + DELETE (revoke). Use bcryptjs cost 10 (matches existing Server5 hash). Multi-key per user requires DROP CONSTRAINT `api_keys_user_id_key`.
-- P111-02: API route `/api/cf/resolve-zone` — given `(domain, cf-token)`, calls Cloudflare GET `/zones?name=<root-domain>` to resolve zone ID (proxy, no token persistence)
-- P111-03: UI wizard `/onboarding/install` — 4-step flow with mode cards, conditional Hybrid form, install command display, copy-to-clipboard
-- P111-04: Mode documentation panel — Local + Hybrid full sections with pre-reqs, what-it-does, security tradeoffs; Own-Cloud + Cloud labelled "Coming Soon" placeholder content
-- P111-05 (optional): Verification polling — after user copies command, dashboard polls heartbeat endpoint to detect install completion
+**Plans:** 5 plans (planning complete 2026-05-13 — discovered prerequisite install.sh URL fix bumps plan count from 4-5 estimate to 5 final; verification polling deferred to Phase 112+):
+- [ ] 111-01-PLAN.md — Server5 install.sh route serves Phase 104+ modular installer (prereq — fixes Phase 108 UAT discovery that wizard one-liners would silently fail against legacy livos/install.sh)
+- [ ] 111-02-PLAN.md — api_keys multi-per-user migration (DROP UNIQUE constraint) + POST/GET/DELETE `/api/account/api-keys` Next.js routes
+- [ ] 111-03-PLAN.md — POST `/api/cf/resolve-zone` Cloudflare API proxy (zone-id auto-resolution, token never persisted)
+- [ ] 111-04-PLAN.md — `/onboarding/install` 3-step wizard UI (mode cards + hybrid/local form + generated install command display) — includes operator-walked mainserver UAT checkpoint
+- [ ] 111-05-PLAN.md — Mode reference docs panel (Local + Hybrid full pre-reqs/what-it-does/security tradeoffs; Own-Cloud + Cloud stubs)
 
-**Repo for Server5 changes:** Server5 has its own repo at `/opt/platform/web/` (separate from this `livinity-io` repo). Phase 111 plans must:
-- Discover the actual Git remote during `/gsd-plan-phase 111`
-- Branch + PR there
-- Keep mainserver (this repo) untouched
+**Deferred to Phase 112+:** Verification polling (auto-detect install completion via heartbeat). User can still verify manually via existing /dashboard polling.
+
+**Repo for Server5 changes:** `/opt/platform/web/` on Server5 (45.137.194.102) is **NOT** a Git repo — plans execute direct file edits via SSH (single-session batch per `feedback_ssh_rate_limit`). PLAN+SUMMARY artifacts live in this repo's `.planning/`. Server5 file backups (`.pre-111-NN.bak`) created in each plan for rollback.
 
 **UAT:** Open livinity.io/dashboard as a new user → see onboarding wizard → pick `Hybrid` → enter domain + CF token → copy generated one-liner → paste on fresh VPS → install completes → open `https://<your-domain>` → App Store loads with full marketplace catalog (no manual key prompt). Then click on a featured app (e.g. n8n) → install completes → app appears in dock.
 
