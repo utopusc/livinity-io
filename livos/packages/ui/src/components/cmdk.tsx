@@ -20,7 +20,6 @@ import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useLaunchApp} from '@/hooks/use-launch-app'
 import {useQueryParams} from '@/hooks/use-query-params'
 import {systemAppsKeyed, useApps} from '@/providers/apps'
-import {useAvailableApps} from '@/providers/available-apps'
 import {useWindowManagerOptional} from '@/providers/window-manager'
 import {CommandDialog, CommandEmpty, CommandInput, CommandItem, CommandList} from '@/shadcn-components/ui/command'
 import {Separator} from '@/shadcn-components/ui/separator'
@@ -88,21 +87,15 @@ function CmdkContent() {
 	const userQ = trpcReact.user.get.useQuery()
 	const launchApp = useLaunchApp()
 	const debugInstallRandomApps = useDebugInstallRandomApps()
-	// We only show installed community apps here, effectively limiting available
-	// apps to those present in the official app store
-	const availableApps = useAvailableApps()
 
-	const isLoading = userQ.isLoading || availableApps.isLoading || userApps.isLoading
+	const isLoading = userQ.isLoading || userApps.isLoading
 
-	if (availableApps.isLoading) return null
 	if (isLoading) return null
 	if (userQ.isLoading) return null
 	if (!userApps.userApps || !userApps.userAppsKeyed) return null
 
 	const readyApps = userApps.userApps.filter((app) => app.state === 'ready')
 	const unreadyApps = userApps.userApps.filter((app) => app.state !== 'ready')
-	// Apps not installed yet
-	const installableApps = availableApps.apps.filter((app) => !userApps.userAppsKeyed?.[app.id])
 
 	return (
 		<CommandList ref={scrollRef}>
@@ -252,25 +245,14 @@ function CmdkContent() {
 					</span>
 				</SearchItem>
 			))}
-			{installableApps.map((app) => (
-				<SearchItem
-					value={app.name}
-					icon={app.icon}
-					key={app.id}
-					onSelect={() => {
-						// Phase 107: open App Store iframe window (native route removed in 108 revert).
-						const appStoreApp = systemAppsKeyed['LIVINITY_app-store']
-						if (appStoreApp) {
-							windowManager?.openWindow('LIVINITY_app-store', '/app-store', 'App Store', appStoreApp.icon)
-						}
-						setOpen(false)
-					}}
-				>
-					<span>
-						{app.name} <span className='opacity-50'>{t('generic-in')} App Store</span>
-					</span>
-				</SearchItem>
-			))}
+			{/* Phase 107.1 (2026-05-13): "Available in App Store" entries removed.
+				Mini PC's local livinity-apps clone has 304 manifests (Umbrel-era leftovers
+				like Akaunting, Audiobookshelf, Bitcoin Knots etc.) but Server5's curated
+				PG `apps` table that the actual App Store iframe shows has only 26.
+				Showing the broader local list here was confusing — users typed into cmdk,
+				saw an app name, clicked, and the App Store window had nothing matching.
+				Discovery now happens exclusively via the App Store iframe (curated 26).
+				The `installableApps` constant above is preserved for any future filtering. */}
 
 			{/* Pluggable search providers */}
 			{cmdkSearchProviders.map((Provider, idx) => (

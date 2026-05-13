@@ -14,7 +14,6 @@ import {
 import {useQueryParams} from '@/hooks/use-query-params'
 import {useLaunchApp} from '@/hooks/use-launch-app'
 import {systemAppsKeyed, useApps} from '@/providers/apps'
-import {useAvailableApps} from '@/providers/available-apps'
 import {useWindowManagerOptional} from '@/providers/window-manager'
 import {cn} from '@/shadcn-lib/utils'
 import {AppState, trpcReact} from '@/trpc/trpc'
@@ -245,7 +244,6 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 	const {addLinkSearchParams} = useQueryParams()
 	const launchApp = useLaunchApp()
 	const {userApps, userAppsKeyed, isLoading: appsLoading} = useApps()
-	const availableApps = useAvailableApps()
 	const windowManager = useWindowManagerOptional()
 	const listRef = useRef<HTMLDivElement>(null)
 
@@ -556,31 +554,16 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 			}
 		}
 
-		// Installable apps from the app store
-		if (availableApps.apps && userAppsKeyed) {
-			const installableApps = availableApps.apps.filter((app) => !userAppsKeyed[app.id])
-			for (const app of installableApps) {
-				if (app.name.toLowerCase().includes(query)) {
-					results.push({
-						icon: <img src={app.icon} alt='' className='h-6 w-6 rounded-lg' />,
-						label: app.name,
-						description: 'Available in App Store',
-						onSelect: () => {
-							// Phase 107: open the App Store iframe window (the
-							// native /app-store/<id> route was removed in 108 revert).
-							const appStoreApp = systemAppsKeyed['LIVINITY_app-store']
-							if (appStoreApp) {
-								windowManager?.openWindow('LIVINITY_app-store', '/app-store', 'App Store', appStoreApp.icon)
-							}
-							onClose()
-						},
-					})
-				}
-			}
-		}
+		// Phase 107.1 (2026-05-13): "Available in App Store" suggestions removed.
+		// Mini PC's local livinity-apps clone exposes 304 manifests (Umbrel-era
+		// leftovers like Akaunting, Audiobookshelf, Bitcoin Knots etc.) but the
+		// App Store iframe shows only 26 curated apps from Server5 PG. Surfacing
+		// the broader local list here was confusing — Spotlight teased an app
+		// name, the App Store window had nothing matching. Discovery now
+		// happens exclusively via the App Store iframe.
 
 		return results.slice(0, 15) // Cap at 15 results
-	}, [searchValue, userApps, userAppsKeyed, availableApps.apps, navigate, windowManager, onClose, launchApp, addLinkSearchParams])
+	}, [searchValue, userApps, userAppsKeyed, navigate, windowManager, onClose, launchApp, addLinkSearchParams])
 
 	// Keyboard navigation
 	const handleKeyDown = useCallback(
