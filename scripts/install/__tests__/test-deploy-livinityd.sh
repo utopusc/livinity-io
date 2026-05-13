@@ -1162,7 +1162,19 @@ else
     fail "Phase 109: helper missing one of __LIVOS_REDIS_URL__ / SET liv:mcp:config / EXISTS liv:mcp:config / sed-substitution"
 fi
 
-# Assertion 4: pipeline contains _dld_seed_mcp_servers between _dld_write_env_file and _dld_write_pnpm_npmrc
+# 109-02 hotfix: helper uses BASH_SOURCE dirname as the first seed-file candidate
+# (live-discovered on mainserver 154.53.56.75 2026-05-13: scripts/install/seeds/
+# is in the repo root, NOT in the livos/ subtree that rsyncs to /opt/livos/,
+# so the single ${_DLD_LIVOS_DIR}/scripts/install/seeds/ lookup never resolved
+# on a real install; needed multi-candidate lookup with BASH_SOURCE first).
+if echo "$phase109_body" | grep -qE 'BASH_SOURCE\[0\]' \
+   && echo "$phase109_body" | grep -q 'for candidate in'; then
+    pass "Phase 109-02 hotfix: helper uses BASH_SOURCE multi-candidate seed lookup"
+else
+    fail "Phase 109-02 hotfix: helper missing BASH_SOURCE fallback for seed file lookup — will skip-soft on fresh install (live-discovered bug)"
+fi
+
+# Assertion 5: pipeline contains _dld_seed_mcp_servers between _dld_write_env_file and _dld_write_pnpm_npmrc
 phase109_order=$(awk '/^deploy_livinityd\(\)/,/^}/' "$DEPLOY_SH" | grep -nE "_dld_write_env_file|_dld_seed_mcp_servers|_dld_write_pnpm_npmrc" | awk -F: '{print $1}')
 phase109_a=$(echo "$phase109_order" | sed -n 1p)
 phase109_b=$(echo "$phase109_order" | sed -n 2p)
