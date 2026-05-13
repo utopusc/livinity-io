@@ -403,12 +403,12 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		}
 		appItems.push(chromeItem)
 
-		// Web app shortcuts — launch Chrome with specific URL
+		// Web app shortcuts — launch Chrome with specific URL.
+		// Phase 107 (2026-05-13): pruned default shortcuts to just Gmail. Facebook/
+		// WhatsApp/YouTube removed — generic URL bookmarks belong in the App Store
+		// (community apps) or user-pinned via right-click, not in the default dock.
 		const webApps = [
 			{id: 'LIVINITY_gmail', label: 'Gmail', icon: '/figma-exports/app-gmail.png', url: 'https://mail.google.com'},
-			{id: 'LIVINITY_facebook', label: 'Facebook', icon: '/figma-exports/app-facebook.png', url: 'https://www.facebook.com'},
-			{id: 'LIVINITY_whatsapp', label: 'WhatsApp', icon: '/figma-exports/app-whatsapp.png', url: 'https://web.whatsapp.com'},
-			{id: 'LIVINITY_youtube', label: 'YouTube', icon: '/figma-exports/app-youtube.png', url: 'https://www.youtube.com'},
 		]
 		for (const wa of webApps) {
 			appItems.push({
