@@ -30,10 +30,11 @@ import {NotFound} from './routes/not-found'
 import {Notifications} from './routes/notifications'
 import {Settings} from './routes/settings'
 
-const AppStoreDiscover = React.lazy(() => import('./routes/app-store/discover'))
-const AppStoreCategoryPage = React.lazy(() => import('./routes/app-store/category-page'))
-const AppStoreAppPage = React.lazy(() => import('./routes/app-store/app-page'))
-const CommunityAppStore = React.lazy(() => import('./routes/community-app-store'))
+// v34 — Native local-mode App Store imports REMOVED (route entries also removed below).
+// const AppStoreDiscover = React.lazy(() => import('./routes/app-store/discover'))
+// const AppStoreCategoryPage = React.lazy(() => import('./routes/app-store/category-page'))
+// const AppStoreAppPage = React.lazy(() => import('./routes/app-store/app-page'))
+// const CommunityAppStore = React.lazy(() => import('./routes/community-app-store'))
 // Phase 76 / Plan 76-04 — Agent Marketplace route. Sibling to /app-store
 // inside the SheetLayout. Lazy-loaded to keep the initial bundle lean
 // and to mirror the existing app-store / community-app-store pattern.
@@ -130,31 +131,13 @@ export const router = createBrowserRouter([
 							},
 						],
 					},
-					{
-						path: 'app-store',
-						Component: AppStoreDiscover,
-						ErrorBoundary: ErrorBoundaryComponentFallback,
-					},
-					{
-						path: 'app-store/category/:category',
-						Component: AppStoreCategoryPage,
-						ErrorBoundary: ErrorBoundaryComponentFallback,
-					},
-					{
-						path: 'app-store/:appId',
-						Component: AppStoreAppPage,
-						ErrorBoundary: ErrorBoundaryComponentFallback,
-					},
-					{
-						path: 'community-app-store',
-						Component: CommunityAppStore,
-						ErrorBoundary: ErrorBoundaryComponentFallback,
-					},
-					{
-						path: 'community-app-store/:appStoreId/:appId',
-						Component: CommunityAppStore,
-						ErrorBoundary: ErrorBoundaryComponentFallback,
-					},
+					// v34 — Native local-mode App Store routes REMOVED per user direction
+					// (post-Phase 108 UAT 2026-05-13). The native /app-store/* catalog
+					// (Discover / Category / AppPage) is no longer reachable. Use the
+					// platform iframe (livinity.io/store) via the App Store window only.
+					// Community App Store also removed (same rationale).
+					// Spotlight + cmdk navigate() calls to /app-store/{appId} will be
+					// dead-ends until cleaned up in a follow-up phase.
 					{
 						// Phase 76 / Plan 76-04 — Agent Marketplace route.
 						path: 'agent-marketplace',
