@@ -71,3 +71,11 @@ Until all six steps pass, Phase 108 status remains `code-complete-pending-mainse
 
 - **Optional Phase 108.1**: Add an explicit `livos:appstore:mode=local|platform` Redis flag + Settings UI toggle so users can force-pin to one mode independently of API-key presence. Deferred — current auto-detect (apiKey absence → local) covers the fresh-VPS UAT acceptance gate and ships smaller.
 - **Phase 109** (MCP servers auto-seed) is already SHIPPED (`50438411`). **Phase 110** (WebApp Launcher VNC swap carry-over from Phase 99) is the next scheduled plan in the v34.0 milestone.
+
+## Self-Check: PASSED
+
+- Files: `app-store-content.tsx`, `app-store-content.test.tsx`, `108-01-SUMMARY.md` all on disk.
+- Commits: `f4ca52e9` (feat), `edb568c9` (test), `bfbd603d` (docs) all on `master`.
+- Sacred SHA: `f3538e1d811992b782a9bb057d1b7f0a0189f95f` post-final-commit (verified via `git hash-object liv/packages/core/src/sdk-agent-runner.ts`).
+- D-NO-PROD-IMPACT: `git diff f4ca52e9~1..HEAD -- livos/install.sh livos/update.sh | wc -l` → `0`.
+- Combined static tests: 204 PASS, 0 FAIL (vitest 6 + deploy-livinityd 156 + mode-hybrid 18 + mode-tunnel 24).
