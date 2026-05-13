@@ -1040,6 +1040,106 @@ _dld_seed_mcp_servers() {
     ok "Seeded liv:mcp:config with 2 MCP servers (sequential-thinking, luse) — substituted REDIS_URL"
 }
 
+# ── 7c. Phase 112 — seed livos:domain:config from local_mode keys ───────────
+# FIX FOR: fresh `install.sh --mode hybrid|tunnel` runs left `livos:domain:config`
+# unset, which caused the App Gateway at server/index.ts:321-324 to short-circuit
+# with `next()` for every subdomain request → livinityd's UI served at
+# `n8n.test.livinity.live` instead of n8n container. Discovered v34 mainserver UAT
+# 2026-05-13T22:03Z. Sister fix is the boot-time fallback in livinityd's
+# `start()` (sub-change 2b) — that one survives accidental `redis-cli DEL`.
+#
+# Idempotency (D-112-IDEMPOTENT-SEED): EXISTS livos:domain:config short-circuits;
+# operator's manual Settings-wizard edits or tunnel-client auto-bootstrap survive.
+# Fail-soft (D-112-WARN-NOT-FAIL): every redis-cli error → warn + return 0
+# (a failed domain seed must NOT brick install).
+_dld_seed_domain_config() {
+    step "Phase 112 — seed livos:domain:config from local_mode keys"
+
+    # 1. Read REDIS_URL from .env (already written by _dld_write_env_file).
+    local redis_url=""
+    if [[ -f "$_DLD_ENV_FILE" ]]; then
+        redis_url=$(grep -E '^REDIS_URL=' "$_DLD_ENV_FILE" 2>/dev/null \
+            | sed -E 's|^REDIS_URL=(.*)$|\1|' \
+            | head -1)
+    fi
+    if [[ -z "$redis_url" ]]; then
+        warn "Could not read REDIS_URL from $_DLD_ENV_FILE — skipping domain-config seed"
+        return 0
+    fi
+
+    local redis_pass
+    redis_pass=$(echo "$redis_url" | sed -E 's|^redis://default:([^@]+)@.*|\1|')
+    if [[ -z "$redis_pass" || "$redis_pass" == "$redis_url" ]]; then
+        warn "Could not extract Redis password from REDIS_URL — skipping domain-config seed"
+        return 0
+    fi
+
+    # 2. Idempotency gate (D-112-IDEMPOTENT-SEED). Skip if operator already
+    # configured via Settings wizard or tunnel-client auto-bootstrap.
+    local existing
+    existing=$(redis-cli -a "$redis_pass" --no-auth-warning EXISTS livos:domain:config 2>/dev/null || echo "0")
+    if [[ "$existing" == "1" ]]; then
+        ok "livos:domain:config already present (reuse — preserves operator config)"
+        return 0
+    fi
+
+    # 3. Derive domain from the install-mode-specific Redis key.
+    local local_mode
+    local_mode=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_mode 2>/dev/null || echo "")
+    local domain=""
+    case "$local_mode" in
+        hybrid)
+            domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:hybrid_subdomain 2>/dev/null || echo "")
+            ;;
+        tunnel)
+            domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:tunnel_domain 2>/dev/null || echo "")
+            ;;
+        local-lan)
+            # local-lan uses ${HOST_IP}.{LIVINITY_LOCAL_TLD} for host-prefixed access;
+            # the gateway's main-domain check works equally well on the bare TLD because
+            # subdomains under it match the same suffix-check pattern.
+            domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_tld 2>/dev/null || echo "")
+            ;;
+        cloud|"")
+            info "local_mode='${local_mode:-unset}' — no domain to seed, skipping (cloud mode has no subdomain routing)"
+            return 0
+            ;;
+        *)
+            warn "Unknown local_mode='${local_mode}' — skipping domain-config seed"
+            return 0
+            ;;
+    esac
+
+    if [[ -z "$domain" ]]; then
+        warn "Could not resolve domain for local_mode='${local_mode}' — skipping domain-config seed"
+        return 0
+    fi
+
+    # 4. Build JSON envelope matching DomainConfig interface in
+    # livos/packages/livinityd/source/modules/domain/routes.ts:27-31.
+    local activated_at
+    activated_at=$(date +%s)000
+    local json
+    json=$(printf '{"domain":"%s","active":true,"activatedAt":%s,"source":"install-112"}' \
+        "$domain" "$activated_at")
+
+    # 5. SET (D-112-WARN-NOT-FAIL on error).
+    if ! redis-cli -a "$redis_pass" --no-auth-warning SET livos:domain:config "$json" >/dev/null 2>&1; then
+        warn "redis-cli SET livos:domain:config failed — install continues without domain-config seed"
+        return 0
+    fi
+
+    # 6. Verify the SET landed.
+    local verify
+    verify=$(redis-cli -a "$redis_pass" --no-auth-warning EXISTS livos:domain:config 2>/dev/null || echo "0")
+    if [[ "$verify" != "1" ]]; then
+        warn "livos:domain:config not present after SET — install continues"
+        return 0
+    fi
+
+    ok "Seeded livos:domain:config domain=${domain} active=true source=install-112"
+}
+
 # ── 7b. v34 — auto-seed livos:platform:api_key from --api-key install flag ──
 # When operator runs `bash install.sh --api-key liv_k_...` (a key issued by
 # livinity.io dashboard), this helper writes the key DIRECTLY into Redis as
@@ -1484,9 +1584,9 @@ deploy_livinityd() {
         return 0
     fi
 
-    step "Plan 104-11/104-12/105-02 — deploying livinityd + liv stack (full LivOS application stack)"
+    step "Plan 104-11/104-12/105-02 / 109 / 112 — deploying livinityd + liv stack (full LivOS application stack)"
     info "After this completes, the LivOS UI should load in the browser."
-    info "Scope: livinityd (Plan 104-11) + liv-core/liv-worker/liv-memory (Plan 104-12) + update.sh 1:1 port (105-02)."
+    info "Scope: livinityd (Plan 104-11) + liv-core/liv-worker/liv-memory (Plan 104-12) + update.sh 1:1 port (105-02) + MCP seed (109) + domain-config seed (112)."
 
     _dld_install_system_packages
     _dld_setup_postgres
@@ -1499,6 +1599,7 @@ deploy_livinityd() {
     _dld_generate_jwt_secret              # 105-01: moved earlier — secrets BEFORE pnpm install per CONTEXT pipeline order
     _dld_write_env_file                   # 105-01: moved earlier
     _dld_seed_mcp_servers                 # Phase 109 — auto-seed liv:mcp:config (sequential-thinking + luse)
+    _dld_seed_domain_config               # Phase 112 — seed livos:domain:config from local_mode keys (App Gateway gate)
     _dld_seed_platform_api_key            # v34 — auto-seed livos:platform:api_key from --api-key flag (App Store no-prompt UX)
     _dld_write_pnpm_npmrc
     _dld_build_packages
@@ -1512,5 +1613,5 @@ deploy_livinityd() {
     _dld_update_caddy_to_livinityd
     _dld_cleanup_temp_dir                 # 105-02 G7+G9 — cleanup + .deployed-sha
 
-    ok "Plan 104-11/104-12/104-13/105-01/105-02 — livinityd + liv stack deploy complete"
+    ok "Plan 104-11/104-12/104-13/105-01/105-02 / 109 / 112 — livinityd + liv stack deploy complete"
 }
