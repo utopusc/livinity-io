@@ -542,7 +542,13 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 						label: app.name,
 						description: appStateToDescription(app.state),
 						onSelect: () => {
-							navigate(`/app-store/${app.id}`)
+							// Phase 107 (2026-05-13): /app-store/<id> route was removed
+							// when Phase 108 reverted — open the App Store iframe window
+							// so user can navigate to the app from there.
+							const appStoreApp = systemAppsKeyed['LIVINITY_app-store']
+							if (appStoreApp) {
+								windowManager?.openWindow('LIVINITY_app-store', '/app-store', 'App Store', appStoreApp.icon)
+							}
 							onClose()
 						},
 					})
@@ -560,7 +566,12 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 						label: app.name,
 						description: 'Available in App Store',
 						onSelect: () => {
-							navigate(`/app-store/${app.id}`)
+							// Phase 107: open the App Store iframe window (the
+							// native /app-store/<id> route was removed in 108 revert).
+							const appStoreApp = systemAppsKeyed['LIVINITY_app-store']
+							if (appStoreApp) {
+								windowManager?.openWindow('LIVINITY_app-store', '/app-store', 'App Store', appStoreApp.icon)
+							}
 							onClose()
 						},
 					})
@@ -569,7 +580,7 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 		}
 
 		return results.slice(0, 15) // Cap at 15 results
-	}, [searchValue, userApps, userAppsKeyed, availableApps.apps, navigate, onClose, launchApp, addLinkSearchParams])
+	}, [searchValue, userApps, userAppsKeyed, availableApps.apps, navigate, windowManager, onClose, launchApp, addLinkSearchParams])
 
 	// Keyboard navigation
 	const handleKeyDown = useCallback(
