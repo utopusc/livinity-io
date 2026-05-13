@@ -1,9 +1,31 @@
 import {useRef, useState} from 'react'
+import {Navigate} from 'react-router-dom'
 
 import {Loading} from '@/components/ui/loading'
 import {useAppStoreBridge} from '@/hooks/use-app-store-bridge'
 import {EnvironmentOverridesDialog} from '@/modules/app-store/environment-overrides-dialog'
 import {trpcReact} from '@/trpc/trpc'
+
+// Phase 108 (App Store Local Mode — D-108-NO-API-KEY-FOR-LOCAL):
+//
+// The App Store dock icon used to render an iframe of
+// https://livinity.io/store gated behind an API key from livinity.io. On
+// fresh-VPS installs the API key is null, so the window showed a
+// platform-connection dead-end prompt.
+//
+// The /app-store/* React-Router tree already provides a fully native
+// Discover/Category/AppPage UI driven by `trpcReact.appStore.registry`
+// (see providers/available-apps.tsx + routes/app-store/*). The registry
+// is served from /opt/livos/data/app-stores/*/livinity-app.yml — the
+// gallery cache populated by scripts/install/deploy-livinityd.sh's
+// `_dld_update_gallery_cache` helper (Phase 105-02 G5).
+//
+// Behaviour now:
+//   • No API key (fresh install)  → <Navigate to="/app-store" replace />
+//     — defers to the native route. Zero outbound calls to livinity.io.
+//   • API key set (platform opt-in) → load the iframe + bridge as before.
+//
+// The legacy platform-connection prompt has been removed.
 
 type EnvOverride = {
 	name: string
@@ -21,25 +43,8 @@ type PendingPrompt = {
 }
 
 export default function AppStoreWindowContent() {
-	const iframeRef = useRef<HTMLIFrameElement>(null)
 	const apiKeyQ = trpcReact.domain.platform.getApiKey.useQuery()
 	const domainQ = trpcReact.domain.getStatus.useQuery()
-	const [pending, setPending] = useState<PendingPrompt | null>(null)
-
-	const apiKey = apiKeyQ.data?.apiKey ?? null
-	const hostname = domainQ.data?.domain || window.location.hostname
-	useAppStoreBridge(iframeRef, {
-		apiKey,
-		instanceName: hostname,
-		// Phase 43.7: when the bridge encounters an app with required env
-		// overrides (ZEP_API_KEY for MiroFish, N8N_BASIC_AUTH_PASSWORD for n8n,
-		// etc.), defer to this callback. Returns a promise that resolves to
-		// the user-supplied values or rejects on cancel.
-		onEnvOverridesNeeded: (appId, overrides) =>
-			new Promise<Record<string, string>>((resolve, reject) => {
-				setPending({appId, overrides, resolve, reject})
-			}),
-	})
 
 	if (apiKeyQ.isLoading || domainQ.isLoading) {
 		return (
@@ -49,9 +54,35 @@ export default function AppStoreWindowContent() {
 		)
 	}
 
+	const apiKey = apiKeyQ.data?.apiKey ?? null
+
+	// Phase 108: local-mode default. When no API key is configured the
+	// window delegates to the native /app-store route which is powered by
+	// AvailableAppsProvider + trpcReact.appStore.registry (gallery cache).
 	if (!apiKey) {
-		return <NoApiKeyMessage />
+		return <Navigate to='/app-store' replace />
 	}
+
+	// Platform mode (opt-in) — preserved unchanged for users who have
+	// explicitly registered their instance with livinity.io.
+	return <PlatformModeIframe apiKey={apiKey} hostname={domainQ.data?.domain || window.location.hostname} />
+}
+
+function PlatformModeIframe({apiKey, hostname}: {apiKey: string; hostname: string}) {
+	const iframeRef = useRef<HTMLIFrameElement>(null)
+	const [pending, setPending] = useState<PendingPrompt | null>(null)
+
+	useAppStoreBridge(iframeRef, {
+		apiKey,
+		instanceName: hostname,
+		// Phase 43.7: when the bridge encounters an app with required env
+		// overrides (ZEP_API_KEY for MiroFish, N8N_BASIC_AUTH_PASSWORD for
+		// n8n, etc.), defer to this callback.
+		onEnvOverridesNeeded: (appId, overrides) =>
+			new Promise<Record<string, string>>((resolve, reject) => {
+				setPending({appId, overrides, resolve, reject})
+			}),
+	})
 
 	const storeUrl = `https://livinity.io/store?token=${encodeURIComponent(apiKey)}&instance=${encodeURIComponent(hostname)}`
 
@@ -82,18 +113,5 @@ export default function AppStoreWindowContent() {
 				/>
 			)}
 		</>
-	)
-}
-
-function NoApiKeyMessage() {
-	return (
-		<div className='flex h-full flex-col items-center justify-center gap-3 p-8 text-center'>
-			<div className='text-4xl'>🔗</div>
-			<h2 className='text-lg font-semibold text-white'>Connect to Livinity Platform</h2>
-			<p className='max-w-md text-sm text-white/60'>
-				To access the App Store, connect your LivOS instance to the Livinity platform. Go to Settings and enter
-				your API key to get started.
-			</p>
-		</div>
 	)
 }
