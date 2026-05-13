@@ -137,6 +137,38 @@ Plans:
 
 ---
 
+### Phase 111: Server5 Dashboard — API Key Generator + Install Command Generator + Mode Documentation
+
+**Goal:** Add a self-service section to the Server5 livinity.io dashboard (`platform/web/` Next.js app at `45.137.194.102`) where a logged-in user can:
+1. Generate a new LivOS marketplace API key (`liv_k_*`) with one click
+2. See a ready-to-paste install command pre-filled with their API key + their account-default Cloudflare token (or placeholder if not yet configured)
+3. Read documentation for the 4 install modes — only 2 active for now
+
+**Driver:** Phase 108 + v34 mainserver UAT (2026-05-13) revealed a UX dead-end: install.sh's `--api-key liv_k_...` flag wasn't auto-seeding `livos:platform:api_key` Redis (App Store stayed gated on manual entry), AND there's no public-facing way for users to *get* an API key short of poking the platform DB. The mainserver-side fix is shipped (`adcc5a5d feat(v34): _dld_seed_platform_api_key`); Phase 111 ships the dashboard-side counterpart so the loop closes end-to-end.
+
+**Direction:**
+- New dashboard route `/account/install` (or `/account/api-keys`) under existing auth middleware
+- "Generate API Key" button → POSTs to existing or new `/api/account/api-keys` route → INSERTs into `platform.api_keys` (key_hash + prefix; show plain key ONCE in toast/modal, never persisted plain)
+- API key list view (prefix + created_at + last_used_at + revoke button)
+- Install command generator: dropdown for mode (Local | Hybrid | Own-Cloud (Coming Soon, disabled) | Cloud (Coming Soon, disabled)) + auto-fills the `bash install.sh ...` one-liner with the active key + saved CF token (if any) + placeholder for missing fields
+- Mode documentation panel — 4 sections (one per mode) with: pre-reqs, what it does, when to use, security tradeoffs. Local + Hybrid full content; Own-Cloud + Cloud labelled "Coming Soon" with brief description only
+- Copy-to-clipboard on install command
+- D-111-NO-LIVOS-CHANGE: this phase is Server5-side only. `livos/` and `liv/` source trees in this repo are NOT modified. Only `platform/web/` on Server5.
+- D-111-EXISTING-AUTH: reuse existing Server5 user auth (`platform.users` table, login already implemented per memory `project_v34_account_tunnel_marketplace_vision`)
+- D-111-KEY-NEVER-LOGGED: plain-text API key shown ONCE in modal, never stored plain, never logged
+
+**Plan count estimate:** 3-4 plans:
+- P111-01: API route — POST /api/account/api-keys (generate liv_k_) + GET (list) + DELETE (revoke); PG insert with proper hash
+- P111-02: UI page `/account/install` — Generate button + key list + install command generator
+- P111-03: Mode documentation content — Local + Hybrid full; Own-Cloud + Cloud "Coming Soon"
+- P111-04 (optional): Email/notification on first key generation (skip if scope creeps)
+
+**Repo for Server5 changes:** Server5 has its own repo (`/opt/platform/web/` likely cloned from a separate GitHub project). Phase 111 plans must specify which repo to edit + which branch. Discover during `/gsd-plan-phase 111`.
+
+**UAT:** Login to livinity.io dashboard → Click "Install LivOS" → Generate API key → Copy install command → Paste on fresh VPS → install completes → open VPS UI → App Store iframe loads automatically (no manual API key entry).
+
+---
+
 **Non-goals (HARD):**
 - Must NOT modify Mini PC's `update.sh` or `livos/install.sh` (read-only canonical refs)
 - Must NOT touch sacred `sdk-agent-runner.ts` SHA
