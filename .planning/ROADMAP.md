@@ -111,8 +111,10 @@ Plans:
 - D-109-IDEMPOTENT: re-running install.sh does NOT duplicate or overwrite user-customized MCP server configs
 - D-109-VERSIONED: seed file pinned to a specific Mini PC export date; future MCP server additions need new export
 
-**Plan count estimate:** 2 plans (P109-01 export from Mini PC + commit seed file to repo, P109-02 deploy-livinityd helper + tests).
-**UAT:** fresh install → open AI Chat → confirm Luse + bytebot + others appear as available MCP tools.
+**Plans:** 1 plan in 1 wave (planned 2026-05-13 — small scope, consolidated from estimated 2 plans into single 4-task plan)
+- [ ] 109-01-PLAN.md (Wave 1, autonomous) — Seed `liv:mcp:config` Redis key from `scripts/install/seeds/mcp-servers.json` (sequential-thinking + luse, exported from Mini PC 2026-05-13) via new `_dld_seed_mcp_servers` helper in `deploy-livinityd.sh`. Idempotent (EXISTS gate), fail-soft, password substituted from `/opt/livos/.env` at install-time (D-109-PASSWORD-NEVER-IN-REPO). +4 regression assertions (target 190 → 194 combined). Mainserver UAT on 154.53.56.75.
+
+**UAT:** fresh install → open AI Chat → MCP panel shows `sequential-thinking` + `luse` (not "No servers installed"). Re-run install → user customizations preserved (idempotency).
 
 ---
 
