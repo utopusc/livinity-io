@@ -264,12 +264,32 @@ export default class TunnelClient {
 			this.logger.log('[tunnel] No API key configured, staying idle')
 			return
 		}
+		// Per-instance tunnel disable. Set `livos:platform:tunnel_disabled=1` in
+		// Redis when an install shares an API key with another active install
+		// (Server5 `tunnel_connections.user_id_key UNIQUE` enforces single-tunnel-
+		// per-user; without this flag the two installs kick-war for the slot).
+		// `api_key` stays set so the App Store iframe gate still validates.
+		const tunnelDisabled = await this.redis.get(`${REDIS_PREFIX}tunnel_disabled`)
+		if (tunnelDisabled === '1') {
+			this.status = 'idle'
+			await this.updateRedisStatus()
+			this.logger.log('[tunnel] livos:platform:tunnel_disabled=1, staying idle (api_key preserved for App Store)')
+			return
+		}
 		await this.connect()
 	}
 
 	async connect(): Promise<void> {
 		const apiKey = await this.redis.get(`${REDIS_PREFIX}api_key`)
 		if (!apiKey) return
+		// Honor the per-instance disable flag here too (defense-in-depth: any
+		// scheduleReconnect() callback that races a flag-set still bails clean).
+		const tunnelDisabled = await this.redis.get(`${REDIS_PREFIX}tunnel_disabled`)
+		if (tunnelDisabled === '1') {
+			this.status = 'idle'
+			await this.updateRedisStatus()
+			return
+		}
 
 		this.status = 'connecting'
 		await this.updateRedisStatus()
