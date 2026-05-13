@@ -16,12 +16,7 @@ import {
 	TbCalendarTime,
 	TbTerminal2,
 	TbBrandChrome,
-	TbBrandFacebook,
 	TbMail,
-	TbBrandYoutube,
-	TbChartLine,
-	TbSearch,
-	TbNews,
 	TbDevices2,
 } from 'react-icons/tb'
 
@@ -53,12 +48,7 @@ const DOCK_LABELS: Record<string, string> = {
 	'LIVINITY_schedules': 'Schedules',
 	'LIVINITY_terminal': 'Terminal',
 	'LIVINITY_chrome': 'Chrome',
-	'LIVINITY_facebook': 'Facebook',
 	'LIVINITY_gmail': 'Gmail',
-	'LIVINITY_youtube': 'YouTube',
-	'LIVINITY_tradingview': 'TradingView',
-	'LIVINITY_google': 'Google',
-	'LIVINITY_yahoo': 'Yahoo',
 }
 
 // Map app IDs to their React Icons
@@ -76,12 +66,7 @@ const DOCK_ICONS: Record<string, IconType> = {
 	'LIVINITY_schedules': TbCalendarTime,
 	'LIVINITY_terminal': TbTerminal2,
 	'LIVINITY_chrome': TbBrandChrome,
-	'LIVINITY_facebook': TbBrandFacebook,
 	'LIVINITY_gmail': TbMail,
-	'LIVINITY_youtube': TbBrandYoutube,
-	'LIVINITY_tradingview': TbChartLine,
-	'LIVINITY_google': TbSearch,
-	'LIVINITY_yahoo': TbNews,
 }
 
 type HTMLDivProps = HTMLMotionProps<'div'>
