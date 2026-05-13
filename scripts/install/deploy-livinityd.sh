@@ -939,6 +939,91 @@ EOF
     ok ".env written at $_DLD_ENV_FILE (mode 0600)"
 }
 
+# ── 7. Phase 109 — auto-seed liv:mcp:config (sequential-thinking + luse) ────
+# Seeds Redis key `liv:mcp:config` from scripts/install/seeds/mcp-servers.json
+# so a fresh install boots with 2 MCP servers registered (AI Chat shows them
+# without operator-initiated Marketplace setup).
+#
+# Idempotency (D-109-IDEMPOTENT):
+#   - SKIP if liv:mcp:config already exists in Redis. This protects user
+#     customizations made via Marketplace/UI and survives re-runs of update.sh.
+#
+# Templating (D-109-PASSWORD-NEVER-IN-REPO):
+#   - Seed file ships with literal `__LIVOS_REDIS_URL__` placeholder.
+#   - This helper substitutes it with the host's actual REDIS_URL value
+#     (read from /opt/livos/.env which _dld_write_env_file produced earlier
+#     in the pipeline). Substitution uses `|` as sed delimiter — REDIS_URL
+#     contains `/` so `s/.../.../` would collide.
+#
+# Fail-soft (D-109-FAIL-SOFT):
+#   - Missing seed file → info + return 0 (older repo SHA without the seed
+#     file should not break new installs)
+#   - redis-cli SET failure → warn + return 0 (install should still ship a
+#     working LivOS even if MCP seed fails)
+_dld_seed_mcp_servers() {
+    step "Phase 109 — seed liv:mcp:config (sequential-thinking + luse)"
+
+    local seed_file="${_DLD_LIVOS_DIR}/scripts/install/seeds/mcp-servers.json"
+    if [[ ! -f "$seed_file" ]]; then
+        info "Seed file not found at $seed_file — skipping MCP seed (forward-compat)"
+        return 0
+    fi
+
+    # Read REDIS_URL from .env (already written by _dld_write_env_file).
+    local redis_url=""
+    if [[ -f "$_DLD_ENV_FILE" ]]; then
+        redis_url=$(grep -E '^REDIS_URL=' "$_DLD_ENV_FILE" 2>/dev/null \
+            | sed -E 's|^REDIS_URL=(.*)$|\1|' \
+            | head -1)
+    fi
+    if [[ -z "$redis_url" ]]; then
+        warn "Could not read REDIS_URL from $_DLD_ENV_FILE — skipping MCP seed"
+        return 0
+    fi
+
+    # Extract the bare password for redis-cli auth.
+    local redis_pass
+    redis_pass=$(echo "$redis_url" | sed -E 's|^redis://default:([^@]+)@.*|\1|')
+    if [[ -z "$redis_pass" || "$redis_pass" == "$redis_url" ]]; then
+        warn "Could not extract Redis password from REDIS_URL — skipping MCP seed"
+        return 0
+    fi
+
+    # Idempotency gate (D-109-IDEMPOTENT): EXISTS liv:mcp:config returns "1"
+    # if the key is already populated. Skip to preserve user customizations.
+    local existing
+    existing=$(redis-cli -a "$redis_pass" --no-auth-warning EXISTS liv:mcp:config 2>/dev/null || echo "0")
+    if [[ "$existing" == "1" ]]; then
+        ok "liv:mcp:config already present (reuse — preserves user customizations)"
+        return 0
+    fi
+
+    # Substitute __LIVOS_REDIS_URL__ placeholder with the host's REDIS_URL.
+    # Pipe delimiter: REDIS_URL contains `/` and `:` but no `|`.
+    local substituted_json
+    substituted_json=$(sed "s|__LIVOS_REDIS_URL__|${redis_url}|g" "$seed_file")
+    if [[ -z "$substituted_json" ]]; then
+        warn "Seed substitution produced empty JSON — skipping MCP seed"
+        return 0
+    fi
+
+    # SET the key (D-109-FAIL-SOFT: warn-not-fail on error).
+    if ! redis-cli -a "$redis_pass" --no-auth-warning SET liv:mcp:config "$substituted_json" >/dev/null 2>&1; then
+        warn "redis-cli SET liv:mcp:config failed — install continues without MCP seed"
+        return 0
+    fi
+
+    # Verify the SET landed.
+    local verify
+    verify=$(redis-cli -a "$redis_pass" --no-auth-warning EXISTS liv:mcp:config 2>/dev/null || echo "0")
+    if [[ "$verify" != "1" ]]; then
+        warn "liv:mcp:config not present after SET — install continues without MCP seed"
+        return 0
+    fi
+
+    ok "Seeded liv:mcp:config with 2 MCP servers (sequential-thinking, luse) — substituted REDIS_URL"
+}
+
 # ── 8. systemd unit livos.service ───────────────────────────────────────────
 # 104-12 path fix: WorkingDirectory=/opt/livos (flat, not nested).
 _dld_write_systemd_unit() {
@@ -1326,6 +1411,7 @@ deploy_livinityd() {
     _dld_setup_docker_images              # 105-05 Bug #6 — pull+retag getumbrel/* → livos/* (Mini PC pattern)
     _dld_generate_jwt_secret              # 105-01: moved earlier — secrets BEFORE pnpm install per CONTEXT pipeline order
     _dld_write_env_file                   # 105-01: moved earlier
+    _dld_seed_mcp_servers                 # Phase 109 — auto-seed liv:mcp:config (sequential-thinking + luse)
     _dld_write_pnpm_npmrc
     _dld_build_packages
     _dld_build_liv_packages
