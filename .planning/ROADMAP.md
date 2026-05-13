@@ -137,7 +137,7 @@ Plans:
 
 ---
 
-### Phase 111: Server5 Dashboard — Install Wizard (Mode Selection + Auto-Generated Install Command)
+### Phase 111: Server5 Dashboard — Install Wizard (Mode Selection + Auto-Generated Install Command) — ✅ CODE-COMPLETE 2026-05-13
 
 **Goal:** Add a first-login onboarding wizard to the Server5 livinity.io dashboard (`platform/web/` Next.js app at `45.137.194.102`) where a new (or existing) user picks an install type, fills in mode-specific fields, and gets a **ready-to-paste one-liner install command with all secrets baked in** (API key auto-generated, user's CF token + domain pre-filled). User pastes the one-liner on a fresh VPS → install completes end-to-end → App Store works without any manual API key entry in Settings.
 
@@ -165,11 +165,11 @@ Plans:
 - **D-111-NO-LIVOS-CHANGE:** this phase is Server5-side only. `livos/` and `liv/` source trees in this repo are NOT modified.
 
 **Plans:** 5 plans (planning complete 2026-05-13 — discovered prerequisite install.sh URL fix bumps plan count from 4-5 estimate to 5 final; verification polling deferred to Phase 112+):
-- [ ] 111-01-PLAN.md — Server5 install.sh route serves Phase 104+ modular installer (prereq — fixes Phase 108 UAT discovery that wizard one-liners would silently fail against legacy livos/install.sh)
-- [ ] 111-02-PLAN.md — api_keys multi-per-user migration (DROP UNIQUE constraint) + POST/GET/DELETE `/api/account/api-keys` Next.js routes
-- [ ] 111-03-PLAN.md — POST `/api/cf/resolve-zone` Cloudflare API proxy (zone-id auto-resolution, token never persisted)
-- [ ] 111-04-PLAN.md — `/onboarding/install` 3-step wizard UI (mode cards + hybrid/local form + generated install command display) — includes operator-walked mainserver UAT checkpoint
-- [ ] 111-05-PLAN.md — Mode reference docs panel (Local + Hybrid full pre-reqs/what-it-does/security tradeoffs; Own-Cloud + Cloud stubs)
+- [x] 111-01-PLAN.md — Server5 install.sh route serves Phase 104+ modular installer (prereq — fixes Phase 108 UAT discovery that wizard one-liners would silently fail against legacy livos/install.sh) — **SHIPPED `8e9cfa3e`** 2026-05-13 evening; live curl verified 1725-line legacy → 99-line modular dispatcher.
+- [x] 111-02-PLAN.md — api_keys multi-per-user migration (DROP UNIQUE constraint) + POST/GET/DELETE `/api/account/api-keys` Next.js routes — **SHIPPED `52d2a4f9`** 2026-05-13 evening; 10/10 UAT (multi-key per user proven, cross-user revoke 404, sacred test key byte-identical).
+- [x] 111-03-PLAN.md — POST `/api/cf/resolve-zone` Cloudflare API proxy (zone-id auto-resolution, token never persisted) — **SHIPPED `448a9cd9`** 2026-05-13 evening; 8/8 UAT, D-111-CF-TOKEN-NEVER-PERSISTED triple-proven (static grep + runtime grep + DB row-count).
+- [x] 111-04-PLAN.md — `/onboarding/install` 3-step wizard UI (mode cards + hybrid/local form + generated install command display) — **SHIPPED `cc12cf33`** 2026-05-13 evening; 6/6 server-side UAT (wizard live at livinity.io/onboarding/install), Caddyfile path whitelist patched. Operator-walked binding UAT (fresh VPS + Hybrid + real CF token) pending.
+- [x] 111-05-PLAN.md — Mode reference docs panel (Local + Hybrid full pre-reqs/what-it-does/security tradeoffs; Own-Cloud + Cloud stubs) — **SHIPPED `41288965`** 2026-05-13 evening; 6/6 UAT, D-111-RELAY-DATA-PLANE-DOC delivered ("Zero relay data plane" honesty disclosure on Hybrid card).
 
 **Deferred to Phase 112+:** Verification polling (auto-detect install completion via heartbeat). User can still verify manually via existing /dashboard polling.
 

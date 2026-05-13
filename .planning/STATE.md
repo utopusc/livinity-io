@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-13T23:05:00.000Z"
+last_updated: "2026-05-13T23:35:00.000Z"
 progress:
   total_phases: 8
-  completed_phases: 5
-  total_plans: 10
-  completed_plans: 5
-  percent: 50
+  completed_phases: 7
+  total_plans: 16
+  completed_plans: 11
+  percent: 69
 ---
 
 # Project State
@@ -25,14 +25,34 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 113 (Caddy CLOUDFLARE_API_TOKEN Log Leak Remediation) — **SHIPPED 2026-05-13**
-Plan: 1 of 1 (113-01) — COMPLETE (Task 1 investigation + Task 2 deploy, mechanism revised mid-flight per Rule 1+3)
+Phase: 111 (server5-dashboard-install-wizard) — ✅ CODE-COMPLETE 2026-05-13 evening
+Plan: 5 of 5 shipped (`8e9cfa3e..41288965`)
 Milestone: v34.0 (active)
-Last-shipped commit: `6df3cb8b` (Task 2 deploy) + SUMMARY commit (pending)
-Mainserver state: `journalctl -u caddy` clean of `CLOUDFLARE_API_TOKEN` since restart; `AFTER_COUNT_SINCE_RESTART=0` (was 5 since boot). TLS works on `test.livinity.live` + wildcard subdomain.
-Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 2/2 Phase 113 commits
+Last-shipped commit: `41288965` (Plan 111-05 SUMMARY)
+Mainserver state: `journalctl -u caddy` clean since Phase 113 restart. TLS works on `test.livinity.live` + wildcard.
+Server5 state: `https://livinity.io/onboarding/install` wizard live (Plan 111-04); `/api/account/api-keys` + `/api/cf/resolve-zone` endpoints live (Plans 111-02, 111-03); `/install.sh` serves Phase 104+ modular dispatcher (Plan 111-01); mode reference docs panel live (Plan 111-05).
+Mini PC state: tunnel stable post-update (Phase 112+114 source picked up; mainserver tunnel paused via Redis `livos:platform:api_key` DEL to give Mini PC the single-user tunnel slot per `feedback_minipc_is_owncloud_primary`). Public reachable as `utopusc.livinity.io` (HTTP 200). `bruce.livinity.io` 503 (pre-existing — no `custom_domains` row; v34.x scope).
+Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 5/5 Phase 111 commits.
 
-Next action: `/gsd-plan-phase` for either (a) `apps.ts:registerAppSubdomain public:true` propagation (carry-forward from Phase 112 § Follow-up), (b) journal vacuum + CF token rotation hygiene phase (Phase 113 follow-ups, operator-decision-gated), or (c) Phase 111 Server5 dashboard install wizard (planned but Server5 was DOWN as of session start — re-check with Contabo panel).
+Next action: `/gsd-plan-phase 110` for WebApp Launcher VNC swap (v33 carry-over from Phase 99). Mini PC UAT required — coordinate with operator since Mini PC is active OwnCloud per memory. Operator-walked binding UAT for Phase 111 (fresh Ubuntu 24.04 VPS + Hybrid mode + real CF token + end-to-end install) is also pending.
+
+## 111 Status (2026-05-13 evening) — Server5 Dashboard Install Wizard CODE-COMPLETE (5/5 plans shipped, sacred SHA preserved 5/5, all per-plan UAT PASS — operator-walked binding UAT pending)
+
+- **WIZARD CENTERPIECE** (5 plans, 3 waves): closes the v34 gap where new users had no first-login onboarding flow and had to manually copy install one-liners + paste API keys + look up CF zone IDs. Five commits on master, all preserve sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f`:
+  1. `8e9cfa3e` Plan 111-01 — `livinity.io/install.sh` route flipped from legacy 1725-line `livos/install.sh` bootstrap to Phase 104+ modular dispatcher (`scripts/install.sh`, 99 lines, `mode-cloud.sh / mode-local-lan.sh / mode-hybrid.sh` dispatch). Live curl: header now `# scripts/install.sh — LivOS one-shot installer`. PM2 reload, no restart loop.
+  2. `52d2a4f9` Plan 111-02 — `api_keys` UNIQUE(user_id) constraint dropped via Drizzle migration `0010_api_keys_multi_per_user.sql` (additive `idx_api_keys_user_id` non-unique index added; FK preserved). `POST/GET/DELETE /api/account/api-keys[/id]` Next.js routes shipped — POST returns plain `liv_k_*` token EXACTLY ONCE in response body, GET returns metadata only (NEVER `key_hash` or plain key), DELETE filters by `user_id = session.userId AND id = $1` (cross-user revoke returns 404, not 200 — id-enumeration oracle prevented). 10/10 live UAT PASS, sacred test user key `8b52d071... liv_k_gcOHv6sk` byte-identical post-migration. Backups: `schema.ts.pre-111-02.bak` + `pg_dump -t api_keys > /tmp/api_keys_pre_111_02.sql`.
+  3. `448a9cd9` Plan 111-03 — `POST /api/cf/resolve-zone` Next.js endpoint (CF API proxy that resolves `cf-zone-id` from `{domain, cfToken}`). 8/8 live UAT PASS. **D-111-CF-TOKEN-NEVER-PERSISTED triple-proven**: static grep on deployed file (0 banned persistence calls — no `pool.query INSERT`, `redis.set`, `fs.write*`, `console.*`); runtime grep on `pm2 logs web` (0 hits for literal test token); DB row-count assertion (`api_keys` test user count 1=1 unchanged). Subdomain stripping confirmed (`test.livinity.live` → `livinity.live` zone lookup).
+  4. `cc12cf33` Plan 111-04 — `/onboarding/install` 4-step wizard UI (mode cards + hybrid/local form + generated install command display). 7 new files under `/opt/platform/web/src/app/onboarding/install/`. Caddyfile patched (added `/onboarding/install /onboarding/install/*` to `@authproxy path` whitelist; was 404 before). 6/6 server-side UAT PASS (unauth 307 redirect to /login, mode cards rendered, "Coming Soon" badges on Own-Cloud/Cloud, manifest valid, pm2 web online). Generated one-liner is exactly ONE shell line (`bash -s -- <args>`, no `\` continuations — D-111-INSTALL-CMD-COPY-FRIENDLY).
+  5. `41288965` Plan 111-05 — Mode reference docs panel (`mode-docs.tsx` accordion + `mode-cards.tsx` "Learn more" wiring + `page.tsx` integration). 6/6 UAT PASS, Plan 111-04 regression-safe. **D-111-RELAY-DATA-PLANE-DOC delivered**: Hybrid `securityTradeoffs[1]` = "Zero relay data plane — your traffic does NOT flow through Server5. The legacy {username}.livinity.io alias does (DO NOT use that — prefer your own domain)" — explicit honesty disclosure that Server5 relay terminates TLS for tunnel-mode aliases.
+  6. `(this commit)` 5× SUMMARY.md (one per plan) + this STATE.md update + ROADMAP.md plan progress (5× `[ ]` → `[x]` + Phase 111 header CODE-COMPLETE tag).
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED across all 5 commits (verified via pre-commit hook + post-merge grep `git diff master~5..master -- liv/packages/core/src/sdk-agent-runner.ts` = empty).
+- D-NO-LIVOS-CHANGE preserved: `git diff master~5..master -- livos/ liv/` = 0 lines (Server5 work + .planning/ artifacts only).
+- D-NO-PROD-IMPACT preserved: Mini PC's `livos/install.sh` and `livos/update.sh` untouched.
+- D-111-NO-CROSS-USER-LEAK enforced: Plan 111-02 DELETE route filters `WHERE id = $1 AND user_id = $2`; cross-user revoke returns 404 (not 200), preventing id-enumeration oracle.
+- Wave structure: Wave 1 (parallel-safe: 111-01, 111-02, 111-03 — different files, executed sequentially since `parallelization=false`); Wave 2 (111-04 depends on Waves 1's two endpoints); Wave 3 (111-05 builds on 111-04).
+- **Tunnel slot side-effect (mid-session discovery)**: Plan 111-02 drops `api_keys.user_id` UNIQUE but `tunnel_connections.user_id` UNIQUE remains — multi-key per user does NOT yet imply multi-tunnel per user. The Mini PC + mainserver tunnel kick war this session was caused by both boxes sharing the same API key with single tunnel slot enforced via the latter constraint. Resolved by pausing mainserver tunnel (Redis `livos:platform:api_key` DEL'd, livos restart → "No API key configured, staying idle"). True multi-device tunnel = v34.x scope. See [feedback_minipc_is_owncloud_primary](../memory/feedback_minipc_is_owncloud_primary.md).
+- Operator-walked binding UAT pending (per `feedback_milestone_uat_gate`): fresh Ubuntu 24.04 VPS + browser-walk wizard at `https://livinity.io/onboarding/install` + Hybrid mode + real Cloudflare API token (with DNS:Edit + Zone:Read scopes) + paste generated one-liner on VPS + observe install completion + open `https://<domain>` + App Store loads with marketplace catalog. Until walked, Phase 111 is CODE-COMPLETE not SHIPPED.
+- Follow-ups (out of Phase 111 scope, candidate v34.x): (a) verification polling — auto-detect install completion via heartbeat (deferred to Phase 112+ per ROADMAP); (b) multi-device tunnel — drop `tunnel_connections.user_id` UNIQUE + relay registry keyed by api_key_id instead of username; (c) `bruce.livinity.io` `custom_domains` registration for Mini PC's preferred public alias; (d) Own-Cloud + Cloud mode card "Coming Soon" stubs need real impls.
 
 ## 113-01 Status (2026-05-13) — Caddy `--environ` Flag Stripped, Journal Clean (Rule 1+3 mid-flight deviation; plan's `Environment=` migration was already done in earlier session, real leak source was `--environ` debug flag in base ExecStart)
 
