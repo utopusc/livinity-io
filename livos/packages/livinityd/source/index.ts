@@ -426,6 +426,49 @@ export default class Livinityd {
 			this.logger.error('Failed to seed broker model aliases', err)
 		}
 
+		// Phase 112 — boot-time fallback for livos:domain:config.
+		// The App Gateway middleware at modules/server/index.ts:321-324 short-circuits
+		// with `next()` when this key is missing → livinityd's UI is served at every
+		// subdomain instead of proxying to the per-app container. Install-time seed
+		// lives in scripts/install/deploy-livinityd.sh `_dld_seed_domain_config`;
+		// THIS block survives accidental `redis-cli DEL livos:domain:config` between
+		// restarts (which is exactly how this bug surfaced in v34 UAT 2026-05-13).
+		//
+		// Idempotent: skips if config already present. Non-fatal on error.
+		try {
+			const existing = await this.ai.redis.get('livos:domain:config')
+			if (!existing) {
+				const localMode = await this.ai.redis.get('livos:domain:local_mode')
+				let domain: string | null = null
+				switch (localMode) {
+					case 'hybrid':
+						domain = await this.ai.redis.get('livos:domain:hybrid_subdomain')
+						break
+					case 'tunnel':
+						domain = await this.ai.redis.get('livos:domain:tunnel_domain')
+						break
+					case 'local-lan':
+						domain = await this.ai.redis.get('livos:domain:local_tld')
+						break
+					default:
+						// cloud / unset / unknown — no subdomain routing applies
+						break
+				}
+				if (domain) {
+					const config = {
+						domain,
+						active: true,
+						activatedAt: Date.now(),
+						source: 'boot-112',
+					}
+					await this.ai.redis.set('livos:domain:config', JSON.stringify(config))
+					this.logger.log(`Phase 112: bootstrapped livos:domain:config domain=${domain} (local_mode=${localMode})`)
+				}
+			}
+		} catch (err) {
+			this.logger.error('Phase 112: failed to bootstrap livos:domain:config', err)
+		}
+
 		// Phase 104 plan 104-10 — LivOS → livinity.io heartbeat client (FIRST
 		// client-side piece of v34). Only armed when the operator passed
 		// --api-key liv_k_... at install time (104-09 persisted both the
