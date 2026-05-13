@@ -94,7 +94,10 @@ Plans:
 - Optional: still allow users to opt into platform mode (API key) for shared apps + cloud sync features
 - D-108-NO-API-KEY-FOR-LOCAL: zero outbound calls to livinity.io required for local-mode App Store browsing or installing
 
-**Plan count estimate:** 2-3 plans (P108-01 backend local-mode + manifests endpoint, P108-02 UI dual-mode rendering, P108-03 install flow without platform sync if needed).
+**Plans:** 1 plan
+
+Plans:
+- [ ] 108-01-PLAN.md — UI dual-mode rewire (default local catalog via existing /app-store route; iframe preserved as platform-mode opt-in) + +8 regression assertions. Backend audit (planner): zero changes needed — appStore.registry already serves the gallery cache.
 **UAT:** fresh install → click App Store → see 304+ apps from local catalog, install one (e.g. AdGuard) — no API key prompt, no livinity.io calls.
 
 ---
