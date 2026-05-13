@@ -142,48 +142,16 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/chrome',
 	},
-	// Web app shortcuts — open Chrome with specific URL
-	{
-		id: 'LIVINITY_facebook',
-		name: 'Facebook',
-		icon: '/figma-exports/app-facebook.png',
-		systemApp: true,
-		systemAppTo: 'https://www.facebook.com',
-	},
+	// Web app shortcuts — open Chrome with specific URL.
+	// Phase 107 (2026-05-13): pruned to just Gmail. Facebook/YouTube/TradingView/
+	// Google/Yahoo removed — generic URL bookmarks belong in App Store community
+	// apps or user-pinned WebApps (right-click paste-a-URL), not in systemApps.
 	{
 		id: 'LIVINITY_gmail',
 		name: 'Gmail',
 		icon: '/figma-exports/app-gmail.png',
 		systemApp: true,
 		systemAppTo: 'https://mail.google.com',
-	},
-	{
-		id: 'LIVINITY_youtube',
-		name: 'YouTube',
-		icon: '/figma-exports/app-youtube.png',
-		systemApp: true,
-		systemAppTo: 'https://www.youtube.com',
-	},
-	{
-		id: 'LIVINITY_tradingview',
-		name: 'TradingView',
-		icon: '/figma-exports/dock-settings.png',
-		systemApp: true,
-		systemAppTo: 'https://www.tradingview.com',
-	},
-	{
-		id: 'LIVINITY_google',
-		name: 'Google',
-		icon: '/figma-exports/dock-settings.png',
-		systemApp: true,
-		systemAppTo: 'https://www.google.com',
-	},
-	{
-		id: 'LIVINITY_yahoo',
-		name: 'Yahoo',
-		icon: '/figma-exports/dock-settings.png',
-		systemApp: true,
-		systemAppTo: 'https://www.yahoo.com',
 	},
 ] as const satisfies readonly AppT[]
 
