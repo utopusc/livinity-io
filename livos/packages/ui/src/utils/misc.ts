@@ -57,11 +57,20 @@ export function appToUrl(app: UserApp): string {
 	const hostParts = location.hostname.split('.')
 
 	let userDomain = location.hostname
+
+	// Special case: LivOS instance accessed via *.livinity.io tunnel relay
+	// (e.g., utopusc.livinity.io). Here `livinity.io` is the eTLD+1 owned by
+	// the platform — strip the LivOS-instance prefix so we get the user's
+	// "base" subdomain (e.g., utopusc.livinity.io stays intact, but
+	// abc.utopusc.livinity.io would become utopusc.livinity.io).
 	if (hostParts.length > 3 && hostParts.slice(-2).join('.') === 'livinity.io') {
 		userDomain = hostParts.slice(-3).join('.')
-	} else if (hostParts.length > 2 && hostParts.slice(-2).join('.') !== 'livinity.io') {
-		userDomain = hostParts.slice(-2).join('.')
 	}
+	// For ALL other domain shapes (user's custom domain like test.livinity.live,
+	// example.com, my-server.example.org, etc.) use location.hostname AS-IS.
+	// Previously a too-eager strip turned `test.livinity.live` → `livinity.live`
+	// → n8n was opened at n8n.livinity.live (NXDOMAIN) instead of
+	// n8n.test.livinity.live (the correct subdomain on user's own DNS).
 
 	return `${location.protocol}//${appSubdomain}.${userDomain}`
 }
