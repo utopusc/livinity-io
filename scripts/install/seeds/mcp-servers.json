@@ -1,0 +1,33 @@
+{
+  "_meta": {
+    "exported_from": "Mini PC bruce@10.69.31.68 liv:mcp:config",
+    "exported_at": "2026-05-13",
+    "phase": "109",
+    "_note": "__LIVOS_REDIS_URL__ is substituted at install-time by _dld_seed_mcp_servers helper with the host's actual REDIS_URL from /opt/livos/.env. installedAt is 0 because seed installs have no meaningful install epoch."
+  },
+  "mcpServers": {
+    "sequential-thinking": {
+      "name": "sequential-thinking",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "description": "Dynamic problem-solving through thought sequences",
+      "installedFrom": "sequential-thinking",
+      "enabled": true,
+      "installedAt": 0
+    },
+    "luse": {
+      "name": "luse",
+      "transport": "stdio",
+      "command": "tsx",
+      "args": ["/opt/livos/packages/livinityd/source/modules/computer-use/mcp/server.ts"],
+      "env": {
+        "DISPLAY": ":1",
+        "XAUTHORITY": "/run/user/1000/gdm/Xauthority",
+        "LUSE_REDIS_URL": "__LIVOS_REDIS_URL__"
+      },
+      "enabled": true,
+      "installedAt": 0
+    }
+  }
+}
