@@ -24,7 +24,7 @@ Real-API-key broker for external/open-source apps (Bolt.diy, Open WebUI, Continu
 
 </details>
 
-### 🟢 v34.0 Bootstrap Polish + First-Run UX (Active — Phases 106-110)
+### 🟢 v34.0 Bootstrap Polish + First-Run UX (Active — Phases 106-113)
 
 **Status (2026-05-12):** Opened after Phase 105 (deploy-livinityd 1:1 update.sh port) shipped + 2× UAT live-validated on mainserver `154.53.56.75`. Phase 105 UAT surfaced 4 categories of follow-up work that are out of Phase 105 scope (which was strictly the update.sh deploy port) but block "fresh-VPS install → working UX" parity with Mini PC. v34 batches these into a dedicated milestone so they can be planned, executed, and tested cleanly.
 
@@ -176,6 +176,44 @@ Plans:
 **Repo for Server5 changes:** `/opt/platform/web/` on Server5 (45.137.194.102) is **NOT** a Git repo — plans execute direct file edits via SSH (single-session batch per `feedback_ssh_rate_limit`). PLAN+SUMMARY artifacts live in this repo's `.planning/`. Server5 file backups (`.pre-111-NN.bak`) created in each plan for rollback.
 
 **UAT:** Open livinity.io/dashboard as a new user → see onboarding wizard → pick `Hybrid` → enter domain + CF token → copy generated one-liner → paste on fresh VPS → install completes → open `https://<your-domain>` → App Store loads with full marketplace catalog (no manual key prompt). Then click on a featured app (e.g. n8n) → install completes → app appears in dock.
+
+---
+
+### Phase 112: WebApp Subdomain Gateway Proxy Fix (n8n routing)
+
+**Goal:** Fix livinityd's subdomain gateway middleware so requests to `<app>.<domain>` (e.g. `n8n.test.livinity.live`) are proxied to the per-app container (e.g. `127.0.0.1:5678`) instead of serving livinityd's own UI. Currently DNS wildcard + Caddy TLS resolve correctly to livinityd, but livinityd returns its own dashboard HTML for every subdomain — making every installed WebApp unreachable from the browser.
+
+**Driver:** v34 mainserver UAT (2026-05-13T22:03Z) — wildcard `*.test.livinity.live` DNS + LE cert + Caddy `reverse_proxy 127.0.0.1:8080` all verified green, `livos:domain:subdomains` Redis has the `n8n` entry, but `curl -H "Host: n8n.test.livinity.live" http://127.0.0.1:8080` returns livinityd's CSP-stamped UI HTML instead of n8n's homepage. Hypothesis: gateway middleware in `livos/packages/livinityd/source/server/index.ts:150-200` reads `domainInfo.appMapping[subPrefix]` from `livos:custom_domain:*` namespace but NOT `livos:domain:subdomains` (where actual subdomain → app/port mappings live). Two systems are not wired together. Without this fix, every WebApp install ends with "container running but browser can't reach it" — blocks v34 App Store end-to-end.
+
+**Direction:**
+- **Investigate first** (no code changes until root cause confirmed): trace gateway middleware end-to-end against the Redis keys actually used by `apps.ts installForUser()` and the subdomain registration path. Identify exactly where the lookup diverges from the registration.
+- **Fix the lookup mismatch:** either (a) make gateway consult `livos:domain:subdomains` alongside `livos:custom_domain:*`, or (b) ensure subdomain registrations also write into the namespace gateway already reads. Pick whichever matches existing patterns better (zero schema drift if avoidable).
+- **Live UAT on mainserver:** restart livinityd → reload `n8n.test.livinity.live` in browser → see n8n's actual UI (not livinityd's dashboard) → install another app → its subdomain also works.
+- **D-112-NO-CADDY-CHANGE:** Caddy config is correct. Don't touch Caddyfile or DNS — fix is purely livinityd middleware.
+- **D-112-NO-LIVOS-AUTH-BYPASS:** subdomain proxy still passes through livinityd auth (session cookie / API key) for apps that require it. Public apps (n8n with own auth) pass through unauthenticated only if the app's own manifest declares `public: true`.
+- **D-112-SACRED-SHA-UNTOUCHED:** `sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` not in scope.
+
+**Plan count estimate:** 1 plan (single-purpose gateway routing fix; ~3 tasks: investigate → fix → UAT).
+
+**UAT:** Mainserver `https://n8n.test.livinity.live` → see n8n's actual homepage (not LivOS dashboard). Install bolt.diy → `https://bolt.test.livinity.live` → see Bolt's UI. App Store full flow works end-to-end.
+
+---
+
+### Phase 113: Caddy CLOUDFLARE_API_TOKEN Log Leak Remediation
+
+**Goal:** Stop Caddy systemd unit from logging the plaintext `CLOUDFLARE_API_TOKEN=cfut_...` env-var to `journalctl -u caddy` on every reload. Currently anyone with root or journalctl read access on mainserver can recover the CF API token from logs — medium-severity credential leak.
+
+**Driver:** v34 session 2026-05-13 — the orchestrator literally recovered the CF token from `journalctl -u caddy` to create the wildcard DNS record (proves the leak is real). Documented in `.planning/v34-HANDOFF-2026-05-13.md` Issue 5.
+
+**Direction:**
+- Investigate where the token surfaces in journald: Caddy stderr on reload? systemd `Environment=` echo? `EnvironmentFile=` not being respected?
+- Pick the minimal-blast-radius fix: load CF token from `EnvironmentFile=` chmod 600 (instead of `Environment=`), OR redirect Caddy stderr away from journald for token-containing lines, OR rotate to credential manager.
+- D-113-NO-CADDY-DOWNTIME: change must reload gracefully — no TLS handshake interruption.
+- D-113-NO-DNS-DROP: wildcard cert renewal continues to work after the fix.
+
+**Plan count estimate:** 1 plan (~2 tasks: identify leak source → apply fix + verify journalctl clean).
+
+**UAT:** `journalctl -u caddy --since today | grep -i cloudflare_api_token` returns empty. Caddy reload still succeeds with valid wildcard cert renewal.
 
 ---
 
