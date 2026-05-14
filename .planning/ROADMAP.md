@@ -999,9 +999,9 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 
 ---
 
-### Phase 116: Canonical Design System Spec — 🟡 IN-PROGRESS (1/2 plans complete)
+### Phase 116: Canonical Design System Spec — ✅ CODE-COMPLETE 2026-05-14
 
-**Status:** Plan 116-01 shipped 2026-05-14 (commits `f7f83e05`, `96320229`, `fde48137`). `@livinity/design-tokens` v1.0.0 ships `:root` block verbatim from canonical (3 cross-verified sources), Tailwind 3.4 preset, JSON manifest, DESIGN-SYSTEM.md long-form spec, STYLE-GUIDE.md skeleton. D-116-LOCK-CANONICAL + D-116-NO-CONSUMER-CHANGES upheld. `body.dark` + `body.iridescent` blocks shipped as documented PENDING stubs (D-116-FOLLOW-UP-DARK + D-116-FOLLOW-UP-IRIDESCENT) — Server5 was unreachable at SSH fetch time. Plan 116-02 pending.
+**Status:** Both plans shipped. **Tagged `v35.0-design-tokens-1.0.0`** (local, not pushed). `@livinity/design-tokens` v1.0.0 ships canonical `:root` block (3 cross-verified sources), Tailwind 3.4 preset, JSON manifest, DESIGN-SYSTEM.md (254 lines), STYLE-GUIDE.md skeleton, fonts.css with 4 @font-face blocks (Geist + Geist Mono + Instrument Serif × 2), 4 self-hosted `.woff2` files, LICENSE-FONTS.md OFL attribution, smoke-test PNG (44685 bytes, headless Chrome render proves offline fonts paint correctly). D-116-LOCK-CANONICAL + D-116-NO-CONSUMER-CHANGES + D-116-SELF-HOSTED-FONT-FALLBACK all upheld. Commits: `f7f83e05 → 96320229 → fde48137 → abad6e80 → 9b1f682b → (closure)`. **Open follow-ups (non-blocking):** D-116-FOLLOW-UP-DARK + D-116-FOLLOW-UP-IRIDESCENT — `body.dark` + `body.iridescent` blocks shipped as PENDING stubs (Server5 SSH unreachable at fetch); patch as `v35.0-design-tokens-1.0.1` when Server5 returns. **Deviation:** Plan 116-02 executor hit content-filter mid-task (OFL 1.1 full-text inlining); manual closure linked SIL canonical URL instead — license obligation met.
 
 **Goal:** Codify dashboard.html aesthetic into a portable, version-controlled spec. Single source of truth that every surface consumes.
 
