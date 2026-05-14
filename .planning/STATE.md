@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-14T23:28:30.217Z"
+last_updated: "2026-05-14T23:35:27.542Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 119 (Reusable Component Library `@livinity/ui-kit`) — IN PROGRESS
-Plan: 3 of 4 — **119-01 COMPLETE** (Plan 119-01 shipped 2026-05-14, `@livinity/ui-kit` v0.1.0 scaffolding with ESM+CJS (tsup) + UMD (vite) + Vitest jsdom + Storybook 8 with design-tokens injection + livTheme global toolbar, commits `a64160e6`, `468f9802`, `4ab24bcf`)
+Phase: 119 (Reusable Component Library `@livinity/ui-kit`) — **COMPLETE**
+Plan: 4 of 4 — **119-04 COMPLETE** (Plan 119-04 shipped 2026-05-14, UMD smoke test + landing consumer recipe, commits `27adbd0b`, `c41e6509`, `05ff03cc`; caught + fixed a release-blocking `process is not defined` bug in `vite.config.umd.ts` — NODE_ENV inlined as `production`, UMD bundle 22.35 KB → 9.71 KB; 18 exports verified via Node vm-based shape verifier; 57.3 KB headless Chrome PNG fixture committed). All 4 plans of Phase 119 shipped: 01 (chassis) → 02 (atoms) → 03 (composites) → 04 (UMD smoke). Next: Phase 120 (Mini PC livinityd UI wave 1).
 Milestone: **v35.0 — Design System Unification (UI/UX)** — OPENED 2026-05-14
 Master plan: [`.planning/v35-DESIGN-SYSTEM-MILESTONE.md`](v35-DESIGN-SYSTEM-MILESTONE.md) (470 lines — read first)
 Phases: 115 (inventory) ✓ → 116 (canonical tokens) ✓ → 117 (Server5 migration) → 118 (landing polish) ✓ → 119 (ui-kit) ← here → 120 (Mini PC wave 1) → 121 (Mini PC long-tail + audit)
