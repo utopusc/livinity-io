@@ -1,0 +1,47 @@
+{
+  "name": "@livinity/design-tokens",
+  "version": "1.0.0",
+  "description": "Canonical LivOS design system — CSS variables, Tailwind preset, JSON token manifest. Single source of truth for the dashboard.html aesthetic.",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "main": "./theme.json",
+  "exports": {
+    ".": {
+      "import": "./theme.json",
+      "require": "./theme.json",
+      "default": "./theme.json"
+    },
+    "./tokens.css": "./tokens.css",
+    "./fonts.css": "./fonts.css",
+    "./tailwind.preset": "./tailwind.preset.cjs",
+    "./tailwind.preset.cjs": "./tailwind.preset.cjs",
+    "./theme.json": "./theme.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "tokens.css",
+    "fonts.css",
+    "tailwind.preset.cjs",
+    "theme.json",
+    "fonts/",
+    "DESIGN-SYSTEM.md",
+    "STYLE-GUIDE.md",
+    "LICENSE-FONTS.md",
+    "README.md"
+  ],
+  "keywords": [
+    "livos",
+    "design-system",
+    "design-tokens",
+    "tailwind",
+    "css-variables"
+  ],
+  "author": "Livinity",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
