@@ -187,3 +187,25 @@ v33 ships single-user only on the Mini PC (D-V33-07). Multi-user WebApp isolatio
 **Subjective vibe — overall feel of multi-stream redesign:** Visual rewire feels right (chromeless, full-bleed, cleaner action bar). Multi-stream concurrency works at the rendering layer. Routing bugs are the gap between "shippable" and "ready to ship".
 
 **Path to v33 ✅ Shipped:** Plan 100-06 ships → re-walk Phase 100 UAT → 11/11 PASS → flip v33 ✅ Shipped.
+
+---
+
+## Phase 110 — Phase 99 WebApp Launcher VNC Swap Carry-over (OPERATOR-PENDING 2026-05-13)
+
+**Walker:** `bruce` (the user) — operator-pending; not yet walked
+**Deployed SHA at smoke-test time:** `1df2ec666dc7f12ff5aeccc21e437d333610c652` (master tip, post Phase 111 + tunnel + cmdk cleanup; Phase 99 source already live on Mini PC since Phase 99-04 ship `351bcb62`)
+**Sacred SHA on Mini PC:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (verified at Phase 100 Row 10 PASS — UNCHANGED since)
+**Outcome:** **CODE-COMPLETE-PLUS-RUNTIME-SMOKE; OPERATOR-PENDING for binding browser walk**
+
+| # | Criterion | Result | Evidence |
+|---|-----------|--------|----------|
+| P110-1 | x11vnc backend on Mini PC `:0` produces RFB 003.008 handshake banner on a fresh listener | **PASS** | Smoke test (Plan 110-01 Task 1): ephemeral `x11vnc -display :0 -localhost -rfbport 5933 -timeout 30 -shared -nopw -noxdamage` + `nc 127.0.0.1 5933` captured ASCII `RFB 003.008` (hex `5246 4220 3030 332e 3030 380a`); x11vnc log confirms 2× `Got connection from client 127.0.0.1` + `check_access: client 127.0.0.1 matches host 127.0.0.1` + RFB ProtocolVersion handshake. Cleanup via `pkill -f "x11vnc.*5933"` (log: `caught signal: 15`). |
+| P110-2 | No production-state pollution from smoke test | **PASS** | Pre-state had only the canonical Mini PC production `x11vnc -rfbport 5900` (PID 3095510, `-display :0 -auth /run/user/1000/gdm/Xauthority`) which is the GNOME-on-Xorg session helper — UNTOUCHED across the smoke test. Post-state `pgrep -af "x11vnc.*5933"` returns empty. Smoke port 5933 chosen outside the production [15900,16100) per-stream port ring (D-110-EPHEMERAL-LOCALHOST-ONLY). |
+| P110-3 | WebApp click → stream window → noVNC handshake (browser-walked binding) | **OPERATOR-PENDING** | Mini PC is bruce's active OwnCloud per [feedback_minipc_is_owncloud_primary]. Browser walk happens at operator's discretion in their own session. Procedure: open `https://bruce.livinity.io`, click WebApp icon, confirm stream window opens with no `Invalid server version ftypiso` error, confirm DevTools console shows `[RFB] handshake state: started → ProtocolVersion → … → connected`. |
+| P110-4 | Bidirectional input pass-through (mouse + keyboard via `xdotool --window <wid>`) | **OPERATOR-PENDING** | Same as P110-3 — operator-walked. Per Phase 99 SUMMARY, this was confirmed PASS on 2026-05-08 against deployed SHA `cd6f442` (the Phase 99 ship); regression risk between then and `1df2ec6` is low (no streaming-subsystem edits in the 14 master commits between). |
+| P110-5 | Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved | **PASS** | Plan 110-01 Task 2 Step E re-verified `git hash-object liv/packages/core/src/sdk-agent-runner.ts` = `f3538e1d…` before commit. Pre-commit hook gated. |
+| P110-6 | No source-tree changes from Phase 110 closure (D-110-NO-RECODE) | **PASS** | `git diff HEAD~1..HEAD -- liv/ livos/` = empty (asserted in 110-SUMMARY.md Self-Check). Closure is 6 `.planning/` files only. |
+
+**Subjective note:** Phase 110 closure is intentionally lightweight. The hard work (TDD-driven `vnc-bridge.ts` + `StreamSession` discriminated union + `WindowManager` swap + WS dispatch) shipped in Phase 99-01..99-04 (11 commits, 66/66 vitest cases). Phase 99-05 partial-closed it (`66f6b75e docs(99-05/100): close Phase 99 PARTIAL-PASS, queue Phase 100`) and queued the multi-stream + UI gaps to Phase 100, which itself partial-shipped on 2026-05-08. Phase 110 captures the missing carry-over `[x]` artifact + adds a non-disruptive runtime smoke + records the binding UAT as operator-pending so v34.0 can flip to CODE-COMPLETE without forcing the operator to interrupt their OwnCloud session.
+
+**Path to Phase 110 ✅ Shipped:** Operator opens `https://bruce.livinity.io` in their own browser → walks P110-3 + P110-4 → reports PASS in chat → next session flips Phase 110 ROADMAP entry from `[~]` (CODE-COMPLETE-PLUS-RUNTIME-SMOKE) to `[x]` (SHIPPED) and Phase 110 UAT row's P110-3 + P110-4 from OPERATOR-PENDING to PASS.

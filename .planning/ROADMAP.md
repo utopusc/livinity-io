@@ -121,19 +121,25 @@ Plans:
 
 ---
 
-### Phase 110: Phase 99 WebApp Launcher VNC Swap (carry-over)
+### Phase 110: Phase 99 WebApp Launcher VNC Swap (carry-over) — `[~]` CODE-COMPLETE-PLUS-RUNTIME-SMOKE 2026-05-13
 
-**Goal:** Complete the v33 WebApp Launcher protocol swap from fMP4 to per-window x11vnc that was started in `99-webapp-vnc-swap/` but left incomplete. Without this, clicking a WebApp opens Chrome successfully but the browser-side stream fails (`vnc backend closed (code 1011)`) because `vnc-bridge.ts` tries to connect to an x11vnc server that was never spawned for that window.
+**Status:** **CODE-COMPLETE-PLUS-RUNTIME-SMOKE 2026-05-13.** SHIPPED flips after operator (bruce) walks the binding browser UAT (P110-3 + P110-4) in their own session at their own discretion. Closure is `.planning/`-only (D-110-NO-RECODE) — Phase 99 source already shipped 11 commits (`9a61d78a..351bcb62`, 66/66 vitest green) and is currently live on Mini PC at deployed SHA `1df2ec6`. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved.
 
-**Direction:**
-- Read `.planning/phases/99-webapp-vnc-swap/CONTINUE.md` for prior context
-- Implement x11vnc per-window spawn logic in `streaming/vnc-bridge.ts` (`-id <wid>` mode per memory `project_v33_protocol_mismatch.md`)
-- Wire the spawned x11vnc port into the VNC bridge's TCP backend lookup
-- Keep the existing fMP4 fallback path for legacy contexts (don't regress Phase 93 work)
-- D-110-NO-FMPEG-REGRESSION: Phase 93 streaming subsystem (`StreamManager`, ffmpeg pipeline) untouched — this phase only adds the x11vnc path alongside
+**Goal (revised):** Close the v34.0 Phase 110 placeholder by capturing the missing `[x]` rollup artifact for the Phase 99 carry-over. The original ROADMAP.md draft of Phase 110 (skeleton-opened 2026-05-12) directed re-implementing `vnc-bridge.ts` per-window spawn logic — but that work was already shipped in Phase 99-02 (`909cca8e feat(99-02): implement vnc-bridge.ts (spawn x11vnc + WS↔TCP byte pipe)`) and verified live in 99-01 (`9a61d78a docs(99-01): record Mini PC x11vnc -id <wid> live verification (PASS)`). The actual gap was a missing closure artifact: a `[x]` Phase 110 entry, an OPERATOR-PENDING UAT row, a non-disruptive runtime evidence point, and a 110-SUMMARY.md.
 
-**Plan count estimate:** 3-4 plans (P110-01 x11vnc spawner + per-window port allocation, P110-02 vnc-bridge router, P110-03 frontend reconnect logic, P110-04 UAT walk).
-**UAT:** fresh install → open WebApp (Google) → see actual Google homepage rendered in browser (not "vnc backend closed" error).
+**Direction (executed):**
+- Smoke-test the in-tree x11vnc backend on Mini PC's live `:0` Xorg display via ephemeral `x11vnc -display :0 -localhost -rfbport 5933 -timeout 30 -shared -nopw -noxdamage` + `nc 127.0.0.1 5933` to capture the RFB 003.008 handshake banner (banner ASCII `RFB 003.008`; hex `5246 4220 3030 332e 3030 380a`) — done 2026-05-13.
+- Append OPERATOR-PENDING UAT row to `.planning/phases/98-uat-polish/UAT-CHECKLIST.md` with 6 criteria (P110-1..6); 4 PASS via Claude-side smoke + sacred SHA + scope re-verify, 2 OPERATOR-PENDING for browser walk.
+- Closure commit: `.planning/`-only. Zero source-tree changes.
+- D-110-NO-FMPEG-REGRESSION: Phase 93 fMP4 path (`fmp4-fanout.ts`, `encoder-args.ts` fmp4 branches, `pipewire-portal.ts`, `geometry-tracker.ts`) untouched.
+- D-110-NO-PROD-IMPACT: no Mini PC script edits.
+- D-110-OPERATOR-PENDING-UAT: browser-walked binding UAT decoupled from Claude-side smoke (Mini PC = active OwnCloud per `feedback_minipc_is_owncloud_primary`; do not disrupt).
+- D-110-EPHEMERAL-LOCALHOST-ONLY: smoke port 5933 chosen outside production [15900,16100) per-stream port ring.
+
+**Plans:** 1/1 plans complete
+- [x] 110-01-PLAN.md (Wave 1, autonomous, closure) — Mini PC SSH RFB 003.008 smoke (PASS) + 110-SUMMARY.md + UAT-CHECKLIST.md row + ROADMAP/STATE flip + sacred SHA + scope re-verify + single closure commit. **CODE-COMPLETE-PLUS-RUNTIME-SMOKE 2026-05-13**.
+
+**UAT:** fresh install → open WebApp (Google) → see actual Google homepage rendered in browser (not "vnc backend closed" error). **OPERATOR-PENDING:** operator opens `https://bruce.livinity.io` in their own browser → walks P110-3 (WebApp click → noVNC handshake) + P110-4 (bidirectional input) → reports PASS in chat → next session flips Phase 110 from `[~]` to `[x]` SHIPPED.
 
 ---
 

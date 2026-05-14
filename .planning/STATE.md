@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
-status: unknown
-last_updated: "2026-05-13T23:35:00.000Z"
+status: code-complete-pending-operator-uat
+last_updated: "2026-05-13T23:50:00.000Z"
 progress:
   total_phases: 8
-  completed_phases: 7
-  total_plans: 16
-  completed_plans: 11
-  percent: 69
+  completed_phases: 8
+  total_plans: 17
+  completed_plans: 12
+  percent: 71
 ---
 
 # Project State
@@ -25,16 +25,32 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 111 (server5-dashboard-install-wizard) — ✅ CODE-COMPLETE 2026-05-13 evening
-Plan: 5 of 5 shipped (`8e9cfa3e..41288965`)
-Milestone: v34.0 (active)
-Last-shipped commit: `41288965` (Plan 111-05 SUMMARY)
+Phase: 110 (webapp-launcher-vnc-swap-carryover) — `[~]` CODE-COMPLETE-PLUS-RUNTIME-SMOKE 2026-05-13
+Plan: 1 of 1 shipped (closure commit pending — see 110-01 Status)
+Milestone: v34.0 (active) — **8/8 phases CODE-COMPLETE** (operator-pending UAT backlog: P108, P109, P110, P111)
+Last-shipped commit: this Phase 110 closure (single `docs(110-01)` rollup commit)
 Mainserver state: `journalctl -u caddy` clean since Phase 113 restart. TLS works on `test.livinity.live` + wildcard.
 Server5 state: `https://livinity.io/onboarding/install` wizard live (Plan 111-04); `/api/account/api-keys` + `/api/cf/resolve-zone` endpoints live (Plans 111-02, 111-03); `/install.sh` serves Phase 104+ modular dispatcher (Plan 111-01); mode reference docs panel live (Plan 111-05).
-Mini PC state: tunnel stable post-update (Phase 112+114 source picked up; mainserver tunnel paused via Redis `livos:platform:api_key` DEL to give Mini PC the single-user tunnel slot per `feedback_minipc_is_owncloud_primary`). Public reachable as `utopusc.livinity.io` (HTTP 200). `bruce.livinity.io` 503 (pre-existing — no `custom_domains` row; v34.x scope).
-Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 5/5 Phase 111 commits.
+Mini PC state: tunnel stable; deployed SHA `1df2ec6` (post Phase 111 + tunnel + cmdk cleanup; Phase 99 vnc-bridge.ts source already live since Phase 99-04 ship `351bcb62`). Phase 110 smoke confirmed Mini PC `:0` x11vnc speaks RFB 003.008 on demand (port 5933, ephemeral, cleaned up). Public reachable as `utopusc.livinity.io` (HTTP 200). `bruce.livinity.io` 503 (pre-existing — no `custom_domains` row; v34.x scope).
+Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across the Phase 110 closure commit (pre-commit hook gated; pre-commit `git hash-object` re-verify).
 
-Next action: `/gsd-plan-phase 110` for WebApp Launcher VNC swap (v33 carry-over from Phase 99). Mini PC UAT required — coordinate with operator since Mini PC is active OwnCloud per memory. Operator-walked binding UAT for Phase 111 (fresh Ubuntu 24.04 VPS + Hybrid mode + real CF token + end-to-end install) is also pending.
+Next action: operator (bruce) walks Phase 110 binding UAT in own browser session (`https://bruce.livinity.io` → click WebApp → confirm noVNC handshake + bidirectional input → report PASS in chat) → next session flips Phase 110 from `[~]` to `[x]` SHIPPED. Same for Phase 111 binding UAT (fresh Ubuntu 24.04 VPS + Hybrid mode + real CF token). With both operator-walked UATs PASS, v34.0 milestone flips to ✅ Shipped.
+
+## 110-01 Status (2026-05-13) — Phase 99 WebApp Launcher VNC Swap Carry-over CLOSURE CODE-COMPLETE-PLUS-RUNTIME-SMOKE (closure-only `.planning/` rollup; Mini PC RFB 003.008 smoke PASS; OPERATOR-PENDING for browser-walked binding UAT)
+
+- **CARRY-OVER CLOSURE** (single plan in Phase 110, 2 tasks): closes the v34.0 ROADMAP.md placeholder Phase 110 (line 124, opened 2026-05-12 in milestone-skeleton) that was misleadingly drafted as "implement x11vnc per-window spawn logic in `streaming/vnc-bridge.ts`" — but that file already exists (290 lines, shipped Phase 99-02 commit `909cca8e` 2026-05-08). The actual gap was a missing `[x]` carry-over rollup artifact for the v33 → v34 closure proof. Six `.planning/` files + zero source-tree changes (D-110-NO-RECODE):
+  1. **Mini PC RFB 003.008 smoke (PASS):** ephemeral `x11vnc -display :0 -localhost -rfbport 5933 -timeout 30 -shared -nopw -noxdamage` on bruce@10.69.31.68 + 2× `nc 127.0.0.1 5933` connections. Captured ASCII `RFB 003.008` + hex `5246 4220 3030 332e 3030 380a` (12-byte canonical RFB ProtocolVersion banner). x11vnc log confirmed `Got connection from client 127.0.0.1` + `check_access ... matches host 127.0.0.1`. Cleanup via `pkill -f "x11vnc.*5933"` (log: `caught signal: 15`). Production state intact: post-smoke `pgrep -af x11vnc` returns ONLY pre-existing canonical Mini PC `:0` helper at port 5900 (PID 3095510) — UNRELATED to smoke. Smoke port 5933 chosen outside production [15900,16100) per-stream port ring (D-110-EPHEMERAL-LOCALHOST-ONLY).
+  2. **Closure rollup files written:** `110-CONTEXT.md` (background, locked decisions, threat surface, sacred-SHA evidence trail across 13 Phase 99/99-05 commits), `110-01-PLAN.md` (closure plan), `110-SUMMARY.md` (rollup with self-check section).
+  3. **Existing files updated:** `.planning/phases/98-uat-polish/UAT-CHECKLIST.md` (appended Phase 110 section with 6-row table P110-1..6 — 4 PASS via Claude-side smoke + sacred SHA + scope re-verify; 2 OPERATOR-PENDING for browser walk); `.planning/ROADMAP.md` Phase 110 entry rewritten (skeleton → CODE-COMPLETE-PLUS-RUNTIME-SMOKE with `[x] 110-01-PLAN.md` line); `.planning/STATE.md` (this section + frontmatter `progress.completed_phases` 7 → 8, `completed_plans` 11 → 12, `percent` 69 → 71).
+  4. **Closure commit:** single `docs(110-01): close Phase 99 carry-over — runtime smoke PASS, operator-pending UAT` (planned for Task 2 Step F). All 6 files staged together; pre-commit hook gates sacred SHA.
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED (verified pre-commit via `git hash-object liv/packages/core/src/sdk-agent-runner.ts`; pre-commit hook live since Phase 100 commit `2f973413`; no `--no-verify` bypasses).
+- D-110-NO-RECODE upheld: `git diff HEAD -- liv/ livos/` returns empty pre-commit. Phase 99 source code (vnc-bridge.ts + StreamSession discriminated union + WebAppWindowManager swap + WS dispatch) shipped in `9a61d78a..351bcb62` (11 commits) + Phase 99-05 partial-close `cd6f442a..66f6b75e` is ALREADY LIVE on Mini PC at deployed SHA `1df2ec6`. Re-coding the same work would create commit-history confusion.
+- D-110-NO-FMPEG-REGRESSION upheld: Phase 93 fMP4 path (`fmp4-fanout.ts`, `encoder-args.ts` fmp4 branches, `pipewire-portal.ts`, `geometry-tracker.ts`) UNTOUCHED. Smoke test exercised dedicated port 5933 outside production [15900,16100) per-stream ring; smoke `x11vnc` invoked directly (NOT through livinityd's vnc-bridge port allocator) so no risk of stealing a per-WebApp port from a hypothetical concurrent live stream.
+- D-110-NO-PROD-IMPACT upheld: no Mini PC script edits (`livos/install.sh`, `livos/update.sh` UNTOUCHED).
+- D-110-OPERATOR-PENDING-UAT upheld: P110-3 (WebApp click → noVNC handshake) + P110-4 (bidirectional input) recorded as OPERATOR-PENDING in UAT-CHECKLIST.md. Per `feedback_minipc_is_owncloud_primary`, Mini PC is bruce's active OwnCloud — disrupting an existing user session for an in-CLI browser walk is unacceptable. Operator walks at own discretion in own browser session; reports PASS in chat; next session flips Phase 110 from `[~]` to `[x]` SHIPPED. Both criteria were PASS at Phase 99 ship 2026-05-08 (deployed SHA `cd6f442`); regression risk between then and `1df2ec6` is low (no streaming-subsystem edits in 14 master commits between).
+- Deviations: **NONE.** Plan executed exactly as designed. One execution note documented in 110-SUMMARY.md: the initial single-SSH `bash -c` chain hit a quoting peculiarity (Exit 127 surfaced AFTER the banner was already captured); follow-up SSH call confirmed cleanup state explicitly. Future smoke iterations should prefer two SSH calls (kick-off + verify) over one chained `bash -c` for parsable per-line output.
+- v34.0 milestone advances: 7/8 → **8/8 phases CODE-COMPLETE**. Operator-pending UAT backlog at v34.0: Phase 108 (mainserver fresh-VPS UAT), Phase 109 (mainserver MCP seed UAT), Phase 110 (Mini PC browser walk), Phase 111 (operator-walked binding UAT for fresh Hybrid install). v34.0 → SHIPPED flips when all four operator-pending UATs report PASS.
+- Carry-forward: zero new carryovers beyond what 99-SUMMARY.md captured (fMP4 path orphaned for WebApp use case but ALIVE for `mode:'desktop'`; Phase 100 owns multi-stream + UI gaps).
 
 ## 111 Status (2026-05-13 evening) — Server5 Dashboard Install Wizard CODE-COMPLETE (5/5 plans shipped, sacred SHA preserved 5/5, all per-plan UAT PASS — operator-walked binding UAT pending)
 
