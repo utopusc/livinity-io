@@ -825,6 +825,12 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
     devDependencies:
+      '@babel/generator':
+        specifier: ^7.29.1
+        version: 7.29.1
+      '@jridgewell/gen-mapping':
+        specifier: ^0.3.13
+        version: 0.3.13
       '@storybook/addon-essentials':
         specifier: ^8.3.0
         version: 8.6.14(@types/react@18.3.27)(storybook@8.6.18(prettier@3.3.3))
@@ -1108,10 +1114,6 @@ packages:
     peerDependencies:
       '@babel/core': ^7.11.0
       eslint: ^7.5.0 || ^8.0.0 || ^9.0.0
-
-  '@babel/generator@7.28.6':
-    resolution: {integrity: sha512-lOoVRwADj8hjf7al89tvQ2a1lf53Z+7tiXMgpZJL3maQPDxh0DgLMN62B2MKUOFcoodBHLMbDM6WAbKgNy5Suw==}
-    engines: {node: '>=6.9.0'}
 
   '@babel/generator@7.29.1':
     resolution: {integrity: sha512-qsaF+9Qcm2Qv8SRIMMscAvG4O3lJ0F1GuMo5HR/Bp02LopNgnZBC/EkbevHFeGs4ls/oPz9v+Bsmzbkbe+0dUw==}
@@ -14942,7 +14944,7 @@ snapshots:
   '@babel/core@7.28.6':
     dependencies:
       '@babel/code-frame': 7.28.6
-      '@babel/generator': 7.28.6
+      '@babel/generator': 7.29.1
       '@babel/helper-compilation-targets': 7.28.6
       '@babel/helper-module-transforms': 7.28.6(@babel/core@7.28.6)
       '@babel/helpers': 7.28.6
@@ -14966,14 +14968,6 @@ snapshots:
       eslint: 8.57.1
       eslint-visitor-keys: 2.1.0
       semver: 6.3.1
-
-  '@babel/generator@7.28.6':
-    dependencies:
-      '@babel/parser': 7.28.6
-      '@babel/types': 7.28.6
-      '@jridgewell/gen-mapping': 0.3.13
-      '@jridgewell/trace-mapping': 0.3.31
-      jsesc: 3.1.0
 
   '@babel/generator@7.29.1':
     dependencies:
@@ -15099,7 +15093,7 @@ snapshots:
   '@babel/helpers@7.28.6':
     dependencies:
       '@babel/template': 7.28.6
-      '@babel/types': 7.28.6
+      '@babel/types': 7.29.0
 
   '@babel/parser@7.28.6':
     dependencies:
@@ -15827,13 +15821,13 @@ snapshots:
   '@babel/template@7.28.6':
     dependencies:
       '@babel/code-frame': 7.28.6
-      '@babel/parser': 7.28.6
-      '@babel/types': 7.28.6
+      '@babel/parser': 7.29.2
+      '@babel/types': 7.29.0
 
   '@babel/traverse@7.28.6':
     dependencies:
       '@babel/code-frame': 7.28.6
-      '@babel/generator': 7.28.6
+      '@babel/generator': 7.29.1
       '@babel/helper-globals': 7.28.0
       '@babel/parser': 7.28.6
       '@babel/template': 7.28.6
@@ -16435,7 +16429,7 @@ snapshots:
   '@ianvs/prettier-plugin-sort-imports@4.1.1(prettier@3.3.3)':
     dependencies:
       '@babel/core': 7.28.6
-      '@babel/generator': 7.28.6
+      '@babel/generator': 7.29.1
       '@babel/parser': 7.28.6
       '@babel/traverse': 7.28.6
       '@babel/types': 7.28.6
@@ -25363,8 +25357,8 @@ snapshots:
 
   magicast@0.3.5:
     dependencies:
-      '@babel/parser': 7.28.6
-      '@babel/types': 7.28.6
+      '@babel/parser': 7.29.2
+      '@babel/types': 7.29.0
       source-map-js: 1.2.1
 
   make-dir@3.1.0:

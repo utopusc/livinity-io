@@ -17,7 +17,10 @@
     "./umd": "./dist/umd/livkit.umd.js",
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "pnpm build:lib && pnpm build:umd",
     "build:lib": "tsup",
@@ -39,6 +42,8 @@
     "clsx": "^2.1.1"
   },
   "devDependencies": {
+    "@babel/generator": "^7.29.1",
+    "@jridgewell/gen-mapping": "^0.3.13",
     "@storybook/addon-essentials": "^8.3.0",
     "@storybook/react": "^8.3.0",
     "@storybook/react-vite": "^8.3.0",
@@ -63,5 +68,11 @@
   "engines": {
     "node": ">=18"
   },
-  "keywords": ["livos", "ui", "design-system", "react", "components"]
+  "keywords": [
+    "livos",
+    "ui",
+    "design-system",
+    "react",
+    "components"
+  ]
 }
