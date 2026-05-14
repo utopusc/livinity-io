@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>@livinity/ui-kit UMD smoke</title>
+
+  <!-- 1. Design tokens + fonts (Phase 116) -->
+  <link rel="stylesheet" href="../../design-tokens/tokens.css">
+  <link rel="stylesheet" href="../../design-tokens/fonts.css">
+
+  <!-- 2. LivKit UMD bundled stylesheet (atoms.css + composites.css) -->
+  <link rel="stylesheet" href="../dist/umd/style.css">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 32px 40px 80px;
+      font-family: Geist, system-ui, sans-serif;
+      background: var(--card-bg-2);
+      color: #111;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-weight: 400;
+      margin: 0 0 32px 0;
+      font-size: 36px;
+      letter-spacing: -0.02em;
+    }
+    .smoke-section { margin: 28px 0; }
+    .smoke-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(0, 0, 0, 0.5);
+      margin-bottom: 12px;
+    }
+    .smoke-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    pre.fail {
+      background: #ffe5e5;
+      border: 1px solid #ff6b6b;
+      color: #a40000;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      margin: 16px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>LivKit UMD smoke</h1>
+
+  <section class="smoke-section">
+    <div class="smoke-label">NavBar composite (+ ThemeToggle)</div>
+    <div id="root-navbar"></div>
+  </section>
+
+  <section class="smoke-section">
+    <div class="smoke-label">Button atoms (solid / ghost / danger)</div>
+    <div id="root-button" class="smoke-row"></div>
+  </section>
+
+  <section class="smoke-section">
+    <div class="smoke-label">Pill atoms (ok / warn / err / neutral)</div>
+    <div id="root-pill" class="smoke-row"></div>
+  </section>
+
+  <section class="smoke-section">
+    <div class="smoke-label">Card atom (default + tight)</div>
+    <div id="root-card"></div>
+  </section>
+
+  <section class="smoke-section">
+    <div class="smoke-label">Stepper composite (4 steps, current=1)</div>
+    <div id="root-stepper"></div>
+  </section>
+
+  <section class="smoke-section">
+    <div class="smoke-label">Modal composite (closed; click button to open)</div>
+    <div id="root-modal"></div>
+  </section>
+
+  <!-- React UMD (pinned 18.2.0) -->
+  <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+
+  <!-- LivKit UMD (exposes window.LivKit) -->
+  <script src="../dist/umd/livkit.umd.js"></script>
+
+  <script>
+    (function () {
+      var LK = window.LivKit;
+      if (!LK) {
+        var msg = document.createElement("pre");
+        msg.className = "fail";
+        msg.textContent = "window.LivKit missing - UMD bundle failed to load";
+        document.body.insertBefore(msg, document.body.firstChild);
+        return;
+      }
+      var e = React.createElement;
+
+      // NavBar + ThemeToggle
+      ReactDOM.createRoot(document.getElementById("root-navbar")).render(
+        e(LK.NavBar, { brand: "Livinity", actions: e(LK.ThemeToggle, null) })
+      );
+
+      // Buttons (3 variants)
+      ReactDOM.createRoot(document.getElementById("root-button")).render(
+        e("div", { className: "smoke-row" },
+          e(LK.Button, { variant: "solid" }, "Click me"),
+          e(LK.Button, { variant: "ghost" }, "Ghost"),
+          e(LK.Button, { variant: "danger" }, "Delete")
+        )
+      );
+
+      // Pills (4 tones)
+      ReactDOM.createRoot(document.getElementById("root-pill")).render(
+        e("div", { className: "smoke-row" },
+          e(LK.Pill, { tone: "ok" }, "ok"),
+          e(LK.Pill, { tone: "warn" }, "warn"),
+          e(LK.Pill, { tone: "err" }, "err"),
+          e(LK.Pill, { tone: "neutral" }, "neutral")
+        )
+      );
+
+      // Card (default + tight)
+      ReactDOM.createRoot(document.getElementById("root-card")).render(
+        e("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" } },
+          e(LK.Card, null,
+            e("h3", { style: { margin: 0, fontWeight: 500 } }, "Default card"),
+            e("p", { style: { margin: "8px 0 0 0", fontSize: 14, opacity: 0.7 } },
+              "Uses var(--card-bg), var(--dash-pad), var(--dash-radius), var(--card-shadow)."
+            )
+          ),
+          e(LK.Card, { padding: "tight", radius: "tight" },
+            e("h3", { style: { margin: 0, fontWeight: 500 } }, "Tight card"),
+            e("p", { style: { margin: "8px 0 0 0", fontSize: 14, opacity: 0.7 } },
+              "padding=tight + radius=tight"
+            )
+          )
+        )
+      );
+
+      // Stepper (4 steps, current=1)
+      ReactDOM.createRoot(document.getElementById("root-stepper")).render(
+        e(LK.Stepper, {
+          steps: [
+            { label: "Install" },
+            { label: "Configure" },
+            { label: "Verify" },
+            { label: "Done" }
+          ],
+          current: 1
+        })
+      );
+
+      // Modal (toggle button + controlled modal)
+      var modalRoot = document.getElementById("root-modal");
+      function ModalDemo() {
+        var st = React.useState(false);
+        var open = st[0];
+        var setOpen = st[1];
+        return e("div", null,
+          e(LK.Button, {
+            variant: "solid",
+            onClick: function () { setOpen(true); }
+          }, "Open modal"),
+          e(LK.Modal, {
+            open: open,
+            onClose: function () { setOpen(false); },
+            title: "Hello from LivKit"
+          },
+            e("p", { style: { margin: 0 } }, "This modal is rendered via createPortal."),
+            e("div", { style: { marginTop: 12, display: "flex", gap: 8, justifyContent: "flex-end" } },
+              e(LK.Button, { variant: "ghost", onClick: function () { setOpen(false); } }, "Cancel"),
+              e(LK.Button, { variant: "solid", onClick: function () { setOpen(false); } }, "Confirm")
+            )
+          )
+        );
+      }
+      ReactDOM.createRoot(modalRoot).render(e(ModalDemo, null));
+
+      // Signal ready for headless capture
+      window.__SMOKE_READY__ = true;
+      window.dispatchEvent(new CustomEvent("livkit-ready"));
+    })();
+  </script>
+</body>
+</html>

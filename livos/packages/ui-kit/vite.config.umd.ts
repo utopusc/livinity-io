@@ -13,6 +13,13 @@ import { resolve } from "node:path";
  */
 export default defineConfig({
   plugins: [react()],
+  // Inline NODE_ENV so the bundle doesn't reference `process.env.NODE_ENV` at
+  // runtime — UMD ships into plain <script> consumers where `process` is
+  // undefined and would throw `process is not defined`. Phase 119-04 verifier
+  // catches this; without the inline, smoke pages fail to mount.
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("production"),
+  },
   build: {
     emptyOutDir: false, // tsup already owns dist/index.* — don't wipe it
     outDir: "dist/umd",
