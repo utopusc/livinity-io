@@ -1,19 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v35.0
-milestone_name: Design System Unification (UI/UX)
-status: in-progress
-last_updated: "2026-05-14T23:30:00.000Z"
+milestone: v34.0
+milestone_name: Bootstrap Polish + First-Run UX
+status: unknown
+last_updated: "2026-05-14T23:17:57.338Z"
 progress:
-  total_phases: 7
-  completed_phases: 4
-  total_plans: 27
+  total_phases: 8
+  completed_phases: 8
+  total_plans: 12
   completed_plans: 12
-  percent: 57
-previous_milestone: v34.0
-previous_milestone_status: code-complete-pending-operator-uat
-v35_master_plan: .planning/v35-DESIGN-SYSTEM-MILESTONE.md
-v35_phases: [115, 116, 117, 118, 119, 120, 121]
+  percent: 100
 ---
 
 # Project State
@@ -29,14 +25,14 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 116 (Canonical Design System Spec) — IN PROGRESS
-Plan: 2 of 2 — **116-01 COMPLETE** (Plan 116-01 shipped 2026-05-14, `@livinity/design-tokens` v1.0.0 scaffold with canonical `:root` block + Tailwind 3.4 preset + JSON manifest + DESIGN-SYSTEM.md + STYLE-GUIDE.md skeleton, commits `f7f83e05`, `96320229`, `fde48137`)
+Phase: 119 (Reusable Component Library `@livinity/ui-kit`) — IN PROGRESS
+Plan: 2 of 4 — **119-01 COMPLETE** (Plan 119-01 shipped 2026-05-14, `@livinity/ui-kit` v0.1.0 scaffolding with ESM+CJS (tsup) + UMD (vite) + Vitest jsdom + Storybook 8 with design-tokens injection + livTheme global toolbar, commits `a64160e6`, `468f9802`, `4ab24bcf`)
 Milestone: **v35.0 — Design System Unification (UI/UX)** — OPENED 2026-05-14
 Master plan: [`.planning/v35-DESIGN-SYSTEM-MILESTONE.md`](v35-DESIGN-SYSTEM-MILESTONE.md) (470 lines — read first)
-Phases: 115 (inventory) ✓ → 116 (canonical tokens) ← here → 117 (Server5 migration) → 118 (landing polish) → 119 (ui-kit) → 120 (Mini PC wave 1) → 121 (Mini PC long-tail + audit)
+Phases: 115 (inventory) ✓ → 116 (canonical tokens) ✓ → 117 (Server5 migration) → 118 (landing polish) ✓ → 119 (ui-kit) ← here → 120 (Mini PC wave 1) → 121 (Mini PC long-tail + audit)
 Total estimated: 70-105 hours of agent work across multiple sessions, paced for operator UAT checkpoints
 
-**Next action (after `/clear`):** `/gsd-plan-phase 116-02` for Plan 116-02 (fonts.css + self-hosted .woff2 + smoke test + LICENSE-FONTS.md). Plan 116-01 left `body.dark` + `body.iridescent` blocks as documented PENDING stubs (D-116-FOLLOW-UP-DARK + D-116-FOLLOW-UP-IRIDESCENT) because Server5 was unreachable at fetch time — once Server5 recovers, fold canonical transcription into 116-02 or ship as 116-01 patch.
+**Next action (after `/clear`):** `/gsd-execute-phase 119` to run Wave 2 (119-02 atoms + 119-03 composites in parallel) followed by Wave 3 (119-04 UMD landing HTML integration smoke test). Plan 119-01 chassis is green: 3 build targets (ESM/CJS/UMD), 5/5 Vitest assertions, Storybook static export builds clean, design-tokens CSS injected via preview.tsx with 3-way livTheme global toolbar.
 
 **v34.0 carry-over:** v34.0 sits at 8/8 CODE-COMPLETE; operator-walked binding UAT pending for Phase 110 (WebApp click test) + Phase 111 (fresh-VPS install). These do NOT block v35.0 — can be walked at operator's discretion in parallel. Phase 110 was operator-confirmed PASS via "calisiyor" chat 2026-05-14 but ROADMAP entry still shows `[~]`; operator-walked binding UAT for Phase 111 still required.
 

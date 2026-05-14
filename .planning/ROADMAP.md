@@ -1077,6 +1077,11 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 **Estimated:** 12-16 hours.
 **UAT:** Storybook screenshot suite passes; smoke-import each component into a Server5 dummy route.
 
+**Progress:** 1/4 plans shipped.
+- **119-01 SHIPPED 2026-05-14** — `@livinity/ui-kit` v0.1.0 chassis green: tsup ESM+CJS (151 B mjs + 184 B cjs + 76 B d.ts), vite UMD (360 B livkit.umd.js with LivKit global), Vitest jsdom (5/5 pass), Storybook 8.6 static build (storybook-static/index.html, design-tokens CSS injected, livTheme 3-way global toolbar). Commits: `a64160e6`, `468f9802`, `4ab24bcf`. D-119-NO-CONSUMER-CHANGES upheld (`git diff --name-only` shows only `packages/ui-kit/**` + `pnpm-workspace.yaml` + lockfile). Two devDep additions for Windows pnpm stability: `@jridgewell/gen-mapping ^0.3.13` + `@babel/generator ^7.29.0` + local `.npmrc` `public-hoist-pattern` (documented Rule 3 deviation in 119-01-SUMMARY.md).
+- 119-02 + 119-03: PENDING (Wave 2 parallel-ready)
+- 119-04: PENDING (Wave 3)
+
 ---
 
 ### Phase 120: Mini PC livinityd UI Migration — Wave 1 (high-impact)
