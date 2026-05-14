@@ -272,3 +272,30 @@
   border-color: var(--accent-blue);
   background: color-mix(in srgb, var(--accent-blue) 8%, var(--card-bg));
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * NavBar — top nav landmark (dashboard.html-ish wordmark + actions row)
+ * ───────────────────────────────────────────────────────────────────────── */
+
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px var(--dash-pad);
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--dash-line);
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.navbar-brand {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: inherit;
+}
+
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
