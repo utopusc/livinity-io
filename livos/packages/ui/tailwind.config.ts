@@ -9,8 +9,23 @@ import {PluginAPI} from 'tailwindcss/types/config'
 
 import {screens} from './src/utils/tw'
 
+// Phase 120-01 (v35.0): load the canonical design-tokens preset (CJS).
+// Tailwind 3.x loads this config via `jiti` which compiles the TS to CJS at
+// build time and provides `require` in the wrapping scope automatically — so
+// we use a bare `require()` here instead of `createRequire(import.meta.url)`.
+// (`import.meta.url` is not available in jiti's CJS sandbox; createRequire
+// attempted at top-level throws `Cannot use 'import.meta' outside a module`.)
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+declare const require: NodeRequire
+const livinityPreset = require('@livinity/design-tokens/tailwind.preset.cjs')
+
 /** @type {import('tailwindcss').Config} */
 export default {
+	// Phase 120-01 (v35.0): canonical token preset. Adds theme.extend.colors.accent-*,
+	// card-bg, dash-line, borderRadius.dash, spacing.dash on top of the existing
+	// extend below — Tailwind merges presets shallowly per key, so no conflict with
+	// the local theme.extend entries (none overlap by name).
+	presets: [livinityPreset],
 	// Phase 24-01 — class-based dark mode for the Docker app (`/routes/docker`).
 	// Adding `dark` class to the docker-app root (via useDockerTheme) turns on
 	// `dark:*` variants beneath. No other LivOS surface uses dark variants today,
