@@ -1,6 +1,7 @@
 packages:
   - packages/ui
   - packages/ui-next
+  - packages/ui-kit
   - packages/livinityd
   - packages/config
   - packages/docker-agent

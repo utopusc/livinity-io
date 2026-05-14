@@ -1,0 +1,67 @@
+{
+  "name": "@livinity/ui-kit",
+  "version": "0.1.0",
+  "description": "Reusable React component library for LivOS UI surfaces. Implements the dashboard.html design language via @livinity/design-tokens.",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./umd": "./dist/umd/livkit.umd.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "pnpm build:lib && pnpm build:umd",
+    "build:lib": "tsup",
+    "build:umd": "vite build --config vite.config.umd.ts",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "storybook": "storybook dev -p 6006",
+    "storybook:build": "storybook build -o storybook-static",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'no lint configured yet' && exit 0"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "dependencies": {
+    "@livinity/design-tokens": "workspace:*",
+    "clsx": "^2.1.1"
+  },
+  "devDependencies": {
+    "@storybook/addon-essentials": "^8.3.0",
+    "@storybook/react": "^8.3.0",
+    "@storybook/react-vite": "^8.3.0",
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.3.0",
+    "jsdom": "^25.0.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "storybook": "^8.3.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.8.3",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.9"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["livos", "ui", "design-system", "react", "components"]
+}
