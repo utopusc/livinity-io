@@ -999,7 +999,9 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 
 ---
 
-### Phase 116: Canonical Design System Spec
+### Phase 116: Canonical Design System Spec — 🟡 IN-PROGRESS (1/2 plans complete)
+
+**Status:** Plan 116-01 shipped 2026-05-14 (commits `f7f83e05`, `96320229`, `fde48137`). `@livinity/design-tokens` v1.0.0 ships `:root` block verbatim from canonical (3 cross-verified sources), Tailwind 3.4 preset, JSON manifest, DESIGN-SYSTEM.md long-form spec, STYLE-GUIDE.md skeleton. D-116-LOCK-CANONICAL + D-116-NO-CONSUMER-CHANGES upheld. `body.dark` + `body.iridescent` blocks shipped as documented PENDING stubs (D-116-FOLLOW-UP-DARK + D-116-FOLLOW-UP-IRIDESCENT) — Server5 was unreachable at SSH fetch time. Plan 116-02 pending.
 
 **Goal:** Codify dashboard.html aesthetic into a portable, version-controlled spec. Single source of truth that every surface consumes.
 

@@ -3,19 +3,17 @@ gsd_state_version: 1.0
 milestone: v35.0
 milestone_name: Design System Unification (UI/UX)
 status: in-progress
-last_updated: "2026-05-14T22:30:00.000Z"
+last_updated: "2026-05-14T21:50:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 27
-  completed_plans: 3
-  percent: 14
+  completed_plans: 4
+  percent: 15
 previous_milestone: v34.0
 previous_milestone_status: code-complete-pending-operator-uat
-previous_milestone_pending_uat: [Phase 110, Phase 111]
 v35_master_plan: .planning/v35-DESIGN-SYSTEM-MILESTONE.md
 v35_phases: [115, 116, 117, 118, 119, 120, 121]
-v35_estimated_hours: "70-105"
 ---
 
 # Project State
@@ -31,14 +29,14 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 115 (UI Component Inventory & Visual Baseline) — IN PROGRESS
-Plan: 1 of 3 — **115-01 COMPLETE** (Mini PC livinityd UI inventory shipped 2026-05-14, `INVENTORY-MINI-PC.md` 919 lines / 654 TSX files classified, commit `0aab97d4`)
-Milestone: **v35.0 — Design System Unification (UI/UX)** — OPENED 2026-05-14, ready to execute
+Phase: 116 (Canonical Design System Spec) — IN PROGRESS
+Plan: 2 of 2 — **116-01 COMPLETE** (Plan 116-01 shipped 2026-05-14, `@livinity/design-tokens` v1.0.0 scaffold with canonical `:root` block + Tailwind 3.4 preset + JSON manifest + DESIGN-SYSTEM.md + STYLE-GUIDE.md skeleton, commits `f7f83e05`, `96320229`, `fde48137`)
+Milestone: **v35.0 — Design System Unification (UI/UX)** — OPENED 2026-05-14
 Master plan: [`.planning/v35-DESIGN-SYSTEM-MILESTONE.md`](v35-DESIGN-SYSTEM-MILESTONE.md) (470 lines — read first)
-Phases: 115 (inventory) → 116 (canonical tokens) → 117 (Server5 migration) → 118 (landing polish) → 119 (ui-kit) → 120 (Mini PC wave 1) → 121 (Mini PC long-tail + audit)
+Phases: 115 (inventory) ✓ → 116 (canonical tokens) ← here → 117 (Server5 migration) → 118 (landing polish) → 119 (ui-kit) → 120 (Mini PC wave 1) → 121 (Mini PC long-tail + audit)
 Total estimated: 70-105 hours of agent work across multiple sessions, paced for operator UAT checkpoints
 
-**Next action (after `/clear`):** `/gsd-autonomous --from 115` — discovers Phase 115 in ROADMAP.md and walks discuss → plan → execute. Or run individual phases with `/gsd-discuss-phase 115` then `/gsd-plan-phase 115` then `/gsd-execute-phase 115` for finer control.
+**Next action (after `/clear`):** `/gsd-plan-phase 116-02` for Plan 116-02 (fonts.css + self-hosted .woff2 + smoke test + LICENSE-FONTS.md). Plan 116-01 left `body.dark` + `body.iridescent` blocks as documented PENDING stubs (D-116-FOLLOW-UP-DARK + D-116-FOLLOW-UP-IRIDESCENT) because Server5 was unreachable at fetch time — once Server5 recovers, fold canonical transcription into 116-02 or ship as 116-01 patch.
 
 **v34.0 carry-over:** v34.0 sits at 8/8 CODE-COMPLETE; operator-walked binding UAT pending for Phase 110 (WebApp click test) + Phase 111 (fresh-VPS install). These do NOT block v35.0 — can be walked at operator's discretion in parallel. Phase 110 was operator-confirmed PASS via "calisiyor" chat 2026-05-14 but ROADMAP entry still shows `[~]`; operator-walked binding UAT for Phase 111 still required.
 
@@ -71,6 +69,20 @@ Total estimated: 70-105 hours of agent work across multiple sessions, paced for 
   - `.planning/phases/121-mini-pc-long-tail-and-audit/121-CONTEXT.md`
 - **Acceptance criteria (8):** see master plan § "Acceptance criteria". Tied to operator-walked end-to-end UAT — visual continuity across surfaces is the win condition.
 - **Out of scope (v36+ candidates):** mobile design, Agent Electron UI, marketing copy, email templates, Storybook→Figma, marketplace+changelog services, apps.livinity.io dark mode (full list in master plan § "Out of scope").
+
+## 116-01 Status (2026-05-14) — Canonical Design System Spec Plan 1 CODE-COMPLETE (3 commits, 9 files created, sacred SHA preserved 3/3; D-116-LOCK-CANONICAL + D-116-NO-CONSUMER-CHANGES upheld)
+
+- **PACKAGE SKELETON + CANONICAL TOKENS + SPEC** (Plan 1 of 2 in Phase 116, 3 tasks): ships `@livinity/design-tokens` v1.0.0 — the canonical LivOS design token package. Three source commits + this SUMMARY:
+  1. `f7f83e05` Task 1 — `livos/packages/design-tokens/{package.json, .gitignore, README.md}` + `.planning/phases/116-canonical-design-system/116-01-dashboard-snapshot.txt` + `livos/pnpm-workspace.yaml` (Rule 3 deviation: existing workspace uses explicit per-package list, not `packages/*` glob; added `packages/design-tokens` entry) + `livos/pnpm-lock.yaml` (`pnpm install --filter @livinity/design-tokens` sync).
+  2. `96320229` Task 2 — `livos/packages/design-tokens/{tokens.css, tailwind.preset.cjs, theme.json}`. `:root` block verbatim from canonical (3 cross-verified sources: master plan + 116-01 plan + Phase 115 work file); `body.dark` + `body.iridescent` shipped as documented PENDING stubs (D-116-FOLLOW-UP-DARK + D-116-FOLLOW-UP-IRIDESCENT). Tailwind 3.4 preset maps every `:root` token to `theme.extend.colors/spacing/borderRadius/boxShadow/backgroundImage/fontFamily/transitionDuration`. `theme.json` JSON manifest mirrors the same tokens in camelCase with `_note` markers on pending variants.
+  3. `fde48137` Task 3 — `livos/packages/design-tokens/{DESIGN-SYSTEM.md, STYLE-GUIDE.md}`. DESIGN-SYSTEM.md long-form spec with 12 H2 sections (Overview, Typography, Color Tokens [Light fully populated + Dark/Iridescent PENDING markers], Spacing, Radius, Shadow, Motion, Accessibility, Interaction Patterns, Tailwind Integration, Tailwind 4 Migration Note, Canonical Reference, Changelog). STYLE-GUIDE.md skeleton with 5 must-haves contract + anti-patterns + workflow, Phase 121 expansion notes.
+- **Verification (full end-of-plan)**: 8/8 files present in `livos/packages/design-tokens/`; canonical token spot-checks (`--dash-pad: 28px`, `--accent-blue:  #2563eb` double-space, `--card-shadow: 0 1px 2px ...`, `--font-mono:  "Geist Mono", ...` double-space) all PASS; `node -e require()` for `package.json` + `tailwind.preset.cjs` + `theme.json` all PASS; `pnpm -r list --depth -1 | grep "@livinity/design-tokens"` PASS; forbidden-glob committed-diff (`livos/packages/{ui,ui-next,livinityd,config,docker-agent,marketplace}`, `liv/`, `scripts/`) = EMPTY (D-116-NO-CONSUMER-CHANGES upheld).
+- **Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNTOUCHED** across all 3 commits.
+- **Deviations** (both Rule 3 — blocking issue, auto-fixed):
+  1. `livos/pnpm-workspace.yaml` uses explicit per-package list (not `packages/*` glob assumed by plan); added `packages/design-tokens` entry. Outside D-116-NO-CONSUMER-CHANGES forbidden glob.
+  2. Server5 (`45.137.194.102`) was unreachable at SSH fetch time (port 22 closed, ICMP fails, public HTTP timeout) — known operator-pending state per `project_v34_session_2026_05_13.md`. `:root` block locked from 3 cross-verified canonical sources (zero risk); `body.dark` + `body.iridescent` shipped as documented PENDING stubs per Plan 116-01 Task 2 Step A explicit allowance. **NO improvised values** — D-116-LOCK-CANONICAL strictly upheld.
+- **Open follow-ups** (rolled into Plan 116-02 or filed as 116-01 patch once Server5 returns): D-116-FOLLOW-UP-DARK (transcribe `body.dark` overrides verbatim → patch tokens.css + theme.json + DESIGN-SYSTEM.md, ship v1.0.1) + D-116-FOLLOW-UP-IRIDESCENT (same for iridescent) + Plan 116-02 (fonts.css + .woff2 self-host + LICENSE-FONTS.md + smoke test — package.json `exports` + `files` array already declare these paths).
+- Carry-forward: Plan 116-02 is the next action. `body.dark` / `body.iridescent` populate folds into 116-02 once Server5 is reachable, otherwise ships as standalone 116-01 patch on operator decision.
 
 ## 110-01 Status (2026-05-13) — Phase 99 WebApp Launcher VNC Swap Carry-over CLOSURE CODE-COMPLETE-PLUS-RUNTIME-SMOKE (closure-only `.planning/` rollup; Mini PC RFB 003.008 smoke PASS; OPERATOR-PENDING for browser-walked binding UAT)
 
