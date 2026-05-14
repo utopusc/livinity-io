@@ -1,0 +1,35 @@
+{
+  "$schema": "./theme.schema.json",
+  "version": "1.0.0",
+  "snapshot": "2026-05-14",
+  "canonicalSource": "/opt/landing/livinity.io/dashboard.html",
+  "themes": {
+    "light": {
+      "dashPad": "28px",
+      "dashRadius": "18px",
+      "dashLine": "rgba(0,0,0,0.07)",
+      "dashLineStrong": "rgba(0,0,0,0.12)",
+      "cardBg": "#ffffff",
+      "cardBg2": "#fafafa",
+      "cardShadow": "0 1px 2px rgba(0,0,0,0.03), 0 24px 60px -34px rgba(0,0,0,0.18)",
+      "heroGrad": "linear-gradient(135deg, #fafafa 0%, #f0f0f3 100%)",
+      "accentBlue":  "#2563eb",
+      "accentGreen": "#16a34a",
+      "accentAmber": "#d97706",
+      "accentRed":   "#dc2626",
+      "fontMono":  "\"Geist Mono\", ui-monospace, monospace",
+      "fontSerif": "\"Instrument Serif\", serif"
+    },
+    "dark": {
+      "_note": "PENDING canonical fetch (D-116-FOLLOW-UP-DARK). Server5 unreachable at Plan 116-01 fetch time; Phase 115 confirms 8 body.dark hits exist in dashboard.html. Plan 116-02 (or 116-01 follow-up) will populate verbatim once SSH is restored. NO improvised values per D-116-LOCK-CANONICAL."
+    },
+    "iridescent": {
+      "_note": "PENDING canonical fetch (D-116-FOLLOW-UP-IRIDESCENT). Server5 unreachable at Plan 116-01 fetch time; Phase 115 confirms 1 body.iridescent hit exists in dashboard.html. NO improvised values per D-116-LOCK-CANONICAL."
+    }
+  },
+  "motion": {
+    "transition": "0.18s ease",
+    "transitionDurationMs": 180,
+    "easing": "ease"
+  }
+}
