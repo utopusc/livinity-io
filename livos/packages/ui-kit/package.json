@@ -14,6 +14,7 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
+    "./dist/index.css": "./dist/index.css",
     "./umd": "./dist/umd/livkit.umd.js",
     "./package.json": "./package.json"
   },

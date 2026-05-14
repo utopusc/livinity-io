@@ -1,7 +1,10 @@
 import {createContext, useCallback, useEffect, useMemo, useState} from 'react'
 
-export type Theme = 'light' | 'dark' | 'system'
-export type ResolvedTheme = 'light' | 'dark'
+// Phase 120-01 (v35.0): `iridescent` is now a valid Theme + ResolvedTheme value
+// alongside light/dark/system. System preference can still only resolve to
+// light or dark (the OS doesn't know about iridescent); see getSystemTheme.
+export type Theme = 'light' | 'dark' | 'iridescent' | 'system'
+export type ResolvedTheme = 'light' | 'dark' | 'iridescent'
 
 export interface ThemeProviderState {
 	theme: Theme
@@ -9,6 +12,9 @@ export interface ThemeProviderState {
 	setTheme: (theme: Theme) => void
 }
 
+// Existing storage key preserved (NOT changed to design-tokens'
+// recommended `liv_theme`) per D-120-MINI-PC-OPERATOR-PRIORITY — changing
+// would migrate every existing Mini PC user's theme to default.
 const STORAGE_KEY = 'liv-theme'
 
 // Exported so use-theme.ts can reference it without a circular dep
@@ -19,16 +25,27 @@ interface ThemeProviderProps {
 	defaultTheme?: Theme
 }
 
-function getSystemTheme(): ResolvedTheme {
+function getSystemTheme(): 'light' | 'dark' {
 	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
 function applyTheme(resolved: ResolvedTheme) {
 	const root = document.documentElement
+	const body = document.body
+	// Existing contract (preserved): toggle `html.dark` for Tailwind dark: variants.
 	if (resolved === 'dark') {
 		root.classList.add('dark')
 	} else {
 		root.classList.remove('dark')
+	}
+	// Phase 120-01: mirror to <body> so @livinity/design-tokens body.dark { }
+	// and body.iridescent { } override blocks fire. tokens.css scopes its
+	// theme overrides to `body.*`, NOT `html.*`, so this mirror is required.
+	body.classList.remove('dark', 'iridescent')
+	if (resolved === 'dark') {
+		body.classList.add('dark')
+	} else if (resolved === 'iridescent') {
+		body.classList.add('iridescent')
 	}
 }
 
@@ -36,7 +53,12 @@ export function ThemeProvider({children, defaultTheme = 'system'}: ThemeProvider
 	const [theme, setThemeState] = useState<Theme>(() => {
 		try {
 			const stored = localStorage.getItem(STORAGE_KEY) as Theme | null
-			if (stored === 'light' || stored === 'dark' || stored === 'system') {
+			if (
+				stored === 'light' ||
+				stored === 'dark' ||
+				stored === 'iridescent' ||
+				stored === 'system'
+			) {
 				return stored
 			}
 		} catch {
