@@ -1,0 +1,134 @@
+/*!
+ * @livinity/ui-kit — composites.css
+ * Phase 119-03: composite component visual contracts.
+ * Canonical source: dashboard.html / dashboard-install.html (Phase 115 COMPONENT-MAP.md).
+ * All colors/spacing/radii are var(--*) references from @livinity/design-tokens,
+ * with ONE documented exception (.cmd-box) called out below.
+ */
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Stepper — dashboard-install.html pill-row pattern
+ * ───────────────────────────────────────────────────────────────────────── */
+
+.stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--card-bg-2);
+  color: rgba(0, 0, 0, 0.5);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.step.active {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.step.done {
+  background: var(--accent-green);
+  color: #fff;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CommandBox — dashboard-install.html mono-surface
+ *
+ * EXCEPTION TO TOKEN-ONLY RULE:
+ *   .cmd-box ships background: #0b0b0b; color: #f0f0f0; directly because
+ *   dashboard-install.html literally hardcodes this surface contrast for
+ *   legibility (dark mono surface on a light page). This is the canonical
+ *   visual per D-119-DASHBOARD-HTML-IS-SOURCE. Do NOT change without
+ *   consulting Phase 116 token-extension PR.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+.cmd-box {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #0b0b0b;
+  color: #f0f0f0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.cmd-box pre {
+  margin: 0;
+  flex: 1 1 auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.cmd-box-copy {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0f0f0;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.cmd-box-copy:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.cmd-box-copy:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * ThemeToggle — small ghost button cycling sun/moon/sparkle
+ * ───────────────────────────────────────────────────────────────────────── */
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--dash-line);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.theme-toggle:hover {
+  background: var(--card-bg-2);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
