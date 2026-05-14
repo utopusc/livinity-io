@@ -979,7 +979,9 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 
 ---
 
-### Phase 115: UI Component Inventory & Visual Baseline
+### Phase 115: UI Component Inventory & Visual Baseline — ✅ CODE-COMPLETE 2026-05-14
+
+**Status:** Shipped 3 plans (115-01 Mini PC 654 TSX classified / 919 lines, 115-02 Server5 67 TSX + 52 TS / 236 lines / 0 canonical, 115-03 8 landing HTML + 48 PNG screenshots + COMPONENT-MAP 13 primitives). 7/7 must-haves PASS. D-115-READ-ONLY honored (`git diff` clean). Chrome DevTools MCP unreachable → headless Chrome fallback (48 PNGs vs 0). Iridescent capture deferred to Phase 117/121. Commits `f768e5d3..2d18c0cc` (6 commits).
 
 **Goal:** Produce A→Z inventory of every UI component on every surface + baseline screenshots of every public route. Output: 3 INVENTORY.md docs + COMPONENT-MAP.md (cross-surface) + baseline-screenshots/.
 
