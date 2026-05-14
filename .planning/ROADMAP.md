@@ -1021,7 +1021,9 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 
 ---
 
-### Phase 117: Server5 Next.js Platform Migration
+### Phase 117: Server5 Next.js Platform Migration — ✅ CODE-COMPLETE 2026-05-14
+
+**Status:** All 5 plans shipped. 11/11 must-haves PASS. Server5 `web` PM2 online; 4 public routes verified HTTP 200 (login, store, download, /dashboard/install). Commits `58d5f482 → f2e9a61d → afbc96c9 → 9b8b2d18 → 436017c8`. Cross-repo: 31 `.pre-117-NN.bak` rollback backups live on Server5, dead `src/src/` archived to `_pre-117-src-src.tar.gz`. Tailwind 4 (`@theme inline` CSS-first) auto-migration discovered + applied (Server5 had moved past Tailwind 3.4). D-117-NO-API-CHANGES + D-117-NO-AUTH-FLOW-CHANGES + D-117-PRESERVE-DASHBOARD-INSTALL + D-117-CROSS-REPO + D-117-OPERATOR-CAN-RESTART-AT-WILL all upheld.
 
 **Goal:** Apply canonical design system to every Server5 Next.js route. After this phase, `livinity.io/login`, `/register`, `/verify`, `/forgot-password`, `/reset-password`, `/dashboard/install`, `/store`, `/download`, `/dashboard` (Next.js side, currently NOT live but should match) all share dashboard.html's visual identity.
 
