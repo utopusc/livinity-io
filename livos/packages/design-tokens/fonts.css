@@ -1,0 +1,63 @@
+/*!
+ * @livinity/design-tokens — fonts.css
+ * Geist (Sans) + Geist Mono + Instrument Serif (Regular + Italic).
+ * D-116-SELF-HOSTED-FONT-FALLBACK: Local .woff2 is primary (offline-capable).
+ * Google Fonts CDN is documented as an online-only alternative below.
+ * License: see LICENSE-FONTS.md.
+ */
+
+/*
+ * --- Online-only alternative (NOT used by default) ---
+ * If a consumer wants Google Fonts CDN delivery, they can add this to their <head>:
+ *
+ *   <link rel="preconnect" href="https://fonts.googleapis.com">
+ *   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ *   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&family=Instrument+Serif:ital@0;1&display=swap">
+ *
+ * The local-first @font-face blocks below cover both online and offline.
+ * No <link> is required when this file is imported.
+ */
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src:
+    local("Geist Variable"),
+    local("Geist"),
+    url("./fonts/Geist-Variable.woff2") format("woff2-variations"),
+    url("./fonts/Geist-Variable.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src:
+    local("Geist Mono Variable"),
+    local("Geist Mono"),
+    url("./fonts/GeistMono-Variable.woff2") format("woff2-variations"),
+    url("./fonts/GeistMono-Variable.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local("Instrument Serif"),
+    url("./fonts/InstrumentSerif-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local("Instrument Serif Italic"),
+    url("./fonts/InstrumentSerif-Italic.woff2") format("woff2");
+}
