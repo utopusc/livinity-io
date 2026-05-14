@@ -132,3 +132,143 @@
   outline: 2px solid var(--accent-blue);
   outline-offset: 2px;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Modal — NEW canonical visual (no dashboard.html source)
+ * Token-driven panel over a translucent backdrop.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+}
+
+.modal-panel {
+  position: relative;
+  background: var(--card-bg);
+  border-radius: var(--dash-radius);
+  padding: var(--dash-pad);
+  box-shadow: var(--card-shadow);
+  max-width: 480px;
+  width: 100%;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: inherit;
+}
+
+.modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.modal-close:hover {
+  background: var(--card-bg-2);
+}
+
+.modal-close:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+.modal-body {
+  font-size: 14px;
+  line-height: 1.5;
+  color: inherit;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Toast — NEW canonical visual (no dashboard.html source)
+ * Stacked bottom-right region with tone variants.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+.toast-region {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1100;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  min-width: 240px;
+  max-width: 360px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--card-bg);
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--dash-line);
+  animation: liv-toast-slide-in 0.18s ease;
+}
+
+@keyframes liv-toast-slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toast.success {
+  border-color: var(--accent-green);
+  background: color-mix(in srgb, var(--accent-green) 8%, var(--card-bg));
+}
+
+.toast.warn {
+  border-color: var(--accent-amber);
+  background: color-mix(in srgb, var(--accent-amber) 8%, var(--card-bg));
+}
+
+.toast.error {
+  border-color: var(--accent-red);
+  background: color-mix(in srgb, var(--accent-red) 8%, var(--card-bg));
+}
+
+.toast.info {
+  border-color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 8%, var(--card-bg));
+}
