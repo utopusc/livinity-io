@@ -121,9 +121,9 @@ Plans:
 
 ---
 
-### Phase 110: Phase 99 WebApp Launcher VNC Swap (carry-over) — `[~]` CODE-COMPLETE-PLUS-RUNTIME-SMOKE 2026-05-13
+### Phase 110: Phase 99 WebApp Launcher VNC Swap (carry-over) — `[x]` SHIPPED 2026-05-14
 
-**Status:** **CODE-COMPLETE-PLUS-RUNTIME-SMOKE 2026-05-13.** SHIPPED flips after operator (bruce) walks the binding browser UAT (P110-3 + P110-4) in their own session at their own discretion. Closure is `.planning/`-only (D-110-NO-RECODE) — Phase 99 source already shipped 11 commits (`9a61d78a..351bcb62`, 66/66 vitest green) and is currently live on Mini PC at deployed SHA `1df2ec6`. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved.
+**Status:** **SHIPPED 2026-05-14.** Operator-walked binding UAT confirmed PASS by user 2026-05-14 ("calisiyor"). All 6 criteria satisfied: P110-1 RFB handshake (PASS via 2026-05-13 smoke), P110-2 no-pollution (PASS), P110-3 WebApp click → noVNC handshake (PASS, operator-confirmed), P110-4 bidirectional input (PASS, operator-confirmed), P110-5 sacred SHA (PASS), P110-6 closure-only scope (PASS). Closure is `.planning/`-only (D-110-NO-RECODE) — Phase 99 source already shipped 11 commits (`9a61d78a..351bcb62`, 66/66 vitest green) and is currently live on Mini PC at deployed SHA `1df2ec6`. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved.
 
 **Goal (revised):** Close the v34.0 Phase 110 placeholder by capturing the missing `[x]` rollup artifact for the Phase 99 carry-over. The original ROADMAP.md draft of Phase 110 (skeleton-opened 2026-05-12) directed re-implementing `vnc-bridge.ts` per-window spawn logic — but that work was already shipped in Phase 99-02 (`909cca8e feat(99-02): implement vnc-bridge.ts (spawn x11vnc + WS↔TCP byte pipe)`) and verified live in 99-01 (`9a61d78a docs(99-01): record Mini PC x11vnc -id <wid> live verification (PASS)`). The actual gap was a missing closure artifact: a `[x]` Phase 110 entry, an OPERATOR-PENDING UAT row, a non-disruptive runtime evidence point, and a 110-SUMMARY.md.
 
@@ -958,5 +958,165 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 
 ---
 
-*Last updated: 2026-05-12 — v34.0 milestone OPENED (Bootstrap Polish + First-Run UX, Phases 106-110); Phase 105 ✅ Shipped + 2× UAT live-validated on mainserver `154.53.56.75` (`290885bc..332239e2`, 14 commits, sacred SHA preserved 14/14, 168 PASS combined static tests).*
+*Last updated: 2026-05-14 — v35.0 milestone OPENED (Design System Unification, Phases 115-121). Master plan at `.planning/v35-DESIGN-SYSTEM-MILESTONE.md`. v34.0 8/8 phases CODE-COMPLETE; operator-walked binding UAT pending for Phase 110 (WebApp click) + Phase 111 (fresh-VPS install).*
+
+---
+
+# v35.0 — Design System Unification (UI/UX) — OPENED 2026-05-14
+
+**Goal:** Unify all 3 LivOS UI surfaces (Mini PC livinityd UI, Server5 Next.js platform, landing static HTML) on the canonical `dashboard.html` design language (Geist + Geist Mono + Instrument Serif fonts, custom CSS variables, light/dark/iridescent themes, bento layout, accent color palette).
+
+**Master plan:** [`v35-DESIGN-SYSTEM-MILESTONE.md`](v35-DESIGN-SYSTEM-MILESTONE.md) (470 lines — read this first).
+
+**Why now:** During Phase 111 binding UAT prep on 2026-05-14 the user observed visual discontinuity across surfaces (Tailwind+zinc vs Geist+CSS-vars vs shadcn). User-stated: *"livinity.io nun tasarimini biliyorsun ... UI da cok profesyonel ol dashboard daki UI vs kullan."* v35.0 generalizes the Phase 111 quick fix.
+
+**Surface inventory:**
+- Mini PC livinityd UI: `livos/packages/ui/src/` — **654 TSX files** (95 components + 123 modules + 219 routes + 29 shadcn + 142 features + 7 layouts + 23 providers)
+- Server5 Next.js: `/opt/platform/web/src/` — 68 TSX + 69 TS files
+- Landing static HTML: `/opt/landing/livinity.io/` — 8 HTML (all already use Geist; drift to fix)
+
+**Locked invariants:** D-V35-CANONICAL-IS-DASHBOARD-HTML, D-V35-NO-FUNCTIONAL-REGRESSIONS, D-V35-MINI-PC-OPERATOR-PRIORITY, D-V35-SACRED-SHA, D-V35-INCREMENTAL-COMMITS, D-V35-LIGHT-DARK-IRIDESCENT-PARITY, D-V35-ACCESSIBILITY-WHEN-MIGRATING (full text in master plan).
+
+---
+
+### Phase 115: UI Component Inventory & Visual Baseline
+
+**Goal:** Produce A→Z inventory of every UI component on every surface + baseline screenshots of every public route. Output: 3 INVENTORY.md docs + COMPONENT-MAP.md (cross-surface) + baseline-screenshots/.
+
+**Direction:**
+- Map every TSX file in `livos/packages/ui/src/` to {file path, primary purpose, route/feature, visual idiom, migration tag}
+- Same for `/opt/platform/web/src/` (Server5, via SSH)
+- Same for `/opt/landing/livinity.io/*.html`
+- Chrome DevTools MCP — capture light + dark screenshots of every public route
+- COMPONENT-MAP.md: identify same conceptual components across surfaces (button, card, stepper, modal) — these become Phase 119 ui-kit candidates
+- D-115-READ-ONLY: zero source changes, pure documentation
+
+**Plans (3 parallel-safe):** 115-01 Mini PC inventory · 115-02 Server5 inventory · 115-03 landing inventory + visual baseline.
+**Estimated:** 2-3 hours of agent work.
+**UAT:** all 3 INVENTORY docs reviewed by operator, baseline screenshots stored.
+
+---
+
+### Phase 116: Canonical Design System Spec
+
+**Goal:** Codify dashboard.html aesthetic into a portable, version-controlled spec. Single source of truth that every surface consumes.
+
+**Direction:**
+- Author DESIGN-SYSTEM.md: typography scale, color tokens (light/dark/iridescent), spacing, radius, shadow, motion curves, accessibility (focus rings, contrast targets), interaction patterns
+- Build `livos/packages/design-tokens/`:
+  - `tokens.css` — pure CSS `:root` + `body.dark` + `body.iridescent` blocks
+  - `tailwind.preset.cjs` — Tailwind preset mapping the same tokens
+  - `theme.json` — JSON manifest for tooling
+  - `fonts.css` — Geist + Instrument Serif declarations (Google Fonts CDN + self-hosted fallback for offline LivOS)
+- Tag release `v35.0-design-tokens-1.0.0`
+- D-116-LOCK-CANONICAL: tokens map exactly to dashboard.html's current shipped values; no improvisation
+
+**Plans (2):** 116-01 spec + tokens + tailwind preset · 116-02 fonts + visual smoke test.
+**Estimated:** 3-5 hours.
+**UAT:** import tokens.css into a throwaway HTML, render dashboard.html elements, pixel-diff against baseline.
+
+---
+
+### Phase 117: Server5 Next.js Platform Migration
+
+**Goal:** Apply canonical design system to every Server5 Next.js route. After this phase, `livinity.io/login`, `/register`, `/verify`, `/forgot-password`, `/reset-password`, `/dashboard/install`, `/store`, `/download`, `/dashboard` (Next.js side, currently NOT live but should match) all share dashboard.html's visual identity.
+
+**Direction:**
+- `app/layout.tsx` injects `tokens.css` + `fonts.css` from `@livinity/design-tokens`
+- `tailwind.config.ts` extends design-tokens preset
+- `globals.css` replaces bespoke styles with token references
+- Per-route restyle: 6 (auth)/* routes + dashboard/install (already aligned, audit) + store + download
+- Cross-repo: `.planning/` artifacts in this repo, source edits via SSH on Server5, backups (`*.pre-117-NN.bak`)
+- D-117-NO-API-CHANGES: API routes (`/api/**`) and DB schema untouched
+- D-117-NO-AUTH-FLOW-CHANGES: session cookie + getSession + redirect logic untouched
+
+**Plans (5):** 117-01 foundation · 117-02 (auth)/* · 117-03 /dashboard/install audit · 117-04 /store · 117-05 /download + Next.js /dashboard.
+**Estimated:** 8-12 hours.
+**UAT:** browser-walk every Server5 route, side-by-side with dashboard.html — visual continuity confirmed.
+
+---
+
+### Phase 118: Landing Static HTML Polish & Drift Fix
+
+**Goal:** All 8 HTML pages share dashboard.html's exact CSS variable definitions and reusable classes. Drift fixed. Common nav/header extracted.
+
+**Direction:**
+- Audit drift: `index.html`, `auth.html`, `profile.html`, `customize.html`, `download.html`, `forgot-password.html` vs dashboard.html canonical values
+- Extract `/opt/landing/livinity.io/_shared/tokens.css` — all HTML pages `<link>` it (replaces inline `:root` definitions)
+- Extract `/opt/landing/livinity.io/_shared/nav.jsx` — reusable React UMD component for top nav (Livinity brand + theme toggle + sign-in/dashboard link)
+- Backward-compat: dashboard.html + dashboard-install.html keep inline tokens AND link to _shared/tokens.css (defense in depth)
+
+**Plans (2):** 118-01 drift audit + extract _shared/tokens.css · 118-02 reusable nav.jsx + integration.
+**Estimated:** 3-5 hours.
+**UAT:** all 8 HTML pages render identical chrome (header, theme toggle, footer); operator-walked.
+
+---
+
+### Phase 119: Reusable Component Library (`@livinity/ui-kit`)
+
+**Goal:** Single React component library that any surface imports. Mini PC livinityd UI (Vite), Server5 Next.js, landing HTML pages (UMD) all consume the same components. New UI work defaults to the library.
+
+**Direction:**
+- New package: `livos/packages/ui-kit/`
+- Initial exports (locked to dashboard.html idioms): Button, Card, Stepper, Pill, Input, PasswordInput, CommandBox, Modal, Toast, ThemeToggle, NavBar
+- 3 build outputs: ESM (Vite/Next), CJS (legacy/SSR), UMD (HTML pages — `window.LivKit.Button`)
+- Storybook stories per component
+- Vitest unit tests per component
+- Depends on `@livinity/design-tokens` (Phase 116)
+- D-119-NO-CONSUMER-CHANGES: ships standalone; consumers migrate in Phase 120/121
+
+**Plans (4):** 119-01 scaffolding + build pipeline · 119-02 atoms (Button/Card/Pill/Input/PasswordInput) · 119-03 composites (Stepper/CommandBox/Modal/Toast/NavBar/ThemeToggle) · 119-04 UMD build + landing HTML smoke test.
+**Estimated:** 12-16 hours.
+**UAT:** Storybook screenshot suite passes; smoke-import each component into a Server5 dummy route.
+
+---
+
+### Phase 120: Mini PC livinityd UI Migration — Wave 1 (high-impact)
+
+**Goal:** Migrate the 30 highest-traffic Mini PC components to canonical design system + ui-kit. After this phase, opening Mini PC dashboard shows identical fonts/spacing/colors as `livinity.io/dashboard`.
+
+**Direction:**
+- Foundation: install `@livinity/design-tokens` + `@livinity/ui-kit` in `livos/packages/ui/`
+- `tailwind.config.ts` extends design-tokens preset
+- `index.css` imports tokens + fonts; replace bespoke vars with token refs
+- Theme provider: switch body class on `liv_theme` localStorage (light/dark/iridescent)
+- Restyle the 30 highest-traffic components:
+  - Layouts (desktop.tsx, bare layouts)
+  - Top-level chrome (dock, spotlight, cmdk, app-icon, window-content, window-manager)
+  - Settings shell + 5 most-used Settings panels
+  - AI Chat input + chat panel + slash-command-menu
+  - App Store window content
+  - Login screen
+- Visual diff vs Phase 115 baseline (regression check)
+- D-120-NO-FUNCTIONAL-CHANGES: visual layer only, prop APIs untouched
+- D-120-INCREMENTAL-DEPLOY: per-plan deployable; revert-safe; operator runs `update.sh` between plans (per `feedback_minipc_is_owncloud_primary`)
+
+**Plans (5):** 120-01 foundation · 120-02 layout + chrome · 120-03 Settings shell + panels · 120-04 AI Chat surface · 120-05 App Store window.
+**Estimated:** 16-24 hours.
+**UAT:** operator browses Mini PC dashboard after each plan; visual continuity vs `livinity.io/dashboard` confirmed; OwnCloud functionality unchanged.
+
+---
+
+### Phase 121: Mini PC UI Long-Tail Migration + Cross-Surface Audit
+
+**Goal:** Migrate remaining ~600 Mini PC components in feature batches; audit cross-surface visual consistency; lock with regression tests; ship developer style guide.
+
+**Direction:**
+- Long-tail batches: backups (~30) + factory-reset (~10) + local-setup (~10) → batch 1; files (~25) → batch 2; window-content app dialogs (~50) → batch 3; routes/* (~219, sub-batched) → batch 4; generic components (~150) + shadcn replacement audit → batch 5
+- Cross-surface audit: side-by-side screenshots of common elements; document residual diffs in `121-cross-surface-audit/CONSISTENCY-REPORT.md`; fix outliers
+- Visual regression suite: Playwright snapshots for canonical pages; GitHub Actions workflow on PRs
+- Developer style guide: `livos/packages/design-tokens/STYLE-GUIDE.md` ("How to add a new LivOS UI component")
+- D-121-OPERATOR-CHECKPOINTS: routes batch (large) inserts UAT checkpoints between sub-batches
+
+**Plans (6):** 121-01 backups+factory-reset+local-setup · 121-02 files · 121-03 window-content dialogs · 121-04 routes/* (sub-batched) · 121-05 generic + shadcn audit · 121-06 cross-surface audit + regression suite + style guide.
+**Estimated:** 24-40 hours.
+**UAT:** all 654 TSX components migrated; operator-walked end-to-end (`bruce.livinity.io` → `livinity.io/dashboard` → `livinity.io/dashboard/install` → `livinity.io/login` → Mini PC livinityd UI) — visual continuity is the win condition.
+
+---
+
+**Total v35.0 estimate:** 70-105 hours of agent work (multiple sessions, paced for operator UAT checkpoints).
+
+**Acceptance criteria (milestone-level):** see `v35-DESIGN-SYSTEM-MILESTONE.md` § "Acceptance criteria".
+
+**Out of scope (v36+ candidates):** mobile app design, Agent Electron UI port, marketing copy refresh, email templates, Storybook→Figma sync, marketplace + changelog services, apps.livinity.io dark mode.
 

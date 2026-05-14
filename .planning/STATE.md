@@ -1,15 +1,21 @@
 ---
 gsd_state_version: 1.0
-milestone: v34.0
-milestone_name: Bootstrap Polish + First-Run UX
-status: code-complete-pending-operator-uat
-last_updated: "2026-05-13T23:50:00.000Z"
+milestone: v35.0
+milestone_name: Design System Unification (UI/UX)
+status: ready-to-execute
+last_updated: "2026-05-14T22:50:00.000Z"
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 17
-  completed_plans: 12
-  percent: 71
+  total_phases: 7
+  completed_phases: 0
+  total_plans: 27
+  completed_plans: 0
+  percent: 0
+previous_milestone: v34.0
+previous_milestone_status: code-complete-pending-operator-uat
+previous_milestone_pending_uat: [Phase 110, Phase 111]
+v35_master_plan: .planning/v35-DESIGN-SYSTEM-MILESTONE.md
+v35_phases: [115, 116, 117, 118, 119, 120, 121]
+v35_estimated_hours: "70-105"
 ---
 
 # Project State
@@ -25,16 +31,44 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 110 (webapp-launcher-vnc-swap-carryover) — `[~]` CODE-COMPLETE-PLUS-RUNTIME-SMOKE 2026-05-13
-Plan: 1 of 1 shipped (closure commit pending — see 110-01 Status)
-Milestone: v34.0 (active) — **8/8 phases CODE-COMPLETE** (operator-pending UAT backlog: P108, P109, P110, P111)
-Last-shipped commit: this Phase 110 closure (single `docs(110-01)` rollup commit)
-Mainserver state: `journalctl -u caddy` clean since Phase 113 restart. TLS works on `test.livinity.live` + wildcard.
-Server5 state: `https://livinity.io/onboarding/install` wizard live (Plan 111-04); `/api/account/api-keys` + `/api/cf/resolve-zone` endpoints live (Plans 111-02, 111-03); `/install.sh` serves Phase 104+ modular dispatcher (Plan 111-01); mode reference docs panel live (Plan 111-05).
-Mini PC state: tunnel stable; deployed SHA `1df2ec6` (post Phase 111 + tunnel + cmdk cleanup; Phase 99 vnc-bridge.ts source already live since Phase 99-04 ship `351bcb62`). Phase 110 smoke confirmed Mini PC `:0` x11vnc speaks RFB 003.008 on demand (port 5933, ephemeral, cleaned up). Public reachable as `utopusc.livinity.io` (HTTP 200). `bruce.livinity.io` 503 (pre-existing — no `custom_domains` row; v34.x scope).
-Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across the Phase 110 closure commit (pre-commit hook gated; pre-commit `git hash-object` re-verify).
+Milestone: **v35.0 — Design System Unification (UI/UX)** — OPENED 2026-05-14, ready to execute
+Master plan: [`.planning/v35-DESIGN-SYSTEM-MILESTONE.md`](v35-DESIGN-SYSTEM-MILESTONE.md) (470 lines — read first)
+Phases: 115 (inventory) → 116 (canonical tokens) → 117 (Server5 migration) → 118 (landing polish) → 119 (ui-kit) → 120 (Mini PC wave 1) → 121 (Mini PC long-tail + audit)
+Total estimated: 70-105 hours of agent work across multiple sessions, paced for operator UAT checkpoints
 
-Next action: operator (bruce) walks Phase 110 binding UAT in own browser session (`https://bruce.livinity.io` → click WebApp → confirm noVNC handshake + bidirectional input → report PASS in chat) → next session flips Phase 110 from `[~]` to `[x]` SHIPPED. Same for Phase 111 binding UAT (fresh Ubuntu 24.04 VPS + Hybrid mode + real CF token). With both operator-walked UATs PASS, v34.0 milestone flips to ✅ Shipped.
+**Next action (after `/clear`):** `/gsd-autonomous --from 115` — discovers Phase 115 in ROADMAP.md and walks discuss → plan → execute. Or run individual phases with `/gsd-discuss-phase 115` then `/gsd-plan-phase 115` then `/gsd-execute-phase 115` for finer control.
+
+**v34.0 carry-over:** v34.0 sits at 8/8 CODE-COMPLETE; operator-walked binding UAT pending for Phase 110 (WebApp click test) + Phase 111 (fresh-VPS install). These do NOT block v35.0 — can be walked at operator's discretion in parallel. Phase 110 was operator-confirmed PASS via "calisiyor" chat 2026-05-14 but ROADMAP entry still shows `[~]`; operator-walked binding UAT for Phase 111 still required.
+
+**Mainserver state:** TLS clean (Phase 113); `tunnel_disabled=1` (Mini PC has the tunnel slot); api_key set (App Store works on test.livinity.live).
+**Server5 state:** all 4 PM2 services online; relay has 4 in-tree hot-patches (custom_domain unconditional + appMapping fallback for HTTP+WS, both shipped 2026-05-14); platform.custom_domains correctly maps `bruce.livinity.io` + `livinity.live` to bruce user (corrected 2026-05-14 evening).
+**Mini PC state:** tunnel stable as **bruce** (api_key swapped from utopusc to bruce 2026-05-14 evening); deployed SHA `a4027136` (post-Phase-110 closure); 4 healthy containers (n8n, code-server, auth, tor_proxy); 3 subdomains registered; bruce.livinity.io HTTP 200 + n8n.bruce.livinity.io HTTP 302 (gateway active).
+**Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f`** preserved across all v34 commits.
+
+## v35.0 Plan Summary (2026-05-14) — OPENED, ready to execute
+
+- **Why:** During Phase 111 binding UAT prep, the operator observed visual discontinuity across LivOS surfaces: `livinity.io/dashboard` (Geist + bespoke CSS vars + bento) vs `livinity.io/onboarding/install` (Tailwind zinc + shadcn-ish) vs Mini PC livinityd UI (Tailwind 3.4 + shadcn). Three idioms. User-stated requirement: *"livinity.io nun tasarimini biliyorsun ... UI da cok profesyonel ol dashboard daki UI vs kullan."* Quick fix: Phase 111 wizard re-skinned to dashboard.html style on 2026-05-14, shipped as `/dashboard/install` static HTML. v35.0 generalizes the fix.
+- **Surfaces:** Mini PC livinityd UI (`livos/packages/ui/src/`, **654 TSX files** — 95 components + 123 modules + 219 routes + 29 shadcn + 142 features + 7 layouts + 23 providers); Server5 Next.js (`/opt/platform/web/src/`, 68 TSX + 69 TS); landing static HTML (`/opt/landing/livinity.io/`, 8 HTML, all already use Geist).
+- **Canonical reference:** `/opt/landing/livinity.io/dashboard.html` (Geist + Geist Mono + Instrument Serif fonts; CSS vars `--dash-pad/radius/line/card-bg/accent-blue/green/amber/red`; light/dark/iridescent themes; bento grid 12-col; `.h-btn`/`.b-card`/`.cmd-box`/`.stepper` reusable classes).
+- **7 phases / 27 plans:**
+  - **115** UI Component Inventory & Visual Baseline (3 plans, parallel-safe) — INVENTORY-MINI-PC.md + INVENTORY-SERVER5.md + INVENTORY-LANDING.md + COMPONENT-MAP.md + baseline screenshots; D-115-READ-ONLY
+  - **116** Canonical Design System Spec (2 plans) — DESIGN-SYSTEM.md + `livos/packages/design-tokens/{tokens.css,tailwind.preset.cjs,theme.json,fonts.css}`; tag `v35.0-design-tokens-1.0.0`; D-116-LOCK-CANONICAL
+  - **117** Server5 Next.js Migration (5 plans) — layout.tsx + tailwind config + globals.css + (auth)/* + dashboard/install audit + store + download; D-117-NO-API-CHANGES, D-117-NO-AUTH-FLOW-CHANGES
+  - **118** Landing HTML Polish (2 plans) — drift fix + `_shared/tokens.css` + `_shared/nav.jsx` reusable nav
+  - **119** Reusable Component Library `@livinity/ui-kit` (4 plans) — Button/Card/Stepper/Pill/Input/PasswordInput/CommandBox/Modal/Toast/NavBar/ThemeToggle; ESM + CJS + UMD; Storybook; Vitest; D-119-NO-CONSUMER-CHANGES
+  - **120** Mini PC UI Wave 1 (5 plans, ~30 high-impact components) — foundation + layout/chrome + Settings shell + AI Chat + App Store; D-120-NO-FUNCTIONAL-CHANGES, D-120-INCREMENTAL-DEPLOY, D-120-MINI-PC-OPERATOR-PRIORITY
+  - **121** Mini PC Long-Tail + Cross-Surface Audit (6 plans, ~600 components) — backups+factory-reset+local-setup batch + files + window-content + routes/* sub-batched + generic+shadcn + cross-surface CONSISTENCY-REPORT.md + Playwright regression suite + STYLE-GUIDE.md; D-121-OPERATOR-CHECKPOINTS
+- **Locked invariants:** D-V35-CANONICAL-IS-DASHBOARD-HTML, D-V35-NO-FUNCTIONAL-REGRESSIONS, D-V35-MINI-PC-OPERATOR-PRIORITY, D-V35-SACRED-SHA, D-V35-INCREMENTAL-COMMITS, D-V35-LIGHT-DARK-IRIDESCENT-PARITY, D-V35-ACCESSIBILITY-WHEN-MIGRATING (full text in master plan).
+- **Per-phase CONTEXT skeletons:** all 7 phase directories created + CONTEXT.md written:
+  - `.planning/phases/115-ui-component-inventory/115-CONTEXT.md`
+  - `.planning/phases/116-canonical-design-system/116-CONTEXT.md`
+  - `.planning/phases/117-server5-nextjs-migration/117-CONTEXT.md`
+  - `.planning/phases/118-landing-html-polish/118-CONTEXT.md`
+  - `.planning/phases/119-reusable-component-library/119-CONTEXT.md`
+  - `.planning/phases/120-mini-pc-ui-migration-wave-1/120-CONTEXT.md`
+  - `.planning/phases/121-mini-pc-long-tail-and-audit/121-CONTEXT.md`
+- **Acceptance criteria (8):** see master plan § "Acceptance criteria". Tied to operator-walked end-to-end UAT — visual continuity across surfaces is the win condition.
+- **Out of scope (v36+ candidates):** mobile design, Agent Electron UI, marketing copy, email templates, Storybook→Figma, marketplace+changelog services, apps.livinity.io dark mode (full list in master plan § "Out of scope").
 
 ## 110-01 Status (2026-05-13) — Phase 99 WebApp Launcher VNC Swap Carry-over CLOSURE CODE-COMPLETE-PLUS-RUNTIME-SMOKE (closure-only `.planning/` rollup; Mini PC RFB 003.008 smoke PASS; OPERATOR-PENDING for browser-walked binding UAT)
 
