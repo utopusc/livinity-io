@@ -1,0 +1,281 @@
+/*!
+ * @livinity/ui-kit — atoms.css
+ * Canonical class definitions for atom components: Button, Card, Pill, Input,
+ * PasswordInput.
+ *
+ * Phase 119-02. Locked to dashboard.html idioms via @livinity/design-tokens
+ * (D-119-DASHBOARD-HTML-IS-SOURCE). NO hardcoded color / spacing / radius /
+ * shadow literals — every visual value is a `var(--token)` reference.
+ *
+ * Structural literals (button heights, font-sizes, letter-spacing) are
+ * allowed per <canonical_visual_contracts> in 119-02-PLAN.md.
+ *
+ * Theme switching (light / dark / iridescent) happens via body-class
+ * overrides defined in @livinity/design-tokens tokens.css — no @media or
+ * theme-specific rules here.
+ */
+
+/* ============================================================
+ * .h-btn — Button (D-119-A11Y-FOCUS-RINGS)
+ * ------------------------------------------------------------ */
+
+.h-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+
+  background: transparent;
+  color: inherit;
+
+  transition: 0.18s ease;
+}
+
+.h-btn:hover {
+  transform: translateY(-1px);
+  transition: 0.18s ease;
+}
+
+.h-btn:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+.h-btn:disabled,
+.h-btn[aria-busy="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.h-btn:disabled:hover,
+.h-btn[aria-busy="true"]:hover {
+  transform: none;
+}
+
+/* Sizes */
+.h-btn-sm {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.h-btn-md {
+  height: 40px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+
+.h-btn-lg {
+  height: 48px;
+  padding: 0 22px;
+  font-size: 16px;
+}
+
+/* Variants: solid + danger get explicit class; ghost is the default
+ * (transparent background + 1px border via var(--dash-line-strong)). */
+.h-btn.solid {
+  background: var(--accent-blue);
+  color: #ffffff;
+}
+
+.h-btn.danger {
+  background: var(--accent-red);
+  color: #ffffff;
+}
+
+/* Ghost: any .h-btn that is NOT .solid and NOT .danger. */
+.h-btn:not(.solid):not(.danger) {
+  background: transparent;
+  border: 1px solid var(--dash-line-strong);
+  color: inherit;
+}
+
+/* Spinner used by Button when loading=true. */
+.h-btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: livkit-spin 0.7s linear infinite;
+}
+
+@keyframes livkit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+ * .b-card — Card
+ * ------------------------------------------------------------ */
+
+.b-card {
+  background: var(--card-bg);
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--dash-line);
+}
+
+.b-card-pad-default {
+  padding: var(--dash-pad);
+}
+
+.b-card-pad-tight {
+  padding: 16px;
+}
+
+.b-card-radius-default {
+  border-radius: var(--dash-radius);
+}
+
+.b-card-radius-tight {
+  border-radius: 12px;
+}
+
+/* ============================================================
+ * .pill — Pill (status tag)
+ * ------------------------------------------------------------ */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+
+  background: var(--dash-line);
+  color: inherit;
+}
+
+.pill.ok {
+  color: var(--accent-green);
+  background: color-mix(in srgb, var(--accent-green) 12%, transparent);
+}
+
+.pill.warn {
+  color: var(--accent-amber);
+  background: color-mix(in srgb, var(--accent-amber) 12%, transparent);
+}
+
+.pill.err {
+  color: var(--accent-red);
+  background: color-mix(in srgb, var(--accent-red) 12%, transparent);
+}
+
+.pill.neutral {
+  color: inherit;
+  background: var(--dash-line);
+}
+
+/* ============================================================
+ * .i-text — Input (D-119-A11Y-FOCUS-RINGS)
+ * ------------------------------------------------------------ */
+
+.i-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.i-text-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: inherit;
+}
+
+.i-text {
+  background: var(--card-bg-2);
+  border: 1px solid var(--dash-line);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  color: inherit;
+  width: 100%;
+  box-sizing: border-box;
+
+  transition: 0.18s ease;
+}
+
+.i-text:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+  border-color: transparent;
+}
+
+.i-text[aria-invalid="true"] {
+  border-color: var(--accent-red);
+}
+
+.i-text:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.i-text-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--accent-amber);
+}
+
+.i-text-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--accent-red);
+}
+
+/* ============================================================
+ * .i-text-toggle — PasswordInput visibility toggle button
+ * ------------------------------------------------------------ */
+
+.i-text-password-wrap {
+  position: relative;
+}
+
+.i-text-password-wrap .i-text {
+  padding-right: 44px;
+}
+
+.i-text-toggle {
+  position: absolute;
+  right: 12px;
+  /*
+   * Align toggle to the input row (not the wrap, which may include label/hint).
+   * The Input has padding 12px 16px + font-size 14px → input row height ~44px.
+   * Bottom-anchor the toggle to the input by offsetting from bottom.
+   */
+  bottom: 14px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  transition: 0.18s ease;
+}
+
+.i-text-toggle:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
