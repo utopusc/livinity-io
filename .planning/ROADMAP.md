@@ -1042,7 +1042,9 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 
 ---
 
-### Phase 118: Landing Static HTML Polish & Drift Fix
+### Phase 118: Landing Static HTML Polish & Drift Fix — ✅ CODE-COMPLETE 2026-05-14
+
+**Status:** Both plans shipped. 9/9 must-haves PASS. `_shared/tokens.css` + `_shared/fonts.css` + 4 self-hosted woff2 + `_shared/nav.jsx` live on Server5. 8 HTML pages linked + mount-div + Babel-in-browser nav. Defense-in-depth: dashboard.html keeps inline `:root` AND links shared. Hex scrub: 5 substitutions across 6 needs-migration files. Commits: `ad523f9a` (118-01), `9b5f46a5` (118-02). 16 `.pre-118-NN.bak` backups on Server5. **Carry-over:** Phase 119 will collapse the 7 stacked navs (existing inline + new shared) into a single `<Nav>` ui-kit primitive.
 
 **Goal:** All 8 HTML pages share dashboard.html's exact CSS variable definitions and reusable classes. Drift fixed. Common nav/header extracted.
 
