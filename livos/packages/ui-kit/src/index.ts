@@ -29,6 +29,33 @@ export type { InputProps } from "./components/Input.types";
 export { PasswordInput } from "./components/PasswordInput";
 
 // ============================================================
+// Composites (Phase 119-03)
+// ============================================================
+
+export { Stepper } from "./components/Stepper";
+export type { StepperProps, StepperStep } from "./components/Stepper.types";
+
+export { CommandBox } from "./components/CommandBox";
+export type { CommandBoxProps } from "./components/CommandBox.types";
+
+export { Modal } from "./components/Modal";
+export type { ModalProps } from "./components/Modal.types";
+
+export { ToastProvider, useToast } from "./components/Toast";
+export type {
+  ToastApi,
+  ToastItem,
+  ToastTone,
+  ToastProviderProps,
+} from "./components/Toast.types";
+
+export { NavBar } from "./components/NavBar";
+export type { NavBarProps } from "./components/NavBar.types";
+
+export { ThemeToggle } from "./components/ThemeToggle";
+export type { ThemeToggleProps } from "./components/ThemeToggle";
+
+// ============================================================
 // Shared utilities + theme helpers
 // ============================================================
 
