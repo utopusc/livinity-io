@@ -2,5 +2,3 @@ node_modules/
 dist/
 *.log
 .DS_Store
-fonts/
-smoke-test/test-output.png
