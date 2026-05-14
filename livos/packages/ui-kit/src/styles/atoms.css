@@ -85,12 +85,12 @@
  * (transparent background + 1px border via var(--dash-line-strong)). */
 .h-btn.solid {
   background: var(--accent-blue);
-  color: #ffffff;
+  color: white;
 }
 
 .h-btn.danger {
   background: var(--accent-red);
-  color: #ffffff;
+  color: white;
 }
 
 /* Ghost: any .h-btn that is NOT .solid and NOT .danger. */
