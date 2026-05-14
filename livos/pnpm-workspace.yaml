@@ -4,6 +4,7 @@ packages:
   - packages/livinityd
   - packages/config
   - packages/docker-agent
+  - packages/design-tokens
 
 ignoredBuiltDependencies:
   - '@parcel/watcher'
