@@ -1,21 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v35.0
-milestone_name: Design System Unification (UI/UX)
-status: ready-to-execute
-last_updated: "2026-05-14T22:50:00.000Z"
+milestone: v34.0
+milestone_name: Bootstrap Polish + First-Run UX
+status: unknown
+last_updated: "2026-05-14T21:24:13.571Z"
 progress:
-  total_phases: 7
-  completed_phases: 0
-  total_plans: 27
-  completed_plans: 0
-  percent: 0
-previous_milestone: v34.0
-previous_milestone_status: code-complete-pending-operator-uat
-previous_milestone_pending_uat: [Phase 110, Phase 111]
-v35_master_plan: .planning/v35-DESIGN-SYSTEM-MILESTONE.md
-v35_phases: [115, 116, 117, 118, 119, 120, 121]
-v35_estimated_hours: "70-105"
+  total_phases: 8
+  completed_phases: 8
+  total_plans: 12
+  completed_plans: 12
+  percent: 100
 ---
 
 # Project State
@@ -31,6 +25,8 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
+Phase: 115 (UI Component Inventory & Visual Baseline) — IN PROGRESS
+Plan: 1 of 3 — **115-01 COMPLETE** (Mini PC livinityd UI inventory shipped 2026-05-14, `INVENTORY-MINI-PC.md` 919 lines / 654 TSX files classified, commit `0aab97d4`)
 Milestone: **v35.0 — Design System Unification (UI/UX)** — OPENED 2026-05-14, ready to execute
 Master plan: [`.planning/v35-DESIGN-SYSTEM-MILESTONE.md`](v35-DESIGN-SYSTEM-MILESTONE.md) (470 lines — read first)
 Phases: 115 (inventory) → 116 (canonical tokens) → 117 (Server5 migration) → 118 (landing polish) → 119 (ui-kit) → 120 (Mini PC wave 1) → 121 (Mini PC long-tail + audit)
@@ -579,7 +575,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 113 (Caddy CLOUDFLARE_API_TOKEN Log Leak Remediation) — 1 plans — 2026-05-13T20:45:26.791Z
+**Planned Phase:** 115 (ui-component-inventory) — 3 plans — 2026-05-14T21:15:09.228Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
