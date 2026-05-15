@@ -3,16 +3,29 @@ gsd_state_version: 1.0
 milestone: v36.0
 milestone_name: "LivOS Design Port"
 status: in-progress
-last_updated: "2026-05-15T18:00:00.000Z"
+last_updated: "2026-05-15T22:30:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
   total_plans: 9
   completed_plans: 9
   percent: 100.0
-current_phase: 129
-current_phase_name: "Chat Bubble (Step 8 of 8)"
-current_phase_status: SHIPPED
+current_phase: 131
+current_phase_name: "Pinned-Windows Architecture"
+current_phase_status: PARTIAL-SHIPPED-PENDING-UAT
+phase_131_commits:
+  - b3b049ad   # 131-01 drag-to-pin bug fix (TopBar inside provider + isExpanded pin-aware)
+  - 167b42ba   # 131-02 persistence tier-a (Postgres pinned_windows + tRPC + hydration)
+  - 559ee89f   # 131-05 partial (right-click context menu + empty-state polish)
+phase_131_status: PARTIAL-SHIPPED-PENDING-UAT
+phase_131_shipped_subplans: ["131-01", "131-02", "131-05 (partial)"]
+phase_131_deferred_subplans:
+  - "131-03 — background runtime (autonomous:false; per-app session hosts need operator-walked Mini PC validation against Chrome handle / hermes / Files watcher leaks)"
+  - "131-04 — MCP AI control (depends on 131-03)"
+  - "131-05.1 — hover preview + drag-off + reorder + 30s thumbnail refresh (blocked on 131-03 snapshot endpoint)"
+  - "131-06 — UAT walk on Mini PC + PROJECT.md chapter + memory snapshot (operator step)"
+phase_131_decisions_locked: 2026-05-15
+phase_131_decisions_file: ".planning/phases/131-pinned-windows-architecture/131-DECISIONS.md"
 phase_122_commits: [c2dbcd0c, 518a0de6, 658714ee, 19d00b2f]
 phase_123_commits: [4e47cb72]
 phase_124_commits: [780d668a]
