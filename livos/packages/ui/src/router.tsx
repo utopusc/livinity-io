@@ -121,16 +121,15 @@ export const router = createBrowserRouter([
 				Component: SheetLayout,
 				children: [
 					...filesRoutes,
-					{
-						path: 'settings/*',
-						Component: Settings,
-						children: [
-							{
-								path: ':settingsDialog',
-								Component: Settings,
-							},
-						],
-					},
+					// v36 LivOS Design Port — /settings/* route REMOVED from
+					// SheetLayout 2026-05-15 per user direction "ben hic bir
+					// sekilde livos un /yoneldnirme yapmasini istemyiorum". The
+					// bottom-sheet wrapper was the "empty layout" appearing
+					// when /settings was typed directly. Settings is now
+					// window-only — clicking Settings in the dock opens it via
+					// window-manager → app-contents/settings-content.tsx, which
+					// has its own internal section navigation (no URL changes).
+					// Typing /settings in the URL now falls through to NotFound.
 					// v34 — Native local-mode App Store routes REMOVED per user direction
 					// (post-Phase 108 UAT 2026-05-13). The native /app-store/* catalog
 					// (Discover / Category / AppPage) is no longer reachable. Use the
