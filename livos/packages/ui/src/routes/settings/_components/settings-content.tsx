@@ -681,9 +681,19 @@ const ACCENT_COLORS = [
 	{label: 'Cyan', hsl: '189 94% 43%'},
 ] as const
 
+// v36 LivOS Design Port — Theme section (2026-05-15).
+// Foundation for a light/dark wallpaper split: registry entries carry a
+// `theme: 'light' | 'dark' | 'auto'` tag and the picker groups them under
+// three rails. Today there is one entry ('fluid', auto). The empty light/dark
+// rails show a "coming soon" placeholder so the foundation is visible without
+// pretending to ship more than one wallpaper.
+//
+// Animation/filter sliders (speed / hueRotate / brightness / saturation) were
+// dropped along with the 11 WebGL wallpapers — fluid particles already feel
+// photo-like and the controls were tuned for shader output. The persisted
+// `wallpaperSettings` values stay in place harmlessly (default no-op).
 function WallpaperSection() {
-	const {wallpaper, setWallpaperId, settings, updateSettings} = useWallpaper()
-	const [hoveredId, setHoveredId] = useState<AnimatedWallpaperId | null>(null)
+	const {wallpaper, setWallpaperId, settings} = useWallpaper()
 	const accentColorQ = trpcReact.user.accentColor.useQuery(undefined, {retry: false})
 	const utils = trpcReact.useUtils()
 	const accentMut = trpcReact.user.set.useMutation({
@@ -693,138 +703,69 @@ function WallpaperSection() {
 		},
 	})
 
-	const previewId = (hoveredId || wallpaper.id || animatedWallpaperIds[0]) as AnimatedWallpaperId
+	const previewId = (wallpaper.id || animatedWallpaperIds[0]) as AnimatedWallpaperId
 	const PreviewComponent = animatedWallpapers[previewId]?.component
 
-	const hasFilter = settings.hueRotate !== 0 || settings.brightness !== 1 || settings.saturation !== 1
-	const filterStyle = hasFilter
-		? {filter: `hue-rotate(${settings.hueRotate}deg) brightness(${settings.brightness}) saturate(${settings.saturation})`}
-		: undefined
+	const grouped = {
+		auto: animatedWallpaperIds.filter((id) => animatedWallpapers[id].theme === 'auto'),
+		light: animatedWallpaperIds.filter((id) => animatedWallpapers[id].theme === 'light'),
+		dark: animatedWallpaperIds.filter((id) => animatedWallpapers[id].theme === 'dark'),
+	}
 
 	return (
-		<div className='flex flex-col gap-4'>
+		<div className='flex flex-col gap-8'>
+			<SettingsPageHeader
+				eyebrow='02 · Theme'
+				title='Tune your'
+				titleAccent='theme.'
+				sub='One wallpaper and one accent colour, shared by every LivOS surface. Light- and dark-theme wallpaper variants will land here over time — today there is one adaptive backdrop that follows whichever theme is active.'
+			/>
+
 			{/* Live preview */}
-			<div className='relative aspect-video overflow-hidden rounded-radius-md border border-border-default'>
-				<div className='absolute inset-0' style={filterStyle}>
-					{PreviewComponent && (
-						<PreviewComponent
-							key={previewId}
-							paused={settings.paused}
-							speed={settings.speed}
-							className='h-full w-full'
-						/>
-					)}
-				</div>
-				<div className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent px-3 pb-2 pt-6'>
-					<span className='text-sm font-medium text-white/90'>{animatedWallpapers[previewId]?.name}</span>
-				</div>
-			</div>
-
-			{/* Wallpaper selection grid */}
-			<div className='grid grid-cols-4 gap-2 sm:grid-cols-6'>
-				{animatedWallpaperIds.map((id) => (
-					<button
-						key={id}
-						onMouseEnter={() => setHoveredId(id)}
-						onMouseLeave={() => setHoveredId(null)}
-						onClick={() => setWallpaperId(id)}
-						className={cn(
-							'relative aspect-square overflow-hidden rounded-lg transition-all',
-							wallpaper.id === id
-								? 'ring-2 ring-brand scale-105'
-								: hoveredId === id
-									? 'ring-1 ring-brand/40 scale-[1.03]'
-									: 'hover:ring-1 hover:ring-white/20'
-						)}
-						style={{backgroundColor: `hsl(${animatedWallpapers[id].brandColorHsl})`}}
-					>
-						<span className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent pt-3 pb-0.5 text-center text-[9px] font-medium text-white/80'>
-							{animatedWallpapers[id].name}
-						</span>
-						{wallpaper.id === id && (
-							<div className='absolute top-1 right-1'>
-								<TbCheck className='h-3 w-3 text-white drop-shadow-md' />
-							</div>
-						)}
-					</button>
-				))}
-			</div>
-
-			{/* Animation settings */}
-			<div className='flex flex-col gap-4 rounded-radius-md border border-border-default bg-surface-base p-4'>
-				<div className='flex items-center justify-between'>
-					<span className='text-sm font-medium text-text-primary'>Animation</span>
-					<button
-						onClick={() => updateSettings({paused: !settings.paused})}
-						className={cn(
-							'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-							settings.paused
-								? 'bg-brand/20 text-brand hover:bg-brand/30'
-								: 'bg-surface-2 text-text-secondary hover:bg-surface-2/80'
-						)}
-					>
-						{settings.paused ? 'Resume' : 'Pause'}
-					</button>
-				</div>
-
-				<WallpaperSlider
-					label='Speed'
-					value={settings.speed}
-					min={0.25}
-					max={3}
-					step={0.25}
-					displayValue={`${settings.speed}x`}
-					onChange={(speed) => updateSettings({speed})}
-				/>
-
-				<WallpaperSlider
-					label='Color'
-					value={settings.hueRotate}
-					min={0}
-					max={360}
-					step={10}
-					displayValue={`${settings.hueRotate}°`}
-					onChange={(hueRotate) => updateSettings({hueRotate})}
-				/>
-
-				<WallpaperSlider
-					label='Brightness'
-					value={settings.brightness}
-					min={0.5}
-					max={1.5}
-					step={0.1}
-					displayValue={`${Math.round(settings.brightness * 100)}%`}
-					onChange={(brightness) => updateSettings({brightness})}
-				/>
-
-				<WallpaperSlider
-					label='Saturation'
-					value={settings.saturation}
-					min={0}
-					max={2}
-					step={0.1}
-					displayValue={`${Math.round(settings.saturation * 100)}%`}
-					onChange={(saturation) => updateSettings({saturation})}
-				/>
-
-				{(settings.speed !== 1 || settings.hueRotate !== 0 || settings.brightness !== 1 || settings.saturation !== 1) && (
-					<button
-						onClick={() => updateSettings({speed: 1, hueRotate: 0, brightness: 1, saturation: 1})}
-						className='self-start text-xs font-medium text-text-tertiary hover:text-text-secondary transition-colors'
-					>
-						Reset to defaults
-					</button>
+			<div className='relative aspect-video overflow-hidden rounded-[var(--r-lg)] border border-line'>
+				{PreviewComponent && (
+					<PreviewComponent
+						key={previewId}
+						paused={settings.paused}
+						speed={settings.speed}
+						className='absolute inset-0 h-full w-full'
+					/>
 				)}
+				<div className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent px-4 pb-3 pt-8'>
+					<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-white/80'>
+						{animatedWallpapers[previewId]?.name} · {animatedWallpapers[previewId]?.theme}
+					</span>
+				</div>
 			</div>
 
-			{/* Accent color picker */}
-			<div className='flex flex-col gap-3 rounded-radius-md border border-border-default bg-surface-base p-4'>
-				<span className='text-sm font-medium text-text-primary'>Accent Color</span>
-				<div className='flex flex-wrap gap-2'>
+			<WallpaperGroup
+				title='Both Themes'
+				ids={grouped.auto}
+				selectedId={wallpaper.id}
+				onSelect={setWallpaperId}
+				placeholder='Adaptive wallpapers will appear here.'
+			/>
+			<WallpaperGroup
+				title='Light Theme'
+				ids={grouped.light}
+				selectedId={wallpaper.id}
+				onSelect={setWallpaperId}
+				placeholder='Light-theme wallpapers coming soon.'
+			/>
+			<WallpaperGroup
+				title='Dark Theme'
+				ids={grouped.dark}
+				selectedId={wallpaper.id}
+				onSelect={setWallpaperId}
+				placeholder='Dark-theme wallpapers coming soon.'
+			/>
+
+			{/* Accent color picker (kept) */}
+			<div className='flex flex-col gap-3'>
+				<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-fg-faint'>Accent Colour</span>
+				<div className='flex flex-wrap gap-2 rounded-[var(--r-lg)] border border-line bg-[color:var(--bg)] p-4'>
 					{ACCENT_COLORS.map((color) => {
-						const isActive = color.hsl === null
-							? !accentColorQ.data
-							: accentColorQ.data === color.hsl
+						const isActive = color.hsl === null ? !accentColorQ.data : accentColorQ.data === color.hsl
 						return (
 							<button
 								key={color.label}
@@ -832,22 +773,26 @@ function WallpaperSection() {
 								onClick={() => accentMut.mutate({accentColor: color.hsl})}
 								className={cn(
 									'relative h-8 w-8 rounded-full transition-all',
-									isActive ? 'ring-2 ring-white ring-offset-2 ring-offset-black/50 scale-110' : 'hover:scale-105',
+									isActive
+										? 'ring-2 ring-fg ring-offset-2 ring-offset-[color:var(--bg)] scale-110'
+										: 'hover:scale-105',
 								)}
 								style={{
-									backgroundColor: color.hsl ? `hsl(${color.hsl})` : `hsl(${wallpaper.brandColorHsl || '0 0% 50%'})`,
+									backgroundColor: color.hsl
+										? `hsl(${color.hsl})`
+										: `hsl(${wallpaper.brandColorHsl || '0 0% 50%'})`,
 								}}
 							>
 								{isActive && (
-									<TbCheck className='absolute inset-0 m-auto h-4 w-4 text-white drop-shadow-md' />
+									<TbCheck className='absolute inset-0 m-auto h-4 w-4 text-[color:var(--bg)] drop-shadow' />
 								)}
 							</button>
 						)
 					})}
 				</div>
 				{accentColorQ.data && (
-					<p className='text-xs text-text-tertiary'>
-						Custom accent color overrides the wallpaper theme color.
+					<p className='text-[12px] text-fg-faint'>
+						Custom accent colour overrides the wallpaper brand colour.
 					</p>
 				)}
 			</div>
@@ -855,37 +800,81 @@ function WallpaperSection() {
 	)
 }
 
-function WallpaperSlider({
-	label,
-	value,
-	min,
-	max,
-	step,
-	displayValue,
-	onChange,
+function WallpaperGroup({
+	title,
+	ids,
+	selectedId,
+	onSelect,
+	placeholder,
 }: {
-	label: string
-	value: number
-	min: number
-	max: number
-	step: number
-	displayValue: string
-	onChange: (value: number) => void
+	title: string
+	ids: AnimatedWallpaperId[]
+	selectedId: string | undefined
+	onSelect: (id: AnimatedWallpaperId) => void
+	placeholder: string
 }) {
+	const count = ids.length
 	return (
-		<div className='flex items-center gap-3'>
-			<span className='w-20 shrink-0 text-xs text-text-secondary'>{label}</span>
-			<input
-				type='range'
-				min={min}
-				max={max}
-				step={step}
-				value={value}
-				onChange={(e) => onChange(parseFloat(e.target.value))}
-				className='h-1 flex-1 cursor-pointer appearance-none rounded-full bg-surface-2 accent-brand [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand'
-			/>
-			<span className='w-10 shrink-0 text-right text-xs tabular-nums text-text-tertiary'>{displayValue}</span>
-		</div>
+		<section className='flex flex-col gap-3'>
+			<div className='flex items-baseline gap-2'>
+				<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-fg-faint'>{title}</span>
+				<span className='text-[11px] text-fg-faint'>
+					· {count} wallpaper{count === 1 ? '' : 's'}
+				</span>
+			</div>
+			{count > 0 ? (
+				<div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
+					{ids.map((id) => (
+						<WallpaperTile
+							key={id}
+							id={id}
+							active={id === selectedId}
+							onSelect={() => onSelect(id)}
+						/>
+					))}
+				</div>
+			) : (
+				<div className='rounded-[var(--r-md)] border border-dashed border-line bg-[color:var(--bg-2)] px-4 py-6 text-center'>
+					<p className='text-[13px] text-fg-faint'>{placeholder}</p>
+				</div>
+			)}
+		</section>
+	)
+}
+
+function WallpaperTile({
+	id,
+	active,
+	onSelect,
+}: {
+	id: AnimatedWallpaperId
+	active: boolean
+	onSelect: () => void
+}) {
+	const entry = animatedWallpapers[id]
+	const Preview = entry.component
+	return (
+		<button
+			onClick={onSelect}
+			className={cn(
+				'group relative aspect-video overflow-hidden rounded-[var(--r-md)] border transition-all',
+				active
+					? 'border-fg shadow-[var(--shadow-pop)]'
+					: 'border-line hover:border-line-strong',
+			)}
+		>
+			<div className='absolute inset-0'>
+				<Preview className='h-full w-full' />
+			</div>
+			<span className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 to-transparent px-2 pb-1 pt-4 text-left text-[11px] font-medium text-white/90'>
+				{entry.name}
+			</span>
+			{active && (
+				<div className='absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-fg text-[color:var(--bg)]'>
+					<TbCheck className='h-3 w-3' />
+				</div>
+			)}
+		</button>
 	)
 }
 
