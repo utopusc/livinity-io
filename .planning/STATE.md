@@ -32,36 +32,41 @@ v36_consumer_migrations_shipped:
   - "/settings URL route removed from SheetLayout (commit a50eec2a) — window-only"
   - "/agent-marketplace URL route removed from SheetLayout (commit 220c2e65)"
 session_2026_05_15_late_commits: [c1d3ad59, 220c2e65, 6f6a836c]
-next_phase: 130
-next_phase_name: "Dark-Mode Polish + Top Bar + AI Chat Modernization"
-next_phase_status: PLANNED-AWAITING-EXECUTION
-next_phase_plan: .planning/phases/130-dark-mode-polish-topbar-ai-chat/130-PLAN.md
+phase_130_commits: [c8b7866f, 99cef55e, 2fb06e15, 900b3bda]
+phase_130_status: CODE-COMPLETE-AWAITING-UAT
+phase_130_shipped: 2026-05-15
+phase_130_summary: |
+  Phase 130 SHIPPED 2026-05-15 — four atomic commits, sacred SHA preserved
+  4/4, baseline tsc count steady at 586.
+    130-01 (c8b7866f) — v36 neutrals added to body.dark; arbitrary-form
+      sweep across 11 files (field-card, settings-page-header, chat-bubble,
+      app-tile, stat-tile, plan-card, button.tsx v36 variants, login,
+      bare/shared, settings-content). Fixes issues A (ThemeModeSelector),
+      B (Account card), G (CPU/Memory/Storage tiles).
+    130-03 (99cef55e) — Liv Agent dropped from MENU_ITEMS, LogsPanel
+      surface-1 + dark variant, Troubleshoot → 2 tabs (Logs/Diagnostics),
+      Software Update + Advanced re-promoted to top-level rows,
+      PastDeploys max-h-[400px] scroll wrap. Fixes C, D, E, F.
+    130-02 (2fb06e15) — new AvatarGradient (sm/md/lg, peach→pink) +
+      getInitials helper, new TopBar (fixed top-0 inset-x-0 z-50, glass
+      shell matching dock, avatar + LivinityBrand sm, mobile-hidden),
+      DockProfile + separator removed from dock.tsx, mounted in router
+      under EnsureLoggedIn. Fixes I, J.
+    130-04 (900b3bda) — AI Chat sidebar: line border + monochrome chip
+      + fg-underline tabs; composer rebuilt as rounded-full pill on
+      bg-2 with fg-invert send button; user bubble bg-fg/text-bg invert
+      + 6px asymmetric corner; assistant bubble bg + border-line + 6px
+      asymmetric corner; mobile drawer !bg-white → !bg-card-bg. Fixes H.
+  Pending UAT: Mini PC `bash /opt/livos/update.sh` + visual walk in
+  both themes (dark first since that's where every issue was reported).
+next_phase: 131
+next_phase_name: "TBD — emerges from Phase 130 UAT feedback"
+next_phase_status: AWAITING-UAT-FROM-130
 next_action: |
-  Phase 130 drafted 2026-05-15 — comprehensive punch-list from a long
-  dark-mode QA pass plus three new asks (top bar, profile relocation,
-  AI Chat redesign). Four sub-plans in execution order:
-    130-01  Dark-mode token completion (body.dark adds --fg / --bg /
-            --fg-mute / --fg-faint; convert v36-component text-fg /
-            bg-fg usages to arbitrary form so they flip).
-            Bundles the ThemeModeSelector "Light/Dark/System" invisibility
-            fix (settings-content.tsx).
-    130-03  Settings polish — drop Liv Agent entry, LogsPanel bg fix,
-            split Troubleshoot back into Logs/Diagnostics only (re-add
-            software-update + advanced as top-level rows), Past Deploys
-            scroll-clamp, Home dashboard CPU/Memory/Storage text fix.
-    130-02  Top Bar + Profile relocation — new modules/desktop/top-bar.tsx
-            with AvatarGradient (peach→pink, 30px) + LivinityMark sm +
-            "Livinity" wordmark. Drop <DockProfile /> from dock.tsx.
-    130-04  AI Chat modernization — left rail dark surface, composer pill
-            input, message bubble migration to v36 ChatBubble (P129).
-  Sacred SHA invariant: f3538e1d811992b782a9bb057d1b7f0a0189f95f
-  (liv/packages/core/src/sdk-agent-runner.ts). Verify before/after every
-  commit per plan §"Verification protocol".
-  Reference: design-system-reference.html in the phase directory (copy
-  of Downloads/design-system.html provided by the user). The Livinity
-  logo / favicon work shipped in commit e00c6cdb already covers the
-  donut brand mark; the avatar gradient is the new addition.
-  Resume command: "phase 130 başla" or the full form in the PLAN.md.
+  Operator: walk the four 130 surfaces in dark mode then light mode on
+  Mini PC (or local dev). For each issue from the 130 plan, confirm
+  PASS/FAIL. Any FAILs flow into Phase 131 (or 130-05+ if minor).
+  Resume command: "phase 130 UAT" or "phase 131 başla" after UAT.
 post_milestone_polish_commits:
   - "0e90eebb feat(v36/settings): AccountSection → FieldCard + SettingsPageHeader"
   - "1dab7029 feat(v36/settings): sidebar consolidation (23 → 17 entries)"
