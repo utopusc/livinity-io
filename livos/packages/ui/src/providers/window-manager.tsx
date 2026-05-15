@@ -1,4 +1,6 @@
-import React, {createContext, useCallback, useContext, useReducer} from 'react'
+import React, {createContext, useCallback, useContext, useEffect, useReducer, useRef} from 'react'
+
+import {trpcReact} from '@/trpc/trpc'
 
 // Types
 export type WindowId = string
@@ -238,6 +240,58 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		nextZIndex: 40, // Start at z-40, below dock at z-50
 	})
 
+	// Phase 131-02 — pinned-windows persistence (D-131-A: Postgres).
+	// On mount, fetch the user's pinned shelf and rehydrate the windows
+	// in `isPinnedToTopBar: true` state so the chips reappear after a
+	// page refresh. Tier-(a) of D-131-E. Tier-(b) — keeping the
+	// underlying app session alive in the background — is Plan 131-03
+	// scope (not yet implemented; chips here open fresh sessions on
+	// click).
+	const pinnedListQuery = trpcReact.pinnedWindows.list.useQuery(undefined, {
+		// Refetch is not useful here — pinned state is mirrored locally
+		// on every pin/unpin. Hydrate once on mount.
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: false,
+		retry: 1,
+	})
+	const pinnedUpsertMutation = trpcReact.pinnedWindows.upsert.useMutation()
+	const pinnedDeleteMutation = trpcReact.pinnedWindows.delete.useMutation()
+
+	// Mirror state.windows in a ref so the pin/unpin mutation callbacks
+	// can look up a window's full payload without taking state in their
+	// dep array (which would re-create the callbacks on every reducer
+	// dispatch and tear the drag-state external store subscribers).
+	const windowsRef = useRef(state.windows)
+	windowsRef.current = state.windows
+
+	// One-shot hydration guard — only dispatch hydrated rows once even if
+	// the query refetches under StrictMode-double-mount.
+	const hydratedRef = useRef(false)
+	useEffect(() => {
+		if (hydratedRef.current) return
+		const rows = pinnedListQuery.data
+		if (!rows || rows.length === 0) return
+		hydratedRef.current = true
+		for (const row of rows) {
+			// Skip rows whose window is already mounted (defense in depth).
+			if (windowsRef.current.some((w) => w.id === row.windowId)) continue
+			dispatch({
+				type: 'OPEN_WINDOW',
+				payload: {
+					id: row.windowId,
+					appId: row.appId,
+					route: row.route,
+					position: row.position,
+					size: row.size,
+					isMinimized: false,
+					isPinnedToTopBar: true, // ← renders as chip, not full window
+					title: row.title,
+					icon: row.icon,
+				},
+			})
+		}
+	}, [pinnedListQuery.data])
+
 	const openWindow = useCallback((appId: string, route: string, title: string, icon: string, originRect?: OriginRect): WindowId => {
 		const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)
 		// Phase 100-06: WebApp windows ship with a stable 1280x720 base size
@@ -298,11 +352,25 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 
 	const pinWindowToTopBar = useCallback((windowId: WindowId) => {
 		dispatch({type: 'PIN_TO_TOPBAR', payload: windowId})
-	}, [])
+		// Mirror to Postgres (Phase 131-02). Look up the current window
+		// state via the ref so we don't take state in our dep array.
+		const w = windowsRef.current.find((x) => x.id === windowId)
+		if (!w) return
+		pinnedUpsertMutation.mutate({
+			windowId,
+			appId: w.appId,
+			route: w.route,
+			title: w.title,
+			icon: w.icon,
+			position: w.position,
+			size: w.size,
+		})
+	}, [pinnedUpsertMutation])
 
 	const unpinWindowFromTopBar = useCallback((windowId: WindowId) => {
 		dispatch({type: 'UNPIN_FROM_TOPBAR', payload: windowId})
-	}, [])
+		pinnedDeleteMutation.mutate({windowId})
+	}, [pinnedDeleteMutation])
 
 	return (
 		<WindowManagerContext.Provider

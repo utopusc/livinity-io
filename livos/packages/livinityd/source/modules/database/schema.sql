@@ -639,3 +639,36 @@ CREATE UNIQUE INDEX IF NOT EXISTS webapp_skills_user_webapp_name_uniq
 
 CREATE INDEX IF NOT EXISTS webapp_skills_user_webapp_idx
   ON webapp_skills(user_id, webapp_id);
+
+-- =========================================================================
+-- Phase 131-02 — pinned_windows registry (D-131-A: Postgres, NOT Redis).
+--
+-- One row per (user_id, window_id) pair the user has pinned to the TopBar
+-- shelf. Survives page refresh (tier-(a) of D-131-E). The actual app
+-- session continuity (Chrome handle / hermes run / Files watcher) is
+-- Plan 131-03 scope (tier-(b)); payload_json is reserved for the per-app
+-- freeze state defined in D-131-C.
+--
+-- position_in_shelf orders the chips left→right (default 0; Plan 131-05
+-- adds the .reorder mutation).
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS pinned_windows (
+  user_id           UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  window_id         TEXT         NOT NULL,
+  app_id            TEXT         NOT NULL,
+  route             TEXT         NOT NULL,
+  title             TEXT         NOT NULL,
+  icon              TEXT         NOT NULL,
+  position_x        INTEGER      NOT NULL,
+  position_y        INTEGER      NOT NULL,
+  size_w            INTEGER      NOT NULL,
+  size_h            INTEGER      NOT NULL,
+  position_in_shelf INTEGER      NOT NULL DEFAULT 0,
+  payload_json      JSONB,
+  pinned_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  last_seen_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, window_id)
+);
+
+CREATE INDEX IF NOT EXISTS pinned_windows_user_idx
+  ON pinned_windows (user_id, position_in_shelf ASC, pinned_at ASC);

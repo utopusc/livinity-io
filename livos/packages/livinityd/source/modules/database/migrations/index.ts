@@ -18,6 +18,12 @@ export const V32_AGENTS_MIGRATIONS: ReadonlyArray<string> = [
 	'2026-05-05-v32-agents-seed.sql',
 ] as const
 
+// Phase 131-02 — pinned_windows table (D-131-A: Postgres).
+export const V36_P131_PINNED_WINDOWS_MIGRATIONS: ReadonlyArray<string> = [
+	'2026-05-15-p131-pinned-windows.sql',
+] as const
+
 export const ALL_MIGRATIONS: ReadonlyArray<string> = [
 	...V32_AGENTS_MIGRATIONS,
+	...V36_P131_PINNED_WINDOWS_MIGRATIONS,
 ] as const

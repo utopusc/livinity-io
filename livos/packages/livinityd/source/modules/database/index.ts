@@ -609,6 +609,126 @@ export async function deleteUserPreference(userId: string, key: string): Promise
 	)
 }
 
+// ── Pinned Windows (Phase 131-02, D-131-A) ────────────────────────────
+
+/**
+ * Wire-shape for the tRPC `pinnedWindows.list` response and the
+ * `.upsert` input. Mirrors the on-disk `pinned_windows` row but uses
+ * camelCase keys for the JS surface.
+ */
+export type PinnedWindowRow = {
+	windowId: string
+	appId: string
+	route: string
+	title: string
+	icon: string
+	position: {x: number; y: number}
+	size: {width: number; height: number}
+	positionInShelf: number
+	pinnedAt: Date
+	lastSeenAt: Date
+}
+
+/**
+ * List every pinned window for a user, ordered by shelf position then
+ * pin time. Returns an empty array if Postgres is unavailable so the
+ * UI degrades to a fresh dashboard rather than crashing.
+ */
+export async function listPinnedWindows(userId: string): Promise<PinnedWindowRow[]> {
+	if (!pool) return []
+	const {rows} = await pool.query(
+		`SELECT window_id, app_id, route, title, icon,
+				position_x, position_y, size_w, size_h,
+				position_in_shelf, pinned_at, last_seen_at
+		   FROM pinned_windows
+		  WHERE user_id = $1
+		  ORDER BY position_in_shelf ASC, pinned_at ASC`,
+		[userId],
+	)
+	return rows.map((r) => ({
+		windowId: r.window_id,
+		appId: r.app_id,
+		route: r.route,
+		title: r.title,
+		icon: r.icon,
+		position: {x: r.position_x, y: r.position_y},
+		size: {width: r.size_w, height: r.size_h},
+		positionInShelf: r.position_in_shelf,
+		pinnedAt: r.pinned_at,
+		lastSeenAt: r.last_seen_at,
+	}))
+}
+
+/**
+ * Upsert a pin row. `last_seen_at` always bumps to NOW so the GC tick
+ * in Plan 131-03 can drop entries the user hasn't touched in 24h.
+ *
+ * Enforces D-131-F hard cap (16) server-side — if the user is already
+ * at the hard cap and this is a NEW pin, throws an Error. Soft cap
+ * warnings (8) are UI-side toasts.
+ */
+export async function upsertPinnedWindow(userId: string, w: {
+	windowId: string
+	appId: string
+	route: string
+	title: string
+	icon: string
+	position: {x: number; y: number}
+	size: {width: number; height: number}
+	positionInShelf?: number
+}): Promise<void> {
+	if (!pool) throw new Error('Database not initialized')
+
+	// D-131-F hard cap — count existing rows for this user that are NOT
+	// this window. If at the cap (16), reject the new pin.
+	const HARD_CAP = 16
+	const countRes = await pool.query(
+		`SELECT COUNT(*)::int AS n FROM pinned_windows
+		  WHERE user_id = $1 AND window_id <> $2`,
+		[userId, w.windowId],
+	)
+	if (countRes.rows[0]?.n >= HARD_CAP) {
+		throw new Error(
+			`Pin limit reached (${HARD_CAP}). Unpin a window before pinning another.`,
+		)
+	}
+
+	await pool.query(
+		`INSERT INTO pinned_windows (
+			user_id, window_id, app_id, route, title, icon,
+			position_x, position_y, size_w, size_h,
+			position_in_shelf, pinned_at, last_seen_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+		ON CONFLICT (user_id, window_id) DO UPDATE SET
+			app_id            = EXCLUDED.app_id,
+			route             = EXCLUDED.route,
+			title             = EXCLUDED.title,
+			icon              = EXCLUDED.icon,
+			position_x        = EXCLUDED.position_x,
+			position_y        = EXCLUDED.position_y,
+			size_w            = EXCLUDED.size_w,
+			size_h            = EXCLUDED.size_h,
+			position_in_shelf = COALESCE(EXCLUDED.position_in_shelf, pinned_windows.position_in_shelf),
+			last_seen_at      = NOW()`,
+		[
+			userId, w.windowId, w.appId, w.route, w.title, w.icon,
+			w.position.x, w.position.y, w.size.width, w.size.height,
+			w.positionInShelf ?? 0,
+		],
+	)
+}
+
+/**
+ * Drop a pin row. Idempotent — deleting a non-existent pin is a no-op.
+ */
+export async function deletePinnedWindow(userId: string, windowId: string): Promise<void> {
+	if (!pool) return
+	await pool.query(
+		`DELETE FROM pinned_windows WHERE user_id = $1 AND window_id = $2`,
+		[userId, windowId],
+	)
+}
+
 // ── Channel Identity Map (unified cross-channel userId) ────────────────
 
 /**
