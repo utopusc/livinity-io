@@ -90,7 +90,7 @@ export function BackupsExclusions({showTitle = false}: {showTitle?: boolean}) {
 												}
 											}}
 											aria-label={t('backups-exclusions.stop-excluding')}
-											className='inline-flex h-6 w-6 cursor-pointer items-center justify-center text-[#F45A5A] hover:text-[#F45A5A]/90'
+											className='inline-flex h-6 w-6 cursor-pointer items-center justify-center text-accent-red hover:text-accent-red/90'
 										>
 											<MinusCircle className='h-4 w-4' />
 										</span>
@@ -302,7 +302,7 @@ function AppRow({
 								}
 							}}
 							aria-label={t('backups-exclusions.stop-excluding')}
-							className='inline-flex size-6 cursor-pointer items-center justify-center text-[#F45A5A] hover:text-[#F45A5A]/90'
+							className='inline-flex size-6 cursor-pointer items-center justify-center text-accent-red hover:text-accent-red/90'
 						>
 							<MinusCircle className='size-4' />
 						</span>

@@ -415,7 +415,7 @@ function RepositoryStep({
 											<div
 												key={repo.id}
 												className={[
-													'flex w-full min-w-0 items-center gap-3 rounded-xl border p-4 transition-colors',
+													'flex w-full min-w-0 items-center gap-3 rounded-dash border p-4 transition-colors',
 													selected
 														? 'border-brand bg-brand/15'
 														: isConnected(repo.path)
@@ -464,7 +464,7 @@ function RepositoryStep({
 						) : null}
 						{/* Manual add callout row (always shown in known mode) */}
 						<div
-							className='flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-border-default bg-surface-base p-4 transition-colors hover:border-brand hover:bg-brand/15'
+							className='flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-dash border border-dashed border-border-default bg-surface-base p-4 transition-colors hover:border-brand hover:bg-brand/15'
 							onClick={() => onModeChange('manual')}
 						>
 							<div className='flex h-10 w-10 shrink-0 items-center justify-center'>
@@ -597,7 +597,7 @@ function BackupsStep({
 					<EmptyCard text={t('backups-restore.no-backups-found')} />
 				) : (
 					<div
-						className='max-h-[45vh] overflow-hidden overflow-y-auto rounded-2xl bg-gradient-to-b from-surface-base to-transparent pb-8 pl-1 pt-1 md:max-h-[min(60vh,560px)]'
+						className='max-h-[45vh] overflow-hidden overflow-y-auto rounded-dash bg-gradient-to-b from-surface-base to-transparent pb-8 pl-1 pt-1 md:max-h-[min(60vh,560px)]'
 						style={{
 							maskImage: 'linear-gradient(to bottom, red 50px calc(100% - 80px), transparent)',
 						}}

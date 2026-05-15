@@ -533,7 +533,7 @@ function BackupsList({
 							<div className='flex items-center gap-2'>
 								<div className='text-text-secondary'>{dateLabel}</div>
 								{isLatest && (
-									<span className='rounded-full bg-green-500/20 px-2 text-[8px] font-medium uppercase tracking-wider text-green-500'>
+									<span className='rounded-full bg-accent-green/20 px-2 text-[8px] font-medium uppercase tracking-wider text-accent-green'>
 										{t('backups-restore.latest')}
 									</span>
 								)}
