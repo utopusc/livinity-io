@@ -46,6 +46,8 @@ import {
 	TbStethoscope,
 	TbRobot,
 	TbBrandChrome,
+	TbPlayerPlay,
+	TbPlayerPause,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -684,15 +686,13 @@ function InlineChangePasswordDialog({open, onOpenChange}: {open: boolean; onOpen
 // `wallpaperSettings` values stay in place harmlessly (default no-op).
 function WallpaperSection() {
 	const {wallpaper, setWallpaperId} = useWallpaper()
+	// Preview-only pause state — independent of the global wallpaperSettings.
+	// Defaults paused so opening the Theme page doesn't immediately start
+	// a 2000-particle rAF loop; user clicks ▶ to bring it alive.
+	const [previewPaused, setPreviewPaused] = useState(true)
 
 	const previewId = (wallpaper.id || animatedWallpaperIds[0]) as AnimatedWallpaperId
 	const PreviewComponent = animatedWallpapers[previewId]?.component
-
-	const grouped = {
-		auto: animatedWallpaperIds.filter((id) => animatedWallpapers[id].theme === 'auto'),
-		light: animatedWallpaperIds.filter((id) => animatedWallpapers[id].theme === 'light'),
-		dark: animatedWallpaperIds.filter((id) => animatedWallpapers[id].theme === 'dark'),
-	}
 
 	return (
 		<div className='flex flex-col gap-8'>
@@ -700,49 +700,49 @@ function WallpaperSection() {
 				eyebrow='02 · Theme'
 				title='Tune your'
 				titleAccent='theme.'
-				sub='Pick the LivOS appearance mode, the wallpaper and the accent colour. The mode applies instantly across every surface (desktop, dock, windows, settings).'
+				sub='Pick the LivOS appearance mode and the wallpaper. The mode applies instantly across every surface (desktop, dock, windows, settings, login).'
 			/>
 
 			<ThemeModeSelector />
 
-			{/* Static preview — the picker shows the wallpaper as a still image so
-			    nothing competes with the rest of the Theme page. The live
-			    animation only runs on the actual desktop / login backdrops. */}
-			<div className='relative aspect-video overflow-hidden rounded-[var(--r-lg)] border border-line'>
-				{PreviewComponent && (
-					<PreviewComponent
-						key={previewId}
-						paused
-						className='absolute inset-0 h-full w-full'
-					/>
-				)}
-				<div className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent px-4 pb-3 pt-8'>
-					<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-white/80'>
-						{animatedWallpapers[previewId]?.name} · {animatedWallpapers[previewId]?.theme}
-					</span>
+			{/* Wallpaper preview with a play/pause toggle. Defaults paused so the
+			    page stays calm on open; tap ▶ to see the wallpaper alive without
+			    affecting the actual desktop / login backdrops. */}
+			<div className='flex flex-col gap-3'>
+				<div className='flex items-baseline justify-between gap-2'>
+					<div className='flex items-baseline gap-2'>
+						<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-fg-faint'>
+							Wallpaper
+						</span>
+						<span className='text-[11px] text-fg-faint'>
+							· {animatedWallpapers[previewId]?.name}
+						</span>
+					</div>
+					<button
+						type='button'
+						onClick={() => setPreviewPaused((p) => !p)}
+						aria-label={previewPaused ? 'Play preview' : 'Pause preview'}
+						className='flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-[12px] font-medium text-fg-mute transition-colors hover:bg-[color:var(--bg-2)] hover:text-fg'
+					>
+						{previewPaused ? <TbPlayerPlay className='h-3.5 w-3.5' /> : <TbPlayerPause className='h-3.5 w-3.5' />}
+						{previewPaused ? 'Play' : 'Pause'}
+					</button>
+				</div>
+				<div className='relative aspect-video overflow-hidden rounded-[var(--r-lg)] border border-line'>
+					{PreviewComponent && (
+						<PreviewComponent
+							key={previewId}
+							paused={previewPaused}
+							className='absolute inset-0 h-full w-full'
+						/>
+					)}
 				</div>
 			</div>
 
 			<WallpaperGroup
-				title='Both Themes'
-				ids={grouped.auto}
+				ids={animatedWallpaperIds}
 				selectedId={wallpaper.id}
 				onSelect={setWallpaperId}
-				placeholder='Adaptive wallpapers will appear here.'
-			/>
-			<WallpaperGroup
-				title='Light Theme'
-				ids={grouped.light}
-				selectedId={wallpaper.id}
-				onSelect={setWallpaperId}
-				placeholder='Light-theme wallpapers coming soon.'
-			/>
-			<WallpaperGroup
-				title='Dark Theme'
-				ids={grouped.dark}
-				selectedId={wallpaper.id}
-				onSelect={setWallpaperId}
-				placeholder='Dark-theme wallpapers coming soon.'
 			/>
 		</div>
 	)
@@ -811,43 +811,30 @@ function ThemeModeSelector() {
 }
 
 function WallpaperGroup({
-	title,
 	ids,
 	selectedId,
 	onSelect,
-	placeholder,
 }: {
-	title: string
 	ids: AnimatedWallpaperId[]
 	selectedId: string | undefined
 	onSelect: (id: AnimatedWallpaperId) => void
-	placeholder: string
 }) {
-	const count = ids.length
+	if (ids.length === 0) return null
 	return (
 		<section className='flex flex-col gap-3'>
-			<div className='flex items-baseline gap-2'>
-				<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-fg-faint'>{title}</span>
-				<span className='text-[11px] text-fg-faint'>
-					· {count} wallpaper{count === 1 ? '' : 's'}
-				</span>
+			<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-fg-faint'>
+				Available
+			</span>
+			<div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
+				{ids.map((id) => (
+					<WallpaperTile
+						key={id}
+						id={id}
+						active={id === selectedId}
+						onSelect={() => onSelect(id)}
+					/>
+				))}
 			</div>
-			{count > 0 ? (
-				<div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
-					{ids.map((id) => (
-						<WallpaperTile
-							key={id}
-							id={id}
-							active={id === selectedId}
-							onSelect={() => onSelect(id)}
-						/>
-					))}
-				</div>
-			) : (
-				<div className='rounded-[var(--r-md)] border border-dashed border-line bg-[color:var(--bg-2)] px-4 py-6 text-center'>
-					<p className='text-[13px] text-fg-faint'>{placeholder}</p>
-				</div>
-			)}
 		</section>
 	)
 }
