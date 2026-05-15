@@ -332,13 +332,25 @@ export function SettingsContent() {
 					<ContactSupportLink />
 				</div>
 
-				{/* Right Side */}
+				{/* Right Side — v36 LivOS Design Port welcoming placeholder.
+				    Replaces the legacy "Select a setting" generic card with a v36
+				    eyebrow + italic-serif title pattern. Sidebar layout PRESERVED
+				    per user direction "onceki design daha iyiydi onceki design i
+				    gelistir" (2026-05-15). */}
 				<div className='flex flex-col gap-5'>
-					{/* Quick Info */}
 					<Card>
-						<div className='text-center py-8'>
-							<div className='text-body-lg font-medium text-text-secondary'>Select a setting from the menu</div>
-							<div className='text-body-sm text-text-tertiary mt-1'>Configure your Livinity device</div>
+						<div className='flex flex-col items-center justify-center text-center py-14 px-8'>
+							<span className='font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint flex items-center gap-2 mb-4'>
+								<span className='inline-block h-1.5 w-1.5 rounded-full bg-fg' aria-hidden='true' />
+								Settings
+							</span>
+							<h2 className='text-[clamp(28px,3.2vw,40px)] font-medium leading-[1.1] tracking-[-0.03em] text-fg text-balance'>
+								Tune <em className='font-serif italic font-normal text-fg-mute'>LivOS.</em>
+							</h2>
+							<p className='mt-3 text-[14px] leading-[1.5] text-fg-mute max-w-[44ch]'>
+								Pick a section on the left — account, theme, AI, integrations, and the
+								rest of your computer&rsquo;s knobs.
+							</p>
 						</div>
 					</Card>
 				</div>
@@ -411,19 +423,25 @@ function SettingsDetailView({
 
 			{/* Right Side - Content */}
 			<Card className={cn('min-h-[500px]', isMobile && 'min-h-0')}>
-				{/* Header with back button - hidden on mobile (SettingsContent handles it) */}
+				{/* v36 LivOS Design Port — duplicate-header fix 2026-05-15.
+				    The previous outer h1 header rendered the section label TWICE
+				    whenever the sub-page also rendered its own <SettingsPageHeader/>
+				    (per Phase 124 migration of ai-config / integrations / dm-pairing
+				    / local-access / domain-setup / chrome-master / liv-agent).
+				    Compact mono breadcrumb keeps the back button + context label
+				    without competing with the inner heading. */}
 				{!isMobile && (
-					<div className='flex items-center gap-4 border-b border-border-default pb-4 mb-6'>
+					<div className='flex items-center gap-3 pb-4 mb-6 border-b border-line'>
 						<button
 							onClick={onBack}
-							className='flex h-10 w-10 items-center justify-center rounded-radius-md bg-surface-base text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary'
+							className='flex h-7 w-7 items-center justify-center rounded-full border border-line-strong text-fg-mute transition-colors hover:bg-[color:var(--bg-2)] hover:text-fg'
+							aria-label='Back to settings'
 						>
-							<TbArrowLeft className='h-5 w-5' />
+							<TbArrowLeft className='h-3.5 w-3.5' />
 						</button>
-						<div>
-							<h1 className='text-heading font-semibold -tracking-2'>{menuItem?.label}</h1>
-							<p className='text-body-sm text-text-secondary'>{menuItem?.description}</p>
-						</div>
+						<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-fg-mute'>
+							Settings · {menuItem?.label}
+						</span>
 					</div>
 				)}
 
@@ -434,7 +452,7 @@ function SettingsDetailView({
 						initial={{opacity: 0, y: 8}}
 						animate={{opacity: 1, y: 0}}
 						exit={{opacity: 0, y: -8}}
-						transition={{duration: 0.2, ease: 'easeOut'}}
+						transition={{duration: 0.22, ease: [0.2, 0.7, 0.2, 1]}}
 					>
 						<SectionContent section={section} onBack={onBack} />
 					</motion.div>

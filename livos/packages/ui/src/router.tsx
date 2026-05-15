@@ -137,12 +137,10 @@ export const router = createBrowserRouter([
 					// Community App Store also removed (same rationale).
 					// Spotlight + cmdk navigate() calls to /app-store/{appId} will be
 					// dead-ends until cleaned up in a follow-up phase.
-					{
-						// Phase 76 / Plan 76-04 — Agent Marketplace route.
-						path: 'agent-marketplace',
-						Component: AgentMarketplace,
-						ErrorBoundary: ErrorBoundaryComponentFallback,
-					},
+					// v36 — /agent-marketplace SheetLayout entry REMOVED 2026-05-15 per
+					// user "buna benzer yerleride kaldir". Component import preserved
+					// for future v37 window-manager conversion; deep links now 404.
+					// /files PRESERVED — OwnCloud daily driver depends on URL deep-linking.
 					// v32-redo-stage1a: /marketplace route removed (source dir deleted)
 				],
 			},
