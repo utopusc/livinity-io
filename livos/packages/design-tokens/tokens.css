@@ -24,6 +24,56 @@
 }
 
 /*
+ * === v36 Design System (additive — Livinity Design Port) ===
+ * Source: .planning/design-system/livinity-design-system.html §01 + §03
+ * Authored by user in claude.ai/design 2026-05-15.
+ * D-V36-ADDITIVE-ONLY: these vars coexist with the Phase 116 canonical block
+ * above (--accent-blue, --dash-line, --card-shadow, etc.). Zero rename,
+ * zero value change to existing tokens. Consumers opt in via new utilities
+ * (see tailwind.preset.cjs v36 block) or arbitrary CSS — e.g.
+ * `rounded-[var(--r-lg)]` for the 18px design-system radius.
+ */
+:root {
+  /* Neutrals (Apple-like, monochrome) */
+  --bg:           #ffffff;
+  --bg-2:         #f5f5f7;
+  --surface:      #fafafa;
+  --surface-2:    #ebebed;
+  --line:         rgb(0 0 0 / .08);
+  --line-strong:  rgb(0 0 0 / .14);
+  --fg:           #1d1d1f;
+  --fg-dim:       #424245;
+  --fg-mute:      #6e6e73;
+  --fg-faint:     #a1a1a6;
+  /* Accent — monochrome by default; --blue used sparingly (focus rings, links) */
+  --accent:       #1d1d1f;
+  --accent-soft:  rgb(0 0 0 / .06);
+  --blue:         #0a84ff;
+  --green-bright: #28c840;
+  /* Radii (v36 scale; addresses --r-* in design-system.html line 45-52) */
+  --r-xs:  6px;
+  --r-sm:  8px;
+  --r:    12px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 22px;
+  --r-2xl:28px;
+  --r-full: 999px;
+  /* Shadows (v36 scale). --shadow-card aliases existing --card-shadow which
+   * is already byte-identical to the design-system value — no duplication. */
+  --shadow-card:   var(--card-shadow);
+  --shadow-window: 0 1px 2px rgb(0 0 0 / .04), 0 30px 80px -30px rgb(0 0 0 / .22);
+  --shadow-pop:    0 12px 30px -16px rgb(0 0 0 / .18);
+  /* Easing (v36 — single canonical curves) */
+  --ease-out-v36:    cubic-bezier(.2, .7, .2, 1);
+  --ease-in-out-v36: cubic-bezier(.4, 0, .2, 1);
+  /* Fonts: alias the existing --font-* (no new @font-face) */
+  --sans:  -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "Geist", system-ui, sans-serif;
+  --mono:  var(--font-mono);
+  --serif: var(--font-serif);
+}
+
+/*
  * D-116-FOLLOW-UP-DARK
  * Server5 was unreachable when Plan 116-01 ran (port 22 closed; Contabo
  * panel restart pending per project_v34_session_2026_05_13.md memory).
