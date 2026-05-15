@@ -143,6 +143,28 @@ body.dark {
   --text-primary:   rgba(245, 245, 247, 0.92);
   --text-secondary: rgba(245, 245, 247, 0.62);
   --text-tertiary:  rgba(245, 245, 247, 0.42);
+  /*
+   * 2026-05-15 (Phase 130-01) — v36 NEUTRAL tokens flipped for dark mode.
+   * Consumers that need theme-aware foregrounds use the arbitrary form
+   * `text-[color:var(--fg)]` / `bg-[color:var(--bg-2)]` etc. so they pick
+   * up these values. The static preset classes (`text-fg`, `bg-fg`,
+   * etc.) intentionally STAY static per the D-V36-ADDITIVE-ONLY rule
+   * above — that's the colour-collision protection. v36 components
+   * needing theme-awareness convert their preset usages to arbitrary
+   * form one-by-one in Plan 130-01 follow-on edits.
+   */
+  --bg:           #0a0a0c;
+  --bg-2:         #16161a;
+  --surface:      #1c1c1f;
+  --surface-2:    #232328;
+  --line:         rgb(255 255 255 / .08);
+  --line-strong:  rgb(255 255 255 / .14);
+  --fg:           #f5f5f7;
+  --fg-dim:       #d2d2d4;
+  --fg-mute:      #a1a1a6;
+  --fg-faint:     #6e6e73;
+  --accent:       #f5f5f7;
+  --accent-soft:  rgb(255 255 255 / .08);
 }
 
 /*

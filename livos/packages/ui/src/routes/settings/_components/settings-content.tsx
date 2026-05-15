@@ -430,12 +430,12 @@ function SettingsDetailView({
 					<div className='flex items-center gap-3 pb-4 mb-6 border-b border-line'>
 						<button
 							onClick={onBack}
-							className='flex h-7 w-7 items-center justify-center rounded-full border border-line-strong text-fg-mute transition-colors hover:bg-[color:var(--bg-2)] hover:text-fg'
+							className='flex h-7 w-7 items-center justify-center rounded-full border border-line-strong text-[color:var(--fg-mute)] transition-colors hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]'
 							aria-label='Back to settings'
 						>
 							<TbArrowLeft className='h-3.5 w-3.5' />
 						</button>
-						<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-fg-mute'>
+						<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--fg-mute)]'>
 							Settings · {menuItem?.label}
 						</span>
 					</div>
@@ -544,7 +544,7 @@ function AccountSection() {
 					value={
 						userName
 							? <span className='truncate'>{userName}</span>
-							: <span className='text-fg-faint'>—</span>
+							: <span className='text-[color:var(--fg-faint)]'>—</span>
 					}
 					trailing={
 						<Button
@@ -558,7 +558,7 @@ function AccountSection() {
 				/>
 				<FieldRow
 					label='Password'
-					value={<span className='font-mono tracking-[0.2em] text-fg-mute'>••••••••</span>}
+					value={<span className='font-mono tracking-[0.2em] text-[color:var(--fg-mute)]'>••••••••</span>}
 					trailing={
 						<Button
 							variant='v36-ghost'
@@ -711,10 +711,10 @@ function WallpaperSection() {
 			<div className='flex flex-col gap-3'>
 				<div className='flex items-baseline justify-between gap-2'>
 					<div className='flex items-baseline gap-2'>
-						<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-fg-faint'>
+						<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--fg-faint)]'>
 							Wallpaper
 						</span>
-						<span className='text-[11px] text-fg-faint'>
+						<span className='text-[11px] text-[color:var(--fg-faint)]'>
 							· {animatedWallpapers[previewId]?.name}
 						</span>
 					</div>
@@ -722,7 +722,7 @@ function WallpaperSection() {
 						type='button'
 						onClick={() => setPreviewPaused((p) => !p)}
 						aria-label={previewPaused ? 'Play preview' : 'Pause preview'}
-						className='flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-[12px] font-medium text-fg-mute transition-colors hover:bg-[color:var(--bg-2)] hover:text-fg'
+						className='flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-[12px] font-medium text-[color:var(--fg-mute)] transition-colors hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]'
 					>
 						{previewPaused ? <TbPlayerPlay className='h-3.5 w-3.5' /> : <TbPlayerPause className='h-3.5 w-3.5' />}
 						{previewPaused ? 'Play' : 'Pause'}
@@ -765,17 +765,17 @@ function ThemeModeSelector() {
 	return (
 		<div className='flex flex-col gap-3'>
 			<div className='flex items-baseline gap-2'>
-				<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-fg-faint'>
+				<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--fg-faint)]'>
 					Mode
 				</span>
-				<span className='text-[11px] text-fg-faint'>
+				<span className='text-[11px] text-[color:var(--fg-faint)]'>
 					· Currently {resolvedTheme}
 				</span>
 			</div>
 			<div
 				role='radiogroup'
 				aria-label='Theme mode'
-				className='inline-flex w-fit gap-1 rounded-[var(--r-md)] border border-line bg-[color:var(--bg)] p-1'
+				className='inline-flex w-fit gap-1 rounded-[var(--r-md)] border border-line bg-[color:var(--bg-2)] p-1'
 			>
 				{THEME_OPTIONS.map(({value, label, icon: Icon}) => {
 					const isActive = theme === value
@@ -788,16 +788,14 @@ function ThemeModeSelector() {
 							onClick={() => setTheme(value)}
 							className={cn(
 								'flex items-center gap-2 rounded-[calc(var(--r-md)-4px)] px-3.5 py-1.5 text-[13px] font-medium transition-colors',
-								// Explicit zinc/white colours instead of `bg-fg text-[var(--bg)]`
-								// — the v36 design-tokens preset declares `fg` and `--bg` as
-								// STATIC light-mode values (`#1d1d1f` / `#ffffff`) and
-								// `body.dark { /* PENDING */ }` is empty in tokens.css, so the
-								// active label was disappearing depending on the surrounding
-								// surface. Hardcoded values survive any token mismatch and
-								// invert correctly via the `dark:` variant.
+								// Phase 130-01: now that body.dark defines the v36 neutrals
+								// (--fg, --fg-mute, --bg, --bg-2 etc.), the inactive label
+								// can use the arbitrary form which flips with the theme.
+								// Active state keeps the explicit zinc/white pair because
+								// it intentionally INVERTS against the wrapper.
 								isActive
 									? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
-									: 'text-fg-mute hover:bg-[color:var(--bg-2)] hover:text-fg',
+									: 'text-[color:var(--fg-mute)] hover:bg-[color:var(--bg)] hover:text-[color:var(--fg)]',
 							)}
 						>
 							<Icon className='h-3.5 w-3.5' />
@@ -822,7 +820,7 @@ function WallpaperGroup({
 	if (ids.length === 0) return null
 	return (
 		<section className='flex flex-col gap-3'>
-			<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-fg-faint'>
+			<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--fg-faint)]'>
 				Available
 			</span>
 			<div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
@@ -856,7 +854,7 @@ function WallpaperTile({
 			className={cn(
 				'group relative aspect-video overflow-hidden rounded-[var(--r-md)] border transition-all',
 				active
-					? 'border-fg shadow-[var(--shadow-pop)]'
+					? 'border-[color:var(--fg)] shadow-[var(--shadow-pop)]'
 					: 'border-line hover:border-line-strong',
 			)}
 		>
@@ -867,7 +865,7 @@ function WallpaperTile({
 				{entry.name}
 			</span>
 			{active && (
-				<div className='absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-fg text-[color:var(--bg)]'>
+				<div className='absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[color:var(--fg)] text-[color:var(--bg)]'>
 					<TbCheck className='h-3 w-3' />
 				</div>
 			)}
@@ -2012,14 +2010,14 @@ function SettingsHomeDashboard() {
 	return (
 		<div className='flex flex-col gap-5'>
 			<div className='pt-2 pb-5 border-b border-line'>
-				<span className='font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint flex items-center gap-2 mb-3'>
-					<span className='inline-block h-1.5 w-1.5 rounded-full bg-fg' aria-hidden='true' />
+				<span className='font-mono text-[11px] uppercase tracking-[0.18em] text-[color:var(--fg-faint)] flex items-center gap-2 mb-3'>
+					<span className='inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--fg)]' aria-hidden='true' />
 					Overview
 				</span>
-				<h2 className='text-[clamp(26px,3vw,36px)] font-medium leading-[1.1] tracking-[-0.03em] text-fg text-balance'>
-					Tune <em className='font-serif italic font-normal text-fg-mute'>LivOS.</em>
+				<h2 className='text-[clamp(26px,3vw,36px)] font-medium leading-[1.1] tracking-[-0.03em] text-[color:var(--fg)] text-balance'>
+					Tune <em className='font-serif italic font-normal text-[color:var(--fg-mute)]'>LivOS.</em>
 				</h2>
-				<p className='mt-2 text-[13.5px] leading-[1.5] text-fg-mute max-w-[48ch]'>
+				<p className='mt-2 text-[13.5px] leading-[1.5] text-[color:var(--fg-mute)] max-w-[48ch]'>
 					A live snapshot of your computer. Pick a section on the left to drill in.
 				</p>
 			</div>
@@ -2037,11 +2035,11 @@ function DashStat({label, value, sub, fill}: {label: string; value: React.ReactN
 	const pct = Math.max(0, Math.min(1, Number.isFinite(fill) ? fill : 0)) * 100
 	return (
 		<div className='rounded-[12px] border border-line bg-[color:var(--bg)] p-4'>
-			<div className='font-mono text-[10.5px] uppercase tracking-[0.14em] text-fg-mute'>{label}</div>
-			<div className='text-[20px] font-semibold tracking-[-0.02em] mt-1 text-fg leading-none'>{value}</div>
-			<div className='text-[11.5px] text-fg-faint mt-1.5 truncate'>{sub}</div>
+			<div className='font-mono text-[10.5px] uppercase tracking-[0.14em] text-[color:var(--fg-mute)]'>{label}</div>
+			<div className='text-[20px] font-semibold tracking-[-0.02em] mt-1 text-[color:var(--fg)] leading-none'>{value}</div>
+			<div className='text-[11.5px] text-[color:var(--fg-faint)] mt-1.5 truncate'>{sub}</div>
 			<div className='h-1 rounded-[2px] bg-[color:var(--bg-2)] mt-3 overflow-hidden'>
-				<div className='h-full bg-fg rounded-[2px] transition-[width] duration-300 ease-out' style={{width: `${pct}%`}} />
+				<div className='h-full bg-[color:var(--fg)] rounded-[2px] transition-[width] duration-300 ease-out' style={{width: `${pct}%`}} />
 			</div>
 		</div>
 	)

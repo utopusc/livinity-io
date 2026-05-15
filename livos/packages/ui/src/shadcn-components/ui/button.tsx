@@ -31,9 +31,9 @@ const buttonVariants = cva(
 				// migrate consumers (settings, plan-cards, app-store, ai-chat) to these
 				// variants one surface at a time.
 				'v36-primary':
-					'bg-fg text-[color:var(--bg)] hover:opacity-90 border border-fg ring-fg/20',
+					'bg-[color:var(--fg)] text-[color:var(--bg)] hover:opacity-90 border border-[color:var(--fg)] ring-[color:var(--fg)]/20',
 				'v36-ghost':
-					'bg-transparent text-fg border border-line-strong hover:bg-[color:var(--bg-2)] ring-fg/10',
+					'bg-transparent text-[color:var(--fg)] border border-line-strong hover:bg-[color:var(--bg-2)] ring-[color:var(--fg)]/10',
 				'v36-danger':
 					'bg-transparent text-[color:var(--red,#dc2626)] border border-[color:rgb(220_38_38_/_.30)] hover:bg-[color:rgb(220_38_38_/_.06)]',
 			},

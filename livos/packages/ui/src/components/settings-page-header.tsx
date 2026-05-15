@@ -44,27 +44,27 @@ export function SettingsPageHeader({eyebrow, title, titleAccent, sub, backTo = n
 						<button
 							type='button'
 							onClick={() => navigate(backTo)}
-							className='flex h-7 w-7 items-center justify-center rounded-full border border-line-strong text-fg-mute transition-colors hover:bg-surface hover:text-fg'
+							className='flex h-7 w-7 items-center justify-center rounded-full border border-line-strong text-[color:var(--fg-mute)] transition-colors hover:bg-surface hover:text-[color:var(--fg)]'
 							aria-label='Back'
 						>
 							<TbArrowLeft className='h-3.5 w-3.5' />
 						</button>
 					)}
 					{eyebrow && (
-						<span className='font-mono text-[11px] uppercase tracking-[0.08em] text-fg-faint'>{eyebrow}</span>
+						<span className='font-mono text-[11px] uppercase tracking-[0.08em] text-[color:var(--fg-faint)]'>{eyebrow}</span>
 					)}
 				</div>
 			)}
-			<h1 className='text-[32px] font-light tracking-[-0.025em] leading-[1.1] text-fg text-balance'>
+			<h1 className='text-[32px] font-light tracking-[-0.025em] leading-[1.1] text-[color:var(--fg)] text-balance'>
 				{title}
 				{titleAccent && (
 					<>
 						{' '}
-						<em className='font-serif italic font-normal text-fg-mute'>{titleAccent}</em>
+						<em className='font-serif italic font-normal text-[color:var(--fg-mute)]'>{titleAccent}</em>
 					</>
 				)}
 			</h1>
-			{sub && <p className='text-[14px] text-fg-mute leading-[1.5] max-w-[560px]'>{sub}</p>}
+			{sub && <p className='text-[14px] text-[color:var(--fg-mute)] leading-[1.5] max-w-[560px]'>{sub}</p>}
 		</header>
 	)
 }

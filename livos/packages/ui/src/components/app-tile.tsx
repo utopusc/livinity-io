@@ -37,7 +37,7 @@ export function AppTile({name, category, monogram, iconUrl, onOpen, className}: 
 			className={cn(
 				'group relative flex flex-col gap-1.5 rounded-2xl p-4 pt-[18px] pb-4 min-h-[112px]',
 				'border border-line bg-[color:var(--bg)] transition-all duration-[350ms] ease-out-v36',
-				'hover:-translate-y-0.5 hover:border-fg-faint cursor-pointer text-left',
+				'hover:-translate-y-0.5 hover:border-[color:var(--fg-faint)] cursor-pointer text-left',
 				className,
 			)}
 		>
@@ -47,12 +47,12 @@ export function AppTile({name, category, monogram, iconUrl, onOpen, className}: 
 					style={{backgroundImage: `url(${iconUrl})`}}
 				/>
 			) : (
-				<div className='h-[34px] w-[34px] rounded-[10px] grid place-items-center text-[16px] font-semibold bg-fg text-[color:var(--bg)] mb-1.5 transition-transform duration-[350ms] ease-out-v36 group-hover:scale-[1.06] group-hover:-rotate-2'>
+				<div className='h-[34px] w-[34px] rounded-[10px] grid place-items-center text-[16px] font-semibold bg-[color:var(--fg)] text-[color:var(--bg)] mb-1.5 transition-transform duration-[350ms] ease-out-v36 group-hover:scale-[1.06] group-hover:-rotate-2'>
 					{initials}
 				</div>
 			)}
-			<div className='text-[14px] font-semibold tracking-[-0.01em] text-fg'>{name}</div>
-			{category && <div className='text-[11px] text-fg-mute font-medium'>{category}</div>}
+			<div className='text-[14px] font-semibold tracking-[-0.01em] text-[color:var(--fg)]'>{name}</div>
+			{category && <div className='text-[11px] text-[color:var(--fg-mute)] font-medium'>{category}</div>}
 		</button>
 	)
 }

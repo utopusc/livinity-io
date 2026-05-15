@@ -42,21 +42,21 @@ export function PlanCard({name, priceNumber, pricePeriod, tag, specs, cta, onSel
 			style={featured ? {background: 'linear-gradient(160deg, #faf6f1 0%, #f5ede2 100%)'} : undefined}
 		>
 			{featured && (
-				<span className='absolute top-[18px] right-[18px] font-mono text-[9.5px] font-semibold uppercase tracking-[0.06em] px-[9px] py-1 rounded-full bg-fg text-[color:var(--bg)]'>
+				<span className='absolute top-[18px] right-[18px] font-mono text-[9.5px] font-semibold uppercase tracking-[0.06em] px-[9px] py-1 rounded-full bg-[color:var(--fg)] text-[color:var(--bg)]'>
 					{badge ?? 'Popular'}
 				</span>
 			)}
-			<div className='font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-fg'>{name}</div>
+			<div className='font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--fg)]'>{name}</div>
 			<div className='flex items-baseline gap-1'>
-				<span className='text-[44px] font-light tracking-[-0.035em] leading-none text-fg'>{priceNumber}</span>
-				<span className='text-[13px] text-fg-mute font-mono'>{pricePeriod}</span>
+				<span className='text-[44px] font-light tracking-[-0.035em] leading-none text-[color:var(--fg)]'>{priceNumber}</span>
+				<span className='text-[13px] text-[color:var(--fg-mute)] font-mono'>{pricePeriod}</span>
 			</div>
-			<div className='text-[12px] text-fg-mute leading-[1.4] min-h-[34px]'>{tag}</div>
+			<div className='text-[12px] text-[color:var(--fg-mute)] leading-[1.4] min-h-[34px]'>{tag}</div>
 			<div className='flex flex-col gap-2.5 pt-3.5 border-t border-line text-[13px]'>
 				{specs.map((s) => (
-					<div key={s.label} className='flex justify-between text-fg-dim'>
+					<div key={s.label} className='flex justify-between text-[color:var(--fg-dim)]'>
 						<span>{s.label}</span>
-						<b className='text-fg font-medium'>{s.value}</b>
+						<b className='text-[color:var(--fg)] font-medium'>{s.value}</b>
 					</div>
 				))}
 			</div>
@@ -66,8 +66,8 @@ export function PlanCard({name, priceNumber, pricePeriod, tag, specs, cta, onSel
 				className={cn(
 					'mt-auto inline-flex items-center justify-center gap-2 px-[18px] py-3 rounded-full text-[13.5px] font-medium border transition-all duration-150',
 					featured
-						? 'bg-fg text-[color:var(--bg)] border-fg hover:opacity-90'
-						: 'bg-transparent text-fg border-line-strong hover:bg-fg hover:text-[color:var(--bg)] hover:border-fg',
+						? 'bg-[color:var(--fg)] text-[color:var(--bg)] border-[color:var(--fg)] hover:opacity-90'
+						: 'bg-transparent text-[color:var(--fg)] border-line-strong hover:bg-[color:var(--fg)] hover:text-[color:var(--bg)] hover:border-[color:var(--fg)]',
 				)}
 			>
 				{cta}

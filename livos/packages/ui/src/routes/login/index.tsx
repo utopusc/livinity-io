@@ -204,8 +204,8 @@ function BrandMark() {
 
 function FormEyebrow({children}: {children: React.ReactNode}) {
 	return (
-		<div className='font-mono text-[11px] uppercase tracking-[0.18em] text-fg-mute flex items-center gap-2'>
-			<span className='inline-block h-1.5 w-1.5 rounded-full bg-fg' aria-hidden='true' />
+		<div className='font-mono text-[11px] uppercase tracking-[0.18em] text-[color:var(--fg-mute)] flex items-center gap-2'>
+			<span className='inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--fg)]' aria-hidden='true' />
 			{children}
 		</div>
 	)
@@ -226,10 +226,10 @@ function UserSelectStep({users, onSelect}: {users: LoginUser[]; onSelect: (u: Lo
 		>
 			<BrandMark />
 			<FormEyebrow>Sign in to LivOS</FormEyebrow>
-			<h1 className='text-center text-[clamp(34px,4vw,46px)] font-medium leading-[1.05] tracking-[-0.035em] text-fg text-balance'>
-				Welcome <em className='font-normal not-italic text-fg-mute'>back.</em>
+			<h1 className='text-center text-[clamp(34px,4vw,46px)] font-medium leading-[1.05] tracking-[-0.035em] text-[color:var(--fg)] text-balance'>
+				Welcome <em className='font-normal not-italic text-[color:var(--fg-mute)]'>back.</em>
 			</h1>
-			<p className='text-center text-[15px] leading-[1.5] text-fg-mute max-w-[38ch]'>
+			<p className='text-center text-[15px] leading-[1.5] text-[color:var(--fg-mute)] max-w-[38ch]'>
 				Pick a user to sign in to your LivOS computer.
 			</p>
 
@@ -247,8 +247,8 @@ function UserSelectStep({users, onSelect}: {users: LoginUser[]; onSelect: (u: Lo
 							<Orb state='breathe' className='h-full w-full' initials={getInitials(user.display_name)} userId={user.id} />
 						</div>
 						<div className='flex flex-col items-center'>
-							<span className='text-[13px] font-medium text-fg'>{user.display_name}</span>
-							<span className='text-[11px] text-fg-faint capitalize'>{user.role}</span>
+							<span className='text-[13px] font-medium text-[color:var(--fg)]'>{user.display_name}</span>
+							<span className='text-[11px] text-[color:var(--fg-faint)] capitalize'>{user.role}</span>
 						</div>
 					</motion.button>
 				))}
@@ -291,7 +291,7 @@ function PasswordStep({
 				<button
 					type='button'
 					onClick={onBack}
-					className='flex items-center gap-1.5 self-start text-[12px] font-medium text-fg-mute transition-colors hover:text-fg'
+					className='flex items-center gap-1.5 self-start text-[12px] font-medium text-[color:var(--fg-mute)] transition-colors hover:text-[color:var(--fg)]'
 				>
 					<TbArrowLeft className='h-3.5 w-3.5' />
 					Back
@@ -300,10 +300,10 @@ function PasswordStep({
 
 			<BrandMark />
 			<FormEyebrow>Sign in to LivOS</FormEyebrow>
-			<h1 className='text-center text-[clamp(34px,4vw,46px)] font-medium leading-[1.05] tracking-[-0.035em] text-fg text-balance'>
-				Welcome{firstName ? <span>, <em className='font-serif italic font-normal text-fg-mute'>{firstName}.</em></span> : <em className='font-normal not-italic text-fg-mute'> back.</em>}
+			<h1 className='text-center text-[clamp(34px,4vw,46px)] font-medium leading-[1.05] tracking-[-0.035em] text-[color:var(--fg)] text-balance'>
+				Welcome{firstName ? <span>, <em className='font-serif italic font-normal text-[color:var(--fg-mute)]'>{firstName}.</em></span> : <em className='font-normal not-italic text-[color:var(--fg-mute)]'> back.</em>}
 			</h1>
-			<p className='text-center text-[15px] leading-[1.5] text-fg-mute max-w-[38ch] -mt-3'>
+			<p className='text-center text-[15px] leading-[1.5] text-[color:var(--fg-mute)] max-w-[38ch] -mt-3'>
 				Sign in to pick up where you left off.
 			</p>
 
@@ -316,7 +316,7 @@ function PasswordStep({
 
 			<form className='flex w-full flex-col gap-4 mt-2' onSubmit={onSubmit}>
 				<div className='flex flex-col gap-1.5'>
-					<label className='font-mono text-[10.5px] uppercase tracking-[0.14em] text-fg-mute pl-1'>
+					<label className='font-mono text-[10.5px] uppercase tracking-[0.14em] text-[color:var(--fg-mute)] pl-1'>
 						Password
 					</label>
 					<PasswordInput

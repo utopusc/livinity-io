@@ -27,11 +27,11 @@ export function StatTile({label, value, fill, className}: StatTileProps) {
 	const clamped = fill === undefined ? null : Math.max(0, Math.min(1, fill))
 	return (
 		<div className={cn('rounded-[12px] border border-line bg-[color:var(--bg)] p-4', className)}>
-			<div className='text-[11px] font-medium text-fg-mute'>{label}</div>
-			<div className='text-[19px] font-semibold tracking-[-0.02em] mt-1 text-fg'>{value}</div>
+			<div className='text-[11px] font-medium text-[color:var(--fg-mute)]'>{label}</div>
+			<div className='text-[19px] font-semibold tracking-[-0.02em] mt-1 text-[color:var(--fg)]'>{value}</div>
 			{clamped !== null && (
 				<div className='h-1 rounded-[2px] bg-[color:var(--bg-2)] mt-2.5 overflow-hidden'>
-					<div className='h-full bg-fg rounded-[2px]' style={{width: `${clamped * 100}%`}} />
+					<div className='h-full bg-[color:var(--fg)] rounded-[2px]' style={{width: `${clamped * 100}%`}} />
 				</div>
 			)}
 		</div>
@@ -55,7 +55,7 @@ export function StatValue({number, unit}: {number: string | number; unit: string
 	return (
 		<>
 			{number}
-			<em className='text-fg-mute font-medium not-italic font-mono ml-1 text-[14px]'>{unit}</em>
+			<em className='text-[color:var(--fg-mute)] font-medium not-italic font-mono ml-1 text-[14px]'>{unit}</em>
 		</>
 	)
 }
