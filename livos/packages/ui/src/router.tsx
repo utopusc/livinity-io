@@ -21,6 +21,7 @@ import {SheetLayout} from './layouts/sheet'
 import {EnsureLoggedIn, EnsureLoggedOut} from './modules/auth/ensure-logged-in'
 import {EnsureUserDoesntExist, EnsureUserExists} from './modules/auth/ensure-user-exists'
 import {Dock, DockBottomPositioner} from './modules/desktop/dock'
+import {TopBar} from './modules/desktop/top-bar'
 import {FloatingIslandContainer} from './modules/floating-island/container'
 import {AppsProvider} from './providers/apps'
 import {AvailableAppsProvider} from './providers/available-apps'
@@ -70,6 +71,7 @@ export const router = createBrowserRouter([
 		element: (
 			<EnsureLoggedIn>
 				<Wallpaper />
+				<TopBar />
 				{/* Get any notifications from livinityd and render them as alert dialogs */}
 				<Notifications />
 				<AvailableAppsProvider>
