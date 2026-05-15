@@ -30,7 +30,7 @@ const DOCK_DIMENSIONS_PX = {
 	desktop: {
 		iconSize: 46,
 		iconSizeZoomed: 74,
-		padding: 12,
+		padding: 8,
 	},
 	mobile: {
 		iconSize: 44,
@@ -93,7 +93,10 @@ export function Dock() {
 					paddingBottom: padding,
 				}}
 			>
-				{/* Segment 1 — pinned apps */}
+				{/* Profile avatar */}
+				<DockProfile mouseX={mouseX} iconSize={iconSize} iconSizeZoomed={iconSizeZoomed} />
+				{/* Separator */}
+				<div className='mx-0.5 h-[60%] w-px bg-white/20 self-center' />
 				<DockItem
 					appId='LIVINITY_files'
 					iconSize={iconSize}
@@ -130,6 +133,14 @@ export function Dock() {
 					}
 				/>
 				<DockItem
+					appId='LIVINITY_live-usage'
+					iconSize={iconSize}
+					iconSizeZoomed={iconSizeZoomed}
+					to={{search: addLinkSearchParams({dialog: 'live-usage'})}}
+					open={pathname.startsWith(systemAppsKeyed['LIVINITY_live-usage'].systemAppTo)}
+					mouseX={mouseX}
+				/>
+				<DockItem
 					appId='LIVINITY_app-store'
 					iconSize={iconSize}
 					iconSizeZoomed={iconSizeZoomed}
@@ -145,6 +156,7 @@ export function Dock() {
 						)
 					}
 				/>
+				<DockDivider iconSize={iconSize} />
 				<DockItem
 					appId='LIVINITY_ai-chat'
 					iconSize={iconSize}
@@ -161,6 +173,10 @@ export function Dock() {
 						)
 					}
 				/>
+				{/* Phase 30 hot-patch round 11 (post-v28.0.2): Server Management
+				    restored to the dock per user request. Docker is intentionally
+				    NOT in the dock — user wants the original sleek server-control
+				    entry, not the heavyweight Docker app. */}
 				<DockItem
 					appId='LIVINITY_server-control'
 					iconSize={iconSize}
@@ -209,21 +225,8 @@ export function Dock() {
 						)
 					}
 				/>
-				{/* Segment 2 — running / recent apps (recent block emits its own
-				    leading separator only when it has content). */}
+				{/* Recent apps */}
 				<RecentAppsDock mouseX={mouseX} iconSize={iconSize} iconSizeZoomed={iconSizeZoomed} />
-				{/* Segment 3 — system tray (live usage + profile). Always rendered
-				    so the third pill is visually distinct even on a fresh boot. */}
-				<DockSegmentSeparator />
-				<DockItem
-					appId='LIVINITY_live-usage'
-					iconSize={iconSize}
-					iconSizeZoomed={iconSizeZoomed}
-					to={{search: addLinkSearchParams({dialog: 'live-usage'})}}
-					open={pathname.startsWith(systemAppsKeyed['LIVINITY_live-usage'].systemAppTo)}
-					mouseX={mouseX}
-				/>
-				<DockProfile mouseX={mouseX} iconSize={iconSize} iconSizeZoomed={iconSizeZoomed} />
 			</motion.div>
 			<LogoutDialog />
 
@@ -288,12 +291,8 @@ export function DockBottomPositioner({children}: {children: React.ReactNode}) {
 	)
 }
 
-// Phase 122 (v36): three-segment dock with glass blur, accent-toned border, and
-// a richer multi-layer shadow. dash-line + shadow-card come from the
-// design-tokens preset and intentionally drift from the older shadow-dock /
-// white/60 border so the visible delta is obvious at first glance.
-const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-card-bg/80 contrast-more:bg-neutral-700 backdrop-blur-2xl contrast-more:backdrop-blur-none px-3 shadow-card shrink-0 will-change-transform transform-gpu border border-dash-line ring-1 ring-accent-blue/10`
-const dockPreviewClass = tw`mx-auto flex items-end gap-4 rounded-radius-xl bg-card-bg/80 backdrop-blur-md px-3 shadow-card shrink-0 border border-dash-line`
+const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-card-bg/80 contrast-more:bg-neutral-700 backdrop-blur-2xl contrast-more:backdrop-blur-none px-3 shadow-dock shrink-0 will-change-transform transform-gpu border-px border-white/60`
+const dockPreviewClass = tw`mx-auto flex items-end gap-4 rounded-radius-xl bg-card-bg/80 backdrop-blur-md px-3 shadow-dock shrink-0 border-hpx border-border-default`
 
 function RecentAppsDock({mouseX, iconSize, iconSizeZoomed}: {mouseX: ReturnType<typeof useMotionValue<number>>; iconSize: number; iconSizeZoomed: number}) {
 	const recentQ = trpcReact.apps.recentlyOpened.useQuery(undefined, {staleTime: 30_000})
@@ -308,7 +307,7 @@ function RecentAppsDock({mouseX, iconSize, iconSizeZoomed}: {mouseX: ReturnType<
 
 	return (
 		<>
-			<DockSegmentSeparator />
+			<div className='mx-0.5 h-[60%] w-px bg-white/20 self-center' />
 			{recentApps.map((appId: string) => {
 				const app = userAppsKeyed![appId]
 				return (
@@ -333,13 +332,5 @@ const DockDivider = ({iconSize}: {iconSize: number}) => (
 	<div className='br grid w-1 place-items-center' style={{height: iconSize}}>
 		<div className='h-6 border-r border-border-subtle' />
 	</div>
-)
-
-// Phase 122 (v36): segment separator between pinned / running / system-tray
-// segments. Slightly taller than the legacy in-icon divider so the three
-// segments read clearly. Tone tuned for both light and dark dock surfaces —
-// dash-line-strong alone is invisible on the dark-mode dock-bg.
-const DockSegmentSeparator = () => (
-	<div className='mx-1.5 h-[70%] w-px self-center bg-black/20 dark:bg-white/30' aria-hidden='true' />
 )
 
