@@ -66,7 +66,7 @@ export function SlashCommandMenu({filter, selectedIndex, onSelect, onFilteredCou
 	if (filtered.length === 0) return null
 
 	return (
-		<div className='absolute bottom-full left-0 right-12 mb-2 max-h-64 overflow-y-auto rounded-lg border border-border-default bg-surface-base shadow-lg'>
+		<div className='absolute bottom-full left-0 right-12 mb-2 max-h-64 overflow-y-auto rounded-dash border border-dash-line bg-card-bg shadow-card'>
 			{filtered.map((cmd, i) => (
 				<div
 					key={cmd.name}
@@ -78,11 +78,11 @@ export function SlashCommandMenu({filter, selectedIndex, onSelect, onFilteredCou
 						onSelect(cmd)
 					}}
 					className={cn(
-						'flex cursor-pointer items-center gap-3 px-3 py-2 text-sm',
-						i === selectedIndex ? 'bg-surface-2 text-text-primary' : 'text-text-secondary hover:bg-surface-1',
+						'flex cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors duration-dash',
+						i === selectedIndex ? 'bg-accent-blue/10 text-accent-blue' : 'text-text-secondary hover:bg-card-bg-2',
 					)}
 				>
-					<span className='font-mono text-brand'>{cmd.name}</span>
+					<span className='font-mono text-accent-blue'>{cmd.name}</span>
 					<span className='truncate text-text-tertiary'>{cmd.description}</span>
 					{cmd.category !== 'builtin' && (
 						<span className='ml-auto flex-shrink-0 text-[10px] uppercase text-text-quaternary'>{cmd.category}</span>
