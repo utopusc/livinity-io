@@ -8,6 +8,7 @@ import {trpcReact} from '@/trpc/trpc'
 import {SettingsPageLayout} from './_components/settings-page-layout'
 import {UsageSection} from './_components/usage-section'
 import {ApiKeysSection} from './_components/api-keys-section'
+import {SettingsPageHeader} from '@/components/settings-page-header'
 
 export default function AiConfigPage() {
 	// -- Kimi login state -----------------------------------------------
@@ -212,7 +213,17 @@ export default function AiConfigPage() {
 	}
 
 	return (
-		<SettingsPageLayout title='AI Configuration' description='Configure AI providers for LivOS'>
+		<SettingsPageLayout title='AI Configuration' description='Configure AI providers for LivOS' hideHeader>
+			{/* v36 LivOS Design Port (Phase 124) — first consumer of <SettingsPageHeader/>.
+			    Replaces the default title bar with the section-head pattern from
+			    design-system.html §17 (eyebrow → italic-serif headline → sub). */}
+			<SettingsPageHeader
+				eyebrow='01 · AI'
+				title='Configure your'
+				titleAccent='assistant.'
+				sub='Connect Kimi or Claude as your primary AI provider. Set the active model and tune computer-use settings — these apply to every Liv conversation across your devices.'
+			/>
+			<div className='h-6' />
 			<div className='max-w-lg space-y-8'>
 				{/* -- Primary Provider Selector ----------------------------- */}
 				<div className='space-y-4'>
