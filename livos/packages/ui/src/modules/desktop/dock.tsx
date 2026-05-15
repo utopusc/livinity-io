@@ -291,7 +291,11 @@ export function DockBottomPositioner({children}: {children: React.ReactNode}) {
 	)
 }
 
-const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-card-bg/80 contrast-more:bg-neutral-700 backdrop-blur-2xl contrast-more:backdrop-blur-none px-3 shadow-dock shrink-0 will-change-transform transform-gpu border-px border-white/60`
+// v36 (micro): amplify the dock's glass feel — lower bg opacity so the
+// wallpaper bleeds through, push blur one step (2xl→3xl), add saturate so
+// colors behind the dock punch through. Apple's frosted-glass trick.
+// Same shape/position/layout/icons — only the glass effect changes.
+const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-card-bg/50 contrast-more:bg-neutral-700 backdrop-blur-3xl backdrop-saturate-150 contrast-more:backdrop-blur-none px-3 shadow-dock shrink-0 will-change-transform transform-gpu border-px border-white/60`
 const dockPreviewClass = tw`mx-auto flex items-end gap-4 rounded-radius-xl bg-card-bg/80 backdrop-blur-md px-3 shadow-dock shrink-0 border-hpx border-border-default`
 
 function RecentAppsDock({mouseX, iconSize, iconSizeZoomed}: {mouseX: ReturnType<typeof useMotionValue<number>>; iconSize: number; iconSizeZoomed: number}) {
