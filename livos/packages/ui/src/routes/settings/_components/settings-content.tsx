@@ -169,15 +169,20 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
+	// v36 sidebar consolidation 2026-05-15 — six thin entries (dm-pairing, webhooks,
+	// migration, diagnostics, software-update, advanced) are now sub-tabs inside
+	// their owner sections (Integrations / Backups / Troubleshoot) instead of
+	// top-level menu items. The original switch cases below are kept callable so
+	// programmatic navigation still works (e.g. dock-window route loaders), but
+	// MENU_ITEMS no longer lists them.
+
 	// Per-user settings (visible to all users)
 	{id: 'account', icon: TbUser, label: 'Account', description: 'Name and password'},
 	{id: 'wallpaper', icon: TbPhoto, label: 'Theme', description: 'Wallpaper & accent color'},
 	{id: 'language', icon: TbLanguage, label: 'Language', description: 'Interface language'},
 	{id: '2fa', icon: TbShield, label: '2FA', description: 'Two-factor authentication'},
-	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Telegram & Discord'},
+	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Channels, DM security & webhooks'},
 	{id: 'gmail', icon: TbMail, label: 'Gmail', description: 'Email integration & OAuth'},
-	{id: 'dm-pairing', icon: TbShield, label: 'DM Security', description: 'DM pairing & allowlist'},
-	{id: 'webhooks', icon: TbWebhook, label: 'Webhooks', description: 'Webhook endpoints & secrets'},
 	{id: 'voice', icon: TbMicrophone, label: 'Voice', description: 'Push-to-talk voice mode'},
 	{id: 'usage', icon: TbChartBar, label: 'Usage', description: 'Token usage & cost tracking'},
 	{id: 'memory', icon: TbBrain, label: 'Memory', description: 'AI memory & conversations'},
@@ -191,13 +196,8 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'chrome-master', icon: TbBrandChrome, label: 'Chrome Profile', description: 'Master Chrome login for WebApps', adminOnly: true},
 	{id: 'my-domains', icon: TbWorld, label: 'My Domains', description: 'Domains synced from livinity.io', adminOnly: true},
 	{id: 'scheduler', icon: TbCalendarTime, label: 'Scheduler', description: 'Scheduled backup & maintenance jobs', adminOnly: true},
-	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup & restore', adminOnly: true},
-	{id: 'migration', icon: RiExpandRightFill, label: 'Migration Assistant', description: 'Transfer from Raspberry Pi', adminOnly: true},
-	{id: 'troubleshoot', icon: TbTool, label: 'Troubleshoot', description: 'Debug & diagnostics', adminOnly: true},
-	{id: 'advanced', icon: TbSettingsMinus, label: 'Advanced', description: 'Terminal, DNS, Beta', adminOnly: true},
-	{id: 'software-update', icon: TbUpdate, label: 'Software Update', description: 'Check for updates', adminOnly: true},
-	// v29.4 Phase 47 Plan 05 — AI Diagnostics (FR-TOOL/MODEL/PROBE).
-	{id: 'diagnostics', icon: TbStethoscope, label: 'Diagnostics', description: 'Capability registry, model identity, app health', adminOnly: true},
+	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup, restore & migration', adminOnly: true},
+	{id: 'troubleshoot', icon: TbTool, label: 'Troubleshoot', description: 'Logs, diagnostics, updates & advanced', adminOnly: true},
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1086,32 +1086,64 @@ interface ChannelStatus {
 	botName?: string
 }
 
+// v36 sidebar consolidation 2026-05-15 — Integrations is the consolidated home
+// for everything chat-channel-shaped. Three top-level tabs:
+//   Channels (Telegram / Discord / WhatsApp)
+//   DM Security
+//   Webhooks
 function IntegrationsSection() {
-	const [activeTab, setActiveTab] = useState<'telegram' | 'discord' | 'whatsapp'>('telegram')
+	const [activeTab, setActiveTab] = useState<'channels' | 'dm-security' | 'webhooks'>('channels')
 
 	return (
 		<div>
-			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'telegram' | 'discord' | 'whatsapp')}>
+			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'channels' | 'dm-security' | 'webhooks')}>
 				<TabsList className='grid w-full grid-cols-3 mb-4'>
-					<TabsTrigger value='telegram' className='flex items-center gap-1.5'>
-						<TbBrandTelegram className='h-4 w-4 text-sky-400' />
-						Telegram
+					<TabsTrigger value='channels' className='flex items-center gap-1.5'>
+						<TbPlug className='h-4 w-4' />
+						Channels
 					</TabsTrigger>
-					<TabsTrigger value='discord' className='flex items-center gap-1.5'>
-						<TbBrandDiscord className='h-4 w-4 text-indigo-400' />
-						Discord
+					<TabsTrigger value='dm-security' className='flex items-center gap-1.5'>
+						<TbShield className='h-4 w-4' />
+						DM Security
 					</TabsTrigger>
-					<TabsTrigger value='whatsapp' className='flex items-center gap-1.5'>
-						<TbBrandWhatsapp className='h-4 w-4 text-accent-green' />
-						WhatsApp
+					<TabsTrigger value='webhooks' className='flex items-center gap-1.5'>
+						<TbWebhook className='h-4 w-4' />
+						Webhooks
 					</TabsTrigger>
 				</TabsList>
 
-				<TabsContent value='telegram'><TelegramPanel /></TabsContent>
-				<TabsContent value='discord'><DiscordPanel /></TabsContent>
-				<TabsContent value='whatsapp'><WhatsAppPanel /></TabsContent>
+				<TabsContent value='channels'><ChannelsPanel /></TabsContent>
+				<TabsContent value='dm-security'><DmPairingSection /></TabsContent>
+				<TabsContent value='webhooks'><WebhooksSection /></TabsContent>
 			</Tabs>
 		</div>
+	)
+}
+
+function ChannelsPanel() {
+	const [activeChannel, setActiveChannel] = useState<'telegram' | 'discord' | 'whatsapp'>('telegram')
+
+	return (
+		<Tabs value={activeChannel} onValueChange={(v) => setActiveChannel(v as 'telegram' | 'discord' | 'whatsapp')}>
+			<TabsList className='grid w-full grid-cols-3 mb-4'>
+				<TabsTrigger value='telegram' className='flex items-center gap-1.5'>
+					<TbBrandTelegram className='h-4 w-4 text-sky-400' />
+					Telegram
+				</TabsTrigger>
+				<TabsTrigger value='discord' className='flex items-center gap-1.5'>
+					<TbBrandDiscord className='h-4 w-4 text-indigo-400' />
+					Discord
+				</TabsTrigger>
+				<TabsTrigger value='whatsapp' className='flex items-center gap-1.5'>
+					<TbBrandWhatsapp className='h-4 w-4 text-accent-green' />
+					WhatsApp
+				</TabsTrigger>
+			</TabsList>
+
+			<TabsContent value='telegram'><TelegramPanel /></TabsContent>
+			<TabsContent value='discord'><DiscordPanel /></TabsContent>
+			<TabsContent value='whatsapp'><WhatsAppPanel /></TabsContent>
+		</Tabs>
 	)
 }
 
@@ -1494,9 +1526,12 @@ const BackupRestoreWizard = React.lazy(() =>
 	import('@/features/backups/components/restore-wizard').then((m) => ({default: m.BackupsRestoreWizard})),
 )
 
+// v36 sidebar consolidation 2026-05-15 — Backups now owns the Migration
+// Assistant. Third tab "Migration" hosts the 3-step transfer wizard
+// previously reached from its own top-level menu entry.
 function BackupsSection() {
 	const {repositories: backupRepositories, isLoadingRepositories: isLoadingBackups} = useBackups()
-	const [activeTab, setActiveTab] = useState<'status' | 'restore'>('status')
+	const [activeTab, setActiveTab] = useState<'status' | 'restore' | 'migration'>('status')
 	const [showSetupWizard, setShowSetupWizard] = useState(false)
 	const [showRestoreWizard, setShowRestoreWizard] = useState(false)
 
@@ -1549,8 +1584,8 @@ function BackupsSection() {
 	return (
 		<div className='space-y-4'>
 			{/* Tab Navigation */}
-			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'status' | 'restore')}>
-				<TabsList className='grid w-full grid-cols-2'>
+			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'status' | 'restore' | 'migration')}>
+				<TabsList className='grid w-full grid-cols-3'>
 					<TabsTrigger value='status' className='flex items-center gap-2'>
 						<TbDatabase className='h-4 w-4' />
 						{hasBackups ? 'Status' : 'Setup'}
@@ -1558,6 +1593,10 @@ function BackupsSection() {
 					<TabsTrigger value='restore' className='flex items-center gap-2'>
 						<TbHistory className='h-4 w-4' />
 						Restore
+					</TabsTrigger>
+					<TabsTrigger value='migration' className='flex items-center gap-2'>
+						<RiExpandRightFill className='h-4 w-4' />
+						Migration
 					</TabsTrigger>
 				</TabsList>
 
@@ -1617,6 +1656,10 @@ function BackupsSection() {
 					<IconButton onClick={() => setShowRestoreWizard(true)} icon={TbHistory}>
 						{t('backups-restore')}
 					</IconButton>
+				</TabsContent>
+
+				<TabsContent value='migration' className='space-y-4 pt-4'>
+					<MigrationSection />
 				</TabsContent>
 			</Tabs>
 		</div>
@@ -1714,7 +1757,51 @@ function LanguageSection() {
 	)
 }
 
+// v36 sidebar consolidation 2026-05-15 — Troubleshoot is the consolidated
+// home for everything debugging-shaped. Four top-level tabs:
+//   Logs (system + app, the existing TroubleshootSection content)
+//   Diagnostics (AI capability registry / model identity / app health)
+//   Software Update (LivOS update check + past deploys)
+//   Advanced (beta channel, external DNS, security toggle, factory reset)
 function TroubleshootSection() {
+	const [activeTab, setActiveTab] = useState<'logs' | 'diagnostics' | 'software-update' | 'advanced'>('logs')
+
+	return (
+		<div>
+			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'logs' | 'diagnostics' | 'software-update' | 'advanced')}>
+				<TabsList className='grid w-full grid-cols-4 mb-4'>
+					<TabsTrigger value='logs' className='flex items-center gap-1.5'>
+						<TbTool className='h-4 w-4' />
+						Logs
+					</TabsTrigger>
+					<TabsTrigger value='diagnostics' className='flex items-center gap-1.5'>
+						<TbStethoscope className='h-4 w-4' />
+						Diagnostics
+					</TabsTrigger>
+					<TabsTrigger value='software-update' className='flex items-center gap-1.5'>
+						<TbUpdate className='h-4 w-4' />
+						Updates
+					</TabsTrigger>
+					<TabsTrigger value='advanced' className='flex items-center gap-1.5'>
+						<TbSettingsMinus className='h-4 w-4' />
+						Advanced
+					</TabsTrigger>
+				</TabsList>
+
+				<TabsContent value='logs'><LogsPanel /></TabsContent>
+				<TabsContent value='diagnostics'>
+					<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
+						<DiagnosticsSectionLazy />
+					</Suspense>
+				</TabsContent>
+				<TabsContent value='software-update'><SoftwareUpdateSection /></TabsContent>
+				<TabsContent value='advanced'><AdvancedSection /></TabsContent>
+			</Tabs>
+		</div>
+	)
+}
+
+function LogsPanel() {
 	const [showFullLogs, setShowFullLogs] = useState(false)
 	const [logType, setLogType] = useState<'system' | 'app'>('system')
 	const [selectedAppId, setSelectedAppId] = useState<string | null>(null)
