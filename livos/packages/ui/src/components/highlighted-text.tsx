@@ -68,7 +68,7 @@ export function parseMarks(html: string): ParsedSegment[] {
 	return out
 }
 
-const DEFAULT_MARK_CLASS = 'bg-amber-400/30 text-amber-100 rounded px-0.5'
+const DEFAULT_MARK_CLASS = 'bg-accent-amber/30 text-amber-100 rounded px-0.5'
 
 export function HighlightedText({
 	html,

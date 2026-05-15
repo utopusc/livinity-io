@@ -35,9 +35,9 @@ const alertVariants = cva(
 		variants: {
 			variant: {
 				default: 'bg-surface-1',
-				warning: 'bg-amber-50 text-amber-700',
-				destructive: 'bg-red-50 text-red-600',
-				success: 'bg-green-50 text-green-700',
+				warning: 'bg-accent-amber/10 text-accent-amber',
+				destructive: 'bg-accent-red/10 text-accent-red',
+				success: 'bg-accent-green/10 text-accent-green',
 			},
 		},
 		defaultVariants: {
