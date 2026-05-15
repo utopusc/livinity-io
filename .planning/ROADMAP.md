@@ -1190,7 +1190,7 @@ Plans:
 
 ---
 
-### Phase 123: Button Shadcn Override (Step 2 of 8) — 🔵 BLOCKED on P122
+### Phase 123: Button Shadcn Override (Additive Variants, Step 2 of 8) — ✅ SHIPPED 2026-05-15 (1 commit 4e47cb72, sacred SHA preserved 1/1, additive — zero production delta, 4 new v36-* variants + sizes available for opt-in)
 
 **Goal:** Override `livos/packages/ui/src/shadcn-components/ui/button.tsx` variants to match design-system.html §04 — pill radius (`rounded-r-full`), `fg/bg` invert primary (black bg / white text), hairline `border border-line-strong` ghost, `rgba(220,38,38,0.3)` border danger, square icon-only.
 
