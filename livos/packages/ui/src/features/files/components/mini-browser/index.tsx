@@ -188,7 +188,7 @@ export function MiniBrowser({
 					</div>
 				</DialogHeader>
 
-				<div className='h-[min(60vh,480px)] overflow-y-auto overflow-x-hidden rounded-xl border border-border-default bg-surface-base p-2'>
+				<div className='h-[min(60vh,480px)] overflow-y-auto overflow-x-hidden rounded-dash border border-border-default bg-surface-base p-2'>
 					{/* Optional actions to render in the browser. e.g., "add NAS" button to open the add NAS dialog */}
 					{actions ? <div className='flex items-center justify-end'>{actions}</div> : null}
 
