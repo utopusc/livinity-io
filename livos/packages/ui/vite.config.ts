@@ -109,6 +109,16 @@ export default defineConfig({
 			'@/': `${path.resolve(__dirname, 'src')}/`,
 		},
 	},
+	optimizeDeps: {
+		// 2026-05-15: Vite dev-mode esbuild pre-bundling needs same TLA target as
+		// production build below — otherwise dev server crashes on @novnc/novnc.
+		esbuildOptions: {
+			target: 'es2022',
+		},
+		// @novnc/novnc uses CJS require() + top-level await in browser.js — esbuild
+		// can't bundle this combo. Excluded → browser loads it as native ESM.
+		exclude: ['@novnc/novnc'],
+	},
 	build: {
 		// 2026-05-08 hotfix: bump from default `modules` (es2020) to `es2022` so
 		// top-level-await in @novnc/novnc's RFB.js compiles. P95-03 added the
