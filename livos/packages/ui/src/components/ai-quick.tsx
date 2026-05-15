@@ -113,7 +113,7 @@ function ToolCallChip({toolCall}: {toolCall: ToolCall}) {
 				{expanded ? <TbChevronDown className='h-3 w-3' /> : <TbChevronRight className='h-3 w-3' />}
 				<TbTool className='h-3 w-3 text-violet-500' />
 				<span className='font-mono text-violet-600'>{toolCall.tool}</span>
-				<span className={cn('ml-auto text-[11px] font-medium', toolCall.result.success ? 'text-emerald-500' : 'text-red-400')}>
+				<span className={cn('ml-auto text-[11px] font-medium', toolCall.result.success ? 'text-emerald-500' : 'text-accent-red')}>
 					{toolCall.result.success ? 'done' : 'failed'}
 				</span>
 			</button>

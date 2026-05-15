@@ -73,21 +73,21 @@ export function UpdateNotification() {
 						animate={{opacity: 1, y: 0}}
 						exit={{opacity: 0, y: 20}}
 						transition={{type: 'spring', stiffness: 300, damping: 30}}
-						className='fixed bottom-4 right-4 z-[80] flex w-80 flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-lg'
+						className='fixed bottom-4 right-4 z-[80] flex w-80 flex-col gap-3 rounded-dash border border-border-default bg-card-bg p-4 shadow-lg'
 						role='dialog'
 						aria-label='Software update available'
 					>
 						<div className='flex items-center gap-2'>
-							<TbDownload className='h-5 w-5 text-blue-600' />
-							<span className='font-semibold text-zinc-900'>New update available</span>
+							<TbDownload className='h-5 w-5 text-accent-blue' />
+							<span className='font-semibold text-text-primary'>New update available</span>
 						</div>
 						<div className='flex flex-col gap-1'>
-							<p className='text-sm text-zinc-600'>
+							<p className='text-sm text-text-secondary'>
 								<span className='font-mono'>{versionLabel}</span>
 								{' — '}
 								{latestVersion.message.split('\n')[0].slice(0, 80)}
 							</p>
-							<p className='text-xs text-zinc-400'>
+							<p className='text-xs text-text-tertiary'>
 								{latestVersion.author}
 								{latestVersion.committedAt && `, ${safeFormatRelative(latestVersion.committedAt)}`}
 							</p>
@@ -95,13 +95,13 @@ export function UpdateNotification() {
 						<div className='flex items-center gap-2'>
 							<button
 								onClick={handleUpdate}
-								className='flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 active:scale-95'
+								className='flex-1 rounded-lg bg-accent-blue px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-blue/90 active:scale-95'
 							>
 								Update
 							</button>
 							<button
 								onClick={handleLater}
-								className='rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 active:scale-95'
+								className='rounded-lg border border-border-default px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-card-bg-2 active:scale-95'
 							>
 								Later
 							</button>
