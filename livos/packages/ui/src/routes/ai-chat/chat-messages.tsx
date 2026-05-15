@@ -41,15 +41,15 @@ function getRawToolName(name: string): string {
 function getToolIcon(name: string): {icon: typeof IconTool; color: string} {
 	const raw = getRawToolName(name)
 	if (/shell|command|bash|exec/.test(raw)) {
-		return {icon: IconTerminal2, color: 'text-amber-400'}
+		return {icon: IconTerminal2, color: 'text-accent-amber'}
 	}
 	if (/file|read|write|edit/.test(raw)) {
-		return {icon: IconFile, color: 'text-blue-400'}
+		return {icon: IconFile, color: 'text-accent-blue'}
 	}
 	if (/docker|container/.test(raw)) {
 		return {icon: IconBox, color: 'text-cyan-400'}
 	}
-	return {icon: IconTool, color: 'text-blue-400'}
+	return {icon: IconTool, color: 'text-accent-blue'}
 }
 
 /** Check if tool is a shell/command type */
@@ -128,7 +128,7 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 							e.stopPropagation()
 							setShowFull(!showFull)
 						}}
-						className='mt-1 text-xs text-blue-400 hover:text-blue-300'
+						className='mt-1 text-xs text-accent-blue hover:text-accent-blue'
 					>
 						{showFull ? 'Show less' : `Show more (${output.length.toLocaleString()} chars)`}
 					</button>
@@ -154,7 +154,7 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 							e.stopPropagation()
 							setShowFull(!showFull)
 						}}
-						className='mt-1 text-xs text-blue-400 hover:text-blue-300'
+						className='mt-1 text-xs text-accent-blue hover:text-accent-blue'
 					>
 						{showFull ? 'Show less' : `Show more (${output.length.toLocaleString()} chars)`}
 					</button>
@@ -175,7 +175,7 @@ function ToolOutput({toolCall}: {toolCall: ChatToolCall}) {
 						e.stopPropagation()
 						setShowFull(!showFull)
 					}}
-					className='mt-1 text-xs text-blue-400 hover:text-blue-300'
+					className='mt-1 text-xs text-accent-blue hover:text-accent-blue'
 				>
 					{showFull ? 'Show less' : `Show more (${output.length.toLocaleString()} chars)`}
 				</button>
@@ -214,9 +214,9 @@ function CapabilityRecommendationCard({toolCall}: {toolCall: ChatToolCall}) {
 		} else if (parsed.installed && parsed.name) {
 			// livinity_install output — already installed
 			return (
-				<div className='my-2 flex items-center gap-2 rounded-dash border border-green-500/20 bg-green-500/5 px-3 py-2'>
-					<IconCheck size={16} className='text-green-400' />
-					<span className='text-caption text-green-400'>Installed: {parsed.name}</span>
+				<div className='my-2 flex items-center gap-2 rounded-dash border border-accent-green/20 bg-accent-green/5 px-3 py-2'>
+					<IconCheck size={16} className='text-accent-green' />
+					<span className='text-caption text-accent-green'>Installed: {parsed.name}</span>
 				</div>
 			)
 		}
@@ -287,7 +287,7 @@ function CapabilityRecommendationCard({toolCall}: {toolCall: ChatToolCall}) {
 							</div>
 						)}
 						{status === 'installed' && (
-							<div className='flex items-center gap-1.5 text-caption text-green-400'>
+							<div className='flex items-center gap-1.5 text-caption text-accent-green'>
 								<IconCheck size={14} />
 								Installed successfully
 							</div>
@@ -352,11 +352,11 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 	const statusDot = (() => {
 		switch (toolCall.status) {
 			case 'running':
-				return <IconLoader2 size={12} className='flex-shrink-0 animate-spin text-blue-400' />
+				return <IconLoader2 size={12} className='flex-shrink-0 animate-spin text-accent-blue' />
 			case 'complete':
-				return <span className='flex-shrink-0 inline-block h-2 w-2 rounded-full bg-green-400' />
+				return <span className='flex-shrink-0 inline-block h-2 w-2 rounded-full bg-accent-green' />
 			case 'error':
-				return <span className='flex-shrink-0 inline-block h-2 w-2 rounded-full bg-red-400' />
+				return <span className='flex-shrink-0 inline-block h-2 w-2 rounded-full bg-accent-red' />
 		}
 	})()
 
@@ -398,7 +398,7 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 						<div className={cn('mt-0.5 border-l-2 border-dash-line pb-1', isMobile ? 'ml-2 pl-2' : 'ml-5 pl-3')}>
 							{/* Error */}
 							{toolCall.status === 'error' && (toolCall.errorMessage || toolCall.output) && (
-								<div className='rounded bg-red-500/10 px-2 py-1 text-xs text-red-400'>
+								<div className='rounded bg-accent-red/10 px-2 py-1 text-xs text-accent-red'>
 									{toolCall.errorMessage || toolCall.output}
 								</div>
 							)}
@@ -497,7 +497,7 @@ export function SystemMessage({message}: {message: ChatMessage}) {
 export function ErrorMessage({message}: {message: ChatMessage}) {
 	return (
 		<div className='flex justify-start'>
-			<div className='w-full rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400'>
+			<div className='w-full rounded-lg border border-accent-red/30 bg-accent-red/10 px-4 py-3 text-sm text-accent-red'>
 				<div className='flex items-start gap-2'>
 					<IconAlertTriangle size={16} className='mt-0.5 flex-shrink-0' />
 					<span className='whitespace-pre-wrap'>{message.content}</span>

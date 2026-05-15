@@ -45,9 +45,9 @@ type AgentsView = {mode: 'list'} | {mode: 'detail'; agentId: string} | {mode: 'c
 function StatusBadge({status}: {status: string}) {
 	const colors =
 		status === 'active'
-			? 'bg-green-500/20 text-green-400'
+			? 'bg-accent-green/20 text-accent-green'
 			: status === 'stopped'
-				? 'bg-red-500/20 text-red-400'
+				? 'bg-accent-red/20 text-accent-red'
 				: 'bg-yellow-500/20 text-yellow-400'
 	return (
 		<span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', colors)}>
@@ -92,8 +92,8 @@ function AgentList({onSelect}: {onSelect: (id: string) => void}) {
 					className='group flex w-full flex-col gap-2 rounded-radius-sm border border-border-subtle bg-surface-base p-3 text-left transition-all hover:border-border-default hover:bg-surface-1'
 				>
 					<div className='flex items-start gap-3'>
-						<div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-500/20'>
-							<IconRobot size={16} className='text-blue-400' />
+						<div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent-blue/20'>
+							<IconRobot size={16} className='text-accent-blue' />
 						</div>
 						<div className='min-w-0 flex-1'>
 							<div className='flex items-center gap-2'>
@@ -220,7 +220,7 @@ function LoopControls({agentId, hasLoopConfig}: {agentId: string; hasLoopConfig:
 			<div className='rounded-radius-sm bg-surface-1 p-3 space-y-2'>
 				<div className='flex items-center justify-between'>
 					<div className='flex items-center gap-2'>
-						<div className={cn('h-2 w-2 rounded-full', isRunning ? 'bg-green-500' : 'bg-red-500/50')} />
+						<div className={cn('h-2 w-2 rounded-full', isRunning ? 'bg-accent-green' : 'bg-accent-red/50')} />
 						<span className='text-caption text-text-secondary'>
 							{isRunning ? 'Running' : 'Stopped'}
 						</span>
@@ -251,7 +251,7 @@ function LoopControls({agentId, hasLoopConfig}: {agentId: string; hasLoopConfig:
 						<button
 							onClick={handleStop}
 							disabled={stopMutation.isPending}
-							className='flex items-center gap-1.5 rounded-radius-sm bg-red-500/10 px-3 py-1.5 text-caption font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50'
+							className='flex items-center gap-1.5 rounded-radius-sm bg-accent-red/10 px-3 py-1.5 text-caption font-medium text-accent-red transition-colors hover:bg-accent-red/20 disabled:opacity-50'
 						>
 							<IconPlayerStop size={14} />
 							{stopMutation.isPending ? 'Stopping...' : 'Stop'}
@@ -260,7 +260,7 @@ function LoopControls({agentId, hasLoopConfig}: {agentId: string; hasLoopConfig:
 						<button
 							onClick={handleStart}
 							disabled={startMutation.isPending}
-							className='flex items-center gap-1.5 rounded-radius-sm bg-green-500/10 px-3 py-1.5 text-caption font-medium text-green-400 transition-colors hover:bg-green-500/20 disabled:opacity-50'
+							className='flex items-center gap-1.5 rounded-radius-sm bg-accent-green/10 px-3 py-1.5 text-caption font-medium text-accent-green transition-colors hover:bg-accent-green/20 disabled:opacity-50'
 						>
 							<IconPlayerPlay size={14} />
 							{startMutation.isPending ? 'Starting...' : 'Start'}
@@ -323,8 +323,8 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 				>
 					<IconArrowLeft size={16} />
 				</button>
-				<div className='flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-500/20'>
-					<IconRobot size={14} className='text-blue-400' />
+				<div className='flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent-blue/20'>
+					<IconRobot size={14} className='text-accent-blue' />
 				</div>
 				<div className='min-w-0 flex-1'>
 					<div className='flex items-center gap-2'>
@@ -472,7 +472,7 @@ function AgentDetail({agentId, onBack}: {agentId: string; onBack: () => void}) {
 										onBack()
 									}}
 									disabled={deleteMutation.isPending}
-									className='flex items-center gap-1 rounded-radius-sm bg-red-500/10 px-3 py-1.5 text-caption text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50'
+									className='flex items-center gap-1 rounded-radius-sm bg-accent-red/10 px-3 py-1.5 text-caption text-accent-red transition-colors hover:bg-accent-red/20 disabled:opacity-50'
 								>
 									<IconTrash size={13} />
 									{deleteMutation.isPending ? 'Deleting...' : 'Delete'}
@@ -618,7 +618,7 @@ export default function AgentsPanel() {
 				<div className='flex-shrink-0 border-b border-border-default px-4 py-3'>
 					<div className='flex items-center gap-3'>
 						<div className='flex h-8 w-8 items-center justify-center rounded-radius-lg bg-gradient-to-br from-blue-500/20 to-violet-500/20'>
-							<IconRobot size={16} className='text-blue-400' />
+							<IconRobot size={16} className='text-accent-blue' />
 						</div>
 						<div className='flex-1'>
 							<h2 className='text-body font-semibold text-text-primary'>Agents</h2>

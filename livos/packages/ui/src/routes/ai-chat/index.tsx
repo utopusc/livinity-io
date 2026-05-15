@@ -134,7 +134,7 @@ function ConversationSidebar({
 									e.stopPropagation()
 									onDelete(conv.id)
 								}}
-								className='hidden rounded p-0.5 text-text-tertiary hover:text-red-400 group-hover:block'
+								className='hidden rounded p-0.5 text-text-tertiary hover:text-accent-red group-hover:block'
 							>
 								<IconTrash size={14} />
 							</button>
@@ -480,9 +480,9 @@ export default function AiChat() {
 							<span
 								className={cn(
 									'inline-block h-2 w-2 rounded-full',
-									agent.connectionStatus === 'connected' && 'bg-green-500',
+									agent.connectionStatus === 'connected' && 'bg-accent-green',
 									agent.connectionStatus === 'reconnecting' && 'bg-yellow-500 animate-pulse',
-									agent.connectionStatus === 'disconnected' && 'bg-red-500',
+									agent.connectionStatus === 'disconnected' && 'bg-accent-red',
 								)}
 							/>
 							<span className='text-caption-sm text-text-tertiary'>
@@ -610,8 +610,8 @@ export default function AiChat() {
 							<div className='mx-4 w-full max-w-sm rounded-dash border border-dash-line bg-card-bg p-6 shadow-elevation-3'>
 								{/* Icon */}
 								<div className='mb-4 flex justify-center'>
-									<div className='flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10'>
-										<IconDeviceDesktop size={24} className='text-amber-500' />
+									<div className='flex h-12 w-12 items-center justify-center rounded-full bg-accent-amber/10'>
+										<IconDeviceDesktop size={24} className='text-accent-amber' />
 									</div>
 								</div>
 								{/* Title */}
@@ -677,9 +677,9 @@ export default function AiChat() {
 							onClick={() => setComputerUseMinimized(false)}
 							className='absolute right-4 top-4 z-10 flex items-center gap-2 rounded-dash border border-dash-line bg-card-bg-2 px-3 py-2 text-body-sm font-medium text-text-secondary shadow-elevation-1 transition-all hover:bg-card-bg-2 hover:text-text-primary'
 						>
-							<IconScreenshot size={16} className='text-green-400' />
+							<IconScreenshot size={16} className='text-accent-green' />
 							Computer Use
-							<span className='ml-1 inline-block h-2 w-2 animate-pulse rounded-full bg-green-500' />
+							<span className='ml-1 inline-block h-2 w-2 animate-pulse rounded-full bg-accent-green' />
 						</button>
 					)}
 				</div>

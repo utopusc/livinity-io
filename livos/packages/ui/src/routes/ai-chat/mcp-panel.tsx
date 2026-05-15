@@ -338,13 +338,13 @@ const ICON_MAP: Record<FeaturedMcp['icon'], React.ElementType> = {
 const CATEGORY_COLORS: Record<string, string> = {
 	Search: 'bg-orange-500/15 text-orange-700',
 	'Dev Tools': 'bg-gray-500/15 text-gray-700',
-	'File System': 'bg-blue-500/15 text-blue-700',
-	Browser: 'bg-green-500/15 text-green-700',
+	'File System': 'bg-accent-blue/15 text-accent-blue',
+	Browser: 'bg-accent-green/15 text-accent-green',
 	Database: 'bg-indigo-500/15 text-indigo-700',
 	AI: 'bg-purple-500/15 text-purple-700',
 	Web: 'bg-teal-500/15 text-teal-700',
 	Productivity: 'bg-yellow-500/15 text-yellow-700',
-	Cloud: 'bg-amber-500/15 text-amber-700',
+	Cloud: 'bg-accent-amber/15 text-accent-amber',
 	Automation: 'bg-orange-500/15 text-orange-700',
 }
 
@@ -443,7 +443,7 @@ function FeaturedCard({
 					{mcp.npmPackage || mcp.remoteUrl || mcp.name}
 				</span>
 				{installed ? (
-					<span className='flex items-center gap-1 rounded-radius-sm bg-green-500/10 px-2.5 py-1 text-caption-sm font-medium text-green-400'>
+					<span className='flex items-center gap-1 rounded-radius-sm bg-accent-green/10 px-2.5 py-1 text-caption-sm font-medium text-accent-green'>
 						<IconCheck size={12} />
 						Installed
 					</span>
@@ -547,7 +547,7 @@ function MarketplaceTab({
 										className='flex items-center gap-3 rounded-radius-lg border border-border-subtle bg-surface-base p-3 transition-all hover:border-border-default hover:bg-surface-1'
 									>
 										<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-radius-sm bg-gradient-to-br from-blue-500/15 to-violet-500/15'>
-											<IconPlug size={16} className='text-blue-400/70' />
+											<IconPlug size={16} className='text-accent-blue/70' />
 										</div>
 										<div className='min-w-0 flex-1'>
 											<div className='flex items-center gap-2'>
@@ -578,7 +578,7 @@ function MarketplaceTab({
 					/* Featured / Popular section */
 					<div className='p-4'>
 						<div className='mb-4 flex items-center gap-2'>
-							<IconStar size={14} className='text-amber-400/70' />
+							<IconStar size={14} className='text-accent-amber/70' />
 							<span className='text-caption font-semibold uppercase tracking-wide text-text-tertiary'>Popular Servers</span>
 						</div>
 						<div className='grid grid-cols-1 gap-2.5 xl:grid-cols-2'>
@@ -744,8 +744,8 @@ function InstallDialog({
 					{hasCredentials && featured ? (
 					<>
 						{/* Setup instructions */}
-						<div className='rounded-radius-lg border border-amber-500/20 bg-amber-500/5 px-3.5 py-3'>
-							<p className='text-caption font-medium text-amber-300'>New connection credentials</p>
+						<div className='rounded-radius-lg border border-accent-amber/20 bg-accent-amber/5 px-3.5 py-3'>
+							<p className='text-caption font-medium text-accent-amber'>New connection credentials</p>
 							<p className='mt-1 text-caption-sm text-text-tertiary'>
 								Save these credentials now. This is the only time you will see them.
 							</p>
@@ -922,7 +922,7 @@ function InstallDialog({
 
 					{/* Error */}
 					{error && (
-						<div className='flex items-start gap-2 rounded-radius-lg bg-red-500/10 px-3 py-2.5 text-caption text-red-400'>
+						<div className='flex items-start gap-2 rounded-radius-lg bg-accent-red/10 px-3 py-2.5 text-caption text-accent-red'>
 							<IconAlertCircle size={14} className='mt-0.5 flex-shrink-0' />
 							<span>{error}</span>
 						</div>
@@ -1028,7 +1028,7 @@ function InstalledTab() {
 			<div className='mb-3 flex items-center gap-4 text-caption-sm text-text-tertiary'>
 				<span>{servers.length} server{servers.length !== 1 && 's'}</span>
 				<span className='flex items-center gap-1'>
-					<IconCircleFilled size={6} className='text-green-400' />
+					<IconCircleFilled size={6} className='text-accent-green' />
 					{Object.values(statuses).filter((s) => s.running).length} running
 				</span>
 				<span>{Object.values(statuses).reduce((sum, s) => sum + (s.tools?.length || 0), 0)} tools</span>
@@ -1064,15 +1064,15 @@ function InstalledTab() {
 									size={8}
 									className={
 										isRunning
-											? 'text-green-400'
+											? 'text-accent-green'
 											: server.enabled
-												? 'text-amber-400'
+												? 'text-accent-amber'
 												: 'text-text-tertiary'
 									}
 								/>
 								{isRunning && (
 									<span className='absolute inset-0 animate-ping'>
-										<IconCircleFilled size={8} className='text-green-400 opacity-40' />
+										<IconCircleFilled size={8} className='text-accent-green opacity-40' />
 									</span>
 								)}
 							</div>
@@ -1118,7 +1118,7 @@ function InstalledTab() {
 											className={cn(
 												'rounded-radius-sm p-1.5 transition-all',
 												server.enabled
-													? 'text-green-400/70 hover:bg-green-500/10 hover:text-green-400'
+													? 'text-accent-green/70 hover:bg-accent-green/10 hover:text-accent-green'
 													: 'text-text-tertiary hover:bg-surface-1 hover:text-text-secondary',
 											)}
 											title={server.enabled ? 'Disable' : 'Enable'}
@@ -1134,7 +1134,7 @@ function InstalledTab() {
 										</button>
 										<button
 											onClick={() => handleAction(server.name, 'remove')}
-											className='rounded-radius-sm p-1.5 text-text-tertiary transition-all hover:bg-red-500/10 hover:text-red-400'
+											className='rounded-radius-sm p-1.5 text-text-tertiary transition-all hover:bg-accent-red/10 hover:text-accent-red'
 											title='Remove'
 										>
 											<IconTrash size={15} />
@@ -1151,7 +1151,7 @@ function InstalledTab() {
 									{/* Connection info */}
 									<div className='grid grid-cols-2 gap-x-4 gap-y-1.5'>
 										<div className='text-text-tertiary'>Status</div>
-										<div className={isRunning ? 'text-green-400' : 'text-text-tertiary'}>
+										<div className={isRunning ? 'text-accent-green' : 'text-text-tertiary'}>
 											{isRunning ? 'Connected' : server.enabled ? 'Connecting...' : 'Disabled'}
 										</div>
 										{server.command && (
@@ -1178,7 +1178,7 @@ function InstalledTab() {
 
 									{/* Error */}
 									{status?.lastError && (
-										<div className='rounded-radius-sm bg-red-500/10 px-2.5 py-2 text-caption-sm text-red-400/80'>
+										<div className='rounded-radius-sm bg-accent-red/10 px-2.5 py-2 text-caption-sm text-accent-red/80'>
 											{status.lastError}
 										</div>
 									)}
@@ -1275,7 +1275,7 @@ function ConfigTab() {
 						<span
 							className={cn(
 								'flex items-center gap-1 text-caption-sm',
-								status.type === 'success' ? 'text-green-400' : 'text-red-400',
+								status.type === 'success' ? 'text-accent-green' : 'text-accent-red',
 							)}
 						>
 							{status.type === 'success' ? <IconCheck size={12} /> : <IconAlertCircle size={12} />}
@@ -1340,7 +1340,7 @@ export default function McpPanel() {
 			<div className='flex-shrink-0 border-b border-border-subtle px-5 py-4'>
 				<div className='flex items-center gap-3'>
 					<div className='flex h-9 w-9 items-center justify-center rounded-radius-lg bg-gradient-to-br from-blue-500/20 to-violet-500/20'>
-						<IconPlug size={18} className='text-blue-400' />
+						<IconPlug size={18} className='text-accent-blue' />
 					</div>
 					<div>
 						<h2 className='text-body font-semibold text-text-primary'>MCP Servers</h2>

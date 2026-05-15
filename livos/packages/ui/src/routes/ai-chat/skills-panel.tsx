@@ -135,7 +135,7 @@ function PermissionDialog({
 				{/* Permissions list */}
 				<div className='mb-5 space-y-2'>
 					{skill.permissions.length === 0 ? (
-						<div className='rounded-radius-lg bg-green-500/10 px-3 py-2.5 text-caption text-green-400'>
+						<div className='rounded-radius-lg bg-accent-green/10 px-3 py-2.5 text-caption text-accent-green'>
 							This skill requires no special permissions.
 						</div>
 					) : (
@@ -168,7 +168,7 @@ function PermissionDialog({
 									<div className='flex items-center gap-2'>
 										<span className='text-body-sm font-medium text-text-primary'>{perm.name}</span>
 										{perm.required && (
-											<span className='rounded-radius-sm bg-amber-500/15 px-1.5 py-0.5 text-caption-sm font-medium text-amber-400'>
+											<span className='rounded-radius-sm bg-accent-amber/15 px-1.5 py-0.5 text-caption-sm font-medium text-accent-amber'>
 												Required
 											</span>
 										)}
@@ -184,7 +184,7 @@ function PermissionDialog({
 
 				{/* Error */}
 				{error && (
-					<div className='mb-4 flex items-start gap-2 rounded-radius-lg bg-red-500/10 px-3 py-2.5 text-caption text-red-400'>
+					<div className='mb-4 flex items-start gap-2 rounded-radius-lg bg-accent-red/10 px-3 py-2.5 text-caption text-accent-red'>
 						<IconAlertCircle size={14} className='mt-0.5 flex-shrink-0' />
 						<span>{error}</span>
 					</div>
@@ -368,14 +368,14 @@ function MarketplaceTab({
 												</span>
 											))}
 											{skill.permissions.length > 0 && (
-												<span className='flex items-center gap-0.5 rounded-radius-sm bg-amber-500/10 px-1.5 py-0.5 text-caption-sm text-amber-400'>
+												<span className='flex items-center gap-0.5 rounded-radius-sm bg-accent-amber/10 px-1.5 py-0.5 text-caption-sm text-accent-amber'>
 													<IconShieldLock size={10} />
 													{skill.permissions.length} permission{skill.permissions.length !== 1 && 's'}
 												</span>
 											)}
 										</div>
 										{isInstalled ? (
-											<span className='flex items-center gap-1 rounded-radius-sm bg-green-500/10 px-2.5 py-1 text-caption-sm font-medium text-green-400'>
+											<span className='flex items-center gap-1 rounded-radius-sm bg-accent-green/10 px-2.5 py-1 text-caption-sm font-medium text-accent-green'>
 												<IconCheck size={12} />
 												Installed
 											</span>
@@ -499,7 +499,7 @@ function InstalledTab({onUninstalled}: {onUninstalled: () => void}) {
 									<button
 										onClick={() => handleUninstall(skill.name)}
 										disabled={actionLoading === skill.name}
-										className='rounded-radius-sm p-1.5 text-text-tertiary transition-all hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40'
+										className='rounded-radius-sm p-1.5 text-text-tertiary transition-all hover:bg-accent-red/10 hover:text-accent-red disabled:opacity-40'
 										title='Uninstall'
 									>
 										{actionLoading === skill.name ? (
@@ -649,7 +649,7 @@ function RegistriesTab() {
 			</div>
 
 			{error && (
-				<div className='mb-4 flex items-start gap-2 rounded-radius-lg bg-red-500/10 px-3 py-2.5 text-caption text-red-400'>
+				<div className='mb-4 flex items-start gap-2 rounded-radius-lg bg-accent-red/10 px-3 py-2.5 text-caption text-accent-red'>
 					<IconAlertCircle size={14} className='mt-0.5 flex-shrink-0' />
 					<span>{error}</span>
 				</div>
@@ -677,7 +677,7 @@ function RegistriesTab() {
 								</div>
 								<button
 									onClick={() => handleRemove(url)}
-									className='rounded-radius-sm p-1.5 text-text-tertiary transition-all hover:bg-red-500/10 hover:text-red-400'
+									className='rounded-radius-sm p-1.5 text-text-tertiary transition-all hover:bg-accent-red/10 hover:text-accent-red'
 									title='Remove registry'
 								>
 									<IconTrash size={15} />

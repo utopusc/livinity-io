@@ -61,7 +61,7 @@ export default function Schedules() {
 								<button
 									onClick={() => handleRemove(s.subagentId || s.jobName)}
 									disabled={removeMutation.isPending}
-									className='rounded-lg p-1.5 text-text-tertiary hover:bg-surface-1 hover:text-red-400 disabled:opacity-50'
+									className='rounded-lg p-1.5 text-text-tertiary hover:bg-surface-1 hover:text-accent-red disabled:opacity-50'
 									title='Remove schedule'
 								>
 									<IconTrash size={16} />

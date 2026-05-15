@@ -17,11 +17,11 @@ interface CanvasPanelProps {
 function typeColorClass(type: string): string {
 	switch (type) {
 		case 'react':
-			return 'bg-blue-500/15 text-blue-400'
+			return 'bg-accent-blue/15 text-accent-blue'
 		case 'html':
 			return 'bg-emerald-500/15 text-emerald-400'
 		case 'svg':
-			return 'bg-amber-500/15 text-amber-400'
+			return 'bg-accent-amber/15 text-accent-amber'
 		case 'mermaid':
 			return 'bg-purple-500/15 text-purple-400'
 		case 'recharts':
@@ -70,10 +70,10 @@ export function CanvasPanel({artifact, onClose}: CanvasPanelProps) {
 
 			{/* Error bar */}
 			{error && (
-				<div className='flex items-start gap-2 border-t border-red-500/20 bg-red-500/10 px-4 py-2'>
-					<IconAlertTriangle size={14} className='mt-0.5 flex-shrink-0 text-red-400' />
-					<span className='flex-1 text-caption text-red-400'>{error}</span>
-					<button onClick={() => setError(null)} className='text-red-400/60 hover:text-red-400'>
+				<div className='flex items-start gap-2 border-t border-accent-red/20 bg-accent-red/10 px-4 py-2'>
+					<IconAlertTriangle size={14} className='mt-0.5 flex-shrink-0 text-accent-red' />
+					<span className='flex-1 text-caption text-accent-red'>{error}</span>
+					<button onClick={() => setError(null)} className='text-accent-red/60 hover:text-accent-red'>
 						<IconX size={12} />
 					</button>
 				</div>

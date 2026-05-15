@@ -42,9 +42,9 @@ const TABS: {key: CapabilityTab; label: string; icon: typeof IconCode}[] = [
 
 const TAB_ICON_COLORS: Record<CapabilityTab, string> = {
 	skill: 'text-cyan-400',
-	mcp: 'text-green-400',
-	hook: 'text-amber-400',
-	agent: 'text-blue-400',
+	mcp: 'text-accent-green',
+	hook: 'text-accent-amber',
+	agent: 'text-accent-blue',
 	prompts: 'text-orange-400',
 	analytics: 'text-pink-400',
 }
@@ -68,10 +68,10 @@ function getTabIcon(type: string) {
 function StatusDot({status}: {status: string}) {
 	const colorClass =
 		status === 'active'
-			? 'bg-green-500'
+			? 'bg-accent-green'
 			: status === 'inactive'
 				? 'bg-yellow-500'
-				: 'bg-red-500'
+				: 'bg-accent-red'
 
 	return <span className={cn('inline-block h-2 w-2 rounded-full', colorClass)} />
 }
@@ -292,7 +292,7 @@ function CapabilityDetail({capabilityId, onBack}: {capabilityId: string; onBack:
 						{cap.last_error && (
 							<div className='flex items-center justify-between'>
 								<span className='text-caption-sm text-text-tertiary'>Last Error</span>
-								<span className='text-caption-sm text-red-400'>{cap.last_error}</span>
+								<span className='text-caption-sm text-accent-red'>{cap.last_error}</span>
 							</div>
 						)}
 					</div>
@@ -447,7 +447,7 @@ function PromptsView() {
 								{!p.builtin && (
 									<button
 										onClick={() => deleteMutation.mutate({name: p.name})}
-										className='rounded p-0.5 text-text-tertiary transition-colors hover:text-red-400'
+										className='rounded p-0.5 text-text-tertiary transition-colors hover:text-accent-red'
 									>
 										<IconTrash size={12} />
 									</button>
@@ -502,7 +502,7 @@ function AnalyticsView() {
 					<div className='text-caption-sm text-text-tertiary'>Total</div>
 				</div>
 				<div className='flex-1 rounded-radius-sm bg-surface-1 p-3 text-center'>
-					<div className='text-heading-sm font-bold text-green-400'>{data.activeCapabilities}</div>
+					<div className='text-heading-sm font-bold text-accent-green'>{data.activeCapabilities}</div>
 					<div className='text-caption-sm text-text-tertiary'>Active</div>
 				</div>
 				{totalCalls > 0 && (
