@@ -6,17 +6,18 @@ status: in-progress
 last_updated: "2026-05-15T18:00:00.000Z"
 progress:
   total_phases: 8
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
-  percent: 25.0
-current_phase: 123
-current_phase_name: "Button Shadcn Override (Additive Variants, Step 2 of 8)"
+  completed_phases: 3
+  total_plans: 5
+  completed_plans: 5
+  percent: 37.5
+current_phase: 124
+current_phase_name: "Section-Head Pattern as <SettingsPageHeader/> (Step 3 of 8)"
 current_phase_status: SHIPPED
 phase_122_commits: [c2dbcd0c, 518a0de6, 658714ee, 19d00b2f]
 phase_123_commits: [4e47cb72]
-next_phase: 124
-next_phase_name: "Section-Head Pattern as <SettingsPageHeader/> (Step 3 of 8)"
+phase_124_commits: [780d668a]
+next_phase: 125
+next_phase_name: "Field-Card + List-Row (Step 4 of 8)"
 next_phase_status: in-progress-autonomous
 previous_milestone: v35.0
 previous_milestone_name: Design System Unification (UI/UX)

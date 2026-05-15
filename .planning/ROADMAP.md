@@ -1202,7 +1202,7 @@ Plans:
 
 ---
 
-### Phase 124: Section-Head Pattern as `<SettingsPageHeader/>` (Step 3 of 8) — 🔵 BLOCKED on P123
+### Phase 124: Section-Head Pattern as `<SettingsPageHeader/>` (Step 3 of 8) — ✅ SHIPPED 2026-05-15 (1 commit 780d668a, sacred SHA preserved 1/1; ai-config first consumer; SettingsPageLayout additive hideHeader prop)
 
 **Goal:** New shared component `livos/packages/ui/src/components/settings-page-header.tsx` per design-system.html §17 — `eyebrow (mono uppercase 11px) → italic-serif h2 → 14px body sub`. Proof of use on ONE settings page.
 
