@@ -8,6 +8,7 @@ import {useCurrentUser} from '@/hooks/use-current-user'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useLinkToDialog} from '@/utils/dialog'
 import {useUserName} from '@/hooks/use-user-name'
+import {onWindowDragDrop, useWindowDragState} from '@/providers/window-drag-state'
 import {cn} from '@/shadcn-lib/utils'
 import {
 	Dialog,
@@ -76,15 +77,19 @@ function TopBarDesktop() {
 	const [menuOpen, setMenuOpen] = useState(false)
 	const [showChangeName, setShowChangeName] = useState(false)
 	const [showChangeIcon, setShowChangeIcon] = useState(false)
-	const [isExpanded, setIsExpanded] = useState(false)
-	const [isDragOver, setIsDragOver] = useState(false)
 	const profileWrapRef = useRef<HTMLDivElement>(null)
+	const dropZoneRef = useRef<HTMLDivElement>(null)
+
+	// Phase 130-08: bar only expands while a window is being dragged. Logo
+	// hover no longer triggers expansion per user direction 2026-05-15
+	// ("eger elimde pencereyi surukluyor isem genislesin").
+	const dragState = useWindowDragState()
+	const isExpanded = dragState.isDragging
+	const [isDragOverShelf, setIsDragOverShelf] = useState(false)
 
 	// Pinned-windows shelf — persisted to localStorage so refresh keeps the
-	// shelf intact. Phase 130-07 stub: the array tracks dropped window IDs
-	// but the actual drag-to-pin wiring + AI-control persistence are
-	// follow-ups. For now the topbar shows the empty drop zone with the
-	// "drag windows here" prompt so the shape is in place.
+	// shelf intact. Future phase reads this array to keep the actual
+	// WindowState alive even when the UI is reloaded.
 	const [pinnedWindowIds, setPinnedWindowIds] = useState<string[]>(() => {
 		if (typeof window === 'undefined') return []
 		try {
@@ -99,6 +104,38 @@ function TopBarDesktop() {
 		window.localStorage.setItem('liv:topbar:pinnedWindows', JSON.stringify(pinnedWindowIds))
 	}, [pinnedWindowIds])
 
+	// Hit-test cursor against the drop-zone rect while a drag is active so
+	// the shelf can highlight when the user is hovering inside it.
+	useEffect(() => {
+		if (!dragState.isDragging) {
+			setIsDragOverShelf(false)
+			return
+		}
+		const onMove = (e: MouseEvent) => {
+			const rect = dropZoneRef.current?.getBoundingClientRect()
+			if (!rect) return
+			const inside = e.clientX >= rect.left && e.clientX <= rect.right
+				&& e.clientY >= rect.top && e.clientY <= rect.bottom
+			setIsDragOverShelf(inside)
+		}
+		document.addEventListener('mousemove', onMove)
+		return () => document.removeEventListener('mousemove', onMove)
+	}, [dragState.isDragging])
+
+	// Drop subscriber: when the user releases over the shelf, pin.
+	useEffect(() => {
+		const unsubscribe = onWindowDragDrop((event) => {
+			const rect = dropZoneRef.current?.getBoundingClientRect()
+			if (!rect) return
+			const inside = event.clientX >= rect.left && event.clientX <= rect.right
+				&& event.clientY >= rect.top && event.clientY <= rect.bottom
+			if (inside && !pinnedWindowIds.includes(event.windowId)) {
+				setPinnedWindowIds((prev) => [...prev, event.windowId])
+			}
+		})
+		return unsubscribe
+	}, [pinnedWindowIds])
+
 	useEffect(() => {
 		if (!menuOpen) return
 		const handler = (e: MouseEvent) => {
@@ -110,22 +147,6 @@ function TopBarDesktop() {
 		return () => document.removeEventListener('mousedown', handler)
 	}, [menuOpen])
 
-	const handleDropZoneDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-		e.preventDefault()
-		setIsDragOver(true)
-		setIsExpanded(true)
-	}
-	const handleDropZoneDragLeave = () => {
-		setIsDragOver(false)
-	}
-	const handleDropZoneDrop = (e: React.DragEvent<HTMLDivElement>) => {
-		e.preventDefault()
-		setIsDragOver(false)
-		const windowId = e.dataTransfer.getData('application/x-livinity-window-id')
-		if (windowId && !pinnedWindowIds.includes(windowId)) {
-			setPinnedWindowIds((prev) => [...prev, windowId])
-		}
-	}
 	const unpinWindow = (windowId: string) => {
 		setPinnedWindowIds((prev) => prev.filter((id) => id !== windowId))
 	}
@@ -152,15 +173,14 @@ function TopBarDesktop() {
 				aria-label='Top bar'
 			>
 				<nav
-					onMouseLeave={() => setIsExpanded(false)}
 					className={cn(
 						'pointer-events-auto grid h-16 w-full grid-cols-[auto_1fr_auto] items-center gap-2.5 rounded-full border bg-card-bg/78 px-3.5 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55',
-						// Compact 580px ➜ expanded 1180px. Slower 900ms duration per
-						// user request 2026-05-15 ("Acilirken cok hizli genisliyor
-						// biraz yavas genislesin"). The center column drops the
-						// brand donut when expanded and renders the pinned-windows
-						// drop-zone instead.
-						'transition-[max-width,border-color,box-shadow] duration-[900ms] ease-out-v36',
+						// Compact 580px ➜ expanded 1180px. Slower 1400ms duration per
+						// user request 2026-05-15 ("cok hizli genisliyor biraz yavas
+						// genislesin"). Triggered only while a window is dragged;
+						// the center column swaps the brand donut for the pinned-
+						// windows drop-zone during expansion.
+						'transition-[max-width,border-color,box-shadow] duration-[1400ms] ease-out-v36',
 						isExpanded
 							? 'max-w-[1180px] border-line-strong shadow-[0_18px_50px_-28px_rgba(0,0,0,0.22)] dark:shadow-[0_18px_50px_-20px_rgba(0,0,0,0.6)]'
 							: 'max-w-[580px] border-line shadow-none',
@@ -244,47 +264,35 @@ function TopBarDesktop() {
 						</div>
 					</div>
 
-					{/* CENTER — collapsed: brand donut (also the expand trigger).
-					    Expanded: pinned-windows drop-zone shelf. The logo "yok
-					    olur" per user direction 2026-05-15. */}
+					{/* CENTER — collapsed: brand donut (purely decorative now, no
+					    longer triggers expand). Expanded (while user drags a
+					    window): pinned-windows drop-zone shelf. */}
 					<div className='flex min-w-0 items-center justify-center'>
 						{!isExpanded ? (
-							<div
-								className='flex items-center justify-center'
-								onMouseEnter={() => setIsExpanded(true)}
-							>
-								<button
-									type='button'
-									onClick={() => undefined}
-									className='grid h-10 w-10 cursor-pointer place-items-center rounded-full transition-[transform,background] duration-200 hover:scale-[1.04] hover:bg-[color:var(--bg-2)]'
-									aria-label='LivOS home'
+							<div className='flex items-center justify-center'>
+								<span
+									aria-hidden='true'
+									className='relative inline-block h-6 w-6 rounded-full bg-[color:var(--fg)]'
 								>
 									<span
-										aria-hidden='true'
-										className='relative inline-block h-6 w-6 rounded-full bg-[color:var(--fg)]'
-									>
-										<span
-											className='absolute rounded-full bg-[color:var(--bg)]'
-											style={{inset: 7}}
-										/>
-									</span>
-								</button>
+										className='absolute rounded-full bg-[color:var(--bg)]'
+										style={{inset: 7}}
+									/>
+								</span>
 							</div>
 						) : (
 							<div
-								onDragOver={handleDropZoneDragOver}
-								onDragLeave={handleDropZoneDragLeave}
-								onDrop={handleDropZoneDrop}
+								ref={dropZoneRef}
 								className={cn(
 									'flex min-h-[44px] w-full max-w-[640px] items-center justify-center gap-2 rounded-full border border-dashed px-3 transition-colors',
-									isDragOver
+									isDragOverShelf
 										? 'border-[color:var(--fg)] bg-[color:var(--bg-2)]'
 										: 'border-line',
 								)}
 							>
 								{pinnedWindowIds.length === 0 ? (
 									<span className='select-none whitespace-nowrap text-[12px] font-medium text-[color:var(--fg-faint)]'>
-										Pencereleri buraya sürükle — sabitlenir, kapatsan bile arka planda kalır
+										Drag here to pin
 									</span>
 								) : (
 									<div className='flex items-center gap-1.5 overflow-x-auto'>
@@ -341,50 +349,27 @@ function PinnedWindowChip({windowId, onUnpin}: {windowId: string; onUnpin: () =>
 	)
 }
 
-// ── Clock + Location ────────────────────────────────────────────────
+// ── Clock ───────────────────────────────────────────────────────────
 
 function ClockWithLocation() {
 	const [now, setNow] = useState(() => new Date())
 
 	useEffect(() => {
-		// Tick every 30s; we only display HH:MM so per-second is wasteful.
+		// Tick every 30s — we only display HH:MM so per-second is wasteful.
 		const id = window.setInterval(() => setNow(new Date()), 30_000)
 		return () => window.clearInterval(id)
 	}, [])
 
 	const hh = String(now.getHours()).padStart(2, '0')
 	const mm = String(now.getMinutes()).padStart(2, '0')
-	const ampm = now.getHours() >= 12 ? 'PM' : 'AM'
 
+	// 24-hour format, no AM/PM. Location/weather was a hardcoded
+	// "Istanbul · 18°C" stub — removed 2026-05-15 ("konumu dogru degil").
+	// A real geolocation + weather hook can land in a follow-up phase.
 	return (
-		<div className='flex flex-col items-end gap-px rounded-xl px-2.5 py-1 text-right leading-[1.1] transition-colors hover:bg-[color:var(--bg-2)]'>
-			<span className='whitespace-nowrap font-mono text-[14.5px] font-medium tracking-[-0.01em] text-[color:var(--fg)] tabular-nums'>
+		<div className='flex items-center rounded-xl px-2.5 py-1 leading-none transition-colors hover:bg-[color:var(--bg-2)]'>
+			<span className='whitespace-nowrap font-mono text-[15px] font-medium tracking-[-0.01em] text-[color:var(--fg)] tabular-nums'>
 				{hh}:{mm}
-				<span className='ml-1 text-[11px] font-medium text-[color:var(--fg-mute)]'>{ampm}</span>
-			</span>
-			{/*
-			 * Location string deliberately kept on a single line via whitespace-
-			 * nowrap so it never wraps or squishes — the user explicitly asked:
-			 * "Istanbul · 18°C bu yazan kisim hic sikismasin bu arada". A real
-			 * weather hook (lat/lon + service) is a follow-up.
-			 */}
-			<span className='inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-normal text-[color:var(--fg-mute)]'>
-				<svg
-					viewBox='0 0 24 24'
-					fill='none'
-					stroke='currentColor'
-					strokeWidth='2'
-					strokeLinecap='round'
-					strokeLinejoin='round'
-					className='h-2.5 w-2.5 shrink-0'
-					aria-hidden='true'
-				>
-					<path d='M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z' />
-					<circle cx='12' cy='10' r='3' />
-				</svg>
-				<span>
-					Istanbul · <span className='text-[color:var(--fg-dim)] tabular-nums'>18°C</span>
-				</span>
 			</span>
 		</div>
 	)
