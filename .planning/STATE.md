@@ -32,20 +32,50 @@ v36_consumer_migrations_shipped:
   - "/settings URL route removed from SheetLayout (commit a50eec2a) — window-only"
   - "/agent-marketplace URL route removed from SheetLayout (commit 220c2e65)"
 session_2026_05_15_late_commits: [c1d3ad59, 220c2e65, 6f6a836c]
-next_phase: null
-next_phase_status: pending-followup-work
+next_phase: 130
+next_phase_name: "Dark-Mode Polish + Top Bar + AI Chat Modernization"
+next_phase_status: PLANNED-AWAITING-EXECUTION
+next_phase_plan: .planning/phases/130-dark-mode-polish-topbar-ai-chat/130-PLAN.md
 next_action: |
-  Two deferred items (next session):
-    1. Sidebar consolidation in routes/settings/_components/settings-content.tsx:
-       merge DM Security + Webhooks into Integrations sub-tabs,
-       Diagnostics + Software Update + Advanced into Troubleshoot,
-       Migration Assistant into Backups, etc. — drop the merged items from
-       MENU_ITEMS array.
-    2. Redesign internal layout of ONE section as v36 FieldCard demo
-       (eyebrow → italic-serif title → FieldCard with 180px/1fr/auto rows).
-       Recommended target: AccountSection (small, visible: Change name +
-       Change password) or ThemeSection (wallpaper + accent picker).
-  Resume command: "v36 settings sidebar consolidation + Account section v36 redesign — kaldigin yerden devam"
+  Phase 130 drafted 2026-05-15 — comprehensive punch-list from a long
+  dark-mode QA pass plus three new asks (top bar, profile relocation,
+  AI Chat redesign). Four sub-plans in execution order:
+    130-01  Dark-mode token completion (body.dark adds --fg / --bg /
+            --fg-mute / --fg-faint; convert v36-component text-fg /
+            bg-fg usages to arbitrary form so they flip).
+            Bundles the ThemeModeSelector "Light/Dark/System" invisibility
+            fix (settings-content.tsx).
+    130-03  Settings polish — drop Liv Agent entry, LogsPanel bg fix,
+            split Troubleshoot back into Logs/Diagnostics only (re-add
+            software-update + advanced as top-level rows), Past Deploys
+            scroll-clamp, Home dashboard CPU/Memory/Storage text fix.
+    130-02  Top Bar + Profile relocation — new modules/desktop/top-bar.tsx
+            with AvatarGradient (peach→pink, 30px) + LivinityMark sm +
+            "Livinity" wordmark. Drop <DockProfile /> from dock.tsx.
+    130-04  AI Chat modernization — left rail dark surface, composer pill
+            input, message bubble migration to v36 ChatBubble (P129).
+  Sacred SHA invariant: f3538e1d811992b782a9bb057d1b7f0a0189f95f
+  (liv/packages/core/src/sdk-agent-runner.ts). Verify before/after every
+  commit per plan §"Verification protocol".
+  Reference: design-system-reference.html in the phase directory (copy
+  of Downloads/design-system.html provided by the user). The Livinity
+  logo / favicon work shipped in commit e00c6cdb already covers the
+  donut brand mark; the avatar gradient is the new addition.
+  Resume command: "phase 130 başla" or the full form in the PLAN.md.
+post_milestone_polish_commits:
+  - "0e90eebb feat(v36/settings): AccountSection → FieldCard + SettingsPageHeader"
+  - "1dab7029 feat(v36/settings): sidebar consolidation (23 → 17 entries)"
+  - "9852b9af feat(v36/theme): fluid wallpaper + light/dark foundation"
+  - "1f409c78 fix(v36/theme): fluid wallpaper viewport sizing"
+  - "f42f66c5 fix(v36/theme): contain wallpaper inside picker + static"
+  - "9b7bd924 feat(v36/theme): theme selector + light-mode dock + label halo"
+  - "d775bee1 fix(v36/theme): theme selector + login bg-fg fallbacks + drop accent picker"
+  - "e00c6cdb feat(v36/theme): dark-mode swap + Livinity donut + wallpaper play/pause"
+  - "8ff3601e revert(v36/theme): undo global token sweep — dark mode is opt-in per-surface"
+  - "132596a2 revert(v36/theme): roll dock back to pre-light-mode state"
+  - "7defd0bf feat(v36/theme): dark-mode pass for dock + window chrome"
+  - "efff9031 feat(v36/theme): legacy semantic tokens → CSS vars for window content"
+  - "fb0188f4 fix(v36/theme): drop inline body color so text inheritance works"
 previous_milestone: v35.0
 previous_milestone_name: Design System Unification (UI/UX)
 previous_milestone_status: shipped
