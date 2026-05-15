@@ -19,7 +19,14 @@
 		<link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png" />
 		<title>Livinity</title>
 	</head>
-	<body style="background: #f8f9fc; color: rgba(15, 23, 42, 0.92)" class="h-full min-h-full">
+	<!-- 2026-05-15: dropped the inline `style="background:#f8f9fc; color:rgba(15,23,42,0.92)"`
+	     because inline styles outrank the @apply text-text-primary on body in
+	     index.css. With the token wired to var(--text-primary), the body color
+	     was getting locked to the light-theme value even in dark mode — every
+	     text node that inherits its colour (button labels, list rows, etc.)
+	     then read as black on a tinted-light hover background. Pre-paint colour
+	     comes from index.css now. -->
+	<body class="h-full min-h-full">
 		<noscript>
 			<h1>LivOS</h1>
 			<p>You need to enable JavaScript to run this app.</p>

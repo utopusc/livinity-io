@@ -35,6 +35,14 @@ body {
 	-webkit-touch-callout: none;
 }
 
+/* 2026-05-15 — dark-mode body backdrop. The wallpaper component covers the
+ * full viewport in most surfaces, but bare pages (login during loading,
+ * cover messages, edges below the dock) can let body bg leak through.
+ * Explicit colour here means dark mode never flashes a white strip. */
+body.dark {
+	background-color: #0a0a0c;
+}
+
 html {
 	--font-inter: 'Inter';
 	--font-jakarta: 'Space Grotesk';
