@@ -781,7 +781,7 @@ function SpawnErrorBanner({error, onRetry}: SpawnErrorBannerProps) {
 			: error.message
 	return (
 		<div className='absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 p-6 text-center'>
-			<AlertTriangle className='h-8 w-8 text-amber-400' />
+			<AlertTriangle className='h-8 w-8 text-accent-amber' />
 			<div className='max-w-md text-body text-text-primary'>{friendly}</div>
 			<button
 				type='button'
@@ -798,7 +798,7 @@ function SpawnErrorBanner({error, onRetry}: SpawnErrorBannerProps) {
 function VncOverlay({text, variant}: {text: string; variant?: 'error'}) {
 	return (
 		<div className='absolute inset-0 flex items-center justify-center bg-black/40 text-text-secondary'>
-			<span className={cn('text-caption-sm', variant === 'error' && 'text-red-400')}>{text}</span>
+			<span className={cn('text-caption-sm', variant === 'error' && 'text-accent-red')}>{text}</span>
 		</div>
 	)
 }
@@ -823,7 +823,7 @@ interface TeachAutoStopBannerProps {
 
 function TeachAutoStopBanner({onReview, onDismiss}: TeachAutoStopBannerProps) {
 	return (
-		<div className='absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-radius-sm bg-amber-500/90 px-3 py-2 text-caption-sm text-black shadow-lg'>
+		<div className='absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-radius-sm bg-accent-amber/90 px-3 py-2 text-caption-sm text-black shadow-lg'>
 			<div className='flex items-center gap-3'>
 				<span>Recording auto-stopped at 10 minutes — review and save?</span>
 				<button
@@ -892,7 +892,7 @@ function SaveSkillDialog({open, eventCount, durationMs, saving, onSave, onCancel
 						aria-invalid={name.length > 0 && !valid}
 					/>
 					{name.length > 0 && !valid ? (
-						<div className='text-caption-xs text-red-400'>
+						<div className='text-caption-xs text-accent-red'>
 							Use 1-80 letters, digits, spaces, underscores or dashes.
 						</div>
 					) : null}
@@ -911,7 +911,7 @@ function SaveSkillDialog({open, eventCount, durationMs, saving, onSave, onCancel
 						onClick={submit}
 						disabled={!valid || saving}
 						className={cn(
-							'inline-flex h-8 items-center rounded-radius-sm bg-blue-500 px-3 text-caption-sm text-white hover:bg-blue-600',
+							'inline-flex h-8 items-center rounded-radius-sm bg-accent-blue px-3 text-caption-sm text-white hover:bg-accent-blue/90',
 							(!valid || saving) && 'cursor-not-allowed opacity-50',
 						)}
 					>

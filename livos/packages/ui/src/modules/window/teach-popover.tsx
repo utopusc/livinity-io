@@ -100,7 +100,7 @@ export function TeachPopover({pendingStep, onCommit, onCancel}: TeachPopoverProp
 							}
 						}}
 						placeholder='Step description'
-						className='w-full rounded-radius-sm border border-border-default bg-surface-1 px-2 py-1 text-caption-sm text-text-primary outline-none focus:border-blue-500'
+						className='w-full rounded-radius-sm border border-border-default bg-surface-1 px-2 py-1 text-caption-sm text-text-primary outline-none focus:border-accent-blue'
 						maxLength={1024}
 					/>
 					{previewText ? (
@@ -121,7 +121,7 @@ export function TeachPopover({pendingStep, onCommit, onCancel}: TeachPopoverProp
 							onClick={() => onCommit(draft.trim())}
 							disabled={!canSave}
 							className={
-								'inline-flex h-7 items-center rounded-radius-sm bg-blue-500 px-2 text-caption-sm text-white hover:bg-blue-600 ' +
+								'inline-flex h-7 items-center rounded-radius-sm bg-accent-blue px-2 text-caption-sm text-white hover:bg-accent-blue/90 ' +
 								(!canSave ? 'cursor-not-allowed opacity-50' : '')
 							}
 						>

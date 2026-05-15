@@ -91,7 +91,7 @@ export function WebAppFloatingSkillsButton(props: WebAppFloatingSkillsButtonProp
 							type='button'
 							aria-label='Skills'
 							className={cn(
-								'group relative flex h-9 w-9 items-center justify-center rounded-full bg-white/90 backdrop-blur-xl border border-neutral-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.08)] text-neutral-500 hover:bg-primary hover:border-primary/80 hover:text-white transition-all duration-200',
+								'group relative flex h-9 w-9 items-center justify-center rounded-full bg-card-bg/90 backdrop-blur-xl border border-dash-line shadow-[0_2px_8px_rgba(0,0,0,0.08)] text-text-secondary hover:bg-primary hover:border-primary/80 hover:text-white transition-all duration-200',
 							)}
 						>
 							<Library className='h-4 w-4 transition-colors' strokeWidth={2.25} />
@@ -133,7 +133,7 @@ export function WebAppFloatingSkillsButton(props: WebAppFloatingSkillsButtonProp
 										type='button'
 										aria-label='Delete'
 										onClick={() => deleteMutation.mutate({skillId: s.id})}
-										className='flex h-6 w-6 items-center justify-center rounded-radius-xs text-text-secondary hover:bg-red-500/10 hover:text-red-500'
+										className='flex h-6 w-6 items-center justify-center rounded-radius-xs text-text-secondary hover:bg-accent-red/10 hover:text-accent-red'
 									>
 										<Trash2 className='h-3 w-3' />
 									</button>
