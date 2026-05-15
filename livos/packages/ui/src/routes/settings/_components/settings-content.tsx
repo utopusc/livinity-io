@@ -96,6 +96,9 @@ import {MenuItemBadge} from './menu-item-badge'
 // v36 LivOS Design Port — Section-Head + FieldCard pattern (Phases 124, 125).
 import {SettingsPageHeader} from '@/components/settings-page-header'
 import {FieldCard, FieldRow} from '@/components/field-card'
+import {useTheme} from '@/hooks/use-theme'
+import type {Theme} from '@/providers/theme-provider'
+import {TbSun, TbMoon, TbDeviceDesktop} from 'react-icons/tb'
 
 // Lazy-loaded DM Pairing content
 const DmPairingContentLazy = React.lazy(() =>
@@ -718,8 +721,10 @@ function WallpaperSection() {
 				eyebrow='02 · Theme'
 				title='Tune your'
 				titleAccent='theme.'
-				sub='One wallpaper and one accent colour, shared by every LivOS surface. Light- and dark-theme wallpaper variants will land here over time — today there is one adaptive backdrop that follows whichever theme is active.'
+				sub='Pick the LivOS appearance mode, the wallpaper and the accent colour. The mode applies instantly across every surface (desktop, dock, windows, settings).'
 			/>
+
+			<ThemeModeSelector />
 
 			{/* Static preview — the picker shows the wallpaper as a still image so
 			    nothing competes with the rest of the Theme page. The live
@@ -796,6 +801,61 @@ function WallpaperSection() {
 						Custom accent colour overrides the wallpaper brand colour.
 					</p>
 				)}
+			</div>
+		</div>
+	)
+}
+
+// v36 LivOS Design Port — Light / Dark / System segmented control (2026-05-15).
+// Replaces the missing user-facing theme toggle in the settings shell. Uses the
+// existing ThemeProvider (`useTheme`) so the choice persists in localStorage and
+// fires applyTheme() to flip html.dark + body.dark immediately. 'iridescent' is
+// not exposed here — it's a Phase 120 design-tokens variant that's only
+// surfaced from the design-tokens story / experimental routes.
+const THEME_OPTIONS: ReadonlyArray<{value: Exclude<Theme, 'iridescent'>; label: string; icon: typeof TbSun}> = [
+	{value: 'light', label: 'Light', icon: TbSun},
+	{value: 'dark', label: 'Dark', icon: TbMoon},
+	{value: 'system', label: 'System', icon: TbDeviceDesktop},
+]
+
+function ThemeModeSelector() {
+	const {theme, resolvedTheme, setTheme} = useTheme()
+	return (
+		<div className='flex flex-col gap-3'>
+			<div className='flex items-baseline gap-2'>
+				<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-fg-faint'>
+					Mode
+				</span>
+				<span className='text-[11px] text-fg-faint'>
+					· Currently {resolvedTheme}
+				</span>
+			</div>
+			<div
+				role='radiogroup'
+				aria-label='Theme mode'
+				className='inline-flex w-fit gap-1 rounded-[var(--r-md)] border border-line bg-[color:var(--bg)] p-1'
+			>
+				{THEME_OPTIONS.map(({value, label, icon: Icon}) => {
+					const isActive = theme === value
+					return (
+						<button
+							key={value}
+							type='button'
+							role='radio'
+							aria-checked={isActive}
+							onClick={() => setTheme(value)}
+							className={cn(
+								'flex items-center gap-2 rounded-[calc(var(--r-md)-4px)] px-3.5 py-1.5 text-[13px] font-medium transition-colors',
+								isActive
+									? 'bg-fg text-[color:var(--bg)]'
+									: 'text-fg-mute hover:bg-[color:var(--bg-2)] hover:text-fg',
+							)}
+						>
+							<Icon className='h-3.5 w-3.5' />
+							{label}
+						</button>
+					)
+				})}
 			</div>
 		</div>
 	)

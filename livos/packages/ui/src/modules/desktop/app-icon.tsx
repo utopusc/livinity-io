@@ -110,7 +110,16 @@ export function AppIcon({
 					</div>
 				)}
 			</div>
-			<div className='max-w-full text-[11px] font-medium leading-normal text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)] md:text-[12px]'>
+			{/* v36 light-mode pass 2026-05-15: keep the label text white but
+			    layer drop-shadows for a darker halo so the label stays legible
+			    against bright wallpapers as well as dark ones. */}
+			<div
+				className='max-w-full text-[11px] font-medium leading-normal text-white md:text-[12px]'
+				style={{
+					filter:
+						'drop-shadow(0 0 3px rgba(0,0,0,0.85)) drop-shadow(0 1px 2px rgba(0,0,0,0.95))',
+				}}
+			>
 				<div className='truncate'>
 					<AppLabel state={state} label={label} />
 				</div>
