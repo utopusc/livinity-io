@@ -24,9 +24,10 @@ module.exports = {
         "accent-green": "#16a34a",
         "accent-amber": "#d97706",
         "accent-red":   "#dc2626",
-        // Surface tokens — match --card-bg / --card-bg-2 in tokens.css
-        "card-bg":   "#ffffff",
-        "card-bg-2": "#fafafa",
+        // Surface tokens — wired to --card-bg / --card-bg-2 from tokens.css
+        // (2026-05-15) so cards/windows pick up the dark-mode override.
+        "card-bg":   "var(--card-bg)",
+        "card-bg-2": "var(--card-bg-2)",
         // Line tokens — match --dash-line / --dash-line-strong in tokens.css
         "dash-line":        "rgba(0,0,0,0.07)",
         "dash-line-strong": "rgba(0,0,0,0.12)",
@@ -36,14 +37,20 @@ module.exports = {
         // SKIPPED: "bg" and "bg-2" (semantic clash with bg-{color} pattern),
         // "accent" / "accent-soft" (Radix-token collision risk). Consumers
         // that need them use bg-[var(--bg)] or bg-[var(--accent)] instead.
-        "fg":          "#1d1d1f",
-        "fg-dim":      "#424245",
-        "fg-mute":     "#6e6e73",
-        "fg-faint":    "#a1a1a6",
-        "surface":     "#fafafa",
-        "surface-2":   "#ebebed",
-        "line":        "rgb(0 0 0 / .08)",
-        "line-strong": "rgb(0 0 0 / .14)",
+        // 2026-05-15 — wired to CSS vars from tokens.css :root + body.dark
+        // so `bg-fg` / `text-fg` / etc. flip with the theme. Pre-dark-block
+        // these were static hex values that NEVER inverted, leaving white-on-
+        // white labels in dark mode. Tailwind opacity (e.g. `bg-fg/50`) won't
+        // resolve through a raw var() — callers needing alpha must use the
+        // arbitrary form `bg-[color:var(--fg)]` directly.
+        "fg":          "var(--fg)",
+        "fg-dim":      "var(--fg-dim)",
+        "fg-mute":     "var(--fg-mute)",
+        "fg-faint":    "var(--fg-faint)",
+        "surface":     "var(--surface)",
+        "surface-2":   "var(--surface-2)",
+        "line":        "var(--line)",
+        "line-strong": "var(--line-strong)",
       },
       spacing: {
         // Match --dash-pad in tokens.css

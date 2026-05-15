@@ -301,7 +301,7 @@ export function DockBottomPositioner({children}: {children: React.ReactNode}) {
 // values so the dock reads as a frosted-white shelf with a hairline edge and
 // a soft drop on light backdrops. Dark mode keeps its original look behind
 // `dark:` prefixes.
-const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-white/55 dark:bg-card-bg/50 contrast-more:bg-neutral-700 backdrop-blur-3xl backdrop-saturate-150 contrast-more:backdrop-blur-none px-3 shadow-[0_10px_32px_rgba(15,23,42,0.18)] dark:shadow-dock shrink-0 will-change-transform transform-gpu border-px border-black/12 dark:border-white/60`
+const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-white/55 dark:bg-black/55 contrast-more:bg-neutral-700 backdrop-blur-3xl backdrop-saturate-150 contrast-more:backdrop-blur-none px-3 shadow-[0_10px_32px_rgba(15,23,42,0.18)] dark:shadow-[0_10px_32px_rgba(0,0,0,0.55)] shrink-0 will-change-transform transform-gpu border-px border-black/12 dark:border-white/15`
 const dockPreviewClass = tw`mx-auto flex items-end gap-4 rounded-radius-xl bg-card-bg/80 backdrop-blur-md px-3 shadow-dock shrink-0 border-hpx border-border-default`
 
 function RecentAppsDock({mouseX, iconSize, iconSizeZoomed}: {mouseX: ReturnType<typeof useMotionValue<number>>; iconSize: number; iconSizeZoomed: number}) {
