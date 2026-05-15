@@ -55,7 +55,7 @@ export default function PermanentlyDeleteConfirmationDialog() {
 								: t('files-permanently-delete.description-multiple', {count: selectedItems.length})}
 						</span>
 						{needsScroll ? (
-							<div className='h-[200px] overflow-hidden rounded-xl bg-black/20'>
+							<div className='h-[200px] overflow-hidden rounded-dash bg-black/20'>
 								<ScrollArea className='h-full'>
 									<div className='p-4'>
 										<ItemsList />
@@ -63,7 +63,7 @@ export default function PermanentlyDeleteConfirmationDialog() {
 								</ScrollArea>
 							</div>
 						) : (
-							<div className='rounded-xl bg-black/20'>
+							<div className='rounded-dash bg-black/20'>
 								<ItemsList />
 							</div>
 						)}

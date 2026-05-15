@@ -44,7 +44,7 @@ function FilesystemCard({
 			disabled={disabled}
 			tabIndex={-1}
 			className={cn(
-				'flex min-h-[80px] cursor-pointer flex-col items-start justify-between rounded-xl border p-3 text-left transition-colors duration-100 sm:min-h-[120px] sm:p-4',
+				'flex min-h-[80px] cursor-pointer flex-col items-start justify-between rounded-dash border p-3 text-left transition-colors duration-100 sm:min-h-[120px] sm:p-4',
 				selected ? 'border-brand bg-brand/15' : 'border-border-default bg-surface-base hover:bg-surface-1',
 				disabled && 'cursor-not-allowed opacity-50',
 			)}
