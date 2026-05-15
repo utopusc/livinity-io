@@ -1,23 +1,25 @@
 ---
 gsd_state_version: 1.0
-milestone: v35.0
-milestone_name: Design System Unification (UI/UX)
-status: code-complete-pending-operator-uat
-last_updated: "2026-05-15T02:10:00.000Z"
+milestone: pending-next
+milestone_name: "(awaiting /gsd-new-milestone)"
+status: between-milestones
+last_updated: "2026-05-15T02:30:00.000Z"
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 27
-  completed_plans: 27
-  percent: 100
-v35_master_plan: .planning/v35-DESIGN-SYSTEM-MILESTONE.md
-v35_phases: [115, 116, 117, 118, 119, 120, 121]
-v35_status: code-complete
-v35_pending: [AC#8 operator-walked end-to-end UAT, AC#5 body.iridescent stubs deferred to v36]
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+previous_milestone: v35.0
+previous_milestone_name: Design System Unification (UI/UX)
+previous_milestone_status: shipped
+previous_milestone_shipped: 2026-05-15
+previous_milestone_commits: 77
+previous_milestone_phases: "115-121 (7 phases, 27 plans)"
 sacred_sha_verified: f3538e1d811992b782a9bb057d1b7f0a0189f95f
-next_action: "Operator: bash /opt/livos/update.sh on Mini PC + cross-surface visual walk (see 121-06-SUMMARY.md § Operator post-121-06 final UAT block). After AC#8 sign-off: close v35.0 + open v36 / Phase 122 (ui-kit v0.2.0)."
-previous_milestone: v34.0
-previous_milestone_status: code-complete-pending-operator-uat
+v35_pending_operator_uat: [AC#8 operator-walked end-to-end UAT — non-blocking, operator paces walks]
+v35_carry_overs: [v35.0-design-tokens-1.0.1 dark+iridescent patch, ui-kit v0.2.0 (22 candidates in SHADCN-AUDIT.md), landing nav collapse, Caddy /dashboard route flip, dark-surface paired tokens]
+next_action: "/gsd-new-milestone (open v36 with ui-kit v0.2.0 scope) — or operator walks v35.0 AC#8 UAT first, then opens v36."
 ---
 
 # Project State

@@ -1,5 +1,40 @@
 # Milestones
 
+## v35.0 Design System Unification (UI/UX) (Shipped: 2026-05-15)
+
+**Phases:** 7 (115-121) — 27 plans — 77 commits
+**Sacred SHA preserved:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (sdk-agent-runner.ts) — 77/77 commits
+**Archive:** [`milestones/v35.0-ROADMAP.md`](milestones/v35.0-ROADMAP.md) · [`milestones/v35.0-REQUIREMENTS.md`](milestones/v35.0-REQUIREMENTS.md) · [`milestones/v35.0-MILESTONE-AUDIT.md`](milestones/v35.0-MILESTONE-AUDIT.md)
+**Tag:** `v35.0` (local; awaits operator push)
+**v35.0-design-tokens-1.0.0:** local tag, package shipped to monorepo
+
+**Delivered:** Unified the visual identity across three surfaces (Mini PC livinityd UI, Server5 platform Next.js, landing static HTML) onto a single design system anchored on `dashboard.html`. Two new monorepo packages — `@livinity/design-tokens` v1.0.0 (canonical CSS tokens + Tailwind preset + 4 self-hosted fonts) and `@livinity/ui-kit` v0.1.0 (11 components × ESM+CJS+UMD = 18 named exports). Cross-surface visual parity verified at 92.5% match average via 38 headless Chrome captures across 8 primitives × 3 surfaces. Playwright visual regression CI + GitHub Actions workflow active for all future PRs. STYLE-GUIDE.md v1.0 documents the migration recipe + PR checklist.
+
+**Key accomplishments:**
+1. Foundational `@livinity/design-tokens` v1.0.0 package — tokens.css + Tailwind preset (3.4 AND 4 `@theme inline`) + 4 self-hosted .woff2 (Geist Variable, Geist Mono Variable, Instrument Serif Regular + Italic) + 254-line DESIGN-SYSTEM.md spec.
+2. `@livinity/ui-kit` v0.1.0 component library — 5 atoms (Button, Card, Pill, Input, PasswordInput) + 6 composites (Stepper, CommandBox, Modal, Toast, NavBar, ThemeToggle) + Toast provider/hook. 62/62 Vitest tests PASS. UMD smoke verifier proves `window.LivKit` exposes 18 exports.
+3. Server5 Next.js platform migrated — 5 plans, 31 .pre-117-NN.bak rollback backups, Tailwind 4 auto-migration discovered (was on `@theme inline` CSS-first), dead `src/src/` tree archived + removed.
+4. Landing HTML 8 pages share `_shared/tokens.css` + `_shared/nav.jsx` (React UMD + Babel-in-browser) — defense-in-depth on canonical pages keeps inline `:root` AND links shared.
+5. Mini PC livinityd UI Wave 1 — 14 high-impact components migrated (chrome, Settings, AI Chat, App Store); sacred SHA preserved across 5/5 commits.
+6. Long-tail migration completed honestly — Phase 121 migrated ~150 real components + ~250 audited NOOPs (faithful to D-V35-NO-FUNCTIONAL-REGRESSIONS). 22 v0.2.0 ui-kit candidates documented in SHADCN-AUDIT.md (251 callsites prop-API-drift-blocked under NO-FUNCTIONAL-CHANGES).
+7. Critical auto-fix during Phase 119-04 — `vite.config.umd.ts` `NODE_ENV` was not inlined; UMD bundle would have crashed all Phase 118 landing pages with `process is not defined`. Smoke test caught + fixed. Bundle dropped 22.35KB → 9.71KB.
+
+**Cross-surface visual parity:** 92.5% average match across 8 primitives × 3 surfaces (CONSISTENCY-REPORT.md).
+
+**Known deferred items at close:**
+- AC#5 PARTIAL — `body.dark` + `body.iridescent` token blocks shipped as PENDING stubs (Server5 SSH transient failure during 116-01 fetch; reachable now). Patch route: `v35.0-design-tokens-1.0.1` once dark+iridescent transcribed.
+- AC#8 PENDING OPERATOR — per-plan UAT blocks ship; operator paces walks via `bash /opt/livos/update.sh` + cross-surface browse.
+- 22 ui-kit v0.2.0 candidates routed to Phase 122+ (button-shim 108 callsites, input 57, dialog 57, badge 14, label 15 + 17 more — prop API drift blocks safe redirect under D-V35-NO-FUNCTIONAL-CHANGES).
+- 7 landing pages have 2 stacked navs (existing inline + new shared) — collapses to `<LivKit.NavBar>` in v0.2.0 work.
+- Caddy `/dashboard` route flip — Next.js dashboard restyled but Caddy still serves static dashboard.html; operator decision when to flip publicly.
+- Dark-surface paired tokens (chrome-content, terminal-content) — v36 dark-token expansion.
+
+**Operator UAT pending phases:** 120 (4 plans), 121 (5 plans). Non-blocking per `feedback_minipc_is_owncloud_primary` — operator paces walks at own discretion. Each plan independently revertable via `git revert <commit-hash> && bash /opt/livos/update.sh`.
+
+**Workflow note:** v35.0 was opened as a design-system milestone with acceptance criteria embedded directly in the master plan rather than as discrete REQ-IDs. The 8 AC#1-8 functioned as v35.0's de-facto requirements. Tracking persisted in `v35.0-MILESTONE-AUDIT.md`. v36 returns to standard REQ-ID-driven requirements via `/gsd-new-milestone`.
+
+---
+
 ## v30.0 Livinity Broker Professionalization (Shipped: 2026-05-04)
 
 **Phases completed:** 8 phases (56-63), 44 plans (41/44 summaries — Phase 63 R-series live-verified piece-by-piece, formal walkthrough waived per --accept-debt), 166 commits since v30.0 seed (`d59b1b51`)

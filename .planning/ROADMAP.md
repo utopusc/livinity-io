@@ -9,6 +9,7 @@
 - ✅ **v31.0 Liv Agent Reborn** — Phases 64-79 (closed 2026-05-05 — P77+P78+P79 hot-fix wave shipped same day; bytebot MCP working end-to-end via host GNOME desktop)
 - ✅ **v32.0 AI Chat Ground-up Rewrite + Hermes Background Runtime** — Phases 80-91 (CODE-COMPLETE 2026-05-06 via autonomous wave-based dispatch; pending Mini PC UAT signoff — see [.planning/phases/91-uat-polish/UAT-CHECKLIST.md](phases/91-uat-polish/UAT-CHECKLIST.md))
 - ✅ **v33.0 WebApp Launcher + Teach/Auto Modes** — Phases 92-98 (CODE-COMPLETE 2026-05-08; pending Mini PC UAT signoff — see [.planning/phases/98-uat-polish/UAT-CHECKLIST.md](phases/98-uat-polish/UAT-CHECKLIST.md))
+- ✅ **v35.0 Design System Unification (UI/UX)** — Phases 115-121 (shipped 2026-05-15; 77 commits, sacred SHA preserved 77/77, AC#3 cross-surface parity 92.5%, operator UAT pending) — see [milestones/v35.0-ROADMAP.md](milestones/v35.0-ROADMAP.md)
 - ⏸ **(deferred) Backup & Restore** — paused, 8 phases / 47 BAK-* reqs defined in [milestones/v30.0-DEFINED/](milestones/v30.0-DEFINED/) (resumes as future slot e.g. v34+)
 
 ---
