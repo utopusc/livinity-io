@@ -243,6 +243,78 @@ The single source of truth is `/opt/landing/livinity.io/dashboard.html` (Server5
 
 Phase 115 inventory: `.planning/phases/115-ui-component-inventory/INVENTORY-LANDING.md` confirms `dashboard.html` carries the full canonical token set + 3-theme support (`body.dark` 8 hits, `body.iridescent` 1 hit) + canonical class vocabulary (`.h-btn`, `.b-card.span-N`, `.hero-card`, `.status-dot`, `.cmd-box`, `.stepper`, `.pill.{ok,err,warn}`).
 
+## v36 Tokens (additive — Livinity Design Port)
+
+Phase 122 of the v36 LivOS Design Port adds a second `:root` block to `tokens.css` with the Livinity Design System tokens (user-authored in claude.ai/design, 2026-05-15). These tokens are **additive** — they coexist with the v35.0 canonical block above, no rename, no value change. Consumers opt in by using the new utilities or by referencing the new CSS variables directly. Master plan: `.planning/v36-DESIGN-PORT-MASTER.md`.
+
+### New CSS variables
+
+| Token | Value | Role |
+|-------|-------|------|
+| `--fg` | `#1d1d1f` | Primary text, accent (monochrome). |
+| `--fg-dim` | `#424245` | Secondary text. |
+| `--fg-mute` | `#6e6e73` | Tertiary text / labels. |
+| `--fg-faint` | `#a1a1a6` | Disabled / hairline icons. |
+| `--bg` | `#ffffff` | Page background. |
+| `--bg-2` | `#f5f5f7` | Subtle surface (rails, chips, inputs). |
+| `--surface` | `#fafafa` | Card on neutral. |
+| `--surface-2` | `#ebebed` | Hovered tile. |
+| `--line` | `rgb(0 0 0 / .08)` | Default hairline. |
+| `--line-strong` | `rgb(0 0 0 / .14)` | Strong hairline. |
+| `--accent` | `#1d1d1f` | Monochrome accent. |
+| `--accent-soft` | `rgb(0 0 0 / .06)` | Subtle accent fill. |
+| `--blue` | `#0a84ff` | Use sparingly — focus rings, links. |
+| `--green-bright` | `#28c840` | Live indicator dot. |
+| `--r-xs` / `--r-sm` / `--r` / `--r-md` / `--r-lg` / `--r-xl` / `--r-2xl` / `--r-full` | `6 / 8 / 12 / 14 / 18 / 22 / 28 / 999` px | v36 radius scale. |
+| `--shadow-card` | aliases `--card-shadow` | Card elevation (byte-equal to v35.0 token). |
+| `--shadow-window` | multi-layer | OS-window elevation. |
+| `--shadow-pop` | `0 12px 30px -16px rgb(0 0 0 / .18)` | Popover / floating elements. |
+| `--ease-out-v36` / `--ease-in-out-v36` | `cubic-bezier(.2, .7, .2, 1)` / `cubic-bezier(.4, 0, .2, 1)` | Canonical easing. |
+| `--sans` / `--mono` / `--serif` | system stack / alias `--font-mono` / alias `--font-serif` | Type stack. No new `@font-face` declarations. |
+
+### New Tailwind utilities
+
+The `tailwind.preset.cjs` ships a deliberately-narrow set of additive utility classes — only those that don't collide with existing Tailwind 3.x semantics:
+
+| Class | Maps to | Notes |
+|-------|---------|-------|
+| `bg-fg` / `text-fg` / `border-fg` | `--fg` | Primary text/accent on white. |
+| `bg-fg-dim` / `text-fg-dim` | `--fg-dim` | Secondary text. |
+| `bg-fg-mute` / `text-fg-mute` | `--fg-mute` | Labels. |
+| `bg-fg-faint` / `text-fg-faint` | `--fg-faint` | Disabled. |
+| `bg-surface` / `bg-surface-2` | `--surface` / `--surface-2` | Card / hovered tile. |
+| `border-line` / `border-line-strong` | `--line` / `--line-strong` | Hairlines. |
+| `shadow-window-soft` | `--shadow-window` | OS-window elevation. |
+| `shadow-pop` | `--shadow-pop` | Popover elevation. |
+| `ease-out-v36` / `ease-in-out-v36` | the cubic-bezier curves | Apply via `transition-timing-function`. |
+
+### Deliberately NOT exposed as Tailwind utilities (Phase 122 deviation)
+
+These design tokens are **only** addressable via the raw CSS variable (e.g. `rounded-[var(--r-lg)]`):
+
+- **`--r-xs` / `--r-sm` / `--r-md` / `--r-lg` / `--r-xl` / `--r-2xl`** — Adding these as `borderRadius` preset keys would generate Tailwind classes like `rounded-r-lg`, which **already exists** in Tailwind 3.x as the directional alias for `rounded-{side}-{size}` ("rounded right side with size lg"). The existing call-site `livos/packages/ui/src/features/files/components/sidebar/sidebar-network-storage.tsx` uses `rounded-r-lg` in the directional sense (8px right-only); adding the v36 18px alias would silently re-resolve it to 18px all-sides. The existing `"dash": "18px"` preset key already covers the most-common 18px case via `rounded-dash`.
+- **`--bg` / `--bg-2`** — `bg-bg` reads weirdly. Consumers use `bg-[var(--bg)]`.
+- **`--accent` / `--accent-soft`** — Reserved by Radix UI's theme system; collision risk with downstream UI plugins. Consumers use `bg-[var(--accent)]`.
+- **fontFamily — no new entries** — the existing `serif` already maps to Instrument Serif (Phase 116). The v36 design system's editorial italic accents use `font-serif italic` as-is.
+
+### Migration guide
+
+v36 components should prefer the new tokens. The legacy `--accent-blue` / `--dash-line` / `--card-bg` tokens stay live and unchanged through v36; a v37 cleanup pass will retire them where the monochrome design system demands.
+
+| Legacy | v36 equivalent | When to migrate |
+|--------|----------------|-----------------|
+| `bg-accent-blue` | `bg-fg` (monochrome black) | When the component is being ported to the new design language (Phases 123-129). |
+| `border-dash-line` | `border-line` | Same migration point. |
+| `bg-card-bg` | `bg-[var(--bg)]` | Page-level background. |
+| `bg-card-bg-2` | `bg-surface` or `bg-[var(--bg-2)]` | Card / chip surface. |
+| `shadow-card` | unchanged — both names work | The v36 `--shadow-card` aliases the v35.0 `--card-shadow`. |
+| `rounded-dash` | unchanged — both work | `dash` and `--r-lg` are both `18px`. |
+| `duration-dash` (180ms) | unchanged — keep | The v36 design system doesn't override the duration scale. |
+
+### Roadmap reference
+
+Phases 123-129 incrementally migrate consumer files (button → section-head → field-card → plan-card → stat-tile → app-tile → chat-bubble) to these tokens. See `.planning/v36-DESIGN-PORT-MASTER.md` for the per-phase scope and `.planning/phases/12X-*/12X-PLAN.md` for the detailed plan of each phase.
+
 ## Changelog
 
 ### 1.0.0 — 2026-05-14 — Initial release (Phase 116-01)
@@ -252,3 +324,10 @@ Phase 115 inventory: `.planning/phases/115-ui-component-inventory/INVENTORY-LAND
 - Tailwind 3.4 preset, JSON manifest, long-form spec.
 - `fonts.css` + self-hosted `.woff2` bundle deferred to Plan 116-02.
 - `STYLE-GUIDE.md` skeleton for Phase 121 expansion.
+
+### 1.1.0 — 2026-05-15 — v36 LivOS Design Port additive tokens (Phase 122)
+
+- New `:root` block in `tokens.css`: monochrome neutrals (fg/fg-dim/fg-mute/fg-faint, bg/bg-2/surface/surface-2), hairlines (line/line-strong), accent (--accent/--accent-soft/--blue/--green-bright), v36 radii scale (--r-xs..--r-2xl, --r-full), v36 shadows (--shadow-window, --shadow-pop, --shadow-card aliasing --card-shadow), v36 easing (--ease-out-v36, --ease-in-out-v36), v36 fonts (--sans system stack, --mono / --serif aliasing --font-mono / --font-serif).
+- New Tailwind preset entries (safe subset): `colors.{fg, fg-dim, fg-mute, fg-faint, surface, surface-2, line, line-strong}`, `boxShadow.{window-soft, pop}`, `transitionTimingFunction.{out-v36, in-out-v36}`.
+- Tailwind r-* / bg / accent / fontFamily aliases **intentionally skipped** to avoid directional / semantic / Radix collisions — see "Deliberately NOT exposed" section above.
+- **No consumer file changes** in Phase 122. D-V36-ADDITIVE-ONLY upheld: all 6 v35.0 canonical tokens (--accent-blue, --dash-line, --card-shadow, --card-bg, --hero-grad, --dash-radius) byte-unchanged. Sacred SHA `f3538e1d...` preserved.
