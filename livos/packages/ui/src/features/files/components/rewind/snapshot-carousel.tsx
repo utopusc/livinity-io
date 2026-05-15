@@ -110,7 +110,7 @@ export function SnapshotCarousel({
 						opacity: {duration: 0.2},
 					}}
 				>
-					<Card className='relative h-full w-full overflow-hidden rounded-2xl bg-black p-0 shadow-2xl lg:p-0'>
+					<Card className='relative h-full w-full overflow-hidden rounded-dash bg-black p-0 shadow-2xl lg:p-0'>
 						<div className='pointer-events-none absolute inset-0'>
 							<div
 								className='absolute inset-0 bg-cover bg-center opacity-90'
