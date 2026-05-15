@@ -245,7 +245,7 @@ export function DeployStackForm({
 						disabled={isEditMode}
 						className={cn(isEditMode && 'opacity-60 cursor-not-allowed')}
 					/>
-					{nameError && <p className='text-xs text-red-500'>{nameError}</p>}
+					{nameError && <p className='text-xs text-accent-red'>{nameError}</p>}
 				</div>
 
 				{/* Compose source — Plan 21-02 wraps Compose YAML in a Tabs primitive
@@ -463,7 +463,7 @@ export function DeployStackForm({
 									key={i}
 									className={cn(
 										'flex items-center gap-2',
-										env.secret && 'border-l-2 border-amber-500/40 pl-2',
+										env.secret && 'border-l-2 border-accent-amber/40 pl-2',
 									)}
 								>
 									<Input
@@ -500,7 +500,7 @@ export function DeployStackForm({
 									<button
 										type='button'
 										onClick={() => removeEnvVar(i)}
-										className='shrink-0 rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-red-500/20 hover:text-red-500'
+										className='shrink-0 rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-accent-red/20 hover:text-accent-red'
 									>
 										<IconX size={14} />
 									</button>

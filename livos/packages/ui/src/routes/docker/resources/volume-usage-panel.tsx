@@ -44,7 +44,7 @@ export function VolumeUsagePanel({volumeName}: {volumeName: string}) {
 					</TableHeader>
 					<TableBody>
 						{containers.map((c, i) => (
-							<TableRow key={i} className='bg-white hover:bg-zinc-50'>
+							<TableRow key={i} className='bg-white hover:bg-card-bg'>
 								<TableCell className='pl-3'>
 									<span className='text-xs font-medium'>{c.containerName}</span>
 								</TableCell>

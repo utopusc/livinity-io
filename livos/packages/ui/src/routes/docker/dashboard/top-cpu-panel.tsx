@@ -56,8 +56,8 @@ function ActionChip({
 			className={cn(
 				'inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium transition',
 				disabled
-					? 'cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-600'
-					: 'border-zinc-300 bg-white text-zinc-700 hover:border-blue-400 hover:text-blue-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-blue-600 dark:hover:text-blue-300',
+					? 'cursor-not-allowed border-zinc-200 bg-card-bg text-zinc-400 dark:border-zinc-800 dark:bg-card-bg-2 dark:text-zinc-600'
+					: 'border-zinc-300 bg-white text-zinc-700 hover:border-accent-blue hover:text-accent-blue dark:border-zinc-700 dark:bg-card-bg-2 dark:text-zinc-300 dark:hover:border-accent-blue dark:hover:text-accent-blue',
 			)}
 		>
 			<IconCmp size={12} className='shrink-0' />
@@ -71,12 +71,12 @@ function TopCpuSkeleton() {
 		<ul className='divide-y divide-zinc-200 dark:divide-zinc-800'>
 			{Array.from({length: 5}).map((_, i) => (
 				<li key={i} className='flex items-center gap-3 py-2'>
-					<div className='h-4 w-12 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800' />
+					<div className='h-4 w-12 animate-pulse rounded bg-zinc-200 dark:bg-card-bg-2' />
 					<div className='flex-1'>
-						<div className='h-4 w-32 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800' />
-						<div className='mt-1 h-3 w-24 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800' />
+						<div className='h-4 w-32 animate-pulse rounded bg-zinc-200 dark:bg-card-bg-2' />
+						<div className='mt-1 h-3 w-24 animate-pulse rounded bg-zinc-200 dark:bg-card-bg-2' />
 					</div>
-					<div className='h-4 w-12 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800' />
+					<div className='h-4 w-12 animate-pulse rounded bg-zinc-200 dark:bg-card-bg-2' />
 				</li>
 			))}
 		</ul>
@@ -134,7 +134,7 @@ export function TopCpuPanel() {
 							key={`${e.envId}:${e.containerId}`}
 							className='flex items-center gap-3 py-2'
 						>
-							<span className='shrink-0 rounded bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'>
+							<span className='shrink-0 rounded bg-card-bg px-2 py-0.5 text-[11px] text-zinc-700 dark:bg-card-bg-2 dark:text-zinc-300'>
 								{e.envName}
 							</span>
 							<div className='min-w-0 flex-1'>

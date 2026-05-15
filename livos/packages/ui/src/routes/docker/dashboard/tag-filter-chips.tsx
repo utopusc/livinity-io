@@ -28,8 +28,8 @@ function Chip({active, onClick, children}: {active: boolean; onClick: () => void
 			className={cn(
 				'shrink-0 rounded-full border px-3 py-1 text-xs transition',
 				active
-					? 'border-blue-500 bg-blue-500 text-white shadow-sm'
-					: 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600',
+					? 'border-accent-blue bg-accent-blue text-white shadow-sm'
+					: 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400 dark:border-zinc-700 dark:bg-card-bg-2 dark:text-zinc-300 dark:hover:border-zinc-600',
 			)}
 		>
 			{children}

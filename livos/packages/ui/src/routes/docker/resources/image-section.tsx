@@ -149,7 +149,7 @@ export function ImageSection() {
 							'mb-4 rounded-lg px-4 py-3 text-sm font-medium',
 							actionResult.type === 'success'
 								? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
-								: 'bg-red-500/20 text-red-600 border border-red-500/30',
+								: 'bg-accent-red/20 text-accent-red border border-accent-red/30',
 						)}
 					>
 						{actionResult.message}
@@ -164,10 +164,10 @@ export function ImageSection() {
 					<p className='text-sm text-text-tertiary'>Loading images...</p>
 				</div>
 			) : isError ? (
-				<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
-					<IconPhoto size={24} className='mx-auto mb-3 text-red-400' />
-					<p className='text-sm text-red-400'>Failed to load images</p>
-					<p className='mt-1 text-xs text-red-400/60'>{error?.message}</p>
+				<div className='rounded-xl border border-accent-red/20 bg-accent-red/10 p-8 text-center'>
+					<IconPhoto size={24} className='mx-auto mb-3 text-accent-red' />
+					<p className='text-sm text-accent-red'>Failed to load images</p>
+					<p className='mt-1 text-xs text-accent-red/60'>{error?.message}</p>
 				</div>
 			) : !images.length ? (
 				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
@@ -223,7 +223,7 @@ export function ImageSection() {
 															<TooltipContent>{fullTagList}</TooltipContent>
 														</Tooltip>
 														{extraCount > 0 && (
-															<span className='shrink-0 inline-flex items-center rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600'>
+															<span className='shrink-0 inline-flex items-center rounded-full bg-accent-blue/10 px-1.5 py-0.5 text-[10px] font-medium text-accent-blue'>
 																+{extraCount} more
 															</span>
 														)}
@@ -235,7 +235,7 @@ export function ImageSection() {
 												<TableCell>
 													<span className='text-sm text-text-secondary'>{formatRelativeDate(image.created)}</span>
 												</TableCell>
-												<TableCell className='sticky right-0 z-10 bg-white text-right pr-4 group-hover:bg-zinc-50'>
+												<TableCell className='sticky right-0 z-10 bg-white text-right pr-4 group-hover:bg-card-bg'>
 													<div className='flex items-center justify-end gap-0.5' onClick={(e) => e.stopPropagation()}>
 														<ActionButton
 															icon={IconLink}
@@ -278,7 +278,7 @@ export function ImageSection() {
 											</TableRow>
 											{isExpanded && (
 												<TableRow>
-													<TableCell colSpan={4} className='p-0 border-t border-border-default bg-zinc-50'>
+													<TableCell colSpan={4} className='p-0 border-t border-border-default bg-card-bg'>
 														<Tabs
 															value={getActiveImageTab(image.id)}
 															onValueChange={(v) => setActiveImageTab(image.id, v as 'history' | 'scan')}

@@ -37,7 +37,7 @@ type ParseResult =
 function ComposeServiceNode({data}: NodeProps<ComposeNodeData>) {
 	return (
 		<div className='min-w-[180px] rounded-md border border-border-default bg-surface-1 px-3 py-2 shadow-sm'>
-			<Handle type='target' position={Position.Left} className='!bg-blue-500' />
+			<Handle type='target' position={Position.Left} className='!bg-accent-blue' />
 			<div className='text-sm font-semibold text-text-primary'>{data.label}</div>
 			<div className='truncate font-mono text-[11px] text-text-secondary' title={data.image}>
 				{data.image}
@@ -47,7 +47,7 @@ function ComposeServiceNode({data}: NodeProps<ComposeNodeData>) {
 					{data.ports.map((p) => (
 						<span
 							key={p}
-							className='inline-flex rounded bg-blue-500/15 px-1.5 py-0.5 font-mono text-[10px] text-blue-700 dark:text-blue-300'
+							className='inline-flex rounded bg-accent-blue/15 px-1.5 py-0.5 font-mono text-[10px] text-accent-blue dark:text-accent-blue'
 						>
 							{p}
 						</span>
@@ -66,7 +66,7 @@ function ComposeServiceNode({data}: NodeProps<ComposeNodeData>) {
 					))}
 				</div>
 			)}
-			<Handle type='source' position={Position.Right} className='!bg-blue-500' />
+			<Handle type='source' position={Position.Right} className='!bg-accent-blue' />
 		</div>
 	)
 }
@@ -275,7 +275,7 @@ export function ComposeGraphViewer({stackName}: {stackName: string}) {
 
 	if (error) {
 		return (
-			<div className='flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400'>
+			<div className='flex items-start gap-2 rounded-lg border border-accent-red/40 bg-accent-red/10 p-3 text-sm text-accent-red dark:text-accent-red'>
 				<IconAlertCircle size={16} className='mt-0.5 shrink-0' />
 				<div>
 					<div className='font-medium'>Failed to load compose file</div>
@@ -288,7 +288,7 @@ export function ComposeGraphViewer({stackName}: {stackName: string}) {
 	if (parsed && 'error' in parsed) {
 		return (
 			<div className='space-y-2'>
-				<div className='flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400'>
+				<div className='flex items-start gap-2 rounded-lg border border-accent-amber/40 bg-accent-amber/10 p-3 text-sm text-accent-amber dark:text-accent-amber'>
 					<IconAlertTriangle size={16} className='mt-0.5 shrink-0' />
 					<div>
 						<div className='font-medium'>Failed to parse compose: {parsed.error}</div>

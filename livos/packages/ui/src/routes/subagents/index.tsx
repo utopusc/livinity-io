@@ -149,7 +149,7 @@ function CreateSubagentForm({onClose}: {onClose: () => void}) {
 				<button
 					type='submit'
 					disabled={createMutation.isPending}
-					className='rounded-lg bg-blue-600 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-500 disabled:opacity-50'
+					className='rounded-lg bg-accent-blue px-4 py-2 text-sm text-white transition-colors hover:bg-accent-blue disabled:opacity-50'
 				>
 					{createMutation.isPending ? 'Creating...' : 'Create'}
 				</button>
@@ -193,7 +193,7 @@ export default function Subagents() {
 				</div>
 				<button
 					onClick={() => setShowCreate(!showCreate)}
-					className='flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-500'
+					className='flex items-center gap-2 rounded-xl bg-accent-blue px-4 py-2 text-sm text-white transition-colors hover:bg-accent-blue'
 				>
 					<IconPlus size={16} />
 					New Subagent
@@ -216,8 +216,8 @@ export default function Subagents() {
 						<div key={agent.id} className='rounded-xl border border-border-default bg-surface-base p-4'>
 							<div className='flex items-start justify-between'>
 								<div className='flex items-center gap-3'>
-									<div className='flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/20'>
-										<IconRobot size={20} className='text-blue-400' />
+									<div className='flex h-10 w-10 items-center justify-center rounded-full bg-accent-blue/20'>
+										<IconRobot size={20} className='text-accent-blue' />
 									</div>
 									<div>
 										<div className='font-medium text-text-primary'>{agent.name || agent.id}</div>
@@ -228,7 +228,7 @@ export default function Subagents() {
 									<span
 										className={`mr-2 rounded-full px-2 py-0.5 text-[10px] font-medium ${
 											agent.status === 'active'
-												? 'bg-green-500/20 text-green-400'
+												? 'bg-accent-green/20 text-accent-green'
 												: 'bg-yellow-500/20 text-yellow-400'
 										}`}
 									>
@@ -236,14 +236,14 @@ export default function Subagents() {
 									</span>
 									<button
 										onClick={() => handleExecute(agent.id)}
-										className='rounded-lg p-1.5 text-text-tertiary hover:bg-surface-1 hover:text-green-400'
+										className='rounded-lg p-1.5 text-text-tertiary hover:bg-surface-1 hover:text-accent-green'
 										title='Execute'
 									>
 										<IconPlayerPlay size={16} />
 									</button>
 									<button
 										onClick={() => handleDelete(agent.id)}
-										className='rounded-lg p-1.5 text-text-tertiary hover:bg-surface-1 hover:text-red-400'
+										className='rounded-lg p-1.5 text-text-tertiary hover:bg-surface-1 hover:text-accent-red'
 										title='Delete'
 									>
 										<IconTrash size={16} />

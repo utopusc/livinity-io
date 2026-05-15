@@ -182,7 +182,7 @@ export function LogsViewer({lines, truncated = false}: LogsViewerProps) {
 				{grepInvalid && (
 					<span
 						role='status'
-						className='flex items-center gap-1 rounded border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs text-red-500'
+						className='flex items-center gap-1 rounded border border-accent-red/40 bg-accent-red/10 px-2 py-1 text-xs text-accent-red'
 					>
 						<IconAlertCircle size={12} />
 						invalid regex
@@ -215,13 +215,13 @@ export function LogsViewer({lines, truncated = false}: LogsViewerProps) {
 
 			{/* Truncation banner */}
 			{truncated && (
-				<div className='shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400'>
+				<div className='shrink-0 border-b border-accent-amber/30 bg-accent-amber/10 px-3 py-2 text-xs text-accent-amber dark:text-accent-amber'>
 					Showing first 25 selected containers (multiplex cap). Uncheck some to add others.
 				</div>
 			)}
 
 			{/* Virtualized list body */}
-			<div ref={scrollRef} onScroll={handleScroll} className='min-h-0 flex-1 overflow-y-auto bg-zinc-50 dark:bg-zinc-950'>
+			<div ref={scrollRef} onScroll={handleScroll} className='min-h-0 flex-1 overflow-y-auto bg-card-bg dark:bg-zinc-950'>
 				{totalLines === 0 ? (
 					<div className='flex h-full items-center justify-center p-8 text-center text-sm text-text-tertiary'>
 						Select a container in the sidebar to start streaming logs.

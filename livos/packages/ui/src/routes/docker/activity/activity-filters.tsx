@@ -48,10 +48,10 @@ function Chip({
 }) {
 	const activeStyle =
 		tone === 'warn'
-			? 'border-amber-500 bg-amber-500 text-white shadow-sm'
+			? 'border-accent-amber bg-accent-amber text-white shadow-sm'
 			: tone === 'error'
-				? 'border-red-500 bg-red-500 text-white shadow-sm'
-				: 'border-blue-500 bg-blue-500 text-white shadow-sm'
+				? 'border-accent-red bg-accent-red text-white shadow-sm'
+				: 'border-accent-blue bg-accent-blue text-white shadow-sm'
 
 	return (
 		<button
@@ -61,7 +61,7 @@ function Chip({
 				'inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-xs transition',
 				active
 					? activeStyle
-					: 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600',
+					: 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400 dark:border-zinc-700 dark:bg-card-bg-2 dark:text-zinc-300 dark:hover:border-zinc-600',
 			)}
 		>
 			{children}

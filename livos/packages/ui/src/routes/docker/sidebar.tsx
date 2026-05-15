@@ -97,7 +97,7 @@ export function Sidebar() {
 	return (
 		<aside
 			className={cn(
-				'flex h-full flex-col border-r border-zinc-200 bg-zinc-50 transition-[width] duration-150',
+				'flex h-full flex-col border-r border-zinc-200 bg-card-bg transition-[width] duration-150',
 				'dark:border-zinc-800 dark:bg-zinc-950',
 				collapsed ? 'w-14' : 'w-56',
 			)}
@@ -110,7 +110,7 @@ export function Sidebar() {
 					type='button'
 					onClick={toggle}
 					aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-					className='ml-auto rounded p-1 text-zinc-600 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800'
+					className='ml-auto rounded p-1 text-zinc-600 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-card-bg-2'
 				>
 					{collapsed ? <IconChevronRight size={14} /> : <IconChevronLeft size={14} />}
 				</button>
@@ -130,8 +130,8 @@ export function Sidebar() {
 									'flex w-full items-center gap-3 px-3 text-sm transition-colors',
 									density === 'compact' ? 'py-1' : 'py-2',
 									active
-										? 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
-										: 'text-zinc-700 hover:bg-zinc-200/60 dark:text-zinc-300 dark:hover:bg-zinc-800/60',
+										? 'bg-accent-blue/10 text-accent-blue dark:bg-accent-blue/15 dark:text-accent-blue'
+										: 'text-zinc-700 hover:bg-zinc-200/60 dark:text-zinc-300 dark:hover:bg-card-bg-2/60',
 									collapsed && 'justify-center px-0',
 								)}
 							>

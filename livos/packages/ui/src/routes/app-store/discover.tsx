@@ -159,17 +159,17 @@ function DiscoverContent() {
 const GRADIENTS = [
 	{
 		from: 'from-blue-50', via: 'via-indigo-50/80', to: 'to-violet-50/50',
-		orb1: 'bg-blue-200/40', orb2: 'bg-indigo-200/30',
-		accent: 'text-blue-600',
-		badge: 'bg-blue-100 text-blue-700 ring-blue-200',
-		dot: 'bg-blue-500', glow: 'bg-blue-200/50',
+		orb1: 'bg-accent-blue/40', orb2: 'bg-indigo-200/30',
+		accent: 'text-accent-blue',
+		badge: 'bg-accent-blue/10 text-accent-blue ring-accent-blue',
+		dot: 'bg-accent-blue', glow: 'bg-accent-blue/50',
 	},
 	{
 		from: 'from-amber-50', via: 'via-orange-50/80', to: 'to-rose-50/50',
-		orb1: 'bg-amber-200/40', orb2: 'bg-orange-200/30',
-		accent: 'text-amber-600',
-		badge: 'bg-amber-100 text-amber-700 ring-amber-200',
-		dot: 'bg-amber-500', glow: 'bg-amber-200/50',
+		orb1: 'bg-accent-amber/40', orb2: 'bg-orange-200/30',
+		accent: 'text-accent-amber',
+		badge: 'bg-accent-amber/10 text-accent-amber ring-accent-amber',
+		dot: 'bg-accent-amber', glow: 'bg-accent-amber/50',
 	},
 ]
 

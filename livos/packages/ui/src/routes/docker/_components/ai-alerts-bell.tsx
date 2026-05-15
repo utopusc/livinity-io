@@ -21,9 +21,9 @@ import {Button} from '@/shadcn-components/ui/button'
 import {cn} from '@/shadcn-lib/utils'
 
 const SEVERITY_DOT: Record<string, string> = {
-	critical: 'bg-red-500',
-	warning: 'bg-amber-500',
-	info: 'bg-blue-500',
+	critical: 'bg-accent-red',
+	warning: 'bg-accent-amber',
+	info: 'bg-accent-blue',
 }
 
 const VISIBLE_LIMIT = 10
@@ -54,11 +54,11 @@ export function AlertsBell() {
 							? `AI Alerts (${unreadCount} un-dismissed)`
 							: 'AI Alerts (none)'
 					}
-					className='relative inline-flex h-9 w-9 items-center justify-center rounded-full text-text-secondary hover:bg-white/5 hover:text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40'
+					className='relative inline-flex h-9 w-9 items-center justify-center rounded-full text-text-secondary hover:bg-white/5 hover:text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue/40'
 				>
 					<IconBell size={18} />
 					{unreadCount > 0 && (
-						<span className='absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white'>
+						<span className='absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-red px-1 text-[10px] font-semibold leading-none text-white'>
 							{badgeText}
 						</span>
 					)}

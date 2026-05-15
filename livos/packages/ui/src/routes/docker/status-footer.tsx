@@ -81,7 +81,7 @@ export function StatusFooter() {
 		<footer
 			className={cn(
 				'sticky bottom-0 z-10 flex h-12 shrink-0 items-center gap-3 border-t border-zinc-200 bg-white/95 px-3 backdrop-blur',
-				'dark:border-zinc-800 dark:bg-zinc-900/95',
+				'dark:border-zinc-800 dark:bg-card-bg-2/95',
 			)}
 		>
 			<div className='flex min-w-0 flex-1 items-center gap-2 overflow-x-auto'>
@@ -103,8 +103,8 @@ function Pill({icon: PillIcon, children}: {icon?: Icon; children: ReactNode}) {
 		<span
 			className={cn(
 				'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs',
-				'border-zinc-200 bg-zinc-50 text-zinc-700',
-				'dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300',
+				'border-zinc-200 bg-card-bg text-zinc-700',
+				'dark:border-zinc-800 dark:bg-card-bg-2 dark:text-zinc-300',
 			)}
 		>
 			{PillIcon && <PillIcon size={12} className='text-zinc-500 dark:text-zinc-400' />}
@@ -120,7 +120,7 @@ function LivePill({connected}: {connected: boolean}) {
 				'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs',
 				connected
 					? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-					: 'border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400',
+					: 'border-zinc-300 bg-card-bg text-zinc-600 dark:border-zinc-700 dark:bg-card-bg-2 dark:text-zinc-400',
 			)}
 			aria-live='polite'
 			aria-label={connected ? 'Engine info up-to-date' : 'Engine info stale (no recent response)'}

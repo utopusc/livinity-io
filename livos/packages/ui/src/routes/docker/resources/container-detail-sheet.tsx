@@ -56,8 +56,8 @@ function formatDate(iso: string): string {
 
 // Color class for CPU/memory progress bars based on percentage
 function progressColor(percent: number): string {
-	if (percent > 80) return 'bg-red-500'
-	if (percent > 50) return 'bg-amber-500'
+	if (percent > 80) return 'bg-accent-red'
+	if (percent > 50) return 'bg-accent-amber'
 	return 'bg-emerald-500'
 }
 
@@ -109,8 +109,8 @@ function HealthBadge({status}: {status: string | null}) {
 	if (!status) return <span className='text-text-tertiary'>No healthcheck</span>
 	const color: Record<string, string> = {
 		healthy: 'text-emerald-600 bg-emerald-500/20',
-		unhealthy: 'text-red-600 bg-red-500/20',
-		starting: 'text-amber-600 bg-amber-500/20',
+		unhealthy: 'text-accent-red bg-accent-red/20',
+		starting: 'text-accent-amber bg-accent-amber/20',
 	}
 	const classes = color[status] ?? 'text-text-secondary bg-surface-2'
 	return (
@@ -123,8 +123,8 @@ function HealthBadge({status}: {status: string | null}) {
 function StateBadgeInline({state}: {state: string}) {
 	const color: Record<string, string> = {
 		running: 'text-emerald-600 bg-emerald-500/20',
-		exited: 'text-red-600 bg-red-500/20',
-		paused: 'text-amber-600 bg-amber-500/20',
+		exited: 'text-accent-red bg-accent-red/20',
+		paused: 'text-accent-amber bg-accent-amber/20',
 	}
 	const classes = color[state] ?? 'text-text-secondary bg-surface-2'
 	return (
@@ -157,8 +157,8 @@ function InfoTab({containerName}: {containerName: string}) {
 	if (detailError) {
 		return (
 			<div className='flex flex-col items-center justify-center py-16'>
-				<IconAlertTriangle size={24} className='mb-2 text-red-400' />
-				<p className='text-sm text-red-400'>{detailError.message}</p>
+				<IconAlertTriangle size={24} className='mb-2 text-accent-red' />
+				<p className='text-sm text-accent-red'>{detailError.message}</p>
 			</div>
 		)
 	}
@@ -310,9 +310,9 @@ function DiagnosticPanel({containerName}: {containerName: string}) {
 			case 'high':
 				return 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
 			case 'medium':
-				return 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+				return 'bg-accent-amber/15 text-accent-amber border-accent-amber/30'
 			case 'low':
-				return 'bg-red-500/15 text-red-600 border-red-500/30'
+				return 'bg-accent-red/15 text-accent-red border-accent-red/30'
 			default:
 				return 'bg-neutral-500/15 text-neutral-600 border-neutral-500/30'
 		}
@@ -338,7 +338,7 @@ function DiagnosticPanel({containerName}: {containerName: string}) {
 
 	if (isDiagnosing) {
 		return (
-			<div className='flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-700'>
+			<div className='flex items-center gap-3 rounded-lg border border-accent-blue/30 bg-accent-blue/10 px-3 py-2 text-sm text-accent-blue'>
 				<IconLoader2 size={16} className='animate-spin' />
 				<span>Analyzing logs and stats — this can take up to 30s on first call...</span>
 			</div>
@@ -348,7 +348,7 @@ function DiagnosticPanel({containerName}: {containerName: string}) {
 	if (diagnosticError) {
 		return (
 			<div className='space-y-2'>
-				<div className='rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600'>
+				<div className='rounded-lg border border-accent-red/30 bg-accent-red/10 px-3 py-2 text-sm text-accent-red'>
 					{diagnosticError.message}
 				</div>
 				<Button
@@ -373,7 +373,7 @@ function DiagnosticPanel({containerName}: {containerName: string}) {
 				<div className='flex items-center gap-2 text-xs text-text-tertiary'>
 					<span>Generated {new Date(diagnosticResult.generatedAt).toLocaleTimeString()}</span>
 					{diagnosticResult.cached && (
-						<span className='inline-flex items-center rounded bg-blue-500/15 px-1.5 py-0.5 font-medium text-blue-700'>
+						<span className='inline-flex items-center rounded bg-accent-blue/15 px-1.5 py-0.5 font-medium text-accent-blue'>
 							cached
 						</span>
 					)}
@@ -399,8 +399,8 @@ function DiagnosticPanel({containerName}: {containerName: string}) {
 				</Button>
 			</div>
 			{diagnosticResult.likelyCause && (
-				<div className='rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700'>
-					<div className='mb-1 font-medium text-amber-600'>Likely Cause</div>
+				<div className='rounded-lg border border-accent-amber/30 bg-accent-amber/10 px-3 py-2 text-sm text-accent-amber'>
+					<div className='mb-1 font-medium text-accent-amber'>Likely Cause</div>
 					<p className='whitespace-pre-wrap leading-relaxed'>{diagnosticResult.likelyCause}</p>
 				</div>
 			)}
@@ -602,7 +602,7 @@ function LogsTab({containerName}: {containerName: string}) {
 					<span
 						className={cn(
 							'inline-block h-2 w-2 rounded-full',
-							connected ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]' : 'bg-red-500',
+							connected ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]' : 'bg-accent-red',
 						)}
 						aria-label={connected ? 'connected' : 'disconnected'}
 					/>
@@ -673,7 +673,7 @@ function StatsTab({containerName}: {containerName: string}) {
 	if (statsError) {
 		return (
 			<div className='flex flex-col items-center justify-center py-16'>
-				<IconAlertTriangle size={24} className='mb-2 text-amber-400' />
+				<IconAlertTriangle size={24} className='mb-2 text-accent-amber' />
 				<p className='text-sm text-text-secondary'>Container not running</p>
 				<p className='mt-1 text-xs text-text-tertiary'>Stats are only available for running containers</p>
 			</div>
@@ -918,7 +918,7 @@ function ConsoleTab({containerName}: {containerName: string}) {
 						{connected ? (
 							<button
 								onClick={disconnect}
-								className='rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700'
+								className='rounded-lg bg-accent-red px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-accent-red'
 							>
 								Disconnect
 							</button>
@@ -981,7 +981,7 @@ export function ContainerDetailSheet({
 											() => toast.error('Could not copy to clipboard'),
 										)
 									}
-									className='rounded-lg p-2 sm:p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-tertiary transition-colors hover:bg-surface-2 hover:text-blue-500'
+									className='rounded-lg p-2 sm:p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-tertiary transition-colors hover:bg-surface-2 hover:text-accent-blue'
 									title='Copy deep link to this container'
 									aria-label='Copy deep link'
 								>
@@ -991,7 +991,7 @@ export function ContainerDetailSheet({
 							{onEdit && containerName && (
 								<button
 									onClick={() => { onEdit(containerName); onOpenChange(false) }}
-									className='rounded-lg p-2 sm:p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-tertiary transition-colors hover:bg-surface-2 hover:text-blue-500'
+									className='rounded-lg p-2 sm:p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-tertiary transition-colors hover:bg-surface-2 hover:text-accent-blue'
 									title='Edit'
 								>
 									<IconPencil size={16} />
@@ -1000,7 +1000,7 @@ export function ContainerDetailSheet({
 							{onDuplicate && containerName && (
 								<button
 									onClick={() => { onDuplicate(containerName); onOpenChange(false) }}
-									className='rounded-lg p-2 sm:p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-tertiary transition-colors hover:bg-surface-2 hover:text-blue-500'
+									className='rounded-lg p-2 sm:p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-tertiary transition-colors hover:bg-surface-2 hover:text-accent-blue'
 									title='Duplicate'
 								>
 									<IconCopy size={16} />

@@ -130,7 +130,7 @@ export function ImageSearchTab() {
 			</div>
 
 			{showError && (
-				<div className='rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200'>
+				<div className='rounded-lg border border-accent-red bg-accent-red/10 px-4 py-3 text-sm text-accent-red dark:border-accent-red dark:bg-accent-red/20 dark:text-accent-red'>
 					{searchQuery.error?.message ?? 'Search failed'}
 				</div>
 			)}
@@ -150,7 +150,7 @@ export function ImageSearchTab() {
 			{results.length > 0 && (
 				<div className='overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800'>
 					<table className='w-full text-sm'>
-						<thead className='bg-zinc-50 text-xs uppercase tracking-wide text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400'>
+						<thead className='bg-card-bg text-xs uppercase tracking-wide text-zinc-600 dark:bg-card-bg-2 dark:text-zinc-400'>
 							<tr>
 								<th className='px-4 py-2 text-left font-medium'>Name</th>
 								<th className='px-4 py-2 text-left font-medium'>Description</th>
@@ -162,13 +162,13 @@ export function ImageSearchTab() {
 							{results.map((r: any) => (
 								<tr
 									key={`${r.source}:${r.name}`}
-									className='hover:bg-zinc-50 dark:hover:bg-zinc-900/40'
+									className='hover:bg-card-bg dark:hover:bg-card-bg-2/40'
 								>
 									<td className='px-4 py-2 font-medium text-zinc-900 dark:text-zinc-100'>
 										<div className='flex items-center gap-2'>
 											{r.name}
 											{r.official && (
-												<span className='rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'>
+												<span className='rounded bg-accent-blue/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-blue dark:bg-accent-blue/30 dark:text-accent-blue'>
 													Official
 												</span>
 											)}

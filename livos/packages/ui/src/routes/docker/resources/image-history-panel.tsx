@@ -31,7 +31,7 @@ export function ImageHistoryPanel({imageId}: {imageId: string}) {
 	if (historyQuery.isError || !historyQuery.data) {
 		return (
 			<div className='px-4 py-3'>
-				<p className='text-sm text-red-400'>Failed to load layer history</p>
+				<p className='text-sm text-accent-red'>Failed to load layer history</p>
 			</div>
 		)
 	}
@@ -56,7 +56,7 @@ export function ImageHistoryPanel({imageId}: {imageId: string}) {
 				</TableHeader>
 				<TableBody>
 					{historyQuery.data.map((layer, idx) => (
-						<TableRow key={`${imageId}-layer-${idx}`} className='bg-white hover:bg-zinc-50'>
+						<TableRow key={`${imageId}-layer-${idx}`} className='bg-white hover:bg-card-bg'>
 							<TableCell className='pl-4 pr-4' colSpan={2}>
 								<span
 									className='block truncate max-w-[500px] font-mono text-xs text-zinc-700'

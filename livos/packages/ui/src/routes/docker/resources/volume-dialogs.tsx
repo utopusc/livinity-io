@@ -178,7 +178,7 @@ export function CreateVolumeDialog({
 								/>
 								<button
 									onClick={() => setDriverOpts(driverOpts.filter((_, idx) => idx !== i))}
-									className='shrink-0 rounded-lg p-1.5 text-text-tertiary hover:bg-surface-2 hover:text-red-500'
+									className='shrink-0 rounded-lg p-1.5 text-text-tertiary hover:bg-surface-2 hover:text-accent-red'
 								>
 									<IconX size={14} />
 								</button>

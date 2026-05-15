@@ -38,7 +38,7 @@ export const TYPE_LABELS: Record<JobRow['type'], string> = {
 
 const STATUS_STYLES: Record<string, {bg: string; text: string; label: string}> = {
 	success: {bg: 'bg-emerald-500/15', text: 'text-emerald-500', label: 'Success'},
-	failure: {bg: 'bg-red-500/15', text: 'text-red-500', label: 'Failed'},
+	failure: {bg: 'bg-accent-red/15', text: 'text-accent-red', label: 'Failed'},
 	running: {bg: 'bg-yellow-500/15', text: 'text-yellow-500', label: 'Running'},
 	skipped: {bg: 'bg-neutral-500/15', text: 'text-neutral-400', label: 'Skipped'},
 }
@@ -104,7 +104,7 @@ export function JobCard({
 							{TYPE_LABELS[job.type]}
 						</span>
 						{isBuiltIn && (
-							<span className='rounded-full bg-blue-500/15 px-2 py-0.5 text-xs text-blue-400'>
+							<span className='rounded-full bg-accent-blue/15 px-2 py-0.5 text-xs text-accent-blue'>
 								Built-in
 							</span>
 						)}
@@ -123,7 +123,7 @@ export function JobCard({
 						<StatusBadge status={job.lastRunStatus} />
 					</div>
 					{job.lastRunError && (
-						<div className='mt-1 truncate text-caption-sm text-red-400' title={job.lastRunError}>
+						<div className='mt-1 truncate text-caption-sm text-accent-red' title={job.lastRunError}>
 							{job.lastRunError}
 						</div>
 					)}

@@ -73,14 +73,14 @@ export function AiComposeTab({
 			</div>
 
 			{isGeneratingCompose && (
-				<div className='flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-700'>
+				<div className='flex items-center gap-2 rounded-lg border border-accent-blue/30 bg-accent-blue/10 px-3 py-2 text-xs text-accent-blue'>
 					<IconLoader2 size={14} className='animate-spin' />
 					<span>Asking Kimi to generate compose YAML — this can take up to 30s...</span>
 				</div>
 			)}
 
 			{composeError && (
-				<div className='rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600'>
+				<div className='rounded-lg border border-accent-red/30 bg-accent-red/10 px-3 py-2 text-sm text-accent-red'>
 					{composeError.message}
 				</div>
 			)}
@@ -113,7 +113,7 @@ export function AiComposeTab({
 						}}
 					/>
 					{composeResult.warnings && composeResult.warnings.length > 0 && (
-						<div className='rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 space-y-0.5'>
+						<div className='rounded-lg border border-accent-amber/30 bg-accent-amber/10 px-3 py-2 text-xs text-accent-amber space-y-0.5'>
 							{composeResult.warnings.map((w, i) => (
 								<div key={i}>· {w}</div>
 							))}
@@ -123,7 +123,7 @@ export function AiComposeTab({
 			)}
 
 			{composeResult && !composeResult.yaml && (
-				<div className='rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-600'>
+				<div className='rounded-lg border border-accent-amber/30 bg-accent-amber/10 px-3 py-2 text-sm text-accent-amber'>
 					Kimi did not return a compose YAML. Try rephrasing the prompt with more specific
 					service names and ports.
 				</div>

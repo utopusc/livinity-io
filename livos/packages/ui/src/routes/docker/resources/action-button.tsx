@@ -21,9 +21,9 @@ export function ActionButton({
 }) {
 	const colorClasses = {
 		emerald: 'hover:bg-emerald-500/20 hover:text-emerald-400',
-		amber: 'hover:bg-amber-500/20 hover:text-amber-400',
-		blue: 'hover:bg-blue-500/20 hover:text-blue-400',
-		red: 'hover:bg-red-500/20 hover:text-red-400',
+		amber: 'hover:bg-accent-amber/20 hover:text-accent-amber',
+		blue: 'hover:bg-accent-blue/20 hover:text-accent-blue',
+		red: 'hover:bg-accent-red/20 hover:text-accent-red',
 	}
 
 	return (

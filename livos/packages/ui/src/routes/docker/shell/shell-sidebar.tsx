@@ -57,7 +57,7 @@ export function ShellSidebar({onSelect}: ShellSidebarProps) {
 				{isLoading ? (
 					<div className='p-4 text-xs text-text-tertiary'>Loading containers…</div>
 				) : isError ? (
-					<div className='p-4 text-xs text-red-500'>Failed to load containers.</div>
+					<div className='p-4 text-xs text-accent-red'>Failed to load containers.</div>
 				) : runningContainers.length === 0 ? (
 					<div className='p-4 text-xs text-text-tertiary'>No running containers in this environment.</div>
 				) : (

@@ -105,7 +105,7 @@ function HealthBanner({
 }) {
 	if (state === 'unreachable') {
 		return (
-			<div className='flex items-center gap-2 rounded-md border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300'>
+			<div className='flex items-center gap-2 rounded-md border border-accent-red bg-accent-red/10 px-2.5 py-1.5 text-xs text-accent-red dark:border-accent-red dark:bg-accent-red/40 dark:text-accent-red'>
 				<IconAlertCircle size={14} className='shrink-0' />
 				<span className='flex-1'>Unreachable</span>
 				{onRetry ? (
@@ -117,7 +117,7 @@ function HealthBanner({
 							e.stopPropagation()
 							onRetry()
 						}}
-						className='shrink-0 rounded border border-red-400 bg-white px-2 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/40 dark:text-red-200 dark:hover:bg-red-900/70'
+						className='shrink-0 rounded border border-accent-red bg-white px-2 py-0.5 text-[11px] font-medium text-accent-red hover:bg-accent-red/10 dark:border-accent-red dark:bg-accent-red/40 dark:text-accent-red dark:hover:bg-accent-red/70'
 					>
 						Retry
 					</button>
@@ -127,14 +127,14 @@ function HealthBanner({
 	}
 	if (state === 'empty') {
 		return (
-			<div className='flex items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400'>
+			<div className='flex items-center gap-2 rounded-md border border-zinc-200 bg-card-bg px-2.5 py-1.5 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-card-bg-2 dark:text-zinc-400'>
 				<span>No containers</span>
 			</div>
 		)
 	}
 	if (state === 'all-healthy') {
 		return (
-			<div className='flex items-center gap-2 rounded-md border border-green-300 bg-green-50 px-2.5 py-1.5 text-xs text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300'>
+			<div className='flex items-center gap-2 rounded-md border border-accent-green bg-accent-green/10 px-2.5 py-1.5 text-xs text-accent-green dark:border-accent-green dark:bg-accent-green/40 dark:text-accent-green'>
 				<IconCircleCheck size={14} className='shrink-0' />
 				<span>All {summary.running} healthy</span>
 			</div>
@@ -142,7 +142,7 @@ function HealthBanner({
 	}
 	const unhealthy = summary.paused + summary.restarting
 	return (
-		<div className='flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'>
+		<div className='flex items-center gap-2 rounded-md border border-accent-amber bg-accent-amber/10 px-2.5 py-1.5 text-xs text-accent-amber dark:border-accent-amber dark:bg-accent-amber/40 dark:text-accent-amber'>
 			<IconAlertTriangle size={14} className='shrink-0' />
 			<span>
 				{unhealthy} unhealthy {unhealthy === 1 ? 'container' : 'containers'}
@@ -165,7 +165,7 @@ function CountPill({icon: Icon, count, label}: {icon: Icon; count: number; label
 
 function StatCell({label, value}: {label: string; value: number | undefined}) {
 	return (
-		<div className='flex flex-col rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 dark:border-zinc-800 dark:bg-zinc-900/50'>
+		<div className='flex flex-col rounded-md border border-zinc-200 bg-card-bg px-2.5 py-1.5 dark:border-zinc-800 dark:bg-card-bg-2/50'>
 			<span className='text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-500'>{label}</span>
 			<span className='font-semibold tabular-nums text-zinc-800 dark:text-zinc-100'>
 				{value === undefined ? '—' : value}
@@ -197,8 +197,8 @@ export function EnvCard({env}: {env: Environment}) {
 			onClick={handleClick}
 			className={cn(
 				'group flex flex-col gap-3 rounded-lg border p-4 text-left shadow-sm transition',
-				'border-zinc-200 bg-white hover:border-blue-400 hover:shadow-md',
-				'dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-blue-600',
+				'border-zinc-200 bg-white hover:border-accent-blue hover:shadow-md',
+				'dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-accent-blue',
 			)}
 		>
 			{/* Header */}
@@ -214,7 +214,7 @@ export function EnvCard({env}: {env: Environment}) {
 					{env.tags.map((tag) => (
 						<span
 							key={tag}
-							className='rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+							className='rounded-full bg-card-bg px-2 py-0.5 text-[11px] text-zinc-700 dark:bg-card-bg-2 dark:text-zinc-300'
 						>
 							{tag}
 						</span>
