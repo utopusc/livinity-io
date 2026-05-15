@@ -2,6 +2,7 @@ import {motion} from 'framer-motion'
 import React, {forwardRef, useCallback, useEffect, useRef, useState} from 'react'
 
 import {OriginRect, Position, Size, useWindowManager, WindowId} from '@/providers/window-manager'
+import {emitWindowDragDrop, setWindowDragState} from '@/providers/window-drag-state'
 import {tw} from '@/utils/tw'
 
 import {WindowChrome} from './window-chrome'
@@ -39,6 +40,11 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 		dragStartPos.current = {x: e.clientX, y: e.clientY}
 		initialPosition.current = {x: position.x, y: position.y}
 		focusWindow(id)
+		// Phase 130-08 — broadcast the drag so the TopBar drop-zone can
+		// auto-expand. setWindowDragState is import-lazy at the bottom of
+		// the file to avoid a static cycle (TopBar → useWindowDragState →
+		// this signal); both ends sync through the same module instance.
+		setWindowDragState({isDragging: true, windowId: id})
 	}, [focusWindow, id, position.x, position.y])
 
 	const handleResizeStart = useCallback((e: React.MouseEvent, direction: string) => {
@@ -88,7 +94,7 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 		}
 	}, [isResizing, resizeDirection, id, updateWindowSize, updateWindowPosition])
 
-	const handleMouseUp = useCallback(() => {
+	const handleMouseUp = useCallback((e?: MouseEvent) => {
 		if (!isDragging) return
 
 		const newX = initialPosition.current.x + dragOffset.x
@@ -101,6 +107,12 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 		updateWindowPosition(id, {x: clampedX, y: clampedY})
 		setIsDragging(false)
 		setDragOffset({x: 0, y: 0})
+		// Phase 130-08 — clear the drag signal. If the mouseup landed inside
+		// a registered drop-zone (currently only the TopBar shelf), notify
+		// the drop-zone subscribers BEFORE clearing the drag state so they
+		// can read the windowId before it's reset.
+		if (e) emitWindowDragDrop({clientX: e.clientX, clientY: e.clientY, windowId: id})
+		setWindowDragState({isDragging: false})
 	}, [isDragging, dragOffset.x, dragOffset.y, id, updateWindowPosition])
 
 	const handleResizeUp = useCallback(() => {
