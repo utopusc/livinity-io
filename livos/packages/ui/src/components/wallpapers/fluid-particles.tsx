@@ -172,12 +172,34 @@ export const FluidParticlesWallpaper = memo(function FluidParticlesWallpaper({
 
 		let rafId = 0
 		let lastTime = performance.now()
+		let staticFramePainted = false
+
+		// Paint one static frame (particles at their current random positions,
+		// no motion update) so a paused-from-mount picker tile still shows the
+		// wallpaper instead of a solid bg-white square.
+		const paintStaticFrame = () => {
+			const isDark = document.documentElement.classList.contains('dark')
+			const w = cssW()
+			const h = cssH()
+			ctx.fillStyle = isDark ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)'
+			ctx.fillRect(0, 0, w, h)
+			for (const particle of particles) {
+				ctx.fillStyle = isDark
+					? 'rgba(255, 255, 255, 0.12)'
+					: 'rgba(0, 0, 0, 0.12)'
+				ctx.beginPath()
+				ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2)
+				ctx.fill()
+			}
+			staticFramePainted = true
+		}
 
 		const animate = () => {
 			rafId = requestAnimationFrame(animate)
 
 			if (pausedRef.current) {
 				lastTime = performance.now()
+				if (!staticFramePainted) paintStaticFrame()
 				return
 			}
 
@@ -249,18 +271,20 @@ export const FluidParticlesWallpaper = memo(function FluidParticlesWallpaper({
 		}
 	}, [particleCount, noiseIntensity, particleSize.min, particleSize.max])
 
+	// When the caller supplies a className we assume they're providing their
+	// own sizing/positioning (e.g. the settings preview tile passes
+	// `absolute inset-0`). Otherwise default to pinning to the viewport like
+	// the legacy WebGL wallpapers did, so <Wallpaper /> consumers (desktop bg,
+	// login, cover-message, 404) work without the caller having to size their
+	// parent. We branch on className rather than relying on tailwind-merge to
+	// strip `fixed` because `h-lvh` is not yet in every twMerge group config
+	// and a stray `fixed` would bleed the wallpaper across the viewport.
+	const wrapperClass = className
+		? cn('overflow-hidden bg-white dark:bg-black', className)
+		: 'pointer-events-none fixed inset-0 h-lvh w-full overflow-hidden bg-white dark:bg-black'
+
 	return (
-		<div
-			className={cn(
-				// Default to pinning to the viewport (matches how the legacy WebGL
-				// wallpapers rendered, so the desktop / login / cover-message paths
-				// keep working without the caller having to size their parent).
-				// Direct consumers (settings preview tile, picker thumbs) pass an
-				// `absolute inset-0` override which tailwind-merge resolves to win.
-				'pointer-events-none fixed inset-0 h-lvh w-full overflow-hidden bg-white dark:bg-black',
-				className,
-			)}
-		>
+		<div className={wrapperClass}>
 			<canvas ref={canvasRef} className='absolute inset-0 h-full w-full' />
 		</div>
 	)

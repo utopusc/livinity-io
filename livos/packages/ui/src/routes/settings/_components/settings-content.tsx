@@ -693,7 +693,7 @@ const ACCENT_COLORS = [
 // photo-like and the controls were tuned for shader output. The persisted
 // `wallpaperSettings` values stay in place harmlessly (default no-op).
 function WallpaperSection() {
-	const {wallpaper, setWallpaperId, settings} = useWallpaper()
+	const {wallpaper, setWallpaperId} = useWallpaper()
 	const accentColorQ = trpcReact.user.accentColor.useQuery(undefined, {retry: false})
 	const utils = trpcReact.useUtils()
 	const accentMut = trpcReact.user.set.useMutation({
@@ -721,13 +721,14 @@ function WallpaperSection() {
 				sub='One wallpaper and one accent colour, shared by every LivOS surface. Light- and dark-theme wallpaper variants will land here over time — today there is one adaptive backdrop that follows whichever theme is active.'
 			/>
 
-			{/* Live preview */}
+			{/* Static preview — the picker shows the wallpaper as a still image so
+			    nothing competes with the rest of the Theme page. The live
+			    animation only runs on the actual desktop / login backdrops. */}
 			<div className='relative aspect-video overflow-hidden rounded-[var(--r-lg)] border border-line'>
 				{PreviewComponent && (
 					<PreviewComponent
 						key={previewId}
-						paused={settings.paused}
-						speed={settings.speed}
+						paused
 						className='absolute inset-0 h-full w-full'
 					/>
 				)}
@@ -864,7 +865,7 @@ function WallpaperTile({
 			)}
 		>
 			<div className='absolute inset-0'>
-				<Preview className='h-full w-full' />
+				<Preview paused className='absolute inset-0 h-full w-full' />
 			</div>
 			<span className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 to-transparent px-2 pb-1 pt-4 text-left text-[11px] font-medium text-white/90'>
 				{entry.name}
