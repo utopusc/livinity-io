@@ -15,7 +15,9 @@ previous_milestone_status: code-complete-pending-operator-uat
 v35_master_plan: .planning/v35-DESIGN-SYSTEM-MILESTONE.md
 v35_phases: [115, 116, 117, 118, 119, 120, 121]
 v35_remaining: [121]
+v35_handoff: .planning/v35-HANDOFF.md
 sacred_sha_verified: f3538e1d811992b782a9bb057d1b7f0a0189f95f
+next_action: "/gsd-autonomous --from 121"
 ---
 
 # Project State
