@@ -291,8 +291,8 @@ export function DockBottomPositioner({children}: {children: React.ReactNode}) {
 	)
 }
 
-const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-white/80 contrast-more:bg-neutral-700 backdrop-blur-2xl contrast-more:backdrop-blur-none px-3 shadow-dock shrink-0 will-change-transform transform-gpu border-px border-white/60`
-const dockPreviewClass = tw`mx-auto flex items-end gap-4 rounded-radius-xl bg-white/80 backdrop-blur-md px-3 shadow-dock shrink-0 border-hpx border-border-default`
+const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-card-bg/80 contrast-more:bg-neutral-700 backdrop-blur-2xl contrast-more:backdrop-blur-none px-3 shadow-dock shrink-0 will-change-transform transform-gpu border-px border-white/60`
+const dockPreviewClass = tw`mx-auto flex items-end gap-4 rounded-radius-xl bg-card-bg/80 backdrop-blur-md px-3 shadow-dock shrink-0 border-hpx border-border-default`
 
 function RecentAppsDock({mouseX, iconSize, iconSizeZoomed}: {mouseX: ReturnType<typeof useMotionValue<number>>; iconSize: number; iconSizeZoomed: number}) {
 	const recentQ = trpcReact.apps.recentlyOpened.useQuery(undefined, {staleTime: 30_000})

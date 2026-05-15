@@ -138,7 +138,7 @@ function SearchResultCard({
 			onClick={onSelect}
 			className={cn(
 				'group/card flex w-full items-center justify-start gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-150',
-				isSelected ? 'bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'hover:bg-white/60',
+				isSelected ? 'bg-card-bg shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'hover:bg-card-bg/60',
 			)}
 		>
 			<div className='flex aspect-square size-8 shrink-0 items-center justify-center [&_svg]:size-5 [&_svg]:stroke-[1.5]'>
@@ -176,7 +176,7 @@ function SearchResultsContainer({
 			layout
 			ref={listRef as React.RefObject<HTMLDivElement>}
 			onMouseLeave={() => onHover(null)}
-			className='flex max-h-80 w-full flex-col overflow-y-auto border-t border-neutral-200/60 bg-neutral-50/80 px-2 py-1.5'
+			className='flex max-h-80 w-full flex-col overflow-y-auto border-t border-dash-line bg-card-bg-2/80 px-2 py-1.5'
 		>
 			{searchResults.map((result, index) => (
 				<motion.div
@@ -633,7 +633,7 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 						style={{filter: 'url(#blob)'}}
 						className={cn(
 							'z-20 flex w-full max-w-2xl items-center justify-end gap-4 group',
-							'[&>div]:rounded-full [&>div]:bg-white/95 [&>div]:text-neutral-800 [&>div]:backdrop-blur-2xl',
+							'[&>div]:rounded-full [&>div]:bg-card-bg/95 [&>div]:text-neutral-800 [&>div]:backdrop-blur-2xl',
 							'[&_svg]:size-6 [&_svg]:stroke-[1.4]',
 						)}
 					>
@@ -644,7 +644,7 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 									layout: {duration: 0.5, type: 'spring', bounce: 0.2},
 								}}
 								style={{borderRadius: '24px'}}
-								className='relative z-10 flex h-full w-full flex-col items-center justify-start overflow-hidden border border-neutral-200/60 shadow-[0_8px_40px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.03)]'
+								className='relative z-10 flex h-full w-full flex-col items-center justify-start overflow-hidden border border-dash-line shadow-[0_8px_40px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.03)]'
 							>
 								<SpotlightInput
 									placeholder={
@@ -676,7 +676,7 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 								{searchValue && searchResults.length === 0 && !appsLoading && (
 									<motion.div
 										layout
-										className='border-t border-neutral-200/60 bg-neutral-50/80 px-5 py-6 text-center text-[13px] text-neutral-400'
+										className='border-t border-dash-line bg-card-bg-2/80 px-5 py-6 text-center text-[13px] text-neutral-400'
 									>
 										{t('no-results-found')}
 									</motion.div>
