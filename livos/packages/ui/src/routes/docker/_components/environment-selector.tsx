@@ -64,7 +64,7 @@ export function EnvironmentSelector() {
 										{env.agentStatus === 'online' ? (
 											<IconWifi size={12} className='text-emerald-500' />
 										) : (
-											<IconWifiOff size={12} className='text-amber-500' />
+											<IconWifiOff size={12} className='text-accent-amber' />
 										)}
 										agent · {env.agentStatus}
 									</>

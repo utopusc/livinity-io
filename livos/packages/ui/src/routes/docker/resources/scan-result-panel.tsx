@@ -28,7 +28,7 @@ const SEVERITY_LIST: readonly Severity[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 function severityBadgeClasses(sev: Severity, active: boolean): string {
 	const base = 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer'
 	const palette = {
-		CRITICAL: 'bg-red-500/20 text-red-700 hover:bg-red-500/30',
+		CRITICAL: 'bg-accent-red/20 text-accent-red hover:bg-accent-red/30',
 		HIGH: 'bg-orange-500/20 text-orange-700 hover:bg-orange-500/30',
 		MEDIUM: 'bg-yellow-500/20 text-yellow-800 hover:bg-yellow-500/30',
 		LOW: 'bg-neutral-500/20 text-neutral-600 hover:bg-neutral-500/30',
@@ -67,7 +67,7 @@ export function ScanResultPanel({imageRef}: {imageRef: string}) {
 	if (scanError && (!scanResult || scanResult.imageRef !== imageRef)) {
 		return (
 			<div className='px-4 py-4'>
-				<div className='rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600'>
+				<div className='rounded-lg border border-accent-red/30 bg-accent-red/10 px-3 py-2 text-sm text-accent-red'>
 					{scanError.message}
 				</div>
 				<Button
@@ -103,7 +103,7 @@ export function ScanResultPanel({imageRef}: {imageRef: string}) {
 			<div className='flex flex-wrap items-center gap-2 text-xs text-zinc-500'>
 				<span>Scanned {formatRelativeDate(Math.floor(result.scannedAt / 1000))}</span>
 				{result.cached && (
-					<span className='inline-flex items-center rounded bg-blue-500/15 px-1.5 py-0.5 font-medium text-blue-700'>
+					<span className='inline-flex items-center rounded bg-accent-blue/15 px-1.5 py-0.5 font-medium text-accent-blue'>
 						cached
 					</span>
 				)}
@@ -165,13 +165,13 @@ export function ScanResultPanel({imageRef}: {imageRef: string}) {
 			</div>
 
 			{isExplaining && (
-				<div className='flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-700'>
+				<div className='flex items-center gap-2 rounded-lg border border-accent-blue/30 bg-accent-blue/10 px-3 py-2 text-xs text-accent-blue'>
 					<IconLoader2 size={14} className='animate-spin' />
 					<span>Asking Kimi to explain the most critical CVEs...</span>
 				</div>
 			)}
 			{explanationError && (
-				<div className='rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600'>
+				<div className='rounded-lg border border-accent-red/30 bg-accent-red/10 px-3 py-2 text-sm text-accent-red'>
 					{explanationError.message}
 				</div>
 			)}
@@ -186,8 +186,8 @@ export function ScanResultPanel({imageRef}: {imageRef: string}) {
 						</div>
 					)}
 					{explanationResult.upgradeSuggestion && (
-						<div className='rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-700'>
-							<div className='mb-1 font-medium text-blue-600'>Upgrade path</div>
+						<div className='rounded-lg border border-accent-blue/30 bg-accent-blue/10 px-3 py-2 text-sm text-accent-blue'>
+							<div className='mb-1 font-medium text-accent-blue'>Upgrade path</div>
 							<p className='whitespace-pre-wrap leading-relaxed'>
 								{explanationResult.upgradeSuggestion}
 							</p>
@@ -225,7 +225,7 @@ export function ScanResultPanel({imageRef}: {imageRef: string}) {
 													href={cve.primaryUrl}
 													target='_blank'
 													rel='noopener noreferrer'
-													className='inline-flex items-center gap-1 font-mono text-xs text-blue-600 hover:underline'
+													className='inline-flex items-center gap-1 font-mono text-xs text-accent-blue hover:underline'
 													title={cve.primaryUrl}
 												>
 													{cve.id}

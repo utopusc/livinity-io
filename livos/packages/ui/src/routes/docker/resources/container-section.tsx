@@ -280,7 +280,7 @@ export function ContainerSection() {
 							'mb-4 rounded-lg px-4 py-3 text-sm font-medium',
 							actionResult.type === 'success'
 								? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
-								: 'bg-red-500/20 text-red-600 border border-red-500/30',
+								: 'bg-accent-red/20 text-accent-red border border-accent-red/30',
 						)}
 					>
 						{actionResult.message}
@@ -295,10 +295,10 @@ export function ContainerSection() {
 					<p className='text-sm text-text-tertiary'>Loading containers...</p>
 				</div>
 			) : isError ? (
-				<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
-					<IconServer size={24} className='mx-auto mb-3 text-red-400' />
-					<p className='text-sm text-red-400'>Failed to load containers</p>
-					<p className='mt-1 text-xs text-red-400/60'>{error?.message}</p>
+				<div className='rounded-xl border border-accent-red/20 bg-accent-red/10 p-8 text-center'>
+					<IconServer size={24} className='mx-auto mb-3 text-accent-red' />
+					<p className='text-sm text-accent-red'>Failed to load containers</p>
+					<p className='mt-1 text-xs text-accent-red/60'>{error?.message}</p>
 				</div>
 			) : !containers.length ? (
 				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
@@ -335,7 +335,7 @@ export function ContainerSection() {
 											onCheckedChange={() => toggleSelect(container.name)}
 										/>
 									</span>
-									{container.isProtected && <IconLock size={14} className='shrink-0 text-amber-500' />}
+									{container.isProtected && <IconLock size={14} className='shrink-0 text-accent-amber' />}
 									<span className='min-w-0 flex-1 truncate text-sm font-medium text-text-primary'>{container.name}</span>
 									<StateBadge state={container.state} />
 								</div>
@@ -447,7 +447,7 @@ export function ContainerSection() {
 										<TableCell className='font-medium'>
 											<div className='flex items-center gap-2'>
 												{container.isProtected && (
-													<IconLock size={14} className='shrink-0 text-amber-500' />
+													<IconLock size={14} className='shrink-0 text-accent-amber' />
 												)}
 												<span className='truncate' title={container.name}>
 													{container.name}
@@ -615,7 +615,7 @@ export function ContainerSection() {
 								<button
 									onClick={() => handleBulkAction('stop')}
 									disabled={isBulkManaging}
-									className='flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-amber-600 transition-colors hover:bg-amber-500/30 disabled:opacity-50'
+									className='flex items-center gap-1.5 rounded-lg bg-accent-amber/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-accent-amber transition-colors hover:bg-accent-amber/30 disabled:opacity-50'
 								>
 									<IconPlayerStop size={14} />
 									Stop
@@ -623,7 +623,7 @@ export function ContainerSection() {
 								<button
 									onClick={() => handleBulkAction('restart')}
 									disabled={isBulkManaging}
-									className='flex items-center gap-1.5 rounded-lg bg-blue-500/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-blue-600 transition-colors hover:bg-blue-500/30 disabled:opacity-50'
+									className='flex items-center gap-1.5 rounded-lg bg-accent-blue/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-accent-blue transition-colors hover:bg-accent-blue/30 disabled:opacity-50'
 								>
 									<IconRotateClockwise size={14} />
 									Restart
@@ -631,7 +631,7 @@ export function ContainerSection() {
 								<button
 									onClick={() => handleBulkAction('kill')}
 									disabled={isBulkManaging}
-									className='flex items-center gap-1.5 rounded-lg bg-red-500/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-red-600 transition-colors hover:bg-red-500/30 disabled:opacity-50'
+									className='flex items-center gap-1.5 rounded-lg bg-accent-red/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-accent-red transition-colors hover:bg-accent-red/30 disabled:opacity-50'
 								>
 									<IconHandStop size={14} />
 									Kill
@@ -639,7 +639,7 @@ export function ContainerSection() {
 								<button
 									onClick={() => handleBulkAction('remove')}
 									disabled={isBulkManaging}
-									className='flex items-center gap-1.5 rounded-lg bg-red-500/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-red-600 transition-colors hover:bg-red-500/30 disabled:opacity-50'
+									className='flex items-center gap-1.5 rounded-lg bg-accent-red/20 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-accent-red transition-colors hover:bg-accent-red/30 disabled:opacity-50'
 								>
 									<IconTrash size={14} />
 									Remove

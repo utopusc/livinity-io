@@ -65,7 +65,7 @@ export function CredentialsTab() {
 			) : (
 				<div className='overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800'>
 					<table className='w-full text-sm'>
-						<thead className='bg-zinc-50 text-xs uppercase tracking-wide text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400'>
+						<thead className='bg-card-bg text-xs uppercase tracking-wide text-zinc-600 dark:bg-card-bg-2 dark:text-zinc-400'>
 							<tr>
 								<th className='px-4 py-2 text-left font-medium'>Name</th>
 								<th className='px-4 py-2 text-left font-medium'>Registry URL</th>
@@ -78,7 +78,7 @@ export function CredentialsTab() {
 							{credentials.map((c: any) => (
 								<tr
 									key={c.id}
-									className='hover:bg-zinc-50 dark:hover:bg-zinc-900/40'
+									className='hover:bg-card-bg dark:hover:bg-card-bg-2/40'
 								>
 									<td className='px-4 py-2 font-medium text-zinc-900 dark:text-zinc-100'>
 										{c.name}

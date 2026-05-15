@@ -140,7 +140,7 @@ export function AddGitCredentialDialog({
 						</div>
 					)}
 					{createMutation.isError && (
-						<p className='text-xs text-red-500'>
+						<p className='text-xs text-accent-red'>
 							{createMutation.error?.message ?? 'Failed to create credential'}
 						</p>
 					)}

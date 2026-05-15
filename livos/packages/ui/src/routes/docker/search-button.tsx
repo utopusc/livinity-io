@@ -19,13 +19,13 @@ export function SearchButton() {
 			title='Search (⌘K command palette)'
 			className={cn(
 				'inline-flex h-8 items-center gap-2 rounded-md px-2.5 text-xs',
-				'border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
-				'dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800',
+				'border border-zinc-200 bg-white text-zinc-600 hover:bg-card-bg',
+				'dark:border-zinc-800 dark:bg-card-bg-2 dark:text-zinc-400 dark:hover:bg-card-bg-2',
 			)}
 		>
 			<IconSearch size={14} />
 			<span className='hidden sm:inline'>Search</span>
-			<kbd className='hidden rounded border border-zinc-300 bg-zinc-100 px-1 py-0.5 font-mono text-[10px] text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 sm:inline-block'>
+			<kbd className='hidden rounded border border-zinc-300 bg-card-bg px-1 py-0.5 font-mono text-[10px] text-zinc-500 dark:border-zinc-700 dark:bg-card-bg-2 dark:text-zinc-400 sm:inline-block'>
 				⌘K
 			</kbd>
 		</button>

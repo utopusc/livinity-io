@@ -206,13 +206,13 @@ export function SecuritySection() {
 					</div>
 				) : null}
 				{serviceState === 'service-inactive' ? (
-					<div className='m-4 rounded-radius-md border border-amber-200 bg-amber-50 px-4 py-3 text-body-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200'>
+					<div className='m-4 rounded-radius-md border border-accent-amber bg-accent-amber/10 px-4 py-3 text-body-sm text-accent-amber dark:border-accent-amber dark:bg-accent-amber/30 dark:text-accent-amber'>
 						<strong>Fail2ban service is stopped.</strong> Run{' '}
 						<span className='font-mono'>systemctl start fail2ban</span> on Mini PC.
 					</div>
 				) : null}
 				{serviceState === 'no-jails' ? (
-					<div className='m-4 rounded-radius-md border border-amber-200 bg-amber-50 px-4 py-3 text-body-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200'>
+					<div className='m-4 rounded-radius-md border border-accent-amber bg-accent-amber/10 px-4 py-3 text-body-sm text-accent-amber dark:border-accent-amber dark:bg-accent-amber/30 dark:text-accent-amber'>
 						<strong>Fail2ban running but no jails configured.</strong> See{' '}
 						<a
 							href='https://www.fail2ban.org/wiki/index.php/MANUAL_0_8.5#Jail_Options'

@@ -263,7 +263,7 @@ export function BanIpModal({
 
 						<div className='space-y-3 py-2'>
 							{adminIps.length > 0 ? (
-								<div className='rounded-radius-sm border border-amber-200 bg-amber-50 px-3 py-2 text-caption text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200'>
+								<div className='rounded-radius-sm border border-accent-amber bg-accent-amber/10 px-3 py-2 text-caption text-accent-amber dark:border-accent-amber dark:bg-accent-amber/30 dark:text-accent-amber'>
 									These IPs were detected as your active sessions:{' '}
 									<span className='font-mono'>{adminIps.join(', ')}</span>
 								</div>

@@ -59,7 +59,7 @@ export function RenameDialog({
 						autoFocus
 					/>
 					{error && (
-						<p className='mt-2 text-sm text-red-400'>{error.message}</p>
+						<p className='mt-2 text-sm text-accent-red'>{error.message}</p>
 					)}
 				</div>
 				<DialogFooter>

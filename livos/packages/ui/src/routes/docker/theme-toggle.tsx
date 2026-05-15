@@ -37,7 +37,7 @@ export function ThemeToggle() {
 			className={cn(
 				'inline-flex size-8 items-center justify-center rounded-md',
 				'text-zinc-600 hover:bg-zinc-200/60',
-				'dark:text-zinc-400 dark:hover:bg-zinc-800/60',
+				'dark:text-zinc-400 dark:hover:bg-card-bg-2/60',
 			)}
 		>
 			<Icon size={16} />

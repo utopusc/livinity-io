@@ -58,8 +58,8 @@ export function ActivityRow({event, onClick}: ActivityRowProps) {
 			onClick={() => onClick(event)}
 			className={cn(
 				'flex w-full items-center gap-3 border-l-4 px-3 py-2 text-left',
-				'hover:bg-zinc-50 dark:hover:bg-zinc-900',
-				'focus:outline-none focus:ring-1 focus:ring-blue-500',
+				'hover:bg-card-bg dark:hover:bg-card-bg-2',
+				'focus:outline-none focus:ring-1 focus:ring-accent-blue',
 				stripe,
 			)}
 			title={event.body || event.title}
@@ -73,7 +73,7 @@ export function ActivityRow({event, onClick}: ActivityRowProps) {
 					<span className='break-all text-xs text-zinc-500 dark:text-zinc-400'>{event.body}</span>
 				) : null}
 			</div>
-			<span className='shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'>
+			<span className='shrink-0 rounded-full bg-card-bg px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:bg-card-bg-2 dark:text-zinc-400'>
 				{SUBTYPE_LABEL[event.sourceType]}
 			</span>
 			<span className='shrink-0 text-xs text-zinc-500 dark:text-zinc-400'>{relTime}</span>

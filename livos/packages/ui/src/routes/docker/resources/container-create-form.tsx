@@ -377,7 +377,7 @@ export function ContainerCreateForm({
 
 			{/* Warning banner in edit mode */}
 			{mode === 'edit' && (
-				<div className='mx-4 sm:mx-6 mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-600'>
+				<div className='mx-4 sm:mx-6 mt-3 rounded-lg border border-accent-amber/30 bg-accent-amber/10 px-4 py-2.5 text-sm text-accent-amber'>
 					<strong>Warning:</strong> This will stop and remove the existing container, then create a new one with the updated configuration.
 				</div>
 			)}
@@ -405,7 +405,7 @@ export function ContainerCreateForm({
 							<div className='grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4'>
 								<div>
 									<Label className='mb-1.5 block text-text-secondary'>
-										Name <span className='text-red-400'>*</span>
+										Name <span className='text-accent-red'>*</span>
 									</Label>
 									<Input
 										sizeVariant='short-square'
@@ -415,11 +415,11 @@ export function ContainerCreateForm({
 										variant={errors.name ? 'destructive' : undefined}
 										disabled={mode === 'edit'}
 									/>
-									{errors.name && <p className='mt-1 text-xs text-red-400'>{errors.name}</p>}
+									{errors.name && <p className='mt-1 text-xs text-accent-red'>{errors.name}</p>}
 								</div>
 								<div>
 									<Label className='mb-1.5 block text-text-secondary'>
-										Image <span className='text-red-400'>*</span>
+										Image <span className='text-accent-red'>*</span>
 									</Label>
 									<Input
 										sizeVariant='short-square'
@@ -428,7 +428,7 @@ export function ContainerCreateForm({
 										onValueChange={(v) => set('image', v)}
 										variant={errors.image ? 'destructive' : undefined}
 									/>
-									{errors.image && <p className='mt-1 text-xs text-red-400'>{errors.image}</p>}
+									{errors.image && <p className='mt-1 text-xs text-accent-red'>{errors.image}</p>}
 								</div>
 							</div>
 
@@ -629,7 +629,7 @@ export function ContainerCreateForm({
 											</Select>
 											<button
 												onClick={() => removePort(i)}
-												className='rounded p-1 text-text-tertiary transition-colors hover:text-red-500'
+												className='rounded p-1 text-text-tertiary transition-colors hover:text-accent-red'
 											>
 												<IconX size={14} />
 											</button>
@@ -703,7 +703,7 @@ export function ContainerCreateForm({
 											</div>
 											<button
 												onClick={() => removeVolume(i)}
-												className='rounded p-1 text-text-tertiary transition-colors hover:text-red-500'
+												className='rounded p-1 text-text-tertiary transition-colors hover:text-accent-red'
 											>
 												<IconX size={14} />
 											</button>
@@ -747,7 +747,7 @@ export function ContainerCreateForm({
 											/>
 											<button
 												onClick={() => removeEnv(i)}
-												className='rounded p-1 text-text-tertiary transition-colors hover:text-red-500'
+												className='rounded p-1 text-text-tertiary transition-colors hover:text-accent-red'
 											>
 												<IconX size={14} />
 											</button>
@@ -788,7 +788,7 @@ export function ContainerCreateForm({
 											/>
 											<button
 												onClick={() => removeLabel(i)}
-												className='rounded p-1 text-text-tertiary transition-colors hover:text-red-500'
+												className='rounded p-1 text-text-tertiary transition-colors hover:text-accent-red'
 											>
 												<IconX size={14} />
 											</button>
@@ -925,7 +925,7 @@ export function ContainerCreateForm({
 			{/* Footer */}
 			<div className='shrink-0 border-t border-border-default px-4 py-3 sm:px-6 sm:py-4'>
 				{activeMutation.error && (
-					<div className='mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400'>
+					<div className='mb-3 rounded-lg border border-accent-red/30 bg-accent-red/10 px-4 py-2 text-sm text-accent-red'>
 						{activeMutation.error.message}
 					</div>
 				)}

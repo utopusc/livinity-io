@@ -37,7 +37,7 @@ const STATE_DOT_CLASS: Record<ConnectionState, string> = {
 	connecting: 'bg-amber-400 animate-pulse',
 	open: 'bg-emerald-500',
 	closed: 'bg-zinc-500',
-	error: 'bg-red-500',
+	error: 'bg-accent-red',
 }
 
 export function LogsSidebar({
@@ -81,7 +81,7 @@ export function LogsSidebar({
 				{isLoading ? (
 					<div className='p-4 text-xs text-text-tertiary'>Loading containers…</div>
 				) : isError ? (
-					<div className='p-4 text-xs text-red-500'>Failed to load containers.</div>
+					<div className='p-4 text-xs text-accent-red'>Failed to load containers.</div>
 				) : runningContainers.length === 0 ? (
 					<div className='p-4 text-xs text-text-tertiary'>No running containers in this env.</div>
 				) : (

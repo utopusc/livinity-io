@@ -7,8 +7,8 @@ import {cn} from '@/shadcn-lib/utils'
 export function StateBadge({state}: {state: string}) {
 	const colorClasses: Record<string, string> = {
 		running: 'bg-emerald-500/20 text-emerald-600',
-		exited: 'bg-red-500/20 text-red-600',
-		paused: 'bg-amber-500/20 text-amber-600',
+		exited: 'bg-accent-red/20 text-accent-red',
+		paused: 'bg-accent-amber/20 text-accent-amber',
 	}
 	const classes = colorClasses[state] ?? 'bg-neutral-500/20 text-neutral-600'
 	return (

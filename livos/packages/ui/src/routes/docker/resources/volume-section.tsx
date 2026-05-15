@@ -125,7 +125,7 @@ export function VolumeSection() {
 							'mb-4 rounded-lg px-4 py-3 text-sm font-medium',
 							actionResult.type === 'success'
 								? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
-								: 'bg-red-500/20 text-red-600 border border-red-500/30',
+								: 'bg-accent-red/20 text-accent-red border border-accent-red/30',
 						)}
 					>
 						{actionResult.message}
@@ -140,10 +140,10 @@ export function VolumeSection() {
 					<p className='text-sm text-text-tertiary'>Loading volumes...</p>
 				</div>
 			) : isError ? (
-				<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
-					<IconFolder size={24} className='mx-auto mb-3 text-red-400' />
-					<p className='text-sm text-red-400'>Failed to load volumes</p>
-					<p className='mt-1 text-xs text-red-400/60'>{error?.message}</p>
+				<div className='rounded-xl border border-accent-red/20 bg-accent-red/10 p-8 text-center'>
+					<IconFolder size={24} className='mx-auto mb-3 text-accent-red' />
+					<p className='text-sm text-accent-red'>Failed to load volumes</p>
+					<p className='mt-1 text-xs text-accent-red/60'>{error?.message}</p>
 				</div>
 			) : !volumes.length ? (
 				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
@@ -209,7 +209,7 @@ export function VolumeSection() {
 														<TooltipContent>{volume.mountpoint}</TooltipContent>
 													</Tooltip>
 												</TableCell>
-												<TableCell className='sticky right-0 z-10 bg-white text-right pr-4 group-hover:bg-zinc-50'>
+												<TableCell className='sticky right-0 z-10 bg-white text-right pr-4 group-hover:bg-card-bg'>
 													<div className='flex items-center justify-end gap-0.5'>
 														<ActionButton
 															icon={IconLink}
@@ -240,7 +240,7 @@ export function VolumeSection() {
 											</TableRow>
 											{isExpanded && (
 												<TableRow>
-													<TableCell colSpan={4} className='p-0 bg-zinc-50'>
+													<TableCell colSpan={4} className='p-0 bg-card-bg'>
 														<VolumeUsagePanel volumeName={volume.name} />
 													</TableCell>
 												</TableRow>

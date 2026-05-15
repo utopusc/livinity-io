@@ -190,7 +190,7 @@ export function SshSessionsTab({onBanIp}: SshSessionsTabProps) {
 				)
 			case 'closed-missing':
 				return (
-					<div className='m-4 rounded-radius-md border border-amber-200 bg-amber-50 px-4 py-3 text-body-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200'>
+					<div className='m-4 rounded-radius-md border border-accent-amber bg-accent-amber/10 px-4 py-3 text-body-sm text-accent-amber dark:border-accent-amber dark:bg-accent-amber/30 dark:text-accent-amber'>
 						<strong>journalctl unavailable on host.</strong> Live SSH session viewer requires
 						journalctl. (Mini PC always has it; this banner indicates a deployment
 						misconfiguration.)
@@ -198,7 +198,7 @@ export function SshSessionsTab({onBanIp}: SshSessionsTabProps) {
 				)
 			case 'closed-network':
 				return (
-					<div className='m-4 flex items-center gap-3 rounded-radius-md border border-amber-200 bg-amber-50 px-4 py-3 text-body-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200'>
+					<div className='m-4 flex items-center gap-3 rounded-radius-md border border-accent-amber bg-accent-amber/10 px-4 py-3 text-body-sm text-accent-amber dark:border-accent-amber dark:bg-accent-amber/30 dark:text-accent-amber'>
 						<span>
 							<strong>Connection lost</strong> (code {conn.code}).
 						</span>
@@ -209,7 +209,7 @@ export function SshSessionsTab({onBanIp}: SshSessionsTabProps) {
 				)
 			case 'closed-server':
 				return (
-					<div className='m-4 flex items-center gap-3 rounded-radius-md border border-amber-200 bg-amber-50 px-4 py-3 text-body-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200'>
+					<div className='m-4 flex items-center gap-3 rounded-radius-md border border-accent-amber bg-accent-amber/10 px-4 py-3 text-body-sm text-accent-amber dark:border-accent-amber dark:bg-accent-amber/30 dark:text-accent-amber'>
 						<span>
 							Server closed connection ({conn.code}
 							{conn.reason ? `: ${conn.reason}` : ''}).

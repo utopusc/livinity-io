@@ -121,7 +121,7 @@ export function ActivitySection() {
 
 			{/* Optional error banner */}
 			{isError ? (
-				<div className='shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200'>
+				<div className='shrink-0 border-b border-accent-amber bg-accent-amber/10 px-4 py-2 text-xs text-accent-amber dark:border-accent-amber dark:bg-accent-amber/30 dark:text-accent-amber'>
 					Some sources failed to load: {errorMessages.join('; ')}
 				</div>
 			) : null}
@@ -161,12 +161,12 @@ function SkeletonRows() {
 		<ul className='divide-y divide-zinc-100 dark:divide-zinc-900'>
 			{Array.from({length: 5}).map((_, i) => (
 				<li key={i} className='flex items-center gap-3 px-3 py-3'>
-					<div className='h-4 w-4 shrink-0 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800' />
+					<div className='h-4 w-4 shrink-0 animate-pulse rounded bg-zinc-200 dark:bg-card-bg-2' />
 					<div className='flex flex-1 flex-col gap-1'>
-						<div className='h-3 w-2/3 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800' />
-						<div className='h-2 w-1/3 animate-pulse rounded bg-zinc-100 dark:bg-zinc-900' />
+						<div className='h-3 w-2/3 animate-pulse rounded bg-zinc-200 dark:bg-card-bg-2' />
+						<div className='h-2 w-1/3 animate-pulse rounded bg-card-bg dark:bg-card-bg-2' />
 					</div>
-					<div className='h-3 w-12 shrink-0 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800' />
+					<div className='h-3 w-12 shrink-0 animate-pulse rounded bg-zinc-200 dark:bg-card-bg-2' />
 				</li>
 			))}
 		</ul>

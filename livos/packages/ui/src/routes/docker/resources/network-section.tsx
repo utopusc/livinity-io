@@ -133,7 +133,7 @@ export function NetworkSection() {
 							'mb-4 rounded-lg px-4 py-3 text-sm font-medium',
 							actionResult.type === 'success'
 								? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
-								: 'bg-red-500/20 text-red-600 border border-red-500/30',
+								: 'bg-accent-red/20 text-accent-red border border-accent-red/30',
 						)}
 					>
 						{actionResult.message}
@@ -148,10 +148,10 @@ export function NetworkSection() {
 					<p className='text-sm text-text-tertiary'>Loading networks...</p>
 				</div>
 			) : isError ? (
-				<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
-					<IconNetwork size={24} className='mx-auto mb-3 text-red-400' />
-					<p className='text-sm text-red-400'>Failed to load networks</p>
-					<p className='mt-1 text-xs text-red-400/60'>{error?.message}</p>
+				<div className='rounded-xl border border-accent-red/20 bg-accent-red/10 p-8 text-center'>
+					<IconNetwork size={24} className='mx-auto mb-3 text-accent-red' />
+					<p className='text-sm text-accent-red'>Failed to load networks</p>
+					<p className='mt-1 text-xs text-accent-red/60'>{error?.message}</p>
 				</div>
 			) : !networks.length ? (
 				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>

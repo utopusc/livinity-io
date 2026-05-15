@@ -21,7 +21,7 @@ function GridSkeleton({count}: {count: number}) {
 			{Array.from({length: count}).map((_, i) => (
 				<div
 					key={i}
-					className='h-64 animate-pulse rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40'
+					className='h-64 animate-pulse rounded-lg border border-zinc-200 bg-card-bg dark:border-zinc-800 dark:bg-card-bg-2/40'
 				/>
 			))}
 		</div>
@@ -36,7 +36,7 @@ export function EnvCardGrid() {
 
 	if (isError || !envs) {
 		return (
-			<div className='m-4 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300'>
+			<div className='m-4 rounded-md border border-accent-red bg-accent-red/10 p-4 text-sm text-accent-red dark:border-accent-red dark:bg-accent-red/40 dark:text-accent-red'>
 				Failed to load environments: {error?.message ?? 'unknown error'}
 			</div>
 		)
@@ -44,7 +44,7 @@ export function EnvCardGrid() {
 
 	if (envs.length === 0) {
 		return (
-			<div className='m-4 rounded-md border border-zinc-200 bg-zinc-50 p-6 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400'>
+			<div className='m-4 rounded-md border border-zinc-200 bg-card-bg p-6 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-card-bg-2 dark:text-zinc-400'>
 				No environments configured yet. Add one from Settings &rarr; Environments.
 			</div>
 		)
@@ -54,7 +54,7 @@ export function EnvCardGrid() {
 
 	if (visibleEnvs.length === 0) {
 		return (
-			<div className='m-4 rounded-md border border-zinc-200 bg-zinc-50 p-6 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400'>
+			<div className='m-4 rounded-md border border-zinc-200 bg-card-bg p-6 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-card-bg-2 dark:text-zinc-400'>
 				No environments match the selected tag.
 			</div>
 		)

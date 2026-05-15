@@ -86,7 +86,7 @@ function canEdit(entry: ContainerFileEntry): boolean {
 }
 
 function entryIcon(entry: ContainerFileEntry): {Icon: typeof IconFile; color: string} {
-	if (entry.type === 'dir') return {Icon: IconFolder, color: 'text-blue-400'}
+	if (entry.type === 'dir') return {Icon: IconFolder, color: 'text-accent-blue'}
 	if (entry.type === 'symlink') return {Icon: IconLink, color: 'text-cyan-400'}
 	if (entry.type === 'file' && TEXT_FILE_ICON_EXTS.has(extOf(entry.name))) {
 		return {Icon: IconFileText, color: 'text-text-secondary'}
@@ -320,7 +320,7 @@ export function FilesTab({containerName}: {containerName: string}): JSX.Element 
 
 			{/* Inline error from too-large/non-text edit attempt */}
 			{tooLargeError && (
-				<div className='shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-300'>
+				<div className='shrink-0 rounded-lg border border-accent-amber/40 bg-accent-amber/10 px-3 py-2 text-xs text-accent-amber'>
 					{tooLargeError}
 				</div>
 			)}
@@ -333,8 +333,8 @@ export function FilesTab({containerName}: {containerName: string}): JSX.Element 
 					</div>
 				) : listQuery.error ? (
 					<div className='flex flex-col items-center justify-center gap-2 py-16'>
-						<IconAlertTriangle size={20} className='text-red-400' />
-						<p className='text-xs text-red-400'>{listQuery.error.message}</p>
+						<IconAlertTriangle size={20} className='text-accent-red' />
+						<p className='text-xs text-accent-red'>{listQuery.error.message}</p>
 					</div>
 				) : entries.length === 0 && !showParentRow ? (
 					<div className='flex items-center justify-center py-16'>
@@ -358,7 +358,7 @@ export function FilesTab({containerName}: {containerName: string}): JSX.Element 
 									onClick={() => navigateTo(posixDirname(currentPath))}
 								>
 									<td className='px-2 py-1.5'>
-										<IconFolder size={14} className='text-blue-400' />
+										<IconFolder size={14} className='text-accent-blue' />
 									</td>
 									<td className='px-2 py-1.5 font-mono text-text-primary' colSpan={4}>
 										..
@@ -385,7 +385,7 @@ export function FilesTab({containerName}: {containerName: string}): JSX.Element 
 											<Icon size={14} className={color} />
 										</td>
 										<td className='px-2 py-1.5 font-mono text-text-primary'>
-											<span className={cn(isDir && 'text-blue-400')}>{entry.name}</span>
+											<span className={cn(isDir && 'text-accent-blue')}>{entry.name}</span>
 											{isSymlink && entry.target && (
 												<span className='ml-2 text-text-tertiary'>→ {entry.target}</span>
 											)}
@@ -442,7 +442,7 @@ export function FilesTab({containerName}: {containerName: string}): JSX.Element 
 														handleDeleteClick(entry)
 													}}
 													title={isDir ? 'Delete directory' : 'Delete file'}
-													className='inline-flex h-6 w-6 items-center justify-center rounded text-text-tertiary hover:bg-red-500/20 hover:text-red-400'
+													className='inline-flex h-6 w-6 items-center justify-center rounded text-text-tertiary hover:bg-accent-red/20 hover:text-accent-red'
 												>
 													<IconTrash size={14} />
 												</button>
@@ -483,8 +483,8 @@ export function FilesTab({containerName}: {containerName: string}): JSX.Element 
 						</div>
 					) : editError ? (
 						<div className='flex flex-col items-center justify-center gap-2 py-8'>
-							<IconAlertTriangle size={20} className='text-red-400' />
-							<p className='text-xs text-red-400'>{editError}</p>
+							<IconAlertTriangle size={20} className='text-accent-red' />
+							<p className='text-xs text-accent-red'>{editError}</p>
 						</div>
 					) : (
 						<textarea
@@ -546,15 +546,15 @@ export function FilesTab({containerName}: {containerName: string}): JSX.Element 
 								<>
 									<p>
 										Delete <span className='font-mono text-text-primary'>{deleteTarget.name}</span> and{' '}
-										<span className='text-red-400'>everything inside it</span>? This cannot be undone.
+										<span className='text-accent-red'>everything inside it</span>? This cannot be undone.
 									</p>
-									<label className='flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2'>
+									<label className='flex items-start gap-2 rounded-lg border border-accent-amber/40 bg-accent-amber/10 px-3 py-2'>
 										<Checkbox
 											checked={deleteRecursiveConfirmed}
 											onCheckedChange={(checked) => setDeleteRecursiveConfirmed(checked === true)}
 											className='mt-0.5'
 										/>
-										<span className='text-xs text-amber-200'>
+										<span className='text-xs text-accent-amber'>
 											Yes, recursively delete this directory and all contents
 										</span>
 									</label>
@@ -582,7 +582,7 @@ export function FilesTab({containerName}: {containerName: string}): JSX.Element 
 								deleteMutation.isPending ||
 								(deleteTarget?.type === 'dir' && !deleteRecursiveConfirmed)
 							}
-							className='rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50'
+							className='rounded-lg bg-accent-red px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-red disabled:opacity-50'
 						>
 							{deleteMutation.isPending ? 'Deleting...' : 'Delete'}
 						</button>
