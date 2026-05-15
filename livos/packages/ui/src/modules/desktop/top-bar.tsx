@@ -8,8 +8,6 @@ import {useCurrentUser} from '@/hooks/use-current-user'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useLinkToDialog} from '@/utils/dialog'
 import {useUserName} from '@/hooks/use-user-name'
-import {useWindowManagerOptional} from '@/providers/window-manager'
-import {systemAppsKeyed} from '@/providers/apps'
 import {cn} from '@/shadcn-lib/utils'
 import {
 	Dialog,
@@ -67,7 +65,6 @@ function TopBarDesktop() {
 	const navigate = useNavigate()
 	const linkToDialog = useLinkToDialog()
 	const {user} = useCurrentUser()
-	const windowManager = useWindowManagerOptional()
 
 	const userQ = trpcReact.user.get.useQuery()
 	const userName = userQ.data?.name || user?.name || 'User'
@@ -80,23 +77,27 @@ function TopBarDesktop() {
 	const [showChangeName, setShowChangeName] = useState(false)
 	const [showChangeIcon, setShowChangeIcon] = useState(false)
 	const [isExpanded, setIsExpanded] = useState(false)
+	const [isDragOver, setIsDragOver] = useState(false)
 	const profileWrapRef = useRef<HTMLDivElement>(null)
 
-	const openAppWindow = (appId: string, route: string, title: string) => {
-		if (!windowManager) return
-		const icon = (systemAppsKeyed as Record<string, {icon?: string}>)[appId]?.icon ?? ''
-		windowManager.openWindow(appId, route, title, icon)
-	}
-	const navItemsLeft: NavItem[] = [
-		{label: 'Home', onClick: () => undefined, active: true},
-		{label: 'Apps', onClick: () => openAppWindow('LIVINITY_app-store', '/app-store', 'App Store')},
-		{label: 'Files', onClick: () => openAppWindow('LIVINITY_files', '/files/Home', 'Files')},
-	]
-	const navItemsRight: NavItem[] = [
-		{label: 'Liv', onClick: () => openAppWindow('LIVINITY_ai-chat', '/ai-chat', 'AI Chat')},
-		{label: 'Storage', onClick: () => openAppWindow('LIVINITY_server-control', '/server-control', 'Server Management')},
-		{label: 'Settings', onClick: () => openAppWindow('LIVINITY_settings', '/settings', 'Settings')},
-	]
+	// Pinned-windows shelf — persisted to localStorage so refresh keeps the
+	// shelf intact. Phase 130-07 stub: the array tracks dropped window IDs
+	// but the actual drag-to-pin wiring + AI-control persistence are
+	// follow-ups. For now the topbar shows the empty drop zone with the
+	// "drag windows here" prompt so the shape is in place.
+	const [pinnedWindowIds, setPinnedWindowIds] = useState<string[]>(() => {
+		if (typeof window === 'undefined') return []
+		try {
+			const raw = window.localStorage.getItem('liv:topbar:pinnedWindows')
+			return raw ? JSON.parse(raw) : []
+		} catch {
+			return []
+		}
+	})
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		window.localStorage.setItem('liv:topbar:pinnedWindows', JSON.stringify(pinnedWindowIds))
+	}, [pinnedWindowIds])
 
 	useEffect(() => {
 		if (!menuOpen) return
@@ -108,6 +109,26 @@ function TopBarDesktop() {
 		document.addEventListener('mousedown', handler)
 		return () => document.removeEventListener('mousedown', handler)
 	}, [menuOpen])
+
+	const handleDropZoneDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+		e.preventDefault()
+		setIsDragOver(true)
+		setIsExpanded(true)
+	}
+	const handleDropZoneDragLeave = () => {
+		setIsDragOver(false)
+	}
+	const handleDropZoneDrop = (e: React.DragEvent<HTMLDivElement>) => {
+		e.preventDefault()
+		setIsDragOver(false)
+		const windowId = e.dataTransfer.getData('application/x-livinity-window-id')
+		if (windowId && !pinnedWindowIds.includes(windowId)) {
+			setPinnedWindowIds((prev) => [...prev, windowId])
+		}
+	}
+	const unpinWindow = (windowId: string) => {
+		setPinnedWindowIds((prev) => prev.filter((id) => id !== windowId))
+	}
 
 	const menuItems: Array<
 		| {icon: typeof TbPencil; label: string; action: () => void; danger?: boolean}
@@ -133,28 +154,32 @@ function TopBarDesktop() {
 				<nav
 					onMouseLeave={() => setIsExpanded(false)}
 					className={cn(
-						'pointer-events-auto grid h-16 w-full grid-cols-[1fr_auto_1fr] items-center gap-2.5 rounded-full border bg-card-bg/78 px-3.5 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55',
-						// Width + border + shadow morph between compact and expanded
-						// states. Reference: topbar.html .topbar { max-width:720 ➜ 1180 }.
-						'transition-[max-width,border-color,box-shadow] duration-[550ms] ease-out-v36',
+						'pointer-events-auto grid h-16 w-full grid-cols-[auto_1fr_auto] items-center gap-2.5 rounded-full border bg-card-bg/78 px-3.5 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55',
+						// Compact 580px ➜ expanded 1180px. Slower 900ms duration per
+						// user request 2026-05-15 ("Acilirken cok hizli genisliyor
+						// biraz yavas genislesin"). The center column drops the
+						// brand donut when expanded and renders the pinned-windows
+						// drop-zone instead.
+						'transition-[max-width,border-color,box-shadow] duration-[900ms] ease-out-v36',
 						isExpanded
 							? 'max-w-[1180px] border-line-strong shadow-[0_18px_50px_-28px_rgba(0,0,0,0.22)] dark:shadow-[0_18px_50px_-20px_rgba(0,0,0,0.6)]'
-							: 'max-w-[720px] border-line shadow-none',
+							: 'max-w-[580px] border-line shadow-none',
 					)}
 					aria-label='Top bar'
 				>
-					{/* LEFT — profile + (on expand) nav links */}
-					<div className='flex min-w-0 items-center justify-start gap-2'>
+					{/* LEFT — profile (pill enlarged so the hover bg wraps the
+					    avatar + name with breathing room equal to the text height). */}
+					<div className='flex min-w-0 items-center justify-start'>
 						<div ref={profileWrapRef} className='relative min-w-0'>
 							<button
 								type='button'
 								onClick={() => setMenuOpen((open) => !open)}
-								className='inline-flex max-w-full items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-3.5 text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg-2)]'
+								className='inline-flex max-w-full items-center gap-2.5 rounded-full px-2 py-2 text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg-2)]'
 								aria-haspopup='menu'
 								aria-expanded={menuOpen}
 							>
 								<span
-									className='grid h-7 w-7 shrink-0 place-items-center rounded-full text-[12px] font-semibold text-white'
+									className='grid h-8 w-8 shrink-0 place-items-center rounded-full text-[13px] font-semibold text-white'
 									style={{
 										background: 'linear-gradient(135deg, #ff8a65, #f06292)',
 										boxShadow: '0 4px 12px -4px rgba(240, 98, 146, 0.5)',
@@ -164,7 +189,7 @@ function TopBarDesktop() {
 								>
 									{initial}
 								</span>
-								<span className='truncate text-[14px] font-medium tracking-[-0.005em]'>
+								<span className='truncate pr-2 text-[14px] font-medium tracking-[-0.005em]'>
 									{userName}
 								</span>
 							</button>
@@ -217,38 +242,63 @@ function TopBarDesktop() {
 								</motion.div>
 							)}
 						</div>
-
-						{/* Left nav group — revealed on expand. Fades + slides in. */}
-						<TopBarNavGroup items={navItemsLeft} side='left' visible={isExpanded} />
 					</div>
 
-					{/* CENTER — brand donut. Hovering this triggers the expand
-					    per user direction 2026-05-15. */}
-					<div
-						className='flex items-center justify-center px-2'
-						onMouseEnter={() => setIsExpanded(true)}
-					>
-						<button
-							type='button'
-							onClick={() => undefined}
-							className='grid h-10 w-10 cursor-pointer place-items-center rounded-full transition-[transform,background] duration-200 hover:scale-[1.04] hover:bg-[color:var(--bg-2)]'
-							aria-label='LivOS home'
-						>
-							<span
-								aria-hidden='true'
-								className='relative inline-block h-6 w-6 rounded-full bg-[color:var(--fg)]'
+					{/* CENTER — collapsed: brand donut (also the expand trigger).
+					    Expanded: pinned-windows drop-zone shelf. The logo "yok
+					    olur" per user direction 2026-05-15. */}
+					<div className='flex min-w-0 items-center justify-center'>
+						{!isExpanded ? (
+							<div
+								className='flex items-center justify-center'
+								onMouseEnter={() => setIsExpanded(true)}
 							>
-								<span
-									className='absolute rounded-full bg-[color:var(--bg)]'
-									style={{inset: 7}}
-								/>
-							</span>
-						</button>
+								<button
+									type='button'
+									onClick={() => undefined}
+									className='grid h-10 w-10 cursor-pointer place-items-center rounded-full transition-[transform,background] duration-200 hover:scale-[1.04] hover:bg-[color:var(--bg-2)]'
+									aria-label='LivOS home'
+								>
+									<span
+										aria-hidden='true'
+										className='relative inline-block h-6 w-6 rounded-full bg-[color:var(--fg)]'
+									>
+										<span
+											className='absolute rounded-full bg-[color:var(--bg)]'
+											style={{inset: 7}}
+										/>
+									</span>
+								</button>
+							</div>
+						) : (
+							<div
+								onDragOver={handleDropZoneDragOver}
+								onDragLeave={handleDropZoneDragLeave}
+								onDrop={handleDropZoneDrop}
+								className={cn(
+									'flex min-h-[44px] w-full max-w-[640px] items-center justify-center gap-2 rounded-full border border-dashed px-3 transition-colors',
+									isDragOver
+										? 'border-[color:var(--fg)] bg-[color:var(--bg-2)]'
+										: 'border-line',
+								)}
+							>
+								{pinnedWindowIds.length === 0 ? (
+									<span className='select-none whitespace-nowrap text-[12px] font-medium text-[color:var(--fg-faint)]'>
+										Pencereleri buraya sürükle — sabitlenir, kapatsan bile arka planda kalır
+									</span>
+								) : (
+									<div className='flex items-center gap-1.5 overflow-x-auto'>
+										{pinnedWindowIds.map((id) => (
+											<PinnedWindowChip key={id} windowId={id} onUnpin={() => unpinWindow(id)} />
+										))}
+									</div>
+								)}
+							</div>
+						)}
 					</div>
 
-					{/* RIGHT — (on expand) nav links + clock + location */}
-					<div className='flex items-center justify-end gap-2.5 pr-1.5'>
-						<TopBarNavGroup items={navItemsRight} side='right' visible={isExpanded} />
+					{/* RIGHT — clock + location (always visible). */}
+					<div className='flex items-center justify-end pr-1.5'>
 						<ClockWithLocation />
 					</div>
 				</nav>
@@ -260,49 +310,33 @@ function TopBarDesktop() {
 	)
 }
 
-// ── Expandable nav group ────────────────────────────────────────────
+// ── Pinned-window chip ──────────────────────────────────────────────
 
-type NavItem = {label: string; onClick: () => void; active?: boolean}
-
-function TopBarNavGroup({items, side, visible}: {items: NavItem[]; side: 'left' | 'right'; visible: boolean}) {
-	// Stagger fade-in per topbar.html reference (lines 176-187): each link
-	// shifts up 4px on collapse and slides back into place on expand, with
-	// a 50ms cascade per index.
+/**
+ * Visual chip representing a pinned window in the TopBar drop-zone. The
+ * pinned window itself stays live in the window manager (or, longer-term,
+ * in a persistent shelf that survives a page reload). The chip just shows
+ * the user it's still there + offers an unpin affordance on hover.
+ *
+ * Phase 130-07 ships this as a stub: it surfaces the windowId verbatim
+ * (truncated). Follow-up phase wires it to a real WindowState lookup so
+ * the chip can display the app icon + title + a live frame thumbnail.
+ */
+function PinnedWindowChip({windowId, onUnpin}: {windowId: string; onUnpin: () => void}) {
 	return (
-		<div
-			className={cn(
-				'flex items-center gap-1.5 transition-[opacity,transform] duration-[350ms] ease-out-v36',
-				side === 'left' ? 'ml-1.5' : 'mr-1',
-				visible
-					? 'opacity-100 translate-x-0 pointer-events-auto'
-					: cn('opacity-0 pointer-events-none', side === 'left' ? '-translate-x-2' : 'translate-x-2'),
-			)}
-			aria-hidden={!visible}
-		>
-			{items.map((item, i) => (
-				<button
-					key={item.label}
-					type='button'
-					onClick={item.onClick}
-					tabIndex={visible ? 0 : -1}
-					className={cn(
-						'inline-flex items-center rounded-full px-3 py-2 text-[13px] font-medium tracking-[-0.005em] whitespace-nowrap transition-[opacity,transform,background,color] ease-out-v36',
-						visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1',
-						item.active
-							? 'text-[color:var(--fg)]'
-							: 'text-[color:var(--fg-dim)] hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]',
-					)}
-					style={{transitionDelay: visible ? `${120 + i * 50}ms` : '0ms', transitionDuration: '350ms'}}
-				>
-					{item.label}
-					{item.active && (
-						<span
-							className='ml-1 inline-block h-0.5 w-3.5 rounded bg-[color:var(--fg)]'
-							aria-hidden='true'
-						/>
-					)}
-				</button>
-			))}
+		<div className='group flex items-center gap-1.5 rounded-full border border-line bg-[color:var(--bg-2)] py-1 pl-2 pr-1 text-[11px] font-medium text-[color:var(--fg)]'>
+			<span className='max-w-[140px] truncate'>{windowId.slice(0, 12)}</span>
+			<button
+				type='button'
+				onClick={onUnpin}
+				className='grid h-5 w-5 place-items-center rounded-full text-[color:var(--fg-faint)] transition-colors hover:bg-[color:var(--bg)] hover:text-[color:var(--fg)]'
+				aria-label='Unpin window'
+				title='Unpin'
+			>
+				<svg viewBox='0 0 16 16' className='h-3 w-3' aria-hidden='true'>
+					<path d='M4 4l8 8M12 4L4 12' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
+				</svg>
+			</button>
 		</div>
 	)
 }
