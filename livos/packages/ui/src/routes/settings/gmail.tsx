@@ -59,7 +59,7 @@ function TagInput({
 	}
 
 	return (
-		<div className='rounded-radius-sm border border-border-default bg-surface-2 px-2 py-1.5 focus-within:border-blue-500'>
+		<div className='rounded-radius-sm border border-border-default bg-surface-2 px-2 py-1.5 focus-within:border-accent-blue'>
 			<div className='flex flex-wrap gap-1.5'>
 				{value.map((tag) => (
 					<span
@@ -70,7 +70,7 @@ function TagInput({
 						<button
 							type='button'
 							onClick={() => removeTag(tag)}
-							className='text-text-tertiary hover:text-red-400'
+							className='text-text-tertiary hover:text-accent-red'
 						>
 							<TbX className='h-3 w-3' />
 						</button>
@@ -144,8 +144,8 @@ function ToggleRow({
 				className={`mt-0.5 relative h-5 w-9 shrink-0 rounded-full transition-colors ${
 					checked
 						? variant === 'danger'
-							? 'bg-red-500'
-							: 'bg-blue-500'
+							? 'bg-accent-red'
+							: 'bg-accent-blue'
 						: 'bg-surface-3'
 				}`}
 			>
@@ -301,15 +301,15 @@ export function GmailContent() {
 			<div
 				className={`rounded-radius-md border p-4 ${
 					status?.connected
-						? 'border-green-500/30 bg-green-500/10'
+						? 'border-accent-green/30 bg-accent-green/10'
 						: status?.configured
-							? 'border-red-500/30 bg-red-500/10'
-							: 'border-amber-500/30 bg-amber-500/10'
+							? 'border-accent-red/30 bg-accent-red/10'
+							: 'border-accent-amber/30 bg-accent-amber/10'
 				}`}
 			>
 				<div className='flex items-center gap-3'>
 					<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-surface-2'>
-						<TbMail className='h-6 w-6 text-red-400' />
+						<TbMail className='h-6 w-6 text-accent-red' />
 					</div>
 					<div className='flex-1'>
 						<div className='text-body-lg font-semibold'>Gmail</div>
@@ -322,18 +322,18 @@ export function GmailContent() {
 						</div>
 					</div>
 					{status?.connected ? (
-						<div className='flex items-center gap-2 text-caption text-green-400'>
+						<div className='flex items-center gap-2 text-caption text-accent-green'>
 							<TbPlugConnected className='h-4 w-4' /> Connected
 						</div>
 					) : (
-						<div className='flex items-center gap-2 text-caption text-red-400'>
+						<div className='flex items-center gap-2 text-caption text-accent-red'>
 							<TbPlugConnectedX className='h-4 w-4' /> Disconnected
 						</div>
 					)}
 				</div>
 
 				{status?.error && (
-					<div className='mt-3 flex items-start gap-2 text-caption text-amber-400'>
+					<div className='mt-3 flex items-start gap-2 text-caption text-accent-amber'>
 						<TbAlertCircle className='mt-0.5 h-4 w-4 shrink-0' />
 						<span>{status.error}</span>
 					</div>
@@ -364,7 +364,7 @@ export function GmailContent() {
 								value={clientId}
 								onChange={(e) => setClientId(e.target.value)}
 								placeholder='123456789-abc.apps.googleusercontent.com'
-								className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary placeholder:text-text-tertiary focus:border-blue-500 focus:outline-none'
+								className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary placeholder:text-text-tertiary focus:border-accent-blue focus:outline-none'
 							/>
 						</div>
 						<div className='space-y-1.5'>
@@ -374,7 +374,7 @@ export function GmailContent() {
 								value={clientSecret}
 								onChange={(e) => setClientSecret(e.target.value)}
 								placeholder='GOCSPX-...'
-								className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary placeholder:text-text-tertiary focus:border-blue-500 focus:outline-none'
+								className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary placeholder:text-text-tertiary focus:border-accent-blue focus:outline-none'
 							/>
 						</div>
 					</div>
@@ -395,14 +395,14 @@ export function GmailContent() {
 							href='https://console.cloud.google.com/apis/credentials'
 							target='_blank'
 							rel='noopener noreferrer'
-							className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+							className='flex items-center gap-1.5 text-caption text-accent-blue hover:text-accent-blue'
 						>
 							<TbExternalLink className='h-3.5 w-3.5' />
 							Google Cloud Console
 						</a>
 					</div>
 					{saveCredentialsMutation.isError && (
-						<p className='text-caption text-red-400'>{saveCredentialsMutation.error.message}</p>
+						<p className='text-caption text-accent-red'>{saveCredentialsMutation.error.message}</p>
 					)}
 					<div className='text-caption text-text-tertiary space-y-1'>
 						<p>1. Go to Google Cloud Console &gt; APIs &amp; Services &gt; Credentials</p>
@@ -412,7 +412,7 @@ export function GmailContent() {
 				</div>
 			) : status?.connected ? (
 				<div className='space-y-3'>
-					<div className='flex items-center gap-2 text-body-sm text-green-400'>
+					<div className='flex items-center gap-2 text-body-sm text-accent-green'>
 						<TbCircleCheck className='h-4 w-4' />
 						Gmail is connected and polling for new emails
 					</div>
@@ -429,7 +429,7 @@ export function GmailContent() {
 						)}
 					</Button>
 					{disconnectMutation.isError && (
-						<p className='text-caption text-red-400'>{disconnectMutation.error.message}</p>
+						<p className='text-caption text-accent-red'>{disconnectMutation.error.message}</p>
 					)}
 				</div>
 			) : (
@@ -447,7 +447,7 @@ export function GmailContent() {
 						)}
 					</Button>
 					{startOAuthMutation.isError && (
-						<p className='text-caption text-red-400'>{startOAuthMutation.error.message}</p>
+						<p className='text-caption text-accent-red'>{startOAuthMutation.error.message}</p>
 					)}
 					{connectUrl && (
 						<div className='rounded-radius-sm bg-surface-2 p-3 space-y-2'>
@@ -460,7 +460,7 @@ export function GmailContent() {
 								href={connectUrl}
 								target='_blank'
 								rel='noopener noreferrer'
-								className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+								className='flex items-center gap-1.5 text-caption text-accent-blue hover:text-accent-blue'
 							>
 								<TbExternalLink className='h-3.5 w-3.5' />
 								Re-open consent screen
@@ -489,7 +489,7 @@ export function GmailContent() {
 						title='Send Protection'
 						description='Controls whether the AI agent can send emails from your Gmail account.'
 					>
-						<div className='rounded-radius-sm border border-red-500/30 bg-red-500/5 p-3'>
+						<div className='rounded-radius-sm border border-accent-red/30 bg-accent-red/5 p-3'>
 							<ToggleRow
 								label='Block all automatic email sending'
 								description='When enabled, the AI agent can NEVER send or reply to emails automatically. You must explicitly command it to send. Highly recommended.'
@@ -499,7 +499,7 @@ export function GmailContent() {
 							/>
 						</div>
 						{!settings.sendProtection && (
-							<div className='flex items-start gap-2 text-caption text-red-400'>
+							<div className='flex items-start gap-2 text-caption text-accent-red'>
 								<TbAlertCircle className='mt-0.5 h-4 w-4 shrink-0' />
 								<span>Send protection is OFF. The AI agent may send emails without your explicit approval.</span>
 							</div>
@@ -534,7 +534,7 @@ export function GmailContent() {
 									key={opt.value}
 									className={`flex items-start gap-3 rounded-radius-sm border p-3 cursor-pointer transition-colors ${
 										settings.processingMode === opt.value
-											? 'border-blue-500/50 bg-blue-500/5'
+											? 'border-accent-blue/50 bg-accent-blue/5'
 											: 'border-border-default hover:border-border-hover'
 									}`}
 								>
@@ -566,7 +566,7 @@ export function GmailContent() {
 							<select
 								value={settings.notifyChannel}
 								onChange={(e) => updateSetting('notifyChannel', e.target.value)}
-								className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary focus:border-blue-500 focus:outline-none'
+								className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary focus:border-accent-blue focus:outline-none'
 							>
 								<option value='none'>None</option>
 								<option value='telegram'>Telegram</option>
@@ -582,7 +582,7 @@ export function GmailContent() {
 									value={settings.notifyChatId}
 									onChange={(e) => updateSetting('notifyChatId', e.target.value)}
 									placeholder='Leave empty to use last active chat'
-									className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary placeholder:text-text-tertiary focus:border-blue-500 focus:outline-none'
+									className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary placeholder:text-text-tertiary focus:border-accent-blue focus:outline-none'
 								/>
 								<p className='text-caption text-text-tertiary'>
 									If empty, notifications go to your most recent chat on this channel.
@@ -669,7 +669,7 @@ export function GmailContent() {
 									max={3600}
 									value={settings.gmailPollIntervalSec}
 									onChange={(e) => updateSetting('gmailPollIntervalSec', Math.max(30, Math.min(3600, parseInt(e.target.value) || 60)))}
-									className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary focus:border-blue-500 focus:outline-none'
+									className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary focus:border-accent-blue focus:outline-none'
 								/>
 							</div>
 							<div className='space-y-1.5'>
@@ -680,7 +680,7 @@ export function GmailContent() {
 									max={50}
 									value={settings.maxEmailsPerPoll}
 									onChange={(e) => updateSetting('maxEmailsPerPoll', Math.max(1, Math.min(50, parseInt(e.target.value) || 5)))}
-									className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary focus:border-blue-500 focus:outline-none'
+									className='w-full rounded-radius-sm border border-border-default bg-surface-2 px-3 py-2 text-body-sm text-text-primary focus:border-accent-blue focus:outline-none'
 								/>
 							</div>
 						</div>
@@ -688,7 +688,7 @@ export function GmailContent() {
 
 					{/* ── Save Button ──────────────────────────────────── */}
 					{dirty && (
-						<div className='sticky bottom-4 flex items-center gap-3 rounded-radius-md border border-blue-500/30 bg-blue-500/10 p-3'>
+						<div className='sticky bottom-4 flex items-center gap-3 rounded-radius-md border border-accent-blue/30 bg-accent-blue/10 p-3'>
 							<div className='flex-1 text-body-sm text-text-primary'>
 								You have unsaved changes
 							</div>
@@ -708,7 +708,7 @@ export function GmailContent() {
 					)}
 
 					{updateSettingsMutation.isError && (
-						<p className='text-caption text-red-400'>{updateSettingsMutation.error.message}</p>
+						<p className='text-caption text-accent-red'>{updateSettingsMutation.error.message}</p>
 					)}
 				</>
 			)}

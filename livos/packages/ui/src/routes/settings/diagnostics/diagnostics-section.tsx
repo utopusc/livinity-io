@@ -50,15 +50,15 @@ export function DiagnosticCard({title, status, detail, action}: DiagnosticCardPr
 			icon: TbCircleCheck,
 		},
 		warn: {
-			border: 'border-amber-500/30',
-			bg: 'bg-amber-500/10',
-			text: 'text-amber-300',
+			border: 'border-accent-amber/30',
+			bg: 'bg-accent-amber/10',
+			text: 'text-accent-amber',
 			icon: TbAlertTriangle,
 		},
 		error: {
-			border: 'border-red-500/30',
-			bg: 'bg-red-500/10',
-			text: 'text-red-300',
+			border: 'border-accent-red/30',
+			bg: 'bg-accent-red/10',
+			text: 'text-accent-red',
 			icon: TbAlertCircle,
 		},
 		idle: {

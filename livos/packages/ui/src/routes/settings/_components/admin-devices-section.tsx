@@ -90,8 +90,8 @@ export function AdminDevicesSection() {
 	// Error
 	if (listQ.isError) {
 		return (
-			<div className='rounded-radius-md border border-red-500/30 bg-red-500/5 p-4'>
-				<div className='flex items-center gap-2 text-red-500'>
+			<div className='rounded-radius-md border border-accent-red/30 bg-accent-red/5 p-4'>
+				<div className='flex items-center gap-2 text-accent-red'>
 					<TbAlertTriangle className='h-5 w-5' />
 					<span className='text-body-sm font-medium'>Failed to load devices</span>
 				</div>
@@ -164,8 +164,8 @@ export function AdminDevicesSection() {
 								</td>
 								<td className='px-3 py-2.5'>
 									{d.online ? (
-										<Badge variant='default' className='bg-green-500/15 text-green-600 dark:text-green-400'>
-											<span className='mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-green-500' />
+										<Badge variant='default' className='bg-accent-green/15 text-accent-green dark:text-accent-green'>
+											<span className='mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent-green' />
 											Online
 										</Badge>
 									) : (
@@ -185,7 +185,7 @@ export function AdminDevicesSection() {
 											variant='destructive'
 											onClick={() => setConfirmTarget(d)}
 											disabled={forceDisconnectMut.isPending}
-											className='bg-red-500 hover:bg-red-600 text-white'
+											className='bg-accent-red hover:bg-accent-red/90 text-white'
 										>
 											<TbX className='mr-1.5 h-3.5 w-3.5' />
 											Force Disconnect
@@ -228,7 +228,7 @@ export function AdminDevicesSection() {
 						</Button>
 						<Button
 							variant='destructive'
-							className='bg-red-500 hover:bg-red-600 text-white'
+							className='bg-accent-red hover:bg-accent-red/90 text-white'
 							disabled={forceDisconnectMut.isPending}
 							onClick={() => {
 								if (confirmTarget) {

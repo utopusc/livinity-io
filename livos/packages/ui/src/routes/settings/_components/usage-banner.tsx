@@ -27,7 +27,7 @@ export function UsageBanner({state, todayCount, dailyCap, tier, lastThrottleAt}:
 
 	if (state === 'warn') {
 		return (
-			<div className='flex items-start gap-2 rounded-radius-sm border border-amber-500/30 bg-amber-500/10 p-3 text-body-sm text-amber-300'>
+			<div className='flex items-start gap-2 rounded-radius-sm border border-accent-amber/30 bg-accent-amber/10 p-3 text-body-sm text-accent-amber'>
 				<TbAlertTriangle className='mt-0.5 size-4 shrink-0' />
 				<div>
 					<div className='font-medium'>
@@ -45,7 +45,7 @@ export function UsageBanner({state, todayCount, dailyCap, tier, lastThrottleAt}:
 		: 'Resets at midnight UTC.'
 
 	return (
-		<div className='flex items-start gap-2 rounded-radius-sm border border-red-500/30 bg-red-500/10 p-3 text-body-sm text-red-300'>
+		<div className='flex items-start gap-2 rounded-radius-sm border border-accent-red/30 bg-accent-red/10 p-3 text-body-sm text-accent-red'>
 			<TbAlertCircle className='mt-0.5 size-4 shrink-0' />
 			<div>
 				<div className='font-medium'>Subscription cap reached ({tier} tier)</div>

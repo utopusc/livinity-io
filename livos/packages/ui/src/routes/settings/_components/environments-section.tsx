@@ -107,7 +107,7 @@ function StatusBadge({env}: {env: EnvironmentRow}) {
 		<span
 			className={cn(
 				'rounded-full px-2 py-0.5 text-xs font-medium',
-				isOnline ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500',
+				isOnline ? 'bg-emerald-500/15 text-emerald-500' : 'bg-accent-amber/15 text-accent-amber',
 			)}
 		>
 			{isOnline ? 'Online' : 'Offline'}
@@ -267,7 +267,7 @@ function EnvironmentCard({
 						</span>
 						<StatusBadge env={env} />
 						{isLocal && (
-							<span className='rounded-full bg-blue-500/15 px-2 py-0.5 text-xs text-blue-400'>
+							<span className='rounded-full bg-accent-blue/15 px-2 py-0.5 text-xs text-accent-blue'>
 								Built-in
 							</span>
 						)}
@@ -897,7 +897,7 @@ function GenerateAgentTokenDialog({
 					)}
 
 					{error && (
-						<div className='rounded-radius-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300'>
+						<div className='rounded-radius-md border border-accent-amber/30 bg-accent-amber/10 p-3 text-sm text-amber-700 dark:text-accent-amber'>
 							<div className='flex items-start gap-2'>
 								<TbAlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />
 								<div>
@@ -914,7 +914,7 @@ function GenerateAgentTokenDialog({
 
 					{token && (
 						<>
-							<div className='rounded-radius-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300'>
+							<div className='rounded-radius-md border border-accent-amber/30 bg-accent-amber/10 p-3 text-sm text-amber-700 dark:text-accent-amber'>
 								<div className='flex items-start gap-2'>
 									<TbAlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />
 									<div>

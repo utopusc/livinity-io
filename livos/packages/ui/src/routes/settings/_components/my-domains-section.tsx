@@ -22,8 +22,8 @@ const STATUS_STYLES: Record<string, {bg: string; text: string; label: string}> =
 	active: {bg: 'bg-emerald-500/15', text: 'text-emerald-500', label: 'Active'},
 	dns_verified: {bg: 'bg-emerald-500/15', text: 'text-emerald-500', label: 'DNS Verified'},
 	pending_dns: {bg: 'bg-yellow-500/15', text: 'text-yellow-500', label: 'Pending DNS'},
-	dns_failed: {bg: 'bg-red-500/15', text: 'text-red-500', label: 'DNS Failed'},
-	error: {bg: 'bg-red-500/15', text: 'text-red-500', label: 'Error'},
+	dns_failed: {bg: 'bg-accent-red/15', text: 'text-accent-red', label: 'DNS Failed'},
+	error: {bg: 'bg-accent-red/15', text: 'text-accent-red', label: 'Error'},
 	dns_changed: {bg: 'bg-orange-500/15', text: 'text-orange-500', label: 'DNS Changed'},
 }
 
@@ -162,7 +162,7 @@ export default function MyDomainsSection() {
 	if (domainsQuery.isError) {
 		return (
 			<div className='flex items-center justify-center py-12'>
-				<span className='text-sm text-red-400'>Failed to load domains: {domainsQuery.error?.message}</span>
+				<span className='text-sm text-accent-red'>Failed to load domains: {domainsQuery.error?.message}</span>
 			</div>
 		)
 	}
@@ -184,7 +184,7 @@ export default function MyDomainsSection() {
 						'rounded-md px-3 py-2 text-xs font-medium',
 						actionResult.type === 'success'
 							? 'bg-emerald-500/15 text-emerald-400'
-							: 'bg-red-500/15 text-red-400',
+							: 'bg-accent-red/15 text-accent-red',
 					)}
 				>
 					{actionResult.message}

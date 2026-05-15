@@ -779,13 +779,13 @@ function StatusRow({label, connected}: {label: string; connected: boolean}) {
 			<div className='flex items-center gap-2'>
 				{connected ? (
 					<>
-						<TbPlugConnected className='h-4 w-4 text-green-500' />
-						<span className='text-green-400'>Connected</span>
+						<TbPlugConnected className='h-4 w-4 text-accent-green' />
+						<span className='text-accent-green'>Connected</span>
 					</>
 				) : (
 					<>
-						<TbPlugConnectedX className='h-4 w-4 text-red-500' />
-						<span className='text-red-400'>Disconnected</span>
+						<TbPlugConnectedX className='h-4 w-4 text-accent-red' />
+						<span className='text-accent-red'>Disconnected</span>
 					</>
 				)}
 			</div>
@@ -804,7 +804,7 @@ function TimestampRow({label, value}: {label: string; value?: string}) {
 }
 
 function ErrorBanner({message}: {message: string}) {
-	return <div className='rounded-radius-sm bg-red-500/20 p-2 text-caption text-red-400'>{message}</div>
+	return <div className='rounded-radius-sm bg-accent-red/20 p-2 text-caption text-accent-red'>{message}</div>
 }
 
 function LoadingState() {
@@ -821,8 +821,8 @@ function EmptyState({message}: {message: string}) {
 
 function UsageInfo({items}: {items: string[]}) {
 	return (
-		<div className='rounded-radius-md border border-blue-500/30 bg-blue-500/10 p-4'>
-			<div className='text-body font-medium text-blue-400'>How it works</div>
+		<div className='rounded-radius-md border border-accent-blue/30 bg-accent-blue/10 p-4'>
+			<div className='text-body font-medium text-accent-blue'>How it works</div>
 			<div className='mt-2 space-y-1 text-caption text-text-secondary'>
 				{items.map((item, i) => (
 					<p key={i}>• {item}</p>

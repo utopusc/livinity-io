@@ -17,9 +17,9 @@ export function SettingsInfoCard({icon: Icon, title, description, children, vari
 			className={cn(
 				'rounded-radius-md border p-4',
 				variant === 'default' && 'border-border-default bg-surface-base',
-				variant === 'success' && 'border-green-500/30 bg-green-500/10',
+				variant === 'success' && 'border-accent-green/30 bg-accent-green/10',
 				variant === 'warning' && 'border-orange-500/30 bg-orange-500/10',
-				variant === 'danger' && 'border-red-500/20 bg-red-500/5',
+				variant === 'danger' && 'border-accent-red/20 bg-accent-red/5',
 				className,
 			)}
 		>

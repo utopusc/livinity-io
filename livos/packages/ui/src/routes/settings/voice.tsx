@@ -98,9 +98,9 @@ export function VoiceContent() {
 			<div
 				className={`rounded-radius-md border p-4 ${
 					isReady && enabled
-						? 'border-green-500/30 bg-green-500/10'
+						? 'border-accent-green/30 bg-accent-green/10'
 						: isReady
-							? 'border-amber-500/30 bg-amber-500/10'
+							? 'border-accent-amber/30 bg-accent-amber/10'
 							: 'border-border-default bg-surface-base'
 				}`}
 			>
@@ -119,11 +119,11 @@ export function VoiceContent() {
 						</div>
 					</div>
 					{isReady && enabled ? (
-						<div className='flex items-center gap-2 text-caption text-green-400'>
+						<div className='flex items-center gap-2 text-caption text-accent-green'>
 							<TbCircleCheck className='h-4 w-4' /> Active
 						</div>
 					) : isReady ? (
-						<div className='flex items-center gap-2 text-caption text-amber-400'>
+						<div className='flex items-center gap-2 text-caption text-accent-amber'>
 							<TbAlertCircle className='h-4 w-4' /> Disabled
 						</div>
 					) : null}
@@ -156,7 +156,7 @@ export function VoiceContent() {
 			<div className='space-y-2'>
 				<label className='text-caption text-text-secondary'>Deepgram API Key (STT)</label>
 				{hasDeepgramKey && (
-					<div className='flex items-center gap-2 text-body-sm text-green-400'>
+					<div className='flex items-center gap-2 text-body-sm text-accent-green'>
 						<TbCircleCheck className='h-4 w-4' />
 						API key configured
 					</div>
@@ -180,7 +180,7 @@ export function VoiceContent() {
 					href='https://console.deepgram.com/signup'
 					target='_blank'
 					rel='noopener noreferrer'
-					className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+					className='flex items-center gap-1.5 text-caption text-accent-blue hover:text-accent-blue'
 				>
 					<TbExternalLink className='h-3.5 w-3.5' />
 					Get API key from deepgram.com
@@ -191,7 +191,7 @@ export function VoiceContent() {
 			<div className='space-y-2'>
 				<label className='text-caption text-text-secondary'>Cartesia API Key (TTS)</label>
 				{hasCartesiaKey && (
-					<div className='flex items-center gap-2 text-body-sm text-green-400'>
+					<div className='flex items-center gap-2 text-body-sm text-accent-green'>
 						<TbCircleCheck className='h-4 w-4' />
 						API key configured
 					</div>
@@ -215,7 +215,7 @@ export function VoiceContent() {
 					href='https://play.cartesia.ai/keys'
 					target='_blank'
 					rel='noopener noreferrer'
-					className='flex items-center gap-1.5 text-caption text-blue-400 hover:text-blue-300'
+					className='flex items-center gap-1.5 text-caption text-accent-blue hover:text-accent-blue'
 				>
 					<TbExternalLink className='h-3.5 w-3.5' />
 					Get API key from cartesia.ai
@@ -269,8 +269,8 @@ export function VoiceContent() {
 			</div>
 
 			{/* Info Card */}
-			<div className='rounded-radius-md border border-blue-500/20 bg-blue-500/5 p-4 space-y-2'>
-				<div className='text-body-sm font-medium text-blue-400'>Requirements</div>
+			<div className='rounded-radius-md border border-accent-blue/20 bg-accent-blue/5 p-4 space-y-2'>
+				<div className='text-body-sm font-medium text-accent-blue'>Requirements</div>
 				<p className='text-caption text-text-secondary'>
 					Voice mode requires both a Deepgram API key (for speech-to-text) and a Cartesia API
 					key (for text-to-speech). The voice button will only appear in the AI chat when both
@@ -297,7 +297,7 @@ export function VoiceContent() {
 			</div>
 
 			{updateMutation.isError && (
-				<p className='text-caption text-red-400 flex items-center gap-1.5'>
+				<p className='text-caption text-accent-red flex items-center gap-1.5'>
 					<TbAlertCircle className='h-3.5 w-3.5' />
 					{updateMutation.error.message}
 				</p>

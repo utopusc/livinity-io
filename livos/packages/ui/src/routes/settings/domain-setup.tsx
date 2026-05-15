@@ -48,7 +48,7 @@ function CopyButton({text}: {text: string}) {
 			className='rounded-radius-sm p-1.5 text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-secondary'
 			title='Copy'
 		>
-			{copied ? <IconCheck size={14} className='text-green-400' /> : <IconCopy size={14} />}
+			{copied ? <IconCheck size={14} className='text-accent-green' /> : <IconCopy size={14} />}
 		</button>
 	)
 }
@@ -102,8 +102,8 @@ function StepMethod({
 					className='w-full rounded-radius-md border border-border-default bg-surface-base px-4 py-4 text-left transition-all hover:border-violet-500/50 hover:bg-surface-2 group'
 				>
 					<div className='flex items-start gap-3'>
-						<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-radius-md bg-blue-500/15 group-hover:bg-blue-500/20 transition-colors'>
-							<TbWorldWww size={18} className='text-blue-400' />
+						<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-radius-md bg-accent-blue/15 group-hover:bg-accent-blue/20 transition-colors'>
+							<TbWorldWww size={18} className='text-accent-blue' />
 						</div>
 						<div className='flex-1 min-w-0'>
 							<span className='text-body font-medium text-text-primary'>Direct (DNS + Let's Encrypt)</span>
@@ -177,7 +177,7 @@ function StepTunnel({
 							href='https://one.dash.cloudflare.com/'
 							target='_blank'
 							rel='noopener noreferrer'
-							className='inline-flex items-center gap-0.5 text-blue-400 transition-colors hover:text-blue-300'
+							className='inline-flex items-center gap-0.5 text-accent-blue transition-colors hover:text-accent-blue'
 						>
 							Cloudflare Zero Trust Dashboard
 							<IconExternalLink size={11} className='ml-0.5' />
@@ -201,7 +201,7 @@ function StepTunnel({
 			</div>
 
 			{error && (
-				<div className='flex items-start gap-2 rounded-radius-md bg-red-500/10 px-4 py-3 text-caption text-red-400'>
+				<div className='flex items-start gap-2 rounded-radius-md bg-accent-red/10 px-4 py-3 text-caption text-accent-red'>
 					<IconAlertCircle size={14} className='mt-0.5 flex-shrink-0' />
 					<span>{error}</span>
 				</div>
@@ -274,7 +274,7 @@ function StepDomain({
 
 			{serverIp && (
 				<div className='flex items-center gap-2 rounded-radius-md bg-surface-base px-4 py-3'>
-					<IconGlobe size={14} className='text-blue-400' />
+					<IconGlobe size={14} className='text-accent-blue' />
 					<span className='text-caption text-text-secondary'>Server IP:</span>
 					<span className='font-mono text-caption text-text-primary'>{serverIp}</span>
 					<CopyButton text={serverIp} />
@@ -335,7 +335,7 @@ function StepDnsRecords({
 					<tbody>
 						<tr>
 							<td className='px-4 py-3'>
-								<span className='rounded bg-blue-500/20 px-2 py-0.5 font-mono font-medium text-blue-400'>A</span>
+								<span className='rounded bg-accent-blue/20 px-2 py-0.5 font-mono font-medium text-accent-blue'>A</span>
 							</td>
 							<td className='px-4 py-3'>
 								<div className='flex items-center gap-1.5'>
@@ -357,7 +357,7 @@ function StepDnsRecords({
 				</table>
 			</div>
 
-			<div className='rounded-radius-md bg-amber-500/10 px-4 py-3 text-caption text-amber-400/80'>
+			<div className='rounded-radius-md bg-accent-amber/10 px-4 py-3 text-caption text-accent-amber/80'>
 				DNS changes can take a few minutes to propagate. Setting TTL to 300 (5 minutes) helps speed this up.
 			</div>
 
@@ -438,11 +438,11 @@ function StepVerify({
 					</div>
 				) : isMatch ? (
 					<div className='flex items-center gap-3'>
-						<div className='flex h-8 w-8 items-center justify-center rounded-full bg-green-500/20'>
-							<IconCheck size={18} className='text-green-400' />
+						<div className='flex h-8 w-8 items-center justify-center rounded-full bg-accent-green/20'>
+							<IconCheck size={18} className='text-accent-green' />
 						</div>
 						<div>
-							<span className='text-body font-medium text-green-400'>DNS verified!</span>
+							<span className='text-body font-medium text-accent-green'>DNS verified!</span>
 							<p className='mt-0.5 text-caption text-text-tertiary'>
 								<span className='font-mono'>{domain}</span> resolves to{' '}
 								<span className='font-mono'>{result?.currentIp ?? ''}</span>
@@ -452,11 +452,11 @@ function StepVerify({
 				) : (
 					<div className='space-y-3'>
 						<div className='flex items-center gap-3'>
-							<div className='flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/20'>
-								<IconAlertCircle size={18} className='text-amber-400' />
+							<div className='flex h-8 w-8 items-center justify-center rounded-full bg-accent-amber/20'>
+								<IconAlertCircle size={18} className='text-accent-amber' />
 							</div>
 							<div>
-								<span className='text-body font-medium text-amber-400'>Not yet resolved</span>
+								<span className='text-body font-medium text-accent-amber'>Not yet resolved</span>
 								<p className='mt-0.5 text-caption text-text-tertiary'>DNS records may need more time to propagate.</p>
 							</div>
 						</div>
@@ -553,7 +553,7 @@ function StepActivate({
 
 			<div className='space-y-3 rounded-radius-md border border-border-default bg-surface-base p-4'>
 				<div className='flex items-start gap-3'>
-					<IconLock size={16} className='mt-0.5 flex-shrink-0 text-green-400' />
+					<IconLock size={16} className='mt-0.5 flex-shrink-0 text-accent-green' />
 					<div>
 						<p className='text-body text-text-primary'>Free SSL certificate from Let's Encrypt</p>
 						<p className='mt-0.5 text-caption text-text-tertiary'>
@@ -562,7 +562,7 @@ function StepActivate({
 					</div>
 				</div>
 				<div className='flex items-start gap-3'>
-					<IconGlobe size={16} className='mt-0.5 flex-shrink-0 text-blue-400' />
+					<IconGlobe size={16} className='mt-0.5 flex-shrink-0 text-accent-blue' />
 					<div>
 						<p className='text-body text-text-primary'>HTTP to HTTPS redirect</p>
 						<p className='mt-0.5 text-caption text-text-tertiary'>
@@ -573,7 +573,7 @@ function StepActivate({
 			</div>
 
 			{error && (
-				<div className='flex items-start gap-2 rounded-radius-md bg-red-500/10 px-4 py-3 text-caption text-red-400'>
+				<div className='flex items-start gap-2 rounded-radius-md bg-accent-red/10 px-4 py-3 text-caption text-accent-red'>
 					<IconAlertCircle size={14} className='mt-0.5 flex-shrink-0' />
 					<span>{error}</span>
 				</div>
@@ -590,7 +590,7 @@ function StepActivate({
 				<button
 					onClick={handleActivate}
 					disabled={activating}
-					className='flex items-center gap-2 rounded-radius-md bg-green-600 px-5 py-2.5 text-body font-medium text-white transition-all hover:bg-green-500 disabled:opacity-40'
+					className='flex items-center gap-2 rounded-radius-md bg-green-600 px-5 py-2.5 text-body font-medium text-white transition-all hover:bg-accent-green disabled:opacity-40'
 				>
 					{activating ? (
 						<IconLoader2 size={14} className='animate-spin' />
@@ -612,8 +612,8 @@ function StepDone({domain, onClose}: {domain: string; onClose: () => void}) {
 	return (
 		<div className='space-y-5'>
 			<div className='flex flex-col items-center py-4'>
-				<div className='mb-4 flex h-14 w-14 items-center justify-center rounded-radius-lg bg-green-500/20'>
-					<IconCheck size={28} className='text-green-400' />
+				<div className='mb-4 flex h-14 w-14 items-center justify-center rounded-radius-lg bg-accent-green/20'>
+					<IconCheck size={28} className='text-accent-green' />
 				</div>
 				<h3 className='text-body-lg font-semibold text-text-primary'>HTTPS is active!</h3>
 				<p className='mt-1 text-caption text-text-tertiary'>
@@ -622,12 +622,12 @@ function StepDone({domain, onClose}: {domain: string; onClose: () => void}) {
 			</div>
 
 			<div className='flex items-center justify-center gap-2 rounded-radius-md bg-surface-base px-4 py-3'>
-				<IconLock size={14} className='text-green-400' />
+				<IconLock size={14} className='text-accent-green' />
 				<a
 					href={url}
 					target='_blank'
 					rel='noopener noreferrer'
-					className='font-mono text-body text-blue-400 transition-colors hover:text-blue-300'
+					className='font-mono text-body text-accent-blue transition-colors hover:text-accent-blue'
 				>
 					{url}
 				</a>
@@ -679,13 +679,13 @@ function DomainStatus({
 	return (
 		<div className='space-y-4'>
 			<div className='flex items-center gap-3'>
-				<div className='flex h-10 w-10 items-center justify-center rounded-radius-md bg-green-500/20'>
-					<IconLock size={20} className='text-green-400' />
+				<div className='flex h-10 w-10 items-center justify-center rounded-radius-md bg-accent-green/20'>
+					<IconLock size={20} className='text-accent-green' />
 				</div>
 				<div className='flex-1'>
 					<div className='flex items-center gap-2'>
 						<span className='text-body font-medium text-text-primary'>HTTPS Active</span>
-						<span className='rounded bg-green-500/20 px-1.5 py-0.5 text-[10px] font-medium text-green-400'>
+						<span className='rounded bg-accent-green/20 px-1.5 py-0.5 text-[10px] font-medium text-accent-green'>
 							Secured
 						</span>
 					</div>
@@ -693,7 +693,7 @@ function DomainStatus({
 						href={url}
 						target='_blank'
 						rel='noopener noreferrer'
-						className='mt-0.5 flex items-center gap-1 font-mono text-caption text-blue-400 transition-colors hover:text-blue-300'
+						className='mt-0.5 flex items-center gap-1 font-mono text-caption text-accent-blue transition-colors hover:text-accent-blue'
 					>
 						{url}
 						<IconExternalLink size={12} />
@@ -718,7 +718,7 @@ function DomainStatus({
 				<button
 					onClick={handleRemove}
 					disabled={removing}
-					className='flex items-center gap-2 rounded-radius-md bg-red-500/10 px-4 py-2 text-caption text-red-400 transition-all hover:bg-red-500/20'
+					className='flex items-center gap-2 rounded-radius-md bg-accent-red/10 px-4 py-2 text-caption text-accent-red transition-all hover:bg-accent-red/20'
 				>
 					{removing ? <IconLoader2 size={14} className='animate-spin' /> : <IconTrash size={14} />}
 					Remove
