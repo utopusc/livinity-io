@@ -63,7 +63,7 @@ export function AppStoreNav({activeId, allCategories}: {activeId: string; allCat
 		>
 			<AnimatedBackground
 				defaultValue={activeId}
-				className='rounded-full bg-neutral-100'
+				className='rounded-full bg-card-bg-2'
 				transition={{type: 'spring', bounce: 0.15, duration: 0.4}}
 			>
 				{allCategories.map((categoryId) => (

@@ -1,3 +1,4 @@
+import {Pill} from '@livinity/ui-kit'
 import {ReactNode} from 'react'
 import semver from 'semver'
 
@@ -61,9 +62,13 @@ function KV({k, v}: {k: ReactNode; v: ReactNode}) {
 
 function InfoSectionCompatibilityText({app}: {app: RegistryApp}) {
 	const os = useVersion()
-	return os.version && semver.lte(app.manifestVersion, os.version)
-		? t('app-page.section.info.compatibility-compatible')
-		: os.version
-			? t('app-page.section.info.compatibility-not-compatible')
-			: t('unknown')
+	if (!os.version) return <>{t('unknown')}</>
+	const compatible = semver.lte(app.manifestVersion, os.version)
+	return (
+		<Pill tone={compatible ? 'ok' : 'err'}>
+			{compatible
+				? t('app-page.section.info.compatibility-compatible')
+				: t('app-page.section.info.compatibility-not-compatible')}
+		</Pill>
+	)
 }
