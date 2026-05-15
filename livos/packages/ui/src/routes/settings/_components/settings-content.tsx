@@ -210,138 +210,153 @@ function useVisibleMenuItems(): MenuItem[] {
 export function SettingsContent() {
 	const [activeSection, setActiveSection] = useState<SettingsSection>('home')
 	const visibleItems = useVisibleMenuItems()
-	const isMobile = useIsMobile()
 
-	// Mobile: drill-down detail view (no sidebar)
-	if (isMobile && activeSection !== 'home') {
+	// v36 LivOS Design Port — Settings UI redesigned 2026-05-15 per user
+	// direction "ayarlar UI ini yeniden tasarla kendi yapimiza gore UI UX
+	// odakli ol". The previous master-detail sidebar layout is gone; the new
+	// shape is window-native single-column:
+	//   - Home view → v36 hairline-card vertical list (mono numerals + Instrument
+	//     Serif italic accents on each item name).
+	//   - Section view → v36 SectionHead (eyebrow + italic-serif title + sub)
+	//     + back button (internal state, NO URL change), then full-width section
+	//     content area.
+	// Mobile and desktop share the SAME shape now — no sidebar branch.
+	if (activeSection !== 'home') {
 		const menuItem = visibleItems.find((m) => m.id === activeSection)
 		return (
-			<div className='animate-in fade-in'>
-				{/* Mobile detail header */}
-				<div className='flex items-center gap-3 px-1 pb-4'>
-					<button
-						onClick={() => setActiveSection('home')}
-						className='flex h-11 w-11 items-center justify-center rounded-radius-md bg-surface-base text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary'
-					>
-						<TbArrowLeft className='h-5 w-5' />
-					</button>
-					<div className='min-w-0'>
-						<h1 className='text-heading font-semibold -tracking-2 truncate'>{menuItem?.label}</h1>
-						<p className='text-body-sm text-text-secondary truncate'>{menuItem?.description}</p>
-					</div>
-				</div>
-				{/* Section content with overflow protection */}
-				<div className='overflow-x-hidden'>
-					<AnimatePresence mode='wait'>
-						<motion.div
-							key={activeSection}
-							initial={{opacity: 0, x: 20}}
-							animate={{opacity: 1, x: 0}}
-							exit={{opacity: 0, x: -20}}
-							transition={{duration: 0.2, ease: 'easeOut'}}
-						>
-							<SectionContent section={activeSection} onBack={() => setActiveSection('home')} />
-						</motion.div>
-					</AnimatePresence>
-				</div>
-			</div>
+			<SettingsSectionViewV36
+				section={activeSection}
+				menuItem={menuItem}
+				onBack={() => setActiveSection('home')}
+			/>
 		)
 	}
 
-	// Mobile: home view - menu list only (no right-side placeholder)
-	if (isMobile) {
-		return (
-			<div className='animate-in fade-in'>
-				<Card className='!p-2'>
-					<div className='space-y-0.5'>
-						{visibleItems.map((item, i) => (
-							<motion.button
-								key={item.id}
-								onClick={() => setActiveSection(item.id)}
-								className='relative flex w-full items-center gap-3 rounded-radius-sm px-3 py-3 text-left transition-colors hover:bg-surface-2'
-								initial={{opacity: 0, x: -10}}
-								animate={{opacity: 1, x: 0}}
-								transition={{delay: i * 0.02, duration: 0.25, ease: 'easeOut'}}
-							>
-								<div className='flex h-9 w-9 items-center justify-center rounded-radius-sm bg-surface-2'>
-									<item.icon className='h-4.5 w-4.5 text-text-secondary' />
-								</div>
-								<div className='flex-1 min-w-0'>
-									<div className='text-body-sm font-medium truncate'>{item.label}</div>
-									<div className='text-caption-sm text-text-tertiary truncate'>{item.description}</div>
-								</div>
-								<TbChevronRight className='h-4 w-4 shrink-0 text-text-tertiary' />
-								<MenuItemBadge itemId={item.id} activeSection={activeSection} />
-							</motion.button>
-						))}
-					</div>
-				</Card>
-				<div className='mt-3'>
-					<ContactSupportLink />
-				</div>
-			</div>
-		)
-	}
+	return <SettingsHomeV36 items={visibleItems} activeSection={activeSection} onSelect={setActiveSection} />
+}
 
-	// If a section is selected, show master-detail view (desktop)
-	if (activeSection !== 'home') {
-		return (
-			<div className='animate-in fade-in'>
-				<SettingsDetailView
-					section={activeSection}
-					onBack={() => setActiveSection('home')}
-					onNavigate={(section) => setActiveSection(section)}
-					visibleItems={visibleItems}
-				/>
-			</div>
-		)
-	}
+// ─────────────────────────────────────────────────────────────────────────────
+// Home view — v36 single-column hairline list
+// ─────────────────────────────────────────────────────────────────────────────
 
-	// Desktop: home view with sidebar menu + placeholder card
+function SettingsHomeV36({
+	items,
+	activeSection,
+	onSelect,
+}: {
+	items: MenuItem[]
+	activeSection: SettingsSection
+	onSelect: (s: SettingsSection) => void
+}) {
 	return (
-		<div className='animate-in fade-in'>
-			<div className='grid w-full gap-x-[30px] gap-y-[20px] lg:grid-cols-[280px_auto]'>
-				{/* Left Sidebar - Menu */}
-				<div className='flex flex-col gap-3'>
-					{/* Menu Items */}
-					<Card className='!p-2'>
-						<div className='space-y-0.5'>
-							{visibleItems.map((item, i) => (
-								<motion.button
-									key={item.id}
-									onClick={() => setActiveSection(item.id)}
-									className='relative flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2'
-									initial={{opacity: 0, x: -10}}
-									animate={{opacity: 1, x: 0}}
-									transition={{delay: i * 0.02, duration: 0.25, ease: 'easeOut'}}
-								>
-									<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-surface-2'>
-										<item.icon className='h-4 w-4 text-text-secondary' />
-									</div>
-									<div className='flex-1 min-w-0'>
-										<div className='text-body-sm font-medium truncate'>{item.label}</div>
-										<div className='text-caption-sm text-text-tertiary truncate'>{item.description}</div>
-									</div>
-									<TbChevronRight className='h-4 w-4 text-text-tertiary' />
-									<MenuItemBadge itemId={item.id} activeSection={activeSection} />
-								</motion.button>
-							))}
-						</div>
-					</Card>
+		<div className='animate-in fade-in px-1 pb-12'>
+			<header className='flex flex-col gap-3 pt-2 pb-8 border-b border-line'>
+				<span className='font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint flex items-center gap-2'>
+					<span className='inline-block h-1.5 w-1.5 rounded-full bg-fg' aria-hidden='true' />
+					Settings
+				</span>
+				<h1 className='text-[clamp(34px,4vw,46px)] font-medium leading-[1.05] tracking-[-0.035em] text-fg text-balance'>
+					Tune <em className='font-serif italic font-normal text-fg-mute'>LivOS.</em>
+				</h1>
+				<p className='text-[15px] leading-[1.5] text-fg-mute max-w-[56ch]'>
+					Every knob, switch, and account toggle lives here. Pick a row to open it — sections render in-place, no URL navigation.
+				</p>
+			</header>
 
-					<ContactSupportLink />
-				</div>
+			<div className='mt-8 rounded-[var(--r-lg)] border border-line bg-[color:var(--bg)] overflow-hidden divide-y divide-line'>
+				{items.map((item, i) => {
+					const Icon = item.icon
+					const num = String(i + 1).padStart(2, '0')
+					return (
+						<motion.button
+							key={item.id}
+							onClick={() => onSelect(item.id)}
+							className='group grid w-full grid-cols-[44px_1fr_auto] items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-[color:var(--bg-2)]'
+							initial={{opacity: 0, x: -8}}
+							animate={{opacity: 1, x: 0}}
+							transition={{delay: Math.min(i, 12) * 0.02, duration: 0.25, ease: [0.2, 0.7, 0.2, 1]}}
+						>
+							<div className='font-mono text-[10.5px] uppercase tracking-[0.14em] text-fg-faint w-11'>
+								{num}
+							</div>
+							<div className='flex items-center gap-3 min-w-0'>
+								<div className='flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-line bg-[color:var(--bg-2)] text-fg'>
+									<Icon className='h-4 w-4' />
+								</div>
+								<div className='min-w-0'>
+									<div className='text-[15px] font-medium tracking-[-0.005em] text-fg truncate'>
+										{item.label}
+									</div>
+									<div className='text-[13px] text-fg-mute truncate mt-0.5'>
+										{item.description}
+									</div>
+								</div>
+								<MenuItemBadge itemId={item.id} activeSection={activeSection} />
+							</div>
+							<div className='font-mono text-[11px] uppercase tracking-[0.12em] text-fg-faint group-hover:text-fg-mute transition-colors'>
+								Open →
+							</div>
+						</motion.button>
+					)
+				})}
+			</div>
 
-				{/* Right Side */}
-				<div className='flex flex-col gap-5'>
-					{/* Quick Info */}
-					<Card>
-						<div className='text-center py-8'>
-							<div className='text-body-lg font-medium text-text-secondary'>Select a setting from the menu</div>
-							<div className='text-body-sm text-text-tertiary mt-1'>Configure your Livinity device</div>
-						</div>
-					</Card>
-				</div>
+			<div className='mt-6'>
+				<ContactSupportLink />
+			</div>
+		</div>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section view — v36 SettingsPageHeader pattern + full-width content
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SettingsSectionViewV36({
+	section,
+	menuItem,
+	onBack,
+}: {
+	section: SettingsSection
+	menuItem?: MenuItem
+	onBack: () => void
+}) {
+	return (
+		<div className='animate-in fade-in px-1 pb-12'>
+			<header className='flex flex-col gap-3 pt-2 pb-7 border-b border-line'>
+				<button
+					type='button'
+					onClick={onBack}
+					className='flex items-center gap-1.5 self-start text-[12px] font-mono uppercase tracking-[0.1em] text-fg-mute transition-colors hover:text-fg'
+				>
+					<TbArrowLeft className='h-3.5 w-3.5' />
+					Settings
+				</button>
+				<h1 className='text-[clamp(28px,3.4vw,40px)] font-medium leading-[1.05] tracking-[-0.03em] text-fg text-balance'>
+					{menuItem?.label.split(' ')[0]}{' '}
+					{menuItem?.label.split(' ').slice(1).join(' ') && (
+						<em className='font-serif italic font-normal text-fg-mute'>
+							{menuItem.label.split(' ').slice(1).join(' ')}.
+						</em>
+					)}
+				</h1>
+				{menuItem?.description && (
+					<p className='text-[14px] leading-[1.5] text-fg-mute max-w-[56ch]'>{menuItem.description}.</p>
+				)}
+			</header>
+
+			<div className='mt-8'>
+				<AnimatePresence mode='wait'>
+					<motion.div
+						key={section}
+						initial={{opacity: 0, y: 8}}
+						animate={{opacity: 1, y: 0}}
+						exit={{opacity: 0, y: -8}}
+						transition={{duration: 0.22, ease: [0.2, 0.7, 0.2, 1]}}
+					>
+						<SectionContent section={section} onBack={onBack} />
+					</motion.div>
+				</AnimatePresence>
 			</div>
 		</div>
 	)
