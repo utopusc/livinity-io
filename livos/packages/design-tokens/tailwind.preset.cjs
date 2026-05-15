@@ -24,12 +24,13 @@ module.exports = {
         "accent-green": "#16a34a",
         "accent-amber": "#d97706",
         "accent-red":   "#dc2626",
-        // Surface tokens — REVERTED 2026-05-15. Flipping these caused
-        // colour collisions with legacy widgets that ship hardcoded white
-        // backgrounds. card-bg stays light; dark-mode opt-ins go through
-        // `dark:` Tailwind variants per-surface (e.g. the dock).
-        "card-bg":   "#ffffff",
-        "card-bg-2": "#fafafa",
+        // 2026-05-15 (third pass) — card-bg / card-bg-2 wired to CSS vars so
+        // the dock, window frame, and every Card consumer pick up dark-mode
+        // values from tokens.css body.dark. The standalone surfaces with
+        // hardcoded `bg-white` (~60 leaf widgets, mostly file-toolbar bits)
+        // stay light per their own utility classes.
+        "card-bg":   "var(--card-bg)",
+        "card-bg-2": "var(--card-bg-2)",
         // Line tokens — match --dash-line / --dash-line-strong in tokens.css
         "dash-line":        "rgba(0,0,0,0.07)",
         "dash-line-strong": "rgba(0,0,0,0.12)",
