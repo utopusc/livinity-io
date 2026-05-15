@@ -10,6 +10,7 @@
 - ✅ **v32.0 AI Chat Ground-up Rewrite + Hermes Background Runtime** — Phases 80-91 (CODE-COMPLETE 2026-05-06 via autonomous wave-based dispatch; pending Mini PC UAT signoff — see [.planning/phases/91-uat-polish/UAT-CHECKLIST.md](phases/91-uat-polish/UAT-CHECKLIST.md))
 - ✅ **v33.0 WebApp Launcher + Teach/Auto Modes** — Phases 92-98 (CODE-COMPLETE 2026-05-08; pending Mini PC UAT signoff — see [.planning/phases/98-uat-polish/UAT-CHECKLIST.md](phases/98-uat-polish/UAT-CHECKLIST.md))
 - ✅ **v35.0 Design System Unification (UI/UX)** — Phases 115-121 (shipped 2026-05-15; 77 commits, sacred SHA preserved 77/77, AC#3 cross-surface parity 92.5%, operator UAT pending) — see [milestones/v35.0-ROADMAP.md](milestones/v35.0-ROADMAP.md)
+- 🟢 **v36.0 LivOS Design Port** — Phases 122-129 (active 2026-05-15; 8-step additive port of the Livinity Design System from claude.ai/design into `livos/packages/ui/` — component-by-component, screenshot per step). Master plan: [v36-DESIGN-PORT-MASTER.md](v36-DESIGN-PORT-MASTER.md). Superseded the old [v36-DRAFT.md](v36-DRAFT.md) (segment-dock direction rejected; see [feedback-v36-no-bold-redesigns](../../../.claude/projects/.../memory/feedback_v36_no_bold_redesigns.md)).
 - ⏸ **(deferred) Backup & Restore** — paused, 8 phases / 47 BAK-* reqs defined in [milestones/v30.0-DEFINED/](milestones/v30.0-DEFINED/) (resumes as future slot e.g. v34+)
 
 ---
@@ -1146,4 +1147,124 @@ Plans:
 **Acceptance criteria (milestone-level):** see `v35-DESIGN-SYSTEM-MILESTONE.md` § "Acceptance criteria".
 
 **Out of scope (v36+ candidates):** mobile app design, Agent Electron UI port, marketing copy refresh, email templates, Storybook→Figma sync, marketplace + changelog services, apps.livinity.io dark mode.
+
+---
+
+### 🟢 v36.0 LivOS Design Port (Active — Phases 122-129)
+
+**Status (2026-05-15):** Opened after the original `v36-DRAFT.md` (segment-dock direction) was rejected in Phase 122 v1 (`3e8734f8` reverted to `bd1adc27`). User dropped a 10MB design handoff bundle from `claude.ai/design` (Livinity Design System, user-authored) and re-scoped v36 as a **component-by-component additive port** of that system into `livos/packages/ui/`. Master plan: [v36-DESIGN-PORT-MASTER.md](v36-DESIGN-PORT-MASTER.md). Design bundle local copies: `.planning/design-system/`.
+
+**Direction:**
+- 8 phases mapping to the 8-step port-guide in `design-system.html` §20 (tokens → button → section-head → field-card → plan-card → stat-tile → app-tile → chat-bubble)
+- **Additive only** — new tokens/components ship parallel to existing. ZERO renames or breaking changes until each legacy consumer is migrated.
+- **Micro-commits** — every visible change ships as the smallest atomic commit. Screenshot + user UAT before stacking. Multiple visual changes in one commit = rejected per [feedback_v36_no_bold_redesigns.md].
+- **STRICTLY SEQUENTIAL** — Phase N starts only after Phase N-1 ships AND user UAT-approves the visible delta. No parallel work.
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved through every commit.
+- Mini PC UI ONLY — Server5 + landing untouched.
+
+**Depends on:** v35.0 ✅ Shipped (provides `@livinity/design-tokens` + `@livinity/ui-kit` foundation).
+
+**Phases (8 total — planned one-at-a-time via `/gsd-plan-phase`):**
+
+---
+
+### Phase 122: Design Tokens (Additive Port, Step 1 of 8) — 🟡 PLANNED 2026-05-15
+
+**Goal:** Add Livinity Design System tokens (`--fg/--bg/--surface/--line/--r-*/--shadow-window/--shadow-pop/--ease-out-v36`) to `@livinity/design-tokens` package WITHOUT removing or renaming any existing token. After this phase ships, new Tailwind utilities (`bg-fg`, `text-fg-mute`, `border-line`, `rounded-r-lg`, `shadow-window-soft`, etc.) are usable but no component visibly changes.
+
+**Direction:**
+- Touched: `livos/packages/design-tokens/{tokens.css, tailwind.preset.cjs, DESIGN-SYSTEM.md}` (3 files)
+- NOT touched: `livos/packages/ui/src/**` (D-122-NO-CONSUMER-CHANGES)
+- Existing `--accent-blue/--dash-line/--card-shadow/--hero-grad/--card-bg/--dash-radius` byte-unchanged (D-122-ADDITIVE verified by grep)
+- Visible delta: **NONE expected** — smoke verifies screenshot byte-equal to last approved state
+
+**Plans:** 4 atomic commits (tokens.css → tailwind.preset.cjs → smoke verification → DESIGN-SYSTEM.md doc)
+
+**Detailed plan:** [phases/122-design-tokens-additive-port/122-PLAN.md](phases/122-design-tokens-additive-port/122-PLAN.md)
+
+**Estimated:** 30-60 min including smoke + commit loop.
+
+**Depends on:** v35.0 design-tokens foundation ✅. Existing `--card-shadow` already byte-equals new `--shadow-card` (verified) → aliases not duplicates.
+
+**UAT:** Build green + Vite HMR clean + browser screenshot diff = noise only. NO Mini PC deploy required (no visible delta).
+
+---
+
+### Phase 123: Button Shadcn Override (Step 2 of 8) — 🔵 BLOCKED on P122
+
+**Goal:** Override `livos/packages/ui/src/shadcn-components/ui/button.tsx` variants to match design-system.html §04 — pill radius (`rounded-r-full`), `fg/bg` invert primary (black bg / white text), hairline `border border-line-strong` ghost, `rgba(220,38,38,0.3)` border danger, square icon-only.
+
+**Direction:** Variant-by-variant commits. Old shadcn variant names preserved (backward-compatible) so unmigrated callsites stay green. Screenshot per variant for UAT.
+
+**Plans:** TBD (write when P122 ships) — estimated 4-5 plans.
+
+**Depends on:** Phase 122 ✅.
+
+---
+
+### Phase 124: Section-Head Pattern as `<SettingsPageHeader/>` (Step 3 of 8) — 🔵 BLOCKED on P123
+
+**Goal:** New shared component `livos/packages/ui/src/components/settings-page-header.tsx` per design-system.html §17 — `eyebrow (mono uppercase 11px) → italic-serif h2 → 14px body sub`. Proof of use on ONE settings page.
+
+**Plans:** TBD — estimated 2-3 plans.
+
+**Depends on:** Phase 123 ✅ (Button variants used inside the header for "Edit" / "Open" affordances).
+
+---
+
+### Phase 125: Field-Card + List-Row (Step 4 of 8) — 🔵 BLOCKED on P124
+
+**Goal:** Migrate ONE Settings panel (`src/routes/settings/_components/settings-content.tsx`) to field-card pattern per §05/§06 — `180px / 1fr / auto` grid, gradient peach→pink avatar (only color permitted).
+
+**Plans:** TBD — estimated 3-4 plans.
+
+**Depends on:** Phase 124 ✅.
+
+---
+
+### Phase 126: Plan Card (3 + Featured) (Step 5 of 8) — 🔵 BLOCKED on P125
+
+**Goal:** `src/routes/settings/usage-dashboard.tsx` tier section adopts §08 — 3 plan cards with featured "beige wash" highlight + Recommended pill.
+
+**Plans:** TBD — estimated 2-3 plans.
+
+**Depends on:** Phase 125 ✅.
+
+---
+
+### Phase 127: Stat Tile + Hairline Progress (Step 6 of 8) — 🔵 BLOCKED on P126
+
+**Goal:** CPU/Memory/Storage cards (`_components/{cpu,memory,storage}-card-content.tsx`) adopt §11 — 4px hairline progress + mono `em` unit label. Old gradient bars retired.
+
+**Plans:** TBD — estimated 3-4 plans.
+
+**Depends on:** Phase 126 ✅.
+
+---
+
+### Phase 128: App Tile (Monogram) (Step 7 of 8) — 🔵 BLOCKED on P127
+
+**Goal:** App Store rows (`src/modules/app-store/*`) get §09 — 34×34 monogram glyph variant for apps without icons. Dock untouched in this phase.
+
+**Plans:** TBD — estimated 2-3 plans.
+
+**Depends on:** Phase 127 ✅.
+
+---
+
+### Phase 129: Chat Bubble (Step 8 of 8) — 🔵 BLOCKED on P128
+
+**Goal:** `src/routes/ai-chat/*` bubbles adopt §13 — user = `fg` solid (black bg / white text), Liv = `surface` with hairline border. Asymmetric layout. No emoji.
+
+**Plans:** TBD — estimated 2-3 plans.
+
+**Depends on:** Phase 128 ✅.
+
+---
+
+**Total v36 estimate:** 22-30 atomic commits across 8 phases (each phase 30-60 min including HMR + screenshot + user UAT round-trip).
+
+**Acceptance criteria (milestone-level):** see `.planning/v36-DESIGN-PORT-MASTER.md` § "The 8 port steps" — every phase has its own AC block.
+
+**Out of scope:** Replacing `--accent-blue` site-wide (v37), dark mode token transcription (D-116-FOLLOW-UP-DARK), iridescent (D-116-FOLLOW-UP-IRIDESCENT), OS window chrome §14, terminal §15, greeting card §16, motion language §18 (v37+ candidates).
 

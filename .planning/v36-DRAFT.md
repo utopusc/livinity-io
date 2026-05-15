@@ -1,4 +1,7 @@
-# v36 LivOS Visual Redesign — DRAFT
+# v36 LivOS Visual Redesign — DRAFT (SUPERSEDED)
+
+> ⚠️ **SUPERSEDED 2026-05-15** by `.planning/v36-DESIGN-PORT-MASTER.md`.
+> The phase content below (segment dock, hover lift, accent-blue dot, etc.) was rejected by the user in Phase 122 v1 (commit `3e8734f8` reverted to `bd1adc27`). The replacement direction is an **additive port of the Livinity Design System** (claude.ai/design handoff bundle, 2026-05-15). See the master plan for the new 8-phase structure. This file is kept as historical context — DO NOT execute against it.
 
 **Status:** DRAFT — written 2026-05-15 after v35.0 close.
 **Source:** Interactive proposal during local dev session — user reviewed Mini PC UI at `http://localhost:3000` (Vite dev, backend `https://test.livinity.live`) and asked for concrete redesign suggestions across 10 areas.
