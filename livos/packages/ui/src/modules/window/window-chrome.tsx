@@ -20,7 +20,7 @@ export function WindowChrome({title, icon, onClose}: WindowChromeProps) {
 							e.stopPropagation()
 							onClose()
 						}}
-						className='group flex items-center justify-center w-9 h-9 rounded-full bg-white/90 backdrop-blur-xl border border-neutral-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.08)] hover:bg-destructive hover:border-destructive/80 transition-all duration-200'
+						className='group flex items-center justify-center w-9 h-9 rounded-full bg-card-bg/90 backdrop-blur-xl border border-dash-line shadow-[0_2px_8px_rgba(0,0,0,0.08)] hover:bg-destructive hover:border-destructive/80 transition-all duration-200'
 						aria-label='Close window'
 					>
 						<TbX className='h-4 w-4 text-neutral-400 group-hover:text-white transition-colors' strokeWidth={2.5} />
@@ -29,7 +29,7 @@ export function WindowChrome({title, icon, onClose}: WindowChromeProps) {
 			</div>
 
 			{/* Title pill - this is what gets centered */}
-			<div className='flex items-center px-4 py-2 bg-white/90 backdrop-blur-xl rounded-full border border-neutral-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.08)]'>
+			<div className='flex items-center px-4 py-2 bg-card-bg/90 backdrop-blur-xl rounded-full border border-dash-line shadow-[0_2px_8px_rgba(0,0,0,0.08)]'>
 				<span className='text-[13px] font-semibold text-neutral-700 tracking-tight whitespace-nowrap select-none'>
 					{title}
 				</span>

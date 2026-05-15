@@ -237,12 +237,12 @@ const windowClass = tw`
 	flex
 	flex-col
 	rounded-[20px]
-	bg-white/95
+	bg-card-bg/95
 	backdrop-blur-xl
 	overflow-hidden
 	shadow-[0_8px_30px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]
 	border
-	border-neutral-200/50
+	border-dash-line
 `
 
 const windowContentClass = tw`
