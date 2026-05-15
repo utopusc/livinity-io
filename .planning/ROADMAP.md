@@ -1268,3 +1268,23 @@ Plans:
 
 **Out of scope:** Replacing `--accent-blue` site-wide (v37), dark mode token transcription (D-116-FOLLOW-UP-DARK), iridescent (D-116-FOLLOW-UP-IRIDESCENT), OS window chrome §14, terminal §15, greeting card §16, motion language §18 (v37+ candidates).
 
+---
+
+### Phase 130: Dark-Mode Polish + Top Bar + AI Chat Modernization — 🟢 IN-PROGRESS 2026-05-15 (commits c8b7866f, 99cef55e, 2fb06e15, 900b3bda, d986c6d0, 1e7c55f5, fc154cf5, 6526607e, cacd03cd — sacred SHA preserved 9/9, awaiting Mini PC UAT)
+
+**Goal:** UAT round on the v36-shipped surfaces — dark-mode token wiring fixes, Settings sidebar polish (Liv Agent drop, Troubleshoot 2-tab, Software Update/Advanced re-promotion), TopBar v1→v3 evolution (compact pill, expand-on-drag, drop-zone shelf, profile dropdown), AI Chat modernization (pill composer, monochrome bubbles), Files dark-mode regressions.
+
+**Plans:** 9 sub-plans shipped (130-01 through 130-09).
+
+**Depends on:** v36.0 milestone (Phases 122-129) ✅ CODE-COMPLETE.
+
+---
+
+### Phase 131: Pinned-Windows Architecture — 🔴 PLANNED 2026-05-15 (pinned-window drag-drop currently broken in Phase 130-09; persistent background-running pinned windows is a new architectural feature)
+
+**Goal:** Make pinned windows a first-class OS-shaped concept: (a) drag-to-pin actually works, (b) pinned windows persist across page refreshes / navigation, (c) their underlying app session keeps running in the background, (d) AI agents can read + control them while the user is elsewhere on the site or has it closed. Touches the WindowManager, the window-frame drag pipeline, backend persistence, the AI agent loop, the TopBar UI, and any per-app session preservation (stream windows, WebApp Chrome sessions).
+
+**Plans:** TBD — estimated 5-7 plans (see `.planning/phases/131-pinned-windows-architecture/131-PLAN.md`).
+
+**Depends on:** Phase 130 ✅ (130-09 dropped the localStorage pinned-IDs cache + introduced `WindowState.isPinnedToTopBar` which 131 builds on).
+
