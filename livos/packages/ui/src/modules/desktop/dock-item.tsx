@@ -173,18 +173,24 @@ export function DockItem({
 				}}
 			/>
 			{/* icon */}
+			{/* Phase 122 (v36): macOS-style lift on direct hover layered on top of
+			    the existing mouseX-driven magnify. transform-origin is bottom so
+			    the lift reads as "rising off the dock" instead of growing sideways. */}
 			<motion.div
 				ref={iconRef}
 				className={cn(
-					'relative origin-top-left rounded-radius-lg bg-surface-2 transform-gpu backdrop-blur-md border border-border-emphasis transition-[filter] has-[:focus-visible]:brightness-125 flex items-center justify-center',
+					'relative rounded-radius-lg bg-surface-2 transform-gpu backdrop-blur-md border border-border-emphasis transition-[filter] has-[:focus-visible]:brightness-125 flex items-center justify-center',
 					className,
 				)}
 				style={{
 					width: iconSize,
 					height: iconSize,
 					scale: transform,
+					transformOrigin: 'bottom center',
 					...style,
 				}}
+				whileHover={{y: -6}}
+				transition={{type: 'spring', stiffness: 320, damping: 22}}
 				onClick={(e) => {
 					setClickedOpen(true)
 					onClick?.(e)
@@ -273,17 +279,25 @@ function DockTooltip({label, isVisible, anchorRef}: {label?: string; isVisible: 
 	)
 }
 
+// Phase 122 (v36): active-app indicator is a 4px accent-blue dot (was a 10×2
+// neutral bar). The shape is the same shorthand macOS uses for "this app has a
+// window open" and immediately telegraphs which dock entries are live.
 function OpenPill() {
 	return (
 		<motion.div
-			className='absolute -bottom-[7px] left-1/2 h-[2px] w-[10px] -translate-x-1/2 rounded-full bg-text-primary'
+			className='absolute -bottom-[8px] left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent-blue shadow-[0_0_8px_rgba(37,99,235,0.55)]'
 			initial={{
 				opacity: 0,
+				scale: 0.6,
 			}}
 			animate={{
 				opacity: 1,
+				scale: 1,
 				transition: {
 					delay: BOUNCE_DURATION,
+					type: 'spring',
+					stiffness: 280,
+					damping: 18,
 				},
 			}}
 		/>
