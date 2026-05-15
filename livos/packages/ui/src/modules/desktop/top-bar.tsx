@@ -8,6 +8,9 @@ import {useCurrentUser} from '@/hooks/use-current-user'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useLinkToDialog} from '@/utils/dialog'
 import {useUserName} from '@/hooks/use-user-name'
+import {useWindowManagerOptional} from '@/providers/window-manager'
+import {systemAppsKeyed} from '@/providers/apps'
+import {cn} from '@/shadcn-lib/utils'
 import {
 	Dialog,
 	DialogContent,
@@ -21,25 +24,30 @@ import {Button} from '@/shadcn-components/ui/button'
 import {t} from '@/utils/i18n'
 
 /**
- * v36 LivOS Design Port — TopBar v2 (Phase 130-05).
+ * v36 LivOS Design Port — TopBar v2 (Phase 130-05 + 130-06 expand).
  *
- * Reference: `Downloads/topbar.html` (user-supplied 2026-05-15). Compact
- * pill shell (max-width 720px) with three columns:
+ * Reference: `Downloads/topbar.html` (user-supplied 2026-05-15).
  *
- *   Left   — avatar + name pill (click → dropdown with Change name /
- *            Change icon / Restart / Log out, matching the old DockProfile
- *            UX 1:1).
- *   Center — brand donut, 40×40 round button, donut mark 24×24.
- *   Right  — live clock (HH:MM + AM/PM badge) + Istanbul · 18°C location
- *            row underneath.
+ * COMPACT state (default, max-width 720px):
+ *   Left   — avatar + name pill (click → dropdown).
+ *   Center — brand donut (40×40 round button, donut mark 24×24).
+ *   Right  — live clock + "Istanbul · 18°C" location row.
  *
- * Window logic note: the original reference adds expanding nav links on
- * hover (Home/Apps/Files…/Liv/Storage/Settings). LivOS is window-based,
- * not URL-routed (per `feedback_livos_window_logic_no_url_routing`), so
- * those nav-link slots are intentionally NOT ported. The bar stays
- * compact.
+ * EXPANDED state (max-width 1180px, ~550ms ease-out):
+ *   The bar widens and reveals six nav-launcher pills on either side of
+ *   the brand donut:
+ *     Home · Apps · Files       — left of logo
+ *     Liv  · Storage · Settings — right of logo
+ *   Each link opens its corresponding dock window via windowManager
+ *   (window-only paradigm preserved per feedback_livos_window_logic).
  *
- * Reuses the DockProfile dropdown actions (ChangeName + ChangeIcon
+ * Trigger: hovering THE LOGO toggles expansion; cursor leaving the
+ * whole bar collapses it again. This way once expanded the user can
+ * use the revealed nav links without the bar snapping shut. Per
+ * 2026-05-15 user direction ("Logonun uzerine geldigimde buyumesi
+ * gerekiyordu ... genislemesi").
+ *
+ * Reuses the old DockProfile dropdown actions (ChangeName + ChangeIcon
  * popups) inline so the entry point and the destination both move with
  * the avatar.
  */
@@ -59,6 +67,7 @@ function TopBarDesktop() {
 	const navigate = useNavigate()
 	const linkToDialog = useLinkToDialog()
 	const {user} = useCurrentUser()
+	const windowManager = useWindowManagerOptional()
 
 	const userQ = trpcReact.user.get.useQuery()
 	const userName = userQ.data?.name || user?.name || 'User'
@@ -70,7 +79,24 @@ function TopBarDesktop() {
 	const [menuOpen, setMenuOpen] = useState(false)
 	const [showChangeName, setShowChangeName] = useState(false)
 	const [showChangeIcon, setShowChangeIcon] = useState(false)
+	const [isExpanded, setIsExpanded] = useState(false)
 	const profileWrapRef = useRef<HTMLDivElement>(null)
+
+	const openAppWindow = (appId: string, route: string, title: string) => {
+		if (!windowManager) return
+		const icon = (systemAppsKeyed as Record<string, {icon?: string}>)[appId]?.icon ?? ''
+		windowManager.openWindow(appId, route, title, icon)
+	}
+	const navItemsLeft: NavItem[] = [
+		{label: 'Home', onClick: () => undefined, active: true},
+		{label: 'Apps', onClick: () => openAppWindow('LIVINITY_app-store', '/app-store', 'App Store')},
+		{label: 'Files', onClick: () => openAppWindow('LIVINITY_files', '/files/Home', 'Files')},
+	]
+	const navItemsRight: NavItem[] = [
+		{label: 'Liv', onClick: () => openAppWindow('LIVINITY_ai-chat', '/ai-chat', 'AI Chat')},
+		{label: 'Storage', onClick: () => openAppWindow('LIVINITY_server-control', '/server-control', 'Server Management')},
+		{label: 'Settings', onClick: () => openAppWindow('LIVINITY_settings', '/settings', 'Settings')},
+	]
 
 	useEffect(() => {
 		if (!menuOpen) return
@@ -105,10 +131,19 @@ function TopBarDesktop() {
 				aria-label='Top bar'
 			>
 				<nav
-					className='pointer-events-auto grid h-16 w-full max-w-[720px] grid-cols-[1fr_auto_1fr] items-center gap-2.5 rounded-full border border-line bg-card-bg/78 px-3.5 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55 shadow-[0_18px_50px_-28px_rgba(0,0,0,0.22)] dark:shadow-[0_18px_50px_-20px_rgba(0,0,0,0.6)]'
+					onMouseLeave={() => setIsExpanded(false)}
+					className={cn(
+						'pointer-events-auto grid h-16 w-full grid-cols-[1fr_auto_1fr] items-center gap-2.5 rounded-full border bg-card-bg/78 px-3.5 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55',
+						// Width + border + shadow morph between compact and expanded
+						// states. Reference: topbar.html .topbar { max-width:720 ➜ 1180 }.
+						'transition-[max-width,border-color,box-shadow] duration-[550ms] ease-out-v36',
+						isExpanded
+							? 'max-w-[1180px] border-line-strong shadow-[0_18px_50px_-28px_rgba(0,0,0,0.22)] dark:shadow-[0_18px_50px_-20px_rgba(0,0,0,0.6)]'
+							: 'max-w-[720px] border-line shadow-none',
+					)}
 					aria-label='Top bar'
 				>
-					{/* LEFT — profile */}
+					{/* LEFT — profile + (on expand) nav links */}
 					<div className='flex min-w-0 items-center justify-start gap-2'>
 						<div ref={profileWrapRef} className='relative min-w-0'>
 							<button
@@ -182,10 +217,17 @@ function TopBarDesktop() {
 								</motion.div>
 							)}
 						</div>
+
+						{/* Left nav group — revealed on expand. Fades + slides in. */}
+						<TopBarNavGroup items={navItemsLeft} side='left' visible={isExpanded} />
 					</div>
 
-					{/* CENTER — brand donut */}
-					<div className='flex items-center justify-center px-2'>
+					{/* CENTER — brand donut. Hovering this triggers the expand
+					    per user direction 2026-05-15. */}
+					<div
+						className='flex items-center justify-center px-2'
+						onMouseEnter={() => setIsExpanded(true)}
+					>
 						<button
 							type='button'
 							onClick={() => undefined}
@@ -204,8 +246,9 @@ function TopBarDesktop() {
 						</button>
 					</div>
 
-					{/* RIGHT — clock + location (Istanbul · 18°C) */}
+					{/* RIGHT — (on expand) nav links + clock + location */}
 					<div className='flex items-center justify-end gap-2.5 pr-1.5'>
+						<TopBarNavGroup items={navItemsRight} side='right' visible={isExpanded} />
 						<ClockWithLocation />
 					</div>
 				</nav>
@@ -214,6 +257,53 @@ function TopBarDesktop() {
 			<ChangeNamePopup open={showChangeName} onOpenChange={setShowChangeName} />
 			<ChangeIconPopup open={showChangeIcon} onOpenChange={setShowChangeIcon} userId={userId} />
 		</>
+	)
+}
+
+// ── Expandable nav group ────────────────────────────────────────────
+
+type NavItem = {label: string; onClick: () => void; active?: boolean}
+
+function TopBarNavGroup({items, side, visible}: {items: NavItem[]; side: 'left' | 'right'; visible: boolean}) {
+	// Stagger fade-in per topbar.html reference (lines 176-187): each link
+	// shifts up 4px on collapse and slides back into place on expand, with
+	// a 50ms cascade per index.
+	return (
+		<div
+			className={cn(
+				'flex items-center gap-1.5 transition-[opacity,transform] duration-[350ms] ease-out-v36',
+				side === 'left' ? 'ml-1.5' : 'mr-1',
+				visible
+					? 'opacity-100 translate-x-0 pointer-events-auto'
+					: cn('opacity-0 pointer-events-none', side === 'left' ? '-translate-x-2' : 'translate-x-2'),
+			)}
+			aria-hidden={!visible}
+		>
+			{items.map((item, i) => (
+				<button
+					key={item.label}
+					type='button'
+					onClick={item.onClick}
+					tabIndex={visible ? 0 : -1}
+					className={cn(
+						'inline-flex items-center rounded-full px-3 py-2 text-[13px] font-medium tracking-[-0.005em] whitespace-nowrap transition-[opacity,transform,background,color] ease-out-v36',
+						visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1',
+						item.active
+							? 'text-[color:var(--fg)]'
+							: 'text-[color:var(--fg-dim)] hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]',
+					)}
+					style={{transitionDelay: visible ? `${120 + i * 50}ms` : '0ms', transitionDuration: '350ms'}}
+				>
+					{item.label}
+					{item.active && (
+						<span
+							className='ml-1 inline-block h-0.5 w-3.5 rounded bg-[color:var(--fg)]'
+							aria-hidden='true'
+						/>
+					)}
+				</button>
+			))}
+		</div>
 	)
 }
 
