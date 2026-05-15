@@ -232,17 +232,24 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 	)
 })
 
+// 2026-05-15 — dark-mode window chrome. Frosted-glass shell flips to a deep
+// slate-glass: `dark:bg-zinc-900/95` keeps the same 95% opacity so dragging
+// reads identically, `dark:border-white/10` gives the hairline back, and the
+// shadow is replaced with a heavier ambient drop tuned for dark backdrops.
 const windowClass = tw`
 	fixed
 	flex
 	flex-col
 	rounded-[20px]
 	bg-card-bg/95
+	dark:bg-zinc-900/95
 	backdrop-blur-xl
 	overflow-hidden
 	shadow-[0_8px_30px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]
+	dark:shadow-[0_8px_30px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.04)]
 	border
 	border-dash-line
+	dark:border-white/10
 `
 
 const windowContentClass = tw`

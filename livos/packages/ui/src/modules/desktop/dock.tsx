@@ -295,7 +295,11 @@ export function DockBottomPositioner({children}: {children: React.ReactNode}) {
 // wallpaper bleeds through, push blur one step (2xl→3xl), add saturate so
 // colors behind the dock punch through. Apple's frosted-glass trick.
 // Same shape/position/layout/icons — only the glass effect changes.
-const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-card-bg/50 contrast-more:bg-neutral-700 backdrop-blur-3xl backdrop-saturate-150 contrast-more:backdrop-blur-none px-3 shadow-dock shrink-0 will-change-transform transform-gpu border-px border-white/60`
+//
+// 2026-05-15 — dark-mode pass. The dark dock is a slate-glass shelf: deeper
+// translucent black so the wallpaper barely bleeds, a hairline white border
+// for definition, and a darker shadow tuned for low-light contrast.
+const dockClass = tw`mx-auto flex items-end gap-3 rounded-radius-xl bg-card-bg/50 dark:bg-black/55 contrast-more:bg-neutral-700 backdrop-blur-3xl backdrop-saturate-150 contrast-more:backdrop-blur-none px-3 shadow-dock dark:shadow-[0_10px_32px_rgba(0,0,0,0.55)] shrink-0 will-change-transform transform-gpu border-px border-white/60 dark:border-white/12`
 const dockPreviewClass = tw`mx-auto flex items-end gap-4 rounded-radius-xl bg-card-bg/80 backdrop-blur-md px-3 shadow-dock shrink-0 border-hpx border-border-default`
 
 function RecentAppsDock({mouseX, iconSize, iconSizeZoomed}: {mouseX: ReturnType<typeof useMotionValue<number>>; iconSize: number; iconSizeZoomed: number}) {
