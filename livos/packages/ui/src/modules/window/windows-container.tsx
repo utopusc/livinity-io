@@ -44,6 +44,7 @@ export function WindowsContainer() {
 								size={window.size}
 								zIndex={window.zIndex}
 								originRect={window.originRect}
+								isPinnedToTopBar={window.isPinnedToTopBar}
 							>
 								<WindowContent route={window.route} appId={window.appId} />
 							</Window>

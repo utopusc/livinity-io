@@ -28,6 +28,11 @@ export type WindowState = {
 	size: Size
 	zIndex: number
 	isMinimized: boolean
+	// Phase 130-09 — when true, the window is "docked" to the TopBar shelf.
+	// Visually it collapses (scale 0.05 / opacity 0) toward the shelf chip
+	// position; semantically the window stays alive in the manager so it
+	// keeps running in the background (future: AI controls).
+	isPinnedToTopBar?: boolean
 	title: string
 	icon: string
 	originRect?: OriginRect
@@ -47,6 +52,8 @@ type WindowManagerContextT = {
 	restoreWindow: (windowId: WindowId) => void
 	updateWindowPosition: (windowId: WindowId, position: Position) => void
 	updateWindowSize: (windowId: WindowId, size: Size) => void
+	pinWindowToTopBar: (windowId: WindowId) => void
+	unpinWindowFromTopBar: (windowId: WindowId) => void
 }
 
 // Get responsive window size based on screen dimensions.
@@ -147,6 +154,8 @@ type WindowAction =
 	| {type: 'RESTORE_WINDOW'; payload: WindowId}
 	| {type: 'UPDATE_POSITION'; payload: {id: WindowId; position: Position}}
 	| {type: 'UPDATE_SIZE'; payload: {id: WindowId; size: Size}}
+	| {type: 'PIN_TO_TOPBAR'; payload: WindowId}
+	| {type: 'UNPIN_FROM_TOPBAR'; payload: WindowId}
 
 function windowReducer(state: WindowManagerState, action: WindowAction): WindowManagerState {
 	switch (action.type) {
@@ -196,6 +205,22 @@ function windowReducer(state: WindowManagerState, action: WindowAction): WindowM
 				windows: state.windows.map((w) =>
 					w.id === action.payload.id ? {...w, size: action.payload.size} : w,
 				),
+			}
+
+		case 'PIN_TO_TOPBAR':
+			return {
+				...state,
+				windows: state.windows.map((w) =>
+					w.id === action.payload ? {...w, isPinnedToTopBar: true} : w,
+				),
+			}
+
+		case 'UNPIN_FROM_TOPBAR':
+			return {
+				windows: state.windows.map((w) =>
+					w.id === action.payload ? {...w, isPinnedToTopBar: false, zIndex: state.nextZIndex} : w,
+				),
+				nextZIndex: state.nextZIndex + 1,
 			}
 
 		default:
@@ -271,6 +296,14 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		dispatch({type: 'UPDATE_SIZE', payload: {id: windowId, size}})
 	}, [])
 
+	const pinWindowToTopBar = useCallback((windowId: WindowId) => {
+		dispatch({type: 'PIN_TO_TOPBAR', payload: windowId})
+	}, [])
+
+	const unpinWindowFromTopBar = useCallback((windowId: WindowId) => {
+		dispatch({type: 'UNPIN_FROM_TOPBAR', payload: windowId})
+	}, [])
+
 	return (
 		<WindowManagerContext.Provider
 			value={{
@@ -282,6 +315,8 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 				restoreWindow,
 				updateWindowPosition,
 				updateWindowSize,
+				pinWindowToTopBar,
+				unpinWindowFromTopBar,
 			}}
 		>
 			{children}

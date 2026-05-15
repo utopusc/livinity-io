@@ -16,10 +16,11 @@ type WindowProps = {
 	zIndex: number
 	children: React.ReactNode
 	originRect?: OriginRect
+	isPinnedToTopBar?: boolean
 }
 
 export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
-	{id, title, icon, position, size, zIndex, children, originRect},
+	{id, title, icon, position, size, zIndex, children, originRect, isPinnedToTopBar = false},
 	ref,
 ) {
 	const {closeWindow, focusWindow, updateWindowPosition, updateWindowSize} = useWindowManager()
@@ -187,22 +188,59 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 		? {type: 'spring' as const, stiffness: 280, damping: 26, mass: 0.8}
 		: {type: 'spring' as const, stiffness: 500, damping: 35}
 
+	// Phase 130-09 — pinned-to-topbar animation target.
+	// When the window is pinned, both the title pill and the content panel
+	// morph to a small "minimized chip" at the top of the viewport
+	// (approximating the TopBar drop-zone position) with scale + opacity
+	// fading out. On unpin, the same morph runs in reverse and the
+	// window grows back to its actual position/size.
+	const pinTargetX = typeof window !== 'undefined' ? window.innerWidth / 2 : 600
+	const pinTargetY = 28 // matches the TopBar drop-zone vertical center
+	const pinAnimateContent = isPinnedToTopBar
+		? {
+			opacity: 0,
+			scale: 0.1,
+			left: pinTargetX,
+			top: pinTargetY,
+			width: 140,
+			height: 32,
+			borderRadius: '999px',
+			pointerEvents: 'none' as const,
+		}
+		: {
+			opacity: isDragging ? 0.95 : 1,
+			scale: 1,
+			left: currentX,
+			top: currentY,
+			width: size.width,
+			height: size.height,
+			borderRadius: '20px',
+			pointerEvents: 'auto' as const,
+		}
+	const pinAnimateChrome = isPinnedToTopBar
+		? {opacity: 0, scale: 0.2, y: 0}
+		: {opacity: isDragging ? 0.9 : 1, y: 0, scale: 1}
+	const pinTransition = isPinnedToTopBar
+		? {type: 'spring' as const, stiffness: 220, damping: 26, mass: 0.7}
+		: undefined
+
 	return (
 		<>
 			{/* Floating title bar - draggable */}
 			<motion.div
 				className='fixed select-none'
 				style={{
-					left: currentX + size.width / 2,
-					top: currentY - 16,
+					left: isPinnedToTopBar ? pinTargetX : currentX + size.width / 2,
+					top: isPinnedToTopBar ? pinTargetY : currentY - 16,
 					transform: 'translateX(-50%)',
 					zIndex: zIndex + 1,
+					pointerEvents: isPinnedToTopBar ? 'none' : 'auto',
 				}}
-				onMouseDown={handleDragStart}
+				onMouseDown={isPinnedToTopBar ? undefined : handleDragStart}
 				initial={{opacity: 0, y: -10, scale: 0.9}}
-				animate={{opacity: isDragging ? 0.9 : 1, y: 0, scale: 1}}
+				animate={pinAnimateChrome}
 				exit={{opacity: 0, y: -10, scale: 0.9}}
-				transition={{type: 'spring', stiffness: 500, damping: 35, delay: hasMorphOrigin ? 0.15 : 0}}
+				transition={pinTransition ?? {type: 'spring', stiffness: 500, damping: 35, delay: hasMorphOrigin ? 0.15 : 0}}
 			>
 				<WindowChrome title={title} icon={icon} onClose={handleClose} />
 			</motion.div>
@@ -222,10 +260,10 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 						: undefined,
 				}}
 				initial={morphInitial}
-				animate={{opacity: isDragging ? 0.95 : 1, scale: 1, left: currentX, top: currentY, width: size.width, height: size.height, borderRadius: '20px'}}
+				animate={pinAnimateContent}
 				exit={morphExit}
-				transition={isDragging || isResizing ? {type: 'tween', duration: 0} : morphTransition}
-				onPointerDown={handleFocus}
+				transition={pinTransition ?? (isDragging || isResizing ? {type: 'tween', duration: 0} : morphTransition)}
+				onPointerDown={isPinnedToTopBar ? undefined : handleFocus}
 			>
 				<div className={windowContentClass}>{children}</div>
 				{/* Resize handles */}
