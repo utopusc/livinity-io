@@ -187,11 +187,11 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 
 	return (
 		<div
-			className='border-t border-border-default bg-surface-base p-3 md:p-4'
+			className='border-t border-dash-line bg-card-bg p-3 md:p-4'
 			style={isMobile && keyboardHeight > 0 ? {paddingBottom: `${keyboardHeight + 12}px`} : undefined}
 		>
 			<div
-				className={cn('relative mx-auto max-w-3xl', isDragging && 'rounded-lg ring-2 ring-brand/50 ring-offset-2 ring-offset-surface-base')}
+				className={cn('relative mx-auto max-w-3xl', isDragging && 'rounded-lg ring-2 ring-accent-blue/50 ring-offset-2 ring-offset-card-bg')}
 				onDrop={handleDrop}
 				onDragOver={handleDragOver}
 				onDragLeave={handleDragLeave}
@@ -200,7 +200,7 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 				{attachments.length > 0 && (
 					<div className='mb-2 flex flex-wrap gap-2 overflow-x-hidden'>
 						{attachments.map((att, i) => (
-							<div key={i} className='flex items-center gap-1.5 rounded-md border border-border-default bg-surface-1 px-2 py-1 text-xs text-text-secondary'>
+							<div key={i} className='flex items-center gap-1.5 rounded-md border border-dash-line bg-card-bg-2 px-2 py-1 text-xs text-text-secondary'>
 								{isImage(att.mimeType) ? <IconPhoto size={14} className='text-blue-400' /> : <IconFile size={14} className='text-orange-400' />}
 								<span className='max-w-[120px] truncate'>{att.name}</span>
 								<span className='text-text-tertiary'>({formatSize(att.size)})</span>
@@ -238,7 +238,7 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 					<button
 						onClick={() => fileInputRef.current?.click()}
 						disabled={isDisabled}
-						className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-border-default bg-surface-1 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary disabled:opacity-40'
+						className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-dash-line bg-card-bg-2 text-text-secondary transition-colors duration-dash hover:bg-card-bg hover:text-text-primary disabled:opacity-40'
 						title='Attach file'
 					>
 						<IconPaperclip size={18} />
@@ -254,9 +254,9 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 						disabled={isDisabled}
 						rows={1}
 						className={cn(
-							'w-full min-h-[44px] resize-none rounded-lg border border-border-default bg-surface-1 px-4 py-3 text-sm text-text-primary',
-							'placeholder:text-text-tertiary outline-none transition-colors',
-							'focus:border-brand/50 focus:ring-1 focus:ring-brand/20',
+							'w-full min-h-[44px] resize-none rounded-lg border border-dash-line bg-card-bg-2 px-4 py-3 text-sm text-text-primary',
+							'placeholder:text-text-tertiary outline-none transition-colors duration-dash',
+							'focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/20',
 							'disabled:opacity-50',
 						)}
 					/>
@@ -266,7 +266,7 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 							<button
 								onClick={() => { onSend(attachments.length > 0 ? attachments : undefined); setAttachments([]) }}
 								disabled={!value.trim() && attachments.length === 0}
-								className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600/80 text-white transition-colors hover:bg-blue-500 disabled:opacity-40'
+								className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-accent-blue/80 text-white transition-colors duration-dash hover:bg-accent-blue disabled:opacity-40'
 								title='Send follow-up'
 							>
 								<IconSend size={18} />
@@ -283,7 +283,7 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 						<button
 							onClick={() => { onSend(attachments.length > 0 ? attachments : undefined); setAttachments([]) }}
 							disabled={(!value.trim() && attachments.length === 0) || !isConnected}
-							className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-500 disabled:opacity-40'
+							className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-accent-blue text-white transition-colors duration-dash hover:bg-accent-blue/90 disabled:opacity-40'
 							title='Send'
 						>
 							<IconSend size={18} />

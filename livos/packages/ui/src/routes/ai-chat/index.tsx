@@ -59,31 +59,31 @@ function ConversationSidebar({
 	className?: string
 }) {
 	return (
-		<div className={cn('flex h-full w-64 flex-shrink-0 flex-col border-r border-border-default bg-surface-base', className)}>
-			<div className='flex items-center justify-between border-b border-border-default p-4'>
+		<div className={cn('flex h-full w-64 flex-shrink-0 flex-col border-r border-dash-line bg-card-bg', className)}>
+			<div className='flex items-center justify-between border-b border-dash-line p-4'>
 				<div className='flex items-center gap-2'>
 					<div className='flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/30 to-blue-500/30'>
 						<IconBrain size={14} className='text-violet-400' />
 					</div>
 					<h2 className='text-body font-semibold text-text-primary'>Liv AI</h2>
-					<span className='rounded-full bg-surface-2 px-2 py-0.5 text-caption-sm font-medium text-text-secondary capitalize'>
+					<span className='rounded-full bg-card-bg-2 px-2 py-0.5 text-caption-sm font-medium text-text-secondary capitalize'>
 						{activeProvider}
 					</span>
 				</div>
 				<button
 					onClick={onNew}
-					className='rounded-radius-sm p-1.5 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+					className='rounded-dash p-1.5 text-text-secondary transition-colors hover:bg-card-bg-2 hover:text-text-primary'
 					title='New conversation'
 				>
 					<IconPlus size={18} />
 				</button>
 			</div>
 
-			<div className='flex border-b border-border-default'>
+			<div className='flex border-b border-dash-line'>
 				<button
 					onClick={() => onViewChange('chat')}
 					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'chat' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+						activeView === 'chat' ? 'border-b-2 border-accent-blue text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
 					)}
 				>
 					<IconMessageCircle size={14} />
@@ -92,7 +92,7 @@ function ConversationSidebar({
 				<button
 					onClick={() => onViewChange('mcp')}
 					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'mcp' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+						activeView === 'mcp' ? 'border-b-2 border-accent-blue text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
 					)}
 				>
 					<IconPlug size={14} />
@@ -101,7 +101,7 @@ function ConversationSidebar({
 				<button
 					onClick={() => onViewChange('agents')}
 					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'agents' ? 'border-b-2 border-brand text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+						activeView === 'agents' ? 'border-b-2 border-accent-blue text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
 					)}
 				>
 					<IconRobot size={14} />
@@ -118,8 +118,8 @@ function ConversationSidebar({
 						<button
 							key={conv.id}
 							onClick={() => onSelect(conv.id)}
-							className={cn('group mb-1 flex w-full items-center gap-2 rounded-radius-sm px-3 py-2.5 text-left transition-colors',
-								activeId === conv.id ? 'bg-surface-3 text-text-primary' : 'text-text-secondary hover:bg-surface-1 hover:text-text-primary'
+							className={cn('group mb-1 flex w-full items-center gap-2 rounded-dash px-3 py-2.5 text-left transition-colors',
+								activeId === conv.id ? 'bg-card-bg-2 text-text-primary' : 'text-text-secondary hover:bg-card-bg-2 hover:text-text-primary'
 							)}
 						>
 							<IconMessageCircle size={16} className='flex-shrink-0' />
@@ -451,23 +451,23 @@ export default function AiChat() {
 							? 'w-1/2 min-w-[360px]' : 'flex-1',
 					)}>
 						{isMobile && (
-							<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+							<div className='flex-shrink-0 border-b border-dash-line bg-card-bg px-4 py-3'>
 								<div className='flex items-center justify-between'>
 									<button
 										onClick={() => setSidebarOpen(true)}
-										className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+										className='flex h-11 w-11 items-center justify-center rounded-dash text-text-secondary transition-colors hover:bg-card-bg-2 hover:text-text-primary'
 									>
 										<IconMenu2 size={20} />
 									</button>
 									<div className='flex items-center gap-2'>
 									<span className='text-body font-semibold text-text-primary'>Liv AI</span>
-									<span className='rounded-full bg-surface-2 px-2 py-0.5 text-caption-sm font-medium text-text-secondary capitalize'>
+									<span className='rounded-full bg-card-bg-2 px-2 py-0.5 text-caption-sm font-medium text-text-secondary capitalize'>
 										{activeProvider}
 									</span>
 								</div>
 									<button
 										onClick={handleNewConversation}
-										className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+										className='flex h-11 w-11 items-center justify-center rounded-dash text-text-secondary transition-colors hover:bg-card-bg-2 hover:text-text-primary'
 									>
 										<IconPlus size={18} />
 									</button>
@@ -476,7 +476,7 @@ export default function AiChat() {
 						)}
 
 						{/* WebSocket connection status indicator */}
-						<div className='flex items-center gap-2 border-b border-border-default bg-surface-base px-4 py-1.5'>
+						<div className='flex items-center gap-2 border-b border-dash-line bg-card-bg px-4 py-1.5'>
 							<span
 								className={cn(
 									'inline-block h-2 w-2 rounded-full',
@@ -509,7 +509,7 @@ export default function AiChat() {
 						>
 							{displayMessages.length === 0 ? (
 								<div className='flex h-full flex-col items-center justify-center text-text-tertiary'>
-									<div className='mb-6 flex h-16 w-16 items-center justify-center rounded-radius-xl bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
+									<div className='mb-6 flex h-16 w-16 items-center justify-center rounded-dash bg-gradient-to-br from-violet-500/20 to-blue-500/20'>
 										<IconBrain size={32} className='text-violet-400' />
 									</div>
 									<h3 className='mb-2 text-heading-sm font-medium text-text-secondary'>Liv</h3>
@@ -534,7 +534,7 @@ export default function AiChat() {
 											<button
 												key={suggestion}
 												onClick={() => setInput(suggestion)}
-												className='rounded-radius-md border border-border-default bg-surface-base px-3 py-1.5 text-caption text-text-tertiary transition-colors hover:border-border-emphasis hover:bg-surface-1 hover:text-text-secondary'
+												className='rounded-dash border border-dash-line bg-card-bg px-3 py-1.5 text-caption text-text-tertiary transition-colors duration-dash hover:border-dash-line-strong hover:bg-card-bg-2 hover:text-text-secondary'
 											>
 												{suggestion}
 											</button>
@@ -584,7 +584,7 @@ export default function AiChat() {
 					{/* Canvas panel -- mobile full overlay (hidden when computer use is active) */}
 					{canvasArtifact && !canvasMinimized && isMobile && !isComputerUseActive && (
 						<Suspense fallback={null}>
-							<div className='fixed inset-0 z-50 bg-surface-base'>
+							<div className='fixed inset-0 z-50 bg-card-bg'>
 								<CanvasPanel
 									artifact={canvasArtifact}
 									onClose={() => setCanvasMinimized(true)}
@@ -597,7 +597,7 @@ export default function AiChat() {
 					{canvasArtifact && canvasMinimized && !isComputerUseActive && (
 						<button
 							onClick={() => setCanvasMinimized(false)}
-							className='absolute right-4 top-4 z-10 flex items-center gap-2 rounded-radius-lg border border-border-default bg-surface-1 px-3 py-2 text-body-sm font-medium text-text-secondary shadow-elevation-1 transition-all hover:bg-surface-2 hover:text-text-primary'
+							className='absolute right-4 top-4 z-10 flex items-center gap-2 rounded-dash border border-dash-line bg-card-bg-2 px-3 py-2 text-body-sm font-medium text-text-secondary shadow-elevation-1 transition-all hover:bg-card-bg-2 hover:text-text-primary'
 						>
 							<IconCode size={16} className='text-cyan-400' />
 							{canvasArtifact.title}
@@ -607,7 +607,7 @@ export default function AiChat() {
 					{/* SEC-01: Consent dialog before computer use starts */}
 					{needsConsent && (
 						<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm'>
-							<div className='mx-4 w-full max-w-sm rounded-radius-xl border border-border-default bg-surface-base p-6 shadow-elevation-3'>
+							<div className='mx-4 w-full max-w-sm rounded-dash border border-dash-line bg-card-bg p-6 shadow-elevation-3'>
 								{/* Icon */}
 								<div className='mb-4 flex justify-center'>
 									<div className='flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10'>
@@ -626,13 +626,13 @@ export default function AiChat() {
 								<div className='flex gap-3'>
 									<button
 										onClick={() => denyConsentMutation.mutate({conversationId: activeConversationId!})}
-										className='flex-1 rounded-radius-lg border border-border-default bg-surface-1 px-4 py-2.5 text-body-sm font-medium text-text-secondary transition-colors hover:bg-surface-2'
+										className='flex-1 rounded-dash border border-dash-line bg-card-bg-2 px-4 py-2.5 text-body-sm font-medium text-text-secondary transition-colors hover:bg-card-bg-2'
 									>
 										Deny
 									</button>
 									<button
 										onClick={() => grantConsentMutation.mutate({conversationId: activeConversationId!})}
-										className='flex-1 rounded-radius-lg bg-accent-primary px-4 py-2.5 text-body-sm font-medium text-white transition-colors hover:bg-accent-primary-hover'
+										className='flex-1 rounded-dash bg-accent-blue px-4 py-2.5 text-body-sm font-medium text-white transition-colors duration-dash hover:bg-accent-blue/90'
 									>
 										Allow
 									</button>
@@ -659,7 +659,7 @@ export default function AiChat() {
 					{/* Computer Use Panel -- mobile full overlay */}
 					{isComputerUseActive && !computerUseMinimized && isMobile && (
 						<Suspense fallback={null}>
-							<div className='fixed inset-0 z-50 bg-surface-base'>
+							<div className='fixed inset-0 z-50 bg-card-bg'>
 								<ComputerUsePanel
 									conversationId={activeConversationId!}
 									screenshot={computerUseData?.screenshot || null}
@@ -675,7 +675,7 @@ export default function AiChat() {
 					{isComputerUseActive && computerUseMinimized && (
 						<button
 							onClick={() => setComputerUseMinimized(false)}
-							className='absolute right-4 top-4 z-10 flex items-center gap-2 rounded-radius-lg border border-border-default bg-surface-1 px-3 py-2 text-body-sm font-medium text-text-secondary shadow-elevation-1 transition-all hover:bg-surface-2 hover:text-text-primary'
+							className='absolute right-4 top-4 z-10 flex items-center gap-2 rounded-dash border border-dash-line bg-card-bg-2 px-3 py-2 text-body-sm font-medium text-text-secondary shadow-elevation-1 transition-all hover:bg-card-bg-2 hover:text-text-primary'
 						>
 							<IconScreenshot size={16} className='text-green-400' />
 							Computer Use
@@ -688,13 +688,13 @@ export default function AiChat() {
 			{activeView === 'mcp' && (
 				<div className='flex flex-1 flex-col overflow-hidden'>
 					{isMobile && (
-						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+						<div className='flex-shrink-0 border-b border-dash-line bg-card-bg px-4 py-3'>
 							<div className='flex items-center justify-between'>
-								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-dash text-text-secondary transition-colors hover:bg-card-bg-2 hover:text-text-primary'>
 									<IconArrowLeft size={20} />
 								</button>
 								<span className='text-body font-semibold text-text-primary'>MCP Servers</span>
-								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-dash text-text-secondary transition-colors hover:bg-card-bg-2 hover:text-text-primary'>
 									<IconMenu2 size={20} />
 								</button>
 							</div>
@@ -708,13 +708,13 @@ export default function AiChat() {
 			{activeView === 'skills' && (
 				<div className='flex flex-1 flex-col overflow-hidden'>
 					{isMobile && (
-						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+						<div className='flex-shrink-0 border-b border-dash-line bg-card-bg px-4 py-3'>
 							<div className='flex items-center justify-between'>
-								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-dash text-text-secondary transition-colors hover:bg-card-bg-2 hover:text-text-primary'>
 									<IconArrowLeft size={20} />
 								</button>
 								<span className='text-body font-semibold text-text-primary'>Skills</span>
-								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-dash text-text-secondary transition-colors hover:bg-card-bg-2 hover:text-text-primary'>
 									<IconMenu2 size={20} />
 								</button>
 							</div>
@@ -728,13 +728,13 @@ export default function AiChat() {
 			{activeView === 'agents' && (
 				<div className='flex flex-1 flex-col overflow-hidden'>
 					{isMobile && (
-						<div className='flex-shrink-0 border-b border-border-default bg-surface-base px-4 py-3'>
+						<div className='flex-shrink-0 border-b border-dash-line bg-card-bg px-4 py-3'>
 							<div className='flex items-center justify-between'>
-								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+								<button onClick={() => setActiveView('chat')} className='flex h-11 w-11 items-center justify-center rounded-dash text-text-secondary transition-colors hover:bg-card-bg-2 hover:text-text-primary'>
 									<IconArrowLeft size={20} />
 								</button>
 								<span className='text-body font-semibold text-text-primary'>Agents</span>
-								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-radius-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'>
+								<button onClick={() => setSidebarOpen(true)} className='flex h-11 w-11 items-center justify-center rounded-dash text-text-secondary transition-colors hover:bg-card-bg-2 hover:text-text-primary'>
 									<IconMenu2 size={20} />
 								</button>
 							</div>

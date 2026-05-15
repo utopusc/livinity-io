@@ -51,7 +51,7 @@ function TypeWriter({targetText}: {targetText: string}) {
 						display: 'inline-block',
 						width: '2px',
 						height: '14px',
-						background: '#6366f1',
+						background: '#2563eb',
 						marginLeft: '1px',
 						verticalAlign: 'text-bottom',
 						animation: 'cursor-blink 1s step-end infinite',

@@ -214,7 +214,7 @@ function CapabilityRecommendationCard({toolCall}: {toolCall: ChatToolCall}) {
 		} else if (parsed.installed && parsed.name) {
 			// livinity_install output — already installed
 			return (
-				<div className='my-2 flex items-center gap-2 rounded-radius-lg border border-green-500/20 bg-green-500/5 px-3 py-2'>
+				<div className='my-2 flex items-center gap-2 rounded-dash border border-green-500/20 bg-green-500/5 px-3 py-2'>
 					<IconCheck size={16} className='text-green-400' />
 					<span className='text-caption text-green-400'>Installed: {parsed.name}</span>
 				</div>
@@ -231,10 +231,10 @@ function CapabilityRecommendationCard({toolCall}: {toolCall: ChatToolCall}) {
 			{capabilities.slice(0, 3).map((cap) => (
 				<div
 					key={cap.name}
-					className='rounded-radius-lg border border-border-default bg-surface-1 p-3'
+					className='rounded-dash border border-dash-line bg-card-bg p-3'
 				>
 					<div className='flex items-start gap-2.5'>
-						<div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-radius-md bg-violet-500/10'>
+						<div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-dash bg-violet-500/10'>
 							<IconPuzzle size={16} className='text-violet-400' />
 						</div>
 						<div className='min-w-0 flex-1'>
@@ -267,14 +267,14 @@ function CapabilityRecommendationCard({toolCall}: {toolCall: ChatToolCall}) {
 										setStatus('installing')
 										installMutation.mutate({name: cap.name})
 									}}
-									className='flex items-center gap-1.5 rounded-radius-md bg-accent-primary px-3 py-1.5 text-caption font-medium text-white transition-colors hover:bg-accent-primary-hover'
+									className='flex items-center gap-1.5 rounded-dash bg-accent-blue px-3 py-1.5 text-caption font-medium text-white transition-colors duration-dash hover:bg-accent-blue/90'
 								>
 									<IconDownload size={14} />
 									Install
 								</button>
 								<button
 									onClick={() => setStatus('rejected')}
-									className='rounded-radius-md border border-border-default px-3 py-1.5 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-2'
+									className='rounded-dash border border-dash-line px-3 py-1.5 text-caption font-medium text-text-secondary transition-colors duration-dash hover:bg-card-bg-2'
 								>
 									Dismiss
 								</button>
@@ -366,7 +366,7 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 			<button
 				onClick={() => setExpanded(!expanded)}
 				className={cn(
-					'group flex w-full items-center gap-1.5 text-left text-xs hover:bg-surface-1/50 rounded px-1 -mx-1',
+					'group flex w-full items-center gap-1.5 text-left text-xs hover:bg-card-bg-2/50 rounded px-1 -mx-1',
 					isMobile ? 'py-2' : 'py-0.5'
 				)}
 			>
@@ -395,7 +395,7 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 						transition={{duration: 0.15, ease: 'easeInOut'}}
 						className='overflow-hidden'
 					>
-						<div className={cn('mt-0.5 border-l-2 border-surface-2 pb-1', isMobile ? 'ml-2 pl-2' : 'ml-5 pl-3')}>
+						<div className={cn('mt-0.5 border-l-2 border-dash-line pb-1', isMobile ? 'ml-2 pl-2' : 'ml-5 pl-3')}>
 							{/* Error */}
 							{toolCall.status === 'error' && (toolCall.errorMessage || toolCall.output) && (
 								<div className='rounded bg-red-500/10 px-2 py-1 text-xs text-red-400'>
@@ -430,7 +430,7 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 export function UserMessage({message}: {message: ChatMessage}) {
 	return (
 		<div className='flex justify-end'>
-			<div className='max-w-[85%] rounded-2xl rounded-br-md bg-blue-600/90 px-4 py-2.5 text-white'>
+			<div className='max-w-[85%] rounded-2xl rounded-br-md bg-accent-blue px-4 py-2.5 text-white'>
 				<p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
 			</div>
 		</div>
@@ -447,7 +447,7 @@ export function AssistantMessage({message}: {message: ChatMessage}) {
 
 	return (
 		<div className='flex justify-start'>
-			<div className='min-w-0 max-w-[90%] border-l-2 border-violet-500/30 pl-4' style={{overflowWrap: 'break-word', wordBreak: 'break-word'}}>
+			<div className='min-w-0 max-w-[90%] rounded-2xl border border-dash-line bg-card-bg-2 px-4 py-2.5' style={{overflowWrap: 'break-word', wordBreak: 'break-word'}}>
 				{/* Render blocks in order — text and tools interleaved */}
 				{blocks && blocks.map((block, idx) => {
 					if (block.type === 'text') {
