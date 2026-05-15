@@ -47,12 +47,9 @@ const ChromeMasterPage = React.lazy(() => import('@/routes/settings/chrome-maste
 // Phase 104 plan 104-05 — Local Access enrollment wizard (AC-104-9, AC-104-10).
 const LocalAccessPage = React.lazy(() => import('@/routes/settings/local-access'))
 
-// v36 LivOS Design Port — Settings hub (root /settings) launcher. Replaces
-// the removed SettingsContent sidebar. Lists all settings sub-pages as v36
-// hairline cards; click navigates to /settings/{slug} which now opens
-// stand-alone (no sidebar wrapper) per the user's "pencere bazli devam
-// edelim" request 2026-05-15.
-const SettingsHome = React.lazy(() => import('./_components/settings-home').then((m) => ({default: m.SettingsHome})))
+// SettingsHome launcher removed 2026-05-15: user rejected — "/settings burasi
+// neden var mk ben istemiyorum". LivOS is window-based — no URL launcher
+// page at /settings root.
 
 // drawers
 const StartMigrationDrawerOrDialog = React.lazy(() =>
@@ -135,8 +132,6 @@ export function Settings() {
 				{isMobile && <SettingsContentMobile />}
 				<Suspense>
 					<Routes>
-						{/* v36 — Settings hub at root */}
-						<Route path='/' Component={SettingsHome} />
 						<Route path='/2fa' Component={TwoFactorDialog} />
 						<Route path='/device-info' Component={isMobile ? DeviceInfoDrawer : DeviceInfoDialog} />
 						{!isMobile && <Route path='/account/change-name' Component={ChangeNameDialog} />}
