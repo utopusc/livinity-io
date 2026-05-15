@@ -1,9 +1,8 @@
 import {AnimatePresence, motion} from 'motion/react'
 import {useState} from 'react'
 import {flushSync} from 'react-dom'
-import {TbArrowLeft, TbLoader2} from 'react-icons/tb'
+import {TbArrowLeft, TbArrowRight, TbLoader2} from 'react-icons/tb'
 
-import {GlowEffect} from '@/components/motion-primitives/glow-effect'
 import {PinInput} from '@/components/ui/pin-input'
 import {useAuth} from '@/modules/auth/use-auth'
 import {PasswordInput} from '@/shadcn-components/ui/input'
@@ -171,33 +170,49 @@ export default function MultiUserLogin() {
 }
 
 // ── Shell ────────────────────────────────────────────────────
+// v36 LivOS Design Port — login redesign matching livinity.io/login
+// (.planning/design-system/livinity-design-system.html § auth.html). No
+// glassy card, no cyan glow — just the clean monochrome editorial layout.
+// Black donut brand mark, mono eyebrow with bullet dot, "Welcome back."
+// headline with italic-serif accent, hairline form fields, fg/bg invert
+// primary CTA with arrow.
 
 function LoginShell({children}: {children: React.ReactNode}) {
 	return (
-		<div className='flex min-h-[calc(100dvh-40px)] w-full flex-col items-center justify-center px-4'>
-			<div className='relative w-full max-w-md'>
-				<GlowEffect
-					colors={['#06B6D4', '#0891B2', '#22D3EE', '#67E8F9']}
-					mode='breathe'
-					blur='strong'
-					scale={1.08}
-					duration={5}
-				/>
-				<motion.div
-					initial={{opacity: 0, scale: 0.96, y: 20}}
-					animate={{opacity: 1, scale: 1, y: 0}}
-					transition={{duration: 0.5, ease: 'easeOut'}}
-					className='relative flex w-full flex-col items-center gap-6 rounded-3xl px-8 py-10 md:px-12 md:py-14'
-					style={{
-						background: 'rgba(255, 255, 255, 0.88)',
-						backdropFilter: 'blur(24px)',
-						WebkitBackdropFilter: 'blur(24px)',
-						boxShadow: '0 8px 40px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04)',
-					}}
-				>
-					{children}
-				</motion.div>
-			</div>
+		<div className='fixed inset-0 flex w-full flex-col items-center justify-center bg-[color:var(--bg)] px-6'>
+			<motion.div
+				initial={{opacity: 0, y: 16}}
+				animate={{opacity: 1, y: 0}}
+				transition={{duration: 0.5, ease: [0.2, 0.7, 0.2, 1]}}
+				className='flex w-full max-w-[420px] flex-col items-center gap-7'
+			>
+				{children}
+			</motion.div>
+		</div>
+	)
+}
+
+/**
+ * The Livinity brand mark — a "donut" of fg around bg (per design-system §06).
+ * Used at the top of the login screen as the only branding element.
+ */
+function BrandMark({size = 56}: {size?: number}) {
+	return (
+		<div
+			className='relative rounded-full bg-fg'
+			style={{width: size, height: size}}
+			aria-hidden='true'
+		>
+			<div className='absolute rounded-full bg-[color:var(--bg)]' style={{inset: size * 0.32}} />
+		</div>
+	)
+}
+
+function FormEyebrow({children}: {children: React.ReactNode}) {
+	return (
+		<div className='font-mono text-[11px] uppercase tracking-[0.18em] text-fg-mute flex items-center gap-2'>
+			<span className='inline-block h-1.5 w-1.5 rounded-full bg-fg' aria-hidden='true' />
+			{children}
 		</div>
 	)
 }
@@ -205,46 +220,41 @@ function LoginShell({children}: {children: React.ReactNode}) {
 // ── User Select ──────────────────────────────────────────────
 
 function UserSelectStep({users, onSelect}: {users: LoginUser[]; onSelect: (u: LoginUser) => void}) {
-	const orbSize = users.length === 1 ? 140 : users.length === 2 ? 110 : 88
+	const orbSize = users.length <= 2 ? 80 : 64
 
 	return (
 		<motion.div
 			initial={{opacity: 0}}
 			animate={{opacity: 1}}
-			exit={{opacity: 0, scale: 0.95}}
+			exit={{opacity: 0, scale: 0.97}}
 			transition={{duration: 0.3}}
-			className='flex flex-col items-center gap-6'
+			className='flex w-full flex-col items-center gap-6'
 		>
-			<motion.h1
-				className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'
-				initial={{opacity: 0, y: 10}}
-				animate={{opacity: 1, y: 0}}
-				transition={{duration: 0.4}}
-			>
-				{t('login.title', {defaultValue: 'Welcome'})}
-			</motion.h1>
+			<BrandMark />
+			<FormEyebrow>Sign in to LivOS</FormEyebrow>
+			<h1 className='text-center text-[clamp(34px,4vw,46px)] font-medium leading-[1.05] tracking-[-0.035em] text-fg text-balance'>
+				Welcome <em className='font-normal not-italic text-fg-mute'>back.</em>
+			</h1>
+			<p className='text-center text-[15px] leading-[1.5] text-fg-mute max-w-[38ch]'>
+				Pick a user to sign in to your LivOS computer.
+			</p>
 
-			<div className='flex flex-wrap items-center justify-center gap-6 md:gap-8'>
+			<div className='flex w-full flex-wrap items-center justify-center gap-4 pt-2'>
 				{users.map((user, i) => (
 					<motion.button
 						key={user.id}
 						onClick={() => onSelect(user)}
-						className='group flex flex-col items-center gap-3 rounded-2xl p-3 transition-all hover:bg-black/5'
-						initial={{opacity: 0, y: 20}}
+						className='group flex flex-col items-center gap-2 rounded-2xl p-3 transition-colors hover:bg-[color:var(--bg-2)]'
+						initial={{opacity: 0, y: 10}}
 						animate={{opacity: 1, y: 0}}
-						transition={{delay: i * 0.1, duration: 0.4, ease: 'easeOut'}}
+						transition={{delay: i * 0.06, duration: 0.4, ease: [0.2, 0.7, 0.2, 1]}}
 					>
-						<div style={{width: orbSize, height: orbSize}} className='transition-transform duration-300 group-hover:scale-110'>
-							<Orb
-								state='breathe'
-								className='h-full w-full'
-								initials={getInitials(user.display_name)}
-								userId={user.id}
-							/>
+						<div style={{width: orbSize, height: orbSize}} className='transition-transform duration-200 group-hover:-translate-y-px'>
+							<Orb state='breathe' className='h-full w-full' initials={getInitials(user.display_name)} userId={user.id} />
 						</div>
 						<div className='flex flex-col items-center'>
-							<span className='text-base font-bold text-text-primary md:text-lg'>{user.display_name}</span>
-							<span className='text-xs text-text-tertiary capitalize'>{user.role}</span>
+							<span className='text-[13px] font-medium text-fg'>{user.display_name}</span>
+							<span className='text-[11px] text-fg-faint capitalize'>{user.role}</span>
 						</div>
 					</motion.button>
 				))}
@@ -274,49 +284,48 @@ function PasswordStep({
 	error?: string
 	isPending: boolean
 }) {
+	const firstName = user?.display_name?.split(/\s+/)[0]
 	return (
 		<motion.div
-			initial={{opacity: 0, y: 20}}
+			initial={{opacity: 0, y: 16}}
 			animate={{opacity: 1, y: 0}}
-			exit={{opacity: 0, y: -20}}
-			transition={{duration: 0.35}}
-			className='flex w-full max-w-sm flex-col items-center gap-6'
+			exit={{opacity: 0, y: -10}}
+			transition={{duration: 0.35, ease: [0.2, 0.7, 0.2, 1]}}
+			className='flex w-full flex-col items-center gap-6'
 		>
 			{onBack && (
 				<button
 					type='button'
 					onClick={onBack}
-					className='flex items-center gap-1.5 self-start text-body-sm text-text-tertiary transition-colors hover:text-text-secondary'
+					className='flex items-center gap-1.5 self-start text-[12px] font-medium text-fg-mute transition-colors hover:text-fg'
 				>
-					<TbArrowLeft className='h-4 w-4' />
-					{t('back')}
+					<TbArrowLeft className='h-3.5 w-3.5' />
+					Back
 				</button>
 			)}
 
-			<h1 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'>
-				{t('login.title', {defaultValue: 'Welcome'})}
+			<BrandMark />
+			<FormEyebrow>Sign in to LivOS</FormEyebrow>
+			<h1 className='text-center text-[clamp(34px,4vw,46px)] font-medium leading-[1.05] tracking-[-0.035em] text-fg text-balance'>
+				Welcome{firstName ? <span>, <em className='font-serif italic font-normal text-fg-mute'>{firstName}.</em></span> : <em className='font-normal not-italic text-fg-mute'> back.</em>}
 			</h1>
+			<p className='text-center text-[15px] leading-[1.5] text-fg-mute max-w-[38ch] -mt-3'>
+				Sign in to pick up where you left off.
+			</p>
 
-			{/* Orb avatar */}
+			{/* Orb avatar — kept as user-identity signal; sized down to match v36 restraint */}
 			{user && (
-				<div className='flex flex-col items-center gap-3'>
-					<div className='h-32 w-32 md:h-40 md:w-40'>
-						<Orb
-								state={orbState}
-								className='h-full w-full'
-								initials={getInitials(user.display_name)}
-								userId={user.id}
-							/>
-					</div>
-					<span className='text-xl font-bold text-text-primary md:text-2xl'>{user.display_name}</span>
+				<div className='h-16 w-16 mt-1'>
+					<Orb state={orbState} className='h-full w-full' initials={getInitials(user.display_name)} userId={user.id} />
 				</div>
 			)}
 
-			{/* Password form — no card, just floating over wallpaper */}
-			<form className='flex w-full flex-col items-center gap-4' onSubmit={onSubmit}>
-				<div className='w-full'>
+			<form className='flex w-full flex-col gap-4 mt-2' onSubmit={onSubmit}>
+				<div className='flex flex-col gap-1.5'>
+					<label className='font-mono text-[10.5px] uppercase tracking-[0.14em] text-fg-mute pl-1'>
+						Password
+					</label>
 					<PasswordInput
-						label={t('login.password-label')}
 						autoFocus
 						value={password}
 						onValueChange={setPassword}
@@ -326,9 +335,16 @@ function PasswordStep({
 				<button
 					type='submit'
 					disabled={isPending || !password}
-					className='flex h-12 w-full items-center justify-center rounded-[14px] bg-fg px-6 text-body-sm font-medium text-[color:var(--bg)] transition-all duration-200 hover:opacity-90 hover:-translate-y-px active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 disabled:pointer-events-none disabled:opacity-40'
+					className='mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-fg px-6 text-[15px] font-medium tracking-[-0.005em] text-[color:var(--bg)] transition-all duration-200 hover:opacity-90 hover:-translate-y-px active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 disabled:pointer-events-none disabled:opacity-40'
 				>
-					{isPending ? <TbLoader2 className='h-4 w-4 animate-spin' /> : t('login.password.submit')}
+					{isPending ? (
+						<TbLoader2 className='h-4 w-4 animate-spin' />
+					) : (
+						<>
+							Sign in
+							<TbArrowRight className='h-4 w-4' strokeWidth={2.25} />
+						</>
+					)}
 				</button>
 			</form>
 		</motion.div>
