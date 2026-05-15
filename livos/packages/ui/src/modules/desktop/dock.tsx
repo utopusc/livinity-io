@@ -14,7 +14,6 @@ import {tw} from '@/utils/tw'
 
 import {useLaunchApp} from '@/hooks/use-launch-app'
 import {DockItem} from './dock-item'
-import {DockProfile} from './dock-profile'
 import {LogoutDialog} from './logout-dialog'
 
 const LiveUsageDialog = React.lazy(() => import('@/routes/live-usage'))
@@ -93,10 +92,8 @@ export function Dock() {
 					paddingBottom: padding,
 				}}
 			>
-				{/* Profile avatar */}
-				<DockProfile mouseX={mouseX} iconSize={iconSize} iconSizeZoomed={iconSizeZoomed} />
-				{/* Separator */}
-				<div className='mx-0.5 h-[60%] w-px bg-white/20 self-center' />
+				{/* Phase 130-02 — Profile avatar moved to the TopBar.
+				    The trailing separator went with it. */}
 				<DockItem
 					appId='LIVINITY_files'
 					iconSize={iconSize}
