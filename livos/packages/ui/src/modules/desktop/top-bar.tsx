@@ -1,5 +1,5 @@
-import {useEffect, useRef, useState} from 'react'
-import {motion} from 'framer-motion'
+import {useEffect, useMemo, useRef, useState} from 'react'
+import {AnimatePresence, motion} from 'framer-motion'
 import {useNavigate} from 'react-router-dom'
 import {TbLogout, TbPalette, TbPencil, TbRefresh} from 'react-icons/tb'
 
@@ -9,6 +9,7 @@ import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useLinkToDialog} from '@/utils/dialog'
 import {useUserName} from '@/hooks/use-user-name'
 import {onWindowDragDrop, useWindowDragState} from '@/providers/window-drag-state'
+import {useWindowManagerOptional} from '@/providers/window-manager'
 import {cn} from '@/shadcn-lib/utils'
 import {
 	Dialog,
@@ -66,6 +67,7 @@ function TopBarDesktop() {
 	const navigate = useNavigate()
 	const linkToDialog = useLinkToDialog()
 	const {user} = useCurrentUser()
+	const windowManager = useWindowManagerOptional()
 
 	const userQ = trpcReact.user.get.useQuery()
 	const userName = userQ.data?.name || user?.name || 'User'
@@ -77,35 +79,25 @@ function TopBarDesktop() {
 	const [menuOpen, setMenuOpen] = useState(false)
 	const [showChangeName, setShowChangeName] = useState(false)
 	const [showChangeIcon, setShowChangeIcon] = useState(false)
+	const [isHoverExpanded, setIsHoverExpanded] = useState(false)
 	const profileWrapRef = useRef<HTMLDivElement>(null)
 	const dropZoneRef = useRef<HTMLDivElement>(null)
 
-	// Phase 130-08: bar only expands while a window is being dragged. Logo
-	// hover no longer triggers expansion per user direction 2026-05-15
-	// ("eger elimde pencereyi surukluyor isem genislesin").
+	// Phase 130-09 — pinned windows now live in the WindowManager as
+	// `isPinnedToTopBar` instead of a local array, so the actual WindowState
+	// stays alive and renderable when minimized into the shelf. The TopBar
+	// derives its chip list directly from windowManager.windows.
+	const pinnedWindows = (windowManager?.windows ?? []).filter((w) => w.isPinnedToTopBar)
+
+	// Phase 130-09 — bar expands either while a window is being dragged
+	// (drag-to-pin gesture) OR while the cursor is hovering the bar (so
+	// the user can see the shelf without having to drag). User direction
+	// 2026-05-15: "fare ile ustune geldigimde acilsin yinede goreyim".
 	const dragState = useWindowDragState()
-	const isExpanded = dragState.isDragging
+	const isExpanded = dragState.isDragging || isHoverExpanded
 	const [isDragOverShelf, setIsDragOverShelf] = useState(false)
 
-	// Pinned-windows shelf — persisted to localStorage so refresh keeps the
-	// shelf intact. Future phase reads this array to keep the actual
-	// WindowState alive even when the UI is reloaded.
-	const [pinnedWindowIds, setPinnedWindowIds] = useState<string[]>(() => {
-		if (typeof window === 'undefined') return []
-		try {
-			const raw = window.localStorage.getItem('liv:topbar:pinnedWindows')
-			return raw ? JSON.parse(raw) : []
-		} catch {
-			return []
-		}
-	})
-	useEffect(() => {
-		if (typeof window === 'undefined') return
-		window.localStorage.setItem('liv:topbar:pinnedWindows', JSON.stringify(pinnedWindowIds))
-	}, [pinnedWindowIds])
-
-	// Hit-test cursor against the drop-zone rect while a drag is active so
-	// the shelf can highlight when the user is hovering inside it.
+	// Hit-test cursor against the drop-zone rect while a drag is active.
 	useEffect(() => {
 		if (!dragState.isDragging) {
 			setIsDragOverShelf(false)
@@ -129,12 +121,12 @@ function TopBarDesktop() {
 			if (!rect) return
 			const inside = event.clientX >= rect.left && event.clientX <= rect.right
 				&& event.clientY >= rect.top && event.clientY <= rect.bottom
-			if (inside && !pinnedWindowIds.includes(event.windowId)) {
-				setPinnedWindowIds((prev) => [...prev, event.windowId])
+			if (inside) {
+				windowManager?.pinWindowToTopBar(event.windowId)
 			}
 		})
 		return unsubscribe
-	}, [pinnedWindowIds])
+	}, [windowManager])
 
 	useEffect(() => {
 		if (!menuOpen) return
@@ -147,8 +139,8 @@ function TopBarDesktop() {
 		return () => document.removeEventListener('mousedown', handler)
 	}, [menuOpen])
 
-	const unpinWindow = (windowId: string) => {
-		setPinnedWindowIds((prev) => prev.filter((id) => id !== windowId))
+	const restorePinnedWindow = (windowId: string) => {
+		windowManager?.unpinWindowFromTopBar(windowId)
 	}
 
 	const menuItems: Array<
@@ -173,13 +165,13 @@ function TopBarDesktop() {
 				aria-label='Top bar'
 			>
 				<nav
+					onMouseLeave={() => setIsHoverExpanded(false)}
 					className={cn(
 						'pointer-events-auto grid h-16 w-full grid-cols-[auto_1fr_auto] items-center gap-2.5 rounded-full border bg-card-bg/78 px-3.5 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55',
-						// Compact 580px ➜ expanded 1180px. Slower 1400ms duration per
-						// user request 2026-05-15 ("cok hizli genisliyor biraz yavas
-						// genislesin"). Triggered only while a window is dragged;
-						// the center column swaps the brand donut for the pinned-
-						// windows drop-zone during expansion.
+						// Compact 580px ➜ expanded 1180px. 1400ms ease-out-v36 morph
+						// per user direction 2026-05-15 ("biraz yavas genislesin").
+						// Triggered by EITHER hovering the bar (so the user can
+						// inspect the shelf) OR actively dragging a window.
 						'transition-[max-width,border-color,box-shadow] duration-[1400ms] ease-out-v36',
 						isExpanded
 							? 'max-w-[1180px] border-line-strong shadow-[0_18px_50px_-28px_rgba(0,0,0,0.22)] dark:shadow-[0_18px_50px_-20px_rgba(0,0,0,0.6)]'
@@ -264,12 +256,17 @@ function TopBarDesktop() {
 						</div>
 					</div>
 
-					{/* CENTER — collapsed: brand donut (purely decorative now, no
-					    longer triggers expand). Expanded (while user drags a
-					    window): pinned-windows drop-zone shelf. */}
+					{/* CENTER — collapsed: brand donut (and hover trigger).
+					    Expanded: pinned-windows drop-zone shelf. */}
 					<div className='flex min-w-0 items-center justify-center'>
 						{!isExpanded ? (
-							<div className='flex items-center justify-center'>
+							<button
+								type='button'
+								onMouseEnter={() => setIsHoverExpanded(true)}
+								onClick={() => undefined}
+								className='grid h-10 w-10 cursor-pointer place-items-center rounded-full transition-[transform,background] duration-200 hover:scale-[1.04] hover:bg-[color:var(--bg-2)]'
+								aria-label='Show pinned windows shelf'
+							>
 								<span
 									aria-hidden='true'
 									className='relative inline-block h-6 w-6 rounded-full bg-[color:var(--fg)]'
@@ -279,26 +276,33 @@ function TopBarDesktop() {
 										style={{inset: 7}}
 									/>
 								</span>
-							</div>
+							</button>
 						) : (
 							<div
 								ref={dropZoneRef}
 								className={cn(
-									'flex min-h-[44px] w-full max-w-[640px] items-center justify-center gap-2 rounded-full border border-dashed px-3 transition-colors',
+									'flex min-h-[44px] w-full max-w-[820px] items-center justify-center gap-2 rounded-full border border-dashed px-3 transition-colors',
 									isDragOverShelf
 										? 'border-[color:var(--fg)] bg-[color:var(--bg-2)]'
 										: 'border-line',
 								)}
 							>
-								{pinnedWindowIds.length === 0 ? (
+								{pinnedWindows.length === 0 ? (
 									<span className='select-none whitespace-nowrap text-[12px] font-medium text-[color:var(--fg-faint)]'>
 										Drag here to pin
 									</span>
 								) : (
 									<div className='flex items-center gap-1.5 overflow-x-auto'>
-										{pinnedWindowIds.map((id) => (
-											<PinnedWindowChip key={id} windowId={id} onUnpin={() => unpinWindow(id)} />
-										))}
+										<AnimatePresence initial={false}>
+											{pinnedWindows.map((w) => (
+												<PinnedWindowChip
+													key={w.id}
+													title={w.title}
+													icon={w.icon}
+													onClick={() => restorePinnedWindow(w.id)}
+												/>
+											))}
+										</AnimatePresence>
 									</div>
 								)}
 							</div>
@@ -322,37 +326,113 @@ function TopBarDesktop() {
 
 /**
  * Visual chip representing a pinned window in the TopBar drop-zone. The
- * pinned window itself stays live in the window manager (or, longer-term,
- * in a persistent shelf that survives a page reload). The chip just shows
- * the user it's still there + offers an unpin affordance on hover.
+ * chip shows the live WindowState title (e.g. "Google" rather than
+ * "wid_abc123…"). Clicking it restores the window with the reverse of
+ * the shrink-to-shelf animation.
  *
- * Phase 130-07 ships this as a stub: it surfaces the windowId verbatim
- * (truncated). Follow-up phase wires it to a real WindowState lookup so
- * the chip can display the app icon + title + a live frame thumbnail.
+ * Whole-chip click = restore. Hover lifts a soft background; the
+ * framer-motion enter springs the chip in from scale 0.4 so a freshly
+ * dropped window pops into the shelf rather than just appearing.
  */
-function PinnedWindowChip({windowId, onUnpin}: {windowId: string; onUnpin: () => void}) {
+function PinnedWindowChip({title, icon, onClick}: {title: string; icon?: string; onClick: () => void}) {
 	return (
-		<div className='group flex items-center gap-1.5 rounded-full border border-line bg-[color:var(--bg-2)] py-1 pl-2 pr-1 text-[11px] font-medium text-[color:var(--fg)]'>
-			<span className='max-w-[140px] truncate'>{windowId.slice(0, 12)}</span>
-			<button
-				type='button'
-				onClick={onUnpin}
-				className='grid h-5 w-5 place-items-center rounded-full text-[color:var(--fg-faint)] transition-colors hover:bg-[color:var(--bg)] hover:text-[color:var(--fg)]'
-				aria-label='Unpin window'
-				title='Unpin'
-			>
-				<svg viewBox='0 0 16 16' className='h-3 w-3' aria-hidden='true'>
-					<path d='M4 4l8 8M12 4L4 12' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
-				</svg>
-			</button>
-		</div>
+		<motion.button
+			type='button'
+			onClick={onClick}
+			layout
+			initial={{opacity: 0, scale: 0.4, y: -4}}
+			animate={{opacity: 1, scale: 1, y: 0}}
+			exit={{opacity: 0, scale: 0.4, y: -4}}
+			transition={{type: 'spring', stiffness: 280, damping: 22, mass: 0.6}}
+			className='group flex items-center gap-1.5 rounded-full border border-line bg-[color:var(--bg-2)] py-1 pl-1.5 pr-3 text-[12px] font-medium text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg)]'
+			title={`Restore "${title}"`}
+		>
+			{icon ? (
+				<span
+					className='h-5 w-5 shrink-0 rounded-md bg-cover bg-center'
+					style={{backgroundImage: `url(${icon})`}}
+					aria-hidden='true'
+				/>
+			) : (
+				<span className='h-5 w-5 shrink-0 rounded-md bg-[color:var(--fg)]' aria-hidden='true' />
+			)}
+			<span className='max-w-[160px] truncate'>{title}</span>
+		</motion.button>
 	)
 }
 
-// ── Clock ───────────────────────────────────────────────────────────
+// ── Clock + Location ────────────────────────────────────────────────
+
+/**
+ * Pulls the user's city from the IANA timezone ("Europe/Istanbul" →
+ * "Istanbul") and fetches the current temperature from open-meteo.com
+ * (free, no API key, no auth). The fetch is one-shot per mount with a
+ * localStorage cache + 1-hour TTL so the network call doesn't repeat
+ * on every render. Failures fall back gracefully to just the city,
+ * then to no location row at all.
+ */
+function useLocationWeather() {
+	const city = useMemo(() => {
+		try {
+			const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+			const parts = tz.split('/')
+			const tail = parts[parts.length - 1] ?? ''
+			return tail.replace(/_/g, ' ').trim() || null
+		} catch {
+			return null
+		}
+	}, [])
+	const [tempC, setTempC] = useState<number | null>(null)
+
+	useEffect(() => {
+		if (!city || typeof window === 'undefined') return
+		const cacheKey = `liv:topbar:weather:${city}`
+		try {
+			const raw = window.localStorage.getItem(cacheKey)
+			if (raw) {
+				const cached = JSON.parse(raw) as {at: number; tempC: number}
+				if (Date.now() - cached.at < 60 * 60 * 1000) {
+					setTempC(cached.tempC)
+					return
+				}
+			}
+		} catch {}
+
+		let cancelled = false
+		async function fetchWeather() {
+			try {
+				const geoRes = await fetch(
+					`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city!)}&count=1&language=en&format=json`,
+				)
+				if (!geoRes.ok) return
+				const geo = await geoRes.json() as {results?: Array<{latitude: number; longitude: number}>}
+				const first = geo.results?.[0]
+				if (!first) return
+				const wxRes = await fetch(
+					`https://api.open-meteo.com/v1/forecast?latitude=${first.latitude}&longitude=${first.longitude}&current=temperature_2m`,
+				)
+				if (!wxRes.ok) return
+				const wx = await wxRes.json() as {current?: {temperature_2m?: number}}
+				const t = wx.current?.temperature_2m
+				if (typeof t !== 'number' || cancelled) return
+				setTempC(Math.round(t))
+				window.localStorage.setItem(cacheKey, JSON.stringify({at: Date.now(), tempC: Math.round(t)}))
+			} catch {
+				// Network failure / blocked — silent fallback to city-only.
+			}
+		}
+		fetchWeather()
+		return () => {
+			cancelled = true
+		}
+	}, [city])
+
+	return {city, tempC}
+}
 
 function ClockWithLocation() {
 	const [now, setNow] = useState(() => new Date())
+	const {city, tempC} = useLocationWeather()
 
 	useEffect(() => {
 		// Tick every 30s — we only display HH:MM so per-second is wasteful.
@@ -360,17 +440,45 @@ function ClockWithLocation() {
 		return () => window.clearInterval(id)
 	}, [])
 
-	const hh = String(now.getHours()).padStart(2, '0')
+	// 12-hour with AM/PM badge per user direction 2026-05-15 ("pm am kullan").
+	const h24 = now.getHours()
+	const h12 = ((h24 + 11) % 12) + 1
+	const hh = String(h12).padStart(2, '0')
 	const mm = String(now.getMinutes()).padStart(2, '0')
+	const ampm = h24 >= 12 ? 'PM' : 'AM'
 
-	// 24-hour format, no AM/PM. Location/weather was a hardcoded
-	// "Istanbul · 18°C" stub — removed 2026-05-15 ("konumu dogru degil").
-	// A real geolocation + weather hook can land in a follow-up phase.
 	return (
-		<div className='flex items-center rounded-xl px-2.5 py-1 leading-none transition-colors hover:bg-[color:var(--bg-2)]'>
-			<span className='whitespace-nowrap font-mono text-[15px] font-medium tracking-[-0.01em] text-[color:var(--fg)] tabular-nums'>
+		<div className='flex flex-col items-end gap-px rounded-xl px-2.5 py-1 text-right leading-[1.05] transition-colors hover:bg-[color:var(--bg-2)]'>
+			<span className='whitespace-nowrap font-mono text-[14.5px] font-medium tracking-[-0.01em] text-[color:var(--fg)] tabular-nums'>
 				{hh}:{mm}
+				<span className='ml-1 text-[10.5px] font-medium text-[color:var(--fg-mute)]'>{ampm}</span>
 			</span>
+			{city && (
+				<span className='inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-normal text-[color:var(--fg-mute)]'>
+					<svg
+						viewBox='0 0 24 24'
+						fill='none'
+						stroke='currentColor'
+						strokeWidth='2'
+						strokeLinecap='round'
+						strokeLinejoin='round'
+						className='h-2.5 w-2.5 shrink-0'
+						aria-hidden='true'
+					>
+						<path d='M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z' />
+						<circle cx='12' cy='10' r='3' />
+					</svg>
+					<span>
+						{city}
+						{tempC !== null && (
+							<>
+								{' · '}
+								<span className='text-[color:var(--fg-dim)] tabular-nums'>{tempC}°C</span>
+							</>
+						)}
+					</span>
+				</span>
+			)}
 		</div>
 	)
 }
