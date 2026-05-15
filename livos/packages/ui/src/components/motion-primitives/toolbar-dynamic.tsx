@@ -23,7 +23,7 @@ function Button({
 }) {
   return (
     <button
-      className='relative flex h-9 w-9 shrink-0 scale-100 select-none appearance-none items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800 focus-visible:ring-2 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50'
+      className='relative flex h-9 w-9 shrink-0 scale-100 select-none appearance-none items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-card-bg-2 hover:text-text-primary focus-visible:ring-2 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50'
       type='button'
       onClick={onClick}
       disabled={disabled}
@@ -45,7 +45,7 @@ export default function ToolbarDynamic() {
   return (
     <MotionConfig transition={transition}>
       <div className='absolute bottom-8' ref={containerRef}>
-        <div className='h-full w-full rounded-xl border border-zinc-950/10 bg-white'>
+        <div className='h-full w-full rounded-xl border border-border-default bg-card-bg'>
           <motion.div
             animate={{
               // @todo: here I want to remove the width
@@ -73,7 +73,7 @@ export default function ToolbarDynamic() {
                   </Button>
                   <div className='relative w-full'>
                     <input
-                      className='h-9 w-full rounded-lg border border-zinc-950/10 bg-transparent p-2 text-zinc-900 placeholder-zinc-500 focus:outline-hidden'
+                      className='h-9 w-full rounded-lg border border-border-default bg-transparent p-2 text-text-primary placeholder-text-tertiary focus:outline-hidden'
                       autoFocus
                       placeholder='Search notes'
                     />
