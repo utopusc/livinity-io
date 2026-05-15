@@ -30,8 +30,8 @@ export function ChatBubble({role, children, className}: ChatBubbleProps) {
 			className={cn(
 				'max-w-[88%] px-3.5 py-[11px] text-[14px] leading-[1.4]',
 				role === 'user'
-					? 'self-end bg-fg text-[color:var(--bg)] rounded-2xl rounded-br-[6px]'
-					: 'self-start bg-[color:var(--bg)] text-fg border border-line rounded-2xl rounded-bl-[6px]',
+					? 'self-end bg-[color:var(--fg)] text-[color:var(--bg)] rounded-2xl rounded-br-[6px]'
+					: 'self-start bg-[color:var(--bg)] text-[color:var(--fg)] border border-line rounded-2xl rounded-bl-[6px]',
 				className,
 			)}
 		>

@@ -51,8 +51,8 @@ export function FieldRow({label, value, trailing, className}: FieldRowProps) {
 				className,
 			)}
 		>
-			<div className='text-[13px] font-medium text-fg-mute'>{label}</div>
-			<div className='text-[14px] text-fg min-w-0'>{value}</div>
+			<div className='text-[13px] font-medium text-[color:var(--fg-mute)]'>{label}</div>
+			<div className='text-[14px] text-[color:var(--fg)] min-w-0'>{value}</div>
 			{trailing && <div className='justify-self-end'>{trailing}</div>}
 		</div>
 	)
@@ -68,10 +68,10 @@ export function FieldCardInput({className, ...props}: FieldCardInputProps) {
 	return (
 		<input
 			className={cn(
-				'w-full px-3 py-2 rounded-[var(--r-sm)] bg-[color:var(--bg-2)] text-[14px] text-fg',
+				'w-full px-3 py-2 rounded-[var(--r-sm)] bg-[color:var(--bg-2)] text-[14px] text-[color:var(--fg)]',
 				'border border-transparent outline-none transition-colors',
 				'focus:border-line-strong focus:bg-[color:var(--bg)]',
-				'placeholder:text-fg-faint',
+				'placeholder:text-[color:var(--fg-faint)]',
 				className,
 			)}
 			{...props}
