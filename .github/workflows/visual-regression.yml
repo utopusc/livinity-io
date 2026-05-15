@@ -1,0 +1,77 @@
+name: Visual Regression
+
+# Phase 121-06 (v35.0 close-out) — Playwright visual-regression CI.
+#
+# Triggers on any PR touching the design-system packages or this workflow.
+# Builds the ui-kit Storybook static, installs Chromium, runs the Playwright
+# snapshot suite, and uploads the report + diffs on failure.
+#
+# Initial baseline is seeded by the operator locally (see
+# livos/packages/ui-kit/playwright/__snapshots__/.gitkeep for instructions).
+# After seeding, CI compares incoming PR renderings against the committed
+# baseline at 0.5% pixel-diff threshold.
+
+on:
+  pull_request:
+    paths:
+      - 'livos/packages/ui-kit/**'
+      - 'livos/packages/design-tokens/**'
+      - 'livos/packages/ui/**'
+      - '.github/workflows/visual-regression.yml'
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: livos/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: livos
+        run: pnpm install --frozen-lockfile
+
+      - name: Build ui-kit
+        working-directory: livos
+        run: pnpm --filter ui-kit build
+
+      - name: Build Storybook static
+        working-directory: livos
+        run: pnpm --filter ui-kit storybook:build
+
+      - name: Install Playwright Chromium
+        working-directory: livos/packages/ui-kit
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright visual regression
+        working-directory: livos/packages/ui-kit
+        run: npx playwright test
+
+      - name: Upload Playwright HTML report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: livos/packages/ui-kit/playwright-report/
+          retention-days: 14
+
+      - name: Upload Playwright diff snapshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diff-snapshots
+          path: livos/packages/ui-kit/test-results/
+          retention-days: 14
