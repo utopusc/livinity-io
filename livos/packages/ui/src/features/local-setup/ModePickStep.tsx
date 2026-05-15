@@ -75,7 +75,7 @@ export function ModePickStep({selected, currentMode, onSelect}: ModePickStepProp
 								<div className='flex items-center gap-2'>
 									<span className='font-semibold'>{m.title}</span>
 									{m.recommended && (
-										<span className='rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-900'>default</span>
+										<span className='rounded bg-accent-green/15 px-2 py-0.5 text-xs text-accent-green'>default</span>
 									)}
 								</div>
 								<p className='mt-1 text-sm text-text-secondary'>
