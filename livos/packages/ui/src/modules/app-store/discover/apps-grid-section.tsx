@@ -71,11 +71,11 @@ export function AppWithDescription({
 		<Link
 			to={to ? to : `/app-store/${app.id}`}
 			className={cn(
-				'group relative flex w-full items-start gap-4 rounded-2xl p-4',
+				'group relative flex w-full items-start gap-4 rounded-dash p-4',
 				'border border-transparent',
 				'bg-transparent',
-				'transition-all duration-200 ease-out',
-				'hover:bg-white hover:border-neutral-200/80 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]',
+				'transition-all duration-dash ease-out',
+				'hover:bg-card-bg-2 hover:border-dash-line hover:shadow-card',
 				'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30',
 				'animate-in fade-in slide-in-from-bottom-4',
 			)}
@@ -127,11 +127,11 @@ export function FeaturedAppCard({app, gradient}: {app: RegistryApp; gradient?: s
 		<Link
 			to={`/app-store/${app.id}`}
 			className={cn(
-				'group relative flex flex-col overflow-hidden rounded-3xl p-6',
-				'bg-gradient-to-br from-neutral-50 to-white',
-				'border border-neutral-200/80',
+				'group relative flex flex-col overflow-hidden rounded-dash p-6',
+				'bg-card-bg',
+				'border border-dash-line',
 				'transition-all duration-500',
-				'hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]',
+				'hover:shadow-card',
 				gradient,
 			)}
 			unstable_viewTransition
