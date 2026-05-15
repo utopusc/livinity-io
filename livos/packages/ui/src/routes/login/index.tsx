@@ -326,7 +326,7 @@ function PasswordStep({
 				<button
 					type='submit'
 					disabled={isPending || !password}
-					className='flex h-11 w-full items-center justify-center rounded-xl bg-brand px-6 text-body-sm font-medium text-white shadow-[0_0_20px_rgba(6,182,212,0.2)] transition-all duration-200 hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40'
+					className='flex h-12 w-full items-center justify-center rounded-[14px] bg-fg px-6 text-body-sm font-medium text-[color:var(--bg)] transition-all duration-200 hover:opacity-90 hover:-translate-y-px active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 disabled:pointer-events-none disabled:opacity-40'
 				>
 					{isPending ? <TbLoader2 className='h-4 w-4 animate-spin' /> : t('login.password.submit')}
 				</button>

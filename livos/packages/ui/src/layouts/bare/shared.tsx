@@ -11,9 +11,14 @@ export const LivinityLogoLarge = () => (
 )
 
 export function Title({children, hasTransition}: {children: React.ReactNode; hasTransition: boolean}) {
+	// v36 LivOS Design Port — login title matches auth.html .form-title:
+	// clamp(34px, 4vw, 46px) font-weight 500, letter-spacing -0.035em.
+	// Existing display-sm hierarchy (44px+ bold) replaced for the v36 invitation
+	// feel. Translation strings rendered as-is; if a string contains '<em>' it
+	// will not parse — keep this for v37 i18n upgrade.
 	return (
 		<h1
-			className='text-center text-display-sm font-bold leading-tight -tracking-2 md:text-56'
+			className='text-center text-[clamp(34px,4vw,46px)] font-medium leading-[1.05] tracking-[-0.035em] text-fg text-balance'
 			style={{
 				viewTransitionName: hasTransition ? 'title' : undefined,
 			}}
@@ -41,7 +46,10 @@ export function SubTitle({
 export const footerClass = tw`flex items-center justify-center gap-4`
 export const footerLinkClass = tw`text-body-sm transition-colors font-normal text-text-tertiary -tracking-3 hover:text-text-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/20`
 
-export const buttonClass = tw`flex h-12 items-center rounded-full bg-brand px-6 text-body font-medium -tracking-1 text-white transition-all duration-300 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 active:scale-[0.98] min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50 shadow-[0_0_20px_rgba(6,182,212,0.3)]`
+// v36 LivOS Design Port — login primary button matches auth.html .passkey:
+// bg-fg + text-[var(--bg)] invert, rounded-[14px], 16/20 padding-equivalent,
+// hover translateY(-1px) opacity 0.92. No cyan glow.
+export const buttonClass = tw`flex h-12 items-center rounded-[14px] bg-fg px-6 text-body font-medium -tracking-[0.005em] text-[color:var(--bg)] transition-all duration-200 hover:opacity-90 hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 active:scale-[0.98] min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50`
 export const secondaryButtonClasss = tw`flex h-12 items-center rounded-full bg-surface-1 border border-border-default px-6 text-body font-medium -tracking-1 text-text-primary transition-all duration-300 hover:bg-surface-2 hover:border-border-emphasis focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 active:scale-[0.98] min-w-[112px] justify-center disabled:pointer-events-none disabled:opacity-50`
 
 export const formGroupClass = tw`flex w-full max-w-sm flex-col gap-2.5`

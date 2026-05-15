@@ -47,6 +47,13 @@ const ChromeMasterPage = React.lazy(() => import('@/routes/settings/chrome-maste
 // Phase 104 plan 104-05 — Local Access enrollment wizard (AC-104-9, AC-104-10).
 const LocalAccessPage = React.lazy(() => import('@/routes/settings/local-access'))
 
+// v36 LivOS Design Port — Settings hub (root /settings) launcher. Replaces
+// the removed SettingsContent sidebar. Lists all settings sub-pages as v36
+// hairline cards; click navigates to /settings/{slug} which now opens
+// stand-alone (no sidebar wrapper) per the user's "pencere bazli devam
+// edelim" request 2026-05-15.
+const SettingsHome = React.lazy(() => import('./_components/settings-home').then((m) => ({default: m.SettingsHome})))
+
 // drawers
 const StartMigrationDrawerOrDialog = React.lazy(() =>
 	import('@/routes/settings/mobile/start-migration-drawer-or-dialog').then((m) => ({
@@ -120,10 +127,16 @@ export function Settings() {
 				<SheetTitle className='leading-none'>{title}</SheetTitle>
 			</SheetHeader>
 			<ErrorBoundary FallbackComponent={ErrorBoundaryCardFallback}>
+				{/* v36 LivOS Design Port — sidebar SettingsContent removed per
+				    user request (2026-05-15: "pencere bazli devam edelim").
+				    Each settings sub-route now opens directly as a window with
+				    no sidebar wrapper, eliminating the duplicate-header issue.
+				    Mobile still gets the SettingsContentMobile drawer. */}
 				{isMobile && <SettingsContentMobile />}
-				{!isMobile && <SettingsContent />}
 				<Suspense>
 					<Routes>
+						{/* v36 — Settings hub at root */}
+						<Route path='/' Component={SettingsHome} />
 						<Route path='/2fa' Component={TwoFactorDialog} />
 						<Route path='/device-info' Component={isMobile ? DeviceInfoDrawer : DeviceInfoDialog} />
 						{!isMobile && <Route path='/account/change-name' Component={ChangeNameDialog} />}

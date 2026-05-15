@@ -9,13 +9,22 @@
 import {MasterChromeLogin} from '@/modules/settings/master-chrome-login'
 
 import {SettingsPageLayout} from './_components/settings-page-layout'
+import {SettingsPageHeader} from '@/components/settings-page-header'
 
 export default function ChromeMasterPage() {
 	return (
 		<SettingsPageLayout
 			title='Chrome Profile'
 			description='Log into Google once. All WebApp browsers inherit this profile.'
+			hideHeader
 		>
+			<SettingsPageHeader
+				eyebrow='06 · Chrome'
+				title='One Google sign-in,'
+				titleAccent='shared by every WebApp.'
+				sub='Log into Google once on the master profile. Every WebApp browser window inherits the cookies — Gmail, Calendar, Drive all work without re-auth.'
+			/>
+			<div className='h-6' />
 			<div className='px-1'>
 				<MasterChromeLogin />
 			</div>
