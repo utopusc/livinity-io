@@ -52,7 +52,7 @@ export function PlatformInstructions({hostIp, onNext, onBack}: PlatformInstructi
 						>
 							<Icon className='h-4 w-4' />
 							{t.label}
-							{t.broken && <IconAlertTriangle className='h-3 w-3 text-amber-500' />}
+							{t.broken && <IconAlertTriangle className='h-3 w-3 text-accent-amber' />}
 						</button>
 					)
 				})}
@@ -67,7 +67,7 @@ sudo update-ca-certificates
 
 			{tab === 'macos' && (
 				<div className='space-y-3'>
-					<div className='rounded bg-rose-50 p-3 text-sm text-rose-900' role='alert'>
+					<div className='rounded bg-accent-red/10 p-3 text-sm text-accent-red' role='alert'>
 						<strong>macOS does NOT support .local TLDs.</strong> Even after CA install, Safari/Chrome will not
 						resolve <code>*.livinity.local</code> due to RFC 6762 mDNS interception (and macOS 26 extends this to
 						ALL custom TLDs). Use <em> hybrid mode</em> instead.
@@ -81,7 +81,7 @@ open ~/Downloads/livos-local-ca.crt   # Keychain Access opens
 
 			{tab === 'ios' && (
 				<div className='space-y-3'>
-					<div className='rounded bg-rose-50 p-3 text-sm text-rose-900' role='alert'>
+					<div className='rounded bg-accent-red/10 p-3 text-sm text-accent-red' role='alert'>
 						<strong>iOS does NOT support .local TLDs.</strong> Use hybrid mode.
 					</div>
 					<pre className='rounded bg-bg-secondary p-3 text-sm'>{`# iOS — if you still want to try:
@@ -101,7 +101,7 @@ certutil -addstore -f "ROOT" "$env:TEMP\\livos-local.crt"
 
 			{tab === 'android' && (
 				<div className='space-y-3'>
-					<div className='rounded bg-amber-50 p-3 text-sm text-amber-900'>
+					<div className='rounded bg-accent-amber/10 p-3 text-sm text-accent-amber'>
 						<strong>Android 14+:</strong> stock Chrome ignores user-installed CAs. Use Firefox for Android (it has
 						its own CA store).
 					</div>

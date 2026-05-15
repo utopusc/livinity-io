@@ -48,7 +48,7 @@ export function HybridDnsSetup({cfToken, hostIp, onProvisioned, onBack}: HybridD
 				LivOS will mint a random subdomain under <code>home.livinity.io</code> via Server5 (one-time control-plane
 				API call). Public DNS A-record will point at <code>{hostIp}</code>.
 			</p>
-			<div className='rounded bg-blue-50 p-3 text-sm text-blue-900'>
+			<div className='rounded bg-accent-blue/10 p-3 text-sm text-accent-blue'>
 				<strong>Zero data-plane Server5 traffic:</strong> after provisioning, Cloudflare DNS resolves the subdomain
 				to your LAN IP. All HTTPS traffic stays LAN-direct.
 			</div>
@@ -64,7 +64,7 @@ export function HybridDnsSetup({cfToken, hostIp, onProvisioned, onBack}: HybridD
 				Get Cloudflare API token <IconExternalLink className='h-3 w-3' />
 			</a>
 			{error && (
-				<div className='text-rose-600' role='alert'>
+				<div className='text-accent-red' role='alert'>
 					{error}
 				</div>
 			)}

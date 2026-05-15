@@ -134,7 +134,7 @@ export function LocalSetupWizard() {
 
 			{state.step === 'done' && (
 				<div className='space-y-3' data-testid='local-setup-done'>
-					<IconCheck className='text-emerald-500' />
+					<IconCheck className='text-accent-green' />
 					<p>
 						Local Access enrolled in <strong>{state.mode}</strong> mode.
 					</p>
@@ -197,12 +197,12 @@ function LocalLanConfigStep({
 					}
 				/>
 			</label>
-			<div className='rounded bg-amber-50 p-3 text-sm text-amber-900'>
+			<div className='rounded bg-accent-amber/10 p-3 text-sm text-accent-amber'>
 				<strong>Note:</strong> .local TLDs do NOT work on Apple devices (iOS, macOS) due to RFC 6762 mDNS
 				interception. Use <em>hybrid</em> mode for Apple support.
 			</div>
 			{activateM.error && (
-				<div className='text-rose-600' role='alert'>
+				<div className='text-accent-red' role='alert'>
 					{activateM.error.message}
 				</div>
 			)}
@@ -264,7 +264,7 @@ function HybridConfigStep({
 					}
 				/>
 			</label>
-			<div className='rounded bg-blue-50 p-3 text-sm text-blue-900'>
+			<div className='rounded bg-accent-blue/10 p-3 text-sm text-accent-blue'>
 				<strong>Hybrid mode:</strong> public DNS A-record points at your LAN IP. Works on every device including
 				iPhone/iPad/Mac. ALL traffic stays LAN-direct — no Server5 relay.
 			</div>
@@ -320,7 +320,7 @@ function HybridVerifyStep({
 				cfTokenAvailable: <code>{String(statusQ.data?.cfTokenAvailable ?? '...')}</code>
 			</p>
 			{activateM.error && (
-				<div className='text-rose-600' role='alert'>
+				<div className='text-accent-red' role='alert'>
 					{activateM.error.message}
 				</div>
 			)}
@@ -360,7 +360,7 @@ function VerifyStep({
 			<p>
 				Expected: <strong>{mode}</strong>
 			</p>
-			{isGreen && <IconCheck className='text-emerald-500' />}
+			{isGreen && <IconCheck className='text-accent-green' />}
 			<div className='flex justify-between'>
 				<button onClick={onBack} className='px-4 py-2'>
 					<IconArrowLeft className='inline' /> Back
