@@ -1,0 +1,21 @@
+# Playwright snapshot baselines (visual regression).
+#
+# This directory holds PNG baselines for the storybook.spec.ts (33 snapshots:
+# 11 stories x 3 themes) and canonical-pages.spec.ts (15 snapshots: 5 routes
+# x 3 themes) suites.
+#
+# Baselines are seeded on the FIRST CI run via:
+#   cd livos/packages/ui-kit
+#   pnpm install
+#   pnpm playwright install chromium --with-deps
+#   pnpm --filter ui-kit storybook:build
+#   pnpm playwright:update
+#   git add playwright/__snapshots__/
+#   git commit -m "test(121-06): seed Playwright snapshot baselines"
+#
+# Reason for empty-seed pattern (Phase 121-06 plan deviation):
+#   Phase 121-06 executor runs on Windows host without GPU-accelerated
+#   Chromium + npx http-server in scope. Per plan spec, leaving .gitkeep +
+#   operator-seed instruction is the explicit-permitted fallback. The CI
+#   workflow at .github/workflows/visual-regression.yml will produce the
+#   first baseline on the next PR touching ui-kit/design-tokens/ui paths.
