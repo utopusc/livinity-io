@@ -59,31 +59,31 @@ function ConversationSidebar({
 	className?: string
 }) {
 	return (
-		<div className={cn('flex h-full w-64 flex-shrink-0 flex-col border-r border-dash-line bg-card-bg', className)}>
-			<div className='flex items-center justify-between border-b border-dash-line p-4'>
+		<div className={cn('flex h-full w-64 flex-shrink-0 flex-col border-r border-line bg-card-bg', className)}>
+			<div className='flex items-center justify-between border-b border-line p-4'>
 				<div className='flex items-center gap-2'>
-					<div className='flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/30 to-blue-500/30'>
-						<IconBrain size={14} className='text-violet-400' />
+					<div className='flex h-7 w-7 items-center justify-center rounded-[var(--r-sm)] bg-[color:var(--fg)]'>
+						<IconBrain size={14} className='text-[color:var(--bg)]' />
 					</div>
-					<h2 className='text-body font-semibold text-text-primary'>Liv AI</h2>
-					<span className='rounded-full bg-card-bg-2 px-2 py-0.5 text-caption-sm font-medium text-text-secondary capitalize'>
+					<h2 className='text-[14px] font-semibold text-[color:var(--fg)]'>Liv AI</h2>
+					<span className='rounded-full bg-[color:var(--bg-2)] px-2 py-0.5 text-[11px] font-medium text-[color:var(--fg-mute)] capitalize'>
 						{activeProvider}
 					</span>
 				</div>
 				<button
 					onClick={onNew}
-					className='rounded-dash p-1.5 text-text-secondary transition-colors hover:bg-card-bg-2 hover:text-text-primary'
+					className='rounded-full p-1.5 text-[color:var(--fg-mute)] transition-colors hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]'
 					title='New conversation'
 				>
 					<IconPlus size={18} />
 				</button>
 			</div>
 
-			<div className='flex border-b border-dash-line'>
+			<div className='flex border-b border-line'>
 				<button
 					onClick={() => onViewChange('chat')}
-					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'chat' ? 'border-b-2 border-accent-blue text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[12px] font-medium transition-colors',
+						activeView === 'chat' ? 'border-b-2 border-[color:var(--fg)] text-[color:var(--fg)]' : 'text-[color:var(--fg-faint)] hover:text-[color:var(--fg-mute)]'
 					)}
 				>
 					<IconMessageCircle size={14} />
@@ -91,8 +91,8 @@ function ConversationSidebar({
 				</button>
 				<button
 					onClick={() => onViewChange('mcp')}
-					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'mcp' ? 'border-b-2 border-accent-blue text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[12px] font-medium transition-colors',
+						activeView === 'mcp' ? 'border-b-2 border-[color:var(--fg)] text-[color:var(--fg)]' : 'text-[color:var(--fg-faint)] hover:text-[color:var(--fg-mute)]'
 					)}
 				>
 					<IconPlug size={14} />
@@ -100,8 +100,8 @@ function ConversationSidebar({
 				</button>
 				<button
 					onClick={() => onViewChange('agents')}
-					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-caption font-medium transition-colors',
-						activeView === 'agents' ? 'border-b-2 border-accent-blue text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+					className={cn('flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[12px] font-medium transition-colors',
+						activeView === 'agents' ? 'border-b-2 border-[color:var(--fg)] text-[color:var(--fg)]' : 'text-[color:var(--fg-faint)] hover:text-[color:var(--fg-mute)]'
 					)}
 				>
 					<IconRobot size={14} />
@@ -112,20 +112,20 @@ function ConversationSidebar({
 			{activeView === 'chat' && (
 				<div className='flex-1 overflow-y-auto overflow-x-hidden p-2'>
 					{conversations.length === 0 && (
-						<p className='px-2 py-8 text-center text-caption text-text-tertiary'>No conversations yet</p>
+						<p className='px-2 py-8 text-center text-[12px] text-[color:var(--fg-faint)]'>No conversations yet</p>
 					)}
 					{conversations.map((conv) => (
 						<button
 							key={conv.id}
 							onClick={() => onSelect(conv.id)}
-							className={cn('group mb-1 flex w-full items-center gap-2 rounded-dash px-3 py-2.5 text-left transition-colors',
-								activeId === conv.id ? 'bg-card-bg-2 text-text-primary' : 'text-text-secondary hover:bg-card-bg-2 hover:text-text-primary'
+							className={cn('group mb-1 flex w-full items-center gap-2 rounded-[var(--r-sm)] px-3 py-2.5 text-left transition-colors',
+								activeId === conv.id ? 'bg-[color:var(--bg-2)] text-[color:var(--fg)]' : 'text-[color:var(--fg-mute)] hover:bg-[color:var(--bg-2)] hover:text-[color:var(--fg)]'
 							)}
 						>
 							<IconMessageCircle size={16} className='flex-shrink-0' />
 							<div className='min-w-0 flex-1'>
-								<span className='block truncate text-body-sm'>{conv.title}</span>
-								<span className='text-caption-sm text-text-tertiary'>
+								<span className='block truncate text-[13px]'>{conv.title}</span>
+								<span className='text-[11px] text-[color:var(--fg-faint)]'>
 									{formatDistanceToNow(conv.updatedAt, {addSuffix: true})}
 								</span>
 							</div>
@@ -134,7 +134,7 @@ function ConversationSidebar({
 									e.stopPropagation()
 									onDelete(conv.id)
 								}}
-								className='hidden rounded p-0.5 text-text-tertiary hover:text-accent-red group-hover:block'
+								className='hidden rounded p-0.5 text-[color:var(--fg-faint)] hover:text-accent-red group-hover:block'
 							>
 								<IconTrash size={14} />
 							</button>
@@ -436,7 +436,7 @@ export default function AiChat() {
 
 			{isMobile && (
 				<Drawer open={sidebarOpen} onOpenChange={setSidebarOpen}>
-					<DrawerContent fullHeight withScroll className='!bg-white !p-0'>
+					<DrawerContent fullHeight withScroll className='!bg-card-bg !p-0'>
 						<ConversationSidebar {...sidebarProps} className='w-full border-r-0' />
 					</DrawerContent>
 				</Drawer>
