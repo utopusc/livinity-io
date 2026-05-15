@@ -1086,7 +1086,9 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 
 ---
 
-### Phase 120: Mini PC livinityd UI Migration — Wave 1 (high-impact)
+### Phase 120: Mini PC livinityd UI Migration — Wave 1 (high-impact) — ✅ CODE-COMPLETE 2026-05-14
+
+**Status:** All 5 plans shipped, 9/9 must-haves PASS, Sacred SHA `f3538e1d…` preserved 5/5 commits. Foundation wired (`@livinity/design-tokens` + `@livinity/ui-kit` workspace deps + Tailwind preset + tokens.css + fonts.css + body-class theme toggle + iridescent). **14 high-impact components migrated** (vs 23 plan target — honest tally; 9 deferred to Phase 121 long-tail as already-canonical NOOP or prop-API mismatch). Commits: `82f9f61a → a1acc390 → 85f6e05d → ccfc769d → 01787e04`. All behavioral-diff guards PASS (zero handler/hook/SSE drift). **Operator UAT pending** (per-plan UAT blocks in each SUMMARY.md — `bash /opt/livos/update.sh` then browse `https://bruce.livinity.io`). D-120-MINI-PC-OPERATOR-PRIORITY upheld: each plan independently revertable via `git revert <commit> && bash /opt/livos/update.sh`.
 
 **Goal:** Migrate the 30 highest-traffic Mini PC components to canonical design system + ui-kit. After this phase, opening Mini PC dashboard shows identical fonts/spacing/colors as `livinity.io/dashboard`.
 
