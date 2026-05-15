@@ -33,12 +33,12 @@ export function SidebarItem({item, isActive, onClick, disabled = false, icon: Ic
 				'group flex w-full rounded-xl text-[13px] transition-all duration-200',
 				disabled
 					? 'cursor-default opacity-50'
-					: 'hover:bg-neutral-100/80',
+					: 'hover:bg-[color:var(--bg-2)]',
 				isActive && !disabled
-					? 'bg-neutral-100 font-semibold text-neutral-900 shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
+					? 'bg-[color:var(--bg-2)] font-semibold text-[color:var(--fg)] shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
 					: disabled
-						? 'text-neutral-400'
-						: 'text-neutral-500 hover:text-neutral-800',
+						? 'text-[color:var(--fg-faint)]'
+						: 'text-[color:var(--fg-mute)] hover:text-[color:var(--fg)]',
 			)}
 			disabled={disabled || item.path === RECENTS_PATH}
 		>
