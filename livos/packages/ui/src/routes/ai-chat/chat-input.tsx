@@ -187,11 +187,11 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 
 	return (
 		<div
-			className='border-t border-dash-line bg-card-bg p-3 md:p-4'
+			className='border-t border-line bg-card-bg p-3 md:p-5'
 			style={isMobile && keyboardHeight > 0 ? {paddingBottom: `${keyboardHeight + 12}px`} : undefined}
 		>
 			<div
-				className={cn('relative mx-auto max-w-3xl', isDragging && 'rounded-lg ring-2 ring-accent-blue/50 ring-offset-2 ring-offset-card-bg')}
+				className={cn('relative mx-auto max-w-3xl', isDragging && 'rounded-[var(--r-xl)] ring-2 ring-[color:var(--fg)]/30 ring-offset-2 ring-offset-card-bg')}
 				onDrop={handleDrop}
 				onDragOver={handleDragOver}
 				onDragLeave={handleDragLeave}
@@ -200,11 +200,11 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 				{attachments.length > 0 && (
 					<div className='mb-2 flex flex-wrap gap-2 overflow-x-hidden'>
 						{attachments.map((att, i) => (
-							<div key={i} className='flex items-center gap-1.5 rounded-md border border-dash-line bg-card-bg-2 px-2 py-1 text-xs text-text-secondary'>
-								{isImage(att.mimeType) ? <IconPhoto size={14} className='text-accent-blue' /> : <IconFile size={14} className='text-orange-400' />}
-								<span className='max-w-[120px] truncate'>{att.name}</span>
-								<span className='text-text-tertiary'>({formatSize(att.size)})</span>
-								<button onClick={() => removeAttachment(i)} className='ml-0.5 text-text-tertiary hover:text-accent-red'>
+							<div key={i} className='flex items-center gap-1.5 rounded-full border border-line bg-[color:var(--bg-2)] px-2.5 py-1 text-[12px] text-[color:var(--fg-mute)]'>
+								{isImage(att.mimeType) ? <IconPhoto size={14} className='text-[color:var(--fg)]' /> : <IconFile size={14} className='text-[color:var(--fg-mute)]' />}
+								<span className='max-w-[120px] truncate text-[color:var(--fg)]'>{att.name}</span>
+								<span className='text-[color:var(--fg-faint)]'>({formatSize(att.size)})</span>
+								<button onClick={() => removeAttachment(i)} className='ml-0.5 text-[color:var(--fg-faint)] hover:text-accent-red'>
 									<IconX size={12} />
 								</button>
 							</div>
@@ -222,7 +222,11 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 					/>
 				)}
 
-				<div className='flex items-end gap-2'>
+				{/* v36 composer pill — flex container morphs into a rounded-full
+				    surface with an inline icon button + textarea + send button.
+				    Border lights up on focus-within (the textarea inside takes
+				    focus, but the wrapper styling stays put). */}
+				<div className='flex items-end gap-1.5 rounded-full border border-line bg-[color:var(--bg-2)] pl-2 pr-1.5 py-1.5 transition-colors focus-within:border-line-strong focus-within:bg-[color:var(--bg)]'>
 					{/* Attach button */}
 					<input
 						ref={fileInputRef}
@@ -238,7 +242,7 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 					<button
 						onClick={() => fileInputRef.current?.click()}
 						disabled={isDisabled}
-						className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-dash-line bg-card-bg-2 text-text-secondary transition-colors duration-dash hover:bg-card-bg hover:text-text-primary disabled:opacity-40'
+						className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-[color:var(--fg-mute)] transition-colors hover:bg-[color:var(--bg)] hover:text-[color:var(--fg)] disabled:opacity-40'
 						title='Attach file'
 					>
 						<IconPaperclip size={18} />
@@ -254,9 +258,8 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 						disabled={isDisabled}
 						rows={1}
 						className={cn(
-							'w-full min-h-[44px] resize-none rounded-lg border border-dash-line bg-card-bg-2 px-4 py-3 text-sm text-text-primary',
-							'placeholder:text-text-tertiary outline-none transition-colors duration-dash',
-							'focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/20',
+							'w-full min-h-[40px] resize-none bg-transparent px-2 py-2 text-[14px] leading-[1.5] text-[color:var(--fg)]',
+							'placeholder:text-[color:var(--fg-faint)] outline-none border-none',
 							'disabled:opacity-50',
 						)}
 					/>
@@ -266,34 +269,34 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 							<button
 								onClick={() => { onSend(attachments.length > 0 ? attachments : undefined); setAttachments([]) }}
 								disabled={!value.trim() && attachments.length === 0}
-								className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-accent-blue/80 text-white transition-colors duration-dash hover:bg-accent-blue disabled:opacity-40'
+								className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[color:var(--fg)] text-[color:var(--bg)] transition-opacity hover:opacity-90 disabled:opacity-40'
 								title='Send follow-up'
 							>
-								<IconSend size={18} />
+								<IconSend size={16} />
 							</button>
 							<button
 								onClick={onStop}
-								className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-accent-red/40 bg-accent-red/10 text-accent-red transition-colors hover:bg-accent-red/20'
+								className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent-red/15 text-accent-red transition-colors hover:bg-accent-red/25'
 								title='Stop'
 							>
-								<IconPlayerStop size={18} />
+								<IconPlayerStop size={16} />
 							</button>
 						</>
 					) : (
 						<button
 							onClick={() => { onSend(attachments.length > 0 ? attachments : undefined); setAttachments([]) }}
 							disabled={(!value.trim() && attachments.length === 0) || !isConnected}
-							className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-accent-blue text-white transition-colors duration-dash hover:bg-accent-blue/90 disabled:opacity-40'
+							className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[color:var(--fg)] text-[color:var(--bg)] transition-opacity hover:opacity-90 disabled:opacity-40'
 							title='Send'
 						>
-							<IconSend size={18} />
+							<IconSend size={16} />
 						</button>
 					)}
 				</div>
 			</div>
 			{!isConnected && !isStreaming && (
 				<div className='mx-auto mt-1 max-w-3xl'>
-					<span className='text-xs text-text-tertiary'>Disconnected -- attempting to reconnect...</span>
+					<span className='text-[11px] text-[color:var(--fg-faint)]'>Disconnected -- attempting to reconnect...</span>
 				</div>
 			)}
 		</div>

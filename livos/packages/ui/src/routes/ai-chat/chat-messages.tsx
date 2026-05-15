@@ -430,8 +430,10 @@ export function AgentToolCallDisplay({toolCall}: {toolCall: ChatToolCall}) {
 export function UserMessage({message}: {message: ChatMessage}) {
 	return (
 		<div className='flex justify-end'>
-			<div className='max-w-[85%] rounded-2xl rounded-br-md bg-accent-blue px-4 py-2.5 text-white'>
-				<p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
+			{/* Phase 130-04 — v36 user bubble: monochrome ink-on-paper invert with
+			    the asymmetric bottom-right corner from design-system.html §13. */}
+			<div className='max-w-[88%] rounded-2xl rounded-br-[6px] bg-[color:var(--fg)] px-3.5 py-[11px] text-[14px] leading-[1.4] text-[color:var(--bg)]'>
+				<p className='whitespace-pre-wrap break-words'>{message.content}</p>
 			</div>
 		</div>
 	)
@@ -447,7 +449,9 @@ export function AssistantMessage({message}: {message: ChatMessage}) {
 
 	return (
 		<div className='flex justify-start'>
-			<div className='min-w-0 max-w-[90%] rounded-2xl border border-dash-line bg-card-bg-2 px-4 py-2.5' style={{overflowWrap: 'break-word', wordBreak: 'break-word'}}>
+			{/* Phase 130-04 — v36 assistant bubble: hairline border + theme-aware
+			    surface + asymmetric bottom-left corner from design-system.html §13. */}
+			<div className='min-w-0 max-w-[90%] rounded-2xl rounded-bl-[6px] border border-line bg-[color:var(--bg)] px-3.5 py-[11px] text-[14px] leading-[1.4] text-[color:var(--fg)]' style={{overflowWrap: 'break-word', wordBreak: 'break-word'}}>
 				{/* Render blocks in order — text and tools interleaved */}
 				{blocks && blocks.map((block, idx) => {
 					if (block.type === 'text') {
