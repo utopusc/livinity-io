@@ -1,7 +1,8 @@
+import {Button as UiKitButton} from '@livinity/ui-kit'
+
 import {Markdown} from '@/components/markdown'
 import {useGlobalSystemState} from '@/providers/global-system-state/index'
 import {useSettingsDialogProps} from '@/routes/settings/_components/shared'
-import {Button} from '@/shadcn-components/ui/button'
 import {Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle} from '@/shadcn-components/ui/dialog'
 import {ScrollArea} from '@/shadcn-components/ui/scroll-area'
 import {trpcReact} from '@/trpc/trpc'
@@ -37,19 +38,20 @@ export function SoftwareUpdateConfirmDialog() {
 					)}
 				</ScrollArea>
 				<DialogFooter className='px-4 sm:px-8'>
-					<Button
-						variant='primary'
-						size='dialog'
+					{/* Phase 120-03: ui-kit <Button> swap. shadcn variant='primary'/size='dialog' → ui-kit variant='solid'/size='md'. update() call preserved verbatim. */}
+					<UiKitButton
+						variant='solid'
+						size='md'
 						onClick={() => {
 							dialogProps.onOpenChange(false)
 							update()
 						}}
 					>
 						{t('software-update.install-now')}
-					</Button>
-					<Button size='dialog' onClick={() => dialogProps.onOpenChange(false)}>
+					</UiKitButton>
+					<UiKitButton variant='ghost' size='md' onClick={() => dialogProps.onOpenChange(false)}>
 						{t('cancel')}
-					</Button>
+					</UiKitButton>
 					{/* <DialogAction variant='destructive' className='px-6' onClick={logout}>
 						{t('logout.confirm.submit')}
 					</DialogAction>
