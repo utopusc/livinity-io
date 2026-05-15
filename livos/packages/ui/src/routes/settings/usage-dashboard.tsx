@@ -295,7 +295,7 @@ function DailyChart({data}: {data: DailyUsage[]}) {
 							/>
 							{/* Input portion (bottom, darker) */}
 							<div
-								className='w-full bg-blue-500'
+								className='w-full bg-accent-blue'
 								style={{height: `${inputPct}%`}}
 							/>
 						</div>

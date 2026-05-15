@@ -75,12 +75,12 @@ export function ModelIdentityCard() {
 							</pre>
 						)}
 						{(verdict === 'dist-drift' || verdict === 'both') && (
-							<div className='text-caption mt-2 text-amber-300'>
+							<div className='text-caption mt-2 text-accent-amber'>
 								Recommended: re-run /opt/livos/update.sh on the Mini PC.
 							</div>
 						)}
 						{(verdict === 'source-confabulation' || verdict === 'both') && (
-							<div className='text-caption mt-2 text-amber-300'>
+							<div className='text-caption mt-2 text-accent-amber'>
 								Recommended: deploy nexus/core with Phase 47 Branch B systemPrompt fix.
 							</div>
 						)}

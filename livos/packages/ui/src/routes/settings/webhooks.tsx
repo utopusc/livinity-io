@@ -56,7 +56,7 @@ function CopyButton({text}: {text: string}) {
 			className='p-1 rounded text-text-tertiary hover:text-text-primary transition-colors'
 			title='Copy to clipboard'
 		>
-			{copied ? <TbCheck className='h-3.5 w-3.5 text-green-400' /> : <TbCopy className='h-3.5 w-3.5' />}
+			{copied ? <TbCheck className='h-3.5 w-3.5 text-accent-green' /> : <TbCopy className='h-3.5 w-3.5' />}
 		</button>
 	)
 }
@@ -105,11 +105,11 @@ export function WebhooksContent() {
 		<div className='space-y-6'>
 			{/* ── Created Webhook Secret Banner ─────────── */}
 			{createdResult && (
-				<div className='rounded-radius-md border border-green-500/30 bg-green-500/10 p-4 space-y-3'>
+				<div className='rounded-radius-md border border-accent-green/30 bg-accent-green/10 p-4 space-y-3'>
 					<div className='flex items-start gap-3'>
-						<TbCheck className='h-5 w-5 text-green-400 mt-0.5 shrink-0' />
+						<TbCheck className='h-5 w-5 text-accent-green mt-0.5 shrink-0' />
 						<div className='flex-1 space-y-2'>
-							<div className='text-body font-medium text-green-400'>Webhook Created</div>
+							<div className='text-body font-medium text-accent-green'>Webhook Created</div>
 							<p className='text-caption text-text-secondary'>
 								Save the secret below. It will not be shown again.
 							</p>
@@ -189,7 +189,7 @@ export function WebhooksContent() {
 						</Button>
 					</div>
 					{createMutation.isError && (
-						<p className='text-caption text-red-400 flex items-center gap-1.5'>
+						<p className='text-caption text-accent-red flex items-center gap-1.5'>
 							<TbAlertCircle className='h-3.5 w-3.5' />
 							{createMutation.error.message}
 						</p>
@@ -241,7 +241,7 @@ export function WebhooksContent() {
 								<div className='shrink-0'>
 									{deleteConfirm === wh.id ? (
 										<div className='flex items-center gap-2'>
-											<span className='text-caption text-red-400'>Delete?</span>
+											<span className='text-caption text-accent-red'>Delete?</span>
 											<Button
 												variant='destructive'
 												size='sm'
@@ -261,7 +261,7 @@ export function WebhooksContent() {
 									) : (
 										<button
 											onClick={() => setDeleteConfirm(wh.id)}
-											className='p-2 rounded-radius-sm text-text-tertiary hover:text-red-400 hover:bg-red-500/10 transition-colors'
+											className='p-2 rounded-radius-sm text-text-tertiary hover:text-accent-red hover:bg-accent-red/10 transition-colors'
 											title='Delete webhook'
 										>
 											<TbTrash className='h-4 w-4' />

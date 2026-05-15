@@ -68,12 +68,12 @@ export function RegistryCard() {
 							{preconditionCount} · Disabled by user: {disabledCount} · Extras: {extrasCount}
 						</div>
 						{lostCount > 0 && q.data && (
-							<div className='text-caption mt-1 text-amber-300'>
+							<div className='text-caption mt-1 text-accent-amber'>
 								Missing: {q.data.categorized.missing.lost.join(', ')}
 							</div>
 						)}
 						{flush.error && (
-							<div className='text-caption mt-1 text-red-300'>
+							<div className='text-caption mt-1 text-accent-red'>
 								Re-sync failed: {flush.error.message}
 							</div>
 						)}

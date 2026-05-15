@@ -957,7 +957,7 @@ function AiConfigSection() {
 					</div>
 				) : isConnected ? (
 					<div className='space-y-3'>
-						<div className='flex items-center gap-2 text-body-sm text-green-400'>
+						<div className='flex items-center gap-2 text-body-sm text-accent-green'>
 							<TbCircleCheck className='h-4 w-4' />
 							Connected to Kimi
 						</div>
@@ -974,12 +974,12 @@ function AiConfigSection() {
 							)}
 						</Button>
 						{logoutMutation.isError && (
-							<p className='text-caption text-red-400'>{logoutMutation.error.message}</p>
+							<p className='text-caption text-accent-red'>{logoutMutation.error.message}</p>
 						)}
 					</div>
 				) : loginSession ? (
 					<div className='space-y-3'>
-						<div className='flex items-center gap-2 text-body-sm text-blue-400'>
+						<div className='flex items-center gap-2 text-body-sm text-accent-blue'>
 							<TbLoader2 className='h-4 w-4 animate-spin' />
 							Waiting for authorization...
 						</div>
@@ -1002,7 +1002,7 @@ function AiConfigSection() {
 					</div>
 				) : (
 					<div className='space-y-3'>
-						<div className='flex items-center gap-2 text-body-sm text-amber-400'>
+						<div className='flex items-center gap-2 text-body-sm text-accent-amber'>
 							<TbAlertCircle className='h-4 w-4' />
 							Not connected
 						</div>
@@ -1019,7 +1019,7 @@ function AiConfigSection() {
 							)}
 						</Button>
 						{loginMutation.isError && (
-							<p className='text-caption text-red-400'>{loginMutation.error.message}</p>
+							<p className='text-caption text-accent-red'>{loginMutation.error.message}</p>
 						)}
 					</div>
 				)}
@@ -1058,7 +1058,7 @@ function IntegrationsSection() {
 						Discord
 					</TabsTrigger>
 					<TabsTrigger value='whatsapp' className='flex items-center gap-1.5'>
-						<TbBrandWhatsapp className='h-4 w-4 text-green-400' />
+						<TbBrandWhatsapp className='h-4 w-4 text-accent-green' />
 						WhatsApp
 					</TabsTrigger>
 				</TabsList>
@@ -1105,11 +1105,11 @@ function TelegramPanel() {
 						<div className='text-caption text-text-secondary'>Connect via BotFather token</div>
 					</div>
 					{status?.connected ? (
-						<div className='flex items-center gap-2 text-caption text-green-400'>
+						<div className='flex items-center gap-2 text-caption text-accent-green'>
 							<TbPlugConnected className='h-4 w-4' /> Connected
 						</div>
 					) : (
-						<div className='flex items-center gap-2 text-caption text-red-400'>
+						<div className='flex items-center gap-2 text-caption text-accent-red'>
 							<TbPlugConnectedX className='h-4 w-4' /> Disconnected
 						</div>
 					)}
@@ -1187,11 +1187,11 @@ function DiscordPanel() {
 						<div className='text-caption text-text-secondary'>Connect your Discord bot</div>
 					</div>
 					{status?.connected ? (
-						<div className='flex items-center gap-2 text-caption text-green-400'>
+						<div className='flex items-center gap-2 text-caption text-accent-green'>
 							<TbPlugConnected className='h-4 w-4' /> Connected
 						</div>
 					) : (
-						<div className='flex items-center gap-2 text-caption text-red-400'>
+						<div className='flex items-center gap-2 text-caption text-accent-red'>
 							<TbPlugConnectedX className='h-4 w-4' /> Disconnected
 						</div>
 					)}
@@ -1277,21 +1277,21 @@ function WhatsAppPanel() {
 	return (
 		<div className='space-y-4'>
 			{/* Status Card */}
-			<div className='rounded-radius-md border border-green-500/30 bg-green-500/10 p-4'>
+			<div className='rounded-radius-md border border-accent-green/30 bg-accent-green/10 p-4'>
 				<div className='flex items-center gap-3'>
 					<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-surface-2'>
-						<TbBrandWhatsapp className='h-6 w-6 text-green-400' />
+						<TbBrandWhatsapp className='h-6 w-6 text-accent-green' />
 					</div>
 					<div className='flex-1'>
 						<div className='text-body-lg font-semibold'>WhatsApp</div>
 						<div className='text-caption text-text-secondary'>Scan QR code to connect</div>
 					</div>
 					{isConnected ? (
-						<div className='flex items-center gap-2 text-caption text-green-400'>
+						<div className='flex items-center gap-2 text-caption text-accent-green'>
 							<TbPlugConnected className='h-4 w-4' /> Connected
 						</div>
 					) : (
-						<div className='flex items-center gap-2 text-caption text-red-400'>
+						<div className='flex items-center gap-2 text-caption text-accent-red'>
 							<TbPlugConnectedX className='h-4 w-4' /> Disconnected
 						</div>
 					)}
@@ -1300,7 +1300,7 @@ function WhatsAppPanel() {
 					<div className='mt-2 text-caption text-text-secondary'>Phone: {status.botName}</div>
 				)}
 				{status?.error && !isConnected && !isConnecting && (
-					<div className='mt-2 text-caption text-red-400'>{status.error}</div>
+					<div className='mt-2 text-caption text-accent-red'>{status.error}</div>
 				)}
 			</div>
 
@@ -1521,13 +1521,13 @@ function BackupsSection() {
 					{hasBackups ? (
 						<>
 							{/* Backup Status */}
-							<div className='rounded-radius-md border border-green-500/30 bg-green-500/10 p-4'>
+							<div className='rounded-radius-md border border-accent-green/30 bg-accent-green/10 p-4'>
 								<div className='flex items-center gap-3'>
-									<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-green-500/20'>
-										<TbCheck className='h-5 w-5 text-green-400' />
+									<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-accent-green/20'>
+										<TbCheck className='h-5 w-5 text-accent-green' />
 									</div>
 									<div className='flex-1'>
-										<div className='text-body font-medium text-green-400'>Backups Configured</div>
+										<div className='text-body font-medium text-accent-green'>Backups Configured</div>
 										<div className='text-caption text-text-secondary'>
 											{backupRepositories?.length} backup location{(backupRepositories?.length ?? 0) > 1 ? 's' : ''} configured
 										</div>
@@ -1612,7 +1612,7 @@ function MigrationSection() {
 			<div className='space-y-3'>
 				<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
 					<div className='flex items-start gap-3'>
-						<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-blue-500/20 text-blue-400'>
+						<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-accent-blue/20 text-accent-blue'>
 							1
 						</div>
 						<div>
@@ -1623,7 +1623,7 @@ function MigrationSection() {
 				</div>
 				<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
 					<div className='flex items-start gap-3'>
-						<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-blue-500/20 text-blue-400'>
+						<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-accent-blue/20 text-accent-blue'>
 							2
 						</div>
 						<div>
@@ -1634,7 +1634,7 @@ function MigrationSection() {
 				</div>
 				<div className='rounded-radius-md border border-border-default bg-surface-base p-4'>
 					<div className='flex items-start gap-3'>
-						<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-blue-500/20 text-blue-400'>
+						<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-accent-blue/20 text-accent-blue'>
 							3
 						</div>
 						<div>
@@ -1713,7 +1713,7 @@ function TroubleshootSection() {
 							<h3 className='text-body-sm font-medium text-text-secondary'>Recent System Logs</h3>
 							<button
 								onClick={() => setShowFullLogs(true)}
-								className='text-caption text-blue-400 hover:text-blue-300'
+								className='text-caption text-accent-blue hover:text-accent-blue'
 							>
 								View Full Logs
 							</button>
@@ -1757,7 +1757,7 @@ function TroubleshootSection() {
 								<h3 className='text-body-sm font-medium text-text-secondary'>App Logs</h3>
 								<button
 									onClick={() => setShowFullLogs(true)}
-									className='text-caption text-blue-400 hover:text-blue-300'
+									className='text-caption text-accent-blue hover:text-accent-blue'
 								>
 									View Full Logs
 								</button>
@@ -1856,9 +1856,9 @@ function AdvancedSection() {
 			<SecurityToggleRow />
 
 			{/* Factory Reset */}
-			<div className='flex items-center justify-between rounded-radius-md border border-red-500/20 bg-red-500/5 p-4'>
+			<div className='flex items-center justify-between rounded-radius-md border border-accent-red/20 bg-accent-red/5 p-4'>
 				<div>
-					<div className='text-body font-medium text-red-400'>{t('factory-reset')}</div>
+					<div className='text-body font-medium text-accent-red'>{t('factory-reset')}</div>
 					<div className='text-caption text-text-secondary'>{t('factory-reset-description')}</div>
 				</div>
 				<IconButtonLink to='/factory-reset' text='destructive'>

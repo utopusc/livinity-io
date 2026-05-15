@@ -71,7 +71,7 @@ export function WallpaperPicker({maxW}: {maxW?: number}) {
 		<div ref={containerRef} className='flex-grow-1 flex h-7 max-w-full items-center animate-in fade-in'>
 			<div
 				className={cn(
-					'livinity-hide-scrollbar livinity-wallpaper-fade-scroller w-full items-center overflow-x-auto bg-red-500/0 py-3',
+					'livinity-hide-scrollbar livinity-wallpaper-fade-scroller w-full items-center overflow-x-auto bg-accent-red/0 py-3',
 					!maxW && 'md:max-w-[350px]',
 				)}
 				ref={scrollerRef}

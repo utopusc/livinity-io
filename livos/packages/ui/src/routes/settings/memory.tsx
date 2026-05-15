@@ -181,7 +181,7 @@ function MemoriesTab() {
 								disabled={deleteMut.isPending}
 								className={cn(
 									'shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center',
-									'rounded-md text-text-tertiary hover:text-red-400 hover:bg-surface-2 transition-colors',
+									'rounded-md text-text-tertiary hover:text-accent-red hover:bg-surface-2 transition-colors',
 									'opacity-0 group-hover:opacity-100 focus:opacity-100',
 									deleteMut.isPending && 'opacity-50 pointer-events-none',
 								)}
@@ -362,8 +362,8 @@ function ConversationsTab() {
 											className={cn(
 												'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium',
 												isUser
-													? 'bg-blue-500/20 text-blue-400'
-													: 'bg-green-500/20 text-green-400',
+													? 'bg-accent-blue/20 text-accent-blue'
+													: 'bg-accent-green/20 text-accent-green',
 											)}
 										>
 											{isUser ? 'User' : 'AI'}
@@ -383,7 +383,7 @@ function ConversationsTab() {
 									disabled={deleteMut.isPending}
 									className={cn(
 										'shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center',
-										'rounded-md text-text-tertiary hover:text-red-400 hover:bg-surface-2 transition-colors',
+										'rounded-md text-text-tertiary hover:text-accent-red hover:bg-surface-2 transition-colors',
 										'opacity-0 group-hover:opacity-100 focus:opacity-100',
 										deleteMut.isPending && 'opacity-50 pointer-events-none',
 									)}

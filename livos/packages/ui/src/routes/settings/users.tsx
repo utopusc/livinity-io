@@ -90,7 +90,7 @@ export function UsersSection() {
 						onClick={() => multiUserMut.mutate(!multiUserQ.data)}
 						disabled={multiUserMut.isPending}
 						className={`relative flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
-							multiUserQ.data ? 'bg-green-500' : 'bg-white/20'
+							multiUserQ.data ? 'bg-accent-green' : 'bg-white/20'
 						}`}
 					>
 						<div
@@ -212,7 +212,7 @@ function UserListItem({user, isCurrentUser}: {user: UserRow; isCurrentUser: bool
 							<span className='shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-caption text-brand'>You</span>
 						)}
 						{!user.is_active && (
-							<span className='shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-caption text-red-600'>Disabled</span>
+							<span className='shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-caption text-accent-red'>Disabled</span>
 						)}
 					</div>
 					<div className='text-caption text-text-tertiary'>@{user.username}</div>
@@ -407,7 +407,7 @@ function InviteDialog({open, onOpenChange}: {open: boolean; onOpenChange: (open:
 							<div className='flex items-center gap-2 overflow-hidden rounded-radius-md border border-border-default bg-surface-base p-3'>
 								<code className='min-w-0 flex-1 truncate text-caption font-mono text-text-primary'>{inviteUrl}</code>
 								<Button variant='default' size='sm' className='shrink-0' onClick={handleCopy}>
-									{copied ? <TbCheck className='h-4 w-4 text-green-500' /> : <TbCopy className='h-4 w-4' />}
+									{copied ? <TbCheck className='h-4 w-4 text-accent-green' /> : <TbCopy className='h-4 w-4' />}
 								</Button>
 							</div>
 						</div>

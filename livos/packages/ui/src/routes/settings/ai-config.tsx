@@ -266,7 +266,7 @@ export default function AiConfigPage() {
 							</div>
 						) : isKimiConnected ? (
 							<div className='space-y-3'>
-								<div className='flex items-center gap-2 text-body-sm text-green-400'>
+								<div className='flex items-center gap-2 text-body-sm text-accent-green'>
 									<TbCircleCheck className='h-4 w-4' />
 									Connected to Kimi
 								</div>
@@ -290,13 +290,13 @@ export default function AiConfigPage() {
 									)}
 								</Button>
 								{logoutMutation.isError && (
-									<p className='text-caption text-red-400'>{logoutMutation.error.message}</p>
+									<p className='text-caption text-accent-red'>{logoutMutation.error.message}</p>
 								)}
 							</div>
 						) : loginSession ? (
 							/* Login in progress -- show verification URL + code */
 							<div className='space-y-3'>
-								<div className='flex items-center gap-2 text-body-sm text-blue-400'>
+								<div className='flex items-center gap-2 text-body-sm text-accent-blue'>
 									<TbLoader2 className='h-4 w-4 animate-spin' />
 									Waiting for authorization...
 								</div>
@@ -308,7 +308,7 @@ export default function AiConfigPage() {
 										<span className='text-body-sm font-medium text-text-primary'>Code</span>
 										<button
 											onClick={handleCopyCode}
-											className='flex items-center gap-1 text-caption text-blue-400 hover:text-blue-300 transition-colors'
+											className='flex items-center gap-1 text-caption text-accent-blue hover:text-accent-blue transition-colors'
 										>
 											{copied ? <TbCheck className='h-3.5 w-3.5' /> : <TbCopy className='h-3.5 w-3.5' />}
 											{copied ? 'Copied' : 'Copy'}
@@ -339,7 +339,7 @@ export default function AiConfigPage() {
 							</div>
 						) : (
 							<div className='space-y-3'>
-								<div className='flex items-center gap-2 text-body-sm text-amber-400'>
+								<div className='flex items-center gap-2 text-body-sm text-accent-amber'>
 									<TbAlertCircle className='h-4 w-4' />
 									Not connected
 								</div>
@@ -363,7 +363,7 @@ export default function AiConfigPage() {
 									)}
 								</Button>
 								{loginMutation.isError && (
-									<p className='text-caption text-red-400'>{loginMutation.error.message}</p>
+									<p className='text-caption text-accent-red'>{loginMutation.error.message}</p>
 								)}
 							</div>
 						)}
@@ -389,7 +389,7 @@ export default function AiConfigPage() {
 								</div>
 							) : isPerUserClaudeConnected ? (
 								<div className='space-y-3'>
-									<div className='flex items-center gap-2 text-body-sm text-green-400'>
+									<div className='flex items-center gap-2 text-body-sm text-accent-green'>
 										<TbCircleCheck className='h-4 w-4' />
 										Connected — your Claude subscription
 									</div>
@@ -413,7 +413,7 @@ export default function AiConfigPage() {
 										)}
 									</Button>
 									{claudePerUserLogoutMutation.isError && (
-										<p className='text-caption text-red-400'>
+										<p className='text-caption text-accent-red'>
 											{claudePerUserLogoutMutation.error.message}
 										</p>
 									)}
@@ -422,7 +422,7 @@ export default function AiConfigPage() {
 								<div className='space-y-3'>
 									{perUserDeviceCode ? (
 										<>
-											<div className='flex items-center gap-2 text-body-sm text-blue-400'>
+											<div className='flex items-center gap-2 text-body-sm text-accent-blue'>
 												<TbLoader2 className='h-4 w-4 animate-spin' />
 												Waiting for authorization...
 											</div>
@@ -473,7 +473,7 @@ export default function AiConfigPage() {
 								</div>
 							) : (
 								<div className='space-y-4'>
-									<div className='flex items-center gap-2 text-body-sm text-amber-400'>
+									<div className='flex items-center gap-2 text-body-sm text-accent-amber'>
 										<TbAlertCircle className='h-4 w-4' />
 										Not connected
 									</div>
@@ -485,7 +485,7 @@ export default function AiConfigPage() {
 										<span className='ml-2'>Sign in with Claude sub</span>
 									</Button>
 									{perUserLoginError ? (
-										<p className='text-caption text-red-400'>{perUserLoginError}</p>
+										<p className='text-caption text-accent-red'>{perUserLoginError}</p>
 									) : null}
 								</div>
 							)}
@@ -507,7 +507,7 @@ export default function AiConfigPage() {
 							</div>
 						) : isClaudeConnected ? (
 							<div className='space-y-3'>
-								<div className='flex items-center gap-2 text-body-sm text-green-400'>
+								<div className='flex items-center gap-2 text-body-sm text-accent-green'>
 									<TbCircleCheck className='h-4 w-4' />
 									Connected to Claude
 								</div>
@@ -531,13 +531,13 @@ export default function AiConfigPage() {
 									)}
 								</Button>
 								{claudeLogoutMutation.isError && (
-									<p className='text-caption text-red-400'>{claudeLogoutMutation.error.message}</p>
+									<p className='text-caption text-accent-red'>{claudeLogoutMutation.error.message}</p>
 								)}
 							</div>
 						) : claudeOAuthData ? (
 							/* OAuth in progress -- show code input */
 							<div className='space-y-3'>
-								<div className='flex items-center gap-2 text-body-sm text-blue-400'>
+								<div className='flex items-center gap-2 text-body-sm text-accent-blue'>
 									<TbLoader2 className='h-4 w-4 animate-spin' />
 									Waiting for authorization...
 								</div>
@@ -575,7 +575,7 @@ export default function AiConfigPage() {
 									</Button>
 								</div>
 								{claudeSubmitCodeMutation.isError && (
-									<p className='text-caption text-red-400'>{claudeSubmitCodeMutation.error.message}</p>
+									<p className='text-caption text-accent-red'>{claudeSubmitCodeMutation.error.message}</p>
 								)}
 								<Button
 									variant='secondary'
@@ -591,7 +591,7 @@ export default function AiConfigPage() {
 							</div>
 						) : (
 							<div className='space-y-4'>
-								<div className='flex items-center gap-2 text-body-sm text-amber-400'>
+								<div className='flex items-center gap-2 text-body-sm text-accent-amber'>
 									<TbAlertCircle className='h-4 w-4' />
 									Not connected
 								</div>
@@ -628,7 +628,7 @@ export default function AiConfigPage() {
 										</Button>
 									</div>
 									{setClaudeApiKeyMutation.isError && (
-										<p className='text-caption text-red-400'>{setClaudeApiKeyMutation.error.message}</p>
+										<p className='text-caption text-accent-red'>{setClaudeApiKeyMutation.error.message}</p>
 									)}
 								</div>
 
@@ -652,7 +652,7 @@ export default function AiConfigPage() {
 										)}
 									</Button>
 									{claudeStartLoginMutation.isError && (
-										<p className='text-caption text-red-400'>{claudeStartLoginMutation.error.message}</p>
+										<p className='text-caption text-accent-red'>{claudeStartLoginMutation.error.message}</p>
 									)}
 								</div>
 							</div>

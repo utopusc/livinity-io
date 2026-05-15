@@ -68,11 +68,11 @@ export function DmPairingContent() {
 	return (
 		<div className='space-y-4'>
 			{/* Info Banner */}
-			<div className='rounded-radius-md border border-amber-500/30 bg-amber-500/10 p-4'>
+			<div className='rounded-radius-md border border-accent-amber/30 bg-accent-amber/10 p-4'>
 				<div className='flex items-start gap-3'>
-					<TbShieldLock className='mt-0.5 h-5 w-5 text-amber-400 shrink-0' />
+					<TbShieldLock className='mt-0.5 h-5 w-5 text-accent-amber shrink-0' />
 					<div>
-						<div className='text-body font-medium text-amber-400'>DM Pairing Security</div>
+						<div className='text-body font-medium text-accent-amber'>DM Pairing Security</div>
 						<div className='mt-1 text-caption text-text-secondary'>
 							When someone sends a DM to your bot, they receive a 6-digit activation code.
 							You must approve or deny the request before they can interact with the AI.
@@ -182,7 +182,7 @@ function PendingRequestsPanel() {
 										<div>
 											<div className='text-body font-medium'>{req.userName}</div>
 											<div className='text-caption text-text-secondary'>
-												{channelInfo?.name || req.channel} &middot; Code: <span className='font-mono font-medium text-amber-400'>{req.code}</span>
+												{channelInfo?.name || req.channel} &middot; Code: <span className='font-mono font-medium text-accent-amber'>{req.code}</span>
 											</div>
 											<div className='text-caption-sm text-text-tertiary'>
 												User ID: {req.userId} &middot; {timeAgo}
@@ -299,8 +299,8 @@ function AllowlistPanel() {
 							className='flex items-center justify-between rounded-radius-sm border border-border-default bg-surface-base px-4 py-3'
 						>
 							<div className='flex items-center gap-3'>
-								<div className='flex h-8 w-8 items-center justify-center rounded-full bg-green-500/20'>
-									<TbCheck className='h-4 w-4 text-green-400' />
+								<div className='flex h-8 w-8 items-center justify-center rounded-full bg-accent-green/20'>
+									<TbCheck className='h-4 w-4 text-accent-green' />
 								</div>
 								<div>
 									<div className='text-body-sm font-mono'>{userId}</div>
@@ -315,7 +315,7 @@ function AllowlistPanel() {
 								{removeMutation.isPending ? (
 									<Loader2 className='h-3.5 w-3.5 animate-spin' />
 								) : (
-									<TbTrash className='h-3.5 w-3.5 text-red-400' />
+									<TbTrash className='h-3.5 w-3.5 text-accent-red' />
 								)}
 							</Button>
 						</div>
@@ -376,7 +376,7 @@ function ChannelPolicyRow({channel}: {channel: (typeof CHANNELS)[number]}) {
 				</div>
 
 				<div className='flex items-center gap-2 shrink-0'>
-					{saved && <TbCheck className='h-4 w-4 text-green-400' />}
+					{saved && <TbCheck className='h-4 w-4 text-accent-green' />}
 					<Select
 						value={currentPolicy}
 						onValueChange={handleChange}
