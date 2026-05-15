@@ -406,7 +406,7 @@ function StepPersonalizeAI({
 		<div className='flex flex-col items-center gap-5 w-full'>
 			<div className='flex flex-col items-center gap-2'>
 				<div className='flex items-center gap-2'>
-					<TbSparkles size={20} className='text-amber-400' />
+					<TbSparkles size={20} className='text-accent-amber' />
 					<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'>
 						Personalize your AI
 					</h2>
@@ -518,8 +518,8 @@ function StepAllDone({displayName}: {displayName: string}) {
 					scale={1.5}
 					duration={3}
 				/>
-				<div className='relative flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20 border border-green-500/30'>
-					<TbCheck size={40} className='text-green-400' />
+				<div className='relative flex h-20 w-20 items-center justify-center rounded-full bg-accent-green/20 border border-accent-green/30'>
+					<TbCheck size={40} className='text-accent-green' />
 				</div>
 			</motion.div>
 
@@ -626,7 +626,7 @@ export default function InviteAcceptPage() {
 					style={glassCardStyle}
 				>
 					<LivinityLogo className='w-[80px]' />
-					<p className='text-body text-red-500'>Invalid or expired invite link.</p>
+					<p className='text-body text-accent-red'>Invalid or expired invite link.</p>
 					<button onClick={() => navigate('/login')} className={secondaryButtonClass}>
 						Go to Login
 					</button>

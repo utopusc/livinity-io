@@ -201,10 +201,10 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 					<div className='mb-2 flex flex-wrap gap-2 overflow-x-hidden'>
 						{attachments.map((att, i) => (
 							<div key={i} className='flex items-center gap-1.5 rounded-md border border-dash-line bg-card-bg-2 px-2 py-1 text-xs text-text-secondary'>
-								{isImage(att.mimeType) ? <IconPhoto size={14} className='text-blue-400' /> : <IconFile size={14} className='text-orange-400' />}
+								{isImage(att.mimeType) ? <IconPhoto size={14} className='text-accent-blue' /> : <IconFile size={14} className='text-orange-400' />}
 								<span className='max-w-[120px] truncate'>{att.name}</span>
 								<span className='text-text-tertiary'>({formatSize(att.size)})</span>
-								<button onClick={() => removeAttachment(i)} className='ml-0.5 text-text-tertiary hover:text-red-400'>
+								<button onClick={() => removeAttachment(i)} className='ml-0.5 text-text-tertiary hover:text-accent-red'>
 									<IconX size={12} />
 								</button>
 							</div>
@@ -273,7 +273,7 @@ export function ChatInput({value, onChange, onSend, onStop, isStreaming, isConne
 							</button>
 							<button
 								onClick={onStop}
-								className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20'
+								className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-accent-red/40 bg-accent-red/10 text-accent-red transition-colors hover:bg-accent-red/20'
 								title='Stop'
 							>
 								<IconPlayerStop size={18} />

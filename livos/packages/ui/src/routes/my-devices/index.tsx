@@ -92,7 +92,7 @@ function DeviceCard({
 				<PlatformIcon size={28} className='text-text-secondary' />
 				{device.online ? (
 					<motion.div
-						className='h-3 w-3 rounded-full bg-green-500'
+						className='h-3 w-3 rounded-full bg-accent-green'
 						animate={{scale: [1, 1.5, 1], opacity: [1, 0.5, 1]}}
 						transition={{duration: 2, repeat: Infinity}}
 					/>
@@ -319,9 +319,9 @@ function AuditEntryRow({entry}: {entry: {timestamp: string; toolName: string; pa
 		<div className='border-b border-border-subtle last:border-b-0'>
 			<button onClick={() => setExpanded(!expanded)} className='flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2'>
 				{entry.success ? (
-					<IconCheck size={16} className='shrink-0 text-green-500' />
+					<IconCheck size={16} className='shrink-0 text-accent-green' />
 				) : (
-					<IconX size={16} className='shrink-0 text-red-500' />
+					<IconX size={16} className='shrink-0 text-accent-red' />
 				)}
 				<Badge variant='default' className='shrink-0 text-xs'>
 					{entry.toolName}
@@ -333,7 +333,7 @@ function AuditEntryRow({entry}: {entry: {timestamp: string; toolName: string; pa
 			{expanded && (
 				<div className='bg-surface-0 px-4 py-3'>
 					<pre className='max-h-40 overflow-auto rounded bg-surface-1 p-2 text-xs text-text-secondary'>{JSON.stringify(entry.params, null, 2)}</pre>
-					{entry.error && <p className='mt-2 text-xs text-red-400'>{entry.error}</p>}
+					{entry.error && <p className='mt-2 text-xs text-accent-red'>{entry.error}</p>}
 				</div>
 			)}
 		</div>

@@ -117,7 +117,7 @@ function CopyButton({text}: {text: string}) {
 
 	return (
 		<button onClick={handleCopy} className='p-1.5 rounded text-text-tertiary hover:text-text-secondary transition-colors' title='Copy'>
-			{copied ? <IconCheck size={14} className='text-green-400' /> : <IconCopy size={14} />}
+			{copied ? <IconCheck size={14} className='text-accent-green' /> : <IconCopy size={14} />}
 		</button>
 	)
 }
@@ -457,7 +457,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 		<div className='flex flex-col items-center gap-5 w-full'>
 			<div className='flex flex-col items-center gap-2'>
 				<div className='flex items-center gap-2'>
-					<IconGlobe size={20} className='text-blue-400' />
+					<IconGlobe size={20} className='text-accent-blue' />
 					<h2 className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'>
 						{t('onboarding.domain.title', {defaultValue: 'Connect your domain'})}
 					</h2>
@@ -488,7 +488,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 
 					{serverIp && (
 						<div className='flex items-center gap-2 rounded-xl bg-surface-1 border border-border-subtle px-4 py-3'>
-							<IconGlobe size={14} className='text-blue-400' />
+							<IconGlobe size={14} className='text-accent-blue' />
 							<span className='text-caption text-text-tertiary'>Server IP:</span>
 							<span className='font-mono text-caption text-text-primary'>{serverIp}</span>
 							<CopyButton text={serverIp} />
@@ -554,8 +554,8 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 							className='w-full rounded-xl border border-border-default bg-surface-base px-4 py-4 text-left transition-all hover:border-violet-400/50 hover:bg-surface-1 group'
 						>
 							<div className='flex items-start gap-3'>
-								<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-500/15 group-hover:bg-blue-500/20 transition-colors'>
-									<TbWorldWww size={18} className='text-blue-400' />
+								<div className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-accent-blue/15 group-hover:bg-accent-blue/20 transition-colors'>
+									<TbWorldWww size={18} className='text-accent-blue' />
 								</div>
 								<div className='flex-1 min-w-0'>
 									<span className='text-body font-medium text-text-primary'>Direct (DNS + Let's Encrypt)</span>
@@ -602,7 +602,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 									href='https://one.dash.cloudflare.com/'
 									target='_blank'
 									rel='noopener noreferrer'
-									className='inline-flex items-center gap-0.5 text-blue-400 hover:text-blue-300 transition-colors'
+									className='inline-flex items-center gap-0.5 text-accent-blue hover:text-accent-blue transition-colors'
 								>
 									Cloudflare Zero Trust Dashboard
 									<IconExternalLink size={11} className='ml-0.5' />
@@ -626,7 +626,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 					</div>
 
 					{tunnelError && (
-						<div className='flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-caption text-red-400'>
+						<div className='flex items-start gap-2 rounded-xl bg-accent-red/10 border border-accent-red/20 px-4 py-3 text-caption text-accent-red'>
 							<IconAlertCircle size={14} className='mt-0.5 flex-shrink-0' />
 							<span>{tunnelError}</span>
 						</div>
@@ -685,7 +685,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 							<tbody>
 								<tr>
 									<td className='px-4 py-3'>
-										<span className='rounded bg-blue-500/20 px-2 py-0.5 font-mono font-medium text-blue-400'>A</span>
+										<span className='rounded bg-accent-blue/20 px-2 py-0.5 font-mono font-medium text-accent-blue'>A</span>
 									</td>
 									<td className='px-4 py-3'>
 										<div className='flex items-center gap-1.5'>
@@ -707,7 +707,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 						</table>
 					</div>
 
-					<div className='rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-caption text-amber-400/80'>
+					<div className='rounded-xl bg-accent-amber/10 border border-accent-amber/20 px-4 py-3 text-caption text-accent-amber/80'>
 						DNS changes can take a few minutes to propagate. Setting TTL to 300 (5 minutes) helps speed this up.
 					</div>
 
@@ -751,12 +751,12 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 									initial={{scale: 0}}
 									animate={{scale: 1}}
 									transition={{type: 'spring', stiffness: 400, damping: 15}}
-									className='flex h-8 w-8 items-center justify-center rounded-full bg-green-500/20'
+									className='flex h-8 w-8 items-center justify-center rounded-full bg-accent-green/20'
 								>
-									<IconCheck size={18} className='text-green-400' />
+									<IconCheck size={18} className='text-accent-green' />
 								</motion.div>
 								<div>
-									<span className='text-body font-medium text-green-400'>DNS verified!</span>
+									<span className='text-body font-medium text-accent-green'>DNS verified!</span>
 									<p className='mt-0.5 text-caption text-text-tertiary'>
 										<span className='font-mono'>{domain}</span> resolves to{' '}
 										<span className='font-mono'>{verifyQuery.data?.currentIp ?? ''}</span>
@@ -766,11 +766,11 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 						) : (
 							<div className='space-y-3'>
 								<div className='flex items-center gap-3'>
-									<div className='flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/20'>
-										<IconAlertCircle size={18} className='text-amber-400' />
+									<div className='flex h-8 w-8 items-center justify-center rounded-full bg-accent-amber/20'>
+										<IconAlertCircle size={18} className='text-accent-amber' />
 									</div>
 									<div>
-										<span className='text-body font-medium text-amber-400'>Not yet resolved</span>
+										<span className='text-body font-medium text-accent-amber'>Not yet resolved</span>
 										<p className='mt-0.5 text-caption text-text-tertiary'>DNS records may need more time to propagate.</p>
 									</div>
 								</div>
@@ -837,7 +837,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 
 					<div className='space-y-3 rounded-xl border border-border-default bg-surface-base p-4'>
 						<div className='flex items-start gap-3'>
-							<IconLock size={16} className='mt-0.5 flex-shrink-0 text-green-400' />
+							<IconLock size={16} className='mt-0.5 flex-shrink-0 text-accent-green' />
 							<div>
 								<p className='text-body text-text-primary'>Free SSL certificate from Let's Encrypt</p>
 								<p className='mt-0.5 text-caption text-text-tertiary'>
@@ -846,7 +846,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 							</div>
 						</div>
 						<div className='flex items-start gap-3'>
-							<IconGlobe size={16} className='mt-0.5 flex-shrink-0 text-blue-400' />
+							<IconGlobe size={16} className='mt-0.5 flex-shrink-0 text-accent-blue' />
 							<div>
 								<p className='text-body text-text-primary'>HTTP to HTTPS redirect</p>
 								<p className='mt-0.5 text-caption text-text-tertiary'>
@@ -857,7 +857,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 					</div>
 
 					{activateError && (
-						<div className='flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-caption text-red-400'>
+						<div className='flex items-start gap-2 rounded-xl bg-accent-red/10 border border-accent-red/20 px-4 py-3 text-caption text-accent-red'>
 							<IconAlertCircle size={14} className='mt-0.5 flex-shrink-0' />
 							<span>{activateError}</span>
 						</div>
@@ -871,7 +871,7 @@ function StepDomainSetup({onNext, onSkip}: {onNext: () => void; onSkip: () => vo
 						<button
 							onClick={handleActivate}
 							disabled={activating}
-							className={cn(primaryButtonClass, 'bg-green-600 shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:bg-green-500')}
+							className={cn(primaryButtonClass, 'bg-accent-green shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:bg-accent-green')}
 						>
 							{activating ? <IconLoader2 size={16} className='animate-spin' /> : <IconLock size={16} />}
 							Activate HTTPS
@@ -1090,12 +1090,12 @@ function StepKimiAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => void}
 							initial={{scale: 0}}
 							animate={{scale: 1}}
 							transition={{type: 'spring', stiffness: 400, damping: 15}}
-							className='flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20'
+							className='flex h-12 w-12 items-center justify-center rounded-full bg-accent-green/20'
 						>
-							<IconCheck size={24} className='text-green-400' />
+							<IconCheck size={24} className='text-accent-green' />
 						</motion.div>
 						<div className='text-center'>
-							<p className='text-body font-medium text-green-400'>
+							<p className='text-body font-medium text-accent-green'>
 								{t('onboarding.kimi.connected', {defaultValue: 'Connected'})}
 							</p>
 							<p className='mt-0.5 text-caption text-text-tertiary'>
@@ -1105,7 +1105,7 @@ function StepKimiAuth({onNext, onSkip}: {onNext: () => void; onSkip: () => void}
 					</motion.div>
 				) : loginSession ? (
 					<div className='space-y-4'>
-						<div className='flex items-center justify-center gap-2 text-blue-400'>
+						<div className='flex items-center justify-center gap-2 text-accent-blue'>
 							<IconLoader2 size={18} className='animate-spin' />
 							<span className='text-body'>Waiting for authorization...</span>
 						</div>
@@ -1201,13 +1201,13 @@ function StepAllDone({name}: {name: string}) {
 					scale={1.5}
 					duration={3}
 				/>
-				<div className='relative flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20 border border-green-500/30'>
+				<div className='relative flex h-20 w-20 items-center justify-center rounded-full bg-accent-green/20 border border-accent-green/30'>
 					<motion.div
 						initial={{pathLength: 0}}
 						animate={{pathLength: 1}}
 						transition={{delay: 0.5, duration: 0.5, ease: 'easeOut'}}
 					>
-						<IconCheck size={40} className='text-green-400' />
+						<IconCheck size={40} className='text-accent-green' />
 					</motion.div>
 				</div>
 			</motion.div>

@@ -50,7 +50,7 @@ function OfflineAgentBanner() {
 	const current = environments?.find((e) => e.id === selectedEnvironmentId)
 	if (!current || current.type !== 'agent' || current.agentStatus === 'online') return null
 	return (
-		<div className='shrink-0 mx-4 sm:mx-6 mb-3 rounded-radius-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300'>
+		<div className='shrink-0 mx-4 sm:mx-6 mb-3 rounded-radius-md border border-accent-amber/30 bg-accent-amber/10 px-3 py-2 text-sm text-accent-amber dark:text-accent-amber'>
 			Agent for <strong>{current.name}</strong> is offline — Docker calls will fail until it reconnects.
 		</div>
 	)
@@ -169,9 +169,9 @@ function ActionButton({
 }) {
 	const colorClasses = {
 		emerald: 'hover:bg-emerald-500/20 hover:text-emerald-400',
-		amber: 'hover:bg-amber-500/20 hover:text-amber-400',
-		blue: 'hover:bg-blue-500/20 hover:text-blue-400',
-		red: 'hover:bg-red-500/20 hover:text-red-400',
+		amber: 'hover:bg-accent-amber/20 hover:text-accent-amber',
+		blue: 'hover:bg-accent-blue/20 hover:text-accent-blue',
+		red: 'hover:bg-accent-red/20 hover:text-accent-red',
 	}
 
 	return (
@@ -201,8 +201,8 @@ function formatPorts(ports: Array<{hostPort: number | null; containerPort: numbe
 function StateBadge({state}: {state: string}) {
 	const colorClasses: Record<string, string> = {
 		running: 'bg-emerald-500/20 text-emerald-600',
-		exited: 'bg-red-500/20 text-red-600',
-		paused: 'bg-amber-500/20 text-amber-600',
+		exited: 'bg-accent-red/20 text-accent-red',
+		paused: 'bg-accent-amber/20 text-accent-amber',
 	}
 	const classes = colorClasses[state] ?? 'bg-neutral-500/20 text-neutral-600'
 	return (
@@ -252,8 +252,8 @@ function ProcessStateBadge({state}: {state: string}) {
 	const colorClasses: Record<string, string> = {
 		running: 'bg-emerald-500/20 text-emerald-600',
 		sleeping: 'bg-neutral-500/20 text-neutral-500',
-		stopped: 'bg-red-500/20 text-red-600',
-		zombie: 'bg-amber-500/20 text-amber-600',
+		stopped: 'bg-accent-red/20 text-accent-red',
+		zombie: 'bg-accent-amber/20 text-accent-amber',
 	}
 	const classes = colorClasses[state] ?? 'bg-neutral-500/20 text-neutral-500'
 	return (
@@ -360,19 +360,19 @@ function OverviewTab() {
 		: containerRunning === containerTotal
 			? 'bg-emerald-500'
 			: containerRunning === 0
-				? 'bg-red-500'
-				: 'bg-amber-500'
+				? 'bg-accent-red'
+				: 'bg-accent-amber'
 
 	const pm2StatusColor = pm2Total === 0
 		? 'bg-neutral-400'
 		: pm2Online === pm2Total
 			? 'bg-emerald-500'
 			: pm2Online === 0
-				? 'bg-red-500'
-				: 'bg-amber-500'
+				? 'bg-accent-red'
+				: 'bg-accent-amber'
 
 	// Temperature color
-	const tempColor = tempWarning ? 'text-red-500' : (temperature ?? 0) > 70 ? 'text-amber-500' : 'text-text-primary'
+	const tempColor = tempWarning ? 'text-accent-red' : (temperature ?? 0) > 70 ? 'text-accent-amber' : 'text-text-primary'
 
 	return (
 		<div className='space-y-3 p-3 sm:space-y-4 sm:p-4'>
@@ -546,7 +546,7 @@ function OverviewTab() {
 					) : (
 						<div className='space-y-1.5'>
 							<div className='flex items-center gap-2'>
-								<IconArrowDown size={14} className='text-blue-500' />
+								<IconArrowDown size={14} className='text-accent-blue' />
 								<span className='text-sm font-medium text-text-primary'>{formatSpeed(currentRx)}</span>
 								<span className='text-xs text-text-tertiary'>in</span>
 							</div>
@@ -589,7 +589,7 @@ function MonitoringTab() {
 						<h3 className='text-sm font-semibold text-text-primary'>Network Traffic</h3>
 						{networkHistory.length > 1 ? (
 							<p className='mt-0.5 text-xs text-text-tertiary'>
-								<span className='text-blue-500'>RX {formatSpeed(currentRx)}</span>
+								<span className='text-accent-blue'>RX {formatSpeed(currentRx)}</span>
 								{' / '}
 								<span className='text-emerald-500'>TX {formatSpeed(currentTx)}</span>
 							</p>
@@ -650,7 +650,7 @@ function MonitoringTab() {
 						<h3 className='text-sm font-semibold text-text-primary'>Disk I/O</h3>
 						{latestDisk ? (
 							<p className='mt-0.5 text-xs text-text-tertiary'>
-								<span className='text-amber-500'>Read {formatSpeed(latestDisk.rIOSec)}</span>
+								<span className='text-accent-amber'>Read {formatSpeed(latestDisk.rIOSec)}</span>
 								{' / '}
 								<span className='text-violet-500'>Write {formatSpeed(latestDisk.wIOSec)}</span>
 							</p>
@@ -786,9 +786,9 @@ function formatUptime(ms: number): string {
 function PM2StatusBadge({status}: {status: string}) {
 	const colorClasses: Record<string, string> = {
 		online: 'bg-emerald-500/20 text-emerald-600',
-		stopped: 'bg-red-500/20 text-red-600',
-		errored: 'bg-amber-500/20 text-amber-600',
-		launching: 'bg-blue-500/20 text-blue-600',
+		stopped: 'bg-accent-red/20 text-accent-red',
+		errored: 'bg-accent-amber/20 text-accent-amber',
+		launching: 'bg-accent-blue/20 text-accent-blue',
 	}
 	const classes = colorClasses[status] ?? 'bg-neutral-500/20 text-neutral-600'
 	return (
@@ -933,7 +933,7 @@ function PM2Tab() {
 							'mb-4 rounded-lg px-4 py-3 text-sm font-medium',
 							actionResult.type === 'success'
 								? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
-								: 'bg-red-500/20 text-red-600 border border-red-500/30',
+								: 'bg-accent-red/20 text-accent-red border border-accent-red/30',
 						)}
 					>
 						{actionResult.message}
@@ -948,10 +948,10 @@ function PM2Tab() {
 					<p className='text-sm text-text-tertiary'>Loading PM2 processes...</p>
 				</div>
 			) : isError ? (
-				<div className='rounded-xl border border-red-500/20 bg-red-500/10 p-8 text-center'>
-					<IconActivity size={24} className='mx-auto mb-3 text-red-400' />
-					<p className='text-sm text-red-400'>Failed to load PM2 processes</p>
-					<p className='mt-1 text-xs text-red-400/60'>{error?.message}</p>
+				<div className='rounded-xl border border-accent-red/20 bg-accent-red/10 p-8 text-center'>
+					<IconActivity size={24} className='mx-auto mb-3 text-accent-red' />
+					<p className='text-sm text-accent-red'>Failed to load PM2 processes</p>
+					<p className='mt-1 text-xs text-accent-red/60'>{error?.message}</p>
 				</div>
 			) : !processes.length ? (
 				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
@@ -991,7 +991,7 @@ function PM2Tab() {
 														<IconChevronRight size={14} className='shrink-0 text-text-tertiary' />
 													)}
 													{process.isProtected && (
-														<IconLock size={14} className='shrink-0 text-amber-500' title='Protected process' />
+														<IconLock size={14} className='shrink-0 text-accent-amber' title='Protected process' />
 													)}
 													<span className='truncate' title={process.name}>
 														{process.name}

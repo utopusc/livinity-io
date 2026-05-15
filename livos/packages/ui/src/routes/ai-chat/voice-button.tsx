@@ -433,10 +433,10 @@ export function VoiceButton({disabled, onTranscript}: VoiceButtonProps) {
 
 	const stateStyles: Record<Exclude<VoiceButtonState, 'unavailable'>, string> = {
 		disconnected: 'bg-surface-3 text-text-tertiary cursor-wait',
-		idle: 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 cursor-pointer',
-		listening: 'bg-red-500/30 text-red-400 cursor-pointer',
-		processing: 'bg-amber-500/20 text-amber-400 cursor-pointer',
-		speaking: 'bg-green-500/20 text-green-400 cursor-pointer',
+		idle: 'bg-accent-blue/20 text-accent-blue hover:bg-accent-blue/30 cursor-pointer',
+		listening: 'bg-accent-red/30 text-accent-red cursor-pointer',
+		processing: 'bg-accent-amber/20 text-accent-amber cursor-pointer',
+		speaking: 'bg-accent-green/20 text-accent-green cursor-pointer',
 	}
 
 	const pulseStyles: Record<string, string> = {
@@ -452,7 +452,7 @@ export function VoiceButton({disabled, onTranscript}: VoiceButtonProps) {
 			{interimText && (
 				<div className='absolute bottom-full mb-2 max-w-[300px] rounded-radius-md border border-border-default bg-surface-2 px-3 py-2 text-caption text-text-secondary shadow-lg'>
 					<div className='flex items-center gap-2'>
-						<IconMicrophone size={12} className='flex-shrink-0 text-red-400' />
+						<IconMicrophone size={12} className='flex-shrink-0 text-accent-red' />
 						<span className='truncate'>{interimText}</span>
 					</div>
 				</div>

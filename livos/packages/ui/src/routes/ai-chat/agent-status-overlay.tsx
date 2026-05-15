@@ -43,9 +43,9 @@ export function AgentStatusOverlay({status}: {status: AgentStatus}) {
 							{step.status === 'running' ? (
 								<IconLoader2 size={14} className='flex-shrink-0 animate-spin text-violet-400' />
 							) : step.status === 'error' ? (
-								<IconX size={14} className='flex-shrink-0 text-red-400' />
+								<IconX size={14} className='flex-shrink-0 text-accent-red' />
 							) : (
-								<IconCheck size={14} className='flex-shrink-0 text-green-400' />
+								<IconCheck size={14} className='flex-shrink-0 text-accent-green' />
 							)}
 							<span className={cn(
 								step.status === 'running' ? 'text-text-primary' : 'text-text-tertiary',

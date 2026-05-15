@@ -61,15 +61,15 @@ function actionIcon(type: ComputerUseAction['type']) {
 		case 'click':
 		case 'double_click':
 		case 'right_click':
-			return <IconMouse size={14} className='text-red-400' />
+			return <IconMouse size={14} className='text-accent-red' />
 		case 'type':
 		case 'press':
-			return <IconKeyboard size={14} className='text-blue-400' />
+			return <IconKeyboard size={14} className='text-accent-blue' />
 		case 'screenshot':
-			return <IconScreenshot size={14} className='text-green-400' />
+			return <IconScreenshot size={14} className='text-accent-green' />
 		case 'drag':
 		case 'move':
-			return <IconArrowsMove size={14} className='text-amber-400' />
+			return <IconArrowsMove size={14} className='text-accent-amber' />
 		case 'scroll':
 			return <IconArrowsUpDown size={14} className='text-purple-400' />
 		default:
@@ -161,18 +161,18 @@ export function ComputerUsePanel({conversationId, screenshot, actions, paused, o
 			{/* Header */}
 			<div className='flex flex-shrink-0 items-center gap-3 border-b border-border-default px-4 py-3'>
 				<div className='flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-green-500/30 to-emerald-500/30'>
-					<IconScreenshot size={14} className='text-green-400' />
+					<IconScreenshot size={14} className='text-accent-green' />
 				</div>
 				<div className='min-w-0 flex-1'>
 					<span className='truncate text-body-sm font-semibold text-text-primary'>Computer Use</span>
 				</div>
 				{paused && (
-					<span className='rounded-radius-sm bg-amber-500/15 px-2 py-0.5 text-caption-sm font-medium text-amber-400'>Paused</span>
+					<span className='rounded-radius-sm bg-accent-amber/15 px-2 py-0.5 text-caption-sm font-medium text-accent-amber'>Paused</span>
 				)}
 				{paused ? (
 					<button
 						onClick={() => resumeMutation.mutate({conversationId})}
-						className='rounded-radius-sm p-1.5 text-green-400 transition-colors hover:bg-green-500/10'
+						className='rounded-radius-sm p-1.5 text-accent-green transition-colors hover:bg-accent-green/10'
 						title='Resume'
 					>
 						<IconPlayerPlay size={16} />
@@ -180,7 +180,7 @@ export function ComputerUsePanel({conversationId, screenshot, actions, paused, o
 				) : (
 					<button
 						onClick={() => pauseMutation.mutate({conversationId})}
-						className='rounded-radius-sm p-1.5 text-amber-400 transition-colors hover:bg-amber-500/10'
+						className='rounded-radius-sm p-1.5 text-accent-amber transition-colors hover:bg-accent-amber/10'
 						title='Pause'
 					>
 						<IconPlayerPause size={16} />
@@ -188,7 +188,7 @@ export function ComputerUsePanel({conversationId, screenshot, actions, paused, o
 				)}
 				<button
 					onClick={() => stopMutation.mutate({conversationId})}
-					className='rounded-radius-sm p-1.5 text-red-400 transition-colors hover:bg-red-500/10'
+					className='rounded-radius-sm p-1.5 text-accent-red transition-colors hover:bg-accent-red/10'
 					title='Stop'
 				>
 					<IconPlayerStop size={16} />
@@ -229,7 +229,7 @@ export function ComputerUsePanel({conversationId, screenshot, actions, paused, o
 										key={`overlay-${action.timestamp}-${i}`}
 										className={cn(
 											'pointer-events-none absolute rounded-full',
-											isLatest ? 'h-3 w-3 bg-red-500 animate-pulse' : 'h-2 w-2 bg-red-500/50',
+											isLatest ? 'h-3 w-3 bg-accent-red animate-pulse' : 'h-2 w-2 bg-accent-red/50',
 										)}
 										style={{
 											left: scaledX,
@@ -249,7 +249,7 @@ export function ComputerUsePanel({conversationId, screenshot, actions, paused, o
 								return (
 									<div
 										key={`badge-${action.timestamp}-${i}`}
-										className='pointer-events-none absolute max-w-32 truncate rounded-radius-sm bg-blue-500/90 px-1.5 py-0.5 text-caption-sm text-white'
+										className='pointer-events-none absolute max-w-32 truncate rounded-radius-sm bg-accent-blue/90 px-1.5 py-0.5 text-caption-sm text-white'
 										style={{
 											left: scaledX,
 											top: scaledY,
@@ -267,7 +267,7 @@ export function ComputerUsePanel({conversationId, screenshot, actions, paused, o
 			{/* Timeline */}
 			<div className='max-h-48 overflow-y-auto border-t border-border-default'>
 				{paused && (
-					<div className='bg-amber-500/10 px-3 py-1.5 text-center text-caption font-medium text-amber-400'>Session Paused</div>
+					<div className='bg-accent-amber/10 px-3 py-1.5 text-center text-caption font-medium text-accent-amber'>Session Paused</div>
 				)}
 				{timelineActions.length === 0 ? (
 					<div className='px-3 py-3 text-center text-caption text-text-tertiary'>No actions yet</div>
