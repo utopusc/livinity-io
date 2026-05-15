@@ -293,7 +293,7 @@ function IconBar({webappId, onChatClick}: IconBarProps) {
 											(id !== 'teach' || !isRecording) && (
 												active
 													? 'bg-primary border-primary/80 text-white'
-													: 'bg-white/90 border-neutral-200/60 text-neutral-500 hover:bg-primary hover:border-primary/80 hover:text-white'
+													: 'bg-card-bg/90 border-dash-line text-text-secondary hover:bg-primary hover:border-primary/80 hover:text-white'
 											),
 										)}
 									>
@@ -453,7 +453,7 @@ function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
 			<div className='inline-flex flex-col items-center gap-1.5 motion-reduce:[&_*]:!animate-none'>
 				<div
 					className={cn(
-						'flex items-center gap-2 rounded-full bg-white/95 backdrop-blur-xl border border-neutral-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.08)] px-3 py-2',
+						'flex items-center gap-2 rounded-full bg-card-bg/95 backdrop-blur-xl border border-dash-line shadow-[0_2px_8px_rgba(0,0,0,0.08)] px-3 py-2',
 						// Phase 101-09 (D-101-CHAT-ANIMS) — idle-pulse on the
 						// pill border. The `chat-input-idle` class targets the
 						// @keyframes idleBreath rule (4s ease-in-out, opacity
@@ -490,7 +490,7 @@ function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
 							'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
 							input.trim() && !agent.isStreaming
 								? 'bg-primary text-white hover:bg-primary/90'
-								: 'bg-neutral-100 text-neutral-400 cursor-not-allowed',
+								: 'bg-card-bg-2 text-text-tertiary cursor-not-allowed',
 						)}
 					>
 						<Send className='h-3.5 w-3.5' strokeWidth={2.25} />
@@ -499,7 +499,7 @@ function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
 						type='button'
 						onClick={onClose}
 						aria-label='Close chat input'
-						className='flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 transition-colors'
+						className='flex h-7 w-7 items-center justify-center rounded-full text-text-secondary hover:bg-card-bg-2 hover:text-text-primary transition-colors'
 					>
 						<X className='h-3.5 w-3.5' strokeWidth={2.25} />
 					</button>
@@ -615,7 +615,7 @@ function ChatResponseBar({webappId, agent, onClose, onNew}: ChatResponseBarProps
 
 	return (
 		<Magnetic intensity={0.2}>
-			<div className='flex items-start gap-2 rounded-2xl bg-white/95 backdrop-blur-xl border border-neutral-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.08)] px-4 py-3 max-w-[480px]'>
+			<div className='flex items-start gap-2 rounded-dash bg-card-bg/95 backdrop-blur-xl border border-dash-line shadow-[0_2px_8px_rgba(0,0,0,0.08)] px-4 py-3 max-w-[480px]'>
 				<div className='flex-1 text-caption-sm text-text-primary whitespace-pre-wrap min-h-[20px]'>
 					{lastAssistant?.content ?? ''}
 					{agent.isStreaming ? (
@@ -646,7 +646,7 @@ function ChatResponseBar({webappId, agent, onClose, onNew}: ChatResponseBarProps
 						type='button'
 						onClick={() => agent.stopStreaming()}
 						aria-label='Stop streaming'
-						className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors'
+						className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-red text-white hover:bg-accent-red/90 transition-colors'
 					>
 						<Square className='h-3.5 w-3.5' strokeWidth={2.25} />
 					</button>
@@ -664,7 +664,7 @@ function ChatResponseBar({webappId, agent, onClose, onNew}: ChatResponseBarProps
 					type='button'
 					onClick={onClose}
 					aria-label='Close chat response'
-					className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 transition-colors'
+					className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-secondary hover:bg-card-bg-2 hover:text-text-primary transition-colors'
 				>
 					<X className='h-3.5 w-3.5' strokeWidth={2.25} />
 				</button>

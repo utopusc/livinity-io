@@ -66,7 +66,7 @@ export function WebAppTeachDrawer({webappId}: WebAppTeachDrawerProps) {
 				<button
 					type='button'
 					onClick={onToggleRecord}
-					className='rounded-radius-sm bg-blue-500 px-3 py-1 text-caption-sm text-white hover:bg-blue-600'
+					className='rounded-radius-sm bg-accent-blue px-3 py-1 text-caption-sm text-white hover:bg-accent-blue/90'
 				>
 					{recorder.recording ? 'Stop' : 'Record'}
 				</button>

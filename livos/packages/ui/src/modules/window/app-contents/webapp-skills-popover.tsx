@@ -52,9 +52,9 @@ export function WebAppSkillsPopover({webappId, onReplaySkill}: WebAppSkillsPopov
 						type='button'
 						aria-label='Skills'
 						className={cn(
-							'flex h-8 items-center gap-1.5 rounded-radius-sm bg-white/90 px-2.5 backdrop-blur-md',
+							'flex h-8 items-center gap-1.5 rounded-radius-sm bg-card-bg/90 px-2.5 backdrop-blur-md',
 							'border border-border-default text-caption-sm text-text-primary',
-							'hover:bg-white shadow-sm',
+							'hover:bg-card-bg shadow-sm',
 						)}
 					>
 						<Library className='h-3.5 w-3.5' />
@@ -93,7 +93,7 @@ export function WebAppSkillsPopover({webappId, onReplaySkill}: WebAppSkillsPopov
 										type='button'
 										aria-label='Delete'
 										onClick={() => deleteMutation.mutate({skillId: s.id})}
-										className='flex h-6 w-6 items-center justify-center rounded-radius-xs text-text-secondary hover:bg-red-500/10 hover:text-red-500'
+										className='flex h-6 w-6 items-center justify-center rounded-radius-xs text-text-secondary hover:bg-accent-red/10 hover:text-accent-red'
 									>
 										<Trash2 className='h-3 w-3' />
 									</button>

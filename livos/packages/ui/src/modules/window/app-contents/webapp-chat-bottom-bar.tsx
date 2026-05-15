@@ -91,7 +91,7 @@ export function WebAppChatBottomBar({webappId}: WebAppChatBottomBarProps) {
 	}, [agent])
 
 	return (
-		<div className='absolute inset-x-0 bottom-0 z-10 border-t border-border-default bg-white/95 backdrop-blur-md'>
+		<div className='absolute inset-x-0 bottom-0 z-10 border-t border-border-default bg-card-bg/95 backdrop-blur-md'>
 			{expanded ? (
 				<ScrollArea className='max-h-[160px] px-3 py-2'>
 					{agent.messages.length === 0 ? (

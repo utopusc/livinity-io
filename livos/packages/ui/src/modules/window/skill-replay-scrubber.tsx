@@ -186,7 +186,7 @@ export function SkillReplayScrubber({skillId, onClose, className}: SkillReplaySc
 						Loading skill…
 					</div>
 				) : skillQuery.isError ? (
-					<div className='flex h-full items-center justify-center text-caption-sm text-red-400'>
+					<div className='flex h-full items-center justify-center text-caption-sm text-accent-red'>
 						Failed to load skill.
 					</div>
 				) : !log ? (

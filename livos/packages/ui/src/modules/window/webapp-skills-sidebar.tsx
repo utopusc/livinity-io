@@ -113,7 +113,7 @@ export function WebAppSkillsSidebar({
 			</div>
 			<div className='flex-1 overflow-y-auto px-2 py-2'>
 				{listQuery.isError ? (
-					<div className='px-2 py-3 text-caption-sm text-red-400'>
+					<div className='px-2 py-3 text-caption-sm text-accent-red'>
 						Failed to load skills.
 					</div>
 				) : skills.length === 0 ? (
@@ -143,7 +143,7 @@ export function WebAppSkillsSidebar({
 										type='button'
 										onClick={() => setPendingDelete({id: s.id, name: s.skillName})}
 										title='Delete skill'
-										className='inline-flex h-6 w-6 items-center justify-center rounded-radius-xs text-text-tertiary opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100'
+										className='inline-flex h-6 w-6 items-center justify-center rounded-radius-xs text-text-tertiary opacity-0 transition-opacity hover:bg-accent-red/10 hover:text-accent-red group-hover:opacity-100'
 									>
 										<Trash2 className='h-3.5 w-3.5' />
 									</button>
@@ -179,7 +179,7 @@ export function WebAppSkillsSidebar({
 								}
 								setPendingDelete(null)
 							}}
-							className='bg-red-500 text-white hover:bg-red-600'
+							className='bg-accent-red text-white hover:bg-accent-red/90'
 						>
 							Delete
 						</AlertDialogAction>
