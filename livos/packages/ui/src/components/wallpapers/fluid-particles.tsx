@@ -141,17 +141,29 @@ export const FluidParticlesWallpaper = memo(function FluidParticlesWallpaper({
 
 		const noise = createNoise()
 
+		// Read live pixel dimensions from the canvas's CSS box (set by Tailwind
+		// inset-0 / h-full / etc.) and scale the bitmap by DPR for crisp drawing.
+		// Falls back to viewport size if the canvas isn't laid out yet (e.g. when
+		// rendered inside a 0-sized container).
+		const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
 		const resize = () => {
-			const parent = canvas.parentElement
-			canvas.width = parent ? parent.clientWidth : window.innerWidth
-			canvas.height = parent ? parent.clientHeight : window.innerHeight
+			const w = canvas.clientWidth || canvas.parentElement?.clientWidth || window.innerWidth
+			const h = canvas.clientHeight || canvas.parentElement?.clientHeight || window.innerHeight
+			canvas.width = Math.max(1, Math.floor(w * dpr))
+			canvas.height = Math.max(1, Math.floor(h * dpr))
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 		}
 
 		resize()
 
+		// Use the CSS-box dimensions for particle distribution so they spread to
+		// the visible area regardless of DPR scaling.
+		const cssW = () => canvas.width / dpr
+		const cssH = () => canvas.height / dpr
+
 		const particles: Particle[] = Array.from({length: particleCount}, () => ({
-			x: Math.random() * canvas.width,
-			y: Math.random() * canvas.height,
+			x: Math.random() * cssW(),
+			y: Math.random() * cssH(),
 			size: Math.random() * (particleSize.max - particleSize.min) + particleSize.min,
 			velocity: {x: 0, y: 0},
 			life: Math.random() * 100,
@@ -176,15 +188,18 @@ export const FluidParticlesWallpaper = memo(function FluidParticlesWallpaper({
 			const isDark = document.documentElement.classList.contains('dark')
 			const scheme = isDark ? COLOR_SCHEME.dark : COLOR_SCHEME.light
 
+			const w = cssW()
+			const h = cssH()
+
 			ctx.fillStyle = scheme.background
-			ctx.fillRect(0, 0, canvas.width, canvas.height)
+			ctx.fillRect(0, 0, w, h)
 
 			for (const particle of particles) {
 				particle.life += dt * 0.06
 				if (particle.life > particle.maxLife) {
 					particle.life = 0
-					particle.x = Math.random() * canvas.width
-					particle.y = Math.random() * canvas.height
+					particle.x = Math.random() * w
+					particle.y = Math.random() * h
 				}
 
 				const opacity = Math.sin((particle.life / particle.maxLife) * Math.PI) * 0.15
@@ -202,10 +217,10 @@ export const FluidParticlesWallpaper = memo(function FluidParticlesWallpaper({
 				particle.x += particle.velocity.x * speedRef.current
 				particle.y += particle.velocity.y * speedRef.current
 
-				if (particle.x < 0) particle.x = canvas.width
-				if (particle.x > canvas.width) particle.x = 0
-				if (particle.y < 0) particle.y = canvas.height
-				if (particle.y > canvas.height) particle.y = 0
+				if (particle.x < 0) particle.x = w
+				if (particle.x > w) particle.x = 0
+				if (particle.y < 0) particle.y = h
+				if (particle.y > h) particle.y = 0
 
 				ctx.fillStyle = isDark
 					? `rgba(255, 255, 255, ${opacity})`
@@ -219,16 +234,30 @@ export const FluidParticlesWallpaper = memo(function FluidParticlesWallpaper({
 		animate()
 		window.addEventListener('resize', resize)
 
+		// Catch parent-size changes (settings preview tile mounts inside a
+		// shrinking dialog, picker thumbs ride a CSS grid, etc.). ResizeObserver
+		// fires once on attach which also lets the canvas pick up its true CSS
+		// box after the first layout pass — important for the fixed-viewport
+		// default below where the canvas's `inset-0` resolves only post-mount.
+		const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resize) : null
+		ro?.observe(canvas)
+
 		return () => {
 			cancelAnimationFrame(rafId)
 			window.removeEventListener('resize', resize)
+			ro?.disconnect()
 		}
 	}, [particleCount, noiseIntensity, particleSize.min, particleSize.max])
 
 	return (
 		<div
 			className={cn(
-				'relative h-full w-full overflow-hidden bg-white dark:bg-black',
+				// Default to pinning to the viewport (matches how the legacy WebGL
+				// wallpapers rendered, so the desktop / login / cover-message paths
+				// keep working without the caller having to size their parent).
+				// Direct consumers (settings preview tile, picker thumbs) pass an
+				// `absolute inset-0` override which tailwind-merge resolves to win.
+				'pointer-events-none fixed inset-0 h-lvh w-full overflow-hidden bg-white dark:bg-black',
 				className,
 			)}
 		>
