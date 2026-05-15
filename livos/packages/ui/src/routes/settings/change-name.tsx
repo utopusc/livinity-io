@@ -1,6 +1,7 @@
+import {Button as UiKitButton, Input as UiKitInput} from '@livinity/ui-kit'
+
 import {useUserName} from '@/hooks/use-user-name'
 import {useSettingsDialogProps} from '@/routes/settings/_components/shared'
-import {Button} from '@/shadcn-components/ui/button'
 import {
 	Dialog,
 	DialogContent,
@@ -9,7 +10,7 @@ import {
 	DialogPortal,
 	DialogTitle,
 } from '@/shadcn-components/ui/dialog'
-import {AnimatedInputError, Input} from '@/shadcn-components/ui/input'
+import {AnimatedInputError} from '@/shadcn-components/ui/input'
 import {t} from '@/utils/i18n'
 
 export default function ChangeNameDialog() {
@@ -29,17 +30,23 @@ export default function ChangeNameDialog() {
 							<DialogHeader>
 								<DialogTitle>{title}</DialogTitle>
 							</DialogHeader>
-							<Input placeholder={t('change-name.input-placeholder')} value={name} onValueChange={setName} />
+							{/* Phase 120-03: ui-kit <Input> swap. shadcn onValueChange → standard onChange adapter; setName call preserved verbatim. */}
+							<UiKitInput
+								placeholder={t('change-name.input-placeholder')}
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+							/>
 							<div className='-my-2.5'>
 								<AnimatedInputError>{formError}</AnimatedInputError>
 							</div>
 							<DialogFooter>
-								<Button type='submit' size='dialog' variant='primary'>
+								{/* Phase 120-03: ui-kit <Button> swap. shadcn variant='primary'/size='dialog' → ui-kit variant='solid'/size='md'. */}
+								<UiKitButton type='submit' size='md' variant='solid' loading={isLoading}>
 									{t('confirm')}
-								</Button>
-								<Button type='button' size='dialog' onClick={() => dialogProps.onOpenChange(false)}>
+								</UiKitButton>
+								<UiKitButton type='button' size='md' variant='ghost' onClick={() => dialogProps.onOpenChange(false)}>
 									{t('cancel')}
-								</Button>
+								</UiKitButton>
 							</DialogFooter>
 						</fieldset>
 					</form>
