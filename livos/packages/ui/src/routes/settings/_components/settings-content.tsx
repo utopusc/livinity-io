@@ -52,6 +52,9 @@ import {
 import {IconType} from 'react-icons'
 
 import {Card} from '@/components/ui/card'
+import {useCpuForUi} from '@/hooks/use-cpu'
+import {useMemoryForUi} from '@/hooks/use-memory'
+import {useDiskForUi} from '@/hooks/use-disk'
 import {IconButton} from '@/components/ui/icon-button'
 import {IconButtonLink} from '@/components/ui/icon-button-link'
 import {usePassword} from '@/hooks/use-password'
@@ -332,27 +335,13 @@ export function SettingsContent() {
 					<ContactSupportLink />
 				</div>
 
-				{/* Right Side — v36 LivOS Design Port welcoming placeholder.
-				    Replaces the legacy "Select a setting" generic card with a v36
-				    eyebrow + italic-serif title pattern. Sidebar layout PRESERVED
-				    per user direction "onceki design daha iyiydi onceki design i
-				    gelistir" (2026-05-15). */}
+				{/* Right Side — v36 LivOS Design Port: live system dashboard
+				    replaces the static "Pick a section" placeholder. Per user
+				    direction 2026-05-15 ("istatistikler vs yazsin sanki ayarlara
+				    giriyormus gibi"). CPU / Memory / Storage live stats use the
+				    existing hooks (use-cpu / use-memory / use-disk). */}
 				<div className='flex flex-col gap-5'>
-					<Card>
-						<div className='flex flex-col items-center justify-center text-center py-14 px-8'>
-							<span className='font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint flex items-center gap-2 mb-4'>
-								<span className='inline-block h-1.5 w-1.5 rounded-full bg-fg' aria-hidden='true' />
-								Settings
-							</span>
-							<h2 className='text-[clamp(28px,3.2vw,40px)] font-medium leading-[1.1] tracking-[-0.03em] text-fg text-balance'>
-								Tune <em className='font-serif italic font-normal text-fg-mute'>LivOS.</em>
-							</h2>
-							<p className='mt-3 text-[14px] leading-[1.5] text-fg-mute max-w-[44ch]'>
-								Pick a section on the left — account, theme, AI, integrations, and the
-								rest of your computer&rsquo;s knobs.
-							</p>
-						</div>
-					</Card>
+					<SettingsHomeDashboard />
 				</div>
 			</div>
 		</div>
@@ -1894,6 +1883,56 @@ function SoftwareUpdateSection() {
 			<SoftwareUpdateListRow isActive={false} />
 			<h3 className='mt-6 text-body font-medium'>Past Deploys</h3>
 			<PastDeploysTable />
+		</div>
+	)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v36 LivOS Design Port — Settings home dashboard
+// Replaces the legacy "Pick a section" placeholder with live system stats.
+// Per user direction 2026-05-15 ("istatistikler vs yazsin sanki ayarlara
+// giriyormus gibi"). CPU / Memory / Storage data via the existing hooks.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SettingsHomeDashboard() {
+	const cpu = useCpuForUi({poll: true})
+	const mem = useMemoryForUi({poll: true})
+	const disk = useDiskForUi({poll: true})
+
+	return (
+		<div className='flex flex-col gap-5'>
+			<div className='pt-2 pb-5 border-b border-line'>
+				<span className='font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint flex items-center gap-2 mb-3'>
+					<span className='inline-block h-1.5 w-1.5 rounded-full bg-fg' aria-hidden='true' />
+					Overview
+				</span>
+				<h2 className='text-[clamp(26px,3vw,36px)] font-medium leading-[1.1] tracking-[-0.03em] text-fg text-balance'>
+					Tune <em className='font-serif italic font-normal text-fg-mute'>LivOS.</em>
+				</h2>
+				<p className='mt-2 text-[13.5px] leading-[1.5] text-fg-mute max-w-[48ch]'>
+					A live snapshot of your computer. Pick a section on the left to drill in.
+				</p>
+			</div>
+
+			<div className='grid grid-cols-3 gap-2.5'>
+				<DashStat label='CPU' value={cpu.value} sub={cpu.secondaryValue} fill={cpu.progress} />
+				<DashStat label='Memory' value={mem.value} sub={mem.secondaryValue} fill={mem.progress} />
+				<DashStat label='Storage' value={disk.value} sub={disk.secondaryValue} fill={disk.progress} />
+			</div>
+		</div>
+	)
+}
+
+function DashStat({label, value, sub, fill}: {label: string; value: React.ReactNode; sub: React.ReactNode; fill: number}) {
+	const pct = Math.max(0, Math.min(1, Number.isFinite(fill) ? fill : 0)) * 100
+	return (
+		<div className='rounded-[12px] border border-line bg-[color:var(--bg)] p-4'>
+			<div className='font-mono text-[10.5px] uppercase tracking-[0.14em] text-fg-mute'>{label}</div>
+			<div className='text-[20px] font-semibold tracking-[-0.02em] mt-1 text-fg leading-none'>{value}</div>
+			<div className='text-[11.5px] text-fg-faint mt-1.5 truncate'>{sub}</div>
+			<div className='h-1 rounded-[2px] bg-[color:var(--bg-2)] mt-3 overflow-hidden'>
+				<div className='h-full bg-fg rounded-[2px] transition-[width] duration-300 ease-out' style={{width: `${pct}%`}} />
+			</div>
 		</div>
 	)
 }
