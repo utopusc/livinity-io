@@ -9,13 +9,11 @@ import {
 	TbHistory,
 	TbPlug,
 	TbSettings,
-	TbSettingsMinus,
 	TbTool,
 	TbWorld,
 	TbPhoto,
 	TbShield,
 	TbLanguage,
-	TbRefresh as TbUpdate,
 	TbArrowLeft,
 	TbChevronRight,
 	TbCheck,
@@ -44,10 +42,10 @@ import {
 	TbServer2,
 	TbCalendarTime,
 	TbStethoscope,
-	TbRobot,
 	TbBrandChrome,
 	TbPlayerPlay,
 	TbPlayerPause,
+	TbDownload,
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
@@ -175,11 +173,12 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
 	// v36 sidebar consolidation 2026-05-15 — six thin entries (dm-pairing, webhooks,
-	// migration, diagnostics, software-update, advanced) are now sub-tabs inside
-	// their owner sections (Integrations / Backups / Troubleshoot) instead of
-	// top-level menu items. The original switch cases below are kept callable so
-	// programmatic navigation still works (e.g. dock-window route loaders), but
-	// MENU_ITEMS no longer lists them.
+	// migration, diagnostics, software-update, advanced) were collapsed into the
+	// Troubleshoot tabs. Phase 130-03 (2026-05-15) re-promotes `software-update`
+	// and `advanced` to top-level rows per user request ("Updates ve Advanced
+	// kismini ayir lutfen bu sayfadan"). `liv-agent` is removed from the sidebar
+	// entirely; its switch case stays callable for programmatic navigation
+	// (dock-window route loaders).
 
 	// Per-user settings (visible to all users)
 	{id: 'account', icon: TbUser, label: 'Account', description: 'Name and password'},
@@ -191,8 +190,6 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'voice', icon: TbMicrophone, label: 'Voice', description: 'Push-to-talk voice mode'},
 	{id: 'usage', icon: TbChartBar, label: 'Usage', description: 'Token usage & cost tracking'},
 	{id: 'memory', icon: TbBrain, label: 'Memory', description: 'AI memory & conversations'},
-	// Phase 76 / Plan 06 (MARKET-07) — Liv Agent thin settings entry (per-user surface, NOT admin-only).
-	{id: 'liv-agent', icon: TbRobot, label: 'Liv Agent', description: 'Marketplace, my agents, onboarding tour'},
 	// Admin-only settings (server management)
 	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
 	{id: 'admin-devices', icon: TbServer2, label: 'Devices', description: 'All devices across all users', adminOnly: true},
@@ -202,7 +199,9 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'my-domains', icon: TbWorld, label: 'My Domains', description: 'Domains synced from livinity.io', adminOnly: true},
 	{id: 'scheduler', icon: TbCalendarTime, label: 'Scheduler', description: 'Scheduled backup & maintenance jobs', adminOnly: true},
 	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup, restore & migration', adminOnly: true},
-	{id: 'troubleshoot', icon: TbTool, label: 'Troubleshoot', description: 'Logs, diagnostics, updates & advanced', adminOnly: true},
+	{id: 'software-update', icon: TbDownload, label: 'Software Update', description: 'Apply updates & view deploy history', adminOnly: true},
+	{id: 'troubleshoot', icon: TbTool, label: 'Troubleshoot', description: 'Logs & diagnostics', adminOnly: true},
+	{id: 'advanced', icon: TbSettings, label: 'Advanced', description: 'Power-user controls', adminOnly: true},
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1742,18 +1741,18 @@ function LanguageSection() {
 }
 
 // v36 sidebar consolidation 2026-05-15 — Troubleshoot is the consolidated
-// home for everything debugging-shaped. Four top-level tabs:
-//   Logs (system + app, the existing TroubleshootSection content)
+// home for debugging surfaces. Phase 130-03 re-promoted software-update
+// and advanced to their own top-level sidebar rows per user request, so
+// Troubleshoot collapses back to two tabs:
+//   Logs (system + app)
 //   Diagnostics (AI capability registry / model identity / app health)
-//   Software Update (LivOS update check + past deploys)
-//   Advanced (beta channel, external DNS, security toggle, factory reset)
 function TroubleshootSection() {
-	const [activeTab, setActiveTab] = useState<'logs' | 'diagnostics' | 'software-update' | 'advanced'>('logs')
+	const [activeTab, setActiveTab] = useState<'logs' | 'diagnostics'>('logs')
 
 	return (
 		<div>
-			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'logs' | 'diagnostics' | 'software-update' | 'advanced')}>
-				<TabsList className='grid w-full grid-cols-4 mb-4'>
+			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'logs' | 'diagnostics')}>
+				<TabsList className='grid w-full grid-cols-2 mb-4'>
 					<TabsTrigger value='logs' className='flex items-center gap-1.5'>
 						<TbTool className='h-4 w-4' />
 						Logs
@@ -1761,14 +1760,6 @@ function TroubleshootSection() {
 					<TabsTrigger value='diagnostics' className='flex items-center gap-1.5'>
 						<TbStethoscope className='h-4 w-4' />
 						Diagnostics
-					</TabsTrigger>
-					<TabsTrigger value='software-update' className='flex items-center gap-1.5'>
-						<TbUpdate className='h-4 w-4' />
-						Updates
-					</TabsTrigger>
-					<TabsTrigger value='advanced' className='flex items-center gap-1.5'>
-						<TbSettingsMinus className='h-4 w-4' />
-						Advanced
 					</TabsTrigger>
 				</TabsList>
 
@@ -1778,8 +1769,6 @@ function TroubleshootSection() {
 						<DiagnosticsSectionLazy />
 					</Suspense>
 				</TabsContent>
-				<TabsContent value='software-update'><SoftwareUpdateSection /></TabsContent>
-				<TabsContent value='advanced'><AdvancedSection /></TabsContent>
 			</Tabs>
 		</div>
 	)
@@ -1833,7 +1822,7 @@ function LogsPanel() {
 								View Full Logs
 							</button>
 						</div>
-						<div className='max-h-[200px] overflow-auto rounded-radius-sm bg-neutral-100 p-3'>
+						<div className='max-h-[200px] overflow-auto rounded-radius-sm bg-[color:var(--surface-1)] dark:bg-zinc-900/60 p-3'>
 							<pre className='whitespace-pre-wrap font-mono text-caption-sm text-text-secondary'>
 								{logsQ.isLoading ? 'Loading...' : logsQ.isError ? logsQ.error.message : (logsQ.data?.slice(-2000) || 'No logs available')}
 							</pre>
@@ -1877,7 +1866,7 @@ function LogsPanel() {
 									View Full Logs
 								</button>
 							</div>
-							<div className='max-h-[200px] overflow-auto rounded-radius-sm bg-neutral-100 p-3'>
+							<div className='max-h-[200px] overflow-auto rounded-radius-sm bg-[color:var(--surface-1)] dark:bg-zinc-900/60 p-3'>
 								<pre className='whitespace-pre-wrap font-mono text-caption-sm text-text-secondary'>
 									{logsQ.isLoading ? 'Loading...' : logsQ.isError ? logsQ.error.message : (logsQ.data?.slice(-2000) || 'No logs available')}
 								</pre>
@@ -1989,8 +1978,15 @@ function SoftwareUpdateSection() {
 		<div className='space-y-4'>
 			<p className='text-body-sm text-text-secondary'>Check for LivOS updates.</p>
 			<SoftwareUpdateListRow isActive={false} />
-			<h3 className='mt-6 text-body font-medium'>Past Deploys</h3>
-			<PastDeploysTable />
+			<div className='mt-6 flex flex-col gap-3'>
+				<h3 className='text-body font-medium'>Past Deploys</h3>
+				{/* Phase 130-03 — cap height so the table doesn't push the page
+				    height unboundedly when deploy history grows. Internal scroll
+				    keeps the column headers visible. */}
+				<div className='max-h-[400px] overflow-y-auto rounded-[var(--r-md)] border border-line bg-[color:var(--bg)]'>
+					<PastDeploysTable />
+				</div>
+			</div>
 		</div>
 	)
 }
