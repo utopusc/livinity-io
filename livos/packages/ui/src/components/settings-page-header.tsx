@@ -24,11 +24,16 @@ export interface SettingsPageHeaderProps {
 	titleAccent?: string
 	/** Optional sub-paragraph, max-width 560px. */
 	sub?: string
-	/** Back button target. Default `/settings`. Pass null to hide the back button. */
+	/**
+	 * Back button target. Pass a route string to render the back button, pass
+	 * `null` (default) to hide it. Defaults to null because settings pages now
+	 * open in their own dock windows — the window chrome already provides a
+	 * close/back affordance.
+	 */
 	backTo?: string | null
 }
 
-export function SettingsPageHeader({eyebrow, title, titleAccent, sub, backTo = '/settings'}: SettingsPageHeaderProps) {
+export function SettingsPageHeader({eyebrow, title, titleAccent, sub, backTo = null}: SettingsPageHeaderProps) {
 	const navigate = useNavigate()
 
 	return (

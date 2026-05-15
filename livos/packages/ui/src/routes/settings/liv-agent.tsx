@@ -7,6 +7,7 @@ import {Card} from '@/components/ui/card'
 import {trpcReact} from '@/trpc/trpc'
 
 import {SettingsPageLayout} from './_components/settings-page-layout'
+import {SettingsPageHeader} from '@/components/settings-page-header'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Liv Agent settings page (Phase 76 / Plan 06 / MARKET-07).
@@ -52,7 +53,15 @@ export default function LivAgentSettings() {
 		<SettingsPageLayout
 			title='Liv Agent'
 			description='Manage your AI agents and onboarding experience.'
+			hideHeader
 		>
+			<SettingsPageHeader
+				eyebrow='07 · Liv Agent'
+				title='Your AI agents, your'
+				titleAccent='catalog.'
+				sub='Browse the marketplace for shared agents, replay the onboarding tour, and manage every subagent that runs in the background on your behalf.'
+			/>
+			<div className='h-6' />
 			<div className='max-w-2xl space-y-6'>
 				{/* ── Section 1 — Marketplace ──────────────────────────── */}
 				<Card variant='liv-elevated'>
