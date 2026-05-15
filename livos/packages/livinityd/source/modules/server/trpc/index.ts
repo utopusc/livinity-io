@@ -106,6 +106,13 @@ import {
 	chromeMasterRouter,
 	createChromeMasterRouter,
 } from '../../chrome-master/index.js'
+// Phase 131-02 V36-PIN-02 — pinned-windows namespace. Three procedures
+// (list / upsert / delete) backed by the `pinned_windows` Postgres
+// table (D-131-A). All three are added to httpOnlyPaths in
+// ./common.ts so mutations survive WS reconnect after `systemctl
+// restart livos` (precedent: webapp.create line 360, conversations.
+// appendMessage line 312, agents.create line 256).
+import pinnedWindowsRouter from '../../pinned-windows/routes.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -181,6 +188,8 @@ export function createAppRouter(opts: {
 		// Default appRouter passes the bare chromeMasterRouter (back-compat);
 		// production livinityd boot replaces it via setProductionAppRouter().
 		chromeMaster: opts.chromeMaster,
+		// Phase 131-02 — pinnedWindows.* namespace (D-131-A persistence).
+		pinnedWindows: pinnedWindowsRouter,
 	})
 }
 

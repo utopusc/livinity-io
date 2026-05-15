@@ -466,4 +466,15 @@ export const httpOnlyPaths = [
 	'chromeMaster.input.key',
 	'chromeMaster.input.type',
 	'chromeMaster.input.scroll',
+	// Phase 131-02 V36-PIN-02 — pinned_windows namespace (D-131-A).
+	// All three paths route via HTTP for the same WS-reconnect-survival
+	// reason as the rest of the user-scoped CRUD cluster (precedent:
+	// preferences.* lines 233-236, webapp.create line 360, agents.create
+	// line 256). list is a page-render dependency on every desktop
+	// mount — HTTP avoids the WS-handshake-delay flicker. upsert /
+	// delete are autosave-adjacent (fired immediately after every
+	// drag-to-pin gesture or chip click). Pitfall B-12 / X-04.
+	'pinnedWindows.list',
+	'pinnedWindows.upsert',
+	'pinnedWindows.delete',
 ] as const
