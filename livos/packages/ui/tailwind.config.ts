@@ -137,26 +137,22 @@ export default {
 				'destructive2-lightest': '#F45A5A',
 				success: '#299E16',
 				'success-light': '#51CB41',
-				'dialog-content': '#FFFFFF',
-				// Semantic surface colors (light theme) — REVERTED 2026-05-15.
-				// The brief experiment of wiring these to var() values flipped every
-				// legacy consumer (hundreds of widgets) at once and they collided
-				// with surfaces that still ship hardcoded `bg-white` / `text-black`
-				// pairs, producing the "colors all mixed up in dark mode" report.
-				// Legacy tokens stay light; opt-in dark surfaces use `dark:` Tailwind
-				// variants per-component instead.
-				'surface-base': 'rgba(0, 0, 0, 0.03)',
-				'surface-1': 'rgba(0, 0, 0, 0.05)',
-				'surface-2': 'rgba(0, 0, 0, 0.08)',
-				'surface-3': 'rgba(0, 0, 0, 0.12)',
-				// Semantic border colors
-				'border-subtle': 'rgba(0, 0, 0, 0.06)',
-				'border-default': 'rgba(0, 0, 0, 0.12)',
-				'border-emphasis': 'rgba(0, 0, 0, 0.20)',
-				// Semantic text colors
-				'text-primary': 'rgba(15, 23, 42, 0.92)',
-				'text-secondary': 'rgba(15, 23, 42, 0.60)',
-				'text-tertiary': 'rgba(15, 23, 42, 0.40)',
+				'dialog-content': 'var(--dialog-content)',
+				// 2026-05-15 (third pass) — semantic surface / border / text tokens
+				// wired to CSS vars so cards + window content inherit dark mode.
+				// :root defines the legacy light values 1:1 with the rgba shapes
+				// previously inlined here; body.dark inverts them. Pairing rule:
+				// every surface var has a matching text var so legibility holds.
+				'surface-base':    'var(--surface-base)',
+				'surface-1':       'var(--surface-1)',
+				'surface-2':       'var(--surface-2)',
+				'surface-3':       'var(--surface-3)',
+				'border-subtle':   'var(--border-subtle)',
+				'border-default':  'var(--border-default)',
+				'border-emphasis': 'var(--border-emphasis)',
+				'text-primary':    'var(--text-primary)',
+				'text-secondary':  'var(--text-secondary)',
+				'text-tertiary':   'var(--text-tertiary)',
 				// Semantic status colors
 				info: '#3B82F6',
 				'info-surface': 'rgba(59, 130, 246, 0.06)',

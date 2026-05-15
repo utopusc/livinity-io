@@ -105,18 +105,44 @@
  * D-116-FOLLOW-UP-DARK directive is now satisfied via this transcribed
  * snapshot — re-fetch from Server5 once SSH is restored and reconcile.
  */
+/*
+ * 2026-05-15 (third pass) — populate body.dark with the LEGACY semantic
+ * tokens only. The v36 design-tokens preset (`bg-fg`/`text-fg`/`border-line`/
+ * etc.) stays statically defined so v36 components don't flip and don't
+ * collide with their surrounding light context. The legacy tokens
+ * (`bg-card-bg`/`bg-surface-*`/`text-text-*`/`border-border-*`) are the ones
+ * used by the Card primitive + every settings page + window-content surface,
+ * so flipping them lights up the window interiors in dark mode.
+ *
+ * Pairing rule: every surface flip is matched with a text flip (e.g. cards
+ * darken AND their `text-text-primary` lightens) so legibility holds. The
+ * dash-line border colour and dialog-content surface also flip.
+ *
+ * Files that hardcode `bg-white` (~60 leaf widgets) stay light — they're
+ * minor decorations (search input, file item overlay, kbd chips). If one
+ * becomes prominent it can opt in to a `dark:` variant per-file.
+ */
 body.dark {
-  /* PENDING canonical fetch — see D-116-FOLLOW-UP-DARK above.
-   *
-   * 2026-05-15 — the dark-mode token block was briefly populated from
-   * Downloads/logo.html but immediately reverted: only a handful of v36
-   * surfaces use the arbitrary `var(--*)` form, while hundreds of legacy
-   * widgets use static `bg-card-bg` / `bg-white` colours. Flipping the
-   * shared CSS vars produced the "colours mixed up in dark mode" report.
-   *
-   * Dark mode is now opt-in per-component (e.g. dock uses `dark:bg-black/55`)
-   * until every surface explicitly accepts a dark variant.
-   */
+  /* Card + dialog surfaces (legacy semantic tokens). */
+  --card-bg:    #16161a;
+  --card-bg-2:  #1c1c1f;
+  --card-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 24px 60px -34px rgba(0,0,0,0.55);
+  --dialog-content: #1c1c1f;
+  /* Layered surface tints (rgba over the dark backdrop). */
+  --surface-base: rgba(255, 255, 255, 0.04);
+  --surface-1:    rgba(255, 255, 255, 0.06);
+  --surface-2:    rgba(255, 255, 255, 0.09);
+  --surface-3:    rgba(255, 255, 255, 0.13);
+  /* Borders. */
+  --border-subtle:  rgba(255, 255, 255, 0.07);
+  --border-default: rgba(255, 255, 255, 0.13);
+  --border-emphasis: rgba(255, 255, 255, 0.22);
+  --dash-line:        rgba(255, 255, 255, 0.08);
+  --dash-line-strong: rgba(255, 255, 255, 0.14);
+  /* Text family. Paired with the surface flips above. */
+  --text-primary:   rgba(245, 245, 247, 0.92);
+  --text-secondary: rgba(245, 245, 247, 0.62);
+  --text-tertiary:  rgba(245, 245, 247, 0.42);
 }
 
 /*
