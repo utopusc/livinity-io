@@ -4,8 +4,6 @@ import React, {Suspense, useEffect, useRef, useState} from 'react'
 import {FaRegSave} from 'react-icons/fa'
 import {
 	RiExpandRightFill,
-	RiKeyLine,
-	RiUserLine,
 } from 'react-icons/ri'
 import {
 	TbHistory,
@@ -94,6 +92,10 @@ import {SecurityToggleRow} from './security-toggle-row'
 import {SoftwareUpdateListRow} from './software-update-list-row'
 import {PastDeploysTable} from './past-deploys-table'
 import {MenuItemBadge} from './menu-item-badge'
+
+// v36 LivOS Design Port — Section-Head + FieldCard pattern (Phases 124, 125).
+import {SettingsPageHeader} from '@/components/settings-page-header'
+import {FieldCard, FieldRow} from '@/components/field-card'
 
 // Lazy-loaded DM Pairing content
 const DmPairingContentLazy = React.lazy(() =>
@@ -517,18 +519,53 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 function AccountSection() {
 	const [showChangeName, setShowChangeName] = useState(false)
 	const [showChangePassword, setShowChangePassword] = useState(false)
+	// v36 LivOS Design Port — pull the current name so the FieldRow can render
+	// the live value next to the "Change" trailing button.
+	const userQ = trpcReact.user.get.useQuery()
+	const userName = userQ.data?.name
 
 	return (
-		<div className='space-y-4'>
-			<p className='text-body-sm text-text-secondary'>{t('account-description')}</p>
-			<div className='flex flex-wrap gap-3'>
-				<IconButton onClick={() => setShowChangeName(true)} icon={RiUserLine}>
-					{t('change-name')}
-				</IconButton>
-				<IconButton onClick={() => setShowChangePassword(true)} icon={RiKeyLine}>
-					{t('change-password')}
-				</IconButton>
-			</div>
+		<div className='flex flex-col gap-8'>
+			<SettingsPageHeader
+				eyebrow='01 · Account'
+				title='Your'
+				titleAccent='account.'
+				sub='Update the display name shown across LivOS and rotate the password used to sign in to this device.'
+			/>
+
+			<FieldCard>
+				<FieldRow
+					label='Name'
+					value={
+						userName
+							? <span className='truncate'>{userName}</span>
+							: <span className='text-fg-faint'>—</span>
+					}
+					trailing={
+						<Button
+							variant='v36-ghost'
+							size='v36-pill-sm'
+							onClick={() => setShowChangeName(true)}
+						>
+							Change
+						</Button>
+					}
+				/>
+				<FieldRow
+					label='Password'
+					value={<span className='font-mono tracking-[0.2em] text-fg-mute'>••••••••</span>}
+					trailing={
+						<Button
+							variant='v36-ghost'
+							size='v36-pill-sm'
+							onClick={() => setShowChangePassword(true)}
+						>
+							Change
+						</Button>
+					}
+				/>
+			</FieldCard>
+
 			<InlineChangeNameDialog open={showChangeName} onOpenChange={setShowChangeName} />
 			<InlineChangePasswordDialog open={showChangePassword} onOpenChange={setShowChangePassword} />
 		</div>
