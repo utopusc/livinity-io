@@ -10,6 +10,13 @@ import {useLinkToDialog} from '@/utils/dialog'
 import {useUserName} from '@/hooks/use-user-name'
 import {onWindowDragDrop, useWindowDragState} from '@/providers/window-drag-state'
 import {useWindowManagerOptional} from '@/providers/window-manager'
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+	ContextMenuSeparator,
+} from '@/shadcn-components/ui/context-menu'
 import {cn} from '@/shadcn-lib/utils'
 import {
 	Dialog,
@@ -145,6 +152,19 @@ function TopBarDesktop() {
 
 	const restorePinnedWindow = (windowId: string) => {
 		windowManager?.unpinWindowFromTopBar(windowId)
+	}
+
+	// Phase 131-05 — right-click context-menu actions. "Close window"
+	// drops the window entirely (the underlying CLOSE_WINDOW reducer
+	// action also removes the pinned-windows row via the existing
+	// unpin mirror when 131-02 ships — see the closeWindow action).
+	const closePinnedWindow = (windowId: string) => {
+		// Order matters: unpin first (drops the Postgres row via the
+		// mirror in WindowManagerProvider) THEN close (removes the
+		// WindowState entirely). Closing first would leave a
+		// dangling pinned_windows row until next refresh.
+		windowManager?.unpinWindowFromTopBar(windowId)
+		windowManager?.closeWindow(windowId)
 	}
 
 	const menuItems: Array<
@@ -292,8 +312,21 @@ function TopBarDesktop() {
 								)}
 							>
 								{pinnedWindows.length === 0 ? (
-									<span className='select-none whitespace-nowrap text-[12px] font-medium text-[color:var(--fg-faint)]'>
-										Drag here to pin
+									<span className='inline-flex select-none items-center gap-1.5 whitespace-nowrap text-[12px] font-medium text-[color:var(--fg-faint)]'>
+										<svg
+											viewBox='0 0 24 24'
+											fill='none'
+											stroke='currentColor'
+											strokeWidth='2'
+											strokeLinecap='round'
+											strokeLinejoin='round'
+											className='h-3 w-3 shrink-0'
+											aria-hidden='true'
+										>
+											<path d='M12 17v5' />
+											<path d='M9 11.5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v7.5l2 1.5v3H7v-3l2-1.5z' />
+										</svg>
+										<span>Drag a window here to pin it</span>
 									</span>
 								) : (
 									<div className='flex items-center gap-1.5 overflow-x-auto'>
@@ -304,6 +337,7 @@ function TopBarDesktop() {
 													title={w.title}
 													icon={w.icon}
 													onClick={() => restorePinnedWindow(w.id)}
+													onClose={() => closePinnedWindow(w.id)}
 												/>
 											))}
 										</AnimatePresence>
@@ -338,30 +372,54 @@ function TopBarDesktop() {
  * framer-motion enter springs the chip in from scale 0.4 so a freshly
  * dropped window pops into the shelf rather than just appearing.
  */
-function PinnedWindowChip({title, icon, onClick}: {title: string; icon?: string; onClick: () => void}) {
+function PinnedWindowChip({title, icon, onClick, onClose}: {
+	title: string
+	icon?: string
+	onClick: () => void
+	onClose: () => void
+}) {
+	// Phase 131-05 — wrap the chip in a Radix ContextMenu so the user
+	// can right-click to either restore or fully close the pinned
+	// window. Whole-chip left-click still restores (matching the
+	// 130-09 contract); right-click brings up Restore / Close (close
+	// also removes the persisted row via the unpin → close ordering
+	// in TopBar.closePinnedWindow).
 	return (
-		<motion.button
-			type='button'
-			onClick={onClick}
-			layout
-			initial={{opacity: 0, scale: 0.4, y: -4}}
-			animate={{opacity: 1, scale: 1, y: 0}}
-			exit={{opacity: 0, scale: 0.4, y: -4}}
-			transition={{type: 'spring', stiffness: 280, damping: 22, mass: 0.6}}
-			className='group flex items-center gap-1.5 rounded-full border border-line bg-[color:var(--bg-2)] py-1 pl-1.5 pr-3 text-[12px] font-medium text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg)]'
-			title={`Restore "${title}"`}
-		>
-			{icon ? (
-				<span
-					className='h-5 w-5 shrink-0 rounded-md bg-cover bg-center'
-					style={{backgroundImage: `url(${icon})`}}
-					aria-hidden='true'
-				/>
-			) : (
-				<span className='h-5 w-5 shrink-0 rounded-md bg-[color:var(--fg)]' aria-hidden='true' />
-			)}
-			<span className='max-w-[160px] truncate'>{title}</span>
-		</motion.button>
+		<ContextMenu>
+			<ContextMenuTrigger asChild>
+				<motion.button
+					type='button'
+					onClick={onClick}
+					layout
+					initial={{opacity: 0, scale: 0.4, y: -4}}
+					animate={{opacity: 1, scale: 1, y: 0}}
+					exit={{opacity: 0, scale: 0.4, y: -4}}
+					transition={{type: 'spring', stiffness: 280, damping: 22, mass: 0.6}}
+					className='group flex items-center gap-1.5 rounded-full border border-line bg-[color:var(--bg-2)] py-1 pl-1.5 pr-3 text-[12px] font-medium text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg)]'
+					title={`Restore "${title}" — right-click for more`}
+				>
+					{icon ? (
+						<span
+							className='h-5 w-5 shrink-0 rounded-md bg-cover bg-center'
+							style={{backgroundImage: `url(${icon})`}}
+							aria-hidden='true'
+						/>
+					) : (
+						<span className='h-5 w-5 shrink-0 rounded-md bg-[color:var(--fg)]' aria-hidden='true' />
+					)}
+					<span className='max-w-[160px] truncate'>{title}</span>
+				</motion.button>
+			</ContextMenuTrigger>
+			<ContextMenuContent className='w-44'>
+				<ContextMenuItem onClick={onClick} className='cursor-pointer'>
+					Restore window
+				</ContextMenuItem>
+				<ContextMenuSeparator />
+				<ContextMenuItem onClick={onClose} className='cursor-pointer text-red-500 focus:text-red-500'>
+					Close window
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
 	)
 }
 
