@@ -671,19 +671,6 @@ function InlineChangePasswordDialog({open, onOpenChange}: {open: boolean; onOpen
 	)
 }
 
-const ACCENT_COLORS = [
-	{label: 'Default', hsl: null},
-	{label: 'Blue', hsl: '217 91% 60%'},
-	{label: 'Purple', hsl: '262 83% 58%'},
-	{label: 'Pink', hsl: '330 81% 60%'},
-	{label: 'Red', hsl: '0 84% 60%'},
-	{label: 'Orange', hsl: '25 95% 53%'},
-	{label: 'Yellow', hsl: '45 93% 47%'},
-	{label: 'Green', hsl: '142 71% 45%'},
-	{label: 'Teal', hsl: '173 80% 40%'},
-	{label: 'Cyan', hsl: '189 94% 43%'},
-] as const
-
 // v36 LivOS Design Port — Theme section (2026-05-15).
 // Foundation for a light/dark wallpaper split: registry entries carry a
 // `theme: 'light' | 'dark' | 'auto'` tag and the picker groups them under
@@ -697,14 +684,6 @@ const ACCENT_COLORS = [
 // `wallpaperSettings` values stay in place harmlessly (default no-op).
 function WallpaperSection() {
 	const {wallpaper, setWallpaperId} = useWallpaper()
-	const accentColorQ = trpcReact.user.accentColor.useQuery(undefined, {retry: false})
-	const utils = trpcReact.useUtils()
-	const accentMut = trpcReact.user.set.useMutation({
-		onSuccess: () => {
-			utils.user.accentColor.invalidate()
-			utils.user.get.invalidate()
-		},
-	})
 
 	const previewId = (wallpaper.id || animatedWallpaperIds[0]) as AnimatedWallpaperId
 	const PreviewComponent = animatedWallpapers[previewId]?.component
@@ -765,43 +744,6 @@ function WallpaperSection() {
 				onSelect={setWallpaperId}
 				placeholder='Dark-theme wallpapers coming soon.'
 			/>
-
-			{/* Accent color picker (kept) */}
-			<div className='flex flex-col gap-3'>
-				<span className='font-mono text-[11px] uppercase tracking-[0.14em] text-fg-faint'>Accent Colour</span>
-				<div className='flex flex-wrap gap-2 rounded-[var(--r-lg)] border border-line bg-[color:var(--bg)] p-4'>
-					{ACCENT_COLORS.map((color) => {
-						const isActive = color.hsl === null ? !accentColorQ.data : accentColorQ.data === color.hsl
-						return (
-							<button
-								key={color.label}
-								title={color.label}
-								onClick={() => accentMut.mutate({accentColor: color.hsl})}
-								className={cn(
-									'relative h-8 w-8 rounded-full transition-all',
-									isActive
-										? 'ring-2 ring-fg ring-offset-2 ring-offset-[color:var(--bg)] scale-110'
-										: 'hover:scale-105',
-								)}
-								style={{
-									backgroundColor: color.hsl
-										? `hsl(${color.hsl})`
-										: `hsl(${wallpaper.brandColorHsl || '0 0% 50%'})`,
-								}}
-							>
-								{isActive && (
-									<TbCheck className='absolute inset-0 m-auto h-4 w-4 text-[color:var(--bg)] drop-shadow' />
-								)}
-							</button>
-						)
-					})}
-				</div>
-				{accentColorQ.data && (
-					<p className='text-[12px] text-fg-faint'>
-						Custom accent colour overrides the wallpaper brand colour.
-					</p>
-				)}
-			</div>
 		</div>
 	)
 }
@@ -846,8 +788,15 @@ function ThemeModeSelector() {
 							onClick={() => setTheme(value)}
 							className={cn(
 								'flex items-center gap-2 rounded-[calc(var(--r-md)-4px)] px-3.5 py-1.5 text-[13px] font-medium transition-colors',
+								// Explicit zinc/white colours instead of `bg-fg text-[var(--bg)]`
+								// — the v36 design-tokens preset declares `fg` and `--bg` as
+								// STATIC light-mode values (`#1d1d1f` / `#ffffff`) and
+								// `body.dark { /* PENDING */ }` is empty in tokens.css, so the
+								// active label was disappearing depending on the surrounding
+								// surface. Hardcoded values survive any token mismatch and
+								// invert correctly via the `dark:` variant.
 								isActive
-									? 'bg-fg text-[color:var(--bg)]'
+									? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
 									: 'text-fg-mute hover:bg-[color:var(--bg-2)] hover:text-fg',
 							)}
 						>

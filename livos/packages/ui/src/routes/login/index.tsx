@@ -195,15 +195,21 @@ function LoginShell({children}: {children: React.ReactNode}) {
 /**
  * The Livinity brand mark — a "donut" of fg around bg (per design-system §06).
  * Used at the top of the login screen as the only branding element.
+ *
+ * 2026-05-15 fix: switched from `bg-fg` + `bg-[color:var(--bg)]` to explicit
+ * Tailwind colours so the donut renders even when the v36 design-tokens
+ * preset's `fg` / `--bg` chain hasn't fully cascaded. The login shell is
+ * white-on-white-static today so dark donut + white centre is correct in
+ * both light and dark mode.
  */
 function BrandMark({size = 56}: {size?: number}) {
 	return (
 		<div
-			className='relative rounded-full bg-fg'
+			className='relative rounded-full bg-zinc-900'
 			style={{width: size, height: size}}
 			aria-hidden='true'
 		>
-			<div className='absolute rounded-full bg-[color:var(--bg)]' style={{inset: size * 0.32}} />
+			<div className='absolute rounded-full bg-white' style={{inset: size * 0.32}} />
 		</div>
 	)
 }
@@ -332,10 +338,14 @@ function PasswordStep({
 						error={error}
 					/>
 				</div>
+				{/* 2026-05-15 fix: explicit bg-zinc-900 + text-white instead of
+				    `bg-fg` + `text-[color:var(--bg)]` so the Sign-in label and arrow
+				    icon stay readable even when the v36 token chain isn't fully
+				    cascaded. */}
 				<button
 					type='submit'
 					disabled={isPending || !password}
-					className='mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-fg px-6 text-[15px] font-medium tracking-[-0.005em] text-[color:var(--bg)] transition-all duration-200 hover:opacity-90 hover:-translate-y-px active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-fg/20 disabled:pointer-events-none disabled:opacity-40'
+					className='mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-zinc-900 px-6 text-[15px] font-medium tracking-[-0.005em] text-white transition-all duration-200 hover:opacity-90 hover:-translate-y-px active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/20 disabled:pointer-events-none disabled:opacity-40'
 				>
 					{isPending ? (
 						<TbLoader2 className='h-4 w-4 animate-spin' />
