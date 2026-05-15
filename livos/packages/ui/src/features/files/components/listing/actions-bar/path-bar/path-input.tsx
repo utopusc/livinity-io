@@ -40,7 +40,7 @@ export function PathInput({path, onClose}: PathInputProps) {
 			className={cn(
 				'relative overflow-hidden',
 				'flex h-8 items-center rounded-xl bg-white px-3 py-1',
-				'border border-blue-200 shadow-sm',
+				'border border-accent-blue/30 shadow-sm',
 				'transition-all duration-200',
 			)}
 			role='group'
