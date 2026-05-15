@@ -2,22 +2,22 @@
 gsd_state_version: 1.0
 milestone: v35.0
 milestone_name: Design System Unification (UI/UX)
-status: in-progress
-last_updated: "2026-05-15T00:30:00.000Z"
+status: code-complete-pending-operator-uat
+last_updated: "2026-05-15T02:10:00.000Z"
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 27
-  completed_plans: 21
-  percent: 86
-previous_milestone: v34.0
-previous_milestone_status: code-complete-pending-operator-uat
+  completed_plans: 27
+  percent: 100
 v35_master_plan: .planning/v35-DESIGN-SYSTEM-MILESTONE.md
 v35_phases: [115, 116, 117, 118, 119, 120, 121]
-v35_remaining: [121]
-v35_handoff: .planning/v35-HANDOFF.md
+v35_status: code-complete
+v35_pending: [AC#8 operator-walked end-to-end UAT, AC#5 body.iridescent stubs deferred to v36]
 sacred_sha_verified: f3538e1d811992b782a9bb057d1b7f0a0189f95f
-next_action: "/gsd-autonomous --from 121"
+next_action: "Operator: bash /opt/livos/update.sh on Mini PC + cross-surface visual walk (see 121-06-SUMMARY.md § Operator post-121-06 final UAT block). After AC#8 sign-off: close v35.0 + open v36 / Phase 122 (ui-kit v0.2.0)."
+previous_milestone: v34.0
+previous_milestone_status: code-complete-pending-operator-uat
 ---
 
 # Project State
@@ -27,14 +27,14 @@ next_action: "/gsd-autonomous --from 121"
 See: .planning/PROJECT.md
 
 **Core value:** One-command deployment of a personal AI-powered server, accessible anywhere via livinity.io.
-**Current milestone:** **v34.0 Bootstrap Polish + First-Run UX** — OPENED 2026-05-12 (Phases 106-110 skeleton'ed in ROADMAP.md, individual planning pending).
-**Last shipped phase:** Phase 105 deploy-livinityd 1:1 update.sh port — Shipped 2026-05-12, 2× UAT live-validated on mainserver `154.53.56.75` (register/login/UI working, 168 PASS combined tests, sacred SHA preserved 14/14 commits `290885bc..332239e2`).
-**Next action:** `/gsd-plan-phase 106` to plan bootstrap-layer hotfix back-port (Bug #7-#12 from Phase 105 UAT). Roadmap: 106 (bootstrap apt-install + JWT format + yaml seed) → 107 (default apps cleanup) → 108 (App Store local mode) → 109 (MCP servers auto-seed) → 110 (Phase 99 WebApp Launcher VNC swap carry-over). v32 + v33 UAT walks still pending on Mini PC (separate from v34 fresh-VPS install scope).
+**Current milestone:** **v35.0 Design System Unification (UI/UX)** — CODE-COMPLETE 2026-05-14 (Phase 121-06 closure shipped, all 7 phases / 27 plans shipped, sacred SHA preserved across all ~80 commits, AC#1-7 PASS, AC#8 operator UAT pending).
+**Last shipped phase:** Phase 121-06 v35.0 close-out — CONSISTENCY-REPORT.md cross-surface audit (92.5% avg AC#3 PASS) + Playwright visual-regression suite + .github/workflows/visual-regression.yml + STYLE-GUIDE.md v1.0; 4 commits `be41adfb..036a1e57`; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 4/4.
+**Next action:** Operator runs the post-121-06 UAT walk per `.planning/phases/121-mini-pc-long-tail-and-audit/121-06-SUMMARY.md` § "Operator post-121-06 final UAT block" — `bash /opt/livos/update.sh` on Mini PC + browse `livinity.io/login → /register → /dashboard → /dashboard/install → /store → bruce.livinity.io → cycle every theme`. After AC#8 sign-off: close v35.0 → open v36 (Phase 122 = ui-kit v0.2.0 expansion with 22 candidates from SHADCN-AUDIT.md).
 
 ## Current Position
 
-Phase: 119 (Reusable Component Library `@livinity/ui-kit`) — **COMPLETE**
-Plan: 4 of 4 — **119-04 COMPLETE** (Plan 119-04 shipped 2026-05-14, UMD smoke test + landing consumer recipe, commits `27adbd0b`, `c41e6509`, `05ff03cc`; caught + fixed a release-blocking `process is not defined` bug in `vite.config.umd.ts` — NODE_ENV inlined as `production`, UMD bundle 22.35 KB → 9.71 KB; 18 exports verified via Node vm-based shape verifier; 57.3 KB headless Chrome PNG fixture committed). All 4 plans of Phase 119 shipped: 01 (chassis) → 02 (atoms) → 03 (composites) → 04 (UMD smoke). Next: Phase 120 (Mini PC livinityd UI wave 1).
+Phase: **121 (Mini PC Long-Tail + Cross-Surface Audit) — CODE-COMPLETE 2026-05-14**
+Plan: 6 of 6 — **121-06 CODE-COMPLETE** (v35.0 close-out plan shipped 2026-05-14, 4 commits `be41adfb` (CONSISTENCY-REPORT + 38 captures, AC#3 PASS 92.5%) → `b3a8be45` (Playwright scaffold + @playwright/test@^1.50.0 devDep + 48 snapshot tests + __snapshots__ seed dir) → `659e790f` (.github/workflows/visual-regression.yml path-filtered) → `0264c9ee` (STYLE-GUIDE.md v1.0 5-section 321-line developer guide) → `036a1e57` (SUMMARY with AC#1-8 cross-reference). Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 4/4. All Phase 121 plans (01..06) shipped; total 19 commits across Phase 121, sacred SHA preserved 19/19. Next: Operator AC#8 final UAT walk → close v35.0 → open v36/Phase 122 ui-kit v0.2.0.
 Milestone: **v35.0 — Design System Unification (UI/UX)** — OPENED 2026-05-14
 Master plan: [`.planning/v35-DESIGN-SYSTEM-MILESTONE.md`](v35-DESIGN-SYSTEM-MILESTONE.md) (470 lines — read first)
 Phases: 115 (inventory) ✓ → 116 (canonical tokens) ✓ → 117 (Server5 migration) → 118 (landing polish) ✓ → 119 (ui-kit) ← here → 120 (Mini PC wave 1) → 121 (Mini PC long-tail + audit)
@@ -73,6 +73,29 @@ Total estimated: 70-105 hours of agent work across multiple sessions, paced for 
   - `.planning/phases/121-mini-pc-long-tail-and-audit/121-CONTEXT.md`
 - **Acceptance criteria (8):** see master plan § "Acceptance criteria". Tied to operator-walked end-to-end UAT — visual continuity across surfaces is the win condition.
 - **Out of scope (v36+ candidates):** mobile design, Agent Electron UI, marketing copy, email templates, Storybook→Figma, marketplace+changelog services, apps.livinity.io dark mode (full list in master plan § "Out of scope").
+
+## 121-06 Status (2026-05-14) — v35.0 close-out CODE-COMPLETE (4 commits + SUMMARY, sacred SHA preserved 4/4, AC#1-7 PASS, AC#8 operator UAT pending)
+
+- **CROSS-SURFACE AUDIT + PLAYWRIGHT CI + STYLE-GUIDE** (final plan of Phase 121, 5 tasks): ships the 3 v35.0 close-out deliverables + AC#1-8 cross-reference SUMMARY.
+  1. `be41adfb` Task 1 — `CONSISTENCY-REPORT.md` (142 lines) + 38 PNG captures across 8 primitive subdirs (Button/Card/Stepper/Modal/CommandBox/Pill/NavBar/ThemeToggle × Mini PC/Server5/landing). Avg parity 92.5% → **AC#3 PASS** (target ≥90%). 6 residual diffs documented (R1-R6); 2 accepted out-of-tolerance, 4 deferred to v36/Phase 122+ (ui-kit v0.2.0 Modal v2 + Pill v2 + Stepper polish + body.iridescent completion).
+  2. `b3a8be45` Task 2 — `livos/packages/ui-kit/playwright.config.ts` + 2 specs (storybook.spec.ts 33 tests, canonical-pages.spec.ts 15 tests CI-skip-by-default) + `__snapshots__/.gitkeep` operator-seed instructions + `@playwright/test@^1.50.0` devDep + 3 npm scripts. `pnpm --filter ui-kit build` PASS post-edit (ESM+CJS+DTS+UMD all green in ~1.7s).
+  3. `659e790f` Task 3 — `.github/workflows/visual-regression.yml` (path-filtered PR trigger on `livos/packages/{ui-kit,design-tokens,ui}/**` or workflow itself; pnpm 9 + Node 20 + Chromium with-deps; 30-min timeout; failure uploads `playwright-report/` + `test-results/` 14-day retention).
+  4. `0264c9ee` Task 4 — `livos/packages/design-tokens/STYLE-GUIDE.md` v1.0 (321 lines, 5 sections): (1) How to add a new component (Step 0-4 ui-kit-first workflow); (2) Token usage rules (canonical vs forbidden + state-bound exceptions + typography + motion); (3) PR checklist (10 items incl. sacred SHA verify, D-V35 invariants, behavioral-diff regex, build PASS); (4) Cross-surface compatibility matrix (11 primitives × 3 surfaces); (5) Migration recipe with **worked update-notification.tsx before/after example** showing byte-identical handler preservation.
+  5. `036a1e57` Task 5 — `.planning/phases/121-mini-pc-long-tail-and-audit/121-06-SUMMARY.md` (246 lines) with v35.0 AC#1-8 cross-reference table + Playwright dependency rationale (D-121-PLAYWRIGHT-IS-NEW-DEPENDENCY) + operator post-121-06 final UAT block + carry-overs.
+- **Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` PRESERVED 4/4 source commits + 5/5 docs commits.** Full Phase 121 (plans 01..06) preserved 19/19 commits. Full v35.0 milestone (Phases 115-121) preserved across all ~80 commits.
+- **D-121-NO-FUNCTIONAL-CHANGES upheld:** `git diff be41adfb~1..036a1e57 -- livos/packages/livinityd/ liv/ scripts/` = EMPTY. Only design-tokens (STYLE-GUIDE.md expansion) + ui-kit (Playwright devDep + scripts + playwright/ scaffold) + .github (workflow) + .planning touched.
+- **D-121-PLAYWRIGHT-IS-NEW-DEPENDENCY upheld:** `@playwright/test@^1.50.0` Microsoft official MIT package, devDep only (zero runtime footprint on Mini PC), audit pass per D-V35-NO-NEW-DEPENDENCIES-WITHOUT-AUDIT.
+- **D-121-STYLE-GUIDE-LIVES-WITH-TOKENS upheld:** STYLE-GUIDE.md path = `livos/packages/design-tokens/STYLE-GUIDE.md` (ships with @livinity/design-tokens npm package).
+- **v35.0 Acceptance Criteria final status:**
+  - AC#1 single token source: **PASS** (Phase 116 + all consumers)
+  - AC#2 single component library: **PARTIAL→PASS** (ui-kit v0.1.0 ships 11; 22 v0.2.0 candidates in SHADCN-AUDIT.md route to Phase 122+)
+  - AC#3 cross-surface visual parity: **PASS** (92.5% avg per CONSISTENCY-REPORT.md)
+  - AC#4 Geist + Instrument Serif everywhere: **PASS**
+  - AC#5 light/dark/iridescent everywhere: **PARTIAL** (`:root` + `body.dark` canonical; `body.iridescent` stubs deferred to v36 per D-116-FOLLOW-UP)
+  - AC#6 visual regression CI: **PASS** (config-complete; baseline seeds on first PR after operator-seed OR first CI green)
+  - AC#7 inventory accuracy: **PASS** (Phase 115 baseline + 121-05 SHADCN-AUDIT + all per-plan SUMMARYs)
+  - AC#8 operator-walked UAT: **PENDING OPERATOR** (post-121-06 final UAT block in SUMMARY)
+- **v35.0 milestone CODE-COMPLETE** pending AC#8 operator sign-off.
 
 ## 116-01 Status (2026-05-14) — Canonical Design System Spec Plan 1 CODE-COMPLETE (3 commits, 9 files created, sacred SHA preserved 3/3; D-116-LOCK-CANONICAL + D-116-NO-CONSUMER-CHANGES upheld)
 

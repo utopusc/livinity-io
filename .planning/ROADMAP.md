@@ -1128,14 +1128,15 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 **Plans:** 6 plans
 
 Plans:
-- [ ] 121-01-PLAN.md — Backups + Factory-reset + Local-setup token+ui-kit migration (~47 tsx files, wave 1, autonomous)
-- [ ] 121-02-PLAN.md — Files feature token+ui-kit migration (~119 tsx files, wave 2, autonomous, OwnCloud-priority surface)
-- [ ] 121-03-PLAN.md — Window chrome + WebApp Launcher + per-app content dialogs migration (~63 tsx files, wave 2, autonomous, strong behavioral guard)
-- [ ] 121-04-PLAN.md — routes/* sub-batched 04a settings 04b apps+docker 04c misc with 3 operator UAT checkpoints (~219 tsx files, wave 3, autonomous=false)
-- [ ] 121-05-PLAN.md — Generic components + features survivors + shadcn-components/ui audit-and-delete-or-keep (~95 + 29 audit, wave 4, autonomous)
-- [ ] 121-06-PLAN.md — CONSISTENCY-REPORT.md + Playwright visual-regression suite + GitHub Actions + STYLE-GUIDE.md expansion + v35.0 AC#1-8 close-out (wave 5, autonomous)
+- [x] 121-01-PLAN.md — Backups + Factory-reset + Local-setup token+ui-kit migration (~47 tsx files, wave 1, autonomous) — SHIPPED
+- [x] 121-02-PLAN.md — Files feature token+ui-kit migration (~119 tsx files, wave 2, autonomous, OwnCloud-priority surface) — SHIPPED
+- [x] 121-03-PLAN.md — Window chrome + WebApp Launcher + per-app content dialogs migration (~63 tsx files, wave 2, autonomous, strong behavioral guard) — SHIPPED
+- [x] 121-04-PLAN.md — routes/* sub-batched 04a settings 04b apps+docker 04c misc with 3 operator UAT checkpoints (~219 tsx files, wave 3, autonomous=false) — SHIPPED
+- [x] 121-05-PLAN.md — Generic components + features survivors + shadcn-components/ui audit-and-delete-or-keep (~95 + 29 audit, wave 4, autonomous) — SHIPPED (4 commits, 22 v0.2.0 candidates documented)
+- [x] 121-06-PLAN.md — CONSISTENCY-REPORT.md + Playwright visual-regression suite + GitHub Actions + STYLE-GUIDE.md expansion + v35.0 AC#1-8 close-out (wave 5, autonomous) — SHIPPED 2026-05-14, 4 commits `be41adfb..036a1e57`, sacred SHA preserved 4/4, AC#3 PASS at 92.5% avg, AC#6 config-complete
 **Estimated:** 24-40 hours.
-**UAT:** all 654 TSX components migrated; operator-walked end-to-end (`bruce.livinity.io` → `livinity.io/dashboard` → `livinity.io/dashboard/install` → `livinity.io/login` → Mini PC livinityd UI) — visual continuity is the win condition.
+**Status:** All 6 plans SHIPPED. Phase 121 CODE-COMPLETE 2026-05-14. Sacred SHA preserved 19/19 commits across the phase. v35.0 milestone CODE-COMPLETE pending AC#8 operator final UAT walk.
+**UAT:** all 654 TSX components migrated; operator-walked end-to-end (`bruce.livinity.io` → `livinity.io/dashboard` → `livinity.io/dashboard/install` → `livinity.io/login` → Mini PC livinityd UI) — visual continuity is the win condition. **Final v35.0 UAT walk in 121-06-SUMMARY.md § Operator post-121-06 final UAT block.**
 
 ---
 
