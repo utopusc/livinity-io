@@ -25,6 +25,17 @@ const buttonVariants = cva(
 				// References Plan 66-01 token --liv-accent-cyan and inlines the .liv-glow-cyan utility on hover.
 				'liv-primary':
 					'bg-[color:var(--liv-accent-cyan)] text-[#050b14] ring-[color:var(--liv-accent-cyan)]/40 active:bg-[#3bbac9] data-[state=open]:bg-[#3bbac9] hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_0_24px_rgba(77,208,225,0.2),inset_0_1px_0_rgba(77,208,225,0.1)] transition-all duration-[var(--liv-dur-fast)]',
+				// === v36 LivOS Design Port (Phase 123, additive) ===
+				// Reference: .planning/design-system/livinity-design-system.html §04 Buttons.
+				// Opt-in only — existing variants above are byte-unchanged. Phases 124-129
+				// migrate consumers (settings, plan-cards, app-store, ai-chat) to these
+				// variants one surface at a time.
+				'v36-primary':
+					'bg-fg text-[color:var(--bg)] hover:opacity-90 border border-fg ring-fg/20',
+				'v36-ghost':
+					'bg-transparent text-fg border border-line-strong hover:bg-[color:var(--bg-2)] ring-fg/10',
+				'v36-danger':
+					'bg-transparent text-[color:var(--red,#dc2626)] border border-[color:rgb(220_38_38_/_.30)] hover:bg-[color:rgb(220_38_38_/_.06)]',
 			},
 			size: {
 				sm: 'rounded-radius-sm h-[44px] md:h-[30px] px-3 text-caption gap-1.5',
@@ -37,6 +48,14 @@ const buttonVariants = cva(
 				lg: 'rounded-radius-md h-[44px] px-6 text-body-lg font-semibold',
 				xl: 'rounded-radius-lg h-[52px] px-7 text-body-lg font-semibold',
 				'icon-only': 'rounded-radius-md h-[44px] w-[44px] md:h-[34px] md:w-[34px]',
+				// === v36 LivOS Design Port (Phase 123, additive) ===
+				// Pill sizes per design-system.html §04 (lines 167-185). Uses rounded-full
+				// not rounded-r-* to avoid Tailwind directional alias collision
+				// (see DESIGN-SYSTEM.md "Deliberately NOT exposed" section).
+				'v36-pill':        'rounded-full h-9 px-5 text-[14px] gap-2 font-medium tracking-[-0.005em]',
+				'v36-pill-sm':     'rounded-full h-[30px] px-3.5 text-[13px] gap-1.5 font-medium',
+				'v36-pill-lg':     'rounded-full h-11 px-6 text-[15px] gap-2 font-medium',
+				'v36-icon-square': 'rounded-full h-9 w-9 p-0 border border-line-strong',
 			},
 			text: {
 				default: 'text-text-primary',
