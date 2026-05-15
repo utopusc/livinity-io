@@ -173,10 +173,15 @@ export function DockItem({
 				}}
 			/>
 			{/* icon */}
+			{/* 2026-05-15 — dark-mode tile: `dark:bg-white/[0.06]` + `dark:border-
+			    white/15` reads as a faint dark-transparent glass over the wallpaper.
+			    `dark:text-white` flips the system glyph icons (TbHome2, TbSettings,
+			    etc.) to white. User app images (the `bg` branch below) keep their
+			    original colours — only the monochrome glyph branch inverts. */}
 			<motion.div
 				ref={iconRef}
 				className={cn(
-					'relative origin-top-left rounded-radius-lg bg-surface-2 transform-gpu backdrop-blur-md border border-border-emphasis transition-[filter] has-[:focus-visible]:brightness-125 flex items-center justify-center',
+					'relative origin-top-left rounded-radius-lg bg-surface-2 dark:bg-white/[0.06] transform-gpu backdrop-blur-md border border-border-emphasis dark:border-white/15 transition-[filter] has-[:focus-visible]:brightness-125 flex items-center justify-center',
 					className,
 				)}
 				style={{
@@ -195,7 +200,7 @@ export function DockItem({
 			>
 				{/* Render React Icon if available, otherwise fallback to bg image */}
 				{Icon ? (
-					<Icon className='h-[60%] w-[60%] text-text-primary drop-shadow-md' />
+					<Icon className='h-[60%] w-[60%] text-text-primary dark:text-white drop-shadow-md' />
 				) : bg ? (
 					<div
 						className='h-full w-full bg-cover bg-center rounded-xl'
