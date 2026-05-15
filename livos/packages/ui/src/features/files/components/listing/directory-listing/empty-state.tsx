@@ -27,7 +27,7 @@ export function EmptyStateDirectory() {
 		<div className='flex h-full flex-col items-center justify-center gap-5 p-8 pt-0 text-center'>
 			<AnimatedGroup preset='blur-slide' className='flex flex-col items-center gap-4'>
 				{/* Icon */}
-				<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100/80'>
+				<div className='flex h-16 w-16 items-center justify-center rounded-dash bg-neutral-100/80'>
 					{isOfflineNetworkHost ? (
 						<TbCloudOff className='h-8 w-8 text-neutral-400' strokeWidth={1.5} />
 					) : (
@@ -63,7 +63,7 @@ export function EmptyStateNetwork() {
 	return (
 		<div className='flex h-full items-center justify-center p-8 pt-0 text-center'>
 			<AnimatedGroup preset='blur-slide' className='flex flex-col items-center gap-4'>
-				<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100/80'>
+				<div className='flex h-16 w-16 items-center justify-center rounded-dash bg-neutral-100/80'>
 					<TbCloudOff className='h-8 w-8 text-neutral-400' strokeWidth={1.5} />
 				</div>
 				<p className='text-[13px] font-medium text-neutral-500'>{t('files-empty.network')}</p>
@@ -76,7 +76,7 @@ export function EmptyStateSearch() {
 	return (
 		<div className='flex h-full items-center justify-center p-8 pt-0 text-center'>
 			<AnimatedGroup preset='blur-slide' className='flex flex-col items-center gap-4'>
-				<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100/80'>
+				<div className='flex h-16 w-16 items-center justify-center rounded-dash bg-neutral-100/80'>
 					<TbSearch className='h-8 w-8 text-neutral-400' strokeWidth={1.5} />
 				</div>
 				<p className='text-[13px] font-medium text-neutral-500'>{t('files-empty.no-results')}</p>

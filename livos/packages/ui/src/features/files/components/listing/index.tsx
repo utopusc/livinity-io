@@ -195,8 +195,8 @@ function ErrorView({error}: {error: unknown}) {
 	return (
 		<div className='flex h-full items-center justify-center p-4 text-center'>
 			<AnimatedGroup preset='blur-slide' className='flex flex-col items-center gap-3'>
-				<div className='flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50/80'>
-					<FolderX className='h-7 w-7 text-red-400' strokeWidth={1.5} />
+				<div className='flex h-14 w-14 items-center justify-center rounded-dash bg-accent-red/10'>
+					<FolderX className='h-7 w-7 text-accent-red' strokeWidth={1.5} />
 				</div>
 				<span className='text-[13px] font-medium text-neutral-500'>
 					{isNotFound ? t('files-listing.no-such-file') : message}
@@ -223,7 +223,7 @@ function LoadingView() {
 				>
 					{Array.from({length: 12}).map((_, i) => (
 						<div key={i} className='flex flex-col items-center gap-2.5 rounded-[20px] p-3'>
-							<SkeletonPulse className='h-[72px] w-[72px] rounded-2xl' />
+							<SkeletonPulse className='h-[72px] w-[72px] rounded-dash' />
 							<SkeletonPulse className='h-3 w-16' />
 						</div>
 					))}
@@ -254,7 +254,7 @@ function EmptyView() {
 	return (
 		<div className='flex h-full items-center justify-center p-4 text-center'>
 			<AnimatedGroup preset='blur-slide' className='flex flex-col items-center gap-4'>
-				<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100/80'>
+				<div className='flex h-16 w-16 items-center justify-center rounded-dash bg-neutral-100/80'>
 					<TbFolder className='h-8 w-8 text-neutral-400' strokeWidth={1.5} />
 				</div>
 				<p className='text-[13px] font-medium text-neutral-500'>{t('files-listing.empty')}</p>
