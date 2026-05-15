@@ -1125,7 +1125,15 @@ All v31 requirements (CARRY/RENAME/DESIGN/CORE/PANEL/VIEWS/COMPOSER/CU-FOUND/CU-
 - Developer style guide: `livos/packages/design-tokens/STYLE-GUIDE.md` ("How to add a new LivOS UI component")
 - D-121-OPERATOR-CHECKPOINTS: routes batch (large) inserts UAT checkpoints between sub-batches
 
-**Plans (6):** 121-01 backups+factory-reset+local-setup · 121-02 files · 121-03 window-content dialogs · 121-04 routes/* (sub-batched) · 121-05 generic + shadcn audit · 121-06 cross-surface audit + regression suite + style guide.
+**Plans:** 6 plans
+
+Plans:
+- [ ] 121-01-PLAN.md — Backups + Factory-reset + Local-setup token+ui-kit migration (~47 tsx files, wave 1, autonomous)
+- [ ] 121-02-PLAN.md — Files feature token+ui-kit migration (~119 tsx files, wave 2, autonomous, OwnCloud-priority surface)
+- [ ] 121-03-PLAN.md — Window chrome + WebApp Launcher + per-app content dialogs migration (~63 tsx files, wave 2, autonomous, strong behavioral guard)
+- [ ] 121-04-PLAN.md — routes/* sub-batched 04a settings 04b apps+docker 04c misc with 3 operator UAT checkpoints (~219 tsx files, wave 3, autonomous=false)
+- [ ] 121-05-PLAN.md — Generic components + features survivors + shadcn-components/ui audit-and-delete-or-keep (~95 + 29 audit, wave 4, autonomous)
+- [ ] 121-06-PLAN.md — CONSISTENCY-REPORT.md + Playwright visual-regression suite + GitHub Actions + STYLE-GUIDE.md expansion + v35.0 AC#1-8 close-out (wave 5, autonomous)
 **Estimated:** 24-40 hours.
 **UAT:** all 654 TSX components migrated; operator-walked end-to-end (`bruce.livinity.io` → `livinity.io/dashboard` → `livinity.io/dashboard/install` → `livinity.io/login` → Mini PC livinityd UI) — visual continuity is the win condition.
 
