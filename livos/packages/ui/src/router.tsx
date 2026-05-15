@@ -71,12 +71,19 @@ export const router = createBrowserRouter([
 		element: (
 			<EnsureLoggedIn>
 				<Wallpaper />
-				<TopBar />
 				{/* Get any notifications from livinityd and render them as alert dialogs */}
 				<Notifications />
 				<AvailableAppsProvider>
 					<AppsProvider>
 						<WindowManagerProvider>
+							{/* TopBar reads `windowManager.windows` to render pinned
+							    chips and dispatches `pinWindowToTopBar` on drop, so it
+							    MUST be inside WindowManagerProvider. 130-09 moved the
+							    pinned-state ownership to WindowManager but TopBar was
+							    still mounted outside this provider, which silently
+							    no-op'd every pin (useWindowManagerOptional returned
+							    null). Fixed Phase 131-01. */}
+							<TopBar />
 							<MobileAppProvider>
 								<CmdkProvider>
 								<AiQuickProvider>

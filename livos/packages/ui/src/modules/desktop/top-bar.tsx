@@ -93,8 +93,12 @@ function TopBarDesktop() {
 	// (drag-to-pin gesture) OR while the cursor is hovering the bar (so
 	// the user can see the shelf without having to drag). User direction
 	// 2026-05-15: "fare ile ustune geldigimde acilsin yinede goreyim".
+	//
+	// Phase 131-01 — also stay expanded while there's at least one pinned
+	// window, otherwise the bar collapses the instant the user releases
+	// the drag and the freshly-dropped chip never gets to show itself.
 	const dragState = useWindowDragState()
-	const isExpanded = dragState.isDragging || isHoverExpanded
+	const isExpanded = dragState.isDragging || isHoverExpanded || pinnedWindows.length > 0
 	const [isDragOverShelf, setIsDragOverShelf] = useState(false)
 
 	// Hit-test cursor against the drop-zone rect while a drag is active.
