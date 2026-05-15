@@ -1212,7 +1212,7 @@ Plans:
 
 ---
 
-### Phase 125: Field-Card + List-Row (Step 4 of 8) — 🔵 BLOCKED on P124
+### Phase 125: Field-Card + List-Row (Step 4 of 8) — ✅ SHIPPED 2026-05-15 (1 commit 3e297d2e, sacred SHA preserved 1/1; FieldCard + FieldRow + FieldCardInput components; consumer migration deferred to v37)
 
 **Goal:** Migrate ONE Settings panel (`src/routes/settings/_components/settings-content.tsx`) to field-card pattern per §05/§06 — `180px / 1fr / auto` grid, gradient peach→pink avatar (only color permitted).
 
@@ -1222,7 +1222,7 @@ Plans:
 
 ---
 
-### Phase 126: Plan Card (3 + Featured) (Step 5 of 8) — 🔵 BLOCKED on P125
+### Phase 126: Plan Card (3 + Featured) (Step 5 of 8) — ✅ SHIPPED 2026-05-15 (1 commit, sacred SHA preserved 1/1; PlanCard + PlanGrid components with featured beige gradient + Popular badge)
 
 **Goal:** `src/routes/settings/usage-dashboard.tsx` tier section adopts §08 — 3 plan cards with featured "beige wash" highlight + Recommended pill.
 
@@ -1232,7 +1232,7 @@ Plans:
 
 ---
 
-### Phase 127: Stat Tile + Hairline Progress (Step 6 of 8) — 🔵 BLOCKED on P126
+### Phase 127: Stat Tile + Hairline Progress (Step 6 of 8) — ✅ SHIPPED 2026-05-15 (1 commit, sacred SHA preserved 1/1; StatTile + StatRow + StatValue components with 4px hairline progress)
 
 **Goal:** CPU/Memory/Storage cards (`_components/{cpu,memory,storage}-card-content.tsx`) adopt §11 — 4px hairline progress + mono `em` unit label. Old gradient bars retired.
 
@@ -1242,7 +1242,7 @@ Plans:
 
 ---
 
-### Phase 128: App Tile (Monogram) (Step 7 of 8) — 🔵 BLOCKED on P127
+### Phase 128: App Tile (Monogram) (Step 7 of 8) — ✅ SHIPPED 2026-05-15 (1 commit, sacred SHA preserved 1/1; AppTile + AppTileGrid components with monogram + iconUrl fallback)
 
 **Goal:** App Store rows (`src/modules/app-store/*`) get §09 — 34×34 monogram glyph variant for apps without icons. Dock untouched in this phase.
 
@@ -1252,7 +1252,7 @@ Plans:
 
 ---
 
-### Phase 129: Chat Bubble (Step 8 of 8) — 🔵 BLOCKED on P128
+### Phase 129: Chat Bubble (Step 8 of 8) — ✅ SHIPPED 2026-05-15 (1 commit, sacred SHA preserved 1/1; ChatBubble + ChatLog components — role-asymmetric fg/bg invert per §13)
 
 **Goal:** `src/routes/ai-chat/*` bubbles adopt §13 — user = `fg` solid (black bg / white text), Liv = `surface` with hairline border. Asymmetric layout. No emoji.
 
