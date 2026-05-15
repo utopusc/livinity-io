@@ -1168,7 +1168,7 @@ Plans:
 
 ---
 
-### Phase 122: Design Tokens (Additive Port, Step 1 of 8) — 🟡 PLANNED 2026-05-15
+### Phase 122: Design Tokens (Additive Port, Step 1 of 8) — ✅ SHIPPED 2026-05-15 (3 commits c2dbcd0c..658714ee, sacred SHA preserved 3/3, visible delta=NONE confirmed by screenshot diff)
 
 **Goal:** Add Livinity Design System tokens (`--fg/--bg/--surface/--line/--r-*/--shadow-window/--shadow-pop/--ease-out-v36`) to `@livinity/design-tokens` package WITHOUT removing or renaming any existing token. After this phase ships, new Tailwind utilities (`bg-fg`, `text-fg-mute`, `border-line`, `rounded-r-lg`, `shadow-window-soft`, etc.) are usable but no component visibly changes.
 
