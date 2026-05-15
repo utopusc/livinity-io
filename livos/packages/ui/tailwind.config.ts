@@ -168,7 +168,10 @@ export default {
 				'elevation-lg': '0px 10px 15px -3px rgba(0, 0, 0, 0.08), 0px 4px 6px -4px rgba(0, 0, 0, 0.04)',
 				'elevation-xl': '0px 20px 25px -5px rgba(0, 0, 0, 0.08), 0px 8px 10px -6px rgba(0, 0, 0, 0.04)',
 				// Component-specific shadows (light theme)
-				dock: '0px 4px 24px rgba(0, 0, 0, 0.08), 0px 1px 3px rgba(0, 0, 0, 0.06), 0px 0px 0px 1px rgba(0, 0, 0, 0.04)',
+				// v36 Phase 122 (micro-step): deepen the ambient layer so the dock
+				// reads as "floating" on the desktop. Crisp + hairline layers kept
+				// byte-identical so the dock's outline is unchanged.
+				dock: '0px 18px 48px -12px rgba(0, 0, 0, 0.22), 0px 4px 12px rgba(0, 0, 0, 0.10), 0px 1px 3px rgba(0, 0, 0, 0.06), 0px 0px 0px 1px rgba(0, 0, 0, 0.04)',
 				'floating-island':
 					'0px 4px 24px rgba(0, 0, 0, 0.10), 0px 1px 3px rgba(0, 0, 0, 0.06), 0px 0px 0px 1px rgba(0, 0, 0, 0.04)',
 				'glass-button':
