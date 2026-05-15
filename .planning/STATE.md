@@ -21,10 +21,31 @@ phase_126_commits: [pending-tag-on-final-close]
 phase_127_commits: [pending-tag-on-final-close]
 phase_128_commits: [pending-tag-on-final-close]
 phase_129_commits: [pending-tag-on-final-close]
-milestone_status: CODE-COMPLETE
+milestone_status: CODE-COMPLETE-PLUS-CONSUMER-MIGRATION
+v36_consumer_migrations_shipped:
+  - "P124 ai-config.tsx → SettingsPageHeader (commit 780d668a)"
+  - "4 settings pages → SettingsPageHeader (commit 20a135a3): integrations, dm-pairing, local-access, domain-setup"
+  - "2 more settings pages → SettingsPageHeader (commit 38287147): chrome-master, liv-agent"
+  - "Login full redesign matching livinity.io/login auth.html (commit 42a121f9)"
+  - "Settings UI polish: home placeholder → live dashboard + duplicate-header fix (commits 220c2e65, 6f6a836c)"
+  - "Window-manager Settings size 800×900 → 1100×980 (commit 38287147)"
+  - "/settings URL route removed from SheetLayout (commit a50eec2a) — window-only"
+  - "/agent-marketplace URL route removed from SheetLayout (commit 220c2e65)"
+session_2026_05_15_late_commits: [c1d3ad59, 220c2e65, 6f6a836c]
 next_phase: null
-next_phase_status: milestone-close-pending-final-commit
-next_action: "Final close commit for phases 126-129 SUMMARY + STATE/ROADMAP. Operator UAT next."
+next_phase_status: pending-followup-work
+next_action: |
+  Two deferred items (next session):
+    1. Sidebar consolidation in routes/settings/_components/settings-content.tsx:
+       merge DM Security + Webhooks into Integrations sub-tabs,
+       Diagnostics + Software Update + Advanced into Troubleshoot,
+       Migration Assistant into Backups, etc. — drop the merged items from
+       MENU_ITEMS array.
+    2. Redesign internal layout of ONE section as v36 FieldCard demo
+       (eyebrow → italic-serif title → FieldCard with 180px/1fr/auto rows).
+       Recommended target: AccountSection (small, visible: Change name +
+       Change password) or ThemeSection (wallpaper + accent picker).
+  Resume command: "v36 settings sidebar consolidation + Account section v36 redesign — kaldigin yerden devam"
 previous_milestone: v35.0
 previous_milestone_name: Design System Unification (UI/UX)
 previous_milestone_status: shipped
