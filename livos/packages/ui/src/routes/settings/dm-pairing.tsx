@@ -18,6 +18,7 @@ import {trpcReact} from '@/trpc/trpc'
 import {cn} from '@/shadcn-lib/utils'
 
 import {SettingsPageLayout} from './_components/settings-page-layout'
+import {SettingsPageHeader} from '@/components/settings-page-header'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -52,7 +53,14 @@ const CHANNELS = [
 
 export default function DmPairingPage() {
 	return (
-		<SettingsPageLayout title='DM Security' description='Control who can interact with your bot via direct messages'>
+		<SettingsPageLayout title='DM Security' description='Control who can interact with your bot via direct messages' hideHeader>
+			<SettingsPageHeader
+				eyebrow='03 · DM Security'
+				title='Lock down'
+				titleAccent='direct messages.'
+				sub='Allow only the contacts you trust to send Liv direct commands. Anyone outside this list gets an explicit decline.'
+			/>
+			<div className='h-6' />
 			<DmPairingContent />
 		</SettingsPageLayout>
 	)

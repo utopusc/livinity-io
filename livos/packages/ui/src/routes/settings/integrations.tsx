@@ -20,6 +20,7 @@ import {trpcReact} from '@/trpc/trpc'
 import {cn} from '@/shadcn-lib/utils'
 
 import {SettingsPageLayout} from './_components/settings-page-layout'
+import {SettingsPageHeader} from '@/components/settings-page-header'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -92,7 +93,14 @@ export default function IntegrationsPage() {
 	const [activeTab, setActiveTab] = useState<ChannelId>('telegram')
 
 	return (
-		<SettingsPageLayout title='Integrations' description='Connect messaging platforms to interact with Nexus AI from anywhere'>
+		<SettingsPageLayout title='Integrations' description='Connect messaging platforms to interact with Nexus AI from anywhere' hideHeader>
+			<SettingsPageHeader
+				eyebrow='02 · Integrations'
+				title='Connect your'
+				titleAccent='channels.'
+				sub='Pair LivOS with the messaging platforms you already use — chat with Liv from Telegram, Slack, or Discord. Tokens stay on your hardware; LivOS never proxies messages through a third-party server.'
+			/>
+			<div className='h-6' />
 			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChannelId)}>
 				<TabsList className='grid w-full grid-cols-4'>
 					{CHANNELS.map((channel) => (

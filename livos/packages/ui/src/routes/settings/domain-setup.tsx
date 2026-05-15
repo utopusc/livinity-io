@@ -19,6 +19,7 @@ import {trpcReact} from '@/trpc/trpc'
 import {cn} from '@/shadcn-lib/utils'
 
 import {SettingsPageLayout} from './_components/settings-page-layout'
+import {SettingsPageHeader} from '@/components/settings-page-header'
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -932,7 +933,14 @@ export default function DomainSetupPage() {
 	const navigate = useNavigate()
 
 	return (
-		<SettingsPageLayout title='Domain & HTTPS' description='Configure custom domain and SSL certificate'>
+		<SettingsPageLayout title='Domain & HTTPS' description='Configure custom domain and SSL certificate' hideHeader>
+			<SettingsPageHeader
+				eyebrow='05 · Domain'
+				title='Your own domain,'
+				titleAccent='end-to-end.'
+				sub='Bring a custom domain to LivOS and we provision the SSL certificate automatically through Cloudflare. Your Mini PC stays reachable as you.bruceoz.com instead of an IP.'
+			/>
+			<div className='h-6' />
 			<DomainSetupInner onClose={() => navigate('/settings')} />
 		</SettingsPageLayout>
 	)
