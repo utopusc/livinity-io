@@ -1823,7 +1823,7 @@ function LogsPanel() {
 							</button>
 						</div>
 						<div className='max-h-[200px] overflow-auto rounded-radius-sm bg-[color:var(--surface-1)] dark:bg-zinc-900/60 p-3'>
-							<pre className='whitespace-pre-wrap font-mono text-caption-sm text-text-secondary'>
+							<pre className='whitespace-pre-wrap break-all font-mono text-caption-sm text-text-secondary'>
 								{logsQ.isLoading ? 'Loading...' : logsQ.isError ? logsQ.error.message : (logsQ.data?.slice(-2000) || 'No logs available')}
 							</pre>
 						</div>
@@ -1867,7 +1867,7 @@ function LogsPanel() {
 								</button>
 							</div>
 							<div className='max-h-[200px] overflow-auto rounded-radius-sm bg-[color:var(--surface-1)] dark:bg-zinc-900/60 p-3'>
-								<pre className='whitespace-pre-wrap font-mono text-caption-sm text-text-secondary'>
+								<pre className='whitespace-pre-wrap break-all font-mono text-caption-sm text-text-secondary'>
 									{logsQ.isLoading ? 'Loading...' : logsQ.isError ? logsQ.error.message : (logsQ.data?.slice(-2000) || 'No logs available')}
 								</pre>
 							</div>
@@ -1908,7 +1908,7 @@ function LogsPanel() {
 							</button>
 						</div>
 						<div className='max-h-[60vh] overflow-auto p-4'>
-							<pre className='whitespace-pre-wrap font-mono text-caption text-text-secondary'>
+							<pre className='whitespace-pre-wrap break-all font-mono text-caption text-text-secondary'>
 								{logsQ.data || 'No logs available'}
 							</pre>
 						</div>
