@@ -21,7 +21,7 @@ kullansın istemiyorum"*.
 | # | Plan | Bug | Files | autonomous |
 |---|------|-----|-------|------------|
 | 1 | 133-01 | A (wizard auto-register) + C (subdomain pre-fill) | Server5 `/opt/platform/web/src/app/api/account/api-keys/route.ts` (Bug A handler) + `/opt/landing/livinity.io/dashboard-install.html` (Bug A fetch body + Bug C HybridStep pre-fill) + pm2 restart web | true |
-| 2 | 133-02 | B (hero) + lucylu hotfix | Server5 `/opt/landing/livinity.io/dashboard.html` + DB INSERT for lucylu | false (needs operator to confirm lucylu's chosen domain) |
+| 2 | 133-02 | B (hero kill-tunnel) | Server5 `/opt/landing/livinity.io/dashboard.html` | true (per user directive 2026-05-17: drop lucylu hotfix, ship as general update only) |
 | 3 | 133-03 | UAT (Flows A/B/C/D — D covers Bug C subdomain pre-fill) | Operator-walked fresh-user verify | false |
 
 Plans 133-01 and 133-02 are file-disjoint and can ship in parallel.

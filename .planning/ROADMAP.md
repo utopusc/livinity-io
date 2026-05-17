@@ -1305,7 +1305,7 @@ Plans:
 
 Plans:
 - [ ] 133-01 wizard Generate auto-INSERT custom_domains (Bug A) + HybridStep `${username}.` pre-fill (Bug C) — autonomous, single deploy
-- [ ] 133-02 hero URL derives from custom_domain only + lucylu data hotfix (Bug B, needs operator to supply lucylu's chosen domain)
+- [ ] 133-02 hero URL derives from custom_domain only (Bug B) — autonomous (per 2026-05-17 directive, lucylu data hotfix dropped, general update only)
 - [ ] 133-03 operator-walked fresh-user UAT, Flows A/B/C/D (autonomous:false)
 
 ---
