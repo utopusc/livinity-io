@@ -11,9 +11,13 @@ import {PersonalizeStep} from '@/features/onboarding-flow/steps/personalize-step
 import {WallpaperStep} from '@/features/onboarding-flow/steps/wallpaper-step'
 import {WelcomeStep} from '@/features/onboarding-flow/steps/welcome-step'
 import {TopBar} from '@/features/onboarding-flow/top-bar'
+import {useDebouncedCallback} from '@/features/onboarding-flow/use-debounced-callback'
 import {useStepper} from '@/features/onboarding-flow/use-stepper'
+import {JWT_LOCAL_STORAGE_KEY} from '@/modules/auth/shared'
+import {trpcReact} from '@/trpc/trpc'
 
 const STORAGE_KEY = 'livos.onb.state'
+const BACKEND_RESUME_KEY = 'onboarding_state'
 
 // Phase 135-D — dev-helper: ?step=N seeds activeStep. Tree-shaken in prod.
 function getInitialStepFromUrl(): number {
@@ -49,12 +53,52 @@ function WizardInner() {
 	const [data, setData] = useState<OnboardingData>(initialData)
 	const [labelChanging, setLabelChanging] = useState(false)
 
-	// Persist on every change (resume backing — backend handoff comes in 135-F).
+	// Persist on every change. localStorage path is the always-available fallback
+	// (covers unauth steps 0-1 before AccountStep registers + logs in). Backend
+	// path (137-04) hydrates once the user is logged in and survives device
+	// switch: a /onboarding visit on another browser with the same account
+	// resumes mid-wizard.
 	useEffect(() => {
 		try {
 			localStorage.setItem(STORAGE_KEY, JSON.stringify({idx: stepper.idx, data}))
 		} catch {}
 	}, [stepper.idx, data])
+
+	// Phase 137-04 — backend resume: read once on mount when logged in.
+	const isLoggedIn = typeof window !== 'undefined' && !!localStorage.getItem(JWT_LOCAL_STORAGE_KEY)
+	const backendResumeQ = trpcReact.preferences.get.useQuery(
+		{keys: [BACKEND_RESUME_KEY]},
+		{enabled: isLoggedIn, retry: false, staleTime: Infinity},
+	)
+	const backendHydratedRef = useRef(false)
+	useEffect(() => {
+		if (backendHydratedRef.current) return
+		if (!backendResumeQ.isSuccess) return
+		backendHydratedRef.current = true
+		const raw = (backendResumeQ.data as Record<string, unknown> | undefined)?.[BACKEND_RESUME_KEY]
+		if (typeof raw !== 'string' || raw.length === 0) return
+		try {
+			const parsed = JSON.parse(raw) as {idx?: number; data?: Partial<OnboardingData>}
+			if (typeof parsed.idx === 'number' && parsed.idx > 0 && parsed.idx < TOTAL) {
+				// Only hydrate if backend has further-along progress than local state.
+				if (parsed.idx > stepper.idx) {
+					setData((prev) => ({...prev, ...(parsed.data ?? {})}))
+					stepper.go(parsed.idx)
+				}
+			}
+		} catch {}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [backendResumeQ.isSuccess, backendResumeQ.data])
+
+	// Write debounced (500ms) — drag-fast slider + rapid step taps don't spam the network.
+	const setBackendResume = trpcReact.preferences.set.useMutation()
+	const writeBackendResume = useDebouncedCallback((idx: number, snap: OnboardingData) => {
+		if (!isLoggedIn) return
+		setBackendResume.mutate({key: BACKEND_RESUME_KEY, value: JSON.stringify({idx, data: snap})})
+	}, 500)
+	useEffect(() => {
+		writeBackendResume(stepper.idx, data)
+	}, [stepper.idx, data, writeBackendResume])
 
 	// body.step-N drives per-step ambient orb color shifts (CSS in 135-A).
 	useEffect(() => {
