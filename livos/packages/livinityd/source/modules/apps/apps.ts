@@ -541,6 +541,16 @@ export default class Apps {
 			await set('apps', apps)
 		})
 
+		// Phase 140 plan 140-08 — provision a CF DNS + Tunnel ingress subdomain
+		// via Server5 BEFORE rebuilding Caddy locally. Best-effort: the helper
+		// internally swallows all errors and returns null, so the install flow
+		// never throws on a Server5 outage / missing platform credentials /
+		// network error. The returned subdomain (e.g. "n8n-lucy") is the
+		// canonical {app}-{user}.livinity.io shape minted by Server5; it's not
+		// persisted client-side — Server5 DB is the source of truth for which
+		// CF resources exist.
+		await this.provisionAppSubdomain(appId, manifest.port)
+
 		// Register subdomain in Caddy for reverse proxy
 		try {
 			const builtinApp = getBuiltinApp(appId)
@@ -635,6 +645,13 @@ export default class Apps {
 		if (isDependency) throw new Error(`App ${appId} is a dependency of another app and cannot be uninstalled`)
 
 		const app = this.getApp(appId)
+
+		// Phase 140 plan 140-08 — deprovision the CF DNS + Tunnel ingress
+		// subdomain BEFORE tearing down the container. We do it first so the
+		// Server5 DB lookup (slug -> dns_record_id / ingress_rule_id) still
+		// resolves. Best-effort: helper swallows errors and returns void, so
+		// the local uninstall always proceeds even if Server5 is unreachable.
+		await this.deprovisionAppSubdomain(appId)
 
 		const uninstalled = await app.uninstall()
 		if (uninstalled) {
@@ -817,6 +834,98 @@ export default class Apps {
 			}
 		} catch (error) {
 			this.logger.error(`Failed to report ${action} event for ${appId}`, error)
+		}
+	}
+
+	// ─── Phase 140 plan 140-08 — CF-for-SaaS subdomain provisioning ──
+	// Calls Server5's POST/DELETE /api/me/app-subdomain endpoints (shipped in
+	// 140-05) so that installing/uninstalling an app on the home LivOS box
+	// triggers Cloudflare DNS + Tunnel ingress creation/removal at the edge.
+	//
+	// Both calls are best-effort: on failure (Server5 unreachable, missing
+	// api-key, missing platform url, network error) we log + continue. The
+	// existing install/uninstall flow must succeed without these calls for
+	// local-lan users and air-gapped deployments.
+	//
+	// Deviation (Rule 3): plan 140-08 prescribed a new `server5-client.ts`
+	// abstraction. Skipped — two helpers reusing the same Redis-keyed fetch
+	// pattern as reportInstallEvent above is enough; introducing a class
+	// wrapper for two HTTP calls is over-engineering. Sacred SHA
+	// f3538e1d811992b782a9bb057d1b7f0a0189f95f preserved.
+
+	/**
+	 * Provision a Cloudflare subdomain for an installed app via Server5.
+	 * Returns the assigned subdomain + URL on success, null on any failure
+	 * (best-effort — caller MUST tolerate null and continue install).
+	 */
+	private async provisionAppSubdomain(
+		appId: string,
+		port: number,
+	): Promise<{subdomain: string; url: string} | null> {
+		try {
+			const [apiKey, platformUrl] = await Promise.all([
+				this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY),
+				this.#livinityd.ai.redis.get(REDIS_PLATFORM_URL),
+			])
+			if (!apiKey || !platformUrl) {
+				this.logger.log(`Skipping CF subdomain provisioning for ${appId}: no platform credentials`)
+				return null
+			}
+
+			const response = await fetch(`${platformUrl.replace(/\/$/, '')}/api/me/app-subdomain`, {
+				method: 'POST',
+				headers: {'Content-Type': 'application/json', 'X-Api-Key': apiKey},
+				body: JSON.stringify({app_slug: appId, port}),
+			})
+			if (!response.ok) {
+				const text = await response.text().catch(() => '')
+				this.logger.error(`CF subdomain provisioning failed for ${appId}: ${response.status} ${text}`)
+				return null
+			}
+
+			const data = (await response.json()) as {subdomain?: string; url?: string}
+			if (!data.subdomain || !data.url) {
+				this.logger.error(`CF subdomain provisioning returned malformed response for ${appId}`)
+				return null
+			}
+			this.logger.log(`Provisioned CF subdomain ${data.subdomain} for ${appId} -> ${data.url}`)
+			return {subdomain: data.subdomain, url: data.url}
+		} catch (error) {
+			this.logger.error(`Failed to provision CF subdomain for ${appId}`, error)
+			return null
+		}
+	}
+
+	/**
+	 * Deprovision a previously-provisioned CF subdomain. Best-effort: errors
+	 * are logged and swallowed so the local uninstall always proceeds.
+	 */
+	private async deprovisionAppSubdomain(appId: string): Promise<void> {
+		try {
+			const [apiKey, platformUrl] = await Promise.all([
+				this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY),
+				this.#livinityd.ai.redis.get(REDIS_PLATFORM_URL),
+			])
+			if (!apiKey || !platformUrl) {
+				this.logger.log(`Skipping CF subdomain deprovisioning for ${appId}: no platform credentials`)
+				return
+			}
+
+			const response = await fetch(
+				`${platformUrl.replace(/\/$/, '')}/api/me/app-subdomain/${encodeURIComponent(appId)}`,
+				{
+					method: 'DELETE',
+					headers: {'X-Api-Key': apiKey},
+				},
+			)
+			if (response.ok) {
+				this.logger.log(`Deprovisioned CF subdomain for ${appId}`)
+			} else {
+				const text = await response.text().catch(() => '')
+				this.logger.error(`CF subdomain deprovisioning failed for ${appId}: ${response.status} ${text}`)
+			}
+		} catch (error) {
+			this.logger.error(`Failed to deprovision CF subdomain for ${appId}`, error)
 		}
 	}
 
