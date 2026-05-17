@@ -48,6 +48,14 @@ export const httpOnlyPaths = [
 	// extends Phase 33 OBS-01 schema with status:"factory-reset"). HTTP only —
 	// the WS would 401 mid-wipe when livinityd is killed. Mirror system.update.
 	'system.factoryReset',
+	// Phase 135-F — 2FA enrollment from onboarding fires immediately after
+	// loginMut.onSuccess closes the WS (so it can reconnect with the fresh
+	// JWT). HTTP avoids the "Active connection is not open" race during that
+	// reconnect window; PinInput → enable2fa likewise.
+	'user.generateTotpUri',
+	'user.enable2fa',
+	'user.disable2fa',
+	'user.is2faEnabled',
 	// Multi-user management routes — use HTTP to avoid WS connection dependency
 	'user.createInvite',
 	'user.listAllUsers',
