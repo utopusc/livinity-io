@@ -91,14 +91,16 @@ fi
 # ── Shared deps (every mode needs Caddy + apt prereqs) ──
 install_common_deps
 
-# ── Dispatch to mode helper (Plan 104-09 adds tunnel mode — CF Tunnel /
-#    cloudflared outbound-only; works behind CGNAT; zero Server5 data plane) ──
+# ── Dispatch to mode helper. Phase 134: hybrid (default) and tunnel are the
+#    same code path now (CF Tunnel transport via cloudflared outbound). hybrid
+#    is the user-facing default; tunnel is a back-compat alias. Both invoke
+#    install_mode_tunnel from mode-tunnel.sh — mode-hybrid.sh just delegates.
 case "$MODE" in
-    cloud)     source "$SCRIPT_DIR/mode-cloud.sh"; install_mode_cloud ;;
-    local-lan) source "$SCRIPT_DIR/mode-local-lan.sh"; install_mode_local_lan ;;
-    hybrid)    source "$SCRIPT_DIR/mode-hybrid.sh"; install_mode_hybrid ;;
-    tunnel)    source "$SCRIPT_DIR/mode-tunnel.sh"; install_mode_tunnel ;;
-    *)         fail "internal error: unhandled MODE=$MODE" 64 ;;
+    cloud)         source "$SCRIPT_DIR/mode-cloud.sh"; install_mode_cloud ;;
+    local-lan)     source "$SCRIPT_DIR/mode-local-lan.sh"; install_mode_local_lan ;;
+    hybrid)        source "$SCRIPT_DIR/mode-hybrid.sh"; install_mode_hybrid ;;   # Phase 134: delegates → install_mode_tunnel
+    tunnel)        source "$SCRIPT_DIR/mode-tunnel.sh"; install_mode_tunnel ;;   # Phase 134: kept as back-compat alias
+    *)             fail "internal error: unhandled MODE=$MODE" 64 ;;
 esac
 
 # ── Persist mode marker (read by livinityd on boot + by update.sh;
