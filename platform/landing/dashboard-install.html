@@ -1,6 +1,7 @@
 <!doctype html>
 <!-- Sacred SHA invariant: f3538e1d811992b782a9bb057d1b7f0a0189f95f -->
 <!-- Phase 140-06: install wizard simplified to username-only. -->
+<!-- Phase 140-06.1: collapsed to 1-step — session username is authoritative. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -8,7 +9,7 @@
     <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <title>Set up your first LivOS — Livinity</title>
-    <meta name="description" content="Pick your subdomain and get the one-line install command." />
+    <meta name="description" content="Get the one-line install command for your LivOS." />
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
@@ -56,19 +57,10 @@
       .panel h2 { font-size: 13px; font-weight: 600; color: var(--fg); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px; }
       .panel .sub { font-size: 13px; color: var(--fg-mute); margin: 0 0 20px; line-height: 1.5; }
 
-      .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-      .field label { font-size: 11.5px; font-family: var(--font-mono); color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.06em; }
-      .field input { background: var(--card-bg-2); border: 1px solid var(--dash-line); border-radius: 12px; padding: 11px 14px; font-size: 14px; color: var(--fg); font-family: inherit; outline: none; transition: border 0.18s ease; }
-      .field input:focus { border-color: var(--fg); }
-      .field input.error { border-color: var(--accent-red); }
-      .field input.ok { border-color: var(--accent-green); }
-
       .url-preview { background: var(--card-bg-2); border: 1px solid var(--dash-line); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--fg-mute); margin: 4px 0 12px; }
       .url-preview code { font-family: var(--font-mono); color: var(--fg); }
 
       .availability { font-size: 12px; font-family: var(--font-mono); min-height: 18px; margin-top: 2px; color: var(--fg-faint); }
-      .availability.checking { color: var(--fg-mute); }
-      .availability.ok { color: var(--accent-green); }
       .availability.err { color: var(--accent-red); }
 
       .cmd-box { background: var(--card-bg-2); border: 1px solid var(--dash-line); border-radius: 12px; padding: 16px; font-family: var(--font-mono); font-size: 12.5px; word-break: break-all; line-height: 1.55; color: var(--fg); position: relative; }
@@ -93,86 +85,10 @@
     <div id="root"><div class="install-loading"><p>Loading…</p></div></div>
 
     <script type="text/babel">
-      const { useState, useEffect, useCallback, useRef } = React;
+      const { useState, useEffect } = React;
 
       function copyText(s) {
         try { navigator.clipboard.writeText(s); } catch (e) {}
-      }
-
-      function sanitizeUsername(raw) {
-        return (raw || "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32);
-      }
-
-      function UsernameStep({ username, setUsername, check, onContinue }) {
-        const canContinue = check.status === "ok";
-        const inputClass = check.status === "ok" ? "ok" : check.status === "err" ? "error" : "";
-        let msgClass = "availability idle";
-        let msgText = "Choose a username for your LivOS.";
-        if (username.length > 0 && check.status === "checking") { msgClass = "availability checking"; msgText = "Checking…"; }
-        else if (check.status === "ok") { msgClass = "availability ok"; msgText = "✓ Looks good"; }
-        else if (check.status === "err") { msgClass = "availability err"; msgText = "✗ " + (check.reason || "Not available"); }
-
-        return (
-          <div>
-            <h2>Step 1 of 2 — Pick your username</h2>
-            <p className="sub">Your LivOS will be reachable at <code style={{ fontFamily: "var(--font-mono)" }}>{`{username}.livinity.io`}</code>. This is also baked into the install command.</p>
-
-            <div className="field">
-              <label htmlFor="username">Username</label>
-              <input id="username" className={inputClass} placeholder="lucy" autoComplete="off" spellCheck={false}
-                value={username}
-                onChange={(e) => setUsername(sanitizeUsername(e.target.value))}
-                onKeyDown={(e) => { if (e.key === "Enter" && canContinue) onContinue(); }} />
-              <div className={msgClass}>{msgText}</div>
-            </div>
-
-            <div className="url-preview">
-              Your URL will be: <code>{username ? "https://" + username + ".livinity.io" : "https://<username>.livinity.io"}</code>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button className="h-btn solid" disabled={!canContinue} onClick={onContinue}>Continue</button>
-            </div>
-          </div>
-        );
-      }
-
-      function InstallCommandStep({ username, gen, emailVerified, onBack }) {
-        if (gen.status === "minting") return <p className="sub" style={{ fontSize: 13 }}>Generating your API key…</p>;
-        if (gen.status === "error") return (
-          <div>
-            <p className="availability err" style={{ marginBottom: 12 }}>✗ Couldn't mint API key — {gen.error}</p>
-            <button className="h-btn" onClick={onBack}>Back</button>
-          </div>
-        );
-        if (gen.status !== "ready" || !gen.installCommand) return null;
-
-        return (
-          <div>
-            <h2>Step 2 of 2 — Run install command</h2>
-            <p className="sub">Paste this on a fresh Ubuntu 24.04 / Debian 12 server. Install provisions Docker, Caddy, PostgreSQL, Redis, and livinityd in one shot (~5–8 min).</p>
-
-            <div className="warn-card">
-              ⚠ Your API key is shown only once. If you lose it, click <strong>Back</strong> to regenerate.
-            </div>
-
-            <div className="cmd-box" style={{ marginBottom: 14 }}>
-              <button className="copy h-btn solid" onClick={() => copyText(gen.installCommand)}>Copy</button>
-              <code>{gen.installCommand}</code>
-            </div>
-
-            <div className="url-preview" style={{ marginBottom: 22 }}>
-              Your URL: <code>{"https://" + username + ".livinity.io"}</code>
-            </div>
-
-            <h2 style={{ marginBottom: 12 }}>What happens next</h2>
-            <ol className="next-list">
-              <li><span className="n">1</span><span><code style={{ fontFamily: "var(--font-mono)" }}>install.sh</code> provisions your server (~5–8 min).</span></li>
-              <li><span className="n">2</span><span><code style={{ fontFamily: "var(--font-mono)" }}>cloudflared</code> connects your tunnel automatically — no port forwarding, no public IP needed.</span></li>
-              <li><span className="n">3</span><span>Open <code style={{ fontFamily: "var(--font-mono)" }}>{"https://" + username + ".livinity.io"}</code> — you're done.</span></li>
-            </ol>
-          </div>
-        );
       }
 
       function App() {
@@ -185,12 +101,9 @@
 
         const [user, setUser] = useState(null);
         const [authLoading, setAuthLoading] = useState(true);
-        const [step, setStep] = useState(1);
-        const [username, setUsername] = useState("");
-        const [check, setCheck] = useState({ status: "idle" });
         const [gen, setGen] = useState({ status: "idle" });
 
-        // Bootstrap auth + pre-fill username from the logged-in account.
+        // Bootstrap auth + immediately mint API key in one mount-time flow.
         useEffect(() => {
           (async () => {
             try {
@@ -199,42 +112,10 @@
               const meData = await me.json();
               if (!meData.user) { window.location.href = "/login?redirect=/dashboard/install"; return; }
               setUser(meData.user);
-              if (meData.user.username) setUsername(sanitizeUsername(meData.user.username));
-            } catch (e) {
-              window.location.href = "/login?redirect=/dashboard/install";
-            } finally {
               setAuthLoading(false);
-            }
-          })();
-        }, []);
 
-        // Debounced live availability check (300ms).
-        const checkTimer = useRef(null);
-        useEffect(() => {
-          if (checkTimer.current) clearTimeout(checkTimer.current);
-          if (!username) { setCheck({ status: "idle" }); return; }
-          setCheck({ status: "checking" });
-          checkTimer.current = setTimeout(async () => {
-            try {
-              const res = await fetch("/api/auth/username-available?u=" + encodeURIComponent(username), { credentials: "same-origin" });
-              const body = await res.json().catch(() => ({}));
-              if (!res.ok) { setCheck({ status: "err", reason: body.error || "HTTP " + res.status }); return; }
-              if (body.available) setCheck({ status: "ok" });
-              else setCheck({ status: "err", reason: body.reason, code: body.code });
-            } catch (e) {
-              setCheck({ status: "err", reason: String(e) });
-            }
-          }, 300);
-          return () => { if (checkTimer.current) clearTimeout(checkTimer.current); };
-        }, [username]);
-
-        // On entering step 2, mint API key + receive install command from server.
-        useEffect(() => {
-          if (step !== 2) return;
-          if (gen.status === "ready" || gen.status === "minting") return;
-          setGen({ status: "minting" });
-          (async () => {
-            try {
+              // Auto-mint API key on mount — username comes from session, no input.
+              setGen({ status: "minting" });
               const res = await fetch("/api/dashboard", {
                 method: "POST", credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },
@@ -245,25 +126,51 @@
                 setGen({ status: "error", error: body.error || ("HTTP " + res.status) });
                 return;
               }
-              setGen({ status: "ready", apiKey: body.apiKey, installCommand: body.installCommand });
+              setGen({
+                status: "ready",
+                apiKey: body.apiKey,
+                installCommand: body.installCommand,
+                username: body.username || meData.user.username,
+              });
             } catch (e) {
-              setGen({ status: "error", error: String(e) });
+              window.location.href = "/login?redirect=/dashboard/install";
             }
           })();
-        }, [step, gen.status]);
-
-        function handleBack() {
-          setGen({ status: "idle" });
-          setStep(1);
-        }
+        }, []);
 
         async function handleLogout() {
           try { await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }); } catch (e) {}
           window.location.href = "/login";
         }
 
+        async function handleRegenerate() {
+          setGen({ status: "minting" });
+          try {
+            const res = await fetch("/api/dashboard", {
+              method: "POST", credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "regenerate-key" }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok || !body.apiKey) {
+              setGen({ status: "error", error: body.error || ("HTTP " + res.status) });
+              return;
+            }
+            setGen({
+              status: "ready",
+              apiKey: body.apiKey,
+              installCommand: body.installCommand,
+              username: body.username || user.username,
+            });
+          } catch (e) {
+            setGen({ status: "error", error: String(e) });
+          }
+        }
+
         if (authLoading) return <div className="install-loading"><p>Loading…</p></div>;
         if (!user) return null;
+
+        const username = gen.username || user.username;
 
         return (
           <div className="install-shell">
@@ -277,9 +184,9 @@
             </nav>
 
             <header className="install-hero">
-              <span className="step-pill">Step {step} of 2</span>
+              <span className="step-pill">Install</span>
               <h1>Set up <em>your first LivOS.</em></h1>
-              <p>Pick a username and we'll generate a one-line install command. Paste it on the machine you want to host your server.</p>
+              <p>Here's your one-line install command. Paste it on the machine you want to host your server.</p>
             </header>
 
             {!user.emailVerified && (
@@ -289,31 +196,52 @@
             )}
 
             <section className="panel">
-              {step === 1 && (
-                <UsernameStep
-                  username={username}
-                  setUsername={setUsername}
-                  check={check}
-                  onContinue={() => { if (check.status === "ok") setStep(2); }}
-                />
+              {gen.status === "minting" && (
+                <p className="sub" style={{ fontSize: 13 }}>Generating your install command…</p>
               )}
-              {step === 2 && (
-                <InstallCommandStep
-                  username={username}
-                  gen={gen}
-                  emailVerified={user.emailVerified}
-                  onBack={handleBack}
-                />
+
+              {gen.status === "error" && (
+                <div>
+                  <p className="availability err" style={{ marginBottom: 12 }}>✗ Couldn't mint API key — {gen.error}</p>
+                  <button className="h-btn" onClick={handleRegenerate}>Retry</button>
+                </div>
+              )}
+
+              {gen.status === "ready" && gen.installCommand && (
+                <div>
+                  <h2>Run install command</h2>
+                  <p className="sub">Paste this on a fresh Ubuntu 24.04 / Debian 12 server. Install provisions Docker, Caddy, PostgreSQL, Redis, and livinityd in one shot (~5–8 min).</p>
+
+                  <div className="warn-card">
+                    ⚠ Your API key is shown only once. If you lose it, click <strong>Regenerate</strong> below to mint a new one (the old key will be invalidated).
+                  </div>
+
+                  <div className="cmd-box" style={{ marginBottom: 14 }}>
+                    <button className="copy h-btn solid" onClick={() => copyText(gen.installCommand)}>Copy</button>
+                    <code>{gen.installCommand}</code>
+                  </div>
+
+                  <div className="url-preview" style={{ marginBottom: 22 }}>
+                    Your URL: <code>{"https://" + username + ".livinity.io"}</code>
+                  </div>
+
+                  <h2 style={{ marginBottom: 12 }}>What happens next</h2>
+                  <ol className="next-list">
+                    <li><span className="n">1</span><span><code style={{ fontFamily: "var(--font-mono)" }}>install.sh</code> provisions your server (~5–8 min).</span></li>
+                    <li><span className="n">2</span><span><code style={{ fontFamily: "var(--font-mono)" }}>cloudflared</code> connects your tunnel automatically — no port forwarding, no public IP needed.</span></li>
+                    <li><span className="n">3</span><span>Open <code style={{ fontFamily: "var(--font-mono)" }}>{"https://" + username + ".livinity.io"}</code> — you're done.</span></li>
+                  </ol>
+                </div>
               )}
             </section>
 
             <div className="nav-row">
               <button className="h-btn ghost" onClick={() => { window.location.href = "/dashboard?skipFirstRun=1"; }}>Skip for now</button>
               <div className="right">
-                {step === 2 && gen.status !== "minting" && (
-                  <button className="h-btn" onClick={handleBack}>Back</button>
+                {gen.status === "ready" && (
+                  <button className="h-btn" onClick={handleRegenerate}>Regenerate key</button>
                 )}
-                {step === 2 && gen.status === "ready" && (
+                {gen.status === "ready" && (
                   <a href="/dashboard" className="h-btn solid">Done — go to dashboard</a>
                 )}
               </div>
