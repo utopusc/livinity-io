@@ -15,25 +15,10 @@ import '@/styles/onboarding-flow.css'
  */
 export function OnboardingShell() {
 	return (
-		<div
-			data-flow='onboarding'
-			style={{
-				minHeight: '100dvh',
-				display: 'grid',
-				placeItems: 'center',
-				padding: 'var(--liv-pad)',
-			}}
-		>
-			<div
-				style={{
-					width: '100%',
-					maxWidth: 560,
-				}}
-			>
-				<Suspense>
-					<Outlet />
-				</Suspense>
-			</div>
+		<div data-flow='onboarding' style={{position: 'relative', minHeight: '100dvh'}}>
+			<Suspense>
+				<Outlet />
+			</Suspense>
 		</div>
 	)
 }
