@@ -1446,3 +1446,27 @@ Plans:
 
 **Depends on:** Phase 130 ✅ (130-09 dropped the localStorage pinned-IDs cache + introduced `WindowState.isPinnedToTopBar` which 131 builds on).
 
+---
+
+### Phase 140: CF for SaaS Multi-Tenant Auto-Provisioning — 🔴 PLANNED 2026-05-17 (closes the Phase 134 manual-CF-wizard gap; end-user never opens Cloudflare)
+
+**Goal:** Every Livinity user gets a Cloudflare-managed subdomain + Tunnel automatically provisioned at signup. End-user touches only the dashboard + terminal — no CF dashboard, no domain ownership, no TLS/DNS/tunnel manual work. Backend uses CF API to create tunnel, fetch token, push ingress, write DNS records, all transparent to the user. URL pattern locked to flat `{app}__{user}.livinity.io` to stay within Universal SSL coverage (Free plan; CF for SaaS wildcards confirmed Enterprise-only via CF API error 1456 on 2026-05-17). Cost stays $0 forever regardless of user/app count.
+
+**Goal split:**
+- V34-PLATFORM-04: zero-Cloudflare-touch user onboarding (signup → tunnel + DNS auto-provisioned)
+- V34-PLATFORM-05: per-app subdomain auto-provisioning at install time
+- V34-PLATFORM-06: username validation (reserved-name blacklist + dynamic app-slug collision)
+- V34-PLATFORM-07: domain consolidation — `livinity.live` retired, `livinity.io` the only user-facing domain
+
+**Plans:** TBD — estimated 6-8 plans (see `.planning/phases/140-cf-saas-multi-tenant/PLAN.md`).
+
+**Depends on:** Phase 134 ✅ (CF Tunnel as default transport), Phase 133 ✅ (custom-domain field in DB).
+
+**Operator setup status (2026-05-17):**
+- CF API token created, verified scope-complete (Account.Tunnel:Edit + Zone.SSL:Edit + Zone.DNS:Edit + Zone.Zone:Read for livinity.io) ✓
+- Token + Account ID + Zone ID saved to Server5 `pm2 ecosystem` (CF_API_TOKEN, CF_ACCOUNT_ID, CF_ZONE_ID_LIVINITY_IO) ✓
+- pm2 web reloaded with new env ✓
+- CF for SaaS Fallback Origin set to `livinity.io` ✓
+- Free-plan wildcard custom hostname confirmed UNAVAILABLE (error 1456 — Enterprise only) — flat URL strategy locked ✓
+- Awaiting kickoff of implementation work.
+
