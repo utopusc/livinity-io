@@ -2,6 +2,7 @@ import {Suspense} from 'react'
 import {Outlet} from 'react-router-dom'
 
 import '@/styles/onboarding-tokens.css'
+import '@/styles/onboarding-flow.css'
 
 /**
  * Phase 135 — Livinity DS-aligned shell for /onboarding/* routes.
