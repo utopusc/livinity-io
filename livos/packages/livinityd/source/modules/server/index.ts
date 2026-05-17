@@ -280,7 +280,21 @@ class Server {
 					// Allow fetching data from our apps API (e.g., for Discover page in App Store)
 					// + Supabase auth/data endpoints used by self-hosted apps (Suna kortix-frontend
 					// reaches the user's external Supabase Cloud project for auth + realtime)
-					connectSrc: ["'self'", 'wss:', 'ws:', 'https://*.livinity.io', 'https://*.supabase.co', 'wss://*.supabase.co'],
+					// + Phase 141-06: curated allowlist of trusted public APIs that bundled
+					//   widgets call (currently weather widget uses open-meteo for geocoding +
+					//   forecast). Origins go through a code review before being added — this
+					//   list is the single source of truth, NOT widget-manifest-driven, so an
+					//   untrusted third-party widget cannot whitelist arbitrary origins for
+					//   itself. Add new origins here when adding a widget that needs them.
+					connectSrc: [
+						"'self'",
+						'wss:',
+						'ws:',
+						'https://*.livinity.io',
+						'https://*.supabase.co',
+						'wss://*.supabase.co',
+						'https://*.open-meteo.com',
+					],
 					// Allow iframes from marketplace and self
 					frameSrc: ["'self'", `https://${domains.marketplace}`, `https://*.${domains.primary}`],
 					// Allow CDN stylesheets for canvas iframe
