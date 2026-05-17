@@ -843,6 +843,58 @@ _dld_sync_liv_dist_into_pnpm_store() {
     ok "liv dist sync complete (${total_synced} total store dirs updated)"
 }
 
+# ── 5d. Verify livinityd's @liv/core import path actually resolves (132-05) ──
+# Bug #6 ground-truth: livinityd boots, imports `@liv/core`, the pnpm symlink
+# resolves to either /opt/liv/packages/core (via file: protocol) or to a
+# pnpm-store dir. EITHER WAY, the resolved dir MUST contain `dist/lib.js`.
+# If the build/sync chain silently misses (e.g. wrong store dir picked,
+# stale dist, pnpm re-link race), the unit boots and dies ERR_MODULE_NOT_FOUND.
+#
+# This helper resolves the symlink livinityd will actually walk and asserts
+# `<resolved>/dist/lib.js` exists. Fails LOUDLY (not silently) before
+# systemd unit write so the operator sees the real diagnostic, not a
+# restart loop hours later.
+_dld_verify_liv_dist_reachable() {
+    step "Phase 132-05 — verify livinityd's @liv/core import path"
+
+    local livinityd_liv_link="$_DLD_LIVOS_DIR/packages/livinityd/node_modules/@liv/core"
+    if [[ ! -e "$livinityd_liv_link" ]]; then
+        warn "$livinityd_liv_link missing — pnpm install may not have linked @liv/core yet"
+        warn "  (livinityd boot will ERR_MODULE_NOT_FOUND on first start)"
+        return 0
+    fi
+
+    # Resolve symlink to canonical absolute path
+    local resolved
+    resolved=$(readlink -f "$livinityd_liv_link" 2>/dev/null || echo "")
+    if [[ -z "$resolved" ]]; then
+        warn "Could not resolve $livinityd_liv_link symlink — pnpm link broken?"
+        return 0
+    fi
+    info "livinityd's @liv/core resolves to: $resolved"
+
+    # The critical file livinityd imports
+    local target="${resolved}/dist/lib.js"
+    if [[ -f "$target" ]]; then
+        ok "@liv/core/dist/lib.js exists at resolved path (livinityd boot will succeed)"
+        return 0
+    fi
+
+    # MISSING — this is exactly Bug #6. Fail loudly with diagnostic.
+    warn "MISSING: ${target}"
+    warn "  Bug #6 detected pre-emptively: livinityd would ERR_MODULE_NOT_FOUND."
+    warn "  Falling back: copying /opt/liv/packages/core/dist into resolved path."
+    if [[ -d "$_DLD_LIV_DIR/packages/core/dist" ]] \
+        && [[ -n "$(find "$_DLD_LIV_DIR/packages/core/dist" -type f 2>/dev/null | head -1)" ]]; then
+        mkdir -p "${resolved}/dist"
+        rsync -a --delete "$_DLD_LIV_DIR/packages/core/dist/" "${resolved}/dist/" \
+            && ok "Recovery rsync complete — $target now exists" \
+            || fail "Recovery rsync FAILED — manual intervention required (build /opt/liv/packages/core first)"
+    else
+        fail "Cannot recover: /opt/liv/packages/core/dist is empty/missing. Re-run _dld_build_liv_packages."
+    fi
+}
+
 # ── 7. JWT secret (run BEFORE .env write so .env can reference its path) ────
 # Phase 106 Bug #11: format MUST be exactly 64 hex chars (no newline).
 # validateSecret in livos/packages/livinityd/source/modules/jwt.ts:29-36 enforces
@@ -1253,15 +1305,32 @@ EOF
     systemctl enable livos.service >/dev/null 2>&1 || true
     ok "livos.service written at $_DLD_SYSTEMD_UNIT (WorkingDirectory=${_DLD_LIVOS_DIR})"
 
-    # Start (or restart if already running from a previous deploy)
-    if systemctl is-active --quiet livos.service; then
-        info "livos.service already running — restarting to pick up new build"
-        systemctl restart livos.service
-    else
-        info "Starting livos.service"
-        systemctl start livos.service
+    # ── Phase 132-05: reset-failed + restart with active-wait ─────────────────
+    # Mirror of 132-06 Caddy fix: previous flow's `restart` silently no-op'd
+    # against failed-state units (e.g. a prior install left livos.service
+    # failed due to bug #6 ERR_MODULE_NOT_FOUND). Now: explicit reset-failed
+    # first so the unit is eligible to start, then restart, then wait up to
+    # 30s for active (livinityd's PG migration + Redis connect + MCP seed
+    # boot path takes 5-15s on cold start).
+    systemctl reset-failed livos.service 2>/dev/null || true
+    info "Starting livos.service (reset-failed first to defeat sticky failed-state)"
+    systemctl restart livos.service 2>/dev/null || \
+        warn "livos.service restart failed; check journalctl -u livos -n 30"
+
+    local livos_wait_i
+    for livos_wait_i in $(seq 1 30); do
+        if systemctl is-active --quiet livos.service; then
+            ok "livos.service active after ${livos_wait_i}s"
+            break
+        fi
+        sleep 1
+    done
+
+    if ! systemctl is-active --quiet livos.service; then
+        warn "livos.service did not reach active state in 30s. Tail logs:"
+        warn "  journalctl -u livos --no-pager -n 50"
+        warn "Install will continue but the LivOS UI will not load until livos.service starts."
     fi
-    ok "livos.service started"
 }
 
 # ── 8b. systemd units for liv-core, liv-worker, liv-memory (104-12) ─────────
@@ -1630,6 +1699,7 @@ deploy_livinityd() {
     _dld_build_packages
     _dld_build_liv_packages
     _dld_sync_liv_dist_into_pnpm_store
+    _dld_verify_liv_dist_reachable        # 132-05 — pre-boot verify + auto-recover Bug #6
     _dld_update_gallery_cache             # 105-02 G5 — gallery cache git pull
     _dld_fix_permissions                  # 105-02 G6 — chown + app-script chmod
     _dld_write_liv_systemd_units
