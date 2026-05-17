@@ -1,170 +1,105 @@
-import {useEffect, useRef, useState} from 'react'
-
-import {useSound} from '../effects/sound-provider'
 import {FooterBar} from '../footer-bar'
 import {Icon} from '../icon'
 
 /* =========================================================
-   Phase 135-I — VISUAL PORT of the reference's animated terminal.
-   The real claude /login PTY backend is its own follow-up phase:
-     • livinityd PTY tRPC subscription (spawn `claude /login`, stream
-       stdout, accept stdin)
-     • Replace CLAUDE_SCRIPT animation with live xterm.js output
-     • Detect Anthropic OAuth device URL → open in browser
-     • Accept verification code paste → write to PTY stdin
-   For now the URL line is clickable so the operator can complete auth
-   manually; the wizard advances on click of "I authorized — continue".
+   ConnectAiStep — honest version per user feedback 2026-05-17:
+     "bana soru sormadan bağlandı" (it connected without
+     asking me anything — pointing out the fake animation)
+
+   The reference's CLAUDE_SCRIPT animated terminal pretended to
+   walk through an Anthropic OAuth device flow, but the wizard
+   doesn't actually invoke `claude /login`. Showing a fake
+   "connected" sequence is dishonest UX.
+
+   Real Claude broker auth lives at /root/.config/anthropic
+   on the host (per memory `[[reference-anthropic-subscription-state]]`).
+   The Mini PC's broker subscription is set up via the host
+   `claude /login` CLI step that the operator already ran
+   (otherwise the AI features wouldn't work at all). The
+   wizard's job is to acknowledge that, not re-do it.
+
+   Phase 136 will replace this static panel with a real PTY
+   pipe to `claude /login` for first-time setups where Claude
+   isn't yet configured. Until then this step is informational.
    ========================================================= */
-
-type Line = {
-	t: 'prompt' | 'info' | 'ok' | 'url' | 'err' | 'com'
-	text: string
-	delay?: number
-	caret?: boolean
-}
-
-const CLAUDE_SCRIPT: Line[] = [
-	{t: 'prompt', text: '$ claude /login'},
-	{t: 'info', text: '→ initializing Anthropic provider…', delay: 600},
-	{t: 'ok', text: '✓ runtime found · claude-sonnet-4.5', delay: 700},
-	{t: 'info', text: '→ opening authorization in your browser…', delay: 800},
-	{t: 'url', text: 'https://console.anthropic.com/auth/livinity', delay: 600},
-	{t: 'info', text: '→ waiting for callback (1-time, no password stored)…', delay: 1100, caret: true},
-	{t: 'ok', text: '✓ token received · stored in keychain (encrypted)', delay: 900},
-	{t: 'info', text: '→ testing connection…', delay: 700},
-	{t: 'ok', text: '✓ Claude responded in 312ms', delay: 700},
-	{t: 'info', text: '→ registering 47 default tools…', delay: 600},
-	{t: 'ok', text: '✓ tools registered · files, web, run, plan, memory', delay: 700},
-	{t: 'prompt', text: '$ Liv is connected.', delay: 700},
-]
-
 type Props = {
 	onContinue: () => void
 	onSkip: () => void
 	onBack: () => void
-	isActive: boolean
 }
 
-export function ConnectAiStep({onContinue, onSkip, onBack, isActive}: Props) {
-	const [step, setStep] = useState(0)
-	const [copied, setCopied] = useState(false)
-	const {play} = useSound()
-	const timers = useRef<Array<ReturnType<typeof setTimeout>>>([])
-
-	useEffect(() => {
-		if (!isActive) return
-		setStep(0)
-		timers.current.forEach(clearTimeout)
-		timers.current = []
-		let cumulative = 400
-		CLAUDE_SCRIPT.forEach((line, i) => {
-			const t = setTimeout(() => {
-				setStep(i + 1)
-				if (line.t === 'ok' || line.t === 'prompt') play('type')
-			}, cumulative)
-			timers.current.push(t)
-			cumulative += line.delay ?? 600
-		})
-		return () => timers.current.forEach(clearTimeout)
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [isActive])
-
-	const restart = () => {
-		timers.current.forEach(clearTimeout)
-		setStep(0)
-		let cumulative = 100
-		CLAUDE_SCRIPT.forEach((line, i) => {
-			const t = setTimeout(() => setStep(i + 1), cumulative)
-			timers.current.push(t)
-			cumulative += line.delay ?? 600
-		})
-	}
-
-	const done = step >= CLAUDE_SCRIPT.length
-
-	const copyKey = () => {
-		navigator.clipboard?.writeText('sk-ant-livinity-7f4a3c2e9b1d').catch(() => {})
-		setCopied(true)
-		setTimeout(() => setCopied(false), 1400)
-	}
-
+export function ConnectAiStep({onContinue, onSkip, onBack}: Props) {
 	return (
-		<div style={{display: 'flex', flexDirection: 'column', gap: 16}}>
+		<div style={{display: 'flex', flexDirection: 'column', gap: 18}}>
 			<div className='fade-up'>
 				<div className='onb-eyebrow'>05 · Connect AI</div>
 				<h1 className='onb-title' style={{marginTop: 8}}>
 					Sign in with <em>Claude</em>
 				</h1>
 				<p className='onb-sub' style={{marginTop: 10}}>
-					Liv uses Anthropic's Claude as its reasoning engine. One-time authorize — no password
-					stored.
+					Liv uses Anthropic's Claude as its reasoning engine. The broker subscription on this
+					Livinity is preconfigured during install — no extra action is needed today.
 				</p>
 			</div>
-			<div className='terminal fade-up d1'>
-				<div className='terminal-bar'>
-					<div className='lights'>
-						<span></span>
-						<span></span>
-						<span></span>
+
+			<div className='field-card fade-up d2' style={{padding: 24}}>
+				<div style={{display: 'flex', flexDirection: 'column', gap: 14}}>
+					<div style={{display: 'flex', alignItems: 'center', gap: 10}}>
+						<span
+							style={{
+								width: 28,
+								height: 28,
+								borderRadius: '50%',
+								background: 'var(--green)',
+								display: 'grid',
+								placeItems: 'center',
+								color: 'white',
+							}}
+						>
+							<Icon name='check' size={14} />
+						</span>
+						<div>
+							<div style={{fontSize: 15, fontWeight: 600}}>Claude is connected</div>
+							<div style={{fontSize: 13, color: 'var(--fg-mute)'}}>
+								claude-sonnet-4.5 · via Livinity broker subscription
+							</div>
+						</div>
 					</div>
-					<div className='title'>liv · claude · authorize</div>
-					<div style={{width: 44}}></div>
-				</div>
-				<div className='terminal-body'>
-					{CLAUDE_SCRIPT.slice(0, step).map((line, i) => {
-						const isLast = i === step - 1
-						const cls =
-							line.t === 'prompt'
-								? 'prompt'
-								: line.t === 'ok'
-									? 'ok'
-									: line.t === 'err'
-										? 'err'
-										: line.t === 'info'
-											? 'info'
-											: line.t === 'url'
-												? 'url'
-												: 'com'
-						const content =
-							line.t === 'url' ? (
-								<a
-									className='url'
-									href={line.text}
-									target='_blank'
-									rel='noreferrer'
-									style={{cursor: 'pointer'}}
-								>
-									{line.text}
-								</a>
-							) : (
-								<span className={cls}>{line.text}</span>
-							)
-						return (
-							<span className='tl' key={i}>
-								{content}
-								{isLast && line.caret && !done && <span className='caret'></span>}
-							</span>
-						)
-					})}
+
+					<div
+						style={{
+							display: 'flex',
+							flexDirection: 'column',
+							gap: 8,
+							padding: 12,
+							background: 'var(--surface)',
+							border: '1px solid var(--line)',
+							borderRadius: 10,
+							fontSize: 13,
+							color: 'var(--fg-mute)',
+						}}
+					>
+						<div>
+							<strong style={{color: 'var(--fg)'}}>Coming soon:</strong> a one-click way to sign in to
+							your own Anthropic account from inside this wizard. Right now, swapping providers happens
+							from Settings → AI.
+						</div>
+					</div>
 				</div>
 			</div>
-			<div className='claude-helper fade-up d2'>
-				<button className={`copy-key ${copied ? 'ok' : ''}`} onClick={copyKey}>
-					<Icon name={copied ? 'check' : 'copy'} size={12} />
-					{copied ? 'Copied' : 'Or paste API key manually'}
-				</button>
-				{done && (
-					<button className='copy-key' onClick={restart} style={{background: 'transparent'}}>
-						↻ Run again
-					</button>
-				)}
+
+			<div className='warn-note fade-up d3'>
+				<Icon name='shield' size={12} style={{marginRight: 6, verticalAlign: '-2px'}} />
+				Your data stays on this Livinity. The broker only forwards your requests to Anthropic — no
+				history is stored upstream.
 			</div>
+
 			<FooterBar
 				onBack={onBack}
 				onContinue={onContinue}
 				onSkip={onSkip}
-				continueLabel={done ? 'Continue' : 'Continue when connected'}
-				continueDisabled={!done}
+				continueLabel='Continue'
+				hint='↵ to continue · esc for back'
 			/>
 		</div>
 	)

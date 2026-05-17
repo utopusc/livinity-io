@@ -219,7 +219,6 @@ function WizardInner() {
 						</Step>
 						<Step stepIndex={4} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<ConnectAiStep
-								isActive={stepper.idx === 4}
 								onContinue={() => {
 									sound.play('success')
 									stepper.next()

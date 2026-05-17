@@ -1,5 +1,6 @@
 import {useEffect, useState} from 'react'
 
+import {animatedWallpaperIds, animatedWallpapers} from '@/components/animated-wallpapers'
 import {JWT_LOCAL_STORAGE_KEY} from '@/modules/auth/shared'
 import {trpcReact} from '@/trpc/trpc'
 
@@ -7,14 +8,14 @@ import type {OnboardingData} from '../constants'
 import {FooterBar} from '../footer-bar'
 import {Icon} from '../icon'
 
-const WALLPAPERS = [
-	{id: 'fluid', name: 'Fluid', cls: 'wp-fluid animated'},
-	{id: 'graphite', name: 'Graphite', cls: 'wp-graphite'},
-	{id: 'aurora', name: 'Aurora', cls: 'wp-aurora'},
-	{id: 'sand', name: 'Sand', cls: 'wp-sand'},
-	{id: 'paper', name: 'Paper', cls: 'wp-paper'},
-	{id: 'mono', name: 'Mono', cls: 'wp-mono'},
-]
+/* =========================================================
+   WallpaperStep — Phase 135-G rewrite per user direction
+   2026-05-17: "wallpaper kismini neden tema bolumunden
+   ayarlamiyorsun?" Uses the same registry + tRPC mutation as
+   the Settings wallpaper picker (animatedWallpapers +
+   user.set). No more 6 mock tiles — the wizard now offers
+   exactly the wallpapers LivOS actually ships.
+   ========================================================= */
 
 function fmtTime(d: Date): string {
 	const hh = String(d.getHours()).padStart(2, '0')
@@ -39,21 +40,35 @@ type Props = {
 }
 
 export function WallpaperStep({data, setData, onContinue, onBack}: Props) {
-	const selected = WALLPAPERS.find((w) => w.id === data.wallpaper) || WALLPAPERS[0]
 	const now = useNow()
 
-	// Phase 137-03 — persist the onboarding wallpaper choice to the backend.
-	// LivOS currently only renders 'fluid' (see animated-wallpapers.tsx); the
-	// other 5 IDs are stored as a preference for future use once more
-	// wallpapers ship. Fire-and-forget — Continue is not gated on the write.
-	// Phase 137-FIX — gate on JWT presence to avoid 401 spam if user reaches
-	// this step unauthed (shouldn't happen in normal flow since AccountStep
-	// registers + logs in, but defensive).
-	const setPref = trpcReact.preferences.set.useMutation()
-	const persist = (id: string) => {
+	// Real wallpaper IDs from the registry. LivOS currently ships ['fluid'].
+	// As more wallpapers are added to animatedWallpapers, they automatically
+	// appear here without further wizard changes.
+	const ids = animatedWallpaperIds
+	const selectedId = ids.includes(data.wallpaper as (typeof ids)[number])
+		? (data.wallpaper as (typeof ids)[number])
+		: ids[0]
+	const selected = animatedWallpapers[selectedId]
+	const PreviewComponent = selected.component
+
+	// Real wallpaper persistence — same mutation Settings uses (user.set with wallpaper).
+	const userSetMut = trpcReact.user.set.useMutation()
+	const utils = trpcReact.useUtils()
+	const onPick = (id: (typeof ids)[number]) => {
+		setData({...data, wallpaper: id})
 		if (!localStorage.getItem(JWT_LOCAL_STORAGE_KEY)) return
-		setPref.mutate({key: 'onboarding_wallpaper', value: id})
+		userSetMut.mutate(
+			{wallpaper: id},
+			{
+				onSuccess: () => {
+					utils.user.get.invalidate()
+					utils.user.wallpaper.invalidate()
+				},
+			},
+		)
 	}
+
 	return (
 		<div style={{display: 'flex', flexDirection: 'column', gap: 20}}>
 			<div className='fade-up'>
@@ -66,9 +81,30 @@ export function WallpaperStep({data, setData, onContinue, onBack}: Props) {
 				</p>
 			</div>
 
+			{/* Live preview — renders the actual wallpaper component LivOS uses.
+			    Same component as the dashboard background; what you see is what you get. */}
 			<div className='wp-preview fade-up d1'>
-				<div className={`wp-preview-bg ${selected.cls}`}>
-					<div className='wp-preview-topbar'>
+				<div
+					className='wp-preview-bg'
+					style={{
+						position: 'relative',
+						overflow: 'hidden',
+						borderRadius: 16,
+						aspectRatio: '16 / 7',
+					}}
+				>
+					<PreviewComponent className='absolute inset-0' />
+					<div
+						className='wp-preview-topbar'
+						style={{
+							position: 'relative',
+							zIndex: 1,
+							color: 'var(--fg)',
+							padding: 14,
+							display: 'flex',
+							justifyContent: 'space-between',
+						}}
+					>
 						<div className='wp-preview-brand'>
 							<span className='wp-preview-mark'></span>
 							<span className='wp-preview-name'>{data.name || 'Bruce'}</span>
@@ -80,24 +116,55 @@ export function WallpaperStep({data, setData, onContinue, onBack}: Props) {
 				</div>
 			</div>
 
-			<div className='wallpaper-grid fade-up d2'>
-				{WALLPAPERS.map((wp) => (
-					<button
-						key={wp.id}
-						className={`wallpaper-tile ${wp.cls} ${data.wallpaper === wp.id ? 'on' : ''}`}
-						onClick={() => {
-							setData({...data, wallpaper: wp.id})
-							persist(wp.id)
-						}}
-						aria-label={`Select ${wp.name} wallpaper`}
-					>
-						<span className='check'>
-							<Icon name='check' size={12} />
-						</span>
-						<span className='name'>{wp.name}</span>
-					</button>
-				))}
+			{/* Tile grid — one tile per real wallpaper. LivOS currently ships 1
+			    (fluid). The tile preview is the actual rendered component, so the
+			    thumbnail is honest. Click commits via user.set mutation. */}
+			<div
+				className='wallpaper-grid fade-up d2'
+				style={{
+					gridTemplateColumns: `repeat(${Math.min(ids.length, 3)}, minmax(0, 1fr))`,
+				}}
+			>
+				{ids.map((id) => {
+					const def = animatedWallpapers[id]
+					const TileComponent = def.component
+					const on = id === selectedId
+					return (
+						<button
+							key={id}
+							className={`wallpaper-tile ${on ? 'on' : ''}`}
+							onClick={() => onPick(id)}
+							aria-label={`Select ${def.name} wallpaper`}
+							style={{position: 'relative', overflow: 'hidden'}}
+						>
+							<TileComponent className='absolute inset-0' />
+							<span className='check' style={{position: 'absolute', top: 8, right: 8, zIndex: 2}}>
+								<Icon name='check' size={12} />
+							</span>
+							<span
+								className='name'
+								style={{position: 'absolute', left: 8, bottom: 8, zIndex: 2, color: 'white'}}
+							>
+								{def.name}
+							</span>
+						</button>
+					)
+				})}
 			</div>
+
+			{ids.length === 1 && (
+				<p
+					style={{
+						fontSize: 12,
+						color: 'var(--fg-mute)',
+						textAlign: 'center',
+						margin: 0,
+					}}
+				>
+					More wallpapers coming in a future release. You can change anytime from Settings.
+				</p>
+			)}
+
 			<FooterBar
 				onBack={onBack}
 				onContinue={onContinue}
