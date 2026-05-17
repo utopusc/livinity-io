@@ -1518,24 +1518,12 @@ _dld_update_caddy_to_livinityd() {
     step "Plan 104-11 — update Caddy to reverse_proxy 127.0.0.1:8080"
 
     case "${MODE:-hybrid}" in
-        hybrid)
-            if [[ -n "${LIVOS_DOMAIN:-}" ]]; then
-                cat > "$_DLD_CADDYFILE" <<CADDYFILE
-${LIVOS_DOMAIN} {
-    tls {
-        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
-    }
-    reverse_proxy 127.0.0.1:8080
-}
-CADDYFILE
-                ok "Caddyfile: ${LIVOS_DOMAIN} → 127.0.0.1:8080 (LE DNS-01)"
-            else
-                # No domain set; leave whatever mode-hybrid.sh wrote alone
-                warn "No LIVOS_DOMAIN — leaving Caddyfile untouched"
-            fi
-            ;;
-        tunnel)
-            # Tunnel mode: CF terminates TLS at the edge. Caddy serves plain :80.
+        hybrid|tunnel)
+            # Phase 134 — hybrid + tunnel both use CF Tunnel transport. CF
+            # terminates TLS at the edge; Caddy serves plain HTTP on :80.
+            # Pre-134 the hybrid branch wrote a LE DNS-01 Caddyfile expecting
+            # CLOUDFLARE_API_TOKEN env — incompatible with Phase 134 (no
+            # cf-token in tunnel-mode install; Caddy would fail to start).
             cat > "$_DLD_CADDYFILE" <<CADDYFILE
 {
     auto_https off
@@ -1544,7 +1532,7 @@ CADDYFILE
     reverse_proxy 127.0.0.1:8080
 }
 CADDYFILE
-            ok "Caddyfile: :80 → 127.0.0.1:8080 (CF Tunnel terminates TLS)"
+            ok "Caddyfile: :80 → 127.0.0.1:8080 (CF Tunnel terminates TLS — D-134-MODE)"
             ;;
         local-lan)
             local tld="${LIVINITY_LOCAL_TLD:-livinity.local}"

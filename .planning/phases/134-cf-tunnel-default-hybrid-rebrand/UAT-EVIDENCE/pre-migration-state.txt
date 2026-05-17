@@ -1,0 +1,25 @@
+Warning: Permanently added '100.112.68.1' (ED25519) to the list of known hosts.
+=== sacred SHA pre-update ===
+f3538e1d811992b782a9bb057d1b7f0a0189f95f
+=== current systemd services ===
+active
+inactive
+active
+active
+active
+active
+=== current Caddyfile head ===
+bruce.livinity.live {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    }
+    reverse_proxy 127.0.0.1:8080
+}
+=== current Redis local_mode ===
+AUTH failed: WRONGPASS invalid username-password pair or user is disabled.
+NOAUTH Authentication required.
+
+=== current Redis tunnel_domain ===
+AUTH failed: WRONGPASS invalid username-password pair or user is disabled.
+NOAUTH Authentication required.
+

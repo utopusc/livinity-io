@@ -1296,6 +1296,25 @@ Plans:
 
 ---
 
+### Phase 134: CF Tunnel as Default Hybrid Transport — ✅ Shipped 2026-05-17 (commits d6a8c3aa, f492603a, 41422c8d + Caddyfile-fix hot-fix — sacred SHA preserved, Mini PC UAT PASS via burak.livinity.live HTTP 200 external)
+
+**Goal:** `--mode hybrid` (the default user-facing install mode) transparently uses Cloudflare Tunnel as its transport. Direct-LAN code (Caddy LE DNS-01 + A-record-to-LAN-IP) retired. cloudflared dials outbound — works behind no-public-IP / CGNAT / Client Isolation. Universal one-liner install preserved across VPS / VDS / Mini PC / home boxes. Existing installs migrate via automated `migrate-to-cf-tunnel.sh`. Server5 wizard updated to emit Phase 134 contract (`--cf-tunnel-token`, no zone-id).
+
+**Driver:** User directive 2026-05-17: *"ben --tunel modunu --hybrid in icinde istiyorum"* (I want tunnel mode inside hybrid). Phase 132 install on Mini PC ended in direct-LAN hybrid (`bruce.livinity.live → 192.168.20.33`); UniFi Client Isolation + no-public-IP combo meant browser access failed from anywhere except Tailscale workaround. Phase 134 closes the anywhere-access gap.
+
+**Locked decisions:** D-134-MODE (hybrid = CF Tunnel) · D-134-MODE-ALIAS (--mode tunnel kept as alias) · D-134-RETIRE-DIRECT-LAN (xcaddy + caddy-dns/cloudflare + LE DNS-01 path deleted) · D-134-PROVISION (Server5 wizard emits new contract; full API auto-provision deferred to v34.x) · D-134-MIGRATION (migrate-to-cf-tunnel.sh — 15 steps, idempotent, dry-run) · D-134-UNIVERSAL (single `curl | sudo bash -s --` works on any device) · D-134-ZERO-PUBLIC-IP · D-134-SACRED-SHA.
+
+**Plans:** 5 plans (master at `.planning/phases/134-cf-tunnel-default-hybrid-rebrand/134-PLAN.md`)
+- [x] 134-01 install.sh + parse-cli + mode-hybrid.sh refactor — mode-hybrid.sh shrunk 304 LOC → 29 LOC (delegates to install_mode_tunnel); parse-cli accepts --cf-tunnel-token in hybrid mode; 44 PASS test (20 + 24)
+- [x] 134-02 Server5 wizard CF Tunnel auto-provision — UI patched (on-server, /opt/landing/livinity.io/dashboard-install.html); full API auto-create deferred to v34.x (requires operator CF token with Tunnel:Edit scope)
+- [x] 134-03 migrate-to-cf-tunnel.sh — 15-step idempotent migration with --dry-run; 19 PASS test
+- [x] 134-04 (folded into 134-01) — test fixtures: 44 PASS total across test-mode-hybrid-args.sh + test-mode-tunnel-args.sh
+- [x] 134-05 Mini PC UAT — fresh-wipe + universal one-liner install; `https://burak.livinity.live/` HTTP 200 external (CF POP SJC); 6/6 services active; sacred SHA preserved; deploy-livinityd.sh Caddyfile regression discovered + fixed in-session
+
+**UAT-EVIDENCE:** `.planning/phases/134-cf-tunnel-default-hybrid-rebrand/UAT-EVIDENCE/post-install-state.txt` + `external-curl-200.txt`
+
+---
+
 ### Phase 133: Kill Server5 Tunnel Default + Custom-Domain-Only Hero + Wizard UX — 🔴 PLANNED 2026-05-17 (carry-over from Phase 132 UAT discovery: 3 bugs — A wizard doesn't persist chosen domain in `custom_domains`, B dashboard hero hard-codes `${username}.livinity.io`, C wizard Domain input is empty free-text without username auto-prefill)
 
 **Goal:** Stop the platform from EVER displaying `${username}.livinity.io` as a user's computer URL. Hero derives URL exclusively from active `custom_domains` (no tunnel fallback). Wizard Generate auto-registers the chosen domain. Wizard hybrid-mode Domain input pre-fills `${username}.` so users type only the parent domain. Per user directive 2026-05-17: *"Hiç bir şekilde Server5'deki tunnel'i kullansın istemiyorum"* + UX bug C reported later same day.
