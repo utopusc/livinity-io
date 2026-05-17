@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "bottleneck": "^2.19.5",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.1",
     "ioredis": "^5.4.2",
