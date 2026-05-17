@@ -111,6 +111,12 @@
               if (!me.ok) { window.location.href = "/login?redirect=/dashboard/install"; return; }
               const meData = await me.json();
               if (!meData.user) { window.location.href = "/login?redirect=/dashboard/install"; return; }
+              // Phase 140-06.2: block unverified users from the install wizard.
+              // Send them to /verify (pending state) until they click the email link.
+              if (!meData.user.emailVerified) {
+                window.location.href = "/verify";
+                return;
+              }
               setUser(meData.user);
               setAuthLoading(false);
 
