@@ -1457,10 +1457,35 @@ CADDYFILE
         warn "Caddyfile validation failed; check /etc/caddy/Caddyfile"
     fi
 
-    # Reload Caddy (graceful — no restart)
-    systemctl reload caddy 2>/dev/null || systemctl restart caddy 2>/dev/null || \
-        warn "Caddy reload/restart failed; check journalctl -u caddy -n 20"
-    ok "Caddy reloaded"
+    # ── Phase 132-06: Caddy reset + start with active-wait ────────────────────
+    # Without this, an install on a box where Caddy was previously failed
+    # (common: install retries, leftover prior partial installs) leaves
+    # Caddy in `failed` state — TLS + Caddyfile valid, port 443 unbound.
+    # The old `systemctl reload || restart` two-liner silently no-op'd in
+    # that case because reload doesn't reset a unit out of failed-state.
+    info "Ensuring Caddy is started and reachable"
+    systemctl reset-failed caddy 2>/dev/null || true
+    systemctl daemon-reload
+    systemctl enable caddy 2>/dev/null || true
+    systemctl restart caddy 2>/dev/null || \
+        warn "Caddy restart failed; check journalctl -u caddy -n 20"
+
+    # Wait up to 30s for Caddy to come active (LE DNS-01 first cert
+    # acquisition can take 5-20s on a fresh domain).
+    local caddy_wait_i
+    for caddy_wait_i in $(seq 1 30); do
+        if systemctl is-active --quiet caddy; then
+            ok "Caddy active after ${caddy_wait_i}s"
+            break
+        fi
+        sleep 1
+    done
+
+    if ! systemctl is-active --quiet caddy; then
+        warn "Caddy did not reach active state in 30s. Tail logs:"
+        warn "  journalctl -u caddy --no-pager -n 50"
+        warn "Install will continue but HTTPS may be down until Caddy starts."
+    fi
 }
 
 # ── 11. Gallery cache (105-02 G5 — update.sh:596-610) ───────────────────────
