@@ -1,57 +1,77 @@
-# LivOS
+<div align="center">
 
-**Self-hosted AI-powered home server operating system**
+# Livinity
 
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Node.js 22+](https://img.shields.io/badge/Node.js-22+-green.svg)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-green.svg)](CONTRIBUTING.md)
+### Your computer.
+
+Livinity is a Cloud AI Computer. One operating system, one quiet interface,
+one assistant — **Liv** — that understands what you ask and gets it done.
+
+[**Website**](https://livinity.io) · [App Library](https://livinity.io/library) · [Developers](https://livinity.io/developers) · [Documentation](./docs)
+
+<br/>
+
+![Livinity — Your computer.](docs/media/livinity-hero.gif)
+
+<br/>
+
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-1f1f1f?style=flat-square)](LICENSE)
+[![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-3c3c3c?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![TypeScript 5.7](https://img.shields.io/badge/TypeScript-5.7-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-1f1f1f?style=flat-square)](CONTRIBUTING.md)
+[![Powered by Claude](https://img.shields.io/badge/Powered_by-Claude-d97757?style=flat-square)](https://www.anthropic.com/claude)
+
+</div>
 
 ---
 
-## What is LivOS?
+## About this repository
 
-LivOS is a personal server operating system that transforms any Linux machine into a powerful, AI-enhanced home server. It combines the simplicity of consumer NAS devices with the flexibility of self-hosted solutions, all managed through an intuitive web interface.
+`livinity-io` is the **open-source, self-host edition** of Livinity — the same
+operating system that powers [livinity.io](https://livinity.io), packaged so
+you can run it on your own hardware.
 
-At its core, LivOS features **Liv**, an integrated AI assistant that can be accessed through WhatsApp, Telegram, Discord, or the web UI. Liv can manage your apps, answer questions about your server, execute automated tasks, and extend its capabilities through a modular skills system. It supports both Google Gemini and Anthropic Claude as AI backends.
+- **Same product as the cloud** — same UI, same Liv assistant, same app library
+- **Your data stays with you** — no telemetry by default, no required cloud account
+- **Modular and extensible** — Docker apps, skill plugins, MCP server, tRPC API
+- **AGPL-3.0 licensed** — fork it, run it, ship it
 
-For developers, LivOS includes an MCP (Model Context Protocol) server that integrates directly with Claude Desktop and Cursor IDE, allowing AI coding assistants to interact with your server. All data stays on your hardware, ensuring complete privacy and ownership of your information.
+> Looking for the managed experience? Visit [**livinity.io**](https://livinity.io)
+> — zero install, one sign-in.
 
 ---
 
-## Features
+## Highlights
 
-### AI Assistant (Liv)
+### Liv — your AI assistant
 
-- Multi-channel access: WhatsApp, Telegram, Discord, and web interface
-- Tool execution for server management and automation
-- Persistent memory with vector embeddings for context-aware conversations
-- Extensible skills system with hot-reload support
-- MCP server for Claude Desktop and Cursor IDE integration
+- Native chat in the dashboard plus optional channels (Telegram, Discord, WhatsApp)
+- Real tool execution — install apps, search files, run background jobs, answer questions
+- Persistent memory with vector embeddings — Liv remembers context across sessions
+- Plugin "skills" system with hot-reload — extend Liv in TypeScript
+- Powered by **Anthropic Claude** (default) with **Google Gemini** as an alternative
 
-### App Management
+### App Library
 
-- Docker-based application deployment
-- 200+ pre-configured apps available (Nextcloud, Plex, Home Assistant, Jellyfin, etc.)
-- One-click installation with automatic configuration
-- App health monitoring and automatic restarts
-- Domain routing with automatic SSL via Caddy
+- One-click install for 200+ curated, Docker-based apps
+  (Nextcloud, Plex, Home Assistant, Jellyfin, n8n, AdGuard, Vaultwarden, …)
+- Automatic HTTPS via Caddy + Let's Encrypt — including per-app custom domains
+- Per-app sharing, health monitoring, and auto-restart
+- Multi-user mode with isolated containers and per-user access control
 
-### File Manager
+### File system
 
-- Web-based file browser with upload and download
-- Network share support (SMB/CIFS)
-- Integrated backup system
-- External storage management
-- File preview and streaming
+- Web-based file browser with drag-and-drop upload, preview, and streaming
+- SMB / CIFS network share support
+- Integrated snapshot and backup workflow
+- External storage (USB, network) auto-discovery
 
-### Developer Tools
+### Developer tools
 
-- MCP server for AI IDE integration
-- Hot-reload skills development
-- tRPC API for programmatic access
-- PM2 process management
-- Comprehensive logging system
+- **MCP server** for Claude Desktop and Cursor IDE — let your AI IDE manage your server
+- Fully-typed **tRPC API**
+- Hot-reload skill development
+- Webhook + scheduler primitives via the daemon
 
 ---
 
@@ -59,311 +79,234 @@ For developers, LivOS includes an MCP (Model Context Protocol) server that integ
 
 ### Requirements
 
-- Linux server (Ubuntu 22.04+ recommended)
-- 2GB+ RAM (4GB recommended)
-- Docker 24+ installed
-- Node.js 22+
+| Component | Minimum | Recommended |
+|---|---|---|
+| OS | Ubuntu 22.04 / Debian 12 | Ubuntu 24.04 LTS |
+| RAM | 2 GB | 8 GB+ |
+| Storage | 20 GB | 100 GB+ NVMe |
+| Node.js | 22.x | 22.x LTS |
+| Docker | 24.x | Latest |
 
-### One-Command Install
+### One-line install
 
 ```bash
 curl -fsSL https://get.livinity.io | bash
 ```
 
-### Manual Installation
+The installer provisions Docker, Caddy, PostgreSQL, and Redis, then brings
+the systemd services up. When it finishes, open `http://<your-host>` and
+follow the onboarding wizard.
+
+### Manual install (developer mode)
 
 ```bash
-# Clone the repository
 git clone https://github.com/utopusc/livinity-io.git
 cd livinity-io
 
-# Install LivOS dependencies
+# Platform (UI + daemon)
 cd livos
 pnpm install
-pnpm build
+pnpm --filter @livos/config build
+pnpm --filter ui build
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your settings (see Configuration section)
-
-# Start services
-pm2 start ecosystem.config.cjs
-
-# Install Liv dependencies (optional, for AI features)
+# Liv AI core
 cd ../liv
 npm install
 npm run build
-pm2 start ecosystem.config.cjs
+
+# Run via systemd
+sudo systemctl start livos liv-core liv-worker liv-memory
 ```
 
-### Access
-
-- **Local**: Open http://localhost:3000 in your browser
-- **Remote**: Open https://your-domain after configuring DNS
-
----
-
-## Requirements
-
-| Component | Minimum | Recommended | Notes |
-|-----------|---------|-------------|-------|
-| Node.js | 22.0+ | 22.x LTS | Required for all services |
-| Docker | 24.0+ | Latest | Required for app management |
-| Redis | 7.0+ | 7.x | Caching and pub/sub |
-| PostgreSQL | 15+ | 16.x | Optional in development |
-| RAM | 2GB | 4GB+ | More for running apps |
-| Storage | 20GB | 100GB+ | Depends on installed apps |
-
----
-
-## Configuration
-
-LivOS uses environment variables for configuration. Copy `.env.example` to `.env` and customize:
+For local hacking, run the dev server from the repo root:
 
 ```bash
-cd livos
-cp .env.example .env
+cd livos && pnpm --filter ui dev   # http://localhost:3000
 ```
-
-### AI API Keys
-
-At least one AI API key is required for AI features.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GEMINI_API_KEY` | (empty) | Google Gemini API key. Get from [AI Studio](https://aistudio.google.com/app/apikey) |
-| `ANTHROPIC_API_KEY` | (empty) | Anthropic Claude API key. Get from [Console](https://console.anthropic.com/settings/keys) |
-
-### Security
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `JWT_SECRET` | (empty) | JWT signing secret (min 32 bytes). Generate: `openssl rand -hex 32` |
-| `LIV_API_KEY` | (empty) | Internal API authentication key. Generate: `openssl rand -hex 32` |
-
-### Database
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REDIS_URL` | `redis://localhost:6379` | Redis connection URL. URL-encode special chars in password |
-| `DATABASE_URL` | (empty) | PostgreSQL connection URL (optional in dev) |
-
-### Server Ports
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MCP_PORT` | `3100` | MCP server port for Claude/Cursor |
-| `API_PORT` | `3200` | Liv API server port |
-| `MEMORY_PORT` | `3300` | Memory/embedding service port |
-
-### Daemon Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DAEMON_INTERVAL_MS` | `30000` | AI daemon polling interval in milliseconds |
-| `DEFAULT_MODEL` | `gemini-2.0-flash` | Default AI model to use |
-
-### Paths
-
-Override defaults for custom installations.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LIVOS_BASE_DIR` | `/opt/livos` | LivOS installation directory |
-| `LIV_BASE_DIR` | `/opt/liv` | Liv installation directory |
-| `LIVOS_DATA_DIR` | `$LIVOS_BASE_DIR/data` | App data storage |
-| `LIVOS_LOGS_DIR` | `$LIVOS_BASE_DIR/logs` | Log files |
-| `LIVOS_SKILLS_DIR` | `$LIVOS_BASE_DIR/skills` | LivOS skill definitions |
-| `LIV_SKILLS_DIR` | `$LIV_BASE_DIR/skills` | Liv skill definitions |
-| `LIV_WORKSPACE_DIR` | `$LIV_BASE_DIR/workspace` | Liv working directory |
-
-### Domain Configuration
-
-Domain setup is done through the **Web UI**, not environment variables:
-
-1. Open **Settings** → **Domain Setup**
-2. Enter your domain name
-3. Configure DNS records as instructed
-4. LivOS will automatically configure Caddy for HTTPS
-
-The UI handles:
-- DNS validation
-- Caddy reverse proxy configuration
-- Automatic HTTPS via Let's Encrypt
-
-### Service URLs
-
-Override if services run on different hosts.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LIV_API_URL` | `http://localhost:3200` | Liv API endpoint |
-| `MEMORY_SERVICE_URL` | `http://localhost:3300` | Memory service endpoint |
-
-### Environment
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NODE_ENV` | `development` | Environment mode (`development` or `production`) |
-
-### Notifications (Optional)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NOTIFICATION_EMAIL` | (empty) | Email for system alerts |
-| `SMTP_HOST` | `smtp.gmail.com` | SMTP server hostname |
-| `SMTP_PORT` | `587` | SMTP server port |
-| `SMTP_USER` | (empty) | SMTP username |
-| `SMTP_PASS` | (empty) | SMTP password |
-
-### Integrations (Optional)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WHATSAPP_ENABLED` | `false` | Enable WhatsApp integration |
 
 ---
 
 ## Architecture
 
-### Monorepo Structure
+```mermaid
+flowchart TB
+    Browser["Web Browser&nbsp;/&nbsp;Chat client"]
+
+    subgraph Edge ["Edge"]
+        Caddy["Caddy<br/>Reverse Proxy + HTTPS"]
+    end
+
+    subgraph Services ["Core services"]
+        direction LR
+        UI["LivOS UI<br/>React + Vite"]
+        Daemon["Livinityd<br/>Express + tRPC"]
+        LivAPI["Liv Core<br/>Agent + skills"]
+        Memory["Memory<br/>Vector embeddings"]
+    end
+
+    subgraph Runtime ["Runtime"]
+        direction LR
+        Docker["Docker<br/>App engine"]
+        Redis[("Redis")]
+        Postgres[("PostgreSQL")]
+    end
+
+    Browser --> Caddy
+    Caddy --> UI
+    Caddy --> Daemon
+    Caddy --> LivAPI
+    Daemon --> Docker
+    Daemon --> Postgres
+    Daemon --> Redis
+    LivAPI --> Memory
+    LivAPI --> Redis
+    Memory --> Postgres
+```
+
+### Monorepo layout
 
 ```
 livinity-io/
-├── livos/                     # Main platform (pnpm workspace)
+├── livos/                    # Platform (pnpm workspace)
 │   ├── packages/
-│   │   ├── livinityd/        # Backend daemon (Express + tRPC)
-│   │   ├── ui/               # Web UI (React + Vite)
-│   │   ├── config/           # Shared config (@livos/config)
-│   │   └── marketplace/      # App marketplace definitions
-│   └── skills/               # LivOS skill definitions
+│   │   ├── livinityd/        # Core daemon (Express + tRPC)
+│   │   ├── ui/               # Web UI (React 18 + Vite)
+│   │   ├── config/           # @livos/config — shared schemas
+│   │   └── marketplace/      # App catalog
+│   └── skills/               # LivOS skill modules
 │
-└── liv/                     # AI Agent (npm workspace)
+└── liv/                      # AI agent (npm workspace)
     ├── packages/
     │   ├── core/             # Agent orchestration
-    │   ├── memory/           # Embedding service
-    │   ├── mcp-server/       # Claude/Cursor integration
+    │   ├── memory/           # Embedding + recall service
+    │   ├── mcp-server/       # MCP for Claude Desktop / Cursor
     │   ├── worker/           # Background task processing
     │   └── hooks/            # Lifecycle hooks
-    └── skills/               # Liv skill definitions
+    └── skills/               # Liv skill modules
 ```
 
-### Service Architecture
+### Services (systemd)
 
-```
-                                   ┌─────────────────┐
-                                   │   Web Browser   │
-                                   └────────┬────────┘
-                                            │
-                                   ┌────────▼────────┐
-                                   │     Caddy       │
-                                   │  (Reverse Proxy)│
-                                   └────────┬────────┘
-                                            │
-              ┌─────────────────────────────┼─────────────────────────────┐
-              │                             │                             │
-     ┌────────▼────────┐          ┌────────▼────────┐          ┌────────▼────────┐
-     │    LivOS UI     │          │   Livinityd     │          │    Liv API      │
-     │   (React/Vite)  │◄────────►│   (Express)     │◄────────►│   (Express)     │
-     │   Port: 5173    │          │   Port: 80/443  │          │   Port: 3200    │
-     └─────────────────┘          └────────┬────────┘          └────────┬────────┘
-                                           │                            │
-                                           │                   ┌────────▼────────┐
-                                  ┌────────▼────────┐          │  Memory Service │
-                                  │     Docker      │          │   Port: 3300    │
-                                  │   (App Engine)  │          └────────┬────────┘
-                                  └─────────────────┘                   │
-                                                               ┌────────▼────────┐
-                                                               │     Redis       │
-                                                               │   Port: 6379    │
-                                                               └─────────────────┘
+| Service | Port | Description |
+|---|---|---|
+| `livos.service` | 8080 | Livinityd — apps, files, system APIs |
+| `liv-core.service` | 3200 | Liv core — agent + tool execution |
+| `liv-memory.service` | 3300 | Vector memory service |
+| `liv-worker.service` | — | Background job processor |
+| `caddy` | 80 / 443 | Reverse proxy with auto-HTTPS |
+
+---
+
+## Configuration
+
+LivOS reads its config from `livos/.env`. Copy the example and tune:
+
+```bash
+cd livos && cp .env.example .env
 ```
 
-### Key Components
+The most important knobs:
 
-| Component | Description |
-|-----------|-------------|
-| **Livinityd** | Core backend daemon handling app management, file operations, and system APIs |
-| **UI** | React-based web interface with tRPC client for real-time communication |
-| **@livos/config** | Shared configuration package with Zod validation schemas |
-| **Liv Core** | AI agent orchestration with intent parsing and skill execution |
-| **Memory Service** | Vector embedding service for AI context and conversation history |
-| **MCP Server** | Model Context Protocol server for Claude Desktop/Cursor integration |
+| Variable | Default | Notes |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | — | Claude API key — primary AI provider |
+| `GEMINI_API_KEY` | — | Google Gemini — alternative provider |
+| `JWT_SECRET` | — | Min 32 bytes. Generate: `openssl rand -hex 32` |
+| `LIV_API_KEY` | — | Internal service auth. Generate: `openssl rand -hex 32` |
+| `REDIS_URL` | `redis://localhost:6379` | URL-encode special chars in password |
+| `DATABASE_URL` | — | PostgreSQL DSN (optional in development) |
+
+Full reference: see [`livos/.env.example`](livos/.env.example).
+
+**Domain and HTTPS** are configured from the dashboard
+(Settings → Domain Setup) — no env vars required.
 
 ---
 
 ## Tech Stack
 
-| Category | Technologies |
-|----------|--------------|
-| **Backend** | Node.js 22, TypeScript 5.7, Express, tRPC |
-| **Frontend** | React 18, Vite, Tailwind CSS, shadcn/ui |
-| **Database** | Redis (caching, pub/sub), PostgreSQL (persistent storage) |
-| **AI** | Google Gemini, Anthropic Claude, Vector embeddings |
-| **Infrastructure** | Docker, Caddy (reverse proxy), PM2 (process management) |
-| **Validation** | Zod schemas for runtime type safety |
-| **Testing** | Vitest, React Testing Library |
+| Layer | Technologies |
+|---|---|
+| Frontend | React 18, Vite, TypeScript 5.7, Tailwind CSS, shadcn/ui, Framer Motion |
+| Backend | Node.js 22, Express, tRPC, Zod |
+| Data | PostgreSQL 16, Redis 7, vector embeddings |
+| AI | Anthropic Claude (default), Google Gemini |
+| Infra | Docker, Caddy, systemd |
+| Testing | Vitest, React Testing Library, Playwright |
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) before submitting pull requests.
+Contributions of all sizes are welcome — bug reports, fixes, new skills,
+App Library entries, documentation improvements.
 
-### Quick Contribution Steps
+1. Fork the repo and create a feature branch
+   (`git checkout -b feat/your-feature`)
+2. Commit using
+   [Conventional Commits](https://www.conventionalcommits.org/)
+3. Open a Pull Request with context and screenshots where relevant
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) and our
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
 ## Security
 
-Security is a priority for LivOS. If you discover a security vulnerability:
+If you discover a vulnerability, **please do not open a public issue.**
+Follow the responsible-disclosure process in [SECURITY.md](SECURITY.md).
 
-1. **Do NOT** open a public issue
-2. Read our [Security Policy](SECURITY.md)
-3. Report vulnerabilities responsibly via the process described there
+Security features include:
 
-### Security Features
-
-- API key authentication for all internal services
-- Timing-safe comparison for credential validation
-- JWT-based session management
-- Configurable secret rotation
+- API-key authentication for all internal services, with timing-safe comparison
+- JWT session management with rotation support
+- Caddy-managed HTTPS by default
+- Per-user Docker isolation
+- Auditable skill execution with a configurable allow-list
 
 ---
 
 ## License
 
-LivOS is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+Livinity is licensed under the
+**GNU Affero General Public License v3.0 (AGPL-3.0)** — see
+[LICENSE](LICENSE).
 
-This means:
+In plain words:
 
-- You can use, modify, and distribute LivOS freely
-- If you modify LivOS and provide it as a service over a network, you must release your modifications under AGPL-3.0
+- Use it personally or commercially, anywhere
+- Modify it, distribute it, ship it as part of your product
+- If you offer a modified version as a network service,
+  you must publish your modifications under AGPL-3.0
 - Network use is considered distribution
-
-See [LICENSE](LICENSE) for the full license text.
 
 ---
 
 ## Links
 
-- **Website**: https://livinity.io
-- **GitHub Issues**: https://github.com/utopusc/livinity-io/issues
-- **Discussions**: https://github.com/utopusc/livinity-io/discussions
+- **Website** — [livinity.io](https://livinity.io)
+- **App Library** — [livinity.io/library](https://livinity.io/library)
+- **Issues** — [github.com/utopusc/livinity-io/issues](https://github.com/utopusc/livinity-io/issues)
+- **Discussions** — [github.com/utopusc/livinity-io/discussions](https://github.com/utopusc/livinity-io/discussions)
 
 ---
 
 ## Acknowledgments
 
-LivOS is built on the shoulders of giants. Special thanks to:
+Livinity stands on the shoulders of giants:
 
-- The Docker community for containerization
-- The Node.js and TypeScript teams
-- Google and Anthropic for AI APIs
-- All open source projects that make this possible
+- The Docker and OCI maintainers
+- The TypeScript and Node.js teams
+- Anthropic and Google for their AI APIs
+- The countless open-source projects bundled in our App Library
+- Everyone who has filed an issue, fixed a typo, or shipped a skill
+
+<div align="center">
+
+<br/>
+
+Built with care by [@utopusc](https://github.com/utopusc) and the
+Livinity community.
+
+</div>
