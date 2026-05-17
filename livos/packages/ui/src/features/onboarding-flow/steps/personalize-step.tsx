@@ -1,3 +1,4 @@
+import {JWT_LOCAL_STORAGE_KEY} from '@/modules/auth/shared'
 import {trpcReact} from '@/trpc/trpc'
 
 import type {OnboardingData} from '../constants'
@@ -61,9 +62,15 @@ export function PersonalizeStep({data, setData, onContinue, onSkip, onBack}: Pro
 	// preferences table as the user makes it. Tone slider is debounced 400ms
 	// so we don't spam the network on every pixel of slider drag. Continue is
 	// not gated on these writes — they're fire-and-forget.
+	// Phase 137-FIX — gate on JWT presence so unauth users don't 401-spam.
 	const setPref = trpcReact.preferences.set.useMutation()
+	const isLoggedIn = () => !!localStorage.getItem(JWT_LOCAL_STORAGE_KEY)
+	const setPrefIfAuthed = (key: string, value: unknown) => {
+		if (!isLoggedIn()) return
+		setPref.mutate({key, value})
+	}
 	const persistTone = useDebouncedCallback((value: number) => {
-		setPref.mutate({key: 'ai_tone', value})
+		setPrefIfAuthed('ai_tone', value)
 	}, 400)
 
 	const setRole = (r: string) => {
@@ -74,15 +81,15 @@ export function PersonalizeStep({data, setData, onContinue, onSkip, onBack}: Pro
 			role: r,
 			useCases: nextCases,
 		})
-		setPref.mutate({key: 'ai_role', value: r})
-		if (!data.useCasesTouched) setPref.mutate({key: 'ai_use_cases', value: nextCases})
+		setPrefIfAuthed('ai_role', r)
+		if (!data.useCasesTouched) setPrefIfAuthed('ai_use_cases', nextCases)
 	}
 	const toggleCase = (uc: string) => {
 		const next = data.useCases.includes(uc)
 			? data.useCases.filter((x) => x !== uc)
 			: [...data.useCases, uc]
 		setData({...data, useCases: next, useCasesTouched: true})
-		setPref.mutate({key: 'ai_use_cases', value: next})
+		setPrefIfAuthed('ai_use_cases', next)
 	}
 	return (
 		<div style={{display: 'flex', flexDirection: 'column', gap: 16}}>
@@ -121,7 +128,7 @@ export function PersonalizeStep({data, setData, onContinue, onSkip, onBack}: Pro
 								className={`style-card ${data.style === s.id ? 'on' : ''}`}
 								onClick={() => {
 									setData({...data, style: s.id})
-									setPref.mutate({key: 'ai_response_style', value: s.id})
+									setPrefIfAuthed('ai_response_style', s.id)
 								}}
 							>
 								<span className='name'>{s.name}</span>
@@ -168,7 +175,7 @@ export function PersonalizeStep({data, setData, onContinue, onSkip, onBack}: Pro
 								className={`memory-opt ${data.memory === m.id ? 'on' : ''}`}
 								onClick={() => {
 									setData({...data, memory: m.id})
-									setPref.mutate({key: 'ai_memory', value: m.id})
+									setPrefIfAuthed('ai_memory', m.id)
 								}}
 							>
 								<div className='memory-name'>{m.name}</div>

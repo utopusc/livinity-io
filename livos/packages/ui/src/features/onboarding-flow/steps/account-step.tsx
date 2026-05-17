@@ -218,8 +218,8 @@ export function AccountStep({data, setData, onContinue, onBack}: Props) {
 					Create your <em>account</em>
 				</h1>
 				<p className='onb-sub' style={{marginTop: 12}}>
-					Your info stays on your Livinity. Pick how you want to secure it — a password, or two-factor
-					with an authenticator app.
+					Your info stays on your Livinity. Secure it with a password — two-factor with an
+					authenticator app is coming soon.
 				</p>
 			</div>
 
@@ -227,8 +227,15 @@ export function AccountStep({data, setData, onContinue, onBack}: Props) {
 				<button className={authMode === 'password' ? 'on' : ''} onClick={() => setAuthMode('password')}>
 					<Icon name='lock' size={12} /> Password
 				</button>
-				<button className={authMode === '2fa' ? 'on' : ''} onClick={() => setAuthMode('2fa')}>
-					<Icon name='shield' size={12} /> Two-factor
+				{/* Phase 138 — Two-factor disabled until backend TOTP enrollment ships.
+				    Visible greyed out + title so users know it's planned, not broken. */}
+				<button
+					className=''
+					disabled
+					title='Two-factor enrollment ships in Phase 138 — coming soon'
+					style={{opacity: 0.4, cursor: 'not-allowed'}}
+				>
+					<Icon name='shield' size={12} /> Two-factor · soon
 				</button>
 			</div>
 
