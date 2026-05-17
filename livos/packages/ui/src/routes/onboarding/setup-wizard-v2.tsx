@@ -100,6 +100,11 @@ function WizardInner() {
 		writeBackendResume(stepper.idx, data)
 	}, [stepper.idx, data, writeBackendResume])
 
+	// Phase 137-05 — Done cleanup. Clear backend resume key before navigating
+	// to dashboard so a fresh login on the same account doesn't re-resume the
+	// wizard. localStorage cleared inline at the DoneStep onEnter handler.
+	const deleteBackendResume = trpcReact.preferences.delete.useMutation()
+
 	// body.step-N drives per-step ambient orb color shifts (CSS in 135-A).
 	useEffect(() => {
 		const prevClasses = document.body.className.split(/\s+/).filter((c) => !c.startsWith('step-'))
@@ -226,6 +231,8 @@ function WizardInner() {
 									try {
 										localStorage.removeItem(STORAGE_KEY)
 									} catch {}
+									// Best-effort backend cleanup (don't block navigation on it).
+									deleteBackendResume.mutate({key: BACKEND_RESUME_KEY})
 									window.location.href = '/'
 								}}
 							/>
