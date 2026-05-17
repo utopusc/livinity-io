@@ -729,6 +729,18 @@ _dld_build_packages() {
     _dld_verify_build "@livos/config" "$_DLD_LIVOS_DIR/packages/config/dist"
     ok "@livos/config built"
 
+    # Phase 132 Bug #15: build @livinity/ui-kit BEFORE @livos/ui because
+    # ui/src/index.css imports @livinity/ui-kit/dist/index.css via PostCSS.
+    # If ui-kit/dist doesn't exist when vite builds ui, build fails with:
+    #   ENOENT: no such file or directory, open '@livinity/ui-kit/dist/index.css'
+    # ui-kit's build script is `pnpm build:lib && pnpm build:umd` (tsup + vite).
+    if [[ -d "$_DLD_LIVOS_DIR/packages/ui-kit" ]]; then
+        info "Building @livinity/ui-kit (tsup + vite UMD)"
+        pnpm --filter @livinity/ui-kit build 2>&1 | tail -5 || fail "@livinity/ui-kit build failed"
+        _dld_verify_build "@livinity/ui-kit" "$_DLD_LIVOS_DIR/packages/ui-kit/dist"
+        ok "@livinity/ui-kit built"
+    fi
+
     # Build UI (vite production bundle)
     # 105-02 (G8): rm -rf dist BEFORE build forces vite to regenerate from source.
     # Phase 51 v29.5 A2 defensive fresh-build — prevents stale dist surviving
@@ -1169,32 +1181,44 @@ _dld_seed_domain_config() {
         fi
     fi
 
-    # 3. Derive domain from the install-mode-specific Redis key.
-    local local_mode
-    local_mode=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_mode 2>/dev/null || echo "")
-    local domain=""
-    case "$local_mode" in
-        hybrid)
-            domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:hybrid_subdomain 2>/dev/null || echo "")
-            ;;
-        tunnel)
-            domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:tunnel_domain 2>/dev/null || echo "")
-            ;;
-        local-lan)
-            # local-lan uses ${HOST_IP}.{LIVINITY_LOCAL_TLD} for host-prefixed access;
-            # the gateway's main-domain check works equally well on the bare TLD because
-            # subdomains under it match the same suffix-check pattern.
-            domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_tld 2>/dev/null || echo "")
-            ;;
-        cloud|"")
-            info "local_mode='${local_mode:-unset}' — no domain to seed, skipping (cloud mode has no subdomain routing)"
-            return 0
-            ;;
-        *)
-            warn "Unknown local_mode='${local_mode}' — skipping domain-config seed"
-            return 0
-            ;;
-    esac
+    # 3. Derive domain. Phase 132 Bug #16: prefer explicit --domain CLI flag
+    # (DOMAIN env var, set by parse-cli.sh) over Redis-key derivation.
+    # Reason: on fresh install, mode-hybrid.sh "queues" config values that
+    # won't reach Redis until livinityd boots and drains the queue — but
+    # this seed runs BEFORE that boot. So Redis appears empty and the
+    # local_mode='unset' branch silently skips, leaving livinityd with no
+    # domain config → "No app configured for this domain" 503.
+    # Solution: when DOMAIN is explicitly provided, trust it directly.
+    local local_mode domain=""
+    if [[ -n "${DOMAIN:-}" ]]; then
+        domain="${DOMAIN}"
+        local_mode="${MODE:-hybrid}"
+        info "Bug #16: using explicit --domain '${domain}' (mode=${local_mode}) instead of Redis-derived value"
+    else
+        local_mode=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_mode 2>/dev/null || echo "")
+        case "$local_mode" in
+            hybrid)
+                domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:hybrid_subdomain 2>/dev/null || echo "")
+                ;;
+            tunnel)
+                domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:tunnel_domain 2>/dev/null || echo "")
+                ;;
+            local-lan)
+                # local-lan uses ${HOST_IP}.{LIVINITY_LOCAL_TLD} for host-prefixed access;
+                # the gateway's main-domain check works equally well on the bare TLD because
+                # subdomains under it match the same suffix-check pattern.
+                domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_tld 2>/dev/null || echo "")
+                ;;
+            cloud|"")
+                info "local_mode='${local_mode:-unset}' — no domain to seed, skipping (cloud mode has no subdomain routing)"
+                return 0
+                ;;
+            *)
+                warn "Unknown local_mode='${local_mode}' — skipping domain-config seed"
+                return 0
+                ;;
+        esac
+    fi
 
     if [[ -z "$domain" ]]; then
         warn "Could not resolve domain for local_mode='${local_mode}' — skipping domain-config seed"
