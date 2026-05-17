@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>Set up your first LivOS — Livinity</title>
+    <meta name="description" content="Generate a one-line install command and connect your server." />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600;700;800&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="styles.css" />
+
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+    <style>
+      :root {
+        --dash-pad: 28px;
+        --dash-radius: 18px;
+        --dash-line: rgba(0,0,0,0.07);
+        --dash-line-strong: rgba(0,0,0,0.12);
+        --card-bg: #ffffff;
+        --card-bg-2: #fafafa;
+        --card-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 24px 60px -34px rgba(0,0,0,0.18);
+        --hero-grad: linear-gradient(135deg, #fafafa 0%, #f0f0f3 100%);
+        --accent-blue: #2563eb;
+        --accent-green: #16a34a;
+        --accent-amber: #d97706;
+        --accent-red: #dc2626;
+        --font-mono: "Geist Mono", ui-monospace, monospace;
+        --font-serif: "Instrument Serif", serif;
+      }
+      body.dark {
+        --dash-line: rgba(255,255,255,0.08);
+        --dash-line-strong: rgba(255,255,255,0.16);
+        --card-bg: #0f0f11;
+        --card-bg-2: #08080a;
+        --card-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 24px 60px -28px rgba(0,0,0,0.8);
+        --hero-grad: linear-gradient(135deg, #0c0c0e 0%, #14141a 100%);
+      }
+      body { background: var(--bg); color: var(--fg); font-family: "Geist", -apple-system, sans-serif; }
+      body.dark { background: #050507; color: #f5f5f7; }
+
+      .install-shell { max-width: 920px; margin: 0 auto; padding: 32px 28px 80px; }
+      .install-nav {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 20px 0; margin-bottom: 12px;
+      }
+      .install-nav .brand { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg); text-decoration: none; }
+      .install-nav .brand em { font-family: var(--font-serif); font-weight: 400; font-style: italic; }
+      .install-nav .right { display: flex; align-items: center; gap: 14px; }
+      .install-nav .uname { font-size: 13px; color: var(--fg-mute); font-family: var(--font-mono); }
+      .h-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 9px 16px; border-radius: 12px;
+        background: transparent; border: 1px solid var(--dash-line-strong); color: var(--fg);
+        font-size: 13.5px; font-weight: 500; font-family: inherit; cursor: pointer;
+        transition: all 0.18s ease; text-decoration: none;
+      }
+      .h-btn:hover { background: rgba(0,0,0,0.04); transform: translateY(-1px); }
+      body.dark .h-btn:hover { background: rgba(255,255,255,0.05); }
+      .h-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+      .h-btn.solid { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+      .h-btn.solid:hover { opacity: 0.92; background: var(--fg); }
+      .h-btn.ghost { border: none; padding: 9px 6px; }
+
+      .install-hero { margin-bottom: 24px; }
+      .install-hero .step-pill {
+        display: inline-block; padding: 4px 11px; border-radius: 999px;
+        background: var(--card-bg); border: 1px solid var(--dash-line);
+        font-size: 11.5px; font-family: var(--font-mono); color: var(--fg-mute);
+        text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px;
+      }
+      .install-hero h1 {
+        font-size: clamp(28px, 4vw, 38px); font-weight: 600; letter-spacing: -0.025em;
+        line-height: 1.05; margin: 0 0 8px;
+      }
+      .install-hero h1 em { font-family: var(--font-serif); font-weight: 400; font-style: italic; color: var(--fg-mute); }
+      .install-hero p { font-size: 15px; color: var(--fg-mute); margin: 0; max-width: 560px; line-height: 1.5; }
+
+      /* Stepper */
+      .stepper { display: flex; gap: 10px; margin: 8px 0 24px; }
+      .stepper .step { flex: 1; display: flex; align-items: center; gap: 10px; }
+      .stepper .num {
+        width: 28px; height: 28px; border-radius: 50%;
+        display: grid; place-items: center;
+        font-size: 12px; font-family: var(--font-mono); font-weight: 600;
+        background: var(--card-bg); border: 1px solid var(--dash-line); color: var(--fg-mute);
+      }
+      .stepper .step.active .num { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+      .stepper .step.done .num { background: var(--accent-green); color: white; border-color: var(--accent-green); }
+      .stepper .lbl { font-size: 12px; font-family: var(--font-mono); color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.06em; }
+      .stepper .step.active .lbl { color: var(--fg); }
+      .stepper .bar { flex: 0 0 32px; height: 1px; background: var(--dash-line); align-self: center; }
+      .stepper .bar.done { background: var(--accent-green); }
+
+      /* Card */
+      .panel {
+        background: var(--card-bg); border: 1px solid var(--dash-line);
+        border-radius: var(--dash-radius); padding: 28px;
+        box-shadow: var(--card-shadow); margin-bottom: 18px;
+      }
+      .panel h2 {
+        font-size: 13px; font-weight: 600; color: var(--fg);
+        font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em;
+        margin: 0 0 6px;
+      }
+      .panel .sub { font-size: 13px; color: var(--fg-mute); margin: 0 0 20px; line-height: 1.5; }
+
+      /* Mode cards grid */
+      .mode-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+      @media (max-width: 720px) { .mode-grid { grid-template-columns: 1fr; } }
+      .mode-card {
+        position: relative;
+        padding: 20px; border-radius: 14px;
+        background: var(--card-bg-2); border: 1.5px solid var(--dash-line);
+        cursor: pointer; transition: all 0.18s ease;
+        display: flex; flex-direction: column; gap: 10px;
+      }
+      .mode-card:hover:not(.disabled) { border-color: var(--dash-line-strong); transform: translateY(-1px); }
+      .mode-card.selected { border-color: var(--fg); background: var(--card-bg); box-shadow: 0 0 0 3px rgba(0,0,0,0.04); }
+      body.dark .mode-card.selected { box-shadow: 0 0 0 3px rgba(255,255,255,0.06); }
+      .mode-card.disabled { opacity: 0.55; cursor: not-allowed; }
+      .mode-card .mc-head { display: flex; align-items: center; justify-content: space-between; }
+      .mode-card .mc-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+      .mode-card .mc-badge {
+        font-size: 10.5px; font-family: var(--font-mono);
+        padding: 2.5px 8px; border-radius: 999px;
+        background: var(--accent-blue); color: white;
+        text-transform: uppercase; letter-spacing: 0.06em;
+      }
+      .mode-card .mc-badge.soon { background: var(--card-bg); color: var(--fg-mute); border: 1px solid var(--dash-line); }
+      .mode-card .mc-tag { font-size: 12.5px; color: var(--fg-mute); line-height: 1.45; }
+      .mode-card .mc-pros { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+      .mode-card .mc-pros li { font-size: 11.5px; color: var(--fg-mute); font-family: var(--font-mono); display: flex; gap: 7px; }
+      .mode-card .mc-pros li::before { content: "✓"; color: var(--accent-green); font-weight: 600; }
+
+      /* Form fields */
+      .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+      .field label { font-size: 11.5px; font-family: var(--font-mono); color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.06em; }
+      .field .hint { font-size: 12px; color: var(--fg-faint); margin-top: 2px; }
+      .field input, .field input[type="password"] {
+        background: var(--card-bg-2); border: 1px solid var(--dash-line);
+        border-radius: 12px; padding: 11px 14px;
+        font-size: 14px; color: var(--fg); font-family: inherit;
+        outline: none; transition: border 0.18s ease;
+      }
+      .field input:focus { border-color: var(--fg); }
+      .field input.error { border-color: var(--accent-red); }
+      .field .row { display: flex; gap: 8px; align-items: stretch; }
+      .field .row input { flex: 1; }
+
+      .pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 4px 10px; border-radius: 999px;
+        font-size: 11px; font-family: var(--font-mono);
+      }
+      .pill.ok { background: rgba(22,163,74,0.12); color: var(--accent-green); }
+      .pill.err { background: rgba(220,38,38,0.12); color: var(--accent-red); }
+      .pill.warn { background: rgba(217,119,6,0.12); color: var(--accent-amber); }
+
+      /* Install command box */
+      .cmd-box {
+        background: var(--card-bg-2); border: 1px solid var(--dash-line);
+        border-radius: 12px; padding: 16px;
+        font-family: var(--font-mono); font-size: 12.5px;
+        word-break: break-all; line-height: 1.55;
+        color: var(--fg);
+        position: relative;
+      }
+      .cmd-box .copy {
+        position: absolute; top: 12px; right: 12px;
+        font-size: 11px; padding: 5px 10px;
+      }
+      .cmd-block { display: flex; flex-direction: column; gap: 14px; }
+      .cmd-key {
+        background: rgba(22,163,74,0.06);
+        border: 1px solid rgba(22,163,74,0.25);
+        padding: 12px 14px; border-radius: 12px;
+        font-family: var(--font-mono); font-size: 12.5px;
+        color: var(--accent-green); word-break: break-all;
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      }
+      .cmd-key .copy { background: var(--accent-green); color: white; border-color: var(--accent-green); padding: 5px 11px; font-size: 11px; }
+
+      /* Mode docs */
+      .docs { display: flex; flex-direction: column; gap: 8px; }
+      .docs details {
+        background: var(--card-bg); border: 1px solid var(--dash-line);
+        border-radius: 14px; padding: 14px 18px;
+      }
+      .docs details[open] { border-color: var(--dash-line-strong); }
+      .docs summary {
+        cursor: pointer; font-size: 13px; font-weight: 500;
+        font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em;
+        color: var(--fg);
+      }
+      .docs .body { margin-top: 12px; font-size: 13px; color: var(--fg-mute); line-height: 1.55; }
+      .docs .body strong { color: var(--fg); font-weight: 600; }
+      .docs .body ul { padding-left: 18px; margin: 6px 0; }
+
+      /* Domain split */
+      .domain-split { display: grid; grid-template-columns: 1fr auto 1.4fr; gap: 10px; align-items: end; }
+      .domain-split .dot { font-size: 22px; color: var(--fg-faint); padding-bottom: 10px; text-align: center; user-select: none; }
+      @media (max-width: 560px) { .domain-split { grid-template-columns: 1fr; } .domain-split .dot { display: none; } }
+      .url-preview {
+        background: var(--card-bg-2); border: 1px solid var(--dash-line);
+        border-radius: 10px; padding: 9px 12px;
+        font-size: 12.5px; color: var(--fg-mute);
+        margin-top: 8px;
+      }
+      .url-preview code { font-family: var(--font-mono); color: var(--fg); }
+
+      /* Numbered step card */
+      .steps-card {
+        background: var(--card-bg); border: 1px solid var(--dash-line);
+        border-radius: 14px; padding: 18px 20px;
+        display: flex; flex-direction: column; gap: 14px;
+      }
+      .steps-card .step-item { display: flex; gap: 12px; align-items: flex-start; }
+      .steps-card .step-num {
+        flex-shrink: 0;
+        width: 22px; height: 22px;
+        border-radius: 999px; background: var(--card-bg-2);
+        border: 1px solid var(--dash-line-strong);
+        font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+        color: var(--fg-mute);
+        display: flex; align-items: center; justify-content: center;
+        margin-top: 1px;
+      }
+      .steps-card .step-body { flex: 1; font-size: 13.5px; color: var(--fg); line-height: 1.55; }
+      .steps-card .step-body code, .field-row code {
+        font-family: var(--font-mono); font-size: 12.5px;
+        background: var(--card-bg-2); padding: 1.5px 6px; border-radius: 5px;
+        color: var(--fg);
+      }
+      .steps-card .step-body .cmd-line {
+        display: block; background: var(--card-bg-2);
+        padding: 9px 12px; border-radius: 8px;
+        font-family: var(--font-mono); font-size: 12px;
+        color: var(--fg); margin-top: 6px;
+      }
+      .steps-card .step-body .cmd-line em { color: var(--accent-green); font-style: normal; }
+      .steps-card .step-body a { color: var(--accent-blue); text-decoration: none; }
+      .steps-card .step-body a:hover { text-decoration: underline; }
+
+      /* Route card */
+      .route-card {
+        border-radius: 14px; padding: 16px 18px;
+        display: flex; flex-direction: column; gap: 10px;
+      }
+      .route-card.ok { background: rgba(22,163,74,0.05); border: 1px solid rgba(22,163,74,0.25); }
+      .route-card.info { background: rgba(37,99,235,0.05); border: 1px solid rgba(37,99,235,0.25); }
+      .route-card .rc-head { display: flex; align-items: center; gap: 10px; }
+      .route-card .rc-tag {
+        font-size: 10.5px; font-family: var(--font-mono);
+        font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+        padding: 3px 9px; border-radius: 999px; color: white;
+      }
+      .route-card.ok .rc-tag { background: var(--accent-green); }
+      .route-card.info .rc-tag { background: var(--accent-blue); }
+      .route-card .rc-title { font-size: 13px; font-weight: 500; color: var(--fg); }
+      .route-card .rc-note { font-size: 11.5px; color: var(--fg-mute); margin-top: 2px; line-height: 1.5; }
+      .route-card .rc-note code { font-family: var(--font-mono); }
+
+      .field-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      }
+      @media (max-width: 560px) { .field-grid { grid-template-columns: 1fr; } }
+      .field-row {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 8px;
+        background: var(--card-bg); border: 1px solid var(--dash-line);
+        border-radius: 10px; padding: 8px 12px;
+      }
+      .field-row .frl { min-width: 0; flex: 1; }
+      .field-row .frl .lbl {
+        font-size: 10px; font-family: var(--font-mono);
+        text-transform: uppercase; letter-spacing: 0.06em;
+        color: var(--fg-faint);
+      }
+      .field-row .frl .val {
+        font-size: 13px; color: var(--fg);
+        font-family: var(--font-mono);
+        margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .field-row .frl .val.empty { color: var(--fg-faint); }
+      .field-row .copy-mini {
+        font-size: 10px; padding: 3px 8px;
+        font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em;
+        background: transparent; color: var(--fg-mute);
+        border: 1px solid var(--dash-line); border-radius: 6px;
+        cursor: pointer; flex-shrink: 0;
+      }
+      .field-row .copy-mini:hover { color: var(--fg); border-color: var(--dash-line-strong); }
+
+      .section-head {
+        display: flex; align-items: center; gap: 10px;
+        margin: 24px 0 12px;
+      }
+      .section-head .sn {
+        width: 24px; height: 24px; border-radius: 999px;
+        background: var(--fg); color: var(--card-bg);
+        font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+      }
+      .section-head h3 { font-size: 14px; font-weight: 600; margin: 0; }
+
+      .token-validity { font-size: 11px; font-family: var(--font-mono); margin-top: 4px; }
+      .token-validity.ok { color: var(--accent-green); }
+      .token-validity.warn { color: var(--accent-amber); }
+      .token-validity.idle { color: var(--fg-faint); }
+
+      /* Footer nav */
+      .nav-row { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; padding: 0 4px; }
+      .nav-row .right { display: flex; gap: 10px; }
+
+      /* Loading */
+      .install-loading { min-height: 100vh; display: grid; place-items: center; color: var(--fg-mute); font-family: var(--font-mono); font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="install-loading"><p>Loading…</p></div></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useCallback, useMemo } = React;
+
+      function copyText(s) {
+        try { navigator.clipboard.writeText(s); } catch (e) {}
+      }
+
+      function Stepper({ step }) {
+        const items = [
+          { n: 1, label: "Mode" },
+          { n: 2, label: "Configure" },
+          { n: 3, label: "Install" },
+        ];
+        return (
+          <div className="stepper">
+            {items.map((it, i) => (
+              <React.Fragment key={it.n}>
+                <div className={"step " + (it.n === step ? "active" : it.n < step ? "done" : "")}>
+                  <div className="num">{it.n < step ? "✓" : it.n}</div>
+                  <span className="lbl">{it.label}</span>
+                </div>
+                {i < items.length - 1 && <div className={"bar " + (it.n < step ? "done" : "")} />}
+              </React.Fragment>
+            ))}
+          </div>
+        );
+      }
+
+      const MODES = [
+        { id: "local-lan", title: "Local (LAN)", tag: "Run on your home network. Reach it via <hostname>.local.", pros: ["No domain needed", "Zero external dependencies", "Fastest setup"] },
+        { id: "hybrid", title: "Hybrid", badge: "Recommended", tag: "Your own subdomain via a Cloudflare Tunnel — no port forwarding required.", pros: ["Public HTTPS URL", "Works behind CGNAT", "No inbound ports needed"] },
+        { id: "tunnel", title: "Own-Cloud (CF Tunnel)", tag: "Cloudflare Tunnel — works behind CGNAT.", pros: ["Bypasses NAT/firewall", "No port forwarding"], soon: true },
+        { id: "cloud", title: "Cloud", tag: "Fully managed on Livinity infrastructure.", pros: ["Zero self-hosting", "Auto-updates"], soon: true },
+      ];
+
+      function ModeCards({ value, onChange }) {
+        return (
+          <div className="mode-grid">
+            {MODES.map((m) => (
+              <div
+                key={m.id}
+                className={"mode-card " + (value === m.id ? "selected " : "") + (m.soon ? "disabled" : "")}
+                onClick={() => { if (!m.soon) onChange(m.id); }}
+              >
+                <div className="mc-head">
+                  <span className="mc-title">{m.title}</span>
+                  {m.badge && <span className="mc-badge">{m.badge}</span>}
+                  {m.soon && <span className="mc-badge soon">Coming soon</span>}
+                </div>
+                <p className="mc-tag">{m.tag}</p>
+                <ul className="mc-pros">{m.pros.map((p, i) => <li key={i}>{p}</li>)}</ul>
+              </div>
+            ))}
+          </div>
+        );
+      }
+
+      function FieldRow({ label, value }) {
+        const empty = !value;
+        return (
+          <div className="field-row">
+            <div className="frl">
+              <div className="lbl">{label}</div>
+              <div className={"val" + (empty ? " empty" : "")}>{empty ? "—" : value}</div>
+            </div>
+            {!empty && (
+              <button type="button" className="copy-mini" onClick={() => copyText(value)}>Copy</button>
+            )}
+          </div>
+        );
+      }
+
+      function HybridForm({ state, set }) {
+        const [tokenVisible, setTokenVisible] = useState(false);
+        const sub = (state.subdomain || "").trim();
+        const base = (state.baseDomain || "").trim();
+        const fullDomain = sub && base ? sub + "." + base : "";
+        const wildcardSub = sub ? "*." + sub : "";
+        const wildcardFull = wildcardSub && base ? wildcardSub + "." + base : "";
+        const tokenLen = (state.cfTunnelToken || "").trim().length;
+        const tokenLooksValid = tokenLen >= 100 && /^[A-Za-z0-9+/=_-]+$/.test((state.cfTunnelToken || "").trim());
+        const tunnelName = sub ? "livos-" + sub : "livos-<subdomain>";
+
+        return (
+          <div>
+            {/* ── 1. Domain ───────────────────────────────────── */}
+            <div className="section-head">
+              <div className="sn">1</div>
+              <h3>Your domain</h3>
+            </div>
+            <p className="sub" style={{ marginBottom: 12 }}>
+              Pick a subdomain (e.g. <code style={{ fontFamily: 'var(--font-mono)' }}>lu</code>) under any domain you own on Cloudflare (e.g. <code style={{ fontFamily: 'var(--font-mono)' }}>livinity.live</code>). DNS is configured automatically by the tunnel.
+            </p>
+            <div className="domain-split">
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label htmlFor="subdomain">Subdomain</label>
+                <input id="subdomain" placeholder="lu" autoComplete="off" spellCheck={false}
+                  value={state.subdomain || ""}
+                  onChange={(e) => set({ ...state, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })} />
+              </div>
+              <div className="dot">.</div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label htmlFor="baseDomain">Domain</label>
+                <input id="baseDomain" placeholder="livinity.live" autoComplete="off" spellCheck={false}
+                  value={state.baseDomain || ""}
+                  onChange={(e) => set({ ...state, baseDomain: e.target.value.toLowerCase().replace(/[^a-z0-9.-]/g, "") })} />
+              </div>
+            </div>
+            <div className="url-preview">
+              Your URL will be:{" "}
+              <code>{fullDomain ? "https://" + fullDomain : "https://<subdomain>.<domain>"}</code>
+            </div>
+
+            {/* ── 2. Get tunnel token ─────────────────────────── */}
+            <div className="section-head">
+              <div className="sn">2</div>
+              <h3>Get your Cloudflare Tunnel token</h3>
+            </div>
+            <div className="steps-card">
+              <div className="step-item">
+                <div className="step-num">1</div>
+                <div className="step-body">
+                  Open Cloudflare <a href="https://one.dash.cloudflare.com/" target="_blank" rel="noopener">Zero Trust dashboard</a> → left sidebar <strong>Networks</strong> → <strong>Tunnels</strong>.
+                </div>
+              </div>
+              <div className="step-item">
+                <div className="step-num">2</div>
+                <div className="step-body">
+                  Click <strong>Create a tunnel</strong> → pick <strong>Cloudflared</strong> → <strong>Next</strong>.
+                </div>
+              </div>
+              <div className="step-item">
+                <div className="step-num">3</div>
+                <div className="step-body">
+                  Name your tunnel — we suggest <code>{tunnelName}</code>
+                  {sub && <button type="button" className="copy-mini" style={{ marginLeft: 8, verticalAlign: 'middle' }} onClick={() => copyText(tunnelName)}>Copy</button>}
+                  . Click <strong>Save tunnel</strong>.
+                </div>
+              </div>
+              <div className="step-item">
+                <div className="step-num">4</div>
+                <div className="step-body">
+                  On the <em>Install and run a connector</em> page pick any OS. Cloudflare shows a command like:
+                  <code className="cmd-line">cloudflared.exe service install <em>eyJhIjoiMz...</em></code>
+                  Copy the long string <strong>after</strong> <code>service install</code> (starts with <code>eyJ</code>). That's your tunnel token. Paste it below.
+                </div>
+              </div>
+              <div className="step-item">
+                <div className="step-num">5</div>
+                <div className="step-body">
+                  Click <strong>Next</strong> and leave the routes blank for now — we'll add them in step 3 below. The connector will say <em>No connectors installed</em> until <code>install.sh</code> runs on your server.
+                </div>
+              </div>
+            </div>
+
+            <div className="field" style={{ marginTop: 14 }}>
+              <label htmlFor="token">Paste your tunnel token</label>
+              <div className="row">
+                <input id="token" type={tokenVisible ? "text" : "password"}
+                  placeholder="eyJhIjoiMzcyMWZi..."
+                  autoComplete="off" spellCheck={false}
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                  value={state.cfTunnelToken || ""}
+                  onChange={(e) => set({ ...state, cfTunnelToken: e.target.value.trim() })} />
+                <button type="button" className="h-btn" onClick={() => setTokenVisible(!tokenVisible)}>{tokenVisible ? "Hide" : "Show"}</button>
+              </div>
+              <div className={"token-validity " + (tokenLen === 0 ? "idle" : tokenLooksValid ? "ok" : "warn")}>
+                {tokenLen === 0
+                  ? "Long base64 string starting with eyJ…"
+                  : tokenLooksValid
+                    ? "✓ Looks like a valid tunnel token (" + tokenLen + " chars)"
+                    : "⚠ Doesn't look like a tunnel token yet (" + tokenLen + " chars — expected ~200+)"}
+              </div>
+            </div>
+
+            {/* ── 3. Add routes (after install) ───────────────── */}
+            <div className="section-head">
+              <div className="sn">3</div>
+              <h3>After install: add Published application routes</h3>
+            </div>
+            <p className="sub" style={{ marginBottom: 12 }}>
+              Once <code style={{ fontFamily: 'var(--font-mono)' }}>install.sh</code> finishes and the connector is healthy, go back to your tunnel in Cloudflare and add <strong>two routes</strong> — one for your main URL, one wildcard for app subdomains (n8n, AdGuard, etc.). Both point to <code style={{ fontFamily: 'var(--font-mono)' }}>localhost:80</code> on your server.
+            </p>
+            <div className="steps-card" style={{ marginBottom: 12 }}>
+              <div className="step-body" style={{ fontSize: 12.5, color: 'var(--fg-mute)' }}>
+                Back in Zero Trust → Networks → Tunnels → click your tunnel <code>{tunnelName}</code> → tab <strong>Published application routes</strong> → <strong>Add a published application route</strong>.
+              </div>
+            </div>
+
+            {/* Route 1 — apex */}
+            <div className="route-card ok" style={{ marginBottom: 10 }}>
+              <div className="rc-head">
+                <span className="rc-tag">Route 1</span>
+                <span className="rc-title">Your main URL — required</span>
+              </div>
+              <div className="field-grid">
+                <FieldRow label="Subdomain" value={sub} />
+                <FieldRow label="Domain" value={base} />
+                <FieldRow label="Path" value="(leave empty)" />
+                <FieldRow label="Service · Type" value="HTTP" />
+                <FieldRow label="Service · URL" value="localhost:80" />
+                <FieldRow label="Full hostname" value={fullDomain} />
+              </div>
+              <div className="rc-note">Save this route. DNS CNAME is created automatically by Cloudflare.</div>
+            </div>
+
+            {/* Route 2 — wildcard */}
+            <div className="route-card info">
+              <div className="rc-head">
+                <span className="rc-tag">Route 2</span>
+                <span className="rc-title">Wildcard for apps (n8n, AdGuard, …) — recommended</span>
+              </div>
+              <div className="field-grid">
+                <FieldRow label="Subdomain" value={wildcardSub} />
+                <FieldRow label="Domain" value={base} />
+                <FieldRow label="Path" value="(leave empty)" />
+                <FieldRow label="Service · Type" value="HTTP" />
+                <FieldRow label="Service · URL" value="localhost:80" />
+                <FieldRow label="Full hostname" value={wildcardFull} />
+              </div>
+              <div className="rc-note">
+                If Cloudflare says <em>"DNS record already exists"</em> for the wildcard, open DNS settings and add the CNAME manually:{" "}
+                <code>{wildcardSub || "*.<subdomain>"} → &lt;tunnel-id&gt;.cfargotunnel.com</code> (Proxied).
+              </div>
+            </div>
+
+            <p className="hint" style={{ marginTop: 14 }}>
+              <strong style={{ color: 'var(--fg)' }}>Security:</strong> Your tunnel token is baked into the install command on the next step and stored on your server at <code style={{ fontFamily: 'var(--font-mono)' }}>/etc/livos/secrets/cf-tunnel-token</code> (0600). It never lands in Livinity's database.
+            </p>
+          </div>
+        );
+      }
+
+      function LocalForm({ state, set }) {
+        return (
+          <div>
+            <div className="field">
+              <label htmlFor="hostname">Hostname (LAN)</label>
+              <input id="hostname" placeholder="livinity" value={state.hostname} onChange={(e) => set({ hostname: e.target.value })} />
+              <span className="hint">Your server will be reachable at <code style={{ fontFamily: 'var(--font-mono)' }}>{(state.hostname || "livinity").trim().toLowerCase()}.local</code> from your LAN.</span>
+            </div>
+          </div>
+        );
+      }
+
+      function buildCommand(mode, hybrid, local, apiKey) {
+        if (mode === "hybrid") {
+          const sub = (hybrid.subdomain || "").trim();
+          const base = (hybrid.baseDomain || "").trim();
+          const fullDomain = sub + "." + base;
+          return "curl -fsSL https://livinity.io/install.sh | sudo bash -s -- --mode hybrid --domain " + fullDomain + " --api-key " + apiKey + " --cf-tunnel-token " + (hybrid.cfTunnelToken || "").trim();
+        }
+        const host = (local.hostname || "livinity").trim();
+        return "curl -fsSL https://livinity.io/install.sh | sudo bash -s -- --mode local-lan --domain " + host + ".local --api-key " + apiKey;
+      }
+
+      function CommandStep({ mode, hybrid, local, gen }) {
+        if (gen.status === "minting") return <p className="hint" style={{ fontSize: 13 }}>Generating your API key…</p>;
+        if (gen.status === "error") return <p className="pill err" style={{ display: 'inline-flex' }}>Couldn't mint API key — {gen.error}</p>;
+        if (gen.status !== "ready" || !gen.plainKey) return null;
+        const cmd = buildCommand(mode, hybrid, local, gen.plainKey);
+        return (
+          <div className="cmd-block">
+            <div>
+              <h2 style={{ marginBottom: 4 }}>API key (save it now)</h2>
+              <p className="sub" style={{ marginBottom: 10 }}>This key is only shown once. Bake it into the install command below or store it somewhere safe.</p>
+              <div className="cmd-key">
+                <span>{gen.plainKey}</span>
+                <button className="copy h-btn" onClick={() => copyText(gen.plainKey)}>Copy key</button>
+              </div>
+            </div>
+            <div>
+              <h2 style={{ marginBottom: 4 }}>One-line install command</h2>
+              <p className="sub" style={{ marginBottom: 10 }}>Paste this on your server (Ubuntu 24.04 / Debian 12 / fresh VPS). Single line — no \-continuations.</p>
+              <div className="cmd-box">
+                <button className="copy h-btn solid" onClick={() => copyText(cmd)}>Copy command</button>
+                <code>{cmd}</code>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function ModeDocs({ mode }) {
+        return (
+          <div className="docs">
+            <details open={mode === "local-lan"}>
+              <summary>Local (LAN) — what to expect</summary>
+              <div className="body">
+                <strong>Pre-reqs:</strong> a machine on your LAN with Docker + 2 free ports (80, 443).<br/>
+                <strong>What it does:</strong> installs LivOS + Caddy, exposes <code>{`<hostname>.local`}</code> via mDNS for LAN-only access. No public exposure, no Cloudflare.<br/>
+                <strong>Security:</strong> HTTPS via Caddy local-CA — browsers will warn the first time (trust the cert once).
+              </div>
+            </details>
+            <details open={mode === "hybrid"}>
+              <summary>Hybrid — what to expect</summary>
+              <div className="body">
+                <strong>Pre-reqs:</strong> Cloudflare account with your domain on it, a Cloudflare Tunnel (Zero Trust → Networks → Tunnels), the connector token from that tunnel.<br/>
+                <strong>What it does:</strong> installs Docker + Postgres + Redis + Caddy + cloudflared, stores your tunnel token at <code>/etc/livos/secrets/cf-tunnel-token</code> (mode 0600), and starts cloudflared as a systemd service that dials out to Cloudflare. TLS terminates at Cloudflare's edge.<br/>
+                <strong>Security:</strong> Traffic flows through Cloudflare's edge (TLS terminated there). The tunnel token is sensitive — stored only on your server, never persisted to Livinity's database. App subdomains (n8n.<code>{`<sub>.<domain>`}</code>, …) require the wildcard route — see step 3 above.
+              </div>
+            </details>
+          </div>
+        );
+      }
+
+      function App() {
+        // Theme support (matches dashboard.html — opt-in via localStorage)
+        useEffect(() => {
+          try {
+            const saved = localStorage.getItem("liv_theme");
+            if (saved === "dark") document.body.classList.add("dark");
+          } catch (e) {}
+        }, []);
+
+        const [user, setUser] = useState(null);
+        const [authLoading, setAuthLoading] = useState(true);
+        const [step, setStep] = useState(1);
+        const [mode, setMode] = useState("hybrid");
+        const [hybrid, setHybrid] = useState({ subdomain: "", baseDomain: "", cfTunnelToken: "" });
+        const [local, setLocal] = useState({ hostname: "livinity" });
+        const [gen, setGen] = useState({ status: "idle" });
+
+        // Phase 133-01 Bug C: pre-fill hybrid subdomain with `${username}` if blank.
+        useEffect(() => {
+          if (mode === "hybrid" && user && user.username && !hybrid.subdomain) {
+            setHybrid(h => ({ ...h, subdomain: user.username }));
+          }
+        }, [mode, user]);
+
+
+        useEffect(() => {
+          (async () => {
+            try {
+              const me = await fetch("/api/auth/me", { credentials: "same-origin" });
+              if (!me.ok) { window.location.href = "/login?redirect=/dashboard/install"; return; }
+              const meData = await me.json();
+              if (!meData.user) { window.location.href = "/login?redirect=/dashboard/install"; return; }
+              setUser(meData.user);
+            } catch (e) {
+              window.location.href = "/login?redirect=/dashboard/install";
+            } finally {
+              setAuthLoading(false);
+            }
+          })();
+        }, []);
+
+        useEffect(() => {
+          if (step !== 3) return;
+          if (gen.status === "ready" || gen.status === "minting") return;
+          setGen({ status: "minting" });
+          (async () => {
+            try {
+              const res = await fetch("/api/account/api-keys", {
+                method: "POST", credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(mode === "hybrid" ? { domain: ((hybrid.subdomain || "").trim() + "." + (hybrid.baseDomain || "").trim()) } : {}),
+              });
+              if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                setGen({ status: "error", error: body.error || ("HTTP " + res.status) });
+                return;
+              }
+              const body = await res.json();
+              setGen({ status: "ready", keyId: body.id, plainKey: body.apiKey });
+            } catch (e) {
+              setGen({ status: "error", error: String(e) });
+            }
+          })();
+        }, [step, gen.status]);
+
+        function handleBack() {
+          if (step === 3 && gen.keyId) {
+            fetch("/api/account/api-keys/" + gen.keyId, { method: "DELETE", credentials: "same-origin" }).catch(() => {});
+          }
+          setGen({ status: "idle" });
+          setStep(Math.max(1, step - 1));
+        }
+
+        function handleSkip() {
+          if (step === 3 && gen.keyId) {
+            fetch("/api/account/api-keys/" + gen.keyId, { method: "DELETE", credentials: "same-origin" }).catch(() => {});
+          }
+          window.location.href = "/dashboard?skipFirstRun=1";
+        }
+
+        async function handleLogout() {
+          try { await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }); } catch (e) {}
+          window.location.href = "/login";
+        }
+
+        const canAdvance = useMemo(() => {
+          if (step !== 2) return true;
+          if (mode === "local-lan") return !!local.hostname.trim();
+          if (mode === "hybrid") {
+            const sub = (hybrid.subdomain || "").trim();
+            const base = (hybrid.baseDomain || "").trim();
+            const token = (hybrid.cfTunnelToken || "").trim();
+            return sub.length > 0 && /^[a-z0-9-]+$/.test(sub)
+              && base.length > 2 && base.includes(".")
+              && token.length >= 100 && /^[A-Za-z0-9+/=_-]+$/.test(token);
+          }
+          return false;
+        }, [step, mode, local, hybrid]);
+
+        if (authLoading) {
+          return <div className="install-loading"><p>Loading…</p></div>;
+        }
+        if (!user) return null;
+
+        const stepLabel = step === 1 ? "Pick mode" : step === 2 ? "Configure" : "Install command";
+
+        return (
+          <div className="install-shell">
+            <nav className="install-nav">
+              <a href="/dashboard" className="brand">Livinity</a>
+              <div className="right">
+                <span className="uname">{user.username}</span>
+                <a href="/dashboard" className="h-btn ghost" style={{ borderRadius: 8 }}>Back to dashboard</a>
+                <button onClick={handleLogout} className="h-btn">Sign out</button>
+              </div>
+            </nav>
+
+            <header className="install-hero">
+              <span className="step-pill">Step {step} of 3 · {stepLabel}</span>
+              <h1>Set up <em>your first LivOS.</em></h1>
+              <p>Pick how you'll run LivOS, then we'll generate a one-line install command. Paste it on the machine you want to host your server.</p>
+            </header>
+
+            <Stepper step={step} />
+
+            <section className="panel">
+              {step === 1 && (
+                <>
+                  <h2>Choose your mode</h2>
+                  <p className="sub">Local for home use, Hybrid for public access via your domain. Own-Cloud and Cloud are coming soon.</p>
+                  <ModeCards value={mode} onChange={setMode} />
+                </>
+              )}
+              {step === 2 && (
+                <>
+                  <h2>{mode === "hybrid" ? "Configure Hybrid mode" : "Local configuration"}</h2>
+                  <p className="sub">{mode === "hybrid" ? "Your LivOS will be reachable on a subdomain you choose, via a Cloudflare Tunnel — no port forwarding, no public IP required." : "Your server will be reachable at <hostname>.local on your LAN."}</p>
+                  {mode === "hybrid" ? <HybridForm state={hybrid} set={setHybrid} /> : <LocalForm state={local} set={setLocal} />}
+                </>
+              )}
+              {step === 3 && (
+                <>
+                  <h2>Your install command</h2>
+                  <p className="sub">Copy and paste this on your server. Install will provision Docker, Caddy, PostgreSQL, Redis, and livinityd in one shot (~5-8 min).</p>
+                  <CommandStep mode={mode} hybrid={hybrid} local={local} gen={gen} />
+                </>
+              )}
+            </section>
+
+            <ModeDocs mode={mode} />
+
+            <div className="nav-row">
+              <button className="h-btn ghost" onClick={handleSkip}>Skip for now</button>
+              <div className="right">
+                {step > 1 && <button className="h-btn" onClick={handleBack}>Back</button>}
+                {step < 3 && (
+                  <button className="h-btn solid" onClick={() => setStep(Math.min(3, step + 1))} disabled={!canAdvance}>
+                    {step === 1 ? "Continue" : "Generate install command"}
+                  </button>
+                )}
+                {step === 3 && gen.status === "ready" && (
+                  <a href="/dashboard" className="h-btn solid">Done — go to dashboard</a>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
