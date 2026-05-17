@@ -12,7 +12,37 @@ const execAsync = promisify(exec)
 // Supports main domain + multiple subdomains for Docker apps.
 // Each subdomain proxies to a different 127.0.0.1 port.
 // Uses 127.0.0.1 instead of localhost to ensure IPv4 connections.
+//
+// Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f (D-102-SACRED) — untouched.
+//
+// Phase 140 plan 140-08: every reverse_proxy emission MUST wrap its target in
+// a `{ flush_interval -1; transport http { versions 1.1 } }` block so that
+// WebSocket upgrades (wss://.../trpc, etc.) survive transit through Cloudflare
+// Tunnel and Caddy's default buffered HTTP/2 transport. Live-discovered on
+// Lucy's Mini PC where bare `reverse_proxy 127.0.0.1:8080` 502'd wss traffic
+// under tunnel mode. The transport block is harmless in local-lan / TLS-internal
+// mode so it's applied uniformly.
 // ─────────────────────────────────────────────────────────────────
+
+/**
+ * WS-friendly reverse_proxy block contents. Indented with tabs so it composes
+ * cleanly into the tab-indented apex/subdomain blocks emitted below.
+ * Phase 140 plan 140-08 — see header comment.
+ */
+const WS_TRANSPORT_BODY = `\t\tflush_interval -1
+\t\ttransport http {
+\t\t\tversions 1.1
+\t\t}`
+
+/**
+ * Local-style four-space-indented variant used by generateLocalCaddyfile /
+ * generateHybridCaddyfile which adopted four-space indentation as their
+ * convention in Phase 104.
+ */
+const WS_TRANSPORT_BODY_LOCAL = `        flush_interval -1
+        transport http {
+            versions 1.1
+        }`
 
 const CADDYFILE_PATH = '/etc/caddy/Caddyfile'
 const DOMAIN_RE = /^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$/
@@ -57,7 +87,9 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 		// No domain configured — minimal :80 fallback. Multi-user / subdomain
 		// routing requires a domain.
 		blocks.push(`:80 {
-	reverse_proxy 127.0.0.1:8080
+	reverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY}
+	}
 }`)
 		return blocks.join('\n\n') + '\n'
 	}
@@ -69,9 +101,17 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 	// form is HTTPS-default and triggers that redirect on tunnel-mode traffic.
 	const prefix = tunnel ? 'http://' : ''
 
+	// Phase 140 plan 140-08 — apex block (LivOS dashboard) gets a no-store
+	// Cache-Control header in tunnel mode so CF's edge cache never serves stale
+	// HTML. Per-app blocks deliberately don't carry this header — app caching
+	// behavior is app-specific and should be left to the app itself.
+	const apexCacheHeader = tunnel ? `\theader Cache-Control "no-store, must-revalidate"\n` : ''
+
 	// Main domain block — always routes to livinityd
 	blocks.push(`${prefix}${config.mainDomain} {
-	reverse_proxy 127.0.0.1:8080
+${apexCacheHeader}	reverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY}
+	}
 }`)
 
 	// Generate subdomain blocks
@@ -82,11 +122,15 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 		const fullDomain = `${prefix}${sub.subdomain}.${config.mainDomain}`
 		if (multiUser) {
 			blocks.push(`${fullDomain} {
-	reverse_proxy 127.0.0.1:8080
+	reverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY}
+	}
 }`)
 		} else {
 			blocks.push(`${fullDomain} {
-	reverse_proxy 127.0.0.1:${sub.port}
+	reverse_proxy 127.0.0.1:${sub.port} {
+${WS_TRANSPORT_BODY}
+	}
 }`)
 		}
 	}
@@ -98,10 +142,13 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 		const fullDomain = `${prefix}${nApp.subdomain}.${config.mainDomain}`
 		const reverseProxyLine = nApp.streaming
 			? `reverse_proxy 127.0.0.1:${nApp.port} {
+${WS_TRANSPORT_BODY}
 		stream_close_delay 5m
 		stream_timeout 24h
 	}`
-			: `reverse_proxy 127.0.0.1:${nApp.port}`
+			: `reverse_proxy 127.0.0.1:${nApp.port} {
+${WS_TRANSPORT_BODY}
+	}`
 
 		blocks.push(`${fullDomain} {
 	@notauth {
@@ -181,7 +228,9 @@ export function generateLocalCaddyfile(
             ca liv-local
         }
     }
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY_LOCAL}
+    }
 }`)
 
 	// Bare-domain virtual host
@@ -191,7 +240,9 @@ export function generateLocalCaddyfile(
             ca liv-local
         }
     }
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY_LOCAL}
+    }
 }`)
 
 	// HTTP-only block for CA root download — listed by both name AND IP so
@@ -203,7 +254,9 @@ export function generateLocalCaddyfile(
         file_server
     }
     handle {
-        reverse_proxy 127.0.0.1:8080
+        reverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY_LOCAL}
+        }
     }
 }`)
 
@@ -216,7 +269,9 @@ export function generateLocalCaddyfile(
             ca liv-local
         }
     }
-    reverse_proxy 127.0.0.1:${sub.port}
+    reverse_proxy 127.0.0.1:${sub.port} {
+${WS_TRANSPORT_BODY_LOCAL}
+    }
 }`)
 		}
 	}
@@ -271,7 +326,9 @@ export function generateHybridCaddyfile(
     tls {
         dns cloudflare {env.CLOUDFLARE_API_TOKEN}
     }
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY_LOCAL}
+    }
 }`)
 
 	// Bare apex virtual host (same cert)
@@ -279,7 +336,9 @@ export function generateHybridCaddyfile(
     tls {
         dns cloudflare {env.CLOUDFLARE_API_TOKEN}
     }
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY_LOCAL}
+    }
 }`)
 
 	// Per-subdomain custom port routing (multi-user app gateway hint)
@@ -289,7 +348,9 @@ export function generateHybridCaddyfile(
     tls {
         dns cloudflare {env.CLOUDFLARE_API_TOKEN}
     }
-    reverse_proxy 127.0.0.1:${sub.port}
+    reverse_proxy 127.0.0.1:${sub.port} {
+${WS_TRANSPORT_BODY_LOCAL}
+    }
 }`)
 		}
 	}
@@ -305,7 +366,9 @@ export function generateCaddyfile(domain: string): string {
 		throw new Error('Invalid domain name')
 	}
 	return `${domain} {
-	reverse_proxy 127.0.0.1:8080
+	reverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY}
+	}
 }
 `
 }
@@ -315,7 +378,9 @@ export function generateCaddyfile(domain: string): string {
  */
 export function generateDefaultCaddyfile(): string {
 	return `:80 {
-	reverse_proxy 127.0.0.1:8080
+	reverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY}
+	}
 }
 `
 }
@@ -372,7 +437,9 @@ export async function removeDomain(): Promise<void> {
 /** Simple Caddy config for tunnel mode — tunnel handles HTTPS, Caddy just reverse proxies */
 export async function applyCaddyConfigForTunnel(): Promise<void> {
 	const caddyfile = `:80 {
-\treverse_proxy localhost:8080
+\treverse_proxy localhost:8080 {
+${WS_TRANSPORT_BODY}
+\t}
 }
 `
 	await fse.writeFile('/etc/caddy/Caddyfile', caddyfile)
@@ -382,7 +449,9 @@ export async function applyCaddyConfigForTunnel(): Promise<void> {
 /** Revert Caddy to default IP-only config */
 export async function revertCaddyToDefault(): Promise<void> {
 	const caddyfile = `:80 {
-\treverse_proxy localhost:8080
+\treverse_proxy localhost:8080 {
+${WS_TRANSPORT_BODY}
+\t}
 }
 `
 	await fse.writeFile('/etc/caddy/Caddyfile', caddyfile)
