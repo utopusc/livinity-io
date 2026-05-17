@@ -1,11 +1,20 @@
 # scripts/install/mode-tunnel.sh
 # Phase 104 plan 104-09 — Cloudflare Tunnel install mode.
 #
+# Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f
+#
+# Plan 140-07 (2026-05-17): added _fetch_cf_tunnel_token_from_api — when
+# LIVOS_CF_TUNNEL_TOKEN is unset BUT LIVOS_API_KEY is set, we curl
+# /api/me/tunnel-token to fetch the token at install time (CF for SaaS
+# multi-tenant auto-provisioning flow). Backward-compat: if the operator
+# already passed --cf-tunnel-token, this helper is a no-op.
+#
 # Provisions:
 #   - cloudflared (CF's official Debian package from pkg.cloudflare.com)
 #   - /etc/livos/secrets/cf-tunnel-token (0600) with the CF Tunnel token (NOT a
 #     CF API token — different thing; token comes from CF dashboard >
-#     Zero Trust > Networks > Tunnels > Configure > Install connector)
+#     Zero Trust > Networks > Tunnels > Configure > Install connector, OR
+#     auto-fetched from /api/me/tunnel-token when --api-key is supplied)
 #   - cloudflared systemd service registered + started via
 #     `cloudflared service install <token>`
 #   - Minimal Caddyfile on :80 plain HTTP (CF Tunnel terminates TLS at the edge)
@@ -70,6 +79,69 @@ EOF
         fail "cloudflared not on PATH after apt install — something is very wrong"
     fi
     ok "cloudflared installed: $(cloudflared --version 2>&1 | head -1)"
+}
+
+# Plan 140-07 — when LIVOS_CF_TUNNEL_TOKEN is unset BUT LIVOS_API_KEY is set,
+# fetch the token from /api/me/tunnel-token at install time. Runs AFTER
+# common-deps install (so curl is guaranteed available). Idempotent — re-runs
+# with the same --api-key fetch the same token from the server (the endpoint
+# returns the persisted DB row; token doesn't rotate).
+#
+# Failure modes:
+#   - both LIVOS_CF_TUNNEL_TOKEN and LIVOS_API_KEY unset → fail 64 (operator
+#     should have hit parse-cli's gate, but defense-in-depth)
+#   - HTTP 4xx/5xx from /api/me/tunnel-token → fail 1 with the api-key prefix
+#     in the message (don't leak the full key)
+#   - empty / short response → fail 1 (token format sanity)
+_fetch_cf_tunnel_token_from_api() {
+    # Already have a token (operator passed --cf-tunnel-token explicitly) → skip
+    if [[ -n "${LIVOS_CF_TUNNEL_TOKEN:-}" ]]; then
+        return 0
+    fi
+    # No --api-key either → can't fetch; parse-cli should have caught this
+    if [[ -z "${LIVOS_API_KEY:-}" ]]; then
+        fail "no --cf-tunnel-token and no --api-key — cannot proceed" 64
+    fi
+
+    step "Fetching Cloudflare Tunnel token from livinity.io API (Plan 140-07)"
+    info "endpoint: https://livinity.io/api/me/tunnel-token"
+    info "api-key prefix: $(echo "$LIVOS_API_KEY" | cut -c1-10)..."
+
+    # Capture body separately so we can grep it. We use `|| true` on the curl
+    # so a network error doesn't kill the trap-on-ERR before we print our own
+    # fail message. --fail makes curl exit non-zero on HTTP 4xx/5xx.
+    local api_body
+    api_body=$(curl -sS --fail \
+        -H "X-API-Key: ${LIVOS_API_KEY}" \
+        --max-time 10 \
+        --retry 3 --retry-delay 2 \
+        "https://livinity.io/api/me/tunnel-token" 2>&1) || {
+        fail "/api/me/tunnel-token request failed — check api-key validity + server status (curl: $api_body)" 1
+    }
+
+    # Extract token from JSON. Response shape from Plan 140-05: { "token": "..." }
+    # Using grep -oE + cut keeps us POSIX-portable (jq isn't installed until
+    # common-deps runs, and that already happened before this — but we avoid
+    # adding jq as a hard dep here for the broader install.sh use case).
+    local tok
+    tok=$(echo "$api_body" \
+        | grep -oE '"token":"[^"]+"' \
+        | head -1 \
+        | cut -d'"' -f4)
+
+    # Sanity check the extracted token. CF Tunnel tokens are JWE-style — long
+    # base64 blobs typically 200+ chars. < 100 chars is almost certainly an
+    # extraction failure or a mocked / placeholder response.
+    if [[ -z "$tok" ]] || [[ "${#tok}" -lt 100 ]]; then
+        fail "could not extract a valid tunnel-token from /api/me/tunnel-token — server returned ${#tok} chars (need 100+)" 1
+    fi
+
+    # Stash into the env-var the rest of mode-tunnel.sh expects. Downstream code
+    # (_write_cf_tunnel_token_secret + _register_cloudflared_service) is
+    # unchanged — it just reads LIVOS_CF_TUNNEL_TOKEN.
+    LIVOS_CF_TUNNEL_TOKEN="$tok"
+    export LIVOS_CF_TUNNEL_TOKEN
+    ok "fetched tunnel-token from server (${#LIVOS_CF_TUNNEL_TOKEN} chars)"
 }
 
 _write_cf_tunnel_token_secret() {
@@ -245,8 +317,12 @@ _write_api_key_secret_if_provided() {
 }
 
 # Public entry point (called by scripts/install.sh case dispatch).
+# Plan 140-07: _fetch_cf_tunnel_token_from_api runs FIRST (so the rest of the
+# pipeline sees LIVOS_CF_TUNNEL_TOKEN populated whether the operator passed it
+# directly or supplied --api-key for auto-fetch).
 install_mode_tunnel() {
     _install_cloudflared_for_tunnel
+    _fetch_cf_tunnel_token_from_api
     _write_cf_tunnel_token_secret
     _register_cloudflared_service
     _configure_caddy_for_tunnel

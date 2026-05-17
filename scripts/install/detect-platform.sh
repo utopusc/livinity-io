@@ -76,15 +76,13 @@ detect_cgnat() {
     # i.e. 100.64.x.x through 100.127.x.x
     if [[ "$pub_ip" =~ ^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\. ]]; then
         CGNAT_DETECTED=1
-        warn "Public IP ${pub_ip} is in the CGNAT range (100.64.0.0/10)."
-        warn "Hybrid mode requires inbound LAN-direct connectivity from your"
-        warn "clients. Behind CGNAT, clients OUTSIDE your LAN (e.g. iPhone on"
-        warn "cellular) WILL NOT REACH this host — the public DNS A-record"
-        warn "will resolve, but TCP SYN to ${pub_ip} dies at your ISP's CGNAT."
-        warn "Workarounds:"
-        warn "  - Use --mode local-lan if you only care about LAN clients"
-        warn "  - Wait for v34 Cloudflare Tunnel support (relays the data plane)"
-        warn "Continuing install — operator decides."
+        # Phase 140 — hybrid now uses Cloudflare Tunnel (outbound-only) so CGNAT
+        # is FINE. cloudflared dials OUT to CF's edge; no inbound reachability
+        # required from the operator's ISP. Demoting from warn→info (informational).
+        info "Public IP ${pub_ip} is in the CGNAT range (100.64.0.0/10)."
+        info "This is OK since you're behind a Cloudflare Tunnel (Phase 134+)."
+        info "cloudflared dials OUT to Cloudflare's edge — no inbound port-forward"
+        info "or public-IP-on-your-ISP required. Continuing install."
     else
         ok "CGNAT check: public IP ${pub_ip} is outside 100.64.0.0/10 (OK)"
     fi
