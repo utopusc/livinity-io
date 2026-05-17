@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
       success: true,
       apiKey: rawKey, // Displayed ONCE, never again
       prefix,
-      installCommand: `curl -sSL https://livinity.io/install.sh | sudo bash -s -- --api-key ${rawKey}`,
+      installCommand: `curl -sSL https://livinity.io/install.sh | sudo bash -s -- --subdomain ${user.username} --api-key ${rawKey}`,
     });
   }
 
