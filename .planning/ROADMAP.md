@@ -1450,7 +1450,7 @@ Plans:
 
 ### Phase 140: CF for SaaS Multi-Tenant Auto-Provisioning — 🔴 PLANNED 2026-05-17 (closes the Phase 134 manual-CF-wizard gap; end-user never opens Cloudflare)
 
-**Goal:** Every Livinity user gets a Cloudflare-managed subdomain + Tunnel automatically provisioned at signup. End-user touches only the dashboard + terminal — no CF dashboard, no domain ownership, no TLS/DNS/tunnel manual work. Backend uses CF API to create tunnel, fetch token, push ingress, write DNS records, all transparent to the user. URL pattern locked to flat `{app}__{user}.livinity.io` to stay within Universal SSL coverage (Free plan; CF for SaaS wildcards confirmed Enterprise-only via CF API error 1456 on 2026-05-17). Cost stays $0 forever regardless of user/app count.
+**Goal:** Every Livinity user gets a Cloudflare-managed subdomain + Tunnel automatically provisioned at signup. End-user touches only the dashboard + terminal — no CF dashboard, no domain ownership, no TLS/DNS/tunnel manual work. Backend uses CF API to create tunnel, fetch token, push ingress, write DNS records, all transparent to the user. URL pattern locked to flat `{app}-{user}.livinity.io` (single-hyphen separator) to stay within Universal SSL coverage (Free plan; CF for SaaS wildcards confirmed Enterprise-only via CF API error 1456 on 2026-05-17). Cost stays $0 forever regardless of user/app count.
 
 **Goal split:**
 - V34-PLATFORM-04: zero-Cloudflare-touch user onboarding (signup → tunnel + DNS auto-provisioned)
