@@ -26,6 +26,7 @@ import {initDatabase, migrateFromYaml, closeDatabase} from './modules/database/i
 import {seedLocalEnvironment} from './modules/docker/environments.js'
 import {seedBuiltinTools} from './modules/seed-builtin-tools.js'
 import {seedDefaultAliases} from './modules/livinity-broker/seed-default-aliases.js'
+import {drainInstallPendingRedisKeys} from './modules/drain-install-pending-redis.js'
 import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/api-keys/index.js'
 // Phase 104 plan 104-10 — LivOS → livinity.io heartbeat client. Wired AFTER
 // ai.start() so this.ai.redis is connected. Only armed when the operator
@@ -424,6 +425,27 @@ export default class Livinityd {
 			this.logger.log('Seeded broker model aliases to livinity:broker:alias:*')
 		} catch (err) {
 			this.logger.error('Failed to seed broker model aliases', err)
+		}
+
+		// Phase 141-01 — drain install-time queued Redis seeds.
+		// install.sh's `set_livos_redis_key` queues `KEY=VALUE` lines to
+		// `/var/lib/livos/install-pending-redis-keys.txt` when Redis is unreachable
+		// at install time (the common case — Redis starts after the seed step).
+		// Without this drainer the queued `livos:domain:local_mode` never reaches
+		// Redis, leaving rebuildCaddy + the Phase 112 fallback below misconfigured.
+		// MUST run BEFORE Phase 112 so the config-seed branch sees the right mode.
+		try {
+			const r = await drainInstallPendingRedisKeys(this.ai.redis, {
+				log: (msg) => this.logger.log(msg),
+				error: (msg, err) => this.logger.error(msg, err),
+			})
+			if (r.applied || r.errored) {
+				this.logger.log(
+					`Phase 141-01: drained install-pending Redis seeds (applied=${r.applied} skipped=${r.skipped} errored=${r.errored})`,
+				)
+			}
+		} catch (err) {
+			this.logger.error('Phase 141-01: drain-install-pending threw', err)
 		}
 
 		// Phase 112 — boot-time fallback for livos:domain:config.
