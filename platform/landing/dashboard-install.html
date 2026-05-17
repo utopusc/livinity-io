@@ -120,7 +120,22 @@
               setUser(meData.user);
               setAuthLoading(false);
 
-              // Auto-mint API key on mount — username comes from session, no input.
+              // Phase 140-06.4: check whether user already has an API key BEFORE
+              // auto-minting. Without this check, every page reload deletes the
+              // existing key + mints a new one — which silently invalidates the
+              // install command the user already pasted onto their Mini PC.
+              const dashRes = await fetch("/api/dashboard", { credentials: "same-origin" });
+              const dashData = await dashRes.json().catch(() => ({}));
+              if (dashData && dashData.apiKey && dashData.apiKey.hasKey) {
+                setGen({
+                  status: "exists",
+                  keyPrefix: dashData.apiKey.prefix,
+                  username: meData.user.username,
+                });
+                return;
+              }
+
+              // No key yet — auto-mint on this first visit.
               setGen({ status: "minting" });
               const res = await fetch("/api/dashboard", {
                 method: "POST", credentials: "same-origin",
@@ -213,6 +228,23 @@
                 </div>
               )}
 
+              {gen.status === "exists" && (
+                <div>
+                  <h2>Install command already minted</h2>
+                  <p className="sub">You generated an API key on a previous visit (prefix <code style={{ fontFamily: "var(--font-mono)" }}>{gen.keyPrefix}…</code>). For security, the full key is only shown once — we can't display it again.</p>
+
+                  <div className="warn-card">
+                    ⚠ If you still have the install command saved, just paste it on your server — it stays valid. If you lost it, click <strong>Regenerate</strong> to mint a fresh command (the old key will be invalidated, so any machine using it will disconnect).
+                  </div>
+
+                  <div className="url-preview" style={{ marginBottom: 14 }}>
+                    Your URL: <code>{"https://" + (gen.username || user.username) + ".livinity.io"}</code>
+                  </div>
+
+                  <button className="h-btn solid" onClick={handleRegenerate}>Regenerate install command</button>
+                </div>
+              )}
+
               {gen.status === "ready" && gen.installCommand && (
                 <div>
                   <h2>Run install command</h2>
@@ -247,7 +279,7 @@
                 {gen.status === "ready" && (
                   <button className="h-btn" onClick={handleRegenerate}>Regenerate key</button>
                 )}
-                {gen.status === "ready" && (
+                {(gen.status === "ready" || gen.status === "exists") && (
                   <a href="/dashboard" className="h-btn solid">Done — go to dashboard</a>
                 )}
               </div>
