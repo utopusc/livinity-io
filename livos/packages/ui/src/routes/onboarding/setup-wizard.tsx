@@ -131,68 +131,56 @@ function StepWelcome({onNext}: {onNext: () => void}) {
 		buttonRef.current?.focus()
 	}, [])
 
+	// Phase 135-02: Livinity DS aesthetic. GlowEffect + TextEffect blur +
+	// 3× spring animations replaced with a single subtle fade. System fonts,
+	// monochrome accent (currentColor logo on white), DS .liv-btn primary.
 	return (
-		<div className='flex flex-col items-center gap-6'>
-			{/* Logo with glow */}
-			<div className='relative'>
-				<GlowEffect
-					colors={['#06B6D4', '#0891B2', '#22D3EE', '#0E7490']}
-					mode='breathe'
-					blur='strong'
-					scale={1.4}
-					duration={4}
-				/>
-				<motion.div
-					initial={{scale: 0.8, opacity: 0}}
-					animate={{scale: 1, opacity: 1}}
-					transition={{type: 'spring', stiffness: 200, damping: 20, delay: 0.1}}
-					className='relative'
-				>
-					<LivinityLogo className='w-[96px] md:w-[120px]' />
-				</motion.div>
-			</div>
+		<motion.div
+			initial={{opacity: 0, y: 8}}
+			animate={{opacity: 1, y: 0}}
+			transition={{duration: 0.4, ease: 'easeOut'}}
+			style={{
+				display: 'flex',
+				flexDirection: 'column',
+				alignItems: 'center',
+				gap: 32,
+				textAlign: 'center',
+				color: 'var(--liv-fg)',
+			}}
+		>
+			<LivinityLogo width={64} style={{color: 'var(--liv-fg)'}} />
 
-			{/* Animated title */}
-			<div className='flex flex-col items-center gap-2'>
-				<TextEffect
-					preset='fade-in-blur'
-					per='word'
-					className='text-center text-display-sm font-bold leading-tight -tracking-2 text-text-primary md:text-56'
-					delay={0.3}
+			<div style={{display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 440}}>
+				<h1
+					style={{
+						fontSize: 40,
+						fontWeight: 600,
+						letterSpacing: '-0.025em',
+						lineHeight: 1.1,
+						margin: 0,
+					}}
 				>
 					Welcome to Livinity
-				</TextEffect>
-				<motion.p
-					initial={{opacity: 0, y: 10}}
-					animate={{opacity: 1, y: 0}}
-					transition={{delay: 0.8, duration: 0.5}}
-					className='text-center text-body font-medium text-text-secondary md:text-body-lg'
+				</h1>
+				<p
+					style={{
+						fontSize: 17,
+						color: 'var(--liv-fg-mute)',
+						margin: 0,
+						lineHeight: 1.5,
+					}}
 				>
 					{t('onboarding.start.subtitle', {defaultValue: 'Your personal AI-powered home server'})}
-				</motion.p>
+				</p>
 			</div>
 
-			{/* Language selector */}
-			<motion.div
-				initial={{opacity: 0}}
-				animate={{opacity: 1}}
-				transition={{delay: 1.0, duration: 0.4}}
-			>
-				<LanguageDropdown />
-			</motion.div>
+			<LanguageDropdown />
 
-			{/* Get Started button */}
-			<motion.div
-				initial={{opacity: 0, y: 10}}
-				animate={{opacity: 1, y: 0}}
-				transition={{delay: 1.2, duration: 0.4}}
-			>
-				<button ref={buttonRef} onClick={onNext} className={primaryButtonClass}>
-					{t('onboarding.start.continue', {defaultValue: 'Get Started'})}
-					<IconArrowRight size={16} />
-				</button>
-			</motion.div>
-		</div>
+			<button ref={buttonRef} onClick={onNext} className='liv-btn'>
+				{t('onboarding.start.continue', {defaultValue: 'Get Started'})}
+				<IconArrowRight size={16} />
+			</button>
+		</motion.div>
 	)
 }
 
