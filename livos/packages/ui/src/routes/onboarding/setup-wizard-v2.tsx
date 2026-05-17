@@ -4,6 +4,7 @@ import {DEFAULT_DATA, TOTAL, etaSeconds, type OnboardingData} from '@/features/o
 import {HelpBubble, ParallaxOrbs, SoundProvider, useSound} from '@/features/onboarding-flow/effects'
 import {ResumeBanner} from '@/features/onboarding-flow/resume-banner'
 import {Step} from '@/features/onboarding-flow/step'
+import {AccountStep} from '@/features/onboarding-flow/steps/account-step'
 import {WelcomeStep} from '@/features/onboarding-flow/steps/welcome-step'
 import {TopBar} from '@/features/onboarding-flow/top-bar'
 import {useStepper} from '@/features/onboarding-flow/use-stepper'
@@ -144,7 +145,7 @@ function WizardInner() {
 							/>
 						</Step>
 						<Step stepIndex={1} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
-							<PlaceholderStep title='Account' />
+							<AccountStep data={data} setData={setData} onContinue={stepper.next} onBack={stepper.back} />
 						</Step>
 						<Step stepIndex={2} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<PlaceholderStep title='Wallpaper' />
