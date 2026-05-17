@@ -3,10 +3,18 @@
 # LivOS one-shot installer. Dispatches to mode-cloud.sh, mode-local-lan.sh, or
 # mode-hybrid.sh based on --mode flag.
 #
+# Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f
+#
 # Source: 104-RESEARCH.md §Pattern 5 (Sentry-style sourced helpers).
 # D-104-INSTALL-ENTRY: single entry point. D-104-DEFAULT-MODE: default = hybrid.
 # D-104-NO-PROD-IMPACT: this is a NEW file; the existing livos/install.sh stays
 # unchanged so update.sh on the Mini PC keeps working byte-for-byte.
+#
+# Plan 140-07 (2026-05-17): adds `--subdomain X` as the primary user-facing
+# flag (derives --domain X.livinity.io). When --api-key is set but
+# --cf-tunnel-token is not, mode-tunnel.sh fetches the token at runtime from
+# /api/me/tunnel-token. parse-cli + mode-tunnel handle the new args; install.sh
+# itself just passes args through unchanged (no dispatcher change needed).
 
 set -euo pipefail
 

@@ -156,11 +156,18 @@ else
 fi
 
 # ── TEST 6: D-104-RELAY-ZERO-DATA-PLANE — no Server5 refs in mode-tunnel.sh ──
+# Plan 140-07 (Phase 140 CF-for-SaaS) intentionally relaxed this invariant for
+# ONE specific endpoint: /api/me/tunnel-token (control-plane fetch of the
+# operator's per-tenant CF Tunnel token). This is NOT a data-plane / relay
+# reference — it's a one-time install-time control-plane call. We grep for
+# remaining forbidden refs after filtering out the whitelisted endpoint.
 info "TEST 6: mode-tunnel.sh has zero Server5 / livinity.io relay references"
 bad_refs=$(grep -nE 'livinity\.io|45\.137\.194\.10[23]|nexus\.livinity|relay\.livinity' \
-    "$MODE_TUNNEL_SH" 2>/dev/null || true)
+    "$MODE_TUNNEL_SH" 2>/dev/null \
+    | grep -vE '/api/me/tunnel-token|Plan 140-07|livinity\.io API' \
+    || true)
 if [[ -z "$bad_refs" ]]; then
-    pass "mode-tunnel.sh contains no Server5 / livinity.io references"
+    pass "mode-tunnel.sh contains no Server5 / livinity.io references (Plan 140-07 control-plane endpoint exempted)"
 else
     fail "mode-tunnel.sh references forbidden Server5 / livinity.io strings:"
     echo "$bad_refs" | sed 's/^/    /'
