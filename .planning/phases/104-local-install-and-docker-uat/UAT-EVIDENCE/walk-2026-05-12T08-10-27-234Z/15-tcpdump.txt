@@ -1,3 +1,0 @@
-WARN: Command failed: docker exec livos-uat bash -c 'grep -q bruce.ab12cd34.home.livinity.io /etc/hosts || echo "127.0.0.1 bruce.ab12cd34.home.livinity.io alice.ab12cd34.home.livinity.io" >> /etc/hosts'
--q: -c: line 1: unexpected EOF while looking for matching `''
-Sistem belirtilen yolu bulamiyor.

@@ -1,4 +1,0 @@
-WARN (Caddy not bound on :443 — local-lan mode may not be fully active):
-Caddy did not respond on :443 (httpCode=0, errMsg=''docker'' is not recognized as an internal or external command,
-operable program or batch file.
-)

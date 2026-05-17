@@ -1,2 +1,0 @@
-query=bruce.livinity.local
-result=172.18.0.2

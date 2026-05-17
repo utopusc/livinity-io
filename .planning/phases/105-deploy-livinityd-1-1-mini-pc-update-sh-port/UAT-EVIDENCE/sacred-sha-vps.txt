@@ -1,7 +1,0 @@
-# GO-4: Sacred SHA on VPS
-# Date: 2026-05-12T20:37:33Z
-
-VPS sacred SHA:    f3538e1d811992b782a9bb057d1b7f0a0189f95f
-Expected SHA:      f3538e1d811992b782a9bb057d1b7f0a0189f95f
-
-RESULT: PASS — sacred SHA preserved through 10 commits (290885bc..733ba90f)

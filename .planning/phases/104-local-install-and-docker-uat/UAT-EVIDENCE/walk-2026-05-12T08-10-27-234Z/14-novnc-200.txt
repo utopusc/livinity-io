@@ -1,9 +1,0 @@
-status=200
-first 200 chars: <!DOCTYPE html>
-<html lang="en" class="noVNC_loading">
-<head>
-
-    <!--
-    noVNC example: simple example using default UI
-    Copyright (C) 2019 The noVNC Authors
-    noVNC is licensed under the MPL 

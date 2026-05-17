@@ -1,2 +1,0 @@
-WARN (wildcard SNI routing not fully exercised — surface unit-tested in plan 104-03):
-bruce.livinity.local did not respond (httpCode=0)

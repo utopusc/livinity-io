@@ -1,2 +1,0 @@
-compose_file=C:\Users\hello\Desktop\Projects\contabo\livinity-io\docker\local-uat\docker-compose.yml
-status=recovered in ~10s

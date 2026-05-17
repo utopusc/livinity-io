@@ -1,9 +1,0 @@
-# GO-1: systemd service states
-# Date: 2026-05-12T20:37:23Z
-# Result: PARTIAL — 4/5 services stable; livos flapping (~12-15s cycle) due to Bug #6-#10
-
-livos: active (restarts=5, since=Tue 2026-05-12 22:37:21 CEST)
-liv-core: active (restarts=0, since=Tue 2026-05-12 22:24:20 CEST)
-liv-worker: active (restarts=0, since=Tue 2026-05-12 22:24:19 CEST)
-liv-memory: active (restarts=0, since=Tue 2026-05-12 22:24:18 CEST)
-caddy: active (restarts=0, since=Tue 2026-05-12 22:25:29 CEST)

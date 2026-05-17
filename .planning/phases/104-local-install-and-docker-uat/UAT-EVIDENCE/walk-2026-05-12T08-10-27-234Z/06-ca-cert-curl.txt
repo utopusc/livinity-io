@@ -1,2 +1,0 @@
-WARN (livinityd or Caddyfile not wired yet — surface is unit-tested in plan 104-03):
-curl: (7) Failed to connect to localhost port 80 after 0 ms: Couldn't connect to server
