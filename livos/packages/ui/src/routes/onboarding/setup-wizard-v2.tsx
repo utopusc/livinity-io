@@ -4,6 +4,7 @@ import {DEFAULT_DATA, TOTAL, etaSeconds, type OnboardingData} from '@/features/o
 import {HelpBubble, ParallaxOrbs, SoundProvider, useSound} from '@/features/onboarding-flow/effects'
 import {ResumeBanner} from '@/features/onboarding-flow/resume-banner'
 import {Step} from '@/features/onboarding-flow/step'
+import {WelcomeStep} from '@/features/onboarding-flow/steps/welcome-step'
 import {TopBar} from '@/features/onboarding-flow/top-bar'
 import {useStepper} from '@/features/onboarding-flow/use-stepper'
 
@@ -114,10 +115,6 @@ function WizardInner() {
 
 	const eta = etaSeconds(stepper.idx)
 
-	// Suppress unused-warning until 135-E..J populate the steps with `data` + `setData` consumers.
-	void data
-	void setData
-
 	return (
 		<>
 			<div className='onb-ambient' aria-hidden='true'>
@@ -140,7 +137,11 @@ function WizardInner() {
 				<div className='onb-stage-body'>
 					<div className='onb-card'>
 						<Step stepIndex={0} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
-							<PlaceholderStep title='Welcome' />
+							<WelcomeStep
+								onStart={stepper.next}
+								lang={data.lang}
+								setLang={(l) => setData({...data, lang: l})}
+							/>
 						</Step>
 						<Step stepIndex={1} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<PlaceholderStep title='Account' />
