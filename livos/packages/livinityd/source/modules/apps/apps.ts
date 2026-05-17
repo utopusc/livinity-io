@@ -19,6 +19,7 @@ import {NativeApp, NATIVE_APP_CONFIGS} from './native-app.js'
 import {generateAppTemplate} from './compose-generator.js'
 import {injectAiProviderConfig} from './inject-ai-provider.js'
 import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
+import {getTunnelStatus} from '../domain/tunnel.js'
 import {
 	allocatePort,
 	createUserAppInstance,
@@ -867,7 +868,11 @@ export default class Apps {
 			}
 		})
 
-		const content = generateFullCaddyfile(caddyConfig, isMultiUser, false, nativeAppSubdomains)
+		// Phase 134+ — detect CF Tunnel mode so every Caddyfile block emits the
+		// `http://` prefix and dodges the auto-HTTPS-redirect loop with cloudflared.
+		const tunnelStatus = await getTunnelStatus().catch(() => null)
+		const isTunnel = Boolean(tunnelStatus?.running)
+		const content = generateFullCaddyfile(caddyConfig, isMultiUser, isTunnel, nativeAppSubdomains)
 		await writeCaddyfile(content)
 		await reloadCaddy()
 	}

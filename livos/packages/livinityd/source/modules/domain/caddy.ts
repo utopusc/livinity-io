@@ -53,18 +53,24 @@ export function validateSubdomain(subdomain: string): boolean {
 export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tunnel = false, nativeApps: Array<{subdomain: string; port: number; streaming?: boolean}> = []): string {
 	const blocks: string[] = []
 
-	if (!config.mainDomain || tunnel) {
-		// No domain configured OR tunnel mode — Caddy just reverse proxies on :80
-		// When using Cloudflare Tunnel, HTTPS is terminated at the Cloudflare edge.
-		// Caddy must NOT use domain blocks (they trigger automatic HTTPS + redirects).
+	if (!config.mainDomain) {
+		// No domain configured — minimal :80 fallback. Multi-user / subdomain
+		// routing requires a domain.
 		blocks.push(`:80 {
 	reverse_proxy 127.0.0.1:8080
 }`)
 		return blocks.join('\n\n') + '\n'
 	}
 
+	// Phase 134+ — when Cloudflare Tunnel terminates TLS at the edge and forwards
+	// plain HTTP to localhost:80, every Caddy block MUST use the `http://` prefix
+	// so Caddy does NOT trigger auto-HTTPS-redirect (which loops with CF Tunnel:
+	// edge → localhost:80 → 308 → edge → 308 → ...). The bare `host { ... }`
+	// form is HTTPS-default and triggers that redirect on tunnel-mode traffic.
+	const prefix = tunnel ? 'http://' : ''
+
 	// Main domain block — always routes to livinityd
-	blocks.push(`${config.mainDomain} {
+	blocks.push(`${prefix}${config.mainDomain} {
 	reverse_proxy 127.0.0.1:8080
 }`)
 
@@ -73,7 +79,7 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 		if (!sub.enabled) continue
 		if (!validateSubdomain(sub.subdomain)) continue
 
-		const fullDomain = `${sub.subdomain}.${config.mainDomain}`
+		const fullDomain = `${prefix}${sub.subdomain}.${config.mainDomain}`
 		if (multiUser) {
 			blocks.push(`${fullDomain} {
 	reverse_proxy 127.0.0.1:8080
@@ -85,12 +91,11 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 		}
 	}
 
-	// Native app subdomains — JWT-gated via cookie check
-	// Redirects to login page if no LIVINITY_SESSION cookie is present
-	// Streaming apps get stream_close_delay (survive Caddy reloads) and stream_timeout (max session length)
+	// Native app subdomains — JWT-gated via cookie check.
+	// Redirects to login page if no LIVINITY_SESSION cookie is present.
+	// Streaming apps get stream_close_delay (survive Caddy reloads) and stream_timeout (max session length).
 	for (const nApp of nativeApps) {
-		if (!config.mainDomain) continue
-		const fullDomain = `${nApp.subdomain}.${config.mainDomain}`
+		const fullDomain = `${prefix}${nApp.subdomain}.${config.mainDomain}`
 		const reverseProxyLine = nApp.streaming
 			? `reverse_proxy 127.0.0.1:${nApp.port} {
 		stream_close_delay 5m
