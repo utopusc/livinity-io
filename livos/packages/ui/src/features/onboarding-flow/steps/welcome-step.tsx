@@ -1,15 +1,14 @@
+import {trpcReact} from '@/trpc/trpc'
+
 import {Icon} from '../icon'
 
-const SYS_INFO = {
-	model: 'Livinity One',
-	cpu: 'Apple M2 · 8 cores',
-	ram: '16 GB',
-	storage: '4 TB SSD',
-	network: 'Wi-Fi · gigabit',
-	region: 'Istanbul · UTC+3',
+const FALLBACK_INFO = {
+	cpu: '—',
+	ram: '—',
+	storage: '—',
+	network: '—',
+	region: '—',
 }
-// TODO 135-E: replace SYS_INFO constants with a tRPC system.info query once
-// livinityd exposes hardware detection. For now hard-coded matches reference.
 
 type Props = {
 	onStart: () => void
@@ -18,6 +17,12 @@ type Props = {
 }
 
 export function WelcomeStep({onStart, lang, setLang}: Props) {
+	// Phase 137-02 — live hardware detection via the livinityd system.info query.
+	// publicProcedure on the backend, so it works pre-login. Falls back to "—" cells
+	// while loading or on error so the card never shows raw undefined values.
+	const sysInfoQ = trpcReact.system.info.useQuery()
+	const sys = sysInfoQ.data ?? FALLBACK_INFO
+
 	return (
 		<div
 			className='welcome'
@@ -50,19 +55,19 @@ export function WelcomeStep({onStart, lang, setLang}: Props) {
 			<div className='sysinfo-card fade-up d2'>
 				<div className='sysinfo-grid'>
 					<div className='sysinfo-row'>
-						<Icon name='cpu' size={13} /> <span>{SYS_INFO.cpu}</span>
+						<Icon name='cpu' size={13} /> <span>{sys.cpu}</span>
 					</div>
 					<div className='sysinfo-row'>
 						<Icon name='disk' size={13} />{' '}
 						<span>
-							{SYS_INFO.ram} · {SYS_INFO.storage}
+							{sys.ram} · {sys.storage}
 						</span>
 					</div>
 					<div className='sysinfo-row'>
-						<Icon name='wifi' size={13} /> <span>{SYS_INFO.network}</span>
+						<Icon name='wifi' size={13} /> <span>{sys.network}</span>
 					</div>
 					<div className='sysinfo-row'>
-						<Icon name='globe' size={13} /> <span>{SYS_INFO.region}</span>
+						<Icon name='globe' size={13} /> <span>{sys.region}</span>
 					</div>
 				</div>
 			</div>
