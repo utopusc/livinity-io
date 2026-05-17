@@ -179,7 +179,12 @@ function WizardInner() {
 			<ParallaxOrbs />
 			<HelpBubble />
 
-			<div className='onb-stage'>
+			<div
+				className='onb-stage'
+				role='application'
+				aria-label='Livinity onboarding'
+				aria-roledescription='Multi-step setup wizard'
+			>
 				<TopBar stepper={stepper} labelChanging={labelChanging} eta={eta} />
 
 				{resumeOffered && pendingResume && (
