@@ -211,18 +211,18 @@ else
     fail "LIVOS_CF_TUNNEL_TOKEN env not equivalent to --cf-tunnel-token flag"
 fi
 
-# ── TEST 10 (bonus): backward compat — Plan 104-08 tests still pass ──────────
-# Sanity: 104-09 must not break 104-08's tests. We don't re-run them here (the
-# CI suite invokes both files separately) — but we DO statically verify the
-# hybrid-mode validation chain is untouched (no `--mode hybrid --domain X`
-# accidental regression).
-info "TEST 10: backward compat — hybrid mode --domain validation preserved"
+# ── TEST 10: Phase 134 — hybrid mode now uses CF Tunnel transport ───────────
+# Phase 134 superseded Plan 104-08's `--cf-token`/`--cf-zone-id` gating; hybrid
+# now requires `--cf-tunnel-token` (same shape as tunnel mode). See
+# test-mode-hybrid-args.sh for the full Phase 134 contract; this is the cross-
+# fixture sanity that hybrid + tunnel modes converge on the same gating.
+info "TEST 10: Phase 134 — hybrid --domain without --cf-tunnel-token is gated"
 err_out=$(bash "$INSTALL_SH" --mode hybrid --domain foo.example.com 2>&1)
 err_rc=$?
-if [[ $err_rc -ne 0 ]] && echo "$err_out" | grep -qE "requires.*--cf-token"; then
-    pass "hybrid --domain without --cf-token still gated (104-08 invariant preserved)"
+if [[ $err_rc -ne 0 ]] && echo "$err_out" | grep -qE "requires.*--cf-tunnel-token"; then
+    pass "hybrid --domain without --cf-tunnel-token gated (Phase 134 invariant)"
 else
-    fail "104-08 regression: hybrid --domain validation broken"
+    fail "Phase 134 regression: hybrid --domain validation broken"
 fi
 
 # ── Summary ─────────────────────────────────────────────────────────────────
