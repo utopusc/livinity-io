@@ -82,9 +82,13 @@ export function AccountStep({data, setData, onContinue, onBack}: Props) {
 		onSuccess: (jwt) => {
 			localStorage.setItem(JWT_LOCAL_STORAGE_KEY, jwt)
 			wsClient.close()
-			// Now logged in — kick off the TOTP URI fetch + flip the view.
-			generateTotpUri()
 			setSubState('enrolling-2fa')
+			// Defer the TOTP URI fetch until the WS has had a moment to reconnect
+			// with the new JWT. Even though user.generateTotpUri is in
+			// httpOnlyPaths (livinityd common.ts), the tRPC client's split-link
+			// can briefly race during reconnect. The small delay + the HTTP
+			// transport together make this reliable.
+			setTimeout(() => generateTotpUri(), 250)
 		},
 		onError: (e) => setRegisterError(e.message),
 	})
