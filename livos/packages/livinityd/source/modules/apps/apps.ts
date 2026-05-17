@@ -34,7 +34,15 @@ import {
 const REDIS_DOMAIN_KEY = 'livos:domain:config'
 const REDIS_SUBDOMAINS_KEY = 'livos:domain:subdomains'
 const REDIS_PLATFORM_API_KEY = 'livos:platform:api_key'
-const REDIS_PLATFORM_URL = 'livos:platform:url'
+// Phase 140-08.1 (2026-05-17): `livos:platform:url` is overwritten by
+// platform/tunnel-client.ts:463 with the INSTANCE'S assigned URL (e.g.
+// https://socinity.livinity.io). Phase 140-08 reads the same key expecting
+// the SERVER5 PLATFORM URL (https://livinity.io) for app-subdomain
+// provisioning. Until tunnel-client is refactored to use a different key,
+// hardcode the platform URL so app installs reach the right endpoint.
+// Env override (LIVINITY_PLATFORM_URL) is honored for staging / mainserver
+// testing where the platform lives at a different host.
+const LIVINITY_PLATFORM_URL = process.env.LIVINITY_PLATFORM_URL || 'https://livinity.io'
 
 export default class Apps {
 	#livinityd: Livinityd
@@ -863,16 +871,13 @@ export default class Apps {
 		port: number,
 	): Promise<{subdomain: string; url: string} | null> {
 		try {
-			const [apiKey, platformUrl] = await Promise.all([
-				this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY),
-				this.#livinityd.ai.redis.get(REDIS_PLATFORM_URL),
-			])
-			if (!apiKey || !platformUrl) {
-				this.logger.log(`Skipping CF subdomain provisioning for ${appId}: no platform credentials`)
+			const apiKey = await this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY)
+			if (!apiKey) {
+				this.logger.log(`Skipping CF subdomain provisioning for ${appId}: no api-key`)
 				return null
 			}
 
-			const response = await fetch(`${platformUrl.replace(/\/$/, '')}/api/me/app-subdomain`, {
+			const response = await fetch(`${LIVINITY_PLATFORM_URL.replace(/\/$/, '')}/api/me/app-subdomain`, {
 				method: 'POST',
 				headers: {'Content-Type': 'application/json', 'X-Api-Key': apiKey},
 				body: JSON.stringify({app_slug: appId, port}),
@@ -902,17 +907,14 @@ export default class Apps {
 	 */
 	private async deprovisionAppSubdomain(appId: string): Promise<void> {
 		try {
-			const [apiKey, platformUrl] = await Promise.all([
-				this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY),
-				this.#livinityd.ai.redis.get(REDIS_PLATFORM_URL),
-			])
-			if (!apiKey || !platformUrl) {
-				this.logger.log(`Skipping CF subdomain deprovisioning for ${appId}: no platform credentials`)
+			const apiKey = await this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY)
+			if (!apiKey) {
+				this.logger.log(`Skipping CF subdomain deprovisioning for ${appId}: no api-key`)
 				return
 			}
 
 			const response = await fetch(
-				`${platformUrl.replace(/\/$/, '')}/api/me/app-subdomain/${encodeURIComponent(appId)}`,
+				`${LIVINITY_PLATFORM_URL.replace(/\/$/, '')}/api/me/app-subdomain/${encodeURIComponent(appId)}`,
 				{
 					method: 'DELETE',
 					headers: {'X-Api-Key': apiKey},
