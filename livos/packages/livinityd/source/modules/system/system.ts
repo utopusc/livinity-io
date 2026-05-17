@@ -267,6 +267,89 @@ export async function getCpuUsage(livinityd: Livinityd): Promise<{
 // us to communicate shutdown progress with the user for as long as possible before
 // livinityd gets killed.
 
+/**
+ * Phase 137-01 — onboarding spec card.
+ *
+ * Returns short, human-readable strings for the WelcomeStep system card.
+ * Falls back to "—" cells if a probe fails so the UI never shows raw nulls.
+ * Cached in-memory for 60s — the spec doesn't change at runtime.
+ */
+let onboardingSystemInfoCache: {at: number; payload: OnboardingSystemInfo} | null = null
+const ONBOARDING_SYSINFO_TTL_MS = 60_000
+
+export type OnboardingSystemInfo = {
+	cpu: string
+	ram: string
+	storage: string
+	network: string
+	region: string
+}
+
+export async function getOnboardingSystemInfo(livinityd: Livinityd): Promise<OnboardingSystemInfo> {
+	const now = Date.now()
+	if (onboardingSystemInfoCache && now - onboardingSystemInfoCache.at < ONBOARDING_SYSINFO_TTL_MS) {
+		return onboardingSystemInfoCache.payload
+	}
+
+	const out: OnboardingSystemInfo = {cpu: '—', ram: '—', storage: '—', network: '—', region: '—'}
+
+	// CPU
+	try {
+		const cpus = os.cpus()
+		if (cpus.length > 0) {
+			const model = cpus[0]!.model.replace(/\s+\(R\)|\s+\(TM\)|CPU/g, '').trim()
+			const shortModel = model.length > 28 ? model.slice(0, 25) + '…' : model
+			out.cpu = `${shortModel} · ${cpus.length} cores`
+		}
+	} catch {}
+
+	// RAM
+	try {
+		const totalGb = Math.round(os.totalmem() / 1024 ** 3)
+		out.ram = `${totalGb} GB`
+	} catch {}
+
+	// Storage
+	try {
+		const {size} = await getSystemDiskUsage(livinityd)
+		const totalGb = Math.round(size / 1024 ** 3)
+		out.storage = totalGb >= 1024 ? `${(totalGb / 1024).toFixed(1)} TB SSD` : `${totalGb} GB SSD`
+	} catch {}
+
+	// Network — Wi-Fi vs gigabit best-effort detection
+	try {
+		const ifaces = await systemInformation.networkInterfaces()
+		const list = Array.isArray(ifaces) ? ifaces : [ifaces]
+		const def = list.find((i) => i.default && !i.internal)
+		if (def) {
+			const isWifi = def.ifaceName?.startsWith('wl') || def.type === 'wireless'
+			const speedMbps = def.speed && def.speed > 0 ? def.speed : null
+			const speedTag = speedMbps && speedMbps >= 1000 ? 'gigabit' : speedMbps ? `${speedMbps} Mbps` : 'connected'
+			out.network = `${isWifi ? 'Wi-Fi' : 'Ethernet'} · ${speedTag}`
+		}
+	} catch {}
+
+	// Region — timezone + offset
+	try {
+		let tz = 'UTC'
+		try {
+			tz = (await fse.readFile('/etc/timezone', 'utf-8')).trim()
+		} catch {
+			tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+		}
+		const city = tz.split('/').pop()?.replace(/_/g, ' ') ?? tz
+		const offsetMin = -new Date().getTimezoneOffset()
+		const sign = offsetMin >= 0 ? '+' : '-'
+		const offsetH = Math.floor(Math.abs(offsetMin) / 60)
+		const offsetM = Math.abs(offsetMin) % 60
+		const offset = offsetM === 0 ? `UTC${sign}${offsetH}` : `UTC${sign}${offsetH}:${String(offsetM).padStart(2, '0')}`
+		out.region = `${city} · ${offset}`
+	} catch {}
+
+	onboardingSystemInfoCache = {at: now, payload: out}
+	return out
+}
+
 export async function shutdown(): Promise<boolean> {
 	await $`poweroff`
 

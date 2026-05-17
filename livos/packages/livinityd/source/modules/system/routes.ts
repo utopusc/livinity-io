@@ -21,6 +21,7 @@ import {
 	detectDevice,
 	getSystemMemoryUsage,
 	getIpAddresses,
+	getOnboardingSystemInfo,
 	syncDns,
 } from './system.js'
 
@@ -36,6 +37,9 @@ export function setSystemStatus(status: SystemStatus) {
 
 export default router({
 	online: publicProcedure.query(() => true),
+	// Phase 137-01 — onboarding WelcomeStep spec card source.
+	// publicProcedure because it's pre-login (welcome step is step 0).
+	info: publicProcedure.query(async ({ctx}) => getOnboardingSystemInfo(ctx.livinityd)),
 	version: publicProcedure.query(async ({ctx}) => {
 		// Phase 30 hot-patch round 8: derive the current version label from the
 		// locally-deployed SHA via the same git-tag-aware resolver that
