@@ -3,8 +3,29 @@ import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 import pool from '@/lib/db';
 import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth';
+import { cfClient } from '@/lib/cf-saas';
 
 const RELAY_URL = process.env.RELAY_INTERNAL_URL || 'http://localhost:4000';
+
+// Phase 141-07: 30-second in-memory cache of CF tunnel connection counts.
+// Per-user (tunnel_id) keyed. Dashboard polls frequently in the browser; we
+// don't want to hammer the CF API on every poll. 30s is enough for the
+// "asleep ↔ online" transition to feel fresh without breaking the per-token
+// rate limit (1200/5min ≈ 240/min) when hundreds of users dashboard at once.
+type CachedStatus = { count: number; checkedAt: number };
+const CF_STATUS_CACHE = new Map<string, CachedStatus>();
+const CF_STATUS_TTL_MS = 30_000;
+
+async function getCfTunnelOnline(tunnel_id: string): Promise<boolean> {
+  const cached = CF_STATUS_CACHE.get(tunnel_id);
+  const now = Date.now();
+  if (cached && now - cached.checkedAt < CF_STATUS_TTL_MS) {
+    return cached.count > 0;
+  }
+  const { count } = await cfClient.getTunnelConnections(tunnel_id);
+  CF_STATUS_CACHE.set(tunnel_id, { count, checkedAt: now });
+  return count > 0;
+}
 
 async function getUser(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
@@ -28,22 +49,37 @@ export async function GET(req: NextRequest) {
   // Phase 140-06.4: surface whether the user's CF tunnel was provisioned at
   // signup. The dashboard.html derives `hasComputer` from this (replacing the
   // older custom_domains-only signal that pre-dates Phase 140's auto-provisioning).
-  const cfResult = await pool.query<{ provisioned_at: Date | null }>(
-    'SELECT cf_provisioned_at AS provisioned_at FROM users WHERE id = $1',
+  // Phase 141-07: also fetch cf_tunnel_id so we can query CF for live connection
+  // count (the authoritative online signal for Phase 134+ deployments — the
+  // relay WebSocket the old code probed is no longer opened by livinityd).
+  const cfResult = await pool.query<{ provisioned_at: Date | null; tunnel_id: string | null }>(
+    'SELECT cf_provisioned_at AS provisioned_at, cf_tunnel_id AS tunnel_id FROM users WHERE id = $1',
     [user.userId],
   );
   const cfProvisioned = cfResult.rows.length > 0 && cfResult.rows[0].provisioned_at != null;
+  const cfTunnelId = cfResult.rows.length > 0 ? cfResult.rows[0].tunnel_id : null;
 
-  // Get connection status from relay
+  // Phase 141-07: connection status. Prefer the CF Tunnel API for users with
+  // a provisioned tunnel (Phase 140+). Fall back to the relay WebSocket
+  // probe for legacy users without a tunnel — those installs still report
+  // "online" via the relay control plane.
   let online = false;
-  try {
-    const statusRes = await fetch(`${RELAY_URL}/internal/user-status?username=${user.username}`, { cache: 'no-store' });
-    if (statusRes.ok) {
-      const data = await statusRes.json();
-      online = data.online;
+  if (cfTunnelId) {
+    try {
+      online = await getCfTunnelOnline(cfTunnelId);
+    } catch {
+      // CF unreachable → leave online=false. Cache miss keeps the call cheap.
     }
-  } catch {
-    // Relay unreachable
+  } else {
+    try {
+      const statusRes = await fetch(`${RELAY_URL}/internal/user-status?username=${user.username}`, { cache: 'no-store' });
+      if (statusRes.ok) {
+        const data = await statusRes.json();
+        online = data.online;
+      }
+    } catch {
+      // Relay unreachable
+    }
   }
 
   // Get bandwidth from relay

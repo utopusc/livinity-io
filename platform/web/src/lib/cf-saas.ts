@@ -60,6 +60,14 @@ export interface CfClient {
   getTunnelIngress(tunnel_id: string): Promise<Ingress[]>;
   deleteTunnel(tunnel_id: string): Promise<void>;
   listTunnels(): Promise<Tunnel[]>;
+  /**
+   * Phase 141-07: return the count of currently-active CF edge connections
+   * for a tunnel. Used by the dashboard online-status check to replace the
+   * relay-WebSocket signal (which Phase 134+ livinityd no longer opens).
+   * Returns 0 on CF API error so a transient failure shows the device as
+   * offline rather than crashing the dashboard.
+   */
+  getTunnelConnections(tunnel_id: string): Promise<{ count: number }>;
 
   // DNS lifecycle
   createDnsRecord(opts: {
@@ -393,6 +401,25 @@ function makeClient(env: CfEnv): CfClient {
         }),
       );
       return result ?? [];
+    },
+
+    async getTunnelConnections(tunnel_id: string) {
+      try {
+        // CF returns an array of connection objects when the tunnel has live
+        // connectors. Endpoint: /accounts/{acct}/cfd_tunnel/{id}/connections
+        // The array length is the active-connection count (typically 4 for a
+        // healthy cloudflared with both IPv4+v6 fan-out across 2 colos).
+        const result = await rl(() =>
+          callCf<Array<{ id: string }> | null>(env, {
+            method: 'GET',
+            path: `/accounts/${env.accountId}/cfd_tunnel/${tunnel_id}/connections`,
+          }),
+        );
+        return { count: Array.isArray(result) ? result.length : 0 };
+      } catch {
+        // Best-effort: a CF API hiccup must not crash the dashboard call site.
+        return { count: 0 };
+      }
     },
 
     async createDnsRecord(opts) {
