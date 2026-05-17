@@ -1,5 +1,7 @@
 import {useEffect, useState} from 'react'
 
+import {trpcReact} from '@/trpc/trpc'
+
 import type {OnboardingData} from '../constants'
 import {FooterBar} from '../footer-bar'
 import {Icon} from '../icon'
@@ -38,6 +40,15 @@ type Props = {
 export function WallpaperStep({data, setData, onContinue, onBack}: Props) {
 	const selected = WALLPAPERS.find((w) => w.id === data.wallpaper) || WALLPAPERS[0]
 	const now = useNow()
+
+	// Phase 137-03 — persist the onboarding wallpaper choice to the backend.
+	// LivOS currently only renders 'fluid' (see animated-wallpapers.tsx); the
+	// other 5 IDs are stored as a preference for future use once more
+	// wallpapers ship. Fire-and-forget — Continue is not gated on the write.
+	const setPref = trpcReact.preferences.set.useMutation()
+	const persist = (id: string) => {
+		setPref.mutate({key: 'onboarding_wallpaper', value: id})
+	}
 	return (
 		<div style={{display: 'flex', flexDirection: 'column', gap: 20}}>
 			<div className='fade-up'>
@@ -69,7 +80,10 @@ export function WallpaperStep({data, setData, onContinue, onBack}: Props) {
 					<button
 						key={wp.id}
 						className={`wallpaper-tile ${wp.cls} ${data.wallpaper === wp.id ? 'on' : ''}`}
-						onClick={() => setData({...data, wallpaper: wp.id})}
+						onClick={() => {
+							setData({...data, wallpaper: wp.id})
+							persist(wp.id)
+						}}
 						aria-label={`Select ${wp.name} wallpaper`}
 					>
 						<span className='check'>
