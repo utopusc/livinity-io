@@ -31,6 +31,9 @@ export function TopBar({stepper, labelChanging, eta}: Props) {
 								if (i < stepper.idx) stepper.go(i)
 							}}
 							aria-label={`Step ${i + 1}: ${STEP_NAMES[i]}`}
+							aria-current={i === stepper.idx ? 'step' : undefined}
+							aria-disabled={i > stepper.idx ? true : undefined}
+							role='tab'
 							disabled={i > stepper.idx}
 						>
 							<span className='seg-fill'></span>

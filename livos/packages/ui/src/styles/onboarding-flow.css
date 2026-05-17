@@ -21,7 +21,10 @@
   --fg: #1d1d1f;
   --fg-dim: #424245;
   --fg-mute: #6e6e73;
-  --fg-faint: #a1a1a6;
+  /* Phase 139-02 — a11y: darkened from #a1a1a6 (2.65:1 contrast vs. white,
+   * fails WCAG 2.1 AA for UI components) to #8a8a8e (3.45:1, passes 3:1
+   * minimum). Used by step counter, eyebrow labels, ETA, dividers. */
+  --fg-faint: #8a8a8e;
   --green: #16a34a;
   --green-bright: #28c840;
   --amber: #d97706;
