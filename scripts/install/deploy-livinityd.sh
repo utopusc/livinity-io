@@ -705,19 +705,21 @@ _dld_build_packages() {
     fi
 
     info "pnpm install (this may take 3-5 min)"
-    # Plan 105-05 Bug #1: pnpm 11+ exits non-zero on ERR_PNPM_IGNORED_BUILDS.
-    # Mini PC's older pnpm doesn't enforce this gate. --config.dangerously-allow-all-builds=true
-    # tells pnpm to silently run postinstall scripts for all packages without prompting.
-    # The repo's package.json `pnpm.onlyBuiltDependencies` allowlist is honored when this
-    # flag is OFF, but with our 20+ legitimate build-script packages (sharp, esbuild, node-pty,
-    # baileys, etc.) the cleanest first-install path is to allow all.
+    # Phase 132 Bug #13: --config.dangerously-allow-all-builds=true was added in
+    # Plan 105-05 Bug #1 to silence pnpm 11+'s ERR_PNPM_IGNORED_BUILDS prompt. But
+    # in pnpm 10 it internally sets neverBuiltDependencies=[], which conflicts with
+    # the package.json `pnpm.onlyBuiltDependencies` allowlist → fatal
+    # ERR_PNPM_CONFIG_CONFLICT_BUILT_DEPENDENCIES. The allowlist alone is sufficient:
+    # 11 explicit packages get build scripts run; everything else is silently skipped
+    # (warning, not error). Removing the flag fixes Bug #13 without re-introducing
+    # the pnpm-11 prompt (CI/non-TTY runs default to skip silently when no flag).
     if [[ -f "pnpm-lock.yaml" ]]; then
-        pnpm install --config.dangerously-allow-all-builds=true --frozen-lockfile 2>&1 | tail -10 || {
+        pnpm install --frozen-lockfile 2>&1 | tail -10 || {
             warn "frozen-lockfile install failed; retrying without lockfile"
-            pnpm install --config.dangerously-allow-all-builds=true 2>&1 | tail -10 || fail "pnpm install failed"
+            pnpm install 2>&1 | tail -10 || fail "pnpm install failed"
         }
     else
-        pnpm install --config.dangerously-allow-all-builds=true 2>&1 | tail -10 || fail "pnpm install failed"
+        pnpm install 2>&1 | tail -10 || fail "pnpm install failed"
     fi
     ok "pnpm install complete"
 
@@ -1126,13 +1128,45 @@ _dld_seed_domain_config() {
         return 0
     fi
 
-    # 2. Idempotency gate (D-112-IDEMPOTENT-SEED). Skip if operator already
-    # configured via Settings wizard or tunnel-client auto-bootstrap.
+    # 2. Idempotency gate (D-112-IDEMPOTENT-SEED) with Phase 132 Bug #14 override.
+    #
+    # Original semantics: skip if operator already configured via Settings wizard
+    # or tunnel-client auto-bootstrap (preserve operator intent on rerun).
+    #
+    # Bug #14 (UAT 2026-05-17): when the install script is RE-RUN with an
+    # explicit --domain flag (e.g. switching from tunnel to hybrid mode), the
+    # preserve gate keeps the stale OLD domain in livos:domain:config and
+    # livinityd returns "No app configured for this domain" 503 for the new
+    # domain. An explicit --domain flag from the operator IS operator intent
+    # to override, so force-update in that case.
     local existing
     existing=$(redis-cli -a "$redis_pass" --no-auth-warning EXISTS livos:domain:config 2>/dev/null || echo "0")
     if [[ "$existing" == "1" ]]; then
-        ok "livos:domain:config already present (reuse — preserves operator config)"
-        return 0
+        # Read current domain from Redis vs the install-mode-specific domain key
+        # we're about to seed below. If they DIFFER and the operator passed --domain
+        # (DOMAIN env var, set by parse-cli.sh), the operator's intent is to switch
+        # → override. If they MATCH or no explicit DOMAIN, preserve.
+        local current_domain mode_domain
+        current_domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:config 2>/dev/null \
+            | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('domain',''))" 2>/dev/null || echo "")
+
+        # The intended new domain is whatever we'd seed below per local_mode.
+        # Peek it (mirror of step 3 below, dup'd intentionally to avoid restructure).
+        local peek_mode peek_domain
+        peek_mode=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_mode 2>/dev/null || echo "")
+        case "$peek_mode" in
+            hybrid)  peek_domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:hybrid_subdomain 2>/dev/null || echo "") ;;
+            tunnel)  peek_domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:tunnel_domain 2>/dev/null || echo "") ;;
+            local-lan) peek_domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_tld 2>/dev/null || echo "") ;;
+        esac
+
+        if [[ -n "${DOMAIN:-}" ]] && [[ -n "$peek_domain" ]] && [[ "$peek_domain" != "$current_domain" ]]; then
+            warn "Bug #14 override: --domain '${DOMAIN}' supplied, current livos:domain:config='${current_domain}' differs from new '${peek_domain}' → force-update"
+            # Fall through to seed step below (skip the preserve return)
+        else
+            ok "livos:domain:config already present (reuse — preserves operator config)"
+            return 0
+        fi
     fi
 
     # 3. Derive domain from the install-mode-specific Redis key.
