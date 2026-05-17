@@ -28,8 +28,14 @@ install_common_deps() {
         ok "Caddy already installed: $(caddy version 2>/dev/null | head -1)"
     else
         info "Installing Caddy from official repo"
+        # Phase 134 UAT (Bug #18, 2026-05-17): when install.sh is run via
+        # `nohup curl|sudo bash` (no controlling TTY), gpg's first invocation
+        # for the new root user fails with `cannot open '/dev/tty'` because
+        # gpg-agent tries to attach to a TTY for pinentry / first-time agent
+        # setup. --no-tty + --batch + --yes makes the dearmor strictly non-
+        # interactive. Idempotent (--yes overwrites existing keyring).
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-            | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+            | gpg --dearmor --no-tty --batch --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
             | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
         apt-get update -qq
