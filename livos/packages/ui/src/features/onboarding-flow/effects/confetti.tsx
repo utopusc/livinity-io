@@ -22,6 +22,12 @@ export function Confetti({active, duration = 2200}: {active: boolean; duration?:
 
 	useEffect(() => {
 		if (!active) return
+		// 139-05 — skip confetti entirely under prefers-reduced-motion.
+		if (
+			typeof window !== 'undefined' &&
+			window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+		)
+			return
 		const canvas = ref.current
 		if (!canvas) return
 		const dpr = Math.min(window.devicePixelRatio || 1, 2)
