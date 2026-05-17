@@ -3,18 +3,20 @@ gsd_state_version: 1.0
 milestone: v36.0
 milestone_name: "LivOS Design Port"
 status: in-progress
-last_updated: "2026-05-17T03:30:00.000Z"
+last_updated: "2026-05-17T03:55:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
   total_plans: 9
   completed_plans: 9
   percent: 100.0
-current_phase: 132
-current_phase_name: "Install.sh Hardening — UAT-driven fixes (7 bugs)"
+current_phase: 133
+current_phase_name: "Kill Server5 Tunnel Default + Custom-Domain-Only Hero + Wizard UX"
 current_phase_status: CODE-COMPLETE-AWAITING-OPERATOR-UAT
-previous_active_phase: 131
-previous_active_phase_status: PARTIAL-SHIPPED-PENDING-UAT
+previous_active_phase: 132
+previous_active_phase_status: CODE-COMPLETE-AWAITING-OPERATOR-UAT
+previous_active_phase_2: 131
+previous_active_phase_2_status: PARTIAL-SHIPPED-PENDING-UAT
 phase_131_commits:
   - b3b049ad   # 131-01 drag-to-pin bug fix (TopBar inside provider + isExpanded pin-aware)
   - 167b42ba   # 131-02 persistence tier-a (Postgres pinned_windows + tRPC + hydration)
@@ -46,6 +48,22 @@ phase_132_server5_live_patches:
   - "/opt/platform/web/src/app/api/account/api-keys/route.ts — emailVerified gate removed + npm run build + pm2 restart web (Bug #3; on-server canonical, backup at .bak-pre-132-02-20260517-030607)"
 phase_132_sacred_sha_preserved: 7/7
 phase_132_pending_push: false  # pushed 2026-05-17 (271915f4..8b28f6ee) + Server5 `pm2 restart web` flushed Next.js 5-min revalidate cache → https://livinity.io/install.sh now serves Mode-3 self-bootstrap (verified: Self-bootstrap marker count 2).
+phase_133_commits:
+  - cbe1a878   # initial 5-file plan + ROADMAP row
+  - 5ca7df99   # Bug C amend (subdomain pre-fill folded into 133-01)
+  - da999c63   # lucylu hotfix dropped, 133-02 → autonomous:true per user directive
+  - 929a7d98   # 133-01 SUMMARY — wizard auto-register + subdomain pre-fill shipped (Bug A + C)
+  - df0e27d8   # 133-02 SUMMARY — hero tunnel URL killed (Bug B)
+phase_133_status: CODE-COMPLETE-AWAITING-OPERATOR-UAT
+phase_133_shipped_subplans: ["133-01 (Bug A + Bug C)", "133-02 (Bug B)"]
+phase_133_deferred_subplans:
+  - "133-03 — operator-walked fresh-user UAT (Flows A/B/C/D) — autonomous:false; needs operator to register fresh test user + walk wizard + hero verify"
+phase_133_server5_live_patches:
+  - "/opt/platform/web/src/app/api/account/api-keys/route.ts — Bug A: body parse + custom_domains INSERT (npm run build + pm2 restart web 2026-05-17)"
+  - "/opt/landing/livinity.io/dashboard-install.html — Bug A fetch body + Bug C HybridStep pre-fill (static, no service restart)"
+  - "/opt/landing/livinity.io/dashboard.html — Bug B hero kill-tunnel + install-pending empty state (static)"
+phase_133_sacred_sha_preserved: 5/5
+phase_133_pending_push: true  # 5 local commits not yet pushed to origin
 phase_122_commits: [c2dbcd0c, 518a0de6, 658714ee, 19d00b2f]
 phase_123_commits: [4e47cb72]
 phase_124_commits: [780d668a]
