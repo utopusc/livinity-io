@@ -40,3 +40,38 @@ agent-app/release/
 # Push to Docker Hub instead. See docker-images/README.md.
 docker-images/*.tar
 docker-images/*.tar.gz
+
+# === Internal tooling / agent state (local-only) ===
+.claude/
+.serena/
+
+# === Internal planning, research, and audit artifacts (local-only) ===
+# Kept on disk but excluded from the public product repo.
+.planning/
+/mobile-audit/
+/ONBOARDING.md
+
+# Session handoff notes
+/NEXT-MILESTONE-PROMPT.md
+/NEXT-SESSION-PROMPT.md
+
+# Market / competitor / strategy research
+/MARKET_RESEARCH_*.md
+/COMPETITIVE_ANALYSIS_REPORT.md
+/COMPETITOR_PROFILES.md
+/RESEARCH_SUMMARY.md
+/STRATEGIC_RECOMMENDATIONS.md
+
+# AI agent research notes
+/AI_AGENT_*.md
+/AI_AGENTS_*.md
+
+# Stray Windows temp-path accidental commits
+*AppDataLocalTemp*
+
+# Scratch / working directories
+/.work/
+
+# Internal analysis & briefing artifacts (root level only — product fixtures unaffected)
+/Livinity_*.pdf
+/livinity_analysis_report.*
