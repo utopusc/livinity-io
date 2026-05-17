@@ -195,18 +195,6 @@ function WizardInner() {
 	)
 }
 
-function PlaceholderStep({title}: {title: string}) {
-	return (
-		<div className='fade-up' style={{display: 'flex', flexDirection: 'column', gap: 18}}>
-			<div className='onb-eyebrow'>STEP</div>
-			<h1 className='onb-title'>
-				{title} <em>step</em>
-			</h1>
-			<p className='onb-sub'>Wiring coming in 135-E..J. Use the segmented bar to navigate.</p>
-		</div>
-	)
-}
-
 export default function SetupWizardV2() {
 	return (
 		<SoundProvider>
