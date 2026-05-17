@@ -3,16 +3,18 @@ gsd_state_version: 1.0
 milestone: v36.0
 milestone_name: "LivOS Design Port"
 status: in-progress
-last_updated: "2026-05-15T22:30:00.000Z"
+last_updated: "2026-05-17T03:30:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
   total_plans: 9
   completed_plans: 9
   percent: 100.0
-current_phase: 131
-current_phase_name: "Pinned-Windows Architecture"
-current_phase_status: PARTIAL-SHIPPED-PENDING-UAT
+current_phase: 132
+current_phase_name: "Install.sh Hardening — UAT-driven fixes (7 bugs)"
+current_phase_status: CODE-COMPLETE-AWAITING-OPERATOR-UAT
+previous_active_phase: 131
+previous_active_phase_status: PARTIAL-SHIPPED-PENDING-UAT
 phase_131_commits:
   - b3b049ad   # 131-01 drag-to-pin bug fix (TopBar inside provider + isExpanded pin-aware)
   - 167b42ba   # 131-02 persistence tier-a (Postgres pinned_windows + tRPC + hydration)
@@ -26,6 +28,24 @@ phase_131_deferred_subplans:
   - "131-06 — UAT walk on Mini PC + PROJECT.md chapter + memory snapshot (operator step)"
 phase_131_decisions_locked: 2026-05-15
 phase_131_decisions_file: ".planning/phases/131-pinned-windows-architecture/131-DECISIONS.md"
+phase_132_commits:
+  - 9860af01   # 132-04 pnpm config dedup (Bug #5)
+  - 5b79f63e   # 132-01 Server5 dashboard HTML — on-server canonical (Bugs #1+#2)
+  - f161a028   # 132-02 Server5 emailVerified gate removed (Bug #3) — live patch
+  - 63d19c1e   # 132-03 install.sh self-bootstrap (Bug #4)
+  - 282b0ec7   # 132-06 Caddy reset+start with 30s active-wait (Bug #7)
+  - 578f65b6   # 132-05 @liv/core import-path verify + reset-failed livos (Bug #6)
+  - 7a8c0eb8   # 132-07 task 07-01 UAT checklist for operator walk
+phase_132_status: CODE-COMPLETE-AWAITING-OPERATOR-UAT
+phase_132_shipped_subplans: ["132-01", "132-02", "132-03", "132-04", "132-05", "132-06", "132-07 (07-01 only)"]
+phase_132_deferred_subplans:
+  - "132-07 task 07-02 — operator-walked fresh-VPS UAT (autonomous:false; requires brand-new Ubuntu 24.04 VPS + CF token + zone for fresh subdomain; checklist at .planning/phases/132-.../132-UAT-CHECKLIST.md)"
+phase_132_server5_live_patches:
+  - "/opt/landing/livinity.io/dashboard-install.html — data-type=\"module\" removed (Bug #1; on-server canonical, no git repo for this tree)"
+  - "/opt/landing/livinity.io/dashboard.html — Install nav link added (Bug #2; on-server canonical)"
+  - "/opt/platform/web/src/app/api/account/api-keys/route.ts — emailVerified gate removed + npm run build + pm2 restart web (Bug #3; on-server canonical, backup at .bak-pre-132-02-20260517-030607)"
+phase_132_sacred_sha_preserved: 7/7
+phase_132_pending_push: true   # commits are local on master, not yet pushed to utopusc/livinity-io. install.sh self-bootstrap fix only takes effect on Mini PC re-runs AFTER push.
 phase_122_commits: [c2dbcd0c, 518a0de6, 658714ee, 19d00b2f]
 phase_123_commits: [4e47cb72]
 phase_124_commits: [780d668a]
