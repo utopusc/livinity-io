@@ -10,14 +10,32 @@ progress:
   total_plans: 9
   completed_plans: 9
   percent: 100.0
-current_phase: 135
-current_phase_name: "LivOS Onboarding Redesign — Livinity.io Reference Port"
-current_phase_status: CODE-COMPLETE-UAT-WALKED
+current_phase: 137
+current_phase_name: "Onboarding Backend Wiring"
+current_phase_status: CODE-COMPLETE-PENDING-OPERATOR-UAT
 next_phases:
-  - "136: Real claude /login PTY pipe (PLANNED)"
-  - "137: Onboarding backend wiring — wallpaper/preferences/system info/resume (PLANNED)"
-  - "138: Real TOTP 2FA enrollment (PLANNED)"
-  - "139: Onboarding hardening — i18n/a11y/mobile/perf (PLANNED)"
+  - "136: Real claude /login PTY pipe (PLANNED — needs Mini PC SSH for node-pty native compile + claude CLI test)"
+  - "138: Real TOTP 2FA enrollment (PLANNED — DB migration needs operator + pgcrypto extension enable)"
+  - "139-01: Onboarding i18n (PLANNED — 85 keys × 5 langs, mechanical translation work)"
+  - "139-06: Cross-device UAT walk (PLANNED — operator-only)"
+phase_137_commits:
+  - 4544c35a   # 137-01 backend system.info query
+  - e8412e50   # 137-02 WelcomeStep consumes system.info
+  - d3f9ba16   # 137-03 wallpaper + personalize persist (preferences.set)
+  - 62fc9e65   # 137-04 backend resume via user_preferences.onboarding_state
+  - 587906a1   # 137-05 DoneStep clears backend resume key
+phase_137_status: CODE-COMPLETE-PENDING-OPERATOR-UAT
+phase_137_sacred_sha_preserved: 5/5
+phase_137_pending_push: false  # pushed 2026-05-17 (03897251..587906a1)
+phase_139_partial_commits:
+  - 163bfb45   # 139-02 a11y contrast + ARIA
+  - 7c802e7d   # 139-03 mobile responsive overrides
+  - c76a17dd   # 139-04+05 perf orb-gating + prefers-reduced-motion
+phase_139_status: PARTIAL — sub-plans 02-05 SHIPPED; 01 (i18n) + 06 (UAT) DEFERRED
+phase_139_sacred_sha_preserved: 3/3
+phase_139_pending_push: false  # pushed 2026-05-17 (587906a1..c76a17dd)
+phase_135_status_archived: CODE-COMPLETE-UAT-WALKED
+phase_133_status_archived: CODE-COMPLETE-AWAITING-OPERATOR-UAT  # superseded by phase 135 active
 phase_135_commits:
   - 061e5613   # 135-01 DS tokens + OnboardingShell
   - 80710482   # 135-02 superseded by 135-E
