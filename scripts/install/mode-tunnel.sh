@@ -47,8 +47,9 @@ _install_cloudflared_for_tunnel() {
     local list=/etc/apt/sources.list.d/cloudflared.list
 
     # Download + dearmor the CF main GPG key (idempotent — same URL each time).
+    # Phase 134 Bug #18: add --no-tty --batch so nohup-piped installs work.
     if ! curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
-            | gpg --dearmor --yes --output "$keyring" 2>/dev/null; then
+            | gpg --dearmor --no-tty --batch --yes --output "$keyring" 2>/dev/null; then
         fail "Failed to fetch + dearmor CF gpg key from pkg.cloudflare.com"
     fi
     chmod 0644 "$keyring"
