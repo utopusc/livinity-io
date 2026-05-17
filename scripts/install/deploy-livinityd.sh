@@ -994,6 +994,15 @@ HOST=127.0.0.1
 LIVOS_LOCAL_MODE=${mode_val}
 LIVOS_LOCAL_DOMAIN=${domain_val}
 LIVOS_HOST_IP=${host_ip_val}
+
+# Phase 134 user-directive (2026-05-17): Luse computer-use MCP server is
+# enabled by default on fresh installs. Provides the global "luse" MCP
+# (screen capture + xdotool input forwarding via mcp/server.ts) so AI chat
+# can see + click + type into running apps out of the box.
+# Pre-Phase-134 default-off (D-NATIVE-10) is overridden here because every
+# real user expects this functionality without manual env edits.
+# To disable on a specific install: edit this file post-install + restart livos.
+LUSE_MCP_ENABLED=true
 EOF
 
     # Append optional --api-key if 104-09 wrote one
