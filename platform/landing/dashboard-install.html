@@ -554,8 +554,48 @@
                 <FieldRow label="Full hostname" value={wildcardFull} />
               </div>
               <div className="rc-note">
-                If Cloudflare says <em>"DNS record already exists"</em> for the wildcard, open DNS settings and add the CNAME manually:{" "}
-                <code>{wildcardSub || "*.<subdomain>"} → &lt;tunnel-id&gt;.cfargotunnel.com</code> (Proxied).
+                Save this route. Cloudflare records it in the tunnel, but <strong style={{ color: 'var(--accent-red)' }}>does NOT auto-create a DNS CNAME for wildcards</strong> — you'll add it below.
+              </div>
+            </div>
+
+            {/* Wildcard DNS CNAME — required, often missed */}
+            <div className="section-head" style={{ marginTop: 22 }}>
+              <div className="sn" style={{ background: 'var(--accent-red)' }}>!</div>
+              <h3>One more thing — add the wildcard DNS CNAME (required for apps)</h3>
+            </div>
+            <p className="sub" style={{ marginBottom: 12 }}>
+              Cloudflare auto-creates the apex CNAME (<code style={{ fontFamily: 'var(--font-mono)' }}>{fullDomain || "<sub>.<domain>"}</code>) when you save Route 1, but it <strong>does not</strong> create wildcard CNAMEs. Without this step, <code style={{ fontFamily: 'var(--font-mono)' }}>n8n.{fullDomain || "<sub>.<domain>"}</code> and every other app subdomain returns NXDOMAIN.
+            </p>
+            <div className="steps-card" style={{ marginBottom: 12 }}>
+              <div className="step-item">
+                <div className="step-num">1</div>
+                <div className="step-body">
+                  Find your <strong>tunnel ID</strong> — in Zero Trust → Networks → Tunnels, click your tunnel <code>{tunnelName}</code>. The ID is a UUID in the URL, e.g. <code>d0bdaf61-4b23-4be4-8892-3ea043ac8176</code>. You'll use it as <code>&lt;tunnel-id&gt;.cfargotunnel.com</code>.
+                </div>
+              </div>
+              <div className="step-item">
+                <div className="step-num">2</div>
+                <div className="step-body">
+                  Open Cloudflare dashboard → your <strong>{base || "<domain>"}</strong> zone → left sidebar <strong>DNS</strong> → <strong>Records</strong> → <strong>Add record</strong>. Fill it in exactly:
+                </div>
+              </div>
+            </div>
+
+            <div className="route-card ok">
+              <div className="rc-head">
+                <span className="rc-tag" style={{ background: 'var(--accent-red)' }}>DNS</span>
+                <span className="rc-title">Wildcard CNAME — exact values</span>
+              </div>
+              <div className="field-grid">
+                <FieldRow label="Type" value="CNAME" />
+                <FieldRow label="Name" value={wildcardSub} />
+                <FieldRow label="Target" value="<tunnel-id>.cfargotunnel.com" />
+                <FieldRow label="Proxy status" value="Proxied (orange cloud ON)" />
+                <FieldRow label="TTL" value="Auto" />
+                <FieldRow label="Full record" value={wildcardSub && base ? wildcardSub + "." + base + " CNAME <tunnel-id>.cfargotunnel.com" : ""} />
+              </div>
+              <div className="rc-note">
+                Replace <code>&lt;tunnel-id&gt;</code> with the UUID you found in step 1. Save → DNS propagates in &lt; 60 sec on Cloudflare. Test with <code>nslookup n8n.{fullDomain || "<sub>.<domain>"} 8.8.8.8</code> — should return Cloudflare IPs.
               </div>
             </div>
 
