@@ -25,6 +25,15 @@ export async function GET(req: NextRequest) {
   const hasApiKey = keyResult.rows.length > 0;
   const apiKeyPrefix = hasApiKey ? keyResult.rows[0].prefix : null;
 
+  // Phase 140-06.4: surface whether the user's CF tunnel was provisioned at
+  // signup. The dashboard.html derives `hasComputer` from this (replacing the
+  // older custom_domains-only signal that pre-dates Phase 140's auto-provisioning).
+  const cfResult = await pool.query<{ provisioned_at: Date | null }>(
+    'SELECT cf_provisioned_at AS provisioned_at FROM users WHERE id = $1',
+    [user.userId],
+  );
+  const cfProvisioned = cfResult.rows.length > 0 && cfResult.rows[0].provisioned_at != null;
+
   // Get connection status from relay
   let online = false;
   try {
@@ -86,6 +95,7 @@ export async function GET(req: NextRequest) {
     server: {
       online,
       url: `https://${user.username}.livinity.io`,
+      provisioned: cfProvisioned,
     },
     bandwidth: {
       usedBytes: bandwidth.usedBytes,
