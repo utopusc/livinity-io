@@ -1278,6 +1278,16 @@ Plans:
 
 **Depends on:** v36.0 milestone (Phases 122-129) ✅ CODE-COMPLETE.
 
+### Phase 132: v34 Install.sh Hardening — UAT-Driven Fixes (7 bugs discovered during Mini PC reinstall 2026-05-16). Fix: (1) dashboard-install.html data-type=module babel error, (2) dashboard.html missing /dashboard/install link, (3) emailVerified=false → 403 with no email service, (4) install.sh exits 2 via curl|bash (needs self-bootstrap), (5) pnpm-workspace.yaml ignoredBuiltDependencies vs package.json onlyBuiltDependencies conflict (pnpm 10), (6) deploy-livinityd.sh doesn't build /opt/liv/packages/{core,worker,mcp-server,memory}, (7) Caddy not reset-failed+started after install. ACCEPTANCE: fresh Ubuntu 24.04 VPS, wizard one-liner → install completes ≤10min → bruce.<domain> HTTPS UI live. NO manual on-server patches, NO 403 for unverified new users.
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 131
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 132 to break down)
+
 ---
 
 ### Phase 131: Pinned-Windows Architecture — 🔴 PLANNED 2026-05-15 (pinned-window drag-drop currently broken in Phase 130-09; persistent background-running pinned windows is a new architectural feature)
