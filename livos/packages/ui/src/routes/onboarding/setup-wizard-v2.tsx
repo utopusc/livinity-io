@@ -5,6 +5,7 @@ import {HelpBubble, ParallaxOrbs, SoundProvider, useSound} from '@/features/onbo
 import {ResumeBanner} from '@/features/onboarding-flow/resume-banner'
 import {Step} from '@/features/onboarding-flow/step'
 import {AccountStep} from '@/features/onboarding-flow/steps/account-step'
+import {ConnectAiStep} from '@/features/onboarding-flow/steps/connect-ai-step'
 import {PersonalizeStep} from '@/features/onboarding-flow/steps/personalize-step'
 import {WallpaperStep} from '@/features/onboarding-flow/steps/wallpaper-step'
 import {WelcomeStep} from '@/features/onboarding-flow/steps/welcome-step'
@@ -162,7 +163,15 @@ function WizardInner() {
 							/>
 						</Step>
 						<Step stepIndex={4} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
-							<PlaceholderStep title='Connect AI' />
+							<ConnectAiStep
+								isActive={stepper.idx === 4}
+								onContinue={() => {
+									sound.play('success')
+									stepper.next()
+								}}
+								onSkip={stepper.next}
+								onBack={stepper.back}
+							/>
 						</Step>
 						<Step stepIndex={5} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<PlaceholderStep title='All set' />
