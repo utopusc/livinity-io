@@ -43,10 +43,9 @@ import {Settings} from './routes/settings'
 // NOTE: /agent-marketplace route kept for deep-links; /agents /marketplace routes REMOVED (v32-redo-stage1a)
 const AgentMarketplace = React.lazy(() => import('./routes/agent-marketplace'))
 const MultiUserLogin = React.lazy(() => import('./routes/login/index'))
-const SetupWizard = React.lazy(() => import('./routes/onboarding/setup-wizard'))
-// Phase 135-D — new reference-aligned wizard. Mounts at /onboarding once
-// each step (135-E..J) is filled in. Until then the placeholder steps
-// exercise the shell (top bar, progress, transitions, ambient, sound, help).
+// Phase 135 — Livinity Onboarding (reference-aligned). 6 steps: Welcome,
+// Account (password or 2FA), Wallpaper, Personalize, Connect AI, All set.
+// The V1 wizard (setup-wizard.tsx, 1402 LOC) was deleted in 135-K.
 const SetupWizardV2 = React.lazy(() => import('./routes/onboarding/setup-wizard-v2'))
 const OnboardingRestore = React.lazy(() => import('./routes/onboarding/restore'))
 const FactoryReset = React.lazy(() => import('./routes/factory-reset'))
