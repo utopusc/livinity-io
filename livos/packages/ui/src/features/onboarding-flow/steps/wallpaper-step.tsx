@@ -1,5 +1,6 @@
 import {useEffect, useState} from 'react'
 
+import {JWT_LOCAL_STORAGE_KEY} from '@/modules/auth/shared'
 import {trpcReact} from '@/trpc/trpc'
 
 import type {OnboardingData} from '../constants'
@@ -45,8 +46,12 @@ export function WallpaperStep({data, setData, onContinue, onBack}: Props) {
 	// LivOS currently only renders 'fluid' (see animated-wallpapers.tsx); the
 	// other 5 IDs are stored as a preference for future use once more
 	// wallpapers ship. Fire-and-forget — Continue is not gated on the write.
+	// Phase 137-FIX — gate on JWT presence to avoid 401 spam if user reaches
+	// this step unauthed (shouldn't happen in normal flow since AccountStep
+	// registers + logs in, but defensive).
 	const setPref = trpcReact.preferences.set.useMutation()
 	const persist = (id: string) => {
+		if (!localStorage.getItem(JWT_LOCAL_STORAGE_KEY)) return
 		setPref.mutate({key: 'onboarding_wallpaper', value: id})
 	}
 	return (
