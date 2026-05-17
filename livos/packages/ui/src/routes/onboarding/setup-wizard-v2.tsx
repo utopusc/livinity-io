@@ -5,6 +5,7 @@ import {HelpBubble, ParallaxOrbs, SoundProvider, useSound} from '@/features/onbo
 import {ResumeBanner} from '@/features/onboarding-flow/resume-banner'
 import {Step} from '@/features/onboarding-flow/step'
 import {AccountStep} from '@/features/onboarding-flow/steps/account-step'
+import {WallpaperStep} from '@/features/onboarding-flow/steps/wallpaper-step'
 import {WelcomeStep} from '@/features/onboarding-flow/steps/welcome-step'
 import {TopBar} from '@/features/onboarding-flow/top-bar'
 import {useStepper} from '@/features/onboarding-flow/use-stepper'
@@ -148,7 +149,7 @@ function WizardInner() {
 							<AccountStep data={data} setData={setData} onContinue={stepper.next} onBack={stepper.back} />
 						</Step>
 						<Step stepIndex={2} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
-							<PlaceholderStep title='Wallpaper' />
+							<WallpaperStep data={data} setData={setData} onContinue={stepper.next} onBack={stepper.back} />
 						</Step>
 						<Step stepIndex={3} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<PlaceholderStep title='Personalize' />
