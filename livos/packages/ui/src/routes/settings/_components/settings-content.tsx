@@ -917,7 +917,7 @@ function TwoFaSection() {
 					</div>
 				</div>
 				<IconButton onClick={() => setShowSetup(true)} icon={TbShield}>
-					{is2faEnabledQ.data ? 'Manage' : 'Enable'}
+					{is2faEnabledQ.data ? 'Disable' : 'Enable'}
 				</IconButton>
 			</div>
 		</div>
