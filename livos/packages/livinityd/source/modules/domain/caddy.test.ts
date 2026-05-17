@@ -10,6 +10,7 @@ import {
 	generateHybridCaddyfile,
 	validateLocalTld,
 	validateHybridDomain,
+	validateHost,
 } from './caddy.js'
 
 describe('validateLocalTld (Phase 104 V5 input validation)', () => {
@@ -213,5 +214,148 @@ describe('generateHybridCaddyfile — data-plane invariant (D-104-RELAY-ZERO-DAT
 		// No reverse_proxy line should point at any livinity.io hostname
 		// (data-plane stays LAN-direct — reverse_proxy targets 127.0.0.1 only).
 		expect(output).not.toMatch(/reverse_proxy\s+[^\s]*livinity\.io[^\/\w]/)
+	})
+})
+
+// ─── Phase 141-03 — hyphen-pattern subdomain (canonical host) tests ──────
+
+describe('validateHost (Phase 141-03)', () => {
+	it('accepts Phase 140 hyphen-pattern hosts', () => {
+		expect(validateHost('n8n-socinity.livinity.io')).toBe(true)
+		expect(validateHost('code-server-lucy.livinity.io')).toBe(true)
+		expect(validateHost('apex-user.livinity.io')).toBe(true)
+	})
+	it('accepts plain two-label hosts', () => {
+		expect(validateHost('example.com')).toBe(true)
+		expect(validateHost('a.b')).toBe(true)
+	})
+	it('rejects empty / single-label', () => {
+		expect(validateHost('')).toBe(false)
+		expect(validateHost('justalabel')).toBe(false)
+	})
+	it('rejects labels starting or ending with dash', () => {
+		expect(validateHost('-bad.livinity.io')).toBe(false)
+		expect(validateHost('bad-.livinity.io')).toBe(false)
+	})
+	it('rejects underscores + special chars', () => {
+		expect(validateHost('bad_label.livinity.io')).toBe(false)
+		expect(validateHost('a.b/c')).toBe(false)
+		expect(validateHost('a b.com')).toBe(false)
+	})
+	it('rejects 254+ char hosts (RFC 1035)', () => {
+		expect(validateHost('a.' + 'b'.repeat(252))).toBe(false)
+	})
+})
+
+describe('generateFullCaddyfile — Phase 141-03 host (canonical FQDN) preferred over subdomain compute', () => {
+	it('subdomain with `host` field emits a block named EXACTLY by host', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'socinity.livinity.io',
+				subdomains: [
+					{
+						subdomain: 'n8n',
+						appId: 'n8n',
+						port: 5678,
+						enabled: true,
+						host: 'n8n-socinity.livinity.io', // Phase 140 hyphen-pattern
+					},
+				],
+			},
+			false,
+			true, // tunnel mode → http:// prefix
+			[],
+		)
+		// Block MUST be the canonical Server5-minted host (not subdomain.mainDomain).
+		expect(out).toContain('http://n8n-socinity.livinity.io {')
+		// Buggy compute path MUST NOT appear.
+		expect(out).not.toContain('http://n8n.socinity.livinity.io {')
+		// Reverse proxy still targets the app's local port.
+		expect(out).toContain('reverse_proxy 127.0.0.1:5678')
+	})
+
+	it('subdomain WITHOUT `host` field falls back to legacy ${sub}.${mainDomain}', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'bruce.livinity.io',
+				subdomains: [
+					{subdomain: 'legacy-app', appId: 'legacy', port: 3000, enabled: true},
+				],
+			},
+			false,
+			false, // cloud mode → no prefix
+			[],
+		)
+		// Legacy compute path kicks in for pre-Phase-140 entries.
+		expect(out).toContain('legacy-app.bruce.livinity.io {')
+	})
+
+	it('mixed Phase 140 + legacy entries coexist (backwards-compat)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'socinity.livinity.io',
+				subdomains: [
+					{subdomain: 'n8n', appId: 'n8n', port: 5678, enabled: true, host: 'n8n-socinity.livinity.io'},
+					{subdomain: 'old', appId: 'old', port: 4000, enabled: true},
+				],
+			},
+			false,
+			true,
+			[],
+		)
+		expect(out).toContain('http://n8n-socinity.livinity.io {')
+		expect(out).toContain('http://old.socinity.livinity.io {')
+	})
+
+	it('disabled subdomain is skipped even when `host` is set', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'socinity.livinity.io',
+				subdomains: [
+					{subdomain: 'n8n', appId: 'n8n', port: 5678, enabled: false, host: 'n8n-socinity.livinity.io'},
+				],
+			},
+			false,
+			true,
+			[],
+		)
+		expect(out).not.toContain('n8n-socinity.livinity.io')
+	})
+
+	it('invalid `host` (single label) is skipped to keep Caddyfile valid', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'socinity.livinity.io',
+				subdomains: [
+					{subdomain: 'n8n', appId: 'n8n', port: 5678, enabled: true, host: 'malformed'},
+				],
+			},
+			false,
+			true,
+			[],
+		)
+		// The bad host did not emit; neither did the legacy fallback (we trust
+		// `host` once it's present — falling back would mask Server5 contract bugs).
+		expect(out).not.toContain('malformed')
+		expect(out).not.toContain('n8n.socinity.livinity.io')
+	})
+
+	it('multi-user mode with `host`: routes via livinityd gateway port', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'socinity.livinity.io',
+				subdomains: [
+					{subdomain: 'n8n', appId: 'n8n', port: 5678, enabled: true, host: 'n8n-socinity.livinity.io'},
+				],
+			},
+			true, // multiUser
+			true,
+			[],
+		)
+		expect(out).toContain('http://n8n-socinity.livinity.io {')
+		// In multi-user mode every block routes to livinityd's gateway (8080),
+		// regardless of the app's local port.
+		expect(out).toContain('reverse_proxy 127.0.0.1:8080')
+		expect(out).not.toContain('reverse_proxy 127.0.0.1:5678')
 	})
 })

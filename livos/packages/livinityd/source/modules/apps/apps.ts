@@ -44,6 +44,20 @@ const REDIS_PLATFORM_API_KEY = 'livos:platform:api_key'
 // testing where the platform lives at a different host.
 const LIVINITY_PLATFORM_URL = process.env.LIVINITY_PLATFORM_URL || 'https://livinity.io'
 
+/**
+ * Phase 141-03: extract a hostname from a Server5-minted app subdomain URL.
+ * Returns the hostname (e.g. `n8n-socinity.livinity.io`) or undefined when
+ * the input can't be parsed. Defensive — Server5 should always return a valid
+ * absolute URL, but we never want a malformed response to abort the install.
+ */
+function hostFromUrl(url: string): string | undefined {
+	try {
+		return new URL(url).hostname || undefined
+	} catch {
+		return undefined
+	}
+}
+
 export default class Apps {
 	#livinityd: Livinityd
 	logger: Livinityd['logger']
@@ -554,16 +568,19 @@ export default class Apps {
 		// internally swallows all errors and returns null, so the install flow
 		// never throws on a Server5 outage / missing platform credentials /
 		// network error. The returned subdomain (e.g. "n8n-lucy") is the
-		// canonical {app}-{user}.livinity.io shape minted by Server5; it's not
-		// persisted client-side — Server5 DB is the source of truth for which
-		// CF resources exist.
-		await this.provisionAppSubdomain(appId, manifest.port)
+		// canonical {app}-{user}.livinity.io shape minted by Server5.
+		// Phase 141-03: capture the return value so the local Caddyfile + Redis
+		// subdomain array carry the same hyphen-pattern host Server5 minted
+		// (previously discarded → Caddy emitted `n8n.socinity.livinity.io`
+		// instead of `n8n-socinity.livinity.io` → CF Tunnel 404).
+		const provisioned = await this.provisionAppSubdomain(appId, manifest.port)
 
 		// Register subdomain in Caddy for reverse proxy
 		try {
 			const builtinApp = getBuiltinApp(appId)
 			const subdomain = builtinApp?.installOptions?.subdomain || (manifest as any).subdomain
-			await this.registerAppSubdomain(appId, manifest.port, subdomain)
+			const fullHost = provisioned ? hostFromUrl(provisioned.url) : undefined
+			await this.registerAppSubdomain(appId, manifest.port, subdomain, fullHost)
 		} catch (error) {
 			this.logger.error(`Failed to register subdomain for ${appId}`, error)
 			// Don't fail install if subdomain registration fails
@@ -1002,8 +1019,13 @@ export default class Apps {
 	/**
 	 * Register a subdomain for an app in Caddy.
 	 * Called automatically after app installation.
+	 *
+	 * Phase 141-03: optional `fullHost` carries the Phase 140 canonical FQDN
+	 * minted by Server5 (e.g. `n8n-socinity.livinity.io`). When set, the Caddy
+	 * emitter + UI use it directly. Absent → legacy `${subdomain}.${mainDomain}`
+	 * compute path. Always lowercased.
 	 */
-	async registerAppSubdomain(appId: string, port: number, subdomain?: string): Promise<void> {
+	async registerAppSubdomain(appId: string, port: number, subdomain?: string, fullHost?: string): Promise<void> {
 		const domainConfig = await this.getDomainConfig()
 		if (!domainConfig?.active) {
 			this.logger.log(`No active domain configured, skipping subdomain registration for ${appId}`)
@@ -1022,6 +1044,7 @@ export default class Apps {
 			appId,
 			port,
 			enabled: true,
+			...(fullHost ? {host: fullHost.toLowerCase()} : {}),
 		}
 
 		if (existingIdx >= 0) {
@@ -1033,7 +1056,8 @@ export default class Apps {
 		await this.setSubdomains(subdomains)
 		await this.rebuildCaddy()
 
-		this.logger.log(`Registered subdomain ${subdomainName}.${domainConfig.domain} -> localhost:${port} for ${appId}`)
+		const displayHost = newSub.host ?? `${subdomainName}.${domainConfig.domain}`
+		this.logger.log(`Registered subdomain ${displayHost} -> localhost:${port} for ${appId}`)
 	}
 
 	/**
