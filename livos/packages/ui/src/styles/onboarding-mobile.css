@@ -100,3 +100,29 @@
 		max-height: 50vh;
 	}
 }
+
+/* ─── Phase 139-05 — prefers-reduced-motion respect ──────────────────── */
+@media (prefers-reduced-motion: reduce) {
+	[data-flow="onboarding"] .onb-step,
+	[data-flow="onboarding"] .onb-step.is-active,
+	[data-flow="onboarding"] .onb-step.is-leaving-forward,
+	[data-flow="onboarding"] .onb-step.is-leaving-back,
+	[data-flow="onboarding"] .fade-up {
+		animation: none !important;
+		transition: none !important;
+		filter: none !important;
+		transform: none !important;
+	}
+	[data-flow="onboarding"] .onb-ambient-orb {
+		animation: none !important;
+	}
+	[data-flow="onboarding"] .onb-progress-bar .seg .seg-fill {
+		transition: none !important;
+	}
+	[data-flow="onboarding"] .onb-progress-label .name {
+		transition: none !important;
+	}
+	[data-flow="onboarding"] .btn:hover:not(:disabled) {
+		transform: none !important;
+	}
+}
