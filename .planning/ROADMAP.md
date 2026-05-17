@@ -1296,17 +1296,17 @@ Plans:
 
 ---
 
-### Phase 133: Kill Server5 Tunnel Default + Custom-Domain-Only Hero — 🔴 PLANNED 2026-05-17 (carry-over from Phase 132 UAT discovery: dashboard hero hard-codes `${username}.livinity.io` regardless of user's custom domain; wizard Generate doesn't persist chosen domain in `custom_domains`)
+### Phase 133: Kill Server5 Tunnel Default + Custom-Domain-Only Hero + Wizard UX — 🔴 PLANNED 2026-05-17 (carry-over from Phase 132 UAT discovery: 3 bugs — A wizard doesn't persist chosen domain in `custom_domains`, B dashboard hero hard-codes `${username}.livinity.io`, C wizard Domain input is empty free-text without username auto-prefill)
 
-**Goal:** Stop the platform from EVER displaying `${username}.livinity.io` as a user's computer URL. Hero derives URL exclusively from active `custom_domains` (no tunnel fallback). Wizard Generate auto-registers the chosen domain. Per user directive 2026-05-17: *"Hiç bir şekilde Server5'deki tunnel'i kullansın istemiyorum"*.
-**Requirements**: V34-PLATFORM-01..03
+**Goal:** Stop the platform from EVER displaying `${username}.livinity.io` as a user's computer URL. Hero derives URL exclusively from active `custom_domains` (no tunnel fallback). Wizard Generate auto-registers the chosen domain. Wizard hybrid-mode Domain input pre-fills `${username}.` so users type only the parent domain. Per user directive 2026-05-17: *"Hiç bir şekilde Server5'deki tunnel'i kullansın istemiyorum"* + UX bug C reported later same day.
+**Requirements**: V34-PLATFORM-01..03 + V34-PLATFORM-01C
 **Depends on:** Phase 132
 **Plans:** 2 fix plans + 1 UAT (master plan at `.planning/phases/133-platform-hero-custom-domain-only-kill-server5-tunnel-default/133-PLAN.md`)
 
 Plans:
-- [ ] 133-01 wizard Generate auto-INSERT custom_domains (Bug A, autonomous)
+- [ ] 133-01 wizard Generate auto-INSERT custom_domains (Bug A) + HybridStep `${username}.` pre-fill (Bug C) — autonomous, single deploy
 - [ ] 133-02 hero URL derives from custom_domain only + lucylu data hotfix (Bug B, needs operator to supply lucylu's chosen domain)
-- [ ] 133-03 operator-walked fresh-user UAT (autonomous:false)
+- [ ] 133-03 operator-walked fresh-user UAT, Flows A/B/C/D (autonomous:false)
 
 ---
 

@@ -52,6 +52,25 @@ SELECT u.username, cd.domain, cd.status FROM users u
  lucylu   |        |       ← empty
 ```
 
+### Bug C — Wizard domain input doesn't auto-prepend username
+
+User-reported 2026-05-17: in the wizard's hybrid mode, the "Domain"
+input field is a single free-text input. The user has to type the
+full `${subdomain}.${parent}.${tld}` string by hand. There's no
+auto-prefill from the logged-in username.
+
+v34 vision (per `project_v34_account_tunnel_marketplace_vision` memory)
+is `{user}.{domain}.{tld}` — so the wizard SHOULD pre-fill the
+subdomain with `${username}` and let the user type only the parent
+domain (e.g. `bruceoz.com`) after the dot.
+
+Minimal UX fix: pre-fill the existing domain field with `${username}.`
+when the user lands on hybrid mode (one-time pre-fill, fully editable
+afterwards so users who want a different subdomain can override).
+
+This shares a file (`dashboard-install.html`) with Bug A's fix, so
+it folds into Plan 133-01 to avoid a duplicate deploy.
+
 ### Bug B — Dashboard hero hard-codes `${username}.livinity.io`
 
 `/opt/landing/livinity.io/dashboard.html:707`:
@@ -86,21 +105,25 @@ materialize the user's intent.
 
 | # | Plan | Bug | Files | autonomous |
 |---|------|-----|-------|------------|
-| 1 | 133-01 | Bug A | Server5 `/opt/platform/web/src/app/api/account/api-keys/route.ts` (live patch + pm2 restart web) | true |
-| 2 | 133-02 | Bug B + lucylu hotfix | Server5 `/opt/landing/livinity.io/dashboard.html` (live edit, no service restart) + DB INSERT for lucylu's chosen domain | false (needs operator to confirm lucylu's chosen domain string) |
-| 3 | 133-03 | UAT | Operator walks fresh-user end-to-end | false |
+| 1 | 133-01 | A + C | Server5 `/opt/platform/web/src/app/api/account/api-keys/route.ts` (Bug A handler) + `/opt/landing/livinity.io/dashboard-install.html` (Bug A fetch body + Bug C subdomain pre-fill) + `pm2 restart web` | true |
+| 2 | 133-02 | B + lucylu hotfix | Server5 `/opt/landing/livinity.io/dashboard.html` (live edit, no service restart) + DB INSERT for lucylu's chosen domain | false (needs operator to confirm lucylu's chosen domain string) |
+| 3 | 133-03 | UAT | Operator walks fresh-user end-to-end (Flow A/B/C/D — D covers Bug C subdomain pre-fill) | false |
 
-Plans 133-01 + 133-02 are file-disjoint and can ship in parallel; the
-DB hotfix for lucylu (in 133-02) depends on operator-supplied domain
-string, so 133-02 is `autonomous:false`.
+Plans 133-01 + 133-02 touch different files (`dashboard-install.html`
+vs `dashboard.html`) and can ship in parallel. Bug C folds into
+Plan 133-01 because it shares `dashboard-install.html` with Bug A's
+wizard wiring change — one edit, one deploy.
 
 ## Acceptance Criteria (final-UAT in 133-03)
 
 Pass criteria:
-- New user registers → wizard → fills hybrid mode + custom domain →
-  Generate API Key → DB shows new row in `custom_domains` with their
-  domain (status=`pending_dns` initially, flips to `active` after
-  install + DNS verify cycle).
+- New user registers → wizard → lands on hybrid mode → domain input
+  is **pre-filled with `${username}.`** (their logged-in username
+  followed by a dot, cursor positioned for them to type the parent
+  domain).
+- User types parent domain (e.g. `bruceoz.com`) after the dot →
+  Generate API Key → DB shows new row in `custom_domains` with the
+  full domain (`${username}.bruceoz.com`), status=`pending_dns`.
 - Dashboard hero for THAT user shows their custom domain (or
   install-pending empty state if status=`pending_dns`). Never
   shows `${username}.livinity.io`.
@@ -110,6 +133,7 @@ Pass criteria:
 Fail criteria (any → phase NOT complete):
 - Hero shows `${username}.livinity.io` for ANY user with a configured custom_domain.
 - New-user Generate doesn't INSERT into custom_domains.
+- Wizard domain input is empty/free-text when user lands on hybrid mode (Bug C not closed).
 - lucylu's hotfix INSERT errors (unique constraint, FK violation).
 
 ## Repo Decision (matches 132-01/02)
