@@ -1278,15 +1278,35 @@ Plans:
 
 **Depends on:** v36.0 milestone (Phases 122-129) ✅ CODE-COMPLETE.
 
-### Phase 132: v34 Install.sh Hardening — UAT-Driven Fixes (7 bugs discovered during Mini PC reinstall 2026-05-16). Fix: (1) dashboard-install.html data-type=module babel error, (2) dashboard.html missing /dashboard/install link, (3) emailVerified=false → 403 with no email service, (4) install.sh exits 2 via curl|bash (needs self-bootstrap), (5) pnpm-workspace.yaml ignoredBuiltDependencies vs package.json onlyBuiltDependencies conflict (pnpm 10), (6) deploy-livinityd.sh doesn't build /opt/liv/packages/{core,worker,mcp-server,memory}, (7) Caddy not reset-failed+started after install. ACCEPTANCE: fresh Ubuntu 24.04 VPS, wizard one-liner → install completes ≤10min → bruce.<domain> HTTPS UI live. NO manual on-server patches, NO 403 for unverified new users.
+### Phase 132: v34 Install.sh Hardening — UAT-Driven Fixes — 🟡 CODE-COMPLETE 2026-05-17 (commits 9860af01, 5b79f63e, f161a028, 63d19c1e, 282b0ec7, 578f65b6, 7a8c0eb8, 8b28f6ee, dcaa3ffa — sacred SHA preserved 9/9, pushed to origin/master, livinity.io/install.sh serving new self-bootstrap; awaiting operator fresh-VPS UAT)
 
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 131
-**Plans:** 0 plans
+**Goal:** Close 7 install bugs discovered in 2026-05-16 Mini PC reinstall UAT so the canonical wizard one-liner JUST WORKS on a fresh Ubuntu 24.04 VPS.
+**Requirements**: V34-INST-01..07
+**Depends on:** Phase 105
+**Plans:** 7 plans + UAT checklist
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 132 to break down)
+- [x] 132-01 Server5 dashboard HTML (Bugs #1+#2) — on-server canonical ratify
+- [x] 132-02 Server5 emailVerified gate removed (Bug #3) — Path A live patch
+- [x] 132-03 install.sh self-bootstrap (Bug #4)
+- [x] 132-04 pnpm config dedup (Bug #5)
+- [x] 132-05 @liv/core import-verify + reset-failed livos (Bug #6)
+- [x] 132-06 reset-failed caddy + 30s wait-for-active (Bug #7)
+- [x] 132-07 task 07-01 UAT checklist surfaced (07-02 operator walk deferred)
+
+---
+
+### Phase 133: Kill Server5 Tunnel Default + Custom-Domain-Only Hero — 🔴 PLANNED 2026-05-17 (carry-over from Phase 132 UAT discovery: dashboard hero hard-codes `${username}.livinity.io` regardless of user's custom domain; wizard Generate doesn't persist chosen domain in `custom_domains`)
+
+**Goal:** Stop the platform from EVER displaying `${username}.livinity.io` as a user's computer URL. Hero derives URL exclusively from active `custom_domains` (no tunnel fallback). Wizard Generate auto-registers the chosen domain. Per user directive 2026-05-17: *"Hiç bir şekilde Server5'deki tunnel'i kullansın istemiyorum"*.
+**Requirements**: V34-PLATFORM-01..03
+**Depends on:** Phase 132
+**Plans:** 2 fix plans + 1 UAT (master plan at `.planning/phases/133-platform-hero-custom-domain-only-kill-server5-tunnel-default/133-PLAN.md`)
+
+Plans:
+- [ ] 133-01 wizard Generate auto-INSERT custom_domains (Bug A, autonomous)
+- [ ] 133-02 hero URL derives from custom_domain only + lucylu data hotfix (Bug B, needs operator to supply lucylu's chosen domain)
+- [ ] 133-03 operator-walked fresh-user UAT (autonomous:false)
 
 ---
 
