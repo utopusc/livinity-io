@@ -1164,16 +1164,31 @@ _dld_seed_domain_config() {
 
         # The intended new domain is whatever we'd seed below per local_mode.
         # Peek it (mirror of step 3 below, dup'd intentionally to avoid restructure).
+        # Phase 134 Bug #17: prefer explicit --domain flag (LIVOS_DOMAIN env)
+        # over Redis-derived value, mirroring the seed-step logic so the
+        # override-vs-preserve decision is symmetric.
         local peek_mode peek_domain
-        peek_mode=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_mode 2>/dev/null || echo "")
-        case "$peek_mode" in
-            hybrid)  peek_domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:hybrid_subdomain 2>/dev/null || echo "") ;;
-            tunnel)  peek_domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:tunnel_domain 2>/dev/null || echo "") ;;
-            local-lan) peek_domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_tld 2>/dev/null || echo "") ;;
-        esac
+        local explicit_domain="${LIVOS_DOMAIN:-${DOMAIN:-}}"
+        if [[ -n "$explicit_domain" ]]; then
+            peek_domain="$explicit_domain"
+            peek_mode="${MODE:-hybrid}"
+        else
+            peek_mode=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_mode 2>/dev/null || echo "")
+            case "$peek_mode" in
+                hybrid)
+                    # Phase 134: hybrid → tunnel_domain (with hybrid_subdomain fallback)
+                    peek_domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:tunnel_domain 2>/dev/null || echo "")
+                    if [[ -z "$peek_domain" ]]; then
+                        peek_domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:hybrid_subdomain 2>/dev/null || echo "")
+                    fi
+                    ;;
+                tunnel)    peek_domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:tunnel_domain 2>/dev/null || echo "") ;;
+                local-lan) peek_domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_tld 2>/dev/null || echo "") ;;
+            esac
+        fi
 
-        if [[ -n "${DOMAIN:-}" ]] && [[ -n "$peek_domain" ]] && [[ "$peek_domain" != "$current_domain" ]]; then
-            warn "Bug #14 override: --domain '${DOMAIN}' supplied, current livos:domain:config='${current_domain}' differs from new '${peek_domain}' → force-update"
+        if [[ -n "$explicit_domain" ]] && [[ -n "$peek_domain" ]] && [[ "$peek_domain" != "$current_domain" ]]; then
+            warn "Bug #14/#17 override: --domain '${explicit_domain}' supplied, current livos:domain:config='${current_domain}' differs from new '${peek_domain}' → force-update"
             # Fall through to seed step below (skip the preserve return)
         else
             ok "livos:domain:config already present (reuse — preserves operator config)"
@@ -1182,23 +1197,43 @@ _dld_seed_domain_config() {
     fi
 
     # 3. Derive domain. Phase 132 Bug #16: prefer explicit --domain CLI flag
-    # (DOMAIN env var, set by parse-cli.sh) over Redis-key derivation.
+    # (LIVOS_DOMAIN env var, set by parse-cli.sh) over Redis-key derivation.
     # Reason: on fresh install, mode-hybrid.sh "queues" config values that
     # won't reach Redis until livinityd boots and drains the queue — but
     # this seed runs BEFORE that boot. So Redis appears empty and the
     # local_mode='unset' branch silently skips, leaving livinityd with no
     # domain config → "No app configured for this domain" 503.
-    # Solution: when DOMAIN is explicitly provided, trust it directly.
+    # Solution: when LIVOS_DOMAIN is explicitly provided, trust it directly.
+    #
+    # Phase 134 UAT (Bug #17, 2026-05-17): the original variable name `DOMAIN`
+    # was a mismatch — parse-cli.sh exports `LIVOS_DOMAIN`, not `DOMAIN`. The
+    # check silently fell through to Redis-derived lookup, which ALSO failed
+    # in Phase 134 hybrid mode because mode-hybrid.sh now delegates to mode-
+    # tunnel.sh (no `livos:domain:hybrid_subdomain` key written) while install.sh
+    # writes `local_mode=hybrid` (user-facing name). Result: tunnel-client raced
+    # in with `assignedUrl` (e.g. bruce.livinity.io) and clobbered the operator's
+    # actual domain (burak.livinity.live), causing cookie Domain mismatch +
+    # LIVINITY_SESSION reject + WS auth fail. See project_phase_134_complete
+    # memory for the full chain. Fix: honour both LIVOS_DOMAIN and legacy DOMAIN;
+    # in hybrid Redis fallback, also peek tunnel_domain (Phase 134 source of truth).
     local local_mode domain=""
-    if [[ -n "${DOMAIN:-}" ]]; then
-        domain="${DOMAIN}"
+    local resolved_domain="${LIVOS_DOMAIN:-${DOMAIN:-}}"
+    if [[ -n "$resolved_domain" ]]; then
+        domain="$resolved_domain"
         local_mode="${MODE:-hybrid}"
-        info "Bug #16: using explicit --domain '${domain}' (mode=${local_mode}) instead of Redis-derived value"
+        info "Bug #16/#17: using explicit --domain '${domain}' (mode=${local_mode}) instead of Redis-derived value"
     else
         local_mode=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:local_mode 2>/dev/null || echo "")
         case "$local_mode" in
             hybrid)
-                domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:hybrid_subdomain 2>/dev/null || echo "")
+                # Phase 134: hybrid delegates to tunnel internally, so the
+                # canonical Redis key is tunnel_domain (written by
+                # _persist_tunnel_mode_redis). Fall back to hybrid_subdomain
+                # for pre-Phase-134 installs that still wrote it.
+                domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:tunnel_domain 2>/dev/null || echo "")
+                if [[ -z "$domain" ]]; then
+                    domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:hybrid_subdomain 2>/dev/null || echo "")
+                fi
                 ;;
             tunnel)
                 domain=$(redis-cli -a "$redis_pass" --no-auth-warning GET livos:domain:tunnel_domain 2>/dev/null || echo "")
