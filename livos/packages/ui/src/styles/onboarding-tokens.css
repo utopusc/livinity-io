@@ -1,0 +1,88 @@
+/* Phase 135 — Livinity Design System tokens scoped to onboarding flow.
+ * Source: .planning/design-system/styles.css (Apple-like monochrome).
+ * Scoped via [data-flow="onboarding"] so other LivOS surfaces keep their
+ * brand color identity (per memory feedback_v36_monochrome_dock_rejected).
+ */
+
+[data-flow="onboarding"] {
+	/* Pure neutrals */
+	--liv-bg: #ffffff;
+	--liv-bg-2: #f5f5f7;
+	--liv-surface: #fafafa;
+	--liv-surface-2: #ebebed;
+	--liv-line: rgba(0, 0, 0, 0.08);
+	--liv-line-strong: rgba(0, 0, 0, 0.14);
+
+	--liv-fg: #1d1d1f;
+	--liv-fg-dim: #424245;
+	--liv-fg-mute: #6e6e73;
+	--liv-fg-faint: #a1a1a6;
+
+	--liv-accent: #1d1d1f;
+	--liv-accent-soft: rgba(0, 0, 0, 0.06);
+
+	/* Typography */
+	--liv-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+				"Helvetica Neue", "Geist", system-ui, sans-serif;
+	--liv-mono: "SF Mono", "Geist Mono", ui-monospace, Menlo, monospace;
+
+	/* Rhythm */
+	--liv-r-sm: 8px;
+	--liv-r: 12px;
+	--liv-r-lg: 18px;
+	--liv-r-xl: 28px;
+
+	--liv-max: 1200px;
+	--liv-pad: clamp(22px, 4vw, 56px);
+
+	/* Apply to descendants */
+	background: var(--liv-bg);
+	color: var(--liv-fg);
+	font-family: var(--liv-sans);
+	font-size: 17px;
+	line-height: 1.5;
+	letter-spacing: -0.01em;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+[data-flow="onboarding"] h1,
+[data-flow="onboarding"] h2,
+[data-flow="onboarding"] h3 {
+	font-family: var(--liv-sans);
+	letter-spacing: -0.02em;
+	color: var(--liv-fg);
+}
+
+[data-flow="onboarding"] .liv-card {
+	background: var(--liv-surface);
+	border: 1px solid var(--liv-line);
+	border-radius: var(--liv-r-lg);
+	padding: var(--liv-pad);
+}
+
+[data-flow="onboarding"] .liv-btn {
+	background: var(--liv-fg);
+	color: var(--liv-bg);
+	border-radius: var(--liv-r);
+	padding: 12px 22px;
+	font-weight: 500;
+	font-size: 15px;
+	border: none;
+	cursor: pointer;
+	transition: opacity 120ms;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+}
+
+[data-flow="onboarding"] .liv-btn:hover { opacity: 0.85; }
+[data-flow="onboarding"] .liv-btn:active { opacity: 0.7; }
+[data-flow="onboarding"] .liv-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+[data-flow="onboarding"] .liv-btn-secondary {
+	background: var(--liv-surface);
+	color: var(--liv-fg);
+	border: 1px solid var(--liv-line-strong);
+}

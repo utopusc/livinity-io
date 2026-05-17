@@ -16,6 +16,7 @@ import {WindowsContainer} from '@/modules/window'
 
 import {ErrorBoundaryPageFallback} from './components/ui/error-boundary-page-fallback'
 import {BareLayout, GradientLayout} from './layouts/bare/bare'
+import OnboardingShell from './layouts/onboarding-shell'
 import {Desktop} from './layouts/desktop'
 import {SheetLayout} from './layouts/sheet'
 import {EnsureLoggedIn, EnsureLoggedOut} from './modules/auth/ensure-logged-in'
@@ -199,10 +200,10 @@ export const router = createBrowserRouter([
 		],
 	},
 
-	// onboarding (gradient glassmorphism background)
+	// onboarding — Phase 135: Livinity DS shell (replaces GradientLayout for this subtree only)
 	{
 		path: '/onboarding',
-		Component: GradientLayout,
+		Component: OnboardingShell,
 		ErrorBoundary: ErrorBoundaryPageFallback,
 		children: [
 			{
