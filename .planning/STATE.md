@@ -45,7 +45,7 @@ phase_132_server5_live_patches:
   - "/opt/landing/livinity.io/dashboard.html — Install nav link added (Bug #2; on-server canonical)"
   - "/opt/platform/web/src/app/api/account/api-keys/route.ts — emailVerified gate removed + npm run build + pm2 restart web (Bug #3; on-server canonical, backup at .bak-pre-132-02-20260517-030607)"
 phase_132_sacred_sha_preserved: 7/7
-phase_132_pending_push: true   # commits are local on master, not yet pushed to utopusc/livinity-io. install.sh self-bootstrap fix only takes effect on Mini PC re-runs AFTER push.
+phase_132_pending_push: false  # pushed 2026-05-17 (271915f4..8b28f6ee) + Server5 `pm2 restart web` flushed Next.js 5-min revalidate cache → https://livinity.io/install.sh now serves Mode-3 self-bootstrap (verified: Self-bootstrap marker count 2).
 phase_122_commits: [c2dbcd0c, 518a0de6, 658714ee, 19d00b2f]
 phase_123_commits: [4e47cb72]
 phase_124_commits: [780d668a]
