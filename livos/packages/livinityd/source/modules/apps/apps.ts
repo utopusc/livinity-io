@@ -1017,6 +1017,21 @@ export default class Apps {
 	}
 
 	/**
+	 * Phase 141-05 — public wrappers around the private CF provisioning
+	 * helpers, so the domain.routes.ts tRPC layer can drive Server5
+	 * deprovision+provision on subdomain rename. The "appId" param name in the
+	 * underlying helpers is misleading — it's used verbatim as the CF slug
+	 * sent to Server5, NOT the LivOS internal app identifier. These wrappers
+	 * pass the SLUG explicitly to make the intent clear at call sites.
+	 */
+	async cfProvisionSubdomain(slug: string, port: number): Promise<{subdomain: string; url: string} | null> {
+		return this.provisionAppSubdomain(slug, port)
+	}
+	async cfDeprovisionSubdomain(slug: string): Promise<void> {
+		return this.deprovisionAppSubdomain(slug)
+	}
+
+	/**
 	 * Register a subdomain for an app in Caddy.
 	 * Called automatically after app installation.
 	 *

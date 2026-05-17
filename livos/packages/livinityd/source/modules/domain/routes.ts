@@ -248,13 +248,45 @@ const domain = router({
 				throw new Error(`Subdomain "${input.subdomain}" is already used by another app`)
 			}
 
-			// Update or add
+			// Phase 141-05: when the subdomain SLUG changes for an existing app,
+			// reconcile Cloudflare too — DELETE the old DNS+ingress, POST the new
+			// one. Without this the local Caddyfile points at a slug the CF tunnel
+			// doesn't ingress, public URL 404s. Server5 calls are best-effort
+			// (helpers swallow errors); on Server5 outage the local Caddy still
+			// updates and the operator can re-sync later.
 			const idx = subdomains.findIndex((s) => s.appId === input.appId)
+			const oldSlug = idx >= 0 ? subdomains[idx].subdomain : null
+			const newSlug = input.subdomain.toLowerCase()
+			const slugChanged = idx < 0 || oldSlug !== newSlug
+
+			let provisionedHost: string | undefined
+			if (input.enabled && slugChanged && ctx.apps) {
+				if (idx >= 0 && oldSlug) {
+					await ctx.apps.cfDeprovisionSubdomain(oldSlug)
+				}
+				const provisioned = await ctx.apps.cfProvisionSubdomain(newSlug, input.port)
+				if (provisioned) {
+					try {
+						provisionedHost = new URL(provisioned.url).hostname || undefined
+					} catch {
+						provisionedHost = undefined
+					}
+				}
+			}
+
 			const newSub: SubdomainConfig = {
-				subdomain: input.subdomain.toLowerCase(),
+				subdomain: newSlug,
 				appId: input.appId,
 				port: input.port,
 				enabled: input.enabled,
+				// Preserve a previously-stored host when no Server5 round-trip
+				// happened (slug unchanged, or apps ctx missing). Phase 140
+				// hyphen-pattern hosts must survive enable/disable toggles.
+				...(provisionedHost
+					? {host: provisionedHost.toLowerCase()}
+					: idx >= 0 && subdomains[idx].host
+						? {host: subdomains[idx].host}
+						: {}),
 			}
 
 			if (idx >= 0) {
@@ -272,7 +304,7 @@ const domain = router({
 
 			return {
 				success: true,
-				fullDomain: `${input.subdomain}.${config.domain}`,
+				fullDomain: newSub.host ?? `${newSlug}.${config.domain}`,
 			}
 		}),
 
@@ -305,12 +337,25 @@ const domain = router({
 
 	/**
 	 * Remove subdomain for an app.
+	 *
+	 * Phase 141-05: also deprovision the Cloudflare DNS + tunnel ingress on
+	 * Server5 so the public URL stops resolving when the user removes the
+	 * Settings → Public Access entry. Without this, leftover CF resources
+	 * accumulate and a re-enable later collides with stale state.
 	 */
 	removeAppSubdomain: privateProcedure
 		.input(z.object({appId: z.string()}))
 		.mutation(async ({ctx, input}) => {
 			const subdomains = await getSubdomains(ctx.livinityd.ai.redis)
+			const existing = subdomains.find((s) => s.appId === input.appId)
 			const filtered = subdomains.filter((s) => s.appId !== input.appId)
+
+			// Best-effort: helper logs + swallows errors so a Server5 outage
+			// doesn't block the local Settings UI removal.
+			if (existing && ctx.apps) {
+				await ctx.apps.cfDeprovisionSubdomain(existing.subdomain)
+			}
+
 			await setSubdomains(ctx.livinityd.ai.redis, filtered)
 
 			// Rebuild Caddy
