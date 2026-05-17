@@ -50,8 +50,11 @@ export const apps = router({
 		const torEnabled = await ctx.livinityd.store.get('torEnabled')
 
 		// Get all subdomain configs to include in app data
+		// Phase 141-03: also expose the optional canonical FQDN `host` minted
+		// by Server5 (Phase 140 hyphen-pattern) so the UI can render the
+		// correct public URL without recomputing `${subdomain}.${mainDomain}`.
 		const allSubdomains = await ctx.apps.getAllSubdomains()
-		const subdomainMap = new Map(allSubdomains.map(s => [s.appId, s.subdomain]))
+		const subdomainMap = new Map(allSubdomains.map(s => [s.appId, {subdomain: s.subdomain, host: s.host}]))
 
 		const appData = await Promise.all(
 			apps.map(async (app) => {
@@ -85,7 +88,13 @@ export const apps = router({
 					const appIcon = icon ?? builtinApp?.icon ?? `https://raw.githubusercontent.com/utopusc/livinity-apps-gallery/master/${app.id}/icon.svg`
 
 					// Get subdomain for this app (if configured)
-					const subdomain = subdomainMap.get(app.id) || app.id
+					// Phase 141-03: `host` carries the canonical FQDN (e.g.
+					// `n8n-socinity.livinity.io`) for Phase-140 hyphen-pattern
+					// entries; absent for legacy entries (UI falls back to
+					// `${subdomain}.${mainDomain}` compute path).
+					const sdEntry = subdomainMap.get(app.id)
+					const subdomain = sdEntry?.subdomain || app.id
+					const host = sdEntry?.host
 
 					return {
 						id: app.id,
@@ -96,6 +105,7 @@ export const apps = router({
 						path,
 						state: app.state,
 						subdomain,
+						host,
 						native: false as const,
 						credentials: {
 							defaultUsername,

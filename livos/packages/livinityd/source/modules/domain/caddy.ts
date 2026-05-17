@@ -53,6 +53,17 @@ export interface SubdomainConfig {
 	appId: string
 	port: number
 	enabled: boolean
+	/**
+	 * Phase 141-03: optional canonical full FQDN minted by Server5's
+	 * `/api/me/app-subdomain` (Phase 140 hyphen-pattern, e.g.
+	 * `n8n-socinity.livinity.io`). When set, the Caddy emitter and the UI use
+	 * this host directly instead of computing `${subdomain}.${mainDomain}` —
+	 * which would otherwise produce the wrong shape (e.g.
+	 * `n8n.socinity.livinity.io`, a level Universal SSL doesn't cover on the
+	 * Free plan). Absent for pre-Phase-140 entries → legacy compute path kicks
+	 * in for backwards compatibility.
+	 */
+	host?: string
 }
 
 export interface CaddyConfig {
@@ -72,6 +83,23 @@ export function validateDomain(domain: string): boolean {
  */
 export function validateSubdomain(subdomain: string): boolean {
 	return SUBDOMAIN_RE.test(subdomain) && subdomain.length <= 63
+}
+
+/**
+ * Phase 141-03 — Validate a full FQDN host (e.g. "n8n-socinity.livinity.io")
+ * for use as a Caddy block name. Matches each dot-separated label against
+ * SUBDOMAIN_RE (so each label is a valid DNS label) and caps total length at
+ * 253 chars per RFC 1035. Used by generateFullCaddyfile when a SubdomainConfig
+ * carries the Phase 140 hyphen-pattern `host` field.
+ */
+export function validateHost(host: string): boolean {
+	if (!host || host.length > 253) return false
+	const labels = host.split('.')
+	if (labels.length < 2) return false
+	for (const label of labels) {
+		if (!validateSubdomain(label)) return false
+	}
+	return true
 }
 
 /**
@@ -117,9 +145,20 @@ ${WS_TRANSPORT_BODY}
 	// Generate subdomain blocks
 	for (const sub of config.subdomains) {
 		if (!sub.enabled) continue
-		if (!validateSubdomain(sub.subdomain)) continue
 
-		const fullDomain = `${prefix}${sub.subdomain}.${config.mainDomain}`
+		// Phase 141-03: prefer the canonical FQDN minted by Server5 (Phase 140
+		// hyphen-pattern, e.g. `n8n-socinity.livinity.io`) when present.
+		// Legacy path computes `${sub.subdomain}.${mainDomain}` and validates
+		// the short label.
+		let host: string
+		if (sub.host) {
+			if (!validateHost(sub.host)) continue
+			host = sub.host
+		} else {
+			if (!validateSubdomain(sub.subdomain)) continue
+			host = `${sub.subdomain}.${config.mainDomain}`
+		}
+		const fullDomain = `${prefix}${host}`
 		if (multiUser) {
 			blocks.push(`${fullDomain} {
 	reverse_proxy 127.0.0.1:8080 {

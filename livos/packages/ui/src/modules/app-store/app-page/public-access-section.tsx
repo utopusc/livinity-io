@@ -85,7 +85,12 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 		)
 	}
 
-	const fullDomain = subdomain ? `${subdomain}.${mainDomain}` : null
+	// Phase 141-03/04: prefer the canonical FQDN minted by Server5 (Phase 140
+	// hyphen-pattern, e.g. `n8n-socinity.livinity.io`) when present. Legacy
+	// path computes `${subdomain}.${mainDomain}` which produces the wrong
+	// shape (one level too deep) for Phase 140 multi-tenant tunnels.
+	const canonicalHost = (existingSubdomain as {host?: string} | null | undefined)?.host
+	const fullDomain = canonicalHost ?? (subdomain ? `${subdomain}.${mainDomain}` : null)
 	const isConfigured = !!existingSubdomain
 	const isEnabled = existingSubdomain?.enabled || false
 
