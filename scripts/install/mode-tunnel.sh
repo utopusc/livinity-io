@@ -179,13 +179,38 @@ _register_cloudflared_service() {
         fail "expected token at ${secret_file} but it's missing/empty"
     fi
 
-    # If cloudflared.service already exists + is active, the operator has
+    # If cloudflared.service already exists + is enabled, the operator has
     # already run `cloudflared service install` before. Re-running it would
-    # fail with "already installed" — short-circuit instead. The token might
-    # have changed though, so we still re-write the secret file (above) and
-    # restart the service to pick up the new token.
+    # fail with "already installed" — short-circuit instead.
+    #
+    # Phase 141-09: BEFORE short-circuiting, reconcile the systemd unit's
+    # ExecStart --token argument against the freshly-fetched token in
+    # /etc/livos/secrets/cf-tunnel-token. The stage-dir cache + the
+    # short-circuit branch combined to silently leave the OLD user's token in
+    # the unit on a re-install with a different user — cloudflared would
+    # connect to the wrong tunnel + the new subdomain would 530. The
+    # token-in-secrets-file is already correct at this point (rewritten by
+    # _write_cf_tunnel_token_secret above); we just need to mirror that
+    # change into the ExecStart line.
     if systemctl list-unit-files cloudflared.service &>/dev/null \
             && systemctl is-enabled cloudflared.service &>/dev/null; then
+        local unit_file="/etc/systemd/system/cloudflared.service"
+        local current_token expected_token
+        expected_token=$(cat "$secret_file")
+        if [[ -f "$unit_file" ]] && grep -q -- "--token " "$unit_file"; then
+            current_token=$(grep -oE -- "--token [A-Za-z0-9_=.-]+" "$unit_file" | head -1 | awk '{print $2}')
+            if [[ -n "$current_token" && "$current_token" != "$expected_token" ]]; then
+                info "Phase 141-09: cloudflared.service token drift detected — rewriting unit"
+                # Escape token chars that have meaning to sed (use | as delim to
+                # avoid escaping the / and = chars present in CF JWTs).
+                sed -i "s|--token ${current_token}|--token ${expected_token}|" "$unit_file"
+                systemctl daemon-reload 2>/dev/null || true
+                ok "cloudflared.service ExecStart token reconciled"
+            fi
+        else
+            info "Phase 141-09: cloudflared.service has no --token in ExecStart (EnvironmentFile path?) — skipping rewrite"
+        fi
+        unset current_token expected_token
         ok "cloudflared.service already registered — restarting to pick up token"
         systemctl restart cloudflared.service \
             || warn "cloudflared restart returned non-zero (check 'journalctl -u cloudflared')"
