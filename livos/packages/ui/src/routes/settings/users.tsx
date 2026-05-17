@@ -77,27 +77,29 @@ export function UsersSection() {
 
 	return (
 		<div className='space-y-4'>
-			{/* Multi-user mode toggle */}
-			<div className='flex items-center justify-between rounded-radius-md border border-border-default bg-surface-base p-4'>
+			{/* Multi-user mode toggle — temporarily DISABLED 2026-05-17.
+			    Toggle currently writes Caddyfile entries that require wildcard
+			    DNS + wildcard CF Tunnel public hostname pre-provisioned in
+			    Cloudflare. Without those, clicking the toggle puts the system
+			    into a redirect loop (recovered by hand). Re-enable once
+			    wildcard provisioning is automated. Button kept visible but
+			    inert + clearly labeled "coming soon". */}
+			<div className='flex items-center justify-between rounded-radius-md border border-border-default bg-surface-base p-4 opacity-60'>
 				<div className='flex-1'>
-					<div className='text-body-sm font-medium text-text-primary'>Multi-User Mode</div>
+					<div className='text-body-sm font-medium text-text-primary'>
+						Multi-User Mode <span className='ml-2 rounded bg-surface-1 px-2 py-0.5 text-caption font-normal text-text-tertiary'>coming soon</span>
+					</div>
 					<div className='text-caption text-text-tertiary'>
-						Enable per-user app instances and subdomain routing. Caddy will use a wildcard certificate for all subdomains.
+						Enable per-user app instances and subdomain routing. Disabled — requires wildcard DNS + Cloudflare Tunnel route provisioning (planned).
 					</div>
 				</div>
 				<div className='flex items-center justify-center min-h-[44px] min-w-[44px]'>
 					<button
-						onClick={() => multiUserMut.mutate(!multiUserQ.data)}
-						disabled={multiUserMut.isPending}
-						className={`relative flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
-							multiUserQ.data ? 'bg-accent-green' : 'bg-white/20'
-						}`}
+						disabled
+						title='Multi-user mode is temporarily disabled — wildcard subdomain provisioning is on the roadmap.'
+						className='relative flex h-6 w-11 shrink-0 items-center rounded-full bg-white/10 px-0.5 cursor-not-allowed'
 					>
-						<div
-							className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${
-								multiUserQ.data ? 'translate-x-5' : 'translate-x-0'
-							}`}
-						/>
+						<div className='h-5 w-5 rounded-full bg-white/40 shadow translate-x-0' />
 					</button>
 				</div>
 			</div>
