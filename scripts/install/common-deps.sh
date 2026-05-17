@@ -37,5 +37,32 @@ install_common_deps() {
         ok "Caddy installed"
     fi
 
+    # Ensure /etc/hosts maps `localhost` on the IPv6 `::1` line.
+    # Phase 134 UAT discovered Ubuntu 24.04 default ships `::1 ip6-localhost
+    # ip6-loopback` WITHOUT `localhost` as an alias. x11vnc (called by the
+    # WebApp streaming pipeline) does `getaddrinfo("localhost", AAAA)` when
+    # `-localhost` is requested; without the alias it returns NXDOMAIN +
+    # rfbListenOnTCP6Port fails + x11vnc exits with code 2 → fluxbox loses
+    # display → cascade crash → wss://.../ws/stream/* close 1006 in browser.
+    # Adding `localhost` to the ::1 line resolves AAAA → ::1 and unblocks
+    # the WebApp pipeline. Idempotent: only touches the line if not already
+    # patched. Single point in install path so every mode (hybrid/tunnel/
+    # cloud/local-lan) gets it.
+    if grep -qE '^::1\s+(\S+\s+)*localhost(\s|$)' /etc/hosts; then
+        ok "/etc/hosts already has localhost on ::1 line"
+    elif grep -qE '^::1\s' /etc/hosts; then
+        info "Patching /etc/hosts ::1 line to include localhost alias (Phase 134 UAT fix)"
+        # cp -n preserves an existing backup; only creates one on first run
+        cp -n /etc/hosts /etc/hosts.pre-livos.bak 2>/dev/null || true
+        sed -i -E 's/^::1[[:space:]]+(.*)$/::1     localhost \1/' /etc/hosts
+        ok "/etc/hosts patched"
+    else
+        # No ::1 line at all (unusual) — append a complete one
+        info "Adding missing ::1 localhost line to /etc/hosts"
+        cp -n /etc/hosts /etc/hosts.pre-livos.bak 2>/dev/null || true
+        printf '::1     localhost ip6-localhost ip6-loopback\n' >> /etc/hosts
+        ok "/etc/hosts appended"
+    fi
+
     ok "Common deps complete"
 }
