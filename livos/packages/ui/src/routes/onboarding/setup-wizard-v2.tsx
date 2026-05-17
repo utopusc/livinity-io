@@ -6,6 +6,7 @@ import {ResumeBanner} from '@/features/onboarding-flow/resume-banner'
 import {Step} from '@/features/onboarding-flow/step'
 import {AccountStep} from '@/features/onboarding-flow/steps/account-step'
 import {ConnectAiStep} from '@/features/onboarding-flow/steps/connect-ai-step'
+import {DoneStep} from '@/features/onboarding-flow/steps/done-step'
 import {PersonalizeStep} from '@/features/onboarding-flow/steps/personalize-step'
 import {WallpaperStep} from '@/features/onboarding-flow/steps/wallpaper-step'
 import {WelcomeStep} from '@/features/onboarding-flow/steps/welcome-step'
@@ -174,7 +175,16 @@ function WizardInner() {
 							/>
 						</Step>
 						<Step stepIndex={5} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
-							<PlaceholderStep title='All set' />
+							<DoneStep
+								data={data}
+								isActive={stepper.idx === 5}
+								onEnter={() => {
+									try {
+										localStorage.removeItem(STORAGE_KEY)
+									} catch {}
+									window.location.href = '/'
+								}}
+							/>
 						</Step>
 					</div>
 				</div>
