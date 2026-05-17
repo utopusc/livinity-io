@@ -1296,6 +1296,27 @@ Plans:
 
 ---
 
+### Phase 135: LivOS Onboarding Redesign per Livinity DS — 🔴 PLANNED 2026-05-17 (vite dev server already running at localhost:3000; backend burak.livinity.live)
+
+**Goal:** All `/onboarding/*` routes + `features/local-setup/*` components in LivOS UI re-skinned to use the Livinity Design System aesthetic (Apple-like monochrome, system fonts, neutral palette). Live-developed at `localhost:3000` with hot reload, operator iterates visually. 11 files, ~2772 LOC.
+
+**Driver:** Post Phase 134 v2 fresh-install UAT, user requested: onboarding pages look like the Livinity DS handoff bundle (claude.ai/design). Marketing-shaped surfaces (onboarding qualifies per `[[feedback-v36-monochrome-dock-rejected]]`) can go monochrome; app-shaped surfaces (dock, app store, desktop) keep their brand color identity, so DS tokens scoped via `[data-flow="onboarding"]` only.
+
+**Locked decisions:** D-135-DS-MONO · D-135-LIVE-DEV (localhost:3000) · D-135-LAYOUT (new OnboardingShell replaces GradientLayout for /onboarding/* only) · D-135-TOKENS (scoped via `[data-flow="onboarding"]`) · D-135-SACRED-SHA.
+
+**Plans:** 7 sub-plans, 5 execution waves (master at `.planning/phases/135-onboarding-redesign-livinity-ds/135-PLAN.md`)
+- [ ] 135-01 DS tokens + OnboardingShell layout (foundational, Wave 1)
+- [ ] 135-02 Entry screen redesign (Wave 2, parallel with 135-03)
+- [ ] 135-03 Setup-wizard core redesign — 1402 LOC file (Wave 2)
+- [ ] 135-04 Create-account + account-created (Wave 3, parallel with 135-05)
+- [ ] 135-05 Local-setup feature components — 5 files (Wave 3)
+- [ ] 135-06 Restore flow redesign (Wave 4)
+- [ ] 135-07 Live UAT walk + screenshot evidence (Wave 5, operator-walked)
+
+**Depends on:** Phase 134 ✅ (Mini PC backend stable at burak.livinity.live)
+
+---
+
 ### Phase 134: CF Tunnel as Default Hybrid Transport — ✅ Shipped 2026-05-17 (commits d6a8c3aa, f492603a, 41422c8d + Caddyfile-fix hot-fix — sacred SHA preserved, Mini PC UAT PASS via burak.livinity.live HTTP 200 external)
 
 **Goal:** `--mode hybrid` (the default user-facing install mode) transparently uses Cloudflare Tunnel as its transport. Direct-LAN code (Caddy LE DNS-01 + A-record-to-LAN-IP) retired. cloudflared dials outbound — works behind no-public-IP / CGNAT / Client Isolation. Universal one-liner install preserved across VPS / VDS / Mini PC / home boxes. Existing installs migrate via automated `migrate-to-cf-tunnel.sh`. Server5 wizard updated to emit Phase 134 contract (`--cf-tunnel-token`, no zone-id).
