@@ -1,0 +1,102 @@
+/* Phase 139-03 — Onboarding mobile responsive overrides.
+ *
+ * The reference onboarding.css (auto-ported to onboarding-flow.css) is
+ * desktop-first with hard breakpoints. This file overlays media queries
+ * for narrow viewports (360px to ~768px). All rules scoped under
+ * [data-flow="onboarding"] like the rest.
+ *
+ * Imported by OnboardingShell after onboarding-flow.css so these rules
+ * override.
+ */
+
+/* ─── ≤600px: stack the top bar; collapse meta column ──────────────── */
+@media (max-width: 600px) {
+	[data-flow="onboarding"] .onb-stage {
+		padding: 16px;
+	}
+	[data-flow="onboarding"] .onb-top {
+		grid-template-columns: 1fr;
+		grid-template-rows: auto auto;
+		row-gap: 12px;
+	}
+	[data-flow="onboarding"] .onb-top-brand {
+		justify-self: start;
+	}
+	[data-flow="onboarding"] .onb-top-meta {
+		position: absolute;
+		top: 12px;
+		right: 12px;
+	}
+	[data-flow="onboarding"] .onb-progress {
+		min-width: 0;
+		width: 100%;
+	}
+	[data-flow="onboarding"] .onb-progress-label .eta {
+		display: none;
+	}
+	[data-flow="onboarding"] .onb-card {
+		width: 100%;
+	}
+	[data-flow="onboarding"] .onb-step {
+		padding: 4px 0;
+		gap: 20px;
+	}
+	[data-flow="onboarding"] .onb-foot {
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+	}
+	[data-flow="onboarding"] .onb-foot-mid {
+		display: none;  /* hide kbd hint on mobile — no keyboard */
+	}
+	[data-flow="onboarding"] .onb-foot-actions {
+		grid-column: 2;
+	}
+}
+
+/* ─── ≤720px: 2FA layout column ─────────────────────────────────────── */
+@media (max-width: 720px) {
+	[data-flow="onboarding"] .tfa-layout {
+		flex-direction: column;
+		gap: 24px;
+	}
+	[data-flow="onboarding"] .tfa-qr-side {
+		width: 100%;
+		align-items: center;
+	}
+	[data-flow="onboarding"] .tfa-input-side {
+		width: 100%;
+	}
+}
+
+/* ─── ≤500px: wallpaper grid 2-col ──────────────────────────────────── */
+@media (max-width: 500px) {
+	[data-flow="onboarding"] .wallpaper-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	[data-flow="onboarding"] .wp-preview {
+		height: 140px;
+	}
+	[data-flow="onboarding"] .role-group .role-chip,
+	[data-flow="onboarding"] .style-cards .style-card,
+	[data-flow="onboarding"] .usecase-chips .usecase-chip {
+		min-height: 44px;  /* Apple HIG tap-target minimum */
+	}
+}
+
+/* ─── HelpBubble: hide when virtual keyboard open (visualViewport-based) ─ */
+@media (max-width: 720px) {
+	[data-flow="onboarding"] .fx-help {
+		bottom: 16px;
+		right: 16px;
+	}
+	body.kbd-open [data-flow="onboarding"] .fx-help {
+		display: none;
+	}
+}
+
+/* ─── Confetti canvas: smaller on mobile to keep perf reasonable ─────── */
+@media (max-width: 600px) {
+	[data-flow="onboarding"] .fx-confetti-canvas {
+		max-height: 50vh;
+	}
+}
