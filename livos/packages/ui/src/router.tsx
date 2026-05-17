@@ -44,6 +44,10 @@ import {Settings} from './routes/settings'
 const AgentMarketplace = React.lazy(() => import('./routes/agent-marketplace'))
 const MultiUserLogin = React.lazy(() => import('./routes/login/index'))
 const SetupWizard = React.lazy(() => import('./routes/onboarding/setup-wizard'))
+// Phase 135-D — new reference-aligned wizard. Mounts at /onboarding once
+// each step (135-E..J) is filled in. Until then the placeholder steps
+// exercise the shell (top bar, progress, transitions, ambient, sound, help).
+const SetupWizardV2 = React.lazy(() => import('./routes/onboarding/setup-wizard-v2'))
 const OnboardingRestore = React.lazy(() => import('./routes/onboarding/restore'))
 const FactoryReset = React.lazy(() => import('./routes/factory-reset'))
 const FactoryResetRecoveryHelp = React.lazy(() => import('./routes/help/factory-reset-recovery'))
@@ -208,7 +212,7 @@ export const router = createBrowserRouter([
 		children: [
 			{
 				index: true,
-				element: <SetupWizard />,
+				element: <SetupWizardV2 />,
 			},
 			{
 				path: 'restore',
