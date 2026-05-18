@@ -20,6 +20,9 @@ export interface App {
   icon_url: string;
   featured: boolean;
   verified: boolean;
+  // Manifest shape varies by section (SPEC.md §2). The detail page reads
+  // optional fields like installSize / install / port — typed loose here.
+  manifest?: unknown;
 }
 
 // Lightweight version returned by /api/apps list endpoint

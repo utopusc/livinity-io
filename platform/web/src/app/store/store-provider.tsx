@@ -13,17 +13,26 @@ export function useStore(): StoreContextValue {
   return ctx;
 }
 
+const VALID_SECTIONS: readonly Section[] = ['app', 'webapp', 'native', 'ai', 'plugin'];
+
 function StoreProviderInner({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const instanceName = searchParams.get('instance');
+  // Section hint via URL — set by SectionTabs when navigating from a
+  // detail page back to /store. Only read once at mount; subsequent
+  // changes happen through setSelectedSection.
+  const sectionHint = searchParams.get('section');
+  const initialSection: Section = VALID_SECTIONS.includes(sectionHint as Section)
+    ? (sectionHint as Section)
+    : 'app';
 
   const [apps, setApps] = useState<AppSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedSection, setSelectedSection] = useState<Section>('app');
+  const [selectedSection, setSelectedSection] = useState<Section>(initialSection);
   const bridge = usePostMessage();
 
   useEffect(() => {

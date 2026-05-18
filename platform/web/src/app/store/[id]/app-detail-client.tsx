@@ -1,57 +1,79 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useStore } from '../store-provider';
+import { CATEGORIES } from '../types';
+import type { App } from '../types';
+import { AppIcon } from '../components/app-icon';
+import { Icon } from '../components/icon';
+import { appVisual } from '../lib/app-visual';
 
-function copyToClipboard(text: string): boolean {
-  // Try modern API first
+interface AppDetailClientProps {
+  appId: string;
+}
+
+function copyToClipboard(text: string): void {
   if (navigator.clipboard?.writeText) {
     navigator.clipboard.writeText(text).catch(() => {});
-    return true;
+    return;
   }
-  // Fallback: textarea + execCommand
   const ta = document.createElement('textarea');
   ta.value = text;
   ta.style.position = 'fixed';
   ta.style.opacity = '0';
   document.body.appendChild(ta);
   ta.select();
-  try { document.execCommand('copy'); } catch {}
+  try {
+    document.execCommand('copy');
+  } catch {
+    /* ignore */
+  }
   document.body.removeChild(ta);
-  return true;
 }
-import { CATEGORIES } from '../types';
-import type { App } from '../types';
 
-interface AppDetailClientProps {
-  appId: string;
+// Format byte count → "1.2 GB" / "768 MB" / etc. for the meta panel.
+function humanSize(bytes?: number | null): string | null {
+  if (!bytes || bytes <= 0) return null;
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let v = bytes;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
 }
 
 export function AppDetailClient({ appId }: AppDetailClientProps) {
-  const { token, instanceName, isEmbedded, getAppStatus, getInstallProgress, appCredentials, clearCredentials, sendInstall, sendUninstall, sendOpen, getAppSubdomain, getAppDefaultCreds, sendUpdateSubdomain } = useStore();
-  const status = isEmbedded ? getAppStatus(appId) : 'not_installed';
-  const isInstalled = status === 'running' || status === 'stopped';
-  const defaultCreds = isEmbedded ? getAppDefaultCreds(appId) : undefined;
-  const currentSubdomain = getAppSubdomain(appId);
-  const [editingSubdomain, setEditingSubdomain] = useState(false);
-  const [subdomainValue, setSubdomainValue] = useState('');
+  const {
+    token,
+    instanceName,
+    isEmbedded,
+    getAppStatus,
+    getInstallProgress,
+    appCredentials,
+    clearCredentials,
+    sendInstall,
+    sendUninstall,
+    sendOpen,
+    getAppSubdomain,
+    getAppDefaultCreds,
+    sendUpdateSubdomain,
+  } = useStore();
+
   const [app, setApp] = useState<App | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCredentials, setShowCredentials] = useState(false);
+  const [editingSubdomain, setEditingSubdomain] = useState(false);
+  const [subdomainValue, setSubdomainValue] = useState('');
 
-  // Auto-show credentials dialog when credentials arrive for this app
   useEffect(() => {
     if (appCredentials && appCredentials.appId === appId) {
       setShowCredentials(true);
     }
   }, [appCredentials, appId]);
-
-  const params = new URLSearchParams();
-  if (token) params.set('token', token);
-  if (instanceName) params.set('instance', instanceName);
-  const qs = params.toString();
 
   useEffect(() => {
     if (!token) {
@@ -73,381 +95,473 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
       .finally(() => setLoading(false));
   }, [appId, token]);
 
-  // Loading skeleton
+  const status = isEmbedded ? getAppStatus(appId) : 'not_installed';
+  const isInstalled = status === 'running' || status === 'stopped';
+  const currentSubdomain = isEmbedded ? getAppSubdomain(appId) : undefined;
+  const defaultCreds = isEmbedded ? getAppDefaultCreds(appId) : undefined;
+
+  // qs for back-link to /store with section preserved
+  const backParams = new URLSearchParams();
+  if (token) backParams.set('token', token);
+  if (instanceName) backParams.set('instance', instanceName);
+  if (app?.section) backParams.set('section', app.section);
+  const backHref = `/store?${backParams.toString()}`;
+
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl px-6 py-8 animate-pulse">
-        <div className="mb-8 h-4 w-16 rounded bg-[#f5f5f7]" />
-        <div className="mb-8 flex items-start gap-6">
-          <div className="h-32 w-32 shrink-0 rounded-3xl bg-[#f5f5f7]" />
-          <div className="flex-1 space-y-3 pt-2">
-            <div className="h-8 w-48 rounded bg-[#f5f5f7]" />
-            <div className="h-5 w-64 rounded bg-[#f5f5f7]" />
-            <div className="h-4 w-32 rounded bg-[#f5f5f7]" />
-          </div>
-        </div>
-        <div className="h-12 w-32 rounded-xl bg-[#f5f5f7]" />
+      <div className="main">
+        <p style={{ color: 'var(--fg-mute)', fontSize: 14 }}>Loading…</p>
       </div>
     );
   }
 
-  // Error state
   if (error || !app) {
     return (
-      <div className="mx-auto max-w-3xl px-6 py-8">
-        <Link
-          href={`/store${qs ? `?${qs}` : ''}`}
-          className="mb-8 inline-flex items-center gap-1 text-sm text-teal-500 transition-colors hover:text-teal-600"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M10 12L6 8l4-4" />
-          </svg>
-          Store
+      <div className="main">
+        <Link href="/store" className="detail-back">
+          <Icon name="arrow-left" size={12} /> Back to Store
         </Link>
-        <div className="rounded-xl bg-[#f5f5f7] px-8 py-6 text-center">
-          <p className="text-sm text-[#86868b]">{error || 'App not found'}</p>
+        <div className="state" style={{ padding: '64px 32px' }}>
+          <div className="state-glyph">
+            <Icon name="alert" size={26} />
+          </div>
+          <h2 className="state-title">{error || 'App not found'}</h2>
         </div>
       </div>
     );
   }
 
   const cat = CATEGORIES[app.category];
+  const visual = appVisual(app.id, app.name);
+
+  // Optional structured fields read from manifest — we don't enforce
+  // these at the API/Drizzle layer, so use cast + safe access.
+  type Manifest = {
+    port?: number | string;
+    install?: { primary?: 'apt' | 'appimage'; aptPackages?: string[] };
+    install_size?: number;
+    requirements?: { ram?: string; disk?: string };
+  };
+  const manifest = app.manifest as Manifest | undefined;
+  const installSize = humanSize((manifest as { installSize?: number } | undefined)?.installSize);
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
-      {/* Back link */}
-      <Link
-        href={`/store${qs ? `?${qs}` : ''}`}
-        className="mb-8 inline-flex items-center gap-1 text-sm text-teal-500 transition-colors hover:text-teal-600"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M10 12L6 8l4-4" />
-        </svg>
-        Store
-      </Link>
+    <div className="detail">
+      <div className="detail-hero">
+        <Link href={backHref} className="detail-back">
+          <Icon name="arrow-left" size={12} /> Back to Store
+        </Link>
 
-      {/* App header */}
-      <div className="mb-8 flex flex-col items-start gap-6 sm:flex-row">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={app.icon_url}
-          alt={`${app.name} icon`}
-          className="h-32 w-32 shrink-0 rounded-3xl bg-white object-contain p-3 shadow-lg"
-        />
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold text-[#1d1d1f]">{app.name}</h1>
-          <p className="mt-1 text-lg text-[#86868b]">{app.tagline}</p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {cat && (
-              <span className="rounded-full bg-[#f5f5f7] px-3 py-1 text-xs font-medium text-[#1d1d1f]">
-                {cat.icon} {cat.label}
-              </span>
-            )}
-            <span className="rounded-full bg-[#f5f5f7] px-3 py-1 text-xs font-medium text-[#86868b]">
-              v{app.version}
+        <div className="detail-header-row">
+          {app.icon_url ? (
+            <span
+              className="detail-icon"
+              style={{ background: '#fff', padding: 14, color: 'var(--fg)' }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={app.icon_url}
+                alt=""
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  display: 'block',
+                }}
+              />
             </span>
-            {app.verified && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600">
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  fill="currentColor"
-                >
-                  <path d="M6 0a6 6 0 1 1 0 12A6 6 0 0 1 6 0Zm2.65 4.15a.5.5 0 0 0-.8-.6L5.4 7.2 4.15 5.95a.5.5 0 1 0-.7.7l1.6 1.6a.5.5 0 0 0 .75-.05l2.85-4.05Z" />
-                </svg>
-                Verified
-              </span>
+          ) : (
+            <span
+              className="detail-icon"
+              style={{ background: `linear-gradient(135deg, ${visual.c1}, ${visual.c2})` }}
+            >
+              {visual.mono}
+            </span>
+          )}
+
+          <div className="detail-meta">
+            <h1 className="detail-name">
+              {app.name}
+              {app.verified && <span className="tag verified">Verified</span>}
+            </h1>
+            <div className="detail-tag">{app.tagline}</div>
+            <div className="detail-meta-row">
+              <span>{cat?.label ?? app.category}</span>
+              <span className="sep">·</span>
+              <span>v{app.version}</span>
+              {installSize && (
+                <>
+                  <span className="sep">·</span>
+                  <span>{installSize}</span>
+                </>
+              )}
+              <span className="sep">·</span>
+              <span>{app.section}</span>
+            </div>
+          </div>
+
+          <InstallStateButton
+            isEmbedded={isEmbedded}
+            status={status}
+            progress={getInstallProgress(appId)}
+            onInstall={() => sendInstall(appId)}
+            onUninstall={() => sendUninstall(appId)}
+            onOpen={() => sendOpen(appId)}
+          />
+        </div>
+      </div>
+
+      <div className="detail-body">
+        <div className="detail-grid">
+          <div>
+            <div className="detail-section">
+              <h3 className="detail-section-title">About</h3>
+              <div className="detail-text">
+                <p style={{ whiteSpace: 'pre-line' }}>{app.description}</p>
+              </div>
+            </div>
+
+            {/* Subdomain editor — only meaningful when embedded + installed */}
+            {isEmbedded && isInstalled && instanceName && (
+              <div className="detail-section">
+                <h3 className="detail-section-title">Access URL</h3>
+                {editingSubdomain ? (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      className="form-input-detail"
+                      value={subdomainValue}
+                      onChange={(e) =>
+                        setSubdomainValue(
+                          e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''),
+                        )
+                      }
+                      autoFocus
+                      style={{
+                        padding: '6px 10px',
+                        background: 'var(--bg)',
+                        border: '1px solid var(--line-strong)',
+                        borderRadius: 'var(--r-sm)',
+                        fontSize: 13,
+                        outline: 'none',
+                        fontFamily: 'var(--mono)',
+                      }}
+                    />
+                    <span style={{ color: 'var(--fg-mute)', fontSize: 12, fontFamily: 'var(--mono)' }}>
+                      .{instanceName}
+                    </span>
+                    <button
+                      type="button"
+                      className="install primary"
+                      style={{ padding: '6px 14px', fontSize: 12 }}
+                      onClick={() => {
+                        if (subdomainValue && subdomainValue !== currentSubdomain) {
+                          sendUpdateSubdomain(appId, subdomainValue);
+                        }
+                        setEditingSubdomain(false);
+                      }}
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      className="install ghost"
+                      style={{ padding: '6px 14px', fontSize: 12 }}
+                      onClick={() => setEditingSubdomain(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <code
+                      style={{
+                        fontFamily: 'var(--mono)',
+                        fontSize: 13,
+                        color: 'var(--fg)',
+                        background: 'var(--bg-2)',
+                        padding: '6px 10px',
+                        borderRadius: 'var(--r-sm)',
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      https://{currentSubdomain || app.id}.{instanceName}
+                    </code>
+                    <button
+                      type="button"
+                      className="install ghost"
+                      style={{ padding: '4px 12px', fontSize: 11 }}
+                      onClick={() => {
+                        setSubdomainValue(currentSubdomain || app.id);
+                        setEditingSubdomain(true);
+                      }}
+                    >
+                      Change
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
+
+            {/* Default credentials shown on App page after install */}
+            {isEmbedded && isInstalled && defaultCreds && (defaultCreds.username || defaultCreds.password) && (
+              <div className="detail-section">
+                <h3 className="detail-section-title">Default credentials</h3>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 16,
+                    padding: 14,
+                    background: 'rgba(217, 119, 6, 0.06)',
+                    border: '1px solid rgba(217, 119, 6, 0.2)',
+                    borderRadius: 'var(--r)',
+                    fontSize: 13,
+                  }}
+                >
+                  {defaultCreds.username && (
+                    <CopyChip label="User" value={defaultCreds.username} />
+                  )}
+                  {defaultCreds.password && (
+                    <CopyChip label="Pass" value={defaultCreds.password} />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!isEmbedded && (
+              <div className="detail-section">
+                <p style={{ color: 'var(--fg-mute)', fontSize: 13, fontStyle: 'italic' }}>
+                  Open this store from your LivOS instance to install apps.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="meta-panel">
+              <div className="meta-row">
+                <span className="k">Section</span>
+                <span className="v">{app.section}</span>
+              </div>
+              <div className="meta-row">
+                <span className="k">Category</span>
+                <span className="v">{cat?.label ?? app.category}</span>
+              </div>
+              <div className="meta-row">
+                <span className="k">Version</span>
+                <span className="v mono">v{app.version}</span>
+              </div>
+              <div className="meta-row">
+                <span className="k">Slug</span>
+                <span className="v mono">{app.id}</span>
+              </div>
+              {app.verified && (
+                <div className="meta-row">
+                  <span className="k">Verified</span>
+                  <span className="v">Yes</span>
+                </div>
+              )}
+              {app.featured && (
+                <div className="meta-row">
+                  <span className="k">Featured</span>
+                  <span className="v">Yes</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Action buttons */}
-      {(() => {
-        const status = getAppStatus(app.id);
-
-        if (!isEmbedded) {
-          return (
-            <p className="mb-10 text-sm text-[#86868b]">
-              Open this store from your LivOS instance to install apps
-            </p>
-          );
-        }
-
-        if (status === 'installing') {
-          const progress = getInstallProgress(app.id);
-          return (
-            <div className="mb-10">
-              <button
-                disabled
-                className="rounded-xl bg-[#f5f5f7] px-8 py-3 text-sm font-semibold text-[#86868b] cursor-not-allowed"
-              >
-                Installing{progress > 0 ? ` ${progress}%` : '...'}
-              </button>
-              {progress > 0 && (
-                <div className="mt-3 h-1.5 w-48 rounded-full bg-[#f5f5f7] overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-teal-500 transition-all duration-500"
-                    style={{ width: `${Math.min(progress, 100)}%` }}
-                  />
-                </div>
-              )}
-            </div>
-          );
-        }
-
-        if (status === 'uninstalling') {
-          return (
-            <div className="mb-10">
-              <button
-                disabled
-                className="rounded-xl bg-red-50 px-8 py-3 text-sm font-semibold text-red-400 cursor-not-allowed"
-              >
-                Uninstalling...
-              </button>
-            </div>
-          );
-        }
-
-        if (status === 'running') {
-          return (
-            <div className="mb-10 flex gap-3">
-              <button
-                onClick={() => sendOpen(app.id)}
-                className="rounded-xl bg-teal-500 px-8 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-teal-600 hover:shadow-md active:scale-[0.98]"
-              >
-                Open
-              </button>
-              <button
-                onClick={() => sendUninstall(app.id)}
-                className="rounded-xl bg-[#f5f5f7] px-6 py-3 text-sm font-semibold text-red-500 transition-all hover:bg-red-50 active:scale-[0.98]"
-              >
-                Uninstall
-              </button>
-            </div>
-          );
-        }
-
-        if (status === 'stopped') {
-          return (
-            <div className="mb-10 flex gap-3">
-              <button
-                onClick={() => sendOpen(app.id)}
-                className="rounded-xl bg-teal-500 px-8 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-teal-600 hover:shadow-md active:scale-[0.98]"
-              >
-                Start
-              </button>
-              <button
-                onClick={() => sendUninstall(app.id)}
-                className="rounded-xl bg-[#f5f5f7] px-6 py-3 text-sm font-semibold text-red-500 transition-all hover:bg-red-50 active:scale-[0.98]"
-              >
-                Uninstall
-              </button>
-            </div>
-          );
-        }
-
-        // not_installed
-        return (
-          <button
-            onClick={() => sendInstall(app.id)}
-            className="mb-10 rounded-xl bg-teal-500 px-8 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-teal-600 hover:shadow-md active:scale-[0.98]"
-          >
-            Install
-          </button>
-        );
-      })()}
-
-      {/* Description */}
-      <section className="mb-10">
-        <h2 className="mb-3 text-xl font-semibold text-[#1d1d1f]">
-          About this app
-        </h2>
-        <p className="whitespace-pre-line text-sm leading-relaxed text-[#424245]">
-          {app.description}
-        </p>
-      </section>
-
-      {/* Info grid */}
-      <section>
-        <h2 className="mb-3 text-xl font-semibold text-[#1d1d1f]">
-          Information
-        </h2>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-[#f5f5f7] p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">
-              Version
-            </p>
-            <p className="mt-1 text-sm font-semibold text-[#1d1d1f]">
-              {app.version}
-            </p>
-          </div>
-          <div className="rounded-xl bg-[#f5f5f7] p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">
-              Category
-            </p>
-            <p className="mt-1 text-sm font-semibold text-[#1d1d1f]">
-              {cat?.label || app.category}
-            </p>
-          </div>
-          {isInstalled && instanceName && (
-            <div className="col-span-2 rounded-xl bg-[#f5f5f7] p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">
-                  Access URL
-                </p>
-                {isEmbedded && (
-                  <button
-                    onClick={() => {
-                      setSubdomainValue(currentSubdomain || app.id);
-                      setEditingSubdomain(true);
-                    }}
-                    className="rounded-md bg-teal-500/10 px-2.5 py-1 text-xs font-semibold text-teal-600 transition-colors hover:bg-teal-500/20"
-                  >
-                    Change
-                  </button>
-                )}
-              </div>
-              {editingSubdomain ? (
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="flex items-center rounded-lg border border-[#d2d2d7] bg-white">
-                    <input
-                      type="text"
-                      value={subdomainValue}
-                      onChange={(e) => setSubdomainValue(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                      className="w-24 rounded-l-lg px-2 py-1.5 text-sm text-[#1d1d1f] outline-none"
-                      autoFocus
-                    />
-                    <span className="border-l border-[#d2d2d7] px-2 py-1.5 text-xs text-[#86868b]">
-                      .{instanceName}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (subdomainValue && subdomainValue !== currentSubdomain) {
-                        sendUpdateSubdomain(app.id, subdomainValue);
-                      }
-                      setEditingSubdomain(false);
-                    }}
-                    className="rounded-lg bg-teal-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-600"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setEditingSubdomain(false)}
-                    className="rounded-lg px-2 py-1.5 text-xs text-[#86868b] hover:text-[#1d1d1f]"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <p className="mt-1 text-sm font-semibold text-teal-600 break-all">
-                  https://{currentSubdomain || app.id}.{instanceName}
-                </p>
-              )}
-            </div>
-          )}
-          {isInstalled && defaultCreds && (defaultCreds.username || defaultCreds.password) && (
-            <div className="col-span-2 rounded-xl bg-amber-50 p-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-amber-700">
-                Default Credentials
-              </p>
-              <div className="mt-2 flex items-center gap-4">
-                {defaultCreds.username && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-amber-600">User:</span>
-                    <span className="font-mono text-sm text-[#1d1d1f]">{defaultCreds.username}</span>
-                    <button onClick={() => copyToClipboard(defaultCreds.username)} className="text-amber-500 hover:text-amber-700" title="Copy">
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 0 1 2 9.5v-7A1.5 1.5 0 0 1 3.5 1h7A1.5 1.5 0 0 1 12 2.5V5"/></svg>
-                    </button>
-                  </div>
-                )}
-                {defaultCreds.password && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-amber-600">Pass:</span>
-                    <span className="font-mono text-sm text-[#1d1d1f]">{defaultCreds.password.length > 20 ? defaultCreds.password.slice(0, 16) + '...' : defaultCreds.password}</span>
-                    <button onClick={() => copyToClipboard(defaultCreds.password)} className="text-amber-500 hover:text-amber-700" title="Copy">
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 0 1 2 9.5v-7A1.5 1.5 0 0 1 3.5 1h7A1.5 1.5 0 0 1 12 2.5V5"/></svg>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Credentials dialog */}
       {showCredentials && appCredentials && appCredentials.appId === app.id && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-[#1d1d1f]">App Credentials</h3>
-            <p className="mt-1 text-sm text-[#86868b]">
-              Save these credentials to log into {app.name}
-            </p>
-            <div className="mt-4 space-y-3">
-              {appCredentials.username && (
-                <div className="flex items-center gap-2 rounded-xl bg-[#f5f5f7] p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">Username</p>
-                    <p className="mt-1 truncate font-mono text-sm text-[#1d1d1f]">{appCredentials.username}</p>
-                  </div>
-                  <button
-                    onClick={() => copyToClipboard(appCredentials.username)}
-                    className="shrink-0 rounded-lg bg-white p-2 text-[#86868b] shadow-sm transition-colors hover:text-[#1d1d1f]"
-                    title="Copy"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 0 1 2 9.5v-7A1.5 1.5 0 0 1 3.5 1h7A1.5 1.5 0 0 1 12 2.5V5"/></svg>
-                  </button>
-                </div>
-              )}
-              {appCredentials.password && (
-                <div className="flex items-center gap-2 rounded-xl bg-[#f5f5f7] p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium uppercase tracking-wider text-[#86868b]">Password</p>
-                    <p className="mt-1 truncate font-mono text-sm text-[#1d1d1f]">{appCredentials.password}</p>
-                  </div>
-                  <button
-                    onClick={() => copyToClipboard(appCredentials.password)}
-                    className="shrink-0 rounded-lg bg-white p-2 text-[#86868b] shadow-sm transition-colors hover:text-[#1d1d1f]"
-                    title="Copy"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 0 1 2 9.5v-7A1.5 1.5 0 0 1 3.5 1h7A1.5 1.5 0 0 1 12 2.5V5"/></svg>
-                  </button>
-                </div>
-              )}
-            </div>
-            <button
-              onClick={() => {
-                setShowCredentials(false);
-                clearCredentials();
-              }}
-              className="mt-5 w-full rounded-xl bg-teal-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-600"
-            >
-              Got it
-            </button>
-          </div>
-        </div>
+        <CredentialsDialog
+          username={appCredentials.username}
+          password={appCredentials.password}
+          appName={app.name}
+          onClose={() => {
+            setShowCredentials(false);
+            clearCredentials();
+          }}
+        />
       )}
+    </div>
+  );
+}
+
+// ─── Install state machine button ────────────────────────────────────────
+
+function InstallStateButton({
+  isEmbedded,
+  status,
+  progress,
+  onInstall,
+  onUninstall,
+  onOpen,
+}: {
+  isEmbedded: boolean;
+  status: ReturnType<ReturnType<typeof useStore>['getAppStatus']>;
+  progress: number;
+  onInstall: () => void;
+  onUninstall: () => void;
+  onOpen: () => void;
+}) {
+  if (!isEmbedded) {
+    return (
+      <button
+        type="button"
+        className="install ghost"
+        disabled
+        style={{ cursor: 'not-allowed' }}
+      >
+        <Icon name="lock" size={13} /> Browser preview
+      </button>
+    );
+  }
+
+  if (status === 'installing') {
+    return (
+      <div className="install installing" aria-disabled="true">
+        <span>Installing</span>
+        <div className="install-progress">
+          <i style={{ width: `${Math.min(progress, 100)}%` }} />
+        </div>
+        <span
+          style={{
+            fontFamily: 'var(--mono)',
+            fontSize: 11,
+            color: 'var(--fg-mute)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {progress}%
+        </span>
+      </div>
+    );
+  }
+
+  if (status === 'uninstalling') {
+    return (
+      <button
+        type="button"
+        className="install ghost"
+        disabled
+        style={{ color: 'var(--red)', borderColor: 'rgba(220,38,38,0.3)' }}
+      >
+        Uninstalling…
+      </button>
+    );
+  }
+
+  if (status === 'running' || status === 'stopped') {
+    return (
+      <div className="install-group">
+        <button type="button" className="install primary" onClick={onOpen}>
+          <Icon name="open" size={13} />
+          {status === 'stopped' ? ' Start' : ' Open'}
+        </button>
+        <button
+          type="button"
+          className="install ghost"
+          onClick={onUninstall}
+          aria-label="Uninstall"
+        >
+          <Icon name="trash" size={13} />
+        </button>
+      </div>
+    );
+  }
+
+  // not_installed
+  return (
+    <button type="button" className="install primary" onClick={onInstall}>
+      <Icon name="download" size={13} /> Install
+    </button>
+  );
+}
+
+// ─── Copy chip used in credentials inline display ────────────────────────
+
+function CopyChip({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ color: 'var(--fg-mute)', fontSize: 11 }}>{label}:</span>
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{value}</span>
+      <button
+        type="button"
+        onClick={() => {
+          copyToClipboard(value);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1200);
+        }}
+        title="Copy"
+        style={{
+          background: 'transparent',
+          border: 0,
+          padding: 2,
+          cursor: 'pointer',
+          color: copied ? 'var(--green)' : 'var(--fg-mute)',
+        }}
+      >
+        <Icon name={copied ? 'check' : 'external'} size={13} />
+      </button>
+    </div>
+  );
+}
+
+// ─── Credentials dialog (post-install one-shot) ──────────────────────────
+
+function CredentialsDialog({
+  username,
+  password,
+  appName,
+  onClose,
+}: {
+  username: string;
+  password: string;
+  appName: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.4)',
+        display: 'grid',
+        placeItems: 'center',
+        zIndex: 100,
+        padding: 24,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 420,
+          width: '100%',
+          background: 'var(--bg)',
+          borderRadius: 'var(--r-xl)',
+          padding: 28,
+          boxShadow: 'var(--shadow-window)',
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 500 }}>
+          App credentials
+        </h3>
+        <p style={{ color: 'var(--fg-mute)', fontSize: 13.5, margin: '6px 0 18px' }}>
+          Save these to log into {appName}.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {username && <CopyChip label="Username" value={username} />}
+          {password && <CopyChip label="Password" value={password} />}
+        </div>
+        <button
+          type="button"
+          className="install primary"
+          style={{ width: '100%', justifyContent: 'center', marginTop: 22 }}
+          onClick={onClose}
+        >
+          Got it
+        </button>
+      </div>
     </div>
   );
 }

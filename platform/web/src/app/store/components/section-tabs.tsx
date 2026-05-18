@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname, useRouter } from 'next/navigation';
 import { useStore } from '../store-provider';
 import { SECTIONS, type Section } from '../types';
 import { Icon, type IconName } from './icon';
@@ -13,7 +14,10 @@ const SECTION_ICONS: Record<Section, IconName> = {
 };
 
 export function SectionTabs() {
-  const { selectedSection, setSelectedSection, setSelectedCategory, apps } = useStore();
+  const { selectedSection, setSelectedSection, setSelectedCategory, apps, token, instanceName } = useStore();
+  const router = useRouter();
+  const pathname = usePathname();
+  const isStoreList = pathname === '/store';
 
   // Count rows per section so each tab reports actual catalog depth.
   // Falls back to "Soon" badge for any section with zero rows.
@@ -24,6 +28,23 @@ export function SectionTabs() {
     },
     { app: 0, webapp: 0, native: 0, ai: 0, plugin: 0 },
   );
+
+  function handleClick(section: Section) {
+    if (isStoreList) {
+      // On /store list page — update state in place, no navigation.
+      setSelectedSection(section);
+      setSelectedCategory(null);
+      return;
+    }
+    // On a detail page (or any /store/* sub-route) — navigate back to
+    // /store with a section hint. The list page consumes ?section=...
+    // on mount (see store-provider) and applies it as initial state.
+    const params = new URLSearchParams();
+    if (token) params.set('token', token);
+    if (instanceName) params.set('instance', instanceName);
+    params.set('section', section);
+    router.push(`/store?${params.toString()}`);
+  }
 
   return (
     <nav className="sn" role="tablist" aria-label="Store sections">
@@ -37,10 +58,7 @@ export function SectionTabs() {
             aria-selected={active}
             className={`sn-tab${active ? ' is-active' : ''}`}
             type="button"
-            onClick={() => {
-              setSelectedSection(s.key);
-              setSelectedCategory(null);
-            }}
+            onClick={() => handleClick(s.key)}
           >
             <Icon name={SECTION_ICONS[s.key]} size={14} />
             <span>{s.label}</span>
