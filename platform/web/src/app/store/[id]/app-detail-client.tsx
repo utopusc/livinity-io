@@ -203,8 +203,9 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
           <InstallStateButton
             isEmbedded={isEmbedded}
             status={status}
+            section={app.section}
             progress={getInstallProgress(appId)}
-            onInstall={() => sendInstall(appId)}
+            onInstall={() => sendInstall(appId, app.section)}
             onUninstall={() => sendUninstall(appId)}
             onOpen={() => sendOpen(appId)}
           />
@@ -392,6 +393,7 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
 function InstallStateButton({
   isEmbedded,
   status,
+  section,
   progress,
   onInstall,
   onUninstall,
@@ -399,11 +401,22 @@ function InstallStateButton({
 }: {
   isEmbedded: boolean;
   status: ReturnType<ReturnType<typeof useStore>['getAppStatus']>;
+  section: App['section'];
   progress: number;
   onInstall: () => void;
   onUninstall: () => void;
   onOpen: () => void;
 }) {
+  // Phase 157 — section-aware copy on the install button so each tab feels
+  // native ("Add to dock" for webapps, "Install" for native/Docker, etc.).
+  function installCopy(): string {
+    switch (section) {
+      case 'webapp': return 'Add to dock';
+      case 'ai': return 'Add';
+      case 'plugin': return 'Add plugin';
+      default: return 'Install';
+    }
+  }
   if (!isEmbedded) {
     return (
       <button
@@ -473,7 +486,7 @@ function InstallStateButton({
   // not_installed
   return (
     <button type="button" className="install primary" onClick={onInstall}>
-      <Icon name="download" size={13} /> Install
+      <Icon name="download" size={13} /> {installCopy()}
     </button>
   );
 }

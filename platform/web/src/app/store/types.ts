@@ -43,7 +43,11 @@ export interface AppSummary {
 // Messages sent from Store iframe to LivOS parent
 export type StoreToLivOSMessage =
   | { type: 'ready' }
-  | { type: 'install'; appId: string; composeUrl: string }
+  // Phase 157 — `section` added so the LivOS bridge dispatches to the
+  // right installer (Docker / webapp catalog / native apt / MCP / plugin).
+  // `composeUrl` is now optional: it only carries data for section='app',
+  // legacy LivOS builds that ignore `section` keep working.
+  | { type: 'install'; appId: string; section: Section; composeUrl?: string }
   | { type: 'uninstall'; appId: string }
   | { type: 'open'; appId: string }
   | { type: 'updateSubdomain'; appId: string; subdomain: string }
@@ -108,7 +112,7 @@ export interface StoreContextValue {
   // postMessage bridge (Phase 19)
   isEmbedded: boolean;
   installedApps: Map<string, AppStatus['status']>;
-  sendInstall: (appId: string) => void;
+  sendInstall: (appId: string, section: Section) => void;
   sendUninstall: (appId: string) => void;
   sendOpen: (appId: string) => void;
   getAppStatus: (appId: string) => AppStatus['status'];
