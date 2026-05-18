@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 import pool from '@/lib/db';
 import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth';
-import { supabaseService, presenceChannelName } from '@/lib/supabase-server';
+import { getSupabaseService, presenceChannelName } from '@/lib/supabase-server';
 
 // Phase 146: online check moved to Supabase Realtime presence on tunnel:<userId>.
 // Replaces the Phase 141-07 CF Tunnel connections API path AND the legacy
@@ -27,7 +27,8 @@ async function isUserOnlineViaPresence(userId: string): Promise<boolean> {
   if (cached && now - cached.checkedAt < PRESENCE_CACHE_TTL_MS) {
     return cached.online;
   }
-  const channel = supabaseService.channel(presenceChannelName(userId));
+  const supabase = getSupabaseService();
+  const channel = supabase.channel(presenceChannelName(userId));
   try {
     const online = await new Promise<boolean>((resolve) => {
       const timer = setTimeout(() => resolve(false), PRESENCE_READ_TIMEOUT_MS);
@@ -46,7 +47,7 @@ async function isUserOnlineViaPresence(userId: string): Promise<boolean> {
     PRESENCE_CACHE.set(userId, { online, checkedAt: now });
     return online;
   } finally {
-    await supabaseService.removeChannel(channel).catch(() => {});
+    await supabase.removeChannel(channel).catch(() => {});
   }
 }
 
