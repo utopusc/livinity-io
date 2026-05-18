@@ -91,11 +91,12 @@ export function CustomUrlForm() {
       <div className="custom-url-head">
         <div className="custom-url-eyebrow">Custom URL</div>
         <h3 className="custom-url-title">
-          Any URL, <em>your dock.</em>
+          Any URL, <em>your desktop.</em>
         </h3>
         <p className="custom-url-desc">
-          Paste any web app URL. LivOS pins it as a desktop window — same
-          mechanic as the curated rows below.
+          Paste any web app URL. LivOS pins it as a desktop icon that
+          opens in its own window — same mechanic as the curated rows
+          below.
         </p>
       </div>
       <div className="custom-url-row">
@@ -113,7 +114,7 @@ export function CustomUrlForm() {
           className="install primary"
           disabled={!preview || !isEmbedded || submitted}
           onClick={handleAdd}
-          title={!isEmbedded ? 'Open this store from your LivOS instance to add to dock' : ''}
+          title={!isEmbedded ? 'Open this store from your LivOS instance to add to your desktop' : ''}
         >
           {submitted ? (
             <>
@@ -121,7 +122,7 @@ export function CustomUrlForm() {
             </>
           ) : (
             <>
-              <Icon name="download" size={13} /> Add to dock
+              <Icon name="download" size={13} /> Add to desktop
             </>
           )}
         </button>
@@ -168,7 +169,7 @@ export function CustomUrlForm() {
       {!isEmbedded && (
         <p className="custom-url-hint">
           Browser preview only — open this store inside LivOS to actually pin
-          the URL to your dock.
+          the URL to your desktop.
         </p>
       )}
     </div>

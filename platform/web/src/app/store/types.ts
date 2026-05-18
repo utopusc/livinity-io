@@ -47,7 +47,22 @@ export type StoreToLivOSMessage =
   // right installer (Docker / webapp catalog / native apt / MCP / plugin).
   // `composeUrl` is now optional: it only carries data for section='app',
   // legacy LivOS builds that ignore `section` keep working.
-  | { type: 'install'; appId: string; section: Section; composeUrl?: string }
+  // Phase 157 follow-up — manifest/name/category travel WITH the
+  // install message so the LivOS bridge does NOT need to make a
+  // cross-origin fetch back to livinity.io (CSP only allows
+  // *.livinity.io subdomains, blocking the apex). The iframe is
+  // same-origin to livinity.io so it can pre-fetch /api/apps/:id
+  // before sending. Empty manifest is fine for section='app' (Docker
+  // path uses composeUrl); required for native/ai/plugin/webapp.
+  | {
+      type: 'install';
+      appId: string;
+      section: Section;
+      composeUrl?: string;
+      name?: string;
+      category?: string;
+      manifest?: unknown;
+    }
   | { type: 'uninstall'; appId: string }
   | { type: 'open'; appId: string }
   | { type: 'updateSubdomain'; appId: string; subdomain: string }
@@ -112,7 +127,11 @@ export interface StoreContextValue {
   // postMessage bridge (Phase 19)
   isEmbedded: boolean;
   installedApps: Map<string, AppStatus['status']>;
-  sendInstall: (appId: string, section: Section) => void;
+  sendInstall: (
+    appId: string,
+    section: Section,
+    payload?: { name?: string; category?: string; manifest?: unknown },
+  ) => void;
   sendUninstall: (appId: string) => void;
   sendOpen: (appId: string) => void;
   getAppStatus: (appId: string) => AppStatus['status'];

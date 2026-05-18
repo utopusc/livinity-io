@@ -8,6 +8,32 @@ import type { AppSummary, Section } from '../types';
 import { AppIcon } from './app-icon';
 import { Icon } from './icons';
 
+// Phase 157 follow-up — for non-Docker sections the LivOS bridge cannot
+// fetch the catalog row itself (LivOS UI CSP blocks the livinity.io
+// apex). Inline-install path pre-fetches /api/apps/:id same-origin from
+// inside the iframe, then attaches name/category/manifest to the
+// install postMessage. Network failures fall through to a manifest-less
+// send — the bridge will surface the install error to the user.
+async function fetchAppFull(
+  appId: string,
+  token: string | null,
+): Promise<{ name?: string; category?: string; manifest?: unknown }> {
+  try {
+    const res = await fetch(`/api/apps/${encodeURIComponent(appId)}`, {
+      headers: token ? { 'X-Api-Key': token } : undefined,
+    });
+    if (!res.ok) return {};
+    const full = await res.json();
+    return {
+      name: typeof full?.name === 'string' ? full.name : undefined,
+      category: typeof full?.category === 'string' ? full.category : undefined,
+      manifest: full?.manifest,
+    };
+  } catch {
+    return {};
+  }
+}
+
 interface AppCardProps {
   app: AppSummary;
   featured?: boolean;
@@ -15,11 +41,13 @@ interface AppCardProps {
 
 // Phase 157 — single-click install button copy per section. Matches the
 // expectation users land on when looking at each section ("Install" reads
-// wrong on a webapp; "Add to dock" reads odd on a Docker app).
+// wrong on a webapp; "Install" reads odd on an MCP server).
+// Webapps pin to the LivOS DESKTOP (not the dock taskbar) — keep the
+// copy honest about where the icon will appear.
 function installLabel(section: Section): string {
   switch (section) {
     case 'webapp':
-      return 'Add to dock';
+      return 'Add to desktop';
     case 'ai':
       return 'Add';
     case 'plugin':
@@ -102,9 +130,19 @@ export function AppCard({ app, featured = false }: AppCardProps) {
             <button
               type="button"
               className="install primary card-install"
-              onClick={(e) => {
+              onClick={async (e) => {
                 stop(e);
-                sendInstall(app.id, app.section);
+                if (app.section === 'app') {
+                  // Docker path doesn't need a manifest payload — bridge
+                  // calls the legacy compose flow that uses composeUrl.
+                  sendInstall(app.id, app.section);
+                } else {
+                  // Same-origin fetch from inside the iframe — CSP-safe
+                  // and gives us the manifest the bridge needs to
+                  // dispatch installV37 / webapp.create.
+                  const payload = await fetchAppFull(app.id, token);
+                  sendInstall(app.id, app.section, payload);
+                }
               }}
             >
               {installLabel(app.section)}
