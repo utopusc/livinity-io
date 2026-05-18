@@ -1448,7 +1448,7 @@ Plans:
 
 ---
 
-### Phase 140: CF for SaaS Multi-Tenant Auto-Provisioning — 🔴 PLANNED 2026-05-17 (closes the Phase 134 manual-CF-wizard gap; end-user never opens Cloudflare)
+### Phase 140: CF for SaaS Multi-Tenant Auto-Provisioning — ✅ SHIPPED 2026-05-17 (commits `39c02ced..04ba6fbf`; live smoke-tested on Server5 + Mini PC with socinity user)
 
 **Goal:** Every Livinity user gets a Cloudflare-managed subdomain + Tunnel automatically provisioned at signup. End-user touches only the dashboard + terminal — no CF dashboard, no domain ownership, no TLS/DNS/tunnel manual work. Backend uses CF API to create tunnel, fetch token, push ingress, write DNS records, all transparent to the user. URL pattern locked to flat `{app}-{user}.livinity.io` (single-hyphen separator) to stay within Universal SSL coverage (Free plan; CF for SaaS wildcards confirmed Enterprise-only via CF API error 1456 on 2026-05-17). Cost stays $0 forever regardless of user/app count.
 
@@ -1469,4 +1469,30 @@ Plans:
 - CF for SaaS Fallback Origin set to `livinity.io` ✓
 - Free-plan wildcard custom hostname confirmed UNAVAILABLE (error 1456 — Enterprise only) — flat URL strategy locked ✓
 - Awaiting kickoff of implementation work.
+
+---
+
+### Phase 141: Multi-Tenant App Install Hardening — ✅ CODE-COMPLETE 2026-05-17 (commits `04ba6fbf`+`70e02749..d1e3c70c`, 10 sub-plans, sacred SHA preserved 11/11)
+
+**Goal:** Close the 8 distinct livinityd-side gaps that surfaced the moment Phase 140 took its first real user (socinity) end-to-end. Phase 140 proved CF/Server5 provisioning works at the platform tier; Phase 141 makes the Mini PC side production-correct so a brand-new user does NOT need ten manual SSH hotfixes after running install.sh.
+
+**Sub-plans shipped:**
+- 141-01 `70e02749` — drain install-pending Redis seeds on livinityd boot (closes the empty-`livos:domain:local_mode` cascade)
+- 141-02 `04ba6fbf` — rebuildCaddy isTunnel covers Phase 134 CF Tunnel mode (not just legacy relay tunnel)
+- 141-03+04 `54f3de2f` — apps.ts captures Server5-minted hyphen-pattern host; SubdomainConfig gains `host?` field; caddy.ts + Settings UI honor it (fixes both the Caddyfile shape bug AND the UI display bug)
+- 141-05 `a5e7bdcc` — Settings → Public Access "Change subdomain" + "Remove" call Server5's CF DELETE/POST endpoints (subdomain reconciliation across rename)
+- 141-06 `b89ee4ac` — CSP connect-src curated allowlist for trusted widget APIs (`*.open-meteo.com`)
+- 141-07 `c4c64178` — dashboard online check via CF Tunnel API (`cfd_tunnel/{id}/connections`) with 30s per-tunnel cache; falls back to legacy relay probe for pre-Phase-140 users
+- 141-08 `eb588dfa` — operator playbook at `docs/operator/post-deploy-playbook.md` (cache-bust + Caddy http:// discipline + cloudflared token recovery + standard smoke-test curl trio)
+- 141-09 `003c2dcd` — install.sh:mode-tunnel.sh reconciles cloudflared.service ExecStart `--token` on re-install (closes the stale-token / wrong-tunnel 530 bug on box re-use)
+- 141-10 `d1e3c70c` — `scripts/install/factory-reset.sh` (idempotent; gated on `--confirm-destroy`; closes the gap that left Lucy's PG row in place when "wiping" for socinity)
+
+**Plus extras shipped same window:**
+- `2a3b5d45` — `docs/marketplace/how-to-add-an-app.md` user-requested README walking through how to publish a new app to the Server5 marketplace (real n8n row used as the worked example).
+
+**Plans / artifacts:** `.planning/phases/141-multi-tenant-app-install-hardening/{PLAN.md,CONTEXT.md,CONTINUE.md,SUMMARY.md}`.
+
+**Depends on:** Phase 140 ✅ (CF for SaaS provisioning) — this phase is its follow-up surface.
+
+**Pending operator step:** `bash /opt/livos/update.sh` on Mini PC (10.69.31.68) → walk the post-deploy smoke-test trio in `docs/operator/post-deploy-playbook.md` §8. After that lands clean, the manual Caddyfile sed-prefix + manual cloudflared token sed + manual Redis local_mode set that socinity is currently relying on all become no-op (the code-paths shipped here take over).
 
