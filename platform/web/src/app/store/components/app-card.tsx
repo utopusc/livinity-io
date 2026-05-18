@@ -29,9 +29,13 @@ export function AppCard({ app, featured = false }: AppCardProps) {
       <AppIcon id={app.id} name={app.name} size={featured ? 64 : 48} />
       <div className="card-body">
         <div className="card-name">
-          <span>{app.name}</span>
-          {/* Featured position IS the badge — show Verified instead on featured cards */}
-          {app.featured && !featured && <span className="tag featured">Featured</span>}
+          <span className="card-name-text">{app.name}</span>
+          {/* Per original Claude Design intent: Featured position is the
+              badge (the featured-card variant) — don't render an inline
+              Featured tag, which also collides with .featured (the
+              FeaturedHero block selector that has min-height: 260px).
+              Verified gets the inline badge slot instead. */}
+          {app.verified && <span className="tag verified">Verified</span>}
           {(status === 'running' || status === 'stopped') && (
             <span className="tag installed dot">Installed</span>
           )}

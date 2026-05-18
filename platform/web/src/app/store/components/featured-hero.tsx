@@ -28,7 +28,7 @@ export function FeaturedHero({ apps }: FeaturedHeroProps) {
   const href = `/store/${app.id}${qs ? `?${qs}` : ''}`;
 
   return (
-    <div className="featured">
+    <div className="featured-hero">
       <div className="featured-body">
         <div>
           <div className="featured-eyebrow">Editor's pick · This week</div>
