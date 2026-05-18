@@ -1,0 +1,1068 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>Sign in — Livinity</title>
+    <meta name="description" content="Wake up your Cloud AI Computer. Sign in to Livinity." />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="styles.css" />
+
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+    <style>
+      :root { --auth-pad: clamp(28px, 4vw, 64px); }
+
+      html, body { background: var(--bg); }
+      body { overflow: hidden; height: 100vh; }
+
+      /* ===== Shell =================================================== */
+      .auth-shell {
+        display: grid;
+        grid-template-columns: 1.15fr 1fr;
+        height: 100vh;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      @media (max-width: 980px) {
+        body { overflow: auto; height: auto; }
+        .auth-shell { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
+        .auth-stage { min-height: 340px; }
+      }
+
+      /* ===== LEFT — quiet, light ====================================== */
+      .auth-stage {
+        position: relative;
+        background: var(--bg-2);
+        color: var(--fg);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: var(--auth-pad);
+        border-right: 1px solid var(--line);
+        isolation: isolate;
+      }
+      .stage-top, .stage-mid, .stage-bottom { position: relative; z-index: 1; }
+
+      .stage-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--fg);
+      }
+      .stage-brand .mk {
+        width: 22px; height: 22px; border-radius: 50%;
+        background: var(--fg);
+        position: relative;
+      }
+      .stage-brand .mk::after {
+        content: ""; position: absolute; inset: 6px; border-radius: 50%; background: var(--bg-2);
+      }
+
+      .stage-meta {
+        display: flex;
+        gap: 18px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: rgba(255,255,255,0.45);
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        margin-top: 18px;
+      }
+      .stage-meta .dot {
+        display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+        background: #4ade80; margin-right: 6px; vertical-align: middle;
+        box-shadow: 0 0 8px rgba(74,222,128,0.7);
+        animation: livePulse 1.6s ease-in-out infinite;
+      }
+      @keyframes livePulse { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
+
+      /* The breathing core — Liv waiting */
+      .stage-core {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 28px;
+        max-width: 520px;
+      }
+      .core-mark {
+        position: relative;
+        width: 80px; height: 80px;
+        border-radius: 50%;
+        background: var(--fg);
+        animation: coreBreathe 4.5s ease-in-out infinite;
+      }
+      .core-mark::after {
+        content: ""; position: absolute; inset: 24px;
+        border-radius: 50%; background: var(--bg-2);
+      }
+      .core-mark::before {
+        content: ""; position: absolute; inset: -12px;
+        border-radius: 50%;
+        border: 1px solid var(--line-strong);
+        animation: corePulse 3s ease-out infinite;
+      }
+      @keyframes coreBreathe {
+        0%, 100% { transform: scale(1); }
+        50%      { transform: scale(1.05); }
+      }
+      @keyframes corePulse {
+        0%   { transform: scale(1);   opacity: 0.8; }
+        100% { transform: scale(2.2); opacity: 0; }
+      }
+
+      .core-greet {
+        font-size: clamp(40px, 5.5vw, 72px);
+        font-weight: 200;
+        letter-spacing: -0.035em;
+        line-height: 1.02;
+        text-wrap: balance;
+      }
+      .core-greet em { font-style: normal; color: var(--fg-mute); font-weight: 200; }
+      .core-greet .typed {
+        display: inline-block;
+        position: relative;
+      }
+      .core-greet .caret {
+        display: inline-block;
+        width: 0.04em; height: 0.85em;
+        margin-left: 0.04em;
+        background: var(--fg);
+        vertical-align: -0.08em;
+        animation: caretBlink 1s steps(2) infinite;
+      }
+      @keyframes caretBlink { 50% { opacity: 0; } }
+
+      .core-sub {
+        font-size: 15px;
+        line-height: 1.55;
+        color: var(--fg-mute);
+        max-width: 38ch;
+      }
+
+      /* terminal log — feels like the OS is booting next to you */
+      .stage-term {
+        margin-top: 28px;
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1.85;
+        color: rgba(255,255,255,0.5);
+        max-width: 460px;
+      }
+      .stage-term .row { display: flex; gap: 12px; opacity: 0; animation: termRow 0.4s ease-out forwards; }
+      .stage-term .row .ts { color: rgba(255,255,255,0.28); width: 6ch; flex: none; }
+      .stage-term .row .ok { color: #4ade80; }
+      .stage-term .row .wait { color: #fbbf24; }
+      .stage-term .row.cur { color: #f5f5f7; }
+      .stage-term .row.cur::after {
+        content: "▍"; margin-left: 6px; color: #fff;
+        animation: caretBlink 0.9s steps(2) infinite;
+      }
+      @keyframes termRow { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: translateX(0); } }
+
+      /* footer of dark side — system info */
+      .stage-foot {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 24px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: rgba(255,255,255,0.4);
+        letter-spacing: 0.08em;
+      }
+      .stage-foot .col { display: flex; flex-direction: column; gap: 4px; }
+      .stage-foot .label { color: rgba(255,255,255,0.3); text-transform: uppercase; font-size: 10px; letter-spacing: 0.16em; }
+      .stage-foot .val { color: rgba(255,255,255,0.7); font-size: 12px; letter-spacing: 0; }
+
+      /* ===== RIGHT — the form ========================================= */
+      .auth-form-side {
+        position: relative;
+        padding: var(--auth-pad);
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+      }
+      .form-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+        color: var(--fg-mute);
+      }
+      .form-top a { color: var(--fg); font-weight: 500; }
+      .form-top a:hover { opacity: 0.7; }
+
+      .form-stage {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        max-width: 420px;
+        margin: 0 auto;
+        width: 100%;
+        padding: 56px 0;
+      }
+
+      .form-eyebrow {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--fg-mute);
+        margin-bottom: 14px;
+        display: inline-flex; align-items: center; gap: 8px;
+      }
+      .form-eyebrow .ic {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: var(--fg);
+      }
+
+      .form-title {
+        font-size: clamp(34px, 4vw, 46px);
+        font-weight: 500;
+        letter-spacing: -0.035em;
+        line-height: 1.05;
+        margin: 0 0 10px;
+        text-wrap: balance;
+      }
+      .form-title em { font-style: normal; color: var(--fg-mute); font-weight: 500; }
+
+      .form-sub {
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--fg-mute);
+        max-width: 38ch;
+      }
+
+      /* mode toggle (Sign in / Create account) */
+      .mode-tabs {
+        display: inline-flex;
+        background: var(--bg-2);
+        border-radius: 999px;
+        padding: 4px;
+        margin: 28px 0 24px;
+        font-size: 13px;
+        font-weight: 500;
+        position: relative;
+      }
+      .mode-tabs button {
+        padding: 8px 18px;
+        border-radius: 999px;
+        color: var(--fg-mute);
+        transition: color .2s ease;
+        position: relative;
+        z-index: 1;
+      }
+      .mode-tabs button.on { color: var(--fg); }
+      .mode-tabs .pill {
+        position: absolute;
+        top: 4px; bottom: 4px;
+        background: var(--bg);
+        border-radius: 999px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 4px 12px -4px rgba(0,0,0,0.1);
+        transition: left .35s cubic-bezier(.2,.7,.2,1), width .35s cubic-bezier(.2,.7,.2,1);
+        z-index: 0;
+      }
+
+      /* Passkey primary CTA */
+      .passkey {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        width: 100%;
+        padding: 16px 20px;
+        background: var(--fg);
+        color: var(--bg);
+        border-radius: 14px;
+        font-size: 15px;
+        font-weight: 500;
+        letter-spacing: -0.005em;
+        margin-top: 8px;
+        transition: transform .2s ease, opacity .2s ease, box-shadow .3s ease;
+        cursor: pointer;
+      }
+      .passkey:hover { transform: translateY(-1px); opacity: 0.92; }
+      .passkey .pk-ic {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.12);
+        display: grid; place-items: center;
+        color: var(--bg);
+      }
+      body.dark .passkey { background: #f5f5f7; color: #050507; }
+      body.dark .passkey .pk-ic { background: rgba(0,0,0,0.08); color: #050507; }
+      .passkey .pk-meta { display: flex; flex-direction: column; gap: 1px; text-align: left; flex: 1; }
+      .passkey .pk-meta .l { font-size: 11px; color: rgba(255,255,255,0.55); letter-spacing: 0.08em; text-transform: uppercase; }
+      body.dark .passkey .pk-meta .l { color: rgba(0,0,0,0.5); }
+      .passkey .pk-meta .v { font-size: 15px; font-weight: 500; }
+      .passkey .pk-go { opacity: 0.5; }
+
+      .or-divider {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 22px 0;
+        font-size: 11px;
+        font-family: var(--mono);
+        color: var(--fg-mute);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+      .or-divider::before, .or-divider::after {
+        content: ""; flex: 1; height: 1px; background: var(--line);
+      }
+
+      /* email + password fields */
+      .field-group { display: flex; flex-direction: column; gap: 14px; }
+      .field-wrap { display: flex; flex-direction: column; gap: 6px; }
+      .field-hint {
+        font-size: 11.5px;
+        color: var(--fg-muted);
+        letter-spacing: -0.005em;
+        padding-left: 18px;
+      }
+      .field-hint .mono {
+        font-family: var(--font-mono);
+        color: var(--fg);
+      }
+      .field {
+        position: relative;
+        background: var(--bg-2);
+        border: 1px solid transparent;
+        border-radius: 12px;
+        transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+      }
+      .field:focus-within {
+        background: var(--bg);
+        border-color: var(--fg);
+        box-shadow: 0 0 0 4px rgba(0,0,0,0.06);
+      }
+      body.dark .field:focus-within { box-shadow: 0 0 0 4px rgba(255,255,255,0.08); }
+      .field .lbl {
+        position: absolute;
+        left: 18px; top: 10px;
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--fg-mute);
+        pointer-events: none;
+      }
+      .field input {
+        width: 100%;
+        padding: 28px 18px 12px;
+        background: transparent;
+        border: 0;
+        outline: 0;
+        font: 500 16px/1.2 var(--sans);
+        color: var(--fg);
+        letter-spacing: -0.01em;
+      }
+      .field input::placeholder { color: var(--fg-faint); }
+      .field .row {
+        position: absolute;
+        right: 14px; top: 50%;
+        transform: translateY(-50%);
+        display: flex; align-items: center; gap: 6px;
+        color: var(--fg-mute);
+        font-size: 12px;
+      }
+      .field-row {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-top: 6px;
+        font-size: 13px;
+        color: var(--fg-mute);
+      }
+      .field-row a { color: var(--fg); font-weight: 500; }
+      .field-row a:hover { opacity: 0.7; }
+      .check {
+        display: inline-flex; align-items: center; gap: 8px;
+        cursor: pointer;
+      }
+      .check .box {
+        width: 16px; height: 16px;
+        border-radius: 5px;
+        border: 1.5px solid var(--line-strong);
+        display: grid; place-items: center;
+        transition: background .2s, border-color .2s;
+      }
+      .check.on .box { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+
+      .submit {
+        width: 100%;
+        padding: 15px;
+        background: var(--fg);
+        color: var(--bg);
+        border-radius: 12px;
+        font-size: 15px;
+        font-weight: 500;
+        margin-top: 14px;
+        display: flex; align-items: center; justify-content: center; gap: 10px;
+        transition: transform .2s ease, opacity .2s ease;
+        cursor: pointer;
+        border: 0;
+      }
+      .submit:disabled { transform: none; cursor: wait; }
+      .auth-error {
+        margin-top: 14px;
+        padding: 12px 14px;
+        background: rgba(220, 38, 38, 0.07);
+        border: 1px solid rgba(220, 38, 38, 0.18);
+        border-radius: 10px;
+        color: #b91c1c;
+        font-size: 13px;
+        line-height: 1.45;
+        text-align: left;
+      }
+      body.dark .auth-error { background: rgba(248, 113, 113, 0.08); border-color: rgba(248, 113, 113, 0.22); color: #fca5a5; }
+      .submit:hover { transform: translateY(-1px); opacity: 0.92; }
+      body.dark .submit { background: #f5f5f7; color: #050507; }
+
+      /* SSO row */
+      .sso-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .sso {
+        padding: 13px;
+        background: transparent;
+        border: 1px solid var(--line-strong);
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        font-size: 13px; font-weight: 500;
+        color: var(--fg);
+        cursor: pointer;
+        transition: background .2s, border-color .2s, transform .2s ease;
+      }
+      .sso:hover { background: var(--bg-2); border-color: var(--fg-mute); transform: translateY(-1px); }
+      body.dark .sso:hover { background: rgba(255,255,255,0.06); }
+      .sso svg { width: 16px; height: 16px; }
+      .sso .lbl { display: none; }
+      @media (min-width: 460px) { .sso .lbl { display: inline; } }
+
+      .form-bottom {
+        padding-top: 18px;
+        font-size: 13px;
+        color: var(--fg-mute);
+        line-height: 1.6;
+        text-align: center;
+      }
+      .form-bottom a { color: var(--fg); font-weight: 500; }
+      .form-bottom a:hover { opacity: 0.7; }
+
+      .legal {
+        margin-top: 20px;
+        font-size: 11px;
+        color: var(--fg-faint);
+        text-align: center;
+        line-height: 1.6;
+      }
+      .legal a { color: var(--fg-mute); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+
+      /* ===== Centered variant (full-bleed, no split) ================== */
+      .auth-shell.centered { grid-template-columns: 1fr; background: var(--bg); }
+      .auth-shell.centered .auth-stage { display: none; }
+      .auth-shell.centered .auth-form-side { padding: 0; }
+      .auth-shell.centered .form-stage {
+        max-width: 460px; padding: 80px 24px;
+        align-items: center; text-align: center;
+      }
+      .auth-shell.centered .form-title { text-align: center; }
+      .auth-shell.centered .form-sub { text-align: center; margin-left: auto; margin-right: auto; }
+      .auth-shell.centered .mode-tabs { margin-left: auto; margin-right: auto; }
+      .auth-shell.centered .field-group, .auth-shell.centered .passkey,
+      .auth-shell.centered .or-divider, .auth-shell.centered .sso-row,
+      .auth-shell.centered .submit, .auth-shell.centered .field-row { width: 100%; }
+      .auth-shell.centered .mini-mark {
+        width: 56px; height: 56px; border-radius: 50%;
+        background: var(--fg); margin: 0 auto 20px; position: relative;
+        animation: coreBreathe 4.5s ease-in-out infinite;
+      }
+      .auth-shell.centered .mini-mark::after {
+        content: ""; position: absolute; inset: 16px; border-radius: 50%; background: var(--bg);
+      }
+
+      /* ===== Conversational variant =================================== */
+      .auth-shell.convo .form-stage { max-width: 560px; }
+      .convo-thread {
+        display: flex; flex-direction: column; gap: 16px;
+        margin-top: 20px;
+      }
+      .convo-row { display: flex; gap: 12px; align-items: flex-start; opacity: 0; animation: convoIn 0.5s cubic-bezier(.2,.7,.2,1) forwards; }
+      .convo-row.user { justify-content: flex-end; }
+      .convo-row.user .bubble {
+        background: var(--fg); color: var(--bg);
+        border-bottom-right-radius: 6px;
+      }
+      .convo-row.liv .avatar {
+        width: 30px; height: 30px; border-radius: 50%;
+        background: var(--fg); flex: none; margin-top: 4px;
+        position: relative;
+      }
+      .convo-row.liv .avatar::after {
+        content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--bg);
+      }
+      .bubble {
+        max-width: 80%;
+        padding: 12px 16px;
+        border-radius: 18px;
+        font-size: 15px;
+        line-height: 1.45;
+        background: var(--bg-2);
+        color: var(--fg);
+        border-bottom-left-radius: 6px;
+      }
+      .bubble.input {
+        padding: 0; background: transparent; border: 1px solid var(--line-strong);
+        display: flex; align-items: center;
+      }
+      .bubble.input input {
+        flex: 1;
+        padding: 12px 14px;
+        background: transparent; border: 0; outline: 0;
+        font: 500 15px/1.2 var(--sans); color: var(--fg);
+      }
+      .bubble.input button {
+        padding: 8px 14px;
+        margin: 4px;
+        border-radius: 12px;
+        background: var(--fg); color: var(--bg);
+        font-size: 13px; font-weight: 500;
+      }
+      @keyframes convoIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+      .typing-dots { display: inline-flex; gap: 4px; padding: 14px 16px; background: var(--bg-2); border-radius: 18px; border-bottom-left-radius: 6px; }
+      .typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--fg-faint); animation: tdot 1.2s infinite; }
+      .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+      .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+      @keyframes tdot { 0%,60%,100% { opacity: 0.3; } 30% { opacity: 1; transform: translateY(-2px); } }
+
+      /* hide stage on narrow */
+      @media (max-width: 980px) {
+        .auth-stage { padding: 32px 24px; }
+        .auth-form-side { padding: 32px 24px; }
+        .stage-core { gap: 18px; }
+        .core-greet { font-size: 36px; }
+        .stage-term, .stage-foot { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+
+    <div id="root"></div>
+
+    <script type="text/babel" src="tweaks-panel.jsx"></script>
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      /* ============================================================== */
+      /*  Tiny icon set                                                 */
+      /* ============================================================== */
+      const Ic = {
+        passkey: (p) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="9" cy="9" r="4"/><path d="M15 13l5 5-2 2-1-1-1 1-1-1-1 1-1-1"/><path d="M13 9h2"/></svg>),
+        arrow: (p) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M5 12h14M13 5l7 7-7 7"/></svg>),
+        check: (p) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M4 12l5 5 11-11"/></svg>),
+        eye: (p) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg>),
+        google: (p) => (<svg viewBox="0 0 24 24" {...p}><path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.6c-.2 1.3-1 2.4-2 3.1v2.6h3.3c1.9-1.8 3.1-4.4 3.1-7.6z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.3-2.6c-.9.6-2.1 1-3.3 1-2.5 0-4.7-1.7-5.5-4H3.2v2.6C4.9 19.8 8.2 22 12 22z"/><path fill="#FBBC04" d="M6.5 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2v-2.6H3.2C2.4 8.9 2 10.4 2 12s.4 3.1 1.2 4.6L6.5 14z"/><path fill="#EA4335" d="M12 6c1.4 0 2.7.5 3.7 1.4l2.8-2.8C16.9 3 14.6 2 12 2 8.2 2 4.9 4.2 3.2 7.4L6.5 10C7.3 7.7 9.5 6 12 6z"/></svg>),
+        apple: (p) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M17 12.5c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.4-.8-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.3.9 1.3 1.9 2.6 3.3 2.6 1.3 0 1.8-.8 3.4-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.2-2.6 1-1.5 1.4-3 1.4-3-.1 0-2.7-1-2.7-4.2zM14.5 5.5c.7-.9 1.2-2.1 1.1-3.3-1 0-2.3.7-3 1.5-.7.8-1.3 2-1.1 3.2 1.1.1 2.3-.6 3-1.4z"/></svg>),
+        github: (p) => (<svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49v-1.71c-2.78.62-3.37-1.36-3.37-1.36-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.7 0 0 .84-.27 2.75 1.05A9.4 9.4 0 0 1 12 6.84c.85 0 1.71.12 2.51.34 1.91-1.32 2.75-1.05 2.75-1.05.55 1.4.2 2.44.1 2.7.64.72 1.03 1.63 1.03 2.75 0 3.94-2.35 4.8-4.58 5.06.36.31.68.93.68 1.87v2.77c0 .27.18.6.69.49C19.14 20.62 22 16.78 22 12.25 22 6.58 17.52 2 12 2z"/></svg>),
+      };
+
+      /* ============================================================== */
+      /*  Typewriter greeting on dark side                              */
+      /* ============================================================== */
+      const Typed = ({ phrases, speed = 70, hold = 1800 }) => {
+        const [i, setI] = useState(0);
+        const [text, setText] = useState("");
+        const [del, setDel] = useState(false);
+        useEffect(() => {
+          const cur = phrases[i % phrases.length];
+          let t;
+          if (!del && text.length < cur.length) {
+            t = setTimeout(() => setText(cur.slice(0, text.length + 1)), speed);
+          } else if (!del && text.length === cur.length) {
+            t = setTimeout(() => setDel(true), hold);
+          } else if (del && text.length > 0) {
+            t = setTimeout(() => setText(cur.slice(0, text.length - 1)), speed / 2);
+          } else if (del && text.length === 0) {
+            setDel(false); setI(i + 1);
+          }
+          return () => clearTimeout(t);
+        }, [text, del, i, phrases, speed, hold]);
+        return (
+          <span className="typed">{text}<span className="caret"/></span>
+        );
+      };
+
+      /* ============================================================== */
+      /*  Terminal log on dark side                                     */
+      /* ============================================================== */
+      const TermLog = () => {
+        const lines = [
+          { t: "00:00", text: "boot.livinity > waking your Cloud AI Computer", ok: true },
+          { t: "00:01", text: "mounting your space · 250 GB available", ok: true },
+          { t: "00:01", text: "Liv loaded from your last conversation", ok: true },
+          { t: "00:02", text: "37 apps ready · Photopea, Cal.com, NocoDB…", ok: true },
+          { t: "00:02", text: "waiting for sign-in", wait: true },
+        ];
+        const [shown, setShown] = useState(0);
+        useEffect(() => {
+          if (shown >= lines.length) return;
+          const t = setTimeout(() => setShown(shown + 1), 380);
+          return () => clearTimeout(t);
+        }, [shown]);
+        return (
+          <div className="stage-term">
+            {lines.slice(0, shown).map((l, idx) => (
+              <div className={"row" + (idx === shown - 1 && l.wait ? " cur" : "")} key={idx} style={{ animationDelay: (idx * 0.05) + "s" }}>
+                <span className="ts">{l.t}</span>
+                <span className={l.ok ? "ok" : (l.wait ? "wait" : "")}>{l.ok ? "✓" : (l.wait ? "…" : "·")}</span>
+                <span>{l.text}</span>
+              </div>
+            ))}
+          </div>
+        );
+      };
+
+      /* ============================================================== */
+      /*  Dark side — your computer, booting                            */
+      /* ============================================================== */
+      const Stage = ({ mode }) => {
+        const greet = mode === "signup"
+          ? ["a new computer.", "your space.", "tuned to you."]
+          : ["welcome back.", "your computer.", "where we left off."];
+        return (
+          <aside className="auth-stage">
+            <div className="stage-top">
+              <div className="stage-brand">
+                <span className="mk"/>
+                <span>Livinity</span>
+              </div>
+              <div className="stage-meta">
+                <span><span className="dot"/>cloud · eu-west-1</span>
+                <span>v 1.0.4</span>
+              </div>
+            </div>
+
+            <div className="stage-mid stage-core">
+              <div className="core-mark"/>
+              <h2 className="core-greet">
+                <em>{mode === "signup" ? "Hey." : "Hey there."}</em><br/>
+                <Typed phrases={greet}/>
+              </h2>
+              <p className="core-sub">
+                {mode === "signup"
+                  ? "Pick a name, pick a passkey. Your Cloud AI Computer boots in 8 seconds."
+                  : "Your computer remembers everything — files, chats, apps. Sign in and it picks up right where you left off."}
+              </p>
+              <TermLog />
+            </div>
+
+            <div className="stage-foot">
+              <div className="col">
+                <span className="label">Region</span>
+                <span className="val">eu-west · Frankfurt</span>
+              </div>
+              <div className="col">
+                <span className="label">Latency</span>
+                <span className="val">14 ms</span>
+              </div>
+              <div className="col">
+                <span className="label">Encrypted</span>
+                <span className="val">end-to-end</span>
+              </div>
+            </div>
+          </aside>
+        );
+      };
+
+      /* ============================================================== */
+      /*  Form — Sign in / Sign up                                      */
+      /* ============================================================== */
+      const ModeTabs = ({ mode, setMode }) => {
+        const ref = useRef(null);
+        const [pill, setPill] = useState({ left: 4, width: 0 });
+        useEffect(() => {
+          const el = ref.current?.querySelector("button.on");
+          if (el) {
+            const p = el.parentNode.getBoundingClientRect();
+            const r = el.getBoundingClientRect();
+            setPill({ left: r.left - p.left, width: r.width });
+          }
+        }, [mode]);
+        return (
+          <div className="mode-tabs" ref={ref}>
+            <button className={mode === "signin" ? "on" : ""} onClick={() => setMode("signin")}>Sign in</button>
+            <button className={mode === "signup" ? "on" : ""} onClick={() => setMode("signup")}>Create account</button>
+          </div>
+        );
+      };
+
+      const Field = ({ label, type = "text", placeholder, value, onChange, right, hint }) => {
+        const [show, setShow] = useState(false);
+        const t = (type === "password" && show) ? "text" : type;
+        return (
+          <div className="field-wrap">
+          <div className="field">
+            <span className="lbl">{label}</span>
+            <input type={t} placeholder={placeholder} value={value} onChange={e => onChange?.(e.target.value)}/>
+            {type === "password" && (
+              <div className="row" style={{ cursor: "pointer" }} onClick={() => setShow(!show)}>
+                <Ic.eye width={16} height={16}/>
+              </div>
+            )}
+            {right && <div className="row">{right}</div>}
+          </div>
+          {hint && <div className="field-hint">{hint}</div>}
+          </div>
+        );
+      };
+
+      /* Classic form (split + centered variants share this) */
+      const ClassicForm = ({ mode, setMode }) => {
+        const [email, setEmail] = useState("");
+        const [pw, setPw] = useState("");
+        const [name, setName] = useState("");
+        const [remember, setRemember] = useState(true);
+        const [submitting, setSubmitting] = useState(false);
+        const [error, setError] = useState(null);
+
+        useEffect(() => { setError(null); }, [mode]);
+
+        const handleSubmit = async (e) => {
+          if (e) e.preventDefault();
+          setError(null);
+          if (!email || !pw || (mode === "signup" && !name)) {
+            setError("Please fill in all fields.");
+            return;
+          }
+          if (mode === "signup" && pw.length < 8) {
+            setError("Password must be at least 8 characters.");
+            return;
+          }
+          setSubmitting(true);
+          try {
+            const url = mode === "signup" ? "/api/auth/register" : "/api/auth/login";
+            const body = mode === "signup"
+              ? { email, password: pw, username: name }
+              : { email, password: pw };
+            const res = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify(body),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+              setError(data.error || (mode === "signup" ? "Couldn't create account." : "Couldn't sign in."));
+              setSubmitting(false);
+              return;
+            }
+            window.location.href = (mode === "signup") ? "/verify" : "/dashboard";
+          } catch (err) {
+            setError("Network error. Try again.");
+            setSubmitting(false);
+          }
+        };
+
+        return (
+          <form onSubmit={handleSubmit} noValidate>
+            <div className="form-eyebrow"><span className="ic"/> {mode === "signup" ? "Create your computer" : "Sign in to Livinity"}</div>
+            <h1 className="form-title">
+              {mode === "signup"
+                ? <>Let's set up <em>your computer.</em></>
+                : <>Welcome <em>back.</em></>
+              }
+            </h1>
+            <p className="form-sub">
+              {mode === "signup"
+                ? "Takes about 30 seconds. Pick a username, choose a password, you're in."
+                : "Sign in to pick up where you left off."}
+            </p>
+
+            <ModeTabs mode={mode} setMode={setMode}/>
+
+            <div className="field-group">
+              {mode === "signup" && (
+                <Field label="Username" placeholder="yourname" value={name} onChange={setName} hint={<><span className="mono">{(name || "yourname").toLowerCase().replace(/[^a-z0-9]/g, "") || "yourname"}.livinity.io</span> · your computer's address</>}/>
+              )}
+              <Field label="Email" type="email" placeholder="you@livinity.io" value={email} onChange={setEmail}/>
+              <Field label="Password" type="password" placeholder="••••••••" value={pw} onChange={setPw} hint={mode === "signup" ? "At least 8 characters" : null}/>
+            </div>
+
+            {mode === "signin" && (
+              <div className="field-row">
+                <label className={"check" + (remember ? " on" : "")} onClick={() => setRemember(!remember)}>
+                  <span className="box">{remember && <Ic.check width={11} height={11}/>}</span>
+                  Remember this computer
+                </label>
+                <a href="/forgot-password">Forgot password?</a>
+              </div>
+            )}
+
+            {error && (
+              <div className="auth-error" role="alert">{error}</div>
+            )}
+
+            <button type="submit" className="submit" disabled={submitting} style={submitting ? { opacity: 0.6, cursor: "wait" } : null}>
+              {submitting ? (mode === "signup" ? "Creating…" : "Signing in…") : (mode === "signup" ? "Create account" : "Sign in")}
+              {!submitting && <Ic.arrow width={16} height={16}/>}
+            </button>
+
+            {mode === "signup" && (
+              <p className="legal">
+                By continuing you agree to our <a href="#">Terms</a> and <a href="#">Privacy</a>. Your data is encrypted and yours to export anytime.
+              </p>
+            )}
+          </form>
+        );
+      };
+
+      /* ============================================================== */
+      /*  Conversational form — Liv asks, you reply                     */
+      /* ============================================================== */
+      const ConvoForm = ({ mode, setMode }) => {
+        const steps = mode === "signup"
+          ? [
+              { ask: "Hey. What should I call you?", key: "name", ph: "Your first name" },
+              { ask: "Nice to meet you. What's your email?", key: "email", ph: "you@livinity.io" },
+              { ask: "Last step — use Passkey, or set a password?", key: "method", choice: ["Use a Passkey", "Set a password"] },
+            ]
+          : [
+              { ask: "Welcome back. What's the email on your computer?", key: "email", ph: "you@livinity.io" },
+              { ask: "Got it. Use your passkey, or type your password?", key: "method", choice: ["Use Passkey", "Type password"] },
+            ];
+
+        const [step, setStep] = useState(0);
+        const [answers, setAnswers] = useState({});
+        const [val, setVal] = useState("");
+        const [typing, setTyping] = useState(true);
+        const [showAsk, setShowAsk] = useState(false);
+
+        useEffect(() => {
+          setTyping(true); setShowAsk(false);
+          const t = setTimeout(() => { setTyping(false); setShowAsk(true); }, 700);
+          return () => clearTimeout(t);
+        }, [step]);
+
+        const advance = (v) => {
+          if (!v) return;
+          const next = { ...answers, [steps[step].key]: v };
+          setAnswers(next);
+          setVal("");
+          if (step + 1 < steps.length) setStep(step + 1);
+        };
+
+        return (
+          <>
+            <div className="form-eyebrow"><span className="ic"/> Conversational sign-in</div>
+            <h1 className="form-title">
+              {mode === "signup" ? <>Let's <em>get acquainted.</em></> : <>Let's get you <em>back in.</em></>}
+            </h1>
+            <ModeTabs mode={mode} setMode={setMode}/>
+
+            <div className="convo-thread">
+              {steps.slice(0, step + 1).map((s, idx) => (
+                <React.Fragment key={idx}>
+                  {idx === step && typing ? (
+                    <div className="convo-row liv" style={{ opacity: 1 }}>
+                      <div className="avatar"/>
+                      <div className="typing-dots"><span/><span/><span/></div>
+                    </div>
+                  ) : (
+                    <div className="convo-row liv">
+                      <div className="avatar"/>
+                      <div className="bubble">{s.ask}</div>
+                    </div>
+                  )}
+                  {answers[s.key] && (
+                    <div className="convo-row user">
+                      <div className="bubble">{answers[s.key]}</div>
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+
+              {step < steps.length && showAsk && !answers[steps[step].key] && (
+                <div className="convo-row user" style={{ flexDirection: "column", alignItems: "stretch", flex: 1 }}>
+                  {steps[step].choice ? (
+                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                      {steps[step].choice.map(c => (
+                        <button key={c} className="sso" style={{ background: "var(--fg)", color: "var(--bg)", border: 0 }} onClick={() => advance(c)}>{c}</button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bubble input">
+                      <input
+                        autoFocus
+                        type={steps[step].key === "email" ? "email" : "text"}
+                        placeholder={steps[step].ph}
+                        value={val}
+                        onChange={e => setVal(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") advance(val); }}
+                      />
+                      <button onClick={() => advance(val)}>Send</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {step === steps.length - 1 && answers[steps[step].key] && (
+                <div className="convo-row liv">
+                  <div className="avatar"/>
+                  <div className="bubble">
+                    {mode === "signup"
+                      ? `All set, ${answers.name || "friend"}. Booting your computer…`
+                      : "Welcome home. Waking up your computer…"}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        );
+      };
+
+      /* ============================================================== */
+      /*  App                                                           */
+      /* ============================================================== */
+      const DEFAULTS = /*EDITMODE-BEGIN*/{
+        "mode": "signin",
+        "theme": "light"
+      }/*EDITMODE-END*/;
+
+      function getInitialMode(fallback) {
+        if (typeof window === "undefined") return fallback;
+        try {
+          const url = new URL(window.location.href);
+          const q = url.searchParams.get("mode");
+          if (q === "signup" || q === "signin") return q;
+          if (url.pathname.indexOf("/register") === 0) return "signup";
+          if (url.pathname.indexOf("/signup") === 0) return "signup";
+        } catch (e) {}
+        return fallback;
+      }
+
+      function App() {
+        const [t, setT] = (window.useTweaks || ((d) => React.useState(d)))(DEFAULTS);
+        const setTweak = window.useTweaks ? setT : ((k, v) => setT(typeof k === "object" ? {...t, ...k} : {...t, [k]: v}));
+
+        const [mode, setMode] = useState(() => getInitialMode(t.mode || "signin"));
+
+        useEffect(() => {
+          if (typeof window === "undefined") return;
+          const newUrl = mode === "signup" ? "/register" : "/login";
+          if (window.location.pathname !== newUrl) {
+            window.history.replaceState(null, "", newUrl);
+          }
+        }, [mode]);
+
+        useEffect(() => {
+          document.body.classList.toggle("dark", t.theme === "dark");
+        }, [t.theme]);
+
+        useEffect(() => {
+          const nav = document.querySelector(".nav");
+          if (!nav) return;
+          const onScroll = () => nav.classList.toggle("stuck", (window.scrollY || 0) > 24);
+          window.addEventListener("scroll", onScroll, { passive: true });
+          onScroll();
+          return () => window.removeEventListener("scroll", onScroll);
+        }, []);
+
+        return (
+          <>
+            <nav className="nav">
+              <div className="container nav-inner">
+                <a href="/" className="brand">
+                  <span className="brand-mark" aria-hidden="true"/>
+                  <span>Livinity</span>
+                </a>
+                <div className="nav-links">
+                  <a href="/#liv">Liv Agent</a>
+                  <a href="/#apps">App Library</a>
+                  <a href="/#privacy">Privacy</a>
+                  <a href="/#hardware">Hardware</a>
+                  <a href="/#pricing">Pricing</a>
+                </div>
+                <div className="nav-cta">
+                  <a className="btn btn-ghost btn-icon" href="https://github.com/utopusc/livinity-io" target="_blank" rel="noreferrer" aria-label="GitHub">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49v-1.71c-2.78.62-3.37-1.36-3.37-1.36-.46-1.17-1.11-1.48-1.11-1.48-.91-.63.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.13-4.56-5.03 0-1.11.39-2.02 1.03-2.73-.1-.26-.45-1.29.1-2.69 0 0 .84-.27 2.75 1.04A9.4 9.4 0 0112 6.84c.85 0 1.71.12 2.51.34 1.91-1.31 2.75-1.04 2.75-1.04.55 1.4.2 2.43.1 2.69.64.71 1.03 1.62 1.03 2.73 0 3.91-2.34 4.77-4.57 5.02.36.32.68.94.68 1.89v2.8c0 .27.18.59.69.49A10.05 10.05 0 0022 12.25C22 6.58 17.52 2 12 2z"/></svg>
+                    <span className="nav-cta-count">4.2k</span>
+                  </a>
+                  <span className="nav-signin">
+                    {mode === "signin"
+                      ? <>New? <a href="#" onClick={(e) => { e.preventDefault(); setMode("signup"); }} style={{ color: "var(--fg)", fontWeight: 500 }}>Create account</a></>
+                      : <>Have an account? <a href="#" onClick={(e) => { e.preventDefault(); setMode("signin"); }} style={{ color: "var(--fg)", fontWeight: 500 }}>Sign in</a></>}
+                  </span>
+                </div>
+              </div>
+            </nav>
+
+            <div className="auth-shell centered">
+              <main className="auth-form-side">
+                <div className="form-stage">
+                  <div className="mini-mark"/>
+                  <ClassicForm mode={mode} setMode={setMode}/>
+                </div>
+
+                <div className="form-bottom">
+                  Open-source · self-host anytime · <a href="/">livinity.io</a>
+                </div>
+              </main>
+            </div>
+
+            {window.TweaksPanel && (
+              <window.TweaksPanel title="Tweaks">
+                <window.TweakSection title="Mode">
+                  <window.TweakRadio
+                    label="State"
+                    value={mode}
+                    options={[
+                      { value: "signin", label: "Sign in" },
+                      { value: "signup", label: "Sign up" },
+                    ]}
+                    onChange={v => { setMode(v); setTweak("mode", v); }}
+                  />
+                </window.TweakSection>
+                <window.TweakSection title="Theme">
+                  <window.TweakRadio
+                    label="Appearance"
+                    value={t.theme || "light"}
+                    options={[
+                      { value: "light", label: "Light" },
+                      { value: "dark", label: "Dark" },
+                    ]}
+                    onChange={v => setTweak("theme", v)}
+                  />
+                </window.TweakSection>
+              </window.TweaksPanel>
+            )}
+          </>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+
+  </body>
+</html>

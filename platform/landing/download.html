@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+
+    <title>Download Livinity Agent — Control your computer from anywhere</title>
+    <meta name="description" content="Download the Livinity desktop agent for Windows, macOS, or Linux. Reach your Cloud AI Computer from any device, securely, without exposing ports." />
+    <meta name="keywords" content="Livinity download, Livinity agent, self-hosted AI client, remote access desktop, LivOS client" />
+
+    <link rel="canonical" href="https://livinity.io/download" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Livinity" />
+    <meta property="og:title" content="Download Livinity Agent" />
+    <meta property="og:description" content="Reach your Cloud AI Computer from any device. Windows, macOS, Linux — open-source, free." />
+    <meta property="og:url" content="https://livinity.io/download" />
+    <meta property="og:image" content="https://livinity.io/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Download Livinity Agent" />
+    <meta name="twitter:description" content="Reach your Cloud AI Computer from any device — open-source, free." />
+    <meta name="twitter:image" content="https://livinity.io/og-image.png" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="styles.css" />
+
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+    <style>
+      :root { --dl-pad: clamp(24px, 4vw, 56px); }
+      body { background: var(--bg); color: var(--fg); }
+
+      .dl-shell { max-width: 1100px; margin: 0 auto; padding: 120px 32px 80px; }
+
+      /* Hero */
+      .dl-hero { text-align: center; margin-bottom: 72px; }
+      .dl-mark {
+        width: 72px; height: 72px; border-radius: 50%;
+        background: var(--fg); margin: 0 auto 28px;
+        position: relative;
+        animation: dlBreathe 4.5s ease-in-out infinite;
+      }
+      .dl-mark::after { content: ""; position: absolute; inset: 20px; border-radius: 50%; background: var(--bg); }
+      @keyframes dlBreathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+      .dl-eyebrow {
+        font-family: var(--mono); font-size: 11px;
+        letter-spacing: 0.18em; text-transform: uppercase;
+        color: var(--fg-mute);
+        margin-bottom: 16px;
+        display: inline-flex; align-items: center; gap: 8px;
+      }
+      .dl-eyebrow .ic { width: 6px; height: 6px; border-radius: 50%; background: var(--fg); }
+
+      .dl-title {
+        font-size: clamp(40px, 5.5vw, 72px);
+        font-weight: 300; letter-spacing: -0.035em;
+        line-height: 1.04; color: var(--fg);
+        text-wrap: balance; margin: 0;
+      }
+      .dl-title em {
+        font-style: italic; font-family: "Instrument Serif", serif;
+        font-weight: 400; color: var(--fg-mute);
+      }
+      .dl-sub {
+        font-size: 17px; line-height: 1.55;
+        color: var(--fg-mute);
+        max-width: 56ch; margin: 22px auto 0;
+        text-wrap: pretty;
+      }
+
+      /* Detection notice */
+      .dl-detect {
+        display: inline-flex; align-items: center; gap: 10px;
+        margin-top: 28px;
+        padding: 8px 16px;
+        background: var(--bg-2);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        font-size: 12.5px;
+        color: var(--fg-mute);
+        font-family: var(--mono);
+        letter-spacing: 0.02em;
+      }
+      .dl-detect .dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--fg);
+        animation: dlBreathe 2.5s ease-in-out infinite;
+      }
+      .dl-detect a { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; margin-left: 4px; }
+
+      /* Download cards */
+      .dl-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+        margin-bottom: 72px;
+      }
+      @media (max-width: 800px) { .dl-grid { grid-template-columns: 1fr; } }
+      .dl-card {
+        position: relative;
+        padding: 32px 28px;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        display: flex; flex-direction: column; gap: 18px;
+        transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+        text-decoration: none;
+        color: var(--fg);
+      }
+      .dl-card:hover {
+        transform: translateY(-2px);
+        border-color: var(--fg);
+        box-shadow: 0 24px 60px -28px rgba(0,0,0,0.18);
+      }
+      body.dark .dl-card:hover { box-shadow: 0 24px 60px -20px rgba(0,0,0,0.6); }
+      .dl-card.recommended {
+        border-color: var(--fg);
+        background: linear-gradient(160deg, var(--bg-2) 0%, var(--bg) 100%);
+      }
+      .dl-card .rec-pill {
+        position: absolute; top: 16px; right: 16px;
+        font-size: 9.5px; font-weight: 600;
+        padding: 4px 10px; border-radius: 999px;
+        background: var(--fg); color: var(--bg);
+        letter-spacing: 0.08em; text-transform: uppercase;
+        font-family: var(--mono);
+      }
+      .dl-card .platform-ic {
+        width: 38px; height: 38px;
+        display: grid; place-items: center;
+        color: var(--fg);
+      }
+      .dl-card .platform-name {
+        font-size: 22px; font-weight: 400;
+        letter-spacing: -0.018em;
+        color: var(--fg);
+      }
+      .dl-card .platform-meta {
+        font-size: 12.5px; color: var(--fg-mute);
+        font-family: var(--mono); letter-spacing: 0.02em;
+        margin-top: -10px;
+      }
+      .dl-card .platform-cta {
+        margin-top: 6px;
+        display: inline-flex; align-items: center; justify-content: space-between;
+        padding: 12px 16px;
+        background: var(--fg); color: var(--bg);
+        border-radius: 12px;
+        font-size: 14px; font-weight: 500;
+        gap: 12px;
+        transition: opacity 0.15s;
+      }
+      .dl-card .platform-cta:hover { opacity: 0.92; }
+      .dl-card .platform-cta .arrow { display: inline-flex; }
+      .dl-card.ghost-cta .platform-cta {
+        background: transparent; color: var(--fg);
+        border: 1px solid var(--line-strong);
+      }
+      .dl-card.ghost-cta .platform-cta:hover { background: var(--bg-2); }
+
+      /* Setup steps */
+      .dl-steps {
+        margin-top: 96px;
+        padding: 56px 48px;
+        background: var(--bg-2);
+        border-radius: 24px;
+        border: 1px solid var(--line);
+      }
+      .dl-steps-eyebrow {
+        font-family: var(--mono); font-size: 11px;
+        letter-spacing: 0.18em; text-transform: uppercase;
+        color: var(--fg-mute); margin-bottom: 12px;
+      }
+      .dl-steps-title {
+        font-size: clamp(28px, 3.5vw, 42px);
+        font-weight: 300; letter-spacing: -0.025em;
+        line-height: 1.1; color: var(--fg);
+        margin: 0 0 48px;
+      }
+      .dl-steps-title em { font-style: italic; font-family: "Instrument Serif", serif; font-weight: 400; color: var(--fg-mute); }
+
+      .dl-steps-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 32px;
+      }
+      @media (max-width: 800px) { .dl-steps-grid { grid-template-columns: 1fr; } }
+      .dl-step { display: flex; flex-direction: column; gap: 10px; }
+      .dl-step .n {
+        font-family: var(--mono); font-size: 11px;
+        letter-spacing: 0.16em; text-transform: uppercase;
+        color: var(--fg-faint);
+      }
+      .dl-step h3 {
+        font-size: 17px; font-weight: 500;
+        letter-spacing: -0.012em;
+        color: var(--fg);
+      }
+      .dl-step p {
+        font-size: 14px; line-height: 1.55;
+        color: var(--fg-mute);
+        text-wrap: pretty;
+      }
+      .dl-step .code {
+        margin-top: 8px;
+        padding: 10px 14px;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        font-family: var(--mono); font-size: 12.5px;
+        color: var(--fg);
+        word-break: break-all;
+      }
+
+      /* Compatibility / footnote */
+      .dl-fine {
+        margin-top: 64px;
+        font-size: 13px; color: var(--fg-mute);
+        line-height: 1.6;
+        text-align: center;
+      }
+      .dl-fine a { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
+      .dl-fine .sep { color: var(--fg-faint); margin: 0 10px; }
+
+      /* Footer */
+      .dl-foot {
+        margin-top: 80px;
+        padding-top: 24px;
+        border-top: 1px solid var(--line);
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 12px; color: var(--fg-mute);
+        font-family: var(--mono);
+        flex-wrap: wrap; gap: 10px;
+      }
+      .dl-foot a { color: var(--fg); text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel" src="tweaks-panel.jsx"></script>
+    <script type="text/babel" src="atoms.jsx"></script>
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      const PLATFORMS = [
+        {
+          id: "windows", name: "Windows",
+          url: "/downloads/livinity-agent-setup-win-x64.exe",
+          size: "~60 MB", arch: "x64",
+          icon: <svg className="platform-ic" width="38" height="38" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>,
+        },
+        {
+          id: "macos", name: "macOS",
+          url: "/downloads/Livinity-Agent.dmg",
+          size: "~60 MB", arch: "Apple Silicon · Intel",
+          icon: <svg className="platform-ic" width="38" height="38" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>,
+        },
+        {
+          id: "linux", name: "Linux",
+          url: "/downloads/livinity-agent_1.0_amd64.deb",
+          size: "~60 MB", arch: "amd64 · .deb",
+          icon: <svg className="platform-ic" width="38" height="38" viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333.391.778 1.113 1.368 1.884 1.43.868.065 1.157-.41 1.743-.19.44.167.862.534 1.454.726.238.077.51.12.775.093.8-.07 1.398-.836 1.397-1.763 0-.752-.33-1.281-.546-1.726-.065-.135-.108-.298-.123-.46-.022-.27.015-.55.078-.795.246-.96.13-1.72-.023-2.403-.077-.339-.168-.67-.246-.972-.04-.158-.085-.323-.135-.498.217-.165.385-.396.489-.674.155-.381.191-.838.091-1.276a2.8 2.8 0 0 0-.403-.87c-.5-.673-1.228-1.273-2.144-2.164-.756-.723-1.077-1.589-1.264-2.485a8 8 0 0 1-.145-1.283c-.027-.427.016-.858.027-1.282.013-.502.02-.862-.08-1.287C15.856.734 14.2.009 12.504 0z"/></svg>,
+        },
+      ];
+
+      function detectPlatform() {
+        if (typeof navigator === "undefined") return null;
+        const p = (navigator.userAgent || navigator.platform || "").toLowerCase();
+        if (p.includes("win")) return "windows";
+        if (p.includes("mac") || p.includes("iphone") || p.includes("ipad")) return "macos";
+        if (p.includes("linux") || p.includes("android")) return "linux";
+        return null;
+      }
+
+      const Arrow = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v14M6 11l6 6 6-6"/></svg>);
+
+      function Nav() {
+        const [user, setUser] = useState(null);
+        const [authLoaded, setAuthLoaded] = useState(false);
+        useEffect(() => {
+          let aborted = false;
+          if (window.fetchProfileOnce) {
+            window.fetchProfileOnce().then(u => {
+              if (aborted) return;
+              setUser(u); setAuthLoaded(true);
+            });
+          } else {
+            fetch("/api/auth/me", { credentials: "same-origin" })
+              .then(r => r.ok ? r.json() : { user: null })
+              .then(d => { if (!aborted) { setUser(d.user || null); setAuthLoaded(true); } })
+              .catch(() => { if (!aborted) setAuthLoaded(true); });
+          }
+          return () => { aborted = true; };
+        }, []);
+        useEffect(() => {
+          const nav = document.querySelector(".nav");
+          if (!nav) return;
+          const onScroll = () => nav.classList.toggle("stuck", (window.scrollY || 0) > 24);
+          window.addEventListener("scroll", onScroll, { passive: true });
+          onScroll();
+          return () => window.removeEventListener("scroll", onScroll);
+        }, []);
+        return (
+          <nav className="nav">
+            <div className="container nav-inner">
+              <a href="/" className="brand">
+                <span className="brand-mark" aria-hidden="true"/>
+                <span>Livinity</span>
+              </a>
+              <div className="nav-links">
+                <a href="/#liv">Liv Agent</a>
+                <a href="/#apps">App Library</a>
+                <a href="/download" className="on">Download</a>
+                <a href="/customize.html">Pricing</a>
+                <a href="https://changelog.livinity.io" target="_blank" rel="noreferrer">Changelog</a>
+              </div>
+              <div className="nav-cta">
+                <a className="btn btn-ghost btn-icon" href="https://github.com/utopusc/livinity-io" target="_blank" rel="noreferrer" aria-label="GitHub">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49v-1.71c-2.78.62-3.37-1.36-3.37-1.36-.46-1.17-1.11-1.48-1.11-1.48-.91-.63.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.13-4.56-5.03 0-1.11.39-2.02 1.03-2.73-.1-.26-.45-1.29.1-2.69 0 0 .84-.27 2.75 1.04A9.4 9.4 0 0112 6.84c.85 0 1.71.12 2.51.34 1.91-1.31 2.75-1.04 2.75-1.04.55 1.4.2 2.43.1 2.69.64.71 1.03 1.62 1.03 2.73 0 3.91-2.34 4.77-4.57 5.02.36.32.68.94.68 1.89v2.8c0 .27.18.59.69.49A10.05 10.05 0 0022 12.25C22 6.58 17.52 2 12 2z"/></svg>
+                  <span className="nav-cta-count">4.2k</span>
+                </a>
+                {authLoaded && user && window.ProfileMenu ? (
+                  <window.ProfileMenu user={user}/>
+                ) : authLoaded ? (
+                  <>
+                    <a className="nav-signin" href="/login">Sign in</a>
+                    <a className="btn btn-primary" href="/register">Sign up</a>
+                  </>
+                ) : (
+                  <span style={{ display: "inline-block", width: 92, height: 32 }} aria-hidden="true"/>
+                )}
+              </div>
+            </div>
+          </nav>
+        );
+      }
+
+      function DownloadCard({ p, recommended }) {
+        return (
+          <a className={"dl-card" + (recommended ? " recommended" : " ghost-cta")} href={p.url} download>
+            {recommended && <span className="rec-pill">Detected</span>}
+            {p.icon}
+            <div>
+              <div className="platform-name">{p.name}</div>
+              <div className="platform-meta">{p.arch}</div>
+            </div>
+            <div className="platform-meta">{p.size} · stable v1.0</div>
+            <span className="platform-cta">
+              Download <Arrow/>
+            </span>
+          </a>
+        );
+      }
+
+      function App() {
+        const [detected, setDetected] = useState(null);
+        useEffect(() => { setDetected(detectPlatform()); }, []);
+
+        // Reorder so detected platform appears first (recommended)
+        const ordered = detected
+          ? [PLATFORMS.find(p => p.id === detected), ...PLATFORMS.filter(p => p.id !== detected)].filter(Boolean)
+          : PLATFORMS;
+
+        return (
+          <>
+            <Nav/>
+            <main className="dl-shell">
+
+              <header className="dl-hero">
+                <div className="dl-mark"/>
+                <div className="dl-eyebrow"><span className="ic"/> Livinity Agent · v1.0</div>
+                <h1 className="dl-title">
+                  Take your computer <em>with you.</em>
+                </h1>
+                <p className="dl-sub">
+                  A small desktop agent that connects your devices to your Cloud AI Computer.
+                  Open files, chat with Liv, launch apps — from anywhere, securely, without exposing ports.
+                </p>
+                {detected && (
+                  <div className="dl-detect">
+                    <span className="dot"/>
+                    Detected · {PLATFORMS.find(p => p.id === detected)?.name}
+                    <a href={PLATFORMS.find(p => p.id === detected)?.url} download>Download below ↓</a>
+                  </div>
+                )}
+              </header>
+
+              <section className="dl-grid">
+                {ordered.map((p, i) => (
+                  <DownloadCard key={p.id} p={p} recommended={detected ? p.id === detected : i === 0}/>
+                ))}
+              </section>
+
+              <section className="dl-steps">
+                <div className="dl-steps-eyebrow">01 · Getting started</div>
+                <h2 className="dl-steps-title">From <em>install</em> to <em>signed in</em>, in under a minute.</h2>
+
+                <div className="dl-steps-grid">
+                  <div className="dl-step">
+                    <span className="n">Step 1</span>
+                    <h3>Install</h3>
+                    <p>Run the installer for your platform. macOS opens a DMG, Windows runs a signed setup, Linux installs via <code>.deb</code>.</p>
+                  </div>
+                  <div className="dl-step">
+                    <span className="n">Step 2</span>
+                    <h3>Sign in</h3>
+                    <p>Use your livinity.io account. The agent registers as a device — manage and revoke from your dashboard.</p>
+                  </div>
+                  <div className="dl-step">
+                    <span className="n">Step 3</span>
+                    <h3>Connect</h3>
+                    <p>Your Cloud AI Computer appears in the menu bar. Open files, chat with Liv, launch apps — wherever you are.</p>
+                    <div className="code">livinity-agent --setup-token YOUR_KEY</div>
+                  </div>
+                </div>
+              </section>
+
+              <p className="dl-fine">
+                Open-source · <a href="https://github.com/utopusc/livinity-io" target="_blank" rel="noreferrer">view source on GitHub</a>
+                <span className="sep">·</span>
+                Need <a href="/customize.html">a cloud machine</a> instead?
+                <span className="sep">·</span>
+                <a href="/#install">Self-host the server</a>
+              </p>
+
+              <footer className="dl-foot">
+                <span>open-source · <a href="/">livinity.io</a></span>
+                <a href="https://changelog.livinity.io" target="_blank" rel="noreferrer">Changelog →</a>
+              </footer>
+            </main>
+          </>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+    </script>
+  </body>
+</html>

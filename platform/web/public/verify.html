@@ -1,0 +1,265 @@
+<!doctype html>
+<!-- Sacred SHA invariant: f3538e1d811992b782a9bb057d1b7f0a0189f95f -->
+<!-- Phase 140-06.3: /verify static page — design parity with dashboard-install.html -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>Verify your email — Livinity</title>
+    <meta name="description" content="Confirm your Livinity account to continue to your install command." />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600;700;800&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="styles.css" />
+
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+    <style>
+      :root { --dash-radius: 18px; --dash-line: rgba(0,0,0,0.07); --dash-line-strong: rgba(0,0,0,0.12); --card-bg: #ffffff; --card-bg-2: #fafafa; --card-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 24px 60px -34px rgba(0,0,0,0.18); --accent-green: #16a34a; --accent-amber: #d97706; --accent-red: #dc2626; --font-mono: "Geist Mono", ui-monospace, monospace; --font-serif: "Instrument Serif", serif; }
+      body.dark { --dash-line: rgba(255,255,255,0.08); --dash-line-strong: rgba(255,255,255,0.16); --card-bg: #0f0f11; --card-bg-2: #08080a; --card-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 24px 60px -28px rgba(0,0,0,0.8); }
+      body { background: var(--bg); color: var(--fg); font-family: "Geist", -apple-system, sans-serif; }
+      body.dark { background: #050507; color: #f5f5f7; }
+
+      .install-shell { max-width: 720px; margin: 0 auto; padding: 32px 28px 80px; }
+      .install-nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; margin-bottom: 12px; }
+      .install-nav .brand { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg); text-decoration: none; }
+      .install-nav .brand em { font-family: var(--font-serif); font-weight: 400; font-style: italic; }
+      .install-nav .right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+      .install-nav .uname { font-size: 13px; color: var(--fg-mute); font-family: var(--font-mono); }
+
+      .h-btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 12px; background: transparent; border: 1px solid var(--dash-line-strong); color: var(--fg); font-size: 13.5px; font-weight: 500; font-family: inherit; cursor: pointer; transition: all 0.18s ease; text-decoration: none; }
+      .h-btn:hover { background: rgba(0,0,0,0.04); transform: translateY(-1px); }
+      body.dark .h-btn:hover { background: rgba(255,255,255,0.05); }
+      .h-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+      .h-btn.solid { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+      .h-btn.solid:hover { opacity: 0.92; background: var(--fg); }
+      .h-btn.ghost { border: none; padding: 9px 6px; }
+
+      .install-hero { margin-bottom: 24px; }
+      .install-hero .step-pill { display: inline-block; padding: 4px 11px; border-radius: 999px; background: var(--card-bg); border: 1px solid var(--dash-line); font-size: 11.5px; font-family: var(--font-mono); color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px; }
+      .install-hero h1 { font-size: clamp(26px, 4vw, 36px); font-weight: 600; letter-spacing: -0.025em; line-height: 1.05; margin: 0 0 8px; }
+      .install-hero h1 em { font-family: var(--font-serif); font-weight: 400; font-style: italic; color: var(--fg-mute); }
+      .install-hero p { font-size: 15px; color: var(--fg-mute); margin: 0; max-width: 560px; line-height: 1.5; }
+
+      .panel { background: var(--card-bg); border: 1px solid var(--dash-line); border-radius: var(--dash-radius); padding: 28px; box-shadow: var(--card-shadow); margin-bottom: 18px; }
+      .panel h2 { font-size: 13px; font-weight: 600; color: var(--fg); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px; }
+      .panel .sub { font-size: 13px; color: var(--fg-mute); margin: 0 0 20px; line-height: 1.5; }
+
+      .email-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 12px; background: var(--card-bg-2); border: 1px solid var(--dash-line); font-family: var(--font-mono); font-size: 13.5px; color: var(--fg); margin: 4px 0 18px; }
+      .email-pill .ic { width: 14px; height: 14px; opacity: 0.6; }
+
+      .ok-icon { display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 999px; background: rgba(22,163,74,0.10); color: var(--accent-green); font-size: 28px; margin: 0 auto 16px; border: 1px solid rgba(22,163,74,0.25); }
+      .err-icon { display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 999px; background: rgba(220,38,38,0.10); color: var(--accent-red); font-size: 28px; margin: 0 auto 16px; border: 1px solid rgba(220,38,38,0.25); }
+
+      .resend-msg { font-size: 12.5px; font-family: var(--font-mono); color: var(--fg-mute); margin-top: 12px; min-height: 16px; }
+      .resend-msg.ok { color: var(--accent-green); }
+      .resend-msg.err { color: var(--accent-red); }
+
+      .warn-card { background: rgba(217,119,6,0.06); border: 1px solid rgba(217,119,6,0.25); border-radius: 12px; padding: 12px 14px; font-size: 12.5px; color: var(--accent-amber); margin-bottom: 14px; line-height: 1.5; }
+
+      .nav-row { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; padding: 0 4px; }
+      .nav-row .right { display: flex; gap: 10px; }
+
+      .install-loading { min-height: 100vh; display: grid; place-items: center; color: var(--fg-mute); font-family: var(--font-mono); font-size: 14px; }
+
+      .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--dash-line-strong); border-top-color: var(--fg); border-radius: 999px; animation: spin 0.8s linear infinite; vertical-align: text-bottom; margin-right: 8px; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      @media (max-width: 480px) { .install-shell { padding: 16px 14px 60px; } .install-nav .right { gap: 8px; } .panel { padding: 20px 18px; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="install-loading"><p>Loading…</p></div></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      function getQueryParam(name) {
+        try { return new URL(window.location.href).searchParams.get(name); } catch (e) { return null; }
+      }
+
+      function App() {
+        useEffect(() => {
+          try {
+            const saved = localStorage.getItem("liv_theme");
+            if (saved === "dark") document.body.classList.add("dark");
+          } catch (e) {}
+        }, []);
+
+        const [user, setUser] = useState(null);
+        const [status, setStatus] = useState("loading"); // loading | pending | success | error
+        const [error, setError] = useState("");
+        const [resending, setResending] = useState(false);
+        const [resendMsg, setResendMsg] = useState(null);
+        const [resendOk, setResendOk] = useState(false);
+
+        const token = getQueryParam("token");
+
+        // Branch 1: token in URL → verify it
+        useEffect(() => {
+          if (!token) return;
+          (async () => {
+            try {
+              const res = await fetch("/api/auth/verify-email", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (data.success) {
+                setStatus("success");
+                setTimeout(() => { window.location.href = "/dashboard/install"; }, 1500);
+              } else {
+                setStatus("error");
+                setError(data.error || "Verification failed");
+              }
+            } catch (e) {
+              setStatus("error");
+              setError("Network error — try again.");
+            }
+          })();
+        }, [token]);
+
+        // Branch 2: no token → check session; show pending state if unverified
+        useEffect(() => {
+          if (token) return;
+          (async () => {
+            try {
+              const me = await fetch("/api/auth/me", { credentials: "same-origin" });
+              if (!me.ok) { window.location.href = "/login?redirect=/verify"; return; }
+              const data = await me.json();
+              if (!data.user) { window.location.href = "/login?redirect=/verify"; return; }
+              if (data.user.emailVerified) { window.location.href = "/dashboard/install"; return; }
+              setUser(data.user);
+              setStatus("pending");
+            } catch (e) {
+              window.location.href = "/login?redirect=/verify";
+            }
+          })();
+        }, [token]);
+
+        async function handleResend() {
+          setResending(true);
+          setResendMsg(null);
+          try {
+            const res = await fetch("/api/auth/resend-verification", {
+              method: "POST",
+              credentials: "same-origin",
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+              setResendOk(true);
+              setResendMsg("Sent — check your inbox.");
+            } else {
+              setResendOk(false);
+              setResendMsg(data.error || ("HTTP " + res.status));
+            }
+          } catch (e) {
+            setResendOk(false);
+            setResendMsg("Network error. Try again.");
+          } finally {
+            setResending(false);
+          }
+        }
+
+        async function handleLogout() {
+          try { await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }); } catch (e) {}
+          window.location.href = "/login";
+        }
+
+        if (status === "loading") return <div className="install-loading"><p>Loading…</p></div>;
+
+        return (
+          <div className="install-shell">
+            <nav className="install-nav">
+              <a href="/" className="brand">Livinity</a>
+              <div className="right">
+                {user && <span className="uname">{user.username}</span>}
+                <button onClick={handleLogout} className="h-btn">Sign out</button>
+              </div>
+            </nav>
+
+            {status === "pending" && (
+              <>
+                <header className="install-hero">
+                  <span className="step-pill">Verify</span>
+                  <h1>Check your <em>inbox.</em></h1>
+                  <p>We sent a verification link. Click it to activate your account — the install command opens right after.</p>
+                </header>
+
+                <section className="panel">
+                  <h2>Awaiting verification</h2>
+                  <p className="sub">We just emailed a one-time confirmation link to the address you signed up with. The link expires in 24 hours.</p>
+
+                  <div className="email-pill">{user && user.email}</div>
+
+                  <div className="warn-card">
+                    ⚠ Can't find the email? Check your spam folder. Some email providers (Gmail, Outlook) sometimes route the first delivery there. Whitelist <strong>noreply@livinity.io</strong> so the next ones land in your inbox.
+                  </div>
+
+                  <button className="h-btn" onClick={handleResend} disabled={resending}>
+                    {resending && <span className="spinner"></span>}
+                    {resending ? "Sending…" : "Resend verification email"}
+                  </button>
+                  {resendMsg && <div className={"resend-msg " + (resendOk ? "ok" : "err")}>{resendMsg}</div>}
+                </section>
+
+                <div className="nav-row">
+                  <a href="/" className="h-btn ghost">Back to home</a>
+                </div>
+              </>
+            )}
+
+            {status === "success" && (
+              <>
+                <header className="install-hero">
+                  <span className="step-pill">Verified</span>
+                  <h1>Email <em>verified.</em></h1>
+                  <p>Your account is now active. Taking you to the install command…</p>
+                </header>
+
+                <section className="panel" style={{ textAlign: "center" }}>
+                  <div className="ok-icon">✓</div>
+                  <h2 style={{ textAlign: "center" }}>All set</h2>
+                  <p className="sub" style={{ textAlign: "center" }}>Redirecting to your install command…</p>
+                  <a href="/dashboard/install" className="h-btn solid" style={{ marginTop: 8 }}>Continue now</a>
+                </section>
+              </>
+            )}
+
+            {status === "error" && (
+              <>
+                <header className="install-hero">
+                  <span className="step-pill">Failed</span>
+                  <h1>Verification <em>failed.</em></h1>
+                  <p>The link may have expired, been used already, or been mistyped. Sign in again to request a fresh one.</p>
+                </header>
+
+                <section className="panel" style={{ textAlign: "center" }}>
+                  <div className="err-icon">!</div>
+                  <h2 style={{ textAlign: "center" }}>Couldn't verify</h2>
+                  <p className="sub" style={{ textAlign: "center" }}>{error}</p>
+                  <a href="/login" className="h-btn solid" style={{ marginTop: 8 }}>Go to sign in</a>
+                </section>
+              </>
+            )}
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>

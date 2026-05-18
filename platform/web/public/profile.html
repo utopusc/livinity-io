@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>Profile — Livinity</title>
+    <meta name="description" content="Your Livinity profile and account settings." />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600;700;800&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="styles.css" />
+
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+    <style>
+      :root {
+        --line: rgba(0,0,0,0.07);
+        --line-strong: rgba(0,0,0,0.14);
+        --card-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 24px 60px -34px rgba(0,0,0,0.18);
+        --mono: "Geist Mono", ui-monospace, monospace;
+        --serif: "Instrument Serif", serif;
+        --green: #16a34a;
+        --amber: #d97706;
+        --red: #dc2626;
+      }
+      body.dark {
+        --line: rgba(255,255,255,0.08);
+        --line-strong: rgba(255,255,255,0.18);
+      }
+      body { background: var(--bg); color: var(--fg); }
+
+      .p-shell {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 100px 32px 80px;
+      }
+
+      /* Header */
+      .p-head {
+        display: grid;
+        grid-template-columns: 96px 1fr auto;
+        gap: 24px;
+        align-items: center;
+        padding-bottom: 28px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 8px;
+      }
+      .p-avatar {
+        width: 96px; height: 96px; border-radius: 50%;
+        background: linear-gradient(135deg, #ff8a65, #f06292);
+        display: grid; place-items: center;
+        color: white; font-size: 38px; font-weight: 500;
+        letter-spacing: -0.02em;
+        box-shadow: 0 12px 30px -12px rgba(240,98,146,0.5);
+      }
+      .p-head-info { display: flex; flex-direction: column; gap: 4px; }
+      .p-name {
+        font-size: 36px; font-weight: 300;
+        letter-spacing: -0.025em;
+        color: var(--fg);
+        line-height: 1.1;
+      }
+      .p-name em { font-style: italic; font-family: var(--serif); font-weight: 400; }
+      .p-handle {
+        font-family: var(--mono); font-size: 13px;
+        color: var(--fg-mute);
+      }
+      .p-meta {
+        display: flex; gap: 18px; margin-top: 8px;
+        font-size: 12px; color: var(--fg-mute);
+        font-family: var(--mono);
+      }
+      .p-meta .dot { color: var(--green); }
+      .p-actions { display: flex; gap: 10px; }
+      .p-btn {
+        font-size: 13px; padding: 9px 16px;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--fg);
+        border: 1px solid var(--line-strong);
+        cursor: pointer; font-weight: 500;
+        transition: background 0.15s, opacity 0.15s;
+        text-decoration: none;
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      }
+      .p-btn:hover { background: rgba(0,0,0,0.04); }
+      body.dark .p-btn:hover { background: rgba(255,255,255,0.06); }
+      .p-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .p-btn.solid {
+        background: var(--fg); color: var(--bg); border-color: var(--fg);
+      }
+      .p-btn.solid:hover { opacity: 0.9; background: var(--fg); }
+      .p-btn.danger { color: var(--red); border-color: rgba(220,38,38,0.3); }
+      .p-btn.danger:hover { background: rgba(220,38,38,0.06); }
+
+      /* Layout: left rail + main */
+      .p-layout {
+        margin-top: 40px;
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        gap: 56px;
+        align-items: start;
+      }
+      @media (max-width: 800px) { .p-layout { grid-template-columns: 1fr; gap: 24px; } }
+      .p-rail {
+        position: sticky; top: 100px;
+        display: flex; flex-direction: column; gap: 2px;
+      }
+      .p-rail a {
+        font-size: 13.5px;
+        color: var(--fg-mute);
+        text-decoration: none;
+        padding: 9px 12px;
+        border-radius: 8px;
+        font-weight: 500;
+        transition: background 0.15s, color 0.15s;
+        display: flex; align-items: center; gap: 8px;
+      }
+      .p-rail a:hover { color: var(--fg); background: var(--bg-2); }
+      .p-rail a.on { color: var(--fg); background: var(--bg-2); }
+      body.dark .p-rail a:hover, body.dark .p-rail a.on { background: rgba(255,255,255,0.06); }
+      .p-rail-sep {
+        height: 1px; background: var(--line);
+        margin: 12px 8px;
+      }
+
+      /* Sections */
+      .p-main { display: flex; flex-direction: column; gap: 56px; }
+      .p-section { scroll-margin-top: 100px; }
+      .p-section-head { margin-bottom: 22px; }
+      .p-section-eyebrow {
+        font-size: 11px; font-family: var(--mono);
+        color: var(--fg-faint);
+        letter-spacing: 0.08em; text-transform: uppercase;
+        margin-bottom: 8px;
+      }
+      .p-section-title {
+        font-size: 32px; font-weight: 300;
+        letter-spacing: -0.025em;
+        line-height: 1.1;
+        color: var(--fg);
+        text-wrap: balance;
+      }
+      .p-section-title em { font-style: italic; font-family: var(--serif); font-weight: 400; }
+      .p-section-sub {
+        font-size: 14px; color: var(--fg-mute);
+        line-height: 1.5;
+        margin-top: 10px;
+        max-width: 560px;
+        text-wrap: pretty;
+      }
+
+      /* Field rows */
+      .p-card {
+        background: var(--card-bg, #fff);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow: hidden;
+      }
+      body.dark .p-card { background: #0f0f11; }
+      .p-row {
+        display: grid;
+        grid-template-columns: 180px 1fr auto;
+        gap: 16px; align-items: center;
+        padding: 18px 22px;
+        border-top: 1px solid var(--line);
+      }
+      .p-row:first-child { border-top: none; }
+      .p-row .lbl {
+        font-size: 13px; color: var(--fg-mute);
+        font-weight: 500;
+      }
+      .p-row .val {
+        font-size: 14px; color: var(--fg);
+      }
+      .p-row .val.mono { font-family: var(--mono); font-size: 13px; }
+      .p-row .val .sub {
+        display: block;
+        font-size: 11.5px; color: var(--fg-mute);
+        margin-top: 4px;
+        font-family: var(--mono);
+      }
+      .p-row .val .pill {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 10.5px;
+        font-family: var(--mono);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        vertical-align: 1px;
+      }
+      .pill.ok { background: rgba(22,163,74,0.1); color: var(--green); }
+      .pill.warn { background: rgba(217,119,6,0.12); color: var(--amber); }
+
+      /* Footer */
+      .p-foot {
+        margin-top: 80px;
+        padding-top: 24px;
+        border-top: 1px solid var(--line);
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 12px; color: var(--fg-mute);
+        font-family: var(--mono);
+      }
+      .p-foot a { color: var(--fg); text-decoration: none; }
+
+      /* Loading skeleton */
+      .p-loading {
+        max-width: 1180px; margin: 0 auto; padding: 140px 32px;
+        text-align: center;
+      }
+      .p-loading p { color: var(--fg-mute); font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+
+      /* Toast */
+      .p-toast {
+        position: fixed;
+        bottom: 24px; left: 50%; transform: translateX(-50%);
+        background: var(--fg); color: var(--bg);
+        padding: 12px 20px; border-radius: 999px;
+        font-size: 13.5px; font-weight: 500;
+        box-shadow: 0 8px 24px -8px rgba(0,0,0,0.3);
+        z-index: 1000;
+        animation: toastIn 0.25s cubic-bezier(.2,.7,.2,1);
+      }
+      @keyframes toastIn { from { transform: translate(-50%, 12px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+
+      /* New API key modal */
+      .key-modal {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.4);
+        display: grid; place-items: center;
+        z-index: 999; padding: 20px;
+      }
+      .key-modal-inner {
+        background: var(--card-bg, #fff);
+        border-radius: 18px;
+        padding: 28px;
+        max-width: 520px; width: 100%;
+        box-shadow: 0 20px 60px -10px rgba(0,0,0,0.3);
+      }
+      body.dark .key-modal-inner { background: #0f0f11; }
+      .key-modal h3 { font-size: 18px; font-weight: 500; margin-bottom: 8px; letter-spacing: -0.015em; }
+      .key-modal p { font-size: 13.5px; color: var(--fg-mute); line-height: 1.5; }
+      .key-modal .key-display {
+        margin: 18px 0;
+        padding: 14px 16px;
+        background: var(--bg-2);
+        border-radius: 10px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        word-break: break-all;
+        color: var(--fg);
+      }
+      .key-modal .key-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+      .key-modal .modal-input {
+        width: 100%;
+        margin: 14px 0 4px;
+        padding: 12px 14px;
+        background: var(--bg-2);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        font: 500 14px/1.2 inherit;
+        color: var(--fg);
+        outline: none;
+        transition: border-color .15s;
+      }
+      .key-modal .modal-input:focus { border-color: var(--line-strong); }
+      .key-modal .modal-error {
+        margin-top: 8px;
+        font-size: 12.5px;
+        color: var(--red);
+      }
+      .key-modal-inner.danger { border: 1px solid rgba(220,38,38,0.25); }
+
+      /* Coming soon — Create computer */
+      .cs-intro {
+        display: flex; gap: 24px;
+        padding: 24px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #faf6f1 0%, #f0e9e1 100%);
+        border: 1px solid var(--line);
+        margin-bottom: 24px;
+        align-items: center;
+      }
+      body.dark .cs-intro {
+        background: linear-gradient(135deg, #14141a 0%, #1c1518 100%);
+      }
+      .cs-orb {
+        width: 60px; height: 60px; border-radius: 50%;
+        background: var(--fg); flex: none;
+        position: relative;
+        animation: csOrb 4.5s ease-in-out infinite;
+      }
+      @keyframes csOrb { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+      .cs-orb::after { content: ""; position: absolute; inset: 14px; border-radius: 50%; background: rgba(255,255,255,0.85); }
+      body.dark .cs-orb::after { background: rgba(0,0,0,0.7); }
+      .cs-intro-text { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+      .cs-intro-text h4 {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 16px; font-weight: 600;
+        color: var(--fg);
+        letter-spacing: -0.01em;
+      }
+      .cs-intro-text p {
+        font-size: 13.5px; color: var(--fg-mute);
+        line-height: 1.5;
+      }
+      .cs-badge {
+        font-size: 9.5px; font-weight: 600;
+        padding: 4px 9px; border-radius: 999px;
+        background: var(--fg); color: var(--bg);
+        letter-spacing: 0.06em; text-transform: uppercase;
+        font-family: var(--mono);
+      }
+      .cs-plans {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        opacity: 0.55;
+        pointer-events: none;
+        user-select: none;
+      }
+      @media (max-width: 900px) { .cs-plans { grid-template-columns: 1fr; } }
+      .cs-plan {
+        position: relative;
+        padding: 26px 24px;
+        border-radius: 16px;
+        background: var(--card-bg, #fff);
+        border: 1px solid var(--line);
+        display: flex; flex-direction: column; gap: 14px;
+      }
+      body.dark .cs-plan { background: #0f0f11; }
+      .cs-plan.featured {
+        background: linear-gradient(160deg, #faf6f1 0%, #f5ede2 100%);
+        border-color: var(--line-strong);
+      }
+      body.dark .cs-plan.featured {
+        background: linear-gradient(160deg, #14141a 0%, #1c1518 100%);
+      }
+      .cs-plan-name {
+        font-size: 11px; font-weight: 600;
+        color: var(--fg);
+        letter-spacing: 0.1em; text-transform: uppercase;
+        font-family: var(--mono);
+      }
+      .cs-plan-price { display: flex; align-items: baseline; gap: 4px; padding-bottom: 4px; }
+      .cs-plan-price .num { font-size: 44px; font-weight: 300; letter-spacing: -0.035em; color: var(--fg); line-height: 1; }
+      .cs-plan-price .per { font-size: 13px; color: var(--fg-mute); font-family: var(--mono); }
+      .cs-plan-tag { font-size: 12px; color: var(--fg-mute); line-height: 1.4; min-height: 34px; }
+      .cs-plan-specs {
+        display: flex; flex-direction: column; gap: 10px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+        font-size: 13px;
+      }
+      .cs-plan-specs .spec { display: flex; justify-content: space-between; color: var(--fg-dim); }
+      .cs-plan-specs .spec b { color: var(--fg); font-weight: 500; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useCallback } = React;
+
+      // ---- location-based currency ----
+      const FX_RATES = { EUR: 1, USD: 1.08, GBP: 0.85, TRY: 38, JPY: 165, CHF: 0.97, CAD: 1.48, AUD: 1.64, INR: 90 };
+      const CURRENCY_SYMBOLS = { EUR: "€", USD: "$", GBP: "£", TRY: "₺", JPY: "¥", CHF: "Fr", CAD: "C$", AUD: "A$", INR: "₹" };
+      const LOCALE_CURRENCY = {
+        tr: "TRY",
+        us: "USD", gb: "GBP", uk: "GBP", au: "AUD", ca: "CAD",
+        jp: "JPY", ja: "JPY", in: "INR",
+        ch: "CHF",
+        de: "EUR", fr: "EUR", es: "EUR", it: "EUR", nl: "EUR", be: "EUR",
+        pt: "EUR", at: "EUR", fi: "EUR", ie: "EUR", gr: "EUR", lu: "EUR", mt: "EUR",
+      };
+      function detectCurrency() {
+        try {
+          const stored = localStorage.getItem("liv_currency");
+          if (stored && FX_RATES[stored]) return stored;
+          const lang = (navigator.language || "en-US").toLowerCase();
+          const parts = lang.split(/[-_]/);
+          if (parts[1] && LOCALE_CURRENCY[parts[1]]) return LOCALE_CURRENCY[parts[1]];
+          if (parts[0] && LOCALE_CURRENCY[parts[0]]) return LOCALE_CURRENCY[parts[0]];
+        } catch (e) {}
+        return "EUR";
+      }
+      function convertPrice(eur, currency) {
+        return Math.round(eur * (FX_RATES[currency] || 1));
+      }
+      function currencySymbol(currency) {
+        return CURRENCY_SYMBOLS[currency] || (currency + " ");
+      }
+
+      const ProfileMenu = ({ user }) => {
+        const [open, setOpen] = useState(false);
+        const initial = user && user.username ? user.username[0].toUpperCase() : "?";
+        const name = user && user.username ? user.username : "you";
+        const logout = async () => {
+          try { await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }); } catch (e) {}
+          window.location.href = "/";
+        };
+        const I = {
+          dash: <svg className="pp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>,
+          set:  <svg className="pp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+          out:  <svg className="pp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>,
+        };
+        return (
+          <div className="profile-wrap">
+            <button className={"profile-trigger" + (open ? " open" : "")} onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu">
+              <span>{name}</span>
+              <svg className="pt-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              <span className="pt-avatar">{initial}</span>
+            </button>
+            {open && (
+              <>
+                <div className="profile-backdrop" onClick={() => setOpen(false)}/>
+                <div className="profile-popover" role="menu">
+                  <div className="pp-head">
+                    <div className="pp-name">{user.username}</div>
+                    {user.email && <div className="pp-email">{user.email}</div>}
+                  </div>
+                  <a className="pp-item" href="/dashboard">{I.dash}Dashboard</a>
+                  <a className="pp-item" href="/profile">{I.set}Settings</a>
+                  <div className="pp-sep"/>
+                  <button className="pp-item danger" onClick={logout}>{I.out}Log out</button>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      };
+
+      const Nav = ({ user }) => {
+        useEffect(() => {
+          const nav = document.querySelector(".nav");
+          if (!nav) return;
+          const onScroll = () => nav.classList.toggle("stuck", (window.scrollY || 0) > 24);
+          window.addEventListener("scroll", onScroll, { passive: true });
+          onScroll();
+          return () => window.removeEventListener("scroll", onScroll);
+        }, []);
+        return (
+          <nav className="nav">
+            <div className="container nav-inner">
+              <a href="/" className="brand">
+                <span className="brand-mark" aria-hidden="true"/>
+                <span>Livinity</span>
+              </a>
+              <div className="nav-links">
+                <a href="/dashboard">Dashboard</a>
+                <a href="https://changelog.livinity.io" target="_blank" rel="noreferrer">Changelog</a>
+                <a href="/store">Store</a>
+              </div>
+              <div className="nav-cta">
+                <a className="btn btn-ghost btn-icon" href="https://github.com/utopusc/livinity-io" target="_blank" rel="noreferrer" aria-label="GitHub">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49v-1.71c-2.78.62-3.37-1.36-3.37-1.36-.46-1.17-1.11-1.48-1.11-1.48-.91-.63.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.13-4.56-5.03 0-1.11.39-2.02 1.03-2.73-.1-.26-.45-1.29.1-2.69 0 0 .84-.27 2.75 1.04A9.4 9.4 0 0112 6.84c.85 0 1.71.12 2.51.34 1.91-1.31 2.75-1.04 2.75-1.04.55 1.4.2 2.43.1 2.69.64.71 1.03 1.62 1.03 2.73 0 3.91-2.34 4.77-4.57 5.02.36.32.68.94.68 1.89v2.8c0 .27.18.59.69.49A10.05 10.05 0 0022 12.25C22 6.58 17.52 2 12 2z"/></svg>
+                  <span className="nav-cta-count">4.2k</span>
+                </a>
+                <ProfileMenu user={user}/>
+              </div>
+            </div>
+          </nav>
+        );
+      };
+
+      const Rail = ({ active, sections }) => (
+        <aside className="p-rail">
+          {sections.map(s => (
+            <a key={s.id} href={"#" + s.id} className={active === s.id ? "on" : ""}>{s.label}</a>
+          ))}
+          <div className="p-rail-sep"/>
+          <a href="/dashboard">← Back to dashboard</a>
+        </aside>
+      );
+
+      function formatJoined(iso) {
+        if (!iso) return null;
+        try {
+          const d = new Date(iso);
+          return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+        } catch (e) { return null; }
+      }
+
+      function App() {
+        const [user, setUser] = useState(null);
+        const [loading, setLoading] = useState(true);
+        const [devices, setDevices] = useState([]);
+        const [apiKeyPrefix, setApiKeyPrefix] = useState(null);
+        const [active, setActive] = useState("account");
+        const [toast, setToast] = useState(null);
+        const [regenerating, setRegenerating] = useState(false);
+        const [signingOut, setSigningOut] = useState(false);
+        const [newKey, setNewKey] = useState(null);
+        const [deleteOpen, setDeleteOpen] = useState(false);
+        const [deletePassword, setDeletePassword] = useState("");
+        const [deleteConfirm, setDeleteConfirm] = useState("");
+        const [deleting, setDeleting] = useState(false);
+        const [deleteError, setDeleteError] = useState(null);
+        const [currency, setCurrency] = useState(detectCurrency());
+        useEffect(() => { try { localStorage.setItem("liv_currency", currency); } catch (e) {} }, [currency]);
+
+        const showToast = (msg) => {
+          setToast(msg);
+          setTimeout(() => setToast(null), 2400);
+        };
+
+        // Bootstrap: fetch session, devices, dashboard summary in parallel
+        useEffect(() => {
+          let aborted = false;
+          (async () => {
+            try {
+              const meRes = await fetch("/api/auth/me", { credentials: "same-origin" });
+              if (!meRes.ok) {
+                window.location.href = "/login";
+                return;
+              }
+              const meData = await meRes.json();
+              if (aborted) return;
+              if (!meData.user) { window.location.href = "/login"; return; }
+              setUser(meData.user);
+
+              // Fetch dashboard summary (for API key prefix) + devices in parallel
+              const [dashRes, devRes] = await Promise.all([
+                fetch("/api/dashboard", { credentials: "same-origin" }).catch(() => null),
+                fetch("/api/devices", { credentials: "same-origin" }).catch(() => null),
+              ]);
+              if (aborted) return;
+              if (dashRes && dashRes.ok) {
+                const d = await dashRes.json();
+                if (d.apiKey && d.apiKey.prefix) setApiKeyPrefix(d.apiKey.prefix);
+              }
+              if (devRes && devRes.ok) {
+                const d = await devRes.json();
+                if (Array.isArray(d.devices)) setDevices(d.devices);
+                else if (Array.isArray(d)) setDevices(d);
+              }
+            } catch (err) {
+              window.location.href = "/login";
+              return;
+            } finally {
+              if (!aborted) setLoading(false);
+            }
+          })();
+          return () => { aborted = true; };
+        }, []);
+
+        // Sync active section to scroll position
+        useEffect(() => {
+          if (loading) return;
+          const ids = ["account", "create-computer", "security", "danger"];
+          const onScroll = () => {
+            for (const id of ids) {
+              const el = document.getElementById(id);
+              if (!el) continue;
+              const top = el.getBoundingClientRect().top;
+              if (top > 80 && top < 300) { setActive(id); return; }
+            }
+          };
+          window.addEventListener("scroll", onScroll, { passive: true });
+          onScroll();
+          return () => window.removeEventListener("scroll", onScroll);
+        }, [loading]);
+
+        const handleSignOut = useCallback(async () => {
+          if (signingOut) return;
+          setSigningOut(true);
+          try {
+            await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+          } catch (e) {}
+          window.location.href = "/";
+        }, [signingOut]);
+
+        const handleRegenerateKey = useCallback(async () => {
+          const msg = apiKeyPrefix
+            ? "This will invalidate your current API key and disconnect any server using it. Continue?"
+            : "Generate a new API key?";
+          if (!confirm(msg)) return;
+          setRegenerating(true);
+          try {
+            const res = await fetch("/api/dashboard", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: apiKeyPrefix ? "regenerate-key" : "generate-key" }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              showToast(data.error || "Couldn't regenerate key.");
+              return;
+            }
+            if (data.apiKey) setNewKey(data.apiKey);
+            // Refresh prefix
+            const dashRes = await fetch("/api/dashboard", { credentials: "same-origin" });
+            if (dashRes.ok) {
+              const d = await dashRes.json();
+              if (d.apiKey && d.apiKey.prefix) setApiKeyPrefix(d.apiKey.prefix);
+            }
+          } catch (e) {
+            showToast("Network error. Try again.");
+          } finally {
+            setRegenerating(false);
+          }
+        }, [apiKeyPrefix]);
+
+        const handleDeleteAccount = useCallback(async () => {
+          setDeleteError(null);
+          if (deleteConfirm.trim().toUpperCase() !== "DELETE") {
+            setDeleteError('Type "DELETE" to confirm.');
+            return;
+          }
+          if (!deletePassword) {
+            setDeleteError("Password is required.");
+            return;
+          }
+          setDeleting(true);
+          try {
+            const res = await fetch("/api/user/delete", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password: deletePassword }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+              setDeleteError(data.error || "Couldn't delete account.");
+              setDeleting(false);
+              return;
+            }
+            window.location.href = "/";
+          } catch (err) {
+            setDeleteError("Network error. Try again.");
+            setDeleting(false);
+          }
+        }, [deletePassword, deleteConfirm]);
+
+        const closeDeleteModal = useCallback(() => {
+          if (deleting) return;
+          setDeleteOpen(false);
+          setDeletePassword("");
+          setDeleteConfirm("");
+          setDeleteError(null);
+        }, [deleting]);
+
+        const copyToClipboard = useCallback(async (text) => {
+          try {
+            await navigator.clipboard.writeText(text);
+            showToast("Copied to clipboard");
+          } catch (e) { showToast("Copy failed"); }
+        }, []);
+
+        if (loading) {
+          return <main className="p-loading"><p>Loading your profile…</p></main>;
+        }
+        if (!user) return null;
+
+        const sections = [
+          { id: "account",         label: "Account" },
+          { id: "create-computer", label: "Create computer" },
+          { id: "security",        label: "Security" },
+          { id: "danger",          label: "Danger zone" },
+        ];
+
+        const initial = user.username ? user.username[0].toUpperCase() : "?";
+        const computerUrl = user.username ? user.username + ".livinity.io" : "—";
+        const joinedDate = formatJoined(user.created_at || user.createdAt);
+        const deviceCount = devices.length;
+        const deviceSummary = deviceCount === 0
+          ? "No active sessions"
+          : deviceCount === 1
+            ? "1 device"
+            : `${deviceCount} devices`;
+
+        return (
+          <>
+            <Nav user={user}/>
+            <main className="p-shell">
+              <header className="p-head">
+                <div className="p-avatar">{initial}</div>
+                <div className="p-head-info">
+                  <h1 className="p-name">Hey, <em>{user.username}.</em></h1>
+                  <div className="p-handle">{computerUrl}</div>
+                  <div className="p-meta">
+                    {joinedDate && <span>joined {joinedDate}</span>}
+                    <span>{user.email}</span>
+                  </div>
+                </div>
+                <div className="p-actions">
+                  <a href="/dashboard" className="p-btn">Open dashboard</a>
+                  <a
+                    className="p-btn solid"
+                    href={"https://" + computerUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >Open my computer</a>
+                </div>
+              </header>
+
+              <div className="p-layout">
+                <Rail active={active} sections={sections}/>
+
+                <div className="p-main">
+
+                  {/* ============ Account ============ */}
+                  <section className="p-section" id="account">
+                    <div className="p-section-head">
+                      <div className="p-section-eyebrow">01 · Account</div>
+                      <h2 className="p-section-title">Who you <em>are.</em></h2>
+                    </div>
+                    <div className="p-card">
+                      <div className="p-row">
+                        <span className="lbl">Username</span>
+                        <span className="val mono">{user.username}</span>
+                        <span/>
+                      </div>
+                      <div className="p-row">
+                        <span className="lbl">Email</span>
+                        <span className="val">
+                          {user.email}
+                          {user.emailVerified || user.email_verified
+                            ? <span className="pill ok">verified</span>
+                            : <span className="pill warn">unverified</span>}
+                        </span>
+                        <span/>
+                      </div>
+                      <div className="p-row">
+                        <span className="lbl">Computer URL</span>
+                        <span className="val mono">{computerUrl}
+                          <span className="sub">manage custom domains in <a href="/dashboard" style={{ color: "var(--fg)" }}>dashboard</a></span>
+                        </span>
+                        <button className="p-btn" onClick={() => copyToClipboard("https://" + computerUrl)}>Copy</button>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* ============ Create computer (Coming soon) ============ */}
+                  <section className="p-section" id="create-computer">
+                    <div className="p-section-head">
+                      <div className="p-section-eyebrow">02 · Create your computer</div>
+                      <h2 className="p-section-title">Spin up a <em>Cloud PC.</em></h2>
+                      <p className="p-section-sub">
+                        A dedicated Linux machine, pre-loaded with Liv. We're polishing the
+                        billing flow now — these plans go live soon.
+                      </p>
+                    </div>
+
+                    <div className="cs-intro">
+                      <div className="cs-orb"/>
+                      <div className="cs-intro-text">
+                        <h4>Cloud plans <span className="cs-badge">Coming soon</span></h4>
+                        <p>Pricing locked in below. Until checkout opens, run Livinity on your own hardware — free, no waitlist.</p>
+                      </div>
+                      <a href="/#install" className="p-btn">Self-host guide</a>
+                    </div>
+
+                    <div className="cs-plans" aria-hidden="true">
+                      {[
+                        { name: "Basic", eur: 17, tag: "Light personal use — Liv, a few apps, your files.", specs: [["CPU","2 vCPU"],["RAM","4 GB"],["SSD","50 GB"],["GPU","—"]] },
+                        { name: "Mid", eur: 59, featured: true, tag: "Most popular. 20+ apps, shared GPU for local AI.", specs: [["CPU","4 vCPU"],["RAM","16 GB"],["SSD","250 GB"],["GPU","Shared T4"]] },
+                        { name: "Advanced", eur: 149, tag: "Heavy lifting — media, ML, dedicated GPU.", specs: [["CPU","8 vCPU"],["RAM","32 GB"],["SSD","500 GB"],["GPU","Dedicated L4"]] },
+                      ].map(p => (
+                        <div key={p.name} className={"cs-plan" + (p.featured ? " featured" : "")}>
+                          <div className="cs-plan-name">{p.name}</div>
+                          <div className="cs-plan-price">
+                            <span style={{ fontSize: 18, color: "var(--fg-mute)", fontFamily: "var(--mono)" }}>{currencySymbol(currency)}</span>
+                            <span className="num">{convertPrice(p.eur, currency)}</span>
+                            <span className="per">/ month</span>
+                          </div>
+                          <div className="cs-plan-tag">{p.tag}</div>
+                          <div className="cs-plan-specs">
+                            {p.specs.map(([k, v]) => (
+                              <div className="spec" key={k}><span>{k}</span><b>{v}</b></div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ marginTop: 14, display: "flex", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
+                      {["EUR","USD","GBP","TRY","JPY","CHF","CAD","AUD","INR"].map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setCurrency(c)}
+                          style={{
+                            padding: "4px 10px", fontSize: 11,
+                            fontFamily: "var(--mono)", letterSpacing: "0.04em",
+                            background: currency === c ? "var(--fg)" : "transparent",
+                            color: currency === c ? "var(--bg)" : "var(--fg-mute)",
+                            border: "1px solid var(--line)",
+                            borderRadius: 999, cursor: "pointer",
+                          }}
+                        >{c}</button>
+                      ))}
+                    </div>
+
+                    <p style={{ marginTop: 14, fontSize: 13, color: "var(--fg-mute)", textAlign: "center" }}>
+                      Want to dial it in? <a href="/customize.html" style={{ color: "var(--fg)", fontWeight: 500 }}>Configure your computer →</a>
+                      {currency !== "EUR" && <><br/><span style={{ fontSize: 11, color: "var(--fg-faint)", fontFamily: "var(--mono)" }}>{currency} prices approximate · billed in EUR</span></>}
+                    </p>
+                  </section>
+
+                  {/* ============ Security ============ */}
+                  <section className="p-section" id="security">
+                    <div className="p-section-head">
+                      <div className="p-section-eyebrow">03 · Security</div>
+                      <h2 className="p-section-title">Keys and <em>sessions.</em></h2>
+                    </div>
+                    <div className="p-card">
+                      <div className="p-row">
+                        <span className="lbl">Password</span>
+                        <span className="val">
+                          Reset via email
+                          <span className="sub">we'll send a one-time link to {user.email}</span>
+                        </span>
+                        <a className="p-btn" href="/forgot-password">Change</a>
+                      </div>
+                      <div className="p-row">
+                        <span className="lbl">API key</span>
+                        <span className="val mono">
+                          {apiKeyPrefix ? apiKeyPrefix + "••••••••" : "Not generated"}
+                          <span className="sub">
+                            {apiKeyPrefix
+                              ? "regenerating will disconnect your server"
+                              : "generate a key to connect a LivOS server"}
+                          </span>
+                        </span>
+                        <button className="p-btn" onClick={handleRegenerateKey} disabled={regenerating}>
+                          {regenerating ? "Working…" : (apiKeyPrefix ? "Regenerate" : "Generate")}
+                        </button>
+                      </div>
+                      <div className="p-row">
+                        <span className="lbl">Active sessions</span>
+                        <span className="val">
+                          {deviceSummary}
+                          {deviceCount > 0 && devices[0] && (devices[0].deviceName || devices[0].device_name) && (
+                            <span className="sub">
+                              {devices.slice(0, 3).map(d => d.deviceName || d.device_name).filter(Boolean).join(" · ")}
+                            </span>
+                          )}
+                        </span>
+                        <a className="p-btn" href="/dashboard">Manage</a>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* ============ Danger zone ============ */}
+                  <section className="p-section" id="danger">
+                    <div className="p-section-head">
+                      <div className="p-section-eyebrow">04 · Danger zone</div>
+                      <h2 className="p-section-title">Things that <em>can't be undone.</em></h2>
+                    </div>
+                    <div className="p-card">
+                      <div className="p-row">
+                        <span className="lbl">Sign out</span>
+                        <span className="val">End your session on this device.</span>
+                        <button className="p-btn" onClick={handleSignOut} disabled={signingOut}>
+                          {signingOut ? "Signing out…" : "Sign out"}
+                        </button>
+                      </div>
+                      <div className="p-row">
+                        <span className="lbl">Delete account</span>
+                        <span className="val">
+                          Permanent. Your user, sessions, devices, and API keys are removed.
+                          <span className="sub">apps installed on a self-hosted server stay on your hardware — this only deletes your livinity.io identity.</span>
+                        </span>
+                        <button className="p-btn danger" onClick={() => setDeleteOpen(true)}>
+                          Delete account
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+
+                </div>
+              </div>
+
+              <footer className="p-foot">
+                <span>open-source · <a href="/">livinity.io</a></span>
+                <a href="https://changelog.livinity.io" target="_blank" rel="noreferrer">Changelog →</a>
+              </footer>
+            </main>
+
+            {toast && <div className="p-toast">{toast}</div>}
+
+            {newKey && (
+              <div className="key-modal" role="dialog" aria-modal="true">
+                <div className="key-modal-inner">
+                  <h3>Your new API key</h3>
+                  <p>This is shown only once. Copy it now and store it somewhere safe.</p>
+                  <div className="key-display">{newKey}</div>
+                  <div className="key-actions">
+                    <button className="p-btn" onClick={() => copyToClipboard(newKey)}>Copy</button>
+                    <button className="p-btn solid" onClick={() => setNewKey(null)}>I've saved it</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {deleteOpen && (
+              <div className="key-modal" role="dialog" aria-modal="true" onClick={closeDeleteModal}>
+                <div className="key-modal-inner danger" onClick={(e) => e.stopPropagation()}>
+                  <h3 style={{ color: "var(--red)" }}>Delete your account?</h3>
+                  <p>
+                    This is permanent. We'll delete your user record, all sessions,
+                    registered devices, API keys, and connection history.
+                    Self-hosted apps on your own hardware are not affected.
+                  </p>
+                  <label style={{ display: "block", fontSize: 12, color: "var(--fg-mute)", marginTop: 18, fontFamily: "var(--mono)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                    Confirm by typing DELETE
+                  </label>
+                  <input
+                    className="modal-input"
+                    placeholder="DELETE"
+                    value={deleteConfirm}
+                    onChange={(e) => setDeleteConfirm(e.target.value)}
+                    disabled={deleting}
+                    autoFocus
+                  />
+                  <label style={{ display: "block", fontSize: 12, color: "var(--fg-mute)", marginTop: 10, fontFamily: "var(--mono)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                    Current password
+                  </label>
+                  <input
+                    className="modal-input"
+                    type="password"
+                    placeholder="Your password"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    disabled={deleting}
+                  />
+                  {deleteError && <div className="modal-error">{deleteError}</div>}
+                  <div className="key-actions">
+                    <button className="p-btn" onClick={closeDeleteModal} disabled={deleting}>Cancel</button>
+                    <button className="p-btn danger" onClick={handleDeleteAccount} disabled={deleting}>
+                      {deleting ? "Deleting…" : "Delete forever"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,295 @@
+<!doctype html>
+<!-- Sacred SHA invariant: f3538e1d811992b782a9bb057d1b7f0a0189f95f -->
+<!-- Phase 140-06: install wizard simplified to username-only. -->
+<!-- Phase 140-06.1: collapsed to 1-step — session username is authoritative. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>Set up your first LivOS — Livinity</title>
+    <meta name="description" content="Get the one-line install command for your LivOS." />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600;700;800&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="styles.css" />
+
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+    <style>
+      :root { --dash-radius: 18px; --dash-line: rgba(0,0,0,0.07); --dash-line-strong: rgba(0,0,0,0.12); --card-bg: #ffffff; --card-bg-2: #fafafa; --card-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 24px 60px -34px rgba(0,0,0,0.18); --accent-green: #16a34a; --accent-amber: #d97706; --accent-red: #dc2626; --font-mono: "Geist Mono", ui-monospace, monospace; --font-serif: "Instrument Serif", serif; }
+      body.dark { --dash-line: rgba(255,255,255,0.08); --dash-line-strong: rgba(255,255,255,0.16); --card-bg: #0f0f11; --card-bg-2: #08080a; --card-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 24px 60px -28px rgba(0,0,0,0.8); }
+      body { background: var(--bg); color: var(--fg); font-family: "Geist", -apple-system, sans-serif; }
+      body.dark { background: #050507; color: #f5f5f7; }
+
+      .install-shell { max-width: 720px; margin: 0 auto; padding: 32px 28px 80px; }
+      .install-nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; margin-bottom: 12px; }
+      .install-nav .brand { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg); text-decoration: none; }
+      .install-nav .brand em { font-family: var(--font-serif); font-weight: 400; font-style: italic; }
+      .install-nav .right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+      .install-nav .uname { font-size: 13px; color: var(--fg-mute); font-family: var(--font-mono); }
+
+      .h-btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 12px; background: transparent; border: 1px solid var(--dash-line-strong); color: var(--fg); font-size: 13.5px; font-weight: 500; font-family: inherit; cursor: pointer; transition: all 0.18s ease; text-decoration: none; }
+      .h-btn:hover { background: rgba(0,0,0,0.04); transform: translateY(-1px); }
+      body.dark .h-btn:hover { background: rgba(255,255,255,0.05); }
+      .h-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+      .h-btn.solid { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+      .h-btn.solid:hover { opacity: 0.92; background: var(--fg); }
+      .h-btn.ghost { border: none; padding: 9px 6px; }
+
+      .install-hero { margin-bottom: 24px; }
+      .install-hero .step-pill { display: inline-block; padding: 4px 11px; border-radius: 999px; background: var(--card-bg); border: 1px solid var(--dash-line); font-size: 11.5px; font-family: var(--font-mono); color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px; }
+      .install-hero h1 { font-size: clamp(26px, 4vw, 36px); font-weight: 600; letter-spacing: -0.025em; line-height: 1.05; margin: 0 0 8px; }
+      .install-hero h1 em { font-family: var(--font-serif); font-weight: 400; font-style: italic; color: var(--fg-mute); }
+      .install-hero p { font-size: 15px; color: var(--fg-mute); margin: 0; max-width: 560px; line-height: 1.5; }
+
+      .panel { background: var(--card-bg); border: 1px solid var(--dash-line); border-radius: var(--dash-radius); padding: 28px; box-shadow: var(--card-shadow); margin-bottom: 18px; }
+      .panel h2 { font-size: 13px; font-weight: 600; color: var(--fg); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px; }
+      .panel .sub { font-size: 13px; color: var(--fg-mute); margin: 0 0 20px; line-height: 1.5; }
+
+      .url-preview { background: var(--card-bg-2); border: 1px solid var(--dash-line); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--fg-mute); margin: 4px 0 12px; }
+      .url-preview code { font-family: var(--font-mono); color: var(--fg); }
+
+      .availability { font-size: 12px; font-family: var(--font-mono); min-height: 18px; margin-top: 2px; color: var(--fg-faint); }
+      .availability.err { color: var(--accent-red); }
+
+      .cmd-box { background: var(--card-bg-2); border: 1px solid var(--dash-line); border-radius: 12px; padding: 16px; font-family: var(--font-mono); font-size: 12.5px; word-break: break-all; line-height: 1.55; color: var(--fg); position: relative; }
+      .cmd-box .copy { position: absolute; top: 12px; right: 12px; font-size: 11px; padding: 5px 10px; }
+      .cmd-box code { display: block; padding-right: 80px; }
+
+      .next-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+      .next-list li { display: flex; gap: 12px; align-items: flex-start; font-size: 13.5px; color: var(--fg); line-height: 1.5; }
+      .next-list .n { flex-shrink: 0; width: 22px; height: 22px; border-radius: 999px; background: var(--card-bg-2); border: 1px solid var(--dash-line-strong); font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--fg-mute); display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+
+      .warn-card { background: rgba(217,119,6,0.06); border: 1px solid rgba(217,119,6,0.25); border-radius: 12px; padding: 12px 14px; font-size: 12.5px; color: var(--accent-amber); margin-bottom: 14px; line-height: 1.5; }
+
+      .nav-row { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; padding: 0 4px; }
+      .nav-row .right { display: flex; gap: 10px; }
+
+      .install-loading { min-height: 100vh; display: grid; place-items: center; color: var(--fg-mute); font-family: var(--font-mono); font-size: 14px; }
+
+      @media (max-width: 480px) { .install-shell { padding: 16px 14px 60px; } .install-nav .right { gap: 8px; } .panel { padding: 20px 18px; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="install-loading"><p>Loading…</p></div></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      function copyText(s) {
+        try { navigator.clipboard.writeText(s); } catch (e) {}
+      }
+
+      function App() {
+        useEffect(() => {
+          try {
+            const saved = localStorage.getItem("liv_theme");
+            if (saved === "dark") document.body.classList.add("dark");
+          } catch (e) {}
+        }, []);
+
+        const [user, setUser] = useState(null);
+        const [authLoading, setAuthLoading] = useState(true);
+        const [gen, setGen] = useState({ status: "idle" });
+
+        // Bootstrap auth + immediately mint API key in one mount-time flow.
+        useEffect(() => {
+          (async () => {
+            try {
+              const me = await fetch("/api/auth/me", { credentials: "same-origin" });
+              if (!me.ok) { window.location.href = "/login?redirect=/dashboard/install"; return; }
+              const meData = await me.json();
+              if (!meData.user) { window.location.href = "/login?redirect=/dashboard/install"; return; }
+              // Phase 140-06.2: block unverified users from the install wizard.
+              // Send them to /verify (pending state) until they click the email link.
+              if (!meData.user.emailVerified) {
+                window.location.href = "/verify";
+                return;
+              }
+              setUser(meData.user);
+              setAuthLoading(false);
+
+              // Phase 140-06.4: check whether user already has an API key BEFORE
+              // auto-minting. Without this check, every page reload deletes the
+              // existing key + mints a new one — which silently invalidates the
+              // install command the user already pasted onto their Mini PC.
+              const dashRes = await fetch("/api/dashboard", { credentials: "same-origin" });
+              const dashData = await dashRes.json().catch(() => ({}));
+              if (dashData && dashData.apiKey && dashData.apiKey.hasKey) {
+                setGen({
+                  status: "exists",
+                  keyPrefix: dashData.apiKey.prefix,
+                  username: meData.user.username,
+                });
+                return;
+              }
+
+              // No key yet — auto-mint on this first visit.
+              setGen({ status: "minting" });
+              const res = await fetch("/api/dashboard", {
+                method: "POST", credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "generate-key" }),
+              });
+              const body = await res.json().catch(() => ({}));
+              if (!res.ok || !body.apiKey) {
+                setGen({ status: "error", error: body.error || ("HTTP " + res.status) });
+                return;
+              }
+              setGen({
+                status: "ready",
+                apiKey: body.apiKey,
+                installCommand: body.installCommand,
+                username: body.username || meData.user.username,
+              });
+            } catch (e) {
+              window.location.href = "/login?redirect=/dashboard/install";
+            }
+          })();
+        }, []);
+
+        async function handleLogout() {
+          try { await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }); } catch (e) {}
+          window.location.href = "/login";
+        }
+
+        async function handleRegenerate() {
+          setGen({ status: "minting" });
+          try {
+            const res = await fetch("/api/dashboard", {
+              method: "POST", credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "regenerate-key" }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok || !body.apiKey) {
+              setGen({ status: "error", error: body.error || ("HTTP " + res.status) });
+              return;
+            }
+            setGen({
+              status: "ready",
+              apiKey: body.apiKey,
+              installCommand: body.installCommand,
+              username: body.username || user.username,
+            });
+          } catch (e) {
+            setGen({ status: "error", error: String(e) });
+          }
+        }
+
+        if (authLoading) return <div className="install-loading"><p>Loading…</p></div>;
+        if (!user) return null;
+
+        const username = gen.username || user.username;
+
+        return (
+          <div className="install-shell">
+            <nav className="install-nav">
+              <a href="/dashboard" className="brand">Livinity</a>
+              <div className="right">
+                <span className="uname">{user.username}</span>
+                <a href="/dashboard" className="h-btn ghost" style={{ borderRadius: 8 }}>Back to dashboard</a>
+                <button onClick={handleLogout} className="h-btn">Sign out</button>
+              </div>
+            </nav>
+
+            <header className="install-hero">
+              <span className="step-pill">Install</span>
+              <h1>Set up <em>your first LivOS.</em></h1>
+              <p>Here's your one-line install command. Paste it on the machine you want to host your server.</p>
+            </header>
+
+            {!user.emailVerified && (
+              <div className="warn-card">
+                ⚠ Your email isn't verified yet. You can still generate the command, but be sure to confirm your email — some features require it.
+              </div>
+            )}
+
+            <section className="panel">
+              {gen.status === "minting" && (
+                <p className="sub" style={{ fontSize: 13 }}>Generating your install command…</p>
+              )}
+
+              {gen.status === "error" && (
+                <div>
+                  <p className="availability err" style={{ marginBottom: 12 }}>✗ Couldn't mint API key — {gen.error}</p>
+                  <button className="h-btn" onClick={handleRegenerate}>Retry</button>
+                </div>
+              )}
+
+              {gen.status === "exists" && (
+                <div>
+                  <h2>Install command already minted</h2>
+                  <p className="sub">You generated an API key on a previous visit (prefix <code style={{ fontFamily: "var(--font-mono)" }}>{gen.keyPrefix}…</code>). For security, the full key is only shown once — we can't display it again.</p>
+
+                  <div className="warn-card">
+                    ⚠ If you still have the install command saved, just paste it on your server — it stays valid. If you lost it, click <strong>Regenerate</strong> to mint a fresh command (the old key will be invalidated, so any machine using it will disconnect).
+                  </div>
+
+                  <div className="url-preview" style={{ marginBottom: 14 }}>
+                    Your URL: <code>{"https://" + (gen.username || user.username) + ".livinity.io"}</code>
+                  </div>
+
+                  <button className="h-btn solid" onClick={handleRegenerate}>Regenerate install command</button>
+                </div>
+              )}
+
+              {gen.status === "ready" && gen.installCommand && (
+                <div>
+                  <h2>Run install command</h2>
+                  <p className="sub">Paste this on a fresh Ubuntu 24.04 / Debian 12 server. Install provisions Docker, Caddy, PostgreSQL, Redis, and livinityd in one shot (~5–8 min).</p>
+
+                  <div className="warn-card">
+                    ⚠ Your API key is shown only once. If you lose it, click <strong>Regenerate</strong> below to mint a new one (the old key will be invalidated).
+                  </div>
+
+                  <div className="cmd-box" style={{ marginBottom: 14 }}>
+                    <button className="copy h-btn solid" onClick={() => copyText(gen.installCommand)}>Copy</button>
+                    <code>{gen.installCommand}</code>
+                  </div>
+
+                  <div className="url-preview" style={{ marginBottom: 22 }}>
+                    Your URL: <code>{"https://" + username + ".livinity.io"}</code>
+                  </div>
+
+                  <h2 style={{ marginBottom: 12 }}>What happens next</h2>
+                  <ol className="next-list">
+                    <li><span className="n">1</span><span><code style={{ fontFamily: "var(--font-mono)" }}>install.sh</code> provisions your server (~5–8 min).</span></li>
+                    <li><span className="n">2</span><span><code style={{ fontFamily: "var(--font-mono)" }}>cloudflared</code> connects your tunnel automatically — no port forwarding, no public IP needed.</span></li>
+                    <li><span className="n">3</span><span>Open <code style={{ fontFamily: "var(--font-mono)" }}>{"https://" + username + ".livinity.io"}</code> — you're done.</span></li>
+                  </ol>
+                </div>
+              )}
+            </section>
+
+            <div className="nav-row">
+              <button className="h-btn ghost" onClick={() => { window.location.href = "/dashboard?skipFirstRun=1"; }}>Skip for now</button>
+              <div className="right">
+                {gen.status === "ready" && (
+                  <button className="h-btn" onClick={handleRegenerate}>Regenerate key</button>
+                )}
+                {(gen.status === "ready" || gen.status === "exists") && (
+                  <a href="/dashboard" className="h-btn solid">Done — go to dashboard</a>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
