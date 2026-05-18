@@ -1,0 +1,286 @@
+/* Developer portal — reuses Livinity DS tokens from store.css. */
+
+.dev-root {
+  font-family: var(--sans);
+  color: var(--fg);
+  background: var(--bg-2);
+  min-height: 100vh;
+}
+
+.dev-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 48px 32px 96px;
+}
+
+.dev-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 48px;
+}
+.dev-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  color: var(--fg);
+}
+.dev-brand-mark {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--fg);
+  position: relative;
+}
+.dev-brand-mark::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: var(--bg);
+}
+.dev-brand-crumb {
+  color: var(--fg-mute);
+  font-weight: 400;
+  margin-left: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+  font-size: 14px;
+}
+.dev-topbar-links {
+  display: flex;
+  gap: 18px;
+  font-size: 13.5px;
+  color: var(--fg-mute);
+}
+.dev-topbar-links a {
+  color: var(--fg-mute);
+  text-decoration: none;
+  transition: color .15s;
+}
+.dev-topbar-links a:hover { color: var(--fg); }
+
+.dev-hero {
+  margin-bottom: 56px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--line);
+}
+.dev-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  margin-bottom: 14px;
+}
+.dev-title {
+  font-size: 48px;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin: 0 0 18px;
+  max-width: 18ch;
+}
+.dev-title em { font-style: italic; font-family: var(--serif); font-weight: 400; }
+.dev-desc {
+  font-size: 17px;
+  color: var(--fg-dim);
+  line-height: 1.5;
+  max-width: 60ch;
+  margin: 0 0 26px;
+}
+.dev-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dev-section {
+  margin-bottom: 56px;
+}
+.dev-section-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+.dev-section-title {
+  font-size: 28px;
+  font-weight: 300;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin: 0 0 12px;
+}
+.dev-section-title em {
+  font-style: italic;
+  font-family: var(--serif);
+  font-weight: 400;
+}
+.dev-section-desc {
+  color: var(--fg-mute);
+  font-size: 14.5px;
+  line-height: 1.55;
+  max-width: 60ch;
+  margin: 0 0 24px;
+}
+
+.dev-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.dev-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 720px) {
+  .dev-grid-3, .dev-grid-2 { grid-template-columns: 1fr; }
+}
+
+.dev-card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 22px 24px;
+}
+.dev-card h4 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 6px;
+}
+.dev-card p {
+  font-size: 13.5px;
+  color: var(--fg-mute);
+  line-height: 1.55;
+  margin: 0;
+}
+.dev-card-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--fg-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.dev-code {
+  background: var(--fg);
+  color: var(--bg);
+  border-radius: var(--r);
+  padding: 20px 22px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  overflow-x: auto;
+  letter-spacing: 0.005em;
+}
+.dev-code .c-key { color: rgba(110, 196, 252, 0.95); }
+.dev-code .c-str { color: rgba(167, 234, 192, 0.92); }
+.dev-code .c-num { color: rgba(255, 184, 108, 0.92); }
+.dev-code .c-cmt { color: rgba(255, 255, 255, 0.4); font-style: italic; }
+
+.dev-step {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 16px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+.dev-step:first-child { border-top: 0; padding-top: 0; }
+.dev-step-num {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+  letter-spacing: 0.02em;
+}
+.dev-step-title {
+  font-size: 15.5px;
+  font-weight: 500;
+  margin: 0 0 4px;
+  letter-spacing: -0.005em;
+}
+.dev-step-desc {
+  font-size: 13.5px;
+  color: var(--fg-mute);
+  line-height: 1.55;
+  margin: 0;
+}
+.dev-step-desc code {
+  background: var(--bg-2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--fg);
+}
+
+.dev-pillrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 16px;
+}
+.dev-pill {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--r-full);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--fg-mute);
+  letter-spacing: 0.02em;
+}
+
+.dev-footer {
+  margin-top: 80px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--fg-faint);
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+.dev-footer a {
+  color: var(--fg-mute);
+  text-decoration: none;
+}
+.dev-footer a:hover { color: var(--fg); }
+
+/* Reuse store install button for CTA — duplicate the rule scoped here
+   in case store.css isn't fully loaded for prerendering. */
+.dev-root .install {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--r-full);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: -0.005em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity .2s, background .25s, transform .25s var(--ease-out);
+}
+.dev-root .install.primary { background: var(--fg); color: var(--bg); }
+.dev-root .install.primary:hover { opacity: 0.88; }
+.dev-root .install.ghost {
+  color: var(--fg);
+  border-color: var(--line-strong);
+  background: transparent;
+}
+.dev-root .install.ghost:hover { background: var(--bg-2); }
