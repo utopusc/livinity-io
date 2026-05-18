@@ -111,7 +111,8 @@ _fetch_cf_tunnel_token_from_api() {
     # so a network error doesn't kill the trap-on-ERR before we print our own
     # fail message. --fail makes curl exit non-zero on HTTP 4xx/5xx.
     local api_body
-    api_body=$(curl -sS --fail \
+    # -L follows Vercel's apex→www 307 redirect post-Phase 146 cutover.
+    api_body=$(curl -sSL --fail \
         -H "X-API-Key: ${LIVOS_API_KEY}" \
         --max-time 10 \
         --retry 3 --retry-delay 2 \
