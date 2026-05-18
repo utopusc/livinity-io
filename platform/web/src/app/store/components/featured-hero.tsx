@@ -61,12 +61,27 @@ export function FeaturedHero({ apps }: FeaturedHeroProps) {
       <div className="featured-visual">
         <div
           className="featured-icon"
-          style={{
-            background: `linear-gradient(135deg, ${visual.c1}, ${visual.c2})`,
-            color: 'white',
-          }}
+          style={
+            app.icon_url
+              ? { background: '#fff', padding: 22 }
+              : { background: `linear-gradient(135deg, ${visual.c1}, ${visual.c2})`, color: 'white' }
+          }
         >
-          {visual.mono}
+          {app.icon_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={app.icon_url}
+              alt=""
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                display: 'block',
+              }}
+            />
+          ) : (
+            visual.mono
+          )}
         </div>
       </div>
     </div>

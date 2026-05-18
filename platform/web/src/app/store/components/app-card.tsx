@@ -26,7 +26,7 @@ export function AppCard({ app, featured = false }: AppCardProps) {
 
   return (
     <Link href={href} className={`card${featured ? ' featured-card' : ''}`}>
-      <AppIcon id={app.id} name={app.name} size={featured ? 64 : 48} />
+      <AppIcon id={app.id} name={app.name} iconUrl={app.icon_url} size={featured ? 64 : 48} />
       <div className="card-body">
         <div className="card-name">
           <span className="card-name-text">{app.name}</span>
