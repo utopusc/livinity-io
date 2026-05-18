@@ -1,9 +1,28 @@
 ---
 gsd_state_version: 1.0
-milestone: v36.0
-milestone_name: "LivOS Design Port"
+milestone: v37.0
+milestone_name: "Store Reimagining + Plugin Platform"
 status: in-progress
-last_updated: "2026-05-18T11:15:00.000Z"
+last_updated: "2026-05-18T14:00:00.000Z"
+milestone_v37: v37.0
+milestone_v37_name: "Store Reimagining + Plugin Platform"
+milestone_v37_status: OPENED 2026-05-18 — Phase 148 ✅ shipped; Phase 149 next (autonomous run in progress)
+v37_phases:
+  - "148: spec + section data model (✅ shipped 2026-05-18)"
+  - "149: /store UI redesign (5-section nav, current design system) — NEXT"
+  - "150: native Linux apps section (apt + AppImage + window infra)"
+  - "151: WebApp section + custom URL form"
+  - "152: AI section (MCP Market + Agents + GSD)"
+  - "153: plugin runtime with HOT-RELOAD (biggest, 3d)"
+  - "154: Livinity Broker plugin"
+  - "155: developer portal + docs"
+v37_dev_server_url: "http://localhost:3000/store?token=liv_k_rX_G7vqBrT8w_eovQdjf"
+v37_zero_server5_constraint: "LOCKED 2026-05-18 — apps catalog + install_history on Supabase; plugin bundles + pubkeys on GitHub; install callbacks via Vercel apex. Server5 destroy date 2026-05-25."
+phase_148_status: ✅ SHIPPED 2026-05-18 — SPEC.md locked, SUMMARY.md written, ROADMAP v37 milestone heading added with 8 phase entries
+phase_148_deliverables:
+  - "SPEC.md (9 sections, ~620 lines): §0 Zero-Server5 placement + migration, §1 section enum + 0013 migration SQL, §2 5 manifest variants, §3 plugin manifest schema (zod + Ed25519), §4 install handler interfaces, §5 plugin runtime contracts, §6 5 reference manifests, §7 deferrals, §8 acceptance"
+  - "SUMMARY.md with 10 locked decisions (D-148-01 through D-148-10)"
+  - "ROADMAP.md: v37.0 milestone heading + Phase 148-155 entries (Phase 148 marked ✅)"
 progress:
   total_phases: 8
   completed_phases: 8

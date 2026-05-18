@@ -11,6 +11,7 @@
 - ✅ **v33.0 WebApp Launcher + Teach/Auto Modes** — Phases 92-98 (CODE-COMPLETE 2026-05-08; pending Mini PC UAT signoff — see [.planning/phases/98-uat-polish/UAT-CHECKLIST.md](phases/98-uat-polish/UAT-CHECKLIST.md))
 - ✅ **v35.0 Design System Unification (UI/UX)** — Phases 115-121 (shipped 2026-05-15; 77 commits, sacred SHA preserved 77/77, AC#3 cross-surface parity 92.5%, operator UAT pending) — see [milestones/v35.0-ROADMAP.md](milestones/v35.0-ROADMAP.md)
 - 🟢 **v36.0 LivOS Design Port** — Phases 122-129 (active 2026-05-15; 8-step additive port of the Livinity Design System from claude.ai/design into `livos/packages/ui/` — component-by-component, screenshot per step). Master plan: [v36-DESIGN-PORT-MASTER.md](v36-DESIGN-PORT-MASTER.md). Superseded the old [v36-DRAFT.md](v36-DRAFT.md) (segment-dock direction rejected; see [feedback-v36-no-bold-redesigns](../../../.claude/projects/.../memory/feedback_v36_no_bold_redesigns.md)).
+- 🟢 **v37.0 Store Reimagining + Plugin Platform** — Phases 148-155 (opened 2026-05-18; LOCKED draft at [v37-DRAFT.md](v37-DRAFT.md)). Redesigns `/store` with 5 sections (Apps/WebApp/Native/AI/Plugin), reuses WebApp window infra for native Linux apps, AI section bundles MCP+Agents+GSD, plugin runtime supports HOT-RELOAD. 7-11 days. Operator-signed plugins for v37; third-party submission deferred to v38.
 - ⏸ **(deferred) Backup & Restore** — paused, 8 phases / 47 BAK-* reqs defined in [milestones/v30.0-DEFINED/](milestones/v30.0-DEFINED/) (resumes as future slot e.g. v34+)
 
 ---
@@ -1650,4 +1651,137 @@ Plans:
 **Depends on:** Phases 141 ✅ + 142 ✅ + 143 ✅ — this UAT validates all three on a fresh box.
 
 **On completion:** Carryover items surfaced (at minimum Section J's `update.sh` rsync gap) become Phase 145 entries. Phase 144 itself flips to ✅ in this ROADMAP.
+
+---
+
+### 🟢 v37.0 Store Reimagining + Plugin Platform (Active — Phases 148-155)
+
+**Status (2026-05-18):** OPENED — Phase 148 (Spec) ✅ SHIPPED 2026-05-18. Phases 149-155 queued for `/gsd-autonomous` run. LOCKED design in [v37-DRAFT.md](v37-DRAFT.md); data contract in [phases/148-store-spec/SPEC.md](phases/148-store-spec/SPEC.md).
+
+**Trigger:** Post-Phase-146 (Server5 → Vercel + Supabase migration) — `/store` is a single flat list of 27 OSS apps using Phase 117 design tokens, no plugin extensibility, no Native/AI sections. Operator requested (1) redesign to current Livinity DS, (2) 5-section catalog (Apps/WebApp/Native/AI/Plugin), (3) plugin runtime so third parties can extend livinityd backend + UI.
+
+**Goal:** Ship a sectioned `/store` marketplace with FIVE catalog types, each with its own install handler, backed by a hot-reloadable plugin runtime. Operator-signed plugins for v37; third-party submission deferred to v38.
+
+**Direction:**
+- **Zero Server5 dependency** (hard constraint, operator-locked 2026-05-18): apps catalog + install_history on Supabase Postgres; plugin bundles + pubkey registry on GitHub; install callbacks via Vercel apex
+- 5 sections as first-class DB enum: `app | webapp | native | ai | plugin`
+- Plugin URLs path-based: `https://<user>.livinity.io/p/<plugin-id>/...` (single CF Tunnel + cert per user)
+- Hot-reload plugin runtime via dynamic `import()` + version-busted cache + Express subrouter dispatcher
+- Operator-signed via Ed25519; pubkey registry at `livinity-apps/.signing/pubkeys.json`
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved every commit
+
+**Estimated duration:** 7-11 days across 8 phases (148 ✅ done; 149-155 remaining). NOT autonomous-runnable end-to-end — needs operator decisions at phase boundaries (per `/gsd-autonomous` flow).
+
+---
+
+### Phase 148: Spec + Section Data Model — ✅ SHIPPED 2026-05-18
+
+**Status:** ✅ COMPLETE — see [148-SUMMARY.md](phases/148-store-spec/SUMMARY.md).
+
+**Goal:** Lock the data contract for v37 — section enum, per-section manifest schemas, plugin manifest spec, install handler interfaces, plugin runtime contracts. Plus enforce **zero Server5 dependency** as a hard constraint across all v37 code paths.
+
+**Plans:** 0 — spec-only phase, deliverable is SPEC.md.
+
+**Deliverables:**
+- [x] [SPEC.md](phases/148-store-spec/SPEC.md) — 9 sections covering: §0 Zero-Server5 placement + migration plan, §1 section enum + 0013 migration SQL, §2 5 manifest variants, §3 plugin manifest schema (zod + Ed25519 signing), §4 install handler interfaces, §5 plugin runtime contracts, §6 5 reference manifests, §7 deferrals, §8 acceptance.
+
+**Depends on:** Phase 146 ✅ (Supabase + Vercel control plane shipped) — gives v37 a stable PaaS backbone with NO Server5 dependency.
+
+---
+
+### Phase 149: `/store` UI Redesign (5-section nav, current design system)
+
+**Status:** 🔴 PLANNED 2026-05-18 (next phase to run).
+
+**Goal:** Apply current Livinity Design System to `/store` — section nav (5 tabs: Apps / WebApp / Native / AI / Plugin), per-section grid layouts, detail modal or sub-route, empty/loading/error states. **Plus Phase 149 task 0:** apply migration `0013_phase_148_add_section_enum.sql` on Supabase + one-shot data sync of 27 existing rows from Server5 → Supabase. Vercel `DATABASE_URL` env points to Supabase pooler URI; the `127.0.0.1:5432/platform` fallback in `platform/web/src/lib/drizzle.ts` made fail-loud to prevent silent Server5 fallback.
+
+**Plans:** 1 estimated (UI redesign + supabase migration + drizzle env hardening).
+
+**UAT:** Vercel preview screenshots PASS visual review; tsc green; Lighthouse 90+ on /store.
+
+**Depends on:** Phase 148 ✅.
+
+---
+
+### Phase 150: Native Linux Apps Section (apt + AppImage + window infra)
+
+**Status:** 🔴 PLANNED 2026-05-18.
+
+**Goal:** First end-to-end section. Seed 5-10 popular Linux apps (VSCode, Cursor, IntelliJ-Community, Audacity, OBS, Inkscape, GIMP, LibreOffice, Blender, Krita). livinityd install handler with apt path (`apt install <pkgs>` + .desktop file generation) and AppImage path (download → `chmod +x` → .desktop). Reuse Phase 33 dock-item pattern + Phase 95 x11vnc window pattern. Re-parse install manifest through existing `nativeAppConfigSchema` at trust boundary.
+
+**Plans:** 2 estimated (installer + seed + dock integration).
+
+**UAT:** Install VSCode from store → appears on dock → click → window opens → VSCode launches.
+
+**Depends on:** Phase 148 ✅.
+
+---
+
+### Phase 151: WebApp Section + Custom URL Form
+
+**Status:** 🔴 PLANNED 2026-05-18.
+
+**Goal:** Pre-curated WebApp catalog (Notion, Linear, Slack, Discord, etc.) + Custom URL form on the WebApp section page — URL input → livinityd fetches OpenGraph title + favicon (10s timeout) → creates webapp via existing `webapp.create` tRPC. Custom URL submissions DO NOT create `apps` rows (store WebApp section is curated discovery, not a registry). CSP + URL allow-list to mitigate phishing risk.
+
+**Plans:** 1 estimated.
+
+**UAT:** Install Notion from store → desktop icon → click → opens in window. Add custom URL "https://example.com" → window opens with example.com.
+
+**Depends on:** Phase 148 ✅.
+
+---
+
+### Phase 152: AI Section (MCP Market + Agents + GSD)
+
+**Status:** 🔴 PLANNED 2026-05-18.
+
+**Goal:** AI section with three sub-flows: (1) MCP Market — 10 pre-vetted servers (filesystem, github, postgres, brave-search, puppeteer, slack, gdrive, memory, fetch, everything) + Livinity Tools sub-cat (livinity-files, livinity-apps, bytebot-desktop); (2) Agent Templates — 10-20 pre-built system prompts + tool sets, one-click clones to user's agents; (3) GSD — packaged planning skills as installable AI tool. AI Chat "Add MCP" link routes to `/store/ai/mcp`.
+
+**Plans:** 2 estimated (catalog seed + install dispatcher per `manifest.kind`).
+
+**UAT:** Install github MCP → AI Chat lists github tools → invoke one successfully.
+
+**Depends on:** Phase 148 ✅ + Phase 151 (uses same install dispatcher pattern).
+
+---
+
+### Phase 153: Plugin Runtime with HOT-RELOAD (biggest, ~3 days)
+
+**Status:** 🔴 PLANNED 2026-05-18 — biggest phase.
+
+**Goal:** Backend plugin loader in livinityd: scans `/opt/livos/plugins/*/manifest.json`, dynamic `import()` for hot-reload via `?v=<ts>` cache-busting, mounts routes under `/p/<id>/` on the live Express app via wrapping dispatcher middleware (Express has no direct route removal). Capability gate refuses install if plugin requests caps beyond its signing tier. Ed25519 signature verification against operator pubkey. Frontend UI plugin loader injects React components into declared hooks (dock, settings, AI chat) via `React.createPortal` + Shadow DOM. WebSocket `plugin:installed` event triggers UI hot-mount without page reload. Plugin SDK `@livinity/plugin-sdk` published as TypeScript interfaces.
+
+**Plans:** 3-4 estimated (loader + signature verify + UI bundle loader + reference plugin).
+
+**UAT:** Install reference plugin `hello-world` from store → routes mounted at `/p/hello/` within 5s, widget appears in dock without page reload, AI chat lists `/hello` slash-command, uninstall removes everything live without restart.
+
+**Depends on:** Phase 148 ✅ + Phases 149-152 (uses install dispatcher infra).
+
+---
+
+### Phase 154: Livinity Broker Plugin
+
+**Status:** 🔴 PLANNED 2026-05-18.
+
+**Goal:** Package existing `livos/packages/livinityd/source/modules/livinity-broker/` as the first non-trivial plugin via the v37 runtime. Plugin id `livinity-broker`. Routes `/p/livinity-broker/v1/messages` + `/p/livinity-broker/v1/chat/completions`. Manages own api-keys in own Postgres tables (decoupled from platform auth). Plugin UI: settings page in /store after install, generate api-key + show URL pattern for Bolt/Cline/Cursor.
+
+**Plans:** 1 estimated.
+
+**UAT:** Install plugin → generate api-key → Bolt configured with `https://<user>.livinity.io/p/livinity-broker/v1` succeeds against Claude.
+
+**Depends on:** Phase 153 ✅ (plugin runtime).
+
+---
+
+### Phase 155: Developer Portal + Documentation
+
+**Status:** 🔴 PLANNED 2026-05-18 — final v37 phase.
+
+**Goal:** `/developers` route on livinity.io with "How to publish a plugin" walkthrough, Plugin SDK reference docs, submission flow (PR to `livinity-apps` repo, signature review, publish to store). v37 portal still publishes operator-signed-only plugins; third-party tier (`verified` / `community`) deferred to v38.
+
+**Plans:** 1 estimated.
+
+**UAT:** External developer can read the docs and ship a plugin without operator help.
+
+**Depends on:** Phase 153 ✅ (plugin runtime + SDK exists).
 
