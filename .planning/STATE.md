@@ -3,10 +3,22 @@ gsd_state_version: 1.0
 milestone: v37.0
 milestone_name: "Store Reimagining + Plugin Platform"
 status: in-progress
-last_updated: "2026-05-18T15:30:00.000Z"
+last_updated: "2026-05-18T17:00:00.000Z"
 milestone_v37: v37.0
 milestone_v37_name: "Store Reimagining + Plugin Platform"
-milestone_v37_status: OPENED 2026-05-18 — 5 phases code-complete in catalog/Vercel layer; 5 Wave B carryovers pending operator-walk + Mini PC sessions
+milestone_v37_status: 2026-05-18 — Catalog + UI layer complete. 6 Vercel-side phases shipped (148-149-149.1-149.2-150A-151A-152A-154A-156). 5 Wave B carryovers pending operator-walk + Mini PC sessions.
+phase_149_2_status: ✅ SHIPPED 2026-05-18 — Featured tag vertical-stretch CSS collision fixed (renamed .featured → .featured-hero; removed inline Featured badge in favor of Verified per original design intent)
+phase_156_status: ✅ SHIPPED 2026-05-18 — admin panel /admin/apps with full CRUD + icon upload to Supabase Storage. Operator-only (api-key gated). per-section dynamic manifest template.
+v37_session_2026_05_18_final_commits:
+  - "38012c62 docs(146-post): cutover.log post-cleanup"
+  - "00776c41 feat(v37-P148): open v37 milestone — SPEC + SUMMARY + ROADMAP/STATE"
+  - "3087e289 feat(v37-P149): 5-section store nav + section_enum migration"
+  - "c7a19e48 feat(v37-P149.1): Claude Design Livinity DS full port"
+  - "0c813933 feat(v37-P150-A): 10 native Linux apps seed"
+  - "528b16ff feat(v37-P151+P152+P154-A): WebApp+AI+Plugin catalog seeds"
+  - "5353dc0e docs(v37-state): mid-session checkpoint"
+  - "46cf5340 fix(v37-P149.2): Featured tag CSS class collision"
+  - "dd29ea08 feat(v37-P156): admin panel for apps CRUD + icon upload"
 v37_phases:
   - "148: spec + section data model (✅ shipped 2026-05-18)"
   - "149: /store UI redesign + Supabase migration (✅ shipped 2026-05-18)"
