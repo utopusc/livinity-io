@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+Allow: /customize.html
+Allow: /store
+Allow: /download
+
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify
+Disallow: /device
+Disallow: /downloads/
+Disallow: /_next/
+
+Sitemap: https://livinity.io/sitemap.xml

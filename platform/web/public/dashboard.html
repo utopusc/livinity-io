@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>Dashboard — Livinity</title>
+    <meta name="description" content="Your Cloud AI Computer." />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600;700;800&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="styles.css" />
+
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+    <style>
+      :root {
+        --dash-pad: 28px;
+        --dash-radius: 18px;
+        --dash-line: rgba(0,0,0,0.07);
+        --dash-line-strong: rgba(0,0,0,0.12);
+        --card-bg: #ffffff;
+        --card-bg-2: #fafafa;
+        --card-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 24px 60px -34px rgba(0,0,0,0.18);
+        --hero-grad: linear-gradient(135deg, #fafafa 0%, #f0f0f3 100%);
+        --accent-blue: #2563eb;
+        --accent-green: #16a34a;
+        --accent-amber: #d97706;
+        --accent-red: #dc2626;
+        --font-mono: "Geist Mono", ui-monospace, monospace;
+        --font-serif: "Instrument Serif", serif;
+      }
+      body.dark {
+        --dash-line: rgba(255,255,255,0.08);
+        --dash-line-strong: rgba(255,255,255,0.16);
+        --card-bg: #0f0f11;
+        --card-bg-2: #08080a;
+        --card-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 24px 60px -28px rgba(0,0,0,0.8);
+        --hero-grad: linear-gradient(135deg, #0c0c0e 0%, #14141a 100%);
+      }
+      body.iridescent {
+        --bg: #f7f4ff;
+        --bg-2: #efe9ff;
+        --fg: #1a0d3d;
+        --fg-dim: #3a2a6e;
+        --fg-mute: #6b5b95;
+        --fg-faint: #a99fcb;
+        --dash-line: rgba(60,30,140,0.1);
+        --dash-line-strong: rgba(60,30,140,0.18);
+        --card-bg: #ffffff;
+        --hero-grad: linear-gradient(135deg, #f3eeff 0%, #fde9f3 35%, #e9f0ff 100%);
+      }
+      body { background: var(--bg); color: var(--fg); }
+      body.dark { background: #050507; color: #f5f5f7; }
+
+      /* Greeting overlay */
+      .greet-veil {
+        position: fixed; inset: 0; z-index: 60;
+        display: grid; place-items: center;
+        background: var(--bg);
+        animation: veilOut 0.7s 2.0s cubic-bezier(.4,0,.2,1) forwards;
+      }
+      @keyframes veilOut { to { opacity: 0; pointer-events: none; } }
+      .greet-inner {
+        display: flex; flex-direction: column; align-items: center; gap: 18px;
+        opacity: 0; transform: translateY(8px);
+        animation: greetIn 0.6s 0.1s cubic-bezier(.2,.7,.2,1) forwards,
+                   greetOut 0.45s 1.75s cubic-bezier(.4,0,.2,1) forwards;
+      }
+      @keyframes greetIn { to { opacity: 1; transform: translateY(0); } }
+      @keyframes greetOut { to { opacity: 0; transform: translateY(-10px) scale(0.97); } }
+      .greet-mark {
+        width: 72px; height: 72px; border-radius: 50%;
+        background: var(--fg); position: relative;
+        animation: greetPulse 2.4s ease-in-out infinite;
+      }
+      .greet-mark::after { content: ""; position: absolute; inset: 18px; border-radius: 50%; background: var(--bg); }
+      @keyframes greetPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+      .greet-text { font-size: 42px; font-weight: 300; letter-spacing: -0.03em; color: var(--fg); text-align: center; }
+      .greet-text em { font-style: italic; font-family: var(--font-serif); font-weight: 400; }
+      .greet-sub { font-size: 13px; color: var(--fg-mute); font-family: var(--font-mono); letter-spacing: 0.04em; }
+
+      /* Container */
+      .dash-container {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 92px 32px 64px;
+      }
+
+      /* Hero card */
+      .hero-card {
+        display: grid;
+        grid-template-columns: 1.3fr 1fr;
+        gap: 0;
+        border-radius: 28px;
+        background: var(--card-bg);
+        border: 1px solid var(--dash-line);
+        box-shadow: var(--card-shadow);
+        overflow: hidden;
+        margin-bottom: 24px;
+        position: relative;
+      }
+      @media (max-width: 880px) { .hero-card { grid-template-columns: 1fr; } }
+      .hero-card-left {
+        padding: 40px 44px;
+        display: flex; flex-direction: column; gap: 24px;
+        background: var(--hero-grad);
+      }
+      body.dark .hero-card-left { background: linear-gradient(135deg, #0c0c0f 0%, #15151a 100%); }
+
+      .hero-status-row {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 11.5px; color: var(--fg-mute);
+        font-family: var(--font-mono);
+        letter-spacing: 0.05em; text-transform: uppercase;
+      }
+      .status-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        display: inline-block;
+      }
+      .status-dot.on { background: var(--accent-green); box-shadow: 0 0 10px rgba(22,163,74,0.55); animation: dotPulse 1.8s infinite; }
+      .status-dot.off { background: var(--fg-faint); }
+      @keyframes dotPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+      .hero-title {
+        font-size: clamp(36px, 4vw, 52px);
+        font-weight: 300; letter-spacing: -0.035em;
+        line-height: 1.04;
+        color: var(--fg);
+        text-wrap: balance;
+        margin: -4px 0 0;
+      }
+      .hero-title em { font-style: italic; font-family: var(--font-serif); font-weight: 400; }
+
+      .hero-url {
+        display: inline-flex; align-items: center; gap: 10px;
+        padding: 10px 14px;
+        background: rgba(0,0,0,0.04);
+        border-radius: 12px;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--fg);
+        align-self: flex-start;
+        max-width: 100%;
+      }
+      body.dark .hero-url { background: rgba(255,255,255,0.05); }
+      .hero-url .copy-btn {
+        background: transparent; border: 0;
+        color: var(--fg-mute); cursor: pointer;
+        display: inline-flex; padding: 2px;
+      }
+      .hero-url .copy-btn:hover { color: var(--fg); }
+
+      .hero-cta-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+      .h-btn {
+        font-size: 14px; padding: 12px 22px;
+        border-radius: 999px;
+        background: transparent; color: var(--fg);
+        border: 1px solid var(--dash-line-strong);
+        cursor: pointer; font-weight: 500;
+        text-decoration: none;
+        display: inline-flex; align-items: center; gap: 8px;
+        transition: background 0.15s, opacity 0.15s, transform 0.15s;
+      }
+      .h-btn:hover { background: rgba(0,0,0,0.04); transform: translateY(-1px); }
+      body.dark .h-btn:hover { background: rgba(255,255,255,0.05); }
+      .h-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+      .h-btn.solid { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+      .h-btn.solid:hover { opacity: 0.92; background: var(--fg); }
+
+      /* Hero right — bandwidth + at-a-glance */
+      .hero-card-right {
+        padding: 32px 36px;
+        display: flex; flex-direction: column; gap: 22px;
+        background: var(--card-bg);
+        border-left: 1px solid var(--dash-line);
+      }
+      @media (max-width: 880px) { .hero-card-right { border-left: 0; border-top: 1px solid var(--dash-line); } }
+      .hr-eyebrow {
+        font-size: 10.5px; color: var(--fg-faint);
+        font-family: var(--font-mono);
+        letter-spacing: 0.16em; text-transform: uppercase;
+      }
+      .hr-bw-num { display: flex; align-items: baseline; gap: 6px; }
+      .hr-bw-num .v { font-size: 36px; font-weight: 300; letter-spacing: -0.025em; color: var(--fg); line-height: 1; }
+      .hr-bw-num .u { font-size: 13px; color: var(--fg-mute); font-family: var(--font-mono); }
+      .hr-bar {
+        height: 6px; border-radius: 999px;
+        background: rgba(0,0,0,0.06);
+        overflow: hidden; margin-top: 8px;
+      }
+      body.dark .hr-bar { background: rgba(255,255,255,0.07); }
+      .hr-bar .fill { height: 100%; border-radius: 999px; background: var(--fg); transition: width 0.6s ease; }
+      .hr-bar .fill.warn { background: var(--accent-amber); }
+      .hr-bar .fill.danger { background: var(--accent-red); }
+      .hr-bw-meta { font-size: 12px; color: var(--fg-mute); font-family: var(--font-mono); }
+      .hr-quick { display: flex; gap: 16px; margin-top: 8px; }
+      .hr-quick .item { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+      .hr-quick .lbl { font-size: 10.5px; color: var(--fg-faint); font-family: var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }
+      .hr-quick .val { font-size: 16px; color: var(--fg); font-weight: 500; letter-spacing: -0.01em; }
+
+      /* Bento grid */
+      .bento {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .b-card {
+        background: var(--card-bg);
+        border: 1px solid var(--dash-line);
+        border-radius: var(--dash-radius);
+        padding: 24px 26px;
+        box-shadow: var(--card-shadow);
+        display: flex; flex-direction: column;
+      }
+      .b-card.span-4 { grid-column: span 4; }
+      .b-card.span-5 { grid-column: span 5; }
+      .b-card.span-6 { grid-column: span 6; }
+      .b-card.span-7 { grid-column: span 7; }
+      .b-card.span-8 { grid-column: span 8; }
+      .b-card.span-12 { grid-column: span 12; }
+      @media (max-width: 1000px) {
+        .b-card.span-4, .b-card.span-5, .b-card.span-6, .b-card.span-7, .b-card.span-8 { grid-column: span 12; }
+      }
+
+      .b-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+      .b-title { font-size: 13px; font-weight: 600; color: var(--fg); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
+      .b-sub { font-size: 11.5px; color: var(--fg-mute); font-family: var(--font-mono); letter-spacing: 0.04em; }
+
+      /* Devices list */
+      .dev-list { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+      .dev-row {
+        display: grid; grid-template-columns: 32px 1fr auto; gap: 12px;
+        align-items: center;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: var(--card-bg-2);
+        border: 1px solid var(--dash-line);
+      }
+      .dev-icon { width: 32px; height: 32px; border-radius: 8px; background: rgba(0,0,0,0.05); display: grid; place-items: center; color: var(--fg-mute); }
+      body.dark .dev-icon { background: rgba(255,255,255,0.05); }
+      .dev-name { font-size: 13.5px; font-weight: 500; color: var(--fg); }
+      .dev-meta { font-size: 11.5px; color: var(--fg-mute); font-family: var(--font-mono); margin-top: 2px; }
+      .dev-status { font-size: 11px; font-family: var(--font-mono); color: var(--fg-mute); display: flex; align-items: center; gap: 6px; }
+      .dev-empty {
+        padding: 18px; text-align: center;
+        font-size: 13px; color: var(--fg-mute);
+        background: var(--card-bg-2); border-radius: 12px;
+        border: 1px dashed var(--dash-line-strong);
+      }
+
+      /* API key card */
+      .ak-key { font-family: var(--font-mono); font-size: 14px; color: var(--fg); word-break: break-all; padding: 12px 14px; background: var(--card-bg-2); border-radius: 10px; border: 1px solid var(--dash-line); }
+      .ak-meta { font-size: 12px; color: var(--fg-mute); margin-top: 10px; line-height: 1.5; }
+      .ak-actions { display: flex; gap: 8px; margin-top: 14px; }
+
+      /* Domains card */
+      .dom-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; flex: 1; }
+      .dom-row {
+        display: grid; grid-template-columns: 1fr auto auto; gap: 10px;
+        align-items: center; padding: 10px 12px;
+        background: var(--card-bg-2);
+        border: 1px solid var(--dash-line);
+        border-radius: 12px;
+      }
+      .dom-row .d-name { font-family: var(--font-mono); font-size: 13px; color: var(--fg); }
+      .dom-row .d-status { font-size: 10.5px; font-family: var(--font-mono); padding: 3px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.06em; }
+      .dom-row .d-status.active { background: rgba(22,163,74,0.12); color: var(--accent-green); }
+      .dom-row .d-status.pending { background: rgba(217,119,6,0.13); color: var(--accent-amber); }
+      .dom-row .d-status.failed { background: rgba(220,38,38,0.12); color: var(--accent-red); }
+      .dom-row .d-del { background: transparent; border: 0; color: var(--fg-faint); cursor: pointer; padding: 4px; font-size: 16px; line-height: 1; }
+      .dom-row .d-del:hover { color: var(--accent-red); }
+      .dom-add { display: flex; gap: 8px; margin-top: 14px; }
+      .dom-add input {
+        flex: 1; padding: 10px 12px;
+        background: var(--card-bg-2);
+        border: 1px solid var(--dash-line);
+        border-radius: 10px;
+        font: 500 13px/1.2 inherit;
+        color: var(--fg); outline: none;
+      }
+      .dom-add input:focus { border-color: var(--dash-line-strong); }
+      .dom-limit { font-size: 11px; color: var(--fg-mute); font-family: var(--font-mono); margin-top: 8px; }
+
+      /* Plans (Coming soon) */
+      .cs-plans-mini { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; opacity: 0.6; pointer-events: none; }
+      @media (max-width: 600px) { .cs-plans-mini { grid-template-columns: 1fr; } }
+      .cs-plan-mini { padding: 14px; border-radius: 12px; background: var(--card-bg-2); border: 1px solid var(--dash-line); display: flex; flex-direction: column; gap: 4px; }
+      .cs-plan-mini.featured { background: linear-gradient(160deg, #faf6f1 0%, #f5ede2 100%); border-color: var(--dash-line-strong); }
+      body.dark .cs-plan-mini.featured { background: linear-gradient(160deg, #14141a 0%, #1c1518 100%); }
+      .cs-plan-mini .nm { font-size: 10px; font-family: var(--font-mono); color: var(--fg); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+      .cs-plan-mini .pr { font-size: 22px; font-weight: 300; letter-spacing: -0.02em; color: var(--fg); }
+      .cs-plan-mini .pr .cur { font-size: 12px; color: var(--fg-mute); font-family: var(--font-mono); }
+      .cs-plan-mini .desc { font-size: 11.5px; color: var(--fg-mute); }
+      .cs-badge-inline { display: inline-block; font-size: 9px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--fg); color: var(--bg); letter-spacing: 0.06em; text-transform: uppercase; font-family: var(--font-mono); margin-left: 8px; vertical-align: 2px; }
+
+      /* Empty state hero */
+      .empty-hero {
+        background: var(--card-bg);
+        border: 1px solid var(--dash-line);
+        border-radius: 28px;
+        box-shadow: var(--card-shadow);
+        padding: 56px 48px;
+        text-align: center;
+        margin-bottom: 24px;
+      }
+      .empty-mark {
+        width: 78px; height: 78px; border-radius: 50%;
+        background: var(--fg); margin: 0 auto 28px;
+        position: relative;
+        animation: greetPulse 4s ease-in-out infinite;
+      }
+      .empty-mark::after { content: ""; position: absolute; inset: 22px; border-radius: 50%; background: var(--card-bg); }
+      .empty-title { font-size: clamp(30px, 3.5vw, 44px); font-weight: 300; letter-spacing: -0.03em; color: var(--fg); line-height: 1.1; text-wrap: balance; }
+      .empty-title em { font-style: italic; font-family: var(--font-serif); font-weight: 400; }
+      .empty-sub { font-size: 15px; color: var(--fg-mute); line-height: 1.55; margin: 14px auto 28px; max-width: 520px; text-wrap: pretty; }
+      .empty-steps { display: flex; justify-content: center; gap: 28px; margin: 30px auto 30px; max-width: 700px; flex-wrap: wrap; }
+      .empty-step { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 180px; text-align: left; padding: 16px; border-radius: 14px; background: var(--card-bg-2); border: 1px solid var(--dash-line); }
+      .empty-step.done { opacity: 0.55; }
+      .empty-step .n { font-size: 10.5px; font-family: var(--font-mono); color: var(--fg-faint); letter-spacing: 0.12em; text-transform: uppercase; }
+      .empty-step .h { font-size: 14px; font-weight: 600; color: var(--fg); }
+      .empty-step .d { font-size: 12.5px; color: var(--fg-mute); }
+
+      /* Install command */
+      .install-cmd {
+        font-family: var(--font-mono); font-size: 12.5px;
+        background: var(--card-bg-2);
+        border: 1px solid var(--dash-line);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-top: 14px;
+        display: flex; align-items: center; gap: 10px;
+        text-align: left;
+      }
+      .install-cmd code { flex: 1; word-break: break-all; color: var(--fg); }
+
+      /* Toast */
+      .toast {
+        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+        background: var(--fg); color: var(--bg);
+        padding: 12px 20px; border-radius: 999px;
+        font-size: 13.5px; font-weight: 500;
+        box-shadow: 0 8px 24px -8px rgba(0,0,0,0.3);
+        z-index: 1000;
+        animation: toastIn 0.25s cubic-bezier(.2,.7,.2,1);
+      }
+      @keyframes toastIn { from { transform: translate(-50%, 12px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+
+      /* New key modal */
+      .km {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.4);
+        display: grid; place-items: center;
+        z-index: 999; padding: 20px;
+      }
+      .km-inner {
+        background: var(--card-bg);
+        border-radius: 18px; padding: 28px;
+        max-width: 540px; width: 100%;
+        box-shadow: 0 20px 60px -10px rgba(0,0,0,0.3);
+        border: 1px solid var(--dash-line);
+      }
+      .km h3 { font-size: 18px; font-weight: 500; margin-bottom: 8px; letter-spacing: -0.015em; color: var(--fg); }
+      .km p { font-size: 13.5px; color: var(--fg-mute); line-height: 1.5; }
+      .km .km-key { margin: 18px 0; padding: 14px 16px; background: var(--card-bg-2); border-radius: 10px; font-family: var(--font-mono); font-size: 12.5px; word-break: break-all; color: var(--fg); border: 1px solid var(--dash-line); }
+      .km .km-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+      /* Footer */
+      .dash-foot {
+        margin-top: 40px;
+        padding-top: 24px;
+        border-top: 1px solid var(--dash-line);
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 12px; color: var(--fg-mute);
+        font-family: var(--font-mono);
+        flex-wrap: wrap; gap: 10px;
+      }
+      .dash-foot a { color: var(--fg); text-decoration: none; }
+
+      /* Loading */
+      .dash-loading {
+        max-width: 1240px; margin: 0 auto; padding: 200px 32px; text-align: center;
+      }
+      .dash-loading p { color: var(--fg-mute); font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel" src="tweaks-panel.jsx"></script>
+    <script type="text/babel">
+      const { useState, useEffect, useCallback, useRef } = React;
+
+      // ---- location-based currency ----
+      const FX_RATES = { EUR: 1, USD: 1.08, GBP: 0.85, TRY: 38, JPY: 165, CHF: 0.97, CAD: 1.48, AUD: 1.64, INR: 90 };
+      const CURRENCY_SYMBOLS = { EUR: "€", USD: "$", GBP: "£", TRY: "₺", JPY: "¥", CHF: "Fr", CAD: "C$", AUD: "A$", INR: "₹" };
+      const LOCALE_CURRENCY = {
+        tr: "TRY",
+        us: "USD", gb: "GBP", uk: "GBP", au: "AUD", ca: "CAD",
+        jp: "JPY", ja: "JPY", in: "INR",
+        ch: "CHF",
+        de: "EUR", fr: "EUR", es: "EUR", it: "EUR", nl: "EUR", be: "EUR",
+        pt: "EUR", at: "EUR", fi: "EUR", ie: "EUR", gr: "EUR", lu: "EUR", mt: "EUR",
+      };
+      function detectCurrency() {
+        try {
+          const stored = localStorage.getItem("liv_currency");
+          if (stored && FX_RATES[stored]) return stored;
+          const lang = (navigator.language || "en-US").toLowerCase();
+          const parts = lang.split(/[-_]/);
+          if (parts[1] && LOCALE_CURRENCY[parts[1]]) return LOCALE_CURRENCY[parts[1]];
+          if (parts[0] && LOCALE_CURRENCY[parts[0]]) return LOCALE_CURRENCY[parts[0]];
+        } catch (e) {}
+        return "EUR";
+      }
+      function convertPrice(eur, currency) { return Math.round(eur * (FX_RATES[currency] || 1)); }
+      function currencySymbol(currency) { return CURRENCY_SYMBOLS[currency] || (currency + " "); }
+
+      /* Icon set */
+      const Ic = {
+        copy:     (p) => (<svg width={p.size||14} height={p.size||14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>),
+        arrow:    (p) => (<svg width={p.size||14} height={p.size||14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>),
+        external: (p) => (<svg width={p.size||14} height={p.size||14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg>),
+        laptop:   (p) => (<svg width={p.size||16} height={p.size||16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>),
+        phone:    (p) => (<svg width={p.size||16} height={p.size||16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>),
+        server:   (p) => (<svg width={p.size||16} height={p.size||16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 8h.01M7 17h.01"/></svg>),
+      };
+
+      function formatBytes(bytes) {
+        if (!bytes && bytes !== 0) return "—";
+        if (bytes === 0) return "0 GB";
+        const k = 1024, sizes = ["B","KB","MB","GB","TB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return (bytes / Math.pow(k, i)).toFixed(1) + " " + sizes[i];
+      }
+
+      function timeAgo(iso) {
+        if (!iso) return "—";
+        const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+        if (s < 60) return "just now";
+        if (s < 3600) return Math.floor(s/60) + "m ago";
+        if (s < 86400) return Math.floor(s/3600) + "h ago";
+        return Math.floor(s/86400) + "d ago";
+      }
+
+      function platformIcon(p) {
+        if (!p) return Ic.server;
+        const l = p.toLowerCase();
+        if (l.includes("ios") || l.includes("iphone") || l.includes("android") || l.includes("mobile")) return Ic.phone;
+        if (l.includes("mac") || l.includes("linux") || l.includes("win")) return Ic.laptop;
+        return Ic.server;
+      }
+
+      const Greeting = ({ name }) => (
+        <div className="greet-veil">
+          <div className="greet-inner">
+            <div className="greet-mark"/>
+            <div className="greet-text">Hey, <em>{name}.</em></div>
+            <div className="greet-sub">your computer is loading</div>
+          </div>
+        </div>
+      );
+
+      const ProfileMenu = ({ user }) => {
+        const [open, setOpen] = useState(false);
+        const initial = user && user.username ? user.username[0].toUpperCase() : "?";
+        const name = user && user.username ? user.username : "you";
+        const logout = async () => {
+          try { await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }); } catch (e) {}
+          window.location.href = "/";
+        };
+        const I = {
+          dash: <svg className="pp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>,
+          set:  <svg className="pp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+          out:  <svg className="pp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>,
+        };
+        return (
+          <div className="profile-wrap">
+            <button className={"profile-trigger" + (open ? " open" : "")} onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu">
+              <span>{name}</span>
+              <svg className="pt-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              <span className="pt-avatar">{initial}</span>
+            </button>
+            {open && (
+              <>
+                <div className="profile-backdrop" onClick={() => setOpen(false)}/>
+                <div className="profile-popover" role="menu">
+                  <div className="pp-head">
+                    <div className="pp-name">{user.username}</div>
+                    {user.email && <div className="pp-email">{user.email}</div>}
+                  </div>
+                  <a className="pp-item" href="/dashboard">{I.dash}Dashboard</a>
+                  <a className="pp-item" href="/profile">{I.set}Settings</a>
+                  <div className="pp-sep"/>
+                  <button className="pp-item danger" onClick={logout}>{I.out}Log out</button>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      };
+
+      const Nav = ({ user }) => {
+        useEffect(() => {
+          const nav = document.querySelector(".nav");
+          if (!nav) return;
+          const onScroll = () => nav.classList.toggle("stuck", (window.scrollY || 0) > 24);
+          window.addEventListener("scroll", onScroll, { passive: true });
+          onScroll();
+          return () => window.removeEventListener("scroll", onScroll);
+        }, []);
+        return (
+          <nav className="nav">
+            <div className="container nav-inner">
+              <a href="/" className="brand">
+                <span className="brand-mark" aria-hidden="true"/>
+                <span>Livinity</span>
+              </a>
+              <div className="nav-links">
+                <a href="/dashboard" className="on">Dashboard</a>
+                <a href="/dashboard/install">Install</a>
+                <a href="https://changelog.livinity.io" target="_blank" rel="noreferrer">Changelog</a>
+                <a href="/store">Store</a>
+              </div>
+              <div className="nav-cta">
+                <a className="btn btn-ghost btn-icon" href="https://github.com/utopusc/livinity-io" target="_blank" rel="noreferrer" aria-label="GitHub">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49v-1.71c-2.78.62-3.37-1.36-3.37-1.36-.46-1.17-1.11-1.48-1.11-1.48-.91-.63.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.55 2.34 1.1 2.91.84.09-.66.35-1.1.63-1.36-2.22-.26-4.56-1.13-4.56-5.03 0-1.11.39-2.02 1.03-2.73-.1-.26-.45-1.29.1-2.69 0 0 .84-.27 2.75 1.04A9.4 9.4 0 0112 6.84c.85 0 1.71.12 2.51.34 1.91-1.31 2.75-1.04 2.75-1.04.55 1.4.2 2.43.1 2.69.64.71 1.03 1.62 1.03 2.73 0 3.91-2.34 4.77-4.57 5.02.36.32.68.94.68 1.89v2.8c0 .27.18.59.69.49A10.05 10.05 0 0022 12.25C22 6.58 17.52 2 12 2z"/></svg>
+                  <span className="nav-cta-count">4.2k</span>
+                </a>
+                <ProfileMenu user={user}/>
+              </div>
+            </div>
+          </nav>
+        );
+      };
+
+      function App() {
+        const [tweaks, setTweaks] = useState({ theme: "light" });
+        const setTweak = (k, v) => setTweaks(t => ({ ...t, [k]: v }));
+        const [currency, setCurrency] = useState(detectCurrency());
+        useEffect(() => { try { localStorage.setItem("liv_currency", currency); } catch (e) {} }, [currency]);
+
+        useEffect(() => {
+          document.body.classList.remove("dark", "iridescent");
+          if (tweaks.theme === "dark") document.body.classList.add("dark");
+          if (tweaks.theme === "iridescent") document.body.classList.add("iridescent");
+        }, [tweaks.theme]);
+
+        const [user, setUser] = useState(null);
+        const [dashData, setDashData] = useState(null);
+        const [devices, setDevices] = useState([]);
+        const [domains, setDomains] = useState([]);
+        const [loading, setLoading] = useState(true);
+        const [toast, setToast] = useState(null);
+
+        const showToast = (msg) => {
+          setToast(msg);
+          setTimeout(() => setToast(null), 2400);
+        };
+
+        const fetchDomains = useCallback(async () => {
+          try {
+            const r = await fetch("/api/domains", { credentials: "same-origin" });
+            if (r.ok) {
+              const d = await r.json();
+              setDomains(Array.isArray(d.domains) ? d.domains : (Array.isArray(d) ? d : []));
+            }
+          } catch (e) {}
+        }, []);
+
+        useEffect(() => {
+          let aborted = false;
+          (async () => {
+            try {
+              const me = await fetch("/api/auth/me", { credentials: "same-origin" });
+              if (!me.ok) { window.location.href = "/login"; return; }
+              const meData = await me.json();
+              if (!meData.user) { window.location.href = "/login"; return; }
+              if (aborted) return;
+              setUser(meData.user);
+
+              const [dashRes, devRes] = await Promise.all([
+                fetch("/api/dashboard", { credentials: "same-origin" }).catch(() => null),
+                fetch("/api/devices", { credentials: "same-origin" }).catch(() => null),
+              ]);
+              if (aborted) return;
+              let dashJson = null;
+              if (dashRes && dashRes.ok) { dashJson = await dashRes.json(); setDashData(dashJson); }
+              let devArr = [];
+              if (devRes && devRes.ok) {
+                const d = await devRes.json();
+                devArr = Array.isArray(d.devices) ? d.devices : (Array.isArray(d) ? d : []);
+                setDevices(devArr);
+              }
+              // First-run redirect: zero devices + no API key -> /dashboard/install.
+              // ?skipFirstRun=1 bypasses (Skip-for-now button on the wizard sets this).
+              try {
+                const sp = new URLSearchParams(window.location.search);
+                const skipFirstRun = sp.get("skipFirstRun") === "1";
+                const hasApiKey = !!(dashJson && dashJson.apiKey && dashJson.apiKey.hasKey);
+                if (!skipFirstRun && !hasApiKey && devArr.length === 0) {
+                  window.location.replace("/dashboard/install");
+                  return;
+                }
+              } catch (e) {}
+              await fetchDomains();
+            } catch (e) {
+              window.location.href = "/login";
+            } finally {
+              if (!aborted) setLoading(false);
+            }
+          })();
+          return () => { aborted = true; };
+        }, [fetchDomains]);
+
+        // Greeting overlay only on first session (skip on reload-back-to-tab)
+        const [showGreeting, setShowGreeting] = useState(true);
+        useEffect(() => {
+          if (loading) return;
+          const t = setTimeout(() => setShowGreeting(false), 2900);
+          return () => clearTimeout(t);
+        }, [loading]);
+
+        /* Actions */
+        const [keyGen, setKeyGen] = useState(false);
+        const [newKey, setNewKey] = useState(null);
+        const [installCmd, setInstallCmd] = useState(null);
+
+        const generateKey = useCallback(async (action) => {
+          if (keyGen) return;
+          if (action === "regenerate-key" && !confirm("This will invalidate your current API key and disconnect any server using it. Continue?")) return;
+          setKeyGen(true);
+          try {
+            const res = await fetch("/api/dashboard", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action }),
+            });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) { showToast(d.error || "Couldn't generate key."); return; }
+            if (d.apiKey) setNewKey(d.apiKey);
+            if (d.installCommand) setInstallCmd(d.installCommand);
+            const dashRes = await fetch("/api/dashboard", { credentials: "same-origin" });
+            if (dashRes.ok) setDashData(await dashRes.json());
+          } catch (e) { showToast("Network error."); }
+          finally { setKeyGen(false); }
+        }, [keyGen]);
+
+        const copy = useCallback(async (text) => {
+          try { await navigator.clipboard.writeText(text); showToast("Copied"); }
+          catch { showToast("Copy failed"); }
+        }, []);
+
+        /* Domains */
+        const [domainInput, setDomainInput] = useState("");
+        const [addingDomain, setAddingDomain] = useState(false);
+
+        const addDomain = useCallback(async (e) => {
+          if (e) e.preventDefault();
+          const v = domainInput.trim();
+          if (!v) return;
+          setAddingDomain(true);
+          try {
+            const res = await fetch("/api/domains", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ domain: v }),
+            });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) { showToast(d.error || "Couldn't add domain."); return; }
+            setDomainInput("");
+            await fetchDomains();
+            showToast("Domain added · check DNS instructions");
+          } catch (e) { showToast("Network error."); }
+          finally { setAddingDomain(false); }
+        }, [domainInput, fetchDomains]);
+
+        const removeDomain = useCallback(async (id) => {
+          if (!confirm("Remove this domain?")) return;
+          try {
+            const res = await fetch("/api/domains/" + id, { method: "DELETE", credentials: "same-origin" });
+            if (!res.ok) { showToast("Couldn't remove."); return; }
+            await fetchDomains();
+            showToast("Domain removed");
+          } catch (e) { showToast("Network error."); }
+        }, [fetchDomains]);
+
+        if (loading) {
+          return <main className="dash-loading"><p>Loading your dashboard…</p></main>;
+        }
+        if (!user) return null;
+
+        const username = user.username;
+        // Phase 133-02 Bug B: hero URL derives from custom_domains only.
+        // No tunnel fallback — Server5 relay is retired from user-visible surfaces.
+        // Include pending_dns so freshly-generated domains show immediately.
+        const activeDomain = (domains || [])
+          .filter(d => d && (d.status === "active" || d.status === "dns_verified" || d.status === "pending_dns"))
+          .sort((a, b) => (b.verified_at || "").localeCompare(a.verified_at || ""))[0];
+        const customDomain = activeDomain ? activeDomain.domain : null;
+        // Phase 140-06.4: hasComputer is true if EITHER user owns a verified custom domain
+        // OR Phase 140 auto-provisioned a livinity.io subdomain at signup
+        // (dashData.server.provisioned reflects users.cf_provisioned_at IS NOT NULL).
+        const provisioned = !!(dashData && dashData.server && dashData.server.provisioned);
+        const tunnelHost = dashData && dashData.server && dashData.server.url ? dashData.server.url.replace("https://", "") : null;
+        const url = customDomain || (provisioned && tunnelHost) || null;
+        const hasComputer = !!url;
+        const hasKey = !!(dashData && dashData.apiKey && dashData.apiKey.hasKey);
+        const keyPrefix = dashData && dashData.apiKey ? dashData.apiKey.prefix : null;
+        const online = !!(dashData && dashData.server && dashData.server.online);
+        const bw = dashData && dashData.bandwidth ? dashData.bandwidth : null;
+        const bwPercent = bw ? Math.min(100, Math.round(bw.usedPercent || (bw.limitBytes ? (bw.usedBytes / bw.limitBytes) * 100 : 0))) : 0;
+        const bwClass = bwPercent >= 95 ? "danger" : bwPercent >= 80 ? "warn" : "";
+
+        const deviceCount = devices.length;
+        const domainLimit = 3;
+
+        return (
+          <>
+            {showGreeting && <Greeting name={username}/>}
+            <Nav user={user}/>
+
+            <main className="dash-container">
+
+              {hasKey ? (
+                <>
+                  {/* HERO */}
+                  <section className="hero-card">
+                    <div className="hero-card-left">
+                      <div className="hero-status-row">
+                        <span className={"status-dot " + (online ? "on" : "off")}/>
+                        <span>{online ? "Online · ready when you are" : "Offline · waiting for your server"}</span>
+                      </div>
+                      <h1 className="hero-title">Hey, <em>{username}.</em><br/>{hasComputer ? (online ? "your computer is awake." : "your computer is asleep.") : "let\'s connect your computer."}</h1>
+                      {hasComputer ? (
+                        <>
+                          <div className="hero-url">
+                            <span>{url}</span>
+                            <button className="copy-btn" onClick={() => copy("https://" + url)} aria-label="Copy URL"><Ic.copy/></button>
+                          </div>
+                          <div className="hero-cta-row">
+                            <a className="h-btn solid" href={"https://" + url} target="_blank" rel="noreferrer">
+                              Open my computer <Ic.arrow/>
+                            </a>
+                            <a className="h-btn" href="/profile">Profile</a>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="hero-sub" style={{ marginTop: 8, color: "var(--fg-mute)" }}>Finish your install to see your computer's URL here.</p>
+                          <div className="hero-cta-row">
+                            <a className="h-btn solid" href="/dashboard/install">Go to install wizard <Ic.arrow/></a>
+                            <a className="h-btn" href="/profile">Profile</a>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div className="hero-card-right">
+                      <div>
+                        <div className="hr-eyebrow">Bandwidth · this month</div>
+                        <div className="hr-bw-num" style={{ marginTop: 6 }}>
+                          <span className="v">{bw ? formatBytes(bw.usedBytes) : "—"}</span>
+                          <span className="u">/ {bw ? formatBytes(bw.limitBytes) : "—"}</span>
+                        </div>
+                        <div className="hr-bar"><div className={"fill " + bwClass} style={{ width: bwPercent + "%" }}/></div>
+                        <div className="hr-bw-meta" style={{ marginTop: 8 }}>{bwPercent}% used</div>
+                      </div>
+                      <div className="hr-quick">
+                        <div className="item">
+                          <span className="lbl">Devices</span>
+                          <span className="val">{deviceCount}</span>
+                        </div>
+                        <div className="item">
+                          <span className="lbl">Domains</span>
+                          <span className="val">{domains.length}/{domainLimit}</span>
+                        </div>
+                        <div className="item">
+                          <span className="lbl">Status</span>
+                          <span className="val" style={{ color: online ? "var(--accent-green)" : "var(--fg-mute)" }}>
+                            {online ? "Online" : "Offline"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* BENTO GRID */}
+                  <div className="bento">
+
+                    {/* Devices */}
+                    <div className="b-card span-6">
+                      <div className="b-head">
+                        <span className="b-title">Devices</span>
+                        <span className="b-sub">{deviceCount} registered</span>
+                      </div>
+                      {deviceCount === 0 ? (
+                        <div className="dev-empty">
+                          No devices yet. Register one from the LivOS Desktop app.
+                        </div>
+                      ) : (
+                        <div className="dev-list">
+                          {devices.slice(0, 4).map((d, i) => {
+                            const IconComp = platformIcon(d.platform);
+                            return (
+                              <div className="dev-row" key={d.deviceId || d.device_id || i}>
+                                <div className="dev-icon"><IconComp size={16}/></div>
+                                <div>
+                                  <div className="dev-name">{d.deviceName || d.device_name || "Unnamed"}</div>
+                                  <div className="dev-meta">{d.platform || "—"}</div>
+                                </div>
+                                <div className="dev-status">{timeAgo(d.lastSeen || d.last_seen || d.createdAt || d.created_at)}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* API key */}
+                    <div className="b-card span-6">
+                      <div className="b-head">
+                        <span className="b-title">API key</span>
+                        <span className="b-sub">{hasKey ? "active" : "not generated"}</span>
+                      </div>
+                      <div className="ak-key">{keyPrefix ? keyPrefix + "••••••••••••••" : "Not generated"}</div>
+                      <div className="ak-meta">
+                        {hasKey
+                          ? "Connect any LivOS server with this key. Regenerating disconnects current servers."
+                          : "Generate a key to connect your computer to Livinity."}
+                      </div>
+                      <div className="ak-actions">
+                        <button className="h-btn" onClick={() => generateKey("regenerate-key")} disabled={keyGen}>
+                          {keyGen ? "Working…" : "Regenerate"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Custom Domains */}
+                    <div className="b-card span-6">
+                      <div className="b-head">
+                        <span className="b-title">Custom Domains</span>
+                        <span className="b-sub">{domains.length} / {domainLimit}</span>
+                      </div>
+                      {domains.length === 0 ? (
+                        <div className="dev-empty">No custom domains. Add one to use your own URL.</div>
+                      ) : (
+                        <div className="dom-list">
+                          {domains.map((d) => {
+                            const st = d.status || "pending_dns";
+                            const cls = st === "active" || st === "dns_verified" ? "active"
+                              : st === "dns_failed" || st === "error" ? "failed" : "pending";
+                            return (
+                              <div className="dom-row" key={d.id}>
+                                <span className="d-name">{d.domain}</span>
+                                <span className={"d-status " + cls}>
+                                  {cls === "active" ? "active" : cls === "failed" ? "failed" : "pending DNS"}
+                                </span>
+                                <button className="d-del" onClick={() => removeDomain(d.id)} aria-label="Remove">×</button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {domains.length < domainLimit && (
+                        <form className="dom-add" onSubmit={addDomain}>
+                          <input
+                            type="text"
+                            placeholder="yourdomain.com"
+                            value={domainInput}
+                            onChange={(e) => setDomainInput(e.target.value)}
+                            disabled={addingDomain}
+                          />
+                          <button className="h-btn solid" type="submit" disabled={addingDomain || !domainInput.trim()}>
+                            {addingDomain ? "Adding…" : "Add"}
+                          </button>
+                        </form>
+                      )}
+                      <div className="dom-limit">DNS verification + auto SSL.</div>
+                    </div>
+
+                    {/* Cloud plans (Coming soon) */}
+                    <div className="b-card span-6">
+                      <div className="b-head">
+                        <span className="b-title">Cloud plans <span className="cs-badge-inline">Coming soon</span></span>
+                        <span className="b-sub">no waitlist</span>
+                      </div>
+                      <p style={{ fontSize: 13.5, color: "var(--fg-mute)", lineHeight: 1.5 }}>
+                        Spin up a dedicated cloud machine pre-loaded with Liv. Until checkout opens, self-host on your own hardware — free.
+                      </p>
+                      <div className="cs-plans-mini">
+                        {[
+                          { name: "Basic", eur: 17, desc: "2 vCPU · 4 GB · 50 GB" },
+                          { name: "Mid", eur: 59, featured: true, desc: "4 vCPU · 16 GB · 250 GB · GPU" },
+                          { name: "Advanced", eur: 149, desc: "8 vCPU · 32 GB · 500 GB · GPU" },
+                        ].map(p => (
+                          <div key={p.name} className={"cs-plan-mini" + (p.featured ? " featured" : "")}>
+                            <div className="nm">{p.name}</div>
+                            <div className="pr">
+                              <span className="cur">{currencySymbol(currency)}</span>
+                              {convertPrice(p.eur, currency)}
+                              <span className="cur" style={{ fontSize: 11 }}> / mo</span>
+                            </div>
+                            <div className="desc">{p.desc}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ marginTop: 10, display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {["EUR","USD","GBP","TRY","JPY","CHF","CAD","AUD","INR"].map(c => (
+                          <button key={c} type="button" onClick={() => setCurrency(c)}
+                            style={{
+                              padding: "3px 8px", fontSize: 10, fontFamily: "var(--font-mono)", letterSpacing: "0.04em",
+                              background: currency === c ? "var(--fg)" : "transparent",
+                              color: currency === c ? "var(--bg)" : "var(--fg-mute)",
+                              border: "1px solid var(--dash-line)", borderRadius: 999, cursor: "pointer",
+                            }}>{c}</button>
+                        ))}
+                      </div>
+                      {currency !== "EUR" && (
+                        <p style={{ marginTop: 8, fontSize: 10.5, color: "var(--fg-faint)", fontFamily: "var(--font-mono)", letterSpacing: "0.04em" }}>
+                          {currency} prices approximate · billed in EUR
+                        </p>
+                      )}
+                      <div className="ak-actions" style={{ marginTop: 14 }}>
+                        <a className="h-btn" href="/customize.html">Configure →</a>
+                        <a className="h-btn" href="/#install">Self-host guide</a>
+                      </div>
+                    </div>
+
+                  </div>
+                </>
+              ) : (
+                /* EMPTY HERO — no API key yet */
+                <section className="empty-hero">
+                  <div className="empty-mark"/>
+                  <h1 className="empty-title">Let's <em>connect your computer.</em></h1>
+                  <p className="empty-sub">
+                    Three quick steps: verify your email, generate an API key, run the install command on your hardware.
+                    You'll be online in under two minutes.
+                  </p>
+
+                  <div className="empty-steps">
+                    <div className={"empty-step " + ((user.emailVerified || user.email_verified) ? "done" : "")}>
+                      <span className="n">01</span>
+                      <span className="h">Verify email</span>
+                      <span className="d">
+                        {(user.emailVerified || user.email_verified)
+                          ? "✓ verified"
+                          : "Check your inbox for the link"}
+                      </span>
+                    </div>
+                    <div className="empty-step">
+                      <span className="n">02</span>
+                      <span className="h">Generate API key</span>
+                      <span className="d">One key, one server</span>
+                    </div>
+                    <div className="empty-step">
+                      <span className="n">03</span>
+                      <span className="h">Install on hardware</span>
+                      <span className="d">Pi, NAS, old laptop — anything Linux</span>
+                    </div>
+                  </div>
+
+                  <div className="hero-cta-row" style={{ justifyContent: "center", marginTop: 14 }}>
+                    <button
+                      className="h-btn solid"
+                      onClick={() => generateKey("generate-key")}
+                      disabled={keyGen || !(user.emailVerified || user.email_verified)}
+                    >
+                      {keyGen ? "Generating…" : "Generate API key"} {!keyGen && <Ic.arrow/>}
+                    </button>
+                    <a className="h-btn" href="/#install">Read the install guide</a>
+                  </div>
+
+                  {!(user.emailVerified || user.email_verified) && (
+                    <p style={{ marginTop: 14, fontSize: 12, color: "var(--accent-amber)", fontFamily: "var(--font-mono)" }}>
+                      Email verification required before API keys can be generated.
+                    </p>
+                  )}
+                </section>
+              )}
+
+              <div className="dash-foot">
+                <span>open-source · <a href="/">livinity.io</a></span>
+                <span><a href="https://changelog.livinity.io" target="_blank" rel="noreferrer">Changelog →</a></span>
+              </div>
+            </main>
+
+            {toast && <div className="toast">{toast}</div>}
+
+            {newKey && (
+              <div className="km" role="dialog" aria-modal="true">
+                <div className="km-inner">
+                  <h3>Your new API key</h3>
+                  <p>This is shown only once. Copy it now and store it somewhere safe.</p>
+                  <div className="km-key">{newKey}</div>
+                  {installCmd && (
+                    <>
+                      <p style={{ marginTop: 16, fontSize: 12.5 }}>Install command for your hardware:</p>
+                      <div className="km-key" style={{ marginTop: 8 }}>{installCmd}</div>
+                    </>
+                  )}
+                  <div className="km-actions">
+                    <button className="h-btn" onClick={() => copy(newKey)}>Copy key</button>
+                    {installCmd && <button className="h-btn" onClick={() => copy(installCmd)}>Copy command</button>}
+                    <button className="h-btn solid" onClick={() => { setNewKey(null); setInstallCmd(null); }}>I've saved it</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {window.TweaksPanel && (
+              <window.TweaksPanel title="Tweaks">
+                <window.TweakSection title="Theme">
+                  <window.TweakRadio
+                    label="Appearance"
+                    value={tweaks.theme || "light"}
+                    options={[
+                      { value: "light", label: "Light" },
+                      { value: "dark", label: "Dark" },
+                      { value: "iridescent", label: "Iris" },
+                    ]}
+                    onChange={v => setTweak("theme", v)}
+                  />
+                </window.TweakSection>
+              </window.TweaksPanel>
+            )}
+          </>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+    </script>
+  </body>
+</html>

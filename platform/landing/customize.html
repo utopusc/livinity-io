@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>Configure your Cloud AI Computer — Livinity</title>
+    <meta name="description" content="Tune CPU, RAM, storage and GPU for your Livinity Cloud AI Computer. Three presets from €17/mo, or dial it in by hand. Auto-converts to your local currency." />
+    <meta name="keywords" content="cloud AI computer, configure server, GPU server, AI hosting, Livinity pricing, managed AI server" />
+
+    <link rel="canonical" href="https://livinity.io/customize.html" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Livinity" />
+    <meta property="og:title" content="Configure your Cloud AI Computer" />
+    <meta property="og:description" content="Pick a preset from €17/mo, or tune CPU, RAM, storage and GPU by hand. Auto-converts to your local currency." />
+    <meta property="og:url" content="https://livinity.io/customize.html" />
+    <meta property="og:image" content="https://livinity.io/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Configure your Cloud AI Computer" />
+    <meta name="twitter:description" content="From €17/mo. Pick a preset or tune the specs by hand." />
+    <meta name="twitter:image" content="https://livinity.io/og-image.png" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="styles.css" />
+
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+    <style>
+      body { background: var(--bg); color: var(--fg); }
+      .cfg-page { min-height: 100vh; }
+      .cfg-nav {
+        position: sticky; top: 0; z-index: 50;
+        backdrop-filter: blur(14px);
+        background: color-mix(in oklab, var(--bg) 80%, transparent);
+        border-bottom: 1px solid var(--line);
+      }
+      .cfg-nav-inner {
+        max-width: 1200px; margin: 0 auto; padding: 16px 24px;
+        display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      }
+      .cfg-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -0.02em; }
+      .cfg-brand svg { width: 22px; height: 22px; }
+      .cfg-nav a { color: var(--fg-dim); text-decoration: none; font-size: 14px; }
+      .cfg-nav a:hover { color: var(--fg); }
+
+      .cfg-wrap { max-width: 1200px; margin: 0 auto; padding: 64px 24px 120px; }
+      .cfg-head { max-width: 720px; }
+      .cfg-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--fg-mute); }
+      .cfg-title { font-size: clamp(36px, 5vw, 64px); line-height: 1.05; letter-spacing: -0.035em; font-weight: 700; margin-top: 14px; }
+      .cfg-lede { font-size: 18px; color: var(--fg-dim); margin-top: 16px; max-width: 56ch; line-height: 1.55; }
+
+      .cfg-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 48px; }
+      @media (max-width: 800px) { .cfg-presets { grid-template-columns: 1fr; } }
+      .preset {
+        position: relative; cursor: pointer;
+        padding: 24px;
+        background: var(--bg-2);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        transition: border-color .2s ease, transform .2s ease, background .2s ease;
+      }
+      .preset:hover { transform: translateY(-2px); }
+      .preset.active {
+        border-color: var(--fg);
+        background: var(--surface);
+      }
+      .preset-name { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-mute); }
+      .preset.active .preset-name { color: var(--fg); }
+      .preset-price { font-size: 32px; font-weight: 800; letter-spacing: -0.025em; margin-top: 8px; font-variant-numeric: tabular-nums; }
+      .preset-price em { font-style: normal; font-size: 13px; font-weight: 500; color: var(--fg-mute); margin-left: 4px; }
+      .preset-specs { margin-top: 14px; display: grid; gap: 6px; font-size: 13px; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+      .preset-specs span { display: flex; justify-content: space-between; gap: 8px; }
+      .preset-specs em { font-style: normal; color: var(--fg); }
+      .preset-tag {
+        position: absolute; top: 14px; right: 14px;
+        font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+        padding: 4px 8px; border-radius: 999px;
+        background: rgba(255,255,255,0.08); color: var(--fg-dim);
+      }
+      body:not(.dark) .preset-tag { background: rgba(0,0,0,0.06); }
+
+      .cfg-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 32px; margin-top: 56px; align-items: start; }
+      @media (max-width: 960px) { .cfg-grid { grid-template-columns: 1fr; } }
+
+      .cfg-card {
+        padding: 28px;
+        background: var(--bg-2);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+      }
+      .cfg-card-title { font-size: 13px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-mute); }
+      .cfg-card-h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-top: 6px; }
+
+      .field { margin-top: 28px; }
+      .field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+      .field-label { font-size: 14px; font-weight: 600; color: var(--fg); }
+      .field-hint { font-size: 12px; color: var(--fg-mute); }
+      .field-value { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .field-value em { font-style: normal; color: var(--fg-mute); font-weight: 500; margin-left: 4px; }
+      .options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+      @media (max-width: 560px) { .options { grid-template-columns: repeat(2, 1fr); } }
+      .opt {
+        cursor: pointer; user-select: none;
+        padding: 12px 8px;
+        text-align: center;
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        font-family: inherit;
+        color: var(--fg-dim);
+        font-size: 14px; font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        transition: all .15s ease;
+      }
+      .opt:hover { border-color: var(--line-strong); color: var(--fg); }
+      .opt.on {
+        background: var(--fg);
+        color: var(--bg);
+        border-color: var(--fg);
+      }
+      .opt small { display: block; font-size: 11px; font-weight: 500; opacity: 0.7; margin-top: 2px; }
+
+      .cfg-summary {
+        position: sticky; top: 88px;
+        padding: 28px;
+        background: var(--bg-2);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+      }
+      .sum-pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 12px; border-radius: 999px;
+        font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+        background: rgba(255,255,255,0.08); color: var(--fg-dim);
+      }
+      body:not(.dark) .sum-pill { background: rgba(0,0,0,0.06); }
+      .sum-pill.basic { background: rgba(80,180,255,0.14); color: #5ab8ff; }
+      .sum-pill.mid { background: rgba(255,180,80,0.16); color: #ffb454; }
+      .sum-pill.advanced { background: rgba(180,80,255,0.18); color: #c084fc; }
+      body:not(.dark) .sum-pill.basic { background: rgba(0,100,180,0.10); color: #0b66b8; }
+      body:not(.dark) .sum-pill.mid { background: rgba(180,110,0,0.12); color: #b06a00; }
+      body:not(.dark) .sum-pill.advanced { background: rgba(120,40,200,0.10); color: #6f24c8; }
+
+      .sum-total {
+        font-size: 56px; font-weight: 800; letter-spacing: -0.04em; line-height: 1;
+        margin-top: 16px; font-variant-numeric: tabular-nums;
+      }
+      .sum-total em { font-style: normal; font-size: 16px; font-weight: 500; color: var(--fg-mute); margin-left: 6px; }
+      .sum-strike { margin-top: 8px; font-size: 13px; font-weight: 500; color: var(--fg-mute); letter-spacing: -0.005em; }
+      .sum-strike s { color: var(--fg-mute); text-decoration: line-through; margin-right: 6px; }
+      .sum-rows { margin-top: 24px; display: grid; gap: 10px; }
+      .sum-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }
+      .sum-row .lbl { color: var(--fg-dim); }
+      .sum-row .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+      .sum-row .price { color: var(--fg-mute); font-size: 12px; font-variant-numeric: tabular-nums; }
+      .sum-divider { height: 1px; background: var(--line); margin: 16px 0; }
+      .sum-cta { display: flex; gap: 10px; margin-top: 24px; }
+      .sum-cta .btn { flex: 1; justify-content: center; }
+      .sum-bullets { margin-top: 20px; display: grid; gap: 8px; font-size: 13px; color: var(--fg-dim); }
+      .sum-bullets span { display: flex; gap: 8px; align-items: flex-start; }
+      .sum-bullets svg { flex-shrink: 0; margin-top: 3px; color: var(--fg); }
+
+      .cfg-footnote { margin-top: 64px; text-align: center; font-size: 13px; color: var(--fg-mute); }
+      .cfg-footnote a { color: var(--fg-dim); text-decoration: underline; text-underline-offset: 3px; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useMemo, useEffect } = React;
+
+      // ---- location-based currency ----
+      const FX_RATES = { EUR: 1, USD: 1.08, GBP: 0.85, TRY: 38, JPY: 165, CHF: 0.97, CAD: 1.48, AUD: 1.64, INR: 90 };
+      const LOCALE_CURRENCY = {
+        tr: "TRY",
+        us: "USD", gb: "GBP", uk: "GBP", au: "AUD", ca: "CAD",
+        jp: "JPY", ja: "JPY", in: "INR",
+        ch: "CHF",
+        de: "EUR", fr: "EUR", es: "EUR", it: "EUR", nl: "EUR", be: "EUR",
+        pt: "EUR", at: "EUR", fi: "EUR", ie: "EUR", gr: "EUR", lu: "EUR", mt: "EUR",
+      };
+      function detectCurrency() {
+        try {
+          const stored = localStorage.getItem("liv_currency");
+          if (stored && FX_RATES[stored]) return stored;
+          const lang = (navigator.language || "en-US").toLowerCase();
+          const parts = lang.split(/[-_]/);
+          if (parts[1] && LOCALE_CURRENCY[parts[1]]) return LOCALE_CURRENCY[parts[1]];
+          if (parts[0] && LOCALE_CURRENCY[parts[0]]) return LOCALE_CURRENCY[parts[0]];
+        } catch (e) {}
+        return "EUR";
+      }
+      function formatPrice(eur, currency, decimals) {
+        const cur = currency || "EUR";
+        const rate = FX_RATES[cur] || 1;
+        const val = eur * rate;
+        const d = decimals != null ? decimals : 0;
+        try {
+          const locale = navigator.language || "en-US";
+          return new Intl.NumberFormat(locale, {
+            style: "currency", currency: cur,
+            maximumFractionDigits: d, minimumFractionDigits: d,
+          }).format(val);
+        } catch (e) {
+          const sym = { EUR: "€", USD: "$", GBP: "£", TRY: "₺", JPY: "¥", CHF: "Fr", CAD: "C$", AUD: "A$", INR: "₹" }[cur] || cur;
+          return sym + (d > 0 ? val.toFixed(d) : Math.round(val));
+        }
+      }
+
+      // ---- pricing model (always in EUR) ----
+      const CPU_OPTIONS     = [2, 4, 8, 16];                          // vCPU
+      const RAM_OPTIONS     = [4, 8, 16, 32, 64];                     // GB
+      const STORAGE_OPTIONS = [50, 100, 250, 500, 1000, 2000];        // GB SSD
+      const PRICE = {
+        base: 5,
+        perCpu: 4,
+        perGb: 0.75,
+        perStorage: 0.02,
+      };
+
+      const GPU_OPTIONS = [
+        { id: "none",  label: "None",       sub: "CPU only",       price: 0   },
+        { id: "share", label: "Shared",     sub: "T4 · 4GB vRAM",   price: 21  },
+        { id: "ded",   label: "Dedicated",  sub: "L4 · 24GB",       price: 78  },
+        { id: "a100",  label: "Pro GPU",    sub: "A100 · 40GB",     price: 350 },
+      ];
+
+      const PRESETS = [
+        { id: "basic",    name: "Basic",    tag: "Personal",       cpu: 2,  ram: 4,  storage: 50,  gpu: "none" },
+        { id: "mid",      name: "Mid",      tag: "Most popular",   cpu: 4,  ram: 16, storage: 250, gpu: "share" },
+        { id: "advanced", name: "Advanced", tag: "Power user",     cpu: 8,  ram: 32, storage: 500, gpu: "ded" },
+      ];
+
+
+      const calcPrice = (cfg) => {
+        const gpu = GPU_OPTIONS.find(g => g.id === cfg.gpu) || GPU_OPTIONS[0];
+        return Math.round(
+          PRICE.base +
+          PRICE.perCpu * cfg.cpu +
+          PRICE.perGb * cfg.ram +
+          PRICE.perStorage * cfg.storage +
+          gpu.price
+        );
+      };
+
+      const detectPack = (cfg) => {
+        // distance metric — closest preset wins, with bias toward smaller
+        const score = (p) =>
+          Math.abs(cfg.cpu - p.cpu) * 2 +
+          Math.abs(cfg.ram - p.ram) * 0.4 +
+          Math.abs(cfg.storage - p.storage) * 0.01 +
+          (cfg.gpu === p.gpu ? 0 : 6);
+        // pack the user has exceeded → next tier up
+        let pack = PRESETS[0];
+        let best = score(PRESETS[0]);
+        for (const p of PRESETS) {
+          const s = score(p);
+          if (s < best) { best = s; pack = p; }
+        }
+        // if user goes well beyond Advanced, still call it Advanced
+        return pack;
+      };
+
+      function Check({size=14}) {
+        return (
+          <svg viewBox="0 0 20 20" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 10l4 4 8-8"/>
+          </svg>
+        );
+      }
+
+      function OptionGroup({options, value, onChange, format}) {
+        return (
+          <div className="options">
+            {options.map(o => {
+              const v = typeof o === "object" ? o.id : o;
+              const label = typeof o === "object" ? o.label : format(o);
+              const sub = typeof o === "object" ? o.sub : null;
+              const on = value === v;
+              return (
+                <button key={v} type="button" className={"opt" + (on ? " on" : "")} onClick={() => onChange(v)}>
+                  {label}
+                  {sub ? <small>{sub}</small> : null}
+                </button>
+              );
+            })}
+          </div>
+        );
+      }
+
+      function App() {
+        const [cfg, setCfg] = useState(PRESETS[1]); // start on Mid
+        const [currency, setCurrency] = useState(detectCurrency());
+        useEffect(() => {
+          try { localStorage.setItem("liv_currency", currency); } catch (e) {}
+        }, [currency]);
+        const pack = useMemo(() => detectPack(cfg), [cfg]);
+        const price = useMemo(() => calcPrice(cfg), [cfg]);
+        const gpu = GPU_OPTIONS.find(g => g.id === cfg.gpu) || GPU_OPTIONS[0];
+
+        const applyPreset = (p) => setCfg({...cfg, cpu: p.cpu, ram: p.ram, storage: p.storage, gpu: p.gpu});
+
+        // does current cfg match a preset exactly?
+        const exactPreset = PRESETS.find(p =>
+          p.cpu === cfg.cpu && p.ram === cfg.ram && p.storage === cfg.storage && p.gpu === cfg.gpu
+        );
+
+        return (
+          <div className="cfg-page">
+            <nav className="nav">
+              <div className="container nav-inner">
+                <a className="brand" href="index.html" style={{textDecoration: "none"}}>
+                  <span className="brand-mark" aria-hidden="true"></span>
+                  <span>Livinity</span>
+                </a>
+                <div className="nav-links">
+                  <a href="index.html#liv">Liv Agent</a>
+                  <a href="index.html#apps">App Library</a>
+                  <a href="index.html#install">Self-host</a>
+                  <a href="index.html#pricing">Pricing</a>
+                </div>
+                <div className="nav-cta">
+                  <a className="btn btn-ghost btn-icon" href="https://github.com/utopusc/livinity-io" target="_blank" rel="noreferrer" aria-label="GitHub">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.11.79-.25.79-.55v-2c-3.2.7-3.87-1.36-3.87-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.18 1.18.92-.26 1.91-.39 2.89-.39.98 0 1.97.13 2.89.39 2.21-1.49 3.18-1.18 3.18-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12c0-6.35-5.15-11.5-11.5-11.5z"/></svg>
+                    <span className="nav-cta-count">4.2k</span>
+                  </a>
+                  <a className="nav-signin" href="index.html">Back</a>
+                </div>
+              </div>
+            </nav>
+
+            <div className="cfg-wrap">
+              <div className="cfg-head">
+                <div className="cfg-eyebrow">Configure</div>
+                <h1 className="cfg-title">Build the computer you want.</h1>
+                <p className="cfg-lede">
+                  Start from a preset or dial it in by hand. Your Cloud AI Computer scales to what you actually use — change anything, anytime.
+                </p>
+              </div>
+
+              <div className="cfg-presets">
+                {PRESETS.map(p => {
+                  const on = exactPreset && exactPreset.id === p.id;
+                  return (
+                    <div key={p.id} className={"preset" + (on ? " active" : "")} onClick={() => applyPreset(p)}>
+                      <span className="preset-tag">{p.tag}</span>
+                      <div className="preset-name">{p.name}</div>
+                      <div className="preset-price">{formatPrice(calcPrice(p), currency)}<em>/mo</em></div>
+                      <div className="preset-specs">
+                        <span><em>{p.cpu} vCPU</em><span>CPU</span></span>
+                        <span><em>{p.ram} GB</em><span>RAM</span></span>
+                        <span><em>{p.storage} GB</em><span>SSD</span></span>
+                        <span><em>{GPU_OPTIONS.find(g => g.id === p.gpu).label}</em><span>GPU</span></span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="cfg-grid">
+                <div className="cfg-card">
+                  <div className="cfg-card-title">Specs</div>
+                  <div className="cfg-card-h2">Tune your computer</div>
+
+                  <div className="field">
+                    <div className="field-head">
+                      <div>
+                        <div className="field-label">CPU</div>
+                        <div className="field-hint">Virtual cores. More = faster builds, more parallel apps.</div>
+                      </div>
+                      <div className="field-value">{cfg.cpu}<em>vCPU</em></div>
+                    </div>
+                    <OptionGroup options={CPU_OPTIONS} value={cfg.cpu} onChange={v => setCfg({...cfg, cpu: v})} format={v => v + " vCPU"} />
+                  </div>
+
+                  <div className="field">
+                    <div className="field-head">
+                      <div>
+                        <div className="field-label">Memory</div>
+                        <div className="field-hint">RAM. More = more apps open, larger AI context windows.</div>
+                      </div>
+                      <div className="field-value">{cfg.ram}<em>GB</em></div>
+                    </div>
+                    <OptionGroup options={RAM_OPTIONS} value={cfg.ram} onChange={v => setCfg({...cfg, ram: v})} format={v => v + " GB"} />
+                  </div>
+
+                  <div className="field">
+                    <div className="field-head">
+                      <div>
+                        <div className="field-label">Storage</div>
+                        <div className="field-hint">NVMe SSD. Your files, photos, app data, AI memory.</div>
+                      </div>
+                      <div className="field-value">{cfg.storage}<em>GB</em></div>
+                    </div>
+                    <OptionGroup options={STORAGE_OPTIONS} value={cfg.storage} onChange={v => setCfg({...cfg, storage: v})} format={v => v >= 1000 ? (v/1000) + " TB" : v + " GB"} />
+                  </div>
+
+                  <div className="field">
+                    <div className="field-head">
+                      <div>
+                        <div className="field-label">GPU</div>
+                        <div className="field-hint">For local AI models, video, design work. None is fine for everyday use.</div>
+                      </div>
+                      <div className="field-value">{gpu.label}</div>
+                    </div>
+                    <OptionGroup options={GPU_OPTIONS} value={cfg.gpu} onChange={v => setCfg({...cfg, gpu: v})} format={v => v} />
+                  </div>
+                </div>
+
+                <div className="cfg-summary">
+                  <span className={"sum-pill " + pack.id}>{pack.name} pack</span>
+                  {(() => {
+                    const discounted = Math.round((price - gpu.price) * 0.5 + gpu.price);
+                    return (
+                      <div className="sum-total">
+                        {formatPrice(discounted, currency)}<em>/mo</em>
+                        <div className="sum-strike"><s>{formatPrice(price, currency)}/mo</s> · 50% off first 3 months{gpu.price > 0 ? " (excl. GPU)" : ""}</div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="sum-rows">
+                    <div className="sum-row">
+                      <span className="lbl">Base</span>
+                      <span className="val">Cloud AI Computer</span>
+                      <span className="price">{formatPrice(PRICE.base, currency)}</span>
+                    </div>
+                    <div className="sum-row">
+                      <span className="lbl">CPU</span>
+                      <span className="val">{cfg.cpu} vCPU</span>
+                      <span className="price">{formatPrice(PRICE.perCpu * cfg.cpu, currency)}</span>
+                    </div>
+                    <div className="sum-row">
+                      <span className="lbl">Memory</span>
+                      <span className="val">{cfg.ram} GB</span>
+                      <span className="price">{formatPrice(PRICE.perGb * cfg.ram, currency)}</span>
+                    </div>
+                    <div className="sum-row">
+                      <span className="lbl">Storage</span>
+                      <span className="val">{cfg.storage >= 1000 ? (cfg.storage/1000) + " TB" : cfg.storage + " GB"}</span>
+                      <span className="price">{formatPrice(PRICE.perStorage * cfg.storage, currency)}</span>
+                    </div>
+                    <div className="sum-row">
+                      <span className="lbl">GPU</span>
+                      <span className="val">{gpu.label}</span>
+                      <span className="price">{formatPrice(gpu.price, currency)}</span>
+                    </div>
+                  </div>
+
+                  <div className="sum-divider"></div>
+
+                  <div className="sum-bullets">
+                    <span><Check/> Liv with your AI keys</span>
+                    <span><Check/> Automatic backups & updates</span>
+                    <span><Check/> Move to your own hardware anytime</span>
+                    <span><Check/> Cancel anytime, no commitment</span>
+                  </div>
+
+                  <div className="sum-cta">
+                    <button className="btn btn-primary" disabled style={{ opacity: 0.55, cursor: "not-allowed", display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      Coming soon
+                      <span style={{ fontSize: 9.5, fontFamily: "var(--mono)", letterSpacing: "0.06em", textTransform: "uppercase", padding: "3px 8px", borderRadius: 999, background: "rgba(255,255,255,0.18)", color: "currentColor" }}>checkout</span>
+                    </button>
+                    <a className="btn btn-ghost" href="/">Back</a>
+                  </div>
+                  <p style={{ fontSize: 12, color: "var(--fg-mute)", marginTop: 12, textAlign: "center", fontFamily: "var(--mono)", letterSpacing: "0.02em", lineHeight: 1.5 }}>
+                    Pricing locked in. Until checkout opens, run Livinity on your own hardware — free.
+                  </p>
+                  {currency !== "EUR" && (
+                    <p style={{ fontSize: 11, color: "var(--fg-faint)", marginTop: 8, textAlign: "center", fontFamily: "var(--mono)", letterSpacing: "0.04em" }}>
+                      Shown in {currency} · approx · billed in EUR
+                    </p>
+                  )}
+                  <div style={{ marginTop: 14, display: "flex", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
+                    {["EUR","USD","GBP","TRY","JPY","CHF","CAD","AUD","INR"].map(c => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setCurrency(c)}
+                        style={{
+                          padding: "4px 10px",
+                          fontSize: 11,
+                          fontFamily: "var(--mono)",
+                          letterSpacing: "0.04em",
+                          background: currency === c ? "var(--fg)" : "transparent",
+                          color: currency === c ? "var(--bg)" : "var(--fg-mute)",
+                          border: "1px solid var(--line)",
+                          borderRadius: 999,
+                          cursor: "pointer",
+                          transition: "background .15s, color .15s",
+                        }}
+                      >{c}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="cfg-footnote">
+                Need something bigger? <a href="mailto:hello@livinity.io">Talk to us</a> about dedicated hardware, A100 clusters, and on-prem.
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+    </script>
+  </body>
+</html>

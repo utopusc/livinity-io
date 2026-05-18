@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <title>Livinity — Your own Cloud AI Computer</title>
+    <meta name="description" content="One operating system, one quiet interface, one assistant — Liv — that understands what you ask and gets it done. Self-host on your own hardware, or spin up in the cloud." />
+    <meta name="keywords" content="self-hosted AI, cloud AI computer, AI operating system, personal server, home server, LivOS, Liv assistant, Docker apps, privacy, open source" />
+    <meta name="author" content="Livinity" />
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://livinity.io/" />
+
+    <!-- Robots -->
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Livinity" />
+    <meta property="og:title" content="Livinity — Your own Cloud AI Computer" />
+    <meta property="og:description" content="One operating system, one quiet interface, one assistant. Self-host on your own hardware, or spin up in the cloud." />
+    <meta property="og:url" content="https://livinity.io/" />
+    <meta property="og:image" content="https://livinity.io/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Livinity — Your own Cloud AI Computer" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Livinity — Your own Cloud AI Computer" />
+    <meta name="twitter:description" content="One operating system, one quiet interface, one assistant. Self-host or cloud." />
+    <meta name="twitter:image" content="https://livinity.io/og-image.png" />
+    <meta name="twitter:image:alt" content="Livinity — Your own Cloud AI Computer" />
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+
+    <!-- Structured data: Organization + WebSite + SoftwareApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://livinity.io/#organization",
+          "name": "Livinity",
+          "url": "https://livinity.io/",
+          "logo": "https://livinity.io/icon-512.png",
+          "sameAs": ["https://github.com/utopusc/livinity-io"]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://livinity.io/#website",
+          "url": "https://livinity.io/",
+          "name": "Livinity",
+          "description": "Your own Cloud AI Computer.",
+          "publisher": { "@id": "https://livinity.io/#organization" },
+          "inLanguage": "en-US"
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "LivOS",
+          "operatingSystem": "Linux",
+          "applicationCategory": "OperatingSystem",
+          "description": "Self-hosted AI operating system with Liv, a personal agent, and 200+ apps.",
+          "offers": [
+            { "@type": "Offer", "name": "Self-host", "price": "0", "priceCurrency": "EUR" },
+            { "@type": "Offer", "name": "Basic Cloud", "price": "17", "priceCurrency": "EUR" },
+            { "@type": "Offer", "name": "Mid Cloud", "price": "59", "priceCurrency": "EUR" },
+            { "@type": "Offer", "name": "Advanced Cloud", "price": "149", "priceCurrency": "EUR" }
+          ],
+          "url": "https://livinity.io/",
+          "downloadUrl": "https://livinity.io/install.sh",
+          "softwareVersion": "2.4.1",
+          "publisher": { "@id": "https://livinity.io/#organization" }
+        }
+      ]
+    }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=DM+Serif+Display:ital@0;1&family=Cormorant:ital,wght@0,300..700;1,300..700&family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Italiana&family=Cardo:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400..700;1,400..700&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Tenor+Sans&family=Marcellus&family=Cormorant+Infant:ital,wght@0,300..700;1,300..700&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="styles.css" />
+
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <script type="text/babel" src="tweaks-panel.jsx"></script>
+    <script type="text/babel" src="atoms.jsx"></script>
+    <script type="text/babel" src="hero.jsx"></script>
+    <script type="text/babel" src="sections.jsx"></script>
+    <script type="text/babel" src="app.jsx"></script>
+  </body>
+</html>
