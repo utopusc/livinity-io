@@ -1543,3 +1543,35 @@ Plans:
 
 **Depends on:** Phase 142 ✅ (the user-facing rename this commit propagates to the wire).
 
+---
+
+### Phase 144: Fresh-Install UAT for 141 + 142 + 143 — 🟡 READY-TO-EXECUTE 2026-05-17 (Mini PC pre-wiped + plan written; awaiting walk-through)
+
+**Goal:** Phases 141 / 142 / 143 each shipped + auto-deployed onto the SAME socinity Mini PC that hosted the original bug-discovery session. Every deploy ran on top of partial back-compat state (legacy Redis values, manually-fixed Caddyfile, etc.). Phase 144 wipes the Mini PC to zero state and walks every code-path the three phases shipped, fresh — so the production install behaves correctly on a never-touched box.
+
+**Setup status (2026-05-17, pre-/clear handoff):**
+- ✅ Mini PC tabula-rasa-wiped via `/tmp/mini-pc-full-wipe.sh` (LivOS state + Claude state + Chrome profiles + cache + stale systemd backups). See `MINI-PC-ZERO-STATE.md` for the verified-clean snapshot.
+- ✅ Server5 socinity row + CF tunnel `633ab1f5-3f10-4d62-a3a7-50d8eace247c` + `liv_k_phase140socinityRESET12` api key all **deliberately preserved** so the re-install regression replay (Section K) is meaningful.
+- ✅ Full 12-section UAT plan written at `UAT-PLAN.md` (~30 min execute time on a clean pass; ~45-60 min thorough walk).
+- ✅ RESUME-PROMPT.md ready to paste after `/clear`.
+
+**UAT sections (see `UAT-PLAN.md` for the per-section command blocks + expected output):**
+- A. Pre-flight sanity (Mini PC zero / Server5 intact / public URLs 5xx)
+- B. Fresh install one-liner + smoke trio
+- C. Phase 141 features (boot drain log + Caddyfile prefix + cloudflared token + dashboard online)
+- D. Phase 142 CLI surface (local-lan retired / cloud Coming Soon / hybrid+tunnel normalize / --help portal-first)
+- E. Phase 143 wire surface (activatePortal procedure + alias coexistence + /api/local/ca.crt 410)
+- F. App install (n8n → hyphen-pattern host in Caddyfile + Redis + UI)
+- G. Subdomain rename (Server5 DELETE+POST round-trip)
+- H. Dashboard online via CF Tunnel API (stop/restart cloudflared → asleep → Online)
+- I. CSP allowlist (weather widget hits *.open-meteo.com cleanly)
+- J. **KNOWN-FAIL:** factory-reset.sh missing on disk → surfaces a Phase 145 carryover (update.sh doesn't rsync `scripts/install/`)
+- K. Re-install regression replay (Phase 141-09 token reconcile)
+- L. Final smoke summary
+
+**Plans / artifacts:** `.planning/phases/144-fresh-install-uat/{MINI-PC-ZERO-STATE.md,UAT-PLAN.md,RESUME-PROMPT.md}`.
+
+**Depends on:** Phases 141 ✅ + 142 ✅ + 143 ✅ — this UAT validates all three on a fresh box.
+
+**On completion:** Carryover items surfaced (at minimum Section J's `update.sh` rsync gap) become Phase 145 entries. Phase 144 itself flips to ✅ in this ROADMAP.
+
