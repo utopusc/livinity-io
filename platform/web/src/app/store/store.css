@@ -486,12 +486,50 @@ button, input { font: inherit; color: inherit; }
   text-align: left;
   align-items: flex-start;
   min-height: 96px;
+  /* Phase 157 — make stretched link + action button stack correctly */
+  position: relative;
 }
 .card:hover {
   border-color: var(--line-strong);
   transform: translateY(-2px);
   box-shadow: var(--shadow-pop);
 }
+
+/* Phase 157 — invisible link covering the card so the whole card is
+   clickable while the action button (above) handles install actions. */
+.card-link-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.card-link-overlay:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: -2px;
+}
+
+/* Right-side action slot — sits above the stretched link */
+.card-action {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
+  align-self: center;
+}
+.card-action .install.card-install {
+  padding: 7px 13px;
+  font-size: 12.5px;
+  gap: 6px;
+}
+.card-action .install.installing.card-install {
+  padding: 7px 12px;
+  gap: 8px;
+  min-width: 110px;
+}
+.card-action .install-group { gap: 4px; }
+.card-action .install-group .install.card-install { padding: 7px 11px; }
 .card-icon {
   width: 48px; height: 48px;
   border-radius: var(--r);

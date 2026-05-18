@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { StoreToLivOSMessage, LivOSToStoreMessage, AppStatus, AppCredentials, InstanceInfo } from '../types';
+import type {
+  StoreToLivOSMessage,
+  LivOSToStoreMessage,
+  AppStatus,
+  AppCredentials,
+  InstanceInfo,
+  Section,
+} from '../types';
 
 const ALLOWED_ORIGINS = [
   'https://livinity.io',
@@ -161,9 +168,14 @@ export function usePostMessage() {
   }, [isEmbedded, sendMessage]);
 
   // Action senders (per BRIDGE-01, BRIDGE-02, BRIDGE-03)
-  const sendInstall = useCallback((appId: string) => {
-    const composeUrl = `${window.location.origin}/api/apps/${appId}/compose`;
-    sendMessage({ type: 'install', appId, composeUrl });
+  // Phase 157 — section is required so the LivOS bridge dispatches to
+  // the correct installer. composeUrl is only meaningful for section='app'.
+  const sendInstall = useCallback((appId: string, section: Section) => {
+    const composeUrl =
+      section === 'app'
+        ? `${window.location.origin}/api/apps/${appId}/compose`
+        : undefined;
+    sendMessage({ type: 'install', appId, section, composeUrl });
     // Optimistic: mark as installing
     setInstalledApps(prev => {
       const next = new Map(prev);
