@@ -3,20 +3,36 @@ gsd_state_version: 1.0
 milestone: v37.0
 milestone_name: "Store Reimagining + Plugin Platform"
 status: in-progress
-last_updated: "2026-05-18T14:00:00.000Z"
+last_updated: "2026-05-18T15:30:00.000Z"
 milestone_v37: v37.0
 milestone_v37_name: "Store Reimagining + Plugin Platform"
-milestone_v37_status: OPENED 2026-05-18 — Phase 148 ✅ shipped; Phase 149 next (autonomous run in progress)
+milestone_v37_status: OPENED 2026-05-18 — 5 phases code-complete in catalog/Vercel layer; 5 Wave B carryovers pending operator-walk + Mini PC sessions
 v37_phases:
   - "148: spec + section data model (✅ shipped 2026-05-18)"
-  - "149: /store UI redesign (5-section nav, current design system) — NEXT"
-  - "150: native Linux apps section (apt + AppImage + window infra)"
-  - "151: WebApp section + custom URL form"
-  - "152: AI section (MCP Market + Agents + GSD)"
-  - "153: plugin runtime with HOT-RELOAD (biggest, 3d)"
-  - "154: Livinity Broker plugin"
-  - "155: developer portal + docs"
-v37_dev_server_url: "http://localhost:3000/store?token=liv_k_rX_G7vqBrT8w_eovQdjf"
+  - "149: /store UI redesign + Supabase migration (✅ shipped 2026-05-18)"
+  - "149.1: full Livinity DS port from Claude Design (✅ shipped 2026-05-18)"
+  - "150: native Linux apps section — Wave A catalog ✅; Wave B livinityd installer DEFERRED"
+  - "151: WebApp section — Wave A catalog ✅; Wave B Custom URL form + webapp.create wiring DEFERRED"
+  - "152: AI section — Wave A catalog ✅; Wave B ai-installer.ts (mcp/agent/gsd dispatch) DEFERRED"
+  - "153: plugin runtime with HOT-RELOAD — DEFERRED (biggest, ~3d, requires Mini PC)"
+  - "154: Livinity Broker plugin — Wave A catalog row ✅; Wave B bundle+sign+ship DEFERRED (blocked on 153)"
+  - "155: developer portal + docs — DEFERRED (blocked on 153 plugin SDK)"
+v37_dev_server_url: "http://localhost:3001/store?token=liv_k_rX_G7vqBrT8w_eovQdjf"
+v37_section_counts: "app:27 / webapp:10 / native:10 / ai:14 / plugin:1 = 62 rows on Supabase, all 5 tabs populated"
+v37_commits_this_session:
+  - "38012c62 docs(146-post): cutover.log post-cleanup"
+  - "00776c41 feat(v37-P148): open v37 milestone — SPEC + SUMMARY + ROADMAP/STATE flip"
+  - "3087e289 feat(v37-P149): 5-section store nav + Supabase section_enum migration"
+  - "c7a19e48 feat(v37-P149.1): port Claude Design Livinity DS to /store — full visual refresh"
+  - "0c813933 feat(v37-P150-A): seed 10 native Linux apps on Supabase + planning docs"
+  - "528b16ff feat(v37-P151+P152+P154-A): seed WebApp+AI+Plugin catalogs on Supabase"
+v37_wave_b_carryovers:
+  - "P150 Wave B — livinityd native-installer.ts (apt + AppImage + .desktop + sudoers + dock + x11vnc) — needs Mini PC SSH + live UAT"
+  - "P151 Wave B — Custom URL form UI + OG fetch + webapp.create wiring (Phase 94 modules exist)"
+  - "P152 Wave B — livinityd ai-installer.ts (mcp/agent/gsd kind dispatch + envSchema modal)"
+  - "P153 — plugin runtime hot-reload (Express subrouter dispatcher + UI bundle injection + Ed25519 verify) — ~3 days, Mini PC + operator presence"
+  - "P154 Wave B — bundle livinity-broker as .livpkg.tgz + Ed25519 sign + GitHub release + Supabase sha256 update"
+  - "P155 — developer portal + docs at /developers on livinity.io"
 v37_zero_server5_constraint: "LOCKED 2026-05-18 — apps catalog + install_history on Supabase; plugin bundles + pubkeys on GitHub; install callbacks via Vercel apex. Server5 destroy date 2026-05-25."
 phase_148_status: ✅ SHIPPED 2026-05-18 — SPEC.md locked, SUMMARY.md written, ROADMAP v37 milestone heading added with 8 phase entries
 phase_148_deliverables:
