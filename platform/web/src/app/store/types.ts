@@ -1,9 +1,21 @@
+// Phase 148 — v37 section enum (SPEC.md §1).
+export type Section = 'app' | 'webapp' | 'native' | 'ai' | 'plugin';
+
+export const SECTIONS: { key: Section; label: string; tagline: string }[] = [
+  { key: 'app', label: 'Apps', tagline: 'Self-hosted Docker apps' },
+  { key: 'webapp', label: 'Web Apps', tagline: 'Hosted services as desktop windows' },
+  { key: 'native', label: 'Native', tagline: 'Linux desktop apps' },
+  { key: 'ai', label: 'AI', tagline: 'MCP servers, agents & planning skills' },
+  { key: 'plugin', label: 'Plugins', tagline: 'Extend LivOS backend + UI' },
+];
+
 export interface App {
   id: string;
   name: string;
   tagline: string;
   description: string;
   category: string;
+  section: Section;
   version: string;
   icon_url: string;
   featured: boolean;
@@ -16,6 +28,7 @@ export interface AppSummary {
   name: string;
   tagline: string;
   category: string;
+  section: Section;
   icon_url: string;
   featured: boolean;
   version: string;
@@ -75,6 +88,8 @@ export interface StoreContextValue {
   setSearchQuery: (q: string) => void;
   selectedCategory: string | null;
   setSelectedCategory: (c: string | null) => void;
+  selectedSection: Section;
+  setSelectedSection: (s: Section) => void;
   token: string | null;
   instanceName: string | null;
   // postMessage bridge (Phase 19)
