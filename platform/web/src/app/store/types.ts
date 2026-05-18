@@ -31,6 +31,7 @@ export interface AppSummary {
   section: Section;
   icon_url: string;
   featured: boolean;
+  verified: boolean;
   version: string;
 }
 

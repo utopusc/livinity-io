@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
       section: apps.section,
       icon_url: apps.icon_url,
       featured: apps.featured,
+      verified: apps.verified,
       version: apps.version,
     })
     .from(apps);
