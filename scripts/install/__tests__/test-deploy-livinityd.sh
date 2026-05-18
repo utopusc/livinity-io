@@ -58,7 +58,6 @@ for f in "$INSTALL_SH" "$DEPLOY_SH" "$PARSE_CLI_SH" "$SHOW_BANNER_SH" \
          "$MODE_CLOUD_SH" \
          "$REPO_ROOT/scripts/install/mode-hybrid.sh" \
          "$REPO_ROOT/scripts/install/mode-tunnel.sh" \
-         "$REPO_ROOT/scripts/install/mode-local-lan.sh" \
          "$REPO_ROOT/scripts/install/common-deps.sh" \
          "$REPO_ROOT/scripts/install/_logging.sh" \
          "$REPO_ROOT/scripts/install/detect-platform.sh"; do

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # scripts/install.sh
-# LivOS one-shot installer. Dispatches to mode-cloud.sh, mode-local-lan.sh, or
-# mode-hybrid.sh based on --mode flag.
+# LivOS one-shot installer. Dispatches to mode-tunnel.sh (portal mode — the only
+# user-facing mode after Phase 142). Legacy mode-cloud.sh/mode-hybrid.sh kept as
+# back-compat safety net (parse-cli normalizes legacy flags to `portal`).
 #
 # Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f
 #
@@ -25,7 +26,7 @@ set -euo pipefail
 #   3. Piped via curl|bash from anywhere else → self-bootstrap: download helpers
 #      from GitHub raw into a temp dir (override base via LIVOS_INSTALL_BOOTSTRAP_BASE)
 HELPERS_REQUIRED=(_logging.sh parse-cli.sh detect-platform.sh common-deps.sh
-                  show-banner.sh mode-cloud.sh mode-local-lan.sh mode-hybrid.sh
+                  show-banner.sh mode-cloud.sh mode-hybrid.sh
                   mode-tunnel.sh deploy-livinityd.sh)
 GH_RAW_BASE="${LIVOS_INSTALL_BOOTSTRAP_BASE:-https://raw.githubusercontent.com/utopusc/livinity-io/master/scripts/install}"
 
