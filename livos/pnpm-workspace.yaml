@@ -6,3 +6,23 @@ packages:
   - packages/config
   - packages/docker-agent
   - packages/design-tokens
+
+# pnpm v10+ requires onlyBuiltDependencies in pnpm-workspace.yaml (root
+# package.json#pnpm.onlyBuiltDependencies is no longer honored in v11+).
+# Without this, fresh installs hit ERR_PNPM_IGNORED_BUILDS = exit 1.
+onlyBuiltDependencies:
+  - "@parcel/watcher"
+  - "@swc/core"
+  - baileys
+  - core-js
+  - core-js-pure
+  - cpu-features
+  - drivelist
+  - esbuild
+  - msgpackr-extract
+  - node-git-server
+  - node-pty
+  - protobufjs
+  - sharp
+  - ssh2
+  - usocket
