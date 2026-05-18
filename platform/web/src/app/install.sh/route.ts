@@ -9,7 +9,7 @@ export async function GET() {
   // Try to fetch the real installer from GitHub
   try {
     const res = await fetch(
-      'https://raw.githubusercontent.com/utopusc/livinity-io/master/livos/install.sh',
+      'https://raw.githubusercontent.com/utopusc/livinity-io/master/scripts/install.sh',
       { next: { revalidate: 300 } }, // Cache for 5 minutes
     );
     if (res.ok) {
