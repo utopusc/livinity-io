@@ -46,7 +46,16 @@ export type StoreToLivOSMessage =
   | { type: 'install'; appId: string; composeUrl: string }
   | { type: 'uninstall'; appId: string }
   | { type: 'open'; appId: string }
-  | { type: 'updateSubdomain'; appId: string; subdomain: string };
+  | { type: 'updateSubdomain'; appId: string; subdomain: string }
+  // Phase 151-B — Custom URL form on /store?section=webapp.
+  // LivOS host calls webapps-repository.create(url, title, faviconUrl)
+  // and pins the new webapp to the dock.
+  | {
+      type: 'installCustomWebapp';
+      url: string;
+      title: string;
+      faviconUrl?: string | null;
+    };
 
 // Messages sent from LivOS parent to Store iframe
 export type AppStatus = {
@@ -112,6 +121,8 @@ export interface StoreContextValue {
   getAppSubdomain: (appId: string) => string | undefined;
   getAppDefaultCreds: (appId: string) => {username: string; password: string} | undefined;
   sendUpdateSubdomain: (appId: string, subdomain: string) => void;
+  // Custom URL → dock (Phase 151-B)
+  sendInstallCustomWebapp: (url: string, title: string, faviconUrl?: string | null) => void;
   // Instance info
   instanceInfo: InstanceInfo | null;
 }

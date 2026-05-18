@@ -6,6 +6,7 @@ import { FeaturedHero } from './components/featured-hero';
 import { CategorySection } from './components/category-section';
 import { AppCard } from './components/app-card';
 import { SectionPlaceholder } from './components/section-placeholder';
+import { CustomUrlForm } from './components/custom-url-form';
 import { CATEGORIES } from './types';
 
 export default function StorePage() {
@@ -180,6 +181,8 @@ export default function StorePage() {
           <span>v37.1</span>
         </div>
       </div>
+
+      {selectedSection === 'webapp' && <CustomUrlForm />}
 
       {featuredApps.length > 0 && <FeaturedHero apps={featuredApps} />}
 
