@@ -1,5 +1,10 @@
 // livos/packages/ui/src/features/local-setup/LocalSetupWizard.tsx
 // Phase 104 plan 104-05 — root wizard for Settings -> Local Access.
+// Phase 142-01 — local-lan branch retired (LocalLanConfigStep + QrCodeStep +
+//   PlatformInstructions imports removed; LOCAL_LAN_STEPS dropped).
+// Phase 142-02 — `hybrid` renamed → `portal` (HybridConfigStep +
+//   HybridVerifyStep inlined as PortalConfigStep + PortalVerifyStep).
+// Phase 142-03 — `cloud` is Coming Soon (rendered as an informational pane).
 import {useEffect, useState} from 'react'
 import {IconArrowLeft, IconCheck, IconLoader2} from '@tabler/icons-react'
 
@@ -7,13 +12,10 @@ import {trpcReact} from '@/trpc/trpc'
 
 import {HybridDnsSetup} from './HybridDnsSetup'
 import {ModePickStep} from './ModePickStep'
-import {PlatformInstructions} from './PlatformInstructions'
-import {QrCodeStep} from './QrCodeStep'
 import {
 	CLOUD_STEPS,
 	PORTAL_STEPS,
 	initialWizardState,
-	LOCAL_LAN_STEPS,
 	type SelectedMode,
 	type WizardState,
 	type WizardStep,
@@ -30,20 +32,15 @@ export function LocalSetupWizard() {
 		if (statusQ.data?.hostIp) {
 			setState((s) => ({
 				...s,
-				localLan: {...s.localLan, hostIp: statusQ.data!.hostIp ?? ''},
 				portal: {...s.portal, hostIp: statusQ.data!.hostIp ?? ''},
 			}))
 		}
 	}, [statusQ.data?.hostIp])
 
-	const activeSteps =
-		state.mode === 'local-lan'
-			? LOCAL_LAN_STEPS
-			: state.mode === 'portal'
-				? PORTAL_STEPS
-				: state.mode === 'cloud'
-					? CLOUD_STEPS
-					: LOCAL_LAN_STEPS // default while mode is null
+	// Phase 142-01: local-lan branch dropped, so the only multi-step flow is
+	// portal. Cloud is currently an informational redirect (Coming Soon copy
+	// added in Phase 142-03 ModePickStep + the redirect pane below).
+	const activeSteps = state.mode === 'cloud' ? CLOUD_STEPS : PORTAL_STEPS
 
 	const stepIndex = activeSteps.indexOf(state.step)
 
@@ -80,37 +77,29 @@ export function LocalSetupWizard() {
 					onSelect={(m: SelectedMode) => {
 						setState((s) => ({...s, mode: m}))
 						if (m === 'cloud') goto('cloud-redirect')
-						else if (m === 'local-lan') goto('local-lan-config')
 						else if (m === 'portal') goto('portal-config')
 					}}
 				/>
 			)}
 
 			{state.step === 'cloud-redirect' && (
-				<div className='space-y-4'>
+				<div className='space-y-4' data-testid='cloud-redirect-pane'>
 					<p>
-						Cloud mode is configured at <strong>/settings/domain-setup</strong>.
+						<strong>Cloud mode</strong> is Coming Soon — Livinity will host the control plane
+						for you (no Cloudflare account required). Track progress at{' '}
+						<a className='text-accent underline' href='https://livinity.io/dashboard'>
+							livinity.io/dashboard
+						</a>
+						.
 					</p>
-					<a className='text-accent underline' href='/settings/domain-setup'>
-						Go to Cloud Domain Setup -&gt;
-					</a>
+					<p className='text-text-secondary'>
+						For now, use <strong>Portal</strong> mode (the recommended default).
+					</p>
 				</div>
 			)}
 
-			{state.step === 'local-lan-config' && (
-				<LocalLanConfigStep state={state} setState={setState} onNext={next} onBack={back} />
-			)}
-
-			{state.step === 'local-lan-qr' && (
-				<QrCodeStep hostIp={state.localLan.hostIp} tld={state.localLan.tld} onNext={next} onBack={back} />
-			)}
-
-			{state.step === 'local-lan-trust' && (
-				<PlatformInstructions hostIp={state.localLan.hostIp} onNext={next} onBack={back} />
-			)}
-
 			{state.step === 'portal-config' && (
-				<HybridConfigStep state={state} setState={setState} onNext={next} onBack={back} />
+				<PortalConfigStep state={state} setState={setState} onNext={next} onBack={back} />
 			)}
 
 			{state.step === 'portal-dns-records' && (
@@ -128,7 +117,7 @@ export function LocalSetupWizard() {
 				/>
 			)}
 
-			{state.step === 'portal-verify' && <HybridVerifyStep state={state} onNext={next} onBack={back} />}
+			{state.step === 'portal-verify' && <PortalVerifyStep state={state} onNext={next} onBack={back} />}
 
 			{state.step === 'verify' && <VerifyStep mode={state.mode} onDone={() => goto('done')} onBack={back} />}
 
@@ -145,85 +134,8 @@ export function LocalSetupWizard() {
 	)
 }
 
-// ── Local-lan config step (inline — tiny, doesn't need its own file) ──
-function LocalLanConfigStep({
-	state,
-	setState,
-	onNext,
-	onBack,
-}: {
-	state: WizardState
-	setState: React.Dispatch<React.SetStateAction<WizardState>>
-	onNext: () => void
-	onBack: () => void
-}) {
-	const activateM = trpcReact.local.activate.useMutation()
-	const handleActivate = async () => {
-		try {
-			await activateM.mutateAsync({
-				tld: state.localLan.tld,
-				hostIp: state.localLan.hostIp,
-			})
-			onNext()
-		} catch {
-			// error rendered via mutation state below
-		}
-	}
-	return (
-		<div className='space-y-4'>
-			<label className='block'>
-				Local TLD
-				<input
-					className='mt-1 block w-full rounded border bg-bg-secondary px-3 py-2'
-					value={state.localLan.tld}
-					onChange={(e) =>
-						setState((s) => ({
-							...s,
-							localLan: {...s.localLan, tld: e.target.value},
-						}))
-					}
-				/>
-			</label>
-			<label className='block'>
-				Host IP
-				<input
-					className='mt-1 block w-full rounded border bg-bg-secondary px-3 py-2'
-					value={state.localLan.hostIp}
-					onChange={(e) =>
-						setState((s) => ({
-							...s,
-							localLan: {...s.localLan, hostIp: e.target.value},
-						}))
-					}
-				/>
-			</label>
-			<div className='rounded bg-accent-amber/10 p-3 text-sm text-accent-amber'>
-				<strong>Note:</strong> .local TLDs do NOT work on Apple devices (iOS, macOS) due to RFC 6762 mDNS
-				interception. Use <em>hybrid</em> mode for Apple support.
-			</div>
-			{activateM.error && (
-				<div className='text-accent-red' role='alert'>
-					{activateM.error.message}
-				</div>
-			)}
-			<div className='flex justify-between'>
-				<button onClick={onBack} className='px-4 py-2'>
-					<IconArrowLeft className='inline' /> Back
-				</button>
-				<button
-					onClick={handleActivate}
-					disabled={!state.localLan.hostIp || activateM.isPending}
-					className='rounded bg-accent px-4 py-2 text-white disabled:opacity-50'
-				>
-					{activateM.isPending ? 'Activating…' : 'Activate Local-LAN'}
-				</button>
-			</div>
-		</div>
-	)
-}
-
-// ── Hybrid config step (inline) ──
-function HybridConfigStep({
+// ── Portal config step (inline — collects CF token + host IP) ──
+function PortalConfigStep({
 	state,
 	setState,
 	onNext,
@@ -265,7 +177,7 @@ function HybridConfigStep({
 				/>
 			</label>
 			<div className='rounded bg-accent-blue/10 p-3 text-sm text-accent-blue'>
-				<strong>Hybrid mode:</strong> public DNS A-record points at your LAN IP. Works on every device including
+				<strong>Portal mode:</strong> public DNS A-record points at your LAN IP. Works on every device including
 				iPhone/iPad/Mac. ALL traffic stays LAN-direct — no Server5 relay.
 			</div>
 			<div className='flex justify-between'>
@@ -284,8 +196,11 @@ function HybridConfigStep({
 	)
 }
 
-// ── Hybrid verify step (calls activateHybrid + waits for green) ──
-function HybridVerifyStep({
+// ── Portal verify step (calls activateHybrid + waits for green) ──
+// NOTE: the underlying tRPC procedure names (activateHybrid / getHybridStatus)
+// haven't been renamed yet — they live on the livinityd `local.*` namespace
+// and Phase 142-04 sweeps them. Wire-level names are kept for now.
+function PortalVerifyStep({
 	state,
 	onNext,
 	onBack,
@@ -333,7 +248,7 @@ function HybridVerifyStep({
 					disabled={activateM.isPending}
 					className='rounded bg-accent px-4 py-2 text-white'
 				>
-					{activateM.isPending ? 'Activating…' : 'Activate Hybrid'}
+					{activateM.isPending ? 'Activating…' : 'Activate Portal'}
 				</button>
 			</div>
 		</div>

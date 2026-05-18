@@ -9,15 +9,16 @@
 import {z} from 'zod'
 import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
 import {
-	generateLocalCaddyfile,
 	generateHybridCaddyfile,
-	validateLocalTld,
 	validateHybridDomain,
 	writeCaddyfile,
 	reloadCaddy,
 	type LocalSubdomainConfig,
 } from '../domain/caddy.js'
-import {readRootCert} from './pki.js'
+// Phase 142-01 — local-lan retired; generateLocalCaddyfile + validateLocalTld
+// dropped from caddy.ts. The legacy `local.activate` + `local.getCaCert`
+// procedures (the only callers of those helpers + readRootCert) are removed
+// from this router. `local.getStatus` no longer probes the CA cert.
 // Phase 104 review fix WIZ-01 + PROVIDE-01: wire UI to the TS provisioner so
 // the Cloudflare API token never leaves the LivOS host (was: dead UI + bash-only).
 import {provisionHybridSubdomain, ServerSideProvisionUnavailable} from './hybrid-provision.js'
@@ -33,20 +34,6 @@ const REDIS_CF_TOKEN_PATH = 'livos:domain:cf_api_token_secret_ref'
 // IPv4 regex — strict (4 octets, each 0-255). Matches install.sh detection output.
 const IPV4_RE =
 	/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/
-
-const localActivateSchema = z.object({
-	tld: z
-		.string()
-		.min(1)
-		.max(253)
-		.refine(validateLocalTld, {message: 'Invalid TLD shape'}),
-	hostIp: z
-		.string()
-		.refine((v) => IPV4_RE.test(v), {message: 'Invalid IPv4'}),
-	subdomains: z
-		.array(z.object({name: z.string(), port: z.number().int().positive()}))
-		.optional(),
-})
 
 // Phase 104 review fix WIZ-01 + PROVIDE-01 — provisionHybrid input schema.
 // Wraps provisionHybridSubdomain so the wizard can call Server5 via livinityd
@@ -78,52 +65,20 @@ const local = router({
 			redis.get(REDIS_LOCAL_TLD),
 			redis.get(REDIS_HOST_IP),
 		])
-		// Probe whether the CA cert is readable (best-effort)
-		let caCertAvailable = false
-		try {
-			await readRootCert()
-			caCertAvailable = true
-		} catch {
-			caCertAvailable = false
-		}
+		// Phase 142-01 — `caCertAvailable` field retained for back-compat
+		// with the wizard's existing destructure, but always reports false
+		// (local-lan internal-CA path retired, readRootCert no longer wired).
 		return {
 			mode: mode ?? null,
 			tld: tld ?? null,
 			hostIp: hostIp ?? null,
-			caCertAvailable,
+			caCertAvailable: false,
 		}
 	}),
 
-	// PRIV-01 (Phase 104 review fix): system-wide TLS-mode mutation.
-	// Rewriting /etc/caddy/Caddyfile + flipping Redis mode keys + reloading
-	// Caddy is admin-only. Legacy single-user installs pass through because
-	// requireRole('admin') early-returns when ctx.currentUser is unset
-	// (is-authenticated.ts:76).
-	activate: adminProcedure
-		.input(localActivateSchema)
-		.mutation(async ({ctx, input}) => {
-			const redis = ctx.livinityd.ai.redis
-			const subdomains: LocalSubdomainConfig[] = input.subdomains ?? []
-			const caddyfile = generateLocalCaddyfile(
-				input.tld,
-				input.hostIp,
-				subdomains,
-				true, // multiUser default for local-lan
-			)
-			await writeCaddyfile(caddyfile)
-			await reloadCaddy()
-			await Promise.all([
-				redis.set(REDIS_LOCAL_MODE, 'local-lan'),
-				redis.set(REDIS_LOCAL_TLD, input.tld),
-				redis.set(REDIS_HOST_IP, input.hostIp),
-			])
-			return {success: true, mode: 'local-lan' as const, tld: input.tld}
-		}),
-
-	getCaCert: privateProcedure.query(async () => {
-		const pem = await readRootCert()
-		return {pem}
-	}),
+	// Phase 142-01 — `local.activate` (local-lan Caddyfile writer) +
+	// `local.getCaCert` (PEM reader) removed. UI no longer offers a local-lan
+	// branch; livinityd's local-mode internal-CA path is no longer used.
 
 	// ─── Phase 104 plan 104-04 — hybrid mode procedures ─────────────────
 
@@ -164,13 +119,16 @@ const local = router({
 			const caddyfile = generateHybridCaddyfile(input.subdomain, subdomains, true)
 			await writeCaddyfile(caddyfile)
 			await reloadCaddy()
+			// Phase 142-02 — `livos:domain:local_mode` now stores `portal`
+			// (formerly `hybrid`). livinityd readers accept both indefinitely
+			// for back-compat.
 			await Promise.all([
-				redis.set(REDIS_LOCAL_MODE, 'hybrid'),
+				redis.set(REDIS_LOCAL_MODE, 'portal'),
 				redis.set(REDIS_HYBRID_SUBDOMAIN, input.subdomain),
 				redis.set(REDIS_HYBRID_ZONE_ID, input.zoneId),
 				redis.set(REDIS_HOST_IP, input.hostIp),
 			])
-			return {success: true, mode: 'hybrid' as const, subdomain: input.subdomain}
+			return {success: true, mode: 'portal' as const, subdomain: input.subdomain}
 		}),
 
 	getHybridStatus: privateProcedure.query(async ({ctx}) => {

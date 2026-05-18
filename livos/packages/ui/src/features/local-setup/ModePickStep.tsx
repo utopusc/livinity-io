@@ -1,6 +1,9 @@
 // livos/packages/ui/src/features/local-setup/ModePickStep.tsx
-// Phase 104 plan 104-05 — step 1: pick local-lan / hybrid / cloud.
-import {TbCloud, TbWorldWww, TbHomeBolt} from 'react-icons/tb'
+// Phase 104 plan 104-05 — step 1: pick install mode.
+// Phase 142-02 — `hybrid` card renamed → `portal` (recommended).
+// Phase 142-01 — `local-lan` card removed (mode retired).
+// Phase 142-03 — `cloud` card kept but rendered DISABLED with Coming Soon badge.
+import {TbCloud, TbHomeBolt} from 'react-icons/tb'
 
 import {cn} from '@/shadcn-lib/utils'
 
@@ -19,6 +22,7 @@ const MODES: Array<{
 	pros: string
 	cons: string
 	recommended?: boolean
+	comingSoon?: boolean
 }> = [
 	{
 		id: 'portal',
@@ -29,18 +33,12 @@ const MODES: Array<{
 		recommended: true,
 	},
 	{
-		id: 'local-lan',
-		icon: TbWorldWww,
-		title: 'Local-LAN (air-gapped)',
-		pros: 'Zero cloud dependency. dnsmasq + Caddy internal CA, fully on-LAN.',
-		cons: 'Does NOT work on Apple devices (RFC 6762 mDNS + macOS 26). Requires per-device CA install.',
-	},
-	{
 		id: 'cloud',
 		icon: TbCloud,
 		title: 'Cloud',
-		pros: 'Existing Mini PC path. Reachable from anywhere via livinity.io.',
-		cons: 'All traffic routes via Server5 relay. Requires Cloudflare DNS at livinity.io.',
+		pros: 'Hosted by Livinity — zero setup, instant access from anywhere, no Cloudflare account needed.',
+		cons: 'Coming Soon. Currently disabled.',
+		comingSoon: true,
 	},
 ]
 
@@ -60,14 +58,18 @@ export function ModePickStep({selected, currentMode, onSelect}: ModePickStepProp
 				{MODES.map((m) => {
 					const Icon = m.icon
 					const isActive = selected === m.id
+					const isDisabled = !!m.comingSoon
 					return (
 						<button
 							key={m.id}
 							data-testid={`mode-pick-${m.id}`}
-							onClick={() => onSelect(m.id)}
+							onClick={() => !isDisabled && onSelect(m.id)}
+							disabled={isDisabled}
+							aria-disabled={isDisabled}
 							className={cn(
 								'flex items-start gap-3 rounded border p-4 text-left transition',
 								isActive ? 'border-accent bg-accent/10' : 'border-border hover:bg-bg-secondary',
+								isDisabled && 'cursor-not-allowed opacity-60 hover:bg-transparent',
 							)}
 						>
 							<Icon className='mt-1 h-6 w-6 flex-shrink-0' />
@@ -76,6 +78,14 @@ export function ModePickStep({selected, currentMode, onSelect}: ModePickStepProp
 									<span className='font-semibold'>{m.title}</span>
 									{m.recommended && (
 										<span className='rounded bg-accent-green/15 px-2 py-0.5 text-xs text-accent-green'>default</span>
+									)}
+									{m.comingSoon && (
+										<span
+											data-testid={`mode-pick-${m.id}-coming-soon`}
+											className='rounded bg-accent-amber/15 px-2 py-0.5 text-xs text-accent-amber'
+										>
+											Coming Soon
+										</span>
 									)}
 								</div>
 								<p className='mt-1 text-sm text-text-secondary'>
