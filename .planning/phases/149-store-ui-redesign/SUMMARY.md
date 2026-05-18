@@ -2,9 +2,40 @@
 
 **Milestone:** v37.0 Store Reimagining + Plugin Platform
 **Status:** CODE-COMPLETE — awaiting operator localhost UAT
-**Effort:** ~0.5 day inline (no agent dispatch needed)
-**Commits:** 1 atomic (Supabase migration ✅ already applied via MCP)
+**Effort:** ~0.5 day inline (no agent dispatch needed) + ~0.5 day DS port refresh (P149.1)
+**Commits:** 2 atomic (initial P149 + DS port P149.1 refresh)
 **Sacred SHA footer:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f`
+
+## P149.1 refresh — Claude Design full port (2026-05-18, this session)
+
+Operator delivered `Livinity.io (2).zip` from claude.ai/design with a complete 14-screen design that ports the **Livinity Design System** onto the v37 store surface. Adopted Option A (single atomic refresh) — replaces all of P149's bare-bones UI with DS-native components.
+
+**What changed in P149.1:**
+
+- **`store.css`** copied verbatim from Claude Design bundle into `platform/web/src/app/store/store.css` — single source of DS truth (1043 lines: tokens, topbar, section nav, sidebar, app card, featured hero, install button states, microbadges, placeholder, app detail, mobile breakpoints).
+- **`layout.tsx`** loads Geist + Geist Mono + Instrument Serif via `next/font/google` and bridges `--font-*` vars onto `--sans/--mono/--serif` (consumed by store.css).
+- **`lib/app-visual.ts`** (new) — deterministic gradient + monogram derivation per app slug. Hand-picked 12-app override list matches Claude Design fixtures (n8n rose, jellyfin violet, etc.); 23-color palette FNV-1a-hashed for everything else. No schema migration needed.
+- **`components/icon.tsx`** (new) — 25-icon stroke-SVG bank (search/arrows/check/download/open/trash/shield/spark/alert/globe/tower/monitor/puzzle/cube/chat/filter/refresh/chevron-r/chevron-d/x/star/lock/sparkle/external) with TypeScript IconName union.
+- **`components/app-icon.tsx`** (new) — colorful monogram tile, 135° brand gradient, inner specular highlight, iOS-style radius (size×0.27). Color-keep per operator memory `feedback_v36_monochrome_dock_rejected`.
+- **`components/topbar.tsx`** (refresh) — brand mark + "Store" crumb + ⌘K search + dynamic user avatar from `instanceName`.
+- **`components/section-tabs.tsx`** (refresh) — bottom-border tab nav (not pill chips), icon + label + dynamic count (from `apps.section` distribution) OR "Soon" dashed badge for empty sections.
+- **`components/sidebar.tsx`** (refresh) — Categories group + dividing line + Status group (Installed/Featured counts derived from postMessage bridge `getAppStatus` + `apps.featured`). Section-scoped — counts reflect the active section.
+- **`components/app-card.tsx`** (refresh) — `<AppIcon>` + `card-name` with verified/featured/installed microbadges + 2-line clamp tagline + monospace meta row (category · installing % when active).
+- **`components/featured-hero.tsx`** (refresh) — full-width black surface with editorial italic-serif title ("Editor's pick"), Install on LivOS + Learn more CTAs, app monogram on warm-peach radial-gradient panel.
+- **`components/section-placeholder.tsx`** (new, replaces `empty-section.tsx`) — dashed-border card + pulse-animated badge dot + glyph + italic-serif title + sample chip list (10 placeholder samples per section).
+- **`components/category-section.tsx`** (refresh) — DS `cat-head` + `cat-title` + `cat-link` "See all N" pattern + DS `grid` (4-col).
+- **`store-shell.tsx`** (refresh) — `.ab` wrapper → Topbar → SectionTabs → `.page` grid `{Sidebar | main}`. Matches DS structure 1-to-1.
+- **`page.tsx`** (refresh) — page-head `ph` block with eyebrow + italic-serif title + sub + meta; routes by state: loading → error → empty section → search → category filter → discover (with FeaturedHero).
+- **`empty-section.tsx`** DELETED (functionality moved to `section-placeholder.tsx`).
+
+**Tokens introduced (via store.css `:root`):**
+`--bg`, `--bg-2`, `--surface`, `--surface-2`, `--line`, `--line-strong`, `--fg`, `--fg-dim`, `--fg-mute`, `--fg-faint`, `--green`, `--green-bright`, `--amber`, `--red`, `--sans`, `--mono`, `--serif`, `--r-xs/sm/md/lg/xl/2xl/full`, `--shadow-card/window/pop`, `--ease-out`.
+
+**Smoke verified:** `tsc --noEmit` clean. `curl http://localhost:3001/store` → HTTP 200 in 30ms (30KB body). next/font Google Fonts CDN call shows in network tab.
+
+## P149.1 → P149 ROADMAP entry update
+
+Phase 149 ROADMAP description should reflect: "5-section nav + DS-native UI port + Supabase migration." The original v37-DRAFT.md scope of "Phase 117 design tokens → current DS" is now fully delivered.
 
 ## What shipped
 

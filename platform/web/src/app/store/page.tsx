@@ -5,7 +5,7 @@ import { useStore } from './store-provider';
 import { FeaturedHero } from './components/featured-hero';
 import { CategorySection } from './components/category-section';
 import { AppCard } from './components/app-card';
-import { EmptySection } from './components/empty-section';
+import { SectionPlaceholder } from './components/section-placeholder';
 import { CATEGORIES } from './types';
 
 export default function StorePage() {
@@ -19,9 +19,6 @@ export default function StorePage() {
     selectedSection,
   } = useStore();
 
-  // Phase 148 — narrow to the active section first; current data has all
-  // rows section='app' so other tabs render empty-state placeholders until
-  // phases 150-153 ship seed entries.
   const sectionApps = useMemo(
     () => apps.filter((a) => a.section === selectedSection),
     [apps, selectedSection],
@@ -38,7 +35,7 @@ export default function StorePage() {
         (a) =>
           a.name.toLowerCase().includes(q) ||
           a.tagline.toLowerCase().includes(q) ||
-          a.category.toLowerCase().includes(q)
+          a.category.toLowerCase().includes(q),
       );
     }
     return result;
@@ -46,7 +43,7 @@ export default function StorePage() {
 
   const featuredApps = useMemo(
     () => sectionApps.filter((a) => a.featured),
-    [sectionApps]
+    [sectionApps],
   );
 
   const appsByCategory = useMemo(() => {
@@ -58,44 +55,69 @@ export default function StorePage() {
     return grouped;
   }, [sectionApps]);
 
-  // Loading state
+  // Loading
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="animate-pulse text-sm text-[#86868b]">
-          Loading apps...
-        </div>
+      <div className="main">
+        <p style={{ color: 'var(--fg-mute)', fontSize: 14 }}>Loading apps…</p>
       </div>
     );
   }
 
-  // Error state
+  // Error
   if (error) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="rounded-xl bg-[#f5f5f7] px-8 py-6 text-center">
-          <p className="text-sm text-[#86868b]">{error}</p>
+      <div className="main">
+        <div className="ph">
+          <div>
+            <div className="ph-eyebrow">Error</div>
+            <h1 className="ph-title">
+              Couldn't reach <em>the catalog.</em>
+            </h1>
+            <p className="ph-sub">{error}</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Search results mode
+  // Empty section placeholder for non-app empty sections
+  if (selectedSection !== 'app' && sectionApps.length === 0) {
+    return (
+      <div className="main" style={{ maxWidth: 840, margin: '0 auto' }}>
+        <SectionPlaceholder section={selectedSection} />
+      </div>
+    );
+  }
+
+  // Search mode
   if (searchQuery.trim()) {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-8">
-        <h1 className="mb-6 text-xl font-bold text-[#1d1d1f]">
-          Results for &ldquo;{searchQuery}&rdquo;
-          <span className="ml-2 text-sm font-normal text-[#86868b]">
-            {filteredApps.length} app{filteredApps.length !== 1 ? 's' : ''}
-          </span>
-        </h1>
+      <div className="main">
+        <div className="ph">
+          <div>
+            <div className="ph-eyebrow">
+              {filteredApps.length} result{filteredApps.length === 1 ? '' : 's'} ·
+              &quot;{searchQuery}&quot;
+            </div>
+            <h1 className="ph-title">
+              Apps matching <em>{searchQuery}</em>
+            </h1>
+            <p className="ph-sub">
+              Searching across this section. Switch to another section above to
+              broaden.
+            </p>
+          </div>
+          <div className="ph-meta">
+            <span>{filteredApps.length} / {sectionApps.length}</span>
+          </div>
+        </div>
         {filteredApps.length === 0 ? (
-          <p className="text-sm text-[#86868b]">
+          <p style={{ color: 'var(--fg-mute)', fontSize: 14 }}>
             No apps found matching your search.
           </p>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid">
             {filteredApps.map((app) => (
               <AppCard key={app.id} app={app} />
             ))}
@@ -109,17 +131,28 @@ export default function StorePage() {
   if (selectedCategory) {
     const cat = CATEGORIES[selectedCategory];
     return (
-      <div className="mx-auto max-w-6xl px-6 py-8">
-        <h1 className="mb-6 text-xl font-bold text-[#1d1d1f]">
-          {cat?.icon} {cat?.label || selectedCategory}
-          <span className="ml-2 text-sm font-normal text-[#86868b]">
-            {filteredApps.length} app{filteredApps.length !== 1 ? 's' : ''}
-          </span>
-        </h1>
+      <div className="main">
+        <div className="ph">
+          <div>
+            <div className="ph-eyebrow">Apps · {cat?.label ?? selectedCategory}</div>
+            <h1 className="ph-title">
+              <em>{cat?.label ?? selectedCategory}</em> in this section
+            </h1>
+            <p className="ph-sub">
+              {filteredApps.length} app{filteredApps.length === 1 ? '' : 's'} in
+              this category.
+            </p>
+          </div>
+          <div className="ph-meta">
+            <span>{filteredApps.length} apps</span>
+          </div>
+        </div>
         {filteredApps.length === 0 ? (
-          <p className="text-sm text-[#86868b]">No apps in this category.</p>
+          <p style={{ color: 'var(--fg-mute)', fontSize: 14 }}>
+            No apps in this category.
+          </p>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid">
             {filteredApps.map((app) => (
               <AppCard key={app.id} app={app} />
             ))}
@@ -129,15 +162,27 @@ export default function StorePage() {
     );
   }
 
-  // Empty section placeholder (everything other than 'app' has no rows in v37 P149)
-  if (selectedSection !== 'app' && sectionApps.length === 0) {
-    return <EmptySection section={selectedSection} />;
-  }
-
   // Discover mode (default)
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <FeaturedHero apps={featuredApps} />
+    <div className="main">
+      <div className="ph">
+        <div>
+          <div className="ph-eyebrow">{sectionApps.length} apps · curated &amp; signed</div>
+          <h1 className="ph-title">
+            A directory, not a <em>marketplace.</em>
+          </h1>
+          <p className="ph-sub">
+            Self-hosted apps that run on the LivOS you already own. Browse by
+            category, install in seconds, keep the data on your hardware.
+          </p>
+        </div>
+        <div className="ph-meta">
+          <span>v37.1</span>
+        </div>
+      </div>
+
+      {featuredApps.length > 0 && <FeaturedHero apps={featuredApps} />}
+
       {Object.keys(CATEGORIES).map((catKey) => {
         const catApps = appsByCategory[catKey];
         if (!catApps || catApps.length === 0) return null;

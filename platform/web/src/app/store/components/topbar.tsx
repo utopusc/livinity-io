@@ -1,6 +1,7 @@
 'use client';
 
 import { useStore } from '../store-provider';
+import { Icon } from './icon';
 
 interface TopbarProps {
   onMenuToggle: () => void;
@@ -10,57 +11,48 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
   const { searchQuery, setSearchQuery, instanceName } = useStore();
 
   return (
-    <header className="sticky top-0 z-30 flex items-center gap-4 border-b border-[#e5e5e7] bg-white/80 px-6 py-3 backdrop-blur-xl">
-      {/* Mobile hamburger */}
+    <div className="tb">
+      {/* Mobile hamburger — folded into the brand cluster on small screens */}
       <button
         onClick={onMenuToggle}
-        className="rounded-lg p-1.5 hover:bg-[#f5f5f7] md:hidden"
+        className="md:hidden"
         aria-label="Toggle menu"
+        style={{
+          background: 'transparent',
+          border: 0,
+          padding: 4,
+          color: 'var(--fg)',
+          cursor: 'pointer',
+        }}
       >
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 20 20"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        >
-          <path d="M3 5h14M3 10h14M3 15h14" />
-        </svg>
+        <Icon name="filter" size={18} />
       </button>
 
-      {/* Search */}
-      <div className="relative max-w-md flex-1">
-        <svg
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868b]"
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        >
-          <circle cx="7" cy="7" r="5" />
-          <path d="M11 11l3.5 3.5" />
-        </svg>
+      <a href="#" className="tb-brand">
+        <span className="tb-brand-mark" aria-hidden="true" />
+        <span>Livinity</span>
+        <span className="crumb">Store</span>
+      </a>
+
+      <div className="tb-search">
+        <Icon name="search" size={15} />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search apps..."
-          className="w-full rounded-lg bg-[#f5f5f7] py-2 pl-9 pr-4 text-sm text-[#1d1d1f] placeholder-[#86868b] outline-none transition-shadow focus:ring-2 focus:ring-teal-500/30"
+          placeholder="Search apps, plugins, MCP servers…"
         />
+        <span className="kbd">⌘K</span>
       </div>
 
-      {/* Instance badge */}
-      {instanceName && (
-        <div className="hidden items-center gap-1.5 text-xs text-[#86868b] sm:flex">
-          <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          {instanceName}
-        </div>
-      )}
-    </header>
+      <div className="tb-right">
+        {instanceName && (
+          <a href="#" className="tb-user">
+            <span className="tb-avatar">{instanceName.charAt(0).toUpperCase()}</span>
+            <span className="tb-user-name">{instanceName}</span>
+          </a>
+        )}
+      </div>
+    </div>
   );
 }

@@ -6,17 +6,20 @@ import { Sidebar } from './components/sidebar';
 import { Topbar } from './components/topbar';
 import { SectionTabs } from './components/section-tabs';
 
+// Outer chrome: Topbar (64px) → SectionTabs (52px) → grid {Sidebar | main}.
+// Layout dimensions match the Claude Design DS bundle so the imported
+// store.css applies one-to-one against this structure.
 export function StoreShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="store-layout flex h-screen bg-white">
+    <div className="ab">
       <StoreProvider>
-        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <Topbar onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
-          <SectionTabs />
-          <main className="flex-1 overflow-y-auto">{children}</main>
+        <Topbar onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
+        <SectionTabs />
+        <div className="page">
+          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+          {children}
         </div>
       </StoreProvider>
     </div>
