@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
+    "@vercel/analytics": "^2.0.1",
     "bcryptjs": "^3.0.3",
     "bottleneck": "^2.19.5",
     "clsx": "^2.1.1",
