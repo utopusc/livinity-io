@@ -1545,6 +1545,70 @@ Plans:
 
 ---
 
+### Phase 146: Big-Bang Migration Server5 → Vercel + Supabase + Realtime Presence — ✅ SHIPPED 2026-05-18 (live on `https://livinity.io` via Vercel; Server5 pm2 stack stopped)
+
+**Status:** ✅ SHIPPED 2026-05-18 — see [146-SUMMARY.md](phases/146-relay-to-supabase-realtime/SUMMARY.md). 11 atomic commits `pre-146-cutover..(W5-T2-commit)`. Sacred SHA preserved 11/11. All 4 demo users (lucy, bozturk, socinity, bolcay) deleted per operator clean-slate directive. Server5 VM kept hot 7 days for rollback. Outstanding: bandwidth metering (Phase 147), device events Broadcast (Phase 148), dead Next.js page cleanup, broker re-implementation if needed, RLS policies, Mini PC orphan livinityd stop (ZeroTier unreachable at cutover time).
+
+**Trigger:** User decision 2026-05-18 — switch control-plane hosting to security-first managed PaaS (Vercel + Supabase + Cloudflare). Demo-only current users (lucy, bozturk, socinity) unlock big-bang cutover: NO backwards-compat requirement, NO strangler-fig parallel run. Researcher's earlier strangler-fig recommendation (`146-RESEARCH.md`) was scoped to "preserve live users" — that constraint is removed.
+
+**Goal:** Within ~5-6 focused hours, sunset Server5 entirely. livinity.io served from Vercel. `platform` Postgres on Supabase. relay's presence/online-status replaced by Supabase Realtime channels. livinityd's `tunnel-client.ts` rewritten to open a Supabase Realtime presence channel instead of WS to `wss://livinity.io:4000`. mainserver + Mini PC fresh-installed with the new livinityd. DNS swap. Server5 pm2 stack stopped but VM kept hot for 7-day rollback window, then destroyed.
+
+**Direction:**
+- ~5-6 hour budget total (6 waves; see plan)
+- Big-bang cutover: no parallel run, no strangler-fig, no compat shim
+- Demo users wipeable: lucy + bozturk + socinity get fresh-installed with new livinityd via the Phase 145-02 aesthetic one-liner (now served from Vercel)
+- **In scope:** Postgres migration, Vercel deploy, Supabase Realtime presence, livinityd `tunnel-client.ts` rewrite, dashboard online check rewrite, DNS cutover, end-to-end UAT on 3 demo users
+- **Out of scope (defer to Phase 147+):** bandwidth metering, audit events log, force-disconnect, custom domain resolution, Supabase Auth migration (keep custom `users` table for now), `api.livinity.io` broker (untouched), public app store DB (deferred separate phase)
+- **Drops:** 2 pre-existing bugs (flap loop, `bandwidth_usage_user_id_fkey` violation) — relay's complete replacement eliminates both
+- Sacred SHA `f3538e1d8...` preserved every commit
+- Server4 + Mini PC hard rules honored (Mini PC IS a UAT target as the socinity install host; Server4 NEVER touched)
+
+**Plans:** 1 plan with 6 waves (W0 prep → W1 backend → W2 realtime → W3 livinityd → W4 cutover → W5 cleanup).
+
+Plans:
+- [x] 146-01-PLAN.md - SHIPPED 2026-05-18. Adapted scope: W4-T2/T3 reinstalls replaced by "delete all users" cleanup per operator directive. NEW W1-T4 added to migrate Server5 static landing HTML (plan-146 miss). See [SUMMARY.md](phases/146-relay-to-supabase-realtime/SUMMARY.md) for the 7 critical findings (wrong JWT_SECRET, landing-HTML miss, Vercel-managed DNS, broker==relay, bolcay user, no custom_domains FK, Vercel lazy-init build fix).
+
+**UAT:** After cutover, fresh registration flow on Vercel dashboard → api-key → curl one-liner → install on mainserver → online badge green within 5s of livinityd start. Repeat for 3 demo users. Server5 pm2 stop verified clean (no pending tunnel connections).
+
+**Rollback (7-day window):** DNS TTL pre-lowered to 60s; rollback = (a) DNS swap livinity.io back to Server5 IP, (b) `pm2 start web relay changelog` on Server5, (c) livinityd's that fail Realtime connect fall back to disconnected — recovery = re-install pre-146 build via update.sh from a tagged commit `pre-146-cutover`.
+
+**Depends on:** Phase 145 ✅ (api-key-only one-liner — Vercel-served install.sh will use the same parse-cli logic).
+
+**Carryover folded in:** none (Phase 145 carryovers tracked separately).
+
+**Phase 147+ candidates surfacing from this scope cut:** bandwidth metering migration (Supabase Postgres CDC), audit events centralization, force-disconnect via Supabase broadcast, custom-domain resolution at CF Worker edge, Supabase Auth migration to drop custom session code.
+
+---
+
+### Phase 145: API-Key-Only Install One-Liner
+
+**Status:** 🟢 PLANNED 2026-05-17 (1 plan, 5 tasks)
+
+**Plans:** 1 plan
+
+Plans:
+- [ ] 145-01-PLAN.md — Server5 /api/me/profile endpoint + install.sh subdomain auto-resolve + warn-on-conflict + mainserver UAT
+
+**Trigger:** Phase 144 follow-up + user request 2026-05-17. Today's working one-liner requires BOTH `--api-key` AND `--subdomain` even though Server5 already knows which user owns the api-key. Pasting from the dashboard onto a new VPS should be ONE flag, not two — copy-paste latency goes down, typo risk (subdomain mismatch) disappears.
+
+**Goal:** Make `curl -sSL https://livinity.io/install.sh | sudo bash -s -- --api-key liv_k_xxxxx` the canonical install command. `--subdomain` becomes optional back-compat only. If both are passed and disagree, warn + use api-key's owner (no fatal abort).
+
+**Direction:**
+- Server5: new public endpoint `GET /api/me/profile` (X-API-Key) → `{username, email}`. Mirror tunnel-token's auth flow (validateApiKey → DB row → JSON).
+- install.sh `parse-cli.sh`: when `--subdomain` empty AND `--api-key` set → curl profile endpoint, set `LIVOS_SUBDOMAIN=<username>`, continue.
+- Conflict handling: `--subdomain X` + api-key owned by Y → log `[WARN] --subdomain X overridden by api-key owner Y (Phase 145)` and use Y. NEVER fail-stop.
+- Edge: api-key invalid → existing 401 error from tunnel-token surfaces; resolver step bails with clear `[FAIL] api-key rejected by livinity.io/api/me/profile (HTTP 401)`.
+
+**Plan count estimate:** 1 plan with 5 tasks: (1) Server5 /api/me/profile route, (2) parse-cli.sh auto-resolve + conflict-warn + help-text, (3) test-subdomain-args.sh extension (TESTS 12/13/14), (4) Server5 deploy + cache flush + endpoint smoke, (5) mainserver wipe + single-flag install UAT + conflict-warn live test.
+
+**UAT:** mainserver wipe → `curl … | bash -s -- --api-key liv_k_uYmDq_eI5ASmW7grwEba` (no --subdomain) → install completes → `https://lucy.livinity.io` 200. Then repeat with `--subdomain lucylu --api-key liv_k_…lucy` and verify warn + correct resolve to `lucy`.
+
+**Depends on:** Phase 144 ✅ (install.sh self-bootstrap healthy + lucy.livinity.io live as test target).
+
+**Carryover folded in from Phase 144 surface:** none — this is fresh Phase 145 scope. Other Phase 144 carryover items (J's scripts/install/ disk deploy, Caddy `:80` catch-all 404, Server5 factory-reset, install.sh `--dry-run`) remain candidates for separate sub-plans/phases.
+
+---
+
 ### Phase 144: Fresh-Install UAT for 141 + 142 + 143 — ✅ CODE-COMPLETE 2026-05-17 (autonomous A-E + J + K + L PASS; F/G/H/I deferred to operator browser walk per autonomous-mode scope; 144-01 hotfix shipped; 7 Phase 145 carryover items recorded)
 
 **144-01 hotfix shipped same session** (`bedfb95a`): `scripts/install.sh` self-bootstrap HELPERS_REQUIRED still listed `mode-local-lan.sh` (Phase 142-01 retired the file but missed the helper list). Live install.sh on `livinity.io/install.sh` curl-fetched fresh from GitHub raw after pm2 web restart + .next/cache/fetch-cache purge. Discovered Section B1 first-install attempt exit 3.

@@ -1,0 +1,406 @@
+=== Phase 146 cutover.log — started 2026-05-18T10:43:34Z ===
+
+[W0-T1] 2026-05-18T10:43:34Z — Lower livinity.io DNS TTL to 60s + git rollback tag
+
+-- Step 1: fetch apex A record id
+{
+    "result": [
+        {
+            "id": "5a46941bdb12999881256b6e80f7806e",
+            "name": "livinity.io",
+            "type": "A",
+            "content": "45.137.194.102",
+            "proxiable": true,
+            "proxied": false,
+            "ttl": 1,
+            "settings": {},
+            "meta": {},
+            "comment": null,
+            "tags": [],
+            "created_on": "2026-03-17T14:45:45.175108Z",
+            "modified_on": "2026-03-17T21:54:14.471791Z"
+        }
+    ],
+    "success": true,
+    "errors": [],
+    "messages": [],
+    "result_info": {
+        "page": 1,
+        "per_page": 100,
+        "count": 1,
+        "total_count": 1,
+        "total_pages": 1
+    }
+}
+REC_ID=5a46941bdb12999881256b6e80f7806e CURRENT_TTL=1 CURRENT_IP=45.137.194.102
+
+-- Step 2: PATCH ttl to 60
+{
+    "result": {
+        "id": "5a46941bdb12999881256b6e80f7806e",
+        "name": "livinity.io",
+        "type": "A",
+        "content": "45.137.194.102",
+        "proxiable": true,
+        "proxied": false,
+        "ttl": 60,
+        "settings": {},
+        "meta": {},
+        "comment": null,
+        "tags": [],
+        "created_on": "2026-03-17T14:45:45.175108Z",
+        "modified_on": "2026-05-18T10:43:36.280583Z"
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+}
+NEW_TTL=60
+
+-- Step 3: dig verify
+/usr/bin/bash: line 70: dig: command not found
+
+-- Step 3b: nslookup verify (Windows native)
+Non-authoritative answer:
+Server:  one.one.one.one
+Address:  1.1.1.1
+
+Name:    livinity.io
+Address:  45.137.194.102
+
+
+-- Step 4: git tag pre-146-cutover
+HEAD before tag: 8d5dc1bdfbe6e08c858bc52cc8f92a09d0e1fc3b
+Tag created at: df09a4c7f5fde1ada63157eb14d138438d84d603
+
+-- Step 5: push tag to origin
+To https://github.com/utopusc/livinity-io.git
+ * [new tag]           pre-146-cutover -> pre-146-cutover
+df09a4c7f5fde1ada63157eb14d138438d84d603	refs/tags/pre-146-cutover
+
+[W0-T1] DONE 2026-05-18T10:44:06Z
+
+
+[W0-T2] 2026-05-18T10:45:33Z — pg_dump Server5 platform DB
+
+-- Pre-dump inventory --
+=== STEP2: \dt ===
+                List of relations
+ Schema |        Name         | Type  |  Owner   
+--------+---------------------+-------+----------
+ public | api_keys            | table | platform
+ public | apps                | table | platform
+ public | bandwidth_usage     | table | platform
+ public | custom_domains      | table | platform
+ public | device_grants       | table | platform
+ public | devices             | table | platform
+ public | install_history     | table | platform
+ public | sessions            | table | platform
+ public | tunnel_connections  | table | platform
+ public | user_app_subdomains | table | postgres
+ public | users               | table | platform
+(11 rows)
+
+
+=== STEP3: users list ===
+                  id                  | username |          created_at           
+--------------------------------------+----------+-------------------------------
+ bab93721-40e4-4716-8f25-1c611baebd4a | socinity | 2026-05-18 00:28:07.96085+02
+ ab25d897-a84e-428e-ac2d-87e9b69665a1 | lucy     | 2026-05-18 05:05:10.715037+02
+ 8e5386ea-025d-402c-b6aa-b43c28cd91b9 | bozturk  | 2026-05-18 07:31:22.881261+02
+ 1db6e591-41d6-4cea-a9c8-87ed9ae6efcd | bolcay   | 2026-05-18 11:56:18.250597+02
+(4 rows)
+
+
+=== STEP4: row counts ===
+ api_keys | custom_domains | devices | tunnel_connections | apps 
+----------+----------------+---------+--------------------+------
+        4 |              4 |       0 |                  0 |   27
+(1 row)
+
+
+=== STEP5: pg_dump custom ===
+-- 🔴 SURPRISE: 4 users (not 3) — bolcay is friend's test account, must preserve through cutover
+
+-- Dump files local --
+-rw-r--r-- 1 hello 197609 40582 May 18 03:45 /tmp/platform-server5.dump
+-rw-r--r-- 1 hello 197609 52178 May 18 03:45 /tmp/platform-server5.sql
+
+-- CREATE TABLE list --
+CREATE TABLE public.api_keys (
+CREATE TABLE public.apps (
+CREATE TABLE public.bandwidth_usage (
+CREATE TABLE public.custom_domains (
+CREATE TABLE public.device_grants (
+CREATE TABLE public.devices (
+CREATE TABLE public.install_history (
+CREATE TABLE public.sessions (
+CREATE TABLE public.tunnel_connections (
+CREATE TABLE public.user_app_subdomains (
+CREATE TABLE public.users (
+
+[W0-T2] DONE 2026-05-18T10:45:33Z
+
+[W1-T1] 2026-05-18T10:47:00Z — pg_restore → Supabase Postgres (us-west-2)
+
+-- Source: /tmp/platform-server5.dump (40582 bytes, from W0-T2)
+-- Target: aws-1-us-west-2.pooler.supabase.com:5432/postgres (session pool)
+-- Method: pg_restore --no-owner --no-privileges --no-acl FROM Server5 itself (Windows local lacks pg_restore)
+
+-- Row counts post-restore (via Supabase MCP list_tables) --
+api_keys: 4 | apps: 27 | bandwidth_usage: 2 | custom_domains: 4 | device_grants: 0 | devices: 0
+install_history: 7 | sessions: 2 | tunnel_connections: 0 | user_app_subdomains: 1 | users: 4
+
+-- Users + api-key prefixes (verified via MCP execute_sql) --
+socinity → liv_k_phase140 (created 2026-05-17 22:43Z)
+lucy     → liv_k_uYmDq_eI (created 2026-05-18 03:06Z) — matches LUCY_API_KEY plan constant
+bozturk  → liv_k_y739fRu8 (created 2026-05-18 05:39Z)
+bolcay   → liv_k_249UpaLf (created 2026-05-18 09:56Z) — friend's test account, preserve
+
+-- RLS status: ALL 11 tables have rls_enabled=true (Supabase 'Enable automatic RLS' default kicked in)
+-- No policies defined yet; service-role client bypasses RLS, used by all /api/* routes
+-- Future: write policies for direct anon-key reads (Phase 147+)
+
+[W1-T1] DONE 2026-05-18T10:47:00Z
+
+[W2-T2] 2026-05-18T10:53:40Z — Realtime presence POC
+
+-- 🔴 CRITICAL DISCOVERY: operator-supplied SUPABASE_JWT_SECRET ('c470b930...') was NOT the real HS256 secret
+-- That UUID was likely a JWT signing key ID, not the secret. Initial POC run failed with JwtSignatureError.
+-- Real HS256 secret retrieved via Management API GET /v1/projects/{ref}/postgrest (jwt_secret field).
+-- Real secret verified by jwt.verify() against Supabase's own anon API key — PASS.
+-- TODO Vercel W1-T3: use REAL secret (operator must paste correct value during W1-T3, NOT the UUID).
+
+-- POC stdout --
+[mint] JWT len: 312 channel: tunnel:ab25d897-a84e-428e-ac2d-87e9b69665a1
+[A] subscribe status: SUBSCRIBED 
+[A] presence sync — current state: {}
+[A] track result: ok
+[A] presence sync — current state: {"ab25d897-a84e-428e-ac2d-87e9b69665a1":[{"livinityd_version":"146-poc","started_at":"2026-05-18T10:53:00.198Z","username":"lucy","presence_ref":"GLCjdhCNqrZjDbcF"}]}
+[B] presence state seen by service-role:
+{
+  "ab25d897-a84e-428e-ac2d-87e9b69665a1": [
+    {
+      "livinityd_version": "146-poc",
+      "started_at": "2026-05-18T10:53:00.198Z",
+      "username": "lucy",
+      "presence_ref": "GLCjdhCNqrZjDbcF"
+    }
+  ]
+}
+[B] online count: 1
+[A] subscribe status: CLOSED 
+PASS: presence flow end-to-end
+
+[W2-T2] DONE 2026-05-18T10:53:40Z
+
+[W3-T3] 2026-05-18T11:09:05Z — TunnelPresence focused smoke (Windows-friendly equivalent of livinityd local boot)
+
+-- Why focused smoke instead of full livinityd boot:
+--   Operator's dev box is Windows; livinityd has Linux-specific deps (node-pty, dbus, samba).
+--   Approach: load the COMPILED-FROM-SOURCE TunnelPresence module directly via tsx, mock Redis,
+--   stub global fetch so /api/me/realtime-token returns a locally-minted JWT (real secret), and
+--   exercise the same code path a live livinityd start() would hit. Side-B service-role observer
+--   reads presenceState to confirm the track event arrived at Supabase Realtime — same end-to-end
+--   evidence as the plan's livinityd-boot smoke.
+
+-- Smoke stdout --
+[smoke] calling presence.start()...
+[livinityd] [presence] subscribed to tunnel:ab25d897-a84e-428e-ac2d-87e9b69665a1 via realtime-token bootstrap — track: ok
+[smoke] start() returned
+[smoke] Redis state after start():
+  status:     connected
+  session_id: tunnel:ab25d897-a84e-428e-ac2d-87e9b69665a1
+  url:        https://lucy.livinity.io
+[smoke] Side-B service-role presence state:
+{
+  "ab25d897-a84e-428e-ac2d-87e9b69665a1": [
+    {
+      "livinityd_version": "146.0.0-smoke",
+      "started_at": "2026-05-18T11:08:45.024Z",
+      "username": "lucy",
+      "presence_ref": "GLCkUg24fy1wTTKB"
+    }
+  ]
+}
+[livinityd] [presence] subscribe failed: CLOSED
+PASS: W3-T3 focused smoke — TunnelPresence end-to-end against real Supabase
+
+[W3-T3] DONE 2026-05-18T11:09:05Z — all W0-W3 prep complete, awaiting operator 'cutover GO' for W4
+
+[W1-T3] 2026-05-18T11:24:29Z — Vercel deploy LIVE + end-to-end smoke green
+
+-- Vercel project: livinity-io (utopusc's projects / Hobby)
+-- Production URL: https://livinity-io.vercel.app
+-- Initial deploy region: iad1 (Washington) — operator MAY relocate to sfo1 for sub-20ms Supabase RTT
+-- 12 env vars pasted from C:\Users\hello\Desktop\livinity-vercel.env
+
+-- Build fix shipped between deploy attempts: commit a46d32f1
+--   Symptom: 'Compiled successfully' then 'Deployment failed with error' on first attempt (92d069b)
+--   Root cause: supabase-server.ts called createClient() at MODULE TOP via 'export const supabaseService = ...'
+--   Next.js page-data collection loads route modules with NO runtime env → requireEnv throws
+--   Fix: getSupabaseService() lazy-init + cache; dashboard/route.ts updated to call it
+
+-- Live smoke 1: /api/me/profile (Phase 145-01) --
+curl -H "X-API-Key: $LUCY_KEY" https://livinity-io.vercel.app/api/me/profile
+→ {"username":"lucy","email":"lucyfeilu@outlook.com"}  HTTP 200
+
+-- Live smoke 2: /api/me/realtime-token (Phase 146 W2-T1) --
+curl -X POST -H "X-API-Key: $LUCY_KEY" https://livinity-io.vercel.app/api/me/realtime-token
+→ {
+    "token": "eyJ...<HS256 JWT>",
+    "supabaseUrl": "https://qlsalsyqjichtpjitldi.supabase.co",
+    "supabaseAnonKey": "eyJ...anon...",
+    "userId": "ab25d897-a84e-428e-ac2d-87e9b69665a1",
+    "expiresIn": 3600,
+    "channel": "tunnel:ab25d897-a84e-428e-ac2d-87e9b69665a1"
+  }  HTTP 200
+
+-- Live smoke 3: Vercel-minted JWT → Supabase Realtime presence --
+  subscribe: SUBSCRIBED
+  track:     ok
+  → JWT signed by Vercel's mintRealtimeJwt() is accepted by Realtime
+  → Confirms SUPABASE_JWT_SECRET in Vercel env matches the project's real secret
+
+[W1-T3] DONE 2026-05-18T11:24:29Z — full new stack LIVE on livinity-io.vercel.app
+
+==== REMAINING: W4-W5 (cutover) GATED on operator 'cutover GO' ====
+
+[W1-T4] 2026-05-18T11:31:57Z — landing HTML migration to Vercel (NEW task, plan-146 miss)
+
+-- Why this task exists: plan-146 assumed all user-facing UI was Next.js. Server5 actually
+-- served /dashboard, /login, /register, /profile, /verify, /forgot-password, /download,
+-- /dashboard/install as STATIC HTML via Caddyfile path matches. Repo had no copy (dashboard.html
+-- was untracked locally), so a DNS cutover would have 404'd all these routes.
+
+-- Sync: tar canonical files (excl .bak, .pre-*, .sh) from Server5 /opt/landing/livinity.io/
+--   → platform/landing/ (canonical home in repo)
+--   → platform/web/public/ (Vercel-served mirror)
+--   28 files / 12MB (mostly everything.mp4 hero video, 11MB)
+
+-- Routing: next.config.ts rewrites.beforeFiles mirror Caddyfile
+--   / → /index.html
+--   /dashboard → /dashboard.html
+--   /dashboard/install → /dashboard-install.html
+--   /login + /register → /auth.html
+--   /profile → /profile.html
+--   /verify → /verify.html
+--   /forgot-password → /forgot-password.html
+--   /download → /download.html
+--   /customize → /customize.html
+
+-- Live verification on https://livinity-io.vercel.app (9 routes via curl + title check) --
+  / → 'Livinity — Your own Cloud AI Computer'
+  /dashboard → 'Dashboard — Livinity'
+  /dashboard/install → 'Set up your first LivOS — Livinity'
+  /login → 'Sign in — Livinity'
+  /register → 'Sign in — Livinity'
+  /profile → 'Profile — Livinity'
+  /verify → 'Verify your email — Livinity'
+  /forgot-password → 'Reset password — Livinity'
+  /download → 'Download Livinity Agent — Control your computer from anywhere'
+  All 9 return X-Nextjs-Rewritten-Path matching the expected HTML target — PASS
+
+-- Dead Next.js pages NOT deleted (kept for minimal commit):
+--   app/dashboard/page.tsx, app/login/page.tsx, app/register/page.tsx, app/profile/page.tsx,
+--   app/verify/page.tsx, app/forgot-password/page.tsx, app/download/page.tsx
+--   These compile during build but beforeFiles rewrites intercept at request time.
+--   Phase 147+ cleanup.
+
+[W1-T4] DONE 2026-05-18T11:31:57Z
+
+==== W4-T1 DNS SWAP START 2026-05-18T11:41:28Z ====
+BEFORE: livinity.io A → 45.137.194.102 (Server5)
+
+==== DNS propagation poll (1.1.1.1) ====
+[poll 1 11:41:29Z] 64.29.17.1
+[poll 2 11:41:44Z] 64.29.17.65
+[poll 3 11:41:59Z] 216.198.79.65
+[poll 4 11:42:14Z] 216.198.79.65
+[poll 5 11:42:29Z] 216.198.79.1
+==== W4-T-cleanup START 2026-05-18T11:44:22Z ====
+Step 1: Delete CF DNS CNAMEs (per-user + nested)
+  lucy.livinity.io → success
+  *.lucy.livinity.io → success
+  bozturk.livinity.io → success
+  n8n-bozturk.livinity.io → success
+  socinity.livinity.io → success
+  n8n-socinity.livinity.io → success
+  code-server-socinity.livinity.io → success
+  bolcay.livinity.io → success
+Step 2: Delete CF Tunnels (cloudflared / Zero Trust API)
+  bolcay (4e53fbf9-b7c5-4706-966b-652faaca479a) → success
+  bozturk (e1352d29-d670-4055-8239-d33bf4eec2bb) → success
+  socinity (633ab1f5-3f10-4d62-a3a7-50d8eace247c) → success
+  lucy (54209c4b-9263-4b7a-a35e-4e10109b9759) → success
+==== DB final cleanup state (logged) ====
+users: 4 → 0 (DELETE RETURNING returned: socinity, lucy, bozturk, bolcay)
+api_keys: 4 → 0 (cascade)
+sessions: 2 → 0 (cascade)
+user_app_subdomains: 1 → 0 (cascade)
+bandwidth_usage: 2 → 0 (cascade)
+tunnel_connections / devices / device_grants: 0 (already empty)
+custom_domains: 4 → 0 (manual delete — NO FK to users, 4 orphan livinity.live rows from prior phase: bruce/burak/lu/lucy)
+install_history: 7 → 0 (manual delete — NO FK to users, orphan install records for socinity+bolcay)
+apps catalog: 27 (preserved — platform-level, not user-tied)
+
+==== CF cleanup state (logged) ====
+DNS CNAMEs deleted: lucy/bozturk/socinity/bolcay.livinity.io + *.lucy + n8n-bozturk + n8n-socinity + code-server-socinity
+CF Tunnels deleted (cascade): 4 tunnels (lucy/bozturk/socinity/bolcay)
+
+==== livinity.io DNS post-swap ====
+livinity.io  CNAME → e1ecfaeff3d82935.vercel-dns-017.com (Vercel auto-set via Domain Add UI)
+www.livinity.io CNAME → e1ecfaeff3d82935.vercel-dns-017.com
+Apex 307s to www (Vercel default redirect). Live as 2026-05-18T11:44Z.
+
+==== post-deletion smoke: any api-key returns 401 ====
+Redirecting...
+
+HTTP 307
+
+[W5-T1] 2026-05-18T11:51:01Z — Server5 pm2 stop all 3
+
+-- Plan said 'broker untouched' but live audit revealed broker == relay (api.livinity.io
+-- reverse_proxy to localhost:4000 = the relay process). api.livinity.io was already 503
+-- pre-stop. Operator confirmed 'stop all 3' interactively.
+
+==== pre-stop snapshot ====
+Warning: Permanently added '45.137.194.102' (ED25519) to the list of known hosts.
+  changelog       online     pid=1056
+  web             online     pid=533010
+  relay           online     pid=1073
+
+==== pm2 stop web relay changelog ====
+[PM2] [relay](2) ✓
+[PM2] Applying action stopProcessId on app [changelog](ids: [ 0 ])
+[PM2] [changelog](0) ✓
+┌────┬──────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name         │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼──────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 0  │ changelog    │ default     │ 15.3.8  │ fork    │ 0        │ 0      │ 0    │ stopped   │ 0%       │ 0b       │ root     │ disabled │
+│ 2  │ relay        │ default     │ 0.1.0   │ fork    │ 0        │ 0      │ 0    │ stopped   │ 0%       │ 0b       │ root     │ disabled │
+│ 1  │ web          │ default     │ N/A     │ fork    │ 0        │ 0      │ 51   │ stopped   │ 0%       │ 0b       │ root     │ disabled │
+└────┴──────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+
+==== post-stop snapshot ====
+Warning: Permanently added '45.137.194.102' (ED25519) to the list of known hosts.
+  changelog       stopped   
+  web             stopped   
+  relay           stopped   
+
+==== save pm2 state so reboot won't auto-resurrect ====
+Warning: Permanently added '45.137.194.102' (ED25519) to the list of known hosts.
+[PM2] Saving current process list...
+[PM2] Successfully saved in /root/.pm2/dump.pm2
+
+[W5-T1] DONE 2026-05-18T11:51:10Z
+[W5-T2] 2026-05-18T11:53:33Z — SUMMARY + ROADMAP + final commit
+
+==== POST-CUTOVER LIVE VERIFICATION ====
+1. https://livinity.io/ → 307 → https://www.livinity.io/ (HTTP 200, 'Livinity — Your own Cloud AI Computer')
+2. https://www.livinity.io/install.sh → HTTP 200, 6312 bytes
+3. https://livinity.io/api/me/realtime-token (no key) → HTTP 401 (auth wired)
+4. https://api.livinity.io/ → HTTP 502 (Server5 relay stopped, broker non-functional)
+5. https://mcp.livinity.io/ → HTTP 502 (Server5 stopped)
+
+==== CUTOVER COMPLETE — Phase 146 SHIPPED 2026-05-18 ====

@@ -3,21 +3,55 @@ gsd_state_version: 1.0
 milestone: v36.0
 milestone_name: "LivOS Design Port"
 status: in-progress
-last_updated: "2026-05-17T03:55:00.000Z"
+last_updated: "2026-05-18T11:15:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
   total_plans: 9
   completed_plans: 9
   percent: 100.0
-current_phase: 137
-current_phase_name: "Onboarding Backend Wiring"
-current_phase_status: CODE-COMPLETE-PENDING-OPERATOR-UAT
+current_phase: 146
+current_phase_name: "Big-Bang Migration Server5 → Vercel + Supabase + Realtime Presence"
+current_phase_status: W0-W3-CODE-COMPLETE-GATED-AWAITING-CUTOVER-GO
+phase_146_status: |
+  W0-W3 prep code-complete (8/12 plan tasks shipped, 6 atomic commits b89bc4d2..92d069b6).
+  Live Supabase project provisioned at qlsalsyqjichtpjitldi.supabase.co (us-west-2).
+  Server5 platform DB pg_dump'd + pg_restore'd to Supabase (11 tables, 4 users, 27 apps).
+  platform/web new code: supabase-server.ts + /api/me/realtime-token + /api/dashboard rewrite.
+  livinityd new code: tunnel-presence.ts + tunnel-client.ts rewritten 852→103 LOC + legacy-device-types.ts.
+  W2-T2 + W3-T3 smokes both PASS — full presence flow validated against real Supabase Realtime.
+  HARD GATE: W4 (DNS swap + demo wipe) + W5 (Server5 pm2 stop) AWAIT explicit operator "cutover GO"
+  because a friend is currently testing on live livinity.io (bolcay user account observed in restored DB).
+phase_146_commits:
+  - df09a4c7  # W0-T1 git tag pre-146-cutover (annotated tag, not in master log)
+  - 4a4f5c8b  # W1-T2 supabase-server.ts + .env.example
+  - 3f7fba09  # W2-T1 /api/me/realtime-token route
+  - b89bc4d2  # W2-T2 POC presence smoke script
+  - 00aa3dde  # W2-T3 /api/dashboard rewrite to Supabase presence
+  - db86a3f6  # W3-T1.5 legacy-device-types.ts extraction
+  - f7412e39  # W3-T1 + W3-T2 tunnel-presence.ts new + tunnel-client.ts rewrite
+  - 92d069b6  # W3-T3 smoke-tunnel-presence.mjs (Windows-friendly equivalent)
+phase_146_sacred_sha_preserved: 6/6  # all commits include Sacred-SHA footer; sdk-agent-runner.ts ZERO diff
+phase_146_pending_push: false  # pushed 8d5dc1bd..92d069b6
+phase_146_critical_findings:
+  - "Operator-supplied SUPABASE_JWT_SECRET 'c470b930-...' UUID was NOT the real HS256 secret (W2-T2 POC v1 failed JwtSignatureError). Real secret retrieved via Management API GET /v1/projects/{ref}/postgrest (jwt_secret field). Operator must use real secret when pasting Vercel env in W1-T3."
+  - "4th user 'bolcay' observed in restored Server5 platform DB (created 2026-05-18 11:56Z) — friend's test account. Must preserve through cutover."
+  - "DNS TTL pre-lowered to 60s on apex livinity.io A record (was CF Automatic). Safe preparation — does not affect friend's session."
+phase_146_remaining_tasks_gated:
+  - "W4-T1: DNS A-record swap livinity.io → Vercel (waits on Vercel project creation by operator + cutover GO)"
+  - "W4-T2/T3: wipe + fresh install lucy/bozturk/socinity (and maybe bolcay) — depends on Vercel-served install.sh from new stack"
+  - "W5-T1: Server5 pm2 stop web/relay/changelog (broker untouched)"
+  - "W5-T2: SUMMARY.md + ROADMAP flip + cutover.log final commit"
+phase_146_blocked_tasks_operator_only:
+  - "W0-T0: Vercel Hobby project provision (operator action — sfo1 region, root platform/web, paste env vars)"
+  - "W1-T3: Vercel env vars + first deploy (depends on W0-T0)"
 next_phases:
-  - "136: Real claude /login PTY pipe (PLANNED — needs Mini PC SSH for node-pty native compile + claude CLI test)"
-  - "138: Real TOTP 2FA enrollment (PLANNED — DB migration needs operator + pgcrypto extension enable)"
-  - "139-01: Onboarding i18n (PLANNED — 85 keys × 5 langs, mechanical translation work)"
-  - "139-06: Cross-device UAT walk (PLANNED — operator-only)"
+  - "W4-T1 cutover: gated on operator GO + Vercel project ready"
+  - "Pre-Phase-146 carryovers (deprioritized while v34 active):"
+  - "  136: Real claude /login PTY pipe (PLANNED — needs Mini PC SSH for node-pty native compile + claude CLI test)"
+  - "  138: Real TOTP 2FA enrollment (PLANNED — DB migration needs operator + pgcrypto extension enable)"
+  - "  139-01: Onboarding i18n (PLANNED — 85 keys × 5 langs, mechanical translation work)"
+  - "  139-06: Cross-device UAT walk (PLANNED — operator-only)"
 phase_137_commits:
   - 4544c35a   # 137-01 backend system.info query
   - e8412e50   # 137-02 WelcomeStep consumes system.info
