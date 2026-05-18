@@ -1,18 +1,25 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {describe, it, expect, vi} from 'vitest'
 
-// Phase 142-01 — local-lan mocks (generateLocalCaddyfile, validateLocalTld,
-// pki readRootCert) dropped alongside the procedures they backed.
+// Phase 142-01 — local-lan mocks dropped (generateLocalCaddyfile,
+// validateLocalTld, pki readRootCert).
+// Phase 143-03 — caddy.ts exports renamed `*Hybrid*` → `*Portal*`. The mock
+// below exposes BOTH names pointing at the same spies so legacy callers
+// (back-compat aliases) and the renamed callers exercise identical behavior.
+const _generateCaddyfileSpy = vi.fn().mockReturnValue('# generated portal\n')
+const _validateDomainSpy = (d: string) =>
+	typeof d === 'string' &&
+	d.length > 0 &&
+	d.length <= 253 &&
+	!d.endsWith('.local') &&
+	!d.includes('..') &&
+	!d.includes('/') &&
+	/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(d)
 vi.mock('../domain/caddy.js', () => ({
-	generateHybridCaddyfile: vi.fn().mockReturnValue('# generated hybrid\n'),
-	validateHybridDomain: (d: string) =>
-		typeof d === 'string' &&
-		d.length > 0 &&
-		d.length <= 253 &&
-		!d.endsWith('.local') &&
-		!d.includes('..') &&
-		!d.includes('/') &&
-		/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(d),
+	generatePortalCaddyfile: _generateCaddyfileSpy,
+	generateHybridCaddyfile: _generateCaddyfileSpy, // alias, same spy
+	validatePortalDomain: _validateDomainSpy,
+	validateHybridDomain: _validateDomainSpy, // alias
 	writeCaddyfile: vi.fn().mockResolvedValue(undefined),
 	reloadCaddy: vi.fn().mockResolvedValue(undefined),
 }))
@@ -133,7 +140,7 @@ describe('local-dns/routes — Phase 104 plan 104-04 — hybrid procedures', () 
 		)
 		expect(await redis.get('livos:domain:hybrid_zone_id')).toBe('cf-zone-abc')
 		expect(await redis.get('livos:domain:host_ip')).toBe('192.168.1.100')
-		expect(caddyMod.generateHybridCaddyfile).toHaveBeenCalled()
+		expect(caddyMod.generatePortalCaddyfile).toHaveBeenCalled()
 		expect(caddyMod.writeCaddyfile).toHaveBeenCalled()
 		expect(caddyMod.reloadCaddy).toHaveBeenCalled()
 	})
@@ -173,5 +180,62 @@ describe('local-dns/routes — Phase 104 plan 104-04 — hybrid procedures', () 
 		expect(status.zoneId).toBeNull()
 		expect(status.hostIp).toBeNull()
 		expect(status.cfTokenAvailable).toBe(false)
+	})
+})
+
+// ─── Phase 143-01 — Portal wire-rename + alias back-compat ──────────────
+
+describe('local-dns/routes — Phase 143-01 Portal procedures (wire rename)', () => {
+	it('local.activatePortal writes Redis keys via the renamed procedure', async () => {
+		const redis = makeFakeRedis()
+		const caddyMod = await import('../domain/caddy.js')
+		const localRouter = (await import('./routes.js')).default
+		const caller = (localRouter as any).createCaller({
+			livinityd: {ai: {redis}},
+			currentUser: {id: 'test-user', role: 'admin', username: 'admin'},
+			dangerouslyBypassAuthentication: true,
+			logger: {error: () => {}, info: () => {}, warn: () => {}, verbose: () => {}},
+		})
+		const r = await caller.activatePortal({
+			subdomain: 'ab12cd34.home.livinity.io',
+			zoneId: 'cf-zone-portal',
+			hostIp: '192.168.1.100',
+		})
+		expect(r.success).toBe(true)
+		expect(r.mode).toBe('portal')
+		expect(await redis.get('livos:domain:local_mode')).toBe('portal')
+		expect(caddyMod.generatePortalCaddyfile).toHaveBeenCalled()
+	})
+
+	it('local.getPortalStatus returns the same shape as getHybridStatus', async () => {
+		const redis = makeFakeRedis()
+		await redis.set('livos:domain:hybrid_subdomain', 'sample.home.livinity.io')
+		await redis.set('livos:domain:hybrid_zone_id', 'cf-z')
+		await redis.set('livos:domain:host_ip', '10.0.0.5')
+		const localRouter = (await import('./routes.js')).default
+		const caller = (localRouter as any).createCaller({
+			livinityd: {ai: {redis}},
+			currentUser: {id: 'test-user', role: 'admin', username: 'admin'},
+			dangerouslyBypassAuthentication: true,
+			logger: {error: () => {}, info: () => {}, warn: () => {}, verbose: () => {}},
+		})
+		const status = await caller.getPortalStatus()
+		expect(status.subdomain).toBe('sample.home.livinity.io')
+		expect(status.zoneId).toBe('cf-z')
+		expect(status.hostIp).toBe('10.0.0.5')
+		expect(status.cfTokenAvailable).toBe(false)
+	})
+
+	it('legacy aliases (activateHybrid / getHybridStatus / provisionHybrid) still exist on the router', async () => {
+		const localRouter = (await import('./routes.js')).default
+		const procs = (localRouter as any)._def?.procedures ?? {}
+		// Phase 143-01 back-compat contract: aliases stay until Phase 144+.
+		expect(procs.activateHybrid).toBeDefined()
+		expect(procs.getHybridStatus).toBeDefined()
+		expect(procs.provisionHybrid).toBeDefined()
+		// And the new canonical names are alongside them.
+		expect(procs.activatePortal).toBeDefined()
+		expect(procs.getPortalStatus).toBeDefined()
+		expect(procs.provisionPortal).toBeDefined()
 	})
 })

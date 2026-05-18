@@ -1,20 +1,20 @@
 // livos/packages/livinityd/source/modules/domain/caddy.test.ts
 // Phase 104 plan 104-03 — generateLocalCaddyfile + cloud-mode regression.
-// Phase 104 plan 104-04 — append: generateHybridCaddyfile + validateHybridDomain
-// + D-104-RELAY-ZERO-DATA-PLANE negative-grep test (static unit-test-level
-// complement to plan 104-07's runtime tcpdump assertion).
+// Phase 104 plan 104-04 — append: generate{Hybrid,Portal}Caddyfile +
+// validate{Hybrid,Portal}Domain + D-104-RELAY-ZERO-DATA-PLANE negative-grep.
+// Phase 142-01 — local-lan generator dropped (generateLocalCaddyfile +
+// validateLocalTld). Phase 143-03 — Hybrid* names renamed → Portal*; the
+// legacy aliases (validateHybridDomain, generateHybridCaddyfile) are still
+// exported and exercised below as a back-compat guarantee.
 import {describe, it, test, expect} from 'vitest'
 import {
 	generateFullCaddyfile,
 	generateHybridCaddyfile,
+	generatePortalCaddyfile,
 	validateHybridDomain,
+	validatePortalDomain,
 	validateHost,
 } from './caddy.js'
-
-// Phase 142-01 — `generateLocalCaddyfile` + `validateLocalTld` test blocks
-// removed alongside the dropped local-lan generator. The remaining tests
-// cover the cloud-mode regression invariant + hybrid (portal) generator +
-// Phase 141-03 hyphen-pattern + Phase 142-01 retirement guards below.
 
 describe('generateFullCaddyfile — cloud-mode regression (D-104-NO-PROD-IMPACT)', () => {
 	it('does NOT emit any pki or import directive in cloud mode (AC-104-3 unit-level)', () => {
@@ -165,6 +165,22 @@ describe('Phase 142-01 local-lan retirement (source-text guards)', () => {
 		const mod = (await import('./caddy.js')) as unknown as Record<string, unknown>
 		expect(mod.generateLocalCaddyfile).toBeUndefined()
 		expect(mod.validateLocalTld).toBeUndefined()
+	})
+})
+
+// ─── Phase 143-03 — Hybrid → Portal alias back-compat guarantee ─────────
+
+describe('Phase 143-03 Hybrid → Portal aliases (back-compat)', () => {
+	test('generateHybridCaddyfile is the same function reference as generatePortalCaddyfile', () => {
+		expect(generateHybridCaddyfile).toBe(generatePortalCaddyfile)
+	})
+	test('validateHybridDomain is the same function reference as validatePortalDomain', () => {
+		expect(validateHybridDomain).toBe(validatePortalDomain)
+	})
+	test('aliases produce byte-identical output for the same input', () => {
+		const portalOut = generatePortalCaddyfile('ab12cd34.home.livinity.io', [{name: 'app1', port: 9001}])
+		const hybridOut = generateHybridCaddyfile('ab12cd34.home.livinity.io', [{name: 'app1', port: 9001}])
+		expect(hybridOut).toBe(portalOut)
 	})
 })
 

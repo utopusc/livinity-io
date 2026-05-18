@@ -1,25 +1,27 @@
-// livos/packages/ui/src/features/local-setup/HybridDnsSetup.tsx
-// Phase 104 plan 104-05 — hybrid step 2: provision subdomain via Server5 +
+// livos/packages/ui/src/features/local-setup/PortalDnsSetup.tsx
+// Phase 104 plan 104-05 — portal step 2: provision subdomain via Server5 +
 // walk through Cloudflare TXT challenge (informational; ACME handles the actual write).
+// Phase 143-02 — renamed from `HybridDnsSetup.tsx` (Phase 142-02 portal rename
+// carry-through). Calls the new `local.provisionPortal` procedure (Phase 143-01).
 //
-// Phase 104 review fix WIZ-01 + PROVIDE-01: calls `local.provisionHybrid` tRPC
-// mutation (server-side helper provisionHybridSubdomain) so the CF token
-// stays on the LivOS host instead of being typed/pasted into prompt() dialogs.
+// Phase 104 review fix WIZ-01 + PROVIDE-01: the tRPC mutation runs server-side
+// (provisionHybridSubdomain helper) so the CF token stays on the LivOS host
+// instead of being typed/pasted into prompt() dialogs.
 import {useState} from 'react'
 import {IconArrowLeft, IconExternalLink, IconLoader2} from '@tabler/icons-react'
 
 import {trpcReact} from '@/trpc/trpc'
 
-export interface HybridDnsSetupProps {
+export interface PortalDnsSetupProps {
 	cfToken: string
 	hostIp: string
 	onProvisioned: (subdomain: string, zoneId: string) => void
 	onBack: () => void
 }
 
-export function HybridDnsSetup({cfToken, hostIp, onProvisioned, onBack}: HybridDnsSetupProps) {
+export function PortalDnsSetup({cfToken, hostIp, onProvisioned, onBack}: PortalDnsSetupProps) {
 	const [error, setError] = useState<string | null>(null)
-	const provisionM = trpcReact.local.provisionHybrid.useMutation()
+	const provisionM = trpcReact.local.provisionPortal.useMutation()
 	const busy = provisionM.isPending
 
 	const handleProvision = async () => {
@@ -42,8 +44,8 @@ export function HybridDnsSetup({cfToken, hostIp, onProvisioned, onBack}: HybridD
 	}
 
 	return (
-		<div className='space-y-4' data-testid='hybrid-dns-setup'>
-			<h3 className='text-lg font-semibold'>Provision hybrid subdomain</h3>
+		<div className='space-y-4' data-testid='portal-dns-setup'>
+			<h3 className='text-lg font-semibold'>Provision portal subdomain</h3>
 			<p className='text-text-secondary'>
 				LivOS will mint a random subdomain under <code>home.livinity.io</code> via Server5 (one-time control-plane
 				API call). Public DNS A-record will point at <code>{hostIp}</code>.

@@ -207,29 +207,35 @@ ${WS_TRANSPORT_BODY}
 
 // ─── Phase 104 plan 104-03 — local-lan generator RETIRED in Phase 142-01 ──
 // The `generateLocalCaddyfile` + `validateLocalTld` pair backed the dnsmasq
-// + Caddy internal-CA mode (--mode local-lan). Phase 142-01 retires local-lan
-// entirely; both functions are dropped. `LocalSubdomainConfig` survives as a
-// small helper type because the portal generator below (formerly hybrid)
-// still uses it for the multi-user-app per-subdomain branch. Rename of the
-// type to `PortalSubdomainConfig` is a Phase 142-04 sweep item.
+// + Caddy internal-CA mode (--mode local-lan). Phase 142-01 retired both.
+// Phase 143-03 finishes the polish: `LocalSubdomainConfig` → `PortalSubdomainConfig`
+// (the type's only consumer is the portal generator below, formerly hybrid).
 
 /**
- * Per-subdomain routing hint for the portal Caddyfile generator. The
- * `Local` prefix reflects the type's original local-lan origin and will be
- * renamed to `PortalSubdomainConfig` in Phase 142-04's polish pass.
+ * Per-subdomain routing hint for the portal Caddyfile generator.
+ * Phase 143-03 rename: was `LocalSubdomainConfig` (legacy from local-lan).
  */
-export interface LocalSubdomainConfig {
+export interface PortalSubdomainConfig {
 	name: string
 	port: number
 }
 
+/**
+ * @deprecated Phase 143-03 — alias of `PortalSubdomainConfig`. Kept as a
+ * type-only export for any external caller still importing the legacy name;
+ * delete in Phase 144+ after consumers have migrated.
+ */
+export type LocalSubdomainConfig = PortalSubdomainConfig
+
 const IPV4_RE_CADDY =
 	/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/
 
-// ─── Phase 104 plan 104-04 — hybrid mode generator + validator ─────────
+// ─── Phase 104 plan 104-04 — portal mode generator + validator ─────────
+// Phase 143-03 — renamed from `Hybrid*` to `Portal*` (carries through the
+// Phase 142-02 user-facing rename to the API surface).
 
 /**
- * Validate a hybrid-mode domain shape. Accepts user-owned domains AND the
+ * Validate a portal-mode domain shape. Accepts user-owned domains AND the
  * LivOS-provisioned <random>.home.livinity.io pattern. Rejects:
  *   - .local TLD (Phase 142-01: local-lan retired; this guard remains as a
  *     defensive sanity check for any caller that hasn't migrated yet)
@@ -237,19 +243,26 @@ const IPV4_RE_CADDY =
  *   - Path-traversal patterns
  *   - Domains shorter than two labels (TLDs alone)
  */
-const HYBRID_DOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i
+const PORTAL_DOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i
 
-export function validateHybridDomain(domain: string): boolean {
+export function validatePortalDomain(domain: string): boolean {
 	if (typeof domain !== 'string') return false
 	if (domain.length === 0 || domain.length > 253) return false
 	if (domain.includes('..') || domain.includes('/')) return false
 	if (IPV4_RE_CADDY.test(domain)) return false
-	if (domain.endsWith('.local')) return false // hybrid path is NOT for .local
-	return HYBRID_DOMAIN_RE.test(domain)
+	if (domain.endsWith('.local')) return false // portal path is NOT for .local
+	return PORTAL_DOMAIN_RE.test(domain)
 }
 
 /**
- * Generate a Caddyfile for hybrid mode. Uses Cloudflare DNS-01 for Let's Encrypt
+ * @deprecated Phase 143-03 — alias of `validatePortalDomain`. Kept as a
+ * named export so external callers using the legacy name still work; remove
+ * in Phase 144+ once consumers have migrated.
+ */
+export const validateHybridDomain = validatePortalDomain
+
+/**
+ * Generate a Caddyfile for portal mode. Uses Cloudflare DNS-01 for Let's Encrypt
  * wildcard cert issuance — no internal PKI, no CA enrollment needed on clients.
  *
  * The `dns cloudflare {env.CLOUDFLARE_API_TOKEN}` directive requires the
@@ -262,15 +275,15 @@ export function validateHybridDomain(domain: string): boolean {
  * Server5 is touched ONLY for (a) one-time subdomain mint and (b) periodic
  * ACME DNS-01 TXT writes; neither path is in this Caddyfile output.
  */
-export function generateHybridCaddyfile(
-	hybridDomain: string,
-	subdomains: LocalSubdomainConfig[] = [],
+export function generatePortalCaddyfile(
+	portalDomain: string,
+	subdomains: PortalSubdomainConfig[] = [],
 	multiUser: boolean = true,
 ): string {
 	const blocks: string[] = []
 
 	// Wildcard virtual host with Cloudflare DNS-01 ACME
-	blocks.push(`*.${hybridDomain} {
+	blocks.push(`*.${portalDomain} {
     tls {
         dns cloudflare {env.CLOUDFLARE_API_TOKEN}
     }
@@ -280,7 +293,7 @@ ${WS_TRANSPORT_BODY_LOCAL}
 }`)
 
 	// Bare apex virtual host (same cert)
-	blocks.push(`${hybridDomain} {
+	blocks.push(`${portalDomain} {
     tls {
         dns cloudflare {env.CLOUDFLARE_API_TOKEN}
     }
@@ -292,7 +305,7 @@ ${WS_TRANSPORT_BODY_LOCAL}
 	// Per-subdomain custom port routing (multi-user app gateway hint)
 	if (multiUser) {
 		for (const sub of subdomains) {
-			blocks.push(`${sub.name}.${hybridDomain} {
+			blocks.push(`${sub.name}.${portalDomain} {
     tls {
         dns cloudflare {env.CLOUDFLARE_API_TOKEN}
     }
@@ -305,6 +318,13 @@ ${WS_TRANSPORT_BODY_LOCAL}
 
 	return blocks.join('\n\n') + '\n'
 }
+
+/**
+ * @deprecated Phase 143-03 — alias of `generatePortalCaddyfile`. Kept as a
+ * named export so external callers using the legacy name still work; remove
+ * in Phase 144+ once consumers have migrated.
+ */
+export const generateHybridCaddyfile = generatePortalCaddyfile
 
 /**
  * Generate a simple Caddyfile for just the main domain (legacy support).
