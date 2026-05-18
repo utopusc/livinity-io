@@ -83,8 +83,10 @@ http://socinity.livinity.io {
 
 Phase 141-03 wires this into `generateFullCaddyfile` so livinityd's
 `rebuildCaddy()` always emits the prefix when `livos:domain:local_mode` is
-`hybrid` or `tunnel`. If the value is empty (Phase 141-01 bug pre-fix), the
-prefix logic falls through and you get bare blocks → loops.
+`portal` (Phase 142-02; `hybrid` and `tunnel` also accepted as back-compat
+aliases for boxes that haven't re-run install.sh since the rename). If the
+value is empty (Phase 141-01 bug pre-fix), the prefix logic falls through
+and you get bare blocks → loops.
 
 **Recovery if you find an unprefixed Caddyfile** (e.g., after a manual edit):
 
@@ -173,11 +175,13 @@ ssh -i .../pem/minipc bruce@10.69.31.68 '
 '
 ```
 
-Expected: `hybrid` (or `tunnel`). Empty means the boot drainer didn't run, or
-the queue file was never written. Re-run install.sh OR manually set:
+Expected: `portal` (Phase 142-02). On older boxes that haven't re-run
+install.sh since the rename, the legacy `hybrid` or `tunnel` values are also
+recognized by livinityd. Empty means the boot drainer didn't run, or the
+queue file was never written. Re-run install.sh OR manually set:
 
 ```bash
-sudo redis-cli -a "$REDIS_PASS" --no-auth-warning set livos:domain:local_mode hybrid
+sudo redis-cli -a "$REDIS_PASS" --no-auth-warning set livos:domain:local_mode portal
 sudo systemctl restart livos   # triggers rebuildCaddy on next install/uninstall
 ```
 
