@@ -41,6 +41,9 @@
     "onlyBuiltDependencies": [
       "@parcel/watcher",
       "@swc/core",
+      "baileys",
+      "core-js",
+      "core-js-pure",
       "cpu-features",
       "drivelist",
       "esbuild",
@@ -49,7 +52,8 @@
       "node-pty",
       "protobufjs",
       "sharp",
-      "ssh2"
+      "ssh2",
+      "usocket"
     ]
   }
 }
