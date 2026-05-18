@@ -21,9 +21,9 @@ const MODES: Array<{
 	recommended?: boolean
 }> = [
 	{
-		id: 'hybrid',
+		id: 'portal',
 		icon: TbHomeBolt,
-		title: 'Hybrid (recommended)',
+		title: 'Portal (recommended)',
 		pros: 'Works on every device including iPhone/iPad/Mac. Public DNS, real Let’s Encrypt cert, NO data-plane Server5 traffic.',
 		cons: 'Requires a Cloudflare API token (free Cloudflare account).',
 		recommended: true,

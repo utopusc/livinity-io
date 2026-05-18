@@ -28,8 +28,15 @@
 # token at runtime from /api/me/tunnel-token (CF for SaaS multi-tenant flow).
 # Backward-compat: `--domain X.livinity.io --cf-tunnel-token Y` continues to work.
 
-MODE="${MODE:-hybrid}"   # D-104-DEFAULT-MODE
-MODE_WHITELIST="cloud local-lan hybrid tunnel"
+MODE="${MODE:-portal}"   # D-104-DEFAULT-MODE (Phase 142-02: `hybrid` renamed → `portal`)
+# Phase 142-02: `portal` is the user-facing name for what used to be `hybrid`
+# (Cloudflare Tunnel transport — Mini PC accessible from anywhere via CF edge).
+# `hybrid` and `tunnel` are kept on the whitelist as silent back-compat aliases
+# (normalized to `portal` below) so any operator copy-pasting an old install
+# command from the docs/wiki still works. `local-lan` and `cloud` REMAIN on the
+# whitelist here so they reach their respective friendly-rejection branches
+# below (Phase 142-01 retires local-lan; Phase 142-03 marks cloud Coming Soon).
+MODE_WHITELIST="cloud local-lan hybrid portal tunnel"
 
 # Plan 104-08 — user-owned domain bypass (env-var form; CLI flags below also set
 # these). Honoring env overrides keeps the install.sh-piped-via-curl ergonomics
@@ -69,23 +76,20 @@ LivOS one-shot installer. Provisions Caddy + Node + Postgres + Redis on a fresh
 Ubuntu 24.04 system and starts the LivOS services.
 
 Modes:
-  hybrid     DEFAULT. Cloudflare Tunnel transport (cloudflared outbound).
-             Works on any device with outbound HTTPS — no public IP, no port-
-             forward, no CGNAT concerns. CF terminates TLS at the edge; Caddy
-             serves plain HTTP on localhost:80. Universal: VPS, VDS, Mini PC,
-             home boxes — all install the same way. Get the install command
-             from https://livinity.io/dashboard/install (it pre-fills the
-             --cf-tunnel-token for you). (Phase 134.)
-  tunnel     Alias for hybrid (kept for backward compat with pre-Phase-134
-             docs / scripts). Identical behavior.
-  cloud      *.livinity.io via Server5 relay (Mini PC legacy path). Use only
-             if you specifically want the Server5-managed subdomain. Requires
-             CLOUDFLARE_API_TOKEN env.
-  local-lan  *.livinity.local via dnsmasq + Caddy internal PKI. Fully air-
-             gapped. Apple devices NOT supported (RFC 6762 + macOS 26 mDNS
-             interception).
+  portal     DEFAULT (and only active mode as of Phase 142). Cloudflare Tunnel
+             transport (cloudflared outbound). Works on any device with
+             outbound HTTPS — no public IP, no port-forward, no CGNAT
+             concerns. CF terminates TLS at the edge; Caddy serves plain HTTP
+             on localhost:80. Universal: VPS, VDS, Mini PC, home boxes — all
+             install the same way. Get the install command from
+             https://livinity.io/dashboard/install (it pre-fills the
+             --cf-tunnel-token for you).
+  hybrid     Back-compat alias for portal — accepted, normalized silently.
+  tunnel     Back-compat alias for portal — accepted, normalized silently.
+  cloud      Coming Soon — not yet available in this LivOS build.
+  local-lan  RETIRED (Phase 142-01). Use --mode portal instead.
 
-Tunnel-transport flags (hybrid + tunnel modes — Phase 134, updated Phase 140):
+Tunnel-transport flags (portal mode — Phase 134, updated Phase 140+142):
   --subdomain SUB          The subdomain part of your livinity.io address
                            (e.g. `lucy` for lucy.livinity.io). REQUIRED for
                            hybrid mode unless --domain is supplied instead.
@@ -102,13 +106,12 @@ Tunnel-transport flags (hybrid + tunnel modes — Phase 134, updated Phase 140):
                            Pass --api-key from your livinity.io dashboard —
                            token is fetched automatically.
 
-Legacy CF DNS flags (back-compat only — no longer used by hybrid/tunnel):
+Legacy CF DNS flags (back-compat only — no longer used by portal):
   --cf-token TOKEN         Pre-Phase-134 CF API token for DNS-01 wildcard
-                           cert issuance. Ignored by hybrid/tunnel modes
-                           (CF Tunnel handles cert + DNS server-side).
-                           Still consumed by `cloud` mode if present.
+                           cert issuance. Ignored by portal mode (CF Tunnel
+                           handles cert + DNS server-side).
   --cf-zone-id ZONE_ID     Pre-Phase-134 CF zone ID for direct-LAN A-record.
-                           Ignored by hybrid/tunnel modes.
+                           Ignored by portal mode.
 
 Marketplace API key (optional, works in all modes):
   --api-key KEY            LivOS marketplace API key (liv_k_...). Saved to
@@ -128,9 +131,10 @@ Application deploy (Plan 104-11):
                            after install.sh exits 0).
 
 Examples:
-  # Phase 140 — minimal subdomain-only one-liner. --api-key auto-fetches the
-  # tunnel token from livinity.io/api/me/tunnel-token. Works on any device
+  # Phase 140+142 — minimal subdomain-only one-liner. --api-key auto-fetches
+  # the tunnel token from livinity.io/api/me/tunnel-token. Works on any device
   # with outbound HTTPS — no port-forward, no public IP, no CGNAT concerns.
+  # --mode portal is the default; omitting it picks portal.
   curl -fsSL https://livinity.io/install.sh | sudo bash -s -- \
       --subdomain lucy \
       --api-key liv_k_<from-dashboard>
@@ -138,35 +142,27 @@ Examples:
   # Backward-compat — full --domain + --cf-tunnel-token still works for
   # operators with existing automation.
   curl -fsSL https://livinity.io/install.sh | sudo bash -s -- \
-      --mode hybrid \
+      --mode portal \
       --domain bruce.livinity.live \
       --api-key liv_k_<from-wizard> \
       --cf-tunnel-token <auto-from-wizard>
 
-  # `--mode tunnel` is a backward-compat alias for hybrid (both use CF Tunnel
-  # transport since Phase 134). Same flags apply.
-  bash install.sh --mode tunnel --domain bruce.bruceoz.com --cf-tunnel-token <tok>
-
-  # Other modes
-  bash install.sh --mode local-lan
-  bash install.sh --mode cloud   # Mini PC legacy path (Server5-managed subdomain)
+  # --mode hybrid and --mode tunnel are silently accepted and normalized to
+  # portal — old install commands keep working without edits.
+  bash install.sh --mode hybrid --domain bruce.bruceoz.com --cf-tunnel-token <tok>
 
 Environment overrides (set instead of --flag if you can't pass long args):
-  CLOUDFLARE_API_TOKEN     required for cloud mode only (Server5 mint)
   LIVOS_DOMAIN             equivalent to --domain
   LIVOS_SUBDOMAIN          equivalent to --subdomain (Plan 140-07)
-  LIVOS_CF_TOKEN           equivalent to --cf-token (also CLOUDFLARE_API_TOKEN)
-  LIVOS_CF_ZONE_ID         equivalent to --cf-zone-id
   LIVOS_CF_TUNNEL_TOKEN    equivalent to --cf-tunnel-token (Plan 104-09)
   LIVOS_API_KEY            equivalent to --api-key (Plan 104-09)
-  LIVINITY_LOCAL_TLD       override local-lan TLD (default: livinity.local)
   LIVINITY_HOST_IP         override auto-detected host IP
   NO_COLOR                 disable ANSI colors
 
-CGNAT note (hybrid + tunnel modes — Phase 134+):
-  Hybrid mode now uses Cloudflare Tunnel (cloudflared outbound) as transport
-  (Phase 134). CGNAT is FINE — cloudflared dials OUT to CF's edge, so no
-  inbound connectivity is required from the operator's ISP.
+CGNAT note:
+  Portal mode uses Cloudflare Tunnel (cloudflared outbound). CGNAT is FINE
+  — cloudflared dials OUT to CF's edge, so no inbound connectivity is
+  required from the operator's ISP.
 HELP
 }
 
@@ -216,10 +212,44 @@ parse_cli() {
         [[ "$MODE" == "$m" ]] && valid=1 && break
     done
     if [[ $valid -ne 1 ]]; then
-        echo "ERROR: invalid --mode '$MODE'. Use: cloud | local-lan | hybrid | tunnel" >&2
+        echo "ERROR: invalid --mode '$MODE'. Use: portal" >&2
         echo "See: bash install.sh --help" >&2
         exit 64   # EX_USAGE per sysexits.h
     fi
+
+    # Phase 142-01 — local-lan mode retired. Reject with a pointer to the only
+    # active mode. dnsmasq + Caddy internal-CA path has no production install
+    # base; the maintenance cost of keeping it alive across every refactor
+    # outweighs its niche air-gap use case.
+    if [[ "$MODE" == "local-lan" ]]; then
+        echo "ERROR: --mode local-lan was retired in Phase 142-01." >&2
+        echo "  LivOS now ships a single transport mode: portal (CF Tunnel; air-gapped" >&2
+        echo "  Mini PC + accessible from anywhere via Cloudflare's edge)." >&2
+        echo "  Re-run with: --mode portal  (or omit --mode — portal is the default)" >&2
+        exit 64
+    fi
+
+    # Phase 142-03 — cloud mode is "Coming Soon" — the hosted control-plane it
+    # implies isn't shipped yet. We keep the mode-cloud.sh helper on disk for
+    # the future implementation but refuse the CLI invocation today.
+    if [[ "$MODE" == "cloud" ]]; then
+        echo "ERROR: --mode cloud is Coming Soon — not yet available in this LivOS build." >&2
+        echo "  Track progress: https://livinity.io/dashboard" >&2
+        echo "  For now use: --mode portal  (or omit --mode — portal is the default)" >&2
+        exit 64
+    fi
+
+    # Phase 142-02 — `hybrid` and `tunnel` are silent back-compat aliases for
+    # `portal`. Normalize here so all downstream code paths see exactly one
+    # canonical mode string. Operators copy-pasting old commands get an INFO
+    # line; new installs go straight to portal without noise.
+    case "$MODE" in
+        hybrid|tunnel)
+            info "--mode $MODE renamed → portal (Phase 142-02). Treating as --mode portal."
+            MODE="portal"
+            ;;
+    esac
+
     info "Mode: $MODE"
 
     # Plan 104-08 — when --domain is set in hybrid mode, the partner flags MUST
@@ -229,13 +259,14 @@ parse_cli() {
     # invocation is `curl | bash` where stdin is the pipe (no tty).
     if [[ -n "$LIVOS_DOMAIN" ]]; then
         case "$MODE" in
-            hybrid|tunnel)
-                # Phase 134 — both modes use CF Tunnel transport. --domain
-                # validation (shape) happens below; the required-flag check
-                # (--cf-tunnel-token) lives in the unified tunnel-gating block.
+            portal)
+                # Phase 142-02 — portal (formerly hybrid/tunnel) uses CF Tunnel
+                # transport. --domain validation (shape) happens below; the
+                # required-flag check (--cf-tunnel-token) lives in the unified
+                # gating block.
                 ;;
             *)
-                echo "ERROR: --domain is only valid with --mode hybrid or --mode tunnel (got --mode $MODE)" >&2
+                echo "ERROR: --domain is only valid with --mode portal (got --mode $MODE)" >&2
                 exit 64
                 ;;
         esac
@@ -248,13 +279,13 @@ parse_cli() {
         info "Domain: $LIVOS_DOMAIN (Cloudflare Tunnel terminates TLS at the edge — D-134-MODE)"
     fi
 
-    # Phase 134 — unified tunnel-transport gating. Both `--mode hybrid` (default)
-    # and `--mode tunnel` (back-compat alias) require a domain (either --subdomain
-    # or --domain) AND a tunnel token (either --cf-tunnel-token or --api-key for
-    # runtime fetch — see Plan 140-07).
-    # --cf-tunnel-token is REJECTED in any other mode (cloud / local-lan) so
-    # operators don't accidentally wire it where it's unused.
-    if [[ "$MODE" == "hybrid" || "$MODE" == "tunnel" ]]; then
+    # Phase 142-02 — unified tunnel-transport gating. `portal` mode (formerly
+    # `hybrid`/`tunnel`) requires a domain (either --subdomain or --domain) AND
+    # a tunnel token (either --cf-tunnel-token or --api-key for runtime fetch
+    # — see Plan 140-07).
+    # --cf-tunnel-token is REJECTED in any other mode so operators don't
+    # accidentally wire it where it's unused.
+    if [[ "$MODE" == "portal" ]]; then
         # Domain gate: at this point LIVOS_DOMAIN is set if either --domain or
         # --subdomain was passed (the derivation above propagates --subdomain).
         if [[ -z "$LIVOS_DOMAIN" ]]; then
@@ -283,7 +314,7 @@ parse_cli() {
             info "--cf-tunnel-token not set; will fetch from /api/me/tunnel-token at install time (Plan 140-07)"
         fi
     elif [[ -n "$LIVOS_CF_TUNNEL_TOKEN" ]]; then
-        echo "ERROR: --cf-tunnel-token is only valid with --mode hybrid or --mode tunnel (got --mode $MODE)" >&2
+        echo "ERROR: --cf-tunnel-token is only valid with --mode portal (got --mode $MODE)" >&2
         exit 64
     fi
 

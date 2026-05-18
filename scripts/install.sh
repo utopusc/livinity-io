@@ -99,16 +99,16 @@ fi
 # ── Shared deps (every mode needs Caddy + apt prereqs) ──
 install_common_deps
 
-# ── Dispatch to mode helper. Phase 134: hybrid (default) and tunnel are the
-#    same code path now (CF Tunnel transport via cloudflared outbound). hybrid
-#    is the user-facing default; tunnel is a back-compat alias. Both invoke
-#    install_mode_tunnel from mode-tunnel.sh — mode-hybrid.sh just delegates.
+# ── Dispatch to mode helper. Phase 142-02: `portal` is the only user-facing
+#    mode. parse-cli.sh normalizes legacy `hybrid` and `tunnel` to `portal`
+#    BEFORE we get here, and rejects `cloud` (Coming Soon) + `local-lan`
+#    (retired). The legacy `hybrid)`/`tunnel)`/`cloud)` arms below are
+#    defense-in-depth — if normalization ever regresses, the install still
+#    routes somewhere sensible instead of dying with an "unhandled mode" fail.
 case "$MODE" in
-    cloud)         source "$SCRIPT_DIR/mode-cloud.sh"; install_mode_cloud ;;
-    local-lan)     source "$SCRIPT_DIR/mode-local-lan.sh"; install_mode_local_lan ;;
-    hybrid)        source "$SCRIPT_DIR/mode-hybrid.sh"; install_mode_hybrid ;;   # Phase 134: delegates → install_mode_tunnel
-    tunnel)        source "$SCRIPT_DIR/mode-tunnel.sh"; install_mode_tunnel ;;   # Phase 134: kept as back-compat alias
-    *)             fail "internal error: unhandled MODE=$MODE" 64 ;;
+    portal)        source "$SCRIPT_DIR/mode-tunnel.sh"; install_mode_tunnel ;;   # Phase 142-02 default
+    hybrid|tunnel) source "$SCRIPT_DIR/mode-tunnel.sh"; install_mode_tunnel ;;   # back-compat alias safety net
+    *)             fail "internal error: unhandled MODE=$MODE (parse-cli normalization regression?)" 64 ;;
 esac
 
 # ── Persist mode marker (read by livinityd on boot + by update.sh;

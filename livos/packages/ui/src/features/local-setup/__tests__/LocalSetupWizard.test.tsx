@@ -29,14 +29,14 @@ describe('LocalSetupWizard — tRPC wiring (Phase 104 plan 104-05)', () => {
 })
 
 describe('ModePickStep — surface invariants', () => {
-	it('shows all three modes', () => {
-		expect(modePickSrc).toContain("id: 'hybrid'")
+	it('shows all three modes (Phase 142-02 renamed hybrid → portal)', () => {
+		expect(modePickSrc).toContain("id: 'portal'")
 		expect(modePickSrc).toContain("id: 'local-lan'")
 		expect(modePickSrc).toContain("id: 'cloud'")
 	})
-	it('marks hybrid as recommended/default (D-104-DEFAULT-MODE surface)', () => {
+	it('marks portal as recommended/default (D-104-DEFAULT-MODE surface, Phase 142-02 rename)', () => {
 		expect(modePickSrc).toMatch(/recommended:\s*true/)
-		expect(modePickSrc).toMatch(/Hybrid \(recommended\)/)
+		expect(modePickSrc).toMatch(/Portal \(recommended\)/)
 	})
 	it('warns local-lan does NOT work on Apple devices', () => {
 		expect(modePickSrc).toMatch(/Does NOT work on Apple devices/)

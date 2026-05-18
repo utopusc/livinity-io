@@ -11,7 +11,7 @@ import {PlatformInstructions} from './PlatformInstructions'
 import {QrCodeStep} from './QrCodeStep'
 import {
 	CLOUD_STEPS,
-	HYBRID_STEPS,
+	PORTAL_STEPS,
 	initialWizardState,
 	LOCAL_LAN_STEPS,
 	type SelectedMode,
@@ -31,7 +31,7 @@ export function LocalSetupWizard() {
 			setState((s) => ({
 				...s,
 				localLan: {...s.localLan, hostIp: statusQ.data!.hostIp ?? ''},
-				hybrid: {...s.hybrid, hostIp: statusQ.data!.hostIp ?? ''},
+				portal: {...s.portal, hostIp: statusQ.data!.hostIp ?? ''},
 			}))
 		}
 	}, [statusQ.data?.hostIp])
@@ -39,8 +39,8 @@ export function LocalSetupWizard() {
 	const activeSteps =
 		state.mode === 'local-lan'
 			? LOCAL_LAN_STEPS
-			: state.mode === 'hybrid'
-				? HYBRID_STEPS
+			: state.mode === 'portal'
+				? PORTAL_STEPS
 				: state.mode === 'cloud'
 					? CLOUD_STEPS
 					: LOCAL_LAN_STEPS // default while mode is null
@@ -81,7 +81,7 @@ export function LocalSetupWizard() {
 						setState((s) => ({...s, mode: m}))
 						if (m === 'cloud') goto('cloud-redirect')
 						else if (m === 'local-lan') goto('local-lan-config')
-						else if (m === 'hybrid') goto('hybrid-config')
+						else if (m === 'portal') goto('portal-config')
 					}}
 				/>
 			)}
@@ -109,26 +109,26 @@ export function LocalSetupWizard() {
 				<PlatformInstructions hostIp={state.localLan.hostIp} onNext={next} onBack={back} />
 			)}
 
-			{state.step === 'hybrid-config' && (
+			{state.step === 'portal-config' && (
 				<HybridConfigStep state={state} setState={setState} onNext={next} onBack={back} />
 			)}
 
-			{state.step === 'hybrid-dns-records' && (
+			{state.step === 'portal-dns-records' && (
 				<HybridDnsSetup
-					cfToken={state.hybrid.cloudflareApiToken}
-					hostIp={state.hybrid.hostIp}
+					cfToken={state.portal.cloudflareApiToken}
+					hostIp={state.portal.hostIp}
 					onProvisioned={(subdomain, zoneId) => {
 						setState((s) => ({
 							...s,
-							hybrid: {...s.hybrid, subdomain, zoneId},
+							portal: {...s.portal, subdomain, zoneId},
 						}))
-						goto('hybrid-verify')
+						goto('portal-verify')
 					}}
 					onBack={back}
 				/>
 			)}
 
-			{state.step === 'hybrid-verify' && <HybridVerifyStep state={state} onNext={next} onBack={back} />}
+			{state.step === 'portal-verify' && <HybridVerifyStep state={state} onNext={next} onBack={back} />}
 
 			{state.step === 'verify' && <VerifyStep mode={state.mode} onDone={() => goto('done')} onBack={back} />}
 
@@ -241,11 +241,11 @@ function HybridConfigStep({
 				<input
 					type='password'
 					className='mt-1 block w-full rounded border bg-bg-secondary px-3 py-2'
-					value={state.hybrid.cloudflareApiToken}
+					value={state.portal.cloudflareApiToken}
 					onChange={(e) =>
 						setState((s) => ({
 							...s,
-							hybrid: {...s.hybrid, cloudflareApiToken: e.target.value},
+							portal: {...s.portal, cloudflareApiToken: e.target.value},
 						}))
 					}
 					placeholder='Required for DNS-01 wildcard cert'
@@ -255,11 +255,11 @@ function HybridConfigStep({
 				Host IP (LAN)
 				<input
 					className='mt-1 block w-full rounded border bg-bg-secondary px-3 py-2'
-					value={state.hybrid.hostIp}
+					value={state.portal.hostIp}
 					onChange={(e) =>
 						setState((s) => ({
 							...s,
-							hybrid: {...s.hybrid, hostIp: e.target.value},
+							portal: {...s.portal, hostIp: e.target.value},
 						}))
 					}
 				/>
@@ -274,7 +274,7 @@ function HybridConfigStep({
 				</button>
 				<button
 					onClick={onNext}
-					disabled={!state.hybrid.cloudflareApiToken || !state.hybrid.hostIp}
+					disabled={!state.portal.cloudflareApiToken || !state.portal.hostIp}
 					className='rounded bg-accent px-4 py-2 text-white disabled:opacity-50'
 				>
 					Next: provision subdomain
@@ -299,9 +299,9 @@ function HybridVerifyStep({
 	const handleActivate = async () => {
 		try {
 			await activateM.mutateAsync({
-				subdomain: state.hybrid.subdomain,
-				zoneId: state.hybrid.zoneId,
-				hostIp: state.hybrid.hostIp,
+				subdomain: state.portal.subdomain,
+				zoneId: state.portal.zoneId,
+				hostIp: state.portal.hostIp,
 			})
 			onNext()
 		} catch {
@@ -311,10 +311,10 @@ function HybridVerifyStep({
 	return (
 		<div className='space-y-4'>
 			<p>
-				Provisioned subdomain: <code>{state.hybrid.subdomain}</code>
+				Provisioned subdomain: <code>{state.portal.subdomain}</code>
 			</p>
 			<p>
-				Zone ID: <code>{state.hybrid.zoneId}</code>
+				Zone ID: <code>{state.portal.zoneId}</code>
 			</p>
 			<p>
 				cfTokenAvailable: <code>{String(statusQ.data?.cfTokenAvailable ?? '...')}</code>

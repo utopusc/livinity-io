@@ -116,24 +116,39 @@ else
     fail "legacy --cf-zone-id flag broke parse_cli"
 fi
 
-# ── AC-134-01-7: --cf-tunnel-token rejected in cloud / local-lan modes ────
-info "AC-134-01-7: --cf-tunnel-token only valid in hybrid / tunnel"
+# ── AC-134-01-7 (Phase 142-03): --mode cloud rejected with Coming Soon ────
+# Pre-142, --mode cloud was a valid mode and --cf-tunnel-token in cloud was
+# the rejection condition. Phase 142-03 turned cloud itself into a Coming
+# Soon stub — the parse-cli rejection now fires earlier (at the mode whitelist
+# step), with a Coming-Soon-shaped error message. The defensive intent is
+# preserved: --mode cloud must NOT proceed to the install body.
+info "AC-134-01-7: --mode cloud → Coming Soon rejection (Phase 142-03)"
 rej_out=$(bash "$INSTALL_SH" --mode cloud --cf-tunnel-token fake 2>&1)
 rej_rc=$?
-if [[ $rej_rc -ne 0 ]] && echo "$rej_out" | grep -qE "only valid with --mode hybrid or --mode tunnel"; then
-    pass "--cf-tunnel-token rejected in --mode cloud (exit $rej_rc + clear error)"
+if [[ $rej_rc -ne 0 ]] && echo "$rej_out" | grep -qE "Coming Soon|coming soon"; then
+    pass "--mode cloud rejected with Coming Soon message (exit $rej_rc)"
 else
-    fail "--cf-tunnel-token should be rejected in --mode cloud"
+    fail "--mode cloud should be rejected with Coming Soon. Got exit=$rej_rc out:"; echo "$rej_out" | head -3 | sed 's/^/    /'
 fi
 
-# ── AC-134-01-8: --mode tunnel still works (back-compat alias) ────────────
-info "AC-134-01-8: --mode tunnel back-compat alias still accepted"
+# ── AC-134-01-8 (Phase 142-02): --mode tunnel + --mode hybrid still accepted ──
+info "AC-134-01-8: --mode tunnel + --mode hybrid back-compat aliases for portal"
 alias_out=$(bash "$INSTALL_SH" --mode tunnel --domain foo.example.com \
                               --cf-tunnel-token fake 2>&1 || true)
-if echo "$alias_out" | grep -qE "(Mode: tunnel|Domain: foo\.example\.com)"; then
-    pass "--mode tunnel still accepted (back-compat)"
+# Phase 142-02 normalizes tunnel/hybrid → portal silently. The accepted-and-
+# normalized signal is the "renamed → portal" info line OR landing past mode
+# validation with Domain/Mode log lines.
+if echo "$alias_out" | grep -qE "(renamed → portal|Mode: portal|Domain: foo\.example\.com)"; then
+    pass "--mode tunnel back-compat alias accepted (normalized to portal)"
 else
-    fail "--mode tunnel alias broken"
+    fail "--mode tunnel alias broken. Output:"; echo "$alias_out" | head -3 | sed 's/^/    /'
+fi
+alias_out2=$(bash "$INSTALL_SH" --mode hybrid --domain foo.example.com \
+                                --cf-tunnel-token fake 2>&1 || true)
+if echo "$alias_out2" | grep -qE "(renamed → portal|Mode: portal|Domain: foo\.example\.com)"; then
+    pass "--mode hybrid back-compat alias accepted (normalized to portal)"
+else
+    fail "--mode hybrid alias broken. Output:"; echo "$alias_out2" | head -3 | sed 's/^/    /'
 fi
 
 # ── AC-134-01-9: bash -n syntax on the touched files ──────────────────────

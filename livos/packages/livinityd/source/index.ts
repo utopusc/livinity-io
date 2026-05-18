@@ -463,17 +463,29 @@ export default class Livinityd {
 				const localMode = await this.ai.redis.get('livos:domain:local_mode')
 				let domain: string | null = null
 				switch (localMode) {
-					case 'hybrid':
-						domain = await this.ai.redis.get('livos:domain:hybrid_subdomain')
-						break
+					case 'portal':
 					case 'tunnel':
+						// Phase 142-02 — `portal` is the new user-facing name for
+						// the Cloudflare-Tunnel transport; `tunnel` is its
+						// back-compat alias on already-deployed boxes that haven't
+						// re-run install.sh yet. Both pull the apex from
+						// `livos:domain:tunnel_domain`.
 						domain = await this.ai.redis.get('livos:domain:tunnel_domain')
 						break
-					case 'local-lan':
-						domain = await this.ai.redis.get('livos:domain:local_tld')
+					case 'hybrid':
+						// Phase 142-02 — legacy alias of `portal`. Pre-rename
+						// installs stored the apex under `livos:domain:hybrid_subdomain`
+						// when an older install.sh ran; fall back to `tunnel_domain`
+						// when the hybrid-specific key is absent so a v34.x box that
+						// last touched install.sh in the Phase 134 era still resolves
+						// its apex correctly after this upgrade.
+						domain =
+							(await this.ai.redis.get('livos:domain:hybrid_subdomain')) ??
+							(await this.ai.redis.get('livos:domain:tunnel_domain'))
 						break
 					default:
-						// cloud / unset / unknown — no subdomain routing applies
+						// cloud / local-lan (retired) / unset / unknown — no
+						// subdomain routing applies.
 						break
 				}
 				if (domain) {

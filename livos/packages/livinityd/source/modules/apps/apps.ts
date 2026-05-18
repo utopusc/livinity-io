@@ -998,18 +998,18 @@ export default class Apps {
 
 		// Phase 134+ — detect CF Tunnel mode so every Caddyfile block emits the
 		// `http://` prefix and dodges the auto-HTTPS-redirect loop with cloudflared.
-		// Phase 140-08.2 fix (2026-05-17): `getTunnelStatus()` only reports on the
-		// LEGACY Server5 RELAY tunnel — with the Phase 134 cloudflared transport
-		// the relay-tunnel isn't running, so isTunnel was always falling through
-		// to `false` and every Caddy host block was emitted without `http://`,
-		// triggering an auto-HTTPS redirect loop. The authoritative signal for
-		// "this Mini PC routes inbound via Cloudflare Tunnel" is the
-		// `livos:domain:local_mode` Redis key, which install.sh seeds to
-		// "hybrid" (or "tunnel") whenever cloudflared is in use.
+		// Phase 140-08.2 (2026-05-17): `getTunnelStatus()` only reports on the
+		// LEGACY Server5 RELAY tunnel — Phase 134 cloudflared transport doesn't
+		// run that tunnel, so isTunnel kept falling through to false → every
+		// host block was emitted without `http://` → CF Tunnel 308 loop.
+		// Phase 142-02 (2026-05-17): the user-facing name `hybrid` was renamed
+		// → `portal`. We accept ALL THREE values here (`portal` for new
+		// installs; `hybrid`/`tunnel` for already-deployed boxes that haven't
+		// re-run install.sh yet) so re-deploys never break.
 		const tunnelStatus = await getTunnelStatus().catch(() => null)
 		const relayTunnelRunning = Boolean(tunnelStatus?.running)
 		const localMode = await this.#livinityd.ai.redis.get('livos:domain:local_mode')
-		const cfTunnelMode = localMode === 'hybrid' || localMode === 'tunnel'
+		const cfTunnelMode = localMode === 'portal' || localMode === 'hybrid' || localMode === 'tunnel'
 		const isTunnel = relayTunnelRunning || cfTunnelMode
 		const content = generateFullCaddyfile(caddyConfig, isMultiUser, isTunnel, nativeAppSubdomains)
 		await writeCaddyfile(content)
