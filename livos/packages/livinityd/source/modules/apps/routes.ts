@@ -10,7 +10,19 @@ import {
 	listUsers,
 	listUserAppInstances,
 	getUserAppInstance,
+	getPool,
 } from '../database/index.js'
+// Phase 157 — v37 install dispatcher service (section-aware install path
+// for webapp/native/ai/plugin). The dispatcher is wired at livinityd boot
+// via `initV37InstallService()`; these procedures resolve it via getter.
+import {
+	getDispatcher,
+	buildInstallContext,
+	recordProgress,
+	getProgress,
+	clearProgress,
+} from './v37-install-service.js'
+import type {InstallProgressEvent} from './install-contracts.js'
 
 export const appStore = router({
 	// Returns builtin apps (priority apps with official Docker images)
@@ -587,4 +599,137 @@ export const apps = router({
 			if (state === 'ready') nativeApp.resetIdleTimer()
 			return {state, port: nativeApp.port}
 		}),
+
+	// ─── v37 install dispatch (Phase 157) ─────────────────────────────
+	//
+	// Section-aware install for the new v37 surfaces (webapp/native/ai/
+	// plugin). The bridge fetches the catalog row from Vercel
+	// (`/api/apps/:id`) and passes the resolved manifest in. livinityd
+	// hands off to the InstallDispatcher registered at boot.
+	//
+	// Legacy `section='app'` continues to flow through `apps.install`
+	// above — Docker compose handler is unchanged.
+
+	installV37: privateProcedure
+		.input(
+			z.object({
+				appId: z.string(),
+				section: z.enum(['app', 'webapp', 'native', 'ai', 'plugin']),
+				name: z.string(),
+				category: z.string(),
+				manifest: z.unknown(),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const d = getDispatcher()
+			if (!d) {
+				return {
+					ok: false as const,
+					code: 'not_implemented' as const,
+					message: 'v37 install dispatcher not initialised',
+				}
+			}
+			const pool = getPool()
+			if (!pool) {
+				return {
+					ok: false as const,
+					code: 'dependency_missing' as const,
+					message: 'PostgreSQL pool unavailable',
+				}
+			}
+			const userId = ctx.currentUser?.id ?? 'admin'
+			const installCtx = buildInstallContext({
+				userId,
+				redis: ctx.livinityd.ai.redis,
+				pg: pool,
+				logger: {
+					info: (m: string) => ctx.logger?.log(m),
+					warn: (m: string) => ctx.logger?.error(m),
+					error: (m: string, extra?: unknown) =>
+						ctx.logger?.error(m, extra as Error | undefined),
+				},
+			})
+			// Seed an opening progress event so the bridge poll sees us
+			// before the handler emits its first internal event.
+			recordProgress({
+				appId: input.appId,
+				section: input.section,
+				pct: 0,
+				message: 'Starting install',
+				done: false,
+			})
+			const emit = (e: InstallProgressEvent) => recordProgress(e)
+			const outcome = await d.install(
+				{
+					id: input.appId,
+					name: input.name,
+					section: input.section,
+					category: input.category,
+					manifest: input.manifest,
+				},
+				installCtx,
+				emit,
+			)
+			// Final tick so the bridge stops polling promptly.
+			recordProgress({
+				appId: input.appId,
+				section: input.section,
+				pct: 100,
+				message: outcome.ok ? 'Installed' : `Failed: ${outcome.message}`,
+				done: true,
+				...(outcome.ok ? {} : {error: outcome.message}),
+			})
+			return outcome
+		}),
+
+	uninstallV37: privateProcedure
+		.input(
+			z.object({
+				appId: z.string(),
+				section: z.enum(['app', 'webapp', 'native', 'ai', 'plugin']),
+			}),
+		)
+		.mutation(async ({ctx, input}) => {
+			const d = getDispatcher()
+			if (!d) {
+				return {
+					ok: false as const,
+					code: 'not_implemented' as const,
+					message: 'v37 install dispatcher not initialised',
+				}
+			}
+			const pool = getPool()
+			if (!pool) {
+				return {
+					ok: false as const,
+					code: 'dependency_missing' as const,
+					message: 'PostgreSQL pool unavailable',
+				}
+			}
+			const userId = ctx.currentUser?.id ?? 'admin'
+			const installCtx = buildInstallContext({
+				userId,
+				redis: ctx.livinityd.ai.redis,
+				pg: pool,
+				logger: {
+					info: (m: string) => ctx.logger?.log(m),
+					warn: (m: string) => ctx.logger?.error(m),
+					error: (m: string, extra?: unknown) =>
+						ctx.logger?.error(m, extra as Error | undefined),
+				},
+			})
+			const emit = (e: InstallProgressEvent) => recordProgress(e)
+			const outcome = await d.uninstall(
+				input.appId,
+				input.section,
+				installCtx,
+				emit,
+			)
+			clearProgress(input.appId)
+			return outcome
+		}),
+
+	v37Progress: privateProcedure
+		.input(z.object({appId: z.string()}))
+		.query(({input}) => getProgress(input.appId)),
 })

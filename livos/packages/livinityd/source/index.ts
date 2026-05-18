@@ -73,6 +73,12 @@ import {DEFAULT_LUSE_MCP_SERVER_PATH} from './modules/computer-use/luse-mcp-conf
 // `liv:apps:native:*` namespace (D-101-NATIVE-APPS) and is consumed by the
 // tRPC `apps.native.{list,get,create,delete}` router.
 import {NativeAppConfigStore} from './modules/apps/native-app-config.js'
+// Phase 157 — v37 install dispatcher service. Wires NativeInstaller +
+// AiInstaller into a module-scope InstallDispatcher consumed by the
+// `apps.installV37` / `apps.uninstallV37` / `apps.v37Progress` trpc
+// procedures. Must be initialised AFTER `this.ai.start()` (Redis) and
+// AFTER `this.nativeAppConfigStore` is constructed.
+import {initV37InstallService} from './modules/apps/v37-install-service.js'
 // Phase 101-01 + 101-04 — singleton Chrome bootstrap + typed CDP client.
 // `bootstrapChrome` spawns Chrome with --remote-debugging-port=9222 and
 // waits for /json/version to return 200. `ChromeCdpClient` owns the
@@ -405,6 +411,22 @@ export default class Livinityd {
 		// SERVICE_UNAVAILABLE if this field were undefined.
 		this.nativeAppConfigStore = new NativeAppConfigStore(this.ai.redis)
 		this.logger.log('NativeAppConfigStore wired (liv:apps:native:* namespace)')
+
+		// Phase 157 — wire the v37 install dispatcher now that Redis +
+		// NativeAppConfigStore are live. The dispatcher constructs a fresh
+		// McpConfigManager bound to the same Redis connection so AI Chat
+		// + install handler share the `liv:cap:*` namespace and the
+		// `liv:config:updated` invalidation channel.
+		try {
+			const v37Mcp = new McpConfigManager(this.ai.redis)
+			initV37InstallService({
+				nativeAppConfigStore: this.nativeAppConfigStore,
+				mcpConfigManager: v37Mcp,
+			})
+			this.logger.log('v37 InstallDispatcher wired (native + ai handlers registered)')
+		} catch (err) {
+			this.logger.error('Failed to wire v37 InstallDispatcher (apps.installV37 will return not_implemented)', err as Error)
+		}
 
 		// Phase 50 (v29.5 A1) — defensive eager seed of built-in tools to nexus:cap:tool:*
 		// Survives factory resets and the v29.4 syncAll() stub (D-WAVE5-SYNCALL-STUB).

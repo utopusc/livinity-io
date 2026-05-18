@@ -5,12 +5,25 @@ import {trpcClient, trpcReact} from '@/trpc/trpc'
 // --- postMessage Bridge Protocol Types ---
 // Duplicated from platform/web store types since LivOS UI cannot import from that package
 
+// Phase 148/157 — v37 section enum mirrored from platform/web store types.
+type Section = 'app' | 'webapp' | 'native' | 'ai' | 'plugin'
+
 type StoreToLivOSMessage =
 	| {type: 'ready'}
-	| {type: 'install'; appId: string; composeUrl: string}
+	// Phase 157 — install now carries section so the LivOS host dispatches
+	// to the right installer. composeUrl is only meaningful for section='app'.
+	// Old payloads without section default to 'app' (back-compat).
+	| {type: 'install'; appId: string; section?: Section; composeUrl?: string}
 	| {type: 'uninstall'; appId: string}
 	| {type: 'open'; appId: string}
 	| {type: 'updateSubdomain'; appId: string; subdomain: string}
+	// Phase 151-B — Custom URL form on /store?section=webapp.
+	| {
+			type: 'installCustomWebapp'
+			url: string
+			title: string
+			faviconUrl?: string | null
+		}
 
 type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing' | 'uninstalling'; progress?: number; subdomain?: string; defaultUsername?: string; defaultPassword?: string}
 
@@ -157,6 +170,174 @@ export function useAppStoreBridge(
 			sendToIframe({type: 'status', apps: []})
 		}
 	}, [sendToIframe])
+
+	// Phase 157 — remember the most-recent iframe origin so v37 install
+	// flows can fetch catalog rows from the SAME store the user is
+	// browsing. Defaults to https://livinity.io when no iframe has
+	// posted yet (handlers tolerate fetch errors and fall back to a
+	// minimal manifest).
+	const catalogOriginRef = useRef<string>('https://livinity.io')
+
+	// Phase 157 — fetch a full catalog row (with manifest) for sections
+	// other than 'app'. Used by handleInstall to feed apps.installV37 the
+	// section/manifest it cannot infer from {appId} alone.
+	const fetchCatalogApp = useCallback(
+		async (appId: string): Promise<{id: string; name: string; section: Section; category: string; manifest: unknown} | null> => {
+			const {apiKey} = optionsRef.current
+			if (!apiKey) return null
+			const origin = catalogOriginRef.current
+			try {
+				const res = await fetch(`${origin}/api/apps/${encodeURIComponent(appId)}`, {
+					headers: {'X-Api-Key': apiKey},
+				})
+				if (!res.ok) return null
+				const row = (await res.json()) as {
+					id: string
+					name: string
+					section?: Section
+					category: string
+					manifest?: unknown
+				}
+				return {
+					id: row.id,
+					name: row.name,
+					section: row.section ?? 'app',
+					category: row.category,
+					manifest: row.manifest ?? {},
+				}
+			} catch {
+				return null
+			}
+		},
+		[],
+	)
+
+	// Phase 157 — section='webapp' curated entries (e.g. Notion). Reads
+	// manifest.url and pins as a dock window via existing webapp.create.
+	const handleInstallWebappFromCatalog = useCallback(
+		async (appId: string) => {
+			const row = await fetchCatalogApp(appId)
+			if (!row) {
+				sendToIframe({
+					type: 'installed',
+					appId,
+					success: false,
+					error: 'Failed to fetch catalog row for webapp install',
+				})
+				return
+			}
+			const m = (row.manifest ?? {}) as {
+				url?: string
+				defaultTitle?: string
+				iconOverride?: string | null
+			}
+			if (!m.url) {
+				sendToIframe({
+					type: 'installed',
+					appId,
+					success: false,
+					error: 'Curated webapp manifest missing required `url`',
+				})
+				return
+			}
+			try {
+				await trpcClient.webapp.create.mutate({
+					url: m.url,
+					title: m.defaultTitle ?? row.name,
+					faviconUrl: m.iconOverride ?? null,
+				})
+				sendToIframe({type: 'installed', appId, success: true})
+				reportEvent(appId, 'install')
+			} catch (err) {
+				const message = err instanceof Error ? err.message : 'webapp install failed'
+				sendToIframe({type: 'installed', appId, success: false, error: message})
+			}
+		},
+		[fetchCatalogApp, reportEvent, sendToIframe],
+	)
+
+	// Phase 151-B — Custom URL form ("Add to dock"). No catalog lookup;
+	// the iframe already collected URL + title + favicon.
+	const handleInstallCustomWebapp = useCallback(
+		async (url: string, title: string, faviconUrl: string | null | undefined) => {
+			try {
+				const wa = await trpcClient.webapp.create.mutate({
+					url,
+					title,
+					faviconUrl: faviconUrl ?? null,
+				})
+				// The iframe keys installed-state by the temporary "custom-<url>"
+				// id its CustomUrlForm uses. Echo back as `installed` so its
+				// optimistic UI clears.
+				sendToIframe({type: 'installed', appId: wa.id, success: true})
+			} catch (err) {
+				const message = err instanceof Error ? err.message : 'webapp install failed'
+				sendToIframe({type: 'installed', appId: url, success: false, error: message})
+			}
+		},
+		[sendToIframe],
+	)
+
+	// Phase 157 — section in {native, ai, plugin}. Fetch catalog row,
+	// hand off to apps.installV37, then poll v37Progress until done.
+	const handleInstallV37 = useCallback(
+		async (appId: string, section: Section) => {
+			const row = await fetchCatalogApp(appId)
+			if (!row) {
+				sendToIframe({
+					type: 'installed',
+					appId,
+					success: false,
+					error: `Failed to fetch catalog row for ${section} install`,
+				})
+				return
+			}
+			sendToIframe({type: 'progress', appId, progress: 0})
+			sendToIframe({type: 'status', apps: [{id: appId, status: 'installing', progress: 0}]})
+
+			const pollInterval = setInterval(async () => {
+				try {
+					const ev = await trpcClient.apps.v37Progress.query({appId})
+					if (ev && ev.pct > 0) {
+						sendToIframe({type: 'progress', appId, progress: Math.round(ev.pct)})
+					}
+					if (ev && ev.done) clearInterval(pollInterval)
+				} catch {
+					// ignore polling errors
+				}
+			}, 2000)
+
+			try {
+				const outcome = await trpcClient.apps.installV37.mutate({
+					appId: row.id,
+					section,
+					name: row.name,
+					category: row.category,
+					manifest: row.manifest,
+				})
+				clearInterval(pollInterval)
+				if (outcome.ok) {
+					sendToIframe({type: 'progress', appId, progress: 100})
+					sendToIframe({type: 'installed', appId, success: true})
+					reportEvent(appId, 'install')
+				} else {
+					sendToIframe({
+						type: 'installed',
+						appId,
+						success: false,
+						error: outcome.message,
+					})
+				}
+			} catch (err) {
+				clearInterval(pollInterval)
+				const message = err instanceof Error ? err.message : 'install failed'
+				sendToIframe({type: 'installed', appId, success: false, error: message})
+			}
+			await sendStatusToIframe()
+			utilsRef.current.apps.list.invalidate()
+		},
+		[fetchCatalogApp, reportEvent, sendStatusToIframe, sendToIframe],
+	)
 
 	const handleInstall = useCallback(
 		async (appId: string) => {
@@ -308,12 +489,29 @@ export function useAppStoreBridge(
 			const data = event.data as StoreToLivOSMessage
 			if (!data || typeof data.type !== 'string') return
 
+			// Phase 157 — remember the latest known store origin so the
+			// v37 install path knows where to fetch catalog rows from.
+			catalogOriginRef.current = event.origin
+
 			switch (data.type) {
 				case 'ready':
 					sendStatusToIframe()
 					break
-				case 'install':
-					handleInstall(data.appId)
+				case 'install': {
+					// Phase 157 — section-aware dispatch. Missing section
+					// is treated as 'app' for back-compat with older builds.
+					const section: Section = data.section ?? 'app'
+					if (section === 'app') {
+						handleInstall(data.appId)
+					} else if (section === 'webapp') {
+						handleInstallWebappFromCatalog(data.appId)
+					} else {
+						handleInstallV37(data.appId, section)
+					}
+					break
+				}
+				case 'installCustomWebapp':
+					handleInstallCustomWebapp(data.url, data.title, data.faviconUrl)
 					break
 				case 'uninstall':
 					handleUninstall(data.appId)
@@ -329,7 +527,16 @@ export function useAppStoreBridge(
 
 		window.addEventListener('message', handleMessage)
 		return () => window.removeEventListener('message', handleMessage)
-	}, [sendStatusToIframe, handleInstall, handleUninstall, handleOpen, handleUpdateSubdomain])
+	}, [
+		sendStatusToIframe,
+		handleInstall,
+		handleInstallV37,
+		handleInstallWebappFromCatalog,
+		handleInstallCustomWebapp,
+		handleUninstall,
+		handleOpen,
+		handleUpdateSubdomain,
+	])
 
 	// Auto-sync status to iframe when apps list changes (covers desktop install/uninstall)
 	const [iframeReady, setIframeReady] = useState(false)
