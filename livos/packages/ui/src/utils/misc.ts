@@ -52,7 +52,18 @@ export function appToUrl(app: UserApp): string {
 		return `${location.protocol}//${location.hostname}:${app.port}`
 	}
 
-	// Production — prepend app subdomain to user's base domain
+	// Phase 141-03 — Server5 mints a canonical hyphen-pattern FQDN per
+	// app (e.g. `n8n-bruce.livinity.io`) and exposes it as `host` on
+	// the apps.list payload. Prefer that over the dot-pattern compute
+	// path so SSL cert + tunnel routing work — `n8n.bruce.livinity.io`
+	// (dot) won't resolve under the wildcard-on-leaf Cloudflare config
+	// the user runs, but `n8n-bruce.livinity.io` (hyphen) does.
+	const canonicalHost = (app as any).host as string | undefined
+	if (canonicalHost && typeof canonicalHost === 'string' && canonicalHost.length > 0) {
+		return `${location.protocol}//${canonicalHost}`
+	}
+
+	// Production fallback — prepend app subdomain to user's base domain
 	const appSubdomain = (app as any).subdomain || app.id
 	const hostParts = location.hostname.split('.')
 

@@ -205,7 +205,13 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
             status={status}
             section={app.section}
             progress={getInstallProgress(appId)}
-            onInstall={() => sendInstall(appId, app.section)}
+            onInstall={() =>
+              sendInstall(appId, app.section, {
+                name: app.name,
+                category: app.category,
+                manifest: app.manifest,
+              })
+            }
             onUninstall={() => sendUninstall(appId)}
             onOpen={() => sendOpen(appId)}
           />
@@ -408,10 +414,11 @@ function InstallStateButton({
   onOpen: () => void;
 }) {
   // Phase 157 — section-aware copy on the install button so each tab feels
-  // native ("Add to dock" for webapps, "Install" for native/Docker, etc.).
+  // native. Webapps pin to the LivOS desktop (icon grid), NOT the dock
+  // taskbar — copy reflects where the icon actually appears.
   function installCopy(): string {
     switch (section) {
-      case 'webapp': return 'Add to dock';
+      case 'webapp': return 'Add to desktop';
       case 'ai': return 'Add';
       case 'plugin': return 'Add plugin';
       default: return 'Install';

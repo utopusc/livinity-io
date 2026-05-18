@@ -13,7 +13,18 @@ type StoreToLivOSMessage =
 	// Phase 157 — install now carries section so the LivOS host dispatches
 	// to the right installer. composeUrl is only meaningful for section='app'.
 	// Old payloads without section default to 'app' (back-compat).
-	| {type: 'install'; appId: string; section?: Section; composeUrl?: string}
+	| {
+			type: 'install'
+			appId: string
+			section?: Section
+			composeUrl?: string
+			// Phase 157 follow-up — name/category/manifest travel WITH
+			// the install message for non-Docker sections so the bridge
+			// does not need a cross-origin fetch back to livinity.io.
+			name?: string
+			category?: string
+			manifest?: unknown
+		}
 	| {type: 'uninstall'; appId: string}
 	| {type: 'open'; appId: string}
 	| {type: 'updateSubdomain'; appId: string; subdomain: string}
@@ -24,6 +35,12 @@ type StoreToLivOSMessage =
 			title: string
 			faviconUrl?: string | null
 		}
+
+// Phase 157 follow-up — install message can carry the pre-fetched
+// catalog row alongside section. Without it the bridge cannot resolve
+// manifests for non-Docker sections (LivOS UI CSP blocks cross-origin
+// fetch back to livinity.io apex).
+type InstallPayload = {appId: string; section: Section; name?: string; category?: string; manifest?: unknown}
 
 type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing' | 'uninstalling'; progress?: number; subdomain?: string; defaultUsername?: string; defaultPassword?: string}
 
@@ -171,62 +188,13 @@ export function useAppStoreBridge(
 		}
 	}, [sendToIframe])
 
-	// Phase 157 — remember the most-recent iframe origin so v37 install
-	// flows can fetch catalog rows from the SAME store the user is
-	// browsing. Defaults to https://livinity.io when no iframe has
-	// posted yet (handlers tolerate fetch errors and fall back to a
-	// minimal manifest).
-	const catalogOriginRef = useRef<string>('https://livinity.io')
-
-	// Phase 157 — fetch a full catalog row (with manifest) for sections
-	// other than 'app'. Used by handleInstall to feed apps.installV37 the
-	// section/manifest it cannot infer from {appId} alone.
-	const fetchCatalogApp = useCallback(
-		async (appId: string): Promise<{id: string; name: string; section: Section; category: string; manifest: unknown} | null> => {
-			const {apiKey} = optionsRef.current
-			if (!apiKey) return null
-			const origin = catalogOriginRef.current
-			try {
-				const res = await fetch(`${origin}/api/apps/${encodeURIComponent(appId)}`, {
-					headers: {'X-Api-Key': apiKey},
-				})
-				if (!res.ok) return null
-				const row = (await res.json()) as {
-					id: string
-					name: string
-					section?: Section
-					category: string
-					manifest?: unknown
-				}
-				return {
-					id: row.id,
-					name: row.name,
-					section: row.section ?? 'app',
-					category: row.category,
-					manifest: row.manifest ?? {},
-				}
-			} catch {
-				return null
-			}
-		},
-		[],
-	)
-
-	// Phase 157 — section='webapp' curated entries (e.g. Notion). Reads
-	// manifest.url and pins as a dock window via existing webapp.create.
+	// Phase 157 follow-up — section='webapp' curated entries (e.g.
+	// Notion). Reads manifest.url from the payload that travelled with
+	// the install message (Vercel pre-fetched). No cross-origin fetch.
 	const handleInstallWebappFromCatalog = useCallback(
-		async (appId: string) => {
-			const row = await fetchCatalogApp(appId)
-			if (!row) {
-				sendToIframe({
-					type: 'installed',
-					appId,
-					success: false,
-					error: 'Failed to fetch catalog row for webapp install',
-				})
-				return
-			}
-			const m = (row.manifest ?? {}) as {
+		async (payload: InstallPayload) => {
+			const {appId, manifest, name} = payload
+			const m = (manifest ?? {}) as {
 				url?: string
 				defaultTitle?: string
 				iconOverride?: string | null
@@ -243,7 +211,7 @@ export function useAppStoreBridge(
 			try {
 				await trpcClient.webapp.create.mutate({
 					url: m.url,
-					title: m.defaultTitle ?? row.name,
+					title: m.defaultTitle ?? name ?? appId,
 					faviconUrl: m.iconOverride ?? null,
 				})
 				sendToIframe({type: 'installed', appId, success: true})
@@ -253,7 +221,7 @@ export function useAppStoreBridge(
 				sendToIframe({type: 'installed', appId, success: false, error: message})
 			}
 		},
-		[fetchCatalogApp, reportEvent, sendToIframe],
+		[reportEvent, sendToIframe],
 	)
 
 	// Phase 151-B — Custom URL form ("Add to dock"). No catalog lookup;
@@ -278,17 +246,18 @@ export function useAppStoreBridge(
 		[sendToIframe],
 	)
 
-	// Phase 157 — section in {native, ai, plugin}. Fetch catalog row,
-	// hand off to apps.installV37, then poll v37Progress until done.
+	// Phase 157 follow-up — section in {native, ai, plugin}. Hand off
+	// to apps.installV37 using the payload that travelled with the
+	// install message, then poll v37Progress until done.
 	const handleInstallV37 = useCallback(
-		async (appId: string, section: Section) => {
-			const row = await fetchCatalogApp(appId)
-			if (!row) {
+		async (payload: InstallPayload) => {
+			const {appId, section, name, category, manifest} = payload
+			if (!name || !category || manifest === undefined) {
 				sendToIframe({
 					type: 'installed',
 					appId,
 					success: false,
-					error: `Failed to fetch catalog row for ${section} install`,
+					error: `Install message missing manifest payload for section "${section}"`,
 				})
 				return
 			}
@@ -309,11 +278,11 @@ export function useAppStoreBridge(
 
 			try {
 				const outcome = await trpcClient.apps.installV37.mutate({
-					appId: row.id,
+					appId,
 					section,
-					name: row.name,
-					category: row.category,
-					manifest: row.manifest,
+					name,
+					category,
+					manifest,
 				})
 				clearInterval(pollInterval)
 				if (outcome.ok) {
@@ -336,7 +305,7 @@ export function useAppStoreBridge(
 			await sendStatusToIframe()
 			utilsRef.current.apps.list.invalidate()
 		},
-		[fetchCatalogApp, reportEvent, sendStatusToIframe, sendToIframe],
+		[reportEvent, sendStatusToIframe, sendToIframe],
 	)
 
 	const handleInstall = useCallback(
@@ -489,10 +458,6 @@ export function useAppStoreBridge(
 			const data = event.data as StoreToLivOSMessage
 			if (!data || typeof data.type !== 'string') return
 
-			// Phase 157 — remember the latest known store origin so the
-			// v37 install path knows where to fetch catalog rows from.
-			catalogOriginRef.current = event.origin
-
 			switch (data.type) {
 				case 'ready':
 					sendStatusToIframe()
@@ -504,9 +469,21 @@ export function useAppStoreBridge(
 					if (section === 'app') {
 						handleInstall(data.appId)
 					} else if (section === 'webapp') {
-						handleInstallWebappFromCatalog(data.appId)
+						handleInstallWebappFromCatalog({
+							appId: data.appId,
+							section,
+							name: data.name,
+							category: data.category,
+							manifest: data.manifest,
+						})
 					} else {
-						handleInstallV37(data.appId, section)
+						handleInstallV37({
+							appId: data.appId,
+							section,
+							name: data.name,
+							category: data.category,
+							manifest: data.manifest,
+						})
 					}
 					break
 				}

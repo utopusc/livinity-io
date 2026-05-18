@@ -168,26 +168,45 @@ export function usePostMessage() {
   }, [isEmbedded, sendMessage]);
 
   // Action senders (per BRIDGE-01, BRIDGE-02, BRIDGE-03)
-  // Phase 157 — section is required so the LivOS bridge dispatches to
-  // the correct installer. composeUrl is only meaningful for section='app'.
-  const sendInstall = useCallback((appId: string, section: Section) => {
-    const composeUrl =
-      section === 'app'
-        ? `${window.location.origin}/api/apps/${appId}/compose`
-        : undefined;
-    sendMessage({ type: 'install', appId, section, composeUrl });
-    // Optimistic: mark as installing
-    setInstalledApps(prev => {
-      const next = new Map(prev);
-      next.set(appId, 'installing');
-      return next;
-    });
-    setInstallProgress(prev => {
-      const next = new Map(prev);
-      next.set(appId, 0);
-      return next;
-    });
-  }, [sendMessage]);
+  // Phase 157 follow-up — section + (for non-Docker sections) the
+  // pre-fetched name/category/manifest travel WITH the postMessage so
+  // the LivOS bridge can dispatch without a cross-origin fetch (which
+  // CSP blocks for the apex livinity.io). Caller pre-fetches the
+  // catalog row (detail page already has it; AppCard fetches inline
+  // before calling this).
+  const sendInstall = useCallback(
+    (
+      appId: string,
+      section: Section,
+      payload?: { name?: string; category?: string; manifest?: unknown },
+    ) => {
+      const composeUrl =
+        section === 'app'
+          ? `${window.location.origin}/api/apps/${appId}/compose`
+          : undefined;
+      sendMessage({
+        type: 'install',
+        appId,
+        section,
+        composeUrl,
+        name: payload?.name,
+        category: payload?.category,
+        manifest: payload?.manifest,
+      });
+      // Optimistic: mark as installing
+      setInstalledApps((prev) => {
+        const next = new Map(prev);
+        next.set(appId, 'installing');
+        return next;
+      });
+      setInstallProgress((prev) => {
+        const next = new Map(prev);
+        next.set(appId, 0);
+        return next;
+      });
+    },
+    [sendMessage],
+  );
 
   const sendUninstall = useCallback((appId: string) => {
     sendMessage({ type: 'uninstall', appId });
