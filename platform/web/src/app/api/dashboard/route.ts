@@ -172,7 +172,12 @@ export async function POST(req: NextRequest) {
       apiKey: rawKey, // Displayed ONCE, never again
       prefix,
       username: user.username,
-      installCommand: `curl -sSL https://livinity.io/install.sh | sudo bash -s -- --subdomain ${user.username} --api-key ${rawKey}`,
+      // Plan 145-02: shortest aesthetic form. install.sh's parse-cli accepts
+      // a bare `liv_k_*` positional and auto-resolves subdomain from /api/me/profile
+      // (Phase 145-01). -fsSL is the conventional curl flag set: -f fail on HTTP
+      // error (don't pipe a 4xx body to bash), -s silent, -S still show errors, -L
+      // follow redirects.
+      installCommand: `curl -fsSL https://livinity.io/install.sh | sudo bash -s ${rawKey}`,
     });
   }
 

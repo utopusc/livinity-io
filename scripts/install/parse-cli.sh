@@ -193,6 +193,10 @@ parse_cli() {
             --skip-deploy) SKIP_DEPLOY=1; shift ;;
             --help|-h) print_help; exit 0 ;;
             --) shift; break ;;
+            # Plan 145-02: bare api-key positional. `bash -s liv_k_xxx` (no flag) is
+            # the canonical short form for the dashboard one-liner. Matches the
+            # `liv_k_` prefix the issuer enforces. Equivalent to --api-key X.
+            liv_k_*) LIVOS_API_KEY="$1"; shift ;;
             *) warn "ignoring unknown arg: $1"; shift ;;
         esac
     done
