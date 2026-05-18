@@ -2,6 +2,7 @@
 
 import { CATEGORIES } from '../types';
 import { AppCard } from './app-card';
+import { Icon } from './icon';
 import type { AppSummary } from '../types';
 
 interface CategorySectionProps {
@@ -10,37 +11,32 @@ interface CategorySectionProps {
   onSeeAll: () => void;
 }
 
-export function CategorySection({
-  category,
-  apps,
-  onSeeAll,
-}: CategorySectionProps) {
+export function CategorySection({ category, apps, onSeeAll }: CategorySectionProps) {
   const cat = CATEGORIES[category];
   if (!cat || apps.length === 0) return null;
 
   const displayApps = apps.slice(0, 4);
 
   return (
-    <section className="mb-10">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-xl font-bold text-gray-900">
-          <span className="text-lg">{cat.icon}</span>
-          {cat.label}
-        </h2>
+    <>
+      <div className="cat-head">
+        <h3 className="cat-title">{cat.label}</h3>
         {apps.length > 4 && (
           <button
             onClick={onSeeAll}
-            className="rounded-full px-3 py-1 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+            type="button"
+            className="cat-link"
+            style={{ background: 'transparent', border: 0, cursor: 'pointer' }}
           >
-            See All &rsaquo;
+            See all {apps.length} <Icon name="arrow-right" size={12} />
           </button>
         )}
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid">
         {displayApps.map((app) => (
           <AppCard key={app.id} app={app} />
         ))}
       </div>
-    </section>
+    </>
   );
 }
