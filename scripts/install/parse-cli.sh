@@ -27,6 +27,14 @@
 # When --api-key is set but --cf-tunnel-token is not, mode-tunnel.sh fetches the
 # token at runtime from /api/me/tunnel-token (CF for SaaS multi-tenant flow).
 # Backward-compat: `--domain X.livinity.io --cf-tunnel-token Y` continues to work.
+#
+# Plan 145-01 (2026-05-17): adds api-key→subdomain auto-resolution. When --api-key
+# is set, install.sh calls https://livinity.io/api/me/profile (X-API-Key:
+# $LIVOS_API_KEY) and either auto-fills LIVOS_SUBDOMAIN (if unset) or WARNS +
+# overrides on mismatch. The conflict path also covers --domain X.Y.Z whose
+# left-most label disagrees with the api-key owner's username; in that case the
+# domain is also overridden to <owner>.livinity.io. Never fail-stop on conflict
+# (user contract: "patlamasin").
 
 MODE="${MODE:-portal}"   # D-104-DEFAULT-MODE (Phase 142-02: `hybrid` renamed → `portal`)
 # Phase 142-02: `portal` is the user-facing name for what used to be `hybrid`
@@ -91,10 +99,13 @@ Modes:
 
 Tunnel-transport flags (portal mode — Phase 134, updated Phase 140+142):
   --subdomain SUB          The subdomain part of your livinity.io address
-                           (e.g. `lucy` for lucy.livinity.io). REQUIRED for
-                           hybrid mode unless --domain is supplied instead.
-                           The full domain is derived as ${SUB}.livinity.io.
-                           Phase 140-07.
+                           (e.g. `lucy` for lucy.livinity.io). OPTIONAL when
+                           --api-key is set — derived automatically from the
+                           api-key owner via livinity.io/api/me/profile
+                           (Phase 145-01). The full domain is then
+                           ${SUB}.livinity.io. Pass it explicitly only to
+                           override / sanity-check; mismatch becomes WARN, not
+                           fail.
   --domain DOMAIN          Your own apex domain or LivOS-managed FQDN (e.g.
                            bruce.livinity.live or yourbox.bruceoz.com).
                            Backward-compat alternative to --subdomain;
@@ -131,10 +142,13 @@ Application deploy (Plan 104-11):
                            after install.sh exits 0).
 
 Examples:
-  # Phase 140+142 — minimal subdomain-only one-liner. --api-key auto-fetches
-  # the tunnel token from livinity.io/api/me/tunnel-token. Works on any device
-  # with outbound HTTPS — no port-forward, no public IP, no CGNAT concerns.
-  # --mode portal is the default; omitting it picks portal.
+  # Phase 145 — single-flag install. --api-key alone is enough; install.sh
+  # resolves the subdomain by calling livinity.io/api/me/profile.
+  curl -fsSL https://livinity.io/install.sh | sudo bash -s -- \
+      --api-key liv_k_<from-dashboard>
+
+  # Pre-Phase-145 form — passing --subdomain explicitly still works.
+  # Mismatch with api-key owner becomes WARN (never fail-stop).
   curl -fsSL https://livinity.io/install.sh | sudo bash -s -- \
       --subdomain lucy \
       --api-key liv_k_<from-dashboard>
@@ -206,6 +220,95 @@ parse_cli() {
         LIVOS_DOMAIN="${LIVOS_SUBDOMAIN}.livinity.io"
         info "Subdomain: $LIVOS_SUBDOMAIN → derived domain: $LIVOS_DOMAIN (Plan 140-07)"
     fi
+
+    # Plan 145-01: api-key auto-resolve BEGIN
+    # api-key → subdomain auto-resolution. Triggers whenever LIVOS_API_KEY is set.
+    # Three input shapes covered:
+    #   (1) Only --api-key K          → resolve and set LIVOS_SUBDOMAIN + LIVOS_DOMAIN
+    #   (2) --subdomain X + --api-key → resolve; WARN+override if owner != X
+    #   (3) --domain D.livinity.io + --api-key → resolve; if D's left-most label
+    #       differs from owner, WARN+override the whole LIVOS_DOMAIN to
+    #       <owner>.livinity.io. Custom-apex domains (e.g. bruce.bruceoz.com)
+    #       are LEFT ALONE — they're the operator's own DNS and the api-key
+    #       owner is irrelevant to the apex. A code comment marks the explicit
+    #       defer-on-custom-apex case below.
+    # We use python3 (already a dep via common-deps) for JSON parsing — keeps jq
+    # off the install path. Response shape: {"username": "lucy", "email": "..."}.
+    #
+    # Test escape hatch: LIVOS_SKIP_API_KEY_RESOLVE=1 bypasses the network call
+    # entirely. Used by the Plan 140-07 offline test suite to assert non-network
+    # parse-cli behavior with fake api-keys (e.g. liv_k_test4xxx). Production
+    # one-liners NEVER set this — the resolver is the whole point of Phase 145.
+    if [[ -n "$LIVOS_API_KEY" && "${LIVOS_SKIP_API_KEY_RESOLVE:-0}" != "1" ]]; then
+        info "Resolving subdomain from --api-key via https://livinity.io/api/me/profile (Plan 145-01)"
+        local _resp _http _resolved _domain_label
+        _resp=$(curl -fsS -o /tmp/livos-profile-resp.json -w "%{http_code}" \
+            -H "X-API-Key: $LIVOS_API_KEY" \
+            "https://livinity.io/api/me/profile" 2>/dev/null) || _resp="000"
+        _http="$_resp"
+        case "$_http" in
+            200)
+                _resolved=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["username"])' \
+                    < /tmp/livos-profile-resp.json 2>/dev/null) || _resolved=""
+                if [[ -z "$_resolved" ]]; then
+                    fail "api-key resolver returned 200 but no username in body. Re-issue from the dashboard." 1
+                fi
+                # T-145-02 mitigation: re-apply the existing --subdomain shape check
+                # to the resolved username before any assignment (refuses a
+                # malicious DB row containing shell-metachars).
+                case "$_resolved" in
+                    *' '*|*.*|-*|*-)
+                        fail "api-key resolver returned malformed username '$_resolved' (no dots, spaces, or leading/trailing dashes)" 1
+                        ;;
+                esac
+                # Plan 145-01: conflict-WARN BEGIN
+                if [[ -z "$LIVOS_SUBDOMAIN" && -z "$LIVOS_DOMAIN" ]]; then
+                    # Input shape (1) — no domain hints, fill them in.
+                    LIVOS_SUBDOMAIN="$_resolved"
+                    LIVOS_DOMAIN="${LIVOS_SUBDOMAIN}.livinity.io"
+                    info "auto-resolved subdomain from api-key: $LIVOS_SUBDOMAIN"
+                elif [[ -n "$LIVOS_SUBDOMAIN" && "$LIVOS_SUBDOMAIN" != "$_resolved" ]]; then
+                    # Input shape (2) — explicit --subdomain mismatch.
+                    warn "--subdomain '$LIVOS_SUBDOMAIN' overridden by api-key owner '$_resolved' (Phase 145 auto-resolve)"
+                    LIVOS_SUBDOMAIN="$_resolved"
+                    LIVOS_DOMAIN="${LIVOS_SUBDOMAIN}.livinity.io"
+                elif [[ -n "$LIVOS_DOMAIN" && -z "$LIVOS_SUBDOMAIN" ]]; then
+                    # Input shape (3) — explicit --domain. Only override when the
+                    # domain is under livinity.io AND the left-label disagrees.
+                    # Custom apex (e.g. bruce.bruceoz.com) is the operator's own
+                    # DNS — defer silently.
+                    case "$LIVOS_DOMAIN" in
+                        *.livinity.io)
+                            _domain_label="${LIVOS_DOMAIN%%.livinity.io}"
+                            if [[ "$_domain_label" != "$_resolved" ]]; then
+                                warn "--domain '$LIVOS_DOMAIN' (label '$_domain_label') overridden by api-key owner '$_resolved' (Phase 145 auto-resolve)"
+                                LIVOS_SUBDOMAIN="$_resolved"
+                                LIVOS_DOMAIN="${LIVOS_SUBDOMAIN}.livinity.io"
+                            fi
+                            ;;
+                        *)
+                            # Custom-apex defer: explicit --domain on operator's
+                            # own DNS — api-key owner is informational, not
+                            # authoritative. No warn, no override.
+                            info "custom apex --domain '$LIVOS_DOMAIN' kept as-is (api-key owner '$_resolved' not enforced on non-livinity.io domains)"
+                            ;;
+                    esac
+                fi
+                # Plan 145-01: conflict-WARN END
+                ;;
+            401)
+                fail "api-key rejected by livinity.io/api/me/profile (HTTP 401). Re-issue from the dashboard." 1
+                ;;
+            000)
+                fail "Cannot reach https://livinity.io/api/me/profile (network error). Check connectivity." 1
+                ;;
+            *)
+                fail "Unexpected HTTP $_http from https://livinity.io/api/me/profile. Check api-key and try again." 1
+                ;;
+        esac
+        rm -f /tmp/livos-profile-resp.json
+    fi
+    # Plan 145-01: api-key auto-resolve END
 
     local valid=0
     for m in $MODE_WHITELIST; do
