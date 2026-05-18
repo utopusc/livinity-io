@@ -404,3 +404,17 @@ Warning: Permanently added '45.137.194.102' (ED25519) to the list of known hosts
 5. https://mcp.livinity.io/ → HTTP 502 (Server5 stopped)
 
 ==== CUTOVER COMPLETE — Phase 146 SHIPPED 2026-05-18 ====
+
+[POST-CUTOVER cleanup] 2026-05-18T12:29:17Z — Server5 orphan services stop + CF DNS leftover cleanup
+Warning: Permanently added '45.137.194.102' (ED25519) to the list of known hosts.
+Removed "/etc/systemd/system/multi-user.target.wants/liv-core.service".
+Removed "/etc/systemd/system/multi-user.target.wants/liv-worker.service".
+Removed "/etc/systemd/system/multi-user.target.wants/livos.service".
+
+post-state:
+inactive
+failed
+inactive
+  *.livinity.io → OK
+  mcp.livinity.io → OK
+  changelog.livinity.io → already gone
