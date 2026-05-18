@@ -3,28 +3,51 @@ import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 import pool from '@/lib/db';
 import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth';
-import { cfClient } from '@/lib/cf-saas';
+import { supabaseService, presenceChannelName } from '@/lib/supabase-server';
 
-const RELAY_URL = process.env.RELAY_INTERNAL_URL || 'http://localhost:4000';
+// Phase 146: online check moved to Supabase Realtime presence on tunnel:<userId>.
+// Replaces the Phase 141-07 CF Tunnel connections API path AND the legacy
+// relay /internal/user-status probe — both retired this milestone. The CF
+// tunnel provisioning is still surfaced for the "tunnel provisioned" badge
+// but no longer drives the online dot. Presence state is populated by
+// livinityd's tunnel-presence.ts (Phase 146 W3).
+//
+// Each presence read opens a Realtime channel briefly (~3s timeout, then removed).
+// 10s in-memory cache keeps the open-channel rate bounded when dashboards poll
+// the route every few seconds.
 
-// Phase 141-07: 30-second in-memory cache of CF tunnel connection counts.
-// Per-user (tunnel_id) keyed. Dashboard polls frequently in the browser; we
-// don't want to hammer the CF API on every poll. 30s is enough for the
-// "asleep ↔ online" transition to feel fresh without breaking the per-token
-// rate limit (1200/5min ≈ 240/min) when hundreds of users dashboard at once.
-type CachedStatus = { count: number; checkedAt: number };
-const CF_STATUS_CACHE = new Map<string, CachedStatus>();
-const CF_STATUS_TTL_MS = 30_000;
+type CachedOnline = { online: boolean; checkedAt: number };
+const PRESENCE_CACHE = new Map<string, CachedOnline>();
+const PRESENCE_CACHE_TTL_MS = 10_000;
+const PRESENCE_READ_TIMEOUT_MS = 3_000;
 
-async function getCfTunnelOnline(tunnel_id: string): Promise<boolean> {
-  const cached = CF_STATUS_CACHE.get(tunnel_id);
+async function isUserOnlineViaPresence(userId: string): Promise<boolean> {
+  const cached = PRESENCE_CACHE.get(userId);
   const now = Date.now();
-  if (cached && now - cached.checkedAt < CF_STATUS_TTL_MS) {
-    return cached.count > 0;
+  if (cached && now - cached.checkedAt < PRESENCE_CACHE_TTL_MS) {
+    return cached.online;
   }
-  const { count } = await cfClient.getTunnelConnections(tunnel_id);
-  CF_STATUS_CACHE.set(tunnel_id, { count, checkedAt: now });
-  return count > 0;
+  const channel = supabaseService.channel(presenceChannelName(userId));
+  try {
+    const online = await new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), PRESENCE_READ_TIMEOUT_MS);
+      channel.on('presence', { event: 'sync' }, () => {
+        clearTimeout(timer);
+        const state = channel.presenceState();
+        resolve(Object.keys(state).length > 0);
+      });
+      channel.subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          clearTimeout(timer);
+          resolve(false);
+        }
+      });
+    });
+    PRESENCE_CACHE.set(userId, { online, checkedAt: now });
+    return online;
+  } finally {
+    await supabaseService.removeChannel(channel).catch(() => {});
+  }
 }
 
 async function getUser(req: NextRequest) {
@@ -59,39 +82,21 @@ export async function GET(req: NextRequest) {
   const cfProvisioned = cfResult.rows.length > 0 && cfResult.rows[0].provisioned_at != null;
   const cfTunnelId = cfResult.rows.length > 0 ? cfResult.rows[0].tunnel_id : null;
 
-  // Phase 141-07: connection status. Prefer the CF Tunnel API for users with
-  // a provisioned tunnel (Phase 140+). Fall back to the relay WebSocket
-  // probe for legacy users without a tunnel — those installs still report
-  // "online" via the relay control plane.
+  // Phase 146: online = Supabase Realtime presence on tunnel:<userId>.
+  // Single code path — CF Tunnel API + relay WebSocket probe both retired.
+  // cfTunnelId is still read above for the provisioned badge but no longer
+  // gates the online dot.
   let online = false;
-  if (cfTunnelId) {
-    try {
-      online = await getCfTunnelOnline(cfTunnelId);
-    } catch {
-      // CF unreachable → leave online=false. Cache miss keeps the call cheap.
-    }
-  } else {
-    try {
-      const statusRes = await fetch(`${RELAY_URL}/internal/user-status?username=${user.username}`, { cache: 'no-store' });
-      if (statusRes.ok) {
-        const data = await statusRes.json();
-        online = data.online;
-      }
-    } catch {
-      // Relay unreachable
-    }
+  try {
+    online = await isUserOnlineViaPresence(user.userId);
+  } catch (err) {
+    console.error('[146/dashboard] presence read failed for', user.userId, err);
   }
 
-  // Get bandwidth from relay
-  let bandwidth = { usedBytes: 0, limitBytes: 53_687_091_200, allowed: true };
-  try {
-    const bwRes = await fetch(`${RELAY_URL}/internal/user-bandwidth?userId=${user.userId}`, { cache: 'no-store' });
-    if (bwRes.ok) {
-      bandwidth = await bwRes.json();
-    }
-  } catch {
-    // Relay unreachable
-  }
+  // Phase 147 carryover: bandwidth metering will read from Supabase bandwidth_usage
+  // table (currently on Server5 platform DB, restored to Supabase via W1-T1). For
+  // Phase 146 cutover, hardcode zeros so the dashboard widget renders without errors.
+  const bandwidth = { usedBytes: 0, limitBytes: 53_687_091_200, allowed: true };
 
   // Get user's registered devices
   let devices: { deviceId: string; deviceName: string; platform: string; createdAt: string; lastSeen: string | null }[] = [];
