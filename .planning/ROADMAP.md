@@ -1545,7 +1545,19 @@ Plans:
 
 ---
 
-### Phase 144: Fresh-Install UAT for 141 + 142 + 143 — 🟡 READY-TO-EXECUTE 2026-05-17 (Mini PC pre-wiped + plan written; awaiting walk-through)
+### Phase 144: Fresh-Install UAT for 141 + 142 + 143 — ✅ CODE-COMPLETE 2026-05-17 (autonomous A-E + J + K + L PASS; F/G/H/I deferred to operator browser walk per autonomous-mode scope; 144-01 hotfix shipped; 7 Phase 145 carryover items recorded)
+
+**144-01 hotfix shipped same session** (`bedfb95a`): `scripts/install.sh` self-bootstrap HELPERS_REQUIRED still listed `mode-local-lan.sh` (Phase 142-01 retired the file but missed the helper list). Live install.sh on `livinity.io/install.sh` curl-fetched fresh from GitHub raw after pm2 web restart + .next/cache/fetch-cache purge. Discovered Section B1 first-install attempt exit 3.
+
+**D3 dangerous-test fallout (carryover #4):** UAT-PLAN's `bash install.sh --mode hybrid --domain x --cf-tunnel-token y | grep` actually RUNS the full install with fake credentials, overwriting `/etc/livos/secrets/cf-tunnel-token` and `/etc/systemd/system/cloudflared.service` ExecStart token. Live smoke went from 200/200 → 530/530 mid-UAT. Recovery: re-ran install.sh with real `--api-key liv_k_phase140socinityRESET12` (which was also a side-effect Section K1 pass = re-install regression replay clean). Phase 145 needs a `--dry-run` parse-cli harness or test-only entry point.
+
+**Final smoke (post-recovery):** apex `200`, /trpc/system.status `200`, n8n-socinity `200`, code-server-socinity `200` (note: hyphen-pattern URLs return 200 from livinityd's default UI per Caddy `:80` catch-all — carryover #6).
+
+**Artifacts:** `MINI-PC-ZERO-STATE.md`, `UAT-PLAN.md`, `UAT-REPORT.md`, `SUMMARY.md`, `RESUME-PROMPT.md`, `section-f-n8n-install.sh`.
+
+**Next:** Phase 145 opens with 6 carryover candidates — install.sh `--dry-run`, scripts/install/ disk deploy, Next.js cache control, Caddy default-host 404, Server5 factory-reset endpoint, operator UAT walk for F/G/H/I.
+
+
 
 **Goal:** Phases 141 / 142 / 143 each shipped + auto-deployed onto the SAME socinity Mini PC that hosted the original bug-discovery session. Every deploy ran on top of partial back-compat state (legacy Redis values, manually-fixed Caddyfile, etc.). Phase 144 wipes the Mini PC to zero state and walks every code-path the three phases shipped, fresh — so the production install behaves correctly on a never-touched box.
 
