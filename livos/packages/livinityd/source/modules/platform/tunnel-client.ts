@@ -92,45 +92,26 @@ interface TunnelWsClose {
 	reason?: string
 }
 
-// Device event messages (relay -> client)
-interface TunnelDeviceConnected {
-	type: 'device_connected'
-	userId: string  // Phase 11 OWN-03: device owner forwarded from relay
-	deviceId: string
-	deviceName: string
-	platform: string
-	tools: string[]
-}
+// Phase 146 W3-T1.5: device-message interfaces moved to legacy-device-types.ts
+// so the W3-T2 rewrite (872 → ~60 LOC) doesn't accidentally drop type symbols
+// downstream consumers may depend on. Re-exported here for back-compat until
+// the relay codepath is fully retired.
+export {
+	type TunnelDeviceConnected,
+	type TunnelDeviceDisconnected,
+	type TunnelDeviceToolResult,
+	type TunnelDeviceAuditEvent,
+	type TunnelDeviceEmergencyStop,
+	type LegacyDeviceMessage,
+} from './legacy-device-types.js'
 
-interface TunnelDeviceDisconnected {
-	type: 'device_disconnected'
-	deviceId: string
-}
-
-interface TunnelDeviceToolResult {
-	type: 'device_tool_result'
-	requestId: string
-	deviceId: string
-	result: {success: boolean; output: string; error?: string; data?: unknown; images?: Array<{base64: string; mimeType: string}>}
-}
-
-interface TunnelDeviceAuditEvent {
-	type: 'device_audit_event'
-	deviceId: string
-	timestamp: string
-	toolName: string
-	params: Record<string, unknown>
-	success: boolean
-	duration: number
-	error?: string
-}
-
-interface TunnelDeviceEmergencyStop {
-	type: 'device_emergency_stop'
-	deviceId: string
-	timestamp: string
-	reason: string
-}
+import type {
+	TunnelDeviceConnected,
+	TunnelDeviceDisconnected,
+	TunnelDeviceToolResult,
+	TunnelDeviceAuditEvent,
+	TunnelDeviceEmergencyStop,
+} from './legacy-device-types.js'
 
 /** Platform syncs custom domain configuration to LivOS */
 interface TunnelDomainSync {
