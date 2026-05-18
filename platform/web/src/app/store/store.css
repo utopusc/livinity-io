@@ -339,8 +339,11 @@ button, input { font: inherit; color: inherit; }
 
 /* =========================================================
    FEATURED HERO — big card with single editorial pick
+   Renamed .featured → .featured-hero to avoid collision with
+   .tag.featured microbadge (the .featured rule set min-height
+   260px which leaked into any element carrying both classes).
    ========================================================= */
-.featured {
+.featured-hero {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
   gap: 0;
@@ -966,7 +969,7 @@ button, input { font: inherit; color: inherit; }
 .ab.mobile .sb { display: none; }
 .ab.mobile .main { padding: 20px 16px 32px; }
 .ab.mobile .grid { grid-template-columns: 1fr; gap: 10px; }
-.ab.mobile .featured { grid-template-columns: 1fr; min-height: auto; }
+.ab.mobile .featured-hero { grid-template-columns: 1fr; min-height: auto; }
 .ab.mobile .featured-body { padding: 24px; }
 .ab.mobile .featured-title { font-size: 26px; }
 .ab.mobile .featured-visual { padding: 28px; }
