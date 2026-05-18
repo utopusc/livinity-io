@@ -1,61 +1,69 @@
 // livos/packages/livinityd/source/modules/local-dns/routes.ts
 // Source: 104-PATTERNS.md — mirrors domain/routes.ts shape.
 //
-// Phase 104 plan 104-03 — three tRPC procedures under the `local.*` namespace:
-//   - local.getStatus   (query)     — mode + tld + hostIp + caCertAvailable
-//   - local.activate    (mutation)  — write Caddyfile, reload Caddy, set Redis keys
-//   - local.getCaCert   (query)     — return PEM of liv-local root CA
+// Phase 104 plan 104-03 — `local.*` tRPC namespace.
+// Phase 142-01 — `local.activate` (local-lan Caddyfile writer) + `local.getCaCert`
+//   (PEM reader) removed alongside the dropped local-lan mode.
+// Phase 143-01 — wire-level rename:
+//   - `local.provisionHybrid` → `local.provisionPortal`
+//   - `local.activateHybrid`   → `local.activatePortal`
+//   - `local.getHybridStatus`  → `local.getPortalStatus`
+//   Legacy procedure names are kept as back-compat aliases — same handlers,
+//   different keys on the router. Lets a Mini PC that updated livinityd but
+//   has a stale UI bundle in the browser cache survive the mid-flight gap.
+//   Aliases removed in Phase 144+ once we're confident every cached client
+//   has refreshed.
 
 import {z} from 'zod'
 import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
 import {
-	generateHybridCaddyfile,
-	validateHybridDomain,
+	generatePortalCaddyfile,
+	validatePortalDomain,
 	writeCaddyfile,
 	reloadCaddy,
-	type LocalSubdomainConfig,
+	type PortalSubdomainConfig,
 } from '../domain/caddy.js'
-// Phase 142-01 — local-lan retired; generateLocalCaddyfile + validateLocalTld
-// dropped from caddy.ts. The legacy `local.activate` + `local.getCaCert`
-// procedures (the only callers of those helpers + readRootCert) are removed
-// from this router. `local.getStatus` no longer probes the CA cert.
-// Phase 104 review fix WIZ-01 + PROVIDE-01: wire UI to the TS provisioner so
-// the Cloudflare API token never leaves the LivOS host (was: dead UI + bash-only).
 import {provisionHybridSubdomain, ServerSideProvisionUnavailable} from './hybrid-provision.js'
 
 const REDIS_LOCAL_MODE = 'livos:domain:local_mode'
 const REDIS_LOCAL_TLD = 'livos:domain:local_tld'
 const REDIS_HOST_IP = 'livos:domain:host_ip'
-// Phase 104 plan 104-04 — hybrid mode Redis keys
-const REDIS_HYBRID_SUBDOMAIN = 'livos:domain:hybrid_subdomain'
-const REDIS_HYBRID_ZONE_ID = 'livos:domain:hybrid_zone_id'
+// Phase 104 plan 104-04 — portal mode Redis keys (legacy names kept on the
+// keys themselves; renaming the Redis namespace would orphan every deployed
+// box's state. The variable names below are local-only.)
+const REDIS_PORTAL_SUBDOMAIN = 'livos:domain:hybrid_subdomain'
+const REDIS_PORTAL_ZONE_ID = 'livos:domain:hybrid_zone_id'
 const REDIS_CF_TOKEN_PATH = 'livos:domain:cf_api_token_secret_ref'
 
 // IPv4 regex — strict (4 octets, each 0-255). Matches install.sh detection output.
 const IPV4_RE =
 	/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/
 
-// Phase 104 review fix WIZ-01 + PROVIDE-01 — provisionHybrid input schema.
-// Wraps provisionHybridSubdomain so the wizard can call Server5 via livinityd
-// (which holds the CF token server-side) instead of dead prompt() calls.
-const provisionHybridSchema = z.object({
+// Phase 104 review fix WIZ-01 + PROVIDE-01 — provisionPortal input schema.
+const provisionPortalSchema = z.object({
 	hostIp: z.string().refine((v) => IPV4_RE.test(v), {message: 'Invalid IPv4'}),
 	cloudflareApiToken: z.string().min(1).max(4096),
 })
 
-// Phase 104 plan 104-04 — hybrid mode activation schema
-const hybridActivateSchema = z.object({
+// Phase 104 plan 104-04 — portal mode activation schema
+const portalActivateSchema = z.object({
 	subdomain: z
 		.string()
 		.min(1)
 		.max(253)
-		.refine(validateHybridDomain, {message: 'Invalid hybrid domain shape'}),
+		.refine(validatePortalDomain, {message: 'Invalid portal domain shape'}),
 	zoneId: z.string().min(1).max(100),
 	hostIp: z.string().refine((v) => IPV4_RE.test(v), {message: 'Invalid IPv4'}),
 	subdomains: z
 		.array(z.object({name: z.string(), port: z.number().int().positive()}))
 		.optional(),
 })
+
+// Phase 143-01 — inline handler bodies (duplicated for the legacy + canonical
+// procedure names). DRY-by-extraction was attempted but tRPC v11's ctx typing
+// is hard to reproduce in a free-standing helper signature; pragmatic choice
+// is to duplicate the 5-line body and rely on the alias guard test in
+// routes.test.ts to keep behavior identical.
 
 const local = router({
 	getStatus: privateProcedure.query(async ({ctx}) => {
@@ -65,9 +73,8 @@ const local = router({
 			redis.get(REDIS_LOCAL_TLD),
 			redis.get(REDIS_HOST_IP),
 		])
-		// Phase 142-01 — `caCertAvailable` field retained for back-compat
-		// with the wizard's existing destructure, but always reports false
-		// (local-lan internal-CA path retired, readRootCert no longer wired).
+		// Phase 142-01 — `caCertAvailable` field retained for back-compat with
+		// the wizard's existing destructure, but always reports false.
 		return {
 			mode: mode ?? null,
 			tld: tld ?? null,
@@ -76,21 +83,10 @@ const local = router({
 		}
 	}),
 
-	// Phase 142-01 — `local.activate` (local-lan Caddyfile writer) +
-	// `local.getCaCert` (PEM reader) removed. UI no longer offers a local-lan
-	// branch; livinityd's local-mode internal-CA path is no longer used.
+	// ─── Phase 143-01 — Portal-renamed procedures (canonical) ───────────
 
-	// ─── Phase 104 plan 104-04 — hybrid mode procedures ─────────────────
-
-	// Phase 104 review fix WIZ-01 + PROVIDE-01: wire UI ↔ Server5 control-plane
-	// through livinityd so the Cloudflare API token never leaves the host. This
-	// replaces the dead `prompt()` flow in HybridDnsSetup.tsx and removes the
-	// drift risk between the bash provisioner in mode-hybrid.sh and the TS
-	// helper in hybrid-provision.ts (which previously had no production caller).
-	// PRIV-01: provisioning mutates apex DNS at Server5 + persists a CF token
-	// reference path in Redis. Admin-only.
-	provisionHybrid: adminProcedure
-		.input(provisionHybridSchema)
+	provisionPortal: adminProcedure
+		.input(provisionPortalSchema)
 		.mutation(async ({input}) => {
 			try {
 				const result = await provisionHybridSubdomain({
@@ -99,10 +95,6 @@ const local = router({
 				})
 				return {success: true as const, subdomain: result.subdomain, zoneId: result.zoneId}
 			} catch (err) {
-				// IMPORTANT: do NOT echo the input back in the error. The
-				// underlying helper already strips the CF token from its own
-				// messages (hybrid-provision.ts T-104-04-I1); we only need to
-				// preserve the recoverable-vs-fatal distinction for the UI.
 				if (err instanceof ServerSideProvisionUnavailable) {
 					throw new Error(`Server5 control-plane unavailable: ${err.message}`)
 				}
@@ -110,22 +102,83 @@ const local = router({
 			}
 		}),
 
-	// PRIV-01: same critique as `activate` — system-wide Caddyfile + Redis mutation.
-	activateHybrid: adminProcedure
-		.input(hybridActivateSchema)
+	activatePortal: adminProcedure
+		.input(portalActivateSchema)
 		.mutation(async ({ctx, input}) => {
 			const redis = ctx.livinityd.ai.redis
-			const subdomains: LocalSubdomainConfig[] = input.subdomains ?? []
-			const caddyfile = generateHybridCaddyfile(input.subdomain, subdomains, true)
+			const subdomains: PortalSubdomainConfig[] = input.subdomains ?? []
+			const caddyfile = generatePortalCaddyfile(input.subdomain, subdomains, true)
 			await writeCaddyfile(caddyfile)
 			await reloadCaddy()
-			// Phase 142-02 — `livos:domain:local_mode` now stores `portal`
-			// (formerly `hybrid`). livinityd readers accept both indefinitely
-			// for back-compat.
 			await Promise.all([
 				redis.set(REDIS_LOCAL_MODE, 'portal'),
-				redis.set(REDIS_HYBRID_SUBDOMAIN, input.subdomain),
-				redis.set(REDIS_HYBRID_ZONE_ID, input.zoneId),
+				redis.set(REDIS_PORTAL_SUBDOMAIN, input.subdomain),
+				redis.set(REDIS_PORTAL_ZONE_ID, input.zoneId),
+				redis.set(REDIS_HOST_IP, input.hostIp),
+			])
+			return {success: true, mode: 'portal' as const, subdomain: input.subdomain}
+		}),
+
+	getPortalStatus: privateProcedure.query(async ({ctx}) => {
+		const redis = ctx.livinityd.ai.redis
+		const [subdomain, zoneId, hostIp, cfTokenPath] = await Promise.all([
+			redis.get(REDIS_PORTAL_SUBDOMAIN),
+			redis.get(REDIS_PORTAL_ZONE_ID),
+			redis.get(REDIS_HOST_IP),
+			redis.get(REDIS_CF_TOKEN_PATH),
+		])
+		let cfTokenAvailable = false
+		if (cfTokenPath) {
+			try {
+				const {stat} = await import('node:fs/promises')
+				await stat(cfTokenPath)
+				cfTokenAvailable = true
+			} catch {
+				cfTokenAvailable = false
+			}
+		}
+		return {
+			subdomain: subdomain ?? null,
+			zoneId: zoneId ?? null,
+			hostIp: hostIp ?? null,
+			cfTokenAvailable,
+		}
+	}),
+
+	// ─── Phase 143-01 — Legacy procedure-name aliases ───────────────────
+	// Duplicate of the canonical bodies above. Lets cached UI bundles + any
+	// external automation keep working through the rename. Schedule for
+	// removal in Phase 144+ once cached clients have refreshed.
+
+	provisionHybrid: adminProcedure
+		.input(provisionPortalSchema)
+		.mutation(async ({input}) => {
+			try {
+				const result = await provisionHybridSubdomain({
+					hostIp: input.hostIp,
+					cloudflareApiToken: input.cloudflareApiToken,
+				})
+				return {success: true as const, subdomain: result.subdomain, zoneId: result.zoneId}
+			} catch (err) {
+				if (err instanceof ServerSideProvisionUnavailable) {
+					throw new Error(`Server5 control-plane unavailable: ${err.message}`)
+				}
+				throw err instanceof Error ? err : new Error(String(err))
+			}
+		}),
+
+	activateHybrid: adminProcedure
+		.input(portalActivateSchema)
+		.mutation(async ({ctx, input}) => {
+			const redis = ctx.livinityd.ai.redis
+			const subdomains: PortalSubdomainConfig[] = input.subdomains ?? []
+			const caddyfile = generatePortalCaddyfile(input.subdomain, subdomains, true)
+			await writeCaddyfile(caddyfile)
+			await reloadCaddy()
+			await Promise.all([
+				redis.set(REDIS_LOCAL_MODE, 'portal'),
+				redis.set(REDIS_PORTAL_SUBDOMAIN, input.subdomain),
+				redis.set(REDIS_PORTAL_ZONE_ID, input.zoneId),
 				redis.set(REDIS_HOST_IP, input.hostIp),
 			])
 			return {success: true, mode: 'portal' as const, subdomain: input.subdomain}
@@ -134,12 +187,11 @@ const local = router({
 	getHybridStatus: privateProcedure.query(async ({ctx}) => {
 		const redis = ctx.livinityd.ai.redis
 		const [subdomain, zoneId, hostIp, cfTokenPath] = await Promise.all([
-			redis.get(REDIS_HYBRID_SUBDOMAIN),
-			redis.get(REDIS_HYBRID_ZONE_ID),
+			redis.get(REDIS_PORTAL_SUBDOMAIN),
+			redis.get(REDIS_PORTAL_ZONE_ID),
 			redis.get(REDIS_HOST_IP),
 			redis.get(REDIS_CF_TOKEN_PATH),
 		])
-		// Probe whether the CF token file exists (best-effort; do NOT read it)
 		let cfTokenAvailable = false
 		if (cfTokenPath) {
 			try {

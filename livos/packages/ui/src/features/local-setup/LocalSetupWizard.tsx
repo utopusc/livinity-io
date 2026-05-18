@@ -10,7 +10,7 @@ import {IconArrowLeft, IconCheck, IconLoader2} from '@tabler/icons-react'
 
 import {trpcReact} from '@/trpc/trpc'
 
-import {HybridDnsSetup} from './HybridDnsSetup'
+import {PortalDnsSetup} from './PortalDnsSetup'
 import {ModePickStep} from './ModePickStep'
 import {
 	CLOUD_STEPS,
@@ -103,7 +103,7 @@ export function LocalSetupWizard() {
 			)}
 
 			{state.step === 'portal-dns-records' && (
-				<HybridDnsSetup
+				<PortalDnsSetup
 					cfToken={state.portal.cloudflareApiToken}
 					hostIp={state.portal.hostIp}
 					onProvisioned={(subdomain, zoneId) => {
@@ -196,10 +196,10 @@ function PortalConfigStep({
 	)
 }
 
-// ── Portal verify step (calls activateHybrid + waits for green) ──
-// NOTE: the underlying tRPC procedure names (activateHybrid / getHybridStatus)
-// haven't been renamed yet — they live on the livinityd `local.*` namespace
-// and Phase 142-04 sweeps them. Wire-level names are kept for now.
+// ── Portal verify step (calls activatePortal + waits for green) ──
+// Phase 143-01 — calls the wire-renamed `local.activatePortal` +
+// `local.getPortalStatus` procedures. Legacy `activateHybrid` / `getHybridStatus`
+// names remain on the router as back-compat aliases.
 function PortalVerifyStep({
 	state,
 	onNext,
@@ -209,8 +209,8 @@ function PortalVerifyStep({
 	onNext: () => void
 	onBack: () => void
 }) {
-	const activateM = trpcReact.local.activateHybrid.useMutation()
-	const statusQ = trpcReact.local.getHybridStatus.useQuery()
+	const activateM = trpcReact.local.activatePortal.useMutation()
+	const statusQ = trpcReact.local.getPortalStatus.useQuery()
 	const handleActivate = async () => {
 		try {
 			await activateM.mutateAsync({

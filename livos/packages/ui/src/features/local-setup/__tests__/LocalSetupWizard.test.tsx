@@ -14,21 +14,23 @@ import {describe, expect, it} from 'vitest'
 const here = path.resolve(__dirname, '..')
 const wizardSrc = readFileSync(path.join(here, 'LocalSetupWizard.tsx'), 'utf-8')
 const modePickSrc = readFileSync(path.join(here, 'ModePickStep.tsx'), 'utf-8')
-const hybridSrc = readFileSync(path.join(here, 'HybridDnsSetup.tsx'), 'utf-8')
+const portalDnsSrc = readFileSync(path.join(here, 'PortalDnsSetup.tsx'), 'utf-8')
 
-describe('LocalSetupWizard — tRPC wiring (Phase 104 plan 104-05, updated 142-01)', () => {
+describe('LocalSetupWizard — tRPC wiring (Phase 104 plan 104-05, updated 142-01 + 143-01)', () => {
 	it('subscribes to local.getStatus', () => {
 		expect(wizardSrc).toMatch(/trpcReact\.local\.getStatus\.useQuery/)
 	})
 	it('does NOT call the retired local.activate (Phase 142-01)', () => {
 		expect(wizardSrc).not.toMatch(/trpcReact\.local\.activate\.useMutation/)
 	})
-	it('uses local.activateHybrid mutation for the portal path', () => {
-		// Wire-level name kept until Phase 142-04 polish renames the tRPC route.
-		expect(wizardSrc).toMatch(/trpcReact\.local\.activateHybrid\.useMutation/)
+	it('uses the wire-renamed local.activatePortal mutation (Phase 143-01)', () => {
+		expect(wizardSrc).toMatch(/trpcReact\.local\.activatePortal\.useMutation/)
+		// And no longer calls the legacy name from inside the wizard.
+		expect(wizardSrc).not.toMatch(/trpcReact\.local\.activateHybrid\.useMutation/)
 	})
-	it('uses local.getHybridStatus for the portal verify step', () => {
-		expect(wizardSrc).toMatch(/trpcReact\.local\.getHybridStatus\.useQuery/)
+	it('uses the wire-renamed local.getPortalStatus for the portal verify step', () => {
+		expect(wizardSrc).toMatch(/trpcReact\.local\.getPortalStatus\.useQuery/)
+		expect(wizardSrc).not.toMatch(/trpcReact\.local\.getHybridStatus\.useQuery/)
 	})
 })
 
@@ -49,11 +51,14 @@ describe('ModePickStep — surface invariants (Phase 142-01/02/03)', () => {
 	})
 })
 
-describe('HybridDnsSetup — Cloudflare flow surface (AC-104-15 UX)', () => {
+describe('PortalDnsSetup — Cloudflare flow surface (AC-104-15 UX, Phase 143-02 rename)', () => {
 	it('links to Cloudflare API token dashboard', () => {
-		expect(hybridSrc).toMatch(/dash\.cloudflare\.com\/profile\/api-tokens/)
+		expect(portalDnsSrc).toMatch(/dash\.cloudflare\.com\/profile\/api-tokens/)
 	})
 	it('mentions zero data-plane Server5 traffic (D-104-RELAY-ZERO-DATA-PLANE surface)', () => {
-		expect(hybridSrc).toMatch(/Zero data-plane Server5 traffic|stays LAN-direct/i)
+		expect(portalDnsSrc).toMatch(/Zero data-plane Server5 traffic|stays LAN-direct/i)
+	})
+	it('calls the wire-renamed local.provisionPortal mutation (Phase 143-01)', () => {
+		expect(portalDnsSrc).toMatch(/trpcReact\.local\.provisionPortal\.useMutation/)
 	})
 })

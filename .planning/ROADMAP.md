@@ -1517,3 +1517,29 @@ Plans:
 
 **Depends on:** Phase 141 ✅ (the live-deploy + boot-time drain validation that made the mode-collapse work reachable safely).
 
+---
+
+### Phase 143: Portal Naming Sweep (wire-level + dead-file cleanup) — ✅ CODE-COMPLETE 2026-05-17 (sacred SHA preserved)
+
+**Goal:** Close the Phase 142 carryover — finish the `hybrid` → `portal` rename at the wire / source-file level so no future contributor has to remember a "wire-level name differs from user-facing name" mapping. Also delete the dead local-dns files orphaned by Phase 142-01.
+
+**Sub-plans shipped (single atomic commit):**
+- 143-01 — tRPC procedures renamed canonically: `local.provisionHybrid` → `provisionPortal`, `local.activateHybrid` → `activatePortal`, `local.getHybridStatus` → `getPortalStatus`. Legacy procedure names ALSO kept on the router as back-compat aliases (same handler bodies; lets a cached UI bundle survive mid-flight). httpOnlyPaths in common.ts gains the new entries.
+- 143-02 — `livos/.../local-setup/HybridDnsSetup.tsx` renamed → `PortalDnsSetup.tsx`; exported component + props interface renamed; LocalSetupWizard.tsx import + test grep updated.
+- 143-03 — `caddy.ts`: `generateHybridCaddyfile` → `generatePortalCaddyfile`, `validateHybridDomain` → `validatePortalDomain`, `LocalSubdomainConfig` → `PortalSubdomainConfig`. Legacy names exported as deprecated aliases (same function references — proven by 3 alias-back-compat tests). local-dns/routes.ts callers updated.
+- 143-04 — deleted `livos/.../local-dns/pki.ts` + `dnsmasq-config.ts` + their orphaned test files. server/index.ts `/api/local/ca.crt` route now returns HTTP 410 Gone with a Phase-142-pointer body instead of crashing on the missing import.
+
+**Tests:** caddy.test.ts gained 3 alias-back-compat guards (function-reference identity + byte-identical output); routes.test.ts gained 3 Portal-procedure guards (canonical procedure call + alias coexistence assertions); LocalSetupWizard.test.tsx swept `Hybrid` → `Portal` grep invariants. **52/52 vitest PASS** across the touched files.
+
+**tsc baseline:** 381 → 383 (+2 `ctx.livinityd possibly undefined` errors from the new Portal procedures — pre-existing pattern, not net new). UI tsc: 0 errors in local-setup.
+
+**Out of scope / Phase 144+:**
+- Delete legacy procedure-name aliases (provisionHybrid / activateHybrid / getHybridStatus) once we're confident every cached client has refreshed.
+- Delete legacy caddy.ts aliases (generateHybridCaddyfile / validateHybridDomain / LocalSubdomainConfig) once external consumers (if any) have migrated.
+- Rename `livos/.../local-dns/` directory → `portal-dns/` (touches every import path; pure mechanical).
+- Rename `hybrid-provision.ts` → `portal-provision.ts` + its function `provisionHybridSubdomain` → `provisionPortalSubdomain`.
+
+**Plans / artifacts:** `.planning/phases/143-portal-naming-sweep/SUMMARY.md`.
+
+**Depends on:** Phase 142 ✅ (the user-facing rename this commit propagates to the wire).
+

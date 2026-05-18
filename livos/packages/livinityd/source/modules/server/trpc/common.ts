@@ -83,13 +83,20 @@ export const httpOnlyPaths = [
 	// Phase 104 plan 104-03 — local-lan mode tRPC routes do systemctl reload + file I/O,
 	// can take 1-5 seconds. Force HTTP transport (survives WS reconnect during
 	// `systemctl restart livos`). Cluster with domain.* for namespace locality.
-	'local.activate',
+	// Phase 142-01 — `local.activate` + `local.getCaCert` removed alongside the
+	// retired local-lan mode; only `getStatus` remains.
 	'local.getStatus',
-	'local.getCaCert',
-	// Phase 104 plan 104-04 — hybrid mode tRPC routes. Same WS-reconnect-survival
-	// rationale as the local-lan trio above: activateHybrid writes 4 Redis keys,
-	// regenerates the Caddyfile, and reloads Caddy (1-5s wall-clock). getHybridStatus
-	// also touches the filesystem (stat /etc/livos/secrets/cf-token best-effort).
+	// Phase 104 plan 104-04 — portal mode tRPC routes. Same WS-reconnect-survival
+	// rationale as the local-lan trio above: activatePortal writes 4 Redis keys,
+	// regenerates the Caddyfile, and reloads Caddy (1-5s wall-clock).
+	// getPortalStatus also touches the filesystem (stat /etc/livos/secrets/cf-token
+	// best-effort).
+	// Phase 143-01 — renamed from `*Hybrid` → `*Portal` (carries the Phase
+	// 142-02 user-facing rename to the wire). Legacy procedure-name aliases
+	// (activateHybrid, getHybridStatus) kept on the router with the same
+	// httpOnlyPaths entries below so cached UI bundles survive mid-flight.
+	'local.activatePortal',
+	'local.getPortalStatus',
 	'local.activateHybrid',
 	'local.getHybridStatus',
 	// File operations — use HTTP for reliability through relay tunnel

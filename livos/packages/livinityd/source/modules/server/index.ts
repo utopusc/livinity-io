@@ -1158,27 +1158,16 @@ class Server {
 		// trust HTTPS from livinityd. Mode-gated by Redis flag — 404s in cloud/hybrid.
 		// Path is intentionally exact-match (not a prefix) to prevent leaking other
 		// endpoints (research §V13 security pitfall).
-		this.app.get('/api/local/ca.crt', async (_request, response) => {
-			const mode = await this.livinityd.ai.redis
-				.get('livos:domain:local_mode')
-				.catch(() => null)
-			if (mode !== 'local-lan') {
-				response.status(404).json({error: 'local-lan mode not active'})
-				return
-			}
-			try {
-				const {readRootCert} = await import('../local-dns/pki.js')
-				const pem = await readRootCert()
-				response.setHeader('Content-Type', 'application/x-x509-ca-cert')
-				response.setHeader(
-					'Content-Disposition',
-					'attachment; filename="livos-local-ca.crt"',
-				)
-				response.send(pem)
-			} catch (err) {
-				this.logger.error('failed to read liv-local CA cert', err)
-				response.status(500).json({error: 'failed to read CA cert'})
-			}
+		// Phase 142-01 + 143-04 — local-lan mode retired; the readRootCert helper
+		// (pki.ts) is deleted. Keep this Express route handler in place so old
+		// QR codes that still reference /api/local/ca.crt get a clean 410 Gone
+		// instead of a 500 (the URL was public-facing). Any future caller is
+		// looking for a feature that no longer exists.
+		this.app.get('/api/local/ca.crt', (_request, response) => {
+			response.status(410).json({
+				error: 'local-lan mode retired (Phase 142-01)',
+				hint: 'Use --mode portal (Phase 142-02) — Cloudflare-issued cert at the edge',
+			})
 		})
 
 		// Proxy MCP API requests to liv-core (Nexus) on port 3200
