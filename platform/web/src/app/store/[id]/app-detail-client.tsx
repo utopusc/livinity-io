@@ -6,7 +6,7 @@ import { useStore } from '../store-provider';
 import { CATEGORIES } from '../types';
 import type { App } from '../types';
 import { AppIcon } from '../components/app-icon';
-import { Icon } from '../components/icon';
+import { Icon } from '../components/icons';
 import { appVisual } from '../lib/app-visual';
 
 interface AppDetailClientProps {
