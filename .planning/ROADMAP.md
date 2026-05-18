@@ -1785,3 +1785,26 @@ Plans:
 
 **Depends on:** Phase 153 ✅ (plugin runtime + SDK exists).
 
+---
+
+### Phase 157: Install Action Wiring (close-out phase for v37)
+
+**Status:** 🔴 PLANNED 2026-05-18 — operator-reported install bug found mid-Wave-B. Last v37 phase before milestone audit.
+
+**Trigger:** Operator clicked Install in /store and nothing happened. Root cause: `useAppStoreBridge` (LivOS UI) carries its own copy of the postMessage protocol and was not updated for v37's new sections (webapp/native/ai/plugin) or the `installCustomWebapp` message type. Bridge silently ignores unknown messages → user sees optimistic UI but the install never reaches livinityd.
+
+**Goal:** Wire the new section install handlers (P150-B / P152-B / P153 / P154-B) into the bridge + livinityd trpc layer so clicking Install actually installs across every section. Plus AppCard gains an inline Install button (single-click in embedded mode).
+
+**Direction (3 waves):**
+- **Wave V (Vercel, immediate):** `StoreToLivOSMessage.install` gains `section: Section` field. `sendInstall` forwards it. AppCard renders inline Install button with section-aware copy.
+- **Wave U (LivOS UI, operator deploys):** Bridge protocol sync; `handleInstall` switches on section; new `handleInstallCustomWebapp` handler.
+- **Wave L (livinityd, operator deploys):** Service container wires `InstallDispatcher` + registers handlers. 4 new trpc procedures (installNative/installAi/installPlugin + webapp.installFromCatalog) + 1 progress query. Express `/p/:id/*` plugin middleware. Sudoers deploy. WebSocket broadcast for plugin install/uninstall.
+
+**Plans:** 1 plan (PLAN.md) covering Wave V/U/L + 10 UAT steps.
+
+**UAT:** 10-step walkthrough (PLAN.md → "Wave UAT") covering install for every section + uninstall + failure case. Acceptance: VS Code from /store → dock → window opens.
+
+**Depends on:** Phases 148 ✅ (contracts) + 150 ✅ + 152 ✅ + 153 ✅ + 154 ✅ (handlers in repo) + 156 ✅ (admin so operator can debug rows).
+
+**Carryover:** None — this is the close-out phase. After P157 ships + UAT passes, v37 milestone audit runs.
+
