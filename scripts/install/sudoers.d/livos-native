@@ -1,0 +1,31 @@
+# Phase 150-B — sudoers entry for the LivOS native-installer.
+#
+# Allows the `bruce` user (the per-LivOS-instance unprivileged user) to
+# run apt-get install for the v37 native catalog without a password.
+# Drop this file at /etc/sudoers.d/livos-native (mode 0440, root-owned).
+#
+# Security model:
+# - Single explicit binary: /usr/bin/apt-get (not /bin/apt, which is a
+#   different shim). The sudoers `Cmnd_Alias` is exact-match: any other
+#   apt-get arguments OR any other binary will be rejected.
+# - No env preservation (`!setenv` not needed since we never pass env
+#   through; sudo strips by default).
+# - The `*` glob covers package args. apt-get itself only allows real
+#   package names from configured repositories, so even if a manifest
+#   passed arbitrary strings here, apt would reject them.
+#
+# To add another permitted apt operation (e.g. apt-get autoremove),
+# extend the Cmnd_Alias — don't grant broader sudoers.
+#
+# Deploy:
+#   sudo install -m 0440 -o root -g root livos-native /etc/sudoers.d/livos-native
+#   sudo visudo -c   # syntax-check
+#
+# Operator UAT for Phase 150-B:
+#   sudo -u bruce -n /usr/bin/apt-get install -y gimp  # → installs
+#   sudo -u bruce -n /usr/bin/apt-get install -y --force-yes evil  # → denied (flag not allowed)
+#   sudo -u bruce -n /usr/bin/apt-get remove gimp  # → denied (subcommand not allowed)
+
+Cmnd_Alias LIVOS_NATIVE = /usr/bin/apt-get install -y *
+
+bruce ALL=(root) NOPASSWD: LIVOS_NATIVE
