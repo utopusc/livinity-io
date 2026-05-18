@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useStore } from '../store-provider';
 import { SECTIONS, type Section } from '../types';
-import { Icon, type IconName } from './icon';
+import { Icon, type IconName } from './icons';
 
 const SECTION_ICONS: Record<Section, IconName> = {
   app: 'cube',

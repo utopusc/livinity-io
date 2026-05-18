@@ -1,7 +1,7 @@
 'use client';
 
 import type { Section } from '../types';
-import { Icon, type IconName } from './icon';
+import { Icon, type IconName } from './icons';
 
 const PLACEHOLDER_GLYPHS: Record<Exclude<Section, 'app'>, IconName> = {
   webapp: 'globe',

@@ -1,7 +1,7 @@
 'use client';
 
 import { useStore } from '../store-provider';
-import { Icon } from './icon';
+import { Icon } from './icons';
 
 interface TopbarProps {
   onMenuToggle: () => void;

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useStore } from '../store-provider';
 import { CATEGORIES, type AppSummary } from '../types';
 import { appVisual } from '../lib/app-visual';
-import { Icon } from './icon';
+import { Icon } from './icons';
 
 interface FeaturedHeroProps {
   apps: AppSummary[];

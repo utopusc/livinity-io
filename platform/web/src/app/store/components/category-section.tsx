@@ -2,7 +2,7 @@
 
 import { CATEGORIES } from '../types';
 import { AppCard } from './app-card';
-import { Icon } from './icon';
+import { Icon } from './icons';
 import type { AppSummary } from '../types';
 
 interface CategorySectionProps {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useStore } from '../store-provider';
-import { Icon } from './icon';
+import { Icon } from './icons';
 
 type Preview = {
   url: string;
