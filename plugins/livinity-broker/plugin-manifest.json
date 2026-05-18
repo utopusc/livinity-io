@@ -1,0 +1,55 @@
+{
+  "manifestVersion": "1.0.0",
+  "id": "livinity-broker",
+  "version": "1.0.0",
+  "name": "Livinity Broker",
+  "tagline": "Claude API via your Anthropic subscription",
+  "description": "Exposes /v1/messages and /v1/chat/completions endpoints under your LivOS subdomain. Point Bolt.diy, Cline, Cursor or any OpenAI/Anthropic-compatible client at it and use Claude through your existing subscription — no separate API key, no separate billing.",
+  "author": "Livinity",
+  "icon": "https://livinity.io/icon.png",
+  "website": "https://livinity.io",
+  "signing": {
+    "tier": "operator",
+    "publicKeyId": "operator-v1",
+    "signedAt": "2026-05-18T00:00:00Z"
+  },
+  "hooks": {
+    "routes": [
+      { "path": "/v1/messages", "method": "POST", "handler": "anthropicMessages" },
+      { "path": "/v1/chat/completions", "method": "POST", "handler": "openaiChatCompletions" },
+      { "path": "/keys", "method": "GET", "handler": "listKeys" },
+      { "path": "/keys", "method": "POST", "handler": "createKey" },
+      { "path": "/keys/:id", "method": "DELETE", "handler": "deleteKey" }
+    ],
+    "widgets": [
+      { "mount": "settings", "component": "BrokerSettings" }
+    ],
+    "commands": [],
+    "mcps": []
+  },
+  "capabilities": {
+    "redis": [
+      { "keyPattern": "liv:plugin:livinity-broker:*", "access": "readwrite" }
+    ],
+    "postgres": [
+      { "table": "plugin_livinity_broker.api_keys", "access": "readwrite" },
+      { "table": "plugin_livinity_broker.usage", "access": "readwrite" }
+    ],
+    "network": {
+      "outbound": ["api.anthropic.com"],
+      "inbound": false
+    }
+  },
+  "minLivosVersion": "37.0.0",
+  "uiBundle": {
+    "entry": "ui/bundle.umd.js",
+    "format": "umd",
+    "shadowDom": true
+  },
+  "migrations": [
+    {
+      "file": "migrations/0001_init.sql",
+      "appliedAtKey": "liv:plugin:livinity-broker:migration:0001"
+    }
+  ]
+}
