@@ -44,7 +44,9 @@ fi
 
 # ── TEST 2: --subdomain X (alone) + --api-key passes parse_cli ──────────────
 info "TEST 2: --subdomain X + --api-key liv_k_... parses clean (fall through to root check)"
-out=$(bash "$INSTALL_SH" --subdomain lucy --api-key liv_k_test4xxx 2>&1)
+# Plan 145-01: set LIVOS_SKIP_API_KEY_RESOLVE=1 so the new auto-resolver does
+# NOT make a network call against the fake api-key (would exit 1 on net-fail).
+out=$(LIVOS_SKIP_API_KEY_RESOLVE=1 bash "$INSTALL_SH" --subdomain lucy --api-key liv_k_test4xxx 2>&1)
 rc=$?
 # Should pass parse_cli (exit != 64) and fall through to root / OS gate.
 if [[ $rc -ne 64 ]]; then
@@ -68,7 +70,7 @@ fi
 
 # ── TEST 3: --subdomain X + --domain X.Y rejected (both-set error) ──────────
 info "TEST 3: --subdomain + --domain both set → exit 64"
-out=$(bash "$INSTALL_SH" --subdomain lucy --domain lucy.livinity.io --api-key liv_k_x 2>&1)
+out=$(LIVOS_SKIP_API_KEY_RESOLVE=1 bash "$INSTALL_SH" --subdomain lucy --domain lucy.livinity.io --api-key liv_k_x 2>&1)
 rc=$?
 if [[ $rc -eq 64 ]]; then
     pass "both --subdomain and --domain → exit 64"
@@ -83,7 +85,7 @@ fi
 
 # ── TEST 4: neither --subdomain nor --domain in hybrid mode → exit 64 ───────
 info "TEST 4: --mode hybrid with neither --subdomain nor --domain → exit 64"
-out=$(bash "$INSTALL_SH" --mode hybrid --api-key liv_k_x 2>&1)
+out=$(LIVOS_SKIP_API_KEY_RESOLVE=1 bash "$INSTALL_SH" --mode hybrid --api-key liv_k_x 2>&1)
 rc=$?
 if [[ $rc -eq 64 ]]; then
     pass "no domain at all → exit 64"
@@ -99,7 +101,7 @@ fi
 # ── TEST 5: --subdomain with invalid shape (dot, space, leading dash) ───────
 info "TEST 5: --subdomain shape validation"
 for bad in "foo.bar" "-leading" "trailing-" "with space"; do
-    out=$(bash "$INSTALL_SH" --subdomain "$bad" --api-key liv_k_x 2>&1)
+    out=$(LIVOS_SKIP_API_KEY_RESOLVE=1 bash "$INSTALL_SH" --subdomain "$bad" --api-key liv_k_x 2>&1)
     rc=$?
     if [[ $rc -eq 64 ]]; then
         pass "--subdomain '$bad' → exit 64"
@@ -155,7 +157,7 @@ fi
 # ── TEST 9: api-key never echoed verbatim into stderr (basic secret hygiene)
 info "TEST 9: --api-key value never appears verbatim in install.sh stderr"
 secret="liv_k_supersecretvalue123456789"
-out=$(bash "$INSTALL_SH" --subdomain test --api-key "$secret" 2>&1 || true)
+out=$(LIVOS_SKIP_API_KEY_RESOLVE=1 bash "$INSTALL_SH" --subdomain test --api-key "$secret" 2>&1 || true)
 # The argv loop logs `--api-key prefix: liv_k_supe...` (10-char prefix). We
 # assert the FULL secret tail (post-prefix) doesn't leak. Note: bash's
 # `warn "ignoring unknown arg: $1"` WILL echo a stray secret if the operator
@@ -189,6 +191,69 @@ for f in "$PARSE_CLI_SH" "$MODE_TUNNEL_SH" "$INSTALL_SH"; do
         fail "Sacred SHA MISSING from $(basename "$f")"
     fi
 done
+
+# ── TEST 12: Phase 145 — auto-resolve block present in parse-cli.sh ─────────
+info "TEST 12: parse-cli.sh contains the Phase 145 auto-resolve block"
+if grep -qF "Plan 145-01" "$PARSE_CLI_SH"; then
+    pass "Phase 145 marker present in parse-cli.sh"
+else
+    fail "Phase 145 marker MISSING from parse-cli.sh"
+fi
+if grep -qF "Plan 145-01: api-key auto-resolve BEGIN" "$PARSE_CLI_SH" \
+    && grep -qF "Plan 145-01: api-key auto-resolve END" "$PARSE_CLI_SH"; then
+    pass "Phase 145 outer sentinels present"
+else
+    fail "Phase 145 outer sentinels MISSING (auto-resolve BEGIN/END markers)"
+fi
+if grep -qF "auto-resolved subdomain from api-key:" "$PARSE_CLI_SH"; then
+    pass "auto-resolve INFO line present"
+else
+    fail "auto-resolve INFO line MISSING"
+fi
+if grep -qF "overridden by api-key owner" "$PARSE_CLI_SH"; then
+    pass "conflict-WARN line present"
+else
+    fail "conflict-WARN line MISSING (should never fail-stop on conflict)"
+fi
+if grep -qF "/api/me/profile" "$PARSE_CLI_SH"; then
+    pass "resolver endpoint URL present"
+else
+    fail "resolver endpoint URL MISSING"
+fi
+if grep -qF "custom apex --domain" "$PARSE_CLI_SH"; then
+    pass "custom-apex defer branch present"
+else
+    fail "custom-apex defer branch MISSING (CONTEXT line 49 requires it)"
+fi
+
+# ── TEST 13: Phase 145 — help text mentions optional --subdomain + new example
+info "TEST 13: --help mentions Phase 145 single-flag install + OPTIONAL --subdomain"
+help_out=$(bash "$INSTALL_SH" --help 2>&1)
+if echo "$help_out" | grep -qF "Phase 145 — single-flag install"; then
+    pass "--help promotes the Phase 145 api-key-only one-liner"
+else
+    fail "--help does NOT promote the api-key-only one-liner"
+fi
+if echo "$help_out" | grep -qF "OPTIONAL when"; then
+    pass "--help marks --subdomain OPTIONAL when --api-key is set"
+else
+    fail "--help does NOT mark --subdomain as optional"
+fi
+
+# ── TEST 14: Phase 145 — conflict-WARN branch is WARN-only (no fail/exit)
+# Use the Plan 145-01 sentinel markers to extract ONLY the conflict-WARN body
+# (sed range, exact match) and grep for any fail/exit call inside it. This
+# replaces the brittle awk/regex approach. The sentinels are part of Task 2's
+# acceptance criteria so this anchor is stable across edits.
+info "TEST 14: conflict-warn path uses warn only, never fail/exit"
+conflict_body=$(sed -n '/Plan 145-01: conflict-WARN BEGIN/,/Plan 145-01: conflict-WARN END/p' "$PARSE_CLI_SH")
+if [[ -z "$conflict_body" ]]; then
+    fail "could not locate conflict-WARN sentinel range (Plan 145-01: conflict-WARN BEGIN/END missing)"
+elif echo "$conflict_body" | grep -qE '(^|[^a-z_])(fail|exit)[[:space:]]'; then
+    fail "conflict-WARN branch contains fail/exit — must be WARN only (Phase 145 contract)"
+else
+    pass "conflict-WARN branch is WARN-only (no fail/exit in the sentinel range)"
+fi
 
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
