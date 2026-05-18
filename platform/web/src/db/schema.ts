@@ -1,4 +1,13 @@
-import { pgTable, uuid, text, boolean, timestamp, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, jsonb, pgEnum } from 'drizzle-orm/pg-core';
+
+// Phase 148 — section enum (see SPEC.md §1).
+export const sectionEnum = pgEnum('section_enum', [
+  'app',
+  'webapp',
+  'native',
+  'ai',
+  'plugin',
+]);
 
 export const apps = pgTable('apps', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -7,6 +16,7 @@ export const apps = pgTable('apps', {
   tagline: text('tagline').notNull(),
   description: text('description').notNull(),
   category: text('category').notNull(),
+  section: sectionEnum('section').notNull().default('app'),
   version: text('version').notNull().default('1.0.0'),
   docker_compose: text('docker_compose').notNull(),
   manifest: jsonb('manifest').notNull(),

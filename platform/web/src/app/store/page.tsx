@@ -5,6 +5,7 @@ import { useStore } from './store-provider';
 import { FeaturedHero } from './components/featured-hero';
 import { CategorySection } from './components/category-section';
 import { AppCard } from './components/app-card';
+import { EmptySection } from './components/empty-section';
 import { CATEGORIES } from './types';
 
 export default function StorePage() {
@@ -15,10 +16,19 @@ export default function StorePage() {
     searchQuery,
     selectedCategory,
     setSelectedCategory,
+    selectedSection,
   } = useStore();
 
+  // Phase 148 — narrow to the active section first; current data has all
+  // rows section='app' so other tabs render empty-state placeholders until
+  // phases 150-153 ship seed entries.
+  const sectionApps = useMemo(
+    () => apps.filter((a) => a.section === selectedSection),
+    [apps, selectedSection],
+  );
+
   const filteredApps = useMemo(() => {
-    let result = apps;
+    let result = sectionApps;
     if (selectedCategory) {
       result = result.filter((a) => a.category === selectedCategory);
     }
@@ -32,21 +42,21 @@ export default function StorePage() {
       );
     }
     return result;
-  }, [apps, searchQuery, selectedCategory]);
+  }, [sectionApps, searchQuery, selectedCategory]);
 
   const featuredApps = useMemo(
-    () => apps.filter((a) => a.featured),
-    [apps]
+    () => sectionApps.filter((a) => a.featured),
+    [sectionApps]
   );
 
   const appsByCategory = useMemo(() => {
-    const grouped: Record<string, typeof apps> = {};
-    for (const app of apps) {
+    const grouped: Record<string, typeof sectionApps> = {};
+    for (const app of sectionApps) {
       if (!grouped[app.category]) grouped[app.category] = [];
       grouped[app.category].push(app);
     }
     return grouped;
-  }, [apps]);
+  }, [sectionApps]);
 
   // Loading state
   if (loading) {
@@ -117,6 +127,11 @@ export default function StorePage() {
         )}
       </div>
     );
+  }
+
+  // Empty section placeholder (everything other than 'app' has no rows in v37 P149)
+  if (selectedSection !== 'app' && sectionApps.length === 0) {
+    return <EmptySection section={selectedSection} />;
   }
 
   // Discover mode (default)
