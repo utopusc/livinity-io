@@ -246,7 +246,8 @@ parse_cli() {
     if [[ -n "$LIVOS_API_KEY" && "${LIVOS_SKIP_API_KEY_RESOLVE:-0}" != "1" ]]; then
         info "Resolving subdomain from --api-key via https://livinity.io/api/me/profile (Plan 145-01)"
         local _resp _http _resolved _domain_label
-        _resp=$(curl -fsS -o /tmp/livos-profile-resp.json -w "%{http_code}" \
+        # -L follows Vercel's apex→www 307 redirect post-Phase 146 cutover.
+        _resp=$(curl -fsSL -o /tmp/livos-profile-resp.json -w "%{http_code}" \
             -H "X-API-Key: $LIVOS_API_KEY" \
             "https://livinity.io/api/me/profile" 2>/dev/null) || _resp="000"
         _http="$_resp"
