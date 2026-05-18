@@ -85,6 +85,8 @@ function StoreProviderInner({ children }: { children: React.ReactNode }) {
         getAppSubdomain: bridge.getAppSubdomain,
         getAppDefaultCreds: bridge.getAppDefaultCreds,
         sendUpdateSubdomain: bridge.sendUpdateSubdomain,
+        // Custom URL → dock (Phase 151-B)
+        sendInstallCustomWebapp: bridge.sendInstallCustomWebapp,
         // Instance info
         instanceInfo: bridge.instanceInfo,
       }}

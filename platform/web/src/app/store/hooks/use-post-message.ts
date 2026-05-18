@@ -215,6 +215,18 @@ export function usePostMessage() {
     sendMessage({ type: 'updateSubdomain', appId, subdomain });
   }, [sendMessage]);
 
+  const sendInstallCustomWebapp = useCallback(
+    (url: string, title: string, faviconUrl?: string | null) => {
+      sendMessage({
+        type: 'installCustomWebapp',
+        url,
+        title,
+        faviconUrl: faviconUrl ?? null,
+      });
+    },
+    [sendMessage],
+  );
+
   return {
     isEmbedded,
     installedApps,
@@ -229,6 +241,7 @@ export function usePostMessage() {
     getAppSubdomain,
     getAppDefaultCreds,
     sendUpdateSubdomain,
+    sendInstallCustomWebapp,
     instanceInfo,
   };
 }
