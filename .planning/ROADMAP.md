@@ -1496,3 +1496,24 @@ Plans:
 
 **Pending operator step:** `bash /opt/livos/update.sh` on Mini PC (10.69.31.68) → walk the post-deploy smoke-test trio in `docs/operator/post-deploy-playbook.md` §8. After that lands clean, the manual Caddyfile sed-prefix + manual cloudflared token sed + manual Redis local_mode set that socinity is currently relying on all become no-op (the code-paths shipped here take over).
 
+---
+
+### Phase 142: Single-Mode UX — Portal + Cloud (Coming Soon) — ✅ CODE-COMPLETE 2026-05-17 (commits `646e6daa`, `e3d58f4c`; 3 sub-plans, sacred SHA preserved 2/2)
+
+**Goal:** Collapse the install mode set from `{cloud, local-lan, hybrid, tunnel}` down to one user-facing active mode (`portal` — rename of `hybrid` per user direction "daha yaratıcı olsun"), retire `local-lan` entirely (no production install base, maintenance-cost-only path), and surface `cloud` as Coming Soon in the install wizard so the future hosted-control-plane story has a visible placeholder. Driven by a mid-session user request after the Phase 141 deploy went green: "Local modu vs çıkarmak istiyorum tek mod olsun" + "hybridin de adını değiştirelim daha yaratıcı olsun" + "cloud olsun ama bunu ileride koyacağımız için bu suanlik coming soon olsun."
+
+**Sub-plans shipped:**
+- 142-02 `646e6daa` — `feat(142-02/single-mode)` rename `hybrid` → `portal` end-to-end. parse-cli.sh default mode + whitelist + help text rewritten; install.sh dispatch collapsed to `portal)`; show-banner.sh trimmed to one portal-shaped banner; livinityd readers (apps.ts:rebuildCaddy, index.ts Phase 112 fallback switch) accept `portal` ∪ `hybrid` ∪ `tunnel` so already-deployed boxes survive update.sh without state migration; UI types (SelectedMode, WizardState.portal, PORTAL_STEPS, portal-* step IDs) + ModePickStep card + LocalSetupWizard state-machine literals renamed. NEW test-mode-portal-rename.sh (11 PASS) + updated test-mode-hybrid-args.sh (21 PASS) + LocalSetupWizard.test.tsx (17 PASS).
+- 142-01 `e3d58f4c` — `feat(142-01/single-mode)` retire `local-lan` end-to-end. Deletes `scripts/install/mode-local-lan.sh` + `PlatformInstructions.tsx` + `QrCodeStep.tsx`; drops `generateLocalCaddyfile` + `validateLocalTld` from caddy.ts; drops `local.activate` + `local.getCaCert` tRPC procedures (with their schema + caddy mock); `local.getStatus` keeps `caCertAvailable` field on the return shape for back-compat but always reports false; `local.activateHybrid` write site updated to `local_mode='portal'` (Phase 142-02 rename reflected at every writer). caddy.test.ts shrunk + gained Phase 142-01 retirement guard. routes.test.ts gained 2 router-definition guards (`activate` + `getCaCert` no longer present in `_def.procedures`). tsc baseline 382 → 381 (one fewer error after dead-code drop). +143/-754 LOC net.
+- 142-03 (bundled into 142-01) — `cloud` Coming Soon UI badge in ModePickStep + LocalSetupWizard's `cloud-redirect` step replaced with informational Coming-Soon copy + pointer at livinity.io/dashboard. parse-cli.sh `--mode cloud` rejects with a Coming-Soon-shaped error before whitelisted dispatch. AC-134-01-7 test updated to assert the new rejection shape.
+- 142-04 — docs sweep + ROADMAP/SUMMARY (this commit). docs/operator/post-deploy-playbook.md `livos:domain:local_mode` references updated portal-first with back-compat note for legacy `hybrid`/`tunnel` values; ROADMAP Phase 142 entry; SUMMARY.md.
+
+**Out of scope / Phase 143+:**
+- Wire-level rename of `local.activateHybrid` / `local.getHybridStatus` tRPC procedures + the `HybridDnsSetup.tsx` component file → `PortalDnsSetup.tsx`. The current LocalSetupWizard still imports `HybridDnsSetup` as a leaf component; renaming is mechanical but touches the test invariants and the tRPC client cache. Held back for a focused Phase 143 sweep.
+- Delete `livos/.../local-dns/pki.ts` + `dnsmasq-config.ts` (dead-but-small after 142-01; safe to delete; deferred to Phase 143 polish).
+- Live the cloud-mode story when the hosted control-plane is actually built (Phase 144+ likely).
+
+**Plans / artifacts:** `.planning/phases/142-single-mode-portal-coming-soon/{SUMMARY.md,SCOPE.md}`.
+
+**Depends on:** Phase 141 ✅ (the live-deploy + boot-time drain validation that made the mode-collapse work reachable safely).
+
