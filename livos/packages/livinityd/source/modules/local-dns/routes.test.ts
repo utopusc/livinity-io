@@ -1,14 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {describe, it, expect, vi} from 'vitest'
 
-// Mock caddy.ts so we don't hit disk
+// Phase 142-01 — local-lan mocks (generateLocalCaddyfile, validateLocalTld,
+// pki readRootCert) dropped alongside the procedures they backed.
 vi.mock('../domain/caddy.js', () => ({
-	generateLocalCaddyfile: vi.fn().mockReturnValue('# generated local\n'),
 	generateHybridCaddyfile: vi.fn().mockReturnValue('# generated hybrid\n'),
-	validateLocalTld: (t: string) =>
-		/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(
-			t,
-		),
 	validateHybridDomain: (d: string) =>
 		typeof d === 'string' &&
 		d.length > 0 &&
@@ -19,9 +15,6 @@ vi.mock('../domain/caddy.js', () => ({
 		/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(d),
 	writeCaddyfile: vi.fn().mockResolvedValue(undefined),
 	reloadCaddy: vi.fn().mockResolvedValue(undefined),
-}))
-vi.mock('./pki.js', () => ({
-	readRootCert: vi.fn().mockResolvedValue('-----BEGIN CERTIFICATE-----\n'),
 }))
 
 // Map-backed fake Redis (mirrors apps/native-app-config.test.ts pattern)
@@ -41,68 +34,39 @@ function makeFakeRedis() {
 	}
 }
 
-describe('local-dns/routes — Phase 104 plan 104-03', () => {
-	it('local.getStatus returns mode/tld/hostIp/caCertAvailable shape', async () => {
+describe('local-dns/routes — Phase 142-01 retirement guard', () => {
+	it('local.getStatus returns mode/tld/hostIp/caCertAvailable=false shape', async () => {
+		// Phase 142-01: caCertAvailable always reports false (internal-CA
+		// path retired with local-lan). Field retained for back-compat with
+		// the wizard's existing destructure.
 		const redis = makeFakeRedis()
-		await redis.set('livos:domain:local_mode', 'local-lan')
-		await redis.set('livos:domain:local_tld', 'livinity.local')
+		await redis.set('livos:domain:local_mode', 'portal')
 		await redis.set('livos:domain:host_ip', '192.168.1.100')
 
 		const localRouter = (await import('./routes.js')).default
 		const caller = (localRouter as any).createCaller({
 			livinityd: {ai: {redis}},
 			currentUser: {id: 'test-user', role: 'admin', username: 'admin'},
-			// Bypass isAuthenticated middleware in unit tests (production calls
-			// route through Express + JWT verification — see is-authenticated.ts:12)
 			dangerouslyBypassAuthentication: true,
 			logger: {error: () => {}, info: () => {}, warn: () => {}, verbose: () => {}},
 		})
 		const status = await caller.getStatus()
-		expect(status.mode).toBe('local-lan')
-		expect(status.tld).toBe('livinity.local')
+		expect(status.mode).toBe('portal')
 		expect(status.hostIp).toBe('192.168.1.100')
-		expect(status.caCertAvailable).toBe(true)
+		expect(status.caCertAvailable).toBe(false)
 	})
 
-	it('local.activate rejects invalid hostIp', async () => {
-		const redis = makeFakeRedis()
+	it('local.activate procedure is no longer in the router (Phase 142-01)', async () => {
 		const localRouter = (await import('./routes.js')).default
-		const caller = (localRouter as any).createCaller({
-			livinityd: {ai: {redis}},
-			currentUser: {id: 'test-user', role: 'admin', username: 'admin'},
-			// Bypass isAuthenticated middleware in unit tests (production calls
-			// route through Express + JWT verification — see is-authenticated.ts:12)
-			dangerouslyBypassAuthentication: true,
-			logger: {error: () => {}, info: () => {}, warn: () => {}, verbose: () => {}},
-		})
-		await expect(
-			caller.activate({tld: 'livinity.local', hostIp: '999.999.999.999'}),
-		).rejects.toThrow()
+		// tRPC v11 routers expose their procedure map at `_def.procedures`.
+		const procs = (localRouter as any)._def?.procedures ?? {}
+		expect(procs.activate).toBeUndefined()
 	})
 
-	it('local.activate writes Redis keys + calls writeCaddyfile + reloadCaddy', async () => {
-		const redis = makeFakeRedis()
-		const caddyMod = await import('../domain/caddy.js')
+	it('local.getCaCert procedure is no longer in the router (Phase 142-01)', async () => {
 		const localRouter = (await import('./routes.js')).default
-		const caller = (localRouter as any).createCaller({
-			livinityd: {ai: {redis}},
-			currentUser: {id: 'test-user', role: 'admin', username: 'admin'},
-			// Bypass isAuthenticated middleware in unit tests (production calls
-			// route through Express + JWT verification — see is-authenticated.ts:12)
-			dangerouslyBypassAuthentication: true,
-			logger: {error: () => {}, info: () => {}, warn: () => {}, verbose: () => {}},
-		})
-		const r = await caller.activate({
-			tld: 'livinity.local',
-			hostIp: '192.168.1.100',
-		})
-		expect(r.success).toBe(true)
-		expect(await redis.get('livos:domain:local_mode')).toBe('local-lan')
-		expect(await redis.get('livos:domain:local_tld')).toBe('livinity.local')
-		expect(await redis.get('livos:domain:host_ip')).toBe('192.168.1.100')
-		expect(caddyMod.generateLocalCaddyfile).toHaveBeenCalled()
-		expect(caddyMod.writeCaddyfile).toHaveBeenCalled()
-		expect(caddyMod.reloadCaddy).toHaveBeenCalled()
+		const procs = (localRouter as any)._def?.procedures ?? {}
+		expect(procs.getCaCert).toBeUndefined()
 	})
 })
 
@@ -159,9 +123,11 @@ describe('local-dns/routes — Phase 104 plan 104-04 — hybrid procedures', () 
 			hostIp: '192.168.1.100',
 		})
 		expect(r.success).toBe(true)
-		expect(r.mode).toBe('hybrid')
+		// Phase 142-02: activateHybrid now writes 'portal' (the rename)
+		// while keeping the tRPC procedure name for wire-level back-compat.
+		expect(r.mode).toBe('portal')
 		expect(r.subdomain).toBe('ab12cd34.home.livinity.io')
-		expect(await redis.get('livos:domain:local_mode')).toBe('hybrid')
+		expect(await redis.get('livos:domain:local_mode')).toBe('portal')
 		expect(await redis.get('livos:domain:hybrid_subdomain')).toBe(
 			'ab12cd34.home.livinity.io',
 		)

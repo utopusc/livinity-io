@@ -205,125 +205,34 @@ ${WS_TRANSPORT_BODY}
 	return blocks.join('\n\n') + '\n'
 }
 
-// ─── Phase 104 plan 104-03 — local-lan + hybrid mode generators ─────────
+// ─── Phase 104 plan 104-03 — local-lan generator RETIRED in Phase 142-01 ──
+// The `generateLocalCaddyfile` + `validateLocalTld` pair backed the dnsmasq
+// + Caddy internal-CA mode (--mode local-lan). Phase 142-01 retires local-lan
+// entirely; both functions are dropped. `LocalSubdomainConfig` survives as a
+// small helper type because the portal generator below (formerly hybrid)
+// still uses it for the multi-user-app per-subdomain branch. Rename of the
+// type to `PortalSubdomainConfig` is a Phase 142-04 sweep item.
 
 /**
- * Local-mode subdomain shape. Differs from the cloud-mode `SubdomainConfig`
- * (which is keyed on `subdomain` + `appId` + Postgres state) because local-lan
- * mode routes per-user app subdomains without the marketplace appId concept.
- *
- * Deviation note (Rule 3): plan 104-03 referenced `SubdomainConfig` for
- * generateLocalCaddyfile but the existing interface is keyed on
- * `subdomain`/`appId`/`enabled`, not the simple `{name, port}` shape the
- * plan needs. Introducing a sibling type keeps cloud-mode parity
- * (D-104-NO-PROD-IMPACT) without bending the call site.
+ * Per-subdomain routing hint for the portal Caddyfile generator. The
+ * `Local` prefix reflects the type's original local-lan origin and will be
+ * renamed to `PortalSubdomainConfig` in Phase 142-04's polish pass.
  */
 export interface LocalSubdomainConfig {
 	name: string
 	port: number
 }
 
-/**
- * Validate a local-mode TLD shape. Rejects path-traversal patterns, IPv4 strings,
- * and characters outside the conservative DNS-label set.
- * Source: 104-RESEARCH.md §Security Domain V5.
- */
-const LOCAL_TLD_RE =
-	/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i
 const IPV4_RE_CADDY =
 	/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/
-
-export function validateLocalTld(tld: string): boolean {
-	if (typeof tld !== 'string') return false
-	if (tld.length === 0 || tld.length > 253) return false
-	if (tld.includes('..') || tld.includes('/')) return false
-	if (IPV4_RE_CADDY.test(tld)) return false
-	return LOCAL_TLD_RE.test(tld)
-}
-
-/**
- * Generate a Caddyfile for local-lan mode.
- * Imports /etc/caddy/pki-global.conf at the top (D-104-CADDY-PKI-IMPORT) so the
- * named CA `liv-local` persists across regenerations (Pitfall 1).
- *
- * IMPORTANT: This function does NOT modify generateFullCaddyfile() — cloud mode
- * remains byte-equivalent to deployed SHA dab261cc (D-104-NO-PROD-IMPACT).
- */
-export function generateLocalCaddyfile(
-	localDomain: string,
-	hostIp: string,
-	subdomains: LocalSubdomainConfig[] = [],
-	multiUser: boolean = true,
-): string {
-	const blocks: string[] = []
-
-	// First non-blank line MUST be the import directive (test: AC-104-8)
-	blocks.push('import /etc/caddy/pki-global.conf')
-
-	// Wildcard virtual host — covers *.bruce.livinity.local, *.alice.livinity.local, etc.
-	blocks.push(`*.${localDomain} {
-    tls {
-        issuer internal {
-            ca liv-local
-        }
-    }
-    reverse_proxy 127.0.0.1:8080 {
-${WS_TRANSPORT_BODY_LOCAL}
-    }
-}`)
-
-	// Bare-domain virtual host
-	blocks.push(`${localDomain} {
-    tls {
-        issuer internal {
-            ca liv-local
-        }
-    }
-    reverse_proxy 127.0.0.1:8080 {
-${WS_TRANSPORT_BODY_LOCAL}
-    }
-}`)
-
-	// HTTP-only block for CA root download — listed by both name AND IP so
-	// pre-trust clients can fetch the cert without name resolution.
-	blocks.push(`http://${localDomain}, http://${hostIp} {
-    handle /api/local/ca.crt {
-        root * /var/lib/caddy/.local/share/caddy/pki/authorities/liv-local
-        rewrite * /root.crt
-        file_server
-    }
-    handle {
-        reverse_proxy 127.0.0.1:8080 {
-${WS_TRANSPORT_BODY_LOCAL}
-        }
-    }
-}`)
-
-	// Optional per-subdomain custom port routing (multi-user app gateway hint)
-	if (multiUser) {
-		for (const sub of subdomains) {
-			blocks.push(`${sub.name}.${localDomain} {
-    tls {
-        issuer internal {
-            ca liv-local
-        }
-    }
-    reverse_proxy 127.0.0.1:${sub.port} {
-${WS_TRANSPORT_BODY_LOCAL}
-    }
-}`)
-		}
-	}
-
-	return blocks.join('\n\n') + '\n'
-}
 
 // ─── Phase 104 plan 104-04 — hybrid mode generator + validator ─────────
 
 /**
  * Validate a hybrid-mode domain shape. Accepts user-owned domains AND the
  * LivOS-provisioned <random>.home.livinity.io pattern. Rejects:
- *   - .local TLD (caller should route to generateLocalCaddyfile instead)
+ *   - .local TLD (Phase 142-01: local-lan retired; this guard remains as a
+ *     defensive sanity check for any caller that hasn't migrated yet)
  *   - IP-shaped strings
  *   - Path-traversal patterns
  *   - Domains shorter than two labels (TLDs alone)

@@ -5,77 +5,16 @@
 // complement to plan 104-07's runtime tcpdump assertion).
 import {describe, it, test, expect} from 'vitest'
 import {
-	generateLocalCaddyfile,
 	generateFullCaddyfile,
 	generateHybridCaddyfile,
-	validateLocalTld,
 	validateHybridDomain,
 	validateHost,
 } from './caddy.js'
 
-describe('validateLocalTld (Phase 104 V5 input validation)', () => {
-	it('accepts valid TLDs', () => {
-		expect(validateLocalTld('livinity.local')).toBe(true)
-		expect(validateLocalTld('home.bruceoz.com')).toBe(true)
-		expect(validateLocalTld('a.b')).toBe(true)
-	})
-	it('rejects path traversal', () => {
-		expect(validateLocalTld('../etc')).toBe(false)
-		expect(validateLocalTld('a/b')).toBe(false)
-		expect(validateLocalTld('foo..bar')).toBe(false)
-	})
-	it('rejects IPv4-shaped strings', () => {
-		expect(validateLocalTld('192.168.1.1')).toBe(false)
-		expect(validateLocalTld('10.0.0.1')).toBe(false)
-	})
-	it('rejects whitespace and special chars', () => {
-		expect(validateLocalTld('foo bar')).toBe(false)
-		expect(validateLocalTld('foo;bar')).toBe(false)
-		expect(validateLocalTld('foo$bar')).toBe(false)
-	})
-	it('rejects empty / too long', () => {
-		expect(validateLocalTld('')).toBe(false)
-		expect(validateLocalTld('a'.repeat(254))).toBe(false)
-	})
-})
-
-describe('generateLocalCaddyfile (Phase 104)', () => {
-	it('emits import /etc/caddy/pki-global.conf as the first non-blank line (AC-104-8)', () => {
-		const out = generateLocalCaddyfile('bruce.livinity.local', '192.168.1.100', [], true)
-		const firstNonBlank = out.split('\n').find((l) => l.trim().length > 0)
-		expect(firstNonBlank).toMatch(/^import \/etc\/caddy\/pki-global\.conf$/)
-	})
-
-	it('contains the wildcard *.bruce.livinity.local block with ca liv-local', () => {
-		const out = generateLocalCaddyfile('bruce.livinity.local', '192.168.1.100', [], true)
-		expect(out).toContain('*.bruce.livinity.local {')
-		expect(out).toMatch(/issuer internal\s*\{\s*ca liv-local/)
-	})
-
-	it('contains the bare-domain block', () => {
-		const out = generateLocalCaddyfile('bruce.livinity.local', '192.168.1.100', [], true)
-		// Bare domain followed by " {" must appear
-		expect(out).toMatch(/(^|\n)bruce\.livinity\.local \{/)
-	})
-
-	it('contains HTTP-only CA cert download block by name AND IP', () => {
-		const out = generateLocalCaddyfile('bruce.livinity.local', '192.168.1.100', [], true)
-		expect(out).toContain('http://bruce.livinity.local, http://192.168.1.100')
-		expect(out).toContain('handle /api/local/ca.crt')
-		expect(out).toContain('/var/lib/caddy/.local/share/caddy/pki/authorities/liv-local')
-	})
-
-	it('appends multi-user subdomains with the named CA', () => {
-		const out = generateLocalCaddyfile(
-			'bruce.livinity.local',
-			'192.168.1.100',
-			[{name: 'app1', port: 8081}],
-			true,
-		)
-		expect(out).toContain('app1.bruce.livinity.local {')
-		expect(out).toContain('reverse_proxy 127.0.0.1:8081')
-	})
-})
+// Phase 142-01 — `generateLocalCaddyfile` + `validateLocalTld` test blocks
+// removed alongside the dropped local-lan generator. The remaining tests
+// cover the cloud-mode regression invariant + hybrid (portal) generator +
+// Phase 141-03 hyphen-pattern + Phase 142-01 retirement guards below.
 
 describe('generateFullCaddyfile — cloud-mode regression (D-104-NO-PROD-IMPACT)', () => {
 	it('does NOT emit any pki or import directive in cloud mode (AC-104-3 unit-level)', () => {
@@ -214,6 +153,18 @@ describe('generateHybridCaddyfile — data-plane invariant (D-104-RELAY-ZERO-DAT
 		// No reverse_proxy line should point at any livinity.io hostname
 		// (data-plane stays LAN-direct — reverse_proxy targets 127.0.0.1 only).
 		expect(output).not.toMatch(/reverse_proxy\s+[^\s]*livinity\.io[^\/\w]/)
+	})
+})
+
+// ─── Phase 142-01 — local-lan retirement guard ─────────────────────────
+
+describe('Phase 142-01 local-lan retirement (source-text guards)', () => {
+	test('caddy.ts no longer exports generateLocalCaddyfile / validateLocalTld', async () => {
+		// Dynamic import so the test surfaces an early failure if either symbol
+		// is re-introduced. Both should be `undefined` on the module object.
+		const mod = (await import('./caddy.js')) as unknown as Record<string, unknown>
+		expect(mod.generateLocalCaddyfile).toBeUndefined()
+		expect(mod.validateLocalTld).toBeUndefined()
 	})
 })
 
