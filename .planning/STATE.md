@@ -3,10 +3,17 @@ gsd_state_version: 1.0
 milestone: v37.0
 milestone_name: "Store Reimagining + Plugin Platform"
 status: in-progress
-last_updated: "2026-05-18T17:00:00.000Z"
+last_updated: "2026-05-18T21:00:00.000Z"
 milestone_v37: v37.0
 milestone_v37_name: "Store Reimagining + Plugin Platform"
-milestone_v37_status: 2026-05-18 — Catalog + UI layer complete. 6 Vercel-side phases shipped (148-149-149.1-149.2-150A-151A-152A-154A-156). 5 Wave B carryovers pending operator-walk + Mini PC sessions.
+milestone_v37_status: 2026-05-18 — All 8 phases CODE-COMPLETE. Vercel layer 100% shipped + live on localhost. Wave B livinityd code 100% shipped (Mini PC UAT pending). v37 is one operator deploy cycle from production-ready.
+phase_149_3_status: ✅ SHIPPED 2026-05-18 — real icons (with monogram fallback), DS-ported detail page, section nav from any /store/* page via URL param
+phase_155_status: ✅ SHIPPED 2026-05-18 — /developers portal page with 7 SDK doc sections + code blocks
+phase_151_b_status: ✅ SHIPPED 2026-05-18 — Custom URL form on WebApp section + Vercel OG preview API + postMessage installCustomWebapp protocol
+phase_150_b_status: ✅ CODE SHIPPED 2026-05-18 (UAT pending Mini PC) — native-installer.ts (apt + AppImage + .desktop + nativeAppConfigSchema gate) + sudoers entry
+phase_152_b_status: ✅ CODE SHIPPED 2026-05-18 (UAT pending Mini PC) — ai-installer.ts dispatches on kind (mcp/agent/gsd) → mcpConfigManager / agent_templates / liv:gsd:installed
+phase_153_status: ✅ CODE SHIPPED 2026-05-18 (UAT pending Mini PC) — plugin runtime: manifest-schema.ts (zod) + signature-verify.ts (Ed25519 + pubkey registry) + runtime-api.ts (scoped redis/fs) + plugin-loader.ts (hot-reload via cache-busted dynamic import + dispatcher) + plugin-installer.ts (download/verify/extract/migrate/mount)
+phase_154_b_status: ✅ CODE SHIPPED 2026-05-18 (UAT pending Mini PC + signing + GitHub release) — plugins/livinity-broker/ package: manifest + backend stub + migrations + README with build/sign flow
 phase_149_2_status: ✅ SHIPPED 2026-05-18 — Featured tag vertical-stretch CSS collision fixed (renamed .featured → .featured-hero; removed inline Featured badge in favor of Verified per original design intent)
 phase_156_status: ✅ SHIPPED 2026-05-18 — admin panel /admin/apps with full CRUD + icon upload to Supabase Storage. Operator-only (api-key gated). per-section dynamic manifest template.
 v37_session_2026_05_18_final_commits:
