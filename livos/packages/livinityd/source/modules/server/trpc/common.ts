@@ -110,6 +110,12 @@ export const httpOnlyPaths = [
 	'apps.nativeStart',
 	'apps.nativeStop',
 	'apps.nativeStatus',
+	// Phase 157 — v37 install dispatcher routes. apt / appimage / MCP /
+	// plugin installs take 5-60s; force HTTP so the mutation survives a
+	// `systemctl restart livos` mid-flight + WS reconnect.
+	'apps.installV37',
+	'apps.uninstallV37',
+	'apps.v37Progress',
 	// Docker management — use HTTP for reliability through relay tunnel
 	'docker.manageContainer',
 	'docker.bulkManageContainers',
