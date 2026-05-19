@@ -1210,3 +1210,216 @@ describe('Phase 160-03 — computer_application LivOS resolver dispatch', () => 
 		expect(WIN_SRC).toMatch(/Phase 160-03/)
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 160-05 — computer_read_file path sandbox
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Source-text invariants locking the sandbox literal. These guard against
+// drift in (a) the allowlist composition, (b) the realpath-BEFORE-allowlist
+// resolution order, (c) the rejection error shape (resolved path leaked
+// but never content), and (d) the LUSE_USER_ID env wire-through. They are
+// static-text checks (no runtime fs) — they catch a refactor that loses the
+// guard or weakens the allowlist by mistake.
+
+describe('Phase 160-05 — computer_read_file sandbox', () => {
+	const SRC = readFileSync(join(__dirname, 'tools.ts'), 'utf8')
+
+	it('isPathAllowed helper exists', () => {
+		expect(SRC).toMatch(/function isPathAllowed/)
+	})
+
+	it('allowlist includes /home/<user>/', () => {
+		expect(SRC).toMatch(/\/home\/\$\{userSlug\}\//)
+	})
+
+	it('allowlist includes /tmp/luse-* prefix', () => {
+		expect(SRC).toMatch(/'\/tmp\/luse-'/)
+	})
+
+	it('allowlist includes /opt/livos/data/uploads/<userId>/', () => {
+		expect(SRC).toMatch(/\/opt\/livos\/data\/uploads\/\$\{userId\}\//)
+	})
+
+	it('handler resolves symlinks via realpath BEFORE allowlist check', () => {
+		// realpathFn(requestedPath) must appear before isPathAllowed(resolved
+		// in source order — the whole point of resolving symlinks first is
+		// so an allowlisted symlink that targets a non-allowlisted file is
+		// still rejected by the allowlist check on the resolved target.
+		const realpathIdx = SRC.indexOf('realpathFn(requestedPath)')
+		const allowCheckIdx = SRC.indexOf('isPathAllowed(resolved')
+		expect(realpathIdx).toBeGreaterThan(-1)
+		expect(allowCheckIdx).toBeGreaterThan(-1)
+		expect(realpathIdx).toBeLessThan(allowCheckIdx)
+	})
+
+	it('rejection includes resolved path (not content) — no info leakage', () => {
+		expect(SRC).toMatch(/path outside sandbox: requested=/)
+		expect(SRC).toMatch(/resolved=\$\{resolved\}/)
+	})
+
+	it('LUSE_USER_ID env drives userSlug + userId', () => {
+		expect(SRC).toMatch(/process\.env\.LUSE_USER_ID/)
+	})
+})
+
+// Functional rejection tests — drive the handler with hostile inputs and
+// assert the sandbox blocks the read BEFORE readFileBase64 fires. Uses the
+// __setRealpathForTest seam to simulate the kernel's symlink resolution
+// without needing real files on disk (the test runs on Windows too).
+
+describe('Phase 160-05 — computer_read_file sandbox runtime rejection', () => {
+	beforeEach(() => {
+		// Reset mocks so we can assert readFileBase64 was NOT called on reject.
+		for (const fn of Object.values(mocks)) {
+			fn.mockReset()
+		}
+		mocks.captureScreenshot.mockResolvedValue(SCREENSHOT_RESULT)
+		mocks.setTimeoutMock.mockResolvedValue(undefined)
+		mocks.readFileBase64.mockResolvedValue({
+			base64: 'WlpaWg==',
+			filename: 'should-not-be-called.txt',
+			size: 4,
+			mimeType: 'text/plain',
+		})
+	})
+
+	afterEach(() => {
+		__setRealpathForTest(undefined)
+	})
+
+	it('rejects /etc/passwd (absolute path outside sandbox)', async () => {
+		__setRealpathForTest(async (p: string) => String(p))
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never)
+		const handler = stub.getHandler('computer_read_file')!
+		const result = (await handler({path: '/etc/passwd'})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		expect(result.isError).toBe(true)
+		expect(result.content[0].text).toMatch(/path outside sandbox/)
+		expect(result.content[0].text).toMatch(/\/etc\/passwd/)
+		expect(mocks.readFileBase64).not.toHaveBeenCalled()
+	})
+
+	it('rejects ../../etc/shadow traversal via resolved-path check', async () => {
+		// Simulate the kernel resolving the relative traversal to /etc/shadow.
+		// This is the realistic case: even if the agent passes a "../../" path
+		// inside a bind-mounted user dir, realpath collapses it and the
+		// allowlist check sees the post-traversal absolute path.
+		__setRealpathForTest(async () => '/etc/shadow')
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never)
+		const handler = stub.getHandler('computer_read_file')!
+		const result = (await handler({path: '../../etc/shadow'})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		expect(result.isError).toBe(true)
+		expect(result.content[0].text).toMatch(/path outside sandbox/)
+		expect(result.content[0].text).toMatch(/resolved=\/etc\/shadow/)
+		expect(mocks.readFileBase64).not.toHaveBeenCalled()
+	})
+
+	it('rejects NUL-byte path before realpath even fires', async () => {
+		const realpathSpy = vi.fn(async (p: string) => String(p))
+		__setRealpathForTest(realpathSpy)
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never)
+		const handler = stub.getHandler('computer_read_file')!
+		const result = (await handler({path: '/home/bruce/foo\x00.txt'})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		expect(result.isError).toBe(true)
+		expect(result.content[0].text).toMatch(/NUL byte/)
+		expect(realpathSpy).not.toHaveBeenCalled()
+		expect(mocks.readFileBase64).not.toHaveBeenCalled()
+	})
+
+	it('rejects symlink-out-of-jail (allowed entry path, evil resolved target)', async () => {
+		// Realistic attack: the agent points at /home/bruce/escape (an
+		// allowlisted entry path) but the file is a symlink to /etc/passwd.
+		// realpath collapses the symlink → allowlist check on the resolved
+		// target rejects the read.
+		__setRealpathForTest(async () => '/etc/passwd')
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never)
+		const handler = stub.getHandler('computer_read_file')!
+		const result = (await handler({path: '/home/bruce/escape'})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		expect(result.isError).toBe(true)
+		expect(result.content[0].text).toMatch(/path outside sandbox/)
+		// Both requested AND resolved appear in the error (info for the LLM,
+		// but the file content never leaks).
+		expect(result.content[0].text).toMatch(/requested=\/home\/bruce\/escape/)
+		expect(result.content[0].text).toMatch(/resolved=\/etc\/passwd/)
+		expect(mocks.readFileBase64).not.toHaveBeenCalled()
+	})
+
+	it('accepts /tmp/luse-<anything>/ path (any luse-prefixed temp dir)', async () => {
+		__setRealpathForTest(async (p: string) => String(p))
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never)
+		const handler = stub.getHandler('computer_read_file')!
+		const result = (await handler({path: '/tmp/luse-abc123/log.txt'})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		expect(result.isError).toBe(false)
+		expect(mocks.readFileBase64).toHaveBeenCalledWith('/tmp/luse-abc123/log.txt')
+	})
+
+	it('accepts /opt/livos/data/uploads/<userId>/ path', async () => {
+		// The default LUSE_USER_ID fallback inside the handler is 'bruce' so
+		// the uploads branch is /opt/livos/data/uploads/bruce/.
+		__setRealpathForTest(async (p: string) => String(p))
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never)
+		const handler = stub.getHandler('computer_read_file')!
+		const result = (await handler({path: '/opt/livos/data/uploads/bruce/photo.png'})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		expect(result.isError).toBe(false)
+		expect(mocks.readFileBase64).toHaveBeenCalledWith('/opt/livos/data/uploads/bruce/photo.png')
+	})
+
+	it('rejects empty path (handler pre-flight before realpath)', async () => {
+		const realpathSpy = vi.fn(async (p: string) => String(p))
+		__setRealpathForTest(realpathSpy)
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never)
+		const handler = stub.getHandler('computer_read_file')!
+		const result = (await handler({path: ''})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		expect(result.isError).toBe(true)
+		expect(result.content[0].text).toMatch(/path is required/)
+		expect(realpathSpy).not.toHaveBeenCalled()
+		expect(mocks.readFileBase64).not.toHaveBeenCalled()
+	})
+
+	it('returns realpath-error (no info leak) when path does not exist', async () => {
+		// realpath throws on ENOENT — sandbox returns a "not found" message
+		// that includes the requested path but not the file content (there
+		// is no file content, so this is mostly a noise-suppression test).
+		__setRealpathForTest(async () => {
+			throw new Error('ENOENT')
+		})
+		const stub = new StubMcpServer()
+		registerLuseTools(stub as never)
+		const handler = stub.getHandler('computer_read_file')!
+		const result = (await handler({path: '/home/bruce/does-not-exist.txt'})) as {
+			content: Array<{type: string; text?: string}>
+			isError: boolean
+		}
+		expect(result.isError).toBe(true)
+		expect(result.content[0].text).toMatch(/path not found or unreadable/)
+		expect(mocks.readFileBase64).not.toHaveBeenCalled()
+	})
+})
