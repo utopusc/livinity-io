@@ -437,15 +437,17 @@ export class AgentSessionManager {
       tier = 'haiku';
     }
 
-    // Phase 162-02 — Vault mode override. Applies to NON-computer-use sessions.
-    // Computer-use sessions already locked to Haiku above; vault mode only
-    // affects chat-style sessions (no convId prefix). When vaultModeConfig is
-    // null, all downstream variables fall back to undefined / pre-162 behavior.
-    const vaultMode = !computerUse && this.vaultModeConfig !== null;
+    // Phase 163-02.5 — vaultMode gate decoupled from computerUse. Surface CWD
+    // now threads through to SDK for both Main Chat (computerUse=false) AND
+    // computer-use sessions (webapp:/native:). The systemPrompt + settingSources
+    // gates below still use (vaultMode && !computerUse) so computer-use STILL
+    // gets the Phase 161-02 LivOS overlay via systemPrompt and does NOT
+    // auto-load vault skills/commands (overlay is sufficient).
+    const vaultMode = this.vaultModeConfig !== null;
     const sessionCwd = vaultMode ? this.vaultModeConfig!.vaultPath : undefined;
     const sessionModelOverride = computerUse
       ? 'claude-haiku-4-5-20251001'                              // Phase 161 dated literal
-      : (vaultMode ? this.vaultModeConfig!.defaultModel : undefined);
+      : (vaultMode && !computerUse ? this.vaultModeConfig!.defaultModel : undefined);
 
     // Intent-based tool selection: use IntentRouter to select relevant tools
     let sdkTools: ReturnType<typeof buildSdkTools> = [];
@@ -842,12 +844,18 @@ export class AgentSessionManager {
       const messages = query({
         prompt: session.inputChannel.generator,
         options: {
-          // Phase 162-02 — vault mode drops the custom systemPrompt so vault/CLAUDE.md
-          // becomes the source of truth via settingSources: ['project']. Legacy mode
-          // (vaultMode === false) preserves Phase 161 systemPrompt selector verbatim.
-          systemPrompt: vaultMode ? undefined : systemPrompt,
-          cwd: sessionCwd,                                       // Phase 162-02
-          settingSources: vaultMode ? ['project'] : undefined,   // Phase 162-02
+          // Phase 163-02.5 — overlay gate uses (vaultMode && !computerUse) so
+          // computer-use sessions STILL use the Phase 161-02 LivOS overlay via
+          // systemPrompt. Main Chat (computerUse=false) under vault mode drops
+          // systemPrompt so the vault CLAUDE.md auto-loads (unchanged from 162-02).
+          systemPrompt: vaultMode && !computerUse ? undefined : systemPrompt,
+          cwd: sessionCwd,                                       // Phase 162-02 (now threads through for computer-use too — Phase 163-02.5)
+          // Phase 163-02.5 — settingSources gate uses (vaultMode && !computerUse)
+          // so computer-use does NOT auto-load vault skills/commands. The Phase
+          // 161-02 LivOS overlay (delivered via systemPrompt above) is sufficient
+          // for computer-use sessions. Main Chat (computerUse=false) under vault
+          // mode loads project settings — unchanged from 162-02.
+          settingSources: vaultMode && !computerUse ? ['project'] : undefined,
           mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
           tools: [],
           allowedTools: allowedTools.length > 0 ? allowedTools : undefined,
