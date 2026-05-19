@@ -2,6 +2,7 @@ import {useEffect, useMemo, useRef, useState} from 'react'
 import {AnimatePresence, motion} from 'framer-motion'
 import {useNavigate} from 'react-router-dom'
 import {TbLogout, TbPalette, TbPencil, TbRefresh} from 'react-icons/tb'
+import {LayoutGrid} from 'lucide-react'
 
 import {trpcReact} from '@/trpc/trpc'
 import {useCurrentUser} from '@/hooks/use-current-user'
@@ -17,6 +18,8 @@ import {
 	ContextMenuTrigger,
 	ContextMenuSeparator,
 } from '@/shadcn-components/ui/context-menu'
+import {Popover, PopoverContent, PopoverTrigger} from '@/shadcn-components/ui/popover'
+import {WindowsManagerPanel} from './windows-manager-panel'
 import {cn} from '@/shadcn-lib/utils'
 import {
 	Dialog,
@@ -347,8 +350,26 @@ function TopBarDesktop() {
 						)}
 					</div>
 
-					{/* RIGHT — clock + location (always visible). */}
-					<div className='flex items-center justify-end pr-1.5'>
+					{/* RIGHT — windows manager dropdown + clock + location. Phase 159 adds
+					    the windows-manager Popover BEFORE the clock. Existing pinned-window
+					    shelf in the Center drop-zone stays untouched (duplication between
+					    shelf + panel is acceptable per RESEARCH C risk #4). */}
+					<div className='flex items-center justify-end gap-1.5 pr-1.5'>
+						<Popover>
+							<PopoverTrigger asChild>
+								<button
+									type='button'
+									aria-label='Windows manager'
+									title='Windows manager'
+									className='grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-[color:var(--bg-2)]'
+								>
+									<LayoutGrid className='h-4 w-4' />
+								</button>
+							</PopoverTrigger>
+							<PopoverContent align='end' className='p-0'>
+								<WindowsManagerPanel />
+							</PopoverContent>
+						</Popover>
 						<ClockWithLocation />
 					</div>
 				</nav>
