@@ -31,20 +31,26 @@ import {cn} from '@/shadcn-lib/utils'
 
 export interface WebAppFloatingSkillsButtonProps {
 	webappId: string
+	// Phase 157 round 10 — when `inline` is true, the component renders
+	// ONLY the Magnetic + Popover button (no fixed-positioned motion.div
+	// wrapper). Used by WindowChrome to embed the Skills button on the
+	// far right of the top chrome row. Position props are ignored in
+	// inline mode (the chrome owns layout).
+	inline?: boolean
 	/** WebApp window's top-left x in viewport coords. */
-	windowX: number
+	windowX?: number
 	/** WebApp window's top y in viewport coords. */
-	windowY: number
+	windowY?: number
 	/** WebApp window width — used to anchor the button at the right edge. */
-	windowWidth: number
+	windowWidth?: number
 	/** zIndex of the parent window (button sits one above). */
-	zIndex: number
+	zIndex?: number
 	/** Optional callback when user clicks Play on a skill. */
 	onReplaySkill?: (skillId: string) => void
 }
 
 export function WebAppFloatingSkillsButton(props: WebAppFloatingSkillsButtonProps) {
-	const {webappId} = props
+	const {webappId, inline = false} = props
 	const [open, setOpen] = useState(false)
 	const listQuery = trpcReact.webapp.skills.list.useQuery(
 		{webappId},
@@ -62,25 +68,11 @@ export function WebAppFloatingSkillsButton(props: WebAppFloatingSkillsButtonProp
 
 	const skills = listQuery.data ?? []
 
-	return (
-		<motion.div
-			className='fixed select-none'
-			style={{
-				// Anchor at the WebApp window's top-right corner. translateX(-100%)
-				// pulls the button so its right edge aligns with the window's
-				// right edge; 16px offsets match the floating action bar pattern.
-				left: props.windowX + props.windowWidth - 16,
-				top: props.windowY + 16,
-				transform: 'translateX(-100%)',
-				zIndex: props.zIndex + 1,
-			}}
-			initial={{opacity: 0, y: -10, scale: 0.9}}
-			animate={{opacity: 1, y: 0, scale: 1}}
-			exit={{opacity: 0, y: -10, scale: 0.9}}
-			transition={{type: 'spring', stiffness: 500, damping: 35}}
-			layout
-		>
-			<Popover open={open} onOpenChange={setOpen}>
+	// Phase 157 round 10 — Popover + Magnetic + Library glyph extracted
+	// so both render branches (fixed satellite + inline chrome embed)
+	// share the same tree without duplication.
+	const popover = (
+		<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger asChild>
 					<Magnetic
 						intensity={0.3}
@@ -143,6 +135,32 @@ export function WebAppFloatingSkillsButton(props: WebAppFloatingSkillsButtonProp
 					)}
 				</PopoverContent>
 			</Popover>
+	)
+
+	// Inline branch — WindowChrome embeds the Skills button directly
+	// into the top chrome row. No fixed positioning, no entry/exit
+	// motion (the parent chrome's motion.div owns animations).
+	if (inline) return popover
+
+	return (
+		<motion.div
+			className='fixed select-none'
+			style={{
+				// Anchor at the WebApp window's top-right corner. translateX(-100%)
+				// pulls the button so its right edge aligns with the window's
+				// right edge; 16px offsets match the floating action bar pattern.
+				left: (props.windowX ?? 0) + (props.windowWidth ?? 0) - 16,
+				top: (props.windowY ?? 0) + 16,
+				transform: 'translateX(-100%)',
+				zIndex: (props.zIndex ?? 0) + 1,
+			}}
+			initial={{opacity: 0, y: -10, scale: 0.9}}
+			animate={{opacity: 1, y: 0, scale: 1}}
+			exit={{opacity: 0, y: -10, scale: 0.9}}
+			transition={{type: 'spring', stiffness: 500, damping: 35}}
+			layout
+		>
+			{popover}
 		</motion.div>
 	)
 }

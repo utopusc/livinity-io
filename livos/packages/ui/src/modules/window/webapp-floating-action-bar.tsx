@@ -98,18 +98,26 @@ const MODES: ReadonlyArray<{id: WebAppDrawerMode; label: string; Icon: LucideIco
 
 interface WebAppFloatingActionBarProps {
 	webappId: string
+	// Phase 157 round 8 — `inline` flag. When true, the component
+	// renders ONLY the mode-switched inner content (IconBar /
+	// ChatInputBar / ChatResponseBar) without the fixed-positioned
+	// motion.div wrapper. Used by WindowChrome to embed the action
+	// bar directly into the top chrome row alongside the close
+	// button. windowX / windowBottomY / windowWidth / zIndex are
+	// ignored in inline mode — the chrome owns positioning.
+	inline?: boolean
 	/** WebApp window's bottom-left x in viewport coords. */
-	windowX: number
+	windowX?: number
 	/** WebApp window's bottom y (windowY + height) in viewport coords. */
-	windowBottomY: number
+	windowBottomY?: number
 	/** WebApp window width — used to center the bar. */
-	windowWidth: number
+	windowWidth?: number
 	/** zIndex of the parent window (bar sits one above). */
-	zIndex: number
+	zIndex?: number
 }
 
 export function WebAppFloatingActionBar(props: WebAppFloatingActionBarProps) {
-	const {webappId} = props
+	const {webappId, inline = false} = props
 	// Phase 100-09-08 — the bar is a 2-mode state machine. The same
 	// `motion.div` host renders ONE of {IconBar | ChatInputBar} based on
 	// the per-webappId mode slot. Default mode (undefined) reads as 'icons'.
@@ -128,14 +136,43 @@ export function WebAppFloatingActionBar(props: WebAppFloatingActionBarProps) {
 	// agentStatus state.
 	const agent = useWebAppAgent(webappId)
 
+	// Phase 157 round 8 — mode-dispatched inner content. Extracted into a
+	// local so both render branches (inline + fixed) share the same tree.
+	const innerContent =
+		mode === 'chat-response' ? (
+			<ChatResponseBar
+				webappId={webappId}
+				agent={agent}
+				onClose={() => setChatInputMode(webappId, 'icons')}
+				onNew={() => setChatInputMode(webappId, 'chat-input')}
+			/>
+		) : mode === 'chat-input' ? (
+			<ChatInputBar
+				webappId={webappId}
+				agent={agent}
+				onClose={() => setChatInputMode(webappId, 'icons')}
+				onSent={() => setChatInputMode(webappId, 'chat-response')}
+			/>
+		) : (
+			<IconBar
+				webappId={webappId}
+				onChatClick={() => setChatInputMode(webappId, 'chat-input')}
+			/>
+		)
+
+	// Inline branch — WindowChrome embeds the action bar directly into
+	// the top chrome row. No fixed positioning, no motion wrapper; the
+	// chrome's parent motion.div owns transitions.
+	if (inline) return <>{innerContent}</>
+
 	return (
 		<motion.div
 			className='fixed select-none'
 			style={{
-				left: props.windowX + props.windowWidth / 2,
-				top: props.windowBottomY + 16,
+				left: (props.windowX ?? 0) + (props.windowWidth ?? 0) / 2,
+				top: (props.windowBottomY ?? 0) + 16,
 				transform: 'translateX(-50%)',
-				zIndex: props.zIndex + 1,
+				zIndex: (props.zIndex ?? 0) + 1,
 			}}
 			initial={{opacity: 0, y: 10, scale: 0.9}}
 			animate={{opacity: 1, y: 0, scale: 1}}
@@ -143,38 +180,7 @@ export function WebAppFloatingActionBar(props: WebAppFloatingActionBarProps) {
 			transition={{type: 'spring', stiffness: 500, damping: 35}}
 			layout
 		>
-			{/* Phase 100-10-06 D-100-10-E: 3-mode dispatch.
-			    - 'chat-response' branch renders the ChatResponseBar (streaming
-			      response panel + Stop button while streaming + Close X).
-			    - 'chat-input' branch renders the ChatInputBar (text input +
-			      Send + Close X). Send/Enter now flips to 'chat-response'
-			      (NOT back to 'icons' — superseding 09-08's behavior).
-			    - Default 'icons' branch renders the IconBar (Chat + Teach).
-			    Phase 100-10-10 Bug A fix: `agent` is passed as a prop into
-			    both ChatInputBar and ChatResponseBar so the shared hook
-			    state survives the mode flip (single WS, single messages
-			    array).
-			*/}
-			{mode === 'chat-response' ? (
-				<ChatResponseBar
-					webappId={webappId}
-					agent={agent}
-					onClose={() => setChatInputMode(webappId, 'icons')}
-					onNew={() => setChatInputMode(webappId, 'chat-input')}
-				/>
-			) : mode === 'chat-input' ? (
-				<ChatInputBar
-					webappId={webappId}
-					agent={agent}
-					onClose={() => setChatInputMode(webappId, 'icons')}
-					onSent={() => setChatInputMode(webappId, 'chat-response')}
-				/>
-			) : (
-				<IconBar
-					webappId={webappId}
-					onChatClick={() => setChatInputMode(webappId, 'chat-input')}
-				/>
-			)}
+			{innerContent}
 		</motion.div>
 	)
 }
@@ -453,7 +459,13 @@ function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
 			<div className='inline-flex flex-col items-center gap-1.5 motion-reduce:[&_*]:!animate-none'>
 				<div
 					className={cn(
-						'flex items-center gap-2 rounded-full bg-card-bg/95 backdrop-blur-xl border border-dash-line shadow-[0_2px_8px_rgba(0,0,0,0.08)] px-3 py-2',
+						// Phase 157 round 10 — chat-input pill now matches the
+						// chrome drag bar: h-9 height, same bg-card-bg/55 +
+						// blur-3xl + saturate-150 + dark-mode swap, hairline
+						// border, soft shadow. Keeps the pill feeling like
+						// part of the same chrome family (D-157-CHAT-MATCHES-
+						// DRAG-BAR).
+						'flex items-center gap-2 h-9 px-3 rounded-full bg-card-bg/55 dark:bg-zinc-800/70 backdrop-blur-3xl backdrop-saturate-150 border border-dash-line dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)]',
 						// Phase 101-09 (D-101-CHAT-ANIMS) — idle-pulse on the
 						// pill border. The `chat-input-idle` class targets the
 						// @keyframes idleBreath rule (4s ease-in-out, opacity
@@ -479,7 +491,7 @@ function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
 						}}
 						placeholder='Mesaj yaz...'
 						disabled={agent.isStreaming}
-						className='w-[360px] bg-transparent text-caption-sm text-text-primary placeholder:text-text-tertiary outline-none border-none focus-visible:ring-0 disabled:opacity-50'
+						className='w-[280px] bg-transparent text-[13px] text-neutral-700 dark:text-neutral-200 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 outline-none border-none focus-visible:ring-0 disabled:opacity-50'
 					/>
 					<button
 						type='button'
@@ -613,32 +625,24 @@ function ChatResponseBar({webappId, agent, onClose, onNew}: ChatResponseBarProps
 		return () => window.removeEventListener('keydown', onKey)
 	}, [onClose])
 
+	// Phase 157 round 11 — response pill matches chrome drag bar shape:
+	// h-9 rounded-full + bg-card-bg/55 + blur-3xl + saturate-150 +
+	// hairline border + soft shadow. Single-line preview with `truncate`
+	// keeps the chrome row's height stable even while the assistant is
+	// streaming a long reply. Stop / New / Close buttons sit inside the
+	// pill at h-7 (centered vertically within the h-9 chrome).
 	return (
 		<Magnetic intensity={0.2}>
-			<div className='flex items-start gap-2 rounded-dash bg-card-bg/95 backdrop-blur-xl border border-dash-line shadow-[0_2px_8px_rgba(0,0,0,0.08)] px-4 py-3 max-w-[480px]'>
-				<div className='flex-1 text-caption-sm text-text-primary whitespace-pre-wrap min-h-[20px]'>
-					{lastAssistant?.content ?? ''}
+			<div className='flex items-center gap-2 h-9 px-3 rounded-full bg-card-bg/55 dark:bg-zinc-800/70 backdrop-blur-3xl backdrop-saturate-150 border border-dash-line dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)]'>
+				<div className='w-[260px] truncate text-[13px] text-neutral-700 dark:text-neutral-200 flex items-center gap-1.5'>
+					<span className='truncate'>
+						{lastAssistant?.content || (agent.isStreaming ? 'Thinking…' : '')}
+					</span>
 					{agent.isStreaming ? (
 						<span
-							className='inline-block w-1.5 h-3.5 ml-1 bg-primary animate-pulse align-middle'
+							className='inline-block w-1 h-3 bg-primary animate-pulse shrink-0'
 							aria-hidden='true'
 						/>
-					) : null}
-					{/* Phase 100-10-10 Bug B — per-tool streaming status line.
-					    User UAT 2026-05-10 wanted to see "parça parça" which
-					    tool the agent is using while it streams. Renders ONLY
-					    while `agent.isStreaming` AND (Hermes `phrase` OR
-					    `currentTool` is set). The chat WS path today does not
-					    carry Phase 87 status_detail chunks (agent-session.ts
-					    doesn't relay runStore status_detail) — so `phrase`
-					    will be null and the fallback shows `Using <tool>…`
-					    from `agentStatus.currentTool` (populated by
-					    use-agent-socket.ts content_block_start handler). */}
-					{agent.isStreaming && (agent.agentStatus?.phrase || agent.agentStatus?.currentTool) ? (
-						<div className='text-caption-xs text-text-tertiary mt-1.5 flex items-center gap-1.5'>
-							<span className='inline-block w-1 h-1 rounded-full bg-text-tertiary animate-pulse' aria-hidden='true' />
-							<span>{agent.agentStatus.phrase ?? `Using ${agent.agentStatus.currentTool}…`}</span>
-						</div>
 					) : null}
 				</div>
 				{agent.isStreaming ? (
@@ -664,7 +668,7 @@ function ChatResponseBar({webappId, agent, onClose, onNew}: ChatResponseBarProps
 					type='button'
 					onClick={onClose}
 					aria-label='Close chat response'
-					className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-secondary hover:bg-card-bg-2 hover:text-text-primary transition-colors'
+					className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-neutral-500 dark:text-neutral-400 hover:bg-card-bg-2 hover:text-text-primary transition-colors'
 				>
 					<X className='h-3.5 w-3.5' strokeWidth={2.25} />
 				</button>
