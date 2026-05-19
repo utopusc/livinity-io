@@ -63,6 +63,7 @@ describe('scaffoldVault — Phase 162-01 vault bootstrap', () => {
 		expect(existsSync(join(vaultPath, '.claude/settings.json'))).toBe(true)
 		expect(existsSync(join(vaultPath, '.claude/mcp.json'))).toBe(true)
 		expect(existsSync(join(vaultPath, '.claude/skills/livos-status/SKILL.md'))).toBe(true)
+		expect(existsSync(join(vaultPath, '.claude/skills/livos-vault-doctor/SKILL.md'))).toBe(true)
 		expect(existsSync(join(vaultPath, '.claude/commands/livos-deploy.md'))).toBe(true)
 		expect(existsSync(join(vaultPath, 'memory/user/bruce-profile.md'))).toBe(true)
 		expect(existsSync(join(vaultPath, 'memory/projects/v34.md'))).toBe(true)
@@ -70,7 +71,10 @@ describe('scaffoldVault — Phase 162-01 vault bootstrap', () => {
 		expect(existsSync(join(vaultPath, 'memory/feedback/.gitkeep'))).toBe(true)
 		expect(existsSync(join(vaultPath, 'sessions/.gitkeep'))).toBe(true)
 		expect(existsSync(join(vaultPath, 'inbox/.gitkeep'))).toBe(true)
-		expect(existsSync(join(vaultPath, 'livos-agents/.gitkeep'))).toBe(true)
+		// Phase 164 replaced the livos-agents/.gitkeep placeholder with real
+		// agent definitions. Assert at least one of those files lands.
+		expect(existsSync(join(vaultPath, 'livos-agents/nightly-backup-audit.md'))).toBe(true)
+		expect(existsSync(join(vaultPath, 'livos-agents/pr-watcher.md'))).toBe(true)
 		// Logger should record the scaffold result.
 		expect(logs.some((l) => l.startsWith('vault-scaffolder:'))).toBe(true)
 	})
@@ -127,6 +131,25 @@ describe('scaffoldVault — Phase 162-01 vault bootstrap', () => {
 		// Re-scaffold should recreate it.
 		await scaffoldVault({vaultPath, templatesDir: REAL_TEMPLATES_DIR, logger})
 		expect(existsSync(join(vaultPath, 'memory/feedback/.gitkeep'))).toBe(true)
+	})
+
+	it('Test 5b (Phase 165-03 regression): livos-vault-doctor SKILL.md is scaffolded with expected body', async () => {
+		const {logger} = silentLogger()
+		const result = await scaffoldVault({vaultPath, templatesDir: REAL_TEMPLATES_DIR, logger})
+		expect(['scaffolded', 'partial', 'existing']).toContain(result.status)
+
+		const skillPath = join(vaultPath, '.claude/skills/livos-vault-doctor/SKILL.md')
+		expect(existsSync(skillPath)).toBe(true)
+
+		const body = readFileSync(skillPath, 'utf8')
+		// Frontmatter declares the skill name (CC SDK convention).
+		expect(body).toMatch(/^---\n[\s\S]*name: livos-vault-doctor/)
+		// Body must contain the section heading + the report-only invariant.
+		expect(body).toContain('Vault Doctor')
+		expect(/report-only/i.test(body)).toBe(true)
+		// Skill must instruct the model to use Read + Glob (no FS mutations).
+		expect(body).toContain('Glob')
+		expect(body).toContain('Read')
 	})
 
 	it('Test 6 (non-existent templates dir → failed-non-fatal): does NOT throw', async () => {
