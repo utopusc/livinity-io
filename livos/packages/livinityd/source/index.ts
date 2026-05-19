@@ -27,6 +27,10 @@ import {seedLocalEnvironment} from './modules/docker/environments.js'
 import {seedBuiltinTools} from './modules/seed-builtin-tools.js'
 import {seedDefaultAliases} from './modules/livinity-broker/seed-default-aliases.js'
 import {drainInstallPendingRedisKeys} from './modules/drain-install-pending-redis.js'
+// Phase 162-01 — Vault scaffolder. Boot-time idempotent bootstrap of
+// /home/bruce/livinity-vault per master plan D-V34-D. Non-fatal on failure
+// (livinityd boots normally; chat falls back to legacy path via 162-02 flag).
+import {scaffoldVault} from './modules/claude-runner/index.js'
 import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/api-keys/index.js'
 // Phase 104 plan 104-10 — LivOS → livinity.io heartbeat client. Wired AFTER
 // ai.start() so this.ai.redis is connected. Only armed when the operator
@@ -459,6 +463,26 @@ export default class Livinityd {
 			this.logger.log('Seeded broker model aliases to livinity:broker:alias:*')
 		} catch (err) {
 			this.logger.error('Failed to seed broker model aliases', err)
+		}
+
+		// Bootstrap /home/bruce/livinity-vault. Idempotent — re-runs preserve
+		// user-edited files via fs.cp force:false. Non-fatal: if templates dir
+		// missing or chown fails, log + continue (chat falls back to legacy
+		// path via Plan 162-02 Redis flag).
+		// Phase 162-01 — vault scaffolder wire-up.
+		try {
+			const vaultResult = await scaffoldVault({
+				vaultPath: '/home/bruce/livinity-vault',
+				logger: {
+					log: (msg) => this.logger.log(msg),
+					error: (msg, err) => this.logger.error(msg, err),
+				},
+			})
+			this.logger.log(`vault-scaffolder: ${vaultResult.status}`)
+		} catch (err) {
+			// Defensive — vault scaffold returns a ScaffoldResult discriminator
+			// and should not throw, but if it does we MUST NOT block boot.
+			this.logger.error('vault-scaffolder: unexpected throw (non-fatal)', err as Error)
 		}
 
 		// Phase 141-01 — drain install-time queued Redis seeds.
