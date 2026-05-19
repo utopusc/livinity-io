@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T12:00:00.000Z"
+last_updated: "2026-05-19T12:47:27.183Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -725,7 +725,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 159 (NativeApp WebApp Parity + Window Manager Panel) — 9 plans — 2026-05-19T07:46:01.220Z
+**Planned Phase:** 161 (Computer-Use SDK Path Wiring) — 4 plans — 2026-05-19T12:47:27.165Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
