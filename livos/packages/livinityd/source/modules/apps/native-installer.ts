@@ -332,6 +332,20 @@ export class NativeInstaller implements InstallHandler<'native'> {
 		progress(95, 'Persisting config')
 		await this.configStore.upsert(configCandidate)
 
+		// Phase 157 follow-up — Redis mapping from catalog appId
+		// (e.g. "blender") to the random NativeAppConfig UUID. Lets
+		// `apps.v37List` answer "is this catalog row installed?" without
+		// scanning every native config. Also gives uninstall a way to
+		// find the UUID from the catalog appId.
+		await ctx.redis
+			.set(`liv:apps:native-catalog:${app.id}`, configCandidate.id)
+			.catch((err) =>
+				ctx.logger.error(
+					`native-installer: failed to write catalog mapping for ${app.id}`,
+					err,
+				),
+			)
+
 		progress(100, 'Done', true)
 		return ok(app.id, 'native', {
 			desktopEntryPath: desktopPath,
@@ -357,11 +371,19 @@ export class NativeInstaller implements InstallHandler<'native'> {
 		await fs.unlink(desktopPath).catch(() => {})
 
 		progress(40, 'Removing Redis config')
+		// Phase 157 follow-up — look up the UUID via the catalog mapping
+		// FIRST (precise), fall back to name/id match (legacy installs).
+		const mappedUuid = await ctx.redis
+			.get(`liv:apps:native-catalog:${appId}`)
+			.catch(() => null)
 		const configs = await this.configStore.list()
-		const match = configs.find(
-			(c: NativeAppConfig) => c.name === appId || c.id === appId,
-		)
+		const match = mappedUuid
+			? configs.find((c: NativeAppConfig) => c.id === mappedUuid)
+			: configs.find(
+					(c: NativeAppConfig) => c.name === appId || c.id === appId,
+				)
 		if (match) await this.configStore.delete(match.id)
+		await ctx.redis.del(`liv:apps:native-catalog:${appId}`).catch(() => {})
 
 		// Best-effort apt-remove for AppImage / standalone binary path —
 		// we skip apt-remove for shared packages to avoid breaking the

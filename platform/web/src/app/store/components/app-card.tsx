@@ -171,23 +171,46 @@ export function AppCard({ app, featured = false }: AppCardProps) {
 
           {isInstalled && (
             <div className="install-group">
-              <button
-                type="button"
-                className="install primary card-install"
-                onClick={(e) => {
-                  stop(e);
-                  sendOpen(app.id);
-                }}
-                title="Open"
-              >
-                <Icon name="open" size={12} /> Open
-              </button>
+              {/* Phase 157 round 3 — webapps + AI installs don't have a
+                  meaningful "Open URL from store" action. Webapps live
+                  on the desktop (clicking Open would route to a bogus
+                  subdomain). AI installs surface inside AI Chat. Show
+                  an "Added" badge instead of a URL Open button. */}
+              {app.section === 'webapp' || app.section === 'ai' ? (
+                <span
+                  className="install ghost card-install"
+                  style={{
+                    cursor: 'default',
+                    pointerEvents: 'none',
+                    color: 'var(--fg)',
+                  }}
+                  title={
+                    app.section === 'webapp'
+                      ? 'Added — click the icon on your desktop'
+                      : 'Added — available in AI Chat'
+                  }
+                >
+                  <Icon name="check" size={12} /> Added
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="install primary card-install"
+                  onClick={(e) => {
+                    stop(e);
+                    sendOpen(app.id);
+                  }}
+                  title="Open"
+                >
+                  <Icon name="open" size={12} /> Open
+                </button>
+              )}
               <button
                 type="button"
                 className="install ghost card-install"
                 onClick={(e) => {
                   stop(e);
-                  sendUninstall(app.id);
+                  sendUninstall(app.id, app.section);
                 }}
                 aria-label="Uninstall"
                 title="Uninstall"
