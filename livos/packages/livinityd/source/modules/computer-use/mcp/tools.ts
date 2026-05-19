@@ -33,7 +33,7 @@
  * — the MCP protocol expects an `isError` flag, not exceptions.
  */
 import {spawn} from 'node:child_process'
-import {readdir as nodeReaddir} from 'node:fs/promises'
+import {readdir as nodeReaddir, realpath as nodeRealpath} from 'node:fs/promises'
 import {setTimeout as sleep} from 'node:timers/promises'
 
 import {z, type ZodTypeAny} from 'zod'
@@ -359,6 +359,62 @@ async function discoverActiveX11Displays(): Promise<string[]> {
 	} catch {
 		return []
 	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 160-05 — computer_read_file path sandbox
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// `computer_read_file` is LLM-controlled file read — without a guard this is a
+// jailbreak vector (e.g. agent coerced into reading /etc/passwd or
+// /opt/livos/.env). We restrict reads to a per-user allowlist:
+//
+//   /home/<user>/                        — user home, read-only
+//   /tmp/luse-*/                         — Luse-owned temp workspace
+//   /opt/livos/data/uploads/<userId>/    — user uploads
+//
+// Symlinks are resolved via fs.realpath BEFORE the allowlist check so a
+// symlink inside /home/bruce/ that points at /etc/passwd is still rejected.
+// LUSE_USER_ID env var drives the per-user allowlist branches (set by
+// luse-mcp-config when the child is spawned). Defaults to 'bruce' for the
+// host-display single-user case where the env may be absent.
+//
+// Rejection error includes the original requested path AND the resolved path
+// (so the LLM sees the symlink target for debugging) but NEVER the file
+// content — that's the whole point of the gate.
+
+/**
+ * Test-only seam — same pattern as __setReaddirForTest. vitest cannot spyOn
+ * the ESM-frozen node:fs/promises.realpath binding, so we expose a mutable
+ * resolver. Production callers go through the default which delegates to
+ * `nodeRealpath`. Reset to `undefined` between tests via
+ * `__setRealpathForTest(undefined)`.
+ */
+let __realpathOverride: typeof nodeRealpath | undefined
+export function __setRealpathForTest(
+	fn: typeof nodeRealpath | undefined,
+): void {
+	__realpathOverride = fn
+}
+
+/**
+ * Phase 160-05 — pure allowlist check. `resolved` is expected to be the
+ * post-realpath absolute path. `userSlug` controls the `/home/<user>/`
+ * branch; `userId` controls the `/opt/livos/data/uploads/<userId>/` branch.
+ * Returns true ONLY if `resolved` starts with one of the three allowed
+ * prefixes. The `/tmp/luse-` prefix matches any `/tmp/luse-<anything>` dir.
+ */
+export function isPathAllowed(
+	resolved: string,
+	userSlug: string,
+	userId: string,
+): boolean {
+	const allowlist = [
+		`/home/${userSlug}/`,
+		'/tmp/luse-',
+		`/opt/livos/data/uploads/${userId}/`,
+	]
+	return allowlist.some((prefix) => resolved.startsWith(prefix))
 }
 
 /**
@@ -733,8 +789,66 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 	// ── File read ────────────────────────────────────────────────────────────
 
 	computer_read_file: async (args) => {
-		const filePath = args.path as string
-		const file = await readFileBase64(filePath)
+		// Phase 160-05 — sandbox guard. LLM-controlled file read is a jailbreak
+		// vector; restrict resolved paths to the per-user allowlist before
+		// touching the disk. See the "computer_read_file path sandbox" comment
+		// block above for the allowlist policy.
+		const requestedPath = String(args.path ?? '').trim()
+		if (!requestedPath) {
+			return {
+				content: [{type: 'text', text: 'path is required'}],
+				isError: true,
+			}
+		}
+
+		// NUL byte rejection — POSIX paths cannot contain NUL; a NUL is a
+		// classic null-byte truncation attack indicator and must be rejected
+		// before realpath (which may itself throw confusingly on NUL).
+		if (requestedPath.includes('\x00')) {
+			return {
+				content: [{type: 'text', text: `path contains NUL byte (rejected): ${JSON.stringify(requestedPath)}`}],
+				isError: true,
+			}
+		}
+
+		// Resolve symlinks FIRST so a symlink at an allowed path that points
+		// at /etc/passwd still gets rejected by the allowlist check below.
+		const realpathFn = __realpathOverride ?? nodeRealpath
+		let resolved: string
+		try {
+			resolved = await realpathFn(requestedPath)
+		} catch {
+			return {
+				content: [{type: 'text', text: `path not found or unreadable: ${requestedPath}`}],
+				isError: true,
+			}
+		}
+
+		// LUSE_USER_ID env drives both the userSlug (home dir name) and the
+		// userId (uploads dir name). They are the same value today (slug ==
+		// id in the v7.0 single-tenant default); the parameters are kept
+		// separate so a future uuid/slug split can be wired without changing
+		// the allowlist shape. Falls back to 'bruce' for the host-display
+		// case where LUSE_USER_ID is not set.
+		const userSlug = process.env.LUSE_USER_ID ?? 'bruce'
+		const userId = process.env.LUSE_USER_ID ?? 'bruce'
+		if (!isPathAllowed(resolved, userSlug, userId)) {
+			// Rejection includes resolved path (so the LLM sees the symlink
+			// target if any — debugging) but NEVER the file content. Allowed
+			// prefixes are echoed back so the agent can self-correct.
+			return {
+				content: [{
+					type: 'text',
+					text:
+						`path outside sandbox: requested=${requestedPath} resolved=${resolved} ` +
+						`(allowed prefixes: /home/${userSlug}/, /tmp/luse-, /opt/livos/data/uploads/${userId}/)`,
+				}],
+				isError: true,
+			}
+		}
+
+		// Sandbox passed — preserve the original read + base64 wrap behavior.
+		const file = await readFileBase64(requestedPath)
 		return {
 			content: [
 				{
