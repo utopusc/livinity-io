@@ -325,6 +325,7 @@ export function useAppStoreBridge(
 						}
 						await sendStatusToIframe()
 						utilsRef.current.apps.list.invalidate()
+						utilsRef.current.apps.myApps.invalidate()
 					}
 				} catch {
 					// ignore polling errors — server is source of truth
@@ -362,6 +363,7 @@ export function useAppStoreBridge(
 			}
 			await sendStatusToIframe()
 			utilsRef.current.apps.list.invalidate()
+			utilsRef.current.apps.myApps.invalidate()
 		},
 		[reportEvent, sendStatusToIframe, sendToIframe],
 	)
@@ -449,6 +451,7 @@ export function useAppStoreBridge(
 			// Always send updated status and invalidate queries after install attempt
 			await sendStatusToIframe()
 			utilsRef.current.apps.list.invalidate()
+			utilsRef.current.apps.myApps.invalidate()
 			utilsRef.current.apps.state.invalidate()
 		},
 		[sendToIframe, sendStatusToIframe, reportEvent],
@@ -502,6 +505,7 @@ export function useAppStoreBridge(
 			// Always send updated status and invalidate queries after uninstall attempt
 			await sendStatusToIframe()
 			utilsRef.current.apps.list.invalidate()
+			utilsRef.current.apps.myApps.invalidate()
 			utilsRef.current.apps.state.invalidate()
 		},
 		[sendToIframe, sendStatusToIframe, reportEvent],
