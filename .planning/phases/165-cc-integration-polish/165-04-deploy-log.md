@@ -239,3 +239,198 @@ May 19 14:34:18 bruce-EQ npx[1398742]: [livinityd            ] [claude-runner/au
 **All Task 1 acceptance criteria PASS.**
 
 ---
+
+# Task 2 — Live Smoke Probes
+
+## §10. Probe A — Vault Mode (`conv_phase165smoke`)
+
+Cloned from `/tmp/phase162-probe.js` (the verified Phase 162-05 probe), conversationId rewritten to `conv_phase165smoke`. Run from `/opt/livos/packages/livinityd/` for node module resolution of `ws` + `jsonwebtoken` (livinityd's symlinked pnpm-store deps). File renamed `.cjs` because the package is `type: "module"`.
+
+```
+$ sudo node /opt/livos/packages/livinityd/phase165-vault-probe.cjs
+WS_OPEN
+[+0.01s] SESSION_READY sessionId=afb72c34-a007-4c34-94b9-ca48926a6a54
+[+1.75s] SDK_INIT model=claude-opus-4-7 cwd=/home/bruce/livinity-vault
+[+3.68s] ASSISTANT_MSG
+[+3.81s] RESULT subtype=success
+WS_CLOSED gotInit=true model=claude-opus-4-7 gotResponse=true textLen=2
+TEXT: ok
+```
+
+**Verdict: Probe A PASS.**
+- `SDK_INIT model=claude-opus-4-7` — Phase 162-02 lazy-resolver (post-165-02 refactor) still resolves to Opus 4.7 default
+- `cwd=/home/bruce/livinity-vault` — Phase 162-02 vault cwd threading intact
+- `TEXT: ok` — full round-trip via subscription auth completes
+
+## §11. Probe B — Phase 161 Regression (`native:smoke165:abcd1234`)
+
+```
+$ sudo node /opt/livos/packages/livinityd/phase165-regression-probe.cjs
+WS_OPEN
+[+0.01s] SESSION_READY sessionId=4dd506d7-3d01-40ed-bea5-6e4b6bb0c64d
+[+1.52s] SDK_INIT model=claude-haiku-4-5-20251001 cwd=/home/bruce/livinity-vault
+[+2.95s] ASSISTANT_MSG
+[+3.00s] RESULT subtype=success
+WS_CLOSED gotInit=true model=claude-haiku-4-5-20251001 gotResponse=true textLen=2
+TEXT: ok
+```
+
+**Verdict: Probe B PASS for the Phase 161 v34 model contract.**
+- `SDK_INIT model=claude-haiku-4-5-20251001` — Phase 161 dated Haiku literal PRESERVED for `native:` surface prefix (the v34.x contract that must NOT regress)
+- `cwd=/home/bruce/livinity-vault` — Phase 163-02 fallback behaviour: surface-prefixed conversationId for an app that has no surface vault dir falls back to the vault root (`resolveSessionVaultPathWithFallback`). The Phase 162-VERIFICATION.md probe ran pre-163-02.5 and saw `cwd=/opt/livos` because Phase 163-02.5 decoupled `vaultMode` gate from `computerUse` — that surgical decouple shipped via Phase 163-02.5 commit `93612d35` and IS the post-163 behaviour. The Phase 161 *model gate* is what v34 protects; the cwd fallback is by design and proves Phase 163-02 routing is wired live.
+
+## §12. Probe C — Autonomous CLI Trigger + Inbox Entry
+
+### Pre-probe setup
+
+```
+$ sudo redis-cli -a "$PWD" --no-auth-warning SET liv:config:autonomous_enabled true
+OK
+$ sudo sed -i 's/^enabled: false$/enabled: true/' /home/bruce/livinity-vault/livos-agents/nightly-backup-audit.md
+$ sudo grep '^enabled:' /home/bruce/livinity-vault/livos-agents/nightly-backup-audit.md
+enabled: true
+```
+
+### Pre-probe Redis state
+
+```
+liv:autonomous:daily_spend_cents:2026-05-19 = 28  (carryover from Phase 164 UAT)
+liv:autonomous:active_count                 = 0
+inbox file count                            = 4
+```
+
+### Trigger
+
+```
+$ sudo bash -c 'cd /opt/livos && BROKER_FORCE_ROOT_HOME=true HOME=/root \
+    /usr/bin/npx tsx /opt/livos/packages/livinityd/source/cli.ts \
+    autonomous-trigger nightly-backup-audit'
+(node:1402040) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. ...
+autonomous-trigger: nightly-backup-audit completed
+```
+
+CLI exit 0. Wall-clock ~80s.
+
+### New inbox entry written
+
+`/home/bruce/livinity-vault/inbox/2026-05-19_19-43_nightly-backup-audit.md` (root:root because CLI ran as root)
+
+Frontmatter:
+
+```yaml
+---
+agent: nightly-backup-audit
+status: success
+started: 2026-05-19T21:39:53.388Z
+duration_ms: 80924
+cost_usd: 0.1003
+turns: 10
+model: claude-sonnet-4-6
+---
+```
+
+### Post-probe Redis state
+
+```
+liv:autonomous:daily_spend_cents:2026-05-19 = 38  (was 28; +10 = round(0.1003*100))
+liv:autonomous:active_count                 = 0   (try/finally decrement worked)
+liv:autonomous:daily_budget_cap_cents       = (unset → default 5000)
+```
+
+**Verdict: Probe C PASS.** Autonomous SDK round-trip, real disk audit performed, inbox entry materialised with locked 7-field frontmatter, daily spend correctly incremented, active_count returns to 0. Phase 164 contract LIVE through Phase 165 redeploy.
+
+## §13. Probe D — tRPC `autonomous.getDailySpend` Roundtrip
+
+JWT minted via legacy single-user shape `{loggedIn: true}` (the new `userId:"admin"` shape requires a DB-resident admin row matching the literal "admin" UUID, which fails on this Mini PC); cookie name `LIVINITY_SESSION`; tRPC mount at `/trpc` (not `/api/trpc`).
+
+```
+$ JWT=$(node -e 'const jwt=require("jsonwebtoken"); ... sign({loggedIn:true}, ...)')
+
+$ curl -s -H "Cookie: LIVINITY_SESSION=$JWT" "http://localhost:8080/trpc/autonomous.getDailySpend"
+{"result":{"data":{"date":"2026-05-19","spentCents":38,"capCents":5000}}}
+```
+
+**Verdict: Probe D PASS.**
+- Response JSON contains literal substrings `"date":`, `"spentCents":`, `"capCents":` — all 3 contract fields present
+- `spentCents: 38` matches Redis state post-Probe-C (10c increment from 28c prior)
+- `capCents: 5000` is the budget-gate default ($50/day)
+- adminProcedure gate honoured — legacy token → `getAdminUser()` fallback → admin role granted (the new-shape `userId:"admin"` non-UUID token IS rejected which is *correct* RBAC behaviour, not a bug)
+
+### Additional tRPC route verification (chatConfig + autonomous siblings)
+
+```
+$ curl -s -H "Cookie: LIVINITY_SESSION=$JWT" "http://localhost:8080/trpc/chatConfig.getBackend"
+{"result":{"data":{"backend":"vault"}}}
+
+$ curl -s -H "Cookie: LIVINITY_SESSION=$JWT" "http://localhost:8080/trpc/chatConfig.getModel"
+{"result":{"data":{"model":"claude-opus-4-7"}}}
+
+$ curl -s -H "Cookie: LIVINITY_SESSION=$JWT" "http://localhost:8080/trpc/autonomous.list"
+{"result":{"data":[]}}
+```
+
+- `chatConfig.getBackend` → `"vault"` (default; the Phase 162-02 → 165-02 lazy resolver returns the same in-memory state)
+- `chatConfig.getModel` → `"claude-opus-4-7"` (Phase 162 v34 quality default)
+- `autonomous.list` → `[]` — **EXPECTED**. Per scheduler.ts:165-171, when `liv:config:autonomous_enabled=false` at boot, `start()` SKIPS parsing and `this.definitions` stays empty. Flipping the flag mid-runtime (which Probe C did) does NOT retroactively parse. To populate the list, set `autonomous_enabled=true` BEFORE livinityd boot or rely on the per-agent toggle path. This is the documented Phase 164 contract — Operator UAT step covers the boot-time flip.
+
+## §14. Probe E — Settings UI Route Mount
+
+```
+$ curl -s -o /dev/null -w 'HTTP_CODE=%{http_code} BYTES=%{size_download}\n' \
+    'http://localhost:8080/settings/chat-backend'
+HTTP_CODE=200 BYTES=2524
+
+$ curl -s -o /dev/null -w 'HTTP_CODE=%{http_code} BYTES=%{size_download}\n' \
+    'http://localhost:8080/settings/autonomous-agents'
+HTTP_CODE=200 BYTES=2524
+
+$ curl -sk -o /dev/null -w 'HTTP_CODE=%{http_code} BYTES=%{size_download}\n' \
+    'https://bruce.livinity.io/settings/chat-backend'
+HTTP_CODE=200 BYTES=3443
+
+$ curl -sk -o /dev/null -w 'HTTP_CODE=%{http_code} BYTES=%{size_download}\n' \
+    'https://bruce.livinity.io/settings/autonomous-agents'
+HTTP_CODE=200 BYTES=3443
+```
+
+Both routes return HTTP 200 on the local listener AND the public `bruce.livinity.io` URL (through the relay). The SPA shell mounts; React Router resolves to the panel components client-side. **Route mounts confirmed; visual UAT pending operator walk** (covered in v34-VERIFICATION.md §7).
+
+## §15. Safety Wind-Down
+
+Per `T-165-04-01` threat-register mitigation:
+
+```
+$ sudo redis-cli -a "$PWD" --no-auth-warning SET liv:config:autonomous_enabled false
+OK
+$ sudo sed -i 's/^enabled: true$/enabled: false/' /home/bruce/livinity-vault/livos-agents/nightly-backup-audit.md
+$ sudo grep '^enabled:' /home/bruce/livinity-vault/livos-agents/nightly-backup-audit.md
+enabled: false
+$ sudo redis-cli -a "$PWD" --no-auth-warning GET liv:config:autonomous_enabled
+false
+```
+
+**Wind-down complete.** Both `autonomous_enabled` AND sample agent `enabled: false` — system back to safe default. Future cron ticks will not auto-fire until operator explicitly re-enables via the Settings UI.
+
+---
+
+## Acceptance Criteria — §§10-15 (Task 2)
+
+| Criterion | Status | Evidence |
+|-----------|--------|----------|
+| `SDK_INIT model=claude-opus-4-7` + `cwd=/home/bruce/livinity-vault` (vault probe) | PASS | §10 |
+| `SDK_INIT model=claude-haiku-4-5-20251001` (Phase 161 regression model gate) | PASS | §11 |
+| `nightly-backup-audit` + `inbox entry written` (autonomous CLI) | PASS | §12 |
+| JSON with `"date":` + `"spentCents":` + `"capCents":` (tRPC roundtrip) | PASS | §13 |
+| `/settings/chat-backend` + `/settings/autonomous-agents` route check | PASS | §14 |
+| `autonomous_enabled=false` + agent reset (wind-down) | PASS | §15 |
+
+**All Task 2 acceptance criteria PASS.**
+
+---
+
+## Notes on Phase 161-02 cwd Delta vs Phase 162-VERIFICATION.md
+
+The Phase 162-VERIFICATION.md regression probe documented `cwd=/opt/livos` for native: prefix. The Phase 165-04 regression probe documents `cwd=/home/bruce/livinity-vault`. The delta is intentional: Phase 163-02.5 (commit `93612d35`, Phase 163 ship) surgically decoupled `vaultMode` gate from `computerUse` so the `cwd: sessionCwd` line threads through SDK `query()` for both Main Chat AND computer-use sessions, while `systemPrompt` + `settingSources` remain gated on `vaultMode && !computerUse` (preserving Phase 161-02's LivOS overlay precedence). The native: regression probe with no installed app falls back to vault root via Phase 163-02's `resolveSessionVaultPathWithFallback`. The v34 *model contract* is the gate — Phase 161 dated Haiku literal IS preserved (§11), which is what the v34.x success criteria #3 actually asserts.
+
+---
+
