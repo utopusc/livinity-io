@@ -14,8 +14,6 @@ const SubagentsWindowContent = React.lazy(() => import('./app-contents/subagents
 const SchedulesWindowContent = React.lazy(() => import('./app-contents/schedules-content'))
 const TerminalWindowContent = React.lazy(() => import('./app-contents/terminal-content'))
 const MyDevicesWindowContent = React.lazy(() => import('./app-contents/my-devices-content'))
-const RemoteDesktopContent = React.lazy(() => import('./app-contents/remote-desktop-content'))
-const ChromeWindowContent = React.lazy(() => import('./app-contents/chrome-content'))
 // Phase 95-02 — WebApp stream content (VNC pane + AI panel + mode selector).
 // The discriminator is the `WEBAPP_<webappId>` prefix on `appId` (per CONTEXT
 // C-95-05 and PLAN 95-02). The real component lands in 95-08; 95-02 ships a
@@ -53,8 +51,7 @@ type WindowContentProps = {
 // Apps that manage their own scroll and layout (no wrapper padding/scroll).
 // WebApps (any appId starting with WEBAPP_) are full-height too — handled
 // via `isWebAppKind(appId)` in `WindowContent` rather than expanding this set.
-const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_remote-desktop', 'LIVINITY_chrome',
-	'LIVINITY_gmail'])
+const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices'])
 
 export function WindowContent({route, appId, windowId}: WindowContentProps) {
 	if (fullHeightApps.has(appId) || isWebAppKind(appId) || isNativeAppKind(appId)) {
@@ -131,12 +128,6 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 		case 'LIVINITY_terminal':
 			return <TerminalWindowContent />
 
-		case 'LIVINITY_remote-desktop':
-			return <RemoteDesktopContent />
-
-		case 'LIVINITY_chrome':
-		case 'LIVINITY_gmail':
-			return <ChromeWindowContent url={initialRoute.startsWith('http') ? initialRoute : undefined} />
 
 		default:
 			return (

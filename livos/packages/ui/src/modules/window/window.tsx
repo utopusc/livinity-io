@@ -224,7 +224,26 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 		}
 	const pinAnimateChrome = isPinnedToTopBar
 		? {opacity: 0, scale: 0.2, y: 0}
-		: {opacity: isDragging ? 0.9 : 1, y: 0, scale: 1}
+		: {opacity: 1, y: 0, scale: 1}
+
+	// Close animation — when the window was opened from a dock icon
+	// (originRect is known), the chrome's exit converges to the same
+	// dock-icon target as the window content, using a transform-based
+	// translate (`x` / `y`) on top of the chrome's static `left` / `top`
+	// so close button + drag bar + skills all "fall into" the dock with
+	// the window instead of fading in place above empty space. The
+	// transition is the same spring as `morphTransition` so chrome and
+	// content land together. No-dock-origin fallback keeps the prior
+	// subtle fade-up.
+	const chromeExitTarget = hasMorphOrigin
+		? {
+				opacity: 0,
+				scale: 0.3,
+				x: originRect!.x + originRect!.width / 2 - size.width * 0.15 - currentX,
+				y: originRect!.y + originRect!.height / 2 - size.height * 0.15 - (currentY - 42),
+				transition: morphTransition,
+			}
+		: {opacity: 0, y: -10, scale: 0.9}
 	const pinTransition = isPinnedToTopBar
 		? {type: 'spring' as const, stiffness: 220, damping: 26, mass: 0.7}
 		: undefined
@@ -247,7 +266,7 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 				onMouseDown={isPinnedToTopBar ? undefined : handleDragStart}
 				initial={{opacity: 0, y: -10, scale: 0.9}}
 				animate={pinAnimateChrome}
-				exit={{opacity: 0, y: -10, scale: 0.9}}
+				exit={chromeExitTarget}
 				transition={pinTransition ?? {type: 'spring', stiffness: 500, damping: 35, delay: hasMorphOrigin ? 0.15 : 0}}
 			>
 				<WindowChrome
@@ -292,6 +311,47 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 				<div className='absolute bottom-0 left-0 h-3 w-3 cursor-nesw-resize' onMouseDown={(e) => handleResizeStart(e, 'sw')} />
 				<div className='absolute bottom-0 right-0 h-3 w-3 cursor-nwse-resize' onMouseDown={(e) => handleResizeStart(e, 'se')} />
 			</motion.div>
+
+			{/* Phase 158 round 16 — iframe / video pointer-capture shield.
+			    While the user is dragging the title bar or resizing from an
+			    edge, the cursor often passes over an iframe or video element
+			    inside the window content (webapp stream, embedded apps). In
+			    those frames, mouse events get owned by the iframe's own
+			    document context — the parent's `document.addEventListener(
+			    'mousemove' / 'mouseup')` stops firing, so the window thinks
+			    the user is still holding the edge even after release.
+
+			    The shield is a transparent, full-viewport `position: fixed`
+			    div with the very highest z-index, rendered ONLY while
+			    isDragging || isResizing. It has no handlers — mouse events
+			    fire on it (default pointer-events: auto) and bubble straight
+			    up to `document`, where our drag listeners catch them. The
+			    iframe under it never sees the events, so it never steals
+			    focus from the drag loop. Cursor is set on the shield so the
+			    grabbing / resize affordance stays correct everywhere the
+			    cursor goes, including over the iframe. */}
+			{(isDragging || isResizing) && (
+				<div
+					aria-hidden='true'
+					style={{
+						position: 'fixed',
+						inset: 0,
+						zIndex: 999999,
+						cursor: isDragging
+							? 'grabbing'
+							: ({
+									n: 'ns-resize',
+									s: 'ns-resize',
+									e: 'ew-resize',
+									w: 'ew-resize',
+									ne: 'nesw-resize',
+									sw: 'nesw-resize',
+									nw: 'nwse-resize',
+									se: 'nwse-resize',
+								}[resizeDirection] || 'se-resize'),
+					}}
+				/>
+			)}
 		</>
 	)
 })
