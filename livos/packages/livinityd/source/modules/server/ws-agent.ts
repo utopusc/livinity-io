@@ -13,6 +13,7 @@
  */
 
 import {randomUUID} from 'node:crypto'
+import {stat} from 'node:fs/promises'
 import {WebSocket} from 'ws'
 import type {IncomingMessage} from 'http'
 
@@ -31,6 +32,55 @@ import type createLogger from '../utilities/logger.js'
 import type AiModule from '../ai/index.js'
 import type {ChatMessage, Conversation} from '../ai/index.js'
 import {buildLuseSystemPromptWithOverlayResolved} from '../ai/agent-prompt-builder.js'
+
+/**
+ * Phase 163-02 — Resolve the per-session vault path from a conversationId.
+ *
+ * Mapping:
+ *   `webapp:<id>:<anything>` -> `<baseVaultPath>/surfaces/webapp/<id>`
+ *   `native:<id>:<anything>` -> `<baseVaultPath>/surfaces/native/<id>`
+ *   anything else            -> `<baseVaultPath>` (Main Chat / no prefix)
+ *
+ * Phase 161 contract preserved: isComputerUseSession(convId) still returns
+ * true for native:/webapp: prefixes — only the CWD differs here. The Haiku
+ * tier override at agent-session.ts still fires and the dated Haiku literal
+ * (lives in agent-session.ts, NOT here) still wins.
+ *
+ * Pure string parse — no I/O. Caller decides whether to fs.stat fallback.
+ */
+export function resolveSessionVaultPath(
+	conversationId: string | undefined,
+	baseVaultPath: string,
+): string {
+	if (!conversationId) return baseVaultPath
+	const parts = conversationId.split(':')
+	if (parts.length < 2) return baseVaultPath
+	const [kind, id] = parts
+	if (kind !== 'webapp' && kind !== 'native') return baseVaultPath
+	if (!id || id.length === 0) return baseVaultPath
+	return `${baseVaultPath}/surfaces/${kind}/${id}`
+}
+
+/**
+ * Phase 163-02 — fs.stat fallback wrapper. If the resolved subsurface dir
+ * does NOT exist (e.g. user opened WebApp chat before app install scaffolded
+ * its surface), fall back to baseVaultPath so the chat still loads
+ * something instead of crashing.
+ */
+export async function resolveSessionVaultPathWithFallback(
+	conversationId: string | undefined,
+	baseVaultPath: string,
+): Promise<string> {
+	const resolved = resolveSessionVaultPath(conversationId, baseVaultPath)
+	if (resolved === baseVaultPath) return resolved
+	try {
+		const s = await stat(resolved)
+		if (s.isDirectory()) return resolved
+	} catch {
+		// ENOENT (or other) — fall back
+	}
+	return baseVaultPath
+}
 
 /**
  * Save a completed turn's messages to Redis conversation storage.
@@ -185,28 +235,48 @@ export function createAgentWebSocketHandler(opts: {
 		// No brain in livinityd — LLM fallback is skipped, keyword matching only
 	})
 
-	const sessionManager = new AgentSessionManager({
-		toolRegistry: lazyToolRegistry,
-		// IntentRouter disabled — scoped tool selection filters out MCP tools.
-		// Re-enable once CapabilityRegistry properly tracks MCP provides_tools
-		// and IntentRouter preserves all MCP tools in scoped registry.
-		// intentRouter,
-		redis: ai.redis,
-		learningEngine,
-		// Phase 161-02 — DI callback wires Plan 160-02 + 160-04 LivOS overlay
-		// composer into the SDK subscription path. The builder is invoked only
-		// for computer-use sessions (conversationId starts with `native:` / `webapp:`
-		// per Plan 161-01 detection). Hard-coded userSlug/domainRoot match
-		// luse-mcp-config.ts:318 defaults; per-session resolution from JWT is
-		// deferred to a future plan. Chat path untouched.
-		computerUseSystemPromptBuilder: async () => {
-			return buildLuseSystemPromptWithOverlayResolved({
-				userSlug: 'admin',
-				domainRoot: 'livinity.io',
-			})
-		},
-		vaultModeConfig: opts.vaultModeConfig,  // Phase 162-02 — pass-through (or undefined for Phase 161 legacy)
-	})
+	// Phase 163-02 — `buildSessionManager` returns an AgentSessionManager scoped to
+	// a specific resolved vault path. Used both for the default manager (factory time)
+	// and for per-session managers built lazily when a surface-prefixed conversationId
+	// resolves to a subsurface vaultPath that differs from the factory's. When
+	// opts.vaultModeConfig is undefined (legacy chat_backend=legacy), we DON'T re-thread
+	// vault config — preserves Phase 161 verbatim. The Phase 161-02 DI hook
+	// (computerUseSystemPromptBuilder) is identical across all manager instances.
+	const buildSessionManager = (resolvedVaultPath: string): AgentSessionManager => {
+		const vaultModeConfigForSession = opts.vaultModeConfig
+			? {vaultPath: resolvedVaultPath, defaultModel: opts.vaultModeConfig.defaultModel}
+			: undefined
+		return new AgentSessionManager({
+			toolRegistry: lazyToolRegistry,
+			// IntentRouter disabled — scoped tool selection filters out MCP tools.
+			// Re-enable once CapabilityRegistry properly tracks MCP provides_tools
+			// and IntentRouter preserves all MCP tools in scoped registry.
+			// intentRouter,
+			redis: ai.redis,
+			learningEngine,
+			// Phase 161-02 — DI callback wires Plan 160-02 + 160-04 LivOS overlay
+			// composer into the SDK subscription path. The builder is invoked only
+			// for computer-use sessions (conversationId starts with `native:` / `webapp:`
+			// per Plan 161-01 detection). Hard-coded userSlug/domainRoot match
+			// luse-mcp-config.ts:318 defaults; per-session resolution from JWT is
+			// deferred to a future plan. Chat path untouched.
+			computerUseSystemPromptBuilder: async () => {
+				return buildLuseSystemPromptWithOverlayResolved({
+					userSlug: 'admin',
+					domainRoot: 'livinity.io',
+				})
+			},
+			vaultModeConfig: vaultModeConfigForSession,  // Phase 162-02 — pass-through (or undefined for Phase 161 legacy); Phase 163-02 — per-session resolvedVaultPath
+		})
+	}
+
+	// Phase 163-02 — Default sessionManager used for Main Chat (no surface prefix).
+	// For surface-prefixed convIds, a per-session manager is built lazily with the
+	// resolved subsurface vaultPath (see perSessionManagers Map below). When
+	// opts.vaultModeConfig is undefined, this is byte-identical Phase 161/162-02.
+	const defaultSessionManager = buildSessionManager(
+		opts.vaultModeConfig?.vaultPath ?? '/home/bruce/livinity-vault',
+	)
 
 	return (ws: WebSocket, request: IncomingMessage) => {
 		const logger = opts.logger
@@ -261,6 +331,16 @@ export function createAgentWebSocketHandler(opts: {
 
 		let sessionKey = buildSessionKey(surfaceKindFromUrl, surfaceIdFromUrl)
 
+		// Phase 163-02 — Per-sessionKey AgentSessionManager cache. When the start
+		// envelope's conversationId resolves to a surface-specific vaultPath
+		// (different from the factory's vault root), a per-key manager is built
+		// lazily and stored here for the lifetime of that sessionKey (across
+		// multi-turn). Cleanup happens on ws close. Cleared at the same point
+		// as the default manager's cleanup() call.
+		const perSessionManagers = new Map<string, AgentSessionManager>()
+		const managerFor = (key: string): AgentSessionManager =>
+			perSessionManagers.get(key) ?? defaultSessionManager
+
 		logger.log(`WS agent: connected, userId=${userId}, conn=${connectionId}`)
 
 		// 15-second heartbeat
@@ -290,6 +370,30 @@ export function createAgentWebSocketHandler(opts: {
 					sessionKey = buildSessionKey((raw as any).surface, (raw as any).surfaceId)
 				}
 
+				// Phase 163-02 — Per-session vault path resolution. Only kicks in when
+				// vault mode is active (opts.vaultModeConfig != null) AND the convId has
+				// a surface prefix (`webapp:<id>:...` / `native:<id>:...`). fs.stat
+				// fallback handles the not-yet-scaffolded case (chat opened before
+				// Plan 163-01 install hook has materialized the surface dir).
+				if (
+					raw.type === 'start' &&
+					opts.vaultModeConfig &&
+					raw.conversationId
+				) {
+					const resolvedPath = await resolveSessionVaultPathWithFallback(
+						raw.conversationId,
+						opts.vaultModeConfig.vaultPath,
+					)
+					if (resolvedPath !== opts.vaultModeConfig.vaultPath) {
+						// Build a per-sessionKey manager pinned to the subsurface vault path.
+						// Reuse if already built for this sessionKey (same key across multi-turn).
+						if (!perSessionManagers.has(sessionKey)) {
+							perSessionManagers.set(sessionKey, buildSessionManager(resolvedPath))
+							logger.log(`WS agent: surface vault path resolved sessionKey=${sessionKey} -> ${resolvedPath}`)
+						}
+					}
+				}
+
 				// For 'start' messages: prepend conversation history to prompt
 				if (raw.type === 'start' && raw.conversationId) {
 					const context = await buildConversationContext(raw.conversationId, userId, ai)
@@ -307,13 +411,15 @@ export function createAgentWebSocketHandler(opts: {
 
 				// V32-HERMES-04: 'steer' is fire-and-forget — inject guidance into the
 				// active LivAgentRunner for this connection and send no reply.
-				// All other message types are delegated to sessionManager.handleMessage().
+				// All other message types are delegated to handleMessage on the
+				// per-session manager (Phase 163-02: managerFor(sessionKey) picks the
+				// surface-scoped manager when present, else falls back to the default).
 				if (raw.type === 'steer') {
-					sessionManager.injectSteer(sessionKey, raw.guidance)
+					managerFor(sessionKey).injectSteer(sessionKey, raw.guidance)
 					return
 				}
 
-				await sessionManager.handleMessage(sessionKey, raw, sendMessage, {
+				await managerFor(sessionKey).handleMessage(sessionKey, raw, sendMessage, {
 					onTurnComplete: (turn: TurnData) => saveToConversation(turn, userId, ai, logger),
 				})
 			} catch (err: any) {
@@ -326,7 +432,8 @@ export function createAgentWebSocketHandler(opts: {
 		ws.on('close', () => {
 			logger.log(`WS agent: disconnected, ${sessionKey}`)
 			clearInterval(heartbeat)
-			sessionManager.cleanup(sessionKey)
+			managerFor(sessionKey).cleanup(sessionKey)
+			perSessionManagers.delete(sessionKey)
 		})
 
 		ws.on('error', (err) => {
