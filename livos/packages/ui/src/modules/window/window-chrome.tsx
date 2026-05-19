@@ -47,6 +47,10 @@ const ACTION_WIDTH_CHAT_INPUT = 480
 // alongside the action area's grow.
 const CHROME_FIXED_OVERHEAD = 36 + 36 + 12 * 3
 const CHROME_FIXED_OVERHEAD_NON_WEBAPP = 36 + 12 // just X + one gap before drag bar
+// Phase 159 — native-app chrome row: X (36) + action area (animated) +
+// drag bar + gaps (12 each). Same as webapp BUT no Skills slot on
+// the right.
+const CHROME_FIXED_OVERHEAD_NATIVE = 36 + 12 * 2
 
 export function WindowChrome({
 	title,
@@ -56,15 +60,22 @@ export function WindowChrome({
 	webappId,
 	nativeAppId,
 }: WindowChromeProps) {
-	// Phase 159 — nativeAppId is plumbed in Task 1. Task 2 wires the
-	// streamKind discriminator + Chat-for-both gate. Reference here to
-	// avoid an unused-var warning until Task 2 lands the body change.
-	void nativeAppId
+	// Phase 159 — discriminator: 'webapp' = full chrome (Chat + Teach +
+	// Skills); 'native' = Chat only (Teach + Skills omitted, RESEARCH A5);
+	// null = non-stream window (e.g. Settings, Files) — no action area.
+	type StreamKind = 'webapp' | 'native' | null
+	const streamKind: StreamKind = webappId ? 'webapp' : nativeAppId ? 'native' : null
+	const hasChromeChat = streamKind !== null
+	const streamId = webappId ?? nativeAppId
+	const isWebApp = streamKind === 'webapp'  // preserved for the Skills slot gate + drag-bar math (literal kept)
+
+	// Phase 159 — chat-mode store read keys on the unified streamId. Slot
+	// name (chatInputModeByWebappId) preserved per Plan 06 namespace
+	// re-use note — UUID collision-free.
 	const setSelectedSkillId = useWebAppDrawerStore((s) => s.setSelectedSkillId)
 	const chatMode = useWebAppDrawerStore(
-		(s) => (webappId ? s.chatInputModeByWebappId[webappId] : undefined) ?? 'icons',
+		(s) => (streamId ? s.chatInputModeByWebappId[streamId] : undefined) ?? 'icons',
 	)
-	const isWebApp = !!webappId
 
 	// Explicit widths drive the width animation. Action area's width is
 	// fixed per mode; drag bar's width is derived from windowWidth so
@@ -72,7 +83,9 @@ export function WindowChrome({
 	const actionAreaWidth = chatMode === 'icons' ? ACTION_WIDTH_ICONS : ACTION_WIDTH_CHAT_INPUT
 	const dragBarWidth = isWebApp
 		? Math.max(60, windowWidth - CHROME_FIXED_OVERHEAD - actionAreaWidth)
-		: Math.max(60, windowWidth - CHROME_FIXED_OVERHEAD_NON_WEBAPP)
+		: streamKind === 'native'
+			? Math.max(60, windowWidth - CHROME_FIXED_OVERHEAD_NATIVE - actionAreaWidth)
+			: Math.max(60, windowWidth - CHROME_FIXED_OVERHEAD_NON_WEBAPP)
 
 	return (
 		<div
@@ -109,7 +122,7 @@ export function WindowChrome({
 			    via explicit `animate={{width}}` (CSS width transition,
 			    NOT transform: scale). That keeps icons and text inside
 			    crisp — no stretching, no distortion. */}
-			{isWebApp && (
+			{hasChromeChat && (
 				<motion.div
 					initial={false}
 					animate={{width: actionAreaWidth}}
@@ -117,7 +130,11 @@ export function WindowChrome({
 					className='shrink-0 h-9 overflow-hidden flex items-center'
 					onMouseDown={(e) => e.stopPropagation()}
 				>
-					<WebAppFloatingActionBar inline webappId={webappId!} />
+					<WebAppFloatingActionBar
+						inline
+						webappId={webappId}
+						nativeAppId={nativeAppId}
+					/>
 				</motion.div>
 			)}
 
