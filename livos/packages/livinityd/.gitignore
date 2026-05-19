@@ -2,6 +2,12 @@ node_modules
 coverage
 .DS_Store
 data
+# Phase 162-01 — vault-templates is committed source data, not runtime
+# state. The `data` rule above gitignores live data dirs (livinityd writes
+# to ./data at runtime); this exception keeps the scaffolder template tree
+# under git.
+!source/data/
+!source/data/**
 ui
 
 # Environment files (never commit secrets)
