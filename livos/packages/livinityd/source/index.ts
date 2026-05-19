@@ -32,6 +32,12 @@ import {drainInstallPendingRedisKeys} from './modules/drain-install-pending-redi
 // (livinityd boots normally; chat falls back to legacy path via 162-02 flag).
 // Phase 162-03 — smokeAuthCheck SDK subscription-path probe at boot.
 import {scaffoldVault, smokeAuthCheck} from './modules/claude-runner/index.js'
+// Phase 164-02 — Autonomous scheduler. Boot-time read of vault/livos-agents/*.md
+// + cron registration of every enabled agent. Gated by Redis flag
+// liv:config:autonomous_enabled (default false = no-op). Non-fatal on every
+// failure path. Architectural separation: spawns SDK query() directly, NOT
+// through liv-core's AgentSessionManager (agent-session.ts UNTOUCHED).
+import {AutonomousScheduler} from './modules/autonomous-scheduler/index.js'
 import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/api-keys/index.js'
 // Phase 104 plan 104-10 — LivOS → livinity.io heartbeat client. Wired AFTER
 // ai.start() so this.ai.redis is connected. Only armed when the operator
@@ -279,6 +285,13 @@ export default class Livinityd {
 	// plan 102-04 (window-manager rewrite) will consume this once the
 	// per-app spawn flow is rewritten.
 	profileSeeder: ProfileSeederHandle | null = null
+	// Phase 164-02 — Autonomous scheduler instance. Constructed in start()
+	// AFTER scaffoldVault() + smokeAuthCheck() (so the vault dir exists and
+	// the SDK auth has been probed) and BEFORE drainInstallPendingRedisKeys.
+	// Stays `undefined` if the constructor or `.start()` throw (non-fatal —
+	// livinityd boots normally and the rest of the daemon keeps running).
+	// stop() teardown is best-effort.
+	autonomousScheduler?: AutonomousScheduler
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -504,6 +517,37 @@ export default class Livinityd {
 			this.logger.error('[claude-runner/auth] unexpected throw (non-fatal)', err as Error)
 		})
 		// NOTE: no `await` — fire-and-forget. Boot continues immediately.
+
+		// Phase 164-02 — Autonomous scheduler wire-up. Boot-time read of
+		// `vault/livos-agents/*.md` + cron registration of every enabled
+		// agent. Gated by Redis flag `liv:config:autonomous_enabled` — when
+		// unset/false the scheduler is a no-op (zero tasks registered).
+		// Non-fatal on every failure path: vault missing, parse errors,
+		// Redis errors → log + boot continues normally. agent-session.ts is
+		// UNTOUCHED — autonomous spawns query() directly, not through
+		// AgentSessionManager (intentional architectural separation per
+		// CONTEXT.md D-V34-G).
+		//
+		// Site: AFTER smokeAuthCheck() so the SDK auth has been probed
+		// before we register any cron jobs that would try to spawn it.
+		// BEFORE drainInstallPendingRedisKeys so the autonomous boot
+		// telemetry lands before the install-pending drain mutates Redis.
+		try {
+			this.autonomousScheduler = new AutonomousScheduler({
+				redis: this.ai.redis,
+				vaultPath: '/home/bruce/livinity-vault',
+				logger: {
+					log: (msg) => this.logger.log(msg),
+					error: (msg, err) => this.logger.error(msg, err),
+				},
+			})
+			await this.autonomousScheduler.start()
+		} catch (err) {
+			this.logger.error(
+				'[autonomous-scheduler] unexpected throw (non-fatal)',
+				err as Error,
+			)
+		}
 
 		// Phase 141-01 — drain install-time queued Redis seeds.
 		// install.sh's `set_livos_redis_key` queues `KEY=VALUE` lines to
@@ -998,6 +1042,18 @@ export default class Livinityd {
 		try {
 			// Stop backups first because it depends on files
 			await this.backups.stop()
+
+			// Phase 164-02 — Halt the autonomous scheduler EARLY so any
+			// in-flight cron-triggered SDK calls drain (up to the 30s
+			// timeout inside scheduler.stop()) BEFORE the Redis client +
+			// inbox writer they depend on are torn down. No-op if the
+			// scheduler never armed (boot edge or autonomous_enabled was
+			// false).
+			try {
+				await this.autonomousScheduler?.stop()
+			} catch (err) {
+				this.logger.error('[autonomous-scheduler] stop', err)
+			}
 
 			// Phase 104 plan 104-10 — stop the heartbeat sender BEFORE the rest
 			// of shutdown so its in-flight POST (and self-rescheduling
