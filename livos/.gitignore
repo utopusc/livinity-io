@@ -12,6 +12,11 @@ logs/
 !packages/ui/src/routes/docker/logs/
 !packages/ui/src/routes/docker/logs/**
 data/
+# Phase 162-01 — vault-templates is bundled source data (committed),
+# NOT runtime data. The generic `data/` rule above gitignores live runtime
+# state; this exception keeps the scaffolder source-of-truth under git.
+!packages/livinityd/source/data/
+!packages/livinityd/source/data/**
 .cache/
 temp/
 *.pyc
