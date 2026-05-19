@@ -505,4 +505,19 @@ export const httpOnlyPaths = [
 	'pinnedWindows.list',
 	'pinnedWindows.upsert',
 	'pinnedWindows.delete',
+	// Phase 165-02 — Settings UI surface for v34.x autonomous agents +
+	// chat backend selector. autonomous.* mutations write to vault files +
+	// bump the in-memory scheduler state; chatConfig.* mutations write Redis
+	// + bump AiModule in-place. All 9 paths route via HTTP for the standard
+	// WS-reconnect-survival reason (memory pitfall B-12 / X-04 — same cluster
+	// as agents.* line 282, chromeMaster.* line 474, marketplace.* line 299).
+	'autonomous.list',
+	'autonomous.toggle',
+	'autonomous.runNow',
+	'autonomous.getDailySpend',
+	'autonomous.setDailyBudgetCap',
+	'chatConfig.getBackend',
+	'chatConfig.setBackend',
+	'chatConfig.getModel',
+	'chatConfig.setModel',
 ] as const

@@ -113,6 +113,17 @@ import {
 // restart livos` (precedent: webapp.create line 360, conversations.
 // appendMessage line 312, agents.create line 256).
 import pinnedWindowsRouter from '../../pinned-windows/routes.js'
+// Phase 165-02 — Autonomous agents Settings UI namespace (5 procedures:
+// list / toggle / runNow / getDailySpend / setDailyBudgetCap). All
+// adminProcedure-gated; all 5 paths added to httpOnlyPaths in common.ts.
+import autonomousRouter from './autonomous-router.js'
+// Phase 165-02 — Chat backend + default-model selector namespace
+// (4 procedures: getBackend / setBackend / getModel / setModel). All
+// adminProcedure-gated; all 4 paths added to httpOnlyPaths in common.ts.
+// setBackend / setModel mutations bump AiModule in-place so the next
+// /ws/agent connection re-resolves vaultModeConfig via Task 4's lazy
+// resolveVaultModeConfig getter (no livinityd restart).
+import chatConfigRouter from './chat-config-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -190,6 +201,10 @@ export function createAppRouter(opts: {
 		chromeMaster: opts.chromeMaster,
 		// Phase 131-02 — pinnedWindows.* namespace (D-131-A persistence).
 		pinnedWindows: pinnedWindowsRouter,
+		// Phase 165-02 — Autonomous agents Settings panel namespace.
+		autonomous: autonomousRouter,
+		// Phase 165-02 — Chat backend selector Settings panel namespace.
+		chatConfig: chatConfigRouter,
 	})
 }
 
