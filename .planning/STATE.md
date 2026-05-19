@@ -25,9 +25,9 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: --phase (161) — EXECUTING
-Plan: 1 of --name
-Next phase: **Phase 161 — Computer-Use SDK Path Wiring** (🔴 PLANNED, ~2-3h, 4 atomic patches). Recommended: `/clear` then `/gsd-discuss-phase 161` in a fresh session.
+Phase: 161 ✅ SHIPPED 2026-05-19 (15 commits + Mini PC deploy `fbb8e3a` + synthetic WS probe LIVE-PROVEN; sacred SHA preserved 15/15; MH1 verified via runtime journal — `routing to Haiku` → SDK_INIT `claude-haiku-4-5-20251001` → streaming response; MH2/MH3/MH4/MH7 queued for operator browser walk)
+Plan: 4 of 4 SHIPPED (all autonomous plans complete; remaining UAT is browser-driven and decoupled from code state)
+Next phase: **Phase 162 — Operator Browser UAT** (autonomous: false; re-walk Phase 160 VERIFICATION.md 10-step checklist via `bruce.livinity.io` to close MH2/MH3/MH4/MH7). If browser UAT surfaces a bug → Phase 162 opens as targeted fix plan; if all green → Phase 161 closes fully, move to next v34 milestone work.
 
 ## 160-01 Status (2026-05-19) — Haiku Routing CODE-COMPLETE (2 commits, sacred SHA preserved 2/2)
 
