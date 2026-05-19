@@ -32,6 +32,64 @@ import type createLogger from '../utilities/logger.js'
 import type AiModule from '../ai/index.js'
 import type {ChatMessage, Conversation} from '../ai/index.js'
 import {buildLuseSystemPromptWithOverlayResolved} from '../ai/agent-prompt-builder.js'
+import type {
+	SessionActivityProvider,
+	SessionSnapshot,
+} from '../claude-runner/idle-reaper.js'
+
+// Phase 165-01 — Idle reaper registry. Populated by ws-agent on every
+// `ws.on('message')` invocation; read by IdleSessionReaper.tick() through
+// the SessionActivityProvider returned by createSessionActivityProvider().
+// Lives at MODULE scope so the reaper sees ALL active WS sessions across
+// every connection bound to this livinityd process.
+//
+// Architectural boundary: this hook lives in ws-agent.ts; the liv-core
+// agent-session.ts file is UNCHANGED. The `abort` closure for each entry
+// calls the existing AgentSessionManager.cleanup(sessionKey) method
+// (the same method the WS-close handler already uses), so no new public
+// API is added to AgentSessionManager.
+interface ReaperEntry {
+	lastMessageAt: number
+	sessionKey: string
+	/**
+	 * Aborts the active session for this key. Implementation closes over
+	 * the per-connection `managerFor(sessionKey)` so the abort hits the
+	 * correct subsurface-scoped AgentSessionManager (Phase 163-02).
+	 */
+	abort: () => void
+}
+const reaperRegistry = new Map<string, ReaperEntry>()
+
+/**
+ * Factory returning the SessionActivityProvider interface used by the
+ * Phase 165-01 IdleSessionReaper. Closes over the module-scope
+ * reaperRegistry above. Safe to call from livinityd.start() before any
+ * WS connections exist — listSessions() simply returns [] until the
+ * first ws.on('message') stamps a lastMessageAt.
+ *
+ * The returned `abort` method calls the registered abort closure for the
+ * session AND removes the entry from the registry (so a subsequent reap
+ * pass doesn't re-fire on the same already-aborted key).
+ */
+export function createSessionActivityProvider(): SessionActivityProvider {
+	return {
+		listSessions(): SessionSnapshot[] {
+			return Array.from(reaperRegistry.entries()).map(([sessionKey, e]) => ({
+				sessionKey,
+				lastMessageAt: e.lastMessageAt,
+			}))
+		},
+		abort(sessionKey: string): void {
+			const e = reaperRegistry.get(sessionKey)
+			if (!e) return
+			try {
+				e.abort()
+			} finally {
+				reaperRegistry.delete(sessionKey)
+			}
+		},
+	}
+}
 
 /**
  * Phase 163-02 — Resolve the per-session vault path from a conversationId.
@@ -370,6 +428,19 @@ export function createAgentWebSocketHandler(opts: {
 					sessionKey = buildSessionKey((raw as any).surface, (raw as any).surfaceId)
 				}
 
+				// Phase 165-01 — Stamp lastMessageAt for the idle reaper. We do this
+				// BEFORE message processing so the reaper sees the most recent activity
+				// timestamp even if the handler below throws. The `abort` closure
+				// resolves the per-sessionKey manager at abort time (NOT at registration
+				// time) so subsurface-scoped managers (Phase 163-02 perSessionManagers)
+				// are honoured. agent-session.ts is UNCHANGED — cleanup() is an existing
+				// public method (the same one called by the ws.on('close') handler below).
+				reaperRegistry.set(sessionKey, {
+					lastMessageAt: Date.now(),
+					sessionKey,
+					abort: () => managerFor(sessionKey).cleanup(sessionKey),
+				})
+
 				// Phase 163-02 — Per-session vault path resolution. Only kicks in when
 				// vault mode is active (opts.vaultModeConfig != null) AND the convId has
 				// a surface prefix (`webapp:<id>:...` / `native:<id>:...`). fs.stat
@@ -434,6 +505,9 @@ export function createAgentWebSocketHandler(opts: {
 			clearInterval(heartbeat)
 			managerFor(sessionKey).cleanup(sessionKey)
 			perSessionManagers.delete(sessionKey)
+			// Phase 165-01 — Drop the reaper-registry entry so the next reap
+			// pass doesn't try to abort an already-cleaned-up session.
+			reaperRegistry.delete(sessionKey)
 		})
 
 		ws.on('error', (err) => {

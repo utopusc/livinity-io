@@ -31,7 +31,13 @@ import {drainInstallPendingRedisKeys} from './modules/drain-install-pending-redi
 // /home/bruce/livinity-vault per master plan D-V34-D. Non-fatal on failure
 // (livinityd boots normally; chat falls back to legacy path via 162-02 flag).
 // Phase 162-03 — smokeAuthCheck SDK subscription-path probe at boot.
-import {scaffoldVault, smokeAuthCheck} from './modules/claude-runner/index.js'
+// Phase 165-01 — IdleSessionReaper: aborts CC sessions whose last WS
+// message is older than `liv:config:idle_reap_min` minutes (default 30).
+// Polls every 5 min via setInterval. Reaper accesses session state ONLY
+// through ws-agent.ts's SessionActivityProvider interface — agent-session.ts
+// is UNCHANGED (Phase 165-01 quality gate).
+import {scaffoldVault, smokeAuthCheck, IdleSessionReaper} from './modules/claude-runner/index.js'
+import {createSessionActivityProvider} from './modules/server/ws-agent.js'
 // Phase 164-02 — Autonomous scheduler. Boot-time read of vault/livos-agents/*.md
 // + cron registration of every enabled agent. Gated by Redis flag
 // liv:config:autonomous_enabled (default false = no-op). Non-fatal on every
@@ -292,6 +298,14 @@ export default class Livinityd {
 	// livinityd boots normally and the rest of the daemon keeps running).
 	// stop() teardown is best-effort.
 	autonomousScheduler?: AutonomousScheduler
+	// Phase 165-01 — Idle CC session reaper. Constructed in start() AFTER
+	// this.autonomousScheduler.start() and BEFORE drainInstallPendingRedisKeys.
+	// Polls every 5 min; aborts AgentSessionManager sessions whose last WS
+	// message is older than `liv:config:idle_reap_min` minutes (default 30).
+	// Non-fatal: stays `undefined` if constructor / start() throw. Reaches
+	// session state through ws-agent.ts's createSessionActivityProvider() —
+	// liv-core agent-session.ts is UNCHANGED.
+	idleReaper?: IdleSessionReaper
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -545,6 +559,33 @@ export default class Livinityd {
 		} catch (err) {
 			this.logger.error(
 				'[autonomous-scheduler] unexpected throw (non-fatal)',
+				err as Error,
+			)
+		}
+
+		// Phase 165-01 — Idle CC session reaper wire-up. Polls every 5 min;
+		// aborts AgentSessionManager sessions whose last WS message is older
+		// than `liv:config:idle_reap_min` minutes (default 30). Architectural
+		// boundary: reaper reads session state through the SessionActivityProvider
+		// interface implemented by ws-agent.ts — liv-core agent-session.ts is
+		// UNCHANGED. Non-fatal on any throw (livinityd boots normally; the rest
+		// of the daemon keeps running). Site is locked AFTER the autonomous
+		// scheduler so the reaper telemetry lands after autonomous boot logs,
+		// and BEFORE drainInstallPendingRedisKeys so the boot ordering stays
+		// deterministic for v34.x.
+		try {
+			this.idleReaper = new IdleSessionReaper({
+				redis: this.ai.redis,
+				provider: createSessionActivityProvider(),
+				logger: {
+					log: (msg) => this.logger.log(msg),
+					error: (msg, err) => this.logger.error(msg, err),
+				},
+			})
+			this.idleReaper.start()
+		} catch (err) {
+			this.logger.error(
+				'[claude-runner/reaper] unexpected throw at start (non-fatal)',
 				err as Error,
 			)
 		}
@@ -1053,6 +1094,16 @@ export default class Livinityd {
 				await this.autonomousScheduler?.stop()
 			} catch (err) {
 				this.logger.error('[autonomous-scheduler] stop', err)
+			}
+
+			// Phase 165-01 — Halt the idle session reaper alongside the
+			// autonomous scheduler (early-shutdown cluster). Clears the 5-min
+			// setInterval; in-flight tick() will not be interrupted but will
+			// complete naturally. No-op if the reaper never armed.
+			try {
+				this.idleReaper?.stop()
+			} catch (err) {
+				this.logger.error('[claude-runner/reaper] stop', err)
 			}
 
 			// Phase 104 plan 104-10 — stop the heartbeat sender BEFORE the rest
