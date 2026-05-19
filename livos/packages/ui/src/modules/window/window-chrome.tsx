@@ -31,9 +31,9 @@ const WIDTH_TRANSITION = {
 
 // Intrinsic widths of each action-area mode. Measured from the
 // rendered IconBar (2 buttons w-9 + gap-3) and ChatInputBar (h-9 pill
-// with w-[280px] input + 2 buttons w-7 + gaps + padding).
+// with w-[380px] input + 2 buttons w-7 + gaps + padding).
 const ACTION_WIDTH_ICONS = 84
-const ACTION_WIDTH_CHAT_INPUT = 380
+const ACTION_WIDTH_CHAT_INPUT = 480
 
 // Fixed overhead in the chrome row: X close (36) + Skills (36) plus
 // three gap-3 (12px) gaps between [X | action | drag | Skills]. Used
@@ -83,7 +83,7 @@ export function WindowChrome({
 						onClose()
 					}}
 					onMouseDown={(e) => e.stopPropagation()}
-					className='group flex shrink-0 items-center justify-center w-9 h-9 rounded-full bg-card-bg/55 dark:bg-zinc-800/70 backdrop-blur-3xl backdrop-saturate-150 border border-dash-line dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)] hover:bg-destructive dark:hover:bg-destructive hover:border-destructive/80 transition-colors duration-200'
+					className='group flex shrink-0 items-center justify-center w-9 h-9 rounded-full bg-white/95 dark:bg-zinc-800/95 border border-dash-line dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)] hover:bg-destructive dark:hover:bg-destructive hover:border-destructive/80 transition-colors duration-200'
 					aria-label='Close window'
 				>
 					<TbX
@@ -119,7 +119,7 @@ export function WindowChrome({
 				initial={false}
 				animate={{width: dragBarWidth}}
 				transition={WIDTH_TRANSITION}
-				className='flex items-center justify-center px-4 h-9 bg-card-bg/55 dark:bg-zinc-800/70 backdrop-blur-3xl backdrop-saturate-150 rounded-full border border-dash-line dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)] cursor-grab active:cursor-grabbing overflow-hidden'
+				className='flex items-center justify-center px-4 h-9 bg-white/95 dark:bg-zinc-800/95 rounded-full border border-dash-line dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)] cursor-grab active:cursor-grabbing overflow-hidden'
 				style={{flex: '0 0 auto'}}
 			>
 				<span className='text-[13px] font-semibold text-neutral-700 dark:text-neutral-200 tracking-tight whitespace-nowrap select-none truncate'>

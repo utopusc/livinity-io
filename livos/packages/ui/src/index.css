@@ -371,9 +371,15 @@ a {
  * a Tailwind `motion-reduce:` variant on its outer wrapper for
  * defense-in-depth (same predicate compiles to the same @media query).
  */
+/* Round 15 — idleBreath sustained at opacity 1. The 0.3↔0.8 breathing
+ * was perceived as the input "fading then coming back" while typing was
+ * about to start ("input sonup turmasin"). Keyframe is retained (the
+ * `.chat-input-idle` class is still referenced by the React component
+ * and the unit-test source-text invariant) but rendered as a no-op so
+ * the pill stays visually steady. */
 @keyframes idleBreath {
-	0%, 100% { opacity: 0.3; }
-	50% { opacity: 0.8; }
+	0%, 100% { opacity: 1; }
+	50% { opacity: 1; }
 }
 .chat-input-idle {
 	animation: idleBreath 4s ease-in-out infinite;
@@ -384,6 +390,56 @@ a {
 	}
 	.animate-pulse {
 		animation: none !important;
+	}
+}
+
+/* Phase 158 round 15 — chat input border glow.
+ *
+ * Subtle brand-tinted glow on the chat input pill that pulses in and
+ * out while the input is visible. Implemented via INSET box-shadow on
+ * a `::after` pseudo-element so the glow stays strictly inside the
+ * pill's rounded-full border. Earlier outward-projecting halo (round
+ * 15 first draft) was visually clipped to a flat rectangle by the
+ * `h-9 overflow-hidden` action-area wrapper in window-chrome.tsx
+ * (which is required for the chat ↔ icons width morph); switching to
+ * an inset shadow sidesteps the clip entirely AND follows the pill's
+ * rounded shape because inset shadows respect the element's
+ * border-radius. The pseudo-element does not conflict with the
+ * parent's outer `shadow-[...]` Tailwind class.
+ *
+ * pointer-events: none keeps clicks falling through to the input.
+ * prefers-reduced-motion: reduce halts the pulse (a static dimmer
+ * inset glow remains so the brand cue is preserved).
+ */
+@keyframes chatInputGlowBreath {
+	0%, 100% {
+		box-shadow:
+			inset 0 0 0 1px hsl(var(--color-brand) / 0.18),
+			inset 0 0 6px 0 hsl(var(--color-brand) / 0.10);
+	}
+	50% {
+		box-shadow:
+			inset 0 0 0 1px hsl(var(--color-brand) / 0.50),
+			inset 0 0 12px 1px hsl(var(--color-brand) / 0.30);
+	}
+}
+.chat-input-glow {
+	position: relative;
+}
+.chat-input-glow::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	pointer-events: none;
+	animation: chatInputGlowBreath 3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+	.chat-input-glow::after {
+		animation: none !important;
+		box-shadow:
+			inset 0 0 0 1px hsl(var(--color-brand) / 0.30),
+			inset 0 0 8px 0 hsl(var(--color-brand) / 0.18);
 	}
 }
 

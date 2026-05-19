@@ -465,7 +465,7 @@ function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
 						// border, soft shadow. Keeps the pill feeling like
 						// part of the same chrome family (D-157-CHAT-MATCHES-
 						// DRAG-BAR).
-						'flex items-center gap-2 h-9 px-3 rounded-full bg-card-bg/55 dark:bg-zinc-800/70 backdrop-blur-3xl backdrop-saturate-150 border border-dash-line dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)]',
+						'flex items-center gap-2 h-9 px-3 rounded-full bg-white/95 dark:bg-zinc-800/95 border border-dash-line dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)] chat-input-glow',
 						// Phase 101-09 (D-101-CHAT-ANIMS) — idle-pulse on the
 						// pill border. The `chat-input-idle` class targets the
 						// @keyframes idleBreath rule (4s ease-in-out, opacity
@@ -491,7 +491,7 @@ function ChatInputBar({webappId, agent, onClose, onSent}: ChatInputBarProps) {
 						}}
 						placeholder='Mesaj yaz...'
 						disabled={agent.isStreaming}
-						className='w-[280px] bg-transparent text-[13px] text-neutral-700 dark:text-neutral-200 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 outline-none border-none focus-visible:ring-0 disabled:opacity-50'
+						className='w-[380px] bg-transparent text-[13px] text-neutral-700 dark:text-neutral-200 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 outline-none border-none focus-visible:ring-0 disabled:opacity-50'
 					/>
 					<button
 						type='button'
@@ -633,8 +633,8 @@ function ChatResponseBar({webappId, agent, onClose, onNew}: ChatResponseBarProps
 	// pill at h-7 (centered vertically within the h-9 chrome).
 	return (
 		<Magnetic intensity={0.2}>
-			<div className='flex items-center gap-2 h-9 px-3 rounded-full bg-card-bg/55 dark:bg-zinc-800/70 backdrop-blur-3xl backdrop-saturate-150 border border-dash-line dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)]'>
-				<div className='w-[260px] truncate text-[13px] text-neutral-700 dark:text-neutral-200 flex items-center gap-1.5'>
+			<div className='flex items-center gap-2 h-9 px-3 rounded-full bg-white/95 dark:bg-zinc-800/95 border border-dash-line dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)]'>
+				<div className='w-[360px] truncate text-[13px] text-neutral-700 dark:text-neutral-200 flex items-center gap-1.5'>
 					<span className='truncate'>
 						{lastAssistant?.content || (agent.isStreaming ? 'Thinking…' : '')}
 					</span>
