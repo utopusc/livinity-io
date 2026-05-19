@@ -43,6 +43,7 @@ import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js'
 // ioredis exports Redis as a named export (NOT default) per project memory.
 import {Redis} from 'ioredis'
 
+import {defaultLivosAppResolver, type LivosAppMatch} from '../native/window.js'
 import {registerLuseTools} from './tools.js'
 
 /**
@@ -135,6 +136,64 @@ async function main(): Promise<void> {
 		)
 	}
 
+	// Phase 161-03 — Construct livosAppResolver via env-thread + HTTP fetch.
+	// Mirrors ws-agent.ts:160-172 IntentRouter getCapabilities idiom.
+	//
+	// When all 4 env vars are set, the resolver fetches the user's WebApp +
+	// NativeApp lists from livinityd's tRPC and feeds them to
+	// defaultLivosAppResolver (Phase 160-03) which synthesizes the DASH-pattern
+	// URL `${proto}://${sub}-${userSlug}.${domainRoot}/` on match.
+	//
+	// When ANY env var is missing → resolver stays undefined → registerLuseTools
+	// without livosAppResolver = pre-Phase-160-03 APP_MAP fall-through (fail-open).
+	//
+	// Stderr discipline (D-161-D / L3): all new log lines use the
+	// `[luse-mcp] resolver: ...` prefix so they DO NOT collide with the
+	// `[luse-mcp] open_livos_app ...` IPC channel that parent livinityd
+	// consumes (see mcp/tools.ts:756).
+	const livinitydApiUrl = process.env.LIVINITYD_API_URL
+	const livApiKey = process.env.LIV_API_KEY
+	const luseUserSlug = process.env.LUSE_USER_SLUG
+	const luseDomainRoot = process.env.LUSE_DOMAIN_ROOT
+
+	let livosAppResolver: ((name: string) => Promise<LivosAppMatch | null>) | undefined
+	if (livinitydApiUrl && livApiKey && luseUserSlug && luseDomainRoot) {
+		const fetchAppList = async (proc: string): Promise<any[]> => {
+			try {
+				const res = await fetch(`${livinitydApiUrl}/trpc/${proc}?input=`, {
+					headers: {'X-Api-Key': livApiKey},
+					signal: AbortSignal.timeout(5000),
+				})
+				if (!res.ok) {
+					throw new Error(`HTTP ${res.status}`)
+				}
+				const data = (await res.json()) as {result?: {data?: any[]}}
+				return data.result?.data ?? []
+			} catch (err: any) {
+				process.stderr.write(
+					`[luse-mcp] resolver: ${proc} fetch failed: ${err?.message ?? String(err)}; returning []\n`,
+				)
+				return []
+			}
+		}
+
+		livosAppResolver = (name: string) =>
+			defaultLivosAppResolver(name, {
+				listWebApps: () => fetchAppList('webapp.list'),
+				listNativeApps: () => fetchAppList('apps.native.list'),
+				userSlug: luseUserSlug,
+				domainRoot: luseDomainRoot,
+			})
+
+		process.stderr.write(
+			`[luse-mcp] resolver: constructed (LIVINITYD_API_URL=${livinitydApiUrl}, userSlug=${luseUserSlug}, domainRoot=${luseDomainRoot})\n`,
+		)
+	} else {
+		process.stderr.write(
+			`[luse-mcp] resolver: env-thread incomplete (LIVINITYD_API_URL=${livinitydApiUrl ? 'set' : 'MISSING'}, LIV_API_KEY=${livApiKey ? 'set' : 'MISSING'}, LUSE_USER_SLUG=${luseUserSlug ? 'set' : 'MISSING'}, LUSE_DOMAIN_ROOT=${luseDomainRoot ? 'set' : 'MISSING'}); falling back to APP_MAP\n`,
+		)
+	}
+
 	const server = new McpServer({name: 'luse', version: '1.0.0'})
 	// Note: `streamManager` is NOT wired into this MCP child (the StreamManager
 	// instance lives in the parent livinityd process and cross-process IPC is
@@ -147,6 +206,8 @@ async function main(): Promise<void> {
 		defaultDisplay,
 		redis,
 		userId: process.env.LUSE_USER_ID ?? 'admin',
+		// Phase 161-03 — undefined falls through to APP_MAP (pre-Phase-160-03 behavior)
+		livosAppResolver,
 	})
 
 	const transport = new StdioServerTransport()
