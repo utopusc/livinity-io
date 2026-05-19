@@ -169,7 +169,86 @@ Deploy complete. All sacred guards green. Phase 164 code-side materialised on pr
 
 ## 4. Live UAT — Single Trigger (Probe 1)
 
-_(pending)_
+### Pre-Trigger Setup
+
+```bash
+sudo redis-cli -u "$REDIS_URL" SET liv:config:autonomous_enabled true   # → OK
+sudo sed -i 's/^enabled: false$/enabled: true/' /home/bruce/livinity-vault/livos-agents/nightly-backup-audit.md
+sudo grep "^enabled:" /home/bruce/livinity-vault/livos-agents/nightly-backup-audit.md   # → enabled: true
+```
+
+| Pre-Trigger Redis State | Value |
+|---|---|
+| `liv:autonomous:daily_spend_cents:2026-05-19` | (null — first run of day) |
+| `liv:autonomous:active_count` | (null — no in-flight) |
+| `/home/bruce/livinity-vault/inbox/` `*.md` count | 0 |
+
+### Trigger Invocation
+
+```bash
+sudo bash -c "cd /opt/livos && BROKER_FORCE_ROOT_HOME=true HOME=/root \
+  /usr/bin/npx tsx /opt/livos/packages/livinityd/source/cli.ts \
+  autonomous-trigger nightly-backup-audit" 2>&1 | tee /tmp/livos-uat-164-trigger.log
+```
+
+| Outcome | Value |
+|---|---|
+| CLI exit code | **0** (success) |
+| stdout tail | `autonomous-trigger: nightly-backup-audit completed` |
+| Wall-clock duration | ~75 seconds |
+
+### Inbox Entry Materialised
+
+**Path:** `/home/bruce/livinity-vault/inbox/2026-05-19_19-41_nightly-backup-audit.md`
+
+Frontmatter (locked 7-field shape from Phase 164-03):
+
+```yaml
+---
+agent: nightly-backup-audit
+status: success
+started: 2026-05-19T19:41:07.513Z
+duration_ms: 74768
+cost_usd: 0.1045
+turns: 11
+model: claude-sonnet-4-6
+---
+```
+
+| Frontmatter Field | Expected | Actual | Status |
+|---|---|---|---|
+| agent | nightly-backup-audit | nightly-backup-audit | PASS |
+| status | success | success | PASS |
+| started | ISO 8601 UTC | `2026-05-19T19:41:07.513Z` | PASS |
+| duration_ms | numeric ms | `74768` | PASS |
+| cost_usd | 4dp number | `0.1045` | PASS |
+| turns | integer | `11` | PASS |
+| model | claude-* literal | `claude-sonnet-4-6` | PASS |
+
+### Body + Backlinks
+
+The agent produced a **real structured audit report** (WARN status — backup files missing in `/opt/livos/data/backups/`, disk pressure 7%, daemon restart churn detected, with 3 specific recommendations). Full body contains the expected `## Summary / ## Detail / ## Recommendations` sections from the agent definition's prompt template.
+
+`## Backlinks` section present with `[[livos-agents/nightly-backup-audit]] — agent definition` wikilink.
+
+### Post-Trigger Redis State
+
+| Key | Pre-Trigger | Post-Trigger | Expected | Status |
+|---|---|---|---|---|
+| `liv:autonomous:daily_spend_cents:2026-05-19` | null | **10** | `round(0.1045 * 100) = 10` (±1 cent rounding) | PASS |
+| `liv:autonomous:active_count` | null | **0** | 0 (try/finally decrement) | PASS |
+| TTL on `daily_spend_cents` | n/a | **172787 sec** | `86400 * 2 = 172800` (±13 sec) | PASS |
+
+### Probe 1 Verdict
+
+**probe_1_status: PASS**
+
+- Live Anthropic SDK round-trip completed against Mini PC subscription credentials (`/root/.claude/.credentials.json`)
+- 11 turns over ~75s, $0.1045 actual cost
+- Real disk audit performed (the agent actually ran journalctl + ls + df + stat against the live Mini PC filesystem)
+- Inbox entry materialised with full frontmatter + backlinks (Phase 164-03 contract LIVE)
+- Daily spend counter atomically incremented with correct TTL (Phase 164-02 budget gate LIVE)
+- active_count returned to 0 — try/finally decrement worked (T-164-02-03 mitigation LIVE-PROVEN)
 
 ## 5. Live UAT — Concurrent Cap (Probe 2)
 
