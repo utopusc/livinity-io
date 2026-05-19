@@ -41,8 +41,8 @@ import type {Redis} from 'ioredis'
 
 const REDIS_KEY_ACTIVE = 'liv:autonomous:active_count'
 const REDIS_KEY_CONCURRENT_CAP = 'liv:config:autonomous_max_concurrent'
-const REDIS_KEY_DAILY_BUDGET_CAP = 'liv:config:autonomous_daily_budget'
-const DAILY_SPEND_KEY_PREFIX = 'liv:autonomous:daily_spend_cents:'
+export const REDIS_KEY_DAILY_BUDGET_CAP = 'liv:config:autonomous_daily_budget'
+export const DAILY_SPEND_KEY_PREFIX = 'liv:autonomous:daily_spend_cents:'
 
 // Defaults per ROADMAP defaults block (164-CONTEXT.md decisions D-V34-G).
 const DEFAULT_CONCURRENT_CAP = 3
