@@ -414,24 +414,30 @@ const _cursorPositionTool = {
 	},
 }
 
+// Phase 160-03 — application enum dropped (was Bytebot static apps only).
+// Schema is now free-form string; handler runtime-validates against the
+// LivOS app catalog (apps.list + apps.native.list) FIRST, then falls back
+// to the classic Bytebot APP_MAP (firefox/thunderbird/vscode/etc) for
+// binary-launchable defaults. Agent should prefer LivOS app names from the
+// LIVOS CONTEXT overlay (Plan 160-02) over Bytebot legacy names.
 const _applicationTool = {
 	name: 'computer_application',
-	description: 'Opens or focuses an application and ensures it is fullscreen',
+	description:
+		'Opens or focuses an application by name. Accepts: (1) LivOS app names ' +
+		'from the LIVOS CONTEXT overlay (e.g. "n8n", "libreoffice") — preferred. ' +
+		'(2) Classic Bytebot Linux apps: firefox, thunderbird, 1password, vscode, ' +
+		'terminal, desktop, directory — kept for upstream parity, may or may not ' +
+		'be installed on LivOS. The handler resolves LivOS apps first via runtime ' +
+		'catalog query, then falls back to Bytebot binary spawn.',
 	input_schema: {
 		type: 'object' as const,
 		properties: {
 			application: {
 				type: 'string' as const,
-				enum: [
-					'firefox',
-					'1password',
-					'thunderbird',
-					'vscode',
-					'terminal',
-					'desktop',
-					'directory',
-				],
-				description: 'The application to open or focus',
+				description:
+					'The application name. Free-form string. Resolved at call-time ' +
+					'against (a) LivOS app catalog from `apps.list` + `apps.native.list`, ' +
+					'(b) classic Bytebot APP_MAP. Match is case-insensitive on name field.',
 			},
 		},
 		required: ['application'],
