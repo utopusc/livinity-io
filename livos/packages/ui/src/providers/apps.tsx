@@ -128,31 +128,6 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/terminal',
 	},
-	{
-		id: 'LIVINITY_remote-desktop',
-		name: 'Remote Desktop',
-		icon: '/figma-exports/dock-remote-desktop.png',
-		systemApp: true,
-		systemAppTo: '/remote-desktop',
-	},
-	{
-		id: 'LIVINITY_chrome',
-		name: 'Chrome',
-		icon: '/figma-exports/dock-chrome.png',
-		systemApp: true,
-		systemAppTo: '/chrome',
-	},
-	// Web app shortcuts — open Chrome with specific URL.
-	// Phase 107 (2026-05-13): pruned to just Gmail. Facebook/YouTube/TradingView/
-	// Google/Yahoo removed — generic URL bookmarks belong in App Store community
-	// apps or user-pinned WebApps (right-click paste-a-URL), not in systemApps.
-	{
-		id: 'LIVINITY_gmail',
-		name: 'Gmail',
-		icon: '/figma-exports/app-gmail.png',
-		systemApp: true,
-		systemAppTo: 'https://mail.google.com',
-	},
 ] as const satisfies readonly AppT[]
 
 export const systemAppsKeyed = keyBy(systemApps, 'id')

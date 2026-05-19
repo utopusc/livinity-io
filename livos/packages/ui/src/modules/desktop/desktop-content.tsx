@@ -231,8 +231,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 	//
 	// The early-return `if (isLoading || !userApps || !name) return null`
 	// used to live HERE — between the trpc query hooks above and the
-	// `useWindowManagerOptional` / `useMemo(streamAppIds)` /
-	// `useCallback(openStreamApp)` / `useMemo(gridItems)` hooks below.
+	// `useWindowManagerOptional` / `useMemo(gridItems)` hooks below.
 	//
 	// When `userApps` flickered to undefined during refetch (or a 500
 	// from apps.native.list mid-session), the early return skipped
@@ -245,23 +244,6 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 
 	const windowManager = useWindowManagerOptional()
 
-	// Stream apps share a single window — close previous before opening new
-	const streamAppIds = useMemo(() => new Set(['LIVINITY_chrome', 'LIVINITY_remote-desktop', 'LIVINITY_gmail']), [])
-	const openStreamApp = useCallback((appId: string, route: string, title: string, icon: string) => {
-		if (isMobile) {
-			openApp(appId, route, title, icon)
-			return
-		}
-		if (!windowManager) return
-		// Close ALL other stream app windows
-		for (const win of windowManager.windows) {
-			if (streamAppIds.has(win.appId)) {
-				windowManager.closeWindow(win.id)
-			}
-		}
-		// Small delay to ensure close happens before open
-		setTimeout(() => windowManager.openWindow(appId, route, title, icon), 50)
-	}, [isMobile, openApp, windowManager, streamAppIds])
 
 	const gridItems: AppGridItem[] = useMemo(() => {
 		// Phase 157 round 4 — defensive guard against userApps being
@@ -378,68 +360,6 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		// Server Management is dock-only (TbServerCog icon) — desktop entry removed per user request.
 		// Symmetric to Docker which is desktop-only-not-dock; together they keep dock minimal.
 
-		const remoteDesktopItem: AppGridItem = {
-			id: 'LIVINITY_remote-desktop',
-			node: (
-				<motion.div
-					initial={{opacity: 0, scale: 0}}
-					animate={{opacity: 1, scale: 1}}
-					transition={{type: 'spring', stiffness: 400, damping: 25}}
-				>
-					<AppIcon
-						label='Remote Desktop'
-						src='/figma-exports/dock-remote-desktop.png'
-						onClick={() => openStreamApp('LIVINITY_remote-desktop', '/remote-desktop', 'Remote Desktop', '/figma-exports/dock-remote-desktop.png')}
-					/>
-				</motion.div>
-			),
-		}
-		appItems.push(remoteDesktopItem)
-
-		const chromeItem: AppGridItem = {
-			id: 'LIVINITY_chrome',
-			node: (
-				<motion.div
-					initial={{opacity: 0, scale: 0}}
-					animate={{opacity: 1, scale: 1}}
-					transition={{type: 'spring', stiffness: 400, damping: 25}}
-				>
-					<AppIcon
-						label='Chrome'
-						src='/figma-exports/dock-chrome.png'
-						onClick={() => openStreamApp('LIVINITY_chrome', '/chrome', 'Chrome', '/figma-exports/dock-chrome.png')}
-					/>
-				</motion.div>
-			),
-		}
-		appItems.push(chromeItem)
-
-		// Web app shortcuts — launch Chrome with specific URL.
-		// Phase 107 (2026-05-13): pruned default shortcuts to just Gmail. Facebook/
-		// WhatsApp/YouTube removed — generic URL bookmarks belong in the App Store
-		// (community apps) or user-pinned via right-click, not in the default dock.
-		const webApps = [
-			{id: 'LIVINITY_gmail', label: 'Gmail', icon: '/figma-exports/app-gmail.png', url: 'https://mail.google.com'},
-		]
-		for (const wa of webApps) {
-			appItems.push({
-				id: wa.id,
-				node: (
-					<motion.div
-						initial={{opacity: 0, scale: 0}}
-						animate={{opacity: 1, scale: 1}}
-						transition={{type: 'spring', stiffness: 400, damping: 25}}
-					>
-						<AppIcon
-							label={wa.label}
-							src={wa.icon}
-							onClick={() => openStreamApp(wa.id, wa.url, wa.label, wa.icon)}
-						/>
-					</motion.div>
-				),
-			})
-		}
-
 		const folderItems: AppGridItem[] = folders.map((folder) => ({
 			id: `folder-${folder.name}`,
 			node: (
@@ -483,7 +403,7 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		})
 
 		return [...appItems, ...folderItems, ...widgetItems]
-	}, [userApps, webapps, nativeApps, folders, widgets, openStreamApp, isMobile, openApp, windowManager])
+	}, [userApps, webapps, nativeApps, folders, widgets, isMobile, openApp, windowManager])
 
 	// Phase 157 round 4 — conditional render deferred to AFTER all hooks
 	// have run. Returning `null` mid-function would have skipped the
@@ -514,17 +434,4 @@ export function addDesktopFolder(folderName: string) {
 		folders.push({name: folderName})
 		saveFoldersLocal(folders)
 	}
-}
-
-// Web app shortcut that opens Chrome KasmVNC in a new browser tab
-function WebAppShortcut({name, icon}: {appId: string; name: string; icon: string; url: string}) {
-	const handleClick = useCallback(() => {
-		// Open Chrome's KasmVNC stream in a new browser tab
-		const host = window.location.hostname
-		const proto = window.location.protocol
-		const chromeUrl = `${proto}//chrome.${host}/`
-		window.open(chromeUrl, '_blank')
-	}, [])
-
-	return <AppIcon label={name} src={icon} onClick={handleClick} />
 }
