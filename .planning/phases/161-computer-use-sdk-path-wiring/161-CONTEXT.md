@@ -42,7 +42,7 @@ Re-using the existing signal means **161-04 is largely a no-op** — the hint is
 
 When the session detects as computer-use (D-161-A):
 - Override `tier = 'haiku'` BEFORE the existing `tierToModel(tier)` call at `liv/packages/core/src/agent-session.ts:320` and `:589/:683/:698`.
-- Pass `model: 'claude-haiku-4-5-20251001'` explicitly via the SDK `query()` options at `:698` — verbatim string matches Plan 160-01's contract.
+- Pass `model: 'claude-haiku-4-5-20251001'` (dated literal) explicitly at line 698 via SDK `query()` options. **DO NOT use `tierToModel('haiku')`** — that helper returns un-dated `'claude-haiku-4-5'`, which mismatches Plan 160-01's broker contract literal. Override the model field at the SDK call site directly when `isComputerUseSession`.
 
 **Why not reuse Phase 160's `forceComputerUseModel`?** That helper lives at the broker layer (`livos/packages/livinityd/source/modules/livinity-broker/agent-runner-factory.ts`). The SDK subscription path doesn't traverse that factory. Reimplementing the override inline is cleaner than extracting a shared helper (which would create a livinityd ↔ liv/core dependency cycle).
 
@@ -71,9 +71,9 @@ if (isComputerUseSession && computerUseSystemPromptBuilder) {
 The MCP server runs as a **child process** spawned by livinityd's `McpClientManager`. It cannot share livinityd's in-memory tRPC context. Wire-up shape:
 
 1. **Add env vars to `luse-mcp-config.ts` descriptor** (alongside existing `LUSE_USER_ID`, `LUSE_REDIS_URL`):
-   - `LIV_API_URL` (HTTP base — `http://localhost:8080` for Mini PC)
-   - `LIV_API_KEY` (livinityd API key from `/opt/livos/.env`)
-   - `LUSE_USER_SLUG` (e.g., `bruce`)
+   - `LIVINITYD_API_URL` (HTTP base — `http://localhost:8080` for Mini PC; **NOT** `LIV_API_URL` — that name already means liv-core port 3200 per `ws-agent.ts:154`, would create port confusion)
+   - `LIV_API_KEY` (livinityd API key from `/opt/livos/.env`; same key works for both liv-core and livinityd tRPC privateProcedure per A3 assumption — planner verifies)
+   - `LUSE_USER_SLUG` (e.g., `bruce`; v1 hard-coded `'admin'` fallback matches `luse-mcp-config.ts:318` defaults)
    - `LUSE_DOMAIN_ROOT` (e.g., `livinity.io`)
 
 2. **In `mcp/server.ts:main()`** — construct two closures around the existing fetch pattern (mirror `ws-agent.ts:160-172` IntentRouter fetch), then pass `defaultLivosAppResolver({listWebApps, listNativeApps, userSlug, domainRoot})` into `registerLuseTools({...existing, livosAppResolver})` at line 145.
@@ -85,6 +85,8 @@ The MCP server runs as a **child process** spawned by livinityd's `McpClientMana
 Both procedures already exist; the MCP child just needs to hit them via HTTP tRPC (`/trpc/apps.native.list`, `/trpc/apps.webapps.list`) with the `X-Api-Key` header.
 
 **Fall-through behavior:** When any env var is missing (legacy launches, host-display Luse without a user context), DO NOT construct the resolver — `registerLuseTools` is called WITHOUT `livosAppResolver`, behavior identical to pre-161 (APP_MAP path).
+
+**Stderr IPC discipline:** The parent livinityd process consumes the MCP child's stderr to drive `windowManager.openWindow` based on lines matching `[luse-mcp] open_livos_app kind=... appId=... route=...`. New resolver-construction / HTTP-fetch failure logs in `mcp/server.ts` MUST use a distinct prefix like `[luse-mcp] resolver: ...` to avoid colliding with that IPC channel. Test invariant: no resolver log line matches `^\[luse-mcp\] open_livos_app`.
 
 ### D-161-E — `use-native-app-agent.ts` is a NEAR no-op
 
