@@ -436,7 +436,10 @@ describe('createSdkAgentRunnerForUser - Phase 102-06 Active Display Context', ()
 		expect(cp).toContain('## Active Display Context')
 		expect(cp).toContain(':10')
 		expect(cp).toContain('1280x720')
-		expect(cp).toContain('LUSE_TARGET_DISPLAY')
+		// Phase 103-04 instruction flip — snippet no longer hints at LUSE_TARGET_DISPLAY env var;
+		// it now tells the agent to pass `display: ":10"` as an explicit tool argument.
+		// Plan 160-06 verification sweep: flipped toContain -> not.toContain per 160-04 SUMMARY guidance.
+		expect(cp).not.toContain('LUSE_TARGET_DISPLAY')
 		expect(cp).toContain('Test App')
 	})
 
