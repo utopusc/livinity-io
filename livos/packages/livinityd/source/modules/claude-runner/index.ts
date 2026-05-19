@@ -9,3 +9,14 @@ export type {ScaffoldVaultOptions, ScaffoldResult} from './vault-scaffolder.js'
 
 export {smokeAuthCheck} from './auth-verifier.js'
 export type {AuthVerifierOptions, AuthVerifierResult} from './auth-verifier.js'
+
+// Phase 163-01 — surface-context vault scaffolder (per-app CLAUDE.md).
+export {writeSurfaceContext, removeSurfaceContext} from './surface-context.js'
+export type {
+	SurfaceKind,
+	SurfaceMetadata,
+	WriteSurfaceContextOptions,
+	WriteSurfaceContextResult,
+	RemoveSurfaceContextOptions,
+	RemoveSurfaceContextResult,
+} from './surface-context.js'
