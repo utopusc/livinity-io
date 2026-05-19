@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T10:55:27.902Z"
+last_updated: "2026-05-19T11:15:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 160 (luse-livos-overlay-haiku-routing) — EXECUTING
-Plan: 4 of 6 (160-01 + 160-02 + 160-03 CODE-COMPLETE; 160-04 in flight parallel)
+Plan: 5 of 6 (160-01 + 160-02 + 160-03 + 160-05 CODE-COMPLETE; 160-04 in flight parallel; 160-06 verification sweep next)
 
 ## 160-01 Status (2026-05-19) — Haiku Routing CODE-COMPLETE (2 commits, sacred SHA preserved 2/2)
 
@@ -84,6 +84,25 @@ Plan: 4 of 6 (160-01 + 160-02 + 160-03 CODE-COMPLETE; 160-04 in flight parallel)
   3. Default resolver wiring + livinityd stderr `open_livos_app` parser — both deferred to a follow-up integration plan (recommend post-Phase 160 sweep). Without the wiring, `options.livosAppResolver` is undefined and the handler dispatches straight to APP_MAP (pre-Plan-160-03 behavior preserved, no regression).
 - **Next action:** Plan 160-04 (Dynamic Display Size) running in parallel; Plan 160-05 (computer_read_file sandbox) on deck.
 - Full deliverable detail: see `.planning/phases/160-luse-livos-overlay-haiku-routing/160-03-SUMMARY.md`.
+
+## 160-05 Status (2026-05-19) — computer_read_file Path Sandbox CODE-COMPLETE (2 commits, sacred SHA preserved 2/2, D-09 verbatim invariant preserved)
+
+- **COMPUTER_READ_FILE PATH SANDBOX** (Plan 5 of 6 in Phase 160, 2 tasks): closes the LLM-controlled file-read jailbreak vector flagged in the Phase 159 review. Adds a per-user allowlist (`/home/<user>/` + `/tmp/luse-*/` + `/opt/livos/data/uploads/<userId>/`) gated by `fs.realpath` symlink resolution BEFORE the allowlist check (so an allowlisted symlink targeting `/etc/passwd` is still rejected). NUL-byte pre-flight reject blocks null-byte truncation attacks. Rejection error echoes `requested=… resolved=… (allowed prefixes: …)` for agent self-correction but never leaks file content. `LUSE_USER_ID` env (set by `luse-mcp-config` when the child is spawned) drives both userSlug + userId allowlist branches; defaults to `'bruce'` for host-display single-user case (matches live Mini PC user per MEMORY). Two atomic commits:
+  1. `5def1871` Task 1 — `livos/packages/livinityd/source/modules/computer-use/mcp/tools.ts` (+139/-17 — `realpath as nodeRealpath` import added next to existing `readdir as nodeReaddir`; `__setRealpathForTest` test seam exported mirroring `__setReaddirForTest` pattern; `isPathAllowed(resolved, userSlug, userId)` exported pure helper; `computer_read_file` handler rewritten with NUL-reject → realpath → allowlist guard while preserving the original `readFileBase64` + base64-wrap return shape beneath the guard) + `livos/packages/livinityd/source/modules/computer-use/mcp/tools.test.ts` (T12 updated to use allowlisted `/home/bruce/foo.txt` path with `__setRealpathForTest(async (p) => String(p))` stub so the original assertion still meaningfully exercises the post-guard read path).
+  2. `42b04ff2` Task 2 — `livos/packages/livinityd/source/modules/computer-use/mcp/tools.test.ts` (+213 — two new describe blocks: "Phase 160-05 — computer_read_file sandbox" with 7 source-text invariants locking the sandbox literal (`isPathAllowed` helper, all 3 allowlist branches, realpath-BEFORE-allowlist source-order assertion, rejection-error shape with resolved-path leak + no content leak, `LUSE_USER_ID` env wire); "Phase 160-05 — computer_read_file sandbox runtime rejection" with 8 runtime tests driving hostile inputs via the realpath stub: `/etc/passwd` absolute reject, `../../etc/shadow` traversal reject (post-realpath collapse), NUL-byte path reject (asserts realpath spy NEVER called), symlink-out-of-jail reject (allowed entry path + evil resolved target), accept cases for `/tmp/luse-*/` + `/opt/livos/data/uploads/bruce/`, empty-path reject, and ENOENT realpath-error path).
+- **Verification:** `mcp/tools.test.ts` **65 PASS / 0 FAIL** (was 50/0 — added 7 Phase 160-05 source-text invariants + 8 runtime rejection/accept cases = +15 total). Each runtime rejection test asserts `readFileBase64` was NEVER called — proves the guard fires before the disk read.
+- **Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f`** for `liv/packages/core/src/sdk-agent-runner.ts` PRESERVED across both source commits.
+- **D-09 verbatim contract upheld:** `git rev-parse HEAD:livos/packages/livinityd/source/modules/computer-use/luse-system-prompt.ts` = `2083f0a3dfc798b4841613b9576b94929f2faf2f` — unchanged from baseline.
+- **D-NO-NEW-DEPS upheld:** `git diff --stat HEAD~2..HEAD -- **/package.json` = empty.
+- **Files-modified disjoint from Plan 160-04:** my 2 files are `mcp/tools.ts` + `mcp/tools.test.ts`; Plan 160-04 touches `agent-prompt-builder.ts` + `screenshot.ts` (+ untracked `display-size.ts`). Zero overlap — parallel safety contract honored.
+- **Deviations (3 auto-fixed; documented in 160-05-SUMMARY.md):**
+  1. **Rule 2 — Security:** Added NUL-byte pre-flight reject BEFORE realpath. Plan snippet had no NUL handling; executor prompt's `success_criteria` explicitly required it. Runtime test asserts the reject fires + realpath spy NEVER called.
+  2. **Rule 3 — Blocking:** T12 (`computer_read_file` original test) used `/tmp/foo.txt` which the new sandbox correctly rejects → fixed by updating T12 to use `/home/bruce/foo.txt` with `__setRealpathForTest` stub so the original `readFileBase64 was called with the right path + result wrapped as MCP content` intent is preserved.
+  3. **Rule 1 — Cosmetic:** Used `'bruce'` default for `LUSE_USER_ID` fallback instead of plan's `'admin'`. Matches live Mini PC single-tenant user (per MEMORY: `bruce@10.69.31.68` + `/home/bruce/`). Defaulting to `admin` would mean host-display reads fail against nonexistent `/home/admin/`.
+- **Beyond-plan additions (security):** Plan called for 7 source-text invariants; I added 8 RUNTIME tests on top because executor `success_criteria` explicitly required them: "must reject /etc/passwd, ../../etc/shadow, NUL-byte path, symlink-out-of-jail". Source-text invariants catch literal-string drift; runtime tests catch logic drift (e.g. accidentally inverting the allowlist check). Together they double-cover the security policy.
+- **Deferred (out of scope per scope-boundary rule):** Same pre-existing failures in `luse-mcp-config.test.ts` T4/T5/T6 and other native/* tests already documented in 160-02 + 160-03 summaries. None touched by this plan.
+- **Next action:** await Plan 160-04 completion (parallel agent) → Plan 160-06 verification sweep (Wave 3) → operator Mini PC UAT (`bash /opt/livos/update.sh` + agent smoke tests against `/etc/passwd` reject, `/home/bruce/somefile.txt` accept, symlink-out-of-jail reject).
+- Full deliverable detail: see `.planning/phases/160-luse-livos-overlay-haiku-routing/160-05-SUMMARY.md`.
 
 Milestone: **v35.0 — Design System Unification (UI/UX)** — OPENED 2026-05-14
 Master plan: [`.planning/v35-DESIGN-SYSTEM-MILESTONE.md`](v35-DESIGN-SYSTEM-MILESTONE.md) (470 lines — read first)
