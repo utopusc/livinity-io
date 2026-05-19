@@ -1,7 +1,7 @@
 // Phase 164 — Autonomous scheduler module barrel.
 //
-// Re-exports the canonical parser API (Phase 164-01). Later plans (164-02
-// scheduler, 164-03 inbox writeback) will add their public surface here.
+// Re-exports the canonical parser API (Phase 164-01) and inbox writeback
+// (Phase 164-03). Phase 164-02 (scheduler) will extend this surface next.
 
 export {
 	parseAgentDefinition,
@@ -14,3 +14,11 @@ export type {
 	ParseError,
 	DirParseResult,
 } from './agent-definition-parser.js'
+
+export {writeInboxEntry} from './inbox-writer.js'
+
+export type {
+	AutonomousRunStatus,
+	InboxEntryInput,
+	WriteInboxResult,
+} from './inbox-writer.js'

@@ -167,8 +167,12 @@ describe('writeInboxEntry — Phase 164-03 inbox writeback', () => {
 		const wikilinks = backlinksSection.match(/\[\[[^\]]+\]\]/g) ?? []
 		expect(wikilinks).toEqual(['[[livos-agents/nightly-backup-audit]]'])
 
-		// Empty array variant — same result.
-		const result2 = await writeInboxEntry(baseInput({backlinks: []}))
+		// Empty array variant — same result. Use a distinct agent name so
+		// the second call does not collide with (and get deduped against)
+		// the first.
+		const result2 = await writeInboxEntry(
+			baseInput({backlinks: [], agent: 'empty-array-agent'}),
+		)
 		expect(result2.written).toBe(true)
 		if (!result2.written) return
 		const content2 = readFileSync(result2.path, 'utf8')
