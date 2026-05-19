@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T19:04:33.000Z"
+last_updated: "2026-05-19T19:17:30.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -26,12 +26,14 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 164 (autonomous-scheduler) — **IN PROGRESS** 2026-05-19
-Plan: 01 — **164-01 CODE-COMPLETE** 2026-05-19 (Agent Definition Format + Parser: agent-definition-parser.ts + .test.ts + index.ts barrel; 14/14 vitest PASS; tsc filtered to modules/autonomous-scheduler/ = zero errors; D-NO-NEW-DEPS verified — js-yaml@^4.1.0 + node-cron@^3.0.3 are direct deps, no package.json or pnpm-lock.yaml diff; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved + 4 other guard files byte-identical; 2 commits `4de8eb8f..3af08562`)
-Next plan: **164-02** — Scheduler Module + budget gate + CLI trigger + livinityd boot wire-up (`/gsd-plan-phase 164` if not yet planned, otherwise execute)
+Plan: 04 — **164-04 CODE-COMPLETE** 2026-05-19 (Sample Autonomous Agents: nightly-backup-audit.md + pr-watcher.md added to `livos/packages/livinityd/source/data/vault-templates/livos-agents/` with `enabled: false` safety override; placeholder .gitkeep removed; sample-agents.test.ts locks both contracts via Phase 164-01 parser round-trip — 3/3 vitest PASS, full autonomous-scheduler suite 29/29 PASS; vault-scaffolder.ts byte-identical (recursive fs.cp picks up new files automatically); D-NO-NEW-DEPS verified; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved; 2 commits `9f8c6935..f2a861f6`)
+Next plan: **164-02** — Scheduler Module + budget gate + CLI trigger + livinityd boot wire-up (`/gsd-plan-phase 164` if not yet planned, otherwise execute) — then 164-05 Mini PC deploy + manual-trigger smoke test
 Master plan: `.planning/v34-LIVOS-CC-INTEGRATION-MASTER.md` (LivOS ⇄ Claude Code tam entegrasyon, 4 phase: 162-165, ~20-25 saat agent work)
-Resume command: `/clear` ardından `/gsd-autonomous --from 164` (zincir devam ediyor — 164-02 sıraya geçer)
+Resume command: `/clear` ardından `/gsd-autonomous --from 164` (zincir devam ediyor — 164-02 + 164-05 sıraya geçer)
 
-Last completed: **164-01** ✅ CODE-COMPLETE 2026-05-19 (Agent Definition Format + Parser shipped — `agent-definition-parser.ts` with `parseAgentDefinition()` + `parseAgentDefinitionsDir()` + `AgentDefinition` + `ParseResult` + `ParseError` + `DirParseResult` types; YAML frontmatter via js-yaml FAILSAFE_SCHEMA (T-164-01-01 mitigation), cron validation via node-cron `cron.validate()`, snake_case→camelCase at parse time, partial-failure resilient directory walk with stable sort by name; 14-test vitest suite PASS covering happy path / defaults / missing required / invalid cron / cron variants / empty body / missing frontmatter / partial-failure dir / non-.md skip / ENOENT / stable sort / subdir non-recursion; sacred SHA + D-09 + 161-02 helper + agent-session + vault-scaffolder all UNCHANGED)
+Last completed: **164-04** ✅ CODE-COMPLETE 2026-05-19 (Sample Autonomous Agents shipped — two YAML+markdown agent definitions in vault-templates/livos-agents/ both shipping `enabled: false`; nightly-backup-audit at cron `0 3 * * *` with sonnet-4-6/15-turn/$3 cap reads /opt/livos/data/backups/ + journalctl + df /opt; pr-watcher at cron `*/30 * * * *` with haiku-4-5/5-turn/$0.50 cap polls `gh pr list` and emits literal `__NO_ACTION_NEEDED__` sentinel on quiet polls so the scheduler can skip inbox flooding; sample-agents.test.ts uses dynamic-import + describe.skipIf for wave-1 parser-independence and locks every frontmatter field + the silence sentinel + a regex audit that trips CI red if anyone ever flips a sample to enabled:true in the bundled template; vault-scaffolder.ts UNCHANGED, livinityd/package.json UNCHANGED, sacred SHA + D-09 + agent-session.ts + Phase 161-02 helper all UNCHANGED)
+
+Previously completed: **164-03** ✅ CODE-COMPLETE 2026-05-19 (Inbox Writeback shipped per `.planning/phases/164-autonomous-scheduler/164-03-SUMMARY.md`); **164-01** ✅ CODE-COMPLETE 2026-05-19 (Agent Definition Format + Parser shipped — `agent-definition-parser.ts` with `parseAgentDefinition()` + `parseAgentDefinitionsDir()` + types; 14-test vitest suite PASS; sacred SHA + D-09 + 161-02 helper + agent-session + vault-scaffolder all UNCHANGED)
 
 v34.x phase queue:
 
