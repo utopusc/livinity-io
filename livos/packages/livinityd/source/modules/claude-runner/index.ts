@@ -20,3 +20,17 @@ export type {
 	RemoveSurfaceContextOptions,
 	RemoveSurfaceContextResult,
 } from './surface-context.js'
+
+// Phase 165-01 — idle CC session reaper. Polls every 5 min; aborts
+// AgentSessionManager sessions whose last user WS-message is older than
+// `liv:config:idle_reap_min` minutes (default 30). Reaper accesses session
+// state ONLY through the injected SessionActivityProvider interface
+// implemented by ws-agent.ts (createSessionActivityProvider). The
+// liv-core agent-session.ts file is UNCHANGED — see Phase 165 quality gate.
+export {IdleSessionReaper} from './idle-reaper.js'
+export type {
+	IdleSessionReaperOptions,
+	SessionActivityProvider,
+	SessionSnapshot,
+	IdleReaperLogger,
+} from './idle-reaper.js'
