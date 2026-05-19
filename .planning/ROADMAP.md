@@ -1842,7 +1842,15 @@ Plans:
 
 **Depends on:** Phase 160 ✅ Shipped (backend additive code in place; this phase only adds wire-through, no backend re-design needed).
 
-**Recommended:** New session. Run `/clear` then `/gsd-discuss-phase 161` (or `/gsd-plan-phase 161 --auto` if scoping is already locked).
+**Plans:** 4 plans / 1 wave (161-02 serialized after 161-01; 161-03 + 161-04 parallel-safe)
+
+Plans:
+- [ ] 161-01-PLAN.md — AgentSessionManager Haiku tier override + isComputerUseSession pure helper (D-161-A + D-161-B; SDK query() receives dated literal claude-haiku-4-5-20251001 only for native:/webapp: convId prefix sessions; chat path byte-identical)
+- [ ] 161-02-PLAN.md — computerUseSystemPromptBuilder DI option + ws-agent.ts closure wire-up (D-161-C; AgentSessionManagerOptions gains optional builder callback; ws-agent.ts:177 passes async () => buildLuseSystemPromptWithOverlayResolved closure; module DAG preserved — @liv/core does NOT import from livinityd)
+- [ ] 161-03-PLAN.md — livosAppResolver env-thread + HTTP fetch construction in mcp/server.ts + luse-mcp-config.ts baseEnv extension (D-161-D; new env name LIVINITYD_API_URL avoids LIV_API_URL/liv-core port confusion; stderr discipline [luse-mcp] resolver: prefix avoids open_livos_app IPC collision)
+- [ ] 161-04-PLAN.md — UI hook prefix-invariant tests (D-161-E; verification-only — zero source-file changes; locks native:/webapp: prefix-emit + verbatim pass-through through agent.sendMessage)
+
+**Resume:** `/clear` then `/gsd-execute-phase 161`. CONTEXT + RESEARCH + PATTERNS + 4 PLAN files all ready at `.planning/phases/161-computer-use-sdk-path-wiring/`. Single wave; 161-02 depends on 161-01 (same file serial); 161-03 + 161-04 parallel.
 
 ---
 
