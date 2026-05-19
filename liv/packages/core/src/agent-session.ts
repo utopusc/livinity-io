@@ -164,6 +164,25 @@ const BASE_SYSTEM_PROMPT =
   `6. If all 3 attempts fail, report the failure to the user with the error details\n` +
   `Do NOT create capabilities speculatively -- only when you have a concrete need during the current task.`;
 
+// ── Computer-Use Session Detection ───────────────────────────
+
+/**
+ * Phase 161-01 — Computer-use session detection.
+ *
+ * Returns true iff the conversationId carries the `native:` or `webapp:` prefix
+ * emitted by use-native-app-agent.ts / use-webapp-agent.ts (verified end-to-end
+ * via the UI hook → useAgentSocket → ws-agent → AgentSessionManager trace).
+ *
+ * Chat-only sessions (AI Chat panel) either have no conversationId or use a
+ * plain UUID — both return false and preserve pre-161 behavior verbatim.
+ *
+ * Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts untouched.
+ */
+export function isComputerUseSession(conversationId: string | undefined): boolean {
+  if (!conversationId) return false;
+  return conversationId.startsWith('native:') || conversationId.startsWith('webapp:');
+}
+
 // ── Agent Session Manager ────────────────────────────────────
 
 export class AgentSessionManager {
@@ -317,7 +336,27 @@ export class AgentSessionManager {
       : undefined;
 
     // Budget cap per tier (declared early — needed by IntentRouter)
-    const tier = model ?? agentDefaults?.tier ?? 'sonnet';
+    let tier = model ?? agentDefaults?.tier ?? 'sonnet';
+
+    // Phase 161-01 — Haiku routing for SDK-path computer-use sessions.
+    // When the session is a NativeApp/WebApp computer-use loop (detected via
+    // conversationId prefix per D-161-A), force tier='haiku' so budget caps,
+    // log lines, and downstream tooling all converge on the Haiku contract.
+    // The model string at the SDK query() call site uses the DATED literal
+    // 'claude-haiku-4-5-20251001' to match Phase 160-01 broker contract
+    // (tierToModel('haiku') returns the un-dated 'claude-haiku-4-5'; both
+    // are valid Anthropic aliases but the dated form is the contract literal).
+    // Chat sessions (no convId prefix) skip this branch and preserve pre-161
+    // behavior byte-identical.
+    // Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts untouched.
+    const computerUse = isComputerUseSession(session.conversationId);
+    if (computerUse) {
+      logger.info('AgentSessionManager: computer-use session detected, routing to Haiku', {
+        userId,
+        conversationId: session.conversationId,
+      });
+      tier = 'haiku';
+    }
 
     // Intent-based tool selection: use IntentRouter to select relevant tools
     let sdkTools: ReturnType<typeof buildSdkTools> = [];
@@ -695,7 +734,11 @@ export class AgentSessionManager {
           allowedTools: allowedTools.length > 0 ? allowedTools : undefined,
           maxTurns,
           maxBudgetUsd,
-          model: tierToModel(tier),
+          // Phase 161-01 — DATED literal for computer-use; un-dated tierToModel() for chat.
+          // See agent-runner-factory.ts:184-197 (Phase 160-01) for the broker contract
+          // this mirrors. tierToModel('haiku') returns 'claude-haiku-4-5' (un-dated);
+          // we use the dated form here to match the broker's verbatim contract literal.
+          model: computerUse ? 'claude-haiku-4-5-20251001' : tierToModel(tier),
           permissionMode: 'dontAsk',
           persistSession: false,
           abortController: session.abortController,
