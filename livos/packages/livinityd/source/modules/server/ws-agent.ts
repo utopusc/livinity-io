@@ -229,8 +229,37 @@ export function createAgentWebSocketHandler(opts: {
 			}
 		}
 
-		// Per-connection session key prevents tab conflicts
-		const sessionKey = `${userId}:${connectionId}`
+		// Phase 162-04 — Surface-aware composite sessionKey.
+		// Reads surfaceKind + surfaceId from WS URL params (`?surface=main|webapp|native|autonomous&surfaceId=<id>`)
+		// emitted by the UI hook, OR from the WS `start` envelope body (`raw.surface`,
+		// `raw.surfaceId`). Defaults to 'main' / 'default' for legacy chat that
+		// doesn't emit a surface hint (most current callers).
+		//
+		// Backward-compat (D-V34-?): when chat_backend === 'legacy' (vaultModeConfig
+		// undefined), the sessionKey drops surfaceKind + surfaceId so AgentSessionManager
+		// keys exactly like Phase 161 (and pre-161). Per-tab isolation via connectionId
+		// is preserved in BOTH modes — Phase 161's contract that "multiple tabs don't
+		// cancel each other's sessions" still holds.
+		//
+		// Composite key shape lets the same userId run parallel sessions for
+		// Main Chat (`admin:54c6caa5:main:default:conn01`) + WebApp Chat
+		// (`admin:54c6caa5:webapp:suna-uuid:conn02`) + Autonomous
+		// (`admin:54c6caa5:autonomous:nightly-backup:conn03`) without one
+		// canceling the other.
+		const surfaceKindFromUrl = url.searchParams.get('surface') ?? undefined
+		const surfaceIdFromUrl = url.searchParams.get('surfaceId') ?? undefined
+
+		const buildSessionKey = (surfaceKind?: string, surfaceId?: string): string => {
+			if (opts.vaultModeConfig === undefined) {
+				// Legacy — Phase 161 byte-identical
+				return `${userId}:${connectionId}`
+			}
+			const sk = surfaceKind ?? 'main'
+			const sid = surfaceId ?? 'default'
+			return `${userId}:${sk}:${sid}:${connectionId}`
+		}
+
+		let sessionKey = buildSessionKey(surfaceKindFromUrl, surfaceIdFromUrl)
 
 		logger.log(`WS agent: connected, userId=${userId}, conn=${connectionId}`)
 
@@ -249,6 +278,17 @@ export function createAgentWebSocketHandler(opts: {
 		ws.on('message', async (data) => {
 			try {
 				const raw = JSON.parse(data.toString()) as ClientWsMessage
+
+				// Phase 162-04 — If the start envelope carries a surface hint AND the
+				// URL didn't already provide one, recompute sessionKey from the body.
+				// This keeps the UI hooks free to emit surface info either way.
+				if (
+					raw.type === 'start' &&
+					(raw as any).surface &&
+					!surfaceKindFromUrl
+				) {
+					sessionKey = buildSessionKey((raw as any).surface, (raw as any).surfaceId)
+				}
 
 				// For 'start' messages: prepend conversation history to prompt
 				if (raw.type === 'start' && raw.conversationId) {
