@@ -209,6 +209,28 @@ export interface AgentSessionManagerOptions {
    * Sacred SHA: sdk-agent-runner.ts untouched.
    */
   computerUseSystemPromptBuilder?: () => Promise<string>;
+  /**
+   * Phase 162-02 — Vault mode support. When set, sessions use CC's
+   * settingSources + cwd-based context loading (vault/CLAUDE.md,
+   * vault/.claude/skills, vault/.claude/commands).
+   *
+   * When undefined or false, AgentSessionManager preserves Phase 161
+   * behavior verbatim (BASE_SYSTEM_PROMPT / DI overlay builder, no cwd,
+   * no settingSources). Computer-use sessions (Phase 161 — convId prefix
+   * native: / webapp:) ALWAYS force Haiku regardless of this flag.
+   *
+   * Init-once resolver: livinityd's AiModule reads the Redis flags ONCE
+   * at boot and exposes them as `ai.chatBackend` + `ai.defaultChatModel`.
+   * The /ws/agent mount computes `vaultModeConfig` from those fields and
+   * passes it via createAgentWebSocketHandler opts. The factory stays
+   * SYNCHRONOUS — no per-connection Redis reads.
+   *
+   * Sacred SHA: sdk-agent-runner.ts untouched.
+   */
+  vaultModeConfig?: {
+    vaultPath: string;             // e.g. '/home/bruce/livinity-vault'
+    defaultModel?: string;         // e.g. 'claude-opus-4-7' (from liv:config:default_chat_model)
+  };
 }
 
 export class AgentSessionManager {
@@ -220,6 +242,8 @@ export class AgentSessionManager {
   private learningEngine: LearningEngine | null;
   // Phase 161-02 — DI callback for LivOS overlay-augmented systemPrompt on computer-use sessions.
   private computerUseSystemPromptBuilder: (() => Promise<string>) | null;
+  // Phase 162-02 — vault mode config; null = Phase 161 behavior preserved.
+  private vaultModeConfig: { vaultPath: string; defaultModel?: string } | null;
 
   constructor(opts: AgentSessionManagerOptions) {
     this.toolRegistry = opts.toolRegistry;
@@ -228,6 +252,7 @@ export class AgentSessionManager {
     this.redis = opts.redis ?? null;
     this.learningEngine = opts.learningEngine ?? null;
     this.computerUseSystemPromptBuilder = opts.computerUseSystemPromptBuilder ?? null;
+    this.vaultModeConfig = opts.vaultModeConfig ?? null;
   }
 
   /**
@@ -386,6 +411,16 @@ export class AgentSessionManager {
       });
       tier = 'haiku';
     }
+
+    // Phase 162-02 — Vault mode override. Applies to NON-computer-use sessions.
+    // Computer-use sessions already locked to Haiku above; vault mode only
+    // affects chat-style sessions (no convId prefix). When vaultModeConfig is
+    // null, all downstream variables fall back to undefined / pre-162 behavior.
+    const vaultMode = !computerUse && this.vaultModeConfig !== null;
+    const sessionCwd = vaultMode ? this.vaultModeConfig!.vaultPath : undefined;
+    const sessionModelOverride = computerUse
+      ? 'claude-haiku-4-5-20251001'                              // Phase 161 dated literal
+      : (vaultMode ? this.vaultModeConfig!.defaultModel : undefined);
 
     // Intent-based tool selection: use IntentRouter to select relevant tools
     let sdkTools: ReturnType<typeof buildSdkTools> = [];
@@ -782,17 +817,25 @@ export class AgentSessionManager {
       const messages = query({
         prompt: session.inputChannel.generator,
         options: {
-          systemPrompt,
+          // Phase 162-02 — vault mode drops the custom systemPrompt so vault/CLAUDE.md
+          // becomes the source of truth via settingSources: ['project']. Legacy mode
+          // (vaultMode === false) preserves Phase 161 systemPrompt selector verbatim.
+          systemPrompt: vaultMode ? undefined : systemPrompt,
+          cwd: sessionCwd,                                       // Phase 162-02
+          settingSources: vaultMode ? ['project'] : undefined,   // Phase 162-02
           mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
           tools: [],
           allowedTools: allowedTools.length > 0 ? allowedTools : undefined,
           maxTurns,
           maxBudgetUsd,
-          // Phase 161-01 — DATED literal for computer-use; un-dated tierToModel() for chat.
+          // Phase 161-01 + 162-02 model selection cascade:
+          //   computer-use: dated Haiku literal (Phase 161 — 'claude-haiku-4-5-20251001')
+          //   vault mode:   vaultModeConfig.defaultModel (e.g. claude-opus-4-7)
+          //   else:         tierToModel(tier) — pre-161 behavior
           // See agent-runner-factory.ts:184-197 (Phase 160-01) for the broker contract
-          // this mirrors. tierToModel('haiku') returns 'claude-haiku-4-5' (un-dated);
-          // we use the dated form here to match the broker's verbatim contract literal.
-          model: computerUse ? 'claude-haiku-4-5-20251001' : tierToModel(tier),
+          // the dated literal mirrors. The Phase 161 invariant is preserved via the
+          // sessionModelOverride derivation block above.
+          model: sessionModelOverride ?? tierToModel(tier),
           permissionMode: 'dontAsk',
           persistSession: false,
           abortController: session.abortController,
