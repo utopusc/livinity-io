@@ -1863,6 +1863,94 @@ If browser UAT surfaces a bug → Phase 162 open as targeted fix plan. If all gr
 
 ---
 
+### Phase 165: Polish + Settings UI + v34.x Ship — 🔴 PLANNED 2026-05-19
+
+**Goal:** Idle session reaper, Settings UI (model picker + autonomous panel + budget editor), memory linter slash command, v34.x consolidated VERIFICATION + final Mini PC deploy. v34.x milestone CODE-COMPLETE at this phase's close.
+
+**Depends on:** Phase 164 SHIPPED
+**Plans:** 4 (165-01 idle reaper, 165-02 Settings UI panels + tRPC autonomous router, 165-03 vault-doctor skill, 165-04 v34-VERIFICATION + final deploy)
+**Approach:** autonomous
+**Estimated:** ~4-6 saat
+**CONTEXT.md:** `.planning/phases/165-cc-integration-polish/165-CONTEXT.md` (locked decisions)
+
+**Hard guardrails:** Sacred SHA preserved, D-09 verbatim, D-NO-NEW-DEPS, Phase 161 chat-path-untouched contract (legacy mode still flippable via Redis flag).
+
+---
+
+### Phase 164: Autonomous Scheduler + Sample Agents — 🔴 PLANNED 2026-05-19
+
+**Goal:** Background autonomous CC agents tetiklenebilsin (cron + event triggers from `vault/livos-agents/*.md` frontmatter). Output `vault/inbox/*.md`'a yazılır. Budget guardrails (per-agent + daily Mini PC total cap).
+
+**Depends on:** Phase 163 SHIPPED
+**Plans:** 5 (164-01 agent def parser, 164-02 scheduler module, 164-03 inbox writer, 164-04 sample agents nightly-backup-audit + pr-watcher, 164-05 deploy + manual trigger smoke)
+**Approach:** autonomous
+**Estimated:** ~5-7 saat
+**CONTEXT.md:** `.planning/phases/164-autonomous-scheduler/164-CONTEXT.md`
+
+**Defaults at ship:**
+- `liv:config:autonomous_enabled` = `false` (explicit opt-in)
+- `liv:config:autonomous_daily_budget` = `5000` (cents, $50)
+- `liv:config:autonomous_max_concurrent` = `3`
+- Sample agents ship `enabled: false` in frontmatter (user flips manually)
+
+**Hard guardrails:** Sacred SHA preserved, D-09 verbatim, D-NO-NEW-DEPS, autonomous run resource caps enforced.
+
+---
+
+### Phase 163: Surface-Specific Vault Contexts + Phase 161 Helper Bridge — 🔴 PLANNED 2026-05-19
+
+**Goal:** WebApp Chat + NativeApp Chat oturumları `vault/surfaces/<kind>/<id>/` CWD'sini kullansın. Surface-özel `CLAUDE.md` install hook'larıyla otomatik üretilsin. Phase 161 Haiku routing + LivOS overlay olduğu gibi reuse (sadece runtime CWD seçimi değişir).
+
+**Depends on:** Phase 162 SHIPPED
+**Plans:** 4 (163-01 surface scaffolder + install hooks, 163-02 isComputerUseSession → CWD resolution, 163-03 LivOS overlay coexistence with vault mode, 163-04 deploy + synthetic surface probes)
+**Approach:** autonomous
+**Estimated:** ~6-8 saat
+**CONTEXT.md:** `.planning/phases/163-surface-vault-contexts/163-CONTEXT.md`
+
+**Hard guardrails:** Sacred SHA preserved, D-09 verbatim, D-NO-NEW-DEPS, Phase 161 contract (native:/webapp: → Haiku model dated literal) preserved verbatim.
+
+---
+
+### Phase 162: Vault Scaffolding + SDK Settings Integration — 🔴 PLANNED 2026-05-19 — **NEXT ACTION**
+
+**Goal:** v34.x milestone'unun temel taşı. `/home/bruce/livinity-vault/` Obsidian-uyumlu vault'u boot-time idempotent oluştur. AgentSessionManager.consumeAndRelay()'i `cwd` + `settingSources: ['project']` options ile çağıracak şekilde upgrade et — vault/CLAUDE.md + vault/.claude/skills + commands artık SDK tarafından auto-load. Redis flag `liv:config:chat_backend = vault | legacy` ile gate.
+
+**Master plan reference:** `.planning/v34-LIVOS-CC-INTEGRATION-MASTER.md` (Decisions D-V34-A through D-V34-N locked, no discuss-phase needed)
+
+**Trigger:** 2026-05-19 user feedback — "şu an seninle konuşan Claude Code, LivOS chat'i daha düşük kaliteli. Claude Code'u Livinity ile bütünleştirmek istiyorum". Research showed root cause: AgentSessionManager passes `query()` without `cwd` + `settingSources`, so vault/CLAUDE.md + .claude/skills/ never load. Hermes Agent's CC orchestration patterns + official Anthropic docs (https://code.claude.com/docs/en/headless, https://code.claude.com/docs/en/agent-sdk) informed v3 architecture: SDK-direct integration (not subprocess CLI) since the SDK already bundles + runs CC binary internally.
+
+**Direction (5 plans):**
+- **162-01** Vault scaffolder module + templates (CLAUDE.md, .claude/settings.json, memory/* shaped per master plan D-V34-D); idempotent boot-time creation
+- **162-02** AgentSessionManagerOptions gains `vaultModeConfig?: {vaultPath, defaultModel}`; consumeAndRelay() branches: vaultMode true → pass cwd + settingSources + drop custom systemPrompt; vaultMode false → Phase 161 verbatim. Redis flag at livinityd wires the gate.
+- **162-03** Auth threading verifier — boot-time smoke check that SDK subprocess reads `/root/.claude/.credentials.json` correctly (HOME env propagation per `BROKER_FORCE_ROOT_HOME`)
+- **162-04** Multi-instance refactor: AgentSessionManager.sessions key shape from `userId` → `${userId}:${surfaceKind}:${surfaceId?}:${connectionId}` for parallel Main + WebApp + autonomous sessions per user
+- **162-05** Mini PC deploy (detached + log poll) + live runtime probe (Phase 161 synthetic WS pattern adapted for vault mode — expect Opus 4.7 default + CLAUDE.md context evidence)
+
+**Hard guardrails (master plan D-V34-J):**
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` for `liv/packages/core/src/sdk-agent-runner.ts` — preserved
+- D-09 verbatim `luse-system-prompt.ts` — preserved
+- D-NO-NEW-DEPS — sıfır `package.json` diff
+- Phase 161 chat-path-untouched: `liv:config:chat_backend=legacy` set olduğunda byte-identical pre-162 path (regression test asserts)
+- Subscription-only (BYOK closed per user preference)
+
+**UAT criteria (per-phase, automated where possible):**
+- Synthetic WS probe (`conversationId: 'conv_smoke162'`, no native:/webapp: prefix) responds with `claude-opus-4-7` in journal
+- Vault scaffolded files present + bruce-owned + Obsidian-readable
+- Redis flag flip vault→legacy reverts behavior in <5sn (chat path unchanged)
+- Sacred SHA + D-09 + D-NO-NEW-DEPS checks green at every Phase 162 commit
+- Phase 161 regression: native:/webapp: prefix sessions still route to Haiku dated literal
+
+**Plans:**
+- [ ] 162-01-PLAN.md — Vault scaffolder + templates
+- [ ] 162-02-PLAN.md — AgentSessionManager vault mode option + Redis flag gate
+- [ ] 162-03-PLAN.md — Auth threading verifier
+- [ ] 162-04-PLAN.md — Multi-instance sessionKey refactor
+- [ ] 162-05-PLAN.md — Mini PC deploy + synthetic vault probe
+
+**Resume:** `/clear` then `/gsd-autonomous --from 162`. Master plan + 4 CONTEXT.md files committed; autonomous run loops planner → executor → verifier per phase without user input. Mini PC deploys included per phase per `feedback_full_autonomous_no_questions` memory override.
+
+---
+
 ### Phase 159: NativeApp WebApp Parity + Window Manager Panel — ✅ SHIPPED 2026-05-19 (browser UAT PASS via chrome-devtools MCP — LibreOffice open/close/reopen cycle proven leak-free; Xvfb :10 fully released and new :11 allocated cleanly; `closeNativeApp` journal trail confirmed in 3s window after panel Close click)
 
 **Goal:** Bring NativeApp surface to functional parity with WebApp — same Chat chrome row (Teach + Skills omitted per A5; native binaries have no DOM), clean backend teardown on window close (no leaked streams or duplicate windows on reopen). Add a Windows Manager panel listing every open window with focus/close/minimize/pin controls. Frontend visual deferred to a follow-up phase; this phase locks data contracts, lifecycle, and wiring.

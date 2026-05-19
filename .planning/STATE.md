@@ -25,9 +25,19 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 161 ✅ SHIPPED 2026-05-19 (15 commits + Mini PC deploy `fbb8e3a` + synthetic WS probe LIVE-PROVEN; sacred SHA preserved 15/15; MH1 verified via runtime journal — `routing to Haiku` → SDK_INIT `claude-haiku-4-5-20251001` → streaming response; MH2/MH3/MH4/MH7 queued for operator browser walk)
-Plan: 4 of 4 SHIPPED (all autonomous plans complete; remaining UAT is browser-driven and decoupled from code state)
-Next phase: **Phase 162 — Operator Browser UAT** (autonomous: false; re-walk Phase 160 VERIFICATION.md 10-step checklist via `bruce.livinity.io` to close MH2/MH3/MH4/MH7). If browser UAT surfaces a bug → Phase 162 opens as targeted fix plan; if all green → Phase 161 closes fully, move to next v34 milestone work.
+Phase: 162 🔴 PLANNED 2026-05-19 — **NEXT ACTION** for `/gsd-autonomous --from 162`
+Plan: 0 of 5 — CONTEXT.md hazır, plans yazılmadı (planner agent yazacak)
+Master plan: `.planning/v34-LIVOS-CC-INTEGRATION-MASTER.md` (LivOS ⇄ Claude Code tam entegrasyon, 4 phase: 162-165, ~20-25 saat agent work)
+Resume command: `/clear` ardından `/gsd-autonomous --from 162` — user uyurken 4 phase sequential ship eder
+
+Last completed: **Phase 161** ✅ SHIPPED 2026-05-19 (15 commits + Mini PC deploy `fbb8e3a` + live runtime probe MH1 PROVEN; sacred SHA preserved 15/15; MH2/MH3/MH4/MH7 operator browser walk pending — DEFERRED to v34.x close per master plan)
+
+v34.x phase queue:
+- [x] Phase 161 — Computer-Use SDK Path Wiring (SHIPPED)
+- [ ] Phase 162 — Vault Scaffolding + SDK Settings Integration (next action)
+- [ ] Phase 163 — Surface-Specific Vault Contexts
+- [ ] Phase 164 — Autonomous Scheduler + Sample Agents
+- [ ] Phase 165 — Polish + Settings UI + v34.x Ship
 
 ## 160-01 Status (2026-05-19) — Haiku Routing CODE-COMPLETE (2 commits, sacred SHA preserved 2/2)
 
