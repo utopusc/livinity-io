@@ -110,3 +110,68 @@ describe('Phase 100-10-06 useWebAppAgent.stopStreaming alias', () => {
 		expect(HOOK_SRC).toMatch(/stopStreaming:\s*agent\.interrupt|stopStreaming.*=.*interrupt/)
 	})
 })
+
+// ============================================================================
+// Phase 161-04 — Computer-use detection signal lock-in (webapp: prefix)
+// ============================================================================
+//
+// Symmetric to use-native-app-agent.test.ts Phase 161-04 block. Locks the
+// `webapp:` conversationId prefix-emit + verbatim pass-through that
+// AgentSessionManager.isComputerUseSession() relies on (Plan 161-01).
+//
+// Note: the existing `mints a fresh conversationId of shape webapp:...`
+// test above (lines 36-38) already locks the prefix-EMIT template literal,
+// so Phase 161-04 skips that assertion and adds the COMPLEMENTARY
+// pass-through + no-mutation invariants. Verification-only per D-161-E.
+
+describe('Phase 161-04 — webapp: prefix downstream invariants', () => {
+	it('passes the webapp: prefix verbatim through agent.sendMessage (undefined model slot + convId in 3rd arg)', () => {
+		// Stricter than the existing line-78 invariant: this asserts the
+		// EXACT call shape `agent.sendMessage(<text>, undefined, convId, ...)`
+		// — the `undefined` literal in the model slot is load-bearing because
+		// useAgentSocket forwards it into the WS payload's `model` field, and
+		// livinityd/liv-core's AgentSessionManager only routes to Haiku when
+		// the model is unset AND the convId carries the `webapp:` prefix.
+		// Any future refactor that swaps `undefined` for an explicit string
+		// (or strips the prefix) breaks Plan 161-01's detection silently.
+		expect(HOOK_SRC).toMatch(/agent\.sendMessage\([^,]+,\s*undefined,\s*convId\b/)
+	})
+
+	it('binds convId from local state with lazy mint via makeFreshConversationId(webappId)', () => {
+		// Symmetric to use-native-app-agent.test.ts. Actual implementation:
+		//   let convId = conversationId
+		//   if (!convId) {
+		//     convId = makeFreshConversationId(webappId)
+		//     ...
+		//   }
+		expect(HOOK_SRC).toMatch(/let\s+convId\s*=\s*conversationId/)
+		expect(HOOK_SRC).toMatch(/convId\s*=\s*makeFreshConversationId\(webappId\)/)
+	})
+
+	it('does not mutate convId between mint and send (no .replace / .slice / suspicious reassignment)', () => {
+		// Two-step filter mirrors the native hook test: collect every
+		// `convId = <rhs>` reassignment, then reject any RHS that is not
+		// the legitimate lazy mint `makeFreshConversationId(...)`. The
+		// plan's original `/^\s*convId\s*=\s*[^m]/gm` regex is defective
+		// (backtracking false-positive on `=` + single space); see the
+		// matching block in use-native-app-agent.test.ts for the deviation
+		// rationale documented in SUMMARY (Rule 1).
+		expect(HOOK_SRC).not.toMatch(/convId\.replace\s*\(/)
+		expect(HOOK_SRC).not.toMatch(/convId\.slice\s*\(/)
+		const allReassigns = HOOK_SRC.match(/^\s*convId\s*=\s*([^\n]+)$/gm) ?? []
+		const illegitimate = allReassigns.filter((line) => {
+			const rhs = line.replace(/^\s*convId\s*=\s*/, '').trim()
+			return !/^makeFreshConversationId\s*\(/.test(rhs)
+		})
+		expect(illegitimate).toEqual([])
+	})
+
+	it('Phase 161-04 marker present (so grep finds the regression-test lock)', () => {
+		// Self-referential: this test file itself contains the Phase 161-04
+		// marker. `grep -r "Phase 161-04" livos/packages/ui/` locates both
+		// the native + webapp regression suites.
+		const TEST_PATH = resolve(__dirname, 'use-webapp-agent.unit.test.tsx')
+		const TEST_SRC = readFileSync(TEST_PATH, 'utf8')
+		expect(TEST_SRC).toMatch(/Phase 161-04/)
+	})
+})
