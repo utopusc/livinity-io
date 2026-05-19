@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T12:47:27.183Z"
+last_updated: "2026-05-19T12:48:24.850Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 160 ✅ SHIPPED 2026-05-19 (18 commits, sacred SHA preserved 18/18, Mini PC deploy PASS, UAT discovered production wire-through gap → carry-forward to Phase 161)
-Plan: 6 of 6 SHIPPED (backend additive code in place; wire-through to LivOS internal SDK subscription path deferred to Phase 161)
+Phase: --phase (161) — EXECUTING
+Plan: 1 of --name
 Next phase: **Phase 161 — Computer-Use SDK Path Wiring** (🔴 PLANNED, ~2-3h, 4 atomic patches). Recommended: `/clear` then `/gsd-discuss-phase 161` in a fresh session.
 
 ## 160-01 Status (2026-05-19) — Haiku Routing CODE-COMPLETE (2 commits, sacred SHA preserved 2/2)
