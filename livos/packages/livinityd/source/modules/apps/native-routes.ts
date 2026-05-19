@@ -202,6 +202,33 @@ export const nativeAppsRouter = router({
 				})
 			}
 
+			// Phase 157 round 5 — idempotency. If the binary is already
+			// alive in activeNative, return the existing handle instead
+			// of allocating another display/stream slot. Without this,
+			// every click leaks a stream (cap 10) and burns a display
+			// number (range [10,100)).
+			const existing = activeNative.get(input.id)
+			if (existing) {
+				ctx.logger?.log?.(
+					'apps.native.spawn: reusing active handle for ' +
+						cfg.name +
+						' (display=' +
+						existing.display +
+						' port=' +
+						existing.port +
+						')',
+				)
+				return {
+					id: existing.id,
+					pid: existing.child.pid ?? 0,
+					display: existing.display,
+					displayN: existing.displayN,
+					port: existing.port,
+					streamId: existing.streamId,
+					wsUrl: existing.wsUrl,
+				}
+			}
+
 			const logger = ctx.logger
 			const adaptLogger = logger
 				? {
@@ -320,7 +347,11 @@ export const nativeAppsRouter = router({
 	 * owns the ordered teardown (SIGTERM child → grace → SIGKILL → stopStream
 	 * → xvfb.stop → display.release → port.release → active.delete).
 	 */
-	close: adminProcedure
+	// Phase 157 round 5 — close is privateProcedure (was admin) so the
+	// NativeAppStreamWindow unmount cleanup hook works for regular users.
+	// Operation is idempotent and only affects the caller's own native
+	// app instance (lookup is keyed by app UUID).
+	close: privateProcedure
 		.input(closeInput)
 		.mutation(async ({ctx, input}) => {
 			const sm = requireStreamManager(ctx)

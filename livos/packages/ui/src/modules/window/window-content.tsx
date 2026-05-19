@@ -21,12 +21,21 @@ const ChromeWindowContent = React.lazy(() => import('./app-contents/chrome-conte
 // C-95-05 and PLAN 95-02). The real component lands in 95-08; 95-02 ships a
 // placeholder so the lazy import resolves at build time.
 const WebAppStreamWindowContent = React.lazy(() => import('./app-contents/webapp-stream-window'))
+// Phase 157 round 5 — NativeAppStreamWindow. Native-app equivalent of
+// WebAppStreamWindow. Discriminator is `NATIVE_<nativeAppId>` prefix.
+const NativeAppStreamWindowContent = React.lazy(() => import('./app-contents/native-app-stream-window'))
 
 const WEBAPP_APP_ID_PREFIX = 'WEBAPP_'
+const NATIVE_APP_ID_PREFIX = 'NATIVE_'
 
 /** True when the appId belongs to a WebApp window (P95). */
 function isWebAppKind(appId: string): boolean {
 	return appId.startsWith(WEBAPP_APP_ID_PREFIX)
+}
+
+/** True when the appId belongs to a native-app stream window (P157 round 5). */
+function isNativeAppKind(appId: string): boolean {
+	return appId.startsWith(NATIVE_APP_ID_PREFIX)
 }
 
 type WindowContentProps = {
@@ -41,7 +50,7 @@ const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINI
 	'LIVINITY_gmail'])
 
 export function WindowContent({route, appId}: WindowContentProps) {
-	if (fullHeightApps.has(appId) || isWebAppKind(appId)) {
+	if (fullHeightApps.has(appId) || isWebAppKind(appId) || isNativeAppKind(appId)) {
 		return (
 			<div className='h-full overflow-hidden'>
 				<Suspense fallback={<Loading />}>
@@ -69,6 +78,14 @@ export function WindowAppContent({appId, initialRoute}: {appId: string; initialR
 	if (isWebAppKind(appId)) {
 		const webappId = appId.slice(WEBAPP_APP_ID_PREFIX.length)
 		return <WebAppStreamWindowContent webappId={webappId} />
+	}
+
+	// Phase 157 round 5 — Native-app stream window. Mirrors the WebApp
+	// branch above; appId is `NATIVE_<nativeAppId>` (NativeAppConfig
+	// UUID from apps.native.list).
+	if (isNativeAppKind(appId)) {
+		const nativeAppId = appId.slice(NATIVE_APP_ID_PREFIX.length)
+		return <NativeAppStreamWindowContent nativeAppId={nativeAppId} />
 	}
 
 	switch (appId) {
