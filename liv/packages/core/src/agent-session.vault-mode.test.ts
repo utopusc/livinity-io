@@ -79,11 +79,18 @@ function test3_constructorAssignment() {
 }
 
 function test4_vaultModeDerivation() {
+  // Phase 163-02.5 — gate decoupled from computerUse. Surface CWD threads
+  // through to SDK for computer-use sessions too.
   assert.match(
     SRC,
-    /const\s+vaultMode\s*=\s*!computerUse\s*&&\s*this\.vaultModeConfig\s*!==\s*null/,
+    /const\s+vaultMode\s*=\s*this\.vaultModeConfig\s*!==\s*null/,
   );
-  console.log('  PASS: const vaultMode = !computerUse && this.vaultModeConfig !== null');
+  assert.doesNotMatch(
+    SRC,
+    /const\s+vaultMode\s*=\s*!computerUse\s*&&\s*this\.vaultModeConfig\s*!==\s*null/,
+    'OLD pre-163-02.5 coupled gate literal must be removed',
+  );
+  console.log('  PASS: const vaultMode = this.vaultModeConfig !== null (Phase 163-02.5)');
 }
 
 function test5_cwdAtCallSite() {
@@ -94,19 +101,34 @@ function test5_cwdAtCallSite() {
 }
 
 function test6_settingSourcesAtCallSite() {
+  // Phase 163-02.5 — overlay-preserving gate: computer-use does NOT auto-load
+  // vault skills/commands (Phase 161-02 overlay is sufficient).
   assert.match(
     SRC,
-    /settingSources:\s*vaultMode\s*\?\s*\['project'\]\s*:\s*undefined/,
+    /settingSources:\s*vaultMode\s*&&\s*!computerUse\s*\?\s*\['project'\]\s*:\s*undefined/,
   );
-  console.log("  PASS: query() options pass settingSources: vaultMode ? ['project'] : undefined");
+  assert.doesNotMatch(
+    SRC,
+    /settingSources:\s*vaultMode\s*\?\s*\['project'\]\s*:\s*undefined/,
+    'OLD pre-163-02.5 single-gate settingSources literal must be removed',
+  );
+  console.log("  PASS: query() options pass settingSources: vaultMode && !computerUse ? ['project'] : undefined (Phase 163-02.5)");
 }
 
 function test7_systemPromptGated() {
+  // Phase 163-02.5 — overlay-preserving gate: computer-use sessions STILL
+  // use Phase 161-02 LivOS overlay via systemPrompt. Main Chat under vault
+  // mode drops systemPrompt so vault CLAUDE.md auto-loads (unchanged).
   assert.match(
     SRC,
-    /systemPrompt:\s*vaultMode\s*\?\s*undefined\s*:\s*systemPrompt/,
+    /systemPrompt:\s*vaultMode\s*&&\s*!computerUse\s*\?\s*undefined\s*:\s*systemPrompt/,
   );
-  console.log('  PASS: query() options pass systemPrompt: vaultMode ? undefined : systemPrompt');
+  assert.doesNotMatch(
+    SRC,
+    /systemPrompt:\s*vaultMode\s*\?\s*undefined\s*:\s*systemPrompt/,
+    'OLD pre-163-02.5 single-gate systemPrompt literal must be removed',
+  );
+  console.log('  PASS: query() options pass systemPrompt: vaultMode && !computerUse ? undefined : systemPrompt (Phase 163-02.5)');
 }
 
 function test8_modelFieldRefactored() {
@@ -206,6 +228,30 @@ function test13_serverMountWiresVaultConfig() {
   console.log('  PASS: server/index.ts /ws/agent mount gates on ai.chatBackend === "vault" and passes vaultModeConfig');
 }
 
+// ── Phase 163-02.5 post-revision matrix lock ───────────────────
+
+function test14_postRevisionMatrix() {
+  // Phase 163-02.5 composition lock: all 5 key fingerprints present + 1 negative.
+  const positives = [
+    'const vaultMode = this.vaultModeConfig !== null',
+    'const sessionCwd = vaultMode ? this.vaultModeConfig!.vaultPath : undefined',
+    'systemPrompt: vaultMode && !computerUse ? undefined : systemPrompt',
+    "settingSources: vaultMode && !computerUse ? ['project'] : undefined",
+    'cwd: sessionCwd,',
+  ];
+  for (const needle of positives) {
+    assert.ok(
+      SRC.includes(needle),
+      `Phase 163-02.5 source-text fingerprint missing: ${needle}`,
+    );
+  }
+  assert.ok(
+    !/vaultMode\s*=\s*!computerUse\s*&&/.test(SRC),
+    'OLD pre-163-02.5 coupled gate (vaultMode = !computerUse && ...) must NOT appear anywhere',
+  );
+  console.log('  PASS: post-163-02.5 composition matrix locked (5 positives + 1 negative)');
+}
+
 // ── Runner ─────────────────────────────────────────────────────
 
 async function main() {
@@ -239,7 +285,11 @@ async function main() {
   test13_serverMountWiresVaultConfig();
 
   console.log('');
-  console.log('OK: 13/13 vault-mode invariants passed');
+  console.log('Phase 163-02.5 post-revision matrix lock:');
+  test14_postRevisionMatrix();
+
+  console.log('');
+  console.log('OK: 14/14 vault-mode invariants passed');
 }
 
 main().catch((err) => {
