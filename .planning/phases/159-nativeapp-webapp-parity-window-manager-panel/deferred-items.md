@@ -52,3 +52,31 @@ regressions. Confirmed by isolating each failure:
   `stories/` errors remain, unrelated)
 - Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` for
   `liv/packages/core/src/sdk-agent-runner.ts` **unchanged** ✓
+
+## From Plan 07 (Workstream A chrome parity, 2026-05-19)
+
+### Additional pre-existing failures observed (NOT caused by Plan 07)
+
+Verified by `git stash`-ing Plan 07 test edits and re-running
+`pnpm exec vitest run src/modules/window/webapp-stream-window.unit.test.tsx`
+on master HEAD — same 4 failures appear pre-edit:
+
+6. **T-09-08-02 + T-09-08-03** — `Phase 100-09-08 action bar 2-mode chat input`
+   describe block asserts `setChatInputMode(webappId, 'chat-input')` /
+   `setChatInputMode(webappId, 'icons')` literals in
+   `webapp-floating-action-bar.tsx`. Phase 159 Plan 07 changed these to
+   `setChatInputMode(streamId, 'chat-input')` (streamId = webappId ?? nativeAppId)
+   to support native windows. The invariants need to be widened to accept
+   either literal. Plan 07 does NOT touch them — out of scope per the
+   "Plan 07 owns only its own invariants" rule. Suggested fix: future
+   Phase 159 cleanup plan widens the regex to `setChatInputMode\((webappId|streamId),`.
+
+7. **T-10-05-11, T-10-10-STATUS-02** — already documented above (items 2-3),
+   confirmed still failing on Plan 07 HEAD (untouched).
+
+### Plan 07 own-test summary
+
+- `npx vitest run src/modules/window/window-chrome.test.tsx` → **10/10 PASS** ✓
+- `npx vitest run src/modules/window/webapp-floating-action-bar.test.tsx` → **18/18 PASS** ✓ (9 existing Phase 101-09 + 9 new Phase 159)
+- `npx vitest run src/modules/window/webapp-stream-window.unit.test.tsx` → 58 PASS + 4 pre-existing FAIL (T-10-10-RESPONSE-02 NOW PASSES after Task 4 update; T-10-10-RESPONSE-01 STILL PASSES — invariant preserved)
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` **unchanged** ✓

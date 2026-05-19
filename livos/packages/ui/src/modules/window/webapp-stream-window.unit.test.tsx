@@ -629,9 +629,14 @@ describe('Phase 100-10-10 chat-response wire-up + per-tool streaming UI', () => 
 		// re-introduce per-component useWebAppAgent calls.
 		expect(barSrc).toMatch(/interface ChatInputBarProps[\s\S]*?\bagent:/)
 		expect(barSrc).toMatch(/interface ChatResponseBarProps[\s\S]*?\bagent:/)
-		// Parent must pass agent={agent} into both branches.
-		expect(barSrc).toMatch(/<ChatInputBar[\s\S]*?agent=\{agent\}/)
-		expect(barSrc).toMatch(/<ChatResponseBar[\s\S]*?agent=\{agent\}/)
+		// Phase 159 — webapp-floating-action-bar.tsx introduces dual-hook
+		// resolution (`const agent = useWebAppAgent(...)` + `const
+		// nativeAgent = useNativeAppAgent(...)` + `const activeAgent:
+		// UseStreamAppAgentResult = nativeAppId ? nativeAgent : agent`).
+		// Downstream JSX now passes `agent={activeAgent}` so both webapp +
+		// native windows share the same sub-components.
+		expect(barSrc).toMatch(/<ChatInputBar[\s\S]*?agent=\{activeAgent\}/)
+		expect(barSrc).toMatch(/<ChatResponseBar[\s\S]*?agent=\{activeAgent\}/)
 	})
 
 	it("T-10-10-STATUS-01: ChatResponseBar renders a status line gated on agent.isStreaming + (phrase || currentTool)", () => {
