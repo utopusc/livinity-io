@@ -211,6 +211,21 @@ export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): 
 			`[livinity-broker:openai] request user=${auth.userId} requestedModel=${requestedModel} actualModel=${actualModel} stream=${body.stream === true}`,
 		)
 
+		// Phase 160-01 — Detect computer-use sub-mode from request header.
+		// See livinity-broker/router.ts for the full rationale. Same header
+		// contract on both broker endpoints (Anthropic + OpenAI) so external
+		// Luse-bound clients can opt-in to Haiku routing regardless of which
+		// /v1 surface they target.
+		const computerUseHeader = req.headers['x-livinity-computer-use']
+		const computerUseHeaderValue = Array.isArray(computerUseHeader)
+			? computerUseHeader[0]
+			: computerUseHeader
+		const brokerMode: 'chat' | 'computer-use' =
+			typeof computerUseHeaderValue === 'string' &&
+			computerUseHeaderValue.trim().toLowerCase() === 'true'
+				? 'computer-use'
+				: 'chat'
+
 		// 6. Stream branching
 		const wantsStream = body.stream === true
 		if (wantsStream) {
@@ -235,6 +250,8 @@ export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): 
 					contextPrefix: sdkArgs.contextPrefix,
 					systemPromptOverride: sdkArgs.systemPromptOverride,
 					signal: abortController.signal,
+					// Phase 160-01 — forward Haiku routing decision (see brokerMode above).
+					mode: brokerMode,
 				})
 				const iter = generator[Symbol.asyncIterator]()
 				while (true) {
@@ -282,6 +299,8 @@ export function registerOpenAIRoutes(router: express.Router, deps: BrokerDeps): 
 				contextPrefix: sdkArgs.contextPrefix,
 				systemPromptOverride: sdkArgs.systemPromptOverride,
 				signal: abortController.signal,
+				// Phase 160-01 — forward Haiku routing decision (see brokerMode above).
+				mode: brokerMode,
 			})
 			const iter = generator[Symbol.asyncIterator]()
 			while (true) {

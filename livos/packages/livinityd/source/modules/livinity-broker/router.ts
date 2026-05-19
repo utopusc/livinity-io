@@ -175,6 +175,32 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 		const wantsStream = body.stream === true
 		const model = body.model
 
+		// Phase 160-01 — Detect computer-use sub-mode from request header.
+		// External Luse-bound clients (Bolt.diy / Vercel AI SDK / custom
+		// agent harness) signal "this session will run computer-use loops,
+		// route me to Haiku for cost/latency" by adding the header
+		// `X-Livinity-Computer-Use: true`. The flag is forwarded to
+		// `createSdkAgentRunnerForUser` via `mode: 'computer-use'` which
+		// in turn injects `tier: 'haiku'` + `model: 'claude-haiku-4-5-20251001'`
+		// into the /api/agent/stream request body (see
+		// agent-runner-factory.ts:opts.mode JSDoc).
+		//
+		// When the header is absent (default for AI Chat panel + WebApp
+		// chat input + every legacy /v1/messages caller), `mode` is
+		// undefined → defaults to 'chat' → tier/model fields omitted →
+		// liv-core api.ts falls back to its existing tier resolution
+		// (agentDefaults?.tier / AGENT_TIER env / 'sonnet'). Chat path
+		// preserved verbatim.
+		const computerUseHeader = req.headers['x-livinity-computer-use']
+		const computerUseHeaderValue = Array.isArray(computerUseHeader)
+			? computerUseHeader[0]
+			: computerUseHeader
+		const brokerMode: 'chat' | 'computer-use' =
+			typeof computerUseHeaderValue === 'string' &&
+			computerUseHeaderValue.trim().toLowerCase() === 'true'
+				? 'computer-use'
+				: 'chat'
+
 		if (wantsStream) {
 			// SSE response (per D-41-12)
 			res.setHeader('Content-Type', 'text/event-stream')
@@ -196,6 +222,8 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 					contextPrefix: sdkArgs.contextPrefix,
 					systemPromptOverride: sdkArgs.systemPromptOverride,
 					signal: abortController.signal,
+					// Phase 160-01 — forward Haiku routing decision (see brokerMode above).
+					mode: brokerMode,
 				})
 				for await (const event of generator) {
 					// Phase 74 Plan 01 (F2): adapter.onAgentEvent is async — await so
@@ -220,6 +248,8 @@ export function createBrokerRouter(deps: BrokerDeps): express.Router {
 					contextPrefix: sdkArgs.contextPrefix,
 					systemPromptOverride: sdkArgs.systemPromptOverride,
 					signal: abortController.signal,
+					// Phase 160-01 — forward Haiku routing decision (see brokerMode above).
+					mode: brokerMode,
 				})
 				// Iterate to drain events (capture final result via generator return)
 				const iter = generator[Symbol.asyncIterator]()

@@ -511,3 +511,100 @@ describe('createSdkAgentRunnerForUser - Phase 102-06 Active Display Context', ()
 		expect(stub.captured.body.contextPrefix).toBeUndefined()
 	})
 })
+
+/**
+ * Phase 160-01 — Haiku routing for computer-use loops.
+ *
+ * Source-text invariant block + runtime body-injection asserts. Source-text
+ * invariants lock the literal contract so future refactors don't silently
+ * lose the Haiku routing. Runtime asserts verify the request body sent to
+ * /api/agent/stream actually carries tier='haiku' + model literal when
+ * mode === 'computer-use', and chat mode (default) preserves the existing
+ * body shape unchanged.
+ */
+
+import {readFileSync} from 'node:fs'
+import {dirname, join} from 'node:path'
+import {fileURLToPath} from 'node:url'
+
+const __filename160 = fileURLToPath(import.meta.url)
+const __dirname160 = dirname(__filename160)
+
+describe('Phase 160-01 — Haiku routing for computer-use', () => {
+	const FACTORY_SRC = readFileSync(
+		join(__dirname160, 'agent-runner-factory.ts'),
+		'utf8',
+	)
+
+	it('contains literal mode === computer-use guard', () => {
+		expect(FACTORY_SRC).toMatch(/mode === 'computer-use'/)
+	})
+
+	it('contains literal claude-haiku-4-5-20251001 override', () => {
+		expect(FACTORY_SRC).toMatch(/claude-haiku-4-5-20251001/)
+	})
+
+	it('preserves Phase 160-01 marker comment', () => {
+		expect(FACTORY_SRC).toMatch(/Phase 160-01/)
+	})
+
+	it('Sacred SHA marker present for sdk-agent-runner', () => {
+		expect(FACTORY_SRC).toMatch(
+			/Sacred SHA: liv\/packages\/core\/src\/sdk-agent-runner\.ts untouched/,
+		)
+	})
+
+	// Runtime body-injection asserts. These complement the source-text invariants
+	// by verifying the override actually flows into the /api/agent/stream request
+	// body — not just that the comment block is present in source.
+
+	describe('runtime body injection', () => {
+		let stub: ReturnType<typeof captureUpstreamPost>
+
+		beforeEach(() => {
+			stub = captureUpstreamPost()
+			vi.unstubAllEnvs()
+		})
+
+		afterEach(() => {
+			stub.restore()
+			vi.unstubAllEnvs()
+		})
+
+		it("injects tier='haiku' + model='claude-haiku-4-5-20251001' when mode='computer-use'", async () => {
+			const gen = createSdkAgentRunnerForUser({
+				livinityd: makeFakeLivinityd(),
+				userId: 'u1',
+				task: 'screenshot then click',
+				mode: 'computer-use',
+			})
+			await drainRunner(gen)
+			expect(stub.captured.body.tier).toBe('haiku')
+			expect(stub.captured.body.model).toBe('claude-haiku-4-5-20251001')
+		})
+
+		it("omits tier + model fields when mode='chat' (chat path preserved)", async () => {
+			const gen = createSdkAgentRunnerForUser({
+				livinityd: makeFakeLivinityd(),
+				userId: 'u1',
+				task: 'just chat',
+				mode: 'chat',
+			})
+			await drainRunner(gen)
+			expect(stub.captured.body.tier).toBeUndefined()
+			expect(stub.captured.body.model).toBeUndefined()
+		})
+
+		it('omits tier + model fields when mode is undefined (default = chat)', async () => {
+			const gen = createSdkAgentRunnerForUser({
+				livinityd: makeFakeLivinityd(),
+				userId: 'u1',
+				task: 'just chat',
+				// no mode field at all → defaults to 'chat'
+			})
+			await drainRunner(gen)
+			expect(stub.captured.body.tier).toBeUndefined()
+			expect(stub.captured.body.model).toBeUndefined()
+		})
+	})
+})

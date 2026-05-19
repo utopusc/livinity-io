@@ -562,6 +562,83 @@ async function main(): Promise<void> {
     );
   });
 
+  // ── Phase 160-01 — Haiku routing for computer-use (source-text invariants) ──
+  //
+  // Locks the literal contract in the livinityd broker factory so future
+  // refactors don't silently lose the Haiku routing. The factory lives in
+  // livos/packages/livinityd/source/modules/livinity-broker/agent-runner-factory.ts —
+  // we read it via fs and assert literal strings present. Runtime body-injection
+  // asserts are colocated in agent-runner-factory.test.ts (vitest).
+  await test('Phase 160-01 — factory contains literal mode === computer-use guard', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, join, resolve } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const __filename160 = fileURLToPath(import.meta.url);
+    const __dirname160 = dirname(__filename160);
+    const factoryPath = resolve(
+      __dirname160,
+      '../../../../livos/packages/livinityd/source/modules/livinity-broker/agent-runner-factory.ts',
+    );
+    const src = readFileSync(factoryPath, 'utf8');
+    assert(
+      /mode === 'computer-use'/.test(src),
+      "factory must contain literal `mode === 'computer-use'` guard",
+    );
+  });
+
+  await test('Phase 160-01 — factory contains literal claude-haiku-4-5-20251001 override', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, join, resolve } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const __filename160 = fileURLToPath(import.meta.url);
+    const __dirname160 = dirname(__filename160);
+    const factoryPath = resolve(
+      __dirname160,
+      '../../../../livos/packages/livinityd/source/modules/livinity-broker/agent-runner-factory.ts',
+    );
+    const src = readFileSync(factoryPath, 'utf8');
+    assert(
+      /claude-haiku-4-5-20251001/.test(src),
+      'factory must contain literal `claude-haiku-4-5-20251001` model id override',
+    );
+  });
+
+  await test('Phase 160-01 — factory preserves Phase 160-01 marker comment', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, join, resolve } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const __filename160 = fileURLToPath(import.meta.url);
+    const __dirname160 = dirname(__filename160);
+    const factoryPath = resolve(
+      __dirname160,
+      '../../../../livos/packages/livinityd/source/modules/livinity-broker/agent-runner-factory.ts',
+    );
+    const src = readFileSync(factoryPath, 'utf8');
+    assert(
+      /Phase 160-01/.test(src),
+      "factory must preserve `Phase 160-01` marker comment for grep visibility",
+    );
+  });
+
+  await test('Phase 160-01 — factory Sacred SHA marker present for sdk-agent-runner', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, join, resolve } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const __filename160 = fileURLToPath(import.meta.url);
+    const __dirname160 = dirname(__filename160);
+    const factoryPath = resolve(
+      __dirname160,
+      '../../../../livos/packages/livinityd/source/modules/livinity-broker/agent-runner-factory.ts',
+    );
+    const src = readFileSync(factoryPath, 'utf8');
+    assert(
+      /Sacred SHA: liv\/packages\/core\/src\/sdk-agent-runner\.ts untouched/.test(
+        src,
+      ),
+      'factory must contain Sacred SHA invariant marker proving sdk-agent-runner.ts is untouched',
+    );
+  });
+
   console.log(`\n${pass} pass, ${fail} fail`);
   process.exit(fail > 0 ? 1 : 0);
 }
