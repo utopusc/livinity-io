@@ -25,19 +25,19 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 163 (surface-vault-contexts) — IN-PROGRESS 2026-05-19
-Plan: 03 — **163-03 CODE-COMPLETE** 2026-05-19 (1 commit `0cd6be14`, 1 file created `liv/packages/core/src/agent-session.surface-overlay.test.ts` 229 lines, 10 PASS / 0 FAIL via `npx tsx`, sibling regression all green: computer-use + vault-mode 14/14 + multi-instance 6/6, sacred SHA preserved, D-09 + 161-02 helper + D-NO-NEW-DEPS untouched, NO source file edits — composition-lock test only)
-Next plan: Phase 163 next plan (if any) — 163-02 + 163-02.5 + 163-03 now form complete surface-vault routing + decoupled-gate + composition-lock stack
+Phase: 163 (surface-vault-contexts) — **SHIPPED + LIVE-VERIFIED** 2026-05-19
+Plan: 04 — **163-04 SHIPPED** 2026-05-19 (Mini PC deploy `bash /opt/livos/update.sh` exit 0, deployed SHA `6dd4a60` matches local HEAD `6dd4a60c7916ad2bcd18aa92c3c45c2021078cf9`; 3 synthetic WS probes all PASS with PRIMARY subsurface CWD expectations — Probe 1 webapp → Haiku 4.5 + `/home/bruce/livinity-vault/surfaces/webapp/phase163test`, Probe 2 native → Haiku 4.5 + `/home/bruce/livinity-vault/surfaces/native/phase163nativetest`, Probe 3 Main Chat regression → Opus 4.7 + `/home/bruce/livinity-vault` vault root; Phase 162 chat-path-untouched + Phase 161 dated literal both preserved at SDK boundary; sacred SHA + D-09 + 161-02 helper + D-NO-NEW-DEPS all preserved end-to-end; full evidence in `163-VERIFICATION.md`)
+Next plan: **Phase 164** — Autonomous Scheduler + Sample Agents (`/gsd-plan-phase 164`)
 Master plan: `.planning/v34-LIVOS-CC-INTEGRATION-MASTER.md` (LivOS ⇄ Claude Code tam entegrasyon, 4 phase: 162-165, ~20-25 saat agent work)
-Resume command: `/clear` ardından `/gsd-autonomous --from 163` — user uyurken kalan 3 phase sequential ship eder
+Resume command: `/clear` ardından `/gsd-plan-phase 164` veya `/gsd-autonomous --from 164` — user uyurken kalan 2 phase sequential ship eder
 
-Last completed: **162-05** ✅ CODE-COMPLETE + LIVE-VERIFIED 2026-05-19 (Mini PC deploy SHIPPED — deployed SHA `b8c4d9b` matches local HEAD; synthetic WS probe with `conv_phase162smoke` returned `SDK_INIT model=claude-opus-4-7 cwd=/home/bruce/livinity-vault` + `RESULT subtype=success` + `TEXT: ok` — vault mode engaged, Opus 4.7 default model live; Phase 161 regression probe with `native:` prefix returned `claude-haiku-4-5-20251001 cwd=/opt/livos` confirming chat-path-untouched; Redis `cc_auth_status=ok` (162-03 smoke check passed live); all 4 services active >5min NRestarts=0; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved on Mini PC source + all 16 commits; D-09 + D-NO-NEW-DEPS green)
+Last completed: **163-04** ✅ SHIPPED + LIVE-VERIFIED 2026-05-19 (Mini PC deploy SHIPPED — deployed SHA `6dd4a60` matches local HEAD; 3 synthetic WS probes all PASS with PRIMARY subsurface CWD expectations: webapp `claude-haiku-4-5-20251001 cwd=/home/bruce/livinity-vault/surfaces/webapp/phase163test`, native `claude-haiku-4-5-20251001 cwd=/home/bruce/livinity-vault/surfaces/native/phase163nativetest`, Main Chat regression `claude-opus-4-7 cwd=/home/bruce/livinity-vault`; surface vault routing LIVE on production; all 4 services active; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved on Mini PC + all 12 commits)
 
 v34.x phase queue:
 
 - [x] Phase 161 — Computer-Use SDK Path Wiring (SHIPPED)
 - [x] Phase 162 — Vault Scaffolding + SDK Settings Integration (SHIPPED — 5/5 plans CODE-COMPLETE + LIVE-VERIFIED on Mini PC)
-- [ ] Phase 163 — Surface-Specific Vault Contexts
+- [x] Phase 163 — Surface-Specific Vault Contexts (SHIPPED — 4/4 plans CODE-COMPLETE + LIVE-VERIFIED on Mini PC, 3/3 synthetic probes PASS with PRIMARY expectations)
 - [ ] Phase 164 — Autonomous Scheduler + Sample Agents
 - [ ] Phase 165 — Polish + Settings UI + v34.x Ship
 
