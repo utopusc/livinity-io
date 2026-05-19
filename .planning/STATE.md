@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T07:53:48.567Z"
+last_updated: "2026-05-19T10:01:10.763Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,8 +25,28 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: --phase (159) — EXECUTING
-Plan: 1 of --name
+Phase: 160 (luse-livos-overlay-haiku-routing) — EXECUTING
+Plan: 2 of 6 (160-01 CODE-COMPLETE; 160-02 next)
+
+## 160-01 Status (2026-05-19) — Haiku Routing CODE-COMPLETE (2 commits, sacred SHA preserved 2/2)
+
+- **HAIKU ROUTING for COMPUTER-USE LOOP** (Plan 1 of 6 in Phase 160, 2 tasks): ships header-gated Haiku routing through livinity-broker. External Luse-bound clients (Bolt.diy / Vercel AI SDK / custom Luse harness) set `X-Livinity-Computer-Use: true` → broker derives `brokerMode = 'computer-use'` → `createSdkAgentRunnerForUser({mode: 'computer-use'})` injects `tier: 'haiku'` + `model: 'claude-haiku-4-5-20251001'` into /api/agent/stream body → liv-core api.ts honors `body.tier` override → sacred sdk-agent-runner `tierToModel('haiku')` resolves to `claude-haiku-4-5` for the entire session. Two atomic commits:
+  1. `95d61ec6` Task 1 — `livos/packages/livinityd/source/modules/livinity-broker/agent-runner-factory.ts` (+ `mode?: 'chat' | 'computer-use'` opt with default `'chat'`; verbatim Haiku routing block per Plan literal contract; conditional `tier`/`model` spread into request body) + `liv/packages/core/src/api.ts` (+ `bodyTierOverride` read at /api/agent/stream entry; precedence: bodyTier > agentDefaults > env > 'sonnet').
+  2. `1b063810` Task 2 — `livos/packages/livinityd/source/modules/livinity-broker/router.ts` + `openai-router.ts` (4 call sites updated to forward `mode: brokerMode`; X-Livinity-Computer-Use header detection on both broker surfaces) + 2 test files (`agent-runner-factory.test.ts` vitest: 4 source-text invariants + 3 runtime body-injection asserts; `liv/packages/core/src/liv-agent-runner.test.ts` tsx script: same 4 source-text invariants in script style).
+- **Verification:** 11 PASS / 0 FAIL in `liv/packages/core` tsx script (was 7/0 — added 4 Phase 160-01 invariants); 22 PASS / 1 FAIL in `livinityd` vitest (was 15/1 — added 7 Phase 160-01 tests; 1 pre-existing failure in Phase 102-06 `LUSE_TARGET_DISPLAY` assertion unrelated to this plan, confirmed via `git stash + run` on bare HEAD).
+- **Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f`** for `liv/packages/core/src/sdk-agent-runner.ts` PRESERVED across both source commits + this STATE update commit.
+- **D-NO-NEW-DEPS upheld:** `git diff --stat HEAD~2..HEAD -- **/package.json` = empty.
+- **Chat path untouched:** `git diff --stat HEAD~2..HEAD -- livos/packages/ui/src/hooks/use-webapp-agent.ts use-native-app-agent.ts` = empty; AI Chat panel runs over `use-agent-socket.ts` WebSocket (separate from broker HTTP routes), default mode `'chat'` preserves verbatim body shape, agentDefaults.tier precedence intact.
+- **Deviations (all Rule 3 — plan/reality mismatch, auto-fixed; documented in 160-01-SUMMARY.md):**
+  1. Plan referenced `liv/packages/livinityd/...` but factory actually lives at `livos/packages/livinityd/...` (Phase 65 rename context). Adjusted paths.
+  2. Plan instructed `resolvedModel = 'claude-haiku-4-5-20251001'` direct injection; sacred SDK runner uses `tier` enum → resolved via `tierToModel()`. Solution: inject BOTH fields (tier flows through routing, model literal preserved for verbatim contract + log/trace visibility).
+  3. Plan assumed an existing computer-use call site; none exists (Phase 160 introduces this routing). Solution: gate via `X-Livinity-Computer-Use: true` request header parallel to existing `X-Livinity-Mode: agent` pattern.
+  4. Plan's test code used vitest patterns; target file `liv-agent-runner.test.ts` is tsx script. Solution: added invariants to BOTH locations.
+- **Deferred (out of scope per scope-boundary rule):**
+  1. Pre-existing Phase 102-06 vitest failure for `LUSE_TARGET_DISPLAY` literal assertion (snippet body in `agent-prompt-builder.buildActiveDisplaySnippet` no longer contains that string; renamed/refactored in an earlier phase). Tracked for follow-up plan.
+- **Next action:** `/gsd-execute-phase 160` Plan 02 — LivOS system prompt overlay (Wave 1, parallel-safe with completed 160-01).
+- Full deliverable detail: see `.planning/phases/160-luse-livos-overlay-haiku-routing/160-01-SUMMARY.md`.
+
 Milestone: **v35.0 — Design System Unification (UI/UX)** — OPENED 2026-05-14
 Master plan: [`.planning/v35-DESIGN-SYSTEM-MILESTONE.md`](v35-DESIGN-SYSTEM-MILESTONE.md) (470 lines — read first)
 Phases: 115 (inventory) ✓ → 116 (canonical tokens) ✓ → 117 (Server5 migration) → 118 (landing polish) ✓ → 119 (ui-kit) ← here → 120 (Mini PC wave 1) → 121 (Mini PC long-tail + audit)

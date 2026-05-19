@@ -1785,7 +1785,7 @@ Plans:
 
 **Depends on:** Phase 153 ✅ (plugin runtime + SDK exists).
 
-### Phase 160: Luse LivOS Overlay + Haiku Routing — 🔴 PLANNED 2026-05-19 (ready to execute; operator triggers `/gsd-execute-phase 160` post-/clear)
+### Phase 160: Luse LivOS Overlay + Haiku Routing — 🟡 IN PROGRESS 2026-05-19 (Plan 01 CODE-COMPLETE; Plans 02-06 pending)
 
 **Goal:** Two parallel improvements to the Luse computer-use MCP. (A) Route computer-use loop to Haiku (`claude-haiku-4-5-20251001`) for screenshot-grounded turns while AI Chat panel + WebApp chat keep Opus/Sonnet (operator's explicit request: faster + cheaper computer-use without losing chat reasoning quality). (B) Fix verbatim-Bytebot drift on LivOS via prompt-builder OVERLAY (preserves D-09 invariant: `luse-system-prompt.ts` body bytes UNCHANGED). LivOS context overlay prepends app catalog + runtime display size + dash-pattern domain rule (`n8n-bruce.livinity.io`, NOT dot subdomain). Plus `computer_application` integration with LivOS launcher (n8n / LibreOffice via `windowManager.openWindow`) and `computer_read_file` path sandbox.
 
@@ -1810,7 +1810,7 @@ Plans:
 **Resume:** `/clear` then `/gsd-execute-phase 160`. CONTEXT + 6 PLAN files all ready at `.planning/phases/160-luse-livos-overlay-haiku-routing/`. Operator UAT (Plan 06) is the only autonomous: false step — Mini PC deploy + 10-step browser walk.
 
 Plans:
-- [ ] 160-01 — Haiku routing for computer-use loop (Wave 1)
+- [x] 160-01 — Haiku routing for computer-use loop (Wave 1) — CODE-COMPLETE 2026-05-19; 2 commits `95d61ec6..1b063810`; X-Livinity-Computer-Use header gates `mode: 'computer-use'` opt on `createSdkAgentRunnerForUser` which injects `tier: 'haiku'` + `model: 'claude-haiku-4-5-20251001'` into /api/agent/stream body; liv-core api.ts honors `body.tier` override; sacred SHA preserved; 11 new tests PASS (4 tsx + 7 vitest); chat path untouched
 - [ ] 160-02 — LivOS system prompt overlay (Wave 1)
 - [ ] 160-03 — computer_application LivOS launcher (Wave 2, depends on 160-02)
 - [ ] 160-04 — Dynamic display size via xdpyinfo (Wave 2, depends on 160-02)
