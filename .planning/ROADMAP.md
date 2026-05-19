@@ -1877,30 +1877,36 @@ If browser UAT surfaces a bug → Phase 162 open as targeted fix plan. If all gr
 
 ---
 
-### Phase 164: Autonomous Scheduler + Sample Agents — 🔴 PLANNED 2026-05-19
+### Phase 164: Autonomous Scheduler + Sample Agents — 🟢 SHIPPED 2026-05-19 (LIVE-PROVEN on Mini PC, 2/2 probes PASS)
 
 **Goal:** Background autonomous CC agents tetiklenebilsin (cron + event triggers from `vault/livos-agents/*.md` frontmatter). Output `vault/inbox/*.md`'a yazılır. Budget guardrails (per-agent + daily Mini PC total cap).
 
 **Depends on:** Phase 163 SHIPPED
-**Plans:** 5 (164-01 agent def parser, 164-02 scheduler module, 164-03 inbox writer, 164-04 sample agents nightly-backup-audit + pr-watcher, 164-05 deploy + manual trigger smoke)
+**Plans:** 5/5 CODE-COMPLETE + LIVE-VERIFIED (164-01 agent def parser, 164-02 scheduler module, 164-03 inbox writer, 164-04 sample agents nightly-backup-audit + pr-watcher, 164-05 deploy + manual trigger smoke + concurrent cap UAT)
 **Approach:** autonomous
-**Estimated:** ~5-7 saat
+**Actual:** ~6 saat (5-7 saat estimate hit)
 **CONTEXT.md:** `.planning/phases/164-autonomous-scheduler/164-CONTEXT.md`
+**Verification:** `.planning/phases/164-autonomous-scheduler/164-VERIFICATION.md` (status: passed)
 
 **Defaults at ship:**
-- `liv:config:autonomous_enabled` = `false` (explicit opt-in)
-- `liv:config:autonomous_daily_budget` = `5000` (cents, $50)
-- `liv:config:autonomous_max_concurrent` = `3`
-- Sample agents ship `enabled: false` in frontmatter (user flips manually)
+- `liv:config:autonomous_enabled` = `false` (explicit opt-in) ✓ LIVE
+- `liv:config:autonomous_daily_budget` = `5000` cents ($50) ✓ wired in budget-gate.ts
+- `liv:config:autonomous_max_concurrent` = `3` ✓ LIVE-PROVEN (4 fan-out → 3 admitted)
+- Sample agents ship `enabled: false` in frontmatter (user flips manually) ✓ LIVE on Mini PC
 
-**Hard guardrails:** Sacred SHA preserved, D-09 verbatim, D-NO-NEW-DEPS, autonomous run resource caps enforced.
+**Hard guardrails (all preserved):** Sacred SHA `f3538e1d` ✓, D-09 verbatim ✓, D-NO-NEW-DEPS ✓, autonomous run resource caps enforced ✓ (Probe 1: cost_usd $0.1045 / 11 turns / 75s well within $3 + 15-turn caps; Probe 2: cap-reject log on T3 with active_count back to 0).
 
 **Plans:**
-- [ ] 164-01-PLAN.md — Agent definition format + parser (vault/livos-agents/*.md YAML+body → AgentDefinition)
-- [ ] 164-02-PLAN.md — Scheduler module + budget gate + CLI trigger + livinityd boot wire-up
-- [ ] 164-03-PLAN.md — Inbox writeback (vault/inbox/<ts>_<agent>.md with frontmatter + backlinks)
-- [ ] 164-04-PLAN.md — Sample autonomous agents (nightly-backup-audit + pr-watcher, both enabled:false)
-- [ ] 164-05-PLAN.md — Mini PC deploy + live UAT (manual trigger + concurrent cap probes)
+- [x] 164-01-PLAN.md — Agent definition format + parser (vault/livos-agents/*.md YAML+body → AgentDefinition) — SHIPPED
+- [x] 164-02-PLAN.md — Scheduler module + budget gate + CLI trigger + livinityd boot wire-up — SHIPPED
+- [x] 164-03-PLAN.md — Inbox writeback (vault/inbox/<ts>_<agent>.md with frontmatter + backlinks) — SHIPPED
+- [x] 164-04-PLAN.md — Sample autonomous agents (nightly-backup-audit + pr-watcher, both enabled:false) — SHIPPED
+- [x] 164-05-PLAN.md — Mini PC deploy + live UAT (manual trigger + concurrent cap probes) — SHIPPED + LIVE-PROVEN
+
+**Live UAT highlights:**
+- Probe 1: nightly-backup-audit CLI trigger → inbox entry `2026-05-19_19-41_nightly-backup-audit.md` with full frontmatter + real disk audit body (WARN status, 7% disk, 6 daemon restarts found); spend counter 0→10c; active_count 0
+- Probe 2: 4 simultaneous fan-out → 3 inbox entries (NOT 4) with collision-suffixing `_2`/`_3`; spend 10→28c (3 runs billed); explicit `concurrent cap 3 exceeded` log line; active_count 0
+- Safety wind-down: `autonomous_enabled=false` + sample agent `enabled: false` + 5 sacred SHAs byte-identical pre→post-deploy→post-revert
 
 ---
 

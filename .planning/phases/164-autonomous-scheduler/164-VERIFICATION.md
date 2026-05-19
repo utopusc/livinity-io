@@ -2,29 +2,42 @@
 phase: 164-autonomous-scheduler
 plan: 05
 type: verification
-status: pending
+status: passed
 deploy_date: 2026-05-19
-verified_at: 2026-05-19
+verified_at: 2026-05-19T19:50:00Z
 deployed_sha_local: 7f2e09b3ba9a498c911090ed7d3325e27f4a2cf4
-deployed_sha_minipc_recorded: pending
+deployed_sha_minipc_recorded: 7f2e09b3ba9a498c911090ed7d3325e27f4a2cf4
 minipc_target: bruce@10.69.31.68
 sacred_sha_local: f3538e1d811992b782a9bb057d1b7f0a0189f95f
-sacred_sha_minipc: pending
-d09_minipc_sha256: pending
-phase161_02_helper_minipc_sha256: pending
-agent_session_minipc_sha256: pending
-vault_scaffolder_minipc_sha256: pending
-services_healthy: pending
-sample_agents_deployed: pending
-manual_trigger_inbox_entry: pending
-daily_spend_increment: pending
-concurrent_cap_enforced: pending
-revert_safety_clean: pending
-probes_run: 0
-probes_passing: 0
-probe_1_status: pending
-probe_2_status: pending
-phase_163_regression: pending
+sacred_sha_minipc: f3538e1d811992b782a9bb057d1b7f0a0189f95f
+d09_minipc_sha256: e63773d7f0c4a78266b7012b8d69a18be91e7ebca3f79782a7ed7ed17fa0866a
+phase_161_02_helper_minipc: dc1831f5f284656dc3bd07babf972cfb02b815c6
+phase161_02_helper_minipc_sha256: 3d8e2a751c7e9d3fe3e92158d7c54272047fde3398ed21260532d3b5086d174d
+agent_session_minipc: 7c690d59ea08b6450da1d5bd243d06e62a70d473
+agent_session_minipc_sha256: 587e94ce82ffae717b557b4d0b053e4a60d12232eb7b20a8590a254a20c01d73
+vault_scaffolder_minipc: 5ddfd06508e11554ae80a7a57b269a4835bf6cdb
+vault_scaffolder_minipc_sha256: 74d78224014b1293fdbde0f36c340d82f977588b93c26a313f3707c4eb06d62d
+services_healthy: [livos, liv-core, liv-worker, liv-memory]
+sample_agents_deployed: yes
+sample_agents_count: 2
+manual_trigger_inbox_entry: yes
+manual_trigger_inbox_file: 2026-05-19_19-41_nightly-backup-audit.md
+manual_trigger_status: success
+manual_trigger_cost_usd: 0.1045
+manual_trigger_turns: 11
+manual_trigger_duration_ms: 74768
+daily_spend_increment: yes
+daily_spend_after_probe_1_cents: 10
+daily_spend_after_probe_2_cents: 28
+concurrent_cap_enforced: yes
+concurrent_cap_admitted: 3
+concurrent_cap_blocked: 1
+revert_safety_clean: yes
+probes_run: 2
+probes_passing: 2
+probe_1_status: pass
+probe_2_status: pass
+phase_163_regression: pass
 ---
 
 # Phase 164 Verification — Autonomous Scheduler LIVE-PROVEN on Mini PC
@@ -332,8 +345,97 @@ This is emitted by Phase 164-02 `budget-gate.ts → checkAndIncrementConcurrent(
 
 ## 6. Safety Wind-Down
 
-_(pending)_
+After both probes completed, the live-trigger state was reverted on Mini PC:
+
+```bash
+sudo redis-cli -u "$REDIS_URL" SET liv:config:autonomous_enabled false   # → OK
+sudo sed -i 's/^enabled: true$/enabled: false/' /home/bruce/livinity-vault/livos-agents/nightly-backup-audit.md
+```
+
+| Check | Pre-Probe | Post-Revert | Status |
+|---|---|---|---|
+| `liv:config:autonomous_enabled` | unset | **false** | reverted (no overnight self-fire) |
+| `nightly-backup-audit.md` `enabled:` field | true (set for probe) | **false** | reverted (cron-disabled until operator opts in) |
+| All 4 services active | yes | **yes** (livos, liv-core, liv-worker, liv-memory) | preserved |
+| Mini PC autonomous loop dormant | no | **yes** | T-164-05-02 + T-164-05-04 mitigated |
+
+The autonomous scheduler is now in the same disabled state it was in pre-deploy. No agent will fire on its own. Operator must:
+1. Set `liv:config:autonomous_enabled=true` in Redis, AND
+2. Flip `enabled: true` on a specific agent file in `/home/bruce/livinity-vault/livos-agents/`
+
+before any cron-driven autonomous run can happen.
 
 ## 7. Sacred Guardrails Final Audit
 
-_(pending)_
+| File | Expected (locked) | Pre-Deploy SHA256 | Post-Deploy SHA256 | Post-Revert SHA256 | Status |
+|---|---|---|---|---|---|
+| `sdk-agent-runner.ts` | git blob `f3538e1d...` | `62f92459...` | `62f92459...` | `62f92459...` | **Sacred preserved end-to-end** |
+| `luse-system-prompt.ts` | git blob `2083f0a3...` | `e63773d7...` | `e63773d7...` | `e63773d7...` | **D-09 verbatim end-to-end** |
+| `agent-prompt-builder.ts` | git blob `dc1831f5...` | `3d8e2a75...` | `3d8e2a75...` | `3d8e2a75...` | **Phase 161-02 helper preserved end-to-end** |
+| `agent-session.ts` | git blob `7c690d59...` | `587e94ce...` | `587e94ce...` | `587e94ce...` | **Phase 163-02.5 preserved end-to-end** |
+| `vault-scaffolder.ts` | git blob `5ddfd065...` | `74d78224...` | `74d78224...` | `74d78224...` | **Phase 162-01 preserved end-to-end** |
+
+All 5 byte-identical across all 3 measurement points — zero sacred-guard regressions across the deploy + 2 live probes + revert.
+
+### Final Services Status
+
+```
+$ sudo systemctl is-active livos liv-core liv-worker liv-memory
+active
+active
+active
+active
+```
+
+4 / 4 active post-UAT and post-revert.
+
+## 8. Phase 164 Summary
+
+Phase 164 is **SHIPPED** to Mini PC. The autonomous scheduler is live-proven end-to-end:
+
+1. **164-01..04 code-complete deploy** — `bash /opt/livos/update.sh` exit 0, deployed SHA `7f2e09b` matches local HEAD `7f2e09b3`.
+2. **Boot wire-up engages + defaults disabled** — `[autonomous-scheduler] disabled (liv:config:autonomous_enabled=unset) — skipping` proves the gate fires on every boot.
+3. **vault-scaffolder picks up both sample agents** — `partial — 2 new files, 11 preserved existing` proves the Phase 162-01 scaffolder + Phase 164-04 sample agents compose correctly.
+4. **Probe 1 (single trigger) PASS** — `nightly-backup-audit` ran 11 turns in 75s, $0.1045, produced a real disk audit, materialised an inbox entry with full Phase 164-03 frontmatter + backlinks, incremented daily spend counter to 10c.
+5. **Probe 2 (concurrent cap of 3) PASS** — 4 simultaneous fires → 3 inbox entries (NOT 4), 18c additional spend (3 runs billed, NOT 4), explicit `concurrent cap 3 exceeded` log line, active_count returned to 0.
+6. **Safety wind-down clean** — `autonomous_enabled=false`, sample agents `enabled: false`, all sacred guards byte-identical end-to-end.
+
+Phase 164 unlocks Phase 165 (Settings UI + Memory Linter + Dock notifications), which builds on this proven autonomous loop.
+
+## 9. Self-Check: PASSED
+
+- [x] Local push successful: `76e69201..7f2e09b3 master -> master`
+- [x] Mini PC `update.sh` exit 0, deployed SHA `7f2e09b` matches local HEAD `7f2e09b3`
+- [x] Boot journal shows autonomous-scheduler gate fired with correct disabled-default
+- [x] vault-scaffolder materialised 2 new sample agents into vault
+- [x] Probe 1 (single trigger) PASS — inbox entry with full frontmatter + backlinks, spend counter 0→10c, active_count 0
+- [x] Probe 2 (4 simultaneous → 3 admitted) PASS — cap-reject log captured, spend counter 10→28c, active_count 0
+- [x] Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (git blob) preserved on Mini PC + across all 164 commits
+- [x] D-09 verbatim byte-identical pre/post deploy
+- [x] Phase 161-02 helper byte-identical pre/post deploy
+- [x] Phase 163-02.5 `agent-session.ts` byte-identical pre/post deploy
+- [x] Phase 162-01 `vault-scaffolder.ts` byte-identical pre/post deploy
+- [x] Safety wind-down complete (autonomous_enabled=false, sample agent enabled:false)
+- [x] All 4 services active post-revert
+
+---
+
+## Status Verdict
+
+## VERIFICATION PASSED + LIVE-PROVEN
+
+**Phase 164 is SHIPPED to Mini PC.**
+
+The autonomous scheduler loop — agent definition parser (164-01) + scheduler module + budget gate + CLI trigger + boot wire-up (164-02) + inbox writer (164-03) + sample agents (164-04) — works end-to-end on production with real Anthropic API round-trips, atomic budget gating, and clean safety reverts.
+
+---
+
+*Verified static: 2026-05-19T19:25:00Z (local HEAD `7f2e09b3` pushed to origin/master)*
+*Verified deploy: 2026-05-19T19:38:00Z (Mini PC update.sh exit 0, deployed SHA `7f2e09b`)*
+*Verified Probe 1 (single trigger): 2026-05-19T19:42:00Z (75s round-trip, $0.1045, 11 turns)*
+*Verified Probe 2 (concurrent cap): 2026-05-19T19:43:00Z (4 fan-out, 3 admitted, 1 cap-rejected)*
+*Verified revert: 2026-05-19T19:50:00Z (Mini PC autonomous_enabled=false, sample agent enabled:false, 4 services active)*
+*Phase: 164-autonomous-scheduler*
+*Commits in scope: 23a0a357..(this commit) (5 plans + verification = ~20 commits)*
+*Mini PC deployed SHA: 7f2e09b (matches local HEAD `7f2e09b3`)*
+*Mini PC sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f (preserved verbatim)*
