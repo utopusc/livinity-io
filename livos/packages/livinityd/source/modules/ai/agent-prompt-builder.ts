@@ -347,6 +347,15 @@ is kept for upstream sync compatibility, not because every line applies.
 // never mutated.
 import {LUSE_SYSTEM_PROMPT} from '../computer-use/luse-system-prompt.js'
 
+// Phase 160-04 — runtime display-size resolver. The overlay's optional
+// `actualDisplaySize` field (LuseOverlayOpts) was a placeholder in 160-02;
+// 160-04 fills it from `xdpyinfo` against `LUSE_TARGET_DISPLAY` (per-WebApp
+// Xvfb env, set by `luse-mcp-config.ts:buildLuseConfig`) or `DISPLAY` (host
+// master fallback). The helper returns null on any failure → overlay falls
+// back to "unknown — ground from screenshots" wording (160-02 behavior
+// preserved).
+import {readActualDisplaySize} from '../computer-use/native/display-size.js'
+
 /**
  * Compose the final Luse system prompt by prepending the LivOS context
  * overlay onto the verbatim Bytebot prompt.
@@ -371,4 +380,50 @@ export function buildLuseSystemPromptWithOverlay(
 	const luseSystemPromptWithOverlay =
 		buildLuseOverlay(overlayOpts) + LUSE_SYSTEM_PROMPT
 	return luseSystemPromptWithOverlay
+}
+
+/**
+ * Phase 160-04 — async variant of `buildLuseSystemPromptWithOverlay` that
+ * resolves the runtime display size from `xdpyinfo` BEFORE composing the
+ * overlay. Reads the env vars in this order of preference:
+ *
+ *   1. `LUSE_TARGET_DISPLAY` — set per-WebApp by `luse-mcp-config.ts:
+ *      buildLuseConfig` to point at the spawned Xvfb (`:10+`).
+ *   2. `DISPLAY` — the host process's master X server (typically `:1` on
+ *      Mini PC).
+ *   3. `:0` — last-ditch fallback for dev environments. xdpyinfo will fail
+ *      cleanly if :0 isn't running, returning null → overlay degrades to
+ *      "unknown" wording.
+ *
+ * If `overlayOpts.actualDisplaySize` is ALREADY supplied by the caller, the
+ * env read + xdpyinfo call is SKIPPED — the explicit opt wins. This lets
+ * tests inject a canned size without monkey-patching the helper, and lets
+ * Plan 160-03 or future callers pre-resolve the size if they already have
+ * it cached.
+ *
+ * Returns `buildLuseOverlay(opts) + LUSE_SYSTEM_PROMPT` — same composition
+ * pattern as the sync variant, just with one more await for the xdpyinfo
+ * round-trip. Total latency: ~5-50 ms on a healthy display, hard-capped at
+ * 2000 ms by the helper's safety timeout.
+ *
+ * Why a separate async function (not converting the sync one):
+ *   - The sync variant has no live callers yet (Phase 160-02 ships scaffold
+ *     only), but the public API contract is sync — preserving it costs
+ *     nothing and keeps the door open for callers that already have the
+ *     size pre-resolved.
+ *   - The async variant is the one Plan 160-04 wires into the agent runner
+ *     construction path (where awaiting one extra promise is free — agent
+ *     setup is already async-throughout).
+ */
+export async function buildLuseSystemPromptWithOverlayResolved(
+	overlayOpts: LuseOverlayOpts = {},
+): Promise<string> {
+	let actualDisplaySize = overlayOpts.actualDisplaySize
+	if (!actualDisplaySize) {
+		const targetDisplay =
+			process.env.LUSE_TARGET_DISPLAY ?? process.env.DISPLAY ?? ':0'
+		const resolved = await readActualDisplaySize(targetDisplay)
+		if (resolved) actualDisplaySize = resolved
+	}
+	return buildLuseSystemPromptWithOverlay({...overlayOpts, actualDisplaySize})
 }
