@@ -41,6 +41,13 @@ function isNativeAppKind(appId: string): boolean {
 type WindowContentProps = {
 	route: string
 	appId: string
+	// Phase 159 — windowId is forwarded to NativeAppStreamWindow so it can
+	// register a close handler with the WindowManager (159-02 registry
+	// pattern). Optional because other content types (settings, files,
+	// etc.) don't need it. The call site in windows-container.tsx is
+	// wired up by Plan 07's full `.map(...)` block rewrite — this plan
+	// only widens the accept side.
+	windowId?: string
 }
 
 // Apps that manage their own scroll and layout (no wrapper padding/scroll).
@@ -49,12 +56,12 @@ type WindowContentProps = {
 const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_remote-desktop', 'LIVINITY_chrome',
 	'LIVINITY_gmail'])
 
-export function WindowContent({route, appId}: WindowContentProps) {
+export function WindowContent({route, appId, windowId}: WindowContentProps) {
 	if (fullHeightApps.has(appId) || isWebAppKind(appId) || isNativeAppKind(appId)) {
 		return (
 			<div className='h-full overflow-hidden'>
 				<Suspense fallback={<Loading />}>
-					<WindowAppContent appId={appId} initialRoute={route} />
+					<WindowAppContent appId={appId} initialRoute={route} windowId={windowId} />
 				</Suspense>
 			</div>
 		)
@@ -64,14 +71,14 @@ export function WindowContent({route, appId}: WindowContentProps) {
 		<div className={contentWrapperClass}>
 			<div className={contentInnerClass}>
 				<Suspense fallback={<Loading />}>
-					<WindowAppContent appId={appId} initialRoute={route} />
+					<WindowAppContent appId={appId} initialRoute={route} windowId={windowId} />
 				</Suspense>
 			</div>
 		</div>
 	)
 }
 
-export function WindowAppContent({appId, initialRoute}: {appId: string; initialRoute: string}) {
+export function WindowAppContent({appId, initialRoute, windowId}: {appId: string; initialRoute: string; windowId?: string}) {
 	// Phase 95-02 — WebApp stream window. appId is `WEBAPP_<webappId>`; the
 	// webappId is sliced off and passed to the lazy-loaded component. Match
 	// before the `switch` so the prefix wins over any future literal collision.
@@ -83,9 +90,14 @@ export function WindowAppContent({appId, initialRoute}: {appId: string; initialR
 	// Phase 157 round 5 — Native-app stream window. Mirrors the WebApp
 	// branch above; appId is `NATIVE_<nativeAppId>` (NativeAppConfig
 	// UUID from apps.native.list).
+	//
+	// Phase 159-04 — windowId is forwarded so NativeAppStreamWindow can
+	// register a close handler with the WindowManager (replaces the H1
+	// unmount-cleanup race). The WebApp branch above does NOT receive
+	// windowId in this plan — Plan 05 will do that defensive migration.
 	if (isNativeAppKind(appId)) {
 		const nativeAppId = appId.slice(NATIVE_APP_ID_PREFIX.length)
-		return <NativeAppStreamWindowContent nativeAppId={nativeAppId} />
+		return <NativeAppStreamWindowContent nativeAppId={nativeAppId} windowId={windowId} />
 	}
 
 	switch (appId) {

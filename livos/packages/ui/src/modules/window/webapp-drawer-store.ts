@@ -1,3 +1,19 @@
+//
+// Phase 159 — namespace re-use note (Workstream A).
+//
+// This Zustand store's `byWebappId` key namespace (chatInputModeByWebappId,
+// teachEventsByWebappId, selectedSkillIdByWebappId, etc.) is RE-USED for
+// native app ids too. Both WebApp and NativeApp ids are UUIDv4 —
+// collision probability is cryptographically negligible (~2^-122 per pair).
+//
+// The slot name is intentionally preserved (NOT renamed to `byStreamAppId`)
+// to keep the existing 117-line source-text invariant test in
+// webapp-floating-action-bar.test.tsx passing without cascade-breaking
+// 20+ locked literals. Consumers (webapp-floating-action-bar.tsx, Plan 07)
+// compute `const streamId = webappId ?? nativeAppId` and select with that.
+//
+// Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f (sdk-agent-runner.ts) unchanged.
+//
 // Phase 100-06: per-WebApp drawer state, shared between the floating
 // action bar (rendered OUTSIDE the window via windows-container.tsx) and
 // the Sheet drawer host (rendered inside webapp-stream-window.tsx, but
