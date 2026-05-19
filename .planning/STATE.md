@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T12:48:24.850Z"
+last_updated: "2026-05-19T16:13:49.510Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -33,6 +33,7 @@ Resume command: `/clear` ardından `/gsd-autonomous --from 162` — user uyurken
 Last completed: **Phase 161** ✅ SHIPPED 2026-05-19 (15 commits + Mini PC deploy `fbb8e3a` + live runtime probe MH1 PROVEN; sacred SHA preserved 15/15; MH2/MH3/MH4/MH7 operator browser walk pending — DEFERRED to v34.x close per master plan)
 
 v34.x phase queue:
+
 - [x] Phase 161 — Computer-Use SDK Path Wiring (SHIPPED)
 - [ ] Phase 162 — Vault Scaffolding + SDK Settings Integration (next action)
 - [ ] Phase 163 — Surface-Specific Vault Contexts
@@ -735,7 +736,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 161 (Computer-Use SDK Path Wiring) — 4 plans — 2026-05-19T12:47:27.165Z
+**Planned Phase:** 162 (vault-and-sdk-integration) — 5 plans — 2026-05-19T16:13:49.497Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
