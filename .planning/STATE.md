@@ -25,8 +25,9 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 160 (luse-livos-overlay-haiku-routing) — CODE-COMPLETE pending operator UAT
-Plan: 6 of 6 COMPLETE (160-01 + 160-02 + 160-03 + 160-04 + 160-05 + 160-06 CODE-COMPLETE; operator Mini PC deploy + 10-step browser UAT pending)
+Phase: 160 ✅ SHIPPED 2026-05-19 (18 commits, sacred SHA preserved 18/18, Mini PC deploy PASS, UAT discovered production wire-through gap → carry-forward to Phase 161)
+Plan: 6 of 6 SHIPPED (backend additive code in place; wire-through to LivOS internal SDK subscription path deferred to Phase 161)
+Next phase: **Phase 161 — Computer-Use SDK Path Wiring** (🔴 PLANNED, ~2-3h, 4 atomic patches). Recommended: `/clear` then `/gsd-discuss-phase 161` in a fresh session.
 
 ## 160-01 Status (2026-05-19) — Haiku Routing CODE-COMPLETE (2 commits, sacred SHA preserved 2/2)
 
