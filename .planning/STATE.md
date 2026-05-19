@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T19:35:00.000Z"
+last_updated: "2026-05-19T20:39:45.356Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -739,7 +739,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 164 (autonomous-scheduler) — 5 plans — 2026-05-19T18:56:51.548Z
+**Planned Phase:** 165 (cc-integration-polish) — 4 plans — 2026-05-19T20:39:45.345Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
