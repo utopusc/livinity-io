@@ -50,8 +50,13 @@ import type {StreamManager} from '../streaming/stream-manager.js'
  * because the allocator is a process-global resource — every spawn from
  * every user shares the same display-number pool. Wave 2 102-04 mirrors
  * this for the WebApp side.
+ *
+ * Phase 159 — exported for the idle reaper wire-up in
+ * livinityd/source/index.ts. Reaper passes this allocator to
+ * `closeNativeApp` so released display slots are freed back to the
+ * shared pool.
  */
-const nativeDisplayAllocator = new DisplayAllocator()
+export const nativeDisplayAllocator = new DisplayAllocator()
 
 /** Default Xvfb spawn factory. Tests override via _setXvfbSpawnFnForTest. */
 let xvfbSpawnFn: typeof spawnXvfb = spawnXvfb
@@ -73,7 +78,12 @@ export interface ActiveNativeApp {
 	startedAt: number
 }
 
-const activeNative = new Map<string, ActiveNativeApp>()
+// Phase 159 — exported for the idle reaper. Reaper walks .entries()
+// every 30s, checks `now - startedAt >= idleMs`, calls
+// `closeNativeApp({id, active: activeNative, ...})` for stale handles.
+// The map is the same module-scope singleton used by the spawn/close
+// tRPC routes — single source of truth for live native-app handles.
+export const activeNative = new Map<string, ActiveNativeApp>()
 
 // Test injection (do not use in production)
 
