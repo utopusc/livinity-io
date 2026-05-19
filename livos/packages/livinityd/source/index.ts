@@ -79,6 +79,12 @@ import {NativeAppConfigStore} from './modules/apps/native-app-config.js'
 // procedures. Must be initialised AFTER `this.ai.start()` (Redis) and
 // AFTER `this.nativeAppConfigStore` is constructed.
 import {initV37InstallService} from './modules/apps/v37-install-service.js'
+// Phase 159 — native-app idle reaper. Self-rescheduling 30s walk over
+// activeNative; reaps handles older than NATIVE_APP_IDLE_REAP_MS (default
+// 30min). Defense in depth for the window-manager-mediated close handler
+// (159-02) and the fire-and-forget native-routes close mutation.
+import {startNativeAppIdleReaper} from './modules/apps/native-app-idle-reaper.js'
+import {activeNative, nativeDisplayAllocator} from './modules/apps/native-routes.js'
 // Phase 101-01 + 101-04 — singleton Chrome bootstrap + typed CDP client.
 // `bootstrapChrome` spawns Chrome with --remote-debugging-port=9222 and
 // waits for /json/version to return 200. `ChromeCdpClient` owns the
@@ -223,6 +229,12 @@ export default class Livinityd {
 	// for graceful shutdown so the self-rescheduling setTimeout chain unwinds
 	// cleanly on SIGTERM/SIGINT.
 	private stopHeartbeat?: HeartbeatStopHandle
+	// Phase 159 — native-app idle reaper stop handle. Armed in start() AFTER
+	// the StreamManager construction block; halted in stop() so the
+	// self-rescheduling setTimeout chain unwinds cleanly on SIGTERM/SIGINT.
+	// Undefined while the reaper has not been started (boot edge before
+	// streamManager is constructed, or post-stop).
+	private nativeAppIdleReaperStop?: () => void
 	// Phase 71-05 — upstream-bytebot desktop container lifecycle owner.
 	// Initialized in start() AFTER initDatabase() because the manager needs the pg pool.
 	// Optional because PostgreSQL may be unavailable on legacy YAML-only mode
@@ -644,6 +656,28 @@ export default class Livinityd {
 				`StreamManager started (cap=${this.streamManager.getCap()}, port-range=[15900,16000))`,
 			)
 
+			// Phase 159 — arm the native-app idle reaper. Reads activeNative +
+			// nativeDisplayAllocator module-scope singletons exported from
+			// native-routes.ts. Stop handle stashed on `this.nativeAppIdleReaperStop`
+			// for clean shutdown via the existing stop() sequence (mirrors the
+			// Phase 104 stopHeartbeat pattern). Defense-in-depth backstop for
+			// the window-manager-mediated close handler (159-02) — env-tunable
+			// via NATIVE_APP_IDLE_REAP_MS (default 30min).
+			const reaperLogger = (() => {
+				const c = this.logger.createChildLogger('native-reaper')
+				return {
+					info: (msg: string) => c.log(msg),
+					warn: (msg: string, error?: unknown) => c.error(msg, error),
+					error: (msg: string, error?: unknown) => c.error(msg, error),
+				}
+			})()
+			this.nativeAppIdleReaperStop = startNativeAppIdleReaper({
+				active: activeNative,
+				displayAllocator: nativeDisplayAllocator,
+				streamManager: this.streamManager,
+				logger: reaperLogger,
+			})
+
 			// Phase 102-03 — Master Chrome profile seeder
 			// (D-102-MASTER-PROFILE-SEED).
 			//
@@ -929,6 +963,17 @@ export default class Livinityd {
 				this.stopHeartbeat?.()
 			} catch (err) {
 				this.logger.error('Failed to stop heartbeat sender', err)
+			}
+
+			// Phase 159 — halt the native-app idle reaper. No-op if it was
+			// never armed (boot edge before streamManager was constructed,
+			// or already-stopped). Must fire before streamManager teardown
+			// so in-flight closeNativeApp ticks finish against a healthy
+			// stream-manager surface.
+			try {
+				this.nativeAppIdleReaperStop?.()
+			} catch (err) {
+				this.logger.error('Failed to stop native-app idle reaper', err)
 			}
 
 			// Phase 98-04 — stop the WebApp idle-cleanup poller before the
