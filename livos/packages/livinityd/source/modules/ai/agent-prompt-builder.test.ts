@@ -450,3 +450,82 @@ describe('Phase 160-02 — buildLuseOverlay runtime behavior', () => {
 		expect(liveIdx).toBeGreaterThan(handoffIdx)
 	})
 })
+
+// ─── Phase 160-04 — runtime display size via xdpyinfo ──────────────────
+//
+// Plan 160-04 fills the `actualDisplaySize` placeholder shipped in 160-02
+// with a real `xdpyinfo` round-trip against LUSE_TARGET_DISPLAY (per-WebApp
+// Xvfb) or DISPLAY (host master). The 4 source-text invariants below lock:
+//
+//   1. agent-prompt-builder imports readActualDisplaySize from the new
+//      sibling helper file
+//   2. agent-prompt-builder reads LUSE_TARGET_DISPLAY env (with DISPLAY
+//      fallback)
+//   3. display-size.ts helper has a strict `^:[0-9]` regex (no shell-meta)
+//   4. display-size.ts helper enforces a 2000 ms timeout (no agent hangs)
+//
+// Plus 2 runtime behavior tests on the new async helper:
+//   - When opts.actualDisplaySize is pre-supplied, the env read is SKIPPED
+//     (caller wins, no xdpyinfo subprocess fires)
+//   - Composition still produces overlay + verbatim in correct order
+//
+// The runtime helper tests do NOT spawn xdpyinfo (CI environments lack X11)
+// — they cover the no-X11 / opt-pre-supplied path that's deterministic
+// without an X server. Live xdpyinfo behavior is verified on Mini PC after
+// deploy per the plan <verification> step.
+
+import {buildLuseSystemPromptWithOverlayResolved} from './agent-prompt-builder.js'
+
+describe('Phase 160-04 — runtime display size in overlay', () => {
+	const BUILDER_SRC = readFileSync(
+		join(__dirname_160_02, 'agent-prompt-builder.ts'),
+		'utf8',
+	)
+	const HELPER_SRC = readFileSync(
+		join(__dirname_160_02, '..', 'computer-use', 'native', 'display-size.ts'),
+		'utf8',
+	)
+
+	it('builder imports readActualDisplaySize from display-size helper', () => {
+		expect(BUILDER_SRC).toMatch(/readActualDisplaySize/)
+	})
+
+	it('builder reads LUSE_TARGET_DISPLAY env first then DISPLAY fallback', () => {
+		expect(BUILDER_SRC).toMatch(/LUSE_TARGET_DISPLAY/)
+		expect(BUILDER_SRC).toMatch(/process\.env\.DISPLAY/)
+	})
+
+	it('helper validates display format strictly (no shell injection)', () => {
+		// The literal `!/^:[0-9]` regex pattern guards against shell-meta in
+		// the display string before it reaches `xdpyinfo -display`.
+		expect(HELPER_SRC).toMatch(/!\/\^:\[0-9\]/)
+	})
+
+	it('helper has 2000 ms timeout for xdpyinfo (no agent loop hang)', () => {
+		expect(HELPER_SRC).toMatch(/2000/)
+	})
+
+	it('resolved composer skips env read when actualDisplaySize is pre-supplied', async () => {
+		// Pre-supplied size → no xdpyinfo subprocess fires (helper is
+		// short-circuited). The composed prompt must reflect the pre-supplied
+		// dimensions verbatim, NOT whatever xdpyinfo would have returned for
+		// the current env.
+		const out = await buildLuseSystemPromptWithOverlayResolved({
+			actualDisplaySize: {width: 1920, height: 1080},
+		})
+		expect(out).toContain('DISPLAY: 1920 x 1080 pixels')
+		// Composition order preserved (overlay BEFORE verbatim):
+		expect(out.startsWith('[LIVOS CONTEXT')).toBe(true)
+		const handoffIdx = out.indexOf('[BYTEBOT VERBATIM PROMPT FOLLOWS]')
+		const liveIdx = out.indexOf('You are Liv,')
+		expect(liveIdx).toBeGreaterThan(handoffIdx)
+	})
+
+	it('resolved composer returns a Promise<string> (async contract)', () => {
+		const result = buildLuseSystemPromptWithOverlayResolved({
+			actualDisplaySize: {width: 1280, height: 720},
+		})
+		expect(result).toBeInstanceOf(Promise)
+		return result.then((s) => expect(typeof s).toBe('string'))
+	})
+})
