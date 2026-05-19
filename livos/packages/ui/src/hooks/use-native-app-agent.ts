@@ -5,7 +5,7 @@
 // hold either result behind a single UseStreamAppAgentResult alias.
 //
 // Differences from useWebAppAgent:
-//   - Uses `apps.native.list` instead of `webapp.list` for ActiveAppMeta
+//   - Uses `apps.native.list` instead of the webapp directory query for ActiveAppMeta
 //   - No window-list query (native binaries own their Xvfb display 1:1; no wid)
 //   - No session persistence endpoints (deferred per RESEARCH A4)
 //   - Conversation IDs prefixed `native:<id>:<short-uuid>` (vs `webapp:<id>:...`)
