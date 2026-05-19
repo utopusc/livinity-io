@@ -79,9 +79,16 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 	// Phase 95-02 — WebApp stream window. appId is `WEBAPP_<webappId>`; the
 	// webappId is sliced off and passed to the lazy-loaded component. Match
 	// before the `switch` so the prefix wins over any future literal collision.
+	//
+	// Phase 159-05 — windowId is forwarded so WebAppStreamWindow can register
+	// a close handler with the WindowManager (defensive symmetry with the
+	// native-app branch below; same registry pattern from Plan 02/04). When
+	// windowId is absent (e.g. component rendered outside the WindowManager
+	// tree, or before Plan 07 reliably threads it), the component falls back
+	// to the legacy D-95-CLEANUP unmount path.
 	if (isWebAppKind(appId)) {
 		const webappId = appId.slice(WEBAPP_APP_ID_PREFIX.length)
-		return <WebAppStreamWindowContent webappId={webappId} />
+		return <WebAppStreamWindowContent webappId={webappId} windowId={windowId} />
 	}
 
 	// Phase 157 round 5 — Native-app stream window. Mirrors the WebApp

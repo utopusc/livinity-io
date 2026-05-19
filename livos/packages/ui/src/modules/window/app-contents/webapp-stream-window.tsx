@@ -138,9 +138,15 @@ function sheetOpenLegacy(openDrawer: DrawerMode | null): boolean {
 
 interface WebAppStreamWindowProps {
 	webappId: string
+	/**
+	 * Phase 159 — windowId from WindowManager. Required for the
+	 * registerCloseHandler pattern (Plan 02 + 04). When absent, falls back
+	 * to the legacy unmount-cleanup path (kept defensively).
+	 */
+	windowId?: string
 }
 
-export default function WebAppStreamWindow({webappId}: WebAppStreamWindowProps) {
+export default function WebAppStreamWindow({webappId, windowId}: WebAppStreamWindowProps) {
 	// 1. Pull this WebApp's row from the persisted list (URL is needed for
 	// the spawn input + the toolbar copy-URL action — D-95-15).
 	const webappListQuery = trpcReact.webapp.list.useQuery(undefined, {
