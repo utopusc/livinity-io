@@ -252,7 +252,83 @@ The agent produced a **real structured audit report** (WARN status — backup fi
 
 ## 5. Live UAT — Concurrent Cap (Probe 2)
 
-_(pending)_
+### Pre-Fan-Out State
+
+| Key | Value |
+|---|---|
+| `liv:config:autonomous_max_concurrent` | (null — defaults to 3 per Phase 164-02 budget-gate) |
+| `INBOX_BEFORE` (count of `*nightly-backup-audit*.md`) | 1 (from Probe 1) |
+| `BEFORE_SPEND` | 10 cents |
+| `BEFORE_ACTIVE` | 0 |
+
+### Fan-Out Invocation
+
+Fired 4 simultaneous triggers in parallel via bash background:
+
+```bash
+for i in 1 2 3 4; do
+  BROKER_FORCE_ROOT_HOME=true HOME=/root /usr/bin/npx tsx \
+    /opt/livos/packages/livinityd/source/cli.ts \
+    autonomous-trigger nightly-backup-audit > /tmp/164-cap-$i.log 2>&1 &
+done
+wait
+```
+
+### Per-Trigger CLI Output
+
+| Trigger | Result | Stdout Tail |
+|---|---|---|
+| T1 | exit 0 | `autonomous-trigger: nightly-backup-audit completed` |
+| T2 | exit 0 | `autonomous-trigger: nightly-backup-audit completed` |
+| T3 | exit 0 with reject log | `[autonomous-scheduler] nightly-backup-audit blocked: concurrent cap 3 exceeded` + `autonomous-trigger: nightly-backup-audit completed` |
+| T4 | exit 0 | `autonomous-trigger: nightly-backup-audit completed` |
+
+Note: which of T1-T4 hits the cap depends on race order. T3 caught the cap-reject this run — exactly 1 of 4 was blocked, the other 3 ran.
+
+### Inbox Materialisation
+
+`/home/bruce/livinity-vault/inbox/` after fan-out:
+
+```
+2026-05-19_19-43_nightly-backup-audit_3.md  (cap probe, run 3)
+2026-05-19_19-43_nightly-backup-audit_2.md  (cap probe, run 2)
+2026-05-19_19-43_nightly-backup-audit.md    (cap probe, run 1)
+2026-05-19_19-41_nightly-backup-audit.md    (Probe 1, single-trigger)
+```
+
+| Metric | Expected | Actual | Status |
+|---|---|---|---|
+| INBOX_AFTER count | 4 (1 + 3 success) | 4 | PASS |
+| DELTA from Probe 1 | 3 (cap enforced, 4th SKIPPED writeback) | 3 | PASS |
+| Collision suffixing (Phase 164-03) | `_2` + `_3` filenames | `_2.md` + `_3.md` present | PASS |
+
+### Post-Fan-Out Redis State
+
+| Key | Pre-Fan-Out | Post-Fan-Out | Expected | Status |
+|---|---|---|---|---|
+| `liv:autonomous:daily_spend_cents:2026-05-19` | 10 | **28** | 10 + (3 × ~6 cents) | PASS (3 runs billed, NOT 4) |
+| `liv:autonomous:active_count` | 0 | **0** | 0 (try/finally decrement) | PASS — NO LEAK |
+
+### Cap-Reject Evidence
+
+T3 captured the explicit budget-gate rejection log line:
+
+```
+[autonomous-scheduler] nightly-backup-audit blocked: concurrent cap 3 exceeded
+```
+
+This is emitted by Phase 164-02 `budget-gate.ts → checkAndIncrementConcurrent()`'s MULTI(INCR+GET)+DECR-rollback atomic gate.
+
+### Probe 2 Verdict
+
+**probe_2_status: PASS**
+
+- **DELTA = 3** new inbox entries (NOT 4) — cap enforced atomically
+- **4th run skipped writeback** per 164-02 Task 2 Test 6 chosen behaviour (no `status: skipped` inbox entry, the operator sees the silence + the journal log)
+- **Spend counter incremented by 3 runs only** (10 → 28 cents) — proves billing happened only for the 3 admitted runs
+- **active_count returned to 0** — proves the cap-gate's DECR rollback fired on the rejected 4th, AND the try/finally decremented after the 3 successful runs
+- **Collision-sequencing path LIVE** — Phase 164-03's `_2` `_3` filename suffixing works in production for same-minute concurrent fires
+- **Concurrent-cap budget gate (T-164-02-03) LIVE-PROVEN** — race past cap blocked atomically
 
 ## 6. Safety Wind-Down
 
