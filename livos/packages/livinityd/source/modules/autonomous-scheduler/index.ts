@@ -24,6 +24,10 @@ export type {
 	WriteInboxResult,
 } from './inbox-writer.js'
 
+// Phase 165-02 — Read-only inbox helper for the Settings UI autonomous panel.
+export {readLastRunForAgent} from './inbox-reader.js'
+export type {LastRunInfo} from './inbox-reader.js'
+
 // Phase 164-02 — scheduler runtime + CLI trigger + budget gate helpers.
 export {AutonomousScheduler} from './scheduler.js'
 export type {
