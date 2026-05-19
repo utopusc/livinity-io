@@ -41,6 +41,13 @@ import {cn} from '@/shadcn-lib/utils'
 import {useWebAppVnc} from '@/hooks/use-webapp-vnc'
 import {useWebAppAgent} from '@/hooks/use-webapp-agent'
 import {useTeachRecorder, type ActionLog} from '@/hooks/use-teach-recorder'
+// Phase 159-05 — window-manager-mediated close (Workstream B defensive
+// symmetry with NativeAppStreamWindow). useWindowManagerOptional is
+// preferred over useWindowManager because the component may render
+// outside the provider tree in some test/storybook surfaces — the
+// optional hook returns null and we transparently fall back to the
+// legacy unmount cleanup path below.
+import {useWindowManagerOptional} from '@/providers/window-manager'
 
 import {type WebAppMode} from '../webapp-mode-selector'
 import {SkillReplayScrubber} from '../skill-replay-scrubber'
@@ -207,23 +214,47 @@ export default function WebAppStreamWindow({webappId, windowId}: WebAppStreamWin
 		triggerSpawn()
 	}, [webapp, wsUrl, spawnError, webappId, triggerSpawn])
 
-	// 3. Cleanup on unmount — fire-and-forget close (D-95-CLEANUP). The
-	// window manager owns idle cleanup as a backstop; failure here is
-	// logged not blocking.
+	// 3. Phase 159 — window-manager-mediated teardown (Workstream B,
+	// defensive symmetry with NativeAppStreamWindow). When `windowId` is
+	// threaded through (Plan 05 plumbing), we register a close handler
+	// that runs while the React tree is still mounted — closeMutationRef
+	// is fresh, the WS transport is live, no H1 stale-closure race. When
+	// `windowId` is absent (defensive fallback during rollout, or when
+	// the component renders outside the WindowManager tree), we keep the
+	// legacy D-95-CLEANUP unmount path; the literal
+	// `closeMutationRef.current.mutate({webappId})` below preserves the
+	// 100-10 source-text invariant (test line 55-57). Both paths are
+	// server-side idempotent so the rare cases where both fire are
+	// harmless.
+	//
+	// Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f (sdk-agent-runner.ts) unchanged.
 	const closeMutationRef = useRef(closeMutation)
 	useEffect(() => {
 		closeMutationRef.current = closeMutation
 	}, [closeMutation])
 
+	const wm = useWindowManagerOptional()
 	useEffect(() => {
-		return () => {
-			try {
-				closeMutationRef.current.mutate({webappId})
-			} catch {
-				// Non-blocking cleanup — log channel handled by tRPC error sink.
+		if (!windowId || !wm) {
+			// Defensive fallback — legacy D-95-CLEANUP unmount path.
+			return () => {
+				try {
+					closeMutationRef.current.mutate({webappId})
+				} catch {
+					// Non-blocking cleanup — log channel handled by tRPC error sink.
+				}
 			}
 		}
-	}, [webappId])
+		const handler = async () => {
+			try {
+				await closeMutationRef.current.mutateAsync({webappId})
+			} catch {
+				// Non-blocking — reaper-style backstop owns retries
+			}
+		}
+		wm.registerCloseHandler(windowId, handler)
+		return () => wm.unregisterCloseHandler(windowId)
+	}, [windowId, webappId, wm])
 
 	// 4. VNC + agent hooks.
 	// Phase 100-07: viewOnly=true disables RFB input forwarding. Mouse +

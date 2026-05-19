@@ -672,3 +672,35 @@ describe('Phase 100-10-10 chat-response wire-up + per-tool streaming UI', () => 
 	})
 })
 
+// ─────────────────────────────────────────────────────────────────────
+// Phase 159-05 — WebApp registry migration (Workstream B defensive symmetry).
+//
+// Mirrors Plan 04's native-app registry migration. The existing
+// `closeMutationRef.current.mutate({webappId})` literal (locked at line 57
+// above) is PRESERVED in the defensive fallback branch, so the legacy
+// 100-10 invariant stays green. NEW invariants below lock the primary
+// registry path: useWindowManagerOptional import, wm.registerCloseHandler
+// call with handler closure, wm.unregisterCloseHandler cleanup, and the
+// mutateAsync inside the handler (so the registry's 2s Promise.race
+// timeout from Plan 02 can observe completion).
+// ─────────────────────────────────────────────────────────────────────
+
+describe('Phase 159-05 — registry-mediated close (Workstream B)', () => {
+	it('Phase 159 — registers close handler with WindowManager when windowId is present', () => {
+		expect(SRC).toMatch(/import\s*\{\s*useWindowManagerOptional\s*\}\s*from\s*['"]@\/providers\/window-manager['"]/)
+		expect(SRC).toMatch(/wm\.registerCloseHandler\(windowId,\s*handler\)/)
+		expect(SRC).toMatch(/wm\.unregisterCloseHandler\(windowId\)/)
+		expect(SRC).toMatch(/closeMutationRef\.current\.mutateAsync\(\{webappId\}\)/)
+	})
+
+	it('Phase 159 — keeps the defensive D-95-CLEANUP fallback for missing windowId', () => {
+		// The legacy unmount cleanup MUST remain reachable when windowId
+		// is absent (component used outside WindowManager tree). Locks
+		// the literal that the 100-10 invariant test (above) also asserts.
+		expect(SRC).toMatch(/if\s*\(!windowId\s*\|\|\s*!wm\)/)
+		// The fallback's mutate call uses `mutate` (not `mutateAsync`) —
+		// matches the original 100-10 fire-and-forget semantic.
+		expect(SRC).toMatch(/closeMutationRef\.current\.mutate\(\{webappId\}\)/)
+	})
+})
+
