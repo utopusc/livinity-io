@@ -420,3 +420,100 @@ export async function readFileBase64(filePath: string): Promise<{
 		mimeType: inferMimeType(filename),
 	}
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 160-03 — LivOS app catalog resolver
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Called by computer_application handler BEFORE classic APP_MAP. Queries
+// WebApps + Native apps in parallel, returns first case-insensitive name
+// match. Null if not found → caller falls through to APP_MAP (Bytebot
+// binary spawn path).
+//
+// The handler in mcp/tools.ts owns the dispatch wire (stderr IPC line
+// "open_livos_app kind=... appId=... route=..."). This module ships the
+// pure resolver function + types; livinityd wires the default resolver
+// at runtime by passing the trpc-backed listWebApps + listNativeApps
+// closures along with the authenticated user's slug + domain root.
+
+/** Shape returned by the LivOS app resolver on a successful name match. */
+export interface LivosAppMatch {
+	kind: 'webapp' | 'native'
+	appId: string
+	/** Route for windowManager.openWindow — WebApp gets a URL, native gets `/native/<id>`. */
+	route: string
+	title: string
+	icon: string
+}
+
+/** Resolver function type. Returns null when no LivOS app matches `name`. */
+export type LivosAppResolver = (name: string) => Promise<LivosAppMatch | null>
+
+/**
+ * Default resolver that queries livinityd trpc procedures. Dependency-injected
+ * so test harnesses can substitute mocks for listWebApps / listNativeApps
+ * without needing a real DB pool.
+ *
+ * URL pattern is the operator-blessed DASH form: `<app>-<user>.<root>`
+ * (e.g. `n8n-bruce.livinity.io`). NEVER the dot form `<app>.<user>.<root>`.
+ * The Plan 160-02 overlay teaches the agent the same convention so the
+ * computer-use loop's URL hint stays consistent with the resolver output.
+ *
+ * Match policy: case-insensitive equality on the app's display name (falls
+ * back to subdomain/id when name is absent). WebApps tried before Native to
+ * match the common agent intent — "open n8n" usually means the browser app
+ * since most LivOS apps are web-based.
+ */
+export async function defaultLivosAppResolver(
+	name: string,
+	deps: {
+		listWebApps: () => Promise<Array<{id: string; subdomain?: string; name?: string}>>
+		listNativeApps: () => Promise<Array<{id: string; name?: string; iconUrl?: string}>>
+		userSlug: string
+		domainRoot: string
+		proto?: 'http' | 'https'
+	},
+): Promise<LivosAppMatch | null> {
+	const needle = name.toLowerCase().trim()
+	if (needle.length === 0) return null
+	const proto = deps.proto ?? 'https'
+
+	const [webapps, natives] = await Promise.all([
+		deps.listWebApps().catch(() => []),
+		deps.listNativeApps().catch(() => []),
+	])
+
+	// Match WebApp first (more likely the user intent for browser-based apps).
+	for (const wa of webapps) {
+		const candidate = (wa.name ?? wa.subdomain ?? wa.id).toLowerCase()
+		if (candidate === needle) {
+			// Phase 160-03 — domain pattern is <app>-<user>.<root> (DASH separator).
+			// NEVER the dot form <app>.<user>.<root>. Test invariant locks this.
+			const sub = wa.subdomain ?? wa.id
+			const url = `${proto}://${sub}-${deps.userSlug}.${deps.domainRoot}/`
+			return {
+				kind: 'webapp',
+				appId: wa.id,
+				route: url,
+				title: wa.name ?? sub,
+				icon: '',
+			}
+		}
+	}
+
+	// Then Native apps — convention is `/native/<id>` route.
+	for (const na of natives) {
+		const candidate = (na.name ?? na.id).toLowerCase()
+		if (candidate === needle) {
+			return {
+				kind: 'native',
+				appId: na.id,
+				route: `/native/${na.id}`,
+				title: na.name ?? na.id,
+				icon: na.iconUrl ?? '',
+			}
+		}
+	}
+
+	return null
+}

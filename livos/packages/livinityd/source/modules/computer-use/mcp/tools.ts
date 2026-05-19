@@ -56,6 +56,10 @@ import {
 	listWindows,
 	readFileBase64,
 } from '../native/index.js'
+// Phase 160-03 — LivOS app catalog resolver type. The handler in this module
+// calls the resolver BEFORE openOrFocus so LivOS apps (n8n, libreoffice, etc.)
+// dispatch through windowManager IPC instead of the classic Bytebot APP_MAP.
+import type {LivosAppResolver} from '../native/window.js'
 import {executeWebAppReplaySkill} from '../skill-replay-tool.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -177,6 +181,22 @@ export interface LuseToolsOptions {
 	 * own sessions (user-scoped read).
 	 */
 	userId?: string
+	/**
+	 * Phase 160-03 — LivOS app catalog resolver. When set, the
+	 * `computer_application` handler invokes this resolver BEFORE the
+	 * classic Bytebot APP_MAP path. A non-null return means the agent
+	 * named a LivOS app (WebApp or Native) — the handler emits a
+	 * structured `open_livos_app` IPC line on stderr (consumed by the
+	 * parent livinityd to drive windowManager.openWindow) and returns
+	 * a post-action screenshot. A null return falls through to
+	 * openOrFocus (Bytebot binary spawn).
+	 *
+	 * Wired by livinityd's mcp/server.ts at registration. Tests inject
+	 * a mock. When unset (e.g. legacy host-display Luse without a trpc
+	 * context), behavior is identical to pre-Phase-160-03 (skip resolver,
+	 * straight to APP_MAP).
+	 */
+	livosAppResolver?: LivosAppResolver
 }
 
 /**
@@ -655,7 +675,46 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 	},
 
 	computer_application: async (args) => {
-		const application = args.application as string
+		const application = String(args.application ?? '').trim()
+		if (!application) {
+			return {
+				content: [{type: 'text', text: 'application name is required'}],
+				isError: true,
+			}
+		}
+
+		// Phase 160-03 — LivOS resolver FIRST. The resolver is injected via
+		// registerLuseTools options so a test harness can mock it; production
+		// path gets the default resolver wired from livinityd's trpc context.
+		// On match, the handler emits a structured `open_livos_app` line on
+		// stderr — the parent livinityd parses it and drives windowManager.
+		// On miss (or no resolver wired), fall through to the classic
+		// openOrFocus / APP_MAP Bytebot binary spawn path.
+		if (options.livosAppResolver) {
+			try {
+				const match = await options.livosAppResolver(application)
+				if (match) {
+					// Phase 160-03 — IPC line consumed by parent livinityd.
+					// Single-line stderr write keeps the parsing trivial; the
+					// agent loop's settle screenshot follows via withPostScreenshot.
+					process.stderr.write(
+						`[luse-mcp] open_livos_app kind=${match.kind} appId=${match.appId} route=${match.route}\n`,
+					)
+					return withPostScreenshot(
+						`application → ${application} (LivOS ${match.kind})`,
+						async () => {
+							/* settle — windowManager.openWindow happens in parent process */
+						},
+					)
+				}
+			} catch (err) {
+				process.stderr.write(
+					`[luse-mcp] livosAppResolver error: ${(err as Error).message}; falling through to APP_MAP\n`,
+				)
+			}
+		}
+
+		// Fallback: classic Bytebot APP_MAP path (firefox/thunderbird/vscode/etc).
 		const result = await openOrFocus(application as never)
 		if (result.isError) {
 			return {
