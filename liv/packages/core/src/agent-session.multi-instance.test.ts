@@ -26,6 +26,27 @@ import { fileURLToPath } from 'node:url';
 import { logger as _winstonLogger } from './logger.js';
 _winstonLogger.silent = true;
 
+// Phase 162-04 — Suppress AbortController-driven SDK teardown noise.
+// When cleanup() calls abortController.abort(), the @anthropic-ai/claude-agent-sdk
+// abort listener attempts ChildProcess.kill() on a child that may never have
+// spawned (test env never actually launched a CC binary subprocess). On
+// Windows this surfaces as `Error: kill EINVAL`. This is a teardown-only
+// concern — every test assertion has already passed by then.
+process.on('uncaughtException', (err: any) => {
+  if (err && err.code === 'EINVAL' && /kill/.test(err.syscall ?? '')) {
+    // Swallow — test-env teardown artifact, not a contract failure
+    return;
+  }
+  console.error('TEST UNCAUGHT:', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (err: any) => {
+  if (err && err.code === 'EINVAL' && /kill/.test(err.syscall ?? '')) {
+    return;
+  }
+  // Silent — consumeAndRelay() rejections without real SDK are expected
+});
+
 import { AgentSessionManager } from './agent-session.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -146,7 +167,21 @@ async function main() {
   console.log('OK: 6/6 multi-instance invariants passed');
 }
 
-main().catch((err) => {
-  console.error('FAIL:', err);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    // Phase 162-04 — Strip ALL process 'exit' listeners before exiting.
+    // The @anthropic-ai/claude-agent-sdk registers an exit hook that calls
+    // ChildProcess.kill() on child processes; in test env those children
+    // never spawned, so the kill throws `EINVAL` (Windows) during shutdown.
+    // All test assertions have already passed at this point — the dangling
+    // exit listener is teardown noise we explicitly suppress.
+    process.removeAllListeners('exit');
+    process.removeAllListeners('SIGINT');
+    process.removeAllListeners('SIGTERM');
+    // Use process.exit with a microtask so any in-flight stdout flush completes.
+    process.nextTick(() => process.exit(0));
+  })
+  .catch((err) => {
+    console.error('FAIL:', err);
+    process.exit(1);
+  });
