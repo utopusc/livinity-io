@@ -1785,7 +1785,7 @@ Plans:
 
 **Depends on:** Phase 153 ✅ (plugin runtime + SDK exists).
 
-### Phase 159: NativeApp WebApp Parity + Window Manager Panel — 🟡 CODE-COMPLETE 2026-05-19 (operator UAT pending)
+### Phase 159: NativeApp WebApp Parity + Window Manager Panel — ✅ SHIPPED 2026-05-19 (browser UAT PASS via chrome-devtools MCP — LibreOffice open/close/reopen cycle proven leak-free; Xvfb :10 fully released and new :11 allocated cleanly; `closeNativeApp` journal trail confirmed in 3s window after panel Close click)
 
 **Goal:** Bring NativeApp surface to functional parity with WebApp — same Chat chrome row (Teach + Skills omitted per A5; native binaries have no DOM), clean backend teardown on window close (no leaked streams or duplicate windows on reopen). Add a Windows Manager panel listing every open window with focus/close/minimize/pin controls. Frontend visual deferred to a follow-up phase; this phase locks data contracts, lifecycle, and wiring.
 **Requirements**: operator-driven additive phase, no REQ-IDs
