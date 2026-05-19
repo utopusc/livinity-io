@@ -234,6 +234,25 @@ export interface AgentSessionManagerOptions {
 }
 
 export class AgentSessionManager {
+  /**
+   * Active agent sessions, keyed by sessionKey (NOT userId).
+   *
+   * Phase 162-04 — sessionKey shape:
+   *   - Vault mode (Phase 162+): `${userId}:${surfaceKind}:${surfaceId}:${connectionId}`
+   *     e.g. `admin:main:default:54c6caa5` or `admin:webapp:suna-uuid:abc01234`
+   *   - Legacy mode (pre-162 / chat_backend=legacy): `${userId}:${connectionId}`
+   *     e.g. `admin:54c6caa5` (Phase 161 behavior preserved byte-identical)
+   *
+   * The Map operations themselves (get/set/delete) are exact-string match —
+   * Phase 161 already proved this works. This field's behavior does NOT change
+   * in 162-04; only the format of the string keys callers pass in becomes
+   * richer when vault mode is active.
+   *
+   * Method parameter `userId: string` on the public surface is a legacy name
+   * from pre-161 single-session-per-user era — it's actually a fully-formed
+   * sessionKey constructed by the caller (ws-agent.ts) from JWT + WS URL
+   * params + (optionally) start-envelope surface hint.
+   */
   private sessions = new Map<string, ActiveSession>();
   private toolRegistry: ToolRegistry;
   private nexusConfig?: NexusConfig;
@@ -299,7 +318,13 @@ export class AgentSessionManager {
     }
   }
 
-  /** Get the active session for a user, if any */
+  /**
+   * Get the active session for a sessionKey, if any.
+   *
+   * Phase 162-04 — the `userId` parameter is actually a sessionKey
+   * (e.g. `admin:main:default:54c6caa5` in vault mode, or `admin:54c6caa5`
+   * in legacy mode). See the JSDoc on `sessions` field for the shape spec.
+   */
   getSession(userId: string): ActiveSession | undefined {
     return this.sessions.get(userId);
   }
@@ -1028,7 +1053,13 @@ export class AgentSessionManager {
     }
   }
 
-  /** Clean up a user's session: abort, close input channel, remove from map */
+  /**
+   * Clean up a session: abort, close input channel, remove from map.
+   *
+   * Phase 162-04 — `userId` is actually a sessionKey (see JSDoc on `sessions`
+   * field for shape). Cleanup is per-key-exact — it does NOT cascade to other
+   * sessions for the same userId on a different surface.
+   */
   cleanup(userId: string): void {
     const session = this.sessions.get(userId);
     if (!session) return;
