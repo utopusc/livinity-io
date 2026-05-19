@@ -150,10 +150,24 @@ function test11_wsAgentOptsShapeAndPassthrough() {
     WS_AGENT_SRC,
     /vaultModeConfig\?:\s*\{[\s\S]*?vaultPath:\s*string/,
   );
-  // Factory threads vaultModeConfig into AgentSessionManager constructor call
+  // Factory threads vaultModeConfig into AgentSessionManager constructor call.
+  // Phase 162-02 form: `vaultModeConfig: opts.vaultModeConfig` (one-shot).
+  // Phase 163-02 form: `vaultModeConfig: vaultModeConfigForSession` where the
+  //   for-session local derives from `opts.vaultModeConfig` two lines above
+  //   inside the `buildSessionManager` closure. Both forms still guarantee
+  //   that the factory threads opts.vaultModeConfig down into the manager.
   assert.match(
     WS_AGENT_SRC,
-    /vaultModeConfig:\s*opts\.vaultModeConfig/,
+    /vaultModeConfig:\s*(opts\.vaultModeConfig|vaultModeConfigForSession)/,
+  );
+  // And the for-session local (Phase 163-02) MUST be derived from opts.vaultModeConfig
+  // OR the Phase 162-02 literal form must still be present. One of the two must hold.
+  const hasLegacyDirect = /vaultModeConfig:\s*opts\.vaultModeConfig\b/.test(WS_AGENT_SRC);
+  const hasPerSessionDerivation =
+    /const\s+vaultModeConfigForSession\s*=\s*opts\.vaultModeConfig/.test(WS_AGENT_SRC);
+  assert.ok(
+    hasLegacyDirect || hasPerSessionDerivation,
+    'ws-agent must EITHER pass `opts.vaultModeConfig` directly (162-02) OR derive `vaultModeConfigForSession` from it (163-02)',
   );
   console.log('  PASS: ws-agent factory opts declares vaultModeConfig + threads it into AgentSessionManager');
 }
