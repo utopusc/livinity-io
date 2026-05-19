@@ -2463,6 +2463,24 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       return;
     }
 
+    // Phase 160-01 — Honor body.tier override from the livinity-broker
+    // factory's Haiku routing for computer-use mode. When the broker's
+    // `createSdkAgentRunnerForUser({...mode: 'computer-use'})` path is
+    // taken, the request body carries `tier: 'haiku'` + `model:
+    // 'claude-haiku-4-5-20251001'`. We accept the tier override at this
+    // single point so the downstream `agentConfig.tier` resolution below
+    // routes through `tierToModel('haiku')` in sdk-agent-runner.ts
+    // (sacred file untouched). When the body has NO tier field (chat
+    // path — AI Chat panel + WebApp chat input + default broker callers),
+    // the existing `agentDefaults?.tier || AGENT_TIER env || 'sonnet'`
+    // resolution applies — chat path unchanged.
+    // Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts untouched.
+    const bodyTierOverride: 'haiku' | 'sonnet' | 'opus' | undefined =
+      typeof req.body?.tier === 'string' &&
+      (req.body.tier === 'haiku' || req.body.tier === 'sonnet' || req.body.tier === 'opus')
+        ? req.body.tier
+        : undefined;
+
     // Phase 100-08-05 — optional webappId for tool-scope filtering. When present,
     // additionalMcpServers is filtered down to the matching `luse:webapp:<id>`
     // child via filterAdditionalMcpServers (lag-fallback to host scope on miss).
@@ -2650,7 +2668,11 @@ export function createApiServer({ daemon, redis, brain, toolRegistry, mcpConfigM
       maxTurns: Math.min(max_turns || agentDefaults?.maxTurns || parseInt(process.env.AGENT_MAX_TURNS || '30'), 200),
       maxTokens: agentDefaults?.maxTokens || parseInt(process.env.AGENT_MAX_TOKENS || '200000'),
       timeoutMs: agentDefaults?.timeoutMs || parseInt(process.env.AGENT_TIMEOUT_MS || '600000'),
-      tier: (agentDefaults?.tier || (process.env.AGENT_TIER as any) || 'sonnet') as 'haiku' | 'sonnet' | 'opus',
+      // Phase 160-01 — bodyTierOverride takes precedence so the broker's
+      // computer-use mode (`mode: 'computer-use'` → body.tier='haiku') routes
+      // to Haiku regardless of agentDefaults. When undefined (chat path),
+      // existing precedence preserved verbatim.
+      tier: (bodyTierOverride || agentDefaults?.tier || (process.env.AGENT_TIER as any) || 'sonnet') as 'haiku' | 'sonnet' | 'opus',
       maxDepth: agentDefaults?.maxDepth ?? parseInt(process.env.AGENT_MAX_DEPTH || '3'),
       stream: true,
       approvalManager,
