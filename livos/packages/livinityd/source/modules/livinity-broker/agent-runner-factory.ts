@@ -152,9 +152,49 @@ export async function* createSdkAgentRunnerForUser(opts: {
 	 */
 	activeDisplay?: string
 	activeAppMeta?: ActiveAppMeta
+	/**
+	 * Phase 160-01 — Mode flag for Haiku routing.
+	 *
+	 * - `'chat'` (default): preserves existing tier resolution in
+	 *   `liv/packages/core/src/api.ts` — agent config tier flows from
+	 *   `nexusConfig.agent.tier` / `AGENT_TIER` env / `'sonnet'` default.
+	 *   The AI Chat panel + WebApp chat input + every legacy broker
+	 *   caller that does not opt-in to computer-use mode continues to
+	 *   resolve to Opus/Sonnet exactly as today.
+	 *
+	 * - `'computer-use'`: forces `tier: 'haiku'` + `model:
+	 *   'claude-haiku-4-5-20251001'` in the request body sent to
+	 *   /api/agent/stream. liv-core api.ts honors `body.tier` override
+	 *   (Phase 160-01 — see api.ts:2459+ comment), passing it into
+	 *   `agentConfig.tier` which the sacred SdkAgentRunner already
+	 *   maps via `tierToModel()` to `claude-haiku-4-5`. Used for
+	 *   computer-use loops (Luse mouse/keyboard/screenshot tool
+	 *   cycles) — 10-50+ turns per task, Haiku is vision-capable and
+	 *   ~5-10x cheaper than Sonnet/Opus.
+	 *
+	 * Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` for
+	 * `liv/packages/core/src/sdk-agent-runner.ts` is preserved — this
+	 * routing change only affects the factory + api.ts body parsing.
+	 */
+	mode?: 'chat' | 'computer-use'
 }): AsyncGenerator<AgentBrokerEvent, AgentResult, void> {
 	const {livinityd, userId, task, contextPrefix, systemPromptOverride, maxTurns = 30, signal} = opts
 	const livApiUrl = process.env.LIV_API_URL || 'http://localhost:3200'
+
+	// Phase 160-01 — Haiku routing for computer-use loops.
+	// When mode === 'computer-use', force Haiku 4.5 regardless of caller-supplied
+	// model. Computer-use loops run 10-50+ turns per task; Haiku is vision-capable
+	// and ~5-10x cheaper than Sonnet/Opus while sufficient for screenshot-
+	// grounded coordinate extraction. Chat path (AI Chat panel + WebApp chat)
+	// keeps existing model — only THIS factory branch routes Haiku.
+	// Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts untouched.
+	const mode = opts.mode ?? 'chat'
+	let resolvedModel: string | undefined
+	let resolvedTier: 'haiku' | 'sonnet' | 'opus' | undefined
+	if (mode === 'computer-use') {
+		resolvedModel = 'claude-haiku-4-5-20251001'
+		resolvedTier = 'haiku'
+	}
 
 	const multiUser = await isMultiUserMode(livinityd).catch(() => false)
 	const forceRootHome = process.env.BROKER_FORCE_ROOT_HOME === 'true'
@@ -208,6 +248,16 @@ export async function* createSdkAgentRunnerForUser(opts: {
 		systemPromptOverride,
 		// Phase 100-08-05 — pass-through webappId for chat-surface tool scope.
 		...(opts.webappId ? {webappId: opts.webappId} : {}),
+		// Phase 160-01 — Haiku routing for computer-use mode (see opts.mode
+		// JSDoc above). Both fields included for verbatim contract: api.ts
+		// reads `tier` (existing field semantic), `model` is the literal
+		// claude-haiku-4-5-20251001 id forwarded for log/trace visibility.
+		// When mode === 'chat' (default), both fields are omitted, so
+		// liv-core api.ts falls back to its existing tier resolution path
+		// (agentDefaults?.tier / AGENT_TIER env / 'sonnet') — chat path
+		// unchanged.
+		...(resolvedTier ? {tier: resolvedTier} : {}),
+		...(resolvedModel ? {model: resolvedModel} : {}),
 	}
 
 	const response = await fetch(`${livApiUrl}/api/agent/stream`, {
