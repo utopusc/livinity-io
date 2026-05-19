@@ -8,8 +8,6 @@ import {
 	TbApps,
 	TbRobot,
 	TbCalendarTime,
-	TbBrandChrome,
-	TbMail,
 } from 'react-icons/tb'
 
 import {NotificationBadge} from '@/components/ui/notification-badge'
@@ -59,8 +57,6 @@ const DOCK_LABELS: Record<string, string> = {
 	'LIVINITY_subagents': 'Agents',
 	'LIVINITY_schedules': 'Schedules',
 	'LIVINITY_terminal': 'Terminal',
-	'LIVINITY_chrome': 'Chrome',
-	'LIVINITY_gmail': 'Gmail',
 }
 
 // Map app IDs to their dock glyph. Custom SVG glyphs for the 8 apps in
@@ -81,8 +77,6 @@ const DOCK_ICONS: Record<string, DockGlyph> = {
 	'LIVINITY_subagents': TbRobot as unknown as DockGlyph,
 	'LIVINITY_schedules': TbCalendarTime as unknown as DockGlyph,
 	'LIVINITY_terminal': IconTerminal,
-	'LIVINITY_chrome': TbBrandChrome as unknown as DockGlyph,
-	'LIVINITY_gmail': TbMail as unknown as DockGlyph,
 	'LIVINITY_app-store-tabler': TbApps as unknown as DockGlyph,
 }
 
