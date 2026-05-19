@@ -78,11 +78,94 @@ All 5 sacred-guard blob SHAs preserved on origin/master at push HEAD `7f2e09b3`.
 
 ## 2. Deploy
 
-_(pending — see Section 2 update post-deploy)_
+- **Command:** `nohup sudo bash /opt/livos/update.sh > /tmp/livos-update-164.log 2>&1 &`
+- **Log:** `/tmp/livos-update-164.log` (134 lines)
+- **Outcome:** exit 0 — `LivOS updated successfully!`
+- **Deployed SHA recorded by update.sh:** `7f2e09b` (matches local HEAD `7f2e09b3ba9a498c911090ed7d3325e27f4a2cf4`)
+- **Services post-deploy:** `livos liv-core liv-worker liv-memory` all `active`
+- **pnpm-store dual-dir hazard:** did NOT fire (`Liv dist linked to 1 pnpm-store resolution dir(s)`)
+
+Deploy log key markers:
+
+```
+━━━ Building Liv core ━━━
+[VERIFY] @liv/core dist OK (/opt/liv/packages/core/dist)
+[OK]    Liv core built
+[OK]    Liv dist linked to 1 pnpm-store resolution dir(s)
+
+━━━ Restarting services ━━━
+[INFO]  Restarting livos...
+[INFO]  Restarting liv-core...
+[INFO]  Restarting liv-worker...
+[INFO]  Restarting liv-memory...
+
+━━━ Recording deployed SHA ━━━
+[OK]    Deployed SHA recorded: 7f2e09b
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  LivOS updated successfully!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
 
 ## 3. Post-Deploy State
 
-_(pending)_
+### Sacred SHA Pin (Mini PC, byte-identical pre/post deploy)
+
+| File | Pre-Deploy SHA256 | Post-Deploy SHA256 | Status |
+|---|---|---|---|
+| `/opt/liv/packages/core/src/sdk-agent-runner.ts` | `62f924594e81331afb159a9a50ef718ef3eb7e79cd5287d9bd2e4788cbab1bfe` | `62f924594e81331afb159a9a50ef718ef3eb7e79cd5287d9bd2e4788cbab1bfe` | **Sacred preserved** |
+| `/opt/livos/.../computer-use/luse-system-prompt.ts` | `e63773d7f0c4a78266b7012b8d69a18be91e7ebca3f79782a7ed7ed17fa0866a` | `e63773d7f0c4a78266b7012b8d69a18be91e7ebca3f79782a7ed7ed17fa0866a` | **D-09 verbatim** |
+| `/opt/livos/.../ai/agent-prompt-builder.ts` | `3d8e2a751c7e9d3fe3e92158d7c54272047fde3398ed21260532d3b5086d174d` | `3d8e2a751c7e9d3fe3e92158d7c54272047fde3398ed21260532d3b5086d174d` | **Phase 161-02 helper preserved** |
+| `/opt/liv/packages/core/src/agent-session.ts` | `587e94ce82ffae717b557b4d0b053e4a60d12232eb7b20a8590a254a20c01d73` | `587e94ce82ffae717b557b4d0b053e4a60d12232eb7b20a8590a254a20c01d73` | **Phase 163-02.5 preserved** |
+| `/opt/livos/.../claude-runner/vault-scaffolder.ts` | `74d78224014b1293fdbde0f36c340d82f977588b93c26a313f3707c4eb06d62d` | `74d78224014b1293fdbde0f36c340d82f977588b93c26a313f3707c4eb06d62d` | **Phase 162-01 preserved** |
+
+All 5 byte-identical — no sacred-guard regressions.
+
+### Phase 164 Module Materialised
+
+`/opt/livos/packages/livinityd/source/modules/autonomous-scheduler/` (11 files):
+
+```
+agent-definition-parser.test.ts
+agent-definition-parser.ts
+budget-gate.test.ts
+budget-gate.ts
+cli-trigger.ts
+inbox-writer.test.ts
+inbox-writer.ts
+index.ts
+sample-agents.test.ts
+scheduler.test.ts
+scheduler.ts
+```
+
+### Sample Agents Scaffolded
+
+| Path | Files |
+|---|---|
+| `/opt/livos/packages/livinityd/source/data/vault-templates/livos-agents/` | `nightly-backup-audit.md`, `pr-watcher.md` |
+| `/home/bruce/livinity-vault/livos-agents/` | `nightly-backup-audit.md`, `pr-watcher.md` (scaffolder picked up both samples on boot) |
+
+### Boot Journal Evidence
+
+```
+May 19 12:39:03 ... [livinityd] vault-scaffolder: partial — 2 new files, 11 preserved existing
+May 19 12:39:03 ... [livinityd] [autonomous-scheduler] disabled (liv:config:autonomous_enabled=unset) — skipping
+```
+
+- **vault-scaffolder partial copy:** 2 new files (the sample agents) materialised into vault, 11 existing files preserved (no overwrites of operator state).
+- **autonomous-scheduler boot wire-up:** fired AND correctly defaulted to `disabled` because `liv:config:autonomous_enabled` is unset.
+
+### Services Post-Deploy
+
+| Service | Status |
+|---|---|
+| `livos` | active |
+| `liv-core` | active |
+| `liv-worker` | active |
+| `liv-memory` | active |
+
+Deploy complete. All sacred guards green. Phase 164 code-side materialised on production.
 
 ## 4. Live UAT — Single Trigger (Probe 1)
 
