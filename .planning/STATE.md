@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T11:32:00.000Z"
+last_updated: "2026-05-19T10:55:27.902Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 160 (luse-livos-overlay-haiku-routing) — EXECUTING
-Plan: 3 of 6 (160-01 + 160-02 CODE-COMPLETE; 160-03 next)
+Plan: 4 of 6 (160-01 + 160-02 + 160-03 CODE-COMPLETE; 160-04 in flight parallel)
 
 ## 160-01 Status (2026-05-19) — Haiku Routing CODE-COMPLETE (2 commits, sacred SHA preserved 2/2)
 
@@ -63,6 +63,27 @@ Plan: 3 of 6 (160-01 + 160-02 CODE-COMPLETE; 160-03 next)
   1. Pre-existing 3 vitest failures in `luse-mcp-config.test.ts` T4/T5/T6 (host-display env shape assertions missing `LUSE_REDIS_URL` after Phase 100-10-04 added it). Confirmed unchanged from bare HEAD via git stash compare.
 - **Next action:** `/gsd-execute-phase 160` Plan 03 — `computer_application` LivOS launcher (Wave 2, depends on 160-02 scaffold).
 - Full deliverable detail: see `.planning/phases/160-luse-livos-overlay-haiku-routing/160-02-SUMMARY.md`.
+
+## 160-03 Status (2026-05-19) — computer_application LivOS Launcher CODE-COMPLETE (3 commits, sacred SHA preserved 3/3, D-09 verbatim invariant preserved, dash-domain pattern locked)
+
+- **COMPUTER_APPLICATION LIVOS LAUNCHER** (Plan 3 of 6 in Phase 160, 3 tasks): drops the static Bytebot enum (`firefox/1password/thunderbird/vscode/terminal/desktop/directory`) from `computer_application`'s MCP schema (free-form `string`) and adds a runtime LivOS app resolver (Promise.all over `apps.list` + `apps.native.list`, case-insensitive match, dash-pattern WebApp URL emission). The handler now dispatches LivOS-matched apps via a `[luse-mcp] open_livos_app kind=… appId=… route=…` stderr IPC line BEFORE falling back to the classic `openOrFocus` / `APP_MAP` Bytebot binary spawn path — the agent can finally open `n8n` / `nextcloud` / native registered apps through the same MCP tool as firefox / vscode. Three atomic commits:
+  1. `95de89ca` Task 1 — `livos/packages/livinityd/source/modules/computer-use/luse-tools.ts` (`_applicationTool.input_schema.properties.application.enum` REMOVED; description expanded to explain dual resolver path + LIVOS CONTEXT overlay preference; Phase 160-03 banner). LUSE_TOOLS array shape unchanged (same 22 tools, same indices).
+  2. `fbdda807` Task 2 — `livos/packages/livinityd/source/modules/computer-use/native/window.ts` (+ `LivosAppMatch` interface + `LivosAppResolver` type alias + `defaultLivosAppResolver(name, deps)` pure function with DI'd `listWebApps` + `listNativeApps` + `userSlug` + `domainRoot` + optional `proto`; Promise.all parallel query, case-insensitive name match, WebApp before Native, DASH-pattern URL `${proto}://${sub}-${deps.userSlug}.${deps.domainRoot}/`, native route `/native/${na.id}`) + `livos/packages/livinityd/source/modules/computer-use/mcp/tools.ts` (LuseToolsOptions.livosAppResolver field added; computer_application handler rewritten: trim + empty-string isError guard → resolver-first dispatch with stderr IPC line on match → APP_MAP fallback on null/throw, preserving pre-Plan-160-03 behavior when resolver is unset).
+  3. `c2939fd6` Task 3 — `livos/packages/livinityd/source/modules/computer-use/mcp/tools.test.ts` (+ `readFileSync` / `join` imports + Phase 160-03 describe block with 6 source-text invariants: livosAppResolver in handler, open_livos_app IPC literal, defaultLivosAppResolver export, DASH-pattern positive regex + dot-pattern negative regex, Promise.all + listWebApps + listNativeApps parallel-query shape, Phase 160-03 marker in both files).
+- **Verification:** `mcp/tools.test.ts` **50 PASS / 0 FAIL** (was 44 / 0 — added 6 Phase 160-03 invariants). Pre-existing failures in `input.test.ts` / `screenshot.test.ts` / `input.window.test.ts` / `screenshot.window.test.ts` / `luse-mcp-config.test.ts` confirmed unrelated to this plan via stash-compare — all in files Plan 160-03 did not touch.
+- **Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f`** for `liv/packages/core/src/sdk-agent-runner.ts` PRESERVED across all 3 source commits.
+- **D-09 verbatim contract upheld:** `git diff HEAD~3..HEAD -- livos/packages/livinityd/source/modules/computer-use/luse-system-prompt.ts` = empty.
+- **D-NO-NEW-DEPS upheld:** `git diff --stat HEAD~3..HEAD -- **/package.json` = empty.
+- **Dash-pattern domain invariant LOCKED:** positive regex `/\${sub}-\${deps\.userSlug}\.\${deps\.domainRoot}/` matches exactly 1 occurrence in window.ts (the resolver emit site); negative regex `/\${sub}\.\${deps\.userSlug}\.\${deps\.domainRoot}/` matches 0 times. Both guarded by test invariant #4 — any future refactor that flips dash → dot fires CI red.
+- **Files-modified disjoint from Plan 160-04:** my 4 files are `luse-tools.ts` / `mcp/tools.ts` / `mcp/tools.test.ts` / `native/window.ts`; Plan 160-04 touches `agent-prompt-builder.ts` / `screenshot.ts`. Zero overlap.
+- **Deviations (1 Rule 1 cosmetic, auto-fixed; documented in 160-03-SUMMARY.md):**
+  1. Plan referenced `opts.livosAppResolver` but the surrounding `buildHandlers(options)` parameter is `options` not `opts`. Used `options.livosAppResolver` throughout — matches existing field references (`options.skillReplayDeps` / `options.streamManager` / `options.defaultDisplay`). Acceptance grep returns 4 occurrences regardless of receiver-name choice.
+- **Deferred (out of scope per scope-boundary rule):**
+  1. Same pre-existing 3 vitest failures in `luse-mcp-config.test.ts` T4/T5/T6 already documented in Plan 160-02 SUMMARY.
+  2. Pre-existing failures in 4 other native/* test files — all flaky / xdotool argv drift, unrelated to Plan 160-03 files.
+  3. Default resolver wiring + livinityd stderr `open_livos_app` parser — both deferred to a follow-up integration plan (recommend post-Phase 160 sweep). Without the wiring, `options.livosAppResolver` is undefined and the handler dispatches straight to APP_MAP (pre-Plan-160-03 behavior preserved, no regression).
+- **Next action:** Plan 160-04 (Dynamic Display Size) running in parallel; Plan 160-05 (computer_read_file sandbox) on deck.
+- Full deliverable detail: see `.planning/phases/160-luse-livos-overlay-haiku-routing/160-03-SUMMARY.md`.
 
 Milestone: **v35.0 — Design System Unification (UI/UX)** — OPENED 2026-05-14
 Master plan: [`.planning/v35-DESIGN-SYSTEM-MILESTONE.md`](v35-DESIGN-SYSTEM-MILESTONE.md) (470 lines — read first)
