@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T17:10:00.000Z"
+last_updated: "2026-05-19T17:08:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,18 +25,18 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 162 (vault-and-sdk-integration) — EXECUTING
-Plan: 4 of 5 — **162-04 CODE-COMPLETE** 2026-05-19 (3 commits `0b6c211c..4828aa41`, 1 file created + 2 modified, 6/6 multi-instance invariants PASS, sacred SHA preserved 3/3)
-Next plan: 162-05 (Mini PC Deploy + Live Runtime Probe — terminal plan in Phase 162)
+Phase: 162 (vault-and-sdk-integration) — **SHIPPED** 2026-05-19
+Plan: 5 of 5 — **162-05 CODE-COMPLETE + LIVE-VERIFIED** 2026-05-19 (1 commit `9904f839`, 1 file created `.planning/phases/162-vault-and-sdk-integration/162-VERIFICATION.md`, Mini PC deploy via `bash /opt/livos/update.sh` SHIPPED, synthetic WS probe proved vault mode engaged on Mini PC)
+Next plan: Phase 163 (Surface-Specific Vault Contexts) — needs `/gsd-plan-phase 163`
 Master plan: `.planning/v34-LIVOS-CC-INTEGRATION-MASTER.md` (LivOS ⇄ Claude Code tam entegrasyon, 4 phase: 162-165, ~20-25 saat agent work)
-Resume command: `/clear` ardından `/gsd-autonomous --from 162` — user uyurken 4 phase sequential ship eder
+Resume command: `/clear` ardından `/gsd-autonomous --from 163` — user uyurken kalan 3 phase sequential ship eder
 
-Last completed: **162-04** ✅ CODE-COMPLETE 2026-05-19 (composite sessionKey `${userId}:${surfaceKind}:${surfaceId}:${connectionId}` in vault mode + legacy `${userId}:${connectionId}` fallback; Phase 164 autonomous scheduler can now spawn surfaceKind='autonomous' without canceling user's Main Chat; sacred SHA `f3538e1d` preserved across all 3 commits; D-NO-NEW-DEPS upheld; Phase 161 + 162-02 regressions GREEN)
+Last completed: **162-05** ✅ CODE-COMPLETE + LIVE-VERIFIED 2026-05-19 (Mini PC deploy SHIPPED — deployed SHA `b8c4d9b` matches local HEAD; synthetic WS probe with `conv_phase162smoke` returned `SDK_INIT model=claude-opus-4-7 cwd=/home/bruce/livinity-vault` + `RESULT subtype=success` + `TEXT: ok` — vault mode engaged, Opus 4.7 default model live; Phase 161 regression probe with `native:` prefix returned `claude-haiku-4-5-20251001 cwd=/opt/livos` confirming chat-path-untouched; Redis `cc_auth_status=ok` (162-03 smoke check passed live); all 4 services active >5min NRestarts=0; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved on Mini PC source + all 16 commits; D-09 + D-NO-NEW-DEPS green)
 
 v34.x phase queue:
 
 - [x] Phase 161 — Computer-Use SDK Path Wiring (SHIPPED)
-- [ ] Phase 162 — Vault Scaffolding + SDK Settings Integration (4/5 plans CODE-COMPLETE)
+- [x] Phase 162 — Vault Scaffolding + SDK Settings Integration (SHIPPED — 5/5 plans CODE-COMPLETE + LIVE-VERIFIED on Mini PC)
 - [ ] Phase 163 — Surface-Specific Vault Contexts
 - [ ] Phase 164 — Autonomous Scheduler + Sample Agents
 - [ ] Phase 165 — Polish + Settings UI + v34.x Ship
