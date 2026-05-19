@@ -114,3 +114,46 @@ describe('webapp-floating-action-bar — Phase 101-09 chat animations', () => {
 		expect(SRC).toMatch(/sdk-agent-runner\.ts/)
 	})
 })
+
+describe('webapp-floating-action-bar — Phase 159 dual-hook (native + webapp)', () => {
+	it('imports useNativeAppAgent + UseStreamAppAgentResult from native-agent hook module', () => {
+		expect(SRC).toMatch(/import\s*\{\s*useNativeAppAgent,\s*type\s+UseStreamAppAgentResult\s*\}\s*from\s*['"]@\/hooks\/use-native-app-agent['"]/)
+	})
+
+	it('preserves the T-10-10-RESPONSE-01 literal: `const agent = useWebAppAgent(webappId` appears exactly once', () => {
+		const matches = SRC.match(/const\s+agent\s*=\s*useWebAppAgent\(webappId/g) ?? []
+		expect(matches.length).toBe(1)
+	})
+
+	it('declares `const nativeAgent = useNativeAppAgent(nativeAppId` exactly once', () => {
+		const matches = SRC.match(/const\s+nativeAgent\s*=\s*useNativeAppAgent\(nativeAppId/g) ?? []
+		expect(matches.length).toBe(1)
+	})
+
+	it('declares `const activeAgent: UseStreamAppAgentResult` exactly once', () => {
+		const matches = SRC.match(/const\s+activeAgent:\s*UseStreamAppAgentResult/g) ?? []
+		expect(matches.length).toBe(1)
+	})
+
+	it('activeAgent selects nativeAgent when nativeAppId set, else agent', () => {
+		expect(SRC).toMatch(/const\s+activeAgent:\s*UseStreamAppAgentResult\s*=\s*nativeAppId\s*\?\s*nativeAgent\s*:\s*agent/)
+	})
+
+	it('declares NATIVE_MODES (Chat-only) alongside MODES', () => {
+		expect(SRC).toMatch(/const NATIVE_MODES/)
+		// NATIVE_MODES contains ONLY the chat entry, not teach
+		expect(SRC).toMatch(/NATIVE_MODES[\s\S]*?\{id:\s*'chat'[^}]*\}\s*,?\s*\]/)
+	})
+
+	it('WebAppFloatingActionBarProps accepts optional nativeAppId', () => {
+		expect(SRC).toMatch(/interface WebAppFloatingActionBarProps[\s\S]*?nativeAppId\?\:\s*string/)
+	})
+
+	it('IconBarProps accepts optional nativeAppId', () => {
+		expect(SRC).toMatch(/interface IconBarProps[\s\S]*?nativeAppId\?\:\s*string/)
+	})
+
+	it('IconBar selects modes by nativeAppId presence', () => {
+		expect(SRC).toMatch(/const\s+modes\s*=\s*nativeAppId\s*\?\s*NATIVE_MODES\s*:\s*MODES/)
+	})
+})

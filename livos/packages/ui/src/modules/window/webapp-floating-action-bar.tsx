@@ -81,6 +81,7 @@ import {motion} from 'framer-motion'
 import {GraduationCap, MessageCircle, Plus, Send, Square, X, type LucideIcon} from 'lucide-react'
 
 import {Magnetic} from '@/components/motion-primitives/magnetic'
+import {useNativeAppAgent, type UseStreamAppAgentResult} from '@/hooks/use-native-app-agent'
 import {useWebAppAgent, type UseWebAppAgentResult} from '@/hooks/use-webapp-agent'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/shadcn-components/ui/tooltip'
 import {cn} from '@/shadcn-lib/utils'
@@ -96,8 +97,21 @@ const MODES: ReadonlyArray<{id: WebAppDrawerMode; label: string; Icon: LucideIco
 	{id: 'teach', label: 'Teach', Icon: GraduationCap},
 ]
 
+// Phase 159 — native windows render Chat-only (no Teach). Teach
+// recorder is webapp-DOM-scoped (uses webapp.input.* tRPC dispatch
+// against a Chrome canvas); native binaries are XTest-driven via
+// x11vnc with no DOM to record clicks against. Architectural omission
+// per RESEARCH A5.
+const NATIVE_MODES: ReadonlyArray<{id: WebAppDrawerMode; label: string; Icon: LucideIcon}> = [
+	{id: 'chat', label: 'Chat', Icon: MessageCircle},
+]
+
 interface WebAppFloatingActionBarProps {
-	webappId: string
+	// Phase 159 — at least ONE of {webappId, nativeAppId} must be set
+	// when `inline` is true. The mutual exclusion is enforced at the
+	// window-chrome.tsx call site (it never passes both).
+	webappId?: string
+	nativeAppId?: string
 	// Phase 157 round 8 — `inline` flag. When true, the component
 	// renders ONLY the mode-switched inner content (IconBar /
 	// ChatInputBar / ChatResponseBar) without the fixed-positioned
@@ -117,11 +131,15 @@ interface WebAppFloatingActionBarProps {
 }
 
 export function WebAppFloatingActionBar(props: WebAppFloatingActionBarProps) {
-	const {webappId, inline = false} = props
+	const {webappId, nativeAppId, inline = false} = props
+	// Phase 159 — streamId is whichever id is set; the drawer-store
+	// slot (`chatInputModeByWebappId`) is re-used for native ids per
+	// Plan 06 namespace note (UUID collision-free).
+	const streamId = (webappId ?? nativeAppId) ?? ''
 	// Phase 100-09-08 — the bar is a 2-mode state machine. The same
 	// `motion.div` host renders ONE of {IconBar | ChatInputBar} based on
-	// the per-webappId mode slot. Default mode (undefined) reads as 'icons'.
-	const mode = useWebAppDrawerStore((s) => s.chatInputModeByWebappId[webappId] ?? 'icons')
+	// the per-streamId mode slot. Default mode (undefined) reads as 'icons'.
+	const mode = useWebAppDrawerStore((s) => s.chatInputModeByWebappId[streamId] ?? 'icons')
 	const setChatInputMode = useWebAppDrawerStore((s) => s.setChatInputMode)
 
 	// Phase 100-10-10 Bug A fix — useWebAppAgent(webappId) is HOISTED
@@ -134,29 +152,43 @@ export function WebAppFloatingActionBar(props: WebAppFloatingActionBarProps) {
 	// and `agent` (the shared reference) is passed as a prop into both
 	// sub-components so they observe the SAME messages + isStreaming +
 	// agentStatus state.
-	const agent = useWebAppAgent(webappId)
+	//
+	// Phase 159 — BOTH hooks called unconditionally to satisfy React
+	// hook-call-order rule. Each hook UUID-guards its own tRPC queries
+	// when the id is empty/non-UUID — passing '' is safe.
+	//
+	// CRITICAL INVARIANT (T-10-10-RESPONSE-01 — webapp-stream-window.unit.test.tsx:609-623):
+	// the literal shape <const><space>agent<space>=<space>useWebAppAgent(webappId
+	// MUST appear EXACTLY ONCE in this file. The native hook below is
+	// named `nativeAgent` (NOT `webappAgent`, NOT `agent2`) so the
+	// T-10-10-RESPONSE-01 regex still matches exactly 1. Downstream
+	// sub-components consume `activeAgent`, not the webapp-only `agent`.
+	const agent = useWebAppAgent(webappId ?? '')
+	const nativeAgent = useNativeAppAgent(nativeAppId ?? '')
+	const activeAgent: UseStreamAppAgentResult = nativeAppId ? nativeAgent : agent
 
 	// Phase 157 round 8 — mode-dispatched inner content. Extracted into a
 	// local so both render branches (inline + fixed) share the same tree.
 	const innerContent =
 		mode === 'chat-response' ? (
 			<ChatResponseBar
-				webappId={webappId}
-				agent={agent}
-				onClose={() => setChatInputMode(webappId, 'icons')}
-				onNew={() => setChatInputMode(webappId, 'chat-input')}
+				webappId={streamId}
+				agent={activeAgent}
+				onClose={() => setChatInputMode(streamId, 'icons')}
+				onNew={() => setChatInputMode(streamId, 'chat-input')}
 			/>
 		) : mode === 'chat-input' ? (
 			<ChatInputBar
-				webappId={webappId}
-				agent={agent}
-				onClose={() => setChatInputMode(webappId, 'icons')}
-				onSent={() => setChatInputMode(webappId, 'chat-response')}
+				webappId={streamId}
+				agent={activeAgent}
+				onClose={() => setChatInputMode(streamId, 'icons')}
+				onSent={() => setChatInputMode(streamId, 'chat-response')}
 			/>
 		) : (
 			<IconBar
-				webappId={webappId}
-				onChatClick={() => setChatInputMode(webappId, 'chat-input')}
+				webappId={streamId}
+				nativeAppId={nativeAppId}
+				onChatClick={() => setChatInputMode(streamId, 'chat-input')}
 			/>
 		)
 
@@ -196,10 +228,14 @@ export function WebAppFloatingActionBar(props: WebAppFloatingActionBarProps) {
 
 interface IconBarProps {
 	webappId: string
+	nativeAppId?: string
 	onChatClick: () => void
 }
 
-function IconBar({webappId, onChatClick}: IconBarProps) {
+function IconBar({webappId, nativeAppId, onChatClick}: IconBarProps) {
+	// Phase 159 — native windows render Chat-only (NATIVE_MODES).
+	// WebApp keeps Chat + Teach.
+	const modes = nativeAppId ? NATIVE_MODES : MODES
 	const open = useWebAppDrawerStore((s) => s.openByWebappId[webappId] ?? null)
 	const toggle = useWebAppDrawerStore((s) => s.toggle)
 	// Phase 100-09-06: Teach icon toggles the per-webappId recording flag
@@ -221,7 +257,7 @@ function IconBar({webappId, onChatClick}: IconBarProps) {
 	return (
 		<TooltipProvider delayDuration={300}>
 			<div className='flex items-center gap-3'>
-				{MODES.map(({id, label, Icon}) => {
+				{modes.map(({id, label, Icon}) => {
 					// Phase 100-09-08: Chat icon's active state mirrors the
 					// floating-bar mode (always false in 'icons' mode; entering
 					// 'chat-input' swaps the whole bar, so the active-state
