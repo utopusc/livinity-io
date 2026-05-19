@@ -1868,12 +1868,18 @@ If browser UAT surfaces a bug → Phase 162 open as targeted fix plan. If all gr
 **Goal:** Idle session reaper, Settings UI (model picker + autonomous panel + budget editor), memory linter slash command, v34.x consolidated VERIFICATION + final Mini PC deploy. v34.x milestone CODE-COMPLETE at this phase's close.
 
 **Depends on:** Phase 164 SHIPPED
-**Plans:** 4 (165-01 idle reaper, 165-02 Settings UI panels + tRPC autonomous router, 165-03 vault-doctor skill, 165-04 v34-VERIFICATION + final deploy)
-**Approach:** autonomous
+**Plans:** 4 plans across 3 waves (Wave 1: 165-01 + 165-03 parallel; Wave 2: 165-02; Wave 3: 165-04 deploy + OperatorUAT gate)
+**Approach:** autonomous (165-01/02/03) + checkpoint (165-04 final UAT gate)
 **Estimated:** ~4-6 saat
 **CONTEXT.md:** `.planning/phases/165-cc-integration-polish/165-CONTEXT.md` (locked decisions)
 
-**Hard guardrails:** Sacred SHA preserved, D-09 verbatim, D-NO-NEW-DEPS, Phase 161 chat-path-untouched contract (legacy mode still flippable via Redis flag).
+**Hard guardrails:** Sacred SHA preserved, D-09 verbatim, D-NO-NEW-DEPS, Phase 161 chat-path-untouched contract (legacy mode still flippable via Redis flag), agent-session.ts UNCHANGED (idle reaper accesses sessions via ws-agent interface), Phase 162-01 vault-scaffolder source UNCHANGED, Phase 164 scheduler core UNCHANGED (only additive public getters in 165-02).
+
+**Plans:**
+- [x] 165-01-PLAN.md — IdleSessionReaper module + ws-agent activity hook + livinityd boot wire-up (Wave 1, autonomous) — **CODE-COMPLETE 2026-05-19** (commits `249b2840..1aef001c`; 12/12 idle-reaper.test.ts PASS; agent-session.ts UNCHANGED via SessionActivityProvider interface; sacred SHAs preserved 2/2; D-NO-NEW-DEPS upheld)
+- [ ] 165-02-PLAN.md — Settings UI panels + autonomous + chatConfig tRPC routers + scheduler public read-getters (Wave 2, autonomous)
+- [ ] 165-03-PLAN.md — livos-vault-doctor SKILL.md template + scaffolder regression test (Wave 1, autonomous)
+- [ ] 165-04-PLAN.md — Mini PC deploy + live smoke probes + v34-VERIFICATION.md consolidated + Operator UAT gate (Wave 3, checkpoint: human-verify)
 
 ---
 
