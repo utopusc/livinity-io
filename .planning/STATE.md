@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T18:56:51.558Z"
+last_updated: "2026-05-19T19:04:33.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,20 +25,20 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 163 (surface-vault-contexts) — **SHIPPED + LIVE-VERIFIED** 2026-05-19
-Plan: 04 — **163-04 SHIPPED** 2026-05-19 (Mini PC deploy `bash /opt/livos/update.sh` exit 0, deployed SHA `6dd4a60` matches local HEAD `6dd4a60c7916ad2bcd18aa92c3c45c2021078cf9`; 3 synthetic WS probes all PASS with PRIMARY subsurface CWD expectations — Probe 1 webapp → Haiku 4.5 + `/home/bruce/livinity-vault/surfaces/webapp/phase163test`, Probe 2 native → Haiku 4.5 + `/home/bruce/livinity-vault/surfaces/native/phase163nativetest`, Probe 3 Main Chat regression → Opus 4.7 + `/home/bruce/livinity-vault` vault root; Phase 162 chat-path-untouched + Phase 161 dated literal both preserved at SDK boundary; sacred SHA + D-09 + 161-02 helper + D-NO-NEW-DEPS all preserved end-to-end; full evidence in `163-VERIFICATION.md`)
-Next plan: **Phase 164** — Autonomous Scheduler + Sample Agents (`/gsd-plan-phase 164`)
+Phase: 164 (autonomous-scheduler) — **IN PROGRESS** 2026-05-19
+Plan: 01 — **164-01 CODE-COMPLETE** 2026-05-19 (Agent Definition Format + Parser: agent-definition-parser.ts + .test.ts + index.ts barrel; 14/14 vitest PASS; tsc filtered to modules/autonomous-scheduler/ = zero errors; D-NO-NEW-DEPS verified — js-yaml@^4.1.0 + node-cron@^3.0.3 are direct deps, no package.json or pnpm-lock.yaml diff; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved + 4 other guard files byte-identical; 2 commits `4de8eb8f..3af08562`)
+Next plan: **164-02** — Scheduler Module + budget gate + CLI trigger + livinityd boot wire-up (`/gsd-plan-phase 164` if not yet planned, otherwise execute)
 Master plan: `.planning/v34-LIVOS-CC-INTEGRATION-MASTER.md` (LivOS ⇄ Claude Code tam entegrasyon, 4 phase: 162-165, ~20-25 saat agent work)
-Resume command: `/clear` ardından `/gsd-plan-phase 164` veya `/gsd-autonomous --from 164` — user uyurken kalan 2 phase sequential ship eder
+Resume command: `/clear` ardından `/gsd-autonomous --from 164` (zincir devam ediyor — 164-02 sıraya geçer)
 
-Last completed: **163-04** ✅ SHIPPED + LIVE-VERIFIED 2026-05-19 (Mini PC deploy SHIPPED — deployed SHA `6dd4a60` matches local HEAD; 3 synthetic WS probes all PASS with PRIMARY subsurface CWD expectations: webapp `claude-haiku-4-5-20251001 cwd=/home/bruce/livinity-vault/surfaces/webapp/phase163test`, native `claude-haiku-4-5-20251001 cwd=/home/bruce/livinity-vault/surfaces/native/phase163nativetest`, Main Chat regression `claude-opus-4-7 cwd=/home/bruce/livinity-vault`; surface vault routing LIVE on production; all 4 services active; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved on Mini PC + all 12 commits)
+Last completed: **164-01** ✅ CODE-COMPLETE 2026-05-19 (Agent Definition Format + Parser shipped — `agent-definition-parser.ts` with `parseAgentDefinition()` + `parseAgentDefinitionsDir()` + `AgentDefinition` + `ParseResult` + `ParseError` + `DirParseResult` types; YAML frontmatter via js-yaml FAILSAFE_SCHEMA (T-164-01-01 mitigation), cron validation via node-cron `cron.validate()`, snake_case→camelCase at parse time, partial-failure resilient directory walk with stable sort by name; 14-test vitest suite PASS covering happy path / defaults / missing required / invalid cron / cron variants / empty body / missing frontmatter / partial-failure dir / non-.md skip / ENOENT / stable sort / subdir non-recursion; sacred SHA + D-09 + 161-02 helper + agent-session + vault-scaffolder all UNCHANGED)
 
 v34.x phase queue:
 
 - [x] Phase 161 — Computer-Use SDK Path Wiring (SHIPPED)
 - [x] Phase 162 — Vault Scaffolding + SDK Settings Integration (SHIPPED — 5/5 plans CODE-COMPLETE + LIVE-VERIFIED on Mini PC)
 - [x] Phase 163 — Surface-Specific Vault Contexts (SHIPPED — 4/4 plans CODE-COMPLETE + LIVE-VERIFIED on Mini PC, 3/3 synthetic probes PASS with PRIMARY expectations)
-- [ ] Phase 164 — Autonomous Scheduler + Sample Agents
+- [ ] Phase 164 — Autonomous Scheduler + Sample Agents (IN PROGRESS — 164-01 CODE-COMPLETE; 164-02..05 pending)
 - [ ] Phase 165 — Polish + Settings UI + v34.x Ship
 
 ## 160-01 Status (2026-05-19) — Haiku Routing CODE-COMPLETE (2 commits, sacred SHA preserved 2/2)

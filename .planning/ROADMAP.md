@@ -1895,6 +1895,13 @@ If browser UAT surfaces a bug → Phase 162 open as targeted fix plan. If all gr
 
 **Hard guardrails:** Sacred SHA preserved, D-09 verbatim, D-NO-NEW-DEPS, autonomous run resource caps enforced.
 
+**Plans:**
+- [ ] 164-01-PLAN.md — Agent definition format + parser (vault/livos-agents/*.md YAML+body → AgentDefinition)
+- [ ] 164-02-PLAN.md — Scheduler module + budget gate + CLI trigger + livinityd boot wire-up
+- [ ] 164-03-PLAN.md — Inbox writeback (vault/inbox/<ts>_<agent>.md with frontmatter + backlinks)
+- [ ] 164-04-PLAN.md — Sample autonomous agents (nightly-backup-audit + pr-watcher, both enabled:false)
+- [ ] 164-05-PLAN.md — Mini PC deploy + live UAT (manual trigger + concurrent cap probes)
+
 ---
 
 ### Phase 163: Surface-Specific Vault Contexts + Phase 161 Helper Bridge — 🔴 PLANNED 2026-05-19
