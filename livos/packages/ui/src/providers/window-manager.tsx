@@ -45,6 +45,15 @@ type WindowManagerState = {
 	nextZIndex: number
 }
 
+// Phase 159 — close-handler registry. Window-manager-mediated teardown
+// ensures the handler runs while the React tree is still mounted, so
+// refs (tRPC mutation refs, etc.) are fresh and the WS transport is
+// live. Replaces the per-component unmount-cleanup race (H1 of
+// 159-RESEARCH.md Workstream B).
+//
+// Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f (sdk-agent-runner.ts) unchanged.
+export type CloseHandler = () => void | Promise<void>
+
 type WindowManagerContextT = {
 	windows: WindowState[]
 	openWindow: (appId: string, route: string, title: string, icon: string, originRect?: OriginRect) => WindowId
@@ -56,6 +65,9 @@ type WindowManagerContextT = {
 	updateWindowSize: (windowId: WindowId, size: Size) => void
 	pinWindowToTopBar: (windowId: WindowId) => void
 	unpinWindowFromTopBar: (windowId: WindowId) => void
+	// Phase 159 — close-handler registry (Workstream B).
+	registerCloseHandler: (windowId: WindowId, handler: CloseHandler) => void
+	unregisterCloseHandler: (windowId: WindowId) => void
 }
 
 // Get responsive window size based on screen dimensions.
@@ -115,9 +127,6 @@ const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	'LIVINITY_subagents': {width: 950, height: 650},
 	'LIVINITY_schedules': {width: 950, height: 650},
 	'LIVINITY_terminal': {width: 900, height: 600},
-	'LIVINITY_remote-desktop': {width: 1400, height: 900},
-	'LIVINITY_chrome': {width: 1280, height: 800},
-	'LIVINITY_gmail': {width: 1280, height: 800},
 	default: {width: 900, height: 600},
 }
 
@@ -264,6 +273,18 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 	const windowsRef = useRef(state.windows)
 	windowsRef.current = state.windows
 
+	// Phase 159 — close-handler registry (Workstream B). Lives in a ref so
+	// registration does NOT trigger context re-renders.
+	const closeHandlersRef = useRef<Map<WindowId, CloseHandler>>(new Map())
+
+	const registerCloseHandler = useCallback((windowId: WindowId, handler: CloseHandler) => {
+		closeHandlersRef.current.set(windowId, handler)
+	}, [])
+
+	const unregisterCloseHandler = useCallback((windowId: WindowId) => {
+		closeHandlersRef.current.delete(windowId)
+	}, [])
+
 	// One-shot hydration guard — only dispatch hydrated rows once even if
 	// the query refetches under StrictMode-double-mount.
 	const hydratedRef = useRef(false)
@@ -327,6 +348,19 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 	}, [])
 
 	const closeWindow = useCallback((windowId: WindowId) => {
+		// Phase 159 — invoke registered close handler FIRST (e.g.
+		// native-app-stream-window's `apps.native.close` mutation),
+		// then dispatch the reducer action. Handler runs while React
+		// tree is still mounted so refs (closeMutationRef, etc.) are
+		// fresh and the WS transport is live. We fire-and-forget with a
+		// 2s timeout — the UI must not hang if the backend is slow.
+		const handler = closeHandlersRef.current.get(windowId)
+		if (handler) {
+			const handlerPromise = Promise.resolve().then(() => handler())
+			const timeout = new Promise<void>((resolve) => setTimeout(resolve, 2000))
+			void Promise.race([handlerPromise, timeout]).catch(() => undefined)
+			closeHandlersRef.current.delete(windowId)
+		}
 		dispatch({type: 'CLOSE_WINDOW', payload: windowId})
 	}, [])
 
@@ -385,6 +419,8 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 				updateWindowSize,
 				pinWindowToTopBar,
 				unpinWindowFromTopBar,
+				registerCloseHandler,
+				unregisterCloseHandler,
 			}}
 		>
 			{children}
