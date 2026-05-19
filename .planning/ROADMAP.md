@@ -1785,7 +1785,7 @@ Plans:
 
 **Depends on:** Phase 153 ✅ (plugin runtime + SDK exists).
 
-### Phase 160: Luse LivOS Overlay + Haiku Routing — 🟡 IN PROGRESS 2026-05-19 (Plan 01 CODE-COMPLETE; Plans 02-06 pending)
+### Phase 160: Luse LivOS Overlay + Haiku Routing — 🟡 IN PROGRESS 2026-05-19 (Plans 01-02 CODE-COMPLETE; Plans 03-06 pending)
 
 **Goal:** Two parallel improvements to the Luse computer-use MCP. (A) Route computer-use loop to Haiku (`claude-haiku-4-5-20251001`) for screenshot-grounded turns while AI Chat panel + WebApp chat keep Opus/Sonnet (operator's explicit request: faster + cheaper computer-use without losing chat reasoning quality). (B) Fix verbatim-Bytebot drift on LivOS via prompt-builder OVERLAY (preserves D-09 invariant: `luse-system-prompt.ts` body bytes UNCHANGED). LivOS context overlay prepends app catalog + runtime display size + dash-pattern domain rule (`n8n-bruce.livinity.io`, NOT dot subdomain). Plus `computer_application` integration with LivOS launcher (n8n / LibreOffice via `windowManager.openWindow`) and `computer_read_file` path sandbox.
 
@@ -1811,7 +1811,7 @@ Plans:
 
 Plans:
 - [x] 160-01 — Haiku routing for computer-use loop (Wave 1) — CODE-COMPLETE 2026-05-19; 2 commits `95d61ec6..1b063810`; X-Livinity-Computer-Use header gates `mode: 'computer-use'` opt on `createSdkAgentRunnerForUser` which injects `tier: 'haiku'` + `model: 'claude-haiku-4-5-20251001'` into /api/agent/stream body; liv-core api.ts honors `body.tier` override; sacred SHA preserved; 11 new tests PASS (4 tsx + 7 vitest); chat path untouched
-- [ ] 160-02 — LivOS system prompt overlay (Wave 1)
+- [x] 160-02 — LivOS system prompt overlay (Wave 1) — CODE-COMPLETE 2026-05-19; 2 commits `ef6f60a5..5926c76d`; `buildLuseOverlay()` + `buildLuseSystemPromptWithOverlay()` in `agent-prompt-builder.ts` prepend a LivOS context block (DISPLAY hook for Plan 04, AVAILABLE APPS hook for Plan 03, WEBAPP URL PATTERN dash-rule with `n8n-user.livinity.io` correct + `n8n.user.livinity.io` anti-example, CONFLICT RULE `THIS CONTEXT WINS`); `PerWebAppMcpDescriptor` gains optional `userSlug?`+`domainRoot?` fields threaded as `LIVOS_USER_SLUG`+`LIVOS_DOMAIN_ROOT` env vars to the spawned Luse MCP child; 14 new vitest invariants PASS (5 source-text + 2 D-09 verbatim-guard + 7 runtime); `agent-prompt-builder.test.ts` 39 PASS / 0 FAIL (was 25 / 0); `luse-system-prompt.ts` bytes UNCHANGED (D-09 verified empty diff); sacred SHA preserved 2/2
 - [ ] 160-03 — computer_application LivOS launcher (Wave 2, depends on 160-02)
 - [ ] 160-04 — Dynamic display size via xdpyinfo (Wave 2, depends on 160-02)
 - [ ] 160-05 — computer_read_file path sandbox (Wave 2)

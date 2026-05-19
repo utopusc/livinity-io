@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T10:01:10.763Z"
+last_updated: "2026-05-19T11:32:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 160 (luse-livos-overlay-haiku-routing) — EXECUTING
-Plan: 2 of 6 (160-01 CODE-COMPLETE; 160-02 next)
+Plan: 3 of 6 (160-01 + 160-02 CODE-COMPLETE; 160-03 next)
 
 ## 160-01 Status (2026-05-19) — Haiku Routing CODE-COMPLETE (2 commits, sacred SHA preserved 2/2)
 
@@ -46,6 +46,23 @@ Plan: 2 of 6 (160-01 CODE-COMPLETE; 160-02 next)
   1. Pre-existing Phase 102-06 vitest failure for `LUSE_TARGET_DISPLAY` literal assertion (snippet body in `agent-prompt-builder.buildActiveDisplaySnippet` no longer contains that string; renamed/refactored in an earlier phase). Tracked for follow-up plan.
 - **Next action:** `/gsd-execute-phase 160` Plan 02 — LivOS system prompt overlay (Wave 1, parallel-safe with completed 160-01).
 - Full deliverable detail: see `.planning/phases/160-luse-livos-overlay-haiku-routing/160-01-SUMMARY.md`.
+
+## 160-02 Status (2026-05-19) — LivOS System Prompt Overlay CODE-COMPLETE (2 commits, sacred SHA preserved 2/2, D-09 verbatim invariant preserved)
+
+- **LIVOS SYSTEM PROMPT OVERLAY (verbatim-preserving)** (Plan 2 of 6 in Phase 160, 2 tasks): ships the scaffold for prepending a LivOS-specific context block to the Bytebot verbatim system prompt without mutating `luse-system-prompt.ts` (D-09 invariant honored). Overlay corrects 4 drift points: app whitelist (placeholder for Plan 160-03 to fill from `apps.list + apps.native.list`), display size (placeholder for Plan 160-04 to fill from `xdpyinfo`), UI conventions ("React shell + dock + Windows Manager, NOT desktop icons"), and `computer_application` enum (callout that Bytebot defaults like firefox/thunderbird/vscode are NOT installed on LivOS). Includes explicit dash-pattern URL rule (`<app>-<user>.livinity.io`, NEVER dot form) and a conflict rule ("THIS CONTEXT WINS" — overlay overrides the verbatim's hardcoded 1280x960 + "DESKTOP ICONS"). Two atomic commits:
+  1. `ef6f60a5` Task 1 — `livos/packages/livinityd/source/modules/ai/agent-prompt-builder.ts` (+ `LuseOverlayOpts` interface with `availableApps?` (Plan 03 hook), `actualDisplaySize?` (Plan 04 hook), `userSlug?`, `domainRoot?`; + `buildLuseOverlay(opts)` pure-function emitting the LivOS context block with banner, DISPLAY line, AVAILABLE APPS block, APP LAUNCHER instruction, WEBAPP URL PATTERN dash-rule, CONFLICT RULE, and handoff marker; + `buildLuseSystemPromptWithOverlay(opts)` composition helper containing the locked literal `buildLuseOverlay(overlayOpts) + LUSE_SYSTEM_PROMPT` pattern). ~149 lines added.
+  2. `5926c76d` Task 2 — `livos/packages/livinityd/source/modules/computer-use/luse-mcp-config.ts` (`PerWebAppMcpDescriptor` gains optional `userSlug?` + `domainRoot?` fields; `buildLuseConfig` per-WebApp env branch threads `LIVOS_USER_SLUG: descriptor.userSlug ?? 'admin'` + `LIVOS_DOMAIN_ROOT: descriptor.domainRoot ?? 'livinity.io'`; host-display branch unchanged — fully back-compat) + `livos/packages/livinityd/source/modules/ai/agent-prompt-builder.test.ts` (+ 14 vitest invariants in 3 describe blocks: 5 source-text invariants on overlay shape, 2 D-09 verbatim-guard invariants on luse-system-prompt.ts source preservation, 7 runtime behavior tests on buildLuseOverlay + buildLuseSystemPromptWithOverlay).
+- **Verification:** `agent-prompt-builder.test.ts` **39 PASS / 0 FAIL** (was 25 / 0 — added 14 Phase 160-02 invariants). `luse-mcp-config.window.test.ts` 5 PASS / 0 FAIL unchanged (per-WebApp branch back-compat verified). `luse-mcp-config.test.ts` 22 PASS / 3 FAIL — same as bare HEAD via `git stash + run` (pre-existing T4/T5/T6 LUSE_REDIS_URL drift, out of scope per scope-boundary rule). No typecheck errors in any touched file.
+- **Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f`** for `liv/packages/core/src/sdk-agent-runner.ts` PRESERVED across both source commits + this STATE update commit.
+- **D-09 verbatim contract upheld:** `git diff HEAD~2..HEAD -- livos/packages/livinityd/source/modules/computer-use/luse-system-prompt.ts` = empty. Pre-execution SHA `2083f0a3dfc798b4841613b9576b94929f2faf2f` — file bytes UNCHANGED. Two source-text invariants now guard the literal "You are Liv," + "1280 x 960 pixels" so any future direct-patch attempt fires CI red.
+- **D-NO-NEW-DEPS upheld:** `git diff --stat HEAD~2..HEAD -- **/package.json` = empty.
+- **Deviations (both Rule 2/Rule 3 auto-fixed; documented in 160-02-SUMMARY.md):**
+  1. Plan snippet had a nested template-literal escape artifact `${${'`'}}<app>` (JSDoc rendering artifact, not real intended syntax). Replaced with the intended plain escaped-backtick pattern; semantic output identical.
+  2. Plan instructed inline assembly edit at "the existing prompt assembly path" but no such path exists in `agent-prompt-builder.ts` (the actual verbatim concat lives in `injectComputerUseSystemPrompt` over in luse-system-prompt.ts which is D-09 sacred). Solution: added a SECOND exported function `buildLuseSystemPromptWithOverlay` whose body contains the literal `buildLuseOverlay(overlayOpts) + LUSE_SYSTEM_PROMPT` expression — satisfies the acceptance test regex AND gives Plans 03/04 a single import point.
+- **Deferred (out of scope per scope-boundary rule):**
+  1. Pre-existing 3 vitest failures in `luse-mcp-config.test.ts` T4/T5/T6 (host-display env shape assertions missing `LUSE_REDIS_URL` after Phase 100-10-04 added it). Confirmed unchanged from bare HEAD via git stash compare.
+- **Next action:** `/gsd-execute-phase 160` Plan 03 — `computer_application` LivOS launcher (Wave 2, depends on 160-02 scaffold).
+- Full deliverable detail: see `.planning/phases/160-luse-livos-overlay-haiku-routing/160-02-SUMMARY.md`.
 
 Milestone: **v35.0 — Design System Unification (UI/UX)** — OPENED 2026-05-14
 Master plan: [`.planning/v35-DESIGN-SYSTEM-MILESTONE.md`](v35-DESIGN-SYSTEM-MILESTONE.md) (470 lines — read first)
