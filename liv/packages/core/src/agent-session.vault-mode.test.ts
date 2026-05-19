@@ -167,31 +167,39 @@ function test10_factoryStaysSync() {
 }
 
 function test11_wsAgentOptsShapeAndPassthrough() {
-  // Factory opts type declares vaultModeConfig
+  // Phase 165-02: opts type renamed from `vaultModeConfig?:` (one-shot) to
+  // `resolveVaultModeConfig: () =>` (getter for per-connection re-resolution).
+  // The getter return type still surfaces `{vaultPath: string; defaultModel?: string} | undefined`.
   assert.match(
     WS_AGENT_SRC,
-    /vaultModeConfig\?:\s*\{[\s\S]*?vaultPath:\s*string/,
+    /resolveVaultModeConfig:\s*\(\)\s*=>[\s\S]*?vaultPath:\s*string/,
   );
-  // Factory threads vaultModeConfig into AgentSessionManager constructor call.
-  // Phase 162-02 form: `vaultModeConfig: opts.vaultModeConfig` (one-shot).
-  // Phase 163-02 form: `vaultModeConfig: vaultModeConfigForSession` where the
-  //   for-session local derives from `opts.vaultModeConfig` two lines above
-  //   inside the `buildSessionManager` closure. Both forms still guarantee
-  //   that the factory threads opts.vaultModeConfig down into the manager.
+  // Factory threads the resolved value into AgentSessionManager constructor call.
+  // Phase 165-02 form: per-connection const `vaultModeConfig` derived from
+  // `opts.resolveVaultModeConfig()` at the top of the returned arrow body,
+  // then threaded into the manager as `vaultModeConfig: vaultModeConfigForSession`
+  // (the Phase 163-02 per-session derivation is preserved — only the FACTORY-
+  // level binding moves from `opts.vaultModeConfig` to the per-connection const).
   assert.match(
     WS_AGENT_SRC,
-    /vaultModeConfig:\s*(opts\.vaultModeConfig|vaultModeConfigForSession)/,
+    /vaultModeConfig:\s*vaultModeConfigForSession/,
   );
-  // And the for-session local (Phase 163-02) MUST be derived from opts.vaultModeConfig
-  // OR the Phase 162-02 literal form must still be present. One of the two must hold.
-  const hasLegacyDirect = /vaultModeConfig:\s*opts\.vaultModeConfig\b/.test(WS_AGENT_SRC);
-  const hasPerSessionDerivation =
-    /const\s+vaultModeConfigForSession\s*=\s*opts\.vaultModeConfig/.test(WS_AGENT_SRC);
+  // Phase 165-02: the per-session derivation is now the per-CONNECTION const
+  // built from opts.resolveVaultModeConfig() at the top of the (ws, request) arrow body.
+  const hasPerConnectionDerivation =
+    /const\s+vaultModeConfig\s*=\s*opts\.resolveVaultModeConfig\(\)/.test(WS_AGENT_SRC);
   assert.ok(
-    hasLegacyDirect || hasPerSessionDerivation,
-    'ws-agent must EITHER pass `opts.vaultModeConfig` directly (162-02) OR derive `vaultModeConfigForSession` from it (163-02)',
+    hasPerConnectionDerivation,
+    'ws-agent must derive a per-connection `const vaultModeConfig = opts.resolveVaultModeConfig()` inside the returned arrow body (Phase 165-02 lazy-getter refactor)',
   );
-  console.log('  PASS: ws-agent factory opts declares vaultModeConfig + threads it into AgentSessionManager');
+  // Phase 165-02: Phase 162-02 one-shot form retired; the boot-frozen
+  // `opts.vaultModeConfig` shape must NOT reappear anywhere in the file.
+  assert.doesNotMatch(
+    WS_AGENT_SRC,
+    /opts\.vaultModeConfig\b/,
+    'Phase 162-02 boot-frozen `opts.vaultModeConfig` shape must be eradicated',
+  );
+  console.log('  PASS: ws-agent factory opts declares resolveVaultModeConfig getter + per-connection const threads into AgentSessionManager (Phase 165-02)');
 }
 
 // ── AiModule init-once invariants ─────────────────────────────
@@ -217,15 +225,21 @@ function test12_aiModuleFieldsAndRedisRead() {
 // ── server/index.ts /ws/agent mount invariants ───────────────
 
 function test13_serverMountWiresVaultConfig() {
+  // Phase 162-02: gate still reads `ai.chatBackend === 'vault'` inside the
+  // /ws/agent mount block — Phase 165-02 moves it INSIDE the lazy getter
+  // arrow body, but the literal is preserved.
   assert.match(
     SERVER_INDEX_SRC,
     /ai\.chatBackend\s*===\s*['"]vault['"]/,
   );
+  // Phase 165-02: server/index.ts /ws/agent mount passes `resolveVaultModeConfig`
+  // (the getter) instead of `vaultModeConfig` (the boot-frozen value).
+  // The createAgentWebSocketHandler({...}) call carries the field name.
   assert.match(
     SERVER_INDEX_SRC,
-    /vaultModeConfig,/,
+    /resolveVaultModeConfig,/,
   );
-  console.log('  PASS: server/index.ts /ws/agent mount gates on ai.chatBackend === "vault" and passes vaultModeConfig');
+  console.log('  PASS: server/index.ts /ws/agent mount gates on ai.chatBackend === "vault" and passes resolveVaultModeConfig (Phase 165-02)');
 }
 
 // ── Phase 163-02.5 post-revision matrix lock ───────────────────

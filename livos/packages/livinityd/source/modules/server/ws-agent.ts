@@ -234,16 +234,28 @@ async function buildConversationContext(
 export function createAgentWebSocketHandler(opts: {
 	livinityd: Livinityd
 	logger: ReturnType<typeof createLogger>
-	// Phase 162-02 — Pre-resolved vault mode config (computed by the caller
-	// from AiModule.chatBackend + AiModule.defaultChatModel — see
-	// server/index.ts /ws/agent mount). When undefined, AgentSessionManager
-	// preserves Phase 161 behavior byte-identical. When set, sessions use
-	// CC's settingSources + cwd loading via vault/CLAUDE.md.
+	// Phase 165-02 — Lazy per-connection vault-mode resolution.
 	//
-	// Init-once architecture: Redis reads live in AiModule.start(); this
-	// factory STAYS synchronous so `wss.on('connection', handler)` keeps
-	// working (cannot await a Promise<handler>).
-	vaultModeConfig?: {vaultPath: string; defaultModel?: string}
+	// The getter is invoked ONCE per incoming WS connection (inside the
+	// returned `(ws, request) => ...` handler, before `defaultSessionManager`
+	// is built). chatConfig.setBackend / setModel mutations therefore take
+	// effect on the NEXT WS connection without a livinityd restart — AiModule's
+	// chatBackend / defaultChatModel fields are mutated in-place by the
+	// mutation, and this getter re-reads them per connection.
+	//
+	// Phase 162-02 used a pre-frozen `vaultModeConfig?:` value (the
+	// architecture bug 165-02 fixes). Phase 163-02 added per-session subsurface
+	// vault paths INSIDE the returned arrow body — that resolution is preserved
+	// here; only the FACTORY-level value moves from boot-once to per-connection.
+	//
+	// Init-once architecture preserved: this factory STAYS synchronous so
+	// `wss.on('connection', handler)` keeps working (cannot await a
+	// Promise<handler>). The getter itself is sync (no Redis read at WS
+	// connection time — AiModule fields are pre-resolved on first start +
+	// in-place mutated by the chatConfig router).
+	resolveVaultModeConfig: () =>
+		| {vaultPath: string; defaultModel?: string}
+		| undefined
 }) {
 	const ai = opts.livinityd.ai
 
@@ -293,51 +305,73 @@ export function createAgentWebSocketHandler(opts: {
 		// No brain in livinityd — LLM fallback is skipped, keyword matching only
 	})
 
-	// Phase 163-02 — `buildSessionManager` returns an AgentSessionManager scoped to
-	// a specific resolved vault path. Used both for the default manager (factory time)
-	// and for per-session managers built lazily when a surface-prefixed conversationId
-	// resolves to a subsurface vaultPath that differs from the factory's. When
-	// opts.vaultModeConfig is undefined (legacy chat_backend=legacy), we DON'T re-thread
-	// vault config — preserves Phase 161 verbatim. The Phase 161-02 DI hook
-	// (computerUseSystemPromptBuilder) is identical across all manager instances.
-	const buildSessionManager = (resolvedVaultPath: string): AgentSessionManager => {
-		const vaultModeConfigForSession = opts.vaultModeConfig
-			? {vaultPath: resolvedVaultPath, defaultModel: opts.vaultModeConfig.defaultModel}
-			: undefined
-		return new AgentSessionManager({
-			toolRegistry: lazyToolRegistry,
-			// IntentRouter disabled — scoped tool selection filters out MCP tools.
-			// Re-enable once CapabilityRegistry properly tracks MCP provides_tools
-			// and IntentRouter preserves all MCP tools in scoped registry.
-			// intentRouter,
-			redis: ai.redis,
-			learningEngine,
-			// Phase 161-02 — DI callback wires Plan 160-02 + 160-04 LivOS overlay
-			// composer into the SDK subscription path. The builder is invoked only
-			// for computer-use sessions (conversationId starts with `native:` / `webapp:`
-			// per Plan 161-01 detection). Hard-coded userSlug/domainRoot match
-			// luse-mcp-config.ts:318 defaults; per-session resolution from JWT is
-			// deferred to a future plan. Chat path untouched.
-			computerUseSystemPromptBuilder: async () => {
-				return buildLuseSystemPromptWithOverlayResolved({
-					userSlug: 'admin',
-					domainRoot: 'livinity.io',
-				})
-			},
-			vaultModeConfig: vaultModeConfigForSession,  // Phase 162-02 — pass-through (or undefined for Phase 161 legacy); Phase 163-02 — per-session resolvedVaultPath
-		})
-	}
-
-	// Phase 163-02 — Default sessionManager used for Main Chat (no surface prefix).
-	// For surface-prefixed convIds, a per-session manager is built lazily with the
-	// resolved subsurface vaultPath (see perSessionManagers Map below). When
-	// opts.vaultModeConfig is undefined, this is byte-identical Phase 161/162-02.
-	const defaultSessionManager = buildSessionManager(
-		opts.vaultModeConfig?.vaultPath ?? '/home/bruce/livinity-vault',
-	)
-
 	return (ws: WebSocket, request: IncomingMessage) => {
 		const logger = opts.logger
+
+		// Phase 165-02 — Resolve vault config ONCE per connection.
+		//
+		// Bound to a per-connection const + reused for the lifetime of this
+		// connection's session managers. Mid-session backend swaps would
+		// break in-flight tool calls — the per-connection scope is the
+		// intended trade-off (CONTEXT.md / threat_model T-165-02-08).
+		const vaultModeConfig = opts.resolveVaultModeConfig()
+		logger.log(
+			`AgentSessionManager: chat_backend=${vaultModeConfig ? 'vault' : 'legacy'}` +
+				(vaultModeConfig
+					? ` (vault=${vaultModeConfig.vaultPath}, model=${vaultModeConfig.defaultModel})`
+					: ' (Phase 161 legacy)'),
+		)
+
+		// Phase 163-02 — `buildSessionManager` returns an AgentSessionManager scoped to
+		// a specific resolved vault path. Used both for the default manager (per-
+		// connection) and for per-session managers built lazily when a surface-prefixed
+		// conversationId resolves to a subsurface vaultPath. When `vaultModeConfig` is
+		// undefined (legacy chat_backend=legacy), we DON'T re-thread vault config —
+		// preserves Phase 161 verbatim. The Phase 161-02 DI hook
+		// (computerUseSystemPromptBuilder) is identical across all manager instances.
+		//
+		// Phase 165-02 — Declared INSIDE the per-connection arrow body so it
+		// closes over `vaultModeConfig` (the per-connection const). Module-scope
+		// declaration moved here as part of the lazy-getter refactor.
+		const buildSessionManager = (resolvedVaultPath: string): AgentSessionManager => {
+			const vaultModeConfigForSession = vaultModeConfig
+				? {vaultPath: resolvedVaultPath, defaultModel: vaultModeConfig.defaultModel}
+				: undefined
+			return new AgentSessionManager({
+				toolRegistry: lazyToolRegistry,
+				// IntentRouter disabled — scoped tool selection filters out MCP tools.
+				// Re-enable once CapabilityRegistry properly tracks MCP provides_tools
+				// and IntentRouter preserves all MCP tools in scoped registry.
+				// intentRouter,
+				redis: ai.redis,
+				learningEngine,
+				// Phase 161-02 — DI callback wires Plan 160-02 + 160-04 LivOS overlay
+				// composer into the SDK subscription path. The builder is invoked only
+				// for computer-use sessions (conversationId starts with `native:` / `webapp:`
+				// per Plan 161-01 detection). Hard-coded userSlug/domainRoot match
+				// luse-mcp-config.ts:318 defaults; per-session resolution from JWT is
+				// deferred to a future plan. Chat path untouched.
+				computerUseSystemPromptBuilder: async () => {
+					return buildLuseSystemPromptWithOverlayResolved({
+						userSlug: 'admin',
+						domainRoot: 'livinity.io',
+					})
+				},
+				vaultModeConfig: vaultModeConfigForSession,  // Phase 162-02 — pass-through (or undefined for Phase 161 legacy); Phase 163-02 — per-session resolvedVaultPath; Phase 165-02 — derived from per-connection const, not opts
+			})
+		}
+
+		// Phase 163-02 — Default sessionManager used for Main Chat (no surface prefix).
+		// For surface-prefixed convIds, a per-session manager is built lazily with the
+		// resolved subsurface vaultPath (see perSessionManagers Map below). When
+		// vaultModeConfig is undefined, this is byte-identical Phase 161/162-02.
+		//
+		// Phase 165-02 — Declared INSIDE the per-connection arrow body so a fresh
+		// instance is built for every connection (pre-165-02 this lived at module
+		// scope, captured at boot).
+		const defaultSessionManager = buildSessionManager(
+			vaultModeConfig?.vaultPath ?? '/home/bruce/livinity-vault',
+		)
 
 		// Each WebSocket connection gets a unique session key so multiple tabs
 		// don't cancel each other's sessions.
@@ -378,7 +412,7 @@ export function createAgentWebSocketHandler(opts: {
 		const surfaceIdFromUrl = url.searchParams.get('surfaceId') ?? undefined
 
 		const buildSessionKey = (surfaceKind?: string, surfaceId?: string): string => {
-			if (opts.vaultModeConfig === undefined) {
+			if (vaultModeConfig === undefined) {
 				// Legacy — Phase 161 byte-identical
 				return `${userId}:${connectionId}`
 			}
@@ -442,20 +476,22 @@ export function createAgentWebSocketHandler(opts: {
 				})
 
 				// Phase 163-02 — Per-session vault path resolution. Only kicks in when
-				// vault mode is active (opts.vaultModeConfig != null) AND the convId has
+				// vault mode is active (vaultModeConfig != null) AND the convId has
 				// a surface prefix (`webapp:<id>:...` / `native:<id>:...`). fs.stat
 				// fallback handles the not-yet-scaffolded case (chat opened before
 				// Plan 163-01 install hook has materialized the surface dir).
+				// Phase 165-02 — `vaultModeConfig` is the per-connection const
+				// derived from `opts.resolveVaultModeConfig()` above.
 				if (
 					raw.type === 'start' &&
-					opts.vaultModeConfig &&
+					vaultModeConfig &&
 					raw.conversationId
 				) {
 					const resolvedPath = await resolveSessionVaultPathWithFallback(
 						raw.conversationId,
-						opts.vaultModeConfig.vaultPath,
+						vaultModeConfig.vaultPath,
 					)
-					if (resolvedPath !== opts.vaultModeConfig.vaultPath) {
+					if (resolvedPath !== vaultModeConfig.vaultPath) {
 						// Build a per-sessionKey manager pinned to the subsurface vault path.
 						// Reuse if already built for this sessionKey (same key across multi-turn).
 						if (!perSessionManagers.has(sessionKey)) {
