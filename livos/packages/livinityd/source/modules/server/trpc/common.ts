@@ -117,6 +117,9 @@ export const httpOnlyPaths = [
 	'apps.uninstallV37',
 	'apps.v37Progress',
 	'apps.v37List',
+	'apps.markWebappCatalog',
+	'apps.unmarkWebappCatalog',
+	'apps.stopAllStreams',
 	// Docker management — use HTTP for reliability through relay tunnel
 	'docker.manageContainer',
 	'docker.bulkManageContainers',

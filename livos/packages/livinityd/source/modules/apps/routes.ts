@@ -754,6 +754,57 @@ export const apps = router({
 			k.slice('liv:apps:native-catalog:'.length),
 		)
 
-		return {ai, native}
+		// Webapp section: catalog-appId mapping written by
+		// apps.markWebappCatalog (called by the bridge after
+		// webapp.create succeeds for a curated webapp install).
+		const webappKeys = await redis
+			.keys('liv:apps:webapp-catalog:*')
+			.catch(() => [] as string[])
+		const webapp = webappKeys.map((k: string) =>
+			k.slice('liv:apps:webapp-catalog:'.length),
+		)
+
+		return {ai, native, webapp}
+	}),
+
+	// Phase 157 round 4 — bridge writes the catalog mapping here after
+	// webapp.create succeeds so v37List can report the install. Idempotent.
+	markWebappCatalog: privateProcedure
+		.input(z.object({catalogAppId: z.string(), webappId: z.string()}))
+		.mutation(async ({ctx, input}) => {
+			await ctx.livinityd.ai.redis.set(
+				`liv:apps:webapp-catalog:${input.catalogAppId}`,
+				input.webappId,
+			)
+			return {ok: true as const}
+		}),
+
+	unmarkWebappCatalog: privateProcedure
+		.input(z.object({catalogAppId: z.string()}))
+		.mutation(async ({ctx, input}) => {
+			await ctx.livinityd.ai.redis.del(`liv:apps:webapp-catalog:${input.catalogAppId}`)
+			return {ok: true as const}
+		}),
+
+	// Phase 157 round 4 — operator emergency: stop ALL alive streams for
+	// the current user. The native-app cap can leak to 10 if Phase 102-08
+	// close lifecycle gaps trap streams alive without an owner. Until the
+	// close lifecycle is plumbed, this gives the user a recovery path
+	// without `systemctl restart livos`.
+	stopAllStreams: privateProcedure.mutation(async ({ctx}) => {
+		const sm = ctx.livinityd.streamManager
+		if (!sm) return {stopped: 0, total: 0}
+		const userId = ctx.currentUser?.id ?? 'admin'
+		const owned = sm.listStreams({userId})
+		let stopped = 0
+		for (const s of owned) {
+			try {
+				await sm.stopStream(s.streamId)
+				stopped++
+			} catch {
+				// best-effort
+			}
+		}
+		return {stopped, total: owned.length}
 	}),
 })

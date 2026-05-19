@@ -227,14 +227,21 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 		updateWidgets((prev) => prev.map((w) => w.id === widgetId ? {...w, config} : w))
 	}, [updateWidgets])
 
-	if (isLoading || !userApps || !name) return null
-
-	type V = 'default' | 'overlayed'
-	const variant: V = pathname === '/' ? 'default' : 'overlayed'
-	const variants: Record<V, Variant> = {
-		default: {opacity: 1, scale: 1, transition: {duration: 0.2, ease: 'easeOut'}},
-		overlayed: {opacity: 0, scale: 0.98, transition: {duration: 0.1}},
-	}
+	// Phase 157 round 4 — React hooks-rules fix.
+	//
+	// The early-return `if (isLoading || !userApps || !name) return null`
+	// used to live HERE — between the trpc query hooks above and the
+	// `useWindowManagerOptional` / `useMemo(streamAppIds)` /
+	// `useCallback(openStreamApp)` / `useMemo(gridItems)` hooks below.
+	//
+	// When `userApps` flickered to undefined during refetch (or a 500
+	// from apps.native.list mid-session), the early return skipped
+	// those hooks → next successful render called MORE hooks than the
+	// previous → React error #310 "Rendered fewer hooks than expected".
+	//
+	// Fix: defer the conditional render until AFTER all hooks run. The
+	// hooks themselves are made defensive (gridItems returns [] when
+	// userApps is undefined). Moves a runtime crash into a no-op render.
 
 	const windowManager = useWindowManagerOptional()
 
@@ -257,6 +264,10 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 	}, [isMobile, openApp, windowManager, streamAppIds])
 
 	const gridItems: AppGridItem[] = useMemo(() => {
+		// Phase 157 round 4 — defensive guard against userApps being
+		// undefined mid-refetch. See the comment block above
+		// `useWindowManagerOptional` for context.
+		if (!userApps) return []
 		const appItems: AppGridItem[] = userApps.map((app) => ({
 			id: app.id,
 			node: (
@@ -473,6 +484,19 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 
 		return [...appItems, ...folderItems, ...widgetItems]
 	}, [userApps, webapps, nativeApps, folders, widgets, openStreamApp, isMobile, openApp, windowManager])
+
+	// Phase 157 round 4 — conditional render deferred to AFTER all hooks
+	// have run. Returning `null` mid-function would have skipped the
+	// hooks above on no-data renders → React error #310 on the next
+	// successful render.
+	if (isLoading || !userApps || !name) return null
+
+	type V = 'default' | 'overlayed'
+	const variant: V = pathname === '/' ? 'default' : 'overlayed'
+	const variants: Record<V, Variant> = {
+		default: {opacity: 1, scale: 1, transition: {duration: 0.2, ease: 'easeOut'}},
+		overlayed: {opacity: 0, scale: 0.98, transition: {duration: 0.1}},
+	}
 
 	return (
 		<motion.div className='flex h-full w-full select-none flex-col' variants={variants} animate={variant} initial={{opacity: 1}} transition={{duration: 0.15, ease: 'easeOut'}}>
