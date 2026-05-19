@@ -212,7 +212,7 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
                 manifest: app.manifest,
               })
             }
-            onUninstall={() => sendUninstall(appId)}
+            onUninstall={() => sendUninstall(appId, app.section)}
             onOpen={() => sendOpen(appId)}
           />
         </div>
@@ -472,6 +472,41 @@ function InstallStateButton({
   }
 
   if (status === 'running' || status === 'stopped') {
+    // Phase 157 round 3 — webapps + MCP/agent/GSD don't have a "URL to
+    // open" shape that makes sense from the store. Webapps live as
+    // desktop icons (clicking the iframe Open button would route to a
+    // bogus `${slug}.${instance}` subdomain). AI installs have no UI of
+    // their own — they show up inside AI Chat. Show a confirmation
+    // label instead of an Open URL button for those sections.
+    if (section === 'webapp' || section === 'ai') {
+      const copy =
+        section === 'webapp'
+          ? 'Added to desktop'
+          : 'Added to AI Chat';
+      return (
+        <div className="install-group">
+          <span
+            className="install ghost"
+            style={{
+              gap: 6,
+              cursor: 'default',
+              pointerEvents: 'none',
+              color: 'var(--fg)',
+            }}
+          >
+            <Icon name="check" size={13} /> {copy}
+          </span>
+          <button
+            type="button"
+            className="install ghost"
+            onClick={onUninstall}
+            aria-label="Uninstall"
+          >
+            <Icon name="trash" size={13} />
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="install-group">
         <button type="button" className="install primary" onClick={onOpen}>

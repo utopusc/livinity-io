@@ -208,10 +208,10 @@ export function usePostMessage() {
     [sendMessage],
   );
 
-  const sendUninstall = useCallback((appId: string) => {
-    sendMessage({ type: 'uninstall', appId });
+  const sendUninstall = useCallback((appId: string, section?: Section) => {
+    sendMessage({ type: 'uninstall', appId, section });
     // Optimistic: mark as uninstalling
-    setInstalledApps(prev => {
+    setInstalledApps((prev) => {
       const next = new Map(prev);
       next.set(appId, 'uninstalling');
       return next;

@@ -732,4 +732,28 @@ export const apps = router({
 	v37Progress: privateProcedure
 		.input(z.object({appId: z.string()}))
 		.query(({input}) => getProgress(input.appId)),
+
+	// Phase 157 follow-up — return installed catalog appIds across v37
+	// sections so the store iframe can keep showing "Installed" after
+	// the per-install postMessage round-trip clears. Without this the
+	// next sendStatusToIframe (apps.list) drops MCP/native entries and
+	// the card reverts to the "Install" button.
+	v37List: privateProcedure.query(async ({ctx}) => {
+		const redis = ctx.livinityd.ai.redis
+		// AI section: native key is `liv:apps:ai:${appId}` (ai-installer
+		// writes this on every install path — mcp/agent/gsd).
+		const aiKeys = await redis.keys('liv:apps:ai:*').catch(() => [] as string[])
+		const ai = aiKeys.map((k: string) => k.slice('liv:apps:ai:'.length))
+
+		// Native section: catalog-appId mapping written by
+		// native-installer.install (Phase 157 follow-up).
+		const nativeKeys = await redis
+			.keys('liv:apps:native-catalog:*')
+			.catch(() => [] as string[])
+		const native = nativeKeys.map((k: string) =>
+			k.slice('liv:apps:native-catalog:'.length),
+		)
+
+		return {ai, native}
+	}),
 })

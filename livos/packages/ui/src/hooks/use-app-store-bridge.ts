@@ -25,7 +25,7 @@ type StoreToLivOSMessage =
 			category?: string
 			manifest?: unknown
 		}
-	| {type: 'uninstall'; appId: string}
+	| {type: 'uninstall'; appId: string; section?: Section}
 	| {type: 'open'; appId: string}
 	| {type: 'updateSubdomain'; appId: string; subdomain: string}
 	// Phase 151-B — Custom URL form on /store?section=webapp.
@@ -140,7 +140,11 @@ export function useAppStoreBridge(
 
 	const sendStatusToIframe = useCallback(async () => {
 		try {
-			const [apps, domainStatus, version, device, memory, disk, userData] = await Promise.all([
+			// Phase 157 follow-up — pull v37 install state alongside the
+			// legacy apps.list so MCP/native cards keep showing
+			// "Installed" after the install round-trip completes (apps.
+			// list doesn't include v37 surfaces).
+			const [apps, domainStatus, version, device, memory, disk, userData, v37] = await Promise.all([
 				trpcClient.apps.list.query(),
 				trpcClient.domain.getStatus.query(),
 				trpcClient.system.version.query(),
@@ -148,6 +152,7 @@ export function useAppStoreBridge(
 				trpcClient.system.systemMemoryUsage.query().catch(() => null),
 				trpcClient.system.systemDiskUsage.query().catch(() => null),
 				trpcClient.user.get.query().catch(() => null),
+				trpcClient.apps.v37List.query().catch(() => ({ai: [] as string[], native: [] as string[]})),
 			])
 			const subdomains = domainStatus.subdomains || []
 			const statusList: AppStatusEntry[] = apps.map((app) => {
@@ -171,6 +176,19 @@ export function useAppStoreBridge(
 				}
 				return {id: app.id, status: 'not_installed' as const}
 			})
+
+			// Phase 157 follow-up — merge v37 installed catalog appIds.
+			// Use a Set to avoid duplicating an id that's also surfaced
+			// in apps.list (defensive — should not happen for the v37
+			// sections currently tracked but keeps merge safe).
+			const seen = new Set(statusList.map((s) => s.id))
+			for (const appId of [...v37.ai, ...v37.native]) {
+				if (!seen.has(appId)) {
+					statusList.push({id: appId, status: 'running' as const})
+					seen.add(appId)
+				}
+			}
+
 			const instance: InstanceInfo = {
 				hostname: (device as any)?.hostname || 'LivOS Server',
 				userName: (userData as any)?.name || (userData as any)?.displayName || '',
@@ -264,15 +282,44 @@ export function useAppStoreBridge(
 			sendToIframe({type: 'progress', appId, progress: 0})
 			sendToIframe({type: 'status', apps: [{id: appId, status: 'installing', progress: 0}]})
 
+			// Phase 157 round 3 — polling is independent of the mutation
+			// outcome. apt-get install / sha256 verify can take 60–300s on
+			// slower links; trpc/network can drop mid-flight even though
+			// the server-side install keeps running. Polling stops on
+			// v37Progress.done === true OR after a hard deadline.
+			let resolved = false
+			const POLL_DEADLINE_MS = 10 * 60_000
+			const startedAt = Date.now()
 			const pollInterval = setInterval(async () => {
+				if (resolved) {
+					clearInterval(pollInterval)
+					return
+				}
+				if (Date.now() - startedAt > POLL_DEADLINE_MS) {
+					clearInterval(pollInterval)
+					return
+				}
 				try {
 					const ev = await trpcClient.apps.v37Progress.query({appId})
-					if (ev && ev.pct > 0) {
+					if (!ev) return
+					if (ev.pct > 0) {
 						sendToIframe({type: 'progress', appId, progress: Math.round(ev.pct)})
 					}
-					if (ev && ev.done) clearInterval(pollInterval)
+					if (ev.done) {
+						resolved = true
+						clearInterval(pollInterval)
+						if (ev.error) {
+							sendToIframe({type: 'installed', appId, success: false, error: ev.error})
+						} else {
+							sendToIframe({type: 'progress', appId, progress: 100})
+							sendToIframe({type: 'installed', appId, success: true})
+							reportEvent(appId, 'install')
+						}
+						await sendStatusToIframe()
+						utilsRef.current.apps.list.invalidate()
+					}
 				} catch {
-					// ignore polling errors
+					// ignore polling errors — server is source of truth
 				}
 			}, 2000)
 
@@ -284,6 +331,8 @@ export function useAppStoreBridge(
 					category,
 					manifest,
 				})
+				if (resolved) return // polling already finalised
+				resolved = true
 				clearInterval(pollInterval)
 				if (outcome.ok) {
 					sendToIframe({type: 'progress', appId, progress: 100})
@@ -297,10 +346,11 @@ export function useAppStoreBridge(
 						error: outcome.message,
 					})
 				}
-			} catch (err) {
-				clearInterval(pollInterval)
-				const message = err instanceof Error ? err.message : 'install failed'
-				sendToIframe({type: 'installed', appId, success: false, error: message})
+			} catch {
+				// Mutation failed (network/timeout) — DO NOT clear polling.
+				// The server-side install may still be running; let polling
+				// detect the done state and report final outcome.
+				return
 			}
 			await sendStatusToIframe()
 			utilsRef.current.apps.list.invalidate()
@@ -397,13 +447,25 @@ export function useAppStoreBridge(
 	)
 
 	const handleUninstall = useCallback(
-		async (appId: string) => {
+		async (appId: string, section?: Section) => {
 			// Send uninstalling status immediately so UI shows feedback
 			sendToIframe({type: 'status', apps: [{id: appId, status: 'uninstalling'}]})
 			try {
-				await trpcClient.apps.uninstall.mutate({appId})
-				reportEvent(appId, 'uninstall')
-				sendToIframe({type: 'uninstalled', appId, success: true})
+				// Phase 157 round 3 — dispatch by section. Default ('app'
+				// or missing) keeps legacy Docker uninstall path.
+				if (section && section !== 'app') {
+					const outcome = await trpcClient.apps.uninstallV37.mutate({appId, section})
+					if (!outcome.ok) {
+						sendToIframe({type: 'uninstalled', appId, success: false})
+					} else {
+						reportEvent(appId, 'uninstall')
+						sendToIframe({type: 'uninstalled', appId, success: true})
+					}
+				} else {
+					await trpcClient.apps.uninstall.mutate({appId})
+					reportEvent(appId, 'uninstall')
+					sendToIframe({type: 'uninstalled', appId, success: true})
+				}
 			} catch {
 				sendToIframe({type: 'uninstalled', appId, success: false})
 			}
@@ -491,7 +553,7 @@ export function useAppStoreBridge(
 					handleInstallCustomWebapp(data.url, data.title, data.faviconUrl)
 					break
 				case 'uninstall':
-					handleUninstall(data.appId)
+					handleUninstall(data.appId, data.section)
 					break
 				case 'open':
 					handleOpen(data.appId)

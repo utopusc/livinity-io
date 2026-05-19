@@ -63,7 +63,10 @@ export type StoreToLivOSMessage =
       category?: string;
       manifest?: unknown;
     }
-  | { type: 'uninstall'; appId: string }
+  // Phase 157 round 3 — uninstall also carries section so the bridge
+  // routes v37 sections to apps.uninstallV37 instead of the legacy
+  // Docker apps.uninstall (which only knows about ctx.apps.instances).
+  | { type: 'uninstall'; appId: string; section?: Section }
   | { type: 'open'; appId: string }
   | { type: 'updateSubdomain'; appId: string; subdomain: string }
   // Phase 151-B — Custom URL form on /store?section=webapp.
@@ -132,7 +135,7 @@ export interface StoreContextValue {
     section: Section,
     payload?: { name?: string; category?: string; manifest?: unknown },
   ) => void;
-  sendUninstall: (appId: string) => void;
+  sendUninstall: (appId: string, section?: Section) => void;
   sendOpen: (appId: string) => void;
   getAppStatus: (appId: string) => AppStatus['status'];
   // Progress & credentials (Phase 22)
