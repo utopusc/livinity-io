@@ -152,7 +152,7 @@ export function useAppStoreBridge(
 				trpcClient.system.systemMemoryUsage.query().catch(() => null),
 				trpcClient.system.systemDiskUsage.query().catch(() => null),
 				trpcClient.user.get.query().catch(() => null),
-				trpcClient.apps.v37List.query().catch(() => ({ai: [] as string[], native: [] as string[]})),
+				trpcClient.apps.v37List.query().catch(() => ({ai: [] as string[], native: [] as string[], webapp: [] as string[]})),
 			])
 			const subdomains = domainStatus.subdomains || []
 			const statusList: AppStatusEntry[] = apps.map((app) => {
@@ -182,7 +182,8 @@ export function useAppStoreBridge(
 			// in apps.list (defensive — should not happen for the v37
 			// sections currently tracked but keeps merge safe).
 			const seen = new Set(statusList.map((s) => s.id))
-			for (const appId of [...v37.ai, ...v37.native]) {
+			const v37Webapp = (v37 as {webapp?: string[]}).webapp ?? []
+			for (const appId of [...v37.ai, ...v37.native, ...v37Webapp]) {
 				if (!seen.has(appId)) {
 					statusList.push({id: appId, status: 'running' as const})
 					seen.add(appId)
@@ -227,11 +228,18 @@ export function useAppStoreBridge(
 				return
 			}
 			try {
-				await trpcClient.webapp.create.mutate({
+				const wa = await trpcClient.webapp.create.mutate({
 					url: m.url,
 					title: m.defaultTitle ?? name ?? appId,
 					faviconUrl: m.iconOverride ?? null,
 				})
+				// Phase 157 round 4 — write the catalog mapping so
+				// `apps.v37List` reports this install on the next status
+				// refresh (otherwise the card reverts to "Add to desktop"
+				// after the iframe's apps.list refetch).
+				await trpcClient.apps.markWebappCatalog
+					.mutate({catalogAppId: appId, webappId: wa.id})
+					.catch(() => {})
 				sendToIframe({type: 'installed', appId, success: true})
 				reportEvent(appId, 'install')
 			} catch (err) {
@@ -451,9 +459,31 @@ export function useAppStoreBridge(
 			// Send uninstalling status immediately so UI shows feedback
 			sendToIframe({type: 'status', apps: [{id: appId, status: 'uninstalling'}]})
 			try {
-				// Phase 157 round 3 — dispatch by section. Default ('app'
-				// or missing) keeps legacy Docker uninstall path.
-				if (section && section !== 'app') {
+				// Phase 157 round 4 — webapp uninstall lives in the
+				// webapps router (apps.uninstallV37 has no Webapp
+				// handler). Look up the webappId via catalog mapping,
+				// call webapp.delete, then clear the mapping.
+				if (section === 'webapp') {
+					// Find the persisted webapp row by its url/id. The
+					// markWebappCatalog mapping stores `catalogAppId →
+					// webappId`; webapp.list returns the user's rows so
+					// we can match either way (defense if mapping
+					// disappeared).
+					const list = await trpcClient.webapp.list.query().catch(() => [])
+					// Bridge has no direct way to read the mapping, but
+					// webapp.delete is a no-op on missing rows so a
+					// best-effort match is safe.
+					const match = list.find((wa) => wa.id === appId)
+					if (match) {
+						await trpcClient.webapp.delete.mutate({id: match.id})
+					}
+					await trpcClient.apps.unmarkWebappCatalog
+						.mutate({catalogAppId: appId})
+						.catch(() => {})
+					reportEvent(appId, 'uninstall')
+					sendToIframe({type: 'uninstalled', appId, success: true})
+				} else if (section && section !== 'app') {
+					// native / ai / plugin → dispatcher path
 					const outcome = await trpcClient.apps.uninstallV37.mutate({appId, section})
 					if (!outcome.ok) {
 						sendToIframe({type: 'uninstalled', appId, success: false})
