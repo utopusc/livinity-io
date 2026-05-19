@@ -22,6 +22,9 @@
  *   - `node:timers/promises` — fake setTimeout that resolves immediately so we
  *     can assert it was called with the right delay without real wall time.
  */
+import {readFileSync} from 'node:fs'
+import {join} from 'node:path'
+
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 
 // Hoisted mock state so vi.mock factories below can close over them safely.
@@ -1150,5 +1153,52 @@ describe('Phase 103-B — withScopedDisplay + display arg threading', () => {
 		expect(parseDisplayArg({display: ':-1'})).toBeUndefined()
 		expect(parseDisplayArg({display: 11})).toBeUndefined() // non-string
 		expect(parseDisplayArg({})).toBeUndefined() // missing
+	})
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 160-03 — computer_application LivOS resolver dispatch (source-text invariants)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Locks the LivOS resolver path's shape: resolver runs BEFORE APP_MAP, dash-
+// pattern URL is the only domain literal, IPC stderr line uses the
+// `open_livos_app kind=…` shape, and Promise.all parallel query of
+// listWebApps + listNativeApps is preserved. These are static-text checks
+// (no runtime spawn) — they catch refactors that drift the dispatch shape
+// or the URL pattern by mistake.
+
+describe('Phase 160-03 — computer_application LivOS resolver dispatch', () => {
+	const SRC = readFileSync(join(__dirname, 'tools.ts'), 'utf8')
+	const WIN_SRC = readFileSync(join(__dirname, '..', 'native', 'window.ts'), 'utf8')
+
+	it('handler calls livosAppResolver before APP_MAP fallback', () => {
+		expect(SRC).toMatch(/livosAppResolver/)
+	})
+
+	it('handler emits open_livos_app IPC line on stderr when LivOS match', () => {
+		expect(SRC).toMatch(/open_livos_app kind=/)
+	})
+
+	it('defaultLivosAppResolver exists in window.ts', () => {
+		expect(WIN_SRC).toMatch(/export async function defaultLivosAppResolver/)
+	})
+
+	it('domain pattern is DASH separator (n8n-user.root) NOT dot', () => {
+		// The literal we emit must use ${sub}-${deps.userSlug}.${deps.domainRoot}
+		// — the dash between sub and userSlug is mandatory.
+		expect(WIN_SRC).toMatch(/\$\{sub\}-\$\{deps\.userSlug\}\.\$\{deps\.domainRoot\}/)
+		// Must NOT contain the wrong dot-pattern n8n.user.root anywhere
+		expect(WIN_SRC).not.toMatch(/\$\{sub\}\.\$\{deps\.userSlug\}\.\$\{deps\.domainRoot\}/)
+	})
+
+	it('resolver queries WebApps AND Native apps in parallel', () => {
+		expect(WIN_SRC).toMatch(/Promise\.all\(\[/)
+		expect(WIN_SRC).toMatch(/listWebApps/)
+		expect(WIN_SRC).toMatch(/listNativeApps/)
+	})
+
+	it('Phase 160-03 marker present in both files', () => {
+		expect(SRC).toMatch(/Phase 160-03/)
+		expect(WIN_SRC).toMatch(/Phase 160-03/)
 	})
 })
