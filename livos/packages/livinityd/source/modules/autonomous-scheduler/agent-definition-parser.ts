@@ -31,6 +31,7 @@
 // (164-02) can keep partially-broken vaults running.
 
 import {readdir, readFile} from 'node:fs/promises'
+import type {Dirent} from 'node:fs'
 import path from 'node:path'
 
 import yaml from 'js-yaml'
@@ -234,7 +235,12 @@ export async function parseAgentDefinitionsDir(dir: string): Promise<DirParseRes
 	const ok: AgentDefinition[] = []
 	const errors: ParseError[] = []
 
-	let entries: Awaited<ReturnType<typeof readdir>>
+	// Explicit Dirent[] type to pin the overload — without this, tsc on
+	// node 22 may infer `Dirent<Buffer>[]` (Buffer-name variant) which then
+	// blocks `.endsWith()` on the entry name. Buffer-mode readdir requires
+	// `encoding: 'buffer'`; we always pass utf8 (default) here so the
+	// string-name variant is correct.
+	let entries: Dirent[]
 	try {
 		entries = await readdir(dir, {withFileTypes: true})
 	} catch (err: unknown) {
