@@ -17,10 +17,15 @@ type WindowProps = {
 	children: React.ReactNode
 	originRect?: OriginRect
 	isPinnedToTopBar?: boolean
+	// Phase 157 round 8 — when this window is a WebApp surface, the
+	// webapp id is passed through so the chrome row can render the
+	// inline Chat / Teach action buttons (right of the X) and shrink
+	// the drag bar when the user opens the chat input.
+	webappId?: string
 }
 
 export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
-	{id, title, icon, position, size, zIndex, children, originRect, isPinnedToTopBar = false},
+	{id, title, icon, position, size, zIndex, children, originRect, isPinnedToTopBar = false, webappId},
 	ref,
 ) {
 	const {closeWindow, focusWindow, updateWindowPosition, updateWindowSize} = useWindowManager()
@@ -226,13 +231,16 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 
 	return (
 		<>
-			{/* Floating title bar - draggable */}
+			{/* Phase 157 round 7 — floating chrome spans the full window
+			    width above the window (left-aligned). The pinned-to-topbar
+			    variant still collapses to the small centered chip the
+			    TopBar drop-zone expects. */}
 			<motion.div
 				className='fixed select-none'
 				style={{
-					left: isPinnedToTopBar ? pinTargetX : currentX + size.width / 2,
-					top: isPinnedToTopBar ? pinTargetY : currentY - 16,
-					transform: 'translateX(-50%)',
+					left: isPinnedToTopBar ? pinTargetX : currentX,
+					top: isPinnedToTopBar ? pinTargetY : currentY - 42,
+					transform: isPinnedToTopBar ? 'translateX(-50%)' : undefined,
 					zIndex: zIndex + 1,
 					pointerEvents: isPinnedToTopBar ? 'none' : 'auto',
 				}}
@@ -242,7 +250,13 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 				exit={{opacity: 0, y: -10, scale: 0.9}}
 				transition={pinTransition ?? {type: 'spring', stiffness: 500, damping: 35, delay: hasMorphOrigin ? 0.15 : 0}}
 			>
-				<WindowChrome title={title} icon={icon} onClose={handleClose} />
+				<WindowChrome
+					title={title}
+					icon={icon}
+					onClose={handleClose}
+					windowWidth={size.width}
+					webappId={webappId}
+				/>
 			</motion.div>
 
 			{/* Window content */}
