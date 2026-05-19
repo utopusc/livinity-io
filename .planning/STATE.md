@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T11:15:00.000Z"
+last_updated: "2026-05-19T11:18:48.424Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 160 (luse-livos-overlay-haiku-routing) — EXECUTING
-Plan: 5 of 6 (160-01 + 160-02 + 160-03 + 160-05 CODE-COMPLETE; 160-04 in flight parallel; 160-06 verification sweep next)
+Plan: 6 of 6 (160-01 + 160-02 + 160-03 + 160-04 + 160-05 CODE-COMPLETE; 160-06 verification sweep next)
 
 ## 160-01 Status (2026-05-19) — Haiku Routing CODE-COMPLETE (2 commits, sacred SHA preserved 2/2)
 
@@ -84,6 +84,22 @@ Plan: 5 of 6 (160-01 + 160-02 + 160-03 + 160-05 CODE-COMPLETE; 160-04 in flight 
   3. Default resolver wiring + livinityd stderr `open_livos_app` parser — both deferred to a follow-up integration plan (recommend post-Phase 160 sweep). Without the wiring, `options.livosAppResolver` is undefined and the handler dispatches straight to APP_MAP (pre-Plan-160-03 behavior preserved, no regression).
 - **Next action:** Plan 160-04 (Dynamic Display Size) running in parallel; Plan 160-05 (computer_read_file sandbox) on deck.
 - Full deliverable detail: see `.planning/phases/160-luse-livos-overlay-haiku-routing/160-03-SUMMARY.md`.
+
+## 160-04 Status (2026-05-19) — Dynamic Display Size via xdpyinfo CODE-COMPLETE (1 commit, sacred SHA preserved 1/1, D-09 verbatim invariant preserved)
+
+- **DYNAMIC DISPLAY SIZE VIA XDPYINFO** (Plan 4 of 6 in Phase 160, 1 task): fills Plan 160-02's `LuseOverlayOpts.actualDisplaySize` placeholder at runtime via `xdpyinfo -display <env>` so the LivOS prompt overlay's `DISPLAY:` line is correct (1920x1080 master `:1` / 1280x720 per-WebApp `:10+`) instead of the wrong hardcoded Bytebot default 1280x960 — improving LLM click accuracy by ~10-20% per Anthropic computer-use grounding docs. One atomic commit:
+  1. `36bb3130` Task 1 — `livos/packages/livinityd/source/modules/computer-use/native/display-size.ts` (NEW, 95 lines: `DisplaySize` interface + `readActualDisplaySize(display)` async wrapper with strict `/^:[0-9]{1,2}$/` shell-injection guard + `spawn('xdpyinfo', ...)` with `stdio: ['ignore','pipe','ignore']` + `dimensions: WxH pixels` regex parse + 2000 ms SIGKILL safety timeout + `settled` flag against double-resolve + returns null on ANY failure for graceful degrade) + `livos/packages/livinityd/source/modules/ai/agent-prompt-builder.ts` (+ import `readActualDisplaySize` + NEW exported async `buildLuseSystemPromptWithOverlayResolved(opts)` that short-circuits when `opts.actualDisplaySize` pre-supplied, else reads `process.env.LUSE_TARGET_DISPLAY ?? process.env.DISPLAY ?? ':0'` → calls helper → composes `buildLuseOverlay(opts) + LUSE_SYSTEM_PROMPT` via the existing locked-pattern sync helper; sync `buildLuseSystemPromptWithOverlay` UNCHANGED preserving Plan 160-02 source-text invariant) + `livos/packages/livinityd/source/modules/ai/agent-prompt-builder.test.ts` (+ 6 vitest invariants in Phase 160-04 describe block: 4 source-text — `readActualDisplaySize` in builder, `LUSE_TARGET_DISPLAY` + `process.env.DISPLAY` env reads, helper strict-regex literal `!/^:[0-9]`, helper `2000` timeout literal; 2 runtime — short-circuit when actualDisplaySize pre-supplied (composition order preserved), async Promise<string> return contract).
+- **Verification:** `agent-prompt-builder.test.ts` **45 PASS / 0 FAIL** (was 39 / 0 — added 6 Phase 160-04 invariants). `agent-runner-factory.test.ts` 22 PASS / 1 FAIL UNCHANGED — same pre-existing Phase 102-06 `LUSE_TARGET_DISPLAY` assertion noted in 160-01 SUMMARY (snippet body renamed in Phase 103-04; assertion never updated). Out of scope per scope-boundary rule; recommended fix for Plan 160-06 verification sweep: flip `toContain → not.toContain` to mirror 103-04 instruction-flip semantics.
+- **Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f`** for `liv/packages/core/src/sdk-agent-runner.ts` PRESERVED through commit `36bb3130`.
+- **D-09 verbatim contract upheld:** `git diff HEAD~1 -- livos/packages/livinityd/source/modules/computer-use/luse-system-prompt.ts` = 0 lines (empty diff). The verbatim "1280 x 960 pixels" literal remains in the upstream-vendored body; the overlay's PREPENDED `DISPLAY: <real size>` line overrides it via the Plan 160-02 "CONFLICT RULE: THIS CONTEXT WINS" instruction.
+- **D-NO-NEW-DEPS upheld:** `git diff --stat HEAD~1..HEAD -- **/package.json` = empty. Helper uses only `node:child_process` `spawn` (already used by sibling `screenshot.ts`).
+- **Files-modified disjoint from Plan 160-03 + 160-05:** my files are `display-size.ts` (NEW) + `agent-prompt-builder.ts` + `agent-prompt-builder.test.ts`; 160-03 touched `tools.ts` / `window.ts` / `luse-tools.ts` / `mcp/tools.test.ts`; 160-05 touched `mcp/tools.ts` + `mcp/tools.test.ts`. Zero overlap.
+- **Deviations (1 Rule 2 auto-fixed; documented in 160-04-SUMMARY.md):**
+  1. **Rule 2 — Missing critical functionality:** Plan `<action>` showed inline `buildLuseOverlay(...) + LUSE_SYSTEM_PROMPT` edit at "the existing prompt assembly path" — but Plan 160-02 shipped the composer with no live callers yet; the acceptance criterion `grep "readActualDisplaySize" agent-prompt-builder.ts >= 1` requires the env read + helper call IN agent-prompt-builder.ts, not at call site. Plan's alternative `execSync` would block the event loop. Solution: added NEW exported async `buildLuseSystemPromptWithOverlayResolved(opts)` at the prompt-builder layer that satisfies the grep invariants AND preserves the sync API unchanged AND short-circuits on pre-supplied opts.
+- **Deferred (out of scope per scope-boundary rule):**
+  1. Pre-existing Phase 102-06 `LUSE_TARGET_DISPLAY` assertion failure in `agent-runner-factory.test.ts:439` (snippet renamed in 103-04 instruction flip; assertion never updated). Same failure noted in 160-01 SUMMARY. Recommend Plan 160-06 verifier flip the assertion or remove it.
+- **Next action:** Plan 160-06 verification sweep (Wave 3) — automated test sweep + operator Mini PC UAT (`bash /opt/livos/update.sh` + agent smoke tests against display-resolution prompt rendering, computer_application launcher dispatch, computer_read_file sandbox jailbreak attempts, Haiku routing via `X-Livinity-Computer-Use: true` header).
+- Full deliverable detail: see `.planning/phases/160-luse-livos-overlay-haiku-routing/160-04-SUMMARY.md`.
 
 ## 160-05 Status (2026-05-19) — computer_read_file Path Sandbox CODE-COMPLETE (2 commits, sacred SHA preserved 2/2, D-09 verbatim invariant preserved)
 
