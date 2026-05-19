@@ -51,8 +51,16 @@ describe('Phase 163-02 ws-agent source-text invariants', () => {
 		expect(WS_AGENT_SOURCE).not.toContain('claude-haiku-4-5-20251001')
 	})
 
-	it('preserves Phase 162-02 vaultModeConfig.defaultModel threading', () => {
-		expect(WS_AGENT_SOURCE).toMatch(/opts\.vaultModeConfig\?\.defaultModel|opts\.vaultModeConfig\.defaultModel/)
+	it('preserves Phase 162-02 vaultModeConfig.defaultModel threading (Phase 165-02: now read from the per-connection const, not opts)', () => {
+		// Phase 165-02 — opts.vaultModeConfig (boot-frozen) was renamed to
+		// opts.resolveVaultModeConfig (per-connection getter). The threading of
+		// .defaultModel into AgentSessionManager still happens, but now via
+		// the per-connection local `vaultModeConfig` const.
+		expect(WS_AGENT_SOURCE).toMatch(
+			/vaultModeConfig\?\.defaultModel|vaultModeConfig\.defaultModel/,
+		)
+		// Old boot-frozen form must be GONE
+		expect(WS_AGENT_SOURCE).not.toMatch(/opts\.vaultModeConfig\b/)
 	})
 
 	it('preserves Phase 162-04 raw.surface recompute branch', () => {

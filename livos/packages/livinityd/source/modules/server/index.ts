@@ -1372,29 +1372,36 @@ class Server {
 		// Handle agent streaming WebSocket routes
 		this.mountWebSocketServer('/ws/agent', (wss) => {
 			const logger = this.logger.createChildLogger('ws-agent')
-			// Phase 162-02 — Build vaultModeConfig from AiModule's pre-resolved
-			// chat_backend flag (read ONCE in AiModule.start()). 'vault' →
-			// enable CC project loading via cwd + settingSources; 'legacy' →
-			// undefined, AgentSessionManager preserves Phase 161 byte-identical
-			// behavior. No per-connection Redis read here (init-once).
-			const ai = this.livinityd.ai
-			const vaultModeConfig =
-				ai.chatBackend === 'vault'
+			// Phase 165-02 — Lazy per-connection resolution.
+			//
+			// The getter closes over `this.livinityd.ai` and is invoked anew on
+			// EVERY incoming WS connection (inside createAgentWebSocketHandler's
+			// returned handler). chatConfig.setBackend / setModel mutations
+			// therefore take effect on the NEXT WS connection without a
+			// livinityd restart.
+			//
+			// Architecture bug fixed: Phase 162-02 pre-froze vaultModeConfig at
+			// mount time (boot-once). That made the Settings UI's setBackend /
+			// setModel mutations dead-on-arrival unless an operator also bounced
+			// livinityd. CONTEXT.md locks the lazy-getter shape.
+			const resolveVaultModeConfig = ():
+				| {vaultPath: string; defaultModel?: string}
+				| undefined => {
+				const ai = this.livinityd.ai
+				return ai.chatBackend === 'vault'
 					? {
 							vaultPath: '/home/bruce/livinity-vault',
 							defaultModel: ai.defaultChatModel ?? 'claude-opus-4-7',
 						}
 					: undefined
+			}
 			logger.log(
-				`AgentSessionManager: chat_backend=${ai.chatBackend}` +
-					(vaultModeConfig
-						? ` (vault=${vaultModeConfig.vaultPath}, model=${vaultModeConfig.defaultModel})`
-						: ' (Phase 161 legacy)'),
+				'AgentSessionManager: lazy resolveVaultModeConfig wired (Phase 165-02)',
 			)
 			const handler = createAgentWebSocketHandler({
 				livinityd: this.livinityd,
 				logger,
-				vaultModeConfig,
+				resolveVaultModeConfig,
 			})
 			wss.on('connection', handler)
 		})
