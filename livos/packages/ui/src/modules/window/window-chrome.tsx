@@ -13,7 +13,13 @@ type WindowChromeProps = {
 	onClose: () => void
 	windowWidth: number
 	webappId?: string
+	// Phase 159 — when set, chrome renders Chat-only action area (no
+	// Teach, no Skills) for a NativeApp window. Mutually exclusive
+	// with webappId per windows-container assertion.
+	nativeAppId?: string
 }
+
+// Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f (sdk-agent-runner.ts) unchanged.
 
 // Phase 157 round 14 — animation curve + duration. Previous rounds
 // used Framer's `layout="size"` which animates via TRANSFORM: SCALE.
@@ -48,7 +54,12 @@ export function WindowChrome({
 	onClose,
 	windowWidth,
 	webappId,
+	nativeAppId,
 }: WindowChromeProps) {
+	// Phase 159 — nativeAppId is plumbed in Task 1. Task 2 wires the
+	// streamKind discriminator + Chat-for-both gate. Reference here to
+	// avoid an unused-var warning until Task 2 lands the body change.
+	void nativeAppId
 	const setSelectedSkillId = useWebAppDrawerStore((s) => s.setSelectedSkillId)
 	const chatMode = useWebAppDrawerStore(
 		(s) => (webappId ? s.chatInputModeByWebappId[webappId] : undefined) ?? 'icons',
