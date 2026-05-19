@@ -308,6 +308,14 @@ export default class AiModule {
 	scheduleManager!: ScheduleManager
 	toolRegistry: any = null
 
+	// Phase 162-02 — Init-once resolution of CC integration flags. Read from
+	// Redis ONCE in start(); reused by /ws/agent mount to build vaultModeConfig
+	// synchronously per connection (no per-connection Redis reads). Admin
+	// flips via `redis-cli SET liv:config:chat_backend legacy` + livinityd
+	// restart for <5s rollback to Phase 161 byte-identical behavior.
+	chatBackend: 'vault' | 'legacy' = 'vault'
+	defaultChatModel: string | null = null
+
 	// Phase 75-07 — Postgres write-through repositories (lazy-initialised
 	// on first use so the AiModule constructor does NOT block on DB pool
 	// being ready). All three are scoped per AiModule instance so tests +
@@ -355,6 +363,19 @@ export default class AiModule {
 		this.redis = new Redis(this.redisUrl, {maxRetriesPerRequest: null})
 		this.redis.on('connect', () => this.logger.log('AI Redis connected'))
 		this.redis.on('error', (err: Error) => this.logger.error('AI Redis error', err))
+
+		// Phase 162-02 — Pre-resolve CC integration flags from Redis. Defaults
+		// match the v34 rollout: chat_backend='vault' (new behavior ON),
+		// default_chat_model='claude-opus-4-7'. Admins override per Redis key
+		// for <5s rollback. These values are read ONCE here and exposed via
+		// instance fields so /ws/agent mount can build vaultModeConfig
+		// synchronously per connection (factory stays sync — see ws-agent.ts).
+		const backendRaw = await this.redis.get('liv:config:chat_backend')
+		this.chatBackend = backendRaw === 'legacy' ? 'legacy' : 'vault'
+		this.defaultChatModel = (await this.redis.get('liv:config:default_chat_model')) ?? 'claude-opus-4-7'
+		this.logger.log(
+			`AiModule: chat_backend=${this.chatBackend} default_chat_model=${this.defaultChatModel}`,
+		)
 
 		this.subagentManager = new SubagentManager(this.redis)
 		this.scheduleManager = new ScheduleManager(this.redis)

@@ -1372,7 +1372,30 @@ class Server {
 		// Handle agent streaming WebSocket routes
 		this.mountWebSocketServer('/ws/agent', (wss) => {
 			const logger = this.logger.createChildLogger('ws-agent')
-			const handler = createAgentWebSocketHandler({livinityd: this.livinityd, logger})
+			// Phase 162-02 — Build vaultModeConfig from AiModule's pre-resolved
+			// chat_backend flag (read ONCE in AiModule.start()). 'vault' →
+			// enable CC project loading via cwd + settingSources; 'legacy' →
+			// undefined, AgentSessionManager preserves Phase 161 byte-identical
+			// behavior. No per-connection Redis read here (init-once).
+			const ai = this.livinityd.ai
+			const vaultModeConfig =
+				ai.chatBackend === 'vault'
+					? {
+							vaultPath: '/home/bruce/livinity-vault',
+							defaultModel: ai.defaultChatModel ?? 'claude-opus-4-7',
+						}
+					: undefined
+			logger.log(
+				`AgentSessionManager: chat_backend=${ai.chatBackend}` +
+					(vaultModeConfig
+						? ` (vault=${vaultModeConfig.vaultPath}, model=${vaultModeConfig.defaultModel})`
+						: ' (Phase 161 legacy)'),
+			)
+			const handler = createAgentWebSocketHandler({
+				livinityd: this.livinityd,
+				logger,
+				vaultModeConfig,
+			})
 			wss.on('connection', handler)
 		})
 

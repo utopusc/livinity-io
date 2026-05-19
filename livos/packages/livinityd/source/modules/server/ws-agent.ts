@@ -126,6 +126,16 @@ async function buildConversationContext(
 export function createAgentWebSocketHandler(opts: {
 	livinityd: Livinityd
 	logger: ReturnType<typeof createLogger>
+	// Phase 162-02 — Pre-resolved vault mode config (computed by the caller
+	// from AiModule.chatBackend + AiModule.defaultChatModel — see
+	// server/index.ts /ws/agent mount). When undefined, AgentSessionManager
+	// preserves Phase 161 behavior byte-identical. When set, sessions use
+	// CC's settingSources + cwd loading via vault/CLAUDE.md.
+	//
+	// Init-once architecture: Redis reads live in AiModule.start(); this
+	// factory STAYS synchronous so `wss.on('connection', handler)` keeps
+	// working (cannot await a Promise<handler>).
+	vaultModeConfig?: {vaultPath: string; defaultModel?: string}
 }) {
 	const ai = opts.livinityd.ai
 
@@ -195,6 +205,7 @@ export function createAgentWebSocketHandler(opts: {
 				domainRoot: 'livinity.io',
 			})
 		},
+		vaultModeConfig: opts.vaultModeConfig,  // Phase 162-02 — pass-through (or undefined for Phase 161 legacy)
 	})
 
 	return (ws: WebSocket, request: IncomingMessage) => {
