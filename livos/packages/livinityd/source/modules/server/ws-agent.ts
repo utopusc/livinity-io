@@ -30,6 +30,7 @@ import type Livinityd from '../../index.js'
 import type createLogger from '../utilities/logger.js'
 import type AiModule from '../ai/index.js'
 import type {ChatMessage, Conversation} from '../ai/index.js'
+import {buildLuseSystemPromptWithOverlayResolved} from '../ai/agent-prompt-builder.js'
 
 /**
  * Save a completed turn's messages to Redis conversation storage.
@@ -182,6 +183,18 @@ export function createAgentWebSocketHandler(opts: {
 		// intentRouter,
 		redis: ai.redis,
 		learningEngine,
+		// Phase 161-02 — DI callback wires Plan 160-02 + 160-04 LivOS overlay
+		// composer into the SDK subscription path. The builder is invoked only
+		// for computer-use sessions (conversationId starts with `native:` / `webapp:`
+		// per Plan 161-01 detection). Hard-coded userSlug/domainRoot match
+		// luse-mcp-config.ts:318 defaults; per-session resolution from JWT is
+		// deferred to a future plan. Chat path untouched.
+		computerUseSystemPromptBuilder: async () => {
+			return buildLuseSystemPromptWithOverlayResolved({
+				userSlug: 'admin',
+				domainRoot: 'livinity.io',
+			})
+		},
 	})
 
 	return (ws: WebSocket, request: IncomingMessage) => {
