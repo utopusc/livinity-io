@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T11:18:48.424Z"
+last_updated: "2026-05-19T12:00:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 160 (luse-livos-overlay-haiku-routing) — EXECUTING
-Plan: 6 of 6 (160-01 + 160-02 + 160-03 + 160-04 + 160-05 CODE-COMPLETE; 160-06 verification sweep next)
+Phase: 160 (luse-livos-overlay-haiku-routing) — CODE-COMPLETE pending operator UAT
+Plan: 6 of 6 COMPLETE (160-01 + 160-02 + 160-03 + 160-04 + 160-05 + 160-06 CODE-COMPLETE; operator Mini PC deploy + 10-step browser UAT pending)
 
 ## 160-01 Status (2026-05-19) — Haiku Routing CODE-COMPLETE (2 commits, sacred SHA preserved 2/2)
 
@@ -119,6 +119,25 @@ Plan: 6 of 6 (160-01 + 160-02 + 160-03 + 160-04 + 160-05 CODE-COMPLETE; 160-06 v
 - **Deferred (out of scope per scope-boundary rule):** Same pre-existing failures in `luse-mcp-config.test.ts` T4/T5/T6 and other native/* tests already documented in 160-02 + 160-03 summaries. None touched by this plan.
 - **Next action:** await Plan 160-04 completion (parallel agent) → Plan 160-06 verification sweep (Wave 3) → operator Mini PC UAT (`bash /opt/livos/update.sh` + agent smoke tests against `/etc/passwd` reject, `/home/bruce/somefile.txt` accept, symlink-out-of-jail reject).
 - Full deliverable detail: see `.planning/phases/160-luse-livos-overlay-haiku-routing/160-05-SUMMARY.md`.
+
+## 160-06 Status (2026-05-19) — Verification Sweep + UAT CODE-COMPLETE (3 commits, sacred SHA preserved 3/3, D-09 verbatim invariant preserved; operator UAT pending)
+
+- **VERIFICATION SWEEP + OPERATOR UAT** (Plan 6 of 6 in Phase 160, 2 tasks): closes the phase with full automated proof + operator UAT scaffold. Three atomic commits:
+  1. `294020ff` Task 1 fix-pass — `test(160-06): flip LUSE_TARGET_DISPLAY assertion to not.toContain` — addresses the long-running pre-existing `agent-runner-factory.test.ts:439` failure (flagged in both 160-01 + 160-04 SUMMARYs). Phase 103-04 had flipped the snippet wording from env-hint to explicit tool-arg, but the test assertion was never updated. Flipped `toContain` → `not.toContain` per 160-04 SUMMARY recommendation. Result: `agent-runner-factory.test.ts` 22 PASS / 1 FAIL → **23 PASS / 0 FAIL**.
+  2. `f9d623fb` Task 1 — `docs(160-06): VERIFICATION.md - automated half PASS, operator UAT pending` — ships `.planning/phases/160-luse-livos-overlay-haiku-routing/160-VERIFICATION.md` (status=pending_uat) with: 15-row grep matrix (all 15/15 verified above floor), Sacred SHA preserved end-to-end (`f3538e1d811992b782a9bb057d1b7f0a0189f95f` verified after every Phase 160 commit including all 5 Plan docs commits + this fix-pass), D-09 invariant proven (zero Phase 160 commits to `luse-system-prompt.ts`; last 2 commits cba8845b/b1455c35 are both Phase 100-10-02), all 5 Plan SUMMARYs cross-referenced (all self-checks PASSED), combined vitest sweep 150 PASS / 3 FAIL (3 = pre-existing LUSE_REDIS_URL drift in `luse-mcp-config.test.ts` T4/T5/T6, out of scope per scope-boundary rule), tsc Phase 160 production surface 0 errors, and the 10-step operator UAT checklist.
+  3. (this commit) — `docs(160-06): complete verification sweep + UAT pending SUMMARY` — ships `160-06-SUMMARY.md` + bumps STATE.md + ROADMAP.md to reflect Phase 160 CODE-COMPLETE pending operator UAT.
+- **Verification snapshot at phase close:**
+  - `liv/packages/core` tsx script: 11 PASS / 0 FAIL.
+  - Combined `vitest run agent-prompt-builder.test.ts mcp/tools.test.ts agent-runner-factory.test.ts luse-mcp-config.test.ts`: **150 PASS / 3 FAIL** (3 pre-existing LUSE_REDIS_URL drift, all documented).
+  - Sacred SHA preserved across all 16 Phase 160 commits (10 source + 5 docs + 1 fix-pass).
+  - D-09 verbatim invariant: zero Phase 160 commits to `luse-system-prompt.ts`.
+- **Carry-forwards documented in VERIFICATION.md (do NOT block ship):**
+  1. `mcp/tools.test.ts` test-typing nuance: +8 tsc errors introduced by 160-03/160-05 mock-fn typing narrowness; runtime PASS 65/65. Cosmetic test-typing improvement for a future housekeeping plan.
+  2. Plan 160-03 `livosAppResolver` wiring deferred: livinityd `mcp/server.ts` needs to construct the default resolver closure from trpc context + parse `[luse-mcp] open_livos_app` stderr IPC into `windowManager.openWindow`. Until wired, `options.livosAppResolver` is `undefined` at runtime and the handler falls through to APP_MAP (pre-Plan-160-03 behavior preserved). Recommended for Phase 161 mcp wiring sweep.
+  3. NativeApp Chat client may need to emit `X-Livinity-Computer-Use: true` header for Haiku routing to fire. Plan 160-01 routing logic is in place; client-side header emit may be a follow-up wiring task.
+- **Operator UAT checklist (pending):** 10 steps in VERIFICATION.md — `git push origin master` → Mini PC `sudo bash /opt/livos/update.sh` → service health → AI Chat returns Sonnet/Opus → NativeApp Chat returns Haiku → LivOS overlay text in journal → `open n8n` → `n8n-bruce.livinity.io` (DASH) → `/etc/passwd` rejection → display size hint correct → Phase 159 lifecycle regression. Step 7 acceptably degrades to "deferred to Phase 161 wiring" per carry-forward #2.
+- **Next action (operator):** push to GitHub, run `sudo bash /opt/livos/update.sh` on Mini PC, walk the 10-step UAT. When 9/10 PASS (Step 7 may defer to Phase 161): `git commit -m "ship(160): Phase 160 SHIPPED — operator UAT PASS"` + flip ROADMAP entry from 🟡 CODE-COMPLETE to ✅ SHIPPED.
+- Full deliverable detail: see `.planning/phases/160-luse-livos-overlay-haiku-routing/160-06-SUMMARY.md` + `160-VERIFICATION.md`.
 
 Milestone: **v35.0 — Design System Unification (UI/UX)** — OPENED 2026-05-14
 Master plan: [`.planning/v35-DESIGN-SYSTEM-MILESTONE.md`](v35-DESIGN-SYSTEM-MILESTONE.md) (470 lines — read first)
