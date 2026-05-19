@@ -1785,6 +1785,38 @@ Plans:
 
 **Depends on:** Phase 153 ✅ (plugin runtime + SDK exists).
 
+### Phase 160: Luse LivOS Overlay + Haiku Routing — 🔴 PLANNED 2026-05-19 (ready to execute; operator triggers `/gsd-execute-phase 160` post-/clear)
+
+**Goal:** Two parallel improvements to the Luse computer-use MCP. (A) Route computer-use loop to Haiku (`claude-haiku-4-5-20251001`) for screenshot-grounded turns while AI Chat panel + WebApp chat keep Opus/Sonnet (operator's explicit request: faster + cheaper computer-use without losing chat reasoning quality). (B) Fix verbatim-Bytebot drift on LivOS via prompt-builder OVERLAY (preserves D-09 invariant: `luse-system-prompt.ts` body bytes UNCHANGED). LivOS context overlay prepends app catalog + runtime display size + dash-pattern domain rule (`n8n-bruce.livinity.io`, NOT dot subdomain). Plus `computer_application` integration with LivOS launcher (n8n / LibreOffice via `windowManager.openWindow`) and `computer_read_file` path sandbox.
+
+**Requirements**: operator-driven additive phase + security hardening, no REQ-IDs
+**Depends on:** Phase 159 ✅ (NativeApp lifecycle parity stable)
+**Plans:** 6 plans / 3 waves
+
+**Workstreams:**
+- **A (Plan 01)** — Haiku model routing for computer-use loop (agent-runner-factory `mode: 'computer-use'` → forces `claude-haiku-4-5-20251001`; chat path untouched)
+- **B (Plan 02)** — LivOS system prompt overlay (prompt-builder prepends LivOS context; `luse-system-prompt.ts` UNCHANGED for upstream sync compatibility)
+- **C (Plan 03)** — `computer_application` LivOS launcher (apps.list + apps.native.list resolver dispatches to `windowManager.openWindow` for LivOS apps; classic Bytebot apps retained as fallback; dash-pattern URL `<app>-<user>.livinity.io`)
+- **D (Plan 04)** — Dynamic display size via xdpyinfo (overlay's `actualDisplaySize` placeholder filled at runtime — replaces hardcoded 1280x960 with real 1920x1080 / 1280x720)
+- **E (Plan 05)** — `computer_read_file` path sandbox (allowlist: `/home/<user>/`, `/tmp/luse-`, `/opt/livos/data/uploads/<userId>/`; realpath resolution + path traversal protection)
+
+**Hard guardrails:**
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` for `liv/packages/core/src/sdk-agent-runner.ts` — preserved across all commits
+- D-09 verbatim invariant: `luse-system-prompt.ts` bytes UNCHANGED (overlay only at prompt-builder layer)
+- D-NO-NEW-DEPS: no new npm packages
+- Domain pattern: `<app>-<user>.<root>` (DASH separator) — locked via test invariant
+- Chat path untouched: `use-webapp-agent.ts` + `use-native-app-agent.ts` + AI Chat panel keep current Opus/Sonnet model
+
+**Resume:** `/clear` then `/gsd-execute-phase 160`. CONTEXT + 6 PLAN files all ready at `.planning/phases/160-luse-livos-overlay-haiku-routing/`. Operator UAT (Plan 06) is the only autonomous: false step — Mini PC deploy + 10-step browser walk.
+
+Plans:
+- [ ] 160-01 — Haiku routing for computer-use loop (Wave 1)
+- [ ] 160-02 — LivOS system prompt overlay (Wave 1)
+- [ ] 160-03 — computer_application LivOS launcher (Wave 2, depends on 160-02)
+- [ ] 160-04 — Dynamic display size via xdpyinfo (Wave 2, depends on 160-02)
+- [ ] 160-05 — computer_read_file path sandbox (Wave 2)
+- [ ] 160-06 — Verification sweep + 10-step operator UAT (Wave 3)
+
 ### Phase 159: NativeApp WebApp Parity + Window Manager Panel — ✅ SHIPPED 2026-05-19 (browser UAT PASS via chrome-devtools MCP — LibreOffice open/close/reopen cycle proven leak-free; Xvfb :10 fully released and new :11 allocated cleanly; `closeNativeApp` journal trail confirmed in 3s window after panel Close click)
 
 **Goal:** Bring NativeApp surface to functional parity with WebApp — same Chat chrome row (Teach + Skills omitted per A5; native binaries have no DOM), clean backend teardown on window close (no leaked streams or duplicate windows on reopen). Add a Windows Manager panel listing every open window with focus/close/minimize/pin controls. Frontend visual deferred to a follow-up phase; this phase locks data contracts, lifecycle, and wiring.
