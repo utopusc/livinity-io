@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T16:15:17.966Z"
+last_updated: "2026-05-19T17:10:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 162 (vault-and-sdk-integration) — EXECUTING
-Plan: 1 of 5 — **162-01 CODE-COMPLETE** 2026-05-19 (3 commits `9104cd6b..ac7f02f0`, 15 files created, 6 vitest tests PASS, sacred SHA preserved 3/3)
-Next plan: 162-02 (AgentSessionManager Options Upgrade + Redis Flag Gate)
+Plan: 4 of 5 — **162-04 CODE-COMPLETE** 2026-05-19 (3 commits `0b6c211c..4828aa41`, 1 file created + 2 modified, 6/6 multi-instance invariants PASS, sacred SHA preserved 3/3)
+Next plan: 162-05 (Mini PC Deploy + Live Runtime Probe — terminal plan in Phase 162)
 Master plan: `.planning/v34-LIVOS-CC-INTEGRATION-MASTER.md` (LivOS ⇄ Claude Code tam entegrasyon, 4 phase: 162-165, ~20-25 saat agent work)
 Resume command: `/clear` ardından `/gsd-autonomous --from 162` — user uyurken 4 phase sequential ship eder
 
-Last completed: **162-01** ✅ CODE-COMPLETE 2026-05-19 (vault scaffolder + 12 template files + boot wire-up; sacred SHA `f3538e1d` + D-09 `2083f0a3` preserved across all 3 commits; D-NO-NEW-DEPS upheld)
+Last completed: **162-04** ✅ CODE-COMPLETE 2026-05-19 (composite sessionKey `${userId}:${surfaceKind}:${surfaceId}:${connectionId}` in vault mode + legacy `${userId}:${connectionId}` fallback; Phase 164 autonomous scheduler can now spawn surfaceKind='autonomous' without canceling user's Main Chat; sacred SHA `f3538e1d` preserved across all 3 commits; D-NO-NEW-DEPS upheld; Phase 161 + 162-02 regressions GREEN)
 
 v34.x phase queue:
 
 - [x] Phase 161 — Computer-Use SDK Path Wiring (SHIPPED)
-- [ ] Phase 162 — Vault Scaffolding + SDK Settings Integration (1/5 plans CODE-COMPLETE)
+- [ ] Phase 162 — Vault Scaffolding + SDK Settings Integration (4/5 plans CODE-COMPLETE)
 - [ ] Phase 163 — Surface-Specific Vault Contexts
 - [ ] Phase 164 — Autonomous Scheduler + Sample Agents
 - [ ] Phase 165 — Polish + Settings UI + v34.x Ship
