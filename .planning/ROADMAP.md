@@ -1785,6 +1785,33 @@ Plans:
 
 **Depends on:** Phase 153 ✅ (plugin runtime + SDK exists).
 
+### Phase 159: NativeApp WebApp Parity + Window Manager Panel — 🟡 CODE-COMPLETE 2026-05-19 (operator UAT pending)
+
+**Goal:** Bring NativeApp surface to functional parity with WebApp — same Chat chrome row (Teach + Skills omitted per A5; native binaries have no DOM), clean backend teardown on window close (no leaked streams or duplicate windows on reopen). Add a Windows Manager panel listing every open window with focus/close/minimize/pin controls. Frontend visual deferred to a follow-up phase; this phase locks data contracts, lifecycle, and wiring.
+**Requirements**: operator-driven additive phase, no REQ-IDs
+**Depends on:** Phase 157, Phase 158 (UI Chrome + Dock Iteration — open-ended polish, not blocking)
+**Plans:** 9 plans / 32 commits / 4 waves
+
+**Shipped:**
+- **Workstream A — Chrome parity:** `nativeAppId` threaded windows-container → window → window-chrome → action-bar; dual-hook resolution preserving `const agent = useWebAppAgent(webappId` literal (T-10-10-RESPONSE-01 invariant green); `useNativeAppAgent` hook mirrors `UseWebAppAgentResult`; `NATIVE_MODES` = Chat-only
+- **Workstream B — Lifecycle parity:** `registerCloseHandler`/`unregisterCloseHandler` API on WindowManagerContext with 2s `Promise.race` timeout; NativeAppStreamWindow + WebAppStreamWindow both migrated (defensive fallback on WebApp preserves D-95-CLEANUP literal); 30min idle reaper backstop (`NATIVE_APP_IDLE_REAP_MS` env override); `native-routes-new.ts` deploy landmine `git rm`'d
+- **Workstream C — Windows Manager Panel:** TopBar Radix Popover behind Lucide LayoutGrid trigger; 4 actions/row (Focus / Min-Restore / Pin-Unpin / Close); activates latent `minimizeWindow`/`restoreWindow` reducer actions; visual intentionally utilitarian (frontend redesign deferred)
+
+**Verification (automated):** 79/79 Phase 159-scoped vitest PASS; tsc clean on 13-file surface; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across all 32 commits. BLOCKER #1 (variable-name preservation) + BLOCKER #2 (Plan 04↔07 file ownership) runtime-verified via grep matrix.
+
+**Pending:** Mini PC `bash /opt/livos/update.sh` deploy + 12-step operator UAT walkthrough per `.planning/phases/159-nativeapp-webapp-parity-window-manager-panel/159-VERIFICATION.md`. Step 4 includes explicit `pgrep -af 'Xvfb :|x11vnc.*-display :'` zero-leak check post-close.
+
+Plans:
+- [x] 159-01 — Test stub scaffold (7 files)
+- [x] 159-02 — registerCloseHandler API + landmine git rm
+- [x] 159-03 — Native app idle reaper (30min backstop)
+- [x] 159-04 — Native stream window registry migration
+- [x] 159-05 — WebApp symmetric migration (defensive)
+- [x] 159-06 — useNativeAppAgent hook
+- [x] 159-07 — Chrome parity (nativeAppId thread + dual-hook + NATIVE_MODES)
+- [x] 159-08 — Windows Manager panel (TopBar dropdown)
+- [x] 159-09 — Full phase verification + UAT doc (automated half PASS; operator UAT pending)
+
 ---
 
 ### Phase 157: Install Action Wiring (close-out phase for v37)
