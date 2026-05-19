@@ -30,7 +30,8 @@ import {drainInstallPendingRedisKeys} from './modules/drain-install-pending-redi
 // Phase 162-01 — Vault scaffolder. Boot-time idempotent bootstrap of
 // /home/bruce/livinity-vault per master plan D-V34-D. Non-fatal on failure
 // (livinityd boots normally; chat falls back to legacy path via 162-02 flag).
-import {scaffoldVault} from './modules/claude-runner/index.js'
+// Phase 162-03 — smokeAuthCheck SDK subscription-path probe at boot.
+import {scaffoldVault, smokeAuthCheck} from './modules/claude-runner/index.js'
 import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/api-keys/index.js'
 // Phase 104 plan 104-10 — LivOS → livinity.io heartbeat client. Wired AFTER
 // ai.start() so this.ai.redis is connected. Only armed when the operator
@@ -484,6 +485,25 @@ export default class Livinityd {
 			// and should not throw, but if it does we MUST NOT block boot.
 			this.logger.error('vault-scaffolder: unexpected throw (non-fatal)', err as Error)
 		}
+
+		// Phase 162-03 — SDK subscription-path auth verifier. Non-blocking smoke
+		// check at boot. Writes liv:config:cc_auth_status = 'ok' | 'failed: <reason>'
+		// for the Settings UI (Phase 165 — pending). Detached — boot continues
+		// even if the SDK subprocess takes >10s, throws, or fails auth.
+		smokeAuthCheck({
+			redis: this.ai.redis,
+			vaultPath: '/home/bruce/livinity-vault',
+			model: 'claude-haiku-4-5',
+			logger: {
+				log: (msg) => this.logger.log(msg),
+				error: (msg, err) => this.logger.error(msg, err),
+			},
+		}).catch((err) => {
+			// Defensive — smokeAuthCheck returns AuthVerifierResult and should
+			// not throw, but if it does we MUST NOT block boot.
+			this.logger.error('[claude-runner/auth] unexpected throw (non-fatal)', err as Error)
+		})
+		// NOTE: no `await` — fire-and-forget. Boot continues immediately.
 
 		// Phase 141-01 — drain install-time queued Redis seeds.
 		// install.sh's `set_livos_redis_key` queues `KEY=VALUE` lines to
