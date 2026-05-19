@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T21:00:30.000Z"
+last_updated: "2026-05-19T21:29:56.766Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,9 +25,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 165 (cc-integration-polish) — **IN PROGRESS** 2026-05-19 (Wave 1: Plan 165-01 CODE-COMPLETE)
-Plan: 01 — **IdleSessionReaper CODE-COMPLETE** 2026-05-19 (Task 1 + Task 2 shipped, 2 commits `249b2840..1aef001c`, 12/12 vitest cases PASS in `idle-reaper.test.ts`, ws-agent.surface-cwd 18/18 PASS + ws-stream 15/15 + ws-desktop 14/14 — zero regression. All 5 sacred SHAs byte-identical pre & post: `sdk-agent-runner.ts f3538e1d…`, `agent-session.ts 7c690d59…`, `luse-system-prompt.ts 2083f0a3…`, `agent-prompt-builder.ts dc1831f5…`, `vault-scaffolder.ts 5ddfd065…`. Phase 164 autonomous-scheduler/*.ts UNCHANGED. `agent-session.ts` git diff = 0 lines (interface-boundary via `SessionActivityProvider` honoured). Zero new npm deps (`package.json` + `pnpm-lock.yaml` diffs empty). Boot order locked: scaffoldVault → smokeAuthCheck → AutonomousScheduler.start() → **IdleSessionReaper.start()** → drainInstallPendingRedisKeys. Verification artifact: `.planning/phases/165-cc-integration-polish/165-01-SUMMARY.md`.
-Next plan: **Plan 165-02** — Settings UI panels + autonomous + chatConfig tRPC routers + scheduler public read-getters (Wave 2, autonomous). Then Plan 165-03 (vault-doctor SKILL, Wave 1 parallel-safe with 165-01 — was independent) and Plan 165-04 (Mini PC deploy + v34-VERIFICATION + Operator UAT gate, Wave 3 checkpoint).
+Phase: 165 (cc-integration-polish) — **IN PROGRESS** 2026-05-19 (Wave 1+2: Plans 165-01 + 165-02 + 165-03 CODE-COMPLETE)
+Plan: 02 — **Settings UI + 2 tRPC routers + lazy resolveVaultModeConfig refactor CODE-COMPLETE** 2026-05-19 (4 tasks shipped across 9 atomic commits `da708df1..a3536249`, 176/176 vitest + tsx-direct cases PASS across all affected suites including 14/14 liv-core vault-mode test migrated in place. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 9/9. Provides: 5-procedure `autonomous` tRPC namespace + 4-procedure `chatConfig` tRPC namespace + 9 httpOnlyPaths entries + AutonomousScheduler additive read-getters (listDefinitions / getEnabledNames / setAgentEnabled) + inbox-reader.ts (readLastRunForAgent helper) + ChatBackendPanel + AutonomousAgentsPanel with editable daily budget cap + 2 settings routes + lazy resolveVaultModeConfig getter so chatConfig.setBackend / setModel take effect on next /ws/agent connection WITHOUT livinityd restart (architecture bug fix for the Phase 162-02 boot-frozen value). 3 auto-fix deviations all Rule 1 bugs (YAML Date semantics, ctx.livinityd typing, surface-cwd cross-test invariant). agent-session.ts diff = 0 lines (refactor lives in livinityd ws-agent.ts only). Verification artifact: `.planning/phases/165-cc-integration-polish/165-02-SUMMARY.md`.
+Previously: Plan 01 — IdleSessionReaper CODE-COMPLETE 2026-05-19 (2 commits `249b2840..1aef001c`, 12/12 vitest cases PASS). Plan 03 — livos-vault-doctor SKILL CODE-COMPLETE earlier (commit `0e402a3c` per git log).
+Next plan: **Plan 165-04** — Mini PC deploy + v34-VERIFICATION + Operator UAT gate (Wave 3 checkpoint).
 Master plan: `.planning/v34-LIVOS-CC-INTEGRATION-MASTER.md` (LivOS ⇄ Claude Code tam entegrasyon, 4 phase: 162-165, ~20-25 saat agent work)
 Resume command: `/gsd-execute-phase 165` Plan 02 (or `/clear` then `/gsd-autonomous --from 165`)
 
