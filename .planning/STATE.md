@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-19T17:53:36.708Z"
+last_updated: "2026-05-19T22:00:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 162 (vault-and-sdk-integration) — **SHIPPED** 2026-05-19
-Plan: 5 of 5 — **162-05 CODE-COMPLETE + LIVE-VERIFIED** 2026-05-19 (1 commit `9904f839`, 1 file created `.planning/phases/162-vault-and-sdk-integration/162-VERIFICATION.md`, Mini PC deploy via `bash /opt/livos/update.sh` SHIPPED, synthetic WS probe proved vault mode engaged on Mini PC)
-Next plan: Phase 163 (Surface-Specific Vault Contexts) — needs `/gsd-plan-phase 163`
+Phase: 163 (surface-vault-contexts) — IN-PROGRESS 2026-05-19
+Plan: 03 — **163-03 CODE-COMPLETE** 2026-05-19 (1 commit `0cd6be14`, 1 file created `liv/packages/core/src/agent-session.surface-overlay.test.ts` 229 lines, 10 PASS / 0 FAIL via `npx tsx`, sibling regression all green: computer-use + vault-mode 14/14 + multi-instance 6/6, sacred SHA preserved, D-09 + 161-02 helper + D-NO-NEW-DEPS untouched, NO source file edits — composition-lock test only)
+Next plan: Phase 163 next plan (if any) — 163-02 + 163-02.5 + 163-03 now form complete surface-vault routing + decoupled-gate + composition-lock stack
 Master plan: `.planning/v34-LIVOS-CC-INTEGRATION-MASTER.md` (LivOS ⇄ Claude Code tam entegrasyon, 4 phase: 162-165, ~20-25 saat agent work)
 Resume command: `/clear` ardından `/gsd-autonomous --from 163` — user uyurken kalan 3 phase sequential ship eder
 
