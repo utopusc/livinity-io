@@ -163,6 +163,39 @@ function validateDescriptorDisplay(d: PerWebAppMcpDescriptor): void {
 export interface PerWebAppMcpDescriptor {
 	instanceKey: string
 	display: string
+	/**
+	 * Phase 160-02 — LivOS overlay context threaded to the MCP child.
+	 *
+	 * Reason: not all flows go through `agent-prompt-builder.ts` in the parent
+	 * process. Some prompt-construction paths run INSIDE the spawned Luse MCP
+	 * child (the child runs its own message loop for some local tool-resolution
+	 * cases — see mcp/server.ts handlers). The child needs to know which user
+	 * + which domain root to render into its own copy of the LivOS overlay so
+	 * the WEBAPP URL PATTERN line is correct (`<app>-${userSlug}.${domainRoot}`,
+	 * dash not dot).
+	 *
+	 * Threaded as env (not as part of the URL/argv) so the values survive the
+	 * tsx subprocess fork without going through shell quoting. Read by the
+	 * child as `process.env.LIVOS_USER_SLUG` / `process.env.LIVOS_DOMAIN_ROOT`.
+	 *
+	 * Both are optional — callers that don't have user/domain context (e.g.
+	 * the host-display luse instance or pre-multi-user single-user mode)
+	 * simply omit them, and the child renders the overlay with the
+	 * `<user>` + `livinity.io` defaults from buildLuseOverlay.
+	 *
+	 * NOT threaded here: `LIVOS_AVAILABLE_APPS` + `LIVOS_DISPLAY_SIZE`.
+	 *   - `LIVOS_AVAILABLE_APPS` (Plan 03 scope) comes from a runtime
+	 *     `apps.list` + `apps.native.list` query — changes per-session,
+	 *     not appropriate for boot-time env.
+	 *   - `LIVOS_DISPLAY_SIZE` (Plan 04 scope) comes from a runtime
+	 *     `xdpyinfo` read against `LUSE_TARGET_DISPLAY` — display content
+	 *     may change live (resolution change), again not env-stable.
+	 *
+	 * The child reconciles per-call: STATIC values from env, DYNAMIC values
+	 * (apps list + display size) from per-call discovery hooks in Plans 03+04.
+	 */
+	userSlug?: string
+	domainRoot?: string
 }
 
 /** Minimal logger contract — only .log + .error are used. Compatible with
@@ -268,11 +301,22 @@ export function buildLuseConfig(
 	// (gate denies — fail-closed).
 	if (descriptor) validateDescriptorDisplay(descriptor)
 	const luseRedisUrl = env.REDIS_URL ?? ''
+	// Phase 160-02 — LivOS overlay context for the MCP child. The child uses
+	// these to construct its own overlay when running the system prompt locally
+	// (not all flows go through agent-prompt-builder in the parent process).
+	// Default to 'admin' / 'livinity.io' so single-user / pre-multi-user
+	// deployments still render a sensible WEBAPP URL PATTERN line.
+	// Note: LIVOS_AVAILABLE_APPS + LIVOS_DISPLAY_SIZE come from runtime queries
+	// performed by Plan 03 + Plan 04 (the apps query and xdpyinfo read);
+	// not threaded as env because they change per-call. The MCP child still
+	// gets STATIC USER_SLUG + DOMAIN_ROOT here.
 	const baseEnv: Record<string, string> = descriptor
 		? {
 				DISPLAY: descriptor.display,
 				[LUSE_TARGET_DISPLAY_ENV]: descriptor.display,
 				LUSE_REDIS_URL: luseRedisUrl,
+				LIVOS_USER_SLUG: descriptor.userSlug ?? 'admin',
+				LIVOS_DOMAIN_ROOT: descriptor.domainRoot ?? 'livinity.io',
 			}
 		: {
 				DISPLAY: env.LUSE_DISPLAY ?? ':1',

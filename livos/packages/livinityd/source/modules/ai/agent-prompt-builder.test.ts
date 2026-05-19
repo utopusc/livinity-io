@@ -17,6 +17,10 @@
  *  11. Sanity: injected title interpolated verbatim post-sanitize (no instruction parsing)
  */
 
+import {readFileSync} from 'node:fs'
+import {dirname, join} from 'node:path'
+import {fileURLToPath} from 'node:url'
+
 import {describe, it, expect} from 'vitest'
 
 import {
@@ -319,5 +323,130 @@ describe('buildActiveDisplaySnippet — Phase 102-06 Pillar C', () => {
 		expect(buildActiveDisplaySnippet({activeDisplay: ':1', appMeta: baseMeta})).toContain(':1')
 		expect(buildActiveDisplaySnippet({activeDisplay: ':99', appMeta: baseMeta})).toContain(':99')
 		expect(buildActiveDisplaySnippet({activeDisplay: ':100', appMeta: baseMeta})).toContain(':100')
+	})
+})
+
+// ─── Phase 160-02 — LivOS overlay prepended to Luse verbatim prompt ───
+//
+// Two describe blocks:
+//
+//   1. Source-text invariants that lock the OVERLAY shape — checks the
+//      raw `agent-prompt-builder.ts` source for the literal banner text,
+//      the dash-domain rule callouts, the conflict rule, and the
+//      `buildLuseOverlay(...) + LUSE_SYSTEM_PROMPT` composition pattern.
+//      These guard against drift in the overlay text itself.
+//
+//   2. D-09 verbatim invariants that lock the VERBATIM PROMPT — checks
+//      `luse-system-prompt.ts` source for the literal "You are Liv" and
+//      the literal "1280 x 960 pixels" hardcoded coordinate space. The
+//      overlay overrides both at runtime, but the verbatim file MUST
+//      retain them byte-for-byte so the upstream-sync diff stays clean.
+//      If either invariant fires, someone has patched the verbatim file
+//      directly — REVERT and route the change through the overlay layer.
+//
+// Plus runtime smoke tests on the buildLuseOverlay function itself so the
+// overlay's behavior (placeholder text, app-list rendering, size formatting)
+// is locked in addition to its source-text shape.
+
+import {
+	buildLuseOverlay,
+	buildLuseSystemPromptWithOverlay,
+} from './agent-prompt-builder.js'
+
+// ESM-safe __dirname replacement (the test file is loaded as ESM by vitest).
+const __dirname_160_02 = dirname(fileURLToPath(import.meta.url))
+
+describe('Phase 160-02 — LivOS overlay prepended to Luse verbatim prompt', () => {
+	const SRC = readFileSync(
+		join(__dirname_160_02, 'agent-prompt-builder.ts'),
+		'utf8',
+	)
+
+	it('exports buildLuseOverlay function', () => {
+		expect(SRC).toMatch(/export function buildLuseOverlay/)
+	})
+
+	it('overlay declares it is prepended to Bytebot verbatim prompt', () => {
+		expect(SRC).toMatch(/PREPENDED TO BYTEBOT VERBATIM/)
+	})
+
+	it('mentions dash-pattern domain rule (n8n-user.livinity.io NOT n8n.user.livinity.io)', () => {
+		expect(SRC).toMatch(/DASH between app/)
+		expect(SRC).toMatch(/NEVER n8n\.\$\{userSlug\}/)
+	})
+
+	it('includes conflict rule (overlay wins over verbatim)', () => {
+		expect(SRC).toMatch(/THIS CONTEXT WINS/)
+	})
+
+	it('verbatim file luse-system-prompt.ts NOT imported as mutable — only read', () => {
+		// The overlay is PREPENDED, not patched into the verbatim string.
+		// The expression `buildLuseOverlay(...) + LUSE_SYSTEM_PROMPT` is the
+		// canonical assembly pattern — Plan 160-02 acceptance criterion.
+		expect(SRC).toMatch(/buildLuseOverlay\([^)]*\) \+ LUSE_SYSTEM_PROMPT/)
+	})
+})
+
+describe('Phase 160-02 — D-09 verbatim invariant guard', () => {
+	const LUSE_SRC = readFileSync(
+		join(__dirname_160_02, '..', 'computer-use', 'luse-system-prompt.ts'),
+		'utf8',
+	)
+
+	it('luse-system-prompt.ts still contains You are Liv literal (verbatim contract)', () => {
+		expect(LUSE_SRC).toMatch(/You are Liv,/)
+	})
+
+	it('luse-system-prompt.ts still contains hardcoded 1280 x 960 (verbatim, not patched)', () => {
+		// We do NOT modify this — the overlay handles the override at runtime.
+		expect(LUSE_SRC).toMatch(/1280 x 960 pixels/)
+	})
+})
+
+describe('Phase 160-02 — buildLuseOverlay runtime behavior', () => {
+	it('renders placeholder app list when no apps supplied', () => {
+		const out = buildLuseOverlay()
+		expect(out).toContain('(no apps currently installed)')
+	})
+
+	it('renders each supplied app with id + kind', () => {
+		const out = buildLuseOverlay({
+			availableApps: [
+				{id: 'n8n', name: 'n8n', kind: 'webapp'},
+				{id: 'libreoffice', name: 'LibreOffice', kind: 'native'},
+			],
+		})
+		expect(out).toContain('- n8n (id=n8n, kind=webapp)')
+		expect(out).toContain('- LibreOffice (id=libreoffice, kind=native)')
+	})
+
+	it('renders the runtime display size when provided (Plan 04 hook)', () => {
+		const out = buildLuseOverlay({actualDisplaySize: {width: 1920, height: 1080}})
+		expect(out).toContain('DISPLAY: 1920 x 1080 pixels')
+	})
+
+	it('falls back to "ground from screenshots" hint when display size absent', () => {
+		const out = buildLuseOverlay()
+		expect(out).toContain('ground coordinates from screenshots')
+	})
+
+	it('renders the dash-pattern URL with supplied userSlug + domainRoot', () => {
+		const out = buildLuseOverlay({userSlug: 'bruce', domainRoot: 'livinity.io'})
+		// Dash form (correct) appears explicitly in the example line:
+		expect(out).toContain('n8n-bruce.livinity.io (correct)')
+		// Dot form (wrong) appears explicitly as the anti-pattern:
+		expect(out).toContain('NEVER n8n.bruce.livinity.io')
+	})
+
+	it('buildLuseSystemPromptWithOverlay composes overlay + verbatim prompt', () => {
+		const out = buildLuseSystemPromptWithOverlay()
+		// Overlay banner is at the very top of the composed string:
+		expect(out.startsWith('[LIVOS CONTEXT')).toBe(true)
+		// Verbatim prompt is appended (its "You are Liv" line must appear
+		// somewhere AFTER the overlay handoff marker):
+		const handoffIdx = out.indexOf('[BYTEBOT VERBATIM PROMPT FOLLOWS]')
+		const liveIdx = out.indexOf('You are Liv,')
+		expect(handoffIdx).toBeGreaterThan(0)
+		expect(liveIdx).toBeGreaterThan(handoffIdx)
 	})
 })
