@@ -317,6 +317,16 @@ export function buildLuseConfig(
 				LUSE_REDIS_URL: luseRedisUrl,
 				LIVOS_USER_SLUG: descriptor.userSlug ?? 'admin',
 				LIVOS_DOMAIN_ROOT: descriptor.domainRoot ?? 'livinity.io',
+				// Phase 161-03 — env-thread for MCP child livosAppResolver wiring.
+				// LIVINITYD_API_URL is a NEW env name (NOT LIV_API_URL — that name
+				// already means liv-core port 3200 in ws-agent.ts:154; livinityd
+				// tRPC lives on port 8080). LUSE_USER_SLUG / LUSE_DOMAIN_ROOT
+				// intentionally separate from LIVOS_* (overlay) to keep resolver
+				// and overlay paths decoupled.
+				LIVINITYD_API_URL: env.LIVINITYD_API_URL ?? 'http://localhost:8080',
+				LIV_API_KEY: env.LIV_API_KEY ?? '',
+				LUSE_USER_SLUG: descriptor.userSlug ?? 'admin',
+				LUSE_DOMAIN_ROOT: descriptor.domainRoot ?? 'livinity.io',
 			}
 		: {
 				DISPLAY: env.LUSE_DISPLAY ?? ':1',
@@ -325,6 +335,14 @@ export function buildLuseConfig(
 					env.XAUTHORITY ??
 					'/run/user/1000/gdm/Xauthority',
 				LUSE_REDIS_URL: luseRedisUrl,
+				// Phase 161-03 — host-display branch — conditional pass-through.
+				// No descriptor → no per-user context → resolver may fall through
+				// when env vars are absent. Spread-conditional avoids polluting
+				// env-block comparison for legacy host-display launches.
+				...(env.LIVINITYD_API_URL ? {LIVINITYD_API_URL: env.LIVINITYD_API_URL} : {}),
+				...(env.LIV_API_KEY ? {LIV_API_KEY: env.LIV_API_KEY} : {}),
+				...(env.LUSE_USER_SLUG ? {LUSE_USER_SLUG: env.LUSE_USER_SLUG} : {}),
+				...(env.LUSE_DOMAIN_ROOT ? {LUSE_DOMAIN_ROOT: env.LUSE_DOMAIN_ROOT} : {}),
 			}
 	return {
 		name: descriptor ? `luse:webapp:${descriptor.instanceKey}` : 'luse',
