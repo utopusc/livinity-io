@@ -22,13 +22,23 @@ import {useEffect, useMemo, useRef, useState} from 'react'
 
 import {Loading} from '@/components/ui/loading'
 import {useWebAppVnc} from '@/hooks/use-webapp-vnc'
+import {useWindowManagerOptional} from '@/providers/window-manager'
 import {trpcReact} from '@/trpc/trpc'
 
 interface NativeAppStreamWindowProps {
 	nativeAppId: string
+	/**
+	 * Phase 159 — windowId from WindowManager. Required for the
+	 * registerCloseHandler pattern (close runs while React tree is
+	 * still mounted, so closeMutationRef is fresh + WS is live).
+	 * Optional for backward-compat during the Phase 159 rollout —
+	 * absent windowId falls back to the legacy unmount cleanup (kept
+	 * defensively until prop is reliably threaded).
+	 */
+	windowId?: string
 }
 
-export default function NativeAppStreamWindow({nativeAppId}: NativeAppStreamWindowProps) {
+export default function NativeAppStreamWindow({nativeAppId, windowId}: NativeAppStreamWindowProps) {
 	// 1. Pull this native app's config row from apps.native.list. The
 	// config carries the display name used in error UI (failed-spawn
 	// surface), and ensures the icon's id is a real, persisted config —
@@ -89,19 +99,42 @@ export default function NativeAppStreamWindow({nativeAppId}: NativeAppStreamWind
 		)
 	}, [cfg, wsUrl, spawnError, nativeAppId])
 
-	// 3. Cleanup on unmount — best-effort `apps.native.close`. Idempotent
-	// server-side, so even if the user repeatedly opens/closes the window
-	// the close call just reports {ok: true}.
+	// 3. Phase 159 — window-manager-mediated teardown (Workstream B).
+	// Replaces the unmount-cleanup race (H1 of 159-RESEARCH.md): when the
+	// user clicks `[X]`, WindowManagerProvider.closeWindow invokes our
+	// registered handler BEFORE dispatching CLOSE_WINDOW, so the React
+	// tree is still mounted, closeMutationRef is fresh, and the WS
+	// transport is live. The handler uses mutateAsync so the registry's
+	// 2s Promise.race timeout can observe completion. If `windowId` is
+	// absent (defensive fallback during rollout), we keep the legacy
+	// unmount cleanup — both paths are idempotent server-side.
+	//
+	// Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f (sdk-agent-runner.ts) unchanged.
+	const wm = useWindowManagerOptional()
 	useEffect(() => {
-		const idForCleanup = nativeAppId
-		return () => {
-			try {
-				closeMutationRef.current.mutate({id: idForCleanup})
-			} catch {
-				// non-blocking
+		if (!windowId || !wm) {
+			// Fallback for the brief window where windowId isn't threaded
+			// yet (component used outside WindowManager tree). Unmount
+			// cleanup is the H1-prone path but better than no teardown.
+			const idForCleanup = nativeAppId
+			return () => {
+				try {
+					closeMutationRef.current.mutate({id: idForCleanup})
+				} catch {
+					// non-blocking
+				}
 			}
 		}
-	}, [nativeAppId])
+		const handler = async () => {
+			try {
+				await closeMutationRef.current.mutateAsync({id: nativeAppId})
+			} catch {
+				// non-blocking — Plan 03 reaper is the backstop
+			}
+		}
+		wm.registerCloseHandler(windowId, handler)
+		return () => wm.unregisterCloseHandler(windowId)
+	}, [windowId, nativeAppId, wm])
 
 	// 4. VNC view. viewOnly=false so the binary receives mouse + keyboard
 	// directly through x11vnc's XTest dispatch. Per-app Xvfb means no
