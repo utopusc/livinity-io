@@ -66,14 +66,23 @@ function testSourceContainsDatedHaikuLiteral() {
 }
 
 function testSourceDoesNotUseUndatedHaikuAtCallSite() {
-  // The SDK query() model option must NOT be `tierToModel(tier)` alone for
-  // computer-use sessions — it must branch on `computerUse` and use the dated
-  // literal. Assert that the ternary pattern is present at the model: assignment.
+  // Phase 162-02 refactor — the dated-literal ternary moved out of the query() call
+  // into a `sessionModelOverride` derivation. Lock BOTH halves of the contract:
+  //   1. The query() model field is `sessionModelOverride ?? tierToModel(tier)`
+  //   2. sessionModelOverride preserves the Phase 161 computer-use → dated Haiku branch
+  // Semantically equivalent to the old inline ternary: when computerUse is true,
+  // sessionModelOverride === 'claude-haiku-4-5-20251001' and `?? tierToModel(tier)`
+  // short-circuits to the dated literal. When false, override may be vaultModeConfig
+  // .defaultModel (Phase 162-02) or undefined, falling through to tierToModel(tier).
   assert.match(
     SRC,
-    /model:\s*computerUse\s*\?\s*['"]claude-haiku-4-5-20251001['"]\s*:\s*tierToModel\(tier\)/,
+    /model:\s*sessionModelOverride\s*\?\?\s*tierToModel\(tier\)/,
   );
-  console.log('  PASS: SDK query() branches dated-literal vs tierToModel(tier) correctly');
+  assert.match(
+    SRC,
+    /sessionModelOverride[\s\S]*?computerUse[\s\S]*?['"]claude-haiku-4-5-20251001['"]/,
+  );
+  console.log('  PASS: SDK query() routes via sessionModelOverride; Phase 161 dated-Haiku branch preserved');
 }
 
 function testSourceContainsBothPrefixLiterals() {
