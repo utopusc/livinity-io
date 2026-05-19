@@ -71,7 +71,7 @@ vi.mock('node:timers/promises', () => ({
 
 // SUT — imported AFTER vi.mock above (top-of-file vi.mock is hoisted by vitest).
 import {LUSE_TOOLS, LUSE_TOOL_NAMES} from '../luse-tools.js'
-import {registerLuseTools, HANDLERS, __setReaddirForTest} from './tools.js'
+import {registerLuseTools, HANDLERS, __setReaddirForTest, __setRealpathForTest} from './tools.js'
 
 // Minimal stub of the McpServer surface registerLuseTools touches.
 class StubMcpServer {
@@ -355,20 +355,28 @@ describe('registerLuseTools', () => {
 	})
 
 	it('T12: computer_read_file calls readFileBase64 and wraps result as MCP content', async () => {
-		const stub = new StubMcpServer()
-		registerLuseTools(stub as never)
-		const handler = stub.getHandler('computer_read_file')!
-		const result = (await handler({path: '/tmp/foo.txt'})) as {
-			content: Array<{type: string; text?: string; data?: string; mimeType?: string}>
-			isError: boolean
-		}
+		// Phase 160-05 — sandbox-guarded path. Use an allowlist-passing path
+		// (/home/<user>/) and stub realpath to echo it back so the guard
+		// passes and the original readFileBase64 wrapping is exercised.
+		__setRealpathForTest(async (p: string) => String(p))
+		try {
+			const stub = new StubMcpServer()
+			registerLuseTools(stub as never)
+			const handler = stub.getHandler('computer_read_file')!
+			const result = (await handler({path: '/home/bruce/foo.txt'})) as {
+				content: Array<{type: string; text?: string; data?: string; mimeType?: string}>
+				isError: boolean
+			}
 
-		expect(mocks.readFileBase64).toHaveBeenCalledWith('/tmp/foo.txt')
-		expect(result.isError).toBe(false)
-		// Some content surface — text describing the read OR an attached document.
-		expect(result.content.length).toBeGreaterThanOrEqual(1)
-		const concat = JSON.stringify(result.content)
-		expect(concat).toMatch(/foo\.txt|ZmlsZQ==/)
+			expect(mocks.readFileBase64).toHaveBeenCalledWith('/home/bruce/foo.txt')
+			expect(result.isError).toBe(false)
+			// Some content surface — text describing the read OR an attached document.
+			expect(result.content.length).toBeGreaterThanOrEqual(1)
+			const concat = JSON.stringify(result.content)
+			expect(concat).toMatch(/foo\.txt|ZmlsZQ==/)
+		} finally {
+			__setRealpathForTest(undefined)
+		}
 	})
 })
 
