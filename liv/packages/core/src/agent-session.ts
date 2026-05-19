@@ -185,6 +185,32 @@ export function isComputerUseSession(conversationId: string | undefined): boolea
 
 // ── Agent Session Manager ────────────────────────────────────
 
+export interface AgentSessionManagerOptions {
+  toolRegistry: ToolRegistry;
+  nexusConfig?: NexusConfig;
+  intentRouter?: IntentRouter;
+  redis?: Redis;
+  learningEngine?: LearningEngine;
+  /**
+   * Phase 161-02 — DI callback for SDK-path computer-use system prompt.
+   *
+   * When set AND the session is computer-use (isComputerUseSession returns
+   * true for session.conversationId), this builder's return value REPLACES
+   * the default systemPrompt for the turn — typically the LivOS overlay-
+   * augmented prompt from livinityd's buildLuseSystemPromptWithOverlayResolved.
+   *
+   * When unset, the legacy systemPrompt selector runs verbatim (chat-path
+   * untouched contract per D-161-F).
+   *
+   * Module boundary (D-161-C): the builder must be supplied by livinityd
+   * (it owns LivOS prompt composition). @liv/core consumes via this DI hook
+   * so the @liv/core → livinityd import direction is preserved.
+   *
+   * Sacred SHA: sdk-agent-runner.ts untouched.
+   */
+  computerUseSystemPromptBuilder?: () => Promise<string>;
+}
+
 export class AgentSessionManager {
   private sessions = new Map<string, ActiveSession>();
   private toolRegistry: ToolRegistry;
@@ -192,13 +218,16 @@ export class AgentSessionManager {
   private intentRouter: IntentRouter | null;
   private redis: Redis | null;
   private learningEngine: LearningEngine | null;
+  // Phase 161-02 — DI callback for LivOS overlay-augmented systemPrompt on computer-use sessions.
+  private computerUseSystemPromptBuilder: (() => Promise<string>) | null;
 
-  constructor(opts: { toolRegistry: ToolRegistry; nexusConfig?: NexusConfig; intentRouter?: IntentRouter; redis?: Redis; learningEngine?: LearningEngine }) {
+  constructor(opts: AgentSessionManagerOptions) {
     this.toolRegistry = opts.toolRegistry;
     this.nexusConfig = opts.nexusConfig;
     this.intentRouter = opts.intentRouter ?? null;
     this.redis = opts.redis ?? null;
     this.learningEngine = opts.learningEngine ?? null;
+    this.computerUseSystemPromptBuilder = opts.computerUseSystemPromptBuilder ?? null;
   }
 
   /**
@@ -594,10 +623,35 @@ export class AgentSessionManager {
       }
     }
 
-    // Build system prompt — dynamic composition from base + loaded capability instructions
-    const systemPrompt = intentResult
-      ? composeSystemPrompt(BASE_SYSTEM_PROMPT, intentResult.capabilities)
-      : BASE_SYSTEM_PROMPT;
+    // Build system prompt — dynamic composition from base + loaded capability instructions.
+    //
+    // Phase 161-02 — Computer-use sessions get the LivOS overlay-augmented
+    // prompt (via DI callback from livinityd); chat sessions follow the
+    // pre-161 selector verbatim (chat-path-untouched contract).
+    //
+    // Branch ordering (L4): computer-use FIRST (when builder + isComputerUseSession
+    // both true), then intentResult, then BASE_SYSTEM_PROMPT fallback. IntentRouter
+    // is currently disabled at ws-agent.ts:178-182 — the intentResult branch is
+    // preserved for any future re-enable.
+    //
+    // Builder failure is non-fatal: swallow + log + fall back to BASE_SYSTEM_PROMPT
+    // so an xdpyinfo failure or apps-list HTTP timeout never breaks a turn.
+    let systemPrompt: string;
+    if (computerUse && this.computerUseSystemPromptBuilder) {
+      try {
+        systemPrompt = await this.computerUseSystemPromptBuilder();
+      } catch (err: any) {
+        logger.warn(
+          'AgentSessionManager: computerUseSystemPromptBuilder failed, falling back to BASE_SYSTEM_PROMPT',
+          { userId, conversationId: session.conversationId, error: err?.message ?? String(err) },
+        );
+        systemPrompt = BASE_SYSTEM_PROMPT;
+      }
+    } else if (intentResult) {
+      systemPrompt = composeSystemPrompt(BASE_SYSTEM_PROMPT, intentResult.capabilities);
+    } else {
+      systemPrompt = BASE_SYSTEM_PROMPT;
+    }
     const budgetByTier: Record<string, number> = {
       opus: 10.0,
       sonnet: 5.0,
