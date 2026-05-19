@@ -62,10 +62,10 @@ export function NativeAppIcon({id, name, iconUrl}: NativeAppIconProps) {
 	const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
 
 	const handleClick = () => {
-		// Fire-and-forget — the hook returns a Promise but we don't need to
-		// await it from a click handler. Failure surfaces via sonner toast
-		// inside useLaunchNativeApp.
-		void launch({id, name})
+		// Phase 157 round 5 — pass iconUrl so the spawned window chrome /
+		// dock tile shows the right icon. Hook is fire-and-forget (returns
+		// a Promise but failures surface via sonner inside the hook).
+		void launch({id, name, iconUrl})
 	}
 
 	const handleRemove = async () => {

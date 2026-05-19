@@ -64,8 +64,12 @@ describe('NativeAppIcon — tRPC wiring', () => {
 		expect(ICON_SRC).toMatch(/deleteMut\.mutateAsync\s*\(\s*\{\s*id\s*[:,}]/)
 	})
 
-	it('invokes useLaunchNativeApp().launch on icon click with id + name', () => {
-		expect(ICON_SRC).toMatch(/launch\s*\(\s*\{\s*id\s*,\s*name\s*\}/)
+	it('invokes useLaunchNativeApp().launch on icon click with id + name (+ iconUrl P157 round 5)', () => {
+		// Phase 157 round 5 — launch now passes iconUrl alongside id +
+		// name so the window chrome can show the right icon. Keep the
+		// regex permissive about trailing args so future additions
+		// (e.g. windowGeometry hints) don't break the contract test.
+		expect(ICON_SRC).toMatch(/launch\s*\(\s*\{\s*id\s*,\s*name/)
 	})
 })
 
