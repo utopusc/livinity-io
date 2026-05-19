@@ -7,6 +7,11 @@ import {Window} from './window'
 import {WindowContent} from './window-content'
 
 const WEBAPP_APP_ID_PREFIX = 'WEBAPP_'
+// Phase 159 — parallel discriminator for NativeApp windows. Same shape as
+// WEBAPP_APP_ID_PREFIX. window-content.tsx:27 declares the same constant for
+// its own switch; duplication is intentional (additive, minimum cross-file
+// churn — RESEARCH Option A1).
+const NATIVE_APP_ID_PREFIX = 'NATIVE_'
 
 export function WindowsContainer() {
 	const windowManager = useWindowManagerOptional()
@@ -27,6 +32,8 @@ export function WindowsContainer() {
 				.map((window) => {
 					const isWebApp = window.appId.startsWith(WEBAPP_APP_ID_PREFIX)
 					const webappId = isWebApp ? window.appId.slice(WEBAPP_APP_ID_PREFIX.length) : null
+					const isNativeApp = window.appId.startsWith(NATIVE_APP_ID_PREFIX)
+					const nativeAppId = isNativeApp ? window.appId.slice(NATIVE_APP_ID_PREFIX.length) : null
 					return (
 						<div key={window.id}>
 							<Window
@@ -39,8 +46,9 @@ export function WindowsContainer() {
 								originRect={window.originRect}
 								isPinnedToTopBar={window.isPinnedToTopBar}
 								webappId={webappId ?? undefined}
+								nativeAppId={nativeAppId ?? undefined}
 							>
-								<WindowContent route={window.route} appId={window.appId} />
+								<WindowContent route={window.route} appId={window.appId} windowId={window.id} />
 							</Window>
 							{/* Phase 157 round 10 — both the WebApp action bar
 							    AND the Skills library button now live INSIDE

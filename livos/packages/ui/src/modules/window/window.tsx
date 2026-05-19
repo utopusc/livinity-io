@@ -22,13 +22,25 @@ type WindowProps = {
 	// inline Chat / Teach action buttons (right of the X) and shrink
 	// the drag bar when the user opens the chat input.
 	webappId?: string
+	// Phase 159 — when this window is a NativeApp stream window, the
+	// native-app config id is passed through so the chrome row can
+	// render the Chat icon + inline chat-input bar (Teach + Skills
+	// omitted — RESEARCH A5). Mutually exclusive with `webappId`.
+	nativeAppId?: string
 }
 
 export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
-	{id, title, icon, position, size, zIndex, children, originRect, isPinnedToTopBar = false, webappId},
+	{id, title, icon, position, size, zIndex, children, originRect, isPinnedToTopBar = false, webappId, nativeAppId},
 	ref,
 ) {
 	const {closeWindow, focusWindow, updateWindowPosition, updateWindowSize} = useWindowManager()
+	// Phase 159 — mutual exclusion. webappId and nativeAppId must never
+	// both be set for the same window. Dev console-warn so accidental
+	// double-threading is caught quickly without throwing in prod.
+	if (process.env.NODE_ENV !== 'production' && webappId && nativeAppId) {
+		// eslint-disable-next-line no-console
+		console.warn('[Window] webappId AND nativeAppId both set — only one expected.', {id, webappId, nativeAppId})
+	}
 	const [isDragging, setIsDragging] = useState(false)
 	const [dragOffset, setDragOffset] = useState({x: 0, y: 0})
 	const dragStartPos = useRef({x: 0, y: 0})
@@ -275,6 +287,7 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 					onClose={handleClose}
 					windowWidth={size.width}
 					webappId={webappId}
+					nativeAppId={nativeAppId}
 				/>
 			</motion.div>
 
