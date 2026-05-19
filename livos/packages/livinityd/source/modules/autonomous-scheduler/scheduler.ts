@@ -66,6 +66,7 @@ import path from 'node:path'
 import type {Redis} from 'ioredis'
 
 import {
+	parseAgentDefinition,
 	parseAgentDefinitionsDir,
 	type AgentDefinition,
 } from './agent-definition-parser.js'
@@ -241,6 +242,74 @@ export class AutonomousScheduler {
 	 */
 	registerDefinition(def: AgentDefinition): void {
 		this.definitions.set(def.name, def)
+	}
+
+	/**
+	 * Phase 165-02 — Read-only snapshot of all parsed agent definitions.
+	 * Surface used by the Settings UI autonomous panel via the
+	 * `autonomous.list` tRPC procedure. Returns a copy (callers cannot
+	 * mutate the internal Map).
+	 */
+	listDefinitions(): AgentDefinition[] {
+		return Array.from(this.definitions.values())
+	}
+
+	/**
+	 * Phase 165-02 — Names of agents whose cron task is currently registered.
+	 * Used by `autonomous.list` to compute the per-row `enabled` cell (which
+	 * is the OBSERVED runtime state, not just the parsed frontmatter).
+	 */
+	getEnabledNames(): string[] {
+		return Array.from(this.tasks.keys())
+	}
+
+	/**
+	 * Phase 165-02 — Flip an agent's enabled state from the Settings UI.
+	 *
+	 * Steps:
+	 *  1. Locate the AgentDefinition by `name` in the in-memory Map.
+	 *  2. If the requested state matches the current cron-task presence:
+	 *     no-op (do NOT rewrite the file).
+	 *  3. Read the source file, rewrite the `enabled:` frontmatter line
+	 *     (or insert one before the closing `---` if missing).
+	 *  4. Re-parse the new contents; update `this.definitions`.
+	 *  5. If enabling: registerTask(def). If disabling: tasks.get(name)?.stop() + tasks.delete(name).
+	 *
+	 * Throws if the agent name is unknown.
+	 */
+	async setAgentEnabled(name: string, enabled: boolean): Promise<void> {
+		const def = this.definitions.get(name)
+		if (!def) throw new Error(`setAgentEnabled: unknown agent: ${name}`)
+		const currentlyEnabled = this.tasks.has(name)
+		if (currentlyEnabled === enabled) return // no-op
+
+		const {readFile, writeFile} = await import('node:fs/promises')
+		const raw = await readFile(def.sourcePath, 'utf8')
+		const rewritten = rewriteEnabledFrontmatter(raw, enabled)
+		await writeFile(def.sourcePath, rewritten, 'utf8')
+
+		const parsed = parseAgentDefinition(rewritten, def.sourcePath)
+		if (!parsed.ok) {
+			throw new Error(`setAgentEnabled: re-parse failed: ${parsed.err}`)
+		}
+		this.definitions.set(name, parsed.definition)
+
+		if (enabled) {
+			this.registerTask(parsed.definition)
+		} else {
+			const task = this.tasks.get(name)
+			if (task) {
+				try {
+					task.stop()
+				} catch (err) {
+					this.logger.error(
+						'[autonomous-scheduler] stop task on disable',
+						err,
+					)
+				}
+				this.tasks.delete(name)
+			}
+		}
 	}
 
 	private registerTask(def: AgentDefinition): void {
@@ -422,4 +491,30 @@ export class AutonomousScheduler {
 function buildMcpServers(names: string[]): Record<string, unknown> {
 	void names
 	return {}
+}
+
+// Phase 165-02 — Frontmatter rewriter (in-place, byte-preserving for non-enabled lines).
+// Operates line-by-line within the `--- ... ---` block; only the line matching
+// `/^enabled\s*:/` is rewritten (or one inserted before the closing fence).
+function rewriteEnabledFrontmatter(raw: string, enabled: boolean): string {
+	const lines = raw.split('\n')
+	const firstFence = lines.findIndex((l) => l.trim() === '---')
+	if (firstFence !== 0) {
+		// No leading frontmatter — head-inject a fresh block.
+		return `---\nenabled: ${enabled}\n---\n${raw}`
+	}
+	const closingFence = lines.findIndex((l, i) => i > firstFence && l.trim() === '---')
+	if (closingFence === -1) return raw // malformed — bail
+	let replaced = false
+	for (let i = firstFence + 1; i < closingFence; i++) {
+		if (/^enabled\s*:/.test(lines[i])) {
+			lines[i] = `enabled: ${enabled}`
+			replaced = true
+			break
+		}
+	}
+	if (!replaced) {
+		lines.splice(closingFence, 0, `enabled: ${enabled}`)
+	}
+	return lines.join('\n')
 }

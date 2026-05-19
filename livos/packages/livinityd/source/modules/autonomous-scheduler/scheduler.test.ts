@@ -24,7 +24,7 @@
  */
 
 import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
-import {mkdtempSync, rmSync, writeFileSync, mkdirSync} from 'node:fs'
+import {mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import path from 'node:path'
 
@@ -572,5 +572,197 @@ describe('AutonomousScheduler — Phase 164-02 Task 2', () => {
 		const res = await scheduler.runNow('never-registered')
 		expect(res.ok).toBe(false)
 		expect(res.reason).toMatch(/unknown agent/)
+	})
+
+	// ── Phase 165-02 Task 1 — listDefinitions / getEnabledNames / setAgentEnabled ──
+
+	// Test 165-02-1 ──────────────────────────────────────────────────
+	it('165-02-T1 (listDefinitions empty before start): returns []', async () => {
+		const scheduler = new AutonomousScheduler({
+			redis: redis as any,
+			vaultPath,
+			logger,
+		})
+		expect(scheduler.listDefinitions()).toEqual([])
+		expect(scheduler.getEnabledNames()).toEqual([])
+	})
+
+	// Test 165-02-2 ──────────────────────────────────────────────────
+	it('165-02-T2 (listDefinitions/getEnabledNames after start): returns parsed defs; enabled set excludes disabled', async () => {
+		await redis.set('liv:config:autonomous_enabled', 'true')
+		writeAgentFile(agentsDir, 'enabled-one', {enabled: true})
+		writeAgentFile(agentsDir, 'disabled-one', {enabled: false})
+		const scheduler = new AutonomousScheduler({
+			redis: redis as any,
+			vaultPath,
+			logger,
+		})
+		await scheduler.start()
+		// listDefinitions returns ONLY the enabled defs (the disabled ones
+		// are skipped at start() and never added to `definitions`).
+		const defs = scheduler.listDefinitions()
+		const names = defs.map((d) => d.name)
+		expect(names).toContain('enabled-one')
+		// getEnabledNames mirrors task registration — only enabled
+		expect(scheduler.getEnabledNames()).toEqual(['enabled-one'])
+		await scheduler.stop()
+	})
+
+	// Test 165-02-3 ──────────────────────────────────────────────────
+	it('165-02-T3 (setAgentEnabled flips frontmatter on disk; other fields byte-identical)', async () => {
+		const filePath = writeAgentFile(agentsDir, 'flipper', {
+			enabled: false,
+			model: 'claude-haiku-4-5',
+			schedule: '*/5 * * * *',
+		})
+		const originalContent = readFileSync(filePath, 'utf8')
+
+		await redis.set('liv:config:autonomous_enabled', 'true')
+		const scheduler = new AutonomousScheduler({
+			redis: redis as any,
+			vaultPath,
+			logger,
+		})
+		await scheduler.start()
+		// Disabled def is NOT in definitions map post-start (parser skips); use
+		// registerDefinition to put it in so setAgentEnabled can find it.
+		const parser = await import('./agent-definition-parser.js')
+		const parseRes = parser.parseAgentDefinition(originalContent, filePath)
+		expect(parseRes.ok).toBe(true)
+		if (parseRes.ok) scheduler.registerDefinition(parseRes.definition)
+
+		await scheduler.setAgentEnabled('flipper', true)
+		const rewritten = readFileSync(filePath, 'utf8')
+		expect(rewritten).toContain('enabled: true')
+		expect(rewritten).not.toContain('enabled: false')
+		// model + schedule lines unchanged
+		expect(rewritten).toContain('model: claude-haiku-4-5')
+		expect(rewritten).toContain('schedule: "*/5 * * * *"')
+		await scheduler.stop()
+	})
+
+	// Test 165-02-4 ──────────────────────────────────────────────────
+	it('165-02-T4 (setAgentEnabled true registers cron task; taskCount increments)', async () => {
+		const filePath = writeAgentFile(agentsDir, 'enabler', {enabled: false})
+		await redis.set('liv:config:autonomous_enabled', 'true')
+		const scheduler = new AutonomousScheduler({
+			redis: redis as any,
+			vaultPath,
+			logger,
+		})
+		await scheduler.start()
+		const parser = await import('./agent-definition-parser.js')
+		const parseRes = parser.parseAgentDefinition(
+			readFileSync(filePath, 'utf8'),
+			filePath,
+		)
+		if (parseRes.ok) scheduler.registerDefinition(parseRes.definition)
+
+		const before = scheduler.taskCount
+		await scheduler.setAgentEnabled('enabler', true)
+		expect(scheduler.taskCount).toBe(before + 1)
+		expect(scheduler.getEnabledNames()).toContain('enabler')
+		await scheduler.stop()
+	})
+
+	// Test 165-02-5 ──────────────────────────────────────────────────
+	it('165-02-T5 (setAgentEnabled false stops + removes cron task; taskCount decrements)', async () => {
+		writeAgentFile(agentsDir, 'disabler', {enabled: true})
+		await redis.set('liv:config:autonomous_enabled', 'true')
+		const scheduler = new AutonomousScheduler({
+			redis: redis as any,
+			vaultPath,
+			logger,
+		})
+		await scheduler.start()
+		expect(scheduler.taskCount).toBe(1)
+		expect(scheduler.getEnabledNames()).toContain('disabler')
+
+		await scheduler.setAgentEnabled('disabler', false)
+		expect(scheduler.taskCount).toBe(0)
+		expect(scheduler.getEnabledNames()).not.toContain('disabler')
+		await scheduler.stop()
+	})
+
+	// Test 165-02-6 ──────────────────────────────────────────────────
+	it('165-02-T6 (setAgentEnabled unknown agent throws)', async () => {
+		const scheduler = new AutonomousScheduler({
+			redis: redis as any,
+			vaultPath,
+			logger,
+		})
+		await expect(
+			scheduler.setAgentEnabled('does-not-exist', true),
+		).rejects.toThrow(/unknown agent/)
+	})
+
+	// Test 165-02-7 ──────────────────────────────────────────────────
+	it('165-02-T7 (setAgentEnabled inserts enabled: line when missing from frontmatter)', async () => {
+		// Hand-craft a frontmatter without `enabled:` line
+		const filePath = path.join(agentsDir, 'no-enabled-line.md')
+		writeFileSync(
+			filePath,
+			`---
+name: no-enabled-line
+schedule: "0 3 * * *"
+model: claude-haiku-4-5
+max_turns: 3
+max_budget_usd: 0.5
+---
+# noop
+`,
+			'utf8',
+		)
+		// Parse + register manually (since enabled defaults to true via DEFAULT_ENABLED,
+		// the parser will mark it enabled).
+		const parser = await import('./agent-definition-parser.js')
+		const parseRes = parser.parseAgentDefinition(
+			readFileSync(filePath, 'utf8'),
+			filePath,
+		)
+		expect(parseRes.ok).toBe(true)
+		const scheduler = new AutonomousScheduler({
+			redis: redis as any,
+			vaultPath,
+			logger,
+		})
+		if (parseRes.ok) scheduler.registerDefinition(parseRes.definition)
+
+		// First call (true) — no task yet because we never started, so
+		// currentlyEnabled === false; flip to true → registerTask
+		await scheduler.setAgentEnabled('no-enabled-line', true)
+		const rewritten = readFileSync(filePath, 'utf8')
+		// `enabled: true` is now part of the frontmatter
+		expect(rewritten).toMatch(/^enabled: true$/m)
+		// closing --- still present
+		const closing = rewritten.split('\n').filter((l) => l.trim() === '---')
+		expect(closing.length).toBe(2)
+		await scheduler.stop()
+	})
+
+	// Test 165-02-8 ──────────────────────────────────────────────────
+	it('165-02-T8 (setAgentEnabled is no-op when state matches current: no write)', async () => {
+		const filePath = writeAgentFile(agentsDir, 'idempotent', {enabled: true})
+		await redis.set('liv:config:autonomous_enabled', 'true')
+		const scheduler = new AutonomousScheduler({
+			redis: redis as any,
+			vaultPath,
+			logger,
+		})
+		await scheduler.start()
+		expect(scheduler.getEnabledNames()).toContain('idempotent')
+
+		const fs = await import('node:fs')
+		const statBefore = fs.statSync(filePath)
+
+		// Already enabled — should be no-op
+		await scheduler.setAgentEnabled('idempotent', true)
+
+		const statAfter = fs.statSync(filePath)
+		// mtime preserved (no write occurred)
+		expect(statAfter.mtimeMs).toBe(statBefore.mtimeMs)
+		// taskCount unchanged
+		expect(scheduler.taskCount).toBe(1)
+		await scheduler.stop()
 	})
 })
