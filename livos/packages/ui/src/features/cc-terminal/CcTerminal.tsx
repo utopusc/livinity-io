@@ -29,17 +29,7 @@ import '@xterm/xterm/css/xterm.css'
 
 import {useTheme} from '@/hooks/use-theme'
 import {CcPtyWsClient} from './terminal-ws-client'
-
-// Inline stub — Plan 167-03 replaces with the canonical
-// livosThemeToXtermTheme from './terminal-theme'.
-function livosThemeToXtermTheme(resolvedTheme: 'light' | 'dark' | 'iridescent') {
-	const isDark = resolvedTheme === 'dark' || resolvedTheme === 'iridescent'
-	return {
-		background: isDark ? '#0a0a0a' : '#ffffff',
-		foreground: isDark ? '#e5e5e5' : '#1a1a1a',
-		cursor: isDark ? '#06b6d4' : '#0891b2',
-	}
-}
+import {livosThemeToXtermTheme} from './terminal-theme'
 
 function wsUrl() {
 	return `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`
