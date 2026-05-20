@@ -19,3 +19,6 @@ export type {Item, BaseItem, ProjectItem, AgentItem, ChatItem, ItemType} from '.
 export {resolveVaultRoot, newItemId} from './vault-root-resolver.js'
 export {ItemStore} from './item-store.js'
 export type {ItemStoreOptions, CreateInput, ListOptions} from './item-store.js'
+// Phase 171-03 — tree-resolver public surface (additive).
+export {buildTree, validateMove, writeTreeCache, depthOf} from './tree-resolver.js'
+export type {TreeNode, MoveValidation} from './tree-resolver.js'
