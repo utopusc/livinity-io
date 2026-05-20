@@ -25,6 +25,7 @@ import {
 	detectTheme,
 	getEdgeColor,
 	getEdgeHoverColor,
+	getOrphanRingColor,
 	type GraphTheme,
 } from './graph-palette'
 import {GraphControls} from './GraphControls'
@@ -304,6 +305,24 @@ export function VaultGraph() {
 				nodeVal={(node: any) =>
 					Math.sqrt(Math.max(1, (node.degree ?? 0))) * settings.display.nodeSizeScale
 				}
+				nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D) => {
+					// Phase 187-02: custom painter — base circle + orphan ring for wikiDegree === 0.
+					const scale = settings.display.nodeSizeScale
+					const r = Math.sqrt(Math.max(1, node.degree ?? 0)) * scale * Math.sqrt(4 / Math.PI)
+					// Base circle
+					ctx.beginPath()
+					ctx.arc(node.x ?? 0, node.y ?? 0, r, 0, 2 * Math.PI)
+					ctx.fillStyle = node.color
+					ctx.fill()
+					// Orphan ring — red border when node has no wikilinks
+					if ((node.wikiDegree ?? 0) === 0) {
+						ctx.beginPath()
+						ctx.arc(node.x ?? 0, node.y ?? 0, r + 1.5, 0, 2 * Math.PI)
+						ctx.strokeStyle = getOrphanRingColor(theme)
+						ctx.lineWidth = 1.5
+						ctx.stroke()
+					}
+				}}
 				onNodeClick={(node: any) => {
 					setActiveNode(node as unknown as GraphNode)
 					// Phase 180-01: clicking a node enters local mode centred on that node.
