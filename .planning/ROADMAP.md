@@ -2065,18 +2065,18 @@ Plans:
 
 ---
 
-### Phase 168: Session Sidebar + Lifecycle UI — 🔴 PLANNED 2026-05-19
+### Phase 168: Session Sidebar + Lifecycle UI — 🟢 CODE-COMPLETE 2026-05-19
 
 **Goal:** AI Chat sidebar lists user's CC sessions. New Session button → spawn tmux + auto-select. Click session → mount CcTerminal. Rename/delete actions. Last-message preview from CC's jsonl. Cross-tab "attached elsewhere" indicator via Redis pub/sub.
 
-**Plans (4):**
-- [ ] 168-01 tRPC `cc-pty-router.ts` (5 procedures: list, create, rename, delete, getPreview; +5 httpOnlyPaths)
-- [ ] 168-02 SessionSidebar + SessionItem + NewSessionButton components
-- [ ] 168-03 AI Chat route integration (wire sidebar + terminal)
-- [ ] 168-04 Cross-tab attach indicator (Redis pub/sub)
+**Plans (4 / 4 SHIPPED):**
+- [x] 168-01 tRPC `cc-pty-router.ts` (5 procedures: list, create, rename, delete, getPreview; +5 httpOnlyPaths) — commit `36b5c662`
+- [x] 168-02 SessionSidebar + SessionItem + NewSessionButton components — commit `55b1e097`
+- [x] 168-03 AI Chat route integration (wire sidebar + terminal) — commit `312ac6a1`
+- [x] 168-04 Cross-tab attach indicator (Redis pub/sub) — commit `ba945a12`
 
 **Wave:** 2 (depends on 166 + 167)
-**Estimated:** ~1.5 days agent work
+**Verification:** `.planning/phases/168-session-sidebar/168-VERIFICATION.md` — 93 vitest assertions GREEN, 0 NEW tsc errors, sacred SHA `f3538e1d` preserved 4/4 commits. Real Redis pub/sub round-trip + two-tab UAT deferred to Phase 170.
 
 ---
 

@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v35.0
-milestone_name: Claude Code PTY Embed + Vault Memory Graph
-status: planned
-last_updated: "2026-05-19T22:30:00.000Z"
+milestone: v34.0
+milestone_name: Bootstrap Polish + First-Run UX
+status: unknown
+last_updated: "2026-05-19T22:50:00.000Z"
 progress:
-  total_phases: 5
-  completed_phases: 0
-  total_plans: 23
-  completed_plans: 0
-  percent: 0
+  total_phases: 75
+  completed_phases: 31
+  total_plans: 268
+  completed_plans: 224
+  percent: 84
 ---
 
 # Project State
@@ -27,17 +27,20 @@ See: .planning/PROJECT.md
 
 **Active milestone:** v35.0 — Claude Code PTY Embed + Vault Memory Graph (OPENED 2026-05-19; master plan `.planning/v35-CC-PTY-MASTER.md`; 5 phases / 23 plans / 3 waves; pre-flight verified; D-NEW-DEPS-v35 authorizes react-force-graph-2d + tmux apt; all other sacred guards locked).
 
-**Next action:** User /clear → `/gsd-autonomous --from 166`. Wave 1 dispatches Phase 166 + 167 + 169 in parallel; Wave 2 → 168; Wave 3 → 170 deploy + UAT.
+**Last shipped phase:** Phase 168 — Session Sidebar + Lifecycle UI (CODE-COMPLETE 2026-05-19; 4 plans / 4 commits `36b5c662..ba945a12`; 93 vitest assertions GREEN; sacred SHA `f3538e1d` preserved; cross-tab Redis pub/sub indicator wired; real round-trip + two-tab UAT deferred to Phase 170).
+
+**Next action:** Phase 170 (Mini PC Deploy + UAT + Milestone Close) — apt-install tmux on Mini PC + bash /opt/livos/update.sh + UAT walks (CC PTY two-tab attach indicator; Vault Graph node hover; session create/rename/delete; WS-survive-restart). Phases 166 / 167 / 169 must also be CODE-COMPLETE before 170 dispatch (assumed by Wave 2 dependency).
 
 **v35.0 phase queue:**
 
 - [ ] Phase 166 — CC PTY Backend (tmux + node-pty + WebSocket) — 5 plans, Wave 1
 - [ ] Phase 167 — xterm.js Frontend (CcTerminal component) — 4 plans, Wave 1
-- [ ] Phase 168 — Session Sidebar + Lifecycle UI — 4 plans, Wave 2
+- [x] Phase 168 — Session Sidebar + Lifecycle UI — 4 plans, Wave 2 ✓ SHIPPED 2026-05-19
 - [ ] Phase 169 — Vault Memory Graph View — 5 plans, Wave 1
 - [ ] Phase 170 — Mini PC Deploy + UAT + Milestone Close — 5 plans, Wave 3
 
 **Pre-flight (verified 2026-05-19 on Mini PC):**
+
 - Node v22.22.1 + python3 + make + g++ all present → node-pty buildable ✓
 - claude binary v2.1.84 at /usr/bin/claude with --resume / --continue / --fork-session ✓
 - HOME=/root contract verified in livinityd /proc env ✓
