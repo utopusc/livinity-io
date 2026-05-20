@@ -7,6 +7,9 @@
  *   - REST /api/mcp/servers (same as mcp-panel.tsx)
  *   - Featured MCP cards with data-testid
  *   - Header eyebrow '10 · MCP'
+ *
+ * Phase 186-02 — B6 updated: inline card markup moved to FeaturedMcpInstaller.tsx;
+ *   assertion now verifies FeaturedMcpInstaller source instead of mcp-servers.tsx.
  */
 
 import {describe, expect, it} from 'vitest'
@@ -17,6 +20,7 @@ const SRC = readFileSync(resolve(__dirname, 'mcp-servers.tsx'), 'utf8')
 const LIST_SRC = readFileSync(resolve(__dirname, '../../components/mcp/McpServerList.tsx'), 'utf8')
 const DETAIL_SRC = readFileSync(resolve(__dirname, '../../components/mcp/McpServerDetail.tsx'), 'utf8')
 const FEATURED_SRC = readFileSync(resolve(__dirname, '../../components/mcp/featured-mcps.ts'), 'utf8')
+const INSTALLER_SRC = readFileSync(resolve(__dirname, '../../components/mcp/FeaturedMcpInstaller.tsx'), 'utf8')
 
 describe('Phase 182-04 — McpServersPage source-text invariants', () => {
 	it('B1: page root has data-testid mcp-servers-page', () => {
@@ -39,8 +43,10 @@ describe('Phase 182-04 — McpServersPage source-text invariants', () => {
 		expect(SRC).toMatch(/data-testid=['"]mcp-featured-section['"]/)
 	})
 
-	it('B6: featured MCP card has data-testid with name interpolation', () => {
-		expect(SRC).toMatch(/data-testid=\{`featured-mcp-\$\{mcp\.name\}`\}/)
+	it('B6: featured MCP card has data-testid with name interpolation (Phase 186-02: moved to FeaturedMcpInstaller.tsx)', () => {
+		// Phase 186-02: inline card markup was lifted to FeaturedMcpInstaller.tsx.
+		// Assert on the installer source instead of mcp-servers.tsx.
+		expect(INSTALLER_SRC).toMatch(/data-testid=\{`featured-mcp-\$\{mcp\.name\}`\}/)
 	})
 
 	it('B7: page header eyebrow is 10 · MCP', () => {
