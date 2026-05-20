@@ -39,6 +39,7 @@ import {bfsSubgraph} from './local-graph-mode'
 import {DepthChip} from './DepthChip'
 import {scheduleAnimation, type AnimationCleanup} from './animation'
 import {LegendBadge, buildLegendRows} from './LegendBadge'
+import {computeGraphStats} from './graph-stats'
 
 interface GraphNode {
 	id: string
@@ -148,6 +149,16 @@ export function VaultGraph() {
 		() => buildLegendRows(settings.groups.mode, theme, localNodes),
 		[settings.groups.mode, theme, localNodes],
 	)
+
+	// Phase 187-05: topology stats for LegendBadge footer.
+	// Threat T-187-05-03: O(N log N) sort ≤2000 items ~1ms; useMemo recomputes only on data change.
+	const graphStats = useMemo(() => {
+		if (!localNodes.length) return undefined
+		return computeGraphStats(
+			localNodes as Array<{id: string; label: string; degree: number; wikiDegree: number}>,
+			localEdges,
+		)
+	}, [localNodes, localEdges])
 
 	// Phase 187-03: navigate to a node by centering + zooming via fgRef, and entering local mode.
 	// Threat T-187-03-01: x/y are numeric simulation coords from ForceGraph2D internal state.
@@ -264,6 +275,7 @@ export function VaultGraph() {
 					})
 				}
 				onCycleMode={handleCycleGroupMode}
+				stats={graphStats}
 			/>
 			<GraphControls>
 				<FiltersSection

@@ -10,6 +10,7 @@
 
 import {getNodeColor, type GraphNodeType, type GraphTheme} from './graph-palette'
 import {hashToOklch, type GroupMode} from './sections/GroupsSection'
+import type {GraphStats} from './graph-stats'
 
 export interface LegendRow {
   key: string    // e.g. 'memory', 'agents/', 'project'
@@ -87,9 +88,10 @@ interface Props {
   hiddenGroups: Set<string>
   onToggleGroup: (key: string) => void
   onCycleMode: () => void
+  stats?: GraphStats  // Phase 187-05: optional topology stats footer
 }
 
-export function LegendBadge({ mode, rows, hiddenGroups, onToggleGroup, onCycleMode }: Props) {
+export function LegendBadge({ mode, rows, hiddenGroups, onToggleGroup, onCycleMode, stats }: Props) {
   return (
     <div
       data-testid='legend-badge'
@@ -121,6 +123,19 @@ export function LegendBadge({ mode, rows, hiddenGroups, onToggleGroup, onCycleMo
           <span className='truncate'>{row.label}</span>
         </button>
       ))}
+      {stats && (
+        <div
+          data-testid='legend-stats-footer'
+          className='mt-1 border-t border-[color:var(--line-strong)] pt-1 grid grid-cols-2 gap-x-2 text-[11px] text-[color:var(--fg-mute)]'
+        >
+          <span>Nodes: {stats.nodeCount}</span>
+          <span>Edges: {stats.edgeCount}</span>
+          <span>Orphans: {stats.orphanCount}</span>
+          <span className='truncate'>
+            Hub: {stats.topHubs[0]?.label ?? '—'}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
