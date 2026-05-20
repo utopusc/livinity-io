@@ -12,6 +12,31 @@ importers:
         specifier: ^3.2.0
         version: 3.3.3
 
+  packages/cli:
+    dependencies:
+      chalk:
+        specifier: ^5.0.1
+        version: 5.0.1
+      uuidv7:
+        specifier: ^1.2.1
+        version: 1.2.1
+      yargs:
+        specifier: ^17.7.2
+        version: 17.7.2
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.7
+      '@types/yargs':
+        specifier: ^17.0.35
+        version: 17.0.35
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.2
+        version: 2.1.9(@types/node@22.19.7)(jsdom@25.0.1)(lightningcss@1.31.1)(terser@5.46.1)
+
   packages/config:
     dependencies:
       dotenv:

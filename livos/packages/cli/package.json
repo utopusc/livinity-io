@@ -1,0 +1,39 @@
+{
+  "name": "@livos/cli",
+  "version": "0.1.0",
+  "description": "LivOS command-line interface — `liv` bin for vault, items, agents, and chat",
+  "type": "module",
+  "main": "dist/cli.js",
+  "types": "dist/cli.d.ts",
+  "bin": {
+    "liv": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "prompts",
+    "scripts"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "yargs": "^17.7.2",
+    "chalk": "^5.0.1",
+    "uuidv7": "^1.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/yargs": "^17.0.35",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.2"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "private": false
+}
