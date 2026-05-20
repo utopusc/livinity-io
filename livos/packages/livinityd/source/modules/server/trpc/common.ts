@@ -539,4 +539,11 @@ export const httpOnlyPaths = [
 	// Phase 176-02 / 177 — Liv agent scheduler (future tRPC namespace; pre-registered
 	// so Phase 177 mutations don't require a common.ts re-edit).
 	'liv.runAgent',
+	// Phase 177-03 — vault.inbox.* routes. All 4 paths route via HTTP:
+	//   listByAgent/listGlobal are page-render dependencies for AgentDetail + GlobalInboxWindow;
+	//   markRead/get are mutations/queries that must survive WS reconnect.
+	'vault.inbox.listByAgent',
+	'vault.inbox.listGlobal',
+	'vault.inbox.markRead',
+	'vault.inbox.get',
 ] as const

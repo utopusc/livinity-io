@@ -52,9 +52,12 @@ describe('inbox-router — Phase 177-03 source-text invariants', () => {
 		expect(ROUTER_SRC).toMatch(/regex|ID_RE/)
 	})
 
-	it('IR-08: no hardcoded filesystem paths in router (uses ctx.livinityd.inboxReader)', () => {
-		// Router should delegate to inboxReader, not build paths itself
+	it('IR-08: no hardcoded filesystem paths in router (delegates to ctx.livinityd.inboxReader)', () => {
+		// Router should delegate to inboxReader, not build vault paths itself
 		expect(ROUTER_SRC).not.toMatch(/vaultRoot/)
-		expect(ROUTER_SRC).not.toMatch(/items\//)
+		// Router must reference inboxReader (not bypass it with direct FS ops)
+		expect(ROUTER_SRC).toMatch(/inboxReader/)
+		// Router should not perform direct FS reads (fs.readdir, readFile, etc.)
+		expect(ROUTER_SRC).not.toMatch(/readdir|readFile|writeFile/)
 	})
 })

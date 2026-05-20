@@ -58,6 +58,9 @@ import {CcPtyManager, SessionStore, CcPtyIdleReaper} from './modules/cc-pty/inde
 // INTERNAL_SERVER_ERROR via the requireStore helper until next restart).
 import {ItemStore, createItemStorePubSub, resolveVaultRoot} from './modules/vault-items/index.js'
 import type {ItemStore as ItemStoreType} from './modules/vault-items/index.js'
+// Phase 177-03 — InboxReader (filesystem walker for per-agent inbox entries).
+// Imported directly (vault-items/index.ts barrel is sacred per Phase 171 freeze).
+import {InboxReader} from './modules/vault-items/inbox-reader.js'
 // Phase 176-01/176-03 — Liv scaffolders. Imported directly (vault-items barrel
 // index.ts is sacred per Phase 171 freeze — DO NOT add exports to that file).
 import {ensureLivRootAgent, ensureLivSkills} from './modules/vault-items/liv-scaffolder.js'
@@ -353,6 +356,10 @@ export default class Livinityd {
 	// throws INTERNAL_SERVER_ERROR via its requireStore helper when this
 	// field is undefined (boot wire-up failed — see start() try/catch).
 	itemStore?: ItemStoreType
+	// Phase 177-03 — InboxReader for vault.inbox.* tRPC procedures.
+	// Populated in start() alongside itemStore. tRPC router procedures
+	// throw INTERNAL_SERVER_ERROR via requireInboxReader when undefined.
+	inboxReader?: InboxReader
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -609,6 +616,8 @@ export default class Livinityd {
 				log: (msg) => this.logger.log(msg),
 				error: (msg, err) => this.logger.error(msg, err),
 			})
+			// Phase 177-03 — InboxReader wired alongside itemStore.
+			this.inboxReader = new InboxReader({vaultRoot})
 			this.logger.log(`[vault-items] store wired (vaultRoot=${vaultRoot})`)
 		} catch (err) {
 			this.logger.error(
