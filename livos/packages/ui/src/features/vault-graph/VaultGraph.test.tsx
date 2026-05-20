@@ -38,13 +38,18 @@ vi.mock('react-force-graph-2d', () => ({
 // ── GraphNodeDetail mock — minimal stub so we can detect mount/unmount ────
 
 vi.mock('./GraphNodeDetail', () => ({
-	GraphNodeDetail: ({node, onClose}: {node: any; onClose: () => void}) => {
+	GraphNodeDetail: ({node, onClose, onNavigateTo}: {node: any; onClose: () => void; onNavigateTo?: (id: string) => void}) => {
 		return (
 			<div data-testid='detail-drawer'>
 				<span data-testid='detail-label'>{node.label}</span>
 				<button data-testid='detail-close' onClick={onClose}>
 					close
 				</button>
+				{onNavigateTo && (
+					<button data-testid='detail-nav' onClick={() => onNavigateTo('test-node-id')}>
+						nav
+					</button>
+				)}
 			</div>
 		)
 	},
@@ -617,6 +622,45 @@ describe('VaultGraph', () => {
 		expect(dirColor).not.toBe('var(--line-strong)')
 		// Should be an rgba value
 		expect(dirColor).toContain('rgba')
+	})
+
+	// ── Phase 187-03: handleNavigateTo assertions ────────────────────────────
+
+	it('handleNavigateTo: GraphNodeDetail receives onNavigateTo prop (detail-nav renders)', async () => {
+		const node = {id: 'memory/foo.md', label: 'foo', type: 'memory' as const, size: 10, mtime: 0, degree: 0, wikiDegree: 0, tags: [] as string[], topDir: 'root'}
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [node],
+				edges: [],
+				truncated: false,
+				totalFiles: 1,
+			}),
+		})
+		render()
+		await flushPromises()
+		// Click node to open detail drawer
+		act(() => { lastOnNodeClick?.(node) })
+		// The mocked GraphNodeDetail renders detail-nav when onNavigateTo is passed
+		const navBtn = container.querySelector('[data-testid="detail-nav"]') as HTMLButtonElement
+		expect(navBtn).not.toBeNull()
+		// Clicking it should not crash (graceful no-op since fgRef not injectable in test)
+		expect(() => act(() => navBtn.click())).not.toThrow()
+	})
+
+	it('handleNavigateTo with unknown id is a no-op (no crash)', async () => {
+		const node = {id: 'memory/foo.md', label: 'foo', type: 'memory' as const, size: 10, mtime: 0, degree: 0, wikiDegree: 0, tags: [] as string[], topDir: 'root'}
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ nodes: [node], edges: [], truncated: false, totalFiles: 1 }),
+		})
+		render()
+		await flushPromises()
+		act(() => { lastOnNodeClick?.(node) })
+		const navBtn = container.querySelector('[data-testid="detail-nav"]') as HTMLButtonElement
+		// handleNavigateTo calls fgRef.current?.graphData() — fgRef.current is null in test,
+		// so it should gracefully no-op without throwing
+		expect(() => { if (navBtn) act(() => navBtn.click()) }).not.toThrow()
 	})
 
 	it('filteredNodes only includes nodes whose type is in filters.enabledTypes', async () => {
