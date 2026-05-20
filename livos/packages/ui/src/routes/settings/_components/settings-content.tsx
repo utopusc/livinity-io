@@ -176,51 +176,59 @@ type SettingsSection =
 	// v29.4 Phase 47 Plan 05 — AI Diagnostics admin section.
 	| 'diagnostics'
 
+// Phase 182-02 — Group-header sidebar (D-V38-M): 4 visual groups + footer cluster.
+type SettingsGroup = 'personal' | 'workspace' | 'ai' | 'system'
+
 interface MenuItem {
 	id: SettingsSection
 	icon: IconType
 	label: string
 	description: string
 	adminOnly?: boolean
+	/** Phase 182-02: which group header this item belongs to */
+	group: SettingsGroup
+	/** Phase 182-02: true = render in footer cluster below separator, not in main list */
+	footer?: boolean
 }
 
 const MENU_ITEMS: MenuItem[] = [
-	// v36 sidebar consolidation 2026-05-15 — six thin entries (dm-pairing, webhooks,
-	// migration, diagnostics, software-update, advanced) were collapsed into the
-	// Troubleshoot tabs. Phase 130-03 (2026-05-15) re-promotes `software-update`
-	// and `advanced` to top-level rows per user request ("Updates ve Advanced
-	// kismini ayir lutfen bu sayfadan"). `liv-agent` is removed from the sidebar
-	// entirely; its switch case stays callable for programmatic navigation
-	// (dock-window route loaders).
-
-	// Per-user settings (visible to all users)
-	{id: 'account', icon: TbUser, label: 'Account', description: 'Name and password'},
-	{id: 'wallpaper', icon: TbPhoto, label: 'Theme', description: 'Wallpaper & accent color'},
-	{id: 'language', icon: TbLanguage, label: 'Language', description: 'Interface language'},
-	{id: '2fa', icon: TbShield, label: '2FA', description: 'Two-factor authentication'},
-	{id: 'integrations', icon: TbPlug, label: 'Integrations', description: 'Channels, DM security & webhooks'},
-	{id: 'gmail', icon: TbMail, label: 'Gmail', description: 'Email integration & OAuth'},
-	{id: 'voice', icon: TbMicrophone, label: 'Voice', description: 'Push-to-talk voice mode'},
-	{id: 'usage', icon: TbChartBar, label: 'Usage', description: 'Token usage & cost tracking'},
-	{id: 'memory', icon: TbBrain, label: 'Memory', description: 'AI memory & conversations'},
-	// Admin-only settings (server management)
-	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
-	{id: 'admin-devices', icon: TbServer2, label: 'Devices', description: 'All devices across all users', adminOnly: true},
-	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'AI providers & model', adminOnly: true},
-	// Phase 182-01 — ChatBackend removed (D-V38-L). New AI Chat Settings + MCP Servers entries added.
-	{id: 'ai-chat-settings', icon: TbMessages, label: 'AI Chat Settings', description: 'CC PTY session config & permissions', adminOnly: true},
-	{id: 'mcp-servers', icon: TbPlugConnected, label: 'MCP Servers', description: 'Manage Model Context Protocol servers', adminOnly: true},
-	// Phase 165-02 / 182-01 — renamed "Autonomous Agents" → "Scheduled Agents" (D-V38-M).
-	{id: 'autonomous-agents', icon: TbRobot, label: 'Scheduled Agents', description: 'Scheduled agents & daily budget cap', adminOnly: true},
-	// Phase 102-07 — master Chrome profile for WebApp browser inheritance.
-	{id: 'chrome-master', icon: TbBrandChrome, label: 'Chrome Profile', description: 'Master Chrome login for WebApps', adminOnly: true},
-	{id: 'my-domains', icon: TbWorld, label: 'My Domains', description: 'Domains synced from livinity.io', adminOnly: true},
-	{id: 'scheduler', icon: TbCalendarTime, label: 'Scheduler', description: 'Scheduled backup & maintenance jobs', adminOnly: true},
-	{id: 'backups', icon: TbDatabase, label: 'Backups', description: 'Backup, restore & migration', adminOnly: true},
-	{id: 'software-update', icon: TbDownload, label: 'Software Update', description: 'Apply updates & view deploy history', adminOnly: true},
-	{id: 'troubleshoot', icon: TbTool, label: 'Troubleshoot', description: 'Logs & diagnostics', adminOnly: true},
-	{id: 'advanced', icon: TbSettings, label: 'Advanced', description: 'Power-user controls', adminOnly: true},
+	// ── PERSONAL ──────────────────────────────────────────────────────
+	{id: 'account',          group: 'personal', icon: TbUser,          label: 'Account',          description: 'Name and password'},
+	{id: 'wallpaper',        group: 'personal', icon: TbPhoto,         label: 'Theme',             description: 'Wallpaper & accent color'},
+	{id: 'language',         group: 'personal', icon: TbLanguage,      label: 'Language',          description: 'Interface language'},
+	{id: '2fa',              group: 'personal', icon: TbShield,        label: '2FA',               description: 'Two-factor authentication'},
+	{id: 'voice',            group: 'personal', icon: TbMicrophone,    label: 'Voice',             description: 'Push-to-talk voice mode'},
+	// ── WORKSPACE ─────────────────────────────────────────────────────
+	{id: 'memory',           group: 'workspace', icon: TbBrain,        label: 'Memory',            description: 'AI memory & conversations'},
+	{id: 'usage',            group: 'workspace', icon: TbChartBar,     label: 'Usage',             description: 'Token usage & cost tracking'},
+	{id: 'integrations',     group: 'workspace', icon: TbPlug,         label: 'Integrations',      description: 'Channels, DM security & webhooks'},
+	{id: 'gmail',            group: 'workspace', icon: TbMail,         label: 'Gmail',             description: 'Email integration & OAuth'},
+	// ── AI ────────────────────────────────────────────────────────────
+	{id: 'ai-config',        group: 'ai', icon: TbKey,                 label: 'AI Configuration',  description: 'AI providers & model',                    adminOnly: true},
+	{id: 'ai-chat-settings', group: 'ai', icon: TbMessages,            label: 'AI Chat Settings',  description: 'CC PTY session config & permissions',     adminOnly: true},
+	{id: 'mcp-servers',      group: 'ai', icon: TbPlugConnected,       label: 'MCP Servers',       description: 'Manage Model Context Protocol servers',   adminOnly: true},
+	{id: 'autonomous-agents',group: 'ai', icon: TbRobot,               label: 'Scheduled Agents',  description: 'Scheduled agents & daily budget cap',     adminOnly: true},
+	// ── SYSTEM ────────────────────────────────────────────────────────
+	{id: 'users',            group: 'system', icon: TbUsers,           label: 'Users',             description: 'Manage users & invites',                  adminOnly: true},
+	{id: 'admin-devices',    group: 'system', icon: TbServer2,         label: 'Devices',           description: 'All devices across all users',            adminOnly: true},
+	{id: 'my-domains',       group: 'system', icon: TbWorld,           label: 'My Domains',        description: 'Domains synced from livinity.io',         adminOnly: true},
+	{id: 'chrome-master',    group: 'system', icon: TbBrandChrome,     label: 'Chrome Profile',    description: 'Master Chrome login for WebApps',         adminOnly: true},
+	{id: 'scheduler',        group: 'system', icon: TbCalendarTime,    label: 'Scheduler',         description: 'Scheduled backup & maintenance jobs',     adminOnly: true},
+	{id: 'backups',          group: 'system', icon: TbDatabase,        label: 'Backups',           description: 'Backup, restore & migration',             adminOnly: true},
+	{id: 'software-update',  group: 'system', icon: TbDownload,        label: 'Software Update',   description: 'Apply updates & view deploy history',     adminOnly: true},
+	// ── FOOTER ────────────────────────────────────────────────────────
+	{id: 'troubleshoot',     group: 'system', icon: TbTool,            label: 'Troubleshoot',      description: 'Logs & diagnostics',                      adminOnly: true, footer: true},
+	{id: 'advanced',         group: 'system', icon: TbSettings,        label: 'Advanced',          description: 'Power-user controls',                     adminOnly: true, footer: true},
 ]
+
+// Phase 182-02 — Group ordering + labels for sidebar rendering.
+const GROUP_ORDER: SettingsGroup[] = ['personal', 'workspace', 'ai', 'system']
+const GROUP_LABELS: Record<SettingsGroup, string> = {
+	personal: 'PERSONAL',
+	workspace: 'WORKSPACE',
+	ai: 'AI',
+	system: 'SYSTEM',
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Component
@@ -325,34 +333,68 @@ export function SettingsContent() {
 	}
 
 	// Desktop: home view with sidebar menu + placeholder card
+	// Phase 182-02 — grouped menu + footer cluster
+	const mainItems = visibleItems.filter((item) => !item.footer)
+	const footerItems = visibleItems.filter((item) => item.footer)
+	const grouped = GROUP_ORDER
+		.map((g) => ({group: g, label: GROUP_LABELS[g], items: mainItems.filter((item) => item.group === g)}))
+		.filter((g) => g.items.length > 0)
+
 	return (
 		<div className='animate-in fade-in'>
 			<div className='grid w-full gap-x-[30px] gap-y-[20px] lg:grid-cols-[280px_auto]'>
 				{/* Left Sidebar - Menu */}
 				<div className='flex flex-col gap-3'>
-					{/* Menu Items */}
+					{/* Grouped Menu Items with footer cluster */}
 					<Card className='!p-2'>
-						<div className='space-y-0.5'>
-							{visibleItems.map((item, i) => (
-								<motion.button
-									key={item.id}
-									onClick={() => setActiveSection(item.id)}
-									className='relative flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2'
-									initial={{opacity: 0, x: -10}}
-									animate={{opacity: 1, x: 0}}
-									transition={{delay: i * 0.02, duration: 0.25, ease: 'easeOut'}}
-								>
-									<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-surface-2'>
-										<item.icon className='h-4 w-4 text-text-secondary' />
+						<div data-testid='settings-grouped-menu'>
+							{grouped.map(({group, label, items}) => (
+								<div key={group}>
+									<div
+										data-testid={`settings-group-header-${group}`}
+										className='px-3 pt-4 pb-1 text-[10px] uppercase tracking-widest text-white/30 font-semibold select-none'
+									>
+										{label}
 									</div>
-									<div className='flex-1 min-w-0'>
-										<div className='text-body-sm font-medium truncate'>{item.label}</div>
-										<div className='text-caption-sm text-text-tertiary truncate'>{item.description}</div>
-									</div>
-									<TbChevronRight className='h-4 w-4 text-text-tertiary' />
-									<MenuItemBadge itemId={item.id} activeSection={activeSection} />
-								</motion.button>
+									{items.map((item, i) => (
+										<motion.button
+											key={item.id}
+											onClick={() => setActiveSection(item.id)}
+											className='relative flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2'
+											initial={{opacity: 0, x: -10}}
+											animate={{opacity: 1, x: 0}}
+											transition={{delay: i * 0.02, duration: 0.25, ease: 'easeOut'}}
+										>
+											<div className='flex h-8 w-8 items-center justify-center rounded-radius-sm bg-surface-2'>
+												<item.icon className='h-4 w-4 text-text-secondary' />
+											</div>
+											<div className='flex-1 min-w-0'>
+												<div className='text-body-sm font-medium truncate'>{item.label}</div>
+												<div className='text-caption-sm text-text-tertiary truncate'>{item.description}</div>
+											</div>
+											<TbChevronRight className='h-4 w-4 text-text-tertiary' />
+											<MenuItemBadge itemId={item.id} activeSection={activeSection} />
+										</motion.button>
+									))}
+								</div>
 							))}
+
+							{/* Footer cluster — power-user items (Advanced + Troubleshoot) */}
+							{footerItems.length > 0 && (
+								<div data-testid='settings-footer-cluster' className='mt-2 border-t border-white/10 pt-1'>
+									{footerItems.map((item) => (
+										<button
+											key={item.id}
+											onClick={() => setActiveSection(item.id)}
+											className='relative flex w-full items-center gap-2 rounded-radius-sm px-3 py-1.5 text-left text-xs transition-colors hover:bg-surface-2'
+										>
+											<item.icon className='h-3.5 w-3.5 text-text-tertiary' />
+											<span className='text-text-tertiary'>{item.label}</span>
+											<MenuItemBadge itemId={item.id} activeSection={activeSection} />
+										</button>
+									))}
+								</div>
+							)}
 						</div>
 					</Card>
 
@@ -399,36 +441,71 @@ function SettingsDetailView({
 			{!isMobile && (
 				<div className='flex flex-col gap-3'>
 					<Card className='!p-2'>
-						<div className='space-y-0.5'>
-							{visibleItems.map((item) => (
-								<button
-									key={item.id}
-									onClick={() => onNavigate(item.id)}
-									className='relative flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2'
-								>
-									{item.id === section && (
-										<motion.div
-											layoutId='settings-sidebar-active'
-											className='absolute inset-0 rounded-radius-sm bg-surface-3'
-											transition={{type: 'spring', bounce: 0.15, duration: 0.4}}
-										/>
-									)}
-									<div className={cn(
-										'relative z-10 flex h-8 w-8 items-center justify-center rounded-radius-sm',
-										item.id === section ? 'bg-surface-3' : 'bg-surface-2'
-									)}>
-										<item.icon className={cn(
-											'h-4 w-4',
-											item.id === section ? 'text-text-primary' : 'text-text-secondary'
-										)} />
+						{/* Phase 182-02 — grouped sidebar in detail view */}
+						<div>
+							{GROUP_ORDER.map((g) => {
+								const items = visibleItems.filter((item) => !item.footer && item.group === g)
+								if (items.length === 0) return null
+								return (
+									<div key={g}>
+										<div className='px-3 pt-3 pb-0.5 text-[10px] uppercase tracking-widest text-white/30 font-semibold select-none'>
+											{GROUP_LABELS[g]}
+										</div>
+										{items.map((item) => (
+											<button
+												key={item.id}
+												onClick={() => onNavigate(item.id)}
+												className='relative flex w-full items-center gap-3 rounded-radius-sm px-3 py-2.5 text-left transition-colors hover:bg-surface-2'
+											>
+												{item.id === section && (
+													<motion.div
+														layoutId='settings-sidebar-active'
+														className='absolute inset-0 rounded-radius-sm bg-surface-3'
+														transition={{type: 'spring', bounce: 0.15, duration: 0.4}}
+													/>
+												)}
+												<div className={cn(
+													'relative z-10 flex h-8 w-8 items-center justify-center rounded-radius-sm',
+													item.id === section ? 'bg-surface-3' : 'bg-surface-2'
+												)}>
+													<item.icon className={cn(
+														'h-4 w-4',
+														item.id === section ? 'text-text-primary' : 'text-text-secondary'
+													)} />
+												</div>
+												<div className='relative z-10 flex-1 min-w-0'>
+													<div className='text-body-sm font-medium truncate'>{item.label}</div>
+												</div>
+												{item.id === section && <TbChevronRight className='relative z-10 h-4 w-4 text-text-secondary' />}
+												<MenuItemBadge itemId={item.id} activeSection={section} />
+											</button>
+										))}
 									</div>
-									<div className='relative z-10 flex-1 min-w-0'>
-										<div className='text-body-sm font-medium truncate'>{item.label}</div>
-									</div>
-									{item.id === section && <TbChevronRight className='relative z-10 h-4 w-4 text-text-secondary' />}
-									<MenuItemBadge itemId={item.id} activeSection={section} />
-								</button>
-							))}
+								)
+							})}
+							{/* Footer cluster items in detail view */}
+							{visibleItems.filter((item) => item.footer).length > 0 && (
+								<div className='mt-1 border-t border-white/10 pt-1'>
+									{visibleItems.filter((item) => item.footer).map((item) => (
+										<button
+											key={item.id}
+											onClick={() => onNavigate(item.id)}
+											className='relative flex w-full items-center gap-2 rounded-radius-sm px-3 py-1.5 text-left text-xs transition-colors hover:bg-surface-2'
+										>
+											{item.id === section && (
+												<motion.div
+													layoutId='settings-sidebar-active'
+													className='absolute inset-0 rounded-radius-sm bg-surface-3'
+													transition={{type: 'spring', bounce: 0.15, duration: 0.4}}
+												/>
+											)}
+											<item.icon className={cn('relative z-10 h-3.5 w-3.5', item.id === section ? 'text-text-secondary' : 'text-text-tertiary')} />
+											<span className={cn('relative z-10', item.id === section ? 'text-text-secondary' : 'text-text-tertiary')}>{item.label}</span>
+											<MenuItemBadge itemId={item.id} activeSection={section} />
+										</button>
+									))}
+								</div>
+							)}
 						</div>
 					</Card>
 				</div>
