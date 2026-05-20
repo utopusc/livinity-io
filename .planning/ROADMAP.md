@@ -2410,16 +2410,31 @@ Plans:
 
 ---
 
-### Phase 185: Mount SidebarTree in Global Dashboard Shell — 🔴 PLANNED 2026-05-20
+### Phase 185: Mount SidebarTree in AI Chat Window (Left Pane) — 🟡 CODE-COMPLETE 2026-05-20
 
-**Goal:** Wire `<SidebarTree>`, `<SidebarFooter>`, `<AddItemModal>` into the actual dashboard layout so users see the tree. The component is dead code without a mount. Pick the correct shell (the global desktop/dock, NOT the ai-chat route) per Phase 174 CONTEXT and per [feedback_livos_window_logic_no_url_routing.md] (window logic, not URL routing). Sidebar must be visible on every route, not just AI Chat.
+**Goal:** Wire `<SidebarTree>`, `<SidebarFooter>`, and `<AddItemModal>` into the AI Chat window content (`routes/ai-chat/index.tsx`) as a persistent left pane. Per [feedback_livos_window_logic_no_url_routing.md], the sidebar belongs INSIDE the AI Chat window — not in the global desktop shell. Resolves v38.0 UAT finding #1: "Open a Chat from the sidebar to attach a terminal" (no sidebar was visible).
 
-**Depends on:** Phase 174 (component exists), Phase 175 (AddItemModal), Phase 176 (open_item subscription wiring)
-**Wave:** 1
-**Plans:** 3-4 plans
-**Estimated:** ~1 day
+**Scope:**
+- 185-01: Split AI Chat window into left pane (SidebarTree ~280px) + right pane (tab content)
+- 185-02: Right-pane item routing — Chat click → ChatDetail, Project → ProjectDetail, Agent → AgentDetail
+- 185-03: Mobile collapse via useIsMobile + AddItemModal trigger at top of sidebar
+- 185-04: UAT probe doc + ROADMAP status marker
+
+**Depends on:** Phase 174 (SidebarTree), Phase 175 (AddItemModal + Detail views), Phase 176 (open_item), Phase 183 (gear button)
+**Wave:** 1 (file-disjoint with Phase 186)
+**Plans:** 4 plans
+
+Plans:
+- [x] 185-01-PLAN.md — Split layout + SidebarTree mount (6 assertions)
+- [x] 185-02-PLAN.md — Right-pane item routing (8 assertions)
+- [x] 185-03-PLAN.md — Mobile collapse + AddItemModal trigger (4 assertions)
+- [x] 185-04-PLAN.md — UAT probe + ROADMAP marker (docs only)
+
+**Test delta:** +18 vitest assertions (32 PASS in ai-chat.test.tsx after phase close)
+**Sacred SHA preserved:** yes (no liv/packages/core changes)
 
 ---
+
 
 ### Phase 186: Restore MCP Panel in AI Chat Area — 🔴 PLANNED 2026-05-20
 
