@@ -26,7 +26,7 @@
 // in the /chat-mobile route itself; this route now always renders the split
 // layout (sidebar collapsed by default on mobile).
 
-import {useState} from 'react'
+import {useCallback, useEffect, useState} from 'react'
 
 import {Menu, Plus} from 'lucide-react'
 
@@ -37,8 +37,10 @@ import {useCurrentUser} from '@/hooks/use-current-user'
 import {LivWelcomeTerminal} from '@/features/liv-welcome/LivWelcomeTerminal'
 import {SidebarTree} from '@/features/sidebar-tree'
 import {ChatDetail, ProjectDetail, AgentDetail, AddItemModal} from '@/features/item-detail'
+import {McpServerList, type McpServerConfig, type McpServerStatus} from '@/components/mcp/McpServerList'
+import {McpServerDetail} from '@/components/mcp/McpServerDetail'
 
-type Tab = 'terminal' | 'graph'
+type Tab = 'terminal' | 'graph' | 'mcp'
 
 export default function AiChatRoute() {
 	const isMobile = useIsMobile()
@@ -62,6 +64,68 @@ export default function AiChatRoute() {
 	// Phase 185-03 — sidebar open state: collapsed on mobile, visible on desktop.
 	const [sidebarOpen, setSidebarOpen] = useState(!isMobile)
 	const [addModalOpen, setAddModalOpen] = useState(false)
+
+	// Phase 186-01 — MCP tab state (mirrors routes/settings/mcp-servers.tsx pattern).
+	const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([])
+	const [mcpStatuses, setMcpStatuses] = useState<Record<string, McpServerStatus>>({})
+	const [mcpLoading, setMcpLoading] = useState(false)
+	const [mcpSelectedName, setMcpSelectedName] = useState<string | null>(null)
+
+	const fetchMcpServers = useCallback(async () => {
+		if (activeTab !== 'mcp') return
+		try {
+			setMcpLoading(true)
+			const res = await fetch('/api/mcp/servers', {credentials: 'include'})
+			if (res.ok) {
+				const data = (await res.json()) as {
+					servers: McpServerConfig[]
+					statuses: Record<string, McpServerStatus>
+				}
+				setMcpServers(data.servers ?? [])
+				setMcpStatuses(data.statuses ?? {})
+			}
+		} catch {
+			/* silent */
+		} finally {
+			setMcpLoading(false)
+		}
+	}, [activeTab])
+
+	useEffect(() => {
+		if (activeTab !== 'mcp') return
+		fetchMcpServers()
+		const interval = setInterval(fetchMcpServers, 15_000)
+		return () => clearInterval(interval)
+	}, [activeTab, fetchMcpServers])
+
+	const mcpServerItems = mcpServers.map((s) => ({name: s.name, config: s, status: mcpStatuses[s.name]}))
+	const mcpSelectedServer = mcpSelectedName
+		? (mcpServerItems.find((s) => s.name === mcpSelectedName) ?? null)
+		: null
+	const handleMcpToggle = async (name: string, enabled: boolean) => {
+		try {
+			await fetch(`/api/mcp/servers/${encodeURIComponent(name)}`, {
+				method: 'PUT',
+				credentials: 'include',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({enabled}),
+			})
+			await fetchMcpServers()
+		} catch {
+			/* silent */
+		}
+	}
+
+	const handleMcpRemove = async (name: string) => {
+		try {
+			await fetch(`/api/mcp/servers/${encodeURIComponent(name)}`, {method: 'DELETE', credentials: 'include'})
+			setMcpSelectedName(null)
+			await fetchMcpServers()
+		} catch {
+			/* silent */
+		}
+	}
+
 
 	// Right-pane terminal tab content — routes based on selectedItem type (185-02).
 	const terminalContent = selectedItem ? (
@@ -143,9 +207,40 @@ export default function AiChatRoute() {
 						>
 							Vault Graph
 						</button>
+						<button
+							type='button'
+							onClick={() => setActiveTab('mcp')}
+							className={`px-4 py-2 text-sm ${activeTab === 'mcp' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary'}`}
+						>
+							MCP Servers
+						</button>
 					</div>
 					<div className='flex-1 overflow-hidden'>
-						{activeTab === 'terminal' ? terminalContent : <VaultGraph />}
+						{activeTab === 'terminal' ? (
+							terminalContent
+						) : activeTab === 'graph' ? (
+							<VaultGraph />
+						) : (
+							<div data-testid='mcp-tab-content' className='flex h-full overflow-hidden'>
+								<div className='w-64 shrink-0 border-r border-border'>
+									<McpServerList
+										servers={mcpServerItems}
+										selectedName={mcpSelectedName}
+										onSelect={setMcpSelectedName}
+										onToggleEnabled={handleMcpToggle}
+										onRemove={handleMcpRemove}
+										isLoading={mcpLoading}
+									/>
+								</div>
+								<div className='flex-1 min-w-0'>
+									<McpServerDetail
+										server={mcpSelectedServer}
+										onClose={() => setMcpSelectedName(null)}
+										onToggleEnabled={handleMcpToggle}
+									/>
+								</div>
+							</div>
+						)}
 					</div>
 				</div>
 			</div>
