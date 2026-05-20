@@ -30,13 +30,14 @@ import {
 import {GraphControls} from './GraphControls'
 import {GraphSearchBar} from './GraphSearchBar'
 import {FiltersSection} from './sections/FiltersSection'
-import {GroupsSection, resolveNodeColor} from './sections/GroupsSection'
+import {GroupsSection, resolveNodeColor, type GroupMode} from './sections/GroupsSection'
 import {DisplaySection} from './sections/DisplaySection'
 import {ForcesSection} from './sections/ForcesSection'
 import {useGraphSettings} from './hooks/useGraphSettings'
 import {bfsSubgraph} from './local-graph-mode'
 import {DepthChip} from './DepthChip'
 import {scheduleAnimation, type AnimationCleanup} from './animation'
+import {LegendBadge, buildLegendRows} from './LegendBadge'
 
 interface GraphNode {
 	id: string
@@ -111,6 +112,9 @@ export function VaultGraph() {
 	const [animRevealedSet, setAnimRevealedSet] = useState<Set<string> | null>(null)
 	const animCleanupRef = useRef<AnimationCleanup | null>(null)
 
+	// Phase 180-03: groups hidden from graph view via legend badge
+	const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(new Set())
+
 	// Phase 180-01: BFS subgraph for local mode.
 	// Threat T-180-01-A: depth clamped inside bfsSubgraph to [1,4].
 	// Threat T-180-01-B: bfsSubgraph visited set prevents infinite loops on cycles.
@@ -133,6 +137,21 @@ export function VaultGraph() {
 		)
 		return result.edges
 	}, [graphMode, localFocusId, localDepth, filteredNodes, graphQ.data])
+
+	// Phase 180-03: legend rows derived from current group mode + visible nodes.
+	// Threat T-180-03-B: row labels are React-escaped text — no XSS path.
+	const legendRows = useMemo(
+		() => buildLegendRows(settings.groups.mode, theme, localNodes),
+		[settings.groups.mode, theme, localNodes],
+	)
+
+	// Phase 180-03: cycle group mode: by-type → by-folder → by-tag → custom → by-type.
+	const GROUP_MODES: GroupMode[] = ['by-type', 'by-folder', 'by-tag', 'custom']
+	function handleCycleGroupMode() {
+		const idx = GROUP_MODES.indexOf(settings.groups.mode)
+		const next = GROUP_MODES[(idx + 1) % GROUP_MODES.length]
+		settings.setGroups({ ...settings.groups, mode: next })
+	}
 
 	// Phase 180-02: animation cancel on unmount.
 	// Threat T-180-02-B: prevents stale setState after unmount.
@@ -215,6 +234,20 @@ export function VaultGraph() {
 					}}
 				/>
 			)}
+			{/* Phase 180-03: LegendBadge — bottom-left, shows group mode swatches */}
+			<LegendBadge
+				mode={settings.groups.mode}
+				rows={legendRows}
+				hiddenGroups={hiddenGroups}
+				onToggleGroup={(key) =>
+					setHiddenGroups((prev) => {
+						const next = new Set(prev)
+						if (next.has(key)) next.delete(key); else next.add(key)
+						return next
+					})
+				}
+				onCycleMode={handleCycleGroupMode}
+			/>
 			<GraphControls>
 				<FiltersSection
 					initialFilters={settings.filters}
@@ -240,15 +273,25 @@ export function VaultGraph() {
 					// Phase 179-05: use filteredNodes with resolveNodeColor; matchSet opacity.
 					// Phase 180-01: switched to localNodes/localEdges (BFS subset in local mode).
 					// Phase 180-02: animRevealedSet hides/reveals nodes in animation.
+					// Phase 180-03: hiddenGroups dims nodes whose group is hidden in legend.
 					// Threat T-179-05-A/D: resolveNodeColor uses clamped sliders + arithmetic only.
 					nodes: localNodes.map((n) => {
+						// Phase 180-03: derive groupKey based on current mode
+						const groupKey =
+							settings.groups.mode === 'by-type' ? n.type
+							: settings.groups.mode === 'by-folder' ? (n.topDir || 'root')
+							: settings.groups.mode === 'by-tag' ? (n.tags[0] ?? n.topDir ?? 'root')
+							: n.type // custom falls back to type
+						const isHiddenGroup = hiddenGroups.has(groupKey)
+
 						const color = resolveNodeColor(n, settings.groups.mode, theme)
 						// Phase 180-02: if animation running, hide nodes not yet revealed
 						const animAlpha = animRevealedSet !== null && !animRevealedSet.has(n.id) ? '00' : ''
 						const baseColor = matchSet.size > 0
 							? matchSet.has(n.id) ? color : color + '66'
 							: color
-						return { ...n, color: baseColor + animAlpha }
+						// Hidden group nodes: 10% opacity suffix '1a'
+						return { ...n, color: isHiddenGroup ? baseColor + '1a' : baseColor + animAlpha }
 					}),
 					links: localEdges.map((e) => ({
 						source: e.source,
