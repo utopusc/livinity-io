@@ -28,7 +28,8 @@ async function main() {
     .version(getVersion())
     .usage('Usage: $0 <command> [options]')
     .command('init [path]', 'Bootstrap a new vault at [path] (default: ~/liv/)',
-      (y) => y.positional('path', {type: 'string', describe: 'Vault root directory'}),
+      (y) => y.positional('path', {type: 'string', describe: 'Vault root directory'})
+              .option('force', {type: 'boolean', default: false, describe: 'Bootstrap into a non-empty directory'}),
       initHandler)
     .command('project <subcmd>', 'Project Item commands (new, list, open)',
       (y) => y.positional('subcmd', {type: 'string', choices: ['new', 'list', 'open']})
