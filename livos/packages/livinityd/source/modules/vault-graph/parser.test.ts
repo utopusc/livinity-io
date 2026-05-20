@@ -8,7 +8,7 @@
 
 import {describe, it, expect} from 'vitest'
 
-import {parseFrontmatter, extractWikilinks} from './parser.js'
+import {parseFrontmatter, extractWikilinks, extractTags} from './parser.js'
 
 describe('parseFrontmatter', () => {
 	it('parses basic frontmatter and separates body', () => {
@@ -37,6 +37,25 @@ describe('parseFrontmatter', () => {
 		const result = parseFrontmatter(malicious)
 		expect(result.frontmatter).toBeUndefined()
 		expect(result.body).toBe('body')
+	})
+})
+
+// Phase 179-01 — extractTags() assertions (RED gate)
+describe('extractTags', () => {
+	it('returns [] when frontmatter is undefined', () => {
+		expect(extractTags(undefined)).toEqual([])
+	})
+
+	it('returns [] when frontmatter has no tags key', () => {
+		expect(extractTags({})).toEqual([])
+	})
+
+	it('returns [str] when tags is a single string', () => {
+		expect(extractTags({tags: 'single-string'})).toEqual(['single-string'])
+	})
+
+	it('returns array when tags is a string array', () => {
+		expect(extractTags({tags: ['a', 'b', 'c']})).toEqual(['a', 'b', 'c'])
 	})
 })
 

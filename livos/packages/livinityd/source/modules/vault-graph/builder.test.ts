@@ -16,6 +16,7 @@ function makeFile(overrides: Partial<VaultFile>): VaultFile {
 		size: 100,
 		mtime: 1700000000000,
 		wikilinks: [],
+		topDir: 'root',
 		...overrides,
 	}
 }
@@ -96,5 +97,24 @@ describe('buildGraph', () => {
 		]
 		const {edges} = buildGraph(files)
 		expect(edges.every((e) => e.type === 'wikilink')).toBe(true)
+	})
+
+	// Phase 179-01 — GraphNode.tags + GraphNode.topDir assertions (RED gate)
+	it('GraphNode.tags is populated from VaultFile with frontmatter tags', () => {
+		const files = [makeFile({path: 'a.md', frontmatter: {tags: ['x']}, topDir: 'root'})]
+		const {nodes} = buildGraph(files)
+		expect(nodes[0].tags).toEqual(['x'])
+	})
+
+	it('GraphNode.tags is empty array when VaultFile has no frontmatter', () => {
+		const files = [makeFile({path: 'a.md', frontmatter: undefined, topDir: 'root'})]
+		const {nodes} = buildGraph(files)
+		expect(nodes[0].tags).toEqual([])
+	})
+
+	it('GraphNode.topDir matches VaultFile.topDir', () => {
+		const files = [makeFile({path: 'agent/baz.md', type: 'agent', topDir: 'agent'})]
+		const {nodes} = buildGraph(files)
+		expect(nodes[0].topDir).toBe('agent')
 	})
 })
