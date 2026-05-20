@@ -134,6 +134,7 @@
 		"systeminformation": "github:getumbrel/systeminformation#a98cf825f52775cf4b8f3c7d4a00d0c96434ff46",
 		"thirty-two": "^1.0.2",
 		"tsx": "^4.7.1",
+		"uuidv7": "^1.2.1",
 		"valid-filename": "^4.0.0",
 		"ws": "^8.16.0",
 		"zod": "^3.21.4"
