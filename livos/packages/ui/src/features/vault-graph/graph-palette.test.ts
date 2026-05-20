@@ -13,6 +13,7 @@ import {
 	getEdgeColor,
 	getEdgeHoverColor,
 	getNodeColor,
+	getOrphanRingColor,
 	PALETTE,
 	type GraphNodeType,
 } from './graph-palette'
@@ -77,5 +78,18 @@ describe('graph-palette', () => {
 		document.body.classList.remove('dark')
 		document.body.classList.add('iridescent')
 		expect(detectTheme()).toBe('iridescent')
+	})
+
+	// Phase 187-02: getOrphanRingColor assertions
+	it('getOrphanRingColor returns correct OKLCH for light theme', () => {
+		expect(getOrphanRingColor('light')).toBe('oklch(0.55 0.20 20)')
+	})
+
+	it('getOrphanRingColor returns correct OKLCH for dark theme (higher lightness)', () => {
+		expect(getOrphanRingColor('dark')).toBe('oklch(0.65 0.20 20)')
+	})
+
+	it('getOrphanRingColor returns correct OKLCH for iridescent theme', () => {
+		expect(getOrphanRingColor('iridescent')).toBe('oklch(0.60 0.20 20)')
 	})
 })

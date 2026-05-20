@@ -461,6 +461,80 @@ describe('VaultGraph', () => {
 		expect(labelEl?.textContent?.toLowerCase()).toContain('degree')
 	})
 
+	// ── Phase 187-02: nodeCanvasObject orphan ring assertions ────────────────
+
+	it('nodeCanvasObject prop is a function passed to ForceGraph2D', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, degree: 0, wikiDegree: 0, tags: [], topDir: 'root'}],
+				edges: [],
+				truncated: false,
+				totalFiles: 1,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(typeof lastNodeCanvasObject).toBe('function')
+	})
+
+	it('nodeCanvasObject: orphan node (wikiDegree=0) triggers ctx.stroke', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, degree: 0, wikiDegree: 0, tags: [], topDir: 'root'}],
+				edges: [],
+				truncated: false,
+				totalFiles: 1,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(lastNodeCanvasObject).not.toBeNull()
+		const strokeCalls: string[] = []
+		let strokeStyleSet = ''
+		const ctx = {
+			beginPath: () => {},
+			arc: () => {},
+			fill: () => {},
+			stroke: () => { strokeCalls.push('stroke') },
+			get strokeStyle() { return strokeStyleSet },
+			set strokeStyle(v: string) { strokeStyleSet = v },
+			fillStyle: '',
+			lineWidth: 0,
+		}
+		lastNodeCanvasObject!({id: 'a.md', degree: 0, wikiDegree: 0, color: 'oklch(0.56 0.10 245)', x: 10, y: 10}, ctx)
+		expect(strokeCalls.length).toBeGreaterThan(0)
+		expect(strokeStyleSet).toBe('oklch(0.55 0.20 20)') // light theme orphan ring color
+	})
+
+	it('nodeCanvasObject: connected node (wikiDegree>0) does NOT trigger ctx.stroke', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, degree: 2, wikiDegree: 2, tags: [], topDir: 'root'}],
+				edges: [],
+				truncated: false,
+				totalFiles: 1,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(lastNodeCanvasObject).not.toBeNull()
+		const strokeCalls: string[] = []
+		const ctx = {
+			beginPath: () => {},
+			arc: () => {},
+			fill: () => {},
+			stroke: () => { strokeCalls.push('stroke') },
+			strokeStyle: '',
+			fillStyle: '',
+			lineWidth: 0,
+		}
+		lastNodeCanvasObject!({id: 'a.md', degree: 2, wikiDegree: 2, color: 'oklch(0.56 0.10 245)', x: 10, y: 10}, ctx)
+		expect(strokeCalls.length).toBe(0)
+	})
+
 	it('filteredNodes only includes nodes whose type is in filters.enabledTypes', async () => {
 		// Pre-set localStorage so only 'memory' type is enabled
 		window.localStorage.setItem(
