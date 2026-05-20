@@ -38,11 +38,16 @@ import {drainInstallPendingRedisKeys} from './modules/drain-install-pending-redi
 // is UNCHANGED (Phase 165-01 quality gate).
 import {scaffoldVault, smokeAuthCheck, IdleSessionReaper} from './modules/claude-runner/index.js'
 import {createSessionActivityProvider} from './modules/server/ws-agent.js'
-// Phase 166-01 — Claude Code PTY backend type surface. Wire-up + boot ordering
-// land in Plan 166-05 (after vault scaffolder + smokeAuthCheck + autonomous
-// scheduler + IdleSessionReaper); this is a type-only placeholder so 166-02..04
-// can import the canonical types without a separate frontmatter churn.
-import type {CcPtySession as _CcPtySession} from './modules/cc-pty/index.js'
+// Phase 166-01/04 — Claude Code PTY backend type surface. Wire-up + boot
+// ordering land in Plan 166-05 (after vault scaffolder + smokeAuthCheck +
+// autonomous scheduler + IdleSessionReaper); the type-only imports here
+// let 166-02..04 declare optional class fields on Livinityd without forcing
+// a value-import (which would also force boot wire-up before 166-05).
+import type {
+	CcPtySession as _CcPtySession,
+	CcPtyManager as _CcPtyManager,
+	SessionStore as _CcPtySessionStore,
+} from './modules/cc-pty/index.js'
 type _CcPtyTypeProbe = _CcPtySession  // tsc-only — never instantiated
 // Phase 164-02 — Autonomous scheduler. Boot-time read of vault/livos-agents/*.md
 // + cron registration of every enabled agent. Gated by Redis flag
@@ -312,6 +317,18 @@ export default class Livinityd {
 	// session state through ws-agent.ts's createSessionActivityProvider() —
 	// liv-core agent-session.ts is UNCHANGED.
 	idleReaper?: IdleSessionReaper
+	// Phase 166-04 / 166-05 — CC PTY backend (tmux + node-pty + WebSocket).
+	// Field declarations land in 166-04 so server/index.ts can typecheck the
+	// `/ws/cc-pty` mount block; the real `new CcPtyManager(...)` instantiation
+	// + boot wire-up land in 166-05 (between IdleSessionReaper.start() and
+	// drainInstallPendingRedisKeys). tmux sessions OUTLIVE livinityd by design
+	// (D-V35-A) — stop() detaches in-process pty handles but does NOT kill
+	// the tmux sessions themselves. Both fields stay undefined when
+	// CcPtyManager.start() throws (tmux missing pre-Phase 170, Redis offline,
+	// etc.); /ws/cc-pty short-circuits with a "cc-pty backend not ready" error
+	// frame in that case.
+	ccPtySessionStore?: _CcPtySessionStore
+	ccPtyManager?: _CcPtyManager
 	isBackupRestoreFirstStart = false
 
 	constructor({
