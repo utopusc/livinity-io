@@ -86,6 +86,19 @@ vi.mock('./ItemTreeRow', () => ({
 	ItemTreeRow: () => <div data-testid='item-row' />,
 }))
 
+// Phase 183 — window-manager mock for gear → Settings assertions.
+// mockWindowManager is module-level so the factory closure can read it;
+// beforeEach in the gear describe block reassigns it per test.
+let mockWindowManager: {
+	windows: Array<{id: string; appId: string}>
+	openWindow: ReturnType<typeof vi.fn>
+	focusWindow: ReturnType<typeof vi.fn>
+} | null = null
+
+vi.mock('@/providers/window-manager', () => ({
+	useWindowManagerOptional: () => mockWindowManager,
+}))
+
 // ── Fixture helper ───────────────────────────────────────────────────────
 
 function fakeItem(p: Partial<any> & {id: string; type: 'project' | 'agent' | 'chat'}) {
@@ -312,5 +325,86 @@ describe('SidebarTree — Phase 176-05 openItem subscription', () => {
 			root.render(<SidebarTree />)
 		})
 		expect(container.textContent).toMatch(/talk to Liv in terminal/i)
+	})
+})
+
+// ── Phase 183: gear → Settings window ────────────────────────────────────
+
+describe('Phase 183 — gear → Settings window', () => {
+	beforeEach(() => {
+		mockWindowManager = {
+			windows: [],
+			openWindow: vi.fn().mockReturnValue('new-window-id'),
+			focusWindow: vi.fn(),
+		}
+	})
+
+	it('T-GEAR-1: gear click with no existing Settings window → openWindow called with correct args', async () => {
+		mockWindowManager!.windows = [] // no existing windows
+
+		act(() => {
+			root.render(<SidebarTree />)
+		})
+
+		// Gear button rendered by SidebarFooter inside SidebarTree.
+		const gearBtn = container.querySelector('button[aria-label="Settings"]') as HTMLButtonElement
+		expect(gearBtn).not.toBeNull()
+
+		act(() => {
+			gearBtn.dispatchEvent(new MouseEvent('click', {bubbles: true}))
+		})
+
+		expect(mockWindowManager!.openWindow).toHaveBeenCalledTimes(1)
+		expect(mockWindowManager!.openWindow).toHaveBeenCalledWith(
+			'LIVINITY_settings',
+			'/settings',
+			'Settings',
+			'/figma-exports/dock-settings-new.svg',
+		)
+		expect(mockWindowManager!.focusWindow).not.toHaveBeenCalled()
+	})
+
+	it('T-GEAR-2: gear click when Settings window already open → focusWindow called; openWindow NOT called', async () => {
+		const existingId = 'existing-settings-window-id'
+		mockWindowManager!.windows = [{id: existingId, appId: 'LIVINITY_settings'}]
+
+		act(() => {
+			root.render(<SidebarTree />)
+		})
+
+		const gearBtn = container.querySelector('button[aria-label="Settings"]') as HTMLButtonElement
+		expect(gearBtn).not.toBeNull()
+
+		act(() => {
+			gearBtn.dispatchEvent(new MouseEvent('click', {bubbles: true}))
+		})
+
+		expect(mockWindowManager!.focusWindow).toHaveBeenCalledTimes(1)
+		expect(mockWindowManager!.focusWindow).toHaveBeenCalledWith(existingId)
+		expect(mockWindowManager!.openWindow).not.toHaveBeenCalled()
+	})
+
+	it('T-GEAR-3: gear click when windowManager is null (outside provider) does not throw', async () => {
+		mockWindowManager = null // simulate outside-provider
+
+		act(() => {
+			root.render(<SidebarTree />)
+		})
+
+		const gearBtn = container.querySelector('button[aria-label="Settings"]') as HTMLButtonElement
+		expect(gearBtn).not.toBeNull()
+
+		expect(() => {
+			act(() => {
+				gearBtn.dispatchEvent(new MouseEvent('click', {bubbles: true}))
+			})
+		}).not.toThrow()
+	})
+
+	it('T-GEAR-4: SidebarTree.tsx imports useWindowManagerOptional and SidebarFooter', () => {
+		const src = readFileSync(resolve(__dirname, 'SidebarTree.tsx'), 'utf8')
+		expect(src).toMatch(/useWindowManagerOptional/)
+		expect(src).toMatch(/SidebarFooter/)
+		expect(src).toMatch(/LIVINITY_settings/)
 	})
 })
