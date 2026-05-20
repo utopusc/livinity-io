@@ -47,6 +47,8 @@ interface GraphNode {
 	mtime: number
 	tags: string[]    // Phase 179-01: from frontmatter
 	topDir: string    // Phase 179-01: first path segment
+	degree: number    // Phase 187-01: total edge count (in + out)
+	wikiDegree: number  // Phase 187-01: wikilink-only edge count
 }
 
 interface GraphEdge {
@@ -299,6 +301,9 @@ export function VaultGraph() {
 					})),
 				}}
 				nodeLabel='label'
+				nodeVal={(node: any) =>
+					Math.sqrt(Math.max(1, (node.degree ?? 0))) * settings.display.nodeSizeScale
+				}
 				onNodeClick={(node: any) => {
 					setActiveNode(node as unknown as GraphNode)
 					// Phase 180-01: clicking a node enters local mode centred on that node.

@@ -90,7 +90,7 @@ export function DisplaySection({initialState, userId, onDisplayChange, onAnimate
 
 			<div className='flex flex-col gap-1'>
 				<label className='flex items-center justify-between text-sm text-[color:var(--fg)]'>
-					<span>Node size</span>
+					<span>Node size (degree)</span>
 					<span className='text-xs text-[color:var(--fg-mute)]'>{state.nodeSizeScale.toFixed(1)}</span>
 				</label>
 				<input
