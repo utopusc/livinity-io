@@ -445,4 +445,54 @@ describe('CcPtyManager', () => {
 		expect(detachedAttachIds.has('tab-A')).toBe(true)
 		expect(detachedAttachIds.has('tab-B')).toBe(true)
 	})
+
+	// ── Phase 181-04 — capture-pane replay on alive attach ───────────────
+
+	it('Assertion 24 (Phase 181-04): capture-pane called on alive attach; onStdout receives replay buffer', async () => {
+		const mgr = makeManager()
+		const s = await mgr.createSession({userId: 'admin'})
+
+		// Default execSyncSpy: tmux has-session succeeds (alive=true)
+		// Capture-pane returns known output
+		execSyncSpy.mockImplementation((cmd: string) => {
+			if (cmd.includes('tmux has-session')) {
+				return Buffer.from('') // exit 0 = alive
+			}
+			if (cmd.includes('tmux capture-pane')) {
+				return 'some output\n'
+			}
+			return Buffer.from('')
+		})
+
+		const onStdout = vi.fn()
+		await mgr.attachSession(s.id, onStdout)
+
+		// onStdout should have been called with replay buffer BEFORE pty data
+		const captureCalls = onStdout.mock.calls.filter(
+			([buf]: [Buffer]) => buf instanceof Buffer && buf.toString().includes('some output'),
+		)
+		expect(captureCalls.length).toBeGreaterThanOrEqual(1)
+	})
+
+	it('Assertion 25 (Phase 181-04): capture-pane NOT called on resurrected session (alive=false)', async () => {
+		const mgr = makeManager()
+		const s = await mgr.createSession({userId: 'admin'})
+
+		let captureCallCount = 0
+		execSyncSpy.mockImplementation((cmd: string) => {
+			if (cmd.includes('tmux has-session')) {
+				throw Object.assign(new Error('exit 1'), {status: 1}) // dead
+			}
+			if (cmd.includes('tmux capture-pane')) {
+				captureCallCount++
+				return 'some output\n'
+			}
+			return Buffer.from('')
+		})
+
+		const onStdout = vi.fn()
+		await mgr.attachSession(s.id, onStdout)
+
+		expect(captureCallCount).toBe(0)
+	})
 })

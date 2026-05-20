@@ -146,6 +146,10 @@ export function createCcPtyWsHandler(opts: CcPtyWsHandlerOptions) {
 				} else if (env.type === 'detach') {
 					attachHandle?.detach()
 					attachHandle = null
+				} else if (env.type === 'ping') {
+					// Phase 181-04 — Heartbeat: respond immediately, no auth state required.
+					// Responds before any 'attach' message is needed (T-181-04-02 mitigation).
+					send({type: 'pong'})
 				} else {
 					send({type: 'error', message: `unknown envelope type: ${env.type}`})
 				}

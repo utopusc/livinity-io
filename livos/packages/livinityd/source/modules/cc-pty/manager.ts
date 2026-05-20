@@ -203,6 +203,23 @@ export class CcPtyManager {
 			const cmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=/root claude ${resumeArg}'`
 			execSync(cmd, {env: {...process.env, HOME: '/root', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8'}})
 			this.logger.log(`[cc-pty] resurrected tmux session ${session.tmuxName}`)
+		} else {
+			// Phase 181-04 — Buffer replay: send last 2000 lines of tmux output to
+			// the new client. Only when session was already alive (resurrection = fresh
+			// start with no prior output to replay). Non-fatal: if capture-pane fails,
+			// attach still proceeds (T-181-04-06: uses shellEscape + timeout guard).
+			try {
+				const replay = execSync(
+					`tmux capture-pane -e -p -S -2000 -t ${nameEsc}`,
+					{encoding: 'utf-8', timeout: 3000},
+				)
+				if (replay) onStdout(Buffer.from(replay))
+			} catch (err) {
+				this.logger.warn?.(
+					`[cc-pty] capture-pane failed for ${session.tmuxName}: ${err}`,
+				)
+				// Non-fatal: continue with attach even if replay fails
+			}
 		}
 
 		// Spawn node-pty wrapping `tmux attach -t <name>` — ARRAY argv form
