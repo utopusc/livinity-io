@@ -2291,19 +2291,22 @@ Plans:
 
 ---
 
-### Phase 181: Mobile CC PTY — 🔴 PLANNED 2026-05-20
+### Phase 181: Mobile CC PTY — ✅ CODE-COMPLETE 2026-05-20
 
 **Goal:** Replace `/chat-mobile` legacy SDK fallback. Tablet (≥640px + `pointer:coarse`) → `<CcTerminal>` + `<MobileTerminalKeyBar>` (2-row sticky-Ctrl). Phone (<640px) → CC-backed bubble UI streaming `/ws/cc-pty`. Touch gestures: pinch-zoom, two-finger paste, three-finger detach. WS resilience: visibilitychange resume, heartbeat ping/pong, `tmux capture-pane` replay-on-reattach.
 
 **Depends on:** Phase 175
 **Wave:** 4
-**Plans:** 4 plans
+**Plans:** 4 plans (4/4 complete)
+**Commits:** `a03cde0e..a19ebdc5`
+**Tests:** 74 UI + 76 backend, 43 new Phase-181 assertions, 31 Phase-167 baseline preserved
+**Key:** legacy-ai-chat-panel.tsx DELETED; sacred 25/25 PASS
 
 Plans:
-- [ ] 181-01-PLAN.md — Device class detection (useDeviceClass hook) + chat-mobile route branching
-- [ ] 181-02-PLAN.md — MobileTerminalKeyBar (2-row sticky-Ctrl key bar for tablet)
-- [ ] 181-03-PLAN.md — Touch gestures on CcTerminal (pinch-zoom, two-finger paste, three-finger detach)
-- [ ] 181-04-PLAN.md — WS resilience (visibilitychange + heartbeat) + tmux capture-pane + MobileBubbleChat + legacy delete
+- [x] 181-01-PLAN.md — Device class detection (useDeviceClass hook) + chat-mobile route branching
+- [x] 181-02-PLAN.md — MobileTerminalKeyBar (2-row sticky-Ctrl key bar for tablet)
+- [x] 181-03-PLAN.md — Touch gestures on CcTerminal (pinch-zoom, two-finger paste, three-finger detach)
+- [x] 181-04-PLAN.md — WS resilience (visibilitychange + heartbeat) + tmux capture-pane + MobileBubbleChat + legacy delete
 
 ---
 
