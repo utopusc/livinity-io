@@ -156,4 +156,19 @@ describe('walkVault', () => {
 		expect(Number.isInteger(node.mtime)).toBe(true)
 		expect(node.mtime).toBeGreaterThan(0)
 	})
+
+	// Phase 179-01 — topDir field assertions (RED gate)
+	it('topDir is first path segment for nested files', async () => {
+		await seed('memory/feedback/foo.md')
+		const result = await walkVault(vaultRoot)
+		const node = result.files.find((f) => f.path === 'memory/feedback/foo.md')
+		expect(node?.topDir).toBe('memory')
+	})
+
+	it('topDir is "root" for top-level files', async () => {
+		await seed('root-level.md')
+		const result = await walkVault(vaultRoot)
+		const node = result.files.find((f) => f.path === 'root-level.md')
+		expect(node?.topDir).toBe('root')
+	})
 })
