@@ -42,9 +42,9 @@ describe('cc-pty-router — Phase 168-01 source-text invariants', () => {
 		expect(ROUTER_SRC).toMatch(/getPreview:\s*adminProcedure/)
 	})
 
-	it('S2: adminProcedure appears at least 5 times (one per procedure)', () => {
+	it('S2: adminProcedure appears at least 6 times (5 base + subscribeAttachStatus)', () => {
 		const matches = ROUTER_SRC.match(/adminProcedure/g) ?? []
-		expect(matches.length).toBeGreaterThanOrEqual(5)
+		expect(matches.length).toBeGreaterThanOrEqual(6)
 	})
 
 	it('S3: path.basename used for ccSessionId (defense-in-depth)', () => {
@@ -77,6 +77,53 @@ describe('cc-pty-router — Phase 168-01 source-text invariants', () => {
 
 	it('S8: getPreview truncates preview at 120 chars', () => {
 		expect(ROUTER_SRC).toMatch(/\.slice\(0,\s*120\)/)
+	})
+})
+
+// ── Phase 168-04 subscribeAttachStatus source-text invariants ────────────
+
+describe('cc-pty-router — Phase 168-04 subscribeAttachStatus invariants', () => {
+	it('S9: subscribeAttachStatus declared as adminProcedure.subscription(...)', () => {
+		expect(ROUTER_SRC).toMatch(/subscribeAttachStatus:\s*adminProcedure\.subscription/)
+	})
+
+	it('S10: subscription uses observable from @trpc/server/observable', () => {
+		expect(ROUTER_SRC).toMatch(
+			/import\s+\{\s*observable\s*\}\s+from\s+['"]@trpc\/server\/observable['"]/,
+		)
+		expect(ROUTER_SRC).toMatch(/observable<\{/)
+	})
+
+	it('S11: subscription uses redis.duplicate() + subscribe(ATTACH_CHANNEL)', () => {
+		expect(ROUTER_SRC).toMatch(/\.duplicate\(\)/)
+		expect(ROUTER_SRC).toMatch(/sub\.subscribe\(ATTACH_CHANNEL\)/)
+	})
+
+	it('S12: malformed JSON payloads silently dropped (try/catch + shape-check)', () => {
+		// Both a defensive JSON.parse try/catch AND a shape check on the
+		// 4 expected fields must exist inside the subscription block.
+		const subIdx = ROUTER_SRC.indexOf('subscribeAttachStatus:')
+		const subSlice = ROUTER_SRC.substring(subIdx, subIdx + 2500)
+		expect(subSlice).toMatch(/try\s*\{/)
+		expect(subSlice).toMatch(/typeof parsed\.sessionId/)
+		expect(subSlice).toMatch(/typeof parsed\.attachId/)
+		expect(subSlice).toMatch(/parsed\.action\s*!==\s*['"]attached['"]/)
+		expect(subSlice).toMatch(/parsed\.action\s*!==\s*['"]detached['"]/)
+	})
+
+	it('S13: cross-user emit suppression — getSession + userId check before emit.next', () => {
+		const subIdx = ROUTER_SRC.indexOf('subscribeAttachStatus:')
+		const subSlice = ROUTER_SRC.substring(subIdx, subIdx + 2500)
+		expect(subSlice).toMatch(/ccPtyManager!?\.getSession/)
+		expect(subSlice).toMatch(/session\.userId !== ctx\.currentUser!?\.id/)
+	})
+
+	it('S14: subscription teardown calls off + unsubscribe + quit', () => {
+		const subIdx = ROUTER_SRC.indexOf('subscribeAttachStatus:')
+		const subSlice = ROUTER_SRC.substring(subIdx, subIdx + 2500)
+		expect(subSlice).toMatch(/sub\.off\(['"]message['"]/)
+		expect(subSlice).toMatch(/sub\.unsubscribe\(/)
+		expect(subSlice).toMatch(/sub\.quit\(/)
 	})
 })
 

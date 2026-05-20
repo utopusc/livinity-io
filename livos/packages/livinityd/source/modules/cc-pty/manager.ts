@@ -22,6 +22,7 @@
 import * as pty from 'node-pty'
 import {execSync} from 'child_process'
 import {randomUUID} from 'crypto'
+import type {Redis} from 'ioredis'
 import type {CcPtySession, CcPtyManagerOptions} from './types.js'
 import {SessionStore} from './session-store.js'
 
@@ -29,6 +30,11 @@ import {SessionStore} from './session-store.js'
 
 const USER_ID_RE = /^[a-zA-Z0-9_-]+$/
 const TMUX_NAME_RE = /^livos-cc-[a-zA-Z0-9_-]+-[a-f0-9]{8}$/
+
+// Phase 168-04 — Redis channel for cross-tab attach status broadcasts.
+// Message format: JSON {sessionId, attachId, attachedAt, action}.
+// No PII / no session content — metadata only.
+const ATTACH_CHANNEL = 'liv:cc-pty:attached'
 
 /**
  * POSIX single-quote escape: any single-quote in `s` is replaced with `'\''`
@@ -52,11 +58,18 @@ export class CcPtyManager {
 	// Mirror mode (D-V35-E): multiple concurrent attaches per session each
 	// get their own node-pty handle. Map value is an array of handles.
 	private attachedTerminals = new Map<string, pty.IPty[]>()
+	// Phase 168-04 — attachId per node-pty handle, parallel to attachedTerminals.
+	// Used by killSession to publish detach for each peer attacher BEFORE killing.
+	private handleAttachIds = new Map<string, string[]>()
 	private vaultPath: string
 	private logger: CcPtyManagerOptions['logger']
 	private idleHours: number
 	private maxSessions: number
 	private started = false
+	// Phase 168-04 — Redis client for cross-tab attach pub/sub broadcasts.
+	// Publish is best-effort; failures logged but never thrown so a Redis
+	// outage cannot break attach/detach functionality.
+	private redis: Redis
 
 	constructor(opts: CcPtyManagerOptions & {store?: SessionStore}) {
 		this.vaultPath = opts.vaultPath
@@ -64,6 +77,7 @@ export class CcPtyManager {
 		this.idleHours = opts.idleHours ?? 24
 		this.maxSessions = opts.maxSessions ?? 10
 		this.store = opts.store ?? new SessionStore({vaultPath: opts.vaultPath})
+		this.redis = opts.redis
 	}
 
 	async start(): Promise<void> {
@@ -149,13 +163,20 @@ export class CcPtyManager {
 	async attachSession(
 		sessionId: string,
 		onStdout: (chunk: Buffer) => void,
+		opts?: {attachId?: string},
 	): Promise<{
 		stdin: (data: string) => void
 		resize: (cols: number, rows: number) => void
 		detach: () => void
+		attachId: string
 	}> {
 		const session = await this.store.getById(sessionId)
 		if (!session) throw new Error(`CcPty: session ${sessionId} not found`)
+
+		// Phase 168-04 — attachId is caller-provided (UI tab UUID) or server-
+		// generated; used by killSession + detach to publish pub/sub events
+		// and by peer-tab subscribers to suppress self-attach badges.
+		const attachId = opts?.attachId ?? randomUUID()
 
 		const nameEsc = shellEscape(session.tmuxName)
 
@@ -200,11 +221,30 @@ export class CcPtyManager {
 		const list = this.attachedTerminals.get(sessionId) ?? []
 		list.push(ptyProc)
 		this.attachedTerminals.set(sessionId, list)
+		// Phase 168-04 — parallel attachId list for cross-tab detach broadcast
+		const idsList = this.handleAttachIds.get(sessionId) ?? []
+		idsList.push(attachId)
+		this.handleAttachIds.set(sessionId, idsList)
 		await this.store.update(sessionId, {lastAttachedAt: Date.now()})
+
+		// Phase 168-04 — broadcast attach. Best-effort; failures logged but
+		// not thrown (a Redis outage cannot break attach functionality).
+		this.redis
+			.publish(
+				ATTACH_CHANNEL,
+				JSON.stringify({
+					sessionId,
+					attachId,
+					attachedAt: Date.now(),
+					action: 'attached',
+				}),
+			)
+			.catch((err) => this.logger.error?.('[cc-pty] attach publish failed', err))
 
 		return {
 			stdin: (data) => ptyProc.write(data),
 			resize: (cols, rows) => ptyProc.resize(cols, rows),
+			attachId,
 			detach: () => {
 				try {
 					ptyProc.kill()
@@ -217,6 +257,25 @@ export class CcPtyManager {
 					if (filtered.length === 0) this.attachedTerminals.delete(sessionId)
 					else this.attachedTerminals.set(sessionId, filtered)
 				}
+				// Phase 168-04 — remove this attachId from the parallel list
+				const curIds = this.handleAttachIds.get(sessionId)
+				if (curIds) {
+					const filteredIds = curIds.filter((aid) => aid !== attachId)
+					if (filteredIds.length === 0) this.handleAttachIds.delete(sessionId)
+					else this.handleAttachIds.set(sessionId, filteredIds)
+				}
+				// Phase 168-04 — broadcast detach. Best-effort.
+				this.redis
+					.publish(
+						ATTACH_CHANNEL,
+						JSON.stringify({
+							sessionId,
+							attachId,
+							attachedAt: Date.now(),
+							action: 'detached',
+						}),
+					)
+					.catch((err) => this.logger.error?.('[cc-pty] detach publish failed', err))
 			},
 		}
 	}
@@ -224,6 +283,28 @@ export class CcPtyManager {
 	async killSession(id: string): Promise<void> {
 		const session = await this.store.getById(id)
 		if (!session) return
+		// Phase 168-04 — publish detach for each active attacher BEFORE killing
+		// so peer tabs clear their badges in real time, even though the
+		// per-handle detach hooks below would also fire on .kill() (defensive
+		// redundancy: tmux kill-session may EOF the node-pty handles in
+		// parallel and the cleanup ordering across processes is racy).
+		const ids = this.handleAttachIds.get(id) ?? []
+		for (const attachId of ids) {
+			this.redis
+				.publish(
+					ATTACH_CHANNEL,
+					JSON.stringify({
+						sessionId: id,
+						attachId,
+						attachedAt: Date.now(),
+						action: 'detached',
+					}),
+				)
+				.catch((err) =>
+					this.logger.error?.('[cc-pty] killSession detach publish failed', err),
+				)
+		}
+		this.handleAttachIds.delete(id)
 		const nameEsc = shellEscape(session.tmuxName)
 		try {
 			execSync(`tmux kill-session -t ${nameEsc}`, {stdio: 'ignore'})

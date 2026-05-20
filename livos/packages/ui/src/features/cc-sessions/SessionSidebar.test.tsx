@@ -54,6 +54,18 @@ const deleteMutationMock: MutationStub = {
 	isLoading: false,
 }
 
+// Phase 168-04 — subscribeAttachStatus mock. Captures the onData callback so
+// tests can fire synthetic attach/detach payloads.
+const subscribeAttachStatusMock = vi.fn()
+let lastSubOnData:
+	| ((msg: {
+			sessionId: string
+			attachId: string
+			attachedAt: number
+			action: 'attached' | 'detached'
+	  }) => void)
+	| null = null
+
 vi.mock('@/trpc/trpc', () => ({
 	trpcReact: {
 		ccPty: {
@@ -78,6 +90,13 @@ vi.mock('@/trpc/trpc', () => ({
 					return deleteMutationMock
 				},
 			},
+			subscribeAttachStatus: {
+				useSubscription: (_input: unknown, opts: any) => {
+					subscribeAttachStatusMock(opts)
+					lastSubOnData = opts?.onData ?? null
+					return {}
+				},
+			},
 		},
 	},
 }))
@@ -96,6 +115,17 @@ beforeEach(() => {
 	createMutationConfig.onSuccess = undefined
 	renameMutationConfig.onSuccess = undefined
 	deleteMutationConfig.onSuccess = undefined
+	subscribeAttachStatusMock.mockReset()
+	lastSubOnData = null
+	// Phase 168-04 — pin crypto.randomUUID so tabAttachIdRef is deterministic.
+	if (!('randomUUID' in crypto)) {
+		Object.defineProperty(crypto, 'randomUUID', {
+			value: () => 'this-tab',
+			configurable: true,
+		})
+	} else {
+		vi.spyOn(crypto, 'randomUUID').mockReturnValue('this-tab' as `${string}-${string}-${string}-${string}-${string}`)
+	}
 	container = document.createElement('div')
 	document.body.appendChild(container)
 	root = createRoot(container)
@@ -304,6 +334,87 @@ describe('SessionSidebar — behavior', () => {
 	it('A10: refetchInterval literal `10_000` is present in SessionSidebar.tsx source', () => {
 		const src = readFileSync(resolve(__dirname, 'SessionSidebar.tsx'), 'utf8')
 		expect(src).toMatch(/refetchInterval:\s*10_000/)
+	})
+
+	// ── Phase 168-04 cross-tab attach indicator assertions ────────────────
+
+	it('B1 (Phase 168-04): mount calls trpcReact.ccPty.subscribeAttachStatus.useSubscription', () => {
+		listQueryMock.data = {sessions: [makeSession('aaaa-1')]}
+		act(() => {
+			root.render(<SessionSidebar activeSessionId={null} onSelect={vi.fn()} />)
+		})
+		expect(subscribeAttachStatusMock).toHaveBeenCalled()
+		expect(lastSubOnData).toBeTypeOf('function')
+	})
+
+	it('B2 (Phase 168-04): onData attach from another tab → SessionItem renders attachedElsewhere badge', () => {
+		listQueryMock.data = {sessions: [makeSession('aaaa-1')]}
+		act(() => {
+			root.render(<SessionSidebar activeSessionId={null} onSelect={vi.fn()} />)
+		})
+		// Fire attach from a peer tab.
+		act(() => {
+			lastSubOnData!({
+				sessionId: 'aaaa-1',
+				attachId: 'other-tab',
+				attachedAt: Date.now(),
+				action: 'attached',
+			})
+		})
+		// SessionItem renders the "Session attached in another tab" aria-label.
+		const badge = container.querySelector(
+			'[aria-label="Session attached in another tab"]',
+		)
+		expect(badge).not.toBeNull()
+	})
+
+	it('B3 (Phase 168-04): subsequent detach from the same attachId clears the badge', () => {
+		listQueryMock.data = {sessions: [makeSession('aaaa-1')]}
+		act(() => {
+			root.render(<SessionSidebar activeSessionId={null} onSelect={vi.fn()} />)
+		})
+		// Attach
+		act(() => {
+			lastSubOnData!({
+				sessionId: 'aaaa-1',
+				attachId: 'other-tab',
+				attachedAt: 1,
+				action: 'attached',
+			})
+		})
+		// Detach
+		act(() => {
+			lastSubOnData!({
+				sessionId: 'aaaa-1',
+				attachId: 'other-tab',
+				attachedAt: 2,
+				action: 'detached',
+			})
+		})
+		const badge = container.querySelector(
+			'[aria-label="Session attached in another tab"]',
+		)
+		expect(badge).toBeNull()
+	})
+
+	it('B4 (Phase 168-04): self-attach (attachId === tabAttachIdRef) does NOT render badge', () => {
+		listQueryMock.data = {sessions: [makeSession('aaaa-1')]}
+		act(() => {
+			root.render(<SessionSidebar activeSessionId={null} onSelect={vi.fn()} />)
+		})
+		// Fire attach from THIS tab (pinned uuid 'this-tab' via beforeEach).
+		act(() => {
+			lastSubOnData!({
+				sessionId: 'aaaa-1',
+				attachId: 'this-tab',
+				attachedAt: Date.now(),
+				action: 'attached',
+			})
+		})
+		const badge = container.querySelector(
+			'[aria-label="Session attached in another tab"]',
+		)
+		expect(badge).toBeNull()
 	})
 })
 

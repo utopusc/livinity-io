@@ -15,10 +15,15 @@
 
 import {z} from 'zod'
 import {TRPCError} from '@trpc/server'
+import {observable} from '@trpc/server/observable'
 import {readFile} from 'node:fs/promises'
 import * as path from 'node:path'
 import {adminProcedure, router} from './trpc.js'
 import type {CcPtySession} from '../../cc-pty/types.js'
+
+// Phase 168-04 — Redis channel for cross-tab attach status broadcasts.
+// Must stay in sync with cc-pty/manager.ts ATTACH_CHANNEL constant.
+const ATTACH_CHANNEL = 'liv:cc-pty:attached'
 
 // CC jsonl path constant. HOME=/root because Anthropic SDK subscription
 // credentials + CC project dir live under /root/.claude on the Mini PC
@@ -122,6 +127,63 @@ const ccPtyRouter = router({
 				return {preview: null}
 			}
 		}),
+
+	// Phase 168-04 — Cross-tab attach status subscription. Streams
+	// {sessionId, attachId, attachedAt, action} JSON envelopes published on
+	// 'liv:cc-pty:attached'. UI consumers compute attachedElsewhere by
+	// comparing payload.attachId to their local tab's attachId.
+	//
+	// Note: subscription routes over WS by design (the WHOLE POINT of
+	// subscriptions is server-push). It does NOT belong in httpOnlyPaths.
+	//
+	// userId scoping: the onMessage handler fetches the session and
+	// suppresses emit if session.userId !== ctx.currentUser.id. This is a
+	// defense-in-depth overlay (single-user mode means single owner) ready
+	// for v36+ multi-user landing.
+	subscribeAttachStatus: adminProcedure.subscription(({ctx}) => {
+		return observable<{
+			sessionId: string
+			attachId: string
+			attachedAt: number
+			action: 'attached' | 'detached'
+		}>((emit) => {
+			// Duplicate the Redis client because subscribe-mode connections
+			// can't run normal commands (ioredis idiom).
+			const sub = ctx.livinityd!.ai.redis.duplicate()
+			sub.subscribe(ATTACH_CHANNEL).catch((err) =>
+				ctx.livinityd!.logger.error('[cc-pty] subscribe failed', err),
+			)
+			const onMessage = async (channel: string, msg: string) => {
+				if (channel !== ATTACH_CHANNEL) return
+				try {
+					const parsed = JSON.parse(msg)
+					if (
+						typeof parsed.sessionId !== 'string' ||
+						typeof parsed.attachId !== 'string' ||
+						typeof parsed.attachedAt !== 'number' ||
+						(parsed.action !== 'attached' && parsed.action !== 'detached')
+					) {
+						return // malformed shape — drop
+					}
+					// userId scoping overlay (T-168-04-03). Defense-in-depth
+					// ahead of v36 multi-user — suppresses cross-user emits.
+					const session = await ctx.livinityd!.ccPtyManager!.getSession(
+						parsed.sessionId,
+					)
+					if (!session || session.userId !== ctx.currentUser!.id) return
+					emit.next(parsed)
+				} catch {
+					/* malformed payload — silently drop */
+				}
+			}
+			sub.on('message', onMessage)
+			return () => {
+				sub.off('message', onMessage)
+				sub.unsubscribe(ATTACH_CHANNEL).catch(() => {})
+				sub.quit().catch(() => {})
+			}
+		})
+	}),
 })
 
 export default ccPtyRouter
