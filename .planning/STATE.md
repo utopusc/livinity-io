@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-20T18:26:07.788Z"
+last_updated: "2026-05-20T18:42:20.819Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -27,9 +27,14 @@ See: .planning/PROJECT.md
 
 **Active milestone:** v38.0 — Liv Agent Platform — **OPENED 2026-05-20** (14 phases / 61 plans / 5 waves; master plan `.planning/v38-LIV-AGENT-PLATFORM-MASTER.md`; pivots flat session list → tree of Project/Agent/Chat Items + 4 LivOS-native default skills + `@livos/cli` npm package + Obsidian-class Vault Graph + mobile CC PTY + Settings restructure; 21 locked D-V38-A..U decisions; vault root renamed `livinity-vault` → `~/liv/` per operator vote 2026-05-20).
 
-**Last shipped phase:** **Phase 180** Vault Graph Local Mode + Animation — CODE-COMPLETE 2026-05-20 (92 total tests, 6 commits `306d9ae0..351a8069`, sacred SHA 25/25; bfsSubgraph + DepthChip + scheduleAnimation + LegendBadge). Previously: **Phase 177** Schedule Engine + Inbox System — CODE-COMPLETE 2026-05-20 (Wave 6 complete; 4 plans, 9 commits `b14dac8c..950347d7`, 68 new tests; AgentScheduleRegistry (node-cron per-agent tasks) + AgentRunner (Redis PX NX lock + PTY spawn + inbox write) + InboxReader (filesystem walker, no DB) + vault.inbox tRPC router (4 adminProcedure procedures) + ItemTreeRow inbox badge + AgentDetail live tRPC data + GlobalInboxWindow; all 25 sacred SHAs preserved; 6 deviations auto-fixed (skipped counter bug, esbuild JSDoc parse, IR-08 test pattern, ioredis 5 arg order, tRPC data shape, InboxEntry re-export). See `.planning/phases/177-schedule-inbox/177-SUMMARY.md`. Previously: Phase 176 Main Liv Root Agent + 4 LivOS-Native Skills.
+**Last shipped phase:** **Phase 183** tmux status off + dangerously-skip default + sidebar Settings gear — CODE-COMPLETE 2026-05-20 (33 manager assertions + 54 sidebar-tree assertions, 4 commits `fc71dc66..64444b74`, sacred SHA 25/25; tmux set-option status off per session + --dangerously-skip-permissions injection (D-V38-K default ON) + SidebarTree gear icon wired to idempotent LIVINITY_settings window open via useWindowManagerOptional). Previously: **Phase 180** Vault Graph Local Mode + Animation — CODE-COMPLETE 2026-05-20 (92 total tests, 6 commits `306d9ae0..351a8069`, sacred SHA 25/25; bfsSubgraph + DepthChip + scheduleAnimation + LegendBadge).
 
-**Next action:** `/gsd-execute-phase 184` — v38.0 Mini PC Deploy + UAT + Milestone Close (Wave 7 FINAL). Or parallel: `/gsd-execute-phase 178` (Vault Graph MVP Polish) + `/gsd-execute-phase 181` (Mobile CC PTY). Phase 177 + 182 complete; Wave 6 complete; Wave 7 is the critical-path ship gate.
+**Key decisions (Phase 183):**
+- Two separate execSync calls for tmux new-session + set-option (not inlined) — preserves Assertion 4 regex compat
+- useWindowManagerOptional null guard in SidebarTree handleOpenSettings — gear safe outside WindowManagerProvider
+- SidebarFooter rendered in both empty-state and normal SidebarTree return paths
+
+**Next action:** `/gsd-execute-phase 184` — v38.0 Mini PC Deploy + UAT + Milestone Close (Wave 7 FINAL). Or parallel: `/gsd-execute-phase 178` (Vault Graph MVP Polish) + `/gsd-execute-phase 181` (Mobile CC PTY). Phase 177 + 182 + 183 complete; Wave 6 complete; Wave 7 is the critical-path ship gate.
 
 **v35.0 phase queue (FINAL):**
 

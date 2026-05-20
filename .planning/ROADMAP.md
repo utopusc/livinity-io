@@ -2326,17 +2326,19 @@ Plans:
 
 ---
 
-### Phase 183: tmux status off + dangerously-skip default + sidebar Settings button — 🔴 PLANNED 2026-05-20
+### Phase 183: tmux status off + dangerously-skip default + sidebar Settings button — ✅ CODE-COMPLETE 2026-05-20
 
 **Goal:** `tmux set -g status off` on session spawn (eliminates status line). `cc-pty/manager.ts` reads `liv:config:cc_pty_skip_perms` (default **true** per D-V38-K) → injects `--dangerously-skip-permissions` flag. Sidebar bottom-left gear-icon Settings button (D-V38-N).
+
+4 commits `fc71dc66..64444b74` · 33 manager assertions + 54 sidebar-tree assertions · sacred SHA 25/25
 
 **Depends on:** Phase 174, 182
 **Wave:** 4
 **Plans:** 2 plans
 
 Plans:
-- [ ] 183-01-PLAN.md — cc-pty/manager.ts: tmux set-option status off + dangerously-skip-permissions Redis-gated flag (D-V38-K/R) (+8 vitest assertions, total 33)
-- [ ] 183-02-PLAN.md — SidebarTree gear click → openWindow/focusWindow Settings (D-V38-N, idempotent, +4 vitest assertions)
+- [x] 183-01-PLAN.md — cc-pty/manager.ts: tmux set-option status off + dangerously-skip-permissions Redis-gated flag (D-V38-K/R) (+8 vitest assertions, total 33) — ✅ SHIPPED `fc71dc66..8fd04f49`
+- [x] 183-02-PLAN.md — SidebarTree gear click → openWindow/focusWindow Settings (D-V38-N, idempotent, +4 vitest assertions) — ✅ SHIPPED `123f9a56..64444b74`
 
 ---
 
