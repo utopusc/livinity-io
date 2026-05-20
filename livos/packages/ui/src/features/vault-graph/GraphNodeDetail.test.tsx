@@ -166,6 +166,71 @@ describe('GraphNodeDetail (178-02)', () => {
 		expect(container.querySelector('[data-testid="outgoing-section"]')?.textContent).toContain('No outgoing links')
 	})
 
+	// Phase 187-03: navigation button assertions
+
+	it('backlinks render as <button> elements when onNavigateTo provided', () => {
+		fetchMock.mockReturnValue(new Promise(() => {}))
+		const spy = vi.fn()
+		act(() => {
+			root.render(<GraphNodeDetail node={NODE} edges={EDGES} onClose={() => {}} onNavigateTo={spy} />)
+		})
+		const btns = container.querySelectorAll('[data-testid="backlinks-list"] button')
+		expect(btns.length).toBeGreaterThan(0)
+	})
+
+	it('outgoing render as <button> elements when onNavigateTo provided', () => {
+		fetchMock.mockReturnValue(new Promise(() => {}))
+		const spy = vi.fn()
+		act(() => {
+			root.render(<GraphNodeDetail node={NODE} edges={EDGES} onClose={() => {}} onNavigateTo={spy} />)
+		})
+		const btns = container.querySelectorAll('[data-testid="outgoing-list"] button')
+		expect(btns.length).toBeGreaterThan(0)
+	})
+
+	it('clicking backlink button calls onNavigateTo with source id', () => {
+		fetchMock.mockReturnValue(new Promise(() => {}))
+		const spy = vi.fn()
+		act(() => {
+			root.render(<GraphNodeDetail node={NODE} edges={EDGES} onClose={() => {}} onNavigateTo={spy} />)
+		})
+		const btn = container.querySelector('[data-testid="nav-link-memory/bar.md"]') as HTMLButtonElement
+		act(() => btn.click())
+		expect(spy).toHaveBeenCalledWith('memory/bar.md')
+	})
+
+	it('clicking outgoing button calls onNavigateTo with target id', () => {
+		fetchMock.mockReturnValue(new Promise(() => {}))
+		const spy = vi.fn()
+		act(() => {
+			root.render(<GraphNodeDetail node={NODE} edges={EDGES} onClose={() => {}} onNavigateTo={spy} />)
+		})
+		const btn = container.querySelector('[data-testid="nav-link-memory/qux.md"]') as HTMLButtonElement
+		act(() => btn.click())
+		expect(spy).toHaveBeenCalledWith('memory/qux.md')
+	})
+
+	it('nav buttons have data-testid nav-link-{id}', () => {
+		fetchMock.mockReturnValue(new Promise(() => {}))
+		const spy = vi.fn()
+		act(() => {
+			root.render(<GraphNodeDetail node={NODE} edges={EDGES} onClose={() => {}} onNavigateTo={spy} />)
+		})
+		expect(container.querySelector('[data-testid="nav-link-memory/bar.md"]')).not.toBeNull()
+	})
+
+	it('without onNavigateTo, backlinks render as <li> not <button>', () => {
+		fetchMock.mockReturnValue(new Promise(() => {}))
+		act(() => {
+			root.render(<GraphNodeDetail node={NODE} edges={EDGES} onClose={() => {}} />)
+		})
+		const btns = container.querySelectorAll('[data-testid="backlinks-list"] button')
+		expect(btns.length).toBe(0)
+		// still has <li> items
+		const items = container.querySelectorAll('[data-testid="backlinks-list"] li')
+		expect(items.length).toBeGreaterThan(0)
+	})
+
 	it('scrolls body to top when node.id changes (scroll-on-focus)', async () => {
 		fetchMock.mockResolvedValue({
 			ok: true,
