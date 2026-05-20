@@ -225,6 +225,187 @@ describe('CcTerminal', () => {
 	})
 })
 
+// ── Phase 181-03 — Touch gesture + sendStdin ref tests ────────────────────
+//
+// 10 new assertions (additive — existing 11 tests above preserved).
+// Tests use the same mock infrastructure (mockTerm, wsInstances, fitInstances).
+// localStorage is mocked where needed.
+
+import React from 'react'
+import type {CcTerminalHandle} from './CcTerminal'
+
+// Helper: create a Touch-like object for TouchEvent
+function makeTouch(x: number, y: number): Partial<Touch> {
+	return {clientX: x, clientY: y, identifier: Math.random(), target: document.body as EventTarget} as Partial<Touch>
+}
+
+function makeTouchEvent(type: string, touches: Partial<Touch>[], changedTouches?: Partial<Touch>[]) {
+	return new TouchEvent(type, {
+		bubbles: true,
+		cancelable: true,
+		touches: touches as unknown as TouchList,
+		changedTouches: (changedTouches ?? touches) as unknown as TouchList,
+	})
+}
+
+describe('CcTerminal — Phase 181-03 gesture + ref tests', () => {
+	beforeEach(() => {
+		vi.useRealTimers()
+		// Reset localStorage between tests
+		localStorage.clear()
+		// Clear mockTerm.options for font size tracking
+		mockTerm.options = {} as Record<string, unknown>
+	})
+
+	afterEach(() => {
+		vi.useRealTimers()
+	})
+
+	it('Test 1 — Font size restored from localStorage on mount (16)', () => {
+		localStorage.setItem('cc-pty-font-size', '16')
+		act(() => {
+			root.render(<CcTerminal sessionId='abc' />)
+		})
+		expect(terminalCtorCalls).toHaveLength(1)
+		expect(terminalCtorCalls[0].fontSize).toBe(16)
+	})
+
+	it('Test 2 — Font size defaults to 13 when localStorage absent', () => {
+		localStorage.removeItem('cc-pty-font-size')
+		act(() => {
+			root.render(<CcTerminal sessionId='abc' />)
+		})
+		expect(terminalCtorCalls).toHaveLength(1)
+		expect(terminalCtorCalls[0].fontSize).toBe(13)
+	})
+
+	it('Test 3 — Pinch-in increases font size by 2pt (40px spread → +2 steps)', () => {
+		act(() => {
+			root.render(<CcTerminal sessionId='abc' />)
+		})
+		const div = container.querySelector('div')!
+		mockTerm.options.fontSize = 13
+
+		// Start: 2 touches 50px apart
+		act(() => div.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(0, 0), makeTouch(50, 0)])))
+		// Move: 90px apart (+40px = +2 steps)
+		act(() => div.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(0, 0), makeTouch(90, 0)])))
+
+		expect(mockTerm.options.fontSize).toBe(15)
+	})
+
+	it('Test 4 — Pinch-out decreases font size by 2pt (distance 90→50 = -40px = -2 steps)', () => {
+		act(() => {
+			root.render(<CcTerminal sessionId='abc' />)
+		})
+		const div = container.querySelector('div')!
+		mockTerm.options.fontSize = 15
+
+		act(() => div.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(0, 0), makeTouch(90, 0)])))
+		act(() => div.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(0, 0), makeTouch(50, 0)])))
+
+		expect(mockTerm.options.fontSize).toBe(13)
+	})
+
+	it('Test 5 — Font size clamped at max 22pt', () => {
+		act(() => {
+			root.render(<CcTerminal sessionId='abc' />)
+		})
+		const div = container.querySelector('div')!
+		mockTerm.options.fontSize = 21
+
+		act(() => div.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(0, 0), makeTouch(50, 0)])))
+		// +60px = +3 steps → would be 24, clamped to 22
+		act(() => div.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(0, 0), makeTouch(110, 0)])))
+
+		expect(mockTerm.options.fontSize).toBe(22)
+	})
+
+	it('Test 6 — Font size clamped at min 10pt', () => {
+		act(() => {
+			root.render(<CcTerminal sessionId='abc' />)
+		})
+		const div = container.querySelector('div')!
+		mockTerm.options.fontSize = 11
+
+		act(() => div.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(0, 0), makeTouch(90, 0)])))
+		// -60px = -3 steps → would be 8, clamped to 10
+		act(() => div.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(0, 0), makeTouch(30, 0)])))
+
+		expect(mockTerm.options.fontSize).toBe(10)
+	})
+
+	it('Test 7 — Font size persisted to localStorage on pinch change', () => {
+		act(() => {
+			root.render(<CcTerminal sessionId='abc' />)
+		})
+		const div = container.querySelector('div')!
+		mockTerm.options.fontSize = 13
+
+		act(() => div.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(0, 0), makeTouch(50, 0)])))
+		act(() => div.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(0, 0), makeTouch(90, 0)])))
+
+		expect(localStorage.getItem('cc-pty-font-size')).toBe('15')
+	})
+
+	it('Test 8 — Two-finger paste: touchend with 2 touches calls ws.sendStdin with clipboard text', async () => {
+		const clipboardText = 'paste text'
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: {readText: vi.fn().mockResolvedValue(clipboardText)},
+		})
+
+		act(() => {
+			root.render(<CcTerminal sessionId='abc' />)
+		})
+		const div = container.querySelector('div')!
+
+		// Start with 2 touches close together (tap, not pinch)
+		act(() => div.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(0, 0), makeTouch(5, 0)])))
+		// End with same distance (< 10px diff)
+		await act(async () => {
+			div.dispatchEvent(makeTouchEvent('touchend', [makeTouch(0, 0), makeTouch(5, 0)], [makeTouch(0, 0), makeTouch(5, 0)]))
+			// Allow clipboard promise to resolve
+			await new Promise((r) => setTimeout(r, 10))
+		})
+
+		expect(wsInstances[0].sendStdin).toHaveBeenCalledWith(clipboardText)
+	})
+
+	it('Test 9 — Three-finger swipe-down calls ws.detach()', () => {
+		act(() => {
+			root.render(<CcTerminal sessionId='abc' />)
+		})
+		const div = container.querySelector('div')!
+		const t1 = makeTouch(50, 100)
+		const t2 = makeTouch(100, 100)
+		const t3 = makeTouch(150, 100)
+
+		// Start at y=100
+		act(() => div.dispatchEvent(makeTouchEvent('touchstart', [t1, t2, t3])))
+		// End at y=170 (deltaY=70 > 60)
+		const end1 = makeTouch(50, 170)
+		const end2 = makeTouch(100, 170)
+		const end3 = makeTouch(150, 170)
+		act(() => div.dispatchEvent(makeTouchEvent('touchend', [end1, end2, end3], [end1, end2, end3])))
+
+		expect(wsInstances[0].detach).toHaveBeenCalled()
+	})
+
+	it('Test 10 — sendStdin ref exposed: ref.current.sendStdin calls ws.sendStdin', () => {
+		const ref = React.createRef<CcTerminalHandle>()
+		act(() => {
+			root.render(<CcTerminal ref={ref} sessionId='abc' />)
+		})
+
+		expect(ref.current).not.toBeNull()
+		expect(typeof ref.current!.sendStdin).toBe('function')
+
+		ref.current!.sendStdin('hello from ref')
+		expect(wsInstances[0].sendStdin).toHaveBeenCalledWith('hello from ref')
+	})
+})
+
 // ── Source-text invariants ─────────────────────────────────────────────────
 
 describe('CcTerminal — source-text invariants', () => {
