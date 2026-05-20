@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v34.0
-milestone_name: Bootstrap Polish + First-Run UX
-status: unknown
-last_updated: "2026-05-19T21:52:00.000Z"
+milestone: v35.0
+milestone_name: Claude Code PTY Embed + Vault Memory Graph
+status: planned
+last_updated: "2026-05-19T22:30:00.000Z"
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 23
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -24,6 +24,37 @@ See: .planning/PROJECT.md
 **Next action:** Operator runs the post-121-06 UAT walk per `.planning/phases/121-mini-pc-long-tail-and-audit/121-06-SUMMARY.md` § "Operator post-121-06 final UAT block" — `bash /opt/livos/update.sh` on Mini PC + browse `livinity.io/login → /register → /dashboard → /dashboard/install → /store → bruce.livinity.io → cycle every theme`. After AC#8 sign-off: close v35.0 → open v36 (Phase 122 = ui-kit v0.2.0 expansion with 22 candidates from SHADCN-AUDIT.md).
 
 ## Current Position
+
+**Active milestone:** v35.0 — Claude Code PTY Embed + Vault Memory Graph (OPENED 2026-05-19; master plan `.planning/v35-CC-PTY-MASTER.md`; 5 phases / 23 plans / 3 waves; pre-flight verified; D-NEW-DEPS-v35 authorizes react-force-graph-2d + tmux apt; all other sacred guards locked).
+
+**Next action:** User /clear → `/gsd-autonomous --from 166`. Wave 1 dispatches Phase 166 + 167 + 169 in parallel; Wave 2 → 168; Wave 3 → 170 deploy + UAT.
+
+**v35.0 phase queue:**
+
+- [ ] Phase 166 — CC PTY Backend (tmux + node-pty + WebSocket) — 5 plans, Wave 1
+- [ ] Phase 167 — xterm.js Frontend (CcTerminal component) — 4 plans, Wave 1
+- [ ] Phase 168 — Session Sidebar + Lifecycle UI — 4 plans, Wave 2
+- [ ] Phase 169 — Vault Memory Graph View — 5 plans, Wave 1
+- [ ] Phase 170 — Mini PC Deploy + UAT + Milestone Close — 5 plans, Wave 3
+
+**Pre-flight (verified 2026-05-19 on Mini PC):**
+- Node v22.22.1 + python3 + make + g++ all present → node-pty buildable ✓
+- claude binary v2.1.84 at /usr/bin/claude with --resume / --continue / --fork-session ✓
+- HOME=/root contract verified in livinityd /proc env ✓
+- @xterm refs 8 in pnpm-lock (no new dep) ✓
+- node-pty refs 3 in pnpm-lock (no new dep) ✓
+- d3-force refs 6 in pnpm-lock (transitive base for react-force-graph) ✓
+- 800GB disk free + 27GB RAM free ✓
+- tmux NOT installed → Phase 170 apt install required ❌
+- react-force-graph-2d NOT in lockfile → Phase 169 install required ❌
+
+**Sacred guardrails locked (v34.x + v35.0 cumulative):** Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` for sdk-agent-runner.ts; D-09 `2083f0a3...` for luse-system-prompt.ts; Phase 161-02 helper `dc1831f5...` for agent-prompt-builder.ts; Phase 162-01 vault-scaffolder.ts byte-identical; Phase 162-02 agent-session.ts byte-identical; Phase 163 ws-agent.ts surface routing UNCHANGED; Phase 164 autonomous-scheduler core UNCHANGED.
+
+**Resume command:** `/clear` then `/gsd-autonomous --from 166`.
+
+---
+
+## v34.x (PREVIOUS MILESTONE — CODE-COMPLETE-AND-LIVE-VERIFIED)
 
 Phase: 165 (cc-integration-polish) — **SHIPPED** 2026-05-19 (all 4 plans CODE-COMPLETE + Mini PC deploy live-proven; v34.x milestone CODE-COMPLETE-AND-LIVE-VERIFIED, Operator UAT § 7 checklist queued for user wake-up walk).
 Plan: 04 — **Mini PC Final Deploy + v34.x Consolidated VERIFICATION SHIPPED** 2026-05-19. 3 tasks shipped across 3 atomic commits (`8a7b5653` Task 1 deploy log, `a4954506` Task 2 live smoke probes, `63360c93` Task 3 v34-VERIFICATION.md). Mini PC deployed SHA `73b9a7f4d500009e9eee9ffd35f52515991c7528` matches local HEAD verbatim; all 4 services (livos / liv-core / liv-worker / liv-memory) active with `NRestarts=0`; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` PRESERVED on Mini PC source AND across all 68 commits of v34.x. 5 live smoke probes PASS: (1) Probe A vault mode `conv_phase165smoke` → `SDK_INIT model=claude-opus-4-7 cwd=/home/bruce/livinity-vault` + `TEXT: ok`; (2) Probe B Phase 161 regression `native:smoke165:abcd1234` → `SDK_INIT model=claude-haiku-4-5-20251001` dated literal preserved; (3) Probe C autonomous CLI trigger `nightly-backup-audit` → exit 0 + new inbox entry `2026-05-19_19-43_nightly-backup-audit.md` (cost_usd=0.1003, 10 turns, status=success) + Redis daily-spend 28→38c; (4) Probe D tRPC `autonomous.getDailySpend` → `{date:"2026-05-19",spentCents:38,capCents:5000}` valid JSON; (5) Probe E settings routes `/settings/chat-backend` + `/settings/autonomous-agents` HTTP 200 on localhost AND public bruce.livinity.io. Plus `[claude-runner/reaper] started — poll every 300s` LIVE in boot journal (Plan 165-01 wire-up live-proven). vault-doctor SKILL.md scaffolded at `/home/bruce/livinity-vault/.claude/skills/livos-vault-doctor/SKILL.md` (Plan 165-03 live-proven). Safety wind-down completed: `liv:config:autonomous_enabled=false` + nightly-backup-audit `enabled: false`. Verification artifacts: `.planning/phases/165-cc-integration-polish/v34-VERIFICATION.md` (266 lines, consolidates all 4 phases against master plan 11 success criteria — 9 PASS + 1 PASS-historical + 1 PASS-pending-OperatorUAT) + `165-04-deploy-log.md` (~430 lines, 15 sections, verbatim transcripts of deploy + 5 probes + wind-down).

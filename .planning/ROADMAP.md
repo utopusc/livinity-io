@@ -2020,3 +2020,96 @@ Plans:
 
 **Carryover:** None — this is the close-out phase. After P157 ships + UAT passes, v37 milestone audit runs.
 
+---
+
+# v35.0 — Claude Code PTY Embed + Vault Memory Graph — OPENED 2026-05-19
+
+> **Supersedes:** v35.0 Design System Unification (2026-05-14, rolled back per memory note `project_v36_draft.md`)
+>
+> **Theme:** AI Chat dock window pivots from custom SDK wrapper to embedded Claude Code via xterm.js + tmux PTY. Session persists across browser close (tmux owns the process). Vault memory graph view added as 2nd tab. Other chat surfaces (WebApp/NativeApp) KEEP SDK approach (Phase 161/163 untouched).
+>
+> **Master plan:** [`v35-CC-PTY-MASTER.md`](v35-CC-PTY-MASTER.md) (READ THIS FIRST — full pre-flight + 14 locked decisions D-V35-A..N + 7 success criteria + risk register)
+>
+> **Pre-flight verified 2026-05-19:** Node v22.22.1 + python3 + make + g++ ✓; claude v2.1.84 with --resume ✓; HOME=/root contract ✓; @xterm refs 8 in lockfile ✓; node-pty refs 3 ✓; d3-force refs 6 ✓; **tmux NOT installed** (Phase 170 apt install) **react-force-graph-2d NOT in lockfile** (Phase 169 adds).
+>
+> **D-NEW-DEPS-v35 EXCEPTION:** Two new deps authorized — `react-force-graph-2d` (npm) + `tmux` (apt). v34.x D-NO-NEW-DEPS guardrail RETIRED for this milestone. Sacred SHA + D-09 + Phase 161-02 helper + Phase 162-01 vault-scaffolder + Phase 162-02 agent-session.ts + Phase 163 ws-agent.ts surface routing + Phase 164 scheduler core ALL REMAIN LOCKED.
+
+### Phase 166: CC PTY Backend (tmux + node-pty + WebSocket) — 🔴 PLANNED 2026-05-19
+
+**Goal:** livinityd-side tmux/node-pty bridge that owns Claude Code subprocess lifecycle. WebSocket endpoint `/ws/cc-pty` lets browser clients attach by sessionId; tmux owns the `claude` process (NOT the WebSocket). Browser tab close → tmux keeps running. Reattach = new WS over existing tmux. Plus 24h idle reaper.
+
+**Plans (5):**
+- [ ] 166-01 tmux apt install + cc-pty module scaffold + types
+- [ ] 166-02 SessionStore (file-backed metadata at `vault/.claude/livos-cc-sessions.json`)
+- [ ] 166-03 PTY manager (tmux + node-pty bridge, attach/detach/kill, concurrent cap)
+- [ ] 166-04 WebSocket handler `/ws/cc-pty` (auth + JSON envelopes + base64 stdout)
+- [ ] 166-05 Boot wire-up + idle reaper (5min interval, 24h default cutoff)
+
+**Wave:** 1 (parallel with 167, 169)
+**Estimated:** ~3 days agent work
+
+---
+
+### Phase 167: xterm.js Frontend Component (CcTerminal) — 🔴 PLANNED 2026-05-19
+
+**Goal:** Browser-side `<CcTerminal>` React component using xterm.js. Replaces legacy SDK chat in AI dock window. Theme-aware (LivOS dark/light bound to xterm colors). Mobile shows "open on desktop" fallback. Legacy SDK chat moves to `/chat-mobile` route.
+
+**Plans (4):**
+- [ ] 167-01 CcTerminal core component (xterm.js + addons: fit, web-links, canvas)
+- [ ] 167-02 WebSocket client (terminal-ws-client.ts, exponential backoff reconnect)
+- [ ] 167-03 LivOS theme → xterm theme bridge (live-bound, no remount)
+- [ ] 167-04 AI Chat route swap (replace legacy SDK chat) + mobile fallback route
+
+**Wave:** 1 (parallel with 166, 169)
+**Estimated:** ~3 days agent work
+
+---
+
+### Phase 168: Session Sidebar + Lifecycle UI — 🔴 PLANNED 2026-05-19
+
+**Goal:** AI Chat sidebar lists user's CC sessions. New Session button → spawn tmux + auto-select. Click session → mount CcTerminal. Rename/delete actions. Last-message preview from CC's jsonl. Cross-tab "attached elsewhere" indicator via Redis pub/sub.
+
+**Plans (4):**
+- [ ] 168-01 tRPC `cc-pty-router.ts` (5 procedures: list, create, rename, delete, getPreview; +5 httpOnlyPaths)
+- [ ] 168-02 SessionSidebar + SessionItem + NewSessionButton components
+- [ ] 168-03 AI Chat route integration (wire sidebar + terminal)
+- [ ] 168-04 Cross-tab attach indicator (Redis pub/sub)
+
+**Wave:** 2 (depends on 166 + 167)
+**Estimated:** ~1.5 days agent work
+
+---
+
+### Phase 169: Vault Memory Graph View — 🔴 PLANNED 2026-05-19
+
+**Goal:** Visual graph of vault contents in AI Chat as 2nd tab. Backend walks vault/*.md, parses YAML + `[[wikilinks]]`, emits `{nodes, edges}` JSON. Frontend uses `react-force-graph-2d`. Click node → side drawer with file content. Cap at 2000 nodes.
+
+**Plans (5):**
+- [ ] 169-01 Vault walker + frontmatter parser + wikilink extractor
+- [ ] 169-02 Graph builder + REST endpoint `/api/vault/graph` + `/api/vault/file` (Express routes)
+- [ ] 169-03 VaultGraph React component (react-force-graph-2d) + GraphNodeDetail drawer
+- [ ] 169-04 AI Chat route — Terminal/Graph tab nav
+- [ ] 169-05 Boot wire-up + install `react-force-graph-2d` dep
+
+**Wave:** 1 (parallel with 166, 167 — file-disjoint)
+**Estimated:** ~2.5 days agent work
+
+---
+
+### Phase 170: v35.0 Mini PC Deploy + UAT + Milestone Close — 🔴 PLANNED 2026-05-19
+
+**Goal:** Deploy v35.0 to Mini PC. `apt install tmux`. 5 live smoke probes covering all master plan success criteria (session lifecycle, persistence-across-browser-close, subagent spawn via CC `/agents`, vault graph endpoint, Phase 162/163 regression). Consolidated `v35-VERIFICATION.md`. Safety wind-down.
+
+**Plans (5):**
+- [ ] 170-01 Pre-deploy guard sweep (push + sacred SHA + tmux apt install)
+- [ ] 170-02 Run update.sh (detached + log poll per ZeroTier protocol)
+- [ ] 170-03 Live smoke probes (5 probes: lifecycle, persistence, subagent, graph, regression)
+- [ ] 170-04 v35-VERIFICATION.md (consolidated milestone close report, 8-step Operator UAT)
+- [ ] 170-05 STATE.md + ROADMAP.md milestone close + safety wind-down
+
+**Wave:** 3 (FINAL — depends on 166, 167, 168, 169)
+**Estimated:** ~1 day agent work
+**Closes:** v35.0 LivOS Claude Code Embed milestone
+
+---
+
