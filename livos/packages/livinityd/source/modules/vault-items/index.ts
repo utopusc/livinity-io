@@ -22,3 +22,6 @@ export type {ItemStoreOptions, CreateInput, ListOptions} from './item-store.js'
 // Phase 171-03 — tree-resolver public surface (additive).
 export {buildTree, validateMove, writeTreeCache, depthOf} from './tree-resolver.js'
 export type {TreeNode, MoveValidation} from './tree-resolver.js'
+// Phase 171-05 — PubSub wrapper public surface (additive).
+export {createItemStorePubSub, TREE_UPDATED_CHANNEL} from './pubsub.js'
+export type {TreeUpdateEvent, TreeUpdateEventType, PubSubLogger} from './pubsub.js'
