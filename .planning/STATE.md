@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v38.0
-milestone_name: Liv Agent Platform
-status: CODE-COMPLETE-AND-LIVE-VERIFIED
-last_updated: "2026-05-20T20:05:00.000Z"
+milestone: v34.0
+milestone_name: Bootstrap Polish + First-Run UX
+status: unknown
+last_updated: "2026-05-20T21:52:01.765Z"
 progress:
-  total_phases: 14
-  completed_phases: 14
-  total_plans: 61
-  completed_plans: 61
+  total_phases: 8
+  completed_phases: 8
+  total_plans: 12
+  completed_plans: 12
   percent: 100
 ---
 
@@ -27,7 +27,12 @@ See: .planning/PROJECT.md
 
 **Active milestone:** v38.0 — Liv Agent Platform — **CLOSED 2026-05-20** (14 phases / 141 commits / 5 waves; CODE-COMPLETE-AND-LIVE-VERIFIED; Operator UAT browser walk queued per `.planning/phases/184-v38-deploy-uat/v38-VERIFICATION.md` § Operator UAT Browser Walk).
 
-**Last shipped phase:** **Phase 184** v38.0 Mini PC Deploy + UAT + Milestone Close — CODE-COMPLETE 2026-05-20 (11/13 live probes PASS; 25/25 sacred SHAs preserved; deployed SHA a0d26c65676e6f3161deaccb4fb4b3e0068701a6; all 4 services active NRestarts=0; vault scaffolded at /root/livinity-vault).
+**Last shipped phase:** **Phase 185** Mount SidebarTree in AI Chat Window — CODE-COMPLETE 2026-05-20 (36/36 vitest PASS; 25/25 sacred SHAs; split layout + item routing + mobile collapse; 2 commits `615caafc..fd38ff96`).
+
+**Key decisions (Phase 185):**
+
+- Mobile early-return ("AI Chat requires a desktop browser") replaced with collapsed-sidebar pattern (sidebarOpen=false on mobile, hamburger toggle reveals sidebar). Resolves conflict between 185-01/02 test expectations and the old early-return.
+- All 3 TDD plans (185-01/02/03) implemented in single GREEN pass; committed atomically as one feat commit + one docs commit.
 
 **Key decisions (Phase 184):**
 
