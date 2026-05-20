@@ -17,16 +17,11 @@
 import {Bot, FileText, Inbox, Pause, Play} from 'lucide-react'
 import {Streamdown} from 'streamdown'
 import {useState} from 'react'
+import {trpcReact} from '@/trpc/trpc'
 
 export interface AgentTool {
 	name: string
 	enabled: boolean
-}
-
-export interface InboxEntry {
-	id: string
-	subject: string
-	receivedAt: number // unix-ms timestamp
 }
 
 export interface AgentDetailProps {
@@ -40,8 +35,6 @@ export interface AgentDetailProps {
 	onScheduleChange?: (next: string) => void
 	onPause?: () => void
 	onRunNow?: () => void
-	inbox?: readonly InboxEntry[]
-	onInboxEntryClick?: (entryId: string) => void
 	lastRunLogPath?: string
 	onOpenLastRunLog?: (path: string) => void
 }
@@ -59,13 +52,15 @@ export function AgentDetail({
 	onScheduleChange,
 	onPause,
 	onRunNow,
-	inbox,
-	onInboxEntryClick,
 	lastRunLogPath,
 	onOpenLastRunLog,
 }: AgentDetailProps) {
 	const [tab, setTab] = useState<Tab>('edit')
-	const inboxSlice = (inbox ?? []).slice(0, 3)
+
+	// Phase 177-04 — live inbox data from tRPC (replaces Phase 175 inbox prop stub)
+	const inboxQuery = trpcReact.vault.inbox.listByAgent.useQuery({agentId: item.id})
+	const markReadMutation = trpcReact.vault.inbox.markRead.useMutation()
+	const inboxSlice = (inboxQuery.data ?? []).slice(0, 3)
 
 	return (
 		<div className='flex h-full flex-col gap-4 overflow-y-auto p-4'>
@@ -193,7 +188,11 @@ export function AgentDetail({
 					<button
 						type='button'
 						data-testid='run-now-btn'
-						onClick={() => onRunNow?.()}
+						onClick={() => {
+							onRunNow?.()
+							// Phase 177-04: refetch inbox after run is triggered
+							inboxQuery.refetch()
+						}}
 						className='flex items-center gap-1 rounded bg-accent-blue px-2 py-1 text-xs text-bg'
 					>
 						<Play size={12} />
@@ -214,10 +213,17 @@ export function AgentDetail({
 							<li
 								key={e.id}
 								data-testid={`inbox-row-${e.id}`}
-								onClick={() => onInboxEntryClick?.(e.id)}
+								onClick={() =>
+									markReadMutation.mutate(
+										{filePath: e.filePath},
+										{onSuccess: () => inboxQuery.refetch()},
+									)
+								}
 								className='cursor-pointer rounded px-2 py-1 text-sm hover:bg-surface-2'
 							>
-								<span className='truncate'>{e.subject}</span>
+								<span className='truncate'>
+									{new Date(e.runAt).toLocaleDateString()} — {e.status}
+								</span>
 							</li>
 						))}
 					</ul>
