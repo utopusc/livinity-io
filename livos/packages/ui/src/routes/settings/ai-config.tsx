@@ -3,12 +3,20 @@ import {TbLoader2, TbAlertCircle, TbCircleCheck, TbLogout, TbLogin, TbCopy, TbCh
 
 import {Button} from '@/shadcn-components/ui/button'
 import {Input} from '@/shadcn-components/ui/input'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/shadcn-components/ui/select'
 import {trpcReact} from '@/trpc/trpc'
 
 import {SettingsPageLayout} from './_components/settings-page-layout'
 import {UsageSection} from './_components/usage-section'
 import {ApiKeysSection} from './_components/api-keys-section'
 import {SettingsPageHeader} from '@/components/settings-page-header'
+
+// Phase 182-01 — Default model picker absorbed from deleted panel (D-V38-L).
+const CHAT_MODELS = [
+	{value: 'claude-opus-4-7', label: 'Opus 4.7 — best quality (default)'},
+	{value: 'claude-sonnet-4-6', label: 'Sonnet 4.6 — balanced'},
+	{value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5 — fastest, cheapest'},
+] as const
 
 export default function AiConfigPage() {
 	// -- Kimi login state -----------------------------------------------
@@ -154,6 +162,13 @@ export default function AiConfigPage() {
 			utils.ai.getProviders.invalidate()
 		},
 	})
+
+	// -- Default Chat Model (Phase 182-01 — absorbed from deleted panel) -----
+	const modelQ = trpcReact.chatConfig.getModel.useQuery()
+	const setModelMutation = trpcReact.chatConfig.setModel.useMutation({
+		onSuccess: () => utils.chatConfig.getModel.invalidate(),
+	})
+	const currentModel = modelQ.data?.model ?? 'claude-opus-4-7'
 
 	// -- Kimi poll for login completion ---------------------------------
 	const pollQ = trpcReact.ai.kimiLoginPoll.useQuery(
@@ -701,6 +716,25 @@ export default function AiConfigPage() {
 
 				{/* ── Usage Section (Phase 44 FR-DASH-01..03) ───────────── */}
 				<UsageSection />
+
+				{/* ── Default Chat Model (Phase 182-01 — D-V38-L absorbed model picker) ── */}
+				<div className='mt-8 space-y-4'>
+					<h2 className='text-body font-semibold'>Default Chat Model</h2>
+					<p className='text-caption text-text-secondary'>Applies to new chat sessions. Existing sessions keep their current model.</p>
+					<Select
+						value={currentModel}
+						onValueChange={(v) => setModelMutation.mutate({model: v as (typeof CHAT_MODELS)[number]['value']})}
+					>
+						<SelectTrigger className='w-64'>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							{CHAT_MODELS.map((m) => (
+								<SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
 			</div>
 		</SettingsPageLayout>
 	)

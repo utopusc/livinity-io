@@ -132,10 +132,13 @@ const AiConfigLazy = React.lazy(() => import('@/routes/settings/ai-config'))
 const LivAgentLazy = React.lazy(() => import('@/routes/settings/liv-agent'))
 // Phase 102-07 — Chrome Master Login (D-102-MASTER-LOGIN-UI).
 const ChromeMasterLazy = React.lazy(() => import('@/routes/settings/chrome-master'))
-// Phase 165-02 — Chat backend toggle (vault | legacy) + default model picker.
-const ChatBackendLazy = React.lazy(() => import('@/routes/settings/chat-backend'))
 // Phase 165-02 — Autonomous agents panel (list, toggle, runNow, budget cap editor).
+// Phase 182-01: renamed label to "Scheduled Agents" (D-V38-M).
 const AutonomousAgentsLazy = React.lazy(() => import('@/routes/settings/autonomous-agents'))
+// Phase 182-03 — AI Chat Settings (CC PTY session config).
+const AiChatSettingsLazy = React.lazy(() => import('@/routes/settings/ai-chat-settings'))
+// Phase 182-04 — MCP Servers management panel.
+const McpServersLazy = React.lazy(() => import('@/routes/settings/mcp-servers'))
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -151,8 +154,10 @@ type SettingsSection =
 	| 'ai-config'
 	| 'liv-agent'
 	| 'chrome-master'
-	| 'chat-backend'
+	// 'chat-backend' removed — Phase 182-01 (D-V38-L)
 	| 'autonomous-agents'
+	| 'ai-chat-settings'
+	| 'mcp-servers'
 	| 'integrations'
 	| 'gmail'
 	| 'dm-pairing'
@@ -202,10 +207,11 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'users', icon: TbUsers, label: 'Users', description: 'Manage users & invites', adminOnly: true},
 	{id: 'admin-devices', icon: TbServer2, label: 'Devices', description: 'All devices across all users', adminOnly: true},
 	{id: 'ai-config', icon: TbKey, label: 'AI Configuration', description: 'AI providers & model', adminOnly: true},
-	// Phase 165-02 — Chat backend (vault | legacy) + default model picker.
-	{id: 'chat-backend', icon: TbMessages, label: 'Chat Backend', description: 'Vault mode & default model', adminOnly: true},
-	// Phase 165-02 — Autonomous agents list + budget cap editor.
-	{id: 'autonomous-agents', icon: TbRobot, label: 'Autonomous Agents', description: 'Scheduled agents & daily budget cap', adminOnly: true},
+	// Phase 182-01 — ChatBackend removed (D-V38-L). New AI Chat Settings + MCP Servers entries added.
+	{id: 'ai-chat-settings', icon: TbMessages, label: 'AI Chat Settings', description: 'CC PTY session config & permissions', adminOnly: true},
+	{id: 'mcp-servers', icon: TbPlugConnected, label: 'MCP Servers', description: 'Manage Model Context Protocol servers', adminOnly: true},
+	// Phase 165-02 / 182-01 — renamed "Autonomous Agents" → "Scheduled Agents" (D-V38-M).
+	{id: 'autonomous-agents', icon: TbRobot, label: 'Scheduled Agents', description: 'Scheduled agents & daily budget cap', adminOnly: true},
 	// Phase 102-07 — master Chrome profile for WebApp browser inheritance.
 	{id: 'chrome-master', icon: TbBrandChrome, label: 'Chrome Profile', description: 'Master Chrome login for WebApps', adminOnly: true},
 	{id: 'my-domains', icon: TbWorld, label: 'My Domains', description: 'Domains synced from livinity.io', adminOnly: true},
@@ -491,8 +497,11 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><LivAgentLazy /></Suspense>
 		case 'chrome-master':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><ChromeMasterLazy /></Suspense>
-		case 'chat-backend':
-			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><ChatBackendLazy /></Suspense>
+		// 'chat-backend' removed — Phase 182-01 (D-V38-L)
+		case 'ai-chat-settings':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AiChatSettingsLazy /></Suspense>
+		case 'mcp-servers':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><McpServersLazy /></Suspense>
 		case 'autonomous-agents':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AutonomousAgentsLazy /></Suspense>
 		case 'integrations':
