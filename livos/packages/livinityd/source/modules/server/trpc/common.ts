@@ -546,4 +546,11 @@ export const httpOnlyPaths = [
 	'vault.inbox.listGlobal',
 	'vault.inbox.markRead',
 	'vault.inbox.get',
+	// Phase 182-03 — CC PTY session configuration (ccPty.getConfig/setConfig/validatePaths).
+	// getConfig is a page-render dependency for AiChatSettingsPage.
+	// setConfig is a mutation that must survive WS reconnect after systemctl restart livos.
+	// validatePaths does filesystem reads that can take 100-500ms — route via HTTP.
+	'ccPty.getConfig',
+	'ccPty.setConfig',
+	'ccPty.validatePaths',
 ] as const
