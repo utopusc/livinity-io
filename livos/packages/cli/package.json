@@ -18,7 +18,8 @@
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
     "yargs": "^17.7.2",
