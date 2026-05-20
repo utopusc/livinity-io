@@ -1,14 +1,14 @@
 // Phase 167-04 — AI Chat dock route, swapped to CcTerminal (v35.0 D-V35-K).
 // Phase 169-04 — Tab nav added (Terminal | Vault Graph).
+// Phase 168-03 — Sidebar wired. <SessionSidebar> replaces the placeholder
+// and owns list/create/rename/delete via trpcReact.ccPty.*. Active session
+// state lives here (lifted) so CcTerminal can remount on session switch
+// via `key={activeSessionId}`.
 //
 // Before Phase 167: this file was the 750-line legacy SDK chat panel.
 // It has been MOVED VERBATIM to `./legacy-ai-chat-panel.tsx` and is
 // re-exported from `routes/chat-mobile/index.tsx` for mobile users
 // (D-V35-G). Desktop users now see the new xterm.js-based CcTerminal.
-//
-// Sidebar (session list, lifecycle controls) is deferred to Phase 168.
-// For now the desktop view shows a placeholder sidebar + a "Select or
-// create a session to start" empty-state right pane.
 //
 // Phase 169-04: a tab strip ('Terminal' | 'Vault Graph') is rendered above
 // the right pane. Terminal tab keeps the existing CcTerminal/EmptyState
@@ -19,19 +19,17 @@
 
 import {useState} from 'react'
 
-import {useIsMobile} from '@/hooks/use-is-mobile'
+import {SessionSidebar} from '@/features/cc-sessions'
 import {CcTerminal} from '@/features/cc-terminal'
 import {VaultGraph} from '@/features/vault-graph'
+import {useIsMobile} from '@/hooks/use-is-mobile'
 
 type Tab = 'terminal' | 'graph'
 
 export default function AiChatRoute() {
 	const isMobile = useIsMobile()
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	const [activeSessionId, _setActiveSessionId] = useState<string | null>(null)
+	const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
 	const [activeTab, setActiveTab] = useState<Tab>('terminal')
-	// Sidebar wiring deferred to Phase 168 — _setActiveSessionId will be
-	// wired into the session-list click handler then.
 
 	if (isMobile) {
 		return (
@@ -48,10 +46,13 @@ export default function AiChatRoute() {
 	}
 
 	return (
-		<div className='grid h-full' style={{gridTemplateColumns: '260px 1fr'}}>
-			{/* Sidebar — Phase 168 wires it; placeholder for now */}
-			<div className='border-r border-border bg-bg-secondary p-4'>
-				<p className='text-sm text-text-secondary'>Session sidebar — Phase 168</p>
+		<div className='grid h-full' style={{gridTemplateColumns: '280px 1fr'}}>
+			{/* Phase 168-03 — CC PTY session sidebar (lifecycle + selection). */}
+			<div className='border-r border-border bg-bg-secondary'>
+				<SessionSidebar
+					activeSessionId={activeSessionId}
+					onSelect={setActiveSessionId}
+				/>
 			</div>
 			<div className='flex h-full flex-col overflow-hidden'>
 				{/* Phase 169-04 — Terminal / Vault Graph tab nav */}
