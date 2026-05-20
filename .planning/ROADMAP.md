@@ -2135,7 +2135,14 @@ Plans:
 **Goal:** NEW livinityd module `vault-items/` with types, file-backed item-store, tree-resolver, atomic CRUD ops, schema v1. tRPC `vault.items.{list,get,create,update,move,archive,delete}`. Redis pub/sub `liv:tree:updated`.
 
 **Wave:** 1 (parallel-safe with 172)
-**Estimated:** 5 plans
+**Plans:** 5 plans (waves 1 → 2 → 3 → 4)
+
+Plans:
+- [ ] 171-01-PLAN.md — Item types + vault-root-resolver + nanoid dep (wave 1, no deps)
+- [ ] 171-02-PLAN.md — ItemStore (file-backed atomic CRUD + per-type scaffolding) (wave 2, depends 171-01)
+- [ ] 171-03-PLAN.md — Tree-resolver + cycle/depth-cap validation + tree.json cache (wave 3, depends 171-01)
+- [ ] 171-04-PLAN.md — tRPC `vault.items.*` router (7 procedures) + httpOnlyPaths (wave 4, depends 171-02 + 171-03)
+- [ ] 171-05-PLAN.md — PubSub `liv:tree:updated` wrapper + livinityd boot wire-up (wave 4, depends 171-02)
 
 ---
 
