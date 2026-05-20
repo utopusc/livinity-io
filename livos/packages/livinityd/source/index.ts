@@ -47,6 +47,13 @@ import {createSessionActivityProvider} from './modules/server/ws-agent.js'
 // is BYTE-IDENTICAL — the new cc-pty/idle-reaper.ts is a SEPARATE file
 // mirroring the pattern, not modifying the original.
 import {CcPtyManager, SessionStore, CcPtyIdleReaper} from './modules/cc-pty/index.js'
+// Phase 169-05 — Vault graph factory import is kept here (source/index.ts) for
+// grep visibility per the 169-05 sacred-guard contract; the actual app.use()
+// mount happens inside server/index.ts via the mountVaultGraphRoutes helper,
+// where livinityd.server.verifyToken is available for the auth middleware.
+// vaultRoot precedence: process.env.VAULT_ROOT → NODE_ENV=test → Mini PC default.
+import {createVaultGraphRouter} from './modules/vault-graph/routes.js'
+void createVaultGraphRouter // referenced by mountVaultGraphRoutes; explicit no-op keeps the symbol in grep results.
 // Phase 164-02 — Autonomous scheduler. Boot-time read of vault/livos-agents/*.md
 // + cron registration of every enabled agent. Gated by Redis flag
 // liv:config:autonomous_enabled (default false = no-op). Non-fatal on every

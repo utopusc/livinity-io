@@ -56,6 +56,11 @@ import {mountBearerAuthMiddleware} from '../api-keys/bearer-auth.js'
 import {mountAgentRunsRoutes} from '../ai/agent-runs.js'
 import {mountConversationSearchRoute} from '../ai/conversation-search.js'
 import {mountPinnedRoutes} from '../ai/pinned-routes.js'
+// Phase 169-05 — Vault Graph routes mount. Reuses livinityd.server.verifyToken
+// (same JWT verifier as mountAgentRunsRoutes). vaultRoot is config-locked at
+// mount time from `process.env.VAULT_ROOT` (or '/home/bruce/livinity-vault/'
+// default on Mini PC; or `${cwd}/test-vault` under NODE_ENV=test).
+import {mountVaultGraphRoutes} from '../vault-graph/routes.js'
 
 export type ServerOptions = {livinityd: Livinityd}
 
@@ -1585,6 +1590,18 @@ class Server {
 		// task assembly path; this route mount only handles the user-
 		// facing pin/unpin surface.
 		mountPinnedRoutes(this.app, this.livinityd)
+
+		// ── Phase 169-05 — Vault Graph routes (additive) ─────────────────────
+		// GET /api/vault/graph — walks vaultRoot (capped at 2000 files), builds
+		// the wikilink graph, returns {nodes, edges, truncated, totalFiles}.
+		// GET /api/vault/file?path=… — serves a single .md file's text content
+		// (capped at 1 MiB), returns {path, content}. Both routes are JWT-authed
+		// via livinityd.server.verifyToken (same verifier as mountAgentRunsRoutes
+		// — Phase 67-03). vaultRoot is config-locked at mount time and never
+		// derived from request input (D-V35-I + threat T-169-05-01).
+		// vaultGraphRouter named here for grep visibility (sacred guard 169-05).
+		const vaultGraphRouter = mountVaultGraphRoutes(this.app, this.livinityd)
+		void vaultGraphRouter // suppress unused-var lint (mount side effect is the contract)
 
 		// Handle log file downloads
 		this.app.get('/logs/', async (request, response) => {
