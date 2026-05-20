@@ -520,26 +520,15 @@ export const httpOnlyPaths = [
 	'chatConfig.setBackend',
 	'chatConfig.getModel',
 	'chatConfig.setModel',
-	// Phase 168-01 — CC PTY session lifecycle router (v35.0 D-V35-A/C/H).
-	// 5 procedures wrap Phase 166's CcPtyManager. All 5 paths route via
-	// HTTP for the standard WS-reconnect-survival reason (memory pitfall
-	// B-12 / X-04 — same cluster as autonomous.* line 510, chatConfig.*
-	// line 515, agents.* line 282). create / rename / delete are
-	// autosave-adjacent admin mutations; list / getPreview are sidebar-
-	// render dependencies where the WS-handshake flicker is undesirable.
-	'ccPty.list',
-	'ccPty.create',
-	'ccPty.rename',
-	'ccPty.delete',
-	'ccPty.getPreview',
 	// Phase 171-04 — Vault Items lifecycle namespace (v38 D-V38-A/B/C/E).
 	// 7 procedures wrap the Phase 171-02 ItemStore + Phase 171-03 tree-resolver.
 	// All 7 paths route via HTTP for the standard WS-reconnect-survival reason
-	// (memory pitfall B-12 / X-04 — same cluster as ccPty.* line 530-534,
-	// agents.* line 282, marketplace.* line 299). create / update / move /
-	// archive / delete are autosave-adjacent admin mutations; list / get are
-	// page-render dependencies for the Phase 174 SidebarTree where the WS-
-	// handshake-delay flicker is undesirable.
+	// (memory pitfall B-12 / X-04 — same cluster as agents.* line 282,
+	// marketplace.* line 299). create / update / move / archive / delete are
+	// autosave-adjacent admin mutations; list / get are page-render
+	// dependencies for the Phase 174 SidebarTree where the WS-handshake-delay
+	// flicker is undesirable. (Phase 175-05 removed the legacy ccPty.* cluster
+	// — superseded by vault.items.* + Phase 175 detail views.)
 	'vault.items.list',
 	'vault.items.get',
 	'vault.items.create',

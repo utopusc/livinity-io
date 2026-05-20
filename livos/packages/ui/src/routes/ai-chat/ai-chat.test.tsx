@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
 //
-// Phase 167-04 — AI Chat route swap unit tests.
+// Phase 167-04 / 169-04 / 175-05 — AI Chat route tests (post-cc-sessions deletion).
 //
 // Pattern: RTL-absent (D-NO-NEW-DEPS) — direct react-dom/client mount via
-// act(). Mocks @/features/cc-terminal + @/hooks/use-is-mobile so the
-// behavior under test is route composition, not xterm rendering.
+// act(). Mocks @/hooks/use-is-mobile + @/features/vault-graph so the
+// behavior under test is route composition, not the heavy children.
+//
+// Phase 175-05 — All SessionSidebar / CcTerminal / cc-sessions assertions
+// were removed. The Terminal tab now renders an empty-state hint
+// ("Open a Chat from the sidebar to attach a terminal.") because chat
+// session lifecycle moved to Phase 174 SidebarTree + Phase 175 dock
+// window manager. The remaining surface here is the tab nav + mobile
+// redirect.
 
 import {readFileSync} from 'node:fs'
 import {resolve} from 'node:path'
@@ -17,53 +24,16 @@ import {createRoot, type Root} from 'react-dom/client'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-// useIsMobile — toggled per test via vi.mocked(...).mockReturnValue(...)
 const useIsMobileMock = vi.fn(() => false)
 vi.mock('@/hooks/use-is-mobile', () => ({
 	useIsMobile: () => useIsMobileMock(),
 }))
 
-// CcTerminal — capture sessionId prop, render a sentinel div.
-const ccTerminalMock = vi.fn((_props: {sessionId: string}) => null)
-vi.mock('@/features/cc-terminal', () => ({
-	CcTerminal: (props: {sessionId: string}) => {
-		ccTerminalMock(props)
-		return <div data-testid='cc-terminal' data-session={props.sessionId} />
-	},
-}))
-
-// Phase 169-04 — VaultGraph mock for the new tab.
 const vaultGraphMock = vi.fn(() => null)
 vi.mock('@/features/vault-graph', () => ({
 	VaultGraph: () => {
 		vaultGraphMock()
 		return <div data-testid='vault-graph' />
-	},
-}))
-
-// Phase 168-03 — SessionSidebar mock. The mock exposes the onSelect callback
-// via a button click so tests can simulate sidebar-driven session selection
-// without dragging in the real trpcReact provider tree.
-type SidebarProps = {
-	activeSessionId: string | null
-	onSelect: (id: string | null) => void
-}
-const sessionSidebarMock = vi.fn((_props: SidebarProps) => null)
-// Captured onSelect prop from the latest render (tests use this to simulate
-// the sidebar firing onSelect with a target sessionId).
-let lastSidebarOnSelect: ((id: string | null) => void) | null = null
-vi.mock('@/features/cc-sessions', () => ({
-	SessionSidebar: (props: SidebarProps) => {
-		sessionSidebarMock(props)
-		lastSidebarOnSelect = props.onSelect
-		return (
-			<div
-				data-testid='mock-session-sidebar'
-				data-active-session={props.activeSessionId ?? ''}
-			>
-				mock-sidebar
-			</div>
-		)
 	},
 }))
 
@@ -75,10 +45,7 @@ let root: Root
 beforeEach(() => {
 	useIsMobileMock.mockReset()
 	useIsMobileMock.mockReturnValue(false)
-	ccTerminalMock.mockReset()
 	vaultGraphMock.mockReset()
-	sessionSidebarMock.mockReset()
-	lastSidebarOnSelect = null
 	container = document.createElement('div')
 	document.body.appendChild(container)
 	root = createRoot(container)
@@ -95,7 +62,7 @@ afterEach(() => {
 
 import AiChatRoute from './index'
 
-describe('AiChatRoute — desktop branch', () => {
+describe('AiChatRoute — desktop branch (Phase 175-05)', () => {
 	beforeEach(() => {
 		useIsMobileMock.mockReturnValue(false)
 	})
@@ -107,90 +74,11 @@ describe('AiChatRoute — desktop branch', () => {
 		expect(container.textContent).toBeTruthy()
 	})
 
-	it('renders the grid container with 280px sidebar template (Phase 168-03 widened from 260px)', () => {
+	it('Terminal tab shows the empty-state hint pointing to the global sidebar', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
-		const grid = container.querySelector('div.grid')
-		expect(grid).not.toBeNull()
-		const style = (grid as HTMLElement).getAttribute('style') ?? ''
-		expect(style).toMatch(/grid-template-columns:\s*280px/i)
-	})
-
-	it('renders the Phase 168-03 SessionSidebar mock (not the legacy placeholder)', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		expect(sessionSidebarMock).toHaveBeenCalled()
-		expect(container.querySelector('[data-testid="mock-session-sidebar"]')).not.toBeNull()
-		// Legacy placeholder string must NOT be present anywhere.
-		expect(container.textContent).not.toMatch(/Session sidebar — Phase 168/)
-	})
-
-	it('with no activeSessionId renders the "Select or create a session to start" empty state', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		expect(container.textContent).toMatch(/Select or create a session to start/)
-		// CcTerminal should NOT have been rendered
-		expect(ccTerminalMock).not.toHaveBeenCalled()
-	})
-
-	// ── Phase 168-03 wiring assertions (A1-A4) ─────────────────────────────
-
-	it('A1: <SessionSidebar> mock is mounted on desktop', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		expect(sessionSidebarMock).toHaveBeenCalled()
-		const sidebar = container.querySelector('[data-testid="mock-session-sidebar"]')
-		expect(sidebar).not.toBeNull()
-	})
-
-	it('A2: SessionSidebar onSelect("uuid-1") mounts CcTerminal with sessionId="uuid-1"', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		expect(lastSidebarOnSelect).toBeTypeOf('function')
-		act(() => {
-			lastSidebarOnSelect!('uuid-1')
-		})
-		// CcTerminal mock is invoked with the new sessionId.
-		const lastCcCall = ccTerminalMock.mock.calls.at(-1)
-		expect(lastCcCall).toBeDefined()
-		expect(lastCcCall![0]).toMatchObject({sessionId: 'uuid-1'})
-		// DOM reflects it.
-		const term = container.querySelector('[data-testid="cc-terminal"]')
-		expect(term).not.toBeNull()
-		expect(term!.getAttribute('data-session')).toBe('uuid-1')
-	})
-
-	it('A3: switching sessions remounts CcTerminal (key change triggers a fresh mount call)', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		// Mount uuid-1
-		act(() => lastSidebarOnSelect!('uuid-1'))
-		const callsAfterFirst = ccTerminalMock.mock.calls.length
-		// Switch to uuid-2
-		act(() => lastSidebarOnSelect!('uuid-2'))
-		// A new call must have been registered (key={activeSessionId} remount semantics).
-		expect(ccTerminalMock.mock.calls.length).toBeGreaterThan(callsAfterFirst)
-		const lastCall = ccTerminalMock.mock.calls.at(-1)!
-		expect(lastCall[0]).toMatchObject({sessionId: 'uuid-2'})
-		// DOM reflects the new id (only one mount visible — fresh attach per Phase 167 dispose contract).
-		const terms = container.querySelectorAll('[data-testid="cc-terminal"]')
-		expect(terms.length).toBe(1)
-		expect(terms[0].getAttribute('data-session')).toBe('uuid-2')
-	})
-
-	it('A4: with activeSessionId=null, EmptyState renders and CcTerminal is NOT in the DOM', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		// Default render — no selection.
-		expect(container.textContent).toMatch(/Select or create a session to start/)
-		expect(container.querySelector('[data-testid="cc-terminal"]')).toBeNull()
+		expect(container.textContent).toMatch(/Open a Chat from the sidebar/)
 	})
 })
 
@@ -214,17 +102,9 @@ describe('AiChatRoute — mobile branch', () => {
 		expect(link).not.toBeNull()
 		expect(link?.textContent).toMatch(/Open mobile chat/i)
 	})
-
-	it('does NOT render the grid layout or CcTerminal on mobile', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		expect(container.querySelector('div.grid')).toBeNull()
-		expect(ccTerminalMock).not.toHaveBeenCalled()
-	})
 })
 
-// ── Phase 169-04 — Terminal | Vault Graph tab nav ─────────────────────────
+// ── Phase 169-04 — Terminal | Vault Graph tab nav (still in scope) ────────
 
 describe('AiChatRoute — Phase 169-04 tab nav', () => {
 	beforeEach(() => {
@@ -242,13 +122,11 @@ describe('AiChatRoute — Phase 169-04 tab nav', () => {
 		expect(buttons).toContain('Vault Graph')
 	})
 
-	it('on initial mount, activeTab="terminal" → EmptyState renders (NOT VaultGraph)', () => {
+	it('on initial mount, activeTab="terminal" → empty-state hint, NOT VaultGraph', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
-		// With no activeSessionId AND terminal tab, the empty state shows.
-		expect(container.textContent).toMatch(/Select or create a session to start/)
-		// VaultGraph must NOT have been mounted.
+		expect(container.textContent).toMatch(/Open a Chat from the sidebar/)
 		expect(vaultGraphMock).not.toHaveBeenCalled()
 		expect(container.querySelector('[data-testid="vault-graph"]')).toBeNull()
 	})
@@ -266,10 +144,7 @@ describe('AiChatRoute — Phase 169-04 tab nav', () => {
 		})
 		expect(vaultGraphMock).toHaveBeenCalled()
 		expect(container.querySelector('[data-testid="vault-graph"]')).not.toBeNull()
-		// Empty-state text should no longer be present after switch.
-		expect(container.textContent).not.toMatch(
-			/Select or create a session to start/,
-		)
+		expect(container.textContent).not.toMatch(/Open a Chat from the sidebar/)
 	})
 
 	it('clicking "Terminal" after switching to Vault Graph restores the Terminal branch', () => {
@@ -284,32 +159,15 @@ describe('AiChatRoute — Phase 169-04 tab nav', () => {
 			(b) => b.textContent === 'Terminal',
 		) as HTMLButtonElement
 		act(() => tBtn.click())
-		// VaultGraph is unmounted.
 		expect(container.querySelector('[data-testid="vault-graph"]')).toBeNull()
-		// EmptyState (no activeSessionId) re-renders.
-		expect(container.textContent).toMatch(/Select or create a session to start/)
-	})
-
-	it('with activeTab="terminal" and activeSessionId=null, EmptyState renders (not VaultGraph)', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		// Initial mount: terminal tab + null session → EmptyState text present.
-		expect(container.textContent).toMatch(/Select or create a session to start/)
-		// VaultGraph stub never invoked at this point.
-		expect(vaultGraphMock).not.toHaveBeenCalled()
+		expect(container.textContent).toMatch(/Open a Chat from the sidebar/)
 	})
 })
 
-// ── Source-text invariants ─────────────────────────────────────────────────
+// ── Source-text invariants (post-175-05) ──────────────────────────────────
 
 describe('routes/ai-chat/index.tsx — source-text invariants', () => {
 	const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
-
-	it('imports CcTerminal from @/features/cc-terminal', () => {
-		expect(SRC).toMatch(/from\s+['"]@\/features\/cc-terminal['"]/)
-		expect(SRC).toMatch(/CcTerminal/)
-	})
 
 	it('imports useIsMobile hook', () => {
 		expect(SRC).toMatch(/from\s+['"]@\/hooks\/use-is-mobile['"]/)
@@ -321,36 +179,27 @@ describe('routes/ai-chat/index.tsx — source-text invariants', () => {
 	})
 
 	it('does NOT import the legacy AI chat panel module (D-V35-K)', () => {
-		// The new ai-chat/index.tsx must not import the relocated legacy panel.
-		// `legacy-ai-chat-panel` may appear in a comment but NEVER in an import.
 		const importLines = SRC.split(/\r?\n/).filter((l) => /^\s*import\s/.test(l))
 		const matches = importLines.filter((l) => /legacy-ai-chat-panel/.test(l))
 		expect(matches).toEqual([])
 	})
 
-	// Phase 169-04 — sacred-invariants for the tab nav additions.
 	it('imports VaultGraph from @/features/vault-graph (Phase 169-04)', () => {
 		expect(SRC).toMatch(/from\s+['"]@\/features\/vault-graph['"]/)
 		expect(SRC).toMatch(/VaultGraph/)
 	})
 
-	it('preserves the Phase 167 CcTerminal mount with sessionId key (sacred guard)', () => {
-		// CcTerminal must still be mounted with key={activeSessionId} (Phase 167-04).
-		expect(SRC).toMatch(/CcTerminal\s+key=\{activeSessionId\}/)
+	// Phase 175-05 — post-deletion invariants.
+	it('does NOT import @/features/cc-sessions (Phase 175-05 deletion)', () => {
+		// Check actual import lines only — a historical reference in a comment is allowed.
+		const importLines = SRC.split(/\r?\n/).filter((l) => /^\s*import\s/.test(l))
+		const ccSessionsImport = importLines.filter((l) => /cc-sessions/.test(l))
+		expect(ccSessionsImport).toEqual([])
+		const sidebarImport = importLines.filter((l) => /SessionSidebar/.test(l))
+		expect(sidebarImport).toEqual([])
 	})
 
-	// Phase 168-03 — sacred-invariants for the sidebar wire-up.
-	it('imports SessionSidebar from @/features/cc-sessions (Phase 168-03)', () => {
-		expect(SRC).toMatch(/from\s+['"]@\/features\/cc-sessions['"]/)
-		expect(SRC).toMatch(/SessionSidebar/)
-	})
-
-	it('renders <SessionSidebar with onSelect={setActiveSessionId} (Phase 168-03 wire)', () => {
-		expect(SRC).toMatch(/<SessionSidebar/)
-		expect(SRC).toMatch(/onSelect=\{setActiveSessionId\}/)
-	})
-
-	it('removes the legacy "Session sidebar — Phase 168" placeholder string', () => {
-		expect(SRC).not.toMatch(/Session sidebar — Phase 168/)
+	it('does NOT import @/features/cc-terminal (Phase 175-05 — moved to dock window manager)', () => {
+		expect(SRC).not.toMatch(/from\s+['"]@\/features\/cc-terminal['"]/)
 	})
 })
