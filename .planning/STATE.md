@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v38.0
 milestone_name: Liv Agent Platform
 status: opened
-last_updated: "2026-05-20T08:50:00.000Z"
+last_updated: "2026-05-20T11:40:00.000Z"
 progress:
   total_phases: 94
-  completed_phases: 37
+  completed_phases: 38
   total_plans: 352
-  completed_plans: 250
-  percent: 71
+  completed_plans: 255
+  percent: 72
 ---
 
 # Project State
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md
 
 **Active milestone:** v38.0 — Liv Agent Platform — **OPENED 2026-05-20** (14 phases / 61 plans / 5 waves; master plan `.planning/v38-LIV-AGENT-PLATFORM-MASTER.md`; pivots flat session list → tree of Project/Agent/Chat Items + 4 LivOS-native default skills + `@livos/cli` npm package + Obsidian-class Vault Graph + mobile CC PTY + Settings restructure; 21 locked D-V38-A..U decisions; vault root renamed `livinity-vault` → `~/liv/` per operator vote 2026-05-20).
 
-**Last shipped phase:** v35.0 milestone CODE-COMPLETE-AND-LIVE-VERIFIED 2026-05-19 (5 phases / 23 plans / 26 commits + 167.1/167.2/167.3 hotfixes; live Mini PC `.deployed-sha=8310beb1`; operator browser walk still pending). Plus three v35.x post-ship hotfixes shipped 2026-05-20: 167.1 (WS auth `?token=` query), 167.2 (UTF-8 + clipboard + locale env), 167.3 (Ctrl+Shift+C case-insensitive).
+**Last shipped phase:** **Phase 172** `@livos/cli` Package Skeleton — CODE-COMPLETE 2026-05-20 (5 plans / wave 1 / 50 automated checks PASS: 46 vitest + 4 postinstall smoke; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across all 172-* commits; `liv init <path>` + `liv doctor` E2E green via real `dist/cli.js` spawn). See `.planning/phases/172-livos-cli-skeleton/172-VERIFICATION.md`. Wave 1 status now: 171 CODE-COMPLETE (66 vitest PASS, shipped earlier), 172 CODE-COMPLETE (just landed), 178 + 182 still PLANNED.
 
-**Next action:** `/clear` then `/gsd-autonomous --from 171` — wave-based autonomous dispatch. v38 Q1-Q10 operator decisions defaulted per master plan recommendations (vault path = `~/liv/` from explicit operator vote; rest accept proposed defaults).
+**Next action:** `/gsd-execute-phase 178` or `/gsd-execute-phase 182` (wave-1 remainders, parallel-safe with each other and with already-complete 171/172). Or `/gsd-execute-phase 173` to start wave 2 (vault rename + sacred freeze, depends 171 ✅).
 
 **v35.0 phase queue (FINAL):**
 
@@ -43,7 +43,7 @@ See: .planning/PROJECT.md
 
 Wave 1 — Independent foundations (4 parallel, file-disjoint):
 - [ ] Phase 171 — Item Model + Storage Layer — 5 plans (no deps)
-- [ ] Phase 172 — `@livos/cli` Package Skeleton — 5 plans (no deps)
+- [x] Phase 172 — `@livos/cli` Package Skeleton — 5 plans — ✅ CODE-COMPLETE 2026-05-20 (46 vitest + 4 smoke PASS; sacred SHA preserved)
 - [ ] Phase 178 — Vault Graph MVP Polish — 4 plans (no deps)
 - [ ] Phase 182 — Settings Restructure — 5 plans (no deps)
 
