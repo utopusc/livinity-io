@@ -22,6 +22,11 @@
 // renderer (slightly slower but functional). Adding these addons is
 // deferred to a future phase that explicitly authorizes the deps.
 
+// Phase 181-01 — forward-declare CcTerminalHandle type; full forwardRef in 181-03.
+export interface CcTerminalHandle {
+	sendStdin: (data: string) => void
+}
+
 import {useEffect, useRef} from 'react'
 import {Terminal} from '@xterm/xterm'
 import {FitAddon} from '@xterm/addon-fit'

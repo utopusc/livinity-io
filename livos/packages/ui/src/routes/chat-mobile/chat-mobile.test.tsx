@@ -2,6 +2,7 @@
 //
 // Phase 167-04 — chat-mobile route unit tests + D-V35-K single-import
 // invariant lock.
+// Phase 181-01 — Route branch tests (tablet/phone/desktop).
 //
 // Pattern: RTL-absent (D-NO-NEW-DEPS) — direct react-dom/client mount.
 
@@ -15,13 +16,38 @@ import {createRoot, type Root} from 'react-dom/client'
 ;(globalThis as {IS_REACT_ACT_ENVIRONMENT?: boolean}).IS_REACT_ACT_ENVIRONMENT = true
 
 // ── Mock the legacy AI chat panel ─────────────────────────────────────────
-//
-// The real component is 750 lines and pulls in tRPC, react-router-dom,
-// `useAgentSocket`, etc. — none of which matter for this route-composition
-// test. Substitute a sentinel <div>.
-
 vi.mock('@/routes/ai-chat/legacy-ai-chat-panel', () => ({
 	default: () => <div data-testid='legacy-ai-chat-panel'>LegacyAiChatPanel sentinel</div>,
+}))
+
+// ── Mock CcTerminal ───────────────────────────────────────────────────────
+vi.mock('@/features/cc-terminal/CcTerminal', () => ({
+	CcTerminal: ({sessionId}: {sessionId: string}) => (
+		<div data-testid='cc-terminal' data-session={sessionId}>
+			CcTerminal sentinel
+		</div>
+	),
+}))
+
+// ── Mock MobileTerminalKeyBar ─────────────────────────────────────────────
+vi.mock('@/features/mobile-terminal/MobileTerminalKeyBar', () => ({
+	MobileTerminalKeyBar: () => <div data-testid='mobile-key-bar'>KeyBar sentinel</div>,
+}))
+
+// ── Mock MobileBubbleChat ─────────────────────────────────────────────────
+vi.mock('@/features/mobile-terminal/MobileBubbleChat', () => ({
+	MobileBubbleChat: ({sessionId}: {sessionId: string}) => (
+		<div data-testid='mobile-bubble-chat' data-session={sessionId}>
+			MobileBubbleChat sentinel
+		</div>
+	),
+}))
+
+// ── useDeviceClass mock — controlled per test ─────────────────────────────
+const mockDeviceClass = {value: 'desktop' as 'phone' | 'tablet' | 'desktop'}
+vi.mock('@/hooks/useDeviceClass', () => ({
+	useDeviceClass: () => mockDeviceClass.value,
+	DeviceClass: {},
 }))
 
 // ── Test setup ────────────────────────────────────────────────────────────
@@ -30,6 +56,7 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
+	mockDeviceClass.value = 'desktop'
 	container = document.createElement('div')
 	document.body.appendChild(container)
 	root = createRoot(container)
@@ -46,15 +73,18 @@ afterEach(() => {
 
 import ChatMobileRoute from './index'
 
-describe('ChatMobileRoute', () => {
+// ── Phase 167-04 baseline tests ───────────────────────────────────────────
+
+describe('ChatMobileRoute (Phase 167-04 baseline)', () => {
 	it('renders without throwing', () => {
 		act(() => {
 			root.render(<ChatMobileRoute />)
 		})
+		// desktop branch renders legacy panel
 		expect(container.textContent).toMatch(/LegacyAiChatPanel sentinel/)
 	})
 
-	it('renders the legacy panel sentinel exactly once', () => {
+	it('renders the legacy panel sentinel exactly once (desktop fallback)', () => {
 		act(() => {
 			root.render(<ChatMobileRoute />)
 		})
@@ -63,11 +93,49 @@ describe('ChatMobileRoute', () => {
 	})
 })
 
+// ── Phase 181-01 route branch tests ──────────────────────────────────────
+
+describe('ChatMobileRoute — device class branching (Phase 181-01)', () => {
+	it('Test 7 — tablet: renders CcTerminal section', () => {
+		mockDeviceClass.value = 'tablet'
+		act(() => {
+			root.render(<ChatMobileRoute />)
+		})
+		const terminal = container.querySelector('[data-testid="cc-terminal"]')
+		expect(terminal).not.toBeNull()
+		// Does NOT render legacy panel
+		const legacy = container.querySelector('[data-testid="legacy-ai-chat-panel"]')
+		expect(legacy).toBeNull()
+	})
+
+	it('Test 8 — phone: renders mobile-bubble-chat (not placeholder div)', () => {
+		mockDeviceClass.value = 'phone'
+		act(() => {
+			root.render(<ChatMobileRoute />)
+		})
+		// After Plan 181-04 wires MobileBubbleChat, look for the component
+		// Before 181-04: accepts placeholder div with data-testid
+		const bubble = container.querySelector('[data-testid="mobile-bubble-chat-placeholder"], [data-testid="mobile-bubble-chat"]')
+		expect(bubble).not.toBeNull()
+		// Does NOT render legacy panel
+		const legacy = container.querySelector('[data-testid="legacy-ai-chat-panel"]')
+		expect(legacy).toBeNull()
+	})
+
+	it('Test 9 — desktop: renders LegacyAiChatPanel', () => {
+		mockDeviceClass.value = 'desktop'
+		act(() => {
+			root.render(<ChatMobileRoute />)
+		})
+		const legacy = container.querySelector('[data-testid="legacy-ai-chat-panel"]')
+		expect(legacy).not.toBeNull()
+	})
+})
+
 // ── D-V35-K — Single-import invariant ──────────────────────────────────────
 //
-// The legacy panel (relocated to routes/ai-chat/legacy-ai-chat-panel.tsx in
-// Plan 167-04) must be imported in EXACTLY ONE production-source file:
-// routes/chat-mobile/index.tsx.
+// After Phase 181-04 deletes the legacy panel, this test is replaced by the
+// "0 imports" check. Until then, exactly 1 production import must exist.
 
 function walk(dir: string): string[] {
 	const results: string[] = []
