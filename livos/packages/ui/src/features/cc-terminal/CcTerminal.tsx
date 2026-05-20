@@ -30,9 +30,23 @@ import '@xterm/xterm/css/xterm.css'
 import {useTheme} from '@/hooks/use-theme'
 import {CcPtyWsClient} from './terminal-ws-client'
 import {livosThemeToXtermTheme} from './terminal-theme'
+import {JWT_LOCAL_STORAGE_KEY} from '@/modules/auth/shared'
 
 function wsUrl() {
 	return `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`
+}
+
+// Phase 167.1 hotfix — the livinityd upgrade handler (server/index.ts L1136)
+// REQUIRES `?token=<jwt>` query param for any path mounted via the generic
+// webSocketRouter; cookie auth alone gets silent socket.destroy(). Mirror the
+// /ws/agent client pattern (use-agent-socket.ts L475-L483) and append the JWT
+// from localStorage. Empty token = let the URL form fail-fast at server side
+// rather than connect silently.
+function ccPtyWsUrl(): string {
+	const base = `${wsUrl()}/ws/cc-pty`
+	if (typeof localStorage === 'undefined') return base
+	const jwt = localStorage.getItem(JWT_LOCAL_STORAGE_KEY)
+	return jwt ? `${base}?token=${encodeURIComponent(jwt)}` : base
 }
 
 export function CcTerminal({sessionId}: {sessionId: string}) {
@@ -61,7 +75,7 @@ export function CcTerminal({sessionId}: {sessionId: string}) {
 		fit.fit()
 
 		const ws = new CcPtyWsClient({
-			url: `${wsUrl()}/ws/cc-pty`,
+			url: ccPtyWsUrl(),
 			sessionId,
 			onStdout: (data) => term.write(data),
 			onAttached: (_env) => {
