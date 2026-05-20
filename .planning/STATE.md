@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v38.0
 milestone_name: Liv Agent Platform
 status: CODE-COMPLETE-AND-LIVE-VERIFIED
-last_updated: "2026-05-20T20:00:00.000Z"
+last_updated: "2026-05-20T20:05:00.000Z"
 progress:
   total_phases: 14
   completed_phases: 14
@@ -30,6 +30,7 @@ See: .planning/PROJECT.md
 **Last shipped phase:** **Phase 184** v38.0 Mini PC Deploy + UAT + Milestone Close — CODE-COMPLETE 2026-05-20 (11/13 live probes PASS; 25/25 sacred SHAs preserved; deployed SHA a0d26c65676e6f3161deaccb4fb4b3e0068701a6; all 4 services active NRestarts=0; vault scaffolded at /root/livinity-vault).
 
 **Key decisions (Phase 184):**
+
 - SSH key: minipc (ED25519) used — contabo_master (RSA) rejected by Mini PC authorized_keys
 - Vault root at /root/livinity-vault (LIV_VAULT_ROOT not set in .env, using fallback); carry-over: add LIV_VAULT_ROOT=/root/liv to .env + mv /root/livinity-vault /root/liv
 - tRPC v11 format: raw JSON body (not wrapped in {json:{...}})
