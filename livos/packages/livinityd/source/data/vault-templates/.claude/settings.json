@@ -6,6 +6,11 @@
     "Edit",
     "Glob",
     "Grep",
-    "Bash"
+    "Bash",
+    "Task",
+    "WebFetch",
+    "WebSearch",
+    "mcp__luse__*",
+    "mcp__filesystem__*"
   ]
 }
