@@ -2117,3 +2117,157 @@ Plans:
 
 ---
 
+
+# v38.0 — Liv Agent Platform — 🔴 OPENED 2026-05-20
+
+> **Master plan:** [`v38-LIV-AGENT-PLATFORM-MASTER.md`](v38-LIV-AGENT-PLATFORM-MASTER.md) (READ FIRST — 21 locked decisions D-V38-A..U + 4 LivOS-native default skills + GSD-style 3-layer architecture + 14 phases / 61 plans / 5 waves)
+>
+> **Theme:** AI Chat sidebar pivots from flat session list to a tree of **Project / Agent / Chat** Items, each backed by a folder on disk. Main "Liv" root agent greets new users with 4 LivOS-native default skills (luse-driver, livos-operator, appstore, window-manager). `npx liv` CLI clones `gsd-sdk`'s 3-layer architecture verbatim. Vault Graph polished into Obsidian-class IA wrapped in Livinity Design tokens. Mobile `/chat-mobile` upgraded from SDK fallback to real Claude Code. Settings restructured.
+>
+> **Vault rename:** `/root/livinity-vault/` → `/root/liv/` (operator vote 2026-05-20). Phase 173 handles atomic migration + compatibility symlink + env-var resolver (sacred SHA on Phase 162-01 vault-scaffolder STAYS — additive shim only).
+>
+> **D-NEW-DEPS-v38:** 3 new npm deps authorized — `react-arborist` (Phase 174 tree UI), `node-cron` (Phase 177 schedules), `nanoid` (Phase 171 UUID v7). Everything else holds D-NO-NEW-DEPS.
+
+---
+
+### Phase 171: Item Model + Storage Layer — 🔴 PLANNED 2026-05-20
+
+**Goal:** NEW livinityd module `vault-items/` with types, file-backed item-store, tree-resolver, atomic CRUD ops, schema v1. tRPC `vault.items.{list,get,create,update,move,archive,delete}`. Redis pub/sub `liv:tree:updated`.
+
+**Wave:** 1 (parallel-safe with 172)
+**Estimated:** 5 plans
+
+---
+
+### Phase 172: `@livos/cli` Package Skeleton — 🔴 PLANNED 2026-05-20
+
+**Goal:** NEW workspace package `packages/cli/` exposing `liv` bin with commands: `init`, `project new`, `agent new`, `chat`, `list --tree`, `attach`, `config get/set`, `doctor`, `migrate`. ESM, minimal deps. tRPC HTTP client + filesystem fallback. Mirrors `gsd-sdk` 3-layer (CLI + bundled skills + bundled templates installed via postinstall symlink).
+
+**Wave:** 1 (parallel-safe with 171)
+**Estimated:** 5 plans
+
+---
+
+### Phase 173: Vault Rename + Phase 168 Migration + Sacred Freeze — 🔴 PLANNED 2026-05-20
+
+**Goal:** Atomic `mv /root/livinity-vault/ /root/liv/` on Mini PC at deploy time. Compatibility symlink. NEW `vault-root-resolver.ts` shim (Phase 162-01 scaffolder STAYS byte-identical). Migrate `livos-cc-sessions.json` → ChatItems under Main Liv. Update Sacred SHA hook to lock vault-items + cli modules.
+
+**Depends on:** Phase 171
+**Wave:** 1
+**Estimated:** 4 plans
+
+---
+
+### Phase 174: SidebarTree Component — 🔴 PLANNED 2026-05-20
+
+**Goal:** NEW `<SidebarTree>` using react-arborist. Per-type row styling (Project/Agent/Chat icon + color from D-V38-O palette). Drag-to-reparent with cycle check. Context menu (rename/duplicate/archive/delete/export). Bottom-left Settings gear button.
+
+**Depends on:** Phase 171, 173
+**Wave:** 2
+**Estimated:** 5 plans
+
+---
+
+### Phase 175: Add Modal + Item Detail Views — 🔴 PLANNED 2026-05-20
+
+**Goal:** NEW `<AddItemModal>` — type selection + per-type form. NEW `<ProjectDetail>`, `<AgentDetail>` views. `<ChatDetail>` = direct CC PTY attach (no detail page). Replace Phase 168 `SessionSidebar` + `NewSessionButton`.
+
+**Depends on:** Phase 174
+**Wave:** 2
+**Estimated:** 5 plans
+
+---
+
+### Phase 176: Main Liv Root Agent + 4 LivOS-Native Skills — 🔴 PLANNED 2026-05-20
+
+**Goal:** NEW Liv root agent with 6 mutation tools (`create_item`, `list_items`, `move_item`, `archive_item`, `open_item`, `run_agent`). 4 LivOS-native default subagents scaffolded into `~/liv/.claude/agents/`:
+- **`luse-driver.md`** — computer use via Phase 165 luse MCP (re-registered into Liv's tool set)
+- **`livos-operator.md`** — LivOS architecture + diagnostics knowledge
+- **`appstore.md`** — install/uninstall/list apps via existing `apps.*` tRPC
+- **`window-manager.md`** — window list/focus/close/pin via Phase 159 WindowManager tRPC
+
+Empty-state UI (terminal centered, Liv greeting). Liv's tmux session auto-spawned on first user boot.
+
+**Depends on:** Phase 171, 175
+**Wave:** 2
+**Estimated:** 5 plans
+
+---
+
+### Phase 177: Schedule Engine + Inbox System — 🔴 PLANNED 2026-05-20
+
+**Goal:** Extend Phase 164 autonomous-scheduler with per-Agent cron registry (`node-cron`). Inbox writer (`items/<uuid>/inbox/<runId>.md`). Inbox UI component (sidebar badge + detail view inbox list). Cross-Item global inbox via filesystem walker.
+
+**Depends on:** Phase 171, 176
+**Wave:** 3
+**Estimated:** 4 plans
+
+---
+
+### Phase 178: Vault Graph MVP Polish — 🔴 PLANNED 2026-05-20
+
+**Goal:** Re-palette to D-V38-O 7-type colors (steel-blue / violet / sage / amber / teal / plum / gray-mute). Replace `<pre>` markdown with streamdown render. Backlinks/Outgoing lists derived client-side. Refresh button + truncated banner restyled per Livinity DS. SearchBar `Cmd+K` + live filter.
+
+**Wave:** 3 (parallel with 177)
+**Estimated:** 4 plans
+
+---
+
+### Phase 179: Vault Graph Controls Panel — 🔴 PLANNED 2026-05-20
+
+**Goal:** Right-edge floating Controls panel — **Filters** (type, orphans, recent, ghosts) + **Groups** (by type/folder/tag/custom) + **Display** (label, size, thickness, arrows) + **Forces** (4 sliders + reset). Backend extends `/api/vault/graph` to emit per-node `tags[]` + `topDir`.
+
+**Depends on:** Phase 178
+**Wave:** 3
+**Estimated:** 5 plans
+
+---
+
+### Phase 180: Local Graph + Animation Timeline — 🔴 PLANNED 2026-05-20
+
+**Goal:** Local Graph mode (BFS from active node, depth chip UI). Animate timeline (`mtime`-ordered reveal). Optional legend badge bottom-left.
+
+**Depends on:** Phase 179
+**Wave:** 3
+**Estimated:** 3 plans
+
+---
+
+### Phase 181: Mobile CC PTY — 🔴 PLANNED 2026-05-20
+
+**Goal:** Replace `/chat-mobile` legacy SDK fallback. Tablet (≥640px + `pointer:coarse`) → `<CcTerminal>` + `<MobileTerminalKeyBar>` (2-row sticky-Ctrl). Phone (<640px) → CC-backed bubble UI streaming `/ws/cc-pty`. Touch gestures: pinch-zoom, two-finger paste, three-finger detach. WS resilience: visibilitychange resume, heartbeat ping/pong, `tmux capture-pane` replay-on-reattach.
+
+**Depends on:** Phase 175
+**Wave:** 4
+**Estimated:** 4 plans
+
+---
+
+### Phase 182: Settings Restructure — 🔴 PLANNED 2026-05-20
+
+**Goal:** Remove `ChatBackendPanel` + route. Drop top-menu Agents tile (sidebar absorbs). Rename "Autonomous Agents" → "Scheduled Agents". Settings sidebar regrouped into PERSONAL / WORKSPACE / AI / SYSTEM. NEW `<AiChatSettingsPanel>` (7 fields incl. dangerously-skip toggle, default cwd, idle hours, max sessions, allowed paths, force terminal on phone, default model). NEW `<McpServersPanel>` lifted from chat sidebar.
+
+**Wave:** 4 (parallel with 181)
+**Estimated:** 5 plans
+
+---
+
+### Phase 183: tmux status off + dangerously-skip default + sidebar Settings button — 🔴 PLANNED 2026-05-20
+
+**Goal:** `tmux set -g status off` on session spawn (eliminates status line). `cc-pty/manager.ts` reads `liv:config:cc_pty_skip_perms` (default **true** per D-V38-K) → injects `--dangerously-skip-permissions` flag. Sidebar bottom-left gear-icon Settings button (D-V38-N).
+
+**Depends on:** Phase 174, 182
+**Wave:** 4
+**Estimated:** 2 plans
+
+---
+
+### Phase 184: v38.0 Mini PC Deploy + UAT + Milestone Close — 🔴 PLANNED 2026-05-20
+
+**Goal:** Push + `bash /opt/livos/update.sh`. Migration script (Phase 173) auto-runs on first boot. Live probes: tree CRUD, sidebar drag-drop, Add modal Project/Agent/Chat, Liv root agent greet, autonomous agent run via cron, Vault Graph controls panel functional, mobile route serves CC-backed UI, Settings panels in new groups, MCP panel functional, no Phase 168 SessionSidebar reachable. v38-VERIFICATION.md. STATE + ROADMAP milestone close.
+
+**Depends on:** all prior phases (171-183)
+**Wave:** 5 (FINAL)
+**Estimated:** 5 plans
+**Closes:** v38.0 Liv Agent Platform milestone
+

@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v35.0
-milestone_name: Claude Code PTY Embed + Vault Memory Graph
-status: code-complete-and-live-verified
-last_updated: "2026-05-19T23:00:00.000Z"
+milestone: v38.0
+milestone_name: Liv Agent Platform
+status: opened
+last_updated: "2026-05-20T08:50:00.000Z"
 progress:
-  total_phases: 80
-  completed_phases: 36
-  total_plans: 291
-  completed_plans: 247
-  percent: 85
+  total_phases: 94
+  completed_phases: 37
+  total_plans: 352
+  completed_plans: 250
+  percent: 71
 ---
 
 # Project State
@@ -25,19 +25,45 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-**Active milestone:** v35.0 — Claude Code PTY Embed + Vault Memory Graph — **CODE-COMPLETE-AND-LIVE-VERIFIED 2026-05-19** (5 phases / 23 plans / 26 commits / 285+ vitest assertions GREEN; live Mini PC probes 10/11 PASS; pending only operator 8-step browser walk; v35-VERIFICATION.md at `.planning/phases/170-v35-deploy-uat/v35-VERIFICATION.md`).
+**Active milestone:** v38.0 — Liv Agent Platform — **OPENED 2026-05-20** (14 phases / 61 plans / 5 waves; master plan `.planning/v38-LIV-AGENT-PLATFORM-MASTER.md`; pivots flat session list → tree of Project/Agent/Chat Items + 4 LivOS-native default skills + `@livos/cli` npm package + Obsidian-class Vault Graph + mobile CC PTY + Settings restructure; 21 locked D-V38-A..U decisions; vault root renamed `livinity-vault` → `~/liv/` per operator vote 2026-05-20).
 
-**Last shipped phase:** Phase 170 — Mini PC Deploy + UAT + Milestone Close (CODE-COMPLETE 2026-05-19; 5 plans; tmux 3.4 apt-installed on Mini PC; `update.sh` 1:1 deploy green to `.deployed-sha=45d52116`; all 4 services active; live probes confirmed `ccPty.create` → tmux spawn → 5s persistence without WS → `ccPty.delete` → tmux cleanup; `/api/vault/graph` returns 15 nodes / 8 edges; `/api/vault/file` path-traversal blocked; all 7 sacred guard SHAs preserved byte-identical pre/post deploy).
+**Last shipped phase:** v35.0 milestone CODE-COMPLETE-AND-LIVE-VERIFIED 2026-05-19 (5 phases / 23 plans / 26 commits + 167.1/167.2/167.3 hotfixes; live Mini PC `.deployed-sha=8310beb1`; operator browser walk still pending). Plus three v35.x post-ship hotfixes shipped 2026-05-20: 167.1 (WS auth `?token=` query), 167.2 (UTF-8 + clipboard + locale env), 167.3 (Ctrl+Shift+C case-insensitive).
 
-**Next action:** Operator runs the 8-step browser walk per `v35-VERIFICATION.md § Operator UAT § Browser Walk` to flip status from `passed-pending-OperatorUAT` → `passed-and-live-verified`. Then open v35.1 (live fs.watch graph, system state nodes) or v36 (multi-tenant CC PTY + WebApp/NativeApp pivot).
+**Next action:** `/clear` then `/gsd-autonomous --from 171` — wave-based autonomous dispatch. v38 Q1-Q10 operator decisions defaulted per master plan recommendations (vault path = `~/liv/` from explicit operator vote; rest accept proposed defaults).
 
 **v35.0 phase queue (FINAL):**
 
-- [x] Phase 166 — CC PTY Backend (tmux + node-pty + WebSocket) — 5 plans / 6 commits / 71 vitest — ✅ SHIPPED `4dd30c83..64596174` + `64d56444`
-- [x] Phase 167 — xterm.js Frontend (CcTerminal component) — 4 plans / 5 commits / 45 vitest — ✅ SHIPPED `74b608ef..165339f4` + `0aff71ad`
-- [x] Phase 168 — Session Sidebar + Lifecycle UI — 4 plans / 5 commits / 93 vitest — ✅ SHIPPED `36b5c662..ba945a12` + `45d52116`
-- [x] Phase 169 — Vault Memory Graph View — 5 plans / 6 commits / 76 vitest — ✅ SHIPPED `d81b7ba6..8e766344` + `42534e1e`
-- [x] Phase 170 — Mini PC Deploy + UAT + v35-VERIFICATION — live probes + verification doc — ✅ SHIPPED (this commit)
+- [x] Phase 166 — CC PTY Backend — ✅ SHIPPED
+- [x] Phase 167 — xterm.js Frontend — ✅ SHIPPED
+- [x] Phase 168 — Session Sidebar + Lifecycle UI — ✅ SHIPPED
+- [x] Phase 169 — Vault Memory Graph View — ✅ SHIPPED
+- [x] Phase 170 — Mini PC Deploy + UAT + v35-VERIFICATION — ✅ SHIPPED
+
+**v38.0 phase queue:**
+
+Wave 1 — Foundation:
+- [ ] Phase 171 — Item Model + Storage Layer — 5 plans
+- [ ] Phase 172 — `@livos/cli` Package Skeleton — 5 plans
+- [ ] Phase 173 — Vault Rename + Migration + Sacred Freeze — 4 plans (depends 171)
+
+Wave 2 — Sidebar UI:
+- [ ] Phase 174 — SidebarTree Component — 5 plans (depends 171, 173)
+- [ ] Phase 175 — Add Modal + Item Detail Views — 5 plans (depends 174)
+- [ ] Phase 176 — Main Liv + 4 LivOS-native Skills — 5 plans (depends 171, 175)
+
+Wave 3 — Autonomous + Vault Graph:
+- [ ] Phase 177 — Schedule Engine + Inbox — 4 plans (depends 171, 176)
+- [ ] Phase 178 — Vault Graph MVP Polish — 4 plans
+- [ ] Phase 179 — Vault Graph Controls Panel — 5 plans (depends 178)
+- [ ] Phase 180 — Local Graph + Animation — 3 plans (depends 179)
+
+Wave 4 — Mobile + Settings + Polish:
+- [ ] Phase 181 — Mobile CC PTY (tablet + phone) — 4 plans (depends 175)
+- [ ] Phase 182 — Settings Restructure — 5 plans
+- [ ] Phase 183 — tmux status off + dangerously-skip + sidebar gear — 2 plans (depends 174, 182)
+
+Wave 5 — Ship:
+- [ ] Phase 184 — v38.0 Mini PC Deploy + UAT + Milestone Close — 5 plans
 
 **Pre-flight (verified 2026-05-19 on Mini PC):**
 
