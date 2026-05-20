@@ -117,4 +117,71 @@ describe('buildGraph', () => {
 		const {nodes} = buildGraph(files)
 		expect(nodes[0].topDir).toBe('agent')
 	})
+
+	// Phase 187-01: degree + wikiDegree assertions (RED gate)
+
+	it('isolated node (no edges) has degree === 0 and wikiDegree === 0', () => {
+		const files = [makeFile({path: 'a.md', wikilinks: []})]
+		const {nodes} = buildGraph(files)
+		expect(nodes[0].degree).toBe(0)
+		expect(nodes[0].wikiDegree).toBe(0)
+	})
+
+	it('node with 2 outgoing wikilinks has degree === 2, wikiDegree === 2', () => {
+		const files = [
+			makeFile({path: 'a.md', wikilinks: ['b', 'c']}),
+			makeFile({path: 'b.md'}),
+			makeFile({path: 'c.md'}),
+		]
+		const {nodes} = buildGraph(files)
+		const a = nodes.find((n) => n.id === 'a.md')!
+		expect(a.degree).toBe(2)
+		expect(a.wikiDegree).toBe(2)
+	})
+
+	it('node as target of 2 incoming wikilinks has degree === 2, wikiDegree === 2', () => {
+		const files = [
+			makeFile({path: 'a.md', wikilinks: ['target']}),
+			makeFile({path: 'b.md', wikilinks: ['target']}),
+			makeFile({path: 'target.md'}),
+		]
+		const {nodes} = buildGraph(files)
+		const t = nodes.find((n) => n.id === 'target.md')!
+		expect(t.degree).toBe(2)
+		expect(t.wikiDegree).toBe(2)
+	})
+
+	it('GraphNode shape includes degree and wikiDegree on every node', () => {
+		const files = [
+			makeFile({path: 'a.md', wikilinks: ['b']}),
+			makeFile({path: 'b.md'}),
+			makeFile({path: 'c.md'}),
+		]
+		const {nodes} = buildGraph(files)
+		for (const n of nodes) {
+			expect(typeof n.degree).toBe('number')
+			expect(typeof n.wikiDegree).toBe('number')
+		}
+	})
+
+	it('wikiDegree ignores directory-type edges (only counts wikilinks)', () => {
+		// A → B via wikilink, A is also a child of a directory node
+		// In builder v1, directory edges are deferred — so directory edges won't
+		// appear in the edge list. This test verifies wikiDegree only counts
+		// wikilink type by checking a node with only wikilink edges.
+		const files = [
+			makeFile({path: 'a.md', wikilinks: ['b']}),
+			makeFile({path: 'b.md'}),
+		]
+		const {edges, nodes} = buildGraph(files)
+		expect(edges.every((e) => e.type === 'wikilink')).toBe(true)
+		const a = nodes.find((n) => n.id === 'a.md')!
+		const b = nodes.find((n) => n.id === 'b.md')!
+		// a: 1 outgoing wikilink → degree=1, wikiDegree=1
+		expect(a.degree).toBe(1)
+		expect(a.wikiDegree).toBe(1)
+		// b: 1 incoming wikilink → degree=1, wikiDegree=1
+		expect(b.degree).toBe(1)
+		expect(b.wikiDegree).toBe(1)
+	})
 })

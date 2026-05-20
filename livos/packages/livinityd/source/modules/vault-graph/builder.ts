@@ -30,6 +30,8 @@ export interface GraphNode {
 	mtime: number
 	tags: string[]    // Phase 179-01: parsed from frontmatter YAML
 	topDir: string    // Phase 179-01: first path segment
+	degree: number    // Phase 187-01: total edge count (in + out, all types)
+	wikiDegree: number  // Phase 187-01: wikilink-type edge count only
 }
 
 export interface GraphEdge {
@@ -49,6 +51,8 @@ export function buildGraph(
 		mtime: f.mtime,
 		tags: extractTags(f.frontmatter), // Phase 179-01 addition
 		topDir: f.topDir,                 // Phase 179-01 addition
+		degree: 0,                         // Phase 187-01: computed below
+		wikiDegree: 0,                     // Phase 187-01: computed below
 	}))
 
 	const nodeIds = new Set(nodes.map((n) => n.id))
@@ -72,6 +76,23 @@ export function buildGraph(
 				edges.push({source: file.path, target, type: 'wikilink'})
 			}
 			// Unresolved link: silently dropped (avoid orphan node spam — 169-CONTEXT L161).
+		}
+	}
+
+	// Phase 187-01: degree + wikiDegree computation (additive post-edge pass).
+	// Builds a degree map from the edge list and patches nodes in-place.
+	const nodeMap = new Map<string, GraphNode>()
+	for (const n of nodes) nodeMap.set(n.id, n)
+	for (const e of edges) {
+		const src = nodeMap.get(e.source)
+		const tgt = nodeMap.get(e.target)
+		if (src) {
+			src.degree++
+			if (e.type === 'wikilink') src.wikiDegree++
+		}
+		if (tgt) {
+			tgt.degree++
+			if (e.type === 'wikilink') tgt.wikiDegree++
 		}
 	}
 
