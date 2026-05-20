@@ -33,6 +33,7 @@ const mockTerm = {
 	// tests can drive synthetic keydown events through it.
 	attachCustomKeyEventHandler: vi.fn(),
 	getSelection: vi.fn(() => ''),
+	clearSelection: vi.fn(),
 	cols: 80,
 	rows: 24,
 	options: {} as Record<string, unknown>,
