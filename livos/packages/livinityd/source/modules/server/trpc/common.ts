@@ -520,4 +520,16 @@ export const httpOnlyPaths = [
 	'chatConfig.setBackend',
 	'chatConfig.getModel',
 	'chatConfig.setModel',
+	// Phase 168-01 — CC PTY session lifecycle router (v35.0 D-V35-A/C/H).
+	// 5 procedures wrap Phase 166's CcPtyManager. All 5 paths route via
+	// HTTP for the standard WS-reconnect-survival reason (memory pitfall
+	// B-12 / X-04 — same cluster as autonomous.* line 510, chatConfig.*
+	// line 515, agents.* line 282). create / rename / delete are
+	// autosave-adjacent admin mutations; list / getPreview are sidebar-
+	// render dependencies where the WS-handshake flicker is undesirable.
+	'ccPty.list',
+	'ccPty.create',
+	'ccPty.rename',
+	'ccPty.delete',
+	'ccPty.getPreview',
 ] as const
