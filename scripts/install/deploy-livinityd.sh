@@ -1392,6 +1392,8 @@ Type=simple
 User=root
 WorkingDirectory=${_DLD_LIVOS_DIR}
 EnvironmentFile=${_DLD_ENV_FILE}
+# Phase 173-04 — v38 vault rename: Phase 171 vault-root-resolver.ts reads LIV_VAULT_ROOT; default fallback /root/livinity-vault is now a back-compat symlink (Plan 173-01)
+Environment=LIV_VAULT_ROOT=/root/liv
 ExecStart=/usr/bin/npx tsx ${_DLD_LIVOS_DIR}/packages/livinityd/source/cli.ts --data-directory ${livos_data_dir} --port ${livos_port}
 Restart=on-failure
 RestartSec=5
