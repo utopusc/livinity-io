@@ -32,6 +32,15 @@ vi.mock('@/features/cc-terminal', () => ({
 	},
 }))
 
+// Phase 169-04 — VaultGraph mock for the new tab.
+const vaultGraphMock = vi.fn(() => null)
+vi.mock('@/features/vault-graph', () => ({
+	VaultGraph: () => {
+		vaultGraphMock()
+		return <div data-testid='vault-graph' />
+	},
+}))
+
 // ── Test setup ────────────────────────────────────────────────────────────
 
 let container: HTMLDivElement
@@ -41,6 +50,7 @@ beforeEach(() => {
 	useIsMobileMock.mockReset()
 	useIsMobileMock.mockReturnValue(false)
 	ccTerminalMock.mockReset()
+	vaultGraphMock.mockReset()
 	container = document.createElement('div')
 	document.body.appendChild(container)
 	root = createRoot(container)
@@ -126,6 +136,83 @@ describe('AiChatRoute — mobile branch', () => {
 	})
 })
 
+// ── Phase 169-04 — Terminal | Vault Graph tab nav ─────────────────────────
+
+describe('AiChatRoute — Phase 169-04 tab nav', () => {
+	beforeEach(() => {
+		useIsMobileMock.mockReturnValue(false)
+	})
+
+	it('renders both "Terminal" and "Vault Graph" tab buttons', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const buttons = Array.from(container.querySelectorAll('button')).map(
+			(b) => b.textContent,
+		)
+		expect(buttons).toContain('Terminal')
+		expect(buttons).toContain('Vault Graph')
+	})
+
+	it('on initial mount, activeTab="terminal" → EmptyState renders (NOT VaultGraph)', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// With no activeSessionId AND terminal tab, the empty state shows.
+		expect(container.textContent).toMatch(/Select or create a session to start/)
+		// VaultGraph must NOT have been mounted.
+		expect(vaultGraphMock).not.toHaveBeenCalled()
+		expect(container.querySelector('[data-testid="vault-graph"]')).toBeNull()
+	})
+
+	it('clicking "Vault Graph" tab mounts VaultGraph and unmounts the Terminal branch', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const vgBtn = Array.from(container.querySelectorAll('button')).find(
+			(b) => b.textContent === 'Vault Graph',
+		) as HTMLButtonElement
+		expect(vgBtn).toBeTruthy()
+		act(() => {
+			vgBtn.click()
+		})
+		expect(vaultGraphMock).toHaveBeenCalled()
+		expect(container.querySelector('[data-testid="vault-graph"]')).not.toBeNull()
+		// Empty-state text should no longer be present after switch.
+		expect(container.textContent).not.toMatch(
+			/Select or create a session to start/,
+		)
+	})
+
+	it('clicking "Terminal" after switching to Vault Graph restores the Terminal branch', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const vgBtn = Array.from(container.querySelectorAll('button')).find(
+			(b) => b.textContent === 'Vault Graph',
+		) as HTMLButtonElement
+		act(() => vgBtn.click())
+		const tBtn = Array.from(container.querySelectorAll('button')).find(
+			(b) => b.textContent === 'Terminal',
+		) as HTMLButtonElement
+		act(() => tBtn.click())
+		// VaultGraph is unmounted.
+		expect(container.querySelector('[data-testid="vault-graph"]')).toBeNull()
+		// EmptyState (no activeSessionId) re-renders.
+		expect(container.textContent).toMatch(/Select or create a session to start/)
+	})
+
+	it('with activeTab="terminal" and activeSessionId=null, EmptyState renders (not VaultGraph)', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// Initial mount: terminal tab + null session → EmptyState text present.
+		expect(container.textContent).toMatch(/Select or create a session to start/)
+		// VaultGraph stub never invoked at this point.
+		expect(vaultGraphMock).not.toHaveBeenCalled()
+	})
+})
+
 // ── Source-text invariants ─────────────────────────────────────────────────
 
 describe('routes/ai-chat/index.tsx — source-text invariants', () => {
@@ -151,5 +238,16 @@ describe('routes/ai-chat/index.tsx — source-text invariants', () => {
 		const importLines = SRC.split(/\r?\n/).filter((l) => /^\s*import\s/.test(l))
 		const matches = importLines.filter((l) => /legacy-ai-chat-panel/.test(l))
 		expect(matches).toEqual([])
+	})
+
+	// Phase 169-04 — sacred-invariants for the tab nav additions.
+	it('imports VaultGraph from @/features/vault-graph (Phase 169-04)', () => {
+		expect(SRC).toMatch(/from\s+['"]@\/features\/vault-graph['"]/)
+		expect(SRC).toMatch(/VaultGraph/)
+	})
+
+	it('preserves the Phase 167 CcTerminal mount with sessionId key (sacred guard)', () => {
+		// CcTerminal must still be mounted with key={activeSessionId} (Phase 167-04).
+		expect(SRC).toMatch(/CcTerminal\s+key=\{activeSessionId\}/)
 	})
 })
