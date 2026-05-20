@@ -136,6 +136,13 @@ export class CcPtyManager {
 		const cwd = opts.cwd ?? this.vaultPath
 		const cwdEsc = shellEscape(cwd)
 		const nameEsc = shellEscape(tmuxName)
+
+		// Phase 183 — read skip-perms flag. Default: true (D-V38-K).
+		// null → operator hasn't set a value → safe default is to skip perms.
+		const skipPermsRaw = await this.redis.get('liv:config:cc_pty_skip_perms')
+		const skipPerms = skipPermsRaw === null ? true : skipPermsRaw === 'true'
+		const skipPermsFlag = skipPerms ? ' --dangerously-skip-permissions' : ''
+
 		// tmux command — name + cwd are shell-escaped; the child command sets
 		// HOME=/root (Anthropic SDK credentials live at /root/.claude/.credentials.json)
 		// AND forces a UTF-8 locale so Turkish + non-ASCII chars round-trip cleanly
@@ -143,8 +150,20 @@ export class CcPtyManager {
 		// systemd but tmux daemon snapshots env on first server start; subsequent
 		// new-session calls inherit the daemon's snapshot. Setting LANG/LC_ALL on
 		// the spawned child explicitly bypasses that snapshot.
-		const tmuxCmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=/root claude'`
+		const tmuxCmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=/root claude${skipPermsFlag}'`
 		execSync(tmuxCmd, {env: {...process.env, HOME: '/root', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8'}})
+
+		// Phase 183 — suppress tmux status bar so the green line never appears
+		// in xterm.js. Non-fatal: if tmux is absent in local dev this must not
+		// prevent session creation.
+		try {
+			execSync(`tmux set-option -g status off -t ${nameEsc}`, {
+				env: {...process.env, HOME: '/root'},
+				stdio: 'ignore',
+			})
+		} catch (err) {
+			this.logger.warn?.(`[cc-pty] set-option status off failed for ${tmuxName}: ${err}`)
+		}
 
 		const session: CcPtySession = {
 			id,
