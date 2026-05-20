@@ -187,6 +187,25 @@ const vaultItemsRouter = router({
 		return {item}
 	}),
 
+	// Phase 174-04 — additive extension of the move() error shape.
+	//
+	// The existing `message: 'move rejected: <reason>'` string is preserved
+	// (backward compat — Phase 171-04 R6 + existing UI consumers expect it).
+	// A new `cause` field is attached to the TRPCError carrying a structured
+	// {kind, depth?} payload so the SidebarTree UI can render type-specific
+	// sonner toast copy without parsing the message string.
+	//
+	// `kind` is the verbatim `validation.reason` string from
+	// vault-items/tree-resolver.ts (SACRED): one of 'cycle', 'self',
+	// 'not-found', 'depth-exceeds-hard-cap', 'archived-parent'. `depth` is
+	// attached only when the validation result actually carries a numeric
+	// depth (current resolver does not, but the shape is forward-compatible).
+	//
+	// SACRED-FREEZE STATUS: vault-items-router.ts is NOT in
+	// scripts/sacred-shas-v38.json (25-entry registry) — confirmed via grep
+	// on the registry by Plan 174-04 prior to this edit. Additive extension
+	// is permitted; the 14 existing assertions in vault-items-router.test.ts
+	// remain green (no procedure signature change, no schema change).
 	move: adminProcedure.input(moveInput).mutation(async ({ctx, input}) => {
 		const store = requireStore(ctx)
 		const items: Item[] = await store.list({})
@@ -196,9 +215,17 @@ const vaultItemsRouter = router({
 			input.newParentId,
 		)
 		if (!validation.ok) {
+			// Map MoveValidation.reason to a structured cause kind for UI dispatch.
+			const cause: {kind: string; depth?: number} = {
+				kind: validation.reason,
+			}
+			if (typeof (validation as {depth?: unknown}).depth === 'number') {
+				cause.depth = (validation as {depth: number}).depth
+			}
 			throw new TRPCError({
 				code: 'BAD_REQUEST',
 				message: 'move rejected: ' + validation.reason,
+				cause,
 			})
 		}
 		const item = await store.update(input.id, {parentId: input.newParentId})
