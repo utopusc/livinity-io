@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 //
 // Phase 167-02 — CcPtyWsClient unit tests.
+// Phase 181-04 — Additive: 5 new assertions for visibilitychange + heartbeat ping/pong.
 //
 // Pattern: RTL-absent (D-NO-NEW-DEPS) — `@testing-library/react` is not
 // installed and the `ws` Node package is server-side only. We instead stub
@@ -338,5 +339,152 @@ describe('CcPtyWsClient — source-text invariants', () => {
 
 	it('MAX_STDIN_BYTES is 64 * 1024', () => {
 		expect(SRC).toMatch(/MAX_STDIN_BYTES\s*=\s*64\s*\*\s*1024/)
+	})
+})
+
+// ── Phase 181-04 — WS resilience tests (5 new assertions) ─────────────────
+//
+// Appended additively — existing 13 assertions above preserved.
+
+describe('CcPtyWsClient — Phase 181-04 WS resilience', () => {
+	it('Test 181-04-1: visibilitychange to visible while WS is closed triggers immediate reconnect (bypasses backoff)', () => {
+		vi.useFakeTimers()
+		const client = new CcPtyWsClient({
+			url: 'ws://x/ws/cc-pty',
+			sessionId: 'sess-1',
+			onStdout: vi.fn(),
+			onAttached: vi.fn(),
+			onError: vi.fn(),
+		})
+
+		// Open WS so the visibilitychange handler is registered
+		mockWsInstances[0].__fireOpen()
+		// Close WS (simulate network disconnect)
+		mockWsInstances[0].__fireClose()
+		expect(mockWsInstances).toHaveLength(1) // no reconnect yet (timer pending)
+
+		// Reset attempts to simulate many failed attempts (would normally block reconnect)
+		// visibilitychange bypasses the normal backoff timer entirely
+
+		// Fire visibilitychange with visible state
+		Object.defineProperty(document, 'visibilityState', {
+			configurable: true,
+			value: 'visible',
+		})
+		document.dispatchEvent(new Event('visibilitychange'))
+
+		// Should have created a new WebSocket immediately (no timer advance needed)
+		expect(mockWsInstances.length).toBeGreaterThan(1)
+
+		client.detach()
+	})
+
+	it('Test 181-04-2: visibilitychange ignored when WS is already OPEN', () => {
+		vi.useFakeTimers()
+		const client = new CcPtyWsClient({
+			url: 'ws://x/ws/cc-pty',
+			sessionId: 'sess-1',
+			onStdout: vi.fn(),
+			onAttached: vi.fn(),
+			onError: vi.fn(),
+		})
+
+		mockWsInstances[0].__fireOpen()
+		const countBefore = mockWsInstances.length
+
+		Object.defineProperty(document, 'visibilityState', {
+			configurable: true,
+			value: 'visible',
+		})
+		document.dispatchEvent(new Event('visibilitychange'))
+
+		// WS already open — no new WS created
+		expect(mockWsInstances).toHaveLength(countBefore)
+
+		client.detach()
+	})
+
+	it('Test 181-04-3: heartbeat ping sent every 30s when WS is OPEN', () => {
+		vi.useFakeTimers()
+		const client = new CcPtyWsClient({
+			url: 'ws://x/ws/cc-pty',
+			sessionId: 'sess-1',
+			onStdout: vi.fn(),
+			onAttached: vi.fn(),
+			onError: vi.fn(),
+		})
+
+		mockWsInstances[0].__fireOpen()
+		mockWsInstances[0].sent = [] // clear attach frame
+
+		// Advance 30s — ping should have been sent
+		vi.advanceTimersByTime(30_000)
+
+		const pings = mockWsInstances[0].sent.filter(
+			(s) => JSON.parse(s)?.type === 'ping',
+		)
+		expect(pings.length).toBeGreaterThanOrEqual(1)
+
+		client.detach()
+	})
+
+	it('Test 181-04-4: pong response clears pong watchdog (no reconnect fires within 10s after pong)', () => {
+		vi.useFakeTimers()
+		const onError = vi.fn()
+		const client = new CcPtyWsClient({
+			url: 'ws://x/ws/cc-pty',
+			sessionId: 'sess-1',
+			onStdout: vi.fn(),
+			onAttached: vi.fn(),
+			onError,
+		})
+
+		mockWsInstances[0].__fireOpen()
+
+		// Trigger ping by advancing 30s
+		vi.advanceTimersByTime(30_000)
+
+		// Server responds with pong
+		mockWsInstances[0].__fireMessage(JSON.stringify({type: 'pong'}))
+
+		// Advance 10s — pong watchdog should have been cleared, no close
+		vi.advanceTimersByTime(10_000)
+
+		// WS still open (no close called)
+		expect(mockWsInstances[0].readyState).toBe(OPEN)
+
+		client.detach()
+	})
+
+	it('Test 181-04-5: heartbeat reconnect — no pong within 10s triggers WS close', () => {
+		vi.useFakeTimers()
+		const client = new CcPtyWsClient({
+			url: 'ws://x/ws/cc-pty',
+			sessionId: 'sess-1',
+			onStdout: vi.fn(),
+			onAttached: vi.fn(),
+			onError: vi.fn(),
+		})
+
+		mockWsInstances[0].__fireOpen()
+
+		// Trigger ping
+		vi.advanceTimersByTime(30_000)
+
+		// Verify ping sent
+		const pings = mockWsInstances[0].sent.filter(
+			(s) => {
+				try { return JSON.parse(s)?.type === 'ping' } catch { return false }
+			}
+		)
+		expect(pings.length).toBeGreaterThanOrEqual(1)
+
+		// Advance 10s with NO pong → watchdog fires → WS close
+		vi.advanceTimersByTime(10_000)
+
+		// ws.close() should have been called (readyState = CLOSED)
+		expect(mockWsInstances[0].readyState).toBe(CLOSED)
+
+		client.detach()
 	})
 })

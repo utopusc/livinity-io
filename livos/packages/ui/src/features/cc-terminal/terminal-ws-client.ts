@@ -3,8 +3,8 @@
 // Browser-side WebSocket client for the Phase 166 `/ws/cc-pty` endpoint.
 // Speaks the envelope protocol shipped by Plan 166-04's ws-handler:
 //
-//   Client → server: {type:'attach'|'stdin'|'resize'|'detach', ...}
-//   Server → client: {type:'attached'|'stdout'|'error'|'exited', ...}
+//   Client → server: {type:'attach'|'stdin'|'resize'|'detach'|'ping', ...}
+//   Server → client: {type:'attached'|'stdout'|'error'|'exited'|'pong', ...}
 //
 // Stdout `data` field is base64-encoded — decoded via atob() before
 // forwarding to opts.onStdout(decoded). NOTE: server field name is `data`
@@ -16,6 +16,12 @@
 // max 5 attempts. After the 5th failed reconnect the client calls
 // opts.onClose() and stays closed. The `detached` flag is set by an
 // explicit detach() call to suppress reconnection of intentional closes.
+//
+// Phase 181-04 additions (ADDITIVE):
+//   - visibilitychange reconnect: document unlock bypasses backoff timer
+//   - heartbeat ping/pong: 30s interval, 10s pong watchdog, reconnect on timeout
+//   - pong handler: clears watchdog on {type:'pong'} message
+//   - detach() cleans up all timers + event listeners (T-181-04-02 mitigation)
 
 export interface AttachedEnvelope {
 	session: {id: string; pid: number; cols: number; rows: number}
@@ -38,6 +44,13 @@ export class CcPtyWsClient {
 	private static readonly BACKOFF_MS = [250, 500, 1000, 2000, 4000]
 	private static readonly MAX_STDIN_BYTES = 64 * 1024
 
+	// Phase 181-04 — heartbeat + visibilitychange state
+	private pingInterval: ReturnType<typeof setInterval> | null = null
+	private pongTimeout: ReturnType<typeof setTimeout> | null = null
+	private visibilityHandler: (() => void) | null = null
+	private static readonly PING_INTERVAL_MS = 30_000
+	private static readonly PONG_TIMEOUT_MS = 10_000
+
 	constructor(private opts: CcPtyWsClientOpts) {
 		this.connect()
 	}
@@ -48,6 +61,32 @@ export class CcPtyWsClient {
 		ws.onopen = () => {
 			this.reconnectAttempts = 0
 			ws.send(JSON.stringify({type: 'attach', sessionId: this.opts.sessionId}))
+
+			// Phase 181-04 — Start heartbeat ping/pong
+			this.pingInterval = setInterval(() => {
+				if (this.ws?.readyState === WebSocket.OPEN) {
+					this.ws.send(JSON.stringify({type: 'ping'}))
+					// Start pong watchdog — reconnect if no pong within 10s
+					this.pongTimeout = setTimeout(() => {
+						this.ws?.close()
+					}, CcPtyWsClient.PONG_TIMEOUT_MS)
+				}
+			}, CcPtyWsClient.PING_INTERVAL_MS)
+
+			// Phase 181-04 — Register visibilitychange reconnect bypass
+			this.visibilityHandler = () => {
+				if (
+					document.visibilityState === 'visible' &&
+					this.ws?.readyState !== WebSocket.OPEN &&
+					this.ws?.readyState !== WebSocket.CONNECTING &&
+					!this.detached
+				) {
+					// Bypass backoff — reconnect immediately on screen unlock
+					this.reconnectAttempts = 0
+					this.connect()
+				}
+			}
+			document.addEventListener('visibilitychange', this.visibilityHandler)
 		}
 		ws.onmessage = (ev) => {
 			let env: any
@@ -76,9 +115,25 @@ export class CcPtyWsClient {
 				this.opts.onError(env.message || 'unknown server error')
 			} else if (env.type === 'exited') {
 				this.opts.onError(`session exited code=${env.code}`)
+			} else if (env.type === 'pong') {
+				// Phase 181-04 — Clear the pong watchdog on heartbeat response
+				if (this.pongTimeout) {
+					clearTimeout(this.pongTimeout)
+					this.pongTimeout = null
+				}
 			}
 		}
 		ws.onclose = () => {
+			// Phase 181-04 — Clear heartbeat on any close (before reconnect logic)
+			if (this.pingInterval) {
+				clearInterval(this.pingInterval)
+				this.pingInterval = null
+			}
+			if (this.pongTimeout) {
+				clearTimeout(this.pongTimeout)
+				this.pongTimeout = null
+			}
+
 			if (this.detached) {
 				this.opts.onClose?.()
 				return
@@ -116,6 +171,21 @@ export class CcPtyWsClient {
 
 	detach(): void {
 		this.detached = true
+
+		// Phase 181-04 — Clean up heartbeat + visibilitychange before close
+		if (this.visibilityHandler) {
+			document.removeEventListener('visibilitychange', this.visibilityHandler)
+			this.visibilityHandler = null
+		}
+		if (this.pingInterval) {
+			clearInterval(this.pingInterval)
+			this.pingInterval = null
+		}
+		if (this.pongTimeout) {
+			clearTimeout(this.pongTimeout)
+			this.pongTimeout = null
+		}
+
 		if (this.ws?.readyState === WebSocket.OPEN) {
 			try {
 				this.ws.send(JSON.stringify({type: 'detach'}))

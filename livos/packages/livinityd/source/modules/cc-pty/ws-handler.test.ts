@@ -230,4 +230,32 @@ describe('createCcPtyWsHandler', () => {
 		expect(errFrame).toBeDefined()
 		expect(s.ws.close).not.toHaveBeenCalled()
 	})
+
+	// ── Phase 181-04 — Ping/pong heartbeat handler ────────────────────────
+
+	it('Assertion 11 (Phase 181-04): ping message → immediate pong response (no attach required)', async () => {
+		const s = setupHarness({session: makeFakeSession({userId: 'admin'})})
+		await s.handler(s.ws as any, stubReq())
+		// Send ping BEFORE any 'attach' message
+		await send(s.ws, {type: 'ping'})
+		const pongFrame = s.ws.send.mock.calls
+			.map(([raw]) => JSON.parse(raw as string))
+			.find((f) => f.type === 'pong')
+		expect(pongFrame).toBeDefined()
+		expect(pongFrame.type).toBe('pong')
+	})
+
+	it('Assertion 12 (Phase 181-04): ping handler works after attach too', async () => {
+		const s = setupHarness({session: makeFakeSession({userId: 'admin'})})
+		await s.handler(s.ws as any, stubReq())
+		// Attach first
+		await send(s.ws, {type: 'attach', sessionId: 'sess-1'})
+		s.ws.send.mockClear()
+		// Then ping
+		await send(s.ws, {type: 'ping'})
+		const pongFrame = s.ws.send.mock.calls
+			.map(([raw]) => JSON.parse(raw as string))
+			.find((f) => f.type === 'pong')
+		expect(pongFrame).toBeDefined()
+	})
 })
