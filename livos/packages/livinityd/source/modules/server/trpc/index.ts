@@ -129,6 +129,11 @@ import chatConfigRouter from './chat-config-router.js'
 // gated; all 7 paths added to httpOnlyPaths in common.ts. ctx.livinityd.itemStore
 // is populated by plan 171-05's boot wire-up.
 import vaultItemsRouter from './vault-items-router.js'
+// Phase 177-03 — Vault Inbox namespace. 4 procedures
+// (listByAgent/listGlobal/markRead/get) wrap the Phase 177-03 InboxReader.
+// All adminProcedure-gated; all 4 paths added to httpOnlyPaths in common.ts.
+// ctx.livinityd.inboxReader is populated by Phase 177-03 boot wire-up in source/index.ts.
+import inboxRouter from './inbox-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -216,7 +221,8 @@ export function createAppRouter(opts: {
 		// (`vault: router({items: ...})`) keeps room for future `vault.*`
 		// namespaces (vault.settings, vault.skills, vault.commands) per the
 		// master plan D-V38-T folder layout — items is the first inhabitant.
-		vault: router({items: vaultItemsRouter}),
+		// Phase 177-03 — vault.inbox.* sub-router (4 procedures wrapping InboxReader).
+		vault: router({items: vaultItemsRouter, inbox: inboxRouter}),
 	})
 }
 
