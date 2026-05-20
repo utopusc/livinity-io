@@ -1701,6 +1701,27 @@ _dld_fix_permissions() {
     ok "Permissions fixed (owner=${livos_user})"
 }
 
+# ── 8c. Phase 173-01 — v35 → v38 vault rename (idempotent) ──────────────────
+# Renames /root/livinity-vault → /root/liv and creates a backward-compat
+# symlink. Safe to run on fresh installs (no-op) and on already-migrated
+# boxes (already-migrated short-circuit). MUST run BEFORE the systemd unit
+# is written so Plan 173-04's `Environment=LIV_VAULT_ROOT=/root/liv` lands
+# against the renamed directory.
+_dld_run_vault_v35_to_v38_migration() {
+    step "Phase 173-01 — v35 → v38 vault rename (idempotent)"
+    local migrate_script="${_DLD_LIVOS_DIR}/scripts/migrate-v35-to-v38.sh"
+    if [[ ! -f "$migrate_script" ]]; then
+        warn "migrate-v35-to-v38.sh not found at $migrate_script — skipping vault rename"
+        return 0
+    fi
+    if ! bash "$migrate_script"; then
+        warn "migrate-v35-to-v38.sh returned non-zero — see log above"
+        warn "deploy will continue; vault path may need manual repair"
+        return 0
+    fi
+    ok "Phase 173-01 — vault rename migration script completed"
+}
+
 # ── 13. Cleanup + .deployed-sha (105-02 G7+G9 — update.sh:657-682) ──────────
 # Stage dir preservation matches 104-11 reuse semantics (faster re-runs).
 # Operators wanting strict update.sh parity: `export _DLD_CLEAR_STAGE=1` to
@@ -1794,6 +1815,7 @@ deploy_livinityd() {
     _dld_verify_liv_dist_reachable        # 132-05 — pre-boot verify + auto-recover Bug #6
     _dld_update_gallery_cache             # 105-02 G5 — gallery cache git pull
     _dld_fix_permissions                  # 105-02 G6 — chown + app-script chmod
+    _dld_run_vault_v35_to_v38_migration   # Phase 173-01 — vault rename BEFORE systemd unit write
     _dld_write_liv_systemd_units
     _dld_write_systemd_unit
     _dld_health_check
