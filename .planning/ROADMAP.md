@@ -2163,7 +2163,7 @@ Plans:
 
 ---
 
-### Phase 173: Vault Rename + Phase 168 Migration + Sacred Freeze — 🟢 IN-PROGRESS 2026-05-20 (1/4 plans shipped)
+### Phase 173: Vault Rename + Phase 168 Migration + Sacred Freeze — 🟢 CODE-COMPLETE 2026-05-20 (4/4 plans shipped, 51 tests PASS, sacred SHA hook now JSON-driven w/ 25 file pins, 13 commits e0cd2b0e..3dcb2e6f)
 
 **Goal:** Atomic `mv /root/livinity-vault/ /root/liv/` on Mini PC at deploy time. Compatibility symlink. NEW `vault-root-resolver.ts` shim (Phase 162-01 scaffolder STAYS byte-identical). Migrate `livos-cc-sessions.json` → ChatItems under Main Liv. Update Sacred SHA hook to lock vault-items + cli modules.
 
@@ -2179,13 +2179,20 @@ Plans:
 
 ---
 
-### Phase 174: SidebarTree Component — 🔴 PLANNED 2026-05-20
+### Phase 174: SidebarTree Component — 🟡 PLANS-READY 2026-05-20
 
 **Goal:** NEW `<SidebarTree>` using react-arborist. Per-type row styling (Project/Agent/Chat icon + color from D-V38-O palette). Drag-to-reparent with cycle check. Context menu (rename/duplicate/archive/delete/export). Bottom-left Settings gear button.
 
 **Depends on:** Phase 171, 173
-**Wave:** 2
-**Estimated:** 5 plans
+**Wave:** 3 (depends 171 ✓ + 173 ✓ — both shipped)
+**Plans:** 5 plans
+
+Plans:
+- [ ] 174-01-PLAN.md — Install react-arborist@^3.x + scaffold features/sidebar-tree/ (3 skeleton files: SidebarTree, ItemTreeRow, barrel)
+- [ ] 174-02-PLAN.md — Implement SidebarTree body: vault.items.list tRPC query + react-arborist render + Main Liv pin + empty-state hint + 5s poll (10 vitest assertions + 8 pure-transformer tests)
+- [ ] 174-03-PLAN.md — Per-type styling on ItemTreeRow: D-V38-O token-driven colors + lucide icons (FolderKanban / Bot / MessageSquare) (8 vitest assertions, dark+light parity)
+- [ ] 174-04-PLAN.md — Drag-drop via react-arborist onMove + vault.items.move tRPC; additive cause field on TRPCError for typed UI toasts; cycle/depth-hard error + depth-soft warn handling (6 UI + 4 server vitest assertions)
+- [ ] 174-05-PLAN.md — ItemContextMenu (Radix; agent-only Run Now/View Inbox/Stop Tmux) + SidebarFooter (lucide Settings gear button, stub handler for Phase 183) + barrel updates (4 + 4 vitest assertions)
 
 ---
 
