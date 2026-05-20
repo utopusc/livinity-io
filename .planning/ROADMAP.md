@@ -2206,7 +2206,7 @@ Plans:
 
 ---
 
-### Phase 176: Main Liv Root Agent + 4 LivOS-Native Skills — 🔴 PLANNED 2026-05-20
+### Phase 176: Main Liv Root Agent + 4 LivOS-Native Skills — ✅ CODE-COMPLETE 2026-05-20
 
 **Goal:** NEW Liv root agent with 6 mutation tools (`create_item`, `list_items`, `move_item`, `archive_item`, `open_item`, `run_agent`). 4 LivOS-native default subagents scaffolded into `~/liv/.claude/agents/`:
 - **`luse-driver.md`** — computer use via Phase 165 luse MCP (re-registered into Liv's tool set)
@@ -2218,14 +2218,17 @@ Empty-state UI (terminal centered, Liv greeting). Liv's tmux session auto-spawne
 
 **Depends on:** Phase 171, 175
 **Wave:** 5
-**Plans:** 5 plans
+**Plans:** 5 plans — ALL SHIPPED
+**Commits:** `e1a8f5d5..cad3aa07` (6 commits)
+**Tests:** 66 new tests — 66/66 PASS
+**Sacred SHA:** preserved 6/6
 
 Plans:
-- [ ] 176-01-PLAN.md — liv-rootagent.md template + LivScaffolder (ensureLivRootAgent)
-- [ ] 176-02-PLAN.md — 6 Liv MCP tools (create_item/list_items/move_item/archive_item/open_item/run_agent)
-- [ ] 176-03-PLAN.md — 4 LivOS-native subagent templates + ensureLivSkills scaffolder
-- [ ] 176-04-PLAN.md — LivWelcomeTerminal empty-state UI + ai-chat route empty-state branch
-- [ ] 176-05-PLAN.md — SidebarTree openItem subscription + vault-items-router openItem procedure
+- [x] 176-01-PLAN.md — liv-rootagent.md template + LivScaffolder (ensureLivRootAgent) — commit e1a8f5d5
+- [x] 176-02-PLAN.md — 6 Liv MCP tools (create_item/list_items/move_item/archive_item/open_item/run_agent) — commit e50065cc
+- [x] 176-03-PLAN.md — 4 LivOS-native subagent templates + ensureLivSkills scaffolder — commit dffdcf52
+- [x] 176-04-PLAN.md — LivWelcomeTerminal empty-state UI + ai-chat route empty-state branch — commit a95078d2
+- [x] 176-05-PLAN.md — SidebarTree openItem subscription + vault-items-router openItem procedure — commits 1b18ac1e + cad3aa07
 
 ---
 

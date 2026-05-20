@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-20T14:00:35.913Z"
+last_updated: "2026-05-20T16:01:01.090Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md
 
 **Active milestone:** v38.0 — Liv Agent Platform — **OPENED 2026-05-20** (14 phases / 61 plans / 5 waves; master plan `.planning/v38-LIV-AGENT-PLATFORM-MASTER.md`; pivots flat session list → tree of Project/Agent/Chat Items + 4 LivOS-native default skills + `@livos/cli` npm package + Obsidian-class Vault Graph + mobile CC PTY + Settings restructure; 21 locked D-V38-A..U decisions; vault root renamed `livinity-vault` → `~/liv/` per operator vote 2026-05-20).
 
-**Last shipped phase:** **Phase 174-04** SidebarTree drag-drop with cycle/depth check — CODE-COMPLETE 2026-05-20 (Wave 3 progress; react-arborist `onMove` → `vault.items.move` tRPC wired; vault-items-router move() TRPCError additively extended with `cause: {kind, depth?}` mapped verbatim from `MoveValidation.reason`; sonner toast.error on cycle/depth-hard + `list.refetch()` revert, toast.warning on soft-cap commit; Main Liv synthetic root guarded; 4 TDD commits `f8c35827..8edf69be`; 18 server vault-items-router + 16 SidebarTree subset vitest PASS; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 4/4; 4 deviations auto-fixed (cause.kind literal = source-of-truth from tree-resolver, vitest hoisting TDZ, mock backward-compat stub, all-5-reasons UI defensive coverage). See `.planning/phases/174-sidebartree-component/174-04-SUMMARY.md`. Previously: Phase 173-01 vault rename migration script + Phase 172 `@livos/cli` + Phase 171 Item Model.
+**Last shipped phase:** **Phase 176** Main Liv Root Agent + 4 LivOS-Native Skills — CODE-COMPLETE 2026-05-20 (Wave 5 complete; 5 plans, 6 commits `e1a8f5d5..cad3aa07`, 66 new tests; ensureLivRootAgent + ensureLivSkills idempotent scaffolders; 6 Liv MCP tools (create/list/move/archive/open_item/run_agent) with Zod .strict() + Redis audit log; 4 skill templates (luse-driver/livos-operator/appstore/window-manager); LivWelcomeTerminal with sanitized userId→sessionName shown when vault empty; openItem Redis→tRPC subscription wired to SidebarTree scrollTo; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 6/6; 6 deviations auto-fixed (sacred barrel bypass, T4 ENOTDIR fix, ai-chat mock default, missing openItem stub, scrollTo positional API, forwardRef Tree mock). See `.planning/phases/176-main-liv-rootagent/176-SUMMARY.md`. Previously: Phase 174-04 SidebarTree drag-drop + Phase 175 Add Modal + Item Detail Views.
 
-**Next action:** `/gsd-execute-phase 178` or `/gsd-execute-phase 182` (wave-1 remainders, parallel-safe). Phase 174 wave continues — 174-05 SidebarFooter Settings gear (scaffold already landed at `livos/packages/ui/src/features/sidebar-tree/SidebarFooter.tsx` with 4 vitest PASS); Phase 173 wave continues — 173-02 (session migration writer), 173-03 (sacred SHA v38 freeze), 173-04 (systemd LIV_VAULT_ROOT env).
+**Next action:** `/gsd-execute-phase 177` — Schedule Engine + Inbox (depends 171, 176; now unblocked). Or parallel: `/gsd-execute-phase 178` (Vault Graph MVP Polish) + `/gsd-execute-phase 181` (Mobile CC PTY). Phase 176 complete; Wave 5 complete; Wave 6 (Phase 177) is the critical-path blocker before Wave 7 ship.
 
 **v35.0 phase queue (FINAL):**
 
@@ -65,7 +65,7 @@ Wave 4 — UI extensions + lightweight polish (2 parallel):
 
 Wave 5 — Liv root + mobile (2 parallel):
 
-- [ ] Phase 176 — Main Liv + 4 LivOS-native Skills — 5 plans (depends 171, 175)
+- [x] Phase 176 — Main Liv + 4 LivOS-native Skills — 5 plans (depends 171, 175) — ✅ CODE-COMPLETE 2026-05-20 (66 tests, 6 commits `e1a8f5d5..cad3aa07`, sacred SHA preserved 6/6)
 - [ ] Phase 181 — Mobile CC PTY (tablet + phone) — 4 plans (depends 175)
 
 Wave 6 — Autonomous (sequential):
