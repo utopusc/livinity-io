@@ -145,7 +145,9 @@ describe('CcPtyManager', () => {
 		expect(newSessionCall).toBeDefined()
 		const cmd = newSessionCall![0] as string
 		expect(cmd).toMatch(/'\/some\/cwd'/)
-		expect(cmd).toMatch(/'HOME=\/root claude'/)
+		// Phase 167.2 — child command now sets LANG/LC_ALL alongside HOME so
+		// Turkish + non-ASCII chars round-trip cleanly through claude's TUI.
+		expect(cmd).toMatch(/'LANG=en_US\.UTF-8 LC_ALL=en_US\.UTF-8 HOME=\/root claude'/)
 	})
 
 	it('Assertion 5: userId injection rejected — execSync is NEVER called for invalid userId', async () => {

@@ -28,6 +28,11 @@ const mockTerm = {
 	write: vi.fn(),
 	onData: vi.fn(),
 	dispose: vi.fn(),
+	// Phase 167.2 — clipboard key-event handler shim. Real xterm.js Terminal
+	// exposes `attachCustomKeyEventHandler(cb)`; the mock captures the cb so
+	// tests can drive synthetic keydown events through it.
+	attachCustomKeyEventHandler: vi.fn(),
+	getSelection: vi.fn(() => ''),
 	cols: 80,
 	rows: 24,
 	options: {} as Record<string, unknown>,
@@ -114,6 +119,8 @@ beforeEach(() => {
 	mockTerm.write.mockClear()
 	mockTerm.onData.mockClear()
 	mockTerm.dispose.mockClear()
+	mockTerm.attachCustomKeyEventHandler.mockClear()
+	mockTerm.getSelection.mockClear()
 	container = document.createElement('div')
 	document.body.appendChild(container)
 	root = createRoot(container)
