@@ -138,3 +138,44 @@ describe('ItemTreeRow — source-text invariants (dark/light token parity)', () 
 		expect(SRC).toMatch(/from 'lucide-react'/)
 	})
 })
+
+// ── Phase 177-04 — Inbox badge tests (T-UI-01 through T-UI-04) ───────────────
+
+describe('ItemTreeRow — Phase 177-04 inbox badge', () => {
+	it('T-UI-01: agent row with unreadCount=3 renders [data-testid="inbox-badge"] containing "3"', () => {
+		act(() => {
+			root.render(<ItemTreeRow item={fakeItem('agent', 'Agent X')} unreadCount={3} />)
+		})
+		const badge = container.querySelector('[data-testid="inbox-badge"]')
+		expect(badge).not.toBeNull()
+		expect(badge!.textContent).toBe('3')
+	})
+
+	it('T-UI-02: agent row with unreadCount=0 does NOT render inbox-badge', () => {
+		act(() => {
+			root.render(<ItemTreeRow item={fakeItem('agent', 'Agent X')} unreadCount={0} />)
+		})
+		expect(container.querySelector('[data-testid="inbox-badge"]')).toBeNull()
+	})
+
+	it('T-UI-03: badge integer-casts input — unreadCount=2.7 renders "2"', () => {
+		act(() => {
+			root.render(<ItemTreeRow item={fakeItem('agent', 'Agent X')} unreadCount={2.7} />)
+		})
+		const badge = container.querySelector('[data-testid="inbox-badge"]')
+		expect(badge).not.toBeNull()
+		expect(badge!.textContent).toBe('2')
+	})
+
+	it('T-UI-04: project/chat rows NEVER render badge regardless of unreadCount', () => {
+		act(() => {
+			root.render(<ItemTreeRow item={fakeItem('project', 'Proj')} unreadCount={5} />)
+		})
+		expect(container.querySelector('[data-testid="inbox-badge"]')).toBeNull()
+
+		act(() => {
+			root.render(<ItemTreeRow item={fakeItem('chat', 'Chat')} unreadCount={5} />)
+		})
+		expect(container.querySelector('[data-testid="inbox-badge"]')).toBeNull()
+	})
+})
