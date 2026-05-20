@@ -280,4 +280,63 @@ describe('VaultGraph', () => {
 			props.linkColor({source: {id: 'a.md'}, target: {id: 'b.md'}}),
 		).toBe('var(--line-strong)')
 	})
+
+	// ── Phase 178-03: chrome restyle assertions (3 new) ──────────────────────
+
+	it('Refresh button uses bg-[color:var(--bg-2)] token class (no bg-bg-secondary literal)', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0}],
+				edges: [],
+				truncated: false,
+				totalFiles: 1,
+			}),
+		})
+		render()
+		await flushPromises()
+		const btn = container.querySelector(
+			'[data-testid="refresh-btn"]',
+		) as HTMLButtonElement
+		expect(btn).not.toBeNull()
+		expect(btn.className).toContain('bg-[color:var(--bg-2)]')
+		expect(btn.className).toContain('border-[color:var(--line-strong)]')
+		expect(btn.className).not.toContain('bg-bg-secondary')
+	})
+
+	it('truncated banner includes "Adjust limit in Settings" link with href="#settings/vault-graph"', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0}],
+				edges: [],
+				truncated: true,
+				totalFiles: 2000,
+			}),
+		})
+		render()
+		await flushPromises()
+		const banner = container.querySelector('[data-testid="truncated-banner"]')
+		expect(banner).not.toBeNull()
+		expect(banner?.className).toContain('bg-[color:var(--bg-2)]')
+		expect(banner?.className).not.toContain('bg-amber-500/20')
+		const link = container.querySelector(
+			'[data-testid="settings-link"]',
+		) as HTMLAnchorElement
+		expect(link).not.toBeNull()
+		expect(link.textContent).toBe('Adjust limit in Settings')
+		expect(link.getAttribute('href')).toBe('#settings/vault-graph')
+	})
+
+	it('error state uses text-[color:var(--accent-red)] (no text-red-500 literal)', async () => {
+		fetchMock.mockResolvedValue({ok: false, status: 500})
+		render()
+		await flushPromises()
+		const wrapper = Array.from(container.querySelectorAll('div')).find(
+			(d) => d.textContent === 'Failed to load graph',
+		)
+		expect(wrapper).toBeTruthy()
+		expect(wrapper?.className).toContain('text-[color:var(--accent-red)]')
+		expect(wrapper?.className).not.toContain('text-red-500')
+	})
 })
