@@ -24,7 +24,7 @@ export function GlobalInboxWindow({onClose}: GlobalInboxWindowProps) {
 	const globalQuery = trpcReact.vault.inbox.listGlobal.useQuery()
 	const markReadMutation = trpcReact.vault.inbox.markRead.useMutation()
 
-	const allEntries = globalQuery.data ?? []
+	const allEntries = globalQuery.data?.entries ?? []
 	const filteredEntries = filter
 		? allEntries.filter((e) => e.agentId.toLowerCase().includes(filter.toLowerCase()))
 		: allEntries

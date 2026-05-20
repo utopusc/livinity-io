@@ -44,7 +44,7 @@ vi.mock('@/trpc/trpc', () => ({
 			inbox: {
 				listByAgent: {
 					useQuery: vi.fn(() => ({
-						data: trpcInboxMock.listByAgentData,
+						data: {entries: trpcInboxMock.listByAgentData},
 						isLoading: false,
 						refetch: trpcInboxMock.listByAgentRefetch,
 					})),

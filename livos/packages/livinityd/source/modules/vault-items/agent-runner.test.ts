@@ -85,9 +85,9 @@ describe('AgentRunner — T-RUN-01 through T-RUN-12', () => {
 		expect(redisMock.set).toHaveBeenCalledWith(
 			'liv:agent:running:agent-abc123456789012',
 			expect.any(String),
-			'NX',
 			'PX',
 			900_000,
+			'NX',
 		)
 	})
 
@@ -116,7 +116,7 @@ describe('AgentRunner — T-RUN-01 through T-RUN-12', () => {
 		const result = await runner.runAgent('agent-abc123456789012')
 		expect(result).toMatchObject({ok: true})
 		expect(inboxWriterMock).toHaveBeenCalledTimes(1)
-		const [, frontmatter] = inboxWriterMock.mock.calls[0] as [string, Record<string, unknown>]
+		const [, frontmatter] = inboxWriterMock.mock.calls[0] as unknown as [string, Record<string, unknown>]
 		expect(frontmatter).toHaveProperty('runAt')
 		expect(frontmatter).toHaveProperty('triggeredBy', 'manual')
 		expect(frontmatter).toHaveProperty('durationMs')
@@ -125,13 +125,13 @@ describe('AgentRunner — T-RUN-01 through T-RUN-12', () => {
 
 	it('T-RUN-06: triggeredBy="cron" when opts.triggeredBy="cron"', async () => {
 		await runner.runAgent('agent-abc123456789012', {triggeredBy: 'cron'})
-		const [, frontmatter] = inboxWriterMock.mock.calls[0] as [string, Record<string, unknown>]
+		const [, frontmatter] = inboxWriterMock.mock.calls[0] as unknown as [string, Record<string, unknown>]
 		expect(frontmatter).toHaveProperty('triggeredBy', 'cron')
 	})
 
 	it('T-RUN-07: triggeredBy="manual" when opts.triggeredBy omitted', async () => {
 		await runner.runAgent('agent-abc123456789012')
-		const [, frontmatter] = inboxWriterMock.mock.calls[0] as [string, Record<string, unknown>]
+		const [, frontmatter] = inboxWriterMock.mock.calls[0] as unknown as [string, Record<string, unknown>]
 		expect(frontmatter).toHaveProperty('triggeredBy', 'manual')
 	})
 
@@ -171,7 +171,7 @@ describe('AgentRunner — T-RUN-01 through T-RUN-12', () => {
 		// inboxWriterMock was injected — must have been called (not the real fs.writeFile)
 		expect(inboxWriterMock).toHaveBeenCalledTimes(1)
 		// First arg should be the inbox file path
-		const [filePath] = inboxWriterMock.mock.calls[0] as [string]
+		const [filePath] = inboxWriterMock.mock.calls[0] as unknown as [string]
 		expect(filePath).toContain('agent-abc123456789012')
 		expect(filePath).toContain('inbox')
 	})
