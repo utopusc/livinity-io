@@ -51,3 +51,13 @@ export type {
 	ConcurrentGateResult,
 	DailyBudgetGateResult,
 } from './budget-gate.js'
+
+// Phase 177-01 — per-Agent cron registry (vault-items/agent-schedule.ts).
+// Additive exports only — scheduler.ts core UNCHANGED (byte-identical).
+export {
+	AgentScheduleRegistry,
+	scheduleAgent,
+	unscheduleAgent,
+	bootSweepAgentSchedules,
+} from '../vault-items/agent-schedule.js'
+export type {BootSweepResult} from '../vault-items/agent-schedule.js'
