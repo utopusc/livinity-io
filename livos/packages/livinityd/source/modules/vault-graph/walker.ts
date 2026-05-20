@@ -33,6 +33,7 @@ export interface VaultFile {
 	mtime: number
 	frontmatter?: Record<string, unknown>
 	wikilinks: string[]
+	topDir: string // Phase 179-01: first path segment, 'root' for top-level files
 }
 
 const TYPE_PATHS: Array<[string, VaultFile['type']]> = [
@@ -90,6 +91,7 @@ export async function walkVault(
 					mtime: Math.floor(st.mtimeMs),
 					frontmatter,
 					wikilinks,
+					topDir: deriveTopDir(normalizedRel), // Phase 179-01 addition
 				})
 			}
 		}
@@ -104,4 +106,11 @@ function classifyType(relPath: string): VaultFile['type'] {
 		if (relPath.startsWith(prefix)) return type
 	}
 	return 'root'
+}
+
+// Phase 179-01: derive topDir from a vault-relative forward-slash path.
+// Returns the first path segment or 'root' if no '/' present (top-level file).
+function deriveTopDir(relPath: string): string {
+	const slash = relPath.indexOf('/')
+	return slash === -1 ? 'root' : relPath.slice(0, slash)
 }

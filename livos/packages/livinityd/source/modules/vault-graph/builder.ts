@@ -20,6 +20,7 @@
 import path from 'node:path'
 
 import type {VaultFile} from './walker.js'
+import {extractTags} from './parser.js'
 
 export interface GraphNode {
 	id: string
@@ -27,6 +28,8 @@ export interface GraphNode {
 	type: VaultFile['type']
 	size: number
 	mtime: number
+	tags: string[]    // Phase 179-01: parsed from frontmatter YAML
+	topDir: string    // Phase 179-01: first path segment
 }
 
 export interface GraphEdge {
@@ -44,6 +47,8 @@ export function buildGraph(
 		type: f.type,
 		size: f.size,
 		mtime: f.mtime,
+		tags: extractTags(f.frontmatter), // Phase 179-01 addition
+		topDir: f.topDir,                 // Phase 179-01 addition
 	}))
 
 	const nodeIds = new Set(nodes.map((n) => n.id))
