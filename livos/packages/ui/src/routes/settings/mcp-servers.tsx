@@ -8,9 +8,9 @@ import {useCallback, useEffect, useState} from 'react'
 import {McpServerList, type McpServerConfig, type McpServerStatus} from '@/components/mcp/McpServerList'
 import {McpServerDetail} from '@/components/mcp/McpServerDetail'
 import {FEATURED_MCPS, type FeaturedMcp} from '@/components/mcp/featured-mcps'
+import {FeaturedMcpInstaller} from '@/components/mcp/FeaturedMcpInstaller'
 import {SettingsPageLayout} from './_components/settings-page-layout'
 import {SettingsPageHeader} from '@/components/settings-page-header'
-import {IconDownload, IconCheck} from '@tabler/icons-react'
 
 // ── REST helpers (same /api/mcp base as mcp-panel.tsx) ───────────────────────
 
@@ -150,31 +150,10 @@ export default function McpServersPage() {
 						/>
 					) : (
 						<div data-testid='mcp-featured-section'>
-							<p className='text-caption text-text-tertiary mb-3'>Featured MCP servers — one-click install:</p>
-							<div className='grid grid-cols-2 gap-3'>
-								{FEATURED_MCPS.slice(0, 6).map((mcp) => (
-									<div
-										key={mcp.name}
-										data-testid={`featured-mcp-${mcp.name}`}
-										onClick={() => handleInstallFeatured(mcp)}
-										className={`rounded-radius-lg p-3 bg-gradient-to-br ${mcp.gradient} border border-white/10 cursor-pointer hover:border-white/20 transition-colors`}
-									>
-										<p className='text-caption font-semibold text-text-primary'>{mcp.displayName}</p>
-										<p className='text-[11px] text-text-tertiary mt-0.5 line-clamp-2'>{mcp.description}</p>
-										{installedNames.has(mcp.name) ? (
-											<span className='flex items-center gap-1 text-[10px] text-accent-green mt-1'>
-												<IconCheck size={10} />
-												Installed
-											</span>
-										) : (
-											<span className='flex items-center gap-1 text-[10px] text-text-tertiary mt-1'>
-												<IconDownload size={10} />
-												Install
-											</span>
-										)}
-									</div>
-								))}
-							</div>
+							<FeaturedMcpInstaller
+								installedNames={installedNames}
+								onInstall={handleInstallFeatured}
+							/>
 						</div>
 					)}
 				</div>

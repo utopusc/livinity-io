@@ -108,7 +108,10 @@ describe('FeaturedMcpInstaller', () => {
 				<FeaturedMcpInstaller installedNames={new Set()} onInstall={async () => {}} />,
 			)
 		})
-		const cards = container.querySelectorAll('[data-testid^="featured-mcp-"]')
+		// Exclude the wrapper div 'featured-mcp-installer' — select only card divs (children of the grid)
+		const cards = container.querySelectorAll(
+			'[data-testid^="featured-mcp-"]:not([data-testid="featured-mcp-installer"])',
+		)
 		expect(cards.length).toBe(6)
 		expect(container.querySelector('[data-testid="featured-mcp-brave-search"]')).not.toBeNull()
 		expect(container.querySelector('[data-testid="featured-mcp-github"]')).not.toBeNull()

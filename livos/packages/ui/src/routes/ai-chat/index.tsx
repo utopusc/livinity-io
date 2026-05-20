@@ -39,6 +39,8 @@ import {SidebarTree} from '@/features/sidebar-tree'
 import {ChatDetail, ProjectDetail, AgentDetail, AddItemModal} from '@/features/item-detail'
 import {McpServerList, type McpServerConfig, type McpServerStatus} from '@/components/mcp/McpServerList'
 import {McpServerDetail} from '@/components/mcp/McpServerDetail'
+import {FeaturedMcpInstaller} from '@/components/mcp/FeaturedMcpInstaller'
+import {type FeaturedMcp} from '@/components/mcp/featured-mcps'
 
 type Tab = 'terminal' | 'graph' | 'mcp'
 
@@ -102,6 +104,36 @@ export default function AiChatRoute() {
 	const mcpSelectedServer = mcpSelectedName
 		? (mcpServerItems.find((s) => s.name === mcpSelectedName) ?? null)
 		: null
+	const mcpInstalledNames = new Set(mcpServers.map((s) => s.name))
+
+	const handleInstallFeaturedMcp = useCallback(
+		async (mcp: FeaturedMcp) => {
+			const body: Record<string, unknown> = {
+				name: mcp.name,
+				transport: mcp.transport,
+				description: mcp.description,
+			}
+			if (mcp.transport === 'stdio') {
+				body.command = mcp.customCommand ?? 'npx'
+				body.args = mcp.customArgs ?? (mcp.npmPackage ? ['-y', mcp.npmPackage] : [])
+			} else {
+				body.url = mcp.remoteUrl ?? ''
+			}
+			try {
+				await fetch('/api/mcp/servers', {
+					method: 'POST',
+					credentials: 'include',
+					headers: {'Content-Type': 'application/json'},
+					body: JSON.stringify(body),
+				})
+				await fetchMcpServers()
+			} catch {
+				/* silent */
+			}
+		},
+		[fetchMcpServers],
+	)
+
 	const handleMcpToggle = async (name: string, enabled: boolean) => {
 		try {
 			await fetch(`/api/mcp/servers/${encodeURIComponent(name)}`, {
@@ -221,23 +253,34 @@ export default function AiChatRoute() {
 						) : activeTab === 'graph' ? (
 							<VaultGraph />
 						) : (
-							<div data-testid='mcp-tab-content' className='flex h-full overflow-hidden'>
-								<div className='w-64 shrink-0 border-r border-border'>
-									<McpServerList
-										servers={mcpServerItems}
-										selectedName={mcpSelectedName}
-										onSelect={setMcpSelectedName}
-										onToggleEnabled={handleMcpToggle}
-										onRemove={handleMcpRemove}
-										isLoading={mcpLoading}
-									/>
-								</div>
-								<div className='flex-1 min-w-0'>
-									<McpServerDetail
-										server={mcpSelectedServer}
-										onClose={() => setMcpSelectedName(null)}
-										onToggleEnabled={handleMcpToggle}
-									/>
+							<div data-testid='mcp-tab-content' className='flex h-full flex-col overflow-hidden'>
+								{/* Featured installer — shown when no server selected */}
+								{!mcpSelectedName && (
+									<div className='shrink-0 border-b border-border p-3 overflow-y-auto'>
+										<FeaturedMcpInstaller
+											installedNames={mcpInstalledNames}
+											onInstall={handleInstallFeaturedMcp}
+										/>
+									</div>
+								)}
+								<div className='flex flex-1 overflow-hidden'>
+									<div className='w-64 shrink-0 border-r border-border'>
+										<McpServerList
+											servers={mcpServerItems}
+											selectedName={mcpSelectedName}
+											onSelect={setMcpSelectedName}
+											onToggleEnabled={handleMcpToggle}
+											onRemove={handleMcpRemove}
+											isLoading={mcpLoading}
+										/>
+									</div>
+									<div className='flex-1 min-w-0'>
+										<McpServerDetail
+											server={mcpSelectedServer}
+											onClose={() => setMcpSelectedName(null)}
+											onToggleEnabled={handleMcpToggle}
+										/>
+									</div>
 								</div>
 							</div>
 						)}
