@@ -136,11 +136,15 @@ export class CcPtyManager {
 		const cwd = opts.cwd ?? this.vaultPath
 		const cwdEsc = shellEscape(cwd)
 		const nameEsc = shellEscape(tmuxName)
-		// tmux command — name + cwd are shell-escaped; literal `HOME=/root claude`
-		// inside the new-window command string. HOME=/root is required because the
-		// Anthropic SDK subscription credentials live at /root/.claude/.credentials.json.
-		const tmuxCmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'HOME=/root claude'`
-		execSync(tmuxCmd, {env: {...process.env, HOME: '/root'}})
+		// tmux command — name + cwd are shell-escaped; the child command sets
+		// HOME=/root (Anthropic SDK credentials live at /root/.claude/.credentials.json)
+		// AND forces a UTF-8 locale so Turkish + non-ASCII chars round-trip cleanly
+		// through claude's TUI. Phase 167.2 hotfix: livinityd inherits LANG from
+		// systemd but tmux daemon snapshots env on first server start; subsequent
+		// new-session calls inherit the daemon's snapshot. Setting LANG/LC_ALL on
+		// the spawned child explicitly bypasses that snapshot.
+		const tmuxCmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=/root claude'`
+		execSync(tmuxCmd, {env: {...process.env, HOME: '/root', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8'}})
 
 		const session: CcPtySession = {
 			id,
@@ -195,19 +199,28 @@ export class CcPtyManager {
 			const resumeArg = session.ccSessionId
 				? `--resume ${shellEscape(session.ccSessionId)}`
 				: ''
-			const cmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'HOME=/root claude ${resumeArg}'`
-			execSync(cmd, {env: {...process.env, HOME: '/root'}})
+			// Phase 167.2 hotfix — same LANG/LC_ALL injection as createSession.
+			const cmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=/root claude ${resumeArg}'`
+			execSync(cmd, {env: {...process.env, HOME: '/root', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8'}})
 			this.logger.log(`[cc-pty] resurrected tmux session ${session.tmuxName}`)
 		}
 
 		// Spawn node-pty wrapping `tmux attach -t <name>` — ARRAY argv form
 		// bypasses the shell entirely so tmuxName never enters a shell parser.
+		// Phase 167.2 hotfix — propagate UTF-8 locale to the attach client so
+		// the renderer xterm.js receives proper multi-byte sequences.
 		const ptyProc = pty.spawn('tmux', ['attach', '-t', session.tmuxName], {
 			name: 'xterm-256color',
 			cols: 120,
 			rows: 30,
 			cwd: session.cwd,
-			env: {...process.env, HOME: '/root', TERM: 'xterm-256color'} as {[k: string]: string},
+			env: {
+				...process.env,
+				HOME: '/root',
+				TERM: 'xterm-256color',
+				LANG: 'en_US.UTF-8',
+				LC_ALL: 'en_US.UTF-8',
+			} as {[k: string]: string},
 		})
 
 		ptyProc.onData((data) => {

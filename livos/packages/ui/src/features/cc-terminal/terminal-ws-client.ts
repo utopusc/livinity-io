@@ -59,7 +59,14 @@ export class CcPtyWsClient {
 			}
 			if (env.type === 'stdout' && typeof env.data === 'string') {
 				try {
-					this.opts.onStdout(atob(env.data))
+					// Phase 167.2 hotfix — `atob` returns a binary string treating each
+					// byte as a single Latin-1 code-point, which corrupts multi-byte
+					// UTF-8 sequences (Turkish ş/ç/ı/ğ/ü/ö, emoji, box-drawing chars
+					// in claude's TUI). Decode into a Uint8Array and run it through
+					// TextDecoder so the stream xterm.js receives is the same UTF-8
+					// payload the PTY emitted.
+					const bytes = Uint8Array.from(atob(env.data), (c) => c.charCodeAt(0))
+					this.opts.onStdout(new TextDecoder('utf-8', {fatal: false}).decode(bytes))
 				} catch {
 					this.opts.onError('invalid base64 stdout payload')
 				}

@@ -86,6 +86,58 @@ export function CcTerminal({sessionId}: {sessionId: string}) {
 
 		term.onData((data) => ws.sendStdin(data))
 
+		// Phase 167.2 hotfix — @xterm/addon-clipboard is not in the lockfile
+		// (D-NEW-DEPS-v35), so wire copy/paste through the navigator Clipboard
+		// API. Convention mirrors most modern terminal emulators:
+		//   - Ctrl+Shift+V / Cmd+V   → paste from clipboard into PTY stdin
+		//   - Ctrl+Shift+C / Cmd+C   → copy current selection (no selection
+		//                              passes Ctrl+C through to claude as SIGINT)
+		// Right-click also pastes (matches xterm.js Linux convention).
+		const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+		term.attachCustomKeyEventHandler((ev) => {
+			if (ev.type !== 'keydown') return true
+			const mod = isMac ? ev.metaKey : ev.ctrlKey
+			if (!mod) return true
+			// Paste: Ctrl+Shift+V (Linux/Win) OR Cmd+V (Mac)
+			if (ev.key === 'v' && (isMac ? !ev.shiftKey : ev.shiftKey)) {
+				navigator.clipboard
+					.readText()
+					.then((text) => {
+						if (text) ws.sendStdin(text)
+					})
+					.catch(() => {
+						/* clipboard permission denied — silent */
+					})
+				return false
+			}
+			// Copy: Ctrl+Shift+C (Linux/Win) OR Cmd+C (Mac) — only intercept
+			// when something is selected; otherwise let Ctrl+C through as SIGINT.
+			if (ev.key === 'c' && (isMac ? !ev.shiftKey : ev.shiftKey)) {
+				const sel = term.getSelection()
+				if (sel) {
+					navigator.clipboard.writeText(sel).catch(() => {
+						/* clipboard permission denied — silent */
+					})
+					return false
+				}
+			}
+			return true
+		})
+
+		const onContextMenu = (e: MouseEvent) => {
+			e.preventDefault()
+			navigator.clipboard
+				.readText()
+				.then((text) => {
+					if (text) ws.sendStdin(text)
+				})
+				.catch(() => {
+					/* clipboard permission denied — silent */
+				})
+		}
+		containerRef.current.addEventListener('contextmenu', onContextMenu)
+		const containerForCleanup = containerRef.current
+
 		const ro = new ResizeObserver(() => {
 			fit.fit()
 			ws.sendResize(term.cols, term.rows)
@@ -98,6 +150,7 @@ export function CcTerminal({sessionId}: {sessionId: string}) {
 
 		return () => {
 			ro.disconnect()
+			containerForCleanup.removeEventListener('contextmenu', onContextMenu)
 			ws.detach()
 			term.dispose()
 		}
