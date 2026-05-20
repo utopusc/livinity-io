@@ -7,6 +7,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { LegendBadge, buildLegendRows } from './LegendBadge'
+import type { GraphStats } from './graph-stats'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -94,6 +95,58 @@ describe('LegendBadge', () => {
     })
     const row = container.querySelector('[data-testid="legend-row-memory"]') as HTMLElement
     expect(row?.className).toContain('opacity-40')
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  // Phase 187-05: stats footer assertions
+
+  it('renders legend-stats-footer when stats prop is provided', () => {
+    const stats: GraphStats = {
+      nodeCount: 42,
+      edgeCount: 18,
+      orphanCount: 5,
+      topHubs: [{id: 'brain/Memories.md', label: 'Memories', degree: 47}],
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(
+        <LegendBadge
+          mode='by-type'
+          rows={[]}
+          hiddenGroups={new Set()}
+          onToggleGroup={vi.fn()}
+          onCycleMode={vi.fn()}
+          stats={stats}
+        />,
+      )
+    })
+    const footer = container.querySelector('[data-testid="legend-stats-footer"]')
+    expect(footer).not.toBeNull()
+    expect(footer?.textContent).toContain('Orphans:')
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('does NOT render legend-stats-footer when stats prop is absent', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(
+        <LegendBadge
+          mode='by-type'
+          rows={[]}
+          hiddenGroups={new Set()}
+          onToggleGroup={vi.fn()}
+          onCycleMode={vi.fn()}
+        />,
+      )
+    })
+    const footer = container.querySelector('[data-testid="legend-stats-footer"]')
+    expect(footer).toBeNull()
     act(() => root.unmount())
     container.remove()
   })
