@@ -36,6 +36,7 @@ import {ForcesSection} from './sections/ForcesSection'
 import {useGraphSettings} from './hooks/useGraphSettings'
 import {bfsSubgraph} from './local-graph-mode'
 import {DepthChip} from './DepthChip'
+import {scheduleAnimation, type AnimationCleanup} from './animation'
 
 interface GraphNode {
 	id: string
@@ -106,6 +107,10 @@ export function VaultGraph() {
 	const [localFocusId, setLocalFocusId] = useState<string | null>(null)
 	const [localDepth, setLocalDepth] = useState<number>(2)
 
+	// Phase 180-02: animation visibility set — null = all visible (no animation running)
+	const [animRevealedSet, setAnimRevealedSet] = useState<Set<string> | null>(null)
+	const animCleanupRef = useRef<AnimationCleanup | null>(null)
+
 	// Phase 180-01: BFS subgraph for local mode.
 	// Threat T-180-01-A: depth clamped inside bfsSubgraph to [1,4].
 	// Threat T-180-01-B: bfsSubgraph visited set prevents infinite loops on cycles.
@@ -128,6 +133,30 @@ export function VaultGraph() {
 		)
 		return result.edges
 	}, [graphMode, localFocusId, localDepth, filteredNodes, graphQ.data])
+
+	// Phase 180-02: animation cancel on unmount.
+	// Threat T-180-02-B: prevents stale setState after unmount.
+	useEffect(() => {
+		return () => { animCleanupRef.current?.() }
+	}, [])
+
+	// Phase 180-02: start reveal animation on currently-visible node set.
+	function handleAnimate() {
+		animCleanupRef.current?.()
+		const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+		setAnimRevealedSet(new Set<string>())
+		const cleanup = scheduleAnimation(
+			localNodes.map((n) => ({ id: n.id, mtime: n.mtime })),
+			8000,
+			(id) => setAnimRevealedSet((prev) => {
+				const next = new Set(prev ?? [])
+				next.add(id)
+				return next
+			}),
+			reducedMotion,
+		)
+		animCleanupRef.current = cleanup
+	}
 
 	if (graphQ.isLoading) {
 		return (
@@ -198,6 +227,7 @@ export function VaultGraph() {
 				<DisplaySection
 					initialState={settings.display}
 					onDisplayChange={settings.setDisplay}
+					onAnimateRequest={handleAnimate}
 				/>
 				<ForcesSection
 					initialState={settings.forces}
@@ -209,18 +239,16 @@ export function VaultGraph() {
 				graphData={{
 					// Phase 179-05: use filteredNodes with resolveNodeColor; matchSet opacity.
 					// Phase 180-01: switched to localNodes/localEdges (BFS subset in local mode).
+					// Phase 180-02: animRevealedSet hides/reveals nodes in animation.
 					// Threat T-179-05-A/D: resolveNodeColor uses clamped sliders + arithmetic only.
 					nodes: localNodes.map((n) => {
 						const color = resolveNodeColor(n, settings.groups.mode, theme)
-						return {
-							...n,
-							color:
-								matchSet.size > 0
-									? matchSet.has(n.id)
-										? color
-										: color + '66' // 40% opacity for non-matching nodes
-									: color,
-						}
+						// Phase 180-02: if animation running, hide nodes not yet revealed
+						const animAlpha = animRevealedSet !== null && !animRevealedSet.has(n.id) ? '00' : ''
+						const baseColor = matchSet.size > 0
+							? matchSet.has(n.id) ? color : color + '66'
+							: color
+						return { ...n, color: baseColor + animAlpha }
 					}),
 					links: localEdges.map((e) => ({
 						source: e.source,
