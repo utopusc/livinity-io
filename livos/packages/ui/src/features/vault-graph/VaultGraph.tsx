@@ -34,6 +34,8 @@ import {GroupsSection, resolveNodeColor} from './sections/GroupsSection'
 import {DisplaySection} from './sections/DisplaySection'
 import {ForcesSection} from './sections/ForcesSection'
 import {useGraphSettings} from './hooks/useGraphSettings'
+import {bfsSubgraph} from './local-graph-mode'
+import {DepthChip} from './DepthChip'
 
 interface GraphNode {
 	id: string
@@ -99,6 +101,34 @@ export function VaultGraph() {
 		)
 	}, [graphQ.data, settings.filters.enabledTypes])
 
+	// Phase 180-01: local graph mode state
+	const [graphMode, setGraphMode] = useState<'global' | 'local'>('global')
+	const [localFocusId, setLocalFocusId] = useState<string | null>(null)
+	const [localDepth, setLocalDepth] = useState<number>(2)
+
+	// Phase 180-01: BFS subgraph for local mode.
+	// Threat T-180-01-A: depth clamped inside bfsSubgraph to [1,4].
+	// Threat T-180-01-B: bfsSubgraph visited set prevents infinite loops on cycles.
+	const localNodes = useMemo(() => {
+		if (graphMode !== 'local' || !localFocusId || !graphQ.data) return filteredNodes
+		const result = bfsSubgraph(
+			{ nodes: filteredNodes, edges: graphQ.data.edges },
+			localFocusId,
+			localDepth,
+		)
+		return result.nodes
+	}, [graphMode, localFocusId, localDepth, filteredNodes, graphQ.data])
+
+	const localEdges = useMemo(() => {
+		if (graphMode !== 'local' || !localFocusId || !graphQ.data) return graphQ.data?.edges ?? []
+		const result = bfsSubgraph(
+			{ nodes: filteredNodes, edges: graphQ.data.edges },
+			localFocusId,
+			localDepth,
+		)
+		return result.edges
+	}, [graphMode, localFocusId, localDepth, filteredNodes, graphQ.data])
+
 	if (graphQ.isLoading) {
 		return (
 			<div className='flex h-full items-center justify-center text-[color:var(--fg-mute)]'>
@@ -145,6 +175,17 @@ export function VaultGraph() {
 				onMatchChange={setMatchSet}
 				onClear={() => setMatchSet(new Set())}
 			/>
+			{/* Phase 180-01: DepthChip — top-center pill when in local mode */}
+			{graphMode === 'local' && localFocusId && (
+				<DepthChip
+					depth={localDepth}
+					onDepthChange={(d) => setLocalDepth(d)}
+					onBackToGlobal={() => {
+						setGraphMode('global')
+						setLocalFocusId(null)
+					}}
+				/>
+			)}
 			<GraphControls>
 				<FiltersSection
 					initialFilters={settings.filters}
@@ -167,8 +208,9 @@ export function VaultGraph() {
 				ref={fgRef}
 				graphData={{
 					// Phase 179-05: use filteredNodes with resolveNodeColor; matchSet opacity.
+					// Phase 180-01: switched to localNodes/localEdges (BFS subset in local mode).
 					// Threat T-179-05-A/D: resolveNodeColor uses clamped sliders + arithmetic only.
-					nodes: filteredNodes.map((n) => {
+					nodes: localNodes.map((n) => {
 						const color = resolveNodeColor(n, settings.groups.mode, theme)
 						return {
 							...n,
@@ -180,13 +222,18 @@ export function VaultGraph() {
 									: color,
 						}
 					}),
-					links: graphQ.data.edges.map((e) => ({
+					links: localEdges.map((e) => ({
 						source: e.source,
 						target: e.target,
 					})),
 				}}
 				nodeLabel='label'
-				onNodeClick={(node) => setActiveNode(node as unknown as GraphNode)}
+				onNodeClick={(node: any) => {
+					setActiveNode(node as unknown as GraphNode)
+					// Phase 180-01: clicking a node enters local mode centred on that node.
+					setGraphMode('local')
+					setLocalFocusId(node.id)
+				}}
 				cooldownTicks={100}
 				linkColor={(link: any) => {
 					if (
