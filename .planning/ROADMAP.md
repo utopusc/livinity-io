@@ -2280,7 +2280,12 @@ Plans:
 
 **Depends on:** Phase 179
 **Wave:** 3
-**Estimated:** 3 plans
+**Plans:** 3 plans
+
+Plans:
+- [ ] 180-01-PLAN.md — BFS depth resolver + DepthChip + VaultGraph local mode (8 assertions)
+- [ ] 180-02-PLAN.md — animation.ts setTimeout reveal + DisplaySection Animate button (6 assertions)
+- [ ] 180-03-PLAN.md — LegendBadge bottom-left + hiddenGroups wiring (6 assertions)
 
 ---
 
