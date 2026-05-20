@@ -341,3 +341,42 @@ Acceptance threshold: 10/13 — **PASSED**
 ### Notes on PASS-deferred Items
 
 Both deferred items have code deployed and verified — the gap is interactive runtime behavior that requires a human operator session or Redis toggle. These are NOT failures; they are scoped to the Operator UAT Browser Walk.
+
+---
+
+### P-185 — SidebarTree in AI Chat Window (Phase 185 UAT)
+
+**What to verify:** The AI Chat window now has a left sidebar pane (~280px) with
+the SidebarTree mounted inside it. This resolves the v38.0 UAT finding:
+"Open a Chat from the sidebar to attach a terminal" (no sidebar was visible).
+
+**Browser steps (Mini PC — open AI Chat window from Dock):**
+
+1. Open the LivOS desktop in a browser (e.g. `https://bruce.livinity.live` or `http://10.69.31.68:3000`).
+2. Click the AI Chat icon in the Dock to open the AI Chat window.
+3. EXPECT: The window body is split horizontally — a ~280px left pane is visible
+   containing a tree/list of items (Projects, Agents, Chats), and the right pane
+   shows the Terminal / Vault Graph tab nav.
+4. EXPECT: A "Workspace" label and a `+` button are visible at the top of the left pane.
+5. Click the `+` button. EXPECT: An "Add new item" modal opens with three type cards
+   (Project, Agent, Chat).
+6. Close the modal (press Escape or click outside). EXPECT: Modal closes, sidebar still visible.
+7. In the SidebarTree, if any Chat items exist: click one.
+   EXPECT: The right pane switches from the empty-state hint to a terminal
+   (CcTerminal attach for that Chat's ccSessionId).
+8. If no Chat items exist yet: use the `+` button to create a new Chat item.
+   EXPECT: After creation, the new Chat row appears in the tree.
+   Click it. EXPECT: Terminal mounts in the right pane.
+9. Click the "Vault Graph" tab.
+   EXPECT: Vault Graph renders; the terminal/detail view is replaced.
+10. Click the "Terminal" tab.
+    EXPECT: The selected item's terminal re-appears (if item was selected) OR
+    the empty-state hint / LivWelcomeTerminal (if no item selected).
+
+**Mobile (optional — narrow the browser to < 768px):**
+- EXPECT: Sidebar is hidden by default; a hamburger icon appears in the tab nav row.
+- Click the hamburger. EXPECT: Sidebar slides into view.
+
+**Pass criteria:** Steps 1-10 all produce the expected results with no console errors.
+
+---
