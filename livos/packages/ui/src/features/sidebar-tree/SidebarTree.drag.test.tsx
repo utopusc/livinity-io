@@ -19,6 +19,7 @@
 import {readFileSync} from 'node:fs'
 import {resolve} from 'node:path'
 
+import React from 'react'
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {act} from 'react'
 import {createRoot, type Root} from 'react-dom/client'
@@ -71,16 +72,22 @@ vi.mock('@/trpc/trpc', () => ({
 						return {mutate: H.moveMutate}
 					},
 				},
+				// Phase 176-05 — no-op stub so SidebarTree hook call doesn't throw.
+				openItem: {
+					useSubscription: (_input: unknown, _opts: any) => {},
+				},
 			},
 		},
 	},
 }))
 
 vi.mock('react-arborist', () => ({
-	Tree: (props: any) => {
+	// Phase 176-05: Tree now receives a ref prop — use forwardRef to avoid React
+	// "Function components cannot be given refs" warning.
+	Tree: React.forwardRef((props: any, _ref: any) => {
 		H.capturedOnMove = props.onMove ?? null
 		return <div data-testid='arborist-tree' />
-	},
+	}),
 }))
 
 vi.mock('./ItemTreeRow', () => ({

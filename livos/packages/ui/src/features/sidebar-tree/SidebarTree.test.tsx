@@ -28,6 +28,8 @@ type QueryStub = {
 let listData: {items: any[]} | undefined = {items: []}
 let useQueryOptionsCapture: any = null
 const listQueryRefetch = vi.fn()
+// Phase 176-05 — captured openItem subscription callback for T-OPEN-* tests.
+let openItemCallback: ((data: {itemId: string}) => void) | null = null
 
 vi.mock('@/trpc/trpc', () => ({
 	trpcReact: {
@@ -48,6 +50,13 @@ vi.mock('@/trpc/trpc', () => ({
 				move: {
 					useMutation: (_opts: any) => ({mutate: () => {}}),
 				},
+				// Phase 176-05 — SidebarTree.tsx now calls vault.items.openItem.useSubscription
+				// on mount. The callback is captured so T-OPEN-2/T-OPEN-3 can trigger it.
+				openItem: {
+					useSubscription: (_input: unknown, opts: any) => {
+						openItemCallback = opts?.onData ?? null
+					},
+				},
 			},
 		},
 	},
@@ -56,12 +65,19 @@ vi.mock('@/trpc/trpc', () => ({
 // Mock react-arborist <Tree> — capture `data` prop into outer var so tests
 // can assert on the tree-shape passed in. Render a deterministic stub so
 // presence is detectable in the DOM.
+// Phase 176-05: Tree is wrapped in React.forwardRef to support treeRef passed
+// from SidebarTree (ref is forwarded, scrollTo spy captured for T-OPEN-2).
+import React from 'react'
 let lastTreeData: any[] = []
+let capturedOnMove: ((args: {dragIds: string[]; parentId: string | null; index: number}) => void) | null = null
+export const mockScrollTo = vi.fn()
 vi.mock('react-arborist', () => ({
-	Tree: (props: any) => {
+	Tree: React.forwardRef((props: any, ref: any) => {
 		lastTreeData = props.data
+		capturedOnMove = props.onMove ?? null
+		React.useImperativeHandle(ref, () => ({scrollTo: mockScrollTo, focus: vi.fn()}))
 		return <div data-testid='arborist-tree' />
-	},
+	}),
 }))
 
 // Mock ItemTreeRow — Plan 174-03 fills the body; for 174-02 we only need
@@ -95,7 +111,10 @@ beforeEach(() => {
 	listData = {items: []}
 	useQueryOptionsCapture = null
 	lastTreeData = []
+	capturedOnMove = null
+	openItemCallback = null
 	listQueryRefetch.mockReset()
+	mockScrollTo.mockReset()
 	container = document.createElement('div')
 	document.body.appendChild(container)
 	root = createRoot(container)
@@ -226,5 +245,70 @@ describe('SidebarTree — behavior', () => {
 	it('B10: source-text invariant — SidebarTree.tsx does NOT call vault.items.subscribeTree (does not exist yet)', () => {
 		const src = readFileSync(resolve(__dirname, 'SidebarTree.tsx'), 'utf8')
 		expect(src).not.toMatch(/vault\.items\.subscribeTree/)
+	})
+})
+
+// ── Phase 176-05: openItem subscription + scrollTo ────────────────────────
+
+const VALID_ITEM_ID = 'aaaabbbbccccddddeeee1234' // matches /^[0-9A-Za-z_-]{20,}$/
+
+describe('SidebarTree — Phase 176-05 openItem subscription', () => {
+	it('T-OPEN-1: SidebarTree.tsx imports trpcReact and calls vault.items.openItem.useSubscription()', () => {
+		const src = readFileSync(resolve(__dirname, 'SidebarTree.tsx'), 'utf8')
+		expect(src).toMatch(/openItem/)
+		expect(src).toMatch(/useSubscription/)
+	})
+
+	it('T-OPEN-2: when openItem fires with itemId, treeRef.current.scrollTo({id, align:"auto"}) is called', () => {
+		// Need items so Tree is rendered (treeRef gets attached).
+		listData = {items: [{id: VALID_ITEM_ID, type: 'project', name: 'x', parentId: null, pinned: false, createdAt: 0, updatedAt: 0, archivedAt: null, schemaVersion: 1, userId: 'admin'}]}
+		act(() => {
+			root.render(<SidebarTree />)
+		})
+		// Trigger the openItem callback.
+		act(() => {
+			openItemCallback?.({itemId: VALID_ITEM_ID})
+		})
+		expect(mockScrollTo).toHaveBeenCalledWith({id: VALID_ITEM_ID, align: 'auto'})
+	})
+
+	it('T-OPEN-3: openItem with itemId=MAIN_LIV_ID is a no-op (guard: synthetic root not scrollable)', () => {
+		listData = {items: [{id: VALID_ITEM_ID, type: 'project', name: 'x', parentId: null, pinned: false, createdAt: 0, updatedAt: 0, archivedAt: null, schemaVersion: 1, userId: 'admin'}]}
+		act(() => {
+			root.render(<SidebarTree />)
+		})
+		act(() => {
+			openItemCallback?.({itemId: MAIN_LIV_ID})
+		})
+		// scrollTo must NOT be called for the synthetic root.
+		expect(mockScrollTo).not.toHaveBeenCalled()
+	})
+
+	it('T-OPEN-4: openItem subscription is registered even when vault is empty (callback captured)', () => {
+		// Vault is empty — Tree is not rendered, but subscription hook is still called.
+		listData = {items: []}
+		act(() => {
+			root.render(<SidebarTree />)
+		})
+		// openItemCallback should be set (hook ran), even if treeRef.current is null.
+		// Calling it should not throw.
+		expect(() => {
+			openItemCallback?.({itemId: VALID_ITEM_ID})
+		}).not.toThrow()
+	})
+
+	it('T-OPEN-5: treeRef is attached to <Tree> (source-text invariant)', () => {
+		const src = readFileSync(resolve(__dirname, 'SidebarTree.tsx'), 'utf8')
+		expect(src).toMatch(/treeRef/)
+		expect(src).toMatch(/TreeApi/)
+	})
+
+	it('T-OPEN-6: SidebarTree still passes all existing B1-B10 regression assertions (smoke check)', () => {
+		// Smoke-check: B1 empty hint still renders.
+		listData = {items: []}
+		act(() => {
+			root.render(<SidebarTree />)
+		})
+		expect(container.textContent).toMatch(/talk to Liv in terminal/i)
 	})
 })

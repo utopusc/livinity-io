@@ -38,6 +38,8 @@
 
 import {z} from 'zod'
 import {TRPCError} from '@trpc/server'
+import {observable} from '@trpc/server/observable'
+import {Redis as IoRedis} from 'ioredis'
 import {adminProcedure, router} from './trpc.js'
 import {validateMove} from '../../vault-items/index.js'
 import type {Item, MoveValidation} from '../../vault-items/index.js'
@@ -242,6 +244,46 @@ const vaultItemsRouter = router({
 		const store = requireStore(ctx)
 		const ok = await store.delete(input.id)
 		return {ok}
+	}),
+
+	// Phase 176-05 — openItem subscription. Forwards Redis liv:open:item messages
+	// to connected WebSocket clients so the SidebarTree can scroll to the focused
+	// Item when Liv's open_item MCP tool is called.
+	//
+	// Security: only emits {itemId} metadata — no item content forwarded
+	// (T-176-05-03 accept disposition — payload is UUID v7 only).
+	//
+	// Resource management: subscriber is a SEPARATE ioredis connection — Redis
+	// pub/sub requires a dedicated connection; sharing the main redis client
+	// would block all other commands. cleanup() calls sub.quit() so the
+	// subscriber disconnects when the tRPC client unsubscribes or disconnects
+	// (T-176-05-04 mitigate disposition).
+	//
+	// REDIS_URL: read from process.env.REDIS_URL. If missing, subscription
+	// silently emits nothing (no throw) — boot continues normally.
+	openItem: adminProcedure.subscription((_opts) => {
+		return observable<{itemId: string}>((emit) => {
+			const redisUrl = process.env.REDIS_URL
+			if (!redisUrl) {
+				// No Redis URL configured — subscription emits nothing.
+				return () => {}
+			}
+			const sub = new IoRedis(redisUrl, {lazyConnect: false, enableOfflineQueue: false})
+			sub.subscribe('liv:open:item').catch(() => {})
+			sub.on('message', (_channel: string, message: string) => {
+				try {
+					const data = JSON.parse(message) as {itemId?: string}
+					if (typeof data.itemId === 'string') {
+						emit.next({itemId: data.itemId})
+					}
+				} catch {
+					// malformed message — ignore
+				}
+			})
+			return () => {
+				sub.quit().catch(() => {})
+			}
+		})
 	}),
 })
 
