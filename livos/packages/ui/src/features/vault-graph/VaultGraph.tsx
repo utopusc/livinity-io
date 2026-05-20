@@ -16,7 +16,7 @@
 //  - T-169-03-05 DoS: server caps at 2000 nodes; cooldownTicks=100 limits
 //    force-simulation iterations.
 
-import {useState} from 'react'
+import {useState, useRef, useEffect, useMemo} from 'react'
 import ForceGraph2D from 'react-force-graph-2d'
 import {useQuery} from '@tanstack/react-query'
 
@@ -25,9 +25,15 @@ import {
 	detectTheme,
 	getEdgeColor,
 	getEdgeHoverColor,
-	getNodeColor,
 	type GraphTheme,
 } from './graph-palette'
+import {GraphControls} from './GraphControls'
+import {GraphSearchBar} from './GraphSearchBar'
+import {FiltersSection} from './sections/FiltersSection'
+import {GroupsSection, resolveNodeColor} from './sections/GroupsSection'
+import {DisplaySection} from './sections/DisplaySection'
+import {ForcesSection} from './sections/ForcesSection'
+import {useGraphSettings} from './hooks/useGraphSettings'
 
 interface GraphNode {
 	id: string
@@ -35,6 +41,8 @@ interface GraphNode {
 	type: 'memory' | 'session' | 'inbox' | 'agent' | 'skill' | 'command' | 'root'
 	size: number
 	mtime: number
+	tags: string[]    // Phase 179-01: from frontmatter
+	topDir: string    // Phase 179-01: first path segment
 }
 
 interface GraphEdge {
@@ -57,6 +65,10 @@ export function VaultGraph() {
 		target: string
 	} | null>(null)
 	const theme: GraphTheme = detectTheme()
+	// Phase 179-05: settings + search state
+	const fgRef = useRef<any>(null)
+	const settings = useGraphSettings()
+	const [matchSet, setMatchSet] = useState<Set<string>>(new Set())
 
 	const graphQ = useQuery<GraphResponse>({
 		queryKey: ['vault-graph'],
@@ -67,6 +79,25 @@ export function VaultGraph() {
 		},
 		staleTime: 60_000,
 	})
+
+	// Phase 179-05: apply d3Force settings without remounting ForceGraph2D.
+	// Threat T-179-05-A: forces come from sliders with parseFloat+clamp guards.
+	useEffect(() => {
+		const fg = fgRef.current
+		if (!fg) return
+		fg.d3Force('charge')?.strength(settings.forces.repelStrength)
+		fg.d3Force('center')?.strength(settings.forces.centerStrength)
+		fg.d3Force('link')?.strength(settings.forces.linkStrength).distance(settings.forces.linkDistance)
+	}, [settings.forces])
+
+	// Phase 179-05: filter nodes by enabledTypes before passing to canvas.
+	// Threat T-179-05-C: O(N) filter on ≤2000 items ~0.1ms.
+	const filteredNodes = useMemo(() => {
+		if (!graphQ.data) return []
+		return graphQ.data.nodes.filter((n) =>
+			settings.filters.enabledTypes.includes(n.type),
+		)
+	}, [graphQ.data, settings.filters.enabledTypes])
 
 	if (graphQ.isLoading) {
 		return (
@@ -108,12 +139,47 @@ export function VaultGraph() {
 			>
 				Refresh
 			</button>
+			{/* Phase 179-05: search bar + controls panel */}
+			<GraphSearchBar
+				nodes={filteredNodes}
+				onMatchChange={setMatchSet}
+				onClear={() => setMatchSet(new Set())}
+			/>
+			<GraphControls>
+				<FiltersSection
+					initialFilters={settings.filters}
+					onFiltersChange={settings.setFilters}
+				/>
+				<GroupsSection
+					initialGroups={settings.groups}
+					onGroupChange={settings.setGroups}
+				/>
+				<DisplaySection
+					initialState={settings.display}
+					onDisplayChange={settings.setDisplay}
+				/>
+				<ForcesSection
+					initialState={settings.forces}
+					onForcesChange={settings.setForces}
+				/>
+			</GraphControls>
 			<ForceGraph2D
+				ref={fgRef}
 				graphData={{
-					nodes: graphQ.data.nodes.map((n) => ({
-						...n,
-						color: getNodeColor(n.type, theme),
-					})),
+					// Phase 179-05: use filteredNodes with resolveNodeColor; matchSet opacity.
+					// Threat T-179-05-A/D: resolveNodeColor uses clamped sliders + arithmetic only.
+					nodes: filteredNodes.map((n) => {
+						const color = resolveNodeColor(n, settings.groups.mode, theme)
+						return {
+							...n,
+							color:
+								matchSet.size > 0
+									? matchSet.has(n.id)
+										? color
+										: color + '66' // 40% opacity for non-matching nodes
+									: color,
+						}
+					}),
 					links: graphQ.data.edges.map((e) => ({
 						source: e.source,
 						target: e.target,
