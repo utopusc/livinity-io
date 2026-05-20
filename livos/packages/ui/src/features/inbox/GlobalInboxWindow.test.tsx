@@ -35,7 +35,7 @@ vi.mock('@/trpc/trpc', () => ({
 			inbox: {
 				listGlobal: {
 					useQuery: vi.fn(() => ({
-						data: trpcGlobalMock.globalData,
+						data: {entries: trpcGlobalMock.globalData},
 						isLoading: false,
 					})),
 				},

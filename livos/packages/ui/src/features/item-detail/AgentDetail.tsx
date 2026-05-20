@@ -24,6 +24,19 @@ export interface AgentTool {
 	enabled: boolean
 }
 
+/** Phase 177-04 — shape of an inbox entry as returned by vault.inbox.listByAgent */
+export interface InboxEntry {
+	id: string
+	agentId: string
+	runId: string
+	runAt: string
+	triggeredBy: 'cron' | 'manual'
+	durationMs: number
+	status: 'success' | 'failed'
+	read: boolean
+	filePath: string
+}
+
 export interface AgentDetailProps {
 	item: {id: string; name: string}
 	systemPrompt?: string
@@ -60,7 +73,7 @@ export function AgentDetail({
 	// Phase 177-04 — live inbox data from tRPC (replaces Phase 175 inbox prop stub)
 	const inboxQuery = trpcReact.vault.inbox.listByAgent.useQuery({agentId: item.id})
 	const markReadMutation = trpcReact.vault.inbox.markRead.useMutation()
-	const inboxSlice = (inboxQuery.data ?? []).slice(0, 3)
+	const inboxSlice = (inboxQuery.data?.entries ?? []).slice(0, 3)
 
 	return (
 		<div className='flex h-full flex-col gap-4 overflow-y-auto p-4'>

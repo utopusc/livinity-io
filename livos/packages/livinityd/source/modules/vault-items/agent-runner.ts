@@ -83,7 +83,8 @@ export class AgentRunner {
 		}
 
 		// 2. Acquire Redis run-lock (NX = only if not exists; PX = TTL ms)
-		const acquired = await this.redis.set(lockKey, runId, 'NX', 'PX', 900_000)
+		// ioredis 5 signature: set(key, value, 'PX', ms, 'NX')
+		const acquired = await this.redis.set(lockKey, runId, 'PX', 900_000, 'NX')
 		if (acquired === null) {
 			// Lock already held — another run is in progress
 			return {ok: false, reason: 'already_running'}

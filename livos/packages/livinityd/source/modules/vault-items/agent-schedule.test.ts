@@ -165,10 +165,11 @@ describe('AgentScheduleRegistry — T-SCHED-01 through T-SCHED-10', () => {
 	it('T-SCHED-10: cron callback fires the user-supplied runFn with the agentId', async () => {
 		// Capture the callback passed to cron.schedule
 		let capturedCallback: (() => void) | null = null
-		cronMock.schedule.mockImplementation((_expr: string, cb: () => void) => {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		cronMock.schedule.mockImplementation(((_expr: string, cb: () => void) => {
 			capturedCallback = cb
 			return {stop: vi.fn()}
-		})
+		}) as any)
 
 		const runFn = vi.fn()
 		scheduleAgent('agent-xyz', '* * * * *', runFn, registry)
