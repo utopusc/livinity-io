@@ -38,6 +38,10 @@ interface RowItem {
 export interface ItemTreeRowProps {
 	/** The Item shape from vault.items.list — Plan 174-03 narrows on `type`. */
 	item: unknown
+	/** Phase 177-04 — unread inbox entry count badge (agent rows only).
+	 *  Integer-cast via Math.floor to prevent XSS via float/string input.
+	 *  Badge hidden when value is 0, NaN, or item.type !== 'agent'. */
+	unreadCount?: number
 }
 
 function isRowItem(x: unknown): x is RowItem {
@@ -47,7 +51,7 @@ function isRowItem(x: unknown): x is RowItem {
 	return (t === 'project' || t === 'agent' || t === 'chat') && typeof n === 'string'
 }
 
-export function ItemTreeRow({item}: ItemTreeRowProps) {
+export function ItemTreeRow({item, unreadCount}: ItemTreeRowProps) {
 	if (!isRowItem(item)) return null
 
 	if (item.type === 'project') {
@@ -60,10 +64,20 @@ export function ItemTreeRow({item}: ItemTreeRowProps) {
 	}
 
 	if (item.type === 'agent') {
+		// Phase 177-04 — integer-cast to prevent XSS via float/string (T-177-04-01).
+		const badgeCount = Math.max(0, Math.floor(Number(unreadCount ?? 0)))
 		return (
 			<div className='flex items-center gap-2 px-2 py-1 text-sm font-medium'>
 				<Bot size={16} className='lucide-bot text-accent-blue' />
 				<span className='truncate'>{item.name}</span>
+				{badgeCount > 0 && (
+					<span
+						data-testid='inbox-badge'
+						className='ml-auto rounded-full bg-accent-blue px-1.5 py-0.5 text-xs font-medium text-bg'
+					>
+						{badgeCount}
+					</span>
+				)}
 			</div>
 		)
 	}
