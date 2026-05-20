@@ -54,6 +54,7 @@ describe('buildGraph', () => {
 			source: 'memory/foo.md',
 			target: 'memory/bar.md',
 			type: 'wikilink',
+			weight: 1,
 		})
 	})
 
@@ -76,6 +77,7 @@ describe('buildGraph', () => {
 			source: 'a.md',
 			target: 'memory/references/ref-doc.md',
 			type: 'wikilink',
+			weight: 1,
 		})
 	})
 
@@ -162,6 +164,27 @@ describe('buildGraph', () => {
 			expect(typeof n.degree).toBe('number')
 			expect(typeof n.wikiDegree).toBe('number')
 		}
+	})
+
+	// Phase 187-04: weight field assertions (RED gate)
+
+	it('every edge has weight === 1 by default', () => {
+		const files = [
+			makeFile({path: 'a.md', wikilinks: ['b']}),
+			makeFile({path: 'b.md'}),
+		]
+		const {edges} = buildGraph(files)
+		expect(edges.length).toBeGreaterThan(0)
+		expect(edges.every((e) => e.weight === 1)).toBe(true)
+	})
+
+	it('edge.weight is a number (not undefined)', () => {
+		const files = [
+			makeFile({path: 'a.md', wikilinks: ['b']}),
+			makeFile({path: 'b.md'}),
+		]
+		const {edges} = buildGraph(files)
+		expect(typeof edges[0].weight).toBe('number')
 	})
 
 	it('wikiDegree ignores directory-type edges (only counts wikilinks)', () => {
