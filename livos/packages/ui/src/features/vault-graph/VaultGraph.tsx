@@ -149,6 +149,19 @@ export function VaultGraph() {
 		[settings.groups.mode, theme, localNodes],
 	)
 
+	// Phase 187-03: navigate to a node by centering + zooming via fgRef, and entering local mode.
+	// Threat T-187-03-01: x/y are numeric simulation coords from ForceGraph2D internal state.
+	// Graceful no-op when node id is not found in current graph data.
+	function handleNavigateTo(id: string) {
+		const data = fgRef.current?.graphData()
+		const node = data?.nodes.find((n: any) => n.id === id)
+		if (!node) return
+		fgRef.current!.centerAt(node.x ?? 0, node.y ?? 0, 500)
+		fgRef.current!.zoom(2.5, 500)
+		setLocalFocusId(id)
+		setGraphMode('local')
+	}
+
 	// Phase 180-03: cycle group mode: by-type → by-folder → by-tag → custom → by-type.
 	const GROUP_MODES: GroupMode[] = ['by-type', 'by-folder', 'by-tag', 'custom']
 	function handleCycleGroupMode() {
@@ -383,6 +396,7 @@ export function VaultGraph() {
 					node={activeNode}
 					edges={graphQ.data.edges}
 					onClose={() => setActiveNode(null)}
+					onNavigateTo={handleNavigateTo}
 				/>
 			)}
 		</div>

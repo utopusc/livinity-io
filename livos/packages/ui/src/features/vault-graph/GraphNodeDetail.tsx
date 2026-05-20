@@ -33,9 +33,10 @@ interface Props {
 	node: GraphNode
 	edges: GraphEdge[]
 	onClose: () => void
+	onNavigateTo?: (id: string) => void  // Phase 187-03: optional navigation callback
 }
 
-export function GraphNodeDetail({node, edges, onClose}: Props) {
+export function GraphNodeDetail({node, edges, onClose, onNavigateTo}: Props) {
 	const [state, setState] = useState<
 		| {status: 'loading'}
 		| {status: 'ok'; content: string}
@@ -120,11 +121,23 @@ export function GraphNodeDetail({node, edges, onClose}: Props) {
 						<p className='text-[color:var(--fg-mute)]'>No backlinks</p>
 					) : (
 						<ul data-testid='backlinks-list'>
-							{backlinks.map((e) => (
-								<li key={`bl-${e.source}`} className='text-[color:var(--fg-dim)]'>
-									{e.source}
-								</li>
-							))}
+							{backlinks.map((e) =>
+								onNavigateTo ? (
+									<button
+										key={`bl-${e.source}`}
+										type='button'
+										data-testid={`nav-link-${e.source}`}
+										onClick={() => onNavigateTo(e.source)}
+										className='block w-full text-left text-[color:var(--fg-dim)] hover:text-[color:var(--fg)] transition-colors truncate px-1 py-0.5 rounded hover:bg-[color:var(--bg-2)]'
+									>
+										{e.source}
+									</button>
+								) : (
+									<li key={`bl-${e.source}`} className='text-[color:var(--fg-dim)]'>
+										{e.source}
+									</li>
+								),
+							)}
 						</ul>
 					)}
 				</section>
@@ -137,11 +150,23 @@ export function GraphNodeDetail({node, edges, onClose}: Props) {
 						<p className='text-[color:var(--fg-mute)]'>No outgoing links</p>
 					) : (
 						<ul data-testid='outgoing-list'>
-							{outgoing.map((e) => (
-								<li key={`out-${e.target}-${e.type}`} className='text-[color:var(--fg-dim)]'>
-									{e.target} ({e.type})
-								</li>
-							))}
+							{outgoing.map((e) =>
+								onNavigateTo ? (
+									<button
+										key={`out-${e.target}-${e.type}`}
+										type='button'
+										data-testid={`nav-link-${e.target}`}
+										onClick={() => onNavigateTo(e.target)}
+										className='block w-full text-left text-[color:var(--fg-dim)] hover:text-[color:var(--fg)] transition-colors truncate px-1 py-0.5 rounded hover:bg-[color:var(--bg-2)]'
+									>
+										{e.target} ({e.type})
+									</button>
+								) : (
+									<li key={`out-${e.target}-${e.type}`} className='text-[color:var(--fg-dim)]'>
+										{e.target} ({e.type})
+									</li>
+								),
+							)}
 						</ul>
 					)}
 				</section>
