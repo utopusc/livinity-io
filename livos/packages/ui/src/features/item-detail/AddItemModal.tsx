@@ -102,7 +102,8 @@ export function AddItemModal({
 	)
 
 	const createMutation = trpcReact.vault.items.create.useMutation({
-		onSuccess: ({item}: {item: {id: string; name: string; type: string}}) => {
+		onSuccess: (data: {item?: any}) => {
+			const item = data.item as {id: string; name: string; type: string}
 			toast.success(`Created: ${item.name}`)
 			onItemCreated?.(item)
 			// Reset local state so a reopen starts fresh.
