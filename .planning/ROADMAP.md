@@ -2146,12 +2146,18 @@ Plans:
 
 ---
 
-### Phase 172: `@livos/cli` Package Skeleton — 🔴 PLANNED 2026-05-20
+### Phase 172: `@livos/cli` Package Skeleton — 🟡 PLANNED 2026-05-20
 
-**Goal:** NEW workspace package `packages/cli/` exposing `liv` bin with commands: `init`, `project new`, `agent new`, `chat`, `list --tree`, `attach`, `config get/set`, `doctor`, `migrate`. ESM, minimal deps. tRPC HTTP client + filesystem fallback. Mirrors `gsd-sdk` 3-layer (CLI + bundled skills + bundled templates installed via postinstall symlink).
+**Goal:** NEW workspace package `packages/cli/` exposing `liv` bin with commands: `init`, `project new`, `agent new`, `chat`, `list --tree`, `attach`, `config get/set`, `doctor`, `migrate`, `query`. ESM, minimal deps. tRPC HTTP client + filesystem fallback. Mirrors `gsd-sdk` 3-layer (CLI + bundled skills + bundled templates installed via postinstall symlink).
 
 **Wave:** 1 (parallel-safe with 171)
-**Estimated:** 5 plans
+**Plans:** 5 plans
+Plans:
+- [ ] 172-01-PLAN.md — Package scaffold + bin entry (wave 1, no deps)
+- [ ] 172-02-PLAN.md — tRPC HTTP client + filesystem-mode fallback + auth resolver (wave 2, depends 172-01)
+- [ ] 172-03-PLAN.md — Query registry + 10 command handler modules + cli.ts rewire (wave 3, depends 172-01 + 172-02)
+- [ ] 172-04-PLAN.md — Bundled skills + workflows + idempotent postinstall (wave 2, depends 172-01; parallel-safe with 172-02)
+- [ ] 172-05-PLAN.md — `liv init` + `liv doctor` + E2E smoke (wave 4, depends 172-02 + 172-03)
 
 ---
 
