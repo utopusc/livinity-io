@@ -233,7 +233,7 @@ describe('VaultGraph', () => {
 		expect(container.querySelector('[data-testid="detail-drawer"]')).toBeNull()
 	})
 
-	it('each ForceGraph2D node receives color from NODE_COLORS keyed by type', async () => {
+	it('each ForceGraph2D node receives color from graph-palette getNodeColor', async () => {
 		fetchMock.mockResolvedValue({
 			ok: true,
 			json: async () => ({
@@ -249,7 +249,35 @@ describe('VaultGraph', () => {
 		render()
 		await flushPromises()
 		expect(lastGraphData).not.toBeNull()
-		expect(lastGraphData.nodes[0].color).toBe('#06b6d4') // memory
-		expect(lastGraphData.nodes[1].color).toBe('#f59e0b') // agent
+		// jsdom default body has no .dark / .iridescent class → light theme.
+		expect(lastGraphData.nodes[0].color).toBe('oklch(0.56 0.10 245)') // memory, light
+		expect(lastGraphData.nodes[1].color).toBe('oklch(0.62 0.10 180)') // agent, light
+	})
+
+	it('linkColor function returns var(--line-strong) for non-hovered edges', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [
+					{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0},
+					{id: 'b.md', label: 'b', type: 'memory', size: 10, mtime: 0},
+				],
+				edges: [{source: 'a.md', target: 'b.md', type: 'wikilink'}],
+				truncated: false,
+				totalFiles: 2,
+			}),
+		})
+		render()
+		await flushPromises()
+		const ForceGraph2DMock = (await import('react-force-graph-2d'))
+			.default as any
+		const lastCall =
+			ForceGraph2DMock.mock.calls[ForceGraph2DMock.mock.calls.length - 1]
+		const props = lastCall[0]
+		expect(typeof props.linkColor).toBe('function')
+		// No hover state → baseline color from getEdgeColor.
+		expect(
+			props.linkColor({source: {id: 'a.md'}, target: {id: 'b.md'}}),
+		).toBe('var(--line-strong)')
 	})
 })

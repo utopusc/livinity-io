@@ -21,6 +21,13 @@ import ForceGraph2D from 'react-force-graph-2d'
 import {useQuery} from '@tanstack/react-query'
 
 import {GraphNodeDetail} from './GraphNodeDetail'
+import {
+	detectTheme,
+	getEdgeColor,
+	getEdgeHoverColor,
+	getNodeColor,
+	type GraphTheme,
+} from './graph-palette'
 
 interface GraphNode {
 	id: string
@@ -43,18 +50,13 @@ interface GraphResponse {
 	totalFiles: number
 }
 
-const NODE_COLORS: Record<GraphNode['type'], string> = {
-	memory: '#06b6d4',
-	session: '#a855f7',
-	inbox: '#22c55e',
-	agent: '#f59e0b',
-	skill: '#3b82f6',
-	command: '#ec4899',
-	root: '#e5e5e5',
-}
-
 export function VaultGraph() {
 	const [activeNode, setActiveNode] = useState<GraphNode | null>(null)
+	const [hoveredLink, setHoveredLink] = useState<{
+		source: string
+		target: string
+	} | null>(null)
+	const theme: GraphTheme = detectTheme()
 
 	const graphQ = useQuery<GraphResponse>({
 		queryKey: ['vault-graph'],
@@ -99,7 +101,7 @@ export function VaultGraph() {
 				graphData={{
 					nodes: graphQ.data.nodes.map((n) => ({
 						...n,
-						color: NODE_COLORS[n.type],
+						color: getNodeColor(n.type, theme),
 					})),
 					links: graphQ.data.edges.map((e) => ({
 						source: e.source,
@@ -109,12 +111,48 @@ export function VaultGraph() {
 				nodeLabel='label'
 				onNodeClick={(node) => setActiveNode(node as unknown as GraphNode)}
 				cooldownTicks={100}
-				linkColor={() => '#525252'}
+				linkColor={(link: any) => {
+					if (
+						hoveredLink &&
+						(link.source?.id ?? link.source) === hoveredLink.source &&
+						(link.target?.id ?? link.target) === hoveredLink.target
+					) {
+						const srcNode = graphQ.data?.nodes.find(
+							(n) => n.id === hoveredLink.source,
+						)
+						return srcNode
+							? getEdgeHoverColor(srcNode.type, theme)
+							: getEdgeColor(theme)
+					}
+					return getEdgeColor(theme)
+				}}
+				linkWidth={(link: any) => {
+					if (
+						hoveredLink &&
+						(link.source?.id ?? link.source) === hoveredLink.source &&
+						(link.target?.id ?? link.target) === hoveredLink.target
+					) {
+						return 1.4
+					}
+					return 0.5
+				}}
+				onLinkHover={(link: any) => {
+					if (link) {
+						const src =
+							typeof link.source === 'object' ? link.source.id : link.source
+						const tgt =
+							typeof link.target === 'object' ? link.target.id : link.target
+						setHoveredLink({source: src, target: tgt})
+					} else {
+						setHoveredLink(null)
+					}
+				}}
 				backgroundColor='transparent'
 			/>
 			{activeNode && (
 				<GraphNodeDetail
 					node={activeNode}
+					edges={graphQ.data.edges}
 					onClose={() => setActiveNode(null)}
 				/>
 			)}
