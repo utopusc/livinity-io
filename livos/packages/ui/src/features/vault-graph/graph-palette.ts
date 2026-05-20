@@ -79,3 +79,16 @@ export function detectTheme(): GraphTheme {
 	if (document.body.classList.contains('dark')) return 'dark'
 	return 'light'
 }
+
+// Phase 187-02: Orphan ring color — red-hue OKLCH per theme.
+// Light L=0.55, Dark L=0.65, Iridescent L=0.60; C=0.20 H=20 (warm red).
+// Used by nodeCanvasObject in VaultGraph.tsx to flag nodes with wikiDegree === 0.
+const ORPHAN_RING: Record<GraphTheme, string> = {
+	light: 'oklch(0.55 0.20 20)',
+	dark: 'oklch(0.65 0.20 20)',
+	iridescent: 'oklch(0.60 0.20 20)',
+}
+
+export function getOrphanRingColor(theme: GraphTheme): string {
+	return ORPHAN_RING[theme]
+}
