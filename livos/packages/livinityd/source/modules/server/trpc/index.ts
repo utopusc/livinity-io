@@ -134,6 +134,11 @@ import vaultItemsRouter from './vault-items-router.js'
 // All adminProcedure-gated; all 4 paths added to httpOnlyPaths in common.ts.
 // ctx.livinityd.inboxReader is populated by Phase 177-03 boot wire-up in source/index.ts.
 import inboxRouter from './inbox-router.js'
+// Phase 182-03 — CC PTY session configuration namespace (3 procedures:
+// getConfig / setConfig / validatePaths). All adminProcedure-gated; all 3
+// paths added to httpOnlyPaths in common.ts so mutations survive WS
+// reconnect after `systemctl restart livos` (memory pitfall B-12 / X-04).
+import ccPtyConfigRouter from './cc-pty-config-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -223,6 +228,8 @@ export function createAppRouter(opts: {
 		// master plan D-V38-T folder layout — items is the first inhabitant.
 		// Phase 177-03 — vault.inbox.* sub-router (4 procedures wrapping InboxReader).
 		vault: router({items: vaultItemsRouter, inbox: inboxRouter}),
+		// Phase 182-03 — CC PTY session configuration namespace.
+		ccPty: ccPtyConfigRouter,
 	})
 }
 
