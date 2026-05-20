@@ -2,7 +2,7 @@
 plan: 166-03-pty-manager
 phase: 166
 status: complete
-commit: <PENDING-FILLED-POST-COMMIT>
+commit: 8827d2a9
 files_modified:
   - livos/packages/livinityd/source/modules/cc-pty/manager.ts (NEW)
   - livos/packages/livinityd/source/modules/cc-pty/manager.test.ts (NEW)

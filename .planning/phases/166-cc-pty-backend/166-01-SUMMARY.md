@@ -2,7 +2,7 @@
 plan: 166-01-tmux-apt-and-scaffold
 phase: 166
 status: complete
-commit: <PENDING-FILLED-POST-COMMIT>
+commit: 4dd30c83
 files_modified:
   - livos/packages/livinityd/source/modules/cc-pty/types.ts (NEW)
   - livos/packages/livinityd/source/modules/cc-pty/index.ts (NEW)

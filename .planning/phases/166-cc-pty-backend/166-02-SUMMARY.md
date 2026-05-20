@@ -2,7 +2,7 @@
 plan: 166-02-session-store
 phase: 166
 status: complete
-commit: <PENDING-FILLED-POST-COMMIT>
+commit: 3e72db4a
 files_modified:
   - livos/packages/livinityd/source/modules/cc-pty/session-store.ts (NEW)
   - livos/packages/livinityd/source/modules/cc-pty/session-store.test.ts (NEW)
