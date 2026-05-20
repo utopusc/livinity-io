@@ -58,6 +58,9 @@ import {CcPtyManager, SessionStore, CcPtyIdleReaper} from './modules/cc-pty/inde
 // INTERNAL_SERVER_ERROR via the requireStore helper until next restart).
 import {ItemStore, createItemStorePubSub, resolveVaultRoot} from './modules/vault-items/index.js'
 import type {ItemStore as ItemStoreType} from './modules/vault-items/index.js'
+// Phase 176-01/176-03 — Liv scaffolders. Imported directly (vault-items barrel
+// index.ts is sacred per Phase 171 freeze — DO NOT add exports to that file).
+import {ensureLivRootAgent, ensureLivSkills} from './modules/vault-items/liv-scaffolder.js'
 // Phase 169-05 — Vault graph factory import is kept here (source/index.ts) for
 // grep visibility per the 169-05 sacred-guard contract; the actual app.use()
 // mount happens inside server/index.ts via the mountVaultGraphRoutes helper,
@@ -555,6 +558,37 @@ export default class Livinityd {
 			// Defensive — vault scaffold returns a ScaffoldResult discriminator
 			// and should not throw, but if it does we MUST NOT block boot.
 			this.logger.error('vault-scaffolder: unexpected throw (non-fatal)', err as Error)
+		}
+
+		// Phase 176-01 — Liv root-agent system prompt scaffold (idempotent, non-fatal).
+		// Drops settings/liv-rootagent.md into the vault root using COPYFILE_EXCL so
+		// user edits survive across restarts. Site: AFTER scaffoldVault() so the
+		// vault dir exists; BEFORE vault-items wire-up (no dependency, but preserves
+		// boot ordering for future phases).
+		try {
+			const livScaffoldResult = await ensureLivRootAgent({
+				vaultRoot: resolveVaultRoot(),
+				logger: {log: (m) => this.logger.log(m), error: (m, e) => this.logger.error(m, e)},
+			})
+			if (livScaffoldResult.status === 'created') {
+				this.logger.log('[Phase 176-01] Liv root-agent system prompt scaffolded')
+			}
+		} catch (_e) {
+			// defensive — ensureLivRootAgent is non-fatal by contract
+		}
+
+		// Phase 176-03 — Liv subagent skills scaffold (idempotent, non-fatal).
+		// Copies 4 LivOS-native subagent .md files into <vaultRoot>/.claude/agents/.
+		try {
+			const skillsResult = await ensureLivSkills({
+				vaultRoot: resolveVaultRoot(),
+				logger: {log: (m) => this.logger.log(m), error: (m, e) => this.logger.error(m, e)},
+			})
+			if (skillsResult.status === 'created' || skillsResult.status === 'partial') {
+				this.logger.log(`[Phase 176-03] Liv skills scaffolded: ${skillsResult.created?.join(', ')}`)
+			}
+		} catch (_e) {
+			// defensive
 		}
 
 		// Phase 171-05 — Vault Items store + PubSub bridge wire-up. Boot
