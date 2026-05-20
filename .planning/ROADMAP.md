@@ -2232,19 +2232,19 @@ Plans:
 
 ---
 
-### Phase 177: Schedule Engine + Inbox System — 🔴 PLANNED 2026-05-20
+### Phase 177: Schedule Engine + Inbox System — ✅ CODE-COMPLETE 2026-05-20
 
 **Goal:** Extend Phase 164 autonomous-scheduler with per-Agent cron registry (`node-cron`). Inbox writer (`items/<uuid>/inbox/<runId>.md`). Inbox UI component (sidebar badge + detail view inbox list). Cross-Item global inbox via filesystem walker.
 
 **Depends on:** Phase 171, 176
 **Wave:** 4 (sequential — each plan depends on prior)
-**Plans:** 4 plans
+**Plans:** 4 plans | 9 commits `b14dac8c..950347d7` | 68 tests | sacred SHA 25/25
 
 Plans:
-- [ ] 177-01-PLAN.md — node-cron AgentScheduleRegistry + boot sweep + additive autonomous-scheduler export
-- [ ] 177-02-PLAN.md — AgentRunner (Redis lock + CC PTY spawn + per-agent inbox write) + run_agent tool unwire
-- [ ] 177-03-PLAN.md — InboxReader filesystem walker + vault.inbox tRPC router (listByAgent/listGlobal/markRead/get)
-- [ ] 177-04-PLAN.md — Inbox badge on ItemTreeRow + AgentDetail live tRPC wire + GlobalInboxWindow
+- [x] 177-01-PLAN.md — node-cron AgentScheduleRegistry + boot sweep + additive autonomous-scheduler export ✅ (10 tests)
+- [x] 177-02-PLAN.md — AgentRunner (Redis lock + CC PTY spawn + per-agent inbox write) + run_agent tool unwire ✅ (12 tests)
+- [x] 177-03-PLAN.md — InboxReader filesystem walker + vault.inbox tRPC router (listByAgent/listGlobal/markRead/get) ✅ (16 tests)
+- [x] 177-04-PLAN.md — Inbox badge on ItemTreeRow + AgentDetail live tRPC wire + GlobalInboxWindow ✅ (30 tests)
 
 ---
 
