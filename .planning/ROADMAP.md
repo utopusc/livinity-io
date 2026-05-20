@@ -2163,13 +2163,19 @@ Plans:
 
 ---
 
-### Phase 173: Vault Rename + Phase 168 Migration + Sacred Freeze — 🔴 PLANNED 2026-05-20
+### Phase 173: Vault Rename + Phase 168 Migration + Sacred Freeze — 🟡 PLANNED 2026-05-20
 
 **Goal:** Atomic `mv /root/livinity-vault/ /root/liv/` on Mini PC at deploy time. Compatibility symlink. NEW `vault-root-resolver.ts` shim (Phase 162-01 scaffolder STAYS byte-identical). Migrate `livos-cc-sessions.json` → ChatItems under Main Liv. Update Sacred SHA hook to lock vault-items + cli modules.
 
 **Depends on:** Phase 171
-**Wave:** 1
-**Estimated:** 4 plans
+**Wave:** 2 (parallel with 179 — depends on 171)
+**Plans:** 4 plans
+
+Plans:
+- [ ] 173-01-PLAN.md — Deploy-time vault rename script (idempotent mv + symlink + service restart) + deploy_livinityd wire-up
+- [ ] 173-02-PLAN.md — Session migration writer (livos-cc-sessions.json → ChatItems under Main Liv) + backup + 8 vitest assertions
+- [ ] 173-03-PLAN.md — Sacred SHA hook v38 freeze (JSON registry of 25 sacred files, check-sacred.sh rewrite, CI test)
+- [ ] 173-04-PLAN.md — livinityd systemd unit env update (Environment=LIV_VAULT_ROOT=/root/liv) + CI test
 
 ---
 
@@ -2219,7 +2225,7 @@ Empty-state UI (terminal centered, Liv greeting). Liv's tmux session auto-spawne
 
 ---
 
-### Phase 178: Vault Graph MVP Polish — 🔴 PLANNED 2026-05-20
+### Phase 178: Vault Graph MVP Polish — 🟢 CODE-COMPLETE 2026-05-20 (38/38 vitest PASS, 7 commits 6b2690dd..ebcabf3f, sacred SHA preserved)
 
 **Goal:** Re-palette to D-V38-O 7-type colors (steel-blue / violet / sage / amber / teal / plum / gray-mute). Replace `<pre>` markdown with streamdown render. Backlinks/Outgoing lists derived client-side. Refresh button + truncated banner restyled per Livinity DS. SearchBar `Cmd+K` + live filter.
 
