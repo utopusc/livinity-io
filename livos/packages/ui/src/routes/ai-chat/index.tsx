@@ -9,19 +9,34 @@
 // tab; clicking a Chat item in the global SidebarTree mounts ChatDetail
 // (Phase 175-03) inside a dock window, which is the new entry point.
 //
+// Phase 176-04 — when vault has no Items, show LivWelcomeTerminal (Liv's
+// auto-spawned tmux CC session) instead of the plain empty-state hint.
+// The "Open a Chat" hint is preserved behind a hasItems=true guard so
+// existing Chat-flow remains discoverable once the operator creates Items.
+//
 // Future: a follow-up plan (likely Phase 181 mobile CC PTY) may either
 // delete this route entirely OR repurpose it as the mobile-only entry.
 
 import {useState} from 'react'
 
+import {trpcReact} from '@/trpc/trpc'
 import {VaultGraph} from '@/features/vault-graph'
 import {useIsMobile} from '@/hooks/use-is-mobile'
+import {useCurrentUser} from '@/hooks/use-current-user'
+import {LivWelcomeTerminal} from '@/features/liv-welcome/LivWelcomeTerminal'
 
 type Tab = 'terminal' | 'graph'
 
 export default function AiChatRoute() {
 	const isMobile = useIsMobile()
 	const [activeTab, setActiveTab] = useState<Tab>('terminal')
+
+	// Phase 176-04 — vault.items.list query for Liv empty-state detection.
+	// staleTime: 10_000 prevents tight refetch loop; loading skeleton prevents
+	// CcTerminal mount on undefined userId (T-176-04-03).
+	const itemList = trpcReact.vault.items.list.useQuery(undefined, {staleTime: 10_000})
+	const {userId} = useCurrentUser()
+	const hasItems = (itemList.data?.items?.length ?? 0) > 0
 
 	if (isMobile) {
 		return (
@@ -58,14 +73,18 @@ export default function AiChatRoute() {
 			</div>
 			<div className='flex-1 overflow-hidden'>
 				{activeTab === 'terminal' ? (
-					<div className='flex h-full items-center justify-center p-8 text-center text-text-secondary'>
-						<div className='flex flex-col gap-2'>
-							<p>Open a Chat from the sidebar to attach a terminal.</p>
-							<p className='text-xs'>
-								Phase 175 — terminals now live in the dock window manager.
-							</p>
+					hasItems ? (
+						<div className='flex h-full items-center justify-center p-8 text-center text-text-secondary'>
+							<div className='flex flex-col gap-2'>
+								<p>Open a Chat from the sidebar to attach a terminal.</p>
+								<p className='text-xs'>
+									Phase 175 — terminals now live in the dock window manager.
+								</p>
+							</div>
 						</div>
-					</div>
+					) : (
+						<LivWelcomeTerminal userId={userId ?? ''} loading={itemList.isLoading} />
+					)
 				) : (
 					<VaultGraph />
 				)}

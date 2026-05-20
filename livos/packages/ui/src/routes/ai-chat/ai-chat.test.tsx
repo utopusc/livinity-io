@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Phase 167-04 / 169-04 / 175-05 — AI Chat route tests (post-cc-sessions deletion).
+// Phase 167-04 / 169-04 / 175-05 / 176-04 — AI Chat route tests.
 //
 // Pattern: RTL-absent (D-NO-NEW-DEPS) — direct react-dom/client mount via
 // act(). Mocks @/hooks/use-is-mobile + @/features/vault-graph so the
@@ -8,10 +8,12 @@
 //
 // Phase 175-05 — All SessionSidebar / CcTerminal / cc-sessions assertions
 // were removed. The Terminal tab now renders an empty-state hint
-// ("Open a Chat from the sidebar to attach a terminal.") because chat
-// session lifecycle moved to Phase 174 SidebarTree + Phase 175 dock
-// window manager. The remaining surface here is the tab nav + mobile
-// redirect.
+// ("Open a Chat from the sidebar to attach a terminal.") when vault has Items,
+// or LivWelcomeTerminal when vault is empty.
+//
+// Phase 176-04 — Added trpcReact + useCurrentUser mocks so the vault.items.list
+// query and userId are controlled in tests. Default mock: hasItems=true so
+// existing "Open a Chat" assertions still pass.
 
 import {readFileSync} from 'node:fs'
 import {resolve} from 'node:path'
@@ -37,6 +39,37 @@ vi.mock('@/features/vault-graph', () => ({
 	},
 }))
 
+// Phase 176-04 — Mock trpcReact so vault.items.list.useQuery is controllable.
+// Default: items=[{fakeItem}] → hasItems=true → "Open a Chat" hint shows
+// (preserves 14 existing assertions unchanged).
+let itemListData: {items: any[]} = {items: [{id: 'fake-item-1', type: 'project'}]}
+vi.mock('@/trpc/trpc', () => ({
+	trpcReact: {
+		vault: {
+			items: {
+				list: {
+					useQuery: (_input: unknown, _opts?: unknown) => ({
+						data: itemListData,
+						isLoading: false,
+					}),
+				},
+			},
+		},
+	},
+}))
+
+// Phase 176-04 — Mock useCurrentUser to return a stable userId.
+vi.mock('@/hooks/use-current-user', () => ({
+	useCurrentUser: () => ({userId: 'bruce', user: {id: 'bruce', username: 'bruce', role: 'admin'}}),
+}))
+
+// Phase 176-04 — Mock LivWelcomeTerminal so we can detect it in tests.
+vi.mock('@/features/liv-welcome/LivWelcomeTerminal', () => ({
+	LivWelcomeTerminal: ({userId}: {userId: string; loading?: boolean}) => (
+		<div data-testid='liv-welcome-terminal' data-user-id={userId} />
+	),
+}))
+
 // ── Test setup ────────────────────────────────────────────────────────────
 
 let container: HTMLDivElement
@@ -46,6 +79,8 @@ beforeEach(() => {
 	useIsMobileMock.mockReset()
 	useIsMobileMock.mockReturnValue(false)
 	vaultGraphMock.mockReset()
+	// Default: hasItems=true (preserves existing "Open a Chat" assertions)
+	itemListData = {items: [{id: 'fake-item-1', type: 'project'}]}
 	container = document.createElement('div')
 	document.body.appendChild(container)
 	root = createRoot(container)
@@ -75,6 +110,7 @@ describe('AiChatRoute — desktop branch (Phase 175-05)', () => {
 	})
 
 	it('Terminal tab shows the empty-state hint pointing to the global sidebar', () => {
+		// hasItems=true (default mock) → shows the hint
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
@@ -109,6 +145,8 @@ describe('AiChatRoute — mobile branch', () => {
 describe('AiChatRoute — Phase 169-04 tab nav', () => {
 	beforeEach(() => {
 		useIsMobileMock.mockReturnValue(false)
+		// hasItems=true → hint visible
+		itemListData = {items: [{id: 'fake-item-1', type: 'project'}]}
 	})
 
 	it('renders both "Terminal" and "Vault Graph" tab buttons', () => {
@@ -201,5 +239,22 @@ describe('routes/ai-chat/index.tsx — source-text invariants', () => {
 
 	it('does NOT import @/features/cc-terminal (Phase 175-05 — moved to dock window manager)', () => {
 		expect(SRC).not.toMatch(/from\s+['"]@\/features\/cc-terminal['"]/)
+	})
+
+	// Phase 176-04 — new source-text invariants.
+	it('T-176-04-A: imports LivWelcomeTerminal', () => {
+		expect(SRC).toMatch(/import.*LivWelcomeTerminal/)
+	})
+
+	it('T-176-04-B: vault.items.list.useQuery is present', () => {
+		expect(SRC).toMatch(/vault\.items\.list\.useQuery/)
+	})
+
+	it('T-176-04-C: hasItems conditional present', () => {
+		expect(SRC).toMatch(/hasItems/)
+	})
+
+	it('T-176-04-D: Phase 175 empty-state text still present (inside hasItems branch)', () => {
+		expect(SRC).toMatch(/Open a Chat from the sidebar/)
 	})
 })
