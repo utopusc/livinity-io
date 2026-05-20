@@ -1,10 +1,10 @@
-// Phase 174-01 — sidebar-tree barrel.
+// Phase 174-01 / 174-05 — sidebar-tree barrel.
 //
-// Re-exports the public surface so downstream plans (174-02/03/04/05)
-// and Phase 175 consumers import via:
-//   import {SidebarTree} from '@/features/sidebar-tree'
-//
-// ItemContextMenu (Plan 174-05) will be added to this barrel by that plan.
+// Re-exports the public surface so downstream plans (Phase 175 AddItemModal
+// wrapper, Phase 183 Settings dispatcher) import via:
+//   import {SidebarTree, ItemContextMenu, SidebarFooter} from '@/features/sidebar-tree'
 
 export {SidebarTree, type SidebarTreeProps} from './SidebarTree'
 export {ItemTreeRow, type ItemTreeRowProps} from './ItemTreeRow'
+export {ItemContextMenu, type ItemContextMenuProps} from './ItemContextMenu'
+export {SidebarFooter, type SidebarFooterProps} from './SidebarFooter'
