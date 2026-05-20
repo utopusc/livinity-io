@@ -1,21 +1,24 @@
-// Phase 174-02 — SidebarTree implementation.
+// Phase 174-02 / 174-04 — SidebarTree implementation.
 //
-// - Queries vault.items.list via tRPC (Phase 171-04 router) with a 5s
-//   refetchInterval as the v1 real-time fallback (subscribeTree doesn't
-//   exist yet — confirmed by grep on vault-items-router.ts).
-// - Transforms the flat Item[] into react-arborist's nested tree shape via
-//   the pure transformer in tree-shape.ts (Main Liv synthetic root pinned
-//   at the top).
-// - Empty vault (length 0) renders ONLY the "talk to Liv in terminal ↓"
-//   centered hint — no empty tree shell.
-// - Per-row content is delegated to <ItemTreeRow> (174-01 stub, 174-03
-//   fills the real per-type icon+label+badge body).
+// 174-02 — Queries vault.items.list via tRPC (Phase 171-04 router) with a
+//   5s refetchInterval as the v1 real-time fallback. Transforms flat
+//   Item[] -> react-arborist tree via tree-shape.ts. Empty state shows
+//   centered hint.
 //
-// Plan 174-04 extends this file with an onMove handler that calls
-// vault.items.move tRPC; Plan 174-05 adds the footer Settings gear slot
-// BELOW the <Tree> in the flex column.
+// 174-04 — Drag-to-reparent via react-arborist's onMove callback.
+//   Each dragId becomes a vault.items.move tRPC mutation. The synthetic
+//   Main Liv id is guarded (never moves). On error, sonner toast.error
+//   surfaces the structured cause (cycle / self / depth-exceeds-hard-cap)
+//   AND we refetch the list to revert react-arborist's local optimistic
+//   state to server truth. On success-with-warn (soft depth cap >= 5),
+//   toast.warning surfaces but the move commits (no refetch — the 5s poll
+//   reconciles).
+//
+// Plan 174-05 will add the footer Settings gear slot BELOW the <Tree>
+// in the flex column.
 
 import {Tree, type NodeRendererProps} from 'react-arborist'
+import {toast} from 'sonner'
 
 import {trpcReact} from '@/trpc/trpc'
 
@@ -47,6 +50,40 @@ export function SidebarTree(_props: SidebarTreeProps) {
 		refetchInterval: 5_000,
 	})
 
+	const moveMutation = trpcReact.vault.items.move.useMutation({
+		onSuccess: (data: {item: unknown; warn: string | null}) => {
+			if (data?.warn) {
+				toast.warning(data.warn)
+			}
+			// Success path: do NOT refetch — react-arborist's optimistic
+			// local move is the truth and the 5s poll will reconcile.
+		},
+		onError: (err: {
+			data?: {cause?: {kind?: string; depth?: number}}
+			message?: string
+		}) => {
+			const kind = err?.data?.cause?.kind
+			let msg = 'Move failed'
+			if (kind === 'cycle') {
+				msg = 'Move failed: would create a cycle'
+			} else if (kind === 'self') {
+				msg = 'Move failed: cannot drop onto self'
+			} else if (kind === 'depth-exceeds-hard-cap') {
+				msg = 'Move failed: tree too deep (limit 8)'
+			} else if (kind === 'archived-parent') {
+				msg = 'Move failed: parent is archived'
+			} else if (kind === 'not-found') {
+				msg = 'Move failed: item or parent not found'
+			} else if (err?.message) {
+				msg = err.message
+			}
+			toast.error(msg)
+			// Error path: refetch to revert any local optimistic state to
+			// server truth.
+			list.refetch()
+		},
+	})
+
 	const items = list.data?.items ?? []
 	if (items.length === 0) {
 		return (
@@ -70,6 +107,13 @@ export function SidebarTree(_props: SidebarTreeProps) {
 					rowHeight={32}
 					idAccessor='id'
 					childrenAccessor='children'
+					onMove={({dragIds, parentId}) => {
+						for (const id of dragIds) {
+							// Guard: the Main Liv synthetic root is unmovable.
+							if (id === MAIN_LIV_ID) continue
+							moveMutation.mutate({id, newParentId: parentId})
+						}
+					}}
 				>
 					{TreeNodeRow}
 				</Tree>
