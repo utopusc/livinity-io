@@ -18,11 +18,19 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 
 let lastGraphData: any = null
 let lastOnNodeClick: ((node: any) => void) | null = null
+let lastNodeVal: ((n: any) => number) | null = null
+let lastLinkWidth: ((link: any) => number) | null = null
+let lastLinkColor: ((link: any) => string) | null = null
+let lastNodeCanvasObject: ((node: any, ctx: any) => void) | null = null
 
 vi.mock('react-force-graph-2d', () => ({
 	default: vi.fn((props: any) => {
 		lastGraphData = props.graphData
 		lastOnNodeClick = props.onNodeClick
+		lastNodeVal = props.nodeVal ?? null
+		lastLinkWidth = props.linkWidth ?? null
+		lastLinkColor = props.linkColor ?? null
+		lastNodeCanvasObject = props.nodeCanvasObject ?? null
 		return null
 	}),
 }))
@@ -87,6 +95,10 @@ beforeEach(() => {
 	;(globalThis as any).fetch = fetchMock
 	lastGraphData = null
 	lastOnNodeClick = null
+	lastNodeVal = null
+	lastLinkWidth = null
+	lastLinkColor = null
+	lastNodeCanvasObject = null
 	qc = freshClient()
 })
 
@@ -370,6 +382,83 @@ describe('VaultGraph', () => {
 		render()
 		await flushPromises()
 		expect(container.querySelector('[data-testid="graph-search-bar"]')).not.toBeNull()
+	})
+
+	// ── Phase 187-01: nodeVal degree-proportional sizing assertions ──────────
+
+	it('nodeVal callback is passed to ForceGraph2D (function)', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, degree: 0, wikiDegree: 0, tags: [], topDir: 'root'}],
+				edges: [],
+				truncated: false,
+				totalFiles: 1,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(typeof lastNodeVal).toBe('function')
+	})
+
+	it('nodeVal({degree:0}) returns >= 0.5 (isolated nodes stay visible)', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, degree: 0, wikiDegree: 0, tags: [], topDir: 'root'}],
+				edges: [],
+				truncated: false,
+				totalFiles: 1,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(lastNodeVal).not.toBeNull()
+		const result = lastNodeVal!({degree: 0})
+		expect(result).toBeGreaterThanOrEqual(0.5)
+	})
+
+	it('nodeVal({degree:4}) returns Math.sqrt(4) * nodeSizeScale (default 1.0)', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, degree: 4, wikiDegree: 2, tags: [], topDir: 'root'}],
+				edges: [],
+				truncated: false,
+				totalFiles: 1,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(lastNodeVal).not.toBeNull()
+		const result = lastNodeVal!({degree: 4})
+		// Math.sqrt(max(1,4)) * 1.0 = 2.0
+		expect(result).toBeCloseTo(2.0, 5)
+	})
+
+	it('DisplaySection node-size slider label contains "degree" (open controls first)', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, degree: 0, wikiDegree: 0, tags: [], topDir: 'root'}],
+				edges: [],
+				truncated: false,
+				totalFiles: 1,
+			}),
+		})
+		render()
+		await flushPromises()
+		// Open the controls panel (click the chip button)
+		const chip = container.querySelector('[data-testid="controls-chip"]') as HTMLButtonElement
+		if (chip) act(() => chip.click())
+		// Find the slider within the open panel
+		const slider = container.querySelector('[data-testid="slider-node-size"]') as HTMLInputElement
+		expect(slider).not.toBeNull()
+		// The outer flex div holding the slider also contains the label element.
+		// The slider is inside a div; that div's parent div contains the label as first child.
+		const sliderWrap = slider?.closest('.flex.flex-col.gap-1')
+		const labelEl = sliderWrap?.querySelector('label')
+		expect(labelEl?.textContent?.toLowerCase()).toContain('degree')
 	})
 
 	it('filteredNodes only includes nodes whose type is in filters.enabledTypes', async () => {
