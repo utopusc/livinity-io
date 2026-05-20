@@ -26,17 +26,34 @@ import {createRoot, type Root} from 'react-dom/client'
 ;(globalThis as {IS_REACT_ACT_ENVIRONMENT?: boolean}).IS_REACT_ACT_ENVIRONMENT = true
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
+//
+// Every shared spy + capture slot lives inside `vi.hoisted()` so the
+// vitest-hoisted `vi.mock(...)` factories can read them. Without this
+// trampoline, vitest hoists `vi.mock(...)` above the `const` declarations
+// (per Vite's import-rewrite semantics) and the factories TDZ-throw with
+// "Cannot access X before initialization".
 
-// tRPC list query stub — populated by tests.
-let listData: {items: any[]} | undefined = {items: []}
-const listQueryRefetch = vi.fn()
-
-// tRPC move mutation stub — capture options + mutate calls.
-let moveMutationOptions: {
-	onSuccess?: (data: any) => void
-	onError?: (err: any) => void
-} = {}
-const moveMutate = vi.fn()
+const H = vi.hoisted(() => {
+	const state = {
+		listData: {items: [] as any[]} as {items: any[]} | undefined,
+		listQueryRefetch: vi.fn(),
+		moveMutationOptions: {} as {
+			onSuccess?: (data: any) => void
+			onError?: (err: any) => void
+		},
+		moveMutate: vi.fn(),
+		capturedOnMove: null as
+			| ((args: {
+					dragIds: string[]
+					parentId: string | null
+					index: number
+			  }) => void)
+			| null,
+		toastError: vi.fn(),
+		toastWarning: vi.fn(),
+	}
+	return state
+})
 
 vi.mock('@/trpc/trpc', () => ({
 	trpcReact: {
@@ -44,14 +61,14 @@ vi.mock('@/trpc/trpc', () => ({
 			items: {
 				list: {
 					useQuery: (_input: unknown, _opts: any) => ({
-						data: listData,
-						refetch: listQueryRefetch,
+						data: H.listData,
+						refetch: H.listQueryRefetch,
 					}),
 				},
 				move: {
 					useMutation: (opts: any) => {
-						moveMutationOptions = opts ?? {}
-						return {mutate: moveMutate}
+						H.moveMutationOptions = opts ?? {}
+						return {mutate: H.moveMutate}
 					},
 				},
 			},
@@ -59,18 +76,9 @@ vi.mock('@/trpc/trpc', () => ({
 	},
 }))
 
-// react-arborist <Tree> — capture onMove prop into outer var so tests can
-// invoke it with synthetic drag events.
-let capturedOnMove:
-	| ((args: {
-			dragIds: string[]
-			parentId: string | null
-			index: number
-	  }) => void)
-	| null = null
 vi.mock('react-arborist', () => ({
 	Tree: (props: any) => {
-		capturedOnMove = props.onMove ?? null
+		H.capturedOnMove = props.onMove ?? null
 		return <div data-testid='arborist-tree' />
 	},
 }))
@@ -79,11 +87,8 @@ vi.mock('./ItemTreeRow', () => ({
 	ItemTreeRow: () => <div data-testid='item-row' />,
 }))
 
-// sonner toast — observable spies.
-const toastError = vi.fn()
-const toastWarning = vi.fn()
 vi.mock('sonner', () => ({
-	toast: {error: toastError, warning: toastWarning},
+	toast: {error: H.toastError, warning: H.toastWarning},
 }))
 
 // ── Fixture helper ───────────────────────────────────────────────────────
@@ -108,18 +113,18 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
-	listData = {
+	H.listData = {
 		items: [
 			fakeItem({id: 'pppppppppppppppppppp1', type: 'project'}),
 			fakeItem({id: 'pppppppppppppppppppp2', type: 'project'}),
 		],
 	}
-	moveMutationOptions = {}
-	capturedOnMove = null
-	moveMutate.mockReset()
-	listQueryRefetch.mockReset()
-	toastError.mockReset()
-	toastWarning.mockReset()
+	H.moveMutationOptions = {}
+	H.capturedOnMove = null
+	H.moveMutate.mockReset()
+	H.listQueryRefetch.mockReset()
+	H.toastError.mockReset()
+	H.toastWarning.mockReset()
 	container = document.createElement('div')
 	document.body.appendChild(container)
 	root = createRoot(container)
@@ -144,16 +149,16 @@ describe('SidebarTree — drag-to-reparent (Phase 174-04)', () => {
 		act(() => {
 			root.render(<SidebarTree />)
 		})
-		expect(capturedOnMove).not.toBeNull()
+		expect(H.capturedOnMove).not.toBeNull()
 		act(() => {
-			capturedOnMove!({
+			H.capturedOnMove!({
 				dragIds: ['pppppppppppppppppppp1'],
 				parentId: 'pppppppppppppppppppp2',
 				index: 0,
 			})
 		})
-		expect(moveMutate).toHaveBeenCalledTimes(1)
-		expect(moveMutate).toHaveBeenCalledWith({
+		expect(H.moveMutate).toHaveBeenCalledTimes(1)
+		expect(H.moveMutate).toHaveBeenCalledWith({
 			id: 'pppppppppppppppppppp1',
 			newParentId: 'pppppppppppppppppppp2',
 		})
@@ -163,67 +168,67 @@ describe('SidebarTree — drag-to-reparent (Phase 174-04)', () => {
 		act(() => {
 			root.render(<SidebarTree />)
 		})
-		expect(moveMutationOptions.onError).toBeDefined()
+		expect(H.moveMutationOptions.onError).toBeDefined()
 		// Simulate the tRPC onError callback with a structured cycle error.
 		act(() => {
-			moveMutationOptions.onError!({
+			H.moveMutationOptions.onError!({
 				data: {cause: {kind: 'cycle'}},
 				message: 'move rejected: cycle',
 			})
 		})
-		expect(toastError).toHaveBeenCalledTimes(1)
-		expect(toastError.mock.calls[0][0]).toMatch(/cycle/i)
-		expect(listQueryRefetch).toHaveBeenCalledTimes(1)
+		expect(H.toastError).toHaveBeenCalledTimes(1)
+		expect(H.toastError.mock.calls[0][0]).toMatch(/cycle/i)
+		expect(H.listQueryRefetch).toHaveBeenCalledTimes(1)
 	})
 
 	it('B-ui-3: depth-hard error — toast.error fires (/too deep|depth/i) + list.refetch invoked', () => {
 		act(() => {
 			root.render(<SidebarTree />)
 		})
-		expect(moveMutationOptions.onError).toBeDefined()
+		expect(H.moveMutationOptions.onError).toBeDefined()
 		act(() => {
-			moveMutationOptions.onError!({
+			H.moveMutationOptions.onError!({
 				data: {cause: {kind: 'depth-exceeds-hard-cap'}},
 				message: 'move rejected: depth-exceeds-hard-cap',
 			})
 		})
-		expect(toastError).toHaveBeenCalledTimes(1)
-		expect(toastError.mock.calls[0][0]).toMatch(/too deep|depth/i)
-		expect(listQueryRefetch).toHaveBeenCalledTimes(1)
+		expect(H.toastError).toHaveBeenCalledTimes(1)
+		expect(H.toastError.mock.calls[0][0]).toMatch(/too deep|depth/i)
+		expect(H.listQueryRefetch).toHaveBeenCalledTimes(1)
 	})
 
 	it('B-ui-4: depth-soft warn — toast.warning fires with warn text; NO refetch (move commits)', () => {
 		act(() => {
 			root.render(<SidebarTree />)
 		})
-		expect(moveMutationOptions.onSuccess).toBeDefined()
+		expect(H.moveMutationOptions.onSuccess).toBeDefined()
 		act(() => {
-			moveMutationOptions.onSuccess!({
+			H.moveMutationOptions.onSuccess!({
 				item: {id: 'pppppppppppppppppppp1'},
 				warn: 'depth-exceeds-soft-cap',
 			})
 		})
-		expect(toastWarning).toHaveBeenCalledTimes(1)
-		expect(toastWarning.mock.calls[0][0]).toBe('depth-exceeds-soft-cap')
+		expect(H.toastWarning).toHaveBeenCalledTimes(1)
+		expect(H.toastWarning.mock.calls[0][0]).toBe('depth-exceeds-soft-cap')
 		// Success path MUST NOT refetch — react-arborist optimistic state is truth.
-		expect(listQueryRefetch).not.toHaveBeenCalled()
+		expect(H.listQueryRefetch).not.toHaveBeenCalled()
 	})
 
 	it('B-ui-5: Main Liv guard — dragIds includes MAIN_LIV_ID, mutate is NOT called for it', () => {
 		act(() => {
 			root.render(<SidebarTree />)
 		})
-		expect(capturedOnMove).not.toBeNull()
+		expect(H.capturedOnMove).not.toBeNull()
 		act(() => {
-			capturedOnMove!({
+			H.capturedOnMove!({
 				dragIds: [MAIN_LIV_ID, 'pppppppppppppppppppp1'],
 				parentId: null,
 				index: 0,
 			})
 		})
 		// Only the real id should have produced a mutate call.
-		expect(moveMutate).toHaveBeenCalledTimes(1)
-		expect(moveMutate).toHaveBeenCalledWith({
+		expect(H.moveMutate).toHaveBeenCalledTimes(1)
+		expect(H.moveMutate).toHaveBeenCalledWith({
 			id: 'pppppppppppppppppppp1',
 			newParentId: null,
 		})

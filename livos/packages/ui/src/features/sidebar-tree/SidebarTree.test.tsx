@@ -40,6 +40,14 @@ vi.mock('@/trpc/trpc', () => ({
 						return stub
 					},
 				},
+				// Phase 174-04 — SidebarTree.tsx now calls vault.items.move.useMutation
+				// on mount; the 174-02 behavioural suite doesn't exercise the move
+				// path so we ship a no-op stub that satisfies the hook call. The
+				// dedicated drag suite (SidebarTree.drag.test.tsx) captures the
+				// useMutation options and asserts on mutate/onSuccess/onError.
+				move: {
+					useMutation: (_opts: any) => ({mutate: () => {}}),
+				},
 			},
 		},
 	},
