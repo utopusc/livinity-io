@@ -47,6 +47,17 @@ import {createSessionActivityProvider} from './modules/server/ws-agent.js'
 // is BYTE-IDENTICAL — the new cc-pty/idle-reaper.ts is a SEPARATE file
 // mirroring the pattern, not modifying the original.
 import {CcPtyManager, SessionStore, CcPtyIdleReaper} from './modules/cc-pty/index.js'
+// Phase 171-05 — Vault Items store + PubSub wire-up. ItemStore is the
+// canonical v38 vault persistence; createItemStorePubSub wraps it so every
+// mutation publishes `liv:tree:updated` for cross-tab UI invalidation
+// (Phase 174 sidebar will consume). Boot site sits AFTER scaffoldVault()
+// (Phase 162-01 SACRED) and BEFORE the smokeAuthCheck() call to keep the
+// boot ordering stable for future phases. Non-fatal try/catch mirrors the
+// Phase 166 cc-pty wire-up precedent — livinityd MUST boot even when the
+// vault-items wire-up throws (tRPC `vault.items.*` returns
+// INTERNAL_SERVER_ERROR via the requireStore helper until next restart).
+import {ItemStore, createItemStorePubSub, resolveVaultRoot} from './modules/vault-items/index.js'
+import type {ItemStore as ItemStoreType} from './modules/vault-items/index.js'
 // Phase 169-05 — Vault graph factory import is kept here (source/index.ts) for
 // grep visibility per the 169-05 sacred-guard contract; the actual app.use()
 // mount happens inside server/index.ts via the mountVaultGraphRoutes helper,
@@ -333,6 +344,12 @@ export default class Livinityd {
 	ccPtySessionStore?: SessionStore
 	ccPtyManager?: CcPtyManager
 	ccPtyIdleReaper?: CcPtyIdleReaper
+	// Phase 171-05 — Vault Items store (file-backed, pub/sub-wrapped).
+	// Populated in start() AFTER scaffoldVault() succeeds. tRPC router
+	// `vault.items.*` (Phase 171-04) reads `ctx.livinityd.itemStore` and
+	// throws INTERNAL_SERVER_ERROR via its requireStore helper when this
+	// field is undefined (boot wire-up failed — see start() try/catch).
+	itemStore?: ItemStoreType
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -538,6 +555,32 @@ export default class Livinityd {
 			// Defensive — vault scaffold returns a ScaffoldResult discriminator
 			// and should not throw, but if it does we MUST NOT block boot.
 			this.logger.error('vault-scaffolder: unexpected throw (non-fatal)', err as Error)
+		}
+
+		// Phase 171-05 — Vault Items store + PubSub bridge wire-up. Boot
+		// site: AFTER scaffoldVault() (Phase 162-01 SACRED — vault dir
+		// must exist before items/ child dirs are written) and BEFORE
+		// smokeAuthCheck() so the store is ready when any subsequent
+		// boot step (autonomous scheduler / cc-pty / etc.) eventually
+		// reads it. Non-fatal try/catch matches the cc-pty wire-up
+		// precedent at lines 659-664: livinityd MUST boot even if the
+		// vault-items wire-up throws. resolveVaultRoot() reads
+		// LIV_VAULT_ROOT env (Phase 173 will set this on the systemd unit
+		// post-migration); fallback `/root/livinity-vault` matches the
+		// pre-migration steady state.
+		try {
+			const vaultRoot = resolveVaultRoot()
+			const baseStore = new ItemStore({vaultRoot})
+			this.itemStore = createItemStorePubSub(baseStore, this.ai.redis, {
+				log: (msg) => this.logger.log(msg),
+				error: (msg, err) => this.logger.error(msg, err),
+			})
+			this.logger.log(`[vault-items] store wired (vaultRoot=${vaultRoot})`)
+		} catch (err) {
+			this.logger.error(
+				'[vault-items] boot wire-up failed (non-fatal — vault.items.* tRPC will throw INTERNAL_SERVER_ERROR until next restart)',
+				err as Error,
+			)
 		}
 
 		// Phase 162-03 — SDK subscription-path auth verifier. Non-blocking smoke
