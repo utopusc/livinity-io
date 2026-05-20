@@ -2436,18 +2436,20 @@ Plans:
 ---
 
 
-### Phase 186: Restore MCP Panel in AI Chat Window — PLANNED 2026-05-20
+### Phase 186: Restore MCP Panel in AI Chat Window — CODE-COMPLETE 2026-05-20
 
 **Goal:** Mount McpServerList + McpServerDetail as a third tab ('MCP Servers') in the AI Chat window right pane. Extract FeaturedMcpInstaller shared component. Delete orphan mcp-panel.tsx.
 
 **Depends on:** Phase 182-04, Phase 185-01
 **Wave:** 2 (after 185-01 lands)
-**Plans:** 3 plans
+**Plans:** 3 plans (3/3 shipped)
 
 Plans:
-- [ ] 186-01-PLAN.md — Add 'mcp' tab to AI Chat + mount McpServerList/Detail (6 assertions)
-- [ ] 186-02-PLAN.md — FeaturedMcpInstaller shared component + mount in AI Chat + Settings (6 assertions)
-- [ ] 186-03-PLAN.md — Delete orphan mcp-panel.tsx + grep audit
+- [x] 186-01-PLAN.md — Add 'mcp' tab to AI Chat + mount McpServerList/Detail (42/42 PASS)
+- [x] 186-02-PLAN.md — FeaturedMcpInstaller shared component + mount in AI Chat + Settings (6/6 PASS)
+- [x] 186-03-PLAN.md — Delete orphan mcp-panel.tsx + grep audit (CLEAN)
+
+**Result:** 60/60 vitest PASS; 25/25 sacred SHAs; 5 commits `ccfbe62f..dfcae745`; mcp-panel.tsx deleted.
 
 ---
 

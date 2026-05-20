@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-20T21:52:01.765Z"
+last_updated: "2026-05-20T22:14:35.916Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -27,7 +27,14 @@ See: .planning/PROJECT.md
 
 **Active milestone:** v38.0 — Liv Agent Platform — **CLOSED 2026-05-20** (14 phases / 141 commits / 5 waves; CODE-COMPLETE-AND-LIVE-VERIFIED; Operator UAT browser walk queued per `.planning/phases/184-v38-deploy-uat/v38-VERIFICATION.md` § Operator UAT Browser Walk).
 
-**Last shipped phase:** **Phase 185** Mount SidebarTree in AI Chat Window — CODE-COMPLETE 2026-05-20 (36/36 vitest PASS; 25/25 sacred SHAs; split layout + item routing + mobile collapse; 2 commits `615caafc..fd38ff96`).
+**Last shipped phase:** **Phase 186** Restore MCP Panel in AI Chat Window — CODE-COMPLETE 2026-05-20 (60/60 vitest PASS across 3 suites; 25/25 sacred SHAs; MCP Servers tab + FeaturedMcpInstaller + mcp-panel.tsx deleted; 5 commits `ccfbe62f..dfcae745`).
+
+**Key decisions (Phase 186):**
+
+- FeaturedMcpInstaller is a shared component (components/mcp/) consumed by both AI Chat and Settings; caller handles fetch via onInstall prop
+- MCP tab uses REST fetch (not tRPC) matching existing settings/mcp-servers.tsx pattern
+- Featured installer collapses when a server is selected for detail view
+- mcp-servers.test.tsx B6 updated to assert on FeaturedMcpInstaller source (inline markup lifted)
 
 **Key decisions (Phase 185):**
 
