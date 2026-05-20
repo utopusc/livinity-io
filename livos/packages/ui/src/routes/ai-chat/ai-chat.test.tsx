@@ -101,6 +101,47 @@ vi.mock('@/providers/window-manager', () => ({
 	useWindowManagerOptional: () => null,
 }))
 
+// Phase 186-01 — Mock McpServerList + McpServerDetail (mounted in MCP tab).
+vi.mock('@/components/mcp/McpServerList', () => ({
+	McpServerList: ({
+		servers,
+		onSelect,
+	}: {
+		servers: unknown[]
+		selectedName: string | null
+		onSelect: (n: string) => void
+		onToggleEnabled: unknown
+		onRemove: unknown
+		isLoading?: boolean
+	}) => (
+		<div
+			data-testid='mcp-server-list-mock'
+			data-server-count={servers.length}
+			onClick={() => onSelect('brave-search')}
+		/>
+	),
+}))
+
+vi.mock('@/components/mcp/McpServerDetail', () => ({
+	McpServerDetail: ({
+		server,
+	}: {
+		server: {name: string} | null
+		onClose: () => void
+		onToggleEnabled: unknown
+	}) =>
+		server ? (
+			<div data-testid='mcp-server-detail-mock' data-server-name={server.name} />
+		) : (
+			<div data-testid='mcp-detail-empty' />
+		),
+}))
+
+// Phase 186-02 — Mock FeaturedMcpInstaller so it renders a stable stub in AI Chat tests.
+vi.mock('@/components/mcp/FeaturedMcpInstaller', () => ({
+	FeaturedMcpInstaller: () => <div data-testid='featured-mcp-installer-stub' />,
+}))
+
 // Phase 185-02 — Mock item-detail components (ChatDetail, ProjectDetail, AgentDetail).
 // Phase 185-03 — Extended to include AddItemModal.
 vi.mock('@/features/item-detail', () => ({
@@ -539,5 +580,79 @@ describe('AiChatRoute — Phase 185-03 mobile collapse + modal trigger', () => {
 		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
 		expect(SRC).toMatch(/AddItemModal/)
 		expect(SRC).toMatch(/from\s+['"]@\/features\/item-detail['"]/)
+	})
+})
+
+// ── Phase 186-01 — MCP Servers tab in AI Chat ─────────────────────────────
+
+describe('AiChatRoute — Phase 186-01 MCP Servers tab', () => {
+	beforeEach(() => {
+		useIsMobileMock.mockReturnValue(false)
+	})
+
+	it('B1: renders "MCP Servers" tab button in the tab nav', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent)
+		expect(buttons).toContain('MCP Servers')
+	})
+
+	it('B2: initial render does NOT show mcp-server-list-mock (Terminal is default tab)', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		expect(container.querySelector('[data-testid="mcp-server-list-mock"]')).toBeNull()
+	})
+
+	it('B3: clicking "MCP Servers" tab renders mcp-server-list-mock in right pane', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const mcpBtn = Array.from(container.querySelectorAll('button')).find(
+			(b) => b.textContent === 'MCP Servers',
+		) as HTMLButtonElement
+		expect(mcpBtn).toBeTruthy()
+		act(() => {
+			mcpBtn.click()
+		})
+		expect(container.querySelector('[data-testid="mcp-server-list-mock"]')).not.toBeNull()
+	})
+
+	it('B4: clicking "MCP Servers" tab renders mcp-detail-empty (no selection yet)', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const mcpBtn = Array.from(container.querySelectorAll('button')).find(
+			(b) => b.textContent === 'MCP Servers',
+		) as HTMLButtonElement
+		act(() => {
+			mcpBtn.click()
+		})
+		expect(container.querySelector('[data-testid="mcp-detail-empty"]')).not.toBeNull()
+	})
+
+	it('B5: after mcp-server-list-mock click fires onSelect, mcp-server-detail-mock appears', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const mcpBtn = Array.from(container.querySelectorAll('button')).find(
+			(b) => b.textContent === 'MCP Servers',
+		) as HTMLButtonElement
+		act(() => {
+			mcpBtn.click()
+		})
+		// The mcp-server-list-mock onClick calls onSelect('brave-search')
+		const listMock = container.querySelector('[data-testid="mcp-server-list-mock"]') as HTMLElement
+		act(() => {
+			listMock.click()
+		})
+		expect(container.querySelector('[data-testid="mcp-server-detail-mock"]')).not.toBeNull()
+		expect(container.querySelector('[data-testid="vault-graph"]')).toBeNull()
+	})
+
+	it('B6: source-text — index.tsx Tab union contains "mcp"', () => {
+		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
+		expect(SRC).toMatch(/'mcp'/)
 	})
 })
