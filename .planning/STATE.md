@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v38.0
-milestone_name: Liv Agent Platform
-status: opened
-last_updated: "2026-05-20T11:40:00.000Z"
+milestone: v34.0
+milestone_name: Bootstrap Polish + First-Run UX
+status: unknown
+last_updated: "2026-05-20T12:55:35.751Z"
 progress:
-  total_phases: 94
-  completed_phases: 38
-  total_plans: 352
-  completed_plans: 255
-  percent: 72
+  total_phases: 8
+  completed_phases: 8
+  total_plans: 12
+  completed_plans: 12
+  percent: 100
 ---
 
 # Project State
@@ -42,31 +42,38 @@ See: .planning/PROJECT.md
 **v38.0 phase queue (re-organized 2026-05-20 for aggressive parallelism — 7 waves, ~10-13 day critical path):**
 
 Wave 1 — Independent foundations (4 parallel, file-disjoint):
+
 - [ ] Phase 171 — Item Model + Storage Layer — 5 plans (no deps)
 - [x] Phase 172 — `@livos/cli` Package Skeleton — 5 plans — ✅ CODE-COMPLETE 2026-05-20 (46 vitest + 4 smoke PASS; sacred SHA preserved)
 - [ ] Phase 178 — Vault Graph MVP Polish — 4 plans (no deps)
 - [ ] Phase 182 — Settings Restructure — 5 plans (no deps)
 
 Wave 2 — Chain extensions (2 parallel):
+
 - [ ] Phase 173 — Vault Rename + Migration + Sacred Freeze — 4 plans (depends 171)
 - [ ] Phase 179 — Vault Graph Controls Panel — 5 plans (depends 178)
 
 Wave 3 — Tree UI + graph polish (2 parallel):
+
 - [ ] Phase 174 — SidebarTree Component — 5 plans (depends 171, 173)
 - [ ] Phase 180 — Local Graph + Animation — 3 plans (depends 179)
 
 Wave 4 — UI extensions + lightweight polish (2 parallel):
+
 - [ ] Phase 175 — Add Modal + Item Detail Views — 5 plans (depends 174)
 - [ ] Phase 183 — tmux status off + dangerously-skip + sidebar gear — 2 plans (depends 174, 182)
 
 Wave 5 — Liv root + mobile (2 parallel):
+
 - [ ] Phase 176 — Main Liv + 4 LivOS-native Skills — 5 plans (depends 171, 175)
 - [ ] Phase 181 — Mobile CC PTY (tablet + phone) — 4 plans (depends 175)
 
 Wave 6 — Autonomous (sequential):
+
 - [ ] Phase 177 — Schedule Engine + Inbox — 4 plans (depends 171, 176)
 
 Wave 7 — Ship (sequential, FINAL):
+
 - [ ] Phase 184 — v38.0 Mini PC Deploy + UAT + Milestone Close — 5 plans
 
 **Critical path:** 171 → 173 → 174 → 175 → 176 → 177 → 184 = ~13 days
