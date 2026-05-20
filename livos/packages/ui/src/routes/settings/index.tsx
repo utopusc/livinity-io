@@ -46,6 +46,10 @@ const LivAgentSettings = React.lazy(() => import('@/routes/settings/liv-agent'))
 const ChromeMasterPage = React.lazy(() => import('@/routes/settings/chrome-master'))
 // Phase 104 plan 104-05 — Local Access enrollment wizard (AC-104-9, AC-104-10).
 const LocalAccessPage = React.lazy(() => import('@/routes/settings/local-access'))
+// Phase 182-03 — AI Chat settings (CC PTY config, 7 form fields).
+const AiChatSettingsPage = React.lazy(() => import('@/routes/settings/ai-chat-settings'))
+// Phase 182-04 — MCP Servers settings page (presentational + REST /api/mcp/*).
+const McpServersPage = React.lazy(() => import('@/routes/settings/mcp-servers'))
 
 // SettingsHome launcher removed 2026-05-15: user rejected — "/settings burasi
 // neden var mk ben istemiyorum". LivOS is window-based — no URL launcher
@@ -158,6 +162,9 @@ export function Settings() {
 						<Route path='/dm-pairing' Component={DmPairingPage} />
 						<Route path='/chrome-master' Component={ChromeMasterPage} />
 						<Route path='/local-access' Component={LocalAccessPage} />
+						{/* Phase 182 — new settings panels */}
+						<Route path='/ai-chat-settings' Component={AiChatSettingsPage} />
+						<Route path='/mcp-servers' Component={McpServersPage} />
 					</Routes>
 					<QueryStringDialog />
 				</Suspense>
