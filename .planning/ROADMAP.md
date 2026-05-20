@@ -2332,7 +2332,11 @@ Plans:
 
 **Depends on:** Phase 174, 182
 **Wave:** 4
-**Estimated:** 2 plans
+**Plans:** 2 plans
+
+Plans:
+- [ ] 183-01-PLAN.md — cc-pty/manager.ts: tmux set-option status off + dangerously-skip-permissions Redis-gated flag (D-V38-K/R) (+8 vitest assertions, total 33)
+- [ ] 183-02-PLAN.md — SidebarTree gear click → openWindow/focusWindow Settings (D-V38-N, idempotent, +4 vitest assertions)
 
 ---
 
