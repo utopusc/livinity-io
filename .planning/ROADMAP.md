@@ -2274,18 +2274,20 @@ Plans:
 
 ---
 
-### Phase 180: Local Graph + Animation Timeline — 🔴 PLANNED 2026-05-20
+### Phase 180: Local Graph + Animation Timeline — ✅ CODE-COMPLETE 2026-05-20
 
 **Goal:** Local Graph mode (BFS from active node, depth chip UI). Animate timeline (`mtime`-ordered reveal). Optional legend badge bottom-left.
 
 **Depends on:** Phase 179
 **Wave:** 3
-**Plans:** 3 plans
+**Plans:** 3/3 plans shipped
 
 Plans:
-- [ ] 180-01-PLAN.md — BFS depth resolver + DepthChip + VaultGraph local mode (8 assertions)
-- [ ] 180-02-PLAN.md — animation.ts setTimeout reveal + DisplaySection Animate button (6 assertions)
-- [ ] 180-03-PLAN.md — LegendBadge bottom-left + hiddenGroups wiring (6 assertions)
+- [x] 180-01-PLAN.md — BFS depth resolver + DepthChip + VaultGraph local mode (8 assertions) ✅
+- [x] 180-02-PLAN.md — animation.ts setTimeout reveal + DisplaySection Animate button (6 assertions) ✅
+- [x] 180-03-PLAN.md — LegendBadge bottom-left + hiddenGroups wiring (6 assertions) ✅
+
+**Commits:** 306d9ae0..351a8069 (6 commits) | Tests: 92/92 PASS (+20 new) | Sacred SHA: 25/25
 
 ---
 

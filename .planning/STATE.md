@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-20T09:40:00.000Z"
+last_updated: "2026-05-20T17:22:10.753Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md
 
 **Active milestone:** v38.0 — Liv Agent Platform — **OPENED 2026-05-20** (14 phases / 61 plans / 5 waves; master plan `.planning/v38-LIV-AGENT-PLATFORM-MASTER.md`; pivots flat session list → tree of Project/Agent/Chat Items + 4 LivOS-native default skills + `@livos/cli` npm package + Obsidian-class Vault Graph + mobile CC PTY + Settings restructure; 21 locked D-V38-A..U decisions; vault root renamed `livinity-vault` → `~/liv/` per operator vote 2026-05-20).
 
-**Last shipped phase:** **Phase 177** Schedule Engine + Inbox System — CODE-COMPLETE 2026-05-20 (Wave 6 complete; 4 plans, 9 commits `b14dac8c..950347d7`, 68 new tests; AgentScheduleRegistry (node-cron per-agent tasks) + AgentRunner (Redis PX NX lock + PTY spawn + inbox write) + InboxReader (filesystem walker, no DB) + vault.inbox tRPC router (4 adminProcedure procedures) + ItemTreeRow inbox badge + AgentDetail live tRPC data + GlobalInboxWindow; all 25 sacred SHAs preserved; 6 deviations auto-fixed (skipped counter bug, esbuild JSDoc parse, IR-08 test pattern, ioredis 5 arg order, tRPC data shape, InboxEntry re-export). See `.planning/phases/177-schedule-inbox/177-SUMMARY.md`. Previously: Phase 176 Main Liv Root Agent + 4 LivOS-Native Skills.
+**Last shipped phase:** **Phase 180** Vault Graph Local Mode + Animation — CODE-COMPLETE 2026-05-20 (92 total tests, 6 commits `306d9ae0..351a8069`, sacred SHA 25/25; bfsSubgraph + DepthChip + scheduleAnimation + LegendBadge). Previously: **Phase 177** Schedule Engine + Inbox System — CODE-COMPLETE 2026-05-20 (Wave 6 complete; 4 plans, 9 commits `b14dac8c..950347d7`, 68 new tests; AgentScheduleRegistry (node-cron per-agent tasks) + AgentRunner (Redis PX NX lock + PTY spawn + inbox write) + InboxReader (filesystem walker, no DB) + vault.inbox tRPC router (4 adminProcedure procedures) + ItemTreeRow inbox badge + AgentDetail live tRPC data + GlobalInboxWindow; all 25 sacred SHAs preserved; 6 deviations auto-fixed (skipped counter bug, esbuild JSDoc parse, IR-08 test pattern, ioredis 5 arg order, tRPC data shape, InboxEntry re-export). See `.planning/phases/177-schedule-inbox/177-SUMMARY.md`. Previously: Phase 176 Main Liv Root Agent + 4 LivOS-Native Skills.
 
 **Next action:** `/gsd-execute-phase 184` — v38.0 Mini PC Deploy + UAT + Milestone Close (Wave 7 FINAL). Or parallel: `/gsd-execute-phase 178` (Vault Graph MVP Polish) + `/gsd-execute-phase 181` (Mobile CC PTY) + `/gsd-execute-phase 182` (Settings Restructure). Phase 177 complete; Wave 6 complete; Wave 7 is the critical-path ship gate.
 
@@ -56,7 +56,7 @@ Wave 2 — Chain extensions (2 parallel):
 Wave 3 — Tree UI + graph polish (2 parallel):
 
 - [ ] Phase 174 — SidebarTree Component — 5 plans (depends 171, 173)
-- [ ] Phase 180 — Local Graph + Animation — 3 plans (depends 179)
+- [x] Phase 180 — Local Graph + Animation — 3 plans (depends 179) — ✅ CODE-COMPLETE 2026-05-20 (20 new tests, 6 commits `306d9ae0..351a8069`, sacred SHA preserved 25/25; bfsSubgraph BFS + DepthChip + animation timeline + LegendBadge bottom-left)
 
 Wave 4 — UI extensions + lightweight polish (2 parallel):
 
