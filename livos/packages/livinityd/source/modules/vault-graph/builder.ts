@@ -38,6 +38,7 @@ export interface GraphEdge {
 	source: string
 	target: string
 	type: 'wikilink' | 'directory'
+	weight: number  // Phase 187-04: default 1; future: multi-link increment
 }
 
 export function buildGraph(
@@ -73,7 +74,7 @@ export function buildGraph(
 			]
 			const target = targetCandidates.find((c) => nodeIds.has(c))
 			if (target) {
-				edges.push({source: file.path, target, type: 'wikilink'})
+				edges.push({source: file.path, target, type: 'wikilink', weight: 1})
 			}
 			// Unresolved link: silently dropped (avoid orphan node spam — 169-CONTEXT L161).
 		}
