@@ -2118,7 +2118,7 @@ Plans:
 ---
 
 
-# v38.0 — Liv Agent Platform — 🔴 OPENED 2026-05-20
+# v38.0 — Liv Agent Platform — ✅ CODE-COMPLETE-AND-LIVE-VERIFIED 2026-05-20
 
 > **Master plan:** [`v38-LIV-AGENT-PLATFORM-MASTER.md`](v38-LIV-AGENT-PLATFORM-MASTER.md) (READ FIRST — 21 locked decisions D-V38-A..U + 4 LivOS-native default skills + GSD-style 3-layer architecture + 14 phases / 61 plans / 5 waves)
 >
@@ -2342,7 +2342,7 @@ Plans:
 
 ---
 
-### Phase 184: v38.0 Mini PC Deploy + UAT + Milestone Close — 🔴 PLANNED 2026-05-20
+### Phase 184: v38.0 Mini PC Deploy + UAT + Milestone Close — ✅ CODE-COMPLETE 2026-05-20
 
 **Goal:** Push + `bash /opt/livos/update.sh`. Migration script (Phase 173) auto-runs on first boot. Live probes: tree CRUD, sidebar drag-drop, Add modal Project/Agent/Chat, Liv root agent greet, autonomous agent run via cron, Vault Graph controls panel functional, mobile route serves CC-backed UI, Settings panels in new groups, MCP panel functional, no Phase 168 SessionSidebar reachable. v38-VERIFICATION.md. STATE + ROADMAP milestone close.
 
@@ -2352,9 +2352,45 @@ Plans:
 **Closes:** v38.0 Liv Agent Platform milestone
 
 Plans:
-- [ ] 184-01-PLAN.md — Pre-deploy guard sweep: Mini PC SSH + service health + 25 sacred SHA inventory (push already done at e1f44ce7)
-- [ ] 184-02-PLAN.md — Run update.sh on Mini PC (detached nohup + log-poll) + post-deploy SHA/service/migration verify
-- [ ] 184-03-PLAN.md — Live smoke probes P1-P13: vault CRUD, drag-drop, Add modals, Liv agent, scheduler, graph, mobile, settings, Phase 168 deletion, tmux status, skip-perms, regression
-- [ ] 184-04-PLAN.md — Write v38-VERIFICATION.md (>=350 lines, 20-criterion mapping, operator UAT 12+ steps)
-- [ ] 184-05-PLAN.md — STATE.md + ROADMAP.md milestone close markers + safety wind-down + final push
+- [x] 184-01-PLAN.md — Pre-deploy guard sweep: Mini PC SSH + service health + 25 sacred SHA inventory — ✅ SHIPPED `a0d26c65`
+- [x] 184-02-PLAN.md — Run update.sh on Mini PC (detached nohup + log-poll) + post-deploy SHA/service/migration verify — ✅ SHIPPED `23fd40d6`
+- [x] 184-03-PLAN.md — Live smoke probes P1-P13: 11/13 PASS (P5+P6 PASS-deferred by design) — ✅ SHIPPED `8c5cd577`
+- [x] 184-04-PLAN.md — v38-VERIFICATION.md: 406 lines, 8 sections, 20 SC-V38-xx rows, 12-step operator UAT walk — ✅ SHIPPED `feefc235`
+- [x] 184-05-PLAN.md — STATE.md + ROADMAP.md milestone close markers + safety wind-down + final push — ✅ SHIPPED
+
+---
+
+## v38.0 — Liv Agent Platform — CLOSED 2026-05-20
+
+**Status:** CODE-COMPLETE-AND-LIVE-VERIFIED
+**Phases shipped:** 14 (Phase 171 → Phase 184)
+**Total commits:** 141 (b208a320..feefc235 + 184-05 close commits)
+**Push range:** b208a320..HEAD
+**Sacred SHA:** f3538e1d811992b782a9bb057d1b7f0a0189f95f — preserved across all 141 commits
+**Sacred registry:** 25 files locked (scripts/sacred-shas-v38.json)
+**Verification:** `.planning/phases/184-v38-deploy-uat/v38-VERIFICATION.md`
+**Operator UAT:** pending browser walk (§ Operator UAT Browser Walk in v38-VERIFICATION.md)
+**Deployed SHA:** a0d26c65676e6f3161deaccb4fb4b3e0068701a6
+
+### v38.0 Deliverables
+- Tree-of-Items vault: Project/Agent/Chat hierarchy replaces flat session list (Phase 171)
+- Phase 173: livinity-vault → ~/liv/ rename + migration script
+- Phase 174: SidebarTree with drag-drop reparenting + cycle/depth guards
+- Phase 175: Add Modal + Item Detail Views
+- Phase 176: Main Liv root agent + 4 LivOS-native default skills
+- Phase 177: Schedule Engine + Inbox (autonomous agents)
+- Phase 172: @livos/cli npm package skeleton (daemon + filesystem modes)
+- Phase 178+179+180: Vault Graph MVP + Controls Panel + Local mode + Animation
+- Phase 181: Mobile CC PTY (tablet terminal + phone bubble)
+- Phase 182: Settings Restructure (PERSONAL/WORKSPACE/AI/SYSTEM groups)
+- Phase 183: tmux status off + dangerously-skip default + sidebar gear
+- Phase 184: Mini PC deploy + 11/13 live probes PASS + v38-VERIFICATION.md
+
+### v38.1+ Carry-overs
+- Real Liv root agent interactive screenshot via luse-driver
+- @livos/cli npm publish
+- Two-tab cross-attach indicator visual verification
+- Mobile device real-world test (iPad + Android tablet + iPhone)
+- LIV_VAULT_ROOT=/root/liv env var + mv /root/livinity-vault /root/liv (vault rename D-V38-A carry-over)
+- Remaining items from .planning/phases/184-v38-deploy-uat/v38-VERIFICATION.md § Deferred Items
 

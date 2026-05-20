@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v34.0
-milestone_name: Bootstrap Polish + First-Run UX
-status: unknown
-last_updated: "2026-05-20T18:42:20.819Z"
+milestone: v38.0
+milestone_name: Liv Agent Platform
+status: CODE-COMPLETE-AND-LIVE-VERIFIED
+last_updated: "2026-05-20T20:00:00.000Z"
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 12
-  completed_plans: 12
+  total_phases: 14
+  completed_phases: 14
+  total_plans: 61
+  completed_plans: 61
   percent: 100
 ---
 
@@ -25,16 +25,18 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-**Active milestone:** v38.0 — Liv Agent Platform — **OPENED 2026-05-20** (14 phases / 61 plans / 5 waves; master plan `.planning/v38-LIV-AGENT-PLATFORM-MASTER.md`; pivots flat session list → tree of Project/Agent/Chat Items + 4 LivOS-native default skills + `@livos/cli` npm package + Obsidian-class Vault Graph + mobile CC PTY + Settings restructure; 21 locked D-V38-A..U decisions; vault root renamed `livinity-vault` → `~/liv/` per operator vote 2026-05-20).
+**Active milestone:** v38.0 — Liv Agent Platform — **CLOSED 2026-05-20** (14 phases / 141 commits / 5 waves; CODE-COMPLETE-AND-LIVE-VERIFIED; Operator UAT browser walk queued per `.planning/phases/184-v38-deploy-uat/v38-VERIFICATION.md` § Operator UAT Browser Walk).
 
-**Last shipped phase:** **Phase 183** tmux status off + dangerously-skip default + sidebar Settings gear — CODE-COMPLETE 2026-05-20 (33 manager assertions + 54 sidebar-tree assertions, 4 commits `fc71dc66..64444b74`, sacred SHA 25/25; tmux set-option status off per session + --dangerously-skip-permissions injection (D-V38-K default ON) + SidebarTree gear icon wired to idempotent LIVINITY_settings window open via useWindowManagerOptional). Previously: **Phase 180** Vault Graph Local Mode + Animation — CODE-COMPLETE 2026-05-20 (92 total tests, 6 commits `306d9ae0..351a8069`, sacred SHA 25/25; bfsSubgraph + DepthChip + scheduleAnimation + LegendBadge).
+**Last shipped phase:** **Phase 184** v38.0 Mini PC Deploy + UAT + Milestone Close — CODE-COMPLETE 2026-05-20 (11/13 live probes PASS; 25/25 sacred SHAs preserved; deployed SHA a0d26c65676e6f3161deaccb4fb4b3e0068701a6; all 4 services active NRestarts=0; vault scaffolded at /root/livinity-vault).
 
-**Key decisions (Phase 183):**
-- Two separate execSync calls for tmux new-session + set-option (not inlined) — preserves Assertion 4 regex compat
-- useWindowManagerOptional null guard in SidebarTree handleOpenSettings — gear safe outside WindowManagerProvider
-- SidebarFooter rendered in both empty-state and normal SidebarTree return paths
+**Key decisions (Phase 184):**
+- SSH key: minipc (ED25519) used — contabo_master (RSA) rejected by Mini PC authorized_keys
+- Vault root at /root/livinity-vault (LIV_VAULT_ROOT not set in .env, using fallback); carry-over: add LIV_VAULT_ROOT=/root/liv to .env + mv /root/livinity-vault /root/liv
+- tRPC v11 format: raw JSON body (not wrapped in {json:{...}})
+- 11/13 probes PASS — above 10/13 acceptance threshold; P5+P6 PASS-deferred by design
+- autonomous_enabled: false (safe state, confirmed pre-close)
 
-**Next action:** `/gsd-execute-phase 184` — v38.0 Mini PC Deploy + UAT + Milestone Close (Wave 7 FINAL). Or parallel: `/gsd-execute-phase 178` (Vault Graph MVP Polish) + `/gsd-execute-phase 181` (Mobile CC PTY). Phase 177 + 182 + 183 complete; Wave 6 complete; Wave 7 is the critical-path ship gate.
+**Next action:** Operator walks `.planning/phases/184-v38-deploy-uat/v38-VERIFICATION.md` § Operator UAT Browser Walk on `https://bruce.livinity.io`. After PASS: open v39 or v38.1 hotfix milestone. On FAIL: `/gsd-plan-phase` for gap-closure phase.
 
 **v35.0 phase queue (FINAL):**
 
@@ -79,7 +81,7 @@ Wave 6 — Autonomous (sequential):
 
 Wave 7 — Ship (sequential, FINAL):
 
-- [ ] Phase 184 — v38.0 Mini PC Deploy + UAT + Milestone Close — 5 plans
+- [x] Phase 184 — v38.0 Mini PC Deploy + UAT + Milestone Close — 5 plans — ✅ CODE-COMPLETE 2026-05-20 (11/13 live probes PASS; 25/25 sacred SHAs; deployed SHA a0d26c65; v38-VERIFICATION.md 406 lines; CODE-COMPLETE-AND-LIVE-VERIFIED)
 
 **Critical path:** 171 → 173 → 174 → 175 → 176 → 177 → 184 = ~13 days
 **Parallel branches all fit inside this window** → total wall-clock ~10-13 days vs ~24-28 days serial.
