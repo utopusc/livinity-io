@@ -55,6 +55,9 @@ function makeFakeRedis(initial: Record<string, string> = {}) {
 			store.set(k, v)
 			return 'OK'
 		}),
+		// Phase 168-04 — pub/sub: publish stubbed to record (channel, message)
+		// pairs for assertions. Returns 0 (subscriber count) as ioredis does.
+		publish: vi.fn(async (_channel: string, _message: string) => 0),
 	} as any
 }
 
@@ -357,5 +360,87 @@ describe('CcPtyManager', () => {
 			const s = await mgr.createSession({userId})
 			expect(s.tmuxName).toMatch(NAME_RE)
 		}
+	})
+
+	// ── Phase 168-04 cross-tab attach pub/sub ────────────────────────────
+
+	it('Assertion 19 (Phase 168-04): attachSession returns {attachId} uuid string when no opts provided', async () => {
+		const mgr = makeManager()
+		const s = await mgr.createSession({userId: 'admin'})
+		const h = await mgr.attachSession(s.id, () => {})
+		expect(typeof h.attachId).toBe('string')
+		expect(h.attachId.length).toBeGreaterThan(8)
+		// uuid v4 shape: 8-4-4-4-12 hex chars
+		expect(h.attachId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+		h.detach()
+	})
+
+	it('Assertion 20 (Phase 168-04): attachSession honors caller-provided opts.attachId', async () => {
+		const mgr = makeManager()
+		const s = await mgr.createSession({userId: 'admin'})
+		const h = await mgr.attachSession(s.id, () => {}, {attachId: 'custom-tab-123'})
+		expect(h.attachId).toBe('custom-tab-123')
+		h.detach()
+	})
+
+	it('Assertion 21 (Phase 168-04): attach publishes ONE liv:cc-pty:attached message with action=attached', async () => {
+		const mgr = makeManager()
+		const s = await mgr.createSession({userId: 'admin'})
+		redis.publish.mockClear()
+		const h = await mgr.attachSession(s.id, () => {}, {attachId: 'tab-A'})
+		const attachCalls = redis.publish.mock.calls.filter(
+			([ch, msg]: [string, string]) =>
+				ch === 'liv:cc-pty:attached' && JSON.parse(msg).action === 'attached',
+		)
+		expect(attachCalls.length).toBe(1)
+		const payload = JSON.parse(attachCalls[0][1] as string)
+		expect(payload).toMatchObject({
+			sessionId: s.id,
+			attachId: 'tab-A',
+			action: 'attached',
+		})
+		expect(typeof payload.attachedAt).toBe('number')
+		h.detach()
+	})
+
+	it('Assertion 22 (Phase 168-04): detach() publishes ONE liv:cc-pty:attached message with action=detached + same attachId', async () => {
+		const mgr = makeManager()
+		const s = await mgr.createSession({userId: 'admin'})
+		const h = await mgr.attachSession(s.id, () => {}, {attachId: 'tab-A'})
+		redis.publish.mockClear()
+		h.detach()
+		const detachCalls = redis.publish.mock.calls.filter(
+			([ch, msg]: [string, string]) =>
+				ch === 'liv:cc-pty:attached' && JSON.parse(msg).action === 'detached',
+		)
+		expect(detachCalls.length).toBe(1)
+		const payload = JSON.parse(detachCalls[0][1] as string)
+		expect(payload).toMatchObject({
+			sessionId: s.id,
+			attachId: 'tab-A',
+			action: 'detached',
+		})
+	})
+
+	it('Assertion 23 (Phase 168-04): killSession publishes detach for EACH active attacher BEFORE killing', async () => {
+		const mgr = makeManager()
+		const s = await mgr.createSession({userId: 'admin'})
+		await mgr.attachSession(s.id, () => {}, {attachId: 'tab-A'})
+		await mgr.attachSession(s.id, () => {}, {attachId: 'tab-B'})
+		redis.publish.mockClear()
+		await mgr.killSession(s.id)
+		// Filter only the killSession-emitted detaches (action: 'detached').
+		// The detach() hooks on each pty-handle ALSO publish on the tmux kill EOF,
+		// but those fire after the explicit killSession publishes; we just check
+		// that at minimum both attachIds appear on the channel.
+		const detachedAttachIds = new Set(
+			redis.publish.mock.calls
+				.filter(([ch]: [string]) => ch === 'liv:cc-pty:attached')
+				.map(([, msg]: [string, string]) => JSON.parse(msg))
+				.filter((p: any) => p.action === 'detached' && p.sessionId === s.id)
+				.map((p: any) => p.attachId),
+		)
+		expect(detachedAttachIds.has('tab-A')).toBe(true)
+		expect(detachedAttachIds.has('tab-B')).toBe(true)
 	})
 })
