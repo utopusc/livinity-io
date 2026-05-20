@@ -16,6 +16,7 @@
 
 import {z} from 'zod'
 import type {Redis} from 'ioredis'
+import type {AgentRunner} from '../agent-runner.js'
 
 // ── Shared Zod shapes ────────────────────────────────────────────────────────
 // Mirror vault-items-router.ts ID_RE (T-176-02-01: reject path traversal / NUL injection).
@@ -54,6 +55,9 @@ export interface LivToolsOptions {
 		}
 	}
 	redis: Redis
+	/** Phase 177-02 — wired AgentRunner. When set, run_agent calls it;
+	 *  when absent, the stub response is returned instead. */
+	agentRunner?: AgentRunner
 }
 
 // ── McpServer-like surface ────────────────────────────────────────────────────
@@ -200,7 +204,7 @@ export function registerLivTools(server: McpServerLike, opts: LivToolsOptions): 
 		},
 	)
 
-	// 6. run_agent — Phase 177 stub
+	// 6. run_agent — Phase 177-02: wired to AgentRunner when present
 	const runAgentSchema = z.object({
 		agentId: safeId,
 		oneShot: z.boolean().optional(),
@@ -209,13 +213,24 @@ export function registerLivTools(server: McpServerLike, opts: LivToolsOptions): 
 
 	server.tool(
 		'run_agent',
-		'Trigger an Agent Item run (Phase 177 scheduler implementation pending).',
+		'Trigger an Agent Item run immediately.',
 		runAgentSchema.shape,
 		async (args: unknown) => {
 			const parse = runAgentSchema.safeParse(args)
 			if (!parse.success) return err(`Validation error: ${parse.error.message}`)
 			await audit(redis, 'run_agent', {agentId: parse.data.agentId})
-			return ok('run_agent: scheduled (Phase 177)')
+			if (opts.agentRunner) {
+				try {
+					const result = await opts.agentRunner.runAgent(parse.data.agentId, {
+						triggeredBy: 'manual',
+					})
+					return ok(JSON.stringify(result))
+				} catch (e: unknown) {
+					return err(e instanceof Error ? e.message : String(e))
+				}
+			}
+			// Fallback stub: agentRunner not wired (Phase 177 runner not injected yet)
+			return ok('run_agent: scheduled (Phase 177 — runner not wired)')
 		},
 	)
 }
