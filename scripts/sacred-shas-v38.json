@@ -1,0 +1,152 @@
+[
+  {
+    "path": "liv/packages/core/src/sdk-agent-runner.ts",
+    "expected_sha": "f3538e1d811992b782a9bb057d1b7f0a0189f95f",
+    "frozen_in_phase": "97-auto-mode",
+    "rationale": "D-100-SACRED — SDK agent runner is the load-bearing extension surface; all wrappers go through liv-agent-runner.ts + mcp-client-manager.ts."
+  },
+  {
+    "path": "livos/packages/livinityd/source/modules/vault-items/types.ts",
+    "expected_sha": "b95ec8c5c1ec98d9aebc33582eadadefe4fc2cdd",
+    "frozen_in_phase": "171-item-model-storage",
+    "rationale": "D-V38-B canonical Item discriminated union; downstream plans MUST narrow on `type` exhaustively."
+  },
+  {
+    "path": "livos/packages/livinityd/source/modules/vault-items/vault-root-resolver.ts",
+    "expected_sha": "b1e22923e5ad0fe23bfdac84de8c982c5ddd0030",
+    "frozen_in_phase": "171-item-model-storage",
+    "rationale": "D-V38-A vault root resolution; Phase 173-04 systemd env var depends on the exact fallback string."
+  },
+  {
+    "path": "livos/packages/livinityd/source/modules/vault-items/item-store.ts",
+    "expected_sha": "8bafbdceb34826a02950cc5242fc0357dc5288cc",
+    "frozen_in_phase": "171-item-model-storage",
+    "rationale": "D-V38-T canonical folder layout writer + atomic CRUD; Phase 173-02 migration consumes this verbatim."
+  },
+  {
+    "path": "livos/packages/livinityd/source/modules/vault-items/tree-resolver.ts",
+    "expected_sha": "ce4b8320f30de2db51c9f247dfb8d2faef1d3a6d",
+    "frozen_in_phase": "171-item-model-storage",
+    "rationale": "D-V38-E cycle/depth guard; Phase 174 SidebarTree consumes tree.json directly."
+  },
+  {
+    "path": "livos/packages/livinityd/source/modules/vault-items/pubsub.ts",
+    "expected_sha": "35e62155dc42a5205085392607882054b8966449",
+    "frozen_in_phase": "171-item-model-storage",
+    "rationale": "Redis liv:tree:updated event contract; UI subscribers depend on payload shape."
+  },
+  {
+    "path": "livos/packages/livinityd/source/modules/vault-items/index.ts",
+    "expected_sha": "5045b76ce9b71f9817a0f69108ddb8aa3bc495fb",
+    "frozen_in_phase": "171-item-model-storage",
+    "rationale": "Barrel export surface — downstream imports stable."
+  },
+  {
+    "path": "livos/packages/cli/src/cli.ts",
+    "expected_sha": "28496c16d321bf12ef44850ae84e5ab99b32cb28",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "D-V38-G CLI command surface; npm-published bin entrypoint."
+  },
+  {
+    "path": "livos/packages/cli/src/auth.ts",
+    "expected_sha": "23fa2a0738b7183825df595ee341c37f17bd842c",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "D-V38-H auth-mode resolution (filesystem vs daemon)."
+  },
+  {
+    "path": "livos/packages/cli/src/version.ts",
+    "expected_sha": "ff67758efe2c289c572f093babcec7e94cda9f86",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Version banner pinned to @livos/cli package.json."
+  },
+  {
+    "path": "livos/packages/cli/src/vault-bootstrap.ts",
+    "expected_sha": "dfac729b5c26cbdc47b88135d417a930cd7f5203",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "D-V38-T canonical folder layout writer (CLI-side mirror of livinityd vault-scaffolder)."
+  },
+  {
+    "path": "livos/packages/cli/src/filesystem-mode.ts",
+    "expected_sha": "602ed2b2b738f76578b07f62196fb8c689b800b7",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Read-only vault traversal when livinityd is unreachable."
+  },
+  {
+    "path": "livos/packages/cli/src/query-client.ts",
+    "expected_sha": "4dea59a7d640f60102a6bd69049eeea5c6b18683",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "tRPC client wrapper — wire-format contract."
+  },
+  {
+    "path": "livos/packages/cli/src/commands/agent.ts",
+    "expected_sha": "ffc7fe916875f29df89fa09a7453c90096c8ca0e",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Command handler — D-V38-G surface."
+  },
+  {
+    "path": "livos/packages/cli/src/commands/attach.ts",
+    "expected_sha": "3a9999e0788fd865514e3d7fb64189f0a1b0698d",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Command handler — D-V38-G surface."
+  },
+  {
+    "path": "livos/packages/cli/src/commands/chat.ts",
+    "expected_sha": "074d08fb306f868b78980a0d0912f10ed9db2aed",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Command handler — D-V38-G surface."
+  },
+  {
+    "path": "livos/packages/cli/src/commands/config.ts",
+    "expected_sha": "2e65bb6c75fcd788d32c1ede303a240b129e0301",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Command handler — D-V38-G surface."
+  },
+  {
+    "path": "livos/packages/cli/src/commands/doctor.ts",
+    "expected_sha": "8bcbd0079459f71ff333a6d146761bdcca95d367",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Command handler — D-V38-G surface."
+  },
+  {
+    "path": "livos/packages/cli/src/commands/init.ts",
+    "expected_sha": "d6f1ea80ceb5effca9ddfc236580dd4a70b19217",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Command handler — D-V38-G surface."
+  },
+  {
+    "path": "livos/packages/cli/src/commands/list.ts",
+    "expected_sha": "116e6981f1eff7045b9b1351cbaf0acfcd88b5f1",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Command handler — D-V38-G surface."
+  },
+  {
+    "path": "livos/packages/cli/src/commands/migrate.ts",
+    "expected_sha": "57503f3109b8e0a8f7cf10e9f1b0cf9f7013d105",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Command handler — D-V38-G surface."
+  },
+  {
+    "path": "livos/packages/cli/src/commands/project.ts",
+    "expected_sha": "cf54f3ba3a7febafb89792f0800cccce426066ad",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Command handler — D-V38-G surface."
+  },
+  {
+    "path": "livos/packages/cli/src/commands/query.ts",
+    "expected_sha": "b9c339849623f526ba080154526f4be183d025b7",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Command handler — D-V38-G surface."
+  },
+  {
+    "path": "livos/packages/cli/src/query/handlers.ts",
+    "expected_sha": "b6039e0f9774622aa36b8d180021b2271782be73",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Query handler registry — wire-format contract."
+  },
+  {
+    "path": "livos/packages/cli/src/query/registry.ts",
+    "expected_sha": "bed545d223ea9a7527b6818bedffb31e0603bbfe",
+    "frozen_in_phase": "172-livos-cli-skeleton",
+    "rationale": "Longest-prefix query routing — wire-format contract."
+  }
+]
