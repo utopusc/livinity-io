@@ -147,7 +147,9 @@ describe('CcPtyManager', () => {
 		expect(cmd).toMatch(/'\/some\/cwd'/)
 		// Phase 167.2 — child command now sets LANG/LC_ALL alongside HOME so
 		// Turkish + non-ASCII chars round-trip cleanly through claude's TUI.
-		expect(cmd).toMatch(/'LANG=en_US\.UTF-8 LC_ALL=en_US\.UTF-8 HOME=\/root claude'/)
+		// Phase 183 — trailing ' removed from regex: skip-perms flag may follow
+		// 'claude' when liv:config:cc_pty_skip_perms is true (default). Match as prefix.
+		expect(cmd).toMatch(/'LANG=en_US\.UTF-8 LC_ALL=en_US\.UTF-8 HOME=\/root claude/)
 	})
 
 	it('Assertion 5: userId injection rejected — execSync is NEVER called for invalid userId', async () => {
@@ -494,5 +496,113 @@ describe('CcPtyManager', () => {
 		await mgr.attachSession(s.id, onStdout)
 
 		expect(captureCallCount).toBe(0)
+	})
+
+	// ── Phase 183 — tmux status off + dangerously-skip-permissions ───────────
+
+	function makeManagerWithRedis(
+		customRedis: ReturnType<typeof makeFakeRedis>,
+		opts: {maxSessions?: number; idleHours?: number} = {},
+	) {
+		return new CcPtyManager({vaultPath, redis: customRedis, logger, store, ...opts} as any)
+	}
+
+	describe('Phase 183 — tmux status off + dangerously-skip-permissions', () => {
+		it('Assertion 26 (P183): set-option -g status off called after tmux new-session', async () => {
+			const r = makeFakeRedis({'liv:config:cc_pty_skip_perms': 'false'})
+			const mgr = makeManagerWithRedis(r)
+			execSyncSpy.mockClear()
+			await mgr.createSession({userId: 'admin'})
+			const calls = execSyncSpy.mock.calls.map(([c]: [string, ...unknown[]]) => c as string)
+			const statusOffCall = calls.find((c) => c.includes('set-option') && c.includes('status off'))
+			expect(statusOffCall).toBeDefined()
+		})
+
+		it('Assertion 27 (P183): set-option -t targets the generated tmuxName', async () => {
+			const r = makeFakeRedis({'liv:config:cc_pty_skip_perms': 'false'})
+			const mgr = makeManagerWithRedis(r)
+			execSyncSpy.mockClear()
+			const s = await mgr.createSession({userId: 'admin'})
+			const calls = execSyncSpy.mock.calls.map(([c]: [string, ...unknown[]]) => c as string)
+			const statusOffCall = calls.find((c) => c.includes('set-option') && c.includes('status off'))
+			expect(statusOffCall).toBeDefined()
+			// The tmuxName must appear (shell-escaped) in the set-option command
+			expect(statusOffCall).toContain(s.tmuxName)
+		})
+
+		it('Assertion 28 (P183): skip-perms default (null Redis) → --dangerously-skip-permissions in command', async () => {
+			const r = makeFakeRedis() // no key → null → default true
+			const mgr = makeManagerWithRedis(r)
+			execSyncSpy.mockClear()
+			await mgr.createSession({userId: 'admin'})
+			const newSesCall = execSyncSpy.mock.calls
+				.map(([c]: [string, ...unknown[]]) => c as string)
+				.find((c) => c.includes('tmux new-session'))
+			expect(newSesCall).toBeDefined()
+			expect(newSesCall).toMatch(/--dangerously-skip-permissions/)
+		})
+
+		it('Assertion 29 (P183): explicit "true" → --dangerously-skip-permissions in command', async () => {
+			const r = makeFakeRedis({'liv:config:cc_pty_skip_perms': 'true'})
+			const mgr = makeManagerWithRedis(r)
+			execSyncSpy.mockClear()
+			await mgr.createSession({userId: 'admin'})
+			const newSesCall = execSyncSpy.mock.calls
+				.map(([c]: [string, ...unknown[]]) => c as string)
+				.find((c) => c.includes('tmux new-session'))
+			expect(newSesCall).toMatch(/--dangerously-skip-permissions/)
+		})
+
+		it('Assertion 30 (P183): "false" → --dangerously-skip-permissions ABSENT from command', async () => {
+			const r = makeFakeRedis({'liv:config:cc_pty_skip_perms': 'false'})
+			const mgr = makeManagerWithRedis(r)
+			execSyncSpy.mockClear()
+			await mgr.createSession({userId: 'admin'})
+			const newSesCall = execSyncSpy.mock.calls
+				.map(([c]: [string, ...unknown[]]) => c as string)
+				.find((c) => c.includes('tmux new-session'))
+			expect(newSesCall).toBeDefined()
+			expect(newSesCall).not.toMatch(/--dangerously-skip-permissions/)
+		})
+
+		it('Assertion 31 (P183): redis.get called with "liv:config:cc_pty_skip_perms" once per createSession', async () => {
+			const r = makeFakeRedis()
+			const mgr = makeManagerWithRedis(r)
+			await mgr.createSession({userId: 'admin'})
+			const skipPermsCalls = r.get.mock.calls.filter(
+				([k]: [string, ...unknown[]]) => k === 'liv:config:cc_pty_skip_perms',
+			)
+			expect(skipPermsCalls.length).toBe(1)
+		})
+
+		it('Assertion 32 (P183): when skip-perms=false child cmd is bare "...HOME=/root claude" with no extra flags', async () => {
+			const r = makeFakeRedis({'liv:config:cc_pty_skip_perms': 'false'})
+			const mgr = makeManagerWithRedis(r)
+			execSyncSpy.mockClear()
+			await mgr.createSession({userId: 'admin'})
+			const newSesCall = execSyncSpy.mock.calls
+				.map(([c]: [string, ...unknown[]]) => c as string)
+				.find((c) => c.includes('tmux new-session'))
+			expect(newSesCall).toBeDefined()
+			// Must end with "HOME=/root claude'" — nothing after 'claude'
+			expect(newSesCall).toMatch(/HOME=\/root claude'/)
+		})
+
+		it('Assertion 33 (P183): set-option failure is non-fatal — createSession resolves + logs warn', async () => {
+			const r = makeFakeRedis({'liv:config:cc_pty_skip_perms': 'false'})
+			const mgr = makeManagerWithRedis(r)
+			execSyncSpy.mockImplementation((cmd: string) => {
+				if (cmd.includes('set-option')) {
+					throw new Error('tmux not found')
+				}
+				return Buffer.from('')
+			})
+			const result = await mgr.createSession({userId: 'admin'})
+			expect(result).toBeDefined()
+			expect(result.id).toBeDefined()
+			expect(logger.warn).toHaveBeenCalledWith(
+				expect.stringMatching(/set-option status off failed/),
+			)
+		})
 	})
 })
