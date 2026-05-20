@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 184 + § Success Criteria (20 items)
-**Wave:** 5 (FINAL — depends on all 171-183)
+**Wave:** 7 (FINAL — depends on all 171-183)
 
 <domain>
 ## Phase Boundary
@@ -99,6 +99,6 @@ Deploy v38.0 to Mini PC. Run migration script (Phase 173). Live probes covering 
 ---
 
 *Phase: 184-v38-deploy-uat*
-*Wave: 5 (FINAL — depends on 171-183)*
+*Wave: 7 (FINAL — depends on all 171-183)*
 *Estimated: ~1 day agent work (deploy + probes + verification doc)*
 *Closes: v38.0 Liv Agent Platform milestone*

@@ -161,50 +161,107 @@ items/<uuid>/
 
 ---
 
-## Phase Breakdown (14 phases, 5 waves)
+## Phase Breakdown (14 phases, 7 waves, aggressive parallelism)
 
-### Wave 1 — Vault Item Foundation (parallel-safe)
+**Dependency-graph optimized:** original 5-wave breakdown serialized too eagerly. Re-analysis reveals 178 (Vault graph polish) and 182 (Settings restructure) have NO v38 dependencies — they can start in Wave 1 alongside 171 + 172. Similarly 179 (graph controls) chains from 178 in Wave 2, 180 (graph local+anim) chains from 179 in Wave 3 — entirely in parallel with the sidebar critical path 171→173→174→175. Net result: critical path drops from ~17-21 days serial to **~10-13 days wall-clock** with max-4 parallelism.
 
-| Phase | Goal | Files modified | Plans | Depends |
-|-------|------|----------------|-------|---------|
-| **171** Item Model + Storage Layer | NEW livinityd module `vault-items/`: types, item-store (file-backed), tree-resolver, atomic CRUD ops. Schema version 1. tRPC `vault.items.{list,get,create,update,move,archive,delete}`. Redis pub/sub `liv:tree:updated`. | NEW `livos/packages/livinityd/source/modules/vault-items/{index,types,item-store,tree-resolver,routes}.ts` + tests; MOD trpc registration | 5 | none |
-| **172** `@livos/cli` Package Skeleton | NEW workspace package `packages/cli/`. Commands: `liv init`, `liv project new`, `liv agent new`, `liv chat`, `liv list --tree`, `liv attach`, `liv config get/set`, `liv doctor`, `liv migrate`. ESM, ~minimal deps. tRPC HTTP client. Bin name `liv`. | NEW `livos/packages/cli/{package.json,src/{cli.ts,commands/*.ts,query-client.ts,filesystem-mode.ts}}`; MOD root `package.json` (workspace) | 5 | none |
-| **173** Vault Rename + Phase 168 Migration + Sacred Freeze | (i) `mv /root/livinity-vault/ /root/liv/` atomically on Mini PC via deploy-time migration script; (ii) compatibility symlink `/root/livinity-vault → /root/liv` for grace period; (iii) Phase 162-01 `vault-scaffolder.ts` STAYS BYTE-IDENTICAL — instead introduce env var `LIV_VAULT_ROOT` (read at boot, defaults to old hard-coded path) consumed by Phase 166 cc-pty manager + Phase 169 vault-graph routes via additive shim files (NEW `vault-root-resolver.ts`); (iv) walk existing `livos-cc-sessions.json` → write ChatItems under Main Liv; (v) backup original; (vi) update Sacred SHA hook to include new vault-items + cli module byte freeze. v38 sacred guard list documented. | NEW `scripts/migrate-v35-to-v38.sh` (deploy-time on Mini PC); NEW `livinityd/source/modules/vault/vault-root-resolver.ts`; MOD pre-commit hook; MOD `.planning/v38-LIV-AGENT-PLATFORM-MASTER.md` (sacred list) | 4 | 171 |
+### Wave 1 — Independent foundations (max-4 parallel — NO v38 deps)
 
-### Wave 2 — Sidebar UI (sequential after Wave 1)
+| Phase | Goal | Plans | Depends |
+|-------|------|-------|---------|
+| **171** Item Model + Storage Layer (livinityd `vault-items/`, tRPC, Redis pub/sub) | 5 | none |
+| **172** `@livos/cli` Package Skeleton (`packages/cli/`, `liv` bin) | 5 | none |
+| **178** Vault Graph MVP Polish (D-V38-O palette, streamdown, SearchBar) — touches `features/vault-graph/`, file-disjoint from 171/172/182 | 4 | none |
+| **182** Settings Restructure (kill ChatBackend, drop top-menu Agents, groups, MCP panel, AiChatSettingsPanel) — touches `routes/settings/`, file-disjoint from rest | 5 | none |
 
-| Phase | Goal | Files modified | Plans | Depends |
-|-------|------|----------------|-------|---------|
-| **174** SidebarTree Component | NEW `<SidebarTree>` using react-arborist. Item rows by type (Project/Agent/Chat), color/icon mapping per D-V38-O. Drag-to-reparent with cycle check. Context menu (rename/dup/archive/delete/export). Bottom-left Settings gear button. | NEW `livos/packages/ui/src/features/sidebar-tree/{SidebarTree,ItemTreeRow,ItemContextMenu}.tsx`; MOD package.json (react-arborist) | 5 | 171, 173 |
-| **175** Add Modal + Item Detail Views | NEW `<AddItemModal>` — Project/Agent/Chat selection + per-type form. NEW `<ProjectDetail>`, `<AgentDetail>` views. `<ChatDetail>` = direct CC PTY attach (no detail page). Replace Phase 168 `SessionSidebar` + `NewSessionButton`. | NEW `livos/packages/ui/src/features/item-detail/{ProjectDetail,AgentDetail,AddItemModal}.tsx`; MOD `routes/ai-chat/index.tsx` (replace sidebar) | 5 | 174 |
-| **176** Main Liv Root Agent + 4 LivOS-native Skills | NEW Liv root agent definition. 6 mutation tools: `create_item`, `list_items`, `move_item`, `archive_item`, `open_item`, `run_agent`. **4 LivOS-native default subagent skills** scaffolded into `~/liv/.claude/agents/`: (a) `luse-driver.md` (computer use via Phase 165 luse MCP — already exists, just re-registered into Liv's default tool set); (b) `livos-operator.md` (LivOS architecture + diagnostics — knows systemd services, Phase history, sacred files, troubleshooting steps; tools: Read, restricted Bash, tRPC system info routes); (c) `appstore.md` (install/uninstall/list apps via existing `apps.*` tRPC); (d) `window-manager.md` (window list/focus/close/pin via Phase 159 WindowManager tRPC). Empty-state UI (terminal centered, Liv greeting). Liv's tmux session auto-spawned on first user boot. | NEW `vault-scaffolder` extension for `settings/liv-rootagent.md`; NEW 4 subagent md files in scaffolder templates; NEW MCP tools in `livinityd/source/modules/vault-items/tools/`; MOD UI empty state | 5 | 171, 175 |
+**Parallel-safe rationale:** 171 touches livinityd modules; 172 creates a new workspace package; 178 touches UI features/vault-graph/; 182 touches UI routes/settings/. Zero file overlap. Worktree-isolated executor agents merge cleanly.
 
-### Wave 3 — Autonomous + Vault Graph (parallel pairs)
+### Wave 2 — Chain extensions (max-2 parallel)
 
-| Phase | Goal | Files modified | Plans | Depends |
-|-------|------|----------------|-------|---------|
-| **177** Schedule Engine + Inbox System | Extend Phase 164 autonomous-scheduler with per-Agent cron registry. `node-cron` (or existing scheduler). Inbox writer (`items/<uuid>/inbox/<runId>.md`). Inbox UI component (sidebar badge + detail view inbox list). Cross-Item global inbox via filesystem walker. | MOD `autonomous-scheduler/scheduler.ts` (additive); NEW `vault-items/inbox-writer.ts`; NEW `<InboxBadge>`, `<InboxList>` UI | 4 | 171, 176 |
-| **178** Vault Graph MVP Polish | Re-palette to D-V38-O 7-type colors. Replace `<pre>` markdown with streamdown render. Backlinks/Outgoing lists derived client-side. Refresh button + truncated banner restyled per Livinity DS. SearchBar `Cmd+K` + live filter. | MOD `livos/packages/ui/src/features/vault-graph/{VaultGraph,GraphNodeDetail}.tsx`; NEW `<GraphSearchBar>` | 4 | none (parallel with 177) |
-| **179** Vault Graph Controls Panel | Right-edge floating Controls panel: **Filters** (type toggles, orphans, recent, ghosts), **Groups** (by type/folder/tag/custom), **Display** (label visibility, node size, link thickness, arrows), **Forces** (4 sliders + reset). Backend: extend `/api/vault/graph` to emit per-node `tags[]` + `topDir`. | NEW `<GraphControls>` + 4 section components; MOD vault-graph backend walker | 5 | 178 |
-| **180** Local Graph + Animation Timeline | Local Graph mode (BFS from active node, depth chip UI). Animate timeline (`mtime`-ordered reveal). Optional: legend badge bottom-left. | NEW `<DepthChip>`, `<LegendBadge>`; MOD `<VaultGraph>` orchestrator | 3 | 179 |
+| Phase | Goal | Plans | Depends |
+|-------|------|-------|---------|
+| **173** Vault Rename + Phase 168 Migration + Sacred Freeze (deploy-time `mv` + compat symlink + `LIV_VAULT_ROOT` env resolver shim; Phase 162-01 scaffolder STAYS byte-identical) | 4 | 171 |
+| **179** Vault Graph Controls Panel (Filters/Groups/Display/Forces + backend tags+topDir extension) | 5 | 178 |
 
-### Wave 4 — Mobile + Settings + Polish (parallel)
+**Parallel-safe:** 173 touches livinityd vault-items + deploy scripts; 179 touches UI features/vault-graph/ + livinityd vault-graph backend (additive). Disjoint enough.
 
-| Phase | Goal | Files modified | Plans | Depends |
-|-------|------|----------------|-------|---------|
-| **181** Mobile CC PTY (tablet terminal + phone bubble) | Replace `/chat-mobile` LegacyAiChatPanel: tablet (≥640px + coarse) → `<CcTerminal>` + `<MobileTerminalKeyBar>` (2-row sticky-Ctrl). Phone (<640px) → CC-backed bubble UI streaming `/ws/cc-pty`. Touch gestures: pinch-zoom, two-finger paste, three-finger detach. WS resilience: `visibilitychange` resume, heartbeat ping/pong, `tmux capture-pane` replay. | MOD `routes/chat-mobile/index.tsx`; NEW `<MobileTerminalKeyBar>`, `<MobileBubbleChat>`; MOD `terminal-ws-client.ts` (heartbeat) | 4 | 175 |
-| **182** Settings Restructure | Remove `ChatBackendPanel` + route. Drop top-menu Agents tile. Rename "Autonomous Agents" → "Scheduled Agents". Add PERSONAL/WORKSPACE/AI/SYSTEM groups. NEW `<AiChatSettingsPanel>` (7 fields incl. dangerously-skip toggle, default cwd, idle hours, max sessions, allowed paths, force terminal on phone, default model). NEW `<McpServersPanel>` (lifted from chat sidebar). | MOD `routes/settings/_components/settings-content.tsx`; MOD `routes/settings/index.tsx`; DEL `routes/settings/chat-backend.tsx` + `ChatBackendPanel.tsx`; NEW `routes/settings/{ai-chat-settings,mcp-servers}.tsx`; MOD `providers/apps.tsx` (drop subagents tile) | 5 | none (parallel with 181) |
-| **183** Polish: tmux status off + dangerously-skip default + sidebar Settings button | `tmux set -g status off` on session spawn. `cc-pty/manager.ts` reads `liv:config:cc_pty_skip_perms` (default true) → injects flag. Sidebar bottom-left gear-icon Settings button. | MOD `cc-pty/manager.ts`; MOD `<SidebarTree>` footer slot | 2 | 174, 182 |
+### Wave 3 — Tree UI + Graph polish (max-2 parallel)
 
-### Wave 5 — Ship (depends on all)
+| Phase | Goal | Plans | Depends |
+|-------|------|-------|---------|
+| **174** SidebarTree Component (react-arborist, per-type rows, drag-drop, context menu, footer gear slot) | 5 | 171, 173 |
+| **180** Local Graph + Animation Timeline (BFS depth mode, mtime-ordered reveal, LegendBadge) | 3 | 179 |
 
-| Phase | Goal | Files modified | Plans | Depends |
-|-------|------|----------------|-------|---------|
-| **184** v38.0 Mini PC Deploy + UAT + Milestone Close | apt install dependencies (if any). Push + `bash /opt/livos/update.sh`. Migration script auto-runs on first boot. Live probes: tree CRUD, sidebar drag-drop, Add modal Project/Agent/Chat, Liv root agent greet, autonomous agent run via cron, Vault Graph controls panel functional, mobile route serves CC-backed UI, Settings panels in new groups, MCP panel functional, no Phase 168 SessionSidebar reachable. v38-VERIFICATION.md. STATE + ROADMAP milestone close. | NEW `.planning/phases/184-v38-deploy-uat/v38-VERIFICATION.md`; MOD STATE + ROADMAP | 5 | all prior |
+**Parallel-safe:** 174 = UI features/sidebar-tree/; 180 = UI features/vault-graph/. Different feature dirs.
 
-**Total: 14 phases / ~62 plans / 5 waves. Estimated 20-28 days sequential, 12-16 days with parallelism.**
+### Wave 4 — UI extensions + lightweight polish (max-2 parallel)
 
-**Plan breakdown by wave:** W1 = 5+5+4 = 14 · W2 = 5+5+5 = 15 · W3 = 4+4+5+3 = 16 · W4 = 4+5+2 = 11 · W5 = 5 = 5 · TOTAL 61 plans.
+| Phase | Goal | Plans | Depends |
+|-------|------|-------|---------|
+| **175** Add Modal + Item Detail Views (`<AddItemModal>`, `<ProjectDetail>`, `<AgentDetail>`; DELETE Phase 168 cc-sessions/* + cc-pty-router) | 5 | 174 |
+| **183** Polish: tmux status off + dangerously-skip default + sidebar gear wire | 2 | 174, 182 |
+
+**Parallel-safe:** 175 = UI features/item-detail/ + Phase 168 deletion; 183 = MOD cc-pty/manager.ts (additive) + MOD sidebar-tree (gear handler wire). Disjoint.
+
+### Wave 5 — Liv root + Mobile (max-2 parallel)
+
+| Phase | Goal | Plans | Depends |
+|-------|------|-------|---------|
+| **176** Main Liv Root Agent + 4 LivOS-native Skills (luse-driver, livos-operator, appstore, window-manager) + empty-state UI | 5 | 171, 175 |
+| **181** Mobile CC PTY (tablet `<CcTerminal>` + virtual key bar; phone `<MobileBubbleChat>`; touch gestures; WS resilience) + DELETE legacy-ai-chat-panel | 4 | 175 |
+
+**Parallel-safe:** 176 = NEW vault-items/tools/ + scaffolder templates + UI empty-state branch; 181 = NEW features/mobile-terminal/ + MOD chat-mobile route + MOD cc-terminal (additive). Disjoint.
+
+### Wave 6 — Autonomous (sequential)
+
+| Phase | Goal | Plans | Depends |
+|-------|------|-------|---------|
+| **177** Schedule Engine + Inbox System (node-cron extension of Phase 164 scheduler; inbox writer + UI; Liv `run_agent` tool full impl) | 4 | 171, 176 |
+
+### Wave 7 — Ship (sequential, FINAL)
+
+| Phase | Goal | Plans | Depends |
+|-------|------|-------|---------|
+| **184** v38.0 Mini PC Deploy + UAT + Milestone Close (push + update.sh + migration auto-run + 13 live probes + v38-VERIFICATION.md + STATE + ROADMAP close) | 5 | all prior |
+
+---
+
+**Total: 14 phases / 61 plans / 7 waves.**
+
+**Critical path** (longest dep chain): 171 (2d) → 173 (1.5d) → 174 (2d) → 175 (2.5d) → 176 (2d) → 177 (2d) → 184 (1d) = **~13 days wall-clock**.
+
+**Parallel branches consumed inside critical path window:**
+- 172 (2.5d) fits day 0-3
+- 178 (1.5d) + 179 (2.5d) + 180 (1.5d) = 5.5d chain fits days 0-6
+- 182 (2.5d) fits day 0-3
+- 181 (3d) fits days 8-11 (after 175 completes)
+- 183 (0.5d) fits day 6 (after 174 + 182 both complete)
+
+**Worst case (zero parallelism):** ~24-28 days serial.
+**Best case (max-4 parallel):** ~10-13 days wall-clock.
+
+**Plan breakdown by wave:**
+- W1 = 5+5+4+5 = 19 plans (4 phases parallel)
+- W2 = 4+5 = 9 plans (2 parallel)
+- W3 = 5+3 = 8 plans (2 parallel)
+- W4 = 5+2 = 7 plans (2 parallel)
+- W5 = 5+4 = 9 plans (2 parallel)
+- W6 = 4 plans
+- W7 = 5 plans
+- **TOTAL: 61 plans**
+
+---
+
+## Parallel Dispatch Strategy
+
+The `/gsd-autonomous --from 171` orchestrator dispatches phases per-wave. For each wave with >1 phase, the orchestrator spawns `N` parallel executor agents — each isolated via `isolation: worktree` so commits don't race on master. After all wave-N agents complete, the orchestrator merges branches sequentially to master (Sacred SHA hook validates each merge), then proceeds to wave N+1.
+
+**Worktree merge order rules:**
+1. Phases with sacred-SHA-touching commits (175 deletion of Phase 168, 173 sacred freeze update) merge first within their wave
+2. Within a wave, alphabetical phase number breaks ties
+3. If a worktree fails Sacred SHA check on merge, that phase blocks → operator decision via `handle_blocker` checkpoint
+
+**Failure isolation:** If 178 fails in Wave 1, 171 + 172 + 182 still ship. Wave 2 proceeds with 173 (no 178 dep). 179 + 180 + 158-feature blocked until 178 fixed in a follow-up phase.
 
 ---
 

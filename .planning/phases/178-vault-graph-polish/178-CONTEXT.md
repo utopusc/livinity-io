@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 178 + Obsidian Graph Hybrid spec (research output Part A1/A3/A7 + Part B + Part E Phase 1)
-**Wave:** 3 (parallel with 177)
+**Wave:** 1 (parallel with 171 + 172 + 182 — file-disjoint, no v38 deps)
 
 <domain>
 ## Phase Boundary
@@ -78,5 +78,5 @@ Polish Phase 169 Vault Graph MVP. Re-palette to D-V38-O 7-type colors (steel-blu
 ---
 
 *Phase: 178-vault-graph-polish*
-*Wave: 3 (parallel with 177)*
+*Wave: 1 (parallel with 171 + 172 + 182 — file-disjoint, no v38 deps)*
 *Estimated: ~1-2 days agent work*

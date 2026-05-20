@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 180 + research Part A4/A8, Part E Phase 3
-**Wave:** 3 (depends on 179)
+**Wave:** 3 (parallel with 174 — depends 179)
 
 <domain>
 ## Phase Boundary
@@ -63,6 +63,6 @@ Two Obsidian "killer" features: Local Graph mode (BFS from active node, depth ch
 ---
 
 *Phase: 180-vault-graph-local-animation*
-*Wave: 3*
+*Wave: 3 (parallel with 174 — depends 179)*
 *Depends on: Phase 179*
 *Estimated: ~1-2 days agent work*

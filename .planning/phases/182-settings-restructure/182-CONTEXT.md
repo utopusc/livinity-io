@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 182 + Settings research Topic 2, D-V38-L/M/N
-**Wave:** 4 (parallel with 181)
+**Wave:** 1 (parallel with 171 + 172 + 178 — file-disjoint, no v38 deps)
 
 <domain>
 ## Phase Boundary
@@ -93,5 +93,5 @@ Restructure Settings sidebar: PERSONAL / WORKSPACE / AI / SYSTEM groups. Remove 
 ---
 
 *Phase: 182-settings-restructure*
-*Wave: 4 (parallel with 181)*
+*Wave: 1 (parallel with 171 + 172 + 178 — file-disjoint, no v38 deps)*
 *Estimated: ~2-3 days agent work*

@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 181 + Mobile research Topic 1, D-V38-J/L
-**Wave:** 4 (depends on 175)
+**Wave:** 5 (parallel with 176 — depends 175)
 
 <domain>
 ## Phase Boundary
@@ -79,6 +79,6 @@ Replace `/chat-mobile` legacy SDK fallback with Claude Code everywhere. Tablet �
 ---
 
 *Phase: 181-mobile-cc-pty*
-*Wave: 4 (parallel with 182)*
+*Wave: 5 (parallel with 176 — depends 175)*
 *Depends on: Phase 175*
 *Estimated: ~3 days agent work*

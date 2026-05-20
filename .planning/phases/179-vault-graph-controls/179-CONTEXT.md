@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 179 + Obsidian Graph Hybrid spec (Part C all 4 sections, Part E Phase 2)
-**Wave:** 3 (depends on 178)
+**Wave:** 2 (parallel with 173 — depends 178)
 
 <domain>
 ## Phase Boundary
@@ -84,6 +84,6 @@ Right-edge floating Controls panel with 4 sections (Filters / Groups / Display /
 ---
 
 *Phase: 179-vault-graph-controls*
-*Wave: 3*
+*Wave: 2 (parallel with 173 — depends 178)*
 *Depends on: Phase 178*
 *Estimated: ~2-3 days agent work*

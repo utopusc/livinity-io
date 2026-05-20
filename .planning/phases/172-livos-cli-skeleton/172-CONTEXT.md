@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 172 + § GSD-Style 3-Layer Architecture + D-V38-G/H
-**Wave:** 1 (parallel-safe with 171)
+**Wave:** 1 (parallel with 171 + 178 + 182 — file-disjoint)
 
 <domain>
 ## Phase Boundary
@@ -82,5 +82,5 @@ Build the `@livos/cli` workspace package — npm-publishable, exposes `liv` bina
 ---
 
 *Phase: 172-livos-cli-skeleton*
-*Wave: 1 (parallel-safe with 171)*
+*Wave: 1 (parallel with 171 + 178 + 182 — file-disjoint)*
 *Estimated: ~2-3 days agent work*

@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 175 + § Item Detail View (research output Part D) + D-V38-B/J
-**Wave:** 2 (depends on 174)
+**Wave:** 4 (parallel with 183 — depends 174)
 
 <domain>
 ## Phase Boundary
@@ -93,6 +93,6 @@ Build the "+ Add" modal flow and the per-type detail views. Delete Phase 168 `Se
 ---
 
 *Phase: 175-add-modal-detail-views*
-*Wave: 2*
+*Wave: 4 (parallel with 183 — depends 174)*
 *Depends on: Phase 174*
 *Estimated: ~2-3 days agent work*

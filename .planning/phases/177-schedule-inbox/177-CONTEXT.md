@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 177 + D-V38-P/S
-**Wave:** 3 (depends on 171, 176)
+**Wave:** 6 (sequential — depends 171, 176; all Wave 5 phases must complete first)
 
 <domain>
 ## Phase Boundary
@@ -74,6 +74,6 @@ Extend Phase 164 autonomous-scheduler with per-Agent cron registry (node-cron). 
 ---
 
 *Phase: 177-schedule-inbox*
-*Wave: 3 (parallel with 178)*
+*Wave: 6 (sequential — depends 171, 176)*
 *Depends on: Phase 171, 176*
 *Estimated: ~2 days agent work*

@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 176 + § Liv (Part F research) + Q7 operator decision (LivOS-native 4-pack)
-**Wave:** 2 (depends on 171, 175)
+**Wave:** 5 (parallel with 181 — depends 171, 175)
 
 <domain>
 ## Phase Boundary
@@ -92,6 +92,6 @@ Build Main Liv root agent and ship 4 LivOS-native default skills. Liv greets new
 ---
 
 *Phase: 176-main-liv-rootagent*
-*Wave: 2*
+*Wave: 5 (parallel with 181 — depends 171, 175)*
 *Depends on: Phase 171, 175*
 *Estimated: ~2 days agent work*

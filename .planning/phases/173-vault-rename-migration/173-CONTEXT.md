@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 173 + D-V38-A/Q/L
-**Wave:** 1 (depends on 171)
+**Wave:** 2 (parallel with 179 — depends 171)
 
 <domain>
 ## Phase Boundary
@@ -77,6 +77,6 @@ Three intertwined tasks: (1) rename Mini PC vault `/root/livinity-vault/` → `/
 ---
 
 *Phase: 173-vault-rename-migration*
-*Wave: 1*
+*Wave: 2 (parallel with 179 — depends 171)*
 *Depends on: Phase 171*
 *Estimated: ~1-2 days agent work*

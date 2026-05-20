@@ -39,31 +39,38 @@ See: .planning/PROJECT.md
 - [x] Phase 169 — Vault Memory Graph View — ✅ SHIPPED
 - [x] Phase 170 — Mini PC Deploy + UAT + v35-VERIFICATION — ✅ SHIPPED
 
-**v38.0 phase queue:**
+**v38.0 phase queue (re-organized 2026-05-20 for aggressive parallelism — 7 waves, ~10-13 day critical path):**
 
-Wave 1 — Foundation:
-- [ ] Phase 171 — Item Model + Storage Layer — 5 plans
-- [ ] Phase 172 — `@livos/cli` Package Skeleton — 5 plans
+Wave 1 — Independent foundations (4 parallel, file-disjoint):
+- [ ] Phase 171 — Item Model + Storage Layer — 5 plans (no deps)
+- [ ] Phase 172 — `@livos/cli` Package Skeleton — 5 plans (no deps)
+- [ ] Phase 178 — Vault Graph MVP Polish — 4 plans (no deps)
+- [ ] Phase 182 — Settings Restructure — 5 plans (no deps)
+
+Wave 2 — Chain extensions (2 parallel):
 - [ ] Phase 173 — Vault Rename + Migration + Sacred Freeze — 4 plans (depends 171)
-
-Wave 2 — Sidebar UI:
-- [ ] Phase 174 — SidebarTree Component — 5 plans (depends 171, 173)
-- [ ] Phase 175 — Add Modal + Item Detail Views — 5 plans (depends 174)
-- [ ] Phase 176 — Main Liv + 4 LivOS-native Skills — 5 plans (depends 171, 175)
-
-Wave 3 — Autonomous + Vault Graph:
-- [ ] Phase 177 — Schedule Engine + Inbox — 4 plans (depends 171, 176)
-- [ ] Phase 178 — Vault Graph MVP Polish — 4 plans
 - [ ] Phase 179 — Vault Graph Controls Panel — 5 plans (depends 178)
+
+Wave 3 — Tree UI + graph polish (2 parallel):
+- [ ] Phase 174 — SidebarTree Component — 5 plans (depends 171, 173)
 - [ ] Phase 180 — Local Graph + Animation — 3 plans (depends 179)
 
-Wave 4 — Mobile + Settings + Polish:
-- [ ] Phase 181 — Mobile CC PTY (tablet + phone) — 4 plans (depends 175)
-- [ ] Phase 182 — Settings Restructure — 5 plans
+Wave 4 — UI extensions + lightweight polish (2 parallel):
+- [ ] Phase 175 — Add Modal + Item Detail Views — 5 plans (depends 174)
 - [ ] Phase 183 — tmux status off + dangerously-skip + sidebar gear — 2 plans (depends 174, 182)
 
-Wave 5 — Ship:
+Wave 5 — Liv root + mobile (2 parallel):
+- [ ] Phase 176 — Main Liv + 4 LivOS-native Skills — 5 plans (depends 171, 175)
+- [ ] Phase 181 — Mobile CC PTY (tablet + phone) — 4 plans (depends 175)
+
+Wave 6 — Autonomous (sequential):
+- [ ] Phase 177 — Schedule Engine + Inbox — 4 plans (depends 171, 176)
+
+Wave 7 — Ship (sequential, FINAL):
 - [ ] Phase 184 — v38.0 Mini PC Deploy + UAT + Milestone Close — 5 plans
+
+**Critical path:** 171 → 173 → 174 → 175 → 176 → 177 → 184 = ~13 days
+**Parallel branches all fit inside this window** → total wall-clock ~10-13 days vs ~24-28 days serial.
 
 **Pre-flight (verified 2026-05-19 on Mini PC):**
 

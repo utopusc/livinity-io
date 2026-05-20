@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 183 + D-V38-K/R + operator explicit requests
-**Wave:** 4 (depends on 174, 182)
+**Wave:** 4 (parallel with 175 — depends 174, 182)
 
 <domain>
 ## Phase Boundary
@@ -59,6 +59,6 @@ Three tightly-scoped polish patches:
 ---
 
 *Phase: 183-polish-tmux-skipperms-gear*
-*Wave: 4*
+*Wave: 4 (parallel with 175 — depends 174, 182)*
 *Depends on: Phase 174, 182*
 *Estimated: ~0.5 days agent work*

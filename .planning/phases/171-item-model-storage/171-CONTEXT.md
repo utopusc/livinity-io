@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** `.planning/v38-LIV-AGENT-PLATFORM-MASTER.md` § Phase 171 + D-V38-A/B/C/E/F/T/U
-**Wave:** 1 (parallel-safe with 172)
+**Wave:** 1 (parallel with 172 + 178 + 182 — file-disjoint)
 
 <domain>
 ## Phase Boundary
@@ -86,5 +86,5 @@ Build the livinityd backend module that owns the vault Item tree: types, file-ba
 ---
 
 *Phase: 171-item-model-storage*
-*Wave: 1 (parallel-safe with 172)*
+*Wave: 1 (parallel with 172 + 178 + 182 — file-disjoint)*
 *Estimated: ~2 days agent work*

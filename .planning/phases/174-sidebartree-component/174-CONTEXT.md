@@ -3,7 +3,7 @@
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
 **Source:** Master plan § Phase 174 + § Sidebar UX (research output Part C)
-**Wave:** 2 (depends on 171, 173)
+**Wave:** 3 (parallel with 180 — depends 171, 173)
 
 <domain>
 ## Phase Boundary
@@ -86,6 +86,6 @@ Build the tree-based sidebar UI that replaces Phase 168 flat `SessionSidebar`. U
 ---
 
 *Phase: 174-sidebartree-component*
-*Wave: 2*
+*Wave: 3 (parallel with 180 — depends 171, 173)*
 *Depends on: Phase 171, 173*
 *Estimated: ~2 days agent work*
