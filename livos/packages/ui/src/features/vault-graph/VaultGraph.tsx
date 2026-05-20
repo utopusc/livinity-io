@@ -56,6 +56,7 @@ interface GraphEdge {
 	source: string
 	target: string
 	type: 'wikilink' | 'directory'
+	weight?: number  // Phase 187-04: optional for backward compat; backend emits 1 by default
 }
 
 interface GraphResponse {
@@ -299,6 +300,7 @@ export function VaultGraph() {
 					links: localEdges.map((e) => ({
 						source: e.source,
 						target: e.target,
+						_edge: e,  // Phase 187-04: carry edge metadata for linkWidth/linkColor callbacks
 					})),
 				}}
 				nodeLabel='label'
@@ -343,6 +345,11 @@ export function VaultGraph() {
 							? getEdgeHoverColor(srcNode.type, theme)
 							: getEdgeColor(theme)
 					}
+					// Phase 187-04: directory edges get reduced opacity (concrete rgba, not CSS var)
+					const edgeType = (link as any)._edge?.type ?? 'wikilink'
+					if (edgeType === 'directory') {
+						return theme === 'dark' ? 'rgba(200,200,200,0.2)' : 'rgba(100,100,100,0.2)'
+					}
 					return getEdgeColor(theme)
 				}}
 				linkWidth={(link: any) => {
@@ -353,7 +360,10 @@ export function VaultGraph() {
 					) {
 						return 1.4
 					}
-					return 0.5
+					// Phase 187-04: semantic thickness — wikilink thicker than directory
+					const edgeType = (link as any)._edge?.type ?? 'wikilink'
+					const weight   = (link as any)._edge?.weight ?? 1
+					return edgeType === 'wikilink' ? 1.2 + weight * 0.3 : 0.3
 				}}
 				onLinkHover={(link: any) => {
 					if (link) {

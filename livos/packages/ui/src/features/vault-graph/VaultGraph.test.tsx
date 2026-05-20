@@ -535,6 +535,90 @@ describe('VaultGraph', () => {
 		expect(strokeCalls.length).toBe(0)
 	})
 
+	// ── Phase 187-04: semantic edge thickness assertions ─────────────────────
+
+	it('linkWidth returns 1.5 for wikilink edge with weight=1', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [
+					{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, degree: 1, wikiDegree: 1, tags: [], topDir: 'root'},
+					{id: 'b.md', label: 'b', type: 'memory', size: 10, mtime: 0, degree: 1, wikiDegree: 1, tags: [], topDir: 'root'},
+				],
+				edges: [{source: 'a.md', target: 'b.md', type: 'wikilink', weight: 1}],
+				truncated: false,
+				totalFiles: 2,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(lastLinkWidth).not.toBeNull()
+		const result = lastLinkWidth!({_edge: {type: 'wikilink', weight: 1}})
+		expect(result).toBeCloseTo(1.5, 5) // 1.2 + 1*0.3
+	})
+
+	it('linkWidth returns 0.3 for directory edge', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [
+					{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, degree: 1, wikiDegree: 0, tags: [], topDir: 'root'},
+					{id: 'b.md', label: 'b', type: 'memory', size: 10, mtime: 0, degree: 1, wikiDegree: 0, tags: [], topDir: 'root'},
+				],
+				edges: [{source: 'a.md', target: 'b.md', type: 'directory', weight: 1}],
+				truncated: false,
+				totalFiles: 2,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(lastLinkWidth).not.toBeNull()
+		const result = lastLinkWidth!({_edge: {type: 'directory', weight: 1}})
+		expect(result).toBeCloseTo(0.3, 5)
+	})
+
+	it('linkWidth returns 1.8 for wikilink edge with weight=2', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [
+					{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, degree: 1, wikiDegree: 1, tags: [], topDir: 'root'},
+					{id: 'b.md', label: 'b', type: 'memory', size: 10, mtime: 0, degree: 1, wikiDegree: 1, tags: [], topDir: 'root'},
+				],
+				edges: [{source: 'a.md', target: 'b.md', type: 'wikilink', weight: 2}],
+				truncated: false,
+				totalFiles: 2,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(lastLinkWidth).not.toBeNull()
+		const result = lastLinkWidth!({_edge: {type: 'wikilink', weight: 2}})
+		expect(result).toBeCloseTo(1.8, 5) // 1.2 + 2*0.3
+	})
+
+	it('linkColor for directory edge is not var(--line-strong) (gets muted rgba)', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [
+					{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, degree: 1, wikiDegree: 0, tags: [], topDir: 'root'},
+					{id: 'b.md', label: 'b', type: 'memory', size: 10, mtime: 0, degree: 1, wikiDegree: 0, tags: [], topDir: 'root'},
+				],
+				edges: [{source: 'a.md', target: 'b.md', type: 'directory', weight: 1}],
+				truncated: false,
+				totalFiles: 2,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(lastLinkColor).not.toBeNull()
+		const dirColor = lastLinkColor!({_edge: {type: 'directory', weight: 1}})
+		expect(dirColor).not.toBe('var(--line-strong)')
+		// Should be an rgba value
+		expect(dirColor).toContain('rgba')
+	})
+
 	it('filteredNodes only includes nodes whose type is in filters.enabledTypes', async () => {
 		// Pre-set localStorage so only 'memory' type is enabled
 		window.localStorage.setItem(
