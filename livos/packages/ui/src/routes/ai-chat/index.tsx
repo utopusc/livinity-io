@@ -3,27 +3,40 @@
 // Pre-175-05: this route mounted <SessionSidebar> from @/features/cc-sessions
 // (now deleted) alongside the Terminal | Vault Graph tab nav. The session
 // lifecycle (list / create / rename / delete) is now owned by Phase 174's
-// SidebarTree + Phase 175's AddItemModal — they live in the global dock
-// sidebar, NOT inside this route. The AI Chat route surface degrades
-// gracefully to "Vault Graph only" + an empty-state hint for the Terminal
-// tab; clicking a Chat item in the global SidebarTree mounts ChatDetail
-// (Phase 175-03) inside a dock window, which is the new entry point.
+// SidebarTree + Phase 175's AddItemModal.
 //
 // Phase 176-04 — when vault has no Items, show LivWelcomeTerminal (Liv's
 // auto-spawned tmux CC session) instead of the plain empty-state hint.
 // The "Open a Chat" hint is preserved behind a hasItems=true guard so
 // existing Chat-flow remains discoverable once the operator creates Items.
 //
-// Future: a follow-up plan (likely Phase 181 mobile CC PTY) may either
-// delete this route entirely OR repurpose it as the mobile-only entry.
+// Phase 185-01 — SidebarTree now mounts inside this route as the left pane.
+// Split layout: fixed 280px left pane (SidebarTree + AddItemModal trigger) +
+// flex-1 right pane (Terminal | Vault Graph tab nav + content).
+//
+// Phase 185-02 — selectedItemId state wires SidebarTree onSelect to right-pane
+// item routing: Chat → ChatDetail, Project → ProjectDetail, Agent → AgentDetail.
+//
+// Phase 185-03 — Mobile collapse: sidebarOpen defaults to false on mobile
+// (true on desktop). Hamburger toggle in the tab-nav row shows/hides the left
+// pane on narrow viewports. AddItemModal "+" button at top of left pane.
+//
+// Note: the mobile early-return ("AI Chat requires a desktop browser") from
+// Phase 175-05 was replaced in Phase 185-03. The /chat-mobile link is preserved
+// in the /chat-mobile route itself; this route now always renders the split
+// layout (sidebar collapsed by default on mobile).
 
 import {useState} from 'react'
+
+import {Menu, Plus} from 'lucide-react'
 
 import {trpcReact} from '@/trpc/trpc'
 import {VaultGraph} from '@/features/vault-graph'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useCurrentUser} from '@/hooks/use-current-user'
 import {LivWelcomeTerminal} from '@/features/liv-welcome/LivWelcomeTerminal'
+import {SidebarTree} from '@/features/sidebar-tree'
+import {ChatDetail, ProjectDetail, AgentDetail, AddItemModal} from '@/features/item-detail'
 
 type Tab = 'terminal' | 'graph'
 
@@ -38,57 +51,106 @@ export default function AiChatRoute() {
 	const {userId} = useCurrentUser()
 	const hasItems = (itemList.data?.items?.length ?? 0) > 0
 
-	if (isMobile) {
-		return (
-			<div className='flex h-full flex-col items-center justify-center gap-4 p-8 text-center'>
-				<h2 className='text-xl font-semibold'>AI Chat requires a desktop browser</h2>
-				<p className='text-text-secondary'>
-					The terminal UI doesn't render well on mobile. Use the simplified chat instead.
-				</p>
-				<a href='/chat-mobile' className='rounded-lg bg-primary px-4 py-2 text-bg'>
-					Open mobile chat
-				</a>
-			</div>
-		)
-	}
+	// Phase 185-02 — item selection state for right-pane routing.
+	const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
+	const handleItemSelect = (id: string | null) => setSelectedItemId(id)
+	const items = itemList.data?.items ?? []
+	const selectedItem = selectedItemId
+		? items.find((it: {id: string}) => it.id === selectedItemId) ?? null
+		: null
 
-	return (
-		<div className='flex h-full flex-col overflow-hidden'>
-			{/* Tab nav */}
-			<div className='flex border-b border-border bg-bg-secondary'>
-				<button
-					type='button'
-					onClick={() => setActiveTab('terminal')}
-					className={`px-4 py-2 text-sm ${activeTab === 'terminal' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary'}`}
-				>
-					Terminal
-				</button>
-				<button
-					type='button'
-					onClick={() => setActiveTab('graph')}
-					className={`px-4 py-2 text-sm ${activeTab === 'graph' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary'}`}
-				>
-					Vault Graph
-				</button>
-			</div>
-			<div className='flex-1 overflow-hidden'>
-				{activeTab === 'terminal' ? (
-					hasItems ? (
-						<div className='flex h-full items-center justify-center p-8 text-center text-text-secondary'>
-							<div className='flex flex-col gap-2'>
-								<p>Open a Chat from the sidebar to attach a terminal.</p>
-								<p className='text-xs'>
-									Phase 175 — terminals now live in the dock window manager.
-								</p>
-							</div>
-						</div>
-					) : (
-						<LivWelcomeTerminal userId={userId ?? ''} loading={itemList.isLoading} />
-					)
-				) : (
-					<VaultGraph />
-				)}
+	// Phase 185-03 — sidebar open state: collapsed on mobile, visible on desktop.
+	const [sidebarOpen, setSidebarOpen] = useState(!isMobile)
+	const [addModalOpen, setAddModalOpen] = useState(false)
+
+	// Right-pane terminal tab content — routes based on selectedItem type (185-02).
+	const terminalContent = selectedItem ? (
+		(selectedItem as {type: string}).type === 'chat' ? (
+			<ChatDetail item={selectedItem as Parameters<typeof ChatDetail>[0]['item']} />
+		) : (selectedItem as {type: string}).type === 'project' ? (
+			<ProjectDetail item={selectedItem as Parameters<typeof ProjectDetail>[0]['item']} />
+		) : (selectedItem as {type: string}).type === 'agent' ? (
+			<AgentDetail item={selectedItem as Parameters<typeof AgentDetail>[0]['item']} />
+		) : null
+	) : hasItems ? (
+		<div className='flex h-full items-center justify-center p-8 text-center text-text-secondary'>
+			<div className='flex flex-col gap-2'>
+				<p>Open a Chat from the sidebar to attach a terminal.</p>
+				<p className='text-xs'>
+					Phase 175 — terminals now live in the dock window manager.
+				</p>
 			</div>
 		</div>
+	) : (
+		<LivWelcomeTerminal userId={userId ?? ''} loading={itemList.isLoading} />
+	)
+
+	return (
+		<>
+			<div className='flex h-full overflow-hidden'>
+				{/* Left pane — SidebarTree (Phase 185-01). Width fixed at 280px. */}
+				{sidebarOpen && (
+					<div
+						data-testid='ai-chat-sidebar'
+						className='flex w-[280px] shrink-0 flex-col border-r border-border'
+					>
+						{/* "+ Add" header row (Phase 185-03) */}
+						<div className='flex items-center justify-between border-b border-border px-3 py-2'>
+							<span className='text-xs font-medium text-text-secondary'>Workspace</span>
+							<button
+								type='button'
+								data-testid='add-item-btn'
+								aria-label='Add item'
+								onClick={() => setAddModalOpen(true)}
+								className='rounded p-1 text-text-secondary hover:bg-surface-2'
+							>
+								<Plus size={16} />
+							</button>
+						</div>
+						<SidebarTree onSelect={handleItemSelect} />
+					</div>
+				)}
+				{/* Right pane — tab nav + content (Phase 185-01). */}
+				<div
+					data-testid='ai-chat-right-pane'
+					className='flex flex-1 flex-col overflow-hidden'
+				>
+					{/* Tab nav */}
+					<div className='flex border-b border-border bg-bg-secondary'>
+						{/* Hamburger toggle — mobile only (Phase 185-03) */}
+						{isMobile && (
+							<button
+								type='button'
+								data-testid='sidebar-toggle-btn'
+								aria-label='Toggle sidebar'
+								onClick={() => setSidebarOpen((prev) => !prev)}
+								className='px-3 py-2 text-text-secondary'
+							>
+								<Menu size={18} />
+							</button>
+						)}
+						<button
+							type='button'
+							onClick={() => setActiveTab('terminal')}
+							className={`px-4 py-2 text-sm ${activeTab === 'terminal' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary'}`}
+						>
+							Terminal
+						</button>
+						<button
+							type='button'
+							onClick={() => setActiveTab('graph')}
+							className={`px-4 py-2 text-sm ${activeTab === 'graph' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary'}`}
+						>
+							Vault Graph
+						</button>
+					</div>
+					<div className='flex-1 overflow-hidden'>
+						{activeTab === 'terminal' ? terminalContent : <VaultGraph />}
+					</div>
+				</div>
+			</div>
+			{/* AddItemModal — Radix Dialog portals to document.body (Phase 185-03) */}
+			<AddItemModal open={addModalOpen} onClose={() => setAddModalOpen(false)} />
+		</>
 	)
 }
