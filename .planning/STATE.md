@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-20T17:52:17.813Z"
+last_updated: "2026-05-20T18:26:07.788Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md
 
 **Last shipped phase:** **Phase 180** Vault Graph Local Mode + Animation — CODE-COMPLETE 2026-05-20 (92 total tests, 6 commits `306d9ae0..351a8069`, sacred SHA 25/25; bfsSubgraph + DepthChip + scheduleAnimation + LegendBadge). Previously: **Phase 177** Schedule Engine + Inbox System — CODE-COMPLETE 2026-05-20 (Wave 6 complete; 4 plans, 9 commits `b14dac8c..950347d7`, 68 new tests; AgentScheduleRegistry (node-cron per-agent tasks) + AgentRunner (Redis PX NX lock + PTY spawn + inbox write) + InboxReader (filesystem walker, no DB) + vault.inbox tRPC router (4 adminProcedure procedures) + ItemTreeRow inbox badge + AgentDetail live tRPC data + GlobalInboxWindow; all 25 sacred SHAs preserved; 6 deviations auto-fixed (skipped counter bug, esbuild JSDoc parse, IR-08 test pattern, ioredis 5 arg order, tRPC data shape, InboxEntry re-export). See `.planning/phases/177-schedule-inbox/177-SUMMARY.md`. Previously: Phase 176 Main Liv Root Agent + 4 LivOS-Native Skills.
 
-**Next action:** `/gsd-execute-phase 184` — v38.0 Mini PC Deploy + UAT + Milestone Close (Wave 7 FINAL). Or parallel: `/gsd-execute-phase 178` (Vault Graph MVP Polish) + `/gsd-execute-phase 181` (Mobile CC PTY) + `/gsd-execute-phase 182` (Settings Restructure). Phase 177 complete; Wave 6 complete; Wave 7 is the critical-path ship gate.
+**Next action:** `/gsd-execute-phase 184` — v38.0 Mini PC Deploy + UAT + Milestone Close (Wave 7 FINAL). Or parallel: `/gsd-execute-phase 178` (Vault Graph MVP Polish) + `/gsd-execute-phase 181` (Mobile CC PTY). Phase 177 + 182 complete; Wave 6 complete; Wave 7 is the critical-path ship gate.
 
 **v35.0 phase queue (FINAL):**
 
@@ -46,7 +46,7 @@ Wave 1 — Independent foundations (4 parallel, file-disjoint):
 - [ ] Phase 171 — Item Model + Storage Layer — 5 plans (no deps)
 - [x] Phase 172 — `@livos/cli` Package Skeleton — 5 plans — ✅ CODE-COMPLETE 2026-05-20 (46 vitest + 4 smoke PASS; sacred SHA preserved)
 - [ ] Phase 178 — Vault Graph MVP Polish — 4 plans (no deps)
-- [ ] Phase 182 — Settings Restructure — 5 plans (no deps)
+- [x] Phase 182 — Settings Restructure — 5 plans — ✅ CODE-COMPLETE 2026-05-20 (62 new tests, 5 commits `81d655f3..d9bd3a47`, sacred SHA preserved 25/25; ChatBackend deleted, LIVINITY_subagents removed, Autonomous→Scheduled rename, PERSONAL/WORKSPACE/AI/SYSTEM sidebar groups, ccPty tRPC router 7-key, AiChatSettingsPage, McpServerList/Detail components, mcp-servers.tsx)
 
 Wave 2 — Chain extensions (2 parallel):
 
