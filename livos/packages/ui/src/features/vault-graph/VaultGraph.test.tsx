@@ -339,4 +339,69 @@ describe('VaultGraph', () => {
 		expect(wrapper?.className).toContain('text-[color:var(--accent-red)]')
 		expect(wrapper?.className).not.toContain('text-red-500')
 	})
+
+	// ── Phase 179-05: GraphControls + GraphSearchBar wiring assertions ──────
+
+	it('renders data-testid="controls-chip" (GraphControls is mounted)', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, tags: [], topDir: 'root'}],
+				edges: [],
+				truncated: false,
+				totalFiles: 1,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(container.querySelector('[data-testid="controls-chip"]')).not.toBeNull()
+	})
+
+	it('renders data-testid="graph-search-bar" (GraphSearchBar is mounted)', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, tags: [], topDir: 'root'}],
+				edges: [],
+				truncated: false,
+				totalFiles: 1,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(container.querySelector('[data-testid="graph-search-bar"]')).not.toBeNull()
+	})
+
+	it('filteredNodes only includes nodes whose type is in filters.enabledTypes', async () => {
+		// Pre-set localStorage so only 'memory' type is enabled
+		window.localStorage.setItem(
+			'liv:vault-graph:settings:filters',
+			JSON.stringify({
+				enabledTypes: ['memory'],
+				showOrphans: true,
+				showRecent: false,
+				showGhosts: true,
+				excludedPaths: '',
+			}),
+		)
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [
+					{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, tags: [], topDir: 'root'},
+					{id: 'b.md', label: 'b', type: 'agent', size: 10, mtime: 0, tags: [], topDir: 'root'},
+					{id: 'c.md', label: 'c', type: 'session', size: 10, mtime: 0, tags: [], topDir: 'root'},
+				],
+				edges: [],
+				truncated: false,
+				totalFiles: 3,
+			}),
+		})
+		render()
+		await flushPromises()
+		// ForceGraph2D mock captures lastGraphData — only memory nodes should be present
+		expect(lastGraphData).not.toBeNull()
+		expect(lastGraphData.nodes).toHaveLength(1)
+		expect(lastGraphData.nodes[0].id).toBe('a.md')
+	})
 })
