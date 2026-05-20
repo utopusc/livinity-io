@@ -41,6 +41,32 @@ vi.mock('@/features/vault-graph', () => ({
 	},
 }))
 
+// Phase 168-03 — SessionSidebar mock. The mock exposes the onSelect callback
+// via a button click so tests can simulate sidebar-driven session selection
+// without dragging in the real trpcReact provider tree.
+type SidebarProps = {
+	activeSessionId: string | null
+	onSelect: (id: string | null) => void
+}
+const sessionSidebarMock = vi.fn((_props: SidebarProps) => null)
+// Captured onSelect prop from the latest render (tests use this to simulate
+// the sidebar firing onSelect with a target sessionId).
+let lastSidebarOnSelect: ((id: string | null) => void) | null = null
+vi.mock('@/features/cc-sessions', () => ({
+	SessionSidebar: (props: SidebarProps) => {
+		sessionSidebarMock(props)
+		lastSidebarOnSelect = props.onSelect
+		return (
+			<div
+				data-testid='mock-session-sidebar'
+				data-active-session={props.activeSessionId ?? ''}
+			>
+				mock-sidebar
+			</div>
+		)
+	},
+}))
+
 // ── Test setup ────────────────────────────────────────────────────────────
 
 let container: HTMLDivElement
@@ -51,6 +77,8 @@ beforeEach(() => {
 	useIsMobileMock.mockReturnValue(false)
 	ccTerminalMock.mockReset()
 	vaultGraphMock.mockReset()
+	sessionSidebarMock.mockReset()
+	lastSidebarOnSelect = null
 	container = document.createElement('div')
 	document.body.appendChild(container)
 	root = createRoot(container)
@@ -79,21 +107,24 @@ describe('AiChatRoute — desktop branch', () => {
 		expect(container.textContent).toBeTruthy()
 	})
 
-	it('renders the grid container with 260px sidebar template', () => {
+	it('renders the grid container with 280px sidebar template (Phase 168-03 widened from 260px)', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
 		const grid = container.querySelector('div.grid')
 		expect(grid).not.toBeNull()
 		const style = (grid as HTMLElement).getAttribute('style') ?? ''
-		expect(style).toMatch(/grid-template-columns:\s*260px/i)
+		expect(style).toMatch(/grid-template-columns:\s*280px/i)
 	})
 
-	it('renders the Phase 168 sidebar placeholder text', () => {
+	it('renders the Phase 168-03 SessionSidebar mock (not the legacy placeholder)', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
-		expect(container.textContent).toMatch(/Session sidebar — Phase 168/)
+		expect(sessionSidebarMock).toHaveBeenCalled()
+		expect(container.querySelector('[data-testid="mock-session-sidebar"]')).not.toBeNull()
+		// Legacy placeholder string must NOT be present anywhere.
+		expect(container.textContent).not.toMatch(/Session sidebar — Phase 168/)
 	})
 
 	it('with no activeSessionId renders the "Select or create a session to start" empty state', () => {
@@ -103,6 +134,63 @@ describe('AiChatRoute — desktop branch', () => {
 		expect(container.textContent).toMatch(/Select or create a session to start/)
 		// CcTerminal should NOT have been rendered
 		expect(ccTerminalMock).not.toHaveBeenCalled()
+	})
+
+	// ── Phase 168-03 wiring assertions (A1-A4) ─────────────────────────────
+
+	it('A1: <SessionSidebar> mock is mounted on desktop', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		expect(sessionSidebarMock).toHaveBeenCalled()
+		const sidebar = container.querySelector('[data-testid="mock-session-sidebar"]')
+		expect(sidebar).not.toBeNull()
+	})
+
+	it('A2: SessionSidebar onSelect("uuid-1") mounts CcTerminal with sessionId="uuid-1"', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		expect(lastSidebarOnSelect).toBeTypeOf('function')
+		act(() => {
+			lastSidebarOnSelect!('uuid-1')
+		})
+		// CcTerminal mock is invoked with the new sessionId.
+		const lastCcCall = ccTerminalMock.mock.calls.at(-1)
+		expect(lastCcCall).toBeDefined()
+		expect(lastCcCall![0]).toMatchObject({sessionId: 'uuid-1'})
+		// DOM reflects it.
+		const term = container.querySelector('[data-testid="cc-terminal"]')
+		expect(term).not.toBeNull()
+		expect(term!.getAttribute('data-session')).toBe('uuid-1')
+	})
+
+	it('A3: switching sessions remounts CcTerminal (key change triggers a fresh mount call)', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// Mount uuid-1
+		act(() => lastSidebarOnSelect!('uuid-1'))
+		const callsAfterFirst = ccTerminalMock.mock.calls.length
+		// Switch to uuid-2
+		act(() => lastSidebarOnSelect!('uuid-2'))
+		// A new call must have been registered (key={activeSessionId} remount semantics).
+		expect(ccTerminalMock.mock.calls.length).toBeGreaterThan(callsAfterFirst)
+		const lastCall = ccTerminalMock.mock.calls.at(-1)!
+		expect(lastCall[0]).toMatchObject({sessionId: 'uuid-2'})
+		// DOM reflects the new id (only one mount visible — fresh attach per Phase 167 dispose contract).
+		const terms = container.querySelectorAll('[data-testid="cc-terminal"]')
+		expect(terms.length).toBe(1)
+		expect(terms[0].getAttribute('data-session')).toBe('uuid-2')
+	})
+
+	it('A4: with activeSessionId=null, EmptyState renders and CcTerminal is NOT in the DOM', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// Default render — no selection.
+		expect(container.textContent).toMatch(/Select or create a session to start/)
+		expect(container.querySelector('[data-testid="cc-terminal"]')).toBeNull()
 	})
 })
 
@@ -249,5 +337,20 @@ describe('routes/ai-chat/index.tsx — source-text invariants', () => {
 	it('preserves the Phase 167 CcTerminal mount with sessionId key (sacred guard)', () => {
 		// CcTerminal must still be mounted with key={activeSessionId} (Phase 167-04).
 		expect(SRC).toMatch(/CcTerminal\s+key=\{activeSessionId\}/)
+	})
+
+	// Phase 168-03 — sacred-invariants for the sidebar wire-up.
+	it('imports SessionSidebar from @/features/cc-sessions (Phase 168-03)', () => {
+		expect(SRC).toMatch(/from\s+['"]@\/features\/cc-sessions['"]/)
+		expect(SRC).toMatch(/SessionSidebar/)
+	})
+
+	it('renders <SessionSidebar with onSelect={setActiveSessionId} (Phase 168-03 wire)', () => {
+		expect(SRC).toMatch(/<SessionSidebar/)
+		expect(SRC).toMatch(/onSelect=\{setActiveSessionId\}/)
+	})
+
+	it('removes the legacy "Session sidebar — Phase 168" placeholder string', () => {
+		expect(SRC).not.toMatch(/Session sidebar — Phase 168/)
 	})
 })
