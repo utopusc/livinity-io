@@ -2315,7 +2315,14 @@ Plans:
 **Goal:** Remove `ChatBackendPanel` + route. Drop top-menu Agents tile (sidebar absorbs). Rename "Autonomous Agents" → "Scheduled Agents". Settings sidebar regrouped into PERSONAL / WORKSPACE / AI / SYSTEM. NEW `<AiChatSettingsPanel>` (7 fields incl. dangerously-skip toggle, default cwd, idle hours, max sessions, allowed paths, force terminal on phone, default model). NEW `<McpServersPanel>` lifted from chat sidebar.
 
 **Wave:** 4 (parallel with 181)
-**Estimated:** 5 plans
+**Plans:** 5 plans
+
+Plans:
+- [ ] 182-01-PLAN.md — Delete ChatBackend + drop LIVINITY_subagents + rename Autonomous→Scheduled + absorb model picker into ai-config
+- [ ] 182-02-PLAN.md — Sidebar grouping (PERSONAL/WORKSPACE/AI/SYSTEM) + footer cluster
+- [ ] 182-03-PLAN.md — NEW AiChatSettingsPanel (7 fields, ccPty tRPC router, confirm dialog)
+- [ ] 182-04-PLAN.md — Lift mcp-panel into McpServerList + McpServerDetail + NEW settings/mcp-servers page
+- [ ] 182-05-PLAN.md — Settings router cleanup + deep-link audit + full suite green
 
 ---
 
