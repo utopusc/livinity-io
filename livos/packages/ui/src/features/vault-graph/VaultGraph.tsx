@@ -70,14 +70,14 @@ export function VaultGraph() {
 
 	if (graphQ.isLoading) {
 		return (
-			<div className='flex h-full items-center justify-center'>
-				Loading vault graph...
+			<div className='flex h-full items-center justify-center text-[color:var(--fg-mute)]'>
+				Loading vault graph…
 			</div>
 		)
 	}
 	if (graphQ.error || !graphQ.data) {
 		return (
-			<div className='flex h-full items-center justify-center text-red-500'>
+			<div className='flex h-full items-center justify-center text-[color:var(--accent-red)]'>
 				Failed to load graph
 			</div>
 		)
@@ -86,14 +86,25 @@ export function VaultGraph() {
 	return (
 		<div className='relative h-full w-full'>
 			{graphQ.data.truncated && (
-				<div className='absolute left-2 top-2 z-10 rounded bg-amber-500/20 px-3 py-1 text-sm'>
-					Vault exceeds 2000 files. Showing first 2000.
+				<div
+					data-testid='truncated-banner'
+					className='absolute left-2 top-2 z-10 flex items-center gap-2 rounded border border-[color:var(--line-strong)] bg-[color:var(--bg-2)] px-3 py-1 text-sm text-[color:var(--fg-dim)]'
+				>
+					<span>Vault exceeds 2000 files. Showing first 2000.</span>
+					<a
+						href='#settings/vault-graph'
+						data-testid='settings-link'
+						className='underline text-[color:var(--fg)]'
+					>
+						Adjust limit in Settings
+					</a>
 				</div>
 			)}
 			<button
 				type='button'
+				data-testid='refresh-btn'
 				onClick={() => graphQ.refetch()}
-				className='absolute right-2 top-2 z-10 rounded bg-bg-secondary px-3 py-1 text-sm'
+				className='absolute right-2 top-2 z-10 rounded border border-[color:var(--line-strong)] bg-[color:var(--bg-2)] px-3 py-1 text-sm text-[color:var(--fg)]'
 			>
 				Refresh
 			</button>
