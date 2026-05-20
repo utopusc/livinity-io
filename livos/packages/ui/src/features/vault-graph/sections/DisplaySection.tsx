@@ -34,9 +34,10 @@ interface Props {
 	initialState?: Partial<DisplayState>
 	userId?: string
 	onDisplayChange?: (d: DisplayState) => void
+	onAnimateRequest?: () => void
 }
 
-export function DisplaySection({initialState, userId, onDisplayChange}: Props) {
+export function DisplaySection({initialState, userId, onDisplayChange, onAnimateRequest}: Props) {
 	const [state, setState] = useState<DisplayState>({
 		...defaultDisplay,
 		...initialState,
@@ -165,6 +166,18 @@ export function DisplaySection({initialState, userId, onDisplayChange}: Props) {
 					<option value='light'>Light</option>
 				</select>
 			</div>
+
+			{/* Phase 180-02: Animate appearance button */}
+			{onAnimateRequest && (
+				<button
+					type='button'
+					data-testid='animate-btn'
+					onClick={onAnimateRequest}
+					className='mt-1 w-full rounded border border-[color:var(--line-strong)] bg-[color:var(--bg-2)] px-2 py-1 text-sm text-[color:var(--fg)] hover:bg-[color:var(--bg-3)] transition-colors'
+				>
+					Animate appearance
+				</button>
+			)}
 		</div>
 	)
 }
