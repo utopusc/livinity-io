@@ -65,11 +65,14 @@ if [[ "$#" -gt 0 ]]; then
 fi
 
 log() { echo "[migrate-v35-to-v38] $*"; }
+
+# maybe_run — argv-form runner (no eval, safe for paths with spaces).
+# Usage: maybe_run mv "$OLD" "$NEW"
 maybe_run() {
     if [[ "$DRY_RUN" == "1" ]]; then
         log "DRY_RUN: $*"
     else
-        eval "$@"
+        "$@"
     fi
 }
 
@@ -80,7 +83,8 @@ run_systemctl() {
         return 0
     fi
     if command -v systemctl >/dev/null 2>&1; then
-        maybe_run "systemctl $1 $2 || true"
+        # `|| true` — never let a missing/stopped unit abort the migration
+        maybe_run systemctl "$1" "$2" || true
     else
         log "no systemctl on PATH — skipping systemctl $1 $2"
     fi
@@ -127,9 +131,9 @@ if [[ "$OLD_IS_DIR" == "1" && "$NEW_MISSING" == "1" ]]; then
 
     run_systemctl stop livos.service
 
-    maybe_run "mkdir -p \"$(dirname \"$NEW_PATH\")\""
-    maybe_run "mv \"$OLD_PATH\" \"$NEW_PATH\""
-    maybe_run "ln -s \"$NEW_PATH\" \"$OLD_PATH\""
+    maybe_run mkdir -p "$(dirname "$NEW_PATH")"
+    maybe_run mv "$OLD_PATH" "$NEW_PATH"
+    maybe_run ln -s "$NEW_PATH" "$OLD_PATH"
 
     run_systemctl restart livos.service
 
