@@ -38,17 +38,15 @@ import {drainInstallPendingRedisKeys} from './modules/drain-install-pending-redi
 // is UNCHANGED (Phase 165-01 quality gate).
 import {scaffoldVault, smokeAuthCheck, IdleSessionReaper} from './modules/claude-runner/index.js'
 import {createSessionActivityProvider} from './modules/server/ws-agent.js'
-// Phase 166-01/04 — Claude Code PTY backend type surface. Wire-up + boot
-// ordering land in Plan 166-05 (after vault scaffolder + smokeAuthCheck +
-// autonomous scheduler + IdleSessionReaper); the type-only imports here
-// let 166-02..04 declare optional class fields on Livinityd without forcing
-// a value-import (which would also force boot wire-up before 166-05).
-import type {
-	CcPtySession as _CcPtySession,
-	CcPtyManager as _CcPtyManager,
-	SessionStore as _CcPtySessionStore,
-} from './modules/cc-pty/index.js'
-type _CcPtyTypeProbe = _CcPtySession  // tsc-only — never instantiated
+// Phase 166 — Claude Code PTY backend (tmux + node-pty + WebSocket).
+// Boot wire-up site: AFTER scaffoldVault + smokeAuthCheck +
+// AutonomousScheduler.start + IdleSessionReaper.start; BEFORE
+// drainInstallPendingRedisKeys. tmux sessions OUTLIVE livinityd by design
+// (D-V35-A) — stop() detaches in-process pty handles but does NOT kill
+// the tmux sessions themselves. Phase 165-01 claude-runner/idle-reaper.ts
+// is BYTE-IDENTICAL — the new cc-pty/idle-reaper.ts is a SEPARATE file
+// mirroring the pattern, not modifying the original.
+import {CcPtyManager, SessionStore, CcPtyIdleReaper} from './modules/cc-pty/index.js'
 // Phase 164-02 — Autonomous scheduler. Boot-time read of vault/livos-agents/*.md
 // + cron registration of every enabled agent. Gated by Redis flag
 // liv:config:autonomous_enabled (default false = no-op). Non-fatal on every
@@ -318,17 +316,16 @@ export default class Livinityd {
 	// liv-core agent-session.ts is UNCHANGED.
 	idleReaper?: IdleSessionReaper
 	// Phase 166-04 / 166-05 — CC PTY backend (tmux + node-pty + WebSocket).
-	// Field declarations land in 166-04 so server/index.ts can typecheck the
-	// `/ws/cc-pty` mount block; the real `new CcPtyManager(...)` instantiation
-	// + boot wire-up land in 166-05 (between IdleSessionReaper.start() and
-	// drainInstallPendingRedisKeys). tmux sessions OUTLIVE livinityd by design
-	// (D-V35-A) — stop() detaches in-process pty handles but does NOT kill
-	// the tmux sessions themselves. Both fields stay undefined when
-	// CcPtyManager.start() throws (tmux missing pre-Phase 170, Redis offline,
-	// etc.); /ws/cc-pty short-circuits with a "cc-pty backend not ready" error
-	// frame in that case.
-	ccPtySessionStore?: _CcPtySessionStore
-	ccPtyManager?: _CcPtyManager
+	// Instantiated in start() between IdleSessionReaper.start() and
+	// drainInstallPendingRedisKeys. tmux sessions OUTLIVE livinityd by design
+	// (D-V35-A) — ccPtyManager.stop() detaches in-process pty handles but
+	// does NOT kill the tmux sessions themselves. All three fields stay
+	// undefined when the wire-up block throws (tmux missing pre-Phase 170,
+	// Redis offline, etc.); /ws/cc-pty short-circuits with a "cc-pty backend
+	// not ready" error frame in that case.
+	ccPtySessionStore?: SessionStore
+	ccPtyManager?: CcPtyManager
+	ccPtyIdleReaper?: CcPtyIdleReaper
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -609,6 +606,52 @@ export default class Livinityd {
 		} catch (err) {
 			this.logger.error(
 				'[claude-runner/reaper] unexpected throw at start (non-fatal)',
+				err as Error,
+			)
+		}
+
+		// Phase 166-05 — CC PTY backend wire-up. Owns tmux/node-pty bridge for
+		// /ws/cc-pty (mounted in Plan 166-04). Boot order site: AFTER
+		// IdleSessionReaper.start() so the cc-pty reaper telemetry lands after
+		// the native CC reaper, BEFORE drainInstallPendingRedisKeys so the
+		// boot ordering stays stable. tmux sessions OUTLIVE livinityd (D-V35-A)
+		// — manager.stop() only detaches in-process pty handles. Non-fatal
+		// try/catch: livinityd MUST boot even if tmux is missing (Phase 170
+		// deploys tmux to Mini PC; pre-deploy boots log a warn and skip cc-pty
+		// until next restart). Idle threshold + cap read from Redis with
+		// sensible defaults (24h / 10 per D-V35-D / D-V35-H).
+		try {
+			const ccPtyVaultPath = '/home/bruce/livinity-vault'
+			const idleHoursRaw = await this.ai.redis.get('liv:config:cc_pty_idle_h')
+			const maxSessionsRaw = await this.ai.redis.get('liv:config:cc_pty_max_sessions')
+			const idleHours = idleHoursRaw ? Number(idleHoursRaw) : 24
+			const maxSessions = maxSessionsRaw ? Number(maxSessionsRaw) : 10
+			this.ccPtySessionStore = new SessionStore({vaultPath: ccPtyVaultPath})
+			this.ccPtyManager = new CcPtyManager({
+				vaultPath: ccPtyVaultPath,
+				redis: this.ai.redis,
+				logger: {
+					log: (msg) => this.logger.log(msg),
+					warn: (msg) => this.logger.log(msg),
+					error: (msg, err) => this.logger.error(msg, err),
+				},
+				idleHours: Number.isFinite(idleHours) && idleHours > 0 ? idleHours : 24,
+				maxSessions: Number.isFinite(maxSessions) && maxSessions > 0 ? maxSessions : 10,
+				store: this.ccPtySessionStore,
+			})
+			await this.ccPtyManager.start()
+			this.ccPtyIdleReaper = new CcPtyIdleReaper({
+				manager: this.ccPtyManager,
+				logger: {
+					log: (msg) => this.logger.log(msg),
+					warn: (msg) => this.logger.log(msg),
+					error: (msg, err) => this.logger.error(msg, err),
+				},
+			})
+			await this.ccPtyIdleReaper.start()
+		} catch (err) {
+			this.logger.error(
+				'[cc-pty] boot wire-up failed (non-fatal — /ws/cc-pty will report not-ready until next restart)',
 				err as Error,
 			)
 		}
@@ -1127,6 +1170,23 @@ export default class Livinityd {
 				this.idleReaper?.stop()
 			} catch (err) {
 				this.logger.error('[claude-runner/reaper] stop', err)
+			}
+
+			// Phase 166-05 — CC PTY backend shutdown. Stop the cc-pty reaper
+			// (clears setInterval) THEN detach in-process pty handles via
+			// manager.stop(). tmux sessions OUTLIVE livinityd by design
+			// (D-V35-A) — we do NOT kill the tmux sessions; the next
+			// livinityd boot reattaches via attachSession's resurrect-or-attach
+			// path. No-op when boot wire-up never armed.
+			try {
+				this.ccPtyIdleReaper?.stop()
+			} catch (err) {
+				this.logger.error('[cc-pty/reaper] stop', err)
+			}
+			try {
+				await this.ccPtyManager?.stop()
+			} catch (err) {
+				this.logger.error('[cc-pty/manager] stop', err)
 			}
 
 			// Phase 104 plan 104-10 — stop the heartbeat sender BEFORE the rest

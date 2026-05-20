@@ -2,7 +2,7 @@
 plan: 166-04-ws-handler
 phase: 166
 status: complete
-commit: <PENDING-FILLED-POST-COMMIT>
+commit: 6e9e2bc6
 files_modified:
   - livos/packages/livinityd/source/modules/cc-pty/ws-handler.ts (NEW)
   - livos/packages/livinityd/source/modules/cc-pty/ws-handler.test.ts (NEW)
