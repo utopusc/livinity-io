@@ -2237,8 +2237,14 @@ Plans:
 **Goal:** Extend Phase 164 autonomous-scheduler with per-Agent cron registry (`node-cron`). Inbox writer (`items/<uuid>/inbox/<runId>.md`). Inbox UI component (sidebar badge + detail view inbox list). Cross-Item global inbox via filesystem walker.
 
 **Depends on:** Phase 171, 176
-**Wave:** 3
-**Estimated:** 4 plans
+**Wave:** 4 (sequential — each plan depends on prior)
+**Plans:** 4 plans
+
+Plans:
+- [ ] 177-01-PLAN.md — node-cron AgentScheduleRegistry + boot sweep + additive autonomous-scheduler export
+- [ ] 177-02-PLAN.md — AgentRunner (Redis lock + CC PTY spawn + per-agent inbox write) + run_agent tool unwire
+- [ ] 177-03-PLAN.md — InboxReader filesystem walker + vault.inbox tRPC router (listByAgent/listGlobal/markRead/get)
+- [ ] 177-04-PLAN.md — Inbox badge on ItemTreeRow + AgentDetail live tRPC wire + GlobalInboxWindow
 
 ---
 
