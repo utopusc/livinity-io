@@ -2179,7 +2179,7 @@ Plans:
 
 ---
 
-### Phase 174: SidebarTree Component — 🟡 PLANS-READY 2026-05-20
+### Phase 174: SidebarTree Component — 🟢 CODE-COMPLETE 2026-05-20 (5/5 plans, ~18 commits f956813d..08abfc9c, 58 tests PASS UI+server, react-arborist@3.7.0, sacred SHA hook PASS every commit)
 
 **Goal:** NEW `<SidebarTree>` using react-arborist. Per-type row styling (Project/Agent/Chat icon + color from D-V38-O palette). Drag-to-reparent with cycle check. Context menu (rename/duplicate/archive/delete/export). Bottom-left Settings gear button.
 
@@ -2196,7 +2196,7 @@ Plans:
 
 ---
 
-### Phase 175: Add Modal + Item Detail Views — 🔴 PLANNED 2026-05-20
+### Phase 175: Add Modal + Item Detail Views — 🟢 CODE-COMPLETE 2026-05-20 (5/5 plans, 10 commits d257fbc0..9577370f, 50 vitest assertions PASS, Phase 168 cc-sessions + cc-pty-router DELETED, sacred SHA hook PASS 10/10)
 
 **Goal:** NEW `<AddItemModal>` — type selection + per-type form. NEW `<ProjectDetail>`, `<AgentDetail>` views. `<ChatDetail>` = direct CC PTY attach (no detail page). Replace Phase 168 `SessionSidebar` + `NewSessionButton`.
 
@@ -2217,8 +2217,15 @@ Plans:
 Empty-state UI (terminal centered, Liv greeting). Liv's tmux session auto-spawned on first user boot.
 
 **Depends on:** Phase 171, 175
-**Wave:** 2
-**Estimated:** 5 plans
+**Wave:** 5
+**Plans:** 5 plans
+
+Plans:
+- [ ] 176-01-PLAN.md — liv-rootagent.md template + LivScaffolder (ensureLivRootAgent)
+- [ ] 176-02-PLAN.md — 6 Liv MCP tools (create_item/list_items/move_item/archive_item/open_item/run_agent)
+- [ ] 176-03-PLAN.md — 4 LivOS-native subagent templates + ensureLivSkills scaffolder
+- [ ] 176-04-PLAN.md — LivWelcomeTerminal empty-state UI + ai-chat route empty-state branch
+- [ ] 176-05-PLAN.md — SidebarTree openItem subscription + vault-items-router openItem procedure
 
 ---
 
