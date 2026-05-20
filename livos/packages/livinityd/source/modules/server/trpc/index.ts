@@ -128,6 +128,11 @@ import chatConfigRouter from './chat-config-router.js'
 // / delete / getPreview). All 5 paths added to httpOnlyPaths in common.ts.
 // Manager + store shipped Phase 166; this router exposes them to the UI.
 import ccPtyRouter from './cc-pty-router.js'
+// Phase 171-04 — Vault Items namespace (v38 D-V38-A/B/C/E). 7 procedures
+// wrap Phase 171-02 ItemStore + Phase 171-03 tree-resolver. All adminProcedure-
+// gated; all 7 paths added to httpOnlyPaths in common.ts. ctx.livinityd.itemStore
+// is populated by plan 171-05's boot wire-up.
+import vaultItemsRouter from './vault-items-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -211,6 +216,13 @@ export function createAppRouter(opts: {
 		chatConfig: chatConfigRouter,
 		// Phase 168-01 — CC PTY session lifecycle namespace (v35.0 D-V35-A/C/H).
 		ccPty: ccPtyRouter,
+		// Phase 171-04 — Vault Items lifecycle namespace (v38 D-V38-A/B/C/E).
+		// List/get/create/update/move/archive/delete adminProcedures over the
+		// vault-items file-backed store + tree-resolver. The double-nesting
+		// (`vault: router({items: ...})`) keeps room for future `vault.*`
+		// namespaces (vault.settings, vault.skills, vault.commands) per the
+		// master plan D-V38-T folder layout — items is the first inhabitant.
+		vault: router({items: vaultItemsRouter}),
 	})
 }
 
