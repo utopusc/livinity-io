@@ -2455,15 +2455,16 @@ Plans:
 
 ### Phase 187: Vault Graph UI Polish (Obsidian-inspired) — 🔴 PLANNED 2026-05-20
 
-**Goal:** Improve Vault Graph UX by studying 3 Obsidian community repos and applying the most impactful 3-5 UX patterns. Operator references:
-- `https://github.com/breferrari/obsidian-mind` — mind-mapping graph patterns
-- `https://github.com/eugeniughelbur/obsidian-second-brain` — second-brain organization
-- `https://github.com/kepano/obsidian-skills` — skill/tag clustering
+**Goal:** Improve Vault Graph UX by adopting 5 Obsidian-inspired patterns: degree-proportional node sizing, orphan ring highlighting, detail-pane navigation, semantic edge thickness, and topology stats.
 
-Research phase (WebFetch the 3 repos) → extract patterns → produce CONTEXT.md → plan → execute. Apply additively over Phase 178-180 outputs (no breaking changes to existing graph code).
+**Depends on:** Phase 178 + 179 + 180; 187-02 + 187-05 depend on 187-01
+**Wave:** 3 (after 185 + 186)
+**Plans:** 5 plans
 
-**Depends on:** Phase 178 + 179 + 180 (graph foundation)
-**Wave:** 3 (after 185 + 186; needs research)
-**Plans:** 4-6 plans (1 research + 3-5 implementation)
-**Estimated:** ~2-3 days
+Plans:
+- [ ] 187-01-PLAN.md â Degree Sizing: builder.ts degree+wikiDegree + nodeVal callback
+- [ ] 187-02-PLAN.md â Orphan Flagging: getOrphanRingColor + nodeCanvasObject red ring
+- [ ] 187-03-PLAN.md â Detail Navigation: clickable backlinks/outgoing + handleNavigateTo
+- [ ] 187-04-PLAN.md â Edge Thickness: linkWidth/linkColor callbacks + edge.weight
+- [ ] 187-05-PLAN.md â Topology Stats: computeGraphStats + LegendBadge stats footer
 
