@@ -2436,17 +2436,18 @@ Plans:
 ---
 
 
-### Phase 186: Restore MCP Panel in AI Chat Area — 🔴 PLANNED 2026-05-20
+### Phase 186: Restore MCP Panel in AI Chat Window — PLANNED 2026-05-20
 
-**Goal:** Move MCP servers back from Settings (Phase 182-04) into the AI Chat area where the operator wants it. Options:
-- (a) Restore `routes/ai-chat/mcp-panel.tsx` mount (still 1316 lines on disk, orphaned)
-- (b) Mount the new presentational `McpServerList`/`McpServerDetail` (Phase 182-04 lifted versions) inside an AI Chat tab/sidebar slot
-Then either remove the Settings duplicate or leave a deep-link. Decision driver: AI Chat is where MCP servers extend the active conversation — co-locating them is the natural mental model.
+**Goal:** Mount McpServerList + McpServerDetail as a third tab ('MCP Servers') in the AI Chat window right pane. Extract FeaturedMcpInstaller shared component. Delete orphan mcp-panel.tsx.
 
-**Depends on:** Phase 182-04
-**Wave:** 2 (parallel with 185 — file-disjoint)
-**Plans:** 2-3 plans
-**Estimated:** ~0.5 day
+**Depends on:** Phase 182-04, Phase 185-01
+**Wave:** 2 (after 185-01 lands)
+**Plans:** 3 plans
+
+Plans:
+- [ ] 186-01-PLAN.md — Add 'mcp' tab to AI Chat + mount McpServerList/Detail (6 assertions)
+- [ ] 186-02-PLAN.md — FeaturedMcpInstaller shared component + mount in AI Chat + Settings (6 assertions)
+- [ ] 186-03-PLAN.md — Delete orphan mcp-panel.tsx + grep audit
 
 ---
 
