@@ -536,4 +536,7 @@ export const httpOnlyPaths = [
 	'vault.items.move',
 	'vault.items.archive',
 	'vault.items.delete',
+	// Phase 176-02 / 177 — Liv agent scheduler (future tRPC namespace; pre-registered
+	// so Phase 177 mutations don't require a common.ts re-edit).
+	'liv.runAgent',
 ] as const
