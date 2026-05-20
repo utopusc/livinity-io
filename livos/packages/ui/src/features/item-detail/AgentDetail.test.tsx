@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 //
 // Phase 175-04 — AgentDetail behaviour tests (12 assertions B-04-1..B-04-12).
+// Phase 177-04 — Inbox tRPC wiring tests (T-UI-05..T-UI-08).
 //
 // Pattern mirrors ProjectDetail.test.tsx (175-03) / AddItemModal.test.tsx
 // (175-01/02): createRoot + act mount, no @testing-library. Streamdown is
@@ -14,6 +15,50 @@ import {act} from 'react'
 import {createRoot, type Root} from 'react-dom/client'
 
 ;(globalThis as {IS_REACT_ACT_ENVIRONMENT?: boolean}).IS_REACT_ACT_ENVIRONMENT = true
+
+// ── Phase 177-04: tRPC mock for vault.inbox.* ─────────────────────────────
+// Hoisted so vi.mock factory can capture it before any imports.
+const trpcInboxMock = vi.hoisted(() => {
+	const markReadMutate = vi.fn()
+	const listByAgentRefetch = vi.fn()
+	return {
+		markReadMutate,
+		listByAgentRefetch,
+		listByAgentData: [] as Array<{
+			id: string
+			agentId: string
+			runId: string
+			runAt: string
+			triggeredBy: 'cron' | 'manual'
+			durationMs: number
+			status: 'success' | 'failed'
+			read: boolean
+			filePath: string
+		}>,
+	}
+})
+
+vi.mock('@/trpc/trpc', () => ({
+	trpcReact: {
+		vault: {
+			inbox: {
+				listByAgent: {
+					useQuery: vi.fn(() => ({
+						data: trpcInboxMock.listByAgentData,
+						isLoading: false,
+						refetch: trpcInboxMock.listByAgentRefetch,
+					})),
+				},
+				markRead: {
+					useMutation: vi.fn(() => ({
+						mutate: trpcInboxMock.markReadMutate,
+						isPending: false,
+					})),
+				},
+			},
+		},
+	},
+}))
 
 vi.mock('streamdown', () => ({
 	Streamdown: (props: {children?: string; content?: string}) => (
@@ -219,53 +264,20 @@ describe('AgentDetail — Phase 175-04', () => {
 		expect(onRunNow).toHaveBeenCalledTimes(1)
 	})
 
-	it('B-04-10: inbox preview renders 3 entries + click invokes onInboxEntryClick', () => {
-		const onInboxEntryClick = vi.fn()
+	it('B-04-10: inbox preview shows empty-state when no tRPC data', () => {
+		// tRPC mock returns [] by default (listByAgentData=[])
 		act(() => {
-			root.render(
-				<AgentDetail
-					item={{id: 'a1', name: 'A'}}
-					inbox={[
-						{id: 'i1', subject: 'a', receivedAt: 1},
-						{id: 'i2', subject: 'b', receivedAt: 2},
-						{id: 'i3', subject: 'c', receivedAt: 3},
-					]}
-					onInboxEntryClick={onInboxEntryClick}
-				/>,
-			)
-		})
-		expect(container.querySelector('[data-testid="inbox-row-i1"]')).not.toBeNull()
-		expect(container.querySelector('[data-testid="inbox-row-i2"]')).not.toBeNull()
-		expect(container.querySelector('[data-testid="inbox-row-i3"]')).not.toBeNull()
-		const row2 = container.querySelector('[data-testid="inbox-row-i2"]') as HTMLElement
-		act(() => {
-			row2.click()
-		})
-		expect(onInboxEntryClick).toHaveBeenCalledTimes(1)
-		expect(onInboxEntryClick).toHaveBeenCalledWith('i2')
-	})
-
-	it('B-04-11: inbox slice cap — 5 passed → only 3 render; empty → empty-state', () => {
-		act(() => {
-			root.render(
-				<AgentDetail
-					item={{id: 'a1', name: 'A'}}
-					inbox={[
-						{id: 'i1', subject: 'a', receivedAt: 1},
-						{id: 'i2', subject: 'b', receivedAt: 2},
-						{id: 'i3', subject: 'c', receivedAt: 3},
-						{id: 'i4', subject: 'd', receivedAt: 4},
-						{id: 'i5', subject: 'e', receivedAt: 5},
-					]}
-				/>,
-			)
-		})
-		expect(container.querySelectorAll('[data-testid^="inbox-row-"]').length).toBe(3)
-
-		act(() => {
-			root.render(<AgentDetail item={{id: 'a1', name: 'A'}} inbox={[]} />)
+			root.render(<AgentDetail item={{id: 'a1', name: 'A'}} />)
 		})
 		expect(container.querySelector('[data-testid="inbox-empty"]')).not.toBeNull()
+	})
+
+	it('B-04-11: inbox empty-state visible when tRPC returns empty array', () => {
+		act(() => {
+			root.render(<AgentDetail item={{id: 'a1', name: 'A'}} />)
+		})
+		expect(container.querySelector('[data-testid="inbox-empty"]')).not.toBeNull()
+		expect(container.querySelectorAll('[data-testid^="inbox-row-"]').length).toBe(0)
 	})
 
 	it('B-04-12: last-run link + source-text invariants', () => {
@@ -301,5 +313,96 @@ describe('AgentDetail — Phase 175-04', () => {
 		expect(src).toMatch(/Bot/)
 		expect(src).toMatch(/from 'streamdown'/)
 		expect(src).toMatch(/onPromptChange/)
+	})
+})
+
+// ── Phase 177-04: inbox tRPC wire tests (T-UI-05..T-UI-08) ───────────────────
+
+function makeInboxEntry(overrides?: Partial<{
+	id: string
+	agentId: string
+	runId: string
+	runAt: string
+	triggeredBy: 'cron' | 'manual'
+	durationMs: number
+	status: 'success' | 'failed'
+	read: boolean
+	filePath: string
+}>) {
+	return {
+		id: 'agent-1/run-abc',
+		agentId: 'agent-1',
+		runId: 'run-abc',
+		runAt: '2024-01-03T10:00:00.000Z',
+		triggeredBy: 'cron' as const,
+		durationMs: 5000,
+		status: 'success' as const,
+		read: false,
+		filePath: '/root/liv/items/agent-1/inbox/run-abc.md',
+		...overrides,
+	}
+}
+
+describe('AgentDetail — Phase 177-04 inbox tRPC wiring', () => {
+	beforeEach(() => {
+		// Reset mock data before each test
+		trpcInboxMock.listByAgentData.length = 0
+		vi.clearAllMocks()
+	})
+
+	it('T-UI-05: when listByAgent.useQuery returns 2 entries, renders 2 inbox-row- elements', () => {
+		trpcInboxMock.listByAgentData.push(
+			makeInboxEntry({id: 'agent-1/run-1', runId: 'run-1'}),
+			makeInboxEntry({id: 'agent-1/run-2', runId: 'run-2'}),
+		)
+		act(() => {
+			root.render(<AgentDetail item={{id: 'agent-1', name: 'A'}} />)
+		})
+		expect(container.querySelector('[data-testid="inbox-preview"]')).not.toBeNull()
+		expect(container.querySelectorAll('[data-testid^="inbox-row-"]').length).toBe(2)
+	})
+
+	it('T-UI-06: when listByAgent returns [], renders [data-testid="inbox-empty"]', () => {
+		// listByAgentData is already [] (cleared in beforeEach)
+		act(() => {
+			root.render(<AgentDetail item={{id: 'agent-1', name: 'A'}} />)
+		})
+		expect(container.querySelector('[data-testid="inbox-empty"]')).not.toBeNull()
+	})
+
+	it('T-UI-07: clicking an inbox-row calls markRead.mutate with the entry filePath', () => {
+		trpcInboxMock.listByAgentData.push(
+			makeInboxEntry({id: 'agent-1/run-abc', runId: 'run-abc'}),
+		)
+		act(() => {
+			root.render(<AgentDetail item={{id: 'agent-1', name: 'A'}} />)
+		})
+		const row = container.querySelector('[data-testid="inbox-row-agent-1/run-abc"]') as HTMLElement
+		expect(row).not.toBeNull()
+		act(() => {
+			row.click()
+		})
+		expect(trpcInboxMock.markReadMutate).toHaveBeenCalledWith(
+			{filePath: '/root/liv/items/agent-1/inbox/run-abc.md'},
+			expect.any(Object),
+		)
+	})
+
+	it('T-UI-08: clicking Run Now calls onRunNow AND refetches inbox', () => {
+		const onRunNow = vi.fn()
+		act(() => {
+			root.render(
+				<AgentDetail
+					item={{id: 'agent-1', name: 'A'}}
+					onRunNow={onRunNow}
+				/>,
+			)
+		})
+		const btn = container.querySelector('[data-testid="run-now-btn"]') as HTMLElement
+		act(() => {
+			btn.click()
+		})
+		expect(onRunNow).toHaveBeenCalledTimes(1)
+		expect(trpcInboxMock.listByAgentRefetch).toHaveBeenCalledTimes(1)
 	})
 })
