@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v34.0
-milestone_name: Bootstrap Polish + First-Run UX
-status: unknown
-last_updated: "2026-05-19T22:50:00.000Z"
+milestone: v35.0
+milestone_name: Claude Code PTY Embed + Vault Memory Graph
+status: code-complete-and-live-verified
+last_updated: "2026-05-19T23:00:00.000Z"
 progress:
-  total_phases: 75
-  completed_phases: 31
-  total_plans: 268
-  completed_plans: 224
-  percent: 84
+  total_phases: 80
+  completed_phases: 36
+  total_plans: 291
+  completed_plans: 247
+  percent: 85
 ---
 
 # Project State
@@ -25,19 +25,19 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-**Active milestone:** v35.0 — Claude Code PTY Embed + Vault Memory Graph (OPENED 2026-05-19; master plan `.planning/v35-CC-PTY-MASTER.md`; 5 phases / 23 plans / 3 waves; pre-flight verified; D-NEW-DEPS-v35 authorizes react-force-graph-2d + tmux apt; all other sacred guards locked).
+**Active milestone:** v35.0 — Claude Code PTY Embed + Vault Memory Graph — **CODE-COMPLETE-AND-LIVE-VERIFIED 2026-05-19** (5 phases / 23 plans / 26 commits / 285+ vitest assertions GREEN; live Mini PC probes 10/11 PASS; pending only operator 8-step browser walk; v35-VERIFICATION.md at `.planning/phases/170-v35-deploy-uat/v35-VERIFICATION.md`).
 
-**Last shipped phase:** Phase 168 — Session Sidebar + Lifecycle UI (CODE-COMPLETE 2026-05-19; 4 plans / 4 commits `36b5c662..ba945a12`; 93 vitest assertions GREEN; sacred SHA `f3538e1d` preserved; cross-tab Redis pub/sub indicator wired; real round-trip + two-tab UAT deferred to Phase 170).
+**Last shipped phase:** Phase 170 — Mini PC Deploy + UAT + Milestone Close (CODE-COMPLETE 2026-05-19; 5 plans; tmux 3.4 apt-installed on Mini PC; `update.sh` 1:1 deploy green to `.deployed-sha=45d52116`; all 4 services active; live probes confirmed `ccPty.create` → tmux spawn → 5s persistence without WS → `ccPty.delete` → tmux cleanup; `/api/vault/graph` returns 15 nodes / 8 edges; `/api/vault/file` path-traversal blocked; all 7 sacred guard SHAs preserved byte-identical pre/post deploy).
 
-**Next action:** Phase 170 (Mini PC Deploy + UAT + Milestone Close) — apt-install tmux on Mini PC + bash /opt/livos/update.sh + UAT walks (CC PTY two-tab attach indicator; Vault Graph node hover; session create/rename/delete; WS-survive-restart). Phases 166 / 167 / 169 must also be CODE-COMPLETE before 170 dispatch (assumed by Wave 2 dependency).
+**Next action:** Operator runs the 8-step browser walk per `v35-VERIFICATION.md § Operator UAT § Browser Walk` to flip status from `passed-pending-OperatorUAT` → `passed-and-live-verified`. Then open v35.1 (live fs.watch graph, system state nodes) or v36 (multi-tenant CC PTY + WebApp/NativeApp pivot).
 
-**v35.0 phase queue:**
+**v35.0 phase queue (FINAL):**
 
-- [ ] Phase 166 — CC PTY Backend (tmux + node-pty + WebSocket) — 5 plans, Wave 1
-- [ ] Phase 167 — xterm.js Frontend (CcTerminal component) — 4 plans, Wave 1
-- [x] Phase 168 — Session Sidebar + Lifecycle UI — 4 plans, Wave 2 ✓ SHIPPED 2026-05-19
-- [ ] Phase 169 — Vault Memory Graph View — 5 plans, Wave 1
-- [ ] Phase 170 — Mini PC Deploy + UAT + Milestone Close — 5 plans, Wave 3
+- [x] Phase 166 — CC PTY Backend (tmux + node-pty + WebSocket) — 5 plans / 6 commits / 71 vitest — ✅ SHIPPED `4dd30c83..64596174` + `64d56444`
+- [x] Phase 167 — xterm.js Frontend (CcTerminal component) — 4 plans / 5 commits / 45 vitest — ✅ SHIPPED `74b608ef..165339f4` + `0aff71ad`
+- [x] Phase 168 — Session Sidebar + Lifecycle UI — 4 plans / 5 commits / 93 vitest — ✅ SHIPPED `36b5c662..ba945a12` + `45d52116`
+- [x] Phase 169 — Vault Memory Graph View — 5 plans / 6 commits / 76 vitest — ✅ SHIPPED `d81b7ba6..8e766344` + `42534e1e`
+- [x] Phase 170 — Mini PC Deploy + UAT + v35-VERIFICATION — live probes + verification doc — ✅ SHIPPED (this commit)
 
 **Pre-flight (verified 2026-05-19 on Mini PC):**
 
