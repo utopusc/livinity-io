@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-20T13:45:39.076Z"
+last_updated: "2026-05-20T14:00:35.913Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md
 
 **Active milestone:** v38.0 — Liv Agent Platform — **OPENED 2026-05-20** (14 phases / 61 plans / 5 waves; master plan `.planning/v38-LIV-AGENT-PLATFORM-MASTER.md`; pivots flat session list → tree of Project/Agent/Chat Items + 4 LivOS-native default skills + `@livos/cli` npm package + Obsidian-class Vault Graph + mobile CC PTY + Settings restructure; 21 locked D-V38-A..U decisions; vault root renamed `livinity-vault` → `~/liv/` per operator vote 2026-05-20).
 
-**Last shipped phase:** **Phase 173-01** v35→v38 vault rename migration script — CODE-COMPLETE 2026-05-20 (1 of 4 plans in Phase 173; 21 bash-test assertions PASS / 0 FAIL; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across all 4 commits `e0cd2b0e..e08ca7f4`; deploy_livinityd() wires `_dld_run_vault_v35_to_v38_migration` between fix_permissions and write_liv_systemd_units so 173-04's `Environment=LIV_VAULT_ROOT=/root/liv` lands against renamed dir). See `.planning/phases/173-vault-rename-migration/173-01-SUMMARY.md`. Previously Phase 172 `@livos/cli` Package Skeleton (50 PASS) and Phase 171 Item Model + Storage Layer (66 vitest PASS) shipped in wave 1.
+**Last shipped phase:** **Phase 174-04** SidebarTree drag-drop with cycle/depth check — CODE-COMPLETE 2026-05-20 (Wave 3 progress; react-arborist `onMove` → `vault.items.move` tRPC wired; vault-items-router move() TRPCError additively extended with `cause: {kind, depth?}` mapped verbatim from `MoveValidation.reason`; sonner toast.error on cycle/depth-hard + `list.refetch()` revert, toast.warning on soft-cap commit; Main Liv synthetic root guarded; 4 TDD commits `f8c35827..8edf69be`; 18 server vault-items-router + 16 SidebarTree subset vitest PASS; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 4/4; 4 deviations auto-fixed (cause.kind literal = source-of-truth from tree-resolver, vitest hoisting TDZ, mock backward-compat stub, all-5-reasons UI defensive coverage). See `.planning/phases/174-sidebartree-component/174-04-SUMMARY.md`. Previously: Phase 173-01 vault rename migration script + Phase 172 `@livos/cli` + Phase 171 Item Model.
 
-**Next action:** `/gsd-execute-phase 178` or `/gsd-execute-phase 182` (wave-1 remainders, parallel-safe). Phase 173 wave continues — 173-02 (session migration writer), 173-03 (sacred SHA v38 freeze), 173-04 (systemd LIV_VAULT_ROOT env — heredoc edit already landed at deploy-livinityd.sh:1395-1396).
+**Next action:** `/gsd-execute-phase 178` or `/gsd-execute-phase 182` (wave-1 remainders, parallel-safe). Phase 174 wave continues — 174-05 SidebarFooter Settings gear (scaffold already landed at `livos/packages/ui/src/features/sidebar-tree/SidebarFooter.tsx` with 4 vitest PASS); Phase 173 wave continues — 173-02 (session migration writer), 173-03 (sacred SHA v38 freeze), 173-04 (systemd LIV_VAULT_ROOT env).
 
 **v35.0 phase queue (FINAL):**
 

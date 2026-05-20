@@ -2191,7 +2191,7 @@ Plans:
 - [ ] 174-01-PLAN.md — Install react-arborist@^3.x + scaffold features/sidebar-tree/ (3 skeleton files: SidebarTree, ItemTreeRow, barrel)
 - [ ] 174-02-PLAN.md — Implement SidebarTree body: vault.items.list tRPC query + react-arborist render + Main Liv pin + empty-state hint + 5s poll (10 vitest assertions + 8 pure-transformer tests)
 - [ ] 174-03-PLAN.md — Per-type styling on ItemTreeRow: D-V38-O token-driven colors + lucide icons (FolderKanban / Bot / MessageSquare) (8 vitest assertions, dark+light parity)
-- [ ] 174-04-PLAN.md — Drag-drop via react-arborist onMove + vault.items.move tRPC; additive cause field on TRPCError for typed UI toasts; cycle/depth-hard error + depth-soft warn handling (6 UI + 4 server vitest assertions)
+- [x] 174-04-PLAN.md — Drag-drop via react-arborist onMove + vault.items.move tRPC; additive cause field on TRPCError for typed UI toasts; cycle/depth-hard error + depth-soft warn handling — ✅ SHIPPED 2026-05-20 (`f8c35827..8edf69be`, 18 server + 16 UI vitest PASS, sacred SHA preserved 4/4)
 - [ ] 174-05-PLAN.md — ItemContextMenu (Radix; agent-only Run Now/View Inbox/Stop Tmux) + SidebarFooter (lucide Settings gear button, stub handler for Phase 183) + barrel updates (4 + 4 vitest assertions)
 
 ---
