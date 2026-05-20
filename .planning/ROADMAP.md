@@ -2163,7 +2163,7 @@ Plans:
 
 ---
 
-### Phase 173: Vault Rename + Phase 168 Migration + Sacred Freeze — 🟡 PLANNED 2026-05-20
+### Phase 173: Vault Rename + Phase 168 Migration + Sacred Freeze — 🟢 IN-PROGRESS 2026-05-20 (1/4 plans shipped)
 
 **Goal:** Atomic `mv /root/livinity-vault/ /root/liv/` on Mini PC at deploy time. Compatibility symlink. NEW `vault-root-resolver.ts` shim (Phase 162-01 scaffolder STAYS byte-identical). Migrate `livos-cc-sessions.json` → ChatItems under Main Liv. Update Sacred SHA hook to lock vault-items + cli modules.
 
@@ -2172,7 +2172,7 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 173-01-PLAN.md — Deploy-time vault rename script (idempotent mv + symlink + service restart) + deploy_livinityd wire-up
+- [x] 173-01-PLAN.md — Deploy-time vault rename script (idempotent mv + symlink + service restart) + deploy_livinityd wire-up — ✅ SHIPPED (21 bash-test PASS / 0 FAIL; 4 commits `e0cd2b0e..e08ca7f4`; sacred SHA preserved)
 - [ ] 173-02-PLAN.md — Session migration writer (livos-cc-sessions.json → ChatItems under Main Liv) + backup + 8 vitest assertions
 - [ ] 173-03-PLAN.md — Sacred SHA hook v38 freeze (JSON registry of 25 sacred files, check-sacred.sh rewrite, CI test)
 - [ ] 173-04-PLAN.md — livinityd systemd unit env update (Environment=LIV_VAULT_ROOT=/root/liv) + CI test

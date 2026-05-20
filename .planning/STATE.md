@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-20T12:55:35.751Z"
+last_updated: "2026-05-20T12:56:23.500Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md
 
 **Active milestone:** v38.0 — Liv Agent Platform — **OPENED 2026-05-20** (14 phases / 61 plans / 5 waves; master plan `.planning/v38-LIV-AGENT-PLATFORM-MASTER.md`; pivots flat session list → tree of Project/Agent/Chat Items + 4 LivOS-native default skills + `@livos/cli` npm package + Obsidian-class Vault Graph + mobile CC PTY + Settings restructure; 21 locked D-V38-A..U decisions; vault root renamed `livinity-vault` → `~/liv/` per operator vote 2026-05-20).
 
-**Last shipped phase:** **Phase 172** `@livos/cli` Package Skeleton — CODE-COMPLETE 2026-05-20 (5 plans / wave 1 / 50 automated checks PASS: 46 vitest + 4 postinstall smoke; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across all 172-* commits; `liv init <path>` + `liv doctor` E2E green via real `dist/cli.js` spawn). See `.planning/phases/172-livos-cli-skeleton/172-VERIFICATION.md`. Wave 1 status now: 171 CODE-COMPLETE (66 vitest PASS, shipped earlier), 172 CODE-COMPLETE (just landed), 178 + 182 still PLANNED.
+**Last shipped phase:** **Phase 173-01** v35→v38 vault rename migration script — CODE-COMPLETE 2026-05-20 (1 of 4 plans in Phase 173; 21 bash-test assertions PASS / 0 FAIL; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across all 4 commits `e0cd2b0e..e08ca7f4`; deploy_livinityd() wires `_dld_run_vault_v35_to_v38_migration` between fix_permissions and write_liv_systemd_units so 173-04's `Environment=LIV_VAULT_ROOT=/root/liv` lands against renamed dir). See `.planning/phases/173-vault-rename-migration/173-01-SUMMARY.md`. Previously Phase 172 `@livos/cli` Package Skeleton (50 PASS) and Phase 171 Item Model + Storage Layer (66 vitest PASS) shipped in wave 1.
 
-**Next action:** `/gsd-execute-phase 178` or `/gsd-execute-phase 182` (wave-1 remainders, parallel-safe with each other and with already-complete 171/172). Or `/gsd-execute-phase 173` to start wave 2 (vault rename + sacred freeze, depends 171 ✅).
+**Next action:** `/gsd-execute-phase 178` or `/gsd-execute-phase 182` (wave-1 remainders, parallel-safe). Phase 173 wave continues — 173-02 (session migration writer), 173-03 (sacred SHA v38 freeze), 173-04 (systemd LIV_VAULT_ROOT env — heredoc edit already landed at deploy-livinityd.sh:1395-1396).
 
 **v35.0 phase queue (FINAL):**
 
