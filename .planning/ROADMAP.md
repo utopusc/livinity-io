@@ -2394,3 +2394,58 @@ Plans:
 - LIV_VAULT_ROOT=/root/liv env var + mv /root/livinity-vault /root/liv (vault rename D-V38-A carry-over)
 - Remaining items from .planning/phases/184-v38-deploy-uat/v38-VERIFICATION.md § Deferred Items
 
+---
+
+# v38.1 — Liv Agent Platform UAT Hotfix — 🔴 OPENED 2026-05-20
+
+**Status:** OPEN — 3 UAT findings from v38.0 operator review need fix
+**Source:** Operator UAT 2026-05-20 — user identified 3 visible bugs after sleeping autonomous run
+**Phases:** 3 (Phase 185 → 187)
+**Closes:** v38.0 UAT loop
+
+### v38.0 UAT Findings (the bugs)
+1. **No sidebar visible** — Phase 174's `<SidebarTree>` was built but never wired into a global layout. The ai-chat route comment says "they live in the global dock window manager" but no global dock actually mounts them. User sees no tree, can't open Chats per Phase 175's prompt.
+2. **MCP panel moved to Settings against operator preference** — Phase 182-04 lifted `mcp-panel.tsx` from AI Chat into `routes/settings/mcp-servers.tsx`. User wants MCP back in AI Chat area (next to the chat content, not buried in Settings).
+3. **Vault Graph UI quality** — Phase 178-180 shipped functional graph but UX still feels rough. Operator referenced 3 Obsidian repos for pattern study: `breferrari/obsidian-mind`, `eugeniughelbur/obsidian-second-brain`, `kepano/obsidian-skills`.
+
+---
+
+### Phase 185: Mount SidebarTree in Global Dashboard Shell — 🔴 PLANNED 2026-05-20
+
+**Goal:** Wire `<SidebarTree>`, `<SidebarFooter>`, `<AddItemModal>` into the actual dashboard layout so users see the tree. The component is dead code without a mount. Pick the correct shell (the global desktop/dock, NOT the ai-chat route) per Phase 174 CONTEXT and per [feedback_livos_window_logic_no_url_routing.md] (window logic, not URL routing). Sidebar must be visible on every route, not just AI Chat.
+
+**Depends on:** Phase 174 (component exists), Phase 175 (AddItemModal), Phase 176 (open_item subscription wiring)
+**Wave:** 1
+**Plans:** 3-4 plans
+**Estimated:** ~1 day
+
+---
+
+### Phase 186: Restore MCP Panel in AI Chat Area — 🔴 PLANNED 2026-05-20
+
+**Goal:** Move MCP servers back from Settings (Phase 182-04) into the AI Chat area where the operator wants it. Options:
+- (a) Restore `routes/ai-chat/mcp-panel.tsx` mount (still 1316 lines on disk, orphaned)
+- (b) Mount the new presentational `McpServerList`/`McpServerDetail` (Phase 182-04 lifted versions) inside an AI Chat tab/sidebar slot
+Then either remove the Settings duplicate or leave a deep-link. Decision driver: AI Chat is where MCP servers extend the active conversation — co-locating them is the natural mental model.
+
+**Depends on:** Phase 182-04
+**Wave:** 2 (parallel with 185 — file-disjoint)
+**Plans:** 2-3 plans
+**Estimated:** ~0.5 day
+
+---
+
+### Phase 187: Vault Graph UI Polish (Obsidian-inspired) — 🔴 PLANNED 2026-05-20
+
+**Goal:** Improve Vault Graph UX by studying 3 Obsidian community repos and applying the most impactful 3-5 UX patterns. Operator references:
+- `https://github.com/breferrari/obsidian-mind` — mind-mapping graph patterns
+- `https://github.com/eugeniughelbur/obsidian-second-brain` — second-brain organization
+- `https://github.com/kepano/obsidian-skills` — skill/tag clustering
+
+Research phase (WebFetch the 3 repos) → extract patterns → produce CONTEXT.md → plan → execute. Apply additively over Phase 178-180 outputs (no breaking changes to existing graph code).
+
+**Depends on:** Phase 178 + 179 + 180 (graph foundation)
+**Wave:** 3 (after 185 + 186; needs research)
+**Plans:** 4-6 plans (1 research + 3-5 implementation)
+**Estimated:** ~2-3 days
+
