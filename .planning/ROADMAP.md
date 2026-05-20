@@ -2263,7 +2263,14 @@ Plans:
 
 **Depends on:** Phase 178
 **Wave:** 3
-**Estimated:** 5 plans
+**Plans:** 5 plans
+
+Plans:
+- [ ] 179-01-PLAN.md — backend extension: extractTags() + VaultFile.topDir + GraphNode.tags/topDir (8 assertions)
+- [ ] 179-02-PLAN.md — GraphControls scaffold + FiltersSection with localStorage persistence (10 assertions)
+- [ ] 179-03-PLAN.md — GroupsSection: 4 group modes + hashToOklch auto-color + 300ms transition (8 assertions)
+- [ ] 179-04-PLAN.md — DisplaySection (3 sliders + 2 toggles) + ForcesSection (4 sliders + Reset) (10 assertions)
+- [ ] 179-05-PLAN.md — useGraphSettings hook + VaultGraph orchestrator full wiring (6 assertions)
 
 ---
 
