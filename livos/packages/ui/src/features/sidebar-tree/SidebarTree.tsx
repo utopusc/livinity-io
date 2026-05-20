@@ -25,8 +25,10 @@ import {Tree, type NodeRendererProps, type TreeApi} from 'react-arborist'
 import {toast} from 'sonner'
 
 import {trpcReact} from '@/trpc/trpc'
+import {useWindowManagerOptional} from '@/providers/window-manager'
 
 import {ItemTreeRow} from './ItemTreeRow'
+import {SidebarFooter} from './SidebarFooter'
 import {buildArboristTree, MAIN_LIV_ID, type TreeNode} from './tree-shape'
 
 export interface SidebarTreeProps {
@@ -67,6 +69,27 @@ export function SidebarTree(_props: SidebarTreeProps) {
 		},
 	})
 
+	// Phase 183 — D-V38-N: gear icon opens Settings window via WindowManager.
+	// useWindowManagerOptional does NOT throw outside provider — returns null.
+	const windowManager = useWindowManagerOptional()
+
+	const handleOpenSettings = () => {
+		if (!windowManager) return
+		const existing = windowManager.windows.find(
+			(w) => w.appId === 'LIVINITY_settings',
+		)
+		if (existing) {
+			windowManager.focusWindow(existing.id)
+		} else {
+			windowManager.openWindow(
+				'LIVINITY_settings',
+				'/settings',
+				'Settings',
+				'/figma-exports/dock-settings-new.svg',
+			)
+		}
+	}
+
 	const moveMutation = trpcReact.vault.items.move.useMutation({
 		onSuccess: (data) => {
 			if (data?.warn) {
@@ -105,10 +128,13 @@ export function SidebarTree(_props: SidebarTreeProps) {
 	const items = list.data?.items ?? []
 	if (items.length === 0) {
 		return (
-			<div className='flex h-full flex-col items-center justify-center p-3'>
-				<p className='text-center text-sm text-text-secondary'>
-					talk to Liv in terminal ↓
-				</p>
+			<div className='flex h-full flex-col p-3'>
+				<div className='flex flex-1 items-center justify-center'>
+					<p className='text-center text-sm text-text-secondary'>
+						talk to Liv in terminal ↓
+					</p>
+				</div>
+				<SidebarFooter onOpenSettings={handleOpenSettings} />
 			</div>
 		)
 	}
@@ -137,6 +163,7 @@ export function SidebarTree(_props: SidebarTreeProps) {
 					{TreeNodeRow}
 				</Tree>
 			</div>
+			<SidebarFooter onOpenSettings={handleOpenSettings} />
 		</div>
 	)
 }
