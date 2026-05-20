@@ -2257,20 +2257,20 @@ Plans:
 
 ---
 
-### Phase 179: Vault Graph Controls Panel — 🔴 PLANNED 2026-05-20
+### Phase 179: Vault Graph Controls Panel — ✅ CODE-COMPLETE 2026-05-20
 
 **Goal:** Right-edge floating Controls panel — **Filters** (type, orphans, recent, ghosts) + **Groups** (by type/folder/tag/custom) + **Display** (label, size, thickness, arrows) + **Forces** (4 sliders + reset). Backend extends `/api/vault/graph` to emit per-node `tags[]` + `topDir`.
 
 **Depends on:** Phase 178
 **Wave:** 3
-**Plans:** 5 plans
+**Plans:** 5/5 complete | 43 new assertions | 125 total PASS
 
 Plans:
-- [ ] 179-01-PLAN.md — backend extension: extractTags() + VaultFile.topDir + GraphNode.tags/topDir (8 assertions)
-- [ ] 179-02-PLAN.md — GraphControls scaffold + FiltersSection with localStorage persistence (10 assertions)
-- [ ] 179-03-PLAN.md — GroupsSection: 4 group modes + hashToOklch auto-color + 300ms transition (8 assertions)
-- [ ] 179-04-PLAN.md — DisplaySection (3 sliders + 2 toggles) + ForcesSection (4 sliders + Reset) (10 assertions)
-- [ ] 179-05-PLAN.md — useGraphSettings hook + VaultGraph orchestrator full wiring (6 assertions)
+- [x] 179-01-PLAN.md — backend extension: extractTags() + VaultFile.topDir + GraphNode.tags/topDir (9 assertions)
+- [x] 179-02-PLAN.md — GraphControls scaffold + FiltersSection with localStorage persistence (10 assertions)
+- [x] 179-03-PLAN.md — GroupsSection: 4 group modes + hashToOklch auto-color + 300ms transition (8 assertions)
+- [x] 179-04-PLAN.md — DisplaySection (3 sliders + 2 toggles) + ForcesSection (4 sliders + Reset) (10 assertions)
+- [x] 179-05-PLAN.md — useGraphSettings hook + VaultGraph orchestrator full wiring (6 assertions)
 
 ---
 
