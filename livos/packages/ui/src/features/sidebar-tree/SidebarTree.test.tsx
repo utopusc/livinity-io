@@ -259,7 +259,7 @@ describe('SidebarTree — Phase 176-05 openItem subscription', () => {
 		expect(src).toMatch(/useSubscription/)
 	})
 
-	it('T-OPEN-2: when openItem fires with itemId, treeRef.current.scrollTo({id, align:"auto"}) is called', () => {
+	it('T-OPEN-2: when openItem fires with itemId, treeRef.current.scrollTo(itemId, "auto") is called', () => {
 		// Need items so Tree is rendered (treeRef gets attached).
 		listData = {items: [{id: VALID_ITEM_ID, type: 'project', name: 'x', parentId: null, pinned: false, createdAt: 0, updatedAt: 0, archivedAt: null, schemaVersion: 1, userId: 'admin'}]}
 		act(() => {
@@ -269,7 +269,9 @@ describe('SidebarTree — Phase 176-05 openItem subscription', () => {
 		act(() => {
 			openItemCallback?.({itemId: VALID_ITEM_ID})
 		})
-		expect(mockScrollTo).toHaveBeenCalledWith({id: VALID_ITEM_ID, align: 'auto'})
+		// react-arborist TreeApi.scrollTo(identity: Identity, align?: Align)
+		// takes the id as the first positional arg, not as {id, align} object.
+		expect(mockScrollTo).toHaveBeenCalledWith(VALID_ITEM_ID, 'auto')
 	})
 
 	it('T-OPEN-3: openItem with itemId=MAIN_LIV_ID is a no-op (guard: synthetic root not scrollable)', () => {

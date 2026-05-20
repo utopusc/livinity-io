@@ -63,23 +63,24 @@ export function SidebarTree(_props: SidebarTreeProps) {
 		onData: ({itemId}) => {
 			// Guard: the Main Liv synthetic root is not scrollable.
 			if (itemId === MAIN_LIV_ID) return
-			treeRef.current?.scrollTo?.({id: itemId, align: 'auto'})
+			treeRef.current?.scrollTo?.(itemId, 'auto')
 		},
 	})
 
 	const moveMutation = trpcReact.vault.items.move.useMutation({
-		onSuccess: (data: {item: unknown; warn: string | null}) => {
+		onSuccess: (data) => {
 			if (data?.warn) {
 				toast.warning(data.warn)
 			}
 			// Success path: do NOT refetch — react-arborist's optimistic
 			// local move is the truth and the 5s poll will reconcile.
 		},
-		onError: (err: {
-			data?: {cause?: {kind?: string; depth?: number}}
-			message?: string
-		}) => {
-			const kind = err?.data?.cause?.kind
+		onError: (err) => {
+			// err.data.cause is attached by the Phase 174-04 structured-cause extension.
+			// Access via type assertion — the generated tRPC error shape doesn't expose
+			// `cause` in its static type, but the server attaches it at runtime.
+			const cause = (err as {data?: {cause?: {kind?: string}}}).data?.cause
+			const kind = cause?.kind
 			let msg = 'Move failed'
 			if (kind === 'cycle') {
 				msg = 'Move failed: would create a cycle'
