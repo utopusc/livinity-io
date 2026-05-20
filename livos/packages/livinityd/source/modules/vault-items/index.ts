@@ -17,3 +17,5 @@
 
 export type {Item, BaseItem, ProjectItem, AgentItem, ChatItem, ItemType} from './types.js'
 export {resolveVaultRoot, newItemId} from './vault-root-resolver.js'
+export {ItemStore} from './item-store.js'
+export type {ItemStoreOptions, CreateInput, ListOptions} from './item-store.js'
