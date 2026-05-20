@@ -98,8 +98,19 @@ export function CcTerminal({sessionId}: {sessionId: string}) {
 			if (ev.type !== 'keydown') return true
 			const mod = isMac ? ev.metaKey : ev.ctrlKey
 			if (!mod) return true
-			// Paste: Ctrl+Shift+V (Linux/Win) OR Cmd+V (Mac)
-			if (ev.key === 'v' && (isMac ? !ev.shiftKey : ev.shiftKey)) {
+			// Phase 167.3 — case-insensitive ev.key. When Shift is held, browsers
+			// emit `ev.key='C'` / `ev.key='V'` (uppercase) on Linux+Windows, so
+			// the prior 'c'/'v' literal checks missed Ctrl+Shift+C entirely. The
+			// xterm.js convention is the de-facto:
+			//   • Ctrl+Shift+V  (Linux/Win)  /  Cmd+V  (Mac)  → paste
+			//   • Ctrl+Shift+C  (Linux/Win)  /  Cmd+C  (Mac)  → copy selection
+			//   • Ctrl+C with active selection                → copy (gnome-terminal
+			//                                                   convention)
+			//   • Ctrl+C without selection                    → SIGINT to claude
+			const key = ev.key.toLowerCase()
+
+			// Paste
+			if (key === 'v' && (isMac ? !ev.shiftKey : ev.shiftKey)) {
 				navigator.clipboard
 					.readText()
 					.then((text) => {
@@ -110,9 +121,9 @@ export function CcTerminal({sessionId}: {sessionId: string}) {
 					})
 				return false
 			}
-			// Copy: Ctrl+Shift+C (Linux/Win) OR Cmd+C (Mac) — only intercept
-			// when something is selected; otherwise let Ctrl+C through as SIGINT.
-			if (ev.key === 'c' && (isMac ? !ev.shiftKey : ev.shiftKey)) {
+
+			// Copy via Ctrl+Shift+C / Cmd+C
+			if (key === 'c' && (isMac ? !ev.shiftKey : ev.shiftKey)) {
 				const sel = term.getSelection()
 				if (sel) {
 					navigator.clipboard.writeText(sel).catch(() => {
@@ -120,7 +131,21 @@ export function CcTerminal({sessionId}: {sessionId: string}) {
 					})
 					return false
 				}
+				return false // swallow even if no selection so SIGINT is unambiguous
 			}
+
+			// Copy via plain Ctrl+C ONLY when there is an active selection
+			// (gnome-terminal pattern). Otherwise let Ctrl+C through so claude
+			// receives SIGINT.
+			if (!isMac && ev.ctrlKey && !ev.shiftKey && key === 'c') {
+				const sel = term.getSelection()
+				if (sel) {
+					navigator.clipboard.writeText(sel).catch(() => {})
+					term.clearSelection?.()
+					return false
+				}
+			}
+
 			return true
 		})
 
