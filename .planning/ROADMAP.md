@@ -2348,6 +2348,13 @@ Plans:
 
 **Depends on:** all prior phases (171-183)
 **Wave:** 5 (FINAL)
-**Estimated:** 5 plans
+**Plans:** 5 plans
 **Closes:** v38.0 Liv Agent Platform milestone
+
+Plans:
+- [ ] 184-01-PLAN.md — Pre-deploy guard sweep: Mini PC SSH + service health + 25 sacred SHA inventory (push already done at e1f44ce7)
+- [ ] 184-02-PLAN.md — Run update.sh on Mini PC (detached nohup + log-poll) + post-deploy SHA/service/migration verify
+- [ ] 184-03-PLAN.md — Live smoke probes P1-P13: vault CRUD, drag-drop, Add modals, Liv agent, scheduler, graph, mobile, settings, Phase 168 deletion, tmux status, skip-perms, regression
+- [ ] 184-04-PLAN.md — Write v38-VERIFICATION.md (>=350 lines, 20-criterion mapping, operator UAT 12+ steps)
+- [ ] 184-05-PLAN.md — STATE.md + ROADMAP.md milestone close markers + safety wind-down + final push
 
