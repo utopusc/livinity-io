@@ -248,6 +248,24 @@ export class CcPtyManager {
 	}
 
 	/**
+	 * Phase 168-01 — additive: rename a session's user-visible title.
+	 * Thin pass-through to SessionStore.update which is a no-op for unknown ids,
+	 * so this method is safe to call without a prior existence check.
+	 */
+	async renameSession(id: string, title: string): Promise<void> {
+		await this.store.update(id, {title})
+	}
+
+	/**
+	 * Phase 168-01 — additive: fetch a single session by id (or null if absent).
+	 * Thin pass-through to SessionStore.getById; used by the tRPC `getPreview`
+	 * procedure to resolve `ccSessionId` for the CC jsonl path lookup.
+	 */
+	async getSession(id: string): Promise<CcPtySession | null> {
+		return this.store.getById(id)
+	}
+
+	/**
 	 * Walk all known sessions; kill any whose last-touch (max of
 	 * lastAttachedAt, lastMessageAt, createdAt) is older than
 	 * idleHours * 3600 * 1000 ms.

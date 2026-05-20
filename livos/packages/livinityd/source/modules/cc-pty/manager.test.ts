@@ -308,6 +308,39 @@ describe('CcPtyManager', () => {
 		expect(survivors[0].id).toBe(sFresh.id)
 	})
 
+	// ── Phase 168-01 additive methods ────────────────────────────────────
+
+	it('Assertion 15 (Phase 168-01): renameSession updates the stored title', async () => {
+		const mgr = makeManager()
+		const s = await mgr.createSession({userId: 'admin', title: 'Old Title'})
+		await mgr.renameSession(s.id, 'My New Title')
+		const reloaded = await store.getById(s.id)
+		expect(reloaded?.title).toBe('My New Title')
+	})
+
+	it('Assertion 16 (Phase 168-01): renameSession on unknown id resolves without throwing (no-op)', async () => {
+		const mgr = makeManager()
+		await expect(
+			mgr.renameSession('00000000-0000-0000-0000-000000000000', 'x'),
+		).resolves.toBeUndefined()
+	})
+
+	it('Assertion 17 (Phase 168-01): getSession returns the same shape as stored row', async () => {
+		const mgr = makeManager()
+		const s = await mgr.createSession({userId: 'admin'})
+		const fetched = await mgr.getSession(s.id)
+		expect(fetched).not.toBeNull()
+		expect(fetched!.id).toBe(s.id)
+		expect(fetched!.userId).toBe('admin')
+		expect(fetched!.tmuxName).toBe(s.tmuxName)
+	})
+
+	it('Assertion 18 (Phase 168-01): getSession returns null for unknown id', async () => {
+		const mgr = makeManager()
+		const fetched = await mgr.getSession('00000000-0000-0000-0000-000000000000')
+		expect(fetched).toBeNull()
+	})
+
 	it('Assertion 14: tmuxName format invariant — across 100 random userIds the name matches regex AND ≤ 30 chars', async () => {
 		const mgr = makeManager({maxSessions: 10_000})
 		// Note: userId max 20 chars in this test → name ≤ 9+20+1+8 = 38, which can EXCEED 30.
