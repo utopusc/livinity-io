@@ -38,6 +38,12 @@ import {drainInstallPendingRedisKeys} from './modules/drain-install-pending-redi
 // is UNCHANGED (Phase 165-01 quality gate).
 import {scaffoldVault, smokeAuthCheck, IdleSessionReaper} from './modules/claude-runner/index.js'
 import {createSessionActivityProvider} from './modules/server/ws-agent.js'
+// Phase 166-01 — Claude Code PTY backend type surface. Wire-up + boot ordering
+// land in Plan 166-05 (after vault scaffolder + smokeAuthCheck + autonomous
+// scheduler + IdleSessionReaper); this is a type-only placeholder so 166-02..04
+// can import the canonical types without a separate frontmatter churn.
+import type {CcPtySession as _CcPtySession} from './modules/cc-pty/index.js'
+type _CcPtyTypeProbe = _CcPtySession  // tsc-only — never instantiated
 // Phase 164-02 — Autonomous scheduler. Boot-time read of vault/livos-agents/*.md
 // + cron registration of every enabled agent. Gated by Redis flag
 // liv:config:autonomous_enabled (default false = no-op). Non-fatal on every
