@@ -2,7 +2,7 @@
 plan: 166-05-boot-wireup-and-idle-reaper
 phase: 166
 status: complete
-commit: <PENDING-FILLED-POST-COMMIT>
+commit: 64596174
 files_modified:
   - livos/packages/livinityd/source/modules/cc-pty/idle-reaper.ts (NEW)
   - livos/packages/livinityd/source/modules/cc-pty/idle-reaper.test.ts (NEW)
