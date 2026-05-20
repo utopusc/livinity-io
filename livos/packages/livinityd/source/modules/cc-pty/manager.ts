@@ -1,0 +1,271 @@
+// Phase 166-03 — CcPtyManager.
+//
+// Owns Claude Code subprocess lifecycle: creates tmux sessions detached
+// with `claude` as the foreground command, attaches via node-pty wrapping
+// `tmux attach -t`, resurrects dead tmux on reattach using
+// `claude --resume <ccSessionId>`, enforces concurrent cap (D-V35-H,
+// default 10), and exposes runIdleReaper() callable from Plan 166-05.
+//
+// Threat model (highlights):
+//  - tmux session name injection via userId → mitigated by
+//    USER_ID_RE regex (rejects shell metachars) + shellEscape
+//    defense-in-depth + TMUX_NAME_RE sanity check on generated name.
+//  - shell injection via cwd / ccSessionId / title → mitigated by
+//    shellEscape on every value crossing execSync.
+//  - data plane uses node-pty ARRAY argv form (no shell), so tmuxName
+//    never enters a shell parser at the data plane.
+//
+// Sacred SHA f3538e1d... + D-09 + Phase 161-02 helper + Phase 162-01
+// vault-scaffolder + Phase 162-02 agent-session.ts + Phase 163 ws-agent.ts
+// + Phase 164 + Phase 165-01 all UNCHANGED.
+
+import * as pty from 'node-pty'
+import {execSync} from 'child_process'
+import {randomUUID} from 'crypto'
+import type {CcPtySession, CcPtyManagerOptions} from './types.js'
+import {SessionStore} from './session-store.js'
+
+// ─── Security constants ──────────────────────────────────────────────────
+
+const USER_ID_RE = /^[a-zA-Z0-9_-]+$/
+const TMUX_NAME_RE = /^livos-cc-[a-zA-Z0-9_-]+-[a-f0-9]{8}$/
+
+/**
+ * POSIX single-quote escape: any single-quote in `s` is replaced with `'\''`
+ * (close quote, escaped quote, reopen quote) and the whole string is wrapped
+ * in single quotes. Result is safe to interpolate into any POSIX shell.
+ */
+function shellEscape(s: string): string {
+	return `'${s.replace(/'/g, `'\\''`)}'`
+}
+
+function validateUserId(userId: string): void {
+	if (!USER_ID_RE.test(userId)) {
+		throw new Error(`CcPty: invalid userId '${userId}' (must match ${USER_ID_RE})`)
+	}
+}
+
+// ─── Manager ─────────────────────────────────────────────────────────────
+
+export class CcPtyManager {
+	private store: SessionStore
+	// Mirror mode (D-V35-E): multiple concurrent attaches per session each
+	// get their own node-pty handle. Map value is an array of handles.
+	private attachedTerminals = new Map<string, pty.IPty[]>()
+	private vaultPath: string
+	private logger: CcPtyManagerOptions['logger']
+	private idleHours: number
+	private maxSessions: number
+	private started = false
+
+	constructor(opts: CcPtyManagerOptions & {store?: SessionStore}) {
+		this.vaultPath = opts.vaultPath
+		this.logger = opts.logger
+		this.idleHours = opts.idleHours ?? 24
+		this.maxSessions = opts.maxSessions ?? 10
+		this.store = opts.store ?? new SessionStore({vaultPath: opts.vaultPath})
+	}
+
+	async start(): Promise<void> {
+		if (this.started) return
+		// Verify tmux binary exists; log + non-fatal warn if missing.
+		// Phase 170 apt-installs tmux on Mini PC; local dev typically lacks it.
+		try {
+			const v = execSync('tmux -V', {encoding: 'utf-8'}).trim()
+			this.logger.log(`[cc-pty] tmux available: ${v}`)
+		} catch {
+			this.logger.warn?.(
+				'[cc-pty] tmux binary NOT FOUND — createSession/attachSession will fail until Phase 170 apt-installs tmux',
+			)
+		}
+		this.started = true
+	}
+
+	async stop(): Promise<void> {
+		// Detach all in-process pty handles; tmux sessions OUTLIVE livinityd
+		// by design (D-V35-A) — stop() does NOT kill the tmux sessions.
+		for (const handles of this.attachedTerminals.values()) {
+			for (const h of handles) {
+				try {
+					h.kill()
+				} catch {
+					/* swallow */
+				}
+			}
+		}
+		this.attachedTerminals.clear()
+		this.started = false
+	}
+
+	async createSession(opts: {
+		userId: string
+		title?: string
+		cwd?: string
+		model?: string
+	}): Promise<CcPtySession> {
+		validateUserId(opts.userId)
+
+		// Cap enforcement BEFORE spawn
+		const existing = await this.store.getByUser(opts.userId)
+		if (existing.length >= this.maxSessions) {
+			throw new Error(
+				`CcPty: session cap reached (${this.maxSessions}) for user ${opts.userId}`,
+			)
+		}
+
+		const id = randomUUID()
+		const tmuxName = `livos-cc-${opts.userId}-${id.slice(0, 8)}`
+		if (!TMUX_NAME_RE.test(tmuxName)) {
+			throw new Error(`CcPty: generated tmuxName failed regex: ${tmuxName}`)
+		}
+
+		const cwd = opts.cwd ?? this.vaultPath
+		const cwdEsc = shellEscape(cwd)
+		const nameEsc = shellEscape(tmuxName)
+		// tmux command — name + cwd are shell-escaped; literal `HOME=/root claude`
+		// inside the new-window command string. HOME=/root is required because the
+		// Anthropic SDK subscription credentials live at /root/.claude/.credentials.json.
+		const tmuxCmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'HOME=/root claude'`
+		execSync(tmuxCmd, {env: {...process.env, HOME: '/root'}})
+
+		const session: CcPtySession = {
+			id,
+			userId: opts.userId,
+			tmuxName,
+			cwd,
+			model: opts.model,
+			createdAt: Date.now(),
+			lastAttachedAt: 0,
+			lastMessageAt: 0,
+			title: opts.title,
+		}
+		await this.store.add(session)
+		this.logger.log(
+			`[cc-pty] createSession userId=${opts.userId} id=${id} tmuxName=${tmuxName}`,
+		)
+		return session
+	}
+
+	async attachSession(
+		sessionId: string,
+		onStdout: (chunk: Buffer) => void,
+	): Promise<{
+		stdin: (data: string) => void
+		resize: (cols: number, rows: number) => void
+		detach: () => void
+	}> {
+		const session = await this.store.getById(sessionId)
+		if (!session) throw new Error(`CcPty: session ${sessionId} not found`)
+
+		const nameEsc = shellEscape(session.tmuxName)
+
+		// Verify tmux session still alive — has-session exits non-zero if dead.
+		let alive = false
+		try {
+			execSync(`tmux has-session -t ${nameEsc}`, {stdio: 'ignore'})
+			alive = true
+		} catch {
+			alive = false
+		}
+
+		if (!alive) {
+			// Resurrect: spawn new tmux + claude --resume <ccSessionId> if present
+			const cwdEsc = shellEscape(session.cwd)
+			const resumeArg = session.ccSessionId
+				? `--resume ${shellEscape(session.ccSessionId)}`
+				: ''
+			const cmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'HOME=/root claude ${resumeArg}'`
+			execSync(cmd, {env: {...process.env, HOME: '/root'}})
+			this.logger.log(`[cc-pty] resurrected tmux session ${session.tmuxName}`)
+		}
+
+		// Spawn node-pty wrapping `tmux attach -t <name>` — ARRAY argv form
+		// bypasses the shell entirely so tmuxName never enters a shell parser.
+		const ptyProc = pty.spawn('tmux', ['attach', '-t', session.tmuxName], {
+			name: 'xterm-256color',
+			cols: 120,
+			rows: 30,
+			cwd: session.cwd,
+			env: {...process.env, HOME: '/root', TERM: 'xterm-256color'} as {[k: string]: string},
+		})
+
+		ptyProc.onData((data) => {
+			this.store
+				.update(session.id, {lastMessageAt: Date.now()})
+				.catch(() => {})
+			onStdout(Buffer.from(data))
+		})
+
+		// Mirror mode: append to per-sessionId handle list
+		const list = this.attachedTerminals.get(sessionId) ?? []
+		list.push(ptyProc)
+		this.attachedTerminals.set(sessionId, list)
+		await this.store.update(sessionId, {lastAttachedAt: Date.now()})
+
+		return {
+			stdin: (data) => ptyProc.write(data),
+			resize: (cols, rows) => ptyProc.resize(cols, rows),
+			detach: () => {
+				try {
+					ptyProc.kill()
+				} catch {
+					/* swallow */
+				}
+				const cur = this.attachedTerminals.get(sessionId)
+				if (cur) {
+					const filtered = cur.filter((p) => p !== ptyProc)
+					if (filtered.length === 0) this.attachedTerminals.delete(sessionId)
+					else this.attachedTerminals.set(sessionId, filtered)
+				}
+			},
+		}
+	}
+
+	async killSession(id: string): Promise<void> {
+		const session = await this.store.getById(id)
+		if (!session) return
+		const nameEsc = shellEscape(session.tmuxName)
+		try {
+			execSync(`tmux kill-session -t ${nameEsc}`, {stdio: 'ignore'})
+		} catch {
+			/* tmux session already dead — fine */
+		}
+		const handles = this.attachedTerminals.get(id) ?? []
+		for (const h of handles) {
+			try {
+				h.kill()
+			} catch {
+				/* swallow */
+			}
+		}
+		this.attachedTerminals.delete(id)
+		await this.store.remove(id)
+		this.logger.log(`[cc-pty] killSession id=${id} tmuxName=${session.tmuxName}`)
+	}
+
+	async listSessions(userId: string): Promise<CcPtySession[]> {
+		return this.store.getByUser(userId)
+	}
+
+	/**
+	 * Walk all known sessions; kill any whose last-touch (max of
+	 * lastAttachedAt, lastMessageAt, createdAt) is older than
+	 * idleHours * 3600 * 1000 ms.
+	 *
+	 * `now` is injectable for tests (defaults to Date.now).
+	 */
+	async runIdleReaper(now: () => number = Date.now): Promise<{reaped: number}> {
+		const idleMs = this.idleHours * 3600 * 1000
+		const cutoff = now() - idleMs
+		const all = await this.store.load()
+		let reaped = 0
+		for (const s of all) {
+			const lastTouch = Math.max(s.lastAttachedAt, s.lastMessageAt, s.createdAt)
+			if (lastTouch < cutoff) {
+				await this.killSession(s.id)
+				reaped++
+			}
+		}
+		return {reaped}
+	}
+}
