@@ -2453,7 +2453,7 @@ Plans:
 
 ---
 
-### Phase 187: Vault Graph UI Polish (Obsidian-inspired) — 🔴 PLANNED 2026-05-20
+### Phase 187: Vault Graph UI Polish (Obsidian-inspired) — CODE-COMPLETE 2026-05-20
 
 **Goal:** Improve Vault Graph UX by adopting 5 Obsidian-inspired patterns: degree-proportional node sizing, orphan ring highlighting, detail-pane navigation, semantic edge thickness, and topology stats.
 
@@ -2462,9 +2462,22 @@ Plans:
 **Plans:** 5 plans
 
 Plans:
-- [ ] 187-01-PLAN.md â Degree Sizing: builder.ts degree+wikiDegree + nodeVal callback
-- [ ] 187-02-PLAN.md â Orphan Flagging: getOrphanRingColor + nodeCanvasObject red ring
-- [ ] 187-03-PLAN.md â Detail Navigation: clickable backlinks/outgoing + handleNavigateTo
-- [ ] 187-04-PLAN.md â Edge Thickness: linkWidth/linkColor callbacks + edge.weight
-- [ ] 187-05-PLAN.md â Topology Stats: computeGraphStats + LegendBadge stats footer
+- [x] 187-01-PLAN.md — Degree Sizing: builder.ts degree+wikiDegree + nodeVal callback
+- [x] 187-02-PLAN.md — Orphan Flagging: getOrphanRingColor + nodeCanvasObject red ring
+- [x] 187-03-PLAN.md — Detail Navigation: clickable backlinks/outgoing + handleNavigateTo
+- [x] 187-04-PLAN.md — Edge Thickness: linkWidth/linkColor callbacks + edge.weight
+- [x] 187-05-PLAN.md — Topology Stats: computeGraphStats + LegendBadge stats footer
+
+**Result:** 124 vault-graph vitest PASS (15 test files, +39 new assertions); 25/25 sacred SHAs; 10 commits `18b79754..e9bcc17c`; hubs bigger, orphans flagged, navigation works, edges semantic, stats shown.
+
+---
+
+## v38.1 — CODE-COMPLETE 2026-05-20
+
+All 3 v38.1 hotfix phases shipped:
+- Phase 185: SidebarTree mounted in AI Chat window (left pane) — CODE-COMPLETE
+- Phase 186: MCP Panel restored in AI Chat window — CODE-COMPLETE
+- Phase 187: Vault Graph UI Polish (Obsidian-inspired) — CODE-COMPLETE
+
+**v38.1 close marker:** 2026-05-20 — all 3 UAT findings addressed. Operator UAT browser walk queued per 187-VERIFICATION.md.
 

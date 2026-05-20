@@ -27,7 +27,15 @@ See: .planning/PROJECT.md
 
 **Active milestone:** v38.0 — Liv Agent Platform — **CLOSED 2026-05-20** (14 phases / 141 commits / 5 waves; CODE-COMPLETE-AND-LIVE-VERIFIED; Operator UAT browser walk queued per `.planning/phases/184-v38-deploy-uat/v38-VERIFICATION.md` § Operator UAT Browser Walk).
 
-**Last shipped phase:** **Phase 186** Restore MCP Panel in AI Chat Window — CODE-COMPLETE 2026-05-20 (60/60 vitest PASS across 3 suites; 25/25 sacred SHAs; MCP Servers tab + FeaturedMcpInstaller + mcp-panel.tsx deleted; 5 commits `ccfbe62f..dfcae745`).
+**Last shipped phase:** **Phase 187** Vault Graph UI Polish (Obsidian-inspired) — CODE-COMPLETE 2026-05-20 (124/124 vault-graph vitest PASS; 25/25 sacred SHAs; 10 commits `18b79754..e9bcc17c`; hubs bigger, orphans flagged, navigation works, edges semantic, stats shown). v38.1 CODE-COMPLETE — all 3 UAT hotfix phases (185/186/187) shipped.
+
+**Key decisions (Phase 187):**
+
+- Post-edge pass (O(E)) chosen for degree computation to keep builder loop clean and additive
+- Math.sqrt(Math.max(1, degree)) floor prevents invisible 0-degree nodes in graph
+- Canvas 2D requires concrete rgba() strings for directory edge opacity (CSS vars not supported by canvas)
+- Optional onNavigateTo prop on GraphNodeDetail so drawer is usable standalone without VaultGraph parent
+- as unknown as Array<...> double cast for computeGraphStats TypeScript overlap between GraphNode shapes
 
 **Key decisions (Phase 186):**
 
@@ -49,7 +57,7 @@ See: .planning/PROJECT.md
 - 11/13 probes PASS — above 10/13 acceptance threshold; P5+P6 PASS-deferred by design
 - autonomous_enabled: false (safe state, confirmed pre-close)
 
-**Next action:** Operator walks `.planning/phases/184-v38-deploy-uat/v38-VERIFICATION.md` § Operator UAT Browser Walk on `https://bruce.livinity.io`. After PASS: open v39 or v38.1 hotfix milestone. On FAIL: `/gsd-plan-phase` for gap-closure phase.
+**Next action:** Operator walks `.planning/phases/187-vault-graph-obsidian-polish/187-VERIFICATION.md` on `https://bruce.livinity.io` — open Vault Graph, confirm hub nodes are larger, orphan nodes have red ring, edge thickness differs by type, backlink pills are clickable, stats footer visible. After PASS: v38.1 CLOSED → open v39 milestone.
 
 **v35.0 phase queue (FINAL):**
 

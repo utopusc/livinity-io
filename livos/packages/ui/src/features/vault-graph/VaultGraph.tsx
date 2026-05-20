@@ -155,7 +155,7 @@ export function VaultGraph() {
 	const graphStats = useMemo(() => {
 		if (!localNodes.length) return undefined
 		return computeGraphStats(
-			localNodes as Array<{id: string; label: string; degree: number; wikiDegree: number}>,
+			localNodes as unknown as Array<{id: string; label: string; degree: number; wikiDegree: number}>,
 			localEdges,
 		)
 	}, [localNodes, localEdges])
