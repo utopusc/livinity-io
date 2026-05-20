@@ -1,4 +1,4 @@
-// Phase 174-02 / 174-04 — SidebarTree implementation.
+// Phase 174-02 / 174-04 / 176-05 — SidebarTree implementation.
 //
 // 174-02 — Queries vault.items.list via tRPC (Phase 171-04 router) with a
 //   5s refetchInterval as the v1 real-time fallback. Transforms flat
@@ -14,10 +14,14 @@
 //   toast.warning surfaces but the move commits (no refetch — the 5s poll
 //   reconciles).
 //
-// Plan 174-05 will add the footer Settings gear slot BELOW the <Tree>
-// in the flex column.
+// 176-05 — open_item feedback loop: when Liv calls open_item, the SidebarTree
+//   scrolls to and highlights the corresponding row. Subscribes to
+//   vault.items.openItem (WebSocket subscription) which forwards Redis
+//   liv:open:item messages from Phase 176-02's MCP tool. The synthetic
+//   Main Liv root is guarded (scrollIntoView is a no-op for it).
 
-import {Tree, type NodeRendererProps} from 'react-arborist'
+import {useRef} from 'react'
+import {Tree, type NodeRendererProps, type TreeApi} from 'react-arborist'
 import {toast} from 'sonner'
 
 import {trpcReact} from '@/trpc/trpc'
@@ -48,6 +52,19 @@ function TreeNodeRow({node}: NodeRendererProps<TreeNode>) {
 export function SidebarTree(_props: SidebarTreeProps) {
 	const list = trpcReact.vault.items.list.useQuery(undefined, {
 		refetchInterval: 5_000,
+	})
+
+	// Phase 176-05 — Tree ref for open_item scroll/focus feedback from Liv.
+	const treeRef = useRef<TreeApi<TreeNode> | null>(null)
+
+	// Subscribe to Liv's open_item MCP tool calls forwarded via Redis → tRPC subscription.
+	// Security: MAIN_LIV_ID guard prevents synthetic root from being scrolled (T-176-05-01).
+	trpcReact.vault.items.openItem.useSubscription(undefined, {
+		onData: ({itemId}) => {
+			// Guard: the Main Liv synthetic root is not scrollable.
+			if (itemId === MAIN_LIV_ID) return
+			treeRef.current?.scrollTo?.({id: itemId, align: 'auto'})
+		},
 	})
 
 	const moveMutation = trpcReact.vault.items.move.useMutation({
@@ -101,6 +118,7 @@ export function SidebarTree(_props: SidebarTreeProps) {
 		<div className='flex h-full flex-col gap-2 p-3'>
 			<div className='flex-1 overflow-y-auto'>
 				<Tree<TreeNode>
+					ref={treeRef}
 					data={treeData}
 					width='100%'
 					height={400}
