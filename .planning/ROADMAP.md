@@ -2297,7 +2297,13 @@ Plans:
 
 **Depends on:** Phase 175
 **Wave:** 4
-**Estimated:** 4 plans
+**Plans:** 4 plans
+
+Plans:
+- [ ] 181-01-PLAN.md — Device class detection (useDeviceClass hook) + chat-mobile route branching
+- [ ] 181-02-PLAN.md — MobileTerminalKeyBar (2-row sticky-Ctrl key bar for tablet)
+- [ ] 181-03-PLAN.md — Touch gestures on CcTerminal (pinch-zoom, two-finger paste, three-finger detach)
+- [ ] 181-04-PLAN.md — WS resilience (visibilitychange + heartbeat) + tmux capture-pane + MobileBubbleChat + legacy delete
 
 ---
 
