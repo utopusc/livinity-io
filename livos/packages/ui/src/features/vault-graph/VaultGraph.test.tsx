@@ -55,6 +55,17 @@ vi.mock('./GraphNodeDetail', () => ({
 	},
 }))
 
+// ── LegendBadge mock — capture stats prop for 187-05 assertion ───────────
+
+let lastLegendStats: any = undefined
+vi.mock('./LegendBadge', () => ({
+	LegendBadge: (props: any) => {
+		lastLegendStats = props.stats
+		return <div data-testid='legend-badge' />
+	},
+	buildLegendRows: () => [],
+}))
+
 import {VaultGraph} from './VaultGraph'
 
 let container: HTMLDivElement
@@ -104,6 +115,7 @@ beforeEach(() => {
 	lastLinkWidth = null
 	lastLinkColor = null
 	lastNodeCanvasObject = null
+	lastLegendStats = undefined
 	qc = freshClient()
 })
 
@@ -661,6 +673,27 @@ describe('VaultGraph', () => {
 		// handleNavigateTo calls fgRef.current?.graphData() — fgRef.current is null in test,
 		// so it should gracefully no-op without throwing
 		expect(() => { if (navBtn) act(() => navBtn.click()) }).not.toThrow()
+	})
+
+	// ── Phase 187-05: graphStats useMemo assertion ──────────────────────────
+
+	it('LegendBadge receives non-undefined stats prop after graph data loads', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				nodes: [
+					{id: 'a.md', label: 'a', type: 'memory', size: 10, mtime: 0, degree: 2, wikiDegree: 2, tags: [], topDir: 'root'},
+					{id: 'b.md', label: 'b', type: 'agent', size: 10, mtime: 0, degree: 0, wikiDegree: 0, tags: [], topDir: 'root'},
+				],
+				edges: [{source: 'a.md', target: 'b.md', type: 'wikilink', weight: 1}],
+				truncated: false,
+				totalFiles: 2,
+			}),
+		})
+		render()
+		await flushPromises()
+		expect(lastLegendStats).toBeDefined()
+		expect(lastLegendStats).not.toBeUndefined()
 	})
 
 	it('filteredNodes only includes nodes whose type is in filters.enabledTypes', async () => {
