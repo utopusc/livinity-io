@@ -107,13 +107,7 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/my-devices',
 	},
-	{
-		id: 'LIVINITY_subagents',
-		name: 'Agents',
-		icon: '/figma-exports/dock-settings.png',
-		systemApp: true,
-		systemAppTo: '/subagents',
-	},
+	// LIVINITY_subagents removed — Phase 182-01 (D-V38-M). Sidebar Settings absorbs agents.
 	{
 		id: 'LIVINITY_schedules',
 		name: 'Schedules',

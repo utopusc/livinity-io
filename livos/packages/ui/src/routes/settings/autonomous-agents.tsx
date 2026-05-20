@@ -12,15 +12,15 @@ import {SettingsPageHeader} from '@/components/settings-page-header'
 export default function AutonomousAgentsPage() {
 	return (
 		<SettingsPageLayout
-			title='Autonomous agents'
+			title='Scheduled Agents'
 			description='Schedule, toggle, and budget your livos-agents/* runs.'
 			hideHeader
 		>
 			<SettingsPageHeader
-				eyebrow='07 · Autonomous'
+				eyebrow='08 · Scheduled'
 				title='Run agents on a schedule,'
 				titleAccent='within a daily budget.'
-				sub='Each agent is a vault/livos-agents/<name>.md file with YAML frontmatter (schedule, model, max budget, max turns). Toggle, Run Now, or set the Mini PC daily cap.'
+				sub='Each scheduled agent is a vault/livos-agents/<name>.md file with YAML frontmatter. Toggle, Run Now, or set the Mini PC daily cap.'
 			/>
 			<div className='h-6' />
 			<div className='px-1'>
