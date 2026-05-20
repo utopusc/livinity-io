@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Phase 167-04 / 169-04 / 175-05 / 176-04 — AI Chat route tests.
+// Phase 167-04 / 169-04 / 175-05 / 176-04 / 185-01 / 185-02 / 185-03 — AI Chat route tests.
 //
 // Pattern: RTL-absent (D-NO-NEW-DEPS) — direct react-dom/client mount via
 // act(). Mocks @/hooks/use-is-mobile + @/features/vault-graph so the
@@ -14,6 +14,11 @@
 // Phase 176-04 — Added trpcReact + useCurrentUser mocks so the vault.items.list
 // query and userId are controlled in tests. Default mock: hasItems=true so
 // existing "Open a Chat" assertions still pass.
+//
+// Phase 185-01 — Added SidebarTree mock + window-manager mock + extended trpcReact
+// mock for SidebarTree internals (openItem subscription + move mutation).
+// Phase 185-02 — Added item-detail mocks (ChatDetail/ProjectDetail/AgentDetail).
+// Phase 185-03 — Added AddItemModal to item-detail mock; mobile collapse assertions.
 
 import {readFileSync} from 'node:fs'
 import {resolve} from 'node:path'
@@ -42,6 +47,8 @@ vi.mock('@/features/vault-graph', () => ({
 // Phase 176-04 — Mock trpcReact so vault.items.list.useQuery is controllable.
 // Default: items=[{fakeItem}] → hasItems=true → "Open a Chat" hint shows
 // (preserves 14 existing assertions unchanged).
+// Phase 185-01 — Extended to include SidebarTree internal calls:
+//   vault.items.openItem.useSubscription + vault.items.move.useMutation
 let itemListData: {items: any[]} = {items: [{id: 'fake-item-1', type: 'project'}]}
 vi.mock('@/trpc/trpc', () => ({
 	trpcReact: {
@@ -51,7 +58,17 @@ vi.mock('@/trpc/trpc', () => ({
 					useQuery: (_input: unknown, _opts?: unknown) => ({
 						data: itemListData,
 						isLoading: false,
+						refetch: vi.fn(),
 					}),
+				},
+				openItem: {
+					useSubscription: vi.fn(),
+				},
+				move: {
+					useMutation: (_opts?: unknown) => ({mutate: vi.fn()}),
+				},
+				create: {
+					useMutation: (_opts?: unknown) => ({mutate: vi.fn(), isPending: false}),
 				},
 			},
 		},
@@ -70,6 +87,36 @@ vi.mock('@/features/liv-welcome/LivWelcomeTerminal', () => ({
 	),
 }))
 
+// Phase 185-01 — Mock SidebarTree + window-manager so SidebarTree renders as
+// a thin stub, capturing the props passed to it.
+const sidebarTreeMock = vi.fn((_props: unknown) => null)
+vi.mock('@/features/sidebar-tree', () => ({
+	SidebarTree: (props: unknown) => {
+		sidebarTreeMock(props)
+		return <div data-testid='sidebar-tree-mock' />
+	},
+}))
+
+vi.mock('@/providers/window-manager', () => ({
+	useWindowManagerOptional: () => null,
+}))
+
+// Phase 185-02 — Mock item-detail components (ChatDetail, ProjectDetail, AgentDetail).
+// Phase 185-03 — Extended to include AddItemModal.
+vi.mock('@/features/item-detail', () => ({
+	ChatDetail: ({item}: {item: {id: string}}) => (
+		<div data-testid='chat-detail-mock' data-item-id={item.id} />
+	),
+	ProjectDetail: ({item}: {item: {id: string}}) => (
+		<div data-testid='project-detail-mock' data-item-id={item.id} />
+	),
+	AgentDetail: ({item}: {item: {id: string}}) => (
+		<div data-testid='agent-detail-mock' data-item-id={item.id} />
+	),
+	AddItemModal: ({open}: {open: boolean; onClose: () => void}) =>
+		open ? <div data-testid='add-item-modal' /> : null,
+}))
+
 // ── Test setup ────────────────────────────────────────────────────────────
 
 let container: HTMLDivElement
@@ -79,6 +126,7 @@ beforeEach(() => {
 	useIsMobileMock.mockReset()
 	useIsMobileMock.mockReturnValue(false)
 	vaultGraphMock.mockReset()
+	sidebarTreeMock.mockReset()
 	// Default: hasItems=true (preserves existing "Open a Chat" assertions)
 	itemListData = {items: [{id: 'fake-item-1', type: 'project'}]}
 	container = document.createElement('div')
@@ -123,20 +171,25 @@ describe('AiChatRoute — mobile branch', () => {
 		useIsMobileMock.mockReturnValue(true)
 	})
 
-	it('renders the "AI Chat requires a desktop browser" headline', () => {
+	// Phase 185-03 — mobile early-return removed; mobile now shows split layout
+	// with sidebar collapsed by default and a hamburger toggle in the tab-nav row.
+	// The /chat-mobile redirect link lives in the /chat-mobile route, not here.
+	it('mounts without throwing on mobile', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
-		expect(container.textContent).toMatch(/AI Chat requires a desktop browser/)
+		expect(container.textContent).toBeTruthy()
 	})
 
-	it('renders an <a href="/chat-mobile"> link to the legacy chat', () => {
+	it('renders both "Terminal" and "Vault Graph" tab buttons on mobile', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
-		const link = container.querySelector('a[href="/chat-mobile"]')
-		expect(link).not.toBeNull()
-		expect(link?.textContent).toMatch(/Open mobile chat/i)
+		const buttons = Array.from(container.querySelectorAll('button')).map(
+			(b) => b.textContent,
+		)
+		expect(buttons).toContain('Terminal')
+		expect(buttons).toContain('Vault Graph')
 	})
 })
 
@@ -212,8 +265,12 @@ describe('routes/ai-chat/index.tsx — source-text invariants', () => {
 		expect(SRC).toMatch(/useIsMobile/)
 	})
 
-	it('contains the /chat-mobile fallback link target', () => {
-		expect(SRC).toMatch(/['"]\/chat-mobile['"]/)
+	// Phase 185-03 — mobile early-return removed; /chat-mobile link now lives
+	// in the /chat-mobile route itself. This test updated to reflect new behaviour.
+	it('does NOT contain a /chat-mobile redirect (Phase 185-03 mobile collapse)', () => {
+		// The link was in the old mobile early-return; now removed.
+		// Test updated to assert the correct post-185 state.
+		expect(SRC).not.toMatch(/href.*\/chat-mobile/)
 	})
 
 	it('does NOT import the legacy AI chat panel module (D-V35-K)', () => {
@@ -256,5 +313,231 @@ describe('routes/ai-chat/index.tsx — source-text invariants', () => {
 
 	it('T-176-04-D: Phase 175 empty-state text still present (inside hasItems branch)', () => {
 		expect(SRC).toMatch(/Open a Chat from the sidebar/)
+	})
+})
+
+// ── Phase 185-01 — Split layout + SidebarTree mount ───────────────────────
+
+describe('AiChatRoute — Phase 185-01 split layout', () => {
+	beforeEach(() => {
+		useIsMobileMock.mockReturnValue(false)
+		sidebarTreeMock.mockReset()
+	})
+
+	it('B1: renders data-testid="ai-chat-sidebar" in DOM', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		expect(container.querySelector('[data-testid="ai-chat-sidebar"]')).not.toBeNull()
+	})
+
+	it('B2: renders data-testid="ai-chat-right-pane" in DOM', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		expect(container.querySelector('[data-testid="ai-chat-right-pane"]')).not.toBeNull()
+	})
+
+	it('B3: sidebar pane has class w-[280px]', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const sidebar = container.querySelector('[data-testid="ai-chat-sidebar"]')
+		expect(sidebar?.className).toMatch(/w-\[280px\]/)
+	})
+
+	it('B4: both "Terminal" and "Vault Graph" buttons still present (regression)', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent)
+		expect(buttons).toContain('Terminal')
+		expect(buttons).toContain('Vault Graph')
+	})
+
+	it('B5: SidebarTree mock is called at least once', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		expect(sidebarTreeMock).toHaveBeenCalledTimes(1)
+	})
+
+	it('B6: source-text — index.tsx imports SidebarTree from @/features/sidebar-tree', () => {
+		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
+		expect(SRC).toMatch(/from\s+['"]@\/features\/sidebar-tree['"]/)
+		expect(SRC).toMatch(/SidebarTree/)
+	})
+})
+
+// ── Phase 185-02 — Right-pane item routing ────────────────────────────────
+
+describe('AiChatRoute — Phase 185-02 item-select routing', () => {
+	beforeEach(() => {
+		useIsMobileMock.mockReturnValue(false)
+		sidebarTreeMock.mockReset()
+		itemListData = {
+			items: [
+				{id: 'chat-id-1', type: 'chat', name: 'Chat 1', ccSessionId: 'sess-abc', parentId: null},
+				{id: 'proj-id-1', type: 'project', name: 'Proj 1', parentId: null},
+				{id: 'agent-id-1', type: 'agent', name: 'Agent 1', parentId: null},
+			],
+		}
+	})
+
+	it('B1: SidebarTree onSelect("chat-id-1") renders chat-detail-mock in right pane', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const calls = sidebarTreeMock.mock.calls as any[]
+		const captured = (calls[0]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
+		act(() => {
+			captured?.onSelect?.('chat-id-1')
+		})
+		expect(container.querySelector('[data-testid="chat-detail-mock"]')).not.toBeNull()
+	})
+
+	it('B2: SidebarTree onSelect("proj-id-1") renders project-detail-mock in right pane', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const calls = sidebarTreeMock.mock.calls as any[]
+		const captured = (calls[0]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
+		act(() => {
+			captured?.onSelect?.('proj-id-1')
+		})
+		expect(container.querySelector('[data-testid="project-detail-mock"]')).not.toBeNull()
+	})
+
+	it('B3: SidebarTree onSelect("agent-id-1") renders agent-detail-mock in right pane', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const calls = sidebarTreeMock.mock.calls as any[]
+		const captured = (calls[0]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
+		act(() => {
+			captured?.onSelect?.('agent-id-1')
+		})
+		expect(container.querySelector('[data-testid="agent-detail-mock"]')).not.toBeNull()
+	})
+
+	it('B4: after item selected, clicking "Vault Graph" tab hides detail view', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const calls = sidebarTreeMock.mock.calls as any[]
+		const captured = (calls[0]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
+		act(() => {
+			captured?.onSelect?.('chat-id-1')
+		})
+		const vgBtn = Array.from(container.querySelectorAll('button')).find(
+			(b) => b.textContent === 'Vault Graph',
+		) as HTMLButtonElement
+		act(() => {
+			vgBtn.click()
+		})
+		expect(container.querySelector('[data-testid="chat-detail-mock"]')).toBeNull()
+		expect(container.querySelector('[data-testid="vault-graph"]')).not.toBeNull()
+	})
+
+	it('B5: after item selected + VaultGraph switch, clicking "Terminal" restores detail view', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const calls = sidebarTreeMock.mock.calls as any[]
+		const captured = (calls[0]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
+		act(() => {
+			captured?.onSelect?.('chat-id-1')
+		})
+		const vgBtn = Array.from(container.querySelectorAll('button')).find(
+			(b) => b.textContent === 'Vault Graph',
+		) as HTMLButtonElement
+		act(() => {
+			vgBtn.click()
+		})
+		const tBtn = Array.from(container.querySelectorAll('button')).find(
+			(b) => b.textContent === 'Terminal',
+		) as HTMLButtonElement
+		act(() => {
+			tBtn.click()
+		})
+		expect(container.querySelector('[data-testid="chat-detail-mock"]')).not.toBeNull()
+	})
+
+	it('B6: onSelect(null) clears detail view and shows default hint/welcome', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const calls = sidebarTreeMock.mock.calls as any[]
+		const captured = (calls[0]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
+		act(() => {
+			captured?.onSelect?.('chat-id-1')
+		})
+		act(() => {
+			captured?.onSelect?.(null)
+		})
+		expect(container.querySelector('[data-testid="chat-detail-mock"]')).toBeNull()
+		// When items exist, should show hint text
+		expect(container.textContent).toMatch(/Open a Chat from the sidebar/)
+	})
+
+	it('B7: source-text — index.tsx imports ChatDetail from @/features/item-detail', () => {
+		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
+		expect(SRC).toMatch(/from\s+['"]@\/features\/item-detail['"]/)
+		expect(SRC).toMatch(/ChatDetail/)
+	})
+
+	it('B8: source-text — index.tsx contains selectedItemId state', () => {
+		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
+		expect(SRC).toMatch(/selectedItemId/)
+	})
+})
+
+// ── Phase 185-03 — Mobile collapse + AddItemModal trigger ─────────────────
+
+describe('AiChatRoute — Phase 185-03 mobile collapse + modal trigger', () => {
+	it('B1: on mobile, sidebar NOT in DOM on initial render', () => {
+		useIsMobileMock.mockReturnValue(true)
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		expect(container.querySelector('[data-testid="ai-chat-sidebar"]')).toBeNull()
+	})
+
+	it('B2: on mobile, clicking sidebar-toggle-btn makes sidebar appear', () => {
+		useIsMobileMock.mockReturnValue(true)
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const toggleBtn = container.querySelector('[data-testid="sidebar-toggle-btn"]') as HTMLButtonElement
+		expect(toggleBtn).not.toBeNull()
+		act(() => {
+			toggleBtn.click()
+		})
+		expect(container.querySelector('[data-testid="ai-chat-sidebar"]')).not.toBeNull()
+	})
+
+	it('B3: on desktop, clicking add-item-btn makes add-item-modal appear', () => {
+		useIsMobileMock.mockReturnValue(false)
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const addBtn = container.querySelector('[data-testid="add-item-btn"]') as HTMLButtonElement
+		expect(addBtn).not.toBeNull()
+		act(() => {
+			addBtn.click()
+		})
+		expect(container.querySelector('[data-testid="add-item-modal"]')).not.toBeNull()
+	})
+
+	it('B4: source-text — index.tsx imports AddItemModal from @/features/item-detail', () => {
+		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
+		expect(SRC).toMatch(/AddItemModal/)
+		expect(SRC).toMatch(/from\s+['"]@\/features\/item-detail['"]/)
 	})
 })
