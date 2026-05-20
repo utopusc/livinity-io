@@ -632,23 +632,36 @@ describe('AiChatRoute — Phase 186-01 MCP Servers tab', () => {
 		expect(container.querySelector('[data-testid="mcp-detail-empty"]')).not.toBeNull()
 	})
 
-	it('B5: after mcp-server-list-mock click fires onSelect, mcp-server-detail-mock appears', () => {
-		act(() => {
+	it('B5: after mcp-server-list-mock click fires onSelect, mcp-server-detail-mock appears', async () => {
+		// Mock fetch to return a servers list so mcpSelectedServer resolves correctly.
+		const mockFetch = vi.fn().mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				servers: [{name: 'brave-search', transport: 'stdio', enabled: true, installedAt: 0}],
+				statuses: {},
+			}),
+		})
+		vi.stubGlobal('fetch', mockFetch)
+
+		await act(async () => {
 			root.render(<AiChatRoute />)
 		})
 		const mcpBtn = Array.from(container.querySelectorAll('button')).find(
 			(b) => b.textContent === 'MCP Servers',
 		) as HTMLButtonElement
-		act(() => {
+		// Clicking MCP tab triggers fetch via useEffect
+		await act(async () => {
 			mcpBtn.click()
 		})
-		// The mcp-server-list-mock onClick calls onSelect('brave-search')
+		// Now mcpServers = [{name:'brave-search',...}]; click list mock calls onSelect('brave-search')
 		const listMock = container.querySelector('[data-testid="mcp-server-list-mock"]') as HTMLElement
 		act(() => {
 			listMock.click()
 		})
 		expect(container.querySelector('[data-testid="mcp-server-detail-mock"]')).not.toBeNull()
 		expect(container.querySelector('[data-testid="vault-graph"]')).toBeNull()
+
+		vi.unstubAllGlobals()
 	})
 
 	it('B6: source-text — index.tsx Tab union contains "mcp"', () => {
