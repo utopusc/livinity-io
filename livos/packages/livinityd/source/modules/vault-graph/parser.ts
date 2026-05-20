@@ -56,6 +56,17 @@ export function parseFrontmatter(
 	}
 }
 
+// Phase 179-01 extension — exported alongside parseFrontmatter.
+// Handles three frontmatter.tags shapes: undefined → [], string → [string], string[] → string[].
+// Any non-string array element is silently coerced via String() — no crash path.
+export function extractTags(frontmatter?: Record<string, unknown>): string[] {
+	const raw = frontmatter?.tags
+	if (raw === undefined || raw === null) return []
+	if (typeof raw === 'string') return raw.length > 0 ? [raw] : []
+	if (Array.isArray(raw)) return raw.map(String).filter((s) => s.length > 0)
+	return []
+}
+
 const WIKILINK_RE = /\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g
 
 export function extractWikilinks(body: string): string[] {
