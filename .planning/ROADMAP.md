@@ -2481,3 +2481,56 @@ All 3 v38.1 hotfix phases shipped:
 
 **v38.1 close marker:** 2026-05-20 — all 3 UAT findings addressed. Operator UAT browser walk queued per 187-VERIFICATION.md.
 
+---
+
+# v38.2 — Agent Workspace Rebuild — 🔴 OPENED 2026-05-20
+
+**Status:** OPEN — v38.0/v38.1 Agent UX rejected by operator post-UAT 2026-05-20
+**Source:** Operator literal spec ("tane tane anlatıyorum") + references nousresearch/hermes-agent + thesysdev/openclaw-os
+**Phases:** 3 (Phase 188 → 190); future v38.3 = Phase 191 (settings gear panel w/ rich MCP) + Phase 192 (Obsidian + obsidian-mcp install) + Phase 193 (Project workspace research)
+**Anti-pattern reminder:** Do NOT extrapolate beyond literal spec, do NOT delete things user might want, do NOT add features
+
+### v38.2 Operator Spec (literal)
+1. **+ Add modal:** 2 cards (Agent | Project) → name + icon → "Kur" button. Simple.
+2. **Agent click:** right pane = Claude Code terminal, cwd = `~/liv/items/<agentName>/`, first launch runs chat-based setup wizard (Claude asks MCPs/tasks/schedule/tools), config persists to `.agent/config.json` + `claude.md`, sessions log to `.agent/sessions/<runId>.md`.
+3. **Multiple terminal tabs:** AI Chat top bar = dynamic terminal tabs + Claude icon + Terminal icon at right.
+
+### v38.2 Implicit Deletions
+- **Vault Graph: GONE** (operator said "Cault kullanmak istemiyorum")
+- **MCP Server top tab: GONE** (moves to settings gear panel in v38.3 Phase 191 — for now just remove tab)
+
+---
+
+### Phase 188: Simplified Add Modal (Agent|Project + name + icon) + DELETE Vault Graph — 🔴 PLANNED 2026-05-20
+
+**Goal:** Replace current AddItemModal multi-step form with: Step 1 = 2 type cards (Agent / Project), Step 2 = name input + icon picker, "Kur" button. Create on-disk folder `~/liv/items/<id>/` with `claude.md` placeholder + `.agent/config.json` (empty defaults). Item appears in sidebar immediately. ALSO: delete Vault Graph feature module entirely (UI files + tab in AI Chat) — operator explicitly does not want it. Fix `+ Add` modal z-index bug.
+
+**Depends on:** Phase 174, 175, 185 (existing sidebar + modal infrastructure)
+**Wave:** 1
+**Plans:** 3-4 plans
+**Estimated:** ~0.5 day
+
+---
+
+### Phase 189: Agent click → CC PTY + Chat-Based Setup Wizard — 🔴 PLANNED 2026-05-20
+
+**Goal:** Click agent in sidebar → right pane mounts `<CcTerminal>` with tmux session `liv-agent-<id>` in cwd `~/liv/items/<agentName>/`. First launch (detected by absent `.agent/setup-done`): Claude Code runs chat-based setup conversation — asks which MCPs to enable, what tasks the agent will do, schedule (cron/manual), tool permissions. Claude writes answers to `<agentName>/.agent/config.json` + appends to `claude.md` (the agent's system prompt). After setup, normal Claude Code chat continues. Every session writes `<agentName>/.agent/sessions/<runId>.md` capturing what the agent did + learned. Research-informed by Hermes Agent + OpenClaw OS patterns.
+
+**Depends on:** Phase 188, Phase 166 (cc-pty manager), Phase 176 (Liv tools + agent scaffolder)
+**Wave:** 2
+**Plans:** 4-5 plans (biggest of v38.2)
+**Estimated:** ~1.5 days
+
+---
+
+### Phase 190: Multiple Terminal Tabs + Claude/Terminal Icons at Right — 🔴 PLANNED 2026-05-20
+
+**Goal:** Replace AI Chat top tab bar (currently `Terminal | Vault Graph | MCP Server` — after 188, just `Terminal | MCP Server`) with dynamic terminal tabs: each open agent/chat gets a tab labeled by name. At right of tab bar: Claude icon (+ new ad-hoc Claude session, cwd = $HOME) and Terminal icon (+ new bare bash terminal). Capacity ≥10 concurrent tabs. Tab switch = swap right-pane mounted CcTerminal session id (no re-spawn). Close-tab kills the tmux session. Remove MCP Server tab entirely (will live in settings gear panel — v38.3 Phase 191).
+
+**Depends on:** Phase 188 (Vault Graph removed), Phase 189 (per-agent tmux sessions exist), Phase 167 (CcTerminal substrate)
+**Wave:** 3
+**Plans:** 3 plans
+**Estimated:** ~0.5 day
+
+---
+
