@@ -2555,6 +2555,58 @@ Plans:
 
 ---
 
+# v38.3 — Drop Vault + bruce-user Refactor — 🔴 OPENED 2026-05-21
+
+**Status:** OPEN — architectural refactor after Hermes/OpenClaw research showed root cause of v38.0/v38.1/v38.2 cascading bugs is the "vault" concept + root-user execution
+**Source:** Operator directive 2026-05-21 ("ben sana bunu livinity-vault/ kullanmayalim demistim" + "biz neden root da calistiriyoruz kullanicida degil") + research synthesis (`feedback_v38_3_drop_vault_concept`)
+**Phases:** 3 (Phase 192 → 194)
+**Anti-pattern reminder:** NEVER reintroduce `vault/`, `livinity-vault/`, `vaultPath`, `vault.items.*` paths
+
+### v38.3 Goals
+1. **livinityd as bruce user** — eliminates `--dangerously-skip-permissions` claude refusal + `/root/livinity-vault/` vs `/home/bruce/livinity-vault/` ownership split
+2. **`/home/bruce/livinity/` canonical state root** — single dir, slug-named subdirs, frontmatter-in-claude.md per agent (Hermes pattern)
+3. **Filesystem as source-of-truth** — no per-item `.agent/config.json` dotfiles; one `claude.md` per agent with YAML frontmatter + body
+
+### Reference Architectures Studied
+- **nousresearch/hermes-agent** — `~/.hermes/skills/<name>/` folders + `MEMORY.md`/`USER.md` + SQLite FTS5 search index
+- **thesysdev/openclaw-os** — single state dir, DB-backed surfaces, flat sidebar (agents/sessions/apps/artifacts/notifications/crons all first-class)
+- **LivOS synthesis** — adopt Hermes filesystem-source-of-truth + OpenClaw flat surface model
+
+---
+
+### Phase 192: livinityd User=bruce Switch + sudoers + Migration — 🔴 PLANNED 2026-05-21
+
+**Goal:** Switch `livos.service` from `User=root` to `User=bruce`. Add sudoers entries for the narrow set of root-required ops (chown, systemctl reload caddy). Migrate ownership of `/opt/livos/data/` + `.env*` to bruce. Drop the `manager.ts` `isRoot` hack (Bug #17 hotfix becomes no-op). Claude can use `--dangerously-skip-permissions` again → autonomous agents per D-V38-K.
+
+**Depends on:** nothing (foundational)
+**Wave:** 1
+**Plans:** 4 (audit + service-unit + code-paths + sacred-re-pin)
+**Estimated:** ~0.5-1 day (testing-heavy)
+
+---
+
+### Phase 193: ~/livinity/ Filesystem Refactor (DROP "vault") — 🔴 PLANNED 2026-05-21
+
+**Goal:** Replace `vault/items/<uuid>/.agent/config.json` model with `/home/bruce/livinity/agents/<slug>/claude.md` (YAML frontmatter + body). Single state root. Slug-named dirs (human-readable). Filesystem is source-of-truth; SQLite FTS5 only for search index. Migration script copies existing items from `/root/livinity-vault/items/<uuid>/` + `/home/bruce/livinity-vault/items/<uuid>/` to new layout. tRPC `vault.items.*` API surface UNCHANGED (frontend stays). Phase 162-01 sacred scaffolder STAYS as code (legacy, no longer called — formal retirement in v38.4).
+
+**Depends on:** Phase 192 (bruce-user)
+**Wave:** 2
+**Plans:** 5 (scaffolder + claude.md format + item-store rewrite + migration script + cc-pty path adapt)
+**Estimated:** ~1-1.5 days (biggest of v38.3)
+
+---
+
+### Phase 194: Sidebar UI + Files Default Adapt — 🔴 PLANNED 2026-05-21
+
+**Goal:** Sidebar renders `name` (from frontmatter) instead of slug. Inline `AgentInlineSettings` below tree when an agent is selected (closes Bug #10 deferred from v38.2). Files app defaults to `/home/bruce/livinity/`. Project click → workspace tab + cwd to project root. Add Modal shows slug preview as operator types name + collision warning.
+
+**Depends on:** Phase 193 (data shape)
+**Wave:** 3
+**Plans:** 5 (tRPC shape + inline settings + Files default + project workspace + slug preview)
+**Estimated:** ~0.5-1 day
+
+---
+
 ## ✅ v38.2 MILESTONE CLOSED — 2026-05-21
 
 **Milestone:** v38.2 Terminal Tabs + Vault Graph Polish
