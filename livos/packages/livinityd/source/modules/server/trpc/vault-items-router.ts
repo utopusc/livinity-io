@@ -43,6 +43,7 @@ import {Redis as IoRedis} from 'ioredis'
 import {adminProcedure, router} from './trpc.js'
 import {validateMove} from '../../vault-items/index.js'
 import type {Item, MoveValidation} from '../../vault-items/index.js'
+import {writeArtifacts} from '../../vault-items/artifact-writer.js'
 
 // Item id shape — nanoid v7 alphabet plus underscore/dash. Same defensive
 // posture as ItemStore.assertSafeId (item-store.ts:66). Length ≥ 20 to
@@ -68,6 +69,7 @@ const createInput = z
 		cwd: z.string().optional(), // project only — router runtime-gates
 		schedule: z.string().optional(), // agent only — router runtime-gates
 		ccSessionId: z.string().optional(), // chat only — router runtime-gates
+		icon: z.string().max(64).optional(), // Phase 188-02: lucide icon name, stored in settings.json
 	})
 	.strict()
 
@@ -170,6 +172,15 @@ const vaultItemsRouter = router({
 			})
 		}
 		const item = await store.create(input)
+		// Phase 188-02: write Agent/Project on-disk artifacts + icon to settings.json.
+		// Runs after ItemStore.create() so the item directory exists.
+		// Uses separate artifact-writer.ts — does NOT modify sacred item-store.ts.
+		await writeArtifacts({
+			itemDir: store.itemDir(item.id),
+			type: item.type,
+			name: item.name,
+			icon: input.icon,
+		})
 		return {item}
 	}),
 
