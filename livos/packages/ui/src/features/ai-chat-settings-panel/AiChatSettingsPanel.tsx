@@ -58,7 +58,8 @@ export function AiChatSettingsPanel({open, onClose}: AiChatSettingsPanelProps) {
 	return (
 		<div
 			data-testid='ai-chat-settings-panel'
-			className='absolute inset-0 z-40 flex flex-col bg-bg'
+			className='absolute inset-0 z-40 flex flex-col bg-bg-secondary'
+			style={{backgroundColor: 'var(--bg-secondary, #fff)'}}
 		>
 			{/* Header — Geri (back) button on left, tab nav centered */}
 			<div className='flex items-center gap-3 border-b border-border px-4 py-2'>

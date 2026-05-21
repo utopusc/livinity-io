@@ -34,10 +34,13 @@ import {resolveAgentSpawnArgs, isAgentSession, createAgentSessionRecorder, flush
 
 const USER_ID_RE = /^[a-zA-Z0-9_-]+$/
 // Phase 190-01 — extended to accept 'liv-bare-' prefix for bare bash sessions.
-// v38.2 hotfix — accept 'liv-agent-' prefix with full UUID format (8-4-4-4-12
-// hex with hyphens). Existing 'livos-cc-' + 'liv-bare-' formats keep their
-// trailing 8-hex-char shape (manager generates id.slice(0,8) for them).
-const TMUX_NAME_RE = /^(livos-cc-[a-zA-Z0-9_-]+-[a-f0-9]{8}|liv-bare-[a-zA-Z0-9_-]+-[a-f0-9]{8}|liv-agent-[a-f0-9-]{8,64})$/
+// v38.2 hotfix — accept ALL client-provided ad-hoc prefixes:
+// - 'livos-cc-{userId}-{8-hex}'              (manager-generated, default claude)
+// - 'liv-bare-{userId}-{8-hex}'              (manager-generated, bare bash)
+// - 'liv-agent-{UUID}'                       (client-provided, agent click)
+// - 'liv-adhoc-claude-{UUID}'                (client-provided, ad-hoc Claude tab)
+// - 'liv-bare-{UUID}'                        (client-provided, ad-hoc Terminal tab)
+const TMUX_NAME_RE = /^(livos-cc-[a-zA-Z0-9_-]+-[a-f0-9]{8}|liv-bare-[a-f0-9-]{8,64}|liv-bare-[a-zA-Z0-9_-]+-[a-f0-9]{8}|liv-agent-[a-f0-9-]{8,64}|liv-adhoc-claude-[a-f0-9-]{8,64})$/
 
 // Phase 168-04 — Redis channel for cross-tab attach status broadcasts.
 // Message format: JSON {sessionId, attachId, attachedAt, action}.
@@ -144,12 +147,18 @@ export class CcPtyManager {
 		}
 
 		const id = opts.id ?? randomUUID()
-		// Phase 190-01 — bare sessions use 'liv-bare-' prefix to distinguish from claude sessions.
-		// v38.2 hotfix — agent sessions use the client-provided id as tmuxName directly so
-		// isAgentSession() regex matches and resolveAgentSpawnArgs fires the wizard prompt.
+		// v38.2 hotfix — when caller provides opts.id with a known LivOS ad-hoc
+		// prefix (liv-agent-/liv-adhoc-claude-/liv-bare- from ws-handler inline
+		// create), use it as tmuxName directly. Otherwise generate the legacy
+		// 8-hex-slice format. This unifies regex acceptance AND lets isAgentSession
+		// detect agent sessions for wizard hook firing.
 		const isBare = opts.sessionType === 'bare'
-		const isAgentClick = !isBare && typeof opts.id === 'string' && opts.id.startsWith('liv-agent-')
-		const tmuxName = isAgentClick
+		const hasAdHocPrefix =
+			typeof opts.id === 'string' &&
+			(opts.id.startsWith('liv-agent-') ||
+				opts.id.startsWith('liv-adhoc-claude-') ||
+				opts.id.startsWith('liv-bare-'))
+		const tmuxName = hasAdHocPrefix
 			? opts.id!
 			: isBare
 				? `liv-bare-${opts.userId}-${id.slice(0, 8)}`
