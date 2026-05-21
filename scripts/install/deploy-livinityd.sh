@@ -1389,7 +1389,12 @@ Requires=postgresql.service redis-server.service
 
 [Service]
 Type=simple
-User=root
+# Phase 192-02 — livinityd runs as bruce (was root, see 192-CONTEXT.md).
+# Root cause of v38.2 bug class (claude --dangerously-skip-permissions refusal
+# under uid=0, vault path split between /root/ and /home/bruce/). Migration
+# script chowns /opt/livos/data + .env* to bruce:bruce before this unit starts.
+User=bruce
+Group=bruce
 WorkingDirectory=${_DLD_LIVOS_DIR}
 EnvironmentFile=${_DLD_ENV_FILE}
 # Phase 173-04 — v38 vault rename: Phase 171 vault-root-resolver.ts reads LIV_VAULT_ROOT; default fallback /root/livinity-vault is now a back-compat symlink (Plan 173-01)
@@ -1479,7 +1484,9 @@ Requires=postgresql.service redis-server.service
 
 [Service]
 Type=simple
-User=root
+# Phase 192-02 — liv-${pkg} runs as bruce (shares /opt/livos/.env via EnvironmentFile)
+User=bruce
+Group=bruce
 WorkingDirectory=${pkg_dir}
 EnvironmentFile=${_DLD_ENV_FILE}
 ExecStart=${node_bin} ${entry}
@@ -1701,6 +1708,26 @@ _dld_fix_permissions() {
     ok "Permissions fixed (owner=${livos_user})"
 }
 
+# ── 8b'. Phase 192-02 — bruce-user ownership flip + sudoers install ─────────
+# Idempotent migration: chowns /opt/livos/data + .env* to bruce:bruce, adds
+# bruce to docker group, installs scripts/install/sudoers.d/livinityd →
+# /etc/sudoers.d/livinityd (0440 root:root). MUST run BEFORE the systemd unit
+# write so when systemd later starts livos.service as User=bruce, all paths
+# the daemon touches are already bruce-owned. Re-runs detect marker + exit 0.
+_dld_run_bruce_migration() {
+    step "Phase 192-02 — bruce user migration (idempotent)"
+    local migration_script="${_DLD_LIVOS_DIR}/scripts/migrate-to-bruce-user.sh"
+    if [[ -f "$migration_script" ]]; then
+        if REPO_ROOT="${_DLD_LIVOS_DIR}" bash "$migration_script"; then
+            ok "bruce migration applied"
+        else
+            warn "migrate-to-bruce-user.sh exited non-zero — proceeding (systemd unit may fail with User=bruce until script is re-run successfully)"
+        fi
+    else
+        warn "migrate-to-bruce-user.sh missing at $migration_script — skipping migration (livos.service will fail with User=bruce until script lands)"
+    fi
+}
+
 # ── 8c. Phase 173-01 — v35 → v38 vault rename (idempotent) ──────────────────
 # Renames /root/livinity-vault → /root/liv and creates a backward-compat
 # symlink. Safe to run on fresh installs (no-op) and on already-migrated
@@ -1815,6 +1842,7 @@ deploy_livinityd() {
     _dld_verify_liv_dist_reachable        # 132-05 — pre-boot verify + auto-recover Bug #6
     _dld_update_gallery_cache             # 105-02 G5 — gallery cache git pull
     _dld_fix_permissions                  # 105-02 G6 — chown + app-script chmod
+    _dld_run_bruce_migration              # Phase 192-02 — bruce user ownership flip + sudoers install BEFORE systemd unit write
     _dld_run_vault_v35_to_v38_migration   # Phase 173-01 — vault rename BEFORE systemd unit write
     _dld_write_liv_systemd_units
     _dld_write_systemd_unit
