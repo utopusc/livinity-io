@@ -1,21 +1,17 @@
 // @vitest-environment jsdom
 //
-// Phase 167-04 / 169-04 / 175-05 / 176-04 / 185-01 / 185-02 / 185-03 / 186-01 — AI Chat route tests.
+// Phase 167-04 / 169-04 / 175-05 / 176-04 / 185-01 / 185-02 / 185-03 — AI Chat route tests.
 // Phase 188-04 — Vault Graph tab REMOVED from Tab union + vault-graph mock deleted.
+// Phase 190-03 — MCP tab REMOVED from AI Chat; TerminalTabStrip replaces static tab bar.
+//   - Phase 186-01 describe block DELETED (MCP Servers tab gone from ai-chat)
+//   - Phase 188-04 F-04-4 updated: checks terminal-tab-strip exists (not old buttons)
+//   - Mobile "Terminal"/"MCP Servers" button test updated: no more MCP Servers
+//   - Phase 185-01 B4 updated: no longer checks old Terminal/MCP buttons
+//   - Phase 185-02 B3 (agent routing) preserved — now routes via tab
+//   - 8 new P-01..P-08 assertions added for tab strip wiring
+//   - Phase 190-04 adds L-01..L-06 localStorage persistence assertions (next plan)
 //
-// Pattern: RTL-absent (D-NO-NEW-DEPS) — direct react-dom/client mount via
-// act(). Mocks @/hooks/use-is-mobile so the behavior under test is route
-// composition, not the heavy children.
-//
-// Phase 188-04: Vault Graph describe blocks (Phase 169-04) deleted.
-//   - vaultGraphMock removed
-//   - vi.mock('@/features/vault-graph') removed
-//   - Phase 169-04 tab nav describe block removed
-//   - Mobile "Vault Graph" button test removed
-//   - Phase 185-01 B4 "Vault Graph" regression test updated (no longer checks Vault Graph)
-//   - Phase 185-02 B4/B5 Vault Graph tab tests removed
-//   - Source invariant "imports VaultGraph from @/features/vault-graph" removed
-//   - 5 new F-04-* assertions added
+// Pattern: RTL-absent (D-NO-NEW-DEPS) — direct react-dom/client mount via act().
 
 import {readFileSync} from 'node:fs'
 import {resolve} from 'node:path'
@@ -34,10 +30,6 @@ vi.mock('@/hooks/use-is-mobile', () => ({
 }))
 
 // Phase 176-04 — Mock trpcReact so vault.items.list.useQuery is controllable.
-// Default: items=[{fakeItem}] → hasItems=true → "Open a Chat" hint shows
-// (preserves 14 existing assertions unchanged).
-// Phase 185-01 — Extended to include SidebarTree internal calls:
-//   vault.items.openItem.useSubscription + vault.items.move.useMutation
 let itemListData: {items: any[]} = {items: [{id: 'fake-item-1', type: 'project'}]}
 vi.mock('@/trpc/trpc', () => ({
 	trpcReact: {
@@ -90,45 +82,78 @@ vi.mock('@/providers/window-manager', () => ({
 	useWindowManagerOptional: () => null,
 }))
 
-// Phase 186-01 — Mock McpServerList + McpServerDetail (mounted in MCP tab).
-vi.mock('@/components/mcp/McpServerList', () => ({
-	McpServerList: ({
-		servers,
-		onSelect,
-	}: {
-		servers: unknown[]
-		selectedName: string | null
-		onSelect: (n: string) => void
-		onToggleEnabled: unknown
-		onRemove: unknown
-		isLoading?: boolean
-	}) => (
-		<div
-			data-testid='mcp-server-list-mock'
-			data-server-count={servers.length}
-			onClick={() => onSelect('brave-search')}
-		/>
+// Phase 190-03 — TerminalTabStrip mock: renders a stable stub with data-testid.
+// Exposes tabs as data-tab-count so localStorage tests (190-04) can assert restoration.
+// Each tab gets a button[data-testid="tab-{id}"] + close button[data-testid="tab-close-{id}"]
+const terminalTabStripMock = vi.fn((_props: unknown) => null)
+vi.mock('@/features/terminal-tabs/TerminalTabStrip', () => ({
+	TerminalTabStrip: (props: {
+		tabs: Array<{id: string; label: string}>
+		activeId: string | null
+		onSelect: (id: string) => void
+		onClose: (id: string) => void
+		onAddClaude: () => void
+		onAddBareTerminal: () => void
+		[k: string]: unknown
+	}) => {
+		terminalTabStripMock(props)
+		return (
+			<div
+				data-testid='terminal-tab-strip'
+				data-tab-count={props.tabs.length}
+			>
+				{props.tabs.map((tab) => (
+					<button
+						key={tab.id}
+						type='button'
+						data-testid={`tab-${tab.id}`}
+						onClick={() => props.onSelect(tab.id)}
+					>
+						{tab.label}
+					</button>
+				))}
+				{/* Close buttons for each tab */}
+				{props.tabs.map((tab) => (
+					<button
+						key={`close-${tab.id}`}
+						type='button'
+						data-testid={`tab-close-${tab.id}`}
+						onClick={() => props.onClose(tab.id)}
+					>
+						×
+					</button>
+				))}
+				<button
+					type='button'
+					data-testid='add-claude-btn'
+					onClick={props.onAddClaude}
+				>
+					Claude
+				</button>
+				<button
+					type='button'
+					data-testid='add-terminal-btn'
+					onClick={props.onAddBareTerminal}
+				>
+					Terminal
+				</button>
+			</div>
+		)
+	},
+}))
+
+// Phase 190-03 — BareTerminal mock.
+vi.mock('@/features/cc-terminal/BareTerminal', () => ({
+	BareTerminal: ({sessionId}: {sessionId: string}) => (
+		<div data-testid='bare-terminal-mock' data-session-id={sessionId} />
 	),
 }))
 
-vi.mock('@/components/mcp/McpServerDetail', () => ({
-	McpServerDetail: ({
-		server,
-	}: {
-		server: {name: string} | null
-		onClose: () => void
-		onToggleEnabled: unknown
-	}) =>
-		server ? (
-			<div data-testid='mcp-server-detail-mock' data-server-name={server.name} />
-		) : (
-			<div data-testid='mcp-detail-empty' />
-		),
-}))
-
-// Phase 186-02 — Mock FeaturedMcpInstaller so it renders a stable stub in AI Chat tests.
-vi.mock('@/components/mcp/FeaturedMcpInstaller', () => ({
-	FeaturedMcpInstaller: () => <div data-testid='featured-mcp-installer-stub' />,
+// Phase 190-03 — CcTerminal mock (used for type='claude' tabs).
+vi.mock('@/features/cc-terminal/CcTerminal', () => ({
+	CcTerminal: ({sessionId}: {sessionId: string}) => (
+		<div data-testid='cc-terminal-mock' data-session-id={sessionId} />
+	),
 }))
 
 // Phase 189-01 — Mock AgentTerminalPane so it renders a stable stub.
@@ -163,6 +188,7 @@ beforeEach(() => {
 	useIsMobileMock.mockReset()
 	useIsMobileMock.mockReturnValue(false)
 	sidebarTreeMock.mockReset()
+	terminalTabStripMock.mockReset()
 	// Default: hasItems=true (preserves existing "Open a Chat" assertions)
 	itemListData = {items: [{id: 'fake-item-1', type: 'project'}]}
 	container = document.createElement('div')
@@ -209,7 +235,6 @@ describe('AiChatRoute — mobile branch', () => {
 
 	// Phase 185-03 — mobile early-return removed; mobile now shows split layout
 	// with sidebar collapsed by default and a hamburger toggle in the tab-nav row.
-	// The /chat-mobile redirect link lives in the /chat-mobile route, not here.
 	it('mounts without throwing on mobile', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
@@ -217,17 +242,16 @@ describe('AiChatRoute — mobile branch', () => {
 		expect(container.textContent).toBeTruthy()
 	})
 
-	// Phase 188-04 — "Vault Graph" tab removed; only Terminal + MCP Servers on mobile
-	it('renders "Terminal" and "MCP Servers" tab buttons on mobile (no Vault Graph)', () => {
+	// Phase 190-03 — MCP Servers tab removed; tab bar is now TerminalTabStrip.
+	// Tab strip itself is mocked. On mobile the hamburger button + add-item-btn still exist.
+	it('TerminalTabStrip is rendered (no MCP Servers tab button) on mobile', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
-		const buttons = Array.from(container.querySelectorAll('button')).map(
-			(b) => b.textContent,
-		)
-		expect(buttons).toContain('Terminal')
-		expect(buttons).toContain('MCP Servers')
-		expect(buttons).not.toContain('Vault Graph')
+		// The mock renders data-testid="terminal-tab-strip"
+		expect(container.querySelector('[data-testid="terminal-tab-strip"]')).not.toBeNull()
+		// MCP Servers text must be absent
+		expect(container.textContent).not.toMatch(/MCP Servers/)
 	})
 })
 
@@ -244,8 +268,6 @@ describe('routes/ai-chat/index.tsx — source-text invariants', () => {
 	// Phase 185-03 — mobile early-return removed; /chat-mobile link now lives
 	// in the /chat-mobile route itself. This test updated to reflect new behaviour.
 	it('does NOT contain a /chat-mobile redirect (Phase 185-03 mobile collapse)', () => {
-		// The link was in the old mobile early-return; now removed.
-		// Test updated to assert the correct post-185 state.
 		expect(SRC).not.toMatch(/href.*\/chat-mobile/)
 	})
 
@@ -264,16 +286,11 @@ describe('routes/ai-chat/index.tsx — source-text invariants', () => {
 
 	// Phase 175-05 — post-deletion invariants.
 	it('does NOT import @/features/cc-sessions (Phase 175-05 deletion)', () => {
-		// Check actual import lines only — a historical reference in a comment is allowed.
 		const importLines = SRC.split(/\r?\n/).filter((l) => /^\s*import\s/.test(l))
 		const ccSessionsImport = importLines.filter((l) => /cc-sessions/.test(l))
 		expect(ccSessionsImport).toEqual([])
 		const sidebarImport = importLines.filter((l) => /SessionSidebar/.test(l))
 		expect(sidebarImport).toEqual([])
-	})
-
-	it('does NOT import @/features/cc-terminal (Phase 175-05 — moved to dock window manager)', () => {
-		expect(SRC).not.toMatch(/from\s+['"]@\/features\/cc-terminal['"]/)
 	})
 
 	// Phase 176-04 — new source-text invariants.
@@ -324,15 +341,14 @@ describe('AiChatRoute — Phase 185-01 split layout', () => {
 		expect(sidebar?.className).toMatch(/w-\[280px\]/)
 	})
 
-	// Phase 188-04 — Updated: "Vault Graph" removed; only Terminal + MCP Servers present
-	it('B4: "Terminal" and "MCP Servers" buttons still present (no Vault Graph regression)', () => {
+	// Phase 190-03 — B4 updated: old static buttons gone; TerminalTabStrip now renders.
+	it('B4: TerminalTabStrip is rendered in the right pane (no Vault Graph or MCP Servers buttons)', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
-		const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent)
-		expect(buttons).toContain('Terminal')
-		expect(buttons).toContain('MCP Servers')
-		expect(buttons).not.toContain('Vault Graph')
+		expect(container.querySelector('[data-testid="terminal-tab-strip"]')).not.toBeNull()
+		expect(container.textContent).not.toMatch(/MCP Servers/)
+		expect(container.textContent).not.toMatch(/Vault Graph/)
 	})
 
 	it('B5: SidebarTree mock is called at least once', () => {
@@ -355,6 +371,7 @@ describe('AiChatRoute — Phase 185-02 item-select routing', () => {
 	beforeEach(() => {
 		useIsMobileMock.mockReturnValue(false)
 		sidebarTreeMock.mockReset()
+		terminalTabStripMock.mockReset()
 		itemListData = {
 			items: [
 				{id: 'chat-id-1', type: 'chat', name: 'Chat 1', ccSessionId: 'sess-abc', parentId: null},
@@ -390,8 +407,7 @@ describe('AiChatRoute — Phase 185-02 item-select routing', () => {
 		expect(container.querySelector('[data-testid="project-detail-mock"]')).not.toBeNull()
 	})
 
-	// Phase 189-01 — agent type now mounts AgentTerminalPane, not AgentDetail.
-	// Updated: assert agent-terminal-pane (not agent-detail-mock) renders.
+	// Phase 189-01 — agent type now mounts AgentTerminalPane via tab system.
 	it('B3: SidebarTree onSelect("agent-id-1") renders agent-terminal-pane in right pane (Phase 189-01)', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
@@ -482,93 +498,10 @@ describe('AiChatRoute — Phase 185-03 mobile collapse + modal trigger', () => {
 	})
 })
 
-// ── Phase 186-01 — MCP Servers tab in AI Chat ─────────────────────────────
-
-describe('AiChatRoute — Phase 186-01 MCP Servers tab', () => {
-	beforeEach(() => {
-		useIsMobileMock.mockReturnValue(false)
-	})
-
-	it('B1: renders "MCP Servers" tab button in the tab nav', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent)
-		expect(buttons).toContain('MCP Servers')
-	})
-
-	it('B2: initial render does NOT show mcp-server-list-mock (Terminal is default tab)', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		expect(container.querySelector('[data-testid="mcp-server-list-mock"]')).toBeNull()
-	})
-
-	it('B3: clicking "MCP Servers" tab renders mcp-server-list-mock in right pane', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		const mcpBtn = Array.from(container.querySelectorAll('button')).find(
-			(b) => b.textContent === 'MCP Servers',
-		) as HTMLButtonElement
-		expect(mcpBtn).toBeTruthy()
-		act(() => {
-			mcpBtn.click()
-		})
-		expect(container.querySelector('[data-testid="mcp-server-list-mock"]')).not.toBeNull()
-	})
-
-	it('B4: clicking "MCP Servers" tab renders mcp-detail-empty (no selection yet)', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		const mcpBtn = Array.from(container.querySelectorAll('button')).find(
-			(b) => b.textContent === 'MCP Servers',
-		) as HTMLButtonElement
-		act(() => {
-			mcpBtn.click()
-		})
-		expect(container.querySelector('[data-testid="mcp-detail-empty"]')).not.toBeNull()
-	})
-
-	it('B5: after mcp-server-list-mock click fires onSelect, mcp-server-detail-mock appears', async () => {
-		// Mock fetch to return a servers list so mcpSelectedServer resolves correctly.
-		const mockFetch = vi.fn().mockResolvedValue({
-			ok: true,
-			json: async () => ({
-				servers: [{name: 'brave-search', transport: 'stdio', enabled: true, installedAt: 0}],
-				statuses: {},
-			}),
-		})
-		vi.stubGlobal('fetch', mockFetch)
-
-		await act(async () => {
-			root.render(<AiChatRoute />)
-		})
-		const mcpBtn = Array.from(container.querySelectorAll('button')).find(
-			(b) => b.textContent === 'MCP Servers',
-		) as HTMLButtonElement
-		// Clicking MCP tab triggers fetch via useEffect
-		await act(async () => {
-			mcpBtn.click()
-		})
-		// Now mcpServers = [{name:'brave-search',...}]; click list mock calls onSelect('brave-search')
-		const listMock = container.querySelector('[data-testid="mcp-server-list-mock"]') as HTMLElement
-		act(() => {
-			listMock.click()
-		})
-		expect(container.querySelector('[data-testid="mcp-server-detail-mock"]')).not.toBeNull()
-		// Phase 188-04 — vault-graph element is gone (not even a stub)
-		expect(container.querySelector('[data-testid="vault-graph"]')).toBeNull()
-
-		vi.unstubAllGlobals()
-	})
-
-	it('B6: source-text — index.tsx Tab union contains "mcp"', () => {
-		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
-		expect(SRC).toMatch(/'mcp'/)
-	})
-})
+// ── Phase 186-01 — MCP Servers tab REMOVED (Phase 190-03) ─────────────────
+// Describe block deleted — MCP tab removed from AI Chat per Phase 190-03.
+// MCP component FILES stay on disk (Phase 191 will re-use in settings gear panel).
+// The absence of MCP Servers tab is asserted in Phase 190-03 P-02 assertion below.
 
 // ── Phase 189-01 — AgentTerminalPane routing (replaces AgentDetail) ─────────
 
@@ -576,6 +509,7 @@ describe('AiChatRoute — Phase 189-01 agent routing', () => {
 	beforeEach(() => {
 		useIsMobileMock.mockReturnValue(false)
 		sidebarTreeMock.mockReset()
+		terminalTabStripMock.mockReset()
 		itemListData = {
 			items: [
 				{id: 'agent-id-1', type: 'agent', name: 'Agent 1', parentId: null},
@@ -615,7 +549,6 @@ describe('AiChatRoute — Phase 189-01 agent routing', () => {
 describe('AiChatRoute — Phase 188-04 vault-graph removal', () => {
 	it('F-04-1: source-text — Tab type does NOT include graph', () => {
 		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
-		// The Tab type union must not contain 'graph'
 		expect(SRC).not.toMatch(/type Tab = .*'graph'/)
 	})
 
@@ -635,28 +568,138 @@ describe('AiChatRoute — Phase 188-04 vault-graph removal', () => {
 		expect(buttons).not.toContain('Vault Graph')
 	})
 
-	it('F-04-4: rendered tab nav contains "Terminal" and "MCP Servers"', () => {
+	// Phase 190-03 updated: TerminalTabStrip replaces static buttons; no more "Terminal" or "MCP Servers" text buttons
+	it('F-04-4: TerminalTabStrip is rendered in tab nav area (replacing static Terminal/MCP buttons)', () => {
 		useIsMobileMock.mockReturnValue(false)
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
-		const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent)
-		expect(buttons).toContain('Terminal')
-		expect(buttons).toContain('MCP Servers')
+		expect(container.querySelector('[data-testid="terminal-tab-strip"]')).not.toBeNull()
 	})
 
-	it('F-04-5: clicking MCP Servers tab still shows mcp-server-list-mock (regression)', () => {
+	// Phase 190-03 — F-04-5 removed (was "clicking MCP Servers tab shows mcp-server-list-mock")
+	// MCP Servers tab is gone from AI Chat. Settings route still shows MCP.
+	it('F-04-5: source-text — no MCP Servers tab value in Tab union (mcp tab removed)', () => {
+		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
+		// The old "type Tab = 'terminal' | 'mcp'" union is gone
+		expect(SRC).not.toMatch(/type Tab = ['"]terminal['"] \| ['"]mcp['"]/)
+	})
+})
+
+// ── Phase 190-03 — Tab strip wiring + MCP tab removal ─────────────────────
+
+describe('AiChatRoute — Phase 190-03 tab strip wiring', () => {
+	beforeEach(() => {
 		useIsMobileMock.mockReturnValue(false)
+		sidebarTreeMock.mockReset()
+		terminalTabStripMock.mockReset()
+		itemListData = {
+			items: [
+				{id: 'agent-id-1', type: 'agent', name: 'Agent 1', parentId: null},
+				{id: 'chat-id-1', type: 'chat', name: 'Chat 1', parentId: null},
+			],
+		}
+	})
+
+	it('P-01: TerminalTabStrip rendered in DOM (data-testid="terminal-tab-strip")', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
-		const mcpBtn = Array.from(container.querySelectorAll('button')).find(
-			(b) => b.textContent === 'MCP Servers',
-		) as HTMLButtonElement
-		expect(mcpBtn).toBeTruthy()
+		expect(container.querySelector('[data-testid="terminal-tab-strip"]')).not.toBeNull()
+	})
+
+	it('P-02: "MCP Servers" text NOT in rendered DOM (tab removed)', () => {
 		act(() => {
-			mcpBtn.click()
+			root.render(<AiChatRoute />)
 		})
-		expect(container.querySelector('[data-testid="mcp-server-list-mock"]')).not.toBeNull()
+		// No static "MCP Servers" button
+		expect(container.textContent).not.toMatch(/MCP Servers/)
+	})
+
+	it('P-03: sidebar agent click → tab with data-testid="tab-liv-agent-{id}" appears in tab strip', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const calls = sidebarTreeMock.mock.calls as any[]
+		const captured = (calls[0]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
+		act(() => {
+			captured?.onSelect?.('agent-id-1')
+		})
+		// The tab strip mock renders a button with data-testid="tab-liv-agent-agent-id-1"
+		expect(container.querySelector('[data-testid="tab-liv-agent-agent-id-1"]')).not.toBeNull()
+	})
+
+	it('P-04: second sidebar agent click for same item → no duplicate tab (focuses existing)', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// First click — get fresh captured fn before the click
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		let calls = sidebarTreeMock.mock.calls as any[]
+		let captured = (calls[calls.length - 1]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
+		act(() => {
+			captured?.onSelect?.('agent-id-1')
+		})
+		// After re-render, get the LATEST captured fn (updated handleItemSelect with new tabs)
+		calls = sidebarTreeMock.mock.calls as any[]
+		captured = (calls[calls.length - 1]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
+		act(() => {
+			captured?.onSelect?.('agent-id-1')
+		})
+		// Only one tab for agent-id-1
+		const agentTabs = container.querySelectorAll('[data-testid="tab-liv-agent-agent-id-1"]')
+		expect(agentTabs).toHaveLength(1)
+	})
+
+	it('P-05: Claude icon click (add-claude-btn) → new tab labeled "Claude 1" appears', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const addBtn = container.querySelector('[data-testid="add-claude-btn"]') as HTMLButtonElement
+		expect(addBtn).not.toBeNull()
+		act(() => {
+			addBtn.click()
+		})
+		// Tab strip mock renders tabs as buttons with their labels
+		expect(container.textContent).toMatch(/Claude 1/)
+	})
+
+	it('P-06: Terminal icon click (add-terminal-btn) → new tab labeled "Terminal 1" appears', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const addBtn = container.querySelector('[data-testid="add-terminal-btn"]') as HTMLButtonElement
+		expect(addBtn).not.toBeNull()
+		act(() => {
+			addBtn.click()
+		})
+		expect(container.textContent).toMatch(/Terminal 1/)
+	})
+
+	it('P-07: close button (tab-close-{id}) click removes that tab from the strip', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const calls = sidebarTreeMock.mock.calls as any[]
+		const captured = (calls[0]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
+		act(() => {
+			captured?.onSelect?.('agent-id-1')
+		})
+		// Tab is now in the strip
+		expect(container.querySelector('[data-testid="tab-liv-agent-agent-id-1"]')).not.toBeNull()
+		// Close it
+		const closeBtn = container.querySelector('[data-testid="tab-close-liv-agent-agent-id-1"]') as HTMLButtonElement
+		expect(closeBtn).not.toBeNull()
+		act(() => {
+			closeBtn.click()
+		})
+		expect(container.querySelector('[data-testid="tab-liv-agent-agent-id-1"]')).toBeNull()
+	})
+
+	it('P-08: source-text — index.tsx does NOT contain "type Tab =" (old union type gone)', () => {
+		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
+		expect(SRC).not.toMatch(/type Tab =/)
 	})
 })
