@@ -2583,6 +2583,12 @@ Plans:
 **Plans:** 4 (audit + service-unit + code-paths + sacred-re-pin)
 **Estimated:** ~0.5-1 day (testing-heavy)
 
+Plans:
+- [ ] 192-01-PLAN.md — Audit root-required ops + sudoers template (Wave 1)
+- [ ] 192-02-PLAN.md — livos.service User=bruce + migration script + deploy invocation (Wave 2, depends 192-01)
+- [ ] 192-03-PLAN.md — Code-path adjustments: drop isRoot, HOME=os.homedir(), broker /root/.claude → ~/.claude (Wave 2, depends 192-01)
+- [ ] 192-04-PLAN.md — Sacred SHA registry repin + Mini PC live verification (Wave 3, depends 192-02 + 192-03)
+
 ---
 
 ### Phase 193: ~/livinity/ Filesystem Refactor (DROP "vault") — 🔴 PLANNED 2026-05-21
