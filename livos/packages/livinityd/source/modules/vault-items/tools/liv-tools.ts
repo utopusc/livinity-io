@@ -17,6 +17,8 @@
 import {z} from 'zod'
 import type {Redis} from 'ioredis'
 import type {AgentRunner} from '../agent-runner.js'
+// Phase 189-03 — conditional agent setup tool registration (additive).
+import {registerAgentSetupTools} from './agent-setup-tools.js'
 
 // ── Shared Zod shapes ────────────────────────────────────────────────────────
 // Mirror vault-items-router.ts ID_RE (T-176-02-01: reject path traversal / NUL injection).
@@ -58,6 +60,9 @@ export interface LivToolsOptions {
 	/** Phase 177-02 — wired AgentRunner. When set, run_agent calls it;
 	 *  when absent, the stub response is returned instead. */
 	agentRunner?: AgentRunner
+	/** Phase 189-03 — when set, also registers agent_config_set tool for the agent's own PTY.
+	 *  Non-agent sessions omit this field, so agent_config_set is NOT exposed globally. */
+	agentDir?: string
 }
 
 // ── McpServer-like surface ────────────────────────────────────────────────────
@@ -233,4 +238,11 @@ export function registerLivTools(server: McpServerLike, opts: LivToolsOptions): 
 			return ok('run_agent: scheduled (Phase 177 — runner not wired)')
 		},
 	)
+
+	// Phase 189-03 — conditionally register agent setup tool.
+	// Only registered when agentDir is provided (i.e. for an agent-scoped PTY session).
+	// Global Liv MCP server (no agentDir) does NOT expose this tool.
+	if (opts.agentDir) {
+		registerAgentSetupTools(server, {agentDir: opts.agentDir, redis})
+	}
 }
