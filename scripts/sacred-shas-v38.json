@@ -148,5 +148,11 @@
     "expected_sha": "bed545d223ea9a7527b6818bedffb31e0603bbfe",
     "frozen_in_phase": "172-livos-cli-skeleton",
     "rationale": "Longest-prefix query routing — wire-format contract."
+  },
+  {
+    "path": "scripts/install/sudoers.d/livinityd",
+    "expected_sha": "568e4403bd71b25fba44609aec47967a9babec08",
+    "frozen_in_phase": "192-bruce-user-switch",
+    "rationale": "Phase 192-01 sudoers security boundary; widening this file (e.g., adding NOPASSWD: ALL or new Cmnd_Alias entries) must be a deliberate, reviewed change that re-pins the SHA. Silent edits would grant livinityd unintended root privileges."
   }
 ]
