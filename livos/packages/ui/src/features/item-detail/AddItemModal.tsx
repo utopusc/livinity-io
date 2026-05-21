@@ -1,38 +1,45 @@
-// Phase 175-01 / 175-02 — AddItemModal.
+// Phase 188-01 — AddItemModal 2-step minimal flow.
 //
-// 175-01 — Scaffold: Radix Dialog shell + 3 type-picker cards + parent
-//   dropdown populated from vault.items.list (Main Liv pinned first).
+// Replaces the Phase 175-01/02 multi-step form (type → cwd / system-prompt /
+// tools / schedule) with a 2-step flow:
+//   Step 1: Pick type — two large cards (Agent | Project)
+//   Step 2: Enter name + pick a lucide icon → "Kur" submits
 //
-// 175-02 — Per-type forms + vault.items.create mutation.
-//   After pickType(type), the modal swaps the picker for a per-type form:
-//     project → name (required), cwd (optional), template select (client-only)
-//     agent   → name (required), system prompt (optional, client-only for now),
-//               schedule cron (optional)
-//     chat    → name (optional — auto-generated `Chat YYYY-MM-DD HH:mm` when blank)
-//   Submit fires trpcReact.vault.items.create.useMutation. On success, sonner
-//   toast.success + onItemCreated(item) + onClose. On error, sonner toast.error
-//   and the modal STAYS open (user can correct + retry).
+// Chat type is retained in the tRPC contract but hidden in this UI.
+// Icon is stored in settings.json (server side, Phase 188-02 wires it).
 //
-// CROSS-TYPE FIELD GATING — the server (vault-items-router.ts lines 155-169)
-// BAD_REQUESTs if cwd is on a non-project, schedule on a non-agent, or
-// ccSessionId on a non-chat. The form-step branches per selectedType
-// ensure we never send a forbidden field.
-//
-// PARENT ID TRANSLATION — the parent dropdown uses MAIN_LIV_ID ('main-liv')
-// for the synthetic root. Real Item ids are ≥20 chars (nanoid); 'main-liv'
-// is 8 chars and the server's Zod ID_RE would reject it. Translate
-// MAIN_LIV_ID → null before sending.
+// Phase 188-03 — z-index + portal fix:
+//   Dialog.Overlay className contains z-50
+//   Dialog.Content className contains z-50
+//   Dialog.Portal has explicit container={document.body}
 
 import * as Dialog from '@radix-ui/react-dialog'
-import {Bot, FolderKanban, MessageSquare} from 'lucide-react'
-import {useState, type FormEvent} from 'react'
+import {
+	User,
+	Bot,
+	Folder,
+	FolderOpen,
+	Code,
+	Terminal,
+	Book,
+	Brain,
+	Sparkles,
+	Wrench,
+	Calendar,
+	Mail,
+	Search,
+	Database,
+	Globe,
+	Settings,
+	FolderOpen as FolderOpenIcon,
+} from 'lucide-react'
+import {useState} from 'react'
 import {toast} from 'sonner'
 
 import {trpcReact} from '@/trpc/trpc'
-
 import {MAIN_LIV_ID, type ItemType} from '@/features/sidebar-tree/tree-shape'
 
-type Step = 'pick' | 'form'
+type Step = 'pick-type' | 'name-icon'
 
 export interface AddItemModalProps {
 	open: boolean
@@ -42,35 +49,24 @@ export interface AddItemModalProps {
 	initialParentId?: string
 }
 
-function defaultChatName(now: Date = new Date()): string {
-	const pad = (n: number) => String(n).padStart(2, '0')
-	return `Chat ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
-}
-
-interface TypeCardProps {
-	testId: string
-	type: ItemType
-	label: string
-	description: string
-	Icon: typeof FolderKanban
-	iconClass: string
-	onClick: () => void
-}
-
-function TypeCard({testId, label, description, Icon, iconClass, onClick}: TypeCardProps) {
-	return (
-		<button
-			type='button'
-			data-testid={testId}
-			onClick={onClick}
-			className='flex flex-col items-start gap-2 rounded-lg border border-line p-4 text-left hover:bg-surface-2'
-		>
-			<Icon size={24} className={iconClass} />
-			<span className='text-sm font-semibold'>{label}</span>
-			<span className='text-xs text-text-secondary'>{description}</span>
-		</button>
-	)
-}
+const ICONS = [
+	{name: 'User', Icon: User},
+	{name: 'Bot', Icon: Bot},
+	{name: 'Folder', Icon: Folder},
+	{name: 'FolderOpen', Icon: FolderOpen},
+	{name: 'Code', Icon: Code},
+	{name: 'Terminal', Icon: Terminal},
+	{name: 'Book', Icon: Book},
+	{name: 'Brain', Icon: Brain},
+	{name: 'Sparkles', Icon: Sparkles},
+	{name: 'Wrench', Icon: Wrench},
+	{name: 'Calendar', Icon: Calendar},
+	{name: 'Mail', Icon: Mail},
+	{name: 'Search', Icon: Search},
+	{name: 'Database', Icon: Database},
+	{name: 'Globe', Icon: Globe},
+	{name: 'Settings', Icon: Settings},
+]
 
 export function AddItemModal({
 	open,
@@ -79,377 +75,134 @@ export function AddItemModal({
 	onItemCreated,
 	initialParentId,
 }: AddItemModalProps) {
-	const [step, setStep] = useState<Step>('pick')
-	const [selectedType, setSelectedType] = useState<ItemType | null>(null)
-	const [parentId, setParentId] = useState<string>(initialParentId ?? MAIN_LIV_ID)
-	const [formError, setFormError] = useState<string | null>(null)
-
-	// Per-type form state — kept isolated so type-switch never carries
-	// forbidden fields (server cross-type gate).
-	const [projectName, setProjectName] = useState('')
-	const [projectCwd, setProjectCwd] = useState('')
-	const [projectTemplate, setProjectTemplate] = useState<'blank' | 'git-clone' | '.planning'>(
-		'blank',
-	)
-	const [agentName, setAgentName] = useState('')
-	const [agentSystemPrompt, setAgentSystemPrompt] = useState('')
-	const [agentSchedule, setAgentSchedule] = useState('')
-	const [chatName, setChatName] = useState('')
-
-	const list = trpcReact.vault.items.list.useQuery()
-	const liveItems = (list.data?.items ?? []).filter(
-		(it: {archivedAt: number | null}) => it.archivedAt === null,
-	)
+	const [step, setStep] = useState<Step>('pick-type')
+	const [selectedType, setSelectedType] = useState<'agent' | 'project' | null>(null)
+	const [name, setName] = useState('')
+	const [iconName, setIconName] = useState<string | null>(null)
+	const [parentId] = useState<string>(initialParentId ?? MAIN_LIV_ID)
 
 	const createMutation = trpcReact.vault.items.create.useMutation({
-		onSuccess: (data: {item?: any}) => {
+		onSuccess: (data) => {
 			const item = data.item as {id: string; name: string; type: string}
-			toast.success(`Created: ${item.name}`)
+			toast.success(`Oluşturuldu: ${item.name}`)
 			onItemCreated?.(item)
-			// Reset local state so a reopen starts fresh.
-			setStep('pick')
+			// reset
+			setStep('pick-type')
 			setSelectedType(null)
-			setProjectName('')
-			setProjectCwd('')
-			setProjectTemplate('blank')
-			setAgentName('')
-			setAgentSystemPrompt('')
-			setAgentSchedule('')
-			setChatName('')
-			setFormError(null)
+			setName('')
+			setIconName(null)
 			onClose()
 		},
-		onError: (err: {message?: string}) => {
-			toast.error(err?.message ?? 'Failed to create item')
-			// Modal stays open — caller can correct + retry.
+		onError: (err) => {
+			toast.error((err as {message?: string})?.message ?? 'Öğe oluşturulamadı')
 		},
 	})
 
-	const handlePick = (type: ItemType) => {
-		setSelectedType(type)
-		setStep('form')
-		setFormError(null)
-		onTypeSelected?.(type)
+	const handlePickType = (t: 'agent' | 'project') => {
+		setSelectedType(t)
+		setStep('name-icon')
+		onTypeSelected?.(t)
 	}
 
 	const handleBack = () => {
-		setStep('pick')
+		setStep('pick-type')
 		setSelectedType(null)
-		setFormError(null)
+		setIconName(null)
 	}
 
-	const serverParentId = parentId === MAIN_LIV_ID ? null : parentId
-
-	const submitProject = (e: FormEvent) => {
+	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault()
-		if (projectName.trim().length === 0) {
-			setFormError('Name is required')
-			return
-		}
-		setFormError(null)
-		const payload: {
-			type: 'project'
-			name: string
-			parentId: string | null
-			cwd?: string
-		} = {
-			type: 'project',
-			name: projectName.trim(),
-			parentId: serverParentId,
-		}
-		if (projectCwd.trim().length > 0) {
-			payload.cwd = projectCwd.trim()
-		}
-		// NOTE: `template` is client-only for now — server scaffolding lands in
-		// a future plan (176+). Not sent to vault.items.create.
-		createMutation.mutate(payload)
-	}
-
-	const submitAgent = (e: FormEvent) => {
-		e.preventDefault()
-		if (agentName.trim().length === 0) {
-			setFormError('Name is required')
-			return
-		}
-		setFormError(null)
-		const payload: {
-			type: 'agent'
-			name: string
-			parentId: string | null
-			schedule?: string
-		} = {
-			type: 'agent',
-			name: agentName.trim(),
-			parentId: serverParentId,
-		}
-		if (agentSchedule.trim().length > 0) {
-			payload.schedule = agentSchedule.trim()
-		}
-		// NOTE: `systemPrompt` is client-only for now — 175-04 AgentDetail will
-		// plumb it via a separate update mutation. Not sent to vault.items.create.
-		createMutation.mutate(payload)
-	}
-
-	const submitChat = (e: FormEvent) => {
-		e.preventDefault()
-		const finalName = chatName.trim().length > 0 ? chatName.trim() : defaultChatName()
-		setFormError(null)
+		if (!selectedType || name.trim().length === 0 || !iconName) return
+		const serverParentId = parentId === MAIN_LIV_ID ? null : parentId
 		createMutation.mutate({
-			type: 'chat',
-			name: finalName,
+			type: selectedType,
+			name: name.trim(),
 			parentId: serverParentId,
-		})
+			icon: iconName,
+		} as any) // icon field added to server schema in 188-02
 	}
 
 	return (
 		<Dialog.Root open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-			<Dialog.Portal>
-				<Dialog.Overlay className='fixed inset-0 bg-bg/60' />
+			<Dialog.Portal container={document.body}>
+				<Dialog.Overlay className='fixed inset-0 z-50 bg-bg/60' />
 				<Dialog.Content
 					data-testid='add-item-modal'
-					className='fixed left-1/2 top-1/2 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-bg-secondary p-6 shadow-lg'
+					className='fixed left-1/2 top-1/2 z-50 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-line bg-bg-secondary p-6 shadow-xl'
 				>
 					<Dialog.Title className='mb-4 text-base font-semibold'>
-						{step === 'pick' ? 'Add new item' : `New ${selectedType ?? ''}`}
+						{step === 'pick-type' ? 'Yeni öğe ekle' : `Yeni ${selectedType === 'agent' ? 'Agent' : 'Proje'}`}
 					</Dialog.Title>
 
-					{step === 'pick' && (
-						<>
-							<div className='mb-4 grid grid-cols-3 gap-3'>
-								<TypeCard
-									testId='type-card-project'
-									type='project'
-									label='Project'
-									description='Folder with README + tasks'
-									Icon={FolderKanban}
-									iconClass='lucide-folder-kanban text-accent-amber'
-									onClick={() => handlePick('project')}
-								/>
-								<TypeCard
-									testId='type-card-agent'
-									type='agent'
-									label='Agent'
-									description='Scheduled or on-demand'
-									Icon={Bot}
-									iconClass='lucide-bot text-accent-blue'
-									onClick={() => handlePick('agent')}
-								/>
-								<TypeCard
-									testId='type-card-chat'
-									type='chat'
-									label='Chat'
-									description='Quick CC PTY session'
-									Icon={MessageSquare}
-									iconClass='lucide-message-square text-text-secondary'
-									onClick={() => handlePick('chat')}
-								/>
-							</div>
-
-							<label className='mb-1 block text-xs font-medium text-text-secondary'>
-								Parent
-							</label>
-							<select
-								data-testid='parent-select'
-								value={parentId}
-								onChange={(e) => setParentId(e.target.value)}
-								className='w-full rounded border border-line bg-bg p-2 text-sm'
+					{step === 'pick-type' && (
+						<div data-testid='step-pick-type' className='grid grid-cols-2 gap-4'>
+							<button
+								type='button'
+								data-testid='type-card-agent'
+								onClick={() => handlePickType('agent')}
+								className='flex h-40 flex-col items-center gap-3 rounded-xl border-2 border-line p-6 text-center hover:border-primary hover:bg-surface-2 cursor-pointer'
 							>
-								<option value={MAIN_LIV_ID}>Main Liv</option>
-								{liveItems.map((it: {id: string; name: string}) => (
-									<option key={it.id} value={it.id}>
-										{it.name}
-									</option>
+								<Bot size={32} className='text-accent-blue' />
+								<span className='text-sm font-semibold'>Agent</span>
+								<span className='text-xs text-text-secondary'>Senin için iş yapan AI asistan</span>
+							</button>
+							<button
+								type='button'
+								data-testid='type-card-project'
+								onClick={() => handlePickType('project')}
+								className='flex h-40 flex-col items-center gap-3 rounded-xl border-2 border-line p-6 text-center hover:border-primary hover:bg-surface-2 cursor-pointer'
+							>
+								<FolderOpenIcon size={32} className='text-accent-amber' />
+								<span className='text-sm font-semibold'>Proje</span>
+								<span className='text-xs text-text-secondary'>İlgili öğeler ve görevler için klasör</span>
+							</button>
+						</div>
+					)}
+
+					{step === 'name-icon' && (
+						<form data-testid='step-name-icon' onSubmit={handleSubmit} className='flex flex-col gap-4'>
+							<input
+								data-testid='name-input'
+								autoFocus
+								type='text'
+								maxLength={128}
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+								placeholder={selectedType === 'agent' ? 'Agent adı...' : 'Proje adı...'}
+								className='w-full rounded border border-line bg-bg p-2 text-sm'
+							/>
+
+							<div className='grid grid-cols-8 gap-1'>
+								{ICONS.map((ic) => (
+									<button
+										type='button'
+										key={ic.name}
+										data-testid={`icon-btn-${ic.name}`}
+										onClick={() => setIconName(ic.name)}
+										className={`rounded-lg p-2 hover:bg-surface-2 ${iconName === ic.name ? 'ring-2 ring-primary bg-surface-2' : ''}`}
+										aria-label={ic.name}
+									>
+										<ic.Icon size={20} />
+									</button>
 								))}
-							</select>
-						</>
-					)}
+							</div>
 
-					{step === 'form' && selectedType === 'project' && (
-						<form
-							data-testid='form-step-project'
-							onSubmit={submitProject}
-							className='flex flex-col gap-3'
-						>
-							<div>
-								<label className='mb-1 block text-xs font-medium text-text-secondary'>
-									Name
-								</label>
-								<input
-									data-testid='project-name-input'
-									type='text'
-									value={projectName}
-									onChange={(e) => setProjectName(e.target.value)}
-									maxLength={200}
-									className='w-full rounded border border-line bg-bg p-2 text-sm'
-								/>
-							</div>
-							<div>
-								<label className='mb-1 block text-xs font-medium text-text-secondary'>
-									Working directory (cwd)
-								</label>
-								<input
-									data-testid='project-cwd-input'
-									type='text'
-									value={projectCwd}
-									onChange={(e) => setProjectCwd(e.target.value)}
-									className='w-full rounded border border-line bg-bg p-2 text-sm'
-								/>
-							</div>
-							<div>
-								<label className='mb-1 block text-xs font-medium text-text-secondary'>
-									Template
-								</label>
-								<select
-									data-testid='project-template-select'
-									value={projectTemplate}
-									onChange={(e) =>
-										setProjectTemplate(
-											e.target.value as 'blank' | 'git-clone' | '.planning',
-										)
-									}
-									className='w-full rounded border border-line bg-bg p-2 text-sm'
-								>
-									<option value='blank'>blank</option>
-									<option value='git-clone'>git-clone</option>
-									<option value='.planning'>.planning</option>
-								</select>
-								<span data-testid='project-template-selected' className='hidden'>
-									{projectTemplate}
-								</span>
-							</div>
-							{formError && (
-								<div data-testid='form-error' className='text-xs text-accent-red'>
-									{formError}
-								</div>
-							)}
-							<div className='flex justify-between'>
+							<div className='flex items-center justify-between'>
 								<button
 									type='button'
-									data-testid='form-back'
+									data-testid='back-btn'
 									onClick={handleBack}
 									className='text-xs text-text-secondary hover:underline'
 								>
-									← Back
+									← Geri
 								</button>
 								<button
 									type='submit'
-									data-testid='form-submit'
-									className='rounded bg-accent-blue px-3 py-1 text-sm text-bg'
+									data-testid='submit-btn'
+									disabled={name.trim().length === 0 || iconName === null || createMutation.isPending}
+									className='rounded bg-accent-blue px-4 py-1.5 text-sm text-bg disabled:opacity-40'
 								>
-									Create project
-								</button>
-							</div>
-						</form>
-					)}
-
-					{step === 'form' && selectedType === 'agent' && (
-						<form
-							data-testid='form-step-agent'
-							onSubmit={submitAgent}
-							className='flex flex-col gap-3'
-						>
-							<div>
-								<label className='mb-1 block text-xs font-medium text-text-secondary'>
-									Name
-								</label>
-								<input
-									data-testid='agent-name-input'
-									type='text'
-									value={agentName}
-									onChange={(e) => setAgentName(e.target.value)}
-									maxLength={200}
-									className='w-full rounded border border-line bg-bg p-2 text-sm'
-								/>
-							</div>
-							<div>
-								<label className='mb-1 block text-xs font-medium text-text-secondary'>
-									System prompt (optional)
-								</label>
-								<textarea
-									data-testid='agent-system-prompt-input'
-									value={agentSystemPrompt}
-									onChange={(e) => setAgentSystemPrompt(e.target.value)}
-									rows={3}
-									className='w-full rounded border border-line bg-bg p-2 text-sm'
-								/>
-							</div>
-							<div>
-								<label className='mb-1 block text-xs font-medium text-text-secondary'>
-									Schedule (cron, optional)
-								</label>
-								<input
-									data-testid='agent-schedule-input'
-									type='text'
-									placeholder='e.g. 0 9 * * *'
-									value={agentSchedule}
-									onChange={(e) => setAgentSchedule(e.target.value)}
-									className='w-full rounded border border-line bg-bg p-2 text-sm'
-								/>
-							</div>
-							{formError && (
-								<div data-testid='form-error' className='text-xs text-accent-red'>
-									{formError}
-								</div>
-							)}
-							<div className='flex justify-between'>
-								<button
-									type='button'
-									data-testid='form-back'
-									onClick={handleBack}
-									className='text-xs text-text-secondary hover:underline'
-								>
-									← Back
-								</button>
-								<button
-									type='submit'
-									data-testid='form-submit'
-									className='rounded bg-accent-blue px-3 py-1 text-sm text-bg'
-								>
-									Create agent
-								</button>
-							</div>
-						</form>
-					)}
-
-					{step === 'form' && selectedType === 'chat' && (
-						<form
-							data-testid='form-step-chat'
-							onSubmit={submitChat}
-							className='flex flex-col gap-3'
-						>
-							<div>
-								<label className='mb-1 block text-xs font-medium text-text-secondary'>
-									Name (optional — auto-generated if blank)
-								</label>
-								<input
-									data-testid='chat-name-input'
-									type='text'
-									value={chatName}
-									onChange={(e) => setChatName(e.target.value)}
-									maxLength={200}
-									className='w-full rounded border border-line bg-bg p-2 text-sm'
-								/>
-							</div>
-							{formError && (
-								<div data-testid='form-error' className='text-xs text-accent-red'>
-									{formError}
-								</div>
-							)}
-							<div className='flex justify-between'>
-								<button
-									type='button'
-									data-testid='form-back'
-									onClick={handleBack}
-									className='text-xs text-text-secondary hover:underline'
-								>
-									← Back
-								</button>
-								<button
-									type='submit'
-									data-testid='form-submit'
-									className='rounded bg-accent-blue px-3 py-1 text-sm text-bg'
-								>
-									Create chat
+									{createMutation.isPending ? '...' : 'Kur'}
 								</button>
 							</div>
 						</form>
