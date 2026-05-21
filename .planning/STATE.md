@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-21T04:04:46.809Z"
+last_updated: "2026-05-21T04:38:33.405Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,9 +25,18 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-**Active milestone:** v38.2 — Agent PTY + Setup Wizard — **IN PROGRESS** (Phase 189 CODE-COMPLETE 2026-05-20).
+**Active milestone:** v38.2 — Agent PTY + Setup Wizard — **CODE-COMPLETE** (Phase 190 shipped 2026-05-21).
 
-**Last shipped phase:** **Phase 189** Agent Click → CC PTY + Chat-Based Setup Wizard — CODE-COMPLETE 2026-05-20 (36 new vitest PASS across 5 suites; 25/25 sacred SHAs; 7 commits `4b788b33..f1264920`; AgentTerminalPane, setup-wizard-prompt, agent_config_set tool, StarterChips, session transcript writer).
+**Last shipped phase:** **Phase 190** Multiple Terminal Tabs + Claude/Terminal Icons — CODE-COMPLETE 2026-05-21 (32 new vitest PASS across 4 plans; 25/25 sacred SHAs; 8 commits `5ce80623..ade1f945`; BareTerminal, TerminalTabStrip, TerminalTab, dynamic tabs state, MCP tab removed from AI Chat, localStorage persistence).
+
+**Key decisions (Phase 190):**
+
+- BareTerminal reuses CcPtyWsClient verbatim (no protocol changes); liv-bare- prefix signals intent
+- Inline bare session creation in ws-handler avoids REST round-trip
+- Type Tab union removed; replaced with TerminalTabInfo[] dynamic state
+- MCP tab removed from AI Chat; McpServerList/Detail/FeaturedMcpInstaller files stay for Phase 191
+- Projects use selectedItem routing; agent/chat/claude/terminal get tabs
+- localStorage key scoped to userId: 'liv:ai-chat:tabs:{userId}'
 
 **Key decisions (Phase 189):**
 

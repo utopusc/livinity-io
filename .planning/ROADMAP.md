@@ -2536,7 +2536,7 @@ Plans:
 
 ---
 
-### Phase 190: Multiple Terminal Tabs + Claude/Terminal Icons at Right — 🔴 PLANNED 2026-05-20
+### Phase 190: Multiple Terminal Tabs + Claude/Terminal Icons at Right — ✅ CODE-COMPLETE 2026-05-21
 
 **Goal:** Replace AI Chat top tab bar (currently `Terminal | Vault Graph | MCP Server` — after 188, just `Terminal | MCP Server`) with dynamic terminal tabs: each open agent/chat gets a tab labeled by name. At right of tab bar: Claude icon (+ new ad-hoc Claude session, cwd = $HOME) and Terminal icon (+ new bare bash terminal). Capacity ≥10 concurrent tabs. Tab switch = swap right-pane mounted CcTerminal session id (no re-spawn). Close-tab kills the tmux session. Remove MCP Server tab entirely (will live in settings gear panel — v38.3 Phase 191).
 
@@ -2546,12 +2546,30 @@ Plans:
 **Requirements:** 190-bare-terminal, 190-tab-strip, 190-tab-wiring, 190-mcp-tab-removal, 190-tab-persistence
 
 Plans:
-- [ ] 190-01-PLAN.md — BareTerminal component + ws-handler sessionType passthrough
-- [ ] 190-02-PLAN.md — TerminalTabStrip + TerminalTab components
-- [ ] 190-03-PLAN.md — AiChatRoute tab strip wiring + MCP tab removal
-- [ ] 190-04-PLAN.md — localStorage tab persistence (300ms debounce)
+- [x] 190-01-PLAN.md — BareTerminal component + ws-handler sessionType passthrough
+- [x] 190-02-PLAN.md — TerminalTabStrip + TerminalTab components
+- [x] 190-03-PLAN.md — AiChatRoute tab strip wiring + MCP tab removal
+- [x] 190-04-PLAN.md — localStorage tab persistence (300ms debounce)
 
-**Estimated:** ~1 day | **Assertions:** 30 new vitest (6+10+8+6)
+**Estimated:** ~1 day | **Assertions:** 32 new vitest (6+10+8+6+2) | **Actual:** 53min | Commits: `5ce80623..ade1f945`
+
+---
+
+## ✅ v38.2 MILESTONE CLOSED — 2026-05-21
+
+**Milestone:** v38.2 Terminal Tabs + Vault Graph Polish
+**Phases shipped:** 188 (vault-graph polish), 189 (agent session hooks), 190 (multiple terminal tabs)
+**New vitest assertions:** 188: ~20 | 189: ~25 | 190: 32 — total ~77 across milestone
+**Sacred SHA:** 25/25 PASS across all milestone commits
+**UI tests:** 1004 passing (25 pre-existing failures unchanged)
+**livinityd tests:** 1901 passing (23 pre-existing failures unchanged)
+**Key deliverables:**
+- Dynamic terminal tab strip replaces static Terminal/MCP tab bar in AI Chat
+- BareTerminal (bash PTY) + CcTerminal (claude) + AgentTerminalPane per-agent sessions
+- Sidebar agent click → opens named tab (focus existing, no duplicate)
+- Claude icon + Terminal icon → ad-hoc tabs
+- localStorage persistence (300ms debounce, user-scoped)
+- MCP tab removed; component files stay on disk for Phase 191
 
 ---
 
