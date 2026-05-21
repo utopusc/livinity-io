@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v34.0
-milestone_name: Bootstrap Polish + First-Run UX
-status: unknown
-last_updated: "2026-05-21T04:38:33.405Z"
+milestone: v38.3
+milestone_name: DROP Vault Concept + bruce-user refactor
+status: phase-192-code-complete-pending-mini-pc-cutover
+last_updated: "2026-05-21T21:05:03.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,9 +25,20 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-**Active milestone:** v38.2 — Agent PTY + Setup Wizard — **CODE-COMPLETE** (Phase 190 shipped 2026-05-21).
+**Active milestone:** v38.3 — DROP Vault Concept + bruce-user refactor — **PHASE 192 CODE-COMPLETE** (Phase 192 shipped 2026-05-21).
 
-**Last shipped phase:** **Phase 190** Multiple Terminal Tabs + Claude/Terminal Icons — CODE-COMPLETE 2026-05-21 (32 new vitest PASS across 4 plans; 25/25 sacred SHAs; 8 commits `5ce80623..ade1f945`; BareTerminal, TerminalTabStrip, TerminalTab, dynamic tabs state, MCP tab removed from AI Chat, localStorage persistence).
+**Last shipped phase:** **Phase 192** livinityd User=bruce Switch + sudoers + Migration — CODE-COMPLETE 2026-05-21 (60 local PASS across 6 test scripts; 26/26 sacred SHAs post-pin; 7 feature commits `33a47c16..a03c60e3`; sudoers fragment + migration script + User=bruce systemd unit + isRoot drop + HOME=os.homedir() interpolation + /root/.claude → os.homedir() fix + sacred registry pin). Mini PC live cutover deferred to operator (`human_needed` per 192-VERIFICATION.md).
+
+**Key decisions (Phase 192):**
+
+- livos.service + 3× liv-* units switched from User=root to User=bruce + Group=bruce
+- Narrow NOPASSWD sudoers fragment (6 Cmnd_Alias entries, NO `NOPASSWD: ALL`) — pinned in sacred SHA registry as security boundary
+- Idempotent migration script `scripts/migrate-to-bruce-user.sh` with TEST_ROOT + DRY_RUN affordances for CI; marker `/opt/livos/data/.bruce-migrated` guards re-runs
+- cc-pty/manager.ts: `isRoot` check dropped (becomes dead code post-cutover); module-level `const HOME_DIR = os.homedir()` interpolated into all 4 tmux/execSync HOME sites
+- livinity-broker/auth.ts: `/root/.claude` literal → `path.join(os.homedir(), '.claude')` for BROKER_FORCE_ROOT_HOME=true path
+- vault-templates/CLAUDE.md docstring updated to reflect bruce-uid reality
+- Migration script NOT pinned (Phase 193 extends it for vault rename); only sudoers fragment pinned
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` for sdk-agent-runner.ts UNCHANGED 7/7 commits
 
 **Key decisions (Phase 190):**
 
@@ -81,7 +92,7 @@ See: .planning/PROJECT.md
 - 11/13 probes PASS — above 10/13 acceptance threshold; P5+P6 PASS-deferred by design
 - autonomous_enabled: false (safe state, confirmed pre-close)
 
-**Next action:** Phase 189 — Agent Setup Wizard (reads .agent/config.json setup_done:false, guides operator through first-run). Phase 188 created the seed artifacts; Phase 189 fills them. Also: Phase 187 UAT still queued — operator can verify Vault Graph (which is now deleted in UI) was replaced by the simpler 2-step modal.
+**Next action:** Operator runs the Phase 192 Mini PC cutover per `.planning/phases/192-livinityd-bruce-user-switch/192-VERIFICATION.md` § "Tasks Requiring Operator Action" — `ssh bruce@10.69.31.68 && sudo bash /opt/livos/update.sh && sudo bash /opt/livos/scripts/migrate-to-bruce-user.sh && sudo systemctl daemon-reload && sudo systemctl restart livos.service liv-core.service liv-worker.service liv-memory.service` then the 9-step verification block. Resume signal: "192 mini-pc-verified". In parallel, Phase 193 (vault → ~/livinity filesystem refactor) and Phase 194 (sidebar UI) can begin code planning — foundation is in place (sudoers pinned, migration script extensible, code paths bruce-aware).
 
 **v35.0 phase queue (FINAL):**
 
