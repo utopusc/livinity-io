@@ -20,11 +20,15 @@
 // + Phase 164 + Phase 165-01 all UNCHANGED.
 
 import * as pty from 'node-pty'
+import * as path from 'path'
 import {execSync} from 'child_process'
 import {randomUUID} from 'crypto'
 import type {Redis} from 'ioredis'
 import type {CcPtySession, CcPtyManagerOptions} from './types.js'
 import {SessionStore} from './session-store.js'
+// Phase 189-02 — agent session hooks (ADDITIVE). resolveAgentSpawnArgs returns [] for non-agent sessions (no-op).
+// Phase 189-05 — transcript recorder exports added to same module (additive).
+import {resolveAgentSpawnArgs, isAgentSession, createAgentSessionRecorder, flushAgentSessionTranscript, type AgentSessionRecorder} from './agent-session-hooks.js'
 
 // ─── Security constants ──────────────────────────────────────────────────
 
@@ -70,6 +74,8 @@ export class CcPtyManager {
 	// Publish is best-effort; failures logged but never thrown so a Redis
 	// outage cannot break attach/detach functionality.
 	private redis: Redis
+	// Phase 189-05 — per-session transcript recorders for agent sessions.
+	private agentRecorders = new Map<string, AgentSessionRecorder>()
 
 	constructor(opts: CcPtyManagerOptions & {store?: SessionStore}) {
 		this.vaultPath = opts.vaultPath
@@ -116,6 +122,8 @@ export class CcPtyManager {
 		title?: string
 		cwd?: string
 		model?: string
+		/** Phase 189-02 — agent name for wizard prompt (optional; only for agent sessions). */
+		agentName?: string
 	}): Promise<CcPtySession> {
 		validateUserId(opts.userId)
 
@@ -143,6 +151,28 @@ export class CcPtyManager {
 		const skipPerms = skipPermsRaw === null ? true : skipPermsRaw === 'true'
 		const skipPermsFlag = skipPerms ? ' --dangerously-skip-permissions' : ''
 
+		// Phase 189-02 — agent spawn args (wizard prompt injection on first open).
+		// resolveAgentSpawnArgs returns [] for non-agent sessions (no-op).
+		let agentExtraArgs: string[] = []
+		if (isAgentSession(tmuxName)) {
+			const agentIdMatch = tmuxName.match(/^liv-agent-(.+)$/)
+			if (agentIdMatch) {
+				const agentId = agentIdMatch[1]
+				const agentDir = path.join(this.vaultPath, 'items', agentId)
+				const mcpNames = await this.getMcpNames()
+				const hookResult = await resolveAgentSpawnArgs({
+					tmuxName,
+					agentDir,
+					agentItem: {id: agentId, name: opts.agentName ?? agentId},
+					mcpNames,
+				})
+				agentExtraArgs = hookResult.extraArgs
+			}
+		}
+		// Build extra args string — each arg is shell-escaped
+		const extraArgsStr =
+			agentExtraArgs.length > 0 ? ' ' + agentExtraArgs.map((a) => shellEscape(a)).join(' ') : ''
+
 		// tmux command — name + cwd are shell-escaped; the child command sets
 		// HOME=/root (Anthropic SDK credentials live at /root/.claude/.credentials.json)
 		// AND forces a UTF-8 locale so Turkish + non-ASCII chars round-trip cleanly
@@ -150,7 +180,7 @@ export class CcPtyManager {
 		// systemd but tmux daemon snapshots env on first server start; subsequent
 		// new-session calls inherit the daemon's snapshot. Setting LANG/LC_ALL on
 		// the spawned child explicitly bypasses that snapshot.
-		const tmuxCmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=/root claude${skipPermsFlag}'`
+		const tmuxCmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=/root claude${skipPermsFlag}${extraArgsStr}'`
 		execSync(tmuxCmd, {env: {...process.env, HOME: '/root', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8'}})
 
 		// Phase 183 — suppress tmux status bar so the green line never appears
@@ -266,6 +296,16 @@ export class CcPtyManager {
 			onStdout(Buffer.from(data))
 		})
 
+		// Phase 189-05 — start session transcript recorder for agent sessions (ADDITIVE).
+		if (isAgentSession(session.tmuxName)) {
+			const recorder = createAgentSessionRecorder()
+			this.agentRecorders.set(sessionId, recorder)
+			// Second listener feeds the recorder (does not affect existing data plane)
+			ptyProc.onData((data) => {
+				recorder.append(Buffer.from(data))
+			})
+		}
+
 		// Mirror mode: append to per-sessionId handle list
 		const list = this.attachedTerminals.get(sessionId) ?? []
 		list.push(ptyProc)
@@ -369,6 +409,20 @@ export class CcPtyManager {
 			}
 		}
 		this.attachedTerminals.delete(id)
+
+		// Phase 189-05 — flush transcript for agent sessions before store.remove (ADDITIVE).
+		const recorder = this.agentRecorders.get(id)
+		if (recorder) {
+			const agentIdMatch = session.tmuxName.match(/^liv-agent-(.+)$/)
+			if (agentIdMatch) {
+				const agentDir = path.join(this.vaultPath, 'items', agentIdMatch[1])
+				await flushAgentSessionTranscript({recorder, agentDir}).catch((err) =>
+					this.logger.warn?.(`[cc-pty] transcript flush failed: ${err}`),
+				)
+			}
+			this.agentRecorders.delete(id)
+		}
+
 		await this.store.remove(id)
 		this.logger.log(`[cc-pty] killSession id=${id} tmuxName=${session.tmuxName}`)
 	}
@@ -393,6 +447,19 @@ export class CcPtyManager {
 	 */
 	async getSession(id: string): Promise<CcPtySession | null> {
 		return this.store.getById(id)
+	}
+
+	/**
+	 * Phase 189-02 — list MCP server names from Redis for wizard prompt injection.
+	 * Best-effort: returns [] on any Redis failure.
+	 */
+	private async getMcpNames(): Promise<string[]> {
+		try {
+			const keys = await this.redis.keys('liv:mcp:*')
+			return keys.map((k) => k.replace(/^liv:mcp:/, '')).filter(Boolean)
+		} catch {
+			return []
+		}
 	}
 
 	/**
