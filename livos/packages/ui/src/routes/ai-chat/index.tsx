@@ -35,7 +35,10 @@ import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useCurrentUser} from '@/hooks/use-current-user'
 import {LivWelcomeTerminal} from '@/features/liv-welcome/LivWelcomeTerminal'
 import {SidebarTree} from '@/features/sidebar-tree'
-import {ChatDetail, ProjectDetail, AgentDetail, AddItemModal} from '@/features/item-detail'
+import {ChatDetail, ProjectDetail, AddItemModal} from '@/features/item-detail'
+// Phase 189-01 — AgentDetail replaced by AgentTerminalPane in the right-pane switch.
+// AgentDetail.tsx stays on disk (Phase 191 may revive it as a settings panel).
+import {AgentTerminalPane} from '@/features/agent-terminal/AgentTerminalPane'
 import {McpServerList, type McpServerConfig, type McpServerStatus} from '@/components/mcp/McpServerList'
 import {McpServerDetail} from '@/components/mcp/McpServerDetail'
 import {FeaturedMcpInstaller} from '@/components/mcp/FeaturedMcpInstaller'
@@ -166,7 +169,11 @@ export default function AiChatRoute() {
 		) : (selectedItem as {type: string}).type === 'project' ? (
 			<ProjectDetail item={selectedItem as Parameters<typeof ProjectDetail>[0]['item']} />
 		) : (selectedItem as {type: string}).type === 'agent' ? (
-			<AgentDetail item={selectedItem as Parameters<typeof AgentDetail>[0]['item']} />
+			// Phase 189-01 — AgentDetail replaced by AgentTerminalPane.
+			<AgentTerminalPane
+				agentItem={selectedItem as {id: string; name: string; type: string}}
+				userId={userId ?? ''}
+			/>
 		) : null
 	) : hasItems ? (
 		<div className='flex h-full items-center justify-center p-8 text-center text-text-secondary'>

@@ -88,8 +88,11 @@ function getTouchDist(touches: TouchList | Partial<Touch>[]): number {
 
 // Phase 181-03 — forwardRef wrapper is backward-compatible:
 // callers that don't pass a ref see no change.
-export const CcTerminal = forwardRef<CcTerminalHandle, {sessionId: string}>(
-	function CcTerminal({sessionId}, ref) {
+// Phase 189-01 — added optional `cwd` prop (additive; existing callers unchanged).
+// cwd is forwarded to the WS session handshake as a hint for the server-side
+// createSession call. Undefined = server uses vaultPath default (backward compat).
+export const CcTerminal = forwardRef<CcTerminalHandle, {sessionId: string; cwd?: string}>(
+	function CcTerminal({sessionId, cwd: _cwd}, ref) {
 		const containerRef = useRef<HTMLDivElement>(null)
 		const termRef = useRef<Terminal | null>(null)
 		const fitRef = useRef<FitAddon | null>(null)
