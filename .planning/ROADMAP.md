@@ -2524,7 +2524,14 @@ Plans:
 
 **Depends on:** Phase 188, Phase 166 (cc-pty manager), Phase 176 (Liv tools + agent scaffolder)
 **Wave:** 2
-**Plans:** 4-5 plans (biggest of v38.2)
+**Plans:** 5 plans
+
+Plans:
+- [ ] 189-01-PLAN.md — AgentTerminalPane component + ai-chat routing (AgentDetail ? AgentTerminalPane)
+- [ ] 189-02-PLAN.md — First-open detection + setup wizard system prompt injection
+- [ ] 189-03-PLAN.md — agent_config_set MCP tool (wizard persistence hook)
+- [ ] 189-04-PLAN.md — StarterChips conversation starter chips + empty-state UI
+- [ ] 189-05-PLAN.md — Per-session transcript writer (.agent/sessions/<runId>.md)
 **Estimated:** ~1.5 days
 
 ---
