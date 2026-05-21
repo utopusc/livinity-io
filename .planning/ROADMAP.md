@@ -2507,8 +2507,14 @@ All 3 v38.1 hotfix phases shipped:
 
 **Depends on:** Phase 174, 175, 185 (existing sidebar + modal infrastructure)
 **Wave:** 1
-**Plans:** 3-4 plans
+**Plans:** 4 plans
 **Estimated:** ~0.5 day
+
+Plans:
+- [ ] 188-01-PLAN.md — AddItemModal 2-step rewrite (type picker + name/icon + Kur)
+- [ ] 188-02-PLAN.md — vault-items backend: icon field + Agent/.agent & Project/.project scaffolding
+- [ ] 188-03-PLAN.md — z-index + Portal container fix (z-50 + document.body)
+- [ ] 188-04-PLAN.md — DELETE vault-graph UI + remove Vault Graph tab from ai-chat
 
 ---
 
