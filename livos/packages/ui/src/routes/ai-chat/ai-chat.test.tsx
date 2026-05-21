@@ -703,3 +703,142 @@ describe('AiChatRoute — Phase 190-03 tab strip wiring', () => {
 		expect(SRC).not.toMatch(/type Tab =/)
 	})
 })
+
+// ── Phase 190-04 — localStorage tab persistence ───────────────────────────
+
+describe('AiChatRoute — Phase 190-04 localStorage persistence', () => {
+	// In-memory localStorage stub shared across this describe block.
+	let lsStore: Record<string, string> = {}
+	const lsKey = 'liv:ai-chat:tabs:bruce'
+
+	beforeEach(() => {
+		useIsMobileMock.mockReturnValue(false)
+		sidebarTreeMock.mockReset()
+		terminalTabStripMock.mockReset()
+		lsStore = {}
+		vi.stubGlobal('localStorage', {
+			getItem: (key: string) => lsStore[key] ?? null,
+			setItem: (key: string, val: string) => {
+				lsStore[key] = val
+			},
+			removeItem: (key: string) => {
+				delete lsStore[key]
+			},
+			clear: () => {
+				lsStore = {}
+			},
+		})
+		vi.useFakeTimers()
+		itemListData = {items: [{id: 'fake-item-1', type: 'project'}]}
+	})
+
+	afterEach(() => {
+		vi.useRealTimers()
+		vi.unstubAllGlobals()
+	})
+
+	it('L-01: tabs restored from localStorage on mount — pre-populate storage with 1 tab, render, assert tab appears', () => {
+		const savedTabs = [{id: 'liv-bare-test-abc12345', label: 'Terminal 1', type: 'terminal', sessionId: 'liv-bare-test-abc12345'}]
+		lsStore[lsKey] = JSON.stringify(savedTabs)
+
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// Advance timers so any effects settle
+		act(() => {
+			vi.runAllTimers()
+		})
+		// The tab strip mock should render the restored tab
+		const strip = container.querySelector('[data-testid="terminal-tab-strip"]')
+		expect(strip).not.toBeNull()
+		expect(strip?.getAttribute('data-tab-count')).toBe('1')
+	})
+
+	it('L-02: tabs NOT restored when localStorage key is absent — renders with 0 tabs', () => {
+		// lsStore is empty (no key set)
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		act(() => {
+			vi.runAllTimers()
+		})
+		const strip = container.querySelector('[data-testid="terminal-tab-strip"]')
+		expect(strip?.getAttribute('data-tab-count')).toBe('0')
+	})
+
+	it('L-03: invalid JSON in localStorage → graceful fallback (0 tabs, no throw)', () => {
+		lsStore[lsKey] = 'not-valid-json{{{['
+		expect(() => {
+			act(() => {
+				root.render(<AiChatRoute />)
+			})
+			act(() => {
+				vi.runAllTimers()
+			})
+		}).not.toThrow()
+		const strip = container.querySelector('[data-testid="terminal-tab-strip"]')
+		expect(strip?.getAttribute('data-tab-count')).toBe('0')
+	})
+
+	it('L-04: tabs write is debounced — after add-claude-btn click, 299ms → NOT written; 1ms more → written', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const addBtn = container.querySelector('[data-testid="add-claude-btn"]') as HTMLButtonElement
+		expect(addBtn).not.toBeNull()
+		act(() => {
+			addBtn.click()
+		})
+		// At 299ms: NOT yet written
+		act(() => {
+			vi.advanceTimersByTime(299)
+		})
+		// The write happens at 300ms — key should be absent at 299ms
+		// (unless the restore effect already wrote empty tabs — check the value contains 'Claude')
+		const valAt299 = lsStore[lsKey]
+		const parsedAt299 = valAt299 ? (JSON.parse(valAt299) as any[]) : []
+		// At 299ms debounce has NOT fired yet for the new tab
+		// (the restore effect may have written [] already — check Claude 1 is NOT present)
+		expect(parsedAt299.some((t: any) => t.label === 'Claude 1')).toBe(false)
+
+		// At 300ms: written
+		act(() => {
+			vi.advanceTimersByTime(1)
+		})
+		const valAt300 = lsStore[lsKey]
+		const parsedAt300 = valAt300 ? (JSON.parse(valAt300) as any[]) : []
+		expect(parsedAt300.some((t: any) => t.label === 'Claude 1')).toBe(true)
+	})
+
+	it('L-05: after tab close + debounce fires → localStorage does NOT contain that tab', () => {
+		// Start with a tab already in localStorage
+		const savedTabs = [{id: 'liv-bare-test-abc12345', label: 'Terminal 1', type: 'terminal', sessionId: 'liv-bare-test-abc12345'}]
+		lsStore[lsKey] = JSON.stringify(savedTabs)
+
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		act(() => {
+			vi.runAllTimers()
+		})
+
+		// Close the tab
+		const closeBtn = container.querySelector('[data-testid="tab-close-liv-bare-test-abc12345"]') as HTMLButtonElement
+		expect(closeBtn).not.toBeNull()
+		act(() => {
+			closeBtn.click()
+		})
+		// Advance past debounce
+		act(() => {
+			vi.advanceTimersByTime(300)
+		})
+		const val = lsStore[lsKey]
+		const parsed = val ? (JSON.parse(val) as any[]) : []
+		expect(parsed.some((t: any) => t.id === 'liv-bare-test-abc12345')).toBe(false)
+	})
+
+	it('L-06: source-text — index.tsx contains string literal "liv:ai-chat:tabs:"', () => {
+		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
+		expect(SRC).toMatch(/liv:ai-chat:tabs:/)
+	})
+})
