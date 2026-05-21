@@ -197,7 +197,16 @@ export class CcPtyManager {
 		// Phase 183 — read skip-perms flag. Default: true (D-V38-K).
 		// null → operator hasn't set a value → safe default is to skip perms.
 		const skipPermsRaw = await this.redis.get('liv:config:cc_pty_skip_perms')
-		const skipPerms = skipPermsRaw === null ? true : skipPermsRaw === 'true'
+		const skipPermsConfig = skipPermsRaw === null ? true : skipPermsRaw === 'true'
+		// v38.2 hotfix — claude refuses to run with --dangerously-skip-permissions
+		// when invoked as root/sudo ("cannot be used with root/sudo privileges").
+		// livinityd runs as root via systemd, so spawning claude with this flag
+		// makes claude exit immediately → operator sees '[exited]' on every
+		// agent/Claude-icon click. Suppress the flag when uid=0; operator will
+		// need to approve tool calls inside claude (manual interaction). Proper
+		// fix = spawn claude as bruce user (deferred).
+		const isRoot = typeof process.getuid === 'function' && process.getuid() === 0
+		const skipPerms = skipPermsConfig && !isRoot
 		const skipPermsFlag = skipPerms ? ' --dangerously-skip-permissions' : ''
 
 		// Phase 190-01 — bare sessions skip claude command injection entirely.
