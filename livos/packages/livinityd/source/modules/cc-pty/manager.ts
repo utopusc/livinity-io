@@ -21,6 +21,8 @@
 
 import * as pty from 'node-pty'
 import * as path from 'path'
+import * as os from 'os'
+import * as fs from 'fs'
 import {execSync} from 'child_process'
 import {randomUUID} from 'crypto'
 import type {Redis} from 'ioredis'
@@ -167,7 +169,28 @@ export class CcPtyManager {
 			throw new Error(`CcPty: generated tmuxName failed regex: ${tmuxName}`)
 		}
 
-		const cwd = opts.cwd ?? this.vaultPath
+		// v38.2 hotfix — resolve cwd to a real absolute directory.
+		// (a) Agent sessions: ALWAYS use <vaultPath>/items/<agentId> regardless
+		//     of what the client passed (client's '~/liv/items/<name>/' contained
+		//     literal '~' and the wrong vault path → tmux chdir(2) failed).
+		// (b) Other sessions: expand leading '~' → os.homedir() (tmux's -c flag
+		//     does NOT do tilde expansion). Fallback to vaultPath if path
+		//     doesn't exist (final defense-in-depth).
+		let cwd: string
+		if (hasAdHocPrefix && opts.id!.startsWith('liv-agent-')) {
+			const agentId = opts.id!.slice('liv-agent-'.length)
+			cwd = path.join(this.vaultPath, 'items', agentId)
+		} else {
+			const raw = opts.cwd ?? this.vaultPath
+			cwd = raw === '~' ? os.homedir() : raw.startsWith('~/') ? path.join(os.homedir(), raw.slice(2)) : raw
+		}
+		// Defense-in-depth: if cwd doesn't exist, fall back to vaultPath (which
+		// is guaranteed to exist on boot).
+		try {
+			if (!fs.existsSync(cwd)) cwd = this.vaultPath
+		} catch {
+			cwd = this.vaultPath
+		}
 		const cwdEsc = shellEscape(cwd)
 		const nameEsc = shellEscape(tmuxName)
 
