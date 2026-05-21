@@ -34,7 +34,10 @@ import {resolveAgentSpawnArgs, isAgentSession, createAgentSessionRecorder, flush
 
 const USER_ID_RE = /^[a-zA-Z0-9_-]+$/
 // Phase 190-01 — extended to accept 'liv-bare-' prefix for bare bash sessions.
-const TMUX_NAME_RE = /^(livos-cc-|liv-bare-)[a-zA-Z0-9_-]+-[a-f0-9]{8}$/
+// v38.2 hotfix — accept 'liv-agent-' prefix with full UUID format (8-4-4-4-12
+// hex with hyphens). Existing 'livos-cc-' + 'liv-bare-' formats keep their
+// trailing 8-hex-char shape (manager generates id.slice(0,8) for them).
+const TMUX_NAME_RE = /^(livos-cc-[a-zA-Z0-9_-]+-[a-f0-9]{8}|liv-bare-[a-zA-Z0-9_-]+-[a-f0-9]{8}|liv-agent-[a-f0-9-]{8,64})$/
 
 // Phase 168-04 — Redis channel for cross-tab attach status broadcasts.
 // Message format: JSON {sessionId, attachId, attachedAt, action}.
