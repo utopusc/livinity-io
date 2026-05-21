@@ -2602,8 +2602,15 @@ Plans:
 
 **Depends on:** Phase 193 (data shape)
 **Wave:** 3
-**Plans:** 5 (tRPC shape + inline settings + Files default + project workspace + slug preview)
+**Plans:** 5 plans (tRPC shape + inline settings + Files default + project workspace + slug preview)
 **Estimated:** ~0.5-1 day
+
+Plans:
+- [ ] 194-01-PLAN.md — vault.items.list slug shape + ItemTreeRow displayName fallback chain (Wave 1)
+- [ ] 194-02-PLAN.md — AgentInlineSettings.tsx + ai-chat sidebar slot wiring (Wave 2, depends 194-01)
+- [ ] 194-03-PLAN.md — Files app default route → LIVINITY_VAULT_PATH (Wave 1)
+- [ ] 194-04-PLAN.md — Project click spawns Project terminal tab + cwd injection (Wave 2, depends 194-01)
+- [ ] 194-05-PLAN.md — AddItemModal slug preview + collision warning (Wave 1)
 
 ---
 
