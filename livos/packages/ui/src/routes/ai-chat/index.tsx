@@ -303,24 +303,20 @@ export default function AiChatRoute() {
 							/>
 						</div>
 					</div>
-					<div className='relative flex-1 overflow-hidden'>
+					<div className='flex-1 overflow-hidden'>
 						{rightPaneContent}
-						{/* v38.2 hotfix — in-pane AI Chat Settings panel (gear opens it).
-						    Absolute overlay scoped to the right pane only; sidebar stays
-						    visible. Contains MCP Servers (restored 1316-line UI) +
-						    Claude Code config (Phase 182-03 form re-wrapped). */}
-						<AiChatSettingsPanel
-							open={settingsPanelOpen}
-							onClose={() => setSettingsPanelOpen(false)}
-						/>
 					</div>
 				</div>
 				{/* v38.2 hotfix — AddItemModal rendered INSIDE the relative AI Chat root
-				    so the absolute-positioned Dialog (no Portal) scopes to this surface.
-				    Previously it was a sibling outside the layout div + Portal to body,
-				    which placed the modal BEHIND the LivOS window manager chrome
-				    (windows have dynamic-zIndex ~100+, modal z-50 was hidden). */}
+				    so the absolute-positioned Dialog scopes to this surface. */}
 				<AddItemModal open={addModalOpen} onClose={() => setAddModalOpen(false)} />
+				{/* v38.2 hotfix — AiChatSettingsPanel covers the ENTIRE AI Chat surface
+				    (absolute inset-0 + the outer div is relative). Operator: 'Settings'e
+				    tikladigimda Butun AI Chat sayfasi settings olsun'. Geri button (not X). */}
+				<AiChatSettingsPanel
+					open={settingsPanelOpen}
+					onClose={() => setSettingsPanelOpen(false)}
+				/>
 			</div>
 		</>
 	)

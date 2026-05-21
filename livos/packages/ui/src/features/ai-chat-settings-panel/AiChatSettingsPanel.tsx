@@ -18,7 +18,7 @@
 // open/close state.
 
 import {useCallback, useEffect, useState} from 'react'
-import {X} from 'lucide-react'
+import {ArrowLeft} from 'lucide-react'
 
 import {trpcReact} from '@/trpc/trpc'
 import {Switch} from '@/shadcn-components/ui/switch'
@@ -60,8 +60,18 @@ export function AiChatSettingsPanel({open, onClose}: AiChatSettingsPanelProps) {
 			data-testid='ai-chat-settings-panel'
 			className='absolute inset-0 z-40 flex flex-col bg-bg'
 		>
-			{/* Header */}
-			<div className='flex items-center justify-between border-b border-border px-4 py-2'>
+			{/* Header — Geri (back) button on left, tab nav centered */}
+			<div className='flex items-center gap-3 border-b border-border px-4 py-2'>
+				<button
+					type='button'
+					aria-label='Geri'
+					data-testid='settings-back-btn'
+					onClick={onClose}
+					className='flex items-center gap-1.5 rounded px-2 py-1 text-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary'
+				>
+					<ArrowLeft size={16} />
+					<span>Geri</span>
+				</button>
 				<div className='flex items-center gap-2'>
 					<button
 						type='button'
@@ -80,15 +90,6 @@ export function AiChatSettingsPanel({open, onClose}: AiChatSettingsPanelProps) {
 						Claude Code
 					</button>
 				</div>
-				<button
-					type='button'
-					aria-label='Close settings'
-					data-testid='settings-close-btn'
-					onClick={onClose}
-					className='rounded p-1 text-text-secondary hover:bg-surface-2'
-				>
-					<X size={18} />
-				</button>
 			</div>
 			{/* Body */}
 			<div className='flex-1 overflow-y-auto'>
