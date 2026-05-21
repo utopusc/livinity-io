@@ -31,7 +31,6 @@ import {useCallback, useEffect, useState} from 'react'
 import {Menu, Plus} from 'lucide-react'
 
 import {trpcReact} from '@/trpc/trpc'
-import {VaultGraph} from '@/features/vault-graph'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useCurrentUser} from '@/hooks/use-current-user'
 import {LivWelcomeTerminal} from '@/features/liv-welcome/LivWelcomeTerminal'
@@ -42,7 +41,8 @@ import {McpServerDetail} from '@/components/mcp/McpServerDetail'
 import {FeaturedMcpInstaller} from '@/components/mcp/FeaturedMcpInstaller'
 import {type FeaturedMcp} from '@/components/mcp/featured-mcps'
 
-type Tab = 'terminal' | 'graph' | 'mcp'
+// Phase 188-04 — Tab union shrunk: 'graph' removed (VaultGraph feature deleted).
+type Tab = 'terminal' | 'mcp'
 
 export default function AiChatRoute() {
 	const isMobile = useIsMobile()
@@ -234,13 +234,6 @@ export default function AiChatRoute() {
 						</button>
 						<button
 							type='button'
-							onClick={() => setActiveTab('graph')}
-							className={`px-4 py-2 text-sm ${activeTab === 'graph' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary'}`}
-						>
-							Vault Graph
-						</button>
-						<button
-							type='button'
 							onClick={() => setActiveTab('mcp')}
 							className={`px-4 py-2 text-sm ${activeTab === 'mcp' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary'}`}
 						>
@@ -250,8 +243,6 @@ export default function AiChatRoute() {
 					<div className='flex-1 overflow-hidden'>
 						{activeTab === 'terminal' ? (
 							terminalContent
-						) : activeTab === 'graph' ? (
-							<VaultGraph />
 						) : (
 							<div data-testid='mcp-tab-content' className='flex h-full flex-col overflow-hidden'>
 								{/* Featured installer — shown when no server selected */}
