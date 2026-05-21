@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-20T22:14:35.916Z"
+last_updated: "2026-05-21T03:34:42.013Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -27,7 +27,14 @@ See: .planning/PROJECT.md
 
 **Active milestone:** v38.0 — Liv Agent Platform — **CLOSED 2026-05-20** (14 phases / 141 commits / 5 waves; CODE-COMPLETE-AND-LIVE-VERIFIED; Operator UAT browser walk queued per `.planning/phases/184-v38-deploy-uat/v38-VERIFICATION.md` § Operator UAT Browser Walk).
 
-**Last shipped phase:** **Phase 187** Vault Graph UI Polish (Obsidian-inspired) — CODE-COMPLETE 2026-05-20 (124/124 vault-graph vitest PASS; 25/25 sacred SHAs; 10 commits `18b79754..e9bcc17c`; hubs bigger, orphans flagged, navigation works, edges semantic, stats shown). v38.1 CODE-COMPLETE — all 3 UAT hotfix phases (185/186/187) shipped.
+**Last shipped phase:** **Phase 188** Simplified Add Modal + DELETE Vault Graph — CODE-COMPLETE 2026-05-20 (28 new vitest PASS across 3 suites; 25/25 sacred SHAs; 6 commits `e4368f6e..307ad944`; 2-step modal, Agent/Project artifacts via artifact-writer.ts, vault-graph UI deleted 28 files, backend preserved).
+
+**Key decisions (Phase 188):**
+
+- item-store.ts is SACRED (SHA 8bafbdceb) — post-create artifact writing moved to new artifact-writer.ts module, called from vault-items-router.ts create procedure
+- 2-step AddItemModal: Agent|Project cards → name+lucide-icon → "Kur" submit (Chat removed from UI, kept server-side)
+- Dialog.Portal container={document.body} + z-50 on Overlay + Content fixes modal z-index bug
+- vault-graph UI (28 files) deleted via git rm; backend livinityd/vault-graph preserved for Phase 192 Obsidian integration
 
 **Key decisions (Phase 187):**
 
@@ -57,7 +64,7 @@ See: .planning/PROJECT.md
 - 11/13 probes PASS — above 10/13 acceptance threshold; P5+P6 PASS-deferred by design
 - autonomous_enabled: false (safe state, confirmed pre-close)
 
-**Next action:** Operator walks `.planning/phases/187-vault-graph-obsidian-polish/187-VERIFICATION.md` on `https://bruce.livinity.io` — open Vault Graph, confirm hub nodes are larger, orphan nodes have red ring, edge thickness differs by type, backlink pills are clickable, stats footer visible. After PASS: v38.1 CLOSED → open v39 milestone.
+**Next action:** Phase 189 — Agent Setup Wizard (reads .agent/config.json setup_done:false, guides operator through first-run). Phase 188 created the seed artifacts; Phase 189 fills them. Also: Phase 187 UAT still queued — operator can verify Vault Graph (which is now deleted in UI) was replaced by the simpler 2-step modal.
 
 **v35.0 phase queue (FINAL):**
 
