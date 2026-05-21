@@ -3,10 +3,13 @@
 // sessionId = "liv-agent-{agentItem.id}" (id immutable, name can change)
 // cwd       = "~/liv/items/{agentItem.name}/" (Phase 188-02 writes here)
 //
+// Phase 189-04 — StarterChips added below the PTY area (auto-hide after first chip pick).
+//
 // SACRED GUARDS: CcTerminal.tsx additive only (31+ Phase-167 assertions stay green).
 
-import {forwardRef, useImperativeHandle, useRef} from 'react'
+import {forwardRef, useImperativeHandle, useRef, useState} from 'react'
 import {CcTerminal, type CcTerminalHandle} from '@/features/cc-terminal/CcTerminal'
+import {StarterChips} from './StarterChips'
 
 export interface AgentTerminalPaneProps {
 	agentItem: {id: string; name: string; type: string}
@@ -20,6 +23,8 @@ export interface AgentTerminalPaneHandle {
 export const AgentTerminalPane = forwardRef<AgentTerminalPaneHandle, AgentTerminalPaneProps>(
 	function AgentTerminalPane({agentItem, userId: _userId}, ref) {
 		const termRef = useRef<CcTerminalHandle>(null)
+		// Phase 189-04 — chips visible until first chip pick
+		const [chipsVisible, setChipsVisible] = useState(true)
 
 		useImperativeHandle(
 			ref,
@@ -31,6 +36,12 @@ export const AgentTerminalPane = forwardRef<AgentTerminalPaneHandle, AgentTermin
 
 		const sessionId = `liv-agent-${agentItem.id}`
 		const cwd = `~/liv/items/${agentItem.name}/`
+
+		// Phase 189-04 — send chip prompt to PTY and hide chips
+		const handleChipPick = (prompt: string) => {
+			termRef.current?.sendStdin(prompt + '\n')
+			setChipsVisible(false)
+		}
 
 		return (
 			<div
@@ -46,6 +57,8 @@ export const AgentTerminalPane = forwardRef<AgentTerminalPaneHandle, AgentTermin
 				<div className='min-h-0 flex-1'>
 					<CcTerminal ref={termRef} sessionId={sessionId} cwd={cwd} />
 				</div>
+				{/* Phase 189-04 — Starter chips (auto-hide after first pick) */}
+				<StarterChips onPick={handleChipPick} hidden={!chipsVisible} />
 			</div>
 		)
 	},
