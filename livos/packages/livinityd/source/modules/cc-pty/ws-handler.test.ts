@@ -258,4 +258,56 @@ describe('createCcPtyWsHandler', () => {
 			.find((f) => f.type === 'pong')
 		expect(pongFrame).toBeDefined()
 	})
+
+	// ── Phase 190-01 — sessionType:'bare' inline session creation ─────────────
+
+	it('T-190-01-G: attach envelope with sessionType:"bare" + unknown sessionId → createSession called with sessionType:"bare"', async () => {
+		// Setup: store returns null (session not found), manager.createSession creates on-the-fly
+		const ws = new StubWs()
+		const fakeSession = makeFakeSession({id: 'live-bare-newid', userId: 'admin', tmuxName: 'livos-cc-admin-newid123'})
+		const fakeHandle = makeFakeAttachHandle()
+		const manager: any = {
+			_lastAttachHandle: fakeHandle,
+			_lastOnStdout: undefined as ((chunk: Buffer) => void) | undefined,
+			createSession: vi.fn(async () => fakeSession),
+			attachSession: vi.fn(async (_id: string, onStdout: (chunk: Buffer) => void) => {
+				manager._lastOnStdout = onStdout
+				return fakeHandle
+			}),
+		}
+		const store: any = {
+			// Returns null for first call (session not found → inline create)
+			getById: vi.fn(async () => null),
+		}
+		const logger = makeLogger()
+		const resolveUser = vi.fn(async () => ({id: 'admin'}))
+		const handler = createCcPtyWsHandler({
+			manager: manager as any,
+			store: store as any,
+			logger,
+			resolveUser,
+		})
+		await handler(ws as any, stubReq())
+		await send(ws, {type: 'attach', sessionId: 'liv-bare-unknown-abc12345', sessionType: 'bare'})
+		expect(manager.createSession).toHaveBeenCalledWith(
+			expect.objectContaining({sessionType: 'bare'}),
+		)
+	})
+
+	it('T-190-01-H: attach envelope with sessionType:"bare" for existing bare session → attaches normally (createSession NOT called)', async () => {
+		// Setup: store returns the existing session (already created)
+		const existingSession = makeFakeSession({id: 'live-bare-exist', userId: 'admin', tmuxName: 'livos-cc-admin-exist1234'})
+		const s = setupHarness({session: existingSession})
+		// Add createSession spy to manager so we can verify it's NOT called
+		;(s.manager as any).createSession = vi.fn()
+		await s.handler(s.ws as any, stubReq())
+		await send(s.ws, {type: 'attach', sessionId: 'live-bare-exist', sessionType: 'bare'})
+		// createSession should NOT be called when session already exists
+		expect((s.manager as any).createSession).not.toHaveBeenCalled()
+		// Should have attached normally
+		const attachedFrame = s.ws.send.mock.calls
+			.map(([raw]) => JSON.parse(raw as string))
+			.find((f) => f.type === 'attached')
+		expect(attachedFrame).toBeDefined()
+	})
 })

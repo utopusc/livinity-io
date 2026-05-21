@@ -33,7 +33,8 @@ import {resolveAgentSpawnArgs, isAgentSession, createAgentSessionRecorder, flush
 // ─── Security constants ──────────────────────────────────────────────────
 
 const USER_ID_RE = /^[a-zA-Z0-9_-]+$/
-const TMUX_NAME_RE = /^livos-cc-[a-zA-Z0-9_-]+-[a-f0-9]{8}$/
+// Phase 190-01 — extended to accept 'liv-bare-' prefix for bare bash sessions.
+const TMUX_NAME_RE = /^(livos-cc-|liv-bare-)[a-zA-Z0-9_-]+-[a-f0-9]{8}$/
 
 // Phase 168-04 — Redis channel for cross-tab attach status broadcasts.
 // Message format: JSON {sessionId, attachId, attachedAt, action}.
@@ -124,6 +125,8 @@ export class CcPtyManager {
 		model?: string
 		/** Phase 189-02 — agent name for wizard prompt (optional; only for agent sessions). */
 		agentName?: string
+		/** Phase 190-01 — session type: 'claude' (default) or 'bare' (plain bash, no claude). */
+		sessionType?: 'claude' | 'bare'
 	}): Promise<CcPtySession> {
 		validateUserId(opts.userId)
 
@@ -136,7 +139,11 @@ export class CcPtyManager {
 		}
 
 		const id = randomUUID()
-		const tmuxName = `livos-cc-${opts.userId}-${id.slice(0, 8)}`
+		// Phase 190-01 — bare sessions use 'liv-bare-' prefix to distinguish from claude sessions.
+		const isBare = opts.sessionType === 'bare'
+		const tmuxName = isBare
+			? `liv-bare-${opts.userId}-${id.slice(0, 8)}`
+			: `livos-cc-${opts.userId}-${id.slice(0, 8)}`
 		if (!TMUX_NAME_RE.test(tmuxName)) {
 			throw new Error(`CcPty: generated tmuxName failed regex: ${tmuxName}`)
 		}
@@ -151,10 +158,11 @@ export class CcPtyManager {
 		const skipPerms = skipPermsRaw === null ? true : skipPermsRaw === 'true'
 		const skipPermsFlag = skipPerms ? ' --dangerously-skip-permissions' : ''
 
+		// Phase 190-01 — bare sessions skip claude command injection entirely.
 		// Phase 189-02 — agent spawn args (wizard prompt injection on first open).
 		// resolveAgentSpawnArgs returns [] for non-agent sessions (no-op).
 		let agentExtraArgs: string[] = []
-		if (isAgentSession(tmuxName)) {
+		if (!isBare && isAgentSession(tmuxName)) {
 			const agentIdMatch = tmuxName.match(/^liv-agent-(.+)$/)
 			if (agentIdMatch) {
 				const agentId = agentIdMatch[1]
@@ -173,6 +181,7 @@ export class CcPtyManager {
 		const extraArgsStr =
 			agentExtraArgs.length > 0 ? ' ' + agentExtraArgs.map((a) => shellEscape(a)).join(' ') : ''
 
+		// Phase 190-01 — bare sessions spawn plain bash; claude sessions spawn the claude command.
 		// tmux command — name + cwd are shell-escaped; the child command sets
 		// HOME=/root (Anthropic SDK credentials live at /root/.claude/.credentials.json)
 		// AND forces a UTF-8 locale so Turkish + non-ASCII chars round-trip cleanly
@@ -180,7 +189,9 @@ export class CcPtyManager {
 		// systemd but tmux daemon snapshots env on first server start; subsequent
 		// new-session calls inherit the daemon's snapshot. Setting LANG/LC_ALL on
 		// the spawned child explicitly bypasses that snapshot.
-		const tmuxCmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=/root claude${skipPermsFlag}${extraArgsStr}'`
+		const tmuxCmd = isBare
+			? `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bash'`
+			: `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=/root claude${skipPermsFlag}${extraArgsStr}'`
 		execSync(tmuxCmd, {env: {...process.env, HOME: '/root', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8'}})
 
 		// Phase 183 — suppress tmux status bar so the green line never appears
