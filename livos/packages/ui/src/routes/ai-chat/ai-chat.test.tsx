@@ -131,6 +131,13 @@ vi.mock('@/components/mcp/FeaturedMcpInstaller', () => ({
 	FeaturedMcpInstaller: () => <div data-testid='featured-mcp-installer-stub' />,
 }))
 
+// Phase 189-01 — Mock AgentTerminalPane so it renders a stable stub.
+vi.mock('@/features/agent-terminal/AgentTerminalPane', () => ({
+	AgentTerminalPane: ({agentItem}: {agentItem: {id: string; name: string; type: string}; userId: string}) => (
+		<div data-testid='agent-terminal-pane' data-agent-id={agentItem.id} />
+	),
+}))
+
 // Phase 185-02 — Mock item-detail components (ChatDetail, ProjectDetail, AgentDetail).
 // Phase 185-03 — Extended to include AddItemModal.
 vi.mock('@/features/item-detail', () => ({
@@ -383,7 +390,9 @@ describe('AiChatRoute — Phase 185-02 item-select routing', () => {
 		expect(container.querySelector('[data-testid="project-detail-mock"]')).not.toBeNull()
 	})
 
-	it('B3: SidebarTree onSelect("agent-id-1") renders agent-detail-mock in right pane', () => {
+	// Phase 189-01 — agent type now mounts AgentTerminalPane, not AgentDetail.
+	// Updated: assert agent-terminal-pane (not agent-detail-mock) renders.
+	it('B3: SidebarTree onSelect("agent-id-1") renders agent-terminal-pane in right pane (Phase 189-01)', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
@@ -393,7 +402,8 @@ describe('AiChatRoute — Phase 185-02 item-select routing', () => {
 		act(() => {
 			captured?.onSelect?.('agent-id-1')
 		})
-		expect(container.querySelector('[data-testid="agent-detail-mock"]')).not.toBeNull()
+		expect(container.querySelector('[data-testid="agent-terminal-pane"]')).not.toBeNull()
+		expect(container.querySelector('[data-testid="agent-detail-mock"]')).toBeNull()
 	})
 
 	// Phase 188-04 — B4/B5 Vault Graph tab tests DELETED (graph tab removed).
@@ -557,6 +567,46 @@ describe('AiChatRoute — Phase 186-01 MCP Servers tab', () => {
 	it('B6: source-text — index.tsx Tab union contains "mcp"', () => {
 		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
 		expect(SRC).toMatch(/'mcp'/)
+	})
+})
+
+// ── Phase 189-01 — AgentTerminalPane routing (replaces AgentDetail) ─────────
+
+describe('AiChatRoute — Phase 189-01 agent routing', () => {
+	beforeEach(() => {
+		useIsMobileMock.mockReturnValue(false)
+		sidebarTreeMock.mockReset()
+		itemListData = {
+			items: [
+				{id: 'agent-id-1', type: 'agent', name: 'Agent 1', parentId: null},
+			],
+		}
+	})
+
+	it('B-01: when selectedItem has type="agent", AgentTerminalPane is in the document', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const calls = sidebarTreeMock.mock.calls as any[]
+		const captured = (calls[0]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
+		act(() => {
+			captured?.onSelect?.('agent-id-1')
+		})
+		expect(container.querySelector('[data-testid="agent-terminal-pane"]')).not.toBeNull()
+	})
+
+	it('B-02: when selectedItem has type="agent", AgentDetail is NOT in the document', () => {
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const calls = sidebarTreeMock.mock.calls as any[]
+		const captured = (calls[0]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
+		act(() => {
+			captured?.onSelect?.('agent-id-1')
+		})
+		expect(container.querySelector('[data-testid="agent-detail-mock"]')).toBeNull()
 	})
 })
 
