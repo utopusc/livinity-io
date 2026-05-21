@@ -2527,11 +2527,11 @@ Plans:
 **Plans:** 5 plans
 
 Plans:
-- [ ] 189-01-PLAN.md � AgentTerminalPane component + ai-chat routing (AgentDetail ? AgentTerminalPane)
-- [ ] 189-02-PLAN.md � First-open detection + setup wizard system prompt injection
-- [ ] 189-03-PLAN.md � agent_config_set MCP tool (wizard persistence hook)
-- [ ] 189-04-PLAN.md � StarterChips conversation starter chips + empty-state UI
-- [ ] 189-05-PLAN.md � Per-session transcript writer (.agent/sessions/<runId>.md)
+- [ ] 189-01-PLAN.md � AgentTerminalPane component + ai-chat routing (AgentDetail ? AgentTerminalPane)
+- [ ] 189-02-PLAN.md � First-open detection + setup wizard system prompt injection
+- [ ] 189-03-PLAN.md � agent_config_set MCP tool (wizard persistence hook)
+- [ ] 189-04-PLAN.md � StarterChips conversation starter chips + empty-state UI
+- [ ] 189-05-PLAN.md � Per-session transcript writer (.agent/sessions/<runId>.md)
 **Estimated:** ~1.5 days
 
 ---
@@ -2541,9 +2541,17 @@ Plans:
 **Goal:** Replace AI Chat top tab bar (currently `Terminal | Vault Graph | MCP Server` — after 188, just `Terminal | MCP Server`) with dynamic terminal tabs: each open agent/chat gets a tab labeled by name. At right of tab bar: Claude icon (+ new ad-hoc Claude session, cwd = $HOME) and Terminal icon (+ new bare bash terminal). Capacity ≥10 concurrent tabs. Tab switch = swap right-pane mounted CcTerminal session id (no re-spawn). Close-tab kills the tmux session. Remove MCP Server tab entirely (will live in settings gear panel — v38.3 Phase 191).
 
 **Depends on:** Phase 188 (Vault Graph removed), Phase 189 (per-agent tmux sessions exist), Phase 167 (CcTerminal substrate)
-**Wave:** 3
-**Plans:** 3 plans
-**Estimated:** ~0.5 day
+**Wave:** 3 (sequential: 190-01 → 190-02 → 190-03 → 190-04)
+**Plans:** 4 plans
+**Requirements:** 190-bare-terminal, 190-tab-strip, 190-tab-wiring, 190-mcp-tab-removal, 190-tab-persistence
+
+Plans:
+- [ ] 190-01-PLAN.md — BareTerminal component + ws-handler sessionType passthrough
+- [ ] 190-02-PLAN.md — TerminalTabStrip + TerminalTab components
+- [ ] 190-03-PLAN.md — AiChatRoute tab strip wiring + MCP tab removal
+- [ ] 190-04-PLAN.md — localStorage tab persistence (300ms debounce)
+
+**Estimated:** ~1 day | **Assertions:** 30 new vitest (6+10+8+6)
 
 ---
 
