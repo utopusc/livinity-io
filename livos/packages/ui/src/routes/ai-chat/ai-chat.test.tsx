@@ -1,24 +1,21 @@
 // @vitest-environment jsdom
 //
-// Phase 167-04 / 169-04 / 175-05 / 176-04 / 185-01 / 185-02 / 185-03 — AI Chat route tests.
+// Phase 167-04 / 169-04 / 175-05 / 176-04 / 185-01 / 185-02 / 185-03 / 186-01 — AI Chat route tests.
+// Phase 188-04 — Vault Graph tab REMOVED from Tab union + vault-graph mock deleted.
 //
 // Pattern: RTL-absent (D-NO-NEW-DEPS) — direct react-dom/client mount via
-// act(). Mocks @/hooks/use-is-mobile + @/features/vault-graph so the
-// behavior under test is route composition, not the heavy children.
+// act(). Mocks @/hooks/use-is-mobile so the behavior under test is route
+// composition, not the heavy children.
 //
-// Phase 175-05 — All SessionSidebar / CcTerminal / cc-sessions assertions
-// were removed. The Terminal tab now renders an empty-state hint
-// ("Open a Chat from the sidebar to attach a terminal.") when vault has Items,
-// or LivWelcomeTerminal when vault is empty.
-//
-// Phase 176-04 — Added trpcReact + useCurrentUser mocks so the vault.items.list
-// query and userId are controlled in tests. Default mock: hasItems=true so
-// existing "Open a Chat" assertions still pass.
-//
-// Phase 185-01 — Added SidebarTree mock + window-manager mock + extended trpcReact
-// mock for SidebarTree internals (openItem subscription + move mutation).
-// Phase 185-02 — Added item-detail mocks (ChatDetail/ProjectDetail/AgentDetail).
-// Phase 185-03 — Added AddItemModal to item-detail mock; mobile collapse assertions.
+// Phase 188-04: Vault Graph describe blocks (Phase 169-04) deleted.
+//   - vaultGraphMock removed
+//   - vi.mock('@/features/vault-graph') removed
+//   - Phase 169-04 tab nav describe block removed
+//   - Mobile "Vault Graph" button test removed
+//   - Phase 185-01 B4 "Vault Graph" regression test updated (no longer checks Vault Graph)
+//   - Phase 185-02 B4/B5 Vault Graph tab tests removed
+//   - Source invariant "imports VaultGraph from @/features/vault-graph" removed
+//   - 5 new F-04-* assertions added
 
 import {readFileSync} from 'node:fs'
 import {resolve} from 'node:path'
@@ -34,14 +31,6 @@ import {createRoot, type Root} from 'react-dom/client'
 const useIsMobileMock = vi.fn(() => false)
 vi.mock('@/hooks/use-is-mobile', () => ({
 	useIsMobile: () => useIsMobileMock(),
-}))
-
-const vaultGraphMock = vi.fn(() => null)
-vi.mock('@/features/vault-graph', () => ({
-	VaultGraph: () => {
-		vaultGraphMock()
-		return <div data-testid='vault-graph' />
-	},
 }))
 
 // Phase 176-04 — Mock trpcReact so vault.items.list.useQuery is controllable.
@@ -166,7 +155,6 @@ let root: Root
 beforeEach(() => {
 	useIsMobileMock.mockReset()
 	useIsMobileMock.mockReturnValue(false)
-	vaultGraphMock.mockReset()
 	sidebarTreeMock.mockReset()
 	// Default: hasItems=true (preserves existing "Open a Chat" assertions)
 	itemListData = {items: [{id: 'fake-item-1', type: 'project'}]}
@@ -222,7 +210,8 @@ describe('AiChatRoute — mobile branch', () => {
 		expect(container.textContent).toBeTruthy()
 	})
 
-	it('renders both "Terminal" and "Vault Graph" tab buttons on mobile', () => {
+	// Phase 188-04 — "Vault Graph" tab removed; only Terminal + MCP Servers on mobile
+	it('renders "Terminal" and "MCP Servers" tab buttons on mobile (no Vault Graph)', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
@@ -230,69 +219,8 @@ describe('AiChatRoute — mobile branch', () => {
 			(b) => b.textContent,
 		)
 		expect(buttons).toContain('Terminal')
-		expect(buttons).toContain('Vault Graph')
-	})
-})
-
-// ── Phase 169-04 — Terminal | Vault Graph tab nav (still in scope) ────────
-
-describe('AiChatRoute — Phase 169-04 tab nav', () => {
-	beforeEach(() => {
-		useIsMobileMock.mockReturnValue(false)
-		// hasItems=true → hint visible
-		itemListData = {items: [{id: 'fake-item-1', type: 'project'}]}
-	})
-
-	it('renders both "Terminal" and "Vault Graph" tab buttons', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		const buttons = Array.from(container.querySelectorAll('button')).map(
-			(b) => b.textContent,
-		)
-		expect(buttons).toContain('Terminal')
-		expect(buttons).toContain('Vault Graph')
-	})
-
-	it('on initial mount, activeTab="terminal" → empty-state hint, NOT VaultGraph', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		expect(container.textContent).toMatch(/Open a Chat from the sidebar/)
-		expect(vaultGraphMock).not.toHaveBeenCalled()
-		expect(container.querySelector('[data-testid="vault-graph"]')).toBeNull()
-	})
-
-	it('clicking "Vault Graph" tab mounts VaultGraph and unmounts the Terminal branch', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		const vgBtn = Array.from(container.querySelectorAll('button')).find(
-			(b) => b.textContent === 'Vault Graph',
-		) as HTMLButtonElement
-		expect(vgBtn).toBeTruthy()
-		act(() => {
-			vgBtn.click()
-		})
-		expect(vaultGraphMock).toHaveBeenCalled()
-		expect(container.querySelector('[data-testid="vault-graph"]')).not.toBeNull()
-		expect(container.textContent).not.toMatch(/Open a Chat from the sidebar/)
-	})
-
-	it('clicking "Terminal" after switching to Vault Graph restores the Terminal branch', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		const vgBtn = Array.from(container.querySelectorAll('button')).find(
-			(b) => b.textContent === 'Vault Graph',
-		) as HTMLButtonElement
-		act(() => vgBtn.click())
-		const tBtn = Array.from(container.querySelectorAll('button')).find(
-			(b) => b.textContent === 'Terminal',
-		) as HTMLButtonElement
-		act(() => tBtn.click())
-		expect(container.querySelector('[data-testid="vault-graph"]')).toBeNull()
-		expect(container.textContent).toMatch(/Open a Chat from the sidebar/)
+		expect(buttons).toContain('MCP Servers')
+		expect(buttons).not.toContain('Vault Graph')
 	})
 })
 
@@ -320,9 +248,11 @@ describe('routes/ai-chat/index.tsx — source-text invariants', () => {
 		expect(matches).toEqual([])
 	})
 
-	it('imports VaultGraph from @/features/vault-graph (Phase 169-04)', () => {
-		expect(SRC).toMatch(/from\s+['"]@\/features\/vault-graph['"]/)
-		expect(SRC).toMatch(/VaultGraph/)
+	// Phase 188-04 — VaultGraph import REMOVED. Updated from Phase 169-04 assertion.
+	it('does NOT import VaultGraph from @/features/vault-graph (Phase 188-04 deletion)', () => {
+		const importLines = SRC.split(/\r?\n/).filter((l) => /^\s*import\s/.test(l))
+		const vgImports = importLines.filter((l) => /vault-graph/.test(l))
+		expect(vgImports).toEqual([])
 	})
 
 	// Phase 175-05 — post-deletion invariants.
@@ -387,13 +317,15 @@ describe('AiChatRoute — Phase 185-01 split layout', () => {
 		expect(sidebar?.className).toMatch(/w-\[280px\]/)
 	})
 
-	it('B4: both "Terminal" and "Vault Graph" buttons still present (regression)', () => {
+	// Phase 188-04 — Updated: "Vault Graph" removed; only Terminal + MCP Servers present
+	it('B4: "Terminal" and "MCP Servers" buttons still present (no Vault Graph regression)', () => {
 		act(() => {
 			root.render(<AiChatRoute />)
 		})
 		const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent)
 		expect(buttons).toContain('Terminal')
-		expect(buttons).toContain('Vault Graph')
+		expect(buttons).toContain('MCP Servers')
+		expect(buttons).not.toContain('Vault Graph')
 	})
 
 	it('B5: SidebarTree mock is called at least once', () => {
@@ -464,50 +396,7 @@ describe('AiChatRoute — Phase 185-02 item-select routing', () => {
 		expect(container.querySelector('[data-testid="agent-detail-mock"]')).not.toBeNull()
 	})
 
-	it('B4: after item selected, clicking "Vault Graph" tab hides detail view', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const calls = sidebarTreeMock.mock.calls as any[]
-		const captured = (calls[0]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
-		act(() => {
-			captured?.onSelect?.('chat-id-1')
-		})
-		const vgBtn = Array.from(container.querySelectorAll('button')).find(
-			(b) => b.textContent === 'Vault Graph',
-		) as HTMLButtonElement
-		act(() => {
-			vgBtn.click()
-		})
-		expect(container.querySelector('[data-testid="chat-detail-mock"]')).toBeNull()
-		expect(container.querySelector('[data-testid="vault-graph"]')).not.toBeNull()
-	})
-
-	it('B5: after item selected + VaultGraph switch, clicking "Terminal" restores detail view', () => {
-		act(() => {
-			root.render(<AiChatRoute />)
-		})
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const calls = sidebarTreeMock.mock.calls as any[]
-		const captured = (calls[0]?.[0] ?? {}) as {onSelect?: (id: string | null) => void}
-		act(() => {
-			captured?.onSelect?.('chat-id-1')
-		})
-		const vgBtn = Array.from(container.querySelectorAll('button')).find(
-			(b) => b.textContent === 'Vault Graph',
-		) as HTMLButtonElement
-		act(() => {
-			vgBtn.click()
-		})
-		const tBtn = Array.from(container.querySelectorAll('button')).find(
-			(b) => b.textContent === 'Terminal',
-		) as HTMLButtonElement
-		act(() => {
-			tBtn.click()
-		})
-		expect(container.querySelector('[data-testid="chat-detail-mock"]')).not.toBeNull()
-	})
+	// Phase 188-04 — B4/B5 Vault Graph tab tests DELETED (graph tab removed).
 
 	it('B6: onSelect(null) clears detail view and shows default hint/welcome', () => {
 		act(() => {
@@ -659,6 +548,7 @@ describe('AiChatRoute — Phase 186-01 MCP Servers tab', () => {
 			listMock.click()
 		})
 		expect(container.querySelector('[data-testid="mcp-server-detail-mock"]')).not.toBeNull()
+		// Phase 188-04 — vault-graph element is gone (not even a stub)
 		expect(container.querySelector('[data-testid="vault-graph"]')).toBeNull()
 
 		vi.unstubAllGlobals()
@@ -667,5 +557,56 @@ describe('AiChatRoute — Phase 186-01 MCP Servers tab', () => {
 	it('B6: source-text — index.tsx Tab union contains "mcp"', () => {
 		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
 		expect(SRC).toMatch(/'mcp'/)
+	})
+})
+
+// ── Phase 188-04 — Vault Graph removal assertions ─────────────────────────
+
+describe('AiChatRoute — Phase 188-04 vault-graph removal', () => {
+	it('F-04-1: source-text — Tab type does NOT include graph', () => {
+		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
+		// The Tab type union must not contain 'graph'
+		expect(SRC).not.toMatch(/type Tab = .*'graph'/)
+	})
+
+	it('F-04-2: source-text — no import from @/features/vault-graph', () => {
+		const SRC = readFileSync(resolve(__dirname, 'index.tsx'), 'utf8')
+		const importLines = SRC.split(/\r?\n/).filter((l) => /^\s*import\s/.test(l))
+		const vgImports = importLines.filter((l) => /vault-graph/.test(l))
+		expect(vgImports).toEqual([])
+	})
+
+	it('F-04-3: rendered tab nav does NOT contain "Vault Graph" button', () => {
+		useIsMobileMock.mockReturnValue(false)
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent)
+		expect(buttons).not.toContain('Vault Graph')
+	})
+
+	it('F-04-4: rendered tab nav contains "Terminal" and "MCP Servers"', () => {
+		useIsMobileMock.mockReturnValue(false)
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent)
+		expect(buttons).toContain('Terminal')
+		expect(buttons).toContain('MCP Servers')
+	})
+
+	it('F-04-5: clicking MCP Servers tab still shows mcp-server-list-mock (regression)', () => {
+		useIsMobileMock.mockReturnValue(false)
+		act(() => {
+			root.render(<AiChatRoute />)
+		})
+		const mcpBtn = Array.from(container.querySelectorAll('button')).find(
+			(b) => b.textContent === 'MCP Servers',
+		) as HTMLButtonElement
+		expect(mcpBtn).toBeTruthy()
+		act(() => {
+			mcpBtn.click()
+		})
+		expect(container.querySelector('[data-testid="mcp-server-list-mock"]')).not.toBeNull()
 	})
 })
