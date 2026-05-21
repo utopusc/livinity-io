@@ -83,7 +83,23 @@ export function createCcPtyWsHandler(opts: CcPtyWsHandlerOptions) {
 						send({type: 'error', message: 'already attached — detach first'})
 						return
 					}
-					const session: CcPtySession | null = await opts.store.getById(env.sessionId)
+					let session: CcPtySession | null = await opts.store.getById(env.sessionId)
+
+					// Phase 190-01 — inline bare session creation:
+					// If sessionType='bare' and session not in store, create it on-the-fly
+					// so no separate REST call is needed from the browser.
+					// cwd is always '~' for bare sessions; userId comes from verified JWT.
+					if (!session && env.sessionType === 'bare') {
+						const newSession = await opts.manager.createSession({
+							userId: user.id,
+							title: 'Terminal',
+							cwd: '~',
+							sessionType: 'bare',
+						})
+						// re-assign so the rest of the attach branch proceeds normally
+						session = newSession
+					}
+
 					if (!session) {
 						send({type: 'error', message: `session ${env.sessionId} not found`})
 						return
