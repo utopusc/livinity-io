@@ -55,7 +55,12 @@ export const AgentTerminalPane = forwardRef<AgentTerminalPaneHandle, AgentTermin
 				</div>
 				{/* PTY area fills remaining height */}
 				<div className='min-h-0 flex-1'>
-					<CcTerminal ref={termRef} sessionId={sessionId} cwd={cwd} />
+					<CcTerminal
+						ref={termRef}
+						sessionId={sessionId}
+						cwd={cwd}
+						agentName={agentItem.name}
+					/>
 				</div>
 				{/* Phase 189-04 — Starter chips (auto-hide after first pick) */}
 				<StarterChips onPick={handleChipPick} hidden={!chipsVisible} />

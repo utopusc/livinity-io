@@ -91,8 +91,8 @@ function getTouchDist(touches: TouchList | Partial<Touch>[]): number {
 // Phase 189-01 — added optional `cwd` prop (additive; existing callers unchanged).
 // cwd is forwarded to the WS session handshake as a hint for the server-side
 // createSession call. Undefined = server uses vaultPath default (backward compat).
-export const CcTerminal = forwardRef<CcTerminalHandle, {sessionId: string; cwd?: string}>(
-	function CcTerminal({sessionId, cwd: _cwd}, ref) {
+export const CcTerminal = forwardRef<CcTerminalHandle, {sessionId: string; cwd?: string; agentName?: string}>(
+	function CcTerminal({sessionId, cwd, agentName}, ref) {
 		const containerRef = useRef<HTMLDivElement>(null)
 		const termRef = useRef<Terminal | null>(null)
 		const fitRef = useRef<FitAddon | null>(null)
@@ -128,6 +128,9 @@ export const CcTerminal = forwardRef<CcTerminalHandle, {sessionId: string; cwd?:
 			const ws = new CcPtyWsClient({
 				url: ccPtyWsUrl(),
 				sessionId,
+				// v38.2 hotfix — forward cwd + agentName to ws-handler for ad-hoc create.
+				cwd,
+				agentName,
 				onStdout: (data) => term.write(data),
 				onAttached: (_env) => {
 					/* sidebar metadata sync — Phase 168 */

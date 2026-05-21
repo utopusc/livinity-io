@@ -130,10 +130,13 @@ export function AddItemModal({
 			    window manager (windows are dynamic-zIndex 100+, our z-50 was hidden
 			    behind the window chrome). absolute positioning + parent
 			    must-be-relative makes the overlay cover only the AI Chat surface. */}
-			<Dialog.Overlay className='absolute inset-0 z-50 bg-bg/60' />
+			{/* v38.2 hotfix — opaque backdrop (bg-bg/60 was semi-transparent and
+			    operator saw sidebar content bleeding through). Use 95% opacity for
+			    a strong block; modal card itself is bg-bg-secondary (fully opaque). */}
+			<Dialog.Overlay className='absolute inset-0 z-50 bg-bg/95 backdrop-blur-sm' />
 			<Dialog.Content
 				data-testid='add-item-modal'
-				className='absolute left-1/2 top-1/2 z-50 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-line bg-bg-secondary p-6 shadow-xl'
+				className='absolute left-1/2 top-1/2 z-50 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-line bg-bg-secondary p-6 shadow-2xl'
 			>
 					<Dialog.Title className='mb-4 text-base font-semibold'>
 						{step === 'pick-type' ? 'Yeni öğe ekle' : `Yeni ${selectedType === 'agent' ? 'Agent' : 'Proje'}`}
