@@ -1,4 +1,6 @@
 import type {Request, Response} from 'express'
+import * as os from 'node:os'
+import * as path from 'node:path'
 import {isMultiUserMode} from '../ai/per-user-claude.js'
 import {findUserById, getAdminUser} from '../database/index.js'
 import type Livinityd from '../../index.js'
@@ -123,9 +125,12 @@ export async function resolveAndAuthorizeUserId(
 
 	// Successful resolution — write to cache. claudeDir mirrors the
 	// BROKER_FORCE_ROOT_HOME contract from agent-runner-factory.ts:77.
+	// Phase 192-03 — livinityd runs as bruce post-192-02 cutover.
+	// BROKER_FORCE_ROOT_HOME signals "use the daemon-user's home" (formerly
+	// hardcoded /root; now resolves to /home/bruce via os.homedir()).
 	const claudeDir =
 		process.env.BROKER_FORCE_ROOT_HOME === 'true'
-			? '/root/.claude'
+			? path.join(os.homedir(), '.claude')
 			: `/opt/livos/data/users/${userId}/.claude`
 	identityCache.set(cacheKey, {
 		userId,

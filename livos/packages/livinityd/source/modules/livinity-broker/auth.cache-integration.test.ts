@@ -189,4 +189,36 @@ describe('resolveAndAuthorizeUserId — F5 cache integration', () => {
 		// Regex check happens BEFORE PG; lookup never invoked.
 		expect(findUserByIdMock).not.toHaveBeenCalled()
 	})
+
+	it('Phase 192-03: BROKER_FORCE_ROOT_HOME=true caches claudeDir via os.homedir() not "/root/.claude"', async () => {
+		// Phase 192-03 — livinityd runs as bruce post-192-02 cutover.
+		// `BROKER_FORCE_ROOT_HOME=true` historically pinned claudeDir to '/root/.claude'
+		// (which bruce cannot read). Now resolves to path.join(os.homedir(), '.claude')
+		// which post-cutover is /home/bruce/.claude (and on a dev host is the user's
+		// own homedir). This test asserts the cache write does NOT contain '/root/.claude'
+		// and DOES contain the runtime os.homedir() path.
+		const os = await import('node:os')
+		const path = await import('node:path')
+		const expectedClaudeDir = path.join(os.homedir(), '.claude')
+
+		const prevEnv = process.env.BROKER_FORCE_ROOT_HOME
+		process.env.BROKER_FORCE_ROOT_HOME = 'true'
+		try {
+			isMultiUserModeMock.mockResolvedValue(true)
+			findUserByIdMock.mockResolvedValue({id: 'u-bruce', username: 'u-bruce'})
+
+			const req = makeReq({userId: 'u-bruce', conversationId: 'conv-P192'})
+			const {res} = makeRes()
+			const result = await resolveAndAuthorizeUserId(req, res, fakeLivinityd)
+			expect(result).toEqual({userId: 'u-bruce'})
+
+			const cached = identityCache.get('u-bruce:conv-P192', true)
+			expect(cached).toBeDefined()
+			expect(cached!.claudeDir).toBe(expectedClaudeDir)
+			expect(cached!.claudeDir).not.toBe('/root/.claude')
+		} finally {
+			if (prevEnv === undefined) delete process.env.BROKER_FORCE_ROOT_HOME
+			else process.env.BROKER_FORCE_ROOT_HOME = prevEnv
+		}
+	})
 })
