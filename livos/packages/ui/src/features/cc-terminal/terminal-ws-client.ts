@@ -34,6 +34,11 @@ export interface CcPtyWsClientOpts {
 	onAttached: (env: AttachedEnvelope) => void
 	onError: (msg: string) => void
 	onClose?: () => void
+	// v38.2 hotfix — optional context for server-side ad-hoc session create.
+	// When set, sent in the attach envelope so ws-handler knows cwd + agentName
+	// for `liv-agent-*` / `liv-bare-*` / `liv-adhoc-claude-*` auto-create flow.
+	cwd?: string
+	agentName?: string
 }
 
 export class CcPtyWsClient {
@@ -60,7 +65,13 @@ export class CcPtyWsClient {
 		this.ws = ws
 		ws.onopen = () => {
 			this.reconnectAttempts = 0
-			ws.send(JSON.stringify({type: 'attach', sessionId: this.opts.sessionId}))
+			ws.send(JSON.stringify({
+				type: 'attach',
+				sessionId: this.opts.sessionId,
+				// v38.2 hotfix — pass cwd + agentName for server-side ad-hoc create.
+				...(this.opts.cwd ? {cwd: this.opts.cwd} : {}),
+				...(this.opts.agentName ? {agentName: this.opts.agentName} : {}),
+			}))
 
 			// Phase 181-04 — Start heartbeat ping/pong
 			this.pingInterval = setInterval(() => {

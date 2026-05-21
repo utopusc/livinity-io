@@ -142,10 +142,15 @@ export class CcPtyManager {
 
 		const id = opts.id ?? randomUUID()
 		// Phase 190-01 — bare sessions use 'liv-bare-' prefix to distinguish from claude sessions.
+		// v38.2 hotfix — agent sessions use the client-provided id as tmuxName directly so
+		// isAgentSession() regex matches and resolveAgentSpawnArgs fires the wizard prompt.
 		const isBare = opts.sessionType === 'bare'
-		const tmuxName = isBare
-			? `liv-bare-${opts.userId}-${id.slice(0, 8)}`
-			: `livos-cc-${opts.userId}-${id.slice(0, 8)}`
+		const isAgentClick = !isBare && typeof opts.id === 'string' && opts.id.startsWith('liv-agent-')
+		const tmuxName = isAgentClick
+			? opts.id!
+			: isBare
+				? `liv-bare-${opts.userId}-${id.slice(0, 8)}`
+				: `livos-cc-${opts.userId}-${id.slice(0, 8)}`
 		if (!TMUX_NAME_RE.test(tmuxName)) {
 			throw new Error(`CcPty: generated tmuxName failed regex: ${tmuxName}`)
 		}

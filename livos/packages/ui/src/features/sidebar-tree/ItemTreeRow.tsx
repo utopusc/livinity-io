@@ -56,7 +56,7 @@ export function ItemTreeRow({item, unreadCount}: ItemTreeRowProps) {
 
 	if (item.type === 'project') {
 		return (
-			<div className='flex items-center gap-2 px-2 py-1 text-sm font-semibold'>
+			<div className='flex items-center gap-2 rounded px-2 py-1 text-sm font-semibold cursor-pointer transition-colors hover:bg-surface-2 active:bg-surface-2'>
 				<FolderKanban size={16} className='lucide-folder-kanban text-accent-amber' />
 				<span className='truncate'>{item.name}</span>
 			</div>
@@ -67,7 +67,7 @@ export function ItemTreeRow({item, unreadCount}: ItemTreeRowProps) {
 		// Phase 177-04 — integer-cast to prevent XSS via float/string (T-177-04-01).
 		const badgeCount = Math.max(0, Math.floor(Number(unreadCount ?? 0)))
 		return (
-			<div className='flex items-center gap-2 px-2 py-1 text-sm font-medium'>
+			<div className='flex items-center gap-2 rounded px-2 py-1 text-sm font-medium cursor-pointer transition-colors hover:bg-surface-2 active:bg-surface-2'>
 				<Bot size={16} className='lucide-bot text-accent-blue' />
 				<span className='truncate'>{item.name}</span>
 				{badgeCount > 0 && (
@@ -84,7 +84,7 @@ export function ItemTreeRow({item, unreadCount}: ItemTreeRowProps) {
 
 	// chat — tertiary visual weight; icon AND label both use text-secondary.
 	return (
-		<div className='flex items-center gap-2 px-2 py-1 text-sm text-text-secondary'>
+		<div className='flex items-center gap-2 rounded px-2 py-1 text-sm text-text-secondary cursor-pointer transition-colors hover:bg-surface-2 hover:text-text-primary active:bg-surface-2'>
 			<MessageSquare size={16} className='lucide-message-square text-text-secondary' />
 			<span className='truncate'>{item.name}</span>
 		</div>

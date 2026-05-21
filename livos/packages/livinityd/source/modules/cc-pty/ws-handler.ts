@@ -90,13 +90,13 @@ export function createCcPtyWsHandler(opts: CcPtyWsHandlerOptions) {
 					// terminal-ws-client never sends sessionType — so the gate never fires
 					// and bare/claude ad-hoc clicks 500'd with "session not found". Fix:
 					// detect ad-hoc sessions by their id prefix (always assigned client-side)
-					// and create on-the-fly. cwd is '~' for ad-hoc; userId from verified JWT.
+					// and create on-the-fly. Includes `liv-agent-*` for Phase 189 agent click.
 					if (!session) {
 						if (env.sessionId.startsWith('liv-bare-')) {
 							session = await opts.manager.createSession({
 								userId: user.id,
 								title: 'Terminal',
-								cwd: '~',
+								cwd: typeof env.cwd === 'string' ? env.cwd : '~',
 								sessionType: 'bare',
 								id: env.sessionId,
 							})
@@ -104,8 +104,21 @@ export function createCcPtyWsHandler(opts: CcPtyWsHandlerOptions) {
 							session = await opts.manager.createSession({
 								userId: user.id,
 								title: 'Claude',
-								cwd: '~',
+								cwd: typeof env.cwd === 'string' ? env.cwd : '~',
 								sessionType: 'claude',
+								id: env.sessionId,
+							})
+						} else if (env.sessionId.startsWith('liv-agent-')) {
+							// Phase 189 agent session — id is `liv-agent-<itemId>`,
+							// client passes cwd (~/liv/items/<name>/) and agentName so
+							// manager.ts can derive agentDir + invoke resolveAgentSpawnArgs
+							// (wizard prompt injection on first open).
+							session = await opts.manager.createSession({
+								userId: user.id,
+								title: typeof env.agentName === 'string' ? env.agentName : 'Agent',
+								cwd: typeof env.cwd === 'string' ? env.cwd : undefined,
+								sessionType: 'claude',
+								agentName: typeof env.agentName === 'string' ? env.agentName : undefined,
 								id: env.sessionId,
 							})
 						}
