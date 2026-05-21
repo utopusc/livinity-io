@@ -52,10 +52,21 @@ export async function resolveAgentSpawnArgs(opts: {
 	if (!isAgentSession(opts.tmuxName)) return {extraArgs: []}
 
 	const config = await readAgentConfig(opts.agentDir)
-	// No config file → treat as first open (artifact-writer may have been skipped)
+	// v38.2 hotfix — wizard prompt CLI injection disabled. Multi-line prompt
+	// containing single-quotes broke shell escaping at the inner+outer tmux
+	// layer ("/bin/sh: You: not found" + "Syntax error: ( unexpected").
+	// Until we route the wizard via a tmp file or CLAUDE.md, the agent
+	// spawns clean and the operator can interact normally. Setup_done stays
+	// false; operator can manually configure via in-pane Settings → MCP/CC.
 	if (!config || config.setup_done === false) {
-		const prompt = getSetupWizardPrompt(opts.agentItem, opts.mcpNames)
-		return {extraArgs: ['--append-system-prompt', prompt]}
+		// Write the wizard prompt to the agent's CLAUDE.md (claude auto-discovers)
+		// so the agent has context on its purpose without CLI escaping.
+		try {
+			const prompt = getSetupWizardPrompt(opts.agentItem, opts.mcpNames)
+			await fs.writeFile(path.join(opts.agentDir, 'CLAUDE.md'), prompt, 'utf-8')
+		} catch {
+			// non-fatal — agent still spawns
+		}
 	}
 	return {extraArgs: []}
 }
