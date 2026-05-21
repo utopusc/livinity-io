@@ -1,0 +1,53 @@
+# Phase 192-01 — sudoers entries for livinityd running as the `bruce` user.
+#
+# Allows bruce (livinityd uid) to run the narrow set of root-equivalent
+# commands identified by .planning/phases/192-livinityd-bruce-user-switch/
+# 192-AUDIT.md (sections SUDO_WRAPPER #19-#22).
+#
+# No NOPASSWD: ALL. No shell wildcards inside binary paths. Globs only in
+# argument-position, following the precedent established by
+# scripts/install/sudoers.d/livos-native (Phase 150-B).
+#
+# Deploy:
+#   sudo install -m 0440 -o root -g root livinityd /etc/sudoers.d/livinityd
+#   sudo visudo -c   # syntax-check
+#
+# Security model:
+# - Each Cmnd_Alias targets EXACTLY ONE binary path (no shell shims like /bin/sh).
+# - Globs appear only AFTER the binary path (argument position).
+# - Two Runas spec lines: `(root)` for chown/Xvfb/x11vnc which need root caps;
+#   `(bruce)` self-target Runas for the `sudo -u bruce <cmd>` patterns from
+#   the v37 code that pre-dates the bruce-user cutover (transitional).
+# - To grant a new privilege: extend the Cmnd_Alias list — do NOT broaden the
+#   runas spec to ALL. Wholesale unrestricted NOPASSWD on bruce is precisely
+#   what Phase 192 is replacing.
+#
+# Audit hand-off: 192-AUDIT.md "Sudoers Command List" enumerates the rationale
+# for each Cmnd_Alias entry below; widening this file MUST update both.
+
+# 19. apps.ts:218 — Tor data dir chown to container uid 1000
+Cmnd_Alias LIVINITYD_CHOWN_DOCKER_DATA = /usr/bin/chown -R 1000\:1000 *
+
+# 20. server/index.ts:1894 — WebApp Launcher Chrome shim
+Cmnd_Alias LIVINITYD_LAUNCH_CHROME = /usr/local/bin/livos-launch-chrome *
+
+# 21. streaming/xvfb-spawner.ts, vnc-bridge.ts — virtual display + VNC
+Cmnd_Alias LIVINITYD_XVFB   = /usr/bin/Xvfb *
+Cmnd_Alias LIVINITYD_X11VNC = /usr/bin/x11vnc *
+
+# 22. chrome-master/master-login-routes.ts — google-chrome spawn under bruce
+Cmnd_Alias LIVINITYD_GOOGLE_CHROME = /usr/bin/google-chrome *
+
+# Adjacent: xdotool window-control invocations co-located with the chrome flows
+Cmnd_Alias LIVINITYD_XDOTOOL = /usr/bin/xdotool *
+
+# Runas=root: actions that genuinely require root caps (CAP_CHOWN on non-bruce
+# files, CAP_NET_RAW/CAP_SYS_ADMIN for X server setup).
+bruce ALL=(root) NOPASSWD: LIVINITYD_CHOWN_DOCKER_DATA, LIVINITYD_XVFB, LIVINITYD_X11VNC, LIVINITYD_XDOTOOL
+
+# Runas=bruce: self-target `sudo -u bruce <cmd>` patterns. Pre-cutover livinityd
+# (uid=0) used these to drop to bruce; post-cutover livinityd IS bruce, so
+# these become near no-ops. Keeping the entries lets the transition land
+# without operator action, and v38.4 polish will drop the `sudo -u bruce`
+# prefixes from the source code (then these aliases can be retired).
+bruce ALL=(bruce) NOPASSWD: LIVINITYD_LAUNCH_CHROME, LIVINITYD_GOOGLE_CHROME, LIVINITYD_XVFB, LIVINITYD_X11VNC, LIVINITYD_XDOTOOL
