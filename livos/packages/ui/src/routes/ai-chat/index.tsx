@@ -25,6 +25,15 @@
 // Phase 175-05 was replaced in Phase 185-03. The /chat-mobile link is preserved
 // in the /chat-mobile route itself; this route now always renders the split
 // layout (sidebar collapsed by default on mobile).
+//
+// Phase 190-03 — Replace static Terminal|MCP tab bar with TerminalTabStrip.
+//   - MCP Server tab REMOVED (MCP component files stay on disk for Phase 191)
+//   - Sidebar agent/chat item selection opens/focuses a tab
+//   - Claude icon → new ad-hoc claude tab; Terminal icon → new bare bash tab
+//   - Tab close removes tab from state and kills tmux session
+//   - Projects still route via selectedItem (no tab)
+//
+// Phase 190-04 — localStorage tab persistence (additive, 300ms debounce).
 
 import {useCallback, useEffect, useState} from 'react'
 
@@ -39,17 +48,16 @@ import {ChatDetail, ProjectDetail, AddItemModal} from '@/features/item-detail'
 // Phase 189-01 — AgentDetail replaced by AgentTerminalPane in the right-pane switch.
 // AgentDetail.tsx stays on disk (Phase 191 may revive it as a settings panel).
 import {AgentTerminalPane} from '@/features/agent-terminal/AgentTerminalPane'
-import {McpServerList, type McpServerConfig, type McpServerStatus} from '@/components/mcp/McpServerList'
-import {McpServerDetail} from '@/components/mcp/McpServerDetail'
-import {FeaturedMcpInstaller} from '@/components/mcp/FeaturedMcpInstaller'
-import {type FeaturedMcp} from '@/components/mcp/featured-mcps'
+import {TerminalTabStrip} from '@/features/terminal-tabs/TerminalTabStrip'
+import {BareTerminal} from '@/features/cc-terminal/BareTerminal'
+import {CcTerminal} from '@/features/cc-terminal/CcTerminal'
+import type {TerminalTabInfo} from '@/features/terminal-tabs/types'
 
-// Phase 188-04 — Tab union shrunk: 'graph' removed (VaultGraph feature deleted).
-type Tab = 'terminal' | 'mcp'
+// Phase 190-04 — user-scoped localStorage key for tab persistence.
+const LS_TABS_KEY = (uid: string) => `liv:ai-chat:tabs:${uid}`
 
 export default function AiChatRoute() {
 	const isMobile = useIsMobile()
-	const [activeTab, setActiveTab] = useState<Tab>('terminal')
 
 	// Phase 176-04 — vault.items.list query for Liv empty-state detection.
 	// staleTime: 10_000 prevents tight refetch loop; loading skeleton prevents
@@ -60,7 +68,6 @@ export default function AiChatRoute() {
 
 	// Phase 185-02 — item selection state for right-pane routing.
 	const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
-	const handleItemSelect = (id: string | null) => setSelectedItemId(id)
 	const items = itemList.data?.items ?? []
 	const selectedItem = selectedItemId
 		? items.find((it: {id: string}) => it.id === selectedItemId) ?? null
@@ -70,123 +77,166 @@ export default function AiChatRoute() {
 	const [sidebarOpen, setSidebarOpen] = useState(!isMobile)
 	const [addModalOpen, setAddModalOpen] = useState(false)
 
-	// Phase 186-01 — MCP tab state (mirrors routes/settings/mcp-servers.tsx pattern).
-	const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([])
-	const [mcpStatuses, setMcpStatuses] = useState<Record<string, McpServerStatus>>({})
-	const [mcpLoading, setMcpLoading] = useState(false)
-	const [mcpSelectedName, setMcpSelectedName] = useState<string | null>(null)
+	// Phase 190-03 — Dynamic tab state replacing the old static Tab union.
+	const [tabs, setTabs] = useState<TerminalTabInfo[]>([])
+	const [activeTabId, setActiveTabId] = useState<string | null>(null)
 
-	const fetchMcpServers = useCallback(async () => {
-		if (activeTab !== 'mcp') return
+	// Derive the currently active tab object.
+	const activeTab = tabs.find((t) => t.id === activeTabId) ?? null
+
+	// Phase 190-04 — restore tabs from localStorage on mount (additive).
+	useEffect(() => {
+		if (!userId) return
 		try {
-			setMcpLoading(true)
-			const res = await fetch('/api/mcp/servers', {credentials: 'include'})
-			if (res.ok) {
-				const data = (await res.json()) as {
-					servers: McpServerConfig[]
-					statuses: Record<string, McpServerStatus>
-				}
-				setMcpServers(data.servers ?? [])
-				setMcpStatuses(data.statuses ?? {})
+			const raw = localStorage.getItem(LS_TABS_KEY(userId))
+			if (!raw) return
+			const saved = JSON.parse(raw) as TerminalTabInfo[]
+			if (Array.isArray(saved) && saved.length > 0) {
+				setTabs(saved)
+				setActiveTabId(saved[0].id)
 			}
 		} catch {
-			/* silent */
-		} finally {
-			setMcpLoading(false)
+			/* invalid JSON — start empty */
 		}
-	}, [activeTab])
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [userId]) // userId stable after first auth resolve; run once on mount
 
+	// Phase 190-04 — persist tabs to localStorage (300ms debounce).
 	useEffect(() => {
-		if (activeTab !== 'mcp') return
-		fetchMcpServers()
-		const interval = setInterval(fetchMcpServers, 15_000)
-		return () => clearInterval(interval)
-	}, [activeTab, fetchMcpServers])
-
-	const mcpServerItems = mcpServers.map((s) => ({name: s.name, config: s, status: mcpStatuses[s.name]}))
-	const mcpSelectedServer = mcpSelectedName
-		? (mcpServerItems.find((s) => s.name === mcpSelectedName) ?? null)
-		: null
-	const mcpInstalledNames = new Set(mcpServers.map((s) => s.name))
-
-	const handleInstallFeaturedMcp = useCallback(
-		async (mcp: FeaturedMcp) => {
-			const body: Record<string, unknown> = {
-				name: mcp.name,
-				transport: mcp.transport,
-				description: mcp.description,
-			}
-			if (mcp.transport === 'stdio') {
-				body.command = mcp.customCommand ?? 'npx'
-				body.args = mcp.customArgs ?? (mcp.npmPackage ? ['-y', mcp.npmPackage] : [])
-			} else {
-				body.url = mcp.remoteUrl ?? ''
-			}
+		if (!userId) return
+		const id = setTimeout(() => {
 			try {
-				await fetch('/api/mcp/servers', {
-					method: 'POST',
-					credentials: 'include',
-					headers: {'Content-Type': 'application/json'},
-					body: JSON.stringify(body),
-				})
-				await fetchMcpServers()
+				localStorage.setItem(LS_TABS_KEY(userId), JSON.stringify(tabs))
 			} catch {
-				/* silent */
+				/* storage full or sandboxed — silent */
+			}
+		}, 300)
+		return () => clearTimeout(id)
+	}, [tabs, userId])
+
+	// ── Tab helpers ────────────────────────────────────────────────────
+
+	function deriveTabId(item: {id: string; type: string}): string {
+		if (item.type === 'agent') return `liv-agent-${item.id}`
+		if (item.type === 'chat') return `liv-chat-${item.id}`
+		return `liv-proj-${item.id}` // projects get no tab — fallback only
+	}
+
+	function deriveTabLabel(item: {type: string; name?: string; title?: string}): string {
+		return (item as any).name ?? (item as any).title ?? item.type
+	}
+
+	// Sidebar selection → open or focus tab (agent/chat), or use selectedItem routing (project).
+	const handleItemSelect = useCallback(
+		(id: string | null) => {
+			setSelectedItemId(id)
+			if (!id) {
+				setActiveTabId(null)
+				return
+			}
+			const item = items.find((it: any) => it.id === id)
+			if (!item) return
+			// Projects: keep selectedItem routing (no tab)
+			if ((item as any).type === 'project') {
+				setActiveTabId(null)
+				return
+			}
+			const tabId = deriveTabId(item as any)
+			const existing = tabs.find((t) => t.id === tabId)
+			if (existing) {
+				setActiveTabId(tabId)
+			} else {
+				const newTab: TerminalTabInfo = {
+					id: tabId,
+					label: deriveTabLabel(item as any),
+					type: (item as any).type as 'agent' | 'chat',
+					sessionId: tabId,
+				}
+				setTabs((prev) => [...prev, newTab])
+				setActiveTabId(tabId)
 			}
 		},
-		[fetchMcpServers],
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[items, tabs],
 	)
 
-	const handleMcpToggle = async (name: string, enabled: boolean) => {
-		try {
-			await fetch(`/api/mcp/servers/${encodeURIComponent(name)}`, {
-				method: 'PUT',
-				credentials: 'include',
-				headers: {'Content-Type': 'application/json'},
-				body: JSON.stringify({enabled}),
+	// Claude icon → new ad-hoc claude tab.
+	const handleAddClaude = useCallback(() => {
+		const n = tabs.filter((t) => t.type === 'claude').length + 1
+		const id = `liv-adhoc-claude-${crypto.randomUUID()}`
+		const newTab: TerminalTabInfo = {id, label: `Claude ${n}`, type: 'claude', sessionId: id}
+		setTabs((prev) => [...prev, newTab])
+		setActiveTabId(id)
+	}, [tabs])
+
+	// Terminal icon → new bare bash tab.
+	const handleAddBareTerminal = useCallback(() => {
+		const n = tabs.filter((t) => t.type === 'terminal').length + 1
+		const id = `liv-bare-${crypto.randomUUID()}`
+		const newTab: TerminalTabInfo = {id, label: `Terminal ${n}`, type: 'terminal', sessionId: id}
+		setTabs((prev) => [...prev, newTab])
+		setActiveTabId(id)
+	}, [tabs])
+
+	// Tab close → remove from state; shift focus to previous tab if it was active.
+	const handleCloseTab = useCallback(
+		(id: string) => {
+			setTabs((prev) => {
+				const idx = prev.findIndex((t) => t.id === id)
+				const next = prev.filter((t) => t.id !== id)
+				if (activeTabId === id) {
+					const prevTab = idx > 0 ? next[idx - 1] : next[0]
+					setActiveTabId(prevTab?.id ?? null)
+				}
+				return next
 			})
-			await fetchMcpServers()
-		} catch {
-			/* silent */
-		}
-	}
-
-	const handleMcpRemove = async (name: string) => {
-		try {
-			await fetch(`/api/mcp/servers/${encodeURIComponent(name)}`, {method: 'DELETE', credentials: 'include'})
-			setMcpSelectedName(null)
-			await fetchMcpServers()
-		} catch {
-			/* silent */
-		}
-	}
-
-
-	// Right-pane terminal tab content — routes based on selectedItem type (185-02).
-	const terminalContent = selectedItem ? (
-		(selectedItem as {type: string}).type === 'chat' ? (
-			<ChatDetail item={selectedItem as Parameters<typeof ChatDetail>[0]['item']} />
-		) : (selectedItem as {type: string}).type === 'project' ? (
-			<ProjectDetail item={selectedItem as Parameters<typeof ProjectDetail>[0]['item']} />
-		) : (selectedItem as {type: string}).type === 'agent' ? (
-			// Phase 189-01 — AgentDetail replaced by AgentTerminalPane.
-			<AgentTerminalPane
-				agentItem={selectedItem as {id: string; name: string; type: string}}
-				userId={userId ?? ''}
-			/>
-		) : null
-	) : hasItems ? (
-		<div className='flex h-full items-center justify-center p-8 text-center text-text-secondary'>
-			<div className='flex flex-col gap-2'>
-				<p>Open a Chat from the sidebar to attach a terminal.</p>
-				<p className='text-xs'>
-					Phase 175 — terminals now live in the dock window manager.
-				</p>
-			</div>
-		</div>
-	) : (
-		<LivWelcomeTerminal userId={userId ?? ''} loading={itemList.isLoading} />
+		},
+		[activeTabId],
 	)
+
+	// ── Right-pane content switch ────────────────────────────────────
+
+	let rightPaneContent: React.ReactNode = null
+
+	if (activeTab?.type === 'agent') {
+		const agentItem = items.find((it: any) => it.id === activeTab.id.replace('liv-agent-', ''))
+		if (agentItem) {
+			rightPaneContent = (
+				<AgentTerminalPane
+					agentItem={agentItem as {id: string; name: string; type: string}}
+					userId={userId ?? ''}
+				/>
+			)
+		}
+	} else if (activeTab?.type === 'terminal') {
+		rightPaneContent = <BareTerminal sessionId={activeTab.sessionId} />
+	} else if (activeTab?.type === 'claude') {
+		rightPaneContent = <CcTerminal sessionId={activeTab.sessionId} />
+	} else if (activeTab?.type === 'chat') {
+		const chatItem = items.find((it: any) => it.id === activeTab.id.replace('liv-chat-', ''))
+		if (chatItem) {
+			rightPaneContent = (
+				<ChatDetail item={chatItem as Parameters<typeof ChatDetail>[0]['item']} />
+			)
+		}
+	} else if (!activeTab && selectedItem && (selectedItem as any).type === 'project') {
+		rightPaneContent = (
+			<ProjectDetail item={selectedItem as Parameters<typeof ProjectDetail>[0]['item']} />
+		)
+	} else if (!activeTab && !selectedItem) {
+		rightPaneContent = hasItems ? (
+			<div className='flex h-full items-center justify-center p-8 text-center text-text-secondary'>
+				<div className='flex flex-col gap-2'>
+					<p>Open a Chat from the sidebar to attach a terminal.</p>
+					<p className='text-xs'>
+						Phase 175 — terminals now live in the dock window manager.
+					</p>
+				</div>
+			</div>
+		) : (
+			<LivWelcomeTerminal userId={userId ?? ''} loading={itemList.isLoading} />
+		)
+	}
 
 	return (
 		<>
@@ -213,13 +263,13 @@ export default function AiChatRoute() {
 						<SidebarTree onSelect={handleItemSelect} />
 					</div>
 				)}
-				{/* Right pane — tab nav + content (Phase 185-01). */}
+				{/* Right pane — tab strip + content (Phase 185-01 + 190-03). */}
 				<div
 					data-testid='ai-chat-right-pane'
 					className='flex flex-1 flex-col overflow-hidden'
 				>
-					{/* Tab nav */}
-					<div className='flex border-b border-border bg-bg-secondary'>
+					{/* Tab nav row: hamburger (mobile) + TerminalTabStrip */}
+					<div className='flex items-center border-b border-border'>
 						{/* Hamburger toggle — mobile only (Phase 185-03) */}
 						{isMobile && (
 							<button
@@ -232,56 +282,21 @@ export default function AiChatRoute() {
 								<Menu size={18} />
 							</button>
 						)}
-						<button
-							type='button'
-							onClick={() => setActiveTab('terminal')}
-							className={`px-4 py-2 text-sm ${activeTab === 'terminal' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary'}`}
-						>
-							Terminal
-						</button>
-						<button
-							type='button'
-							onClick={() => setActiveTab('mcp')}
-							className={`px-4 py-2 text-sm ${activeTab === 'mcp' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary'}`}
-						>
-							MCP Servers
-						</button>
+						{/* Phase 190-03 — TerminalTabStrip replaces the old static tab buttons */}
+						<div className='flex-1 min-w-0'>
+							<TerminalTabStrip
+								data-testid='terminal-tab-strip'
+								tabs={tabs}
+								activeId={activeTabId}
+								onSelect={setActiveTabId}
+								onClose={handleCloseTab}
+								onAddClaude={handleAddClaude}
+								onAddBareTerminal={handleAddBareTerminal}
+							/>
+						</div>
 					</div>
 					<div className='flex-1 overflow-hidden'>
-						{activeTab === 'terminal' ? (
-							terminalContent
-						) : (
-							<div data-testid='mcp-tab-content' className='flex h-full flex-col overflow-hidden'>
-								{/* Featured installer — shown when no server selected */}
-								{!mcpSelectedName && (
-									<div className='shrink-0 border-b border-border p-3 overflow-y-auto'>
-										<FeaturedMcpInstaller
-											installedNames={mcpInstalledNames}
-											onInstall={handleInstallFeaturedMcp}
-										/>
-									</div>
-								)}
-								<div className='flex flex-1 overflow-hidden'>
-									<div className='w-64 shrink-0 border-r border-border'>
-										<McpServerList
-											servers={mcpServerItems}
-											selectedName={mcpSelectedName}
-											onSelect={setMcpSelectedName}
-											onToggleEnabled={handleMcpToggle}
-											onRemove={handleMcpRemove}
-											isLoading={mcpLoading}
-										/>
-									</div>
-									<div className='flex-1 min-w-0'>
-										<McpServerDetail
-											server={mcpSelectedServer}
-											onClose={() => setMcpSelectedName(null)}
-											onToggleEnabled={handleMcpToggle}
-										/>
-									</div>
-								</div>
-							</div>
-						)}
+						{rightPaneContent}
 					</div>
 				</div>
 			</div>
