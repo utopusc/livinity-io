@@ -149,7 +149,11 @@ describe('CcPtyManager', () => {
 		// Turkish + non-ASCII chars round-trip cleanly through claude's TUI.
 		// Phase 183 — trailing ' removed from regex: skip-perms flag may follow
 		// 'claude' when liv:config:cc_pty_skip_perms is true (default). Match as prefix.
-		expect(cmd).toMatch(/'LANG=en_US\.UTF-8 LC_ALL=en_US\.UTF-8 HOME=\/root claude/)
+		// Phase 192-03 — HOME=<os.homedir()> (was hardcoded /root pre-bruce-user switch).
+		const expectedHome = os.homedir()
+		expect(cmd).toContain(
+			`'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=${expectedHome} claude`,
+		)
 	})
 
 	it('Assertion 5: userId injection rejected — execSync is NEVER called for invalid userId', async () => {
@@ -575,7 +579,7 @@ describe('CcPtyManager', () => {
 			expect(skipPermsCalls.length).toBe(1)
 		})
 
-		it('Assertion 32 (P183): when skip-perms=false child cmd is bare "...HOME=/root claude" with no extra flags', async () => {
+		it('Assertion 32 (P183 → P192-03): when skip-perms=false child cmd is bare "...HOME=<homedir> claude" with no extra flags', async () => {
 			const r = makeFakeRedis({'liv:config:cc_pty_skip_perms': 'false'})
 			const mgr = makeManagerWithRedis(r)
 			execSyncSpy.mockClear()
@@ -584,8 +588,9 @@ describe('CcPtyManager', () => {
 				.map(([c]: [string, ...unknown[]]) => c as string)
 				.find((c) => c.includes('tmux new-session'))
 			expect(newSesCall).toBeDefined()
-			// Must end with "HOME=/root claude'" — nothing after 'claude'
-			expect(newSesCall).toMatch(/HOME=\/root claude'/)
+			// Phase 192-03 — HOME now resolves to runtime user's home, not /root
+			const expectedHome = os.homedir()
+			expect(newSesCall).toContain(`HOME=${expectedHome} claude'`)
 		})
 
 		it('Assertion 33 (P183): set-option failure is non-fatal — createSession resolves + logs warn', async () => {
@@ -603,6 +608,49 @@ describe('CcPtyManager', () => {
 			expect(logger.warn).toHaveBeenCalledWith(
 				expect.stringMatching(/set-option status off failed/),
 			)
+		})
+
+		// ── Phase 192-03 — bruce-user runtime; HOME interpolation + skip-perms always-on ───
+
+		it('Assertion 192-03-A: createSession tmuxCmd uses HOME=os.homedir() not HOME=/root', async () => {
+			const r = makeFakeRedis({'liv:config:cc_pty_skip_perms': 'true'})
+			const mgr = makeManagerWithRedis(r)
+			execSyncSpy.mockClear()
+			await mgr.createSession({userId: 'admin'})
+			const newSesCall = execSyncSpy.mock.calls
+				.map(([c]: [string, ...unknown[]]) => c as string)
+				.find((c) => c.includes('tmux new-session'))
+			expect(newSesCall).toBeDefined()
+			expect(newSesCall).not.toMatch(/HOME=\/root /)
+			expect(newSesCall).toContain(`HOME=${os.homedir()} `)
+		})
+
+		it('Assertion 192-03-B: createSession execSync env.HOME equals os.homedir()', async () => {
+			const r = makeFakeRedis({'liv:config:cc_pty_skip_perms': 'true'})
+			const mgr = makeManagerWithRedis(r)
+			execSyncSpy.mockClear()
+			await mgr.createSession({userId: 'admin'})
+			const newSesCall = execSyncSpy.mock.calls.find(
+				([c]: [string, ...unknown[]]) =>
+					typeof c === 'string' && c.includes('tmux new-session'),
+			)
+			expect(newSesCall).toBeDefined()
+			const optsArg = newSesCall![1] as {env: Record<string, string>}
+			expect(optsArg.env.HOME).toBe(os.homedir())
+			expect(optsArg.env.HOME).not.toBe('/root')
+		})
+
+		it('Assertion 192-03-C: skip-perms config=true always emits --dangerously-skip-permissions (no uid suppression)', async () => {
+			// Phase 192-03 dropped the uid=0 suppression. Even if a test runner is uid=0
+			// (Docker CI, root container), the flag MUST be passed when config=true.
+			const r = makeFakeRedis({'liv:config:cc_pty_skip_perms': 'true'})
+			const mgr = makeManagerWithRedis(r)
+			execSyncSpy.mockClear()
+			await mgr.createSession({userId: 'admin'})
+			const newSesCall = execSyncSpy.mock.calls
+				.map(([c]: [string, ...unknown[]]) => c as string)
+				.find((c) => c.includes('tmux new-session'))
+			expect(newSesCall).toContain('--dangerously-skip-permissions')
 		})
 	})
 })

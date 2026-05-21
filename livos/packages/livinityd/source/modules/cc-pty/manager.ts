@@ -32,6 +32,13 @@ import {SessionStore} from './session-store.js'
 // Phase 189-05 — transcript recorder exports added to same module (additive).
 import {resolveAgentSpawnArgs, isAgentSession, createAgentSessionRecorder, flushAgentSessionTranscript, type AgentSessionRecorder} from './agent-session-hooks.js'
 
+// Phase 192-03 — livinityd runs as bruce (uid 1000) post-192-02 cutover.
+// HOME_DIR resolves to /home/bruce at runtime so the spawned `claude`
+// subprocess reads credentials from ~/.claude/.credentials.json (instead of
+// the legacy hardcoded /root/.claude). Module-level constant so all
+// functions (createSession + attachSession) share one reference.
+const HOME_DIR = os.homedir()
+
 // ─── Security constants ──────────────────────────────────────────────────
 
 const USER_ID_RE = /^[a-zA-Z0-9_-]+$/
@@ -198,15 +205,11 @@ export class CcPtyManager {
 		// null → operator hasn't set a value → safe default is to skip perms.
 		const skipPermsRaw = await this.redis.get('liv:config:cc_pty_skip_perms')
 		const skipPermsConfig = skipPermsRaw === null ? true : skipPermsRaw === 'true'
-		// v38.2 hotfix — claude refuses to run with --dangerously-skip-permissions
-		// when invoked as root/sudo ("cannot be used with root/sudo privileges").
-		// livinityd runs as root via systemd, so spawning claude with this flag
-		// makes claude exit immediately → operator sees '[exited]' on every
-		// agent/Claude-icon click. Suppress the flag when uid=0; operator will
-		// need to approve tool calls inside claude (manual interaction). Proper
-		// fix = spawn claude as bruce user (deferred).
-		const isRoot = typeof process.getuid === 'function' && process.getuid() === 0
-		const skipPerms = skipPermsConfig && !isRoot
+		// Phase 192-03 — root-uid check removed. livinityd now runs as bruce
+		// (uid 1000) post-Phase 192-02 cutover; claude no longer refuses
+		// `--dangerously-skip-permissions`. The legacy v38.2 hotfix that
+		// suppressed the flag when uid=0 is dead code post-cutover.
+		const skipPerms = skipPermsConfig
 		const skipPermsFlag = skipPerms ? ' --dangerously-skip-permissions' : ''
 
 		// Phase 190-01 — bare sessions skip claude command injection entirely.
@@ -233,8 +236,10 @@ export class CcPtyManager {
 			agentExtraArgs.length > 0 ? ' ' + agentExtraArgs.map((a) => shellEscape(a)).join(' ') : ''
 
 		// Phase 190-01 — bare sessions spawn plain bash; claude sessions spawn the claude command.
-		// tmux command — name + cwd are shell-escaped; the child command sets
-		// HOME=/root (Anthropic SDK credentials live at /root/.claude/.credentials.json)
+		// Phase 192-03 — HOME=${HOME_DIR} (was hardcoded /root); credentials at
+		// ${HOME_DIR}/.claude/.credentials.json now resolve to /home/bruce/.claude
+		// post-192-02 cutover.
+		// tmux command — name + cwd are shell-escaped; the child command sets HOME
 		// AND forces a UTF-8 locale so Turkish + non-ASCII chars round-trip cleanly
 		// through claude's TUI. Phase 167.2 hotfix: livinityd inherits LANG from
 		// systemd but tmux daemon snapshots env on first server start; subsequent
@@ -242,15 +247,15 @@ export class CcPtyManager {
 		// the spawned child explicitly bypasses that snapshot.
 		const tmuxCmd = isBare
 			? `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bash'`
-			: `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=/root claude${skipPermsFlag}${extraArgsStr}'`
-		execSync(tmuxCmd, {env: {...process.env, HOME: '/root', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8'}})
+			: `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=${HOME_DIR} claude${skipPermsFlag}${extraArgsStr}'`
+		execSync(tmuxCmd, {env: {...process.env, HOME: HOME_DIR, LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8'}})
 
 		// Phase 183 — suppress tmux status bar so the green line never appears
 		// in xterm.js. Non-fatal: if tmux is absent in local dev this must not
 		// prevent session creation.
 		try {
 			execSync(`tmux set-option -g status off -t ${nameEsc}`, {
-				env: {...process.env, HOME: '/root'},
+				env: {...process.env, HOME: HOME_DIR},
 				stdio: 'ignore',
 			})
 		} catch (err) {
@@ -311,8 +316,9 @@ export class CcPtyManager {
 				? `--resume ${shellEscape(session.ccSessionId)}`
 				: ''
 			// Phase 167.2 hotfix — same LANG/LC_ALL injection as createSession.
-			const cmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=/root claude ${resumeArg}'`
-			execSync(cmd, {env: {...process.env, HOME: '/root', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8'}})
+			// Phase 192-03 — HOME=${HOME_DIR} instead of hardcoded /root.
+			const cmd = `tmux new-session -d -s ${nameEsc} -c ${cwdEsc} 'LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 HOME=${HOME_DIR} claude ${resumeArg}'`
+			execSync(cmd, {env: {...process.env, HOME: HOME_DIR, LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8'}})
 			this.logger.log(`[cc-pty] resurrected tmux session ${session.tmuxName}`)
 		} else {
 			// Phase 181-04 — Buffer replay: send last 2000 lines of tmux output to
@@ -343,8 +349,9 @@ export class CcPtyManager {
 			rows: 30,
 			cwd: session.cwd,
 			env: {
+				// Phase 192-03 — HOME=${HOME_DIR} (was hardcoded /root)
 				...process.env,
-				HOME: '/root',
+				HOME: HOME_DIR,
 				TERM: 'xterm-256color',
 				LANG: 'en_US.UTF-8',
 				LC_ALL: 'en_US.UTF-8',
