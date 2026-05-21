@@ -127,6 +127,8 @@ export class CcPtyManager {
 		agentName?: string
 		/** Phase 190-01 — session type: 'claude' (default) or 'bare' (plain bash, no claude). */
 		sessionType?: 'claude' | 'bare'
+		/** v38.2 hotfix — caller-provided id (for ad-hoc sessions created via ws-handler inline-create flow). */
+		id?: string
 	}): Promise<CcPtySession> {
 		validateUserId(opts.userId)
 
@@ -138,7 +140,7 @@ export class CcPtyManager {
 			)
 		}
 
-		const id = randomUUID()
+		const id = opts.id ?? randomUUID()
 		// Phase 190-01 — bare sessions use 'liv-bare-' prefix to distinguish from claude sessions.
 		const isBare = opts.sessionType === 'bare'
 		const tmuxName = isBare

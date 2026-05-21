@@ -47,7 +47,9 @@ export const ccPtyConfigSchema = z.object({
 
 const ccPtyConfigRouter = router({
 	getConfig: adminProcedure.query(async ({ctx}) => {
-		const redis = ctx.livinityd.redis
+		// v38.2 hotfix — Redis lives at ctx.livinityd.ai.redis (matches autonomous-router pattern).
+		// Phase 182-03 originally used ctx.livinityd.redis which is undefined → TypeError on .get().
+		const redis = ctx.livinityd!.ai.redis
 		const [sp, cwd, idle, maxS, paths, ftp, model] = await Promise.all([
 			redis.get(REDIS_PREFIX + 'skip_perms'),
 			redis.get(REDIS_PREFIX + 'default_cwd'),
@@ -71,7 +73,9 @@ const ccPtyConfigRouter = router({
 	setConfig: adminProcedure
 		.input(ccPtyConfigSchema.partial())
 		.mutation(async ({ctx, input}) => {
-			const redis = ctx.livinityd.redis
+			// v38.2 hotfix — Redis lives at ctx.livinityd.ai.redis (matches autonomous-router pattern).
+		// Phase 182-03 originally used ctx.livinityd.redis which is undefined → TypeError on .get().
+		const redis = ctx.livinityd!.ai.redis
 			const writes: Array<[string, string]> = []
 			if (input.skip_perms !== undefined) writes.push([REDIS_PREFIX + 'skip_perms', String(input.skip_perms)])
 			if (input.default_cwd !== undefined) writes.push([REDIS_PREFIX + 'default_cwd', input.default_cwd])

@@ -124,12 +124,17 @@ export function AddItemModal({
 
 	return (
 		<Dialog.Root open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-			<Dialog.Portal container={document.body}>
-				<Dialog.Overlay className='fixed inset-0 z-50 bg-bg/60' />
-				<Dialog.Content
-					data-testid='add-item-modal'
-					className='fixed left-1/2 top-1/2 z-50 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-line bg-bg-secondary p-6 shadow-xl'
-				>
+			{/* v38.2 hotfix — render Dialog in-tree (no Portal) so it scopes to the
+			    AI Chat window content, not document.body. Phase 188-03 used
+			    container={document.body} which broke z-index relative to the LivOS
+			    window manager (windows are dynamic-zIndex 100+, our z-50 was hidden
+			    behind the window chrome). absolute positioning + parent
+			    must-be-relative makes the overlay cover only the AI Chat surface. */}
+			<Dialog.Overlay className='absolute inset-0 z-50 bg-bg/60' />
+			<Dialog.Content
+				data-testid='add-item-modal'
+				className='absolute left-1/2 top-1/2 z-50 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-line bg-bg-secondary p-6 shadow-xl'
+			>
 					<Dialog.Title className='mb-4 text-base font-semibold'>
 						{step === 'pick-type' ? 'Yeni öğe ekle' : `Yeni ${selectedType === 'agent' ? 'Agent' : 'Proje'}`}
 					</Dialog.Title>
@@ -207,8 +212,7 @@ export function AddItemModal({
 							</div>
 						</form>
 					)}
-				</Dialog.Content>
-			</Dialog.Portal>
+			</Dialog.Content>
 		</Dialog.Root>
 	)
 }
