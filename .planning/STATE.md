@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-21T03:34:42.013Z"
+last_updated: "2026-05-21T04:04:46.809Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,9 +25,17 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-**Active milestone:** v38.0 — Liv Agent Platform — **CLOSED 2026-05-20** (14 phases / 141 commits / 5 waves; CODE-COMPLETE-AND-LIVE-VERIFIED; Operator UAT browser walk queued per `.planning/phases/184-v38-deploy-uat/v38-VERIFICATION.md` § Operator UAT Browser Walk).
+**Active milestone:** v38.2 — Agent PTY + Setup Wizard — **IN PROGRESS** (Phase 189 CODE-COMPLETE 2026-05-20).
 
-**Last shipped phase:** **Phase 188** Simplified Add Modal + DELETE Vault Graph — CODE-COMPLETE 2026-05-20 (28 new vitest PASS across 3 suites; 25/25 sacred SHAs; 6 commits `e4368f6e..307ad944`; 2-step modal, Agent/Project artifacts via artifact-writer.ts, vault-graph UI deleted 28 files, backend preserved).
+**Last shipped phase:** **Phase 189** Agent Click → CC PTY + Chat-Based Setup Wizard — CODE-COMPLETE 2026-05-20 (36 new vitest PASS across 5 suites; 25/25 sacred SHAs; 7 commits `4b788b33..f1264920`; AgentTerminalPane, setup-wizard-prompt, agent_config_set tool, StarterChips, session transcript writer).
+
+**Key decisions (Phase 189):**
+
+- agent sessions use deterministic tmux name liv-agent-{id} (id immutable; name mutable)
+- wizard injection is additive in agent-session-hooks.ts (not in manager.ts core)
+- agent_config_set gated by agentDir param in LivToolsOptions (not globally exposed)
+- TRANSCRIPT_MARKER Set provides process-scoped idempotency for session flush
+- AgentDetail stays on disk (Phase 191 settings panel future use)
 
 **Key decisions (Phase 188):**
 
