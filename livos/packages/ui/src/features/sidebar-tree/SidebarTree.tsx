@@ -38,6 +38,12 @@ export interface SidebarTreeProps {
 	 * clicking a Chat resumes its CC PTY session, etc.).
 	 */
 	onSelect?: (itemId: string | null) => void
+	/**
+	 * v38.2 hotfix — when provided, the footer gear button fires this instead of
+	 * opening the global Settings WindowManager window. AI Chat surface uses
+	 * this to open the in-pane AiChatSettingsPanel (MCP + Claude Code config).
+	 */
+	onOpenSettingsPanel?: () => void
 }
 
 function TreeNodeRow({node}: NodeRendererProps<TreeNode>) {
@@ -51,7 +57,7 @@ function TreeNodeRow({node}: NodeRendererProps<TreeNode>) {
 	return <ItemTreeRow item={node.data.item} />
 }
 
-export function SidebarTree(_props: SidebarTreeProps) {
+export function SidebarTree(props: SidebarTreeProps) {
 	const list = trpcReact.vault.items.list.useQuery(undefined, {
 		refetchInterval: 5_000,
 	})
@@ -74,6 +80,12 @@ export function SidebarTree(_props: SidebarTreeProps) {
 	const windowManager = useWindowManagerOptional()
 
 	const handleOpenSettings = () => {
+		// v38.2 hotfix — prefer in-pane panel callback if parent provided one.
+		// Operator: "AI Chat sidebar Settings butonu AI Chat'e ÖZEL olacak".
+		if (props.onOpenSettingsPanel) {
+			props.onOpenSettingsPanel()
+			return
+		}
 		if (!windowManager) return
 		const existing = windowManager.windows.find(
 			(w) => w.appId === 'LIVINITY_settings',
@@ -158,6 +170,17 @@ export function SidebarTree(_props: SidebarTreeProps) {
 							if (id === MAIN_LIV_ID) continue
 							moveMutation.mutate({id, newParentId: parentId})
 						}
+					}}
+					// v38.2 hotfix — wire onSelect to parent (Phase 174-02 typed the
+					// prop but never connected it; sidebar clicks did nothing).
+					onSelect={(nodes) => {
+						if (!props.onSelect) return
+						const first = nodes[0]
+						if (!first || first.id === MAIN_LIV_ID) {
+							props.onSelect(null)
+							return
+						}
+						props.onSelect(first.id)
 					}}
 				>
 					{TreeNodeRow}

@@ -45,6 +45,7 @@ import {useCurrentUser} from '@/hooks/use-current-user'
 import {LivWelcomeTerminal} from '@/features/liv-welcome/LivWelcomeTerminal'
 import {SidebarTree} from '@/features/sidebar-tree'
 import {ChatDetail, ProjectDetail, AddItemModal} from '@/features/item-detail'
+import {AiChatSettingsPanel} from '@/features/ai-chat-settings-panel/AiChatSettingsPanel'
 // Phase 189-01 — AgentDetail replaced by AgentTerminalPane in the right-pane switch.
 // AgentDetail.tsx stays on disk (Phase 191 may revive it as a settings panel).
 import {AgentTerminalPane} from '@/features/agent-terminal/AgentTerminalPane'
@@ -76,6 +77,8 @@ export default function AiChatRoute() {
 	// Phase 185-03 — sidebar open state: collapsed on mobile, visible on desktop.
 	const [sidebarOpen, setSidebarOpen] = useState(!isMobile)
 	const [addModalOpen, setAddModalOpen] = useState(false)
+	// v38.2 hotfix — in-pane Settings panel state (gear button toggles).
+	const [settingsPanelOpen, setSettingsPanelOpen] = useState(false)
 
 	// Phase 190-03 — Dynamic tab state replacing the old static Tab union.
 	const [tabs, setTabs] = useState<TerminalTabInfo[]>([])
@@ -240,7 +243,9 @@ export default function AiChatRoute() {
 
 	return (
 		<>
-			<div className='flex h-full overflow-hidden'>
+			{/* v38.2 hotfix — `relative` parent so AddItemModal (absolute positioning) is
+			    scoped to AI Chat surface, not document.body. */}
+			<div className='relative flex h-full overflow-hidden'>
 				{/* Left pane — SidebarTree (Phase 185-01). Width fixed at 280px. */}
 				{sidebarOpen && (
 					<div
@@ -260,7 +265,10 @@ export default function AiChatRoute() {
 								<Plus size={16} />
 							</button>
 						</div>
-						<SidebarTree onSelect={handleItemSelect} />
+						<SidebarTree
+							onSelect={handleItemSelect}
+							onOpenSettingsPanel={() => setSettingsPanelOpen(true)}
+						/>
 					</div>
 				)}
 				{/* Right pane — tab strip + content (Phase 185-01 + 190-03). */}
@@ -295,13 +303,25 @@ export default function AiChatRoute() {
 							/>
 						</div>
 					</div>
-					<div className='flex-1 overflow-hidden'>
+					<div className='relative flex-1 overflow-hidden'>
 						{rightPaneContent}
+						{/* v38.2 hotfix — in-pane AI Chat Settings panel (gear opens it).
+						    Absolute overlay scoped to the right pane only; sidebar stays
+						    visible. Contains MCP Servers (restored 1316-line UI) +
+						    Claude Code config (Phase 182-03 form re-wrapped). */}
+						<AiChatSettingsPanel
+							open={settingsPanelOpen}
+							onClose={() => setSettingsPanelOpen(false)}
+						/>
 					</div>
 				</div>
+				{/* v38.2 hotfix — AddItemModal rendered INSIDE the relative AI Chat root
+				    so the absolute-positioned Dialog (no Portal) scopes to this surface.
+				    Previously it was a sibling outside the layout div + Portal to body,
+				    which placed the modal BEHIND the LivOS window manager chrome
+				    (windows have dynamic-zIndex ~100+, modal z-50 was hidden). */}
+				<AddItemModal open={addModalOpen} onClose={() => setAddModalOpen(false)} />
 			</div>
-			{/* AddItemModal — Radix Dialog portals to document.body (Phase 185-03) */}
-			<AddItemModal open={addModalOpen} onClose={() => setAddModalOpen(false)} />
 		</>
 	)
 }

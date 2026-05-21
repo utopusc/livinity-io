@@ -85,19 +85,30 @@ export function createCcPtyWsHandler(opts: CcPtyWsHandlerOptions) {
 					}
 					let session: CcPtySession | null = await opts.store.getById(env.sessionId)
 
-					// Phase 190-01 — inline bare session creation:
-					// If sessionType='bare' and session not in store, create it on-the-fly
-					// so no separate REST call is needed from the browser.
-					// cwd is always '~' for bare sessions; userId comes from verified JWT.
-					if (!session && env.sessionType === 'bare') {
-						const newSession = await opts.manager.createSession({
-							userId: user.id,
-							title: 'Terminal',
-							cwd: '~',
-							sessionType: 'bare',
-						})
-						// re-assign so the rest of the attach branch proceeds normally
-						session = newSession
+					// v38.2 hotfix — inline ad-hoc session creation by sessionId prefix.
+					// Phase 190-01 added 'bare' auto-create gated on env.sessionType, but the
+					// terminal-ws-client never sends sessionType — so the gate never fires
+					// and bare/claude ad-hoc clicks 500'd with "session not found". Fix:
+					// detect ad-hoc sessions by their id prefix (always assigned client-side)
+					// and create on-the-fly. cwd is '~' for ad-hoc; userId from verified JWT.
+					if (!session) {
+						if (env.sessionId.startsWith('liv-bare-')) {
+							session = await opts.manager.createSession({
+								userId: user.id,
+								title: 'Terminal',
+								cwd: '~',
+								sessionType: 'bare',
+								id: env.sessionId,
+							})
+						} else if (env.sessionId.startsWith('liv-adhoc-claude-')) {
+							session = await opts.manager.createSession({
+								userId: user.id,
+								title: 'Claude',
+								cwd: '~',
+								sessionType: 'claude',
+								id: env.sessionId,
+							})
+						}
 					}
 
 					if (!session) {
