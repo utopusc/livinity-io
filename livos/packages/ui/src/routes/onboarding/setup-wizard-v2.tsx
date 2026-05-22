@@ -8,6 +8,7 @@ import {AccountStep} from '@/features/onboarding-flow/steps/account-step'
 import {ConnectAiStep} from '@/features/onboarding-flow/steps/connect-ai-step'
 import {DoneStep} from '@/features/onboarding-flow/steps/done-step'
 import {PersonalizeStep} from '@/features/onboarding-flow/steps/personalize-step'
+import {ProviderStep} from '@/features/onboarding-flow/steps/provider-step'
 import {WallpaperStep} from '@/features/onboarding-flow/steps/wallpaper-step'
 import {WelcomeStep} from '@/features/onboarding-flow/steps/welcome-step'
 import {TopBar} from '@/features/onboarding-flow/top-bar'
@@ -218,6 +219,15 @@ function WizardInner() {
 							/>
 						</Step>
 						<Step stepIndex={4} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
+							<ProviderStep
+								data={data}
+								setData={setData}
+								onContinue={stepper.next}
+								onSkip={stepper.next}
+								onBack={stepper.back}
+							/>
+						</Step>
+						<Step stepIndex={5} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<ConnectAiStep
 								onContinue={() => {
 									sound.play('success')
@@ -227,10 +237,10 @@ function WizardInner() {
 								onBack={stepper.back}
 							/>
 						</Step>
-						<Step stepIndex={5} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
+						<Step stepIndex={6} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<DoneStep
 								data={data}
-								isActive={stepper.idx === 5}
+								isActive={stepper.idx === 6}
 								onEnter={() => {
 									try {
 										localStorage.removeItem(STORAGE_KEY)
