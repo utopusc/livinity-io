@@ -1,40 +1,51 @@
 /**
- * Phase 196-04 — `setup.*` tRPC namespace.
+ * Phase 196-04 / 196-05 — `setup.*` tRPC namespace.
  *
- * Single procedure today: `setup.setRegion` (adminProcedure mutation).
+ * Two procedures today (after 196-05):
  *
- *   - Zod schema gates region values against the canonical 6-element
+ *   - `setup.setRegion` (Plan 196-04) — adminProcedure mutation.
+ *     Zod schema gates region values against the canonical 6-element
  *     REGIONS allow-list from `../../locale/region-suggestion.ts`. A
  *     client sending `region: 'mars'` is rejected with BAD_REQUEST
  *     before the procedure body runs (T-196-04-01 Tampering mitigation).
- *   - Optional `country` field: zod `regex(/^[A-Z]{2}$/)` enforces a
+ *     Optional `country` field: zod `regex(/^[A-Z]{2}$/)` enforces a
  *     2-letter uppercase ISO-3166-1 code (T-196-04-02 path-traversal
- *     defense-in-depth — Redis SET writes the value as the VALUE not
- *     the KEY, so a regex bypass still can't traverse).
- *   - Persists to Redis keys `liv:user:region` (always) and
- *     `liv:user:country` (only if present in input).
+ *     defense-in-depth). Persists to Redis keys `liv:user:region`
+ *     (always) and `liv:user:country` (only if present in input).
  *
- * Future plans (196-05 + onward) extend this namespace with
- * `setup.setLocaleTimezone`, `setup.setProvider`, etc — the empty-injection
- * default proxy pattern mirrors xai-auth-router.ts exactly so production
- * livinityd boot can swap in a real `createSetupRouter({redis})` via
+ *   - `setup.setLocaleTimezone` (Plan 196-05) — adminProcedure mutation.
+ *     Zod gates timezone (non-empty string) + locale (z.enum of 6
+ *     supported codes). Body re-validates timezone via
+ *     `timezoneService.validate()` (defense-in-depth — even if a future
+ *     caller bypasses zod, the Intl gate still fires before timedatectl).
+ *     On success: `timezoneService.setSystemTimezone(zone)` runs `sudo
+ *     /usr/bin/timedatectl set-timezone <zone>` via the narrow sudoers
+ *     Cmnd_Alias extended in this same plan, then persists to
+ *     `liv:user:timezone` + `liv:user:locale`.
+ *
+ * Future plans (e.g. `setup.setProvider`) extend this namespace too —
+ * the empty-injection default proxy pattern mirrors xai-auth-router.ts
+ * exactly so production livinityd boot can swap in a real
+ * `createSetupRouter({redis, timezoneService})` via
  * `setProductionAppRouter(createAppRouter({chromeMaster, xaiAuth, setup}))`.
  *
- * D-196-04-DI: the router takes a `{redis}` dep object. Production
- * livinityd boot (Plan 196-05's responsibility) constructs the dep set
- * and injects it; the bare `setupRouter` default throws on access until
- * that swap lands.
+ * D-196-04-DI / D-196-05-DI: the router takes a `{redis, timezoneService}`
+ * dep object. Production livinityd boot (Plan 196-05 Task 5) constructs
+ * both deps and injects them; the bare `setupRouter` default throws on
+ * access until that swap lands.
  *
- * D-196-04-HTTP-ONLY: `setup.setRegion` is added to `httpOnlyPaths` in
- * ./common.ts because the onboarding mutation must survive WS reconnect
- * across the systemctl restart livos window (memory pitfall B-12 / X-04
- * cluster — same rationale as `auth.xai.*` family in 195-03).
+ * D-196-04-HTTP-ONLY / D-196-05-HTTP-ONLY: both procedures are in
+ * `httpOnlyPaths` in ./common.ts because the onboarding mutation must
+ * survive WS reconnect across the systemctl restart livos window
+ * (memory pitfall B-12 / X-04 cluster — same rationale as `auth.xai.*`
+ * family in 195-03).
  */
 
+import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
 import {adminProcedure, router} from './trpc.js'
-import {REGIONS, type Region} from '../../locale/index.js'
+import {REGIONS, type Region, type TimezoneService} from '../../locale/index.js'
 
 // ─── Service DI shape ────────────────────────────────────────────────────
 
@@ -49,6 +60,12 @@ export interface SetupRedisClient {
 
 export interface SetupRouterDeps {
 	redis: SetupRedisClient
+	/**
+	 * Phase 196-05 — TimezoneService for `setup.setLocaleTimezone`.
+	 * Production wire-up at livinityd/source/index.ts constructs via
+	 * `createTimezoneService()`; tests inject a mock.
+	 */
+	timezoneService: TimezoneService
 }
 
 // ─── Input schemas ───────────────────────────────────────────────────────
@@ -70,6 +87,34 @@ const setRegionInput = z.object({
 		.string()
 		.regex(/^[A-Z]{2}$/)
 		.optional(),
+})
+
+/**
+ * Phase 196-05 — `setup.setLocaleTimezone` input schema.
+ *
+ * T-196-05-01 Tampering mitigation (layer 1 — zod): the locale field is
+ * a hard z.enum of 6 supported codes. The timezone field is a non-empty
+ * string but the SHAPE of valid IANA zones (a few hundred) is too large
+ * to embed as a zod enum without bloating the wire-format types, so
+ * runtime validation is delegated to the timezoneService.validate()
+ * gate inside the procedure body (layer 2 — Intl set membership).
+ *
+ * The two-layer design means even a future caller that bypasses this
+ * zod schema entirely still cannot reach `execFile('sudo', ...)` with
+ * an unvalidated zone — see timezone-service.test.ts T6 + T8 for the
+ * defense-in-depth regression-lock.
+ */
+const SUPPORTED_LOCALES = [
+	'en-US',
+	'tr-TR',
+	'de-DE',
+	'fr-FR',
+	'es-ES',
+	'ar-SA',
+] as const
+const setLocaleTimezoneInput = z.object({
+	timezone: z.string().min(1),
+	locale: z.enum(SUPPORTED_LOCALES),
 })
 
 // ─── Factory ─────────────────────────────────────────────────────────────
@@ -96,6 +141,42 @@ export function createSetupRouter(deps: SetupRouterDeps) {
 			}
 			return {ok: true as const}
 		}),
+
+		/**
+		 * Phase 196-05 — Persist the operator's locale + timezone selection
+		 * AND propagate the timezone to the system clock via the narrow
+		 * sudoers TIMEDATECTL Cmnd_Alias.
+		 *
+		 * Defense-in-depth ordering:
+		 *   1. zod (above) — locale enum + timezone non-empty string
+		 *   2. timezoneService.validate — Intl set membership for the timezone
+		 *   3. timezoneService.setSystemTimezone — execFile (argv-array, no
+		 *      shell) + 10s timeout
+		 *   4. redis.set — only after the system clock change succeeds, so a
+		 *      timedatectl failure does NOT leave Redis claiming a zone that
+		 *      isn't actually live
+		 *
+		 * adminProcedure-gated (T-196-05-03 EoP — mirrors setRegion).
+		 */
+		setLocaleTimezone: adminProcedure
+			.input(setLocaleTimezoneInput)
+			.mutation(async ({input}) => {
+				// Defense-in-depth: re-validate via Intl even though the UI
+				// only offers values from `Intl.supportedValuesOf('timeZone')`.
+				if (!deps.timezoneService.validate(input.timezone)) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: 'Phase 196-05: invalid IANA timezone',
+					})
+				}
+				// Propagate to the system clock BEFORE persisting to Redis —
+				// failures bubble up as TRPCError surfaces so the UI can show
+				// "permission denied" / "timedatectl exit 1" inline.
+				await deps.timezoneService.setSystemTimezone(input.timezone)
+				await deps.redis.set('liv:user:timezone', input.timezone)
+				await deps.redis.set('liv:user:locale', input.locale)
+				return {ok: true as const, timezone: input.timezone, locale: input.locale}
+			}),
 	})
 }
 
@@ -111,7 +192,7 @@ export function createSetupRouter(deps: SetupRouterDeps) {
  */
 function emptyInjectionStub(serviceName: string): never {
 	throw new Error(
-		`setup-router: ${serviceName} not injected — call createSetupRouter({redis}) in livinityd boot, then setProductionAppRouter(createAppRouter({chromeMaster, xaiAuth, setup}))`,
+		`setup-router: ${serviceName} not injected — call createSetupRouter({redis, timezoneService}) in livinityd boot, then setProductionAppRouter(createAppRouter({chromeMaster, xaiAuth, setup}))`,
 	)
 }
 
@@ -119,6 +200,13 @@ export const setupRouter = createSetupRouter({
 	redis: new Proxy({} as SetupRedisClient, {
 		get() {
 			return emptyInjectionStub('redis')
+		},
+	}),
+	// Phase 196-05 — timezoneService stub. Throws on any access until
+	// production createSetupRouter({timezoneService}) injection lands.
+	timezoneService: new Proxy({} as TimezoneService, {
+		get() {
+			return emptyInjectionStub('timezoneService')
 		},
 	}),
 })
