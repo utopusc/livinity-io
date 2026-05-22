@@ -154,22 +154,7 @@ export function Dock() {
 					}
 				/>
 				<DockDivider iconSize={iconSize} />
-				<DockItem
-					appId='LIVINITY_ai-chat'
-					iconSize={iconSize}
-					iconSizeZoomed={iconSizeZoomed}
-					open={false}
-					mouseX={mouseX}
-					onOpenWindow={(originRect) =>
-						handleOpenWindow(
-							'LIVINITY_ai-chat',
-							'/ai-chat',
-							'AI Chat',
-							systemAppsKeyed['LIVINITY_ai-chat'].icon,
-							originRect,
-						)
-					}
-				/>
+				{/* AI Chat dock entry removed with AI Chat teardown. */}
 				{/* Phase 30 hot-patch round 11 (post-v28.0.2): Server Management
 				    restored to the dock per user request. Docker is intentionally
 				    NOT in the dock — user wants the original sleek server-control

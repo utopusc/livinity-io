@@ -311,23 +311,6 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 				},
 			},
 			{
-				label: 'AI Chat',
-				icon: <TbMessage className='text-neutral-600' />,
-				onSelect: () => {
-					if (windowManager) {
-						windowManager.openWindow(
-							'LIVINITY_ai-chat',
-							'/ai-chat',
-							'AI Chat',
-							systemAppsKeyed['LIVINITY_ai-chat'].icon,
-						)
-					} else {
-						navigate(systemAppsKeyed['LIVINITY_ai-chat'].systemAppTo)
-					}
-					onClose()
-				},
-			},
-			{
 				// Phase 24-01 — replaces the legacy 'Server' app entry.
 				label: 'Docker',
 				icon: <TbServer className='text-neutral-600' />,

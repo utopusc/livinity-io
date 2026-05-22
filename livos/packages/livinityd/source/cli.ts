@@ -32,20 +32,7 @@ if (process.argv.includes('client')) {
 // REDIS_URL env or the localhost default; daily + concurrent budget caps
 // inside scheduler.runAgent() still apply. Bypasses the
 // `liv:config:autonomous_enabled` flag — see cli-trigger.ts docblock for
-// the explicit-operator-action rationale (T-164-02-06).
-if (process.argv.includes('autonomous-trigger')) {
-	const idx = process.argv.indexOf('autonomous-trigger')
-	const agentName = process.argv[idx + 1]
-	if (!agentName) {
-		console.error('Usage: livinityd autonomous-trigger <agent-name>')
-		process.exit(1)
-	}
-	const {autonomousTriggerCli} = await import(
-		'./modules/autonomous-scheduler/cli-trigger.js'
-	)
-	const code = await autonomousTriggerCli({agentName})
-	process.exit(code)
-}
+// autonomous-trigger subcommand removed — AI Chat feature torn out.
 
 const showHelp = () =>
 	console.log(`
@@ -61,11 +48,9 @@ const showHelp = () =>
 
     Subcommands
         client <query> [...args]   Quick tRPC client (debug)
-        autonomous-trigger <name>  Manually trigger an autonomous agent (Phase 164-02)
 
     Examples
         $ livinityd --data-directory ~/livinity
-        $ livinityd autonomous-trigger nightly-backup-audit
 `)
 
 const args = camelcaseKeys(

@@ -7,11 +7,8 @@ import {tw} from '@/utils/tw'
 const AppStoreWindowContent = React.lazy(() => import('./app-contents/app-store-content'))
 const FilesWindowContent = React.lazy(() => import('./app-contents/files-content'))
 const SettingsWindowContent = React.lazy(() => import('./app-contents/settings-content'))
-const AiChatWindowContent = React.lazy(() => import('./app-contents/ai-chat-content'))
 const DockerWindowContent = React.lazy(() => import('./app-contents/docker-content'))
 const ServerControlWindowContent = React.lazy(() => import('./app-contents/server-control-content'))
-const SubagentsWindowContent = React.lazy(() => import('./app-contents/subagents-content'))
-const SchedulesWindowContent = React.lazy(() => import('./app-contents/schedules-content'))
 const TerminalWindowContent = React.lazy(() => import('./app-contents/terminal-content'))
 const MyDevicesWindowContent = React.lazy(() => import('./app-contents/my-devices-content'))
 // Phase 95-02 — WebApp stream content (VNC pane + AI panel + mode selector).
@@ -51,7 +48,7 @@ type WindowContentProps = {
 // Apps that manage their own scroll and layout (no wrapper padding/scroll).
 // WebApps (any appId starting with WEBAPP_) are full-height too — handled
 // via `isWebAppKind(appId)` in `WindowContent` rather than expanding this set.
-const fullHeightApps = new Set(['LIVINITY_ai-chat', 'LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices'])
+const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices'])
 
 export function WindowContent({route, appId, windowId}: WindowContentProps) {
 	if (fullHeightApps.has(appId) || isWebAppKind(appId) || isNativeAppKind(appId)) {
@@ -114,9 +111,6 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 		case 'LIVINITY_settings':
 			return <SettingsWindowContent initialRoute={initialRoute} />
 
-		case 'LIVINITY_ai-chat':
-			return <AiChatWindowContent />
-
 		case 'LIVINITY_docker':
 			return <DockerWindowContent />
 
@@ -126,11 +120,6 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 		case 'LIVINITY_my-devices':
 			return <MyDevicesWindowContent />
 
-		case 'LIVINITY_subagents':
-			return <SubagentsWindowContent />
-
-		case 'LIVINITY_schedules':
-			return <SchedulesWindowContent />
 
 		case 'LIVINITY_terminal':
 			return <TerminalWindowContent />

@@ -33,14 +33,7 @@ import {
 	downloadArchive as downloadContainerArchive,
 	writeFile as writeContainerFile,
 } from '../docker/container-files.js'
-import {createAgentWebSocketHandler} from './ws-agent.js'
 import {createAgentWsHandler, startAgentRevocationSubscriber} from './agent-socket.js'
-// Phase 166-04 — CC PTY WS handler factory. The mount block below references
-// `this.livinityd.ccPtyManager` + `this.livinityd.ccPtySessionStore`, both of
-// which are TYPED but UNDEFINED at this commit (Plan 166-05 instantiates them
-// at livinityd boot). The connection handler short-circuits with a "cc-pty
-// backend not ready" error frame + close 1011 when the manager is missing.
-import {createCcPtyWsHandler} from '../cc-pty/index.js'
 import {
 	getGitStack,
 	updateGitStackSyncSha,
@@ -50,12 +43,8 @@ import {
 import {syncRepo, copyComposeToStackDir} from '../docker/git-deploy.js'
 
 import fileApi from '../files/api.js'
-import {mountBrokerRoutes} from '../livinity-broker/index.js'
 import {mountUsageCaptureMiddleware} from '../usage-tracking/index.js'
 import {mountBearerAuthMiddleware} from '../api-keys/bearer-auth.js'
-import {mountAgentRunsRoutes} from '../ai/agent-runs.js'
-import {mountConversationSearchRoute} from '../ai/conversation-search.js'
-import {mountPinnedRoutes} from '../ai/pinned-routes.js'
 // Phase 169-05 — Vault Graph routes mount. Reuses livinityd.server.verifyToken
 // (same JWT verifier as mountAgentRunsRoutes). vaultRoot is config-locked at
 // mount time from `process.env.VAULT_ROOT` (or '/home/bruce/livinity-vault/'
@@ -490,52 +479,6 @@ class Server {
 				return next()
 			}
 		})
-
-		// ── Computer Use Desktop Gateway (Phase 71-05 / CU-FOUND-02 / CU-FOUND-04) ──
-		// Sealed-off subdomain for upstream-bytebot containers — runs AFTER the generic
-		// app-gateway (which falls through for multi-segment subdomains like
-		// `desktop.bruce` thanks to its `subdomain.includes('.')` check at
-		// line 338) and BEFORE the `/app/:appId` proxy. Path filter restricts
-		// to /computer-use*, /websockify*, /screenshot*, /health* — anything
-		// else returns 404. Active-task gate enforces the user has an open
-		// computer_use_tasks row (else 403). T-PRIVILEGED-CONTAINER mitigation.
-		{
-			const {mountDesktopGateway, mountDesktopWsUpgrade} = await import('../computer-use/index.js')
-			const manager = this.livinityd.computerUseManager
-			if (manager && this.server) {
-				const getMainDomain = async (): Promise<string | null> => {
-					const raw = await this.livinityd.ai.redis.get('livos:domain:config').catch(() => null)
-					if (!raw) return null
-					try {
-						const parsed = JSON.parse(raw)
-						return parsed.active && parsed.domain ? parsed.domain : null
-					} catch {
-						return null
-					}
-				}
-				const getMultiUserMode = async (): Promise<boolean> =>
-					(await this.livinityd.ai.redis.get('livos:system:multi_user').catch(() => null)) === 'true'
-
-				mountDesktopGateway({
-					app: this.app,
-					server: this.server,
-					manager,
-					getMainDomain,
-					getMultiUserMode,
-					verifyToken: (token: string) => this.verifyToken(token),
-					logger: this.logger,
-				})
-				mountDesktopWsUpgrade({
-					server: this.server,
-					manager,
-					getMainDomain,
-					getMultiUserMode,
-					verifyToken: (token: string) => this.verifyToken(token),
-					logger: this.logger,
-				})
-				this.logger.log('Computer Use desktop gateway mounted (desktop.{user}.{domain})')
-			}
-		}
 
 		// App proxy - routes /app/<appId>/* to the app's port
 		// This allows accessing apps without port numbers: http://localhost/app/tailscale
@@ -1380,42 +1323,7 @@ class Server {
 			wss.on('connection', createDockerLogsHandler({logger}))
 		})
 
-		// Handle agent streaming WebSocket routes
-		this.mountWebSocketServer('/ws/agent', (wss) => {
-			const logger = this.logger.createChildLogger('ws-agent')
-			// Phase 165-02 — Lazy per-connection resolution.
-			//
-			// The getter closes over `this.livinityd.ai` and is invoked anew on
-			// EVERY incoming WS connection (inside createAgentWebSocketHandler's
-			// returned handler). chatConfig.setBackend / setModel mutations
-			// therefore take effect on the NEXT WS connection without a
-			// livinityd restart.
-			//
-			// Architecture bug fixed: Phase 162-02 pre-froze vaultModeConfig at
-			// mount time (boot-once). That made the Settings UI's setBackend /
-			// setModel mutations dead-on-arrival unless an operator also bounced
-			// livinityd. CONTEXT.md locks the lazy-getter shape.
-			const resolveVaultModeConfig = ():
-				| {vaultPath: string; defaultModel?: string}
-				| undefined => {
-				const ai = this.livinityd.ai
-				return ai.chatBackend === 'vault'
-					? {
-							vaultPath: '/home/bruce/livinity-vault',
-							defaultModel: ai.defaultChatModel ?? 'claude-opus-4-7',
-						}
-					: undefined
-			}
-			logger.log(
-				'AgentSessionManager: lazy resolveVaultModeConfig wired (Phase 165-02)',
-			)
-			const handler = createAgentWebSocketHandler({
-				livinityd: this.livinityd,
-				logger,
-				resolveVaultModeConfig,
-			})
-			wss.on('connection', handler)
-		})
+		// /ws/agent removed — AI Chat feature torn out.
 
 		// Phase 48 — Live SSH session viewer (FR-SSH-01). journalctl-tailed
 		// ssh.service events broadcast to admin clients. RBAC enforced inside
@@ -1425,59 +1333,6 @@ class Server {
 			const logger = this.logger.createChildLogger('ssh-sessions')
 			const handler = createSshSessionsWsHandler({livinityd: this.livinityd, logger})
 			wss.on('connection', handler)
-		})
-
-		// Phase 166-04 — /ws/cc-pty endpoint. Tmux/PTY-backed Claude Code
-		// interactive sessions (D-V35-A/B). JWT auth via cookie / url-param /
-		// Authorization header mirroring /ws/agent (Phase 163 ws-agent.ts is
-		// BYTE-IDENTICAL — the JWT pattern is COPIED into this mount block,
-		// NOT extracted into a shared helper). Each WS connection attaches
-		// to one tmux session by id; tmux OWNS the claude subprocess (NOT
-		// the WS) so browser tab close → tmux keeps running. Reattach is a
-		// fresh WS over the existing tmux. `this.livinityd.ccPtyManager` and
-		// `.ccPtySessionStore` are TYPED but UNDEFINED at this commit; Plan
-		// 166-05 instantiates them at livinityd boot. Until then, the
-		// connection handler short-circuits with a 1011 close.
-		this.mountWebSocketServer('/ws/cc-pty', (wss) => {
-			const ccPtyLogger = this.logger.createChildLogger('cc-pty')
-			wss.on('connection', (ws, req) => {
-				const manager = this.livinityd.ccPtyManager
-				const store = this.livinityd.ccPtySessionStore
-				if (!manager || !store) {
-					try {
-						ws.send(JSON.stringify({type: 'error', message: 'cc-pty backend not ready'}))
-					} catch {
-						/* socket gone */
-					}
-					ws.close(1011, 'cc-pty backend not ready')
-					return
-				}
-				const handler = createCcPtyWsHandler({
-					manager,
-					store,
-					logger: {
-						log: (msg: string) => ccPtyLogger.log(msg),
-						error: (msg: string, err?: unknown) => ccPtyLogger.error(msg, err),
-					},
-					resolveUser: async (request) => {
-						try {
-							const url = new URL(request.url ?? '', 'http://localhost')
-							const token =
-								url.searchParams.get('token') ??
-								request.headers['cookie']?.match(/livos_jwt=([^;]+)/)?.[1] ??
-								(request.headers['authorization'] ?? '').replace(/^Bearer /, '')
-							if (!token) return null
-							const payload = JSON.parse(
-								Buffer.from(token.split('.')[1], 'base64').toString(),
-							)
-							return {id: payload.userId ?? 'admin'}
-						} catch {
-							return null
-						}
-					},
-				})
-				handler(ws as any, req)
-			})
 		})
 
 		// Phase 22 MH-05 — Subscribe to docker-agent token revocations on Redis.
@@ -1550,46 +1405,6 @@ class Server {
 		// the new primary identity surface; URL-path remains for back-compat.
 		// Mount order asserted by mount-order.test.ts.
 		mountBearerAuthMiddleware(this.app, this.livinityd, this.livinityd.apiKeyCache)
-
-		// ── Livinity Broker (Phase 41 — Anthropic Messages API for marketplace apps) ──
-		// Routes: POST /u/:userId/v1/messages (sync + SSE per Plan 41-03)
-		// See livos/packages/livinityd/source/modules/livinity-broker/ +
-		// .planning/phases/41-anthropic-messages-broker/
-		mountBrokerRoutes(this.app, this.livinityd)
-
-		// ── Phase 67-03 — Liv Agent Run routes (additive) ─────────────────────
-		// Routes: POST /api/agent/start, GET /api/agent/runs/:runId/stream,
-		// POST /api/agent/runs/:runId/control. Existing /api/agent/stream is
-		// UNCHANGED (D-06) — broker + existing chat UI continue using the
-		// nexus-side SSE endpoint. The new endpoint is reachable from the
-		// browser at livinityd's port (8080) and is JWT-authenticated via
-		// `verifyToken()` (multi-user payload yields userId; legacy maps to
-		// 'admin'). The livAgentRunnerFactory is intentionally left undefined
-		// here — production wiring (constructing SdkAgentRunner with a Brain
-		// bound to nexus's config) lands in P68 / P73. Until then, POST /start
-		// returns 503 with a clear message; the route surface itself is in
-		// place so 67-04's hook + verifier can validate end-to-end.
-		// Phase 73-04: mountAgentRunsRoutes is now async (constructs + starts
-		// a BullMQ-backed RunQueue at mount time when a factory is provided).
-		await mountAgentRunsRoutes(this.app, this.livinityd)
-
-		// ── Phase 75-06 — Conversation full-text-search route (additive) ─────
-		// GET /api/conversations/search?q=… — JWT-authed, scoped to the
-		// authenticated userId, backed by Plan 75-01's MessagesRepository
-		// (postgres ts_headline + ts_rank). Plan 75-07 will mount the
-		// matching sidebar component; this mount makes the route reachable
-		// end-to-end and independently curl-able today.
-		mountConversationSearchRoute(this.app, this.livinityd)
-
-		// ── Phase 75-07 — Pinned-messages routes (additive) ──────────────────
-		// POST /api/pinned-messages, DELETE /api/pinned-messages/:id, GET
-		// /api/pinned-messages — JWT-authed, scoped to the authenticated
-		// userId, backed by Plan 75-03's PinnedMessagesRepository. Pin
-		// content is also auto-injected into the agent system prompt at
-		// run time (see ai/index.ts chat()). The injection point is the
-		// task assembly path; this route mount only handles the user-
-		// facing pin/unpin surface.
-		mountPinnedRoutes(this.app, this.livinityd)
 
 		// ── Phase 169-05 — Vault Graph routes (additive) ─────────────────────
 		// GET /api/vault/graph — walks vaultRoot (capped at 2000 files), builds

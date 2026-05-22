@@ -1,9 +1,9 @@
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useMobileApp} from './mobile-app-context'
-import {IconMessageCircle, IconFolder, IconSettings, IconBrandDocker, IconServer} from '@tabler/icons-react'
+import {IconFolder, IconSettings, IconBrandDocker, IconServer} from '@tabler/icons-react'
 
 const TABS = [
-	{id: 'ai-chat', label: 'AI Chat', icon: IconMessageCircle, appId: 'LIVINITY_ai-chat', route: '/ai-chat', title: 'AI Chat', appIcon: '/figma-exports/dock-home.png'},
+	// AI Chat mobile tab removed with AI Chat teardown.
 	{id: 'files', label: 'Files', icon: IconFolder, appId: 'LIVINITY_files', route: '/files/Home', title: 'Files', appIcon: '/figma-exports/dock-files.png'},
 	{id: 'settings', label: 'Settings', icon: IconSettings, appId: 'LIVINITY_settings', route: '/settings', title: 'Settings', appIcon: '/figma-exports/dock-settings.png'},
 	// Phase 24-01 — replaces the legacy 'server' app with the new Docker app.

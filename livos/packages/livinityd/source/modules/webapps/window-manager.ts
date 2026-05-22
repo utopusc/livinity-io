@@ -85,14 +85,19 @@ import {
 	type WindowSessionResult,
 } from './pipewire-portal.js'
 import {GeometryTracker} from './geometry-tracker.js'
-// Phase 100-08-04 — per-WebApp Luse MCP child registration via livinityd's
-// own McpConfigManager (Redis pub-sub bridge to liv-core's McpClientManager).
-// (Renamed P100-10-02 from bytebot per D-100-10-B.)
-import {
-	buildLuseConfig,
-	type McpServerConfigInput,
-	type PerWebAppMcpDescriptor,
-} from '../computer-use/luse-mcp-config.js'
+// computer-use/luse-mcp-config deleted with AI Chat teardown. Inline the
+// minimal MCP config shape so the optional per-WebApp Luse MCP registration
+// (which is now a no-op when luseServerPath is undefined) still typechecks.
+interface McpServerConfigInput {
+	name: string
+	transport: 'stdio' | 'streamableHttp'
+	command?: string
+	args?: string[]
+	url?: string
+	env?: Record<string, string>
+	enabled?: boolean
+	installedAt?: number
+}
 
 const DEFAULT_TITLE_TIMEOUT_MS = 5000
 const DEFAULT_IDLE_POLL_MS = 5000
@@ -790,44 +795,11 @@ export class WebAppWindowManager {
 		display: string = ':1',
 		url?: string,
 	): Promise<void> {
-		if (!this.mcpConfigManager || !this.luseServerPath) return
-		try {
-			// Phase 102-06 — PerWebAppMcpDescriptor.windowId dropped (per-WebApp
-			// Luse now scopes by X11 display, not window-id). The `wid` argument
-			// remains in this method signature for legacy log/IPC paths; only the
-			// MCP descriptor stops carrying it. `display` (the dedicated Xvfb :N
-			// for this WebApp from 102-01's DisplayAllocator) is the scope unit.
-			//
-			// Phase 102 UAT r8: server name is now URL-slug-based (e.g.
-			// `luse:webapp:yandex-91c9`) for readability — see mcpServerNameFor.
-			const descriptor: PerWebAppMcpDescriptor = {
-				instanceKey: webappId,
-				display,
-			}
-			const config = buildLuseConfig(this.luseMcpEnv, this.luseServerPath, descriptor)
-			const name = this.mcpServerNameFor(webappId, url)
-			// Override the auto-generated config.name with our slug-based name
-			// (buildLuseConfig may default to instanceKey-based name).
-			;(config as {name?: string}).name = name
-			try {
-				await this.mcpConfigManager.installServer(config)
-			} catch (installErr) {
-				const updated = await this.mcpConfigManager.updateServer(name, config)
-				if (updated == null) {
-					throw installErr
-				}
-			}
-			this.logger?.info?.(
-				`webapp ${webappId} per-WebApp Luse MCP registered (display=${display}); ` +
-					`liv-core reconcile is async via Redis pub-sub liv:config:updated (~1-2s lag)`,
-			)
-		} catch (err) {
-			this.logger?.warn?.(
-				`webapp ${webappId} per-WebApp Luse MCP registration failed (non-fatal); ` +
-					`host Luse fallback (broadcastActiveWid IPC) remains active`,
-				err,
-			)
-		}
+		// luse-mcp-config module deleted with AI Chat teardown — per-WebApp
+		// MCP registration is now a no-op. Kept the method signature so call
+		// sites compile unchanged.
+		void webappId; void _wid; void display; void url
+		return
 	}
 
 	private async deregisterWebAppMcp(webappId: string, url?: string): Promise<void> {

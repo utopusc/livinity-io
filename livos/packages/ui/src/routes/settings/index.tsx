@@ -36,18 +36,13 @@ const DeviceInfoDialog = React.lazy(() => import('@/routes/settings/device-info'
 const BackupsRestoreDialog = React.lazy(() => import('@/features/backups/index'))
 
 // New settings pages (no popup dialogs)
-const AiConfigPage = React.lazy(() => import('@/routes/settings/ai-config'))
-const IntegrationsPage = React.lazy(() => import('@/routes/settings/integrations'))
+// AI-Chat-related pages (ai-config / integrations / dm-pairing / liv-agent /
+// ai-chat-settings) removed with the AI Chat teardown.
 const DomainSetupPage = React.lazy(() => import('@/routes/settings/domain-setup'))
-const DmPairingPage = React.lazy(() => import('@/routes/settings/dm-pairing'))
-// Phase 76 / Plan 06 (MARKET-07) — Liv Agent thin settings page (D-12 — re-uses /subagents + links to /agent-marketplace).
-const LivAgentSettings = React.lazy(() => import('@/routes/settings/liv-agent'))
 // Phase 102-07 — Chrome Master Login settings page (D-102-MASTER-LOGIN-UI).
 const ChromeMasterPage = React.lazy(() => import('@/routes/settings/chrome-master'))
 // Phase 104 plan 104-05 — Local Access enrollment wizard (AC-104-9, AC-104-10).
 const LocalAccessPage = React.lazy(() => import('@/routes/settings/local-access'))
-// Phase 182-03 — AI Chat settings (CC PTY config, 7 form fields).
-const AiChatSettingsPage = React.lazy(() => import('@/routes/settings/ai-chat-settings'))
 // Phase 182-04 — MCP Servers settings page (presentational + REST /api/mcp/*).
 const McpServersPage = React.lazy(() => import('@/routes/settings/mcp-servers'))
 
@@ -155,15 +150,11 @@ export function Settings() {
 						<Route path='/software-update/confirm' Component={SoftwareUpdateConfirmDialog} />
 						<Route path='/advanced/:advancedSelection?' Component={AdvancedSettingsDrawerOrDialog} />
 						{/* New settings pages - embedded, no popups */}
-						<Route path='/ai-config' Component={AiConfigPage} />
-						<Route path='/liv-agent' Component={LivAgentSettings} />
-						<Route path='/integrations' Component={IntegrationsPage} />
+						{/* /ai-config /liv-agent /integrations /dm-pairing /ai-chat-settings
+						    routes removed with the AI Chat teardown. */}
 						<Route path='/domain-setup' Component={DomainSetupPage} />
-						<Route path='/dm-pairing' Component={DmPairingPage} />
 						<Route path='/chrome-master' Component={ChromeMasterPage} />
 						<Route path='/local-access' Component={LocalAccessPage} />
-						{/* Phase 182 — new settings panels */}
-						<Route path='/ai-chat-settings' Component={AiChatSettingsPage} />
 						<Route path='/mcp-servers' Component={McpServersPage} />
 					</Routes>
 					<QueryStringDialog />

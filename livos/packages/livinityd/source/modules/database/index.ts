@@ -877,15 +877,4 @@ export {
 // Allows apps.ts / future container-manager.ts to do
 // `import {createActiveTask} from '../database/index.js'` without
 // reaching into the computer-use module directly.
-export {
-	createActiveTask,
-	getActiveTask,
-	getTaskById,
-	updateContainerInfo,
-	bumpActivity,
-	markIdle,
-	markStopped,
-	findIdleCandidates,
-	type ComputerUseTask,
-	type ComputerUseTaskStatus,
-} from '../computer-use/task-repository.js'
+// computer-use/task-repository.ts deleted with AI Chat teardown — re-exports removed.

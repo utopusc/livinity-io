@@ -14,7 +14,6 @@ import files from '../../files/routes.js'
 import notifications from '../../notifications/routes.js'
 import eventBus from '../../event-bus/routes.js'
 import backups from '../../backups/routes.js'
-import ai from '../../ai/routes.js'
 import usage from '../../usage-tracking/routes.js'
 import domain from '../../domain/routes.js'
 // Phase 104 plan 104-03 — local-lan mode tRPC routes (local.{getStatus,activate,getCaCert}).
@@ -40,18 +39,6 @@ import diagnosticsRoutes from '../../diagnostics/routes.js'
 // in ./common.ts so the React client routes them through HTTP (cookie
 // + header semantics survive WS reconnect after `systemctl restart livos`).
 import apiKeys from '../../api-keys/routes.js'
-// v31.0 Phase 71-05 — Computer Use desktop session control (CU-FOUND-04).
-// Top-level `computerUse` namespace exposes getStatus / startStandaloneSession
-// / stopSession. All three are added to httpOnlyPaths in ./common.ts because
-// the mutations may take 1-15s (upstream-bytebot container spawn budget) and must survive WS
-// reconnect.
-import {computerUseRouter} from '../../computer-use/routes.js'
-// v32 Phase 85 (UI slice) — agents tRPC router (Wave 2). Consumes the Wave 1
-// agents-repo from database/index.ts. Eight procedures (list/get/create/
-// update/delete/publish/unpublish/clone) — all added to httpOnlyPaths in
-// ./common.ts so autosave mutations don't hang on a half-broken WS after
-// `systemctl restart livos` (memory pitfall B-12 / X-04).
-import agentsRouter from './agents-router.js'
 // v32 Phase 86 — Public marketplace router (V32-MKT-01..06). File-disjoint
 // from P85-UI's agents-router (same directory, separate router). Three
 // procedures: list (publicProcedure query — no auth, browseable pre-login),
@@ -68,13 +55,6 @@ import marketplaceRouter from './marketplace-router.js'
 // or agents-router. All 6 procedure paths added to httpOnlyPaths in
 // ./common.ts (same WS-reconnect-survival rationale as P85-UI / P86).
 import mcpRouter from './mcp-router.js'
-// v32-redo Stage 2b — conversations namespace. Six procedures
-// (list/get/create/delete/listMessages/appendMessage) wrapping the existing
-// ConversationsRepository + MessagesRepository (Phase 75-01). Powers the
-// ai-chat-suna sidebar feed + thread view + composer persistence path. All
-// 6 paths added to httpOnlyPaths in ./common.ts (mutations must survive
-// `systemctl restart livos` mid-restart per pitfall B-12 / X-04).
-import conversationsRouter from './conversations-router.js'
 // v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01). Single procedure
 // `webapp.extractMetadata({url})` returning `{title, faviconUrl, description,
 // ogImage}`. The path is added to httpOnlyPaths in ./common.ts because clean
@@ -113,32 +93,6 @@ import {
 // restart livos` (precedent: webapp.create line 360, conversations.
 // appendMessage line 312, agents.create line 256).
 import pinnedWindowsRouter from '../../pinned-windows/routes.js'
-// Phase 165-02 — Autonomous agents Settings UI namespace (5 procedures:
-// list / toggle / runNow / getDailySpend / setDailyBudgetCap). All
-// adminProcedure-gated; all 5 paths added to httpOnlyPaths in common.ts.
-import autonomousRouter from './autonomous-router.js'
-// Phase 165-02 — Chat backend + default-model selector namespace
-// (4 procedures: getBackend / setBackend / getModel / setModel). All
-// adminProcedure-gated; all 4 paths added to httpOnlyPaths in common.ts.
-// setBackend / setModel mutations bump AiModule in-place so the next
-// /ws/agent connection re-resolves vaultModeConfig via Task 4's lazy
-// resolveVaultModeConfig getter (no livinityd restart).
-import chatConfigRouter from './chat-config-router.js'
-// Phase 171-04 — Vault Items namespace (v38 D-V38-A/B/C/E). 7 procedures
-// wrap Phase 171-02 ItemStore + Phase 171-03 tree-resolver. All adminProcedure-
-// gated; all 7 paths added to httpOnlyPaths in common.ts. ctx.livinityd.itemStore
-// is populated by plan 171-05's boot wire-up.
-import vaultItemsRouter from './vault-items-router.js'
-// Phase 177-03 — Vault Inbox namespace. 4 procedures
-// (listByAgent/listGlobal/markRead/get) wrap the Phase 177-03 InboxReader.
-// All adminProcedure-gated; all 4 paths added to httpOnlyPaths in common.ts.
-// ctx.livinityd.inboxReader is populated by Phase 177-03 boot wire-up in source/index.ts.
-import inboxRouter from './inbox-router.js'
-// Phase 182-03 — CC PTY session configuration namespace (3 procedures:
-// getConfig / setConfig / validatePaths). All adminProcedure-gated; all 3
-// paths added to httpOnlyPaths in common.ts so mutations survive WS
-// reconnect after `systemctl restart livos` (memory pitfall B-12 / X-04).
-import ccPtyConfigRouter from './cc-pty-config-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -178,7 +132,6 @@ export function createAppRouter(opts: {
 		notifications,
 		eventBus,
 		backups,
-		ai,
 		usage,
 		domain,
 		// Phase 104 plan 104-03 — local-lan mode namespace.
@@ -195,16 +148,10 @@ export function createAppRouter(opts: {
 		capabilities: diagnosticsRoutes.capabilitiesRouter,
 		// v30.0 Phase 59 Plan 04 — apiKeys namespace (FR-BROKER-B1-04).
 		apiKeys,
-		// v31.0 Phase 71-05 — computerUse namespace (CU-FOUND-04).
-		computerUse: computerUseRouter,
-		// v32 Phase 85 (UI slice) — agents namespace (consumes Wave 1 agents-repo).
-		agents: agentsRouter,
 		// v32 Phase 86 — marketplace namespace (public browse + clone-to-library).
 		marketplace: marketplaceRouter,
 		// v32 Phase 84 — MCP single-source-of-truth namespace (Wave 3).
 		mcp: mcpRouter,
-		// v32-redo Stage 2b — conversations namespace (sidebar feed + thread view).
-		conversations: conversationsRouter,
 		// v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01).
 		// Phase 93-11 — webapp.window.* sub-router added in webappRouter.
 		webapp: webappRouter,
@@ -216,20 +163,6 @@ export function createAppRouter(opts: {
 		chromeMaster: opts.chromeMaster,
 		// Phase 131-02 — pinnedWindows.* namespace (D-131-A persistence).
 		pinnedWindows: pinnedWindowsRouter,
-		// Phase 165-02 — Autonomous agents Settings panel namespace.
-		autonomous: autonomousRouter,
-		// Phase 165-02 — Chat backend selector Settings panel namespace.
-		chatConfig: chatConfigRouter,
-		// Phase 171-04 — Vault Items lifecycle namespace (v38 D-V38-A/B/C/E).
-		// List/get/create/update/move/archive/delete adminProcedures over the
-		// vault-items file-backed store + tree-resolver. The double-nesting
-		// (`vault: router({items: ...})`) keeps room for future `vault.*`
-		// namespaces (vault.settings, vault.skills, vault.commands) per the
-		// master plan D-V38-T folder layout — items is the first inhabitant.
-		// Phase 177-03 — vault.inbox.* sub-router (4 procedures wrapping InboxReader).
-		vault: router({items: vaultItemsRouter, inbox: inboxRouter}),
-		// Phase 182-03 — CC PTY session configuration namespace.
-		ccPty: ccPtyConfigRouter,
 	})
 }
 
