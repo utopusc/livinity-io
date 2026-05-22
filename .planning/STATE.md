@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-22T09:10:40.299Z"
+last_updated: "2026-05-22T10:41:46.622Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 195 (xai-oauth-onboarding) — **CODE-COMPLETE 2026-05-22** (5/5 plans shipped — Wave 1 + Wave 2 + Wave 3 all done)
-Plan: 5 of 5 (all plans shipped — phase close-eligible)
+Phase: 196 (onboarding-completion-installer-locale) — EXECUTING
+Plan: 2 of 5
 Last completed plan: **195-04** ✅ CODE-COMPLETE 2026-05-22 — connect-ai-step.tsx full replacement (Phase 136 placeholder removed; real xAI OAuth state machine wired). 2 commits: `b58bc1aa` (feat — 370 LOC component, +322/-58 vs Phase 136 placeholder) + `16826b26` (test — 367 LOC, 7/7 vitest PASS in 110 ms). Discriminated-union `State = idle | starting | awaiting-user | connected | error` via `useReducer`. All 4 STRIDE mitigations wired AND tested: T-195-04-01 `isXaiOAuthUrl()` allow-list via `new URL().hostname` strict equality on `x.ai` + `auth.x.ai` (defeats subdomain trick `x.ai.evil.example.com` + userinfo trick `x.ai@evil.example.com` — naive regex would let those through); T-195-04-02 10-min `setTimeout(600_000)` watchdog inside `useEffect` with state-change cleanup; T-195-04-03 every `window.open` (main + reopen handler) passes `'noopener,noreferrer'`; T-195-04-04 `connected` state entered ONLY when `status.connected === true`. Scope mapping: `grok-cli:access → Chat`, `api:access → Tools + Image + Video`; speech / transcription chips intentionally absent per 2026-05-22 live audit (xAI 403/404). FooterBar wired with `continueDisabled={state.kind !== 'connected'}` — Continue only enables after real successful auth. Props contract `{onContinue, onSkip, onBack}` preserved byte-for-byte. 7 vitest tests: idle render, happy path (window.open triplet asserted), T-195-04-01 malicious URL rejection (`https://evil.example.com/oauth` → window.open NOT called), Retry returns to idle, Skip-for-now invokes onSkip, isXaiOAuthUrl 7-case allow-list, mapScopesToDisplay scope→label contract. D-NO-NEW-DEPS preserved via `react-dom/client` harness + `vi.mock('@/trpc/trpc')` — no `@testing-library/react` install needed (canonical pattern from `inline-tool-pill.unit.test.tsx`). Vite build green: `pnpm --filter ui build` exit 0 in 41.9s. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` PRESERVED 2/2 (pre-commit hook `[sacred-sha] PASS: 20 files verified` × 2). McpPanelClassic.tsx zero diff. Deleted-module grep (cc-pty/claude-runner/livinity-broker/vault-items/computer-use/autonomous-scheduler) ZERO matches in connect-ai-step.tsx. 17/17 acceptance criteria PASS. 0 substantive deviations. See `.planning/phases/195-xai-oauth-onboarding/195-04-SUMMARY.md`.
 
 Previously: **195-05** ✅ CODE-COMPLETE 2026-05-22 — XaiProvider scaffold for downstream Phase 196 (LangGraph) + Phase 197 (lean Livinity broker) consumption. 5 NEW files under `livos/packages/livinityd/source/modules/xai-provider/`: errors.ts (75 LOC — 6 typed error classes with XAI_* discriminating .code literals), types.ts (134 LOC — OpenAI-shape subset including XaiChatRequest/Response/XaiToolDef/XaiClient), xai-client.ts (228 LOC — `createXaiClient(credsService, opts?)` factory with chatCompletions/models/imageGenerate/videoGenerate + 2 voice rejectors), xai-client.test.ts (289 LOC — 7 vitest PASS), index.ts (38 LOC — barrel). 7/7 vitest PASS. Commits `ca1540b9` + `eafa3a56`. Sacred SHA preserved 2/2. See `.planning/phases/195-xai-oauth-onboarding/195-05-SUMMARY.md`.
@@ -918,7 +918,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 165 (cc-integration-polish) — 4 plans — 2026-05-19T20:39:45.345Z
+**Planned Phase:** 196 () — 0 plans — 2026-05-22T10:29:51.964Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
