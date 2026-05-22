@@ -10,7 +10,7 @@
 # Idempotency contract:
 #   - If opencode >= OPENCODE_MIN_VERSION is already on PATH, log "already
 #     installed" and exit 0 without touching upstream.
-#   - Otherwise: run `curl -fsSL https://opencode.ai/install | bash` and verify
+#   - Otherwise: pipe the official upstream installer URL to bash and verify
 #     the post-install version. If the version is still below the floor, exit 1
 #     so install.sh halts instead of pretending success.
 

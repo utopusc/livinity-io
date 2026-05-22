@@ -296,6 +296,22 @@ verify_build() {
 
 step()  { echo -e "\n${CYAN}━━━ $* ━━━${NC}"; }
 
+# ── Phase 196-02 — opencode CLI version-pin warning ──
+# update.sh assumes install.sh has already provisioned opencode. If the
+# operator skipped install.sh OR opencode upstream pushed a regression,
+# warn loudly so the auth.xai.start tRPC procedure doesn't fail post-deploy.
+OPENCODE_MIN_VERSION="1.15.0"
+if ! command -v opencode >/dev/null 2>&1; then
+    echo "⚠ Phase 196-02 — opencode CLI not found in PATH. Run \`sudo bash install.sh\` for a clean bootstrap." >&2
+    sleep 5
+else
+    OPENCODE_CURRENT=$(opencode --version 2>/dev/null | awk '{print $NF}' | tr -d 'v')
+    if [[ -n "$OPENCODE_CURRENT" ]] && [[ "$(printf '%s\n%s' "$OPENCODE_MIN_VERSION" "$OPENCODE_CURRENT" | sort -V | head -1)" != "$OPENCODE_MIN_VERSION" ]]; then
+        echo "⚠ Phase 196-02 — opencode $OPENCODE_CURRENT < required $OPENCODE_MIN_VERSION. Re-run \`sudo bash scripts/install/opencode-install.sh\`." >&2
+        sleep 5
+    fi
+fi
+
 # ── Pre-flight checks ────────────────────────────────────
 step "Pre-flight checks"
 
