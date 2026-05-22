@@ -42,21 +42,22 @@ beforeEach(() => {
 })
 
 describe('createLivOSMemory', () => {
-	test('Test 1: passes correct options shape with scope=thread twice', () => {
+	test('Test 1: passes correct options shape with scope=thread on workingMemory', () => {
 		createLivOSMemory({databaseUrl: 'postgres://test:pass@localhost/livos'})
 		expect(memoryCtorCalls.length).toBe(1)
 		const opts = memoryCtorCalls[0]!.args[0] as {
 			options: {
 				lastMessages: number
-				semanticRecall: {topK: number; messageRange: number; scope: string}
+				semanticRecall: false | object
 				workingMemory: {enabled: boolean; scope: string}
 			}
 		}
 		expect(opts.options.lastMessages).toBe(20)
-		expect(opts.options.semanticRecall.topK).toBe(5)
-		expect(opts.options.semanticRecall.messageRange).toBe(2)
-		expect(opts.options.semanticRecall.scope).toBe('thread')
+		// Phase 197-03 v1 — semanticRecall disabled at runtime (embedder deferred to Phase 198+)
+		expect(opts.options.semanticRecall).toBe(false)
 		expect(opts.options.workingMemory.enabled).toBe(true)
+		// T-197-03-05 — workingMemory.scope MUST stay 'thread' to prevent
+		// cross-thread context bleed when Phase 198+ re-enables semanticRecall.
 		expect(opts.options.workingMemory.scope).toBe('thread')
 	})
 

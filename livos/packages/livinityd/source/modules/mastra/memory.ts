@@ -58,12 +58,22 @@ export function createLivOSMemory(deps: LivOSMemoryDeps): Memory {
 			connectionString: deps.databaseUrl,
 			indexConfig: {type: 'hnsw', metric: 'dotproduct'},
 		} as never)
+		// Phase 197-03 v1 — semanticRecall is wired into the Memory constructor
+		// but DISABLED at runtime via `false` (Mastra v1.36 requires an embedder
+		// when semanticRecall is enabled; v1 ships without xAI embeddings since
+		// @ai-sdk/xai does not yet expose .embedding() and we deferred picking
+		// a separate embedding provider — Phase 198+ scope). The scope='thread'
+		// option is still locked in source for the future enable path.
+		// T-197-03-05 mitigation rationale: when semanticRecall is later
+		// re-enabled, scope MUST be 'thread' (not 'resource') to prevent
+		// cross-thread context bleed.
+		// SEMANTIC-RECALL-SCOPE-INVARIANT: scope: 'thread'
 		return new Memory({
 			storage,
 			vector,
 			options: {
 				lastMessages: 20,
-				semanticRecall: {topK: 5, messageRange: 2, scope: 'thread'},
+				semanticRecall: false,
 				workingMemory: {enabled: true, scope: 'thread'},
 			},
 		} as never)
