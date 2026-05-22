@@ -38,6 +38,9 @@
     "node": ">=22.0.0"
   },
   "pnpm": {
+    "overrides": {
+      "zod": "^3.25.0"
+    },
     "onlyBuiltDependencies": [
       "@parcel/watcher",
       "@swc/core",
