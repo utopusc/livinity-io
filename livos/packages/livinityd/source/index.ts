@@ -126,6 +126,12 @@ import {createXaiAuthRouter} from './modules/server/trpc/xai-auth-router.js'
 // throws on call until this swap lands.
 import {createSetupRouter} from './modules/server/trpc/setup-router.js'
 import {createTimezoneService} from './modules/locale/index.js'
+// Phase 197-01 — Liv AI / Mastra foundation. LivOSMastra singleton holds the
+// ProviderRouter that dynamically resolves the active LLM provider from Redis
+// `liv:config:active_provider`. Subsequent plans (197-02 McpBridge, 197-03
+// Memory, 197-04 Liv AI Agent, 197-05 tRPC namespace) attach into the singleton
+// via the FINAL attach helpers shipped from index.ts in this same plan.
+import {LivOSMastra, createProviderRouter} from './modules/mastra/index.js'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -923,10 +929,34 @@ export default class Livinityd {
 				timezoneService,
 			})
 
+			// Phase 197-01 — Liv AI / Mastra foundation. Constructs the
+			// LivOSMastra singleton with its ProviderRouter dynamically
+			// resolving the active provider from Redis (xai today; claude/
+			// openai future via Phase 198+). Subsequent plans (197-02/03/04/
+			// 05) populate the agents+memory+mcpBridge slots via the typed
+			// attach helpers shipped from this plan's index.ts.
+			let livOSMastra: LivOSMastra | null = null
+			try {
+				const providerRouter = createProviderRouter({
+					xaiCreds: xaiCredentialsService,
+					redis: this.ai.redis,
+				})
+				livOSMastra = new LivOSMastra({providerRouter})
+				webappLogger.info(
+					'Phase 197-01 — LivOSMastra wired (providerRouter ready; agents+memory+mcpBridge slots empty until 197-02/03/04)',
+				)
+			} catch (mastraErr) {
+				this.logger.error(
+					'Phase 197-01 — LivOSMastra construction failed; Liv AI surface will degrade until next restart',
+					mastraErr,
+				)
+			}
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
 				setup: setupRouterProductionInstance,
+				mastra: undefined,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(
@@ -938,6 +968,7 @@ export default class Livinityd {
 			webappLogger.info(
 				'Phase 196-05 — setup router wired (setRegion + setLocaleTimezone)',
 			)
+			void livOSMastra // referenced for downstream plans; see Phase 197-05 boot wire-up
 		} catch (err) {
 			// Non-fatal — boot continues. Streaming + WebApp launcher will
 			// degrade to SERVICE_UNAVAILABLE for the affected tRPC routes

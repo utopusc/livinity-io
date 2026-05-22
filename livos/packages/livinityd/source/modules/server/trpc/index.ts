@@ -145,6 +145,11 @@ export function createAppRouter(opts: {
 	// `createSetupRouter({redis})` build alongside the locale step
 	// wire-up.
 	setup?: ReturnType<typeof createSetupRouter>
+	// Phase 197-01 — Liv AI / Mastra tRPC namespace slot. Pre-declared in
+	// Plan 197-01 to lock the createAppRouter opts contract; the production
+	// build lands in Plan 197-05 (createMastraRouter factory) and narrows the
+	// `unknown` here to the real router type at that time.
+	mastra?: unknown
 }) {
 	return router({
 		migration,
@@ -204,6 +209,9 @@ export function createAppRouter(opts: {
 		// until Plan 196-05's production swap injects a real
 		// createSetupRouter({redis}) build.
 		setup: opts.setup ?? setupRouter,
+		// Phase 197-01 — mastra slot pre-declared. Production swap in Plan 197-05.
+		// Until Plan 197-05's createMastraRouter ships, opts.mastra is undefined
+		// here and no `mastra` namespace is mounted (router({...}) entry omitted).
 	})
 }
 
