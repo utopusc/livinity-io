@@ -11,6 +11,10 @@ const DockerWindowContent = React.lazy(() => import('./app-contents/docker-conte
 const ServerControlWindowContent = React.lazy(() => import('./app-contents/server-control-content'))
 const TerminalWindowContent = React.lazy(() => import('./app-contents/terminal-content'))
 const MyDevicesWindowContent = React.lazy(() => import('./app-contents/my-devices-content'))
+// Phase 197-06 — Liv AI Dock app. Operator clicks the icon → window-manager
+// opens → LivAiChatWindow renders here. Chat surface consumes mastra.agent.*
+// tRPC namespace (stream + approve + cancel + threads.list/delete).
+const LivAiWindowContent = React.lazy(() => import('./app-contents/liv-ai-content'))
 // Phase 95-02 — WebApp stream content (VNC pane + AI panel + mode selector).
 // The discriminator is the `WEBAPP_<webappId>` prefix on `appId` (per CONTEXT
 // C-95-05 and PLAN 95-02). The real component lands in 95-08; 95-02 ships a
@@ -48,7 +52,7 @@ type WindowContentProps = {
 // Apps that manage their own scroll and layout (no wrapper padding/scroll).
 // WebApps (any appId starting with WEBAPP_) are full-height too — handled
 // via `isWebAppKind(appId)` in `WindowContent` rather than expanding this set.
-const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices'])
+const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_liv-ai'])
 
 export function WindowContent({route, appId, windowId}: WindowContentProps) {
 	if (fullHeightApps.has(appId) || isWebAppKind(appId) || isNativeAppKind(appId)) {
@@ -123,6 +127,10 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 
 		case 'LIVINITY_terminal':
 			return <TerminalWindowContent />
+
+		// Phase 197-06 — Liv AI Dock app surface.
+		case 'LIVINITY_liv-ai':
+			return <LivAiWindowContent />
 
 
 		default:
