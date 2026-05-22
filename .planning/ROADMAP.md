@@ -2632,6 +2632,29 @@ Plans:
 
 ---
 
+### Phase 196: xAI Onboarding Completion + First-Run Installer + Locale — 🔴 PLANNED 2026-05-22
+
+**Goal:** Close Phase 195's deferred runtime gaps (DI wire-up + opencode CLI install) AND add three operator-requested onboarding deliverables: provider→auth auto-route for xAI, region/location selection step, locale+timezone configuration with system clock alignment. After Phase 196 the setup wizard becomes the genuine "click 5 buttons and you are running LivOS with xAI" experience implied by v34.0 Bootstrap Polish.
+
+**Live runtime evidence (2026-05-22, Mini PC SHA `da5fe05`):**
+- `trpc.auth.xai.start` → HTTP 500 `xai-auth-router: flowService not injected` (predicted by 195-VERIFICATION.md, self-documenting error message points to fix)
+- `which opencode` → not-found
+- All 4 services boot clean; empty-injection Proxy only throws when called
+
+**Depends on:** Phase 195 (5/5 plans CODE-COMPLETE), Phase 192 (sudoers boundary — extended in Plan 196-05)
+**Wave:** 1 (blocks LangGraph + new broker phases — neither can do anything until DI wire-up + opencode binary land)
+**Plans:** 5 plans (DI wire-up + install.sh + provider auto-route + region step + locale/timezone step)
+**Estimated:** 1-2 days
+
+Plans:
+- [ ] 196-01-PLAN.md — livinityd DI wire-up (XaiAuthFlowService + XaiCredentialsService singletons → `createAppRouter({chromeMaster, xaiAuth})` injection at `index.ts:854`) — closes Phase 195 HUMAN-UAT #1
+- [ ] 196-02-PLAN.md — install.sh idempotent first-run installer (opencode CLI install + system deps + bruce user + sudoers + systemd units + builds + service start) — closes Phase 195 HUMAN-UAT #2
+- [ ] 196-03-PLAN.md — onboarding provider-step xAI auto-route (selecting xAI immediately advances to ConnectAiStep, no intermediate click)
+- [ ] 196-04-PLAN.md — onboarding region/location selection step (6 regions, IP/timezone suggestion, manual override, Redis persistence)
+- [ ] 196-05-PLAN.md — locale + timezone configuration step (auto-detect, operator override, `timedatectl set-timezone` via extended sudoers Cmnd, Intl-based UI formatters)
+
+---
+
 ## ✅ v38.2 MILESTONE CLOSED — 2026-05-21
 
 **Milestone:** v38.2 Terminal Tabs + Vault Graph Polish
