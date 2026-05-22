@@ -1,16 +1,17 @@
-export const TOTAL = 6
+export const TOTAL = 7
 
 export const STEP_NAMES = [
 	'Welcome',
 	'Account',
 	'Wallpaper',
 	'Personalize',
+	'Provider',
 	'Connect AI',
 	'All set',
 ] as const
 
 /** Rough seconds per remaining step — used for the ETA pill. */
-export const STEP_WEIGHT = [15, 60, 20, 45, 25, 5] as const
+export const STEP_WEIGHT = [15, 60, 20, 45, 10, 25, 5] as const
 
 export function etaSeconds(idx: number): number {
 	let total = 0
@@ -40,6 +41,8 @@ export type OnboardingData = {
 	useCasesTouched: boolean
 	tone: number
 	memory: 'off' | 'session' | 'persistent'
+	/** Phase 196-03 — AI provider selection (xAI only enabled; Claude/OpenAI/Anthropic land in Phase 197+). */
+	provider?: 'xai' | 'claude' | 'openai' | 'anthropic'
 }
 
 export const DEFAULT_DATA: OnboardingData = {
