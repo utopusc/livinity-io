@@ -2602,21 +2602,33 @@ Plans:
 
 ---
 
-### Phase 194: Sidebar UI + Files Default Adapt — 🔴 PLANNED 2026-05-21
+### Phase 194: Sidebar UI + Files Default Adapt — ⚫ OBSOLETED 2026-05-22
 
-**Goal:** Sidebar renders `name` (from frontmatter) instead of slug. Inline `AgentInlineSettings` below tree when an agent is selected (closes Bug #10 deferred from v38.2). Files app defaults to `/home/bruce/livinity/`. Project click → workspace tab + cwd to project root. Add Modal shows slug preview as operator types name + collision warning.
+**Status:** Obsoleted by AI Chat deletion (commit `782ee4a3`). Sidebar/AddItemModal/AgentInlineSettings were AI-Chat-coupled features — all deleted. Plans 194-01..05 no longer applicable. Scope retired without execution.
 
-**Depends on:** Phase 193 (data shape)
-**Wave:** 3
-**Plans:** 5 plans (tRPC shape + inline settings + Files default + project workspace + slug preview)
-**Estimated:** ~0.5-1 day
+---
+
+### Phase 195: xAI OAuth Onboarding (Replace Claude Setup) — 🔴 PLANNED 2026-05-22
+
+**Goal:** Replace the static "Sign in with Claude" placeholder in `features/onboarding-flow/steps/connect-ai-step.tsx` with a real OAuth flow. Backend spawns `opencode auth login -p xai` as a hidden child process, extracts the xAI device-code URL from stdout, returns it to the frontend. Frontend opens URL in a new browser tab; backend long-polls `~/.local/share/opencode/auth.json` for the captured xai entry. On success, exposes credentials via a new `XaiCredentialsService` consumable by the future LangGraph agent + new lean Livinity broker. All OpenCode mechanics hidden from the user — they only see "Sign in with xAI" → "✓ Connected as SuperGrok Tier N".
+
+**Live test evidence (2026-05-22 with operator's own SuperGrok):**
+- Chat (`grok-4.3`), function calling, models list, image gen, video gen: HTTP 200 ✅
+- Voice TTS: HTTP 403 "Team is not authorized" ❌ (out of subscription scope)
+- Voice STT: HTTP 404 ❌
+- Voice scope deferred to self-hosted Whisper+Kokoro (separate phase)
+
+**Depends on:** nothing executable (Phase 192 bruce-user recommended for Mini PC path correctness, not blocking)
+**Wave:** 1 (foundational — LangGraph + new broker consume these credentials)
+**Plans:** 5 plans (auth flow service + credentials service + tRPC router + UI replacement + provider scaffold)
+**Estimated:** ~1-2 days
 
 Plans:
-- [ ] 194-01-PLAN.md — vault.items.list slug shape + ItemTreeRow displayName fallback chain (Wave 1)
-- [ ] 194-02-PLAN.md — AgentInlineSettings.tsx + ai-chat sidebar slot wiring (Wave 2, depends 194-01)
-- [ ] 194-03-PLAN.md — Files app default route → LIVINITY_VAULT_PATH (Wave 1)
-- [ ] 194-04-PLAN.md — Project click spawns Project terminal tab + cwd injection (Wave 2, depends 194-01)
-- [ ] 194-05-PLAN.md — AddItemModal slug preview + collision warning (Wave 1)
+- [ ] 195-01-PLAN.md — XaiAuthFlowService: OpenCode CLI wrapper, stdout URL extraction (Wave 1)
+- [ ] 195-02-PLAN.md — XaiCredentialsService: token store, JWT decode, background refresh (Wave 1)
+- [ ] 195-03-PLAN.md — tRPC `auth.xai.{start,status,waitForCompletion,disconnect}` + httpOnlyPaths (Wave 2, depends 195-01 + 195-02)
+- [ ] 195-04-PLAN.md — `connect-ai-step.tsx` replacement: state machine, `window.open(url)`, long-poll status (Wave 3, depends 195-03)
+- [ ] 195-05-PLAN.md — `xai-provider/` scaffold: OpenAI-compatible client, 401 refresh+retry, voice rejection errors (Wave 2, depends 195-02)
 
 ---
 
