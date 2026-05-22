@@ -132,6 +132,17 @@ import {createTimezoneService} from './modules/locale/index.js'
 // Memory, 197-04 Liv AI Agent, 197-05 tRPC namespace) attach into the singleton
 // via the FINAL attach helpers shipped from index.ts in this same plan.
 import {LivOSMastra, createProviderRouter} from './modules/mastra/index.js'
+// Phase 197-05 — Liv AI full wire-up. ApprovalManager + createLivOSMemory +
+// createMcpBridge + createLivAiAgent + createMastraRouter all instantiated in
+// the chromeMaster try/catch block, populating LivOSMastra typed slots via
+// Plan 197-01's attach helpers (B-02 lock — index.ts of the mastra module is
+// NOT modified by Plan 197-05).
+import {ApprovalManager} from './modules/mastra/approval-manager.js'
+import {createLivOSMemory} from './modules/mastra/memory.js'
+import {runMastraMigrations} from './modules/mastra/migrate.js'
+import {createMcpBridge} from './modules/mastra/mcp-bridge.js'
+import {createLivAiAgent} from './modules/mastra/agents/liv-ai.js'
+import {createMastraRouter} from './modules/server/trpc/mastra-router.js'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -952,11 +963,75 @@ export default class Livinityd {
 				)
 			}
 
+			// Phase 197-05 — Liv AI / Mastra full wire-up.
+			//
+			// Construction order (sequential — each step depends on prior):
+			//   1. ApprovalManager    (no deps)
+			//   2. runMastraMigrations({databaseUrl})  (PG migration — non-fatal)
+			//   3. createLivOSMemory({databaseUrl})    (depends on PG migration)
+			//   4. createMcpBridge({redis, logger})    (depends on Redis)
+			//   5. createLivAiAgent({providerRouter, memory, mcpBridge, approvalManager})
+			//   6. createMastraRouter({livOSMastra, approvalManager})
+			//
+			// After 3/4/5 succeed, populate LivOSMastra slots via Plan 197-01's
+			// attach helpers (B-02 lock — mastra/index.ts NOT modified here).
+			// Failures non-fatal — livinityd boots with empty-injection Proxy
+			// mastraRouter on degradation.
+			let mastraRouterProductionInstance: ReturnType<typeof createMastraRouter> | undefined
+			if (livOSMastra) {
+				try {
+					const approvalManager = new ApprovalManager()
+					const databaseUrl = process.env.DATABASE_URL
+					if (!databaseUrl) {
+						throw new Error(
+							'Phase 197-05 — DATABASE_URL env var missing; cannot wire Liv AI memory',
+						)
+					}
+					try {
+						await runMastraMigrations({databaseUrl})
+					} catch (migErr) {
+						this.logger.warn(
+							'Phase 197-05 — runMastraMigrations failed (non-fatal); Memory will surface DB errors lazily',
+							migErr,
+						)
+					}
+					const memory = createLivOSMemory({databaseUrl})
+					livOSMastra.attachMemory(memory)
+					const mcpBridge = await createMcpBridge({
+						redis: this.ai.redis,
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) => this.logger.warn(msg, err),
+						},
+					})
+					livOSMastra.attachMcpBridge(mcpBridge)
+					const agent = createLivAiAgent({
+						providerRouter: livOSMastra.providerRouter,
+						memory,
+						mcpBridge,
+						approvalManager,
+					})
+					livOSMastra.attachLivAiAgent(agent)
+					mastraRouterProductionInstance = createMastraRouter({
+						livOSMastra,
+						approvalManager,
+					})
+					webappLogger.info(
+						'Phase 197-05 — Liv AI agent + Mastra tRPC router wired (memory + mcpBridge + agent + approval-manager ready)',
+					)
+				} catch (mastraWireUpErr) {
+					this.logger.error(
+						'Phase 197-05 — Liv AI wire-up failed; mastraRouter falls back to empty-injection Proxy default until next restart',
+						mastraWireUpErr,
+					)
+				}
+			}
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
 				setup: setupRouterProductionInstance,
-				mastra: undefined,
+				mastra: mastraRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(
@@ -968,7 +1043,6 @@ export default class Livinityd {
 			webappLogger.info(
 				'Phase 196-05 — setup router wired (setRegion + setLocaleTimezone)',
 			)
-			void livOSMastra // referenced for downstream plans; see Phase 197-05 boot wire-up
 		} catch (err) {
 			// Non-fatal — boot continues. Streaming + WebApp launcher will
 			// degrade to SERVICE_UNAVAILABLE for the affected tRPC routes

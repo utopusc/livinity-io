@@ -585,4 +585,20 @@ export const httpOnlyPaths = [
 	// Redis batch persist. HTTP-only for the same reason — survives WS
 	// reconnect across systemctl restart livos windows.
 	'setup.setLocation',
+	// Phase 197-05 — Liv AI Mastra tRPC namespace. 5 adminProcedure routes
+	// (mastra.agent.stream / approve / cancel / threads.list / threads.delete).
+	// All 5 paths route via HTTP because:
+	//   - mastra.agent.stream is a long-lived SSE/subscription where a half-
+	//     broken WS after `systemctl restart livos` would silently drop the
+	//     stream mid-response (memory pitfall B-12 / X-04 — same cluster as
+	//     auth.xai.waitForCompletion and ai.executeSubagent).
+	//   - mastra.agent.approve / cancel are mutations called from the chat
+	//     window in real time; HTTP avoids the silent-hang failure mode.
+	//   - threads.list / threads.delete are page-render dependencies for the
+	//     thread sidebar; transport consistency with the rest of the namespace.
+	'mastra.agent.stream',
+	'mastra.agent.approve',
+	'mastra.agent.cancel',
+	'mastra.agent.threads.list',
+	'mastra.agent.threads.delete',
 ] as const

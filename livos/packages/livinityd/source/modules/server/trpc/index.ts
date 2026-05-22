@@ -110,6 +110,11 @@ import {xaiAuthRouter, createXaiAuthRouter} from './xai-auth-router.js'
 // (line 104). The default setupRouter Proxy throws on any service access
 // until real injection lands (Plan 196-05).
 import {setupRouter, createSetupRouter} from './setup-router.js'
+// Phase 197-05 — Liv AI Mastra tRPC namespace. Plan 197-01 pre-declared the
+// `mastra?: unknown` opts slot; this import narrows it to the real router
+// type. Production livinityd boot supplies the createMastraRouter({...}) build
+// via the chromeMaster try/catch (same DI pattern as 196-01).
+import {mastraRouter, createMastraRouter} from './mastra-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -145,11 +150,10 @@ export function createAppRouter(opts: {
 	// `createSetupRouter({redis})` build alongside the locale step
 	// wire-up.
 	setup?: ReturnType<typeof createSetupRouter>
-	// Phase 197-01 — Liv AI / Mastra tRPC namespace slot. Pre-declared in
-	// Plan 197-01 to lock the createAppRouter opts contract; the production
-	// build lands in Plan 197-05 (createMastraRouter factory) and narrows the
-	// `unknown` here to the real router type at that time.
-	mastra?: unknown
+	// Phase 197-05 — Liv AI / Mastra tRPC namespace slot. Narrowed from
+	// Plan 197-01's `unknown` placeholder to the real router type at this
+	// plan. Production swap in livinityd boot via createMastraRouter({...}).
+	mastra?: ReturnType<typeof createMastraRouter>
 }) {
 	return router({
 		migration,
@@ -209,9 +213,11 @@ export function createAppRouter(opts: {
 		// until Plan 196-05's production swap injects a real
 		// createSetupRouter({redis}) build.
 		setup: opts.setup ?? setupRouter,
-		// Phase 197-01 — mastra slot pre-declared. Production swap in Plan 197-05.
-		// Until Plan 197-05's createMastraRouter ships, opts.mastra is undefined
-		// here and no `mastra` namespace is mounted (router({...}) entry omitted).
+		// Phase 197-05 — Liv AI Mastra namespace. Empty-injection default
+		// `mastraRouter` throws PRECONDITION_FAILED until production swap
+		// injects a real createMastraRouter({livOSMastra, approvalManager})
+		// build via the chromeMaster try/catch in livinityd start().
+		mastra: opts.mastra ?? mastraRouter,
 	})
 }
 
