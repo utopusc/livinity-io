@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-22T01:30:00.000Z"
+last_updated: "2026-05-22T08:38:39.293Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,11 +25,13 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 195 (xai-oauth-onboarding) — IN PROGRESS (1/5 plans shipped)
-Plan: 2 of 5 (next)
-Last completed plan: **195-01** ✅ CODE-COMPLETE 2026-05-22 — XaiAuthFlowService backend OpenCode CLI wrapper. 6 NEW files under `livos/packages/livinityd/source/modules/xai-auth/`, 15 vitest PASS (8 url-extractor + 7 flow-service), 7 typed error classes ready for tRPC mapping, zero new npm deps, sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 2/2 across commits `57679789` (Task 1: url-extractor + opencode-spawner) and `82cf91be` (Task 2: XaiAuthFlowService + barrel + flow-service.test). Acceptance criteria all PASS: shell:true grep=0, OpencodeNotInstalledError throw site present, SIGKILL ref count 10 in flow-service.ts, flowId regex `/^[a-zA-Z0-9-]{8,64}$/` present, barrel ^export count=14 (≥5). Zero deviations. See `.planning/phases/195-xai-oauth-onboarding/195-01-SUMMARY.md`.
+Phase: 195 (xai-oauth-onboarding) — IN PROGRESS (2/5 plans shipped — Wave 1 complete)
+Plan: 3 of 5 (next)
+Last completed plan: **195-02** ✅ CODE-COMPLETE 2026-05-22 — XaiCredentialsService single source of truth for xAI OAuth tokens. 8 NEW files under `livos/packages/livinityd/source/modules/xai-credentials/`, 24 vitest PASS (9 jwt-decoder + 5 token-refresher + 10 credentials-service), 3 typed error classes (NotConnectedError / RefreshFailedError / AuthJsonCorruptError) ready for tRPC mapping, zero new npm deps, sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 2/2 across commits `abaee743` (Task 1: jwt-decoder + auth-json-path + token-refresher primitives) and `4d1572f1` (Task 2: XaiCredentialsService + barrel + credentials-service.test). All 12 acceptance criteria PASS: refreshInFlight grep=6 (single-flight evidence), fs.rename grep=1 (atomic write), EventEmitter/emit grep=8 (token-refreshed + token-expired + disconnected), token-leak grep=0 (T-195-02-01), tmp.*pid grep=1 line 311 (T-195-02-02 PID-suffixed temp), /root/ hardcode grep=0 (Phase 192 hard rule), URLSearchParams grep=1 (form-urlencoded body), single-flight assertion verified (10 concurrent calls → exactly 1 refreshFn invocation). 2 documented adjustments (zero substantive deviations): (1) docstring rephrase to clear `/root/` grep cleanly, (2) atomic-write test switched from vi.spyOn(fs, 'rename') (rejected by ESM non-configurable property) to outcome assertion (post-rename no temp file lingers + new tokens on disk — stronger guarantee). See `.planning/phases/195-xai-oauth-onboarding/195-02-SUMMARY.md`.
 
-Next: `/gsd-execute-phase 195` Plan 02 (XaiCredentialsService — token store, JWT decode, background refresh). Plan 02 is Wave 1 parallel-safe with 195-01; files are disjoint (`xai-credentials/` vs `xai-auth/`).
+Previously: **195-01** ✅ CODE-COMPLETE 2026-05-22 — XaiAuthFlowService backend OpenCode CLI wrapper. 6 NEW files under `livos/packages/livinityd/source/modules/xai-auth/`, 15 vitest PASS, 7 typed error classes, commits `57679789` + `82cf91be`.
+
+Next: `/gsd-execute-phase 195` Plan 03 (tRPC `auth.xai` router — wires `XaiAuthFlowService.start/waitForCompletion` + `XaiCredentialsService.getStatus/clear` into 4 admin tRPC procedures; adds 4 paths to `httpOnlyPaths` in common.ts). Plan 03 depends on both 195-01 and 195-02 (Wave 2).
 
 **Active milestone:** v38.3 — DROP Vault Concept + bruce-user refactor — **PHASE 192 CODE-COMPLETE** (Phase 192 shipped 2026-05-21).
 
