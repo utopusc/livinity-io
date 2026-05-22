@@ -49,8 +49,12 @@ export interface LivOSMemoryDeps {
  */
 export function createLivOSMemory(deps: LivOSMemoryDeps): Memory {
 	try {
-		const storage = new PostgresStore({connectionString: deps.databaseUrl} as never)
+		const storage = new PostgresStore({
+			id: 'livos-mastra-pg-store',
+			connectionString: deps.databaseUrl,
+		} as never)
 		const vector = new PgVector({
+			id: 'livos-mastra-pg-vector',
 			connectionString: deps.databaseUrl,
 			indexConfig: {type: 'hnsw', metric: 'dotproduct'},
 		} as never)
