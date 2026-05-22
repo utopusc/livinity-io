@@ -567,4 +567,10 @@ export const httpOnlyPaths = [
 	'auth.xai.status',
 	'auth.xai.waitForCompletion',
 	'auth.xai.disconnect',
+	// Phase 196-04 — `setup.setRegion` onboarding mutation. Persists the
+	// operator's region selection (and optionally a country sub-pick) to
+	// Redis. HTTP-only so the mutation survives a WS reconnect mid-
+	// onboarding (memory pitfall B-12 / X-04 cluster — same rationale as
+	// the auth.xai.* family directly above).
+	'setup.setRegion',
 ] as const

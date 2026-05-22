@@ -102,6 +102,14 @@ import pinnedWindowsRouter from '../../pinned-windows/routes.js'
 // line 192). The default xaiAuthRouter throws on any service access until
 // real injection lands.
 import {xaiAuthRouter, createXaiAuthRouter} from './xai-auth-router.js'
+// Phase 196-04 — `setup.*` onboarding namespace. Single procedure today
+// (`setup.setRegion`); future plans (196-05 locale+timezone) extend the
+// same router. Production wire-up at livinityd/source/index.ts builds
+// via createSetupRouter({redis}) then injects via setProductionAppRouter
+// — same factory-DI pattern as chromeMaster (line 89-94) + xaiAuth
+// (line 104). The default setupRouter Proxy throws on any service access
+// until real injection lands (Plan 196-05).
+import {setupRouter, createSetupRouter} from './setup-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -132,6 +140,11 @@ export function createAppRouter(opts: {
 	// keep type-checking. Production livinityd boot supplies a real
 	// `createXaiAuthRouter({flowService, credsService})` build.
 	xaiAuth?: ReturnType<typeof createXaiAuthRouter>
+	// Phase 196-04 — `setup.*` onboarding namespace. Optional with
+	// empty-injection fallback. Plan 196-05 supplies the production
+	// `createSetupRouter({redis})` build alongside the locale step
+	// wire-up.
+	setup?: ReturnType<typeof createSetupRouter>
 }) {
 	return router({
 		migration,
@@ -186,6 +199,11 @@ export function createAppRouter(opts: {
 		// B-12 / X-04). Default `xaiAuthRouter` throws on access until
 		// production swap (mirrors chromeMaster factory pattern above).
 		auth: router({xai: opts.xaiAuth ?? xaiAuthRouter}),
+		// Phase 196-04 — setup.setRegion onboarding-only mutation namespace.
+		// The empty-injection default setupRouter throws on any procedure call
+		// until Plan 196-05's production swap injects a real
+		// createSetupRouter({redis}) build.
+		setup: opts.setup ?? setupRouter,
 	})
 }
 
