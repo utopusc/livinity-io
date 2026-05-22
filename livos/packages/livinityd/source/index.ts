@@ -990,7 +990,7 @@ export default class Livinityd {
 					try {
 						await runMastraMigrations({databaseUrl})
 					} catch (migErr) {
-						this.logger.warn(
+						this.logger.error(
 							'Phase 197-05 — runMastraMigrations failed (non-fatal); Memory will surface DB errors lazily',
 							migErr,
 						)
@@ -1001,7 +1001,7 @@ export default class Livinityd {
 						redis: this.ai.redis,
 						logger: {
 							info: (msg) => webappLogger.info(msg),
-							warn: (msg, err) => this.logger.warn(msg, err),
+							warn: (msg, err) => this.logger.error(msg, err),
 						},
 					})
 					livOSMastra.attachMcpBridge(mcpBridge)
