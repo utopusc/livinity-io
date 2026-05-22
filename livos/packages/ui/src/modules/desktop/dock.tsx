@@ -207,6 +207,25 @@ export function Dock() {
 						)
 					}
 				/>
+				{/* Phase 197-06 — Liv AI Dock app. Mastra agent + xAI provider + computer-use
+				    MCP bridge + 4-layer memory (workingMemory scope=thread). Window opens via
+				    window-manager → LivAiChatWindow renders chat surface. */}
+				<DockItem
+					appId='LIVINITY_liv-ai'
+					iconSize={iconSize}
+					iconSizeZoomed={iconSizeZoomed}
+					open={false}
+					mouseX={mouseX}
+					onOpenWindow={(originRect) =>
+						handleOpenWindow(
+							'LIVINITY_liv-ai',
+							'/liv-ai',
+							'Liv AI',
+							systemAppsKeyed['LIVINITY_liv-ai'].icon,
+							originRect,
+						)
+					}
+				/>
 				{/* Recent apps */}
 				<RecentAppsDock mouseX={mouseX} iconSize={iconSize} iconSizeZoomed={iconSizeZoomed} />
 			</motion.div>
