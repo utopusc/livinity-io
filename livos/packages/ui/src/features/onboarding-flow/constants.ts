@@ -1,6 +1,11 @@
 import type {Region} from '../../../../livinityd/source/modules/locale/region-suggestion'
 
-export const TOTAL = 9
+/**
+ * Phase 196.1 — wizard collapsed 9 → 7 steps.
+ *   - ConnectAi merged into Provider (inline auth)
+ *   - Region + Locale & Time merged into single Location step (Country + City)
+ */
+export const TOTAL = 7
 
 export const STEP_NAMES = [
 	'Welcome',
@@ -8,19 +13,17 @@ export const STEP_NAMES = [
 	'Wallpaper',
 	'Personalize',
 	'Provider',
-	'Region',
-	'Locale & Time',
-	'Connect AI',
+	'Location',
 	'All set',
 ] as const
 
 /**
  * Rough seconds per remaining step — used for the ETA pill.
  * Order mirrors STEP_NAMES exactly:
- *   Welcome 15, Account 60, Wallpaper 20, Personalize 45, Provider 10,
- *   Region 10, Locale & Time 25, Connect AI 25, All set 5.
+ *   Welcome 15, Account 60, Wallpaper 20, Personalize 45,
+ *   Provider+Auth 35, Location 20, All set 5.
  */
-export const STEP_WEIGHT = [15, 60, 20, 45, 10, 10, 25, 25, 5] as const
+export const STEP_WEIGHT = [15, 60, 20, 45, 35, 20, 5] as const
 
 export function etaSeconds(idx: number): number {
 	let total = 0
@@ -52,11 +55,13 @@ export type OnboardingData = {
 	memory: 'off' | 'session' | 'persistent'
 	/** Phase 196-03 — AI provider selection (xAI only enabled; Claude/OpenAI/Anthropic land in Phase 197+). */
 	provider?: 'xai' | 'claude' | 'openai' | 'anthropic'
-	/** Phase 196-04 — region selection (continent-level). */
+	/** Phase 196-04 — region selection (continent-level). Derived in 196.1 from country. */
 	region?: Region
-	/** Phase 196-04 — optional country sub-pick (ISO-3166-1 alpha-2). */
+	/** Phase 196-04 — optional country sub-pick (ISO-3166-1 alpha-2). Required in 196.1. */
 	country?: string
-	/** Phase 196-05 — IANA Olson timezone (e.g. Europe/Istanbul). */
+	/** Phase 196.1 — city name within country (curated catalog). */
+	city?: string
+	/** Phase 196-05 — IANA Olson timezone (e.g. Europe/Istanbul). Derived in 196.1 from city. */
 	timezone?: string
 	/** Phase 196-05 — UI locale code from the SUPPORTED_LOCALES allow-list. */
 	locale?: 'en-US' | 'tr-TR' | 'de-DE' | 'fr-FR' | 'es-ES' | 'ar-SA'

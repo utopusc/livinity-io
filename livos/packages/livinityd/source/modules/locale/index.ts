@@ -26,3 +26,17 @@ export {
 	TimedatectlError,
 } from './timezone-service.js'
 export type {TimezoneService} from './timezone-service.js'
+
+// Phase 196.1 — curated country/city catalog for the merged LocationStep.
+export {
+	COUNTRIES,
+	SUPPORTED_LOCALES,
+	getCountry,
+	resolveLocation,
+} from './location-data.js'
+export type {
+	CountryEntry,
+	CityEntry,
+	LocationRegion,
+	SupportedLocale,
+} from './location-data.js'

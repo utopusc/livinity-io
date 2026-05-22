@@ -5,12 +5,10 @@ import {HelpBubble, ParallaxOrbs, SoundProvider, useSound} from '@/features/onbo
 import {ResumeBanner} from '@/features/onboarding-flow/resume-banner'
 import {Step} from '@/features/onboarding-flow/step'
 import {AccountStep} from '@/features/onboarding-flow/steps/account-step'
-import {ConnectAiStep} from '@/features/onboarding-flow/steps/connect-ai-step'
 import {DoneStep} from '@/features/onboarding-flow/steps/done-step'
-import {LocaleTimezoneStep} from '@/features/onboarding-flow/steps/locale-timezone-step'
+import {LocationStep} from '@/features/onboarding-flow/steps/location-step'
 import {PersonalizeStep} from '@/features/onboarding-flow/steps/personalize-step'
 import {ProviderStep} from '@/features/onboarding-flow/steps/provider-step'
-import {RegionStep} from '@/features/onboarding-flow/steps/region-step'
 import {WallpaperStep} from '@/features/onboarding-flow/steps/wallpaper-step'
 import {WelcomeStep} from '@/features/onboarding-flow/steps/welcome-step'
 import {TopBar} from '@/features/onboarding-flow/top-bar'
@@ -224,31 +222,6 @@ function WizardInner() {
 							<ProviderStep
 								data={data}
 								setData={setData}
-								onContinue={stepper.next}
-								onSkip={stepper.next}
-								onBack={stepper.back}
-							/>
-						</Step>
-						<Step stepIndex={5} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
-							<RegionStep
-								data={data}
-								setData={setData}
-								onContinue={stepper.next}
-								onSkip={stepper.next}
-								onBack={stepper.back}
-							/>
-						</Step>
-						<Step stepIndex={6} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
-							<LocaleTimezoneStep
-								data={data}
-								setData={setData}
-								onContinue={stepper.next}
-								onSkip={stepper.next}
-								onBack={stepper.back}
-							/>
-						</Step>
-						<Step stepIndex={7} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
-							<ConnectAiStep
 								onContinue={() => {
 									sound.play('success')
 									stepper.next()
@@ -257,10 +230,19 @@ function WizardInner() {
 								onBack={stepper.back}
 							/>
 						</Step>
-						<Step stepIndex={8} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
+						<Step stepIndex={5} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
+							<LocationStep
+								data={data}
+								setData={setData}
+								onContinue={stepper.next}
+								onSkip={stepper.next}
+								onBack={stepper.back}
+							/>
+						</Step>
+						<Step stepIndex={6} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<DoneStep
 								data={data}
-								isActive={stepper.idx === 8}
+								isActive={stepper.idx === 6}
 								onEnter={() => {
 									try {
 										localStorage.removeItem(STORAGE_KEY)

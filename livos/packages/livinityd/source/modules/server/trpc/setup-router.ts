@@ -45,7 +45,13 @@ import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
 import {adminProcedure, router} from './trpc.js'
-import {REGIONS, type Region, type TimezoneService} from '../../locale/index.js'
+import {
+	COUNTRIES,
+	REGIONS,
+	resolveLocation,
+	type Region,
+	type TimezoneService,
+} from '../../locale/index.js'
 
 // ─── Service DI shape ────────────────────────────────────────────────────
 
@@ -117,6 +123,26 @@ const setLocaleTimezoneInput = z.object({
 	locale: z.enum(SUPPORTED_LOCALES),
 })
 
+/**
+ * Phase 196.1 — `setup.setLocation` input schema.
+ *
+ * Replaces the Phase 196-04 (setRegion) + Phase 196-05 (setLocaleTimezone)
+ * two-step flow with a single Country + City picker. The pair is resolved
+ * server-side via `resolveLocation()` from the canonical curated catalog;
+ * unknown country or city values are rejected with BAD_REQUEST.
+ *
+ * The 2-letter country regex defense-in-depth against path-traversal-flavoured
+ * input mirrors the Phase 196-04 setRegion gate.
+ */
+const VALID_COUNTRY_CODES = COUNTRIES.map((c) => c.code) as readonly string[]
+const setLocationInput = z.object({
+	country: z
+		.string()
+		.regex(/^[A-Z]{2}$/, 'country must be a 2-letter uppercase ISO code')
+		.refine((c) => VALID_COUNTRY_CODES.includes(c), 'unknown country'),
+	city: z.string().min(1).max(64),
+})
+
 // ─── Factory ─────────────────────────────────────────────────────────────
 
 /**
@@ -177,6 +203,50 @@ export function createSetupRouter(deps: SetupRouterDeps) {
 				await deps.redis.set('liv:user:locale', input.locale)
 				return {ok: true as const, timezone: input.timezone, locale: input.locale}
 			}),
+
+		/**
+		 * Phase 196.1 — `setup.setLocation` merged Country+City procedure.
+		 *
+		 * Resolves (country, city) → {region, timezone, locale} via the
+		 * curated COUNTRIES catalog, then persists ALL FIVE Redis keys
+		 * (country, city, region, timezone, locale) and propagates the
+		 * timezone to the system clock via the same narrow sudoers
+		 * TIMEDATECTL Cmnd_Alias as setLocaleTimezone.
+		 *
+		 * Defense-in-depth ordering (same as setLocaleTimezone but extended):
+		 *   1. zod — country regex + COUNTRIES membership; city non-empty
+		 *   2. resolveLocation — (country, city) pair must exist in catalog
+		 *   3. timezoneService.validate — Intl set membership for the timezone
+		 *   4. timezoneService.setSystemTimezone — execFile (argv-array, no shell)
+		 *   5. redis.set — only after the system clock change succeeds
+		 *
+		 * adminProcedure-gated (matches setRegion / setLocaleTimezone).
+		 */
+		setLocation: adminProcedure.input(setLocationInput).mutation(async ({input}) => {
+			const resolved = resolveLocation(input.country, input.city)
+			if (!resolved) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: `Phase 196.1: unknown (country, city) pair: ${input.country} / ${input.city}`,
+				})
+			}
+			// Defense-in-depth: even though resolveLocation only returns
+			// timezones we ship, re-validate via Intl before invoking
+			// timedatectl.
+			if (!deps.timezoneService.validate(resolved.timezone)) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: `Phase 196.1: catalog timezone not in Intl set: ${resolved.timezone}`,
+				})
+			}
+			await deps.timezoneService.setSystemTimezone(resolved.timezone)
+			await deps.redis.set('liv:user:country', resolved.country)
+			await deps.redis.set('liv:user:city', resolved.city)
+			await deps.redis.set('liv:user:region', resolved.region)
+			await deps.redis.set('liv:user:timezone', resolved.timezone)
+			await deps.redis.set('liv:user:locale', resolved.locale)
+			return {ok: true as const, ...resolved}
+		}),
 	})
 }
 

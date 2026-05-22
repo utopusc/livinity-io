@@ -580,4 +580,9 @@ export const httpOnlyPaths = [
 	// the mutation survives WS reconnect (memory pitfall B-12 / X-04
 	// cluster — same rationale as setup.setRegion directly above).
 	'setup.setLocaleTimezone',
+	// Phase 196.1 — `setup.setLocation` merged Country+City onboarding mutation.
+	// Same systemd timedatectl propagation as setLocaleTimezone plus 5-key
+	// Redis batch persist. HTTP-only for the same reason — survives WS
+	// reconnect across systemctl restart livos windows.
+	'setup.setLocation',
 ] as const
