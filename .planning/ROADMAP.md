@@ -2655,27 +2655,38 @@ Plans:
 
 ---
 
-### Phase 197: Mastra Agent Platform + xAI/OAuth Integration — 🔴 PLANNED 2026-05-22
+### Phase 197 (rev-2): Liv AI — Mastra Agent + Provider Router + Dock App — 🔴 PLANNED 2026-05-22
 
-**Goal:** Wire Mastra (TypeScript-first AI agent framework, v1.0 stable Jan 2026, 24.2k stars) into LivOS as the agent + workflow layer that sits on top of `XaiCredentialsService.getToken()`. After this phase livinityd hosts a Mastra instance with one or more agents capable of: streaming + tool-loop against Grok-4.20 via OAuth (no static XAI_API_KEY); using LivOS-native tools (shell + app install + Docker + Redis + filesystem) with HITL approval; remembering across conversations via 4-layer memory backed by existing livos PG with pgvector; running durable workflows with suspend/resume + PG snapshot; consuming selfclaude's existing MCP endpoint (`:8090/mcp`) via MCPClient. Differentiation from OpenClaw/selfclaude: provider-agnostic (not Anthropic-coupled), durable workflows, 4-layer memory, tRPC-native HITL, LivOS-native tools.
+**Goal:** Ship "Liv AI" — a visible chat app in the LivOS Dock. Operator clicks the icon, a window opens, types a message, the agent responds via Mastra running Grok via xAI OAuth (or future Claude/OpenAI via ProviderRouter). The agent has computer-use tools (screenshot, list windows, click, type, launch apps) via Mastra MCPClient consuming Luse MCP and/or selfclaude MCP. 4-layer memory backed by livos PG + pgvector. HITL approval for destructive tools. NOT in Docker — bundled with LivOS install via pnpm.
+
+**Pivot from earlier 197 plan (CONTEXT rewritten 2026-05-22 + old 6 PLAN.md deleted):** Operator directive: "Mastra alt yapısını app install için istemiyorum, Liv AI'ı tasarlamak istiyorum yeniden. LivOS ile birlikte indirilmesi lazım, Docker'da çalışmayacak. Otomatik hangi provider seçili ise onu kullanacak. LivOS UI'da Dock'ta tıkladığımda pencere açılsın. SelfClaude şu şekilde olmalı, Luse MCP computer-use özellikleri eklendi." App-install workflow + eval+OTel deferred to Phase 198+.
 
 **Live evidence (2026-05-22):**
-- xAI OAuth device-code flow validated live on Mini PC (`https://accounts.x.ai/oauth2/device?user_code=…`)
-- opencode 1.15.7 on system PATH; `XaiCredentialsService.getToken()` returns fresh access tokens with 6h auto-refresh
-- Mastra research (technical-researcher agent 2026-05-22) confirmed native xAI support (`xai/grok-*`), `@ai-sdk/xai` factory's `fetch` middleware as cleanest dynamic-token integration path, 18h dev time vs 41h LangGraph benchmark (public report), MCP first-class, PG memory plugs directly into existing `livos` DB
+- xAI OAuth device-code flow live on Mini PC SHA `9f71435c`
+- `XaiCredentialsService.getToken()` returns fresh tokens with 6h auto-refresh — Mastra `@ai-sdk/xai` `fetch` middleware consumes this
+- Luse MCP server design exists (vault-templates/skills/luse-driver.md verifies 13 computer-use tools); server binary path resolved via `LUSE_MCP_PATH` env var (graceful-skip if absent)
+- selfclaude MCP runs at `http://localhost:8090/mcp` on Mini PC (4 tools)
+- LivOS Dock reads `systemApps` array in `livos/packages/ui/src/providers/apps.tsx` — adding `LIVINITY_liv-ai` entry + `/liv-ai` route is the entry point
 
-**Depends on:** Phase 195 (xAI OAuth core + xai-client scaffold), Phase 196 (livinityd DI wire-up + setupRouter pattern), Phase 196.1 (live xAI device-code flow validated)
-**Wave:** 1 (foundational — every future "AI does X on LivOS" phase consumes this layer)
-**Plans:** 6 plans (Mastra core + xAI wiring / tool registry + MCPClient / pgvector memory / tRPC SSE bridge / first workflow / eval + OTel)
+**Differentiation from selfclaude/OpenClaw (visible in code, not just docs):**
+1. Provider-agnostic (single ProviderRouter abstraction — xAI today, Claude/OpenAI plugin tomorrow)
+2. OS-native bundled (no Docker, runs as part of livinityd via pnpm install)
+3. Dock-first UX (first-class LivOS app with icon + window)
+4. Computer-use via MCP bridge (Mastra MCPClient consuming Luse + selfclaude, not direct xdotool)
+5. 4-layer Mastra memory backed by livos PG (raw + working + semantic recall + observational)
+
+**Depends on:** Phase 195 (xAI OAuth core), Phase 196 (livinityd DI pattern), Phase 196.1 (live device-code flow validated)
+**Wave:** 1 (foundational — Liv AI is the marquee agent surface for v38.3 + v39.0)
+**Plans:** 6 plans (Mastra core + ProviderRouter / MCP bridge / memory + pgvector / Liv AI agent definition / tRPC SSE bridge / Dock app + chat window UI)
 **Estimated:** 2-3 days
 
 Plans:
-- [ ] 197-01-PLAN.md — Mastra core setup + xAI provider wiring via `@ai-sdk/xai` `fetch` middleware (Wave 1, no deps)
-- [ ] 197-02-PLAN.md — LivOS tool registry (shell/app/docker/redis/fs) with HITL approval + MCPClient consuming selfclaude `:8090/mcp` (Wave 1, no deps)
-- [ ] 197-03-PLAN.md — Memory integration: pgvector extension on livos DB + 4-layer Memory (raw + working + semantic recall + observational) (Wave 1, no deps)
-- [ ] 197-04-PLAN.md — tRPC agent bridge: SSE stream + HITL approval (`tool-call-approval` chunk) + thread management (Wave 2, depends 197-01..03)
-- [ ] 197-05-PLAN.md — First Mastra workflow: app install pipeline with suspend/resume + PG snapshot (Wave 3, depends 197-02 + 197-04 — file-shared MOD of mastra-router/index.ts forces serialization after 197-04)
-- [ ] 197-06-PLAN.md — Eval scorers (answer-relevancy + LivOS task completion) + OpenTelemetry export (Wave 4, depends 197-04 + 197-05 — same file-shared MOD reason)
+- [ ] 197-01-PLAN.md — Mastra core deps (pinned versions) + ProviderRouter reading `liv:config:active_provider` Redis key (xai now, claude/openai future) + LivOSMastra singleton wired into livinityd boot (Wave 1, no deps)
+- [ ] 197-02-PLAN.md — McpBridge: MCPClient consuming Luse MCP stdio (`LUSE_MCP_PATH`) + selfclaude MCP HTTP (`:8090/mcp`), graceful degradation if either missing, 13+ namespaced tools (Wave 1, no deps)
+- [ ] 197-03-PLAN.md — pgvector enable script + 4-layer Memory (raw + working + semantic recall + observational, scope='thread' explicit) (Wave 1, no deps)
+- [ ] 197-04-PLAN.md — Liv AI Agent definition: system prompt + dynamic model resolver (ProviderRouter) + dynamic tools (McpBridge) + Memory binding (Wave 2, depends 197-01..03)
+- [ ] 197-05-PLAN.md — tRPC `mastra.*` namespace: agent.stream SSE + agent.approve + agent.cancel + agent.threads.list/delete; httpOnlyPaths; ApprovalManager + redactError wrappers (Wave 3, depends 197-04)
+- [ ] 197-06-PLAN.md — Liv AI Dock app: LIVINITY_liv-ai systemApps entry + /liv-ai route + LivAiChatWindow (message list + streaming renderer + approval modal + thread sidebar) (Wave 4, depends 197-05)
 
 ---
 
