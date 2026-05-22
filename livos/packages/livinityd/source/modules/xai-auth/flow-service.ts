@@ -32,8 +32,20 @@ import {spawnOpencodeLogin} from './opencode-spawner.js'
 
 // ─── Tunables ────────────────────────────────────────────────────────────────
 
-/** Default method label per CONTEXT.md verified live 2026-05-22 with operator's SuperGrok subscription. */
-const DEFAULT_METHOD = 'xAI Grok Auth Headless / Remote / VPS'
+/**
+ * Default opencode auth method label — verified live 2026-05-22 against opencode 1.15.7 on Mini PC.
+ *
+ * Three labels exist; the Headless / Remote / VPS variant uses xAI's device-code flow
+ * (`https://accounts.x.ai/oauth2/device?user_code=XXXX-XXXX`) which does NOT require a
+ * local-host callback — critical for LivOS's remote-server topology where the user's
+ * browser is on a different machine than livinityd.
+ *
+ * Available labels (case-sensitive, exactly as opencode prompts):
+ *   - 'xAI Grok OAuth (SuperGrok Subscription)'  — local-callback flow (laptop use)
+ *   - 'xAI Grok OAuth (Headless / Remote / VPS)' — device-code flow (LivOS use)
+ *   - 'Manually enter API Key'
+ */
+const DEFAULT_METHOD = 'xAI Grok OAuth (Headless / Remote / VPS)'
 
 /** URL must appear in child stdout within this window or the flow is aborted. */
 const URL_DISCOVERY_TIMEOUT_MS = 30_000
