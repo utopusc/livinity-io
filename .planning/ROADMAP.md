@@ -2632,7 +2632,7 @@ Plans:
 
 ---
 
-### Phase 196: xAI Onboarding Completion + First-Run Installer + Locale — 🔴 PLANNED 2026-05-22
+### Phase 196: xAI Onboarding Completion + First-Run Installer + Locale — 🟢 CODE-COMPLETE 2026-05-22 (all 5 plans shipped; operator UAT pending on Mini PC `bruce@10.69.31.68`)
 
 **Goal:** Close Phase 195's deferred runtime gaps (DI wire-up + opencode CLI install) AND add three operator-requested onboarding deliverables: provider→auth auto-route for xAI, region/location selection step, locale+timezone configuration with system clock alignment. After Phase 196 the setup wizard becomes the genuine "click 5 buttons and you are running LivOS with xAI" experience implied by v34.0 Bootstrap Polish.
 
@@ -2651,7 +2651,7 @@ Plans:
 - [ ] 196-02-PLAN.md — install.sh idempotent first-run installer (opencode CLI install + system deps + bruce user + sudoers + systemd units + builds + service start) — closes Phase 195 HUMAN-UAT #2
 - [x] 196-03-PLAN.md — onboarding provider-step xAI auto-route (selecting xAI immediately advances to ConnectAiStep, no intermediate click) — ✅ CODE-COMPLETE 2026-05-22 (commits b4bee157 + 5ed44ad4; 4/4 vitest PASS; UI build green; TOTAL=7; sacred SHA + sudoers SHA preserved)
 - [x] 196-04-PLAN.md — onboarding region/location selection step (6 regions, IP/timezone suggestion, manual override, Redis persistence) — ✅ CODE-COMPLETE 2026-05-22 (commits 5d43b4bd + 71ee17a1 + 5f8b8ea2; 59/59 vitest PASS [47 region-suggestion + 6 setup-router + 6 region-step]; UI build green; sacred SHA + sudoers SHA preserved; wizard mount + sudoers re-pin deferred to 196-05 per file-disjoint contract)
-- [ ] 196-05-PLAN.md — locale + timezone configuration step (auto-detect, operator override, `timedatectl set-timezone` via extended sudoers Cmnd, Intl-based UI formatters)
+- [x] 196-05-PLAN.md — locale + timezone configuration step (auto-detect, operator override, `timedatectl set-timezone` via extended sudoers Cmnd, Intl-based UI formatters) — ✅ CODE-COMPLETE 2026-05-22 (5 atomic commits `23e7f249` + `778a00f3` + `04fad313` + `6d2a1950` + `10d9ae1c`; **31 new vitest PASS** [8 timezone-service + 4 new setup-router T7-T10 + 7 intl + 6 locale-timezone-step] + 23/23 full onboarding-flow regression PASS + 73/73 livinityd trpc+locale; pnpm --filter ui build exit 0; tsc clean on changed files; **sudoers fragment SHA atomically re-pinned `568e4403...→aea64b87...` in Task 1 commit** alongside the LIVINITYD_TIMEDATECTL Cmnd_Alias extension — pre-commit hook `[sacred-sha] PASS: 20 files verified` × 5; sacred SDK-runner SHA `f3538e1d...` PRESERVED 5/5; all 7 STRIDE threats honoured. Phase 196 is **CODE-COMPLETE** — operator UAT walks `bash /opt/livos/update.sh` + 9-step wizard + `cat /etc/timezone` + `redis-cli get liv:user:timezone` on Mini PC bruce@10.69.31.68 to close both Phase 195 HUMAN-UAT items + Phase 196's own checklist in one pass).
 
 ---
 
