@@ -93,6 +93,15 @@ import {
 // restart livos` (precedent: webapp.create line 360, conversations.
 // appendMessage line 312, agents.create line 256).
 import pinnedWindowsRouter from '../../pinned-windows/routes.js'
+// Phase 195 — xAI OAuth auth router. Four adminProcedure procedures
+// (start/status/waitForCompletion/disconnect) mount under the new
+// top-level `auth.xai.*` namespace. Production wire-up at
+// livinityd/source/index.ts builds via createXaiAuthRouter({flowService,
+// credsService}) then injects the result via setProductionAppRouter — same
+// factory-DI pattern as chromeMaster (line 89-94 / setProductionAppRouter
+// line 192). The default xaiAuthRouter throws on any service access until
+// real injection lands.
+import {xaiAuthRouter, createXaiAuthRouter} from './xai-auth-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -118,6 +127,11 @@ const apps = t.mergeRouters(
  */
 export function createAppRouter(opts: {
 	chromeMaster: ReturnType<typeof createChromeMasterRouter>
+	// Phase 195 — xAI OAuth auth router. Optional with empty-injection
+	// fallback so back-compat callers (and the default appRouter below)
+	// keep type-checking. Production livinityd boot supplies a real
+	// `createXaiAuthRouter({flowService, credsService})` build.
+	xaiAuth?: ReturnType<typeof createXaiAuthRouter>
 }) {
 	return router({
 		migration,
@@ -163,6 +177,15 @@ export function createAppRouter(opts: {
 		chromeMaster: opts.chromeMaster,
 		// Phase 131-02 — pinnedWindows.* namespace (D-131-A persistence).
 		pinnedWindows: pinnedWindowsRouter,
+		// Phase 195 — xAI OAuth auth namespace (`auth.xai.*`). Four
+		// adminProcedure procedures wire XaiAuthFlowService (195-01) +
+		// XaiCredentialsService (195-02) into the onboarding UI seam (195-04).
+		// All four paths are added to httpOnlyPaths in ./common.ts because
+		// waitForCompletion is a 10-min long-poll mutation that must survive
+		// WS reconnect after `systemctl restart livos` (memory pitfall
+		// B-12 / X-04). Default `xaiAuthRouter` throws on access until
+		// production swap (mirrors chromeMaster factory pattern above).
+		auth: router({xai: opts.xaiAuth ?? xaiAuthRouter}),
 	})
 }
 

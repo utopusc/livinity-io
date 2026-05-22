@@ -553,4 +553,18 @@ export const httpOnlyPaths = [
 	'ccPty.getConfig',
 	'ccPty.setConfig',
 	'ccPty.validatePaths',
+	// Phase 195 — xAI OAuth onboarding router (auth.xai.*). All 4 paths route via
+	// HTTP because: (a) waitForCompletion is a long-poll mutation that can run up to
+	// 10 minutes — WS reconnect would silently drop the response (memory pitfall
+	// B-12 / X-04); (b) start spawns an `opencode auth login` child process (5-30s
+	// wall-clock) — same long-mutation cluster rationale as `system.update` line 27
+	// and `docker.scanImage` line 137; (c) status is a page-render dependency for
+	// the onboarding step where the WS-handshake-delay flicker is undesirable
+	// (precedent: `webapp.list` line 406, `agents.list` line 291); (d) disconnect is
+	// an autosave-adjacent mutation kept on HTTP for transport consistency with the
+	// namespace.
+	'auth.xai.start',
+	'auth.xai.status',
+	'auth.xai.waitForCompletion',
+	'auth.xai.disconnect',
 ] as const
