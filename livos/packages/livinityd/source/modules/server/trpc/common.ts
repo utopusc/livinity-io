@@ -573,4 +573,11 @@ export const httpOnlyPaths = [
 	// onboarding (memory pitfall B-12 / X-04 cluster — same rationale as
 	// the auth.xai.* family directly above).
 	'setup.setRegion',
+	// Phase 196-05 — `setup.setLocaleTimezone` onboarding mutation.
+	// Invokes systemd timedatectl via the narrow sudoers TIMEDATECTL
+	// Cmnd_Alias + double-writes liv:user:timezone + liv:user:locale.
+	// The execFile call can take 1-3s on a cold Mini PC; HTTP-only so
+	// the mutation survives WS reconnect (memory pitfall B-12 / X-04
+	// cluster — same rationale as setup.setRegion directly above).
+	'setup.setLocaleTimezone',
 ] as const

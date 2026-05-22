@@ -133,10 +133,14 @@ export function createTimezoneService(opts?: {
 				'sudo',
 				['/usr/bin/timedatectl', 'set-timezone', zone],
 				{timeout: 10_000},
-				(error: ExecFileException | null, _stdout, stderr) => {
+				(error: ExecFileException | null, _stdout: string | Buffer, stderr: string | Buffer) => {
 					if (error) {
 						const stderrText =
-							typeof stderr === 'string' ? stderr : stderr?.toString('utf8') ?? ''
+							typeof stderr === 'string'
+								? stderr
+								: stderr
+								? stderr.toString('utf8')
+								: ''
 						const exitCode = typeof error.code === 'number' ? error.code : null
 						reject(new TimedatectlError(zone, stderrText || error.message, exitCode))
 						return
