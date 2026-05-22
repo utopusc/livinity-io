@@ -2649,7 +2649,7 @@ Plans:
 Plans:
 - [ ] 196-01-PLAN.md — livinityd DI wire-up (XaiAuthFlowService + XaiCredentialsService singletons → `createAppRouter({chromeMaster, xaiAuth})` injection at `index.ts:854`) — closes Phase 195 HUMAN-UAT #1
 - [ ] 196-02-PLAN.md — install.sh idempotent first-run installer (opencode CLI install + system deps + bruce user + sudoers + systemd units + builds + service start) — closes Phase 195 HUMAN-UAT #2
-- [ ] 196-03-PLAN.md — onboarding provider-step xAI auto-route (selecting xAI immediately advances to ConnectAiStep, no intermediate click)
+- [x] 196-03-PLAN.md — onboarding provider-step xAI auto-route (selecting xAI immediately advances to ConnectAiStep, no intermediate click) — ✅ CODE-COMPLETE 2026-05-22 (commits b4bee157 + 5ed44ad4; 4/4 vitest PASS; UI build green; TOTAL=7; sacred SHA + sudoers SHA preserved)
 - [ ] 196-04-PLAN.md — onboarding region/location selection step (6 regions, IP/timezone suggestion, manual override, Redis persistence)
 - [ ] 196-05-PLAN.md — locale + timezone configuration step (auto-detect, operator override, `timedatectl set-timezone` via extended sudoers Cmnd, Intl-based UI formatters)
 
