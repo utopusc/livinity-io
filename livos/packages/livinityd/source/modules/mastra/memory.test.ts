@@ -23,7 +23,7 @@ vi.mock('@mastra/memory', () => ({
 }))
 
 vi.mock('@mastra/pg', () => ({
-	PgStore: vi.fn().mockImplementation((...args: unknown[]) => {
+	PostgresStore: vi.fn().mockImplementation((...args: unknown[]) => {
 		pgStoreCtorCalls.push({args})
 		return {__pgStore: true}
 	}),
@@ -82,9 +82,9 @@ describe('redactPgUrl (T-197-03-02)', () => {
 	})
 
 	test('Test 5: construction error never contains raw password', async () => {
-		// Force PgStore ctor to throw with a known password substring
+		// Force PostgresStore ctor to throw with a known password substring
 		const pgMod = await import('@mastra/pg')
-		;(pgMod.PgStore as unknown as {mockImplementationOnce: (fn: () => never) => void}).mockImplementationOnce(() => {
+		;(pgMod.PostgresStore as unknown as {mockImplementationOnce: (fn: () => never) => void}).mockImplementationOnce(() => {
 			throw new Error('boom: connection postgres://livos:DEEP-SECRET-XYZ@host/db failed')
 		})
 		try {
