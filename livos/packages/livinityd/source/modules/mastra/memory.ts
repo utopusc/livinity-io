@@ -16,7 +16,7 @@
  */
 
 import {Memory} from '@mastra/memory'
-import {PgStore, PgVector} from '@mastra/pg'
+import {PostgresStore, PgVector} from '@mastra/pg'
 
 /**
  * Scrub user:password from a postgres:// URL for safe logging.
@@ -49,7 +49,7 @@ export interface LivOSMemoryDeps {
  */
 export function createLivOSMemory(deps: LivOSMemoryDeps): Memory {
 	try {
-		const storage = new PgStore({connectionString: deps.databaseUrl} as never)
+		const storage = new PostgresStore({connectionString: deps.databaseUrl} as never)
 		const vector = new PgVector({
 			connectionString: deps.databaseUrl,
 			indexConfig: {type: 'hnsw', metric: 'dotproduct'},
