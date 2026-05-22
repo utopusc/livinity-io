@@ -2608,7 +2608,7 @@ Plans:
 
 ---
 
-### Phase 195: xAI OAuth Onboarding (Replace Claude Setup) — 🟡 IN PROGRESS 2026-05-22 (3/5 plans shipped — Wave 1 + first Wave 2 plan complete)
+### Phase 195: xAI OAuth Onboarding (Replace Claude Setup) — ✅ CODE-COMPLETE 2026-05-22 (5/5 plans shipped — all waves done)
 
 **Goal:** Replace the static "Sign in with Claude" placeholder in `features/onboarding-flow/steps/connect-ai-step.tsx` with a real OAuth flow. Backend spawns `opencode auth login -p xai` as a hidden child process, extracts the xAI device-code URL from stdout, returns it to the frontend. Frontend opens URL in a new browser tab; backend long-polls `~/.local/share/opencode/auth.json` for the captured xai entry. On success, exposes credentials via a new `XaiCredentialsService` consumable by the future LangGraph agent + new lean Livinity broker. All OpenCode mechanics hidden from the user — they only see "Sign in with xAI" → "✓ Connected as SuperGrok Tier N".
 
@@ -2627,8 +2627,8 @@ Plans:
 - [x] 195-01-PLAN.md — XaiAuthFlowService: OpenCode CLI wrapper, stdout URL extraction (Wave 1) — ✅ CODE-COMPLETE 2026-05-22 (15 vitest PASS, 6 NEW files, sacred SHA preserved 2/2 across commits 57679789 + 82cf91be)
 - [x] 195-02-PLAN.md — XaiCredentialsService: token store, JWT decode, background refresh (Wave 1) — ✅ CODE-COMPLETE 2026-05-22 (24 vitest PASS, 8 NEW files, single-flight refresh + PID-suffixed atomic auth.json writes, sacred SHA preserved 2/2 across commits abaee743 + 4d1572f1)
 - [x] 195-03-PLAN.md — tRPC `auth.xai.{start,status,waitForCompletion,disconnect}` + httpOnlyPaths (Wave 2, depends 195-01 + 195-02) — ✅ CODE-COMPLETE 2026-05-22 (5 vitest PASS, 2 NEW files [xai-auth-router.ts + test] + 2 MOD [trpc/index.ts mounts under auth.xai.*, common.ts adds 4 httpOnlyPaths entries], 4/4 procedures adminProcedure-gated T-195-03-01, flowId via crypto.randomUUID T-195-03-02, zero new TS errors, sacred SHA preserved 2/2 across commits 730e1177 + 92fbc557)
-- [ ] 195-04-PLAN.md — `connect-ai-step.tsx` replacement: state machine, `window.open(url)`, long-poll status (Wave 3, depends 195-03)
-- [ ] 195-05-PLAN.md — `xai-provider/` scaffold: OpenAI-compatible client, 401 refresh+retry, voice rejection errors (Wave 2, depends 195-02)
+- [x] 195-04-PLAN.md — `connect-ai-step.tsx` replacement: state machine, `window.open(url)`, long-poll status (Wave 3, depends 195-03) — ✅ CODE-COMPLETE 2026-05-22 (7/7 vitest PASS in 110 ms, 2 commits b58bc1aa + 16826b26, 370 LOC component + 367 LOC test = 737 LOC; 4 STRIDE mitigations wired AND tested [T-195-04-01 URL allow-list via `new URL().hostname` strict equality, T-195-04-02 10-min watchdog `setTimeout(600_000)`, T-195-04-03 `noopener,noreferrer` on every window.open, T-195-04-04 connected-only-when-`status.connected === true`]; D-NO-NEW-DEPS preserved via react-dom/client harness; vite build green 41.9s; sacred SHA preserved 2/2; 17/17 acceptance criteria PASS)
+- [x] 195-05-PLAN.md — `xai-provider/` scaffold: OpenAI-compatible client, 401 refresh+retry, voice rejection errors (Wave 2, depends 195-02) — ✅ CODE-COMPLETE 2026-05-22 (7 vitest PASS, 5 NEW files under livos/packages/livinityd/source/modules/xai-provider/, commits ca1540b9 + eafa3a56, sacred SHA preserved 2/2)
 
 ---
 
