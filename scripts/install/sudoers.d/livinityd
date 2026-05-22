@@ -51,3 +51,7 @@ bruce ALL=(root) NOPASSWD: LIVINITYD_CHOWN_DOCKER_DATA, LIVINITYD_XVFB, LIVINITY
 # without operator action, and v38.4 polish will drop the `sudo -u bruce`
 # prefixes from the source code (then these aliases can be retired).
 bruce ALL=(bruce) NOPASSWD: LIVINITYD_LAUNCH_CHROME, LIVINITYD_GOOGLE_CHROME, LIVINITYD_XVFB, LIVINITYD_X11VNC, LIVINITYD_XDOTOOL
+
+# 23. Phase 196-05 — onboarding locale-timezone step ships timedatectl set-timezone
+Cmnd_Alias LIVINITYD_TIMEDATECTL = /usr/bin/timedatectl set-timezone *
+bruce ALL=(root) NOPASSWD: LIVINITYD_TIMEDATECTL
