@@ -1,0 +1,18 @@
+/**
+ * Phase 196-04 — locale module barrel.
+ *
+ * Public surface consumed by:
+ *   - server/trpc/setup-router.ts (zod schema gates region values via REGIONS)
+ *   - server/trpc/setup-router.ts (optionally calls countryToRegion if a
+ *     CF-IPCountry header makes it into ctx in a future plan)
+ *   - ui/src/features/onboarding-flow/steps/region-step.tsx (client-side
+ *     mirror — ships its OWN small timezone copy; this barrel exists so
+ *     server-side render or any future SSR path can import the full table).
+ */
+
+export {
+	REGIONS,
+	countryToRegion,
+	timezoneToRegion,
+} from './region-suggestion.js'
+export type {Region} from './region-suggestion.js'
