@@ -115,6 +115,16 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/terminal',
 	},
+	// Phase 197-06 — Liv AI Dock app. Clicking the icon opens a window at
+	// /liv-ai, which mounts LivAiChatWindow. Plan 197-05's mastra.agent.*
+	// tRPC namespace powers the chat (stream / approve / cancel / threads).
+	{
+		id: 'LIVINITY_liv-ai',
+		name: 'Liv AI',
+		icon: '/figma-exports/liv-ai.svg',
+		systemApp: true,
+		systemAppTo: '/liv-ai',
+	},
 ] as const satisfies readonly AppT[]
 
 export const systemAppsKeyed = keyBy(systemApps, 'id')
