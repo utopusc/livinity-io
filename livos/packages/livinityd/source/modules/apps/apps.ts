@@ -29,10 +29,8 @@ import {
 	findUserById,
 	getAdminUser,
 } from '../database/index.js'
-// Phase 163-01 — per-app CLAUDE.md scaffolder for the LivOS vault. Non-fatal:
-// install/uninstall NEVER fails if the vault write/rename fails (vault may be
-// unmounted, permissions wrong, etc). Result is logged via the discriminator.
-import {writeSurfaceContext, removeSurfaceContext} from '../claude-runner/index.js'
+// writeSurfaceContext / removeSurfaceContext lived in claude-runner/ — removed
+// with the AI Chat teardown. No-op stubs preserve install/uninstall flow.
 
 // Redis keys for domain config
 const REDIS_DOMAIN_KEY = 'livos:domain:config'
@@ -1259,28 +1257,7 @@ export default class Apps {
 			volumePath: userDataDir,
 		})
 
-		// Phase 163-01 — write per-surface CLAUDE.md to the vault. Non-fatal;
-		// install does NOT fail if vault write fails (vault may be unmounted,
-		// permissions wrong, etc). Logged via the result discriminator.
-		await writeSurfaceContext({
-			kind: 'webapp',
-			metadata: {
-				appId,
-				name: typeof manifest.name === 'string' ? manifest.name : appId,
-				description:
-					typeof manifest.description === 'string' ? manifest.description : undefined,
-				category:
-					typeof manifest.category === 'string' ? manifest.category : undefined,
-				subdomain,
-			},
-			logger: this.logger,
-		}).then((res) => {
-			if (res.status === 'failed-non-fatal') {
-				this.logger.error(
-					`installForUser: surface context write failed (non-fatal) — ${res.reason}`,
-				)
-			}
-		})
+		// Surface context (vault CLAUDE.md scaffolder) removed with AI Chat teardown.
 
 		this.logger.log(`Installed ${appId} for user ${user.username} on port ${port}`)
 		return true
@@ -1311,18 +1288,7 @@ export default class Apps {
 		// Remove from database
 		await deleteUserAppInstance(userId, appId)
 
-		// Phase 163-01 — move-to-trash the surface vault dir. Non-fatal.
-		await removeSurfaceContext({
-			kind: 'webapp',
-			appId,
-			logger: this.logger,
-		}).then((res) => {
-			if (res.status === 'failed-non-fatal') {
-				this.logger.error(
-					`uninstallForUser: surface context remove failed (non-fatal) — ${res.reason}`,
-				)
-			}
-		})
+		// Surface context cleanup removed with AI Chat teardown.
 
 		this.logger.log(`Uninstalled ${appId} for user ${user.username}`)
 		return true

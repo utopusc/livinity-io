@@ -25,9 +25,8 @@ import {
 	type Section,
 } from './install-contracts.js'
 import {NativeInstaller} from './native-installer.js'
-import {AiInstaller} from './ai-installer.js'
+import {AiInstaller, type McpConfigManagerLike} from './ai-installer.js'
 import type {NativeAppConfigStore} from './native-app-config.js'
-import type {McpConfigManagerLike} from '../computer-use/luse-mcp-config.js'
 
 // ─── Module-scope singletons ─────────────────────────────────────────────
 

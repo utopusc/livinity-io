@@ -45,9 +45,8 @@ import {
 	fail,
 	progressFactory,
 } from './install-contracts.js'
-// Phase 163-01 — per-app CLAUDE.md scaffolder. Non-fatal: install/uninstall
-// NEVER fails if the vault write/rename fails.
-import {writeSurfaceContext, removeSurfaceContext} from '../claude-runner/index.js'
+// writeSurfaceContext / removeSurfaceContext lived in claude-runner/ — removed
+// with the AI Chat teardown. Install/uninstall now skip vault scaffolding.
 import {
 	NativeAppConfigStore,
 	nativeAppConfigSchema,
@@ -349,27 +348,7 @@ export class NativeInstaller implements InstallHandler<'native'> {
 				),
 			)
 
-		// Phase 163-01 — write per-surface CLAUDE.md for the native app.
-		// Non-fatal: install does not fail if vault write fails.
-		await writeSurfaceContext({
-			kind: 'native',
-			metadata: {
-				appId: app.id,
-				name: app.name,
-				binaryPath: manifest.launch.binaryPath,
-				appSpecificHint: manifest.desktopEntry.comment,
-			},
-			logger: {
-				log: (m) => ctx.logger.info(m),
-				error: (m, err) => ctx.logger.error(m, err),
-			},
-		}).then((res) => {
-			if (res.status === 'failed-non-fatal') {
-				ctx.logger.warn(
-					`NativeInstaller.install: surface context write failed (non-fatal) — ${res.reason}`,
-				)
-			}
-		})
+		// Surface context write removed with AI Chat teardown.
 
 		progress(100, 'Done', true)
 		return ok(app.id, 'native', {
@@ -419,22 +398,7 @@ export class NativeInstaller implements InstallHandler<'native'> {
 		const appimagePath = path.join(homeDir, '.local/bin', appId)
 		await fs.unlink(appimagePath).catch(() => {})
 
-		// Phase 163-01 — move-to-trash the surface vault dir for this
-		// native app. Non-fatal.
-		await removeSurfaceContext({
-			kind: 'native',
-			appId,
-			logger: {
-				log: (m) => ctx.logger.info(m),
-				error: (m, err) => ctx.logger.error(m, err),
-			},
-		}).then((res) => {
-			if (res.status === 'failed-non-fatal') {
-				ctx.logger.warn(
-					`NativeInstaller.uninstall: surface context remove failed (non-fatal) — ${res.reason}`,
-				)
-			}
-		})
+		// Surface context remove skipped with AI Chat teardown.
 
 		progress(100, 'Done', true)
 		return ok(appId, 'native', {desktopEntryPath: desktopPath})

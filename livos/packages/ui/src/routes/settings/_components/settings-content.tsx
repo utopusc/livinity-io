@@ -102,41 +102,17 @@ import {useTheme} from '@/hooks/use-theme'
 import type {Theme} from '@/providers/theme-provider'
 import {TbSun, TbMoon, TbDeviceDesktop} from 'react-icons/tb'
 
-// Lazy-loaded DM Pairing content
-const DmPairingContentLazy = React.lazy(() =>
-	import('@/routes/settings/dm-pairing').then((m) => ({default: m.DmPairingContent})),
-)
-const UsageDashboardLazy = React.lazy(() =>
-	import('@/routes/settings/usage-dashboard').then((m) => ({default: m.UsageDashboard})),
-)
-const GmailContentLazy = React.lazy(() =>
-	import('@/routes/settings/gmail').then((m) => ({default: m.GmailContent})),
-)
-const WebhooksContentLazy = React.lazy(() =>
-	import('@/routes/settings/webhooks').then((m) => ({default: m.WebhooksContent})),
-)
-const VoiceContentLazy = React.lazy(() =>
-	import('@/routes/settings/voice').then((m) => ({default: m.VoiceContent})),
-)
+// DM Pairing / Usage / Gmail / Webhooks / Voice sections removed with AI Chat teardown.
 const UsersSectionLazy = React.lazy(() =>
 	import('@/routes/settings/users').then((m) => ({default: m.UsersSection})),
 )
 const AdminDevicesSectionLazy = React.lazy(() =>
 	import('./admin-devices-section').then((m) => ({default: m.AdminDevicesSection})),
 )
-const MemorySectionLazy = React.lazy(() =>
-	import('@/routes/settings/memory').then((m) => ({default: m.MemorySection})),
-)
-const AiConfigLazy = React.lazy(() => import('@/routes/settings/ai-config'))
-// Phase 76 / Plan 06 (MARKET-07) — Liv Agent thin settings page (D-12).
-const LivAgentLazy = React.lazy(() => import('@/routes/settings/liv-agent'))
+// AI-chat-specific settings (memory / ai-config / liv-agent / autonomous-agents /
+// ai-chat-settings) removed with the AI Chat teardown.
 // Phase 102-07 — Chrome Master Login (D-102-MASTER-LOGIN-UI).
 const ChromeMasterLazy = React.lazy(() => import('@/routes/settings/chrome-master'))
-// Phase 165-02 — Autonomous agents panel (list, toggle, runNow, budget cap editor).
-// Phase 182-01: renamed label to "Scheduled Agents" (D-V38-M).
-const AutonomousAgentsLazy = React.lazy(() => import('@/routes/settings/autonomous-agents'))
-// Phase 182-03 — AI Chat Settings (CC PTY session config).
-const AiChatSettingsLazy = React.lazy(() => import('@/routes/settings/ai-chat-settings'))
 // Phase 182-04 — MCP Servers management panel.
 const McpServersLazy = React.lazy(() => import('@/routes/settings/mcp-servers'))
 
@@ -151,33 +127,21 @@ type SettingsSection =
 	| 'admin-devices'
 	| 'wallpaper'
 	| '2fa'
-	| 'ai-config'
-	| 'liv-agent'
 	| 'chrome-master'
-	// 'chat-backend' removed — Phase 182-01 (D-V38-L)
-	| 'autonomous-agents'
-	| 'ai-chat-settings'
 	| 'mcp-servers'
-	| 'integrations'
-	| 'gmail'
-	| 'dm-pairing'
-	| 'usage'
-	| 'webhooks'
-	| 'voice'
 	| 'my-domains'
 	| 'backups'
 	| 'migration'
 	| 'language'
 	| 'troubleshoot'
 	| 'advanced'
-	| 'memory'
 	| 'scheduler'
 	| 'software-update'
 	// v29.4 Phase 47 Plan 05 — AI Diagnostics admin section.
 	| 'diagnostics'
 
 // Phase 182-02 — Group-header sidebar (D-V38-M): 4 visual groups + footer cluster.
-type SettingsGroup = 'personal' | 'workspace' | 'ai' | 'system'
+type SettingsGroup = 'personal' | 'workspace' | 'system'
 
 interface MenuItem {
 	id: SettingsSection
@@ -197,17 +161,8 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'wallpaper',        group: 'personal', icon: TbPhoto,         label: 'Theme',             description: 'Wallpaper & accent color'},
 	{id: 'language',         group: 'personal', icon: TbLanguage,      label: 'Language',          description: 'Interface language'},
 	{id: '2fa',              group: 'personal', icon: TbShield,        label: '2FA',               description: 'Two-factor authentication'},
-	{id: 'voice',            group: 'personal', icon: TbMicrophone,    label: 'Voice',             description: 'Push-to-talk voice mode'},
 	// ── WORKSPACE ─────────────────────────────────────────────────────
-	{id: 'memory',           group: 'workspace', icon: TbBrain,        label: 'Memory',            description: 'AI memory & conversations'},
-	{id: 'usage',            group: 'workspace', icon: TbChartBar,     label: 'Usage',             description: 'Token usage & cost tracking'},
-	{id: 'integrations',     group: 'workspace', icon: TbPlug,         label: 'Integrations',      description: 'Channels, DM security & webhooks'},
-	{id: 'gmail',            group: 'workspace', icon: TbMail,         label: 'Gmail',             description: 'Email integration & OAuth'},
-	// ── AI ────────────────────────────────────────────────────────────
-	{id: 'ai-config',        group: 'ai', icon: TbKey,                 label: 'AI Configuration',  description: 'AI providers & model',                    adminOnly: true},
-	{id: 'ai-chat-settings', group: 'ai', icon: TbMessages,            label: 'AI Chat Settings',  description: 'CC PTY session config & permissions',     adminOnly: true},
-	{id: 'mcp-servers',      group: 'ai', icon: TbPlugConnected,       label: 'MCP Servers',       description: 'Manage Model Context Protocol servers',   adminOnly: true},
-	{id: 'autonomous-agents',group: 'ai', icon: TbRobot,               label: 'Scheduled Agents',  description: 'Scheduled agents & daily budget cap',     adminOnly: true},
+	{id: 'mcp-servers',      group: 'workspace', icon: TbPlugConnected, label: 'MCP Servers',      description: 'Manage Model Context Protocol servers',   adminOnly: true},
 	// ── SYSTEM ────────────────────────────────────────────────────────
 	{id: 'users',            group: 'system', icon: TbUsers,           label: 'Users',             description: 'Manage users & invites',                  adminOnly: true},
 	{id: 'admin-devices',    group: 'system', icon: TbServer2,         label: 'Devices',           description: 'All devices across all users',            adminOnly: true},
@@ -221,12 +176,12 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'advanced',         group: 'system', icon: TbSettings,        label: 'Advanced',          description: 'Power-user controls',                     adminOnly: true, footer: true},
 ]
 
-// Phase 182-02 — Group ordering + labels for sidebar rendering.
-const GROUP_ORDER: SettingsGroup[] = ['personal', 'workspace', 'ai', 'system']
+// Phase 182-02 — Group ordering + labels for sidebar rendering. (AI Chat
+// teardown 2026-05-21: 'workspace' kept for MCP Servers only; 'ai' removed.)
+const GROUP_ORDER: SettingsGroup[] = ['personal', 'workspace', 'system']
 const GROUP_LABELS: Record<SettingsGroup, string> = {
 	personal: 'PERSONAL',
 	workspace: 'WORKSPACE',
-	ai: 'AI',
 	system: 'SYSTEM',
 }
 
@@ -568,31 +523,13 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <WallpaperSection />
 		case '2fa':
 			return <TwoFaSection />
-		case 'ai-config':
-			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AiConfigLazy /></Suspense>
-		case 'liv-agent':
-			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><LivAgentLazy /></Suspense>
 		case 'chrome-master':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><ChromeMasterLazy /></Suspense>
-		// 'chat-backend' removed — Phase 182-01 (D-V38-L)
-		case 'ai-chat-settings':
-			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AiChatSettingsLazy /></Suspense>
 		case 'mcp-servers':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><McpServersLazy /></Suspense>
-		case 'autonomous-agents':
-			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AutonomousAgentsLazy /></Suspense>
-		case 'integrations':
-			return <IntegrationsSection />
-		case 'gmail':
-			return <GmailSection />
-		case 'dm-pairing':
-			return <DmPairingSection />
-		case 'usage':
-			return <UsageSection />
-		case 'webhooks':
-			return <WebhooksSection />
-		case 'voice':
-			return <VoiceSection />
+		// ai-config / liv-agent / ai-chat-settings / autonomous-agents / integrations
+		// / gmail / dm-pairing / usage / webhooks / voice / memory cases removed
+		// with the AI Chat teardown.
 		case 'my-domains':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><MyDomainsSectionLazy /></Suspense>
 		case 'scheduler':
@@ -607,8 +544,6 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <TroubleshootSection />
 		case 'advanced':
 			return <AdvancedSection />
-		case 'memory':
-			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><MemorySectionLazy /></Suspense>
 		case 'software-update':
 			return <SoftwareUpdateSection />
 		case 'diagnostics':
@@ -1026,564 +961,9 @@ function TwoFaSection() {
 	)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AI Configuration Section
-// ─────────────────────────────────────────────────────────────────────────────
+// AI Configuration / Integrations / Gmail / DM Pairing / Usage /
+// Webhooks / Voice sections removed with the AI Chat teardown.
 
-function AiConfigSection() {
-	const kimiStatusQ = trpcReact.ai.getKimiStatus.useQuery()
-	const utils = trpcReact.useUtils()
-	const [loginSession, setLoginSession] = useState<{
-		sessionId: string
-		verificationUrl: string
-		userCode: string
-	} | null>(null)
-
-	const isConnected = kimiStatusQ.data?.authenticated ?? false
-
-	const loginMutation = trpcReact.ai.kimiLogin.useMutation({
-		onSuccess: (data) => {
-			setLoginSession(data)
-		},
-	})
-
-	const logoutMutation = trpcReact.ai.kimiLogout.useMutation({
-		onSuccess: () => {
-			setLoginSession(null)
-			utils.ai.getKimiStatus.invalidate()
-		},
-	})
-
-	// Poll login session for auth completion
-	const pollQ = trpcReact.ai.kimiLoginPoll.useQuery(
-		{sessionId: loginSession?.sessionId ?? ''},
-		{enabled: !!loginSession, refetchInterval: 2000},
-	)
-
-	// When poll returns success or status becomes connected, clear login session
-	useEffect(() => {
-		if (pollQ.data?.status === 'success' || (isConnected && loginSession)) {
-			setLoginSession(null)
-			utils.ai.getKimiStatus.invalidate()
-		}
-	}, [pollQ.data?.status, isConnected, loginSession, utils.ai.getKimiStatus])
-
-	return (
-		<div className='max-w-full space-y-4'>
-			<h3 className='text-body font-medium text-text-primary'>Kimi AI</h3>
-			<p className='text-body-sm text-text-secondary'>
-				Sign in with your Kimi account to enable AI features.
-			</p>
-
-			<div className={cn(
-				'rounded-radius-md border p-4 space-y-3',
-				isConnected ? 'border-brand/50 bg-brand/5' : 'border-border-default bg-surface-base'
-			)}>
-				{kimiStatusQ.isLoading ? (
-					<div className='flex items-center gap-2 text-body-sm text-text-secondary'>
-						<TbLoader2 className='h-4 w-4 animate-spin' />
-						Checking status...
-					</div>
-				) : isConnected ? (
-					<div className='space-y-3'>
-						<div className='flex items-center gap-2 text-body-sm text-accent-green'>
-							<TbCircleCheck className='h-4 w-4' />
-							Connected to Kimi
-						</div>
-						<Button
-							variant='secondary'
-							size='sm'
-							onClick={() => logoutMutation.mutate()}
-							disabled={logoutMutation.isPending}
-						>
-							{logoutMutation.isPending ? (
-								<><TbLoader2 className='h-4 w-4 animate-spin' /> Signing out...</>
-							) : (
-								<><TbLogout className='h-4 w-4' /> Sign Out</>
-							)}
-						</Button>
-						{logoutMutation.isError && (
-							<p className='text-caption text-accent-red'>{logoutMutation.error.message}</p>
-						)}
-					</div>
-				) : loginSession ? (
-					<div className='space-y-3'>
-						<div className='flex items-center gap-2 text-body-sm text-accent-blue'>
-							<TbLoader2 className='h-4 w-4 animate-spin' />
-							Waiting for authorization...
-						</div>
-						<p className='text-caption text-text-secondary'>
-							Open the link and enter code: <span className='font-mono font-bold'>{loginSession.userCode}</span>
-						</p>
-						<a
-							href={loginSession.verificationUrl}
-							target='_blank'
-							rel='noopener noreferrer'
-							className='block'
-						>
-							<Button variant='primary' size='sm' className='w-full'>
-								Open Kimi Authorization
-							</Button>
-						</a>
-						<Button variant='secondary' size='sm' onClick={() => setLoginSession(null)} className='w-full'>
-							Cancel
-						</Button>
-					</div>
-				) : (
-					<div className='space-y-3'>
-						<div className='flex items-center gap-2 text-body-sm text-accent-amber'>
-							<TbAlertCircle className='h-4 w-4' />
-							Not connected
-						</div>
-						<Button
-							variant='primary'
-							size='sm'
-							onClick={() => loginMutation.mutate()}
-							disabled={loginMutation.isPending}
-						>
-							{loginMutation.isPending ? (
-								<><TbLoader2 className='h-4 w-4 animate-spin' /> Starting...</>
-							) : (
-								<><TbLogin className='h-4 w-4' /> Sign in with Kimi</>
-							)}
-						</Button>
-						{loginMutation.isError && (
-							<p className='text-caption text-accent-red'>{loginMutation.error.message}</p>
-						)}
-					</div>
-				)}
-			</div>
-		</div>
-	)
-}
-
-/* NexusConfigSection removed (SDK-09) — Claude Agent SDK handles all settings natively */
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Integrations Section
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface ChannelStatus {
-	enabled: boolean
-	connected: boolean
-	error?: string
-	lastConnect?: string
-	botName?: string
-}
-
-// v36 sidebar consolidation 2026-05-15 — Integrations is the consolidated home
-// for everything chat-channel-shaped. Three top-level tabs:
-//   Channels (Telegram / Discord / WhatsApp)
-//   DM Security
-//   Webhooks
-function IntegrationsSection() {
-	const [activeTab, setActiveTab] = useState<'channels' | 'dm-security' | 'webhooks'>('channels')
-
-	return (
-		<div>
-			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'channels' | 'dm-security' | 'webhooks')}>
-				<TabsList className='grid w-full grid-cols-3 mb-4'>
-					<TabsTrigger value='channels' className='flex items-center gap-1.5'>
-						<TbPlug className='h-4 w-4' />
-						Channels
-					</TabsTrigger>
-					<TabsTrigger value='dm-security' className='flex items-center gap-1.5'>
-						<TbShield className='h-4 w-4' />
-						DM Security
-					</TabsTrigger>
-					<TabsTrigger value='webhooks' className='flex items-center gap-1.5'>
-						<TbWebhook className='h-4 w-4' />
-						Webhooks
-					</TabsTrigger>
-				</TabsList>
-
-				<TabsContent value='channels'><ChannelsPanel /></TabsContent>
-				<TabsContent value='dm-security'><DmPairingSection /></TabsContent>
-				<TabsContent value='webhooks'><WebhooksSection /></TabsContent>
-			</Tabs>
-		</div>
-	)
-}
-
-function ChannelsPanel() {
-	const [activeChannel, setActiveChannel] = useState<'telegram' | 'discord' | 'whatsapp'>('telegram')
-
-	return (
-		<Tabs value={activeChannel} onValueChange={(v) => setActiveChannel(v as 'telegram' | 'discord' | 'whatsapp')}>
-			<TabsList className='grid w-full grid-cols-3 mb-4'>
-				<TabsTrigger value='telegram' className='flex items-center gap-1.5'>
-					<TbBrandTelegram className='h-4 w-4 text-sky-400' />
-					Telegram
-				</TabsTrigger>
-				<TabsTrigger value='discord' className='flex items-center gap-1.5'>
-					<TbBrandDiscord className='h-4 w-4 text-indigo-400' />
-					Discord
-				</TabsTrigger>
-				<TabsTrigger value='whatsapp' className='flex items-center gap-1.5'>
-					<TbBrandWhatsapp className='h-4 w-4 text-accent-green' />
-					WhatsApp
-				</TabsTrigger>
-			</TabsList>
-
-			<TabsContent value='telegram'><TelegramPanel /></TabsContent>
-			<TabsContent value='discord'><DiscordPanel /></TabsContent>
-			<TabsContent value='whatsapp'><WhatsAppPanel /></TabsContent>
-		</Tabs>
-	)
-}
-
-function TelegramPanel() {
-	const [token, setToken] = useState('')
-	const [showToken, setShowToken] = useState(false)
-
-	const configQ = trpcReact.ai.getIntegrationConfig.useQuery({channel: 'telegram'})
-	const statusQ = trpcReact.ai.getIntegrationStatus.useQuery({channel: 'telegram'})
-	const saveMutation = trpcReact.ai.saveIntegrationConfig.useMutation()
-	const utils = trpcReact.useUtils()
-
-	useEffect(() => {
-		if (configQ.data?.token) setToken(configQ.data.token)
-	}, [configQ.data])
-
-	const status = statusQ.data as ChannelStatus | undefined
-
-	const handleSave = async () => {
-		await saveMutation.mutateAsync({channel: 'telegram', config: {token, enabled: true}})
-		utils.ai.getIntegrationConfig.invalidate()
-		utils.ai.getIntegrationStatus.invalidate()
-	}
-
-	return (
-		<div className='space-y-4'>
-			{/* Status */}
-			<div className='rounded-radius-md border border-sky-500/30 bg-sky-500/10 p-4'>
-				<div className='flex items-center gap-3'>
-					<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-surface-2'>
-						<TbBrandTelegram className='h-6 w-6 text-sky-400' />
-					</div>
-					<div className='flex-1'>
-						<div className='text-body-lg font-semibold'>Telegram</div>
-						<div className='text-caption text-text-secondary'>Connect via BotFather token</div>
-					</div>
-					{status?.connected ? (
-						<div className='flex items-center gap-2 text-caption text-accent-green'>
-							<TbPlugConnected className='h-4 w-4' /> Connected
-						</div>
-					) : (
-						<div className='flex items-center gap-2 text-caption text-accent-red'>
-							<TbPlugConnectedX className='h-4 w-4' /> Disconnected
-						</div>
-					)}
-				</div>
-				{status?.botName && <div className='mt-2 text-caption text-text-secondary'>Bot: @{status.botName}</div>}
-			</div>
-
-			{/* Token Input */}
-			<div className='space-y-2'>
-				<label className='text-caption text-text-secondary'>Bot Token</label>
-				<div className='relative'>
-					<Input
-						type={showToken ? 'text' : 'password'}
-						value={token}
-						onChange={(e) => setToken(e.target.value)}
-						placeholder='123456789:ABCdef...'
-						className='pr-10'
-					/>
-					<button onClick={() => setShowToken(!showToken)} className='absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary'>
-						{showToken ? <TbEyeOff className='h-4 w-4' /> : <TbEye className='h-4 w-4' />}
-					</button>
-				</div>
-				<p className='text-caption-sm text-text-tertiary'>Create a bot with @BotFather and paste the token here</p>
-			</div>
-
-			<div className='flex gap-2'>
-				<Button variant='primary' className='flex-1' onClick={handleSave} disabled={!token || saveMutation.isPending}>
-					{saveMutation.isPending ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
-					Save & Connect
-				</Button>
-				{status?.enabled && (
-					<Button variant='destructive' onClick={() => saveMutation.mutateAsync({channel: 'telegram', config: {enabled: false}}).then(() => {
-						utils.ai.getIntegrationConfig.invalidate()
-						utils.ai.getIntegrationStatus.invalidate()
-					})}>
-						Disable
-					</Button>
-				)}
-			</div>
-		</div>
-	)
-}
-
-function DiscordPanel() {
-	const [token, setToken] = useState('')
-	const [showToken, setShowToken] = useState(false)
-
-	const configQ = trpcReact.ai.getIntegrationConfig.useQuery({channel: 'discord'})
-	const statusQ = trpcReact.ai.getIntegrationStatus.useQuery({channel: 'discord'})
-	const saveMutation = trpcReact.ai.saveIntegrationConfig.useMutation()
-	const utils = trpcReact.useUtils()
-
-	useEffect(() => {
-		if (configQ.data?.token) setToken(configQ.data.token)
-	}, [configQ.data])
-
-	const status = statusQ.data as ChannelStatus | undefined
-
-	const handleSave = async () => {
-		await saveMutation.mutateAsync({channel: 'discord', config: {token, enabled: true}})
-		utils.ai.getIntegrationConfig.invalidate()
-		utils.ai.getIntegrationStatus.invalidate()
-	}
-
-	return (
-		<div className='space-y-4'>
-			{/* Status */}
-			<div className='rounded-radius-md border border-indigo-500/30 bg-indigo-500/10 p-4'>
-				<div className='flex items-center gap-3'>
-					<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-surface-2'>
-						<TbBrandDiscord className='h-6 w-6 text-indigo-400' />
-					</div>
-					<div className='flex-1'>
-						<div className='text-body-lg font-semibold'>Discord</div>
-						<div className='text-caption text-text-secondary'>Connect your Discord bot</div>
-					</div>
-					{status?.connected ? (
-						<div className='flex items-center gap-2 text-caption text-accent-green'>
-							<TbPlugConnected className='h-4 w-4' /> Connected
-						</div>
-					) : (
-						<div className='flex items-center gap-2 text-caption text-accent-red'>
-							<TbPlugConnectedX className='h-4 w-4' /> Disconnected
-						</div>
-					)}
-				</div>
-				{status?.botName && <div className='mt-2 text-caption text-text-secondary'>Bot: {status.botName}</div>}
-			</div>
-
-			{/* Token Input */}
-			<div className='space-y-2'>
-				<label className='text-caption text-text-secondary'>Bot Token</label>
-				<div className='relative'>
-					<Input
-						type={showToken ? 'text' : 'password'}
-						value={token}
-						onChange={(e) => setToken(e.target.value)}
-						placeholder='Enter bot token...'
-						className='pr-10'
-					/>
-					<button onClick={() => setShowToken(!showToken)} className='absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary'>
-						{showToken ? <TbEyeOff className='h-4 w-4' /> : <TbEye className='h-4 w-4' />}
-					</button>
-				</div>
-				<p className='text-caption-sm text-text-tertiary'>Get your bot token from the Discord Developer Portal</p>
-			</div>
-
-			<div className='flex gap-2'>
-				<Button variant='primary' className='flex-1' onClick={handleSave} disabled={!token || saveMutation.isPending}>
-					{saveMutation.isPending ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
-					Save & Connect
-				</Button>
-				{status?.enabled && (
-					<Button variant='destructive' onClick={() => saveMutation.mutateAsync({channel: 'discord', config: {enabled: false}}).then(() => {
-						utils.ai.getIntegrationConfig.invalidate()
-						utils.ai.getIntegrationStatus.invalidate()
-					})}>
-						Disable
-					</Button>
-				)}
-			</div>
-		</div>
-	)
-}
-
-function WhatsAppPanel() {
-	const [isConnecting, setIsConnecting] = useState(false)
-
-	const statusQ = trpcReact.ai.whatsappGetStatus.useQuery(undefined, {
-		refetchInterval: isConnecting ? 3000 : 10000,
-	})
-	const qrQ = trpcReact.ai.whatsappGetQr.useQuery(undefined, {
-		enabled: isConnecting && !statusQ.data?.connected,
-		refetchInterval: 5000,
-	})
-	const connectMutation = trpcReact.ai.whatsappConnect.useMutation()
-	const disconnectMutation = trpcReact.ai.whatsappDisconnect.useMutation()
-	const utils = trpcReact.useUtils()
-
-	// Stop connecting mode once connected
-	useEffect(() => {
-		if (statusQ.data?.connected) {
-			setIsConnecting(false)
-		}
-	}, [statusQ.data?.connected])
-
-	const handleConnect = async () => {
-		setIsConnecting(true)
-		try {
-			await connectMutation.mutateAsync()
-		} catch {
-			setIsConnecting(false)
-		}
-	}
-
-	const handleDisconnect = async () => {
-		await disconnectMutation.mutateAsync()
-		setIsConnecting(false)
-		utils.ai.whatsappGetStatus.invalidate()
-	}
-
-	const status = statusQ.data as ChannelStatus | undefined
-	const isConnected = status?.connected ?? false
-
-	return (
-		<div className='space-y-4'>
-			{/* Status Card */}
-			<div className='rounded-radius-md border border-accent-green/30 bg-accent-green/10 p-4'>
-				<div className='flex items-center gap-3'>
-					<div className='flex h-10 w-10 items-center justify-center rounded-radius-sm bg-surface-2'>
-						<TbBrandWhatsapp className='h-6 w-6 text-accent-green' />
-					</div>
-					<div className='flex-1'>
-						<div className='text-body-lg font-semibold'>WhatsApp</div>
-						<div className='text-caption text-text-secondary'>Scan QR code to connect</div>
-					</div>
-					{isConnected ? (
-						<div className='flex items-center gap-2 text-caption text-accent-green'>
-							<TbPlugConnected className='h-4 w-4' /> Connected
-						</div>
-					) : (
-						<div className='flex items-center gap-2 text-caption text-accent-red'>
-							<TbPlugConnectedX className='h-4 w-4' /> Disconnected
-						</div>
-					)}
-				</div>
-				{status?.botName && (
-					<div className='mt-2 text-caption text-text-secondary'>Phone: {status.botName}</div>
-				)}
-				{status?.error && !isConnected && !isConnecting && (
-					<div className='mt-2 text-caption text-accent-red'>{status.error}</div>
-				)}
-			</div>
-
-			{/* QR Code Display — shown while connecting */}
-			{isConnecting && !isConnected && (
-				<div className='flex flex-col items-center gap-4 rounded-radius-md border border-border-default bg-surface-1 p-6'>
-					{qrQ.data?.qr ? (
-						<>
-							<img
-								src={qrQ.data.qr}
-								alt='WhatsApp QR Code'
-								className='h-[256px] w-[256px] rounded-radius-sm'
-							/>
-							<div className='space-y-1 text-center'>
-								<p className='text-body-sm font-medium text-text-primary'>Scan with your phone</p>
-								<p className='text-caption text-text-secondary'>
-									WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a Device
-								</p>
-							</div>
-						</>
-					) : (
-						<div className='flex flex-col items-center gap-2'>
-							<Loader2 className='h-8 w-8 animate-spin text-text-tertiary' />
-							<p className='text-caption text-text-secondary'>Starting WhatsApp... QR code will appear shortly</p>
-						</div>
-					)}
-				</div>
-			)}
-
-			{/* Action Buttons */}
-			<div className='space-y-2'>
-				{!isConnected && !isConnecting && (
-					<Button
-						variant='primary'
-						className='w-full'
-						onClick={handleConnect}
-						disabled={connectMutation.isPending}
-					>
-						{connectMutation.isPending ? (
-							<Loader2 className='mr-2 h-4 w-4 animate-spin' />
-						) : null}
-						Connect WhatsApp
-					</Button>
-				)}
-				{isConnecting && !isConnected && (
-					<Button
-						variant='secondary'
-						className='w-full'
-						onClick={() => setIsConnecting(false)}
-					>
-						Cancel
-					</Button>
-				)}
-				{isConnected && (
-					<Button
-						variant='destructive'
-						className='w-full'
-						onClick={handleDisconnect}
-						disabled={disconnectMutation.isPending}
-					>
-						{disconnectMutation.isPending ? (
-							<Loader2 className='mr-2 h-4 w-4 animate-spin' />
-						) : null}
-						Disconnect
-					</Button>
-				)}
-			</div>
-		</div>
-	)
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DM Pairing Section
-// ─────────────────────────────────────────────────────────────────────────────
-
-function GmailSection() {
-	return (
-		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
-			<GmailContentLazy />
-		</Suspense>
-	)
-}
-
-function DmPairingSection() {
-	return (
-		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
-			<DmPairingContentLazy />
-		</Suspense>
-	)
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Usage Section
-// ─────────────────────────────────────────────────────────────────────────────
-
-function UsageSection() {
-	return (
-		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
-			<UsageDashboardLazy />
-		</Suspense>
-	)
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Webhooks Section
-// ─────────────────────────────────────────────────────────────────────────────
-
-function WebhooksSection() {
-	return (
-		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
-			<WebhooksContentLazy />
-		</Suspense>
-	)
-}
-
-function VoiceSection() {
-	return (
-		<Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}>
-			<VoiceContentLazy />
-		</Suspense>
-	)
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Other Sections (Simplified)

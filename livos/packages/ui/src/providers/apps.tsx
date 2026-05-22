@@ -73,14 +73,7 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/app-store',
 	},
-	// LivOS AI pages
-	{
-		id: 'LIVINITY_ai-chat',
-		name: 'AI Chat',
-		icon: '/figma-exports/dock-ai-chat.svg',
-		systemApp: true,
-		systemAppTo: '/ai-chat',
-	},
+	// AI Chat app entry removed with AI Chat teardown.
 	// Phase 24-01 — replaced the legacy server-control app id with LIVINITY_docker.
 	// Final routes/server-control directory delete completed in Phase 27-02.
 	{

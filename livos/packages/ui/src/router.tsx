@@ -5,7 +5,6 @@ import {AppleSpotlight} from '@/components/apple-spotlight'
 import {InstallPromptBanner} from '@/components/install-prompt-banner'
 import {UpdateNotification} from '@/components/update-notification'
 import {CmdkProvider, useCmdkOpen} from '@/components/cmdk'
-import {AiQuickProvider, AiQuickDialog} from '@/components/ai-quick'
 import {ErrorBoundaryComponentFallback} from '@/components/ui/error-boundary-component-fallback'
 import {filesRoutes} from '@/features/files/routes'
 import {DesktopContextMenu} from '@/modules/desktop/desktop-context-menu'
@@ -40,8 +39,7 @@ import {Settings} from './routes/settings'
 // Phase 76 / Plan 76-04 — Agent Marketplace route. Sibling to /app-store
 // inside the SheetLayout. Lazy-loaded to keep the initial bundle lean
 // and to mirror the existing app-store / community-app-store pattern.
-// NOTE: /agent-marketplace route kept for deep-links; /agents /marketplace routes REMOVED (v32-redo-stage1a)
-const AgentMarketplace = React.lazy(() => import('./routes/agent-marketplace'))
+// /agent-marketplace route removed with AI Chat teardown.
 const MultiUserLogin = React.lazy(() => import('./routes/login/index'))
 // Phase 135 — Livinity Onboarding (reference-aligned). 6 steps: Welcome,
 // Account (password or 2FA), Wallpaper, Personalize, Connect AI, All set.
@@ -90,13 +88,10 @@ export const router = createBrowserRouter([
 							<TopBar />
 							<MobileAppProvider>
 								<CmdkProvider>
-								<AiQuickProvider>
 									<DesktopContextMenu>
 										<Desktop />
 									</DesktopContextMenu>
 									<SpotlightConnected />
-									<AiQuickDialog />
-								</AiQuickProvider>
 								</CmdkProvider>
 								<Suspense>
 									<Outlet />

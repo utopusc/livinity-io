@@ -19,64 +19,19 @@ import EventBus from './modules/event-bus/event-bus.js'
 import Dbus from './modules/dbus/dbus.js'
 import Backups from './modules/backups/backups.js'
 import Scheduler from './modules/scheduler/index.js'
-import AiModule from './modules/ai/index.js'
+import RedisModule from './modules/redis-module.js'
 import TunnelClient from './modules/platform/tunnel-client.js'
 import {DeviceBridge} from './modules/devices/device-bridge.js'
 import {initDatabase, migrateFromYaml, closeDatabase} from './modules/database/index.js'
 import {seedLocalEnvironment} from './modules/docker/environments.js'
 import {seedBuiltinTools} from './modules/seed-builtin-tools.js'
-import {seedDefaultAliases} from './modules/livinity-broker/seed-default-aliases.js'
 import {drainInstallPendingRedisKeys} from './modules/drain-install-pending-redis.js'
-// Phase 162-01 — Vault scaffolder. Boot-time idempotent bootstrap of
-// /home/bruce/livinity-vault per master plan D-V34-D. Non-fatal on failure
-// (livinityd boots normally; chat falls back to legacy path via 162-02 flag).
-// Phase 162-03 — smokeAuthCheck SDK subscription-path probe at boot.
-// Phase 165-01 — IdleSessionReaper: aborts CC sessions whose last WS
-// message is older than `liv:config:idle_reap_min` minutes (default 30).
-// Polls every 5 min via setInterval. Reaper accesses session state ONLY
-// through ws-agent.ts's SessionActivityProvider interface — agent-session.ts
-// is UNCHANGED (Phase 165-01 quality gate).
-import {scaffoldVault, smokeAuthCheck, IdleSessionReaper} from './modules/claude-runner/index.js'
-import {createSessionActivityProvider} from './modules/server/ws-agent.js'
-// Phase 166 — Claude Code PTY backend (tmux + node-pty + WebSocket).
-// Boot wire-up site: AFTER scaffoldVault + smokeAuthCheck +
-// AutonomousScheduler.start + IdleSessionReaper.start; BEFORE
-// drainInstallPendingRedisKeys. tmux sessions OUTLIVE livinityd by design
-// (D-V35-A) — stop() detaches in-process pty handles but does NOT kill
-// the tmux sessions themselves. Phase 165-01 claude-runner/idle-reaper.ts
-// is BYTE-IDENTICAL — the new cc-pty/idle-reaper.ts is a SEPARATE file
-// mirroring the pattern, not modifying the original.
-import {CcPtyManager, SessionStore, CcPtyIdleReaper} from './modules/cc-pty/index.js'
-// Phase 171-05 — Vault Items store + PubSub wire-up. ItemStore is the
-// canonical v38 vault persistence; createItemStorePubSub wraps it so every
-// mutation publishes `liv:tree:updated` for cross-tab UI invalidation
-// (Phase 174 sidebar will consume). Boot site sits AFTER scaffoldVault()
-// (Phase 162-01 SACRED) and BEFORE the smokeAuthCheck() call to keep the
-// boot ordering stable for future phases. Non-fatal try/catch mirrors the
-// Phase 166 cc-pty wire-up precedent — livinityd MUST boot even when the
-// vault-items wire-up throws (tRPC `vault.items.*` returns
-// INTERNAL_SERVER_ERROR via the requireStore helper until next restart).
-import {ItemStore, createItemStorePubSub, resolveVaultRoot} from './modules/vault-items/index.js'
-import type {ItemStore as ItemStoreType} from './modules/vault-items/index.js'
-// Phase 177-03 — InboxReader (filesystem walker for per-agent inbox entries).
-// Imported directly (vault-items/index.ts barrel is sacred per Phase 171 freeze).
-import {InboxReader} from './modules/vault-items/inbox-reader.js'
-// Phase 176-01/176-03 — Liv scaffolders. Imported directly (vault-items barrel
-// index.ts is sacred per Phase 171 freeze — DO NOT add exports to that file).
-import {ensureLivRootAgent, ensureLivSkills} from './modules/vault-items/liv-scaffolder.js'
 // Phase 169-05 — Vault graph factory import is kept here (source/index.ts) for
 // grep visibility per the 169-05 sacred-guard contract; the actual app.use()
 // mount happens inside server/index.ts via the mountVaultGraphRoutes helper,
 // where livinityd.server.verifyToken is available for the auth middleware.
-// vaultRoot precedence: process.env.VAULT_ROOT → NODE_ENV=test → Mini PC default.
 import {createVaultGraphRouter} from './modules/vault-graph/routes.js'
 void createVaultGraphRouter // referenced by mountVaultGraphRoutes; explicit no-op keeps the symbol in grep results.
-// Phase 164-02 — Autonomous scheduler. Boot-time read of vault/livos-agents/*.md
-// + cron registration of every enabled agent. Gated by Redis flag
-// liv:config:autonomous_enabled (default false = no-op). Non-fatal on every
-// failure path. Architectural separation: spawns SDK query() directly, NOT
-// through liv-core's AgentSessionManager (agent-session.ts UNTOUCHED).
-import {AutonomousScheduler} from './modules/autonomous-scheduler/index.js'
 import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/api-keys/index.js'
 // Phase 104 plan 104-10 — LivOS → livinity.io heartbeat client. Wired AFTER
 // ai.start() so this.ai.redis is connected. Only armed when the operator
@@ -84,10 +39,6 @@ import {ApiKeyCache, createApiKeyCache, setSharedApiKeyCache} from './modules/ap
 // Redis key); otherwise we skip silently so plain LAN-only installs don't
 // spam the journal with "API key unavailable" warnings.
 import {startHeartbeat, REDIS_KEY_API_KEY_PATH, type StopHandle as HeartbeatStopHandle} from './modules/account/index.js'
-// Phase 71-05 — ComputerUseContainerManager wiring. Field added so the
-// desktop-gateway middleware (server/index.ts) and the computerUse tRPC
-// router (computer-use/routes.ts) can reach a shared lifecycle owner.
-import {ComputerUseContainerManager} from './modules/computer-use/container-manager.js'
 // Phase 93/98 — streaming subsystem + WebApp window manager. Singletons are
 // instantiated in start() AFTER ai.start() (StreamManager needs the boot-time
 // `vainfo` probe persisted to ai.redis as `liv:streaming:caps`).
@@ -116,7 +67,6 @@ import {DisplayAllocator} from './modules/streaming/display-allocator.js'
 // agent-runs.ts:52-58, 161-164. (Renamed P100-10-02 from bytebot per
 // D-100-10-B.)
 import {McpConfigManager} from '@liv/core/lib'
-import {DEFAULT_LUSE_MCP_SERVER_PATH} from './modules/computer-use/luse-mcp-config.js'
 // Phase 101-03 — Native-app config store. Backed by `this.ai.redis` so it
 // shares the same Redis connection (and pub-sub channel `liv:config:updated`)
 // used by McpConfigManager. Surfaces UUID-keyed CRUD at the
@@ -265,7 +215,7 @@ export default class Livinityd {
 	dbus: Dbus
 	backups: Backups
 	scheduler: Scheduler
-	ai: AiModule
+	ai: RedisModule
 	tunnelClient: TunnelClient
 	deviceBridge!: DeviceBridge
 	// Phase 59 (FR-BROKER-B1-03) — Bearer auth hot-path cache. Constructed in
@@ -285,12 +235,6 @@ export default class Livinityd {
 	// Undefined while the reaper has not been started (boot edge before
 	// streamManager is constructed, or post-stop).
 	private nativeAppIdleReaperStop?: () => void
-	// Phase 71-05 — upstream-bytebot desktop container lifecycle owner.
-	// Initialized in start() AFTER initDatabase() because the manager needs the pg pool.
-	// Optional because PostgreSQL may be unavailable on legacy YAML-only mode
-	// (initDatabase returns false). Consumers (desktop-gateway, computerUse
-	// tRPC router) gracefully no-op when undefined.
-	computerUseManager?: ComputerUseContainerManager
 	// Phase 93 — Streaming subsystem (T93-05 StreamManager). Optional because
 	// T93-11 wires the lifecycle in start(); this field is declared up-front so
 	// the /ws/stream/:id upgrade handler in server/index.ts can typecheck.
@@ -324,42 +268,6 @@ export default class Livinityd {
 	// plan 102-04 (window-manager rewrite) will consume this once the
 	// per-app spawn flow is rewritten.
 	profileSeeder: ProfileSeederHandle | null = null
-	// Phase 164-02 — Autonomous scheduler instance. Constructed in start()
-	// AFTER scaffoldVault() + smokeAuthCheck() (so the vault dir exists and
-	// the SDK auth has been probed) and BEFORE drainInstallPendingRedisKeys.
-	// Stays `undefined` if the constructor or `.start()` throw (non-fatal —
-	// livinityd boots normally and the rest of the daemon keeps running).
-	// stop() teardown is best-effort.
-	autonomousScheduler?: AutonomousScheduler
-	// Phase 165-01 — Idle CC session reaper. Constructed in start() AFTER
-	// this.autonomousScheduler.start() and BEFORE drainInstallPendingRedisKeys.
-	// Polls every 5 min; aborts AgentSessionManager sessions whose last WS
-	// message is older than `liv:config:idle_reap_min` minutes (default 30).
-	// Non-fatal: stays `undefined` if constructor / start() throw. Reaches
-	// session state through ws-agent.ts's createSessionActivityProvider() —
-	// liv-core agent-session.ts is UNCHANGED.
-	idleReaper?: IdleSessionReaper
-	// Phase 166-04 / 166-05 — CC PTY backend (tmux + node-pty + WebSocket).
-	// Instantiated in start() between IdleSessionReaper.start() and
-	// drainInstallPendingRedisKeys. tmux sessions OUTLIVE livinityd by design
-	// (D-V35-A) — ccPtyManager.stop() detaches in-process pty handles but
-	// does NOT kill the tmux sessions themselves. All three fields stay
-	// undefined when the wire-up block throws (tmux missing pre-Phase 170,
-	// Redis offline, etc.); /ws/cc-pty short-circuits with a "cc-pty backend
-	// not ready" error frame in that case.
-	ccPtySessionStore?: SessionStore
-	ccPtyManager?: CcPtyManager
-	ccPtyIdleReaper?: CcPtyIdleReaper
-	// Phase 171-05 — Vault Items store (file-backed, pub/sub-wrapped).
-	// Populated in start() AFTER scaffoldVault() succeeds. tRPC router
-	// `vault.items.*` (Phase 171-04) reads `ctx.livinityd.itemStore` and
-	// throws INTERNAL_SERVER_ERROR via its requireStore helper when this
-	// field is undefined (boot wire-up failed — see start() try/catch).
-	itemStore?: ItemStoreType
-	// Phase 177-03 — InboxReader for vault.inbox.* tRPC procedures.
-	// Populated in start() alongside itemStore. tRPC router procedures
-	// throw INTERNAL_SERVER_ERROR via requireInboxReader when undefined.
-	inboxReader?: InboxReader
 	isBackupRestoreFirstStart = false
 
 	constructor({
@@ -385,7 +293,7 @@ export default class Livinityd {
 		this.dbus = new Dbus(this)
 		this.backups = new Backups(this)
 		this.scheduler = new Scheduler({logger: this.logger})
-		this.ai = new AiModule({livinityd: this})
+		this.ai = new RedisModule({livinityd: this})
 		// TunnelClient is initialized in start() after ai.start() creates the Redis connection
 		this.tunnelClient = null as unknown as TunnelClient
 		// Phase 59 — Bearer auth cache. Construction is side-effect-free (only
@@ -479,28 +387,6 @@ export default class Livinityd {
 			this.ai.start(),
 		])
 
-		// Phase 71-05 — upstream-bytebot desktop container lifecycle. Initialized
-		// AFTER apps.start() (the manager re-uses apps.installForUser) and AFTER
-		// initDatabase() (manager needs the pg pool from 71-03's task-repository).
-		// Non-fatal — missing PG → manager stays undefined; desktop subdomain
-		// gateway and computerUse tRPC router gracefully no-op without it.
-		if (dbReady) {
-			try {
-				const pool = getPool()
-				if (pool) {
-					this.computerUseManager = new ComputerUseContainerManager({
-						apps: this.apps,
-						pool,
-						logger: this.logger,
-					})
-					this.computerUseManager.start()
-					this.logger.log('ComputerUseContainerManager started (5-min idle reaper armed)')
-				}
-			} catch (err) {
-				this.logger.error('Failed to start ComputerUseContainerManager (desktop subdomain disabled)', err)
-			}
-		}
-
 		// Phase 101-03 — Wire the NativeAppConfigStore now that this.ai.redis
 		// is live. Construction is side-effect-free (just stashes the redis
 		// reference), so we do it eagerly here BEFORE anything that might
@@ -534,219 +420,6 @@ export default class Livinityd {
 		} catch (err) {
 			// Non-fatal — boot continues; tools will be missing until next syncTools()
 			this.logger.error('Failed to seed builtin tools', err)
-		}
-
-		// Phase 61 Plan 03 D1 — boot-time seed of default broker model aliases.
-		// Uses SETNX so admin runtime edits via `redis-cli SET` survive reboot
-		// (FR-BROKER-D1-02). Non-fatal on failure — broker keeps working with
-		// the resolver's hardcoded fallback (claude-sonnet-4-6).
-		try {
-			await seedDefaultAliases(this.ai.redis)
-			this.logger.log('Seeded broker model aliases to livinity:broker:alias:*')
-		} catch (err) {
-			this.logger.error('Failed to seed broker model aliases', err)
-		}
-
-		// Bootstrap /home/bruce/livinity-vault. Idempotent — re-runs preserve
-		// user-edited files via fs.cp force:false. Non-fatal: if templates dir
-		// missing or chown fails, log + continue (chat falls back to legacy
-		// path via Plan 162-02 Redis flag).
-		// Phase 162-01 — vault scaffolder wire-up.
-		try {
-			const vaultResult = await scaffoldVault({
-				vaultPath: '/home/bruce/livinity-vault',
-				logger: {
-					log: (msg) => this.logger.log(msg),
-					error: (msg, err) => this.logger.error(msg, err),
-				},
-			})
-			this.logger.log(`vault-scaffolder: ${vaultResult.status}`)
-		} catch (err) {
-			// Defensive — vault scaffold returns a ScaffoldResult discriminator
-			// and should not throw, but if it does we MUST NOT block boot.
-			this.logger.error('vault-scaffolder: unexpected throw (non-fatal)', err as Error)
-		}
-
-		// Phase 176-01 — Liv root-agent system prompt scaffold (idempotent, non-fatal).
-		// Drops settings/liv-rootagent.md into the vault root using COPYFILE_EXCL so
-		// user edits survive across restarts. Site: AFTER scaffoldVault() so the
-		// vault dir exists; BEFORE vault-items wire-up (no dependency, but preserves
-		// boot ordering for future phases).
-		try {
-			const livScaffoldResult = await ensureLivRootAgent({
-				vaultRoot: resolveVaultRoot(),
-				logger: {log: (m) => this.logger.log(m), error: (m, e) => this.logger.error(m, e)},
-			})
-			if (livScaffoldResult.status === 'created') {
-				this.logger.log('[Phase 176-01] Liv root-agent system prompt scaffolded')
-			}
-		} catch (_e) {
-			// defensive — ensureLivRootAgent is non-fatal by contract
-		}
-
-		// Phase 176-03 — Liv subagent skills scaffold (idempotent, non-fatal).
-		// Copies 4 LivOS-native subagent .md files into <vaultRoot>/.claude/agents/.
-		try {
-			const skillsResult = await ensureLivSkills({
-				vaultRoot: resolveVaultRoot(),
-				logger: {log: (m) => this.logger.log(m), error: (m, e) => this.logger.error(m, e)},
-			})
-			if (skillsResult.status === 'created' || skillsResult.status === 'partial') {
-				this.logger.log(`[Phase 176-03] Liv skills scaffolded: ${skillsResult.created?.join(', ')}`)
-			}
-		} catch (_e) {
-			// defensive
-		}
-
-		// Phase 171-05 — Vault Items store + PubSub bridge wire-up. Boot
-		// site: AFTER scaffoldVault() (Phase 162-01 SACRED — vault dir
-		// must exist before items/ child dirs are written) and BEFORE
-		// smokeAuthCheck() so the store is ready when any subsequent
-		// boot step (autonomous scheduler / cc-pty / etc.) eventually
-		// reads it. Non-fatal try/catch matches the cc-pty wire-up
-		// precedent at lines 659-664: livinityd MUST boot even if the
-		// vault-items wire-up throws. resolveVaultRoot() reads
-		// LIV_VAULT_ROOT env (Phase 173 will set this on the systemd unit
-		// post-migration); fallback `/root/livinity-vault` matches the
-		// pre-migration steady state.
-		try {
-			const vaultRoot = resolveVaultRoot()
-			const baseStore = new ItemStore({vaultRoot})
-			this.itemStore = createItemStorePubSub(baseStore, this.ai.redis, {
-				log: (msg) => this.logger.log(msg),
-				error: (msg, err) => this.logger.error(msg, err),
-			})
-			// Phase 177-03 — InboxReader wired alongside itemStore.
-			this.inboxReader = new InboxReader({vaultRoot})
-			this.logger.log(`[vault-items] store wired (vaultRoot=${vaultRoot})`)
-		} catch (err) {
-			this.logger.error(
-				'[vault-items] boot wire-up failed (non-fatal — vault.items.* tRPC will throw INTERNAL_SERVER_ERROR until next restart)',
-				err as Error,
-			)
-		}
-
-		// Phase 162-03 — SDK subscription-path auth verifier. Non-blocking smoke
-		// check at boot. Writes liv:config:cc_auth_status = 'ok' | 'failed: <reason>'
-		// for the Settings UI (Phase 165 — pending). Detached — boot continues
-		// even if the SDK subprocess takes >10s, throws, or fails auth.
-		smokeAuthCheck({
-			redis: this.ai.redis,
-			vaultPath: '/home/bruce/livinity-vault',
-			model: 'claude-haiku-4-5',
-			logger: {
-				log: (msg) => this.logger.log(msg),
-				error: (msg, err) => this.logger.error(msg, err),
-			},
-		}).catch((err) => {
-			// Defensive — smokeAuthCheck returns AuthVerifierResult and should
-			// not throw, but if it does we MUST NOT block boot.
-			this.logger.error('[claude-runner/auth] unexpected throw (non-fatal)', err as Error)
-		})
-		// NOTE: no `await` — fire-and-forget. Boot continues immediately.
-
-		// Phase 164-02 — Autonomous scheduler wire-up. Boot-time read of
-		// `vault/livos-agents/*.md` + cron registration of every enabled
-		// agent. Gated by Redis flag `liv:config:autonomous_enabled` — when
-		// unset/false the scheduler is a no-op (zero tasks registered).
-		// Non-fatal on every failure path: vault missing, parse errors,
-		// Redis errors → log + boot continues normally. agent-session.ts is
-		// UNTOUCHED — autonomous spawns query() directly, not through
-		// AgentSessionManager (intentional architectural separation per
-		// CONTEXT.md D-V34-G).
-		//
-		// Site: AFTER smokeAuthCheck() so the SDK auth has been probed
-		// before we register any cron jobs that would try to spawn it.
-		// BEFORE drainInstallPendingRedisKeys so the autonomous boot
-		// telemetry lands before the install-pending drain mutates Redis.
-		try {
-			this.autonomousScheduler = new AutonomousScheduler({
-				redis: this.ai.redis,
-				vaultPath: '/home/bruce/livinity-vault',
-				logger: {
-					log: (msg) => this.logger.log(msg),
-					error: (msg, err) => this.logger.error(msg, err),
-				},
-			})
-			await this.autonomousScheduler.start()
-		} catch (err) {
-			this.logger.error(
-				'[autonomous-scheduler] unexpected throw (non-fatal)',
-				err as Error,
-			)
-		}
-
-		// Phase 165-01 — Idle CC session reaper wire-up. Polls every 5 min;
-		// aborts AgentSessionManager sessions whose last WS message is older
-		// than `liv:config:idle_reap_min` minutes (default 30). Architectural
-		// boundary: reaper reads session state through the SessionActivityProvider
-		// interface implemented by ws-agent.ts — liv-core agent-session.ts is
-		// UNCHANGED. Non-fatal on any throw (livinityd boots normally; the rest
-		// of the daemon keeps running). Site is locked AFTER the autonomous
-		// scheduler so the reaper telemetry lands after autonomous boot logs,
-		// and BEFORE drainInstallPendingRedisKeys so the boot ordering stays
-		// deterministic for v34.x.
-		try {
-			this.idleReaper = new IdleSessionReaper({
-				redis: this.ai.redis,
-				provider: createSessionActivityProvider(),
-				logger: {
-					log: (msg) => this.logger.log(msg),
-					error: (msg, err) => this.logger.error(msg, err),
-				},
-			})
-			this.idleReaper.start()
-		} catch (err) {
-			this.logger.error(
-				'[claude-runner/reaper] unexpected throw at start (non-fatal)',
-				err as Error,
-			)
-		}
-
-		// Phase 166-05 — CC PTY backend wire-up. Owns tmux/node-pty bridge for
-		// /ws/cc-pty (mounted in Plan 166-04). Boot order site: AFTER
-		// IdleSessionReaper.start() so the cc-pty reaper telemetry lands after
-		// the native CC reaper, BEFORE drainInstallPendingRedisKeys so the
-		// boot ordering stays stable. tmux sessions OUTLIVE livinityd (D-V35-A)
-		// — manager.stop() only detaches in-process pty handles. Non-fatal
-		// try/catch: livinityd MUST boot even if tmux is missing (Phase 170
-		// deploys tmux to Mini PC; pre-deploy boots log a warn and skip cc-pty
-		// until next restart). Idle threshold + cap read from Redis with
-		// sensible defaults (24h / 10 per D-V35-D / D-V35-H).
-		try {
-			const ccPtyVaultPath = '/home/bruce/livinity-vault'
-			const idleHoursRaw = await this.ai.redis.get('liv:config:cc_pty_idle_h')
-			const maxSessionsRaw = await this.ai.redis.get('liv:config:cc_pty_max_sessions')
-			const idleHours = idleHoursRaw ? Number(idleHoursRaw) : 24
-			const maxSessions = maxSessionsRaw ? Number(maxSessionsRaw) : 10
-			this.ccPtySessionStore = new SessionStore({vaultPath: ccPtyVaultPath})
-			this.ccPtyManager = new CcPtyManager({
-				vaultPath: ccPtyVaultPath,
-				redis: this.ai.redis,
-				logger: {
-					log: (msg) => this.logger.log(msg),
-					warn: (msg) => this.logger.log(msg),
-					error: (msg, err) => this.logger.error(msg, err),
-				},
-				idleHours: Number.isFinite(idleHours) && idleHours > 0 ? idleHours : 24,
-				maxSessions: Number.isFinite(maxSessions) && maxSessions > 0 ? maxSessions : 10,
-				store: this.ccPtySessionStore,
-			})
-			await this.ccPtyManager.start()
-			this.ccPtyIdleReaper = new CcPtyIdleReaper({
-				manager: this.ccPtyManager,
-				logger: {
-					log: (msg) => this.logger.log(msg),
-					warn: (msg) => this.logger.log(msg),
-					error: (msg, err) => this.logger.error(msg, err),
-				},
-			})
-			await this.ccPtyIdleReaper.start()
-		} catch (err) {
-			this.logger.error(
-				'[cc-pty] boot wire-up failed (non-fatal — /ws/cc-pty will report not-ready until next restart)',
-				err as Error,
-			)
 		}
 
 		// Phase 141-01 — drain install-time queued Redis seeds.
@@ -1126,8 +799,6 @@ export default class Livinityd {
 			// liv-core's McpClientManager directly (different process at
 			// port 3200).
 			const webappMcpConfigManager = new McpConfigManager(this.ai.redis)
-			const luseServerPath =
-				process.env.LUSE_MCP_SERVER_PATH ?? DEFAULT_LUSE_MCP_SERVER_PATH
 			// Phase 102-04 — per-app display allocator (number-returning,
 			// range [10, 100); 90 slots). Construct here so the same instance
 			// flows into WebAppWindowManager.spawn() display orchestration AND
@@ -1140,8 +811,6 @@ export default class Livinityd {
 				>[0]['spawn'],
 				logger: webappLogger,
 				mcpConfigManager: webappMcpConfigManager,
-				luseServerPath,
-				luseMcpEnv: process.env,
 				// Phase 102-04 — required per-app primitives (Wave 1 deliverables).
 				displayAllocator: webappDisplayAllocator,
 				portAllocator: sharedPortAllocator,
@@ -1242,45 +911,6 @@ export default class Livinityd {
 		try {
 			// Stop backups first because it depends on files
 			await this.backups.stop()
-
-			// Phase 164-02 — Halt the autonomous scheduler EARLY so any
-			// in-flight cron-triggered SDK calls drain (up to the 30s
-			// timeout inside scheduler.stop()) BEFORE the Redis client +
-			// inbox writer they depend on are torn down. No-op if the
-			// scheduler never armed (boot edge or autonomous_enabled was
-			// false).
-			try {
-				await this.autonomousScheduler?.stop()
-			} catch (err) {
-				this.logger.error('[autonomous-scheduler] stop', err)
-			}
-
-			// Phase 165-01 — Halt the idle session reaper alongside the
-			// autonomous scheduler (early-shutdown cluster). Clears the 5-min
-			// setInterval; in-flight tick() will not be interrupted but will
-			// complete naturally. No-op if the reaper never armed.
-			try {
-				this.idleReaper?.stop()
-			} catch (err) {
-				this.logger.error('[claude-runner/reaper] stop', err)
-			}
-
-			// Phase 166-05 — CC PTY backend shutdown. Stop the cc-pty reaper
-			// (clears setInterval) THEN detach in-process pty handles via
-			// manager.stop(). tmux sessions OUTLIVE livinityd by design
-			// (D-V35-A) — we do NOT kill the tmux sessions; the next
-			// livinityd boot reattaches via attachSession's resurrect-or-attach
-			// path. No-op when boot wire-up never armed.
-			try {
-				this.ccPtyIdleReaper?.stop()
-			} catch (err) {
-				this.logger.error('[cc-pty/reaper] stop', err)
-			}
-			try {
-				await this.ccPtyManager?.stop()
-			} catch (err) {
-				this.logger.error('[cc-pty/manager] stop', err)
-			}
 
 			// Phase 104 plan 104-10 — stop the heartbeat sender BEFORE the rest
 			// of shutdown so its in-flight POST (and self-rescheduling

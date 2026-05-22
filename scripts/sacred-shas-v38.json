@@ -6,42 +6,6 @@
     "rationale": "D-100-SACRED — SDK agent runner is the load-bearing extension surface; all wrappers go through liv-agent-runner.ts + mcp-client-manager.ts."
   },
   {
-    "path": "livos/packages/livinityd/source/modules/vault-items/types.ts",
-    "expected_sha": "b95ec8c5c1ec98d9aebc33582eadadefe4fc2cdd",
-    "frozen_in_phase": "171-item-model-storage",
-    "rationale": "D-V38-B canonical Item discriminated union; downstream plans MUST narrow on `type` exhaustively."
-  },
-  {
-    "path": "livos/packages/livinityd/source/modules/vault-items/vault-root-resolver.ts",
-    "expected_sha": "b1e22923e5ad0fe23bfdac84de8c982c5ddd0030",
-    "frozen_in_phase": "171-item-model-storage",
-    "rationale": "D-V38-A vault root resolution; Phase 173-04 systemd env var depends on the exact fallback string."
-  },
-  {
-    "path": "livos/packages/livinityd/source/modules/vault-items/item-store.ts",
-    "expected_sha": "8bafbdceb34826a02950cc5242fc0357dc5288cc",
-    "frozen_in_phase": "171-item-model-storage",
-    "rationale": "D-V38-T canonical folder layout writer + atomic CRUD; Phase 173-02 migration consumes this verbatim."
-  },
-  {
-    "path": "livos/packages/livinityd/source/modules/vault-items/tree-resolver.ts",
-    "expected_sha": "ce4b8320f30de2db51c9f247dfb8d2faef1d3a6d",
-    "frozen_in_phase": "171-item-model-storage",
-    "rationale": "D-V38-E cycle/depth guard; Phase 174 SidebarTree consumes tree.json directly."
-  },
-  {
-    "path": "livos/packages/livinityd/source/modules/vault-items/pubsub.ts",
-    "expected_sha": "35e62155dc42a5205085392607882054b8966449",
-    "frozen_in_phase": "171-item-model-storage",
-    "rationale": "Redis liv:tree:updated event contract; UI subscribers depend on payload shape."
-  },
-  {
-    "path": "livos/packages/livinityd/source/modules/vault-items/index.ts",
-    "expected_sha": "5045b76ce9b71f9817a0f69108ddb8aa3bc495fb",
-    "frozen_in_phase": "171-item-model-storage",
-    "rationale": "Barrel export surface — downstream imports stable."
-  },
-  {
     "path": "livos/packages/cli/src/cli.ts",
     "expected_sha": "28496c16d321bf12ef44850ae84e5ab99b32cb28",
     "frozen_in_phase": "172-livos-cli-skeleton",

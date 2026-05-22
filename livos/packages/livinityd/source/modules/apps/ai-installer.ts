@@ -28,10 +28,29 @@ import {
 	fail,
 	progressFactory,
 } from './install-contracts.js'
-import type {
-	McpConfigManagerLike,
-	McpServerConfigInput,
-} from '../computer-use/luse-mcp-config.js'
+// Inlined McpConfigManagerLike + McpServerConfigInput shapes (the old
+// computer-use/luse-mcp-config.ts module was deleted with the AI Chat
+// teardown — kept here as the install handler still talks to the real
+// McpConfigManager that lives in @liv/core).
+export interface McpServerConfigInput {
+	name: string
+	transport: 'stdio' | 'streamableHttp'
+	command?: string
+	args?: string[]
+	url?: string
+	env?: Record<string, string>
+	enabled?: boolean
+	installedAt?: number
+}
+export interface McpConfigManagerLike {
+	installServer(server: McpServerConfigInput): Promise<void>
+	updateServer(
+		name: string,
+		updates: Partial<McpServerConfigInput>,
+	): Promise<unknown>
+	listServers(): Promise<McpServerConfigInput[]>
+	removeServer?(name: string): Promise<boolean>
+}
 
 // ─── Manifest shapes (SPEC §2.4) ─────────────────────────────────────────
 
