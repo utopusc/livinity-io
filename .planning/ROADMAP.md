@@ -2674,8 +2674,8 @@ Plans:
 - [ ] 197-02-PLAN.md — LivOS tool registry (shell/app/docker/redis/fs) with HITL approval + MCPClient consuming selfclaude `:8090/mcp` (Wave 1, no deps)
 - [ ] 197-03-PLAN.md — Memory integration: pgvector extension on livos DB + 4-layer Memory (raw + working + semantic recall + observational) (Wave 1, no deps)
 - [ ] 197-04-PLAN.md — tRPC agent bridge: SSE stream + HITL approval (`tool-call-approval` chunk) + thread management (Wave 2, depends 197-01..03)
-- [ ] 197-05-PLAN.md — First Mastra workflow: app install pipeline with suspend/resume + PG snapshot (Wave 2, depends 197-02 + 197-04)
-- [ ] 197-06-PLAN.md — Eval scorers (answer-relevancy + LivOS task completion) + OpenTelemetry export (Wave 3, depends 197-04 + 197-05)
+- [ ] 197-05-PLAN.md — First Mastra workflow: app install pipeline with suspend/resume + PG snapshot (Wave 3, depends 197-02 + 197-04 — file-shared MOD of mastra-router/index.ts forces serialization after 197-04)
+- [ ] 197-06-PLAN.md — Eval scorers (answer-relevancy + LivOS task completion) + OpenTelemetry export (Wave 4, depends 197-04 + 197-05 — same file-shared MOD reason)
 
 ---
 
