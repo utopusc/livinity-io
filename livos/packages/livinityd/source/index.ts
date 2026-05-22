@@ -111,6 +111,15 @@ import {createProfileSeeder, type ProfileSeederHandle} from './modules/chrome-ma
 // route through the injected router from this swap forward.
 import {createChromeMasterRouter} from './modules/chrome-master/index.js'
 import {createAppRouter, setProductionAppRouter} from './modules/server/trpc/index.js'
+// Phase 196-01 — xAI OAuth dependency injection. Closes Phase 195 HUMAN-UAT #1:
+// before this plan landed, the bare `xaiAuthRouter` empty-injection Proxy
+// threw HTTP 500 emptyInjectionStub on the first procedure call (live probe
+// 2026-05-22 on Mini PC confirmed). The two service singletons constructed
+// in start() are injected into createXaiAuthRouter and passed through the
+// createAppRouter `xaiAuth:` slot so `auth.xai.*` serves real opencode flows.
+import {XaiAuthFlowService} from './modules/xai-auth/index.js'
+import {XaiCredentialsService} from './modules/xai-credentials/index.js'
+import {createXaiAuthRouter} from './modules/server/trpc/xai-auth-router.js'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -851,12 +860,60 @@ export default class Livinityd {
 				streamManager: this.streamManager,
 				profileSeeder: this.profileSeeder!,
 			})
+
+			// Phase 196-01 — XAI OAuth dependency injection.
+			//
+			// Closes Phase 195 HUMAN-UAT #1: the empty-injection Proxy in
+			// xai-auth-router.ts will throw on first procedure call (live probe
+			// 2026-05-22 confirmed HTTP 500 emptyInjectionStub) until these two
+			// singletons land. After this swap, trpc.auth.xai.start returns a
+			// real {flowId, url} response on a clean Mini PC.
+			//
+			// Graceful degradation (per 196-CONTEXT.md decisions): if the
+			// credentials service constructor throws (auth.json directory
+			// inaccessible on a fresh box), log + still mount the router with
+			// the working FlowService so first-time auth.xai.start is reachable.
+			const xaiAuthFlowService = new XaiAuthFlowService()
+			let xaiCredentialsService: XaiCredentialsService
+			try {
+				xaiCredentialsService = new XaiCredentialsService()
+			} catch (credsErr) {
+				// Logger has no .warn — use .error to surface the degradation
+				// (same channel the surrounding try/catch uses for streaming
+				// subsystem failures, which are also "non-fatal — boot continues").
+				this.logger.error(
+					'XaiCredentialsService failed to initialize; mounting router with first-time-auth-only degradation. ' +
+					'auth.xai.start will work; auth.xai.status / disconnect / waitForCompletion may report errors until ' +
+					'the auth.json directory becomes available.',
+					credsErr,
+				)
+				// Construct a no-throwing shim: each method rejects with a clear,
+				// status-like error so the UI can surface "not yet connected" rather
+				// than crashing. Type-asserted to satisfy the factory signature.
+				xaiCredentialsService = {
+					async getStatus() {
+						return {connected: false, reason: 'credentials-service-uninitialized'} as never
+					},
+					async clear() {
+						return {ok: true as const}
+					},
+				} as unknown as XaiCredentialsService
+			}
+			const xaiAuthRouterProductionInstance = createXaiAuthRouter({
+				flowService: xaiAuthFlowService,
+				credsService: xaiCredentialsService,
+			})
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
+				xaiAuth: xaiAuthRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(
 				'Phase 103-01 — chromeMaster router wired with displayAllocator + streamManager + profileSeeder (master Chrome can now stream via Xvfb)',
+			)
+			webappLogger.info(
+				'Phase 196-01 — xAI auth router wired (auth.xai.start now serves real opencode flows, not emptyInjectionStub)',
 			)
 		} catch (err) {
 			// Non-fatal — boot continues. Streaming + WebApp launcher will
