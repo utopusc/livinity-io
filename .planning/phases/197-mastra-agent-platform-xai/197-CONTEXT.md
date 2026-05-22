@@ -49,8 +49,8 @@ Six concrete deliverables, each a separate plan. Order is:
 - Wave 4: Dock app + chat window UI (depends on SSE)
 
 **Hidden mechanics summary:**
-- `LivOSMastra` singleton at `liv/packages/core/src/mastra/index.ts` registered in livinityd boot alongside `setupRouter` + `xaiAuthRouter` (same Phase 196-01 DI pattern — module-scope singleton, then `setProductionAppRouter(createAppRouter({chromeMaster, xaiAuth, setup, mastra}))`)
-- Provider router: `liv/packages/core/src/mastra/provider-router.ts` reads `liv:config:active_provider` from Redis (sync via local cache + invalidate-on-change). xai → `createXai({fetch: tokenFetch})`, claude/openai → throw `ProviderNotConfiguredError` for now (Phase 198+ adds).
+- `LivOSMastra` singleton at `livos/packages/livinityd/source/modules/mastra/index.ts` registered in livinityd boot alongside `setupRouter` + `xaiAuthRouter` (same Phase 196-01 DI pattern — module-scope singleton, then `setProductionAppRouter(createAppRouter({chromeMaster, xaiAuth, setup, mastra}))`)
+- Provider router: `livos/packages/livinityd/source/modules/mastra/provider-router.ts` reads `liv:config:active_provider` from Redis (sync via local cache + invalidate-on-change). xai → `createXai({fetch: tokenFetch})`, claude/openai → throw `ProviderNotConfiguredError` for now (Phase 198+ adds).
 - MCPClient: per-request reads Redis flag `liv:mcp:luse:enabled` and `liv:mcp:selfclaude:enabled` to decide which MCP servers to expose. Tools namespaced (`luse_computer_screenshot`, `selfclaude_list_skills`). At least one MCP source must be active; both can be active simultaneously.
 - Memory: pgvector extension on existing `livos` DB (operator UAT manual step after Plan 197-03 ships: `sudo apt install postgresql-16-pgvector` + `psql livos -c 'CREATE EXTENSION vector;'`). 4-layer Memory (raw + working + semantic recall + observational) bound to `liv:user:*` Redis scope.
 - tRPC `mastra.*` namespace: 5 procedures (`agent.stream` SSE, `agent.approve`, `agent.cancel`, `agent.threads.list`, `agent.threads.delete`). All in `httpOnlyPaths`. Stream emits typed chunks: `text-delta`, `tool-call`, `tool-call-approval`, `tool-result`, `finish`.
@@ -76,8 +76,8 @@ Six concrete deliverables, each a separate plan. Order is:
 
 ### Plan 197-01: Mastra Core + Provider Router (Wave 1)
 - NEW pnpm workspace deps (EXACT pins, no `^`): `@mastra/core`, `@mastra/memory`, `@mastra/pg`, `@mastra/mcp`, `@ai-sdk/xai`, `@ai-sdk/openai-compatible`. Add pnpm `overrides` for Zod v3/v4 peer conflict resolution.
-- NEW `liv/packages/core/src/mastra/index.ts` — `LivOSMastra` singleton, holds Mastra instance + registered agents/workflows (extension points for future plans)
-- NEW `liv/packages/core/src/mastra/provider-router.ts`:
+- NEW `livos/packages/livinityd/source/modules/mastra/index.ts` — `LivOSMastra` singleton, holds Mastra instance + registered agents/workflows (extension points for future plans)
+- NEW `livos/packages/livinityd/source/modules/mastra/provider-router.ts`:
   ```ts
   type ProviderId = 'xai' | 'claude' | 'openai'
   interface ProviderDeps { xaiCreds: XaiCredentialsService; redis: RedisClient }
@@ -106,7 +106,7 @@ Six concrete deliverables, each a separate plan. Order is:
 - Acceptance: `LivOSMastra.providerRouter.resolveAgentModel()` returns a Mastra language model bound to fresh xAI token on every fetch (verified by spy)
 
 ### Plan 197-02: Luse MCP + selfclaude MCP Bridge (Wave 1)
-- NEW `liv/packages/core/src/mastra/mcp-bridge.ts` — `createMcpBridge({redis, logger})` that:
+- NEW `livos/packages/livinityd/source/modules/mastra/mcp-bridge.ts` — `createMcpBridge({redis, logger})` that:
   1. Reads `liv:mcp:luse:enabled` (bool, default true) and `LUSE_MCP_PATH` env var
   2. Reads `liv:mcp:selfclaude:enabled` (bool, default true) and `SELFCLAUDE_MCP_URL` env var (default `http://localhost:8090/mcp`)
   3. Instantiates Mastra `MCPClient` with `id: 'livos-mcp-bridge'` (MANDATORY — memory leak guard)
@@ -118,7 +118,7 @@ Six concrete deliverables, each a separate plan. Order is:
 
 ### Plan 197-03: Memory + pgvector (Wave 1)
 - NEW `scripts/install/pgvector-enable.sh` — idempotent: detect package install, `CREATE EXTENSION IF NOT EXISTS vector;` on `livos` DB
-- NEW `liv/packages/core/src/mastra/memory.ts` — `createLivOSMemory({databaseUrl})`:
+- NEW `livos/packages/livinityd/source/modules/mastra/memory.ts` — `createLivOSMemory({databaseUrl})`:
   ```ts
   new Memory({
     storage: new PgStore({ connectionString: databaseUrl }),
@@ -135,7 +135,7 @@ Six concrete deliverables, each a separate plan. Order is:
 - Acceptance: two-turn conv "my name is bruce" → "what's my name?" → agent recalls via working memory; cross-thread isolation verified (same query in fresh thread returns null)
 
 ### Plan 197-04: Liv AI Agent Definition (Wave 2, depends 197-01..03)
-- NEW `liv/packages/core/src/mastra/agents/liv-ai.ts` — single agent definition:
+- NEW `livos/packages/livinityd/source/modules/mastra/agents/liv-ai.ts` — single agent definition:
   ```ts
   export function createLivAiAgent(deps: {
     providerRouter: ProviderRouter
@@ -228,7 +228,7 @@ Six concrete deliverables, each a separate plan. Order is:
 
 ### Sacred SHA preservation
 - `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` MUST remain unchanged across every Phase 197 commit
-- All Mastra integration code lives in NEW files under `liv/packages/core/src/mastra/**` — sdk-agent-runner.ts is NOT touched
+- All Mastra integration code lives in NEW files under `livos/packages/livinityd/source/modules/mastra/**` — sdk-agent-runner.ts is NOT touched
 
 ### File scope (don't touch what's not in files_modified)
 - Every plan lists exact files_modified; don't bleed
@@ -236,7 +236,7 @@ Six concrete deliverables, each a separate plan. Order is:
 - DO NOT modify Phase 196's `setup-router.ts` setLocation procedure
 - DO NOT touch Phase 196.1 live patches (`DEFAULT_METHOD` and URL regex in xai-auth/)
 - DO NOT reintroduce deleted modules: cc-pty, claude-runner, livinity-broker, vault-items, computer-use, autonomous-scheduler, AI Chat
-- DO NOT touch `liv/packages/worker/`, `liv/packages/mcp-server/`, `liv/packages/memory/` — Mastra is a NEW subdirectory `liv/packages/core/src/mastra/`
+- DO NOT touch `liv/packages/worker/`, `liv/packages/mcp-server/`, `liv/packages/memory/` — Mastra is a NEW subdirectory `livos/packages/livinityd/source/modules/mastra/` inside livinityd (NOT under liv/packages/core/, which is the sacred-SHA sdk-agent-runner zone)
 
 ### Mastra version pin
 - Pin EXACT versions of `@mastra/core`, `@mastra/pg`, `@mastra/memory`, `@mastra/mcp`, `@ai-sdk/xai`, `@ai-sdk/openai-compatible` in `livos/package.json` AND `liv/package.json` (no `^`, no `~`)
