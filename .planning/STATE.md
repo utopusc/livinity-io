@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-22T08:49:34.564Z"
+last_updated: "2026-05-22T08:58:37.715Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,15 +25,17 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 195 (xai-oauth-onboarding) — IN PROGRESS (3/5 plans shipped — Wave 1 + Wave 2 first plan complete)
-Plan: 4 of 5 (next)
-Last completed plan: **195-03** ✅ CODE-COMPLETE 2026-05-22 — tRPC `auth.xai.*` router wiring XaiAuthFlowService (195-01) + XaiCredentialsService (195-02) into 4 adminProcedure procedures (start / status / waitForCompletion / disconnect). 2 NEW files (xai-auth-router.ts + xai-auth-router.test.ts) + 2 MOD files (trpc/index.ts mounts under `auth.xai.*`, common.ts adds 4 httpOnlyPaths entries). 5/5 vitest PASS (start UUID + flowService.start call args, status verbatim delegation, waitForCompletion 10-min binding, regex rejects invalid flowIds T-195-03-04, disconnect delegation). All 4 procedures adminProcedure-gated (T-195-03-01). flowId server-generated via crypto.randomUUID (T-195-03-02 non-enumerable). Zero new npm deps. Zero new TS errors (307 pre-existing = 307 with changes — stash-comparison verified). Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 2/2 across commits `730e1177` (Task 1: router + tests) and `92fbc557` (Task 2: mount + httpOnlyPaths). 0 substantive deviations (2 documented quirks: pnpm-filter test invocation forwarding + vitest non-discovery of common.test.ts node:assert format — both pre-existing, not regressions). Empty-injection Proxy stub default + createXaiAuthRouter factory pattern mirrors chromeMaster's setProductionAppRouter DI swap — production wire-up at livinityd boot is separate effort. See `.planning/phases/195-xai-oauth-onboarding/195-03-SUMMARY.md`.
+Phase: 195 (xai-oauth-onboarding) — IN PROGRESS (4/5 plans shipped — Wave 1 + Wave 2 complete except 195-04 frontend onboarding UI)
+Plan: 4 of 5 (next — 195-04 frontend connect-ai-step.tsx replacement; Wave 2 final remaining piece)
+Last completed plan: **195-05** ✅ CODE-COMPLETE 2026-05-22 — XaiProvider scaffold for downstream Phase 196 (LangGraph) + Phase 197 (lean Livinity broker) consumption. 5 NEW files under `livos/packages/livinityd/source/modules/xai-provider/`: errors.ts (75 LOC — 6 typed error classes with XAI_* discriminating .code literals), types.ts (134 LOC — OpenAI-shape subset including XaiChatRequest/Response/XaiToolDef/XaiClient), xai-client.ts (228 LOC — `createXaiClient(credsService, opts?)` factory with chatCompletions/models/imageGenerate/videoGenerate + 2 voice rejectors), xai-client.test.ts (289 LOC — 7 vitest PASS), index.ts (38 LOC — barrel). 7/7 vitest PASS covering 4 plan-required behaviors + 1 bonus credentials gating: chat 200 with `Bearer <token>` header + JSON content-type + token-not-in-URL (T-195-05-01); function calling `tools[]` pass-through unchanged in request body; 401→200 retry (`getToken` called twice + client returns 200); 401→401 double-fail throws `XaiUnauthorizedError(attempts=2, code=XAI_UNAUTHORIZED)` with EXACTLY 2 fetch calls — no recursion (T-195-05-03 single-retry guarantee); `audioSpeech()` + `audioTranscriptions()` throw `XaiVoiceNotSupportedError(endpoint=…)` WITHOUT any network round-trip (documented absence per 2026-05-22 live test: speech=403, transcriptions=404); `XAI_NOT_CONNECTED` surfaces as `XaiNotConnectedError`. Zero new npm deps — uses global `fetch` (Node 18+); `pnpm-lock.yaml` byte-identical. Zero TS errors in `xai-provider/*` (pre-existing 307 livinityd-wide errors unchanged — out of scope per plan boundary). `liv/packages/core/` untouched. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` PRESERVED 2/2 commits via pre-commit hook (`[sacred-sha] PASS: 20 files verified` × 2). Commits `ca1540b9` (Task 1: errors + types + xai-client + index) + `eafa3a56` (Task 2: vitest). 0 substantive deviations (1 bonus test added beyond plan's ≥4-behavior minimum to lock the credentials-gating contract — Rule 2 auto-add). See `.planning/phases/195-xai-oauth-onboarding/195-05-SUMMARY.md`.
+
+Previously: **195-03** ✅ CODE-COMPLETE 2026-05-22 — tRPC `auth.xai.*` router wiring XaiAuthFlowService (195-01) + XaiCredentialsService (195-02) into 4 adminProcedure procedures (start / status / waitForCompletion / disconnect). 2 NEW files (xai-auth-router.ts + xai-auth-router.test.ts) + 2 MOD files (trpc/index.ts mounts under `auth.xai.*`, common.ts adds 4 httpOnlyPaths entries). 5/5 vitest PASS. Sacred SHA preserved 2/2 across commits `730e1177` + `92fbc557`. See `.planning/phases/195-xai-oauth-onboarding/195-03-SUMMARY.md`.
 
 Previously: **195-02** ✅ CODE-COMPLETE 2026-05-22 — XaiCredentialsService single source of truth (8 files, 24 vitest PASS, 3 typed errors, commits `abaee743` + `4d1572f1`).
 
 Previously: **195-01** ✅ CODE-COMPLETE 2026-05-22 — XaiAuthFlowService backend OpenCode CLI wrapper. 6 NEW files under `livos/packages/livinityd/source/modules/xai-auth/`, 15 vitest PASS, 7 typed error classes, commits `57679789` + `82cf91be`.
 
-Next: `/gsd-execute-phase 195` Plan 04 (connect-ai-step.tsx replacement — frontend onboarding UI consuming `trpc.auth.xai.start/status/waitForCompletion/disconnect`; full replace of static Claude info panel with state-machine UI driving the OAuth flow). Plan 04 depends on 195-03 (Wave 2).
+Next: `/gsd-execute-phase 195` Plan 04 (connect-ai-step.tsx replacement — frontend onboarding UI consuming `trpc.auth.xai.start/status/waitForCompletion/disconnect`; full replace of static Claude info panel with state-machine UI driving the OAuth flow). Plan 04 depends on 195-03 (Wave 2). Phase 195 is then close-eligible.
 
 **Active milestone:** v38.3 — DROP Vault Concept + bruce-user refactor — **PHASE 192 CODE-COMPLETE** (Phase 192 shipped 2026-05-21).
 
