@@ -2655,6 +2655,30 @@ Plans:
 
 ---
 
+### Phase 197: Mastra Agent Platform + xAI/OAuth Integration — 🔴 PLANNED 2026-05-22
+
+**Goal:** Wire Mastra (TypeScript-first AI agent framework, v1.0 stable Jan 2026, 24.2k stars) into LivOS as the agent + workflow layer that sits on top of `XaiCredentialsService.getToken()`. After this phase livinityd hosts a Mastra instance with one or more agents capable of: streaming + tool-loop against Grok-4.20 via OAuth (no static XAI_API_KEY); using LivOS-native tools (shell + app install + Docker + Redis + filesystem) with HITL approval; remembering across conversations via 4-layer memory backed by existing livos PG with pgvector; running durable workflows with suspend/resume + PG snapshot; consuming selfclaude's existing MCP endpoint (`:8090/mcp`) via MCPClient. Differentiation from OpenClaw/selfclaude: provider-agnostic (not Anthropic-coupled), durable workflows, 4-layer memory, tRPC-native HITL, LivOS-native tools.
+
+**Live evidence (2026-05-22):**
+- xAI OAuth device-code flow validated live on Mini PC (`https://accounts.x.ai/oauth2/device?user_code=…`)
+- opencode 1.15.7 on system PATH; `XaiCredentialsService.getToken()` returns fresh access tokens with 6h auto-refresh
+- Mastra research (technical-researcher agent 2026-05-22) confirmed native xAI support (`xai/grok-*`), `@ai-sdk/xai` factory's `fetch` middleware as cleanest dynamic-token integration path, 18h dev time vs 41h LangGraph benchmark (public report), MCP first-class, PG memory plugs directly into existing `livos` DB
+
+**Depends on:** Phase 195 (xAI OAuth core + xai-client scaffold), Phase 196 (livinityd DI wire-up + setupRouter pattern), Phase 196.1 (live xAI device-code flow validated)
+**Wave:** 1 (foundational — every future "AI does X on LivOS" phase consumes this layer)
+**Plans:** 6 plans (Mastra core + xAI wiring / tool registry + MCPClient / pgvector memory / tRPC SSE bridge / first workflow / eval + OTel)
+**Estimated:** 2-3 days
+
+Plans:
+- [ ] 197-01-PLAN.md — Mastra core setup + xAI provider wiring via `@ai-sdk/xai` `fetch` middleware (Wave 1, no deps)
+- [ ] 197-02-PLAN.md — LivOS tool registry (shell/app/docker/redis/fs) with HITL approval + MCPClient consuming selfclaude `:8090/mcp` (Wave 1, no deps)
+- [ ] 197-03-PLAN.md — Memory integration: pgvector extension on livos DB + 4-layer Memory (raw + working + semantic recall + observational) (Wave 1, no deps)
+- [ ] 197-04-PLAN.md — tRPC agent bridge: SSE stream + HITL approval (`tool-call-approval` chunk) + thread management (Wave 2, depends 197-01..03)
+- [ ] 197-05-PLAN.md — First Mastra workflow: app install pipeline with suspend/resume + PG snapshot (Wave 2, depends 197-02 + 197-04)
+- [ ] 197-06-PLAN.md — Eval scorers (answer-relevancy + LivOS task completion) + OpenTelemetry export (Wave 3, depends 197-04 + 197-05)
+
+---
+
 ## ✅ v38.2 MILESTONE CLOSED — 2026-05-21
 
 **Milestone:** v38.2 Terminal Tabs + Vault Graph Polish
