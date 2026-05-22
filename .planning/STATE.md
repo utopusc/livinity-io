@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v38.3
-milestone_name: DROP Vault Concept + bruce-user refactor
-status: phase-192-code-complete-pending-mini-pc-cutover
-last_updated: "2026-05-21T21:05:03.000Z"
+milestone: v34.0
+milestone_name: Bootstrap Polish + First-Run UX
+status: unknown
+last_updated: "2026-05-22T01:30:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -24,6 +24,12 @@ See: .planning/PROJECT.md
 **Next action:** Operator runs the post-121-06 UAT walk per `.planning/phases/121-mini-pc-long-tail-and-audit/121-06-SUMMARY.md` § "Operator post-121-06 final UAT block" — `bash /opt/livos/update.sh` on Mini PC + browse `livinity.io/login → /register → /dashboard → /dashboard/install → /store → bruce.livinity.io → cycle every theme`. After AC#8 sign-off: close v35.0 → open v36 (Phase 122 = ui-kit v0.2.0 expansion with 22 candidates from SHADCN-AUDIT.md).
 
 ## Current Position
+
+Phase: 195 (xai-oauth-onboarding) — IN PROGRESS (1/5 plans shipped)
+Plan: 2 of 5 (next)
+Last completed plan: **195-01** ✅ CODE-COMPLETE 2026-05-22 — XaiAuthFlowService backend OpenCode CLI wrapper. 6 NEW files under `livos/packages/livinityd/source/modules/xai-auth/`, 15 vitest PASS (8 url-extractor + 7 flow-service), 7 typed error classes ready for tRPC mapping, zero new npm deps, sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 2/2 across commits `57679789` (Task 1: url-extractor + opencode-spawner) and `82cf91be` (Task 2: XaiAuthFlowService + barrel + flow-service.test). Acceptance criteria all PASS: shell:true grep=0, OpencodeNotInstalledError throw site present, SIGKILL ref count 10 in flow-service.ts, flowId regex `/^[a-zA-Z0-9-]{8,64}$/` present, barrel ^export count=14 (≥5). Zero deviations. See `.planning/phases/195-xai-oauth-onboarding/195-01-SUMMARY.md`.
+
+Next: `/gsd-execute-phase 195` Plan 02 (XaiCredentialsService — token store, JWT decode, background refresh). Plan 02 is Wave 1 parallel-safe with 195-01; files are disjoint (`xai-credentials/` vs `xai-auth/`).
 
 **Active milestone:** v38.3 — DROP Vault Concept + bruce-user refactor — **PHASE 192 CODE-COMPLETE** (Phase 192 shipped 2026-05-21).
 

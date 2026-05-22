@@ -2608,7 +2608,7 @@ Plans:
 
 ---
 
-### Phase 195: xAI OAuth Onboarding (Replace Claude Setup) — 🔴 PLANNED 2026-05-22
+### Phase 195: xAI OAuth Onboarding (Replace Claude Setup) — 🟡 IN PROGRESS 2026-05-22 (1/5 plans shipped)
 
 **Goal:** Replace the static "Sign in with Claude" placeholder in `features/onboarding-flow/steps/connect-ai-step.tsx` with a real OAuth flow. Backend spawns `opencode auth login -p xai` as a hidden child process, extracts the xAI device-code URL from stdout, returns it to the frontend. Frontend opens URL in a new browser tab; backend long-polls `~/.local/share/opencode/auth.json` for the captured xai entry. On success, exposes credentials via a new `XaiCredentialsService` consumable by the future LangGraph agent + new lean Livinity broker. All OpenCode mechanics hidden from the user — they only see "Sign in with xAI" → "✓ Connected as SuperGrok Tier N".
 
@@ -2624,7 +2624,7 @@ Plans:
 **Estimated:** ~1-2 days
 
 Plans:
-- [ ] 195-01-PLAN.md — XaiAuthFlowService: OpenCode CLI wrapper, stdout URL extraction (Wave 1)
+- [x] 195-01-PLAN.md — XaiAuthFlowService: OpenCode CLI wrapper, stdout URL extraction (Wave 1) — ✅ CODE-COMPLETE 2026-05-22 (15 vitest PASS, 6 NEW files, sacred SHA preserved 2/2 across commits 57679789 + 82cf91be)
 - [ ] 195-02-PLAN.md — XaiCredentialsService: token store, JWT decode, background refresh (Wave 1)
 - [ ] 195-03-PLAN.md — tRPC `auth.xai.{start,status,waitForCompletion,disconnect}` + httpOnlyPaths (Wave 2, depends 195-01 + 195-02)
 - [ ] 195-04-PLAN.md — `connect-ai-step.tsx` replacement: state machine, `window.open(url)`, long-poll status (Wave 3, depends 195-03)
