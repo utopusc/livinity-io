@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-22T08:38:39.293Z"
+last_updated: "2026-05-22T08:49:34.564Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,13 +25,15 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 195 (xai-oauth-onboarding) — IN PROGRESS (2/5 plans shipped — Wave 1 complete)
-Plan: 3 of 5 (next)
-Last completed plan: **195-02** ✅ CODE-COMPLETE 2026-05-22 — XaiCredentialsService single source of truth for xAI OAuth tokens. 8 NEW files under `livos/packages/livinityd/source/modules/xai-credentials/`, 24 vitest PASS (9 jwt-decoder + 5 token-refresher + 10 credentials-service), 3 typed error classes (NotConnectedError / RefreshFailedError / AuthJsonCorruptError) ready for tRPC mapping, zero new npm deps, sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 2/2 across commits `abaee743` (Task 1: jwt-decoder + auth-json-path + token-refresher primitives) and `4d1572f1` (Task 2: XaiCredentialsService + barrel + credentials-service.test). All 12 acceptance criteria PASS: refreshInFlight grep=6 (single-flight evidence), fs.rename grep=1 (atomic write), EventEmitter/emit grep=8 (token-refreshed + token-expired + disconnected), token-leak grep=0 (T-195-02-01), tmp.*pid grep=1 line 311 (T-195-02-02 PID-suffixed temp), /root/ hardcode grep=0 (Phase 192 hard rule), URLSearchParams grep=1 (form-urlencoded body), single-flight assertion verified (10 concurrent calls → exactly 1 refreshFn invocation). 2 documented adjustments (zero substantive deviations): (1) docstring rephrase to clear `/root/` grep cleanly, (2) atomic-write test switched from vi.spyOn(fs, 'rename') (rejected by ESM non-configurable property) to outcome assertion (post-rename no temp file lingers + new tokens on disk — stronger guarantee). See `.planning/phases/195-xai-oauth-onboarding/195-02-SUMMARY.md`.
+Phase: 195 (xai-oauth-onboarding) — IN PROGRESS (3/5 plans shipped — Wave 1 + Wave 2 first plan complete)
+Plan: 4 of 5 (next)
+Last completed plan: **195-03** ✅ CODE-COMPLETE 2026-05-22 — tRPC `auth.xai.*` router wiring XaiAuthFlowService (195-01) + XaiCredentialsService (195-02) into 4 adminProcedure procedures (start / status / waitForCompletion / disconnect). 2 NEW files (xai-auth-router.ts + xai-auth-router.test.ts) + 2 MOD files (trpc/index.ts mounts under `auth.xai.*`, common.ts adds 4 httpOnlyPaths entries). 5/5 vitest PASS (start UUID + flowService.start call args, status verbatim delegation, waitForCompletion 10-min binding, regex rejects invalid flowIds T-195-03-04, disconnect delegation). All 4 procedures adminProcedure-gated (T-195-03-01). flowId server-generated via crypto.randomUUID (T-195-03-02 non-enumerable). Zero new npm deps. Zero new TS errors (307 pre-existing = 307 with changes — stash-comparison verified). Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 2/2 across commits `730e1177` (Task 1: router + tests) and `92fbc557` (Task 2: mount + httpOnlyPaths). 0 substantive deviations (2 documented quirks: pnpm-filter test invocation forwarding + vitest non-discovery of common.test.ts node:assert format — both pre-existing, not regressions). Empty-injection Proxy stub default + createXaiAuthRouter factory pattern mirrors chromeMaster's setProductionAppRouter DI swap — production wire-up at livinityd boot is separate effort. See `.planning/phases/195-xai-oauth-onboarding/195-03-SUMMARY.md`.
+
+Previously: **195-02** ✅ CODE-COMPLETE 2026-05-22 — XaiCredentialsService single source of truth (8 files, 24 vitest PASS, 3 typed errors, commits `abaee743` + `4d1572f1`).
 
 Previously: **195-01** ✅ CODE-COMPLETE 2026-05-22 — XaiAuthFlowService backend OpenCode CLI wrapper. 6 NEW files under `livos/packages/livinityd/source/modules/xai-auth/`, 15 vitest PASS, 7 typed error classes, commits `57679789` + `82cf91be`.
 
-Next: `/gsd-execute-phase 195` Plan 03 (tRPC `auth.xai` router — wires `XaiAuthFlowService.start/waitForCompletion` + `XaiCredentialsService.getStatus/clear` into 4 admin tRPC procedures; adds 4 paths to `httpOnlyPaths` in common.ts). Plan 03 depends on both 195-01 and 195-02 (Wave 2).
+Next: `/gsd-execute-phase 195` Plan 04 (connect-ai-step.tsx replacement — frontend onboarding UI consuming `trpc.auth.xai.start/status/waitForCompletion/disconnect`; full replace of static Claude info panel with state-machine UI driving the OAuth flow). Plan 04 depends on 195-03 (Wave 2).
 
 **Active milestone:** v38.3 — DROP Vault Concept + bruce-user refactor — **PHASE 192 CODE-COMPLETE** (Phase 192 shipped 2026-05-21).
 
