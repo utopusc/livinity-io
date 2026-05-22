@@ -120,6 +120,12 @@ import {createAppRouter, setProductionAppRouter} from './modules/server/trpc/ind
 import {XaiAuthFlowService} from './modules/xai-auth/index.js'
 import {XaiCredentialsService} from './modules/xai-credentials/index.js'
 import {createXaiAuthRouter} from './modules/server/trpc/xai-auth-router.js'
+// Phase 196-05 — setup.* (region + locale-timezone) production wire-up.
+// 196-04 shipped the router factory with setRegion; 196-05 extends with
+// setLocaleTimezone and the timezoneService dep. The default Proxy stub
+// throws on call until this swap lands.
+import {createSetupRouter} from './modules/server/trpc/setup-router.js'
+import {createTimezoneService} from './modules/locale/index.js'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -904,9 +910,23 @@ export default class Livinityd {
 				credsService: xaiCredentialsService,
 			})
 
+			// Phase 196-05 — setup.* production wire-up. Combines:
+			//   - setRegion procedure (shipped Plan 196-04)
+			//   - setLocaleTimezone procedure (shipped Plan 196-05 Task 3)
+			// timezoneService validates against Intl.supportedValuesOf and
+			// shells out via execFile('sudo', ['/usr/bin/timedatectl',
+			// 'set-timezone', zone]) — covered by the narrow sudoers
+			// TIMEDATECTL Cmnd_Alias extended in this same plan.
+			const timezoneService = createTimezoneService()
+			const setupRouterProductionInstance = createSetupRouter({
+				redis: this.ai.redis,
+				timezoneService,
+			})
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
+				setup: setupRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(
@@ -914,6 +934,9 @@ export default class Livinityd {
 			)
 			webappLogger.info(
 				'Phase 196-01 — xAI auth router wired (auth.xai.start now serves real opencode flows, not emptyInjectionStub)',
+			)
+			webappLogger.info(
+				'Phase 196-05 — setup router wired (setRegion + setLocaleTimezone)',
 			)
 		} catch (err) {
 			// Non-fatal — boot continues. Streaming + WebApp launcher will
