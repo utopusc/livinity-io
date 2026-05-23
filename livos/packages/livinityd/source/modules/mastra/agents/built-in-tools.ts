@@ -378,6 +378,36 @@ const typeTextTool = createTool({
 	},
 })
 
+// ─── Phase 200-C-4 — luse_computer_press_keys (DESTRUCTIVE) ────────────
+//
+// Sends an xdotool keysym sequence — e.g. "ctrl+c", "Return", "alt+F4".
+// The keys string is parsed by xdotool itself; we pass it through
+// execFile so the operator cannot inject shell metacharacters.
+
+const pressKeysTool = createTool({
+	id: 'luse_computer_press_keys',
+	description:
+		'Press one or more keys on the LivOS desktop using xdotool key syntax. ' +
+		"Examples: 'ctrl+c', 'Return', 'alt+F4', 'super'. " +
+		'This is a DESTRUCTIVE tool — the operator will be asked to approve before it runs.',
+	inputSchema: z.object({
+		keys: z.string().min(1),
+	}),
+	outputSchema: z.object({
+		success: z.boolean(),
+		keys: z.string(),
+	}),
+	execute: async (input) => {
+		const {keys} = input as {keys: string}
+		const env = displayEnv()
+		await execFileAsync('xdotool', ['key', '--', keys], {
+			timeout: 4000,
+			env,
+		})
+		return {success: true, keys}
+	},
+})
+
 /**
  * Built-in tool map keyed by tool id. Merged into the agent's tool resolver
  * AFTER MCP tool filtering, so these always reach the model regardless of
@@ -396,4 +426,5 @@ export const builtInTools = {
 	// Phase 200-C destructive additions (W-02 approval-wrapped at agent build time)
 	luse_computer_click_mouse: clickMouseTool,
 	luse_computer_type_text: typeTextTool,
+	luse_computer_press_keys: pressKeysTool,
 }
