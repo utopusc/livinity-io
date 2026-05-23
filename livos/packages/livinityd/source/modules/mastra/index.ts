@@ -9,6 +9,7 @@
  */
 
 import type {Agent} from '@mastra/core/agent'
+import type {Mastra} from '@mastra/core'
 
 import type {ProviderRouter} from './provider-router.js'
 import type {AgentRegistry} from './agents/agent-registry.js'
@@ -41,6 +42,14 @@ export class LivOSMastra {
 	// mutations in `agent-router.ts` call `scheduler?.refresh()` so cron
 	// changes hot-reload without a livinityd restart.
 	scheduler: AgentScheduler | null = null
+	// Phase 202-09 — additive B-02-respecting extension (INV-202-03). The
+	// canonical `new Mastra({...})` constructor wrap (D-202-06 / D-202-07 /
+	// D-202-18) lives here so future workflow / eval / telemetry features
+	// have a single hook point. Construction is deferred to the
+	// `createMastraInstance` helper in `mastra-instance.ts` so this file
+	// stays a thin shape contract — the existing `agent`, `memory`,
+	// `mcpBridge`, `registry`, `scheduler` slots are preserved untouched.
+	mastraInstance: Mastra | null = null
 
 	constructor(deps: {providerRouter: ProviderRouter}) {
 		this.providerRouter = deps.providerRouter
@@ -75,6 +84,16 @@ export class LivOSMastra {
 	// every CRUD change.
 	attachScheduler(scheduler: AgentScheduler): void {
 		this.scheduler = scheduler
+	}
+
+	// Phase 202-09 — additive attach helper (INV-202-03). Mirrors the shape
+	// of the existing attach* methods. Called from livinityd boot wire-up
+	// AFTER `registry.init()` so the constructed Mastra instance can read
+	// the live agent map. The instance is side-effect-free until `.startWorkers()`
+	// is called — Plan 202-09 stops at construction; future plans extend
+	// the boot wire-up with worker lifecycle if needed.
+	attachMastraInstance(instance: Mastra): void {
+		this.mastraInstance = instance
 	}
 }
 
