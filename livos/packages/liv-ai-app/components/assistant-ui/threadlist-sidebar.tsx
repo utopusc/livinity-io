@@ -29,6 +29,7 @@ export function ThreadListSidebar({
   const pathname = usePathname();
   const isChatActive = pathname === "/" || pathname === "";
   const isAgentsActive = pathname?.startsWith("/agents") ?? false;
+  const isSettingsActive = pathname?.startsWith("/settings") ?? false;
 
   return (
     <Sidebar {...props}>
@@ -81,16 +82,15 @@ export function ThreadListSidebar({
       <SidebarFooter className="aui-sidebar-footer border-t">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              onClick={() => {
-                // TODO(P201): open Liv AI settings panel
-              }}
-            >
-              <Settings className="size-5 shrink-0" />
-              <span className="aui-sidebar-footer-title font-semibold">
-                Settings
-              </span>
+            {/* Phase 202-07 — Settings footer button now navigates to
+                /settings (was a TODO onClick stub since Phase 201). */}
+            <SidebarMenuButton size="lg" asChild isActive={isSettingsActive}>
+              <Link href="/settings">
+                <Settings className="size-5 shrink-0" />
+                <span className="aui-sidebar-footer-title font-semibold">
+                  Settings
+                </span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

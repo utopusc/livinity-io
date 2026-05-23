@@ -42,6 +42,7 @@ export function AgentsSidebar({ headerLabel = "Agents", ...props }: AgentsSideba
 	const pathname = usePathname();
 	const isChatActive = pathname === "/" || pathname === "";
 	const isAgentsActive = pathname?.startsWith("/agents") ?? false;
+	const isSettingsActive = pathname?.startsWith("/settings") ?? false;
 
 	return (
 		<Sidebar {...props}>
@@ -92,11 +93,13 @@ export function AgentsSidebar({ headerLabel = "Agents", ...props }: AgentsSideba
 			<SidebarFooter className="aui-sidebar-footer border-t">
 				<SidebarMenu>
 					<SidebarMenuItem>
-						<SidebarMenuButton size="lg">
-							<Settings className="size-5 shrink-0" />
-							<span className="aui-sidebar-footer-title font-semibold">
-								Settings
-							</span>
+						<SidebarMenuButton size="lg" asChild isActive={isSettingsActive}>
+							<Link href="/settings">
+								<Settings className="size-5 shrink-0" />
+								<span className="aui-sidebar-footer-title font-semibold">
+									Settings
+								</span>
+							</Link>
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 				</SidebarMenu>
