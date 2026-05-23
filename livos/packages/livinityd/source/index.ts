@@ -143,6 +143,13 @@ import {runMastraMigrations} from './modules/mastra/migrate.js'
 import {createMcpBridge} from './modules/mastra/mcp-bridge.js'
 import {createLivAiAgent} from './modules/mastra/agents/liv-ai.js'
 import {createMastraRouter} from './modules/server/trpc/mastra-router.js'
+// Phase 198-01 — Mastra chatRoute Express handler factory. Bridges the
+// assistant-ui frontend (Plan 198-02) to livOSMastra.agents.livAi via
+// AI-SDK-format SSE. Mounted at POST /chat/:agentId behind the same JWT
+// gate as /trpc. tRPC mastra.* namespace from P197-05 stays as deprecated
+// fallback transport; full removal deferred to Phase 199.
+import {createChatRouteHandler} from './modules/mastra/chat-route.js'
+import express from 'express'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
 // DISPLAY or XAUTHORITY. Both subsystems that touch X11 (streaming's
@@ -1025,6 +1032,53 @@ export default class Livinityd {
 						mastraWireUpErr,
 					)
 				}
+			}
+
+			// Phase 198-01 — Mastra chatRoute Express mount. Bridges assistant-ui
+			// frontend (Plan 198-02) to livOSMastra.agents.livAi via AI-SDK SSE.
+			// tRPC mastra.agent.* namespace from P197-05 stays mounted as deprecated
+			// fallback; full removal deferred to Phase 199.
+			//
+			// T-198-01 / T-198-08 mitigation: inline JWT gate using the SAME
+			// verifyToken used by the rest of livinityd's Express surface
+			// (/api/desktop/resize, /api/docker/container, etc). Bearer header
+			// OR LIVINITY_SESSION cookie accepted, mirroring the tRPC
+			// is-authenticated middleware's two-source token resolution.
+			// Unauthenticated requests get 401 BEFORE the handler runs.
+			try {
+				if (livOSMastra && this.server.app) {
+					const chatHandler = createChatRouteHandler({livOSMastra})
+					const chatAuthGate: express.RequestHandler = async (req, res, next) => {
+						try {
+							let token = req.headers.authorization?.split(' ')[1]
+							if (!token) {
+								token = (req as unknown as {cookies?: {LIVINITY_SESSION?: string}}).cookies?.LIVINITY_SESSION
+							}
+							if (!token) {
+								res.status(401).json({error: 'Unauthorized'})
+								return
+							}
+							await this.server.verifyToken(token)
+							next()
+						} catch {
+							res.status(401).json({error: 'Unauthorized'})
+						}
+					}
+					this.server.app.post(
+						'/chat/:agentId',
+						express.json({limit: '10mb'}),
+						chatAuthGate,
+						chatHandler,
+					)
+					webappLogger.info(
+						'Phase 198-01 — Mastra chatRoute mounted at /chat/livAi (AI-SDK SSE transport ready)',
+					)
+				}
+			} catch (chatRouteErr) {
+				this.logger.error(
+					'Phase 198-01 — chatRoute mount failed; /chat/livAi unavailable until next restart',
+					chatRouteErr,
+				)
 			}
 
 			const productionAppRouter = createAppRouter({
