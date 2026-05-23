@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-23T09:36:00.000Z"
+last_updated: "2026-05-23T18:55:00Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -25,9 +25,13 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 197 (mastra-agent-platform-xai — rev-2 Liv AI Dock app) — **CODE-COMPLETE + LIVE on Mini PC** 2026-05-22 (all 6 plans shipped + 4 live-deploy hotfixes; pre-commit hook `[sacred-sha] PASS: 20 files verified` × every commit; Mini PC bruce@10.69.31.68 boot log confirms `Phase 197-05 — Liv AI agent + Mastra tRPC router wired (memory + mcpBridge + agent + approval-manager ready)`; tRPC `mastra.agent.approve` route registered + adminProcedure gate verified via live curl 401 UNAUTHORIZED response)
-Plan: 6 of 6 + 4 hotfixes
-Last completed plan: **197-06** ✅ CODE-COMPLETE 2026-05-22 (Liv AI Dock app — LIVINITY_liv-ai systemApps entry + /liv-ai window-content lazy-load + useLivAi hook wrapping trpc.mastra.agent.stream subscription with reducer over chunks + ApprovalModal autoFocus-on-Reject + redactArgsForDisplay scrubs token/key/secret/password/authorization fields + MessageBubble React-text-only [T-197-06-02 zero dangerouslySetInnerHTML] + ThreadSidebar + LivAiChatWindow composition; D-NO-NEW-DEPS preserved [zero new npm deps in UI]; 5/5 redact-args.test PASS; pnpm --filter ui build exit 0 in 33.65s). 4 live-deploy hotfixes shipped same day: 440f4f57 (PgStore→PostgresStore — Mastra v1.11 API), b84e2f8a (this.logger.warn→this.logger.error), 86df7041 (PostgresStore+PgVector require id field), ed537b01 (semanticRecall=false at runtime — embedder deferred to Phase 198+, SEMANTIC-RECALL-SCOPE-INVARIANT 'thread' preserved as code comment).
+Phase: 198 (liv-ai-v2-assistant-ui-generative-ui) — EXECUTING
+Plan: 2 of 8 complete
+Last completed plan: **198-02** ✅ CODE-COMPLETE 2026-05-23 (assistant-ui Frontend Bootstrap — installed @assistant-ui/react@^0.14.7 + @assistant-ui/react-ai-sdk@^1.3.26 + @assistant-ui/react-markdown@^0.14.0 in livos/packages/ui; deleted 5 bespoke Phase 197-06 files [566 LOC: approval-modal + message-bubble + thread-sidebar + use-liv-ai + liv-ai-chat-window]; preserved redact-args.ts + redact-args.test.ts [5/5 vitest PASS — Plan 198-04 ApprovalCard reuse]; manual-copy-fallback Thread scaffold at src/components/assistant-ui/thread.tsx [126 LOC, minimal @assistant-ui/react primitives only — assistant-ui CLI + shadcn fallback both ELIFECYCLE on Windows host due to POSIX postinstall cp -r ./.../.]; new <Assistant /> at src/features/liv-ai/assistant.tsx [50 LOC — AssistantRuntimeProvider + useChatRuntime + AssistantChatTransport({api:'/chat/livAi', credentials:'include'}) + Thread]; liv-ai-content.tsx rewired from LivAiChatWindow → Assistant; 4 atomic commits 9e9a75b7 + f0c3676e + 9a525838 + d32653b4; vite build EXIT 0 in 36.24s [liv-ai-content chunk 342.5 kB / 94.9 kB gzip]; tsc --noEmit ZERO new errors on 3 modified files; sacred SHA preserved 4/4). 2 deviations documented [both Windows postinstall ELIFECYCLE workarounds — Plan Task 3 step 2 explicitly anticipated the CLI-failure branch].
+
+Previously: **198-01** ✅ CODE-COMPLETE 2026-05-23 — Backend Mastra chatRoute + livinityd Express mount (POST /chat/:agentId with inline JWT chatAuthGate + ChatRequestSchema zod gate + ALLOWED_AGENT_IDS Set allow-list; @mastra/ai-sdk@1.4.3 + ai@6.0.191 EXACT-pinned; 7 vitest PASS; commits abd00d52 + 9705e393 + 5a8d40f5; sacred SHA preserved 3/3).
+
+Previously: **197-06** ✅ CODE-COMPLETE 2026-05-22 (Liv AI Dock app — LIVINITY_liv-ai systemApps entry + /liv-ai window-content lazy-load + useLivAi hook wrapping trpc.mastra.agent.stream subscription with reducer over chunks + ApprovalModal autoFocus-on-Reject + redactArgsForDisplay scrubs token/key/secret/password/authorization fields + MessageBubble React-text-only [T-197-06-02 zero dangerouslySetInnerHTML] + ThreadSidebar + LivAiChatWindow composition; D-NO-NEW-DEPS preserved [zero new npm deps in UI]; 5/5 redact-args.test PASS; pnpm --filter ui build exit 0 in 33.65s). 4 live-deploy hotfixes shipped same day: 440f4f57 (PgStore→PostgresStore — Mastra v1.11 API), b84e2f8a (this.logger.warn→this.logger.error), 86df7041 (PostgresStore+PgVector require id field), ed537b01 (semanticRecall=false at runtime — embedder deferred to Phase 198+, SEMANTIC-RECALL-SCOPE-INVARIANT 'thread' preserved as code comment).
 
 Previously: **197-05** ✅ CODE-COMPLETE 2026-05-22 — ApprovalManager + redactError + createMastraRouter 5-procedure factory + httpOnlyPaths 5 entries + boot wire-up (3 commits 8d71ca63 + f5859b29 + d12465bb; 20 vitest PASS; W-02 + W-03 + N-01 + B-02 locks honoured; B-02 verified via git diff HEAD~3 -- mastra/index.ts = 0 lines).
 
