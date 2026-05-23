@@ -626,6 +626,9 @@ importers:
       js-yaml:
         specifier: ^4.1.1
         version: 4.1.1
+      leaflet:
+        specifier: ^1.9.4
+        version: 1.9.4
       lucide-react:
         specifier: 0.288.0
         version: 0.288.0(react@18.3.1)
@@ -674,6 +677,9 @@ importers:
       react-json-tree:
         specifier: 0.18.0
         version: 0.18.0(@types/react@18.3.27)(react@18.3.1)
+      react-leaflet:
+        specifier: ^4.2.1
+        version: 4.2.1(leaflet@1.9.4)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-markdown:
         specifier: ^9.0.1
         version: 9.1.0(@types/react@18.3.27)(react@18.3.1)
@@ -700,7 +706,7 @@ importers:
         version: 1.0.26(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-vnc:
         specifier: ^2.0.3
-        version: 2.0.3(react-dom@18.3.1(react@18.3.1))(react-scripts@5.0.1(@babel/plugin-syntax-flow@7.28.6(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.28.6(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3))(react@18.3.1)(rollup@2.80.0)(tslib@2.8.1)(typescript@5.9.3)
+        version: 2.0.3(react-dom@18.3.1(react@18.3.1))(react-scripts@5.0.1(@babel/plugin-syntax-flow@7.28.6(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.28.6(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3))(react@18.3.1)(rollup@4.57.0)(tslib@2.8.1)(typescript@5.9.3)
       react-window:
         specifier: ^1.8.11
         version: 1.8.11(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -783,6 +789,9 @@ importers:
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
+      '@types/leaflet':
+        specifier: ^1.9.21
+        version: 1.9.21
       '@types/node':
         specifier: 20.8.7
         version: 20.8.7
@@ -884,10 +893,10 @@ importers:
         version: 4.5.14(@types/node@20.8.7)(lightningcss@1.31.1)(terser@5.46.1)
       vite-bundle-visualizer:
         specifier: ^0.11.0
-        version: 0.11.0(rollup@2.80.0)
+        version: 0.11.0(rollup@4.57.0)
       vite-imagetools:
         specifier: ^7.0.5
-        version: 7.1.1(rollup@2.80.0)
+        version: 7.1.1(rollup@4.57.0)
       vite-plugin-pwa:
         specifier: ^1.2.0
         version: 1.2.0(vite@4.5.14(@types/node@20.8.7)(lightningcss@1.31.1)(terser@5.46.1))(workbox-build@7.4.0(@types/babel__core@7.20.5))(workbox-window@7.4.0)
@@ -4990,6 +4999,13 @@ packages:
   '@react-dnd/shallowequal@2.0.0':
     resolution: {integrity: sha512-Pc/AFTdwZwEKJxFJvlxrSmGe/di+aAOBn60sremrpLo6VI/6cmiUYNNwlI5KNYttg7uypzA3ILPMPgxB2GYZEg==}
 
+  '@react-leaflet/core@2.1.0':
+    resolution: {integrity: sha512-Qk7Pfu8BSarKGqILj4x7bCSZ1pjuAPZ+qmRwH5S7mDS91VSbVVsJSrW4qA+GPrro8t69gFYVMWb1Zc4yFmPiVg==}
+    peerDependencies:
+      leaflet: ^1.9.0
+      react: ^18.0.0
+      react-dom: ^18.0.0
+
   '@react-three/drei@10.7.7':
     resolution: {integrity: sha512-ff+J5iloR0k4tC++QtD/j9u3w5fzfgFAWDtAGQah9pF2B1YgOq/5JxqY0/aVoQG5r3xSZz0cv5tk2YuBob4xEQ==}
     peerDependencies:
@@ -6361,6 +6377,9 @@ packages:
 
   '@types/jsonwebtoken@9.0.10':
     resolution: {integrity: sha512-asx5hIG9Qmf/1oStypjanR7iKTv0gXQ1Ov/jfrX6kS/EO0OFni8orbmGCn0672NHR3kXHwpAwR+B368ZGN/2rA==}
+
+  '@types/leaflet@1.9.21':
+    resolution: {integrity: sha512-TbAd9DaPGSnzp6QvtYngntMZgcRk+igFELwR2N99XZn7RXUdKgsXMR+28bUO0rPsWp8MIu/f47luLIQuSLYv/w==}
 
   '@types/lodash@4.17.23':
     resolution: {integrity: sha512-RDvF6wTulMPjrNdCoYRC8gNR880JNGT8uB+REUpC2Ns4pRqQJhGz90wh7rgdXDPpCczF3VGktDuFGVnz8zP7HA==}
@@ -10703,6 +10722,9 @@ packages:
     resolution: {integrity: sha512-b94GiNHQNy6JNTrt5w6zNyffMrNkXZb3KTkCZJb2V1xaEGCk093vkZ2jk3tpaeP33/OiXC+WvK9AxUebnf5nbw==}
     engines: {node: '>= 0.6.3'}
 
+  leaflet@1.9.4:
+    resolution: {integrity: sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA==}
+
   leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
     engines: {node: '>=6'}
@@ -12939,6 +12961,13 @@ packages:
     engines: {node: '>=12'}
     peerDependencies:
       react: '>=16.13.1'
+
+  react-leaflet@4.2.1:
+    resolution: {integrity: sha512-p9chkvhcKrWn/H/1FFeVSqLdReGwn2qmiobOQGO3BifX+/vV/39qhY8dGqbdcPh1e6jxh/QHriLXr7a4eLFK4Q==}
+    peerDependencies:
+      leaflet: ^1.9.0
+      react: ^18.0.0
+      react-dom: ^18.0.0
 
   react-markdown@10.1.0:
     resolution: {integrity: sha512-qKxVopLT/TyA6BX3Ue5NwabOsAzm0Q7kAPwq6L+wWDwisYs7R8vZ0nRXqq6rkueboxpkjvLGU9fWifiX/ZZFxQ==}
@@ -20179,6 +20208,12 @@ snapshots:
 
   '@react-dnd/shallowequal@2.0.0': {}
 
+  '@react-leaflet/core@2.1.0(leaflet@1.9.4)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      leaflet: 1.9.4
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+
   '@react-three/drei@10.7.7(@react-three/fiber@9.5.0(@types/react@18.3.27)(immer@9.0.21)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.183.2))(@types/react@18.3.27)(@types/three@0.183.1)(immer@9.0.21)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.183.2)':
     dependencies:
       '@babel/runtime': 7.28.6
@@ -20359,13 +20394,13 @@ snapshots:
     optionalDependencies:
       rollup: 2.80.0
 
-  '@rollup/plugin-typescript@11.1.6(rollup@2.80.0)(tslib@2.8.1)(typescript@5.9.3)':
+  '@rollup/plugin-typescript@11.1.6(rollup@4.57.0)(tslib@2.8.1)(typescript@5.9.3)':
     dependencies:
-      '@rollup/pluginutils': 5.3.0(rollup@2.80.0)
+      '@rollup/pluginutils': 5.3.0(rollup@4.57.0)
       resolve: 1.22.11
       typescript: 5.9.3
     optionalDependencies:
-      rollup: 2.80.0
+      rollup: 4.57.0
       tslib: 2.8.1
 
   '@rollup/pluginutils@3.1.0(rollup@2.80.0)':
@@ -21791,6 +21826,10 @@ snapshots:
     dependencies:
       '@types/ms': 0.7.34
       '@types/node': 22.19.7
+
+  '@types/leaflet@1.9.21':
+    dependencies:
+      '@types/geojson': 7946.0.16
 
   '@types/lodash@4.17.23': {}
 
@@ -27187,6 +27226,8 @@ snapshots:
     dependencies:
       readable-stream: 2.3.8
 
+  leaflet@1.9.4: {}
+
   leven@3.1.0: {}
 
   levn@0.4.1:
@@ -29662,6 +29703,13 @@ snapshots:
       jerrypick: 1.1.2
       react: 18.3.1
 
+  react-leaflet@4.2.1(leaflet@1.9.4)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+    dependencies:
+      '@react-leaflet/core': 2.1.0(leaflet@1.9.4)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      leaflet: 1.9.4
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+
   react-markdown@10.1.0(@types/react@18.3.27)(react@18.3.1):
     dependencies:
       '@types/hast': 3.0.4
@@ -29924,9 +29972,9 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
-  react-vnc@2.0.3(react-dom@18.3.1(react@18.3.1))(react-scripts@5.0.1(@babel/plugin-syntax-flow@7.28.6(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.28.6(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3))(react@18.3.1)(rollup@2.80.0)(tslib@2.8.1)(typescript@5.9.3):
+  react-vnc@2.0.3(react-dom@18.3.1(react@18.3.1))(react-scripts@5.0.1(@babel/plugin-syntax-flow@7.28.6(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.28.6(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3))(react@18.3.1)(rollup@4.57.0)(tslib@2.8.1)(typescript@5.9.3):
     dependencies:
-      '@rollup/plugin-typescript': 11.1.6(rollup@2.80.0)(tslib@2.8.1)(typescript@5.9.3)
+      '@rollup/plugin-typescript': 11.1.6(rollup@4.57.0)(tslib@2.8.1)(typescript@5.9.3)
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       react-scripts: 5.0.1(@babel/plugin-syntax-flow@7.28.6(@babel/core@7.28.6))(@babel/plugin-transform-react-jsx@7.28.6(@babel/core@7.28.6))(@types/babel__core@7.20.5)(eslint@8.57.1)(react@18.3.1)(type-fest@4.41.0)(typescript@5.9.3)
@@ -30317,14 +30365,14 @@ snapshots:
       serialize-javascript: 4.0.0
       terser: 5.46.1
 
-  rollup-plugin-visualizer@5.14.0(rollup@2.80.0):
+  rollup-plugin-visualizer@5.14.0(rollup@4.57.0):
     dependencies:
       open: 8.4.2
       picomatch: 4.0.3
       source-map: 0.7.6
       yargs: 17.7.2
     optionalDependencies:
-      rollup: 2.80.0
+      rollup: 4.57.0
 
   rollup@2.80.0:
     optionalDependencies:
@@ -32045,18 +32093,18 @@ snapshots:
       d3-time: 3.1.0
       d3-timer: 3.0.1
 
-  vite-bundle-visualizer@0.11.0(rollup@2.80.0):
+  vite-bundle-visualizer@0.11.0(rollup@4.57.0):
     dependencies:
       cac: 6.7.14
-      rollup-plugin-visualizer: 5.14.0(rollup@2.80.0)
+      rollup-plugin-visualizer: 5.14.0(rollup@4.57.0)
       tmp: 0.2.5
     transitivePeerDependencies:
       - rolldown
       - rollup
 
-  vite-imagetools@7.1.1(rollup@2.80.0):
+  vite-imagetools@7.1.1(rollup@4.57.0):
     dependencies:
-      '@rollup/pluginutils': 5.3.0(rollup@2.80.0)
+      '@rollup/pluginutils': 5.3.0(rollup@4.57.0)
       imagetools-core: 7.1.0
       sharp: 0.34.5
     transitivePeerDependencies:
