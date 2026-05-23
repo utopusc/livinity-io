@@ -251,3 +251,31 @@ describe('luse_computer_type_text', () => {
 		expect(calls[0].args[4]).toBe(dangerous)
 	})
 })
+
+// ─── luse_computer_press_keys ─────────────────────────────────────────
+
+describe('luse_computer_press_keys', () => {
+	test('happy path: ctrl+c → xdotool key -- ctrl+c', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			return {stdout: '', stderr: ''}
+		})
+		const r = (await run('luse_computer_press_keys', {keys: 'ctrl+c'})) as {
+			success: boolean
+			keys: string
+		}
+		expect(r).toEqual({success: true, keys: 'ctrl+c'})
+		expect(calls[0].file).toBe('xdotool')
+		expect(calls[0].args).toEqual(['key', '--', 'ctrl+c'])
+	})
+
+	test('error path: xdotool unknown key propagates exception', async () => {
+		setExecFileHandler(() => {
+			throw new Error('xdotool: Unknown key name: bogus')
+		})
+		await expect(
+			run('luse_computer_press_keys', {keys: 'bogus'}),
+		).rejects.toThrow(/Unknown key name/)
+	})
+})
