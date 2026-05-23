@@ -130,9 +130,9 @@ function runStatement<T>(statement: any, mode: "all" | "get" | "run", params: un
 
 export default definePluginEntry({
   id: "openclaw-os-plugin",
-  name: "Claw — OpenUI for OpenClaw",
+  name: "Liv AI — OpenUI workspace",
   description:
-    "Injects the OpenUI Lang system prompt for requests originating from the Claw client, enabling Generative UI responses instead of plain markdown.",
+    "Liv AI: injects the OpenUI Lang system prompt for requests originating from the Liv AI client, enabling Generative UI responses instead of plain markdown.",
   configSchema: emptyPluginConfigSchema,
 
   register(api) {
@@ -255,11 +255,11 @@ export default definePluginEntry({
       ({ program, config }) => {
         const group = program
           .command("os")
-          .description("OpenClaw OS — Generative UI client controls");
+          .description("Liv AI — Generative UI workspace controls");
 
         group
           .command("url")
-          .description("Print the OpenClaw OS setup URL with auth (gateway+token in fragment)")
+          .description("Print the Liv AI setup URL with auth (gateway+token in fragment)")
           .action(() => {
             const port = config.gateway?.port ?? 18789;
             const bind = config.gateway?.bind;

@@ -115,7 +115,7 @@ export function MobileSettingsDialog({
       >
         <form onSubmit={handleSubmit} className="mt-ml flex flex-col gap-ml">
           <p className="text-sm text-text-neutral-tertiary">
-            Connect Claw to your OpenClaw gateway. The fastest way is to run{" "}
+            Connect Liv AI to your openclaw gateway. The fastest way is to run{" "}
             <code className="rounded bg-foreground px-1 font-mono">openclaw os url</code> in a
             terminal — it opens this page pre-authenticated. To paste manually, open{" "}
             <code className="rounded bg-foreground px-1 font-mono">~/.openclaw/openclaw.json</code>{" "}

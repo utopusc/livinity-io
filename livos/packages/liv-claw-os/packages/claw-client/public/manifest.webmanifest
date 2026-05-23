@@ -1,7 +1,7 @@
 {
-  "name": "OpenClaw",
-  "short_name": "Claw",
-  "description": "Generative UI client for OpenClaw — chat with agents, build apps, run cron jobs.",
+  "name": "Liv AI",
+  "short_name": "Liv AI",
+  "description": "Liv AI — Generative UI workspace for LivOS. Chat with agents, build apps, run cron jobs.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

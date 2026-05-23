@@ -1,17 +1,15 @@
 # Security Policy
 
-## Reporting a Vulnerability
+## LivOS internal fork — please file LivOS security issues internally
 
-We take the security of OpenClaw OS seriously. If you believe you have found a security vulnerability in either `@openuidev/claw-client` or `@openuidev/openclaw-os-plugin`, please report it to us through GitHub's Security Advisory **"Report a Vulnerability"** tab.
+This directory is the LivOS internal fork of `thesysdev/openclaw-os` pinned at
+upstream commit `076ae63`. For Liv AI / LivOS security issues, follow the
+LivOS security disclosure process (operator contact channel) — do NOT file
+upstream-style GitHub advisories against this folder.
 
-**Please do not report security vulnerabilities through public GitHub issues.**
+For vulnerabilities in the upstream packages (`@openuidev/claw-client`,
+`@openuidev/openclaw-os-plugin`) themselves — independent of the LivOS fork —
+report through the upstream GitHub repository's Security Advisory tab at
+[`thesysdev/openclaw-os`](https://github.com/thesysdev/openclaw-os).
 
-Instead:
-
-1. Go to the **Security** tab of this repository.
-2. Click **Report a vulnerability**.
-3. Fill out the form with a description of the vulnerability, affected versions, and reproduction steps.
-
-We will respond as quickly as possible to your report and work with you to verify and address the issue. Once a fix is available we will coordinate disclosure with you.
-
-Thank you for helping keep OpenClaw OS and its users safe!
+Thank you for helping keep Liv AI and its users safe.

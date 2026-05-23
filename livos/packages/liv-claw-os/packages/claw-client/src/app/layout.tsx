@@ -5,14 +5,14 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Claw",
-  description: "Generative UI client for OpenClaw",
+  title: "Liv AI",
+  description: "Liv AI — Generative UI workspace for LivOS",
   icons: { icon: "/favicon.svg", apple: "/favicon.svg" },
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Claw",
+    title: "Liv AI",
   },
 };
 
