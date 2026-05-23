@@ -38,25 +38,53 @@ const PORT = String(process.env.PORT || process.env.OPENCLAW_PORT || 18789);
 const BIND = process.env.OPENCLAW_BIND || 'loopback';
 const AUTH = process.env.OPENCLAW_GATEWAY_AUTH || 'none';
 
-// Resolve the openclaw CLI bin via node's module resolution so this works in
-// both pnpm-workspace (symlinked node_modules) and npm-flat node_modules
-// layouts.
+// Resolve the openclaw CLI bin. openclaw's package.json has a restrictive
+// `exports` block that does NOT expose `./package.json`, so the natural
+// `require.resolve('openclaw/package.json')` path fails with
+// ERR_PACKAGE_PATH_NOT_EXPORTED on Node 22+ (Mini PC observed 2026-05-23).
+//
+// Strategy (most → least preferred):
+//   1) Walk a fixed set of candidate paths to `openclaw.mjs` directly.
+//      Covers both pnpm-workspace symlinks AND npm-flat layouts AND the
+//      pnpm-store deduplicated location at /opt/livos/node_modules/.pnpm/...
+//   2) Fall back to the `.bin/openclaw` shim wrapper (always present after
+//      `pnpm install`). The shim is a POSIX script — we exec it via /bin/sh
+//      rather than via `node` directly.
 function resolveOpenclawBin() {
-    // openclaw's package.json exposes `bin: { openclaw: "./bin/openclaw.mjs" }`.
-    // Use require.resolve on the package.json to find the package root, then
-    // join the bin path.
-    const pkgPath = require.resolve('openclaw/package.json');
-    const pkgRoot = path.dirname(pkgPath);
-    const pkgJson = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    let binRel;
-    if (typeof pkgJson.bin === 'string') {
-        binRel = pkgJson.bin;
-    } else if (pkgJson.bin && typeof pkgJson.bin === 'object') {
-        binRel = pkgJson.bin.openclaw || Object.values(pkgJson.bin)[0];
-    } else {
-        throw new Error('openclaw package.json has no `bin` field');
+    const candidates = [
+        // Plan-canonical: pkg-local node_modules (npm flat / pnpm hoisted)
+        path.resolve(__dirname, 'node_modules', 'openclaw', 'openclaw.mjs'),
+        // Workspace-root hoisted node_modules (pnpm-workspace default)
+        path.resolve(__dirname, '..', '..', 'node_modules', 'openclaw', 'openclaw.mjs'),
+        // pnpm-store inner layout (resolved from the .bin shim NODE_PATH)
+        path.resolve(
+            __dirname,
+            '..',
+            '..',
+            'node_modules',
+            '.pnpm',
+            'openclaw@2026.5.20',
+            'node_modules',
+            'openclaw',
+            'openclaw.mjs',
+        ),
+    ];
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) return candidate;
     }
-    return path.join(pkgRoot, binRel);
+    // Last resort — defer to the `.bin/openclaw` shim if present. The shim is
+    // a POSIX script that bakes the correct NODE_PATH; we'll exec it directly.
+    const shimCandidates = [
+        path.resolve(__dirname, 'node_modules', '.bin', 'openclaw'),
+        path.resolve(__dirname, '..', '..', 'node_modules', '.bin', 'openclaw'),
+    ];
+    for (const shim of shimCandidates) {
+        if (fs.existsSync(shim)) return shim;
+    }
+    throw new Error(
+        '[liv-claw-gateway] openclaw bin not found. Run `pnpm --filter @livos/liv-claw-gateway install` first. Looked at:\n  - ' +
+            candidates.concat(shimCandidates).join('\n  - '),
+    );
 }
 
 function resolvePluginBundle() {
@@ -85,8 +113,7 @@ const pluginBundle = resolvePluginBundle();
 // invocation. `--plugin <path>` registers an out-of-tree plugin without
 // requiring `openclaw plugins install` first (Plan 203-04 will do the
 // permanent install).
-const args = [
-    openclawBin,
+const subArgs = [
     'gateway',
     'run',
     '--port',
@@ -100,7 +127,20 @@ const args = [
 ];
 
 if (AUTH === 'none') {
-    args.push('--allow-unconfigured');
+    subArgs.push('--allow-unconfigured');
+}
+
+// Dispatch based on resolved bin shape:
+//   *.mjs  → exec `node <mjs> <args>`  (preferred, lets node honour shebang)
+//   <shim> → exec `<shim> <args>`      (POSIX shell that bakes NODE_PATH)
+let cmd;
+let cmdArgs;
+if (openclawBin.endsWith('.mjs') || openclawBin.endsWith('.js')) {
+    cmd = process.execPath;
+    cmdArgs = [openclawBin, ...subArgs];
+} else {
+    cmd = openclawBin;
+    cmdArgs = subArgs;
 }
 
 console.log('[liv-claw-gateway] booting openclaw');
@@ -108,7 +148,7 @@ console.log('[liv-claw-gateway]   bin:    ' + openclawBin);
 console.log('[liv-claw-gateway]   plugin: ' + pluginBundle);
 console.log('[liv-claw-gateway]   port:   ' + PORT + ' (bind=' + BIND + ' auth=' + AUTH + ')');
 
-const child = spawn(process.execPath, args, {
+const child = spawn(cmd, cmdArgs, {
     stdio: 'inherit',
     env: process.env,
 });
