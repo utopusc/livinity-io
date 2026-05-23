@@ -119,6 +119,12 @@ vi.mock('@assistant-ui/react', () => {
 		Root: ({children}: {children?: ReactNode}) => <div>{children}</div>,
 		Content: () => null,
 	}
+	// attachment-adapter.ts imports these classes; stub minimally so the
+	// import resolves under the mocked module.
+	class SimpleImageAttachmentAdapter {}
+	class CompositeAttachmentAdapter {
+		constructor(public adapters: unknown[]) {}
+	}
 	return {
 		AssistantRuntimeProvider,
 		AuiIf,
@@ -129,6 +135,8 @@ vi.mock('@assistant-ui/react', () => {
 		ComposerPrimitive,
 		ThreadPrimitive,
 		MessagePrimitive,
+		SimpleImageAttachmentAdapter,
+		CompositeAttachmentAdapter,
 	}
 })
 
