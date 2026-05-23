@@ -1,6 +1,12 @@
 import type { Settings } from "../storage";
 import type { DeviceIdentity } from "./device-identity";
 import { buildConnectParams } from "./handshake";
+import {
+  fetchLivinitydDeviceToken,
+  LivinitydHandshakeError,
+  shouldRefreshDeviceToken,
+  type LivinitydHandshakeResult,
+} from "./livinityd-handshake";
 import type { EventFrame, GatewayError, GatewayFrame, HelloOk } from "./types";
 
 // WebSocket close codes that indicate non-retryable auth failures
@@ -40,6 +46,13 @@ export interface GatewaySocketOptions {
    * `reconnect()`) again to resume.
    */
   onUnreachable?: () => void;
+  /**
+   * Phase 203-05 (D-203-12 / INV-203-10) — optional handshake fetcher.
+   * Defaults to `fetchLivinitydDeviceToken` (POST /openclawos/handshake on the
+   * same origin as the iframe). Override in tests or when running outside
+   * LivOS to disable the bridge (returns null = skip and use settings.token).
+   */
+  fetchHandshakeToken?: () => Promise<LivinitydHandshakeResult | null>;
 }
 
 export class GatewaySocket {
@@ -58,6 +71,10 @@ export class GatewaySocket {
   private _readyPromise: Promise<void> | null = null;
   private _readyResolve: (() => void) | null = null;
   private _readyReject: ((e: Error) => void) | null = null;
+  // Phase 203-05 — cached livinityd-minted openclaw device token. Refreshed
+  // when missing OR within 30s of expiry. The expiresAt is unix-ms.
+  private livinitydDeviceToken: string | null = null;
+  private livinitydDeviceTokenExpiresAt: number | null = null;
 
   constructor(private opts: GatewaySocketOptions) {}
 
@@ -165,8 +182,45 @@ export class GatewaySocket {
     const nonce = await this.waitForChallenge();
     log(`challenge nonce: ${nonce.slice(0, 12)}…`);
 
-    const settings = this.opts.getSettings();
-    if (!settings || this.stopped) return;
+    const rawSettings = this.opts.getSettings();
+    if (!rawSettings || this.stopped) return;
+
+    // Phase 203-05 — fetch (or reuse cached) livinityd-minted openclaw device
+    // token BEFORE buildConnectParams. The token is short-lived (5min per
+    // T-203-02), so we re-fetch when missing or within 30s of expiry. Failure
+    // is non-fatal — we fall through to the raw settings.token path so
+    // stand-alone (non-LivOS) deploys keep working.
+    let settings = rawSettings;
+    try {
+      if (
+        shouldRefreshDeviceToken(this.livinitydDeviceTokenExpiresAt ?? undefined)
+      ) {
+        const fetcher = this.opts.fetchHandshakeToken ?? fetchLivinitydDeviceToken;
+        const handshake = await fetcher();
+        if (handshake) {
+          this.livinitydDeviceToken = handshake.token;
+          this.livinitydDeviceTokenExpiresAt = handshake.expiresAt;
+          log(
+            `livinityd handshake ok — token expires ${new Date(handshake.expiresAt).toISOString()} (jti ${handshake.sessionId.slice(0, 8)}…)`,
+          );
+        }
+      }
+      if (this.livinitydDeviceToken) {
+        settings = {...rawSettings, deviceToken: this.livinitydDeviceToken};
+      }
+    } catch (handshakeErr) {
+      if (handshakeErr instanceof LivinitydHandshakeError) {
+        warn(
+          `livinityd handshake failed (${handshakeErr.status ?? "no-status"}): ${handshakeErr.message} — falling through to settings.token`,
+        );
+        // Clear the cache so the next attempt re-fetches rather than reusing
+        // a stale token that may now be revoked.
+        this.livinitydDeviceToken = null;
+        this.livinitydDeviceTokenExpiresAt = null;
+      } else {
+        warn("livinityd handshake threw unexpectedly — falling through:", handshakeErr);
+      }
+    }
 
     let device: DeviceIdentity;
     try {
