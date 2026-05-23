@@ -78,8 +78,16 @@ describe('createLivAiAgent', () => {
 		agentCtorArgs.length = 0
 		const deps = makeDeps()
 		createLivAiAgent(deps)
-		const args = agentCtorArgs[0] as {model: () => Promise<unknown>}
-		await args.model()
+		// Phase 199-03 — model: is now a per-request resolver taking
+		// {requestContext}. Phase 197-04 shape was zero-arg async; this
+		// pre-existing case is updated to pass a stub RequestContext so
+		// the basic "model resolver delegates to providerRouter" contract
+		// stays asserted independently of the modelName parameterization
+		// covered in Tests 11-13.
+		const args = agentCtorArgs[0] as {
+			model: (input: {requestContext: {get(k: string): unknown}}) => Promise<unknown> | unknown
+		}
+		await args.model({requestContext: {get: () => undefined}})
 		expect(deps.providerRouter.resolveAgentModel).toHaveBeenCalledTimes(1)
 	})
 
@@ -178,5 +186,63 @@ describe('wrapDestructiveTools', () => {
 		)
 		expect((out.luse_computer_click_mouse as {execute: unknown}).execute).not.toBe(click.execute)
 		expect(out.luse_computer_screenshot).toBe(ss)
+	})
+})
+
+// --- Phase 199-03 ------------------------------------------------------
+//
+// Plan 199-03 flips the model: prop from zero-arg async resolver
+//   model: (async () => deps.providerRouter.resolveAgentModel()) as never
+// to a per-request dynamic resolver that reads modelName off the Mastra
+// RequestContext (passed in by chat-route per Plan 199-03):
+//   model: ({requestContext}) => deps.providerRouter.resolveAgentModel(
+//       requestContext.get('modelName') as string | undefined
+//   )
+//
+// The provider-router (Plan 199-02 coerceModel) handles soft validation
+// of the modelName — invalid/undefined → XAI_DEFAULT_MODEL_ID. The agent
+// just forwards whatever requestContext yields.
+
+describe('Phase 199-03: dynamic model via RequestContext', () => {
+	function makeRequestContextStub(modelName?: string): {get(key: string): unknown} {
+		return {
+			get: (key: string) => (key === 'modelName' ? modelName : undefined),
+		}
+	}
+
+	test('Test 11: model resolver invoked with requestContext returning "grok-4.3" calls providerRouter.resolveAgentModel("grok-4.3")', async () => {
+		agentCtorArgs.length = 0
+		const deps = makeDeps()
+		createLivAiAgent(deps)
+		const args = agentCtorArgs[0] as {
+			model: (input: {requestContext: {get(k: string): unknown}}) => Promise<unknown> | unknown
+		}
+		await args.model({requestContext: makeRequestContextStub('grok-4.3')})
+		expect(deps.providerRouter.resolveAgentModel).toHaveBeenCalledTimes(1)
+		expect(deps.providerRouter.resolveAgentModel).toHaveBeenCalledWith('grok-4.3')
+	})
+
+	test('Test 12: model resolver invoked with requestContext returning undefined calls providerRouter.resolveAgentModel(undefined) (default-model fallback)', async () => {
+		agentCtorArgs.length = 0
+		const deps = makeDeps()
+		createLivAiAgent(deps)
+		const args = agentCtorArgs[0] as {
+			model: (input: {requestContext: {get(k: string): unknown}}) => Promise<unknown> | unknown
+		}
+		await args.model({requestContext: makeRequestContextStub(undefined)})
+		expect(deps.providerRouter.resolveAgentModel).toHaveBeenCalledTimes(1)
+		expect(deps.providerRouter.resolveAgentModel).toHaveBeenCalledWith(undefined)
+	})
+
+	test('Test 13: model resolver invoked with bogus modelName forwards verbatim (coerce in provider-router, not here)', async () => {
+		agentCtorArgs.length = 0
+		const deps = makeDeps()
+		createLivAiAgent(deps)
+		const args = agentCtorArgs[0] as {
+			model: (input: {requestContext: {get(k: string): unknown}}) => Promise<unknown> | unknown
+		}
+		await args.model({requestContext: makeRequestContextStub('bogus')})
+		expect(deps.providerRouter.resolveAgentModel).toHaveBeenCalledTimes(1)
+		expect(deps.providerRouter.resolveAgentModel).toHaveBeenCalledWith('bogus')
 	})
 })
