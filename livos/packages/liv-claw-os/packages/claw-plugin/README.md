@@ -1,31 +1,36 @@
-# @openuidev/openclaw-os-plugin
+# @openuidev/openclaw-os-plugin — Liv AI plugin
 
-> The [OpenClaw](https://github.com/openclaw/openclaw) plugin behind [OpenClaw OS](../../README.md). Bundles the workspace UI ([`@openuidev/claw-client`](../claw-client)) and serves it from the gateway at `http://<gateway>/plugins/openclawos` — no separate Next.js process, no tunnel, no settings dialog on first load.
+> **Fork note.** This is the LivOS-internal fork of the upstream
+> `@openuidev/openclaw-os-plugin` (kept under that npm name so the plugin
+> remains binary-compatible with an upstream openclaw gateway). The product
+> brand inside LivOS is "Liv AI".
+
+> The [openclaw](https://github.com/openclaw/openclaw) plugin behind [Liv AI](../../README.md). Bundles the workspace UI ([`@openuidev/claw-client`](../claw-client)) and serves it from the gateway at `http://<gateway>/plugins/openclawos` — no separate Next.js process, no tunnel, no settings dialog on first load.
 
 Requires `openclaw >= 2026.4.12`.
 
 ## What it does
 
-The plugin is a single OpenClaw extension that performs four roles:
+The plugin is a single openclaw extension that performs four roles:
 
 1. **Serves the workspace UI.** Registers an HTTP route at `/plugins/openclawos` (via `api.registerHttpRoute`). The route serves the prebuilt static export of the workspace (Next.js `output: "export"`) bundled into the plugin's `static/` directory. Browser tabs load the UI from the gateway origin and connect back over the same-origin WebSocket — no CORS, no allowed-origins config, no tunnel.
 
-2. **Augments agent prompts for OpenClaw OS sessions.** A `before_prompt_build` hook prepends the full inline-UI OpenUI Lang spec plus surface-routing guidance; a `before_tool_call` hook blocks `app_create` / `app_update` until the agent has `read` `skills/openui-app/SKILL.md` that session. Both are scoped by the session-key suffix `:openclaw-os`, so other clients (CLI, scripts, third-party apps) are unaffected. See "Two UI surfaces" below.
+2. **Augments agent prompts for Liv AI sessions.** A `before_prompt_build` hook prepends the full inline-UI OpenUI Lang spec plus surface-routing guidance; a `before_tool_call` hook blocks `app_create` / `app_update` until the agent has `read` `skills/openui-app/SKILL.md` that session. Both are scoped by the session-key suffix `:openclaw-os` (preserved from upstream — wire-protocol identifier, NOT a user-visible string), so other clients (CLI, scripts, third-party apps) are unaffected. See "Two UI surfaces" below.
 
 3. **Provides persistent UI primitives.** Lightweight stores for **apps**, **artifacts**, **notifications**, and **uploads** give agents addressable, persistent surfaces the workspace renders and updates across turns. See `app-store.ts`, `artifact-store.ts`, `notification-store.ts`, `upload-store.ts`.
 
-4. **Registers the `openclaw os` CLI command group.** Via `api.registerCli`. The `os url` subcommand prints a token-authenticated workspace URL built from the gateway-validated config — same auth pattern as `openclaw dashboard`. Clipboard and browser-open are left to the calling shell so the plugin stays free of `child_process` (which would trip openclaw's install security scan).
+4. **Registers the `openclaw os` CLI command group** (Liv AI controls). Via `api.registerCli`. The `os url` subcommand prints a token-authenticated workspace URL built from the gateway-validated config — same auth pattern as `openclaw dashboard`. Clipboard and browser-open are left to the calling shell so the plugin stays free of `child_process` (which would trip openclaw's install security scan).
 
 ## Two UI surfaces: one inlined, one loaded on demand (and gated)
 
 The plugin teaches OpenUI Lang in two pieces, split by how often a turn needs each:
 
-- **Inline UI** — one-shot UI in a chat reply (charts, tables, forms, follow-ups; static, no `$state`/`Query`/`Mutation`). Used by almost every visual answer, so the full spec ([`prompts/openui-inline-ui.md`](./prompts/openui-inline-ui.md), a `generate-prompt.ts` artifact — not a skill) is prepended verbatim to every OpenClaw OS system prompt.
+- **Inline UI** — one-shot UI in a chat reply (charts, tables, forms, follow-ups; static, no `$state`/`Query`/`Mutation`). Used by almost every visual answer, so the full spec ([`prompts/openui-inline-ui.md`](./prompts/openui-inline-ui.md), a `generate-prompt.ts` artifact — not a skill) is prepended verbatim to every Liv AI system prompt.
 - **Durable apps** — reopenable dashboards/trackers/command centers with the full reactive surface (`$state`, `Query`, `Mutation`, scheduled refresh, SQLite). Larger and needed by a minority of turns, so it stays a load-on-demand skill ([`skills/openui-app/SKILL.md`](./skills/openui-app/SKILL.md)). The model tends to call `app_create` without reading it, so a `before_tool_call` hook blocks `app_create` / `app_update` until the agent has `read` it that session (per-session set persisted to `<state-dir>/plugins/openclaw-os/app-skill-read-sessions.json`, so restarts don't force a re-read).
 
 ## Install
 
-For end users, install OpenClaw OS via the installer script from the [root README](../../README.md#quick-start):
+In LivOS, Liv AI is installed and managed automatically by `liv-claw-gateway.service` on the Mini PC; the install commands below are the upstream-style instructions retained for development reference:
 
 macOS or Linux:
 

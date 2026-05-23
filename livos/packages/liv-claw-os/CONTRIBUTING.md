@@ -1,6 +1,13 @@
-# Contributing to OpenClaw OS
+# Contributing — upstream reference (Liv AI fork)
 
-Thank you for considering contributing to OpenClaw OS! This document covers how to set up the repo, what we expect from contributions, and the workflow for opening a pull request.
+> **Fork note.** This file is preserved from upstream `thesysdev/openclaw-os`
+> as a development-workflow reference for the inner pnpm workspace
+> (lint, typecheck, build commands still apply). Pull requests should go
+> against the LivOS monorepo (`utopusc/livinity-io`) following the LivOS GSD
+> workflow — NOT the upstream openclaw-os repository. Upstream issue-tracker
+> + Discord links below are informational only.
+
+Thank you for working on the Liv AI fork. This document covers how to set up the inner workspace, what we expect from contributions, and the development workflow inherited from upstream.
 
 ## Code of Conduct
 
@@ -12,7 +19,7 @@ By participating in this project, you agree to abide by our [Code of Conduct](./
 openclaw-os/
 ├── packages/
 │   ├── claw-client/   # Next.js generative UI web client
-│   └── claw-plugin/   # OpenClaw server-side plugin
+│   └── claw-plugin/   # openclaw server-side plugin (Liv AI plugin entrypoint)
 ├── scripts/           # Local helpers (connection info, tunnel setup)
 └── .github/           # CI workflows + issue / PR templates
 ```
@@ -23,7 +30,7 @@ See [`AGENTS.md`](./AGENTS.md) for protocol details, gateway internals, and the 
 
 - [Node.js](https://nodejs.org/) **20+** (run `nvm use` to pick up the version pinned in `.nvmrc`)
 - [pnpm](https://pnpm.io/) **9.15+**
-- A running [OpenClaw](https://github.com/openclaw/openclaw) gateway for end-to-end testing
+- A running [openclaw](https://github.com/openclaw/openclaw) gateway for end-to-end testing (on Mini PC this is `liv-claw-gateway.service`)
 
 ## Local setup
 
@@ -96,7 +103,7 @@ chore(deps): bump @openuidev/react-ui to 0.12.0
 Please use the [issue templates](.github/ISSUE_TEMPLATE/). For bugs, include:
 
 - A clear description and reproduction steps
-- Versions of the client, plugin, and OpenClaw gateway
+- Versions of the client, plugin, and openclaw gateway
 - Relevant gateway logs and browser console output
 
 ## Security issues

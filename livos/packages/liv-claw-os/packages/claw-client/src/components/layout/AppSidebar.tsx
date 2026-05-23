@@ -398,7 +398,7 @@ export function AppSidebar({
           nc ? "justify-center px-0" : "justify-between px-ml"
         } transition-[padding] duration-300`}
       >
-        <Logo name="OpenClaw" suffix="OS" collapsed={nc} />
+        <Logo name="Liv" suffix="AI" collapsed={nc} />
         <IconButton
           icon={nc ? PanelLeft : PanelLeftClose}
           variant="tertiary"

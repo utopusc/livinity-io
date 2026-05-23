@@ -245,7 +245,7 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
         <div className="min-h-0">
           <>
             <p className="mb-ml font-body text-md leading-snug text-text-neutral-tertiary">
-              Connect Claw to your OpenClaw gateway. The fastest way is to run{" "}
+              Connect Liv AI to your openclaw gateway. The fastest way is to run{" "}
               <code className="rounded bg-sunk-light px-3xs font-mono text-sm dark:bg-elevated">
                 openclaw os url
               </code>{" "}

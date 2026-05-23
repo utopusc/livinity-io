@@ -1,4 +1,12 @@
-# Agents
+# Agents (protocol reference)
+
+> **Fork note (Liv AI).** This document is preserved verbatim from upstream
+> `openclaw-os` because it describes the wire-protocol contract between the
+> openclaw gateway, the plugin, and the claw-client. The Liv AI rebrand does
+> NOT touch any of the identifiers documented here (`:openclaw-os` suffix,
+> `openclaw` npm package, `OpenClaw*` type names) — changing them would break
+> the gateway handshake. The product UI is rebranded as "Liv AI"; the
+> protocol identifiers stay `openclaw*` on purpose.
 
 - ALWAYS use pnpm.
 

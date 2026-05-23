@@ -1,6 +1,10 @@
-# @openuidev/claw-client
+# @openuidev/claw-client — Liv AI workspace UI
 
-> The workspace UI for [OpenClaw OS](../../README.md). A Next.js app that connects to an [OpenClaw](https://github.com/openclaw/openclaw) gateway and renders agent responses as live, interactive components using the [OpenUI](https://openui.com) React renderer.
+> **Fork note.** This is the LivOS-internal fork of the upstream
+> `@openuidev/claw-client` package (kept under that npm name to preserve the
+> plugin↔client binary contract). User-visible branding is "Liv AI".
+
+> The workspace UI for [Liv AI](../../README.md). A Next.js app that connects to an [openclaw](https://github.com/openclaw/openclaw) gateway and renders agent responses as live, interactive components using the [OpenUI](https://openui.com) React renderer.
 
 In a normal install the workspace is statically exported and bundled into [`@openuidev/openclaw-os-plugin`](../claw-plugin), then served from your gateway at `http://<gateway>/plugins/openclawos`. This package is the source for that UI — most users will never need to run it directly.
 
@@ -42,7 +46,7 @@ Then in this package:
 pnpm dev      # Next.js dev server on http://localhost:18790
 ```
 
-You will also need an OpenClaw gateway running with [`@openuidev/openclaw-os-plugin`](../claw-plugin) installed. See the [root README](../../README.md#quick-start) for end-to-end setup.
+You will also need an openclaw gateway running with [`@openuidev/openclaw-os-plugin`](../claw-plugin) installed. See the [root README](../../README.md) for end-to-end setup.
 
 ### Connecting to a gateway
 
@@ -80,11 +84,11 @@ src/
 └── types/            # Shared TypeScript interfaces (threads, gateway protocol)
 ```
 
-The gateway protocol types are inlined into `src/lib/gateway/types.ts` because OpenClaw does not export them publicly. There is a comment in the file pointing back to the upstream source. See [`AGENTS.md`](../../AGENTS.md#gateway-protocol-types-browser-clients) for the rationale.
+The gateway protocol types are inlined into `src/lib/gateway/types.ts` because the upstream `openclaw` npm package does not export them publicly. There is a comment in the file pointing back to the upstream source. See [`AGENTS.md`](../../AGENTS.md#gateway-protocol-types-browser-clients) for the rationale.
 
 ## Deployment
 
-In the standard OpenClaw OS install, this package is built once and bundled into `@openuidev/openclaw-os-plugin/static/` — the gateway serves it directly. No separate deploy is required.
+In the standard Liv AI install, this package is built once and bundled into `@openuidev/openclaw-os-plugin/static/` — the openclaw gateway serves it directly. No separate deploy is required.
 
 If you want to host the workspace independently (for example on Cloudflare Workers), this package is also configured for [`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare) (see `next.config.ts`, `open-next.config.ts`, `wrangler.jsonc`):
 
