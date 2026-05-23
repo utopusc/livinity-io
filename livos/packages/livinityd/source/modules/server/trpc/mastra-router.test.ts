@@ -252,18 +252,17 @@ describe('W-02 anti-pattern grep (source)', () => {
  *   T13 — labels mirror the D-199-11 mapping
  */
 describe('mastra.agent.listAvailableModels (Phase 199-02)', () => {
-	test('T11 — returns 4-item catalogue in ALLOWED_XAI_MODELS order with {id, name, description}', async () => {
+	test('T11 — returns 3-item chat-completion catalogue in ALLOWED_XAI_MODELS order (P200-B drops multi-agent)', async () => {
 		const livOSMastra = makeLivOSMastra()
 		const r = createMastraRouter({livOSMastra, approvalManager})
 		const caller = r.createCaller(makeAdminCtx() as any)
 		const result = await caller.agent.listAvailableModels()
 		expect(Array.isArray(result)).toBe(true)
-		expect(result).toHaveLength(4)
+		expect(result).toHaveLength(3)
 		const ids = result.map((m: {id: string}) => m.id)
 		expect(ids).toEqual([
 			'grok-4.20-0309-non-reasoning',
 			'grok-4.20-0309-reasoning',
-			'grok-4.20-multi-agent-0309',
 			'grok-4.3',
 		])
 		for (const entry of result) {
@@ -312,7 +311,7 @@ describe('mastra.agent.listAvailableModels (Phase 199-02)', () => {
 		expect(byId['grok-4.20-0309-non-reasoning']?.name).toBe('Grok 4.20')
 		expect(byId['grok-4.20-0309-non-reasoning']?.description).toBe('Fast non-reasoning. Default.')
 		expect(byId['grok-4.20-0309-reasoning']?.name).toBe('Grok 4.20 Think')
-		expect(byId['grok-4.20-multi-agent-0309']?.name).toBe('Grok 4.20 Multi-Agent')
+		expect(byId['grok-4.3']?.description).toBe('Latest. Reasoning + tool use.')
 		expect(byId['grok-4.3']?.name).toBe('Grok 4.3')
 		expect(byId['grok-4.3']?.description).toBe('Latest. Reasoning + tool use.')
 	})

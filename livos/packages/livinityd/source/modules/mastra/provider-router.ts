@@ -43,7 +43,6 @@ type ProviderId = (typeof ALLOWED_PROVIDERS)[number]
 export const ALLOWED_XAI_MODELS = [
 	'grok-4.20-0309-non-reasoning',
 	'grok-4.20-0309-reasoning',
-	'grok-4.20-multi-agent-0309',
 	'grok-4.3',
 ] as const
 export type AllowedXaiModel = (typeof ALLOWED_XAI_MODELS)[number]
