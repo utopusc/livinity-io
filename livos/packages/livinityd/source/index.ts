@@ -141,6 +141,13 @@ import {ApprovalManager} from './modules/mastra/approval-manager.js'
 import {createLivOSMemory} from './modules/mastra/memory.js'
 import {runMastraMigrations} from './modules/mastra/migrate.js'
 import {runLivOSMigrations} from './db/migrate.js'
+// Phase 202-01 — AgentRepository + system-agent seed. Wired into the same
+// boot block that runs the LivOS migration so seed only fires after the
+// table is guaranteed to exist.
+import {
+	AgentRepository,
+	seedSystemAgents,
+} from './modules/mastra/agents/agent-repository.js'
 import {createMcpBridge} from './modules/mastra/mcp-bridge.js'
 import {createLivAiAgent} from './modules/mastra/agents/liv-ai.js'
 import {createMastraRouter} from './modules/server/trpc/mastra-router.js'
@@ -1013,6 +1020,30 @@ export default class Livinityd {
 						this.logger.error(
 							'Phase 202-01 — runLivOSMigrations failed (non-fatal); AgentRepository will surface DB errors lazily',
 							livosMigErr,
+						)
+					}
+					// Phase 202-01 — seed the original Phase 197-04 `livAi` agent
+					// (D-202-20). Dynamic import keeps the heavy drizzle-orm/pg
+					// surfaces out of the hot path and isolates pg.Pool failures
+					// from the rest of the boot sequence.
+					try {
+						const {Pool} = await import('pg')
+						const {drizzle} = await import('drizzle-orm/node-postgres')
+						const seedPool = new Pool({connectionString: databaseUrl})
+						try {
+							const seedDb = drizzle(seedPool)
+							const agentRepo = new AgentRepository(seedDb)
+							await seedSystemAgents(agentRepo)
+							webappLogger.info(
+								'Phase 202-01 — agent registry loaded with livAi seed (system=true)',
+							)
+						} finally {
+							await seedPool.end()
+						}
+					} catch (seedErr) {
+						this.logger.error(
+							'Phase 202-01 — seedSystemAgents failed (non-fatal); the agents list will be empty until the next successful boot',
+							seedErr,
 						)
 					}
 					const memory = createLivOSMemory({databaseUrl})
