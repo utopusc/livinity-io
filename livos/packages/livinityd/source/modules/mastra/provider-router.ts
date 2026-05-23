@@ -26,10 +26,53 @@ const ALLOWED_PROVIDERS = ['xai', 'claude', 'openai'] as const
 type ProviderId = (typeof ALLOWED_PROVIDERS)[number]
 
 /**
- * Default model id resolved when provider='xai'. Pinned literal per
- * CONTEXT.md `<decisions>` block — bump as a deliberate plan change.
+ * Phase 199-02 — Locked Grok 4 model id allow-list (D-199-06).
+ *
+ * Backs the static catalogue surfaced by `mastra.agent.listAvailableModels`
+ * (Plan 199-02 tRPC procedure) AND the per-request dynamic-model dispatch
+ * via `resolveAgentModel(modelId)` (Plan 199-03). Any model id outside
+ * this tuple is rejected by `coerceModel()` and falls through to
+ * `XAI_DEFAULT_MODEL_ID` (D-199-24 — soft validation, never 400s).
+ *
+ * Source-of-truth lives in this file — the UI registry at
+ * livos/packages/ui/src/features/liv-ai/models.ts (NEW Plan 199-04) hydrates
+ * from `mastra.agent.listAvailableModels.query` at mount; the literal there
+ * is a fallback for offline render + a regression-lock test asserts equality
+ * (T-199-08 / Plan 199-04 acceptance).
  */
-const XAI_DEFAULT_MODEL_ID = 'grok-4.20-0309-non-reasoning'
+export const ALLOWED_XAI_MODELS = [
+	'grok-4.20-0309-fast',
+	'grok-4.20-0309-non-reasoning',
+	'grok-4.20-0309-reasoning',
+	'grok-4.3',
+] as const
+export type AllowedXaiModel = (typeof ALLOWED_XAI_MODELS)[number]
+
+/**
+ * Default model id resolved when provider='xai'. Phase 199-02 rotated this
+ * literal from 'grok-4.20-0309-non-reasoning' → 'grok-4.20-0309-fast' per
+ * D-199-07 (lower-latency default; user-tuned in the model picker via
+ * Plan 199-04 + 199-07).
+ */
+const XAI_DEFAULT_MODEL_ID: AllowedXaiModel = 'grok-4.20-0309-fast'
+
+/**
+ * Phase 199-02 — narrow arbitrary unknown input to `AllowedXaiModel`.
+ *
+ * Untyped client input (chat-route body `config.modelName`) cannot escape
+ * the allow-list — invalid / null / undefined / non-string inputs all fall
+ * through to `XAI_DEFAULT_MODEL_ID` per D-199-24 (soft validation; never
+ * 400s the request). Mitigates T-199-02-02 (Tampering — coerceModel input).
+ *
+ * Implementation uses `Array.includes` against a `readonly string[]` cast —
+ * no `eval`, no string-construction; pure structural narrowing.
+ */
+export function coerceModel(raw: unknown): AllowedXaiModel {
+	if (typeof raw !== 'string') return XAI_DEFAULT_MODEL_ID
+	return (ALLOWED_XAI_MODELS as readonly string[]).includes(raw)
+		? (raw as AllowedXaiModel)
+		: XAI_DEFAULT_MODEL_ID
+}
 
 const REDIS_ACTIVE_PROVIDER_KEY = 'liv:config:active_provider'
 
@@ -39,7 +82,15 @@ export interface ProviderRouterDeps {
 }
 
 export interface ProviderRouter {
-	resolveAgentModel(): Promise<unknown>
+	/**
+	 * Phase 199-02 — Extended signature: optional `modelId` accepts the
+	 * per-request override from `chat-route` body `config.modelName`
+	 * (Plan 199-03). Backward-compat: zero-arg call (the Phase 197-01
+	 * shape) coerces undefined → XAI_DEFAULT_MODEL_ID and continues to
+	 * work exactly as before — liv-ai.ts pre-Plan-199-03 callers do not
+	 * need to change synchronously.
+	 */
+	resolveAgentModel(modelId?: string): Promise<unknown>
 }
 
 /**
@@ -80,12 +131,16 @@ function coerceProvider(raw: string | null | undefined): ProviderId {
 
 export function createProviderRouter(deps: ProviderRouterDeps): ProviderRouter {
 	return {
-		async resolveAgentModel(): Promise<unknown> {
+		async resolveAgentModel(modelId?: string): Promise<unknown> {
 			const raw = await deps.redis.get(REDIS_ACTIVE_PROVIDER_KEY)
 			const provider = coerceProvider(raw)
 			if (provider !== 'xai') {
 				throw new ProviderNotConfiguredError(provider)
 			}
+			// Phase 199-02 — coerce per-request modelId through the allow-list.
+			// undefined / null / non-string / unknown id → XAI_DEFAULT_MODEL_ID
+			// (D-199-24 soft validation; T-199-02-02 tampering mitigation).
+			const resolvedId = coerceModel(modelId)
 			// apiKey: 'placeholder' satisfies @ai-sdk/xai's type contract; the
 			// fetch middleware overrides Authorization on every request with a
 			// fresh token from XaiCredentialsService. T-197-01-02: no static
@@ -94,7 +149,7 @@ export function createProviderRouter(deps: ProviderRouterDeps): ProviderRouter {
 				apiKey: 'placeholder',
 				fetch: createTokenFetch({xaiCreds: deps.xaiCreds}),
 			})
-			return provider_(XAI_DEFAULT_MODEL_ID)
+			return provider_(resolvedId)
 		},
 	}
 }
