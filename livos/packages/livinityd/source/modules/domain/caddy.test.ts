@@ -16,6 +16,98 @@ import {
 	validateHost,
 } from './caddy.js'
 
+// ─── Phase 203-05 — /openclawos/handshake bridge handle ─────────────────
+
+describe('Phase 203-05 — /openclawos/handshake handle (D-203-12 / INV-203-10)', () => {
+	it('null mainDomain :80 block emits /openclawos/handshake → :8080 BEFORE /liv-ai-app/* → :18789', () => {
+		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expect(out).toContain('handle /openclawos/handshake')
+		expect(out).toContain('reverse_proxy 127.0.0.1:8080')
+		expect(out).toContain('@livai path /liv-ai-app /liv-ai-app/*')
+		expect(out).toContain('reverse_proxy 127.0.0.1:18789')
+		// Ordering — handshake handle MUST appear before the livai handle so
+		// first-match-wins routes the JWT POST to livinityd, not the gateway.
+		const handshakeIdx = out.indexOf('handle /openclawos/handshake')
+		const livaiIdx = out.indexOf('@livai path')
+		expect(handshakeIdx).toBeGreaterThan(-1)
+		expect(livaiIdx).toBeGreaterThan(-1)
+		expect(handshakeIdx).toBeLessThan(livaiIdx)
+	})
+
+	it('apex block (mainDomain set) emits /openclawos/handshake BEFORE /liv-ai-app/*', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('handle /openclawos/handshake')
+		const apexBlockStart = out.indexOf('bruce.livinity.io {')
+		const apexBlockEnd = out.indexOf('}', apexBlockStart + 100) // skip the opening { and the cache header
+		// Find first handshake + livai occurrences INSIDE the apex block
+		const handshakeInside = out.indexOf('handle /openclawos/handshake', apexBlockStart)
+		const livaiInside = out.indexOf('@livai path', apexBlockStart)
+		expect(handshakeInside).toBeGreaterThan(apexBlockStart)
+		expect(livaiInside).toBeGreaterThan(handshakeInside)
+		expect(handshakeInside).toBeLessThan(apexBlockEnd)
+	})
+
+	it('multi-user subdomain block also emits /openclawos/handshake BEFORE /liv-ai-app/*', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			},
+			true, // multiUser
+			false,
+			[],
+		)
+		const subdomainBlockStart = out.indexOf('bruce.livinity.io {')
+		const handshakeInside = out.indexOf('handle /openclawos/handshake', subdomainBlockStart)
+		const livaiInside = out.indexOf('@livai path', subdomainBlockStart)
+		expect(handshakeInside).toBeGreaterThan(subdomainBlockStart)
+		expect(livaiInside).toBeGreaterThan(handshakeInside)
+	})
+
+	it('handshake handle routes to :8080 (livinityd), NOT :18789 (openclaw gateway)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		// Extract the handshake handle block + its single reverse_proxy line
+		const handshakeIdx = out.indexOf('handle /openclawos/handshake')
+		const blockEnd = out.indexOf('}', handshakeIdx + 'handle /openclawos/handshake'.length + 1)
+		const handshakeBlock = out.slice(handshakeIdx, blockEnd)
+		expect(handshakeBlock).toContain('reverse_proxy 127.0.0.1:8080')
+		expect(handshakeBlock).not.toContain(':18789')
+	})
+
+	it('handshake handle is the ONLY new routing surface (INV-203-08) — apex/subdomain/native still route to :8080 or per-app port', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'bruce.livinity.io',
+				subdomains: [{subdomain: 'n8n', appId: 'n8n', port: 5678, enabled: true}],
+			},
+			false,
+			false,
+			[],
+		)
+		// All existing legacy reverse_proxy targets still present
+		expect(out).toContain('reverse_proxy 127.0.0.1:8080')
+		expect(out).toContain('reverse_proxy 127.0.0.1:18789') // livai
+		expect(out).toContain('reverse_proxy 127.0.0.1:5678') // n8n subdomain
+		// No new port targets sneaked in beyond {8080, 18789, 5678}
+		const portMatches = (out.match(/reverse_proxy 127\.0\.0\.1:(\d+)/g) ?? []).map((m) =>
+			Number(m.split(':').pop()),
+		)
+		for (const port of portMatches) {
+			expect([8080, 18789, 5678]).toContain(port)
+		}
+	})
+})
+
 describe('generateFullCaddyfile — cloud-mode regression (D-104-NO-PROD-IMPACT)', () => {
 	it('does NOT emit any pki or import directive in cloud mode (AC-104-3 unit-level)', () => {
 		const out = generateFullCaddyfile(

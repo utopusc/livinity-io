@@ -135,6 +135,26 @@ ${WS_TRANSPORT_BODY}
 \t}`
 
 /**
+ * Phase 203-05 (D-203-12 / INV-203-10) — `/openclawos/handshake` is the
+ * outer-auth bridge: parent UI (LIVINITY_SESSION JWT cookie) POSTs here, and
+ * livinityd on :8080 mints a 5-minute Ed25519 openclaw device token that the
+ * iframe forwards to the openclaw gateway WebSocket handshake.
+ *
+ * This handle MUST emit BEFORE `LIV_AI_APP_HANDLE` so Caddy's first-match-wins
+ * matcher steers the handshake POST to livinityd (:8080) instead of the
+ * gateway (:18789). The gateway has no idea what LIVINITY_SESSION means; only
+ * livinityd can verify it.
+ *
+ * INV-203-08 PASS — this is the ONLY second routing surface added in Phase 203.
+ * Apex + subdomain + every other path stays unchanged.
+ */
+const OPENCLAWOS_HANDSHAKE_HANDLE = `\thandle /openclawos/handshake {
+\t\treverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY}
+\t}
+\t}`
+
+/**
  * Generate a complete Caddyfile with main domain and all subdomains.
  * In multi-user mode, uses a single wildcard block that routes all subdomains
  * to livinityd's app gateway (port 8080) for dynamic per-user routing.
@@ -148,6 +168,7 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 		// routing requires a domain. Liv AI claw-gateway handle still goes
 		// ABOVE the catch-all so dev/IP-only operators can also reach :18789.
 		blocks.push(`:80 {
+${OPENCLAWOS_HANDSHAKE_HANDLE}
 ${LIV_AI_APP_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
@@ -171,9 +192,11 @@ ${WS_TRANSPORT_BODY}
 	// behavior is app-specific and should be left to the app itself.
 	const apexCacheHeader = tunnel ? `\theader Cache-Control "no-store, must-revalidate"\n` : ''
 
-	// Main domain block — Liv AI subapp first, then livinityd catch-all
+	// Main domain block — openclaw handshake bridge first (Phase 203-05),
+	// then Liv AI subapp handle, then livinityd catch-all.
 	blocks.push(`${prefix}${config.mainDomain} {
-${apexCacheHeader}${LIV_AI_APP_HANDLE}
+${apexCacheHeader}${OPENCLAWOS_HANDSHAKE_HANDLE}
+${LIV_AI_APP_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY}
@@ -200,6 +223,7 @@ ${WS_TRANSPORT_BODY}
 		const fullDomain = `${prefix}${host}`
 		if (multiUser) {
 			blocks.push(`${fullDomain} {
+${OPENCLAWOS_HANDSHAKE_HANDLE}
 ${LIV_AI_APP_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {

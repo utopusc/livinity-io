@@ -1590,6 +1590,9 @@ _dld_update_caddy_to_livinityd() {
     auto_https off
 }
 :80 {
+    handle /openclawos/handshake {
+        reverse_proxy 127.0.0.1:8080
+    }
     @livai path /liv-ai-app /liv-ai-app/*
     handle @livai {
         reverse_proxy 127.0.0.1:18789
@@ -1599,7 +1602,7 @@ _dld_update_caddy_to_livinityd() {
     }
 }
 CADDYFILE
-            ok "Caddyfile: :80 → 127.0.0.1:8080 (CF Tunnel terminates TLS — D-134-MODE; /liv-ai-app/* → :18789)"
+            ok "Caddyfile: :80 → 127.0.0.1:8080 (CF Tunnel terminates TLS — D-134-MODE; /openclawos/handshake → :8080; /liv-ai-app/* → :18789)"
             ;;
         local-lan)
             local tld="${LIVINITY_LOCAL_TLD:-livinity.local}"
@@ -1611,6 +1614,9 @@ import /etc/caddy/pki-global.conf
             ca liv-local
         }
     }
+    handle /openclawos/handshake {
+        reverse_proxy 127.0.0.1:8080
+    }
     @livai path /liv-ai-app /liv-ai-app/*
     handle @livai {
         reverse_proxy 127.0.0.1:18789
@@ -1620,11 +1626,14 @@ import /etc/caddy/pki-global.conf
     }
 }
 CADDYFILE
-            ok "Caddyfile: *.${tld} → 127.0.0.1:8080 (tls internal liv-local; /liv-ai-app/* → :18789)"
+            ok "Caddyfile: *.${tld} → 127.0.0.1:8080 (tls internal liv-local; /openclawos/handshake → :8080; /liv-ai-app/* → :18789)"
             ;;
         cloud)
             cat > "$_DLD_CADDYFILE" <<CADDYFILE
 :80 {
+    handle /openclawos/handshake {
+        reverse_proxy 127.0.0.1:8080
+    }
     @livai path /liv-ai-app /liv-ai-app/*
     handle @livai {
         reverse_proxy 127.0.0.1:18789
@@ -1634,7 +1643,7 @@ CADDYFILE
     }
 }
 CADDYFILE
-            ok "Caddyfile: :80 → 127.0.0.1:8080 (cloud-mode bootstrap; /liv-ai-app/* → :18789)"
+            ok "Caddyfile: :80 → 127.0.0.1:8080 (cloud-mode bootstrap; /openclawos/handshake → :8080; /liv-ai-app/* → :18789)"
             ;;
     esac
 
