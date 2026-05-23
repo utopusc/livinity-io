@@ -24,9 +24,9 @@
  * Plans 198-03..07 layer on:
  *   198-03 — tool renderers (Generative UI for tool calls) [SHIPPED]
  *   198-04 — HITL Approval Card inline [SHIPPED]
- *   198-05 — ThreadList sidebar [THIS PLAN]
- *   198-06 — Slash commands + suggested prompts + attachments
- *   198-07 — Empty state + theming + DevTools
+ *   198-05 — ThreadList sidebar [SHIPPED]
+ *   198-06 — Slash commands + suggested prompts + attachments [SHIPPED]
+ *   198-07 — Empty state + DevTools + a11y wrapper [THIS PLAN]
  */
 
 import {
@@ -44,41 +44,43 @@ import {useEffect, useRef} from 'react'
 import {Thread} from '@/components/assistant-ui/thread'
 
 import {createImageAttachmentAdapter} from './attachment-adapter'
+import {DevToolsMount} from './devtools-mount'
+import {EmptyState} from './empty-state'
 import {parseSlashCommand, SLASH_COMMANDS} from './slash-commands'
-import {SuggestedPrompts} from './suggested-prompts'
 import {useThreadListAdapter} from './thread-list-adapter'
 import {ToolRenderers} from './tool-renderers'
 
 /**
- * Plan 198-06 — Empty-state suggested-prompt overlay.
+ * Plan 198-07 — Rich empty-state mount.
  *
- * Rendered inside the AssistantRuntimeProvider so it can call
- * `useThread()` to read the message count (chips visible only when the
- * active thread is empty) and `useThreadRuntime().append(text)` to
- * inject the chip text directly as a user message, kicking off the
+ * Replaces the Plan 198-06 bare `EmptyStateSuggestedPrompts` floating-
+ * pill overlay with the richer <EmptyState> from ./empty-state.tsx
+ * (Liv AI logo + tagline + suggested-prompts chip row). Behaviour
+ * preserved: only renders when the active thread has zero messages;
+ * clicking a chip calls `useThreadRuntime().append({role:'user', ...})`
+ * to inject the chip text directly as a user message and kick off the
  * agent stream in one click.
  *
- * Mounted inside `<main>` ABOVE `<Thread />` with absolute positioning
- * so the chips float over the empty Thread.Viewport without leaking
- * layout space when the thread has messages.
+ * Mounted INSIDE `<main>` ABOVE `<Thread />` with `absolute inset-0`
+ * positioning so the rich empty state owns the full thread viewport
+ * when no messages exist, then disappears (returns null) when the
+ * thread has messages — at which point `<Thread />` paints its own
+ * message list underneath. The `pointer-events-auto` wrapper ensures
+ * chips remain clickable while pointer events fall through to Thread
+ * once the empty state un-mounts.
  */
-function EmptyStateSuggestedPrompts() {
+function EmptyStateMount() {
 	const messagesCount = useThread((t) => t.messages.length)
 	const threadRuntime = useThreadRuntime()
-	const hidden = messagesCount > 0
+	if (messagesCount > 0) return null
 
 	const handlePick = (text: string) => {
 		threadRuntime.append({role: 'user', content: [{type: 'text', text}]})
 	}
 
 	return (
-		<div
-			className='pointer-events-none absolute inset-x-0 bottom-24 z-10 flex justify-center'
-			data-testid='liv-ai-empty-state'
-		>
-			<div className='pointer-events-auto'>
-				<SuggestedPrompts onPick={handlePick} hidden={hidden} />
-			</div>
+		<div className='pointer-events-auto absolute inset-0 z-10'>
+			<EmptyState onPick={handlePick} />
 		</div>
 	)
 }
@@ -204,33 +206,64 @@ export function Assistant() {
 			 * same barrel for destructive Luse MCP tools.
 			 */}
 			<ToolRenderers />
-			<div className='flex h-full overflow-hidden'>
+			{/*
+			 * Plan 198-07 — DevToolsMount renders the assistant-ui DevTools
+			 * panel in dev (T-198-07-01: gated behind import.meta.env.DEV
+			 * so the production bundle tree-shakes it out entirely). Mounts
+			 * at the root of <Assistant /> alongside the AssistantRuntime-
+			 * Provider so the panel can inspect the full runtime tree.
+			 */}
+			<DevToolsMount />
+			{/*
+			 * Plan 198-07 — a11y wrapper. `role="application"` scopes the
+			 * entire Liv AI chat surface as a single interactive application
+			 * for screen readers (NVDA/JAWS/VoiceOver), so keystrokes are
+			 * passed through to the composer instead of being intercepted
+			 * as document-navigation commands. `aria-label="Liv AI chat"`
+			 * provides the spoken landmark name. (Plan 198-07 must_haves
+			 * truth #5 — verified via Plan 198-08 a11y audit.)
+			 */}
+			<div
+				role='application'
+				aria-label='Liv AI chat'
+				className='flex h-full overflow-hidden'
+			>
 				{/* Plan 198-05 — Left sidebar: ThreadList */}
-				<aside className='flex h-full w-64 flex-col border-r border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900'>
+				<aside
+					aria-label='Conversation history'
+					className='flex h-full w-64 flex-col border-r border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900'
+				>
 					<div className='border-b border-neutral-200 p-3 dark:border-neutral-800'>
 						<button
 							type='button'
 							onClick={onSwitchToNewThread}
 							className='w-full rounded-md bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700'
 							data-testid='liv-ai-new-thread'
+							aria-label='Start a new conversation'
 						>
 							+ New conversation
 						</button>
 					</div>
-					<div className='flex-1 overflow-y-auto p-2'>
+					<ul
+						className='flex-1 overflow-y-auto p-2'
+						aria-label='Threads'
+					>
 						{items.length === 0 ? (
-							<p className='p-3 text-center text-xs text-neutral-500'>
+							<li className='p-3 text-center text-xs text-neutral-500'>
 								No conversations yet
-							</p>
+							</li>
 						) : (
 							items.map((t) => (
-								<div
+								<li
 									key={t.threadId}
 									className={
 										'group mb-1 flex items-center justify-between rounded-md px-2 py-2 text-sm ' +
 										(t.threadId === currentThreadId
 											? 'bg-cyan-100 dark:bg-cyan-950'
 											: 'hover:bg-neutral-100 dark:hover:bg-neutral-800')
+									}
+									aria-current={
+										t.threadId === currentThreadId ? 'true' : undefined
 									}
 									data-testid={`liv-ai-thread-item-${t.threadId}`}
 								>
@@ -247,24 +280,27 @@ export function Assistant() {
 											void onDelete(t.threadId)
 										}}
 										className='ml-2 hidden text-xs text-neutral-500 hover:text-red-600 group-hover:inline'
-										aria-label='Delete thread'
+										aria-label={`Delete thread: ${t.title}`}
 									>
 										×
 									</button>
-								</div>
+								</li>
 							))
 						)}
-					</div>
+					</ul>
 				</aside>
-				{/* Plan 198-02 — Main thread area; Plan 198-06 layers in
-				    the empty-state SuggestedPrompts overlay + the slash-
-				    command interceptor. Both are no-op when not applicable
-				    (overlay returns null when messages.length > 0; the
-				    interceptor only rewrites send when the composer text
-				    parses as a registered slash command — see SLASH_COMMANDS). */}
+				{/* Plan 198-02 — Main thread area.
+				 * Plan 198-06 layered in the slash-command interceptor.
+				 * Plan 198-07 replaces the bare SuggestedPrompts overlay
+				 * with the rich <EmptyState> mount (logo + tagline + chips).
+				 * EmptyStateMount returns null when messages.length > 0,
+				 * so <Thread /> below paints unobstructed once a conversation
+				 * begins. The interceptor only rewrites send when the
+				 * composer text parses as a registered slash command — see
+				 * SLASH_COMMANDS. */}
 				<main className='relative flex-1 overflow-hidden'>
 					<SlashCommandInterceptor onClear={onSwitchToNewThread} />
-					<EmptyStateSuggestedPrompts />
+					<EmptyStateMount />
 					<Thread />
 				</main>
 			</div>
