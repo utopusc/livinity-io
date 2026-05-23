@@ -714,6 +714,125 @@ import {
 	LuseTypeTextToolUI,
 } from './tool-renderers'
 
+// ─── Plan 199-06 — RunningHeader + incomplete-status branches ──────
+//
+// Asserts that the 10 P198-03 generative renderers paint a
+// `<RunningHeader>` (per-renderer args-echo label) during
+// `status.type === 'running'` and explicit error/cancelled chips
+// during `status.type === 'incomplete'`. Pre-existing P198 cases
+// (complete-state branches) MUST keep passing (INV-199-05).
+
+// Build a status fixture supporting incomplete `reason: 'cancelled'`
+// in addition to the default 'error' reason that makeProps emits.
+function makePropsWithCancelled(opts: {
+	toolName: string
+	args?: Record<string, unknown>
+	cancelled?: boolean
+}): any {
+	const base = makeProps({
+		toolName: opts.toolName,
+		args: opts.args,
+		status: 'incomplete',
+	})
+	if (opts.cancelled) {
+		base.status = {type: 'incomplete', reason: 'cancelled'}
+	}
+	return base
+}
+
+describe('Phase 199-06: status branches (RunningHeader + incomplete chips)', () => {
+	it('A — WeatherToolUI running → label "Checking weather in Istanbul…"', () => {
+		const Render = WeatherToolUI.unstable_tool.render
+		renderJsx(
+			<Render
+				{...makeProps({
+					toolName: 'weather',
+					args: {location: 'Istanbul'},
+					status: 'running',
+				})}
+			/>,
+		)
+		expect(container.textContent).toContain('Checking weather in Istanbul…')
+	})
+
+	it('B — LuseListWindowsToolUI running → label "Listing windows…"', () => {
+		const Render = LuseListWindowsToolUI.unstable_tool.render
+		renderJsx(
+			<Render
+				{...makeProps({
+					toolName: 'luse_list_windows',
+					status: 'running',
+				})}
+			/>,
+		)
+		expect(container.textContent).toContain('Listing windows…')
+	})
+
+	it('C — ImageSearchToolUI running → label `Searching images: "cats"`', () => {
+		const Render = ImageSearchToolUI.unstable_tool.render
+		renderJsx(
+			<Render
+				{...makeProps({
+					toolName: 'image_search',
+					args: {query: 'cats'},
+					status: 'running',
+				})}
+			/>,
+		)
+		expect(container.textContent).toContain('Searching images: "cats"')
+	})
+
+	it('D — WeatherToolUI complete branch still renders WeatherWidget (INV-199-05)', () => {
+		const Render = WeatherToolUI.unstable_tool.render
+		renderJsx(
+			<Render
+				{...makeProps({
+					toolName: 'weather',
+					args: {location: 'Berlin'},
+					status: 'complete',
+					result: {temperature: 20, conditions: 'Sunny', humidity: 50},
+				})}
+			/>,
+		)
+		expect(container.textContent).toContain('Berlin')
+		expect(container.textContent).toContain('20°')
+		expect(container.textContent).toContain('Sunny')
+	})
+
+	it('E — WeatherToolUI incomplete/error → red "Weather lookup failed" chip', () => {
+		const Render = WeatherToolUI.unstable_tool.render
+		renderJsx(
+			<Render
+				{...makeProps({
+					toolName: 'weather',
+					args: {location: 'Istanbul'},
+					status: 'incomplete',
+				})}
+			/>,
+		)
+		expect(container.textContent).toContain('Weather lookup failed')
+		// Red text class present somewhere on the rendered tree
+		const html = container.innerHTML
+		expect(html).toMatch(/text-red-/)
+	})
+
+	it('F — WeatherToolUI incomplete/cancelled → muted "Cancelled" chip', () => {
+		const Render = WeatherToolUI.unstable_tool.render
+		renderJsx(
+			<Render
+				{...makePropsWithCancelled({
+					toolName: 'weather',
+					args: {location: 'Istanbul'},
+					cancelled: true,
+				})}
+			/>,
+		)
+		expect(container.textContent).toContain('Cancelled')
+		// And NOT the error chip
+		expect(container.textContent).not.toContain('Weather lookup failed')
+	})
+})
+
 describe('ApprovalCardToolUI registrations (Plan 198-04)', () => {
 	it('registers a renderer for each of the 6 destructive tool names', () => {
 		const expected = new Set([
