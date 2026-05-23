@@ -533,7 +533,12 @@ step "Installing dependencies"
 
 info "Installing LivOS dependencies..."
 cd "$LIVOS_DIR"
-pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+# Phase 202-10: CI=true forces --frozen-lockfile by default. When the
+# committed pnpm-lock.yaml is out of sync with package.json (e.g. dev
+# branch added a dep without `pnpm install`), the fallback MUST opt out
+# explicitly via --no-frozen-lockfile. Previously the bare `pnpm install`
+# fallback inherited the CI=true default and looped on the same error.
+pnpm install --frozen-lockfile 2>/dev/null || pnpm install --no-frozen-lockfile
 ok "LivOS dependencies installed"
 
 if [[ -d "$LIV_DIR" ]]; then
