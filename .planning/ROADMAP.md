@@ -2739,7 +2739,7 @@ Plans:
 - [ ] 199-03-PLAN.md — Mastra agent dynamic-model via `RequestContext` + chat-route `config.modelName` zod field + incidental memory.thread wire fix (Wave 2, depends_on=[199-02]; ~80 LOC)
 - [ ] 199-04-PLAN.md — `LIV_AI_MODELS` registry + `<LivAiModelPicker>` shadcn DropdownMenu + backend-drift-lock test (Wave 2, depends_on=[199-02]; ~200 LOC)
 - [x] 199-05-PLAN.md — Centered empty-state via `<AuiIf>` + extracted Composer + DELETE `EmptyStateMount` absolute overlay + AssistantChatTransport body-callback form (Wave 3 first; ~150 LOC) ✅ CODE-COMPLETE 2026-05-23 — 3 commits `b9eac2ab..9b4abe05`, sacred SHA preserved 3/3, 95/95 liv-ai vitest PASS
-- [ ] 199-06-PLAN.md — `<RunningHeader>` micro-primitive ("Checking weather in Istanbul…") + 10 generative renderer status-branch updates (Wave 3 parallel-safe with 199-05; ~80 LOC)
+- [x] 199-06-PLAN.md — `<RunningHeader>` micro-primitive ("Checking weather in Istanbul…") + 10 generative renderer status-branch updates (Wave 3 parallel-safe with 199-05; ~80 LOC) ✅ CODE-COMPLETE 2026-05-23 — 3 commits `6c45ca37..4d341bd1`, sacred SHA preserved 3/3, 106/106 liv-ai+tool-ui vitest PASS, INV-199-07 W-02 lock preserved
 - [ ] 199-07-PLAN.md — Header bar with "Liv AI" title + `<LivAiModelPicker>` + new-conversation; Redis `liv:config:active_model` via new `getActiveModel`/`setActiveModel` tRPC procedures (Wave 3, depends_on=[199-04, 199-05]; ~120 LOC)
 - [ ] 199-08-PLAN.md — Mini PC deploy + 10-step operator browser UAT + 199-VERIFICATION.md + STATE/ROADMAP flip (Wave 4, `autonomous: false` human-gated)
 
