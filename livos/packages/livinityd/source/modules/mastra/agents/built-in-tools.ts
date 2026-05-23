@@ -305,6 +305,48 @@ const screenshotTool = createTool({
 	},
 })
 
+// ─── Phase 200-C-2 — luse_computer_click_mouse (DESTRUCTIVE) ───────────
+//
+// Moves the X11 cursor and clicks once. Inputs are coerced to integers
+// before passing to xdotool via execFile (NOT exec) — coords cannot
+// contain shell metacharacters once they hit the spawn syscall.
+
+const clickMouseTool = createTool({
+	id: 'luse_computer_click_mouse',
+	description:
+		'Move the cursor to (x, y) on the LivOS desktop and click. ' +
+		'Default button is left. This is a DESTRUCTIVE tool — the operator ' +
+		'will be asked to approve before it runs.',
+	inputSchema: z.object({
+		x: z.number().int(),
+		y: z.number().int(),
+		button: z.enum(['left', 'middle', 'right']).optional().default('left'),
+	}),
+	outputSchema: z.object({
+		success: z.boolean(),
+		x: z.number(),
+		y: z.number(),
+		button: z.string(),
+	}),
+	execute: async (input) => {
+		const {x, y, button = 'left'} = input as {
+			x: number
+			y: number
+			button?: 'left' | 'middle' | 'right'
+		}
+		const xi = Math.trunc(x)
+		const yi = Math.trunc(y)
+		const buttonCode = button === 'left' ? '1' : button === 'middle' ? '2' : '3'
+		const env = displayEnv()
+		await execFileAsync(
+			'xdotool',
+			['mousemove', '--sync', String(xi), String(yi), 'click', buttonCode],
+			{timeout: 4000, env},
+		)
+		return {success: true, x: xi, y: yi, button}
+	},
+})
+
 /**
  * Built-in tool map keyed by tool id. Merged into the agent's tool resolver
  * AFTER MCP tool filtering, so these always reach the model regardless of
@@ -320,4 +362,6 @@ export const builtInTools = {
 	get_current_time: getCurrentTimeTool,
 	// Phase 200-C-1 (non-destructive)
 	luse_computer_screenshot: screenshotTool,
+	// Phase 200-C destructive additions (W-02 approval-wrapped at agent build time)
+	luse_computer_click_mouse: clickMouseTool,
 }

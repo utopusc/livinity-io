@@ -111,11 +111,17 @@ vi.mock('node:fs/promises', () => ({
 const {builtInTools} = await import('./built-in-tools.js')
 
 function run(toolId: string, input: Record<string, unknown> = {}) {
-	const tool = (builtInTools as Record<string, {execute: (a: unknown) => Promise<unknown>}>)[
-		toolId
-	]
+	const tool = (builtInTools as Record<
+		string,
+		{execute: (a: unknown, b: unknown) => Promise<unknown>}
+	>)[toolId]
 	if (!tool) throw new Error(`tool ${toolId} not registered in builtInTools`)
-	return tool.execute({context: input})
+	// Mastra's createTool wraps execute and validates input against inputSchema
+	// (chunk-6FFXBNBE.js validateToolInput); the validated data becomes the
+	// FIRST arg to the original execute. Tests therefore call with raw input
+	// (no `.context` wrapping) — matches the production AI-SDK invocation
+	// `tool.execute(args, toolOptions)` (chunk-AM3IOVFX.js:20935).
+	return tool.execute(input, {})
 }
 
 beforeEach(() => {
@@ -159,5 +165,59 @@ describe('luse_computer_screenshot', () => {
 		const r = (await run('luse_computer_screenshot')) as {dataUrl: string}
 		expect(importCalled).toBe(true)
 		expect(r.dataUrl.startsWith('data:image/png;base64,')).toBe(true)
+	})
+})
+
+// ─── luse_computer_click_mouse ────────────────────────────────────────
+
+describe('luse_computer_click_mouse', () => {
+	test('happy path: left click at (100, 200) calls xdotool with correct args', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			return {stdout: '', stderr: ''}
+		})
+		const r = (await run('luse_computer_click_mouse', {
+			x: 100,
+			y: 200,
+			button: 'left',
+		})) as {success: boolean; x: number; y: number; button: string}
+		expect(r).toEqual({success: true, x: 100, y: 200, button: 'left'})
+		expect(calls).toHaveLength(1)
+		expect(calls[0].file).toBe('xdotool')
+		expect(calls[0].args).toEqual([
+			'mousemove',
+			'--sync',
+			'100',
+			'200',
+			'click',
+			'1', // left = button 1
+		])
+	})
+
+	test('right-button maps to xdotool button code 3', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			return {stdout: '', stderr: ''}
+		})
+		const r = (await run('luse_computer_click_mouse', {
+			x: 42,
+			y: 7,
+			button: 'right',
+		})) as {x: number; y: number; button: string}
+		expect(r.x).toBe(42)
+		expect(r.y).toBe(7)
+		expect(r.button).toBe('right')
+		expect(calls[0].args[5]).toBe('3') // right = button 3
+	})
+
+	test('error path: xdotool failure propagates as thrown error', async () => {
+		setExecFileHandler(() => {
+			throw new Error('xdotool: cannot open display')
+		})
+		await expect(
+			run('luse_computer_click_mouse', {x: 1, y: 1}),
+		).rejects.toThrow(/cannot open display/)
 	})
 })
