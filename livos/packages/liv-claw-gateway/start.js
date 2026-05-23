@@ -118,20 +118,26 @@ const pluginBundle = resolvePluginBundle();
 // boot) before the gateway starts. The install command is a no-op if the
 // plugin is already linked; --force replaces a stale registration.
 function ensurePluginInstalled() {
-    const installArgs = openclawBin.endsWith('.mjs') || openclawBin.endsWith('.js')
-        ? [openclawBin, 'plugins', 'install', '--link', '--force', pluginBundle]
-        : ['plugins', 'install', '--link', '--force', pluginBundle];
-    const installCmd = openclawBin.endsWith('.mjs') || openclawBin.endsWith('.js')
-        ? process.execPath
-        : openclawBin;
+    // openclaw CLI on 2026.5.20: --force is INCOMPATIBLE with --link (linked
+    // plugins point at source path directly; force-replace makes no sense).
+    // Run with --link only — second-and-subsequent runs are no-ops if the
+    // link already exists.
+    const subArgs = ['plugins', 'install', '--link', pluginBundle];
+    const useNode = openclawBin.endsWith('.mjs') || openclawBin.endsWith('.js');
+    const installCmd = useNode ? process.execPath : openclawBin;
+    const installArgs = useNode ? [openclawBin, ...subArgs] : subArgs;
     console.log('[liv-claw-gateway] installing plugin: ' + pluginBundle);
     const result = spawnSync(installCmd, installArgs, {
         stdio: 'inherit',
         env: process.env,
     });
     if (result.status !== 0) {
+        // Already-installed is the most common non-zero exit (CLI returns 1
+        // with "Plugin already linked at <path>" message). Log and continue.
         console.error(
-            '[liv-claw-gateway] plugin install exited with code ' + result.status + '; continuing anyway',
+            '[liv-claw-gateway] plugin install exited with code ' +
+                result.status +
+                ' (most likely already linked); continuing',
         );
     }
 }
@@ -153,9 +159,14 @@ const subArgs = [
     AUTH,
 ];
 
-if (AUTH === 'none') {
-    subArgs.push('--allow-unconfigured');
-}
+// First-boot bootstrap: openclaw requires either a setup-completed config
+// OR --allow-unconfigured to start. We have no operator-run `openclaw setup`
+// step in the deploy flow, so pass --allow-unconfigured unconditionally
+// here — the gateway boots in a permissive mode and accepts LLM provider
+// keys lazily via /opt/livos/.env (read by livinityd, not the gateway) on
+// first tool call. Plan 220+ may add a one-shot `openclaw setup --headless`
+// step inside update.sh to flip this to enforced mode.
+subArgs.push('--allow-unconfigured');
 
 // Dispatch based on resolved bin shape:
 //   *.mjs  → exec `node <mjs> <args>`  (preferred, lets node honour shebang)

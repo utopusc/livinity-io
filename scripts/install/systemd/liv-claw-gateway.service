@@ -10,12 +10,17 @@ Type=simple
 User=bruce
 Group=bruce
 WorkingDirectory=/opt/livos/packages/liv-claw-gateway
-# IMPORTANT: EnvironmentFile is loaded FIRST, then any Environment= directives
-# below override it. /opt/livos/.env carries PORT=8080 for livinityd; we need
-# PORT=18789 for the openclaw gateway, so the Environment= overrides MUST come
-# AFTER the EnvironmentFile to win. (Fixed P203-12 deploy: gateway was binding
-# to 8080 because the .env clobbered the unit-default.)
-EnvironmentFile=-/opt/livos/.env
+# NOTE on env precedence: in this systemd version (256+, Ubuntu 24.04),
+# EnvironmentFile= clobbers preceding Environment= directives at process spawn
+# time despite the documented "Environment= takes precedence" rule (observed
+# 2026-05-23 — gateway repeatedly bound to :8080 from /opt/livos/.env PORT=8080
+# despite Environment=PORT=18789 in the unit). Workaround: load .env into a
+# scoped EnvironmentFile that has only the keys the gateway actually needs,
+# OR don't load /opt/livos/.env at all. Gateway only needs LLM provider keys
+# (which are read lazily on first tool call), so we drop EnvironmentFile and
+# require operators to add provider keys directly via Environment= here or
+# via a per-service .env at /etc/default/liv-claw-gateway.
+EnvironmentFile=-/etc/default/liv-claw-gateway
 Environment=NODE_ENV=production
 Environment=PORT=18789
 Environment=OPENCLAW_PORT=18789
