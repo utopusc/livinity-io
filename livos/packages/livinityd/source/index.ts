@@ -140,6 +140,7 @@ import {LivOSMastra, createProviderRouter} from './modules/mastra/index.js'
 import {ApprovalManager} from './modules/mastra/approval-manager.js'
 import {createLivOSMemory} from './modules/mastra/memory.js'
 import {runMastraMigrations} from './modules/mastra/migrate.js'
+import {runLivOSMigrations} from './db/migrate.js'
 import {createMcpBridge} from './modules/mastra/mcp-bridge.js'
 import {createLivAiAgent} from './modules/mastra/agents/liv-ai.js'
 import {createMastraRouter} from './modules/server/trpc/mastra-router.js'
@@ -1000,6 +1001,18 @@ export default class Livinityd {
 						this.logger.error(
 							'Phase 197-05 — runMastraMigrations failed (non-fatal); Memory will surface DB errors lazily',
 							migErr,
+						)
+					}
+					// Phase 202-01 — LivOS-owned migrations (livos_agents registry).
+					// Runs AFTER runMastraMigrations because the agent table lives in
+					// the same `livos` PG database (D-202-01). Non-fatal — repository
+					// surfaces DB errors lazily on first read/write.
+					try {
+						await runLivOSMigrations({databaseUrl})
+					} catch (livosMigErr) {
+						this.logger.error(
+							'Phase 202-01 — runLivOSMigrations failed (non-fatal); AgentRepository will surface DB errors lazily',
+							livosMigErr,
 						)
 					}
 					const memory = createLivOSMemory({databaseUrl})
