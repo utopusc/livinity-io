@@ -154,6 +154,12 @@ import {
 // rebuild the in-memory map. livOSMastra.agents.livAi slot is double-wired
 // from registry.getByName('livAi') for the chat-route back-compat window.
 import {AgentRegistry} from './modules/mastra/agents/agent-registry.js'
+// Phase 202-09 — canonical `new Mastra({...})` constructor wrap (D-202-06).
+// Boot wire-up calls `createMastraInstance({agents, logger})` AFTER
+// `registry.init()` so the constructed Mastra instance can read the live
+// agent map, then `livOSMastra.attachMastraInstance(instance)` parks it on
+// the singleton for future workflow / eval / telemetry hooks.
+import {createMastraInstance} from './modules/mastra/mastra-instance.js'
 import {createMcpBridge} from './modules/mastra/mcp-bridge.js'
 import {createLivAiAgent} from './modules/mastra/agents/liv-ai.js'
 import {createMastraRouter} from './modules/server/trpc/mastra-router.js'
@@ -1137,6 +1143,38 @@ export default class Livinityd {
 							} else {
 								webappLogger.info(
 									'Phase 202-02 — registry initialised but livAi row absent; falling back to in-process createLivAiAgent for the back-compat slot',
+								)
+							}
+
+							// Phase 202-09 — canonical `new Mastra({...})` constructor
+							// wrap. Built AFTER `registry.init()` so the agents map
+							// reflects the hydrated registry. Wired-but-empty
+							// scaffold per D-202-06 / D-202-07 / D-202-18 — the
+							// instance is side-effect-free until `.startWorkers()`
+							// is called (deferred to Phase 203+ when concrete
+							// workflows / scorers land). Failure here is non-fatal
+							// — chat-route / scheduler / runOnce all continue to
+							// read from `livOSMastra.registry` directly; the new
+							// `mastraInstance` slot is the future-feature hook
+							// point, not a present dependency.
+							try {
+								const mastraInstance = createMastraInstance({
+									agents: Object.fromEntries(
+										registry
+											.listAll()
+											.map(({name, agent}) => [name, agent]),
+									),
+									logger: {
+										info: (msg) => webappLogger.info(msg),
+										warn: (msg, err) =>
+											this.logger.error(msg, err),
+									},
+								})
+								livOSMastra.attachMastraInstance(mastraInstance)
+							} catch (mastraInstanceErr) {
+								this.logger.error(
+									'Phase 202-09 — Mastra constructor wrap failed (non-fatal); workflows / telemetry hooks remain unwired until next restart',
+									mastraInstanceErr,
 								)
 							}
 
