@@ -19,6 +19,7 @@ import {
 import { ToolFallback } from "@/components/tool-fallback";
 import { TooltipIconButton } from "@/components/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
+import { ToolRenderers } from "@/lib/liv-ai/tool-renderers";
 import { cn } from "@/lib/utils";
 import {
   ActionBarMorePrimitive,
@@ -58,6 +59,8 @@ export const Thread: FC = () => {
         ["--composer-padding" as string]: "10px",
       }}
     >
+      {/* Phase 201-03 — register 16 generative + HITL tool renderers (D-201-20). */}
+      <ToolRenderers />
       <ThreadPrimitive.Viewport
         turnAnchor="top"
         data-slot="aui_thread-viewport"
