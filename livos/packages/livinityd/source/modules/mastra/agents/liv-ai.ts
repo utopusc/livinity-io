@@ -19,18 +19,18 @@
  *               MCP source must be added to ALLOWED_TOOL_PREFIXES explicitly.
  */
 
-import {Agent} from '@mastra/core/agent'
-import type {RequestContext} from '@mastra/core/request-context'
+import type {Agent} from '@mastra/core/agent'
 
 import type {ProviderRouter} from '../provider-router.js'
 import type {McpBridge} from '../mcp-bridge.js'
 import {destructiveToolNames} from '../mcp-bridge.js'
-import {builtInTools} from './built-in-tools.js'
+import {createAgentFromRow} from './agent-factory.js'
 import {
 	wrapToolWithApproval,
 	type ApprovalGate,
 	type MinimalTool,
 } from './wrap-tool-with-approval.js'
+import type {LivosAgent} from '../../../db/schema.js'
 
 // Phase 197-04 T-197-04-01 — static string, no interpolation.
 // The literal substring 'luse_*' + 'selfclaude_*' + 'take a screenshot FIRST'
@@ -105,64 +105,44 @@ export interface LivAiAgentDeps {
 	approvalManager: ApprovalGate
 }
 
+/**
+ * Phase 202-02 — `createLivAiAgent` is now a thin shim over
+ * `createAgentFromRow` (agent-factory.ts). The agent is built from an
+ * in-memory `LivosAgent` row that mirrors the seeded `livAi` system agent
+ * (Phase 202-01 D-202-20). The factory body lives in agent-factory.ts; this
+ * function exists only as back-compat for any direct caller that was wired
+ * pre-202 (boot wire-up is migrated to AgentRegistry in Plan 202-02 Task 3).
+ *
+ * The model resolver inside the factory still falls back to row.modelName
+ * (`grok-4.3` in the seeded literal here) when chat-route doesn't push a
+ * per-request modelName onto the RequestContext — exact same effective
+ * behaviour as the Phase 197-04 / 199-03 shape.
+ *
+ * INV-202-08 + INV-202-09: the factory hands MCP tools through
+ * filterMcpTools (Luse allow-list) and the Phase 200-C built-ins remain
+ * wrapped via the same approval gate, so the livAi tool catalog (10
+ * built-ins + Luse MCP namespace) is byte-identical to the Phase 200-C
+ * surface. row.toolIds = [] keeps the per-row filter inert.
+ */
 export function createLivAiAgent(deps: LivAiAgentDeps): Agent {
-	// Phase 197-04 T-197-04-03 — no processor steps configured. Future plans
-	// adding processors must validate steps array length > 0 before passing
-	// (Mastra ProcessorRunner issue #9352).
-	return new Agent({
+	const now = new Date()
+	const livAiRow: LivosAgent = {
 		id: 'liv-ai',
 		name: 'Liv AI',
 		instructions: LIV_AI_SYSTEM_PROMPT,
-		// Phase 199-03 — per-request dynamic model resolver (D-199-14).
-		//
-		// Mastra v1.36 invokes this with `{requestContext}` on every turn.
-		// We pull `modelName` off the RequestContext (populated by chat-route
-		// from the AI-SDK frontend's `config.modelName` body field — Plan
-		// 199-03 wire) and hand it to providerRouter.resolveAgentModel.
-		//
-		// `coerceModel` inside provider-router (Plan 199-02) does the soft
-		// validation: undefined / null / unknown id → XAI_DEFAULT_MODEL_ID.
-		// We forward whatever the context yields — the agent does NOT
-		// validate values here (D-199-24).
-		//
-		// Backward-compat: when chat-route doesn't set modelName (no UI
-		// picker selection yet), `requestContext.get('modelName')` returns
-		// `undefined` and resolveAgentModel falls through to the default —
-		// same effective behaviour as the Phase 197-04 zero-arg shape.
-		//
-		// T-197-04-02 still honoured: a Redis active-provider change still
-		// takes effect on the next message without restart (resolveAgentModel
-		// reads Redis on every call).
-		model: (({requestContext}: {requestContext: RequestContext}) => {
-			const modelName = requestContext.get('modelName') as
-				| string
-				| undefined
-			return deps.providerRouter.resolveAgentModel(modelName)
-		}) as never,
-		// T-197-04-04 + T-197-04-05 — filter raw MCP tool map through the
-		// allow-list, then wrap destructive tools through the approval gate.
-		//
-		// Phase 200-C — merge built-in tools through the SAME wrap pass so
-		// the new luse_computer_* destructive built-ins (click_mouse,
-		// type_text, press_keys, application, drag_mouse, paste_text) ride
-		// the W-02 ApprovalGate just like the MCP-sourced destructive tools.
-		// Non-destructive entries (weather, get_current_time,
-		// luse_list_windows, luse_computer_screenshot) pass through
-		// untouched because wrapDestructiveTools only wraps names in the
-		// destructiveToolNames Set.
-		//
-		// Note (Phase 198 UAT hot-fix #3 carry-over): builtInTools is
-		// merged AFTER the MCP wrap, so a built-in entry with the same name
-		// as an MCP entry shadows the MCP one. Today this is intentional —
-		// the Luse MCP server was never actually installed, so the built-in
-		// implementations are the only live computer-use surface.
-		tools: (async () => ({
-			...wrapDestructiveTools(
-				filterMcpTools(await deps.mcpBridge.listTools()),
-				deps.approvalManager,
-			),
-			...wrapDestructiveTools(builtInTools, deps.approvalManager),
-		})) as never,
-		memory: deps.memory as never,
-	} as never)
+		modelName: 'grok-4.3',
+		toolIds: [],
+		scheduleCron: null,
+		parentAgentId: null,
+		enabled: true,
+		system: true,
+		createdAt: now,
+		updatedAt: now,
+	}
+	return createAgentFromRow(livAiRow, {
+		providerRouter: deps.providerRouter,
+		memory: deps.memory,
+		mcpBridge: deps.mcpBridge,
+		approvalManager: deps.approvalManager,
+	})
 }
