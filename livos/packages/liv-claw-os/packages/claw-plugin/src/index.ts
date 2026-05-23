@@ -244,7 +244,19 @@ export default definePluginEntry({
         if (await tryServe(res, absPath + ".html")) return true;
         // 3) Directory with index.html (e.g. /setup/ → /setup/index.html).
         if (await tryServe(res, path.join(absPath, "index.html"))) return true;
-        // 4) SPA fallback so client-side routing on the loaded app still works.
+        // 4) Phase 203-11 — /apps/<unknown-slug> falls back to the prebuilt
+        //    OpenUI-app page placeholder so the client component can extract
+        //    the live slug from window.location.pathname. Without this,
+        //    fallback (5) would deliver ChatApp's index.html which doesn't
+        //    know how to render an OpenUI app.
+        if (safeRel.startsWith("/apps/") && safeRel !== "/apps/__placeholder__.html") {
+          if (
+            await tryServe(res, path.join(STATIC_ROOT, "apps", "__placeholder__.html"))
+          ) {
+            return true;
+          }
+        }
+        // 5) SPA fallback so client-side routing on the loaded app still works.
         if (await tryServe(res, path.join(STATIC_ROOT, "index.html"))) return true;
 
         res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
