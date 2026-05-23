@@ -43,6 +43,24 @@ describe('useLaunchNativeApp — source-text invariants', () => {
 		expect(HOOK_SRC).toMatch(/name\s*[:,}]/)
 		expect(HOOK_SRC).toMatch(/iconUrl/)
 	})
+
+	// Phase 203-10 — D-203-10 OpenUI short-circuit.
+	it('short-circuits to OPENUI_<slug> when wmClassHint starts with liv-openui-', () => {
+		expect(HOOK_SRC).toMatch(/wmClassHint/)
+		expect(HOOK_SRC).toMatch(/liv-openui-/)
+		expect(HOOK_SRC).toMatch(/OPENUI_/)
+	})
+
+	it('exports OPENUI_APP_ID_PREFIX + OPENUI_WMCLASS_PREFIX constants', () => {
+		expect(HOOK_SRC).toMatch(/export\s+const\s+OPENUI_APP_ID_PREFIX\b/)
+		expect(HOOK_SRC).toMatch(/export\s+const\s+OPENUI_WMCLASS_PREFIX\b/)
+	})
+
+	it('still falls through to NATIVE_<id> when wmClassHint is undefined or unrelated', () => {
+		// The legacy path must remain — assert that the NATIVE_${id} branch
+		// is NOT gated behind the wmClassHint check.
+		expect(HOOK_SRC).toMatch(/`NATIVE_\$\{id\}`/)
+	})
 })
 
 describe('useLaunchNativeApp — smoke import', () => {

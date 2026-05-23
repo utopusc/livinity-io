@@ -293,7 +293,12 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 					animate={{opacity: 1, scale: 1}}
 					transition={{type: 'spring', stiffness: 400, damping: 25}}
 				>
-					<NativeAppIcon id={cfg.id} name={cfg.name} iconUrl={cfg.iconUrl} />
+					<NativeAppIcon
+						id={cfg.id}
+						name={cfg.name}
+						iconUrl={cfg.iconUrl}
+						wmClassHint={cfg.wmClassHint}
+					/>
 				</motion.div>
 			),
 		}))
