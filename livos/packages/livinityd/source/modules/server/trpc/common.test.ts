@@ -282,7 +282,52 @@ function runTests() {
 		ok('Test 16: bare/half-namespaced listAvailableModels absent (mastra.agent.* convention preserved)')
 	}
 
-	console.log('\nAll common.test.ts tests passed (16/16)')
+	// Phase 199-07 — mastra.agent.getActiveModel + setActiveModel added to
+	// httpOnlyPaths. Same WS-reconnect-survival rationale as the rest of the
+	// mastra.agent.* cluster (Phase 197-05 + 199-02 entries directly above).
+	// setActiveModel is an admin mutation — silent WS drop during `systemctl
+	// restart livos` would leave the operator thinking they saved a model
+	// choice when they didn't (memory pitfall B-12 / X-04). getActiveModel
+	// hydrates the header-bar picker on first paint — HTTP avoids the
+	// WS-handshake-delay flicker (precedent: mastra.agent.listAvailableModels
+	// at common.ts line 611).
+	// Test 17: 'mastra.agent.getActiveModel' + 'mastra.agent.setActiveModel' present
+	{
+		assert.ok(
+			httpOnlyPaths.includes('mastra.agent.getActiveModel' as any),
+			"httpOnlyPaths must include 'mastra.agent.getActiveModel' (Phase 199-07 D-199-12 — UI hydrates the header-bar picker on first paint; HTTP avoids WS-handshake-delay flicker AND survives `systemctl restart livos` mid-mount)",
+		)
+		assert.ok(
+			httpOnlyPaths.includes('mastra.agent.setActiveModel' as any),
+			"httpOnlyPaths must include 'mastra.agent.setActiveModel' (Phase 199-07 D-199-12 — admin mutation writes Redis liv:config:active_model; silent WS drop during `systemctl restart livos` would lose the operator's model choice)",
+		)
+		ok("Test 17: 'mastra.agent.getActiveModel' + 'mastra.agent.setActiveModel' present in httpOnlyPaths")
+	}
+
+	// Test 18: bare-name footgun guard for Phase 199-07 entries. Mirrors
+	// Tests 4 / 7 / 9 / 12 / 14 / 16 — every existing entry follows
+	// <router>.<route> namespace convention.
+	{
+		assert.ok(
+			!httpOnlyPaths.includes('getActiveModel' as any),
+			"httpOnlyPaths must NOT include bare 'getActiveModel' (must be namespaced as 'mastra.agent.getActiveModel')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('setActiveModel' as any),
+			"httpOnlyPaths must NOT include bare 'setActiveModel' (must be namespaced as 'mastra.agent.setActiveModel')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('agent.getActiveModel' as any),
+			"httpOnlyPaths must NOT include 'agent.getActiveModel' (missing 'mastra.' prefix — full path is 'mastra.agent.getActiveModel')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('agent.setActiveModel' as any),
+			"httpOnlyPaths must NOT include 'agent.setActiveModel' (missing 'mastra.' prefix — full path is 'mastra.agent.setActiveModel')",
+		)
+		ok('Test 18: bare/half-namespaced getActiveModel/setActiveModel absent (mastra.agent.* convention preserved)')
+	}
+
+	console.log('\nAll common.test.ts tests passed (18/18)')
 }
 
 runTests()
