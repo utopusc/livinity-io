@@ -480,6 +480,28 @@ rsync -a --delete \
     "$LIVOS_DIR/packages/config/"
 ok "Config package updated"
 
+# ── Phase 202-10: liv-ai-app subapp rsync (Phase 201 carry-over fix) ──────
+# Phase 201 left a gap — packages/liv-ai-app/ was NOT in the rsync block,
+# so update.sh would build a stale tree. Phase 202 adds /agents, /agents/[id],
+# /agents/new, /settings pages + tRPC adapters + new components; without
+# this rsync those files never reach Mini PC.
+# --delete is intentional so removed files (e.g. Phase 197/198 legacy)
+# get pruned. node_modules + .next are excluded so the local build cache
+# survives. Defensive: only run if source dir exists in TEMP.
+if [[ -d "$TEMP_DIR/livos/packages/liv-ai-app" ]]; then
+    info "Updating liv-ai-app subapp source (Phase 202 — /agents + /settings)..."
+    mkdir -p "$LIVOS_DIR/packages/liv-ai-app"
+    rsync -a --delete \
+        --exclude='node_modules' \
+        --exclude='.next' \
+        --exclude='.turbo' \
+        "$TEMP_DIR/livos/packages/liv-ai-app/" \
+        "$LIVOS_DIR/packages/liv-ai-app/"
+    ok "liv-ai-app subapp source updated"
+else
+    info "liv-ai-app not in TEMP_DIR — skipping subapp rsync"
+fi
+
 # ── Step 3: Update Liv source files ───────────────────────
 step "Updating Liv source files"
 
@@ -704,6 +726,22 @@ if [[ -f "$_LIV_AI_UNIT_SRC" ]]; then
     fi
 else
     info "livos-app-liv-ai.service source not found — skipping install (Caddy /liv-ai-app/* will 502 until unit lands)"
+fi
+
+# ── Phase 202-10: bruce ownership hook (recurring P198/P199/P200/P201 patch) ──
+# When update.sh runs as root, rsync + pnpm install + builds end up root-owned.
+# livos.service runs as `bruce`, and pnpm-store / .next / dist directories
+# end up un-readable on next boot. This was hot-fixed manually on every deploy
+# since Phase 198. Folding into update.sh closes the recurring carry-over.
+step "Fixing /opt/livos + /opt/liv ownership (bruce:bruce)"
+if id bruce >/dev/null 2>&1; then
+    chown -R bruce:bruce "$LIVOS_DIR" 2>/dev/null || warn "chown $LIVOS_DIR partial"
+    if [[ -d "$LIV_DIR" ]]; then
+        chown -R bruce:bruce "$LIV_DIR" 2>/dev/null || warn "chown $LIV_DIR partial"
+    fi
+    ok "Ownership normalised to bruce:bruce"
+else
+    info "bruce user absent — skipping ownership normalisation"
 fi
 
 # ── Step 8: Restart services ─────────────────────────────
