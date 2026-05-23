@@ -637,6 +637,30 @@ chown -R root:root "$LIV_DIR" 2>/dev/null || true
 
 ok "Permissions fixed"
 
+# ── Step 7.2: Phase 201-06 — liv-ai-app Next.js subapp build ────────────────
+# The Liv AI subapp lives at livos/packages/liv-ai-app and is served by
+# livos-app-liv-ai.service on 127.0.0.1:3010 (Caddy `handle /liv-ai-app/*`
+# routes to it). Rebuild on every deploy so updates pick up changes — the
+# pnpm workspace at LIVOS_DIR already covers this filter.
+step "Phase 201-06: Building Liv AI Next.js subapp (liv-ai-app)"
+
+if [[ -d "$LIVOS_DIR/packages/liv-ai-app" ]]; then
+    if (cd "$LIVOS_DIR" && pnpm --filter liv-ai-app install --frozen-lockfile 2>&1) ; then
+        ok "liv-ai-app dependencies installed"
+    else
+        warn "liv-ai-app pnpm install (frozen) failed — retrying without --frozen-lockfile"
+        (cd "$LIVOS_DIR" && pnpm --filter liv-ai-app install 2>&1) || warn "liv-ai-app install still failing"
+    fi
+
+    if (cd "$LIVOS_DIR" && pnpm --filter liv-ai-app build 2>&1) ; then
+        ok "liv-ai-app build complete"
+    else
+        warn "liv-ai-app build failed — check journalctl -u livos-app-liv-ai -n 30 after deploy"
+    fi
+else
+    info "liv-ai-app package not present in this checkout — skipping (legacy deploys may not ship it)"
+fi
+
 # ── Step 7.5: Mastra storage schema drift fixes ─────────────────────────────
 # P199 UAT discovered Mastra v1.36 expects camelCase columns the old @mastra/pg
 # init never created (mastra_threads.resourceId, mastra_messages.type). Both
@@ -654,6 +678,32 @@ SQL
     ok "Mastra schema drift fixes applied"
 else
     info "Postgres not accessible — skipping Mastra schema fixes (run manually if upgrading)"
+fi
+
+# ── Step 7.7: Phase 201-06 — install livos-app-liv-ai.service if missing ───
+# update.sh runs on pre-existing deploys that may not have the new unit yet.
+# We copy the file ourselves (avoiding a dependency on install.sh having been
+# re-run) so the restart step below has a unit to manage.
+step "Phase 201-06: install livos-app-liv-ai.service unit (if missing)"
+
+_LIV_AI_UNIT_SRC="$LIVOS_DIR/../scripts/install/systemd/livos-app-liv-ai.service"
+# Fallback to TEMP_DIR location (fresh clone) if the on-disk path isn't there.
+if [[ ! -f "$_LIV_AI_UNIT_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _LIV_AI_UNIT_SRC="$TEMP_DIR/scripts/install/systemd/livos-app-liv-ai.service"
+fi
+
+if [[ -f "$_LIV_AI_UNIT_SRC" ]]; then
+    _LIV_AI_UNIT_DST="/etc/systemd/system/livos-app-liv-ai.service"
+    if [[ ! -f "$_LIV_AI_UNIT_DST" ]] || ! cmp -s "$_LIV_AI_UNIT_SRC" "$_LIV_AI_UNIT_DST"; then
+        install -m 0644 -o root -g root "$_LIV_AI_UNIT_SRC" "$_LIV_AI_UNIT_DST"
+        systemctl daemon-reload
+        systemctl enable livos-app-liv-ai.service 2>/dev/null || true
+        ok "livos-app-liv-ai.service installed at $_LIV_AI_UNIT_DST"
+    else
+        ok "livos-app-liv-ai.service already byte-identical"
+    fi
+else
+    info "livos-app-liv-ai.service source not found — skipping install (Caddy /liv-ai-app/* will 502 until unit lands)"
 fi
 
 # ── Step 8: Restart services ─────────────────────────────
@@ -674,6 +724,20 @@ systemctl restart liv-worker.service 2>/dev/null || true
 
 info "Restarting liv-memory..."
 systemctl restart liv-memory.service 2>/dev/null || true
+
+# Phase 201-06 — restart liv-ai-app Next.js subapp (127.0.0.1:3010).
+# Guarded so this is a no-op on legacy deploys that haven't yet had the unit
+# installed via scripts/install/systemd-units-install.sh.
+if [[ -f /etc/systemd/system/livos-app-liv-ai.service || -f /usr/lib/systemd/system/livos-app-liv-ai.service ]]; then
+    systemctl enable livos-app-liv-ai.service 2>/dev/null || true
+    if systemctl restart livos-app-liv-ai.service 2>/dev/null; then
+        ok "Restarted livos-app-liv-ai (Next.js :3010)"
+    else
+        warn "livos-app-liv-ai restart failed — check journalctl -u livos-app-liv-ai -n 30"
+    fi
+else
+    info "livos-app-liv-ai.service not installed yet — run scripts/install/systemd-units-install.sh as root to enable"
+fi
 
 # Verify services
 sleep 3

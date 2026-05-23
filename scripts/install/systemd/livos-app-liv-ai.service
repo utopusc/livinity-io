@@ -1,0 +1,19 @@
+[Unit]
+Description=LivOS Liv AI Next.js subapp
+Documentation=https://github.com/utopusc/livinity-io/blob/master/.planning/phases/201-liv-ai-nextjs-iframe/201-06-PLAN.md
+After=network.target
+Requires=livos.service
+
+[Service]
+Type=simple
+User=bruce
+Group=bruce
+WorkingDirectory=/opt/livos/packages/liv-ai-app
+Environment="NODE_ENV=production"
+Environment="PORT=3010"
+ExecStart=/usr/bin/pnpm --filter liv-ai-app start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

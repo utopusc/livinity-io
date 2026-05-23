@@ -103,6 +103,21 @@ export function validateHost(host: string): boolean {
 }
 
 /**
+ * Phase 201-06 — Next.js Liv AI subapp listens on 127.0.0.1:3010 with
+ * `basePath: '/liv-ai-app'` (see livos/packages/liv-ai-app/next.config.ts).
+ * Every per-user vhost (apex + multiUser subdomain blocks) MUST first try
+ * `handle /liv-ai-app/*` and route it to :3010 BEFORE falling through to the
+ * livinityd app gateway on :8080. Caddy `handle` is first-match-wins for path
+ * matchers, so a default `handle { reverse_proxy 127.0.0.1:8080 ... }` comes
+ * after the prefix matcher to keep the existing 8080 catch-all semantics.
+ */
+const LIV_AI_APP_HANDLE = `\thandle /liv-ai-app/* {
+\t\treverse_proxy 127.0.0.1:3010 {
+${WS_TRANSPORT_BODY}
+\t}
+\t}`
+
+/**
  * Generate a complete Caddyfile with main domain and all subdomains.
  * In multi-user mode, uses a single wildcard block that routes all subdomains
  * to livinityd's app gateway (port 8080) for dynamic per-user routing.
@@ -113,10 +128,14 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 
 	if (!config.mainDomain) {
 		// No domain configured — minimal :80 fallback. Multi-user / subdomain
-		// routing requires a domain.
+		// routing requires a domain. Liv AI subapp handle still goes ABOVE
+		// the catch-all so dev/IP-only operators can also reach :3010.
 		blocks.push(`:80 {
-	reverse_proxy 127.0.0.1:8080 {
+${LIV_AI_APP_HANDLE}
+	handle {
+		reverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY}
+		}
 	}
 }`)
 		return blocks.join('\n\n') + '\n'
@@ -135,10 +154,13 @@ ${WS_TRANSPORT_BODY}
 	// behavior is app-specific and should be left to the app itself.
 	const apexCacheHeader = tunnel ? `\theader Cache-Control "no-store, must-revalidate"\n` : ''
 
-	// Main domain block — always routes to livinityd
+	// Main domain block — Liv AI subapp first, then livinityd catch-all
 	blocks.push(`${prefix}${config.mainDomain} {
-${apexCacheHeader}	reverse_proxy 127.0.0.1:8080 {
+${apexCacheHeader}${LIV_AI_APP_HANDLE}
+	handle {
+		reverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY}
+		}
 	}
 }`)
 
@@ -161,8 +183,11 @@ ${WS_TRANSPORT_BODY}
 		const fullDomain = `${prefix}${host}`
 		if (multiUser) {
 			blocks.push(`${fullDomain} {
-	reverse_proxy 127.0.0.1:8080 {
+${LIV_AI_APP_HANDLE}
+	handle {
+		reverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY}
+		}
 	}
 }`)
 		} else {
