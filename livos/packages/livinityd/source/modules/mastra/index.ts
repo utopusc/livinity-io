@@ -12,6 +12,7 @@ import type {Agent} from '@mastra/core/agent'
 
 import type {ProviderRouter} from './provider-router.js'
 import type {AgentRegistry} from './agents/agent-registry.js'
+import type {AgentScheduler} from './scheduler.js'
 
 // Forward type aliases — narrowed structurally by the concrete inhabitants
 // shipped from Plans 197-02 (McpBridge) and 197-03 (Memory). Kept `unknown`
@@ -32,6 +33,14 @@ export class LivOSMastra {
 	// during the one-release back-compat window. Plan 202-02 Task 4 then
 	// migrates chat-route to read via the registry exclusively.
 	registry: AgentRegistry | null = null
+	// Phase 202-03 — additive B-02-respecting extension. Plan 202-03 ships a
+	// node-cron + Redis SET NX PX scheduler; the boot wire-up constructs it
+	// AFTER `registry.init()` (the scheduler needs the registry to look up
+	// agents at fire time) and AFTER `attachMemory()` (it persists task
+	// records via Memory.saveThread). The tRPC `agents.{create,update,delete}`
+	// mutations in `agent-router.ts` call `scheduler?.refresh()` so cron
+	// changes hot-reload without a livinityd restart.
+	scheduler: AgentScheduler | null = null
 
 	constructor(deps: {providerRouter: ProviderRouter}) {
 		this.providerRouter = deps.providerRouter
@@ -57,6 +66,15 @@ export class LivOSMastra {
 	// wire-up reads consistently.
 	attachRegistry(registry: AgentRegistry): void {
 		this.registry = registry
+	}
+
+	// Phase 202-03 — additive attach helper (INV-202-03). Mirrors the
+	// existing attach* methods. Called from livinityd boot wire-up AFTER the
+	// scheduler is constructed + initialised. tRPC mutations then call
+	// `livOSMastra.scheduler?.refresh()` to rebuild the cron table after
+	// every CRUD change.
+	attachScheduler(scheduler: AgentScheduler): void {
+		this.scheduler = scheduler
 	}
 }
 
