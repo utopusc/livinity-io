@@ -30,7 +30,7 @@
  */
 'use strict';
 
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 
@@ -108,11 +108,40 @@ function resolvePluginBundle() {
 const openclawBin = resolveOpenclawBin();
 const pluginBundle = resolvePluginBundle();
 
-// Build the openclaw gateway argv. Per 203-01 spike: `openclaw gateway run
-// --port <PORT> --bind <BIND> --auth <AUTH>` is the canonical foreground
-// invocation. `--plugin <path>` registers an out-of-tree plugin without
-// requiring `openclaw plugins install` first (Plan 203-04 will do the
-// permanent install).
+// Plan 203-01 spike said `--plugin <path>` flag would register an out-of-tree
+// plugin at boot. openclaw 2026.5.20 CLI does NOT have that flag — confirmed
+// via `openclaw gateway run --help` on Mini PC 2026-05-23. Available commands
+// are `openclaw plugins install [--link] <path>` for permanent registration.
+//
+// Strategy: idempotently install (with --link, so we never copy bytes — the
+// gateway re-reads /opt/livos/packages/liv-claw-os/.../dist/index.js on each
+// boot) before the gateway starts. The install command is a no-op if the
+// plugin is already linked; --force replaces a stale registration.
+function ensurePluginInstalled() {
+    const installArgs = openclawBin.endsWith('.mjs') || openclawBin.endsWith('.js')
+        ? [openclawBin, 'plugins', 'install', '--link', '--force', pluginBundle]
+        : ['plugins', 'install', '--link', '--force', pluginBundle];
+    const installCmd = openclawBin.endsWith('.mjs') || openclawBin.endsWith('.js')
+        ? process.execPath
+        : openclawBin;
+    console.log('[liv-claw-gateway] installing plugin: ' + pluginBundle);
+    const result = spawnSync(installCmd, installArgs, {
+        stdio: 'inherit',
+        env: process.env,
+    });
+    if (result.status !== 0) {
+        console.error(
+            '[liv-claw-gateway] plugin install exited with code ' + result.status + '; continuing anyway',
+        );
+    }
+}
+
+ensurePluginInstalled();
+
+// Build the openclaw gateway argv. Per `openclaw gateway run --help`:
+//   --port <port>  Port for the gateway WebSocket
+//   --bind <mode>  Bind mode (loopback|lan|tailnet|auto|custom)
+//   --auth <mode>  Gateway auth mode (none|token|password|trusted-proxy)
 const subArgs = [
     'gateway',
     'run',
@@ -122,8 +151,6 @@ const subArgs = [
     BIND,
     '--auth',
     AUTH,
-    '--plugin',
-    pluginBundle,
 ];
 
 if (AUTH === 'none') {

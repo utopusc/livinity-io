@@ -10,13 +10,19 @@ Type=simple
 User=bruce
 Group=bruce
 WorkingDirectory=/opt/livos/packages/liv-claw-gateway
+# IMPORTANT: EnvironmentFile is loaded FIRST, then any Environment= directives
+# below override it. /opt/livos/.env carries PORT=8080 for livinityd; we need
+# PORT=18789 for the openclaw gateway, so the Environment= overrides MUST come
+# AFTER the EnvironmentFile to win. (Fixed P203-12 deploy: gateway was binding
+# to 8080 because the .env clobbered the unit-default.)
+EnvironmentFile=-/opt/livos/.env
 Environment=NODE_ENV=production
 Environment=PORT=18789
+Environment=OPENCLAW_PORT=18789
 Environment=OPENCLAW_BIND=loopback
 Environment=OPENCLAW_GATEWAY_AUTH=token
 Environment=OPENCLAW_HOME=/opt/livos/data/openclaw
 Environment=OPENCLAW_STATE_DIR=/opt/livos/data/openclaw
-EnvironmentFile=-/opt/livos/.env
 ExecStart=/usr/bin/env bash /opt/livos/packages/liv-claw-gateway/start.sh
 Restart=on-failure
 RestartSec=5
