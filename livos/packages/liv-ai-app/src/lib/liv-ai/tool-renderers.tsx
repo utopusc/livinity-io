@@ -43,6 +43,11 @@
 
 import {makeAssistantToolUI} from '@assistant-ui/react'
 
+// Phase 202-08 — ad-hoc OpenUI Lang renderer for the `ui_render` tool.
+// INV-202-10: this is a new ADD alongside the 16 frozen Phase 198 renderers.
+// makeAssistantToolUI dispatches by toolName, so no conflict with anything below.
+import {UiRenderTool} from '@/lib/openui/openui-renderer'
+
 import {ApprovalCard} from '@/lib/tool-ui/approval-card'
 import {Chart} from '@/lib/tool-ui/chart'
 import {DataTable} from '@/lib/tool-ui/data-table'
@@ -470,6 +475,8 @@ export function ToolRenderers() {
 			<LuseApplicationToolUI />
 			<LuseDragMouseToolUI />
 			<LusePasteTextToolUI />
+			{/* Phase 202-08 — OpenUI Lang ad-hoc renderer (`ui_render`) */}
+			<UiRenderTool />
 		</>
 	)
 }
