@@ -165,6 +165,11 @@ import {createMastraRouter} from './modules/server/trpc/mastra-router.js'
 import {AgentScheduler} from './modules/mastra/scheduler.js'
 import {createAgentRouter} from './modules/server/trpc/agent-router.js'
 import {createAgentTaskRouter} from './modules/server/trpc/agent-task-router.js'
+// Phase 202-07 — MCP external server config sub-router (`mcp.config.*`).
+// Backed by Redis hash `liv:mcp:config` (D-202-12). Boot wire-up builds the
+// real factory with `this.ai.redis` so the /settings → MCP tab can CRUD
+// the hash; McpBridge picks up changes at next livinityd boot.
+import {createMcpConfigRouter} from './modules/server/trpc/mcp-config-router.js'
 // Phase 202-04 — SSE endpoint that pushes live agent status to the
 // /agents dashboard. Subscribes to the same scheduler statusEvents
 // EventEmitter that runOnce / drainAgentStream emit on.
@@ -1327,6 +1332,28 @@ export default class Livinityd {
 				}
 			}
 
+			// Phase 202-07 — MCP config sub-router (`mcp.config.*`). Always
+			// safe to wire (Redis client is hoisted on `this.ai.redis` long
+			// before this block runs); the factory call itself can never
+			// throw, so we skip a try/catch and let the createAppRouter call
+			// site keep the default empty-injection stub if `this.ai.redis`
+			// is somehow undefined.
+			const mcpConfigRouterProductionInstance =
+				this.ai?.redis != null
+					? createMcpConfigRouter({
+							redis: this.ai.redis,
+							logger: {
+								info: (msg) => webappLogger.info(msg),
+								warn: (msg, err) => this.logger.error(msg, err),
+							},
+						})
+					: undefined
+			if (mcpConfigRouterProductionInstance) {
+				webappLogger.info(
+					'Phase 202-07 — mcp.config.* tRPC router wired (Redis hash liv:mcp:config CRUD; restart required for McpBridge re-spawn)',
+				)
+			}
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
@@ -1334,6 +1361,7 @@ export default class Livinityd {
 				mastra: mastraRouterProductionInstance,
 				agents: agentsRouterProductionInstance,
 				agentTasks: agentTasksRouterProductionInstance,
+				mcpConfig: mcpConfigRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(

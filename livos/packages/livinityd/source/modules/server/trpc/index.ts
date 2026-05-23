@@ -55,6 +55,19 @@ import marketplaceRouter from './marketplace-router.js'
 // or agents-router. All 6 procedure paths added to httpOnlyPaths in
 // ./common.ts (same WS-reconnect-survival rationale as P85-UI / P86).
 import mcpRouter from './mcp-router.js'
+// Phase 202-07 — MCP external server config sub-router. Merged into the
+// existing `mcp.*` namespace as `mcp.config.*` (list/add/update/delete/toggle).
+// Backed by Redis hash `liv:mcp:config` (D-202-12). Mutations do NOT hot-reload
+// the running McpBridge — UI surfaces a "Changes take effect on next service
+// restart." banner. All five paths added to httpOnlyPaths in ./common.ts
+// (WS-reconnect-survival after `systemctl restart livos`).
+//
+// Factory-DI pattern: production livinityd boot supplies a real
+// createMcpConfigRouter({redis: this.ai.redis, logger}) build via
+// setProductionAppRouter. The default mcpConfigRouter throws
+// PRECONDITION_FAILED on every call (mirrors xaiAuth + mastra +
+// agents pattern).
+import {mcpConfigRouter, createMcpConfigRouter} from './mcp-config-router.js'
 // v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01). Single procedure
 // `webapp.extractMetadata({url})` returning `{title, faviconUrl, description,
 // ogImage}`. The path is added to httpOnlyPaths in ./common.ts because clean
@@ -171,6 +184,10 @@ export function createAppRouter(opts: {
 	// (no `agents` key) preserves type inference for back-compat callers.
 	agents?: ReturnType<typeof createAgentRouter>
 	agentTasks?: ReturnType<typeof createAgentTaskRouter>
+	// Phase 202-07 — MCP config sub-router slot. Merged into the existing
+	// `mcp` namespace below as `mcp.config.*`. Optional with empty-injection
+	// fallback so the default appRouter still type-checks.
+	mcpConfig?: ReturnType<typeof createMcpConfigRouter>
 }) {
 	return router({
 		migration,
@@ -204,7 +221,13 @@ export function createAppRouter(opts: {
 		// v32 Phase 86 — marketplace namespace (public browse + clone-to-library).
 		marketplace: marketplaceRouter,
 		// v32 Phase 84 — MCP single-source-of-truth namespace (Wave 3).
-		mcp: mcpRouter,
+		// Phase 202-07 — `mcp.config.*` sub-router merged in. Default empty-
+		// injection stub keeps `mcp.config.list` reachable from typed clients
+		// even when production boot hasn't yet swapped the real router in.
+		mcp: t.mergeRouters(
+			mcpRouter,
+			router({config: opts.mcpConfig ?? mcpConfigRouter}),
+		),
 		// v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01).
 		// Phase 93-11 — webapp.window.* sub-router added in webappRouter.
 		webapp: webappRouter,
