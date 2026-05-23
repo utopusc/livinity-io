@@ -29,6 +29,9 @@
       "@/lib/liv-ai/*": [
         "./src/lib/liv-ai/*"
       ],
+      "@/lib/openui/*": [
+        "./src/lib/openui/*"
+      ],
       "@/*": [
         "./*"
       ]
