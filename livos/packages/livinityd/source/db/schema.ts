@@ -15,7 +15,7 @@
  *                duplicate name rejects at the DB layer
  */
 
-import {boolean, pgTable, text, timestamp} from 'drizzle-orm/pg-core'
+import {boolean, integer, pgTable, primaryKey, text, timestamp} from 'drizzle-orm/pg-core'
 
 export const livosAgents = pgTable('livos_agents', {
 	id: text('id').primaryKey(),
@@ -46,3 +46,67 @@ export const livosAgents = pgTable('livos_agents', {
 
 export type LivosAgent = typeof livosAgents.$inferSelect
 export type LivosAgentInsert = typeof livosAgents.$inferInsert
+
+/**
+ * Phase 203-04 — `livos_openui_apps` registry table.
+ *
+ * Mirrors `migrations/0003_livos_openui_apps.sql` exactly. Holds the live
+ * OpenUI Lang program for each agent-generated app keyed by stable slug.
+ *
+ * Decisions honoured:
+ *   D-203-09 — slug PK, name/content/version/user_id/timestamps surface
+ *
+ * Threat mitigations:
+ *   T-203-03 — `content` is validated against the 14-component whitelist
+ *              + isSafeUrl() guard at the tRPC boundary before insert/update
+ *              (see modules/openclawos/openui-apps-repository.ts +
+ *              modules/server/trpc/openclawos-router.ts).
+ *   INV-203-02 — additive only; no ALTERs of Phase 202 tables.
+ */
+export const livosOpenuiApps = pgTable('livos_openui_apps', {
+	slug: text('slug').primaryKey(),
+	name: text('name').notNull(),
+	content: text('content').notNull(),
+	version: integer('version').notNull().default(1),
+	userId: text('user_id'),
+	createdAt: timestamp('created_at', {withTimezone: true})
+		.notNull()
+		.defaultNow(),
+	updatedAt: timestamp('updated_at', {withTimezone: true})
+		.notNull()
+		.defaultNow(),
+})
+
+export type LivosOpenuiApp = typeof livosOpenuiApps.$inferSelect
+export type LivosOpenuiAppInsert = typeof livosOpenuiApps.$inferInsert
+
+/**
+ * Phase 203-04 — `livos_openui_app_versions` append-only history.
+ *
+ * Each `openclawos.apps.update` mutation writes ONE row here capturing the
+ * pre-update `content` snapshot, then increments the parent row's `version`.
+ * AppRepository.update() enforces MAX_VERSIONS=25 per slug inside the same
+ * transaction (oldest version rows are deleted when the cap is hit).
+ *
+ * FK with ON DELETE CASCADE so deleting the parent slug clears the history
+ * defensively (repo.delete() also issues a manual DELETE for symmetry).
+ */
+export const livosOpenuiAppVersions = pgTable(
+	'livos_openui_app_versions',
+	{
+		slug: text('slug')
+			.notNull()
+			.references(() => livosOpenuiApps.slug, {onDelete: 'cascade'}),
+		version: integer('version').notNull(),
+		content: text('content').notNull(),
+		snapshotAt: timestamp('snapshot_at', {withTimezone: true})
+			.notNull()
+			.defaultNow(),
+	},
+	(table) => ({
+		pk: primaryKey({columns: [table.slug, table.version]}),
+	}),
+)
+
+export type LivosOpenuiAppVersion = typeof livosOpenuiAppVersions.$inferSelect
+export type LivosOpenuiAppVersionInsert = typeof livosOpenuiAppVersions.$inferInsert
