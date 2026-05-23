@@ -393,3 +393,36 @@ describe('luse_computer_drag_mouse', () => {
 		expect(calls[0].args[9]).toBe('3') // mouseup btn
 	})
 })
+
+// ─── luse_computer_paste_text ─────────────────────────────────────────
+
+describe('luse_computer_paste_text', () => {
+	test('happy path: xsel --clipboard --input then xdotool key ctrl+v', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			return {stdout: '', stderr: ''}
+		})
+		const r = (await run('luse_computer_paste_text', {
+			text: 'hello clipboard',
+		})) as {success: boolean; charsPasted: number}
+		expect(r).toEqual({success: true, charsPasted: 'hello clipboard'.length})
+		expect(calls).toHaveLength(2)
+		expect(calls[0]).toEqual({file: 'xsel', args: ['--clipboard', '--input']})
+		expect(calls[1]).toEqual({file: 'xdotool', args: ['key', '--', 'ctrl+v']})
+	})
+
+	test('error path: xsel failure aborts before xdotool runs', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			if (file === 'xsel') throw new Error('xsel: cannot open clipboard')
+			return {stdout: '', stderr: ''}
+		})
+		await expect(
+			run('luse_computer_paste_text', {text: 'whatever'}),
+		).rejects.toThrow(/cannot open clipboard/)
+		// xdotool MUST NOT have run — paste failure is atomic.
+		expect(calls.every((c) => c.file !== 'xdotool')).toBe(true)
+	})
+})

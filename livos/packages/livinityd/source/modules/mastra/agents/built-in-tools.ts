@@ -535,14 +535,63 @@ const dragMouseTool = createTool({
 	},
 })
 
+// ─── Phase 200-C-7 — luse_computer_paste_text (DESTRUCTIVE) ────────────
+//
+// Stuffs `text` into the X11 CLIPBOARD via `xsel --clipboard --input` then
+// issues ctrl+v. We feed text on stdin so the operator's input never
+// appears as a shell argument (no metacharacter risk, no ENV/ARG_MAX
+// truncation by long strings).
+//
+// Why paste vs. type for long strings: xdotool type at 20ms/char hits
+// ~50 chars/sec; paste is single-shot. Paste also preserves Unicode that
+// some xdotool builds mishandle.
+
+const pasteTextTool = createTool({
+	id: 'luse_computer_paste_text',
+	description:
+		'Paste the given text into the focused window on the LivOS desktop ' +
+		'(copies to the X11 clipboard, then issues ctrl+v). Use this for long ' +
+		'strings or Unicode-heavy content where type_text would be slow or lossy. ' +
+		'This is a DESTRUCTIVE tool — the operator will be asked to approve before it runs.',
+	inputSchema: z.object({
+		text: z.string(),
+	}),
+	outputSchema: z.object({
+		success: z.boolean(),
+		charsPasted: z.number(),
+	}),
+	execute: async (input) => {
+		const {text} = input as {text: string}
+		const env = displayEnv()
+		// Step 1: copy text to X11 CLIPBOARD via xsel stdin. We use the
+		// callback form of execFile (NOT execFileAsync) so we can grab the
+		// child object and pipe to its stdin before the process exits.
+		await new Promise<void>((resolve, reject) => {
+			const child = execFile(
+				'xsel',
+				['--clipboard', '--input'],
+				{timeout: 4000, env},
+				(err) => (err ? reject(err) : resolve()),
+			)
+			child.stdin?.end(text, 'utf8')
+		})
+		// Step 2: simulate ctrl+v in the focused window.
+		await execFileAsync('xdotool', ['key', '--', 'ctrl+v'], {
+			timeout: 4000,
+			env,
+		})
+		return {success: true, charsPasted: text.length}
+	},
+})
+
 /**
  * Built-in tool map keyed by tool id. Merged into the agent's tool resolver
  * AFTER MCP tool filtering, so these always reach the model regardless of
  * MCP source availability.
  *
- * Destructive Phase 200-C entries (added in later C-* commits) MUST match
- * the mcp-bridge.ts destructiveToolNames Set verbatim — liv-ai.ts
- * wrapDestructiveTools wraps them with the W-02 approval gate automatically.
+ * Destructive Phase 200-C entries match the mcp-bridge.ts destructiveToolNames
+ * Set verbatim — liv-ai.ts wrapDestructiveTools wraps them with the W-02
+ * approval gate automatically.
  */
 export const builtInTools = {
 	weather: weatherTool,
@@ -556,4 +605,5 @@ export const builtInTools = {
 	luse_computer_press_keys: pressKeysTool,
 	luse_computer_application: applicationTool,
 	luse_computer_drag_mouse: dragMouseTool,
+	luse_computer_paste_text: pasteTextTool,
 }
