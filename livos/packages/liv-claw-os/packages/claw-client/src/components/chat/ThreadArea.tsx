@@ -11,6 +11,12 @@ import { MobileWorkspaceDrawer } from "@/components/mobile/MobileWorkspaceDrawer
 import { AssistantMessage } from "@/components/rendering/AssistantMessage";
 import { UserMessage } from "@/components/rendering/UserMessage";
 import { SessionComposer } from "@/components/session/SessionComposer";
+// Phase 203-10 — rebuilt HITL approval surface (replaces the assistant-ui
+// ApprovalCard deleted in Plan 203-09). Subscribes to livinityd's
+// /openclawos/approvals/stream SSE and renders one card per pending
+// destructive-tool gate (INV-203-04). Mount right above the composer so
+// the operator's eye goes to the action before typing the next turn.
+import { ApprovalCardStack } from "@/components/cards/ApprovalCard";
 import {
   SessionWorkspaceDrawer,
   SessionWorkspacePane,
@@ -688,6 +694,10 @@ export function ThreadArea({
               return (
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   <EmptyAgentHero agentName={activeAgentName} composer={composerEl} />
+                  {/* Phase 203-10 — surface pending approvals even on empty thread. */}
+                  <div className="px-ml pt-2xs">
+                    <ApprovalCardStack />
+                  </div>
                 </div>
               );
             }
@@ -702,6 +712,10 @@ export function ThreadArea({
                     loader={<Shell.MessageLoading />}
                   />
                 </Shell.ScrollArea>
+                {/* Phase 203-10 — HITL approval surface (INV-203-04). */}
+                <div className="px-ml pt-2xs">
+                  <ApprovalCardStack />
+                </div>
                 {composerEl}
               </>
             );

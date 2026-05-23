@@ -26,6 +26,12 @@ export interface PendingApproval {
 	resolve(approved: boolean): void
 	runId: string
 	timeoutHandle: ReturnType<typeof setTimeout>
+	/** Phase 203-10 — snapshot of the request payload so the UI can render it. */
+	toolName: string
+	args: unknown
+	agentId?: string
+	userId?: string
+	createdAt: number
 }
 
 export interface RequestSyncOptions {
@@ -46,9 +52,43 @@ export interface ApprovalDecisionResult {
 	runId: string
 }
 
+/**
+ * Phase 203-10 — public summary of a pending approval. The SSE endpoint
+ * (modules/openclawos/approvals-routes.ts) serializes these to clients;
+ * the claw-client ApprovalCard renders one row per entry.
+ */
+export interface PendingApprovalSummary {
+	toolCallId: string
+	toolName: string
+	args: unknown
+	agentId?: string
+	userId?: string
+	runId: string
+	createdAt: number
+}
+
+/**
+ * Phase 203-10 — events emitted on the ApprovalManager event bus.
+ * Subscribers (SSE handler) get a 'pending' for every new request and a
+ * 'resolved' for every approve/reject/timeout/cancel. UI uses these to
+ * render + retract approval cards.
+ */
+export type ApprovalEvent =
+	| {type: 'pending'; entry: PendingApprovalSummary}
+	| {
+			type: 'resolved'
+			toolCallId: string
+			decision: ApprovalDecision
+			runId: string
+	  }
+
+export type ApprovalEventListener = (event: ApprovalEvent) => void
+
 export class ApprovalManager {
 	private pending = new Map<string, PendingApproval>()
 	private readonly timeoutMs: number
+	/** Phase 203-10 — event subscribers (SSE stream handlers in livinityd). */
+	private readonly listeners = new Set<ApprovalEventListener>()
 
 	constructor(opts?: {timeoutMs?: number}) {
 		this.timeoutMs = opts?.timeoutMs ?? 5 * 60 * 1000
@@ -61,9 +101,24 @@ export class ApprovalManager {
 				if (entry) {
 					this.pending.delete(toolCallId)
 					entry.resolve(false)
+					this.emit({
+						type: 'resolved',
+						toolCallId,
+						decision: 'timeout',
+						runId: entry.runId,
+					})
 				}
 			}, this.timeoutMs)
-			this.pending.set(toolCallId, {resolve, runId, timeoutHandle})
+			const entry: PendingApproval = {
+				resolve,
+				runId,
+				timeoutHandle,
+				toolName: 'unknown',
+				args: undefined,
+				createdAt: Date.now(),
+			}
+			this.pending.set(toolCallId, entry)
+			this.emit({type: 'pending', entry: this.toSummary(toolCallId, entry)})
 		})
 	}
 
@@ -72,6 +127,9 @@ export class ApprovalManager {
 	 * dispatcher. Differentiates 'timeout' from explicit 'rejected' so the
 	 * plugin can surface a clearer message inside the `before_tool_call`
 	 * hook's rejection payload (T-197-05-05).
+	 *
+	 * Phase 203-10 — emits a 'pending' event so the SSE stream can push the
+	 * approval card to the claw-client UI; emits 'resolved' on completion.
 	 */
 	async requestSync(opts: RequestSyncOptions): Promise<ApprovalDecisionResult> {
 		const toolCallId = opts.toolCallId ?? randomToolCallId()
@@ -91,9 +149,26 @@ export class ApprovalManager {
 					timedOut = true
 					this.pending.delete(toolCallId)
 					entry.resolve(false)
+					this.emit({
+						type: 'resolved',
+						toolCallId,
+						decision: 'timeout',
+						runId: entry.runId,
+					})
 				}
 			}, timeoutMs)
-			this.pending.set(toolCallId, {resolve, runId, timeoutHandle})
+			const entry: PendingApproval = {
+				resolve,
+				runId,
+				timeoutHandle,
+				toolName: opts.toolName,
+				args: opts.args,
+				agentId: opts.agentId,
+				userId: opts.userId,
+				createdAt: Date.now(),
+			}
+			this.pending.set(toolCallId, entry)
+			this.emit({type: 'pending', entry: this.toSummary(toolCallId, entry)})
 		})
 
 		const decision: ApprovalDecision = result
@@ -110,6 +185,12 @@ export class ApprovalManager {
 		clearTimeout(entry.timeoutHandle)
 		this.pending.delete(toolCallId)
 		entry.resolve(approved)
+		this.emit({
+			type: 'resolved',
+			toolCallId,
+			decision: approved ? 'approved' : 'rejected',
+			runId: entry.runId,
+		})
 	}
 
 	cancelAll(runId: string): void {
@@ -118,7 +199,56 @@ export class ApprovalManager {
 				clearTimeout(entry.timeoutHandle)
 				this.pending.delete(toolCallId)
 				entry.resolve(false)
+				this.emit({type: 'resolved', toolCallId, decision: 'rejected', runId})
 			}
+		}
+	}
+
+	/**
+	 * Phase 203-10 — snapshot of currently-pending approvals. SSE handler
+	 * uses this to send an initial batch when a new client connects so the
+	 * UI does not have to wait for the next 'pending' event to populate.
+	 */
+	listPending(): PendingApprovalSummary[] {
+		return Array.from(this.pending.entries()).map(([toolCallId, entry]) =>
+			this.toSummary(toolCallId, entry),
+		)
+	}
+
+	/**
+	 * Phase 203-10 — subscribe to approval events. Returns an unsubscribe
+	 * function. Listeners are called synchronously; throwing inside one
+	 * does NOT prevent others from firing.
+	 */
+	subscribe(listener: ApprovalEventListener): () => void {
+		this.listeners.add(listener)
+		return () => {
+			this.listeners.delete(listener)
+		}
+	}
+
+	private emit(event: ApprovalEvent): void {
+		for (const listener of this.listeners) {
+			try {
+				listener(event)
+			} catch {
+				// Subscriber faults must not break the request lifecycle.
+			}
+		}
+	}
+
+	private toSummary(
+		toolCallId: string,
+		entry: PendingApproval,
+	): PendingApprovalSummary {
+		return {
+			toolCallId,
+			toolName: entry.toolName,
+			args: entry.args,
+			agentId: entry.agentId,
+			userId: entry.userId,
+			runId: entry.runId,
+			createdAt: entry.createdAt,
 		}
 	}
 }
