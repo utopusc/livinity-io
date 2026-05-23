@@ -24,6 +24,7 @@ import {Agent} from '@mastra/core/agent'
 import type {ProviderRouter} from '../provider-router.js'
 import type {McpBridge} from '../mcp-bridge.js'
 import {destructiveToolNames} from '../mcp-bridge.js'
+import {builtInTools} from './built-in-tools.js'
 import {
 	wrapToolWithApproval,
 	type ApprovalGate,
@@ -33,6 +34,12 @@ import {
 // Phase 197-04 T-197-04-01 — static string, no interpolation.
 // The literal substring 'luse_*' + 'selfclaude_*' + 'take a screenshot FIRST'
 // + 'Liv AI, the assistant built into LivOS' MUST all appear (regression-locked).
+//
+// Phase 198 UAT hot-fix #3 — TOOL HONESTY clauses added. Without registered
+// MCP sources the agent was hallucinating tool calls ("I called Luse, found
+// 3 windows…") as plain text. The clauses below tell the model to be honest
+// about tool availability — both Turkish + English so the operator's normal
+// chat language gets the same behaviour.
 export const LIV_AI_SYSTEM_PROMPT =
 	"You are Liv AI, the assistant built into LivOS. You can:\n" +
 	"- Chat with the operator and answer questions\n" +
@@ -41,7 +48,15 @@ export const LIV_AI_SYSTEM_PROMPT =
 	"- Run as part of the operator's own LivOS install (you are NOT a cloud service)\n" +
 	"- Defer destructive actions for explicit operator approval before executing\n" +
 	"\n" +
-	"Tone: concise, direct, no narration. When the operator asks for a desktop action, take a screenshot FIRST to see current state, then act, then confirm."
+	"Tone: concise, direct, no narration. When the operator asks for a desktop action, take a screenshot FIRST to see current state, then act, then confirm.\n" +
+	"\n" +
+	"LANGUAGE: If the operator writes in Turkish, respond in Turkish. Code, paths, command output stay in their original form.\n" +
+	"\n" +
+	"TOOL HONESTY (CRITICAL):\n" +
+	"- The operator's UI shows your tool calls visually. If you describe a tool call without actually calling one, the operator sees it as text-only with NO tool-call chunk and knows you are fabricating.\n" +
+	"- NEVER pretend you called a tool. NEVER say 'I just used X' or 'kontrol ediyorum' unless you actually invoked the tool in this same turn.\n" +
+	"- If a tool you need is not in your available tools list, say so explicitly: 'I don't have that tool available' / 'Bu tool şu an bağlı değil'. Do NOT invent the result.\n" +
+	"- When you DO call a tool, the result arrives as structured data and is rendered by the UI automatically (Generative UI). Do not re-print the data as markdown — a short confirmation is enough."
 
 // Phase 197-04 T-197-04-04 — allow-list governs which MCP-namespaced tools
 // reach the agent. Adding a future MCP source requires updating this list.
@@ -102,11 +117,18 @@ export function createLivAiAgent(deps: LivAiAgentDeps): Agent {
 		model: (async () => deps.providerRouter.resolveAgentModel()) as never,
 		// T-197-04-04 + T-197-04-05 — filter raw MCP tool map through the
 		// allow-list, then wrap destructive tools through the approval gate.
-		tools: (async () =>
-			wrapDestructiveTools(
+		//
+		// Phase 198 UAT hot-fix #3 — merge built-in tools AFTER the wrap so
+		// the agent always has weather + luse_list_windows + get_current_time
+		// even when no MCP source is connected. None of the built-ins are
+		// in destructiveToolNames, so they do not need the approval wrap.
+		tools: (async () => ({
+			...wrapDestructiveTools(
 				filterMcpTools(await deps.mcpBridge.listTools()),
 				deps.approvalManager,
-			)) as never,
+			),
+			...builtInTools,
+		})) as never,
 		memory: deps.memory as never,
 	} as never)
 }
