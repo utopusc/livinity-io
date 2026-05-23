@@ -141,13 +141,13 @@ describe('useThreadListAdapter', () => {
 		})
 		expect(captured).not.toBeNull()
 		const first = captured!.currentThreadId
-		expect(first).toMatch(/^t-\d+-[a-z0-9]+$/)
+		expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
 
 		act(() => {
 			captured!.onSwitchToNewThread()
 		})
 		const second = captured!.currentThreadId
-		expect(second).toMatch(/^t-\d+-[a-z0-9]+$/)
+		expect(second).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
 		expect(second).not.toBe(first)
 	})
 

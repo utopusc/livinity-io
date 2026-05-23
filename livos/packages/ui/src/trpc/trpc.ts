@@ -60,6 +60,14 @@ export const links = [
 			},
 			true: httpLink({
 				url: trpcHttpUrl,
+				// P199 UAT hot-fix: forward the JWT cookie (LIVINITY_SESSION)
+				// alongside the Authorization header so calls made before the
+				// localStorage JWT is hydrated still authenticate. Server's
+				// verifyToken accepts either source; without credentials:include
+				// the cookie was dropped and listAvailableModels +
+				// getActiveModel + setActiveModel all returned 401.
+				fetch: (url, options) =>
+					fetch(url, {...options, credentials: 'include'}),
 				headers: () => {
 					const token = getJwt()
 					return token ? {Authorization: `Bearer ${token}`} : {}
