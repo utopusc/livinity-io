@@ -1,0 +1,107 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+export type Route =
+  | { view: "home" }
+  | { view: "chat"; sessionId: string }
+  | { view: "agents" }
+  | { view: "apps" }
+  | { view: "artifacts" }
+  | { view: "crons"; selectedId?: string }
+  | { view: "artifact"; artifactId: string }
+  | { view: "app"; appId: string };
+
+function parseHash(hash: string): Route | null {
+  const path = hash.replace(/^#/, "");
+  if (path === "" || path === "/" || path === "/home") return { view: "home" };
+  if (path.startsWith("/chat/")) {
+    const sessionId = decodeURIComponent(path.slice("/chat/".length));
+    if (sessionId) return { view: "chat", sessionId };
+  }
+  if (path === "/agents") return { view: "agents" };
+  if (path === "/apps") return { view: "apps" };
+  if (path === "/artifacts") return { view: "artifacts" };
+  if (path === "/crons") return { view: "crons" };
+  if (path.startsWith("/crons/")) {
+    const selectedId = decodeURIComponent(path.slice("/crons/".length));
+    if (selectedId) return { view: "crons", selectedId };
+  }
+  if (path.startsWith("/artifacts/")) {
+    const artifactId = decodeURIComponent(path.slice("/artifacts/".length));
+    if (artifactId) return { view: "artifact", artifactId };
+  }
+  if (path.startsWith("/apps/")) {
+    const appId = decodeURIComponent(path.slice("/apps/".length));
+    if (appId) return { view: "app", appId };
+  }
+  return null;
+}
+
+export function homeHash(): string {
+  return "#/home";
+}
+
+export function chatHash(sessionId: string): string {
+  return `#/chat/${encodeURIComponent(sessionId)}`;
+}
+
+export function agentsHash(): string {
+  return "#/agents";
+}
+
+export function appsHash(): string {
+  return "#/apps";
+}
+
+export function cronsHash(): string {
+  return "#/crons";
+}
+
+export function artifactsHash(): string {
+  return "#/artifacts";
+}
+
+export function artifactHash(artifactId: string): string {
+  return `#/artifacts/${encodeURIComponent(artifactId)}`;
+}
+
+export function appHash(appId: string): string {
+  return `#/apps/${encodeURIComponent(appId)}`;
+}
+
+export function navigate(route: Route): void {
+  if (route.view === "home") {
+    window.location.hash = "/home";
+  } else if (route.view === "chat") {
+    window.location.hash = `/chat/${encodeURIComponent(route.sessionId)}`;
+  } else if (route.view === "agents") {
+    window.location.hash = "/agents";
+  } else if (route.view === "apps") {
+    window.location.hash = "/apps";
+  } else if (route.view === "artifacts") {
+    window.location.hash = "/artifacts";
+  } else if (route.view === "crons") {
+    window.location.hash = route.selectedId
+      ? `/crons/${encodeURIComponent(route.selectedId)}`
+      : "/crons";
+  } else if (route.view === "app") {
+    window.location.hash = `/apps/${encodeURIComponent(route.appId)}`;
+  } else if (route.view === "artifact") {
+    window.location.hash = `/artifacts/${encodeURIComponent(route.artifactId)}`;
+  }
+}
+
+export function useHashRoute(): Route | null {
+  const [route, setRoute] = useState<Route | null>(() =>
+    typeof window !== "undefined" ? parseHash(window.location.hash) : null,
+  );
+
+  useEffect(() => {
+    const handler = () => setRoute(parseHash(window.location.hash));
+    window.addEventListener("hashchange", handler);
+    return () => window.removeEventListener("hashchange", handler);
+  }, []);
+
+  return route;
+}

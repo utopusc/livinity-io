@@ -8,6 +8,10 @@ packages:
   - packages/design-tokens
   - packages/cli
   - packages/liv-ai-app
+  # Phase 203-02: fork of thesysdev/openclaw-os pinned at SHA 076ae63 (see UPSTREAM-COMMIT)
+  # Root container = @livos/liv-claw-os; inner packages registered flatly so pnpm sees them
+  - packages/liv-claw-os
+  - packages/liv-claw-os/packages/*
 
 # pnpm v11+ uses `allowBuilds` map (booleans) at workspace root, NOT the
 # legacy `onlyBuiltDependencies` list. Without explicit `true` values for
