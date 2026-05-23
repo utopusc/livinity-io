@@ -5,7 +5,7 @@
 // Locks the EmptyState component contract from Plan 198-07 must_haves:
 //
 //   1. Renders the Liv AI logo (img with alt="Liv AI") + heading.
-//   2. Renders the tagline string (LivOS'un yapay zekası — ...).
+//   2. Renders the tagline string (English D-200-18; was Turkish pre-Phase-200).
 //   3. Clicking a SuggestedPrompts chip propagates the chip text through
 //      the EmptyState's onPick prop exactly once.
 //
@@ -58,7 +58,7 @@ describe('EmptyState', () => {
 		expect(cls).toMatch(/\bw-16\b/)
 	})
 
-	it('Test 2: renders the locked Liv AI tagline ("ekranını yönetir, sorularına cevap verir, hatırlar")', () => {
+	it('Test 2: renders the locked Liv AI tagline ("Liv AI — your operating system\'s assistant.") [D-200-18]', () => {
 		const onPick = vi.fn()
 		act(() => {
 			root.render(<EmptyState onPick={onPick} />)
@@ -69,10 +69,18 @@ describe('EmptyState', () => {
 		)
 		expect(root_el).not.toBeNull()
 		const text = root_el!.textContent ?? ''
-		// Locked phrase from Plan 198-07 must_haves truth #1.
-		expect(text).toContain('ekranını yönetir')
-		expect(text).toContain('sorularına cevap verir')
-		expect(text).toContain('hatırlar')
+		// Locked English phrase from D-200-18 (Plan 200-06 replaces the Phase
+		// 198-07 Turkish wording per INV-200-05).
+		expect(text).toContain('Liv AI')
+		expect(text).toContain("your operating system's assistant")
+	})
+
+	it('Test 2b: LIV_AI_TAGLINE constant is the English D-200-18 string with NO Turkish diacritics (INV-200-05)', async () => {
+		const {LIV_AI_TAGLINE} = await import('./empty-state')
+		expect(LIV_AI_TAGLINE).toBe("Liv AI — your operating system's assistant.")
+		// Sentinel — guards INV-200-05 against any future regression that
+		// reintroduces Turkish diacritics into the Liv AI surface.
+		expect(LIV_AI_TAGLINE).not.toMatch(/[ğüşıöçĞÜŞİÖÇ]/)
 	})
 
 	it('Test 3: clicking a SuggestedPrompts chip propagates to onPick callback', () => {

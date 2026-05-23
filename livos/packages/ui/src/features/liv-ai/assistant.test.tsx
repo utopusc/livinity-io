@@ -243,11 +243,29 @@ vi.mock('./devtools-mount', () => ({
 	DevToolsMount: () => null,
 }))
 
-// ─── Mock @/components/assistant-ui/thread (legacy Thread; unused
-// post-199-05 rebuild but kept importable for safety) ─────────────────
+// ─── Mock @/components/assistant-ui/thread (canonical Thread surface;
+// Plan 200-06 mounts <Thread composerSlot={<LivAiComposer.../>} />.
+// The mock renders the composerSlot inside a ThreadWelcome-shaped
+// container so layout assertions still resolve and the LivAiComposer
+// (which carries the LivAiModelPicker) lands in the DOM for Tests 7-9).
+// ─────────────────────────────────────────────────────────────────────
 
 vi.mock('@/components/assistant-ui/thread', () => ({
-	Thread: () => <div data-testid='legacy-thread' />,
+	Thread: ({composerSlot}: {composerSlot?: ReactNode}) => (
+		<div data-testid='aui-thread-root'>
+			{/* ThreadWelcome surrogate — canonical heading + D-200-18 subtitle */}
+			<div data-testid='aui-thread-welcome'>
+				<h1>Hello there!</h1>
+				<p>How can I help you today?</p>
+				<p>Liv AI — your operating system&apos;s assistant.</p>
+			</div>
+			<div data-testid='aui-thread-viewport'>
+				<div data-testid='aui-thread-viewport-footer'>
+					{composerSlot}
+				</div>
+			</div>
+		</div>
+	),
 }))
 
 // Mock the LivAiComposer module — the canonical composer pulls in
@@ -306,68 +324,74 @@ afterEach(() => {
 	container.remove()
 })
 
-describe('Assistant — Phase 199-05 AuiIf-branched layout', () => {
-	it('Test 1: thread.isEmpty === true → centered hero + Composer mounted ONCE', () => {
+describe('Assistant — Phase 200-06 canonical Thread mount', () => {
+	it('Test 1: <Thread composerSlot> mounted with LivAiComposer inside; D-200-18 subtitle visible', () => {
 		mockState.thread.isEmpty = true
 		act(() => {
 			root.render(<Assistant />)
 		})
 
-		const empty = document.querySelector('[data-testid="liv-ai-empty-state"]')
-		expect(empty).not.toBeNull()
+		// Plan 200-06 — canonical assistant-ui Thread is the new outer
+		// surface (D-200-16). The mock surrogate renders `aui-thread-root`
+		// with a ThreadWelcome heading + the D-200-18 English Liv AI
+		// subtitle. The LivAiComposer mock lands inside the composerSlot
+		// (composer-primitive-root testid).
+		const threadRoot = document.querySelector(
+			'[data-testid="aui-thread-root"]',
+		)
+		expect(threadRoot).not.toBeNull()
 
-		const h2 = empty!.querySelector('h2')
-		expect(h2).not.toBeNull()
-		expect(h2!.textContent?.trim()).toBe('Liv AI')
+		// D-200-18 English subtitle present in ThreadWelcome.
+		const welcome = document.querySelector(
+			'[data-testid="aui-thread-welcome"]',
+		)
+		expect(welcome).not.toBeNull()
+		const welcomeText = welcome!.textContent ?? ''
+		expect(welcomeText).toContain('Hello there!')
+		expect(welcomeText).toContain('How can I help you today?')
+		expect(welcomeText).toContain("your operating system's assistant")
 
-		const img = empty!.querySelector('img') as HTMLImageElement | null
-		expect(img).not.toBeNull()
-		expect(img!.getAttribute('src')).toBe('/figma-exports/liv-ai.svg')
-		const cls = img!.getAttribute('class') ?? ''
-		expect(cls).toMatch(/\bh-16\b/)
-		expect(cls).toMatch(/\bw-16\b/)
-
-		// Exactly ONE Composer (ComposerPrimitive.Root via the extracted
-		// './composer' module — mock renders <form data-testid="composer-
-		// primitive-root">) in the empty branch.
+		// Exactly ONE LivAiComposer surrogate mounted via composerSlot.
 		const composers = document.querySelectorAll(
 			'[data-testid="composer-primitive-root"]',
 		)
 		expect(composers.length).toBe(1)
 	})
 
-	it('Test 2: thread.isEmpty === false → empty hero is gone; Composer mounted in chat branch', () => {
+	it('Test 2: LivAiComposer lands inside Thread ViewportFooter (composerSlot prop wiring)', () => {
 		mockState.thread.isEmpty = false
 		act(() => {
 			root.render(<Assistant />)
 		})
 
+		// Phase 200-06 — Phase 199-05 EmptyStateBranch is DELETED; the
+		// canonical Thread owns both empty/chat layout. The LivAiComposer
+		// lands in the Thread's ViewportFooter via `composerSlot` (D-200-16).
 		const empty = document.querySelector('[data-testid="liv-ai-empty-state"]')
 		expect(empty).toBeNull()
 
-		// Viewport from the non-empty branch is present.
 		const viewport = document.querySelector(
-			'[data-testid="thread-primitive-viewport"]',
+			'[data-testid="aui-thread-viewport"]',
 		)
 		expect(viewport).not.toBeNull()
 
-		// Exactly ONE Composer in chat layout (inside ViewportFooter).
-		const composers = document.querySelectorAll(
-			'[data-testid="composer-primitive-root"]',
-		)
-		expect(composers.length).toBe(1)
-
-		// Composer is nested inside the ViewportFooter container.
+		// Composer nested inside the canonical Thread's ViewportFooter.
 		const footer = document.querySelector(
-			'[data-testid="thread-primitive-viewport-footer"]',
+			'[data-testid="aui-thread-viewport-footer"]',
 		)
 		expect(footer).not.toBeNull()
 		expect(
 			footer!.querySelector('[data-testid="composer-primitive-root"]'),
 		).not.toBeNull()
+
+		// Exactly ONE Composer rendered (single composerSlot mount).
+		const composers = document.querySelectorAll(
+			'[data-testid="composer-primitive-root"]',
+		)
+		expect(composers.length).toBe(1)
 	})
 
-	it('Test 3: empty branch DOM has NO `absolute inset-0` overlay (Pitfall 5 regression-lock)', () => {
+	it('Test 3: empty branch DOM has NO `absolute inset-0` overlay (Phase 199-05 Pitfall 5 regression-lock; carries forward into Plan 200-06)', () => {
 		mockState.thread.isEmpty = true
 		act(() => {
 			root.render(<Assistant />)
@@ -388,14 +412,7 @@ describe('Assistant — Phase 199-05 AuiIf-branched layout', () => {
 		}
 	})
 
-	it('Test 4: LivAiComposer module surrogate — assistant.tsx imports LivAiComposer from ./composer (D-199-18 / D-200-13)', async () => {
-		// Surrogate for the Pitfall 7 text-preservation test: rather than
-		// flip AuiIf state mid-render (hard to do without a real runtime),
-		// assert that the SAME LivAiComposer module is the one mounted by
-		// both AuiIf branches. We do that by reading the file source for
-		// the import literal + JSX usage. Plan 200-05 renamed
-		// `Composer` → `LivAiComposer` when rebuilding the surface into
-		// the Grok-pattern footer-strip composer.
+	it('Test 4: LivAiComposer source-import surrogate — assistant.tsx imports LivAiComposer from ./composer + Thread from canonical components/assistant-ui/thread (D-199-18 / D-200-13 / D-200-16)', async () => {
 		const fs = await import('node:fs/promises')
 		const path = await import('node:path')
 		const assistantPath = path.resolve(
@@ -405,25 +422,33 @@ describe('Assistant — Phase 199-05 AuiIf-branched layout', () => {
 		const src = await fs.readFile(assistantPath, 'utf-8')
 		expect(src).toMatch(/from ['"]\.\/composer['"]/)
 		expect(src).toMatch(/<LivAiComposer\b/)
+		// Plan 200-06 — canonical Thread mount via composerSlot (D-200-16).
+		expect(src).toMatch(/from ['"]@\/components\/assistant-ui\/thread['"]/)
+		expect(src).toMatch(/composerSlot=\{/)
 	})
 
-	it('Test 5: SuggestedPrompts content unchanged from P198 — 4 locked chips render in empty state (D-199-26)', () => {
+	it('Test 5: canonical ThreadWelcome subtitle = "Liv AI — your operating system\'s assistant." (D-200-18; ENGLISH-only INV-200-05)', () => {
+		// Phase 198-06 SuggestedPrompts chips are NO LONGER mounted by
+		// assistant.tsx — the canonical assistant-ui Thread owns its own
+		// ThreadSuggestions surface (registry-canonical), which renders
+		// nothing today since the runtime ships zero
+		// `ThreadPrimitive.Suggestions` entries. Plan 200-06 replaces the
+		// Phase 199-05 SuggestedPrompts assertion with a positive lock on
+		// the D-200-18 English Liv AI subtitle inside ThreadWelcome.
 		mockState.thread.isEmpty = true
 		act(() => {
 			root.render(<Assistant />)
 		})
 
-		const chips = document.querySelectorAll(
-			'[data-testid="liv-ai-suggested-prompts"] button',
+		const welcome = document.querySelector(
+			'[data-testid="aui-thread-welcome"]',
 		)
-		expect(chips.length).toBe(4)
-		const texts = Array.from(chips).map((b) => b.textContent?.trim())
-		expect(texts).toEqual([
-			'What is the weather in Istanbul?',
-			'Take a screenshot of my screen',
-			'List my open windows',
-			'What can you do?',
-		])
+		expect(welcome).not.toBeNull()
+		const text = welcome!.textContent ?? ''
+		expect(text).toContain("Liv AI — your operating system's assistant.")
+		// Sentinel: INV-200-05 — no Turkish diacritics in the empty-state
+		// surface rendered through the canonical Thread.
+		expect(text).not.toMatch(/[ğüşıöçĞÜŞİÖÇ]/)
 	})
 })
 

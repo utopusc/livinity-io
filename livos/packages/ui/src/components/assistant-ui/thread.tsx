@@ -127,6 +127,14 @@ const ThreadWelcome: FC = () => {
           <p className="aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-muted-foreground text-xl delay-75 duration-200">
             How can I help you today?
           </p>
+          {/* Phase 200-06 (D-200-18) — second intentional delta from upstream
+            registry (same justification as Plan 200-02 composerSlot). The Liv
+            AI English tagline is injected as a third <p> below the canonical
+            heading + subtitle, slightly delayed fade-in, smaller text size,
+            muted-foreground/70. INV-200-05 ENGLISH-only. */}
+          <p className="aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-muted-foreground/70 text-sm delay-150 duration-200">
+            Liv AI — your operating system's assistant.
+          </p>
         </div>
       </div>
       <ThreadSuggestions />

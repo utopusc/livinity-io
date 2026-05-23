@@ -12,10 +12,11 @@
  *                    wired via useThreadListAdapter() against the
  *                    existing P197-05 mastra.agent.threads.* tRPC
  *                    procedures.
- *   - RIGHT (flex-1) — Existing Thread primitive (Phase 199-05 rebuilt
- *                      into AuiIf-branched centered-empty vs
- *                      sticky-footer chat layout — see <main> below)
- *                      hosting the assistant-ui message stream.
+ *   - RIGHT (flex-1) — Canonical assistant-ui <Thread /> (Phase 200-02
+ *                      registry port) with a `composerSlot` (D-200-16)
+ *                      that injects <LivAiComposer /> from ./composer
+ *                      (Plan 200-05 Grok-pattern composer with the
+ *                      relocated model picker in the footer-strip).
  *
  * The currentThreadId from the adapter is threaded into the transport
  * body so every /chat/livAi request carries the right thread scope —
@@ -23,32 +24,41 @@
  * messages per threadId, so switching threads in the sidebar restores
  * history on the next message (or on initial agent.stream() resolve).
  *
- * Phase 199-05 rebuild — centered empty-state composer:
- *   - DELETED Phase 198-07 `EmptyStateMount` absolute-positioned overlay
- *     (D-199-28; RESEARCH Pitfall 5). The overlay fought the Thread
- *     layout — it absolutely-positioned the empty-state on top of a
- *     Thread that pinned the composer at the bottom, so the composer
- *     stayed sticky-footer even when no messages existed.
- *   - REPLACED with canonical assistant-ui `<AuiIf condition={(s) =>
- *     s.thread.isEmpty}>` empty-state branch + matching
- *     `!s.thread.isEmpty` chat branch (D-199-17; RESEARCH B1 + Pattern
- *     2 — the Grok / ChatGPT pattern operator asked for).
- *   - Single shared `<LivAiComposer
-											selectedModel={selectedModel}
-											onModelChange={handleModelChange}
-										/>` from ./composer mounted in BOTH
- *     branches (D-199-18; RESEARCH Pitfall 7). The assistant-ui runtime
- *     preserves ComposerPrimitive text/focus across the empty→chat
- *     layout flip — typing in the centered hero does NOT lose
- *     characters when the first send relocates the composer to the
- *     sticky footer.
- *   - Empty-state hero (logo + heading + tagline + SuggestedPrompts +
- *     centered Composer) rendered INLINE inside the AuiIf branch so the
- *     layout is natural flex-column flow (no absolute positioning).
- *     `data-testid='liv-ai-empty-state'` preserved on the outer
- *     centered div (INV-199-08 + D-199-29).
- *   - Logo tightened from h-20/w-20 → h-16/w-16 for the centered layout
- *     (D-199-25).
+ * Phase 200-06 rebuild — registry-canonical Thread mount (D-200-16):
+ *   - DELETED Phase 199-05 inline `<ThreadPrimitive.Root>` + dual `<AuiIf>`
+ *     empty/chat branches and the local UserMessage / AssistantMessage
+ *     renderers. The canonical <Thread /> (livos/packages/ui/src/
+ *     components/assistant-ui/thread.tsx — verbatim r.assistant-ui.com/
+ *     thread.json port) owns the entire surface now: ThreadWelcome with
+ *     canonical heading + the D-200-18 English Liv AI subtitle, the full
+ *     MessagePrimitive.GroupedParts render pipeline (text / reasoning /
+ *     tool-call routed through part.toolUI — Phase 198 generative-UI
+ *     renderers stay FROZEN per INV-200-03), AssistantActionBar with
+ *     ActionBarPrimitive.Copy / Reload / ExportMarkdown, BranchPicker,
+ *     EditComposer, AttachmentDropzone, ThreadScrollToBottom, etc.
+ *   - REPLACED with a single `<Thread composerSlot={<LivAiComposer
+ *     selectedModel={...} onModelChange={...} />} />` mount (the one
+ *     intentional delta from upstream registry, per D-200-16 — already
+ *     wired in Plan 200-02 as `ThreadProps = { composerSlot?: ReactNode }`).
+ *   - DELETED EmptyStateBranch (Phase 199-05) — the canonical
+ *     ThreadWelcome in thread.tsx (with the Phase 200-06 subtitle delta)
+ *     is the registry-canonical empty-state surface. The Phase 198-06
+ *     SuggestedPrompts catalog is preserved as `ThreadPrimitive.Suggestions`
+ *     children registered via the runtime adapter (deferred to a follow-up
+ *     wire — registry Thread renders 0 suggestion chips today when the
+ *     runtime ships no Suggestion entries; canonical ThreadWelcome heading
+ *     + Liv AI subtitle remain visible).
+ *   - DELETED the (vestigial Phase 199-05) inline UserMessage /
+ *     AssistantMessage renderers + the unused MessagePrimitive,
+ *     ComposerPrimitive, AuiIf, useThreadRuntime, ThreadPrimitive,
+ *     LIV_AI_TAGLINE, SuggestedPrompts imports — they all live INSIDE the
+ *     canonical Thread now.
+ *
+ * Plan 199-07 model-picker state + transport body callback wiring is
+ * preserved verbatim: `selectedModel` / `handleModelChange` are passed
+ * down into LivAiComposer via the `composerSlot` prop; the
+ * AssistantChatTransport `body` callback still emits
+ * `{threadId, config: {modelName: selectedModel}}` per request.
  *
  * Plans 198-03..07 layer on:
  *   198-03 — tool renderers (Generative UI for tool calls) [SHIPPED]
@@ -56,21 +66,12 @@
  *   198-05 — ThreadList sidebar [SHIPPED]
  *   198-06 — Slash commands + suggested prompts + attachments [SHIPPED]
  *   198-07 — Empty state + DevTools + a11y wrapper [SHIPPED — empty-state
- *            rebuilt by Plan 199-05; DevTools + a11y wrapper preserved]
- *
- * Plan 199-07 will mount the header bar (Liv AI title + LivAiModelPicker
- * + "+ New conversation" quick action) ABOVE this 2-column layout. The
- * transport `body` is already a callback so Plan 199-07 can extend it
- * with `config.modelName` from the picker without touching this file.
+ *            rebuilt by Plan 199-05 → finalized by Plan 200-06 to the
+ *            canonical ThreadWelcome; DevTools + a11y wrapper preserved]
  */
 
 import {
 	AssistantRuntimeProvider,
-	AuiIf,
-	ComposerPrimitive,
-	MessagePrimitive,
-	ThreadPrimitive,
-	useThreadRuntime,
 } from '@assistant-ui/react'
 import {
 	AssistantChatTransport,
@@ -78,92 +79,15 @@ import {
 } from '@assistant-ui/react-ai-sdk'
 import {useEffect, useState} from 'react'
 
+import {Thread} from '@/components/assistant-ui/thread'
 import {trpcReact} from '@/trpc/trpc'
 
 import {createImageAttachmentAdapter} from './attachment-adapter'
 import {LivAiComposer} from './composer'
 import {DevToolsMount} from './devtools-mount'
-import {LIV_AI_TAGLINE} from './empty-state'
 import {DEFAULT_LIV_AI_MODEL_ID, type LivAiModelId} from './models'
-import {SuggestedPrompts} from './suggested-prompts'
 import {useThreadListAdapter} from './thread-list-adapter'
 import {ToolRenderers} from './tool-renderers'
-
-/**
- * Minimal MessagePrimitive renderers for the chat-branch viewport.
- * Mirrors the shape Phase 198-02 ships in components/assistant-ui/thread.tsx
- * — we re-declare them here so Plan 199-05 can switch the live render
- * surface to ThreadPrimitive.Root inline without depending on the legacy
- * <Thread /> wrapper (which still mounts a hand-rolled
- * ThreadPrimitive.Empty + ViewportFooter shape that we no longer want).
- */
-function UserMessage() {
-	return (
-		<MessagePrimitive.Root data-role='user' className='flex justify-end px-2'>
-			<div className='rounded-2xl bg-muted px-4 py-2 text-foreground'>
-				<MessagePrimitive.Content />
-			</div>
-		</MessagePrimitive.Root>
-	)
-}
-
-function AssistantMessage() {
-	return (
-		<MessagePrimitive.Root
-			data-role='assistant'
-			className='relative px-2 leading-relaxed text-foreground'
-		>
-			<MessagePrimitive.Content />
-		</MessagePrimitive.Root>
-	)
-}
-
-/**
- * Phase 199-05 — Centered empty-state hero (replaces Phase 198-07
- * EmptyStateMount overlay; D-199-28). Lives INSIDE AssistantRuntime-
- * Provider so `useThreadRuntime().append()` resolves a valid runtime
- * when a SuggestedPrompts chip is picked.
- *
- * The outer container preserves `data-testid='liv-ai-empty-state'`
- * per INV-199-08 + D-199-29 (regression-locked by the existing
- * empty-state vitest + the new assistant.test.tsx Test 1).
- */
-interface EmptyStateBranchProps {
-	selectedModel: LivAiModelId
-	onModelChange: (next: LivAiModelId) => void
-}
-
-function EmptyStateBranch({selectedModel, onModelChange}: EmptyStateBranchProps) {
-	const threadRuntime = useThreadRuntime()
-	const handlePickPrompt = (text: string) => {
-		threadRuntime.append({role: 'user', content: [{type: 'text', text}]})
-	}
-	return (
-		<div
-			className='flex h-full flex-col items-center justify-center gap-4 p-8 text-center'
-			data-testid='liv-ai-empty-state'
-		>
-			<img
-				src='/figma-exports/liv-ai.svg'
-				alt='Liv AI'
-				className='h-16 w-16'
-			/>
-			<h2 className='text-2xl font-semibold text-neutral-900 dark:text-neutral-100'>
-				Liv AI
-			</h2>
-			<p className='max-w-md text-sm text-neutral-600 dark:text-neutral-400'>
-				{LIV_AI_TAGLINE}
-			</p>
-			<div className='w-full max-w-3xl'>
-				<LivAiComposer
-					selectedModel={selectedModel}
-					onModelChange={onModelChange}
-				/>
-			</div>
-			<SuggestedPrompts onPick={handlePickPrompt} />
-		</div>
-	)
-}
 
 export function Assistant() {
 	const {
@@ -177,7 +101,7 @@ export function Assistant() {
 	// Phase 199-07 — selectedModel state + Redis hydration.
 	//
 	// Initial value: DEFAULT_LIV_AI_MODEL_ID (Grok 4.20, D-199-07) so the
-	// header bar paints with a sensible default during the first React render
+	// composer paints with a sensible default during the first React render
 	// before the getActiveModel useQuery resolves.
 	//
 	// Hydration: useEffect listens to `activeModelQuery.data?.modelName` and
@@ -188,10 +112,10 @@ export function Assistant() {
 	//
 	// onChange: handleModelChange fires the setActiveModel mutation which
 	// writes `liv:config:active_model` in Redis (D-199-10). Optimistic update —
-	// local state flips immediately so the header bar reflects the choice
-	// without waiting for the round trip; onSuccess refetches the query for
-	// ground-truth re-hydration (defense against concurrent operator updates,
-	// T-199-07-05).
+	// local state flips immediately so the composer model-picker reflects the
+	// choice without waiting for the round trip; onSuccess refetches the query
+	// for ground-truth re-hydration (defense against concurrent operator
+	// updates, T-199-07-05).
 	const [selectedModel, setSelectedModel] = useState<LivAiModelId>(
 		DEFAULT_LIV_AI_MODEL_ID,
 	)
@@ -257,8 +181,9 @@ export function Assistant() {
 			 * return value of `makeAssistantToolUI({toolName, render})` which
 			 * registers a per-tool renderer in the runtime's tool registry
 			 * via useAssistantToolUI (effect-only; renders null). Must mount
-			 * BEFORE <ThreadPrimitive.Root /> so registrations are present
-			 * when the first tool-call message part is rendered.
+			 * BEFORE <Thread /> so registrations are present when the first
+			 * tool-call message part is rendered by the canonical Thread's
+			 * MessagePrimitive.GroupedParts switch.
 			 *
 			 * Plan 198-04 — 6 ApprovalCardToolUI HITL renderers extend the
 			 * same barrel for destructive Luse MCP tools.
@@ -280,10 +205,13 @@ export function Assistant() {
 			 * the sidebar (assistant.tsx <aside> below). Pitfall 6 (two model
 			 * pickers in DOM) is now structurally impossible.
 			 *
-			 * The outer flex-column wrapper is preserved so the 2-column
-			 * application landmark below still has a bounded parent. Plan
-			 * 200-06 will swap the inline ThreadPrimitive.Root composition to
-			 * the canonical <Thread composerSlot={<LivAiComposer .../>} />.
+			 * Phase 200-06 — REPLACED the Phase 199-05 inline
+			 * ThreadPrimitive.Root + dual AuiIf branches with a single
+			 * `<Thread composerSlot={<LivAiComposer .../>} />` mount
+			 * (D-200-16). The canonical assistant-ui Thread (Plan 200-02
+			 * registry port) owns the empty/chat layout, ThreadWelcome,
+			 * MessagePrimitive.GroupedParts render pipeline, ActionBar with
+			 * Copy/Reload/ExportMarkdown, BranchPicker, EditComposer, etc.
 			 */}
 			<div className='flex h-full flex-col overflow-hidden'>
 				{/*
@@ -294,11 +222,6 @@ export function Assistant() {
 				 * as document-navigation commands. `aria-label="Liv AI chat"`
 				 * provides the spoken landmark name. (Plan 198-07 must_haves
 				 * truth #5 — verified via Plan 198-08 a11y audit.)
-				 *
-				 * Phase 199-07 — wrapped inside an outer flex-column with the
-				 * new header bar above; this div retains its 2-column shape but
-				 * the outer flex-1 lets it consume remaining vertical space
-				 * below the header.
 				 */}
 				<div
 					role='application'
@@ -367,65 +290,28 @@ export function Assistant() {
 					</ul>
 				</aside>
 				{/* Plan 198-02 — Main thread area.
-				 * Plan 198-06 layered in the slash-command interceptor.
-				 * Plan 199-05 — REBUILT: ThreadPrimitive.Root hosts two
-				 * AuiIf branches. Empty branch renders a vertically-
-				 * centered hero (logo + 'Liv AI' + tagline + Composer +
-				 * SuggestedPrompts). Non-empty branch renders the chat
-				 * viewport with ThreadPrimitive.Messages + sticky-footer
-				 * Composer. The SAME <Composer /> from ./composer mounts
-				 * in BOTH branches (D-199-18) so runtime preserves text/
-				 * focus across the empty→chat transition.
-				 *
-				 * The Phase 198-07 EmptyStateMount overlay is DELETED
-				 * (D-199-28; RESEARCH Pitfall 5) — overlay layout fought
-				 * the bottom-sticky composer; AuiIf-branched layout is
-				 * the canonical Grok / ChatGPT pattern (RESEARCH B1). */}
+				 * Plan 200-06 — Canonical <Thread /> mount (D-200-16). The
+				 * `composerSlot` prop is the one intentional delta from the
+				 * upstream registry (Plan 200-02 ThreadProps extension); we
+				 * inject the LivAiComposer (Plan 200-05 Grok-pattern footer-
+				 * strip composer with the relocated model picker, @ mention
+				 * popover, / slash popover, image attachments) so the
+				 * canonical Thread surface gets the full Liv AI composer
+				 * UX without forking the registry composer wholesale. */}
 				<main className='relative flex-1 overflow-hidden'>
-					<ThreadPrimitive.Root className='flex h-full flex-col bg-background'>
-						{/*
-						 * Phase 200-04 — DELETED the Phase 198-06 imperative
-						 * slash-command runtime interceptor (the
-						 * composerRuntime monkey-patch). Slash command UX is
-						 * now owned by the canonical
-						 * unstable_useSlashCommandAdapter adapter
-						 * (slash-adapter.ts) mounted inside the new
-						 * LivAiComposer via ComposerTriggerPopover char="/"
-						 * (Plan 200-05). All 4 Phase 198-06 SLASH_COMMANDS
-						 * ids — help, clear, screenshot, search — preserved
-						 * (INV-200-06).
-						 */}
-						<AuiIf condition={(s) => s.thread.isEmpty}>
-							<EmptyStateBranch
-									selectedModel={selectedModel}
-									onModelChange={handleModelChange}
-								/>
-						</AuiIf>
-
-						<AuiIf condition={(s) => !s.thread.isEmpty}>
-							<ThreadPrimitive.Viewport className='relative flex flex-1 flex-col overflow-y-auto px-4 pt-4'>
-								<div className='mx-auto flex w-full max-w-3xl flex-1 flex-col'>
-									<ThreadPrimitive.Messages
-										components={{
-											UserMessage,
-											AssistantMessage,
-										}}
-									/>
-									<ThreadPrimitive.ViewportFooter className='sticky bottom-0 mt-auto flex flex-col gap-4 bg-background pb-4'>
-										<LivAiComposer
-											selectedModel={selectedModel}
-											onModelChange={handleModelChange}
-										/>
-									</ThreadPrimitive.ViewportFooter>
-								</div>
-							</ThreadPrimitive.Viewport>
-						</AuiIf>
-					</ThreadPrimitive.Root>
+					<Thread
+						composerSlot={
+							<LivAiComposer
+								selectedModel={selectedModel}
+								onModelChange={handleModelChange}
+							/>
+						}
+					/>
 				</main>
 				</div>
-				{/* /role='application' (Phase 199-07 nested under header-bar shell) */}
+				{/* /role='application' */}
 			</div>
-			{/* /flex h-full flex-col — Phase 199-07 header-bar shell */}
+			{/* /flex h-full flex-col */}
 		</AssistantRuntimeProvider>
 	)
 }
