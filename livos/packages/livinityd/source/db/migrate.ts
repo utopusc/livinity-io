@@ -1,9 +1,10 @@
 /**
- * Phase 202-01 — Idempotent LivOS DB migration runner.
+ * Phase 202-01 / 203-04 — Idempotent LivOS DB migration runner.
  *
- * Reads `migrations/0002_livos_agents.sql` (the only LivOS-owned migration so
- * far) and applies it to the livos DB via pg client. All statements are
- * CREATE/DROP-IF-NOT-EXISTS so re-runs are no-ops.
+ * Reads `migrations/0002_livos_agents.sql` (Phase 202-01) +
+ * `migrations/0003_livos_openui_apps.sql` (Phase 203-04) and applies them in
+ * order to the livos DB via a pg client. All statements are CREATE/DROP-IF-
+ * NOT-EXISTS so re-runs are no-ops (INV-203-07 — converges idempotently).
  *
  * Sibling of `modules/mastra/migrate.ts` — Mastra owns its tables, LivOS owns
  * the agent registry. Runs AFTER `runMastraMigrations` in the boot sequence
@@ -35,7 +36,18 @@ export interface LivOSMigrationOpts {
 	dryRun?: boolean
 }
 
-const LIVOS_TABLES = ['livos_agents'] as const
+const LIVOS_TABLES = [
+	'livos_agents',
+	// Phase 203-04
+	'livos_openui_apps',
+	'livos_openui_app_versions',
+] as const
+
+const LIVOS_MIGRATION_FILES = [
+	'0002_livos_agents.sql',
+	// Phase 203-04 — add openui apps + version-history sibling.
+	'0003_livos_openui_apps.sql',
+] as const
 
 /**
  * Idempotent migration runner for LivOS-owned tables. Returns counts of
@@ -59,13 +71,15 @@ export async function runLivOSMigrations(
 			return {tablesCreated: 0, alreadyExisted}
 		}
 
-		const sqlPath = path.join(
+		const migrationsDir = path.join(
 			path.dirname(fileURLToPath(import.meta.url)),
 			'migrations',
-			'0002_livos_agents.sql',
 		)
-		const sql = await readFile(sqlPath, 'utf-8')
-		await client.query(sql)
+		for (const file of LIVOS_MIGRATION_FILES) {
+			const sqlPath = path.join(migrationsDir, file)
+			const sql = await readFile(sqlPath, 'utf-8')
+			await client.query(sql)
+		}
 
 		const after = await client.query(
 			`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = ANY($1)`,
@@ -78,7 +92,7 @@ export async function runLivOSMigrations(
 		const inner = err instanceof Error ? err.message : String(err)
 		const innerRedacted = redactPgUrl(inner)
 		throw new Error(
-			`Phase 202-01 runLivOSMigrations failed for ${redacted}: ${innerRedacted}`,
+			`Phase 202-01 / 203-04 runLivOSMigrations failed for ${redacted}: ${innerRedacted}`,
 		)
 	} finally {
 		try {
