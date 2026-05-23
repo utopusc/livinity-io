@@ -38,9 +38,10 @@ import {z} from 'zod'
 
 import type {ApprovalManager} from '../../mastra/approval-manager.js'
 import type {LivOSMastra} from '../../mastra/index.js'
+import {ALLOWED_XAI_MODELS, type AllowedXaiModel} from '../../mastra/provider-router.js'
 import {destructiveToolNames} from '../../mastra/mcp-bridge.js'
 import {redactError} from '../../mastra/redact-error.js'
-import {adminProcedure, router} from './trpc.js'
+import {adminProcedure, privateProcedure, router} from './trpc.js'
 
 export interface MastraRouterDeps {
 	livOSMastra: LivOSMastra
@@ -52,6 +53,22 @@ export interface MastraRouterDeps {
 // a different procedure invocation.
 const runAborts = new Map<string, AbortController>()
 
+/**
+ * Phase 199-02 — Per-model human-readable labels for the model picker.
+ *
+ * Pinned literal (D-199-11). The UI registry at
+ * livos/packages/ui/src/features/liv-ai/models.ts (NEW Plan 199-04) hydrates
+ * from `mastra.agent.listAvailableModels.query` at mount and falls back to
+ * its own static literal for offline render; a Plan 199-04 regression-lock
+ * test asserts equality (T-199-08).
+ */
+const LIV_AI_MODEL_LABELS: Record<AllowedXaiModel, {name: string; description: string}> = {
+	'grok-4.20-0309-fast': {name: 'Grok 4.20 Fast', description: 'Fast non-reasoning. Default.'},
+	'grok-4.20-0309-non-reasoning': {name: 'Grok 4.20', description: 'Standard non-reasoning.'},
+	'grok-4.20-0309-reasoning': {name: 'Grok 4.20 Think', description: 'Multi-step reasoning (slower).'},
+	'grok-4.3': {name: 'Grok 4.3', description: 'Latest. Reasoning + tool use.'},
+}
+
 export function createMastraRouter(deps: MastraRouterDeps) {
 	if (process.env.NODE_ENV === 'development') {
 		console.warn(
@@ -60,6 +77,19 @@ export function createMastraRouter(deps: MastraRouterDeps) {
 	}
 	return router({
 		agent: router({
+			// Phase 199-02 — read-only model catalogue. privateProcedure (JWT
+			// session required; matches "protectedProcedure" semantics per the
+			// plan's threat model T-199-02-01). Any logged-in user can hydrate
+			// the picker; mutating the active model (Plan 199-07
+			// `setActiveModel`) is adminProcedure-gated.
+			//
+			// NAMING DEVIATION (Rule 3): plan literally says `protectedProcedure`
+			// but this codebase exposes `privateProcedure` (= JWT-gated) +
+			// `adminProcedure` (= role=admin); `privateProcedure` is the
+			// semantic match.
+			listAvailableModels: privateProcedure.query(async () => {
+				return ALLOWED_XAI_MODELS.map((id) => ({id, ...LIV_AI_MODEL_LABELS[id]}))
+			}),
 			stream: adminProcedure
 				.input(z.object({threadId: z.string(), message: z.string()}))
 				.subscription(async function* ({input, signal}) {
@@ -206,6 +236,10 @@ const notInjected = (): never => {
 
 export const mastraRouter = router({
 	agent: router({
+		// Phase 199-02 — empty-injection default mirrors createMastraRouter
+		// shape (Plan 197-05 convention). Throws on call until the production
+		// swap during livinityd boot.
+		listAvailableModels: privateProcedure.query(() => notInjected()),
 		stream: adminProcedure
 			.input(z.object({threadId: z.string(), message: z.string()}))
 			.subscription(async function* () {

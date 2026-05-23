@@ -601,4 +601,12 @@ export const httpOnlyPaths = [
 	'mastra.agent.cancel',
 	'mastra.agent.threads.list',
 	'mastra.agent.threads.delete',
+	// Phase 199-02 — Liv AI model picker. listAvailableModels is a read-only
+	// privateProcedure query returning the static ALLOWED_XAI_MODELS catalogue
+	// (D-199-11). Route via HTTP for the same WS-reconnect-survival reason as
+	// the rest of the mastra.agent.* cluster directly above (memory pitfall
+	// B-12 / X-04) AND because the UI hydrates the picker on first paint —
+	// the WS-handshake-delay flicker on first paint is undesirable (precedent:
+	// agents.list line 291, webapp.list line 406). T-199-02-03 mitigation.
+	'mastra.agent.listAvailableModels',
 ] as const

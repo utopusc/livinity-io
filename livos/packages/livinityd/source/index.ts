@@ -1097,6 +1097,9 @@ export default class Livinityd {
 			webappLogger.info(
 				'Phase 196-05 — setup router wired (setRegion + setLocaleTimezone)',
 			)
+			webappLogger.info(
+				'[liv-ai] Phase 199-02 — provider-router allow-list + listAvailableModels tRPC endpoint ready',
+			)
 		} catch (err) {
 			// Non-fatal — boot continues. Streaming + WebApp launcher will
 			// degrade to SERVICE_UNAVAILABLE for the affected tRPC routes
