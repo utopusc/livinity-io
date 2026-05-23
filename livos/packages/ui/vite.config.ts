@@ -47,6 +47,16 @@ export default defineConfig({
 				],
 			},
 			workbox: {
+				// Phase 201 fix 2026-05-23: force the new SW to skip the waiting
+				// state and claim all open tabs immediately. Without these, the
+				// previously-installed SW keeps controlling open tabs (and keeps
+				// intercepting /liv-ai-app for the navigateFallback handler) until
+				// every tab is closed — operators experienced this as
+				// "LivOS cannot be embedded in an iframe." persisting across
+				// reloads on the Phase 200 → 201 cutover.
+				skipWaiting: true,
+				clientsClaim: true,
+				cleanupOutdatedCaches: true,
 				// 2026-05-05: precache 16 MB → user reported "site çok yavaş" with 477 entries.
 				// Strategy: keep precaching (offline-first), but skip the heavy Shiki
 				// syntax-highlighter language chunks + xterm + wasm + recharts. These
