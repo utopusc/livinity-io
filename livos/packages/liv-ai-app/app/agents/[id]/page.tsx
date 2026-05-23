@@ -12,9 +12,10 @@
  *   - `useAgentStatusSSE` for the live status pill in the header
  *   - `StatusBadge` from 202-04 (not duplicated here)
  *
- * Sub-agent tree visualization is intentionally a stub — full viz lands in
- * Plan 202-09 (the per-row child count surfaces inline in the recent-runs
- * heading as a precursor).
+ * Phase 202-09 mounted the SubAgentTree component below the Recent runs
+ * section. The component is intentionally read-only — re-parenting still
+ * happens via the AgentEditForm `parentAgentId` select. The section heading
+ * is suppressed when the agent has neither a parent nor children.
  */
 
 "use client";
@@ -27,6 +28,7 @@ import { AgentEditForm } from "@/components/agents/AgentEditForm";
 import { RecentTasksList } from "@/components/agents/RecentTasksList";
 import { RunNowButton } from "@/components/agents/RunNowButton";
 import { StatusBadge } from "@/components/agents/StatusBadge";
+import { SubAgentTree } from "@/components/agents/SubAgentTree";
 import { Button } from "@/components/ui/button";
 import { useAgent } from "@/src/lib/agents/use-agent";
 import { useAgentsList } from "@/src/lib/agents/use-agents-list";
@@ -120,6 +122,27 @@ export default function AgentDetailPage({
 				</h2>
 				<RecentTasksList agentId={agent.id} />
 			</section>
+
+			{/* Phase 202-09 — sub-agent tree. Component returns null when the
+			    agent has neither a parent nor children, so the section heading
+			    is suppressed for orphan agents (the common case for a brand-new
+			    livAi-style root agent). D-202-13 depth-2 cap enforced inside
+			    the component. */}
+			{(() => {
+				const hasParent = !!agent.parentAgentId;
+				const hasChildren = allAgents.some(
+					(a) => a.parentAgentId === agent.id,
+				);
+				if (!hasParent && !hasChildren) return null;
+				return (
+					<section>
+						<h2 className="mb-3 text-lg font-medium tracking-tight">
+							Sub-agents
+						</h2>
+						<SubAgentTree agent={agent} allAgents={allAgents} />
+					</section>
+				);
+			})()}
 
 			{/* D-202-20 — system agents cannot be deleted. Hide the Delete row
 			    entirely so the operator does not see a disabled-but-tempting
