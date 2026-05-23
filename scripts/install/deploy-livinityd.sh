@@ -1589,7 +1589,8 @@ _dld_update_caddy_to_livinityd() {
     auto_https off
 }
 :80 {
-    handle /liv-ai-app/* {
+    @livai path /liv-ai-app /liv-ai-app/*
+    handle @livai {
         reverse_proxy 127.0.0.1:3010
     }
     handle {
@@ -1609,7 +1610,8 @@ import /etc/caddy/pki-global.conf
             ca liv-local
         }
     }
-    handle /liv-ai-app/* {
+    @livai path /liv-ai-app /liv-ai-app/*
+    handle @livai {
         reverse_proxy 127.0.0.1:3010
     }
     handle {
@@ -1622,7 +1624,8 @@ CADDYFILE
         cloud)
             cat > "$_DLD_CADDYFILE" <<CADDYFILE
 :80 {
-    handle /liv-ai-app/* {
+    @livai path /liv-ai-app /liv-ai-app/*
+    handle @livai {
         reverse_proxy 127.0.0.1:3010
     }
     handle {

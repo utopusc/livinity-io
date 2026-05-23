@@ -289,7 +289,8 @@ _configure_caddy_for_tunnel() {
 }
 
 :80 {
-    handle /liv-ai-app/* {
+    @livai path /liv-ai-app /liv-ai-app/*
+    handle @livai {
         reverse_proxy 127.0.0.1:3010
     }
     handle {
