@@ -40,7 +40,7 @@ afterEach(() => {
 })
 
 describe('EmptyState', () => {
-	it('Test 1: renders the Liv AI logo image (alt="Liv AI")', () => {
+	it('Test 1: renders the Liv AI logo image (alt="Liv AI") at h-16/w-16 (D-199-25)', () => {
 		const onPick = vi.fn()
 		act(() => {
 			root.render(<EmptyState onPick={onPick} />)
@@ -51,6 +51,11 @@ describe('EmptyState', () => {
 		) as HTMLImageElement | null
 		expect(img).not.toBeNull()
 		expect(img!.getAttribute('alt')).toBe('Liv AI')
+		// Plan 199-05 D-199-25 — logo tightened from h-20/w-20 → h-16/w-16
+		// for the centered empty-state layout.
+		const cls = img!.getAttribute('class') ?? ''
+		expect(cls).toMatch(/\bh-16\b/)
+		expect(cls).toMatch(/\bw-16\b/)
 	})
 
 	it('Test 2: renders the locked Liv AI tagline ("ekranını yönetir, sorularına cevap verir, hatırlar")', () => {
