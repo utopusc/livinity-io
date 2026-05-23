@@ -250,6 +250,34 @@ vi.mock('@/components/assistant-ui/thread', () => ({
 	Thread: () => <div data-testid='legacy-thread' />,
 }))
 
+// Mock the LivAiComposer module — the canonical composer pulls in
+// useAssistantRuntime, ComposerTriggerPopover, slash/mention adapters,
+// etc. which would require a much larger surrogate surface. The
+// LivAiModelPicker is still imported from the real ./model-picker file
+// to keep the Phase 199-07 hydration + transport-body wiring testable
+// (Tests 7-10) — but everything else collapses to a tiny stub that just
+// renders the composer-primitive-root marker for layout assertions.
+vi.mock('./composer', async () => {
+	const {LivAiModelPicker} = await import('./model-picker')
+	return {
+		LivAiComposer: ({
+			selectedModel,
+			onModelChange,
+		}: {
+			selectedModel: string
+			onModelChange: (next: string) => void
+		}) => (
+			<form data-testid='composer-primitive-root'>
+				<textarea data-testid='composer-primitive-input' placeholder='Ask Liv anything…' />
+				<LivAiModelPicker
+					value={selectedModel as never}
+					onChange={onModelChange as never}
+				/>
+			</form>
+		),
+	}
+})
+
 // Import AFTER all vi.mock factories run.
 import {Assistant} from './assistant'
 
@@ -360,12 +388,14 @@ describe('Assistant — Phase 199-05 AuiIf-branched layout', () => {
 		}
 	})
 
-	it('Test 4: Composer module surrogate — assistant.tsx imports Composer from ./composer (D-199-18)', async () => {
+	it('Test 4: LivAiComposer module surrogate — assistant.tsx imports LivAiComposer from ./composer (D-199-18 / D-200-13)', async () => {
 		// Surrogate for the Pitfall 7 text-preservation test: rather than
 		// flip AuiIf state mid-render (hard to do without a real runtime),
-		// assert that the SAME Composer module is the one mounted by both
-		// AuiIf branches. We do that by reading the file source for the
-		// import literal — strong signal that one component is shared.
+		// assert that the SAME LivAiComposer module is the one mounted by
+		// both AuiIf branches. We do that by reading the file source for
+		// the import literal + JSX usage. Plan 200-05 renamed
+		// `Composer` → `LivAiComposer` when rebuilding the surface into
+		// the Grok-pattern footer-strip composer.
 		const fs = await import('node:fs/promises')
 		const path = await import('node:path')
 		const assistantPath = path.resolve(
@@ -374,7 +404,7 @@ describe('Assistant — Phase 199-05 AuiIf-branched layout', () => {
 		)
 		const src = await fs.readFile(assistantPath, 'utf-8')
 		expect(src).toMatch(/from ['"]\.\/composer['"]/)
-		expect(src).toMatch(/<Composer\s*\/?>/)
+		expect(src).toMatch(/<LivAiComposer\b/)
 	})
 
 	it('Test 5: SuggestedPrompts content unchanged from P198 — 4 locked chips render in empty state (D-199-26)', () => {
@@ -400,26 +430,24 @@ describe('Assistant — Phase 199-05 AuiIf-branched layout', () => {
 // ─── Phase 199-07 — header bar + Redis-backed selectedModel wiring ───────
 
 describe('Assistant — Phase 199-07 header bar + selectedModel wiring', () => {
-	it('Test 6: header bar mounted ABOVE the 2-column layout (DOM order: header → flex-1)', () => {
+	it('Test 6: LivAiHeaderBar is DELETED — no [data-testid="liv-ai-header-bar"] in DOM (Plan 200-05 / D-200-15)', () => {
 		mockState.thread.isEmpty = true
 		mockActiveModelData = {modelName: 'grok-4.20-0309-non-reasoning'}
 		act(() => {
 			root.render(<Assistant />)
 		})
 
+		// Plan 200-05 deleted header-bar.tsx — the application landmark
+		// must still exist (sidebar + main still render) but there is
+		// NO header element above the 2-column flex.
 		const header = document.querySelector(
 			'[data-testid="liv-ai-header-bar"]',
-		) as HTMLElement | null
-		expect(header).not.toBeNull()
-		// Header must be a sibling preceding the 2-column flex (role="application").
+		)
+		expect(header).toBeNull()
 		const appShell = document.querySelector(
 			'[role="application"][aria-label="Liv AI chat"]',
-		) as HTMLElement | null
+		)
 		expect(appShell).not.toBeNull()
-		// DOM order check: header comes before appShell in document order.
-		const order = header!.compareDocumentPosition(appShell!)
-		// Node.DOCUMENT_POSITION_FOLLOWING === 4
-		expect(order & 4).toBe(4)
 	})
 
 	it('Test 7: getActiveModel hydration — picker trigger reflects Redis value after effect', async () => {
@@ -465,7 +493,7 @@ describe('Assistant — Phase 199-07 header bar + selectedModel wiring', () => {
 		expect((body as {threadId: string}).threadId.length).toBeGreaterThan(0)
 	})
 
-	it('Test 10: clicking "+ New conversation" in header fires onSwitchToNewThread (mutates threadId in body envelope)', async () => {
+	it('Test 10: clicking the sidebar "+ New conversation" button fires onSwitchToNewThread (mutates threadId in body envelope)', async () => {
 		mockState.thread.isEmpty = true
 		mockActiveModelData = {modelName: 'grok-4.20-0309-non-reasoning'}
 		await act(async () => {
@@ -476,8 +504,12 @@ describe('Assistant — Phase 199-07 header bar + selectedModel wiring', () => {
 		const beforeId = before.threadId
 		expect(typeof beforeId).toBe('string')
 
+		// Plan 200-05 deleted the header-bar "+ New conversation" button.
+		// The sidebar button (data-testid="liv-ai-new-thread") is the
+		// remaining canonical entry-point (single source of truth —
+		// D-200-15).
 		const newBtn = document.querySelector(
-			'[data-testid="liv-ai-header-new-thread"]',
+			'[data-testid="liv-ai-new-thread"]',
 		) as HTMLButtonElement | null
 		expect(newBtn).not.toBeNull()
 		await act(async () => {
@@ -490,21 +522,30 @@ describe('Assistant — Phase 199-07 header bar + selectedModel wiring', () => {
 		expect(after.threadId).not.toBe(beforeId)
 	})
 
-	it('Test 11: source-import surrogate — assistant.tsx imports LivAiHeaderBar from ./header-bar AND mounts it', async () => {
+	it('Test 11: source-import surrogate — assistant.tsx no longer references LivAiHeaderBar; imports LivAiComposer (Plan 200-05 / D-200-15)', async () => {
 		const fs = await import('node:fs/promises')
 		const path = await import('node:path')
 		const assistantPath = path.resolve(__dirname, './assistant.tsx')
 		const src = await fs.readFile(assistantPath, 'utf-8')
-		// Import literal proves the new file is referenced.
-		expect(src).toMatch(/from ['"]\.\/header-bar['"]/)
-		// JSX literal proves the component is actually mounted in the tree.
-		expect(src).toMatch(/<LivAiHeaderBar\b/)
-		// body envelope literal proves Plan 199-07 extended the callback shape
-		// per D-199-09 (config.modelName threaded through).
+		// Plan 200-05 deleted header-bar.tsx + header-bar.test.tsx — there
+		// must be NO active `from './header-bar'` import and NO
+		// <LivAiHeaderBar JSX element in assistant.tsx (D-200-15). The
+		// historical comment referring to it as an artefact is OK (we
+		// only ban active code references), so strip JSDoc block + `//`
+		// line comments from the source before scanning.
+		const stripped = src
+			.replace(/\/\*[\s\S]*?\*\//g, '') // /* ... */ blocks
+			.replace(/^[ \t]*\/\/.*$/gm, '') // single-line comments
+		expect(stripped).not.toMatch(/^\s*import\s[^\n]*from\s+['"]\.\/header-bar['"]/m)
+		expect(stripped).not.toMatch(/<LivAiHeaderBar[\s/>]/)
+		// LivAiComposer is the new canonical composer mount.
+		expect(src).toMatch(/from ['"]\.\/composer['"]/)
+		expect(src).toMatch(/<LivAiComposer\b/)
+		// body envelope literal proves Plan 199-07 extended the callback
+		// shape per D-199-09 (config.modelName threaded through).
 		expect(src).toMatch(/config:\s*\{modelName:\s*selectedModel\}/)
-		// tRPC wire-up literals — proves Plan 199-07 Tasks 1 + 3 are integrated.
-		// Match `.useQuery` / `.useMutation` after the procedure name, allowing
-		// optional-chaining `?.` between (the codebase trpcAny pattern uses ?.).
+		// tRPC wire-up literals — proves Plan 199-07 Tasks 1 + 3 are
+		// integrated.
 		expect(src).toMatch(/getActiveModel\??\.useQuery/)
 		expect(src).toMatch(/setActiveModel\??\.useMutation/)
 	})
