@@ -1108,6 +1108,9 @@ export default class Livinityd {
 			webappLogger.info(
 				'[liv-ai] Phase 199-03 — chat-route accepts config.modelName + memory.thread; agent dispatches via requestContext',
 			)
+			webappLogger.info(
+				'[liv-ai] Phase 199-07 — header bar + Redis-backed active model persistence (mastra.agent.getActiveModel/setActiveModel) ready',
+			)
 		} catch (err) {
 			// Non-fatal — boot continues. Streaming + WebApp launcher will
 			// degrade to SERVICE_UNAVAILABLE for the affected tRPC routes
