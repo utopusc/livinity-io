@@ -1035,9 +1035,16 @@ export default class Livinityd {
 			// path errors out → the agent tRPC namespace falls back to the
 			// empty stub inside createAppRouter.
 			let agentsRepoForRouter: AgentRepository | null = null
+			// Phase 203-06 — hoisted so the plugin-RPC mount below the
+			// chat-route mount block can wire ApprovalManager + mcpBridge into
+			// the /openclawos/plugin-rpc dispatcher.
+			let approvalManagerForPlugin: ApprovalManager | null = null
+			let mcpBridgeForPlugin: Awaited<ReturnType<typeof createMcpBridge>> | null = null
 			if (livOSMastra) {
 				try {
 					const approvalManager = new ApprovalManager()
+					// Phase 203-06 — surface to outer scope for the plugin-RPC mount.
+					approvalManagerForPlugin = approvalManager
 					const databaseUrl = process.env.DATABASE_URL
 					if (!databaseUrl) {
 						throw new Error(
@@ -1098,6 +1105,8 @@ export default class Livinityd {
 						},
 					})
 					livOSMastra.attachMcpBridge(mcpBridge)
+					// Phase 203-06 — surface mcpBridge to outer scope for plugin-RPC.
+					mcpBridgeForPlugin = mcpBridge
 					// Phase 202-02 — dynamic agent registry. Reads every enabled
 					// livos_agents row (seeded livAi + any custom agents created
 					// from the Phase 202 UI) and instantiates them via
@@ -1365,6 +1374,77 @@ export default class Livinityd {
 				this.logger.error(
 					'Phase 203-05 — /openclawos/handshake mount failed; openclaw bridge unavailable until next restart',
 					handshakeErr,
+				)
+			}
+
+			// Phase 203-06 — POST /openclawos/plugin-rpc Express mount. Internal
+			// dispatcher consumed by the rebranded openclaw plugin (livos/packages/
+			// liv-claw-os/packages/claw-plugin/src/livinityd-rpc.ts) for 5 methods:
+			//   luse.list, luse.invoke           (D-203-13)
+			//   builtin.list, builtin.invoke     (D-203-14)
+			//   approval.request                 (INV-203-04 — HITL gate bridge)
+			//
+			// Auth = X-Internal-Plugin-Token header against LIV_PLUGIN_TOKEN env
+			// (with LIV_API_KEY fallback per Plan 203-04 D-203-06). The route mounts
+			// even if approvalManagerForPlugin / mcpBridgeForPlugin are null —
+			// approval.request and luse.* methods then surface TOOL_NOT_FOUND-style
+			// errors so the plugin sees graceful degradation rather than hanging.
+			try {
+				if (this.server.app && approvalManagerForPlugin) {
+					const {createPluginRpcHandler} = await import(
+						'./modules/openclawos/plugin-rpc.js'
+					)
+					const {createMcpToolAdapter} = await import(
+						'./modules/openclawos/mcp-tool-adapter.js'
+					)
+					const {builtInTools, BUILT_IN_TOOL_CATALOG} = await import(
+						'./modules/mastra/agents/built-in-tools.js'
+					)
+					// Adapt Mastra tools (parametric Tool<I,O,R>) to the simpler
+					// BuiltInToolExecutable shape plugin-rpc expects. We forward
+					// `{context: args}` to each tool's execute; outputs are passed
+					// through opaque.
+					const builtInToolsAdapter: Record<string, {
+						execute(input: {context: Record<string, unknown>}): Promise<unknown>
+					}> = {}
+					for (const [name, tool] of Object.entries(
+						builtInTools as Record<string, {execute?: (input: unknown) => Promise<unknown>}>,
+					)) {
+						if (typeof tool.execute === 'function') {
+							const exec = tool.execute.bind(tool)
+							builtInToolsAdapter[name] = {
+								execute: (input) => exec(input),
+							}
+						}
+					}
+					const pluginRpcHandler = createPluginRpcHandler({
+						approvalManager: approvalManagerForPlugin,
+						mcp: createMcpToolAdapter(mcpBridgeForPlugin),
+						builtInTools: builtInToolsAdapter,
+						builtInCatalog: BUILT_IN_TOOL_CATALOG,
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) => this.logger.error(msg, err),
+							error: (msg, err) => this.logger.error(msg, err),
+						},
+					})
+					this.server.app.post(
+						'/openclawos/plugin-rpc',
+						express.json({limit: '4mb'}),
+						pluginRpcHandler,
+					)
+					webappLogger.info(
+						`Phase 203-06 — POST /openclawos/plugin-rpc mounted (luse + ${BUILT_IN_TOOL_CATALOG.length} built-in tools + approval bridge)`,
+					)
+				} else if (this.server.app && !approvalManagerForPlugin) {
+					this.logger.error(
+						'Phase 203-06 — /openclawos/plugin-rpc NOT mounted: approvalManagerForPlugin is null (mastra wire-up failed)',
+					)
+				}
+			} catch (pluginRpcErr) {
+				this.logger.error(
+					'Phase 203-06 — /openclawos/plugin-rpc mount failed; openclaw plugin tool surface unavailable until next restart',
+					pluginRpcErr,
 				)
 			}
 
