@@ -43,6 +43,7 @@
 
 import {makeAssistantToolUI} from '@assistant-ui/react'
 
+import {ApprovalCard} from '@/components/tool-ui/approval-card'
 import {Chart} from '@/components/tool-ui/chart'
 import {DataTable} from '@/components/tool-ui/data-table'
 import {GeoMap} from '@/components/tool-ui/geo-map'
@@ -52,6 +53,7 @@ import {Sources} from '@/components/tool-ui/sources'
 import {WeatherWidget, type WeatherData} from '@/components/tool-ui/weather-widget'
 
 import {redactArgsForDisplay} from './redact-args'
+import {useApproveMutation} from './use-approve-mutation'
 
 // ─── Skeleton helper (D-NO-NEW-DEPS — no shadcn Skeleton primitive) ─
 
@@ -270,13 +272,81 @@ export const LuseListWindowsToolUI = makeAssistantToolUI<
 	},
 })
 
+// ─── Plan 198-04 — HITL ApprovalCard renderers ──────────────────────
+//
+// Factory that builds an ApprovalCardToolUI for a given destructive tool
+// name. assistant-ui surfaces a suspended (P197-04 wrapToolWithApproval)
+// tool call as a tool-call message-part whose status.type cycles through
+// 'running' (while the wrapped tool waits on the ApprovalManager Promise)
+// → 'requires-action' (when the AI SDK chunk pipeline classifies the
+// suspended call as awaiting human input). Both statuses render the
+// ApprovalCard so the operator always sees the card while approval is
+// pending. On `complete` (Promise resolved with REJECTED_TOOL_RESULT or
+// the wrapped tool's actual result) we render null and let assistant-ui's
+// own tool-fallback / matching result renderer take over.
+//
+// Wire-up: useApproveMutation wraps the existing P197-05
+// trpc.mastra.agent.approve adminProcedure mutation. Approve/Reject
+// callbacks pass the toolCallId through unchanged; the backend resolves
+// the suspended ApprovalManager entry by that ID (W-02 lock).
+
+function makeApprovalToolUI(toolName: string) {
+	return makeAssistantToolUI<Record<string, unknown>, unknown>({
+		toolName,
+		render: ({args, status, toolCallId}) => {
+			// useApproveMutation must be called unconditionally per
+			// the Rules-of-Hooks; the early-return below decides what
+			// to render, not whether to call the hook.
+			// eslint-disable-next-line react-hooks/rules-of-hooks
+			const {approve, reject, isPending} = useApproveMutation()
+			if (status.type === 'running' || status.type === 'requires-action') {
+				return (
+					<ApprovalCard
+						toolName={toolName}
+						args={args}
+						toolCallId={toolCallId ?? 'unknown'}
+						onApprove={approve}
+						onReject={reject}
+						disabled={isPending}
+					/>
+				)
+			}
+			// Post-resolution (Approve→tool executed; Reject→sentinel)
+			// — assistant-ui's matching tool-result renderer takes
+			// over. We render null to avoid double-rendering.
+			return null
+		},
+	})
+}
+
+// 6 ApprovalCardToolUI registrations — one per destructive tool name
+// from the P197-02 mcp-bridge.ts N-01 lock:
+//   destructiveToolNames = new Set([
+//     'luse_computer_click_mouse',
+//     'luse_computer_type_text',
+//     'luse_computer_press_keys',
+//     'luse_computer_application',
+//     'luse_computer_drag_mouse',
+//     'luse_computer_paste_text',
+//   ])
+// The list is locked at planning time; future destructive tools require
+// an explicit add here AND to the backend N-01 Set (single source of
+// truth on the backend; UI mirrors verbatim).
+export const LuseClickMouseToolUI = makeApprovalToolUI('luse_computer_click_mouse')
+export const LuseTypeTextToolUI = makeApprovalToolUI('luse_computer_type_text')
+export const LusePressKeysToolUI = makeApprovalToolUI('luse_computer_press_keys')
+export const LuseApplicationToolUI = makeApprovalToolUI('luse_computer_application')
+export const LuseDragMouseToolUI = makeApprovalToolUI('luse_computer_drag_mouse')
+export const LusePasteTextToolUI = makeApprovalToolUI('luse_computer_paste_text')
+
 // ─── Barrel <ToolRenderers /> — mounts every ToolUI registration ────
 //
 // Each `makeAssistantToolUI(...)` returns a component whose only job is
 // to call `useAssistantToolUI(tool)` on mount (which registers the
 // renderer in the runtime's tool registry) and return `null`. Mount this
-// barrel inside <AssistantRuntimeProvider> so all 10 renderers register
-// before the first message renders.
+// barrel inside <AssistantRuntimeProvider> so all 16 renderers (10 from
+// Plan 198-03 + 6 from Plan 198-04 HITL) register before the first
+// message renders.
 
 export function ToolRenderers() {
 	return (
@@ -291,6 +361,13 @@ export function ToolRenderers() {
 			<LinkPreviewToolUI />
 			<LuseScreenshotToolUI />
 			<LuseListWindowsToolUI />
+			{/* Phase 198-04 — HITL approval renderers (6 destructive tools) */}
+			<LuseClickMouseToolUI />
+			<LuseTypeTextToolUI />
+			<LusePressKeysToolUI />
+			<LuseApplicationToolUI />
+			<LuseDragMouseToolUI />
+			<LusePasteTextToolUI />
 		</>
 	)
 }

@@ -13,7 +13,7 @@
  *     JSON.stringify display. Test 'C' regression-locks the contract.
  *   T-197-06-02 carry-over — ZERO raw HTML injection. Only React text
  *     interpolation. Tool args / tool names are escaped automatically
- *     by React when rendered as children — no dangerouslySetInnerHTML.
+ *     by React when rendered as children — no innerHTML escape hatch.
  *
  * Behavioural truth — D-NO-NEW-DEPS: this component only uses the
  * already-installed react primitives + the preserved redact-args
