@@ -166,7 +166,12 @@ describe('createChatRouteHandler', () => {
 		await handler(req as never, res as never, () => {})
 
 		expect(streamSpy).toHaveBeenCalledTimes(1)
-		expect(streamSpy).toHaveBeenCalledWith(messages)
+		// Phase 199-03 widened stream sig: agent.stream(messages, opts).
+		// The first positional arg is the messages array; the second arg is
+		// {requestContext, memory?}. We assert the messages slot here; Test 2
+		// + Tests 1-7 in the Phase 199-03 describe-block cover opts shape.
+		const callArgs = streamSpy.mock.calls[0] as unknown as unknown[]
+		expect(callArgs[0]).toEqual(messages)
 		expect(captured.statusCode).toBe(200)
 		expect(captured.ended).toBe(true)
 	})

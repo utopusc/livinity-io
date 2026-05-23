@@ -32,6 +32,7 @@ import type {Request, RequestHandler, Response} from 'express'
 
 import {convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse} from 'ai'
 import {toAISdkStream} from '@mastra/ai-sdk'
+import {RequestContext} from '@mastra/core/request-context'
 import {z} from 'zod'
 
 import type {LivOSMastra} from './index.js'
@@ -49,6 +50,20 @@ export interface ChatRouteHandlerDeps {
 // so downstream `convertToModelMessages()` can normalize. Stripping `parts`
 // (default zod behavior) caused Mastra MessageList.addOne to reject every
 // incoming user message with "must have either content or parts" (P198 UAT).
+// Phase 199-03 extension — D-199-09 backend gate + D-199-15 RequestContext
+// build + E12 memory.thread wire-up.
+//
+//   - config.modelName: optional string; soft-validated per D-199-24. UI
+//     controls the values (Plan 199-04 ModelPicker); stale UI clients that
+//     send an unknown model id MUST still get a 200 + default-model stream
+//     (the agent factory in liv-ai.ts reads modelName off requestContext and
+//     hands it to providerRouter.resolveAgentModel which coerces via
+//     coerceModel — soft validation). Numbers / arrays / non-string shapes
+//     are rejected here at the zod boundary (400 — Test 6).
+//   - threadId: optional string; threaded into agent.stream's memory option
+//     as `{thread, resource: 'admin'}` (single-user LivOS — Plan 200+ will
+//     promote `resource` to ctx.userId once multi-user lands; see T-199-03-03).
+//     Closes the P197-03 wire gap noted in RESEARCH E12.
 export const ChatRequestSchema = z.object({
 	messages: z.array(
 		z
@@ -57,6 +72,8 @@ export const ChatRequestSchema = z.object({
 			})
 			.passthrough(),
 	),
+	config: z.object({modelName: z.string().optional()}).optional(),
+	threadId: z.string().optional(),
 })
 
 export type ChatRequestBody = z.infer<typeof ChatRequestSchema>
@@ -109,15 +126,43 @@ export function createChatRouteHandler(deps: ChatRouteHandlerDeps): RequestHandl
 				parsed.data.messages as never,
 			)
 
+			// Phase 199-03 — per-request Mastra RequestContext. Built FRESH
+			// per request so two parallel POSTs cannot cross-talk modelName
+			// values (T-199-03-02 / T-199-05 regression-lock). modelName is
+			// the only key populated today; future per-request resourceId,
+			// thread-version overrides, etc. should be added here in the
+			// same idiomatic Map-like `.set(key, value)` shape.
+			const ctx = new RequestContext()
+			if (parsed.data.config?.modelName) {
+				ctx.set('modelName', parsed.data.config.modelName)
+			}
+
 			// Mastra agent stream — adapter shape uses an `unknown` cast because
 			// the concrete Agent<…> generics from Mastra v1.36 carry a large
 			// number of phantom-type parameters we don't need to enumerate at
 			// the HTTP layer. The contract we care about is:
-			//   .stream(messages): MastraModelOutput
+			//   .stream(messages, opts): MastraModelOutput
 			// which is exactly what toAISdkStream({from:'agent'}) consumes.
+			//
+			// Phase 199-03 — widened to accept the second arg carrying
+			// requestContext (D-199-14: liv-ai.ts agent factory's model:
+			// resolver reads requestContext.get('modelName')) AND memory
+			// thread/resource (E12 wire-up: closes the P197-03 gap where
+			// req.body.threadId never reached Mastra Memory).
 			const stream = await (agent as unknown as {
-				stream(messages: unknown[]): Promise<unknown>
-			}).stream(modelMessages as unknown as unknown[])
+				stream(
+					messages: unknown[],
+					opts: {
+						requestContext: RequestContext
+						memory?: {thread?: string; resource?: string}
+					},
+				): Promise<unknown>
+			}).stream(modelMessages as unknown as unknown[], {
+				requestContext: ctx,
+				memory: parsed.data.threadId
+					? {thread: parsed.data.threadId, resource: 'admin'}
+					: undefined,
+			})
 
 			// Wrap the Mastra stream in an AI-SDK UI message stream. toAISdkStream
 			// produces a ReadableStream<UIMessageChunk>; createUIMessageStream
