@@ -344,3 +344,52 @@ describe('luse_computer_application', () => {
 		expect(calls[0]).toEqual({file: 'wmctrl', args: ['-c', 'Calculator']})
 	})
 })
+
+// ─── luse_computer_drag_mouse ─────────────────────────────────────────
+
+describe('luse_computer_drag_mouse', () => {
+	test('happy path: drag left from (10,20) to (300,400) → mousedown/mouseup sequence', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			return {stdout: '', stderr: ''}
+		})
+		const r = (await run('luse_computer_drag_mouse', {
+			fromX: 10,
+			fromY: 20,
+			toX: 300,
+			toY: 400,
+		})) as {success: boolean; fromX: number; toX: number; button: string}
+		expect(r).toMatchObject({success: true, fromX: 10, toX: 300, button: 'left'})
+		expect(calls[0].file).toBe('xdotool')
+		expect(calls[0].args).toEqual([
+			'mousemove',
+			'10',
+			'20',
+			'mousedown',
+			'1',
+			'mousemove',
+			'300',
+			'400',
+			'mouseup',
+			'1',
+		])
+	})
+
+	test('right-button drag: button code 3 in mousedown/mouseup positions', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			return {stdout: '', stderr: ''}
+		})
+		await run('luse_computer_drag_mouse', {
+			fromX: 1,
+			fromY: 1,
+			toX: 2,
+			toY: 2,
+			button: 'right',
+		})
+		expect(calls[0].args[4]).toBe('3') // mousedown btn
+		expect(calls[0].args[9]).toBe('3') // mouseup btn
+	})
+})

@@ -475,6 +475,66 @@ const applicationTool = createTool({
 	},
 })
 
+// ─── Phase 200-C-6 — luse_computer_drag_mouse (DESTRUCTIVE) ────────────
+//
+// Click-and-drag between two coords. Coordinates are coerced to integers,
+// command runs through execFile arg list — no shell injection surface.
+
+const dragMouseTool = createTool({
+	id: 'luse_computer_drag_mouse',
+	description:
+		'Drag the mouse from (fromX, fromY) to (toX, toY) on the LivOS desktop. ' +
+		'Default button is left. This is a DESTRUCTIVE tool — the operator ' +
+		'will be asked to approve before it runs.',
+	inputSchema: z.object({
+		fromX: z.number().int(),
+		fromY: z.number().int(),
+		toX: z.number().int(),
+		toY: z.number().int(),
+		button: z.enum(['left', 'middle', 'right']).optional().default('left'),
+	}),
+	outputSchema: z.object({
+		success: z.boolean(),
+		fromX: z.number(),
+		fromY: z.number(),
+		toX: z.number(),
+		toY: z.number(),
+		button: z.string(),
+	}),
+	execute: async (input) => {
+		const {fromX, fromY, toX, toY, button = 'left'} = input as {
+			fromX: number
+			fromY: number
+			toX: number
+			toY: number
+			button?: 'left' | 'middle' | 'right'
+		}
+		const fx = Math.trunc(fromX)
+		const fy = Math.trunc(fromY)
+		const tx = Math.trunc(toX)
+		const ty = Math.trunc(toY)
+		const btn = button === 'left' ? '1' : button === 'middle' ? '2' : '3'
+		const env = displayEnv()
+		await execFileAsync(
+			'xdotool',
+			[
+				'mousemove',
+				String(fx),
+				String(fy),
+				'mousedown',
+				btn,
+				'mousemove',
+				String(tx),
+				String(ty),
+				'mouseup',
+				btn,
+			],
+			{timeout: 6000, env},
+		)
+		return {success: true, fromX: fx, fromY: fy, toX: tx, toY: ty, button}
+	},
+})
+
 /**
  * Built-in tool map keyed by tool id. Merged into the agent's tool resolver
  * AFTER MCP tool filtering, so these always reach the model regardless of
@@ -495,4 +555,5 @@ export const builtInTools = {
 	luse_computer_type_text: typeTextTool,
 	luse_computer_press_keys: pressKeysTool,
 	luse_computer_application: applicationTool,
+	luse_computer_drag_mouse: dragMouseTool,
 }
