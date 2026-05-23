@@ -2828,7 +2828,7 @@ Plans:
 
 ---
 
-### Phase 202: Agents Platform — multi-agent + scheduling + generative UI — 🟡 IN-PROGRESS 2026-05-23 (2/10 plans)
+### Phase 202: Agents Platform — multi-agent + scheduling + generative UI — 🟡 IN-PROGRESS 2026-05-23 (3/10 plans — Wave 1 CLOSED)
 
 **Goal:** Self-service Agents Platform on top of Mastra. Operators create Agents from the UI (`/agents/new`), bind cron schedules, link parent → child sub-agents via Supervisor pattern, and watch live runs at `/agents`. Settings page lands at `/settings` with Account / MCP / Models tabs. Chat upgrades to true Generative UI via assistant-ui tool-ui primitives + `@openuidev/renderer` (OpenUI Lang `ui_render` tool). Mastra constructor wrapped with `telemetry: {enabled, export:'console'}` + empty `workflows:{}` / `evals:{}` scaffold for Phase 203+.
 
@@ -2844,7 +2844,7 @@ Plans:
 **Plans (10):**
 - [x] 202-01-PLAN.md — `livos_agents` schema + Drizzle migration + AgentRepository + livAi seed ✅ CODE-COMPLETE 2026-05-23 (6 commits `16b76525..a0dd7a1b`; 13/13 vitest PASS; sacred SHA preserved 6/6; 3 deviations documented in 202-01-SUMMARY.md)
 - [x] 202-02-PLAN.md — Dynamic Mastra agent registry + Supervisor wire + LivOSMastra additive extension ✅ CODE-COMPLETE 2026-05-23 (5 commits `ae89e9f1..c01a0d09`; 8/8 vitest PASS; sacred SHA preserved 5/5; INV-202-03 B-02 lock honoured — LivOSMastra diff is purely additive (1 new slot + 1 new method); 2 deviations documented in 202-02-SUMMARY.md)
-- [ ] 202-03-PLAN.md — node-cron scheduler + agent CRUD tRPC + task lifecycle routes
+- [x] 202-03-PLAN.md — node-cron scheduler + agent CRUD tRPC + task lifecycle routes ✅ CODE-COMPLETE 2026-05-23 (6 commits `02a118eb..e5789829`; 8/8 vitest PASS + 21 sibling tests still PASS; sacred SHA preserved 6/6; INV-202-03 B-02 additive — LivOSMastra +1 slot `scheduler` + `attachScheduler()`; T-202-01 lock + T-202-03 cron validate + T-202-02 unique map + T-202-04 depth map + D-202-20 system delete refusal all wired through tRPC error codes (AGENT_CRON_INVALID / AGENT_NAME_TAKEN / AGENT_DEPTH_EXCEEDED / AGENT_IS_SYSTEM); 3 deviations documented in 202-03-SUMMARY.md; Wave 1 CLOSED)
 - [ ] 202-04-PLAN.md — `/agents` dashboard + SSE live status + sidebar nav
 - [ ] 202-05-PLAN.md — `/agents/[id]` detail + edit + recent tasks + Run now
 - [ ] 202-06-PLAN.md — `/agents/new` create form + cron/tool/sub-agent/model pickers
