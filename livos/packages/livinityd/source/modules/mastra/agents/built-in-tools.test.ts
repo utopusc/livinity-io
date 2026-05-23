@@ -279,3 +279,68 @@ describe('luse_computer_press_keys', () => {
 		).rejects.toThrow(/Unknown key name/)
 	})
 })
+
+// ─── luse_computer_application ────────────────────────────────────────
+
+describe('luse_computer_application', () => {
+	test('action=launch happy path: gtk-launch <name>', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			return {stdout: '', stderr: ''}
+		})
+		const r = (await run('luse_computer_application', {
+			action: 'launch',
+			name: 'firefox',
+		})) as {success: boolean; action: string; name: string}
+		expect(r).toEqual({success: true, action: 'launch', name: 'firefox'})
+		expect(calls[0]).toEqual({file: 'gtk-launch', args: ['firefox']})
+	})
+
+	test('action=launch fallback: gtk-launch fails → setsid sh -c', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			if (file === 'gtk-launch') {
+				throw new Error('gtk-launch: No such .desktop file')
+			}
+			return {stdout: '', stderr: ''}
+		})
+		const r = (await run('luse_computer_application', {
+			action: 'launch',
+			name: 'xclock',
+		})) as {success: boolean}
+		expect(r.success).toBe(true)
+		expect(calls).toHaveLength(2)
+		expect(calls[1].file).toBe('sh')
+		expect(calls[1].args[0]).toBe('-c')
+		expect(calls[1].args[1]).toContain('setsid')
+		expect(calls[1].args[1]).toContain("'xclock'") // shell-quoted
+	})
+
+	test('action=focus → wmctrl -a <name>', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			return {stdout: '', stderr: ''}
+		})
+		await run('luse_computer_application', {
+			action: 'focus',
+			name: 'Firefox',
+		})
+		expect(calls[0]).toEqual({file: 'wmctrl', args: ['-a', 'Firefox']})
+	})
+
+	test('action=close → wmctrl -c <name>', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			return {stdout: '', stderr: ''}
+		})
+		await run('luse_computer_application', {
+			action: 'close',
+			name: 'Calculator',
+		})
+		expect(calls[0]).toEqual({file: 'wmctrl', args: ['-c', 'Calculator']})
+	})
+})
