@@ -115,8 +115,13 @@ function getResponsiveSize(
 	}
 }
 
-// Default window sizes per app - matching original page layouts
-const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
+// Default window sizes per app - matching original page layouts.
+//
+// Phase 199-01 (D-199-01): exported so the regression-lock vitest cases
+// in window-manager.test.tsx can import the runtime value. The Liv AI
+// entry must not silently fall through to `default` (900x600) — operator
+// directive 2026-05-22 mandates a bigger initial window.
+export const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	'LIVINITY_app-store': {width: 1500, height: 750},
 	'LIVINITY_files': {width: 1000, height: 1230},
 	'LIVINITY_settings': {width: 1100, height: 980},
@@ -127,6 +132,7 @@ const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	'LIVINITY_subagents': {width: 950, height: 650},
 	'LIVINITY_schedules': {width: 950, height: 650},
 	'LIVINITY_terminal': {width: 900, height: 600},
+	'LIVINITY_liv-ai': {width: 1180, height: 820},
 	default: {width: 900, height: 600},
 }
 
