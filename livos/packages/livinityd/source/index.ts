@@ -1319,6 +1319,42 @@ export default class Livinityd {
 						},
 					})
 					this.server.app.get('/agents/status/stream', sseHandler)
+					// HOT-FIX (B1): server.start() already mounted the SPA
+					// fallback `app.use('*', express.static(index.html))` (see
+					// modules/server/index.ts:1829) BEFORE this late mount runs.
+					// Express matches handlers in registration order, so the
+					// fallback was answering /agents/status/stream with 200 +
+					// text/html (the SPA shell) instead of routing to our SSE
+					// handler. Splice the just-added layer to the position
+					// immediately BEFORE the SPA static fallback so the SSE
+					// handler wins.
+					try {
+						const router = (
+							this.server.app as unknown as {
+								_router?: {stack?: Array<{regexp?: RegExp; route?: {path?: string}}>}
+							}
+						)._router
+						const stack = router?.stack
+						if (Array.isArray(stack) && stack.length > 1) {
+							const justAdded = stack.pop()
+							const fallbackIdx = stack.findIndex((layer) => {
+								// SPA fallback is registered via app.use('*', ...) which
+								// produces a regex matching ^\/?(?=\/|$). The static
+								// serveStatic handler at '/' (line 1828) and the SPA
+								// fallback at '*' (line 1829) are both candidates;
+								// splice before whichever appears first.
+								const re = layer?.regexp?.toString() ?? ''
+								return re.includes('^\\/?(?=\\/|$)') || re === '/^\\/?$/i'
+							})
+							const insertAt = fallbackIdx >= 0 ? fallbackIdx : stack.length
+							if (justAdded) stack.splice(insertAt, 0, justAdded)
+						}
+					} catch (spliceErr) {
+						this.logger.error(
+							'Phase 202-04 — SSE layer splice failed; route may be shadowed by SPA fallback',
+							spliceErr,
+						)
+					}
 					webappLogger.info(
 						'Phase 202-04 — GET /agents/status/stream SSE mounted (subscribed to AgentScheduler.statusEvents)',
 					)
