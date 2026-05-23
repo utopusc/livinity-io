@@ -1333,6 +1333,50 @@ export default class Livinityd {
 				)
 			}
 
+			// Phase 203-10 — Approvals SSE + respond routes. Surfaces the
+			// in-process ApprovalManager events to the rebuilt claw-client
+			// ApprovalCard (Plan 203-09 deleted the assistant-ui one). Same
+			// JWT-cookie auth gate as /openclawos/handshake. Mount is no-op
+			// when approvalManagerForPlugin is null (agent-runtime degraded).
+			try {
+				if (this.server.app && approvalManagerForPlugin) {
+					const {
+						createApprovalsStreamHandler,
+						createApprovalsRespondHandler,
+					} = await import('./modules/openclawos/approvals-routes.js')
+					const approvalsLogger = {
+						info: (msg: string) => webappLogger.info(msg),
+						warn: (msg: string, err?: unknown) => this.logger.error(msg, err),
+						error: (msg: string, err?: unknown) => this.logger.error(msg, err),
+					}
+					this.server.app.get(
+						'/openclawos/approvals/stream',
+						createApprovalsStreamHandler({
+							approvalManager: approvalManagerForPlugin,
+							verifyToken: (token) => this.server.verifyToken(token),
+							logger: approvalsLogger,
+						}),
+					)
+					this.server.app.post(
+						'/openclawos/approvals/respond',
+						express.json({limit: '4kb'}),
+						createApprovalsRespondHandler({
+							approvalManager: approvalManagerForPlugin,
+							verifyToken: (token) => this.server.verifyToken(token),
+							logger: approvalsLogger,
+						}),
+					)
+					webappLogger.info(
+						'Phase 203-10 — /openclawos/approvals/{stream,respond} mounted (HITL UI bridge for the claw-client ApprovalCard)',
+					)
+				}
+			} catch (approvalsRouteErr) {
+				this.logger.error(
+					'Phase 203-10 — /openclawos/approvals/* mount failed; HITL surface unavailable until next restart',
+					approvalsRouteErr,
+				)
+			}
+
 			// Phase 202-03 — agents.* + agents.tasks.* tRPC routers. Both are
 			// optional: when livOSAgent OR agentsRepoForRouter is null (boot
 			// path errored out before the registry/scheduler wire-up
