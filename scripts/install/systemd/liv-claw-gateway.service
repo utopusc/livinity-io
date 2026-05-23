@@ -1,0 +1,27 @@
+[Unit]
+Description=Liv AI Claw Gateway (openclaw runtime + @livos/liv-claw-os plugin, port 18789)
+Documentation=https://github.com/utopusc/livinity-io/blob/master/.planning/phases/203-liv-ai-openclaw-os/203-03-PLAN.md
+After=network-online.target livos.service
+Wants=network-online.target
+Requires=livos.service
+
+[Service]
+Type=simple
+User=bruce
+Group=bruce
+WorkingDirectory=/opt/livos/packages/liv-claw-gateway
+Environment=NODE_ENV=production
+Environment=PORT=18789
+Environment=OPENCLAW_BIND=loopback
+Environment=OPENCLAW_GATEWAY_AUTH=token
+Environment=OPENCLAW_HOME=/opt/livos/data/openclaw
+Environment=OPENCLAW_STATE_DIR=/opt/livos/data/openclaw
+EnvironmentFile=-/opt/livos/.env
+ExecStart=/usr/bin/env bash /opt/livos/packages/liv-claw-gateway/start.sh
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
