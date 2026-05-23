@@ -24,7 +24,7 @@ import {beforeEach, describe, expect, test, vi} from 'vitest'
 
 // node-cron mock — capture the handler per schedule() call.
 type CronHandler = () => Promise<void> | void
-const cronTasks: Array<{expr: string; handler: CronHandler; stop: () => void}> = []
+const cronTasks: Array<{expr: string; handler: CronHandler; stop: () => void; start?: () => void}> = []
 vi.mock('node-cron', () => ({
 	default: {
 		validate: (expr: string) => {
@@ -39,8 +39,9 @@ vi.mock('node-cron', () => ({
 		},
 		schedule: (expr: string, handler: CronHandler) => {
 			const stop = vi.fn()
-			cronTasks.push({expr, handler, stop})
-			return {stop}
+			const start = vi.fn()
+			cronTasks.push({expr, handler, stop, start} as never)
+			return {stop, start}
 		},
 	},
 	validate: (expr: string) => {
@@ -291,6 +292,100 @@ describe('AgentScheduler', () => {
 			[{role: 'user', content: 'Custom prompt'}],
 			expect.objectContaining({memory: expect.objectContaining({thread: expect.any(String)})}),
 		)
+	})
+
+	test('Test 9: Phase 203-08 T-203-04 — pauseAll() stops every armed task; resumeAll() re-arms them', async () => {
+		const rows = [
+			newRow({id: 'a', name: 'Alpha', scheduleCron: '*/5 * * * *'}),
+			newRow({id: 'b', name: 'Beta', scheduleCron: '0 9 * * *'}),
+		]
+		const {scheduler} = makeMakers(rows)
+		await scheduler.init()
+		expect(cronTasks.length).toBe(2)
+		// Capture the stop spies BEFORE pauseAll consumes them.
+		const stops = cronTasks.map((t) => t.stop)
+		const paused = scheduler.pauseAll()
+		expect(paused.sort()).toEqual(['a', 'b'])
+		// Both task.stop() invoked.
+		for (const s of stops) {
+			expect(s).toHaveBeenCalledTimes(1)
+		}
+		const resumed = scheduler.resumeAll()
+		expect(resumed.sort()).toEqual(['a', 'b'])
+		// Second resume = no-op (pausedAgentIds was cleared).
+		const resumedAgain = scheduler.resumeAll()
+		expect(resumedAgain).toEqual([])
+	})
+
+	test('Test 10: Phase 203-08 T-203-04 — drainForRuntimeSwap returns immediately when nothing is running', async () => {
+		const rows = [
+			newRow({id: 'a', name: 'Alpha', scheduleCron: '*/5 * * * *'}),
+		]
+		const {scheduler} = makeMakers(rows)
+		await scheduler.init()
+		const before = Date.now()
+		const {paused, wasRunning} = await scheduler.drainForRuntimeSwap({
+			timeoutMs: 1000,
+		})
+		const elapsed = Date.now() - before
+		expect(paused).toEqual(['a'])
+		expect(wasRunning).toEqual([])
+		// Fast-path — no polling loop entered.
+		expect(elapsed).toBeLessThan(500)
+	})
+
+	test('Test 11: Phase 203-08 T-203-04 — drainForRuntimeSwap waits for in-flight tasks to settle', async () => {
+		const rows = [
+			newRow({id: 'a', name: 'Alpha', scheduleCron: '*/5 * * * *'}),
+		]
+		const {scheduler, agent} = makeMakers(rows)
+		// Force agent.stream() to return a stream whose text-promise we
+		// resolve manually — gives us deterministic control over when the
+		// in-flight drain finishes.
+		let resolveText: ((v: string) => void) | undefined
+		agent.stream.mockReturnValue({
+			text: new Promise<string>((r) => {
+				resolveText = r
+			}),
+		})
+		// Kick off a run that registers in runningTasks.
+		await scheduler.runOnce('a', 'manual')
+		// Give the microtask queue a beat so drainAgentStream registers in the set.
+		await new Promise((r) => setImmediate(r))
+
+		// drainForRuntimeSwap should NOT resolve until we resolve the text promise.
+		let drainSettled = false
+		const drainPromise = scheduler
+			.drainForRuntimeSwap({timeoutMs: 5000})
+			.then((r) => {
+				drainSettled = true
+				return r
+			})
+		await new Promise((r) => setTimeout(r, 100))
+		expect(drainSettled).toBe(false)
+
+		// Resolve the agent text → background drain finishes → runningTasks clears.
+		resolveText!('done')
+		const {wasRunning} = await drainPromise
+		expect(drainSettled).toBe(true)
+		expect(wasRunning).toEqual(['a'])
+	})
+
+	test('Test 12: Phase 203-08 T-203-04 — drainForRuntimeSwap times out cleanly when tasks never finish', async () => {
+		const rows = [
+			newRow({id: 'a', name: 'Alpha', scheduleCron: '*/5 * * * *'}),
+		]
+		const {scheduler, agent, logger} = makeMakers(rows)
+		// Stream that never resolves.
+		agent.stream.mockReturnValue({text: new Promise<string>(() => {})})
+		await scheduler.runOnce('a', 'manual')
+		await new Promise((r) => setImmediate(r))
+		const {wasRunning} = await scheduler.drainForRuntimeSwap({timeoutMs: 200})
+		// Still recorded the task that was running at drain start.
+		expect(wasRunning).toEqual(['a'])
+		// Warn logged about the unsettled task.
+		const warnMsgs = logger.warn.mock.calls.map((c) => String(c[0]))
+		expect(warnMsgs.some((m) => m.includes('still running'))).toBe(true)
 	})
 
 	test('Test 8: T-202-01 lock release — del() called after successful acquire run', async () => {

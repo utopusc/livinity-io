@@ -121,6 +121,20 @@ export interface TaskThreadMetadata extends Record<string, unknown> {
 
 export class AgentScheduler {
 	private tasks = new Map<string, ScheduledTask>()
+	/**
+	 * Phase 203-08 T-203-04 — set of agentIds whose background drain
+	 * (drainAgentStream) is currently in flight. Used by
+	 * `drainForRuntimeSwap()` so a runtime swap (LIV_AGENT_RUNTIME=mastra →
+	 * openclaw) can wait for any cron-triggered run to settle before the
+	 * registry's underlying agent map is rebuilt for the new runtime.
+	 */
+	private runningTasks = new Set<string>()
+	/**
+	 * Phase 203-08 — agentIds whose cron task was paused via `pauseAll()` so
+	 * `resumeAll()` can re-arm them after a runtime swap. Empty when no pause
+	 * is in progress (steady-state).
+	 */
+	private pausedAgentIds = new Set<string>()
 
 	/**
 	 * Phase 202-04 — public EventEmitter that the `/agents/status/stream` SSE
@@ -390,6 +404,9 @@ export class AgentScheduler {
 		agentId: string,
 		agentName: string,
 	): Promise<void> {
+		// Phase 203-08 T-203-04 — register the run BEFORE any await so
+		// drainForRuntimeSwap() observes the in-flight set deterministically.
+		this.runningTasks.add(agentId)
 		let drainError: unknown = null
 		try {
 			const streamable = agent as {
@@ -428,6 +445,10 @@ export class AgentScheduler {
 				err,
 			)
 		} finally {
+			// Phase 203-08 T-203-04 — clear the in-flight marker so
+			// drainForRuntimeSwap() resolves once the last running task
+			// finishes. Safe to call unconditionally — Set.delete is idempotent.
+			this.runningTasks.delete(agentId)
 			// Phase 202-04 — flip the SSE channel back to `idle` once the
 			// background drain resolves (success OR failure). `lastRunAt` is
 			// the timestamp the run finished, which the AgentCard surfaces
@@ -445,6 +466,102 @@ export class AgentScheduler {
 					: {}),
 			})
 		}
+	}
+
+	/**
+	 * Phase 203-08 T-203-04 — pause every armed cron task without unscheduling
+	 * the underlying ScheduledTask entries. The tasks map stays populated so
+	 * `resumeAll()` can re-arm them without a `refresh()` round-trip.
+	 *
+	 * `node-cron`'s `task.stop()` is the documented pause operation —
+	 * subsequent ticks are suppressed until `task.start()` is called. Calling
+	 * `pauseAll` while another pause is in progress is idempotent (the
+	 * pausedAgentIds set carries the original list).
+	 *
+	 * Used by `drainForRuntimeSwap()` to freeze the cron table before a
+	 * LIV_AGENT_RUNTIME swap rebuilds the registry's agent map underneath the
+	 * scheduler.
+	 *
+	 * @returns the list of agentIds whose ScheduledTask was paused
+	 */
+	pauseAll(): string[] {
+		const paused: string[] = []
+		for (const [agentId, task] of this.tasks) {
+			try {
+				task.stop()
+				this.pausedAgentIds.add(agentId)
+				paused.push(agentId)
+			} catch (err) {
+				this.deps.logger.warn(
+					`Phase 203-08 scheduler.pauseAll — task.stop() for ${agentId} failed`,
+					err,
+				)
+			}
+		}
+		return paused
+	}
+
+	/**
+	 * Phase 203-08 T-203-04 — re-arm every ScheduledTask paused by
+	 * `pauseAll()`. Tasks that were added or removed between the pause and the
+	 * resume are NOT re-armed here — call `refresh()` instead if the
+	 * underlying agent set has changed. Idempotent — calling `resumeAll()`
+	 * twice is a no-op on the second call.
+	 *
+	 * @returns the list of agentIds whose ScheduledTask was re-armed
+	 */
+	resumeAll(): string[] {
+		const resumed: string[] = []
+		for (const agentId of this.pausedAgentIds) {
+			const task = this.tasks.get(agentId)
+			if (!task) continue
+			try {
+				task.start()
+				resumed.push(agentId)
+			} catch (err) {
+				this.deps.logger.warn(
+					`Phase 203-08 scheduler.resumeAll — task.start() for ${agentId} failed`,
+					err,
+				)
+			}
+		}
+		this.pausedAgentIds.clear()
+		return resumed
+	}
+
+	/**
+	 * Phase 203-08 T-203-04 — drain helper called BEFORE a runtime swap. Pauses
+	 * every armed cron task (so no new runs fire during the swap) AND waits
+	 * for any in-flight `drainAgentStream` to settle.
+	 *
+	 * Polls `runningTasks` on a fixed 50 ms interval until empty OR the
+	 * `timeoutMs` budget expires (default 30 s — generous enough for any
+	 * reasonable cron-tick LLM run; the openclaw branch streams via SSE so the
+	 * gateway's own request lifecycle is independent of this drain).
+	 *
+	 * Returns `{paused, wasRunning}` so the boot wire-up can log the
+	 * transition and operator UAT can verify cleanly.
+	 */
+	async drainForRuntimeSwap(opts?: {
+		timeoutMs?: number
+	}): Promise<{paused: string[]; wasRunning: string[]}> {
+		const timeoutMs = opts?.timeoutMs ?? 30_000
+		const paused = this.pauseAll()
+		const wasRunning = Array.from(this.runningTasks)
+
+		// Fast-path: nothing running.
+		if (wasRunning.length === 0) return {paused, wasRunning}
+
+		const deadline = Date.now() + timeoutMs
+		while (this.runningTasks.size > 0 && Date.now() < deadline) {
+			await new Promise((resolve) => setTimeout(resolve, 50))
+		}
+		if (this.runningTasks.size > 0) {
+			this.deps.logger.warn(
+				`Phase 203-08 scheduler.drainForRuntimeSwap — ${this.runningTasks.size} task(s) still running after ${timeoutMs}ms; proceeding with swap`,
+			)
+		}
+		return {paused, wasRunning}
 	}
 
 	private threadTitleFor(
