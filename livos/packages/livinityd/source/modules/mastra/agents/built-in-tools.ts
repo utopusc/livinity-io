@@ -585,6 +585,93 @@ const pasteTextTool = createTool({
 })
 
 /**
+ * Phase 201-05 — Built-in tool catalog (UI surface).
+ *
+ * Static catalog the MCP panel renders as a "Built-in tools" group above
+ * the external-MCP server list. Source-of-truth for what the operator sees;
+ * the Mastra agent generation loop is untouched (`builtInTools` map below
+ * is still the runtime resolver). 10 entries match the 10 createTool() ids
+ * exactly (3 non-destructive `data` + 7 destructive `computer-use`).
+ *
+ * Consumed by `mastra.agent.listBuiltInTools` tRPC privateProcedure
+ * (livos/packages/livinityd/source/modules/server/trpc/mastra-router.ts).
+ */
+export const BUILT_IN_TOOL_CATALOG = [
+	{
+		id: 'weather',
+		name: 'Weather',
+		description: 'Get current weather + 3-day forecast',
+		destructive: false,
+		category: 'data',
+	},
+	{
+		id: 'luse_list_windows',
+		name: 'List Windows',
+		description: 'List open desktop windows',
+		destructive: false,
+		category: 'computer-use',
+	},
+	{
+		id: 'luse_computer_screenshot',
+		name: 'Screenshot',
+		description: 'Capture the desktop screen',
+		destructive: false,
+		category: 'computer-use',
+	},
+	{
+		id: 'get_current_time',
+		name: 'Current Time',
+		description: 'Get current date/time',
+		destructive: false,
+		category: 'data',
+	},
+	{
+		id: 'luse_computer_click_mouse',
+		name: 'Click Mouse',
+		description: 'Click at coordinates',
+		destructive: true,
+		category: 'computer-use',
+	},
+	{
+		id: 'luse_computer_type_text',
+		name: 'Type Text',
+		description: 'Type text via keyboard',
+		destructive: true,
+		category: 'computer-use',
+	},
+	{
+		id: 'luse_computer_press_keys',
+		name: 'Press Keys',
+		description: 'Send keypress combos',
+		destructive: true,
+		category: 'computer-use',
+	},
+	{
+		id: 'luse_computer_application',
+		name: 'Application',
+		description: 'Launch/focus/close apps',
+		destructive: true,
+		category: 'computer-use',
+	},
+	{
+		id: 'luse_computer_drag_mouse',
+		name: 'Drag Mouse',
+		description: 'Drag from one coord to another',
+		destructive: true,
+		category: 'computer-use',
+	},
+	{
+		id: 'luse_computer_paste_text',
+		name: 'Paste Text',
+		description: 'Paste text via clipboard',
+		destructive: true,
+		category: 'computer-use',
+	},
+] as const
+
+export type BuiltInToolCatalogEntry = (typeof BUILT_IN_TOOL_CATALOG)[number]
+
+/**
  * Built-in tool map keyed by tool id. Merged into the agent's tool resolver
  * AFTER MCP tool filtering, so these always reach the model regardless of
  * MCP source availability.

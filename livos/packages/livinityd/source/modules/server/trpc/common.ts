@@ -618,4 +618,8 @@ export const httpOnlyPaths = [
 	// D-199-12 — both routes MUST be in httpOnlyPaths.
 	'mastra.agent.getActiveModel',
 	'mastra.agent.setActiveModel',
+	// Phase 201-05 (D-201-13) — read-only built-in tool catalog for the MCP
+	// panel "Built-in tools" group. Same WS-handshake-delay-flicker rationale
+	// as mastra.agent.listAvailableModels (the panel hydrates on first mount).
+	'mastra.agent.listBuiltInTools',
 ] as const

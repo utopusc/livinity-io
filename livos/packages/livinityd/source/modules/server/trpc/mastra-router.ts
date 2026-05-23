@@ -38,6 +38,7 @@ import {z} from 'zod'
 
 import type {ApprovalManager} from '../../mastra/approval-manager.js'
 import type {LivOSMastra} from '../../mastra/index.js'
+import {BUILT_IN_TOOL_CATALOG} from '../../mastra/agents/built-in-tools.js'
 import {ALLOWED_XAI_MODELS, type AllowedXaiModel, coerceModel} from '../../mastra/provider-router.js'
 import {destructiveToolNames} from '../../mastra/mcp-bridge.js'
 import {redactError} from '../../mastra/redact-error.js'
@@ -113,6 +114,12 @@ export function createMastraRouter(deps: MastraRouterDeps) {
 			listAvailableModels: privateProcedure.query(async () => {
 				return ALLOWED_XAI_MODELS.map((id) => ({id, ...LIV_AI_MODEL_LABELS[id]}))
 			}),
+
+			// Phase 201-05 (D-201-13) — read-only built-in tool catalog for
+			// the MCP panel "Built-in tools" group. privateProcedure: any
+			// JWT-authenticated user can hydrate the panel. Pure read from a
+			// static module constant; no Mastra runtime touched.
+			listBuiltInTools: privateProcedure.query(() => BUILT_IN_TOOL_CATALOG),
 
 			// Phase 199-07 — read active model from Redis liv:config:active_model
 			// (D-199-10). privateProcedure: any JWT-authenticated user can hydrate
@@ -334,6 +341,8 @@ export const mastraRouter = router({
 		// shape (Plan 197-05 convention). Throws on call until the production
 		// swap during livinityd boot.
 		listAvailableModels: privateProcedure.query(() => notInjected()),
+		// Phase 201-05 — empty-injection default mirrors createMastraRouter shape.
+		listBuiltInTools: privateProcedure.query(() => notInjected()),
 		// Phase 199-07 — empty-injection defaults for the new active-model
 		// procedures. Real production builds wire deps.redis via livinityd boot;
 		// any caller hitting the bare router gets the standard "not injected"
