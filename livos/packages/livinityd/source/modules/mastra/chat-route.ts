@@ -97,12 +97,15 @@ export function createChatRouteHandler(deps: ChatRouteHandlerDeps): RequestHandl
 			// Convert AI-SDK v6 UIMessage[] (with `parts`) to ModelMessage[]
 			// (with `content`) before handing to Mastra. Mastra's MessageList
 			// rejects messages that have neither `content` nor `parts` after
-			// internal normalization — passing UIMessage[] directly worked in
-			// theory but in practice Mastra v1.36's prepare-memory-step strips
-			// parts during workflow normalization. The convertToModelMessages
-			// helper produces the canonical {role, content: string|array} shape
-			// that Mastra accepts unchanged.
-			const modelMessages = convertToModelMessages(
+			// internal normalization. The convertToModelMessages helper
+			// produces the canonical {role, content: string|array} shape that
+			// Mastra accepts unchanged.
+			//
+			// IMPORTANT: convertToModelMessages is async in ai@6 (was sync in
+			// ai@4/5). Forgetting `await` returns a Promise that serialises as
+			// `{}` and crashes prepare-memory-step with "role: undefined"
+			// (P198 UAT hot-fix #2).
+			const modelMessages = await convertToModelMessages(
 				parsed.data.messages as never,
 			)
 
