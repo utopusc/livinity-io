@@ -137,28 +137,28 @@ describe('createTokenFetch middleware (T-197-01-01)', () => {
  * or missing input falls through to XAI_DEFAULT_MODEL_ID per D-199-24
  * (soft validation; never 400s a request).
  *
- * Default model id is rotated to 'grok-4.20-0309-fast' per D-199-07 (was
+ * Default model id is rotated to 'grok-4.20-0309-non-reasoning' per D-199-07 (was
  * 'grok-4.20-0309-non-reasoning' pre-Phase 199).
  */
 describe('Phase 199-02: ALLOWED_XAI_MODELS + coerceModel + resolveAgentModel signature', () => {
 	test('Test 9: ALLOWED_XAI_MODELS contains exactly the 4 D-199-06 ids', () => {
 		expect(ALLOWED_XAI_MODELS.length).toBe(4)
-		expect(ALLOWED_XAI_MODELS).toContain('grok-4.20-0309-fast')
+		expect(ALLOWED_XAI_MODELS).toContain('grok-4.20-0309-non-reasoning')
 		expect(ALLOWED_XAI_MODELS).toContain('grok-4.20-0309-non-reasoning')
 		expect(ALLOWED_XAI_MODELS).toContain('grok-4.20-0309-reasoning')
 		expect(ALLOWED_XAI_MODELS).toContain('grok-4.3')
 	})
 
-	test('Test 10: XAI_DEFAULT_MODEL_ID rotated to grok-4.20-0309-fast (D-199-07)', () => {
-		expect(XAI_DEFAULT_MODEL_ID).toBe('grok-4.20-0309-fast')
+	test('Test 10: XAI_DEFAULT_MODEL_ID rotated to grok-4.20-0309-non-reasoning (D-199-07)', () => {
+		expect(XAI_DEFAULT_MODEL_ID).toBe('grok-4.20-0309-non-reasoning')
 	})
 
 	test('Test 11: coerceModel("grok-4.3") returns "grok-4.3"', () => {
 		expect(coerceModel('grok-4.3')).toBe('grok-4.3')
 	})
 
-	test('Test 12: coerceModel("grok-4.20-0309-fast") returns "grok-4.20-0309-fast"', () => {
-		expect(coerceModel('grok-4.20-0309-fast')).toBe('grok-4.20-0309-fast')
+	test('Test 12: coerceModel("grok-4.20-0309-non-reasoning") returns "grok-4.20-0309-non-reasoning"', () => {
+		expect(coerceModel('grok-4.20-0309-non-reasoning')).toBe('grok-4.20-0309-non-reasoning')
 	})
 
 	test('Test 13: coerceModel("grok-4.20-0309-non-reasoning") returns "grok-4.20-0309-non-reasoning"', () => {
@@ -170,19 +170,19 @@ describe('Phase 199-02: ALLOWED_XAI_MODELS + coerceModel + resolveAgentModel sig
 	})
 
 	test('Test 15: coerceModel("bogus-model-id") falls back to default (D-199-24 soft validation)', () => {
-		expect(coerceModel('bogus-model-id')).toBe('grok-4.20-0309-fast')
+		expect(coerceModel('bogus-model-id')).toBe('grok-4.20-0309-non-reasoning')
 	})
 
 	test('Test 16: coerceModel(undefined) returns default', () => {
-		expect(coerceModel(undefined)).toBe('grok-4.20-0309-fast')
+		expect(coerceModel(undefined)).toBe('grok-4.20-0309-non-reasoning')
 	})
 
 	test('Test 17: coerceModel(null) returns default', () => {
-		expect(coerceModel(null)).toBe('grok-4.20-0309-fast')
+		expect(coerceModel(null)).toBe('grok-4.20-0309-non-reasoning')
 	})
 
 	test('Test 18: coerceModel(42) returns default (typeof guard)', () => {
-		expect(coerceModel(42)).toBe('grok-4.20-0309-fast')
+		expect(coerceModel(42)).toBe('grok-4.20-0309-non-reasoning')
 	})
 
 	test('Test 19: resolveAgentModel("grok-4.3") resolves a model handle for the requested id', async () => {
@@ -200,20 +200,20 @@ describe('Phase 199-02: ALLOWED_XAI_MODELS + coerceModel + resolveAgentModel sig
 		const deps = makeDeps({activeProvider: 'xai'})
 		const router = createProviderRouter(deps as never)
 		const model = await router.resolveAgentModel('bogus')
-		expect((model as {modelId?: string}).modelId).toBe('grok-4.20-0309-fast')
+		expect((model as {modelId?: string}).modelId).toBe('grok-4.20-0309-non-reasoning')
 	})
 
 	test('Test 21: resolveAgentModel(undefined) uses default model id', async () => {
 		const deps = makeDeps({activeProvider: 'xai'})
 		const router = createProviderRouter(deps as never)
 		const model = await router.resolveAgentModel(undefined)
-		expect((model as {modelId?: string}).modelId).toBe('grok-4.20-0309-fast')
+		expect((model as {modelId?: string}).modelId).toBe('grok-4.20-0309-non-reasoning')
 	})
 
 	test('Test 22: resolveAgentModel() zero-arg (backward-compat) uses default model id', async () => {
 		const deps = makeDeps({activeProvider: 'xai'})
 		const router = createProviderRouter(deps as never)
 		const model = await router.resolveAgentModel()
-		expect((model as {modelId?: string}).modelId).toBe('grok-4.20-0309-fast')
+		expect((model as {modelId?: string}).modelId).toBe('grok-4.20-0309-non-reasoning')
 	})
 })

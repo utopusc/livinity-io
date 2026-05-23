@@ -20,24 +20,32 @@
 import {Brain, Crown, Sparkles, Zap} from 'lucide-react'
 import type {LucideIcon} from 'lucide-react'
 
+// P199 UAT hot-fix: list rebuilt from a live `GET https://api.x.ai/v1/models`
+// against the operator's account. `grok-4.20-0309-fast` does not exist on this
+// subscription — calls 404'd with "model … does not exist or your team does
+// not have access to it". Real models for this account:
+//   - grok-4.20-0309-non-reasoning  (chat default)
+//   - grok-4.20-0309-reasoning      (think)
+//   - grok-4.20-multi-agent-0309    (multi-agent)
+//   - grok-4.3                       (latest)
 export const LIV_AI_MODELS = [
-	{
-		id: 'grok-4.20-0309-fast',
-		name: 'Grok 4.20 Fast',
-		description: 'Fast non-reasoning. Default.',
-		Icon: Zap,
-	},
 	{
 		id: 'grok-4.20-0309-non-reasoning',
 		name: 'Grok 4.20',
-		description: 'Standard non-reasoning.',
-		Icon: Sparkles,
+		description: 'Fast non-reasoning. Default.',
+		Icon: Zap,
 	},
 	{
 		id: 'grok-4.20-0309-reasoning',
 		name: 'Grok 4.20 Think',
 		description: 'Multi-step reasoning (slower).',
 		Icon: Brain,
+	},
+	{
+		id: 'grok-4.20-multi-agent-0309',
+		name: 'Grok 4.20 Multi-Agent',
+		description: 'Advanced multi-agent orchestration.',
+		Icon: Sparkles,
 	},
 	{
 		id: 'grok-4.3',
@@ -54,6 +62,6 @@ export const LIV_AI_MODELS = [
 
 export type LivAiModelId = (typeof LIV_AI_MODELS)[number]['id']
 
-// D-199-07 — default model id (rotated from 'grok-4.20-0309-non-reasoning'
-// pre-Phase 199-02 to the lower-latency `-fast` variant).
-export const DEFAULT_LIV_AI_MODEL_ID: LivAiModelId = 'grok-4.20-0309-fast'
+// D-199-07 — default model id. Rotated from `grok-4.20-0309-fast` (didn't
+// exist on the account) to `grok-4.20-0309-non-reasoning` per P199 UAT.
+export const DEFAULT_LIV_AI_MODEL_ID: LivAiModelId = 'grok-4.20-0309-non-reasoning'

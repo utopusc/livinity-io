@@ -76,7 +76,7 @@ describe('LivAiHeaderBar — Phase 199-07', () => {
 		act(() => {
 			root.render(
 				<LivAiHeaderBar
-					selectedModel='grok-4.20-0309-fast'
+					selectedModel='grok-4.20-0309-non-reasoning'
 					onModelChange={() => {}}
 					onNewThread={() => {}}
 				/>,
@@ -116,7 +116,7 @@ describe('LivAiHeaderBar — Phase 199-07', () => {
 		act(() => {
 			root.render(
 				<LivAiHeaderBar
-					selectedModel='grok-4.20-0309-fast'
+					selectedModel='grok-4.20-0309-non-reasoning'
 					onModelChange={() => {}}
 					onNewThread={onNewThread}
 				/>,
@@ -136,7 +136,7 @@ describe('LivAiHeaderBar — Phase 199-07', () => {
 		act(() => {
 			root.render(
 				<LivAiHeaderBar
-					selectedModel='grok-4.20-0309-fast'
+					selectedModel='grok-4.20-0309-non-reasoning'
 					onModelChange={() => {}}
 					onNewThread={() => {}}
 				/>,
@@ -152,7 +152,7 @@ describe('LivAiHeaderBar — Phase 199-07', () => {
 		act(() => {
 			root.render(
 				<LivAiHeaderBar
-					selectedModel='grok-4.20-0309-fast'
+					selectedModel='grok-4.20-0309-non-reasoning'
 					onModelChange={() => {}}
 					onNewThread={() => {}}
 				/>,
