@@ -88,9 +88,6 @@ importers:
 
   packages/liv-ai-app:
     dependencies:
-      '@ai-sdk/openai':
-        specifier: ^3.0.61
-        version: 3.0.65(zod@3.25.76)
       '@assistant-ui/react':
         specifier: latest
         version: 0.14.7(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(immer@9.0.21)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))
@@ -1102,12 +1099,6 @@ packages:
 
   '@ai-sdk/openai-compatible@2.0.47':
     resolution: {integrity: sha512-Enm5UlL0zUCrW3792opk5h7hRWxZOZzDe6eQYVFqX9LUOGGCe1h8MZWAGim765nwzgnjlpeYOsuzZmLtRsTPlg==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.25.0
-
-  '@ai-sdk/openai@3.0.65':
-    resolution: {integrity: sha512-ZlVoWH+zrdiYDiUt6n/xvfCsk33mzsB81TUQkBRVx79rxU1FKZqVH9J/QCtEpSLqx0cUzjvtIw9l9p7EbUv+dw==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.0
@@ -16033,12 +16024,6 @@ snapshots:
       zod: 3.25.76
 
   '@ai-sdk/openai-compatible@2.0.47(zod@3.25.76)':
-    dependencies:
-      '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@3.25.76)
-      zod: 3.25.76
-
-  '@ai-sdk/openai@3.0.65(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 3.0.10
       '@ai-sdk/provider-utils': 4.0.27(zod@3.25.76)
