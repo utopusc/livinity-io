@@ -584,6 +584,52 @@ const pasteTextTool = createTool({
 	},
 })
 
+// ─── Phase 202-08 — ui_render (Generative UI passthrough) ──────────────
+//
+// The agent emits an OpenUI Lang JSON tree via this tool. The server-side
+// execute is a pure passthrough — there is no compute step; the tool exists
+// solely so the SSE pipeline emits a `tool-result` chunk that the subapp's
+// `makeAssistantToolUI({ toolName: 'ui_render', ... })` registration can
+// dispatch on. The client-side renderer validates the tree against a
+// whitelisted component set (T-202-06) and mounts it inline.
+//
+// Schema is intentionally loose (`tree: z.unknown()`): OpenUI Lang shape
+// validation happens client-side so the renderer can drop unknown
+// components gracefully without raising on the backend.
+//
+// Not destructive — no approval gate. INV-202-09 updated: this is the
+// 11th built-in tool (10 pre-existing Phase 200-C entries + ui_render).
+
+const uiRenderTool = createTool({
+	id: 'ui_render',
+	description:
+		'Render a custom inline UI in the chat (card, list, layout, table). ' +
+		'Use when the operator asks to "show", "display", or "design" something ' +
+		'visual, or when structured data is best presented as UI rather than ' +
+		'markdown text. Pass an OpenUI Lang JSON tree (shape: ' +
+		'{ component: "name", props?: {...}, children?: [...] }). The host ' +
+		'renders it inline. Do NOT use for plain prose answers — the 10 ' +
+		'specialised tools (weather, list_windows, screenshot, etc.) take ' +
+		'priority when their topic fits.',
+	inputSchema: z.object({
+		// Loose schema — actual OpenUI Lang validation happens client-side.
+		// We forward the tree opaquely; the renderer validates the shape.
+		tree: z.unknown(),
+		title: z.string().optional(),
+	}),
+	outputSchema: z.object({
+		rendered: z.literal(true),
+		title: z.string().optional(),
+	}),
+	execute: async ({context}) => {
+		// No-op server-side. The UI is rendered by the client via the
+		// tool-ui makeAssistantToolUI('ui_render') registration. We just
+		// acknowledge so the chunk pipeline emits a tool-result frame.
+		const {title} = context as {title?: string}
+		return {rendered: true as const, title}
+	},
+})
+
 /**
  * Phase 201-05 — Built-in tool catalog (UI surface).
  *
@@ -595,6 +641,9 @@ const pasteTextTool = createTool({
  *
  * Consumed by `mastra.agent.listBuiltInTools` tRPC privateProcedure
  * (livos/packages/livinityd/source/modules/server/trpc/mastra-router.ts).
+ *
+ * Phase 202-08 extends this to 11 entries — the new `ui_render` tool
+ * surfaces the OpenUI Lang generative-UI primitive (INV-202-09 updated).
  */
 export const BUILT_IN_TOOL_CATALOG = [
 	{
@@ -667,6 +716,14 @@ export const BUILT_IN_TOOL_CATALOG = [
 		destructive: true,
 		category: 'computer-use',
 	},
+	// Phase 202-08 — 11th built-in: ad-hoc OpenUI Lang renderer
+	{
+		id: 'ui_render',
+		name: 'Render UI',
+		description: 'Show a custom inline UI block (OpenUI Lang)',
+		destructive: false,
+		category: 'generative-ui',
+	},
 ] as const
 
 export type BuiltInToolCatalogEntry = (typeof BUILT_IN_TOOL_CATALOG)[number]
@@ -693,4 +750,6 @@ export const builtInTools = {
 	luse_computer_application: applicationTool,
 	luse_computer_drag_mouse: dragMouseTool,
 	luse_computer_paste_text: pasteTextTool,
+	// Phase 202-08 — Generative UI passthrough (non-destructive)
+	ui_render: uiRenderTool,
 }
