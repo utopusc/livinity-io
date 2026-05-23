@@ -80,8 +80,41 @@ function findTrigger(): HTMLButtonElement {
 
 function openMenu(): void {
 	const trigger = findTrigger()
+	// Radix DropdownMenu opens on pointerdown (not click) — see
+	// `@radix-ui/react-menu` source `composeEventHandlers` chain. Under
+	// jsdom we must dispatch a pointerdown that matches the
+	// Radix-recognized predicate (button=0 + pointerType=mouse).
 	act(() => {
+		trigger.dispatchEvent(
+			new (globalThis as {PointerEvent: typeof MouseEvent}).PointerEvent(
+				'pointerdown',
+				{bubbles: true, cancelable: true, button: 0, pointerType: 'mouse'} as PointerEventInit,
+			),
+		)
+		// Radix's MenuTrigger also responds to onClick as a fallback path —
+		// fire it so any focus-management side effects also resolve.
 		trigger.click()
+	})
+}
+
+function clickItem(el: HTMLElement): void {
+	// DropdownMenuItem listens to pointerup AND click. Dispatch both for
+	// radix robustness under jsdom (some radix versions short-circuit on
+	// pointerup; others on click).
+	act(() => {
+		el.dispatchEvent(
+			new (globalThis as {PointerEvent: typeof MouseEvent}).PointerEvent(
+				'pointerdown',
+				{bubbles: true, cancelable: true, button: 0, pointerType: 'mouse'} as PointerEventInit,
+			),
+		)
+		el.dispatchEvent(
+			new (globalThis as {PointerEvent: typeof MouseEvent}).PointerEvent(
+				'pointerup',
+				{bubbles: true, cancelable: true, button: 0, pointerType: 'mouse'} as PointerEventInit,
+			),
+		)
+		el.click()
 	})
 }
 
@@ -143,9 +176,7 @@ describe('LivAiModelPicker (Phase 199-04)', () => {
 			'[data-testid="liv-ai-model-picker-item-grok-4.3"]',
 		) as HTMLElement
 		expect(item).not.toBeNull()
-		act(() => {
-			item.click()
-		})
+		clickItem(item)
 
 		expect(onChange).toHaveBeenCalledTimes(1)
 		expect(onChange).toHaveBeenCalledWith('grok-4.3')
@@ -164,9 +195,7 @@ describe('LivAiModelPicker (Phase 199-04)', () => {
 			'[data-testid="liv-ai-model-picker-item-grok-4.20-0309-reasoning"]',
 		) as HTMLElement
 		expect(item).not.toBeNull()
-		act(() => {
-			item.click()
-		})
+		clickItem(item)
 
 		expect(onChange).toHaveBeenCalledTimes(1)
 		expect(onChange).toHaveBeenCalledWith('grok-4.20-0309-reasoning')
@@ -179,11 +208,11 @@ describe('LivAiModelPicker (Phase 199-04)', () => {
 		})
 		openMenu()
 
-		// We can't distinguish lucide icons by tag alone (both are <svg>), but
-		// the component should render either a Check (with class lucide-check)
-		// OR the model Icon (e.g. lucide-crown / lucide-zap / lucide-sparkles /
-		// lucide-brain) — never both — per item. lucide-react sets a
-		// per-icon class on every svg (`lucide lucide-<kebab-name>`).
+		// lucide-react v0.288.0 does NOT add a `lucide-<kebab>` class —
+		// only the caller-provided className. We discriminate by inner
+		// geometry instead: Check renders a <polyline points="20 6 9 17 4 12">,
+		// Zap renders a <polygon points="13 2 ...">, Crown renders a <path d="m2 4 ...">.
+		// (Verified by renderToStaticMarkup against the installed v0.288.0.)
 		const selected = document.querySelector(
 			'[data-testid="liv-ai-model-picker-item-grok-4.3"]',
 		) as HTMLElement
@@ -193,21 +222,24 @@ describe('LivAiModelPicker (Phase 199-04)', () => {
 		expect(selected).not.toBeNull()
 		expect(unselected).not.toBeNull()
 
-		const selectedSvgs = selected.querySelectorAll('svg')
-		const unselectedSvgs = unselected.querySelectorAll('svg')
-		// Each item has exactly one leading status svg in the menu.
-		expect(selectedSvgs.length).toBeGreaterThanOrEqual(1)
-		expect(unselectedSvgs.length).toBeGreaterThanOrEqual(1)
+		const selectedFirstSvg = selected.querySelector('svg')
+		const unselectedFirstSvg = unselected.querySelector('svg')
+		expect(selectedFirstSvg).not.toBeNull()
+		expect(unselectedFirstSvg).not.toBeNull()
 
-		const selectedClasses = (selectedSvgs[0].getAttribute('class') ?? '').toLowerCase()
-		const unselectedClasses = (unselectedSvgs[0].getAttribute('class') ?? '')
-			.toLowerCase()
+		// Selected (grok-4.3) -> Check icon -> <polyline points="20 6 9 17 4 12">.
+		const selectedPolyline = selectedFirstSvg!.querySelector('polyline')
+		expect(selectedPolyline).not.toBeNull()
+		expect(selectedPolyline!.getAttribute('points')).toBe('20 6 9 17 4 12')
 
-		// Selected item carries `lucide-check`; unselected carries the model's
-		// Icon (zap for grok-4.20-0309-fast). Neither item should show both.
-		expect(selectedClasses).toContain('lucide-check')
-		expect(unselectedClasses).toContain('lucide-zap')
-		expect(unselectedClasses).not.toContain('lucide-check')
+		// Unselected (grok-4.20-0309-fast) -> Zap icon -> <polygon points starts with "13 2 3 14">.
+		const unselectedPolygon = unselectedFirstSvg!.querySelector('polygon')
+		expect(unselectedPolygon).not.toBeNull()
+		const zapPoints = unselectedPolygon!.getAttribute('points') ?? ''
+		expect(zapPoints.startsWith('13 2 3 14')).toBe(true)
+
+		// And the unselected item must NOT carry a Check geometry.
+		expect(unselectedFirstSvg!.querySelector('polyline')).toBeNull()
 	})
 
 	it('Test 7: pressing Escape closes the menu (radix default keyboard handling)', () => {
