@@ -288,14 +288,29 @@ export const httpOnlyPaths = [
 	//   - Queries (list/get) are page-render dependencies; HTTP avoids the
 	//     WS-handshake-delay flicker on first paint (precedent: apiKeys.list
 	//     at line 210, usage.getMine at line 181).
+	// Phase 202-03 supersedes the v32 P85 agents.* namespace (the old
+	// marketplace publish/unpublish/clone surface). New routes:
+	//   - agents.list / get / create / update / delete (CRUD)
+	//   - agents.runOnce (manual scheduler dispatch)
+	//   - agents.cronPreview (cronstrue human-readable preview)
+	//   - agents.tasks.{create,list,get,cancel} (task lifecycle via Memory threads)
+	// All 11 paths route via HTTP for the same WS-reconnect-survival reason
+	// as the rest of the long-lived mutation cluster (memory pitfall
+	// B-12 / X-04 — precedent: apiKeys.create line 209, conversations.appendMessage,
+	// webapp.create). Queries are page-render dependencies for /agents,
+	// /agents/[id], /agents/new (Plans 202-04..06) where the WS-handshake
+	// flicker on first paint is undesirable.
 	'agents.list',
 	'agents.get',
 	'agents.create',
 	'agents.update',
 	'agents.delete',
-	'agents.publish',
-	'agents.unpublish',
-	'agents.clone',
+	'agents.runOnce',
+	'agents.cronPreview',
+	'agents.tasks.create',
+	'agents.tasks.list',
+	'agents.tasks.get',
+	'agents.tasks.cancel',
 	// v32 Phase 86 — Public marketplace browse + clone (V32-MKT-01..06).
 	// list + tags are publicProcedure queries — they MUST work without a JWT
 	// (D-PUBLIC-BROWSE: marketplace is reachable on the login screen / pre-
