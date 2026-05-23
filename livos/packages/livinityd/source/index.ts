@@ -1337,6 +1337,37 @@ export default class Livinityd {
 				)
 			}
 
+			// Phase 203-05 — POST /openclawos/handshake Express mount. Verifies
+			// the LIVINITY_SESSION JWT cookie (or Bearer header) and mints a
+			// 5-minute Ed25519 openclaw device token (D-203-12 / T-203-02 /
+			// INV-203-10). The token caches its jti in Redis with EX 300 so
+			// the gateway-side verifier (Plan 203-06+) can confirm freshness.
+			// Auth gate identical to /chat/:agentId + /agents/status/stream
+			// above (Bearer header OR LIVINITY_SESSION cookie).
+			try {
+				if (this.server.app) {
+					const {createHandshakeRouteHandler} = await import('./modules/openclawos/handshake-route.js')
+					const handshakeHandler = createHandshakeRouteHandler({
+						verifyToken: (token) => this.server.verifyToken(token),
+						redis: this.ai.redis,
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) => this.logger.error(msg, err),
+							error: (msg, err) => this.logger.error(msg, err),
+						},
+					})
+					this.server.app.post('/openclawos/handshake', express.json({limit: '4kb'}), handshakeHandler)
+					webappLogger.info(
+						'Phase 203-05 — POST /openclawos/handshake mounted (JWT verify + Ed25519 mint, Redis-cached 300s TTL)',
+					)
+				}
+			} catch (handshakeErr) {
+				this.logger.error(
+					'Phase 203-05 — /openclawos/handshake mount failed; openclaw bridge unavailable until next restart',
+					handshakeErr,
+				)
+			}
+
 			// Phase 202-03 — agents.* + agents.tasks.* tRPC routers. Both are
 			// optional: when livOSMastra OR agentsRepoForRouter is null (boot
 			// path errored out before the registry/scheduler wire-up
