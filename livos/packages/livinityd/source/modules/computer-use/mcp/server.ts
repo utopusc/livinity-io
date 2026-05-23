@@ -1,0 +1,229 @@
+#!/usr/bin/env tsx
+/**
+ * Luse MCP server (renamed P100-10-02 from Bytebot MCP server per D-100-10-B) —
+ * stdio JSON-RPC entry point.
+ *
+ * Phase 72-native-05 — Wave-2 deliverable. Spawned as a child process by
+ * livinityd's existing McpClientManager (config wiring lands in 72-native-06).
+ *
+ * Apache 2.0 attribution
+ * ─────────────────────────
+ * The 17 tool schemas this server exposes (LUSE_TOOLS) and the action
+ * dispatch strategy are derived from upstream bytebot project (Apache 2.0):
+ *   https://github.com/bytebot-ai/bytebot
+ *
+ * Apache 2.0 NOTICE: full license text mirrored at
+ * `.planning/licenses/bytebot-LICENSE.txt`.
+ *
+ * Architecture decisions (per 72-CONTEXT.md):
+ *   D-NATIVE-03 — stdio MCP server (NO HTTP listener).
+ *   D-NATIVE-04 — Tool handlers dispatch to native primitives.
+ *   D-NATIVE-10 — Server name `luse` matches `mcp_luse_*` categorize patch.
+ *
+ * Spawn:
+ *   tsx /opt/livos/packages/livinityd/source/modules/computer-use/mcp/server.ts
+ *
+ * Wire (JSON-RPC 2.0 over stdin/stdout). Logs go to stderr exclusively —
+ * stdout is reserved for the MCP wire and any stray stdout writes will
+ * corrupt the protocol stream.
+ *
+ * Phase 100-10-04 (D-100-10-C, G-100-10-E) — Redis client lifecycle:
+ *
+ * This MCP server runs in its OWN Node.js process spawned by livinityd's
+ * McpClientManager via the per-WebApp descriptor in `luse-mcp-config.ts`.
+ * It DOES NOT share the parent livinityd's ioredis client; instead, it
+ * constructs its OWN fresh `new Redis(luseRedisUrl, ...)` from the
+ * `LUSE_REDIS_URL` env var threaded through by the descriptor's env
+ * block. That fresh client is passed into `registerLuseTools({redis})`
+ * so the `mcp__luse__create_stream` handler can read the privilege-gate
+ * flag `liv:config:luse_can_create_streams` at call-time.
+ */
+import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js'
+import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js'
+// ioredis exports Redis as a named export (NOT default) per project memory.
+import {Redis} from 'ioredis'
+
+import {defaultLivosAppResolver, type LivosAppMatch} from '../native/window.js'
+import {registerLuseTools} from './tools.js'
+
+/**
+ * Phase 102-06 — display-target resolution with precedence:
+ *   1. LUSE_TARGET_DISPLAY (canonical Phase 102 env — must satisfy
+ *      /^:[1-9][0-9]?$/ or it's dropped with a stderr warning).
+ *   2. LUSE_DISPLAY (legacy alias from Phase 100-10-03).
+ *   3. DISPLAY (system default).
+ *
+ * Returns the chosen display string, or `undefined` if none of the env vars
+ * are set. Pure function — testable without booting the MCP server.
+ *
+ * Exported so `mcp/server.test.ts` can cover env precedence without booting
+ * a stdio MCP server (the McpServer instance lifecycle is hard to unit test
+ * cleanly; the env-read is the only Phase-102 behavior change).
+ */
+export interface ResolveDisplayDeps {
+	env?: NodeJS.ProcessEnv
+	writeWarn?: (message: string) => void
+}
+
+export function resolveDisplay(deps: ResolveDisplayDeps = {}): string | undefined {
+	const env = deps.env ?? process.env
+	const writeWarn = deps.writeWarn ?? ((msg) => process.stderr.write(msg))
+	const DISPLAY_RE = /^:[1-9][0-9]?$/
+	const rawTargetDisplay = env.LUSE_TARGET_DISPLAY
+	if (typeof rawTargetDisplay === 'string' && rawTargetDisplay.length > 0) {
+		if (DISPLAY_RE.test(rawTargetDisplay)) {
+			return rawTargetDisplay
+		}
+		writeWarn(
+			`[luse-mcp] warning: LUSE_TARGET_DISPLAY=${JSON.stringify(rawTargetDisplay)} does not match /^:[1-9][0-9]?$/; falling through to LUSE_DISPLAY/DISPLAY
+`,
+		)
+	}
+	return env.LUSE_DISPLAY ?? env.DISPLAY
+}
+
+async function main(): Promise<void> {
+	// @deprecated since Phase 102-06 — `LUSE_TARGET_WINDOW_ID` is no longer
+	// set by the per-WebApp descriptor (see luse-mcp-config.ts: the descriptor
+	// branch now emits `LUSE_TARGET_DISPLAY` instead). This env read remains
+	// as a legacy fallback ONLY for the host-display Luse instance (which is
+	// spawned without a descriptor and which never had LUSE_TARGET_WINDOW_ID
+	// set by livinityd anyway — operators can still set it manually for
+	// host-level wid-scoping during ad-hoc debugging). When unset, host-display
+	// behavior is preserved.
+	const targetWindowEnv = process.env.LUSE_TARGET_WINDOW_ID
+	let defaultWindowId: number | undefined
+	if (typeof targetWindowEnv === 'string' && targetWindowEnv.length > 0) {
+		const parsed = Number(targetWindowEnv)
+		if (Number.isFinite(parsed) && Number.isInteger(parsed) && parsed > 0) {
+			defaultWindowId = parsed
+		} else {
+			process.stderr.write(
+				`[luse-mcp] warning: LUSE_TARGET_WINDOW_ID=${JSON.stringify(targetWindowEnv)} is not a positive integer; ignoring (host-display default)\n`,
+			)
+		}
+	}
+
+	// Phase 102-06 — see resolveDisplay() above for precedence:
+	//   LUSE_TARGET_DISPLAY (canonical, regex-validated) → LUSE_DISPLAY → DISPLAY.
+	const defaultDisplay = resolveDisplay()
+
+	// P100-10-04 — construct a FRESH ioredis client from LUSE_REDIS_URL.
+	// The parent livinityd process owns its own ioredis instance; this MCP
+	// child is a separate Node.js process and cannot share it. The
+	// `mcp__luse__create_stream` handler reads the Redis flag
+	// `liv:config:luse_can_create_streams` via this local client (G-100-10-E).
+	// When `LUSE_REDIS_URL` is absent or the empty string, we DO NOT construct
+	// a client — the handler treats `redis === null` as "deny" (fail-closed,
+	// same semantics as a thrown Redis error).
+	const luseRedisUrl = process.env.LUSE_REDIS_URL
+	let redis: Redis | null = null
+	if (typeof luseRedisUrl === 'string' && luseRedisUrl.length > 0) {
+		try {
+			redis = new Redis(luseRedisUrl, {
+				lazyConnect: true,
+				maxRetriesPerRequest: 1,
+			})
+		} catch (err) {
+			process.stderr.write(
+				`[luse-mcp] warning: failed to construct Redis client from LUSE_REDIS_URL: ${(err as Error).message}; create_stream will fail-closed\n`,
+			)
+			redis = null
+		}
+	} else {
+		process.stderr.write(
+			'[luse-mcp] warning: LUSE_REDIS_URL not set; mcp__luse__create_stream will fail-closed (privilege gate denies)\n',
+		)
+	}
+
+	// Phase 161-03 — Construct livosAppResolver via env-thread + HTTP fetch.
+	// Mirrors ws-agent.ts:160-172 IntentRouter getCapabilities idiom.
+	//
+	// When all 4 env vars are set, the resolver fetches the user's WebApp +
+	// NativeApp lists from livinityd's tRPC and feeds them to
+	// defaultLivosAppResolver (Phase 160-03) which synthesizes the DASH-pattern
+	// URL `${proto}://${sub}-${userSlug}.${domainRoot}/` on match.
+	//
+	// When ANY env var is missing → resolver stays undefined → registerLuseTools
+	// without livosAppResolver = pre-Phase-160-03 APP_MAP fall-through (fail-open).
+	//
+	// Stderr discipline (D-161-D / L3): all new log lines use the
+	// `[luse-mcp] resolver: ...` prefix so they DO NOT collide with the
+	// `[luse-mcp] open_livos_app ...` IPC channel that parent livinityd
+	// consumes (see mcp/tools.ts:756).
+	const livinitydApiUrl = process.env.LIVINITYD_API_URL
+	const livApiKey = process.env.LIV_API_KEY
+	const luseUserSlug = process.env.LUSE_USER_SLUG
+	const luseDomainRoot = process.env.LUSE_DOMAIN_ROOT
+
+	let livosAppResolver: ((name: string) => Promise<LivosAppMatch | null>) | undefined
+	if (livinitydApiUrl && livApiKey && luseUserSlug && luseDomainRoot) {
+		const fetchAppList = async (proc: string): Promise<any[]> => {
+			try {
+				const res = await fetch(`${livinitydApiUrl}/trpc/${proc}?input=`, {
+					headers: {'X-Api-Key': livApiKey},
+					signal: AbortSignal.timeout(5000),
+				})
+				if (!res.ok) {
+					throw new Error(`HTTP ${res.status}`)
+				}
+				const data = (await res.json()) as {result?: {data?: any[]}}
+				return data.result?.data ?? []
+			} catch (err: any) {
+				process.stderr.write(
+					`[luse-mcp] resolver: ${proc} fetch failed: ${err?.message ?? String(err)}; returning []\n`,
+				)
+				return []
+			}
+		}
+
+		livosAppResolver = (name: string) =>
+			defaultLivosAppResolver(name, {
+				listWebApps: () => fetchAppList('webapp.list'),
+				listNativeApps: () => fetchAppList('apps.native.list'),
+				userSlug: luseUserSlug,
+				domainRoot: luseDomainRoot,
+			})
+
+		process.stderr.write(
+			`[luse-mcp] resolver: constructed (LIVINITYD_API_URL=${livinitydApiUrl}, userSlug=${luseUserSlug}, domainRoot=${luseDomainRoot})\n`,
+		)
+	} else {
+		process.stderr.write(
+			`[luse-mcp] resolver: env-thread incomplete (LIVINITYD_API_URL=${livinitydApiUrl ? 'set' : 'MISSING'}, LIV_API_KEY=${livApiKey ? 'set' : 'MISSING'}, LUSE_USER_SLUG=${luseUserSlug ? 'set' : 'MISSING'}, LUSE_DOMAIN_ROOT=${luseDomainRoot ? 'set' : 'MISSING'}); falling back to APP_MAP\n`,
+		)
+	}
+
+	const server = new McpServer({name: 'luse', version: '1.0.0'})
+	// Note: `streamManager` is NOT wired into this MCP child (the StreamManager
+	// instance lives in the parent livinityd process and cross-process IPC is
+	// out of scope for this plan). Without `streamManager`, the stream-management
+	// tool handlers are not registered in this child — the schemas remain
+	// visible in LUSE_TOOLS for agent enumeration. Test injection passes a
+	// mock streamManager directly to `registerLuseTools`.
+	registerLuseTools(server as never, {
+		defaultWindowId,
+		defaultDisplay,
+		redis,
+		userId: process.env.LUSE_USER_ID ?? 'admin',
+		// Phase 161-03 — undefined falls through to APP_MAP (pre-Phase-160-03 behavior)
+		livosAppResolver,
+	})
+
+	const transport = new StdioServerTransport()
+	await server.connect(transport)
+
+	// Log to STDERR so the MCP stdout wire stays clean.
+	process.stderr.write(
+		`[luse-mcp] connected via stdio transport${
+			defaultWindowId !== undefined ? ` (windowId=${defaultWindowId})` : ''
+		}${defaultDisplay !== undefined ? ` (display=${defaultDisplay})` : ''}${
+			redis !== null ? ' (redis=connected)' : ' (redis=null, create_stream gated off)'
+		}\n`,
+	)
+}
+
+main().catch((err) => {
+	process.stderr.write(`[luse-mcp] fatal error: ${(err as Error).stack ?? String(err)}\n`)
+	process.exit(1)
+})
