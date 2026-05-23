@@ -1578,13 +1578,15 @@ _dld_update_caddy_to_livinityd() {
             # CLOUDFLARE_API_TOKEN env — incompatible with Phase 134 (no
             # cf-token in tunnel-mode install; Caddy would fail to start).
             #
-            # Phase 201-06 → Phase 203-03 (D-203-05) — `handle /liv-ai-app/*`
-            # routes the Liv AI claw gateway on 127.0.0.1:18789 (was the
-            # legacy Phase 201 Next.js subapp on :3010 pre-203-03). Placed
-            # ABOVE the catch-all so Caddy's first-match-wins matcher steers
-            # /liv-ai-app/* away from the livinityd gateway. The runtime
-            # generator in livos/packages/livinityd/.../domain/caddy.ts emits
-            # the same block for per-user vhosts (bruce.livinity.io/liv-ai-app/*).
+            # Phase 201-06 → Phase 203-03 (D-203-05) → Phase 203-09 — Liv AI
+            # surface routing is now SPLIT:
+            #   /liv-ai-app/openclawos[/*]  → :18789 (openclaw claw-gateway, strip_prefix via handle_path)
+            #   /liv-ai-app/*                → :3010 (Next.js Phase 202 dashboard subapp)
+            # Both handles are placed ABOVE the catch-all so Caddy's matcher-
+            # specificity rules steer Liv AI traffic away from the livinityd
+            # app gateway. The runtime generator in
+            # livos/packages/livinityd/.../domain/caddy.ts emits the same
+            # split for per-user vhosts (bruce.livinity.io/liv-ai-app/*).
             cat > "$_DLD_CADDYFILE" <<CADDYFILE
 {
     auto_https off
@@ -1593,16 +1595,19 @@ _dld_update_caddy_to_livinityd() {
     handle /openclawos/handshake {
         reverse_proxy 127.0.0.1:8080
     }
-    @livai path /liv-ai-app /liv-ai-app/*
-    handle @livai {
+    handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
         reverse_proxy 127.0.0.1:18789
+    }
+    @livaiSubapp path /liv-ai-app /liv-ai-app/*
+    handle @livaiSubapp {
+        reverse_proxy 127.0.0.1:3010
     }
     handle {
         reverse_proxy 127.0.0.1:8080
     }
 }
 CADDYFILE
-            ok "Caddyfile: :80 → 127.0.0.1:8080 (CF Tunnel terminates TLS — D-134-MODE; /openclawos/handshake → :8080; /liv-ai-app/* → :18789)"
+            ok "Caddyfile: :80 → 127.0.0.1:8080 (CF Tunnel terminates TLS — D-134-MODE; /openclawos/handshake → :8080; /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
             ;;
         local-lan)
             local tld="${LIVINITY_LOCAL_TLD:-livinity.local}"
@@ -1617,16 +1622,19 @@ import /etc/caddy/pki-global.conf
     handle /openclawos/handshake {
         reverse_proxy 127.0.0.1:8080
     }
-    @livai path /liv-ai-app /liv-ai-app/*
-    handle @livai {
+    handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
         reverse_proxy 127.0.0.1:18789
+    }
+    @livaiSubapp path /liv-ai-app /liv-ai-app/*
+    handle @livaiSubapp {
+        reverse_proxy 127.0.0.1:3010
     }
     handle {
         reverse_proxy 127.0.0.1:8080
     }
 }
 CADDYFILE
-            ok "Caddyfile: *.${tld} → 127.0.0.1:8080 (tls internal liv-local; /openclawos/handshake → :8080; /liv-ai-app/* → :18789)"
+            ok "Caddyfile: *.${tld} → 127.0.0.1:8080 (tls internal liv-local; /openclawos/handshake → :8080; /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
             ;;
         cloud)
             cat > "$_DLD_CADDYFILE" <<CADDYFILE
@@ -1634,16 +1642,19 @@ CADDYFILE
     handle /openclawos/handshake {
         reverse_proxy 127.0.0.1:8080
     }
-    @livai path /liv-ai-app /liv-ai-app/*
-    handle @livai {
+    handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
         reverse_proxy 127.0.0.1:18789
+    }
+    @livaiSubapp path /liv-ai-app /liv-ai-app/*
+    handle @livaiSubapp {
+        reverse_proxy 127.0.0.1:3010
     }
     handle {
         reverse_proxy 127.0.0.1:8080
     }
 }
 CADDYFILE
-            ok "Caddyfile: :80 → 127.0.0.1:8080 (cloud-mode bootstrap; /openclawos/handshake → :8080; /liv-ai-app/* → :18789)"
+            ok "Caddyfile: :80 → 127.0.0.1:8080 (cloud-mode bootstrap; /openclawos/handshake → :8080; /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
             ;;
     esac
 

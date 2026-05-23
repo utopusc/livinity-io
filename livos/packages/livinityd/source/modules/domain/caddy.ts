@@ -103,33 +103,44 @@ export function validateHost(host: string): boolean {
 }
 
 /**
- * Phase 201-06 → Phase 203-03 (D-203-05) — Liv AI claw gateway listens on
- * 127.0.0.1:18789 and serves the rebranded openclaw claw-client at
- * `/plugins/openclawos` (plugin HTTP route — see @livos/liv-claw-os
- * packages/claw-plugin/src/index.ts ROUTE_PREFIX).
+ * Phase 201-06 → Phase 203-03 (D-203-05) → Phase 203-09 — Liv AI surface
+ * routing. Two co-existing surfaces share the `/liv-ai-app/*` URL prefix:
  *
- * For the Liv AI dock icon iframe to load the claw-client, every per-user
- * vhost (apex + multiUser subdomain blocks) must first match BOTH
- * `/liv-ai-app` (the bare prefix the iframe src uses) AND `/liv-ai-app/*`
- * (every asset / WS path) and route them to :18789 BEFORE falling through to
- * the livinityd app gateway on :8080.
+ *   1. Openclaw claw-gateway at 127.0.0.1:18789 owns the desktop-style chat
+ *      experience under `/liv-ai-app/openclawos[/*]`. Plan 203-10/11 will
+ *      mount the gateway claw-client at that path. Caddy strips the prefix
+ *      via `handle_path` so the gateway receives `/` (its in-process router
+ *      is responsible for resolving the plugin URL — see
+ *      @livos/liv-claw-os packages/claw-plugin/src/index.ts).
  *
- * History — pre-203-03 this routed to the legacy Phase 201 Next.js subapp
- * (livos-app-liv-ai.service) on :3010. Phase 203-12 (Mini PC deploy walk)
- * retires that unit; this routing change is the single Caddy mutation that
- * flips the Liv AI surface to the openclaw runtime (INV-203-08).
+ *   2. Next.js Phase 202 subapp at 127.0.0.1:3010 owns the agents +
+ *      settings dashboard at `/liv-ai-app/agents[/...]` and
+ *      `/liv-ai-app/settings[/...]`. Per Phase 203-09 the `@assistant-ui`
+ *      chat surface that previously lived at `/` is GONE; the subapp now
+ *      only serves the Phase 202 routes (plus a `/` → `/agents` redirect
+ *      stub for dev port-direct access).
  *
- * Caddy `handle` only accepts a single path matcher inline, so we declare a
- * named matcher `@livai` covering both shapes and use it with
- * `handle @livai`. First-match-wins ordering means the default
- * `handle { reverse_proxy 127.0.0.1:8080 ... }` placed after still catches
- * everything else (Phase 201 hotfix 2026-05-23 — bare prefix was leaking to
- * livinityd UI, IframeChecker self-protection then refused to mount the
- * iframe with "LivOS cannot be embedded in an iframe.").
+ * Ordering — Caddy evaluates `handle` blocks by path-matcher specificity,
+ * not source order, so emitting the openclawos handle alongside the bare
+ * `/liv-ai-app/*` handle is safe: the longer-prefix matcher wins for
+ * openclawos paths and the shorter matcher catches the rest. We still emit
+ * the openclawos handle FIRST for readability and so a future maintainer
+ * sees the two are paired.
+ *
+ * History — pre-203-03 routed the bare prefix to a vanished Next.js subapp
+ * (livos-app-liv-ai.service). Phase 203-03 unified everything onto :18789.
+ * Phase 203-09 splits it again because the Phase 202 dashboard (kept by
+ * INV-203-09 contract) lives on the Next.js subapp and would otherwise be
+ * shadowed by the gateway.
  */
-const LIV_AI_APP_HANDLE = `\t@livai path /liv-ai-app /liv-ai-app/*
-\thandle @livai {
+const LIV_AI_APP_HANDLE = `\thandle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
 \t\treverse_proxy 127.0.0.1:18789 {
+${WS_TRANSPORT_BODY}
+\t}
+\t}
+\t@livaiSubapp path /liv-ai-app /liv-ai-app/*
+\thandle @livaiSubapp {
+\t\treverse_proxy 127.0.0.1:3010 {
 ${WS_TRANSPORT_BODY}
 \t}
 \t}`
