@@ -22,6 +22,8 @@ import {
 
 import {Thread} from '@/components/assistant-ui/thread'
 
+import {ToolRenderers} from './tool-renderers'
+
 export function Assistant() {
 	const runtime = useChatRuntime({
 		transport: new AssistantChatTransport({
@@ -39,7 +41,15 @@ export function Assistant() {
 
 	return (
 		<AssistantRuntimeProvider runtime={runtime}>
-			{/* Tool renderers from 198-03 mount as siblings here in later plans */}
+			{/*
+			 * Plan 198-03 — Generative UI tool renderers. Each child is the
+			 * return value of `makeAssistantToolUI({toolName, render})` which
+			 * registers a per-tool renderer in the runtime's tool registry
+			 * via useAssistantToolUI (effect-only; renders null). Must mount
+			 * BEFORE <Thread /> so registrations are present when the first
+			 * tool-call message part is rendered.
+			 */}
+			<ToolRenderers />
 			<Thread />
 		</AssistantRuntimeProvider>
 	)
