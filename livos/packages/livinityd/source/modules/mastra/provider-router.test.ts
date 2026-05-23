@@ -15,9 +15,12 @@
 import {describe, expect, test, vi, beforeEach, afterEach} from 'vitest'
 
 import {
+	ALLOWED_XAI_MODELS,
+	coerceModel,
 	createProviderRouter,
 	createTokenFetch,
 	REDIS_ACTIVE_PROVIDER_KEY,
+	XAI_DEFAULT_MODEL_ID,
 } from './provider-router.js'
 import {ProviderNotConfiguredError} from './errors.js'
 
@@ -121,5 +124,96 @@ describe('createTokenFetch middleware (T-197-01-01)', () => {
 		const here = path.dirname(fileURLToPath(import.meta.url))
 		const src = await fs.readFile(path.join(here, 'provider-router.ts'), 'utf-8')
 		expect(src).not.toMatch(/XAI_API_KEY/)
+	})
+})
+
+/**
+ * Phase 199-02 — ALLOWED_XAI_MODELS allow-list + coerceModel helper +
+ * resolveAgentModel(modelId?) extended signature.
+ *
+ * Backs the new mastra.agent.listAvailableModels tRPC procedure (D-199-11)
+ * and the chat-route → agent dynamic-model dispatch path (Plan 199-03).
+ * coerceModel narrows arbitrary unknown input to AllowedXaiModel — invalid
+ * or missing input falls through to XAI_DEFAULT_MODEL_ID per D-199-24
+ * (soft validation; never 400s a request).
+ *
+ * Default model id is rotated to 'grok-4.20-0309-fast' per D-199-07 (was
+ * 'grok-4.20-0309-non-reasoning' pre-Phase 199).
+ */
+describe('Phase 199-02: ALLOWED_XAI_MODELS + coerceModel + resolveAgentModel signature', () => {
+	test('Test 9: ALLOWED_XAI_MODELS contains exactly the 4 D-199-06 ids', () => {
+		expect(ALLOWED_XAI_MODELS.length).toBe(4)
+		expect(ALLOWED_XAI_MODELS).toContain('grok-4.20-0309-fast')
+		expect(ALLOWED_XAI_MODELS).toContain('grok-4.20-0309-non-reasoning')
+		expect(ALLOWED_XAI_MODELS).toContain('grok-4.20-0309-reasoning')
+		expect(ALLOWED_XAI_MODELS).toContain('grok-4.3')
+	})
+
+	test('Test 10: XAI_DEFAULT_MODEL_ID rotated to grok-4.20-0309-fast (D-199-07)', () => {
+		expect(XAI_DEFAULT_MODEL_ID).toBe('grok-4.20-0309-fast')
+	})
+
+	test('Test 11: coerceModel("grok-4.3") returns "grok-4.3"', () => {
+		expect(coerceModel('grok-4.3')).toBe('grok-4.3')
+	})
+
+	test('Test 12: coerceModel("grok-4.20-0309-fast") returns "grok-4.20-0309-fast"', () => {
+		expect(coerceModel('grok-4.20-0309-fast')).toBe('grok-4.20-0309-fast')
+	})
+
+	test('Test 13: coerceModel("grok-4.20-0309-non-reasoning") returns "grok-4.20-0309-non-reasoning"', () => {
+		expect(coerceModel('grok-4.20-0309-non-reasoning')).toBe('grok-4.20-0309-non-reasoning')
+	})
+
+	test('Test 14: coerceModel("grok-4.20-0309-reasoning") returns "grok-4.20-0309-reasoning"', () => {
+		expect(coerceModel('grok-4.20-0309-reasoning')).toBe('grok-4.20-0309-reasoning')
+	})
+
+	test('Test 15: coerceModel("bogus-model-id") falls back to default (D-199-24 soft validation)', () => {
+		expect(coerceModel('bogus-model-id')).toBe('grok-4.20-0309-fast')
+	})
+
+	test('Test 16: coerceModel(undefined) returns default', () => {
+		expect(coerceModel(undefined)).toBe('grok-4.20-0309-fast')
+	})
+
+	test('Test 17: coerceModel(null) returns default', () => {
+		expect(coerceModel(null)).toBe('grok-4.20-0309-fast')
+	})
+
+	test('Test 18: coerceModel(42) returns default (typeof guard)', () => {
+		expect(coerceModel(42)).toBe('grok-4.20-0309-fast')
+	})
+
+	test('Test 19: resolveAgentModel("grok-4.3") resolves a model handle for the requested id', async () => {
+		const deps = makeDeps({activeProvider: 'xai'})
+		const router = createProviderRouter(deps as never)
+		const model = await router.resolveAgentModel('grok-4.3')
+		expect(model).toBeTruthy()
+		// The @ai-sdk/xai LanguageModelV2 surface exposes `.modelId` (per the
+		// SDK contract); assert the requested id propagated correctly through
+		// coerceModel + provider_(resolvedId).
+		expect((model as {modelId?: string}).modelId).toBe('grok-4.3')
+	})
+
+	test('Test 20: resolveAgentModel("bogus") coerces to default model id', async () => {
+		const deps = makeDeps({activeProvider: 'xai'})
+		const router = createProviderRouter(deps as never)
+		const model = await router.resolveAgentModel('bogus')
+		expect((model as {modelId?: string}).modelId).toBe('grok-4.20-0309-fast')
+	})
+
+	test('Test 21: resolveAgentModel(undefined) uses default model id', async () => {
+		const deps = makeDeps({activeProvider: 'xai'})
+		const router = createProviderRouter(deps as never)
+		const model = await router.resolveAgentModel(undefined)
+		expect((model as {modelId?: string}).modelId).toBe('grok-4.20-0309-fast')
+	})
+
+	test('Test 22: resolveAgentModel() zero-arg (backward-compat) uses default model id', async () => {
+		const deps = makeDeps({activeProvider: 'xai'})
+		const router = createProviderRouter(deps as never)
+		const model = await router.resolveAgentModel()
+		expect((model as {modelId?: string}).modelId).toBe('grok-4.20-0309-fast')
 	})
 })
