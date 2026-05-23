@@ -95,3 +95,50 @@ describe('redactError', () => {
 		expect(redactError(null)).toEqual({message: 'null', stack: '[redacted]'})
 	})
 })
+
+describe('ApprovalManager.requestSync (Phase 203-06)', () => {
+	test('requestSync approved → decision:approved', async () => {
+		const m = new ApprovalManager({timeoutMs: 60_000})
+		const p = m.requestSync({
+			toolName: 'luse_computer_click_mouse',
+			toolCallId: 'tc-rs-1',
+			agentId: 'a-1',
+		})
+		// next tick — resolve true
+		await new Promise((r) => setTimeout(r, 10))
+		m.resolve('tc-rs-1', true)
+		const res = await p
+		expect(res.decision).toBe('approved')
+		expect(res.toolCallId).toBe('tc-rs-1')
+		expect(res.runId).toBe('openclawos:a-1')
+	})
+
+	test('requestSync rejected → decision:rejected (NOT timeout)', async () => {
+		const m = new ApprovalManager({timeoutMs: 60_000})
+		const p = m.requestSync({toolName: 'luse_computer_type_text', toolCallId: 'tc-rs-2'})
+		await new Promise((r) => setTimeout(r, 10))
+		m.resolve('tc-rs-2', false)
+		const res = await p
+		expect(res.decision).toBe('rejected')
+		expect(res.runId).toBe('openclawos:default')
+	})
+
+	test('requestSync timeout → decision:timeout', async () => {
+		const m = new ApprovalManager()
+		const p = m.requestSync({
+			toolName: 'luse_computer_click_mouse',
+			toolCallId: 'tc-rs-3',
+			timeoutMs: 20,
+		})
+		const res = await p
+		expect(res.decision).toBe('timeout')
+	})
+
+	test('requestSync mints a toolCallId when not supplied', async () => {
+		const m = new ApprovalManager()
+		const p = m.requestSync({toolName: 'luse_computer_click_mouse', timeoutMs: 10})
+		const res = await p
+		expect(res.toolCallId.length).toBeGreaterThan(0)
+		expect(res.decision).toBe('timeout')
+	})
+})
