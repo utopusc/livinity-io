@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-23T02:34:39.971Z"
+last_updated: "2026-05-23T02:47:42.353Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -26,8 +26,10 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 198 (liv-ai-v2-assistant-ui-generative-ui) — EXECUTING
-Plan: 5 of 8 complete
-Last completed plan: **198-05** ✅ CODE-COMPLETE 2026-05-23 (ThreadList Sidebar — useThreadListAdapter hook [122 LOC] wraps existing P197-05 mastra.agent.threads.list adminProcedure query + mastra.agent.threads.delete adminProcedure mutation in ExternalStoreThreadListAdapter-shape; <Assistant /> extended to 2-column layout [w-64 left aside ThreadList + flex-1 right main <Thread />]; AssistantChatTransport body now carries {threadId: currentThreadId} for per-thread Mastra Memory scoping; client-generated UUID-shape threadIds [t-${Date.now()}-${b36}] persisted by PostgresStore P197-03 on first message; empty-state 'No conversations yet' + title fallback 'Untitled · YYYY-MM-DD' + delete-active-thread → fresh UUID auto-switch; 3 atomic commits c2509428 RED + a838d532 GREEN + 31030309 mount; 4/4 new vitest PASS + 48/48 liv-ai+tool-ui suite PASS [zero regressions vs Plan 198-04 baseline]; pnpm --filter ui build EXIT 0 in 36.51s [liv-ai-content chunk 557.97 kB / 156.03 kB gzip]; sacred SHA preserved 3/3; T-198-05-01 accept disposition honoured [single-operator Mini PC + adminProcedure backend gate, multi-tenant deferred to v40+]; D-NO-NEW-DEPS preserved; B-02 lock unchanged [zero backend Mastra surface mods]). 1 deviation [Rule-1 cosmetic .ts → .tsx test-file rename for vite:react-swc JSX-parse].
+Plan: 6 of 8 complete
+Last completed plan: **198-06** ✅ CODE-COMPLETE 2026-05-23 (Composer Power Features — slash commands + suggested prompts + image attachments wired into <Assistant />. SLASH_COMMANDS catalog at livos/packages/ui/src/features/liv-ai/slash-commands.ts ships 4 locked triggers /help /clear /screenshot /search; parseSlashCommand(input) returns ParsedSlash|null with leading-whitespace tolerance + /clear transformedText=null suppress-send convention + /search rest-arg query rewrite. DEFAULT_SUGGESTED_PROMPTS ships 4 locked prompts ('What is the weather in Istanbul?', 'Take a screenshot of my screen', 'List my open windows', 'What can you do?'); <SuggestedPrompts onPick hidden /> component renders 4 chip buttons with data-testids. createImageAttachmentAdapter() wraps SimpleImageAttachmentAdapter in CompositeAttachmentAdapter (extensible for P199 PDF/audio); image/png|jpeg|webp|gif allow-list + 10 MB ceiling; acceptsFile + readFileAsBase64 + attachFile pure helpers. <Assistant /> extended with two inner components: SlashCommandInterceptor uses useComposerRuntime() to wrap composerRuntime.send() in useEffect (useRef-guarded idempotent; cleanup restores originalSend) — on /clear → composer.reset() + onSwitchToNewThread() + skip send; on other slash → composer.setText(transformedText) + forward; non-slash → forward unmodified. EmptyStateSuggestedPrompts inner component uses useThread() to read messages.length + useThreadRuntime().append({role:'user',content:[{type:'text',text}]}) to inject chip text directly; mounted as absolute pointer-events-none overlay above <Thread /> with pointer-events-auto inner pill bar; hidden={messageCount>0} returns null automatically. useChatRuntime adapters.attachments wired to createImageAttachmentAdapter(). 6 atomic commits (Tasks 1+2 TDD RED/GREEN: 0e17cb31+95e7befc + 081a2b29+17b5acdc; Tasks 3+4: c9d55b63 + c9a696b8); 23 new vitest PASS (9 slash + 5 suggested + 9 attachment) + 48 prior = 71/71 liv-ai+tool-ui suite PASS zero regressions; pnpm --filter ui build EXIT 0 in 36.51s [liv-ai-content chunk 562.61 kB / 157.67 kB gzip — +5 kB vs 198-05]; sacred SHA preserved 6/6; D-NO-NEW-DEPS preserved; B-02 lock unchanged [UI-only, zero backend mods]). 1 deviation [Rule-2 elevation: plan-optional attachment-adapter test elevated to mandatory — 9 vitest cases as regression-protection for Phase 198 acceptance envelope #9].
+
+Previously: **198-05** ✅ CODE-COMPLETE 2026-05-23 (ThreadList Sidebar — see 198-05-SUMMARY.md for full detail).
 
 Previously: **198-04** ✅ CODE-COMPLETE 2026-05-23 (HITL ApprovalCard inline + 6 destructive-tool registrations — see 198-04-SUMMARY.md for full detail).
 
