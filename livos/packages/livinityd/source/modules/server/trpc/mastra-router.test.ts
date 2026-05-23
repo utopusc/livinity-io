@@ -392,12 +392,25 @@ describe('mastra.agent.getActiveModel + setActiveModel (Phase 199-07)', () => {
 		expect(redis.set).not.toHaveBeenCalled()
 	})
 
-	test('T26 — getActiveModel callable by non-admin (privateProcedure semantics)', async () => {
+	test('T26 — getActiveModel callable by non-admin authenticated user (privateProcedure, NOT adminProcedure)', async () => {
 		const livOSMastra = makeLivOSMastra()
 		const redis = makeRedisStub({'liv:config:active_model': 'grok-4.20-0309-reasoning'})
 		const r = createMastraRouter({livOSMastra, approvalManager, redis})
-		const nonAdmin = r.createCaller(makeNonAdminCtx() as any)
-		const result = await nonAdmin.agent.getActiveModel()
+		// Authenticated non-admin context: bypass=true so isAuthenticated middleware
+		// skips token verification, but currentUser.role='member' so adminProcedure
+		// would reject. getActiveModel is privateProcedure → must accept this caller.
+		const memberCtx = {
+			...makeNonAdminCtx(),
+			dangerouslyBypassAuthentication: true,
+		}
+		const memberCaller = r.createCaller(memberCtx as any)
+		const result = await memberCaller.agent.getActiveModel()
 		expect(result).toEqual({modelName: 'grok-4.20-0309-reasoning'})
+		// Defense-in-depth: same member caller MUST be rejected by setActiveModel
+		// (adminProcedure gate). Combines T25 + T26 into a contrast assertion that
+		// proves the two procedures have different gates.
+		await expect(
+			memberCaller.agent.setActiveModel({modelName: 'grok-4.3'}),
+		).rejects.toThrow()
 	})
 })

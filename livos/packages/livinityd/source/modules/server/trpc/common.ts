@@ -609,4 +609,13 @@ export const httpOnlyPaths = [
 	// the WS-handshake-delay flicker on first paint is undesirable (precedent:
 	// agents.list line 291, webapp.list line 406). T-199-02-03 mitigation.
 	'mastra.agent.listAvailableModels',
+	// Phase 199-07 — Liv AI active-model persistence. getActiveModel hydrates
+	// the header-bar picker on first paint (same WS-handshake-delay-flicker
+	// rationale as mastra.agent.listAvailableModels directly above);
+	// setActiveModel is an admin mutation writing `liv:config:active_model`
+	// in Redis (D-199-10), and silent WS drop during `systemctl restart livos`
+	// would lose the operator's saved model choice (memory pitfall B-12 / X-04).
+	// D-199-12 — both routes MUST be in httpOnlyPaths.
+	'mastra.agent.getActiveModel',
+	'mastra.agent.setActiveModel',
 ] as const

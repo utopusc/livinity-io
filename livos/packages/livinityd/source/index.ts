@@ -1022,6 +1022,11 @@ export default class Livinityd {
 					mastraRouterProductionInstance = createMastraRouter({
 						livOSMastra,
 						approvalManager,
+						// Phase 199-07 — Redis client for `liv:config:active_model`
+						// persistence (D-199-10 / INV-199-03). Borrowed from
+						// this.ai.redis per the established convention (Plan 197-02
+						// mcp-bridge wire-up, Plan 101-03 native-app store).
+						redis: this.ai.redis,
 					})
 					webappLogger.info(
 						'Phase 197-05 — Liv AI agent + Mastra tRPC router wired (memory + mcpBridge + agent + approval-manager ready)',
