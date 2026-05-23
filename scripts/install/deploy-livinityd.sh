@@ -1578,12 +1578,13 @@ _dld_update_caddy_to_livinityd() {
             # CLOUDFLARE_API_TOKEN env — incompatible with Phase 134 (no
             # cf-token in tunnel-mode install; Caddy would fail to start).
             #
-            # Phase 201-06 — `handle /liv-ai-app/*` routes the Next.js subapp
-            # listening on 127.0.0.1:3010. Placed ABOVE the catch-all so
-            # Caddy's first-match-wins matcher steers /liv-ai-app/* away
-            # from the livinityd gateway. The runtime generator in
-            # livos/packages/livinityd/.../domain/caddy.ts emits the same
-            # block for per-user vhosts (bruce.livinity.io/liv-ai-app/*).
+            # Phase 201-06 → Phase 203-03 (D-203-05) — `handle /liv-ai-app/*`
+            # routes the Liv AI claw gateway on 127.0.0.1:18789 (was the
+            # legacy Phase 201 Next.js subapp on :3010 pre-203-03). Placed
+            # ABOVE the catch-all so Caddy's first-match-wins matcher steers
+            # /liv-ai-app/* away from the livinityd gateway. The runtime
+            # generator in livos/packages/livinityd/.../domain/caddy.ts emits
+            # the same block for per-user vhosts (bruce.livinity.io/liv-ai-app/*).
             cat > "$_DLD_CADDYFILE" <<CADDYFILE
 {
     auto_https off
@@ -1591,14 +1592,14 @@ _dld_update_caddy_to_livinityd() {
 :80 {
     @livai path /liv-ai-app /liv-ai-app/*
     handle @livai {
-        reverse_proxy 127.0.0.1:3010
+        reverse_proxy 127.0.0.1:18789
     }
     handle {
         reverse_proxy 127.0.0.1:8080
     }
 }
 CADDYFILE
-            ok "Caddyfile: :80 → 127.0.0.1:8080 (CF Tunnel terminates TLS — D-134-MODE; /liv-ai-app/* → :3010)"
+            ok "Caddyfile: :80 → 127.0.0.1:8080 (CF Tunnel terminates TLS — D-134-MODE; /liv-ai-app/* → :18789)"
             ;;
         local-lan)
             local tld="${LIVINITY_LOCAL_TLD:-livinity.local}"
@@ -1612,28 +1613,28 @@ import /etc/caddy/pki-global.conf
     }
     @livai path /liv-ai-app /liv-ai-app/*
     handle @livai {
-        reverse_proxy 127.0.0.1:3010
+        reverse_proxy 127.0.0.1:18789
     }
     handle {
         reverse_proxy 127.0.0.1:8080
     }
 }
 CADDYFILE
-            ok "Caddyfile: *.${tld} → 127.0.0.1:8080 (tls internal liv-local; /liv-ai-app/* → :3010)"
+            ok "Caddyfile: *.${tld} → 127.0.0.1:8080 (tls internal liv-local; /liv-ai-app/* → :18789)"
             ;;
         cloud)
             cat > "$_DLD_CADDYFILE" <<CADDYFILE
 :80 {
     @livai path /liv-ai-app /liv-ai-app/*
     handle @livai {
-        reverse_proxy 127.0.0.1:3010
+        reverse_proxy 127.0.0.1:18789
     }
     handle {
         reverse_proxy 127.0.0.1:8080
     }
 }
 CADDYFILE
-            ok "Caddyfile: :80 → 127.0.0.1:8080 (cloud-mode bootstrap; /liv-ai-app/* → :3010)"
+            ok "Caddyfile: :80 → 127.0.0.1:8080 (cloud-mode bootstrap; /liv-ai-app/* → :18789)"
             ;;
     esac
 

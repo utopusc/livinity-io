@@ -277,11 +277,12 @@ _configure_caddy_for_tunnel() {
 # CF Tunnel terminates TLS at the edge; Caddy serves plain HTTP locally.
 # livinityd may regenerate this file at runtime — those edits supersede this.
 #
-# Phase 201-06 — \`handle /liv-ai-app/*\` routes the Next.js subapp on :3010.
-# Placed ABOVE the catch-all so Caddy's first-match-wins matcher steers
-# /liv-ai-app/* away from the livinityd gateway. Runtime generator in
-# livos/packages/livinityd/.../domain/caddy.ts emits the same shape for
-# per-user vhosts.
+# Phase 201-06 → Phase 203-03 (D-203-05) — \`handle /liv-ai-app/*\` routes
+# the Liv AI claw gateway on :18789 (was the legacy Phase 201 Next.js subapp
+# on :3010 pre-203-03). Placed ABOVE the catch-all so Caddy's first-match-wins
+# matcher steers /liv-ai-app/* away from the livinityd gateway. Runtime
+# generator in livos/packages/livinityd/.../domain/caddy.ts emits the same
+# shape for per-user vhosts.
 
 {
     # Disable Caddy's automatic HTTPS — CF edge handles TLS for us.
@@ -291,7 +292,7 @@ _configure_caddy_for_tunnel() {
 :80 {
     @livai path /liv-ai-app /liv-ai-app/*
     handle @livai {
-        reverse_proxy 127.0.0.1:3010
+        reverse_proxy 127.0.0.1:18789
     }
     handle {
         reverse_proxy 127.0.0.1:8080
