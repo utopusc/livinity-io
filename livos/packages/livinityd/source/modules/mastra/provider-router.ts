@@ -41,20 +41,22 @@ type ProviderId = (typeof ALLOWED_PROVIDERS)[number]
  * (T-199-08 / Plan 199-04 acceptance).
  */
 export const ALLOWED_XAI_MODELS = [
-	'grok-4.20-0309-fast',
 	'grok-4.20-0309-non-reasoning',
 	'grok-4.20-0309-reasoning',
+	'grok-4.20-multi-agent-0309',
 	'grok-4.3',
 ] as const
 export type AllowedXaiModel = (typeof ALLOWED_XAI_MODELS)[number]
 
 /**
- * Default model id resolved when provider='xai'. Phase 199-02 rotated this
- * literal from 'grok-4.20-0309-non-reasoning' → 'grok-4.20-0309-fast' per
- * D-199-07 (lower-latency default; user-tuned in the model picker via
- * Plan 199-04 + 199-07).
+ * Default model id resolved when provider='xai'. P199 UAT discovered that
+ * `grok-4.20-0309-fast` (D-199-07 original) does NOT exist for the operator's
+ * xAI subscription — live `GET https://api.x.ai/v1/models` returned the 4 ids
+ * in ALLOWED_XAI_MODELS above + 3 image/video models we don't expose. Default
+ * rotated to `grok-4.20-0309-non-reasoning` (the cheapest/fastest of the chat
+ * models confirmed available on this account).
  */
-const XAI_DEFAULT_MODEL_ID: AllowedXaiModel = 'grok-4.20-0309-fast'
+const XAI_DEFAULT_MODEL_ID: AllowedXaiModel = 'grok-4.20-0309-non-reasoning'
 
 /**
  * Phase 199-02 — narrow arbitrary unknown input to `AllowedXaiModel`.

@@ -235,7 +235,7 @@ export function Assistant() {
 
 	// Phase 199-07 — selectedModel state + Redis hydration.
 	//
-	// Initial value: DEFAULT_LIV_AI_MODEL_ID (Grok 4.20 Fast, D-199-07) so the
+	// Initial value: DEFAULT_LIV_AI_MODEL_ID (Grok 4.20, D-199-07) so the
 	// header bar paints with a sensible default during the first React render
 	// before the getActiveModel useQuery resolves.
 	//

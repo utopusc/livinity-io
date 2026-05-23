@@ -402,7 +402,7 @@ describe('Assistant — Phase 199-05 AuiIf-branched layout', () => {
 describe('Assistant — Phase 199-07 header bar + selectedModel wiring', () => {
 	it('Test 6: header bar mounted ABOVE the 2-column layout (DOM order: header → flex-1)', () => {
 		mockState.thread.isEmpty = true
-		mockActiveModelData = {modelName: 'grok-4.20-0309-fast'}
+		mockActiveModelData = {modelName: 'grok-4.20-0309-non-reasoning'}
 		act(() => {
 			root.render(<Assistant />)
 		})
@@ -435,7 +435,7 @@ describe('Assistant — Phase 199-07 header bar + selectedModel wiring', () => {
 		expect(trigger!.textContent).toContain('Grok 4.3')
 	})
 
-	it('Test 8: default model — picker shows Grok 4.20 Fast when getActiveModel returns undefined', () => {
+	it('Test 8: default model — picker shows Grok 4.20 when getActiveModel returns undefined', () => {
 		mockState.thread.isEmpty = true
 		mockActiveModelData = undefined
 		act(() => {
@@ -445,7 +445,7 @@ describe('Assistant — Phase 199-07 header bar + selectedModel wiring', () => {
 			'[data-testid="liv-ai-model-picker-trigger"]',
 		)
 		expect(trigger).not.toBeNull()
-		expect(trigger!.textContent).toContain('Grok 4.20 Fast')
+		expect(trigger!.textContent).toContain('Grok 4.20')
 	})
 
 	it('Test 9: transport body callback envelope — body() returns {threadId, config:{modelName}}', async () => {
@@ -467,7 +467,7 @@ describe('Assistant — Phase 199-07 header bar + selectedModel wiring', () => {
 
 	it('Test 10: clicking "+ New conversation" in header fires onSwitchToNewThread (mutates threadId in body envelope)', async () => {
 		mockState.thread.isEmpty = true
-		mockActiveModelData = {modelName: 'grok-4.20-0309-fast'}
+		mockActiveModelData = {modelName: 'grok-4.20-0309-non-reasoning'}
 		await act(async () => {
 			root.render(<Assistant />)
 		})

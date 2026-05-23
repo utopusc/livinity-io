@@ -3,7 +3,7 @@
 // 5 cases:
 //   1. LIV_AI_MODELS.length === 4
 //   2. id order matches D-199-06 spec
-//   3. DEFAULT_LIV_AI_MODEL_ID === 'grok-4.20-0309-fast' (D-199-07)
+//   3. DEFAULT_LIV_AI_MODEL_ID === 'grok-4.20-0309-non-reasoning' (D-199-07)
 //   4. each model carries a truthy `Icon` (lucide forwardRef)
 //   5. **DRIFT-LOCK (T-199-08 / T-199-04-01):** cross-package import of
 //      `ALLOWED_XAI_MODELS` from the backend; set-equality on ids.
@@ -30,17 +30,17 @@ describe('LIV_AI_MODELS registry (Phase 199-04)', () => {
 		expect(LIV_AI_MODELS).toHaveLength(4)
 	})
 
-	it('Test 2: id order matches the D-199-06 spec', () => {
+	it('Test 2: id order matches the P199-UAT live-xAI list', () => {
 		expect(LIV_AI_MODELS.map((m) => m.id)).toEqual([
-			'grok-4.20-0309-fast',
 			'grok-4.20-0309-non-reasoning',
 			'grok-4.20-0309-reasoning',
+			'grok-4.20-multi-agent-0309',
 			'grok-4.3',
 		])
 	})
 
-	it('Test 3: DEFAULT_LIV_AI_MODEL_ID is the -fast variant (D-199-07)', () => {
-		expect(DEFAULT_LIV_AI_MODEL_ID).toBe('grok-4.20-0309-fast')
+	it('Test 3: DEFAULT_LIV_AI_MODEL_ID is the non-reasoning variant (P199-UAT)', () => {
+		expect(DEFAULT_LIV_AI_MODEL_ID).toBe('grok-4.20-0309-non-reasoning')
 		// And the default must be one of the registered ids — type-level
 		// guarantee, but assert at runtime too so a future stray rename of
 		// the literal would fail loudly.
@@ -75,7 +75,7 @@ describe('LivAiModelId type (Phase 199-04)', () => {
 		// Compile-time guarantee: assigning a value outside the union is a
 		// TS error. Runtime touch keeps the symbol "used" so the type-only
 		// import survives tree-shaking inspectors.
-		const a: LivAiModelId = 'grok-4.20-0309-fast'
-		expect(a).toBe('grok-4.20-0309-fast')
+		const a: LivAiModelId = 'grok-4.20-0309-non-reasoning'
+		expect(a).toBe('grok-4.20-0309-non-reasoning')
 	})
 })

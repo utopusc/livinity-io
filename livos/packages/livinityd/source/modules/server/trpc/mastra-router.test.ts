@@ -261,9 +261,9 @@ describe('mastra.agent.listAvailableModels (Phase 199-02)', () => {
 		expect(result).toHaveLength(4)
 		const ids = result.map((m: {id: string}) => m.id)
 		expect(ids).toEqual([
-			'grok-4.20-0309-fast',
 			'grok-4.20-0309-non-reasoning',
 			'grok-4.20-0309-reasoning',
+			'grok-4.20-multi-agent-0309',
 			'grok-4.3',
 		])
 		for (const entry of result) {
@@ -309,10 +309,10 @@ describe('mastra.agent.listAvailableModels (Phase 199-02)', () => {
 			description: string
 		}>
 		const byId = Object.fromEntries(result.map((m) => [m.id, m]))
-		expect(byId['grok-4.20-0309-fast']?.name).toBe('Grok 4.20 Fast')
-		expect(byId['grok-4.20-0309-fast']?.description).toBe('Fast non-reasoning. Default.')
 		expect(byId['grok-4.20-0309-non-reasoning']?.name).toBe('Grok 4.20')
+		expect(byId['grok-4.20-0309-non-reasoning']?.description).toBe('Fast non-reasoning. Default.')
 		expect(byId['grok-4.20-0309-reasoning']?.name).toBe('Grok 4.20 Think')
+		expect(byId['grok-4.20-multi-agent-0309']?.name).toBe('Grok 4.20 Multi-Agent')
 		expect(byId['grok-4.3']?.name).toBe('Grok 4.3')
 		expect(byId['grok-4.3']?.description).toBe('Latest. Reasoning + tool use.')
 	})
@@ -322,9 +322,9 @@ describe('mastra.agent.listAvailableModels (Phase 199-02)', () => {
  * Phase 199-07 — getActiveModel + setActiveModel procedure tests.
  *
  * Coverage (7 cases per Plan 199-07 Task 1 behavior block):
- *   T20 — getActiveModel.query() when Redis returns null → returns {modelName: 'grok-4.20-0309-fast'} (coerce fallback / D-199-07)
+ *   T20 — getActiveModel.query() when Redis returns null → returns {modelName: 'grok-4.20-0309-non-reasoning'} (coerce fallback / D-199-07)
  *   T21 — getActiveModel.query() when Redis returns 'grok-4.3' → returns {modelName: 'grok-4.3'}
- *   T22 — getActiveModel.query() when Redis returns 'bogus' → returns {modelName: 'grok-4.20-0309-fast'} (coerce — D-199-24 soft validation)
+ *   T22 — getActiveModel.query() when Redis returns 'bogus' → returns {modelName: 'grok-4.20-0309-non-reasoning'} (coerce — D-199-24 soft validation)
  *   T23 — setActiveModel.mutation({modelName:'grok-4.3'}) → redis.set called with key 'liv:config:active_model' + value 'grok-4.3'
  *   T24 — setActiveModel.mutation({modelName:'rm -rf /'}) → zod 400 (z.enum reject — T-199-07-02 mitigation)
  *   T25 — setActiveModel.mutation called by non-admin → rejects (adminProcedure gate — T-199-07-01 mitigation)
@@ -337,7 +337,7 @@ describe('mastra.agent.getActiveModel + setActiveModel (Phase 199-07)', () => {
 		const r = createMastraRouter({livOSMastra, approvalManager, redis})
 		const caller = r.createCaller(makeAdminCtx() as any)
 		const result = await caller.agent.getActiveModel()
-		expect(result).toEqual({modelName: 'grok-4.20-0309-fast'})
+		expect(result).toEqual({modelName: 'grok-4.20-0309-non-reasoning'})
 		expect(redis.get).toHaveBeenCalledWith('liv:config:active_model')
 	})
 
@@ -356,7 +356,7 @@ describe('mastra.agent.getActiveModel + setActiveModel (Phase 199-07)', () => {
 		const r = createMastraRouter({livOSMastra, approvalManager, redis})
 		const caller = r.createCaller(makeAdminCtx() as any)
 		const result = await caller.agent.getActiveModel()
-		expect(result).toEqual({modelName: 'grok-4.20-0309-fast'})
+		expect(result).toEqual({modelName: 'grok-4.20-0309-non-reasoning'})
 	})
 
 	test('T23 — setActiveModel writes Redis key liv:config:active_model with valid value (D-199-10)', async () => {
