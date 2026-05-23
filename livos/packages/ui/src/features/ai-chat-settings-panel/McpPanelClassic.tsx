@@ -31,8 +31,60 @@ import {
 	IconNote,
 	IconBrandMongodb,
 	IconBolt,
+	IconSparkles,
 } from '@tabler/icons-react'
 import {cn} from '@/shadcn-lib/utils'
+import {trpcReact} from '@/trpc/trpc'
+
+// ─── Phase 201-05 — Built-in tools group ────────────────────────
+//
+// Renders the 10 built-in agent tools (D-201-13) as a "Built-in"
+// MCP source ABOVE the external-MCP server list. Hydrates from
+// mastra.agent.listBuiltInTools (privateProcedure, HTTP-only —
+// see common.ts httpOnlyPaths). The Mastra agent generation loop
+// is untouched; this is a read-only surface.
+
+function BuiltInToolsSection() {
+	const builtInQuery = trpcReact.mastra.agent.listBuiltInTools.useQuery()
+	const tools = builtInQuery.data ?? []
+	const count = tools.length
+
+	return (
+		<section className='mb-3' data-testid='built-in-tools-section'>
+			<div className='mb-2 flex items-center gap-2'>
+				<IconSparkles size={14} className='text-accent-blue/70' />
+				<h3 className='text-caption font-semibold uppercase tracking-wide text-text-tertiary'>
+					Built-in tools ({count})
+				</h3>
+			</div>
+			<ul className='space-y-1 rounded-radius-lg border border-border-subtle bg-surface-base p-1'>
+				{tools.map((t) => (
+					<li
+						key={t.id}
+						className='flex items-center justify-between rounded-radius-sm px-2.5 py-1.5 hover:bg-surface-1'
+					>
+						<div className='min-w-0 flex-1'>
+							<div className='text-body-sm font-medium text-text-primary'>{t.name}</div>
+							<div className='truncate text-caption-sm text-text-tertiary'>
+								{t.description}
+							</div>
+						</div>
+						<span
+							className={cn(
+								'ml-2 flex-shrink-0 rounded-radius-sm px-2 py-0.5 text-caption-sm font-medium',
+								t.destructive
+									? 'bg-accent-amber/15 text-accent-amber'
+									: 'bg-accent-green/15 text-accent-green',
+							)}
+						>
+							{t.destructive ? 'Approval' : 'Auto'}
+						</span>
+					</li>
+				))}
+			</ul>
+		</section>
+	)
+}
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -1014,16 +1066,22 @@ function InstalledTab() {
 
 	if (servers.length === 0) {
 		return (
-			<div className='flex flex-col items-center justify-center py-16 text-text-tertiary'>
-				<IconPlugOff size={28} className='mb-3' />
-				<p className='text-body-sm font-medium'>No servers installed</p>
-				<p className='mt-1 text-caption-sm text-text-tertiary'>Browse the Marketplace to add MCP servers</p>
+			<div className='p-4'>
+				{/* Phase 201-05 — Built-in tools group always renders at top, even when no external MCP servers are installed. */}
+				<BuiltInToolsSection />
+				<div className='flex flex-col items-center justify-center py-16 text-text-tertiary'>
+					<IconPlugOff size={28} className='mb-3' />
+					<p className='text-body-sm font-medium'>No external MCP servers installed</p>
+					<p className='mt-1 text-caption-sm text-text-tertiary'>Browse the Marketplace to add MCP servers</p>
+				</div>
 			</div>
 		)
 	}
 
 	return (
 		<div className='space-y-2 p-4'>
+			{/* Phase 201-05 — Built-in tools group rendered ABOVE the external MCP server list. */}
+			<BuiltInToolsSection />
 			{/* Summary bar */}
 			<div className='mb-3 flex items-center gap-4 text-caption-sm text-text-tertiary'>
 				<span>{servers.length} server{servers.length !== 1 && 's'}</span>
