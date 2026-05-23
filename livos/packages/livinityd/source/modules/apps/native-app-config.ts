@@ -57,10 +57,35 @@ const SHELL_METACHAR_RE = /^[^;&|`$<>(){}\\]*$/
  */
 const PRELOAD_ENV_RE = /^(LD_|DYLD_)/
 
+/**
+ * Phase 203-10 widening: iconUrl accepts either a full http(s) URL OR a
+ * root-relative path (e.g. `/liv-ai-app/icons/liv-ai-placeholder.svg`).
+ * OpenUI apps register desktop icons via `registerOpenUiAppAsDesktopIcon`
+ * which passes a root-relative path served by the openclaw gateway under
+ * Caddy's `/liv-ai-app/*` reverse proxy. Existing callers passing full
+ * `https://example.com/icon.svg` URLs remain valid (additive change).
+ */
+const ROOT_RELATIVE_PATH_RE = /^\/[A-Za-z0-9_\-./]*$/
+
 export const nativeAppConfigSchema = z.object({
 	id: z.string().uuid(),
 	name: z.string().min(1).max(64),
-	iconUrl: z.string().url().optional(),
+	iconUrl: z
+		.string()
+		.refine(
+			(v) => {
+				if (v.startsWith('/')) return ROOT_RELATIVE_PATH_RE.test(v)
+				try {
+					// Re-use zod's URL gate without recursing the schema.
+					new URL(v)
+					return true
+				} catch {
+					return false
+				}
+			},
+			{message: 'iconUrl must be a URL or a root-relative path'},
+		)
+		.optional(),
 	binaryPath: z
 		.string()
 		.regex(ABSOLUTE_PATH_RE, 'binaryPath must be an absolute path with no shell metachars'),
