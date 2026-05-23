@@ -86,3 +86,36 @@ the issue does not block the current plan and was not caused by it).
 - **Action:** Defer to a dedicated test-cleanup plan (probably groups
   best with Plan 200-05's deferred items above — same jsdom / shim /
   localStorage drift class of failure).
+
+---
+
+## 200-08 — Discovered 2026-05-23T02:18Z
+
+### update.sh leaves /opt/livos and /opt/liv root-owned after rsync — services fail status=200/CHDIR until manual chown
+
+- **Recurrence:** This is the THIRD consecutive deploy where this patch
+  was needed (Phase 198-08, Phase 199-08, now Phase 200-08).
+- **Symptom:** After `sudo bash /opt/livos/update.sh` completes
+  "successfully", `systemctl is-active livos liv-core liv-worker
+  liv-memory` returns 4× `activating` (restart-looping) for ~30
+  seconds. `journalctl -u livos -n 20` shows:
+  `livos.service: Changing to the requested working directory failed:
+  Permission denied` and `livos.service: Main process exited,
+  code=exited, status=200/CHDIR`.
+- **Root cause:** update.sh's `sudo bash` runs as root → rsync to
+  `/opt/livos` and `/opt/liv` lands with root ownership. systemd units
+  livos.service + liv-core.service run `User=bruce` and fail at
+  `WorkingDirectory=` chdir.
+- **Manual patch (applied every deploy):**
+  ```bash
+  sudo chown -R bruce:bruce /opt/livos /opt/liv
+  sudo systemctl restart livos liv-core liv-worker liv-memory
+  ```
+- **Fix proposal:** Add a `_dld_fix_permissions` (or equivalent)
+  helper to update.sh that runs `chown -R bruce:bruce /opt/livos
+  /opt/liv` BEFORE the systemctl restart block. Should also be folded
+  into install.sh's first-run sequence.
+- **Impact:** Recurring operator-facing pain point. Every deploy needs
+  ZeroTier SSH access + a manual sudo chown command before services
+  come up. Should be a single-line fix.
+- **Owner:** Phase 201 or earlier (since it affects every deploy now).

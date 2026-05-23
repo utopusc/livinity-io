@@ -2720,7 +2720,7 @@ Plans:
 
 ---
 
-### Phase 199: Liv AI UI Polish — Brand + Sizing + Model Picker + Centered Empty + Generative UI Polish — 🔴 PLANNED 2026-05-23
+### Phase 199: Liv AI UI Polish — Brand + Sizing + Model Picker + Centered Empty + Generative UI Polish — 🟡 CODE-COMPLETE + DEPLOYED 2026-05-23 (operator UAT pending)
 
 **Goal:** Operator-requested UI polish on the Phase 198 Liv AI surface. Five concrete asks: (1) marquee app name "Liv AI" everywhere, (2) bigger window default (1180×820), (3) model picker with xAI Grok variants persisted to Redis, (4) ChatGPT-style centered empty-state composer (input in middle on new thread, slides to bottom once messages start), (5) Generative UI cilası — RunningHeader during tool execution + status-branch polish across 10 renderers.
 
@@ -2734,18 +2734,62 @@ Plans:
 **Estimated:** 1 day autonomous + operator-walked UAT
 
 Plans:
-- [ ] 199-01-PLAN.md — Window default size patch + brand string regression-lock (single-line `DEFAULT_WINDOW_SIZES.LIVINITY_liv-ai: {width:1180,height:820}` + grep-regression for "Liv AI" in 4 surfaces; Wave 1; ~30 LOC)
-- [ ] 199-02-PLAN.md — Provider-router ALLOWED_XAI_MODELS allow-list + `coerceModel` + new `mastra.agent.listAvailableModels` protectedProcedure + httpOnlyPaths add (Wave 1; ~120 LOC)
-- [ ] 199-03-PLAN.md — Mastra agent dynamic-model via `RequestContext` + chat-route `config.modelName` zod field + incidental memory.thread wire fix (Wave 2, depends_on=[199-02]; ~80 LOC)
-- [ ] 199-04-PLAN.md — `LIV_AI_MODELS` registry + `<LivAiModelPicker>` shadcn DropdownMenu + backend-drift-lock test (Wave 2, depends_on=[199-02]; ~200 LOC)
-- [x] 199-05-PLAN.md — Centered empty-state via `<AuiIf>` + extracted Composer + DELETE `EmptyStateMount` absolute overlay + AssistantChatTransport body-callback form (Wave 3 first; ~150 LOC) ✅ CODE-COMPLETE 2026-05-23 — 3 commits `b9eac2ab..9b4abe05`, sacred SHA preserved 3/3, 95/95 liv-ai vitest PASS
-- [x] 199-06-PLAN.md — `<RunningHeader>` micro-primitive ("Checking weather in Istanbul…") + 10 generative renderer status-branch updates (Wave 3 parallel-safe with 199-05; ~80 LOC) ✅ CODE-COMPLETE 2026-05-23 — 3 commits `6c45ca37..4d341bd1`, sacred SHA preserved 3/3, 106/106 liv-ai+tool-ui vitest PASS, INV-199-07 W-02 lock preserved
-- [ ] 199-07-PLAN.md — Header bar with "Liv AI" title + `<LivAiModelPicker>` + new-conversation; Redis `liv:config:active_model` via new `getActiveModel`/`setActiveModel` tRPC procedures (Wave 3, depends_on=[199-04, 199-05]; ~120 LOC)
-- [ ] 199-08-PLAN.md — Mini PC deploy + 10-step operator browser UAT + 199-VERIFICATION.md + STATE/ROADMAP flip (Wave 4, `autonomous: false` human-gated)
+- [x] 199-01-PLAN.md — Window default size patch + brand string regression-lock ✅ CODE-COMPLETE 2026-05-23
+- [x] 199-02-PLAN.md — Provider-router ALLOWED_XAI_MODELS allow-list + `coerceModel` + new `mastra.agent.listAvailableModels` protectedProcedure ✅ CODE-COMPLETE 2026-05-23
+- [x] 199-03-PLAN.md — Mastra agent dynamic-model via `RequestContext` + chat-route `config.modelName` zod field ✅ CODE-COMPLETE 2026-05-23
+- [x] 199-04-PLAN.md — `LIV_AI_MODELS` registry + `<LivAiModelPicker>` shadcn DropdownMenu + backend-drift-lock test ✅ CODE-COMPLETE 2026-05-23
+- [x] 199-05-PLAN.md — Centered empty-state via `<AuiIf>` + extracted Composer ✅ CODE-COMPLETE 2026-05-23 — 3 commits `b9eac2ab..9b4abe05`, sacred SHA preserved 3/3, 95/95 liv-ai vitest PASS
+- [x] 199-06-PLAN.md — `<RunningHeader>` micro-primitive + 10 generative renderer status-branch updates ✅ CODE-COMPLETE 2026-05-23 — 3 commits `6c45ca37..4d341bd1`, sacred SHA preserved 3/3, 106/106 liv-ai+tool-ui vitest PASS
+- [x] 199-07-PLAN.md — Header bar with "Liv AI" title + `<LivAiModelPicker>` + new-conversation; Redis `liv:config:active_model` via new `getActiveModel`/`setActiveModel` tRPC procedures ✅ CODE-COMPLETE 2026-05-23
+- [x] 199-08-PLAN.md — (no separate close-out commit — Phase 199 close-out folded into Phase 200-08 deploy + verification since both shared the same Mini PC update.sh run on 2026-05-23T02:18Z)
 
 **Invariants carried forward:** Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (INV-199-01); B-02 mastra/index.ts FINAL (INV-199-02); W-02 Reject=tool-result sentinel (INV-199-03); D-NO-NEW-DEPS strict (INV-199-04); Phase 198 generative-UI renderer freeze (INV-199-05); T-197-04-01 LIV_AI_SYSTEM_PROMPT 4 substrings (INV-199-06); P198 hot-fix `convertToModelMessages` await preserved (INV-199-07); 3 built-in tools `weather` + `luse_list_windows` + `get_current_time` preserved (INV-199-08); pre-commit sacred-sha hook PASS (INV-199-09).
 
 **Deferred to Phase 200+:** MCP server install ops (Luse + bytebot), embedder for semanticRecall, voice, PDF attachment, title-generation, multi-agent routing.
+
+---
+
+### Phase 200: Liv AI UI Complete Redesign + Computer-Use Built-in Tools — 🟡 CODE-COMPLETE + DEPLOYED 2026-05-23T02:18Z (operator UAT pending)
+
+**Goal:** Adopt the canonical assistant-ui shadcn registry (`r.assistant-ui.com/*.json`) as the structural baseline; rebuild composer with `@` mention picker + `/` slash adapter (canonical `unstable_use*Adapter` form) + inline model picker (Grok pattern, collapses to icon while typing); add hover-visible Copy button via `ActionBarPrimitive`; fix the New Conversation runtime sync bug via single-line `await runtime.threads.switchToNewThread()` in `thread-list-adapter.ts`; DELETE the imperative `SlashCommandInterceptor` + the `header-bar.tsx` strip; switch all UI text to English (`LIV_AI_TAGLINE` → "Liv AI — your operating system's assistant."). In parallel: Phase 200-C ships 7 `luse_computer_*` built-in tools (screenshot via scrot, click_mouse + type_text + press_keys + drag_mouse via xdotool, application via wmctrl/gtk-launch, paste_text via xsel+xdotool).
+
+**Source directive (operator):** continuation of Phase 199 — operator wanted the assistant-ui shadcn registry as the visible baseline + `@`/`/` pickers + the Grok-style inline model picker; old header-bar to go away.
+
+**Depends on:** Phase 199 (Mastra dynamic-model + `LIV_AI_MODELS` registry + Redis active-model persistence + window 1180×820 — all KEPT intact; Phase 200 is layered on top, additive UI-only).
+
+**Wave:** Wave 0 = dep audit + registry port (200-01 + 200-02); Wave 1 = `@` + `/` adapters + composer rebuild (200-03 + 200-04 + 200-05); Wave 2 = canonical Thread mount + Copy + runtime-sync fix + deploy (200-06 + 200-07 + 200-08). Parallel track: 200-C (computer-use built-ins, file-disjoint from UI plans).
+
+**Plans:** 8 UI plans + 7 built-in-tool sub-plans (200-C-1..200-C-7), 17 commits total `e592465c..d032e63e`; sacred SHA preserved 17/17.
+
+Plans (UI track):
+- [x] 200-01-PLAN.md — Wave-0 dep audit + shadcn avatar/collapsible primitives ✅ CODE-COMPLETE 2026-05-23 — 1 commit `e592465c`; D-NO-NEW-DEPS confirmed (the 4 candidate deps were already present)
+- [x] 200-02-PLAN.md — Port 9 canonical assistant-ui shadcn registry files (verbatim + composerSlot prop) ✅ CODE-COMPLETE 2026-05-23 — 2 commits `b198c5d6` + `4354fe41`
+- [x] 200-03-PLAN.md — `@` mention adapter + static tool catalog (7 items) ✅ CODE-COMPLETE 2026-05-23 — 1 commit `4b9715ab`
+- [x] 200-04-PLAN.md — `/` slash adapter + delete imperative `SlashCommandInterceptor` ✅ CODE-COMPLETE 2026-05-23 — 1 commit `4648a770`
+- [x] 200-05-PLAN.md — Composer rebuild with inline model picker + `@`/`+` popovers; DELETE `header-bar.tsx` ✅ CODE-COMPLETE 2026-05-23 — 1 commit `dd90567b`
+- [x] 200-06-PLAN.md — Mount canonical Thread with `LivAiComposer` slot + English `LIV_AI_TAGLINE` + ActionBar Copy verified ✅ CODE-COMPLETE 2026-05-23 — 2 commits `f71b76d7` + `33af07c4`
+- [x] 200-07-PLAN.md — New Conversation runtime sync via `runtime.threads.switchToNewThread()` (Option A) ✅ CODE-COMPLETE 2026-05-23 — 2 commits `2ecd37c8` + `d032e63e`; 18/18 vitest PASS in-scope (7 thread-list-adapter + 11 assistant)
+- [x] 200-08-PLAN.md — Mini PC deploy + executor-run smoke tests + 200-VERIFICATION.md + STATE/ROADMAP flip ✅ CODE-COMPLETE + DEPLOYED 2026-05-23T02:18Z (operator browser UAT pending; `status: human_needed` in 200-VERIFICATION.md)
+
+Plans (200-C parallel built-in tools — file-disjoint from UI plans, INV-200-09):
+- [x] 200-C-1 — `luse_computer_screenshot` via scrot — commit `959ce84f`
+- [x] 200-C-2 — `luse_computer_click_mouse` via xdotool — commit `131e8639`
+- [x] 200-C-3 — `luse_computer_type_text` via xdotool — commit `0d19e109`
+- [x] 200-C-4 — `luse_computer_press_keys` via xdotool — commit `8c858afc`
+- [x] 200-C-5 — `luse_computer_application` via wmctrl/gtk-launch — commit `3b002676`
+- [x] 200-C-6 — `luse_computer_drag_mouse` via xdotool — commit `b9036b37`
+- [x] 200-C-7 — `luse_computer_paste_text` via xsel+xdotool — commit `b9df0c0f`
+
+**Commits:** `e592465c..d032e63e` exclusive of base (17 commits — 10 UI + 7 200-C built-in tools).
+**Sacred SHA:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved 17/17 (per-commit pre-commit hook `[sacred-sha] PASS: 20 files verified`); Mini PC post-deploy git-blob recompute PASS.
+**Live HTTP smoke tests (executor-run on Mini PC port 8080):** `POST /chat/livAi` HTTP 200 with real SSE stream + `updateWorkingMemory` tool firing + Turkish-response rule active; `GET /trpc/mastra.agent.listAvailableModels` HTTP 200 returning 3 models (grok-4.20-0309-non-reasoning + grok-4.20-0309-reasoning + grok-4.3); `GET /trpc/mastra.agent.getActiveModel` HTTP 200 returning `grok-4.3` (Redis-persisted from earlier session).
+**Bundle integrity on Mini PC `/opt/livos/packages/ui/dist/assets/liv-ai-content-f784580e.js`:** 0 `SlashCommandInterceptor` (Acceptance #15 PASS), 0 `LivAiHeaderBar` (Acceptance #14 PASS), 1 `your operating system's assistant` (Acceptance #5 PASS), 0 Turkish substrings (INV-200-05 PASS).
+**Service status post-deploy + bruce-ownership patch:** `systemctl is-active livos liv-core liv-worker liv-memory` → 4× `active`; 6 boot markers present (197-01 + 197-05 + 198-01 + 199-02 + 199-03 + 199-07).
+**Invariants:** INV-200-01 sacred SHA preserved (PASS 17/17); INV-200-02 `mastra/index.ts` byte-identical B-02 lock (PASS); INV-200-03 P198 generative-UI renderers FROZEN (PASS — `tool-renderers.tsx` not in any P200 diff); INV-200-04 D-NO-NEW-DEPS strict (PASS — only 200-01 audit allowed, none added since); INV-200-05 English UI only (PASS — bundle grep zero Turkish); INV-200-06 `SLASH_COMMANDS` catalog preserved (PASS — 4 IDs `help`/`clear`/`screenshot`/`search`); INV-200-07 4-task per plan max (PASS); INV-200-08 New Conversation fix locus = `thread-list-adapter.ts` only (PASS); INV-200-09 200-C parallel-safe (PASS — file-disjoint).
+**Carry-overs to Phase 201:** Option B `switchToThread(oldId)` runtime sync via `ExternalStoreThreadListAdapter` + `mastra.agent.threads.getHistory` tRPC route (D-200-20 deferred); live MCP-bridge tool discovery in `@` mention catalog (D-200-08 static-list deferred); Phase 197 `mastra.agent.*` tRPC namespace full removal (one-release grace expiring); `update.sh` enhancement to add `chown -R bruce:bruce /opt/livos /opt/liv` before `systemctl restart` (recurring P198/P199/P200 ownership patch).
+**UAT walk template:** 10 steps in `.planning/phases/200-liv-ai-ui-redesign/200-VERIFICATION.md` § B (frontmatter `status: human_needed` until operator walks). Phase 200 ROADMAP heading flips 🟡 → 🟢 CODE-COMPLETE + LIVE + OPERATOR-UAT-PASSED when operator returns and ticks all 10 rows PASS.
+
+**Deferred to Phase 201:** Option B sidebar-click-old-thread history reload (D-200-20); live MCP tool discovery in `@` catalog; `update.sh` chown hook; full removal of P197 `mastra.agent.*` namespace deprecation; per-thread model persistence; voice/TTS; PDF attachment adapter.
 
 ---
 
