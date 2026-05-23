@@ -16,6 +16,17 @@ import { ArtifactStore } from "./artifact-store.js";
 import { lintOpenUICode, type LintReport } from "./lint-openui.js";
 import { NotificationStore } from "./notification-store.js";
 import { UploadStore } from "./upload-store.js";
+// Phase 203-06 — LivOS-side tool proxies. luse-proxy registers the 9 luse_*
+// tools as openclaw gateway tools (D-203-13); builtin-proxy registers the 11
+// LivOS built-in tools (weather, get_current_time, ui_render, 8 luse_*)
+// per D-203-14. Both forward to livinityd's /openclawos/plugin-rpc route via
+// the shared livinityd-rpc HTTP client; destructive tools route through the
+// ApprovalManager HITL gate (INV-203-04).
+import { registerLuseProxyTools, LUSE_TOOL_COUNT } from "./luse-proxy.js";
+import {
+  registerBuiltinProxyTools,
+  BUILTIN_TOOL_COUNT,
+} from "./builtin-proxy.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -840,6 +851,41 @@ export default definePluginEntry({
       }),
       { name: "app_update" },
     );
+
+    // ── Phase 203-06 — LivOS-side tool proxies (luse + built-ins) ──────────
+    //
+    // 9 luse_* tools (D-203-13) + 11 LivOS built-ins (D-203-14) registered as
+    // openclaw gateway tools. Each tool's `execute` forwards over local HTTP to
+    // livinityd's `/openclawos/plugin-rpc` route. Destructive tools fire the
+    // existing ApprovalManager HITL gate via `approval.request` RPC
+    // (INV-203-04). Total tool surface after this block: 9 upstream + 9 luse +
+    // 11 built-in = 29 tools (matches the 203-01 SPIKE prediction of 29).
+    //
+    // NOTE: there is intentional overlap between the luse_* set (9 entries)
+    // and the built-in set (6 luse_* entries) — the built-in catalog is the
+    // canonical "11 LivOS tools" surface for the openclaw UI; luse-proxy is
+    // the broader stop-gap until the gateway's tool picker is rebuilt
+    // (Plan 203-09 territory). For Phase 203-06 we register BOTH to satisfy
+    // the explicit D-203-13 + D-203-14 must-haves; the gateway de-dupes by
+    // name at registration time (the second registration of an existing name
+    // is a no-op per the spike SPIKE.md §Tool registration API).
+    try {
+      const luseRegistered = registerLuseProxyTools(api, {
+        logger: { info: (msg) => api.logger.info(msg) },
+      });
+      const builtinRegistered = registerBuiltinProxyTools(api, {
+        logger: { info: (msg) => api.logger.info(msg) },
+      });
+      api.logger.info(
+        `[openclaw-os-plugin] Phase 203-06 — registered ${luseRegistered.length} luse_* tools + ${builtinRegistered.length} built-in tools (expected ${LUSE_TOOL_COUNT} + ${BUILTIN_TOOL_COUNT})`,
+      );
+    } catch (livosToolsErr) {
+      api.logger.warn(
+        `[openclaw-os-plugin] Phase 203-06 — LivOS tool proxy registration failed: ${
+          livosToolsErr instanceof Error ? livosToolsErr.message : String(livosToolsErr)
+        }`,
+      );
+    }
 
     api.logger.info("[openclaw-os-plugin] all tools registered");
 
