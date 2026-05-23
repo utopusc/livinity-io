@@ -42,6 +42,32 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 ;(globalThis as {IS_REACT_ACT_ENVIRONMENT?: boolean}).IS_REACT_ACT_ENVIRONMENT =
 	true
 
+// Phase 199-07 — radix DropdownMenu (via LivAiModelPicker inside the new
+// header bar) needs PointerEvent + Pointer-capture / scrollIntoView shims under
+// jsdom. Mirrors the model-picker.test.tsx + header-bar.test.tsx pattern.
+if (typeof (globalThis as {PointerEvent?: unknown}).PointerEvent === 'undefined') {
+	class PointerEventShim extends MouseEvent {
+		pointerType: string
+		constructor(type: string, props: PointerEventInit = {}) {
+			super(type, props)
+			this.pointerType = props.pointerType ?? 'mouse'
+		}
+	}
+	;(globalThis as {PointerEvent?: unknown}).PointerEvent = PointerEventShim
+}
+if (!HTMLElement.prototype.hasPointerCapture) {
+	HTMLElement.prototype.hasPointerCapture = () => false
+}
+if (!HTMLElement.prototype.releasePointerCapture) {
+	HTMLElement.prototype.releasePointerCapture = () => {}
+}
+if (!HTMLElement.prototype.setPointerCapture) {
+	HTMLElement.prototype.setPointerCapture = () => {}
+}
+if (!HTMLElement.prototype.scrollIntoView) {
+	HTMLElement.prototype.scrollIntoView = () => {}
+}
+
 // ─── Mutable mock state ─────────────────────────────────────────────────
 // Updated per-test to drive AuiIf branching.
 let mockState = {
@@ -141,10 +167,18 @@ vi.mock('@assistant-ui/react', () => {
 })
 
 // ─── Mock @assistant-ui/react-ai-sdk ────────────────────────────────────
+//
+// Phase 199-07 — expose the AssistantChatTransport `body` callback so Test 6
+// can invoke it and assert the {threadId, config:{modelName}} envelope.
+// `lastTransportOpts` is reassigned per useChatRuntime() call so each render
+// captures the current body function and selectedModel closure.
 
+let lastTransportOpts: {body?: () => unknown} | null = null
 vi.mock('@assistant-ui/react-ai-sdk', () => ({
 	AssistantChatTransport: class AssistantChatTransport {
-		constructor(public opts: unknown) {}
+		constructor(public opts: {body?: () => unknown}) {
+			lastTransportOpts = opts
+		}
 	},
 	useChatRuntime: () => ({}),
 }))
@@ -152,6 +186,13 @@ vi.mock('@assistant-ui/react-ai-sdk', () => ({
 // ─── Mock @/trpc/trpc (matches thread-list-adapter.test.tsx pattern) ───
 
 const mockMutateAsync = vi.fn(async () => ({ok: true}))
+// Phase 199-07 — getActiveModel returns whatever mockActiveModelData is at
+// render time; setActiveModel records every mutate() call so Test 8 can assert
+// the call shape. Both default to a "loading / no-op" baseline that Test 7
+// flips per-case.
+let mockActiveModelData: {modelName: string} | undefined
+const mockActiveModelRefetch = vi.fn()
+const mockSetActiveModelMutate = vi.fn()
 vi.mock('@/trpc/trpc', () => ({
 	trpcReact: {
 		mastra: {
@@ -170,6 +211,20 @@ vi.mock('@/trpc/trpc', () => ({
 							isPending: false,
 						}),
 					},
+				},
+				// Phase 199-07 wiring.
+				getActiveModel: {
+					useQuery: () => ({
+						data: mockActiveModelData,
+						isLoading: false,
+						refetch: mockActiveModelRefetch,
+					}),
+				},
+				setActiveModel: {
+					useMutation: (_opts?: {onSuccess?: () => void}) => ({
+						mutate: mockSetActiveModelMutate,
+						isPending: false,
+					}),
 				},
 			},
 		},
@@ -207,6 +262,10 @@ beforeEach(() => {
 		composer: {isEmpty: true},
 	}
 	mockMutateAsync.mockClear()
+	mockActiveModelData = undefined
+	mockActiveModelRefetch.mockClear()
+	mockSetActiveModelMutate.mockClear()
+	lastTransportOpts = null
 	container = document.createElement('div')
 	document.body.appendChild(container)
 	root = createRoot(container)
@@ -335,5 +394,118 @@ describe('Assistant — Phase 199-05 AuiIf-branched layout', () => {
 			'List my open windows',
 			'What can you do?',
 		])
+	})
+})
+
+// ─── Phase 199-07 — header bar + Redis-backed selectedModel wiring ───────
+
+describe('Assistant — Phase 199-07 header bar + selectedModel wiring', () => {
+	it('Test 6: header bar mounted ABOVE the 2-column layout (DOM order: header → flex-1)', () => {
+		mockState.thread.isEmpty = true
+		mockActiveModelData = {modelName: 'grok-4.20-0309-fast'}
+		act(() => {
+			root.render(<Assistant />)
+		})
+
+		const header = document.querySelector(
+			'[data-testid="liv-ai-header-bar"]',
+		) as HTMLElement | null
+		expect(header).not.toBeNull()
+		// Header must be a sibling preceding the 2-column flex (role="application").
+		const appShell = document.querySelector(
+			'[role="application"][aria-label="Liv AI chat"]',
+		) as HTMLElement | null
+		expect(appShell).not.toBeNull()
+		// DOM order check: header comes before appShell in document order.
+		const order = header!.compareDocumentPosition(appShell!)
+		// Node.DOCUMENT_POSITION_FOLLOWING === 4
+		expect(order & 4).toBe(4)
+	})
+
+	it('Test 7: getActiveModel hydration — picker trigger reflects Redis value after effect', async () => {
+		mockState.thread.isEmpty = true
+		mockActiveModelData = {modelName: 'grok-4.3'}
+		await act(async () => {
+			root.render(<Assistant />)
+		})
+		const trigger = document.querySelector(
+			'[data-testid="liv-ai-model-picker-trigger"]',
+		)
+		expect(trigger).not.toBeNull()
+		expect(trigger!.textContent).toContain('Grok 4.3')
+	})
+
+	it('Test 8: default model — picker shows Grok 4.20 Fast when getActiveModel returns undefined', () => {
+		mockState.thread.isEmpty = true
+		mockActiveModelData = undefined
+		act(() => {
+			root.render(<Assistant />)
+		})
+		const trigger = document.querySelector(
+			'[data-testid="liv-ai-model-picker-trigger"]',
+		)
+		expect(trigger).not.toBeNull()
+		expect(trigger!.textContent).toContain('Grok 4.20 Fast')
+	})
+
+	it('Test 9: transport body callback envelope — body() returns {threadId, config:{modelName}}', async () => {
+		mockState.thread.isEmpty = true
+		mockActiveModelData = {modelName: 'grok-4.3'}
+		await act(async () => {
+			root.render(<Assistant />)
+		})
+		expect(lastTransportOpts).not.toBeNull()
+		expect(typeof lastTransportOpts!.body).toBe('function')
+		const body = lastTransportOpts!.body!()
+		expect(body).toMatchObject({
+			config: {modelName: 'grok-4.3'},
+		})
+		// threadId is uuid-shaped from useThreadListAdapter (non-empty string).
+		expect(typeof (body as {threadId?: unknown}).threadId).toBe('string')
+		expect((body as {threadId: string}).threadId.length).toBeGreaterThan(0)
+	})
+
+	it('Test 10: clicking "+ New conversation" in header fires onSwitchToNewThread (mutates threadId in body envelope)', async () => {
+		mockState.thread.isEmpty = true
+		mockActiveModelData = {modelName: 'grok-4.20-0309-fast'}
+		await act(async () => {
+			root.render(<Assistant />)
+		})
+		// Capture body envelope threadId BEFORE clicking new-thread.
+		const before = lastTransportOpts!.body!() as {threadId: string}
+		const beforeId = before.threadId
+		expect(typeof beforeId).toBe('string')
+
+		const newBtn = document.querySelector(
+			'[data-testid="liv-ai-header-new-thread"]',
+		) as HTMLButtonElement | null
+		expect(newBtn).not.toBeNull()
+		await act(async () => {
+			newBtn!.click()
+		})
+		// After click, the same body callback (still pointing at the live closure)
+		// returns a NEW threadId — proves onSwitchToNewThread fired and the
+		// useThreadListAdapter state rotated.
+		const after = lastTransportOpts!.body!() as {threadId: string}
+		expect(after.threadId).not.toBe(beforeId)
+	})
+
+	it('Test 11: source-import surrogate — assistant.tsx imports LivAiHeaderBar from ./header-bar AND mounts it', async () => {
+		const fs = await import('node:fs/promises')
+		const path = await import('node:path')
+		const assistantPath = path.resolve(__dirname, './assistant.tsx')
+		const src = await fs.readFile(assistantPath, 'utf-8')
+		// Import literal proves the new file is referenced.
+		expect(src).toMatch(/from ['"]\.\/header-bar['"]/)
+		// JSX literal proves the component is actually mounted in the tree.
+		expect(src).toMatch(/<LivAiHeaderBar\b/)
+		// body envelope literal proves Plan 199-07 extended the callback shape
+		// per D-199-09 (config.modelName threaded through).
+		expect(src).toMatch(/config:\s*\{modelName:\s*selectedModel\}/)
+		// tRPC wire-up literals — proves Plan 199-07 Tasks 1 + 3 are integrated.
+		// Match `.useQuery` / `.useMutation` after the procedure name, allowing
+		// optional-chaining `?.` between (the codebase trpcAny pattern uses ?.).
+		expect(src).toMatch(/getActiveModel\??\.useQuery/)
+		expect(src).toMatch(/setActiveModel\??\.useMutation/)
 	})
 })

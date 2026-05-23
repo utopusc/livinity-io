@@ -74,12 +74,16 @@ import {
 	AssistantChatTransport,
 	useChatRuntime,
 } from '@assistant-ui/react-ai-sdk'
-import {useEffect, useRef} from 'react'
+import {useEffect, useRef, useState} from 'react'
+
+import {trpcReact} from '@/trpc/trpc'
 
 import {createImageAttachmentAdapter} from './attachment-adapter'
 import {Composer} from './composer'
 import {DevToolsMount} from './devtools-mount'
 import {LIV_AI_TAGLINE} from './empty-state'
+import {LivAiHeaderBar} from './header-bar'
+import {DEFAULT_LIV_AI_MODEL_ID, type LivAiModelId} from './models'
 import {parseSlashCommand} from './slash-commands'
 import {SuggestedPrompts} from './suggested-prompts'
 import {useThreadListAdapter} from './thread-list-adapter'
@@ -229,6 +233,46 @@ export function Assistant() {
 		onDelete,
 	} = useThreadListAdapter()
 
+	// Phase 199-07 — selectedModel state + Redis hydration.
+	//
+	// Initial value: DEFAULT_LIV_AI_MODEL_ID (Grok 4.20 Fast, D-199-07) so the
+	// header bar paints with a sensible default during the first React render
+	// before the getActiveModel useQuery resolves.
+	//
+	// Hydration: useEffect listens to `activeModelQuery.data?.modelName` and
+	// pushes it into `selectedModel` state when the query resolves with a
+	// non-empty value. Backend `coerceModel()` guarantees this value is one of
+	// the 4 allow-listed ids, so the cast to LivAiModelId is sound (T-199-02-01
+	// + T-199-02-02 mitigation lives backend-side per D-199-24).
+	//
+	// onChange: handleModelChange fires the setActiveModel mutation which
+	// writes `liv:config:active_model` in Redis (D-199-10). Optimistic update —
+	// local state flips immediately so the header bar reflects the choice
+	// without waiting for the round trip; onSuccess refetches the query for
+	// ground-truth re-hydration (defense against concurrent operator updates,
+	// T-199-07-05).
+	const [selectedModel, setSelectedModel] = useState<LivAiModelId>(
+		DEFAULT_LIV_AI_MODEL_ID,
+	)
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const trpcAny = trpcReact as any
+	const activeModelQuery = trpcAny.mastra?.agent?.getActiveModel?.useQuery?.()
+	useEffect(() => {
+		const next = activeModelQuery?.data?.modelName as
+			| LivAiModelId
+			| undefined
+		if (next) {
+			setSelectedModel(next)
+		}
+	}, [activeModelQuery?.data?.modelName])
+	const setActiveModelMutation = trpcAny.mastra?.agent?.setActiveModel?.useMutation?.({
+		onSuccess: () => activeModelQuery?.refetch?.(),
+	})
+	const handleModelChange = (next: LivAiModelId) => {
+		setSelectedModel(next)
+		setActiveModelMutation?.mutate?.({modelName: next})
+	}
+
 	const runtime = useChatRuntime({
 		transport: new AssistantChatTransport({
 			// Caddy reverse-proxy on Mini PC forwards /chat/* to livinityd:8080
@@ -243,10 +287,14 @@ export function Assistant() {
 			// Phase 199-05 — body switched from static object → callback form
 			// (RESEARCH B6). The function closure captures `currentThreadId`
 			// fresh per request so thread switches in the sidebar always
-			// thread the right Memory scope into livinityd. Plan 199-07
-			// extends this callback with `config: {modelName: selectedModel}`
-			// once <LivAiModelPicker /> is mounted in the header bar.
-			body: () => ({threadId: currentThreadId}),
+			// thread the right Memory scope into livinityd.
+			//
+			// Phase 199-07 — extended with `config: {modelName: selectedModel}`
+			// (D-199-09). The backend chat-route (Plan 199-03) reads
+			// `config.modelName` and builds a RequestContext that the agent's
+			// dynamic-model resolver (provider-router.resolveAgentModel) consumes
+			// per request. Allows mid-conversation model switching (UAT step 9).
+			body: () => ({threadId: currentThreadId, config: {modelName: selectedModel}}),
 		}),
 		// Plan 198-06 — image-only attachment adapter. Composer Attachment
 		// surface accepts image/png|jpeg|webp|gif drag-drop or click; the
@@ -284,19 +332,39 @@ export function Assistant() {
 			 */}
 			<DevToolsMount />
 			{/*
-			 * Plan 198-07 — a11y wrapper. `role="application"` scopes the
-			 * entire Liv AI chat surface as a single interactive application
-			 * for screen readers (NVDA/JAWS/VoiceOver), so keystrokes are
-			 * passed through to the composer instead of being intercepted
-			 * as document-navigation commands. `aria-label="Liv AI chat"`
-			 * provides the spoken landmark name. (Plan 198-07 must_haves
-			 * truth #5 — verified via Plan 198-08 a11y audit.)
+			 * Phase 199-07 — top-level flex-column shell. <LivAiHeaderBar> sits
+			 * above the 2-column flex layout (D-199-21) and reuses the existing
+			 * useThreadListAdapter().onSwitchToNewThread handler for the
+			 * "+ New conversation" button (no duplicate handler — single source
+			 * of truth, header sidebar + landmark stay in sync). selectedModel
+			 * state hydrates from Redis via trpc.mastra.agent.getActiveModel
+			 * (Plan 199-07 Task 1) and writes back via setActiveModel.
 			 */}
-			<div
-				role='application'
-				aria-label='Liv AI chat'
-				className='flex h-full overflow-hidden'
-			>
+			<div className='flex h-full flex-col overflow-hidden'>
+				<LivAiHeaderBar
+					selectedModel={selectedModel}
+					onModelChange={handleModelChange}
+					onNewThread={onSwitchToNewThread}
+				/>
+				{/*
+				 * Plan 198-07 — a11y wrapper. `role="application"` scopes the
+				 * entire Liv AI chat surface as a single interactive application
+				 * for screen readers (NVDA/JAWS/VoiceOver), so keystrokes are
+				 * passed through to the composer instead of being intercepted
+				 * as document-navigation commands. `aria-label="Liv AI chat"`
+				 * provides the spoken landmark name. (Plan 198-07 must_haves
+				 * truth #5 — verified via Plan 198-08 a11y audit.)
+				 *
+				 * Phase 199-07 — wrapped inside an outer flex-column with the
+				 * new header bar above; this div retains its 2-column shape but
+				 * the outer flex-1 lets it consume remaining vertical space
+				 * below the header.
+				 */}
+				<div
+					role='application'
+					aria-label='Liv AI chat'
+					className='flex flex-1 overflow-hidden'
+				>
 				{/* Plan 198-05 — Left sidebar: ThreadList */}
 				<aside
 					aria-label='Conversation history'
@@ -398,7 +466,10 @@ export function Assistant() {
 						</AuiIf>
 					</ThreadPrimitive.Root>
 				</main>
+				</div>
+				{/* /role='application' (Phase 199-07 nested under header-bar shell) */}
 			</div>
+			{/* /flex h-full flex-col — Phase 199-07 header-bar shell */}
 		</AssistantRuntimeProvider>
 	)
 }
