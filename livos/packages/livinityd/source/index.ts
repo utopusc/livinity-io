@@ -171,6 +171,13 @@ import {createMastraRouter} from './modules/server/trpc/mastra-router.js'
 import {AgentScheduler} from './modules/mastra/scheduler.js'
 import {createAgentRouter} from './modules/server/trpc/agent-router.js'
 import {createAgentTaskRouter} from './modules/server/trpc/agent-task-router.js'
+// Phase 203-04 — OpenUIAppsRepository + openclawos.apps.* tRPC router.
+// Drizzle-backed CRUD against the Postgres `livos_openui_apps` table
+// (migration 0003); consumed by the rebranded liv-claw plugin's app-store
+// HTTP client (livos/packages/liv-claw-os/packages/claw-plugin/src/
+// app-store.ts) in place of the upstream fs.writeJson backend.
+import {OpenUIAppsRepository} from './modules/openclawos/openui-apps-repository.js'
+import {createOpenclawosAppsRouter} from './modules/server/trpc/openclawos-router.js'
 // Phase 202-07 — MCP external server config sub-router (`mcp.config.*`).
 // Backed by Redis hash `liv:mcp:config` (D-202-12). Boot wire-up builds the
 // real factory with `this.ai.redis` so the /settings → MCP tab can CRUD
@@ -1392,6 +1399,44 @@ export default class Livinityd {
 				)
 			}
 
+			// Phase 203-04 — openclawos.apps.* tRPC router. Reuses the same
+			// PostgreSQL pool used by AgentRepository (D-202-01 — same `livos`
+			// DB). Failure here is non-fatal — the empty-injection stub
+			// returns OPENUI_REPO_UNAVAILABLE so the plugin's app-store HTTP
+			// client surfaces a clean error rather than hanging.
+			let openclawosAppsRouterProductionInstance:
+				| ReturnType<typeof createOpenclawosAppsRouter>
+				| undefined
+			try {
+				const databaseUrl = process.env.DATABASE_URL
+				if (databaseUrl) {
+					const {Pool} = await import('pg')
+					const {drizzle} = await import('drizzle-orm/node-postgres')
+					const openuiPool = new Pool({connectionString: databaseUrl})
+					const openuiDb = drizzle(openuiPool)
+					const openuiRepo = new OpenUIAppsRepository(openuiDb)
+					openclawosAppsRouterProductionInstance = createOpenclawosAppsRouter({
+						repo: openuiRepo,
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) => this.logger.error(msg, err),
+						},
+					})
+					webappLogger.info(
+						'Phase 203-04 — openclawos.apps.* tRPC router wired (livos_openui_apps Postgres CRUD; consumed by liv-claw plugin HTTP client)',
+					)
+				} else {
+					this.logger.error(
+						'Phase 203-04 — DATABASE_URL missing; openclawos.apps.* falls back to OPENUI_REPO_UNAVAILABLE stub until next restart',
+					)
+				}
+			} catch (openuiRouterErr) {
+				this.logger.error(
+					'Phase 203-04 — openclawos.apps.* router factory failed; falls back to OPENUI_REPO_UNAVAILABLE stub until next restart',
+					openuiRouterErr,
+				)
+			}
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
@@ -1400,6 +1445,7 @@ export default class Livinityd {
 				agents: agentsRouterProductionInstance,
 				agentTasks: agentTasksRouterProductionInstance,
 				mcpConfig: mcpConfigRouterProductionInstance,
+				openclawosApps: openclawosAppsRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(
