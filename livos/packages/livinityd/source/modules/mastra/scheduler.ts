@@ -45,11 +45,30 @@
  *                file never imports LivOSMastra directly.
  */
 
+import {EventEmitter} from 'node:events'
 import cron, {type ScheduledTask} from 'node-cron'
 import type {Redis} from 'ioredis'
 
 import type {AgentRegistry} from './agents/agent-registry.js'
 import type {AgentRepository} from './agents/agent-repository.js'
+
+/**
+ * Phase 202-04 — Live status event emitted on the scheduler's `statusEvents`
+ * EventEmitter. Consumed by the `/agents/status/stream` SSE route
+ * (routes-agents-sse.ts) so every connected browser sees runs flip from
+ * `running` to `idle` without polling.
+ *
+ * D-202-08 — SSE transport, not WebSocket. Frontend uses native EventSource.
+ */
+export interface AgentStatusEvent {
+	agentId: string
+	state: 'idle' | 'running' | 'scheduled'
+	threadId?: string
+	triggeredBy?: TaskThreadMetadata['triggeredBy']
+	at: string
+	lastRunAt?: string
+	error?: string
+}
 
 export interface SchedulerLogger {
 	info: (msg: string) => void
@@ -103,7 +122,41 @@ export interface TaskThreadMetadata extends Record<string, unknown> {
 export class AgentScheduler {
 	private tasks = new Map<string, ScheduledTask>()
 
-	constructor(private deps: SchedulerDeps) {}
+	/**
+	 * Phase 202-04 — public EventEmitter that the `/agents/status/stream` SSE
+	 * route subscribes to. Emits a single event channel: `'status'` with an
+	 * `AgentStatusEvent` payload. Listener cap raised to 64 because each open
+	 * browser tab + the executor smoke tests can subscribe concurrently.
+	 *
+	 * The emitter is process-local; multi-replica fan-out is out of scope for
+	 * v202 (deferred to Phase 220+ Redis pub-sub design). Single-host
+	 * livinityd boot reads from this emitter directly.
+	 */
+	readonly statusEvents: EventEmitter = new EventEmitter()
+
+	constructor(private deps: SchedulerDeps) {
+		// Allow many concurrent SSE subscribers (per browser tab + smoke tests)
+		// without Node's "possible EventEmitter memory leak" warning. 64 is a
+		// safe cap for a single-host LivOS deployment.
+		this.statusEvents.setMaxListeners(64)
+	}
+
+	/**
+	 * Internal helper — emit a single status event. Wrapped to keep the call
+	 * sites in runOnce + drainAgentStream tight + to add the `at` timestamp
+	 * uniformly. Never throws; emitter errors are swallowed (a misbehaving
+	 * subscriber MUST NOT brick the scheduler).
+	 */
+	private emitStatus(event: AgentStatusEvent): void {
+		try {
+			this.statusEvents.emit('status', event)
+		} catch (err) {
+			this.deps.logger.warn(
+				'Phase 202-04 scheduler — statusEvents listener threw; swallowed',
+				err,
+			)
+		}
+	}
 
 	/**
 	 * Boot-time hydration. Calls `refresh()` once. Subsequent CRUD mutations
@@ -273,8 +326,20 @@ export class AgentScheduler {
 				? opts.overridePrompt
 				: row.instructions
 
+		// Phase 202-04 — emit `running` BEFORE the background drain so any
+		// connected SSE subscriber sees the state flip immediately after the
+		// tRPC mutation returns the threadId. The drain emits `idle` (or
+		// `error`) when it finishes.
+		this.emitStatus({
+			agentId: row.id,
+			state: 'running',
+			threadId,
+			triggeredBy,
+			at: triggeredAt,
+		})
+
 		// Fire-and-forget the agent stream. Caller does not await text drain.
-		void this.drainAgentStream(agent, promptText, threadId, row.name)
+		void this.drainAgentStream(agent, promptText, threadId, row.id, row.name)
 
 		return threadId
 	}
@@ -322,8 +387,10 @@ export class AgentScheduler {
 		agent: unknown,
 		prompt: string,
 		threadId: string,
+		agentId: string,
 		agentName: string,
 	): Promise<void> {
+		let drainError: unknown = null
 		try {
 			const streamable = agent as {
 				stream(
@@ -355,10 +422,28 @@ export class AgentScheduler {
 				}
 			}
 		} catch (err) {
+			drainError = err
 			this.deps.logger.warn(
 				`Phase 202-03 scheduler — agent ${agentName} run failed (threadId=${threadId})`,
 				err,
 			)
+		} finally {
+			// Phase 202-04 — flip the SSE channel back to `idle` once the
+			// background drain resolves (success OR failure). `lastRunAt` is
+			// the timestamp the run finished, which the AgentCard surfaces
+			// under the status badge. `error` carries the failure message
+			// when the drain threw so the dashboard can flag failed runs.
+			const finishedAt = new Date().toISOString()
+			this.emitStatus({
+				agentId,
+				state: 'idle',
+				threadId,
+				at: finishedAt,
+				lastRunAt: finishedAt,
+				...(drainError
+					? {error: drainError instanceof Error ? drainError.message : String(drainError)}
+					: {}),
+			})
 		}
 	}
 

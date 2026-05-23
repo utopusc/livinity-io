@@ -165,6 +165,10 @@ import {createMastraRouter} from './modules/server/trpc/mastra-router.js'
 import {AgentScheduler} from './modules/mastra/scheduler.js'
 import {createAgentRouter} from './modules/server/trpc/agent-router.js'
 import {createAgentTaskRouter} from './modules/server/trpc/agent-task-router.js'
+// Phase 202-04 — SSE endpoint that pushes live agent status to the
+// /agents dashboard. Subscribes to the same scheduler statusEvents
+// EventEmitter that runOnce / drainAgentStream emit on.
+import {createAgentsStatusSseHandler} from './modules/server/routes-agents-sse.js'
 // Phase 198-01 — Mastra chatRoute Express handler factory. Bridges the
 // assistant-ui frontend (Plan 198-02) to livOSMastra.agents.livAi via
 // AI-SDK-format SSE. Mounted at POST /chat/:agentId behind the same JWT
@@ -1252,6 +1256,34 @@ export default class Livinityd {
 				this.logger.error(
 					'Phase 198-01 — chatRoute mount failed; /chat/livAi unavailable until next restart',
 					chatRouteErr,
+				)
+			}
+
+			// Phase 202-04 — GET /agents/status/stream SSE mount. Subscribes
+			// to livOSMastra.scheduler.statusEvents (set up in 202-03 boot +
+			// extended here). Skipped when the scheduler is null (registry
+			// init failed) — the route then 404s, which is the same surface
+			// as a livinityd restart pending. Auth gate identical to the
+			// /chat/:agentId mount above (Bearer header OR LIVINITY_SESSION).
+			try {
+				if (livOSMastra?.scheduler && this.server.app) {
+					const sseHandler = createAgentsStatusSseHandler({
+						scheduler: livOSMastra.scheduler,
+						verifyToken: (token) => this.server.verifyToken(token),
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) => this.logger.error(msg, err),
+						},
+					})
+					this.server.app.get('/agents/status/stream', sseHandler)
+					webappLogger.info(
+						'Phase 202-04 — GET /agents/status/stream SSE mounted (subscribed to AgentScheduler.statusEvents)',
+					)
+				}
+			} catch (sseErr) {
+				this.logger.error(
+					'Phase 202-04 — /agents/status/stream mount failed; agents dashboard live status unavailable until next restart',
+					sseErr,
 				)
 			}
 
