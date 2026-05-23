@@ -157,6 +157,14 @@ import {AgentRegistry} from './modules/mastra/agents/agent-registry.js'
 import {createMcpBridge} from './modules/mastra/mcp-bridge.js'
 import {createLivAiAgent} from './modules/mastra/agents/liv-ai.js'
 import {createMastraRouter} from './modules/server/trpc/mastra-router.js'
+// Phase 202-03 — AgentScheduler + agents.* tRPC routers. Scheduler arms
+// node-cron tasks for every enabled livos_agents row after the registry has
+// hydrated (so registry.get() returns live Agent instances at fire time).
+// agent-router.ts / agent-task-router.ts mount under the `agents.*` namespace
+// via the new createAppRouter slots.
+import {AgentScheduler} from './modules/mastra/scheduler.js'
+import {createAgentRouter} from './modules/server/trpc/agent-router.js'
+import {createAgentTaskRouter} from './modules/server/trpc/agent-task-router.js'
 // Phase 198-01 — Mastra chatRoute Express handler factory. Bridges the
 // assistant-ui frontend (Plan 198-02) to livOSMastra.agents.livAi via
 // AI-SDK-format SSE. Mounted at POST /chat/:agentId behind the same JWT
@@ -999,6 +1007,12 @@ export default class Livinityd {
 			// Failures non-fatal — livinityd boots with empty-injection Proxy
 			// mastraRouter on degradation.
 			let mastraRouterProductionInstance: ReturnType<typeof createMastraRouter> | undefined
+			// Phase 202-03 — hoisted to the outer mastra-wire-up scope so the
+			// agents.* / agents.tasks.* router factories built after the
+			// chat-route mount can read it. Stays null when the registry init
+			// path errors out → the agent tRPC namespace falls back to the
+			// empty stub inside createAppRouter.
+			let agentsRepoForRouter: AgentRepository | null = null
 			if (livOSMastra) {
 				try {
 					const approvalManager = new ApprovalManager()
@@ -1078,6 +1092,10 @@ export default class Livinityd {
 					// init fails (DB outage, schema drift) so livinityd still
 					// boots with a working livAi surface.
 					let livAiAgent: ReturnType<typeof createLivAiAgent> | null = null
+					// Phase 202-03 — `agentsRepoForRouter` is declared at the outer
+					// mastra-wire-up scope above so the agents.* / agents.tasks.*
+					// router factories (built after the chat-route mount) can read
+					// it. Stays null when the registry init path errors out.
 					try {
 						const registryPool = new (await import('pg')).Pool({
 							connectionString: databaseUrl,
@@ -1086,6 +1104,7 @@ export default class Livinityd {
 							const {drizzle} = await import('drizzle-orm/node-postgres')
 							const registryDb = drizzle(registryPool)
 							const registryRepo = new AgentRepository(registryDb)
+							agentsRepoForRouter = registryRepo
 							const registry = new AgentRegistry({
 								repo: registryRepo,
 								providerRouter: livOSMastra.providerRouter,
@@ -1109,6 +1128,40 @@ export default class Livinityd {
 							} else {
 								webappLogger.info(
 									'Phase 202-02 — registry initialised but livAi row absent; falling back to in-process createLivAiAgent for the back-compat slot',
+								)
+							}
+
+							// Phase 202-03 — wire the AgentScheduler. Arms node-cron
+							// tasks for every enabled row that has a scheduleCron;
+							// runOnce() also gives manual + tRPC dispatch a single
+							// entry point. Construct AFTER `registry.init()` so
+							// runOnce can look up live Agent instances via
+							// `registry.get(agentId)` at fire time. Borrows
+							// `this.ai.redis` for the Redis SET NX PX mutex per
+							// D-202-04. Failures here are non-fatal — scheduler stays
+							// null and the `agents.runOnce` / `agents.tasks.create`
+							// tRPC routes return PRECONDITION_FAILED until next
+							// livinityd restart.
+							try {
+								const scheduler = new AgentScheduler({
+									registry,
+									repo: registryRepo,
+									memory,
+									redis: this.ai.redis,
+									logger: {
+										info: (msg) => webappLogger.info(msg),
+										warn: (msg, err) => this.logger.error(msg, err),
+									},
+								})
+								await scheduler.init()
+								livOSMastra.attachScheduler(scheduler)
+								webappLogger.info(
+									'Phase 202-03 — AgentScheduler attached to LivOSMastra (node-cron tasks armed for every enabled row with schedule_cron)',
+								)
+							} catch (schedErr) {
+								this.logger.error(
+									'Phase 202-03 — AgentScheduler init failed (non-fatal); cron + runOnce will be unavailable until next restart',
+									schedErr,
 								)
 							}
 						} finally {
@@ -1202,11 +1255,53 @@ export default class Livinityd {
 				)
 			}
 
+			// Phase 202-03 — agents.* + agents.tasks.* tRPC routers. Both are
+			// optional: when livOSMastra OR agentsRepoForRouter is null (boot
+			// path errored out before the registry/scheduler wire-up
+			// completed), the `agents` namespace falls back to the empty stub
+			// inside createAppRouter so the rest of the appRouter still
+			// type-infers and serves.
+			let agentsRouterProductionInstance:
+				| ReturnType<typeof createAgentRouter>
+				| undefined
+			let agentTasksRouterProductionInstance:
+				| ReturnType<typeof createAgentTaskRouter>
+				| undefined
+			if (livOSMastra && agentsRepoForRouter) {
+				try {
+					agentsRouterProductionInstance = createAgentRouter({
+						repo: agentsRepoForRouter,
+						livOSMastra,
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) => this.logger.error(msg, err),
+						},
+					})
+					agentTasksRouterProductionInstance = createAgentTaskRouter({
+						livOSMastra,
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) => this.logger.error(msg, err),
+						},
+					})
+					webappLogger.info(
+						'Phase 202-03 — agents.* + agents.tasks.* tRPC routers wired (CRUD + runOnce + cronPreview + task lifecycle)',
+					)
+				} catch (agentsRouterErr) {
+					this.logger.error(
+						'Phase 202-03 — agent-router factory failed; agents.* namespace falls back to empty stub until next restart',
+						agentsRouterErr,
+					)
+				}
+			}
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
 				setup: setupRouterProductionInstance,
 				mastra: mastraRouterProductionInstance,
+				agents: agentsRouterProductionInstance,
+				agentTasks: agentTasksRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(
