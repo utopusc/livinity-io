@@ -48,7 +48,7 @@
 import type {RequestHandler} from 'express'
 import {randomUUID} from 'node:crypto'
 
-import type {ApprovalManager} from '../mastra/approval-manager.js'
+import type {ApprovalManager} from '../agent-runtime/approval-manager.js'
 
 // ──────────────────────────────────────────────────────────────────────────────
 // External dependency interfaces — kept minimal so tests can supply pure mocks

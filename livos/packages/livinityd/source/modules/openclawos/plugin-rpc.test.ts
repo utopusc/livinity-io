@@ -22,7 +22,7 @@ import express from 'express'
 import type {AddressInfo} from 'node:net'
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest'
 
-import {ApprovalManager} from '../mastra/approval-manager.js'
+import {ApprovalManager} from '../agent-runtime/approval-manager.js'
 import {
 	createPluginRpcHandler,
 	type LusePluginRpcMcp,

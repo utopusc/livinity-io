@@ -24,7 +24,14 @@ import {fileURLToPath} from 'node:url'
 
 import {Client} from 'pg'
 
-import {redactPgUrl} from '../modules/mastra/memory.js'
+// Phase 203-08 — inlined from the deleted `modules/mastra/memory.ts`.
+// redactPgUrl strips user:password from a postgres:// URL for safe logging:
+//   postgres://user:pass@host:5432/db → postgres://***:***@host:5432/db
+function redactPgUrl(url: string): string {
+	let out = url.replace(/(postgres(ql)?:\/\/)([^:@/]+):([^@/]+)(@)/, '$1***:***$5')
+	out = out.replace(/(postgres(ql)?:\/\/)([^:@/]+)(@)/, '$1***$4')
+	return out
+}
 
 export interface LivOSMigrationResult {
 	tablesCreated: number
