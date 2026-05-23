@@ -67,14 +67,13 @@ import {
 	ComposerPrimitive,
 	MessagePrimitive,
 	ThreadPrimitive,
-	useComposerRuntime,
 	useThreadRuntime,
 } from '@assistant-ui/react'
 import {
 	AssistantChatTransport,
 	useChatRuntime,
 } from '@assistant-ui/react-ai-sdk'
-import {useEffect, useRef, useState} from 'react'
+import {useEffect, useState} from 'react'
 
 import {trpcReact} from '@/trpc/trpc'
 
@@ -84,77 +83,9 @@ import {DevToolsMount} from './devtools-mount'
 import {LIV_AI_TAGLINE} from './empty-state'
 import {LivAiHeaderBar} from './header-bar'
 import {DEFAULT_LIV_AI_MODEL_ID, type LivAiModelId} from './models'
-import {parseSlashCommand} from './slash-commands'
 import {SuggestedPrompts} from './suggested-prompts'
 import {useThreadListAdapter} from './thread-list-adapter'
 import {ToolRenderers} from './tool-renderers'
-
-/**
- * Plan 198-06 — Slash-command interceptor.
- *
- * Once the AssistantRuntimeProvider is mounted, this inner component
- * wraps `composerRuntime.send()` with a parse step that:
- *
- *   - On `/clear` → resets composer text + triggers onSwitchToNewThread
- *     and does NOT forward to the real send (so the agent isn't asked
- *     to "process" the literal "/clear" string).
- *   - On any other registered slash command → replaces composer text
- *     with the command's `transformedText` (e.g. `/help` →
- *     "What can you do? List the tools…") then forwards to the real
- *     send so the agent sees the clean natural-language prompt.
- *   - On non-slash text → forwards to the real send unmodified.
- *
- * The wrapper is installed once per composer-runtime instance (guarded
- * by `installedRef`) so React strict-mode double-mount doesn't double-
- * wrap. Plan 198-06 must_haves: SLASH_COMMANDS is the source of truth
- * for the 4 registered triggers; parseSlashCommand is the parser.
- */
-function SlashCommandInterceptor({
-	onClear,
-}: {
-	onClear: () => void
-}) {
-	const composerRuntime = useComposerRuntime()
-	const installedRef = useRef(false)
-
-	useEffect(() => {
-		if (installedRef.current) return
-		installedRef.current = true
-
-		const originalSend = composerRuntime.send.bind(composerRuntime)
-		composerRuntime.send = ((opts) => {
-			const state = composerRuntime.getState()
-			const parsed = parseSlashCommand(state.text)
-			if (!parsed) {
-				// Not a slash command — preserve default behavior.
-				return originalSend(opts)
-			}
-			if (parsed.transformedText === null) {
-				// /clear (or any future "no-send" slash command) — reset
-				// composer text + invoke the UI-level action. Skip the
-				// underlying send so the agent never sees the literal slash.
-				void composerRuntime.reset()
-				onClear()
-				return
-			}
-			// Other slash commands — rewrite the composer text to the
-			// transformed prompt, then send normally so the agent receives
-			// the clean natural-language version.
-			composerRuntime.setText(parsed.transformedText)
-			return originalSend(opts)
-		}) as typeof composerRuntime.send
-
-		return () => {
-			// Restore original send on unmount so re-mounting doesn't stack
-			// wrappers. (Reusing originalSend is safe because we captured it
-			// via .bind() above.)
-			composerRuntime.send = originalSend as typeof composerRuntime.send
-			installedRef.current = false
-		}
-	}, [composerRuntime, onClear])
-
-	return null
-}
 
 /**
  * Minimal MessagePrimitive renderers for the chat-branch viewport.
@@ -443,8 +374,18 @@ export function Assistant() {
 				 * the canonical Grok / ChatGPT pattern (RESEARCH B1). */}
 				<main className='relative flex-1 overflow-hidden'>
 					<ThreadPrimitive.Root className='flex h-full flex-col bg-background'>
-						<SlashCommandInterceptor onClear={onSwitchToNewThread} />
-
+						{/*
+						 * Phase 200-04 — DELETED the Phase 198-06 imperative
+						 * slash-command runtime interceptor (the
+						 * composerRuntime monkey-patch). Slash command UX is
+						 * now owned by the canonical
+						 * unstable_useSlashCommandAdapter adapter
+						 * (slash-adapter.ts) mounted inside the new
+						 * LivAiComposer via ComposerTriggerPopover char="/"
+						 * (Plan 200-05). All 4 Phase 198-06 SLASH_COMMANDS
+						 * ids — help, clear, screenshot, search — preserved
+						 * (INV-200-06).
+						 */}
 						<AuiIf condition={(s) => s.thread.isEmpty}>
 							<EmptyStateBranch />
 						</AuiIf>
