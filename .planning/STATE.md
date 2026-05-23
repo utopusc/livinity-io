@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-23T02:26:14.464Z"
+last_updated: "2026-05-23T02:34:39.971Z"
 progress:
   total_phases: 8
   completed_phases: 8
@@ -26,8 +26,14 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 198 (liv-ai-v2-assistant-ui-generative-ui) — EXECUTING
-Plan: 4 of 8 complete
-Last completed plan: **198-02** ✅ CODE-COMPLETE 2026-05-23 (assistant-ui Frontend Bootstrap — installed @assistant-ui/react@^0.14.7 + @assistant-ui/react-ai-sdk@^1.3.26 + @assistant-ui/react-markdown@^0.14.0 in livos/packages/ui; deleted 5 bespoke Phase 197-06 files [566 LOC: approval-modal + message-bubble + thread-sidebar + use-liv-ai + liv-ai-chat-window]; preserved redact-args.ts + redact-args.test.ts [5/5 vitest PASS — Plan 198-04 ApprovalCard reuse]; manual-copy-fallback Thread scaffold at src/components/assistant-ui/thread.tsx [126 LOC, minimal @assistant-ui/react primitives only — assistant-ui CLI + shadcn fallback both ELIFECYCLE on Windows host due to POSIX postinstall cp -r ./.../.]; new <Assistant /> at src/features/liv-ai/assistant.tsx [50 LOC — AssistantRuntimeProvider + useChatRuntime + AssistantChatTransport({api:'/chat/livAi', credentials:'include'}) + Thread]; liv-ai-content.tsx rewired from LivAiChatWindow → Assistant; 4 atomic commits 9e9a75b7 + f0c3676e + 9a525838 + d32653b4; vite build EXIT 0 in 36.24s [liv-ai-content chunk 342.5 kB / 94.9 kB gzip]; tsc --noEmit ZERO new errors on 3 modified files; sacred SHA preserved 4/4). 2 deviations documented [both Windows postinstall ELIFECYCLE workarounds — Plan Task 3 step 2 explicitly anticipated the CLI-failure branch].
+Plan: 5 of 8 complete
+Last completed plan: **198-05** ✅ CODE-COMPLETE 2026-05-23 (ThreadList Sidebar — useThreadListAdapter hook [122 LOC] wraps existing P197-05 mastra.agent.threads.list adminProcedure query + mastra.agent.threads.delete adminProcedure mutation in ExternalStoreThreadListAdapter-shape; <Assistant /> extended to 2-column layout [w-64 left aside ThreadList + flex-1 right main <Thread />]; AssistantChatTransport body now carries {threadId: currentThreadId} for per-thread Mastra Memory scoping; client-generated UUID-shape threadIds [t-${Date.now()}-${b36}] persisted by PostgresStore P197-03 on first message; empty-state 'No conversations yet' + title fallback 'Untitled · YYYY-MM-DD' + delete-active-thread → fresh UUID auto-switch; 3 atomic commits c2509428 RED + a838d532 GREEN + 31030309 mount; 4/4 new vitest PASS + 48/48 liv-ai+tool-ui suite PASS [zero regressions vs Plan 198-04 baseline]; pnpm --filter ui build EXIT 0 in 36.51s [liv-ai-content chunk 557.97 kB / 156.03 kB gzip]; sacred SHA preserved 3/3; T-198-05-01 accept disposition honoured [single-operator Mini PC + adminProcedure backend gate, multi-tenant deferred to v40+]; D-NO-NEW-DEPS preserved; B-02 lock unchanged [zero backend Mastra surface mods]). 1 deviation [Rule-1 cosmetic .ts → .tsx test-file rename for vite:react-swc JSX-parse].
+
+Previously: **198-04** ✅ CODE-COMPLETE 2026-05-23 (HITL ApprovalCard inline + 6 destructive-tool registrations — see 198-04-SUMMARY.md for full detail).
+
+Previously: **198-03** ✅ CODE-COMPLETE 2026-05-23 (assistant-ui Generative UI tool renderers — 10 ToolUI primitives + ToolRenderers barrel).
+
+Previously: **198-02** ✅ CODE-COMPLETE 2026-05-23 (assistant-ui Frontend Bootstrap — installed @assistant-ui/react@^0.14.7 + @assistant-ui/react-ai-sdk@^1.3.26 + @assistant-ui/react-markdown@^0.14.0 in livos/packages/ui; deleted 5 bespoke Phase 197-06 files [566 LOC: approval-modal + message-bubble + thread-sidebar + use-liv-ai + liv-ai-chat-window]; preserved redact-args.ts + redact-args.test.ts [5/5 vitest PASS — Plan 198-04 ApprovalCard reuse]; manual-copy-fallback Thread scaffold at src/components/assistant-ui/thread.tsx [126 LOC, minimal @assistant-ui/react primitives only — assistant-ui CLI + shadcn fallback both ELIFECYCLE on Windows host due to POSIX postinstall cp -r ./.../.]; new <Assistant /> at src/features/liv-ai/assistant.tsx [50 LOC — AssistantRuntimeProvider + useChatRuntime + AssistantChatTransport({api:'/chat/livAi', credentials:'include'}) + Thread]; liv-ai-content.tsx rewired from LivAiChatWindow → Assistant; 4 atomic commits 9e9a75b7 + f0c3676e + 9a525838 + d32653b4; vite build EXIT 0 in 36.24s [liv-ai-content chunk 342.5 kB / 94.9 kB gzip]; tsc --noEmit ZERO new errors on 3 modified files; sacred SHA preserved 4/4). 2 deviations documented [both Windows postinstall ELIFECYCLE workarounds — Plan Task 3 step 2 explicitly anticipated the CLI-failure branch].
 
 Previously: **198-01** ✅ CODE-COMPLETE 2026-05-23 — Backend Mastra chatRoute + livinityd Express mount (POST /chat/:agentId with inline JWT chatAuthGate + ChatRequestSchema zod gate + ALLOWED_AGENT_IDS Set allow-list; @mastra/ai-sdk@1.4.3 + ai@6.0.191 EXACT-pinned; 7 vitest PASS; commits abd00d52 + 9705e393 + 5a8d40f5; sacred SHA preserved 3/3).
 
