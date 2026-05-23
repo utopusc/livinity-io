@@ -103,22 +103,29 @@ export function validateHost(host: string): boolean {
 }
 
 /**
- * Phase 201-06 → Phase 203-03 (D-203-05) → Phase 203-09 — Liv AI surface
- * routing. Two co-existing surfaces share the `/liv-ai-app/*` URL prefix:
+ * Phase 201-06 → Phase 203-03 (D-203-05) → Phase 203-09 → Phase 203-10 — Liv
+ * AI surface routing. Two co-existing surfaces share the `/liv-ai-app/*` URL
+ * prefix:
  *
  *   1. Openclaw claw-gateway at 127.0.0.1:18789 owns the desktop-style chat
- *      experience under `/liv-ai-app/openclawos[/*]`. Plan 203-10/11 will
- *      mount the gateway claw-client at that path. Caddy strips the prefix
- *      via `handle_path` so the gateway receives `/` (its in-process router
- *      is responsible for resolving the plugin URL — see
- *      @livos/liv-claw-os packages/claw-plugin/src/index.ts).
+ *      experience under `/liv-ai-app/openclawos[/*]`. The gateway's in-process
+ *      plugin (livos/packages/liv-claw-os/packages/claw-plugin/src/index.ts)
+ *      registers its static-file route at the upstream-canonical
+ *      `/plugins/openclawos` path (matching upstream openclaw-os). Caddy uses
+ *      `handle_path` to strip the external `/liv-ai-app/openclawos` prefix +
+ *      a `rewrite` directive to prepend `/plugins/openclawos` so the gateway
+ *      receives the URL shape its plugin already matches. Phase 203-09
+ *      handoff note: pre-203-10 the gateway received bare `/` paths and
+ *      404'd; the rewrite below closes that gap.
  *
  *   2. Next.js Phase 202 subapp at 127.0.0.1:3010 owns the agents +
  *      settings dashboard at `/liv-ai-app/agents[/...]` and
- *      `/liv-ai-app/settings[/...]`. Per Phase 203-09 the `@assistant-ui`
+ *      `/liv-ai-app/settings[/...]`, PLUS the new Phase 203-10/11 routes
+ *      `/liv-ai-app/icons/*` (placeholder SVG) and `/liv-ai-app/apps/<slug>`
+ *      (standalone OpenUI app page). Per Phase 203-09 the `@assistant-ui`
  *      chat surface that previously lived at `/` is GONE; the subapp now
- *      only serves the Phase 202 routes (plus a `/` → `/agents` redirect
- *      stub for dev port-direct access).
+ *      only serves the Phase 202+203-10/11 routes (plus a `/` → `/agents`
+ *      redirect stub for dev port-direct access).
  *
  * Ordering — Caddy evaluates `handle` blocks by path-matcher specificity,
  * not source order, so emitting the openclawos handle alongside the bare
@@ -131,9 +138,11 @@ export function validateHost(host: string): boolean {
  * (livos-app-liv-ai.service). Phase 203-03 unified everything onto :18789.
  * Phase 203-09 splits it again because the Phase 202 dashboard (kept by
  * INV-203-09 contract) lives on the Next.js subapp and would otherwise be
- * shadowed by the gateway.
+ * shadowed by the gateway. Phase 203-10 adds the `/plugins/openclawos`
+ * rewrite for the gateway path so the gateway's plugin URL match succeeds.
  */
 const LIV_AI_APP_HANDLE = `\thandle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
+\t\trewrite * /plugins/openclawos{path}
 \t\treverse_proxy 127.0.0.1:18789 {
 ${WS_TRANSPORT_BODY}
 \t}
