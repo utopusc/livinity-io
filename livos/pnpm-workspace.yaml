@@ -7,6 +7,7 @@ packages:
   - packages/docker-agent
   - packages/design-tokens
   - packages/cli
+  - packages/liv-ai-app
 
 # pnpm v11+ uses `allowBuilds` map (booleans) at workspace root, NOT the
 # legacy `onlyBuiltDependencies` list. Without explicit `true` values for
