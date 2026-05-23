@@ -37,6 +37,12 @@ vi.mock('@mastra/ai-sdk', () => ({
 }))
 
 vi.mock('ai', () => ({
+	// P198 UAT hot-fix: identity-passthrough so streamSpy assertions still
+	// see the original messages array. Real `convertToModelMessages` normalizes
+	// UIMessage (parts) → ModelMessage (content); the handler now invokes it
+	// before agent.stream(). In tests we pass already-ModelMessage shape, so
+	// returning input verbatim preserves the prior assertion contract.
+	convertToModelMessages: vi.fn((messages: unknown) => messages),
 	createUIMessageStream: vi.fn((opts: {execute: (a: {writer: {merge: (s: unknown) => void}}) => unknown}) => {
 		// Invoke execute() synchronously so the mocked toAISdkStream is hit
 		// (and the spy registers a call) before we return the stub stream.
