@@ -12,6 +12,8 @@ packages:
   # Root container = @livos/liv-claw-os; inner packages registered flatly so pnpm sees them
   - packages/liv-claw-os
   - packages/liv-claw-os/packages/*
+  # Phase 203-03: thin systemd-deployable wrapper around `openclaw` npm
+  - packages/liv-claw-gateway
 
 # pnpm v11+ uses `allowBuilds` map (booleans) at workspace root, NOT the
 # legacy `onlyBuiltDependencies` list. Without explicit `true` values for
