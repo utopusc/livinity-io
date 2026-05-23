@@ -42,7 +42,7 @@ import {SuggestedPrompts} from './suggested-prompts'
  * drift.
  */
 export const LIV_AI_TAGLINE =
-	"LivOS'un yapay zekası — ekranını yönetir, sorularına cevap verir, hatırlar."
+	"Liv AI — your operating system's assistant."
 
 export interface EmptyStateProps {
 	/**
