@@ -132,6 +132,17 @@ import {createTimezoneService} from './modules/locale/index.js'
 // Memory, 197-04 Liv AI Agent, 197-05 tRPC namespace) attach into the singleton
 // via the FINAL attach helpers shipped from index.ts in this same plan.
 import {LivOSMastra, createProviderRouter} from './modules/mastra/index.js'
+// Phase 203-07 — LivOSAgent (Branch A — openclaw built-in LLM dispatch).
+// Parallel runtime to LivOSMastra during the 203-07/08 coexistence window.
+// Selected via `LIV_AGENT_RUNTIME` env var (also accepts `LIVOS_AGENT_RUNTIME`
+// for symmetry with the LIVOS_* prefix convention used by Plan 203-12 deploy
+// scripts). Default is `mastra` so this plan is operationally a no-op until
+// the deploy walk flips the flag. D-203-06 / D-203-07.
+import {
+	LivOSAgent,
+	OpenclawClient,
+} from './modules/agent-runtime/index.js'
+import {createConversationMemoryAdapter} from './modules/agent-runtime/memory.js'
 // Phase 197-05 — Liv AI full wire-up. ApprovalManager + createLivOSMemory +
 // createMcpBridge + createLivAiAgent + createMastraRouter all instantiated in
 // the chromeMaster try/catch block, populating LivOSMastra typed slots via
@@ -998,6 +1009,20 @@ export default class Livinityd {
 			// 05) populate the agents+memory+mcpBridge slots via the typed
 			// attach helpers shipped from this plan's index.ts.
 			let livOSMastra: LivOSMastra | null = null
+			// Phase 203-07 — parallel LivOSAgent (Branch A openclaw runtime).
+			// Constructed alongside LivOSMastra during the 203-07/08
+			// coexistence window. Selected via env-var toggle:
+			//   LIV_AGENT_RUNTIME=mastra   (default — wires LivOSMastra)
+			//   LIV_AGENT_RUNTIME=openclaw (Plan 203-12 deploy walk flips)
+			// Also accepts LIVOS_AGENT_RUNTIME for symmetry with the LIVOS_*
+			// prefix convention. D-203-06 / D-203-07.
+			const agentRuntimeFlag = (
+				process.env.LIV_AGENT_RUNTIME ??
+				process.env.LIVOS_AGENT_RUNTIME ??
+				'mastra'
+			).toLowerCase()
+			const useOpenclawRuntime = agentRuntimeFlag === 'openclaw'
+			let livOSAgent: LivOSAgent | null = null
 			try {
 				const providerRouter = createProviderRouter({
 					xaiCreds: xaiCredentialsService,
@@ -1007,9 +1032,41 @@ export default class Livinityd {
 				webappLogger.info(
 					'Phase 197-01 — LivOSMastra wired (providerRouter ready; agents+memory+mcpBridge slots empty until 197-02/03/04)',
 				)
+				// Phase 203-07 — construct the parallel LivOSAgent. Always
+				// constructed (so the slot exists for downstream code) but
+				// only ACTIVE for dispatch when the openclaw branch is
+				// selected. LivOSMastra remains the dispatch path under the
+				// default `mastra` flag.
+				livOSAgent = new LivOSAgent({
+					providerRouter,
+					logger: {
+						info: (msg) => webappLogger.info(msg),
+						warn: (msg, err) => this.logger.error(msg, err),
+					},
+				})
+				// Wire the openclaw HTTP client unconditionally — Plan 203-03
+				// ships the gateway on :18789. The client degrades gracefully
+				// when the gateway is unreachable (health() returns false
+				// rather than throwing).
+				const openclawBaseUrl =
+					process.env.OPENCLAW_GATEWAY_URL ??
+					'http://127.0.0.1:18789'
+				livOSAgent.attachAgentClient(
+					new OpenclawClient({
+						baseUrl: openclawBaseUrl,
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) =>
+								this.logger.error(msg, err),
+						},
+					}),
+				)
+				webappLogger.info(
+					`Phase 203-07 — LivOSAgent wired (runtime=${agentRuntimeFlag}, openclawGateway=${openclawBaseUrl}); ${useOpenclawRuntime ? 'OPENCLAW path ACTIVE — LivOSAgent owns dispatch' : 'MASTRA path active (default); LivOSAgent is shadow-wired and idle'}`,
+				)
 			} catch (mastraErr) {
 				this.logger.error(
-					'Phase 197-01 — LivOSMastra construction failed; Liv AI surface will degrade until next restart',
+					'Phase 197-01 — LivOSMastra/LivOSAgent construction failed; Liv AI surface will degrade until next restart',
 					mastraErr,
 				)
 			}
@@ -1097,6 +1154,25 @@ export default class Livinityd {
 					}
 					const memory = createLivOSMemory({databaseUrl})
 					livOSMastra.attachMemory(memory)
+					// Phase 203-07 — parallel attach into the openclaw runtime.
+					// `livOSAgent` is constructed at boot regardless of the flag
+					// so its slots stay populated; consumers branch on
+					// `useOpenclawRuntime` to decide which singleton to read.
+					// The memory adapter is a transparent pass-through during
+					// the coexistence window (Plan 203-08 swaps the backing
+					// store).
+					livOSAgent?.attachMemory(
+						createConversationMemoryAdapter(
+							memory as never as Parameters<
+								typeof createConversationMemoryAdapter
+							>[0],
+						),
+					)
+					// Approval gate surfaces from the same scope (declared just
+					// above as `approvalManager`). Attach into the parallel
+					// runtime explicitly so downstream code does not need to
+					// reach back into LivOSMastra's mcpBridge to find it.
+					livOSAgent?.attachApprovalManager(approvalManager)
 					const mcpBridge = await createMcpBridge({
 						redis: this.ai.redis,
 						logger: {
@@ -1105,6 +1181,7 @@ export default class Livinityd {
 						},
 					})
 					livOSMastra.attachMcpBridge(mcpBridge)
+					livOSAgent?.attachMcpBridge(mcpBridge)
 					// Phase 203-06 — surface mcpBridge to outer scope for plugin-RPC.
 					mcpBridgeForPlugin = mcpBridge
 					// Phase 202-02 — dynamic agent registry. Reads every enabled
@@ -1149,10 +1226,31 @@ export default class Livinityd {
 							})
 							await registry.init()
 							livOSMastra.attachRegistry(registry)
+							// Phase 203-07 — same registry feeds the parallel
+							// runtime. AgentRegistry's value type stays the
+							// Mastra Agent during the coexistence window; the
+							// openclaw runtime branch (Plan 203-08) narrows
+							// the registry value type to OpenclawAgentHandle.
+							livOSAgent?.attachRegistry(registry)
 							const seededLivAi = registry.getByName('livAi')
 							if (seededLivAi) {
 								livOSMastra.attachLivAiAgent(seededLivAi)
 								livAiAgent = seededLivAi as never
+								// Phase 203-07 — surface a synthetic
+								// OpenclawAgentHandle for the parallel
+								// runtime's back-compat livAi slot. Carries
+								// just the metadata the chat-route fallback
+								// reader needs (id + name + kind).
+								livOSAgent?.attachLivAi({
+									id: 'livAi',
+									name: 'livAi',
+									instructions: '',
+									modelName: livOSAgent.providerRouter
+										? 'grok-4.3'
+										: 'grok-4.3',
+									toolIds: [],
+									kind: 'openclaw',
+								})
 								webappLogger.info(
 									`Phase 202-02 — agent registry initialised with ${registry.listAll().length} live agents (livAi slot wired from registry)`,
 								)
@@ -1218,8 +1316,13 @@ export default class Livinityd {
 								})
 								await scheduler.init()
 								livOSMastra.attachScheduler(scheduler)
+								// Phase 203-07 — same scheduler feeds the
+								// parallel runtime so SSE status events stay
+								// single-source-of-truth across both branches
+								// during the 203-07/08 coexistence window.
+								livOSAgent?.attachScheduler(scheduler)
 								webappLogger.info(
-									'Phase 202-03 — AgentScheduler attached to LivOSMastra (node-cron tasks armed for every enabled row with schedule_cron)',
+									`Phase 202-03 — AgentScheduler attached to LivOSMastra${livOSAgent ? ' + LivOSAgent (Phase 203-07 parallel runtime)' : ''} (node-cron tasks armed for every enabled row with schedule_cron)`,
 								)
 							} catch (schedErr) {
 								this.logger.error(
