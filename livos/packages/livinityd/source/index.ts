@@ -1100,6 +1100,9 @@ export default class Livinityd {
 			webappLogger.info(
 				'[liv-ai] Phase 199-02 — provider-router allow-list + listAvailableModels tRPC endpoint ready',
 			)
+			webappLogger.info(
+				'[liv-ai] Phase 199-03 — chat-route accepts config.modelName + memory.thread; agent dispatches via requestContext',
+			)
 		} catch (err) {
 			// Non-fatal — boot continues. Streaming + WebApp launcher will
 			// degrade to SERVICE_UNAVAILABLE for the affected tRPC routes
