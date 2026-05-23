@@ -278,4 +278,5 @@ Recommend a single ~30-line hygiene plan before Phase 200 final close.
 - FOUND: zero `@/lib/utils` + zero `from "radix-ui"` import occurrences across assistant-ui directory
 - FOUND: 45/45 `tool-renderers` vitest cases green (INV-200-03 frozen)
 - FOUND: total full-suite typecheck error count unchanged at 508 (no new regressions)
-- Commit hash: recorded post-commit below.
+- Commit hash: `b198c5d6` (10 files changed, 2404 insertions(+), 118 deletions(-) — Phase 198 scaffold replaced + 8 new sibling primitives + SUMMARY).
+- Sacred-SHA pre-commit hook output: `[sacred-sha] PASS: 20 files verified`.
