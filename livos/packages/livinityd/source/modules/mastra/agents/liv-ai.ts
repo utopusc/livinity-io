@@ -142,16 +142,26 @@ export function createLivAiAgent(deps: LivAiAgentDeps): Agent {
 		// T-197-04-04 + T-197-04-05 — filter raw MCP tool map through the
 		// allow-list, then wrap destructive tools through the approval gate.
 		//
-		// Phase 198 UAT hot-fix #3 — merge built-in tools AFTER the wrap so
-		// the agent always has weather + luse_list_windows + get_current_time
-		// even when no MCP source is connected. None of the built-ins are
-		// in destructiveToolNames, so they do not need the approval wrap.
+		// Phase 200-C — merge built-in tools through the SAME wrap pass so
+		// the new luse_computer_* destructive built-ins (click_mouse,
+		// type_text, press_keys, application, drag_mouse, paste_text) ride
+		// the W-02 ApprovalGate just like the MCP-sourced destructive tools.
+		// Non-destructive entries (weather, get_current_time,
+		// luse_list_windows, luse_computer_screenshot) pass through
+		// untouched because wrapDestructiveTools only wraps names in the
+		// destructiveToolNames Set.
+		//
+		// Note (Phase 198 UAT hot-fix #3 carry-over): builtInTools is
+		// merged AFTER the MCP wrap, so a built-in entry with the same name
+		// as an MCP entry shadows the MCP one. Today this is intentional —
+		// the Luse MCP server was never actually installed, so the built-in
+		// implementations are the only live computer-use surface.
 		tools: (async () => ({
 			...wrapDestructiveTools(
 				filterMcpTools(await deps.mcpBridge.listTools()),
 				deps.approvalManager,
 			),
-			...builtInTools,
+			...wrapDestructiveTools(builtInTools, deps.approvalManager),
 		})) as never,
 		memory: deps.memory as never,
 	} as never)
