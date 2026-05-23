@@ -77,7 +77,7 @@ import {
 	AssistantChatTransport,
 	useChatRuntime,
 } from '@assistant-ui/react-ai-sdk'
-import {useEffect, useState} from 'react'
+import {useEffect, useRef, useState} from 'react'
 
 import {Thread} from '@/components/assistant-ui/thread'
 import {trpcReact} from '@/trpc/trpc'
@@ -90,13 +90,21 @@ import {useThreadListAdapter} from './thread-list-adapter'
 import {ToolRenderers} from './tool-renderers'
 
 export function Assistant() {
-	const {
-		threads,
-		currentThreadId,
-		onSwitchToNewThread,
-		onSwitchToThread,
-		onDelete,
-	} = useThreadListAdapter()
+	// Phase 200-07 — the `useThreadListAdapter()` hook call moved INSIDE
+	// the <AssistantRuntimeProvider> render boundary (see <AssistantShell>
+	// below). That's required because Plan 200-07 wires
+	// `useAssistantRuntime()` at the top of the adapter hook so the New
+	// Conversation button can call `runtime.threads.switchToNewThread()`
+	// (D-200-19) — and `useAssistantRuntime()` only resolves from a
+	// descendant of the provider.
+	//
+	// The body callback in `useChatRuntime` (still owned by the outer
+	// Assistant component) reads the current threadId via a ref kept in
+	// lockstep with the adapter's internal state by an effect inside the
+	// shell. This is the minimal restructure permitted by the Plan 200-07
+	// Task 2 pitfall guard ("if the consumer is OUTSIDE the provider,
+	// MOVE the sidebar mount inside the provider").
+	const currentThreadIdRef = useRef<string>('')
 
 	// Phase 199-07 — selectedModel state + Redis hydration.
 	//
@@ -159,7 +167,17 @@ export function Assistant() {
 			// `config.modelName` and builds a RequestContext that the agent's
 			// dynamic-model resolver (provider-router.resolveAgentModel) consumes
 			// per request. Allows mid-conversation model switching (UAT step 9).
-			body: () => ({threadId: currentThreadId, config: {modelName: selectedModel}}),
+			//
+			// Phase 200-07 — `currentThreadId` now flows via
+			// `currentThreadIdRef` (kept in sync by `<AssistantShell>` so the
+			// adapter hook can live inside the provider; see file header).
+			// The closure reads `.current` per request so the latest threadId
+			// is always picked up — same semantics as the prior direct
+			// closure-capture pattern (Plan 199-05 RESEARCH B6 rationale).
+			body: () => ({
+				threadId: currentThreadIdRef.current,
+				config: {modelName: selectedModel},
+			}),
 		}),
 		// Plan 198-06 — image-only attachment adapter. Composer Attachment
 		// surface accepts image/png|jpeg|webp|gif drag-drop or click; the
@@ -171,8 +189,6 @@ export function Assistant() {
 			attachments: createImageAttachmentAdapter(),
 		},
 	})
-
-	const items = threads()
 
 	return (
 		<AssistantRuntimeProvider runtime={runtime}>
@@ -198,36 +214,78 @@ export function Assistant() {
 			 */}
 			<DevToolsMount />
 			{/*
-			 * Phase 200-05 — DELETED the Phase 199-07 <LivAiHeaderBar> shell
-			 * (D-200-15 / Plan 200-05 Task 3). The model picker has been
-			 * relocated INTO <LivAiComposer> (Grok footer-strip pattern;
-			 * D-200-13), and the "+ New conversation" button already lives in
-			 * the sidebar (assistant.tsx <aside> below). Pitfall 6 (two model
-			 * pickers in DOM) is now structurally impossible.
-			 *
-			 * Phase 200-06 — REPLACED the Phase 199-05 inline
-			 * ThreadPrimitive.Root + dual AuiIf branches with a single
-			 * `<Thread composerSlot={<LivAiComposer .../>} />` mount
-			 * (D-200-16). The canonical assistant-ui Thread (Plan 200-02
-			 * registry port) owns the empty/chat layout, ThreadWelcome,
-			 * MessagePrimitive.GroupedParts render pipeline, ActionBar with
-			 * Copy/Reload/ExportMarkdown, BranchPicker, EditComposer, etc.
+			 * Phase 200-07 — moved sidebar + thread JSX into
+			 * <AssistantShell /> so the `useThreadListAdapter()` hook (which
+			 * now calls `useAssistantRuntime()` internally for the
+			 * `runtime.threads.switchToNewThread()` D-200-19 fix) runs INSIDE
+			 * the provider's React context. `currentThreadIdRef` bridges the
+			 * shell's currentThreadId state back to the outer body callback.
 			 */}
-			<div className='flex h-full flex-col overflow-hidden'>
-				{/*
-				 * Plan 198-07 — a11y wrapper. `role="application"` scopes the
-				 * entire Liv AI chat surface as a single interactive application
-				 * for screen readers (NVDA/JAWS/VoiceOver), so keystrokes are
-				 * passed through to the composer instead of being intercepted
-				 * as document-navigation commands. `aria-label="Liv AI chat"`
-				 * provides the spoken landmark name. (Plan 198-07 must_haves
-				 * truth #5 — verified via Plan 198-08 a11y audit.)
-				 */}
-				<div
-					role='application'
-					aria-label='Liv AI chat'
-					className='flex flex-1 overflow-hidden'
-				>
+			<AssistantShell
+				selectedModel={selectedModel}
+				onModelChange={handleModelChange}
+				currentThreadIdRef={currentThreadIdRef}
+			/>
+		</AssistantRuntimeProvider>
+	)
+}
+
+/**
+ * Phase 200-07 — child component rendered INSIDE
+ * `<AssistantRuntimeProvider>` so the `useThreadListAdapter()` hook
+ * (which calls `useAssistantRuntime()` internally for the D-200-19 New
+ * Conversation runtime-sync fix) resolves the provider's runtime
+ * context. Owns the entire sidebar JSX + the canonical `<Thread />`
+ * mount that previously lived in the outer Assistant body.
+ *
+ * Bridge: `currentThreadIdRef` is updated via `useEffect` whenever the
+ * adapter's local state rotates — the outer `useChatRuntime` body
+ * callback reads `currentThreadIdRef.current` so each /chat/livAi
+ * request carries the latest threadId (no semantic change vs the prior
+ * closure-capture pattern).
+ */
+function AssistantShell({
+	selectedModel,
+	onModelChange,
+	currentThreadIdRef,
+}: {
+	selectedModel: LivAiModelId
+	onModelChange: (next: LivAiModelId) => void
+	currentThreadIdRef: React.MutableRefObject<string>
+}) {
+	const {
+		threads,
+		currentThreadId,
+		onSwitchToNewThread,
+		onSwitchToThread,
+		onDelete,
+	} = useThreadListAdapter()
+
+	// Phase 200-07 — keep the outer body callback's ref in lockstep with
+	// the adapter's currentThreadId. Effect runs on every change so the
+	// next /chat/livAi request always carries the latest threadId.
+	useEffect(() => {
+		currentThreadIdRef.current = currentThreadId
+	}, [currentThreadId, currentThreadIdRef])
+
+	const items = threads()
+
+	return (
+		<div className='flex h-full flex-col overflow-hidden'>
+			{/*
+			 * Plan 198-07 — a11y wrapper. `role="application"` scopes the
+			 * entire Liv AI chat surface as a single interactive application
+			 * for screen readers (NVDA/JAWS/VoiceOver), so keystrokes are
+			 * passed through to the composer instead of being intercepted
+			 * as document-navigation commands. `aria-label="Liv AI chat"`
+			 * provides the spoken landmark name. (Plan 198-07 must_haves
+			 * truth #5 — verified via Plan 198-08 a11y audit.)
+			 */}
+			<div
+				role='application'
+				aria-label='Liv AI chat'
+				className='flex flex-1 overflow-hidden'
+			>
 				{/* Plan 198-05 — Left sidebar: ThreadList */}
 				<aside
 					aria-label='Conversation history'
@@ -236,7 +294,14 @@ export function Assistant() {
 					<div className='border-b border-neutral-200 p-3 dark:border-neutral-800'>
 						<button
 							type='button'
-							onClick={onSwitchToNewThread}
+							onClick={() => {
+								// Phase 200-07 — onSwitchToNewThread is now async
+								// (awaits runtime.threads.switchToNewThread()
+								// before flipping local state); fire-and-forget
+								// is fine — the body callback closure picks up
+								// the fresh threadId on the next request.
+								void onSwitchToNewThread()
+							}}
 							className='w-full rounded-md bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700'
 							data-testid='liv-ai-new-thread'
 							aria-label='Start a new conversation'
@@ -244,10 +309,7 @@ export function Assistant() {
 							+ New conversation
 						</button>
 					</div>
-					<ul
-						className='flex-1 overflow-y-auto p-2'
-						aria-label='Threads'
-					>
+					<ul className='flex-1 overflow-y-auto p-2' aria-label='Threads'>
 						{items.length === 0 ? (
 							<li className='p-3 text-center text-xs text-neutral-500'>
 								No conversations yet
@@ -303,16 +365,15 @@ export function Assistant() {
 						composerSlot={
 							<LivAiComposer
 								selectedModel={selectedModel}
-								onModelChange={handleModelChange}
+								onModelChange={onModelChange}
 							/>
 						}
 					/>
 				</main>
-				</div>
-				{/* /role='application' */}
 			</div>
-			{/* /flex h-full flex-col */}
-		</AssistantRuntimeProvider>
+			{/* /role='application' */}
+		</div>
+		// /flex h-full flex-col
 	)
 }
 
