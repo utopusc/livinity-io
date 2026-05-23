@@ -30,7 +30,7 @@
 
 import type {Request, RequestHandler, Response} from 'express'
 
-import {createUIMessageStream, createUIMessageStreamResponse} from 'ai'
+import {convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse} from 'ai'
 import {toAISdkStream} from '@mastra/ai-sdk'
 import {z} from 'zod'
 
@@ -44,15 +44,18 @@ export interface ChatRouteHandlerDeps {
 // BEFORE the body reaches agent.stream(). Malformed shapes (e.g. {foo:1})
 // surface as a 400 with the zod issues array.
 //
-// The `content` field accepts z.unknown() because AI-SDK / Mastra messages
-// can carry rich content (text + tool-call parts + multimodal). The agent
-// itself does the deep validation; we only gate the wire shape here.
+// AI-SDK v6 UIMessage shape uses `parts: UIMessagePart[]` (not `content`).
+// Legacy ModelMessage shape uses `content`. We accept either via `.passthrough()`
+// so downstream `convertToModelMessages()` can normalize. Stripping `parts`
+// (default zod behavior) caused Mastra MessageList.addOne to reject every
+// incoming user message with "must have either content or parts" (P198 UAT).
 export const ChatRequestSchema = z.object({
 	messages: z.array(
-		z.object({
-			role: z.enum(['user', 'assistant', 'system', 'tool']),
-			content: z.unknown(),
-		}),
+		z
+			.object({
+				role: z.enum(['user', 'assistant', 'system', 'tool']),
+			})
+			.passthrough(),
 	),
 })
 
@@ -91,6 +94,18 @@ export function createChatRouteHandler(deps: ChatRouteHandlerDeps): RequestHandl
 		}
 
 		try {
+			// Convert AI-SDK v6 UIMessage[] (with `parts`) to ModelMessage[]
+			// (with `content`) before handing to Mastra. Mastra's MessageList
+			// rejects messages that have neither `content` nor `parts` after
+			// internal normalization — passing UIMessage[] directly worked in
+			// theory but in practice Mastra v1.36's prepare-memory-step strips
+			// parts during workflow normalization. The convertToModelMessages
+			// helper produces the canonical {role, content: string|array} shape
+			// that Mastra accepts unchanged.
+			const modelMessages = convertToModelMessages(
+				parsed.data.messages as never,
+			)
+
 			// Mastra agent stream — adapter shape uses an `unknown` cast because
 			// the concrete Agent<…> generics from Mastra v1.36 carry a large
 			// number of phantom-type parameters we don't need to enumerate at
@@ -99,7 +114,7 @@ export function createChatRouteHandler(deps: ChatRouteHandlerDeps): RequestHandl
 			// which is exactly what toAISdkStream({from:'agent'}) consumes.
 			const stream = await (agent as unknown as {
 				stream(messages: unknown[]): Promise<unknown>
-			}).stream(parsed.data.messages)
+			}).stream(modelMessages as unknown as unknown[])
 
 			// Wrap the Mastra stream in an AI-SDK UI message stream. toAISdkStream
 			// produces a ReadableStream<UIMessageChunk>; createUIMessageStream
