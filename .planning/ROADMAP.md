@@ -2713,6 +2713,40 @@ Plans:
 - [x] 198-07-PLAN.md — ✅ CODE-COMPLETE 2026-05-23 (Empty State + DevTools + Accessibility Polish — rich `<EmptyState>` at `empty-state.tsx` [73 LOC] mounts `/figma-exports/liv-ai.svg` + 'Liv AI' heading + locked `LIV_AI_TAGLINE` "LivOS'un yapay zekası — ekranını yönetir, sorularına cevap verir, hatırlar." + delegated `<SuggestedPrompts>`; dev-only `<DevToolsMount>` with DOUBLE `import.meta.env.DEV` guard + try/catch fallback for the optional `@assistant-ui/react-devtools` dynamic import [NOT installed — D-NO-NEW-DEPS preserved via Rollup `external` whitelist in `vite.config.ts`]; `<div role='application' aria-label='Liv AI chat'>` a11y wrapper; left sidebar promoted to `<ul aria-label='Threads'>`/`<li aria-current>` semantics + per-thread delete `aria-label='Delete thread: {title}'`; 5 commits `829bfda1..b2c31066`; 3 new vitest + 71 prior = 74/74 PASS; T-198-07-01 verified `grep "react-devtools" dist/assets/*.js` = 0 matches; sacred SHA preserved)
 - [x] 198-08-PLAN.md — 🟡 CODE-COMPLETE + DEPLOYED 2026-05-23T03:02Z (operator browser UAT pending — Mini PC live deploy via `bash /opt/livos/update.sh` + bruce-ownership patch + service restart; 4 services `active`; 3 boot markers present [197-01 + 197-05 + 198-01]; `POST /trpc/mastra.agent.approve` → `401` adminProcedure gate; `POST /chat/livAi` → `401` chatAuthGate; production bundle clean of `react-devtools` strings; deployed SHA `8c22fe1`; sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` PRESERVED on Mini PC via git-blob recompute; Phase 197 tRPC `mastra.agent.*` namespace marked `@deprecated` + dev-mode `console.warn` [one-release grace before P199 full removal — commit `8c22fe10`]; Task 3 operator UAT deferred to morning [`type="human-verify"` cannot be auto-walked; 10-step walk template + decision rules in `198-VERIFICATION.md` § 7]; status: `human_needed` until operator returns)
 
+**P198 UAT hot-fixes (2026-05-23 post-deploy):**
+- `99130f72` — ChatRequestSchema dropped UIMessage `parts` → Mastra rejected empty `{role:'user'}` 500. Fix: `.passthrough()` + `convertToModelMessages()`. 7/7 vitest PASS.
+- `af83d6f7` — `convertToModelMessages` async in ai@6 (was sync in ai@4/5). Missing await → Promise serialised as `{}` → Mastra "role: undefined" crash. Fix: add `await`.
+- `566b044d` — Agent had ZERO MCP tools live (Luse path unset + selfclaude unreachable) → Grok hallucinated tool calls as plain text. Fix: ship 3 built-in tools (`weather` via open-meteo, `luse_list_windows` via wmctrl, `get_current_time`); harden system prompt with TOOL HONESTY clause + Turkish-response rule.
+
+---
+
+### Phase 199: Liv AI UI Polish — Brand + Sizing + Model Picker + Centered Empty + Generative UI Polish — 🔴 PLANNED 2026-05-23
+
+**Goal:** Operator-requested UI polish on the Phase 198 Liv AI surface. Five concrete asks: (1) marquee app name "Liv AI" everywhere, (2) bigger window default (1180×820), (3) model picker with xAI Grok variants persisted to Redis, (4) ChatGPT-style centered empty-state composer (input in middle on new thread, slides to bottom once messages start), (5) Generative UI cilası — RunningHeader during tool execution + status-branch polish across 10 renderers.
+
+**Source directive (operator 2026-05-23):** "Liv AI olacak uygulamanin Adi! Biraz daha buyuk yap pencereyi ayrica Model secimi ekle Inputu baslangicta ortaya al. Cok ama cok detaylica a dan z ye mcp yi kullanarak incele. Ve Cok buyuk bir UI improve Plani hazirla."
+
+**Research outcome:** assistant-ui-docs MCP + context7 MCP queried for canonical patterns. `<AuiIf>` primitive (assistant-ui Grok example) solves centered empty-state. Mastra v1 `RequestContext` (`model: ({requestContext}) => …`) is the canonical dynamic-model pattern for per-request provider routing. ZERO new top-level deps required (shadcn dropdown-menu/select/table/dialog already shipped). Window default size bug: `LIVINITY_liv-ai` missing from `DEFAULT_WINDOW_SIZES` falls back to 900×600 — single-line fix to 1180×820. Full research at `.planning/phases/199-liv-ai-ui-polish/199-RESEARCH.md` (2025 lines, dense citations).
+
+**Depends on:** Phase 198 (assistant-ui shell, Mastra agent, AssistantChatTransport, ToolRenderers barrel — all KEPT intact, additive-only polish)
+**Wave:** 1 (foundational UX polish, blocks v38.3 close)
+**Plans:** 8 plans across 4 waves (~780 LOC added/modified, est 3-4 hours wall-clock)
+**Estimated:** 1 day autonomous + operator-walked UAT
+
+Plans:
+- [ ] 199-01-PLAN.md — Window default size patch + brand string regression-lock (single-line `DEFAULT_WINDOW_SIZES.LIVINITY_liv-ai: {width:1180,height:820}` + grep-regression for "Liv AI" in 4 surfaces; Wave 1; ~30 LOC)
+- [ ] 199-02-PLAN.md — Provider-router ALLOWED_XAI_MODELS allow-list + `coerceModel` + new `mastra.agent.listAvailableModels` protectedProcedure + httpOnlyPaths add (Wave 1; ~120 LOC)
+- [ ] 199-03-PLAN.md — Mastra agent dynamic-model via `RequestContext` + chat-route `config.modelName` zod field + incidental memory.thread wire fix (Wave 2, depends_on=[199-02]; ~80 LOC)
+- [ ] 199-04-PLAN.md — `LIV_AI_MODELS` registry + `<LivAiModelPicker>` shadcn DropdownMenu + backend-drift-lock test (Wave 2, depends_on=[199-02]; ~200 LOC)
+- [ ] 199-05-PLAN.md — Centered empty-state via `<AuiIf>` + extracted Composer + DELETE `EmptyStateMount` absolute overlay + AssistantChatTransport body-callback form (Wave 3 first; ~150 LOC)
+- [ ] 199-06-PLAN.md — `<RunningHeader>` micro-primitive ("Checking weather in Istanbul…") + 10 generative renderer status-branch updates (Wave 3 parallel-safe with 199-05; ~80 LOC)
+- [ ] 199-07-PLAN.md — Header bar with "Liv AI" title + `<LivAiModelPicker>` + new-conversation; Redis `liv:config:active_model` via new `getActiveModel`/`setActiveModel` tRPC procedures (Wave 3, depends_on=[199-04, 199-05]; ~120 LOC)
+- [ ] 199-08-PLAN.md — Mini PC deploy + 10-step operator browser UAT + 199-VERIFICATION.md + STATE/ROADMAP flip (Wave 4, `autonomous: false` human-gated)
+
+**Invariants carried forward:** Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (INV-199-01); B-02 mastra/index.ts FINAL (INV-199-02); W-02 Reject=tool-result sentinel (INV-199-03); D-NO-NEW-DEPS strict (INV-199-04); Phase 198 generative-UI renderer freeze (INV-199-05); T-197-04-01 LIV_AI_SYSTEM_PROMPT 4 substrings (INV-199-06); P198 hot-fix `convertToModelMessages` await preserved (INV-199-07); 3 built-in tools `weather` + `luse_list_windows` + `get_current_time` preserved (INV-199-08); pre-commit sacred-sha hook PASS (INV-199-09).
+
+**Deferred to Phase 200+:** MCP server install ops (Luse + bytebot), embedder for semanticRecall, voice, PDF attachment, title-generation, multi-agent routing.
+
 ---
 
 ## ✅ v38.2 MILESTONE CLOSED — 2026-05-21

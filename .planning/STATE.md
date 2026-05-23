@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-23T03:05:48Z"
+last_updated: "2026-05-23T04:36:34.049Z"
 progress:
   total_phases: 8
   completed_phases: 8
