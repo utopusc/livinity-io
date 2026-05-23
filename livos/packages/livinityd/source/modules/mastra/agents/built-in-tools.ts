@@ -408,6 +408,73 @@ const pressKeysTool = createTool({
 	},
 })
 
+// ─── Phase 200-C-5 — luse_computer_application (DESTRUCTIVE) ───────────
+//
+// Three sub-actions:
+//   - launch → `gtk-launch <name>` (looks up name.desktop); if that fails,
+//              fall back to `setsid <name> &` so the bare binary spawns
+//              detached from livinityd's process group.
+//   - focus  → `wmctrl -a <name>` (case-insensitive substring match against
+//              window titles).
+//   - close  → `wmctrl -c <name>` (closes the matching window).
+//
+// `name` is passed through execFile arg list — no shell interpolation
+// for the gtk-launch / wmctrl paths. The setsid fallback DOES use sh -c
+// for backgrounding; we wrap name in single quotes via JSON.stringify-ish
+// shell-escape to neutralise embedded single quotes and metacharacters.
+
+function shellQuote(s: string): string {
+	// POSIX single-quoted form: end-quote → escape ' as '\'' → reopen quote
+	return `'${s.replace(/'/g, `'\\''`)}'`
+}
+
+const applicationTool = createTool({
+	id: 'luse_computer_application',
+	description:
+		'Launch, focus, or close an application on the LivOS desktop. ' +
+		"action='launch' starts an app, 'focus' brings its window to front, " +
+		"'close' asks it to quit. This is a DESTRUCTIVE tool — the operator " +
+		'will be asked to approve before it runs.',
+	inputSchema: z.object({
+		action: z.enum(['launch', 'focus', 'close']),
+		name: z.string().min(1),
+	}),
+	outputSchema: z.object({
+		success: z.boolean(),
+		action: z.string(),
+		name: z.string(),
+	}),
+	execute: async (input) => {
+		const {action, name} = input as {
+			action: 'launch' | 'focus' | 'close'
+			name: string
+		}
+		const env = displayEnv()
+		if (action === 'launch') {
+			try {
+				await execFileAsync('gtk-launch', [name], {timeout: 4000, env})
+			} catch {
+				// Fall back to a detached spawn so livinityd doesn't wait on
+				// the child. shellQuote(name) neutralises any operator-supplied
+				// shell meta — sh sees a single literal token.
+				await execFileAsync(
+					'sh',
+					[
+						'-c',
+						`setsid ${shellQuote(name)} >/dev/null 2>&1 < /dev/null &`,
+					],
+					{timeout: 4000, env},
+				)
+			}
+		} else if (action === 'focus') {
+			await execFileAsync('wmctrl', ['-a', name], {timeout: 4000, env})
+		} else {
+			await execFileAsync('wmctrl', ['-c', name], {timeout: 4000, env})
+		}
+		return {success: true, action, name}
+	},
+})
+
 /**
  * Built-in tool map keyed by tool id. Merged into the agent's tool resolver
  * AFTER MCP tool filtering, so these always reach the model regardless of
@@ -427,4 +494,5 @@ export const builtInTools = {
 	luse_computer_click_mouse: clickMouseTool,
 	luse_computer_type_text: typeTextTool,
 	luse_computer_press_keys: pressKeysTool,
+	luse_computer_application: applicationTool,
 }
