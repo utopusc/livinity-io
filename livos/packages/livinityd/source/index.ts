@@ -1415,6 +1415,11 @@ export default class Livinityd {
 					const openuiRepo = new OpenUIAppsRepository(openuiDb)
 					openclawosAppsRouterProductionInstance = createOpenclawosAppsRouter({
 						repo: openuiRepo,
+						// Phase 203-10 — wire NativeAppConfigStore so successful
+						// create/update fire the desktop-registrar hook (D-203-10).
+						// `this.nativeAppConfigStore` is constructed earlier in
+						// boot (after this.ai.start) and is guaranteed live here.
+						nativeAppStore: this.nativeAppConfigStore,
 						logger: {
 							info: (msg) => webappLogger.info(msg),
 							warn: (msg, err) => this.logger.error(msg, err),
@@ -1423,6 +1428,11 @@ export default class Livinityd {
 					webappLogger.info(
 						'Phase 203-04 — openclawos.apps.* tRPC router wired (livos_openui_apps Postgres CRUD; consumed by liv-claw plugin HTTP client)',
 					)
+					if (this.nativeAppConfigStore) {
+						webappLogger.info(
+							'Phase 203-10 — desktop-registrar hook ENABLED (openclawos.apps.create/update/delete propagate to dock via liv:apps:native:* + liv:config:updated)',
+						)
+					}
 				} else {
 					this.logger.error(
 						'Phase 203-04 — DATABASE_URL missing; openclawos.apps.* falls back to OPENUI_REPO_UNAVAILABLE stub until next restart',

@@ -19,6 +19,11 @@ import {TRPCError} from '@trpc/server'
 import {describe, expect, test} from 'vitest'
 
 import {
+	NativeAppConfigStore,
+	type RedisLike,
+} from '../../apps/native-app-config.js'
+import {deterministicUuidForSlug} from '../../openclawos/desktop-registrar.js'
+import {
 	createOpenclawosAppsRouter,
 	openclawosAppsRouter,
 } from './openclawos-router.js'
@@ -178,5 +183,145 @@ describe('createOpenclawosAppsRouter — validation', () => {
 	test('version returns {version: null} for missing slug', async () => {
 		const caller = router.createCaller(makeAdminCtx() as never)
 		await expect(caller.version({slug: 'missing'})).resolves.toEqual({version: null})
+	})
+})
+
+// Phase 203-10 — D-203-10 desktop integration hook.
+//
+// When nativeAppStore is injected, create/update/delete fire
+// register/unregister so the OpenUI app surfaces as a LivOS dock icon.
+// Failures inside the hook MUST NOT mask a successful repo write — the
+// operator still gets the row back; the hook log surfaces the partial state.
+describe('createOpenclawosAppsRouter — desktop-registrar hook (D-203-10)', () => {
+	function fakeRedis(): RedisLike & {
+		store: Map<string, string>
+		publishes: Array<{channel: string; message: string}>
+	} {
+		const store = new Map<string, string>()
+		const publishes: Array<{channel: string; message: string}> = []
+		return {
+			store,
+			publishes,
+			async set(k, v) {
+				store.set(k, v)
+				return 'OK'
+			},
+			async get(k) {
+				return store.get(k) ?? null
+			},
+			async del(k) {
+				return store.delete(k) ? 1 : 0
+			},
+			async keys(p) {
+				const pre = p.replace(/\*$/, '')
+				return [...store.keys()].filter((k) => k.startsWith(pre))
+			},
+			async publish(c, m) {
+				publishes.push({channel: c, message: m})
+				return 0
+			},
+		}
+	}
+
+	const fakeRepo = {
+		listAll: async () => [],
+		getBySlug: async () => null,
+		upsert: async (input: {slug: string; name: string; content: string}) => ({
+			slug: input.slug,
+			name: input.name,
+			content: input.content,
+			version: 1,
+			userId: null,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		}),
+		delete: async () => undefined,
+		versions: async () => [],
+		currentVersion: async () => null,
+		incrementVersion: async () => null,
+	} as unknown as OpenUIAppsRepository
+
+	test('create propagates to NativeAppConfigStore.upsert', async () => {
+		const redis = fakeRedis()
+		const nativeAppStore = new NativeAppConfigStore(redis)
+		const router = createOpenclawosAppsRouter({
+			repo: fakeRepo,
+			nativeAppStore,
+			logger: {info: () => undefined, warn: () => undefined},
+		})
+		const caller = router.createCaller(makeAdminCtx() as never)
+
+		await caller.create({slug: 'calc', name: 'Calculator', content: 'root = Text("hi")'})
+
+		const cfg = await nativeAppStore.get(deterministicUuidForSlug('calc'))
+		expect(cfg).not.toBeNull()
+		expect(cfg!.name).toBe('Calculator')
+		expect(cfg!.wmClassHint).toBe('liv-openui-calc')
+	})
+
+	test('update re-fires register (idempotent on deterministic UUID)', async () => {
+		const redis = fakeRedis()
+		const nativeAppStore = new NativeAppConfigStore(redis)
+		const router = createOpenclawosAppsRouter({
+			repo: fakeRepo,
+			nativeAppStore,
+			logger: {info: () => undefined, warn: () => undefined},
+		})
+		const caller = router.createCaller(makeAdminCtx() as never)
+
+		await caller.create({slug: 'rename', name: 'Old Name', content: 'x'})
+		await caller.update({slug: 'rename', name: 'New Name', content: 'x'})
+
+		const all = await nativeAppStore.list()
+		expect(all).toHaveLength(1)
+		expect(all[0]!.name).toBe('New Name')
+	})
+
+	test('delete propagates to NativeAppConfigStore.delete', async () => {
+		const redis = fakeRedis()
+		const nativeAppStore = new NativeAppConfigStore(redis)
+		const router = createOpenclawosAppsRouter({
+			repo: fakeRepo,
+			nativeAppStore,
+			logger: {info: () => undefined, warn: () => undefined},
+		})
+		const caller = router.createCaller(makeAdminCtx() as never)
+
+		await caller.create({slug: 'gone', name: 'Gone', content: 'x'})
+		await caller.delete({slug: 'gone'})
+
+		const all = await nativeAppStore.list()
+		expect(all).toHaveLength(0)
+	})
+
+	test('hook failure does NOT mask successful create response (non-fatal)', async () => {
+		// Inject a NativeAppConfigStore whose upsert throws.
+		const failingStore = {
+			upsert: () => Promise.reject(new Error('redis down')),
+			delete: () => Promise.resolve(false),
+		} as unknown as NativeAppConfigStore
+
+		const warns: string[] = []
+		const router = createOpenclawosAppsRouter({
+			repo: fakeRepo,
+			nativeAppStore: failingStore,
+			logger: {info: () => undefined, warn: (m) => warns.push(m)},
+		})
+		const caller = router.createCaller(makeAdminCtx() as never)
+
+		const r = await caller.create({slug: 'a', name: 'A', content: 'x'})
+		expect(r.slug).toBe('a') // create still succeeded
+		expect(warns.join('\n')).toContain('Phase 203-10 desktop-registrar (create)')
+	})
+
+	test('omitting nativeAppStore is allowed (router still functional)', async () => {
+		const router = createOpenclawosAppsRouter({
+			repo: fakeRepo,
+			logger: {info: () => undefined, warn: () => undefined},
+		})
+		const caller = router.createCaller(makeAdminCtx() as never)
+		await expect(
+			caller.create({slug: 'no-dock', name: 'X', content: 'x'}),
+		).resolves.toMatchObject({slug: 'no-dock'})
 	})
 })

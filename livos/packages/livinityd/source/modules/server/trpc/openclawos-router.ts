@@ -42,12 +42,27 @@
 import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
+import type {NativeAppConfigStore} from '../../apps/native-app-config.js'
+import {
+	registerOpenUiAppAsDesktopIcon,
+	unregisterOpenUiApp,
+} from '../../openclawos/desktop-registrar.js'
 import type {OpenUIAppsRepository} from '../../openclawos/openui-apps-repository.js'
 import {validateOpenUITree} from '../../openui/validator.js'
 import {adminProcedure, router} from './trpc.js'
 
 export interface OpenclawosAppsRouterDeps {
 	repo: OpenUIAppsRepository
+	/**
+	 * Phase 203-10 — when present, every successful create/update fires
+	 * `registerOpenUiAppAsDesktopIcon` so the OpenUI app surfaces as a
+	 * LivOS dock icon (D-203-10). Delete fires `unregisterOpenUiApp`.
+	 * Failure during the dock-register hop is non-fatal (logged + swallowed)
+	 * so a transient Redis hiccup does NOT mask a successful Postgres write.
+	 * Optional so existing test factories (and the empty-injection stub)
+	 * can omit it.
+	 */
+	nativeAppStore?: NativeAppConfigStore
 	logger: {
 		info: (msg: string) => void
 		warn: (msg: string, error?: unknown) => void
@@ -131,6 +146,50 @@ function mapRepoError(err: unknown): TRPCError {
 	return new TRPCError({code: 'INTERNAL_SERVER_ERROR', message: msg})
 }
 
+/**
+ * Phase 203-10 — fire desktop-registrar hook after a successful
+ * create/update Postgres write. Non-fatal failures are logged + swallowed
+ * so the operator still gets their successful tRPC response and can
+ * re-register via apps.update later.
+ */
+async function registerDesktopIconBestEffort(
+	deps: OpenclawosAppsRouterDeps,
+	slug: string,
+	name: string,
+	op: 'create' | 'update',
+): Promise<void> {
+	if (!deps.nativeAppStore) return
+	try {
+		await registerOpenUiAppAsDesktopIcon(deps.nativeAppStore, slug, name)
+		deps.logger.info(
+			`Phase 203-10 desktop-registrar (${op}) — slug=${slug} registered`,
+		)
+	} catch (err) {
+		deps.logger.warn(
+			`Phase 203-10 desktop-registrar (${op}) — slug=${slug} FAILED (non-fatal)`,
+			err,
+		)
+	}
+}
+
+async function unregisterDesktopIconBestEffort(
+	deps: OpenclawosAppsRouterDeps,
+	slug: string,
+): Promise<void> {
+	if (!deps.nativeAppStore) return
+	try {
+		await unregisterOpenUiApp(deps.nativeAppStore, slug)
+		deps.logger.info(
+			`Phase 203-10 desktop-registrar (delete) — slug=${slug} unregistered`,
+		)
+	} catch (err) {
+		deps.logger.warn(
+			`Phase 203-10 desktop-registrar (delete) — slug=${slug} FAILED (non-fatal)`,
+			err,
+		)
+	}
+}
+
 export function createOpenclawosAppsRouter(deps: OpenclawosAppsRouterDeps) {
 	return router({
 		list: adminProcedure.input(ListInputSchema).query(async ({input}) => {
@@ -173,6 +232,12 @@ export function createOpenclawosAppsRouter(deps: OpenclawosAppsRouterDeps) {
 					deps.logger.info(
 						`Phase 203-04 openclawos.apps.create — slug=${row.slug} v${row.version}`,
 					)
+					// Phase 203-10 — D-203-10 desktop integration. Fire-and-await
+					// the dock-registrar so the operator can immediately see the
+					// new icon (the existing liv:config:updated pub/sub triggers
+					// the dock to re-fetch apps.native.list). Failures are
+					// non-fatal — logged + swallowed inside the helper.
+					await registerDesktopIconBestEffort(deps, row.slug, row.name, 'create')
 					return row
 				} catch (err) {
 					throw mapRepoError(err)
@@ -193,6 +258,10 @@ export function createOpenclawosAppsRouter(deps: OpenclawosAppsRouterDeps) {
 					deps.logger.info(
 						`Phase 203-04 openclawos.apps.update — slug=${row.slug} v${row.version}`,
 					)
+					// Phase 203-10 — re-fire on update so a name change propagates
+					// to the dock label. Deterministic UUID keeps it idempotent on
+					// the Redis side (T-203-05).
+					await registerDesktopIconBestEffort(deps, row.slug, row.name, 'update')
 					return row
 				} catch (err) {
 					throw mapRepoError(err)
@@ -207,8 +276,10 @@ export function createOpenclawosAppsRouter(deps: OpenclawosAppsRouterDeps) {
 					deps.logger.info(
 						`Phase 203-04 openclawos.apps.delete — slug=${input.slug}`,
 					)
-					// Plan 203-10 will fire `NativeAppConfigStore.delete` here
-					// for the desktop-dock unregister hook (D-203-10).
+					// Phase 203-10 — D-203-10 unregister hook. Idempotent so a
+					// repeat delete or a delete for an app that never had the
+					// dock-registrar fire (e.g. pre-203-10 rows) is safe.
+					await unregisterDesktopIconBestEffort(deps, input.slug)
 					return {ok: true as const}
 				} catch (err) {
 					throw mapRepoError(err)
