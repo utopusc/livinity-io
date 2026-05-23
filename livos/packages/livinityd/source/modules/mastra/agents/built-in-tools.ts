@@ -347,6 +347,37 @@ const clickMouseTool = createTool({
 	},
 })
 
+// ─── Phase 200-C-3 — luse_computer_type_text (DESTRUCTIVE) ─────────────
+//
+// Types arbitrary text into the focused window. The text payload is
+// passed via execFile arg list (NOT interpolated into a shell string) so
+// the operator's `;`, `$`, backticks, etc. cannot escape into a sub-shell.
+// `--` terminates xdotool option parsing so text starting with `-` is
+// not misread as a flag.
+
+const typeTextTool = createTool({
+	id: 'luse_computer_type_text',
+	description:
+		'Type the given text into the currently focused window on the LivOS desktop. ' +
+		'This is a DESTRUCTIVE tool — the operator will be asked to approve before it runs.',
+	inputSchema: z.object({
+		text: z.string(),
+	}),
+	outputSchema: z.object({
+		success: z.boolean(),
+		charsTyped: z.number(),
+	}),
+	execute: async (input) => {
+		const {text} = input as {text: string}
+		const env = displayEnv()
+		await execFileAsync('xdotool', ['type', '--delay', '20', '--', text], {
+			timeout: 10_000,
+			env,
+		})
+		return {success: true, charsTyped: text.length}
+	},
+})
+
 /**
  * Built-in tool map keyed by tool id. Merged into the agent's tool resolver
  * AFTER MCP tool filtering, so these always reach the model regardless of
@@ -364,4 +395,5 @@ export const builtInTools = {
 	luse_computer_screenshot: screenshotTool,
 	// Phase 200-C destructive additions (W-02 approval-wrapped at agent build time)
 	luse_computer_click_mouse: clickMouseTool,
+	luse_computer_type_text: typeTextTool,
 }

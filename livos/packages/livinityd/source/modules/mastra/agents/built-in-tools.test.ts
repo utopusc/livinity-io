@@ -221,3 +221,33 @@ describe('luse_computer_click_mouse', () => {
 		).rejects.toThrow(/cannot open display/)
 	})
 })
+
+// ─── luse_computer_type_text ──────────────────────────────────────────
+
+describe('luse_computer_type_text', () => {
+	test('happy path: text passed via arg list with --delay 20 and -- terminator', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			return {stdout: '', stderr: ''}
+		})
+		const r = (await run('luse_computer_type_text', {
+			text: 'merhaba dünya',
+		})) as {success: boolean; charsTyped: number}
+		expect(r).toEqual({success: true, charsTyped: 'merhaba dünya'.length})
+		expect(calls[0].file).toBe('xdotool')
+		expect(calls[0].args).toEqual(['type', '--delay', '20', '--', 'merhaba dünya'])
+	})
+
+	test('shell-meta safety: $, ;, backticks pass through arg list unchanged (no shell interpolation)', async () => {
+		const calls: Array<{file: string; args: ReadonlyArray<string>}> = []
+		setExecFileHandler((file, args) => {
+			calls.push({file, args: [...args]})
+			return {stdout: '', stderr: ''}
+		})
+		const dangerous = '$(rm -rf /); `id`; ${HOME}'
+		await run('luse_computer_type_text', {text: dangerous})
+		// xdotool gets the literal string in args[4] — no shell ever sees it.
+		expect(calls[0].args[4]).toBe(dangerous)
+	})
+})
