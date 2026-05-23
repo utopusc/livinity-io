@@ -17,7 +17,7 @@
 // plan widens the backend list without bumping this literal, the test
 // fails CI and forces a sync.
 
-import {Brain, Crown, Sparkles, Zap} from 'lucide-react'
+import {Brain, Crown, Zap} from 'lucide-react'
 import type {LucideIcon} from 'lucide-react'
 
 // P199 UAT hot-fix: list rebuilt from a live `GET https://api.x.ai/v1/models`
@@ -40,12 +40,6 @@ export const LIV_AI_MODELS = [
 		name: 'Grok 4.20 Think',
 		description: 'Multi-step reasoning (slower).',
 		Icon: Brain,
-	},
-	{
-		id: 'grok-4.20-multi-agent-0309',
-		name: 'Grok 4.20 Multi-Agent',
-		description: 'Advanced multi-agent orchestration.',
-		Icon: Sparkles,
 	},
 	{
 		id: 'grok-4.3',

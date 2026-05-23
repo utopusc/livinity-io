@@ -27,14 +27,13 @@ import {DEFAULT_LIV_AI_MODEL_ID, LIV_AI_MODELS, type LivAiModelId} from './model
 
 describe('LIV_AI_MODELS registry (Phase 199-04)', () => {
 	it('Test 1: ships exactly 4 entries (D-199-06)', () => {
-		expect(LIV_AI_MODELS).toHaveLength(4)
+		expect(LIV_AI_MODELS).toHaveLength(3)
 	})
 
-	it('Test 2: id order matches the P199-UAT live-xAI list', () => {
+	it('Test 2: id order matches the live-xAI chat-completion-capable list (P200-B drops multi-agent)', () => {
 		expect(LIV_AI_MODELS.map((m) => m.id)).toEqual([
 			'grok-4.20-0309-non-reasoning',
 			'grok-4.20-0309-reasoning',
-			'grok-4.20-multi-agent-0309',
 			'grok-4.3',
 		])
 	})

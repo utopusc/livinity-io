@@ -637,6 +637,25 @@ chown -R root:root "$LIV_DIR" 2>/dev/null || true
 
 ok "Permissions fixed"
 
+# ── Step 7.5: Mastra storage schema drift fixes ─────────────────────────────
+# P199 UAT discovered Mastra v1.36 expects camelCase columns the old @mastra/pg
+# init never created (mastra_threads.resourceId, mastra_messages.type). Both
+# ALTERs are idempotent (IF NOT EXISTS) so safe to run on every deploy.
+step "Applying Mastra storage schema drift fixes"
+
+if command -v sudo >/dev/null && sudo -u postgres psql -d livos -c '\q' >/dev/null 2>&1; then
+    sudo -u postgres psql -d livos <<'SQL' >/dev/null 2>&1 || true
+ALTER TABLE IF EXISTS mastra_threads ADD COLUMN IF NOT EXISTS "resourceId" text;
+UPDATE mastra_threads SET "resourceId" = resource_id
+  WHERE "resourceId" IS NULL AND resource_id IS NOT NULL;
+ALTER TABLE IF EXISTS mastra_messages ADD COLUMN IF NOT EXISTS "type" text;
+ALTER TABLE IF EXISTS mastra_messages ADD COLUMN IF NOT EXISTS "createdAtZ" timestamp with time zone DEFAULT now();
+SQL
+    ok "Mastra schema drift fixes applied"
+else
+    info "Postgres not accessible — skipping Mastra schema fixes (run manually if upgrading)"
+fi
+
 # ── Step 8: Restart services ─────────────────────────────
 step "Restarting services"
 

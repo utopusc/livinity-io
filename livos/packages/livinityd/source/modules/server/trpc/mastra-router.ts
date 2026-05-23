@@ -89,7 +89,6 @@ const runAborts = new Map<string, AbortController>()
 const LIV_AI_MODEL_LABELS: Record<AllowedXaiModel, {name: string; description: string}> = {
 	'grok-4.20-0309-non-reasoning': {name: 'Grok 4.20', description: 'Fast non-reasoning. Default.'},
 	'grok-4.20-0309-reasoning': {name: 'Grok 4.20 Think', description: 'Multi-step reasoning (slower).'},
-	'grok-4.20-multi-agent-0309': {name: 'Grok 4.20 Multi-Agent', description: 'Advanced multi-agent orchestration.'},
 	'grok-4.3': {name: 'Grok 4.3', description: 'Latest. Reasoning + tool use.'},
 }
 
