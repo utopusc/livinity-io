@@ -651,4 +651,16 @@ export const httpOnlyPaths = [
 	// panel "Built-in tools" group. Same WS-handshake-delay-flicker rationale
 	// as mastra.agent.listAvailableModels (the panel hydrates on first mount).
 	'mastra.agent.listBuiltInTools',
+	// Phase 203-04 — openclawos.apps.* namespace consumed by the rebranded
+	// liv-claw plugin (loopback HTTP fetch from `liv-claw-gateway.service`
+	// to livinityd `:8080`). All 6 paths MUST be HTTP — the plugin process
+	// has no WS pipe to livinityd, and mutations on a half-broken WS hang
+	// silently (memory pitfall B-12). Same rationale as mastra.config.*
+	// + agents.* clusters above.
+	'openclawos.apps.list',
+	'openclawos.apps.get',
+	'openclawos.apps.create',
+	'openclawos.apps.update',
+	'openclawos.apps.delete',
+	'openclawos.apps.version',
 ] as const

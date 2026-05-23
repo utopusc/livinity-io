@@ -139,6 +139,17 @@ import {mastraRouter, createMastraRouter} from './mastra-router.js'
 // boot wire-up replaces them via setProductionAppRouter().
 import {createAgentRouter} from './agent-router.js'
 import {createAgentTaskRouter} from './agent-task-router.js'
+// Phase 203-04 — `openclawos.apps.*` namespace. Factory-DI: production
+// livinityd boot supplies a real `createOpenclawosAppsRouter({repo, logger})`
+// built against an OpenUIAppsRepository instance. The default exported
+// router is an empty-injection stub that throws PRECONDITION_FAILED on
+// every call until boot wires the real repo. All 6 procedure paths are
+// added to `httpOnlyPaths` in ./common.ts so the plugin's loopback fetch
+// from `liv-claw-gateway.service` can never accidentally route via WS.
+import {
+	createOpenclawosAppsRouter,
+	openclawosAppsRouter,
+} from './openclawos-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -188,6 +199,12 @@ export function createAppRouter(opts: {
 	// `mcp` namespace below as `mcp.config.*`. Optional with empty-injection
 	// fallback so the default appRouter still type-checks.
 	mcpConfig?: ReturnType<typeof createMcpConfigRouter>
+	// Phase 203-04 — `openclawos.apps.*` namespace slot. Default empty-
+	// injection stub keeps the appRouter type-stable; production boot
+	// supplies the real router built against `OpenUIAppsRepository` (Plan
+	// 203-04). Mounted under `openclawos` as a NEW top-level namespace —
+	// INV-203-09 untouched (mcp.* + agents.* contracts unchanged).
+	openclawosApps?: ReturnType<typeof createOpenclawosAppsRouter>
 }) {
 	return router({
 		migration,
@@ -279,6 +296,14 @@ export function createAppRouter(opts: {
 			// only here to keep `createAppRouter()` shape stable for tests.
 			return router({})
 		})(),
+		// Phase 203-04 — `openclawos.apps.*` namespace (slug-keyed Postgres
+		// app registry consumed by the rebranded liv-claw plugin). The
+		// default `openclawosAppsRouter` stub throws PRECONDITION_FAILED +
+		// OPENUI_REPO_UNAVAILABLE on every call until production boot swaps
+		// in a real `createOpenclawosAppsRouter({repo})` build.
+		openclawos: router({
+			apps: opts.openclawosApps ?? openclawosAppsRouter,
+		}),
 	})
 }
 
