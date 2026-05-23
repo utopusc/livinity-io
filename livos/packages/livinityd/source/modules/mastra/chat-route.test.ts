@@ -260,3 +260,202 @@ describe('createChatRouteHandler', () => {
 		expect(parsed.success).toBe(false)
 	})
 })
+
+// --- Phase 199-03 ------------------------------------------------------
+//
+// Plan 199-03 wires per-request dynamic model selection via Mastra
+// RequestContext + closes the P197-03 wire gap by threading req.body.threadId
+// into agent.stream's memory option.
+//
+// Coverage (7 cases — T-199-03-02 cross-talk + T-199-01 soft-validate +
+// D-199-09 backend schema gate + E12 memory.thread wire-up):
+//   1. body {messages, config:{modelName:'grok-4.3'}} → agent.stream opts
+//      requestContext.get('modelName') === 'grok-4.3'
+//   2. body {messages} no config → requestContext.get('modelName') === undefined
+//   3. body {messages, config:{modelName:'bogus'}} → forwards verbatim ('bogus')
+//      to RequestContext (provider-router coerceModel handles the soft fallback)
+//   4. body {messages, threadId:'t-12345'} → agent.stream opts
+//      memory === {thread:'t-12345', resource:'admin'}
+//   5. body {messages} no threadId → agent.stream opts memory === undefined
+//   6. body {messages, config:{modelName:42}} → zod 400 (number rejected)
+//   7. Two parallel POSTs with different modelName resolve independently
+//      (T-199-05 cross-talk regression-lock)
+
+describe('Phase 199-03: config.modelName + threadId + RequestContext', () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+	})
+
+	test('Test 1: config.modelName="grok-4.3" → opts.requestContext.get(modelName) === "grok-4.3"', async () => {
+		let capturedOpts: {requestContext?: {get(k: string): unknown}; memory?: unknown} | undefined
+		const streamSpy = vi.fn(async (_msgs: unknown[], opts?: typeof capturedOpts) => {
+			capturedOpts = opts
+			return {dummy: true}
+		})
+		const livOSMastra = makeLivOSMastra({hasAgent: true, streamSpy})
+		const handler = createChatRouteHandler({livOSMastra})
+
+		const req = makeReq({
+			body: {
+				messages: [{role: 'user', content: 'hi'}],
+				config: {modelName: 'grok-4.3'},
+			},
+		})
+		const {res, captured} = makeRes()
+
+		await handler(req as never, res as never, () => {})
+
+		expect(streamSpy).toHaveBeenCalledTimes(1)
+		expect(capturedOpts).toBeDefined()
+		expect(capturedOpts!.requestContext).toBeDefined()
+		expect(capturedOpts!.requestContext!.get('modelName')).toBe('grok-4.3')
+		expect(captured.statusCode).toBe(200)
+	})
+
+	test('Test 2: no config → opts.requestContext.get(modelName) === undefined', async () => {
+		let capturedOpts: {requestContext?: {get(k: string): unknown}; memory?: unknown} | undefined
+		const streamSpy = vi.fn(async (_msgs: unknown[], opts?: typeof capturedOpts) => {
+			capturedOpts = opts
+			return {dummy: true}
+		})
+		const livOSMastra = makeLivOSMastra({hasAgent: true, streamSpy})
+		const handler = createChatRouteHandler({livOSMastra})
+
+		const req = makeReq({body: {messages: [{role: 'user', content: 'hi'}]}})
+		const {res, captured} = makeRes()
+
+		await handler(req as never, res as never, () => {})
+
+		expect(streamSpy).toHaveBeenCalledTimes(1)
+		expect(capturedOpts!.requestContext).toBeDefined()
+		expect(capturedOpts!.requestContext!.get('modelName')).toBeUndefined()
+		expect(captured.statusCode).toBe(200)
+	})
+
+	test('Test 3: config.modelName="bogus" → forwards verbatim to RequestContext (NO 400, NO coerce here)', async () => {
+		let capturedOpts: {requestContext?: {get(k: string): unknown}} | undefined
+		const streamSpy = vi.fn(async (_msgs: unknown[], opts?: typeof capturedOpts) => {
+			capturedOpts = opts
+			return {dummy: true}
+		})
+		const livOSMastra = makeLivOSMastra({hasAgent: true, streamSpy})
+		const handler = createChatRouteHandler({livOSMastra})
+
+		const req = makeReq({
+			body: {
+				messages: [{role: 'user', content: 'hi'}],
+				config: {modelName: 'bogus'},
+			},
+		})
+		const {res, captured} = makeRes()
+
+		await handler(req as never, res as never, () => {})
+
+		// Soft-validate per D-199-24 / T-199-01: chat-route forwards verbatim;
+		// provider-router.coerceModel handles the fallback when liv-ai.ts
+		// reads modelName off requestContext.
+		expect(capturedOpts!.requestContext!.get('modelName')).toBe('bogus')
+		expect(streamSpy).toHaveBeenCalledTimes(1)
+		expect(captured.statusCode).toBe(200)
+	})
+
+	test('Test 4: threadId="t-12345" → opts.memory === {thread:"t-12345", resource:"admin"}', async () => {
+		let capturedOpts: {memory?: {thread?: string; resource?: string}} | undefined
+		const streamSpy = vi.fn(async (_msgs: unknown[], opts?: typeof capturedOpts) => {
+			capturedOpts = opts
+			return {dummy: true}
+		})
+		const livOSMastra = makeLivOSMastra({hasAgent: true, streamSpy})
+		const handler = createChatRouteHandler({livOSMastra})
+
+		const req = makeReq({
+			body: {
+				messages: [{role: 'user', content: 'hi'}],
+				threadId: 't-12345',
+			},
+		})
+		const {res, captured} = makeRes()
+
+		await handler(req as never, res as never, () => {})
+
+		expect(capturedOpts!.memory).toEqual({thread: 't-12345', resource: 'admin'})
+		expect(captured.statusCode).toBe(200)
+	})
+
+	test('Test 5: no threadId → opts.memory === undefined', async () => {
+		let capturedOpts: {memory?: unknown} | undefined
+		const streamSpy = vi.fn(async (_msgs: unknown[], opts?: typeof capturedOpts) => {
+			capturedOpts = opts
+			return {dummy: true}
+		})
+		const livOSMastra = makeLivOSMastra({hasAgent: true, streamSpy})
+		const handler = createChatRouteHandler({livOSMastra})
+
+		const req = makeReq({body: {messages: [{role: 'user', content: 'hi'}]}})
+		const {res, captured} = makeRes()
+
+		await handler(req as never, res as never, () => {})
+
+		expect(capturedOpts!.memory).toBeUndefined()
+		expect(captured.statusCode).toBe(200)
+	})
+
+	test('Test 6: config.modelName=42 (number) → zod rejects with 400', async () => {
+		const streamSpy = vi.fn()
+		const livOSMastra = makeLivOSMastra({hasAgent: true, streamSpy})
+		const handler = createChatRouteHandler({livOSMastra})
+
+		const req = makeReq({
+			body: {
+				messages: [{role: 'user', content: 'hi'}],
+				config: {modelName: 42},
+			},
+		})
+		const {res, captured} = makeRes()
+
+		await handler(req as never, res as never, () => {})
+
+		expect(captured.statusCode).toBe(400)
+		const body = captured.jsonBody as {error: string; issues: unknown[]}
+		expect(body.error).toBe('Invalid request body')
+		expect(Array.isArray(body.issues)).toBe(true)
+		expect(streamSpy).not.toHaveBeenCalled()
+	})
+
+	test('Test 7: T-199-05 cross-talk — two parallel POSTs with different modelName resolve independently', async () => {
+		const capturedOptsList: Array<{requestContext?: {get(k: string): unknown}}> = []
+		const streamSpy = vi.fn(async (_msgs: unknown[], opts?: {requestContext?: {get(k: string): unknown}}) => {
+			if (opts) capturedOptsList.push(opts)
+			return {dummy: true}
+		})
+		const livOSMastra = makeLivOSMastra({hasAgent: true, streamSpy})
+		const handler = createChatRouteHandler({livOSMastra})
+
+		const req1 = makeReq({
+			body: {
+				messages: [{role: 'user', content: 'a'}],
+				config: {modelName: 'grok-4.3'},
+			},
+		})
+		const req2 = makeReq({
+			body: {
+				messages: [{role: 'user', content: 'b'}],
+				config: {modelName: 'grok-4.20-0309-reasoning'},
+			},
+		})
+		const {res: res1} = makeRes()
+		const {res: res2} = makeRes()
+
+		await Promise.all([
+			handler(req1 as never, res1 as never, () => {}),
+			handler(req2 as never, res2 as never, () => {}),
+		])
+
+		expect(streamSpy).toHaveBeenCalledTimes(2)
+		expect(capturedOptsList.length).toBe(2)
+		const modelNames = capturedOptsList.map((o) => o.requestContext!.get('modelName')).sort()
+		expect(modelNames).toEqual(['grok-4.20-0309-reasoning', 'grok-4.3'])
+		// And they must be distinct RequestContext instances (no shared mutation).
+		expect(capturedOptsList[0]!.requestContext).not.toBe(capturedOptsList[1]!.requestContext)
+	})
+})
