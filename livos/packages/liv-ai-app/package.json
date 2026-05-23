@@ -12,16 +12,12 @@
     "format:fix": "biome format --write ."
   },
   "dependencies": {
-    "@assistant-ui/react": "latest",
-    "@assistant-ui/react-ai-sdk": "latest",
-    "@assistant-ui/react-markdown": "latest",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "ai": "^6.0.175",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "leaflet": "^1.9.4",
