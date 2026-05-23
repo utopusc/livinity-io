@@ -115,6 +115,17 @@ import {setupRouter, createSetupRouter} from './setup-router.js'
 // type. Production livinityd boot supplies the createMastraRouter({...}) build
 // via the chromeMaster try/catch (same DI pattern as 196-01).
 import {mastraRouter, createMastraRouter} from './mastra-router.js'
+// Phase 202-03 — Agents Platform CRUD + task lifecycle routers. Two
+// factory-DI routers (createAgentRouter + createAgentTaskRouter) consumed by
+// the boot wire-up the same way chromeMaster / xaiAuth / mastra are wired.
+// Both factories require `livOSMastra` + a logger; createAgentRouter ALSO
+// needs the `AgentRepository` instance so CRUD mutations can call
+// repo.create/update/delete directly without going through the registry.
+//
+// The default exports are empty-injection stubs that throw on first call —
+// boot wire-up replaces them via setProductionAppRouter().
+import {createAgentRouter} from './agent-router.js'
+import {createAgentTaskRouter} from './agent-task-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -154,6 +165,12 @@ export function createAppRouter(opts: {
 	// Plan 197-01's `unknown` placeholder to the real router type at this
 	// plan. Production swap in livinityd boot via createMastraRouter({...}).
 	mastra?: ReturnType<typeof createMastraRouter>
+	// Phase 202-03 — Agents Platform CRUD + task router slots. Both default
+	// to undefined; when boot wires them, they mount as `agents.*` and
+	// `agents.tasks.*`. When undefined, the legacy fall-through behaviour
+	// (no `agents` key) preserves type inference for back-compat callers.
+	agents?: ReturnType<typeof createAgentRouter>
+	agentTasks?: ReturnType<typeof createAgentTaskRouter>
 }) {
 	return router({
 		migration,
@@ -218,6 +235,27 @@ export function createAppRouter(opts: {
 		// injects a real createMastraRouter({livOSMastra, approvalManager})
 		// build via the chromeMaster try/catch in livinityd start().
 		mastra: opts.mastra ?? mastraRouter,
+		// Phase 202-03 — Agents Platform namespace. Combines the CRUD router
+		// (agents.list/get/create/update/delete/runOnce/cronPreview) with the
+		// task lifecycle sub-router (agents.tasks.{create,list,get,cancel}).
+		// When the boot wire-up has not yet supplied both factories, fall back
+		// to an empty stub router so type inference still works.
+		agents: (() => {
+			if (opts.agents && opts.agentTasks) {
+				return t.mergeRouters(
+					opts.agents,
+					router({tasks: opts.agentTasks}),
+				)
+			}
+			if (opts.agents) {
+				return opts.agents
+			}
+			// Empty stub — every procedure call throws PRECONDITION_FAILED via
+			// adminProcedure auth + the bare router has no procedures at all.
+			// Production boot is expected to inject both routers; the stub is
+			// only here to keep `createAppRouter()` shape stable for tests.
+			return router({})
+		})(),
 	})
 }
 
