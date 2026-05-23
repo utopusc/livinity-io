@@ -89,18 +89,30 @@ function resolveOpenclawBin() {
 
 function resolvePluginBundle() {
     // The plugin is the @openuidev/openclaw-os-plugin package shipped INSIDE
-    // @livos/liv-claw-os. Its build output is dist/index.js (esbuild bundle).
-    // We resolve via the workspace path rather than the package name to avoid
-    // any private/peer-dep resolution quirks.
+    // @livos/liv-claw-os. openclaw `plugins install --link` expects a path
+    // pointing at a directory containing `openclaw.plugin.json` (the plugin
+    // manifest), NOT the compiled JS bundle.
+    //
+    // We pass the package ROOT (containing both `openclaw.plugin.json` and
+    // `package.json` with `main: "./dist/index.js"`) so openclaw can resolve
+    // the manifest AND the entry bundle via standard package conventions.
+    //
+    // Plan 203-13 inline fix (Plan 203-12 carry-over #1): earlier deploys
+    // pointed at `dist/index.js` directly, which made openclaw bail with
+    // "plugin manifest not found: openclaw.plugin.json" because the CLI walks
+    // siblings of the given path, not parents. Fix is two-pronged:
+    //   1) Build script now copies `openclaw.plugin.json` into `dist/` so
+    //      sibling-walk also finds it (defence-in-depth);
+    //   2) This resolver now points at the package root (containing both the
+    //      manifest and `package.json`) — canonical openclaw plugin shape.
     const candidates = [
-        // Most likely location post `pnpm install` at workspace root.
-        path.resolve(__dirname, '..', 'liv-claw-os', 'packages', 'claw-plugin', 'dist', 'index.js'),
+        path.resolve(__dirname, '..', 'liv-claw-os', 'packages', 'claw-plugin'),
     ];
     for (const candidate of candidates) {
-        if (fs.existsSync(candidate)) return candidate;
+        if (fs.existsSync(path.join(candidate, 'openclaw.plugin.json'))) return candidate;
     }
     throw new Error(
-        '[liv-claw-gateway] plugin bundle not found. Run `pnpm --filter @livos/liv-claw-os build` first. Looked at:\n  - ' +
+        '[liv-claw-gateway] plugin package not found. Run `pnpm --filter @livos/liv-claw-os build` first. Looked at:\n  - ' +
             candidates.join('\n  - '),
     );
 }

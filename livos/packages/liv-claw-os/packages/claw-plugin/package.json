@@ -30,7 +30,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --external:openclaw --external:openclaw/* --external:node:* --loader:.json=json --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
+    "build": "rm -rf dist && esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --external:openclaw --external:openclaw/* --external:node:* --loader:.json=json --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" && shx cp openclaw.plugin.json dist/openclaw.plugin.json && shx cp package.json dist/package.json",
     "bundle-ui": "cd ../claw-client && pnpm install --frozen-lockfile=false && pnpm build && shx rm -rf ../claw-plugin/static && shx cp -r out ../claw-plugin/static",
     "prepack": "pnpm bundle-ui && pnpm build",
     "open": "node ../../scripts/open-ui.mjs",
