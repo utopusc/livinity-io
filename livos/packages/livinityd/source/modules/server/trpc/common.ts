@@ -344,6 +344,20 @@ export const httpOnlyPaths = [
 	'mcp.removeFromAgent',
 	'mcp.smitheryConfigured',
 	'mcp.setSmitheryKey',
+	// Phase 202-07 — `mcp.config.*` CRUD over the Redis hash `liv:mcp:config`
+	// (D-202-12). All five paths route via HTTP because:
+	//   - list is a settings-page render dependency. HTTP avoids the
+	//     WS-handshake-delay flicker on first paint (precedent: agents.list).
+	//   - add / update / delete / toggle are settings-page mutations called
+	//     immediately after admin clicks save. A WS half-broken after
+	//     `systemctl restart livos` would silently drop the Redis hash
+	//     mutation (memory pitfall B-12 / X-04 — same rationale as
+	//     mcp.setSmitheryKey above + apiKeys.create).
+	'mcp.config.list',
+	'mcp.config.add',
+	'mcp.config.update',
+	'mcp.config.delete',
+	'mcp.config.toggle',
 	// v32-redo Stage 2b — conversations namespace (sidebar feed + thread view +
 	// composer persistence path). All 6 paths route via HTTP because:
 	//   - list / listMessages are page-render dependencies for the AI Chat
