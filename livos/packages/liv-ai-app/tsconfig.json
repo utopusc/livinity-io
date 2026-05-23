@@ -23,6 +23,12 @@
       }
     ],
     "paths": {
+      "@/lib/tool-ui/*": [
+        "./src/lib/tool-ui/*"
+      ],
+      "@/lib/liv-ai/*": [
+        "./src/lib/liv-ai/*"
+      ],
       "@/*": [
         "./*"
       ]
