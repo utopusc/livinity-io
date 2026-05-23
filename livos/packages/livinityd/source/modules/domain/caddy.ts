@@ -105,13 +105,19 @@ export function validateHost(host: string): boolean {
 /**
  * Phase 201-06 — Next.js Liv AI subapp listens on 127.0.0.1:3010 with
  * `basePath: '/liv-ai-app'` (see livos/packages/liv-ai-app/next.config.ts).
- * Every per-user vhost (apex + multiUser subdomain blocks) MUST first try
- * `handle /liv-ai-app/*` and route it to :3010 BEFORE falling through to the
- * livinityd app gateway on :8080. Caddy `handle` is first-match-wins for path
- * matchers, so a default `handle { reverse_proxy 127.0.0.1:8080 ... }` comes
- * after the prefix matcher to keep the existing 8080 catch-all semantics.
+ * Every per-user vhost (apex + multiUser subdomain blocks) MUST first match
+ * BOTH `/liv-ai-app` (the bare prefix the iframe src uses) AND `/liv-ai-app/*`
+ * (every asset / API path) and route them to :3010 BEFORE falling through to
+ * the livinityd app gateway on :8080. Caddy `handle` only accepts a single
+ * path matcher inline, so we declare a named matcher `@livai` covering both
+ * shapes and use it with `handle @livai`. First-match-wins ordering means the
+ * default `handle { reverse_proxy 127.0.0.1:8080 ... }` placed after still
+ * catches everything else (Phase 201 hotfix 2026-05-23 — bare prefix was
+ * leaking to livinityd UI, IframeChecker self-protection then refused to
+ * mount the iframe with "LivOS cannot be embedded in an iframe.").
  */
-const LIV_AI_APP_HANDLE = `\thandle /liv-ai-app/* {
+const LIV_AI_APP_HANDLE = `\t@livai path /liv-ai-app /liv-ai-app/*
+\thandle @livai {
 \t\treverse_proxy 127.0.0.1:3010 {
 ${WS_TRANSPORT_BODY}
 \t}

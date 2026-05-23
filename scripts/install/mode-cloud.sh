@@ -66,7 +66,8 @@ _configure_caddy_for_cloud() {
     if [[ "$use_https" == "true" ]] && [[ "$domain" != "localhost" ]]; then
         cat > /etc/caddy/Caddyfile <<CADDYFILE
 ${domain} {
-    handle /liv-ai-app/* {
+    @livai path /liv-ai-app /liv-ai-app/*
+    handle @livai {
         reverse_proxy 127.0.0.1:3010
     }
     handle {
@@ -78,7 +79,8 @@ CADDYFILE
     else
         cat > /etc/caddy/Caddyfile <<'CADDYFILE'
 :80 {
-    handle /liv-ai-app/* {
+    @livai path /liv-ai-app /liv-ai-app/*
+    handle @livai {
         reverse_proxy 127.0.0.1:3010
     }
     handle {
