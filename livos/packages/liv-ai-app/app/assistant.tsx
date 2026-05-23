@@ -17,17 +17,26 @@ import { Separator } from "@/components/ui/separator";
 import {
   Breadcrumb,
   BreadcrumbItem,
-  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
-  BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
+/**
+ * Liv AI UI talks to livinityd's Express route `/chat/livAi`.
+ *   - Dev (localhost:3010): Next.js rewrites in next.config.ts proxy
+ *     `/chat/*` + `/trpc/*` → https://bruce.livinity.io/* server-side, so
+ *     the browser sees same-origin (no CORS) and the operator's
+ *     LIVINITY_SESSION cookie (one-time copied to localhost via DevTools)
+ *     is forwarded to the live backend.
+ *   - Prod (Caddy at bruce.livinity.io/liv-ai-app/*): rewrites no-op —
+ *     same-origin already, JWT cookie native to the parent vhost.
+ */
 export const Assistant = () => {
   const runtime = useChatRuntime({
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     transport: new AssistantChatTransport({
-      api: "/api/chat",
+      api: "/chat/livAi",
+      credentials: "include",
     }),
   });
 
@@ -42,18 +51,8 @@ export const Assistant = () => {
               <Separator orientation="vertical" className="mr-2 h-4" />
               <Breadcrumb>
                 <BreadcrumbList>
-                  <BreadcrumbItem className="hidden md:block">
-                    <BreadcrumbLink
-                      href="https://www.assistant-ui.com/docs/getting-started"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Build Your Own ChatGPT UX
-                    </BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator className="hidden md:block" />
                   <BreadcrumbItem>
-                    <BreadcrumbPage>Starter Template</BreadcrumbPage>
+                    <BreadcrumbPage>Liv AI</BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
