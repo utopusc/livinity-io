@@ -1596,6 +1596,7 @@ _dld_update_caddy_to_livinityd() {
         reverse_proxy 127.0.0.1:8080
     }
     handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
+        rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
     }
     @livaiSubapp path /liv-ai-app /liv-ai-app/*
@@ -1623,6 +1624,7 @@ import /etc/caddy/pki-global.conf
         reverse_proxy 127.0.0.1:8080
     }
     handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
+        rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
     }
     @livaiSubapp path /liv-ai-app /liv-ai-app/*
@@ -1643,6 +1645,7 @@ CADDYFILE
         reverse_proxy 127.0.0.1:8080
     }
     handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
+        rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
     }
     @livaiSubapp path /liv-ai-app /liv-ai-app/*

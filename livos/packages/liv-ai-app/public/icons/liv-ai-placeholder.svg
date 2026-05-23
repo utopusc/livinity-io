@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Liv AI app">
+  <title>Liv AI app</title>
+  <defs>
+    <linearGradient id="livGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" ry="14" fill="url(#livGrad)"/>
+  <path
+    d="M20 18 L20 46 L30 46 L30 38 L34 38 L34 46 L44 46 L44 18 L34 18 L34 28 L30 28 L30 18 Z"
+    fill="#ffffff"
+    fill-opacity="0.95"
+  />
+</svg>
