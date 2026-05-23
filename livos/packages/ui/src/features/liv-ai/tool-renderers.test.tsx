@@ -89,6 +89,27 @@ vi.mock('leaflet', () => ({
 	},
 }))
 
+// Mock trpc client — the Plan 198-04 ApprovalCard renderers route
+// Approve/Reject through useApproveMutation → trpcReact.mastra.agent
+// .approve.useMutation. Tests don't bring up the tRPC provider so we
+// stub the chain inline. Capture the .mutate call shape for the
+// integration assertion below.
+const mockMutate = vi.fn()
+vi.mock('@/trpc/trpc', () => ({
+	trpcReact: {
+		mastra: {
+			agent: {
+				approve: {
+					useMutation: () => ({
+						mutate: mockMutate,
+						isPending: false,
+					}),
+				},
+			},
+		},
+	},
+}))
+
 // recharts uses ResponsiveContainer + SVG — under jsdom the container
 // reports width/height of 0 so charts render empty SVGs. That's fine for
 // our shape assertions (we only check the chart wrapper div is present).
@@ -515,5 +536,309 @@ describe('Tool name registration sanity', () => {
 			LuseListWindowsToolUI.unstable_tool.toolName,
 		])
 		expect(actual).toEqual(expected)
+	})
+})
+
+// ─── Plan 198-04 — ApprovalCard component tests ─────────────────────
+//
+// Tests A-F from 198-04-PLAN.md Task 2 behavior block:
+//   A — autoFocus on Reject button (T-198-04-01)
+//   B — Enter key intercepted (T-198-04-01)
+//   C — Sensitive fields redacted via redactArgsForDisplay (T-198-04-02)
+//   D — Click Approve fires onApprove(toolCallId) once
+//   E — Click Reject fires onReject(toolCallId) once
+//   F — No dangerouslySetInnerHTML (grep-locked at acceptance criterion;
+//       runtime parity test asserts the rendered HTML never includes a
+//       raw <script>/<iframe>/etc. byte sequence injected from args)
+
+import {ApprovalCard} from '@/components/tool-ui/approval-card'
+
+describe('ApprovalCard — Plan 198-04', () => {
+	it('A — Reject button autoFocus on mount (T-198-04-01)', () => {
+		const onApprove = vi.fn()
+		const onReject = vi.fn()
+		renderJsx(
+			<ApprovalCard
+				toolName='luse_computer_click_mouse'
+				args={{x: 100, y: 200}}
+				toolCallId='tc-A'
+				onApprove={onApprove}
+				onReject={onReject}
+			/>,
+		)
+		const rejectBtn = container.querySelector(
+			'[data-testid="liv-ai-reject-tc-A"]',
+		) as HTMLButtonElement | null
+		expect(rejectBtn).not.toBeNull()
+		// document.activeElement must be the reject button after mount
+		expect(document.activeElement).toBe(rejectBtn)
+	})
+
+	it('B — Enter key intercepted, does NOT trigger onApprove (T-198-04-01)', () => {
+		const onApprove = vi.fn()
+		const onReject = vi.fn()
+		renderJsx(
+			<ApprovalCard
+				toolName='luse_computer_type_text'
+				args={{text: 'hello'}}
+				toolCallId='tc-B'
+				onApprove={onApprove}
+				onReject={onReject}
+			/>,
+		)
+		const region = container.querySelector(
+			'[data-testid="liv-ai-approval-card-tc-B"]',
+		) as HTMLDivElement | null
+		expect(region).not.toBeNull()
+		// Dispatch an Enter keydown on the card region
+		act(() => {
+			const evt = new KeyboardEvent('keydown', {
+				key: 'Enter',
+				bubbles: true,
+				cancelable: true,
+			})
+			region!.dispatchEvent(evt)
+		})
+		// Neither callback should have fired from a bare Enter press
+		expect(onApprove).not.toHaveBeenCalled()
+	})
+
+	it('C — Sensitive fields redacted (T-198-04-02)', () => {
+		const onApprove = vi.fn()
+		const onReject = vi.fn()
+		renderJsx(
+			<ApprovalCard
+				toolName='luse_computer_application'
+				args={{username: 'bruce', token: 'secret123', password: 'p4ss'}}
+				toolCallId='tc-C'
+				onApprove={onApprove}
+				onReject={onReject}
+			/>,
+		)
+		// Sensitive values masked
+		expect(container.textContent).not.toContain('secret123')
+		expect(container.textContent).not.toContain('p4ss')
+		expect(container.textContent).toContain('***')
+		// Non-sensitive passes through
+		expect(container.textContent).toContain('bruce')
+	})
+
+	it('D — Click Approve fires onApprove(toolCallId) once', () => {
+		const onApprove = vi.fn()
+		const onReject = vi.fn()
+		renderJsx(
+			<ApprovalCard
+				toolName='luse_computer_drag_mouse'
+				args={{from: [0, 0], to: [10, 10]}}
+				toolCallId='tc-D'
+				onApprove={onApprove}
+				onReject={onReject}
+			/>,
+		)
+		const approveBtn = container.querySelector(
+			'[data-testid="liv-ai-approve-tc-D"]',
+		) as HTMLButtonElement | null
+		expect(approveBtn).not.toBeNull()
+		act(() => {
+			approveBtn!.click()
+		})
+		expect(onApprove).toHaveBeenCalledTimes(1)
+		expect(onApprove).toHaveBeenCalledWith('tc-D')
+		expect(onReject).not.toHaveBeenCalled()
+	})
+
+	it('E — Click Reject fires onReject(toolCallId) once', () => {
+		const onApprove = vi.fn()
+		const onReject = vi.fn()
+		renderJsx(
+			<ApprovalCard
+				toolName='luse_computer_press_keys'
+				args={{keys: 'ctrl+a'}}
+				toolCallId='tc-E'
+				onApprove={onApprove}
+				onReject={onReject}
+			/>,
+		)
+		const rejectBtn = container.querySelector(
+			'[data-testid="liv-ai-reject-tc-E"]',
+		) as HTMLButtonElement | null
+		expect(rejectBtn).not.toBeNull()
+		act(() => {
+			rejectBtn!.click()
+		})
+		expect(onReject).toHaveBeenCalledTimes(1)
+		expect(onReject).toHaveBeenCalledWith('tc-E')
+		expect(onApprove).not.toHaveBeenCalled()
+	})
+
+	it('F — ApprovalCard markup contains zero dangerouslySetInnerHTML', () => {
+		const onApprove = vi.fn()
+		const onReject = vi.fn()
+		// Render with args that include attempted HTML injection — the
+		// rendered DOM must NEVER materialize this as actual markup.
+		renderJsx(
+			<ApprovalCard
+				toolName='luse_computer_paste_text'
+				args={{text: '<script>alert(1)</script><img src=x onerror=1>'}}
+				toolCallId='tc-F'
+				onApprove={onApprove}
+				onReject={onReject}
+			/>,
+		)
+		// No <script> element should have been parsed
+		expect(container.querySelector('script')).toBeNull()
+		// No injected <img onerror=...> either
+		const imgs = container.querySelectorAll('img')
+		imgs.forEach((img) => {
+			expect(img.getAttribute('onerror')).toBeNull()
+		})
+		// The literal angle-brackets show up as escaped text content
+		expect(container.textContent).toContain('<script>')
+	})
+})
+
+// ─── Plan 198-04 — Tool-renderers approval registration tests ───────
+//
+// Integration tests asserting the 6 ApprovalCardToolUI registrations
+// from Task 3 wire correctly through useApproveMutation → trpc.mastra
+// .agent.approve. Each destructive tool name renders an ApprovalCard
+// inline when its tool-call chunk surfaces with the running /
+// requires-action status.
+
+import {
+	LuseApplicationToolUI,
+	LuseClickMouseToolUI,
+	LuseDragMouseToolUI,
+	LusePasteTextToolUI,
+	LusePressKeysToolUI,
+	LuseTypeTextToolUI,
+} from './tool-renderers'
+
+describe('ApprovalCardToolUI registrations (Plan 198-04)', () => {
+	it('registers a renderer for each of the 6 destructive tool names', () => {
+		const expected = new Set([
+			'luse_computer_click_mouse',
+			'luse_computer_type_text',
+			'luse_computer_press_keys',
+			'luse_computer_application',
+			'luse_computer_drag_mouse',
+			'luse_computer_paste_text',
+		])
+		const actual = new Set([
+			LuseClickMouseToolUI.unstable_tool.toolName,
+			LuseTypeTextToolUI.unstable_tool.toolName,
+			LusePressKeysToolUI.unstable_tool.toolName,
+			LuseApplicationToolUI.unstable_tool.toolName,
+			LuseDragMouseToolUI.unstable_tool.toolName,
+			LusePasteTextToolUI.unstable_tool.toolName,
+		])
+		expect(actual).toEqual(expected)
+	})
+
+	it('renders an ApprovalCard inline on status=requires-action', () => {
+		const Render = LuseClickMouseToolUI.unstable_tool.render
+		renderJsx(
+			<Render
+				{...makeProps({
+					toolName: 'luse_computer_click_mouse',
+					args: {x: 100, y: 200},
+					status: 'requires-action',
+				})}
+			/>,
+		)
+		// The card region renders with data-testid scheme
+		// 'liv-ai-approval-card-<toolCallId>'
+		const region = container.querySelector(
+			'[data-testid^="liv-ai-approval-card-"]',
+		)
+		expect(region).not.toBeNull()
+		// Tool name is surfaced
+		expect(container.textContent).toContain('luse_computer_click_mouse')
+		// Both buttons present
+		expect(container.querySelector('[data-testid^="liv-ai-approve-"]')).not.toBeNull()
+		expect(container.querySelector('[data-testid^="liv-ai-reject-"]')).not.toBeNull()
+	})
+
+	it('renders the approval surface on status=running too', () => {
+		const Render = LuseTypeTextToolUI.unstable_tool.render
+		renderJsx(
+			<Render
+				{...makeProps({
+					toolName: 'luse_computer_type_text',
+					args: {text: 'hi'},
+					status: 'running',
+				})}
+			/>,
+		)
+		// Still emits the approval card while the wrapped tool is
+		// suspended (status flips running → requires-action depending on
+		// runtime/AI-SDK chunk emission timing — the renderer must
+		// surface the card in BOTH cases).
+		expect(container.querySelector('[data-testid^="liv-ai-approval-card-"]')).not.toBeNull()
+	})
+
+	it('redacts args (T-198-04-02 integration) when the args carry a token', () => {
+		const Render = LusePasteTextToolUI.unstable_tool.render
+		renderJsx(
+			<Render
+				{...makeProps({
+					toolName: 'luse_computer_paste_text',
+					args: {api_token: 'shhh-xyz', username: 'bruce'},
+					status: 'requires-action',
+				})}
+			/>,
+		)
+		expect(container.textContent).not.toContain('shhh-xyz')
+		expect(container.textContent).toContain('***')
+		expect(container.textContent).toContain('bruce')
+	})
+
+	it('Approve click fires trpc.mastra.agent.approve.mutate({approved:true})', () => {
+		mockMutate.mockClear()
+		const Render = LuseDragMouseToolUI.unstable_tool.render
+		const props = makeProps({
+			toolName: 'luse_computer_drag_mouse',
+			args: {from: [0, 0], to: [10, 10]},
+			status: 'requires-action',
+		})
+		// Pin the toolCallId so we can assert it
+		props.toolCallId = 'tc-integration-approve'
+		renderJsx(<Render {...props} />)
+		const approveBtn = container.querySelector(
+			'[data-testid="liv-ai-approve-tc-integration-approve"]',
+		) as HTMLButtonElement | null
+		expect(approveBtn).not.toBeNull()
+		act(() => {
+			approveBtn!.click()
+		})
+		expect(mockMutate).toHaveBeenCalledTimes(1)
+		expect(mockMutate).toHaveBeenCalledWith({
+			toolCallId: 'tc-integration-approve',
+			approved: true,
+		})
+	})
+
+	it('Reject click fires trpc.mastra.agent.approve.mutate({approved:false})', () => {
+		mockMutate.mockClear()
+		const Render = LuseApplicationToolUI.unstable_tool.render
+		const props = makeProps({
+			toolName: 'luse_computer_application',
+			args: {action: 'launch', name: 'chrome'},
+			status: 'requires-action',
+		})
+		props.toolCallId = 'tc-integration-reject'
+		renderJsx(<Render {...props} />)
+		const rejectBtn = container.querySelector(
+			'[data-testid="liv-ai-reject-tc-integration-reject"]',
+		) as HTMLButtonElement | null
+		expect(rejectBtn).not.toBeNull()
+		act(() => {
+			rejectBtn!.click()
+		})
+		expect(mockMutate).toHaveBeenCalledTimes(1)
+		expect(mockMutate).toHaveBeenCalledWith({
+			toolCallId: 'tc-integration-reject',
+			approved: false,
+		})
 	})
 })
