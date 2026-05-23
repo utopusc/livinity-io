@@ -12,7 +12,6 @@
     "format:fix": "biome format --write ."
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.61",
     "@assistant-ui/react": "latest",
     "@assistant-ui/react-ai-sdk": "latest",
     "@assistant-ui/react-markdown": "latest",
