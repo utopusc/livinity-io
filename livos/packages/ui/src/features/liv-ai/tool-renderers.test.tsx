@@ -38,6 +38,32 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 // support act(...)" warning under jsdom.
 ;(globalThis as {IS_REACT_ACT_ENVIRONMENT?: boolean}).IS_REACT_ACT_ENVIRONMENT = true
 
+// jsdom polyfill — recharts ResponsiveContainer needs ResizeObserver to
+// measure its parent. Real browsers always have this; jsdom doesn't.
+class MockResizeObserver {
+	observe() {/* noop */}
+	unobserve() {/* noop */}
+	disconnect() {/* noop */}
+}
+if (!('ResizeObserver' in globalThis)) {
+	;(globalThis as {ResizeObserver?: unknown}).ResizeObserver = MockResizeObserver
+}
+
+// Mock @assistant-ui/react makeAssistantToolUI so its returned components
+// don't try to register with the AuiProvider runtime context (none exists
+// in test). We preserve the unstable_tool metadata used by registration
+// assertions + the public render function used by per-renderer tests.
+vi.mock('@assistant-ui/react', () => ({
+	makeAssistantToolUI: <TArgs, TResult>(tool: {
+		toolName: string
+		render: (props: any) => React.ReactNode
+	}) => {
+		const ToolUI: any = () => null
+		ToolUI.unstable_tool = tool
+		return ToolUI
+	},
+}))
+
 // Mock react-leaflet — it requires browser-only leaflet which is hard to
 // boot under jsdom. We replace the GeoMap import path's transitive deps
 // so the renderer can still mount in tests. Note: GeoMap component
