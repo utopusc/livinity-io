@@ -103,8 +103,8 @@ async function fetchMcpServers(): Promise<{
 			};
 		}
 		const data = (await res.json()) as Array<BatchResult<unknown>>;
-		const serversEntry = data?.[0];
-		const toolsEntry = data?.[1];
+		const serversEntry = data?.[0] as BatchResult<McpServerConfig[]> | undefined;
+		const toolsEntry = data?.[1] as BatchResult<BuiltInToolCatalogEntry[]> | undefined;
 		const serversError = readBatchError(serversEntry);
 		if (serversError) {
 			return { servers: [], builtInTools: [], error: serversError };
