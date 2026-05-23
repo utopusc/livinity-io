@@ -38,15 +38,39 @@ import {z} from 'zod'
 
 import type {ApprovalManager} from '../../mastra/approval-manager.js'
 import type {LivOSMastra} from '../../mastra/index.js'
-import {ALLOWED_XAI_MODELS, type AllowedXaiModel} from '../../mastra/provider-router.js'
+import {ALLOWED_XAI_MODELS, type AllowedXaiModel, coerceModel} from '../../mastra/provider-router.js'
 import {destructiveToolNames} from '../../mastra/mcp-bridge.js'
 import {redactError} from '../../mastra/redact-error.js'
 import {adminProcedure, privateProcedure, router} from './trpc.js'
 
+/**
+ * Phase 199-07 — narrow Redis client surface needed by the new
+ * getActiveModel / setActiveModel procedures (D-199-10 + D-199-11).
+ *
+ * Matches both the ioredis runtime shape (`.get`/`.set` return Promise<string|null>
+ * and Promise<'OK'|null>) and the test-mock stub. Only the two methods are
+ * exercised — keeps the DI surface minimal so future plans can extend without
+ * widening the contract.
+ */
+export interface MastraRedisClient {
+	get(key: string): Promise<string | null>
+	set(key: string, value: string): Promise<unknown>
+}
+
 export interface MastraRouterDeps {
 	livOSMastra: LivOSMastra
 	approvalManager: ApprovalManager
+	/**
+	 * Phase 199-07 — Redis client for `liv:config:active_model` persistence
+	 * (D-199-10 + INV-199-03). Optional for back-compat with Plan 197-05 boot
+	 * paths that haven't been re-wired yet — the new procedures throw a
+	 * `PRECONDITION_FAILED` TRPCError when missing, matching the empty-injection
+	 * Proxy convention used by other slots in this file.
+	 */
+	redis?: MastraRedisClient
 }
+
+const REDIS_ACTIVE_MODEL_KEY = 'liv:config:active_model'
 
 // Per-run AbortController registry — keyed by runId. Cleared on stream end
 // or cancel. Module-scoped so cancel mutation can find the controller from
@@ -90,6 +114,77 @@ export function createMastraRouter(deps: MastraRouterDeps) {
 			listAvailableModels: privateProcedure.query(async () => {
 				return ALLOWED_XAI_MODELS.map((id) => ({id, ...LIV_AI_MODEL_LABELS[id]}))
 			}),
+
+			// Phase 199-07 — read active model from Redis liv:config:active_model
+			// (D-199-10). privateProcedure: any JWT-authenticated user can hydrate
+			// the header-bar model picker on first paint. Coerces any unknown /
+			// missing value through provider-router.coerceModel() so a corrupt or
+			// stale Redis value never surfaces an invalid id to the UI
+			// (D-199-24 soft validation — falls through to XAI_DEFAULT_MODEL_ID).
+			getActiveModel: privateProcedure.query(async () => {
+				if (!deps.redis) {
+					throw new TRPCError({
+						code: 'PRECONDITION_FAILED',
+						message: 'mastra-router: redis client not injected — getActiveModel unavailable',
+					})
+				}
+				try {
+					const raw = await deps.redis.get(REDIS_ACTIVE_MODEL_KEY)
+					const modelName = coerceModel(raw)
+					return {modelName}
+				} catch (err) {
+					const red = redactError(err)
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: red.message,
+						cause: red,
+					})
+				}
+			}),
+
+			// Phase 199-07 — write active model to Redis liv:config:active_model
+			// (D-199-10). adminProcedure: only admin sessions can mutate the global
+			// active model. Zod z.enum gate (T-199-07-02): invalid modelName values
+			// 400 at parse before any Redis touch, so a tampered client can't
+			// poison the key with `'rm -rf /'` or similar (the value is coerced on
+			// read anyway via getActiveModel, but defense-in-depth at write).
+			//
+			// NOTE: `as unknown as [AllowedXaiModel, ...AllowedXaiModel[]]` cast
+			// — z.enum needs a non-empty tuple of string literals and TS doesn't
+			// narrow `readonly ['grok-...', ...]` to that signature without a cast.
+			// ALLOWED_XAI_MODELS is `as const`-narrowed to a 4-tuple so the cast
+			// is sound (provider-router.ts:43-48).
+			setActiveModel: adminProcedure
+				.input(
+					z.object({
+						modelName: z.enum(
+							ALLOWED_XAI_MODELS as unknown as [
+								AllowedXaiModel,
+								...AllowedXaiModel[],
+							],
+						),
+					}),
+				)
+				.mutation(async ({input}) => {
+					if (!deps.redis) {
+						throw new TRPCError({
+							code: 'PRECONDITION_FAILED',
+							message: 'mastra-router: redis client not injected — setActiveModel unavailable',
+						})
+					}
+					try {
+						await deps.redis.set(REDIS_ACTIVE_MODEL_KEY, input.modelName)
+						return {modelName: input.modelName}
+					} catch (err) {
+						const red = redactError(err)
+						throw new TRPCError({
+							code: 'INTERNAL_SERVER_ERROR',
+							message: red.message,
+							cause: red,
+						})
+					}
+				}),
+
 			stream: adminProcedure
 				.input(z.object({threadId: z.string(), message: z.string()}))
 				.subscription(async function* ({input, signal}) {
@@ -240,6 +335,23 @@ export const mastraRouter = router({
 		// shape (Plan 197-05 convention). Throws on call until the production
 		// swap during livinityd boot.
 		listAvailableModels: privateProcedure.query(() => notInjected()),
+		// Phase 199-07 — empty-injection defaults for the new active-model
+		// procedures. Real production builds wire deps.redis via livinityd boot;
+		// any caller hitting the bare router gets the standard "not injected"
+		// PRECONDITION_FAILED error.
+		getActiveModel: privateProcedure.query(() => notInjected()),
+		setActiveModel: adminProcedure
+			.input(
+				z.object({
+					modelName: z.enum(
+						ALLOWED_XAI_MODELS as unknown as [
+							AllowedXaiModel,
+							...AllowedXaiModel[],
+						],
+					),
+				}),
+			)
+			.mutation(() => notInjected()),
 		stream: adminProcedure
 			.input(z.object({threadId: z.string(), message: z.string()}))
 			.subscription(async function* () {
