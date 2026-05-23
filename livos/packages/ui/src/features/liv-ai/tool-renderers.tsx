@@ -49,6 +49,7 @@ import {DataTable} from '@/components/tool-ui/data-table'
 import {GeoMap} from '@/components/tool-ui/geo-map'
 import {ImageGallery} from '@/components/tool-ui/image-gallery'
 import {LinkPreview} from '@/components/tool-ui/link-preview'
+import {RunningHeader} from '@/components/tool-ui/running-header'
 import {Sources} from '@/components/tool-ui/sources'
 import {WeatherWidget, type WeatherData} from '@/components/tool-ui/weather-widget'
 
@@ -66,6 +67,38 @@ function Skeleton({className = ''}: {className?: string}) {
 	)
 }
 
+// ─── Phase 199-06 — incomplete-status chip helper ───────────────────
+//
+// Per D-199-23 + RESEARCH B5: every generative renderer branches on
+// `status.type === 'incomplete'` with two sub-cases:
+//
+//   reason === 'cancelled' → muted "Cancelled" chip (operator aborted)
+//   anything else          → red error chip with per-renderer text
+//
+// The helper centralises the chip JSX so each renderer body stays
+// terse and so all 10 renderers ship byte-identical chrome.
+
+function IncompleteChip({
+	reason,
+	errorText,
+}: {
+	reason: string | undefined
+	errorText: string
+}) {
+	if (reason === 'cancelled') {
+		return (
+			<div className='rounded-lg border bg-card p-3 text-sm text-muted-foreground'>
+				Cancelled
+			</div>
+		)
+	}
+	return (
+		<div className='rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300'>
+			{errorText}
+		</div>
+	)
+}
+
 // ─── Web search (web_search tool) ───────────────────────────────────
 
 export const WebSearchToolUI = makeAssistantToolUI<
@@ -73,12 +106,12 @@ export const WebSearchToolUI = makeAssistantToolUI<
 	{sources: Array<{title: string; url: string; snippet?: string; favicon?: string}>}
 >({
 	toolName: 'web_search',
-	render: ({result, status}) => {
+	render: ({args, result, status}) => {
 		if (status.type === 'running') {
-			return <Skeleton className='h-32 w-full' />
+			return <RunningHeader label={`Searching: "${args?.query ?? '…'}"`} />
 		}
 		if (status.type === 'incomplete') {
-			return <div className='text-red-500 text-sm'>Search failed.</div>
+			return <IncompleteChip reason={status.reason} errorText='Search failed' />
 		}
 		return <Sources sources={result?.sources ?? []} />
 	},
@@ -99,14 +132,13 @@ export const PlacesSearchToolUI = makeAssistantToolUI<
 	}
 >({
 	toolName: 'search_places',
-	render: ({result, status}) => {
+	render: ({args, result, status}) => {
 		if (status.type === 'running') {
+			return <RunningHeader label={`Finding places in ${args?.city ?? '…'}`} />
+		}
+		if (status.type === 'incomplete') {
 			return (
-				<div className='grid grid-cols-2 gap-3'>
-					{Array.from({length: 4}).map((_, i) => (
-						<Skeleton key={i} className='h-40 rounded-xl' />
-					))}
-				</div>
+				<IncompleteChip reason={status.reason} errorText='Places lookup failed' />
 			)
 		}
 		return <ImageGallery items={result?.places ?? []} />
@@ -120,7 +152,17 @@ export const ImageSearchToolUI = makeAssistantToolUI<
 	{images: Array<{url: string; alt?: string}>}
 >({
 	toolName: 'image_search',
-	render: ({result, status}) => {
+	render: ({args, result, status}) => {
+		if (status.type === 'running') {
+			return (
+				<RunningHeader label={`Searching images: "${args?.query ?? '…'}"`} />
+			)
+		}
+		if (status.type === 'incomplete') {
+			return (
+				<IncompleteChip reason={status.reason} errorText='Image search failed' />
+			)
+		}
 		if (status.type !== 'complete') return <Skeleton className='h-40 w-full' />
 		return (
 			<ImageGallery
@@ -141,8 +183,20 @@ export const WeatherToolUI = makeAssistantToolUI<
 >({
 	toolName: 'weather',
 	render: ({args, result, status}) => {
+		if (status.type === 'running') {
+			return (
+				<RunningHeader
+					label={`Checking weather in ${args?.location ?? '…'}…`}
+				/>
+			)
+		}
+		if (status.type === 'incomplete') {
+			return (
+				<IncompleteChip reason={status.reason} errorText='Weather lookup failed' />
+			)
+		}
 		if (status.type !== 'complete' || !result) {
-			return <Skeleton className='h-24 w-full' />
+			return <RunningHeader label='Loading…' />
 		}
 		return <WeatherWidget location={args?.location ?? ''} data={result} />
 	},
@@ -157,9 +211,17 @@ export const MapToolUI = makeAssistantToolUI<
 	}
 >({
 	toolName: 'map',
-	render: ({result, status}) => {
+	render: ({args, result, status}) => {
+		if (status.type === 'running') {
+			return <RunningHeader label={`Loading map of ${args?.query ?? '…'}…`} />
+		}
+		if (status.type === 'incomplete') {
+			return (
+				<IncompleteChip reason={status.reason} errorText='Map load failed' />
+			)
+		}
 		if (status.type !== 'complete' || !result?.markers?.length) {
-			return <Skeleton className='h-80 w-full rounded-lg' />
+			return <RunningHeader label='Loading map…' />
 		}
 		return <GeoMap markers={result.markers} />
 	},
@@ -173,7 +235,15 @@ export const DataQueryToolUI = makeAssistantToolUI<
 >({
 	toolName: 'data_query',
 	render: ({result, status}) => {
-		if (status.type !== 'complete') return <Skeleton className='h-48 w-full' />
+		if (status.type === 'running') {
+			return <RunningHeader label='Querying data…' />
+		}
+		if (status.type === 'incomplete') {
+			return (
+				<IncompleteChip reason={status.reason} errorText='Data query failed' />
+			)
+		}
+		if (status.type !== 'complete') return <RunningHeader label='Querying data…' />
 		// T-198-03: scrub secret-bearing fields before render.
 		const rows = (result?.rows ?? []).map(
 			(r) => redactArgsForDisplay(r) as Record<string, unknown>,
@@ -190,8 +260,16 @@ export const ChartToolUI = makeAssistantToolUI<
 >({
 	toolName: 'chart',
 	render: ({args, result, status}) => {
+		if (status.type === 'running') {
+			return <RunningHeader label='Compiling chart…' />
+		}
+		if (status.type === 'incomplete') {
+			return (
+				<IncompleteChip reason={status.reason} errorText='Chart build failed' />
+			)
+		}
 		if (status.type !== 'complete' || !result) {
-			return <Skeleton className='h-64 w-full' />
+			return <RunningHeader label='Compiling chart…' />
 		}
 		return (
 			<Chart
@@ -217,9 +295,17 @@ export const LinkPreviewToolUI = makeAssistantToolUI<
 	}
 >({
 	toolName: 'link_preview',
-	render: ({result, status}) => {
+	render: ({args, result, status}) => {
+		if (status.type === 'running') {
+			return <RunningHeader label={`Loading preview: ${args?.url ?? '…'}`} />
+		}
+		if (status.type === 'incomplete') {
+			return (
+				<IncompleteChip reason={status.reason} errorText='Link preview failed' />
+			)
+		}
 		if (status.type !== 'complete' || !result) {
-			return <Skeleton className='h-24 w-full' />
+			return <RunningHeader label='Loading preview…' />
 		}
 		return <LinkPreview {...result} />
 	},
@@ -233,7 +319,15 @@ export const LuseScreenshotToolUI = makeAssistantToolUI<
 >({
 	toolName: 'luse_computer_screenshot',
 	render: ({result, status}) => {
-		if (status.type !== 'complete') return <Skeleton className='h-64 w-full' />
+		if (status.type === 'running') {
+			return <RunningHeader label='Taking screenshot…' />
+		}
+		if (status.type === 'incomplete') {
+			return (
+				<IncompleteChip reason={status.reason} errorText='Screenshot failed' />
+			)
+		}
+		if (status.type !== 'complete') return <RunningHeader label='Taking screenshot…' />
 		const src =
 			result?.dataUrl ??
 			(result?.base64
@@ -262,7 +356,15 @@ export const LuseListWindowsToolUI = makeAssistantToolUI<
 >({
 	toolName: 'luse_list_windows',
 	render: ({result, status}) => {
-		if (status.type !== 'complete') return <Skeleton className='h-48 w-full' />
+		if (status.type === 'running') {
+			return <RunningHeader label='Listing windows…' />
+		}
+		if (status.type === 'incomplete') {
+			return (
+				<IncompleteChip reason={status.reason} errorText='Window list failed' />
+			)
+		}
+		if (status.type !== 'complete') return <RunningHeader label='Listing windows…' />
 		return (
 			<DataTable
 				rows={result?.windows ?? []}

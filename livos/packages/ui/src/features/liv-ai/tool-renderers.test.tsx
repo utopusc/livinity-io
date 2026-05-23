@@ -187,12 +187,20 @@ describe('WebSearchToolUI', () => {
 		expect(WebSearchToolUI.unstable_tool.toolName).toBe('web_search')
 	})
 
-	it('renders Skeleton when status=running', () => {
+	it('renders RunningHeader on running (Plan 199-06 polish — was h-32 Skeleton in P198)', () => {
 		const Render = WebSearchToolUI.unstable_tool.render
-		renderJsx(<Render {...makeProps({toolName: 'web_search', status: 'running'})} />)
-		// Skeleton-class element exists OR placeholder fallback (the
-		// running branch returns a Skeleton-like div with h-32 class).
-		expect(container.innerHTML).toMatch(/h-32|skeleton/i)
+		renderJsx(
+			<Render
+				{...makeProps({
+					toolName: 'web_search',
+					args: {query: 'llamas'},
+					status: 'running',
+				})}
+			/>,
+		)
+		// Phase 199-06 (D-199-22): running branch emits <RunningHeader>
+		// with `Searching: "<query>"` label.
+		expect(container.textContent).toContain('Searching: "llamas"')
 	})
 
 	it('renders Sources component when status=complete', () => {
@@ -240,11 +248,20 @@ describe('PlacesSearchToolUI', () => {
 		expect(container.querySelector('img')?.getAttribute('src')).toBe('https://x.test/tp.jpg')
 	})
 
-	it('renders skeleton grid on running', () => {
+	it('renders RunningHeader on running (Plan 199-06 polish — was skeleton grid in P198)', () => {
 		const Render = PlacesSearchToolUI.unstable_tool.render
-		renderJsx(<Render {...makeProps({toolName: 'search_places', status: 'running'})} />)
-		// 4 placeholders rendered
-		expect(container.querySelectorAll('.h-40').length).toBe(4)
+		renderJsx(
+			<Render
+				{...makeProps({
+					toolName: 'search_places',
+					args: {city: 'Istanbul'},
+					status: 'running',
+				})}
+			/>,
+		)
+		// Phase 199-06 (D-199-22): running branch now emits a
+		// <RunningHeader> with the args-echo label per RESEARCH E5.
+		expect(container.textContent).toContain('Finding places in Istanbul')
 	})
 })
 
