@@ -49,3 +49,40 @@ the issue does not block the current plan and was not caused by it).
 - **Verified pre-existing:** Reproduces on master.
 - **Impact:** Does not affect composer rebuild.
 - **Action:** Defer.
+
+---
+
+## 200-07 — Discovered 2026-05-23
+
+### ui-package-wide vitest — 13 file / 40 test failures across docker, onboarding, webapp-stream-window, settings, tests/, tests-examples/
+
+- **Failing files (all pre-existing, none touched by Plan 200-07):**
+  - `src/features/liv-ai/model-picker.test.tsx` (already in Plan 200-05 defer list)
+  - `src/features/onboarding-flow/steps/provider-step.test.tsx`
+  - `src/modules/window/webapp-stream-window.unit.test.tsx`
+  - `src/routes/docker/dashboard/use-tag-filter.unit.test.ts`
+  - `src/routes/docker/palette/use-recent-searches.unit.test.ts`
+  - `src/routes/docker/sidebar-density.unit.test.ts`
+  - `src/routes/docker/sidebar.unit.test.ts`
+  - `src/routes/docker/store.unit.test.ts`
+  - `src/routes/settings/_components/settings-content.test.tsx`
+  - `tests/example.spec.ts`, `tests/happy-path.spec.ts`,
+    `tests-examples/demo-todo-app.spec.ts` (Playwright suites — picked
+    up by vitest but never intended to run there)
+- **Verified pre-existing:** `git stash` of Plan 200-07's 4-file diff
+  → re-ran `vitest run` on the same set → same failures (e.g.,
+  `use-recent-searches` + `use-tag-filter` + `provider-step` produced
+  16 failures across 3 files identically with the stash applied).
+  Plan 200-07's edits are limited to `thread-list-adapter.ts`,
+  `thread-list-adapter.test.tsx`, `assistant.tsx`, and
+  `assistant.test.tsx`; none of the failing files share imports with
+  the Plan 200-07 surface.
+- **Plan 200-07 in-scope suite:** PASS (18/18) —
+  `thread-list-adapter.test.tsx` (7/7) +
+  `assistant.test.tsx` (11/11).
+- **Impact:** Out-of-scope; cannot fix in this plan without violating
+  the SCOPE BOUNDARY rule. Per-file tsc + targeted vitest is the
+  Plan 200-07 verification gate.
+- **Action:** Defer to a dedicated test-cleanup plan (probably groups
+  best with Plan 200-05's deferred items above — same jsdom / shim /
+  localStorage drift class of failure).

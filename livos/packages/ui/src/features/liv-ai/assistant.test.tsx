@@ -151,6 +151,16 @@ vi.mock('@assistant-ui/react', () => {
 	class CompositeAttachmentAdapter {
 		constructor(public adapters: unknown[]) {}
 	}
+	// Phase 200-07 — useAssistantRuntime stub. <AssistantShell /> (the
+	// inner component extracted by Plan 200-07's assistant.tsx restructure)
+	// calls useThreadListAdapter(), which now wires useAssistantRuntime()
+	// at the top to enable the D-200-19 runtime-sync fix. Stub returns the
+	// minimal `threads.switchToNewThread` surface the adapter touches; the
+	// AssistantRuntimeProvider pass-through above means the call resolves
+	// without booting a real runtime.
+	const useAssistantRuntime = () => ({
+		threads: {switchToNewThread: vi.fn(async () => undefined)},
+	})
 	return {
 		AssistantRuntimeProvider,
 		AuiIf,
@@ -158,6 +168,7 @@ vi.mock('@assistant-ui/react', () => {
 		useThread,
 		useThreadRuntime,
 		useComposerRuntime,
+		useAssistantRuntime,
 		ComposerPrimitive,
 		ThreadPrimitive,
 		MessagePrimitive,
