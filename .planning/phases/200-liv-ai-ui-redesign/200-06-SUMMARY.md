@@ -398,3 +398,31 @@ File created:
 
 Sacred SHA: `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved
 (check-sacred.sh PASS, 20 files verified).
+
+## Self-Check: PASSED
+
+- FOUND: `livos/packages/ui/src/features/liv-ai/assistant.tsx`
+- FOUND: `livos/packages/ui/src/features/liv-ai/empty-state.tsx`
+- FOUND: `livos/packages/ui/src/features/liv-ai/empty-state.test.tsx`
+- FOUND: `livos/packages/ui/src/features/liv-ai/assistant.test.tsx`
+- FOUND: `livos/packages/ui/src/components/assistant-ui/thread.tsx`
+- FOUND: `.planning/phases/200-liv-ai-ui-redesign/200-06-SUMMARY.md`
+- FOUND commit `f71b76d7` — feat(200-06): mount canonical Thread with LivAiComposer slot + English tagline + ActionBar Copy verified
+- FOUND commit `e8491a72` — docs(200-06): state advance — plan 7/8 -> 8/8 + last_updated timestamp
+- FOUND grep `composerSlot=\{` in assistant.tsx (line 303 + 2 comment refs)
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` PRESERVED — check-sacred.sh PASS on both Plan 200-06 commits.
+
+---
+
+## Commit
+
+- **Plan commit:** `f71b76d7` — `feat(200-06): mount canonical Thread with LivAiComposer slot + English tagline + ActionBar Copy verified` (6 files changed, 577 insertions, 250 deletions)
+- **State commit:** `e8491a72` — `docs(200-06): state advance — plan 7/8 -> 8/8 + last_updated timestamp`
+- **Files (plan commit):**
+  - M `livos/packages/ui/src/features/liv-ai/assistant.tsx`
+  - M `livos/packages/ui/src/features/liv-ai/assistant.test.tsx`
+  - M `livos/packages/ui/src/features/liv-ai/empty-state.tsx`
+  - M `livos/packages/ui/src/features/liv-ai/empty-state.test.tsx`
+  - M `livos/packages/ui/src/components/assistant-ui/thread.tsx`
+  - A `.planning/phases/200-liv-ai-ui-redesign/200-06-SUMMARY.md`
+- **Sacred SHA:** PASS at commit time (`[sacred-sha] PASS: 20 files verified`).
