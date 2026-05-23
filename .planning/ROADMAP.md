@@ -2886,7 +2886,7 @@ Plans:
 **Wave plan:** Wave 1 spike + clone + rebrand (203-01..03) → Wave 2 bridge to livinityd (203-04..06) → Wave 3 Mastra + assistant-ui purge (203-07..09) → Wave 4 desktop integration + deploy + UAT (203-10..13).
 
 **Plans (13):**
-- [ ] 203-01-PLAN.md — L0 spike: clone openclaw-os, boot gateway, write decision matrix for D-203-06 branch
+- [x] 203-01-PLAN.md — L0 spike: clone openclaw-os, boot gateway, write decision matrix for D-203-06 branch — ✅ **CODE-COMPLETE 2026-05-23** — Branch A CONFIRMED (openclaw self-dispatches LLM via 57-provider catalog + env vars + `agents.defaults.model.primary` config; no backend callback required). openclaw-os HEAD `076ae63478fa2417d38c39b5b6d13f9188b8580b` pinned for Plan 203-02. openclaw@2026.5.20 booted clean on port 18790 with `{"ok":true,"status":"live"}` health probe. 647-line `203-01-SPIKE.md` covers all 12 required sections + 10 risks/surprises (notably: D-203-04 service topology needs 1-unit revision — plugin runs IN-process, not as a separate worker).
 - [ ] 203-02-PLAN.md — Clone openclaw-os into livos/packages/liv-claw-os + rebrand pass (OpenClaw → Liv AI)
 - [ ] 203-03-PLAN.md — liv-claw-gateway workspace package + systemd unit + update.sh patch
 - [ ] 203-04-PLAN.md — liv-claw-plugin tools call livinityd HTTP + livos_openui_apps table + openclawos.apps.* tRPC + shared openui-validator
