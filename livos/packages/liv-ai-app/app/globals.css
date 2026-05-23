@@ -136,7 +136,19 @@
     color-scheme: dark;
   }
 
+  /* Phase 201 — bire bir LivOS body typography (livos/packages/ui/src/index.css:30-37).
+   * geometricPrecision lines up letter shapes with Figma; -0.03em tracking is
+   * the canonical Liv DS tightening applied across the whole shell. Body font
+   * is Geist Variable (next/font/google → --font-geist-sans) to match LivOS's
+   * @fontsource-variable/geist primary. */
+  html,
+  body {
+    text-rendering: geometricPrecision;
+    letter-spacing: -0.03em;
+    -webkit-touch-callout: none;
+  }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
   }
 }
