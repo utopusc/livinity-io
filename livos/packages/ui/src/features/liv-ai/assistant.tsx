@@ -33,7 +33,10 @@
  *     s.thread.isEmpty}>` empty-state branch + matching
  *     `!s.thread.isEmpty` chat branch (D-199-17; RESEARCH B1 + Pattern
  *     2 — the Grok / ChatGPT pattern operator asked for).
- *   - Single shared `<Composer />` from ./composer mounted in BOTH
+ *   - Single shared `<LivAiComposer
+											selectedModel={selectedModel}
+											onModelChange={handleModelChange}
+										/>` from ./composer mounted in BOTH
  *     branches (D-199-18; RESEARCH Pitfall 7). The assistant-ui runtime
  *     preserves ComposerPrimitive text/focus across the empty→chat
  *     layout flip — typing in the centered hero does NOT lose
@@ -78,10 +81,9 @@ import {useEffect, useState} from 'react'
 import {trpcReact} from '@/trpc/trpc'
 
 import {createImageAttachmentAdapter} from './attachment-adapter'
-import {Composer} from './composer'
+import {LivAiComposer} from './composer'
 import {DevToolsMount} from './devtools-mount'
 import {LIV_AI_TAGLINE} from './empty-state'
-import {LivAiHeaderBar} from './header-bar'
 import {DEFAULT_LIV_AI_MODEL_ID, type LivAiModelId} from './models'
 import {SuggestedPrompts} from './suggested-prompts'
 import {useThreadListAdapter} from './thread-list-adapter'
@@ -126,7 +128,12 @@ function AssistantMessage() {
  * per INV-199-08 + D-199-29 (regression-locked by the existing
  * empty-state vitest + the new assistant.test.tsx Test 1).
  */
-function EmptyStateBranch() {
+interface EmptyStateBranchProps {
+	selectedModel: LivAiModelId
+	onModelChange: (next: LivAiModelId) => void
+}
+
+function EmptyStateBranch({selectedModel, onModelChange}: EmptyStateBranchProps) {
 	const threadRuntime = useThreadRuntime()
 	const handlePickPrompt = (text: string) => {
 		threadRuntime.append({role: 'user', content: [{type: 'text', text}]})
@@ -148,7 +155,10 @@ function EmptyStateBranch() {
 				{LIV_AI_TAGLINE}
 			</p>
 			<div className='w-full max-w-3xl'>
-				<Composer />
+				<LivAiComposer
+					selectedModel={selectedModel}
+					onModelChange={onModelChange}
+				/>
 			</div>
 			<SuggestedPrompts onPick={handlePickPrompt} />
 		</div>
@@ -263,20 +273,19 @@ export function Assistant() {
 			 */}
 			<DevToolsMount />
 			{/*
-			 * Phase 199-07 — top-level flex-column shell. <LivAiHeaderBar> sits
-			 * above the 2-column flex layout (D-199-21) and reuses the existing
-			 * useThreadListAdapter().onSwitchToNewThread handler for the
-			 * "+ New conversation" button (no duplicate handler — single source
-			 * of truth, header sidebar + landmark stay in sync). selectedModel
-			 * state hydrates from Redis via trpc.mastra.agent.getActiveModel
-			 * (Plan 199-07 Task 1) and writes back via setActiveModel.
+			 * Phase 200-05 — DELETED the Phase 199-07 <LivAiHeaderBar> shell
+			 * (D-200-15 / Plan 200-05 Task 3). The model picker has been
+			 * relocated INTO <LivAiComposer> (Grok footer-strip pattern;
+			 * D-200-13), and the "+ New conversation" button already lives in
+			 * the sidebar (assistant.tsx <aside> below). Pitfall 6 (two model
+			 * pickers in DOM) is now structurally impossible.
+			 *
+			 * The outer flex-column wrapper is preserved so the 2-column
+			 * application landmark below still has a bounded parent. Plan
+			 * 200-06 will swap the inline ThreadPrimitive.Root composition to
+			 * the canonical <Thread composerSlot={<LivAiComposer .../>} />.
 			 */}
 			<div className='flex h-full flex-col overflow-hidden'>
-				<LivAiHeaderBar
-					selectedModel={selectedModel}
-					onModelChange={handleModelChange}
-					onNewThread={onSwitchToNewThread}
-				/>
 				{/*
 				 * Plan 198-07 — a11y wrapper. `role="application"` scopes the
 				 * entire Liv AI chat surface as a single interactive application
@@ -387,7 +396,10 @@ export function Assistant() {
 						 * (INV-200-06).
 						 */}
 						<AuiIf condition={(s) => s.thread.isEmpty}>
-							<EmptyStateBranch />
+							<EmptyStateBranch
+									selectedModel={selectedModel}
+									onModelChange={handleModelChange}
+								/>
 						</AuiIf>
 
 						<AuiIf condition={(s) => !s.thread.isEmpty}>
@@ -400,7 +412,10 @@ export function Assistant() {
 										}}
 									/>
 									<ThreadPrimitive.ViewportFooter className='sticky bottom-0 mt-auto flex flex-col gap-4 bg-background pb-4'>
-										<Composer />
+										<LivAiComposer
+											selectedModel={selectedModel}
+											onModelChange={handleModelChange}
+										/>
 									</ThreadPrimitive.ViewportFooter>
 								</div>
 							</ThreadPrimitive.Viewport>
