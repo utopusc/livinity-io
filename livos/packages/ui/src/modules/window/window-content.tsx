@@ -23,9 +23,14 @@ const WebAppStreamWindowContent = React.lazy(() => import('./app-contents/webapp
 // Phase 157 round 5 — NativeAppStreamWindow. Native-app equivalent of
 // WebAppStreamWindow. Discriminator is `NATIVE_<nativeAppId>` prefix.
 const NativeAppStreamWindowContent = React.lazy(() => import('./app-contents/native-app-stream-window'))
+// Phase 203-10 — OpenUI app window. Discriminator is `OPENUI_<slug>` prefix.
+// The slug is sliced off the appId and rendered as
+// `<iframe src="/liv-ai-app/apps/<slug>">` (D-203-10, T-203-06).
+const OpenUiAppContent = React.lazy(() => import('./app-contents/openui-app-content'))
 
 const WEBAPP_APP_ID_PREFIX = 'WEBAPP_'
 const NATIVE_APP_ID_PREFIX = 'NATIVE_'
+const OPENUI_APP_ID_PREFIX = 'OPENUI_'
 
 /** True when the appId belongs to a WebApp window (P95). */
 function isWebAppKind(appId: string): boolean {
@@ -35,6 +40,11 @@ function isWebAppKind(appId: string): boolean {
 /** True when the appId belongs to a native-app stream window (P157 round 5). */
 function isNativeAppKind(appId: string): boolean {
 	return appId.startsWith(NATIVE_APP_ID_PREFIX)
+}
+
+/** True when the appId belongs to an OpenUI app iframe window (Phase 203-10). */
+function isOpenUiAppKind(appId: string): boolean {
+	return appId.startsWith(OPENUI_APP_ID_PREFIX)
 }
 
 type WindowContentProps = {
@@ -55,7 +65,12 @@ type WindowContentProps = {
 const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_liv-ai'])
 
 export function WindowContent({route, appId, windowId}: WindowContentProps) {
-	if (fullHeightApps.has(appId) || isWebAppKind(appId) || isNativeAppKind(appId)) {
+	if (
+		fullHeightApps.has(appId) ||
+		isWebAppKind(appId) ||
+		isNativeAppKind(appId) ||
+		isOpenUiAppKind(appId)
+	) {
 		return (
 			<div className='h-full overflow-hidden'>
 				<Suspense fallback={<Loading />}>
@@ -103,6 +118,15 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 	if (isNativeAppKind(appId)) {
 		const nativeAppId = appId.slice(NATIVE_APP_ID_PREFIX.length)
 		return <NativeAppStreamWindowContent nativeAppId={nativeAppId} windowId={windowId} />
+	}
+
+	// Phase 203-10 — OpenUI app window. The window-manager passed
+	// `OPENUI_<slug>`; slice the prefix and render the iframe pointed at
+	// /liv-ai-app/apps/<slug>. The window title carries the human-readable
+	// app name (set by useLaunchNativeApp when it called openWindow).
+	if (isOpenUiAppKind(appId)) {
+		const slug = appId.slice(OPENUI_APP_ID_PREFIX.length)
+		return <OpenUiAppContent slug={slug} name={slug} />
 	}
 
 	switch (appId) {

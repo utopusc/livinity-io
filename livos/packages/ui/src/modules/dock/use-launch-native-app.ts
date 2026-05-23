@@ -10,10 +10,23 @@
 // fires `apps.native.spawn` from inside the window and mounts the VNC
 // canvas. Server-side spawn is idempotent so re-opening the same window
 // reuses the existing Xvfb + binary + stream.
+//
+// Phase 203-10 — D-203-10 desktop integration. When the persisted
+// NativeAppConfig has a `wmClassHint` starting with `liv-openui-`, the
+// "app" is an OpenUI app generated via openclaw `app_create` (NOT a real
+// binary). Launching opens an `OPENUI_<slug>` window whose body is the
+// OpenUiAppContent iframe (Plan 203-10 Task 3) instead of the x11vnc
+// stream. window-content.tsx dispatches on the `OPENUI_` prefix.
 
 import {toast} from 'sonner'
 
 import {useWindowManagerOptional} from '@/providers/window-manager'
+
+/** Phase 203-10 — wmClassHint prefix marking an OpenUI-app entry. */
+export const OPENUI_WMCLASS_PREFIX = 'liv-openui-'
+
+/** Window-manager appId prefix for OpenUI app windows (vs. NATIVE_ for binaries). */
+export const OPENUI_APP_ID_PREFIX = 'OPENUI_'
 
 export interface LaunchNativeAppArgs {
 	/** UUID matching the persisted NativeAppConfig (apps.native.list[].id). */
@@ -22,22 +35,43 @@ export interface LaunchNativeAppArgs {
 	name: string
 	/** Optional icon URL for the window chrome / dock tile. */
 	iconUrl?: string
+	/**
+	 * Phase 203-10 — when the wmClassHint starts with `liv-openui-`, the
+	 * launcher short-circuits the binary-spawn path and opens an iframe
+	 * window pointed at /liv-ai-app/apps/<slug>. Slug = wmClassHint sliced
+	 * past the prefix. Callers that omit wmClassHint (legacy NativeAppIcon
+	 * paths) fall through to the existing NATIVE_<id> behaviour.
+	 */
+	wmClassHint?: string
 }
 
 /**
  * React hook returning an async launch function. The hook owns a
- * `WindowManager` reference; callers invoke `launch({id, name, iconUrl})`
- * from a click handler.
+ * `WindowManager` reference; callers invoke
+ * `launch({id, name, iconUrl, wmClassHint})` from a click handler.
  *
  * Returns void — the window itself owns the spawn lifecycle now.
  */
 export function useLaunchNativeApp(): (args: LaunchNativeAppArgs) => Promise<void> {
 	const windowManager = useWindowManagerOptional()
-	return async function launch({id, name, iconUrl}): Promise<void> {
+	return async function launch({id, name, iconUrl, wmClassHint}): Promise<void> {
 		if (!windowManager) {
 			toast.error(`Cannot launch ${name}: window manager unavailable`)
 			return
 		}
+
+		// Phase 203-10 — OpenUI app short-circuit. The slug we want to render
+		// lives past the prefix in wmClassHint; the underlying UUID (`id`) is
+		// derived from the slug deterministically server-side, but the OpenUI
+		// route on the gateway is slug-keyed, not UUID-keyed, so we ride the
+		// hint here.
+		if (wmClassHint && wmClassHint.startsWith(OPENUI_WMCLASS_PREFIX)) {
+			const slug = wmClassHint.slice(OPENUI_WMCLASS_PREFIX.length)
+			const appId = `${OPENUI_APP_ID_PREFIX}${slug}`
+			windowManager.openWindow(appId, name, name, iconUrl ?? '')
+			return
+		}
+
 		const appId = `NATIVE_${id}`
 		// initialRoute is unused by NativeAppStreamWindow (id is sliced
 		// from appId prefix) — pass the name as a placeholder so the

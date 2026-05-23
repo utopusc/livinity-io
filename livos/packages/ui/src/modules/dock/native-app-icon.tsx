@@ -52,9 +52,16 @@ export interface NativeAppIconProps {
 	name: string
 	/** Optional icon URL. Empty string falls back to the AppIcon placeholder. */
 	iconUrl?: string
+	/**
+	 * Phase 203-10 — wmClassHint from the persisted config. When it starts
+	 * with `liv-openui-`, useLaunchNativeApp short-circuits the binary-spawn
+	 * path and opens an OpenUI iframe window (D-203-10). Legacy callers
+	 * that omit it fall through to the existing NATIVE_<id> behaviour.
+	 */
+	wmClassHint?: string
 }
 
-export function NativeAppIcon({id, name, iconUrl}: NativeAppIconProps) {
+export function NativeAppIcon({id, name, iconUrl, wmClassHint}: NativeAppIconProps) {
 	const launch = useLaunchNativeApp()
 	const utils = trpcReact.useUtils()
 	const deleteMut = trpcReact.apps.native.delete.useMutation()
@@ -65,7 +72,9 @@ export function NativeAppIcon({id, name, iconUrl}: NativeAppIconProps) {
 		// Phase 157 round 5 — pass iconUrl so the spawned window chrome /
 		// dock tile shows the right icon. Hook is fire-and-forget (returns
 		// a Promise but failures surface via sonner inside the hook).
-		void launch({id, name, iconUrl})
+		// Phase 203-10 — also thread wmClassHint so the launcher can route
+		// OpenUI apps to the iframe window instead of the binary-spawn path.
+		void launch({id, name, iconUrl, wmClassHint})
 	}
 
 	const handleRemove = async () => {
