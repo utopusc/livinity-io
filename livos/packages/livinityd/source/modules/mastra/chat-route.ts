@@ -78,16 +78,37 @@ export const ChatRequestSchema = z.object({
 
 export type ChatRequestBody = z.infer<typeof ChatRequestSchema>
 
-// Forward-compat allow-list. Plan 198-01 ships with one entry; multi-agent
-// in P199+ extends the list. Detection is by string match against req.params.agentId.
-const ALLOWED_AGENT_IDS = new Set<string>(['livAi'])
+// Phase 202-02 — dynamic agent allow-list backed by the AgentRegistry. The
+// pre-202 hard-coded `new Set(['livAi'])` is replaced by a function that
+// honours every enabled row in `livos_agents` while keeping the literal
+// 'livAi' alias forever-allowed (P198 back-compat — Phase 197-04's UI
+// shipped against the literal string; we never strand that surface even if
+// the registry init fails).
+//
+// T-198-08 mitigation preserved: unknown agentIds + agentIds matching a
+// disabled row still 404.
+function isAgentAllowed(
+	agentId: string,
+	deps: ChatRouteHandlerDeps,
+): boolean {
+	// Forever-allowed alias (P198-08 + back-compat with the hard-coded
+	// frontend route from Plans 198-02 / 200-08).
+	if (agentId === 'livAi') return true
+	const registry = deps.livOSMastra.registry
+	if (!registry) return false
+	return registry
+		.rowsAll()
+		.some((r) => r.name === agentId && r.enabled)
+}
 
 export function createChatRouteHandler(deps: ChatRouteHandlerDeps): RequestHandler {
 	return async (req: Request, res: Response) => {
 		const agentId = req.params.agentId
 
-		// agentId allow-list — T-198-08 + forward-compat gate.
-		if (!ALLOWED_AGENT_IDS.has(agentId)) {
+		// agentId allow-list — T-198-08 + forward-compat gate. Phase 202-02
+		// extends this to honour every enabled livos_agents row via the
+		// AgentRegistry while keeping 'livAi' a forever-allowed alias.
+		if (!isAgentAllowed(agentId, deps)) {
 			res.status(404).json({error: `Unknown agentId: ${agentId}`})
 			return
 		}
@@ -102,9 +123,16 @@ export function createChatRouteHandler(deps: ChatRouteHandlerDeps): RequestHandl
 			return
 		}
 
-		// LivOSMastra slot may be empty if boot wire-up failed (P197-05 wiring
-		// non-fatal by design). Surface 503 so the frontend can show a banner.
-		const agent = deps.livOSMastra.agents.livAi
+		// Phase 202-02 — resolve the agent via the registry first; fall back
+		// to the legacy livAi slot for 'livAi' specifically so the pre-202
+		// boot path (registry init failed → only the back-compat livAi slot
+		// is populated) keeps serving requests. Any other agentId MUST come
+		// out of the registry — unknown rows have already been rejected by
+		// isAgentAllowed above.
+		let agent = deps.livOSMastra.registry?.getByName(agentId)
+		if (!agent && agentId === 'livAi') {
+			agent = deps.livOSMastra.agents.livAi
+		}
 		if (!agent) {
 			res.status(503).json({error: 'Liv AI agent not initialized'})
 			return
