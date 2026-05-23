@@ -445,6 +445,11 @@ export default definePluginEntry({
     // (gateway frames carry arbitrary JSON), so reads use bracket access to
     // satisfy `noPropertyAccessFromIndexSignature`. Each field is still
     // narrowed with a `typeof` check before use.
+    //
+    // PHASE 203-04: db_query/db_execute still local SQLite — Plan 203-06+ to
+    // evaluate Postgres bridge (T-203-07 scope boundary). Only the
+    // app_create / app_update / get_app / apps.{list,get,delete} surface
+    // was redirected to livinityd HTTP in Plan 203-04 (see ./app-store.ts).
     const invokeDbQueryTool = async (args: Record<string, unknown>): Promise<unknown> => {
       const sql = typeof args["sql"] === "string" ? args["sql"].trim() : "";
       if (!sql) {
