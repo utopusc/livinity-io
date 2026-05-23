@@ -54,11 +54,14 @@ export interface ThreadListAdapter {
 	isLoading: boolean
 }
 
-// UUID-shaped client-generated threadId — PostgresStore (P197-03)
-// persists this id on the first agent.stream() call carrying it.
-// Format matches the regex `^t-\d+-[a-z0-9]+$` asserted by Test 3.
+// UUID-shaped client-generated threadId — PostgresStore (P197-03) backs
+// Mastra Memory and its `mastra_threads.id` column is `uuid` typed, so the
+// id MUST match the RFC 4122 UUID grammar. Previous `t-{ts}-{rand}` format
+// failed at prepare-memory-step with `invalid input syntax for type uuid`
+// (P199 UAT hot-fix). `crypto.randomUUID()` is available in all browsers
+// targeted by Vite — no new dep, no polyfill (D-NO-NEW-DEPS preserved).
 function newThreadId(): string {
-	return `t-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+	return crypto.randomUUID()
 }
 
 export function useThreadListAdapter(): ThreadListAdapter {
