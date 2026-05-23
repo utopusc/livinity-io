@@ -1826,7 +1826,30 @@ class Server {
 			// refresh their contents after an OTA update for example.
 			const staticOptions = {cacheControl: true, etag: true, lastModified: true, maxAge: 0}
 			this.app.use('/', express.static(uiPath, staticOptions))
-			this.app.use('*', express.static(`${uiPath}/index.html`, staticOptions))
+			// HOT-FIX (P202.1-B1): Path-aware SPA fallback. API-shaped paths
+			// (SSE, tRPC, /api/*, /chat/*, /agents/* dynamic routes) MUST 404
+			// when no specific handler is mounted yet, so the browser does NOT
+			// receive a 200 + text/html SPA shell where it expects JSON/SSE.
+			// Without this guard, late-mounted routes (e.g. /agents/status/stream
+			// wired in livinityd.start() AFTER server.start()) get shadowed by
+			// the catch-all and EventSource fails with "MIME type text/html".
+			const spaFallback = express.static(`${uiPath}/index.html`, staticOptions)
+			const apiPathPrefixes = [
+				'/agents/status/',
+				'/agents/',
+				'/api/',
+				'/trpc/',
+				'/chat/',
+			]
+			this.app.use('*', (request, response, next) => {
+				const path = request.originalUrl?.split('?')[0] ?? request.path ?? ''
+				for (const prefix of apiPathPrefixes) {
+					if (path.startsWith(prefix)) {
+						return next()
+					}
+				}
+				return spaFallback(request, response, next)
+			})
 		}
 
 		// All errors should be handled by their own middleware but if they aren't we'll catch
