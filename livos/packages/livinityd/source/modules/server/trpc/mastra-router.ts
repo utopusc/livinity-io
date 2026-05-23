@@ -1,4 +1,10 @@
 /**
+ * @deprecated Phase 198 ships @mastra/ai-sdk chatRoute at POST /chat/livAi
+ * as the primary transport for the assistant-ui frontend. This tRPC
+ * `mastra.agent.*` namespace is kept as a fallback for one release;
+ * full removal is scheduled for Phase 199. New code should use the
+ * AssistantChatTransport({api: '/chat/livAi'}) pattern instead.
+ *
  * Phase 197-05 — mastra.* tRPC namespace.
  *
  * 5 adminProcedure-gated routes:
@@ -47,6 +53,11 @@ export interface MastraRouterDeps {
 const runAborts = new Map<string, AbortController>()
 
 export function createMastraRouter(deps: MastraRouterDeps) {
+	if (process.env.NODE_ENV === 'development') {
+		console.warn(
+			'[mastra-router] tRPC mastra.agent.* namespace is deprecated — see Phase 198 SUMMARY; use POST /chat/livAi.',
+		)
+	}
 	return router({
 		agent: router({
 			stream: adminProcedure
