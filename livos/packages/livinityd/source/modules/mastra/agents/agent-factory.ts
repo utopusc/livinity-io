@@ -144,12 +144,16 @@ export function createAgentFromRow(
 	// string is a legal Mastra value (no instructions = base model behaviour).
 	const instructions = row.instructions
 
-	// Per-row default-model fallback — when chat-route doesn't set modelName
-	// (Plan 199-03 + Plan 199-07 wiring), we fall back to row.modelName from
-	// the registry. resolveAgentModel coerces unknowns to XAI_DEFAULT_MODEL_ID
-	// (soft validation per D-199-24), so a stale model id in a DB row still
-	// boots — it just rounds-down to the default until the operator edits it.
-	const defaultModelName = row.modelName
+	// Phase 199-03 — per-request dynamic model resolver. We forward whatever
+	// the RequestContext yields (may be undefined when the chat-route
+	// frontend hasn't pushed a modelName yet). `resolveAgentModel` coerces
+	// undefined / unknown ids to the XAI default per D-199-24 soft
+	// validation. Row.modelName is NOT used here — the registry-driven
+	// per-row default would diverge from the Phase 199-03 contract that
+	// liv-ai.test.ts (Test 12) regression-locks. Future per-row default
+	// overrides should be injected by chat-route building the
+	// RequestContext from the resolved row's modelName, not by the factory.
+	void row.modelName // reserved for future per-row default surfacing
 
 	const modelResolver = (({
 		requestContext,
@@ -159,12 +163,7 @@ export function createAgentFromRow(
 		const requestModelName = requestContext.get('modelName') as
 			| string
 			| undefined
-		// Per-request override (D-199-14 / Plan 199-03) wins; otherwise fall
-		// back to this row's persisted modelName so distinct agents can pick
-		// distinct defaults without explicit UI selection.
-		return deps.providerRouter.resolveAgentModel(
-			requestModelName ?? defaultModelName,
-		)
+		return deps.providerRouter.resolveAgentModel(requestModelName)
 	}) as never
 
 	// Per-turn async tool resolver. Mirrors the Phase 197-04 livAi factory's
