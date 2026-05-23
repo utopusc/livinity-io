@@ -103,22 +103,33 @@ export function validateHost(host: string): boolean {
 }
 
 /**
- * Phase 201-06 — Next.js Liv AI subapp listens on 127.0.0.1:3010 with
- * `basePath: '/liv-ai-app'` (see livos/packages/liv-ai-app/next.config.ts).
- * Every per-user vhost (apex + multiUser subdomain blocks) MUST first match
- * BOTH `/liv-ai-app` (the bare prefix the iframe src uses) AND `/liv-ai-app/*`
- * (every asset / API path) and route them to :3010 BEFORE falling through to
- * the livinityd app gateway on :8080. Caddy `handle` only accepts a single
- * path matcher inline, so we declare a named matcher `@livai` covering both
- * shapes and use it with `handle @livai`. First-match-wins ordering means the
- * default `handle { reverse_proxy 127.0.0.1:8080 ... }` placed after still
- * catches everything else (Phase 201 hotfix 2026-05-23 — bare prefix was
- * leaking to livinityd UI, IframeChecker self-protection then refused to
- * mount the iframe with "LivOS cannot be embedded in an iframe.").
+ * Phase 201-06 → Phase 203-03 (D-203-05) — Liv AI claw gateway listens on
+ * 127.0.0.1:18789 and serves the rebranded openclaw claw-client at
+ * `/plugins/openclawos` (plugin HTTP route — see @livos/liv-claw-os
+ * packages/claw-plugin/src/index.ts ROUTE_PREFIX).
+ *
+ * For the Liv AI dock icon iframe to load the claw-client, every per-user
+ * vhost (apex + multiUser subdomain blocks) must first match BOTH
+ * `/liv-ai-app` (the bare prefix the iframe src uses) AND `/liv-ai-app/*`
+ * (every asset / WS path) and route them to :18789 BEFORE falling through to
+ * the livinityd app gateway on :8080.
+ *
+ * History — pre-203-03 this routed to the legacy Phase 201 Next.js subapp
+ * (livos-app-liv-ai.service) on :3010. Phase 203-12 (Mini PC deploy walk)
+ * retires that unit; this routing change is the single Caddy mutation that
+ * flips the Liv AI surface to the openclaw runtime (INV-203-08).
+ *
+ * Caddy `handle` only accepts a single path matcher inline, so we declare a
+ * named matcher `@livai` covering both shapes and use it with
+ * `handle @livai`. First-match-wins ordering means the default
+ * `handle { reverse_proxy 127.0.0.1:8080 ... }` placed after still catches
+ * everything else (Phase 201 hotfix 2026-05-23 — bare prefix was leaking to
+ * livinityd UI, IframeChecker self-protection then refused to mount the
+ * iframe with "LivOS cannot be embedded in an iframe.").
  */
 const LIV_AI_APP_HANDLE = `\t@livai path /liv-ai-app /liv-ai-app/*
 \thandle @livai {
-\t\treverse_proxy 127.0.0.1:3010 {
+\t\treverse_proxy 127.0.0.1:18789 {
 ${WS_TRANSPORT_BODY}
 \t}
 \t}`
@@ -134,8 +145,8 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 
 	if (!config.mainDomain) {
 		// No domain configured — minimal :80 fallback. Multi-user / subdomain
-		// routing requires a domain. Liv AI subapp handle still goes ABOVE
-		// the catch-all so dev/IP-only operators can also reach :3010.
+		// routing requires a domain. Liv AI claw-gateway handle still goes
+		// ABOVE the catch-all so dev/IP-only operators can also reach :18789.
 		blocks.push(`:80 {
 ${LIV_AI_APP_HANDLE}
 	handle {

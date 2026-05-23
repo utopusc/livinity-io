@@ -57,38 +57,40 @@ _configure_caddy_for_cloud() {
     local use_https="${CONFIG_USE_HTTPS:-false}"
 
     mkdir -p /etc/caddy
-    # Phase 201-06 — `handle /liv-ai-app/*` routes the Next.js subapp on :3010.
-    # Placed ABOVE the catch-all so Caddy's first-match-wins matcher steers
-    # /liv-ai-app/* away from the livinityd gateway. Runtime generator in
-    # livos/packages/livinityd/.../domain/caddy.ts emits the same shape for
-    # per-user vhosts; this bootstrap keeps :80 consistent before livinityd
-    # regenerates the Caddyfile on first domain.activate.
+    # Phase 201-06 → Phase 203-03 (D-203-05) — `handle /liv-ai-app/*` routes
+    # the Liv AI claw gateway on :18789 (was the legacy Phase 201 Next.js
+    # subapp on :3010 pre-203-03). Placed ABOVE the catch-all so Caddy's
+    # first-match-wins matcher steers /liv-ai-app/* away from the livinityd
+    # gateway. Runtime generator in livos/packages/livinityd/.../domain/caddy.ts
+    # emits the same shape for per-user vhosts; this bootstrap keeps :80
+    # consistent before livinityd regenerates the Caddyfile on first
+    # domain.activate.
     if [[ "$use_https" == "true" ]] && [[ "$domain" != "localhost" ]]; then
         cat > /etc/caddy/Caddyfile <<CADDYFILE
 ${domain} {
     @livai path /liv-ai-app /liv-ai-app/*
     handle @livai {
-        reverse_proxy 127.0.0.1:3010
+        reverse_proxy 127.0.0.1:18789
     }
     handle {
         reverse_proxy 127.0.0.1:8080
     }
 }
 CADDYFILE
-        ok "Caddy configured: ${domain} (auto-TLS via livinityd domain module; /liv-ai-app/* → :3010)"
+        ok "Caddy configured: ${domain} (auto-TLS via livinityd domain module; /liv-ai-app/* → :18789)"
     else
         cat > /etc/caddy/Caddyfile <<'CADDYFILE'
 :80 {
     @livai path /liv-ai-app /liv-ai-app/*
     handle @livai {
-        reverse_proxy 127.0.0.1:3010
+        reverse_proxy 127.0.0.1:18789
     }
     handle {
         reverse_proxy 127.0.0.1:8080
     }
 }
 CADDYFILE
-        ok "Caddy configured: :80 -> localhost:8080 (HTTP only; cloud-mode bootstrap; /liv-ai-app/* → :3010)"
+        ok "Caddy configured: :80 -> localhost:8080 (HTTP only; cloud-mode bootstrap; /liv-ai-app/* → :18789)"
     fi
 
     # Enable + restart (idempotent; matches livos/install.sh:1293-1294).
