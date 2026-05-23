@@ -178,8 +178,8 @@ describe('Phase 203-09 — /liv-ai-app split: openclaw gateway vs Next.js subapp
 
 // ─── Phase 203-10 — gateway URL rewrite (handoff from Plan 203-09) ─────────
 
-describe('Phase 203-10 — gateway URL rewrite to /plugins/openclawos', () => {
-	it('handle_path strips external prefix AND rewrites to /plugins/openclawos before forwarding', () => {
+describe('Phase 203-10/12 — gateway URL rewrite to /openclawos', () => {
+	it('handle_path strips external prefix AND rewrites to /openclawos before forwarding', () => {
 		const out = generateFullCaddyfile(
 			{mainDomain: 'bruce.livinity.io', subdomains: []},
 			false,
@@ -194,7 +194,7 @@ describe('Phase 203-10 — gateway URL rewrite to /plugins/openclawos', () => {
 		expect(clawIdx).toBeGreaterThan(-1)
 		const clawBlockEnd = out.indexOf('\t}\n\t}', clawIdx)
 		const clawBlock = out.slice(clawIdx, clawBlockEnd)
-		const rewriteIdx = clawBlock.indexOf('rewrite * /plugins/openclawos{path}')
+		const rewriteIdx = clawBlock.indexOf('rewrite * /openclawos{path}')
 		const proxyIdx = clawBlock.indexOf('reverse_proxy 127.0.0.1:18789')
 		expect(rewriteIdx).toBeGreaterThan(-1)
 		expect(proxyIdx).toBeGreaterThan(-1)
@@ -214,7 +214,7 @@ describe('Phase 203-10 — gateway URL rewrite to /plugins/openclawos', () => {
 		const subdomainBlockStart = out.indexOf('bruce.livinity.io {')
 		const clawInside = out.indexOf('handle_path /liv-ai-app/openclawos', subdomainBlockStart)
 		const rewriteInside = out.indexOf(
-			'rewrite * /plugins/openclawos{path}',
+			'rewrite * /openclawos{path}',
 			clawInside,
 		)
 		expect(rewriteInside).toBeGreaterThan(clawInside)
@@ -224,7 +224,7 @@ describe('Phase 203-10 — gateway URL rewrite to /plugins/openclawos', () => {
 		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
 		const clawIdx = out.indexOf('handle_path /liv-ai-app/openclawos')
 		expect(clawIdx).toBeGreaterThan(-1)
-		const rewriteIdx = out.indexOf('rewrite * /plugins/openclawos{path}', clawIdx)
+		const rewriteIdx = out.indexOf('rewrite * /openclawos{path}', clawIdx)
 		expect(rewriteIdx).toBeGreaterThan(clawIdx)
 	})
 })

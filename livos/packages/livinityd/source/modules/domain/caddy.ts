@@ -142,7 +142,7 @@ export function validateHost(host: string): boolean {
  * rewrite for the gateway path so the gateway's plugin URL match succeeds.
  */
 const LIV_AI_APP_HANDLE = `\thandle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
-\t\trewrite * /plugins/openclawos{path}
+\t\trewrite * /openclawos{path}
 \t\treverse_proxy 127.0.0.1:18789 {
 ${WS_TRANSPORT_BODY}
 \t}
