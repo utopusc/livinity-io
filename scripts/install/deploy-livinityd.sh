@@ -1577,15 +1577,27 @@ _dld_update_caddy_to_livinityd() {
             # Pre-134 the hybrid branch wrote a LE DNS-01 Caddyfile expecting
             # CLOUDFLARE_API_TOKEN env — incompatible with Phase 134 (no
             # cf-token in tunnel-mode install; Caddy would fail to start).
+            #
+            # Phase 201-06 — `handle /liv-ai-app/*` routes the Next.js subapp
+            # listening on 127.0.0.1:3010. Placed ABOVE the catch-all so
+            # Caddy's first-match-wins matcher steers /liv-ai-app/* away
+            # from the livinityd gateway. The runtime generator in
+            # livos/packages/livinityd/.../domain/caddy.ts emits the same
+            # block for per-user vhosts (bruce.livinity.io/liv-ai-app/*).
             cat > "$_DLD_CADDYFILE" <<CADDYFILE
 {
     auto_https off
 }
 :80 {
-    reverse_proxy 127.0.0.1:8080
+    handle /liv-ai-app/* {
+        reverse_proxy 127.0.0.1:3010
+    }
+    handle {
+        reverse_proxy 127.0.0.1:8080
+    }
 }
 CADDYFILE
-            ok "Caddyfile: :80 → 127.0.0.1:8080 (CF Tunnel terminates TLS — D-134-MODE)"
+            ok "Caddyfile: :80 → 127.0.0.1:8080 (CF Tunnel terminates TLS — D-134-MODE; /liv-ai-app/* → :3010)"
             ;;
         local-lan)
             local tld="${LIVINITY_LOCAL_TLD:-livinity.local}"
@@ -1597,18 +1609,28 @@ import /etc/caddy/pki-global.conf
             ca liv-local
         }
     }
-    reverse_proxy 127.0.0.1:8080
+    handle /liv-ai-app/* {
+        reverse_proxy 127.0.0.1:3010
+    }
+    handle {
+        reverse_proxy 127.0.0.1:8080
+    }
 }
 CADDYFILE
-            ok "Caddyfile: *.${tld} → 127.0.0.1:8080 (tls internal liv-local)"
+            ok "Caddyfile: *.${tld} → 127.0.0.1:8080 (tls internal liv-local; /liv-ai-app/* → :3010)"
             ;;
         cloud)
             cat > "$_DLD_CADDYFILE" <<CADDYFILE
 :80 {
-    reverse_proxy 127.0.0.1:8080
+    handle /liv-ai-app/* {
+        reverse_proxy 127.0.0.1:3010
+    }
+    handle {
+        reverse_proxy 127.0.0.1:8080
+    }
 }
 CADDYFILE
-            ok "Caddyfile: :80 → 127.0.0.1:8080 (cloud-mode bootstrap)"
+            ok "Caddyfile: :80 → 127.0.0.1:8080 (cloud-mode bootstrap; /liv-ai-app/* → :3010)"
             ;;
     esac
 

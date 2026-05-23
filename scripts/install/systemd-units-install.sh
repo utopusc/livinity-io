@@ -6,11 +6,15 @@
 #
 # Source-of-truth search order for each unit file:
 #   1. ${SCRIPT_DIR}/../../systemd/<name>.service      (top-level systemd/ in repo)
-#   2. ${SCRIPT_DIR}/seeds/<name>.service              (scripts/install/seeds/)
+#   2. ${SCRIPT_DIR}/systemd/<name>.service            (scripts/install/systemd/)
+#   3. ${SCRIPT_DIR}/seeds/<name>.service              (scripts/install/seeds/)
 #
-# If neither location holds a given unit, we WARN but do not fail. Some
+# If none of those locations hold a given unit, we WARN but do not fail. Some
 # operators may use systemctl edit overlays on top of pre-existing units; the
 # v34.x deploys never shipped seed unit files in-repo, so this is by design.
+#
+# Phase 201-06 — adds `livos-app-liv-ai.service` (Next.js subapp on :3010) and
+# resolves it from the new scripts/install/systemd/ directory.
 
 set -euo pipefail
 
@@ -25,8 +29,10 @@ if [[ $EUID -ne 0 ]]; then
     fail "systemd-units-install: must run as root" 77
 fi
 
-_units=(livos.service liv-core.service liv-worker.service liv-memory.service)
+# Phase 201-06 — livos-app-liv-ai.service ships from scripts/install/systemd/
+_units=(livos.service liv-core.service liv-worker.service liv-memory.service livos-app-liv-ai.service)
 _repo_systemd_dir="${SCRIPT_DIR}/../../systemd"
+_install_systemd_dir="${SCRIPT_DIR}/systemd"
 _seeds_dir="${SCRIPT_DIR}/seeds"
 
 _installed_any=0
@@ -37,12 +43,14 @@ for _unit in "${_units[@]}"; do
     _src=""
     if [[ -f "${_repo_systemd_dir}/${_unit}" ]]; then
         _src="${_repo_systemd_dir}/${_unit}"
+    elif [[ -f "${_install_systemd_dir}/${_unit}" ]]; then
+        _src="${_install_systemd_dir}/${_unit}"
     elif [[ -f "${_seeds_dir}/${_unit}" ]]; then
         _src="${_seeds_dir}/${_unit}"
     fi
 
     if [[ -z "$_src" ]]; then
-        warn "systemd unit source missing: ${_unit} — checked ${_repo_systemd_dir}/ and ${_seeds_dir}/ (not fatal; pre-existing overlay may be in place)"
+        warn "systemd unit source missing: ${_unit} — checked ${_repo_systemd_dir}/, ${_install_systemd_dir}/, and ${_seeds_dir}/ (not fatal; pre-existing overlay may be in place)"
         _missing_any=$((_missing_any + 1))
         continue
     fi
