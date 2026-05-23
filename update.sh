@@ -502,6 +502,45 @@ else
     info "liv-ai-app not in TEMP_DIR — skipping subapp rsync"
 fi
 
+# ── Phase 203-03: liv-claw-os fork + liv-claw-gateway wrapper rsync ────────
+# In-tree fork of thesysdev/openclaw-os (pinned at SHA 076ae63 — see
+# packages/liv-claw-os/UPSTREAM-COMMIT) PLUS the thin systemd-deployable
+# wrapper package that boots `openclaw gateway run` in foreground with the
+# rebranded plugin pre-loaded. Both directories ship as source-tree
+# artifacts; pnpm install (Step 4) resolves their deps; pnpm build below
+# in Step 7.x produces the plugin bundle the gateway loads.
+# Excludes mirror liv-ai-app (no node_modules / .next / .turbo / dist / out
+# rsync churn — those rebuild from source).
+if [[ -d "$TEMP_DIR/livos/packages/liv-claw-os" ]]; then
+    info "Updating liv-claw-os fork (Phase 203-02 clone of openclaw-os)..."
+    mkdir -p "$LIVOS_DIR/packages/liv-claw-os"
+    rsync -a --delete \
+        --exclude='node_modules' \
+        --exclude='.next' \
+        --exclude='.turbo' \
+        --exclude='dist' \
+        --exclude='out' \
+        --exclude='.git' \
+        "$TEMP_DIR/livos/packages/liv-claw-os/" \
+        "$LIVOS_DIR/packages/liv-claw-os/"
+    ok "liv-claw-os source updated"
+else
+    info "liv-claw-os not in TEMP_DIR — skipping (Phase 203 fork not in this checkout)"
+fi
+
+if [[ -d "$TEMP_DIR/livos/packages/liv-claw-gateway" ]]; then
+    info "Updating liv-claw-gateway wrapper (Phase 203-03)..."
+    mkdir -p "$LIVOS_DIR/packages/liv-claw-gateway"
+    rsync -a --delete \
+        --exclude='node_modules' \
+        "$TEMP_DIR/livos/packages/liv-claw-gateway/" \
+        "$LIVOS_DIR/packages/liv-claw-gateway/"
+    chmod +x "$LIVOS_DIR/packages/liv-claw-gateway/start.sh" 2>/dev/null || true
+    ok "liv-claw-gateway wrapper updated"
+else
+    info "liv-claw-gateway not in TEMP_DIR — skipping (Phase 203 wrapper not in this checkout)"
+fi
+
 # ── Step 3: Update Liv source files ───────────────────────
 step "Updating Liv source files"
 
@@ -688,6 +727,40 @@ else
     info "liv-ai-app package not present in this checkout — skipping (legacy deploys may not ship it)"
 fi
 
+# ── Step 7.3: Phase 203-03 — liv-claw-os plugin build ──────────────────────
+# The openclaw gateway loads @livos/liv-claw-os's claw-plugin in-process via
+# `node start.js --plugin <bundle>` (see liv-claw-gateway/start.js). The
+# bundle is dist/index.js inside packages/claw-plugin, produced by esbuild.
+# `pnpm --filter @livos/liv-claw-os build` runs the recursive build which
+# covers claw-plugin (esbuild → dist/index.js, ~170kb) AND claw-client (Next.js
+# static export → out/) per the upstream prepack/build wiring.
+# Guarded so legacy deploys without Phase 203 source don't fail.
+step "Phase 203-03: Building liv-claw-os plugin + claw-client"
+if [[ -d "$LIVOS_DIR/packages/liv-claw-os" ]]; then
+    if (cd "$LIVOS_DIR" && pnpm --filter @livos/liv-claw-os build 2>&1) ; then
+        ok "liv-claw-os build complete (claw-plugin dist + claw-client out)"
+    else
+        warn "liv-claw-os build failed — liv-claw-gateway will fail to boot until plugin bundle exists; check journalctl -u liv-claw-gateway -n 30 after deploy"
+    fi
+else
+    info "liv-claw-os not present in this checkout — skipping (Phase 203 fork not deployed yet)"
+fi
+
+# ── Step 7.4: Phase 203-03 — liv-claw-gateway dep resolution ───────────────
+# Wrapper package depends on openclaw (npm) + @livos/liv-claw-os (workspace).
+# pnpm install at workspace root (Step 4 above) already resolves these, but
+# we re-run a filtered install here to guarantee node_modules exists at
+# /opt/livos/packages/liv-claw-gateway/ even if the root install used a
+# partial filter or skipped a workspace member.
+if [[ -d "$LIVOS_DIR/packages/liv-claw-gateway" ]]; then
+    if (cd "$LIVOS_DIR" && pnpm --filter @livos/liv-claw-gateway install 2>&1) ; then
+        ok "liv-claw-gateway dependencies installed"
+    else
+        warn "liv-claw-gateway install failed (frozen) — retrying without --frozen-lockfile"
+        (cd "$LIVOS_DIR" && pnpm --filter @livos/liv-claw-gateway install --no-frozen-lockfile 2>&1) || warn "liv-claw-gateway install still failing"
+    fi
+fi
+
 # ── Step 7.5: Mastra storage schema drift fixes ─────────────────────────────
 # P199 UAT discovered Mastra v1.36 expects camelCase columns the old @mastra/pg
 # init never created (mastra_threads.resourceId, mastra_messages.type). Both
@@ -731,6 +804,38 @@ if [[ -f "$_LIV_AI_UNIT_SRC" ]]; then
     fi
 else
     info "livos-app-liv-ai.service source not found — skipping install (Caddy /liv-ai-app/* will 502 until unit lands)"
+fi
+
+# ── Step 7.8: Phase 203-03 — install liv-claw-gateway.service unit (if missing) ──
+# Mirror of Step 7.7's idempotent pattern for the new gateway unit. update.sh
+# runs on pre-existing deploys that may not have re-run install.sh; copy the
+# file ourselves so the restart step below has a unit to manage. cmp -s guard
+# keeps re-runs cheap (no daemon-reload churn on byte-identical writes).
+step "Phase 203-03: install liv-claw-gateway.service unit (if missing)"
+
+_LIV_CLAW_UNIT_SRC="$LIVOS_DIR/../scripts/install/systemd/liv-claw-gateway.service"
+# Fallback to TEMP_DIR location (fresh clone) if the on-disk path isn't there.
+if [[ ! -f "$_LIV_CLAW_UNIT_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _LIV_CLAW_UNIT_SRC="$TEMP_DIR/scripts/install/systemd/liv-claw-gateway.service"
+fi
+
+if [[ -f "$_LIV_CLAW_UNIT_SRC" ]]; then
+    _LIV_CLAW_UNIT_DST="/etc/systemd/system/liv-claw-gateway.service"
+    if [[ ! -f "$_LIV_CLAW_UNIT_DST" ]] || ! cmp -s "$_LIV_CLAW_UNIT_SRC" "$_LIV_CLAW_UNIT_DST"; then
+        install -m 0644 -o root -g root "$_LIV_CLAW_UNIT_SRC" "$_LIV_CLAW_UNIT_DST"
+        systemctl daemon-reload
+        systemctl enable liv-claw-gateway.service 2>/dev/null || true
+        ok "liv-claw-gateway.service installed at $_LIV_CLAW_UNIT_DST"
+    else
+        ok "liv-claw-gateway.service already byte-identical"
+    fi
+    # Ensure the gateway's state dir exists and is bruce-writable
+    mkdir -p /opt/livos/data/openclaw 2>/dev/null || true
+    if id bruce >/dev/null 2>&1; then
+        chown -R bruce:bruce /opt/livos/data/openclaw 2>/dev/null || true
+    fi
+else
+    info "liv-claw-gateway.service source not found — skipping install (Caddy /liv-ai-app/* will route to legacy :3010 unit until landed)"
 fi
 
 # ── Phase 202-10: bruce ownership hook (recurring P198/P199/P200/P201 patch) ──
@@ -780,6 +885,21 @@ if [[ -f /etc/systemd/system/livos-app-liv-ai.service || -f /usr/lib/systemd/sys
     fi
 else
     info "livos-app-liv-ai.service not installed yet — run scripts/install/systemd-units-install.sh as root to enable"
+fi
+
+# Phase 203-03 — restart liv-claw-gateway (openclaw runtime on 127.0.0.1:18789).
+# Guarded so legacy deploys without the unit installed are no-ops. Caddy
+# `handle /liv-ai-app/*` will steer traffic to :18789 once D-203-05 routing
+# lands (Plan 203-12 deploy walk).
+if [[ -f /etc/systemd/system/liv-claw-gateway.service || -f /usr/lib/systemd/system/liv-claw-gateway.service ]]; then
+    systemctl enable liv-claw-gateway.service 2>/dev/null || true
+    if systemctl restart liv-claw-gateway.service 2>/dev/null; then
+        ok "Restarted liv-claw-gateway (openclaw + plugin :18789)"
+    else
+        warn "liv-claw-gateway restart failed — check journalctl -u liv-claw-gateway -n 30"
+    fi
+else
+    info "liv-claw-gateway.service not installed yet — pre-203-03 deploy; run scripts/install/systemd-units-install.sh as root to enable"
 fi
 
 # Verify services
