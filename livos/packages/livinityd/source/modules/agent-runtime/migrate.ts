@@ -18,7 +18,18 @@ import {fileURLToPath} from 'node:url'
 
 import {Client} from 'pg'
 
-import {redactPgUrl} from './memory.js'
+/**
+ * Phase 203-08 — inlined from the deleted `modules/mastra/memory.ts`
+ * (Plan 197-03 T-197-03-02). Scrub user:password from a postgres:// URL for
+ * safe logging:
+ *   postgres://user:pass@host:5432/db → postgres://***:***@host:5432/db
+ *   postgres://user@host/db           → postgres://***@host/db
+ */
+function redactPgUrl(url: string): string {
+	let out = url.replace(/(postgres(ql)?:\/\/)([^:@/]+):([^@/]+)(@)/, '$1***:***$5')
+	out = out.replace(/(postgres(ql)?:\/\/)([^:@/]+)(@)/, '$1***$4')
+	return out
+}
 
 export interface MigrationResult {
 	tablesCreated: number

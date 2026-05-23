@@ -35,14 +35,17 @@
  *                + ONE new attach method via a sibling Task 3 edit).
  */
 
-import type {Agent} from '@mastra/core/agent'
-
-import {createAgentFromRow} from './agent-factory.js'
+import {createAgentFromRow, type LocalAgent} from './agent-factory.js'
 import type {AgentRepository} from './agent-repository.js'
 import type {LivosAgent} from '../../../db/schema.js'
 import type {ProviderRouter} from '../provider-router.js'
 import type {McpBridge, McpBridgeLogger} from '../mcp-bridge.js'
 import type {ApprovalGate} from './wrap-tool-with-approval.js'
+
+// Phase 203-08 — local Agent shape (replaces `@mastra/core/agent` Agent type
+// after the Mastra purge). Registry only touches the agent through downstream
+// consumers' duck-typed `.stream()` reader (scheduler) — shape stays opaque.
+type Agent = LocalAgent
 
 export interface AgentRegistryDeps {
 	repo: AgentRepository

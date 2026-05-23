@@ -39,6 +39,15 @@ import type {
 	ProviderRouter,
 } from './types.js'
 import {OpenclawClient} from './openclaw-client.js'
+// Phase 203-08 — concrete types for the LivOSAgent slots so tRPC routers
+// (agent-router, agent-task-router) can call `.refresh()` / `.runOnce()` /
+// memory.* methods without unknown-cast gymnastics. Mirrors the LivOSMastra
+// slot-shape contract these routers consumed pre-203-08.
+import type {AgentRegistry} from './agents/agent-registry.js'
+import type {AgentScheduler} from './scheduler.js'
+import type {McpBridge} from './mcp-bridge.js'
+import type {ApprovalManager} from './approval-manager.js'
+import type {LocalAgent} from './agents/agent-factory.js'
 
 // Re-export the openclaw client + types so consumers import everything via
 // the agent-runtime barrel (parallel to mastra/index.ts shape).
@@ -60,19 +69,31 @@ export type {
 	ProviderRouter,
 	ApprovalGate,
 } from './types.js'
-export {createAgentFromRow} from './agent-factory.js'
-export type {AgentRuntimeFactoryDeps} from './agent-factory.js'
+export {createAgentFromRow} from './agents/agent-factory.js'
+export type {
+	AgentFactoryDeps,
+	AgentFactoryDeps as AgentRuntimeFactoryDeps,
+	LocalAgent,
+} from './agents/agent-factory.js'
+
+// Phase 203-08 — re-export the framework-agnostic helpers that the boot
+// wire-up + chat-route + tRPC routers consume. Lets the boot file's
+// agent-runtime imports stay compact.
+export {createProviderRouter} from './provider-router.js'
+export {ProviderNotConfiguredError} from './errors.js'
 
 /**
- * Forward type aliases — mirrored from LivOSMastra to keep the slot shape
- * structurally identical during the coexistence window. Narrowed structurally
- * by the concrete inhabitants attached at boot.
+ * Phase 203-08 — slot types narrowed to the concrete classes the boot
+ * wire-up attaches. The tRPC routers (agent-router / agent-task-router) call
+ * `.refresh()` on registry/scheduler and `saveThread/listThreads/recall/...`
+ * on memory; previously these were `unknown` (203-07 coexistence window)
+ * which forced unsafe casts at every call site.
  */
 export type LivOSAgentMemory = ConversationMemoryAdapter | unknown
-export type LivOSAgentMcpBridge = unknown
-export type LivOSAgentRegistry = unknown
-export type LivOSAgentScheduler = unknown
-export type LivOSAgentApprovalManager = unknown
+export type LivOSAgentMcpBridge = McpBridge | null
+export type LivOSAgentRegistry = AgentRegistry | null
+export type LivOSAgentScheduler = AgentScheduler | null
+export type LivOSAgentApprovalManager = ApprovalManager | null
 /**
  * Future-feature hook point matching `LivOSMastra.mastraInstance`. Branch A
  * has no equivalent "gateway instance" object (the gateway lives in its own
@@ -97,13 +118,19 @@ export class LivOSAgent {
 	 * the same way LivOSMastra does today). Chat-route's legacy reader keeps
 	 * working without re-routing.
 	 */
-	readonly agents: {livAi?: OpenclawAgentHandle} = {}
+	/**
+	 * Phase 203-08 — `livAi` slot type widened to `LocalAgent | OpenclawAgentHandle`.
+	 * The registry now returns LocalAgent (per the Mastra purge); the
+	 * back-compat OpenclawAgentHandle path stays so the 203-07 test surface
+	 * (livos-agent.test.ts) keeps compiling.
+	 */
+	readonly agents: {livAi?: LocalAgent | OpenclawAgentHandle} = {}
 	agentClient: OpenclawClient | null = null
 	memory: LivOSAgentMemory | null = null
-	mcpBridge: LivOSAgentMcpBridge | null = null
-	registry: LivOSAgentRegistry | null = null
-	scheduler: LivOSAgentScheduler | null = null
-	approvalManager: LivOSAgentApprovalManager | null = null
+	mcpBridge: LivOSAgentMcpBridge = null
+	registry: LivOSAgentRegistry = null
+	scheduler: LivOSAgentScheduler = null
+	approvalManager: LivOSAgentApprovalManager = null
 	agentInstance: LivOSAgentInstance | null = null
 
 	constructor(deps: LivOSAgentDeps) {
@@ -130,7 +157,7 @@ export class LivOSAgent {
 	 * Mastra Agent. Renamed per D-203-07 — `attachLivAiAgent` → `attachLivAi`
 	 * to drop the Mastra-specific suffix while keeping the wire-up readable.
 	 */
-	attachLivAi(handle: OpenclawAgentHandle): void {
+	attachLivAi(handle: LocalAgent | OpenclawAgentHandle): void {
 		this.agents.livAi = handle
 	}
 

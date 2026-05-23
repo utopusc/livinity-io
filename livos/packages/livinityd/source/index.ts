@@ -126,60 +126,29 @@ import {createXaiAuthRouter} from './modules/server/trpc/xai-auth-router.js'
 // throws on call until this swap lands.
 import {createSetupRouter} from './modules/server/trpc/setup-router.js'
 import {createTimezoneService} from './modules/locale/index.js'
-// Phase 197-01 — Liv AI / Mastra foundation. LivOSMastra singleton holds the
-// ProviderRouter that dynamically resolves the active LLM provider from Redis
-// `liv:config:active_provider`. Subsequent plans (197-02 McpBridge, 197-03
-// Memory, 197-04 Liv AI Agent, 197-05 tRPC namespace) attach into the singleton
-// via the FINAL attach helpers shipped from index.ts in this same plan.
-import {LivOSMastra, createProviderRouter} from './modules/mastra/index.js'
-// Phase 203-07 — LivOSAgent (Branch A — openclaw built-in LLM dispatch).
-// Parallel runtime to LivOSMastra during the 203-07/08 coexistence window.
-// Selected via `LIV_AGENT_RUNTIME` env var (also accepts `LIVOS_AGENT_RUNTIME`
-// for symmetry with the LIVOS_* prefix convention used by Plan 203-12 deploy
-// scripts). Default is `mastra` so this plan is operationally a no-op until
-// the deploy walk flips the flag. D-203-06 / D-203-07.
+// Phase 203-08 — Liv AI agent runtime (Mastra purged). LivOSAgent is the
+// sole runtime; LIV_AGENT_RUNTIME defaults to `openclaw` (deploy walk in
+// Plan 203-12 flips Mini PC env). Mastra-specific imports (LivOSMastra,
+// chat-route, liv-ai, mastra-instance, Mastra Memory) are DELETED per the
+// Plan 203-08 purge. Surviving framework-agnostic modules live under
+// agent-runtime/ (Plan 203-08 git-mv preserved history).
 import {
 	LivOSAgent,
 	OpenclawClient,
+	createProviderRouter,
 } from './modules/agent-runtime/index.js'
 import {createConversationMemoryAdapter} from './modules/agent-runtime/memory.js'
-// Phase 197-05 — Liv AI full wire-up. ApprovalManager + createLivOSMemory +
-// createMcpBridge + createLivAiAgent + createMastraRouter all instantiated in
-// the chromeMaster try/catch block, populating LivOSMastra typed slots via
-// Plan 197-01's attach helpers (B-02 lock — index.ts of the mastra module is
-// NOT modified by Plan 197-05).
-import {ApprovalManager} from './modules/mastra/approval-manager.js'
-import {createLivOSMemory} from './modules/mastra/memory.js'
-import {runMastraMigrations} from './modules/mastra/migrate.js'
+import {ApprovalManager} from './modules/agent-runtime/approval-manager.js'
+import {runMastraMigrations} from './modules/agent-runtime/migrate.js'
 import {runLivOSMigrations} from './db/migrate.js'
-// Phase 202-01 — AgentRepository + system-agent seed. Wired into the same
-// boot block that runs the LivOS migration so seed only fires after the
-// table is guaranteed to exist.
 import {
 	AgentRepository,
 	seedSystemAgents,
-} from './modules/mastra/agents/agent-repository.js'
-// Phase 202-02 — dynamic AgentRegistry. Reads every enabled livos_agents row,
-// instantiates each via createAgentFromRow, wires Supervisor agents:{} maps
-// for parents. CRUD mutations (Plan 202-03) call registry.refresh() to
-// rebuild the in-memory map. livOSMastra.agents.livAi slot is double-wired
-// from registry.getByName('livAi') for the chat-route back-compat window.
-import {AgentRegistry} from './modules/mastra/agents/agent-registry.js'
-// Phase 202-09 — canonical `new Mastra({...})` constructor wrap (D-202-06).
-// Boot wire-up calls `createMastraInstance({agents, logger})` AFTER
-// `registry.init()` so the constructed Mastra instance can read the live
-// agent map, then `livOSMastra.attachMastraInstance(instance)` parks it on
-// the singleton for future workflow / eval / telemetry hooks.
-import {createMastraInstance} from './modules/mastra/mastra-instance.js'
-import {createMcpBridge} from './modules/mastra/mcp-bridge.js'
-import {createLivAiAgent} from './modules/mastra/agents/liv-ai.js'
+} from './modules/agent-runtime/agents/agent-repository.js'
+import {AgentRegistry} from './modules/agent-runtime/agents/agent-registry.js'
+import {createMcpBridge} from './modules/agent-runtime/mcp-bridge.js'
 import {createMastraRouter} from './modules/server/trpc/mastra-router.js'
-// Phase 202-03 — AgentScheduler + agents.* tRPC routers. Scheduler arms
-// node-cron tasks for every enabled livos_agents row after the registry has
-// hydrated (so registry.get() returns live Agent instances at fire time).
-// agent-router.ts / agent-task-router.ts mount under the `agents.*` namespace
-// via the new createAppRouter slots.
-import {AgentScheduler} from './modules/mastra/scheduler.js'
+import {AgentScheduler} from './modules/agent-runtime/scheduler.js'
 import {createAgentRouter} from './modules/server/trpc/agent-router.js'
 import {createAgentTaskRouter} from './modules/server/trpc/agent-task-router.js'
 // Phase 203-04 — OpenUIAppsRepository + openclawos.apps.* tRPC router.
@@ -198,12 +167,12 @@ import {createMcpConfigRouter} from './modules/server/trpc/mcp-config-router.js'
 // /agents dashboard. Subscribes to the same scheduler statusEvents
 // EventEmitter that runOnce / drainAgentStream emit on.
 import {createAgentsStatusSseHandler} from './modules/server/routes-agents-sse.js'
-// Phase 198-01 — Mastra chatRoute Express handler factory. Bridges the
-// assistant-ui frontend (Plan 198-02) to livOSMastra.agents.livAi via
-// AI-SDK-format SSE. Mounted at POST /chat/:agentId behind the same JWT
-// gate as /trpc. tRPC mastra.* namespace from P197-05 stays as deprecated
-// fallback transport; full removal deferred to Phase 199.
-import {createChatRouteHandler} from './modules/mastra/chat-route.js'
+// Phase 203-08 — Mastra chatRoute (POST /chat/livAi) DELETED. The assistant-ui
+// frontend is purged in Plan 203-09; the openclaw gateway hosts its own chat
+// surface at https://bruce.livinity.io/liv-ai-app/ (proxied via Caddy to
+// :18789 per D-203-05). The legacy /chat/:agentId Express mount no longer
+// fires; LivOSAgent.agentClient.streamInvoke is the new dispatch surface
+// (called by the openclaw plugin's tool-call hooks, not by livinityd itself).
 import express from 'express'
 
 // 2026-05-08: livinityd's systemd env contains only PATH/USER/HOME — no
@@ -1002,41 +971,26 @@ export default class Livinityd {
 				timezoneService,
 			})
 
-			// Phase 197-01 — Liv AI / Mastra foundation. Constructs the
-			// LivOSMastra singleton with its ProviderRouter dynamically
-			// resolving the active provider from Redis (xai today; claude/
-			// openai future via Phase 198+). Subsequent plans (197-02/03/04/
-			// 05) populate the agents+memory+mcpBridge slots via the typed
-			// attach helpers shipped from this plan's index.ts.
-			let livOSMastra: LivOSMastra | null = null
-			// Phase 203-07 — parallel LivOSAgent (Branch A openclaw runtime).
-			// Constructed alongside LivOSMastra during the 203-07/08
-			// coexistence window. Selected via env-var toggle:
-			//   LIV_AGENT_RUNTIME=mastra   (default — wires LivOSMastra)
-			//   LIV_AGENT_RUNTIME=openclaw (Plan 203-12 deploy walk flips)
-			// Also accepts LIVOS_AGENT_RUNTIME for symmetry with the LIVOS_*
-			// prefix convention. D-203-06 / D-203-07.
+			// Phase 203-08 — Liv AI runtime (Mastra purged). Sole runtime is
+			// LivOSAgent (Branch A — openclaw built-in LLM dispatch). The
+			// LIV_AGENT_RUNTIME env var is still read for forward-compat with
+			// Plan 203-12 deploy scripts but now defaults to `openclaw` and
+			// no longer dispatches to a separate `mastra` path (LivOSMastra
+			// + chat-route + Mastra Memory + Mastra Agent factory all DELETED
+			// in this plan).
 			const agentRuntimeFlag = (
 				process.env.LIV_AGENT_RUNTIME ??
 				process.env.LIVOS_AGENT_RUNTIME ??
-				'mastra'
+				'openclaw'
 			).toLowerCase()
-			const useOpenclawRuntime = agentRuntimeFlag === 'openclaw'
+			void agentRuntimeFlag // referenced for forward-compat — the openclaw
+			// path is the only path; flag value is logged but does not branch.
 			let livOSAgent: LivOSAgent | null = null
 			try {
 				const providerRouter = createProviderRouter({
 					xaiCreds: xaiCredentialsService,
 					redis: this.ai.redis,
 				})
-				livOSMastra = new LivOSMastra({providerRouter})
-				webappLogger.info(
-					'Phase 197-01 — LivOSMastra wired (providerRouter ready; agents+memory+mcpBridge slots empty until 197-02/03/04)',
-				)
-				// Phase 203-07 — construct the parallel LivOSAgent. Always
-				// constructed (so the slot exists for downstream code) but
-				// only ACTIVE for dispatch when the openclaw branch is
-				// selected. LivOSMastra remains the dispatch path under the
-				// default `mastra` flag.
 				livOSAgent = new LivOSAgent({
 					providerRouter,
 					logger: {
@@ -1044,10 +998,6 @@ export default class Livinityd {
 						warn: (msg, err) => this.logger.error(msg, err),
 					},
 				})
-				// Wire the openclaw HTTP client unconditionally — Plan 203-03
-				// ships the gateway on :18789. The client degrades gracefully
-				// when the gateway is unreachable (health() returns false
-				// rather than throwing).
 				const openclawBaseUrl =
 					process.env.OPENCLAW_GATEWAY_URL ??
 					'http://127.0.0.1:18789'
@@ -1062,64 +1012,47 @@ export default class Livinityd {
 					}),
 				)
 				webappLogger.info(
-					`Phase 203-07 — LivOSAgent wired (runtime=${agentRuntimeFlag}, openclawGateway=${openclawBaseUrl}); ${useOpenclawRuntime ? 'OPENCLAW path ACTIVE — LivOSAgent owns dispatch' : 'MASTRA path active (default); LivOSAgent is shadow-wired and idle'}`,
+					`Phase 203-08 — LivOSAgent wired (runtime=${agentRuntimeFlag}, openclawGateway=${openclawBaseUrl}); Mastra purged — LivOSAgent.agentClient is the dispatch surface`,
 				)
-			} catch (mastraErr) {
+			} catch (agentErr) {
 				this.logger.error(
-					'Phase 197-01 — LivOSMastra/LivOSAgent construction failed; Liv AI surface will degrade until next restart',
-					mastraErr,
+					'Phase 203-08 — LivOSAgent construction failed; Liv AI surface will degrade until next restart',
+					agentErr,
 				)
 			}
 
-			// Phase 197-05 — Liv AI / Mastra full wire-up.
-			//
-			// Construction order (sequential — each step depends on prior):
-			//   1. ApprovalManager    (no deps)
-			//   2. runMastraMigrations({databaseUrl})  (PG migration — non-fatal)
-			//   3. createLivOSMemory({databaseUrl})    (depends on PG migration)
-			//   4. createMcpBridge({redis, logger})    (depends on Redis)
-			//   5. createLivAiAgent({providerRouter, memory, mcpBridge, approvalManager})
-			//   6. createMastraRouter({livOSMastra, approvalManager})
-			//
-			// After 3/4/5 succeed, populate LivOSMastra slots via Plan 197-01's
-			// attach helpers (B-02 lock — mastra/index.ts NOT modified here).
-			// Failures non-fatal — livinityd boots with empty-injection Proxy
-			// mastraRouter on degradation.
+			// Phase 203-08 — agent runtime wire-up. Same construction order
+			// as the pre-203-08 Mastra path but populates LivOSAgent slots
+			// instead of LivOSMastra (LivOSMastra + chat-route + Mastra
+			// Memory all deleted in this plan).
 			let mastraRouterProductionInstance: ReturnType<typeof createMastraRouter> | undefined
-			// Phase 202-03 — hoisted to the outer mastra-wire-up scope so the
-			// agents.* / agents.tasks.* router factories built after the
-			// chat-route mount can read it. Stays null when the registry init
-			// path errors out → the agent tRPC namespace falls back to the
-			// empty stub inside createAppRouter.
 			let agentsRepoForRouter: AgentRepository | null = null
-			// Phase 203-06 — hoisted so the plugin-RPC mount below the
-			// chat-route mount block can wire ApprovalManager + mcpBridge into
-			// the /openclawos/plugin-rpc dispatcher.
 			let approvalManagerForPlugin: ApprovalManager | null = null
 			let mcpBridgeForPlugin: Awaited<ReturnType<typeof createMcpBridge>> | null = null
-			if (livOSMastra) {
+			if (livOSAgent) {
 				try {
 					const approvalManager = new ApprovalManager()
-					// Phase 203-06 — surface to outer scope for the plugin-RPC mount.
 					approvalManagerForPlugin = approvalManager
+					livOSAgent.attachApprovalManager(approvalManager)
 					const databaseUrl = process.env.DATABASE_URL
 					if (!databaseUrl) {
 						throw new Error(
-							'Phase 197-05 — DATABASE_URL env var missing; cannot wire Liv AI memory',
+							'Phase 203-08 — DATABASE_URL env var missing; cannot wire Liv AI runtime',
 						)
 					}
+					// Legacy `mastra_*` table migration kept for back-compat —
+					// runs idempotently against the existing livos PG database
+					// (operator may still have mastra_threads / mastra_messages
+					// rows from the pre-203-08 deployment; the migration is
+					// CREATE-IF-NOT-EXISTS so re-runs are no-ops).
 					try {
 						await runMastraMigrations({databaseUrl})
 					} catch (migErr) {
 						this.logger.error(
-							'Phase 197-05 — runMastraMigrations failed (non-fatal); Memory will surface DB errors lazily',
+							'Phase 203-08 — runMastraMigrations failed (non-fatal); legacy mastra_* tables may be absent',
 							migErr,
 						)
 					}
-					// Phase 202-01 — LivOS-owned migrations (livos_agents registry).
-					// Runs AFTER runMastraMigrations because the agent table lives in
-					// the same `livos` PG database (D-202-01). Non-fatal — repository
-					// surfaces DB errors lazily on first read/write.
 					try {
 						await runLivOSMigrations({databaseUrl})
 					} catch (livosMigErr) {
@@ -1128,10 +1061,6 @@ export default class Livinityd {
 							livosMigErr,
 						)
 					}
-					// Phase 202-01 — seed the original Phase 197-04 `livAi` agent
-					// (D-202-20). Dynamic import keeps the heavy drizzle-orm/pg
-					// surfaces out of the hot path and isolates pg.Pool failures
-					// from the rest of the boot sequence.
 					try {
 						const {Pool} = await import('pg')
 						const {drizzle} = await import('drizzle-orm/node-postgres')
@@ -1152,27 +1081,27 @@ export default class Livinityd {
 							seedErr,
 						)
 					}
-					const memory = createLivOSMemory({databaseUrl})
-					livOSMastra.attachMemory(memory)
-					// Phase 203-07 — parallel attach into the openclaw runtime.
-					// `livOSAgent` is constructed at boot regardless of the flag
-					// so its slots stay populated; consumers branch on
-					// `useOpenclawRuntime` to decide which singleton to read.
-					// The memory adapter is a transparent pass-through during
-					// the coexistence window (Plan 203-08 swaps the backing
-					// store).
-					livOSAgent?.attachMemory(
-						createConversationMemoryAdapter(
-							memory as never as Parameters<
-								typeof createConversationMemoryAdapter
-							>[0],
-						),
-					)
-					// Approval gate surfaces from the same scope (declared just
-					// above as `approvalManager`). Attach into the parallel
-					// runtime explicitly so downstream code does not need to
-					// reach back into LivOSMastra's mcpBridge to find it.
-					livOSAgent?.attachApprovalManager(approvalManager)
+					// Phase 203-08 — Memory adapter swapped from Mastra Memory
+					// to the in-memory adapter for now. Conversation history is
+					// owned by the openclaw gateway's own SQLite store (per
+					// D-203-09 scope clarification — gateway SQLite is out of
+					// scope for livinityd-side persistence). The
+					// ConversationMemoryAdapter still satisfies the
+					// scheduler's saveThread call so cron-tick task records
+					// continue to flow without crashing.
+					const memoryAdapter = createConversationMemoryAdapter({
+						saveThread: async (opts) => {
+							// In-process pass-through — keeps the scheduler's
+							// fire-and-forget saveThread call from rejecting;
+							// real conversation persistence flows through the
+							// openclaw gateway.
+							webappLogger.info(
+								`Phase 203-08 — Memory.saveThread(${opts.thread.id}) [in-process noop; openclaw owns conversation persistence]`,
+							)
+							return opts.thread
+						},
+					})
+					livOSAgent.attachMemory(memoryAdapter)
 					const mcpBridge = await createMcpBridge({
 						redis: this.ai.redis,
 						logger: {
@@ -1180,30 +1109,8 @@ export default class Livinityd {
 							warn: (msg, err) => this.logger.error(msg, err),
 						},
 					})
-					livOSMastra.attachMcpBridge(mcpBridge)
-					livOSAgent?.attachMcpBridge(mcpBridge)
-					// Phase 203-06 — surface mcpBridge to outer scope for plugin-RPC.
+					livOSAgent.attachMcpBridge(mcpBridge)
 					mcpBridgeForPlugin = mcpBridge
-					// Phase 202-02 — dynamic agent registry. Reads every enabled
-					// livos_agents row (seeded livAi + any custom agents created
-					// from the Phase 202 UI) and instantiates them via
-					// createAgentFromRow. Supervisor wiring (D-202-03) happens
-					// during refresh().
-					//
-					// The legacy `livOSMastra.agents.livAi` slot is double-wired
-					// from `registry.getByName('livAi')` so the Phase 198-01
-					// chat-route slot reader keeps working during the one-release
-					// back-compat window (Plan 202-02 Task 4 migrates chat-route
-					// to read via the registry directly).
-					//
-					// Falls back to the pre-202 single-agent path if the registry
-					// init fails (DB outage, schema drift) so livinityd still
-					// boots with a working livAi surface.
-					let livAiAgent: ReturnType<typeof createLivAiAgent> | null = null
-					// Phase 202-03 — `agentsRepoForRouter` is declared at the outer
-					// mastra-wire-up scope above so the agents.* / agents.tasks.*
-					// router factories (built after the chat-route mount) can read
-					// it. Stays null when the registry init path errors out.
 					try {
 						const registryPool = new (await import('pg')).Pool({
 							connectionString: databaseUrl,
@@ -1215,8 +1122,8 @@ export default class Livinityd {
 							agentsRepoForRouter = registryRepo
 							const registry = new AgentRegistry({
 								repo: registryRepo,
-								providerRouter: livOSMastra.providerRouter,
-								memory,
+								providerRouter: livOSAgent.providerRouter,
+								memory: memoryAdapter,
 								mcpBridge,
 								approvalManager,
 								logger: {
@@ -1225,89 +1132,24 @@ export default class Livinityd {
 								},
 							})
 							await registry.init()
-							livOSMastra.attachRegistry(registry)
-							// Phase 203-07 — same registry feeds the parallel
-							// runtime. AgentRegistry's value type stays the
-							// Mastra Agent during the coexistence window; the
-							// openclaw runtime branch (Plan 203-08) narrows
-							// the registry value type to OpenclawAgentHandle.
-							livOSAgent?.attachRegistry(registry)
+							livOSAgent.attachRegistry(registry)
 							const seededLivAi = registry.getByName('livAi')
 							if (seededLivAi) {
-								livOSMastra.attachLivAiAgent(seededLivAi)
-								livAiAgent = seededLivAi as never
-								// Phase 203-07 — surface a synthetic
-								// OpenclawAgentHandle for the parallel
-								// runtime's back-compat livAi slot. Carries
-								// just the metadata the chat-route fallback
-								// reader needs (id + name + kind).
-								livOSAgent?.attachLivAi({
-									id: 'livAi',
-									name: 'livAi',
-									instructions: '',
-									modelName: livOSAgent.providerRouter
-										? 'grok-4.3'
-										: 'grok-4.3',
-									toolIds: [],
-									kind: 'openclaw',
-								})
+								livOSAgent.attachLivAi(seededLivAi)
 								webappLogger.info(
 									`Phase 202-02 — agent registry initialised with ${registry.listAll().length} live agents (livAi slot wired from registry)`,
 								)
 							} else {
 								webappLogger.info(
-									'Phase 202-02 — registry initialised but livAi row absent; falling back to in-process createLivAiAgent for the back-compat slot',
+									'Phase 202-02 — registry initialised but livAi row absent; back-compat slot left empty',
 								)
 							}
 
-							// Phase 202-09 — canonical `new Mastra({...})` constructor
-							// wrap. Built AFTER `registry.init()` so the agents map
-							// reflects the hydrated registry. Wired-but-empty
-							// scaffold per D-202-06 / D-202-07 / D-202-18 — the
-							// instance is side-effect-free until `.startWorkers()`
-							// is called (deferred to Phase 203+ when concrete
-							// workflows / scorers land). Failure here is non-fatal
-							// — chat-route / scheduler / runOnce all continue to
-							// read from `livOSMastra.registry` directly; the new
-							// `mastraInstance` slot is the future-feature hook
-							// point, not a present dependency.
-							try {
-								const mastraInstance = createMastraInstance({
-									agents: Object.fromEntries(
-										registry
-											.listAll()
-											.map(({name, agent}) => [name, agent]),
-									),
-									logger: {
-										info: (msg) => webappLogger.info(msg),
-										warn: (msg, err) =>
-											this.logger.error(msg, err),
-									},
-								})
-								livOSMastra.attachMastraInstance(mastraInstance)
-							} catch (mastraInstanceErr) {
-								this.logger.error(
-									'Phase 202-09 — Mastra constructor wrap failed (non-fatal); workflows / telemetry hooks remain unwired until next restart',
-									mastraInstanceErr,
-								)
-							}
-
-							// Phase 202-03 — wire the AgentScheduler. Arms node-cron
-							// tasks for every enabled row that has a scheduleCron;
-							// runOnce() also gives manual + tRPC dispatch a single
-							// entry point. Construct AFTER `registry.init()` so
-							// runOnce can look up live Agent instances via
-							// `registry.get(agentId)` at fire time. Borrows
-							// `this.ai.redis` for the Redis SET NX PX mutex per
-							// D-202-04. Failures here are non-fatal — scheduler stays
-							// null and the `agents.runOnce` / `agents.tasks.create`
-							// tRPC routes return PRECONDITION_FAILED until next
-							// livinityd restart.
 							try {
 								const scheduler = new AgentScheduler({
 									registry,
 									repo: registryRepo,
-									memory,
+									memory: memoryAdapter,
 									redis: this.ai.redis,
 									logger: {
 										info: (msg) => webappLogger.info(msg),
@@ -1315,14 +1157,9 @@ export default class Livinityd {
 									},
 								})
 								await scheduler.init()
-								livOSMastra.attachScheduler(scheduler)
-								// Phase 203-07 — same scheduler feeds the
-								// parallel runtime so SSE status events stay
-								// single-source-of-truth across both branches
-								// during the 203-07/08 coexistence window.
-								livOSAgent?.attachScheduler(scheduler)
+								livOSAgent.attachScheduler(scheduler)
 								webappLogger.info(
-									`Phase 202-03 — AgentScheduler attached to LivOSMastra${livOSAgent ? ' + LivOSAgent (Phase 203-07 parallel runtime)' : ''} (node-cron tasks armed for every enabled row with schedule_cron)`,
+									'Phase 202-03 — AgentScheduler attached to LivOSAgent (node-cron tasks armed for every enabled row with schedule_cron)',
 								)
 							} catch (schedErr) {
 								this.logger.error(
@@ -1331,106 +1168,51 @@ export default class Livinityd {
 								)
 							}
 						} finally {
-							// Registry holds a reference to its own db handle via
-							// the repo; we keep the pool open for the lifetime of
-							// the process. Closing here would break later
-							// `registry.refresh()` calls.
 							void registryPool
 						}
 					} catch (registryErr) {
 						this.logger.error(
-							'Phase 202-02 — AgentRegistry init failed (non-fatal); falling back to legacy single-agent createLivAiAgent path until next restart',
+							'Phase 202-02 — AgentRegistry init failed (non-fatal); agents.* surface will return empty until next restart',
 							registryErr,
 						)
 					}
-					// Back-compat fallback — guarantees the chat-route slot is
-					// populated even if the registry init path errored out.
-					if (!livAiAgent) {
-						const fallbackLivAi = createLivAiAgent({
-							providerRouter: livOSMastra.providerRouter,
-							memory,
-							mcpBridge,
-							approvalManager,
-						})
-						livOSMastra.attachLivAiAgent(fallbackLivAi)
-					}
 					mastraRouterProductionInstance = createMastraRouter({
-						livOSMastra,
-						approvalManager,
 						// Phase 199-07 — Redis client for `liv:config:active_model`
-						// persistence (D-199-10 / INV-199-03). Borrowed from
-						// this.ai.redis per the established convention (Plan 197-02
-						// mcp-bridge wire-up, Plan 101-03 native-app store).
+						// persistence (D-199-10 / INV-199-03). The mastra.agent.*
+						// namespace stays mounted per INV-203-09 contract
+						// preservation; internals point at the agent-runtime
+						// subtree after Plan 203-08.
 						redis: this.ai.redis,
 					})
 					webappLogger.info(
-						'Phase 197-05 — Liv AI agent + Mastra tRPC router wired (memory + mcpBridge + agent + approval-manager ready)',
+						'Phase 203-08 — Liv AI runtime + tRPC router wired (memory + mcpBridge + registry + scheduler + approval-manager ready)',
 					)
-				} catch (mastraWireUpErr) {
+				} catch (runtimeWireUpErr) {
 					this.logger.error(
-						'Phase 197-05 — Liv AI wire-up failed; mastraRouter falls back to empty-injection Proxy default until next restart',
-						mastraWireUpErr,
+						'Phase 203-08 — Liv AI runtime wire-up failed; mastraRouter falls back to empty-injection Proxy default until next restart',
+						runtimeWireUpErr,
 					)
 				}
 			}
 
-			// Phase 198-01 — Mastra chatRoute Express mount. Bridges assistant-ui
-			// frontend (Plan 198-02) to livOSMastra.agents.livAi via AI-SDK SSE.
-			// tRPC mastra.agent.* namespace from P197-05 stays mounted as deprecated
-			// fallback; full removal deferred to Phase 199.
-			//
-			// T-198-01 / T-198-08 mitigation: inline JWT gate using the SAME
-			// verifyToken used by the rest of livinityd's Express surface
-			// (/api/desktop/resize, /api/docker/container, etc). Bearer header
-			// OR LIVINITY_SESSION cookie accepted, mirroring the tRPC
-			// is-authenticated middleware's two-source token resolution.
-			// Unauthenticated requests get 401 BEFORE the handler runs.
-			try {
-				if (livOSMastra && this.server.app) {
-					const chatHandler = createChatRouteHandler({livOSMastra})
-					const chatAuthGate: express.RequestHandler = async (req, res, next) => {
-						try {
-							let token = req.headers.authorization?.split(' ')[1]
-							if (!token) {
-								token = (req as unknown as {cookies?: {LIVINITY_SESSION?: string}}).cookies?.LIVINITY_SESSION
-							}
-							if (!token) {
-								res.status(401).json({error: 'Unauthorized'})
-								return
-							}
-							await this.server.verifyToken(token)
-							next()
-						} catch {
-							res.status(401).json({error: 'Unauthorized'})
-						}
-					}
-					this.server.app.post(
-						'/chat/:agentId',
-						express.json({limit: '10mb'}),
-						chatAuthGate,
-						chatHandler,
-					)
-					webappLogger.info(
-						'Phase 198-01 — Mastra chatRoute mounted at /chat/livAi (AI-SDK SSE transport ready)',
-					)
-				}
-			} catch (chatRouteErr) {
-				this.logger.error(
-					'Phase 198-01 — chatRoute mount failed; /chat/livAi unavailable until next restart',
-					chatRouteErr,
-				)
-			}
+			// Phase 203-08 — /chat/:agentId Express mount DELETED. The Mastra
+			// chatRoute (Phase 198-01) was bound to LivOSMastra.agents.livAi
+			// (a Mastra Agent class) which no longer exists. New chat
+			// surface lives inside the openclaw gateway at
+			// https://bruce.livinity.io/liv-ai-app/ (Caddy reverse-proxies
+			// /liv-ai-app/* to :18789 per D-203-05). The assistant-ui
+			// frontend that consumed /chat/livAi is deleted in Plan 203-09.
 
 			// Phase 202-04 — GET /agents/status/stream SSE mount. Subscribes
-			// to livOSMastra.scheduler.statusEvents (set up in 202-03 boot +
-			// extended here). Skipped when the scheduler is null (registry
-			// init failed) — the route then 404s, which is the same surface
-			// as a livinityd restart pending. Auth gate identical to the
-			// /chat/:agentId mount above (Bearer header OR LIVINITY_SESSION).
+			// to livOSAgent.scheduler.statusEvents (Plan 203-08 rewire). Skipped
+			// when the scheduler is null (registry init failed) — the route
+			// then 404s, which is the same surface as a livinityd restart
+			// pending. Auth gate identical to the /openclawos/handshake mount
+			// below (Bearer header OR LIVINITY_SESSION cookie).
 			try {
-				if (livOSMastra?.scheduler && this.server.app) {
+				if (livOSAgent?.scheduler && this.server.app) {
 					const sseHandler = createAgentsStatusSseHandler({
-						scheduler: livOSMastra.scheduler,
+						scheduler: livOSAgent.scheduler,
 						verifyToken: (token) => this.server.verifyToken(token),
 						logger: {
 							info: (msg) => webappLogger.info(msg),
@@ -1501,7 +1283,7 @@ export default class Livinityd {
 						'./modules/openclawos/mcp-tool-adapter.js'
 					)
 					const {builtInTools, BUILT_IN_TOOL_CATALOG} = await import(
-						'./modules/mastra/agents/built-in-tools.js'
+						'./modules/agent-runtime/agents/built-in-tools.js'
 					)
 					// Adapt Mastra tools (parametric Tool<I,O,R>) to the simpler
 					// BuiltInToolExecutable shape plugin-rpc expects. We forward
@@ -1541,7 +1323,7 @@ export default class Livinityd {
 					)
 				} else if (this.server.app && !approvalManagerForPlugin) {
 					this.logger.error(
-						'Phase 203-06 — /openclawos/plugin-rpc NOT mounted: approvalManagerForPlugin is null (mastra wire-up failed)',
+						'Phase 203-06 — /openclawos/plugin-rpc NOT mounted: approvalManagerForPlugin is null (agent-runtime wire-up failed)',
 					)
 				}
 			} catch (pluginRpcErr) {
@@ -1552,29 +1334,31 @@ export default class Livinityd {
 			}
 
 			// Phase 202-03 — agents.* + agents.tasks.* tRPC routers. Both are
-			// optional: when livOSMastra OR agentsRepoForRouter is null (boot
+			// optional: when livOSAgent OR agentsRepoForRouter is null (boot
 			// path errored out before the registry/scheduler wire-up
 			// completed), the `agents` namespace falls back to the empty stub
 			// inside createAppRouter so the rest of the appRouter still
-			// type-infers and serves.
+			// type-infers and serves. Plan 203-08 rewire — these routers'
+			// `livOSMastra` slot is now typed as LivOSAgent (slot-shape
+			// preserved per INV-203-09; tRPC contracts identical).
 			let agentsRouterProductionInstance:
 				| ReturnType<typeof createAgentRouter>
 				| undefined
 			let agentTasksRouterProductionInstance:
 				| ReturnType<typeof createAgentTaskRouter>
 				| undefined
-			if (livOSMastra && agentsRepoForRouter) {
+			if (livOSAgent && agentsRepoForRouter) {
 				try {
 					agentsRouterProductionInstance = createAgentRouter({
 						repo: agentsRepoForRouter,
-						livOSMastra,
+						livOSMastra: livOSAgent,
 						logger: {
 							info: (msg) => webappLogger.info(msg),
 							warn: (msg, err) => this.logger.error(msg, err),
 						},
 					})
 					agentTasksRouterProductionInstance = createAgentTaskRouter({
-						livOSMastra,
+						livOSMastra: livOSAgent,
 						logger: {
 							info: (msg) => webappLogger.info(msg),
 							warn: (msg, err) => this.logger.error(msg, err),

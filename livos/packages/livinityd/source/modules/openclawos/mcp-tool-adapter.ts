@@ -15,7 +15,7 @@
  * `luse.list` surfaces those flags via the tool definitions Mastra emits.
  */
 
-import type {McpBridge} from '../mastra/mcp-bridge.js'
+import type {McpBridge} from '../agent-runtime/mcp-bridge.js'
 import type {LusePluginRpcMcp} from './plugin-rpc.js'
 
 // Minimal duck-type for a Mastra-wrapped tool — we only call `execute`.

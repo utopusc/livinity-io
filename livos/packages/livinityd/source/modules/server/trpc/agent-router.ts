@@ -50,14 +50,20 @@ import cronstrue from 'cronstrue'
 import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
-import type {LivOSMastra} from '../../mastra/index.js'
-import type {AgentRepository} from '../../mastra/agents/agent-repository.js'
+import type {LivOSAgent} from '../../agent-runtime/index.js'
+import type {AgentRepository} from '../../agent-runtime/agents/agent-repository.js'
 import type {LivosAgent, LivosAgentInsert} from '../../../db/schema.js'
 import {adminProcedure, router} from './trpc.js'
 
 export interface AgentRouterDeps {
 	repo: AgentRepository
-	livOSMastra: LivOSMastra
+	/**
+	 * Phase 203-08 — repointed at LivOSAgent (replaces LivOSMastra). Slot
+	 * names + types preserved (registry / scheduler / memory / agents) so
+	 * existing call sites continue to compile and the procedure contracts
+	 * stay identical per INV-203-09.
+	 */
+	livOSMastra: LivOSAgent
 	logger: {
 		info: (msg: string) => void
 		warn: (msg: string, error?: unknown) => void

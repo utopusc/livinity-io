@@ -66,15 +66,8 @@ export interface AgentRuntimeLogger {
 }
 
 /**
- * Provider router contract — re-used as-is from the mastra branch so the
- * existing ProviderRouter implementation continues to satisfy LivOSAgent.
+ * Phase 203-08 — provider router + approval gate types now live under the
+ * agent-runtime/ subtree (modules/mastra/ deleted with the Mastra purge).
  */
-export type {ProviderRouter} from '../mastra/provider-router.js'
-
-/**
- * Approval gate contract — re-exported under the agent-runtime namespace so
- * downstream code is not coupled to the mastra subtree. Plan 203-08 will
- * move ApprovalManager out of mastra/ altogether; until then this is a
- * type-only passthrough.
- */
-export type {ApprovalGate} from '../mastra/agents/wrap-tool-with-approval.js'
+export type {ProviderRouter} from './provider-router.js'
+export type {ApprovalGate} from './agents/wrap-tool-with-approval.js'

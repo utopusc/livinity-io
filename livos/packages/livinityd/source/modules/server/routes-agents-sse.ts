@@ -24,7 +24,7 @@
 
 import type {Request, Response, RequestHandler} from 'express'
 
-import type {AgentScheduler, AgentStatusEvent} from '../mastra/scheduler.js'
+import type {AgentScheduler, AgentStatusEvent} from '../agent-runtime/scheduler.js'
 
 export interface AgentsSseDeps {
 	scheduler: AgentScheduler

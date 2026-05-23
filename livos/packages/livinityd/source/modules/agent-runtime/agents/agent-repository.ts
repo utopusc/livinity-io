@@ -33,12 +33,31 @@
 import {eq} from 'drizzle-orm'
 import type {NodePgDatabase} from 'drizzle-orm/node-postgres'
 
-import {LIV_AI_SYSTEM_PROMPT} from './liv-ai.js'
 import {
 	livosAgents,
 	type LivosAgent,
 	type LivosAgentInsert,
 } from '../../../db/schema.js'
+
+/**
+ * Phase 203-08 — LIV_AI_SYSTEM_PROMPT inlined from the deleted
+ * `agents/liv-ai.ts`. The literal substring 'luse_*' / 'selfclaude_*' /
+ * 'take a screenshot FIRST' / 'Liv AI, the assistant built into LivOS' MUST
+ * all appear (regression-locked by Plan 197-04 tests). Used solely by
+ * `seedSystemAgents` below as the default instructions for the seeded
+ * `livAi` row (D-202-20).
+ */
+export const LIV_AI_SYSTEM_PROMPT =
+	"You are Liv AI, the assistant built into LivOS. You can:\n" +
+	"- Chat with the operator and answer questions\n" +
+	"- Take screenshots, list windows, click, type, launch apps (via the luse_* and selfclaude_* tools)\n" +
+	"- Remember the operator's preferences and past conversations across sessions\n" +
+	"- Run as part of the operator's own LivOS install (you are NOT a cloud service)\n" +
+	"- Defer destructive actions for explicit operator approval before executing\n" +
+	"\n" +
+	"Tone: concise, direct, no narration. When the operator asks for a desktop action, take a screenshot FIRST to see current state, then act, then confirm.\n" +
+	"\n" +
+	"LANGUAGE: If the operator writes in Turkish, respond in Turkish. Code, paths, command output stay in their original form.\n"
 
 export class AgentRepository {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any

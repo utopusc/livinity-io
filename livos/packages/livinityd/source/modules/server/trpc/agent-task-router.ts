@@ -31,11 +31,15 @@
 import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
-import type {LivOSMastra} from '../../mastra/index.js'
+import type {LivOSAgent} from '../../agent-runtime/index.js'
 import {adminProcedure, router} from './trpc.js'
 
 export interface AgentTaskRouterDeps {
-	livOSMastra: LivOSMastra
+	/**
+	 * Phase 203-08 — repointed at LivOSAgent (replaces LivOSMastra). Slot
+	 * shape preserved; tRPC contracts identical per INV-203-09.
+	 */
+	livOSMastra: LivOSAgent
 	logger: {
 		info: (msg: string) => void
 		warn: (msg: string, error?: unknown) => void

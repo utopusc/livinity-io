@@ -27,10 +27,198 @@
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import {fileURLToPath} from 'node:url'
-
-import {MCPClient} from '@mastra/mcp'
+import {spawn, type ChildProcessWithoutNullStreams} from 'node:child_process'
 
 import {LuseMcpUnavailableError} from './mcp-errors.js'
+
+/**
+ * Phase 203-08 — Local stdio MCP client. Replaces `@mastra/mcp` MCPClient
+ * (purged with @mastra/* deps). Implements the minimal Model Context Protocol
+ * surface livinityd actually uses:
+ *
+ *   - `initialize` handshake on spawn
+ *   - `tools/list` for `getTools()` (returns a `{name → {description, parameters/inputSchema}}` map
+ *     wrapped with an `.execute({context})` closure that calls `tools/call`)
+ *   - `tools/call` for tool invocation
+ *   - `disconnect()` tears down the child + cleans up pending requests
+ *
+ * Supports ONE server per client (livinityd never multiplexed) — the
+ * upstream MCPClient `{servers: {name: {command,args}}}` map is collapsed to
+ * the first entry's spawn definition. Tool names returned by `getTools()` are
+ * namespaced with the server name as prefix (matching the upstream Mastra
+ * MCPClient convention `luse_<toolname>`).
+ *
+ * Wire format: JSON-RPC 2.0 framed with `Content-Length`-style newline
+ * delimiters per the MCP stdio spec (https://modelcontextprotocol.io/docs/concepts/transports#stdio).
+ *
+ * Error handling: child stderr is logged on debug; protocol errors surface as
+ * thrown rejections on the in-flight `requests` map; spawn failures are caught
+ * at construction and surface via the first `getTools()` rejection so
+ * createMcpBridge's degraded path can swallow them per T-197-02-01.
+ */
+interface McpServerSpawn {
+	command: string
+	args?: string[]
+}
+
+interface McpClientConfig {
+	id: string
+	servers: Record<string, McpServerSpawn>
+}
+
+interface McpToolDescriptor {
+	name: string
+	description?: string
+	inputSchema?: unknown
+}
+
+class StdioMcpClient {
+	private child: ChildProcessWithoutNullStreams | null = null
+	private requestId = 0
+	private pending = new Map<
+		number,
+		{resolve: (v: unknown) => void; reject: (e: unknown) => void}
+	>()
+	private buffer = ''
+	private serverName: string
+	private initPromise: Promise<void> | null = null
+
+	constructor(private readonly config: McpClientConfig) {
+		const entries = Object.entries(config.servers)
+		if (entries.length === 0) {
+			throw new Error('StdioMcpClient: no servers configured')
+		}
+		this.serverName = entries[0]![0]
+	}
+
+	private ensureSpawned(): ChildProcessWithoutNullStreams {
+		if (this.child) return this.child
+		const spawn_ = this.config.servers[this.serverName]!
+		const child = spawn(spawn_.command, spawn_.args ?? [], {
+			stdio: ['pipe', 'pipe', 'pipe'],
+		})
+		this.child = child
+		child.stdout.on('data', (chunk: Buffer) => this.onStdout(chunk.toString('utf8')))
+		// Phase 203-08 — `child` typed `ChildProcessWithoutNullStreams` ships
+		// without `.on` in this codebase's @types/node version (same gap hits
+		// chrome-cdp/bootstrap.ts, chrome-master/master-login-routes.ts,
+		// computer-use/* — pre-existing baseline pattern). Cast to a minimal
+		// event-emitter surface to silence the gap without widening the type.
+		const childEvents = child as unknown as {
+			on(event: 'error' | 'exit', listener: (arg: unknown) => void): void
+		}
+		childEvents.on('error', (err: unknown) => this.failAllPending(err))
+		childEvents.on('exit', (code: unknown) => {
+			if (this.pending.size > 0) {
+				this.failAllPending(new Error(`StdioMcpClient: child exited code=${String(code)}`))
+			}
+		})
+		return child
+	}
+
+	private onStdout(text: string): void {
+		this.buffer += text
+		let nl: number
+		while ((nl = this.buffer.indexOf('\n')) >= 0) {
+			const line = this.buffer.slice(0, nl).trim()
+			this.buffer = this.buffer.slice(nl + 1)
+			if (!line) continue
+			try {
+				const msg = JSON.parse(line) as {id?: number; result?: unknown; error?: unknown}
+				if (typeof msg.id === 'number') {
+					const entry = this.pending.get(msg.id)
+					if (entry) {
+						this.pending.delete(msg.id)
+						if (msg.error) entry.reject(msg.error)
+						else entry.resolve(msg.result)
+					}
+				}
+			} catch {
+				// Ignore unparseable lines (server log noise).
+			}
+		}
+	}
+
+	private failAllPending(err: unknown): void {
+		for (const [, entry] of this.pending) entry.reject(err)
+		this.pending.clear()
+	}
+
+	private rpc(method: string, params?: unknown): Promise<unknown> {
+		const child = this.ensureSpawned()
+		const id = ++this.requestId
+		const payload = JSON.stringify({jsonrpc: '2.0', id, method, params}) + '\n'
+		return new Promise<unknown>((resolve, reject) => {
+			this.pending.set(id, {resolve, reject})
+			try {
+				child.stdin.write(payload)
+			} catch (err) {
+				this.pending.delete(id)
+				reject(err)
+			}
+		})
+	}
+
+	private async ensureInitialized(): Promise<void> {
+		if (this.initPromise) return this.initPromise
+		this.initPromise = (async () => {
+			await this.rpc('initialize', {
+				protocolVersion: '2025-06-18',
+				capabilities: {},
+				clientInfo: {name: this.config.id, version: '1.0.0'},
+			})
+			// Per spec — send `notifications/initialized` once handshake completes.
+			const child = this.ensureSpawned()
+			try {
+				child.stdin.write(
+					JSON.stringify({jsonrpc: '2.0', method: 'notifications/initialized'}) + '\n',
+				)
+			} catch {
+				/* swallow — best-effort notification */
+			}
+		})()
+		return this.initPromise
+	}
+
+	async getTools(): Promise<Record<string, unknown>> {
+		await this.ensureInitialized()
+		const result = (await this.rpc('tools/list')) as {tools?: McpToolDescriptor[]}
+		const tools = result?.tools ?? []
+		const out: Record<string, unknown> = {}
+		for (const t of tools) {
+			const namespaced = `${this.serverName}_${t.name}`
+			const callTool = async (args: {context: Record<string, unknown>}): Promise<unknown> => {
+				return this.rpc('tools/call', {name: t.name, arguments: args.context})
+			}
+			out[namespaced] = {
+				description: t.description,
+				inputSchema: t.inputSchema,
+				parameters: t.inputSchema,
+				execute: callTool,
+			}
+		}
+		return out
+	}
+
+	async disconnect(): Promise<void> {
+		if (!this.child) return
+		try {
+			this.child.stdin.end()
+		} catch {
+			/* swallow */
+		}
+		this.failAllPending(new Error('StdioMcpClient: disconnected'))
+		try {
+			this.child.kill()
+		} catch {
+			/* swallow */
+		}
+		this.child = null
+	}
+}
+
+// Local alias preserving the call shape mcp-bridge expects.
+const MCPClient = StdioMcpClient
 
 // Phase 201 — default Luse spawn target: the in-repo TSX server. Resolved
 // from this module's own URL so it works under both dev (tsx packages/
@@ -87,8 +275,16 @@ export interface McpBridgeDeps {
 }
 
 export interface McpBridgeOptions {
-	/** Test seam — defaults to `(opts) => new MCPClient(opts)`. */
-	mcpClientFactory?: (opts: ConstructorParameters<typeof MCPClient>[0]) => MCPClient
+	/**
+	 * Test seam — defaults to `(opts) => new MCPClient(opts)`. After Plan 203-08
+	 * MCPClient resolves to the local StdioMcpClient (no @mastra/mcp). The
+	 * return type is duck-typed to the methods mcp-bridge calls (`getTools`,
+	 * `disconnect`) so test mocks need not pull the concrete class.
+	 */
+	mcpClientFactory?: (opts: McpClientConfig) => {
+		getTools(): Promise<Record<string, unknown>>
+		disconnect?(): Promise<void>
+	}
 	/** Phase 201 — selfclaude removed; keep param for API compat. */
 	fetchImpl?: typeof globalThis.fetch
 }

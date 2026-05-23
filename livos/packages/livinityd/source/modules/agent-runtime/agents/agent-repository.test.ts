@@ -27,8 +27,8 @@ import {beforeEach, describe, expect, test, vi} from 'vitest'
 import {
 	AgentRepository,
 	seedSystemAgents,
+	LIV_AI_SYSTEM_PROMPT,
 } from './agent-repository.js'
-import {LIV_AI_SYSTEM_PROMPT} from './liv-ai.js'
 import type {LivosAgent, LivosAgentInsert} from '../../../db/schema.js'
 
 // --- Mock fixture state -----------------------------------------------------

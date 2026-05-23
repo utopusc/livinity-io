@@ -38,8 +38,72 @@
 import {exec, execFile} from 'node:child_process'
 import {promisify} from 'node:util'
 
-import {createTool} from '@mastra/core/tools'
 import {z} from 'zod'
+
+/**
+ * Phase 203-08 — Local createTool shim. Replaces `@mastra/core/tools`
+ * createTool (purged with @mastra/* deps). Returns a plain tool descriptor
+ * carrying `id`, `description`, `inputSchema`, `outputSchema`, `meta`, and
+ * an `execute({context})` wrapper that runs the typed handler. Shape matches
+ * what downstream consumers touch:
+ *   - mcp-tool-adapter.ts duck-types `.execute({context})`
+ *   - plugin-rpc.ts duck-types `.execute({context: args})`
+ *   - agent-factory.ts treats tool entries as opaque records
+ *   - approval wrap (wrap-tool-with-approval.ts) duck-types `.execute(input, ctx)`
+ *     (compat shim: when called with two args we collapse to {context: input}).
+ *
+ * Intentionally NO dependency on @mastra/core types — this is the Plan 203-08
+ * purge gate.
+ */
+interface ToolDefinitionInput<I, O> {
+	id?: string
+	description?: string
+	inputSchema?: z.ZodType<I>
+	outputSchema?: z.ZodType<O>
+	meta?: Record<string, unknown>
+	/**
+	 * Per-call handler. `input` is the unwrapped tool argument bag (matches
+	 * the cast pattern downstream tool bodies use: `input as {x, y, button}`).
+	 * The outer `.execute({context})` shim below normalises Mastra-style
+	 * `{context}` envelopes from mcp-tool-adapter / plugin-rpc.
+	 */
+	execute: (input: I) => Promise<O> | O
+}
+
+interface LocalTool<I, O> {
+	id?: string
+	description?: string
+	inputSchema?: z.ZodType<I>
+	outputSchema?: z.ZodType<O>
+	parameters?: z.ZodType<I>
+	meta?: Record<string, unknown>
+	execute: (input: {context: I} | I, _ctx?: unknown) => Promise<O>
+}
+
+function createTool<I, O>(def: ToolDefinitionInput<I, O>): LocalTool<I, O> {
+	return {
+		id: def.id,
+		description: def.description,
+		inputSchema: def.inputSchema,
+		outputSchema: def.outputSchema,
+		parameters: def.inputSchema,
+		meta: def.meta,
+		async execute(input: {context: I} | I, _ctx?: unknown): Promise<O> {
+			// Two call shapes: Mastra-style `{context: I}` (used by mcp-tool-adapter,
+			// plugin-rpc) and approval-wrap style `(I, ctx)` (legacy
+			// wrapToolWithApproval signature). Unwrap to `I` before handing to
+			// the typed handler so downstream tool bodies do not have to
+			// pierce a `{context}` envelope.
+			const context: I =
+				typeof input === 'object' &&
+				input !== null &&
+				'context' in (input as Record<string, unknown>)
+					? ((input as {context: I}).context as I)
+					: (input as I)
+			return Promise.resolve(def.execute(context))
+		},
+	}
+}
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
@@ -117,8 +181,8 @@ const weatherTool = createTool({
 			)
 			.optional(),
 	}),
-	execute: async ({context}) => {
-		const {location} = context as {location: string}
+	execute: async (input) => {
+		const {location} = input as {location: string}
 		const geoRes = await fetch(
 			`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1`,
 		)
@@ -228,9 +292,9 @@ const getCurrentTimeTool = createTool({
 		localized: z.string(),
 		timezone: z.string(),
 	}),
-	execute: async ({context}) => {
+	execute: async (input) => {
 		const tz =
-			(context as {timezone?: string}).timezone ||
+			(input as {timezone?: string}).timezone ||
 			Intl.DateTimeFormat().resolvedOptions().timeZone
 		const now = new Date()
 		return {
@@ -621,11 +685,11 @@ const uiRenderTool = createTool({
 		rendered: z.literal(true),
 		title: z.string().optional(),
 	}),
-	execute: async ({context}) => {
+	execute: async (input) => {
 		// No-op server-side. The UI is rendered by the client via the
 		// tool-ui makeAssistantToolUI('ui_render') registration. We just
 		// acknowledge so the chunk pipeline emits a tool-result frame.
-		const {title} = context as {title?: string}
+		const {title} = input as {title?: string}
 		return {rendered: true as const, title}
 	},
 })
