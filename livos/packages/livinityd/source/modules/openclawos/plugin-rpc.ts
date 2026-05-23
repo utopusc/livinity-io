@@ -207,18 +207,23 @@ const approvalRequest: RpcHandler = async (args, deps) => {
 	if (!toolName) {
 		return {ok: false, error: 'BAD_REQUEST', detail: 'toolName is required'}
 	}
-	const runId =
-		typeof args['agentId'] === 'string' && args['agentId'].length > 0
-			? `openclawos:${args['agentId']}`
-			: 'openclawos:default'
-	const toolCallId =
-		typeof args['toolCallId'] === 'string' && args['toolCallId'].length > 0
-			? args['toolCallId']
-			: randomUUID()
+	const opts = {
+		toolName,
+		args: args['args'],
+		agentId: typeof args['agentId'] === 'string' ? args['agentId'] : undefined,
+		userId: typeof args['userId'] === 'string' ? args['userId'] : undefined,
+		toolCallId:
+			typeof args['toolCallId'] === 'string' && args['toolCallId'].length > 0
+				? args['toolCallId']
+				: randomUUID(),
+		timeoutMs:
+			typeof args['timeoutMs'] === 'number' && args['timeoutMs'] > 0
+				? args['timeoutMs']
+				: undefined,
+	}
 	try {
-		const approved = await deps.approvalManager.registerPending(toolCallId, runId)
-		const decision: 'approved' | 'rejected' = approved ? 'approved' : 'rejected'
-		return {ok: true, result: {decision, toolCallId, runId}}
+		const decisionResult = await deps.approvalManager.requestSync(opts)
+		return {ok: true, result: decisionResult}
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err)
 		deps.logger?.error(`[plugin-rpc] approval.request ${toolName} failed`, err)
