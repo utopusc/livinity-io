@@ -1,11 +1,17 @@
 /**
  * Phase 197-02 — McpBridge.
  *
- * Consumes computer-use tools from two MCP sources (Luse stdio + selfclaude
- * HTTP) via Mastra's MCPClient and exposes them to the Liv AI agent as a
- * unified, namespaced tool map. Each source is independently optional —
- * livinityd boot never crashes from a missing binary or unreachable HTTP
- * endpoint; the bridge silently degrades.
+ * Phase 201 update (2026-05-23) — selfclaude HTTP source removed (operator
+ * directive: only Luse needed). Luse stdio source now defaults to running the
+ * in-repo Luse server via `npx tsx <abs-path>/computer-use/mcp/server.ts`
+ * instead of looking for a pre-built `LUSE_MCP_PATH` binary. The original
+ * env-var override path is still honoured for production deploys that ship a
+ * compiled binary.
+ *
+ * Consumes computer-use tools from Luse stdio via Mastra's MCPClient and
+ * exposes them to the Liv AI agent as a namespaced tool map. The Luse source
+ * is independently optional — livinityd boot never crashes from a missing
+ * binary; the bridge silently degrades.
  *
  * Destructive Luse tools (6 named entries) get a `meta.requireApproval = true`
  * flag attached at namespace-time. Plan 197-05's SSE layer detects these
@@ -13,22 +19,29 @@
  * (N-01 lock — never reaches into chunk.tool.meta).
  *
  * Threat mitigations honoured:
- *   T-197-02-01 (T): fs.access(LUSE_MCP_PATH, X_OK) gates spawn.
+ *   T-197-02-01 (T): fs.access(luse spawn target, X_OK or R_OK) gates spawn.
  *   T-197-02-02 (I): MCPClient id parameter MANDATORY ('livos-mcp-bridge').
- *   T-197-02-03 (T): selfclaude URL hostname allow-listed (localhost only).
- *   T-197-02-04 (D): 2_000 ms AbortController timeout on selfclaude HEAD probe.
  *   T-197-02-05 (E): 6 destructive tools tagged with requireApproval.
  */
 
 import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import {fileURLToPath} from 'node:url'
 
 import {MCPClient} from '@mastra/mcp'
 
-import {
-	InvalidMcpUrlError,
-	LuseMcpUnavailableError,
-	SelfclaudeMcpUnavailableError,
-} from './mcp-errors.js'
+import {LuseMcpUnavailableError} from './mcp-errors.js'
+
+// Phase 201 — default Luse spawn target: the in-repo TSX server. Resolved
+// from this module's own URL so it works under both dev (tsx packages/
+// livinityd/source/...) and the production install (rsync'd to /opt/livos/).
+// The env var LUSE_MCP_PATH still wins when set (production binaries, custom
+// builds, test harnesses).
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const DEFAULT_LUSE_SERVER_TSX = path.resolve(
+	__dirname,
+	'../computer-use/mcp/server.ts',
+)
 
 // Source of truth for destructive Luse tool names (UNNAMESPACED).
 const DESTRUCTIVE_LUSE_TOOLS = new Set([
@@ -54,8 +67,6 @@ export const destructiveToolNames: ReadonlySet<string> = new Set([
 	'luse_computer_paste_text',
 ])
 
-const ALLOWED_SELFCLAUDE_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
-
 export interface McpBridge {
 	listTools(): Promise<Record<string, unknown>>
 	destroy(): Promise<void>
@@ -78,7 +89,7 @@ export interface McpBridgeDeps {
 export interface McpBridgeOptions {
 	/** Test seam — defaults to `(opts) => new MCPClient(opts)`. */
 	mcpClientFactory?: (opts: ConstructorParameters<typeof MCPClient>[0]) => MCPClient
-	/** Test seam for fetch (HEAD probe). Defaults to globalThis.fetch. */
+	/** Phase 201 — selfclaude removed; keep param for API compat. */
 	fetchImpl?: typeof globalThis.fetch
 }
 
@@ -89,79 +100,58 @@ function readBoolFlag(value: string | null, defaultValue: boolean): boolean {
 	return defaultValue
 }
 
-async function probeSelfclaudeHead(
-	url: URL,
-	fetchImpl: typeof globalThis.fetch,
-): Promise<boolean> {
-	const controller = new AbortController()
-	const timer = setTimeout(() => controller.abort(), 2_000)
-	try {
-		const resp = await fetchImpl(url, {method: 'HEAD', signal: controller.signal})
-		clearTimeout(timer)
-		return resp.ok || resp.status === 405 // some MCP servers reject HEAD with 405; treat as alive
-	} catch {
-		clearTimeout(timer)
-		return false
-	}
-}
-
 export async function createMcpBridge(
 	deps: McpBridgeDeps,
 	options: McpBridgeOptions = {},
 ): Promise<McpBridge> {
 	const mcpClientFactory =
 		options.mcpClientFactory ?? ((opts) => new MCPClient(opts))
-	const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
 
 	const luseEnabled = readBoolFlag(await deps.redis.get('liv:mcp:luse:enabled'), true)
-	const selfclaudeEnabled = readBoolFlag(
-		await deps.redis.get('liv:mcp:selfclaude:enabled'),
-		true,
-	)
 
 	const servers: Record<string, unknown> = {}
 
 	// ─── Luse stdio ────────────────────────────────────────────────────────
+	// Phase 201 — Luse server is restored from 782ee4a3 and lives at
+	// modules/computer-use/mcp/server.ts. Spawn target is either:
+	//   1. process.env.LUSE_MCP_PATH if set → executed as-is (production binary)
+	//   2. otherwise → `npx tsx <repo-abs-path-to-server.ts>` via DEFAULT_LUSE_SERVER_TSX
+	// Either way, MCPClient receives a stdio spawn command + args pair.
 	if (luseEnabled) {
-		const lusePath = process.env.LUSE_MCP_PATH
-		if (!lusePath) {
-			deps.logger.warn(
-				'Luse MCP enabled but LUSE_MCP_PATH env var unset — skipping Luse source',
-			)
-		} else {
-			try {
-				await fs.access(lusePath, fs.constants.X_OK) // T-197-02-01
-				servers.luse = {command: lusePath, args: []}
-				deps.logger.info(`Luse MCP source enabled: ${lusePath}`)
-			} catch (err) {
-				deps.logger.warn(
-					'LUSE_MCP_PATH not executable — skipping Luse source',
-					err,
-				)
-			}
-		}
-	}
+		const lusePathEnv = process.env.LUSE_MCP_PATH
+		let command: string
+		let args: string[] = []
+		let probePath: string
 
-	// ─── selfclaude HTTP ───────────────────────────────────────────────────
-	if (selfclaudeEnabled) {
-		const rawUrl = process.env.SELFCLAUDE_MCP_URL ?? 'http://localhost:8090/mcp'
-		let parsed: URL
-		try {
-			parsed = new URL(rawUrl)
-		} catch {
-			throw new InvalidMcpUrlError(rawUrl, 'malformed URL')
-		}
-		if (!ALLOWED_SELFCLAUDE_HOSTS.has(parsed.hostname)) {
-			throw new InvalidMcpUrlError(rawUrl, `hostname ${parsed.hostname} not in allow-list`)
-		}
-		const alive = await probeSelfclaudeHead(parsed, fetchImpl)
-		if (!alive) {
-			deps.logger.warn(
-				`selfclaude MCP at ${rawUrl} did not respond within 2_000 ms — skipping selfclaude source`,
-			)
+		if (lusePathEnv) {
+			command = lusePathEnv
+			probePath = lusePathEnv
 		} else {
-			servers.selfclaude = {url: parsed}
-			deps.logger.info(`selfclaude MCP source enabled: ${rawUrl}`)
+			// tsx wrapper around the in-repo TSX server. fs.access checks the .ts
+			// source (R_OK is enough; tsx itself decides whether to compile).
+			command = process.execPath.endsWith('node') ? 'npx' : 'npx'
+			args = ['tsx', DEFAULT_LUSE_SERVER_TSX]
+			probePath = DEFAULT_LUSE_SERVER_TSX
+		}
+
+		try {
+			await fs.access(
+				probePath,
+				lusePathEnv ? fs.constants.X_OK : fs.constants.R_OK,
+			) // T-197-02-01
+			servers.luse = {command, args}
+			deps.logger.info(
+				lusePathEnv
+					? `Luse MCP source enabled (env binary): ${lusePathEnv}`
+					: `Luse MCP source enabled (tsx ${DEFAULT_LUSE_SERVER_TSX})`,
+			)
+		} catch (err) {
+			deps.logger.warn(
+				lusePathEnv
+					? 'LUSE_MCP_PATH not executable — skipping Luse source'
+					: `Default Luse server.ts not readable at ${DEFAULT_LUSE_SERVER_TSX} — skipping Luse source`,
+				err,
+			)
 		}
 	}
 
@@ -220,6 +210,6 @@ export async function createMcpBridge(
 // without re-declaring the literal.
 export const DESTRUCTIVE_LUSE_TOOLS_UNNAMESPACED: ReadonlySet<string> = DESTRUCTIVE_LUSE_TOOLS as never
 
-// Re-export ALLOWED_SELFCLAUDE_HOSTS so tests can assert against the literal
-// without reaching into module internals.
-export {ALLOWED_SELFCLAUDE_HOSTS}
+// Phase 201 — ALLOWED_SELFCLAUDE_HOSTS re-export removed alongside the
+// selfclaude HTTP source. If a future plan re-introduces an HTTP-based MCP,
+// add its allow-list here.
