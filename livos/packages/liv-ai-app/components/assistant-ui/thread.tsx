@@ -47,9 +47,18 @@ import {
   RefreshCwIcon,
   SquareIcon,
 } from "lucide-react";
-import type { FC } from "react";
+import type { FC, ReactNode } from "react";
 
-export const Thread: FC = () => {
+// Phase 201-04 — Thread accepts optional `composerSlot` prop so callers
+// (assistant.tsx AssistantShellWithRuntime) can mount a custom composer
+// (LivAiComposer with @ + / popovers + inline model picker) in place
+// of the default <Composer />. Minimum-diff deviation matching Plan
+// 200-02's livos UI ship — render `composerSlot ?? <Composer />`.
+export interface ThreadProps {
+  composerSlot?: ReactNode;
+}
+
+export const Thread: FC<ThreadProps> = ({ composerSlot }) => {
   return (
     <ThreadPrimitive.Root
       className="aui-root aui-thread-root @container flex h-full flex-col bg-background"
@@ -82,7 +91,7 @@ export const Thread: FC = () => {
 
           <ThreadPrimitive.ViewportFooter className="aui-thread-viewport-footer sticky bottom-0 mt-auto flex flex-col gap-4 overflow-visible rounded-t-(--composer-radius) bg-background pb-4 md:pb-6">
             <ThreadScrollToBottom />
-            <Composer />
+            {composerSlot ?? <Composer />}
           </ThreadPrimitive.ViewportFooter>
         </div>
       </ThreadPrimitive.Viewport>
