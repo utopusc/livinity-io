@@ -20,6 +20,7 @@
  */
 
 import {Agent} from '@mastra/core/agent'
+import type {RequestContext} from '@mastra/core/request-context'
 
 import type {ProviderRouter} from '../provider-router.js'
 import type {McpBridge} from '../mcp-bridge.js'
@@ -112,9 +113,32 @@ export function createLivAiAgent(deps: LivAiAgentDeps): Agent {
 		id: 'liv-ai',
 		name: 'Liv AI',
 		instructions: LIV_AI_SYSTEM_PROMPT,
-		// Dynamic model resolver re-runs per turn so an active-provider change
-		// in Redis takes effect on the next message without restart (T-197-04-02).
-		model: (async () => deps.providerRouter.resolveAgentModel()) as never,
+		// Phase 199-03 — per-request dynamic model resolver (D-199-14).
+		//
+		// Mastra v1.36 invokes this with `{requestContext}` on every turn.
+		// We pull `modelName` off the RequestContext (populated by chat-route
+		// from the AI-SDK frontend's `config.modelName` body field — Plan
+		// 199-03 wire) and hand it to providerRouter.resolveAgentModel.
+		//
+		// `coerceModel` inside provider-router (Plan 199-02) does the soft
+		// validation: undefined / null / unknown id → XAI_DEFAULT_MODEL_ID.
+		// We forward whatever the context yields — the agent does NOT
+		// validate values here (D-199-24).
+		//
+		// Backward-compat: when chat-route doesn't set modelName (no UI
+		// picker selection yet), `requestContext.get('modelName')` returns
+		// `undefined` and resolveAgentModel falls through to the default —
+		// same effective behaviour as the Phase 197-04 zero-arg shape.
+		//
+		// T-197-04-02 still honoured: a Redis active-provider change still
+		// takes effect on the next message without restart (resolveAgentModel
+		// reads Redis on every call).
+		model: (({requestContext}: {requestContext: RequestContext}) => {
+			const modelName = requestContext.get('modelName') as
+				| string
+				| undefined
+			return deps.providerRouter.resolveAgentModel(modelName)
+		}) as never,
 		// T-197-04-04 + T-197-04-05 — filter raw MCP tool map through the
 		// allow-list, then wrap destructive tools through the approval gate.
 		//
