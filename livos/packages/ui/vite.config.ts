@@ -128,6 +128,16 @@ export default defineConfig({
 		// es2022 is supported by chrome89+, firefox89+, safari15+, edge89+.
 		target: 'es2022',
 		rollupOptions: {
+			// Phase 198-07: @assistant-ui/react-devtools is an OPTIONAL
+			// dev-only dep (NOT installed in livos/packages/ui — D-NO-NEW-DEPS).
+			// devtools-mount.tsx dynamically imports it ONLY when
+			// import.meta.env.DEV === true; in production the DEV branch
+			// returns null at the top of the lazy callback. Marking it
+			// external tells Rollup not to attempt module resolution —
+			// the bare specifier stays in the bundle as a dynamic import
+			// string but is never executed at runtime in production.
+			// T-198-07-01: production bundle does not load DevTools.
+			external: ['@assistant-ui/react-devtools'],
 			output: {
 				minifyInternalExports: true,
 				manualChunks: {
