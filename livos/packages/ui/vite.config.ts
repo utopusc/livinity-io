@@ -57,7 +57,13 @@ export default defineConfig({
 					'**/assets/{generateCategoricalChart,FileSaver}-*.js',
 				],
 				navigateFallback: '/index.html',
-				navigateFallbackDenylist: [/^\/trpc/, /^\/api/, /^\/ws/],
+				// Phase 201 fix 2026-05-23: deny /liv-ai-app/* and the bare prefix so
+				// the iframe at `<iframe src="/liv-ai-app">` reaches the Next.js
+				// subapp on :3010 via Caddy reverse_proxy. Without this, the LivOS
+				// PWA service worker intercepts the iframe's navigation request and
+				// serves the cached /index.html (LivOS UI shell), which contains
+				// IframeChecker → prints "LivOS cannot be embedded in an iframe."
+				navigateFallbackDenylist: [/^\/trpc/, /^\/api/, /^\/ws/, /^\/liv-ai-app/],
 				runtimeCaching: [
 					{
 						urlPattern: /\/wallpapers\/.*/,
