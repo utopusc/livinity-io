@@ -97,6 +97,7 @@
 		"compose-spec-schema": "^1.0.0",
 		"cookie-parser": "^1.4.6",
 		"cors": "2.8.5",
+		"cronstrue": "^3.14.0",
 		"dbus-next": "^0.10.2",
 		"dockerode": "^4.0.2",
 		"dot-prop": "^7.2.0",
