@@ -4,10 +4,10 @@
  * Controlled cron-field for the create form. Two surfaces:
  *
  *   1. Preset row — four buttons that fill the field with a canonical cron
- *      expression. Click `every 15m` → `*\/15 * * * *` (the literal `*/` slash
- *      escaped here in the JSDoc so the parser does not bail; runtime value
- *      is the standard 5-field expression). Pre-filled presets remove the
- *      "what do I type here?" friction the operator hits on a blank form.
+ *      expression. Click "every 15m" sets the value to the standard
+ *      5-field cron for once-every-15-minutes. Pre-filled presets remove
+ *      the "what do I type here?" friction the operator hits on a blank
+ *      form.
  *
  *   2. Free-form Input — a standard text field bound to `value`. On change,
  *      the field is debounced 300 ms and the result is shipped to the
