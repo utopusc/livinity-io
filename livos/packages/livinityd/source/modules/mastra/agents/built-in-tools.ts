@@ -1,5 +1,5 @@
 /**
- * Phase 198 UAT hot-fix #3 — Built-in agent tools.
+ * Phase 198 UAT hot-fix #3 / Phase 200-C — Built-in agent tools.
  *
  * The Mini PC ships with NO MCP server connected (Luse + selfclaude both
  * gracefully degrade to empty sources). Without any tools, the xAI Grok
@@ -7,24 +7,53 @@
  * pure text, never emitting an actual tool-call chunk — so the Phase 198
  * generative-UI renderers never trigger.
  *
- * This file ships 3 real tools that the agent CAN call today, against
- * existing infrastructure (open-meteo, system wmctrl, Node Date). The tool
- * names match the Phase 198-03 renderers:
- *   - `weather`            → WeatherToolUI         (WeatherWidget)
- *   - `luse_list_windows`  → LuseListWindowsToolUI (DataTable)
- *   - `get_current_time`   → ToolFallback          (plain text result)
+ * Phase 200-C expands the original 3 tools to the full Luse-compatible
+ * computer-use suite, backed by Linux CLI tools (xdotool, scrot/ImageMagick,
+ * wmctrl, xsel). The 6 destructive tools use the same namespaced names that
+ * appear in mcp-bridge.ts destructiveToolNames Set — so liv-ai.ts's
+ * wrapDestructiveTools attaches the existing W-02 approval gate
+ * automatically, and the Phase 198-04 ApprovalCard renderers fire on the
+ * UI side without any wire changes.
  *
- * Phase 199 will replace these with actual Luse MCP server install +
- * full computer-use suite. Until then these unblock visible behaviour.
+ *   Non-destructive (auto-execute):
+ *     - `weather`                       → WeatherWidget
+ *     - `luse_list_windows`             → DataTable
+ *     - `luse_computer_screenshot`      → inline <img>
+ *     - `get_current_time`              → ToolFallback (plain text)
+ *
+ *   Destructive (HITL-gated via W-02 approval wrap):
+ *     - `luse_computer_click_mouse`     → ApprovalCard
+ *     - `luse_computer_type_text`       → ApprovalCard
+ *     - `luse_computer_press_keys`      → ApprovalCard
+ *     - `luse_computer_application`     → ApprovalCard
+ *     - `luse_computer_drag_mouse`      → ApprovalCard
+ *     - `luse_computer_paste_text`      → ApprovalCard
+ *
+ * All shell-invoking destructive tools use execFile with arg arrays (NOT
+ * `exec` shell strings) so operator-controlled inputs cannot escape into a
+ * sub-shell. Coordinates are coerced to integers; large strings are passed
+ * via stdin where possible.
  */
 
-import {exec} from 'node:child_process'
+import {exec, execFile} from 'node:child_process'
 import {promisify} from 'node:util'
 
 import {createTool} from '@mastra/core/tools'
 import {z} from 'zod'
 
 const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
+
+// Default X11 display when DISPLAY env var is unset. The Mini PC bruce
+// session pins to :0 (Xorg + fluxbox).
+const DEFAULT_DISPLAY = ':0'
+function displayEnv(): NodeJS.ProcessEnv {
+	return {...process.env, DISPLAY: process.env.DISPLAY ?? DEFAULT_DISPLAY}
+}
+
+// Maximum byte-size of a screenshot payload returned inline (4 MiB). Larger
+// frames are rejected rather than blowing through the SSE channel.
+const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024
 
 // Open-Meteo WMO weather-code → short description map. Aligns with
 // WeatherWidget's "conditions" string.
@@ -216,13 +245,79 @@ const getCurrentTimeTool = createTool({
 	},
 })
 
+// ─── Phase 200-C-1 — luse_computer_screenshot ──────────────────────────
+//
+// Captures the X11 root window to PNG via scrot, falls back to
+// `import -window root` (ImageMagick) if scrot is missing. Returns
+// {dataUrl, base64, mimeType} so LuseScreenshotToolUI renders inline.
+//
+// The shell command is fixed (no operator input is interpolated) and runs
+// against /tmp/livos-screenshot-*.png — afterwards we read the file as
+// base64 and unlink it.
+
+const screenshotTool = createTool({
+	id: 'luse_computer_screenshot',
+	description:
+		'Capture the current LivOS desktop as a PNG screenshot. ' +
+		'Use this FIRST when the operator asks for a desktop action — ' +
+		'see current state before clicking, typing, or launching anything. ' +
+		'Returns a base64 PNG that the UI renders inline.',
+	inputSchema: z.object({}),
+	outputSchema: z.object({
+		dataUrl: z.string().optional(),
+		base64: z.string().optional(),
+		mimeType: z.string().optional(),
+	}),
+	execute: async () => {
+		const tmpPath = `/tmp/livos-screenshot-${process.pid}-${Date.now()}.png`
+		const env = displayEnv()
+		// Try scrot first, fall back to ImageMagick `import`.
+		try {
+			await execAsync(`scrot -o ${tmpPath}`, {timeout: 5000, env})
+		} catch {
+			try {
+				await execAsync(`import -window root ${tmpPath}`, {
+					timeout: 5000,
+					env,
+				})
+			} catch (err) {
+				throw new Error(
+					`screenshot failed: neither scrot nor ImageMagick available (${(err as Error).message})`,
+				)
+			}
+		}
+		const {readFile, unlink} = await import('node:fs/promises')
+		const buf = await readFile(tmpPath)
+		await unlink(tmpPath).catch(() => {
+			/* best-effort */
+		})
+		if (buf.byteLength > MAX_SCREENSHOT_BYTES) {
+			throw new Error(
+				`screenshot exceeds ${MAX_SCREENSHOT_BYTES} bytes (got ${buf.byteLength})`,
+			)
+		}
+		const base64 = buf.toString('base64')
+		return {
+			dataUrl: `data:image/png;base64,${base64}`,
+			base64,
+			mimeType: 'image/png',
+		}
+	},
+})
+
 /**
  * Built-in tool map keyed by tool id. Merged into the agent's tool resolver
  * AFTER MCP tool filtering, so these always reach the model regardless of
  * MCP source availability.
+ *
+ * Destructive Phase 200-C entries (added in later C-* commits) MUST match
+ * the mcp-bridge.ts destructiveToolNames Set verbatim — liv-ai.ts
+ * wrapDestructiveTools wraps them with the W-02 approval gate automatically.
  */
 export const builtInTools = {
 	weather: weatherTool,
 	luse_list_windows: listWindowsTool,
 	get_current_time: getCurrentTimeTool,
+	// Phase 200-C-1 (non-destructive)
+	luse_computer_screenshot: screenshotTool,
 }
