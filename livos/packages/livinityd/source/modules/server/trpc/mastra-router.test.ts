@@ -24,6 +24,22 @@ import {ApprovalManager} from '../../mastra/approval-manager.js'
 import {LivOSMastra} from '../../mastra/index.js'
 import {createMastraRouter, mastraRouter} from './mastra-router.js'
 
+// Phase 199-07 — minimal in-memory Redis stub the new
+// getActiveModel / setActiveModel procedures consume through
+// MastraRouterDeps.redis. Mirrors the setup-router test's RedisStub shape:
+// only `.get(key) | .set(key, value)` are exercised here.
+function makeRedisStub(initial?: Record<string, string>) {
+	const store = new Map<string, string>(Object.entries(initial ?? {}))
+	return {
+		store,
+		get: vi.fn(async (key: string) => store.get(key) ?? null),
+		set: vi.fn(async (key: string, value: string) => {
+			store.set(key, value)
+			return 'OK'
+		}),
+	}
+}
+
 function makeAdminCtx() {
 	return {
 		livinityd: {} as any,
@@ -299,5 +315,89 @@ describe('mastra.agent.listAvailableModels (Phase 199-02)', () => {
 		expect(byId['grok-4.20-0309-reasoning']?.name).toBe('Grok 4.20 Think')
 		expect(byId['grok-4.3']?.name).toBe('Grok 4.3')
 		expect(byId['grok-4.3']?.description).toBe('Latest. Reasoning + tool use.')
+	})
+})
+
+/**
+ * Phase 199-07 — getActiveModel + setActiveModel procedure tests.
+ *
+ * Coverage (7 cases per Plan 199-07 Task 1 behavior block):
+ *   T20 — getActiveModel.query() when Redis returns null → returns {modelName: 'grok-4.20-0309-fast'} (coerce fallback / D-199-07)
+ *   T21 — getActiveModel.query() when Redis returns 'grok-4.3' → returns {modelName: 'grok-4.3'}
+ *   T22 — getActiveModel.query() when Redis returns 'bogus' → returns {modelName: 'grok-4.20-0309-fast'} (coerce — D-199-24 soft validation)
+ *   T23 — setActiveModel.mutation({modelName:'grok-4.3'}) → redis.set called with key 'liv:config:active_model' + value 'grok-4.3'
+ *   T24 — setActiveModel.mutation({modelName:'rm -rf /'}) → zod 400 (z.enum reject — T-199-07-02 mitigation)
+ *   T25 — setActiveModel.mutation called by non-admin → rejects (adminProcedure gate — T-199-07-01 mitigation)
+ *   T26 — getActiveModel.query() callable by non-admin (privateProcedure)
+ */
+describe('mastra.agent.getActiveModel + setActiveModel (Phase 199-07)', () => {
+	test('T20 — getActiveModel returns DEFAULT when Redis empty (coerce fallback)', async () => {
+		const livOSMastra = makeLivOSMastra()
+		const redis = makeRedisStub()
+		const r = createMastraRouter({livOSMastra, approvalManager, redis})
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.agent.getActiveModel()
+		expect(result).toEqual({modelName: 'grok-4.20-0309-fast'})
+		expect(redis.get).toHaveBeenCalledWith('liv:config:active_model')
+	})
+
+	test('T21 — getActiveModel returns Redis value when valid', async () => {
+		const livOSMastra = makeLivOSMastra()
+		const redis = makeRedisStub({'liv:config:active_model': 'grok-4.3'})
+		const r = createMastraRouter({livOSMastra, approvalManager, redis})
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.agent.getActiveModel()
+		expect(result).toEqual({modelName: 'grok-4.3'})
+	})
+
+	test('T22 — getActiveModel coerces bogus Redis value back to DEFAULT (D-199-24 soft validation)', async () => {
+		const livOSMastra = makeLivOSMastra()
+		const redis = makeRedisStub({'liv:config:active_model': 'bogus'})
+		const r = createMastraRouter({livOSMastra, approvalManager, redis})
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.agent.getActiveModel()
+		expect(result).toEqual({modelName: 'grok-4.20-0309-fast'})
+	})
+
+	test('T23 — setActiveModel writes Redis key liv:config:active_model with valid value (D-199-10)', async () => {
+		const livOSMastra = makeLivOSMastra()
+		const redis = makeRedisStub()
+		const r = createMastraRouter({livOSMastra, approvalManager, redis})
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.agent.setActiveModel({modelName: 'grok-4.3'})
+		expect(result).toEqual({modelName: 'grok-4.3'})
+		expect(redis.set).toHaveBeenCalledWith('liv:config:active_model', 'grok-4.3')
+	})
+
+	test('T24 — setActiveModel rejects invalid modelName via zod enum (T-199-07-02 — 400 at parse)', async () => {
+		const livOSMastra = makeLivOSMastra()
+		const redis = makeRedisStub()
+		const r = createMastraRouter({livOSMastra, approvalManager, redis})
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await expect(
+			caller.agent.setActiveModel({modelName: 'rm -rf /' as any}),
+		).rejects.toThrow()
+		// And Redis MUST NOT have been touched.
+		expect(redis.set).not.toHaveBeenCalled()
+	})
+
+	test('T25 — setActiveModel adminProcedure gate — non-admin rejected (T-199-07-01)', async () => {
+		const livOSMastra = makeLivOSMastra()
+		const redis = makeRedisStub()
+		const r = createMastraRouter({livOSMastra, approvalManager, redis})
+		const nonAdmin = r.createCaller(makeNonAdminCtx() as any)
+		await expect(
+			nonAdmin.agent.setActiveModel({modelName: 'grok-4.3'}),
+		).rejects.toThrow()
+		expect(redis.set).not.toHaveBeenCalled()
+	})
+
+	test('T26 — getActiveModel callable by non-admin (privateProcedure semantics)', async () => {
+		const livOSMastra = makeLivOSMastra()
+		const redis = makeRedisStub({'liv:config:active_model': 'grok-4.20-0309-reasoning'})
+		const r = createMastraRouter({livOSMastra, approvalManager, redis})
+		const nonAdmin = r.createCaller(makeNonAdminCtx() as any)
+		const result = await nonAdmin.agent.getActiveModel()
+		expect(result).toEqual({modelName: 'grok-4.20-0309-reasoning'})
 	})
 })
