@@ -2828,6 +2828,43 @@ Plans:
 
 ---
 
+### Phase 202: Agents Platform — multi-agent + scheduling + generative UI — 🔴 PLANNED 2026-05-23
+
+**Goal:** Self-service Agents Platform on top of Mastra. Operators create Agents from the UI (`/agents/new`), bind cron schedules, link parent → child sub-agents via Supervisor pattern, and watch live runs at `/agents`. Settings page lands at `/settings` with Account / MCP / Models tabs. Chat upgrades to true Generative UI via assistant-ui tool-ui primitives + `@openuidev/renderer` (OpenUI Lang `ui_render` tool). Mastra constructor wrapped with `telemetry: {enabled, export:'console'}` + empty `workflows:{}` / `evals:{}` scaffold for Phase 203+.
+
+**Depends on:** Phase 201 (Liv AI Next.js iframe rebuild + Luse MCP restore). All Mastra invariants from 197-201 preserved (B-02 LivOSMastra additive-only, W-02 approval gate, N-01 destructive tool name set, INV-200-05 English UI).
+
+**Wave plan:**
+
+- **Wave 1 — Backend foundation:** 202-01 (schema + Drizzle migration + AgentRepository + livAi seed), 202-02 (dynamic Mastra registry + Supervisor wire + LivOSMastra additive), 202-03 (node-cron scheduler + Redis mutex + agent CRUD tRPC + task lifecycle routes)
+- **Wave 2 — Frontend pages:** 202-04 (`/agents` dashboard + SSE live status + sidebar nav), 202-05 (`/agents/[id]` detail + edit + recent tasks + Run now), 202-06 (`/agents/new` create form + cron/tool/sub-agent/model pickers)
+- **Wave 3 — Settings + Generative UI:** 202-07 (`/settings` page with Account/MCP/Models tabs + external MCP CRUD via Redis `liv:mcp:config`), 202-08 (OpenUI Lang `ui_render` tool + renderer + 14-component whitelist)
+- **Wave 4 — Polish + deploy:** 202-09 (SubAgentTree + Mastra constructor wrap with telemetry + empty workflows/evals scaffold), 202-10 (Mini PC deploy + executor smoke + 202-VERIFICATION.md + STATE/ROADMAP flip + final commit)
+
+**Plans (10):**
+- [ ] 202-01-PLAN.md — `livos_agents` schema + Drizzle migration + AgentRepository + livAi seed
+- [ ] 202-02-PLAN.md — Dynamic Mastra agent registry + Supervisor wire + LivOSMastra additive extension
+- [ ] 202-03-PLAN.md — node-cron scheduler + agent CRUD tRPC + task lifecycle routes
+- [ ] 202-04-PLAN.md — `/agents` dashboard + SSE live status + sidebar nav
+- [ ] 202-05-PLAN.md — `/agents/[id]` detail + edit + recent tasks + Run now
+- [ ] 202-06-PLAN.md — `/agents/new` create form + cron/tool/sub-agent/model pickers
+- [ ] 202-07-PLAN.md — `/settings` page with Account/MCP/Models tabs + external MCP CRUD
+- [ ] 202-08-PLAN.md — OpenUI Lang `ui_render` tool + renderer + 14-component whitelist
+- [ ] 202-09-PLAN.md — SubAgentTree + Mastra constructor wrap (telemetry + workflows/evals scaffold)
+- [ ] 202-10-PLAN.md — Mini PC deploy + verification + STATE/ROADMAP flip
+
+**Locked decisions (D-202-01..24):** see `.planning/phases/202-agents-platform/202-CONTEXT.md`.
+
+**Invariants:** INV-202-01 sacred SHA preserved; INV-202-02 backend stays in livinityd; INV-202-03 LivOSMastra B-02 additive-only; INV-202-04 approval gate preserved; INV-202-05 English UI; INV-202-06 sub-agent depth ≤ 2 (DB trigger + runtime double-check); INV-202-07 agent name UNIQUE; INV-202-08 Mastra MCP source list preserved; INV-202-09 Phase 200-C 10 built-ins preserved (now 11 with `ui_render`); INV-202-10 Phase 201-03 generative UI renderers FROZEN.
+
+**Threats / mitigations (T-202-01..08):** Schedule overlap → Redis SET NX PX lock; name collision → DB UNIQUE + form validation; cron injection → node-cron.validate; sub-agent recursion → DB trigger + runtime guard; telemetry leak → console-only export; OpenUI XSS → 14-component whitelist + safe-URL check; privilege escalation → adminProcedure gate; scheduler thunder-herd → 1-min resolution + cron jitter.
+
+**Speed budget:** 13-17 hours wall-clock for autonomous executor (Wave 1: 4-5h, Wave 2: 4-5h, Wave 3: 3-4h, Wave 4: 2-3h).
+
+**Resume command:** `/gsd-execute-phase 202` (CONTEXT + 10 PLANs already on disk).
+
+---
+
 ## ✅ v38.2 MILESTONE CLOSED — 2026-05-21
 
 **Milestone:** v38.2 Terminal Tabs + Vault Graph Polish

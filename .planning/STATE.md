@@ -3,7 +3,10 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: unknown
-last_updated: "2026-05-23T12:15:00.000Z"
+last_updated: "2026-05-23T22:00:00.000Z"
+next_phase: 202-agents-platform
+next_phase_status: planned
+next_phase_plan_count: 10
 progress:
   total_phases: 9
   completed_phases: 9
