@@ -253,7 +253,36 @@ function runTests() {
 		ok('Test 14: bare extractMetadata absent (namespaced convention preserved)')
 	}
 
-	console.log('\nAll common.test.ts tests passed (14/14)')
+	// Phase 199-02 — mastra.agent.listAvailableModels added to httpOnlyPaths.
+	// Same WS-reconnect-survival rationale as the rest of the mastra.agent.*
+	// cluster (Phase 197-05 entries at lines 599-603). The Liv AI UI hydrates
+	// the model picker on first paint via this query — WS-handshake-delay
+	// flicker on cold load is undesirable; HTTP avoids it. T-199-02-03 mit.
+	// Test 15: 'mastra.agent.listAvailableModels' present in httpOnlyPaths
+	{
+		assert.ok(
+			httpOnlyPaths.includes('mastra.agent.listAvailableModels' as any),
+			"httpOnlyPaths must include 'mastra.agent.listAvailableModels' (Phase 199-02 D-199-12 — UI hydrates the model picker on first paint; HTTP avoids WS-handshake-delay flicker AND survives `systemctl restart livos` mid-mount)",
+		)
+		ok("Test 15: 'mastra.agent.listAvailableModels' present in httpOnlyPaths")
+	}
+
+	// Test 16: bare-name footgun guard for Phase 199-02 entry. Mirrors Tests
+	// 4 / 7 / 9 / 12 / 14 — every existing entry follows <router>.<route>
+	// namespace convention.
+	{
+		assert.ok(
+			!httpOnlyPaths.includes('listAvailableModels' as any),
+			"httpOnlyPaths must NOT include bare 'listAvailableModels' (must be namespaced as 'mastra.agent.listAvailableModels')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('agent.listAvailableModels' as any),
+			"httpOnlyPaths must NOT include 'agent.listAvailableModels' (missing 'mastra.' prefix — full path is 'mastra.agent.listAvailableModels')",
+		)
+		ok('Test 16: bare/half-namespaced listAvailableModels absent (mastra.agent.* convention preserved)')
+	}
+
+	console.log('\nAll common.test.ts tests passed (16/16)')
 }
 
 runTests()

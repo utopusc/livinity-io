@@ -225,3 +225,79 @@ describe('W-02 anti-pattern grep (source)', () => {
 		expect(src).not.toMatch(/if \(!approved\)[\s\S]{0,80}cancelAll/)
 	})
 })
+
+/**
+ * Phase 199-02 — mastra.agent.listAvailableModels procedure tests.
+ *
+ * Coverage:
+ *   T11 — listAvailableModels returns the 4-item D-199-06 catalogue with
+ *         {id, name, description} shape and stable ALLOWED_XAI_MODELS order
+ *   T12 — privateProcedure gate — unauthenticated call rejects (T-199-02-01)
+ *   T13 — labels mirror the D-199-11 mapping
+ */
+describe('mastra.agent.listAvailableModels (Phase 199-02)', () => {
+	test('T11 — returns 4-item catalogue in ALLOWED_XAI_MODELS order with {id, name, description}', async () => {
+		const livOSMastra = makeLivOSMastra()
+		const r = createMastraRouter({livOSMastra, approvalManager})
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.agent.listAvailableModels()
+		expect(Array.isArray(result)).toBe(true)
+		expect(result).toHaveLength(4)
+		const ids = result.map((m: {id: string}) => m.id)
+		expect(ids).toEqual([
+			'grok-4.20-0309-fast',
+			'grok-4.20-0309-non-reasoning',
+			'grok-4.20-0309-reasoning',
+			'grok-4.3',
+		])
+		for (const entry of result) {
+			expect(typeof (entry as {id: string}).id).toBe('string')
+			expect(typeof (entry as {name: string}).name).toBe('string')
+			expect(typeof (entry as {description: string}).description).toBe('string')
+		}
+	})
+
+	test('T12 — privateProcedure gate: unauthenticated caller rejects (T-199-02-01)', async () => {
+		const livOSMastra = makeLivOSMastra()
+		const r = createMastraRouter({livOSMastra, approvalManager})
+		// Unauthenticated context: dangerouslyBypassAuthentication=false AND no currentUser
+		const unauthCtx = {
+			livinityd: {} as any,
+			logger: {
+				info: () => {},
+				warn: () => {},
+				error: () => {},
+				verbose: () => {},
+				log: () => {},
+				debug: () => {},
+			},
+			server: {} as any,
+			user: {} as any,
+			appStore: {} as any,
+			apps: {} as any,
+			dangerouslyBypassAuthentication: false,
+			currentUser: undefined,
+			transport: 'express' as const,
+		}
+		const caller = r.createCaller(unauthCtx as any)
+		await expect(caller.agent.listAvailableModels()).rejects.toThrow()
+	})
+
+	test('T13 — labels match D-199-11 spec', async () => {
+		const livOSMastra = makeLivOSMastra()
+		const r = createMastraRouter({livOSMastra, approvalManager})
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = (await caller.agent.listAvailableModels()) as Array<{
+			id: string
+			name: string
+			description: string
+		}>
+		const byId = Object.fromEntries(result.map((m) => [m.id, m]))
+		expect(byId['grok-4.20-0309-fast']?.name).toBe('Grok 4.20 Fast')
+		expect(byId['grok-4.20-0309-fast']?.description).toBe('Fast non-reasoning. Default.')
+		expect(byId['grok-4.20-0309-non-reasoning']?.name).toBe('Grok 4.20')
+		expect(byId['grok-4.20-0309-reasoning']?.name).toBe('Grok 4.20 Think')
+		expect(byId['grok-4.3']?.name).toBe('Grok 4.3')
+		expect(byId['grok-4.3']?.description).toBe('Latest. Reasoning + tool use.')
+	})
+})
