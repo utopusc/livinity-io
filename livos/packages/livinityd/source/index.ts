@@ -148,6 +148,12 @@ import {
 	AgentRepository,
 	seedSystemAgents,
 } from './modules/mastra/agents/agent-repository.js'
+// Phase 202-02 — dynamic AgentRegistry. Reads every enabled livos_agents row,
+// instantiates each via createAgentFromRow, wires Supervisor agents:{} maps
+// for parents. CRUD mutations (Plan 202-03) call registry.refresh() to
+// rebuild the in-memory map. livOSMastra.agents.livAi slot is double-wired
+// from registry.getByName('livAi') for the chat-route back-compat window.
+import {AgentRegistry} from './modules/mastra/agents/agent-registry.js'
 import {createMcpBridge} from './modules/mastra/mcp-bridge.js'
 import {createLivAiAgent} from './modules/mastra/agents/liv-ai.js'
 import {createMastraRouter} from './modules/server/trpc/mastra-router.js'
@@ -1056,13 +1062,79 @@ export default class Livinityd {
 						},
 					})
 					livOSMastra.attachMcpBridge(mcpBridge)
-					const agent = createLivAiAgent({
-						providerRouter: livOSMastra.providerRouter,
-						memory,
-						mcpBridge,
-						approvalManager,
-					})
-					livOSMastra.attachLivAiAgent(agent)
+					// Phase 202-02 — dynamic agent registry. Reads every enabled
+					// livos_agents row (seeded livAi + any custom agents created
+					// from the Phase 202 UI) and instantiates them via
+					// createAgentFromRow. Supervisor wiring (D-202-03) happens
+					// during refresh().
+					//
+					// The legacy `livOSMastra.agents.livAi` slot is double-wired
+					// from `registry.getByName('livAi')` so the Phase 198-01
+					// chat-route slot reader keeps working during the one-release
+					// back-compat window (Plan 202-02 Task 4 migrates chat-route
+					// to read via the registry directly).
+					//
+					// Falls back to the pre-202 single-agent path if the registry
+					// init fails (DB outage, schema drift) so livinityd still
+					// boots with a working livAi surface.
+					let livAiAgent: ReturnType<typeof createLivAiAgent> | null = null
+					try {
+						const registryPool = new (await import('pg')).Pool({
+							connectionString: databaseUrl,
+						})
+						try {
+							const {drizzle} = await import('drizzle-orm/node-postgres')
+							const registryDb = drizzle(registryPool)
+							const registryRepo = new AgentRepository(registryDb)
+							const registry = new AgentRegistry({
+								repo: registryRepo,
+								providerRouter: livOSMastra.providerRouter,
+								memory,
+								mcpBridge,
+								approvalManager,
+								logger: {
+									info: (msg) => webappLogger.info(msg),
+									warn: (msg, err) => this.logger.error(msg, err),
+								},
+							})
+							await registry.init()
+							livOSMastra.attachRegistry(registry)
+							const seededLivAi = registry.getByName('livAi')
+							if (seededLivAi) {
+								livOSMastra.attachLivAiAgent(seededLivAi)
+								livAiAgent = seededLivAi as never
+								webappLogger.info(
+									`Phase 202-02 — agent registry initialised with ${registry.listAll().length} live agents (livAi slot wired from registry)`,
+								)
+							} else {
+								webappLogger.info(
+									'Phase 202-02 — registry initialised but livAi row absent; falling back to in-process createLivAiAgent for the back-compat slot',
+								)
+							}
+						} finally {
+							// Registry holds a reference to its own db handle via
+							// the repo; we keep the pool open for the lifetime of
+							// the process. Closing here would break later
+							// `registry.refresh()` calls.
+							void registryPool
+						}
+					} catch (registryErr) {
+						this.logger.error(
+							'Phase 202-02 — AgentRegistry init failed (non-fatal); falling back to legacy single-agent createLivAiAgent path until next restart',
+							registryErr,
+						)
+					}
+					// Back-compat fallback — guarantees the chat-route slot is
+					// populated even if the registry init path errored out.
+					if (!livAiAgent) {
+						const fallbackLivAi = createLivAiAgent({
+							providerRouter: livOSMastra.providerRouter,
+							memory,
+							mcpBridge,
+							approvalManager,
+						})
+						livOSMastra.attachLivAiAgent(fallbackLivAi)
+					}
 					mastraRouterProductionInstance = createMastraRouter({
 						livOSMastra,
 						approvalManager,
