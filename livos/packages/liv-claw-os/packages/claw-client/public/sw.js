@@ -12,13 +12,15 @@
  *     a fresh fetch). We let the browser HTTP cache handle those.
  */
 
-// Phase 203 Hot-fix I 2026-05-24 — bumped to v3 to evict v2 shells that still
-// referenced pre-scrub bundles + persisted dead `wss://*.livinity.io` gateway
-// URLs in localStorage. Hot-fix I adds a storage-layer scrub for poisoned URLs
-// AND a one-shot navigation interception that wipes ALL caches so the operator
-// gets a guaranteed-fresh shell after deploy without needing a manual hard-
-// reload. Bump on any future Hot-fix that ships new top-level UI behavior.
-const CACHE_VERSION = "claw-shell-v3-hotfix-i";
+// Phase 203 Hot-fix J 2026-05-24 — bumped to v4 to evict v3 shells that still
+// route the openclaw master token through `auth: {deviceToken}` (rejected by
+// openclaw `mode: token` with `device_token_mismatch` → rate-limit lockout —
+// operator UAT 2026-05-23/24). Hot-fix J switches the claw-client WS connect
+// frame to `auth: {token}` (master-bearer shape) AND scrubs the stale
+// deviceToken slot in localStorage to repair existing installs without an
+// operator-side wipe. Bump on any future Hot-fix that ships new top-level UI
+// behavior.
+const CACHE_VERSION = "claw-shell-v4-hotfix-j";
 const SHELL_URLS = ["/", "/favicon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
