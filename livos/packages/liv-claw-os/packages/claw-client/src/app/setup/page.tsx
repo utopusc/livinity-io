@@ -1,6 +1,7 @@
 "use client";
 
 import { saveSettings } from "@/lib/storage";
+import { attemptLivOsAutoConnect } from "@/lib/gateway/auto-connect";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -13,9 +14,22 @@ export default function SetupPage() {
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
+
+    // Phase 203 Hot-fix D 2026-05-24 — if there are no hash params, try the
+    // LivOS auto-connect bridge BEFORE failing. Operator was previously sent
+    // here when they bookmarked /setup or opened it from a stale link; with
+    // the dock-shortcut path live, the natural landing is /, but this fallback
+    // keeps /setup useful when the iframe is hosted inside LivOS.
     if (!hash) {
-      setStatus("error");
-      setErrorMsg("No configuration found in the URL.");
+      void (async () => {
+        const result = await attemptLivOsAutoConnect();
+        if (result.ok) {
+          router.replace("/");
+        } else {
+          setStatus("error");
+          setErrorMsg("No configuration found in the URL.");
+        }
+      })();
       return;
     }
 
