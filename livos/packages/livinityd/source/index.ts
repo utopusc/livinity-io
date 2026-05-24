@@ -165,6 +165,14 @@ import {createAgentTaskRouter} from './modules/server/trpc/agent-task-router.js'
 // app-store.ts) in place of the upstream fs.writeJson backend.
 import {OpenUIAppsRepository} from './modules/openclawos/openui-apps-repository.js'
 import {createOpenclawosAppsRouter} from './modules/server/trpc/openclawos-router.js'
+// Phase 205-04 — `openclawos.gateway.*` tRPC router (Wave 3).
+// Surfaces paired-device + allowed-origin + auth-mode CRUD inside the
+// claw-client SettingsDialog Gateway tab. Backed by OpenclawConfigStore
+// (atomic JSON read/patch over /opt/livos/data/openclaw/openclaw.json)
+// and `device-auto-approver.ts`'s paired.json + pending.json + revoked.json
+// trio (Probe A5 race mitigation).
+import {OpenclawConfigStore} from './modules/openclawos/openclaw-config-store.js'
+import {createOpenclawosGatewayRouter} from './modules/server/trpc/openclawos-gateway-router.js'
 // Phase 202-07 — MCP external server config sub-router (`mcp.config.*`).
 // Backed by Redis hash `liv:mcp:config` (D-202-12). Boot wire-up builds the
 // real factory with `this.ai.redis` so the /settings → MCP tab can CRUD
@@ -1584,6 +1592,48 @@ export default class Livinityd {
 				}
 			}
 
+			// Phase 205-04 — openclawos.gateway.* router. Atomic OpenclawConfigStore
+			// over /opt/livos/data/openclaw/openclaw.json + devicesDir for the
+			// paired/pending/revoked JSON trio. `this.ai.redis` is used for
+			// best-effort device-token poison on revoke. Failure here is non-
+			// fatal — the empty-injection stub surfaces OPENCLAW_GATEWAY_UNAVAILABLE
+			// so the UI gets a clean error rather than hanging.
+			let openclawosGatewayRouterProductionInstance:
+				| ReturnType<typeof createOpenclawosGatewayRouter>
+				| undefined
+			try {
+				const openclawConfigPath =
+					process.env['OPENCLAW_CONFIG_PATH'] ??
+					'/opt/livos/data/openclaw/openclaw.json'
+				const openclawDevicesDir =
+					process.env['OPENCLAW_DEVICES_DIR'] ??
+					'/opt/livos/data/openclaw/devices'
+				const gatewayConfigStore = new OpenclawConfigStore(openclawConfigPath)
+				const gatewayRedis = this.ai?.redis
+					? {
+							del: async (key: string) => this.ai.redis.del(key),
+						}
+					: {del: async () => 0}
+				openclawosGatewayRouterProductionInstance =
+					createOpenclawosGatewayRouter({
+						configStore: gatewayConfigStore,
+						devicesDir: openclawDevicesDir,
+						redis: gatewayRedis,
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) => this.logger.error(msg, err),
+						},
+					})
+				webappLogger.info(
+					`Phase 205-04 — openclawos.gateway.* tRPC router wired (configPath=${openclawConfigPath}, devicesDir=${openclawDevicesDir})`,
+				)
+			} catch (gatewayRouterErr) {
+				this.logger.error(
+					'Phase 205-04 — openclawos.gateway.* router factory failed; falls back to OPENCLAW_GATEWAY_UNAVAILABLE stub until next restart',
+					gatewayRouterErr,
+				)
+			}
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
@@ -1593,6 +1643,7 @@ export default class Livinityd {
 				agentTasks: agentTasksRouterProductionInstance,
 				mcpConfig: mcpConfigRouterProductionInstance,
 				openclawosApps: openclawosAppsRouterProductionInstance,
+				openclawosGateway: openclawosGatewayRouterProductionInstance,
 				providerConfig: providerConfigRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)

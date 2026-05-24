@@ -671,4 +671,23 @@ export const httpOnlyPaths = [
 	'provider.config.list',
 	'provider.config.set',
 	'provider.config.delete',
+	// Phase 205-04 — openclawos.gateway.* admin namespace for the in-chat
+	// Gateway tab (paired devices + allowed origins + auth mode CRUD inside
+	// claw-client SettingsDialog). All 8 paths route via HTTP for the standard
+	// WS-reconnect-survival reason (memory pitfall B-12 / X-04 — same cluster
+	// as provider.config.* immediately above). devices.revoke / origins.add /
+	// origins.remove / auth.setMode / auth.rotateToken are admin mutations
+	// called immediately after operator clicks Save / Revoke / Rotate; a
+	// half-broken WS after `systemctl restart livos` would silently drop them.
+	// Queries (devices.list / origins.list / auth.get) are page-render
+	// dependencies for the Gateway tab body — HTTP avoids the WS-handshake-
+	// delay flicker on first paint. D-205-19.
+	'openclawos.gateway.devices.list',
+	'openclawos.gateway.devices.revoke',
+	'openclawos.gateway.origins.list',
+	'openclawos.gateway.origins.add',
+	'openclawos.gateway.origins.remove',
+	'openclawos.gateway.auth.get',
+	'openclawos.gateway.auth.setMode',
+	'openclawos.gateway.auth.rotateToken',
 ] as const
