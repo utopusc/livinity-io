@@ -938,6 +938,21 @@ export default function ChatApp() {
   //
   // Outside LivOS (stand-alone deploys), the handshake fails silently and we
   // fall through to the legacy `open settings dialog on missing gateway` UX.
+  //
+  // Phase 203 Hot-fix E 2026-05-24 — close the H3 race:
+  //   useGateway() constructed the OpenClawEngine at mount with the EMPTY
+  //   settings read from localStorage (fresh install / cleared storage). The
+  //   engine's connect() short-circuits when gatewayUrl is empty, so the
+  //   socket never starts. attemptLivOsAutoConnect THEN writes the freshly-
+  //   minted creds to localStorage — but the engine doesn't re-read storage
+  //   so it stays disconnected and the operator sees the setup form despite
+  //   the handshake having succeeded server-side (live confirmed via livos
+  //   journal showing 4 successful mints / 0 connections on 2026-05-24 UAT).
+  //
+  //   Fix: on `seeded` (engine had empty settings on mount), call reconnect
+  //   with the freshly-seeded settings — that recreates the socket and
+  //   starts it. On `already-configured`, the engine was already initialized
+  //   with the same settings; no reconnect needed.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -947,14 +962,22 @@ export default function ChatApp() {
         // No gateway configured AND auto-connect failed (likely standalone use)
         // → open the legacy setup dialog so the operator can paste a URL.
         setSettingsOpen(true);
+        return;
       }
-      // result.ok === true paths intentionally do NOT open the dialog:
-      //  - "seeded" → fresh install inside LivOS, settings now valid
-      //  - "already-configured" → settings persisted from a prior session
+      // Hot-fix E — reconnect engine with seeded creds. The 'seeded' branch
+      // means the engine was constructed with empty settings on mount; we
+      // MUST kick it via reconnect() or it stays disconnected forever.
+      if (result.reason === "seeded" && result.settings) {
+        reconnect(result.settings);
+      }
+      // result.reason === "already-configured" → engine already initialized
+      // with the same settings on mount, nothing to do.
     })();
     return () => {
       cancelled = true;
     };
+    // reconnect is stable (useCallback with [] deps in useGateway).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const { adaptedFetchThreadList, adaptedLoadThread } = useChatProviderAdapters({
