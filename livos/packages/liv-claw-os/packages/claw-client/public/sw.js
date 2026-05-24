@@ -20,7 +20,14 @@
 // deviceToken slot in localStorage to repair existing installs without an
 // operator-side wipe. Bump on any future Hot-fix that ships new top-level UI
 // behavior.
-const CACHE_VERSION = "claw-shell-v4-hotfix-j";
+//
+// Phase 205 Hot-fix K 2026-05-24 — bumped to v5 to evict v4 shells that
+// still ship the old ChatApp.tsx ternary where SettingsDialog was collapsed
+// into LivOsConnectingSplash inside LivOS mode (settings cog was a no-op).
+// Hot-fix K renders SettingsDialog independently and adds a
+// suppressConnectionForm prop so the Connection tab hides its URL/token
+// form in LivOS mode while the MCP Servers + Gateway tabs remain reachable.
+const CACHE_VERSION = "claw-shell-v5-hotfix-k";
 const SHELL_URLS = ["/", "/favicon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
