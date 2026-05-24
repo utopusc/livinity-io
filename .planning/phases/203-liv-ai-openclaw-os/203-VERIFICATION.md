@@ -149,9 +149,13 @@ sudo journalctl -u liv-claw-gateway -n 50 --no-pager | grep -i 'provider\|model\
 
 **Why not `/opt/livos/.env`?** Per Decision 203-12-D-02, livinityd's PORT=8080 in `/opt/livos/.env` contaminated the gateway's PORT (intended 18789) via systemd EnvironmentFile= precedence quirk on Ubuntu 24.04 / systemd 256. Decoupling the gateway's EnvironmentFile to `/etc/default/liv-claw-gateway` (empty by default; `-` prefix makes it optional) eliminates the contamination. Operator can put either file — `/opt/livos/.env` works for the *API key* (livinityd already reads it for other purposes), but the per-service file is recommended.
 
-### G.2 — Liv AI claw-plugin loaded on next update.sh run (PARTIAL — Fix-A SHIPPED 2026-05-24; Fix-B/C OPEN)
+### G.2 — Liv AI claw-plugin loaded on next update.sh run (PARTIAL — Fix-A + Fix-B SHIPPED 2026-05-24; Fix-C OPEN)
 
-> **2026-05-24 UPDATE:** Hot-fix Fix-A (commit `26444ce0`, deployed via `update.sh` 19:17 PDT Mini PC time) UNBLOCKED openclaw's install-time security scanner. Plugin now appears in `installs.json` and the gateway boot line ("8 plugins" vs prior "7"). HOWEVER two downstream issues remain: (B) manifest `contracts.tools` doesn't enumerate the ~20 runtime tools so each tool registration is rejected, and (C) the workspace UI mount at `/plugins/openclawos/` still 404s so Caddy proxy serves the stock OpenClaw root page. See `203-HOTFIX-205-PLUGIN-LOAD.md` for full forensics, partial resolution evidence, and Fix-B/C carry-over breakdown.
+> **2026-05-24 UPDATE (2nd pass):** Hot-fix Fix-B (commit `f69525cd`, deployed via `update.sh` 19:33 PDT Mini PC time on deployed SHA `f69525c`) enumerates all 21 runtime tools in `openclaw.plugin.json` `contracts.tools[]` (9 inline + 9 luse_* + 3 unique built-ins). Result: ZERO "must declare contracts.tools" rejection lines in post-deploy journal; plugin activation completes fully ("registered 9 luse_* tools + 11 built-in tools", "all tools registered", "gateway RPC methods registered"); chat sessions CAN now call all 20+ Liv AI tools.
+>
+> **HOWEVER Fix-C remains OPEN.** Live diagnosis post Fix-B revealed the true root cause: the plugin's `static/` directory (required by the `registerHttpRoute` handler in `src/index.ts:209-266` — it streams files from `path.resolve(__dirname, "..", "static")`) **does NOT exist on the Mini PC**. The `claw-client` static bundle is only produced by the `bundle-ui` npm script (cd ../claw-client && pnpm install && pnpm build && cp -r out ../claw-plugin/static) which only runs as part of `prepack` — NOT `build`. So `update.sh` (which runs `pnpm install` + builds packages) never generates `static/`, every file lookup misses, and every request 404s. The 404 has nothing to do with auth or Caddy — it's just an empty static root.
+>
+> **2026-05-24 UPDATE (1st pass):** Hot-fix Fix-A (commit `26444ce0`, deployed via `update.sh` 19:17 PDT Mini PC time) UNBLOCKED openclaw's install-time security scanner. Plugin now appears in `installs.json` and the gateway boot line ("8 plugins" vs prior "7"). See `203-HOTFIX-205-PLUGIN-LOAD.md` for full forensics.
 
 The previous deploy SHA `ff612109` had the gateway booting with only the **7 stock plugins** (browser, canvas, device-pair, file-transfer, memory-core, phone-control, talk-voice) because the Liv AI claw-plugin's `openclaw.plugin.json` manifest was missing from the build output and the gateway's `plugins install --link` was pointed at the bundle file (`dist/index.js`) instead of the package root.
 
@@ -192,15 +196,30 @@ sudo journalctl -u liv-claw-gateway --since "1 hour ago" --no-pager | grep -i "s
 #   → (empty — Fix-A removed the scanner block)
 ```
 
-**Fix-B (open) — manifest `contracts.tools` declarations missing:**
-The plugin code registers ~20 tools at runtime (9 `luse_*` proxies + 11 built-in: weather, get_current_time, ui_render, app_create, etc.) but `openclaw.plugin.json` only declares 9 tools (artifact CRUD + db_query/execute + app_create/get/update). Every undeclared registration is rejected with:
+**Fix-B (RESOLVED — `f69525cd`) — manifest `contracts.tools` enumeration:**
+Manifest now declares all 21 unique tools (9 inline + 9 luse_* + 3 unique built-ins). Build script copies `openclaw.plugin.json` → `dist/openclaw.plugin.json`. Live verification on Mini PC post-deploy:
 ```
-[gateway] [plugins] plugin must declare contracts.tools for: <toolname>
+[plugins] [livinityd-tools] registered 9 luse_* proxy tools
+[plugins] [livinityd-tools] registered 11 built-in LivOS proxy tools
+[plugins] [openclaw-os-plugin] Phase 203-06 — registered 9 luse_* tools + 11 built-in tools (expected 9 + 11)
+[plugins] [openclaw-os-plugin] all tools registered
+[plugins] [openclaw-os-plugin] gateway RPC methods registered
 ```
-Until fixed, the plugin is registered but NO tools are callable by chat sessions. Fix: append the full runtime tool list to `claw-plugin/openclaw.plugin.json` `contracts.tools[]` (and rebuild so `dist/openclaw.plugin.json` matches).
+ZERO "must declare contracts.tools" rejection lines in post-deploy journal (was 20+ per startup before Fix-B).
 
-**Fix-C (open) — workspace UI mount unreachable:**
-Plugin log says `workspace UI mounted at http://127.0.0.1:18789/plugins/openclawos/` but that URL 404s (both with and without trailing slash). Caddy `/liv-ai-app/openclawos/` returns 200 but serves `<title>OpenClaw Control</title>` (stock root, not the Liv AI rebranded UI). Likely tied to Fix-B (openclaw may be aborting plugin activation after tool-register rejection cascade); if Fix-B alone doesn't resolve, also rewrite Caddy `/liv-ai-app/openclawos/*` → `/plugins/openclawos/*`.
+**Fix-C (OPEN) — workspace UI mount serves empty static root → 404:**
+Plugin log says `workspace UI mounted at http://127.0.0.1:18789/plugins/openclawos/` but every request to that route 404s. Live diagnosis on Mini PC after Fix-B deploy:
+```
+$ ls -la /opt/livos/packages/liv-claw-os/packages/claw-plugin/static/
+ls: cannot access '...': No such file or directory
+```
+The `registerHttpRoute` handler in `src/index.ts:209-266` streams files from `path.resolve(__dirname, "..", "static")`. The `claw-client` Next.js export → `static/` copy is performed by the `bundle-ui` npm script in `package.json:34` which only runs in `prepack`, NOT `build`. So `update.sh` (which executes `pnpm install` + builds packages) never produces `static/`, every file lookup misses → 404. Independent of Fix-B (tool registration is unrelated to static-file serving). Caddy then proxies through to the openclaw gateway's stock root which DOES exist, hence the `<title>OpenClaw Control</title>` mismatch.
+
+**Fix-C proposed paths** (next hot-fix):
+1. **Build-side** — add `bundle-ui` to the regular `build` script (or a new `build:full` invoked by `update.sh`) so `static/` is generated on deploy. Pre-condition: `claw-client` package builds cleanly on the Mini PC (verify Next.js + dependency footprint).
+2. **Deploy-side** — pre-build `static/` on the developer workstation and ship it via git (similar to how `dist/` was previously checked in). Tradeoff: bundle size in repo.
+3. **Update.sh-side** — add an explicit `pnpm --filter @openuidev/openclaw-os-plugin bundle-ui` step in `update.sh` after `pnpm install`. Cleanest separation; keeps repo lean.
+Path 3 is the recommended fix path — surgical change to `update.sh`, no source/CI changes, and `bundle-ui` is already idempotent.
 
 See `203-HOTFIX-205-PLUGIN-LOAD.md` for full forensic breakdown including before/after comparison table and proposed Fix-B/C paths.
 
@@ -263,7 +282,7 @@ For traceability after Plan 203-12 deploy + Plan 203-13 inline fix:
 |---|---|---|
 | Plan 203-12 deferred #1 | claw-plugin manifest missing from `dist/` | **RESOLVED** in Plan 203-13 commit `eedde743` |
 | Plan 203-12 deferred #2 | LLM provider API key not in env | OPERATOR ACTION ITEM (§ G.1) — cannot auto-resolve (no secret available to inject) |
-| Plan 203-12 deferred #3 | Liv AI claw-plugin not in loaded plugins | **PARTIAL** — Fix-A in hot-fix `26444ce0` (2026-05-24) unblocked install scanner; plugin now in `installs.json` + 8-plugin boot line. Fix-B (contracts.tools manifest enumeration) and Fix-C (workspace UI mount routing) still OPEN — see `203-HOTFIX-205-PLUGIN-LOAD.md` |
+| Plan 203-12 deferred #3 | Liv AI claw-plugin not in loaded plugins | **PARTIAL** — Fix-A in hot-fix `26444ce0` + Fix-B in hot-fix `f69525cd` (both 2026-05-24) shipped. Plugin now in `installs.json` + 8-plugin boot line; all 20+ tools registered + callable; ZERO contracts.tools rejection lines in journal. Fix-C (workspace UI `static/` dir missing on Mini PC; `bundle-ui` script not part of `update.sh` build path) still OPEN — see `203-HOTFIX-205-PLUGIN-LOAD.md` |
 | Plan 203-12 D-04 | `livos-app-liv-ai.service` not retired | INTENTIONAL — preserved per D-203-09 split routing (carry-over #14 in § H) |
 | Plan 203-12 D-05 | migration 0004 (DROP mastra) not applied | INTENTIONAL — Plan 203-08 D-02 (carry-over #12 in § H) |
 | caddy.ts source vs live Caddyfile drift | regenerate-caddyfile script not in update.sh | carry-over #13 in § H |

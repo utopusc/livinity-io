@@ -2,11 +2,13 @@
 phase: 203-liv-ai-openclaw-os
 hotfix: 205-plugin-load
 parent_issue: "Phase 203 § G.2 — Liv AI claw-plugin not loaded"
-status: PARTIAL — Fix-A SHIPPED, Fix-B follow-up required
+status: PARTIAL — Fix-A + Fix-B SHIPPED, Fix-C follow-up required
 created: 2026-05-24
-commit: 26444ce0
-deployed_sha: 26444ce0
-deploy_date: 2026-05-23 (PDT, late evening, Mini PC time 19:17 PDT)
+last_updated: 2026-05-24 (Fix-B addendum)
+fix_a_commit: 26444ce0
+fix_b_commit: f69525cd
+deployed_sha: f69525cd
+deploy_date: 2026-05-23 19:33 PDT (Fix-B redeploy)
 sacred_sha: f3538e1d811992b782a9bb057d1b7f0a0189f95f
 ---
 
@@ -142,9 +144,93 @@ Files touched: 1 (`livos/packages/liv-claw-gateway/start.js`, +47 / -8). Zero sa
 
 | ID            | Surface                                                        | Status              |
 |---------------|----------------------------------------------------------------|---------------------|
-| 205-hotfix-A  | openclaw install scanner blocks pnpm devDep symlinks           | **RESOLVED** (this) |
-| 205-hotfix-B  | `contracts.tools` manifest missing 20+ runtime tools           | OPEN — next hot-fix |
-| 205-hotfix-C  | `/plugins/openclawos/` workspace UI mount 404s (Caddy + bare)  | OPEN — depends on B |
+| 205-hotfix-A  | openclaw install scanner blocks pnpm devDep symlinks           | **RESOLVED** (`26444ce0`) |
+| 205-hotfix-B  | `contracts.tools` manifest missing 20+ runtime tools           | **RESOLVED** (`f69525cd`) |
+| 205-hotfix-C  | `/plugins/openclawos/` workspace UI mount 404s (Caddy + bare)  | OPEN — `static/` dir missing on Mini PC (root cause changed; was assumed to depend on B, now proven independent) |
+
+## Addendum — Fix-B SHIPPED 2026-05-24 19:33 PDT (`f69525cd`)
+
+### What Fix-B changed
+
+`livos/packages/liv-claw-os/packages/claw-plugin/openclaw.plugin.json` — expanded `contracts.tools[]` from 9 → 21 entries:
+- 9 inline tools (already declared): artifact CRUD + db_query/execute + app_create/get/update
+- 9 luse_* proxies (Phase 203-06 D-203-13): luse_computer_{screenshot,click_mouse,type_text,press_keys,application,drag_mouse,paste_text} + luse_list_windows + luse_get_cursor_position
+- 3 unique built-ins (Phase 203-06 D-203-14): weather, get_current_time, ui_render. (The other 8 built-ins overlap with luse-proxy names and de-dupe at registration per the plugin's index.ts comment §867-883.)
+
+Package version bumped 0.1.5 → 0.1.6 to force openclaw's install cache to re-scan. Manifest schema = string-array of tool names, verified against stock openclaw extensions (`browser/openclaw.plugin.json`, `canvas/openclaw.plugin.json`) in `livos/node_modules/.pnpm/openclaw@2026.5.20/.../openclaw/dist/extensions/`.
+
+Build verified locally: `pnpm --filter @openuidev/openclaw-os-plugin build` → PASS (dist/index.js 190.6kb + dist/openclaw.plugin.json matches source).
+
+### Live verification on Mini PC post Fix-B deploy
+
+Deployed via `sudo bash /opt/livos/update.sh` at Mini PC time 19:33 PDT 2026-05-23 (update.sh recorded `Deployed SHA: f69525c`). Gateway log post-deploy:
+
+```
+[plugins] [openclaw-os-plugin] register() called — plugin loaded OK
+[plugins] [openclaw-os-plugin] workspace UI mounted at http://127.0.0.1:18789/plugins/openclawos/ (root /opt/livos/packages/liv-claw-os/packages/claw-plugin/static)
+[plugins] [openclaw-os-plugin] registering tools…
+[plugins] [livinityd-tools] registered 9 luse_* proxy tools
+[plugins] [livinityd-tools] registered 11 built-in LivOS proxy tools
+[plugins] [openclaw-os-plugin] Phase 203-06 — registered 9 luse_* tools + 11 built-in tools (expected 9 + 11)
+[plugins] [openclaw-os-plugin] all tools registered
+[plugins] [openclaw-os-plugin] gateway RPC methods registered
+[gateway] http server listening (8 plugins: browser, canvas, device-pair, file-transfer, memory-core, openclaw-os-plugin, phone-control, talk-voice; 3.9s)
+```
+
+**ZERO "must declare contracts.tools" rejection lines** in the journal post-deploy (was 20+ lines per startup before Fix-B). Plugin activation completes fully: tool registration step finishes, gateway RPC methods register, 8-plugin boot line preserved.
+
+### Fix-B did NOT resolve Fix-C — root cause changed
+
+Original Fix-C hypothesis (in this doc, pre-addendum): "tied to Fix-B; openclaw may be aborting plugin activation after tool-register rejection cascade." Post-Fix-B evidence DISPROVES that — activation completes cleanly but `/plugins/openclawos/` still 404s.
+
+Live diagnosis post-Fix-B revealed the real cause:
+
+```
+$ ls -la /opt/livos/packages/liv-claw-os/packages/claw-plugin/static/
+ls: cannot access '/opt/livos/packages/liv-claw-os/packages/claw-plugin/static/': No such file or directory
+```
+
+The plugin's `registerHttpRoute` handler in `src/index.ts:209-266` streams files from `path.resolve(__dirname, "..", "static")`. That directory is populated by the `bundle-ui` npm script in `package.json:34`:
+```
+"bundle-ui": "cd ../claw-client && pnpm install --frozen-lockfile=false && pnpm build && shx rm -rf ../claw-plugin/static && shx cp -r out ../claw-plugin/static"
+```
+`bundle-ui` runs ONLY as part of `prepack` (`"prepack": "pnpm bundle-ui && pnpm build"`) — never on plain `pnpm build`, never on `pnpm install`. So:
+- `update.sh` runs `pnpm install` + builds packages → never invokes `prepack` → never creates `static/`
+- Every file lookup in the route handler misses → response = 404 + `text/plain` "Not Found"
+- Caddy `/liv-ai-app/openclawos/*` then falls through to openclaw's gateway core root, which serves the stock claw-control UI hence `<title>OpenClaw Control</title>`
+
+This is INDEPENDENT of Fix-B. Tool registration and static-file serving are orthogonal concerns. Fix-C is its own deploy-pipeline gap.
+
+### Fix-C proposed paths (next hot-fix)
+
+1. **Build-side** — add `bundle-ui` invocation to `build` script (or `build:full` invoked by `update.sh`). Pre-condition: `claw-client` Next.js build is fast/light on Mini PC; verify dep footprint.
+2. **Deploy-side** — pre-build `static/` on developer workstation and ship it via git. Tradeoff: ~MBs of static assets in repo.
+3. **Update.sh-side (RECOMMENDED)** — add `pnpm --filter @openuidev/openclaw-os-plugin bundle-ui` step in `update.sh` after `pnpm install`. Cleanest separation; keeps repo lean; `bundle-ui` is already idempotent.
+
+Path 3 = next hot-fix.
+
+### Operator-visible state after Fix-B
+
+| Check                                              | Before (`26444ce0` Fix-A) | After (`f69525cd` Fix-B) | Goal              |
+|----------------------------------------------------|---------------------------|--------------------------|-------------------|
+| `installs.json` has `openclaw-os-plugin`           | YES                       | **YES**                  | YES               |
+| Gateway boot line plugin count                     | 8                         | **8**                    | 8                 |
+| "must declare contracts.tools" rejection lines     | 20+                       | **0**                    | 0                 |
+| Liv AI plugin tools registered + callable          | NO                        | **YES (20 tools)**       | YES               |
+| Plugin activation completes ("all tools registered" log) | NO (mid-stream abort) | **YES**                  | YES               |
+| `/plugins/openclawos/` returns 200                 | 404                       | 404                      | 200 (Fix-C)       |
+| Caddy serves `<title>Liv AI</title>`               | OpenClaw Control          | OpenClaw Control         | Liv AI (Fix-C)    |
+
+**Two-thirds resolved.** Tool surface is fully live. Only the static-bundle deploy gap remains — operator can use Liv AI's tool catalog programmatically (e.g. via `openclaw chat` CLI) but the in-browser workspace UI at `/plugins/openclawos/` still serves the stock OpenClaw root.
+
+### Sacred SHA (Fix-B commit)
+
+Hook PASSED on commit `f69525cd`:
+```
+[sacred-sha] PASS: 20 files verified
+```
+
+Files touched (2): `openclaw.plugin.json` + `package.json` (version bump). Zero sacred files. Canonical SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved.
 
 ## Self-Check: PASSED
 
