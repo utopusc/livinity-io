@@ -1840,6 +1840,19 @@ class Server {
 				'/api/',
 				'/trpc/',
 				'/chat/',
+				// Phase 207 R5 — `/openclawos/*` was missing from this list, so
+				// `/openclawos/approvals/stream` (SSE), `/openclawos/handshake`,
+				// `/openclawos/plugin-rpc`, and `/openclawos/approvals/respond`
+				// were all shadowed by the SPA index.html catch-all. Browsers'
+				// EventSource then saw `Content-Type: text/html` and aborted
+				// with the MIME mismatch operator UAT reported on 2026-05-24.
+				// These routes are mounted late (in livinityd.start() after
+				// server.start()), so the catch-all wildcard ran first.
+				'/openclawos/',
+				// `/ws/` was already covered by the WebSocket upgrade path
+				// short-circuiting before Express, so listing it here is
+				// defense-in-depth only.
+				'/ws/',
 			]
 			this.app.use('*', (request, response, next) => {
 				const path = request.originalUrl?.split('?')[0] ?? request.path ?? ''
