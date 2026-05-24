@@ -28,7 +28,7 @@ import type {RequestHandler} from 'express'
 import type {Redis} from 'ioredis'
 import {readFileSync, existsSync} from 'node:fs'
 import {mintToken} from './device-token.js'
-import {autoApproveDevice, type AutoApproveResult} from './device-auto-approver.js'
+import {autoApproveDevice, sweepPendingRequests, type AutoApproveResult} from './device-auto-approver.js'
 
 type VerifyTokenFn = (token: string) => Promise<unknown>
 
@@ -143,21 +143,35 @@ export function createHandshakeRouteHandler(opts: HandshakeRouteOptions): Reques
 				return
 			}
 
-			// Phase 203 Hot-fix F3 2026-05-24 — auto-approve pending device
-			// pairing request matching the deviceId the client sent. Outer
-			// LIVINITY_SESSION JWT is the trust gate; openclaw's secondary
-			// pairing dance is redundant and was blocking every new browser.
-			// Idempotent: a no-op when the device is already paired or when
-			// no pending request matches. Failure is logged but never breaks
-			// the master-token response below.
+			// Phase 203 Hot-fix F3 + F4 2026-05-24 — auto-approve openclaw
+			// pairing requests. Outer LIVINITY_SESSION JWT is the trust gate;
+			// openclaw's secondary pairing dance is redundant and was blocking
+			// every new browser. Two passes:
+			//
+			//   1. F3 — deviceId-targeted promote (fast-path for liv-claw-client
+			//      which sends its hex deviceId). Hot-fix F4 also accepts a UUID
+			//      requestId for openclaw control-ui flows.
+			//   2. F4 — sweepPendingRequests() — belt-and-suspenders that promotes
+			//      EVERY remaining pending entry. Covers the case where openclaw
+			//      control-ui never calls /openclawos/handshake but a pending
+			//      entry exists from its WS handshake (operator UAT 2026-05-24).
+			//
+			// Both are idempotent + non-fatal — failures are logged and the
+			// master-token response below still ships normally.
 			let autoApprove: AutoApproveResult | undefined
+			let sweepResult: {sweptCount: number; errors: string[]} | undefined
 			try {
 				const reqDeviceId = (req.body as {deviceId?: unknown} | undefined)?.deviceId
+				const autoApproveOpts: {logger?: typeof opts.logger; devicesDir?: string} = {}
+				if (opts.logger) autoApproveOpts.logger = opts.logger
+				if (opts.openclawDevicesDir) autoApproveOpts.devicesDir = opts.openclawDevicesDir
 				if (typeof reqDeviceId === 'string' && reqDeviceId.length > 0) {
-					const autoApproveOpts: {logger?: typeof opts.logger; devicesDir?: string} = {}
-					if (opts.logger) autoApproveOpts.logger = opts.logger
-					if (opts.openclawDevicesDir) autoApproveOpts.devicesDir = opts.openclawDevicesDir
 					autoApprove = autoApproveDevice(reqDeviceId, autoApproveOpts)
+				}
+				// F4 sweep — ALWAYS run (cheap when pending.json is empty).
+				sweepResult = sweepPendingRequests(autoApproveOpts)
+				if (autoApprove) {
+					autoApprove.sweptCount = sweepResult.sweptCount
 				}
 			} catch (approveErr) {
 				opts.logger?.warn?.('[openclawos-handshake] auto-approve threw', approveErr)
@@ -175,8 +189,9 @@ export function createHandshakeRouteHandler(opts: HandshakeRouteOptions): Reques
 				const oneHourMs = 60 * 60 * 1000
 				const expiresAt = Date.now() + oneHourMs
 				const approveStatus = autoApprove?.status ?? 'skipped'
+				const swept = sweepResult?.sweptCount ?? 0
 				opts.logger?.info(
-					`[openclawos-handshake] userId=${userId} mode=master-token expiresAt=${new Date(expiresAt).toISOString()} autoApprove=${approveStatus}`,
+					`[openclawos-handshake] userId=${userId} mode=master-token expiresAt=${new Date(expiresAt).toISOString()} autoApprove=${approveStatus} swept=${swept}`,
 				)
 				// Hot-fix J 2026-05-24 — explicitly mark authMode=master so the
 				// claw-client knows to ride this token in `auth: {token}`, NOT
@@ -191,6 +206,10 @@ export function createHandshakeRouteHandler(opts: HandshakeRouteOptions): Reques
 					// (operator can see in DevTools whether their first WS connect
 					// will succeed or still hit NOT_PAIRED before the file landed).
 					...(autoApprove ? {autoApprove: autoApprove.status} : {}),
+					// Hot-fix F4 — sweep count is useful when autoApprove ran for
+					// a deviceId that wasn't in pending.json yet (race) but the
+					// sweep still promoted what was there.
+					...(sweepResult ? {sweptCount: sweepResult.sweptCount} : {}),
 				})
 				return
 			}
