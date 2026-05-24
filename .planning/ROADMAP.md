@@ -3024,3 +3024,28 @@ Plans:
 **Plans:** TBD (locked during planning phase).
 
 ---
+
+### Phase 207: Phase 206 Carry-Overs + UAT-Surfaced Bugs — ⚪ NOT STARTED
+
+**Goal:** Close the operator-visible regressions surfaced after Phase 206 + bridge deploy (commit `a493ed33`), and finish the auth-flow generalization deferred from Phase 206 SPEC.
+
+**Triggered by:** Operator UAT 2026-05-24 surfaced 5 distinct issues:
+- MCP tools invisible to chat agent (only built-ins surfaced)
+- Composer model dropdown shows all 955 models (should filter to configured providers)
+- WS `/ws/agent` flooding console with failures
+- `openclawos.apps.list` returns empty payload error
+- EventSource MIME mismatch (text/html vs text/event-stream)
+
+Plus Phase 206 carry-overs:
+- OAuth bridge token-refresh staleness (~24h)
+- Generic auth-flow for OpenAI Codex / Anthropic via opencode bridge
+- Phase 204 dead-code deletion (further deferred)
+- Mobile route migration (further deferred)
+
+**Depends on:** Phase 206 (openclaw.* tRPC namespace + auth-profiles store + bridge), Phase 205 (Settings content-swap), Phase 203 (openclaw chat shell).
+
+**Status:** SPEC.md written; PLAN.md TODO.
+
+**SPEC:** `.planning/phases/207-phase206-carryovers/207-SPEC.md`
+
+---
