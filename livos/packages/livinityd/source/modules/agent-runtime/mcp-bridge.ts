@@ -30,6 +30,12 @@ import {fileURLToPath} from 'node:url'
 import {spawn, type ChildProcessWithoutNullStreams} from 'node:child_process'
 
 import {LuseMcpUnavailableError} from './mcp-errors.js'
+import {
+	MCP_CONFIG_REDIS_HASH_KEY,
+	MCP_CONFIG_REDIS_PUBSUB_CHANNEL,
+	parseEntry,
+	type McpServerConfig,
+} from '../server/trpc/mcp-config-router.js'
 
 /**
  * Phase 203-08 — Local stdio MCP client. Replaces `@mastra/mcp` MCPClient
@@ -258,6 +264,14 @@ export const destructiveToolNames: ReadonlySet<string> = new Set([
 export interface McpBridge {
 	listTools(): Promise<Record<string, unknown>>
 	destroy(): Promise<void>
+	/**
+	 * Phase 205-03 — reconcile spawned external MCP clients against the
+	 * current `liv:mcp:config` hash. Spawns enabled-not-yet-running entries
+	 * and disconnects entries that have been deleted or disabled. Exposed
+	 * for test seams; the live-reload subscribe loop calls it internally on
+	 * each `liv:mcp:updated` publish.
+	 */
+	reconcileServers(): Promise<void>
 }
 
 export interface McpBridgeLogger {
@@ -265,8 +279,25 @@ export interface McpBridgeLogger {
 	info(msg: string): void
 }
 
+/**
+ * Minimal Redis surface mcp-bridge depends on. Production wires the full
+ * ioredis client via `this.ai.redis`; tests pass an in-memory fake. The
+ * `duplicate()` method MUST return an object with `subscribe`, `on('message',...)`,
+ * and `quit()` — ioredis returns a Redis instance which satisfies that surface.
+ *
+ * Phase 205-03 — `hgetall` + `duplicate` are NEW; previously the bridge only
+ * needed `get(key)` for the Luse-enabled flag.
+ */
 export interface McpBridgeRedis {
 	get(key: string): Promise<string | null>
+	hgetall(key: string): Promise<Record<string, string>>
+	duplicate(): McpBridgeSubRedis
+}
+
+export interface McpBridgeSubRedis {
+	subscribe(channel: string): Promise<unknown>
+	on(event: 'message', listener: (channel: string, message: string) => void): unknown
+	quit(): Promise<unknown>
 }
 
 export interface McpBridgeDeps {
@@ -351,53 +382,217 @@ export async function createMcpBridge(
 		}
 	}
 
-	if (Object.keys(servers).length === 0) {
+	// T-197-02-02 — MANDATORY id parameter on MCPClient. The Luse client is
+	// constructed eagerly at boot (only if a luse server entry was prepared
+	// above) so the existing init-on-boot semantics are preserved.
+	let luseClient:
+		| {
+				getTools(): Promise<Record<string, unknown>>
+				disconnect?(): Promise<void>
+			}
+		| null = null
+	if (Object.keys(servers).length > 0) {
+		luseClient = mcpClientFactory({
+			id: 'livos-mcp-bridge',
+			servers: servers as never,
+		})
+	} else {
 		deps.logger.info(
-			'McpBridge constructed with no sources — agent will have no computer-use tools',
+			'McpBridge constructed with no Luse source — agent has no computer-use tools (external MCPs may still load)',
 		)
-		return {
-			async listTools() {
-				return {}
-			},
-			async destroy() {
-				/* no-op */
-			},
+	}
+
+	// ── Phase 205-03 — external MCP servers from `liv:mcp:config` ────────────
+	// Spawned per-entry into a Map keyed by server name. Live-reload subscribe
+	// loop calls reconcileServers() on every `liv:mcp:updated` publish to diff
+	// the map against the current hash and spawn/disconnect accordingly.
+	const externalClients = new Map<
+		string,
+		{
+			getTools(): Promise<Record<string, unknown>>
+			disconnect?(): Promise<void>
+		}
+	>()
+
+	async function spawnExternal(entry: McpServerConfig): Promise<void> {
+		if (entry.transport !== 'stdio' || !entry.command) {
+			// HTTP transport not supported by StdioMcpClient; surface a warn and
+			// skip. A future plan can add an HTTP MCP client.
+			deps.logger.warn(
+				`McpBridge: skipping external MCP '${entry.name}' — only stdio transport with a command is currently supported`,
+			)
+			return
+		}
+		try {
+			const client = mcpClientFactory({
+				id: `livos-mcp-${entry.name}`,
+				servers: {
+					[entry.name]: {command: entry.command, args: entry.args ?? []},
+				} as never,
+			})
+			externalClients.set(entry.name, client)
+			deps.logger.info(`McpBridge: spawned external MCP '${entry.name}' (transport=stdio)`)
+		} catch (err) {
+			deps.logger.warn(`McpBridge: failed to spawn external MCP '${entry.name}'`, err)
 		}
 	}
 
-	// T-197-02-02 — MANDATORY id parameter on MCPClient.
-	const client = mcpClientFactory({
-		id: 'livos-mcp-bridge',
-		servers: servers as never,
-	})
+	async function disconnectExternal(name: string): Promise<void> {
+		const client = externalClients.get(name)
+		if (!client) return
+		externalClients.delete(name)
+		const disconnect = (client as unknown as {disconnect?: () => Promise<void>}).disconnect
+		if (typeof disconnect === 'function') {
+			try {
+				await disconnect.call(client)
+			} catch {
+				/* swallow — best-effort teardown */
+			}
+		}
+		deps.logger.info(`McpBridge: disconnected external MCP '${name}'`)
+	}
+
+	let reconciling = false
+	let pendingReconcile = false
+
+	async function reconcileServers(): Promise<void> {
+		const raw = await deps.redis.hgetall(MCP_CONFIG_REDIS_HASH_KEY)
+		const enabledNow = new Map<string, McpServerConfig>()
+		for (const [name, value] of Object.entries(raw ?? {})) {
+			// `luse` is the system MCP — already handled above on the Luse path;
+			// never spawn it again as an "external" entry to avoid double-spawn.
+			if (name === 'luse') continue
+			const parsed = parseEntry(name, value, deps.logger)
+			if (parsed && parsed.enabled) enabledNow.set(name, parsed)
+		}
+		// Disconnect entries that are gone or disabled.
+		const toDisconnect: string[] = []
+		for (const name of externalClients.keys()) {
+			if (!enabledNow.has(name)) toDisconnect.push(name)
+		}
+		for (const name of toDisconnect) {
+			await disconnectExternal(name)
+		}
+		// Spawn entries that are new.
+		for (const [name, entry] of enabledNow) {
+			if (!externalClients.has(name)) {
+				await spawnExternal(entry)
+			}
+		}
+	}
+
+	async function scheduleReconcile(): Promise<void> {
+		if (reconciling) {
+			pendingReconcile = true
+			return
+		}
+		reconciling = true
+		try {
+			await reconcileServers()
+		} catch (err) {
+			deps.logger.warn('McpBridge: reconcileServers failed', err)
+		} finally {
+			reconciling = false
+			if (pendingReconcile) {
+				pendingReconcile = false
+				void scheduleReconcile()
+			}
+		}
+	}
+
+	// Initial spawn of currently-enabled external MCP servers from the hash.
+	// Best-effort — never throw out of construction (matches Luse degraded path).
+	try {
+		await reconcileServers()
+	} catch (err) {
+		deps.logger.warn('McpBridge: initial reconcile failed (continuing in degraded mode)', err)
+	}
+
+	// ── Subscribe loop — Phase 205-03 live-reload ────────────────────────────
+	// ioredis subscribe-mode connections cannot serve normal commands, so we
+	// duplicate the main client and subscribe on the duplicate (canonical
+	// ioredis pattern). Failure to duplicate (eg test fake without the
+	// method) degrades silently — the bridge still works on next boot.
+	let subConnection: McpBridgeSubRedis | null = null
+	try {
+		const dup = deps.redis.duplicate()
+		// Literal channel for grep-friendliness (also exported as
+		// MCP_CONFIG_REDIS_PUBSUB_CHANNEL — kept in lock-step with the publisher).
+		await dup.subscribe('liv:mcp:updated')
+		dup.on('message', (_channel, _message) => {
+			void scheduleReconcile()
+		})
+		subConnection = dup
+		deps.logger.info(
+			`McpBridge: subscribed to ${MCP_CONFIG_REDIS_PUBSUB_CHANNEL} for live-reload`,
+		)
+	} catch (err) {
+		deps.logger.warn('McpBridge: failed to subscribe to live-reload channel (degraded)', err)
+	}
 
 	return {
 		async listTools(): Promise<Record<string, unknown>> {
-			const raw = (await (client as unknown as {getTools(): Promise<Record<string, unknown>>}).getTools()) ?? {}
 			const out: Record<string, unknown> = {}
-			for (const [name, def] of Object.entries(raw)) {
-				const match = /^luse_(.+)$/.exec(name)
-				if (match && DESTRUCTIVE_LUSE_TOOLS.has(match[1] as never)) {
-					const original = (def ?? {}) as {meta?: Record<string, unknown>}
-					out[name] = {
-						...original,
-						meta: {...(original.meta ?? {}), requireApproval: true},
+			// Luse tools (preserves the destructive-tool approval-flag pass)
+			if (luseClient) {
+				const raw =
+					(await (luseClient as unknown as {getTools(): Promise<Record<string, unknown>>}).getTools()) ?? {}
+				for (const [name, def] of Object.entries(raw)) {
+					const match = /^luse_(.+)$/.exec(name)
+					if (match && DESTRUCTIVE_LUSE_TOOLS.has(match[1] as never)) {
+						const original = (def ?? {}) as {meta?: Record<string, unknown>}
+						out[name] = {
+							...original,
+							meta: {...(original.meta ?? {}), requireApproval: true},
+						}
+					} else {
+						out[name] = def
 					}
-				} else {
-					out[name] = def
+				}
+			}
+			// External MCP tools — already namespaced `<serverName>_<tool>` by
+			// the StdioMcpClient.getTools() implementation.
+			for (const [_name, client] of externalClients) {
+				try {
+					const raw =
+						(await (client as unknown as {getTools(): Promise<Record<string, unknown>>}).getTools()) ?? {}
+					for (const [tname, def] of Object.entries(raw)) {
+						out[tname] = def
+					}
+				} catch (err) {
+					deps.logger.warn(`McpBridge: getTools failed for external MCP '${_name}'`, err)
 				}
 			}
 			return out
 		},
 		async destroy(): Promise<void> {
-			const disconnect = (client as unknown as {disconnect?: () => Promise<void>}).disconnect
-			if (typeof disconnect === 'function') {
-				try {
-					await disconnect.call(client)
-				} catch {
-					/* swallow — best-effort teardown */
+			if (luseClient) {
+				const disconnect = (luseClient as unknown as {disconnect?: () => Promise<void>}).disconnect
+				if (typeof disconnect === 'function') {
+					try {
+						await disconnect.call(luseClient)
+					} catch {
+						/* swallow */
+					}
 				}
 			}
+			// Disconnect all external MCPs.
+			const names = Array.from(externalClients.keys())
+			for (const name of names) {
+				await disconnectExternal(name)
+			}
+			// Tear down the subscribe connection so the socket does not leak.
+			if (subConnection) {
+				try {
+					await subConnection.quit()
+				} catch {
+					/* swallow */
+				}
+				subConnection = null
+			}
+		},
+		async reconcileServers(): Promise<void> {
+			await scheduleReconcile()
 		},
 	}
 }
