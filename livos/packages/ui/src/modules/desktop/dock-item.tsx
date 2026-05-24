@@ -57,6 +57,14 @@ const DOCK_LABELS: Record<string, string> = {
 	'LIVINITY_subagents': 'Agents',
 	'LIVINITY_schedules': 'Schedules',
 	'LIVINITY_terminal': 'Terminal',
+	// Phase 203 Hot-fix F 2026-05-24 — DOCK Liv/Chat entries. Both render
+	// the same Liv glyph + tile colour; the second tile is a Chat shortcut
+	// to the SAME LIV_AI_CHAT window. Keys are the dock-side appId props
+	// passed by dock.tsx (which intentionally differ from the
+	// window-manager appId so the dock can render two distinct tiles for
+	// one window target).
+	'LIV_AI_CHAT': 'Liv',
+	'LIV_AI_CHAT_SHORTCUT': 'Chat',
 }
 
 // Map app IDs to their dock glyph. Custom SVG glyphs for the 8 apps in
@@ -78,6 +86,10 @@ const DOCK_ICONS: Record<string, DockGlyph> = {
 	'LIVINITY_schedules': TbCalendarTime as unknown as DockGlyph,
 	'LIVINITY_terminal': IconTerminal,
 	'LIVINITY_app-store-tabler': TbApps as unknown as DockGlyph,
+	// Phase 203 Hot-fix F — Liv/Chat dock tiles reuse the IconLiv glyph
+	// (already shipped for AI Chat in claude-design dock-icons.html).
+	'LIV_AI_CHAT': IconLiv,
+	'LIV_AI_CHAT_SHORTCUT': IconLiv,
 }
 
 // Phase 157 round 6 — Dock icon visual refresh per claude-design
@@ -95,6 +107,10 @@ const DOCK_TINTS: Record<string, string> = {
 	'LIVINITY_server-control': 'rgba(255, 186, 110, 0.30)',
 	'LIVINITY_my-devices': 'rgba(195, 156, 255, 0.30)',
 	'LIVINITY_terminal': 'rgba(74, 222, 128, 0.30)',
+	// Phase 203 Hot-fix F — Liv/Chat tiles share the AI Chat warm-coral
+	// tint so the two chat shortcuts read as a related pair.
+	'LIV_AI_CHAT': 'rgba(255, 138, 101, 0.40)',
+	'LIV_AI_CHAT_SHORTCUT': 'rgba(255, 138, 101, 0.40)',
 }
 
 // Apps rendered as an INVERTED tile (dark surface + white glyph).
