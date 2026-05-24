@@ -149,30 +149,60 @@ sudo journalctl -u liv-claw-gateway -n 50 --no-pager | grep -i 'provider\|model\
 
 **Why not `/opt/livos/.env`?** Per Decision 203-12-D-02, livinityd's PORT=8080 in `/opt/livos/.env` contaminated the gateway's PORT (intended 18789) via systemd EnvironmentFile= precedence quirk on Ubuntu 24.04 / systemd 256. Decoupling the gateway's EnvironmentFile to `/etc/default/liv-claw-gateway` (empty by default; `-` prefix makes it optional) eliminates the contamination. Operator can put either file — `/opt/livos/.env` works for the *API key* (livinityd already reads it for other purposes), but the per-service file is recommended.
 
-### G.2 — Liv AI claw-plugin loaded on next update.sh run (FIX SHIPPED)
+### G.2 — Liv AI claw-plugin loaded on next update.sh run (PARTIAL — Fix-A SHIPPED 2026-05-24; Fix-B/C OPEN)
+
+> **2026-05-24 UPDATE:** Hot-fix Fix-A (commit `26444ce0`, deployed via `update.sh` 19:17 PDT Mini PC time) UNBLOCKED openclaw's install-time security scanner. Plugin now appears in `installs.json` and the gateway boot line ("8 plugins" vs prior "7"). HOWEVER two downstream issues remain: (B) manifest `contracts.tools` doesn't enumerate the ~20 runtime tools so each tool registration is rejected, and (C) the workspace UI mount at `/plugins/openclawos/` still 404s so Caddy proxy serves the stock OpenClaw root page. See `203-HOTFIX-205-PLUGIN-LOAD.md` for full forensics, partial resolution evidence, and Fix-B/C carry-over breakdown.
 
 The previous deploy SHA `ff612109` had the gateway booting with only the **7 stock plugins** (browser, canvas, device-pair, file-transfer, memory-core, phone-control, talk-voice) because the Liv AI claw-plugin's `openclaw.plugin.json` manifest was missing from the build output and the gateway's `plugins install --link` was pointed at the bundle file (`dist/index.js`) instead of the package root.
 
-**Plan 203-13 commit `eedde743` ships the fix:**
-1. `livos/packages/liv-claw-os/packages/claw-plugin/package.json` build script now copies `openclaw.plugin.json` + `package.json` into `dist/` post-esbuild.
-2. `livos/packages/liv-claw-gateway/start.js` `resolvePluginBundle` now resolves the **package root** (which contains the manifest), not the bundle file.
+Plan 203-13 commit `eedde743` shipped a manifest+resolver fix but the plugin STILL didn't load — investigation 2026-05-24 surfaced the real blocker: openclaw's install-time security scanner rejects pnpm devDependency symlinks (esbuild, openclaw, shx, typescript, vitest) that escape the install root:
 
-**Operator action — pick the plugin fix up via routine update.sh run:**
+```
+Plugin "openclaw-os-plugin" installation blocked: code safety scan failed
+(Error: manifest dependency scan found node_modules symlink target outside
+install root at node_modules/esbuild)
+```
+
+**Hot-fix `26444ce0` (Fix-A) ships in `livos/packages/liv-claw-gateway/start.js`:**
+1. `ensurePluginInstalled()` strips the plugin's `node_modules/` dir before `openclaw plugins install --link` so the symlink scan trivially passes. Plugin is pre-built (`dist/index.js`); runtime needs no devDeps. Idempotent.
+2. Replaces the "already linked; continuing" misclassification — now captures stderr via `stdio: ['inherit', 'inherit', 'pipe']`, mirrors it to the journal, only treats specific `already installed` / `already linked` markers as tolerable, surfaces real errors loudly with exit code + first 1KB of stderr. Still doesn't throw (gateway boots in degraded mode so `/health` stays up).
+
+**Operator action — pick the hot-fix up via routine update.sh run:**
 ```bash
 ssh -i C:/Users/hello/Desktop/Projects/contabo/pem/minipc bruce@10.69.31.68
 sudo bash /opt/livos/update.sh
-# Wait ~3-5 minutes; watch for `[Phase 203-03]` lines + `liv-claw-gateway` restart
-sudo journalctl -u liv-claw-gateway -n 100 --no-pager | grep -iE 'plugin|ready|listening'
+# Wait ~3-5 minutes; watch for `liv-claw-gateway` restart
+sudo journalctl -u liv-claw-gateway -n 100 --no-pager | grep -iE 'plugin|ready|listening|stripped'
 ```
 
-**Verify the plugin is loaded:**
+**Verify Fix-A took (current state on Mini PC as of 2026-05-24):**
 ```bash
-# Expect 8 plugins in the boot line (was 7 in the deployed state):
+# Plugin appears in installs.json:
+sudo cat /opt/livos/data/openclaw/plugins/installs.json | jq .installRecords
+#   → openclaw-os-plugin: present (version 0.1.5, installed 2026-05-24T02:17:23Z)
+#
+# Gateway boot line shows 8 plugins (was 7):
 sudo journalctl -u liv-claw-gateway -n 200 --no-pager | grep 'plugins:'
-# Expected pattern: `http server listening (8 plugins: ..., openclaw-os-plugin; <ms>s)`
+#   → http server listening (8 plugins: browser, canvas, device-pair,
+#       file-transfer, memory-core, openclaw-os-plugin, phone-control,
+#       talk-voice; 3.6s)
+#
+# No "scan failed" lines in journal:
+sudo journalctl -u liv-claw-gateway --since "1 hour ago" --no-pager | grep -i "scan failed"
+#   → (empty — Fix-A removed the scanner block)
 ```
 
-If the plugin still doesn't load, capture the gateway boot log and re-run; the manifest fix is byte-deterministic so any failure is unrelated.
+**Fix-B (open) — manifest `contracts.tools` declarations missing:**
+The plugin code registers ~20 tools at runtime (9 `luse_*` proxies + 11 built-in: weather, get_current_time, ui_render, app_create, etc.) but `openclaw.plugin.json` only declares 9 tools (artifact CRUD + db_query/execute + app_create/get/update). Every undeclared registration is rejected with:
+```
+[gateway] [plugins] plugin must declare contracts.tools for: <toolname>
+```
+Until fixed, the plugin is registered but NO tools are callable by chat sessions. Fix: append the full runtime tool list to `claw-plugin/openclaw.plugin.json` `contracts.tools[]` (and rebuild so `dist/openclaw.plugin.json` matches).
+
+**Fix-C (open) — workspace UI mount unreachable:**
+Plugin log says `workspace UI mounted at http://127.0.0.1:18789/plugins/openclawos/` but that URL 404s (both with and without trailing slash). Caddy `/liv-ai-app/openclawos/` returns 200 but serves `<title>OpenClaw Control</title>` (stock root, not the Liv AI rebranded UI). Likely tied to Fix-B (openclaw may be aborting plugin activation after tool-register rejection cascade); if Fix-B alone doesn't resolve, also rewrite Caddy `/liv-ai-app/openclawos/*` → `/plugins/openclawos/*`.
+
+See `203-HOTFIX-205-PLUGIN-LOAD.md` for full forensic breakdown including before/after comparison table and proposed Fix-B/C paths.
 
 ## § H — Phase 203 Carry-overs to Phase 204+
 
@@ -231,9 +261,9 @@ For traceability after Plan 203-12 deploy + Plan 203-13 inline fix:
 
 | ID | Surface | Status |
 |---|---|---|
-| Plan 203-12 deferred #1 | claw-plugin manifest missing from `dist/` | **RESOLVED** in Plan 203-13 commit `eedde743` (pending next update.sh run on Mini PC) |
+| Plan 203-12 deferred #1 | claw-plugin manifest missing from `dist/` | **RESOLVED** in Plan 203-13 commit `eedde743` |
 | Plan 203-12 deferred #2 | LLM provider API key not in env | OPERATOR ACTION ITEM (§ G.1) — cannot auto-resolve (no secret available to inject) |
-| Plan 203-12 deferred #3 | Liv AI claw-plugin not in 7 loaded plugins | **RESOLVED** by Plan 203-13 fix (same root cause as deferred #1) |
+| Plan 203-12 deferred #3 | Liv AI claw-plugin not in loaded plugins | **PARTIAL** — Fix-A in hot-fix `26444ce0` (2026-05-24) unblocked install scanner; plugin now in `installs.json` + 8-plugin boot line. Fix-B (contracts.tools manifest enumeration) and Fix-C (workspace UI mount routing) still OPEN — see `203-HOTFIX-205-PLUGIN-LOAD.md` |
 | Plan 203-12 D-04 | `livos-app-liv-ai.service` not retired | INTENTIONAL — preserved per D-203-09 split routing (carry-over #14 in § H) |
 | Plan 203-12 D-05 | migration 0004 (DROP mastra) not applied | INTENTIONAL — Plan 203-08 D-02 (carry-over #12 in § H) |
 | caddy.ts source vs live Caddyfile drift | regenerate-caddyfile script not in update.sh | carry-over #13 in § H |
