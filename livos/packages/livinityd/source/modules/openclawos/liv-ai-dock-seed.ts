@@ -86,41 +86,36 @@ export const LIV_AI_ICON_URL = '/liv-ai-app/icons/liv-ai-placeholder.svg'
 const LIV_AI_PLACEHOLDER_BINARY = '/usr/bin/true'
 
 /**
- * Idempotently upsert BOTH permanent dock entries — "Liv" + "Chat". Safe to
- * call on every boot — NativeAppConfigStore.upsert is keyed by the fixed
- * UUIDs so repeat calls collapse to the same two Redis entries. Each upsert
- * re-publishes liv:config:updated so the dock re-renders if the name / icon
- * ever changes.
+ * Phase 203 Hot-fix F 2026-05-24 — DELETE the Hot-fix D/E seeded entries.
  *
- * Hot-fix E 2026-05-24:
- *   - "Liv AI" (LIV_AI_NATIVE_ID) renamed to just "Liv". Same UUID = same
- *     Redis key = in-place rename on existing operator installs, no
- *     duplicate.
- *   - "Chat" (LIV_AI_CHAT_NATIVE_ID) added as a NEW deterministic entry.
- *     Same target surface (LIV_AI_CHAT window via wmClassHint='liv-ai'),
- *     different display name + UUID. Operator wanted two shortcut tiles.
+ * Hot-fix D/E (2026-05-24) upserted "Liv" + "Chat" into
+ * `NativeAppConfigStore` thinking it fed the LivOS DOCK. It does NOT —
+ * NativeAppConfigStore feeds the DESKTOP grid (rendered by
+ * `desktop-content.tsx:213` via `NativeAppIcon`). Operator UAT caught the
+ * mistake immediately: "where's the dock, why are you putting it on desktop?".
  *
- * Caller (livinityd.start) wraps this in try/catch — a transient Redis
- * hiccup here must NOT fail the rest of livinityd boot.
+ * Hot-fix F part 1 (commit prior) moved the two chat tiles into the dock
+ * via the hardcoded `dock.tsx` (LIV_AI_CHAT + LIV_AI_CHAT_SHORTCUT). This
+ * file is now the OPPOSITE — every boot we delete the two stale Redis
+ * keys so the desktop is clean (no duplicate tiles).
+ *
+ * Idempotent: `NativeAppConfigStore.delete()` returns false (no-op) when
+ * the key is already absent, so cold installs that never had Hot-fix D/E
+ * applied also run cleanly. Both deletes also publish a `liv:config:updated`
+ * `delete` event so the desktop grid drops the rows in real time without
+ * a page refresh.
+ *
+ * The function name is preserved for caller stability (livinityd index.ts
+ * still calls `seedLivAiDockEntry(store)` on boot) — the SEMANTICS
+ * inverted from "seed two entries" to "delete the two legacy seeds". The
+ * existing try/catch in the caller treats a transient Redis hiccup as
+ * non-fatal — boot continues; the next boot retries the cleanup.
  */
 export async function seedLivAiDockEntry(
 	store: NativeAppConfigStore,
 ): Promise<void> {
-	const liv: NativeAppConfig = {
-		id: LIV_AI_NATIVE_ID,
-		name: 'Liv',
-		iconUrl: LIV_AI_ICON_URL,
-		binaryPath: LIV_AI_PLACEHOLDER_BINARY,
-		wmClassHint: LIV_AI_WMCLASS_HINT,
-	}
-	await store.upsert(liv)
-
-	const chat: NativeAppConfig = {
-		id: LIV_AI_CHAT_NATIVE_ID,
-		name: 'Chat',
-		iconUrl: LIV_AI_ICON_URL,
-		binaryPath: LIV_AI_PLACEHOLDER_BINARY,
-		wmClassHint: LIV_AI_WMCLASS_HINT,
-	}
-	await store.upsert(chat)
+	// Hot-fix F — sweep the bad desktop entries Hot-fix D/E left behind.
+	// Order does not matter; both deletes are independent.
+	await store.delete(LIV_AI_NATIVE_ID)
+	await store.delete(LIV_AI_CHAT_NATIVE_ID)
 }
