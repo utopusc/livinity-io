@@ -140,6 +140,40 @@ describe("attemptLivOsAutoConnect", () => {
 		expect(fetcher).not.toHaveBeenCalled();
 	});
 
+	// Hot-fix H 2026-05-24 — force=true bypasses the already-configured
+	// short-circuit. Used by AUTH_FAILED recovery in ChatApp: a stale
+	// gatewayUrl in localStorage cannot be edited from the LivOS shell
+	// (no form), so the only recovery is to overwrite it with fresh creds.
+	test("Hot-fix H — force=true skips already-configured short-circuit and re-handshakes", async () => {
+		const stale = {gatewayUrl: "wss://stale.example.com/dead/ws", deviceToken: "old"};
+		localStorage.setItem("claw-settings-v1", JSON.stringify(stale));
+		const handshake: LivinitydHandshakeResult = {
+			token: "tok-fresh",
+			expiresAt: Date.now() + 300_000,
+			sessionId: "jti-fresh",
+		};
+		const fetcher = vi.fn().mockResolvedValue(handshake);
+		const result = await attemptLivOsAutoConnect({fetchHandshake: fetcher as never, force: true});
+		expect(result.ok).toBe(true);
+		expect(result.reason).toBe("seeded");
+		expect(result.settings?.gatewayUrl).toBe("ws://localhost:18789/plugins/openclawos/ws");
+		expect(result.settings?.deviceToken).toBe("tok-fresh");
+		expect(fetcher).toHaveBeenCalledOnce();
+		// Stale gatewayUrl MUST have been overwritten in localStorage.
+		const persisted = JSON.parse(localStorage.getItem("claw-settings-v1") ?? "null");
+		expect(persisted.gatewayUrl).toBe("ws://localhost:18789/plugins/openclawos/ws");
+		expect(persisted.deviceToken).toBe("tok-fresh");
+	});
+
+	test("Hot-fix H — force=false (default) still short-circuits on already-configured", async () => {
+		const existing = {gatewayUrl: "wss://x.io/liv-ai-app/liv-ai/ws"};
+		localStorage.setItem("claw-settings-v1", JSON.stringify(existing));
+		const fetcher = vi.fn().mockRejectedValue(new Error("must not be called"));
+		const result = await attemptLivOsAutoConnect({fetchHandshake: fetcher as never});
+		expect(result.reason).toBe("already-configured");
+		expect(fetcher).not.toHaveBeenCalled();
+	});
+
 	test("returns no-window when called in a non-browser env", async () => {
 		// Simulate SSR / Node: delete window. Cast through unknown so the
 		// `delete` operator type-checks against the dynamic shape we just

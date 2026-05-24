@@ -81,26 +81,55 @@ export interface AutoConnectResult {
 }
 
 /**
+ * Phase 203 Hot-fix H 2026-05-24 — options for `attemptLivOsAutoConnect`.
+ *
+ * `force=true` skips the `already-configured` short-circuit. Used by
+ * AUTH_FAILED recovery in ChatApp: when the gateway rejects an existing
+ * deviceToken (or a stale `gatewayUrl` points at a dead host), the operator
+ * has no way to fix it from the LivOS shell (they don't know the token).
+ * Forcing a fresh handshake re-mints credentials AND overwrites the stale
+ * `gatewayUrl` with the loopback one so the next reconnect succeeds.
+ */
+export interface AutoConnectOptions {
+	/** Override for tests; defaults to the real `/openclawos/handshake` fetcher. */
+	fetchHandshake?: typeof fetchLivinitydDeviceToken;
+	/**
+	 * When true, ignore any existing settings.gatewayUrl in localStorage and
+	 * always attempt a fresh handshake. Used by AUTH_FAILED recovery to
+	 * overwrite stale creds the operator can't see or edit.
+	 */
+	force?: boolean;
+}
+
+/**
  * Attempt to seed Settings from the LivOS same-origin handshake bridge.
  * Safe to call multiple times — the result is idempotent on already-
- * configured installs.
- *
- * @param fetchHandshake Override for tests; defaults to the real
- *   `/openclawos/handshake` fetcher.
+ * configured installs (unless `force=true`).
  */
 export async function attemptLivOsAutoConnect(
-	fetchHandshake: typeof fetchLivinitydDeviceToken = fetchLivinitydDeviceToken,
+	optsOrFetchHandshake:
+		| AutoConnectOptions
+		| typeof fetchLivinitydDeviceToken = {},
 ): Promise<AutoConnectResult> {
+	// Back-compat: callers passing a bare fetcher (Hot-fix D era) still work.
+	const opts: AutoConnectOptions =
+		typeof optsOrFetchHandshake === "function"
+			? {fetchHandshake: optsOrFetchHandshake}
+			: optsOrFetchHandshake;
+	const fetchHandshake = opts.fetchHandshake ?? fetchLivinitydDeviceToken;
+
 	if (typeof window === "undefined") {
 		return {ok: false, reason: "no-window"};
 	}
 
-	const existing = getSettings();
-	if (existing?.gatewayUrl) {
-		// Already-configured installs short-circuit. The socket layer's
-		// per-open handshake (Plan 203-05) keeps the deviceToken fresh
-		// on every (re)connect, so we don't need to fetch here too.
-		return {ok: true, reason: "already-configured", settings: existing};
+	if (!opts.force) {
+		const existing = getSettings();
+		if (existing?.gatewayUrl) {
+			// Already-configured installs short-circuit. The socket layer's
+			// per-open handshake (Plan 203-05) keeps the deviceToken fresh
+			// on every (re)connect, so we don't need to fetch here too.
+			return {ok: true, reason: "already-configured", settings: existing};
+		}
 	}
 
 	// Probe the LivOS handshake bridge. Same-origin so the LIVINITY_SESSION

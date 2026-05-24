@@ -798,9 +798,39 @@ function ChatAppInner({
   );
 }
 
+/**
+ * Phase 203 Hot-fix H 2026-05-24 — LivOS bypass mode.
+ *
+ * Operator UAT (2026-05-24) kept seeing the "Gateway Settings" form pop over
+ * the chat surface even after Hot-fix F2 added re-handshake on AUTH_FAILED.
+ * The form is fundamentally wrong inside LivOS — the operator can't paste a
+ * token they don't have access to (it's minted by livinityd from their
+ * LIVINITY_SESSION cookie and never surfaced to the UI).
+ *
+ * Bypass states:
+ *   - "probing":    probing /openclawos/handshake to decide whether we are
+ *                   inside LivOS or standalone. Render a "Connecting…" splash.
+ *   - "livos":      handshake succeeded → we are inside LivOS. NEVER render
+ *                   the SettingsDialog/MobileSettingsDialog form. AUTH_FAILED
+ *                   triggers a forced re-handshake instead of opening the form.
+ *   - "livos-error": handshake worked once but the engine is stuck after a
+ *                    forced re-handshake (rare — re-handshake fetcher itself
+ *                    threw). Render an inline error splash with a Retry link,
+ *                    NOT the form.
+ *   - "standalone": handshake unreachable → we are NOT inside LivOS (e.g.,
+ *                   developer running claw-client locally without livinityd).
+ *                   The legacy form is the only way to onboard; render it.
+ */
+type LivOsBypassMode = "probing" | "livos" | "livos-error" | "standalone";
+
 export default function ChatApp() {
   const isMobile = useIsMobile();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Start in "probing" — we render a Connecting splash and bypass the form
+  // until the handshake probe resolves. This guarantees the operator NEVER
+  // sees the form on first paint inside LivOS, even if the probe races.
+  const [livOsBypassMode, setLivOsBypassMode] = useState<LivOsBypassMode>("probing");
+  const [livOsBypassError, setLivOsBypassError] = useState<string | null>(null);
 
   useEffect(() => {
     applyPreferences();
@@ -884,14 +914,35 @@ export default function ChatApp() {
     // root-cause, but this guard prevents form regressions in the future).
     onAuthFailed: () => {
       void (async () => {
-        const result = await attemptLivOsAutoConnect();
+        // Phase 203 Hot-fix H 2026-05-24 — when we know we're inside LivOS
+        // (bypass mode active), AUTH_FAILED is recoverable via FORCED
+        // re-handshake. The stale gatewayUrl/deviceToken in localStorage was
+        // pointing at a dead endpoint or carried a revoked token — overwrite
+        // them with fresh creds from livinityd. We MUST use force=true here
+        // because the prior Hot-fix F2 call returned "already-configured" on
+        // the second AUTH_FAILED in a row (stale settings still present), and
+        // fell through to the form. The form has no recovery value here.
+        const result = await attemptLivOsAutoConnect({force: true});
         if (result.ok && result.reason === "seeded" && result.settings && reconnectRef.current) {
           reconnectRef.current(result.settings);
-        } else {
-          // Either bridge unavailable (standalone deploy) OR already-configured
-          // with a stale token — surface the form so operator can intervene.
-          setSettingsOpen(true);
+          setLivOsBypassMode("livos");
+          setLivOsBypassError(null);
+          return;
         }
+        // Re-handshake failed. If we're inside LivOS (bypass mode active),
+        // show an inline error splash — NOT the form. The operator's only
+        // recovery is reload, which the splash button triggers.
+        if (livOsBypassMode === "livos" || livOsBypassMode === "probing") {
+          setLivOsBypassMode("livos-error");
+          setLivOsBypassError(
+            result.reason === "handshake-failed"
+              ? "Re-authentication failed. LivOS session may have expired."
+              : `Re-handshake returned ${result.reason}.`,
+          );
+          return;
+        }
+        // Standalone deploy → legacy form is the only recovery path.
+        setSettingsOpen(true);
       })();
     },
   });
@@ -988,22 +1039,35 @@ export default function ChatApp() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const result = await attemptLivOsAutoConnect();
+      // Phase 203 Hot-fix H 2026-05-24 — probe the handshake endpoint to
+      // decide LivOS vs standalone BEFORE deciding whether the form is OK to
+      // render. Use force=true so a previously-cached (and possibly stale)
+      // gatewayUrl doesn't short-circuit the probe with "already-configured":
+      // we want the probe to actually hit /openclawos/handshake every time
+      // ChatApp mounts so we KNOW whether we're inside LivOS.
+      const result = await attemptLivOsAutoConnect({force: true});
       if (cancelled) return;
       if (!result.ok) {
-        // No gateway configured AND auto-connect failed (likely standalone use)
-        // → open the legacy setup dialog so the operator can paste a URL.
-        setSettingsOpen(true);
+        // Probe failed → we are standalone (no livinityd handshake bridge).
+        // The legacy setup form is the only onboarding path here.
+        setLivOsBypassMode("standalone");
+        // Only open the form if the standalone install genuinely lacks
+        // settings — an already-configured standalone deploy connects fine.
+        const existing =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem("claw-settings-v1")
+            : null;
+        if (!existing) setSettingsOpen(true);
         return;
       }
-      // Hot-fix E — reconnect engine with seeded creds. The 'seeded' branch
-      // means the engine was constructed with empty settings on mount; we
-      // MUST kick it via reconnect() or it stays disconnected forever.
+      // Probe succeeded → we are inside LivOS. Engage bypass mode and ensure
+      // the form is NEVER rendered. Reconnect with the freshly-seeded creds
+      // (force=true always returns 'seeded' on success).
+      setLivOsBypassMode("livos");
+      setLivOsBypassError(null);
       if (result.reason === "seeded" && result.settings) {
         reconnect(result.settings);
       }
-      // result.reason === "already-configured" → engine already initialized
-      // with the same settings on mount, nothing to do.
     })();
     return () => {
       cancelled = true;
@@ -1079,28 +1143,49 @@ export default function ChatApp() {
           onToggleThemeMode={toggleThemeMode}
         />
 
-        {isMobile ? (
-          <MobileSettingsDialog
-            open={settingsOpen}
-            currentSettings={settings}
-            connectionState={connectionState}
-            onClose={() => setSettingsOpen(false)}
-            onSave={(newSettings) => {
-              // Don't close here — the dialog watches `connectionState` and
-              // closes itself on CONNECTED, or stays open with an inline
-              // error on UNREACHABLE / AUTH_FAILED.
-              reconnect(newSettings);
-            }}
-          />
+        {/*
+          Phase 203 Hot-fix H 2026-05-24 — the "Gateway Settings" form is the
+          single biggest UX regression operators reported. It's useless inside
+          LivOS (they don't know the token). So:
+            * livos / probing / livos-error → render LivOsConnectingSplash
+              (NEVER render the form, regardless of `settingsOpen`).
+            * standalone → legacy form continues to work for dev / non-LivOS use.
+          The settings cog in the sidebar still flips `settingsOpen=true`, but
+          inside LivOS it has no effect — that button is a no-op for now (a
+          future plan can replace it with a LivOS-aware "force re-handshake"
+          control). Operator-facing damage here is zero: the cog click stops
+          producing a form, which was the bug.
+        */}
+        {livOsBypassMode === "standalone" ? (
+          isMobile ? (
+            <MobileSettingsDialog
+              open={settingsOpen}
+              currentSettings={settings}
+              connectionState={connectionState}
+              onClose={() => setSettingsOpen(false)}
+              onSave={(newSettings) => {
+                // Don't close here — the dialog watches `connectionState` and
+                // closes itself on CONNECTED, or stays open with an inline
+                // error on UNREACHABLE / AUTH_FAILED.
+                reconnect(newSettings);
+              }}
+            />
+          ) : (
+            <SettingsDialog
+              open={settingsOpen}
+              currentSettings={settings}
+              connectionState={connectionState}
+              onClose={() => setSettingsOpen(false)}
+              onSave={(newSettings) => {
+                reconnect(newSettings);
+              }}
+            />
+          )
         ) : (
-          <SettingsDialog
-            open={settingsOpen}
-            currentSettings={settings}
+          <LivOsConnectingSplash
+            mode={livOsBypassMode}
             connectionState={connectionState}
-            onClose={() => setSettingsOpen(false)}
-            onSave={(newSettings) => {
-              reconnect(newSettings);
-            }}
+            errorMessage={livOsBypassError}
           />
         )}
 
@@ -1163,6 +1248,93 @@ export default function ChatApp() {
         )}
       </ChatProvider>
     </ThemeProvider>
+  );
+}
+
+/**
+ * Phase 203 Hot-fix H 2026-05-24 — splash shown in place of the form.
+ *
+ * Renders only while the LivOS bypass is engaged (probing / livos /
+ * livos-error). Once the engine reaches CONNECTED, the splash hides itself
+ * so the chat surface is visible. The visible message tracks both `mode`
+ * (probing vs error) AND `connectionState` (connecting vs pairing vs
+ * unreachable) so the operator sees real progress rather than a frozen
+ * "Connecting…".
+ */
+function LivOsConnectingSplash({
+  mode,
+  connectionState,
+  errorMessage,
+}: {
+  mode: "probing" | "livos" | "livos-error";
+  connectionState: ConnectionState;
+  errorMessage: string | null;
+}) {
+  // Hide the splash once the gateway is fully connected — the chat surface
+  // is now usable and the splash would just be a stale overlay.
+  if (mode === "livos" && connectionState === ConnectionState.CONNECTED) {
+    return null;
+  }
+
+  const isError = mode === "livos-error";
+  const headline = isError
+    ? "Couldn't reach Liv AI"
+    : connectionState === ConnectionState.PAIRING
+      ? "Pairing device…"
+      : "Connecting to Liv AI…";
+  const detail = isError
+    ? (errorMessage ?? "Reload to retry.")
+    : connectionState === ConnectionState.UNREACHABLE
+      ? "Reaching the local gateway…"
+      : "One moment.";
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-overlay backdrop-blur-sm">
+      <div className="mx-ml w-full max-w-sm rounded-xl bg-background p-xl text-center shadow-float">
+        <div
+          className={`mx-auto mb-ml flex h-10 w-10 items-center justify-center rounded-full ${
+            isError ? "bg-danger-background" : "bg-alert-background"
+          }`}
+        >
+          <svg
+            className={`h-l w-l ${
+              isError ? "text-text-danger-primary" : "animate-pulse text-text-alert-primary"
+            }`}
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={2}
+            stroke="currentColor"
+          >
+            {isError ? (
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+              />
+            ) : (
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3.75 6.75h16.5M3.75 12h16.5M12 17.25h8.25"
+              />
+            )}
+          </svg>
+        </div>
+        <h2 className="mb-s text-lg font-bold text-text-neutral-primary">{headline}</h2>
+        <p className="mb-ml text-sm text-text-neutral-tertiary">{detail}</p>
+        {isError ? (
+          <button
+            type="button"
+            className="mx-auto rounded-s bg-sunk-light px-m py-s text-sm font-medium text-text-neutral-primary hover:bg-sunk dark:bg-elevated"
+            onClick={() => {
+              if (typeof window !== "undefined") window.location.reload();
+            }}
+          >
+            Reload
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
