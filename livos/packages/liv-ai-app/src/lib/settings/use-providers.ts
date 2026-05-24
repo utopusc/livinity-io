@@ -125,29 +125,64 @@ async function fetchProviders(): Promise<{
 	}
 }
 
-async function callSetProvider(
-	provider: ProviderName,
-	key: string,
-): Promise<ProviderMutationResult> {
+/**
+ * Non-batch tRPC mutation envelope.
+ *
+ * NOTE: this livinityd uses NO superjson transformer (see
+ * `livos/packages/livinityd/source/modules/server/trpc/trpc.ts`), and the
+ * `{"0":{"json":{...}}}` batch envelope used by McpTab silently fails for
+ * input validation (router sees `undefined` for every field — pre-existing
+ * bug in McpTab.tsx, not addressed here). The bare non-batch body
+ * `{...input}` POSTed to `/trpc/<path>` (no `?batch=1`) is the contract that
+ * actually works against `provider.config.set/delete`.
+ *
+ * Verified live on Mini PC 2026-05-24 via JWT-authenticated curl.
+ */
+async function callMutation<T>(
+	path: string,
+	input: Record<string, unknown>,
+): Promise<{ok: true; data: T} | {ok: false; error: string}> {
 	try {
-		const res = await fetch("/trpc/provider.config.set?batch=1", {
+		const res = await fetch(`/trpc/${path}`, {
 			method: "POST",
 			credentials: "include",
 			headers: {"content-type": "application/json"},
-			body: JSON.stringify({"0": {json: {provider, key}}}),
+			body: JSON.stringify(input),
 		});
-		if (!res.ok) {
+		const text = await res.text();
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(text);
+		} catch {
 			return {
 				ok: false,
-				error: `Save failed (HTTP ${res.status})`,
+				error: `${path} returned non-JSON (HTTP ${res.status})`,
 			};
 		}
-		const data = (await res.json()) as Array<BatchResult<ProviderMutationResult>>;
-		const entry = data?.[0];
-		const errMsg = readBatchError(entry);
-		if (errMsg) return {ok: false, error: errMsg};
-		const payload = unwrapBatch<ProviderMutationResult>(entry);
-		return payload ?? {ok: false, error: "Empty server response"};
+		// Non-batch envelope shape: {result: {data: T}} OR {error: {message: ...}}
+		const obj = parsed as {
+			result?: {data?: T | {json?: T}};
+			error?: {message?: string; json?: {message?: string}};
+		};
+		if (obj.error) {
+			return {
+				ok: false,
+				error: obj.error.json?.message ?? obj.error.message ?? `Server error (HTTP ${res.status})`,
+			};
+		}
+		if (!res.ok) {
+			return {ok: false, error: `${path} failed (HTTP ${res.status})`};
+		}
+		const direct = obj.result?.data;
+		if (
+			direct !== undefined &&
+			direct !== null &&
+			typeof direct === "object" &&
+			"json" in (direct as Record<string, unknown>)
+		) {
+			return {ok: true, data: (direct as {json: T}).json};
+		}
+		return {ok: true, data: (direct as T) ?? ({} as T)};
 	} catch (err) {
 		return {
 			ok: false,
@@ -156,31 +191,27 @@ async function callSetProvider(
 	}
 }
 
+async function callSetProvider(
+	provider: ProviderName,
+	key: string,
+): Promise<ProviderMutationResult> {
+	const res = await callMutation<ProviderMutationResult>(
+		"provider.config.set",
+		{provider, key},
+	);
+	if (!res.ok) return {ok: false, error: res.error};
+	return res.data;
+}
+
 async function callDeleteProvider(
 	provider: ProviderName,
 ): Promise<ProviderMutationResult> {
-	try {
-		const res = await fetch("/trpc/provider.config.delete?batch=1", {
-			method: "POST",
-			credentials: "include",
-			headers: {"content-type": "application/json"},
-			body: JSON.stringify({"0": {json: {provider}}}),
-		});
-		if (!res.ok) {
-			return {ok: false, error: `Delete failed (HTTP ${res.status})`};
-		}
-		const data = (await res.json()) as Array<BatchResult<ProviderMutationResult>>;
-		const entry = data?.[0];
-		const errMsg = readBatchError(entry);
-		if (errMsg) return {ok: false, error: errMsg};
-		const payload = unwrapBatch<ProviderMutationResult>(entry);
-		return payload ?? {ok: false, error: "Empty server response"};
-	} catch (err) {
-		return {
-			ok: false,
-			error: err instanceof Error ? err.message : "Network error",
-		};
-	}
+	const res = await callMutation<ProviderMutationResult>(
+		"provider.config.delete",
+		{provider},
+	);
+	if (!res.ok) return {ok: false, error: res.error};
+	return res.data;
 }
 
 /**
