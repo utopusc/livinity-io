@@ -3003,3 +3003,24 @@ Plans:
 
 ---
 
+
+### Phase 206: Unified Provider+Model Config via openclaw Native CLI — ⚪ NOT STARTED
+
+**Goal:** Replace Phase 204's gateway env file approach (proven dead 2026-05-24 — env file holds only `LIV_API_KEY` despite ProvidersTab UI claiming to save 6 providers) with a thin tRPC wrapper around openclaw 2026.5.20's native `capability model` CLI surface. Operator picks default model from any of 35+ providers, clicks Connect → OAuth (ChatGPT/Codex, Claude, xAI, GitHub Copilot, etc.) or API key flow lands creds in agent's `auth-profiles.json` (NOT the dead env file), `/models` slash command surfaces the configured providers, chat actually works without "missing provider" errors.
+
+**Depends on:** Phase 195 (xai-auth-router pattern — generalize), Phase 205 (Settings content-swap route + ProvidersTab shell — keep, replace body), Phase 203 (openclaw chat shell), openclaw 2026.5.20 binary at `/opt/livos/node_modules/.pnpm/openclaw@2026.5.20/`.
+
+**Triggered by:** Operator UAT 2026-05-24 after Phase 205 Hot-fix N+O ship — chat fails with "No API key found for provider 'openai'. Auth store: /opt/livos/data/openclaw/agents/main/agent/auth-profiles.json". Live Mini PC inspection confirmed: (a) `/opt/livos/etc/liv-claw-gateway.env` only holds `LIV_API_KEY`; (b) Phase 204's `provider.config.set` never reaches the agent; (c) openclaw's native `capability model auth status` JSON exposes the exact `defaultModel` / `agentDir` / `providersWithOAuth` / `missingProvidersInUse` data the UI needs; (d) openclaw natively supports 35+ providers with OAuth methods including OpenAI ChatGPT/Codex, Anthropic Claude, xAI, Google, GitHub Copilot, vercel-ai-gateway, openrouter (265 models).
+
+**Sub-features (3):**
+- **206-01 — `openclaw.*` tRPC namespace.** New livinityd router shell-execs openclaw native CLI: `openclaw.providers.list` (capability model providers), `openclaw.models.list` (capability model list), `openclaw.auth.status` (capability model auth status), `openclaw.auth.login` (capability model auth login --provider X --method Y, generalized from xai-auth flow-service), `openclaw.auth.logout`, `openclaw.config.setDefaultModel` (openclaw.json patch).
+- **206-02 — Generalize xai-auth-router → generic auth-flow-service.** `opencode-spawner.ts` already takes `provider` + `method` parameters; `url-extractor.ts` is xAI-regex-specific — generalize to per-provider URL pattern map. Backward-compat: `auth.xai.*` paths keep working (delegate to new generic surface).
+- **206-03 — ProvidersTab redesign.** Default-model picker at top (live `capability model list`, group by provider). Provider grid below: each card shows status pill (configured/selected/missing), available auth methods as buttons (Connect with ChatGPT, Connect with Claude, Use API key), model count. OAuth flow: in-card URL panel + spinner (existing N+O pattern, generalized). Deprecate `provider-config-router.ts` (keep for migration safety, stop new writes).
+
+**Speed budget:** 6-8 hours wall-clock; 3 sub-features ship sequentially (206-01 first because UI depends on tRPC surface, then 206-02 + 206-03 in parallel waves).
+
+**Status:** SPEC.md TODO.
+
+**Plans:** TBD (locked during planning phase).
+
+---
