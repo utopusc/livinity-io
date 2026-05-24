@@ -1,11 +1,13 @@
 /**
- * Phase 203 Hot-fix D 2026-05-24 — liv-ai-dock-seed tests.
- * Phase 203 Hot-fix E 2026-05-24 — extended to cover the "Liv" rename +
- *   "Chat" second-entry pair.
- *
- * Verifies the seed is idempotent (same UUIDs on every boot), produces
- * schema-valid configs that survive nativeAppConfigSchema.parse inside
- * upsert, and publishes liv:config:updated so the dock re-renders.
+ * Phase 203 Hot-fix D 2026-05-24 — original test (covered the seed flow).
+ * Phase 203 Hot-fix E 2026-05-24 — extended for the Liv+Chat pair seed.
+ * Phase 203 Hot-fix F 2026-05-24 — INVERTED. The function now DELETES the
+ *   Hot-fix D/E entries from NativeAppConfigStore because that store feeds
+ *   the DESKTOP grid (not the dock). The dock tiles moved to the hardcoded
+ *   `modules/desktop/dock.tsx` (LIV_AI_CHAT + LIV_AI_CHAT_SHORTCUT). These
+ *   tests now verify the cleanup semantics: stale rows are deleted, cold
+ *   installs are no-ops, and delete events publish so the desktop grid
+ *   drops the rows in real time.
  */
 
 import {beforeEach, describe, expect, it} from 'vitest'
@@ -13,6 +15,7 @@ import {beforeEach, describe, expect, it} from 'vitest'
 import {
 	NativeAppConfigStore,
 	nativeAppConfigSchema,
+	type NativeAppConfig,
 	type RedisLike,
 } from '../apps/native-app-config.js'
 import {
@@ -53,7 +56,27 @@ function fakeRedis(): RedisLike & {
 	}
 }
 
-describe('seedLivAiDockEntry — permanent dock entry seed (Hot-fix E pair)', () => {
+/** Helper — pre-populate the store with the Hot-fix D/E entries Hot-fix F sweeps. */
+async function seedLegacy(store: NativeAppConfigStore): Promise<void> {
+	const liv: NativeAppConfig = {
+		id: LIV_AI_NATIVE_ID,
+		name: 'Liv',
+		iconUrl: LIV_AI_ICON_URL,
+		binaryPath: '/usr/bin/true',
+		wmClassHint: LIV_AI_WMCLASS_HINT,
+	}
+	const chat: NativeAppConfig = {
+		id: LIV_AI_CHAT_NATIVE_ID,
+		name: 'Chat',
+		iconUrl: LIV_AI_ICON_URL,
+		binaryPath: '/usr/bin/true',
+		wmClassHint: LIV_AI_WMCLASS_HINT,
+	}
+	await store.upsert(liv)
+	await store.upsert(chat)
+}
+
+describe('Hot-fix F — seedLivAiDockEntry now DELETES the legacy desktop entries', () => {
 	let redis: ReturnType<typeof fakeRedis>
 	let store: NativeAppConfigStore
 
@@ -62,95 +85,114 @@ describe('seedLivAiDockEntry — permanent dock entry seed (Hot-fix E pair)', ()
 		store = new NativeAppConfigStore(redis)
 	})
 
-	it('writes the Liv entry at the fixed LIV_AI_NATIVE_ID Redis key (renamed from "Liv AI")', async () => {
+	it('removes the legacy Liv entry from NativeAppConfigStore after boot', async () => {
+		await seedLegacy(store)
+		expect(await store.get(LIV_AI_NATIVE_ID)).not.toBeNull()
+
 		await seedLivAiDockEntry(store)
-		const persisted = await store.get(LIV_AI_NATIVE_ID)
-		expect(persisted).not.toBeNull()
-		expect(persisted?.id).toBe(LIV_AI_NATIVE_ID)
-		// Hot-fix E rename: name is now "Liv" (was "Liv AI" in Hot-fix D)
-		expect(persisted?.name).toBe('Liv')
-		expect(persisted?.iconUrl).toBe(LIV_AI_ICON_URL)
-		expect(persisted?.wmClassHint).toBe(LIV_AI_WMCLASS_HINT)
+
+		expect(await store.get(LIV_AI_NATIVE_ID)).toBeNull()
 	})
 
-	it('Hot-fix E — writes the Chat entry at the fixed LIV_AI_CHAT_NATIVE_ID Redis key', async () => {
+	it('removes the legacy Chat entry from NativeAppConfigStore after boot', async () => {
+		await seedLegacy(store)
+		expect(await store.get(LIV_AI_CHAT_NATIVE_ID)).not.toBeNull()
+
 		await seedLivAiDockEntry(store)
-		const persisted = await store.get(LIV_AI_CHAT_NATIVE_ID)
-		expect(persisted).not.toBeNull()
-		expect(persisted?.id).toBe(LIV_AI_CHAT_NATIVE_ID)
-		expect(persisted?.name).toBe('Chat')
-		expect(persisted?.iconUrl).toBe(LIV_AI_ICON_URL)
-		// Same wmClassHint — both open the same chat surface
-		expect(persisted?.wmClassHint).toBe(LIV_AI_WMCLASS_HINT)
+
+		expect(await store.get(LIV_AI_CHAT_NATIVE_ID)).toBeNull()
 	})
 
-	it('Hot-fix E — Liv and Chat are at DIFFERENT Redis keys (distinct UUIDs)', async () => {
+	it('leaves apps.native.list empty when both legacy entries were present', async () => {
+		await seedLegacy(store)
+		expect(await store.list()).toHaveLength(2)
+
 		await seedLivAiDockEntry(store)
-		expect(LIV_AI_NATIVE_ID).not.toBe(LIV_AI_CHAT_NATIVE_ID)
-		const liv = await store.get(LIV_AI_NATIVE_ID)
-		const chat = await store.get(LIV_AI_CHAT_NATIVE_ID)
-		expect(liv).not.toBeNull()
-		expect(chat).not.toBeNull()
+
+		expect(await store.list()).toHaveLength(0)
 	})
 
-	it('is idempotent — calling N times produces exactly 2 entries (Liv + Chat) in apps.native.list', async () => {
+	it('is idempotent — cold installs (no legacy rows) are a no-op', async () => {
+		// No legacy seed first — store is empty.
+		expect(await store.list()).toHaveLength(0)
+
 		await seedLivAiDockEntry(store)
 		await seedLivAiDockEntry(store)
 		await seedLivAiDockEntry(store)
-		const all = await store.list()
-		// Hot-fix E — now 2 entries (was 1 in Hot-fix D)
-		expect(all).toHaveLength(2)
-		const livs = all.filter((e) => e.id === LIV_AI_NATIVE_ID)
-		const chats = all.filter((e) => e.id === LIV_AI_CHAT_NATIVE_ID)
-		expect(livs).toHaveLength(1)
-		expect(chats).toHaveLength(1)
-		expect(livs[0]!.name).toBe('Liv')
-		expect(chats[0]!.name).toBe('Chat')
+
+		expect(await store.list()).toHaveLength(0)
 	})
 
-	it('publishes liv:config:updated for BOTH entries so the dock can re-fetch each', async () => {
+	it('publishes liv:config:updated delete events when legacy rows existed', async () => {
+		await seedLegacy(store)
+		// Reset the publish log so we only see Hot-fix F's events
+		redis.publishes.length = 0
+
 		await seedLivAiDockEntry(store)
-		const updates = redis.publishes.filter((p) => p.channel === 'liv:config:updated')
-		// Hot-fix E — 2 publishes (one per upsert), not 1
-		expect(updates.length).toBeGreaterThanOrEqual(2)
-		const ids = updates
+
+		const deletes = redis.publishes
+			.filter((p) => p.channel === 'liv:config:updated')
 			.map((p) => JSON.parse(p.message))
-			.filter((m) => m.kind === 'native-app' && m.op === 'upsert')
-			.map((m) => m.id)
-		expect(ids).toContain(LIV_AI_NATIVE_ID)
-		expect(ids).toContain(LIV_AI_CHAT_NATIVE_ID)
+			.filter((m) => m.kind === 'native-app' && m.op === 'delete')
+		const deletedIds = deletes.map((m) => m.id)
+		expect(deletedIds).toContain(LIV_AI_NATIVE_ID)
+		expect(deletedIds).toContain(LIV_AI_CHAT_NATIVE_ID)
 	})
 
-	it('produces configs that satisfy nativeAppConfigSchema.parse (both entries)', async () => {
+	it('publishes nothing when there is nothing to delete (clean cold install)', async () => {
 		await seedLivAiDockEntry(store)
-		for (const id of [LIV_AI_NATIVE_ID, LIV_AI_CHAT_NATIVE_ID]) {
-			const raw = redis.store.get(`liv:apps:native:${id}`)
-			expect(raw).toBeDefined()
-			expect(() => nativeAppConfigSchema.parse(JSON.parse(raw!))).not.toThrow()
-		}
+
+		const deletes = redis.publishes
+			.filter((p) => p.channel === 'liv:config:updated')
+			.map((p) => JSON.parse(p.message))
+			.filter((m) => m.kind === 'native-app' && m.op === 'delete')
+		expect(deletes).toHaveLength(0)
 	})
 
-	it('iconUrl is a root-relative path served by the Phase 202 Next.js subapp', () => {
-		// Sanity check on the constant exported alongside the seed function —
-		// catches accidental rename to an absolute URL or a non-/liv-ai-app path
-		// (which would 404 because no Caddy handle serves it).
-		expect(LIV_AI_ICON_URL.startsWith('/liv-ai-app/')).toBe(true)
-		expect(LIV_AI_ICON_URL).toMatch(/\.(svg|png|webp)$/i)
+	it('does NOT recreate the legacy rows (defends against accidental re-seed regressions)', async () => {
+		await seedLivAiDockEntry(store)
+		// Inspect the underlying Redis fake — no liv:apps:native:* keys
+		// should have been WRITTEN by Hot-fix F's flow.
+		const keys = Array.from(redis.store.keys()).filter((k) =>
+			k.startsWith('liv:apps:native:'),
+		)
+		expect(keys).toHaveLength(0)
 	})
+})
 
-	it('wmClassHint is the EXACT string "liv-ai" (not a prefix — distinct from liv-openui-)', () => {
-		// useLaunchNativeApp short-circuits on exact match; the OpenUI branch
-		// uses startsWith('liv-openui-'). Test that the two branches stay
-		// disjoint by asserting the exact value here.
-		expect(LIV_AI_WMCLASS_HINT).toBe('liv-ai')
-		expect(LIV_AI_WMCLASS_HINT.startsWith('liv-openui-')).toBe(false)
-	})
+describe('Hot-fix F — exported constants remain stable for back-compat', () => {
+	// These constants are kept exported so any external consumer (tests,
+	// debug scripts, future cleanup tasks) can still reference the legacy
+	// UUIDs symbolically. The values themselves MUST NOT change — operator
+	// installs may still hold the matching Redis keys until next boot.
 
-	it('LIV_AI_NATIVE_ID + LIV_AI_CHAT_NATIVE_ID are valid v4-shaped UUIDs (match nativeAppConfigSchema.id regex)', () => {
-		// Regex from z.string().uuid() — version nibble must be 1-5, variant 8-b.
+	it('LIV_AI_NATIVE_ID + LIV_AI_CHAT_NATIVE_ID are valid v4-shaped UUIDs', () => {
 		const UUID_RE =
 			/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 		expect(UUID_RE.test(LIV_AI_NATIVE_ID)).toBe(true)
 		expect(UUID_RE.test(LIV_AI_CHAT_NATIVE_ID)).toBe(true)
+	})
+
+	it('wmClassHint is the EXACT string "liv-ai" (distinct from liv-openui- prefix)', () => {
+		expect(LIV_AI_WMCLASS_HINT).toBe('liv-ai')
+		expect(LIV_AI_WMCLASS_HINT.startsWith('liv-openui-')).toBe(false)
+	})
+
+	it('LIV_AI_ICON_URL is a root-relative path under /liv-ai-app/', () => {
+		expect(LIV_AI_ICON_URL.startsWith('/liv-ai-app/')).toBe(true)
+		expect(LIV_AI_ICON_URL).toMatch(/\.(svg|png|webp)$/i)
+	})
+
+	it('legacy seed shape (rebuilt in seedLegacy helper) still satisfies nativeAppConfigSchema.parse', () => {
+		// Defensive check — proves the helper used by these tests creates
+		// objects schema-compatible with what livinityd seeds in production.
+		const liv: NativeAppConfig = {
+			id: LIV_AI_NATIVE_ID,
+			name: 'Liv',
+			iconUrl: LIV_AI_ICON_URL,
+			binaryPath: '/usr/bin/true',
+			wmClassHint: LIV_AI_WMCLASS_HINT,
+		}
+		expect(() => nativeAppConfigSchema.parse(liv)).not.toThrow()
 	})
 })

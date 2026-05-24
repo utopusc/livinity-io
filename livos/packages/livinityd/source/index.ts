@@ -476,19 +476,20 @@ export default class Livinityd {
 		this.nativeAppConfigStore = new NativeAppConfigStore(this.ai.redis)
 		this.logger.log('NativeAppConfigStore wired (liv:apps:native:* namespace)')
 
-		// Phase 203 Hot-fix D 2026-05-24 — seed the permanent "Liv AI" dock
-		// entry. Idempotent: fixed UUID collapses repeat upserts onto a single
-		// Redis key, so booting N times produces 1 dock tile (not N). Non-fatal
-		// on Redis hiccups — the rest of livinityd boot continues and the
-		// operator can re-seed via tRPC `apps.native.list` refresh later.
+		// Phase 203 Hot-fix F 2026-05-24 — DELETE the Hot-fix D/E desktop
+		// entries that were mistakenly seeded into NativeAppConfigStore
+		// (which feeds the DESKTOP grid, not the DOCK). The dock tiles
+		// now live in the hardcoded modules/desktop/dock.tsx
+		// (LIV_AI_CHAT + LIV_AI_CHAT_SHORTCUT — Hot-fix F part 1).
+		// `seedLivAiDockEntry` is now misnamed — it DELETES (kept the
+		// name for caller stability across the hot-fix cascade). Both
+		// deletes are idempotent; cold installs that never had D/E
+		// seeded run cleanly. Non-fatal on Redis hiccups — boot continues.
 		try {
 			await seedLivAiDockEntry(this.nativeAppConfigStore)
-			// Hot-fix E 2026-05-24 — now seeds TWO entries: "Liv" (renamed
-			// from "Liv AI") + "Chat" (new). Both share wmClassHint='liv-ai'
-			// so both open the same LIV_AI_CHAT window.
-			this.logger.log('Hot-fix E — Liv + Chat permanent dock entries seeded')
+			this.logger.log('Hot-fix F — stale Liv/Chat desktop entries removed (if any)')
 		} catch (err) {
-			this.logger.error('Hot-fix E — Liv/Chat dock seed failed (dock tiles will be missing this boot)', err as Error)
+			this.logger.error('Hot-fix F — stale Liv/Chat desktop sweep failed (entries may linger on desktop)', err as Error)
 		}
 
 		// Phase 157 — wire the v37 install dispatcher now that Redis +
