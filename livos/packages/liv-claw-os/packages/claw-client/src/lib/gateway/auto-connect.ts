@@ -40,22 +40,16 @@ import {getSettings, saveSettings, type Settings} from "../storage";
  * client detection and produce `device_token_mismatch` storms — see Hot-
  * fix F2).
  *
- * Reality check: the Liv AI claw-client only ever runs INSIDE the LivOS
- * desktop stream, which means the browser executing this code is Chrome
- * on the SAME Mini PC that hosts openclaw. `localhost === Mini PC` and
- * the gateway is already bound to 127.0.0.1:18789. So we skip Caddy
- * entirely and connect directly.
- *
- * Path `/plugins/openclawos/ws` matches what Caddy was rewriting to —
- * confirmed live via `Caddyfile: handle_path /liv-ai-app/liv-ai* {
- *   rewrite * /plugins/openclawos{path}; reverse_proxy 127.0.0.1:18789 }`.
- *
- * The `loc` argument is retained for the test surface (and so we keep
- * `ws://` for any future HTTP dev harness) but its host is intentionally
- * ignored — the destination is always the loopback gateway port.
+ * REVERT 2026-05-24: Hot-fix G assumed browser runs ON Mini PC (LivOS
+ * desktop stream's local Chrome). REALITY: operator's browser is REMOTE
+ * (their laptop), so `localhost` resolved to the LAPTOP, not Mini PC →
+ * WS code=1006. Back to same-origin Caddy-proxied path. allowedOrigins
+ * whitelist (Hot-fix G part 2) covers the origin gate so the original
+ * URL now actually works end-to-end.
  */
-export function computeSameOriginGatewayUrl(_loc: {protocol: string; host: string}): string {
-	return "ws://localhost:18789/plugins/openclawos/ws";
+export function computeSameOriginGatewayUrl(loc: {protocol: string; host: string}): string {
+	const wsScheme = loc.protocol === "https:" ? "wss:" : "ws:";
+	return `${wsScheme}//${loc.host}/liv-ai-app/liv-ai/ws`;
 }
 
 export interface AutoConnectResult {
