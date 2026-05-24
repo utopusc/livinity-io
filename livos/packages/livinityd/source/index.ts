@@ -188,6 +188,12 @@ import {ProviderKeyStore} from './modules/provider/key-store.js'
 import {EnvFileWriter} from './modules/provider/env-file-writer.js'
 import {createRestartHook} from './modules/provider/restart-hook.js'
 import {createProviderConfigRouter} from './modules/server/trpc/provider-config-router.js'
+// Phase 206 — openclaw CLI wrapper router. Wraps the openclaw 2026.5.20
+// `capability model` + `config` subcommands as tRPC procedures so the
+// claw-client Providers tab can drive provider auth + default model
+// selection without inventing yet another storage path. Replaces the dead
+// Phase 204 gateway env file approach (which the running agent never read).
+import {createOpenclawCliRouter} from './modules/server/trpc/openclaw-router.js'
 // Phase 202-04 — SSE endpoint that pushes live agent status to the
 // /agents dashboard. Subscribes to the same scheduler statusEvents
 // EventEmitter that runOnce / drainAgentStream emit on.
@@ -1634,6 +1640,26 @@ export default class Livinityd {
 				)
 			}
 
+			// Phase 206 — openclaw CLI router. Self-contained (no external
+			// service deps); just instantiates with default state-dir +
+			// binary resolution. The router itself handles binary discovery
+			// and env var defaults. No try/catch needed because the factory
+			// is pure construction — every shellout is lazy at procedure
+			// call time. If the binary turns out missing at runtime, the
+			// `OpenclawNotInstalledError` mapping in the router surfaces a
+			// clean TRPCError to the UI.
+			const openclawCliRouterProductionInstance = createOpenclawCliRouter({
+				logger: {
+					info: (...args) => webappLogger.info(args.map(String).join(' ')),
+					warn: (...args) => this.logger.error(args.map(String).join(' ')),
+					error: (...args) => this.logger.error(args.map(String).join(' ')),
+					debug: () => undefined,
+				},
+			})
+			webappLogger.info(
+				'Phase 206 — openclaw.* tRPC router wired (CLI-wrapped provider+model config; replaces dead Phase 204 env file path)',
+			)
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
@@ -1645,6 +1671,7 @@ export default class Livinityd {
 				openclawosApps: openclawosAppsRouterProductionInstance,
 				openclawosGateway: openclawosGatewayRouterProductionInstance,
 				providerConfig: providerConfigRouterProductionInstance,
+				openclawCli: openclawCliRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(

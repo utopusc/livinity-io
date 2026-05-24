@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { LivosAgent } from "@/src/lib/agents/types";
+import { ModelPicker } from "@/components/agents/ModelPicker";
 
 interface AgentEditFormProps {
 	agent: LivosAgent;
@@ -48,16 +49,11 @@ interface AgentEditFormProps {
 }
 
 /**
- * Available models surfaced in the model dropdown. Backend resolves the
- * underlying provider at runtime via the mastra-side dynamic model resolver
- * (Phase 197-04). The three Grok variants are the supported set per Phase
- * 202-CONTEXT D-202-?? (model picker requirement).
+ * Phase 206 — MODEL_OPTIONS hardcoded list removed. The Model dropdown now
+ * delegates to <ModelPicker>, which fetches openclaw.models.list dynamically.
+ * Legacy fallback (3 Grok variants) lives inside ModelPicker.tsx for use
+ * when the live catalog is unreachable.
  */
-const MODEL_OPTIONS = [
-	{ value: "grok-4.3", label: "Grok 4.3 (default)" },
-	{ value: "grok-4.3-fast", label: "Grok 4.3 Fast" },
-	{ value: "grok-4.3-reasoning", label: "Grok 4.3 Reasoning" },
-];
 
 /**
  * Built-in tools surface from Phase 200-C (INV-202-09 — 10 tools preserved).
@@ -331,23 +327,12 @@ export function AgentEditForm({
 				/>
 			</Field>
 
-			{/* Model */}
-			<Field label="Model" hint="Backed by the dynamic model resolver.">
-				<select
-					value={modelName}
-					onChange={(e) => setModelName(e.target.value)}
-					className={selectClassName}
-				>
-					{MODEL_OPTIONS.map((opt) => (
-						<option key={opt.value} value={opt.value}>
-							{opt.label}
-						</option>
-					))}
-					{/* Preserve any unknown model the row already carries (eg legacy). */}
-					{MODEL_OPTIONS.every((o) => o.value !== modelName) ? (
-						<option value={modelName}>{modelName} (existing)</option>
-					) : null}
-				</select>
+			{/* Model — Phase 206: dynamic catalog from openclaw.models.list */}
+			<Field
+				label="Model"
+				hint="Pick from any provider configured in Liv AI Settings → Providers."
+			>
+				<ModelPicker value={modelName} onChange={setModelName} />
 			</Field>
 
 			{/* Tools */}
