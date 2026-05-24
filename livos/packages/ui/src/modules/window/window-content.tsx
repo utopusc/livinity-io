@@ -27,10 +27,18 @@ const NativeAppStreamWindowContent = React.lazy(() => import('./app-contents/nat
 // The slug is sliced off the appId and rendered as
 // `<iframe src="/liv-ai-app/apps/<slug>">` (D-203-10, T-203-06).
 const OpenUiAppContent = React.lazy(() => import('./app-contents/openui-app-content'))
+// Phase 203 Hot-fix D 2026-05-24 — Liv AI chat iframe window. Discriminator
+// is the EXACT appId `LIV_AI_CHAT` (set by useLaunchNativeApp short-circuit
+// when wmClassHint==='liv-ai'). Renders the openclaw claw-client surface as
+// an iframe at /liv-ai-app/liv-ai — distinct from the legacy
+// `LIVINITY_liv-ai` literal-appId path which iframes the Next.js dashboard.
+const LivAiChatIframeContent = React.lazy(() => import('./app-contents/liv-ai-chat-iframe-content'))
 
 const WEBAPP_APP_ID_PREFIX = 'WEBAPP_'
 const NATIVE_APP_ID_PREFIX = 'NATIVE_'
 const OPENUI_APP_ID_PREFIX = 'OPENUI_'
+/** Phase 203 Hot-fix D — exact appId for the seeded Liv AI chat iframe window. */
+const LIV_AI_CHAT_APP_ID = 'LIV_AI_CHAT'
 
 /** True when the appId belongs to a WebApp window (P95). */
 function isWebAppKind(appId: string): boolean {
@@ -62,7 +70,7 @@ type WindowContentProps = {
 // Apps that manage their own scroll and layout (no wrapper padding/scroll).
 // WebApps (any appId starting with WEBAPP_) are full-height too — handled
 // via `isWebAppKind(appId)` in `WindowContent` rather than expanding this set.
-const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_liv-ai'])
+const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_liv-ai', LIV_AI_CHAT_APP_ID])
 
 export function WindowContent({route, appId, windowId}: WindowContentProps) {
 	if (
@@ -127,6 +135,16 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 	if (isOpenUiAppKind(appId)) {
 		const slug = appId.slice(OPENUI_APP_ID_PREFIX.length)
 		return <OpenUiAppContent slug={slug} name={slug} />
+	}
+
+	// Phase 203 Hot-fix D 2026-05-24 — permanent "Liv AI" chat iframe window.
+	// The dock launcher's wmClassHint='liv-ai' short-circuit set this exact
+	// appId; mount the iframe pointed at /liv-ai-app/liv-ai (Caddy Hot-fix-D
+	// part 1 rewrites that to /plugins/openclawos so the openclaw gateway
+	// plugin serves the claw-client chat surface). Checked BEFORE the switch
+	// so it can't collide with any future literal appId case.
+	if (appId === LIV_AI_CHAT_APP_ID) {
+		return <LivAiChatIframeContent />
 	}
 
 	switch (appId) {

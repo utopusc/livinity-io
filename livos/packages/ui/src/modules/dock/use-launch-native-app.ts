@@ -28,6 +28,21 @@ export const OPENUI_WMCLASS_PREFIX = 'liv-openui-'
 /** Window-manager appId prefix for OpenUI app windows (vs. NATIVE_ for binaries). */
 export const OPENUI_APP_ID_PREFIX = 'OPENUI_'
 
+/**
+ * Phase 203 Hot-fix D 2026-05-24 — EXACT wmClassHint string marking the
+ * permanent "Liv AI" dock entry seeded by livinityd's liv-ai-dock-seed.ts.
+ * Distinct from the `liv-openui-` PREFIX (per-app OpenUI tiles); this is an
+ * exact-match string so the two short-circuit branches stay disjoint.
+ */
+export const LIV_AI_WMCLASS_HINT = 'liv-ai'
+
+/**
+ * Window-manager appId for the Liv AI chat iframe. window-content.tsx
+ * dispatches on this exact string and mounts LivAiChatIframeContent
+ * (iframe → /liv-ai-app/liv-ai → openclaw claw-client).
+ */
+export const LIV_AI_CHAT_APP_ID = 'LIV_AI_CHAT'
+
 export interface LaunchNativeAppArgs {
 	/** UUID matching the persisted NativeAppConfig (apps.native.list[].id). */
 	id: string
@@ -57,6 +72,18 @@ export function useLaunchNativeApp(): (args: LaunchNativeAppArgs) => Promise<voi
 	return async function launch({id, name, iconUrl, wmClassHint}): Promise<void> {
 		if (!windowManager) {
 			toast.error(`Cannot launch ${name}: window manager unavailable`)
+			return
+		}
+
+		// Phase 203 Hot-fix D 2026-05-24 — permanent "Liv AI" dock entry
+		// short-circuit. The seeded NativeAppConfig has wmClassHint='liv-ai'
+		// (EXACT match, NOT a prefix). Open the LIV_AI_CHAT window which
+		// window-content.tsx mounts as an iframe pointed at /liv-ai-app/liv-ai
+		// (Caddy Hot-fix-D part 1 rewrites that to /plugins/openclawos so the
+		// openclaw gateway plugin serves the claw-client chat surface).
+		// Checked BEFORE the OpenUI prefix branch so the two stay disjoint.
+		if (wmClassHint === LIV_AI_WMCLASS_HINT) {
+			windowManager.openWindow(LIV_AI_CHAT_APP_ID, name, name, iconUrl ?? '')
 			return
 		}
 
