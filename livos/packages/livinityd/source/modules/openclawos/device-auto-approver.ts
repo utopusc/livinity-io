@@ -294,6 +294,18 @@ export function sweepPendingRequests(
 		}
 
 		const paired = readJsonOrEmpty<Record<string, PairedEntry>>(pairedPath)
+		// Phase 205-04 A5 — revoked deny-list. Devices listed here have been
+		// explicitly revoked by an operator via openclawos.gateway.devices.revoke
+		// and MUST NOT be re-promoted by the sweep even if a fresh pending
+		// entry races in before the next handshake. Without this guard the
+		// 3-step revoke (scrub→delete→deny-list) would lose to a racing
+		// re-pair attempt on the same handshake call. Schema: per-device
+		// {revokedAtMs: number, reason: string}.
+		const revokedPath = join(dir, 'revoked.json')
+		const revoked =
+			readJsonOrEmpty<Record<string, {revokedAtMs: number; reason: string}>>(
+				revokedPath,
+			)
 		let swept = 0
 		const now = Date.now()
 
@@ -305,6 +317,15 @@ export function sweepPendingRequests(
 				continue
 			}
 			const did = req.deviceId
+			if (revoked[did]) {
+				// Phase 205-04 — revoked-device deny-list hit. Drop the stale
+				// pending row WITHOUT promoting (revoke wins the race).
+				delete pending[requestId]
+				opts.logger?.info(
+					`[openclawos-auto-approve sweep] revoked-device skip ${did.slice(0, 12)}… (requestId ${requestId.slice(0, 8)}…)`,
+				)
+				continue
+			}
 			if (!paired[did]) {
 				const scopes = Array.isArray(req.scopes) && req.scopes.length > 0
 					? req.scopes

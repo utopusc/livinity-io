@@ -150,6 +150,18 @@ import {
 	createOpenclawosAppsRouter,
 	openclawosAppsRouter,
 } from './openclawos-router.js'
+// Phase 205-04 — `openclawos.gateway.*` namespace. Factory-DI: production
+// livinityd boot supplies a real `createOpenclawosGatewayRouter({configStore,
+// devicesDir, redis, logger})` build. The default exported router is an
+// empty-injection stub that throws PRECONDITION_FAILED + OPENCLAW_GATEWAY_UNAVAILABLE
+// on every call until production boot wires the real deps. All 8 procedure
+// paths are added to httpOnlyPaths in ./common.ts so the Gateway tab
+// mutations (revoke / setMode / rotateToken) survive `systemctl restart
+// livos` mid-call (pitfall B-12 / X-04).
+import {
+	createOpenclawosGatewayRouter,
+	openclawosGatewayRouter,
+} from './openclawos-gateway-router.js'
 // Phase 204-01 — `provider.config.*` namespace. Factory-DI: production
 // livinityd boot supplies a real `createProviderConfigRouter({keyStore,
 // envFileWriter, restartHook, logger})` build. The default exported
@@ -216,6 +228,12 @@ export function createAppRouter(opts: {
 	// 203-04). Mounted under `openclawos` as a NEW top-level namespace —
 	// INV-203-09 untouched (mcp.* + agents.* contracts unchanged).
 	openclawosApps?: ReturnType<typeof createOpenclawosAppsRouter>
+	// Phase 205-04 — `openclawos.gateway.*` namespace slot. Default empty-
+	// injection stub keeps the appRouter type-stable; production boot supplies
+	// the real router built against OpenclawConfigStore (+ devicesDir + redis).
+	// Mounted as a sibling of openclawosApps under the existing `openclawos`
+	// namespace.
+	openclawosGateway?: ReturnType<typeof createOpenclawosGatewayRouter>
 	// Phase 204-01 — `provider.config.*` namespace slot. Default empty-
 	// injection stub keeps the appRouter type-stable; production boot
 	// supplies the real router built against ProviderKeyStore + EnvFileWriter
@@ -321,6 +339,11 @@ export function createAppRouter(opts: {
 		// in a real `createOpenclawosAppsRouter({repo})` build.
 		openclawos: router({
 			apps: opts.openclawosApps ?? openclawosAppsRouter,
+			// Phase 205-04 — `openclawos.gateway.*` admin namespace for the
+			// in-chat Gateway tab. Default empty-injection stub throws
+			// PRECONDITION_FAILED + OPENCLAW_GATEWAY_UNAVAILABLE until
+			// production boot wires the real router.
+			gateway: opts.openclawosGateway ?? openclawosGatewayRouter,
 		}),
 		// Phase 204-01 — `provider.config.*` namespace (LLM provider API
 		// key entry for liv-claw-gateway). Default empty-injection stub
