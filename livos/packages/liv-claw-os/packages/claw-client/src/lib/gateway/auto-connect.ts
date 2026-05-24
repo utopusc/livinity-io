@@ -131,10 +131,18 @@ export async function attemptLivOsAutoConnect(
 	try {
 		const handshake = await fetchHandshake();
 		const gatewayUrl = computeSameOriginGatewayUrl(window.location);
-		const seeded: Settings = {
-			gatewayUrl,
-			deviceToken: handshake.token,
-		};
+		// Hot-fix J 2026-05-24 — route master tokens into Settings.token (rides
+		// in WS connect `auth: {token}`) and device tokens into
+		// Settings.deviceToken (rides in `auth: {deviceToken}`). Openclaw
+		// `mode: token` requires the former; sending the latter trips
+		// `device_token_mismatch` then rate-limit lockout (operator UAT
+		// 2026-05-23/24). Default to "device" for back-compat with bridges
+		// that don't yet emit authMode.
+		const authMode = handshake.authMode ?? "device";
+		const seeded: Settings =
+			authMode === "master"
+				? {gatewayUrl, token: handshake.token}
+				: {gatewayUrl, deviceToken: handshake.token};
 		saveSettings(seeded);
 		// Hot-fix E 2026-05-24 — return the seeded settings so the caller
 		// (ChatApp) can fire engine.reconnect(seeded) immediately. Without

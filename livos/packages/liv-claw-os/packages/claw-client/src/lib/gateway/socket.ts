@@ -75,6 +75,10 @@ export class GatewaySocket {
   // when missing OR within 30s of expiry. The expiresAt is unix-ms.
   private livinitydDeviceToken: string | null = null;
   private livinitydDeviceTokenExpiresAt: number | null = null;
+  // Hot-fix J 2026-05-24 — auth-mode discriminator from the handshake. When
+  // "master", the token rides in connect-frame `auth.token` (shared bearer);
+  // when "device" (legacy / future), it rides in `auth.deviceToken`.
+  private livinitydAuthMode: "master" | "device" = "device";
 
   constructor(private opts: GatewaySocketOptions) {}
 
@@ -190,6 +194,12 @@ export class GatewaySocket {
     // T-203-02), so we re-fetch when missing or within 30s of expiry. Failure
     // is non-fatal — we fall through to the raw settings.token path so
     // stand-alone (non-LivOS) deploys keep working.
+    //
+    // Hot-fix J 2026-05-24 — route the token into `settings.token` (master
+    // bearer) or `settings.deviceToken` (device pairing) based on the
+    // handshake's authMode discriminator. Openclaw `mode: token` only
+    // accepts `auth: {token}` frames; sending `auth: {deviceToken}` fails
+    // with `device_token_mismatch` regardless of the token's actual value.
     let settings = rawSettings;
     try {
       if (
@@ -200,13 +210,24 @@ export class GatewaySocket {
         if (handshake) {
           this.livinitydDeviceToken = handshake.token;
           this.livinitydDeviceTokenExpiresAt = handshake.expiresAt;
+          this.livinitydAuthMode = handshake.authMode ?? "device";
           log(
-            `livinityd handshake ok — token expires ${new Date(handshake.expiresAt).toISOString()} (jti ${handshake.sessionId.slice(0, 8)}…)`,
+            `livinityd handshake ok — token expires ${new Date(handshake.expiresAt).toISOString()} (jti ${handshake.sessionId.slice(0, 8)}…) mode=${this.livinitydAuthMode}`,
           );
         }
       }
       if (this.livinitydDeviceToken) {
-        settings = {...rawSettings, deviceToken: this.livinitydDeviceToken};
+        if (this.livinitydAuthMode === "master") {
+          // Master-bearer mode: ride in `auth.token`. STRIP any stale
+          // deviceToken from earlier Hot-fix F2 deploys so handshake.ts's
+          // `auth: settings.deviceToken ? {deviceToken} : {token}` ternary
+          // picks the token branch (otherwise localStorage leftovers send
+          // us into the broken deviceToken branch again).
+          const {deviceToken: _stale, ...rest} = rawSettings;
+          settings = {...rest, token: this.livinitydDeviceToken};
+        } else {
+          settings = {...rawSettings, deviceToken: this.livinitydDeviceToken};
+        }
       }
     } catch (handshakeErr) {
       if (handshakeErr instanceof LivinitydHandshakeError) {
@@ -217,6 +238,7 @@ export class GatewaySocket {
         // a stale token that may now be revoked.
         this.livinitydDeviceToken = null;
         this.livinitydDeviceTokenExpiresAt = null;
+        this.livinitydAuthMode = "device";
       } else {
         warn("livinityd handshake threw unexpectedly — falling through:", handshakeErr);
       }
