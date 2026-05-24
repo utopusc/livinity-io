@@ -46,7 +46,14 @@ async function mountApp(opts: Parameters<typeof createHandshakeRouteHandler>[0])
 	const app = express()
 	app.use(cookieParser())
 	app.use(express.json())
-	app.post('/openclawos/handshake', createHandshakeRouteHandler(opts))
+	// Hot-fix F2 — force the legacy Ed25519 mint path in tests by pointing
+	// openclawConfigPath at a guaranteed-nonexistent file. Production code
+	// uses /opt/livos/data/openclaw/openclaw.json which may accidentally
+	// exist on a developer's Mini PC.
+	app.post(
+		'/openclawos/handshake',
+		createHandshakeRouteHandler({...opts, openclawConfigPath: '/__nonexistent_openclaw_test_path__.json'}),
+	)
 
 	await new Promise<void>((resolve) => {
 		server = app.listen(0, '127.0.0.1', () => resolve())
@@ -258,5 +265,37 @@ describe('Phase 203-05 — POST /openclawos/handshake', () => {
 		const b2 = (await res2.json()) as {token: string; sessionId: string}
 		expect(b1.sessionId).not.toBe(b2.sessionId)
 		expect(b1.token).not.toBe(b2.token)
+	})
+
+	test('13. Hot-fix F2 — master-token path returns gateway.auth.token from openclaw.json', async () => {
+		// Write a fixture openclaw.json with gateway.auth.token
+		const {writeFileSync} = await import('node:fs')
+		const cfgPath = path.join(tmpDir, 'openclaw.json')
+		const MASTER = 'master-secret-deadbeefcafebabe1234567890abcdef'
+		writeFileSync(cfgPath, JSON.stringify({gateway: {auth: {token: MASTER}}}))
+
+		// Mount the handler WITH openclawConfigPath pointing at the fixture
+		const app = express()
+		app.use(cookieParser())
+		app.use(express.json())
+		app.post(
+			'/openclawos/handshake',
+			createHandshakeRouteHandler({
+				verifyToken: vi.fn().mockResolvedValue({loggedIn: true, userId: 'bruce'}),
+				openclawConfigPath: cfgPath,
+			}),
+		)
+		await new Promise<void>((resolve) => {
+			server = app.listen(0, '127.0.0.1', () => resolve())
+		})
+		const addr = server!.address() as AddressInfo
+		const url = `http://127.0.0.1:${addr.port}/openclawos/handshake`
+
+		const res = await fetch(url, {method: 'POST', headers: {Authorization: 'Bearer x'}})
+		expect(res.status).toBe(200)
+		const body = (await res.json()) as {token: string; expiresAt: number; sessionId: string}
+		expect(body.token).toBe(MASTER) // returned verbatim, not a custom Ed25519 envelope
+		expect(body.sessionId).toBe('master:bruce')
+		expect(body.expiresAt).toBeGreaterThan(Date.now())
 	})
 })

@@ -26,6 +26,7 @@
 
 import type {RequestHandler} from 'express'
 import type {Redis} from 'ioredis'
+import {readFileSync, existsSync} from 'node:fs'
 import {mintToken} from './device-token.js'
 
 type VerifyTokenFn = (token: string) => Promise<unknown>
@@ -44,6 +45,40 @@ export interface HandshakeRouteOptions {
 	 * single-user tokens).
 	 */
 	resolveUserId?: (verifiedPayload: unknown) => string
+	/**
+	 * Phase 203 Hot-fix F2 2026-05-24 — path to openclaw.json. When set AND
+	 * the file contains `gateway.auth.token`, the handshake returns that
+	 * master token instead of minting a custom Ed25519 device token. This
+	 * exists because openclaw upstream verifies device tokens against its
+	 * OWN identity keypair (data/openclaw/identity/device.json), so the
+	 * livinityd-minted Ed25519 token (device-token.ts) always fails as
+	 * `device_token_mismatch` over WS. The master-token path uses
+	 * openclaw's documented `gateway.auth.token` mechanism which IS verified
+	 * upstream.
+	 *
+	 * Default: '/opt/livos/data/openclaw/openclaw.json' on Mini PC; tests
+	 * override via this option.
+	 */
+	openclawConfigPath?: string
+}
+
+const DEFAULT_OPENCLAW_CONFIG_PATH = '/opt/livos/data/openclaw/openclaw.json'
+
+/**
+ * Phase 203 Hot-fix F2 — best-effort read of `gateway.auth.token` from
+ * openclaw.json. Returns undefined on any failure (file missing, parse
+ * error, key absent). Caller falls back to the legacy Ed25519 mint path.
+ */
+function readOpenclawMasterToken(configPath: string): string | undefined {
+	try {
+		if (!existsSync(configPath)) return undefined
+		const raw = readFileSync(configPath, 'utf8')
+		const parsed = JSON.parse(raw) as {gateway?: {auth?: {token?: unknown}}}
+		const t = parsed?.gateway?.auth?.token
+		return typeof t === 'string' && t.length > 0 ? t : undefined
+	} catch {
+		return undefined
+	}
 }
 
 /**
@@ -96,6 +131,31 @@ export function createHandshakeRouteHandler(opts: HandshakeRouteOptions): Reques
 				return
 			}
 
+			// Phase 203 Hot-fix F2 2026-05-24 — prefer openclaw master token when
+			// configured. The custom Ed25519 mint path was never accepted by
+			// openclaw upstream (device_token_mismatch loop in operator UAT
+			// 2026-05-24). The master token from openclaw.json bypasses the
+			// device-pairing dance entirely — it's openclaw's documented "I am
+			// the gateway operator" credential.
+			const cfgPath = opts.openclawConfigPath ?? DEFAULT_OPENCLAW_CONFIG_PATH
+			const masterToken = readOpenclawMasterToken(cfgPath)
+			if (masterToken) {
+				const oneHourMs = 60 * 60 * 1000
+				const expiresAt = Date.now() + oneHourMs
+				opts.logger?.info(
+					`[openclawos-handshake] userId=${userId} mode=master-token expiresAt=${new Date(expiresAt).toISOString()}`,
+				)
+				res.status(200).json({
+					token: masterToken,
+					expiresAt,
+					sessionId: `master:${userId}`,
+				})
+				return
+			}
+
+			// Legacy Ed25519 mint path — kept for tests and any future flow that
+			// re-introduces livinityd-side token verification (not currently used
+			// by openclaw upstream — see Hot-fix F2 commentary above).
 			let minted: Awaited<ReturnType<typeof mintToken>>
 			try {
 				const mintOpts = opts.redis ? {redis: opts.redis} : {}
