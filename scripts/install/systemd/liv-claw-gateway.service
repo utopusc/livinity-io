@@ -21,6 +21,11 @@ WorkingDirectory=/opt/livos/packages/liv-claw-gateway
 # require operators to add provider keys directly via Environment= here or
 # via a per-service .env at /etc/default/liv-claw-gateway.
 EnvironmentFile=-/etc/default/liv-claw-gateway
+# Phase 204-02 — fallback env file written by livinityd when /etc/default/
+# is not bruce-writable. The `-` prefix makes it optional, so cold installs
+# where the file doesn't yet exist boot fine. Both files are processed in
+# order; later assignments win, so the writer's chosen path always wins.
+EnvironmentFile=-/opt/livos/etc/liv-claw-gateway.env
 Environment=NODE_ENV=production
 Environment=PORT=18789
 Environment=OPENCLAW_PORT=18789
