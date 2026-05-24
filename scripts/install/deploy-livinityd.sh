@@ -1595,6 +1595,10 @@ _dld_update_caddy_to_livinityd() {
     handle /openclawos/handshake {
         reverse_proxy 127.0.0.1:8080
     }
+    handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* {
+        rewrite * /plugins/openclawos{path}
+        reverse_proxy 127.0.0.1:18789
+    }
     handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
         rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
@@ -1612,7 +1616,7 @@ _dld_update_caddy_to_livinityd() {
     }
 }
 CADDYFILE
-            ok "Caddyfile: :80 → 127.0.0.1:8080 (CF Tunnel terminates TLS — D-134-MODE; /openclawos/handshake → :8080; /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
+            ok "Caddyfile: :80 → 127.0.0.1:8080 (CF Tunnel terminates TLS — D-134-MODE; /openclawos/handshake → :8080; /liv-ai-app/liv-ai + /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
             ;;
         local-lan)
             local tld="${LIVINITY_LOCAL_TLD:-livinity.local}"
@@ -1627,6 +1631,10 @@ import /etc/caddy/pki-global.conf
     handle /openclawos/handshake {
         reverse_proxy 127.0.0.1:8080
     }
+    handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* {
+        rewrite * /plugins/openclawos{path}
+        reverse_proxy 127.0.0.1:18789
+    }
     handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
         rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
@@ -1644,7 +1652,7 @@ import /etc/caddy/pki-global.conf
     }
 }
 CADDYFILE
-            ok "Caddyfile: *.${tld} → 127.0.0.1:8080 (tls internal liv-local; /openclawos/handshake → :8080; /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
+            ok "Caddyfile: *.${tld} → 127.0.0.1:8080 (tls internal liv-local; /openclawos/handshake → :8080; /liv-ai-app/liv-ai + /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
             ;;
         cloud)
             cat > "$_DLD_CADDYFILE" <<CADDYFILE
@@ -1652,6 +1660,10 @@ CADDYFILE
     handle /openclawos/handshake {
         reverse_proxy 127.0.0.1:8080
     }
+    handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* {
+        rewrite * /plugins/openclawos{path}
+        reverse_proxy 127.0.0.1:18789
+    }
     handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
         rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
@@ -1669,7 +1681,7 @@ CADDYFILE
     }
 }
 CADDYFILE
-            ok "Caddyfile: :80 → 127.0.0.1:8080 (cloud-mode bootstrap; /openclawos/handshake → :8080; /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
+            ok "Caddyfile: :80 → 127.0.0.1:8080 (cloud-mode bootstrap; /openclawos/handshake → :8080; /liv-ai-app/liv-ai + /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
             ;;
     esac
 

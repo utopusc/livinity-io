@@ -249,6 +249,104 @@ describe('Phase 203-10/12/Hot-fix-C — gateway URL rewrite to /plugins/openclaw
 	})
 })
 
+// ─── Phase 203 Hot-fix D 2026-05-24 — operator-facing URL rename ─────────
+//
+// External path `/liv-ai-app/liv-ai` is added BEFORE the legacy
+// `/liv-ai-app/openclawos` handle so operators see "Liv AI" in the URL bar.
+// Both rewrite to the same upstream `/plugins/openclawos{path}` so the
+// gateway plugin doesn't need to change. The legacy path stays for
+// backwards-compat with any in-flight iframe src / bookmark.
+
+describe('Phase 203 Hot-fix D — /liv-ai-app/liv-ai rename (operator-facing URL)', () => {
+	it('apex block emits BOTH /liv-ai-app/liv-ai AND /liv-ai-app/openclawos handle_paths', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
+		expect(out).toContain('handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
+	})
+
+	it('the new /liv-ai-app/liv-ai handle rewrites to /plugins/openclawos and proxies to :18789', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const livAiIdx = out.indexOf('handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
+		expect(livAiIdx).toBeGreaterThan(-1)
+		const livAiBlockEnd = out.indexOf('\t}\n\t}', livAiIdx)
+		const livAiBlock = out.slice(livAiIdx, livAiBlockEnd)
+		expect(livAiBlock).toContain('rewrite * /plugins/openclawos{path}')
+		expect(livAiBlock).toContain('reverse_proxy 127.0.0.1:18789')
+		expect(livAiBlock).not.toContain(':3010')
+	})
+
+	it('the new handle is emitted BEFORE the legacy openclawos handle (cosmetic top-to-bottom)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const livAiIdx = out.indexOf('handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
+		const openclawosIdx = out.indexOf(
+			'handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/*',
+		)
+		expect(livAiIdx).toBeGreaterThan(-1)
+		expect(openclawosIdx).toBeGreaterThan(-1)
+		expect(livAiIdx).toBeLessThan(openclawosIdx)
+	})
+
+	it('multi-user subdomain block also carries the new /liv-ai-app/liv-ai handle', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			},
+			true,
+			false,
+			[],
+		)
+		const subdomainBlockStart = out.indexOf('bruce.livinity.io {')
+		const livAiInside = out.indexOf(
+			'handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*',
+			subdomainBlockStart,
+		)
+		expect(livAiInside).toBeGreaterThan(subdomainBlockStart)
+		const rewriteInside = out.indexOf('rewrite * /plugins/openclawos{path}', livAiInside)
+		expect(rewriteInside).toBeGreaterThan(livAiInside)
+	})
+
+	it('the null-mainDomain :80 fallback block also carries the new /liv-ai-app/liv-ai handle', () => {
+		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expect(out).toContain('handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
+		const livAiIdx = out.indexOf('handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
+		const rewriteIdx = out.indexOf('rewrite * /plugins/openclawos{path}', livAiIdx)
+		expect(rewriteIdx).toBeGreaterThan(livAiIdx)
+	})
+
+	it('the handshake handle still emits BEFORE both /liv-ai-app/* handles (ordering invariant preserved)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const handshakeIdx = out.indexOf('handle /openclawos/handshake')
+		const livAiIdx = out.indexOf('handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
+		const openclawosIdx = out.indexOf(
+			'handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/*',
+		)
+		expect(handshakeIdx).toBeGreaterThan(-1)
+		expect(handshakeIdx).toBeLessThan(livAiIdx)
+		expect(livAiIdx).toBeLessThan(openclawosIdx)
+	})
+})
+
 describe('generateFullCaddyfile — cloud-mode regression (D-104-NO-PROD-IMPACT)', () => {
 	it('does NOT emit any pki or import directive in cloud mode (AC-104-3 unit-level)', () => {
 		const out = generateFullCaddyfile(
