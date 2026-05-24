@@ -30,6 +30,20 @@ export interface LivinitydHandshakeResult {
   token: string;
   expiresAt: number; // unix-ms
   sessionId: string;
+  /**
+   * Phase 203 Hot-fix J 2026-05-24 — auth-mode discriminator.
+   *
+   * "master" (default for current Hot-fix F2 master-token path) means the
+   * token must ride in the WS connect frame as `auth: {token: ...}` so
+   * openclaw's `mode: token` gateway accepts it as a shared bearer. The
+   * legacy "device" mode is reserved for any future per-device pairing
+   * flow (the original Plan 203-05 design) where the token is verified
+   * against an openclaw-side device keypair.
+   *
+   * Optional for back-compat with older bridge responses (treated as
+   * "device" if missing — that's the pre-J behaviour).
+   */
+  authMode?: "master" | "device";
 }
 
 export class LivinitydHandshakeError extends Error {
@@ -95,7 +109,7 @@ export async function fetchLivinitydDeviceToken(
     throw new LivinitydHandshakeError("handshake response not an object");
   }
   const obj = body as Record<string, unknown>;
-  const {token, expiresAt, sessionId} = obj;
+  const {token, expiresAt, sessionId, authMode} = obj;
   if (typeof token !== "string" || token.length === 0) {
     throw new LivinitydHandshakeError("handshake response missing token");
   }
@@ -105,8 +119,13 @@ export async function fetchLivinitydDeviceToken(
   if (typeof sessionId !== "string" || sessionId.length === 0) {
     throw new LivinitydHandshakeError("handshake response missing sessionId");
   }
+  // Hot-fix J — authMode is optional; default to "device" so older bridges
+  // keep the legacy frame format. Current livinityd (Hot-fix F2+) emits
+  // "master" because openclaw runs in mode:token.
+  const mode: "master" | "device" =
+    authMode === "master" || authMode === "device" ? authMode : "device";
 
-  return {token, expiresAt, sessionId};
+  return {token, expiresAt, sessionId, authMode: mode};
 }
 
 /**

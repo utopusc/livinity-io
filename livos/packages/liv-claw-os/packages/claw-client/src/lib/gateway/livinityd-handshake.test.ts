@@ -23,7 +23,7 @@ function mockFetch(body: unknown, status = 200): typeof fetch {
 }
 
 describe("Phase 203-05 — fetchLivinitydDeviceToken", () => {
-  test("200 with valid body returns the token tuple", async () => {
+  test("200 with valid body returns the token tuple (default authMode=device)", async () => {
     const fetchImpl = mockFetch({
       token: "abc.def",
       expiresAt: 1700000300000,
@@ -34,7 +34,33 @@ describe("Phase 203-05 — fetchLivinitydDeviceToken", () => {
       token: "abc.def",
       expiresAt: 1700000300000,
       sessionId: "jti-123",
+      // Hot-fix J 2026-05-24 — body without authMode defaults to "device"
+      // for back-compat with pre-J livinityd bridges.
+      authMode: "device",
     });
+  });
+
+  test("Hot-fix J — 200 with authMode=master surfaces the master discriminator", async () => {
+    const fetchImpl = mockFetch({
+      token: "deadbeef".repeat(8),
+      expiresAt: 1700000300000,
+      sessionId: "master:admin",
+      authMode: "master",
+    });
+    const result = await fetchLivinitydDeviceToken("/openclawos/handshake", fetchImpl);
+    expect(result.authMode).toBe("master");
+    expect(result.token).toBe("deadbeef".repeat(8));
+  });
+
+  test("Hot-fix J — unknown authMode value falls back to 'device'", async () => {
+    const fetchImpl = mockFetch({
+      token: "abc.def",
+      expiresAt: 1700000300000,
+      sessionId: "jti-x",
+      authMode: "nonsense",
+    });
+    const result = await fetchLivinitydDeviceToken("/openclawos/handshake", fetchImpl);
+    expect(result.authMode).toBe("device");
   });
 
   test("401 surfaces LivinitydHandshakeError with login-required message", async () => {
