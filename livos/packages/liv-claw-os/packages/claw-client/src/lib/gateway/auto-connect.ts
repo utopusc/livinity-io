@@ -27,6 +27,7 @@
  */
 
 import {fetchLivinitydDeviceToken} from "./livinityd-handshake";
+import {getOrCreateDeviceIdentity} from "./device-identity";
 import {getSettings, saveSettings, type Settings} from "../storage";
 
 /**
@@ -129,7 +130,22 @@ export async function attemptLivOsAutoConnect(
 	// Probe the LivOS handshake bridge. Same-origin so the LIVINITY_SESSION
 	// cookie is auto-forwarded by the browser (T-203-06 trust chain).
 	try {
-		const handshake = await fetchHandshake();
+		// Hot-fix F3 2026-05-24 — include the browser's deviceId so livinityd
+		// can auto-approve any matching pending openclaw pairing request
+		// inline with the handshake. Without this the first WS connect for
+		// every new browser hits NOT_PAIRED and never recovers (operator
+		// UAT loop 2026-05-24).
+		let deviceId: string | undefined;
+		try {
+			const identity = await getOrCreateDeviceIdentity();
+			deviceId = identity.deviceId;
+		} catch {
+			// IndexedDB unavailable (private mode, locked) — fall through.
+			deviceId = undefined;
+		}
+		const handshake = await fetchHandshake(
+			deviceId ? {deviceId} : {},
+		);
 		const gatewayUrl = computeSameOriginGatewayUrl(window.location);
 		// Hot-fix J 2026-05-24 — route master tokens into Settings.token (rides
 		// in WS connect `auth: {token}`) and device tokens into
