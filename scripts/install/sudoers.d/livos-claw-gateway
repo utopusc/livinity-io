@@ -1,0 +1,26 @@
+# Phase 204-02 — sudoers drop-in for the `liv-claw-gateway` restart hook.
+#
+# When the operator saves an LLM provider key via the /settings → Providers
+# tab in Liv AI, livinityd's `provider.config.set` mutation writes a new
+# env file and then calls `sudo systemctl restart liv-claw-gateway` so the
+# gateway picks up the value at process boot. This drop-in is the narrow
+# grant that lets bruce (livinityd uid) run exactly those two commands
+# without a password prompt.
+#
+# INV-204-07 — ONLY these two commands. Nothing else.
+#
+# Deploy:
+#   sudo install -m 0440 -o root -g root livos-claw-gateway \
+#     /etc/sudoers.d/livos-claw-gateway
+#   sudo visudo -c -f /etc/sudoers.d/livos-claw-gateway   # syntax-check
+#
+# Security model:
+# - Each command targets EXACTLY one binary path with fixed argument list
+#   (no globs, no shell shims).
+# - No NOPASSWD: ALL anywhere.
+# - Self-contained — does not depend on or extend scripts/install/sudoers.d/livinityd.
+
+Cmnd_Alias LIVOS_CLAW_GW_RESTART = /bin/systemctl restart liv-claw-gateway
+Cmnd_Alias LIVOS_CLAW_GW_STATUS  = /bin/systemctl status liv-claw-gateway
+
+bruce ALL=(root) NOPASSWD: LIVOS_CLAW_GW_RESTART, LIVOS_CLAW_GW_STATUS
