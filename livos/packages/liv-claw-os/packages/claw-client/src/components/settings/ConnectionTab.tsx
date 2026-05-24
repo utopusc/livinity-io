@@ -25,6 +25,16 @@ interface Props {
   connectionState: ConnectionState;
   onClose: () => void;
   onSave: (settings: Settings) => void;
+  /**
+   * Phase 205 Hot-fix K — when true, hide the gateway URL + auth token form
+   * and show only the status banner. Set by ChatApp when running inside
+   * LivOS (livOsBypassMode !== "standalone"): the operator does not paste
+   * gateway URLs in that mode (livinityd handshake auto-pairs the browser),
+   * so the form is operator-confusing dead UI. Preserves the intent of
+   * Phase 203 Hot-fix H while still letting the dialog open so the MCP
+   * Servers + Gateway tabs are reachable.
+   */
+  suppressConnectionForm?: boolean;
 }
 
 const STATUS_BANNER: Record<
@@ -99,7 +109,14 @@ const STATUS_BANNER: Record<
   },
 };
 
-export function ConnectionTab({ open, currentSettings, connectionState, onClose, onSave }: Props) {
+export function ConnectionTab({
+  open,
+  currentSettings,
+  connectionState,
+  onClose,
+  onSave,
+  suppressConnectionForm = false,
+}: Props) {
   const [gatewayUrl, setGatewayUrl] = useState(currentSettings?.gatewayUrl ?? "");
   const [token, setToken] = useState(currentSettings?.token ?? "");
   // `pending` = user clicked Save & Connect and we're awaiting the engine's
@@ -225,6 +242,20 @@ export function ConnectionTab({ open, currentSettings, connectionState, onClose,
         </div>
       </div>
 
+      {suppressConnectionForm ? (
+        // Phase 205 Hot-fix K — running inside LivOS. Hide the gateway
+        // URL + token form (operator never pastes a URL in this mode;
+        // livinityd handshake auto-pairs the browser via the
+        // /openclawos/handshake route). Status banner above is enough.
+        // The MCP Servers + Gateway tabs above remain fully usable.
+        <p className="font-body text-md leading-snug text-text-neutral-tertiary">
+          Liv AI is paired with this LivOS instance via the handshake route.
+          You don&apos;t need to enter a gateway URL or auth token here.
+          Switch to the <strong>MCP Servers</strong> tab to manage external
+          tool servers, or the <strong>Gateway</strong> tab to manage paired
+          devices and allowed origins.
+        </p>
+      ) : (
       <div className="min-h-0">
         <p className="mb-ml font-body text-md leading-snug text-text-neutral-tertiary">
           Connect Liv AI to your openclaw gateway. The fastest way is to run{" "}
@@ -310,6 +341,7 @@ export function ConnectionTab({ open, currentSettings, connectionState, onClose,
           </div>
         </form>
       </div>
+      )}
     </div>
   );
 }

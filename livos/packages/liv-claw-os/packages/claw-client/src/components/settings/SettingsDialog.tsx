@@ -37,9 +37,18 @@ interface Props {
   connectionState: ConnectionState;
   onClose: () => void;
   onSave: (settings: Settings) => void;
+  /** Phase 205 Hot-fix K — passed straight to ConnectionTab. See ConnectionTab.tsx. */
+  suppressConnectionForm?: boolean;
 }
 
-export function SettingsDialog({ open, currentSettings, connectionState, onClose, onSave }: Props) {
+export function SettingsDialog({
+  open,
+  currentSettings,
+  connectionState,
+  onClose,
+  onSave,
+  suppressConnectionForm = false,
+}: Props) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("connection");
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -96,6 +105,7 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
               connectionState={connectionState}
               onClose={onClose}
               onSave={onSave}
+              suppressConnectionForm={suppressConnectionForm}
             />
           )}
           {activeTab === "mcp" && <McpServersTab />}

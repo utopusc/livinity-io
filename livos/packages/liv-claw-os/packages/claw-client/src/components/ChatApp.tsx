@@ -1144,44 +1144,47 @@ export default function ChatApp() {
         />
 
         {/*
-          Phase 203 Hot-fix H 2026-05-24 — the "Gateway Settings" form is the
-          single biggest UX regression operators reported. It's useless inside
-          LivOS (they don't know the token). So:
-            * livos / probing / livos-error → render LivOsConnectingSplash
-              (NEVER render the form, regardless of `settingsOpen`).
-            * standalone → legacy form continues to work for dev / non-LivOS use.
-          The settings cog in the sidebar still flips `settingsOpen=true`, but
-          inside LivOS it has no effect — that button is a no-op for now (a
-          future plan can replace it with a LivOS-aware "force re-handshake"
-          control). Operator-facing damage here is zero: the cog click stops
-          producing a form, which was the bug.
+          Phase 203 Hot-fix H 2026-05-24 — original concern: the "Gateway
+          Settings" form is operator-confusing inside LivOS (they don't know
+          the token; livinityd handshake auto-pairs the browser anyway).
+          Original mitigation collapsed the entire dialog branch into
+          LivOsConnectingSplash, which made the settings cog a no-op.
+
+          Phase 205 Hot-fix K 2026-05-24 — Phase 205 needs the dialog to
+          open inside LivOS so the operator can reach the new MCP Servers
+          and Gateway tabs. The form-is-useless concern is preserved by
+          `suppressConnectionForm={livOsBypassMode !== "standalone"}`
+          which collapses the Connection tab body to a status banner +
+          one-line explanation, hiding the URL / token form completely.
+          LivOsConnectingSplash continues to render as an overlay during
+          handshake and is independent of the dialog now.
         */}
-        {livOsBypassMode === "standalone" ? (
-          isMobile ? (
-            <MobileSettingsDialog
-              open={settingsOpen}
-              currentSettings={settings}
-              connectionState={connectionState}
-              onClose={() => setSettingsOpen(false)}
-              onSave={(newSettings) => {
-                // Don't close here — the dialog watches `connectionState` and
-                // closes itself on CONNECTED, or stays open with an inline
-                // error on UNREACHABLE / AUTH_FAILED.
-                reconnect(newSettings);
-              }}
-            />
-          ) : (
-            <SettingsDialog
-              open={settingsOpen}
-              currentSettings={settings}
-              connectionState={connectionState}
-              onClose={() => setSettingsOpen(false)}
-              onSave={(newSettings) => {
-                reconnect(newSettings);
-              }}
-            />
-          )
+        {isMobile ? (
+          <MobileSettingsDialog
+            open={settingsOpen}
+            currentSettings={settings}
+            connectionState={connectionState}
+            onClose={() => setSettingsOpen(false)}
+            onSave={(newSettings) => {
+              // Don't close here — the dialog watches `connectionState` and
+              // closes itself on CONNECTED, or stays open with an inline
+              // error on UNREACHABLE / AUTH_FAILED.
+              reconnect(newSettings);
+            }}
+          />
         ) : (
+          <SettingsDialog
+            open={settingsOpen}
+            currentSettings={settings}
+            connectionState={connectionState}
+            onClose={() => setSettingsOpen(false)}
+            onSave={(newSettings) => {
+              reconnect(newSettings);
+            }}
+            suppressConnectionForm={livOsBypassMode !== "standalone"}
+          />
+        )}
+        {livOsBypassMode !== "standalone" && (
           <LivOsConnectingSplash
             mode={livOsBypassMode}
             connectionState={connectionState}
