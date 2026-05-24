@@ -663,4 +663,12 @@ export const httpOnlyPaths = [
 	'openclawos.apps.update',
 	'openclawos.apps.delete',
 	'openclawos.apps.version',
+	// Phase 204-01 — provider.config.{list,set,delete} routes the operator's
+	// LLM provider API key entry flow. set/delete trigger sudo systemctl restart
+	// liv-claw-gateway and a 30s health poll. All 3 paths route via HTTP for the
+	// same WS-reconnect-survival rationale as the rest of the admin cluster
+	// (mcp.config.* line ~358, agents.* line ~303). Pitfall B-12 / X-04.
+	'provider.config.list',
+	'provider.config.set',
+	'provider.config.delete',
 ] as const

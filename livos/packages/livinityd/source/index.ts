@@ -163,6 +163,16 @@ import {createOpenclawosAppsRouter} from './modules/server/trpc/openclawos-route
 // real factory with `this.ai.redis` so the /settings → MCP tab can CRUD
 // the hash; McpBridge picks up changes at next livinityd boot.
 import {createMcpConfigRouter} from './modules/server/trpc/mcp-config-router.js'
+// Phase 204-01 — provider.config.* router (LLM provider API key entry for
+// liv-claw-gateway). Boot wire-up builds the real factory with
+// `this.ai.redis` so the /settings → Providers tab can CRUD the
+// `liv:provider:keys` hash + regen `/etc/default/liv-claw-gateway` + kick
+// off `sudo systemctl restart liv-claw-gateway`. Factory-DI mirrors the
+// mcp-config-router pattern (line 165 above).
+import {ProviderKeyStore} from './modules/provider/key-store.js'
+import {EnvFileWriter} from './modules/provider/env-file-writer.js'
+import {createRestartHook} from './modules/provider/restart-hook.js'
+import {createProviderConfigRouter} from './modules/server/trpc/provider-config-router.js'
 // Phase 202-04 — SSE endpoint that pushes live agent status to the
 // /agents dashboard. Subscribes to the same scheduler statusEvents
 // EventEmitter that runOnce / drainAgentStream emit on.
@@ -1489,6 +1499,47 @@ export default class Livinityd {
 				)
 			}
 
+			// Phase 204-01 — provider.config.* router. Same Redis-availability
+			// guard as mcp-config-router above; if `this.ai.redis` is somehow
+			// undefined, we silently fall back to the empty-injection stub
+			// which surfaces PROVIDER_CONFIG_UNAVAILABLE on every call.
+			let providerConfigRouterProductionInstance:
+				| ReturnType<typeof createProviderConfigRouter>
+				| undefined
+			if (this.ai?.redis != null) {
+				try {
+					const providerLogger = {
+						info: (msg: string) => webappLogger.info(msg),
+						warn: (msg: string, err?: unknown) =>
+							this.logger.error(msg, err),
+					}
+					const providerKeyStore = new ProviderKeyStore({
+						redis: this.ai.redis,
+						logger: providerLogger,
+					})
+					const envFileWriter = new EnvFileWriter({
+						keyStore: providerKeyStore,
+						redis: this.ai.redis,
+						logger: providerLogger,
+					})
+					const restartHook = createRestartHook({logger: providerLogger})
+					providerConfigRouterProductionInstance = createProviderConfigRouter({
+						keyStore: providerKeyStore,
+						envFileWriter,
+						restartHook,
+						logger: providerLogger,
+					})
+					webappLogger.info(
+						'Phase 204-01 — provider.config.* tRPC router wired (Redis hash liv:provider:keys; env-file: /etc/default/liv-claw-gateway with EACCES fallback to /opt/livos/etc/liv-claw-gateway.env)',
+					)
+				} catch (providerRouterErr) {
+					this.logger.error(
+						'Phase 204-01 — provider.config.* router factory failed; falls back to PROVIDER_CONFIG_UNAVAILABLE stub until next restart',
+						providerRouterErr,
+					)
+				}
+			}
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
@@ -1498,6 +1549,7 @@ export default class Livinityd {
 				agentTasks: agentTasksRouterProductionInstance,
 				mcpConfig: mcpConfigRouterProductionInstance,
 				openclawosApps: openclawosAppsRouterProductionInstance,
+				providerConfig: providerConfigRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(

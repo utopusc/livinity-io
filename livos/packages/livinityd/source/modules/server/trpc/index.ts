@@ -150,6 +150,17 @@ import {
 	createOpenclawosAppsRouter,
 	openclawosAppsRouter,
 } from './openclawos-router.js'
+// Phase 204-01 — `provider.config.*` namespace. Factory-DI: production
+// livinityd boot supplies a real `createProviderConfigRouter({keyStore,
+// envFileWriter, restartHook, logger})` build. The default exported
+// router is an empty-injection stub that throws PRECONDITION_FAILED +
+// PROVIDER_CONFIG_UNAVAILABLE on every call until boot wires the real
+// deps. All 3 procedure paths are added to `httpOnlyPaths` in ./common.ts
+// so the settings UI mutations survive `systemctl restart livos` mid-call.
+import {
+	createProviderConfigRouter,
+	providerConfigRouter,
+} from './provider-config-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -205,6 +216,13 @@ export function createAppRouter(opts: {
 	// 203-04). Mounted under `openclawos` as a NEW top-level namespace —
 	// INV-203-09 untouched (mcp.* + agents.* contracts unchanged).
 	openclawosApps?: ReturnType<typeof createOpenclawosAppsRouter>
+	// Phase 204-01 — `provider.config.*` namespace slot. Default empty-
+	// injection stub keeps the appRouter type-stable; production boot
+	// supplies the real router built against ProviderKeyStore + EnvFileWriter
+	// + RestartHook. Mounted under a NEW top-level `provider` namespace —
+	// INV-204-08 satisfied (no other routing surface mutations beyond the 3
+	// httpOnlyPaths additions).
+	providerConfig?: ReturnType<typeof createProviderConfigRouter>
 }) {
 	return router({
 		migration,
@@ -303,6 +321,15 @@ export function createAppRouter(opts: {
 		// in a real `createOpenclawosAppsRouter({repo})` build.
 		openclawos: router({
 			apps: opts.openclawosApps ?? openclawosAppsRouter,
+		}),
+		// Phase 204-01 — `provider.config.*` namespace (LLM provider API
+		// key entry for liv-claw-gateway). Default empty-injection stub
+		// throws PRECONDITION_FAILED + PROVIDER_CONFIG_UNAVAILABLE until
+		// production boot swaps in a real
+		// `createProviderConfigRouter({keyStore, envFileWriter, restartHook,
+		// logger})` build.
+		provider: router({
+			config: opts.providerConfig ?? providerConfigRouter,
 		}),
 	})
 }
