@@ -73,22 +73,47 @@ export type StoredApp = {
   updatedAt: string;
 };
 
-interface TRPCInputEnvelope<T> {
-  "0": { json: T };
-}
-
+/**
+ * Phase 207 R4 — bare tRPC wire envelope.
+ *
+ * livinityd has NO superjson transformer (Phase 206 commit 3f6b0c25). The
+ * canonical claw-client `livinityd-client.ts` already uses bare input + bare
+ * `{result:{data:<value>}}` response. This file (claw-plugin's separate copy)
+ * was missed in Phase 206 because it sits on the OTHER side of the gateway
+ * RPC boundary — the symptom was `"livinityd openclawos.apps.list returned
+ * empty payload"` because the batch envelope's `payload[0].result.data.json`
+ * read against a non-batched bare response yields `undefined`.
+ *
+ * Defensive read: also tolerate the legacy `{json:<value>}` shape so a stray
+ * superjson re-introduction doesn't immediately break us.
+ */
 interface TRPCSingleResult<T> {
-  result: { data: { json: T } };
+  result: { data: T | { json: T } };
 }
 
 interface TRPCErrorBody {
   error: {
-    json: {
+    message?: string;
+    code?: number | string;
+    data?: { code?: string; httpStatus?: number; message?: string };
+    json?: {
       message: string;
       code: number;
       data?: { code?: string; httpStatus?: number };
     };
   };
+}
+
+function unwrapTrpcData<T>(payload: TRPCSingleResult<T> | undefined): T | undefined {
+  const raw = payload?.result?.data;
+  if (raw === null || raw === undefined) return undefined;
+  if (
+    typeof raw === "object" &&
+    "json" in (raw as Record<string, unknown>)
+  ) {
+    return (raw as { json: T }).json;
+  }
+  return raw as T;
 }
 
 /**
@@ -138,39 +163,40 @@ export class AppStore {
    * 5xx errors retry once after 250 ms (T-203-01 mitigation for transient
    * livinityd restarts during update.sh).
    */
-  private async mutate<TIn, TOut>(path: string, input: TIn): Promise<TOut> {
-    const url = `${this.baseUrl}/trpc/${path}?batch=1`;
-    const body: TRPCInputEnvelope<TIn> = { "0": { json: input } };
+  private async parseTrpcError(res: Response, path: string): Promise<string> {
+    let serverMsg = `HTTP ${res.status}`;
+    try {
+      const payload = (await res.json()) as TRPCErrorBody | TRPCErrorBody[];
+      const err = Array.isArray(payload) ? payload[0]?.error : payload?.error;
+      const inner = err?.json ?? err;
+      const code = inner?.data?.code ?? (typeof err?.code === "string" ? err.code : undefined);
+      const message = inner?.message ?? err?.data?.message;
+      if (message) serverMsg = code ? `${code}: ${message}` : message;
+    } catch {
+      // ignore — fall back to status text
+    }
+    return `livinityd ${path} ${serverMsg}`;
+  }
 
+  private async mutate<TIn, TOut>(path: string, input: TIn): Promise<TOut> {
+    const url = `${this.baseUrl}/trpc/${path}`;
     let lastErr: unknown;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const res = await fetch(url, {
           method: "POST",
           headers: this.headers(),
-          body: JSON.stringify(body),
+          body: JSON.stringify(input),
         });
         if (!res.ok) {
-          // tRPC returns a JSON body even on errors — try to parse the
-          // first envelope element for a user-readable message.
-          let serverMsg = `HTTP ${res.status}`;
-          try {
-            const payload = (await res.json()) as Array<TRPCErrorBody>;
-            const inner = payload?.[0]?.error?.json;
-            if (inner?.message) {
-              serverMsg = `${inner.data?.code ?? inner.message}: ${inner.message}`;
-            }
-          } catch {
-            // Ignore parse failure — fall back to status text.
-          }
           if (res.status >= 500 && attempt === 0) {
             await new Promise((r) => setTimeout(r, 250));
             continue;
           }
-          throw new Error(`livinityd ${path} ${serverMsg}`);
+          throw new Error(await this.parseTrpcError(res, path));
         }
-        const payload = (await res.json()) as Array<TRPCSingleResult<TOut>>;
-        const out = payload?.[0]?.result?.data?.json;
+        const payload = (await res.json()) as TRPCSingleResult<TOut>;
+        const out = unwrapTrpcData(payload);
         if (out === undefined) {
           throw new Error(`livinityd ${path} returned empty payload`);
         }
@@ -178,8 +204,6 @@ export class AppStore {
       } catch (err) {
         lastErr = err;
         if (attempt === 0 && err instanceof TypeError) {
-          // Network-layer failure (fetch threw — connection refused, dns,
-          // socket reset). Retry once.
           await new Promise((r) => setTimeout(r, 250));
           continue;
         }
@@ -192,34 +216,29 @@ export class AppStore {
   }
 
   /**
-   * Call a livinityd tRPC QUERY (GET request). tRPC GET batch shape:
-   * `?batch=1&input=<encoded-{"0":{"json":<input>}}>`.
+   * Call a livinityd tRPC QUERY. Non-batch bare-input shape matches
+   * Phase 206 `livinityd-client.ts` callQuery (see commit 3f6b0c25).
    */
   private async query<TIn, TOut>(path: string, input: TIn): Promise<TOut> {
-    const inputParam = encodeURIComponent(
-      JSON.stringify({ "0": { json: input } }),
-    );
-    const url = `${this.baseUrl}/trpc/${path}?batch=1&input=${inputParam}`;
+    const url =
+      input === undefined || input === null
+        ? `${this.baseUrl}/trpc/${path}`
+        : `${this.baseUrl}/trpc/${path}?input=${encodeURIComponent(
+            JSON.stringify(input),
+          )}`;
     const res = await fetch(url, {
       method: "GET",
       headers: this.headers(),
     });
     if (!res.ok) {
-      let serverMsg = `HTTP ${res.status}`;
-      try {
-        const payload = (await res.json()) as Array<TRPCErrorBody>;
-        const inner = payload?.[0]?.error?.json;
-        if (inner?.message) {
-          serverMsg = `${inner.data?.code ?? inner.message}: ${inner.message}`;
-        }
-      } catch {
-        // ignore
-      }
-      throw new Error(`livinityd ${path} ${serverMsg}`);
+      throw new Error(await this.parseTrpcError(res, path));
     }
-    const payload = (await res.json()) as Array<TRPCSingleResult<TOut>>;
-    const out = payload?.[0]?.result?.data?.json;
+    const payload = (await res.json()) as TRPCSingleResult<TOut>;
+    const out = unwrapTrpcData(payload);
     if (out === undefined) {
+      // openclawos.apps.list returns [] when no rows. Treat that as the
+      // empty-array case — empty payload is now distinguishable from
+      // wire-shape mismatch (which would land on `out === undefined`).
       throw new Error(`livinityd ${path} returned empty payload`);
     }
     return out;
