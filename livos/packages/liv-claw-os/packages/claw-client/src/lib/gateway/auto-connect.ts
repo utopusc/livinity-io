@@ -30,14 +30,32 @@ import {fetchLivinitydDeviceToken} from "./livinityd-handshake";
 import {getSettings, saveSettings, type Settings} from "../storage";
 
 /**
- * Compute the same-origin gateway WS URL when running inside LivOS.
- * `location.protocol === 'https:'` → wss://; otherwise ws://. Path is the
- * Hot-fix-D part-1 `/liv-ai-app/liv-ai/ws` external prefix which Caddy
- * rewrites to `/plugins/openclawos/ws` before forwarding to :18789.
+ * Phase 203 Hot-fix G 2026-05-24 — direct loopback gateway URL.
+ *
+ * Hot-fix D originally routed claw-client over Caddy
+ * (`wss://${host}/liv-ai-app/liv-ai/ws` → openclaw on :18789) so that an
+ * operator on a remote browser could reach the gateway. Operator UAT
+ * proved that pathway both slow (TLS + reverse-proxy round trip on every
+ * frame) AND fragile (proxy-trust headers desync the gateway's local-
+ * client detection and produce `device_token_mismatch` storms — see Hot-
+ * fix F2).
+ *
+ * Reality check: the Liv AI claw-client only ever runs INSIDE the LivOS
+ * desktop stream, which means the browser executing this code is Chrome
+ * on the SAME Mini PC that hosts openclaw. `localhost === Mini PC` and
+ * the gateway is already bound to 127.0.0.1:18789. So we skip Caddy
+ * entirely and connect directly.
+ *
+ * Path `/plugins/openclawos/ws` matches what Caddy was rewriting to —
+ * confirmed live via `Caddyfile: handle_path /liv-ai-app/liv-ai* {
+ *   rewrite * /plugins/openclawos{path}; reverse_proxy 127.0.0.1:18789 }`.
+ *
+ * The `loc` argument is retained for the test surface (and so we keep
+ * `ws://` for any future HTTP dev harness) but its host is intentionally
+ * ignored — the destination is always the loopback gateway port.
  */
-export function computeSameOriginGatewayUrl(loc: {protocol: string; host: string}): string {
-	const scheme = loc.protocol === "https:" ? "wss:" : "ws:";
-	return `${scheme}//${loc.host}/liv-ai-app/liv-ai/ws`;
+export function computeSameOriginGatewayUrl(_loc: {protocol: string; host: string}): string {
+	return "ws://localhost:18789/plugins/openclawos/ws";
 }
 
 export interface AutoConnectResult {
