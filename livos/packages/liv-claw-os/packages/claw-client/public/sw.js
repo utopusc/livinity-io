@@ -27,7 +27,7 @@
 // Hot-fix K renders SettingsDialog independently and adds a
 // suppressConnectionForm prop so the Connection tab hides its URL/token
 // form in LivOS mode while the MCP Servers + Gateway tabs remain reachable.
-const CACHE_VERSION = "claw-shell-v14-phase206-wirefix";
+const CACHE_VERSION = "claw-shell-v15-phase206-bridge";
 const SHELL_URLS = ["/", "/favicon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

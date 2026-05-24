@@ -360,7 +360,10 @@ function ProviderCard({ info, authStatus, xaiStatus, onChanged }: ProviderCardPr
     oauthProviders.includes(info.provider) ||
     hasXaiOAuth;
 
-  // xAI status polling while OAuth flow active
+  // xAI status polling while OAuth flow active. On completion, ALSO bridges
+  // opencode's auth.json into openclaw's auth-profiles.json so the running
+  // agent actually sees the credential (Phase 206 root-cause: the two
+  // stores are independent — see project_phase206_shipped memory).
   useEffect(() => {
     if (!isXai || !oauthFlow) return;
     let cancelled = false;
@@ -369,9 +372,21 @@ function ProviderCard({ info, authStatus, xaiStatus, onChanged }: ProviderCardPr
         const s = await callQuery<undefined, XaiStatus>("auth.xai.status");
         if (cancelled) return;
         if (s?.connected) {
+          // Bridge opencode auth.json → openclaw auth-profiles.json. Best-
+          // effort: if the bridge mutation fails the operator can re-paste
+          // a permanent API key from the same card; we don't block the UI
+          // success message on the bridge.
+          try {
+            await callMutation<
+              { providers?: string[] },
+              { ok: boolean; bridged: string[] }
+            >("openclaw.auth.bridgeFromOpencode", { providers: ["xai"] });
+          } catch (bridgeErr) {
+            console.warn("xAI OAuth bridge failed", bridgeErr);
+          }
           setOauthFlow(null);
           setOauthCopied(false);
-          setNotice("xAI account connected.");
+          setNotice("xAI account connected and bridged to the running agent.");
           await onChanged();
           return;
         }
