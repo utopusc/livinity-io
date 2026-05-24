@@ -202,6 +202,17 @@ export class OpenClawEngine implements Engine {
   private _settings: Settings | null;
   private _sessionMeta = new Map<string, SessionRow>();
   private _availableModels: ModelChoice[] = [];
+  /**
+   * Phase 207 R2 — set of provider IDs with an auth credential configured.
+   * Populated by `_refreshConfiguredProviders()` from `openclaw.providers.list`
+   * (the same source ProvidersTab uses). When EMPTY, `availableModels` falls
+   * back to the unfiltered list so a fresh install with no providers
+   * configured still surfaces the catalog (operator can pick a model and the
+   * subsequent send will trigger an auth flow). When NON-EMPTY, the composer
+   * dropdown filters models to providers in this set — operator UAT
+   * 2026-05-24 quote: "Bagli olan api veya auth larin modellerini gostersin".
+   */
+  private _configuredProviders: Set<string> = new Set();
   private events: OpenClawEngineEvents;
 
   private _isReady = false;
@@ -848,6 +859,18 @@ export class OpenClawEngine implements Engine {
     return this._sessionMeta;
   }
   get availableModels(): ModelChoice[] {
+    return this._filteredAvailableModels();
+  }
+
+  /**
+   * Phase 207 R2 — escape hatch for callers that need the full catalog
+   * (e.g. config validation surfaces, `/model` slash command completion when
+   * the operator wants to bypass the filter and discover everything). The
+   * composer picker uses `availableModels` (filtered); the slash-command
+   * matcher uses this (unfiltered) so the operator can still type
+   * `/model openrouter/...` even before openrouter is connected.
+   */
+  get availableModelsAll(): ModelChoice[] {
     return this._availableModels;
   }
 
@@ -1058,6 +1081,9 @@ export class OpenClawEngine implements Engine {
     this._readyDeferred?.resolve();
     void this._refreshModels();
     void this._refreshConfig();
+    // Phase 207 R2 — populate _configuredProviders so the composer's default-
+    // model dropdown filters from 955 → only providers with credentials.
+    void this._refreshConfiguredProviders();
   };
 
   private _handleAuthFailed = (): void => {
@@ -1085,11 +1111,70 @@ export class OpenClawEngine implements Engine {
     try {
       const result = await this._request<ModelsListResult>("models.list");
       this._availableModels = result?.models ?? [];
-      this.events.onModelsChanged(this._availableModels);
+      this.events.onModelsChanged(this._filteredAvailableModels());
       log(`models.list → ${this._availableModels.length} model(s)`);
     } catch (e) {
       warn("models.list failed:", e);
     }
+  }
+
+  /**
+   * Phase 207 R2 — fetch the configured-provider set from openclaw and update
+   * the in-memory mask. Re-fires `onModelsChanged` with the FILTERED list so
+   * the composer dropdown narrows from 955 → only configured providers.
+   *
+   * Called from `_handleHello()` once on connect (after `_refreshModels`)
+   * and again after any in-app provider config change (Phase 207 R7 wiring,
+   * not required for R2 acceptance — operator does a manual reconnect).
+   *
+   * Tolerant of `providers.list` returning a partial shape; only entries with
+   * `provider: string` AND `configured === true` are included. Empty result
+   * (no providers configured) leaves the set empty → fail-open at the
+   * filter layer.
+   */
+  private async _refreshConfiguredProviders(): Promise<void> {
+    try {
+      const result = await this._request<{
+        providers?: Array<{ provider?: string; configured?: boolean }>;
+      }>("openclaw.providers.list", {});
+      const next = new Set<string>();
+      for (const entry of result?.providers ?? []) {
+        if (typeof entry?.provider === "string" && entry.configured === true) {
+          next.add(entry.provider);
+        }
+      }
+      this._configuredProviders = next;
+      log(
+        `openclaw.providers.list → ${next.size} configured provider(s) (${[...next].join(", ") || "none"})`,
+      );
+      // Re-emit models filtered against the new set so the composer picker
+      // narrows without waiting for a full models.list re-fetch.
+      this.events.onModelsChanged(this._filteredAvailableModels());
+    } catch (e) {
+      // `openclaw.providers.list` is the LivOS-side surface — older gateway
+      // builds may not have it. Treat absence as "no filtering" so the
+      // composer remains usable.
+      warn("openclaw.providers.list failed (filter disabled):", e);
+    }
+  }
+
+  /**
+   * Phase 207 R2 — filter the model catalog to the configured-provider set.
+   *
+   * Fail-open in three cases (return unfiltered):
+   *   1. `_configuredProviders` is empty (fresh install, no providers wired)
+   *   2. A model has no `provider` field (synthetic / unknown — keep it)
+   *   3. The provider is in the configured set (passes through)
+   *
+   * Operator UAT acceptance: with xAI + OpenRouter configured, the picker
+   * should show ≤ 279 models (14 xai + 265 openrouter), not 955.
+   */
+  private _filteredAvailableModels(): ModelChoice[] {
+    if (this._configuredProviders.size === 0) return this._availableModels;
+    return this._availableModels.filter((m) => {
+      if (!m.provider) return true;
+      return this._configuredProviders.has(m.provider);
+    });
   }
 
   /**
