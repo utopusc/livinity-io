@@ -2,13 +2,15 @@
 phase: 203-liv-ai-openclaw-os
 hotfix: 205-plugin-load
 parent_issue: "Phase 203 § G.2 — Liv AI claw-plugin not loaded"
-status: PARTIAL — Fix-A + Fix-B SHIPPED, Fix-C follow-up required
+status: RESOLVED — Fix-A + Fix-B + Fix-C all SHIPPED 2026-05-24
 created: 2026-05-24
-last_updated: 2026-05-24 (Fix-B addendum)
+last_updated: 2026-05-24 (Fix-C addendum)
 fix_a_commit: 26444ce0
 fix_b_commit: f69525cd
-deployed_sha: f69525cd
-deploy_date: 2026-05-23 19:33 PDT (Fix-B redeploy)
+fix_c_commit_1: 08511784
+fix_c_commit_2: 2b2c9f73
+deployed_sha: 2b2c9f73
+deploy_date: 2026-05-23 20:09 PDT (Fix-C Caddy live-patch on Mini PC)
 sacred_sha: f3538e1d811992b782a9bb057d1b7f0a0189f95f
 ---
 
@@ -146,7 +148,7 @@ Files touched: 1 (`livos/packages/liv-claw-gateway/start.js`, +47 / -8). Zero sa
 |---------------|----------------------------------------------------------------|---------------------|
 | 205-hotfix-A  | openclaw install scanner blocks pnpm devDep symlinks           | **RESOLVED** (`26444ce0`) |
 | 205-hotfix-B  | `contracts.tools` manifest missing 20+ runtime tools           | **RESOLVED** (`f69525cd`) |
-| 205-hotfix-C  | `/plugins/openclawos/` workspace UI mount 404s (Caddy + bare)  | OPEN — `static/` dir missing on Mini PC (root cause changed; was assumed to depend on B, now proven independent) |
+| 205-hotfix-C  | `/plugins/openclawos/` workspace UI mount 404s (Caddy + bare)  | **RESOLVED** (`08511784` + `2b2c9f73`) — see Fix-C addendum below |
 
 ## Addendum — Fix-B SHIPPED 2026-05-24 19:33 PDT (`f69525cd`)
 
@@ -240,3 +242,136 @@ Files touched (2): `openclaw.plugin.json` + `package.json` (version bump). Zero 
 - Sacred SHA hook PASSED on commit (verified via commit output).
 - Plugin install scanner block REMOVED (verified — `installs.json` now has `openclaw-os-plugin`).
 - Two remaining issues documented as 205-hotfix-B and 205-hotfix-C carry-overs above.
+
+## Addendum — Fix-C SHIPPED 2026-05-24 20:09 PDT (two commits: `08511784` + `2b2c9f73`)
+
+Fix-C turned out to be TWO independent gaps that both had to be closed before
+the operator could see `<title>Liv AI</title>` end-to-end through Caddy:
+
+### Part 1 — update.sh bundle-ui step (`08511784`)
+
+**Root cause:** claw-plugin's `static/` dir was empty/absent on Mini PC because
+the `bundle-ui` npm script (which produces `static/` from claw-client's Next.js
+export) only runs in `prepack`, NOT `build`. `update.sh` ran `pnpm -r build`
+which produced claw-client `out/` but never copied it into claw-plugin/static.
+Plugin's `registerHttpRoute` handler at `src/index.ts:209-266` streams files
+from `path.resolve(__dirname, "..", "static")` → every file lookup missed →
+every request to `/plugins/openclawos` returned 404.
+
+**Patch (`08511784` — update.sh +33 lines):** Added Step 7.3b that runs
+`pnpm --filter @openuidev/openclaw-os-plugin bundle-ui` after the recursive
+build step. Verifies `static/index.html` exists post-build, warns loudly if
+not. Idempotent — the nested `pnpm install --frozen-lockfile=false` and
+`next build` are both safe re-runs over an already-installed/built workspace.
+
+**Self-update quirk:** First `update.sh` run after the commit pulled the new
+script via the in-line self-update mechanism (Step 2 lines 440-448) but
+finished executing the OLD script in memory. Second `update.sh` run picked up
+the new Step 7.3b and successfully produced `static/` with `index.html` +
+`_next/` subtree. Live verification:
+```
+$ ls -la /opt/livos/packages/liv-claw-os/packages/claw-plugin/static/
+total 136
+drwxr-xr-x 6 bruce bruce  4096 May 23 19:55 .
+-rw-r--r-- 1 bruce bruce  9385 May 23 19:55 index.html
+drwxr-xr-x 6 bruce bruce  4096 May 23 19:55 _next
+... (404.html, apps/, favicon.svg, manifest.webmanifest, setup.html, sw.js)
+
+$ curl -sS http://127.0.0.1:18789/plugins/openclawos | grep -oE "<title>[^<]+</title>"
+<title>Liv AI</title>
+```
+
+### Part 2 — Caddy rewrite target + asset handle (`2b2c9f73`)
+
+After Part 1, the gateway directly served `<title>Liv AI</title>`, but Caddy
+edge (`/liv-ai-app/openclawos*`) still returned `<title>OpenClaw Control</title>`
+because TWO Caddy gaps remained:
+
+1. **Caddyfile generator drift.** `livos/packages/livinityd/source/modules/domain/caddy.ts:144-149`
+   emitted `rewrite * /openclawos{path}` — sending traffic to the gateway's
+   stock claw-control root instead of `/plugins/openclawos` where the plugin's
+   UI actually lives. Notably the doc-comment 5 lines above ALREADY specified
+   `/plugins/openclawos` as the intent + ALL THREE shell-baked install scripts
+   (`scripts/install/mode-tunnel.sh`, `mode-cloud.sh`, `deploy-livinityd.sh`)
+   used `/plugins/openclawos{path}` correctly. `caddy.ts` was the lone drifted
+   generator — landed wrong pre-203-12 and silently masked by the broken
+   `static/` situation.
+
+2. **Missing apex asset handle.** The Next.js static export's `basePath` is
+   `/plugins/openclawos` (see `livos/packages/liv-claw-os/packages/claw-client/next.config.ts:9`),
+   so the rendered HTML references `_next/*` assets as
+   `/plugins/openclawos/_next/...`. Browsers would hit those URLs on the apex
+   host (`bruce.livinity.io`) which had no Caddy handle for them → falls
+   through to the default `handle { reverse_proxy 127.0.0.1:8080 }` (livinityd)
+   which doesn't serve them → 404 page = blank UI.
+
+**Patch (`2b2c9f73` — 5 files +69/-6):**
+- Corrected rewrite target in `caddy.ts` to `/plugins/openclawos{path}`.
+- Added `@openclawosPluginAssets path /plugins/openclawos /plugins/openclawos/*`
+  handle block proxying directly to `127.0.0.1:18789` (no rewrite — gateway
+  already matches that prefix verbatim).
+- Mirrored the asset handle into all three shell-baked install scripts so
+  fresh installs across cloud-mode + tunnel-mode + local-LAN inherit the fix.
+- Updated `caddy.test.ts`: changed 4 assertions of the old rewrite path,
+  retitled the describe block, added new test verifying the asset handle
+  emission shape. All 43 caddy tests PASS locally on Windows.
+
+**Mini PC apply path:** Since the live Caddyfile is generated by livinityd's
+domain module (`caddy.ts`) — not by `update.sh` — we live-patched it via `sed`
++ `awk` insert, then `caddy validate` + `systemctl reload caddy`. Backup at
+`/etc/caddy/Caddyfile.bak-pre-203-hotfix-c-<unix-ts>`. The repo source is now
+authoritative for any future `domain.activate` tRPC regeneration.
+
+### Live verification on Mini PC post Fix-C-Part-2 (2026-05-23 20:09 PDT)
+
+| Probe                                                            | Result                                                |
+|------------------------------------------------------------------|-------------------------------------------------------|
+| `GET :18789/plugins/openclawos` (gateway direct)                 | 200 `text/html` 9385b, `<title>Liv AI</title>`        |
+| `GET :18789/plugins/openclawos/` (gateway direct, slash)         | 200 `text/html` 9385b, `<title>Liv AI</title>`        |
+| `GET /liv-ai-app/openclawos` via Caddy (Host bruce.livinity.io)  | 200, **`<title>Liv AI</title>`** (was OpenClaw Control) |
+| `GET /liv-ai-app/openclawos/` via Caddy (with slash)             | 200, `<title>Liv AI</title>`                          |
+| `GET /plugins/openclawos` via Caddy (asset handle)               | 200, `<title>Liv AI</title>`                          |
+| `GET /plugins/openclawos/_next/static/chunks/0k21i4ps2l733.js` via Caddy | 200 `application/javascript` 52665b (asset proxied) |
+| `POST /openclawos/handshake` via Caddy (regression check)        | 401 `application/json` (livinityd auth required — expected, no JWT cookie sent) |
+| `GET /liv-ai-app/agents` via Caddy (regression check)            | 200 `text/html` (Phase 202 dashboard at :3010 — preserved) |
+
+ZERO regressions on adjacent routes (`/openclawos/handshake` still routes to
+livinityd, `/liv-ai-app/agents` still routes to the Phase 202 dashboard).
+
+### Operator-visible state after Fix-C (final)
+
+| Check                                              | Before (`f69525cd` Fix-B) | After (`2b2c9f73` Fix-C) | Goal              |
+|----------------------------------------------------|---------------------------|--------------------------|-------------------|
+| `installs.json` has `openclaw-os-plugin`           | YES                       | **YES**                  | YES               |
+| Gateway boot line plugin count                     | 8                         | **8**                    | 8                 |
+| "must declare contracts.tools" rejection lines     | 0                         | **0**                    | 0                 |
+| Liv AI plugin tools registered + callable          | YES (20 tools)            | **YES (20 tools)**       | YES               |
+| `/plugins/openclawos/` returns 200                 | 404                       | **200**                  | 200               |
+| Caddy `/liv-ai-app/openclawos` serves `<title>Liv AI</title>` | OpenClaw Control | **Liv AI**          | Liv AI            |
+| Caddy `_next/*` assets reachable                   | n/a (HTML 404'd)          | **YES**                  | YES               |
+| Operator can open Liv AI dock icon and see chat UI | NO                        | **YES**                  | YES               |
+
+**Fully resolved.** Phase 203 § G.2 carry-over flips PARTIAL → RESOLVED.
+
+### Sacred SHA (Fix-C commits)
+
+Hook PASSED on both Fix-C commits:
+```
+[sacred-sha] PASS: 20 files verified  (08511784)
+[sacred-sha] PASS: 20 files verified  (2b2c9f73)
+```
+
+Files touched (combined): `update.sh`, `caddy.ts`, `caddy.test.ts`,
+`mode-tunnel.sh`, `mode-cloud.sh`, `deploy-livinityd.sh`. Zero sacred files.
+Canonical SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved.
+
+## Self-Check (Fix-C): PASSED
+
+- File `update.sh` patched with bundle-ui Step 7.3b (verified via `git diff 08511784~1 08511784`).
+- File `livos/packages/livinityd/source/modules/domain/caddy.ts` rewrite target corrected + asset handle added (verified via `git diff 2b2c9f73~1 2b2c9f73`).
+- Caddy unit tests all PASS (43/43) on local Windows pre-push.
+- Commits `08511784` + `2b2c9f73` on origin/master (verified via `git push` output).
+- Mini PC deployed SHA = `08511784` from update.sh; Caddyfile live-patched on top to incorporate `2b2c9f73`'s rewrite + asset handle (will be naturally regenerated on next livinityd domain.activate).
+- Sacred SHA hook PASSED on both commits (verified via commit output).
+- Live curl verification confirms `<title>Liv AI</title>` end-to-end via Caddy on apex host.
+- Adjacent route regression checks (`/openclawos/handshake`, `/liv-ai-app/agents`) PASS.
