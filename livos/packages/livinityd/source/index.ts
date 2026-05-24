@@ -1383,9 +1383,47 @@ export default class Livinityd {
 			// Phase 203-10 — Approvals SSE + respond routes. Surfaces the
 			// in-process ApprovalManager events to the rebuilt claw-client
 			// ApprovalCard (Plan 203-09 deleted the assistant-ui one). Same
-			// JWT-cookie auth gate as /openclawos/handshake. Mount is no-op
-			// when approvalManagerForPlugin is null (agent-runtime degraded).
+			// JWT-cookie auth gate as /openclawos/handshake.
+			//
+			// Phase 207 R5 — when approvalManagerForPlugin is null (agent-
+			// runtime degraded at boot) we previously skipped the mount
+			// entirely, which made `/openclawos/approvals/stream` fall through
+			// to the SPA fallback handler. Browsers' EventSource then logged
+			// `EventSource's response has a MIME type ("text/html")` and
+			// aborted. The stub below ALWAYS mounts the SSE route with the
+			// correct Content-Type even on degraded boot — it just sends one
+			// `event: unavailable` frame and closes. The console stays clean
+			// and the UI can degrade gracefully (no pending approvals → no
+			// ApprovalCards). The POST /respond stub returns 503 with a
+			// structured JSON body for the same reason.
 			try {
+				if (this.server.app && !approvalManagerForPlugin) {
+					this.server.app.get('/openclawos/approvals/stream', (_req, res) => {
+						res.status(503)
+						res.setHeader('Content-Type', 'text/event-stream')
+						res.setHeader('Cache-Control', 'no-cache')
+						res.setHeader('Connection', 'keep-alive')
+						res.setHeader('X-Accel-Buffering', 'no')
+						res.write(
+							'event: unavailable\ndata: ' +
+								JSON.stringify({
+									reason: 'APPROVAL_MANAGER_UNAVAILABLE',
+									message:
+										'Approvals subsystem not initialized — agent runtime degraded at boot.',
+								}) +
+								'\n\n',
+						)
+						res.end()
+					})
+					this.server.app.post('/openclawos/approvals/respond', (_req, res) => {
+						res
+							.status(503)
+							.json({error: 'APPROVAL_MANAGER_UNAVAILABLE'})
+					})
+					webappLogger.info(
+						'Phase 207 R5 — /openclawos/approvals/* stub mounted (approvalManager null, SSE returns text/event-stream so EventSource does not abort with MIME mismatch)',
+					)
+				}
 				if (this.server.app && approvalManagerForPlugin) {
 					const {
 						createApprovalsStreamHandler,
@@ -1683,6 +1721,33 @@ export default class Livinityd {
 			webappLogger.info(
 				'Phase 206 — openclaw.* tRPC router wired (CLI-wrapped provider+model config; replaces dead Phase 204 env file path)',
 			)
+
+			// Phase 207 R6 — periodic opencode→openclaw bridge auto-refresh.
+			// Phase 206 ships the manual bridge (`openclaw.bridgeFromOpencode`
+			// mutation) that fires at the end of an xAI OAuth flow. The bridged
+			// profile is a SNAPSHOT — when opencode's TokenRefresher rotates
+			// the xAI access token (~24h cycle), the snapshot goes stale and
+			// chat starts returning 401. The interval below re-runs the
+			// bridge every 30 min so the openclaw mirror stays fresh without
+			// operator action. Best-effort: any failure is logged + retried
+			// on the next tick; the timer is unref'd so it never blocks
+			// process shutdown.
+			try {
+				const {startPeriodicBridgeRefresh} = await import(
+					'./modules/openclaw-cli/opencode-bridge.js'
+				)
+				startPeriodicBridgeRefresh({
+					logger: {
+						info: (msg) => webappLogger.info(msg),
+						warn: (msg, err) => this.logger.error(msg, err),
+					},
+				})
+			} catch (bridgeRefresherErr) {
+				this.logger.error(
+					'Phase 207 R6 — periodic bridge refresher startup failed; OAuth snapshots will go stale without manual rebridge',
+					bridgeRefresherErr,
+				)
+			}
 
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
