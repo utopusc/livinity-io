@@ -27,6 +27,7 @@ import {
   PanelLeftClose,
   Pin,
   Search,
+  Settings as SettingsIcon,
   Sun,
   Wifi,
   WifiOff,
@@ -750,57 +751,56 @@ export function AppSidebar({
         </div>
       </div>
 
-      {/* ── Footer: theme toggle + combined status/settings button ── */}
+      {/* ── Footer: gear-icon Settings entry + theme toggle ──
+       *
+       * Phase 205-02 D-205-01 (LOCKED): the bottom-tile content was
+       * previously a connection-status pill (STATUS_LABEL +
+       * STATUS_ICON). It is replaced here with a gear icon + literal
+       * "Settings" label so the bottom-tile reads as a stable settings
+       * entry point. The STATUS_LABEL / STATUS_ICON / DOT_CLASS tables
+       * stay defined at the top of this file because other surfaces
+       * (and a future Connection-tab body) may still render them. The
+       * `connectionState` prop is still consumed by other lines of the
+       * file, so the prop signature is unchanged. */}
       <div
         className={`flex items-center gap-2xs bg-sunk-light/60 px-s py-sm ${
           nc ? "justify-center" : ""
         }`}
       >
-        {(() => {
-          const status = STATUS_ICON[connectionState];
-          const StatusIcon = status.icon;
-          return nc ? (
+        {nc ? (
+          <IconButton
+            icon={SettingsIcon}
+            variant="tertiary"
+            size="md"
+            title="Open settings"
+            onClick={onSettingsClick}
+          />
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={onSettingsClick}
+              title="Open settings"
+              aria-label="Open settings"
+              className="group flex min-w-0 flex-1 items-center gap-s rounded-m px-s py-2xs text-left transition-colors hover:bg-sunk dark:hover:bg-sunk-light"
+            >
+              <SettingsIcon
+                size={14}
+                className="shrink-0 text-text-neutral-tertiary group-hover:text-text-neutral-primary"
+              />
+              <span className="truncate font-label text-sm font-regular text-text-neutral-primary">
+                Settings
+              </span>
+            </button>
             <IconButton
-              icon={StatusIcon}
+              icon={isDark ? Sun : Moon}
               variant="tertiary"
               size="md"
-              title={`${STATUS_LABEL[connectionState]} — open settings`}
-              onClick={onSettingsClick}
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={onToggleThemeMode}
             />
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={onSettingsClick}
-                title="Open settings"
-                aria-label={`${STATUS_LABEL[connectionState]} — open settings`}
-                className="group flex min-w-0 flex-1 items-center justify-between gap-s rounded-m px-s py-2xs text-left transition-colors hover:bg-sunk dark:hover:bg-sunk-light"
-              >
-                <span className="flex min-w-0 items-center gap-s">
-                  <span
-                    className={`inline-block h-s w-s shrink-0 rounded-full ${DOT_CLASS[connectionState]}`}
-                  />
-                  <span className="truncate font-label text-sm font-regular text-text-neutral-primary">
-                    {STATUS_LABEL[connectionState]}
-                  </span>
-                </span>
-                <StatusIcon
-                  size={14}
-                  className={`shrink-0 text-text-neutral-tertiary group-hover:text-text-neutral-primary ${
-                    status.pulse ? "animate-pulse" : ""
-                  }`}
-                />
-              </button>
-              <IconButton
-                icon={isDark ? Sun : Moon}
-                variant="tertiary"
-                size="md"
-                title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-                onClick={onToggleThemeMode}
-              />
-            </>
-          );
-        })()}
+          </>
+        )}
       </div>
     </aside>
   );
