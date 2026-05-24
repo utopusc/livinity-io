@@ -18,18 +18,6 @@ interface Props {
   onSave: (settings: Settings) => void;
 }
 
-// Phase 203 Hot-fix I 2026-05-24 — defensive scrub mirror of SettingsDialog.
-// Keep in lockstep with SettingsDialog's POISONED_GATEWAY_URL_PATTERNS.
-const POISONED_GATEWAY_URL_PATTERNS: ReadonlyArray<RegExp> = [
-  /^wss?:\/\/[^/]+\.livinity\.(io|live)\/liv-ai-app\/liv-ai\/ws$/i,
-  /^wss?:\/\/[^/]+\.livinity\.(io|live)\/plugins\/openclawos\/ws$/i,
-];
-function scrubGatewayUrl(url: string | undefined): string {
-  if (!url) return "";
-  if (POISONED_GATEWAY_URL_PATTERNS.some((re) => re.test(url))) return "";
-  return url;
-}
-
 export function MobileSettingsDialog({
   open,
   currentSettings,
@@ -39,7 +27,7 @@ export function MobileSettingsDialog({
 }: Props) {
   useBodyScrollLock(open);
 
-  const [gatewayUrl, setGatewayUrl] = useState(scrubGatewayUrl(currentSettings?.gatewayUrl));
+  const [gatewayUrl, setGatewayUrl] = useState(currentSettings?.gatewayUrl ?? "");
   const [token, setToken] = useState(currentSettings?.token ?? "");
   const [pending, setPending] = useState(false);
   // See SettingsDialog for the snapshot-based race rationale.
@@ -49,7 +37,7 @@ export function MobileSettingsDialog({
 
   useEffect(() => {
     if (!open) return;
-    setGatewayUrl(scrubGatewayUrl(currentSettings?.gatewayUrl));
+    setGatewayUrl(currentSettings?.gatewayUrl ?? "");
     setToken(currentSettings?.token ?? "");
     setPending(false);
     submitSnapshotRef.current = null;

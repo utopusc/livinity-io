@@ -89,24 +89,8 @@ const STATUS_BANNER: Record<
   },
 };
 
-// Phase 203 Hot-fix I 2026-05-24 — defensive scrub of the legacy livinity.io
-// gateway URL inside the form's INITIAL value. Even with the storage-layer
-// scrub (getSettings()), an old in-memory `currentSettings` snapshot can still
-// reach this component when the form briefly renders before useGateway()
-// reloads settings. We intercept here so the operator NEVER sees the dead
-// `wss://*.livinity.io/...` URL pre-filled in the input.
-const POISONED_GATEWAY_URL_PATTERNS: ReadonlyArray<RegExp> = [
-  /^wss?:\/\/[^/]+\.livinity\.(io|live)\/liv-ai-app\/liv-ai\/ws$/i,
-  /^wss?:\/\/[^/]+\.livinity\.(io|live)\/plugins\/openclawos\/ws$/i,
-];
-function scrubGatewayUrl(url: string | undefined): string {
-  if (!url) return "";
-  if (POISONED_GATEWAY_URL_PATTERNS.some((re) => re.test(url))) return "";
-  return url;
-}
-
 export function SettingsDialog({ open, currentSettings, connectionState, onClose, onSave }: Props) {
-  const [gatewayUrl, setGatewayUrl] = useState(scrubGatewayUrl(currentSettings?.gatewayUrl));
+  const [gatewayUrl, setGatewayUrl] = useState(currentSettings?.gatewayUrl ?? "");
   const [token, setToken] = useState(currentSettings?.token ?? "");
   // `pending` = user clicked Save & Connect and we're awaiting the engine's
   // resolution. We hold the dialog open and watch `connectionState` to decide
@@ -138,7 +122,7 @@ export function SettingsDialog({ open, currentSettings, connectionState, onClose
   // Sync local state from props only when dialog opens — never mid-typing.
   useEffect(() => {
     if (!open) return;
-    setGatewayUrl(scrubGatewayUrl(currentSettings?.gatewayUrl));
+    setGatewayUrl(currentSettings?.gatewayUrl ?? "");
     setToken(currentSettings?.token ?? "");
     setPending(false);
     submitSnapshotRef.current = null;
