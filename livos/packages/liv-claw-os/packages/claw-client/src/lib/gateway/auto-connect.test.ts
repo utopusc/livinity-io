@@ -44,22 +44,25 @@ beforeEach(() => {
 // ─── computeSameOriginGatewayUrl ─────────────────────────────────────────
 
 describe("computeSameOriginGatewayUrl", () => {
-	test("https → wss with Hot-fix-D /liv-ai-app/liv-ai/ws path", () => {
+	// Hot-fix G 2026-05-24 — direct-loopback URL. The browser always runs
+	// inside the LivOS desktop stream on the Mini PC, so localhost = Mini PC
+	// = openclaw gateway. Caddy round-trip is intentionally bypassed.
+	test("returns the loopback openclaw WS URL regardless of host (HTTPS embed)", () => {
 		expect(
 			computeSameOriginGatewayUrl({protocol: "https:", host: "bruce.livinity.io"}),
-		).toBe("wss://bruce.livinity.io/liv-ai-app/liv-ai/ws");
+		).toBe("ws://localhost:18789/plugins/openclawos/ws");
 	});
 
-	test("http → ws (dev / local-lan)", () => {
+	test("returns the loopback openclaw WS URL regardless of host (HTTP dev)", () => {
 		expect(
 			computeSameOriginGatewayUrl({protocol: "http:", host: "127.0.0.1:8080"}),
-		).toBe("ws://127.0.0.1:8080/liv-ai-app/liv-ai/ws");
+		).toBe("ws://localhost:18789/plugins/openclawos/ws");
 	});
 
-	test("path uses the operator-visible URL prefix (NOT the legacy /openclawos)", () => {
+	test("path targets the openclaw plugin WS mount (NOT the Caddy-routed external prefix)", () => {
 		const url = computeSameOriginGatewayUrl({protocol: "https:", host: "x.io"});
-		expect(url).toContain("/liv-ai-app/liv-ai/ws");
-		expect(url).not.toContain("/liv-ai-app/openclawos");
+		expect(url).toContain("/plugins/openclawos/ws");
+		expect(url).not.toContain("/liv-ai-app/");
 	});
 });
 
@@ -88,7 +91,7 @@ describe("attemptLivOsAutoConnect", () => {
 		const fetcher = vi.fn().mockResolvedValue(handshake);
 		const result = await attemptLivOsAutoConnect(fetcher as never);
 		const expectedSettings = {
-			gatewayUrl: "wss://bruce.livinity.io/liv-ai-app/liv-ai/ws",
+			gatewayUrl: "ws://localhost:18789/plugins/openclawos/ws",
 			deviceToken: "tok-abc",
 		};
 		expect(result).toEqual({
@@ -114,7 +117,7 @@ describe("attemptLivOsAutoConnect", () => {
 		expect(result.ok).toBe(true);
 		expect(result.reason).toBe("seeded");
 		expect(result.settings).toBeDefined();
-		expect(result.settings?.gatewayUrl).toBe("wss://bruce.livinity.io/liv-ai-app/liv-ai/ws");
+		expect(result.settings?.gatewayUrl).toBe("ws://localhost:18789/plugins/openclawos/ws");
 		expect(result.settings?.deviceToken).toBe("tok-e");
 	});
 
