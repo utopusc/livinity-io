@@ -112,7 +112,8 @@ async function revokeWithDeviceHeader(
       Accept: "application/json",
       "X-Claw-Device-Id": callerDeviceId,
     },
-    body: JSON.stringify({ json: { deviceId: targetDeviceId } }),
+    // Phase 206 fix — bare envelope, no superjson wrap (matches livinityd-client.ts).
+    body: JSON.stringify({ deviceId: targetDeviceId }),
   });
   const text = await res.text().catch(() => "");
   let env: {

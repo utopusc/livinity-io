@@ -19,10 +19,14 @@
  * server-side env var, and the cookie is strictly more secure (HttpOnly,
  * Same-Site, no env exposure to the page).
  *
- * Wire envelopes confirmed live on Mini PC during Hot-fix L diagnosis:
- *   - Queries: `GET /trpc/<path>?input=%7B%22json%22%3A<...>%7D`
- *   - Mutations: `POST /trpc/<path>` body `{"json": <input>}` (bare non-batch)
- *   - Success: `{result:{data:<unwrapped>}}` (defensively also accepts `{json: payload}`)
+ * Wire envelopes confirmed live on Mini PC during Phase 206 diagnosis
+ * 2026-05-24 (the Hot-fix L comment's `{"json":<input>}` shape was WRONG —
+ * livinityd has no superjson transformer; the wrapping makes zod see
+ * `input.model === undefined`):
+ *   - Queries: `GET /trpc/<path>?input=<JSON.stringify(input)>` (bare;
+ *     omit query string entirely when input is undefined)
+ *   - Mutations: `POST /trpc/<path>` body `<JSON.stringify(input)>` (bare)
+ *   - Success: `{result:{data:<value>}}` (defensively also accepts `{json: payload}`)
  *   - Error: `{error:{json:{message,code}}}` OR `{error:{message,…}}`
  *
  * Consumed by:
@@ -110,11 +114,15 @@ async function explainNotOk<O>(res: Response, path: string): Promise<Error> {
  * cookie auto-flowed by `credentials: 'include'`.
  */
 export async function callQuery<I, O>(path: string, input?: I): Promise<O> {
+  // Phase 206 fix — livinityd has no superjson transformer, so the bare
+  // input value is what tRPC expects. The previous `{json: input}` wrap
+  // made zod see `input === {json: <real>}` and fail with "missing field"
+  // errors for every procedure that had a non-empty input schema.
   const url =
     input === undefined
       ? `${getBaseUrl()}/trpc/${path}`
       : `${getBaseUrl()}/trpc/${path}?input=${encodeURIComponent(
-          JSON.stringify({ json: input }),
+          JSON.stringify(input),
         )}`;
   const res = await fetch(url, {
     method: "GET",
@@ -137,6 +145,9 @@ export async function callQuery<I, O>(path: string, input?: I): Promise<O> {
  * Phase 204-02 carry-over). Auth via LIVINITY_SESSION cookie.
  */
 export async function callMutation<I, O>(path: string, input: I): Promise<O> {
+  // Phase 206 fix — see callQuery comment above. Bare input, no superjson
+  // wrapper. The previous `{json: input}` shape made every input-bearing
+  // mutation silently zod-fail on the server.
   const res = await fetch(`${getBaseUrl()}/trpc/${path}`, {
     method: "POST",
     credentials: "include",
@@ -144,7 +155,7 @@ export async function callMutation<I, O>(path: string, input: I): Promise<O> {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({ json: input }),
+    body: JSON.stringify(input),
   });
   if (!res.ok) {
     throw await explainNotOk<O>(res, path);
