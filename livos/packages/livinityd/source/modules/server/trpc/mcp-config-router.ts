@@ -50,6 +50,10 @@
 import {TRPCError} from '@trpc/server'
 import {z} from 'zod'
 
+import type {
+	OpenclawConfigStore,
+	OpenclawMcpServerConfig,
+} from '../../openclawos/openclaw-config-store.js'
 import {adminProcedure, router} from './trpc.js'
 
 export const MCP_CONFIG_REDIS_HASH_KEY = 'liv:mcp:config'
@@ -102,6 +106,34 @@ export interface McpConfigRouterDeps {
 		info: (msg: string) => void
 		warn: (msg: string, error?: unknown) => void
 	}
+	/**
+	 * Phase 207 R1 — openclaw.json mirror.
+	 *
+	 * Optional handle to `/opt/livos/data/openclaw/openclaw.json`. When
+	 * present, every mutation (add/update/delete/toggle) is mirrored to the
+	 * config file's `mcp.servers.<name>` field so the openclaw gateway
+	 * live-reloads it (Probe A6, 205-01 SPIKE) and spawns the corresponding
+	 * MCP runtime. Without this dep configured MCP servers stay in Redis
+	 * only and the chat agent never sees their tools — that was the operator
+	 * UAT failure on 2026-05-24 ("MCP ile ilgili özel araçlar bulunmuyor").
+	 *
+	 * Optional so unit tests can omit it and so livinityd boot can fall back
+	 * to Redis-only when `OpenclawConfigStore` construction fails (path
+	 * missing, permission denied). All mirror calls fail-open: a write
+	 * failure is logged but never bubbles a TRPCError because the Redis
+	 * write already succeeded and the UI must reflect the authoritative
+	 * state.
+	 */
+	openclawConfigStore?: OpenclawConfigStore
+	/**
+	 * Phase 207 R1 — system MCP servers we never mirror.
+	 *
+	 * `luse` is the built-in OS bridge wired by the claw-plugin process
+	 * itself, NOT a remote MCP server openclaw spawns. Adding it to
+	 * `mcp.servers` would cause openclaw to try and double-spawn it. The
+	 * router filters these names out of every mirror.
+	 */
+	mirrorSkipNames?: ReadonlySet<string>
 }
 
 /**
@@ -180,6 +212,70 @@ export function parseEntry(name: string, raw: string, logger: McpConfigRouterDep
 }
 
 /**
+ * Phase 207 R1 — translate the LivOS-shape MCP body into the openclaw-shape
+ * server-config the gateway expects in `mcp.servers.<name>`. Returns `null`
+ * when the entry is disabled — disabled servers are dropped from openclaw.json
+ * so the gateway doesn't spawn them, matching the McpBridge semantics
+ * (`mcp-bridge.ts` skips entries with `enabled === false`).
+ */
+function toOpenclawMcpServerConfig(
+	body: z.infer<typeof ServerBodySchema>,
+): OpenclawMcpServerConfig | null {
+	if (!body.enabled) return null
+	const out: OpenclawMcpServerConfig = {}
+	if (body.transport === 'stdio') {
+		if (body.command !== undefined) out.command = body.command
+		if (body.args !== undefined) out.args = body.args
+		if (body.env !== undefined) out.env = body.env
+	} else if (body.transport === 'http') {
+		if (body.url !== undefined) out.url = body.url
+	}
+	return out
+}
+
+/**
+ * Phase 207 R1 — mirror one `mcp.config.*` mutation to openclaw.json.
+ *
+ * Fail-open: never throws. A failure is logged with the operator-readable
+ * reason so the SettingsDialog → MCP tab still surfaces the Redis truth even
+ * if the openclaw config file is unwritable.
+ */
+async function mirrorMcpEntryToOpenclawJson(
+	deps: McpConfigRouterDeps,
+	op: 'set' | 'delete',
+	name: string,
+	body: z.infer<typeof ServerBodySchema> | null,
+): Promise<void> {
+	const store = deps.openclawConfigStore
+	if (!store) return
+	if (deps.mirrorSkipNames?.has(name)) return
+	try {
+		store.patch((cfg) => {
+			if (!cfg.mcp) cfg.mcp = {}
+			if (!cfg.mcp.servers) cfg.mcp.servers = {}
+			if (op === 'delete') {
+				delete cfg.mcp.servers[name]
+				return
+			}
+			const projection = body ? toOpenclawMcpServerConfig(body) : null
+			if (projection === null) {
+				delete cfg.mcp.servers[name]
+				return
+			}
+			cfg.mcp.servers[name] = projection
+		})
+		deps.logger.info(
+			`[mcp-config] mirrored '${name}' to openclaw.json mcp.servers (op=${op})`,
+		)
+	} catch (err) {
+		deps.logger.warn(
+			`[mcp-config] mirror to openclaw.json failed for '${name}' (op=${op}) — chat agent may not see this server until openclaw.json catches up`,
+			err,
+		)
+	}
+}
+
+/**
  * Serialize the user-supplied body to the JSON shape we persist in the hash.
  * `system` is NOT persisted (it's a runtime-computed flag); the rest of the
  * fields are.
@@ -229,6 +325,7 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 			await deps.redis.hset(REDIS_HASH_KEY, input.name, serializeBody(body))
 			deps.logger.info(`[mcp-config] added external MCP server '${input.name}'`)
 			await publishMcpUpdated(deps, 'set', input.name)
+			await mirrorMcpEntryToOpenclawJson(deps, 'set', input.name, body)
 			return {ok: true as const}
 		}),
 
@@ -263,6 +360,7 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 			await deps.redis.hset(REDIS_HASH_KEY, input.name, serializeBody(merged))
 			deps.logger.info(`[mcp-config] updated MCP server '${input.name}'`)
 			await publishMcpUpdated(deps, 'set', input.name)
+			await mirrorMcpEntryToOpenclawJson(deps, 'set', input.name, merged)
 			return {ok: true as const}
 		}),
 
@@ -287,6 +385,7 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 			await deps.redis.hdel(REDIS_HASH_KEY, input.name)
 			deps.logger.info(`[mcp-config] deleted MCP server '${input.name}'`)
 			await publishMcpUpdated(deps, 'delete', input.name)
+			await mirrorMcpEntryToOpenclawJson(deps, 'delete', input.name, null)
 			return {ok: true as const}
 		}),
 
@@ -322,6 +421,7 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 				`[mcp-config] toggled MCP server '${input.name}' → ${input.enabled ? 'enabled' : 'disabled'}`,
 			)
 			await publishMcpUpdated(deps, 'set', input.name)
+			await mirrorMcpEntryToOpenclawJson(deps, 'set', input.name, merged)
 			return {ok: true as const}
 		}),
 	})

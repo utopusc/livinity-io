@@ -1472,6 +1472,28 @@ export default class Livinityd {
 			// throw, so we skip a try/catch and let the createAppRouter call
 			// site keep the default empty-injection stub if `this.ai.redis`
 			// is somehow undefined.
+			// Phase 207 R1 — pre-construct an OpenclawConfigStore so mcp-config-
+			// router can mirror every Redis MCP write to openclaw.json's
+			// `mcp.servers.<name>` field. Without this mirror the openclaw
+			// gateway never sees servers added via the /settings → MCP tab and
+			// the chat agent reports "no MCP tools" (operator UAT 2026-05-24).
+			// gatewayConfigStore below (Phase 205-04) constructs a DIFFERENT
+			// instance for the openclawos.gateway.* router; the two instances
+			// race only at the rename-syscall layer and the OpenclawConfigStore
+			// contract documents last-writer-wins as acceptable.
+			let mcpConfigOpenclawStore: OpenclawConfigStore | undefined
+			try {
+				const openclawConfigPath =
+					process.env['OPENCLAW_CONFIG_PATH'] ??
+					'/opt/livos/data/openclaw/openclaw.json'
+				mcpConfigOpenclawStore = new OpenclawConfigStore(openclawConfigPath)
+			} catch (storeErr) {
+				this.logger.error(
+					'Phase 207 R1 — mcp-config OpenclawConfigStore construction failed; mirror to openclaw.json disabled this boot',
+					storeErr,
+				)
+			}
+
 			const mcpConfigRouterProductionInstance =
 				this.ai?.redis != null
 					? createMcpConfigRouter({
@@ -1480,6 +1502,8 @@ export default class Livinityd {
 								info: (msg) => webappLogger.info(msg),
 								warn: (msg, err) => this.logger.error(msg, err),
 							},
+							openclawConfigStore: mcpConfigOpenclawStore,
+							mirrorSkipNames: new Set(['luse']),
 						})
 					: undefined
 			if (mcpConfigRouterProductionInstance) {
