@@ -858,17 +858,37 @@ export class OpenClawEngine implements Engine {
   get sessionMeta(): Map<string, SessionRow> {
     return this._sessionMeta;
   }
+  /**
+   * Phase 207 R2 followup — show ALL models, configured ones FIRST.
+   *
+   * Initial R2 (commit f4c343bb) filtered to configured-only because the
+   * 955-model deluge overwhelmed the operator's picker. Live UAT
+   * 2026-05-24 surfaced the OPPOSITE problem: after revoking xAI,
+   * the operator wanted to see + reconnect xAI from the picker, but
+   * filtering hid it entirely. Operator quote:
+   *   "Bagli olan api veya auth larin modellerini gostersin … ben
+   *    hepsini gormek istiyorum ve anlik oradan degistirmek isityorum"
+   * (Show configured-provider models … I want to see ALL of them and
+   * change provider live from there.)
+   *
+   * Solution: return EVERY model, but put configured providers' entries
+   * at the top of the array so the picker dropdown surfaces them first.
+   * The grouping (by provider) carries through `m.provider` so the
+   * picker's `group:` field renders configured providers as the top
+   * groups regardless of search-state.
+   *
+   * Fail-open semantics retained: an empty _configuredProviders set
+   * returns the raw list (no sort) so a fresh install isn't churned.
+   */
   get availableModels(): ModelChoice[] {
     return this._filteredAvailableModels();
   }
 
   /**
-   * Phase 207 R2 — escape hatch for callers that need the full catalog
-   * (e.g. config validation surfaces, `/model` slash command completion when
-   * the operator wants to bypass the filter and discover everything). The
-   * composer picker uses `availableModels` (filtered); the slash-command
-   * matcher uses this (unfiltered) so the operator can still type
-   * `/model openrouter/...` even before openrouter is connected.
+   * Phase 207 R2 — escape hatch for callers that need the unsorted catalog.
+   * Composer reads `availableModels` (sorted by configured-first);
+   * slash-command matcher reads this (unsorted/raw) to keep the existing
+   * `/model openrouter/...` completion ordering stable.
    */
   get availableModelsAll(): ModelChoice[] {
     return this._availableModels;
@@ -1159,22 +1179,27 @@ export class OpenClawEngine implements Engine {
   }
 
   /**
-   * Phase 207 R2 — filter the model catalog to the configured-provider set.
+   * Phase 207 R2 followup — order the catalog: configured providers first,
+   * everything else second. Composer's picker dropdown surfaces the
+   * configured group at the top while still letting operator scroll/search
+   * down to a NON-configured model (which they may want to pre-select
+   * before connecting that provider).
    *
-   * Fail-open in three cases (return unfiltered):
-   *   1. `_configuredProviders` is empty (fresh install, no providers wired)
-   *   2. A model has no `provider` field (synthetic / unknown — keep it)
-   *   3. The provider is in the configured set (passes through)
-   *
-   * Operator UAT acceptance: with xAI + OpenRouter configured, the picker
-   * should show ≤ 279 models (14 xai + 265 openrouter), not 955.
+   * Internal callers (event emission, getter) use this; the unsorted raw
+   * list is still available via `availableModelsAll`.
    */
   private _filteredAvailableModels(): ModelChoice[] {
     if (this._configuredProviders.size === 0) return this._availableModels;
-    return this._availableModels.filter((m) => {
-      if (!m.provider) return true;
-      return this._configuredProviders.has(m.provider);
-    });
+    const configured: ModelChoice[] = [];
+    const rest: ModelChoice[] = [];
+    for (const m of this._availableModels) {
+      if (m.provider && this._configuredProviders.has(m.provider)) {
+        configured.push(m);
+      } else {
+        rest.push(m);
+      }
+    }
+    return [...configured, ...rest];
   }
 
   /**

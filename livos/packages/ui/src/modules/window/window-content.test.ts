@@ -48,8 +48,13 @@ describe('window-content.tsx — Phase 203-10 OpenUI dispatch', () => {
 })
 
 describe('openui-app-content.tsx — T-203-06 iframe trust chain', () => {
-	it('renders a same-origin iframe pointed at /liv-ai-app/apps/<slug>', () => {
-		expect(OPENUI_SRC).toMatch(/\/liv-ai-app\/apps\//)
+	it('renders a same-origin iframe pointed at /liv-ai-app/openclawos/apps/<slug>', () => {
+		// Phase 207 follow-up — `/liv-ai-app/apps/<slug>` 404'd because Caddy's
+		// @livai catch-all routes /liv-ai-app/* to the Next.js dashboard
+		// (port 3010) which has no /apps/[slug] route. The openclaw gateway
+		// serves the claw-client OpenUiAppView at /plugins/openclawos/apps/<slug>;
+		// Caddy already rewrites `/liv-ai-app/openclawos/*` → `/plugins/openclawos*`.
+		expect(OPENUI_SRC).toMatch(/\/liv-ai-app\/openclawos\/apps\//)
 		expect(OPENUI_SRC).toMatch(/<iframe/)
 	})
 

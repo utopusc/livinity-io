@@ -22,7 +22,18 @@
  * iframes /liv-ai-app/ for the chat surface).
  */
 export interface OpenUiAppContentProps {
-	/** OpenUI app slug — matches the URL segment `/liv-ai-app/apps/<slug>`. */
+	/**
+	 * OpenUI app slug — matches the URL segment
+	 * `/liv-ai-app/openclawos/apps/<slug>`. (Phase 203-10 originally
+	 * specified `/liv-ai-app/apps/<slug>` but operator UAT 2026-05-24 hit
+	 * a 404 on that path: Caddy's `@livai` catch-all routes
+	 * `/liv-ai-app/*` to the Next.js dashboard (:3010), which has no
+	 * `/apps/[slug]` route. The openclaw gateway serves the claw-client's
+	 * OpenUiAppView at `/plugins/openclawos/apps/<slug>` and Caddy has a
+	 * pre-existing rewrite `/liv-ai-app/openclawos/* → /plugins/openclawos*`
+	 * (verified curl 200 OK 2026-05-24), so we point the iframe at the
+	 * rewriting prefix.)
+	 */
 	slug: string
 	/** Display name — used as the iframe title (a11y + DevTools). */
 	name: string
@@ -31,7 +42,7 @@ export interface OpenUiAppContentProps {
 export default function OpenUiAppContent({slug, name}: OpenUiAppContentProps) {
 	return (
 		<iframe
-			src={`/liv-ai-app/apps/${encodeURIComponent(slug)}`}
+			src={`/liv-ai-app/openclawos/apps/${encodeURIComponent(slug)}`}
 			title={name}
 			className='h-full w-full border-0 bg-background'
 			allow='clipboard-read; clipboard-write'
