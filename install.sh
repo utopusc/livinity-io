@@ -129,6 +129,89 @@ _run_phase "Bruce user + sudoers" bruce-user-bootstrap.sh
 # ━━━ Systemd units ━━━ → scripts/install/systemd-units-install.sh
 _run_phase "Systemd units" systemd-units-install.sh
 
+# ━━━ Bootstrapping per-user openclaw config ━━━
+# Phase 203 Hot-fix G part 3 2026-05-24 — per-host openclaw config bootstrap.
+#
+# liv-claw-gateway runs with OPENCLAW_STATE_DIR=/opt/livos/data/openclaw and
+# reads openclaw.json from that root. Production needs a baseline file with:
+#   - gateway.auth.{mode=token, token=<64-hex random, per-host>} so claw-client
+#     WS auth succeeds out of the box (Hot-fix F2 master-token mechanism)
+#   - gateway.controlUi.allowedOrigins matching the operator's actual FQDN
+#     PLUS the loopback origin (Hot-fix G part 1 — claw-client connects
+#     direct to ws://localhost:18789/...)
+#
+# Strategy: idempotent, per-host bootstrap.
+#   - dir created with bruce ownership + 700 perms (gateway runs as bruce)
+#   - openssl rand -hex 32 generates a fresh token PER INSTALL — NOT a
+#     hardcoded secret in the repo
+#   - operator FQDN resolved via hostname -f (NOT hardcoded bruce.livinity.io)
+#   - file written only if missing — re-running install.sh on an existing
+#     host preserves the operator's customisations + token (rotating it
+#     would invalidate every browser tab's cached creds)
+#   - update.sh's Hot-fix F2 jq-merge still runs day-2 and tops up
+#     allowedOrigins if needed
+step "Bootstrapping per-host openclaw config"
+_OPENCLAW_STATE_DIR="/opt/livos/data/openclaw"
+_OPENCLAW_CFG="${_OPENCLAW_STATE_DIR}/openclaw.json"
+mkdir -p "$_OPENCLAW_STATE_DIR"
+if id bruce >/dev/null 2>&1; then
+    chown bruce:bruce "$_OPENCLAW_STATE_DIR" 2>/dev/null || true
+    chmod 700 "$_OPENCLAW_STATE_DIR" 2>/dev/null || true
+fi
+
+if [[ -f "$_OPENCLAW_CFG" ]]; then
+    info "openclaw config already exists at ${_OPENCLAW_CFG} — preserving operator customisations (update.sh will jq-merge any missing allowedOrigins)"
+else
+    # Resolve per-host operator FQDN. Order of preference:
+    #   1) hostname -f (DNS-resolvable FQDN)
+    #   2) hostname (short name, fallback for hosts w/o reverse DNS)
+    #   3) "localhost" (last-resort placeholder — gateway still works via
+    #      loopback even if no public FQDN is set yet)
+    _OPERATOR_FQDN=$(hostname -f 2>/dev/null || true)
+    [[ -z "$_OPERATOR_FQDN" ]] && _OPERATOR_FQDN=$(hostname 2>/dev/null || true)
+    [[ -z "$_OPERATOR_FQDN" ]] && _OPERATOR_FQDN="localhost"
+
+    # Random 64-char hex master token. Prefer openssl; fall back to /dev/urandom
+    # via xxd. Both produce cryptographic-quality output per Hot-fix F2.
+    if command -v openssl >/dev/null 2>&1; then
+        _OPENCLAW_TOKEN=$(openssl rand -hex 32)
+    elif command -v xxd >/dev/null 2>&1; then
+        _OPENCLAW_TOKEN=$(head -c 32 /dev/urandom | xxd -p -c 32)
+    else
+        _OPENCLAW_TOKEN=""
+        warn "neither openssl nor xxd available — openclaw.json will be written WITHOUT a master token; update.sh Hot-fix F2 will backfill it on first day-2 deploy"
+    fi
+
+    _OPENCLAW_BOOTSTRAP=$(mktemp)
+    cat > "$_OPENCLAW_BOOTSTRAP" <<JSON
+{
+  "gateway": {
+    "controlUi": {
+      "allowedOrigins": [
+        "https://${_OPERATOR_FQDN}",
+        "http://${_OPERATOR_FQDN}",
+        "wss://${_OPERATOR_FQDN}",
+        "http://localhost:18789",
+        "http://127.0.0.1:18789",
+        "https://livinity.io"
+      ]
+    },
+    "auth": {
+      "mode": "token",
+      "token": "${_OPENCLAW_TOKEN}"
+    }
+  }
+}
+JSON
+    install -m 0600 "$_OPENCLAW_BOOTSTRAP" "$_OPENCLAW_CFG"
+    rm -f "$_OPENCLAW_BOOTSTRAP"
+    if id bruce >/dev/null 2>&1; then
+        chown bruce:bruce "$_OPENCLAW_CFG" 2>/dev/null || true
+    fi
+    _TOKEN_PREVIEW="${_OPENCLAW_TOKEN:0:8}"
+    ok "openclaw config bootstrapped at ${_OPENCLAW_CFG} (operator=${_OPERATOR_FQDN}, token=${_TOKEN_PREVIEW:-<missing>}…)"
+fi
+
 # ━━━ Initial build + seed ━━━
 step "Initial build + seed"
 if [[ "${LIVOS_INSTALL_SKIP_BUILD:-0}" == "1" ]]; then
