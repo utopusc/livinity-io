@@ -966,6 +966,30 @@ export function SessionComposer({
                         hint.endsWith(`/${m.id}`),
                     ) ?? null)
                   : null;
+
+                // Phase 207 UAT 2026-05-24 — derive the button label from the
+                // hint string when the model catalog hasn't loaded yet (or
+                // doesn't contain the exact `qualifyModel` match). Operator's
+                // 3rd complaint after the bridge ship was "hala Openrouter
+                // API key i girmeme rağmen default yazıyor" — the button kept
+                // reading "Default" because `models.find(...)` returned null
+                // before the first `models.list` round-tripped. Prefer the
+                // hint's tail segment (`openrouter/nvidia/...:free` →
+                // `nvidia/...:free`) so the operator sees the configured
+                // model name immediately instead of the generic placeholder.
+                const defaultLabel = defaultModel
+                  ? defaultModel.name
+                  : hint
+                    ? hint.includes("/")
+                      ? hint.slice(hint.indexOf("/") + 1)
+                      : hint
+                    : "Default";
+                const defaultGroup =
+                  defaultModel?.provider ??
+                  (hint && hint.includes("/")
+                    ? hint.slice(0, hint.indexOf("/"))
+                    : undefined);
+
                 // openclaw's `models.list` can repeat the same qualified id (e.g.
                 // `openrouter/auto` appears once from the provider catalog and
                 // again from the configured alias entry). Dedupe so the picker
@@ -984,13 +1008,14 @@ export function SessionComposer({
                     onChange={onModelChange}
                     title="Model"
                     options={[
-                      // The "" value still represents "use the resolved default"
-                      // — we just label it with the model's own name so the
-                      // list reads as a flat catalog. The default model is
-                      // filtered from the rest so it doesn't appear twice.
-                      ...(defaultModel
-                        ? [{ value: "", label: defaultModel.name, group: defaultModel.provider }]
-                        : [{ value: "", label: "Default" }]),
+                      // The "" value still represents "use the resolved default".
+                      // Label flows from `defaultLabel` so a missing catalog
+                      // entry still surfaces the configured model name.
+                      {
+                        value: "",
+                        label: defaultLabel,
+                        ...(defaultGroup ? { group: defaultGroup } : {}),
+                      },
                       ...uniqueModels
                         .filter((m) => m !== defaultModel)
                         .map((m) => ({
