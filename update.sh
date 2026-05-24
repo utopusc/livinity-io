@@ -867,6 +867,59 @@ if [[ -f "$_LIV_CLAW_UNIT_SRC" ]]; then
     if id bruce >/dev/null 2>&1; then
         chown -R bruce:bruce /opt/livos/data/openclaw 2>/dev/null || true
     fi
+
+    # ── Phase 203 Hot-fix F 2026-05-24 — openclaw allowedOrigins patch ──
+    # Operator UAT (post Hot-fix D/E): browser console shows
+    #   "connect RPC failed — Error: origin not allowed (open the Control UI
+    #    from the gateway host or allow it in gateway.controlUi.allowedOrigins)"
+    # The openclaw plugin's connect RPC rejects WS handshakes whose Origin
+    # header is not in `gateway.controlUi.allowedOrigins`. bruce.livinity.io
+    # is not in the default list — defaults assume operator opens the UI
+    # from localhost. Production access from the LivOS frontend at
+    # bruce.livinity.io (Caddy → relay → Mini PC) needs an explicit entry.
+    #
+    # openclaw resolves its config path from $OPENCLAW_STATE_DIR/openclaw.json
+    # (paths-r6w2eKyy.js). The gateway runs with OPENCLAW_STATE_DIR=
+    # /opt/livos/data/openclaw so the file is at:
+    #   /opt/livos/data/openclaw/openclaw.json
+    #
+    # Strategy: idempotent jq patch. Adds three origins (HTTPS prod, HTTP
+    # fallback, root domain) and dedupes. Skips silently if jq is missing
+    # or the file doesn't exist yet (first-boot — operator can re-run
+    # update.sh after the gateway writes its initial config).
+    _OPENCLAW_CFG="/opt/livos/data/openclaw/openclaw.json"
+    if command -v jq >/dev/null 2>&1; then
+        if [[ -f "$_OPENCLAW_CFG" ]]; then
+            _TMP_CFG=$(mktemp)
+            if jq '.gateway //= {}
+                   | .gateway.controlUi //= {}
+                   | .gateway.controlUi.allowedOrigins = (
+                       ((.gateway.controlUi.allowedOrigins // []) +
+                        ["https://bruce.livinity.io",
+                         "http://bruce.livinity.io",
+                         "https://livinity.io"])
+                       | unique
+                     )' "$_OPENCLAW_CFG" > "$_TMP_CFG" 2>/dev/null; then
+                if ! cmp -s "$_TMP_CFG" "$_OPENCLAW_CFG"; then
+                    mv "$_TMP_CFG" "$_OPENCLAW_CFG"
+                    if id bruce >/dev/null 2>&1; then
+                        chown bruce:bruce "$_OPENCLAW_CFG" 2>/dev/null || true
+                    fi
+                    ok "openclaw allowedOrigins patched (bruce.livinity.io added)"
+                else
+                    ok "openclaw allowedOrigins already contains bruce.livinity.io"
+                    rm -f "$_TMP_CFG"
+                fi
+            else
+                warn "jq failed to patch $_OPENCLAW_CFG — connect RPC will still 'origin not allowed' from bruce.livinity.io"
+                rm -f "$_TMP_CFG"
+            fi
+        else
+            info "$_OPENCLAW_CFG missing — gateway hasn't written initial config yet. Re-run update.sh after first liv-claw-gateway boot."
+        fi
+    else
+        warn "jq not installed — skipping openclaw allowedOrigins patch (install via: apt-get install -y jq)"
+    fi
 else
     info "liv-claw-gateway.service source not found — skipping install (Caddy /liv-ai-app/* will route to legacy :3010 unit until landed)"
 fi
