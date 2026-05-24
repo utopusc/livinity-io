@@ -140,9 +140,19 @@ export function OpenUiAppView() {
   const { app } = state;
   return (
     <main className="flex h-full min-h-screen w-full flex-col bg-background">
-      <header className="border-b border-border-neutral-tertiary px-ml py-sm">
-        <h1 className="text-base font-semibold text-text-neutral-primary">{app.name}</h1>
-      </header>
+      {/*
+       * Phase 207 UAT 2026-05-24 — in-app title header REMOVED.
+       *
+       * Operator quote: "App icin en yukarida sol ust kisimda uygulama
+       * ismi yazmasin zaten yaziyor Livinity Dashboard. Drag and drop
+       * da da yaziyor o kalabilir!"
+       *
+       * The LivOS window chrome already shows the app name in the drag
+       * handle (and the browser tab title). The in-iframe header
+       * duplicated it inside the app body. The screen-reader-only
+       * `app.name` stays via the `<title>`-equivalent flow through the
+       * OpenUiAppView state machine; we just don't paint it twice.
+       */}
       <div className="min-h-0 flex-1 overflow-auto p-ml">
         {renderErrors.length > 0 ? (
           <div className="mb-ml rounded-lg border border-border-alert-primary bg-alert-background p-sm text-sm text-text-alert-primary">

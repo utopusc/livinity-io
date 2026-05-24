@@ -1078,7 +1078,19 @@ export default class Livinityd {
 			let mcpBridgeForPlugin: Awaited<ReturnType<typeof createMcpBridge>> | null = null
 			if (livOSAgent) {
 				try {
-					const approvalManager = new ApprovalManager()
+					// Phase 207 UAT 2026-05-24 — auto-approve via env var. Set
+					// LIVOS_AUTO_APPROVE_DESTRUCTIVE=true (or 1 / yes) in
+					// /opt/livos/.env to bypass the destructive-tool approval
+					// gate during fast iteration. The callback is re-read on
+					// every requestSync() call, so editing the env value +
+					// restarting livos.service is enough to flip behaviour.
+					const approvalManager = new ApprovalManager({
+						autoApprove: () => {
+							const raw =
+								process.env['LIVOS_AUTO_APPROVE_DESTRUCTIVE']?.trim().toLowerCase()
+							return raw === 'true' || raw === '1' || raw === 'yes'
+						},
+					})
 					approvalManagerForPlugin = approvalManager
 					livOSAgent.attachApprovalManager(approvalManager)
 					const databaseUrl = process.env.DATABASE_URL

@@ -89,9 +89,34 @@ export class ApprovalManager {
 	private readonly timeoutMs: number
 	/** Phase 203-10 — event subscribers (SSE stream handlers in livinityd). */
 	private readonly listeners = new Set<ApprovalEventListener>()
+	/**
+	 * Phase 207 UAT 2026-05-24 — auto-approve resolver.
+	 *
+	 * When set and returns true, `requestSync()` resolves immediately with
+	 * `decision='approved'` WITHOUT surfacing a pending event to the SSE
+	 * stream. Operator request: "LuseMCP yi Onayli calisiyor ya bunun icin
+	 * bir ayar olustur Sormadan onay istemeden devam etmesini ayarlayabilmemiz
+	 * icin" — they want a configurable bypass for destructive-tool approval
+	 * during fast iteration.
+	 *
+	 * Default resolver (boot wire-up) reads
+	 * `LIVOS_AUTO_APPROVE_DESTRUCTIVE` env var (true/1/yes); unset = approval
+	 * gate remains active (the secure default). A future UI surfaces this
+	 * as a per-session toggle that writes to Redis; this env var is the
+	 * minimal hook so the operator can flip it without a UI rebuild.
+	 *
+	 * INV-203-04 carry-forward: the resolver is a CALLBACK, not a static
+	 * boolean — so a future runtime-controlled flag (Redis hash, tRPC
+	 * mutation) can swap behaviour without a server restart.
+	 */
+	private readonly autoApproveResolver: () => boolean
 
-	constructor(opts?: {timeoutMs?: number}) {
+	constructor(opts?: {
+		timeoutMs?: number
+		autoApprove?: () => boolean
+	}) {
 		this.timeoutMs = opts?.timeoutMs ?? 5 * 60 * 1000
+		this.autoApproveResolver = opts?.autoApprove ?? (() => false)
 	}
 
 	registerPending(toolCallId: string, runId: string): Promise<boolean> {
@@ -138,6 +163,23 @@ export class ApprovalManager {
 				? `openclawos:${opts.agentId}`
 				: 'openclawos:default'
 		const timeoutMs = opts.timeoutMs ?? this.timeoutMs
+
+		// Phase 207 UAT 2026-05-24 — auto-approve short-circuit. When the
+		// operator has set LIVOS_AUTO_APPROVE_DESTRUCTIVE=true (or a future
+		// runtime flag flips the callback), every destructive-tool call
+		// passes through without surfacing the approval card. We still
+		// emit the 'resolved' event so any open SSE consumer sees the
+		// decision land in the audit stream (don't fire 'pending' first —
+		// that'd flash the card for a single render).
+		if (this.autoApproveResolver()) {
+			this.emit({
+				type: 'resolved',
+				toolCallId,
+				decision: 'approved',
+				runId,
+			})
+			return {decision: 'approved', toolCallId, runId}
+		}
 
 		// Tag the pending entry with a per-call timeout sentinel so we can
 		// distinguish 'timeout' from 'rejected' on the resolution side.
