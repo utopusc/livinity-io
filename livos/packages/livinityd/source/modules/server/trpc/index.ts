@@ -173,6 +173,16 @@ import {
 	createProviderConfigRouter,
 	providerConfigRouter,
 } from './provider-config-router.js'
+// Phase 206 — `openclaw.*` namespace. Factory-DI: production livinityd boot
+// supplies a real `createOpenclawCliRouter({stateDir, onProvidersChanged,
+// logger})` build. The default exported router throws PRECONDITION_FAILED +
+// OPENCLAW_CLI_UNAVAILABLE on every call until boot wires the real deps.
+// All paths added to httpOnlyPaths in ./common.ts so settings + composer
+// mutations survive `systemctl restart livos` mid-call.
+import {
+	createOpenclawCliRouter,
+	openclawCliRouter,
+} from './openclaw-router.js'
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -241,6 +251,11 @@ export function createAppRouter(opts: {
 	// INV-204-08 satisfied (no other routing surface mutations beyond the 3
 	// httpOnlyPaths additions).
 	providerConfig?: ReturnType<typeof createProviderConfigRouter>
+	// Phase 206 — `openclaw.*` namespace slot. Default empty-injection stub
+	// keeps the appRouter type-stable; production boot supplies the real
+	// router built against the openclaw CLI binary path + state dir +
+	// onProvidersChanged hook.
+	openclawCli?: ReturnType<typeof createOpenclawCliRouter>
 }) {
 	return router({
 		migration,
@@ -354,6 +369,11 @@ export function createAppRouter(opts: {
 		provider: router({
 			config: opts.providerConfig ?? providerConfigRouter,
 		}),
+		// Phase 206 — `openclaw.*` namespace (CLI-wrapped provider+model
+		// config). Default empty-injection stub throws PRECONDITION_FAILED +
+		// OPENCLAW_CLI_UNAVAILABLE until production boot swaps in a real
+		// `createOpenclawCliRouter({...})` build.
+		openclaw: opts.openclawCli ?? openclawCliRouter,
 	})
 }
 

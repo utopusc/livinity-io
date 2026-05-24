@@ -690,4 +690,24 @@ export const httpOnlyPaths = [
 	'openclawos.gateway.auth.get',
 	'openclawos.gateway.auth.setMode',
 	'openclawos.gateway.auth.rotateToken',
+	// Phase 206 — `openclaw.*` namespace (CLI-wrapped provider+model
+	// config). All paths route via HTTP because: (a) every procedure
+	// shells out to the openclaw binary which can take 200-3000ms; a
+	// half-broken WS after `systemctl restart livos` would silently
+	// drop the response (memory pitfall B-12 / X-04); (b) the queries
+	// hydrate the Providers tab + Default-model picker on first paint —
+	// WS-handshake-delay flicker is undesirable (precedent: provider.
+	// config.list line 671 and openclawos.gateway.devices.list line 685);
+	// (c) auth.setApiKey / logout / config.setDefaultModel are mutations
+	// the gateway picks up via file-watch (Phase 205-01 Probe A6) — the
+	// operator must see "Saved" banner reliably even across a livinityd
+	// restart window.
+	'openclaw.providers.list',
+	'openclaw.models.list',
+	'openclaw.auth.status',
+	'openclaw.auth.setApiKey',
+	'openclaw.auth.logout',
+	'openclaw.config.setDefaultModel',
+	'openclaw.config.getDefaultModel',
+	'openclaw.profiles.list',
 ] as const
