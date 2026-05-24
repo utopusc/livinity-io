@@ -67,13 +67,15 @@ describe("computeSameOriginGatewayUrl", () => {
 
 describe("attemptLivOsAutoConnect", () => {
 	test("returns already-configured when settings.gatewayUrl is already set", async () => {
-		localStorage.setItem(
-			"claw-settings-v1",
-			JSON.stringify({gatewayUrl: "wss://x.io/liv-ai-app/liv-ai/ws"}),
-		);
+		const existing = {gatewayUrl: "wss://x.io/liv-ai-app/liv-ai/ws"};
+		localStorage.setItem("claw-settings-v1", JSON.stringify(existing));
 		const fetcher = vi.fn().mockRejectedValue(new Error("must not be called"));
 		const result = await attemptLivOsAutoConnect(fetcher as never);
-		expect(result).toEqual({ok: true, reason: "already-configured"});
+		expect(result).toEqual({
+			ok: true,
+			reason: "already-configured",
+			settings: existing,
+		});
 		expect(fetcher).not.toHaveBeenCalled();
 	});
 
@@ -85,12 +87,35 @@ describe("attemptLivOsAutoConnect", () => {
 		};
 		const fetcher = vi.fn().mockResolvedValue(handshake);
 		const result = await attemptLivOsAutoConnect(fetcher as never);
-		expect(result).toEqual({ok: true, reason: "seeded"});
-		const persisted = JSON.parse(localStorage.getItem("claw-settings-v1") ?? "null");
-		expect(persisted).toEqual({
+		const expectedSettings = {
 			gatewayUrl: "wss://bruce.livinity.io/liv-ai-app/liv-ai/ws",
 			deviceToken: "tok-abc",
+		};
+		expect(result).toEqual({
+			ok: true,
+			reason: "seeded",
+			settings: expectedSettings,
 		});
+		const persisted = JSON.parse(localStorage.getItem("claw-settings-v1") ?? "null");
+		expect(persisted).toEqual(expectedSettings);
+	});
+
+	test("Hot-fix E — seeded result includes settings the caller MUST forward to engine.reconnect", async () => {
+		// Hot-fix D shipped without returning settings → ChatApp couldn't
+		// reconnect the engine after auto-connect → operator saw setup form
+		// even though handshake succeeded. Hot-fix E closes that race.
+		const handshake: LivinitydHandshakeResult = {
+			token: "tok-e",
+			expiresAt: Date.now() + 300_000,
+			sessionId: "jti-e",
+		};
+		const fetcher = vi.fn().mockResolvedValue(handshake);
+		const result = await attemptLivOsAutoConnect(fetcher as never);
+		expect(result.ok).toBe(true);
+		expect(result.reason).toBe("seeded");
+		expect(result.settings).toBeDefined();
+		expect(result.settings?.gatewayUrl).toBe("wss://bruce.livinity.io/liv-ai-app/liv-ai/ws");
+		expect(result.settings?.deviceToken).toBe("tok-e");
 	});
 
 	test("returns handshake-failed silently when the bridge rejects (standalone deploys)", async () => {

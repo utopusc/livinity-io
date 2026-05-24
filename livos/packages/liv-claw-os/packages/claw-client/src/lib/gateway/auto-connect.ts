@@ -45,6 +45,21 @@ export interface AutoConnectResult {
 	ok: boolean;
 	/** Diagnostic string for the console — never user-facing. */
 	reason: "already-configured" | "seeded" | "handshake-failed" | "no-window";
+	/**
+	 * Phase 203 Hot-fix E 2026-05-24 — the settings persisted to localStorage.
+	 *
+	 * On `seeded`: the freshly-minted {gatewayUrl, deviceToken} the caller
+	 * MUST forward to `engine.reconnect(...)` (the engine was constructed at
+	 * mount with empty settings BEFORE auto-connect ran — H3 race condition
+	 * from Hot-fix D operator UAT).
+	 *
+	 * On `already-configured`: the existing persisted settings (returned for
+	 * symmetry; the engine was already initialized with these on mount, so
+	 * the caller does NOT need to reconnect).
+	 *
+	 * On `handshake-failed` / `no-window`: undefined.
+	 */
+	settings?: Settings;
 }
 
 /**
@@ -67,7 +82,7 @@ export async function attemptLivOsAutoConnect(
 		// Already-configured installs short-circuit. The socket layer's
 		// per-open handshake (Plan 203-05) keeps the deviceToken fresh
 		// on every (re)connect, so we don't need to fetch here too.
-		return {ok: true, reason: "already-configured"};
+		return {ok: true, reason: "already-configured", settings: existing};
 	}
 
 	// Probe the LivOS handshake bridge. Same-origin so the LIVINITY_SESSION
@@ -80,7 +95,12 @@ export async function attemptLivOsAutoConnect(
 			deviceToken: handshake.token,
 		};
 		saveSettings(seeded);
-		return {ok: true, reason: "seeded"};
+		// Hot-fix E 2026-05-24 — return the seeded settings so the caller
+		// (ChatApp) can fire engine.reconnect(seeded) immediately. Without
+		// this, the engine constructed at mount with empty gatewayUrl never
+		// learns about the fresh creds and the operator sees the setup form
+		// even though localStorage has a valid token.
+		return {ok: true, reason: "seeded", settings: seeded};
 	} catch {
 		// Standalone deploy (operator opened claw-client outside LivOS), or
 		// LIVINITY_SESSION cookie missing/expired. Either way, fall through to
