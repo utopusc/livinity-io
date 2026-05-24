@@ -1,4 +1,5 @@
 import {TRPCError} from '@trpc/server'
+import {timingSafeEqual} from 'node:crypto'
 
 import {type Context} from './context.js'
 import {findUserById, getAdminUser} from '../../database/index.js'
@@ -8,12 +9,53 @@ type MiddlewareOptions = {
 	next: () => Promise<any>
 }
 
+// Phase 203 Hot-fix F5 — constant-time compare for the service-token shortcut.
+// Length mismatch returns false without invoking timingSafeEqual (which throws
+// on differing-length buffers). The length leak is acceptable because the
+// expected token length is derived from a public env var generator.
+function safeTokenCompare(a: string, b: string): boolean {
+	if (a.length !== b.length) return false
+	return timingSafeEqual(Buffer.from(a), Buffer.from(b))
+}
+
 export const isAuthenticated = async ({ctx, next}: MiddlewareOptions) => {
 	if (ctx.dangerouslyBypassAuthentication === true) return next()
 
 	// Bypass authentication for websocket requests since auth is handled
 	// on connection by express.
 	if (ctx.transport === 'ws') return next()
+
+	// Phase 203 Hot-fix F5 — service-token auth shortcut.
+	// `openclawos-router.ts:23` (D-203-12) anticipated this path: the openclaw
+	// gateway plugin (`liv-claw-os/packages/claw-plugin`) calls livinityd's
+	// tRPC layer over loopback but cannot hold an admin JWT. When the request
+	// carries an `X-Api-Key` header matching `process.env.LIV_API_KEY`, treat
+	// it as an internal service call and map to the admin user. Falls through
+	// to the JWT/cookie path on mismatch (NOT throw).
+	const apiKeyHeader = ctx.request?.headers['x-api-key']
+	const apiKey = Array.isArray(apiKeyHeader) ? apiKeyHeader[0] : apiKeyHeader
+	const expectedApiKey = process.env['LIV_API_KEY']
+	if (
+		typeof apiKey === 'string' &&
+		typeof expectedApiKey === 'string' &&
+		expectedApiKey.length >= 8 &&
+		safeTokenCompare(apiKey, expectedApiKey)
+	) {
+		try {
+			const adminUser = await getAdminUser()
+			if (adminUser) {
+				ctx.currentUser = {
+					id: adminUser.id,
+					username: adminUser.username,
+					role: adminUser.role,
+				}
+			}
+		} catch {
+			// Legacy single-user mode (no DB) — fall through with no
+			// currentUser; downstream procedures handle that case.
+		}
+		return next()
+	}
 
 	try {
 		// Try Bearer token first, then fall back to LIVINITY_SESSION cookie

@@ -217,6 +217,20 @@ export class EnvFileWriter {
 	 */
 	async sync(): Promise<{path: string; mode: number}> {
 		const envMap = await this.keyStore.getAllForEnvFile()
+
+		// Phase 203 Hot-fix F5 — propagate LIV_API_KEY into the gateway env
+		// file so the openclaw plugin's livinityd HTTP client (app-store.ts)
+		// can authenticate via the `X-Api-Key` service-token path. Without
+		// this, `openclawos.apps.list` returns 401 and the desktop-integration
+		// flow (Plan 203-10) cannot fetch the OpenUI apps list. Only injected
+		// when the env var is present AND matches the writer's key-shape
+		// regex (defense-in-depth — keeps the gateway out of a restart loop
+		// if /opt/livos/.env is malformed).
+		const livApiKey = process.env['LIV_API_KEY']
+		if (typeof livApiKey === 'string' && KEY_SHAPE_REGEX.test(livApiKey)) {
+			envMap['LIV_API_KEY'] = livApiKey
+		}
+
 		const body = formatEnvFile(envMap, new Date().toISOString())
 
 		// If we've previously chosen a path successfully, stay sticky. Avoid
