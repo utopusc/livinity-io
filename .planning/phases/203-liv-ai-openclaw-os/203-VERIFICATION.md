@@ -149,6 +149,32 @@ sudo journalctl -u liv-claw-gateway -n 50 --no-pager | grep -i 'provider\|model\
 
 **Why not `/opt/livos/.env`?** Per Decision 203-12-D-02, livinityd's PORT=8080 in `/opt/livos/.env` contaminated the gateway's PORT (intended 18789) via systemd EnvironmentFile= precedence quirk on Ubuntu 24.04 / systemd 256. Decoupling the gateway's EnvironmentFile to `/etc/default/liv-claw-gateway` (empty by default; `-` prefix makes it optional) eliminates the contamination. Operator can put either file — `/opt/livos/.env` works for the *API key* (livinityd already reads it for other purposes), but the per-service file is recommended.
 
+### G.3 — Operator UX trio: URL rename + permanent dock + auto-connect (SHIPPED 2026-05-24 — Hot-fix D)
+
+> **2026-05-24 UPDATE — Hot-fix D SHIPPED + LIVE-VERIFIED.** Three connected operator-UX gaps closed in one batch (commits `5a53ca9f` + `2c5e8a33` + `fe9ac8ed`, deployed SHA `fe9ac8e` via `update.sh`):
+>
+> 1. **URL rename:** External `/liv-ai-app/liv-ai` added as the operator-facing URL alongside the legacy `/liv-ai-app/openclawos` (back-compat preserved). Both rewrite to upstream `/plugins/openclawos{path}` so the gateway plugin's path matcher is unchanged. Live: `curl /liv-ai-app/liv-ai` returns 200 + `<title>Liv AI</title>`.
+> 2. **Permanent "Liv AI" dock entry:** Livinityd seeds a fixed-UUID `NativeAppConfig` (`d1748ca1-0203-4d04-8db1-9aa1c1a1f1d1`) at every boot. Wired via `seedLivAiDockEntry()` in new module `liv-ai-dock-seed.ts`; idempotent on repeat boots. UI side: dock launcher short-circuits on `wmClassHint==='liv-ai'` → opens `LIV_AI_CHAT` window which renders new `LivAiChatIframeContent` (iframe → `/liv-ai-app/liv-ai`). Boot journal confirms: `Hot-fix D — Liv AI permanent dock entry seeded`. Redis `liv:apps:native:d1748ca1-…` populated.
+> 3. **Auto-connect bypass:** New `auto-connect.ts` helper probes `/openclawos/handshake` on first load; on success, persists `{gatewayUrl: wss://${host}/liv-ai-app/liv-ai/ws, deviceToken: <minted>}` to localStorage and skips the setup form. `ChatApp.tsx` + `setup/page.tsx` wired to call it. Outside-LivOS standalone use unchanged (handshake fails silently → legacy setup form fires).
+>
+> **Live verification (Mini PC bruce@10.69.31.68, 2026-05-24):**
+>
+> | Probe | Status | Expected | Actual |
+> | ----- | ------ | -------- | ------ |
+> | `GET /liv-ai-app/liv-ai` | new | 200 + `<title>Liv AI</title>` | ✅ |
+> | `GET /liv-ai-app/liv-ai/` | new | 200 | ✅ |
+> | `GET /liv-ai-app/openclawos` | legacy back-compat | 200 | ✅ |
+> | `GET /liv-ai-app/agents` | Next.js dashboard regression | 200 | ✅ |
+> | `POST /openclawos/handshake` (unauth) | Plan 203-05 endpoint | 401 | ✅ |
+> | Boot journal `Hot-fix D` marker | seed log line | present | ✅ |
+> | Redis `liv:apps:native:d1748ca1-…` | seeded entry | JSON with name=Liv AI | ✅ |
+>
+> **Test coverage:** 70 tests pass in livinityd workspace (49 caddy.test + 7 liv-ai-dock-seed.test + 14 desktop-registrar.test); 8 TS-clean auto-connect tests await pre-existing claw-client vitest 4.x fix (same gap as the existing `livinityd-handshake.test.ts`).
+>
+> **Caddyfile note:** The runtime regen only fires on `domain.activate`, so the source-side caddy.ts fix shipped correctly but the live `/etc/caddy/Caddyfile` needed a one-off in-place patch. Done; backup at `/etc/caddy/Caddyfile.bak.hotfix-d`. See `203-HOTFIX-D-RENAME-DOCK-AUTOCONNECT.md` for full forensics including the Python heredoc patch script.
+>
+> **Operator browser UAT pending:** click "Liv AI" dock icon → window opens → iframe loads `/liv-ai-app/liv-ai` (NOT openclawos) → chat surface usable within ~2s, no setup form.
+
 ### G.2 — Liv AI claw-plugin loaded on next update.sh run (RESOLVED 2026-05-24 — Fix-A + Fix-B + Fix-C all SHIPPED)
 
 > **2026-05-24 UPDATE (3rd/final pass — RESOLVED):** Hot-fix Fix-C shipped via TWO commits (`08511784` + `2b2c9f73`) and deployed to Mini PC at 20:09 PDT. Part 1 added a `pnpm --filter @openuidev/openclaw-os-plugin bundle-ui` step (Step 7.3b) to `update.sh` so `static/` is populated with the claw-client Next.js export on every deploy. Part 2 corrected the Caddyfile generator's rewrite target (`/openclawos{path}` → `/plugins/openclawos{path}`) and added a `@openclawosPluginAssets` handle for `/plugins/openclawos*` asset URLs (Next.js basePath). Live verification: `curl -H "Host: bruce.livinity.io" http://127.0.0.1/liv-ai-app/openclawos` returns `<title>Liv AI</title>` (was `OpenClaw Control`); `_next/*` JS assets proxy through Caddy at 52KB; adjacent routes (`/openclawos/handshake`, `/liv-ai-app/agents`) unregressed. See `203-HOTFIX-205-PLUGIN-LOAD.md` § "Addendum — Fix-C SHIPPED" for full forensics + before/after table.
