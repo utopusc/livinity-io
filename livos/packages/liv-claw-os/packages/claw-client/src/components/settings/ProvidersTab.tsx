@@ -684,6 +684,77 @@ function ProviderCard({ info, authStatus, xaiStatus, onChanged }: ProviderCardPr
               )}
             </div>
           ) : null}
+
+          {/*
+           * Phase 207 R7 — generic opencode-bridge for non-xAI providers.
+           *
+           * The Phase 195 OAuth wizard only handles xAI in-app (auth.xai.*
+           * RPCs). For Anthropic + OpenAI Codex (the other providers
+           * opencode-cli supports today), the operator runs
+           *   `opencode auth login -p <provider>`
+           * from a host terminal. That writes opencode/auth.json but the
+           * openclaw agent still doesn't see the credential until the
+           * bridge runs. The "Bridge from opencode" button fires the
+           * bridge mutation for THIS provider only — if opencode already
+           * has a credential, it lands in openclaw's auth-profiles.json
+           * and the provider flips to `configured`. If opencode doesn't
+           * have one yet, the mutation returns `bridged=[]` and the
+           * inline hint tells the operator what command to run on the
+           * host (a future plan can expose the OAuth-start flow generic-
+           * ally; SPEC R7 acceptance allows the bridge-only UX as the
+           * step toward full from-UI parity).
+           */}
+          {!isXai &&
+          (info.provider === "anthropic" ||
+            info.provider === "openai" ||
+            info.provider === "claude" ||
+            info.provider === "openai-codex") ? (
+            <div className="border-t border-border-default/40 pt-s dark:border-border-default/16 flex flex-col gap-3xs">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    type BridgeResult = {bridged?: string[]; skipped?: Array<{provider: string; reason: string}>};
+                    const result = await callMutation<
+                      {providers: string[]},
+                      BridgeResult
+                    >("openclaw.bridgeFromOpencode", {
+                      providers: [info.provider],
+                    });
+                    if ((result.bridged ?? []).includes(info.provider)) {
+                      onChanged();
+                    } else {
+                      const skipReason = result.skipped?.find(
+                        (s) => s.provider === info.provider,
+                      )?.reason;
+                      // Surface a soft hint via window.alert — the ProvidersTab
+                      // doesn't have a toast surface today. Better-than-silent
+                      // until a future plan adds per-card status banners.
+                      window.alert(
+                        skipReason
+                          ? `Bridge skipped for ${info.provider}: ${skipReason}`
+                          : `No opencode credential found for ${info.provider}. ` +
+                              `Run \`opencode auth login -p ${info.provider}\` on the host first.`,
+                      );
+                    }
+                  } catch (bridgeErr) {
+                    const msg =
+                      bridgeErr instanceof Error
+                        ? bridgeErr.message
+                        : String(bridgeErr);
+                    window.alert(`Bridge failed: ${msg}`);
+                  }
+                }}
+              >
+                Bridge from opencode
+              </Button>
+              <p className="text-xs text-text-neutral-tertiary">
+                Run <code>opencode auth login -p {info.provider}</code> on the host
+                first, then click here to import the credential into openclaw.
+              </p>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

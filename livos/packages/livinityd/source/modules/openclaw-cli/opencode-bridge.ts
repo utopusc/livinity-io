@@ -202,3 +202,103 @@ export async function bridgeFromOpencode(
 		opencodeAuthPath,
 	}
 }
+
+// ─── Phase 207 R6 — periodic auto-refresh ───────────────────────────────────
+
+/**
+ * Phase 207 R6 — periodic refresh interval, in milliseconds.
+ *
+ * 30 minutes is well below the xAI OAuth access-token lifetime (typically
+ * ~24h), and well below any reasonable expiry on the other opencode-bridged
+ * providers (OpenAI Codex / Anthropic / GitHub Copilot all rotate slower
+ * than the 24h ceiling). The cost of a refresh is one auth.json read + one
+ * auth-profiles.json atomic write — both are local-filesystem cheap.
+ */
+export const BRIDGE_REFRESH_INTERVAL_MS = 30 * 60 * 1000
+
+export interface PeriodicBridgeRefresherDeps {
+	logger: {
+		info: (msg: string) => void
+		warn: (msg: string, err?: unknown) => void
+	}
+	/** Test seam — override the interval (default 30 min). */
+	intervalMs?: number
+	/** Test seam — override the bridge implementation. */
+	bridge?: (opts?: BridgeOpts) => Promise<BridgeResult>
+	/** Optional path overrides forwarded into bridge calls. */
+	bridgeOpts?: BridgeOpts
+}
+
+export interface PeriodicBridgeRefresherHandle {
+	/** Stop the timer. Idempotent. */
+	stop(): void
+	/** Trigger an immediate refresh (returns when the bridge call settles). */
+	tick(): Promise<void>
+}
+
+/**
+ * Phase 207 R6 — fire-and-forget periodic re-bridge so xAI / OpenAI Codex
+ * / Anthropic OAuth access tokens that opencode rotates in the background
+ * propagate into openclaw's auth-profiles.json without operator action.
+ *
+ * Pre-Phase 207 the bridge ran ONCE at the end of the xAI OAuth flow and
+ * wrote a snapshot. After ~24h the snapshot went stale and chat started
+ * failing with 401s until the operator re-clicked "Connect via xAI" in
+ * Settings → Providers. Operator UAT 2026-05-24 surfaced this; SPEC R6
+ * scopes the auto-refresh.
+ *
+ * Failure handling: any caught error is logged at WARN level — the bridge
+ * is best-effort, never throws back to the caller, and the timer keeps
+ * firing on the next tick. unref() on the timer so livinityd's process
+ * shutdown isn't blocked by a pending interval.
+ */
+export function startPeriodicBridgeRefresh(
+	deps: PeriodicBridgeRefresherDeps,
+): PeriodicBridgeRefresherHandle {
+	const intervalMs = deps.intervalMs ?? BRIDGE_REFRESH_INTERVAL_MS
+	const bridge = deps.bridge ?? bridgeFromOpencode
+	const opts = deps.bridgeOpts
+
+	const tick = async (): Promise<void> => {
+		try {
+			const result = await bridge(opts)
+			if (result.bridged.length > 0) {
+				deps.logger.info(
+					`Phase 207 R6 — bridge auto-refresh OK; rotated ${result.bridged.length} provider(s): ${result.bridged.join(', ')}`,
+				)
+			}
+			if (result.skipped.length > 0) {
+				deps.logger.warn(
+					`Phase 207 R6 — bridge auto-refresh skipped ${result.skipped.length} entry(ies): ${result.skipped
+						.map((s) => `${s.provider}=${s.reason}`)
+						.join(', ')}`,
+				)
+			}
+		} catch (err) {
+			deps.logger.warn(
+				'Phase 207 R6 — bridge auto-refresh failed (will retry on next tick)',
+				err,
+			)
+		}
+	}
+
+	deps.logger.info(
+		`Phase 207 R6 — periodic bridge refresher armed (intervalMs=${intervalMs})`,
+	)
+	const handle = setInterval(() => {
+		void tick()
+	}, intervalMs)
+	if (typeof handle.unref === 'function') handle.unref()
+
+	let stopped = false
+	return {
+		stop(): void {
+			if (stopped) return
+			stopped = true
+			clearInterval(handle)
+		},
+		async tick(): Promise<void> {
+			await tick()
+		},
+	}
+}
