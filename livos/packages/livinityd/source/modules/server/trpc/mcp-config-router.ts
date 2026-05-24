@@ -52,7 +52,9 @@ import {z} from 'zod'
 
 import {adminProcedure, router} from './trpc.js'
 
-const REDIS_HASH_KEY = 'liv:mcp:config'
+export const MCP_CONFIG_REDIS_HASH_KEY = 'liv:mcp:config'
+export const MCP_CONFIG_REDIS_PUBSUB_CHANNEL = 'liv:mcp:updated'
+const REDIS_HASH_KEY = MCP_CONFIG_REDIS_HASH_KEY
 const SYSTEM_MCP_NAMES = new Set(['luse'])
 
 /**
@@ -65,6 +67,33 @@ export interface McpConfigRedisClient {
 	hget(key: string, field: string): Promise<string | null>
 	hset(key: string, field: string, value: string): Promise<unknown>
 	hdel(key: string, field: string): Promise<unknown>
+	/**
+	 * Phase 205-03 — publish a notification on `liv:mcp:updated` after every
+	 * state-mutating procedure. mcp-bridge subscribes via `redis.duplicate()`
+	 * and reconciles its spawned-server map. See SPEC R3 + 205-01 SPIKE-NOTES.
+	 */
+	publish(channel: string, message: string): Promise<number>
+}
+
+/**
+ * Phase 205-03 — best-effort publish on `liv:mcp:updated` after every
+ * state-mutating procedure. Wrapped so a Redis-side failure never bubbles
+ * out of the tRPC mutation (the hash write already succeeded; pub/sub is
+ * advisory). Mirrors `native-app-config.ts` publisher template.
+ */
+async function publishMcpUpdated(
+	deps: McpConfigRouterDeps,
+	op: 'set' | 'delete',
+	name: string,
+): Promise<void> {
+	try {
+		await deps.redis.publish(
+			MCP_CONFIG_REDIS_PUBSUB_CHANNEL,
+			JSON.stringify({op, name, ts: new Date().toISOString()}),
+		)
+	} catch (err) {
+		deps.logger.warn(`[mcp-config] failed to publish ${MCP_CONFIG_REDIS_PUBSUB_CHANNEL} for '${name}'`, err)
+	}
 }
 
 export interface McpConfigRouterDeps {
@@ -126,7 +155,7 @@ const ToggleInput = z.object({name: NameSchema, enabled: z.boolean()})
  * Parse a JSON-encoded value from the hash. On malformed JSON, log and skip
  * (returning null) so a single corrupt entry doesn't brick the whole tab.
  */
-function parseEntry(name: string, raw: string, logger: McpConfigRouterDeps['logger']): McpServerConfig | null {
+export function parseEntry(name: string, raw: string, logger: McpConfigRouterDeps['logger']): McpServerConfig | null {
 	try {
 		const parsed = JSON.parse(raw) as Partial<McpServerConfig>
 		const transport = parsed.transport
@@ -198,7 +227,8 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 			}
 			const {name: _ignored, ...body} = input
 			await deps.redis.hset(REDIS_HASH_KEY, input.name, serializeBody(body))
-			deps.logger.info(`[mcp-config] added external MCP server '${input.name}' (restart required to spawn)`)
+			deps.logger.info(`[mcp-config] added external MCP server '${input.name}'`)
+			await publishMcpUpdated(deps, 'set', input.name)
 			return {ok: true as const}
 		}),
 
@@ -231,7 +261,8 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 				enabled: input.patch.enabled !== undefined ? input.patch.enabled : current.enabled,
 			}
 			await deps.redis.hset(REDIS_HASH_KEY, input.name, serializeBody(merged))
-			deps.logger.info(`[mcp-config] updated MCP server '${input.name}' (restart required)`)
+			deps.logger.info(`[mcp-config] updated MCP server '${input.name}'`)
+			await publishMcpUpdated(deps, 'set', input.name)
 			return {ok: true as const}
 		}),
 
@@ -254,7 +285,8 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 				})
 			}
 			await deps.redis.hdel(REDIS_HASH_KEY, input.name)
-			deps.logger.info(`[mcp-config] deleted MCP server '${input.name}' (restart required)`)
+			deps.logger.info(`[mcp-config] deleted MCP server '${input.name}'`)
+			await publishMcpUpdated(deps, 'delete', input.name)
 			return {ok: true as const}
 		}),
 
@@ -287,8 +319,9 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 			}
 			await deps.redis.hset(REDIS_HASH_KEY, input.name, serializeBody(merged))
 			deps.logger.info(
-				`[mcp-config] toggled MCP server '${input.name}' → ${input.enabled ? 'enabled' : 'disabled'} (restart required)`,
+				`[mcp-config] toggled MCP server '${input.name}' → ${input.enabled ? 'enabled' : 'disabled'}`,
 			)
+			await publishMcpUpdated(deps, 'set', input.name)
 			return {ok: true as const}
 		}),
 	})
