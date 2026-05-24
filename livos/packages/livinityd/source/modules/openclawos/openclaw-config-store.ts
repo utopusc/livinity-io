@@ -41,6 +41,22 @@ import {
 	writeFileSync,
 } from 'node:fs'
 
+/**
+ * Phase 207 R1 — Subset of openclaw's `McpServerConfig` shape (see
+ * `node_modules/openclaw/dist/types.openclaw-*.d.ts`). Only the fields LivOS
+ * actually mirrors from `liv:mcp:config` are typed here; openclaw tolerates
+ * extra keys (`[k: string]: unknown` on the upstream type) so we don't have
+ * to enumerate every Codex/HTTP variant.
+ */
+export interface OpenclawMcpServerConfig {
+	command?: string
+	args?: string[]
+	env?: Record<string, string | number | boolean>
+	url?: string
+	headers?: Record<string, string | number | boolean>
+	[k: string]: unknown
+}
+
 export interface OpenclawConfig {
 	gateway?: {
 		controlUi?: {allowedOrigins?: string[]}
@@ -48,6 +64,17 @@ export interface OpenclawConfig {
 			token?: string
 			mode?: 'none' | 'token' | 'password' | 'trusted-proxy'
 		}
+	}
+	/**
+	 * Phase 207 R1 — `mcp.servers` field that the openclaw gateway live-reloads
+	 * to spawn MCP runtimes and expose their tools to agent chats. Mirrored
+	 * from Redis hash `liv:mcp:config` on every `mcp.config.*` mutation so the
+	 * `/settings → MCP` tab persists changes that actually reach chat.
+	 */
+	mcp?: {
+		servers?: Record<string, OpenclawMcpServerConfig>
+		sessionIdleTtlMs?: number
+		[k: string]: unknown
 	}
 	plugins?: {entries?: unknown[]}
 	[k: string]: unknown
