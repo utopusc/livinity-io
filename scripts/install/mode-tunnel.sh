@@ -296,6 +296,10 @@ _configure_caddy_for_tunnel() {
         rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
     }
+    @openclawosPluginAssets path /plugins/openclawos /plugins/openclawos/*
+    handle @openclawosPluginAssets {
+        reverse_proxy 127.0.0.1:18789
+    }
     @livaiSubapp path /liv-ai-app /liv-ai-app/*
     handle @livaiSubapp {
         reverse_proxy 127.0.0.1:3010

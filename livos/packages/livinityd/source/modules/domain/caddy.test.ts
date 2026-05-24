@@ -178,8 +178,8 @@ describe('Phase 203-09 — /liv-ai-app split: openclaw gateway vs Next.js subapp
 
 // ─── Phase 203-10 — gateway URL rewrite (handoff from Plan 203-09) ─────────
 
-describe('Phase 203-10/12 — gateway URL rewrite to /openclawos', () => {
-	it('handle_path strips external prefix AND rewrites to /openclawos before forwarding', () => {
+describe('Phase 203-10/12/Hot-fix-C — gateway URL rewrite to /plugins/openclawos', () => {
+	it('handle_path strips external prefix AND rewrites to /plugins/openclawos before forwarding', () => {
 		const out = generateFullCaddyfile(
 			{mainDomain: 'bruce.livinity.io', subdomains: []},
 			false,
@@ -194,7 +194,7 @@ describe('Phase 203-10/12 — gateway URL rewrite to /openclawos', () => {
 		expect(clawIdx).toBeGreaterThan(-1)
 		const clawBlockEnd = out.indexOf('\t}\n\t}', clawIdx)
 		const clawBlock = out.slice(clawIdx, clawBlockEnd)
-		const rewriteIdx = clawBlock.indexOf('rewrite * /openclawos{path}')
+		const rewriteIdx = clawBlock.indexOf('rewrite * /plugins/openclawos{path}')
 		const proxyIdx = clawBlock.indexOf('reverse_proxy 127.0.0.1:18789')
 		expect(rewriteIdx).toBeGreaterThan(-1)
 		expect(proxyIdx).toBeGreaterThan(-1)
@@ -214,7 +214,7 @@ describe('Phase 203-10/12 — gateway URL rewrite to /openclawos', () => {
 		const subdomainBlockStart = out.indexOf('bruce.livinity.io {')
 		const clawInside = out.indexOf('handle_path /liv-ai-app/openclawos', subdomainBlockStart)
 		const rewriteInside = out.indexOf(
-			'rewrite * /openclawos{path}',
+			'rewrite * /plugins/openclawos{path}',
 			clawInside,
 		)
 		expect(rewriteInside).toBeGreaterThan(clawInside)
@@ -224,8 +224,28 @@ describe('Phase 203-10/12 — gateway URL rewrite to /openclawos', () => {
 		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
 		const clawIdx = out.indexOf('handle_path /liv-ai-app/openclawos')
 		expect(clawIdx).toBeGreaterThan(-1)
-		const rewriteIdx = out.indexOf('rewrite * /openclawos{path}', clawIdx)
+		const rewriteIdx = out.indexOf('rewrite * /plugins/openclawos{path}', clawIdx)
 		expect(rewriteIdx).toBeGreaterThan(clawIdx)
+	})
+
+	// Hot-fix-C addendum 2026-05-24: the Next.js static export's basePath is
+	// /plugins/openclawos so the rendered HTML references _next/* assets via
+	// /plugins/openclawos/_next/... — those external URLs would otherwise hit
+	// the default reverse_proxy to :8080 (livinityd) which doesn't serve them.
+	// Asset handle steers them directly to :18789 (no rewrite needed since the
+	// plugin already matches /plugins/openclawos*).
+	it('also emits a /plugins/openclawos asset handle pointing at :18789', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('@openclawosPluginAssets path /plugins/openclawos /plugins/openclawos/*')
+		// The asset handle must NOT carry a rewrite (gateway already serves the path as-is).
+		const assetIdx = out.indexOf('@openclawosPluginAssets path')
+		const handleIdx = out.indexOf('handle @openclawosPluginAssets', assetIdx)
+		expect(handleIdx).toBeGreaterThan(assetIdx)
 	})
 })
 
