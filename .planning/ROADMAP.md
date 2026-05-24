@@ -2976,3 +2976,22 @@ Plans:
 
 ---
 
+### Phase 205: Liv AI UI Carry-Over Bundle (in-chat provider picker + MCP UI in shell + OpenClaw gateway settings UI) — ⚪ NOT STARTED
+
+**Goal:** Close the three UI gaps surfaced during Phase 203/204 operator UAT so the openclaw chat shell becomes operationally self-sufficient (no SSH-edit of `/opt/livos/data/openclaw/openclaw.json`, no jumping out to `/settings` for per-chat decisions). Bundles three small UI carry-overs into one phase so the wave can ship together.
+
+**Depends on:** Phase 203 (openclaw chat shell + gateway), Phase 204 (provider-config tRPC + ProvidersTab pattern), Phase 203 Hot-fix F5 (`X-Api-Key` service-token path that lets the openclaw plugin reach livinityd tRPC without holding admin JWT).
+
+**Sub-features (3):**
+- **205-01 — In-chat provider picker.** Operator picks which LLM provider runs the current chat (XAI / Anthropic / OpenAI / Groq / Mistral / Ollama). Today provider is picked once globally via `/settings → Providers`; carry-over from Phase 203 § G operator action item.
+- **205-02 — MCP server management UI inside Liv AI chat shell.** Existing `/settings → MCP` tab (Phase 202-07) lives in liv-ai-app Next.js subapp only. Operator wants MCP control inside the openclaw chat surface as well so adding/removing MCP servers does not require shell-switching.
+- **205-03 — OpenClaw gateway settings UI.** Surface gateway config (allowedOrigins, auth mode, paired device list, plugin list, sweepable pairings) via a settings tab so the operator does not have to SSH-edit `openclaw.json` or run `systemctl restart liv-claw-gateway` to revoke a device.
+
+**Triggered by (handoff source):** `project_v40_session_handoff.md` § "Open carry-overs for next session" + Phase 204-02 4th deviation note ("McpTab.tsx pre-existing mutation bug documented as Phase 205+ candidate").
+
+**Speed budget:** 6-10 hours wall-clock; 3 sub-features ship as parallel waves where state shape allows.
+
+**Status:** Awaiting SPEC.md (this entry is the ROADMAP placeholder).
+
+---
+
