@@ -34,11 +34,74 @@
  * Phase 204-02 carry-over flagged in 205-01 SPIKE-NOTES).
  */
 
-import { Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { callMutation, callQuery } from "@/lib/livinityd-client";
+
+/**
+ * Built-in MCP catalog — Phase 205 Hot-fix L3.
+ *
+ * Source of truth (verified 2026-05-24 against the actual on-disk plugin
+ * registrations — NOT guessed):
+ *   - 9 luse_* tools registered by `luse-proxy.ts` (`registerLuseProxyTools`)
+ *   - 11 tools registered by `builtin-proxy.ts` (`registerBuiltinProxyTools`),
+ *     of which 8 overlap with luse_* and 3 are LivOS utilities
+ *     (`weather`, `get_current_time`, `ui_render`).
+ *
+ * Total unique tools available to the agent without any user action: **12**
+ * — 9 Luse (computer use, Bytebot fork per P100-10 rename D-100-10-B) + 3
+ * LivOS utilities.
+ *
+ * Counts here MUST match those proxies. If you add/remove a tool there,
+ * mirror it here. A future hardening pass should expose this via a
+ * `mcp.builtin.list` tRPC query so the catalog is self-describing.
+ */
+type BuiltinToolDef = { name: string; label: string; destructive: boolean };
+
+const LUSE_TOOLS: ReadonlyArray<BuiltinToolDef> = [
+  { name: "luse_computer_screenshot", label: "Screenshot Desktop", destructive: false },
+  { name: "luse_list_windows", label: "List Open Windows", destructive: false },
+  { name: "luse_get_cursor_position", label: "Get Cursor Position", destructive: false },
+  { name: "luse_computer_click_mouse", label: "Click Mouse", destructive: true },
+  { name: "luse_computer_type_text", label: "Type Text", destructive: true },
+  { name: "luse_computer_press_keys", label: "Press Keys", destructive: true },
+  { name: "luse_computer_drag_mouse", label: "Drag Mouse", destructive: true },
+  { name: "luse_computer_paste_text", label: "Paste Text", destructive: true },
+  { name: "luse_computer_application", label: "Launch / Focus / Close App", destructive: true },
+];
+
+const LIVOS_TOOLS: ReadonlyArray<BuiltinToolDef> = [
+  { name: "weather", label: "Weather", destructive: false },
+  { name: "get_current_time", label: "Current Time", destructive: false },
+  { name: "ui_render", label: "Render UI", destructive: false },
+];
+
+type BuiltinMcp = {
+  id: string;
+  name: string;
+  category: string;
+  origin: string;
+  tools: ReadonlyArray<BuiltinToolDef>;
+};
+
+const BUILTIN_MCPS: ReadonlyArray<BuiltinMcp> = [
+  {
+    id: "luse",
+    name: "luse",
+    category: "computer use",
+    origin: "Bytebot fork — LivOS computer-use MCP (livinityd:internal)",
+    tools: LUSE_TOOLS,
+  },
+  {
+    id: "livos-utilities",
+    name: "livos-utilities",
+    category: "built-in helpers",
+    origin: "openclaw plugin — claw-plugin:builtin-proxy",
+    tools: LIVOS_TOOLS,
+  },
+];
 
 /**
  * Mirrors `McpServerConfig` from
@@ -185,51 +248,33 @@ export function McpServersTab() {
 
   return (
     <div className="space-y-l p-m">
-      {/* ── Built-in tools (always on) ─────────────────────────────────────
-       *
-       * Phase 205 Hot-fix L follow-up — operator UAT (2026-05-24) raised
-       * the legitimate confusion that "MCP Servers (0)" implied the agent
-       * had no tools. In fact Luse + 11 LivOS built-ins ship to the gateway
-       * compile-time via plugin-rpc (Plan 203-06) and are always active.
-       * They do NOT live in the `liv:mcp:configs` Redis hash, so they do
-       * not surface in the External servers list below. This read-only
-       * panel makes the architecture visible without muddying the contract.
-       *
-       * Counts are static — they are defined at compile time in
-       * `liv-claw-os/packages/claw-plugin/src/luse-proxy.ts` (9 luse_*)
-       * and `builtin-proxy.ts` (11 LivOS). If those change, update here.
-       */}
-      <div className="rounded-md border border-border-default/40 bg-sunk-light/30 p-m dark:bg-elevated/30">
-        <div className="flex items-baseline justify-between gap-s">
-          <h3 className="text-sm font-medium text-text-neutral-primary">
-            Built-in tools <span className="text-text-neutral-tertiary">(always on)</span>
-          </h3>
-          <span className="text-xs text-text-success-primary">active</span>
-        </div>
-        <ul className="mt-s space-y-2xs text-sm text-text-neutral-secondary">
-          <li>
-            <span className="font-mono text-text-neutral-primary">luse</span>{" "}
-            <span className="text-text-neutral-tertiary">— 9 tools (browser, file, talk-voice, canvas, …)</span>
-          </li>
-          <li>
-            <span className="font-mono text-text-neutral-primary">livos-built-ins</span>{" "}
-            <span className="text-text-neutral-tertiary">— 11 tools (weather, get_current_time, ui_render, …)</span>
-          </li>
-        </ul>
-        <p className="mt-s text-xs text-text-neutral-tertiary">
-          Built-in tools ship with LivOS and cannot be removed from this UI.
-          Add external MCP servers below to expose more tools to the agent.
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="space-y-xs">
+        <h2 className="text-md font-medium text-text-neutral-primary">
+          MCP Servers ({BUILTIN_MCPS.length + servers.length})
+        </h2>
+        <p className="text-sm text-text-neutral-tertiary">
+          Tap an MCP to expand its tool list. Built-in MCPs are always on; add
+          your own below to expose more tools to the agent. Changes take effect
+          within ~10 seconds — no restart required.
         </p>
       </div>
 
-      {/* ── Header (external servers) ──────────────────────────────────── */}
+      {/* ── Built-in MCPs (clickable accordion) ─────────────────────────── */}
+      <ul className="space-y-xs">
+        {BUILTIN_MCPS.map((mcp) => (
+          <BuiltinMcpRow key={mcp.id} mcp={mcp} />
+        ))}
+      </ul>
+
+      {/* ── External MCP header ─────────────────────────────────────────── */}
       <div className="space-y-xs">
-        <h2 className="text-md font-medium text-text-neutral-primary">
-          External MCP Servers ({servers.length})
-        </h2>
+        <h3 className="text-sm font-medium text-text-neutral-primary">
+          External servers ({servers.length})
+        </h3>
         <p className="text-sm text-text-neutral-tertiary">
-          Add MCP servers to expose new tools to the agent. Changes take effect
-          within ~10 seconds — no restart required.
+          Connect 3rd-party MCP servers (Filesystem, GitHub, Postgres, …) by
+          pointing claw-client at a local command or HTTP endpoint.
         </p>
       </div>
 
@@ -388,5 +433,85 @@ export function McpServersTab() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Clickable row for a built-in MCP. Renders a header (name + meta) that
+ * expands on click to show the full tool list with destructive markers.
+ */
+function BuiltinMcpRow({ mcp }: { mcp: BuiltinMcp }) {
+  const [open, setOpen] = useState(false);
+  const Chevron = open ? ChevronDown : ChevronRight;
+  const destructiveCount = mcp.tools.filter((t) => t.destructive).length;
+
+  return (
+    <li className="rounded-md border border-border-default/40 bg-sunk-light/30 dark:bg-elevated/30">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-s px-m py-s text-left transition-colors hover:bg-sunk dark:hover:bg-elevated"
+      >
+        <div className="flex min-w-0 items-center gap-s">
+          <Chevron size={16} className="shrink-0 text-text-neutral-tertiary" />
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-xs">
+              <span className="font-mono text-sm font-medium text-text-neutral-primary">
+                {mcp.name}
+              </span>
+              <span className="text-xs text-text-neutral-tertiary">
+                · {mcp.category}
+              </span>
+            </div>
+            <p className="mt-3xs truncate text-xs text-text-neutral-tertiary">
+              {mcp.origin}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-s">
+          <span className="text-xs text-text-neutral-secondary">
+            {mcp.tools.length} tool{mcp.tools.length === 1 ? "" : "s"}
+          </span>
+          <span className="rounded-full bg-success-background px-xs py-3xs text-xs font-medium text-text-success-primary">
+            active
+          </span>
+        </div>
+      </button>
+      {open && (
+        <div className="border-t border-border-default/40 px-m py-s dark:border-border-default/16">
+          <ul className="space-y-2xs">
+            {mcp.tools.map((tool) => (
+              <li
+                key={tool.name}
+                className="flex items-baseline justify-between gap-s text-sm"
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="font-mono text-text-neutral-primary">{tool.name}</span>
+                  <span className="ml-xs text-text-neutral-tertiary">— {tool.label}</span>
+                </div>
+                {tool.destructive ? (
+                  <span
+                    className="shrink-0 rounded-full bg-alert-background px-xs py-3xs text-xs font-medium text-text-alert-primary"
+                    title="Requires operator approval before each invocation"
+                  >
+                    approval
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-xs text-text-neutral-tertiary">read-only</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {destructiveCount > 0 && (
+            <p className="mt-s text-xs text-text-neutral-tertiary">
+              {destructiveCount} of {mcp.tools.length} tools are destructive and
+              require your approval before each invocation (handled by the
+              ApprovalManager — you&apos;ll see an in-chat prompt).
+            </p>
+          )}
+        </div>
+      )}
+    </li>
   );
 }
