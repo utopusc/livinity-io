@@ -49,6 +49,10 @@ import {
 	setApiKeyProfile,
 	type AuthProfilesPathOpts,
 } from '../../openclaw-cli/auth-profiles-store.js'
+import {
+	bridgeFromOpencode,
+	resolveOpencodeAuthPath,
+} from '../../openclaw-cli/opencode-bridge.js'
 
 // ─── Wire-format types (mirror openclaw CLI JSON output) ─────────────────────
 
@@ -417,6 +421,97 @@ export function createOpenclawCliRouter(deps: OpenclawCliRouterDeps = {}) {
 					throw mapCliError(err)
 				}
 			}),
+		}),
+
+		/**
+		 * Bridge opencode auth entries into openclaw auth-profiles.json.
+		 *
+		 * The Phase 195 xAI OAuth flow (auth.xai.start) lands tokens in
+		 * opencode's own auth.json which the openclaw agent does NOT read.
+		 * This procedure reads opencode's auth.json, converts each entry
+		 * to openclaw's api_key shape (Bearer-compatible — xAI accepts the
+		 * OAuth access token under both API key and Bearer headers
+		 * interchangeably), and merges into auth-profiles.json.
+		 *
+		 * Call this AFTER `auth.xai.waitForCompletion` succeeds. Providers
+		 * filter is optional — when omitted, every entry in opencode's
+		 * auth.json is bridged.
+		 *
+		 * Known limitation: the bridged entry is a snapshot of the
+		 * current OAuth access token. When opencode's TokenRefresher
+		 * rotates the token, the bridged copy goes stale. Operators on
+		 * long sessions should re-run the bridge before ~24h or paste a
+		 * permanent xAI API key directly. (Phase 207 carry-over: wire
+		 * a refresh-event subscriber so the bridge auto-refreshes.)
+		 */
+		bridgeFromOpencode: adminProcedure
+			.input(
+				z.object({
+					providers: z.array(providerIdSchema).optional(),
+					opencodeAuthPath: z.string().optional(),
+				}),
+			)
+			.mutation(async ({input}) => {
+				try {
+					const result = await bridgeFromOpencode({
+						...pathOpts(deps),
+						providers: input.providers,
+						opencodeAuthPath: input.opencodeAuthPath,
+					})
+					if (deps.onProvidersChanged) {
+						try {
+							await deps.onProvidersChanged()
+						} catch (e) {
+							deps.logger?.warn?.(
+								'openclaw.auth.bridgeFromOpencode onProvidersChanged hook failed',
+								e,
+							)
+						}
+					}
+					return {
+						ok: true as const,
+						bridged: result.bridged,
+						skipped: result.skipped,
+						profilePath: result.profilePath,
+						opencodeAuthPath: result.opencodeAuthPath,
+					}
+				} catch (err) {
+					throw mapCliError(err)
+				}
+			}),
+
+		/**
+		 * Read opencode auth.json metadata (without raw tokens) so the UI
+		 * can show "bridgeable" hints. Returns the list of providers that
+		 * exist in opencode's store, so the xAI card can render "Bridge
+		 * existing xAI OAuth" CTA when applicable.
+		 */
+		opencodeProviders: adminProcedure.query(async () => {
+			try {
+				const path = resolveOpencodeAuthPath()
+				const fs = await import('node:fs/promises')
+				try {
+					const raw = await fs.readFile(path, 'utf8')
+					const parsed = JSON.parse(raw)
+					if (parsed && typeof parsed === 'object') {
+						return {
+							path,
+							providers: Object.entries(parsed as Record<string, {type?: string}>).map(
+								([provider, entry]) => ({
+									provider,
+									type: entry?.type ?? 'unknown',
+								}),
+							),
+						}
+					}
+				} catch (err: unknown) {
+					const code = (err as NodeJS.ErrnoException).code
+					if (code !== 'ENOENT') throw err
+				}
+				return {path, providers: []}
+			} catch (err) {
+				throw mapCliError(err)
+			}
 		}),
 
 		/**
