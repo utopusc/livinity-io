@@ -43,7 +43,16 @@ import {
   uploadMetaToThreadUpload,
   type ThreadWorkspaceState,
 } from "@/lib/session-workspace";
-import { getSettings } from "@/lib/storage";
+// Phase 203 Hot-fix D 2026-05-24 — auto-connect bootstrap. Probes the LivOS
+// /openclawos/handshake bridge on first load; if it succeeds (same-origin +
+// LIVINITY_SESSION cookie present), seeds Settings.gatewayUrl +
+// .deviceToken and skips the setup dialog. Returns false silently for
+// stand-alone (non-LivOS) deploys so the legacy form continues to work.
+// getSettings is no longer imported at the module level — it's now read
+// inside attemptLivOsAutoConnect, which short-circuits on already-configured
+// installs so the side-effect (open settings dialog) only fires on genuinely
+// fresh + outside-LivOS first loads.
+import { attemptLivOsAutoConnect } from "@/lib/gateway/auto-connect";
 import type { ClawThread } from "@/types/claw-thread";
 import type { ModelChoice, SessionRow } from "@/types/gateway-responses";
 import {
@@ -921,9 +930,31 @@ export default function ChatApp() {
     [apps, refreshAppList],
   );
 
-  // Auto-open settings on first visit (no gateway URL configured)
+  // Phase 203 Hot-fix D 2026-05-24 — on first load, try the LivOS auto-connect
+  // bridge before falling back to the setup dialog. When the iframe is hosted
+  // inside LivOS at /liv-ai-app/liv-ai, the /openclawos/handshake endpoint
+  // mints a fresh deviceToken from the LIVINITY_SESSION cookie and we seed
+  // Settings same-origin. Operator sees chat immediately — no setup form.
+  //
+  // Outside LivOS (stand-alone deploys), the handshake fails silently and we
+  // fall through to the legacy `open settings dialog on missing gateway` UX.
   useEffect(() => {
-    if (!getSettings()?.gatewayUrl) setSettingsOpen(true);
+    let cancelled = false;
+    void (async () => {
+      const result = await attemptLivOsAutoConnect();
+      if (cancelled) return;
+      if (!result.ok) {
+        // No gateway configured AND auto-connect failed (likely standalone use)
+        // → open the legacy setup dialog so the operator can paste a URL.
+        setSettingsOpen(true);
+      }
+      // result.ok === true paths intentionally do NOT open the dialog:
+      //  - "seeded" → fresh install inside LivOS, settings now valid
+      //  - "already-configured" → settings persisted from a prior session
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const { adaptedFetchThreadList, adaptedLoadThread } = useChatProviderAdapters({
