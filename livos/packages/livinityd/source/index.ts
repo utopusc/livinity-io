@@ -73,6 +73,11 @@ import {McpConfigManager} from '@liv/core/lib'
 // `liv:apps:native:*` namespace (D-101-NATIVE-APPS) and is consumed by the
 // tRPC `apps.native.{list,get,create,delete}` router.
 import {NativeAppConfigStore} from './modules/apps/native-app-config.js'
+// Phase 203 Hot-fix D 2026-05-24 — permanent "Liv AI" dock entry seed.
+// Idempotently upserts a fixed-UUID native-app config so the dock always
+// surfaces a clickable Liv AI tile (operator opens the openclaw chat surface
+// directly via /liv-ai-app/liv-ai iframe, bypassing the setup form).
+import {seedLivAiDockEntry} from './modules/openclawos/liv-ai-dock-seed.js'
 // Phase 157 — v37 install dispatcher service. Wires NativeInstaller +
 // AiInstaller into a module-scope InstallDispatcher consumed by the
 // `apps.installV37` / `apps.uninstallV37` / `apps.v37Progress` trpc
@@ -468,6 +473,18 @@ export default class Livinityd {
 		// SERVICE_UNAVAILABLE if this field were undefined.
 		this.nativeAppConfigStore = new NativeAppConfigStore(this.ai.redis)
 		this.logger.log('NativeAppConfigStore wired (liv:apps:native:* namespace)')
+
+		// Phase 203 Hot-fix D 2026-05-24 — seed the permanent "Liv AI" dock
+		// entry. Idempotent: fixed UUID collapses repeat upserts onto a single
+		// Redis key, so booting N times produces 1 dock tile (not N). Non-fatal
+		// on Redis hiccups — the rest of livinityd boot continues and the
+		// operator can re-seed via tRPC `apps.native.list` refresh later.
+		try {
+			await seedLivAiDockEntry(this.nativeAppConfigStore)
+			this.logger.log('Hot-fix D — Liv AI permanent dock entry seeded')
+		} catch (err) {
+			this.logger.error('Hot-fix D — Liv AI dock seed failed (dock tile will be missing this boot)', err as Error)
+		}
 
 		// Phase 157 — wire the v37 install dispatcher now that Redis +
 		// NativeAppConfigStore are live. The dispatcher constructs a fresh
