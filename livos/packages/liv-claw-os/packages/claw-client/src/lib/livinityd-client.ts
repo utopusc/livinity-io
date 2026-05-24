@@ -1,84 +1,37 @@
 /**
  * Phase 205-02 — Shared tRPC HTTP client for claw-client → livinityd.
  *
- * Wire contract LOCKED in `.planning/phases/205-liv-ai-ui-carryovers/205-01-SPIKE-NOTES.md`
- * AUTH PATH section. Empirically verified against Mini PC livinityd at
- * `127.0.0.1:8080` during Probe B5 + B7 + C4:
+ * Phase 205 Hot-fix L 2026-05-24 — REWRITTEN.
  *
- *   - tRPC v11 queries route through **GET** (POST returns 405).
- *   - Mutations route through **POST** with **bare non-batch** envelope
- *     `{json: input}` — NOT the `{0:{json:...}}?batch=1` shape (that shape
- *     is the production-broken McpTab.tsx Phase 204-02 carry-over).
- *   - Auth is the F5 X-Api-Key shortcut via runtime-config bootstrap.
- *     The browser bundle CANNOT read the Node-side LIV_API_KEY env var
- *     directly (Next.js `output:"export"` SPA); it instead fetches the
- *     key once on first call from same-origin `GET /openclawos/runtime-config`
- *     and caches it in module scope.
- *   - Response envelopes:
- *       success: `{result:{data:<unwrapped>}}` (tRPC v11 strips `{json:…}`
- *                wrapper on the wire for primitive outputs — proven by
- *                `{"result":{"data":[]}}` rather than `{"result":{"data":{"json":[]}}}`).
- *                We still accept `{json: payload}` defensively in case a
- *                future procedure returns a wrapped payload.
- *       error:   `{error:{json:{message,code}}}` OR `{error:{message,…}}`.
+ * The original Phase 205-02 implementation relied on a `/openclawos/runtime-config`
+ * endpoint that the Wave 0 spike (`205-01-SPIKE-NOTES.md` AUTH PATH section)
+ * claimed existed. Operator UAT proved otherwise: livinityd has no such route;
+ * GET requests hit livinityd's SPA fallback handler and return `<!doctype html>`,
+ * which fails JSON.parse with `Unexpected token '<'`. The spike was wrong and
+ * the executor copy-pasted without verifying the route.
  *
- * Cookie auth via `credentials: 'include'` is the defense-in-depth fallback
- * (LIVINITY_SESSION cookie auto-flows). The X-Api-Key header takes
- * precedence per Hot-fix F5 contract in `is-authenticated.ts:19-58`.
+ * Hot-fix L removes the bootstrap entirely and uses the LIVINITY_SESSION JWT
+ * cookie path the operator already carries from login. `is-authenticated.ts:20-23`
+ * reads the cookie via `req.cookies.LIVINITY_SESSION`, so `credentials: 'include'`
+ * on every fetch is sufficient. The Hot-fix F5 `X-Api-Key` shortcut still exists
+ * in livinityd for server-to-server callers (openclaw plugin → livinityd over
+ * loopback) but is NOT used from the browser — browsers cannot read the
+ * server-side env var, and the cookie is strictly more secure (HttpOnly,
+ * Same-Site, no env exposure to the page).
  *
- * This module is consumed by:
+ * Wire envelopes confirmed live on Mini PC during Hot-fix L diagnosis:
+ *   - Queries: `GET /trpc/<path>?input=%7B%22json%22%3A<...>%7D`
+ *   - Mutations: `POST /trpc/<path>` body `{"json": <input>}` (bare non-batch)
+ *   - Success: `{result:{data:<unwrapped>}}` (defensively also accepts `{json: payload}`)
+ *   - Error: `{error:{json:{message,code}}}` OR `{error:{message,…}}`
+ *
+ * Consumed by:
  *   - Wave 2 (Plan 205-03) `McpServersTab.tsx`
  *   - Wave 3 (Plan 205-04) `GatewayTab.tsx`
- * The shells were scaffolded in this wave (205-02); the tab bodies fill
- * in later. The `livinityd-client.ts` helper is locked in this wave so
- * both downstream waves consume an identical wire envelope.
  */
-
-let cachedApiKey: string | undefined;
-let bootstrapPromise: Promise<string> | undefined;
 
 function getBaseUrl(): string {
   return typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:8080";
-}
-
-/**
- * Fetch the LIV_API_KEY from same-origin `/openclawos/runtime-config` on
- * first use and cache it for the session. The endpoint is served by the
- * openclaw gateway plugin and returns `{livApiKey: <string>}` for
- * requests that already carry an authenticated LIVINITY_SESSION cookie.
- *
- * The fetch is de-duplicated via `bootstrapPromise` so concurrent first
- * callers share a single in-flight request.
- */
-async function getApiKey(): Promise<string> {
-  if (cachedApiKey) return cachedApiKey;
-  if (bootstrapPromise) return bootstrapPromise;
-  bootstrapPromise = (async () => {
-    const res = await fetch(`${getBaseUrl()}/openclawos/runtime-config`, {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      bootstrapPromise = undefined;
-      throw new Error(`runtime-config HTTP ${res.status}`);
-    }
-    const body = (await res.json()) as { livApiKey?: string };
-    if (!body.livApiKey) {
-      bootstrapPromise = undefined;
-      throw new Error("runtime-config missing livApiKey");
-    }
-    cachedApiKey = body.livApiKey;
-    return cachedApiKey;
-  })();
-  try {
-    return await bootstrapPromise;
-  } finally {
-    // Clear the in-flight promise on failure so the next caller retries;
-    // on success cachedApiKey covers all subsequent calls.
-    if (!cachedApiKey) bootstrapPromise = undefined;
-  }
 }
 
 interface TrpcEnvelopeSuccess<O> {
@@ -118,15 +71,45 @@ function unwrap<O>(env: TrpcEnvelope<O>): O {
 }
 
 /**
+ * Parse a tRPC response that returned a non-2xx status. Tries to surface the
+ * server's structured error message; falls back to a generic HTTP message.
+ *
+ * Hot-fix L — when the response body is HTML (Caddy / livinityd SPA fallback),
+ * surface a clearer error than `Unexpected token '<'`. This is the exact
+ * failure mode operator UAT hit before the cookie path was wired.
+ */
+async function explainNotOk<O>(res: Response, path: string): Promise<Error> {
+  const text = await res.text().catch(() => "");
+  if (text.startsWith("<")) {
+    return new Error(
+      `${path} HTTP ${res.status} — server returned HTML instead of JSON ` +
+        `(route may be missing or proxy misconfigured; check Caddy /trpc/* proxy + livinityd boot log)`,
+    );
+  }
+  try {
+    const env = JSON.parse(text) as TrpcEnvelope<O>;
+    if (env.error) {
+      const message =
+        env.error.json?.message ??
+        env.error.data?.message ??
+        env.error.message ??
+        `${path} HTTP ${res.status}`;
+      return new Error(message);
+    }
+  } catch {
+    // fall through to generic
+  }
+  return new Error(`${path} HTTP ${res.status}`);
+}
+
+/**
  * Issue a tRPC **query** against livinityd.
  *
- * Wire shape: `GET /trpc/<path>` with `?input=<encoded {json: input}>`
- * when input is provided; bare GET when omitted. X-Api-Key header
- * carries the bootstrapped LIV_API_KEY; LIVINITY_SESSION cookie auto-
- * flows via `credentials: 'include'` as defense-in-depth.
+ * Wire shape: `GET /trpc/<path>` with `?input=<encoded {json: input}>` when
+ * input is provided; bare GET when omitted. Auth via LIVINITY_SESSION
+ * cookie auto-flowed by `credentials: 'include'`.
  */
 export async function callQuery<I, O>(path: string, input?: I): Promise<O> {
-  const apiKey = await getApiKey();
   const url =
     input === undefined
       ? `${getBaseUrl()}/trpc/${path}`
@@ -136,26 +119,11 @@ export async function callQuery<I, O>(path: string, input?: I): Promise<O> {
   const res = await fetch(url, {
     method: "GET",
     credentials: "include",
-    headers: { Accept: "application/json", "X-Api-Key": apiKey },
+    headers: { Accept: "application/json" },
     cache: "no-store",
   });
   if (!res.ok) {
-    // Try to extract a tRPC error message from the body if present.
-    const text = await res.text().catch(() => "");
-    try {
-      const env = JSON.parse(text) as TrpcEnvelope<O>;
-      if (env.error) {
-        const message =
-          env.error.json?.message ??
-          env.error.data?.message ??
-          env.error.message ??
-          `${path} HTTP ${res.status}`;
-        throw new Error(message);
-      }
-    } catch {
-      // fall through
-    }
-    throw new Error(`${path} HTTP ${res.status}`);
+    throw await explainNotOk<O>(res, path);
   }
   const env = (await res.json()) as TrpcEnvelope<O>;
   return unwrap<O>(env);
@@ -164,38 +132,22 @@ export async function callQuery<I, O>(path: string, input?: I): Promise<O> {
 /**
  * Issue a tRPC **mutation** against livinityd.
  *
- * Wire shape: `POST /trpc/<path>` with body `{json: input}` (bare
- * non-batch — `{0:{json:...}}?batch=1` is the production-broken shape).
- * X-Api-Key + LIVINITY_SESSION cookie attached as in `callQuery`.
+ * Wire shape: `POST /trpc/<path>` with body `{json: input}` (bare non-batch;
+ * `{0:{json:...}}?batch=1` is the production-broken shape from McpTab.tsx
+ * Phase 204-02 carry-over). Auth via LIVINITY_SESSION cookie.
  */
 export async function callMutation<I, O>(path: string, input: I): Promise<O> {
-  const apiKey = await getApiKey();
   const res = await fetch(`${getBaseUrl()}/trpc/${path}`, {
     method: "POST",
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
-      "X-Api-Key": apiKey,
     },
     body: JSON.stringify({ json: input }),
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    try {
-      const env = JSON.parse(text) as TrpcEnvelope<O>;
-      if (env.error) {
-        const message =
-          env.error.json?.message ??
-          env.error.data?.message ??
-          env.error.message ??
-          `${path} HTTP ${res.status}`;
-        throw new Error(message);
-      }
-    } catch {
-      // fall through
-    }
-    throw new Error(`${path} HTTP ${res.status}`);
+    throw await explainNotOk<O>(res, path);
   }
   const env = (await res.json()) as TrpcEnvelope<O>;
   return unwrap<O>(env);
