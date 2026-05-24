@@ -236,6 +236,17 @@ export class OpenClawEngine implements Engine {
     return this._readyDeferred.promise;
   }
 
+  /**
+   * Phase 207 UAT 2026-05-24 — when ProvidersTab dispatches
+   * `openclaw-os:providers-changed` (after a successful bridge / setApiKey /
+   * logout / disconnect mutation), re-poll `providers.list` so the composer
+   * picker's configured-first sort + the default model auto-pick updates
+   * without a full reconnect. The same handler also re-runs
+   * `_refreshConfig` so workspaceDefault rotates if the operator just
+   * connected a provider that should override the default.
+   */
+  private _providersChangedListener: (() => void) | null = null;
+
   constructor(config: OpenClawEngineConfig, events: OpenClawEngineEvents) {
     this.id = config.id;
     this._settings = config.gatewayUrl
@@ -245,6 +256,30 @@ export class OpenClawEngine implements Engine {
     this._agentIdsHydratedPromise = new Promise<void>((resolve) => {
       this._resolveAgentIdsHydrated = resolve;
     });
+
+    if (typeof window !== "undefined") {
+      this._providersChangedListener = () => {
+        void this._refreshConfiguredProviders();
+        void this._refreshConfig();
+        void this._refreshModels();
+      };
+      window.addEventListener(
+        "openclaw-os:providers-changed",
+        this._providersChangedListener,
+      );
+    }
+  }
+
+  /**
+   * Phase 207 UAT 2026-05-24 — public escape hatch so callers outside the
+   * engine (e.g. settings dialogs) can force a refresh after a credential
+   * mutation. The event-listener wired in the constructor is the preferred
+   * path; this is the direct call for tests + non-window contexts.
+   */
+  async refreshConfiguredProviders(): Promise<void> {
+    await this._refreshConfiguredProviders();
+    void this._refreshConfig();
+    void this._refreshModels();
   }
 
   // ── Engine interface: stores ───────────────────────────────────────────────
@@ -424,6 +459,13 @@ export class OpenClawEngine implements Engine {
     this._readyDeferred = null;
     this.socket?.stop();
     this.socket = null;
+    if (typeof window !== "undefined" && this._providersChangedListener) {
+      window.removeEventListener(
+        "openclaw-os:providers-changed",
+        this._providersChangedListener,
+      );
+      this._providersChangedListener = null;
+    }
   }
 
   reconnect(newSettings: Settings): void {

@@ -13,13 +13,21 @@
  * because the bundle is mounted under the parent vhost (T-203-06 trust
  * chain preserved).
  *
- * Wire format — tRPC v10/v11 batch envelope used by the rest of the
- * livinityd-facing surface (see livinityd `httpOnlyPaths` registration of
- * `openclawos.apps.get`):
+ * Wire format — bare non-batch envelope.
  *
- *   GET /trpc/openclawos.apps.get?batch=1&input=<encoded {0:{json:{slug}}}>
- *   → 200 [{result:{data:{json: LivosOpenuiApp}}}]
- *   → 404 [{error:{...code:NOT_FOUND, data:{httpStatus:404}}}]  (server emits a tRPC NOT_FOUND envelope on missing slug)
+ * Phase 206 commit 3f6b0c25 retired the `{0:{json:input}}` batch wrap for
+ * livinityd's tRPC because livinityd has NO superjson transformer and
+ * every input-bearing procedure silently zod-failed against the wrapped
+ * shape. This helper was missed in that commit — operator UAT 2026-05-24
+ * surfaced it as `openclawos.apps.get HTTP 400 (BAD_REQUEST)` when
+ * clicking the freshly-created OpenUI desktop app.
+ *
+ *   GET /trpc/openclawos.apps.get?input=<encoded {"slug":"..."}>
+ *   → 200 {result:{data: LivosOpenuiApp}}
+ *   → 404 {error:{data:{code:"NOT_FOUND", httpStatus:404}}}
+ *
+ * The defensive `{json:…}` read in the parser is kept so a future
+ * superjson re-introduction wouldn't immediately break the page.
  */
 
 export interface OpenUiApp {
@@ -52,8 +60,8 @@ export async function fetchOpenUiApp(
     options.baseUrl ??
     (typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:8080");
 
-  const input = encodeURIComponent(JSON.stringify({ 0: { json: { slug } } }));
-  const url = `${baseUrl}/trpc/openclawos.apps.get?batch=1&input=${input}`;
+  const input = encodeURIComponent(JSON.stringify({ slug }));
+  const url = `${baseUrl}/trpc/openclawos.apps.get?input=${input}`;
 
   const res = await fetch(url, {
     method: "GET",
@@ -63,42 +71,54 @@ export async function fetchOpenUiApp(
     cache: "no-store",
   });
 
+  type ErrEnvelope = {
+    error?: { data?: { code?: string; httpStatus?: number }; message?: string };
+  };
+
   if (!res.ok) {
     // Server emits a tRPC envelope even on errors — try to read it so the
     // caller can distinguish "missing app" from "broken endpoint".
     const text = await res.text().catch(() => "");
-    let envelope: unknown = null;
+    let parsed: unknown = null;
     try {
-      envelope = JSON.parse(text);
+      parsed = JSON.parse(text);
     } catch {
       // not JSON — fall through to plain HTTP error
     }
-    if (Array.isArray(envelope) && envelope[0] && typeof envelope[0] === "object") {
-      const first = envelope[0] as { error?: { data?: { code?: string; httpStatus?: number } } };
-      const code = first.error?.data?.code;
-      const httpStatus = first.error?.data?.httpStatus;
-      if (code === "NOT_FOUND" || httpStatus === 404) {
-        return null;
-      }
+    // Tolerate both bare {error} envelopes (non-batch) and legacy
+    // [{error}] batch shape, so a transient server rollback doesn't
+    // confuse the not-found vs broken-endpoint branch.
+    const errEnv: ErrEnvelope | null = Array.isArray(parsed)
+      ? ((parsed[0] as ErrEnvelope) ?? null)
+      : ((parsed as ErrEnvelope) ?? null);
+    const code = errEnv?.error?.data?.code;
+    const httpStatus = errEnv?.error?.data?.httpStatus;
+    if (code === "NOT_FOUND" || httpStatus === 404) {
+      return null;
     }
     throw new Error(`openclawos.apps.get HTTP ${res.status}`);
   }
 
-  const envelope = (await res.json()) as unknown;
-  if (!Array.isArray(envelope) || !envelope[0] || typeof envelope[0] !== "object") {
-    throw new Error("openclawos.apps.get malformed envelope");
-  }
-  const first = envelope[0] as {
+  const parsed = (await res.json()) as unknown;
+  // Same tolerance on the success path — bare {result:{data}} is the
+  // post-Phase-206 shape, [{result:{data}}] is the legacy batch shape.
+  const successEnv = (Array.isArray(parsed) ? parsed[0] : parsed) as {
     result?: { data?: { json?: OpenUiApp } | OpenUiApp };
     error?: { data?: { code?: string } };
   };
-  if (first.error) {
-    if (first.error.data?.code === "NOT_FOUND") return null;
-    throw new Error(`openclawos.apps.get error: ${first.error.data?.code ?? "UNKNOWN"}`);
+  if (!successEnv || typeof successEnv !== "object") {
+    throw new Error("openclawos.apps.get malformed envelope");
   }
-  // tRPC v11 default transformer wraps in {json}, v10 does not — accept both.
-  const raw = first.result?.data;
+  if (successEnv.error) {
+    if (successEnv.error.data?.code === "NOT_FOUND") return null;
+    throw new Error(
+      `openclawos.apps.get error: ${successEnv.error.data?.code ?? "UNKNOWN"}`,
+    );
+  }
+  const raw = successEnv.result?.data;
   if (!raw) throw new Error("openclawos.apps.get empty result");
+  // tRPC v11 default transformer wraps in {json}, v10/post-206 does not —
+  // accept both (defense-in-depth for a possible superjson re-introduction).
   const app = (raw as { json?: OpenUiApp }).json ?? (raw as OpenUiApp);
   if (
     typeof app?.slug !== "string" ||

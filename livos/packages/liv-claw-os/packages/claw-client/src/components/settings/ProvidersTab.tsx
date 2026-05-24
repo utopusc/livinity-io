@@ -103,6 +103,28 @@ interface XaiStartResult {
 // Provider display labels — display-only, falls back to provider id if absent
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Phase 207 UAT 2026-05-24 — broadcast a window-level signal whenever a
+ * provider credential mutation (setApiKey / bridge / logout / xAI
+ * disconnect) succeeds. OpenClawEngine listens for this event and re-polls
+ * `providers.list` + `config.get` + `models.list` so the composer's
+ * configured-first model sort and the workspace default model update
+ * without a full claw-client reconnect.
+ *
+ * Pre-fix symptom: operator completed xAI OAuth bridge, but the composer
+ * "Default" button kept showing the prior default and OpenRouter models
+ * weren't surfaced as a configured group — the engine's
+ * `_configuredProviders` set was stale until next reconnect.
+ */
+function notifyProvidersChanged(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.dispatchEvent(new CustomEvent("openclaw-os:providers-changed"));
+  } catch {
+    // Old browsers / SSR — best-effort signal, never throws.
+  }
+}
+
 const PROVIDER_LABELS: Record<string, string> = {
   xai: "xAI (Grok)",
   anthropic: "Anthropic (Claude)",
@@ -392,6 +414,7 @@ function ProviderCard({ info, authStatus, xaiStatus, onChanged }: ProviderCardPr
           setOauthFlow(null);
           setOauthCopied(false);
           setNotice("xAI account connected and bridged to the running agent.");
+          notifyProvidersChanged();
           await onChanged();
           return;
         }
@@ -428,6 +451,7 @@ function ProviderCard({ info, authStatus, xaiStatus, onChanged }: ProviderCardPr
       >("openclaw.auth.setApiKey", { provider: info.provider, key: trimmed });
       setPendingKey("");
       setNotice("Saved. Agent will pick up the new key automatically.");
+      notifyProvidersChanged();
       await onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -446,6 +470,7 @@ function ProviderCard({ info, authStatus, xaiStatus, onChanged }: ProviderCardPr
         { provider: info.provider },
       );
       setNotice("Removed.");
+      notifyProvidersChanged();
       await onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -506,6 +531,7 @@ function ProviderCard({ info, authStatus, xaiStatus, onChanged }: ProviderCardPr
         {} as Record<string, never>,
       );
       setNotice("xAI account disconnected.");
+      notifyProvidersChanged();
       await onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -723,6 +749,7 @@ function ProviderCard({ info, authStatus, xaiStatus, onChanged }: ProviderCardPr
                       providers: [info.provider],
                     });
                     if ((result.bridged ?? []).includes(info.provider)) {
+                      notifyProvidersChanged();
                       onChanged();
                     } else {
                       const skipReason = result.skipped?.find(

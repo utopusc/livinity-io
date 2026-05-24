@@ -7,18 +7,14 @@ describe("fetchOpenUiApp", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns the app on a successful tRPC envelope (v11 {json} wrap)", async () => {
+  it("returns the app on a successful tRPC envelope (bare post-Phase-206 shape)", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
-        JSON.stringify([
-          {
-            result: {
-              data: {
-                json: { slug: "calculator", name: "Calculator", content: "<heading>Hi</heading>", version: 1 },
-              },
-            },
+        JSON.stringify({
+          result: {
+            data: { slug: "calculator", name: "Calculator", content: "<heading>Hi</heading>", version: 1 },
           },
-        ]),
+        }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),
     );
@@ -34,17 +30,22 @@ describe("fetchOpenUiApp", () => {
     const firstCall = fetchMock.mock.calls[0];
     expect(firstCall).toBeDefined();
     const url = firstCall![0] as string;
-    expect(url).toContain("/trpc/openclawos.apps.get?batch=1&input=");
-    expect(url).toContain(encodeURIComponent(JSON.stringify({ 0: { json: { slug: "calculator" } } })));
+    // Post-Phase-206: no batch=1, no {0:{json:…}} wrap.
+    expect(url).toContain("/trpc/openclawos.apps.get?input=");
+    expect(url).toContain(encodeURIComponent(JSON.stringify({ slug: "calculator" })));
+    expect(url).not.toContain("batch=1");
   });
 
-  it("returns the app on a tRPC v10 envelope (no {json} wrap)", async () => {
+  it("returns the app on a legacy batch envelope (defense-in-depth)", async () => {
+    // A future server rollback / a different middleware accidentally
+    // re-wrapping the response should not crash the page — accept the
+    // legacy [{result:{data:{json:…}}}] shape too.
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify([
           {
             result: {
-              data: { slug: "x", name: "X", content: "x", version: 2 },
+              data: { json: { slug: "x", name: "X", content: "x", version: 2 } },
             },
           },
         ]),
@@ -106,9 +107,13 @@ describe("fetchOpenUiApp", () => {
     await expect(fetchOpenUiApp("x", { baseUrl: "http://x" })).rejects.toThrow(/HTTP 500/);
   });
 
-  it("throws on a malformed envelope (not an array)", async () => {
+  it("throws on a malformed envelope (truly non-object body)", async () => {
+    // Post-Phase-206 the bare {result:{data}} shape is valid, so the
+    // old `{result:"nope"}` test case now means "result exists but data
+    // is a string" — which trips the empty-result check, not malformed.
+    // Use a truly non-object body instead.
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ result: "nope" }), {
+      new Response(JSON.stringify("not-an-object"), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
@@ -120,7 +125,7 @@ describe("fetchOpenUiApp", () => {
   it("throws when the result is structurally wrong (missing content)", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
-        JSON.stringify([{ result: { data: { json: { slug: "x", name: "x" } } } }]),
+        JSON.stringify({ result: { data: { slug: "x", name: "x" } } }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),
     );
