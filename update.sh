@@ -946,7 +946,9 @@ if [[ -f "$_LIV_CLAW_UNIT_SRC" ]]; then
                         ["https://" + $dom,
                          "http://" + $dom,
                          "wss://" + $dom,
-                         "https://livinity.io"])
+                         "https://livinity.io",
+                         "http://localhost:18789",
+                         "http://127.0.0.1:18789"])
                        | unique
                      )
                    | .gateway.auth //= {}
