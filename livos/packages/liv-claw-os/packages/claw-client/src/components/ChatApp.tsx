@@ -53,6 +53,7 @@ import {
 // installs so the side-effect (open settings dialog) only fires on genuinely
 // fresh + outside-LivOS first loads.
 import { attemptLivOsAutoConnect } from "@/lib/gateway/auto-connect";
+import type { Settings } from "@/lib/storage";
 import type { ClawThread } from "@/types/claw-thread";
 import type { ModelChoice, SessionRow } from "@/types/gateway-responses";
 import {
@@ -829,6 +830,11 @@ export default function ChatApp() {
     setThemeMode((prev) => (prev === "dark" ? "light" : "dark"));
   }, []);
 
+  // Phase 203 Hot-fix F2 2026-05-24 — ref-holds the reconnect callback so
+  // the onAuthFailed handler (which fires LATER, after destructuring is
+  // complete) can call it without TDZ. Captured via effect below.
+  const reconnectRef = useRef<((settings: Settings) => void) | null>(null);
+
   const {
     connectionState,
     pairingDeviceId,
@@ -866,7 +872,33 @@ export default function ChatApp() {
     gatewayCommands,
     onSessionChanged,
     requestThreadListRefresh,
-  } = useGateway({ onAuthFailed: () => setSettingsOpen(true) });
+  } = useGateway({
+    // Phase 203 Hot-fix F2 2026-05-24 — when claw-client is hosted inside
+    // LivOS (same-origin with the livinityd handshake bridge), AUTH_FAILED
+    // is recoverable via re-handshake — NOT operator-fixable via the setup
+    // form (the operator can't paste a token they don't know). Re-fetch
+    // fresh creds via attemptLivOsAutoConnect; only open the setup form
+    // when we're certain the auto-connect bridge is unavailable (standalone
+    // deploy). Operator UAT 2026-05-24 saw the setup form pop up over the
+    // chat surface immediately on connect (master-token deploy will fix
+    // root-cause, but this guard prevents form regressions in the future).
+    onAuthFailed: () => {
+      void (async () => {
+        const result = await attemptLivOsAutoConnect();
+        if (result.ok && result.reason === "seeded" && result.settings && reconnectRef.current) {
+          reconnectRef.current(result.settings);
+        } else {
+          // Either bridge unavailable (standalone deploy) OR already-configured
+          // with a stale token — surface the form so operator can intervene.
+          setSettingsOpen(true);
+        }
+      })();
+    },
+  });
+  // Capture reconnect into ref AFTER destructuring (avoids TDZ above).
+  useEffect(() => {
+    reconnectRef.current = reconnect;
+  }, [reconnect]);
 
   const { pinnedAppIds, togglePinnedApp } = usePinnedApps();
   const {
