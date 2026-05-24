@@ -133,6 +133,13 @@ export const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	'LIVINITY_schedules': {width: 950, height: 650},
 	'LIVINITY_terminal': {width: 900, height: 600},
 	'LIVINITY_liv-ai': {width: 1180, height: 820},
+	// Phase 203 Hot-fix E 2026-05-24 — LIV_AI_CHAT is the appId opened by
+	// useLaunchNativeApp short-circuit when wmClassHint === 'liv-ai' (the
+	// dock-seed entry from liv-ai-dock-seed.ts). Hot-fix D shipped without
+	// a matching entry → window fell through to `default` (900x600) and the
+	// operator complained the chat surface was cramped. 1200x800 picked to
+	// match operator directive ("~1200x800 or 80%% viewport").
+	'LIV_AI_CHAT': {width: 1200, height: 800},
 	default: {width: 900, height: 600},
 }
 
