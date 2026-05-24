@@ -12,6 +12,7 @@ import type {
   HelloOk,
 } from "@/lib/gateway/types";
 import { ConnectionState } from "@/lib/gateway/types";
+import { callQuery } from "@/lib/livinityd-client";
 import { normalizeSessionPatch } from "@/lib/models";
 import type { NotificationRecord } from "@/lib/notifications";
 import { encodeExtra, encodeMain, extractAgentIdFromKey, hasClawSuffix } from "@/lib/session-keys";
@@ -1169,14 +1170,50 @@ export class OpenClawEngine implements Engine {
     }
   };
 
+  /**
+   * Phase 207 UAT 2026-05-24 — switched from gateway WebSocket
+   * `models.list` to livinityd HTTP `openclaw.models.list`.
+   *
+   * Gateway's `models.list` returns only the "selected" model entry per
+   * configured provider (1 model when only openrouter is configured —
+   * operator's "amk sadece 1 tane model var" complaint). The livinityd
+   * tRPC route hits the full openclaw model catalog and returns ~960
+   * entries (openrouter=265, xai=16, …) with proper `provider` fields.
+   *
+   * Same-origin fetch via `callQuery` so the LIVINITY_SESSION cookie
+   * auto-flows. Falls back to the gateway-WS path if livinityd is
+   * unreachable (preserves the 'engine offline / cookies missing' edge
+   * cases where the operator might still want to see SOMETHING in the
+   * composer).
+   */
   private async _refreshModels(): Promise<void> {
+    try {
+      const livinitydModels = await callQuery<undefined, ModelChoice[] | undefined>(
+        "openclaw.models.list",
+      );
+      if (Array.isArray(livinitydModels) && livinitydModels.length > 0) {
+        this._availableModels = livinitydModels;
+        this.events.onModelsChanged(this._filteredAvailableModels());
+        log(
+          `openclaw.models.list (livinityd HTTP) → ${livinitydModels.length} model(s)`,
+        );
+        return;
+      }
+    } catch (e) {
+      warn(
+        "openclaw.models.list via livinityd HTTP failed; falling back to gateway models.list",
+        e,
+      );
+    }
+    // Fallback: gateway WS `models.list` (the pre-fix path — returns the
+    // selected-only subset but better than empty).
     try {
       const result = await this._request<ModelsListResult>("models.list");
       this._availableModels = result?.models ?? [];
       this.events.onModelsChanged(this._filteredAvailableModels());
-      log(`models.list → ${this._availableModels.length} model(s)`);
+      log(`models.list (gateway fallback) → ${this._availableModels.length} model(s)`);
     } catch (e) {
-      warn("models.list failed:", e);
+      warn("models.list (gateway fallback) failed:", e);
     }
   }
 
@@ -1194,13 +1231,21 @@ export class OpenClawEngine implements Engine {
    * (no providers configured) leaves the set empty → fail-open at the
    * filter layer.
    */
+  /**
+   * Phase 207 UAT 2026-05-24 — switched from gateway WebSocket
+   * `openclaw.providers.list` (which gateway rejects with
+   * `unknown method`, observed in liv-claw-gateway journalctl) to
+   * livinityd HTTP `openclaw.providers.list` (the tRPC route ProvidersTab
+   * already reads from). Same data, just the right transport.
+   */
   private async _refreshConfiguredProviders(): Promise<void> {
     try {
-      const result = await this._request<{
-        providers?: Array<{ provider?: string; configured?: boolean }>;
-      }>("openclaw.providers.list", {});
+      const result = await callQuery<
+        undefined,
+        Array<{ provider?: string; configured?: boolean }>
+      >("openclaw.providers.list");
       const next = new Set<string>();
-      for (const entry of result?.providers ?? []) {
+      for (const entry of result ?? []) {
         if (typeof entry?.provider === "string" && entry.configured === true) {
           next.add(entry.provider);
         }
@@ -1209,14 +1254,15 @@ export class OpenClawEngine implements Engine {
       log(
         `openclaw.providers.list → ${next.size} configured provider(s) (${[...next].join(", ") || "none"})`,
       );
-      // Re-emit models filtered against the new set so the composer picker
-      // narrows without waiting for a full models.list re-fetch.
+      // Re-emit models with the configured-first sort so the composer
+      // picker bubbles configured providers to the top without waiting
+      // for a full models.list re-fetch.
       this.events.onModelsChanged(this._filteredAvailableModels());
     } catch (e) {
-      // `openclaw.providers.list` is the LivOS-side surface — older gateway
-      // builds may not have it. Treat absence as "no filtering" so the
-      // composer remains usable.
-      warn("openclaw.providers.list failed (filter disabled):", e);
+      // `openclaw.providers.list` is the LivOS-side surface — older
+      // livinityd builds may not have it. Treat absence as "no sort"
+      // so the composer remains usable.
+      warn("openclaw.providers.list failed (sort disabled):", e);
     }
   }
 
