@@ -2943,3 +2943,25 @@ Plans:
 
 ---
 
+### Phase 204: Provider Key Management UI — 🔴 PLANNED 2026-05-24
+
+**Goal:** Ship a `/settings → Providers` tab so the operator can paste LLM provider API keys (xai, anthropic, openai, groq, mistral, ollama) into the running Mini PC without SSH — and have the `liv-claw-gateway` pick them up automatically via env-file write + systemctl restart. Closes Phase 203 § G.1 (operator action item) + § K deferred #2 (LLM provider key not in env). See `.planning/phases/204-provider-key-management/204-CONTEXT.md`.
+
+**Depends on:** Phase 202 settings page + Phase 203 openclaw gateway / systemd unit.
+
+**Wave plan:** Sequential — Plan 204-01 backend (tRPC + Redis + env-file writer + restart hook) → Plan 204-02 frontend (ProvidersTab + tab registration + sudoers drop-in + Mini PC deploy).
+
+**Plans (2):**
+- [ ] 204-01-PLAN.md — Backend: `provider.config.*` tRPC + Redis hash `liv:provider:keys` + env-file writer + `sudo systemctl restart liv-claw-gateway` hook + 15 vitest cases
+- [ ] 204-02-PLAN.md — Frontend: ProvidersTab.tsx + tab registration + sudoers drop-in + bootstrap script + Mini PC deploy + 6-check smoke
+
+**Locked decisions (D-204-01..12):** see `.planning/phases/204-provider-key-management/204-CONTEXT.md`.
+
+**Invariants:** INV-204-01 sacred SHA preserved (carries forward from INV-203-01); INV-204-02 English UI only; INV-204-03 Mini PC only deploy; INV-204-04 `list` NEVER returns the raw key (redacted preview only); INV-204-05 env file chmod 0600; INV-204-06 no raw key ever in livinityd journal; INV-204-07 sudoers drop-in scope is narrow (2 commands only); INV-204-08 no routing surface mutations beyond `httpOnlyPaths` additions.
+
+**Threats / mitigations (T-204-01..07):** Paste-back attack → no re-reveal (preview only); Lateral Redis admin → same trust model as `/opt/livos/.env`; Env file world-readable → chmod 0600; Restart loop on malformed value → zod regex pre-validation; Gateway crash on restart → existing T-203-01 systemd Restart=on-failure; Key in error stack trace → redact-on-throw templates; Sudoers permissions left wrong → `install -m 0440` + `visudo -c` verify.
+
+**Speed budget:** 3-4 hours wall-clock; sequential 2-plan execution.
+
+---
+
