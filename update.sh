@@ -890,35 +890,95 @@ if [[ -f "$_LIV_CLAW_UNIT_SRC" ]]; then
     _OPENCLAW_CFG="/opt/livos/data/openclaw/openclaw.json"
     if command -v jq >/dev/null 2>&1; then
         if [[ -f "$_OPENCLAW_CFG" ]]; then
+
+            # ── Hot-fix F2 2026-05-24 — resolve operator domain dynamically ──
+            # Hot-fix F part 3 hardcoded `bruce.livinity.io`. That broke any
+            # other operator (different VPS, different domain) before they
+            # could even open Liv AI. livinityd persists the active operator
+            # domain to Redis key `livos:domain:config` at install/activation
+            # time. Read it; fall back to bruce.livinity.io only if Redis is
+            # unreachable AND the file's existing list is empty.
+            _OPERATOR_DOMAIN=""
+            if command -v redis-cli >/dev/null 2>&1; then
+                _REDIS_URL=$(grep -E "^REDIS_URL=" /opt/livos/.env 2>/dev/null | cut -d= -f2-)
+                if [[ -n "$_REDIS_URL" ]]; then
+                    _REDIS_PW=$(echo "$_REDIS_URL" | sed -E 's|redis://[^:]*:([^@]+)@.*|\1|')
+                    _OPERATOR_DOMAIN=$(redis-cli -a "$_REDIS_PW" --no-auth-warning GET livos:domain:config 2>/dev/null | jq -r '.domain // empty' 2>/dev/null)
+                fi
+            fi
+            [[ -z "$_OPERATOR_DOMAIN" ]] && _OPERATOR_DOMAIN="bruce.livinity.io"
+            info "openclaw config: operator domain resolved = $_OPERATOR_DOMAIN"
+
+            # ── Hot-fix F2 2026-05-24 — ensure gateway.auth.token exists ──
+            # The custom livinityd Ed25519 mint flow (Plan 203-05) is incompat
+            # with openclaw upstream's identity-keypair device-token system
+            # (every WS connect logged `device_token_mismatch` in operator UAT
+            # 2026-05-24). openclaw DOES support a documented `gateway.auth.
+            # token` master-token mechanism that IS verified upstream.
+            # Strategy: generate a 64-char hex token on first run, persist into
+            # openclaw.json, then have livinityd-handshake serve it (Hot-fix
+            # F2 part 1).  Idempotent: if the key already exists, preserve the
+            # operator's existing token (do NOT rotate on every update.sh — a
+            # rotation would invalidate every browser tab's cached creds).
+            _EXISTING_TOKEN=$(jq -r '.gateway.auth.token // empty' "$_OPENCLAW_CFG" 2>/dev/null)
+            if [[ -z "$_EXISTING_TOKEN" ]]; then
+                _NEW_TOKEN=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 32)
+                if [[ -z "$_NEW_TOKEN" ]]; then
+                    warn "openclaw master-token generation failed — neither openssl nor xxd available. claw-client connects will continue to fail device_token_mismatch."
+                else
+                    info "openclaw master token will be generated (first-time bootstrap)"
+                fi
+            else
+                info "openclaw master token already present (preserving operator's existing token)"
+                _NEW_TOKEN=""  # don't overwrite
+            fi
+
             _TMP_CFG=$(mktemp)
-            if jq '.gateway //= {}
+            # Single jq invocation does THREE things idempotently:
+            #   1. Ensure gateway.controlUi.allowedOrigins includes operator domain (https, http, wss)
+            #   2. Ensure gateway.auth.token exists (set if missing; preserve if present)
+            #   3. Ensure gateway.auth.mode = "token" (openclaw upstream requirement)
+            if jq --arg dom "$_OPERATOR_DOMAIN" --arg newtok "$_NEW_TOKEN" '
+                   .gateway //= {}
                    | .gateway.controlUi //= {}
                    | .gateway.controlUi.allowedOrigins = (
                        ((.gateway.controlUi.allowedOrigins // []) +
-                        ["https://bruce.livinity.io",
-                         "http://bruce.livinity.io",
+                        ["https://" + $dom,
+                         "http://" + $dom,
+                         "wss://" + $dom,
                          "https://livinity.io"])
                        | unique
-                     )' "$_OPENCLAW_CFG" > "$_TMP_CFG" 2>/dev/null; then
+                     )
+                   | .gateway.auth //= {}
+                   | (if (.gateway.auth.token // "" | length) == 0
+                       then .gateway.auth.token = $newtok
+                       else . end)
+                   | .gateway.auth.mode = "token"
+                 ' "$_OPENCLAW_CFG" > "$_TMP_CFG" 2>/dev/null; then
                 if ! cmp -s "$_TMP_CFG" "$_OPENCLAW_CFG"; then
+                    # Take a backup before overwriting — Hot-fix F2 changes are
+                    # significant. openclaw already keeps .bak rotations but a
+                    # local one helps with rapid rollback.
+                    cp "$_OPENCLAW_CFG" "${_OPENCLAW_CFG}.pre-hotfix-f2.bak" 2>/dev/null || true
                     mv "$_TMP_CFG" "$_OPENCLAW_CFG"
+                    chmod 600 "$_OPENCLAW_CFG" 2>/dev/null || true
                     if id bruce >/dev/null 2>&1; then
                         chown bruce:bruce "$_OPENCLAW_CFG" 2>/dev/null || true
                     fi
-                    ok "openclaw allowedOrigins patched (bruce.livinity.io added)"
+                    ok "openclaw config patched (allowedOrigins:$_OPERATOR_DOMAIN, gateway.auth.token ensured)"
                 else
-                    ok "openclaw allowedOrigins already contains bruce.livinity.io"
+                    ok "openclaw config already converged (allowedOrigins + gateway.auth.token)"
                     rm -f "$_TMP_CFG"
                 fi
             else
-                warn "jq failed to patch $_OPENCLAW_CFG — connect RPC will still 'origin not allowed' from bruce.livinity.io"
+                warn "jq failed to patch $_OPENCLAW_CFG — connect RPC will still fail"
                 rm -f "$_TMP_CFG"
             fi
         else
             info "$_OPENCLAW_CFG missing — gateway hasn't written initial config yet. Re-run update.sh after first liv-claw-gateway boot."
         fi
     else
-        warn "jq not installed — skipping openclaw allowedOrigins patch (install via: apt-get install -y jq)"
+        warn "jq not installed — skipping openclaw allowedOrigins/master-token patch (install via: apt-get install -y jq)"
     fi
 else
     info "liv-claw-gateway.service source not found — skipping install (Caddy /liv-ai-app/* will route to legacy :3010 unit until landed)"
