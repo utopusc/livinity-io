@@ -293,9 +293,19 @@ describe('Phase 203-05 — POST /openclawos/handshake', () => {
 
 		const res = await fetch(url, {method: 'POST', headers: {Authorization: 'Bearer x'}})
 		expect(res.status).toBe(200)
-		const body = (await res.json()) as {token: string; expiresAt: number; sessionId: string}
+		const body = (await res.json()) as {
+			token: string
+			expiresAt: number
+			sessionId: string
+			authMode?: string
+		}
 		expect(body.token).toBe(MASTER) // returned verbatim, not a custom Ed25519 envelope
 		expect(body.sessionId).toBe('master:bruce')
 		expect(body.expiresAt).toBeGreaterThan(Date.now())
+		// Hot-fix J 2026-05-24 — master-token path MUST surface authMode=master
+		// so claw-client routes the value into Settings.token (WS connect frame
+		// `auth: {token}`), NOT Settings.deviceToken (`auth: {deviceToken}` —
+		// rejected by openclaw `mode: token` with `device_token_mismatch`).
+		expect(body.authMode).toBe('master')
 	})
 })

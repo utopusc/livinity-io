@@ -145,10 +145,15 @@ export function createHandshakeRouteHandler(opts: HandshakeRouteOptions): Reques
 				opts.logger?.info(
 					`[openclawos-handshake] userId=${userId} mode=master-token expiresAt=${new Date(expiresAt).toISOString()}`,
 				)
+				// Hot-fix J 2026-05-24 — explicitly mark authMode=master so the
+				// claw-client knows to ride this token in `auth: {token}`, NOT
+				// `auth: {deviceToken}` (which openclaw `mode: token` rejects with
+				// `device_token_mismatch` — operator UAT 2026-05-23/24).
 				res.status(200).json({
 					token: masterToken,
 					expiresAt,
 					sessionId: `master:${userId}`,
+					authMode: 'master',
 				})
 				return
 			}
