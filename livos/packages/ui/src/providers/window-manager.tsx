@@ -132,7 +132,11 @@ export const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	'LIVINITY_subagents': {width: 950, height: 650},
 	'LIVINITY_schedules': {width: 950, height: 650},
 	'LIVINITY_terminal': {width: 900, height: 600},
-	'LIVINITY_liv-ai': {width: 1180, height: 820},
+	// Phase 205 Hot-fix N 2026-05-24 — bumped from {1180, 820} (D-199-01) to
+	// {1400, 900} so the new in-shell Settings route (content-swap, horizontal
+	// tabs) has room without compressing the chat surface. Matches the Docker
+	// window's footprint — another moderately content-heavy LivOS app.
+	'LIVINITY_liv-ai': {width: 1400, height: 900},
 	// Phase 203 Hot-fix E 2026-05-24 — LIV_AI_CHAT is the appId opened by
 	// useLaunchNativeApp short-circuit when wmClassHint === 'liv-ai' (the
 	// dock-seed entry from liv-ai-dock-seed.ts). Hot-fix D shipped without

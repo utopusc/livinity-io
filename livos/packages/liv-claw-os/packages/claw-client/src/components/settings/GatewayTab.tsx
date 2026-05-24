@@ -214,8 +214,17 @@ export function GatewayTab() {
       const out = await callQuery<undefined, DevicesListResponse>(
         "openclawos.gateway.devices.list",
       );
-      setDevices(out);
+      // Phase 205 Hot-fix N — shape-validate before storing. If the tRPC
+      // envelope ever leaks a non-array `paired` field, `devices.paired.map`
+      // downstream crashes the entire route. Fall back to an empty shape
+      // and surface the loader instead.
+      const safe: DevicesListResponse = {
+        paired: out && Array.isArray(out.paired) ? out.paired : [],
+        pending: out && Array.isArray(out.pending) ? out.pending : [],
+      };
+      setDevices(safe);
     } catch (e) {
+      setDevices({ paired: [], pending: [] });
       setBanner({
         kind: "error",
         message: e instanceof Error ? e.message : "Failed to load paired devices.",

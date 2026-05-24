@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+export type SettingsSection = "connection" | "mcp" | "gateway" | "providers";
+
 export type Route =
   | { view: "home" }
   | { view: "chat"; sessionId: string }
@@ -10,7 +12,19 @@ export type Route =
   | { view: "artifacts" }
   | { view: "crons"; selectedId?: string }
   | { view: "artifact"; artifactId: string }
-  | { view: "app"; appId: string };
+  | { view: "app"; appId: string }
+  | { view: "settings"; section?: SettingsSection };
+
+const SETTINGS_SECTIONS: readonly SettingsSection[] = [
+  "connection",
+  "mcp",
+  "gateway",
+  "providers",
+];
+
+function isSettingsSection(value: string): value is SettingsSection {
+  return (SETTINGS_SECTIONS as readonly string[]).includes(value);
+}
 
 function parseHash(hash: string): Route | null {
   const path = hash.replace(/^#/, "");
@@ -34,6 +48,12 @@ function parseHash(hash: string): Route | null {
   if (path.startsWith("/apps/")) {
     const appId = decodeURIComponent(path.slice("/apps/".length));
     if (appId) return { view: "app", appId };
+  }
+  if (path === "/settings") return { view: "settings" };
+  if (path.startsWith("/settings/")) {
+    const raw = decodeURIComponent(path.slice("/settings/".length));
+    if (isSettingsSection(raw)) return { view: "settings", section: raw };
+    return { view: "settings" };
   }
   return null;
 }
@@ -70,6 +90,10 @@ export function appHash(appId: string): string {
   return `#/apps/${encodeURIComponent(appId)}`;
 }
 
+export function settingsHash(section?: SettingsSection): string {
+  return section ? `#/settings/${section}` : "#/settings";
+}
+
 export function navigate(route: Route): void {
   if (route.view === "home") {
     window.location.hash = "/home";
@@ -89,6 +113,8 @@ export function navigate(route: Route): void {
     window.location.hash = `/apps/${encodeURIComponent(route.appId)}`;
   } else if (route.view === "artifact") {
     window.location.hash = `/artifacts/${encodeURIComponent(route.artifactId)}`;
+  } else if (route.view === "settings") {
+    window.location.hash = route.section ? `/settings/${route.section}` : "/settings";
   }
 }
 

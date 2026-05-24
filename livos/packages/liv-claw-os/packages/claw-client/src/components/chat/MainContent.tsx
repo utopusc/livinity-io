@@ -7,6 +7,8 @@ import { AppsRoute } from "@/components/chat/routes/AppsRoute";
 import { ArtifactsRoute } from "@/components/chat/routes/ArtifactsRoute";
 import { CronsRoute } from "@/components/chat/routes/CronsRoute";
 import { HomeRoute } from "@/components/chat/routes/HomeRoute";
+import { SettingsRoute } from "@/components/chat/routes/SettingsRoute";
+import type { SettingsSection } from "@/lib/hooks/useHashRoute";
 import type { ReactNode } from "react";
 
 export type Route =
@@ -17,7 +19,8 @@ export type Route =
   | { view: "crons"; selectedId?: string }
   | { view: "app"; appId: string }
   | { view: "artifact"; artifactId: string }
-  | { view: "chat"; sessionId: string };
+  | { view: "chat"; sessionId: string }
+  | { view: "settings"; section?: SettingsSection };
 
 interface Props {
   route: Route;
@@ -50,6 +53,8 @@ export function MainContent({ route, homeComposer, threadArea }: Props) {
       return <ArtifactsRoute />;
     case "crons":
       return <CronsRoute initialSelectedId={route.selectedId} />;
+    case "settings":
+      return <SettingsRoute section={route.section} />;
     case "app":
     case "artifact":
       // Same fallthrough — `/apps/<id>` opened cold has no `apps` store yet.
