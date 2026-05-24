@@ -130,6 +130,31 @@ const pluginBundle = resolvePluginBundle();
 // boot) before the gateway starts. The install command is a no-op if the
 // plugin is already linked; --force replaces a stale registration.
 function ensurePluginInstalled() {
+    // HOT-FIX 2026-05-24 (Phase 203 § G.2 carry-over): openclaw 2026.5.20's
+    // install-time security scanner hard-blocks the Liv AI plugin with
+    //   "Plugin "openclaw-os-plugin" installation blocked: code safety scan
+    //    failed (Error: manifest dependency scan found node_modules symlink
+    //    target outside install root at node_modules/esbuild)"
+    // The plugin dir contains pnpm-style devDependency symlinks
+    //   claw-plugin/node_modules/esbuild → ../../../../../node_modules/.pnpm/...
+    // (esbuild, openclaw, shx, typescript, vitest — all devDeps from the
+    // build script). openclaw refuses to register any plugin whose
+    // node_modules/* symlinks escape the install root.
+    //
+    // Fix: strip the plugin's node_modules dir before install — the plugin
+    // is pre-built (dist/index.js); runtime needs no devDeps. Idempotent —
+    // pnpm install regenerates them on the next workspace install if a
+    // builder needs them.
+    const pluginNodeModules = path.join(pluginBundle, 'node_modules');
+    try {
+        fs.rmSync(pluginNodeModules, { recursive: true, force: true });
+        console.log('[liv-claw-gateway] stripped ' + pluginNodeModules);
+    } catch (e) {
+        console.warn(
+            '[liv-claw-gateway] could not strip plugin node_modules: ' + e.message,
+        );
+    }
+
     // openclaw CLI on 2026.5.20: --force is INCOMPATIBLE with --link (linked
     // plugins point at source path directly; force-replace makes no sense).
     // Run with --link only — second-and-subsequent runs are no-ops if the
@@ -139,18 +164,32 @@ function ensurePluginInstalled() {
     const installCmd = useNode ? process.execPath : openclawBin;
     const installArgs = useNode ? [openclawBin, ...subArgs] : subArgs;
     console.log('[liv-claw-gateway] installing plugin: ' + pluginBundle);
+    // Use 'pipe' for stderr so we can inspect it on failure; mirror stdout
+    // to parent's inherit channel via stdout: 'inherit' for normal progress.
     const result = spawnSync(installCmd, installArgs, {
-        stdio: 'inherit',
+        stdio: ['inherit', 'inherit', 'pipe'],
         env: process.env,
+        encoding: 'utf8',
     });
     if (result.status !== 0) {
-        // Already-installed is the most common non-zero exit (CLI returns 1
-        // with "Plugin already linked at <path>" message). Log and continue.
-        console.error(
-            '[liv-claw-gateway] plugin install exited with code ' +
-                result.status +
-                ' (most likely already linked); continuing',
-        );
+        const stderr = (result.stderr || '').toString();
+        // Mirror stderr so operator can see it in the journal.
+        if (stderr.trim()) process.stderr.write(stderr);
+        // Tolerate genuine already-installed case with a SPECIFIC marker
+        // (don't blanket-misclassify scan failures as "already linked").
+        if (stderr.includes('already installed') || stderr.includes('already linked')) {
+            console.log('[liv-claw-gateway] plugin already installed, continuing');
+        } else {
+            console.error(
+                '[liv-claw-gateway] plugin install FAILED exit=' + result.status,
+            );
+            console.error('[liv-claw-gateway] stderr (first 1KB): ' + stderr.slice(0, 1024));
+            // Do NOT throw — let gateway boot anyway so /health stays up; the
+            // gateway runs in degraded mode (only stock plugins) and the next
+            // update.sh attempt can pick up a corrected build.
+        }
+    } else {
+        console.log('[liv-claw-gateway] plugin install OK');
     }
 }
 
