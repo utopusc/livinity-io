@@ -471,42 +471,21 @@ export function useAgentSocket(opts: UseAgentSocketOpts = {}) {
 
 	// --- Connection management ---
 
+	// Phase 207 R3 — /ws/agent server route was removed in Phase 203 when chat
+	// migrated to openclaw transport. The legacy WebSocket was retrying with
+	// exponential backoff against a dead endpoint, flooding the console with
+	// `WebSocket connection to 'wss://.../ws/agent' failed`. This hook is now
+	// inert: it preserves the API surface (so callers compile) but never opens
+	// a socket. Webapp/native chat surfaces that wrap this hook will report
+	// `disconnected` until they're migrated to the openclaw transport.
 	const connect = useCallback(() => {
-		const jwt = localStorage.getItem(JWT_LOCAL_STORAGE_KEY)
-		if (!jwt) {
-			setConnectionStatus('disconnected')
-			return
-		}
-		const {protocol, hostname, port} = location
-		const portPart = port ? `:${port}` : ''
-		const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:'
-		const wsUrl = `${wsProtocol}//${hostname}${portPart}/ws/agent?token=${jwt}`
-		try {
-			const ws = new WebSocket(wsUrl)
-			wsRef.current = ws
-			ws.onopen = () => {
-				setConnectionStatus('connected')
-				backoffRef.current = 1000
-			}
-			ws.onmessage = handleMessage
-			ws.onclose = () => {
-				wsRef.current = null
-				setConnectionStatus('disconnected')
-				if (!intentionalCloseRef.current) {
-					setConnectionStatus('reconnecting')
-					const delay = backoffRef.current
-					backoffRef.current = Math.min(backoffRef.current * 2, 30000)
-					reconnectTimerRef.current = setTimeout(() => {
-						reconnectTimerRef.current = null
-						connect()
-					}, delay)
-				}
-			}
-			ws.onerror = () => {}
-		} catch {
-			setConnectionStatus('disconnected')
-		}
-	}, [handleMessage])
+		setConnectionStatus('disconnected')
+	}, [])
+
+	// Suppress unused-warning on handleMessage now that connect is inert. The
+	// reducer + message handler stay live so the openclaw migration can wire
+	// them back via a different transport without rewriting the contract.
+	void handleMessage
 
 	useEffect(() => {
 		intentionalCloseRef.current = false
