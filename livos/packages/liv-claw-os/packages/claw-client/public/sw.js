@@ -12,7 +12,12 @@
  *     a fresh fetch). We let the browser HTTP cache handle those.
  */
 
-const CACHE_VERSION = "claw-shell-v1";
+// Phase 203 Hot-fix H 2026-05-24 — bumped to v2 to force activate() to evict
+// the stale shell cache. Operators on prior bundles were getting a cached
+// index.html that referenced the obsolete JS chunks AND that bypassed Hot-fix
+// H's "no form inside LivOS" logic. Bump on any future Hot-fix that ships
+// new top-level UI behavior.
+const CACHE_VERSION = "claw-shell-v2-hotfix-h";
 const SHELL_URLS = ["/", "/favicon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
