@@ -56,22 +56,54 @@ export class LivinitydHandshakeError extends Error {
   }
 }
 
+export interface FetchHandshakeOptions {
+  /** Endpoint override (defaults to /openclawos/handshake same-origin). */
+  endpoint?: string;
+  /** fetch implementation override for tests. */
+  fetchImpl?: typeof fetch;
+  /**
+   * Phase 203 Hot-fix F3 2026-05-24 — opaque hex deviceId (sha256 of the
+   * browser's Ed25519 pubkey, see device-identity.ts). When present, the
+   * livinityd handshake will auto-approve any matching pending pairing
+   * request in openclaw's `pending.json` before responding. Closes the
+   * NOT_PAIRED gate that openclaw enforces on every new browser device,
+   * since outer LIVINITY_SESSION JWT auth is already the trust gate.
+   */
+  deviceId?: string;
+}
+
 /**
  * Fetch a fresh openclaw device token from livinityd. Same-origin so the
  * LIVINITY_SESSION cookie is auto-forwarded by the browser. Throws on any
  * non-200 response so the caller can fall through to its existing failure path.
+ *
+ * Back-compat: callers passing positional endpoint/fetchImpl still work.
  */
 export async function fetchLivinitydDeviceToken(
-  endpoint: string = HANDSHAKE_ENDPOINT,
-  fetchImpl: typeof fetch = fetch,
+  endpointOrOptions: string | FetchHandshakeOptions = HANDSHAKE_ENDPOINT,
+  fetchImplArg: typeof fetch = fetch,
 ): Promise<LivinitydHandshakeResult> {
+  // Normalize old positional API → options shape.
+  const options: FetchHandshakeOptions =
+    typeof endpointOrOptions === "string"
+      ? {endpoint: endpointOrOptions, fetchImpl: fetchImplArg}
+      : endpointOrOptions;
+  const endpoint = options.endpoint ?? HANDSHAKE_ENDPOINT;
+  const fetchImpl = options.fetchImpl ?? fetchImplArg ?? fetch;
+
+  const requestBodyObj: Record<string, unknown> = {};
+  if (typeof options.deviceId === "string" && options.deviceId.length > 0) {
+    requestBodyObj["deviceId"] = options.deviceId;
+  }
+  const requestBody = JSON.stringify(requestBodyObj);
+
   let response: Response;
   try {
     response = await fetchImpl(endpoint, {
       method: "POST",
       credentials: "include", // LIVINITY_SESSION cookie travels with the request
       headers: {"Content-Type": "application/json"},
-      body: "{}",
+      body: requestBody,
     });
   } catch (networkErr) {
     throw new LivinitydHandshakeError(

@@ -28,6 +28,7 @@ import type {RequestHandler} from 'express'
 import type {Redis} from 'ioredis'
 import {readFileSync, existsSync} from 'node:fs'
 import {mintToken} from './device-token.js'
+import {autoApproveDevice, type AutoApproveResult} from './device-auto-approver.js'
 
 type VerifyTokenFn = (token: string) => Promise<unknown>
 
@@ -60,6 +61,17 @@ export interface HandshakeRouteOptions {
 	 * override via this option.
 	 */
 	openclawConfigPath?: string
+	/**
+	 * Phase 203 Hot-fix F3 2026-05-24 — directory holding openclaw's
+	 * `paired.json` + `pending.json` device tables. When the handshake POST
+	 * body includes a `deviceId`, we look for a pending pairing request for
+	 * that device and promote it to paired (idempotent). This closes the
+	 * NOT_PAIRED gate the gateway enforces independently of the bearer token.
+	 *
+	 * Default: '/opt/livos/data/openclaw/devices' on Mini PC; tests override
+	 * via this option or pass a guaranteed-nonexistent path to disable.
+	 */
+	openclawDevicesDir?: string
 }
 
 const DEFAULT_OPENCLAW_CONFIG_PATH = '/opt/livos/data/openclaw/openclaw.json'
@@ -131,6 +143,26 @@ export function createHandshakeRouteHandler(opts: HandshakeRouteOptions): Reques
 				return
 			}
 
+			// Phase 203 Hot-fix F3 2026-05-24 — auto-approve pending device
+			// pairing request matching the deviceId the client sent. Outer
+			// LIVINITY_SESSION JWT is the trust gate; openclaw's secondary
+			// pairing dance is redundant and was blocking every new browser.
+			// Idempotent: a no-op when the device is already paired or when
+			// no pending request matches. Failure is logged but never breaks
+			// the master-token response below.
+			let autoApprove: AutoApproveResult | undefined
+			try {
+				const reqDeviceId = (req.body as {deviceId?: unknown} | undefined)?.deviceId
+				if (typeof reqDeviceId === 'string' && reqDeviceId.length > 0) {
+					const autoApproveOpts: {logger?: typeof opts.logger; devicesDir?: string} = {}
+					if (opts.logger) autoApproveOpts.logger = opts.logger
+					if (opts.openclawDevicesDir) autoApproveOpts.devicesDir = opts.openclawDevicesDir
+					autoApprove = autoApproveDevice(reqDeviceId, autoApproveOpts)
+				}
+			} catch (approveErr) {
+				opts.logger?.warn?.('[openclawos-handshake] auto-approve threw', approveErr)
+			}
+
 			// Phase 203 Hot-fix F2 2026-05-24 — prefer openclaw master token when
 			// configured. The custom Ed25519 mint path was never accepted by
 			// openclaw upstream (device_token_mismatch loop in operator UAT
@@ -142,8 +174,9 @@ export function createHandshakeRouteHandler(opts: HandshakeRouteOptions): Reques
 			if (masterToken) {
 				const oneHourMs = 60 * 60 * 1000
 				const expiresAt = Date.now() + oneHourMs
+				const approveStatus = autoApprove?.status ?? 'skipped'
 				opts.logger?.info(
-					`[openclawos-handshake] userId=${userId} mode=master-token expiresAt=${new Date(expiresAt).toISOString()}`,
+					`[openclawos-handshake] userId=${userId} mode=master-token expiresAt=${new Date(expiresAt).toISOString()} autoApprove=${approveStatus}`,
 				)
 				// Hot-fix J 2026-05-24 — explicitly mark authMode=master so the
 				// claw-client knows to ride this token in `auth: {token}`, NOT
@@ -154,6 +187,10 @@ export function createHandshakeRouteHandler(opts: HandshakeRouteOptions): Reques
 					expiresAt,
 					sessionId: `master:${userId}`,
 					authMode: 'master',
+					// Hot-fix F3 — surface the auto-approve outcome for diagnostics
+					// (operator can see in DevTools whether their first WS connect
+					// will succeed or still hit NOT_PAIRED before the file landed).
+					...(autoApprove ? {autoApprove: autoApprove.status} : {}),
 				})
 				return
 			}

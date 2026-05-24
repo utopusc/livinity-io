@@ -189,6 +189,21 @@ export class GatewaySocket {
     const rawSettings = this.opts.getSettings();
     if (!rawSettings || this.stopped) return;
 
+    // Phase 203 Hot-fix F3 2026-05-24 — resolve device identity BEFORE the
+    // handshake so we can pass deviceId into the auto-approver. Previously
+    // getDevice() was called after the handshake which left openclaw's
+    // pairing gate locked on first connect (operator UAT NOT_PAIRED loop).
+    let device: DeviceIdentity;
+    try {
+      device = await this.opts.getDevice();
+      log(`device id: ${device.deviceId.slice(0, 12)}…`);
+    } catch (e) {
+      err("failed to get device identity:", e);
+      this.closeWs();
+      this.scheduleReconnect();
+      return;
+    }
+
     // Phase 203-05 — fetch (or reuse cached) livinityd-minted openclaw device
     // token BEFORE buildConnectParams. The token is short-lived (5min per
     // T-203-02), so we re-fetch when missing or within 30s of expiry. Failure
@@ -205,8 +220,13 @@ export class GatewaySocket {
       if (
         shouldRefreshDeviceToken(this.livinitydDeviceTokenExpiresAt ?? undefined)
       ) {
-        const fetcher = this.opts.fetchHandshakeToken ?? fetchLivinitydDeviceToken;
-        const handshake = await fetcher();
+        const fetcher = this.opts.fetchHandshakeToken;
+        // Hot-fix F3 — forward the deviceId so livinityd can auto-approve
+        // any pending pairing request for this browser. Falls through to the
+        // bare default fetcher when caller didn't override (Standalone path).
+        const handshake = fetcher
+          ? await fetcher()
+          : await fetchLivinitydDeviceToken({deviceId: device.deviceId});
         if (handshake) {
           this.livinitydDeviceToken = handshake.token;
           this.livinitydDeviceTokenExpiresAt = handshake.expiresAt;
@@ -242,17 +262,6 @@ export class GatewaySocket {
       } else {
         warn("livinityd handshake threw unexpectedly — falling through:", handshakeErr);
       }
-    }
-
-    let device: DeviceIdentity;
-    try {
-      device = await this.opts.getDevice();
-      log(`device id: ${device.deviceId.slice(0, 12)}…`);
-    } catch (e) {
-      err("failed to get device identity:", e);
-      this.closeWs();
-      this.scheduleReconnect();
-      return;
     }
 
     const authMethod = settings.deviceToken ? "deviceToken" : settings.token ? "token" : "none";
