@@ -1,6 +1,6 @@
 {
   "name": "@openuidev/openclaw-os-plugin",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "type": "module",
   "description": "Liv AI plugin (LivOS fork of @openuidev/openclaw-os-plugin) — turns agent responses into Generative UI and serves the claw-client at /plugins/openclawos.",
   "keywords": [
