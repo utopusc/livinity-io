@@ -44,25 +44,25 @@ beforeEach(() => {
 // ─── computeSameOriginGatewayUrl ─────────────────────────────────────────
 
 describe("computeSameOriginGatewayUrl", () => {
-	// Hot-fix G 2026-05-24 — direct-loopback URL. The browser always runs
-	// inside the LivOS desktop stream on the Mini PC, so localhost = Mini PC
-	// = openclaw gateway. Caddy round-trip is intentionally bypassed.
-	test("returns the loopback openclaw WS URL regardless of host (HTTPS embed)", () => {
+	// Hot-fix G part 1 (revert in commit `0715ba6c`) 2026-05-24 — same-origin
+	// Caddy-proxied URL. The operator's browser is REMOTE (laptop), not on
+	// the Mini PC, so loopback is unreachable; the WS path must route through
+	// Caddy at `/liv-ai-app/liv-ai/ws` which proxies to openclaw :18789.
+	test("returns the same-origin Caddy-proxied openclaw WS URL (HTTPS embed)", () => {
 		expect(
 			computeSameOriginGatewayUrl({protocol: "https:", host: "bruce.livinity.io"}),
-		).toBe("ws://localhost:18789/plugins/openclawos/ws");
+		).toBe("wss://bruce.livinity.io/liv-ai-app/liv-ai/ws");
 	});
 
-	test("returns the loopback openclaw WS URL regardless of host (HTTP dev)", () => {
+	test("returns ws:// for HTTP origin (local dev)", () => {
 		expect(
 			computeSameOriginGatewayUrl({protocol: "http:", host: "127.0.0.1:8080"}),
-		).toBe("ws://localhost:18789/plugins/openclawos/ws");
+		).toBe("ws://127.0.0.1:8080/liv-ai-app/liv-ai/ws");
 	});
 
-	test("path targets the openclaw plugin WS mount (NOT the Caddy-routed external prefix)", () => {
+	test("path targets the Caddy-routed external prefix", () => {
 		const url = computeSameOriginGatewayUrl({protocol: "https:", host: "x.io"});
-		expect(url).toContain("/plugins/openclawos/ws");
-		expect(url).not.toContain("/liv-ai-app/");
+		expect(url).toContain("/liv-ai-app/liv-ai/ws");
 	});
 });
 
@@ -82,17 +82,18 @@ describe("attemptLivOsAutoConnect", () => {
 		expect(fetcher).not.toHaveBeenCalled();
 	});
 
-	test("seeds settings on successful handshake (gatewayUrl + deviceToken persisted)", async () => {
+	test("seeds settings on successful handshake — master mode → token slot (Hot-fix J)", async () => {
 		const handshake: LivinitydHandshakeResult = {
 			token: "tok-abc",
 			expiresAt: Date.now() + 300_000,
 			sessionId: "jti-xyz",
+			authMode: "master",
 		};
 		const fetcher = vi.fn().mockResolvedValue(handshake);
 		const result = await attemptLivOsAutoConnect(fetcher as never);
 		const expectedSettings = {
-			gatewayUrl: "ws://localhost:18789/plugins/openclawos/ws",
-			deviceToken: "tok-abc",
+			gatewayUrl: "wss://bruce.livinity.io/liv-ai-app/liv-ai/ws",
+			token: "tok-abc",
 		};
 		expect(result).toEqual({
 			ok: true,
@@ -103,6 +104,22 @@ describe("attemptLivOsAutoConnect", () => {
 		expect(persisted).toEqual(expectedSettings);
 	});
 
+	test("seeds settings on device-mode handshake → deviceToken slot (legacy)", async () => {
+		const handshake: LivinitydHandshakeResult = {
+			token: "dev-tok",
+			expiresAt: Date.now() + 300_000,
+			sessionId: "jti-dev",
+			authMode: "device",
+		};
+		const fetcher = vi.fn().mockResolvedValue(handshake);
+		const result = await attemptLivOsAutoConnect(fetcher as never);
+		expect(result.ok).toBe(true);
+		expect(result.settings).toEqual({
+			gatewayUrl: "wss://bruce.livinity.io/liv-ai-app/liv-ai/ws",
+			deviceToken: "dev-tok",
+		});
+	});
+
 	test("Hot-fix E — seeded result includes settings the caller MUST forward to engine.reconnect", async () => {
 		// Hot-fix D shipped without returning settings → ChatApp couldn't
 		// reconnect the engine after auto-connect → operator saw setup form
@@ -111,14 +128,17 @@ describe("attemptLivOsAutoConnect", () => {
 			token: "tok-e",
 			expiresAt: Date.now() + 300_000,
 			sessionId: "jti-e",
+			authMode: "master",
 		};
 		const fetcher = vi.fn().mockResolvedValue(handshake);
 		const result = await attemptLivOsAutoConnect(fetcher as never);
 		expect(result.ok).toBe(true);
 		expect(result.reason).toBe("seeded");
 		expect(result.settings).toBeDefined();
-		expect(result.settings?.gatewayUrl).toBe("ws://localhost:18789/plugins/openclawos/ws");
-		expect(result.settings?.deviceToken).toBe("tok-e");
+		expect(result.settings?.gatewayUrl).toBe(
+			"wss://bruce.livinity.io/liv-ai-app/liv-ai/ws",
+		);
+		expect(result.settings?.token).toBe("tok-e");
 	});
 
 	test("returns handshake-failed silently when the bridge rejects (standalone deploys)", async () => {
@@ -151,18 +171,25 @@ describe("attemptLivOsAutoConnect", () => {
 			token: "tok-fresh",
 			expiresAt: Date.now() + 300_000,
 			sessionId: "jti-fresh",
+			authMode: "master",
 		};
 		const fetcher = vi.fn().mockResolvedValue(handshake);
 		const result = await attemptLivOsAutoConnect({fetchHandshake: fetcher as never, force: true});
 		expect(result.ok).toBe(true);
 		expect(result.reason).toBe("seeded");
-		expect(result.settings?.gatewayUrl).toBe("ws://localhost:18789/plugins/openclawos/ws");
-		expect(result.settings?.deviceToken).toBe("tok-fresh");
+		expect(result.settings?.gatewayUrl).toBe(
+			"wss://bruce.livinity.io/liv-ai-app/liv-ai/ws",
+		);
+		// Hot-fix J: master mode routes into token slot, NOT deviceToken.
+		expect(result.settings?.token).toBe("tok-fresh");
+		expect(result.settings?.deviceToken).toBeUndefined();
 		expect(fetcher).toHaveBeenCalledOnce();
 		// Stale gatewayUrl MUST have been overwritten in localStorage.
 		const persisted = JSON.parse(localStorage.getItem("claw-settings-v1") ?? "null");
-		expect(persisted.gatewayUrl).toBe("ws://localhost:18789/plugins/openclawos/ws");
-		expect(persisted.deviceToken).toBe("tok-fresh");
+		expect(persisted.gatewayUrl).toBe(
+			"wss://bruce.livinity.io/liv-ai-app/liv-ai/ws",
+		);
+		expect(persisted.token).toBe("tok-fresh");
 	});
 
 	test("Hot-fix H — force=false (default) still short-circuits on already-configured", async () => {
