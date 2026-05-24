@@ -12,12 +12,13 @@
  *     a fresh fetch). We let the browser HTTP cache handle those.
  */
 
-// Phase 203 Hot-fix H 2026-05-24 — bumped to v2 to force activate() to evict
-// the stale shell cache. Operators on prior bundles were getting a cached
-// index.html that referenced the obsolete JS chunks AND that bypassed Hot-fix
-// H's "no form inside LivOS" logic. Bump on any future Hot-fix that ships
-// new top-level UI behavior.
-const CACHE_VERSION = "claw-shell-v2-hotfix-h";
+// Phase 203 Hot-fix I 2026-05-24 — bumped to v3 to evict v2 shells that still
+// referenced pre-scrub bundles + persisted dead `wss://*.livinity.io` gateway
+// URLs in localStorage. Hot-fix I adds a storage-layer scrub for poisoned URLs
+// AND a one-shot navigation interception that wipes ALL caches so the operator
+// gets a guaranteed-fresh shell after deploy without needing a manual hard-
+// reload. Bump on any future Hot-fix that ships new top-level UI behavior.
+const CACHE_VERSION = "claw-shell-v3-hotfix-i";
 const SHELL_URLS = ["/", "/favicon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
