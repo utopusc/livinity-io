@@ -746,6 +746,39 @@ else
     info "liv-claw-os not present in this checkout — skipping (Phase 203 fork not deployed yet)"
 fi
 
+# ── Step 7.3b: Phase 203 Hot-fix-C — bundle claw-client static export into claw-plugin/static ──
+# § G.2 Fix-C root cause: claw-plugin's `registerHttpRoute` handler streams
+# files from path.resolve(__dirname, "..", "static") — i.e. the PACKAGE-ROOT
+# `static/` dir of @openuidev/openclaw-os-plugin. That directory is populated
+# ONLY by the `bundle-ui` npm script in claw-plugin/package.json:
+#   cd ../claw-client && pnpm install --frozen-lockfile=false && pnpm build \
+#     && shx rm -rf ../claw-plugin/static && shx cp -r out ../claw-plugin/static
+# which is wired into `prepack` (NOT `build`). Step 7.3 above only runs
+# `pnpm -r build` recursively, so claw-client emits `out/` but it never gets
+# copied into claw-plugin/static. Result: gateway log says "workspace UI
+# mounted at /plugins/openclawos/" but every request 404s because the static
+# root is empty (= absent on disk).
+#
+# Path 3 from 203-HOTFIX-205-PLUGIN-LOAD.md: invoke `bundle-ui` explicitly
+# from update.sh — keeps repo lean, no source/CI churn, idempotent (the
+# nested `pnpm install --frozen-lockfile=false` and `next build` are both
+# safe re-runs over an already-installed/built workspace).
+#
+# Run AFTER 7.3 so deps are guaranteed installed; before plugin restart so
+# liv-claw-gateway re-mount sees the populated dir on next boot.
+if [[ -d "$LIVOS_DIR/packages/liv-claw-os/packages/claw-plugin" ]]; then
+    info "Phase 203 hot-fix C: bundling claw-client static export into claw-plugin/static/..."
+    if (cd "$LIVOS_DIR" && pnpm --filter @openuidev/openclaw-os-plugin bundle-ui 2>&1 | tail -10) ; then
+        if [[ -f "$LIVOS_DIR/packages/liv-claw-os/packages/claw-plugin/static/index.html" ]]; then
+            ok "claw-plugin/static/ populated (index.html present — /plugins/openclawos will serve Liv AI UI)"
+        else
+            warn "bundle-ui exited 0 but static/index.html missing — /plugins/openclawos may still 404"
+        fi
+    else
+        warn "bundle-ui failed — /plugins/openclawos will 404; check pnpm --filter @openuidev/openclaw-os-plugin bundle-ui output above"
+    fi
+fi
+
 # ── Step 7.4: Phase 203-03 — liv-claw-gateway dep resolution ───────────────
 # Wrapper package depends on openclaw (npm) + @livos/liv-claw-os (workspace).
 # pnpm install at workspace root (Step 4 above) already resolves these, but
