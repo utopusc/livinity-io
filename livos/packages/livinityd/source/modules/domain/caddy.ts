@@ -141,8 +141,27 @@ export function validateHost(host: string): boolean {
  * shadowed by the gateway. Phase 203-10 adds the `/plugins/openclawos`
  * rewrite for the gateway path so the gateway's plugin URL match succeeds.
  */
+// Phase 203 Hot-fix C addendum 2026-05-24: rewrite target corrected to
+// `/plugins/openclawos{path}` (was `/openclawos{path}`). Plan 203-10 inline
+// comment above already specified the correct intent; the code emitted the
+// wrong path which caused the gateway to serve its stock `/openclawos` root
+// (claw-control UI, `<title>OpenClaw Control</title>`) instead of the plugin's
+// rebranded `/plugins/openclawos` static export (`<title>Liv AI</title>`).
+//
+// Companion `handle /plugins/openclawos*` block proxies Next.js static export
+// asset requests: the export's basePath is `/plugins/openclawos`, so the HTML
+// references `_next/`/asset URLs as `/plugins/openclawos/_next/...`. Browsers
+// would hit that path on the apex host (bruce.livinity.io) which has no other
+// handle for it — the additional handle steers those asset hits to :18789
+// where the plugin's `registerHttpRoute` already serves them.
 const LIV_AI_APP_HANDLE = `\thandle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
-\t\trewrite * /openclawos{path}
+\t\trewrite * /plugins/openclawos{path}
+\t\treverse_proxy 127.0.0.1:18789 {
+${WS_TRANSPORT_BODY}
+\t}
+\t}
+\t@openclawosPluginAssets path /plugins/openclawos /plugins/openclawos/*
+\thandle @openclawosPluginAssets {
 \t\treverse_proxy 127.0.0.1:18789 {
 ${WS_TRANSPORT_BODY}
 \t}
