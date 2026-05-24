@@ -12,8 +12,16 @@ import type {
 } from "@/lib/engines/types";
 import { ConnectionState } from "@/lib/gateway/types";
 import type { NotificationRecord } from "@/lib/notifications";
+import type { Settings } from "@/lib/storage";
 import type { ClawThread } from "@/types/claw-thread";
 import { createContext, useContext, type ReactNode, type RefObject } from "react";
+
+/**
+ * Phase 203 Hot-fix H — handshake state shared across the app. Mirrors the
+ * literal union in ChatApp.tsx (`LivOsBypassMode`) — duplicated here to
+ * avoid a cycle on a component-internal type.
+ */
+export type LivOsBypassMode = "probing" | "livos" | "livos-error" | "standalone";
 
 export interface ChatAppContextValue {
   // Data shared by 2+ routes.
@@ -28,6 +36,13 @@ export interface ChatAppContextValue {
   pinnedAppIds: Set<string>;
   knownAgentIds: RefObject<Set<string>>;
   connectionState: ConnectionState;
+  /** Phase 205 Hot-fix N — needed by SettingsRoute Connection tab. */
+  settings: Settings | null;
+  /** Phase 205 Hot-fix N — `livinityd` handshake state; gates the Connection
+   * tab's URL/token form. */
+  livOsBypassMode: LivOsBypassMode;
+  /** Phase 205 Hot-fix N — Settings → Connection tab Save & Connect handler. */
+  onReconnect: (settings: Settings) => void;
 
   // Cross-route handlers.
   openNotification: (n: NotificationRecord) => Promise<void>;

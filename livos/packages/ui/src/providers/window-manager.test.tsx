@@ -67,11 +67,16 @@ describe('window-manager — Phase 159 close-handler registry', () => {
 // D-199-01: Liv AI window opens at {width: 1180, height: 820} instead of
 // the {900, 600} default-fallback. INV-199-02 brand-string lock is in
 // empty-state.test.tsx; this block locks the SIZE contract.
-describe('DEFAULT_WINDOW_SIZES Phase 199-01', () => {
-    it('Test 1: DEFAULT_WINDOW_SIZES["LIVINITY_liv-ai"] is exactly {width: 1180, height: 820}', () => {
+//
+// Phase 205 Hot-fix N 2026-05-24 — bumped to {1400, 900} to fit the new
+// in-shell Settings content-swap route. The exact-size assertion is updated
+// here; the divergence-from-default lock (Test 2) and existence lock (Test 3)
+// remain in force.
+describe('DEFAULT_WINDOW_SIZES Phase 199-01 + Hot-fix N', () => {
+    it('Test 1: DEFAULT_WINDOW_SIZES["LIVINITY_liv-ai"] is exactly {width: 1400, height: 900}', () => {
         expect(DEFAULT_WINDOW_SIZES['LIVINITY_liv-ai']).toEqual({
-            width: 1180,
-            height: 820,
+            width: 1400,
+            height: 900,
         })
     })
 

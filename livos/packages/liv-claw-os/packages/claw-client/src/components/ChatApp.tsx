@@ -9,7 +9,6 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { MobileShell } from "@/components/layout/MobileShell";
 import { MobileNotificationInboxDrawer } from "@/components/mobile/MobileNotificationInboxDrawer";
 import { MobileSettingsDialog } from "@/components/mobile/MobileSettingsDialog";
-import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { openClawAdapter } from "@/lib/chat/openClawAdapter";
 import { useChatProviderAdapters } from "@/lib/chat/useChatProviderAdapters";
 import {
@@ -74,6 +73,12 @@ interface ChatAppInnerProps {
   // Connection / config
   connectionState: ConnectionState;
   onSettingsClick: () => void;
+  /** Phase 205 Hot-fix N — flows into ChatAppContext for SettingsRoute. */
+  settings: Settings | null;
+  /** Phase 205 Hot-fix N — flows into ChatAppContext for SettingsRoute. */
+  livOsBypassMode: "probing" | "livos" | "livos-error" | "standalone";
+  /** Phase 205 Hot-fix N — flows into ChatAppContext for SettingsRoute. */
+  onReconnect: (settings: Settings) => void;
   // Sessions
   createSession: (agentId: string) => Promise<string | null>;
   renameSession: (threadId: string, label: string) => Promise<boolean>;
@@ -144,6 +149,9 @@ interface ChatAppInnerProps {
 function ChatAppInner({
   connectionState,
   onSettingsClick,
+  settings,
+  livOsBypassMode,
+  onReconnect,
   createSession,
   renameSession,
   deleteSession,
@@ -616,6 +624,9 @@ function ChatAppInner({
       pinnedAppIds,
       knownAgentIds,
       connectionState,
+      settings,
+      livOsBypassMode,
+      onReconnect,
       openNotification,
       setCronTrayJobId,
       onMarkNotificationsRead,
@@ -643,6 +654,9 @@ function ChatAppInner({
       pinnedAppIds,
       knownAgentIds,
       connectionState,
+      settings,
+      livOsBypassMode,
+      onReconnect,
       openNotification,
       onMarkNotificationsRead,
       onTogglePinned,
@@ -778,7 +792,7 @@ function ChatAppInner({
         <RouteSidebarSync collapse={route.view === "app" || route.view === "artifact"} />
         <AppSidebar
           connectionState={connectionState}
-          onSettingsClick={onSettingsClick}
+          onSettingsClick={() => navigate({ view: "settings" })}
           createSession={createSession}
           renameSession={renameSession}
           deleteSession={deleteSession}
@@ -1095,6 +1109,9 @@ export default function ChatApp() {
         <ChatAppInner
           connectionState={connectionState}
           onSettingsClick={() => setSettingsOpen(true)}
+          settings={settings}
+          livOsBypassMode={livOsBypassMode}
+          onReconnect={reconnect}
           createSession={createSession}
           renameSession={renameSession}
           deleteSession={deleteSession}
@@ -1144,22 +1161,19 @@ export default function ChatApp() {
         />
 
         {/*
-          Phase 203 Hot-fix H 2026-05-24 — original concern: the "Gateway
-          Settings" form is operator-confusing inside LivOS (they don't know
-          the token; livinityd handshake auto-pairs the browser anyway).
-          Original mitigation collapsed the entire dialog branch into
-          LivOsConnectingSplash, which made the settings cog a no-op.
+          Phase 205 Hot-fix N 2026-05-24 — Settings is no longer a modal on
+          desktop. The gear icon navigates to the #/settings route which
+          swaps the home dashboard's content area for the SettingsRoute
+          component (back button + horizontal tabs: Connection / MCP /
+          Gateway / Providers). Hot-fix M's side-panel and Hot-fix M.1's
+          modal are both retired.
 
-          Phase 205 Hot-fix K 2026-05-24 — Phase 205 needs the dialog to
-          open inside LivOS so the operator can reach the new MCP Servers
-          and Gateway tabs. The form-is-useless concern is preserved by
-          `suppressConnectionForm={livOsBypassMode !== "standalone"}`
-          which collapses the Connection tab body to a status banner +
-          one-line explanation, hiding the URL / token form completely.
-          LivOsConnectingSplash continues to render as an overlay during
-          handshake and is independent of the dialog now.
+          Mobile keeps the dialog for now — touch-friendly UX and small
+          screens make a full-page swap less ergonomic. We'll converge to
+          a single content-swap path in a follow-up once the new layout
+          is verified on desktop.
         */}
-        {isMobile ? (
+        {isMobile && (
           <MobileSettingsDialog
             open={settingsOpen}
             currentSettings={settings}
@@ -1171,17 +1185,6 @@ export default function ChatApp() {
               // error on UNREACHABLE / AUTH_FAILED.
               reconnect(newSettings);
             }}
-          />
-        ) : (
-          <SettingsDialog
-            open={settingsOpen}
-            currentSettings={settings}
-            connectionState={connectionState}
-            onClose={() => setSettingsOpen(false)}
-            onSave={(newSettings) => {
-              reconnect(newSettings);
-            }}
-            suppressConnectionForm={livOsBypassMode !== "standalone"}
           />
         )}
         {livOsBypassMode !== "standalone" && (
