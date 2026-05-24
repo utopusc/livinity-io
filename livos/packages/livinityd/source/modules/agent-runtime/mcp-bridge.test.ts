@@ -29,10 +29,20 @@ function makeLogger() {
 }
 
 function makeRedis(flags: Record<string, string | null>) {
+	// Phase 205-03 — McpBridgeRedis widened to require `hgetall` + `duplicate`
+	// for the live-reload subscribe loop. Existing tests stub both as no-ops so
+	// the bridge degrades silently (reconcileServers returns {} hash; subscribe
+	// failure → warn). The bridge still functions for Luse-only paths.
 	return {
 		get: vi.fn().mockImplementation(async (k: string) =>
 			Object.prototype.hasOwnProperty.call(flags, k) ? flags[k] : null,
 		),
+		hgetall: vi.fn().mockResolvedValue({}),
+		duplicate: vi.fn().mockReturnValue({
+			subscribe: vi.fn().mockResolvedValue(undefined),
+			on: vi.fn().mockReturnThis(),
+			quit: vi.fn().mockResolvedValue(undefined),
+		}),
 	}
 }
 
