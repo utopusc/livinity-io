@@ -815,23 +815,31 @@ export function ProvidersTab() {
         </p>
       ) : (
         <>
-          {/* Default model picker */}
-          <DefaultModelPicker
-            models={models}
-            current={authStatus?.defaultModel ?? authStatus?.resolvedDefault ?? null}
-            onChange={handleDefaultModelChange}
-            saving={defaultSaving}
-          />
-          {defaultError ? (
-            <StatusBanner tone="danger" icon={AlertTriangle} message={defaultError} />
-          ) : null}
-          {defaultNotice && !defaultError ? (
-            <StatusBanner
-              tone="success"
-              icon={CheckCircle2}
-              message={defaultNotice}
-            />
-          ) : null}
+          {/*
+           * Phase 207 R2 — Default model picker REMOVED from ProvidersTab.
+           *
+           * Operator UAT 2026-05-24 quote:
+           *   "Bak ben ana modeli buradan secmek istemiyorum … Default
+           *    yaziyor ya sag assagida hemen sag tarafinda yine default
+           *    yaziyor soldaki default model secsin"
+           *
+           * Translation: don't want the default-model selector in this tab;
+           * the LEFT "Default" button at composer bottom-right is where the
+           * picker should live (next to the right-side thinking-mode toggle).
+           * That picker is wired in SessionComposer.tsx; its model list is
+           * filtered to configured providers via
+           * OpenClawEngine._refreshConfiguredProviders().
+           *
+           * `DefaultModelPicker`, `handleDefaultModelChange`, `defaultSaving`,
+           * `defaultError`, `defaultNotice` remain DEFINED in this file as
+           * dead code intentionally — they're still referenced from
+           * `setDefaultModelMutation` callers in the providers list (the
+           * `setDefault` action on individual provider cards still works,
+           * which is the path operator uses when picking a specific model
+           * from the provider grid). Removing the top-level banner-and-
+           * picker block was the minimal change to honor the operator's
+           * intent without ripping out the provider-card flow.
+           */}
 
           {/* Provider grid header */}
           <div className="flex items-center justify-between border-t border-border-default/30 pt-m dark:border-border-default/16">
