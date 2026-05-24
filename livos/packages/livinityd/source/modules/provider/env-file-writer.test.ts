@@ -7,7 +7,7 @@
  * 4. formatEnvFile() is byte-deterministic for the same input.
  */
 
-import {describe, expect, test} from 'vitest'
+import {afterEach, beforeEach, describe, expect, test} from 'vitest'
 
 import {
 	EnvFileWriter,
@@ -106,6 +106,23 @@ describe('formatEnvFile', () => {
 })
 
 describe('EnvFileWriter.sync', () => {
+	// Phase 203 Hot-fix F5 — sync() now reads process.env.LIV_API_KEY to
+	// inject the service token into the gateway env file. Keep the variable
+	// scrubbed for the original Phase 204 tests so their expected bodies
+	// don't pick up an unexpected line, and restore whatever the caller's
+	// shell had set after each test.
+	const ORIGINAL_LIV_API_KEY = process.env['LIV_API_KEY']
+	beforeEach(() => {
+		delete process.env['LIV_API_KEY']
+	})
+	afterEach(() => {
+		if (ORIGINAL_LIV_API_KEY === undefined) {
+			delete process.env['LIV_API_KEY']
+		} else {
+			process.env['LIV_API_KEY'] = ORIGINAL_LIV_API_KEY
+		}
+	})
+
 	test('2. writes the primary path with chmod 0600', async () => {
 		const {fs, files} = makeInMemoryFs()
 		const writer = new EnvFileWriter({
@@ -137,5 +154,50 @@ describe('EnvFileWriter.sync', () => {
 		expect(files.has('/etc/default/liv-claw-gateway')).toBe(false)
 		const written = files.get(chosen)
 		expect(written?.body).toContain('GROQ_API_KEY=gsk_validkey1234')
+	})
+
+	test('5. (Hot-fix F5) injects process.env.LIV_API_KEY into the env file', async () => {
+		process.env['LIV_API_KEY'] = 'liv_k_lF6WvENQcoYRTaoJhWWU'
+		const {fs, files} = makeInMemoryFs()
+		const writer = new EnvFileWriter({
+			keyStore: makeKeyStore({XAI_API_KEY: 'xai-validkey1234'}),
+			primaryPath: '/etc/default/liv-claw-gateway',
+			fallbackPath: '/opt/livos/etc/liv-claw-gateway.env',
+			fs,
+		})
+		const {path: chosen} = await writer.sync()
+		const written = files.get(chosen)
+		expect(written?.body).toContain('LIV_API_KEY=liv_k_lF6WvENQcoYRTaoJhWWU')
+		// Provider keys still emitted alongside.
+		expect(written?.body).toContain('XAI_API_KEY=xai-validkey1234')
+	})
+
+	test('6. (Hot-fix F5) skips LIV_API_KEY when env var is malformed', async () => {
+		process.env['LIV_API_KEY'] = 'short' // fails KEY_SHAPE_REGEX (<8 chars)
+		const {fs, files} = makeInMemoryFs()
+		const writer = new EnvFileWriter({
+			keyStore: makeKeyStore({XAI_API_KEY: 'xai-validkey1234'}),
+			primaryPath: '/etc/default/liv-claw-gateway',
+			fallbackPath: '/opt/livos/etc/liv-claw-gateway.env',
+			fs,
+		})
+		const {path: chosen} = await writer.sync()
+		const written = files.get(chosen)
+		expect(written?.body).not.toContain('LIV_API_KEY=')
+		expect(written?.body).toContain('XAI_API_KEY=xai-validkey1234')
+	})
+
+	test('7. (Hot-fix F5) skips LIV_API_KEY when env var is unset', async () => {
+		// beforeEach already deleted LIV_API_KEY.
+		const {fs, files} = makeInMemoryFs()
+		const writer = new EnvFileWriter({
+			keyStore: makeKeyStore({XAI_API_KEY: 'xai-validkey1234'}),
+			primaryPath: '/etc/default/liv-claw-gateway',
+			fallbackPath: '/opt/livos/etc/liv-claw-gateway.env',
+			fs,
+		})
+		const {path: chosen} = await writer.sync()
+		const written = files.get(chosen)
+		expect(written?.body).not.toContain('LIV_API_KEY=')
 	})
 })

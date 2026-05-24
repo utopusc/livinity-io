@@ -1555,6 +1555,27 @@ export default class Livinityd {
 					webappLogger.info(
 						'Phase 204-01 — provider.config.* tRPC router wired (Redis hash liv:provider:keys; env-file: /etc/default/liv-claw-gateway with EACCES fallback to /opt/livos/etc/liv-claw-gateway.env)',
 					)
+
+					// Phase 203 Hot-fix F5 — seed the gateway env file at startup
+					// so LIV_API_KEY is present even when the operator hasn't
+					// touched a provider key yet. Without this, the openclaw
+					// plugin's livinityd HTTP client has no token and every
+					// `openclawos.apps.list` returns 401. Non-fatal: write
+					// errors are logged and swallowed; provider router still
+					// recovers on the next set/delete.
+					envFileWriter
+						.sync()
+						.then((res) => {
+							webappLogger.info(
+								`Phase 203 Hot-fix F5 — gateway env file seeded at startup (path=${res.path}, mode=${res.mode.toString(8)})`,
+							)
+						})
+						.catch((seedErr) => {
+							this.logger.error(
+								'Phase 203 Hot-fix F5 — startup env-file seed failed; openclaw plugin auth may be unavailable until next provider key save',
+								seedErr,
+							)
+						})
 				} catch (providerRouterErr) {
 					this.logger.error(
 						'Phase 204-01 — provider.config.* router factory failed; falls back to PROVIDER_CONFIG_UNAVAILABLE stub until next restart',
