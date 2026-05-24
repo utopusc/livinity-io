@@ -35,6 +35,18 @@ Close the operator-visible regressions surfaced after Phase 206 + bridge deploy,
 - **`/model {provider/id}` slash command WORKS** (operator confirmed). This is the per-chat override.
 - **Default model picker WORKS** for selection but lists too many (955 models — operator wants filter to configured only).
 
+## Operator UI request 2026-05-24 (NEW for Phase 207)
+
+**Move default-model picker OUT of Providers tab INTO chat composer bottom-right.** Operator quote: "Bak ben ana modeli buradan secmek istemiyorum … Default yaziyor ya sag assagida hemen sag tarafinda yine default yaziyor soldaki default model secsin Provider i ile beraber tikladigim zaman hemen ustunde Dropbox acilsin searchde olsun Ama aktif olan provider a gore seceyim".
+
+Translation: Don't want default model selector in Providers tab. The LEFT "Default" button at composer bottom-right (next to the right-side "Default off" thinking-mode button) should open an upward-opening searchable dropdown showing models from CONFIGURED providers only. Click that left "Default" → model picker. Don't touch right "Default (off)".
+
+This is essentially requirement #2 below — but operator clarified it should REPLACE the Providers tab's "Default model" picker, NOT supplement it. Remove the Default-model picker from ProvidersTab.tsx; wire SessionComposer's existing model dropdown to filter on configured providers.
+
+## Path correction 2026-05-24
+
+Phase 206's bridge mutation actually deploys at `openclaw.bridgeFromOpencode` (top-level of openclaw router), NOT `openclaw.auth.bridgeFromOpencode` — router brace shuffle left it as a sibling of auth/config/profiles. Verified live curl returns `{ok:true, bridged:["xai"]}`. Client path fixed in claw-client v16. Future cleanup: move into the auth namespace properly OR rename the call site (no operator-visible change either way).
+
 ## Requirements
 
 1. **MCP tools reach agent**: chat agent's tool catalog includes MCP-configured servers in addition to built-ins.
@@ -42,10 +54,10 @@ Close the operator-visible regressions surfaced after Phase 206 + bridge deploy,
    - Target: `mcp.config.list` entries flow through to the agent's tool registry so the agent answers "I see X, Y, Z MCP servers" with the configured set.
    - Acceptance: configure a `filesystem` MCP server via Settings → MCP, ask agent "which MCPs do you see", agent lists `filesystem` in its tools.
 
-2. **Composer model dropdown filtered to configured providers**: SessionComposer's bottom-right model picker shows only models from providers with auth configured.
-   - Current: 955 models from all 39 providers regardless of auth state.
-   - Target: filter against `openclaw.auth.status.auth.runtimeAuthRoutes[].status==="configured"` + `providersWithOAuth[]` + `providers[].profiles.apiKey > 0`.
-   - Acceptance: with only xAI + openrouter configured, the composer model picker shows ≤ 14 (xai count) + 265 (openrouter count) = ≤ 279 models, NOT 955.
+2. **Composer LEFT "Default" button = default-model picker (filtered, replaces ProvidersTab picker)**: SessionComposer's bottom-right LEFT button (currently shows "Default") opens an upward searchable dropdown of models from CONFIGURED providers only. Picking persists to `agents.defaults.model.primary` (writes via `openclaw.config.setDefaultModel`). The RIGHT "Default (off)" stays as thinking-mode (untouched per operator). The Providers tab's "Default model" picker is REMOVED.
+   - Current: 955 models from all 39 providers regardless of auth state; default picker lives in ProvidersTab.
+   - Target: composer-embedded default-model picker filtered to providers with `auth.runtimeAuthRoutes[].status==="configured"` OR `providersWithOAuth[]` OR `providers[].profiles.apiKey > 0`. Upward-opening dropdown matches existing TextButtonSelect pattern. Searchable.
+   - Acceptance: with only xAI + openrouter configured, composer "Default" left-button dropdown shows ≤ 279 models (14 xai + 265 openrouter), NOT 955. ProvidersTab no longer renders a default-model picker.
 
 3. **WebSocket `/ws/agent` either works or is removed**: no more console floods.
    - Current: repeated failed connections to `wss://bruce.livinity.io/ws/agent?token=…`.

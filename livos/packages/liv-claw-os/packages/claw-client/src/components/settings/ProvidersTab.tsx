@@ -377,10 +377,15 @@ function ProviderCard({ info, authStatus, xaiStatus, onChanged }: ProviderCardPr
           // a permanent API key from the same card; we don't block the UI
           // success message on the bridge.
           try {
+            // Phase 206 path: bridgeFromOpencode landed at openclaw.bridgeFromOpencode
+            // (top-level of openclaw router, NOT openclaw.auth.* — router brace
+            // shuffle left it as a sibling of auth/config/profiles). Confirmed
+            // live on Mini PC 2026-05-24 — top-level path returns 200 with
+            // {ok:true, bridged:["xai"]}.
             await callMutation<
               { providers?: string[] },
               { ok: boolean; bridged: string[] }
-            >("openclaw.auth.bridgeFromOpencode", { providers: ["xai"] });
+            >("openclaw.bridgeFromOpencode", { providers: ["xai"] });
           } catch (bridgeErr) {
             console.warn("xAI OAuth bridge failed", bridgeErr);
           }
