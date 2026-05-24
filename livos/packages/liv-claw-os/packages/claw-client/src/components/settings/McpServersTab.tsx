@@ -185,10 +185,47 @@ export function McpServersTab() {
 
   return (
     <div className="space-y-l p-m">
-      {/* ── Header ───────────────────────────────────────────────────────── */}
+      {/* ── Built-in tools (always on) ─────────────────────────────────────
+       *
+       * Phase 205 Hot-fix L follow-up — operator UAT (2026-05-24) raised
+       * the legitimate confusion that "MCP Servers (0)" implied the agent
+       * had no tools. In fact Luse + 11 LivOS built-ins ship to the gateway
+       * compile-time via plugin-rpc (Plan 203-06) and are always active.
+       * They do NOT live in the `liv:mcp:configs` Redis hash, so they do
+       * not surface in the External servers list below. This read-only
+       * panel makes the architecture visible without muddying the contract.
+       *
+       * Counts are static — they are defined at compile time in
+       * `liv-claw-os/packages/claw-plugin/src/luse-proxy.ts` (9 luse_*)
+       * and `builtin-proxy.ts` (11 LivOS). If those change, update here.
+       */}
+      <div className="rounded-md border border-border-default/40 bg-sunk-light/30 p-m dark:bg-elevated/30">
+        <div className="flex items-baseline justify-between gap-s">
+          <h3 className="text-sm font-medium text-text-neutral-primary">
+            Built-in tools <span className="text-text-neutral-tertiary">(always on)</span>
+          </h3>
+          <span className="text-xs text-text-success-primary">active</span>
+        </div>
+        <ul className="mt-s space-y-2xs text-sm text-text-neutral-secondary">
+          <li>
+            <span className="font-mono text-text-neutral-primary">luse</span>{" "}
+            <span className="text-text-neutral-tertiary">— 9 tools (browser, file, talk-voice, canvas, …)</span>
+          </li>
+          <li>
+            <span className="font-mono text-text-neutral-primary">livos-built-ins</span>{" "}
+            <span className="text-text-neutral-tertiary">— 11 tools (weather, get_current_time, ui_render, …)</span>
+          </li>
+        </ul>
+        <p className="mt-s text-xs text-text-neutral-tertiary">
+          Built-in tools ship with LivOS and cannot be removed from this UI.
+          Add external MCP servers below to expose more tools to the agent.
+        </p>
+      </div>
+
+      {/* ── Header (external servers) ──────────────────────────────────── */}
       <div className="space-y-xs">
         <h2 className="text-md font-medium text-text-neutral-primary">
-          MCP Servers ({servers.length})
+          External MCP Servers ({servers.length})
         </h2>
         <p className="text-sm text-text-neutral-tertiary">
           Add MCP servers to expose new tools to the agent. Changes take effect
