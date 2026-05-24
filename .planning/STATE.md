@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
-status: CODE-COMPLETE + DEPLOYED (operator UAT pending)
-last_updated: "2026-05-24T02:15:00.000Z"
+status: CODE-COMPLETE + DEPLOYED (operator UAT pending); Phase 205 IN PROGRESS (Wave 0 spike SHIPPED)
+last_updated: "2026-05-24T09:00:00.000Z"
 last_shipped_phase: 204-provider-key-management
 last_shipped_phase_status: deployed_pending_browser_uat
-next_phase: null
+last_shipped_plan: 205-01
+last_shipped_plan_status: code_complete_unblocks_downstream
+next_phase: 205-liv-ai-ui-carryovers
+next_plan: 205-02
 progress:
   total_phases: 9
   completed_phases: 9
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 16
+  completed_plans: 16
   percent: 100
 ---
 

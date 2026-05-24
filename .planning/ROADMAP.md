@@ -2991,7 +2991,15 @@ Plans:
 
 **Speed budget:** 6-10 hours wall-clock; 3 sub-features ship as parallel waves where state shape allows.
 
-**Status:** Awaiting SPEC.md (this entry is the ROADMAP placeholder).
+**Status:** Wave 0 spike SHIPPED 2026-05-24 (1/4 plans complete). 205-01 spike notes lock JWT shape + auth path + revoke race + auth.mode enum corrections for downstream waves; Plan 205-04 has 3 locked adjustments (header-based self-lock, 3-step atomic revoke + deny-list, corrected zod enum).
+
+**Plans:** 4 plans (1 complete, 3 unblocked)
+
+Plans:
+- [x] 205-01-PLAN.md -- Wave 0 spike: live JWT shape probe + browser auth path lock + pending.json race confirmation on Mini PC -- **CODE-COMPLETE 2026-05-24** -- 4 batched SSH probes resolved 4 unknowns: A1 (JWT has NO deviceId/jti -> self-lock guard uses X-Claw-Device-Id header), AUTH PATH (X-Api-Key via runtime-config bootstrap), A5 (3-step atomic revoke + revoked.json deny-list), A6 (gateway auto-reloads openclaw.json on file-write; auth.mode enum corrected to ['none','token','password','trusted-proxy']). 1 commit 52215473. Sacred SHA PASS 1/1. SUMMARY at .planning/phases/205-liv-ai-ui-carryovers/205-01-SUMMARY.md.
+- [ ] 205-02-PLAN.md -- Wave 1: Settings entry-point + SegmentedTabs strip in SettingsDialog (Connection / MCP Servers / Gateway placeholders) + livinityd-client.ts helper -- **UNBLOCKED**
+- [ ] 205-03-PLAN.md -- Wave 2: MCP Servers tab + mcp-config-router publishes liv:mcp:updated + mcp-bridge.ts subscribe loop + reconcileServers (restart-free MCP propagation) -- **UNBLOCKED** (consumes spike AUTH PATH livinityd-client.ts template)
+- [ ] 205-04-PLAN.md -- Wave 3: Gateway tab + new openclawos-gateway-router.ts + OpenclawConfigStore + self-lock guard -- **UNBLOCKED with 3 plan adjustments** (header self-lock, 3-step atomic revoke, corrected auth.mode enum)
 
 ---
 
