@@ -154,7 +154,27 @@ export function validateHost(host: string): boolean {
 // would hit that path on the apex host (bruce.livinity.io) which has no other
 // handle for it — the additional handle steers those asset hits to :18789
 // where the plugin's `registerHttpRoute` already serves them.
-const LIV_AI_APP_HANDLE = `\thandle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
+// Phase 203 Hot-fix D 2026-05-24 — operator-facing URL rename. The internal
+// gateway plugin path is `/plugins/openclawos` (openclaw's immutable plugin
+// id). Operator sees `/liv-ai-app/liv-ai` instead of the legacy
+// `/liv-ai-app/openclawos` so the URL bar reads "Liv AI" rather than the
+// upstream codename. Both prefixes coexist (back-compat for any persisted
+// bookmark, deep link, or in-flight iframe src) — they rewrite to the same
+// upstream `/plugins/openclawos{path}` so a single gateway-side route serves
+// them both.
+//
+// Ordering note (handle vs handle_path): Caddy evaluates by matcher
+// specificity, NOT source order. The two `handle_path` blocks are disjoint
+// (different external prefix matchers), so emit order is purely cosmetic
+// — putting `/liv-ai-app/liv-ai` first reads top-to-bottom matching what
+// operators type into the URL bar.
+const LIV_AI_APP_HANDLE = `\thandle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* {
+\t\trewrite * /plugins/openclawos{path}
+\t\treverse_proxy 127.0.0.1:18789 {
+${WS_TRANSPORT_BODY}
+\t}
+\t}
+\thandle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
 \t\trewrite * /plugins/openclawos{path}
 \t\treverse_proxy 127.0.0.1:18789 {
 ${WS_TRANSPORT_BODY}

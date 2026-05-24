@@ -69,6 +69,10 @@ _configure_caddy_for_cloud() {
     if [[ "$use_https" == "true" ]] && [[ "$domain" != "localhost" ]]; then
         cat > /etc/caddy/Caddyfile <<CADDYFILE
 ${domain} {
+    handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* {
+        rewrite * /plugins/openclawos{path}
+        reverse_proxy 127.0.0.1:18789
+    }
     handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
         rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
@@ -86,10 +90,14 @@ ${domain} {
     }
 }
 CADDYFILE
-        ok "Caddy configured: ${domain} (auto-TLS via livinityd domain module; /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
+        ok "Caddy configured: ${domain} (auto-TLS via livinityd domain module; /liv-ai-app/liv-ai + /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
     else
         cat > /etc/caddy/Caddyfile <<'CADDYFILE'
 :80 {
+    handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* {
+        rewrite * /plugins/openclawos{path}
+        reverse_proxy 127.0.0.1:18789
+    }
     handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
         rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
@@ -107,7 +115,7 @@ CADDYFILE
     }
 }
 CADDYFILE
-        ok "Caddy configured: :80 -> localhost:8080 (HTTP only; cloud-mode bootstrap; /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
+        ok "Caddy configured: :80 -> localhost:8080 (HTTP only; cloud-mode bootstrap; /liv-ai-app/liv-ai + /liv-ai-app/openclawos → :18789; /liv-ai-app/* → :3010)"
     fi
 
     # Enable + restart (idempotent; matches livos/install.sh:1293-1294).
