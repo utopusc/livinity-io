@@ -1267,27 +1267,40 @@ export class OpenClawEngine implements Engine {
   }
 
   /**
-   * Phase 207 R2 followup — order the catalog: configured providers first,
-   * everything else second. Composer's picker dropdown surfaces the
-   * configured group at the top while still letting operator scroll/search
-   * down to a NON-configured model (which they may want to pre-select
-   * before connecting that provider).
+   * Phase 207 UAT 2026-05-24 round 4 — STRICT FILTER (final decision).
    *
-   * Internal callers (event emission, getter) use this; the unsorted raw
-   * list is still available via `availableModelsAll`.
+   * History of this method:
+   *   R2 (f4c343bb): filter to configured-only — operator wanted to hide
+   *                  the 955-model deluge.
+   *   d2cbf6e7:      weakened to "show all, sort configured first" —
+   *                  operator wanted xAI back in the picker post-revoke.
+   *   THIS commit:   back to STRICT FILTER. Operator quote:
+   *     "Model secme yeri orada butun modelleri de gosterme sadece
+   *      auth unu yaptigim veya API key girdigim modelleri goster ya."
+   *     (Don't show all models in the picker — only ones with auth /
+   *      API key that I've entered.)
+   *
+   * Also: "hala Auth dan ciktiktan sonra xai da xai model seciyorum
+   * yine xai kullaniyor amk hardcoded girilmis sanki" — after revoking
+   * xAI, picking an xAI model from the dropdown made the operator
+   * believe xAI was "still used" even though backend logs show the
+   * actual dispatch went to OpenRouter. The fix for that confusion is
+   * to REMOVE revoked providers from the picker so the operator can't
+   * accidentally select something that won't authenticate.
+   *
+   * Fail-open: when `_configuredProviders` is empty (fresh install,
+   * bootstrap window before the providers.list round-trip), return the
+   * raw list so the picker is usable while the operator's connecting
+   * their first provider.
    */
   private _filteredAvailableModels(): ModelChoice[] {
     if (this._configuredProviders.size === 0) return this._availableModels;
-    const configured: ModelChoice[] = [];
-    const rest: ModelChoice[] = [];
-    for (const m of this._availableModels) {
-      if (m.provider && this._configuredProviders.has(m.provider)) {
-        configured.push(m);
-      } else {
-        rest.push(m);
-      }
-    }
-    return [...configured, ...rest];
+    return this._availableModels.filter((m) => {
+      // Models without a `provider` field are synthetic / unknown — keep
+      // them (the slash command + manual override path still works).
+      if (!m.provider) return true;
+      return this._configuredProviders.has(m.provider);
+    });
   }
 
   /**

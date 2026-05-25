@@ -1554,8 +1554,50 @@ export default class Livinityd {
 							},
 							openclawConfigStore: mcpConfigOpenclawStore,
 							mirrorSkipNames: new Set(['luse']),
+							// Phase 207 UAT 2026-05-24 round 4 — forward the
+							// Settings checkbox toggle to the live ApprovalManager
+							// so the operator's choice takes effect on the next
+							// destructive-tool call without a restart. The
+							// closure captures `approvalManagerForPlugin` (boot-
+							// initialized above when livOSAgent is healthy);
+							// when null, the persisted Redis value is still
+							// written and a subsequent boot picks it up.
+							onAutoApproveChanged: (enabled: boolean) => {
+								if (approvalManagerForPlugin) {
+									approvalManagerForPlugin.setAutoApprove(enabled)
+								}
+							},
+							getAutoApprove: () =>
+								approvalManagerForPlugin?.getAutoApprove() ?? false,
 						})
 					: undefined
+
+			// Phase 207 UAT 2026-05-24 round 4 — Redis hydration for the
+			// persisted auto-approve flag. We read once at boot so a previous
+			// operator's choice survives livos.service restarts. The seeded
+			// value is fed directly into ApprovalManager.setAutoApprove
+			// (which becomes a no-op when livOSAgent / approvalManager are
+			// degraded — Redis write still landed earlier).
+			if (this.ai?.redis && approvalManagerForPlugin) {
+				try {
+					const persistedAutoApprove =
+						await this.ai.redis.get('liv:config:auto_approve_destructive')
+					if (persistedAutoApprove === 'true' || persistedAutoApprove === '1') {
+						approvalManagerForPlugin.setAutoApprove(true)
+						webappLogger.info(
+							'Phase 207 UAT R4 — auto-approve destructive tool calls SEEDED true from Redis (liv:config:auto_approve_destructive)',
+						)
+					} else if (persistedAutoApprove === 'false' || persistedAutoApprove === '0') {
+						approvalManagerForPlugin.setAutoApprove(false)
+					}
+					// else: unset → defer to env-var resolver (the current default).
+				} catch (autoApproveSeedErr) {
+					this.logger.error(
+						'Phase 207 UAT R4 — Redis seed of auto-approve flag failed; ApprovalManager defers to env var',
+						autoApproveSeedErr,
+					)
+				}
+			}
 			if (mcpConfigRouterProductionInstance) {
 				webappLogger.info(
 					'Phase 202-07 — mcp.config.* tRPC router wired (Redis hash liv:mcp:config CRUD; restart required for McpBridge re-spawn)',
