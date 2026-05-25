@@ -1,8 +1,9 @@
-import {createContext, useCallback, useEffect, useMemo, useState} from 'react'
+import {createContext, useCallback, useEffect, useState} from 'react'
 
 // Phase 120-01 (v35.0): `iridescent` is now a valid Theme + ResolvedTheme value
 // alongside light/dark/system. System preference can still only resolve to
-// light or dark (the OS doesn't know about iridescent); see getSystemTheme.
+// light or dark (the OS doesn't know about iridescent); see the prefers-color-
+// scheme effect below.
 export type Theme = 'light' | 'dark' | 'iridescent' | 'system'
 export type ResolvedTheme = 'light' | 'dark' | 'iridescent'
 
@@ -23,10 +24,6 @@ export const ThemeProviderContext = createContext<ThemeProviderState | undefined
 interface ThemeProviderProps {
 	children: React.ReactNode
 	defaultTheme?: Theme
-}
-
-function getSystemTheme(): 'light' | 'dark' {
-	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
 function applyTheme(resolved: ResolvedTheme) {
@@ -50,7 +47,7 @@ function applyTheme(resolved: ResolvedTheme) {
 }
 
 export function ThemeProvider({children, defaultTheme = 'system'}: ThemeProviderProps) {
-	const [theme, setThemeState] = useState<Theme>(() => {
+	const [storedTheme, setStoredTheme] = useState<Theme>(() => {
 		try {
 			const stored = localStorage.getItem(STORAGE_KEY) as Theme | null
 			if (
@@ -67,28 +64,60 @@ export function ThemeProvider({children, defaultTheme = 'system'}: ThemeProvider
 		return defaultTheme
 	})
 
-	const resolvedTheme = useMemo<ResolvedTheme>(() => {
-		return theme === 'system' ? getSystemTheme() : theme
-	}, [theme])
+	// `resolvedTheme` is reactive React state — NOT a useMemo derivation —
+	// because Plan 208-05 requires it to update LIVE when the OS
+	// `prefers-color-scheme` flips (override === 'system' branch). A useMemo
+	// keyed only on `storedTheme` would miss MediaQueryList change events
+	// entirely and leave consumers (theme-toggle, dock-item,
+	// settings-content) reading a stale value until the next manual
+	// setTheme call.
+	//
+	// First-paint value defaults to the stored theme (or 'light' for
+	// 'system'); the prefers-color-scheme effect below performs an
+	// immediate sync on mount so consumers get the correct OS-derived
+	// value before paint.
+	const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
+		storedTheme === 'system' ? 'light' : storedTheme,
+	)
 
-	// Apply class immediately and on theme change
+	// Keep `resolvedTheme` in sync with manual overrides (light/dark/
+	// iridescent flips out of `'system'` or between concrete themes).
+	useEffect(() => {
+		if (storedTheme === 'system') return
+		setResolvedTheme(storedTheme)
+	}, [storedTheme])
+
+	// Apply class immediately and on resolvedTheme change.
 	useEffect(() => {
 		applyTheme(resolvedTheme)
 	}, [resolvedTheme])
 
-	// Subscribe to system preference changes when theme === 'system'
+	// Plan 208-05 R8 — live OS-preference auto-switch.
+	//
+	// Operator's explicit override ALWAYS wins: when storedTheme is
+	// anything other than 'system', we early-return WITHOUT registering a
+	// listener. Only when storedTheme === 'system' do we subscribe to the
+	// MediaQueryList and propagate `change` events into React state so the
+	// UI flips within one render tick (well under the 200ms acceptance
+	// budget per Plan 208-05 CONTEXT).
 	useEffect(() => {
-		if (theme !== 'system') return
+		if (storedTheme !== 'system') return
+		if (typeof window === 'undefined' || !window.matchMedia) return
 
-		const mql = window.matchMedia('(prefers-color-scheme: dark)')
+		const mq = window.matchMedia('(prefers-color-scheme: dark)')
 
-		function handleChange() {
-			applyTheme(getSystemTheme())
+		// Initial sync — OS preference may have changed between mount
+		// and effect run, or while no listener was active because the
+		// operator was on a manual override.
+		setResolvedTheme(mq.matches ? 'dark' : 'light')
+
+		const handler = (e: MediaQueryListEvent) => {
+			setResolvedTheme(e.matches ? 'dark' : 'light')
 		}
 
-		mql.addEventListener('change', handleChange)
-		return () => mql.removeEventListener('change', handleChange)
-	}, [theme])
+		mq.addEventListener('change', handler)
+		return () => mq.removeEventListener('change', handler)
+	}, [storedTheme])
 
 	const setTheme = useCallback((next: Theme) => {
 		try {
@@ -96,13 +125,10 @@ export function ThemeProvider({children, defaultTheme = 'system'}: ThemeProvider
 		} catch {
 			// ignore write failures
 		}
-		setThemeState(next)
+		setStoredTheme(next)
 	}, [])
 
-	const value = useMemo<ThemeProviderState>(
-		() => ({theme, resolvedTheme, setTheme}),
-		[theme, resolvedTheme, setTheme],
-	)
+	const value: ThemeProviderState = {theme: storedTheme, resolvedTheme, setTheme}
 
 	return <ThemeProviderContext.Provider value={value}>{children}</ThemeProviderContext.Provider>
 }
