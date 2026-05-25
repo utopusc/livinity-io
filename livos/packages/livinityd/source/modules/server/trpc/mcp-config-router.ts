@@ -77,6 +77,16 @@ export interface McpConfigRedisClient {
 	 * and reconciles its spawned-server map. See SPEC R3 + 205-01 SPIKE-NOTES.
 	 */
 	publish(channel: string, message: string): Promise<number>
+	/**
+	 * Phase 207 UAT 2026-05-24 round 4 — get/set a single string key for the
+	 * runtime-toggles store (Redis SET / GET). Used for the auto-approve
+	 * persistence (`liv:config:auto_approve_destructive`). Optional so the
+	 * ioredis instance with the full API satisfies the type while a
+	 * minimal test mock can omit the methods (the consuming routes
+	 * gracefully degrade to in-memory only when set/get are absent).
+	 */
+	set?(key: string, value: string): Promise<unknown>
+	get?(key: string): Promise<string | null>
 }
 
 /**
@@ -134,7 +144,35 @@ export interface McpConfigRouterDeps {
 	 * router filters these names out of every mirror.
 	 */
 	mirrorSkipNames?: ReadonlySet<string>
+	/**
+	 * Phase 207 UAT 2026-05-24 round 4 — runtime auto-approve toggle hook.
+	 *
+	 * Operator quote (last frustrated request): "LuseMCP yi Onayli
+	 * calisiyor ya bunun icin bir ayar olustur Sormadan onay istemeden
+	 * devam etmesini ayarlayabilmemiz icin." (Add a setting for LuseMCP
+	 * so we can configure it to continue without asking approval.)
+	 *
+	 * When this callback is wired (boot wire-up in livinityd/source/
+	 * index.ts), the `setAutoApprove` mutation forwards the new value to
+	 * the in-process ApprovalManager so the change takes effect on the
+	 * NEXT destructive-tool call — no restart needed. Without the
+	 * callback the mutation only persists to Redis (`liv:config:auto_-
+	 * approve_destructive`); a subsequent restart reads Redis and
+	 * re-seeds the resolver via the env-var pathway.
+	 */
+	onAutoApproveChanged?: (enabled: boolean) => void
+	/**
+	 * Phase 207 UAT 2026-05-24 round 4 — read the live boolean for the
+	 * `getAutoApprove` query. Boot wires this to `approvalManager.
+	 * getAutoApprove()` so the Settings checkbox seeds with the actual
+	 * runtime state (which may be true via env var even before any
+	 * mutation lands).
+	 */
+	getAutoApprove?: () => boolean
 }
+
+/** Phase 207 UAT 2026-05-24 round 4 — Redis key for the persisted toggle. */
+export const AUTO_APPROVE_REDIS_KEY = 'liv:config:auto_approve_destructive'
 
 /**
  * Persisted shape of one MCP server config. Matches
@@ -424,6 +462,65 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 			await mirrorMcpEntryToOpenclawJson(deps, 'set', input.name, merged)
 			return {ok: true as const}
 		}),
+
+		// ── getAutoApprove ─────────────────────────────────────────────────────
+		// Phase 207 UAT 2026-05-24 round 4 — read the live auto-approve flag.
+		// Returns false when no override is set AND the env var is unset.
+		// The Settings checkbox seeds with this value.
+		getAutoApprove: adminProcedure.query(async () => {
+			if (deps.getAutoApprove) {
+				return {enabled: deps.getAutoApprove() as boolean}
+			}
+			// Fallback: read Redis directly (boot didn't wire the live getter).
+			if (deps.redis.get) {
+				try {
+					const raw = await deps.redis.get(AUTO_APPROVE_REDIS_KEY)
+					return {enabled: raw === 'true' || raw === '1'}
+				} catch {
+					return {enabled: false}
+				}
+			}
+			return {enabled: false}
+		}),
+
+		// ── setAutoApprove ─────────────────────────────────────────────────────
+		// Phase 207 UAT 2026-05-24 round 4 — flip the destructive-tool
+		// approval gate. Persists to Redis AND forwards to the live
+		// ApprovalManager via deps.onAutoApproveChanged so the next
+		// `requestSync()` call picks up the change without a restart.
+		setAutoApprove: adminProcedure
+			.input(z.object({enabled: z.boolean()}))
+			.mutation(async ({input}) => {
+				// Persist first (so the next boot picks up the choice).
+				if (deps.redis.set) {
+					try {
+						await deps.redis.set(
+							AUTO_APPROVE_REDIS_KEY,
+							input.enabled ? 'true' : 'false',
+						)
+					} catch (err) {
+						deps.logger.warn(
+							`[mcp-config] persisting auto-approve to Redis failed (runtime override still applies for this process)`,
+							err,
+						)
+					}
+				}
+				// Forward to the live ApprovalManager (best-effort).
+				if (deps.onAutoApproveChanged) {
+					try {
+						deps.onAutoApproveChanged(input.enabled)
+					} catch (err) {
+						deps.logger.warn(
+							`[mcp-config] onAutoApproveChanged callback failed`,
+							err,
+						)
+					}
+				}
+				deps.logger.info(
+					`[mcp-config] auto-approve destructive tool calls → ${input.enabled ? 'ENABLED' : 'disabled'}`,
+				)
+				return {ok: true as const, enabled: input.enabled}
+			}),
 	})
 }
 
@@ -446,6 +543,10 @@ export const mcpConfigRouter = router({
 	update: adminProcedure.input(UpdateInput).mutation(() => notInjected()),
 	delete: adminProcedure.input(DeleteInput).mutation(() => notInjected()),
 	toggle: adminProcedure.input(ToggleInput).mutation(() => notInjected()),
+	getAutoApprove: adminProcedure.query(() => notInjected()),
+	setAutoApprove: adminProcedure
+		.input(z.object({enabled: z.boolean()}))
+		.mutation(() => notInjected()),
 })
 
 export type McpConfigRouter = ReturnType<typeof createMcpConfigRouter>

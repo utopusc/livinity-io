@@ -807,10 +807,44 @@ export function ProvidersTab() {
   // Filter — show only configured-or-most-popular providers by default.
   const [showAll, setShowAll] = useState(false);
 
+  /**
+   * Phase 207 UAT 2026-05-24 round 4 — auto-approve checkbox state.
+   *
+   * Operator quote: "LuseMCP yi Onayli calisiyor ya bunun icin bir ayar
+   * olustur Sormadan onay istemeden devam etmesini ayarlayabilmemiz icin."
+   *
+   * Initial state seeded from `mcp.config.getAutoApprove` so the box
+   * reflects the live ApprovalManager state (which may be true via env
+   * var even before any operator toggle). Toggling calls
+   * `mcp.config.setAutoApprove` which both persists to Redis AND
+   * forwards to the in-process ApprovalManager — no service restart.
+   */
+  const [autoApprove, setAutoApprove] = useState(false);
+  const [autoApproveSaving, setAutoApproveSaving] = useState(false);
+
+  const handleToggleAutoApprove = useCallback(async (next: boolean) => {
+    setAutoApproveSaving(true);
+    const prev = autoApprove;
+    setAutoApprove(next); // optimistic
+    try {
+      await callMutation<{ enabled: boolean }, { ok: boolean; enabled: boolean }>(
+        "mcp.config.setAutoApprove",
+        { enabled: next },
+      );
+    } catch (err) {
+      setAutoApprove(prev); // revert on failure
+      window.alert(
+        `Failed to save auto-approve toggle: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setAutoApproveSaving(false);
+    }
+  }, [autoApprove]);
+
   const refetchAll = useCallback(async () => {
     setLoadError(null);
     try {
-      const [provs, mods, status, xai] = await Promise.all([
+      const [provs, mods, status, xai, autoApproveState] = await Promise.all([
         callQuery<undefined, ProviderInfo[]>("openclaw.providers.list").catch(
           () => [] as ProviderInfo[],
         ),
@@ -823,11 +857,15 @@ export function ProvidersTab() {
         callQuery<undefined, XaiStatus>("auth.xai.status").catch(
           () => ({ connected: false }) as XaiStatus,
         ),
+        callQuery<undefined, { enabled: boolean }>("mcp.config.getAutoApprove").catch(
+          () => ({ enabled: false }),
+        ),
       ]);
       setProviders(Array.isArray(provs) ? provs : []);
       setModels(Array.isArray(mods) ? mods : []);
       setAuthStatus(status);
       setXaiStatus(xai ?? { connected: false });
+      setAutoApprove(Boolean(autoApproveState?.enabled));
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     }
@@ -938,6 +976,41 @@ export function ProvidersTab() {
            * picker block was the minimal change to honor the operator's
            * intent without ripping out the provider-card flow.
            */}
+
+          {/*
+           * Phase 207 UAT 2026-05-24 round 4 — auto-approve checkbox.
+           *
+           * Lives ABOVE the provider grid so it's visible without
+           * scrolling. Persists via mcp.config.setAutoApprove (Redis +
+           * in-process ApprovalManager). When checked, every
+           * destructive-tool call short-circuits to 'approved' — no
+           * card surfaces. The setting survives restarts.
+           */}
+          <label className="flex items-start gap-xs cursor-pointer rounded-md border border-border-default/40 bg-surface-elevated/40 p-sm hover:border-border-default/70 transition-colors">
+            <input
+              type="checkbox"
+              checked={autoApprove}
+              disabled={autoApproveSaving}
+              onChange={(e) => {
+                void handleToggleAutoApprove(e.target.checked);
+              }}
+              className="mt-1 accent-text-info-primary"
+            />
+            <span className="flex-1">
+              <span className="block text-sm font-medium text-text-neutral-primary">
+                Auto-approve destructive tool calls
+                {autoApproveSaving ? (
+                  <span className="ml-xs text-xs text-text-neutral-tertiary">saving…</span>
+                ) : null}
+              </span>
+              <span className="block text-xs text-text-neutral-tertiary">
+                Skip the "Approve" prompt for tools like screenshot,
+                click, keystroke, file write, shell run. Persists across
+                restarts. <strong>Use with caution — the agent will
+                execute destructive actions without confirmation.</strong>
+              </span>
+            </span>
+          </label>
 
           {/* Provider grid header */}
           <div className="flex items-center justify-between border-t border-border-default/30 pt-m dark:border-border-default/16">

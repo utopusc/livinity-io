@@ -110,6 +110,16 @@ export class ApprovalManager {
 	 * mutation) can swap behaviour without a server restart.
 	 */
 	private readonly autoApproveResolver: () => boolean
+	/**
+	 * Phase 207 UAT 2026-05-24 round 4 — runtime override for the
+	 * auto-approve resolver. Set via the `setAutoApprove(bool)` setter
+	 * (called by the openclaw.config.setAutoApprove tRPC mutation + by
+	 * the boot-time Redis hydration). When set to `true`, every
+	 * `requestSync()` call short-circuits as 'approved' regardless of
+	 * the constructor-injected env-var resolver. Setting to `null`
+	 * (default) defers to the env-var resolver.
+	 */
+	private autoApproveRuntimeOverride: boolean | null = null
 
 	constructor(opts?: {
 		timeoutMs?: number
@@ -117,6 +127,38 @@ export class ApprovalManager {
 	}) {
 		this.timeoutMs = opts?.timeoutMs ?? 5 * 60 * 1000
 		this.autoApproveResolver = opts?.autoApprove ?? (() => false)
+	}
+
+	/**
+	 * Phase 207 UAT 2026-05-24 round 4 — UI-facing toggle.
+	 *
+	 * The Settings → Providers tab's "Auto-approve destructive tool calls"
+	 * checkbox calls the openclaw.config.setAutoApprove mutation; the
+	 * boot wire-up forwards the new value to this method so the
+	 * ApprovalManager picks up the change without a restart. The
+	 * boolean value is also persisted to the Redis key
+	 * `liv:config:auto_approve_destructive` so the choice survives a
+	 * service restart (mcp-config-router reads it on boot and seeds the
+	 * runtime override).
+	 *
+	 * Pass `null` to clear the runtime override and revert to the
+	 * env-var-driven default.
+	 */
+	setAutoApprove(value: boolean | null): void {
+		this.autoApproveRuntimeOverride = value
+	}
+
+	/**
+	 * Phase 207 UAT 2026-05-24 round 4 — getter for the UI initial state.
+	 * Returns the runtime override if set, else evaluates the env-var
+	 * resolver. The Settings checkbox reads this to seed its initial
+	 * `checked` state.
+	 */
+	getAutoApprove(): boolean {
+		if (this.autoApproveRuntimeOverride !== null) {
+			return this.autoApproveRuntimeOverride
+		}
+		return this.autoApproveResolver()
 	}
 
 	registerPending(toolCallId: string, runId: string): Promise<boolean> {
@@ -164,14 +206,14 @@ export class ApprovalManager {
 				: 'openclawos:default'
 		const timeoutMs = opts.timeoutMs ?? this.timeoutMs
 
-		// Phase 207 UAT 2026-05-24 — auto-approve short-circuit. When the
-		// operator has set LIVOS_AUTO_APPROVE_DESTRUCTIVE=true (or a future
-		// runtime flag flips the callback), every destructive-tool call
-		// passes through without surfacing the approval card. We still
-		// emit the 'resolved' event so any open SSE consumer sees the
-		// decision land in the audit stream (don't fire 'pending' first —
-		// that'd flash the card for a single render).
-		if (this.autoApproveResolver()) {
+		// Phase 207 UAT 2026-05-24 — auto-approve short-circuit. Runtime
+		// override (Settings checkbox) wins over the env-var resolver
+		// (LIVOS_AUTO_APPROVE_DESTRUCTIVE); when neither says yes the
+		// approval card fires as before. We still emit the 'resolved'
+		// event so any open SSE consumer sees the decision land in the
+		// audit stream (don't fire 'pending' first — that'd flash the
+		// card for a single render).
+		if (this.getAutoApprove()) {
 			this.emit({
 				type: 'resolved',
 				toolCallId,
