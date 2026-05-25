@@ -1,13 +1,19 @@
 /**
  * Phase 203-06 Task 3 — builtin-proxy.ts tests.
  *
+ * Updated by Plan 208-08 (R1): the 8 luse_* entries were removed from
+ * BUILTIN_TOOL_DEFS to silence the intra-plugin name conflict spam
+ * (`plugin tool name conflict (openclaw-os-plugin): luse_*`). builtin-proxy
+ * now owns only the 3 unique tools (weather, get_current_time, ui_render);
+ * luse_* registration is exclusive to luse-proxy.ts.
+ *
  * Coverage (≥4):
- *   1. registerBuiltinProxyTools registers exactly 11 tools
+ *   1. registerBuiltinProxyTools registers exactly 3 tools (post-208-08)
  *   2. ui_render skips approval (non-destructive even though high-impact)
  *   3. weather tool forwards args correctly via builtin.invoke
- *   4. Destructive luse_computer_click_mouse routes through approval first
- *   5. RPC failure → tool returns {error, detail}
- *   6. Mirrors livinityd BUILT_IN_TOOL_CATALOG count (11)
+ *   4. RPC failure → tool returns {error, detail}
+ *   5. BUILTIN_TOOL_DEFS contains exactly the 3 unique names
+ *   6. ZERO luse_* tools registered here (intra-plugin name conflict guard)
  */
 
 import { describe, expect, test, vi } from "vitest";
@@ -43,12 +49,12 @@ function makeMockApi(): {
 }
 
 describe("registerBuiltinProxyTools", () => {
-  test("registers exactly 11 built-in tools", () => {
+  test("registers exactly 3 built-in tools (post Plan 208-08 R1)", () => {
     const { api, registered } = makeMockApi();
     const names = registerBuiltinProxyTools(api, { callRpc: vi.fn() });
-    expect(names).toHaveLength(11);
-    expect(registered).toHaveLength(11);
-    expect(BUILTIN_TOOL_COUNT).toBe(11);
+    expect(names).toHaveLength(3);
+    expect(registered).toHaveLength(3);
+    expect(BUILTIN_TOOL_COUNT).toBe(3);
   });
 
   test("ui_render skips approval (non-destructive)", async () => {
@@ -91,27 +97,17 @@ describe("registerBuiltinProxyTools", () => {
     expect((argsPayload["args"] as Record<string, unknown>)["location"]).toBe("Istanbul");
   });
 
-  test("destructive luse_computer_click_mouse routes through approval first", async () => {
+  test("ZERO luse_* tools registered here — plugin tool name conflict guard (Plan 208-08 R1)", () => {
     const { api, registered } = makeMockApi();
-    const callRpc = vi.fn(
-      async (method: string): Promise<RpcResponse<unknown>> => {
-        if (method === "approval.request")
-          return okR({ decision: "approved", toolCallId: "tc", runId: "r" });
-        if (method === "builtin.invoke") return okR({ success: true, x: 100, y: 200 });
-        return errR("UNEXPECTED");
-      },
-    );
-    registerBuiltinProxyTools(api, { callRpc });
-
-    const c = registered.find((r) => r.name === "luse_computer_click_mouse")!;
-    const tool = c.factory({ agentId: "agent-1", sessionKey: "s1" });
-    await tool.execute("call-c", { x: 100, y: 200 });
-
-    expect(callRpc).toHaveBeenCalledTimes(2);
-    const c0 = callRpc.mock.calls[0];
-    const c1 = callRpc.mock.calls[1];
-    expect(c0 && c0[0]).toBe("approval.request");
-    expect(c1 && c1[0]).toBe("builtin.invoke");
+    registerBuiltinProxyTools(api, { callRpc: vi.fn() });
+    const luseNames = registered.filter((r) => r.name.startsWith("luse_")).map((r) => r.name);
+    expect(luseNames).toEqual([]);
+    // Plugin tool name conflict mechanism: registerTool in luse-proxy.ts wins
+    // the first-registration race; builtin-proxy.ts must NOT re-register the
+    // same names or the openclaw gateway emits "plugin tool name conflict
+    // (openclaw-os-plugin): luse_*" diagnostics (~152 log lines/boot pre-fix).
+    const defNames = BUILTIN_TOOL_DEFS.map((d) => d.name);
+    expect(defNames.filter((n) => n.startsWith("luse_"))).toEqual([]);
   });
 
   test("builtin.invoke RPC failure → tool returns {error, detail}", async () => {
@@ -132,34 +128,13 @@ describe("registerBuiltinProxyTools", () => {
     expect(payload.detail).toBe("Geocoding failed");
   });
 
-  test("BUILTIN_TOOL_DEFS contains expected 11 names", () => {
-    const names = BUILTIN_TOOL_DEFS.map((d) => d.name);
-    expect(names).toContain("weather");
-    expect(names).toContain("get_current_time");
-    expect(names).toContain("ui_render");
-    expect(names).toContain("luse_list_windows");
-    expect(names).toContain("luse_computer_screenshot");
-    expect(names).toContain("luse_computer_click_mouse");
-    expect(names).toContain("luse_computer_type_text");
-    expect(names).toContain("luse_computer_press_keys");
-    expect(names).toContain("luse_computer_application");
-    expect(names).toContain("luse_computer_drag_mouse");
-    expect(names).toContain("luse_computer_paste_text");
-    expect(names).toHaveLength(11);
+  test("BUILTIN_TOOL_DEFS contains exactly the 3 unique non-luse names (post Plan 208-08 R1)", () => {
+    const names = BUILTIN_TOOL_DEFS.map((d) => d.name).sort();
+    expect(names).toEqual(["get_current_time", "ui_render", "weather"]);
   });
 
-  test("destructive flag mirrors livinityd built-in-tools.ts (6 destructive)", () => {
+  test("destructive flag — zero destructives remain (luse_computer_* moved out)", () => {
     const destructives = BUILTIN_TOOL_DEFS.filter((d) => d.destructive).map((d) => d.name);
-    expect(destructives).toHaveLength(6);
-    expect(destructives).toEqual(
-      expect.arrayContaining([
-        "luse_computer_click_mouse",
-        "luse_computer_type_text",
-        "luse_computer_press_keys",
-        "luse_computer_application",
-        "luse_computer_drag_mouse",
-        "luse_computer_paste_text",
-      ]),
-    );
+    expect(destructives).toEqual([]);
   });
 });

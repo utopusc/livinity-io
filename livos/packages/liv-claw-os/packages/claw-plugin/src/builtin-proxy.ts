@@ -2,8 +2,10 @@
  * Phase 203-06 Task 3 — Built-in LivOS tool proxies registered as openclaw
  * gateway tools.
  *
- * Implements D-203-14: the 11 LivOS built-in tools (Phase 202-08
- * `BUILT_IN_TOOL_CATALOG`) are re-exposed as openclaw gateway tools by
+ * Implements D-203-14: the 3 unique LivOS built-in tools (weather,
+ * get_current_time, ui_render; the 8 luse_* tools are registered
+ * exclusively by luse-proxy.ts to avoid intra-plugin name conflicts —
+ * Plan 208-08, R1 fix) are re-exposed as openclaw gateway tools by
  * registering them via `api.registerTool(factory, {name})` in the plugin.
  * Each tool's `execute` forwards to livinityd's `/openclawos/plugin-rpc`
  * route with `{method: 'builtin.invoke', args: {toolName, args}}`.
@@ -15,10 +17,8 @@
  * lockstep — a runtime parity check at registration time logs any drift
  * by calling `builtin.list` on the livinityd RPC.
  *
- * Destructive flag fires the same approval gate as `luse-proxy.ts`. 6 of
- * the 11 built-ins are destructive (the `luse_computer_*` family); the
- * non-destructive 5 are weather + get_current_time + luse_list_windows +
- * luse_computer_screenshot + ui_render.
+ * All 3 remaining built-ins are non-destructive. The luse_* destructive
+ * set is handled by luse-proxy.ts.
  *
  * `ui_render` (Phase 202-08) is a PASSTHROUGH on the server — the actual UI
  * rendering happens client-side via the OpenUI Lang renderer. We still
@@ -42,7 +42,11 @@ interface BuiltinToolDef {
 }
 
 /**
- * Mirror of livinityd's `BUILT_IN_TOOL_CATALOG` (Phase 202-08, 11 entries).
+ * Plugin-owned subset of livinityd's `BUILT_IN_TOOL_CATALOG` (Phase 202-08).
+ * Only the 3 unique non-luse tools are registered here — the 8 luse_* tools
+ * live in luse-proxy.ts (Plan 208-08, R1). livinityd's full 11-entry catalog
+ * is still consumed by the in-app UI tool-picker manifest via the
+ * `openclaw.builtins.list` tRPC route (separate consumer, not affected).
  * Schema mirrors the createTool() inputSchema in built-in-tools.ts.
  */
 const BUILTIN_TOOL_DEFS: ReadonlyArray<BuiltinToolDef> = [
@@ -89,107 +93,6 @@ const BUILTIN_TOOL_DEFS: ReadonlyArray<BuiltinToolDef> = [
         title: { type: "string", description: "Optional block title" },
       },
       required: ["tree"],
-    },
-  },
-  {
-    name: "luse_list_windows",
-    label: "List Windows",
-    destructive: false,
-    description:
-      "List all currently open windows on the LivOS desktop. Returns a structured list rendered as a DataTable.",
-    parameters: { type: "object", properties: {} },
-  },
-  {
-    name: "luse_computer_screenshot",
-    label: "Screenshot",
-    destructive: false,
-    description:
-      "Capture the LivOS desktop as a PNG screenshot. Returns base64 image inline.",
-    parameters: { type: "object", properties: {} },
-  },
-  {
-    name: "luse_computer_click_mouse",
-    label: "Click Mouse",
-    destructive: true,
-    description:
-      "Click at (x, y) on the LivOS desktop. DESTRUCTIVE — operator approval required.",
-    parameters: {
-      type: "object",
-      properties: {
-        x: { type: "number" },
-        y: { type: "number" },
-        button: { type: "string", enum: ["left", "middle", "right"] },
-      },
-      required: ["x", "y"],
-    },
-  },
-  {
-    name: "luse_computer_type_text",
-    label: "Type Text",
-    destructive: true,
-    description:
-      "Type text into the focused window via xdotool. DESTRUCTIVE — operator approval required.",
-    parameters: {
-      type: "object",
-      properties: { text: { type: "string" } },
-      required: ["text"],
-    },
-  },
-  {
-    name: "luse_computer_press_keys",
-    label: "Press Keys",
-    destructive: true,
-    description:
-      "Send keys to the focused window via xdotool key syntax. DESTRUCTIVE — operator approval required.",
-    parameters: {
-      type: "object",
-      properties: { keys: { type: "string" } },
-      required: ["keys"],
-    },
-  },
-  {
-    name: "luse_computer_application",
-    label: "Launch/Focus/Close App",
-    destructive: true,
-    description:
-      "Launch, focus, or close an app on the LivOS desktop. DESTRUCTIVE — operator approval required.",
-    parameters: {
-      type: "object",
-      properties: {
-        action: { type: "string", enum: ["launch", "focus", "close"] },
-        name: { type: "string" },
-      },
-      required: ["action", "name"],
-    },
-  },
-  {
-    name: "luse_computer_drag_mouse",
-    label: "Drag Mouse",
-    destructive: true,
-    description:
-      "Drag the mouse on the LivOS desktop. DESTRUCTIVE — operator approval required.",
-    parameters: {
-      type: "object",
-      properties: {
-        fromX: { type: "number" },
-        fromY: { type: "number" },
-        toX: { type: "number" },
-        toY: { type: "number" },
-        button: { type: "string", enum: ["left", "middle", "right"] },
-      },
-      required: ["fromX", "fromY", "toX", "toY"],
-    },
-  },
-  {
-    name: "luse_computer_paste_text",
-    label: "Paste Text",
-    destructive: true,
-    description:
-      "Paste text via the X11 clipboard + ctrl+v. DESTRUCTIVE — operator approval required.",
-    parameters: {
-      type: "object",
-      properties: { text: { type: "string" } },
-      required: ["text"],
     },
   },
 ];
@@ -265,7 +168,10 @@ export interface RegisterOptions {
 }
 
 /**
- * Register all 11 built-in LivOS tools as openclaw gateway tools.
+ * Register the 3 unique LivOS built-in tools (weather, get_current_time,
+ * ui_render) as openclaw gateway tools. The 8 luse_* tools are NOT
+ * registered here — they live exclusively in luse-proxy.ts to avoid the
+ * intra-plugin name conflict spam fixed in Plan 208-08 (R1).
  */
 export function registerBuiltinProxyTools(
   api: OpenClawPluginApi,
