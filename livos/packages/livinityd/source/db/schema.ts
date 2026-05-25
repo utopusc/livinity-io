@@ -15,7 +15,16 @@
  *                duplicate name rejects at the DB layer
  */
 
-import {boolean, integer, pgTable, primaryKey, text, timestamp} from 'drizzle-orm/pg-core'
+import {sql} from 'drizzle-orm'
+import {
+	boolean,
+	integer,
+	jsonb,
+	pgTable,
+	primaryKey,
+	text,
+	timestamp,
+} from 'drizzle-orm/pg-core'
 
 export const livosAgents = pgTable('livos_agents', {
 	id: text('id').primaryKey(),
@@ -75,6 +84,16 @@ export const livosOpenuiApps = pgTable('livos_openui_apps', {
 	updatedAt: timestamp('updated_at', {withTimezone: true})
 		.notNull()
 		.defaultNow(),
+	// Phase 208-07 R7 — per-app icon customization.
+	// `iconKind` is one of `'icon-pack' | 'url' | 'ai-generated'` but the DB
+	// stays permissive (TEXT not enum); the zod schema at the tRPC boundary
+	// is the enforcement point. `iconConfig` shape is kind-specific (see
+	// AppIcon renderer at packages/liv-claw-os/packages/claw-client/src/lib/
+	// app-icon-renderer.tsx for the IconConfig union).
+	iconKind: text('icon_kind').notNull().default('icon-pack'),
+	iconConfig: jsonb('icon_config')
+		.notNull()
+		.default(sql`'{}'::jsonb`),
 })
 
 export type LivosOpenuiApp = typeof livosOpenuiApps.$inferSelect
