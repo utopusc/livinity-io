@@ -871,16 +871,14 @@ export default definePluginEntry({
     // livinityd's `/openclawos/plugin-rpc` route. Destructive tools fire the
     // existing ApprovalManager HITL gate via `approval.request` RPC
     // (INV-203-04). Total tool surface after this block: 9 upstream + 9 luse +
-    // 11 built-in = 29 tools (matches the 203-01 SPIKE prediction of 29).
+    // 3 built-in = 21 tools (post Plan 208-08 R1: builtin-proxy now owns
+    // only weather/get_current_time/ui_render; the 8 luse_* dupes were
+    // deleted from BUILTIN_TOOL_DEFS to silence the intra-plugin name
+    // conflict spam — 152 log lines/boot → 0).
     //
-    // NOTE: there is intentional overlap between the luse_* set (9 entries)
-    // and the built-in set (6 luse_* entries) — the built-in catalog is the
-    // canonical "11 LivOS tools" surface for the openclaw UI; luse-proxy is
-    // the broader stop-gap until the gateway's tool picker is rebuilt
-    // (Plan 203-09 territory). For Phase 203-06 we register BOTH to satisfy
-    // the explicit D-203-13 + D-203-14 must-haves; the gateway de-dupes by
-    // name at registration time (the second registration of an existing name
-    // is a no-op per the spike SPIKE.md §Tool registration API).
+    // NOTE: luse_* registration is exclusive to luse-proxy.ts; builtin-proxy.ts
+    // owns only weather/get_current_time/ui_render to avoid the intra-plugin
+    // name conflict spam fixed in Plan 208-08.
     try {
       const luseRegistered = registerLuseProxyTools(api, {
         logger: { info: (msg) => api.logger.info(msg) },
