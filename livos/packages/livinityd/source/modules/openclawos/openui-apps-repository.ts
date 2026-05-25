@@ -54,12 +54,39 @@ import {
  */
 export const MAX_VERSIONS_PER_SLUG = 25
 
+/**
+ * Phase 208-07 R7 — per-app icon customization.
+ *
+ * `iconKind` is one of `'icon-pack' | 'url' | 'ai-generated'`. Kept as a
+ * loose `string` here so future kinds can ship without a schema rev; the
+ * tRPC zod schema at `openclawos-router.ts` is the enforcement point.
+ *
+ * `iconConfig` shape depends on `iconKind`:
+ *   - `'icon-pack'`: `{icon: string, bg?: string, fg?: string}`
+ *   - `'url'`:       `{url: string}`
+ *   - `'ai-generated'` (DEFERRED): `{prompt: string}` — renderer falls back
+ *                     to placeholder until R7.x ships the image-gen path.
+ *
+ * On `upsert`, when `iconKind` / `iconConfig` are OMITTED from the input:
+ *   - CREATE path → defaults to `'icon-pack'` / `{}` (DB column defaults).
+ *   - UPDATE path → PRESERVES the prior column values (do not overwrite).
+ *
+ * This preserve-on-omit semantic lets callers patch just `content` (e.g. an
+ * agent re-rendering the app body) without nuking the operator's chosen
+ * icon. To explicitly clear the icon, pass `iconKind: 'icon-pack'` +
+ * `iconConfig: {}`.
+ */
+export type OpenUIAppIconKind = 'icon-pack' | 'url' | 'ai-generated'
+export type OpenUIAppIconConfig = Record<string, unknown>
+
 /** Input shape for `upsert`. `name`/`content` are required; `userId` opt. */
 export interface OpenUIAppUpsertInput {
 	slug: string
 	name: string
 	content: string
 	userId?: string | null
+	iconKind?: OpenUIAppIconKind | string
+	iconConfig?: OpenUIAppIconConfig
 }
 
 export class OpenUIAppsRepository {
@@ -104,12 +131,17 @@ export class OpenUIAppsRepository {
 			const existing = existingRows[0]
 
 			if (!existing) {
+				// Phase 208-07 R7 — on CREATE, default icon fields when omitted so
+				// the persisted row carries the same defaults the DB column-defaults
+				// would supply (mock + drizzle both behave the same way).
 				const insertPayload: LivosOpenuiAppInsert = {
 					slug: input.slug,
 					name: input.name,
 					content: input.content,
 					version: 1,
 					userId: input.userId ?? null,
+					iconKind: input.iconKind ?? 'icon-pack',
+					iconConfig: input.iconConfig ?? {},
 				}
 				const inserted = await tx
 					.insert(livosOpenuiApps)
@@ -147,15 +179,26 @@ export class OpenUIAppsRepository {
 					)
 			}
 
+			// Phase 208-07 R7 — preserve-on-omit semantics for icon fields. The
+			// caller can patch JUST `content` without nuking the operator's icon
+			// (partial-update test 15) or pass both fields to fully replace
+			// them (test 17). The patch is loosely typed because `.set()` accepts
+			// SQL templates (e.g. `sql\`now()\``) alongside literal values, and
+			// the strict `Partial<LivosOpenuiAppInsert>` would reject the
+			// timestamp SQL on the updatedAt field.
+			const patch: Record<string, unknown> = {
+				name: input.name,
+				content: input.content,
+				version: nextVersion,
+				userId: input.userId ?? existing.userId,
+				updatedAt: sql`now()`,
+			}
+			if (input.iconKind !== undefined) patch.iconKind = input.iconKind
+			if (input.iconConfig !== undefined) patch.iconConfig = input.iconConfig
+
 			const updated = await tx
 				.update(livosOpenuiApps)
-				.set({
-					name: input.name,
-					content: input.content,
-					version: nextVersion,
-					userId: input.userId ?? existing.userId,
-					updatedAt: sql`now()`,
-				})
+				.set(patch)
 				.where(eq(livosOpenuiApps.slug, existing.slug))
 				.returning()
 			const row = updated[0]
