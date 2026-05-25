@@ -6,11 +6,16 @@
  * `openclaw-router.ts` tRPC procedures (one-shot JSON queries via execFile)
  * and the generic `auth-flow-service.ts` (long-running OAuth flows via spawn).
  *
- * Binary discovery (in order):
- *   1. `OPENCLAW_BIN` env var (caller override; defense against tests)
- *   2. PATH lookup via `which openclaw`
- *   3. Fallback to `/opt/livos/node_modules/.pnpm/node_modules/.bin/openclaw`
+ * Binary discovery (in order, Phase 208-03 R2 hardened):
+ *   1. `override` arg if non-empty AND fs.existsSync
+ *   2. `OPENCLAW_BINARY` env var (Phase 208-03 alias) — checked first
+ *   3. `OPENCLAW_BIN` env var (legacy caller override; defense against tests)
+ *   4. `/opt/livos/bin/openclaw` vendored shim (Phase 208-03 installer target)
+ *   5. PATH lookup via `which openclaw`
+ *   6. Fallback to `/opt/livos/node_modules/.pnpm/node_modules/.bin/openclaw`
  *      (verified live on Mini PC 2026-05-24 — pnpm hoisted .bin/openclaw)
+ *   7. /usr/local/bin/openclaw, /usr/bin/openclaw, ~/.npm-global/bin/openclaw
+ *   8. throw OpenclawNotInstalledError listing checked paths + installer hint
  *
  * Environment contract:
  *   Every spawned child MUST inherit `OPENCLAW_STATE_DIR` (default
@@ -40,7 +45,9 @@ import * as os from 'node:os'
 export class OpenclawNotInstalledError extends Error {
 	readonly code = 'OPENCLAW_NOT_INSTALLED' as const
 	constructor(
-		message = 'openclaw CLI binary not found on PATH or in common install locations',
+		message = 'openclaw CLI binary not found on PATH or in common install locations. ' +
+			'Checked: /opt/livos/bin/openclaw, node_modules/.bin/openclaw, $PATH. ' +
+			'Run scripts/install/install-openclaw-cli.sh to install (Phase 208-03 R2).',
 	) {
 		super(message)
 		this.name = 'OpenclawNotInstalledError'
@@ -83,16 +90,47 @@ const DEFAULT_PNPM_FALLBACK =
 	'/opt/livos/node_modules/.pnpm/node_modules/.bin/openclaw'
 
 /**
+ * Phase 208-03 — vendored binary shim path installed by
+ * scripts/install/install-openclaw-cli.sh. Checked BEFORE PATH so a Mini PC
+ * with a stale system `openclaw` can't shadow the workspace-pinned version.
+ */
+export const VENDORED_BIN_PATH = '/opt/livos/bin/openclaw'
+
+/**
  * Resolve the `openclaw` binary path. Throws `OpenclawNotInstalledError`
- * when nothing is found.
+ * when nothing is found. The error message names every path checked plus the
+ * installer command so the operator knows the recovery action.
  *
- * Caller-supplied override wins; PATH lookup next; pnpm hoist fallback last.
+ * Lookup order (Phase 208-03 R2 hardened):
+ *   1. `override` arg
+ *   2. `process.env.OPENCLAW_BINARY` (Phase 208-03 alias)
+ *   3. `process.env.OPENCLAW_BIN` (legacy alias preserved for callers/tests)
+ *   4. VENDORED_BIN_PATH = /opt/livos/bin/openclaw
+ *   5. PATH lookup via `which openclaw`
+ *   6. DEFAULT_PNPM_FALLBACK
+ *   7. /usr/local/bin/openclaw, /usr/bin/openclaw, ~/.npm-global/bin/openclaw
  */
 export function resolveOpenclawBinary(override?: string): string {
 	if (override && fs.existsSync(override)) return override
 
+	// Phase 208-03 — preferred env var name (matches docs); fall back to legacy.
+	const envBinary = process.env.OPENCLAW_BINARY
+	if (envBinary && fs.existsSync(envBinary)) return envBinary
+
 	const envOverride = process.env.OPENCLAW_BIN
 	if (envOverride && fs.existsSync(envOverride)) return envOverride
+
+	// Phase 208-03 vendored-path fallback — checked BEFORE PATH so a stale
+	// system-wide openclaw can't shadow the workspace-pinned version.
+	try {
+		if (fs.existsSync(VENDORED_BIN_PATH)) {
+			fs.accessSync(VENDORED_BIN_PATH, fs.constants.X_OK)
+			return VENDORED_BIN_PATH
+		}
+	} catch {
+		// Vendored binary exists but is not executable (mode bits stripped?).
+		// Fall through to PATH lookup so we don't return a non-runnable path.
+	}
 
 	const isWindows = process.platform === 'win32'
 	const lookup = isWindows ? 'where openclaw' : 'which openclaw'
