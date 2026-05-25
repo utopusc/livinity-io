@@ -44,6 +44,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { callMutation, callQuery } from "@/lib/livinityd-client";
+import { providersCache } from "@/lib/providers-cache";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Wire-format types — mirror livinityd `openclaw-router.ts` outputs
@@ -831,6 +832,10 @@ export function ProvidersTab() {
         "mcp.config.setAutoApprove",
         { enabled: next },
       );
+      // Invalidate just the auto-approve cache entry — the optimistic
+      // setAutoApprove(next) above already covers UI; we only need to stop
+      // a stale cache hit on next mount from overwriting the new value.
+      providersCache.invalidate("mcp.config.getAutoApprove");
     } catch (err) {
       setAutoApprove(prev); // revert on failure
       window.alert(
@@ -841,35 +846,131 @@ export function ProvidersTab() {
     }
   }, [autoApprove]);
 
-  const refetchAll = useCallback(async () => {
-    setLoadError(null);
-    try {
-      const [provs, mods, status, xai, autoApproveState] = await Promise.all([
-        callQuery<undefined, ProviderInfo[]>("openclaw.providers.list").catch(
-          () => [] as ProviderInfo[],
-        ),
-        callQuery<undefined, ModelInfo[]>("openclaw.models.list").catch(
-          () => [] as ModelInfo[],
-        ),
-        callQuery<undefined, AuthStatus>("openclaw.auth.status").catch(
-          () => null,
-        ),
-        callQuery<undefined, XaiStatus>("auth.xai.status").catch(
-          () => ({ connected: false }) as XaiStatus,
-        ),
-        callQuery<undefined, { enabled: boolean }>("mcp.config.getAutoApprove").catch(
-          () => ({ enabled: false }),
-        ),
-      ]);
-      setProviders(Array.isArray(provs) ? provs : []);
-      setModels(Array.isArray(mods) ? mods : []);
-      setAuthStatus(status);
-      setXaiStatus(xai ?? { connected: false });
-      setAutoApprove(Boolean(autoApproveState?.enabled));
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
-    }
-  }, []);
+  /**
+   * Phase 208-06 R10 — Stale-while-revalidate refetch.
+   *
+   * Cold path (no cache):   fires all 5 callQuery in parallel, hydrates state.
+   * Warm path (cache hit):  paints stale data synchronously BEFORE the async
+   *                         refetch resolves (sub-500ms second visit), then
+   *                         silently overwrites with fresh server data.
+   *
+   * `bypassCache: true` — every mutation success path passes this so the cache
+   *                         is invalidated + refetched authoritatively.
+   *
+   * Per-query try/catch (was per-callQuery `.catch(() => fallback)`) is
+   * preserved as the `Promise.all` map-error guard so one slow/failing query
+   * never blocks the others.
+   */
+  const applyResult = useCallback(
+    (key: string, value: unknown): void => {
+      switch (key) {
+        case "openclaw.providers.list":
+          setProviders(Array.isArray(value) ? (value as ProviderInfo[]) : []);
+          break;
+        case "openclaw.models.list":
+          setModels(Array.isArray(value) ? (value as ModelInfo[]) : []);
+          break;
+        case "openclaw.auth.status":
+          setAuthStatus((value as AuthStatus | null) ?? null);
+          break;
+        case "auth.xai.status":
+          setXaiStatus((value as XaiStatus | null) ?? { connected: false });
+          break;
+        case "mcp.config.getAutoApprove": {
+          const v = value as { enabled?: boolean } | null;
+          setAutoApprove(Boolean(v?.enabled));
+          break;
+        }
+      }
+    },
+    [],
+  );
+
+  const refetchAll = useCallback(
+    async (opts?: { bypassCache?: boolean }): Promise<void> => {
+      const bypass = opts?.bypassCache === true;
+      setLoadError(null);
+
+      const queries: { key: string; fn: () => Promise<unknown> }[] = [
+        {
+          key: "openclaw.providers.list",
+          fn: () =>
+            callQuery<undefined, ProviderInfo[]>("openclaw.providers.list"),
+        },
+        {
+          key: "openclaw.models.list",
+          fn: () => callQuery<undefined, ModelInfo[]>("openclaw.models.list"),
+        },
+        {
+          key: "openclaw.auth.status",
+          fn: () => callQuery<undefined, AuthStatus>("openclaw.auth.status"),
+        },
+        {
+          key: "auth.xai.status",
+          fn: () => callQuery<undefined, XaiStatus>("auth.xai.status"),
+        },
+        {
+          key: "mcp.config.getAutoApprove",
+          fn: () =>
+            callQuery<undefined, { enabled: boolean }>(
+              "mcp.config.getAutoApprove",
+            ),
+        },
+      ];
+
+      // Synchronous cache read — paint stale data immediately for warm visits.
+      // Note: we render stale entries regardless of TTL freshness; the async
+      // refetch below is authoritative either way, so even an expired entry
+      // beats a spinner. Cache TTL gates server hits in OTHER code paths
+      // (none today; ProvidersTab always refetches on mount).
+      if (!bypass) {
+        for (const q of queries) {
+          const cached = providersCache.get(q.key);
+          if (cached) applyResult(q.key, cached.value);
+        }
+      }
+
+      // Async refresh — runs in background when cache was hot, blocks initial
+      // paint when cold. Each query gets its own fallback so one failure
+      // doesn't poison the others (parity with pre-208-06 behaviour).
+      const fallbacks: Record<string, unknown> = {
+        "openclaw.providers.list": [] as ProviderInfo[],
+        "openclaw.models.list": [] as ModelInfo[],
+        "openclaw.auth.status": null,
+        "auth.xai.status": { connected: false } as XaiStatus,
+        "mcp.config.getAutoApprove": { enabled: false },
+      };
+
+      try {
+        await Promise.all(
+          queries.map((q) =>
+            q
+              .fn()
+              .then((v) => {
+                providersCache.set(q.key, v);
+                applyResult(q.key, v);
+              })
+              .catch(() => {
+                // Per-query graceful fallback — match pre-208-06 behaviour.
+                applyResult(q.key, fallbacks[q.key]);
+              }),
+          ),
+        );
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [applyResult],
+  );
+
+  /**
+   * Mutation-success refetch — always bypasses cache so the freshest server
+   * state hits the UI + reseeds the cache.
+   */
+  const refetchAfterMutation = useCallback(async (): Promise<void> => {
+    providersCache.invalidateAll();
+    await refetchAll({ bypassCache: true });
+  }, [refetchAll]);
 
   useEffect(() => {
     void refetchAll().finally(() => setLoading(false));
@@ -886,14 +987,14 @@ export function ProvidersTab() {
           { model },
         );
         setDefaultNotice(`Default model set to ${model}.`);
-        await refetchAll();
+        await refetchAfterMutation();
       } catch (err) {
         setDefaultError(err instanceof Error ? err.message : String(err));
       } finally {
         setDefaultSaving(false);
       }
     },
-    [refetchAll],
+    [refetchAfterMutation],
   );
 
   // Compact list: configured providers first, then top 6 by model count.
@@ -1041,7 +1142,7 @@ export function ProvidersTab() {
                   info={p}
                   authStatus={authStatus}
                   xaiStatus={p.provider === "xai" ? xaiStatus : null}
-                  onChanged={refetchAll}
+                  onChanged={refetchAfterMutation}
                 />
               </li>
             ))}
