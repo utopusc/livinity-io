@@ -45,6 +45,45 @@ export class CdpDisconnectedError extends Error {
 	}
 }
 
+/**
+ * Phase 208-09 R9 — lightweight HTTP probe of Chrome's `/json/version`
+ * endpoint. Used by `ChromeCdpClient.connect({preferAttach:true})` to gate the
+ * CDP socket connect call: if Chrome isn't listening on the loopback CDP port
+ * the probe fails fast (default 2s timeout) and the caller can either throw a
+ * helpful error OR fall through to a legacy spawn/connect-retry path.
+ *
+ * The browser tool wires `allowSpawnFallback:false` so the failure surface is
+ * "no Chrome at 127.0.0.1:9222" rather than the 5-attempt × 200ms CDP retry
+ * loop that masks the real cause as `CDP_TIMEOUT`. The bootstrap path (which
+ * spawns Chrome at livinityd boot via `bootstrap.ts`) is the only sanctioned
+ * way to bring Chrome up — the browser tool MUST attach, never spawn.
+ */
+export interface ProbeAttachResult {
+	available: boolean
+	version?: string
+	error?: string
+}
+
+export async function probeAttachTarget(opts: {
+	host: string
+	port: number
+	timeoutMs?: number
+}): Promise<ProbeAttachResult> {
+	const url = `http://${opts.host}:${opts.port}/json/version`
+	const controller = new AbortController()
+	const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 2000)
+	try {
+		const res = await fetch(url, {signal: controller.signal})
+		if (!res.ok) return {available: false, error: `HTTP ${res.status}`}
+		const body = (await res.json()) as {Browser?: string}
+		return {available: true, version: body.Browser ?? 'unknown'}
+	} catch (err) {
+		return {available: false, error: (err as Error).message}
+	} finally {
+		clearTimeout(timer)
+	}
+}
+
 /** Thrown when `connect()` exhausts its retry budget without succeeding.
  *  The number of attempts is `connectRetries` (default 5), spaced 200ms
  *  apart. `connectTimeoutMs` is carried for log diagnostics only. */
@@ -149,8 +188,41 @@ export class ChromeCdpClient {
 	 * (preferred over the first available page target — Plan 101-04 needs
 	 * `Browser.*` and `Target.*` domains, both of which are on the
 	 * browser-level socket).
+	 *
+	 * Phase 208-09 R9 — `preferAttach` gates the CDP socket connect with a
+	 * lightweight `/json/version` probe. When `true`:
+	 *   - probe succeeds → CDP connect runs as usual (attach path)
+	 *   - probe fails AND `allowSpawnFallback:false` (default for the browser
+	 *     tool) → throws a helpful error mentioning `:9222` and the
+	 *     `--remote-debugging-port` flag the caller should ensure is set
+	 *     BEFORE Liv AI is asked to drive the browser. NO CDP retries.
+	 *   - probe fails AND `allowSpawnFallback:true` → falls through to the
+	 *     legacy CDP-retry loop (existing behaviour pre-208-09 — preserved
+	 *     for callers that may eventually want a "spawn on demand" path).
+	 *
+	 * Calling `connect()` with no args preserves the pre-208-09 behaviour:
+	 * NO probe, factory invoked directly with the retry loop. This is the
+	 * back-compat surface for `webapps/window-manager.ts` + other in-tree
+	 * consumers that already rely on the bootstrap-spawned Chrome being up.
 	 */
-	async connect(): Promise<void> {
+	async connect(opts: {
+		preferAttach?: boolean
+		allowSpawnFallback?: boolean
+	} = {}): Promise<void> {
+		if (opts.preferAttach === true) {
+			const probe = await probeAttachTarget({host: this.host, port: this.port})
+			if (!probe.available) {
+				if (opts.allowSpawnFallback !== true) {
+					throw new Error(
+						`chrome-cdp: no Chrome at ${this.host}:${this.port}/json/version. ` +
+							`Start it with --remote-debugging-port=${this.port} (the LivOS ` +
+							`bootstrap.ts spawn does this) or pass allowSpawnFallback:true. ` +
+							`Probe error: ${probe.error ?? 'unknown'}`,
+					)
+				}
+				// fall through to legacy CDP retry path below
+			}
+		}
 		let lastErr: unknown
 		for (let attempt = 0; attempt < this.connectRetries; attempt++) {
 			try {

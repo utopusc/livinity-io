@@ -22,7 +22,9 @@ export {
 	ChromeCdpClient,
 	CdpDisconnectedError,
 	CdpTimeoutError,
+	probeAttachTarget,
 	type ChromeCdpClientOpts,
 	type ChromeCdpLogger,
 	type CdpFactory,
+	type ProbeAttachResult,
 } from './client.js'
