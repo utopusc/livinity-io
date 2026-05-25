@@ -47,6 +47,8 @@ const newApp = (over: Partial<LivosOpenuiApp> = {}): LivosOpenuiApp => ({
 	userId: over.userId ?? null,
 	createdAt: over.createdAt ?? new Date(),
 	updatedAt: over.updatedAt ?? new Date(),
+	iconKind: over.iconKind ?? 'icon-pack',
+	iconConfig: over.iconConfig ?? {},
 })
 
 const eqMockTag = Symbol('eq-mock')
@@ -85,6 +87,8 @@ vi.mock('../../db/schema.js', () => {
 			userId: appsCol('userId'),
 			createdAt: appsCol('createdAt'),
 			updatedAt: appsCol('updatedAt'),
+			iconKind: appsCol('iconKind'),
+			iconConfig: appsCol('iconConfig'),
 		},
 		livosOpenuiAppVersions: {
 			slug: versCol('slug'),
@@ -212,6 +216,10 @@ const makeDb = () => {
 						content: state.input.content as string,
 						version: (state.input.version as number) ?? 1,
 						userId: (state.input.userId as string | null) ?? null,
+						iconKind: (state.input.iconKind as string | undefined) ?? 'icon-pack',
+						iconConfig:
+							(state.input.iconConfig as Record<string, unknown> | undefined) ??
+							{},
 					})
 					apps.push(row)
 					return [row]
@@ -446,5 +454,96 @@ describe('OpenUIAppsRepository', () => {
 		expect(bumped?.content).toBe('frozen')
 		expect(versions).toHaveLength(1)
 		expect(versions[0]?.content).toBe('frozen')
+	})
+
+	// ── Phase 208-07 R7 — per-app icon customization ──────────────────────────
+
+	test('Test 13 (R7): upsert persists iconKind + iconConfig on create', async () => {
+		const repo = new OpenUIAppsRepository(makeDb())
+		const row = await repo.upsert({
+			slug: 'foo',
+			name: 'Foo',
+			content: '<x>',
+			iconKind: 'url',
+			iconConfig: {url: 'https://x.com/i.png'},
+		})
+		expect(row.iconKind).toBe('url')
+		expect(row.iconConfig).toEqual({url: 'https://x.com/i.png'})
+		const got = await repo.getBySlug('foo')
+		expect(got?.iconKind).toBe('url')
+		expect(got?.iconConfig).toEqual({url: 'https://x.com/i.png'})
+	})
+
+	test('Test 14 (R7): upsert defaults to icon-pack + {} when iconKind/iconConfig omitted', async () => {
+		const repo = new OpenUIAppsRepository(makeDb())
+		const row = await repo.upsert({slug: 'bar', name: 'Bar', content: 'c'})
+		expect(row.iconKind).toBe('icon-pack')
+		expect(row.iconConfig).toEqual({})
+	})
+
+	test('Test 15 (R7): partial update — iconConfig only — preserves prior iconKind', async () => {
+		const repo = new OpenUIAppsRepository(makeDb())
+		await repo.upsert({
+			slug: 'baz',
+			name: 'Baz',
+			content: 'c1',
+			iconKind: 'url',
+			iconConfig: {url: 'https://a/1.png'},
+		})
+		// Update without specifying iconKind — iconKind should remain 'url'.
+		const updated = await repo.upsert({
+			slug: 'baz',
+			name: 'Baz',
+			content: 'c2',
+			iconConfig: {url: 'https://a/2.png'},
+		})
+		expect(updated.iconKind).toBe('url')
+		expect(updated.iconConfig).toEqual({url: 'https://a/2.png'})
+	})
+
+	test('Test 16 (R7): listAll returns iconKind + iconConfig for every row', async () => {
+		const repo = new OpenUIAppsRepository(makeDb())
+		await repo.upsert({
+			slug: 'a',
+			name: 'A',
+			content: '',
+			iconKind: 'icon-pack',
+			iconConfig: {icon: 'cloud', bg: '#000', fg: '#fff'},
+		})
+		await repo.upsert({
+			slug: 'b',
+			name: 'B',
+			content: '',
+			iconKind: 'url',
+			iconConfig: {url: 'https://x'},
+		})
+		const all = await repo.listAll()
+		expect(all).toHaveLength(2)
+		for (const r of all) {
+			expect(typeof r.iconKind).toBe('string')
+			expect(typeof r.iconConfig).toBe('object')
+		}
+		const byA = all.find((r) => r.slug === 'a')
+		expect(byA?.iconConfig).toEqual({icon: 'cloud', bg: '#000', fg: '#fff'})
+	})
+
+	test('Test 17 (R7): full update with both iconKind + iconConfig replaces both', async () => {
+		const repo = new OpenUIAppsRepository(makeDb())
+		await repo.upsert({
+			slug: 'q',
+			name: 'Q',
+			content: 'c1',
+			iconKind: 'icon-pack',
+			iconConfig: {icon: 'cloud'},
+		})
+		const updated = await repo.upsert({
+			slug: 'q',
+			name: 'Q',
+			content: 'c2',
+			iconKind: 'url',
+			iconConfig: {url: 'https://y'},
+		})
+		expect(updated.iconKind).toBe('url')
+		expect(updated.iconConfig).toEqual({url: 'https://y'})
 	})
 })
