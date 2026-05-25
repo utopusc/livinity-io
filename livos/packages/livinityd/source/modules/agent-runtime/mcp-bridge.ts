@@ -30,6 +30,7 @@ import {fileURLToPath} from 'node:url'
 import {spawn, type ChildProcessWithoutNullStreams} from 'node:child_process'
 
 import {LuseMcpUnavailableError} from './mcp-errors.js'
+import {sweepStaleLocks} from './stale-lock-sweeper.js'
 import {
 	MCP_CONFIG_REDIS_HASH_KEY,
 	MCP_CONFIG_REDIS_PUBSUB_CHANNEL,
@@ -333,6 +334,29 @@ export async function createMcpBridge(
 ): Promise<McpBridge> {
 	const mcpClientFactory =
 		options.mcpClientFactory ?? ((opts) => new MCPClient(opts))
+
+	// ── Phase 208-04 R5 ──────────────────────────────────────────────────────
+	// Sweep stale agent locks (>24h) from previous livinityd crashes BEFORE
+	// any MCP child spawns. Override root via LIVOS_AGENT_LOCK_DIR (tests +
+	// non-production deploys). Non-fatal: missing root logs a single warn.
+	const sweepRootDir =
+		process.env.LIVOS_AGENT_LOCK_DIR ?? '/opt/livos/data/openclaw/agents'
+	try {
+		const sweep = await sweepStaleLocks({
+			rootDir: sweepRootDir,
+			logger: (lvl, msg) => {
+				if (lvl === 'warn') deps.logger.warn(msg)
+				else deps.logger.info(msg)
+			},
+		})
+		deps.logger.info(
+			`[stale-lock-sweep] complete: scanned=${sweep.scanned} removed=${sweep.removed.length} root=${sweepRootDir}`,
+		)
+	} catch (err) {
+		deps.logger.warn(
+			`[stale-lock-sweep] failed (non-fatal): ${(err as Error).message}`,
+		)
+	}
 
 	const luseEnabled = readBoolFlag(await deps.redis.get('liv:mcp:luse:enabled'), true)
 
