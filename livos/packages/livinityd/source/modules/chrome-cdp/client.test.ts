@@ -273,7 +273,7 @@ describe('probeAttachTarget (Phase 208-09 R9)', () => {
 			new Response(JSON.stringify({Browser: 'HeadlessChrome/120.0'}), {
 				status: 200,
 			}),
-		) as typeof globalThis.fetch
+		) as unknown as typeof globalThis.fetch
 		const res = await probeAttachTarget({host: '127.0.0.1', port: 9222})
 		expect(res.available).toBe(true)
 		expect(res.version).toBe('HeadlessChrome/120.0')
@@ -283,7 +283,7 @@ describe('probeAttachTarget (Phase 208-09 R9)', () => {
 	it('returns {available:false, error} when fetch throws (connection refused)', async () => {
 		globalThis.fetch = vi.fn(async () => {
 			throw new Error('ECONNREFUSED 127.0.0.1:9222')
-		}) as typeof globalThis.fetch
+		}) as unknown as typeof globalThis.fetch
 		const res = await probeAttachTarget({host: '127.0.0.1', port: 9222})
 		expect(res.available).toBe(false)
 		expect(res.error).toContain('ECONNREFUSED')
@@ -293,7 +293,7 @@ describe('probeAttachTarget (Phase 208-09 R9)', () => {
 	it('returns {available:false} when /json/version returns non-2xx', async () => {
 		globalThis.fetch = vi.fn(async () =>
 			new Response('Not Found', {status: 404}),
-		) as typeof globalThis.fetch
+		) as unknown as typeof globalThis.fetch
 		const res = await probeAttachTarget({host: '127.0.0.1', port: 9222})
 		expect(res.available).toBe(false)
 		expect(res.error).toContain('404')
@@ -312,7 +312,7 @@ describe('probeAttachTarget (Phase 208-09 R9)', () => {
 						reject(new Error('The operation was aborted'))
 					})
 				}),
-		) as typeof globalThis.fetch
+		) as unknown as typeof globalThis.fetch
 		const t0 = Date.now()
 		const res = await probeAttachTarget({
 			host: '127.0.0.1',
@@ -342,7 +342,7 @@ describe('ChromeCdpClient.connect({preferAttach}) (Phase 208-09 R9)', () => {
 	it('preferAttach:true + probe succeeds → CDP connect runs (attach path)', async () => {
 		globalThis.fetch = vi.fn(async () =>
 			new Response(JSON.stringify({Browser: 'Chrome/120'}), {status: 200}),
-		) as typeof globalThis.fetch
+		) as unknown as typeof globalThis.fetch
 		const {client} = makeMockCdpClient()
 		const cdpFactory = vi.fn(async () => client)
 		const c = new ChromeCdpClient({cdpFactory, logger})
@@ -356,7 +356,7 @@ describe('ChromeCdpClient.connect({preferAttach}) (Phase 208-09 R9)', () => {
 	it('preferAttach:true + probe fails + allowSpawnFallback:false → throws helpful error WITHOUT invoking factory retries', async () => {
 		globalThis.fetch = vi.fn(async () => {
 			throw new Error('ECONNREFUSED')
-		}) as typeof globalThis.fetch
+		}) as unknown as typeof globalThis.fetch
 		const cdpFactory = vi.fn(async () => {
 			throw new Error('factory should never be called when probe fails + no fallback')
 		})
@@ -375,7 +375,7 @@ describe('ChromeCdpClient.connect({preferAttach}) (Phase 208-09 R9)', () => {
 	it('preferAttach:true + probe fails + allowSpawnFallback:true → falls through to legacy CDP retry path', async () => {
 		globalThis.fetch = vi.fn(async () => {
 			throw new Error('ECONNREFUSED')
-		}) as typeof globalThis.fetch
+		}) as unknown as typeof globalThis.fetch
 		const {client} = makeMockCdpClient()
 		const cdpFactory = vi.fn(async () => client)
 		const c = new ChromeCdpClient({cdpFactory, logger})
