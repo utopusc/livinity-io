@@ -67,8 +67,8 @@ describe("AppIcon", () => {
 		// Wrapper div carries size 48.
 		expect(el.type).toBe("div");
 		const style = (el.props as {style: Record<string, unknown>}).style;
-		expect(style.width).toBe(48);
-		expect(style.height).toBe(48);
+		expect(style["width"]).toBe(48);
+		expect(style["height"]).toBe(48);
 		// The lucide Cloud component is rendered inside.
 		const cloud = findByType(el, Cloud);
 		expect(cloud).not.toBeNull();
@@ -84,7 +84,7 @@ describe("AppIcon", () => {
 			},
 		});
 		const style = (el.props as {style: Record<string, unknown>}).style;
-		expect(style.background).toBe("linear-gradient(45deg, red, blue)");
+		expect(style["background"]).toBe("linear-gradient(45deg, red, blue)");
 		const db = findByType(el, Database);
 		expect(db).not.toBeNull();
 		expect((db!.props as {color: string}).color).toBe("#ffffff");
@@ -153,8 +153,8 @@ describe("AppIcon", () => {
 			size: 32,
 		});
 		const packStyle = (pack.props as {style: Record<string, unknown>}).style;
-		expect(packStyle.width).toBe(32);
-		expect(packStyle.height).toBe(32);
+		expect(packStyle["width"]).toBe(32);
+		expect(packStyle["height"]).toBe(32);
 
 		const urlEl = AppIcon({
 			iconKind: "url",
@@ -170,8 +170,8 @@ describe("AppIcon", () => {
 			size: 24,
 		});
 		const phStyle = (placeholder.props as {style: Record<string, unknown>}).style;
-		expect(phStyle.width).toBe(24);
-		expect(phStyle.height).toBe(24);
+		expect(phStyle["width"]).toBe(24);
+		expect(phStyle["height"]).toBe(24);
 	});
 
 	test("Test 9: ICON_PACK_NAMES exports the 24-name catalog (per Claude Discretion)", () => {
