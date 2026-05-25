@@ -21,11 +21,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import {describe, it, expect, vi, beforeEach} from 'vitest'
+// Note: afterEach not needed — each test restores globalThis.fetch inline.
 
 import {
 	ChromeCdpClient,
 	CdpTimeoutError,
 	CdpDisconnectedError,
+	probeAttachTarget,
 } from './client.js'
 
 type DisconnectHandler = () => void
@@ -247,5 +249,154 @@ describe('ChromeCdpClient', () => {
 		const err = new CdpDisconnectedError()
 		expect(err).toBeInstanceOf(Error)
 		expect(err.code).toBe('CDP_DISCONNECTED')
+	})
+})
+
+// ─── Phase 208-09 R9 — preferAttach probe + connect path ────────────────────
+//
+// The browser tool needs to ATTACH to the existing Chrome (spawned by
+// bootstrap.ts at port 9222) rather than try to spawn its own headless one.
+// `probeAttachTarget` fronts the connect call with a lightweight HTTP probe of
+// `/json/version` so the failure surface is "no Chrome at 127.0.0.1:9222"
+// instead of a 5-attempt 1s+ CDP timeout. `connect({preferAttach})` runs the
+// probe first; with `allowSpawnFallback:false` (default for browser tool) a
+// missing target throws immediately rather than falling through to retries.
+
+describe('probeAttachTarget (Phase 208-09 R9)', () => {
+	let originalFetch: typeof globalThis.fetch
+	beforeEach(() => {
+		originalFetch = globalThis.fetch
+	})
+
+	it('returns {available:true, version} when /json/version returns 200', async () => {
+		globalThis.fetch = vi.fn(async () =>
+			new Response(JSON.stringify({Browser: 'HeadlessChrome/120.0'}), {
+				status: 200,
+			}),
+		) as typeof globalThis.fetch
+		const res = await probeAttachTarget({host: '127.0.0.1', port: 9222})
+		expect(res.available).toBe(true)
+		expect(res.version).toBe('HeadlessChrome/120.0')
+		globalThis.fetch = originalFetch
+	})
+
+	it('returns {available:false, error} when fetch throws (connection refused)', async () => {
+		globalThis.fetch = vi.fn(async () => {
+			throw new Error('ECONNREFUSED 127.0.0.1:9222')
+		}) as typeof globalThis.fetch
+		const res = await probeAttachTarget({host: '127.0.0.1', port: 9222})
+		expect(res.available).toBe(false)
+		expect(res.error).toContain('ECONNREFUSED')
+		globalThis.fetch = originalFetch
+	})
+
+	it('returns {available:false} when /json/version returns non-2xx', async () => {
+		globalThis.fetch = vi.fn(async () =>
+			new Response('Not Found', {status: 404}),
+		) as typeof globalThis.fetch
+		const res = await probeAttachTarget({host: '127.0.0.1', port: 9222})
+		expect(res.available).toBe(false)
+		expect(res.error).toContain('404')
+		globalThis.fetch = originalFetch
+	})
+
+	it('aborts after the requested timeout (fail-fast)', async () => {
+		// fetch hangs longer than the timeout — controller.abort fires and
+		// rejects the awaited fetch with an AbortError. The handler swallows
+		// that and surfaces it as {available:false, error: <abort msg>}.
+		globalThis.fetch = vi.fn(
+			(_url, init) =>
+				new Promise((_resolve, reject) => {
+					const signal = (init as RequestInit | undefined)?.signal
+					signal?.addEventListener('abort', () => {
+						reject(new Error('The operation was aborted'))
+					})
+				}),
+		) as typeof globalThis.fetch
+		const t0 = Date.now()
+		const res = await probeAttachTarget({
+			host: '127.0.0.1',
+			port: 9222,
+			timeoutMs: 50,
+		})
+		const elapsed = Date.now() - t0
+		expect(res.available).toBe(false)
+		expect(elapsed).toBeLessThan(500) // generous margin; should be ~50ms
+		globalThis.fetch = originalFetch
+	})
+})
+
+describe('ChromeCdpClient.connect({preferAttach}) (Phase 208-09 R9)', () => {
+	let logger: {
+		info: ReturnType<typeof vi.fn>
+		warn: ReturnType<typeof vi.fn>
+		error: ReturnType<typeof vi.fn>
+		verbose: ReturnType<typeof vi.fn>
+	}
+	let originalFetch: typeof globalThis.fetch
+	beforeEach(() => {
+		logger = {info: vi.fn(), warn: vi.fn(), error: vi.fn(), verbose: vi.fn()}
+		originalFetch = globalThis.fetch
+	})
+
+	it('preferAttach:true + probe succeeds → CDP connect runs (attach path)', async () => {
+		globalThis.fetch = vi.fn(async () =>
+			new Response(JSON.stringify({Browser: 'Chrome/120'}), {status: 200}),
+		) as typeof globalThis.fetch
+		const {client} = makeMockCdpClient()
+		const cdpFactory = vi.fn(async () => client)
+		const c = new ChromeCdpClient({cdpFactory, logger})
+		await c.connect({preferAttach: true, allowSpawnFallback: false})
+		expect(cdpFactory).toHaveBeenCalledWith(
+			expect.objectContaining({host: '127.0.0.1', port: 9222}),
+		)
+		globalThis.fetch = originalFetch
+	})
+
+	it('preferAttach:true + probe fails + allowSpawnFallback:false → throws helpful error WITHOUT invoking factory retries', async () => {
+		globalThis.fetch = vi.fn(async () => {
+			throw new Error('ECONNREFUSED')
+		}) as typeof globalThis.fetch
+		const cdpFactory = vi.fn(async () => {
+			throw new Error('factory should never be called when probe fails + no fallback')
+		})
+		const c = new ChromeCdpClient({
+			cdpFactory,
+			logger,
+			connectRetries: 5,
+		})
+		await expect(
+			c.connect({preferAttach: true, allowSpawnFallback: false}),
+		).rejects.toThrow(/--remote-debugging-port=9222|127\.0\.0\.1:9222/)
+		expect(cdpFactory).not.toHaveBeenCalled()
+		globalThis.fetch = originalFetch
+	})
+
+	it('preferAttach:true + probe fails + allowSpawnFallback:true → falls through to legacy CDP retry path', async () => {
+		globalThis.fetch = vi.fn(async () => {
+			throw new Error('ECONNREFUSED')
+		}) as typeof globalThis.fetch
+		const {client} = makeMockCdpClient()
+		const cdpFactory = vi.fn(async () => client)
+		const c = new ChromeCdpClient({cdpFactory, logger})
+		await c.connect({preferAttach: true, allowSpawnFallback: true})
+		// Probe failed → fell through to existing connect retry loop → factory hit
+		expect(cdpFactory).toHaveBeenCalled()
+		globalThis.fetch = originalFetch
+	})
+
+	it('connect() with no opts (back-compat) behaves as before — no probe, factory invoked directly', async () => {
+		// fetch sentinel that throws if it gets called (probe should NOT run)
+		const fetchSpy = vi.fn(async () => {
+			throw new Error('probe should not run on bare connect()')
+		})
+		globalThis.fetch = fetchSpy as typeof globalThis.fetch
+		const {client} = makeMockCdpClient()
+		const cdpFactory = vi.fn(async () => client)
+		const c = new ChromeCdpClient({cdpFactory, logger})
+		await c.connect()
+		expect(cdpFactory).toHaveBeenCalled()
+		expect(fetchSpy).not.toHaveBeenCalled()
+		globalThis.fetch = originalFetch
 	})
 })
