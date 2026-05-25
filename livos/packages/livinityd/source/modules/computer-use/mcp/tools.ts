@@ -565,12 +565,19 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 	computer_click_mouse: async (args) => {
 		const w = wid(args)
 		const displayArg = parseDisplayArg(args)
+		// R3 (208-01): accept `{coord:{x,y}}` as an alias for
+		// `{coordinates:{x,y}}`. Silent — no log line, no warning.
+		const coordAlias = args.coord as {x: number; y: number} | undefined
+		const argsWithCoord =
+			args.coordinates == null && coordAlias != null
+				? {...args, coordinates: coordAlias}
+				: args
 		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
 			withPostScreenshot(
-				`clickMouse ${summarizeArgs(args)}${displayArg ? ` display=${displayArg}` : ''}`,
+				`clickMouse ${summarizeArgs(argsWithCoord)}${displayArg ? ` display=${displayArg}` : ''}`,
 				() =>
 					clickMouse({
-						...(args as unknown as {
+						...(argsWithCoord as unknown as {
 							coordinates?: {x: number; y: number}
 							button: 'left' | 'right' | 'middle'
 							clickCount: number
@@ -603,7 +610,16 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 	},
 
 	computer_drag_mouse: async (args) => {
-		const path = args.path as ReadonlyArray<{x: number; y: number}>
+		// R3 (208-01): accept `{coord:{x,y}}` as an alias for `{x,y}` on every
+		// path entry, so LLMs that fall into the coord-object habit succeed.
+		const rawPath = args.path as ReadonlyArray<Record<string, unknown>>
+		const path = (rawPath ?? []).map((p) => {
+			if (p && typeof p === 'object' && 'coord' in p && p.coord != null) {
+				const c = p.coord as {x: number; y: number}
+				return {x: c.x, y: c.y}
+			}
+			return p as unknown as {x: number; y: number}
+		}) as ReadonlyArray<{x: number; y: number}>
 		const button = args.button as 'left' | 'right' | 'middle'
 		const holdKeys = args.holdKeys as ReadonlyArray<string> | undefined
 		const w = wid(args)
@@ -674,7 +690,9 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 	},
 
 	computer_type_text: async (args) => {
-		const text = args.text as string
+		// R3 (208-01): accept {text, content, value} interchangeably. Canonical
+		// `text` wins when both are present. Silent — no log line.
+		const text = (args.text ?? args.content ?? args.value) as string
 		const delay = args.delay as number | undefined
 		const isSensitive = args.isSensitive as boolean | undefined
 		const safeText = isSensitive ? `<${text.length} sensitive chars>` : text
@@ -690,7 +708,9 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 	},
 
 	computer_paste_text: async (args) => {
-		const text = args.text as string
+		// R3 (208-01): accept {text, content, value} interchangeably. Canonical
+		// `text` wins when both are present. Silent — no log line.
+		const text = (args.text ?? args.content ?? args.value) as string
 		const isSensitive = args.isSensitive as boolean | undefined
 		const safeText = isSensitive ? `<${text.length} sensitive chars>` : text
 		const w = wid(args)
@@ -735,7 +755,9 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 	},
 
 	computer_application: async (args) => {
-		const application = String(args.application ?? '').trim()
+		// R3 (208-01): accept {application, name, app} interchangeably.
+		// Canonical `application` wins when both are present. Silent — no log.
+		const application = String(args.application ?? args.name ?? args.app ?? '').trim()
 		if (!application) {
 			return {
 				content: [{type: 'text', text: 'application name is required'}],
@@ -1204,7 +1226,8 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 			inputSchema: jsonSchemaToZodRawShape(screenshotWindowTool.input_schema),
 		},
 		wrapHandler(async (args) => {
-			const widRaw = args.wid
+			// R3 (208-01): accept {id, window_id, wid} interchangeably.
+			const widRaw = args.wid ?? args.window_id ?? args.id
 			if (typeof widRaw === 'number' && Number.isFinite(widRaw)) {
 				// Window-bound capture. captureScreenshot's signature is
 				// `{windowId}` (P97-01 naming); we accept the `wid` alias
@@ -1270,7 +1293,8 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 			inputSchema: jsonSchemaToZodRawShape(focusWindowTool.input_schema),
 		},
 		wrapHandler(async (args) => {
-			const widRaw = args.wid
+			// R3 (208-01): accept {id, window_id, wid} interchangeably.
+			const widRaw = args.wid ?? args.window_id ?? args.id
 			if (typeof widRaw !== 'number' || !Number.isFinite(widRaw)) {
 				return {
 					content: [{type: 'text', text: 'Error: wid is required and must be a positive integer'}],
