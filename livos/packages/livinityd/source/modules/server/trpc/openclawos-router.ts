@@ -75,11 +75,86 @@ const SlugSchema = z
 	.max(120)
 	.regex(/^[a-z0-9][a-z0-9-_]*$/i, 'OPENUI_SLUG_INVALID')
 
+/**
+ * Phase 208-07 R7 — icon-pack name allowlist.
+ *
+ * Mirrors the 24-name catalog exported by the AppIcon renderer
+ * (`packages/liv-claw-os/packages/claw-client/src/lib/app-icon-renderer.tsx`
+ * → ICON_PACK_NAMES). The list is duplicated here as a literal tuple so the
+ * zod schema can `.enum()`-validate it without crossing the daemon/client
+ * package boundary. If this list drifts from ICON_PACK_NAMES, the daemon
+ * still passes through the value (icon_kind is permissive TEXT) but the
+ * renderer falls back to Folder for the unknown name.
+ */
+const ICON_PACK_NAMES_ALLOWLIST = [
+	'cloud',
+	'cpu',
+	'database',
+	'folder',
+	'image',
+	'music',
+	'video',
+	'terminal',
+	'code',
+	'settings',
+	'user',
+	'users',
+	'lock',
+	'mail',
+	'calendar',
+	'clock',
+	'bell',
+	'search',
+	'star',
+	'heart',
+	'bookmark',
+	'share',
+	'edit',
+	'trash',
+] as const
+
+/**
+ * Phase 208-07 R7 — kind-specific iconConfig shapes.
+ *
+ * `z.union(...)` discriminates on the iconKind sibling field at the parent
+ * level; each kind has its own narrowly-typed config. `ai-generated` is
+ * SCHEMA-ACCEPTED but the renderer renders a placeholder (R7.x will plug in
+ * the image-gen path).
+ */
+const IconPackConfigSchema = z.object({
+	icon: z.enum(ICON_PACK_NAMES_ALLOWLIST as unknown as [string, ...string[]]),
+	bg: z.string().max(500).optional(),
+	fg: z.string().max(50).optional(),
+})
+
+const UrlIconConfigSchema = z.object({
+	url: z.string().url().max(2000),
+})
+
+const AiGeneratedIconConfigSchema = z.object({
+	prompt: z.string().min(1).max(1000),
+})
+
+/**
+ * Permissive top-level — the parent object discriminates on iconKind; on
+ * mismatch we let the value through (DB stores it; renderer falls back).
+ * `.passthrough()` lets future kinds carry their own config shape without a
+ * router-level schema rev.
+ */
+const IconConfigSchema = z
+	.union([IconPackConfigSchema, UrlIconConfigSchema, AiGeneratedIconConfigSchema])
+	.or(z.record(z.unknown()))
+
 const AppCreateSchema = z.object({
 	slug: SlugSchema,
 	name: z.string().min(1).max(200),
 	content: z.string().min(1).max(200_000),
 	userId: z.string().min(1).max(120).nullish(),
+	// Phase 208-07 R7 — per-app icon customization. Both fields are optional;
+	// repository defaults to 'icon-pack' / {} on omit during CREATE and
+	// preserves prior values during UPDATE.
+	iconKind: z.enum(['icon-pack', 'url', 'ai-generated']).optional(),
+	iconConfig: IconConfigSchema.optional(),
 })
 
 const AppUpdateSchema = AppCreateSchema // same shape — upsert bumps version
@@ -228,6 +303,10 @@ export function createOpenclawosAppsRouter(deps: OpenclawosAppsRouterDeps) {
 						name: input.name,
 						content: input.content,
 						userId: input.userId ?? null,
+						// Phase 208-07 R7 — pass icon fields through; repo defaults
+						// to 'icon-pack' / {} on omit during CREATE.
+						iconKind: input.iconKind,
+						iconConfig: input.iconConfig,
 					})
 					deps.logger.info(
 						`Phase 203-04 openclawos.apps.create — slug=${row.slug} v${row.version}`,
@@ -254,6 +333,11 @@ export function createOpenclawosAppsRouter(deps: OpenclawosAppsRouterDeps) {
 						name: input.name,
 						content: input.content,
 						userId: input.userId ?? null,
+						// Phase 208-07 R7 — pass icon fields through; repo preserves
+						// prior values on UPDATE when these are omitted (lets agents
+						// patch content without nuking operator-chosen icons).
+						iconKind: input.iconKind,
+						iconConfig: input.iconConfig,
 					})
 					deps.logger.info(
 						`Phase 203-04 openclawos.apps.update — slug=${row.slug} v${row.version}`,
