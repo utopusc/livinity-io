@@ -59,11 +59,15 @@ const coordinateSchema = {
 	properties: {
 		x: {
 			type: 'number' as const,
-			description: 'The x-coordinate',
+			description:
+				'Required JSON key MUST be "x" (NOT "X", "px", "horizontal", or other aliases). Example: {"x":100,"y":200}. ' +
+				'The x-coordinate',
 		},
 		y: {
 			type: 'number' as const,
-			description: 'The y-coordinate',
+			description:
+				'Required JSON key MUST be "y" (NOT "Y", "py", "vertical", or other aliases). Example: {"x":100,"y":200}. ' +
+				'The y-coordinate',
 		},
 	},
 	required: ['x', 'y'],
@@ -140,6 +144,7 @@ const _clickMouseTool = {
 			coordinates: {
 				...coordinateSchema,
 				description:
+					'Required JSON key MUST be "coordinates" (NOT "coord", "xy", "position", or other aliases). Example: {"coordinates":{"x":100,"y":200},"button":"left","clickCount":1}. ' +
 					'Optional click coordinates (defaults to current position)',
 				nullable: true,
 			},
@@ -198,7 +203,9 @@ const _dragMouseTool = {
 			path: {
 				type: 'array' as const,
 				items: coordinateSchema,
-				description: 'Array of coordinates representing the drag path',
+				description:
+					'Required JSON key MUST be "path" (NOT "points", "coords", or other aliases). Each path entry MUST use keys "x" and "y" (NOT "coord"). Example: {"path":[{"x":10,"y":20},{"x":100,"y":200}],"button":"left"}. ' +
+					'Array of coordinates representing the drag path',
 			},
 			button: buttonSchema,
 			holdKeys: holdKeysSchema,
@@ -285,7 +292,9 @@ const _pressKeysTool = {
 			keys: {
 				type: 'array' as const,
 				items: {type: 'string' as const},
-				description: 'Array of key names to press or release',
+				description:
+					'Required JSON key MUST be "keys" (NOT "key", "buttons", or other aliases). Example: {"keys":["ctrl","c"]}. ' +
+					'Array of key names to press or release',
 			},
 			press: {
 				type: 'string' as const,
@@ -312,7 +321,9 @@ const _typeTextTool = {
 		properties: {
 			text: {
 				type: 'string' as const,
-				description: 'The text string to type',
+				description:
+					'Required JSON key MUST be "text" (NOT "content", "value", or other aliases). Example: {"text":"hello"}. ' +
+					'The text string to type',
 			},
 			delay: {
 				type: 'number' as const,
@@ -344,7 +355,9 @@ const _pasteTextTool = {
 		properties: {
 			text: {
 				type: 'string' as const,
-				description: 'The text string to type',
+				description:
+					'Required JSON key MUST be "text" (NOT "content", "value", or other aliases). Example: {"text":"hello"}. ' +
+					'The text string to type',
 			},
 			isSensitive: {
 				type: 'boolean' as const,
@@ -435,6 +448,7 @@ const _applicationTool = {
 			application: {
 				type: 'string' as const,
 				description:
+					'Required JSON key MUST be "application" (NOT "name", "id", or other aliases). Example: {"application":"Chrome"}. ' +
 					'The application name. Free-form string. Resolved at call-time ' +
 					'against (a) LivOS app catalog from `apps.list` + `apps.native.list`, ' +
 					'(b) classic Bytebot APP_MAP. Match is case-insensitive on name field.',
@@ -561,6 +575,7 @@ const _screenshotWindowTool = {
 			wid: {
 				type: 'number' as const,
 				description:
+					'Required JSON key MUST be "wid" (NOT "id", "window_id", or other aliases). Example: {"wid":12345678}. ' +
 					'X11 window id (decimal). When set, capture only this window. Takes precedence over `display`.',
 			},
 			display: {
@@ -581,7 +596,9 @@ const _focusWindowTool = {
 		properties: {
 			wid: {
 				type: 'number' as const,
-				description: 'X11 window id (decimal).',
+				description:
+					'Required JSON key MUST be "wid" (NOT "id", "window_id", or other aliases). Example: {"wid":12345678}. ' +
+					'X11 window id (decimal).',
 			},
 		},
 		required: ['wid'],
