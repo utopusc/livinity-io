@@ -158,17 +158,37 @@ export async function bridgeFromOpencode(
 				skipped.push({provider, reason: 'oauth entry missing access token'})
 				continue
 			}
+			// Phase 207 UAT 2026-05-25 — write as openclaw's native OAuth
+			// credential shape, NOT api_key.
+			//
+			// The earlier comment claimed "the xAI Bearer token interchange
+			// is identical between api_key and oauth modes" — that turned
+			// out to be WRONG. Live UAT on Mini PC produced:
+			//   "No API key found for provider 'xai'. Auth store:
+			//    /opt/livos/data/openclaw/agents/main/agent/auth-profiles.json"
+			// even though the file had {type:"api_key", provider:"xai",
+			// key:<JWT>}. Openclaw's xAI provider specifically reads
+			// {type:"oauth", access, refresh, expires} (per
+			// node_modules/openclaw/dist/types-DqsXKrbS.d.ts OAuthCredential)
+			// to use its own token-refresh logic. The api_key form is
+			// silently treated as "no credential for OAuth-only providers".
+			//
+			// We now mirror opencode's OAuth shape directly: access +
+			// refresh + expires preserved verbatim. This is closer to
+			// upstream openclaw too — if their CLI ever introduces an
+			// in-process refresh of bridged tokens, the data it needs is
+			// already on disk.
 			const profile: AuthProfile = {
-				type: 'api_key',
+				type: 'oauth',
 				provider,
-				key: oauth.access,
+				access: oauth.access,
 			}
-			// Preserve refresh + expires as extra fields so a future refresh
-			// helper can rotate the key without losing context. The api_key
-			// type is what the openclaw agent dispatches on, so these extras
-			// are inert at agent runtime.
-			if (oauth.refresh) (profile as Record<string, unknown>).opencodeRefresh = oauth.refresh
-			if (oauth.expires) (profile as Record<string, unknown>).opencodeExpiresAt = oauth.expires
+			if (oauth.refresh) {
+				;(profile as Record<string, unknown>).refresh = oauth.refresh
+			}
+			if (typeof oauth.expires === 'number') {
+				;(profile as Record<string, unknown>).expires = oauth.expires
+			}
 			;(profile as Record<string, unknown>).bridgedFromOpencode = true
 			dest.profiles[profileId] = profile
 			bridged.push(provider)
