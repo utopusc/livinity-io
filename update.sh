@@ -587,6 +587,30 @@ if [[ -d "$LIV_DIR" ]]; then
     ok "Liv dependencies installed"
 fi
 
+# ── Step 4.5: Phase 208-03 — install openclaw CLI shim ────
+# Wires /opt/livos/bin/openclaw → workspace-pinned openclaw entry.
+# Required by livinityd's openclaw-cli/cli-spawner.ts resolver (Plan 208-03
+# Task 2) — without this, the openclaw.config.setDefaultModel tRPC mutation
+# throws OpenclawNotInstalledError because no system-wide `openclaw` exists
+# on the Mini PC and `npm install` does NOT hoist pnpm package bins to PATH.
+#
+# Idempotent: the helper exits 0 immediately if the symlink already points
+# at a working binary. Sourced from TEMP_DIR (fresh clone) so a stale on-disk
+# helper can't shadow the just-pulled version. Non-fatal — warn and continue
+# if the helper is missing or fails, so older deploys (where the helper file
+# doesn't exist yet) don't block the rest of the update.
+step "Phase 208-03: openclaw CLI shim install"
+_OPENCLAW_INSTALLER_SRC="$TEMP_DIR/scripts/install/install-openclaw-cli.sh"
+if [[ -f "$_OPENCLAW_INSTALLER_SRC" ]]; then
+    if LIVOS_ROOT="$LIVOS_DIR" bash "$_OPENCLAW_INSTALLER_SRC" 2>&1 | tail -5; then
+        ok "openclaw CLI shim ensured at $LIVOS_DIR/bin/openclaw"
+    else
+        warn "install-openclaw-cli.sh exited non-zero — openclaw.config.* mutations may fail; check pnpm-store for openclaw@* dirs"
+    fi
+else
+    info "scripts/install/install-openclaw-cli.sh not in TEMP_DIR — skipping (pre-Phase 208-03 deploy)"
+fi
+
 # ── Step 5: Build packages ────────────────────────────────
 step "Building packages"
 
