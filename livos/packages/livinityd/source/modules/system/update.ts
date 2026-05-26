@@ -202,7 +202,13 @@ export async function performUpdate(livinityd: Livinityd): Promise<boolean> {
 		// so signals to livinityd don't propagate to it. Stdout/stderr pipes
 		// continue working until livinityd dies; tee in update.sh keeps writing
 		// to the .pending log file regardless.
-		const proc = $({cwd: '/opt/livos', detached: true})`bash /opt/livos/update.sh`
+		//
+		// HOTFIX 2026-05-26: update.sh has a "Must run as root" preflight check.
+		// livinityd runs as `bruce` (non-root), so direct invocation fails with
+		// exit code 1 before any work happens. Wrap with `sudo -n` — bruce has
+		// NOPASSWD:ALL in /etc/sudoers.d/99-bruce (Phase 105 / 106-02 invariant),
+		// so this is non-interactive and reliable.
+		const proc = $({cwd: '/opt/livos', detached: true})`sudo -n bash /opt/livos/update.sh`
 
 		const handleOutput = (chunk: Buffer) => {
 			const text = stripAnsi(chunk.toString())
