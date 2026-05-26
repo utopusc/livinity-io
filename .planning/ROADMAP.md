@@ -3073,7 +3073,7 @@ Plus Phase 206 carry-overs:
 
 ---
 
-### Phase 209: openclaw → Claude CLI reuse + Haiku 4.5 default — ⚪ NOT STARTED
+### Phase 209: openclaw → Claude CLI reuse + Haiku 4.5 default — 🟢 SHIPPED 2026-05-26 (4/4 ship-gates PASS; AI-04/05/06 operator-UAT deferred to P217)
 
 **Goal:** Liv AI chat agent stops using `openrouter/nvidia/nemotron-nano-9b-v2:free` (bad coord prediction, slow tool use), starts using `anthropic/claude-haiku-4-5` via local `claude-cli` backend reusing `/root/.claude/.credentials.json` already attached to SdkAgentRunner.
 
