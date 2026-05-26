@@ -304,6 +304,13 @@ export default class Apps {
 		// Runs BEFORE T5's boot-time Caddyfile regen so reconciled rows
 		// participate in the regen.
 		await this.reconcileOrphanInstances()
+
+		// Phase 218 T5 — rebuild the Caddyfile from current DB+Redis state
+		// after reconciliation so any orphan apps newly inserted into
+		// user_app_instances get their subdomain block emitted. Non-fatal:
+		// rebuildCaddyFromState swallows its own failures, so a Caddy outage
+		// never blocks livinityd boot.
+		await this.rebuildCaddyFromState()
 	}
 
 	private async reinstallMissingAppsAfterRestore(appIds: string[]) {
