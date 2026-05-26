@@ -20,8 +20,17 @@ import type {Redis} from 'ioredis'
 
 const REDIS_PREFIX = 'livos:platform:'
 const DEFAULT_PLATFORM_BASE = 'https://livinity.io'
-const POLL_INTERVAL_MS = 5_000
-const ERROR_BACKOFF_MS = 30_000
+// 60s default. The poller is best-effort dispatch — 5s was too aggressive
+// and tripped Vercel's Attack Challenge Mode in production on 2026-05-26.
+// 60s with empty queue = 1 GET per minute, well under any rate-limit floor.
+const POLL_INTERVAL_MS = 60_000
+const ERROR_BACKOFF_MS = 60_000
+// 429 (rate-limit or Vercel challenge) needs a much longer backoff so we
+// don't keep hammering the protected endpoint and prolong the shield state.
+const RATE_LIMITED_BACKOFF_MS = 5 * 60_000
+// Kill-switch: operator sets `livos:platform:install_poller_disabled` = '1'
+// in Redis and restarts livinityd to drain a runaway poller without code change.
+const REDIS_KEY_DISABLED = `${REDIS_PREFIX}install_poller_disabled`
 
 export interface InstallPollerLogger {
 	log: (...a: unknown[]) => void
@@ -82,6 +91,11 @@ export class InstallPoller {
 
 	async start(): Promise<void> {
 		this.stopped = false
+		const disabled = await this.redis.get(REDIS_KEY_DISABLED)
+		if (disabled === '1') {
+			this.logger.log('[install-poller] kill-switch active (install_poller_disabled=1), staying idle')
+			return
+		}
 		const apiKey = await this.redis.get(`${REDIS_PREFIX}api_key`)
 		if (!apiKey) {
 			this.logger.log('[install-poller] No api-key configured, staying idle')
@@ -115,6 +129,12 @@ export class InstallPoller {
 		this.inFlight = true
 		let backoff = this.intervalMs
 		try {
+			const disabled = await this.redis.get(REDIS_KEY_DISABLED)
+			if (disabled === '1') {
+				this.logger.log('[install-poller] kill-switch activated mid-run, stopping')
+				this.stopped = true
+				return
+			}
 			const apiKey = await this.redis.get(`${REDIS_PREFIX}api_key`)
 			if (!apiKey) {
 				// api-key disappeared (rotation / sign-out). Stay idle until next start().
@@ -128,8 +148,17 @@ export class InstallPoller {
 				await this.runOne(apiKey, cmd)
 			}
 		} catch (err) {
-			this.logger.error('[install-poller] tick failed:', err)
-			backoff = ERROR_BACKOFF_MS
+			const message = err instanceof Error ? err.message : String(err)
+			// HTTP 429 (rate-limit / Vercel challenge) needs an aggressive backoff
+			// so we don't trip Vercel Attack Challenge Mode and lock the whole
+			// project out (real 2026-05-26 production incident).
+			if (message.includes('HTTP 429') || message.includes('challenge')) {
+				this.logger.error(`[install-poller] rate-limited (5min backoff): ${message.slice(0, 200)}`)
+				backoff = RATE_LIMITED_BACKOFF_MS
+			} else {
+				this.logger.error('[install-poller] tick failed:', err)
+				backoff = ERROR_BACKOFF_MS
+			}
 		} finally {
 			this.inFlight = false
 			this.scheduleNext(backoff)
@@ -140,11 +169,14 @@ export class InstallPoller {
 		const resp = await fetch(`${this.baseUrl}/api/me/install-commands/poll`, {
 			headers: {
 				'X-API-Key': apiKey,
-				'User-Agent': `livinityd-install-poller/${this.version}`,
+				'User-Agent': `livinityd-presence/${this.version}`,
 			},
 		})
 		if (!resp.ok) {
-			throw new Error(`poll HTTP ${resp.status}: ${await resp.text()}`)
+			// Drain a small slice of the body for diagnostics but do NOT pull the
+			// entire HTML challenge page — Vercel returns large interstitials.
+			const snippet = (await resp.text()).slice(0, 256)
+			throw new Error(`poll HTTP ${resp.status}: ${snippet}`)
 		}
 		const body = (await resp.json()) as {commands?: QueuedCommand[]}
 		return body.commands ?? []
@@ -158,7 +190,7 @@ export class InstallPoller {
 				method: 'POST',
 				headers: {
 					'X-API-Key': apiKey,
-					'User-Agent': `livinityd-install-poller/${this.version}`,
+					'User-Agent': `livinityd-presence/${this.version}`,
 				},
 			},
 		)
@@ -209,7 +241,7 @@ export class InstallPoller {
 				headers: {
 					'Content-Type': 'application/json',
 					'X-API-Key': apiKey,
-					'User-Agent': `livinityd-install-poller/${this.version}`,
+					'User-Agent': `livinityd-presence/${this.version}`,
 				},
 				body: JSON.stringify(completeBody),
 			},
