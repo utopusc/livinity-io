@@ -3219,7 +3219,7 @@ Plus Phase 206 carry-overs:
 
 ---
 
-### Phase 215: One-click MCP/app install in store + walkthrough docs — ⚪ NOT STARTED
+### Phase 215: One-click MCP/app install in store + walkthrough docs — 🟡 PARTIAL 2026-05-26 (Vercel-side complete: install_commands schema + 4 endpoints + SSE + 3-guide walkthrough; Mini PC poller deferred → CARRY-P215-MINIPC-POLLER; WIRE-04/05 live verification gated)
 
 **Goal:** Admin clicks "Install" → flows to Mini PC bridge → MCP/app working in <60s. `/admin/walkthrough` explains how to add a new app/MCP from scratch.
 
