@@ -141,6 +141,19 @@ const domain = router({
 
 	/**
 	 * Verify DNS for a subdomain.
+	 *
+	 * Phase 219 T4 — closes "DNS PENDING diyor surekli" (operator UAT
+	 * 2026-05-26). Two structural fixes:
+	 *
+	 * 1. Look up the STORED hyphen-pattern host (Phase 140 multi-tenant
+	 *    minted `<slug>-<user>.<root>`) instead of constructing the legacy
+	 *    dot-pattern `<slug>.<root>`. The dot-pattern record never existed
+	 *    on the operator's CF, so the lookup ENOTFOUND'd forever.
+	 *
+	 * 2. Always run verifyDns in tunnelMode for SUBDOMAIN checks. LivOS
+	 *    subdomains always traverse a CF tunnel / Server5 relay, so the
+	 *    A record points at the relay's IP — not the Mini PC's — and the
+	 *    historical IP-equality test was structurally unreachable.
 	 */
 	verifySubdomainDns: privateProcedure
 		.input(z.object({subdomain: z.string()}))
@@ -149,9 +162,13 @@ const domain = router({
 			if (!config?.domain) {
 				throw new Error('No main domain configured')
 			}
-			const fullDomain = `${input.subdomain}.${config.domain}`
+			// Phase 219 T4 — prefer stored hyphen-pattern host over the
+			// legacy dot-pattern construction.
+			const subdomains = await getSubdomains(ctx.livinityd.ai.redis)
+			const stored = subdomains.find((s) => s.subdomain === input.subdomain)
+			const fullDomain = stored?.host ?? `${input.subdomain}.${config.domain}`
 			const serverIp = await getPublicIp()
-			const result = await verifyDns(fullDomain, serverIp)
+			const result = await verifyDns(fullDomain, serverIp, true /* tunnelMode */)
 			return {...result, fullDomain}
 		}),
 
