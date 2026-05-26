@@ -237,7 +237,11 @@ function buildLuseToolFactory(def: LuseToolDef, opts: ResolvedRegisterOptions) {
           detail: invokeRes.detail,
         });
       }
-      return jsonResult(invokeRes.result as Record<string, unknown>);
+      // 208-09: `invokeRes.result` is ALREADY a `{content: [...], isError: bool}` MCP
+      // envelope from the luse server. Wrapping it in `jsonResult()` again produces
+      // `{content: [{type: 'text', text: JSON.stringify(envelope)}], isError: false}`,
+      // and chat UIs render that as `{}`. Pass through directly.
+      return invokeRes.result as { content: unknown[]; isError?: boolean };
     },
   });
 }
