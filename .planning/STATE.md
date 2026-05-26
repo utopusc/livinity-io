@@ -3,16 +3,38 @@ gsd_state_version: 1.0
 milestone: v41
 milestone_name: Admin Panel + Store Hardening + Subdomain Reliability
 status: executing
-last_updated: "2026-05-26T12:30:00.000Z"
+last_updated: "2026-05-26T13:30:00.000Z"
 progress:
   total_phases: 9
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
-  percent: 56
+  completed_phases: 6
+  total_plans: 6
+  completed_plans: 6
+  percent: 67
 ---
 
-## Current Position (v41 — autonomous run 2026-05-26 — Phases 212+213 just shipped, 4/9 remaining)
+## Current Position (v41 — autonomous run 2026-05-26 — Phases 212-214 shipped, 3/9 remaining)
+
+Phase: 214 just shipped CODE-COMPLETE (`4f90360f..1a4c7f65`, 4 commits)
+Plan: 214-01 (T1 middleware+client gate + T2 sync-catalog + T3 curation UI)
+Status: Ready for Phase 215 (one-click install — install channel architecture is open)
+
+### ✅ Phase 214 SHIPPED 2026-05-26
+- **T1** middleware.ts /store matcher + store/admin-gate.tsx client check
+- **T2** POST /api/admin/sync-catalog (GitHub REST, chunked, idempotent upsert preserving curated fields)
+- **T3** /admin/store curation UI (featured/verified toggle + sync button)
+
+### Verdict matrix (all GREEN)
+| Criterion | Status |
+|---|---|
+| STORE-01 non-admin /store → /dashboard | 🟢 |
+| STORE-02 sync reports counts | 🟢 |
+| STORE-03 admin sees catalog | 🟢 |
+| STORE-04 admin marks featured/verified | 🟢 |
+
+### Deferred (carries)
+- CARRY-P214-STORE-SEARCH, CARRY-P214-DETAIL-REDESIGN, CARRY-P214-MARKETING-LANDING, CARRY-P214-FULL-SYNC-304
+
+
 
 Phase: 213 just shipped CODE-COMPLETE (`713a47eb..e4242552`, 3 commits)
 Plan: 213-01 (T1 auth bridge + T2-T7 admin UI bundle)

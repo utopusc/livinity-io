@@ -3194,7 +3194,7 @@ Plus Phase 206 carry-overs:
 
 ---
 
-### Phase 214: Store redesign — admin-only gate + UX polish — ⚪ NOT STARTED
+### Phase 214: Store redesign — admin-only gate + UX polish — 🟡 CODE-COMPLETE 2026-05-26 (commits `4f90360f..1a4c7f65`; all 4 success criteria GREEN; tasks 4 (search) + 5 (detail redesign) deferred to CARRY-P214-STORE-SEARCH + CARRY-P214-DETAIL-REDESIGN)
 
 **Goal:** `livinity.io/store` becomes admin-only. Non-admin sees marketing landing. Admin sees full catalog + install management.
 
