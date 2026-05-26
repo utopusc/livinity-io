@@ -3244,7 +3244,7 @@ Plus Phase 206 carry-overs:
 
 ---
 
-### Phase 216: Cloudflare audit + automation — ⚪ NOT STARTED
+### Phase 216: Cloudflare audit + automation — 🟡 DOCS-COMPLETE 2026-05-26 (CF-AUDIT.md + scripts/cf-audit.sh shipped; CF-01 🟢, CF-02/03/04 → operator-walk in P217)
 
 **Goal:** Document + automate CF DNS state. Today CF is DNS-only (no tunnel), Vercel handles edge. Live-audit per-user wildcard cert path post-migration.
 
