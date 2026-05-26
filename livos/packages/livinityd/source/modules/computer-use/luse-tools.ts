@@ -448,13 +448,23 @@ const _applicationTool = {
 			application: {
 				type: 'string' as const,
 				description:
-					'Required JSON key MUST be "application" (NOT "name", "id", or other aliases). Example: {"application":"Chrome"}. ' +
+					'PREFERRED JSON key (canonical). Accepts aliases "name", "app", "id" — ' +
+					'handler coalesces. Example: {"application":"Chrome"}. ' +
 					'The application name. Free-form string. Resolved at call-time ' +
 					'against (a) LivOS app catalog from `apps.list` + `apps.native.list`, ' +
 					'(b) classic Bytebot APP_MAP. Match is case-insensitive on name field.',
 			},
+			name: {
+				type: 'string' as const,
+				description: 'Alias for "application". Handler coalesces via R3 (Phase 208-01).',
+			},
+			app: {
+				type: 'string' as const,
+				description: 'Alias for "application". Handler coalesces via R3 (Phase 208-01).',
+			},
 		},
-		required: ['application'],
+		// 208-09: NO `required` — MCP SDK rejects at schema before handler R3 alias
+		// can coalesce. Handler at tools.ts:761 validates with explicit error.
 	},
 }
 
