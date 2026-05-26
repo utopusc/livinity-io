@@ -83,6 +83,18 @@ export function appToUrl(app: UserApp): string {
 	// → n8n was opened at n8n.livinity.live (NXDOMAIN) instead of
 	// n8n.test.livinity.live (the correct subdomain on user's own DNS).
 
+	// Phase 210 canonical: hyphen-format `<app>-<user>.<basedomain>` when
+	// running under livinity.io. The legacy dot-format `<app>.<user>.<base>`
+	// doesn't resolve because CF wildcard cert covers `*.livinity.io` only
+	// at the leaf level — `photos.bruce.livinity.io` is a sub-of-sub and
+	// fails SSL + tunnel routing.
+	const livinityIoSuffix = '.livinity.io'
+	if (userDomain.endsWith(livinityIoSuffix)) {
+		const userPart = userDomain.slice(0, -livinityIoSuffix.length)
+		return `${location.protocol}//${appSubdomain}-${userPart}.livinity.io`
+	}
+	// Custom domains (test.livinity.live, example.com etc.) — preserve the
+	// dot-format since these are operator-owned DNS with arbitrary cert config.
 	return `${location.protocol}//${appSubdomain}.${userDomain}`
 }
 

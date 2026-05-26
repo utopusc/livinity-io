@@ -255,7 +255,7 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
                       }}
                     />
                     <span style={{ color: 'var(--fg-mute)', fontSize: 12, fontFamily: 'var(--mono)' }}>
-                      .{instanceName}
+                      -{instanceName}.livinity.io
                     </span>
                     <button
                       type="button"
@@ -292,7 +292,7 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
                         wordBreak: 'break-all',
                       }}
                     >
-                      https://{currentSubdomain || app.id}.{instanceName}
+                      https://{currentSubdomain || app.id}-{instanceName}.livinity.io
                     </code>
                     <button
                       type="button"
