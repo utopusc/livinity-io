@@ -53,9 +53,22 @@ export function middleware(req: NextRequest): NextResponse {
     return NextResponse.next();
   }
 
+  // Phase 214: /store/* is admin-only. Soft gate at the Edge:
+  // - no cookie → /login?next=/store/...
+  // - cookie present → continue; client-side <StoreAdminGate /> finalizes
+  //   the is_admin check and redirects non-admin to /dashboard.
+  if (pathname === '/store' || pathname.startsWith('/store/')) {
+    if (!hasSession) {
+      const loginUrl = new URL('/login', req.url);
+      loginUrl.searchParams.set('next', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+    return NextResponse.next();
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/admin/:path*'],
+  matcher: ['/admin/:path*', '/api/admin/:path*', '/store', '/store/:path*'],
 };

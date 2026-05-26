@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono, Instrument_Serif } from 'next/font/google';
 import { StoreShell } from './store-shell';
+import { StoreAdminGate } from './admin-gate';
 import './store.css';
 
 // Livinity Design System typography. CSS variables consumed via store.css
@@ -46,7 +47,9 @@ export default function StoreLayout({
         overflow: 'hidden',
       } as React.CSSProperties}
     >
-      <StoreShell>{children}</StoreShell>
+      <StoreAdminGate>
+        <StoreShell>{children}</StoreShell>
+      </StoreAdminGate>
     </div>
   );
 }
