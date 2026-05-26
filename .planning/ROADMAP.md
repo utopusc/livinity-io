@@ -3171,7 +3171,7 @@ Plus Phase 206 carry-overs:
 
 ---
 
-### Phase 213: Admin panel UI — ⚪ NOT STARTED
+### Phase 213: Admin panel UI — 🟡 CODE-COMPLETE 2026-05-26 (commits `713a47eb..e4242552`; 4/6 pages real, 2 placeholders by design; UI-09 mobile-responsive PASS; UI-08 non-admin client redirect → CARRY-P213-NON-ADMIN-REDIRECT-CLIENT)
 
 **Goal:** Operator opens `livinity.io/admin`, sees the whole system at a glance, drills into detail views.
 

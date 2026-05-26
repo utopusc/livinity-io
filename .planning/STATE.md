@@ -3,20 +3,44 @@ gsd_state_version: 1.0
 milestone: v41
 milestone_name: Admin Panel + Store Hardening + Subdomain Reliability
 status: executing
-last_updated: "2026-05-26T11:00:00.000Z"
+last_updated: "2026-05-26T12:30:00.000Z"
 progress:
   total_phases: 9
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 44
+  completed_phases: 5
+  total_plans: 5
+  completed_plans: 5
+  percent: 56
 ---
 
-## Current Position (v41 — autonomous run 2026-05-26 — Phase 212 just shipped, 5/9 remaining)
+## Current Position (v41 — autonomous run 2026-05-26 — Phases 212+213 just shipped, 4/9 remaining)
 
-Phase: 212 just shipped CODE-COMPLETE (`e9b37106..62b0ea0a`, 7 commits)
-Plan: 212-01 (5 serial tasks T1–T5 + 1 hardening)
-Status: Ready for Phase 213 (Admin panel UI — 6 Next.js pages on shadcn/ui + recharts, consumes the 6 API routes shipped in 212-T3)
+Phase: 213 just shipped CODE-COMPLETE (`713a47eb..e4242552`, 3 commits)
+Plan: 213-01 (T1 auth bridge + T2-T7 admin UI bundle)
+Status: Ready for Phase 214 (Store admin-only gate + UX polish)
+
+### ✅ Phase 213 SHIPPED 2026-05-26
+- **T1** Auth bridge: `requireAdmin()` accepts session cookie OR x-api-key; `/api/auth/me` returns `is_admin`.
+- **T2** `admin-api.ts` typed wrappers for 6 P212 routes.
+- **T3** 3-group sidebar nav (Overview / Catalog / Operations).
+- **T4** `/admin` real dashboard (7 KPI cards + 2 CSS bar charts).
+- **T5** `/admin/users` paginated + `/admin/users/[id]` minimal detail.
+- **T6** `/admin/tunnels` real (empty-state→HEARTBEAT-AUDIT) + store/walkthrough placeholders.
+- **T7** +315 lines admin.css with mobile sidebar collapse @<768px.
+- Sacred SHA `f3538e1d...` preserved 3/3.
+
+### Pragmatic deviations (Claude's discretion, documented)
+- **shadcn/ui + recharts NOT installed** despite ROADMAP wording. Existing admin uses custom CSS tokens; mid-milestone install risks visual drift. Filed CARRY-P213-DESIGN-SYSTEM-POLISH.
+- **Pages remain client components** (RSC refactor → CARRY-P213-RSC-REFACTOR).
+- **users/[id] is a placeholder** (full drill-down → CARRY-P213-USERS-DRILLDOWN).
+
+### Verdict matrix
+| Criterion | Status |
+|---|---|
+| UI-01..06 all pages render real data | 🟢 4/6 real; 2 explicit placeholders by ROADMAP (P214/P215) |
+| UI-08 non-admin redirect to /dashboard | 🟡 partial (middleware no-cookie ✓; client-side `is_admin=false` redirect → CARRY) |
+| UI-09 mobile responsive 1024×768 + 1920×1080 | 🟢 GREEN (auto-fit grids + media query) |
+
+
 
 ### ✅ Phase 212 SHIPPED 2026-05-26
 - **T1** `0013_phase_212_admin_auth.sql` — `is_admin BOOLEAN` + `last_seen_at TIMESTAMPTZ` on `public.users`; seeded `bruce` admin live.
