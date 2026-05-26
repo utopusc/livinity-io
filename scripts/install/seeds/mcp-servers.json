@@ -2,10 +2,114 @@
   "_meta": {
     "exported_from": "Mini PC bruce@10.69.31.68 liv:mcp:config",
     "exported_at": "2026-05-26",
-    "phase": "219-T3",
-    "_note": "Placeholder tokens (LIVOS_REDIS_URL surrounded by double underscores) in this file are substituted at install-time by _dld_seed_mcp_servers helper with the host's actual REDIS_URL from /opt/livos/.env. installedAt is 0 because seed installs have no meaningful install epoch. Phase 219 T3: 4 local LivOS MCP servers (liv-*) added — enabled=false by default; operator opts in via /settings → MCP."
+    "phase": "219-T2",
+    "_note": "Placeholder tokens (LIVOS_REDIS_URL surrounded by double underscores) in this file are substituted at install-time by _dld_seed_mcp_servers helper with the host's actual REDIS_URL from /opt/livos/.env. installedAt is 0 because seed installs have no meaningful install epoch. Phase 219 T2: 15+ curated MCPs across categories (search, dev, files, productivity, system, database, web). Only `luse` + `sequential-thinking` ship enabled — operators opt into the rest via /settings → MCP. T3 added 4 local liv-* MCPs (system category)."
   },
   "mcpServers": {
+    "brave-search": {
+      "name": "brave-search",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {"BRAVE_API_KEY": ""},
+      "description": "Web + local search via Brave Search API. Requires BRAVE_API_KEY.",
+      "category": "search",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "everything": {
+      "name": "everything",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everything"],
+      "description": "MCP reference server — every prompt / resource / tool primitive in one place. Useful for testing MCP clients.",
+      "category": "dev",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "fetch": {
+      "name": "fetch",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"],
+      "description": "Fetch arbitrary URLs and return parsed Markdown. Read-only.",
+      "category": "web",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "filesystem": {
+      "name": "filesystem",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/bruce"],
+      "description": "Read / write files under an allowed root (defaults to /home/bruce). Destructive ops gated.",
+      "category": "files",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "git": {
+      "name": "git",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-git"],
+      "description": "Local Git repo operations — status / log / diff / branch / show. Read-only.",
+      "category": "dev",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "github": {
+      "name": "github",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": ""},
+      "description": "GitHub API — issues, PRs, code search. Needs GITHUB_PERSONAL_ACCESS_TOKEN.",
+      "category": "dev",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "gitlab": {
+      "name": "gitlab",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-gitlab"],
+      "env": {"GITLAB_PERSONAL_ACCESS_TOKEN": "", "GITLAB_API_URL": "https://gitlab.com/api/v4"},
+      "description": "GitLab API — projects, issues, MRs. Needs GITLAB_PERSONAL_ACCESS_TOKEN.",
+      "category": "dev",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "google-drive": {
+      "name": "google-drive",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-gdrive"],
+      "description": "Google Drive — search + read files. Requires OAuth client config (see server README).",
+      "category": "productivity",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "google-maps": {
+      "name": "google-maps",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-google-maps"],
+      "env": {"GOOGLE_MAPS_API_KEY": ""},
+      "description": "Google Maps — geocoding, places, directions. Needs GOOGLE_MAPS_API_KEY.",
+      "category": "productivity",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "kubernetes": {
+      "name": "kubernetes",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "mcp-server-kubernetes"],
+      "description": "Read pods / services / deployments from the host kubeconfig. Read-only by default.",
+      "category": "system",
+      "enabled": false,
+      "installedAt": 0
+    },
     "liv-apps": {
       "name": "liv-apps",
       "transport": "stdio",
@@ -46,17 +150,6 @@
       "enabled": false,
       "installedAt": 0
     },
-    "sequential-thinking": {
-      "name": "sequential-thinking",
-      "transport": "stdio",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
-      "description": "Dynamic problem-solving through thought sequences",
-      "category": "productivity",
-      "installedFrom": "sequential-thinking",
-      "enabled": true,
-      "installedAt": 0
-    },
     "luse": {
       "name": "luse",
       "transport": "stdio",
@@ -70,6 +163,79 @@
       "description": "Computer-use tools (keyboard / mouse / screenshot). System MCP — required for the WebApp surface.",
       "category": "system",
       "enabled": true,
+      "installedAt": 0
+    },
+    "postgres": {
+      "name": "postgres",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/postgres"],
+      "description": "Read-only Postgres queries. Edit the connection URL in args[2] before enabling.",
+      "category": "database",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "puppeteer": {
+      "name": "puppeteer",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+      "description": "Headless Chromium browsing — navigate, click, fill, screenshot. Heavy: bundles Chromium.",
+      "category": "web",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "sequential-thinking": {
+      "name": "sequential-thinking",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "description": "Dynamic problem-solving through thought sequences.",
+      "category": "productivity",
+      "installedFrom": "sequential-thinking",
+      "enabled": true,
+      "installedAt": 0
+    },
+    "slack": {
+      "name": "slack",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "env": {"SLACK_BOT_TOKEN": "", "SLACK_TEAM_ID": ""},
+      "description": "Slack — list channels, post messages, search. Needs SLACK_BOT_TOKEN + SLACK_TEAM_ID.",
+      "category": "productivity",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "sqlite": {
+      "name": "sqlite",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "/tmp/scratch.db"],
+      "description": "Read-only SQLite queries against a path you choose (edit args[--db-path]).",
+      "category": "database",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "tavily-search": {
+      "name": "tavily-search",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "tavily-mcp"],
+      "env": {"TAVILY_API_KEY": ""},
+      "description": "Tavily web search — designed for LLM grounding. Needs TAVILY_API_KEY.",
+      "category": "search",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "time": {
+      "name": "time",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-time"],
+      "description": "Current time + timezone conversions. Read-only.",
+      "category": "productivity",
+      "enabled": false,
       "installedAt": 0
     }
   }

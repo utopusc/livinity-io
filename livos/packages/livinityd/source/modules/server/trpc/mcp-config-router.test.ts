@@ -300,6 +300,32 @@ describe('createMcpConfigRouter — Phase 219 T1 STRING→HASH self-heal', () =>
 		expect(res.warnings![0]).toMatch(/EACCES/)
 	})
 
+	test('13. Phase 219 T2 — catalog returns curated MCP entries sorted alphabetically and filters system entries', async () => {
+		const {deps} = makeDeps()
+		const caller = createMcpConfigRouter(deps).createCaller(makeAdminCtx() as never)
+		const catalog = await caller.catalog()
+		// At least 15 entries per Phase 219 T2 SPEC (excluding the 5 system MCPs).
+		expect(catalog.length).toBeGreaterThanOrEqual(15)
+		// Alphabetical sort.
+		const names = catalog.map((e) => e.name)
+		expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
+		// System MCPs (luse, liv-*) should NOT be in the picker.
+		for (const sys of ['luse', 'liv-system', 'liv-docker', 'liv-apps', 'liv-vault']) {
+			expect(names).not.toContain(sys)
+		}
+		// A few sanity entries that operators care about.
+		expect(names).toContain('git')
+		expect(names).toContain('github')
+		expect(names).toContain('filesystem')
+		// Every entry has the contract fields.
+		for (const entry of catalog) {
+			expect(typeof entry.name).toBe('string')
+			expect(['stdio', 'http']).toContain(entry.transport)
+			expect(typeof entry.description).toBe('string')
+			expect(typeof entry.category).toBe('string')
+		}
+	})
+
 	test('12.5 Phase 219 T3 — local liv-* MCPs are tagged system: true and reject delete', async () => {
 		const {deps} = makeDeps({
 			'liv-system': JSON.stringify({transport: 'stdio', command: 'tsx', enabled: false}),

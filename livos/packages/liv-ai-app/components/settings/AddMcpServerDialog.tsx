@@ -22,8 +22,8 @@
 
 "use client";
 
-import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowLeft, Plus, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,17 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+
+interface McpCatalogEntry {
+	name: string;
+	transport: "stdio" | "http";
+	command?: string;
+	args?: string[];
+	url?: string;
+	env?: Record<string, string>;
+	description: string;
+	category: string;
+}
 
 interface AddMcpServerDialogProps {
 	open: boolean;
@@ -92,6 +103,61 @@ export function AddMcpServerDialog({
 	const [nameError, setNameError] = useState<string | null>(null);
 	const [formError, setFormError] = useState<string | null>(null);
 
+	// Phase 219 T2 — Browse catalog panel.
+	const [mode, setMode] = useState<"form" | "browse">("form");
+	const [catalog, setCatalog] = useState<McpCatalogEntry[] | null>(null);
+	const [catalogError, setCatalogError] = useState<string | null>(null);
+	const [catalogFilter, setCatalogFilter] = useState<string>("");
+
+	const loadCatalog = useCallback(async () => {
+		setCatalogError(null);
+		try {
+			const res = await fetch("/trpc/mcp.config.catalog?batch=1&input=%7B%220%22%3A%7B%22json%22%3Anull%7D%7D", {
+				credentials: "include",
+			});
+			if (!res.ok) {
+				setCatalogError(`Catalog fetch failed (HTTP ${res.status})`);
+				return;
+			}
+			const data = await res.json();
+			const list = data?.[0]?.result?.data?.json;
+			if (!Array.isArray(list)) {
+				setCatalogError("Catalog returned an unexpected shape.");
+				return;
+			}
+			setCatalog(list as McpCatalogEntry[]);
+		} catch (e) {
+			setCatalogError(e instanceof Error ? e.message : "Network error");
+		}
+	}, []);
+
+	useEffect(() => {
+		if (mode === "browse" && catalog === null) {
+			void loadCatalog();
+		}
+	}, [mode, catalog, loadCatalog]);
+
+	const applyCatalogEntry = (entry: McpCatalogEntry) => {
+		// Suggest the catalog name but let the operator edit/dedupe.
+		let suggested = entry.name;
+		let i = 2;
+		while (existingNames.includes(suggested)) {
+			suggested = `${entry.name}-${i}`;
+			i += 1;
+		}
+		setName(suggested);
+		setTransport(entry.transport);
+		setCommand(entry.command ?? "");
+		setArgsText((entry.args ?? []).join("\n"));
+		setUrl(entry.url ?? "");
+		setEnvRows(
+			Object.entries(entry.env ?? {}).map(([key, value]) => ({key, value})),
+		);
+		setNameError(null);
+		setFormError(null);
+		setMode("form");
+	};
+
 	const reset = () => {
 		setName("");
 		setTransport("stdio");
@@ -103,6 +169,8 @@ export function AddMcpServerDialog({
 		setNameError(null);
 		setFormError(null);
 		setSubmitting(false);
+		setMode("form");
+		setCatalogFilter("");
 	};
 
 	const handleOpenChange = (next: boolean) => {
@@ -205,18 +273,132 @@ export function AddMcpServerDialog({
 		}
 	};
 
+	const filteredCatalog = catalog
+		? catalog.filter((entry) => {
+				if (catalogFilter.trim().length === 0) return true;
+				const q = catalogFilter.trim().toLowerCase();
+				return (
+					entry.name.toLowerCase().includes(q) ||
+					entry.category.toLowerCase().includes(q) ||
+					entry.description.toLowerCase().includes(q)
+				);
+			})
+		: [];
+	const grouped: Record<string, McpCatalogEntry[]> = {};
+	for (const entry of filteredCatalog) {
+		(grouped[entry.category] ??= []).push(entry);
+	}
+
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="max-w-lg">
 				<DialogHeader>
-					<DialogTitle>Add MCP server</DialogTitle>
+					<DialogTitle>
+						{mode === "browse" ? "Browse MCP catalog" : "Add MCP server"}
+					</DialogTitle>
 					<DialogDescription>
-						Persists to <code className="font-mono">liv:mcp:config</code>.
-						Changes take effect after the next service restart.
+						{mode === "browse"
+							? "Pick a curated MCP server; the Add form pre-fills with command + env."
+							: "Persists to "}
+						{mode === "browse" ? null : (
+							<code className="font-mono">liv:mcp:config</code>
+						)}
+						{mode === "browse"
+							? null
+							: ". Changes take effect after the next service restart."}
 					</DialogDescription>
 				</DialogHeader>
 
+				{mode === "browse" ? (
+					<div className="space-y-3">
+						<button
+							type="button"
+							className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+							onClick={() => setMode("form")}
+						>
+							<ArrowLeft className="size-3" /> Back to form
+						</button>
+						<div className="relative">
+							<Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+							<Input
+								value={catalogFilter}
+								onChange={(e) => setCatalogFilter(e.target.value)}
+								placeholder="Filter by name, category, or description…"
+								className="pl-7"
+							/>
+						</div>
+						{catalogError ? (
+							<p
+								role="alert"
+								className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+							>
+								{catalogError}
+							</p>
+						) : catalog === null ? (
+							<p className="text-sm text-muted-foreground">Loading catalog…</p>
+						) : filteredCatalog.length === 0 ? (
+							<p className="rounded-md border border-dashed border-border/60 px-3 py-6 text-center text-sm text-muted-foreground">
+								No catalog entries match "{catalogFilter}".
+							</p>
+						) : (
+							<div className="max-h-[400px] space-y-4 overflow-y-auto pr-1">
+								{Object.entries(grouped)
+									.sort(([a], [b]) => a.localeCompare(b))
+									.map(([category, entries]) => (
+										<div key={category} className="space-y-1.5">
+											<h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+												{category}
+											</h3>
+											<ul className="divide-y divide-border/60 rounded-md border border-border/60">
+												{entries.map((entry) => {
+													const alreadyInstalled = existingNames.includes(entry.name);
+													return (
+														<li
+															key={entry.name}
+															className="flex items-start justify-between gap-3 px-3 py-2 text-sm"
+														>
+															<div className="min-w-0 flex-1">
+																<div className="flex items-center gap-2">
+																	<span className="font-medium">{entry.name}</span>
+																	<span className="rounded-sm bg-muted px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+																		{entry.transport}
+																	</span>
+																	{alreadyInstalled ? (
+																		<span className="rounded-sm bg-amber-500/15 px-1 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+																			already installed
+																		</span>
+																	) : null}
+																</div>
+																<p className="mt-0.5 text-xs text-muted-foreground">
+																	{entry.description}
+																</p>
+															</div>
+															<Button
+																type="button"
+																size="sm"
+																variant={alreadyInstalled ? "outline" : "default"}
+																onClick={() => applyCatalogEntry(entry)}
+															>
+																Use
+															</Button>
+														</li>
+													);
+												})}
+											</ul>
+										</div>
+									))}
+							</div>
+						)}
+					</div>
+				) : (
 				<div className="space-y-4">
+					<button
+						type="button"
+						className="inline-flex items-center gap-1 rounded-md border border-border/60 px-2 py-1 text-xs hover:bg-muted/40"
+						onClick={() => setMode("browse")}
+					>
+						<Search className="size-3" /> Browse catalog
+					</button>
 					{/* Name */}
 					<div className="space-y-1.5">
 						<label htmlFor="mcp-add-name" className="text-sm font-medium">
@@ -395,6 +577,7 @@ export function AddMcpServerDialog({
 						</p>
 					) : null}
 				</div>
+				)}
 
 				<DialogFooter>
 					<DialogClose asChild>
@@ -402,9 +585,11 @@ export function AddMcpServerDialog({
 							Cancel
 						</Button>
 					</DialogClose>
-					<Button type="button" onClick={submit} disabled={submitting}>
-						{submitting ? "Adding…" : "Add server"}
-					</Button>
+					{mode === "form" ? (
+						<Button type="button" onClick={submit} disabled={submitting}>
+							{submitting ? "Adding…" : "Add server"}
+						</Button>
+					) : null}
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
