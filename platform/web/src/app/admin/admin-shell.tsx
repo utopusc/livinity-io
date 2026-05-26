@@ -4,6 +4,23 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { AdminGate } from './admin-gate';
 
+const TOKEN_KEY = 'livinity_admin_token';
+
+async function handleLogout(): Promise<void> {
+  // Best-effort server-side session revoke (ignore network errors).
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  } catch {
+    // proceed regardless
+  }
+  // Clear the legacy api-key cache.
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem(TOKEN_KEY);
+  }
+  // Force a full reload so middleware sees the empty cookie + fresh state.
+  window.location.assign('/login');
+}
+
 type NavItem = { href: string; label: string; exact?: boolean };
 
 const NAV_OVERVIEW: NavItem[] = [
@@ -65,6 +82,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <a href="/store" className="admin-link" target="_blank" rel="noreferrer">
             View store →
           </a>
+
+          <div className="admin-side-foot">
+            <button
+              type="button"
+              className="admin-link admin-link-logout"
+              onClick={() => void handleLogout()}
+            >
+              Log out
+            </button>
+          </div>
         </aside>
         <main className="admin-main">{children}</main>
       </div>
