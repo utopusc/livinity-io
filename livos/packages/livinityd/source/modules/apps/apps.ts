@@ -57,6 +57,26 @@ const REDIS_PLATFORM_URL = 'livos:platform:url'
 const LIVINITY_PLATFORM_URL = process.env.LIVINITY_PLATFORM_URL || 'https://livinity.io'
 
 /**
+ * Phase 218 follow-up — detect whether cloudflared.service is running.
+ * Used as an additional signal for "CF tunnel terminates TLS at the edge,
+ * so emit `http://` prefix on every Caddy host block". Boxes provisioned
+ * via `install.sh --mode tunnel` before the Phase 142-02 Redis seed
+ * landed don't have `livos:domain:local_mode` set, but the cloudflared
+ * unit is the canonical truth source. `systemctl is-active` is cheap
+ * (single read of /sys/fs/cgroup state); the catch swallows any error
+ * (missing systemctl on non-Linux dev boxes, etc.) so detection
+ * gracefully degrades to false.
+ */
+async function isCloudflaredActive(): Promise<boolean> {
+	try {
+		const result = await $({reject: false})`systemctl is-active cloudflared`
+		return result.stdout.trim() === 'active'
+	} catch {
+		return false
+	}
+}
+
+/**
  * Phase 141-03: extract a hostname from a Server5-minted app subdomain URL.
  * Returns the hostname (e.g. `n8n-socinity.livinity.io`) or undefined when
  * the input can't be parsed. Defensive — Server5 should always return a valid
@@ -1050,7 +1070,10 @@ export default class Apps {
 		const relayTunnelRunning = Boolean(tunnelStatus?.running)
 		const localMode = await this.#livinityd.ai.redis.get('livos:domain:local_mode')
 		const cfTunnelMode = localMode === 'portal' || localMode === 'hybrid' || localMode === 'tunnel'
-		const isTunnel = relayTunnelRunning || cfTunnelMode
+		// Phase 218 follow-up — cloudflared.service is the canonical truth
+		// when the Redis seed isn't present (pre-Phase-142-02 boxes).
+		const cloudflaredRunning = await isCloudflaredActive().catch(() => false)
+		const isTunnel = relayTunnelRunning || cfTunnelMode || cloudflaredRunning
 		const content = generateFullCaddyfile(caddyConfig, isMultiUser, isTunnel, nativeAppSubdomains)
 		await writeCaddyfile(content)
 		await reloadCaddy()
@@ -1139,12 +1162,18 @@ export default class Apps {
 				streaming: app.id === 'desktop-stream',
 			}))
 
-			// Phase 134+ tunnel detection — mirrors rebuildCaddy().
+			// Phase 134+ tunnel detection — mirrors rebuildCaddy() plus Phase 218
+			// follow-up: also probe cloudflared.service. Without the probe a box
+			// that was provisioned via `install.sh --mode tunnel` BEFORE the
+			// `livos:domain:local_mode` Redis seed landed (Phase 142-02) emits
+			// the apex block without the `http://` prefix → Caddy auto-HTTPS-
+			// redirect loop with the CF tunnel (Mini PC dogfood 2026-05-26).
 			const tunnelStatus = await getTunnelStatus().catch(() => null)
 			const relayTunnelRunning = Boolean(tunnelStatus?.running)
 			const localMode = await this.#livinityd.ai.redis.get('livos:domain:local_mode')
 			const cfTunnelMode = localMode === 'portal' || localMode === 'hybrid' || localMode === 'tunnel'
-			const isTunnel = relayTunnelRunning || cfTunnelMode
+			const cloudflaredRunning = await isCloudflaredActive().catch(() => false)
+			const isTunnel = relayTunnelRunning || cfTunnelMode || cloudflaredRunning
 
 			const content = generateFullCaddyfile(caddyConfig, isMultiUser, isTunnel, nativeAppSubdomains)
 			await writeCaddyfile(content)
