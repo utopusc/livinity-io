@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import pool from '@/lib/db';
 import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
@@ -12,5 +13,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ user: null }, { status: 401 });
   }
 
-  return NextResponse.json({ user });
+  // Phase 213: enrich with is_admin so client-side admin gates can route on it.
+  const adminResult = await pool.query<{ is_admin: boolean }>(
+    'SELECT is_admin FROM users WHERE id = $1 LIMIT 1',
+    [user.userId],
+  );
+  const is_admin = adminResult.rows[0]?.is_admin === true;
+
+  return NextResponse.json({ user: { ...user, is_admin } });
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import pool from './db';
 import { getSession, SESSION_COOKIE_NAME } from './auth';
 
@@ -17,7 +18,7 @@ export interface SessionUserWithAdmin {
   isAdmin: boolean;
 }
 
-export async function getSessionUserWithAdmin(req: NextRequest): Promise<SessionUserWithAdmin | null> {
+async function resolveAdminViaSessionCookie(req: NextRequest): Promise<SessionUserWithAdmin | null> {
   const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
 
@@ -31,7 +32,6 @@ export async function getSessionUserWithAdmin(req: NextRequest): Promise<Session
 
   const isAdmin = result.rows[0]?.is_admin === true;
 
-  // Best-effort last_seen_at touch — never blocks the request.
   pool
     .query('UPDATE users SET last_seen_at = NOW() WHERE id = $1', [session.userId])
     .catch((err) => console.warn('[auth-admin] last_seen_at touch failed:', err?.message ?? err));
@@ -43,6 +43,57 @@ export async function getSessionUserWithAdmin(req: NextRequest): Promise<Session
     emailVerified: session.emailVerified,
     isAdmin,
   };
+}
+
+async function resolveAdminViaApiKey(req: NextRequest): Promise<SessionUserWithAdmin | null> {
+  const apiKey = req.headers.get('x-api-key');
+  if (!apiKey || !apiKey.startsWith('liv_k_')) return null;
+
+  const apiResult = await pool.query<{ key_hash: string; user_id: string }>(
+    'SELECT key_hash, user_id FROM api_keys',
+  );
+
+  let matchedUserId: string | null = null;
+  for (const row of apiResult.rows) {
+    if (await bcrypt.compare(apiKey, row.key_hash)) {
+      matchedUserId = row.user_id;
+      break;
+    }
+  }
+  if (!matchedUserId) return null;
+
+  const userResult = await pool.query<{
+    id: string;
+    username: string;
+    email: string;
+    email_verified: boolean;
+    is_admin: boolean;
+  }>(
+    'SELECT id, username, email, email_verified, is_admin FROM users WHERE id = $1 LIMIT 1',
+    [matchedUserId],
+  );
+
+  const row = userResult.rows[0];
+  if (!row) return null;
+
+  pool
+    .query('UPDATE users SET last_seen_at = NOW() WHERE id = $1', [matchedUserId])
+    .catch((err) => console.warn('[auth-admin] last_seen_at touch (api-key) failed:', err?.message ?? err));
+
+  return {
+    userId: row.id,
+    username: row.username,
+    email: row.email,
+    emailVerified: row.email_verified,
+    isAdmin: row.is_admin === true,
+  };
+}
+
+export async function getSessionUserWithAdmin(req: NextRequest): Promise<SessionUserWithAdmin | null> {
+  // Prefer session-cookie path; fall back to x-api-key (legacy admin shell).
+  const cookieUser = await resolveAdminViaSessionCookie(req);
+  if (cookieUser) return cookieUser;
+  return resolveAdminViaApiKey(req);
 }
 
 export async function requireAdmin(req: NextRequest): Promise<AdminContext | NextResponse> {
