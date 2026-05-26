@@ -25,14 +25,14 @@ describe('Phase 203-05 — /openclawos/handshake handle (D-203-12 / INV-203-10)'
 		expect(out).toContain('reverse_proxy 127.0.0.1:8080')
 		// Phase 203-09 split: openclaw gateway (:18789) for /liv-ai-app/openclawos,
 		// Next.js subapp (:3010) for everything else under /liv-ai-app/*.
-		expect(out).toContain('handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
+		expect(out).toContain('@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
 		expect(out).toContain('reverse_proxy 127.0.0.1:18789')
 		expect(out).toContain('@livaiSubapp path /liv-ai-app /liv-ai-app/*')
 		expect(out).toContain('reverse_proxy 127.0.0.1:3010')
 		// Ordering — handshake handle MUST appear before the livai handles so
 		// the JWT POST routes to livinityd, not the gateway.
 		const handshakeIdx = out.indexOf('handle /openclawos/handshake')
-		const livaiClawIdx = out.indexOf('handle_path /liv-ai-app/openclawos')
+		const livaiClawIdx = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos')
 		const livaiSubappIdx = out.indexOf('@livaiSubapp path')
 		expect(handshakeIdx).toBeGreaterThan(-1)
 		expect(livaiClawIdx).toBeGreaterThan(-1)
@@ -53,7 +53,7 @@ describe('Phase 203-05 — /openclawos/handshake handle (D-203-12 / INV-203-10)'
 		const apexBlockEnd = out.indexOf('}', apexBlockStart + 100) // skip the opening { and the cache header
 		// Find first handshake + livai occurrences INSIDE the apex block
 		const handshakeInside = out.indexOf('handle /openclawos/handshake', apexBlockStart)
-		const livaiClawInside = out.indexOf('handle_path /liv-ai-app/openclawos', apexBlockStart)
+		const livaiClawInside = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos', apexBlockStart)
 		const livaiSubappInside = out.indexOf('@livaiSubapp path', apexBlockStart)
 		expect(handshakeInside).toBeGreaterThan(apexBlockStart)
 		expect(livaiClawInside).toBeGreaterThan(handshakeInside)
@@ -73,7 +73,7 @@ describe('Phase 203-05 — /openclawos/handshake handle (D-203-12 / INV-203-10)'
 		)
 		const subdomainBlockStart = out.indexOf('bruce.livinity.io {')
 		const handshakeInside = out.indexOf('handle /openclawos/handshake', subdomainBlockStart)
-		const livaiClawInside = out.indexOf('handle_path /liv-ai-app/openclawos', subdomainBlockStart)
+		const livaiClawInside = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos', subdomainBlockStart)
 		const livaiSubappInside = out.indexOf('@livaiSubapp path', subdomainBlockStart)
 		expect(handshakeInside).toBeGreaterThan(subdomainBlockStart)
 		expect(livaiClawInside).toBeGreaterThan(handshakeInside)
@@ -132,7 +132,7 @@ describe('Phase 203-09 — /liv-ai-app split: openclaw gateway vs Next.js subapp
 		)
 		// handle_path automatically strips the matched prefix before forwarding
 		// — the openclaw gateway in-process router sees "/" not "/liv-ai-app/openclawos"
-		const clawIdx = out.indexOf('handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
+		const clawIdx = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
 		expect(clawIdx).toBeGreaterThan(-1)
 		const clawBlockEnd = out.indexOf('\t}\n\t}', clawIdx)
 		const clawBlock = out.slice(clawIdx, clawBlockEnd)
@@ -169,7 +169,7 @@ describe('Phase 203-09 — /liv-ai-app split: openclaw gateway vs Next.js subapp
 			[],
 		)
 		const subdomainBlockStart = out.indexOf('bruce.livinity.io {')
-		const clawInside = out.indexOf('handle_path /liv-ai-app/openclawos', subdomainBlockStart)
+		const clawInside = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos', subdomainBlockStart)
 		const subappInside = out.indexOf('@livaiSubapp path', subdomainBlockStart)
 		expect(clawInside).toBeGreaterThan(subdomainBlockStart)
 		expect(subappInside).toBeGreaterThan(clawInside)
@@ -190,7 +190,7 @@ describe('Phase 203-10/12/Hot-fix-C — gateway URL rewrite to /plugins/openclaw
 		// block, BEFORE the reverse_proxy line, so the gateway plugin's
 		// `path: '/plugins/openclawos'` prefix matcher fires (upstream
 		// openclaw-os shape; see liv-claw-os/packages/claw-plugin/src/index.ts).
-		const clawIdx = out.indexOf('handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
+		const clawIdx = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
 		expect(clawIdx).toBeGreaterThan(-1)
 		const clawBlockEnd = out.indexOf('\t}\n\t}', clawIdx)
 		const clawBlock = out.slice(clawIdx, clawBlockEnd)
@@ -212,7 +212,7 @@ describe('Phase 203-10/12/Hot-fix-C — gateway URL rewrite to /plugins/openclaw
 			[],
 		)
 		const subdomainBlockStart = out.indexOf('bruce.livinity.io {')
-		const clawInside = out.indexOf('handle_path /liv-ai-app/openclawos', subdomainBlockStart)
+		const clawInside = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos', subdomainBlockStart)
 		const rewriteInside = out.indexOf(
 			'rewrite * /plugins/openclawos{path}',
 			clawInside,
@@ -222,7 +222,7 @@ describe('Phase 203-10/12/Hot-fix-C — gateway URL rewrite to /plugins/openclaw
 
 	it('the null-mainDomain :80 fallback block also carries the rewrite', () => {
 		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
-		const clawIdx = out.indexOf('handle_path /liv-ai-app/openclawos')
+		const clawIdx = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos')
 		expect(clawIdx).toBeGreaterThan(-1)
 		const rewriteIdx = out.indexOf('rewrite * /plugins/openclawos{path}', clawIdx)
 		expect(rewriteIdx).toBeGreaterThan(clawIdx)
@@ -265,8 +265,8 @@ describe('Phase 203 Hot-fix D — /liv-ai-app/liv-ai rename (operator-facing URL
 			false,
 			[],
 		)
-		expect(out).toContain('handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
-		expect(out).toContain('handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
+		expect(out).toContain('@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
+		expect(out).toContain('@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
 	})
 
 	it('the new /liv-ai-app/liv-ai handle rewrites to /plugins/openclawos and proxies to :18789', () => {
@@ -276,7 +276,7 @@ describe('Phase 203 Hot-fix D — /liv-ai-app/liv-ai rename (operator-facing URL
 			false,
 			[],
 		)
-		const livAiIdx = out.indexOf('handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
+		const livAiIdx = out.indexOf('@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
 		expect(livAiIdx).toBeGreaterThan(-1)
 		const livAiBlockEnd = out.indexOf('\t}\n\t}', livAiIdx)
 		const livAiBlock = out.slice(livAiIdx, livAiBlockEnd)
@@ -292,9 +292,9 @@ describe('Phase 203 Hot-fix D — /liv-ai-app/liv-ai rename (operator-facing URL
 			false,
 			[],
 		)
-		const livAiIdx = out.indexOf('handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
+		const livAiIdx = out.indexOf('@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
 		const openclawosIdx = out.indexOf(
-			'handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/*',
+			'@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*',
 		)
 		expect(livAiIdx).toBeGreaterThan(-1)
 		expect(openclawosIdx).toBeGreaterThan(-1)
@@ -313,7 +313,7 @@ describe('Phase 203 Hot-fix D — /liv-ai-app/liv-ai rename (operator-facing URL
 		)
 		const subdomainBlockStart = out.indexOf('bruce.livinity.io {')
 		const livAiInside = out.indexOf(
-			'handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*',
+			'@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*',
 			subdomainBlockStart,
 		)
 		expect(livAiInside).toBeGreaterThan(subdomainBlockStart)
@@ -323,8 +323,8 @@ describe('Phase 203 Hot-fix D — /liv-ai-app/liv-ai rename (operator-facing URL
 
 	it('the null-mainDomain :80 fallback block also carries the new /liv-ai-app/liv-ai handle', () => {
 		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
-		expect(out).toContain('handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
-		const livAiIdx = out.indexOf('handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
+		expect(out).toContain('@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
+		const livAiIdx = out.indexOf('@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
 		const rewriteIdx = out.indexOf('rewrite * /plugins/openclawos{path}', livAiIdx)
 		expect(rewriteIdx).toBeGreaterThan(livAiIdx)
 	})
@@ -337,9 +337,9 @@ describe('Phase 203 Hot-fix D — /liv-ai-app/liv-ai rename (operator-facing URL
 			[],
 		)
 		const handshakeIdx = out.indexOf('handle /openclawos/handshake')
-		const livAiIdx = out.indexOf('handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
+		const livAiIdx = out.indexOf('@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
 		const openclawosIdx = out.indexOf(
-			'handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/*',
+			'@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*',
 		)
 		expect(handshakeIdx).toBeGreaterThan(-1)
 		expect(handshakeIdx).toBeLessThan(livAiIdx)

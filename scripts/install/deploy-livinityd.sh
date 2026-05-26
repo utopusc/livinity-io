@@ -1690,6 +1690,16 @@ CADDYFILE
     # Caddy systemd unit runs as `caddy` user → permission denied reading the config.
     # 0644 makes it readable by caddy without exposing write to anyone.
     chmod 0644 "$_DLD_CADDYFILE" 2>/dev/null || true
+    # Phase 218 T1 follow-up: livinityd writes the Caddyfile from app install
+    # / boot regen paths (Apps#rebuildCaddyFromState). Phase 86 moved
+    # livinityd from root → bruce, but the Caddyfile stayed root-owned, so
+    # every dynamic regen has been silently EACCES'ing since. Hand ownership
+    # to bruce so the regen path actually lands; Caddy reads via 0644 either
+    # way. Defensive: only chown if `bruce` exists (factory-reset runs first
+    # on fresh installs and may pre-stage this script before user creation).
+    if id bruce >/dev/null 2>&1; then
+        chown bruce:bruce "$_DLD_CADDYFILE" 2>/dev/null || true
+    fi
 
     # Validate config before reload
     if caddy validate --config "$_DLD_CADDYFILE" 2>/dev/null; then

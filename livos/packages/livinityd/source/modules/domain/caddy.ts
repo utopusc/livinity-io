@@ -168,13 +168,26 @@ export function validateHost(host: string): boolean {
 // (different external prefix matchers), so emit order is purely cosmetic
 // — putting `/liv-ai-app/liv-ai` first reads top-to-bottom matching what
 // operators type into the URL bar.
-const LIV_AI_APP_HANDLE = `\thandle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* {
+// Phase 218 T1 follow-up — `handle_path` in Caddy v2 only accepts a SINGLE
+// path matcher. The original two-arg form (`handle_path /a /a/* { ... }`)
+// silently never reached production because the static install.sh Caddyfile
+// was never overwritten by livinityd's dynamic regen path. Phase 218 T1+T5
+// made the regen actually deploy, surfacing the parse error
+//   `wrong argument count or unexpected line ending after '/liv-ai-app/liv-ai/*'`
+// Fix: switch to a named `path` matcher (which DOES accept multiple values)
+// + `handle` + an explicit `uri strip_prefix` to recreate handle_path's
+// prefix-stripping behavior.
+const LIV_AI_APP_HANDLE = `\t@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*
+\thandle @livAiLivAi {
+\t\turi strip_prefix /liv-ai-app/liv-ai
 \t\trewrite * /plugins/openclawos{path}
 \t\treverse_proxy 127.0.0.1:18789 {
 ${WS_TRANSPORT_BODY}
 \t}
 \t}
-\thandle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
+\t@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*
+\thandle @livAiOpenclawos {
+\t\turi strip_prefix /liv-ai-app/openclawos
 \t\trewrite * /plugins/openclawos{path}
 \t\treverse_proxy 127.0.0.1:18789 {
 ${WS_TRANSPORT_BODY}
