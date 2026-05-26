@@ -62,9 +62,15 @@ const SCREENSHOT_QUALITY: number = (() => {
 	const n = parseInt(process.env.LUSE_SCREENSHOT_QUALITY ?? '60', 10)
 	return Number.isFinite(n) && n >= 1 && n <= 100 ? n : 60
 })()
+// 208-11b — default to 0 (no downscale). Downscaling shifts the coordinate
+// frame the agent sees (1280×720 view) vs the X11 frame the click handler
+// targets (1920×1080), and clicks land at scaled-down coords if we don't
+// rescale x/y by (rawWidth / SCREENSHOT_MAX_DIM) at the click site.
+// Coord-rescale is a follow-up plan; until then keep MAX_DIM=0 by default
+// so JPEG q60 alone delivers ~3× size cut without coord drift.
 const SCREENSHOT_MAX_DIM: number = (() => {
-	const n = parseInt(process.env.LUSE_SCREENSHOT_MAX_DIM ?? '1280', 10)
-	return Number.isFinite(n) && n >= 0 ? n : 1280
+	const n = parseInt(process.env.LUSE_SCREENSHOT_MAX_DIM ?? '0', 10)
+	return Number.isFinite(n) && n >= 0 ? n : 0
 })()
 
 /**
