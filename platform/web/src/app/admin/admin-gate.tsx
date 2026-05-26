@@ -20,9 +20,14 @@ function AdminGateInner({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
   const [manualInput, setManualInput] = useState('');
-  // CARRY-P213-NON-ADMIN-REDIRECT-CLIENT — verify is_admin via /api/admin/whoami
-  // after a token is set. Non-admin → redirect to /dashboard.
-  const [adminVerified, setAdminVerified] = useState<'idle' | 'checking' | 'admin' | 'denied'>('idle');
+  // CARRY-P213-NON-ADMIN-REDIRECT-CLIENT — verify is_admin via /api/admin/whoami.
+  // Two auth paths probed: (a) session cookie alone, (b) sessionStorage api-key.
+  // 'idle' = not started, 'checking' = probe in flight, 'admin' = green, 'denied'
+  // = authenticated but not admin (redirect /dashboard), 'needs-key' = no
+  // session and no token → show api-key prompt.
+  const [adminVerified, setAdminVerified] = useState<
+    'idle' | 'checking' | 'admin' | 'denied' | 'needs-key'
+  >('checking');
 
   useEffect(() => {
     // Persist token from URL if present, then strip it from the visible URL.
@@ -30,7 +35,6 @@ function AdminGateInner({ children }: { children: React.ReactNode }) {
     if (urlToken) {
       sessionStorage.setItem(TOKEN_KEY, urlToken);
       setToken(urlToken);
-      // Clean URL — remove token from query string but keep pathname.
       router.replace(pathname);
       return;
     }
@@ -38,46 +42,62 @@ function AdminGateInner({ children }: { children: React.ReactNode }) {
     if (stored) setToken(stored);
   }, [searchParams, router, pathname]);
 
-  // Probe admin status whenever the token changes.
+  // Probe admin status. Runs on mount AND when token changes.
+  // Order: (1) try with X-Api-Key if token present, OR cookie-only if not.
+  // (2) On 401 with token, clear token and retry as cookie-only.
+  // (3) On 401 cookie-only AND no token → show api-key prompt.
   useEffect(() => {
-    if (!token) {
-      setAdminVerified('idle');
-      return;
-    }
-    setAdminVerified('checking');
     let cancelled = false;
-    fetch('/api/admin/whoami', {
-      headers: { 'X-Api-Key': token },
-      credentials: 'same-origin',
-    })
-      .then((res) => {
+    setAdminVerified('checking');
+
+    async function probe() {
+      const headers: Record<string, string> = {};
+      if (token) headers['X-Api-Key'] = token;
+
+      try {
+        const res = await fetch('/api/admin/whoami', {
+          headers,
+          credentials: 'same-origin',
+        });
         if (cancelled) return;
+
+        if (res.status === 200) {
+          setAdminVerified('admin');
+          return;
+        }
         if (res.status === 403) {
           // Authenticated but not admin → bounce to dashboard.
           setAdminVerified('denied');
           router.replace('/dashboard');
           return;
         }
-        if (!res.ok) {
-          // 401 (bad token) — clear sessionStorage so the prompt re-appears.
-          sessionStorage.removeItem(TOKEN_KEY);
-          setToken(null);
-          setAdminVerified('idle');
+        if (res.status === 401) {
+          if (token) {
+            // Bad api-key — clear it and retry as cookie-only by setting
+            // token=null. The state change re-fires this effect.
+            sessionStorage.removeItem(TOKEN_KEY);
+            setToken(null);
+            return;
+          }
+          // No session and no token → show the api-key prompt.
+          setAdminVerified('needs-key');
           return;
         }
-        setAdminVerified('admin');
-      })
-      .catch(() => {
+        // Any other status — fall back to idle / prompt.
+        setAdminVerified('needs-key');
+      } catch {
         if (cancelled) return;
-        // Network failure — leave gate as-is, user can retry.
-        setAdminVerified('idle');
-      });
+        setAdminVerified('needs-key');
+      }
+    }
+
+    void probe();
     return () => {
       cancelled = true;
     };
   }, [token, router]);
 
-  if (token && adminVerified === 'checking') {
+  if (adminVerified === 'checking') {
     return (
       <div className="gate">
         <div className="gate-card">
@@ -87,7 +107,7 @@ function AdminGateInner({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (token && adminVerified === 'denied') {
+  if (adminVerified === 'denied') {
     return (
       <div className="gate">
         <div className="gate-card">
@@ -99,7 +119,7 @@ function AdminGateInner({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!token) {
+  if (adminVerified === 'needs-key') {
     return (
       <div className="gate">
         <div className="gate-card">
