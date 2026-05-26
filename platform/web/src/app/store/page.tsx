@@ -18,6 +18,7 @@ export default function StorePage() {
     selectedCategory,
     setSelectedCategory,
     selectedSection,
+    sortBy,
   } = useStore();
 
   const sectionApps = useMemo(
@@ -39,8 +40,19 @@ export default function StorePage() {
           a.category.toLowerCase().includes(q),
       );
     }
+    // CARRY-P214-STORE-SEARCH — sort dropdown.
+    if (sortBy === 'newly_added') {
+      result = [...result].sort((a, b) => {
+        const at = a.created_at ? Date.parse(a.created_at) : 0;
+        const bt = b.created_at ? Date.parse(b.created_at) : 0;
+        return bt - at;
+      });
+    } else if (sortBy === 'name') {
+      result = [...result].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    // 'curated' = preserve API order (server already orderBy sort_order, name)
     return result;
-  }, [sectionApps, searchQuery, selectedCategory]);
+  }, [sectionApps, searchQuery, selectedCategory, sortBy]);
 
   const featuredApps = useMemo(
     () => sectionApps.filter((a) => a.featured),

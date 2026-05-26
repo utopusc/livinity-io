@@ -145,6 +145,24 @@ button, input { font: inherit; color: inherit; }
   align-items: center;
   gap: 14px;
 }
+.tb-sort select {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 6px 28px 6px 10px;
+  font-size: 13px;
+  color: var(--fg);
+  cursor: pointer;
+  font-family: inherit;
+  background-image: linear-gradient(45deg, transparent 50%, var(--fg-mute) 50%),
+                    linear-gradient(135deg, var(--fg-mute) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.tb-sort select:hover { border-color: var(--line-strong); }
+.tb-sort select:focus { outline: 1px solid var(--line-strong); outline-offset: 0; }
 .tb-user {
   display: inline-flex;
   align-items: center;
