@@ -533,12 +533,37 @@ export async function provisionUserHostnames(username: string): Promise<{
  *
  * URL pattern (locked Phase 140): `{app_slug}-{username}.livinity.io`
  */
+// CARRY-P210-BUG-D — defense-in-depth slug + username validation.
+// Callers above (api/me/app-subdomain/route.ts) also validate, but new
+// callers can land later and skip the wrapper — guarding here means single-
+// char slugs / malformed inputs cannot reach the CF API.
+const CF_SUBDOMAIN_PART_RE = /^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$/;
+
 export async function provisionAppSubdomain(opts: {
   tunnel_id: string;
   username: string;
   app_slug: string;
   port: number;
 }): Promise<{ subdomain: string; url: string; dns_record_id: string }> {
+  if (!CF_SUBDOMAIN_PART_RE.test(opts.app_slug)) {
+    throw new CfApiError({
+      message: `Invalid app_slug "${opts.app_slug}": must be 2-32 chars, lowercase alphanumeric or hyphen, no leading/trailing hyphen`,
+      code: 400,
+      cfErrorCode: 0,
+      cfMessage: 'validation rejected app_slug',
+      endpoint: 'provisionAppSubdomain',
+    });
+  }
+  if (!CF_SUBDOMAIN_PART_RE.test(opts.username)) {
+    throw new CfApiError({
+      message: `Invalid username "${opts.username}": must be 2-32 chars, lowercase alphanumeric or hyphen, no leading/trailing hyphen`,
+      code: 400,
+      cfErrorCode: 0,
+      cfMessage: 'validation rejected username',
+      endpoint: 'provisionAppSubdomain',
+    });
+  }
+
   const subdomain = `${opts.app_slug}-${opts.username}`;
   const hostname = `${subdomain}.livinity.io`;
 
