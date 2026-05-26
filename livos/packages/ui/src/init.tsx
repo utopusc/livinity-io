@@ -8,6 +8,7 @@ import ReactDOM from 'react-dom/client'
 import {ErrorBoundary} from 'react-error-boundary'
 
 import {IframeChecker} from '@/components/iframe-checker'
+import {LivosVersionBanner} from '@/components/livos-version-banner'
 import {BareCoverMessage, CoverMessageTarget} from '@/components/ui/cover-message'
 import {Toaster} from '@/components/ui/toast'
 import {TooltipProvider} from '@/shadcn-components/ui/tooltip'
@@ -36,6 +37,8 @@ export function init(element: React.ReactNode) {
 							<TooltipProvider>
 								{element}
 								<Toaster />
+								{/* Phase 218 T7 — refresh banner on UI bundle mismatch. */}
+								<LivosVersionBanner />
 								{/* Put `CoverMessageTarget` after `Toaster` because we don't want toasts to show up on these pages */}
 								<CoverMessageTarget />
 							</TooltipProvider>
