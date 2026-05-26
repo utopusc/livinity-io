@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
-import { validateApiKey, unauthorizedResponse } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/auth-admin';
 import { db } from '@/lib/drizzle';
 import { apps } from '@/db/schema';
 
@@ -29,8 +29,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(req);
-  if (!auth.valid) return unauthorizedResponse(auth.error);
+  const ctx = await requireAdmin(req);
+  if (ctx instanceof NextResponse) return ctx;
 
   const { id } = await params;
   const [row] = await db.select().from(apps).where(eq(apps.slug, id)).limit(1);
@@ -42,8 +42,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(req);
-  if (!auth.valid) return unauthorizedResponse(auth.error);
+  const ctx = await requireAdmin(req);
+  if (ctx instanceof NextResponse) return ctx;
 
   const { id } = await params;
   let body: UpdateBody;
@@ -94,8 +94,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(req);
-  if (!auth.valid) return unauthorizedResponse(auth.error);
+  const ctx = await requireAdmin(req);
+  if (ctx instanceof NextResponse) return ctx;
 
   const { id } = await params;
   try {

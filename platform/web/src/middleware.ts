@@ -2,38 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const SESSION_COOKIE_NAME = 'liv_session';
 
-// Legacy admin routes that authenticate via `x-api-key` header (bcrypt-checked
-// against the api_keys table). These keep working unchanged — middleware is a
-// soft cookie-presence gate; real `is_admin=true` enforcement lives in
-// requireAdmin() inside each new route handler.
-const LEGACY_APIKEY_ADMIN_PREFIXES = [
-  '/api/admin/apps',
-  '/api/admin/devices',
-  '/api/admin/icon-upload',
-];
-
-function isLegacyApiKeyPath(pathname: string): boolean {
-  for (const prefix of LEGACY_APIKEY_ADMIN_PREFIXES) {
-    if (pathname === prefix || pathname.startsWith(prefix + '/')) {
-      return true;
-    }
-  }
-  return false;
-}
-
 export function middleware(req: NextRequest): NextResponse {
   const { pathname } = req.nextUrl;
   const hasSession = req.cookies.has(SESSION_COOKIE_NAME);
+  // CARRY-P212-LEGACY-ADMIN-UNIFY closed: all /api/admin/* routes now use
+  // requireAdmin() which accepts session cookie OR x-api-key. Middleware
+  // skips the gate when EITHER credential type is present and lets the
+  // handler do the actual is_admin lookup.
+  const hasApiKey = req.headers.has('x-api-key');
 
-  // Legacy x-api-key paths bypass the cookie gate entirely.
-  if (isLegacyApiKeyPath(pathname)) {
-    return NextResponse.next();
-  }
-
-  // New admin API routes: 401 JSON without session cookie.
-  // Real is_admin enforcement happens in requireAdmin() inside the handler.
+  // Admin API routes: 401 JSON only when NO credential is present at all.
+  // Real is_admin enforcement happens inside the handler via requireAdmin().
   if (pathname.startsWith('/api/admin/')) {
-    if (!hasSession) {
+    if (!hasSession && !hasApiKey) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 },

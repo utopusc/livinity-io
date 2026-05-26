@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth-admin';
 import pool from '@/lib/db';
 
 /**
- * GET /api/admin/devices — Phase 16 ADMIN-01
+ * GET /api/admin/devices — Phase 16 ADMIN-01 (unified P212 auth)
  *
  * Returns every device across every user with owner username, platform, online
  * status (derived from last_seen within 60s), and timestamps.
  *
- * Admin detection: platform/web has no explicit role column, so the historical
- * convention from migration 0007 is adopted — the "admin" is the user with the
- * smallest `created_at` (i.e., the first registered user, who bootstrapped the
- * deployment). Every other authenticated user receives 403.
+ * Auth: requireAdmin() — accepts EITHER session cookie OR x-api-key, both
+ * gated by users.is_admin=true (Phase 212). Replaces the legacy "oldest
+ * user is admin" heuristic from migration 0007.
  *
  * This is defense-in-depth: the primary enforcement of ADMIN-01 lives on the
  * livinityd side via tRPC `devicesAdmin.adminListAll` (adminProcedure gate
@@ -21,24 +20,8 @@ import pool from '@/lib/db';
  */
 export async function GET(req: NextRequest) {
   try {
-    const sessionToken = req.cookies.get(SESSION_COOKIE_NAME)?.value;
-    if (!sessionToken) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-    const session = await getSession(sessionToken);
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
-
-    // Admin check — is this session's user the oldest (bootstrap) user?
-    // Matches migration 0007's "oldest admin" fallback convention.
-    const adminRow = await pool.query<{ id: string }>(
-      `SELECT id FROM users ORDER BY created_at ASC LIMIT 1`,
-    );
-    const platformAdminId = adminRow.rows[0]?.id;
-    if (!platformAdminId || platformAdminId !== session.userId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const ctx = await requireAdmin(req);
+    if (ctx instanceof NextResponse) return ctx;
 
     // Cross-user listing: every non-revoked device with owner username.
     // Online = last_seen within 60 seconds (matches relay heartbeat cadence).
