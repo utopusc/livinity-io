@@ -35,6 +35,9 @@ export async function GET(req: NextRequest) {
       featured: apps.featured,
       verified: apps.verified,
       version: apps.version,
+      // CARRY-P214-STORE-SEARCH — sort dropdown reads created_at for the
+      // "newly added" option. Cheap to ship in the existing list payload.
+      created_at: apps.created_at,
     })
     .from(apps);
 

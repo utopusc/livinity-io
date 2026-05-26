@@ -36,7 +36,11 @@ export interface AppSummary {
   featured: boolean;
   verified: boolean;
   version: string;
+  /** Phase 214 — created_at for "newly added" sort option in store UI. */
+  created_at?: string;
 }
+
+export type StoreSort = 'curated' | 'newly_added' | 'name';
 
 // --- postMessage Bridge Protocol (Phase 19) ---
 
@@ -125,6 +129,9 @@ export interface StoreContextValue {
   setSelectedCategory: (c: string | null) => void;
   selectedSection: Section;
   setSelectedSection: (s: Section) => void;
+  // Phase 214 — sort dropdown.
+  sortBy: StoreSort;
+  setSortBy: (s: StoreSort) => void;
   token: string | null;
   instanceName: string | null;
   // postMessage bridge (Phase 19)

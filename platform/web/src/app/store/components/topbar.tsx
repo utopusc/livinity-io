@@ -2,13 +2,20 @@
 
 import { useStore } from '../store-provider';
 import { Icon } from './icons';
+import type { StoreSort } from '../types';
 
 interface TopbarProps {
   onMenuToggle: () => void;
 }
 
+const SORT_OPTIONS: { value: StoreSort; label: string }[] = [
+  { value: 'curated', label: 'Curated order' },
+  { value: 'newly_added', label: 'Newly added' },
+  { value: 'name', label: 'Name (A→Z)' },
+];
+
 export function Topbar({ onMenuToggle }: TopbarProps) {
-  const { searchQuery, setSearchQuery, instanceName } = useStore();
+  const { searchQuery, setSearchQuery, instanceName, sortBy, setSortBy } = useStore();
 
   return (
     <div className="tb">
@@ -46,6 +53,18 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
       </div>
 
       <div className="tb-right">
+        <label className="tb-sort" aria-label="Sort apps">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as StoreSort)}
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
         {instanceName && (
           <a href="#" className="tb-user">
             <span className="tb-avatar">{instanceName.charAt(0).toUpperCase()}</span>
