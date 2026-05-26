@@ -34,6 +34,7 @@ import type {Redis} from 'ioredis'
 
 const REDIS_PREFIX = 'livos:platform:'
 const DEFAULT_REALTIME_TOKEN_URL = 'https://livinity.io/api/me/realtime-token'
+const DEFAULT_TUNNEL_CONN_URL = 'https://livinity.io/api/me/tunnel-connections'
 const REMINT_INTERVAL_MS = 50 * 60 * 1000 // 50 min — token TTL is 1h
 
 export type TunnelPresenceStatus =
@@ -84,6 +85,9 @@ export class TunnelPresence {
 	private userId: string | null = null
 	private username: string | null = null
 	private stopped = false
+	// CARRY-P212-TUNNEL-PERSIST — id of the active tunnel_connections row
+	// on livinity.io, used to POST disconnect on shutdown.
+	private tunnelConnectionId: string | null = null
 
 	constructor(opts: TunnelPresenceOptions) {
 		this.redis = opts.redis
@@ -177,6 +181,12 @@ export class TunnelPresence {
 						await this.setStatus('connected')
 						await this.redis.set(`${REDIS_PREFIX}session_id`, tokenResp.channel)
 						await this.redis.set(`${REDIS_PREFIX}url`, `https://${username}.livinity.io`)
+						// CARRY-P212-TUNNEL-PERSIST — best-effort: record this
+						// tunnel session on livinity.io so the admin Tunnels page
+						// has a real row. Failure is non-fatal — presence stays up.
+						this.recordConnected(apiKey, tokenResp.channel).catch((err) =>
+							this.logger.error('[presence] recordConnected failed:', err),
+						)
 						this.scheduleRemint(apiKey)
 						resolve()
 					} else if (
@@ -194,6 +204,54 @@ export class TunnelPresence {
 		} catch (err) {
 			this.logger.error('[presence] connect failed, will retry in 30s:', err)
 			this.scheduleRetry(apiKey, 30_000)
+		}
+	}
+
+	private async recordConnected(apiKey: string, sessionId: string): Promise<void> {
+		const resp = await fetch(`${DEFAULT_TUNNEL_CONN_URL}/connect`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-API-Key': apiKey,
+				'User-Agent': `livinityd-presence/${this.version}`,
+			},
+			body: JSON.stringify({
+				session_id: sessionId,
+				client_version: this.version,
+			}),
+		})
+		if (!resp.ok) {
+			this.logger.error(
+				`[presence] tunnel_connections insert HTTP ${resp.status}: ${(await resp.text()).slice(0, 200)}`,
+			)
+			return
+		}
+		const body = (await resp.json()) as {id?: string}
+		if (body.id) {
+			this.tunnelConnectionId = body.id
+			this.logger.log(`[presence] tunnel_connections row id=${body.id}`)
+		}
+	}
+
+	private async recordDisconnected(apiKey: string): Promise<void> {
+		const id = this.tunnelConnectionId
+		if (!id) return
+		this.tunnelConnectionId = null
+		try {
+			const resp = await fetch(`${DEFAULT_TUNNEL_CONN_URL}/${id}/disconnect`, {
+				method: 'POST',
+				headers: {
+					'X-API-Key': apiKey,
+					'User-Agent': `livinityd-presence/${this.version}`,
+				},
+			})
+			if (!resp.ok) {
+				this.logger.error(
+					`[presence] tunnel_connections disconnect HTTP ${resp.status}: ${(await resp.text()).slice(0, 200)}`,
+				)
+			}
+		} catch (err) {
+			this.logger.error('[presence] recordDisconnected failed:', err)
 		}
 	}
 
@@ -233,6 +291,17 @@ export class TunnelPresence {
 		if (this.retryTimer) {
 			clearTimeout(this.retryTimer)
 			this.retryTimer = null
+		}
+		// CARRY-P212-TUNNEL-PERSIST — record disconnect before tearing down
+		// presence. Best-effort: errors swallowed; tunnel teardown proceeds
+		// regardless. Uses the api-key from Redis (still present at stop).
+		try {
+			const apiKey = await this.redis.get(`${REDIS_PREFIX}api_key`)
+			if (apiKey && this.tunnelConnectionId) {
+				await this.recordDisconnected(apiKey)
+			}
+		} catch {
+			// proceed
 		}
 		if (this.channel) {
 			await this.channel.untrack().catch(() => {})
