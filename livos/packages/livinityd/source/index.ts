@@ -182,6 +182,8 @@ import {createOpenclawosGatewayRouter} from './modules/server/trpc/openclawos-ga
 // real factory with `this.ai.redis` so the /settings → MCP tab can CRUD
 // the hash; McpBridge picks up changes at next livinityd boot.
 import {createMcpConfigRouter} from './modules/server/trpc/mcp-config-router.js'
+import {createSkillsRouter} from './modules/server/trpc/skills-router.js'
+import {SkillsLoader} from './modules/skills/loader.js'
 // Phase 204-01 — provider.config.* router (LLM provider API key entry for
 // liv-claw-gateway). Boot wire-up builds the real factory with
 // `this.ai.redis` so the /settings → Providers tab can CRUD the
@@ -1808,6 +1810,17 @@ export default class Livinityd {
 				)
 			}
 
+			// Phase 219 T6 — SkillsLoader wired against the canonical vault
+			// root (~/livinity or LIV_VAULT_ROOT). Loader is filesystem-only
+			// (no Redis dep), so it always boots even when Redis is down.
+			const skillsLoader = new SkillsLoader({
+				logger: {
+					info: (msg) => webappLogger.info(msg),
+					warn: (msg, err) => this.logger.error(msg, err),
+				},
+			})
+			const skillsRouterProductionInstance = createSkillsRouter({loader: skillsLoader})
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
@@ -1820,6 +1833,7 @@ export default class Livinityd {
 				openclawosGateway: openclawosGatewayRouterProductionInstance,
 				providerConfig: providerConfigRouterProductionInstance,
 				openclawCli: openclawCliRouterProductionInstance,
+				skills: skillsRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(
