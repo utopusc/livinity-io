@@ -1,13 +1,38 @@
 import path from 'node:path'
+import {writeFileSync} from 'node:fs'
 import react from '@vitejs/plugin-react-swc'
-import {defineConfig} from 'vite'
+import {defineConfig, type Plugin} from 'vite'
 import {imagetools} from 'vite-imagetools'
 import {VitePWA} from 'vite-plugin-pwa'
+
+// Phase 218 T7 — emit dist/version.txt with a build-time stamp matching
+// __LIVOS_BUILD_VERSION__. The UI polls this file every 30s; mismatch
+// against its compiled-in constant means update.sh ran and the operator
+// is looking at a stale tab. Banner prompts a refresh.
+function writeVersionFile(version: string): Plugin {
+	return {
+		name: 'livos-version-stamp',
+		apply: 'build',
+		closeBundle() {
+			const outDir = path.resolve(__dirname, 'dist')
+			try {
+				writeFileSync(path.join(outDir, 'version.txt'), version, 'utf-8')
+			} catch (err) {
+				// Don't fail the build; the banner just won't trigger.
+				// eslint-disable-next-line no-console
+				console.warn('[livos-version-stamp] failed to write dist/version.txt', err)
+			}
+		},
+	}
+}
+
+const LIVOS_BUILD_VERSION = String(Date.now())
 
 // https://vitejs.dev/config/
 
 export default defineConfig({
 	plugins: [
+		writeVersionFile(LIVOS_BUILD_VERSION),
 		react(),
 		imagetools({
 			// Currently we only convert SVGs in features/files/assets/file-items-thumbnails
@@ -73,7 +98,9 @@ export default defineConfig({
 				// PWA service worker intercepts the iframe's navigation request and
 				// serves the cached /index.html (LivOS UI shell), which contains
 				// IframeChecker → prints "LivOS cannot be embedded in an iframe."
-				navigateFallbackDenylist: [/^\/trpc/, /^\/api/, /^\/ws/, /^\/liv-ai-app/],
+				// Phase 218 T7 — /version.txt must bypass the SW so polling reads the
+				// freshly-deployed bundle's stamp, not a cached fallback to index.html.
+				navigateFallbackDenylist: [/^\/trpc/, /^\/api/, /^\/ws/, /^\/liv-ai-app/, /^\/version\.txt/],
 				runtimeCaching: [
 					{
 						urlPattern: /\/wallpapers\/.*/,
@@ -109,6 +136,13 @@ export default defineConfig({
 		__MARKETPLACE_URL__: JSON.stringify(
 			process.env.VITE_MARKETPLACE_URL || 'https://livinity.io'
 		),
+		// Phase 218 T7 — frozen at build time. The UI compares this against
+		// the freshly-fetched /version.txt every 30s and shows a refresh
+		// banner when they diverge, so operators see a "UI updated — Refresh"
+		// prompt within seconds of update.sh instead of having to hard-reload
+		// to notice. Companion plugin (writeVersionFile above) emits the
+		// matching value into dist/version.txt at build time.
+		__LIVOS_BUILD_VERSION__: JSON.stringify(LIVOS_BUILD_VERSION),
 	},
 	server: {
 		proxy: {
