@@ -21,6 +21,7 @@ import { AccountTab } from "@/components/settings/AccountTab";
 import { McpTab } from "@/components/settings/McpTab";
 import { ModelsTab } from "@/components/settings/ModelsTab";
 import { ProvidersTab } from "@/components/settings/ProvidersTab";
+import { SkillsTab } from "@/components/settings/SkillsTab";
 
 export default function SettingsPage() {
 	return (
@@ -28,13 +29,14 @@ export default function SettingsPage() {
 			<div className="mb-6">
 				<h1 className="text-2xl font-semibold">Settings</h1>
 				<p className="mt-1 text-sm text-muted-foreground">
-					Account, MCP servers, default Grok model, and LLM provider API keys.
+					Account, MCP servers, skills, default Grok model, and LLM provider API keys.
 				</p>
 			</div>
 			<Tabs defaultValue="account" className="space-y-6">
 				<TabsList>
 					<TabsTrigger value="account">Account</TabsTrigger>
 					<TabsTrigger value="mcp">MCP</TabsTrigger>
+					<TabsTrigger value="skills">Skills</TabsTrigger>
 					<TabsTrigger value="models">Models</TabsTrigger>
 					<TabsTrigger value="providers">Providers</TabsTrigger>
 				</TabsList>
@@ -43,6 +45,9 @@ export default function SettingsPage() {
 				</TabsContent>
 				<TabsContent value="mcp">
 					<McpTab />
+				</TabsContent>
+				<TabsContent value="skills">
+					<SkillsTab />
 				</TabsContent>
 				<TabsContent value="models">
 					<ModelsTab />

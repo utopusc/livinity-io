@@ -183,6 +183,7 @@ import {createOpenclawosGatewayRouter} from './modules/server/trpc/openclawos-ga
 // the hash; McpBridge picks up changes at next livinityd boot.
 import {createMcpConfigRouter} from './modules/server/trpc/mcp-config-router.js'
 import {createSkillsRouter} from './modules/server/trpc/skills-router.js'
+import {createSkillsMarketRouter} from './modules/server/trpc/skills-market-router.js'
 import {SkillsLoader} from './modules/skills/loader.js'
 // Phase 204-01 — provider.config.* router (LLM provider API key entry for
 // liv-claw-gateway). Boot wire-up builds the real factory with
@@ -1820,6 +1821,14 @@ export default class Livinityd {
 				},
 			})
 			const skillsRouterProductionInstance = createSkillsRouter({loader: skillsLoader})
+			// Phase 219 T7 — skills market router. Filesystem-only (writes into
+			// the vault root); shares the same vault contract as SkillsLoader.
+			const skillsMarketRouterProductionInstance = createSkillsMarketRouter({
+				logger: {
+					info: (msg) => webappLogger.info(msg),
+					warn: (msg, err) => this.logger.error(msg, err),
+				},
+			})
 
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
@@ -1834,6 +1843,7 @@ export default class Livinityd {
 				providerConfig: providerConfigRouterProductionInstance,
 				openclawCli: openclawCliRouterProductionInstance,
 				skills: skillsRouterProductionInstance,
+				skillsMarket: skillsMarketRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(
