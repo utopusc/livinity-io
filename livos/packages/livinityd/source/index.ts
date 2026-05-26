@@ -21,6 +21,10 @@ import Backups from './modules/backups/backups.js'
 import Scheduler from './modules/scheduler/index.js'
 import RedisModule from './modules/redis-module.js'
 import TunnelClient from './modules/platform/tunnel-client.js'
+// Phase 215 / CARRY-P215-MINIPC-POLLER — poll livinity.io install_commands
+// queue and dispatch to Apps.installForUser. Armed only when api-key is
+// configured in Redis (livos:platform:api_key); silent otherwise.
+import {InstallPoller} from './modules/platform/install-poller.js'
 import {DeviceBridge} from './modules/devices/device-bridge.js'
 import {initDatabase, migrateFromYaml, closeDatabase} from './modules/database/index.js'
 import {seedLocalEnvironment} from './modules/docker/environments.js'
@@ -311,6 +315,7 @@ export default class Livinityd {
 	scheduler: Scheduler
 	ai: RedisModule
 	tunnelClient: TunnelClient
+	installPoller!: InstallPoller
 	deviceBridge!: DeviceBridge
 	// Phase 59 (FR-BROKER-B1-03) — Bearer auth hot-path cache. Constructed in
 	// the constructor (no DB dep at construction; getPool() is resolved lazily
@@ -1849,6 +1854,19 @@ export default class Livinityd {
 		this.tunnelClient = new TunnelClient({redis: this.ai.redis})
 		await this.tunnelClient.start()
 
+		// Phase 215 / CARRY-P215-MINIPC-POLLER — start install_commands poller.
+		// Silent when api-key not configured (LAN-only installs).
+		this.installPoller = new InstallPoller({
+			redis: this.ai.redis,
+			apps: this.apps,
+			version: packageJson.version,
+			logger: {
+				log: (...args: unknown[]) => this.logger.log(args.map(String).join(' ')),
+				error: (...args: unknown[]) => this.logger.error(args.map(String).join(' ')),
+			},
+		})
+		await this.installPoller.start()
+
 		// Initialize DeviceBridge for remote device proxy tools
 		this.deviceBridge = new DeviceBridge({
 			redis: this.ai.redis,
@@ -1933,6 +1951,9 @@ export default class Livinityd {
 			}
 
 			// Stop modules
+			// Phase 215: stop install poller before tunnelClient so any in-flight
+			// install completes cleanly before the api-key path goes idle.
+			this.installPoller?.stop()
 			await Promise.all([this.files.stop(), this.apps.stop(), this.appStore.stop(), this.dbus.stop(), this.ai.stop(), this.tunnelClient.stop(), this.scheduler.stop()])
 
 			// Phase 59 — flush pending last_used_at writes BEFORE closing the DB
