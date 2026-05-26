@@ -1,17 +1,58 @@
 {
   "_meta": {
     "exported_from": "Mini PC bruce@10.69.31.68 liv:mcp:config",
-    "exported_at": "2026-05-13",
-    "phase": "109",
-    "_note": "Placeholder tokens (LIVOS_REDIS_URL surrounded by double underscores) in this file are substituted at install-time by _dld_seed_mcp_servers helper with the host's actual REDIS_URL from /opt/livos/.env. installedAt is 0 because seed installs have no meaningful install epoch."
+    "exported_at": "2026-05-26",
+    "phase": "219-T3",
+    "_note": "Placeholder tokens (LIVOS_REDIS_URL surrounded by double underscores) in this file are substituted at install-time by _dld_seed_mcp_servers helper with the host's actual REDIS_URL from /opt/livos/.env. installedAt is 0 because seed installs have no meaningful install epoch. Phase 219 T3: 4 local LivOS MCP servers (liv-*) added — enabled=false by default; operator opts in via /settings → MCP."
   },
   "mcpServers": {
+    "liv-apps": {
+      "name": "liv-apps",
+      "transport": "stdio",
+      "command": "/usr/bin/npx",
+      "args": ["tsx", "/opt/livos/packages/livinityd/source/modules/mcp/local/liv-apps/index.ts"],
+      "description": "List installed LivOS app instances + resolve slug → subdomain/port. Read-only. Needs LIVINITYD_API_URL + LIV_API_KEY env wired via the UI before enabling.",
+      "category": "system",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "liv-docker": {
+      "name": "liv-docker",
+      "transport": "stdio",
+      "command": "/usr/bin/npx",
+      "args": ["tsx", "/opt/livos/packages/livinityd/source/modules/mcp/local/liv-docker/index.ts"],
+      "description": "Inspect the host Docker daemon — list containers, tail logs, restart (destructive, gated).",
+      "category": "system",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "liv-system": {
+      "name": "liv-system",
+      "transport": "stdio",
+      "command": "/usr/bin/npx",
+      "args": ["tsx", "/opt/livos/packages/livinityd/source/modules/mcp/local/liv-system/index.ts"],
+      "description": "Read CPU / memory / disk / uptime metrics for the LivOS host. Read-only.",
+      "category": "system",
+      "enabled": false,
+      "installedAt": 0
+    },
+    "liv-vault": {
+      "name": "liv-vault",
+      "transport": "stdio",
+      "command": "/usr/bin/npx",
+      "args": ["tsx", "/opt/livos/packages/livinityd/source/modules/mcp/local/liv-vault/index.ts"],
+      "description": "Note CRUD over ~bruce/livinity/<agent>/notes/. Write + delete are destructive (gated).",
+      "category": "system",
+      "enabled": false,
+      "installedAt": 0
+    },
     "sequential-thinking": {
       "name": "sequential-thinking",
       "transport": "stdio",
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
       "description": "Dynamic problem-solving through thought sequences",
+      "category": "productivity",
       "installedFrom": "sequential-thinking",
       "enabled": true,
       "installedAt": 0
@@ -26,6 +67,8 @@
         "XAUTHORITY": "/run/user/1000/gdm/Xauthority",
         "LUSE_REDIS_URL": "__LIVOS_REDIS_URL__"
       },
+      "description": "Computer-use tools (keyboard / mouse / screenshot). System MCP — required for the WebApp surface.",
+      "category": "system",
       "enabled": true,
       "installedAt": 0
     }
