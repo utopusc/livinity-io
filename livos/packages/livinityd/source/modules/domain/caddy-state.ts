@@ -65,13 +65,31 @@ export interface CaddyStateDeps {
 }
 
 /**
+ * Strip the first DNS label from a domain to get the apex. The operator's
+ * `livos:domain:config` typically stores the per-instance dashboard host
+ * (e.g. `bruce.livinity.io`), but Phase 140 hyphen-pattern app subdomains
+ * sit at the PLATFORM APEX (e.g. `bolt-diy-bruce.livinity.io`, NOT
+ * `bolt-diy-bruce.bruce.livinity.io`). Apex inference = mainDomain minus
+ * its first label. Returns null when the input has no dot (apex unknown).
+ */
+function inferApex(mainDomain: string | null): string | null {
+	if (!mainDomain) return null
+	const dot = mainDomain.indexOf('.')
+	if (dot < 0) return null
+	return mainDomain.slice(dot + 1)
+}
+
+/**
  * Build a `CaddyConfig` from the current DB + Redis state.
  *
  * Rules:
  *   - Only running instances.
  *   - Prefer the cached canonical FQDN from `user_app_subdomains` when
  *     present (Phase 140 hyphen-pattern minted by Server5).
- *   - Fallback: derive `<app_slug>-<username>.<mainDomain>` locally.
+ *   - Fallback: derive `<app_slug>-<username>.<apex>` locally, where apex
+ *     is mainDomain with its first label stripped. This matches the
+ *     Server5 mint shape for graceful degradation when the platform mint
+ *     hasn't been cached locally yet.
  *   - Drop instances whose username can't compose a valid subdomain
  *     label (defense in depth against bad migrations).
  */
@@ -81,6 +99,8 @@ export async function buildCaddyConfigFromState(deps: CaddyStateDeps): Promise<C
 		deps.getSubdomains().catch(() => [] as CaddyStateSubdomain[]),
 		deps.getMainDomain(),
 	])
+
+	const apex = inferApex(mainDomain)
 
 	// Index the subdomain cache by (userId, appSlug) for O(1) lookup.
 	const cacheKey = (userId: string, appSlug: string) => `${userId}::${appSlug}`
@@ -95,7 +115,7 @@ export async function buildCaddyConfigFromState(deps: CaddyStateDeps): Promise<C
 		if (!inst.username || !inst.appSlug) continue
 
 		const cachedHost = cache.get(cacheKey(inst.userId, inst.appSlug))
-		const host = cachedHost ?? (mainDomain ? `${inst.appSlug}-${inst.username}.${mainDomain}` : null)
+		const host = cachedHost ?? (apex ? `${inst.appSlug}-${inst.username}.${apex}` : null)
 		if (!host) continue
 
 		subdomains.push({

@@ -19,6 +19,7 @@ import {NativeApp, NATIVE_APP_CONFIGS} from './native-app.js'
 import {generateAppTemplate} from './compose-generator.js'
 import {injectAiProviderConfig} from './inject-ai-provider.js'
 import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
+import {buildCaddyConfigFromState, type CaddyStateInstance, type CaddyStateSubdomain} from '../domain/caddy-state.js'
 import {getTunnelStatus} from '../domain/tunnel.js'
 import {
 	allocatePort,
@@ -28,6 +29,7 @@ import {
 	listAllUserAppInstances,
 	findUserById,
 	getAdminUser,
+	getPool,
 } from '../database/index.js'
 // writeSurfaceContext / removeSurfaceContext lived in claude-runner/ — removed
 // with the AI Chat teardown. No-op stubs preserve install/uninstall flow.
@@ -1041,6 +1043,105 @@ export default class Apps {
 	}
 
 	/**
+	 * Phase 218 T1/T5 — DB+Redis-state-derived Caddy regen. Used by per-user
+	 * install/uninstall flows (installForUser, uninstallForUser) and the
+	 * boot-time orphan reconciler so the Caddyfile reflects every running
+	 * `user_app_instances` row plus any single-user-shape `livos:domain:subdomains`
+	 * entries that registerAppSubdomain wrote.
+	 *
+	 * Merge rules:
+	 *   - State-derived per-user blocks come first (multi-user installs).
+	 *   - Redis-Stored subdomains are appended unless their host would
+	 *     collide with a state-derived host (defense in depth — shouldn't
+	 *     happen in practice but a single-→multi-user mid-flight migration
+	 *     could cause it).
+	 *
+	 * Non-fatal: any failure logs an error but does NOT throw. Callers
+	 * (post-install hooks, boot regen) must not abort their own flow if
+	 * Caddy is unavailable.
+	 */
+	private async rebuildCaddyFromState(): Promise<void> {
+		try {
+			const pool = getPool()
+			const stateConfig = await buildCaddyConfigFromState({
+				getInstances: async (): Promise<CaddyStateInstance[]> => {
+					if (!pool) return []
+					const {rows} = await pool.query(
+						`SELECT i.user_id, u.username, i.app_id, i.port, i.status
+						 FROM user_app_instances i
+						 JOIN users u ON i.user_id = u.id`,
+					)
+					return rows.map((r: any) => ({
+						userId: r.user_id,
+						username: r.username,
+						appSlug: r.app_id,
+						port: r.port,
+						status: r.status,
+					}))
+				},
+				getSubdomains: async (): Promise<CaddyStateSubdomain[]> => {
+					if (!pool) return []
+					const {rows} = await pool.query(
+						`SELECT user_id, app_slug, subdomain FROM user_app_subdomains`,
+					)
+					return rows.map((r: any) => ({
+						userId: r.user_id,
+						appSlug: r.app_slug,
+						subdomain: r.subdomain,
+					}))
+				},
+				getMainDomain: async () => {
+					const config = await this.getDomainConfig()
+					return config?.active ? config.domain : null
+				},
+			})
+
+			// Merge with existing Redis-stored single-user subdomains.
+			const redisSubs = await this.getSubdomains()
+			const stateHosts = new Set(
+				stateConfig.subdomains
+					.map((s) => s.host?.toLowerCase())
+					.filter((h): h is string => Boolean(h)),
+			)
+			const merged: SubdomainConfig[] = [...stateConfig.subdomains]
+			for (const r of redisSubs) {
+				if (!r.enabled) continue
+				const candidateHost = (r.host ?? (stateConfig.mainDomain ? `${r.subdomain}.${stateConfig.mainDomain}` : '')).toLowerCase()
+				if (candidateHost && stateHosts.has(candidateHost)) continue
+				merged.push(r)
+			}
+
+			const caddyConfig: CaddyConfig = {
+				mainDomain: stateConfig.mainDomain,
+				subdomains: merged,
+			}
+
+			const multiUserEnabled = await this.#livinityd.ai.redis.get('livos:system:multi_user')
+			const isMultiUser = multiUserEnabled === 'true'
+
+			const nativeAppSubdomains = this.nativeInstances.map((app) => ({
+				subdomain: app.subdomain,
+				port: app.proxyPort,
+				streaming: app.id === 'desktop-stream',
+			}))
+
+			// Phase 134+ tunnel detection — mirrors rebuildCaddy().
+			const tunnelStatus = await getTunnelStatus().catch(() => null)
+			const relayTunnelRunning = Boolean(tunnelStatus?.running)
+			const localMode = await this.#livinityd.ai.redis.get('livos:domain:local_mode')
+			const cfTunnelMode = localMode === 'portal' || localMode === 'hybrid' || localMode === 'tunnel'
+			const isTunnel = relayTunnelRunning || cfTunnelMode
+
+			const content = generateFullCaddyfile(caddyConfig, isMultiUser, isTunnel, nativeAppSubdomains)
+			await writeCaddyfile(content)
+			await reloadCaddy()
+			this.logger.log(`[caddy] regenerated from state: ${caddyConfig.subdomains.length} subdomain blocks`)
+		} catch (err) {
+			this.logger.error('[caddy] rebuildCaddyFromState failed (non-fatal)', err)
+		}
+	}
+
+	/**
 	 * Phase 141-05 — public wrappers around the private CF provisioning
 	 * helpers, so the domain.routes.ts tRPC layer can drive Server5
 	 * deprovision+provision on subdomain rename. The "appId" param name in the
@@ -1281,6 +1382,13 @@ export default class Apps {
 
 		// Surface context (vault CLAUDE.md scaffolder) removed with AI Chat teardown.
 
+		// Phase 218 T1 — regenerate Caddyfile so the new per-user subdomain
+		// (e.g. bolt-diy-bruce.livinity.io) actually routes to the container
+		// we just started. Without this, the install lands but the subdomain
+		// falls through Caddy's catch-all to livinityd's LivOS UI — the
+		// real-world dogfood bug operator reported 2026-05-26.
+		await this.rebuildCaddyFromState()
+
 		this.logger.log(`Installed ${appId} for user ${user.username} on port ${port}`)
 		return true
 	}
@@ -1311,6 +1419,10 @@ export default class Apps {
 		await deleteUserAppInstance(userId, appId)
 
 		// Surface context cleanup removed with AI Chat teardown.
+
+		// Phase 218 T1 — regenerate Caddyfile after the row is gone so the
+		// dead subdomain stops 502'ing.
+		await this.rebuildCaddyFromState()
 
 		this.logger.log(`Uninstalled ${appId} for user ${user.username}`)
 		return true
