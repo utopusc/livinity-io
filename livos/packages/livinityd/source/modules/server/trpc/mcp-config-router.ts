@@ -87,6 +87,15 @@ export interface McpConfigRedisClient {
 	 */
 	set?(key: string, value: string): Promise<unknown>
 	get?(key: string): Promise<string | null>
+	/**
+	 * Phase 219 T1 — TYPE + DEL needed for STRING→HASH self-healing migration.
+	 * Optional so the test mock can omit them when not relevant; production
+	 * ioredis exposes both. Without these, ensureHashPrimitive() short-circuits
+	 * to a no-op (router still works on already-HASH keys but cannot recover a
+	 * stale STRING from pre-218 deploys).
+	 */
+	type?(key: string): Promise<string>
+	del?(key: string): Promise<unknown>
 }
 
 /**
@@ -107,6 +116,72 @@ async function publishMcpUpdated(
 		)
 	} catch (err) {
 		deps.logger.warn(`[mcp-config] failed to publish ${MCP_CONFIG_REDIS_PUBSUB_CHANNEL} for '${name}'`, err)
+	}
+}
+
+/**
+ * Phase 219 T1 — STRING→HASH self-healing migration for the tRPC router.
+ *
+ * The Phase 109 install seed historically did `SET liv:mcp:config "<json>"`,
+ * which left the key as a Redis STRING. The router uses HASH operations
+ * (HGETALL/HSET/HGET/HDEL), so the first mutation on a freshly-installed box
+ * threw WRONGTYPE — surfacing as "Add failed (HTTP 500)" in the operator's
+ * UI. Phase 218 T6 added an equivalent migration in liv-core's
+ * `McpConfigManager.ensureHashPrimitive()`, but livinityd's tRPC router has
+ * its own minimal Redis surface and never crossed that path.
+ *
+ * Mirrors `McpConfigManager.ensureHashPrimitive`:
+ *   - TYPE check; no-op on every type other than 'string'
+ *   - Parse the legacy `{mcpServers: {...}}` JSON, DEL the STRING, HSET each
+ *     server entry into the canonical HASH
+ *   - Fail-open: on any failure, log + DEL so subsequent HSET succeeds
+ *
+ * Optional `type`/`del` on the Redis client means tests that mock only the
+ * hash surface still work — the function short-circuits when the type probe
+ * isn't available.
+ */
+async function ensureHashPrimitive(deps: McpConfigRouterDeps): Promise<void> {
+	const {redis, logger} = deps
+	if (typeof redis.type !== 'function' || typeof redis.del !== 'function') return
+	let kind: string
+	try {
+		kind = await redis.type(REDIS_HASH_KEY)
+	} catch (err) {
+		logger.warn(`[mcp-config] TYPE check failed for ${REDIS_HASH_KEY}`, err)
+		return
+	}
+	if (kind !== 'string') return
+
+	try {
+		const get = redis.get
+		const raw = typeof get === 'function' ? await get.call(redis, REDIS_HASH_KEY) : null
+		if (!raw) {
+			await redis.del(REDIS_HASH_KEY)
+			logger.info(`[mcp-config] cleared empty STRING at ${REDIS_HASH_KEY}`)
+			return
+		}
+		const parsed = JSON.parse(raw) as {mcpServers?: Record<string, unknown>; servers?: Record<string, unknown>}
+		const servers =
+			parsed.mcpServers && typeof parsed.mcpServers === 'object'
+				? parsed.mcpServers
+				: parsed.servers && typeof parsed.servers === 'object'
+					? parsed.servers
+					: {}
+		await redis.del(REDIS_HASH_KEY)
+		let migrated = 0
+		for (const [name, val] of Object.entries(servers)) {
+			if (!val || typeof val !== 'object') continue
+			await redis.hset(REDIS_HASH_KEY, name, JSON.stringify(val))
+			migrated++
+		}
+		logger.info(`[mcp-config] migrated ${REDIS_HASH_KEY} STRING → HASH (${migrated} servers)`)
+	} catch (err) {
+		logger.warn(`[mcp-config] STRING→HASH migration failed for ${REDIS_HASH_KEY}, deleting key to recover`, err)
+		try {
+			await redis.del(REDIS_HASH_KEY)
+		} catch {
+			/* swallow — already logged */
+		}
 	}
 }
 
@@ -277,16 +352,21 @@ function toOpenclawMcpServerConfig(
  * Fail-open: never throws. A failure is logged with the operator-readable
  * reason so the SettingsDialog → MCP tab still surfaces the Redis truth even
  * if the openclaw config file is unwritable.
+ *
+ * Phase 219 T1 — returns a warning string when the mirror fails so the
+ * caller can surface it in the mutation's `warnings` array. The operator
+ * sees "MCP added — but openclaw.json mirror failed (chat agent will not
+ * see this server until next boot)" instead of a silent server-side log.
  */
 async function mirrorMcpEntryToOpenclawJson(
 	deps: McpConfigRouterDeps,
 	op: 'set' | 'delete',
 	name: string,
 	body: z.infer<typeof ServerBodySchema> | null,
-): Promise<void> {
+): Promise<string | null> {
 	const store = deps.openclawConfigStore
-	if (!store) return
-	if (deps.mirrorSkipNames?.has(name)) return
+	if (!store) return null
+	if (deps.mirrorSkipNames?.has(name)) return null
 	try {
 		store.patch((cfg) => {
 			if (!cfg.mcp) cfg.mcp = {}
@@ -305,11 +385,14 @@ async function mirrorMcpEntryToOpenclawJson(
 		deps.logger.info(
 			`[mcp-config] mirrored '${name}' to openclaw.json mcp.servers (op=${op})`,
 		)
+		return null
 	} catch (err) {
+		const reason = err instanceof Error ? err.message : String(err)
 		deps.logger.warn(
 			`[mcp-config] mirror to openclaw.json failed for '${name}' (op=${op}) — chat agent may not see this server until openclaw.json catches up`,
 			err,
 		)
+		return `openclaw.json mirror failed: ${reason}. Server saved to Redis but the chat agent will not see it until openclaw.json catches up.`
 	}
 }
 
@@ -336,6 +419,7 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 		// Read every field of the hash. Returns an array sorted alphabetically
 		// so the UI render is deterministic between calls.
 		list: adminProcedure.query(async () => {
+			await ensureHashPrimitive(deps)
 			const raw = await deps.redis.hgetall(REDIS_HASH_KEY)
 			const entries: McpServerConfig[] = []
 			for (const [name, value] of Object.entries(raw ?? {})) {
@@ -352,6 +436,7 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 		// "An MCP server with this name already exists" inline under the Name
 		// field.
 		add: adminProcedure.input(AddInput).mutation(async ({input}) => {
+			await ensureHashPrimitive(deps)
 			const existing = await deps.redis.hget(REDIS_HASH_KEY, input.name)
 			if (existing !== null && existing !== undefined) {
 				throw new TRPCError({
@@ -363,8 +448,8 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 			await deps.redis.hset(REDIS_HASH_KEY, input.name, serializeBody(body))
 			deps.logger.info(`[mcp-config] added external MCP server '${input.name}'`)
 			await publishMcpUpdated(deps, 'set', input.name)
-			await mirrorMcpEntryToOpenclawJson(deps, 'set', input.name, body)
-			return {ok: true as const}
+			const warning = await mirrorMcpEntryToOpenclawJson(deps, 'set', input.name, body)
+			return {ok: true as const, warnings: warning ? [warning] : []}
 		}),
 
 		// ── update ─────────────────────────────────────────────────────────────
@@ -373,6 +458,7 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 		// can send only the fields they care about (transport-switch is allowed
 		// when the caller supplies the matching `command`/`args` or `url`).
 		update: adminProcedure.input(UpdateInput).mutation(async ({input}) => {
+			await ensureHashPrimitive(deps)
 			const existing = await deps.redis.hget(REDIS_HASH_KEY, input.name)
 			if (existing === null || existing === undefined) {
 				throw new TRPCError({
@@ -398,8 +484,8 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 			await deps.redis.hset(REDIS_HASH_KEY, input.name, serializeBody(merged))
 			deps.logger.info(`[mcp-config] updated MCP server '${input.name}'`)
 			await publishMcpUpdated(deps, 'set', input.name)
-			await mirrorMcpEntryToOpenclawJson(deps, 'set', input.name, merged)
-			return {ok: true as const}
+			const warning = await mirrorMcpEntryToOpenclawJson(deps, 'set', input.name, merged)
+			return {ok: true as const, warnings: warning ? [warning] : []}
 		}),
 
 		// ── delete ─────────────────────────────────────────────────────────────
@@ -413,6 +499,7 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 					message: `SYSTEM_MCP: '${input.name}' is a system MCP server and cannot be deleted.`,
 				})
 			}
+			await ensureHashPrimitive(deps)
 			const existing = await deps.redis.hget(REDIS_HASH_KEY, input.name)
 			if (existing === null || existing === undefined) {
 				throw new TRPCError({
@@ -423,8 +510,8 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 			await deps.redis.hdel(REDIS_HASH_KEY, input.name)
 			deps.logger.info(`[mcp-config] deleted MCP server '${input.name}'`)
 			await publishMcpUpdated(deps, 'delete', input.name)
-			await mirrorMcpEntryToOpenclawJson(deps, 'delete', input.name, null)
-			return {ok: true as const}
+			const warning = await mirrorMcpEntryToOpenclawJson(deps, 'delete', input.name, null)
+			return {ok: true as const, warnings: warning ? [warning] : []}
 		}),
 
 		// ── toggle ─────────────────────────────────────────────────────────────
@@ -432,6 +519,7 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 		// `update({name, patch: {enabled}})` but keeps the wire-level
 		// audit log entry distinct.
 		toggle: adminProcedure.input(ToggleInput).mutation(async ({input}) => {
+			await ensureHashPrimitive(deps)
 			const existing = await deps.redis.hget(REDIS_HASH_KEY, input.name)
 			if (existing === null || existing === undefined) {
 				throw new TRPCError({
@@ -459,8 +547,8 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 				`[mcp-config] toggled MCP server '${input.name}' → ${input.enabled ? 'enabled' : 'disabled'}`,
 			)
 			await publishMcpUpdated(deps, 'set', input.name)
-			await mirrorMcpEntryToOpenclawJson(deps, 'set', input.name, merged)
-			return {ok: true as const}
+			const warning = await mirrorMcpEntryToOpenclawJson(deps, 'set', input.name, merged)
+			return {ok: true as const, warnings: warning ? [warning] : []}
 		}),
 
 		// ── getAutoApprove ─────────────────────────────────────────────────────
