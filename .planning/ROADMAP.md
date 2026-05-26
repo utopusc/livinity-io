@@ -3267,7 +3267,7 @@ Plus Phase 206 carry-overs:
 
 ---
 
-### Phase 217: E2E UAT + verification — ⚪ NOT STARTED
+### Phase 217: E2E UAT + verification — 🟡 OPERATOR-PENDING 2026-05-26 (UAT-CHECKLIST.md ready; operator walk required to close milestone)
 
 **Goal:** Operator walks every Phase 209-216 deliverable, confirms; milestone archived.
 

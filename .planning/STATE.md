@@ -3,16 +3,46 @@ gsd_state_version: 1.0
 milestone: v41
 milestone_name: Admin Panel + Store Hardening + Subdomain Reliability
 status: executing
-last_updated: "2026-05-26T13:30:00.000Z"
+last_updated: "2026-05-26T15:00:00.000Z"
 progress:
   total_phases: 9
-  completed_phases: 6
-  total_plans: 6
-  completed_plans: 6
-  percent: 67
+  completed_phases: 8
+  total_plans: 9
+  completed_plans: 9
+  percent: 89
 ---
 
-## Current Position (v41 — autonomous run 2026-05-26 — Phases 212-214 shipped, 3/9 remaining)
+## Current Position (v41 — autonomous run 2026-05-26 COMPLETE on Claude side, P217 operator-walk pending)
+
+**Autonomous run 2026-05-26 shipped 6 phases end-to-end in one session: P212 → P213 → P214 → P215 → P216 → P217 (prep).**
+
+| Phase | Status | Verdict |
+|---|---|---|
+| P209 | ✅ SHIPPED | Prior session |
+| P210 | 🟡 CODE-COMPLETE | Prior session — relay live-verify carry |
+| P211 | 🟡 PARTIAL | Prior session — 211.1 only, 2 carries |
+| P212 | 🟡 CODE-COMPLETE | Admin auth + data model; ADM-13 carry, ADM-03 carry |
+| P213 | 🟡 CODE-COMPLETE | Admin UI; design polish carry, RSC carry |
+| P214 | 🟢 CODE-COMPLETE | Store gate; all 4 criteria GREEN; search/detail carry |
+| P215 | 🟡 PARTIAL | Install bridge Vercel-side only; Mini PC poller carry |
+| P216 | 🟡 DOCS-COMPLETE | CF-AUDIT.md + cf-audit.sh shipped; operator-walk for live |
+| P217 | 🟡 OPERATOR-PENDING | UAT-CHECKLIST.md ready; operator walks ~70 rows |
+
+### What's left
+**ONLY operator-walked UAT.** All Claude-side autonomous work is complete. ~70 rows in UAT-CHECKLIST.md, est. 2–4h to walk.
+
+After walk: STATE.md `status:complete`, ROADMAP v41 → ✅ Shipped, archive to `.planning/milestones/v41/`.
+
+### Carry count
+~25 carries filed across phases. Catalogued in `.planning/phases/217-e2e-uat/UAT-CHECKLIST.md` with suggested v42 phase groupings.
+
+### Sacred SHA
+`f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across ALL commits this session (~25 commits).
+
+---
+
+## Previous run history (compressed)
+
 
 Phase: 214 just shipped CODE-COMPLETE (`4f90360f..1a4c7f65`, 4 commits)
 Plan: 214-01 (T1 middleware+client gate + T2 sync-catalog + T3 curation UI)
