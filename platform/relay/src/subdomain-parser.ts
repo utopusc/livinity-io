@@ -5,7 +5,8 @@
  *
  * Examples (with RELAY_HOST = "livinity.io"):
  *   "alice.livinity.io"         -> { username: "alice",  appName: null }
- *   "immich.alice.livinity.io"  -> { username: "alice",  appName: "immich" }
+ *   "n8n-alice.livinity.io"     -> { username: "alice",  appName: "n8n" }   (Phase 140+ hyphen format — canonical)
+ *   "immich.alice.livinity.io"  -> { username: "alice",  appName: "immich" } (legacy dot format)
  *   "livinity.io"               -> { username: null,     appName: null }
  *   "127.0.0.1:4000"            -> { username: null,     appName: null }
  */
@@ -46,12 +47,32 @@ export function parseSubdomain(host: string | undefined): SubdomainInfo {
   const parts = subdomainPart.split('.');
 
   if (parts.length === 1) {
+    // Phase 210 Bug A fix — canonical Phase 140+ format is `<app>-<username>`
+    // (hyphen): e.g. `n8n-alice.livinity.io`. Before this fix, a hyphen-format
+    // host was returned with `username='n8n-alice'`, which never matched any
+    // tunnel user → fell through to `serveOfflinePage(username)` which renders
+    // the offline page for the unknown user (often visually indistinguishable
+    // from the legitimate root page of the suffix user).
+    //
+    // Heuristic: usernames are validated server-side to be hyphen-free
+    // (RFC-compliant + UI guard at /register), so the LAST hyphen splits app
+    // slug (left, may itself contain hyphens like `code-server`) from username
+    // (right). If no hyphen, treat as bare username (legacy single-label case).
+    if (parts[0].includes('-')) {
+      const lastDash = parts[0].lastIndexOf('-');
+      const candidateApp = parts[0].slice(0, lastDash);
+      const candidateUser = parts[0].slice(lastDash + 1);
+      // Defensive: both halves must be non-empty after split.
+      if (candidateApp && candidateUser) {
+        return { username: candidateUser, appName: candidateApp };
+      }
+    }
     // "alice.livinity.io" -> username=alice
     return { username: parts[0], appName: null };
   }
 
   if (parts.length === 2) {
-    // "immich.alice.livinity.io" -> appName=immich, username=alice
+    // Legacy dot format: "immich.alice.livinity.io" -> appName=immich, username=alice
     return { username: parts[1], appName: parts[0] };
   }
 

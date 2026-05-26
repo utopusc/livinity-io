@@ -3098,7 +3098,7 @@ Plus Phase 206 carry-overs:
 
 ---
 
-### Phase 210: Subdomain canonical format + 3 critical relay/install bugs — ⚪ NOT STARTED
+### Phase 210: Subdomain canonical format + 3 critical relay/install bugs — 🟡 CODE-COMPLETE 2026-05-26 (4/4 code gates PASS; SUB-08/09/10 live-verify deferred to P217 pending CARRY-V41-RELAY-DOWN restart)
 
 **Goal:** End the `n8n-bruce` vs `n8n.bruce` vs `bruce.livinity.io` chaos. One canonical format (hyphen), deterministic across install path → DNS → relay → Caddy → app.
 
