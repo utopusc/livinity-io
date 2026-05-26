@@ -20,6 +20,9 @@ function AdminGateInner({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
   const [manualInput, setManualInput] = useState('');
+  // CARRY-P213-NON-ADMIN-REDIRECT-CLIENT — verify is_admin via /api/admin/whoami
+  // after a token is set. Non-admin → redirect to /dashboard.
+  const [adminVerified, setAdminVerified] = useState<'idle' | 'checking' | 'admin' | 'denied'>('idle');
 
   useEffect(() => {
     // Persist token from URL if present, then strip it from the visible URL.
@@ -34,6 +37,67 @@ function AdminGateInner({ children }: { children: React.ReactNode }) {
     const stored = sessionStorage.getItem(TOKEN_KEY);
     if (stored) setToken(stored);
   }, [searchParams, router, pathname]);
+
+  // Probe admin status whenever the token changes.
+  useEffect(() => {
+    if (!token) {
+      setAdminVerified('idle');
+      return;
+    }
+    setAdminVerified('checking');
+    let cancelled = false;
+    fetch('/api/admin/whoami', {
+      headers: { 'X-Api-Key': token },
+      credentials: 'same-origin',
+    })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.status === 403) {
+          // Authenticated but not admin → bounce to dashboard.
+          setAdminVerified('denied');
+          router.replace('/dashboard');
+          return;
+        }
+        if (!res.ok) {
+          // 401 (bad token) — clear sessionStorage so the prompt re-appears.
+          sessionStorage.removeItem(TOKEN_KEY);
+          setToken(null);
+          setAdminVerified('idle');
+          return;
+        }
+        setAdminVerified('admin');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Network failure — leave gate as-is, user can retry.
+        setAdminVerified('idle');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, router]);
+
+  if (token && adminVerified === 'checking') {
+    return (
+      <div className="gate">
+        <div className="gate-card">
+          <p className="gate-desc" style={{ margin: 0 }}>Verifying admin access…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (token && adminVerified === 'denied') {
+    return (
+      <div className="gate">
+        <div className="gate-card">
+          <p className="gate-desc" style={{ margin: 0 }}>
+            Not authorized. Redirecting to dashboard…
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!token) {
     return (
