@@ -3,20 +3,46 @@ gsd_state_version: 1.0
 milestone: v41
 milestone_name: Admin Panel + Store Hardening + Subdomain Reliability
 status: executing
-last_updated: "2026-05-26T09:42:00.000Z"
+last_updated: "2026-05-26T11:00:00.000Z"
 progress:
   total_phases: 9
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 33
+  completed_phases: 4
+  total_plans: 4
+  completed_plans: 4
+  percent: 44
 ---
 
-## Current Position (v41 — autonomous run 2026-05-26 paused after 3/9 phases)
+## Current Position (v41 — autonomous run 2026-05-26 — Phase 212 just shipped, 5/9 remaining)
 
-Phase: 211 just shipped partial
-Plan: —
-Status: Awaiting context refresh to start Phase 212 (production Supabase migration, recommended for fresh-context session)
+Phase: 212 just shipped CODE-COMPLETE (`e9b37106..62b0ea0a`, 7 commits)
+Plan: 212-01 (5 serial tasks T1–T5 + 1 hardening)
+Status: Ready for Phase 213 (Admin panel UI — 6 Next.js pages on shadcn/ui + recharts, consumes the 6 API routes shipped in 212-T3)
+
+### ✅ Phase 212 SHIPPED 2026-05-26
+- **T1** `0013_phase_212_admin_auth.sql` — `is_admin BOOLEAN` + `last_seen_at TIMESTAMPTZ` on `public.users`; seeded `bruce` admin live.
+- **T2** `lib/auth-admin.ts` (`requireAdmin()`) + new `middleware.ts` (cookie soft-gate + legacy x-api-key allow-list).
+- **T3** 6 admin API routes: `/api/admin/{metrics/summary,users,tunnels,apps/summary,bandwidth,install-failures}`.
+- **T4** `0014_phase_212_bandwidth_rollups.sql` — `hourly_bandwidth` + `daily_bandwidth` + sync trigger (smoke-verified live).
+- **T5** `HEARTBEAT-AUDIT.md` — wiring gap identified (no code writes to `tunnel_connections`); 2 carries filed.
+- **Hardening** `bandwidth_rollup_upsert` `search_path` pinned (zero new advisor WARN).
+- Sacred SHA `f3538e1d...` preserved through all 7 commits.
+
+### Verdict matrix
+| Criterion | Status |
+|---|---|
+| ADM-05 metrics/summary returns real numbers | 🟢 GREEN |
+| ADM-11 all `/api/admin/*` gated by `requireAdmin()` | 🟢 GREEN |
+| ADM-13 `tunnel_connections>0` when Mini PC online | 🔴 RED (wiring gap — CARRY-P212-TUNNEL-PERSIST) |
+| ADM-03 RLS verified | 🟡 YELLOW (service-role bypass; CARRY-P212-RLS-POLICIES → P214) |
+| ADM-12 rollup lag <5min | 🟢 GREEN (sync trigger, near-zero lag) |
+
+**New carries (4):**
+- CARRY-P212-TUNNEL-PERSIST — wire INSERT/UPDATE in `tunnel-registry.ts` (~50–80 LOC)
+- CARRY-P212-TUNNEL-SESSION-UNIQUE — UNIQUE(session_id) constraint decision
+- CARRY-P212-RLS-POLICIES — real RLS policies on 4 tables → P214
+- CARRY-P212-LEGACY-ADMIN-UNIFY — migrate legacy api-key admin routes to cookie path (cosmetic)
+
+
 Last activity: 2026-05-26 — three phases shipped end-to-end via `/gsd-autonomous --from 209`:
 
 ### ✅ Phase 209 SHIPPED (commit `8ad89ee6`)

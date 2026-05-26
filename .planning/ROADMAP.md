@@ -3146,7 +3146,7 @@ Plus Phase 206 carry-overs:
 
 ---
 
-### Phase 212: Admin panel auth + data model — ⚪ NOT STARTED
+### Phase 212: Admin panel auth + data model — 🟡 CODE-COMPLETE 2026-05-26 (commits `e9b37106..62b0ea0a`; SUB-2/4 of 5 success criteria GREEN, ADM-13 RED → CARRY-P212-TUNNEL-PERSIST + CARRY-V41-RELAY-DOWN, ADM-03 YELLOW → CARRY-P212-RLS-POLICIES → P214)
 
 **Goal:** Single source of truth for who-is-admin + the queries that power the admin dashboard. Backend only.
 
