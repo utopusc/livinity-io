@@ -59,7 +59,11 @@ import {adminProcedure, router} from './trpc.js'
 export const MCP_CONFIG_REDIS_HASH_KEY = 'liv:mcp:config'
 export const MCP_CONFIG_REDIS_PUBSUB_CHANNEL = 'liv:mcp:updated'
 const REDIS_HASH_KEY = MCP_CONFIG_REDIS_HASH_KEY
-const SYSTEM_MCP_NAMES = new Set(['luse'])
+// Phase 219 T3 — luse + 4 local LivOS MCP servers (liv-docker / liv-system /
+// liv-apps / liv-vault). System MCPs cannot be deleted from the UI (the
+// router refuses with FORBIDDEN + SYSTEM_MCP). Toggling + editing still
+// allowed so operators can disable a server during debugging.
+const SYSTEM_MCP_NAMES = new Set(['luse', 'liv-docker', 'liv-system', 'liv-apps', 'liv-vault'])
 
 /**
  * Minimal Redis surface — `.hgetall`, `.hget`, `.hset`, `.hdel`. Matches both

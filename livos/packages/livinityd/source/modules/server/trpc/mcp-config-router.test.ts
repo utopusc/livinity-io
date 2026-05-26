@@ -300,6 +300,28 @@ describe('createMcpConfigRouter — Phase 219 T1 STRING→HASH self-heal', () =>
 		expect(res.warnings![0]).toMatch(/EACCES/)
 	})
 
+	test('12.5 Phase 219 T3 — local liv-* MCPs are tagged system: true and reject delete', async () => {
+		const {deps} = makeDeps({
+			'liv-system': JSON.stringify({transport: 'stdio', command: 'tsx', enabled: false}),
+			'liv-docker': JSON.stringify({transport: 'stdio', command: 'tsx', enabled: false}),
+			'liv-apps': JSON.stringify({transport: 'stdio', command: 'tsx', enabled: false}),
+			'liv-vault': JSON.stringify({transport: 'stdio', command: 'tsx', enabled: false}),
+		})
+		const caller = createMcpConfigRouter(deps).createCaller(makeAdminCtx() as never)
+		const entries = await caller.list()
+		expect(entries).toHaveLength(4)
+		for (const e of entries) {
+			expect(e.system).toBe(true)
+		}
+		// All 4 should refuse delete with SYSTEM_MCP — defense-in-depth at the
+		// router (UI hides the Delete button via the system flag too).
+		for (const name of ['liv-system', 'liv-docker', 'liv-apps', 'liv-vault']) {
+			await expect(caller.delete({name})).rejects.toMatchObject({
+				code: 'FORBIDDEN',
+			})
+		}
+	})
+
 	test('12. list survives a legacy STRING entry — coerces then HGETALL succeeds', async () => {
 		const {redis, deps} = makeDeps()
 		redis._setString(
