@@ -572,6 +572,12 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 			args.coordinates == null && coordAlias != null
 				? {...args, coordinates: coordAlias}
 				: args
+		// 208-10: default clickCount=1 when omitted — schema no longer requires
+		// it (LLM consistently elides), so the handler is the source of truth.
+		const clickCount =
+			typeof (argsWithCoord as {clickCount?: unknown}).clickCount === 'number'
+				? ((argsWithCoord as {clickCount: number}).clickCount)
+				: 1
 		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
 			withPostScreenshot(
 				`clickMouse ${summarizeArgs(argsWithCoord)}${displayArg ? ` display=${displayArg}` : ''}`,
@@ -580,9 +586,9 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 						...(argsWithCoord as unknown as {
 							coordinates?: {x: number; y: number}
 							button: 'left' | 'right' | 'middle'
-							clickCount: number
 							holdKeys?: readonly string[]
 						}),
+						clickCount,
 						windowId: w,
 					}),
 				w,
