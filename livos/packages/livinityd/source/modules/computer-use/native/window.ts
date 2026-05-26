@@ -118,7 +118,7 @@ function spawnAndForget(command: string, args: string[]): void {
 	const child = spawn(command, args, {
 		detached: true,
 		stdio: 'ignore',
-		env: {...process.env, DISPLAY: ':0'},
+		env: {...process.env, DISPLAY: process.env.DISPLAY ?? ':0'},
 	})
 	child.unref()
 }
@@ -247,7 +247,7 @@ export async function openOrFocus(
 			spawn('wmctrl', ['-k', 'on'], {
 				detached: false,
 				stdio: 'ignore',
-				env: {...process.env, DISPLAY: ':0'},
+				env: {...process.env, DISPLAY: process.env.DISPLAY ?? ':0'},
 			})
 			return {isError: false}
 		} catch (err) {
@@ -277,7 +277,7 @@ export async function openOrFocus(
 			spawn('wmctrl', ['-x', '-a', className], {
 				detached: false,
 				stdio: 'ignore',
-				env: {...process.env, DISPLAY: ':0'},
+				env: {...process.env, DISPLAY: process.env.DISPLAY ?? ':0'},
 			})
 		} else {
 			// Launch new instance, detach so livinityd can exit independently.
