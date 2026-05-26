@@ -179,18 +179,25 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 							</div>
 						</div>
 
-						{/* DNS Status */}
+						{/* DNS Status — Phase 219 T4 surfaces the verify reason in the tooltip
+								so the operator can tell "still propagating" from "never minted". */}
 						{isEnabled && (
 							<div className='flex items-center gap-1.5'>
 								{dnsQuery.isLoading ? (
 									<TbLoader2 className='h-4 w-4 animate-spin text-text-secondary' />
 								) : dnsQuery.data?.match ? (
-									<span className='flex items-center gap-1 text-xs text-green-400'>
+									<span
+										className='flex items-center gap-1 text-xs text-green-400'
+										title={dnsQuery.data?.reason ?? 'DNS resolved.'}
+									>
 										<TbCheck className='h-4 w-4' />
 										DNS OK
 									</span>
 								) : (
-									<span className='flex items-center gap-1 text-xs text-yellow-400'>
+									<span
+										className='flex items-center gap-1 text-xs text-yellow-400'
+										title={dnsQuery.data?.reason ?? 'DNS not yet propagated for this host.'}
+									>
 										<TbInfoCircle className='h-4 w-4' />
 										DNS pending
 									</span>
