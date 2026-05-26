@@ -3049,3 +3049,269 @@ Plus Phase 206 carry-overs:
 **SPEC:** `.planning/phases/207-phase206-carryovers/207-SPEC.md`
 
 ---
+
+# v41 — Admin Panel + Store Hardening + Subdomain Reliability — 🔴 OPENED 2026-05-26
+
+**Goal:** Ship Vercel-hosted admin panel at `livinity.io/admin`, lock the public store down to admin-only, end the `n8n-bruce` vs `n8n.bruce` subdomain chaos with a single canonical format, make MCP/app install one-click reliable from the store, switch Liv AI chat from nemotron-9B to Anthropic Claude Haiku 4.5 via local `claude-cli` reuse.
+
+**Source:** `.planning/v41-DRAFT.md` (operator-authored 2026-05-26).
+**Research:** `.planning/research/2026-05-26-store-admin/{server5-state.md, subdomain-install-bugs.md, install-flow-audit.md}` + `R5-broker-tool-routing.md`.
+**Requirements:** `.planning/REQUIREMENTS.md` (66 REQs across 9 phases).
+
+**Locked decisions (D-V41-*):**
+- D-V41-ADMIN-SEED = `hello@bruceoz.com`
+- D-V41-STATIC-HTML-KEEP — `/dashboard.html`/`/auth.html`/`/login.html` untouched
+- D-V41-BANDWIDTH-ROLLUPS — Supabase rollup tables (no TimescaleDB)
+- D-V41-RELAY-STATE-UNKNOWN — Phase 210 entry probes
+- D-V41-CF-CERT-AUDIT-DEFERRED — Phase 216 lives audit
+- D-V41-CLAUDE-CLI-REUSE — openclaw uses local `claude-cli` backend (no broker, no BYOK)
+- D-V41-ADMIN-ONLY-STORE — `/store` admin-only
+- D-V41-NO-SERVER5-ADMIN-MIGRATION — admin on Vercel from day one
+- D-V41-NO-SUPABASE-AUTH-REPLACEMENT — reuse existing `auth` schema
+
+**Estimated effort:** 18-22 days (~120-150 hours).
+
+---
+
+### Phase 209: openclaw → Claude CLI reuse + Haiku 4.5 default — ⚪ NOT STARTED
+
+**Goal:** Liv AI chat agent stops using `openrouter/nvidia/nemotron-nano-9b-v2:free` (bad coord prediction, slow tool use), starts using `anthropic/claude-haiku-4-5` via local `claude-cli` backend reusing `/root/.claude/.credentials.json` already attached to SdkAgentRunner.
+
+**Effort:** TODAY, ~5 min ops (zero code change, subscription path, Anthropic-sanctioned per 2026-05-26 operator confirmation).
+
+**Requirements:** AI-01, AI-02, AI-03, AI-04, AI-05, AI-06 (6 REQs).
+
+**Tasks (Mini PC ops):**
+1. `ssh bruce@10.69.31.68`
+2. `openclaw models auth login --provider anthropic --method cli --set-default`
+3. `openclaw config set agents.defaults.model.primary anthropic/claude-haiku-4-5`
+4. `sudo systemctl restart liv-claw-gateway`
+5. Verify: `journalctl -u liv-claw-gateway` shows `agent model: anthropic/claude-haiku-4-5` (was nemotron).
+
+**Success criteria:**
+1. Journalctl confirms model swap (AI-03).
+2. Liv AI chat coord-click success rate ≥80% on standard battery (AI-04).
+3. Per-call latency p50 ≤1.5s (AI-05).
+4. Zero subscription quota errors during 30-min UAT (AI-06).
+
+**Why first:** Operator's primary pain. Cost-free. Zero code change. Unblocks all subsequent UAT.
+
+---
+
+### Phase 210: Subdomain canonical format + 3 critical relay/install bugs — ⚪ NOT STARTED
+
+**Goal:** End the `n8n-bruce` vs `n8n.bruce` vs `bruce.livinity.io` chaos. One canonical format (hyphen), deterministic across install path → DNS → relay → Caddy → app.
+
+**Effort:** 3-5 days.
+
+**Requirements:** SUB-01..11 (11 REQs).
+
+**Depends on:** Phase 209 (UAT clarity), `.planning/research/2026-05-26-store-admin/subdomain-install-bugs.md`.
+
+**Entry probe (resolves D-V41-RELAY-STATE-UNKNOWN):** ONE batched SSH probe to confirm whether `platform/relay/` is still on Server5 or has moved, before any patch. Capture result in `phases/210-*/210-CONTEXT.md`.
+
+**Sub-features:**
+- **210.1 (CRITICAL) — Relay `parseSubdomain` misroutes hyphen-format.** File `platform/relay/src/subdomain-parser.ts:46-50`. Fix: split single-part hyphen subdomain on last hyphen, forward to `<username>` tunnel with `X-App-Name: <appName>` header so Mini PC Caddy can route. 4-case test coverage. Deploy: rsync + `pm2 restart relay` (or Vercel deploy depending on entry probe outcome).
+- **210.2 (HIGH) — `provisionAppSubdomain` silent-null Caddy mismatch.** Files `livos/packages/livinityd/source/modules/apps/apps.ts:578-585`, `caddy.ts:279`. Fix: throw (not null) on non-409 failures; on 409 fetch existing canonical host from Supabase. Repair migration for in-the-wild stale rows.
+- **210.3 (MEDIUM) — `REDIS_PLATFORM_URL` undeclared (silent install-event drop).** File `livos/packages/livinityd/source/modules/apps/apps.ts:849`. Fix: declare `const REDIS_PLATFORM_URL = 'livos:platform:url'` alongside `REDIS_PLATFORM_API_KEY`. Test: install event appears in `install_history` within 2s.
+
+**Success criteria:**
+1. All 3 bugs RED→GREEN test coverage (SUB-03, SUB-06, SUB-08).
+2. Install n8n → opens at `n8n-bruce.livinity.io` in <30s, returns n8n UI not bruce root (SUB-09).
+3. `install_history` row in Supabase within 2s of install (SUB-08).
+4. Zero "fall through to offline page" log lines per install (SUB-10).
+5. Entry probe written to phase context (SUB-11).
+
+---
+
+### Phase 211: MCP/App install reliability + auto-install MCP — ⚪ NOT STARTED
+
+**Goal:** Click "Install" in store → MCP/app working, zero manual config, zero restart, clear feedback on env-vars needed.
+
+**Effort:** 2-3 days.
+
+**Requirements:** INST-01..06 (6 REQs).
+
+**Depends on:** Phase 210 (canonical subdomain), `.planning/research/2026-05-26-store-admin/install-flow-audit.md`.
+
+**Sub-features:**
+- **211.1 — Dual-writer collision at `liv:mcp:config`.** `liv/core/McpConfigManager` writes JSON string + publishes `mcp_config`; `livinityd mcp-config-router.ts` writes Redis HASH + publishes `liv:mcp:updated`. Pick JSON-string writer (agent-consumed); migrate Settings → MCP tab; deprecate HASH writer. Test: install via UI → `tools/list` shows new MCP without restart.
+- **211.2 — `EnvironmentOverridesDialog` for AI installs.** Read `envSchema` from app manifest; modal prompts for each `required: true` env; saves to per-user env file before install proceeds. Test: install MCP requiring API key → modal → fill → install completes.
+- **211.3 — Admin-only install gate (interim, hardened in Phase 212).** Add `is_admin BOOLEAN` to Supabase `public.users`; seed `hello@bruceoz.com`; enforce `is_admin=true` on `apps.install`, `installV37`, `/api/admin/apps` tRPC + REST routes. (Migration formalized in Phase 212 — this sub-feature ships the enforcement path.)
+
+**Success criteria:**
+1. One-click MCP install works for ≥3 sample MCPs (browser, filesystem, github) in <60s each (INST-02, INST-06).
+2. Missing env vars surfaced via dialog (not toast) (INST-05).
+3. Non-admin user gets 403 on install; admin gets 200 (INST hooks Phase 212 RLS gate).
+
+---
+
+### Phase 212: Admin panel auth + data model — ⚪ NOT STARTED
+
+**Goal:** Single source of truth for who-is-admin + the queries that power the admin dashboard. Backend only.
+
+**Effort:** 2 days.
+
+**Requirements:** ADM-01..13 (13 REQs).
+
+**Depends on:** Phase 211 (admin gate enforcement path).
+
+**Tasks:**
+1. **Supabase migration** — add `is_admin BOOLEAN DEFAULT FALSE` to `public.users`, ensure `created_at` + `last_seen_at`, backfill `hello@bruceoz.com` to `true`. Add RLS policies for `users`, `tunnel_connections`, `install_history`, `bandwidth_usage`.
+2. **6 admin API routes** under `platform/web/app/api/admin/` — `metrics/summary`, `users`, `tunnels`, `apps`, `bandwidth`, `install-failures`. All gated by `is_admin=true` via Supabase Auth + new `middleware.ts`.
+3. **Bandwidth rollup tables** — create `hourly_bandwidth` + `daily_bandwidth` rollup tables in Supabase; writer (cron or trigger) aggregates `bandwidth_usage` with <5min lag.
+4. **Heartbeat persistence audit** — verify `tunnel_connections` rows when a Mini PC is online. Fix the relay → Supabase upsert if missing.
+
+**Success criteria:**
+1. `GET /api/admin/metrics/summary` returns real numbers (ADM-05).
+2. All `/api/admin/*` return 403 to non-admin / 200 to admin (ADM-11).
+3. `tunnel_connections` count >0 when ≥1 Mini PC online (ADM-13).
+4. RLS verified: non-admin `SELECT * FROM users` returns only own row (ADM-03).
+5. Rollup lag <5min (ADM-12).
+
+---
+
+### Phase 213: Admin panel UI — ⚪ NOT STARTED
+
+**Goal:** Operator opens `livinity.io/admin`, sees the whole system at a glance, drills into detail views.
+
+**Effort:** 4 days.
+
+**Requirements:** UI-01..10 (10 REQs).
+
+**Depends on:** Phase 212 (admin API surface).
+
+**Constraint:** `next.config.ts` Phase 146 rewrites intercept `/dashboard`, `/login`, etc. to static HTML. `/admin` is FREE — no static intercept (D-V41-STATIC-HTML-KEEP). Lock the `beforeFiles` rewrite list so nobody adds `/admin.html`.
+
+**Pages:** `/admin` (6 KPI cards + 2 charts), `/admin/users`, `/admin/users/[id]`, `/admin/tunnels`, `/admin/apps`, `/admin/store`, `/admin/walkthrough`.
+
+**Stack:** shadcn/ui + recharts + Supabase server components. Soft sidebar nav, Linear-style opacity-tier typography.
+
+**Success criteria:**
+1. All 6 pages render real data from Supabase (UI-01..06).
+2. Non-admin redirected to `/dashboard` (UI-08).
+3. Mobile-responsive at 1024×768 + 1920×1080 (UI-09).
+
+---
+
+### Phase 214: Store redesign — admin-only gate + UX polish — ⚪ NOT STARTED
+
+**Goal:** `livinity.io/store` becomes admin-only. Non-admin sees marketing landing. Admin sees full catalog + install management.
+
+**Effort:** 3 days.
+
+**Requirements:** STORE-01..06 (6 REQs).
+
+**Depends on:** Phase 212 (auth middleware), Phase 213 (`/admin/store` UI page).
+
+**Tasks:**
+1. `/store/**` middleware → non-admin redirected to `/dashboard`.
+2. `POST /api/admin/sync-catalog` Vercel function pulls manifests from `utopusc/livinity-apps` repo and upserts into Supabase `public.apps`. 304 candidate apps → catalog.
+3. Featured/verified curation UI via `/admin/store`.
+4. Search + filter (category, search, "newly added" sort).
+5. App detail page redesign — README rendered, screenshots, install button (admin only), system requirements.
+
+**Success criteria:**
+1. Non-admin GET `/store` → 302 to `/dashboard` (STORE-01).
+2. Admin sees 304 catalog apps after first sync (STORE-03).
+3. Admin can mark featured / verified (STORE-04).
+4. Sync function reports count of new/updated apps (STORE-02).
+
+---
+
+### Phase 215: One-click MCP/app install in store + walkthrough docs — ⚪ NOT STARTED
+
+**Goal:** Admin clicks "Install" → flows to Mini PC bridge → MCP/app working in <60s. `/admin/walkthrough` explains how to add a new app/MCP from scratch.
+
+**Effort:** 2 days.
+
+**Requirements:** WIRE-01..05 (5 REQs).
+
+**Depends on:** Phase 211 (install path reliability), Phase 213 (`/admin/walkthrough` page), Phase 214 (store admin UI).
+
+**Tasks:**
+1. Wire store "Install" → Mini PC bridge → Phase 211 install path (auto-config + reconcile).
+2. SSE install progress UI: `downloading` → `configuring` → `starting` → `ready`.
+3. `/admin/walkthrough` page with 3 guides (Docker app, MCP, custom non-Docker).
+4. Embedded test-install button per guide.
+
+**Success criteria:**
+1. 3 sample MCPs install via one-click in <60s each (WIRE-05).
+2. Walkthrough page renders, test-install works for sample (WIRE-04).
+3. Doc walkthroughs reviewed by operator (WIRE-03).
+
+**Risk:** Vercel-only Next.js cannot directly write to Mini PC — install command must travel through Server5 relay or a Supabase-mediated channel (Mini PC polls Supabase for install commands). Phase 211 must clarify which; Phase 215 reuses the chosen channel.
+
+---
+
+### Phase 216: Cloudflare audit + automation — ⚪ NOT STARTED
+
+**Goal:** Document + automate CF DNS state. Today CF is DNS-only (no tunnel), Vercel handles edge. Live-audit per-user wildcard cert path post-migration.
+
+**Effort:** 1-2 days.
+
+**Requirements:** CF-01..05 (5 REQs).
+
+**Depends on:** Phase 210 (subdomain provisioning).
+
+**Tasks:**
+1. Enumerate current DNS records (livinity.io zone) via CF API → `.planning/cloudflare-state.md`.
+2. Verify Vercel A/AAAA, www CNAME, MX, TXT (SPF, DKIM, DMARC).
+3. **Live audit** of per-user wildcard cert (`*.livinity.io` via Server5 Caddy on-demand TLS + relay `/internal/ask`) — closes D-V41-CF-CERT-AUDIT-DEFERRED. If broken, fix lands in this phase.
+4. Optional: Terraform/wrangler config declaring DNS state (operator decides at audit time).
+
+**Success criteria:**
+1. DNS state documented (CF-01).
+2. Per-user wildcard cert path verified live; if broken, fixed within phase (CF-02, CF-03).
+3. Per-user subdomain provisioning works end-to-end with CF API (CF-04).
+
+---
+
+### Phase 217: E2E UAT + verification — ⚪ NOT STARTED
+
+**Goal:** Operator walks every Phase 209-216 deliverable, confirms; milestone archived.
+
+**Effort:** 2 days.
+
+**Requirements:** UAT-01..04 (4 REQs).
+
+**Depends on:** Phases 209-216 complete.
+
+**Tasks:**
+1. Write `UAT-CHECKLIST.md` with sections per Phase 209-216 deliverable.
+2. Operator walks each section, marks PASS/FAIL/SKIP with evidence.
+3. Fix any FAIL, re-verify.
+4. Update STATE.md, ROADMAP.md; archive milestone to `.planning/milestones/v41/`.
+
+**Success criteria:**
+1. UAT-CHECKLIST.md written and walked (UAT-01, UAT-02).
+2. All FAILs fixed and re-verified before close (UAT-03).
+3. STATE.md + ROADMAP.md updated; milestone archived (UAT-04).
+
+---
+
+## v41 Coverage
+
+| Phase | REQs | Status |
+|-------|------|--------|
+| 209 | AI-01..06 (6) | ⚪ NOT STARTED |
+| 210 | SUB-01..11 (11) | ⚪ NOT STARTED |
+| 211 | INST-01..06 (6) | ⚪ NOT STARTED |
+| 212 | ADM-01..13 (13) | ⚪ NOT STARTED |
+| 213 | UI-01..10 (10) | ⚪ NOT STARTED |
+| 214 | STORE-01..06 (6) | ⚪ NOT STARTED |
+| 215 | WIRE-01..05 (5) | ⚪ NOT STARTED |
+| 216 | CF-01..05 (5) | ⚪ NOT STARTED |
+| 217 | UAT-01..04 (4) | ⚪ NOT STARTED |
+| **Total** | **66 / 66 mapped** | **0 / 9 shipped** |
+
+All 66 requirements from `.planning/REQUIREMENTS.md` mapped to exactly one phase. ✓
+
+## v41 Risk register
+
+- **Vercel-only Next.js cannot directly write to Mini PC** — install commands must travel through Server5 relay or Supabase-mediated channel (Mini PC polls). Phase 211 picks the channel; Phase 215 reuses.
+- **Static-HTML rewrites in `next.config.ts`** may intercept `/admin` if anyone adds `/admin.html` to static. Phase 213 must lock the `beforeFiles` list.
+- **Heartbeat persistence gap** (ADM-13) blocks all live metrics if not fixed.
+- **Supabase RLS misconfiguration** could leak user data — Phase 212 must include RLS verification tests asserting non-admin row counts.
+- **Server5 relay state unknown** at milestone open (D-V41-RELAY-STATE-UNKNOWN) — Phase 210 entry probe must run before patching.
+- **CF wildcard cert may be broken post-migration** (D-V41-CF-CERT-AUDIT-DEFERRED) — Phase 216 live audit will surface.
