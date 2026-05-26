@@ -349,6 +349,62 @@ export async function syncCatalog(opts: { limit?: number; offset?: number } = {}
   return res.json() as Promise<SyncCatalogResult>;
 }
 
+// CARRY-P213-USERS-DRILLDOWN — full per-user detail.
+export type AdminUserDetail = {
+  user: AdminUserRow & {
+    cf_tunnel_id: string | null;
+    cf_provisioned_at: string | null;
+  };
+  install_history: {
+    id: string;
+    app_id: string | null;
+    app_slug: string | null;
+    app_name: string | null;
+    action: string;
+    instance_name: string | null;
+    created_at: string;
+  }[];
+  install_commands: {
+    id: string;
+    app_id: string;
+    app_slug: string | null;
+    app_name: string | null;
+    instance_name: string | null;
+    status: string;
+    created_at: string;
+    started_at: string | null;
+    completed_at: string | null;
+    result_json: unknown;
+  }[];
+  bandwidth: {
+    period_month: string;
+    bytes_in: number;
+    bytes_out: number;
+    updated_at: string;
+  }[];
+  tunnel_sessions: {
+    id: string;
+    session_id: string;
+    status: string;
+    connected_at: string;
+    disconnected_at: string | null;
+    client_version: string | null;
+    client_ip: string | null;
+  }[];
+  subdomains: {
+    id: string;
+    app_slug: string;
+    subdomain: string;
+    cf_dns_record_id: string | null;
+    port: number | null;
+    created_at: string;
+  }[];
+};
+
+export function getAdminUserDetail(userId: string): Promise<AdminUserDetail> {
+  return adminGet<AdminUserDetail>(`/api/admin/users/${encodeURIComponent(userId)}`);
+}
+
 export function listInstallFailures(opts: { limit?: number } = {}): Promise<InstallFailuresResult> {
   const params = new URLSearchParams();
   if (opts.limit != null) params.set('limit', String(opts.limit));
