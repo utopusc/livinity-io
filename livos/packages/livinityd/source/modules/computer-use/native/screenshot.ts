@@ -41,8 +41,31 @@ export interface ScreenshotResult {
 	base64: string
 	width: number
 	height: number
-	mimeType: 'image/png'
+	mimeType: 'image/png' | 'image/jpeg'
 }
+
+/**
+ * 208-11 (computer-use perf): env-driven JPEG + downscale to slash agent
+ * context cost. PNG 1920x1080 from maim is ~150-200KB base64; JPEG q60 at
+ * 1280px wide is ~25-40KB (5-8× reduction) — still legible by Claude vision.
+ *
+ *   LUSE_SCREENSHOT_FORMAT  png | jpeg   (default: jpeg)
+ *   LUSE_SCREENSHOT_QUALITY 1-100         (default: 60 — sharp jpeg quality)
+ *   LUSE_SCREENSHOT_MAX_DIM N pixels      (default: 1280 — max width OR height)
+ *
+ * Set LUSE_SCREENSHOT_FORMAT=png + LUSE_SCREENSHOT_MAX_DIM=0 to disable
+ * (preserves the pre-208-11 raw maim output for OCR-heavy flows).
+ */
+const SCREENSHOT_FORMAT: 'png' | 'jpeg' =
+	process.env.LUSE_SCREENSHOT_FORMAT === 'png' ? 'png' : 'jpeg'
+const SCREENSHOT_QUALITY: number = (() => {
+	const n = parseInt(process.env.LUSE_SCREENSHOT_QUALITY ?? '60', 10)
+	return Number.isFinite(n) && n >= 1 && n <= 100 ? n : 60
+})()
+const SCREENSHOT_MAX_DIM: number = (() => {
+	const n = parseInt(process.env.LUSE_SCREENSHOT_MAX_DIM ?? '1280', 10)
+	return Number.isFinite(n) && n >= 0 ? n : 1280
+})()
 
 /**
  * Optional capture options.
@@ -188,17 +211,42 @@ export async function captureScreenshot(options?: CaptureScreenshotOptions): Pro
 	}
 }
 
-/** Parse PNG IHDR width/height and wrap as ScreenshotResult. */
-function parsePngResult(buffer: Buffer): ScreenshotResult {
-	// PNG IHDR chunk: header = 8 bytes signature + 4 length + 4 type ('IHDR') + 4 width + 4 height
-	// Bytes 16-19 = width (BE u32), bytes 20-23 = height (BE u32).
-	const width = buffer.readUInt32BE(16)
-	const height = buffer.readUInt32BE(20)
+/** Parse PNG IHDR width/height and wrap as ScreenshotResult.
+ *  208-11: optionally downscale + transcode to JPEG via sharp. Env-gated. */
+async function parsePngResult(buffer: Buffer): Promise<ScreenshotResult> {
+	// PNG IHDR — bytes 16-19 width BE u32, bytes 20-23 height BE u32.
+	const rawWidth = buffer.readUInt32BE(16)
+	const rawHeight = buffer.readUInt32BE(20)
+
+	// Fast path: original PNG passthrough when format=png AND no downscale.
+	if (SCREENSHOT_FORMAT === 'png' && SCREENSHOT_MAX_DIM === 0) {
+		return {base64: buffer.toString('base64'), width: rawWidth, height: rawHeight, mimeType: 'image/png'}
+	}
+
+	// 208-11: sharp pipeline. Optional resize, optional JPEG transcode.
+	// Lazy import keeps the screenshot module loadable in test envs that
+	// haven't installed sharp's native binary.
+	const {default: sharp} = await import('sharp')
+	let pipeline = sharp(buffer)
+	const needsResize =
+		SCREENSHOT_MAX_DIM > 0 && Math.max(rawWidth, rawHeight) > SCREENSHOT_MAX_DIM
+	if (needsResize) {
+		pipeline = pipeline.resize({
+			width: rawWidth >= rawHeight ? SCREENSHOT_MAX_DIM : undefined,
+			height: rawHeight > rawWidth ? SCREENSHOT_MAX_DIM : undefined,
+			fit: 'inside',
+			withoutEnlargement: true,
+		})
+	}
+	if (SCREENSHOT_FORMAT === 'jpeg') {
+		pipeline = pipeline.jpeg({quality: SCREENSHOT_QUALITY, progressive: false, mozjpeg: false})
+	}
+	const out = await pipeline.toBuffer({resolveWithObject: true})
 	return {
-		base64: buffer.toString('base64'),
-		width,
-		height,
-		mimeType: 'image/png',
+		base64: out.data.toString('base64'),
+		width: out.info.width,
+		height: out.info.height,
+		mimeType: SCREENSHOT_FORMAT === 'jpeg' ? 'image/jpeg' : 'image/png',
 	}
 }
 

@@ -100,8 +100,21 @@ export interface McpServerLike {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Settle delay between an action and its post-action screenshot (D-NATIVE-05). */
-const POST_ACTION_SETTLE_MS = 750
+/** Settle delay between an action and its post-action screenshot (D-NATIVE-05).
+ *  208-11 (computer-use perf): 750→250ms. xdotool/wmctrl events deliver
+ *  atomically; the original 750ms was a defensive upper bound that
+ *  dominated agent latency. Operators can override via LUSE_POST_ACTION_SETTLE_MS. */
+const POST_ACTION_SETTLE_MS = (() => {
+	const env = process.env.LUSE_POST_ACTION_SETTLE_MS
+	const n = env ? parseInt(env, 10) : NaN
+	return Number.isFinite(n) && n >= 0 ? n : 250
+})()
+
+/** 208-11: skip the post-action screenshot entirely. Drops ~30-200KB/call.
+ *  Default OFF — agent still gets visual feedback. Operator opt-in via
+ *  LUSE_POST_SCREENSHOT_DISABLED=1 for high-throughput batched flows where
+ *  the agent explicitly calls computer_screenshot when needed. */
+const POST_SCREENSHOT_DISABLED = process.env.LUSE_POST_SCREENSHOT_DISABLED === '1'
 
 /**
  * Phase 97-05 — runtime options for the Luse MCP tool dispatcher.
@@ -459,6 +472,14 @@ async function withPostScreenshot(
 ): Promise<LivCallToolResult> {
 	await fn()
 	await sleep(POST_ACTION_SETTLE_MS)
+	// 208-11: env-gated skip drops the 30-200KB image to save agent context.
+	// The text summary still describes the action so the agent has feedback.
+	if (POST_SCREENSHOT_DISABLED) {
+		return {
+			content: [{type: 'text', text: `${actionSummary} (post-screenshot disabled)`}],
+			isError: false,
+		}
+	}
 	const shot = await captureScreenshot(typeof windowId === 'number' ? {windowId} : undefined)
 	return {
 		content: [
