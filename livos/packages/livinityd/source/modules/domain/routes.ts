@@ -219,6 +219,13 @@ const domain = router({
 
 	/**
 	 * Get subdomain config for a specific app.
+	 *
+	 * Phase 219 T5 — returns `userSlug` so the UI can render the
+	 * canonical hyphen-pattern template `<editable>-<userSlug>.<root>`
+	 * in the Change subdomain form. Falls back to parsing the user
+	 * prefix out of the stored host (e.g. `filebrowser-bruce` → `bruce`)
+	 * when the username can't be read from the session — keeps legacy
+	 * single-user installs working.
 	 */
 	getAppSubdomain: privateProcedure
 		.input(z.object({appId: z.string()}))
@@ -226,10 +233,25 @@ const domain = router({
 			const subdomains = await getSubdomains(ctx.livinityd.ai.redis)
 			const config = await getConfig(ctx.livinityd.ai.redis)
 			const sub = subdomains.find((s) => s.appId === input.appId)
+
+			// Phase 219 T5 — surface the user slug used to mint the Phase 140
+			// hyphen-pattern host. Preference order: live session user (single
+			// source of truth) → parsed from stored host → null.
+			let userSlug: string | null = ctx.currentUser?.username ?? null
+			if (!userSlug && sub?.host) {
+				const labels = sub.host.split('.')
+				const leftmost = labels[0] ?? ''
+				const dash = leftmost.lastIndexOf('-')
+				if (dash > 0 && dash < leftmost.length - 1) {
+					userSlug = leftmost.slice(dash + 1)
+				}
+			}
+
 			return {
 				subdomain: sub || null,
 				mainDomain: config?.domain || null,
 				mainDomainActive: config?.active || false,
+				userSlug,
 			}
 		}),
 

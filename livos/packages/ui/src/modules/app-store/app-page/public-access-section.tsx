@@ -12,9 +12,27 @@ interface PublicAccessSectionProps {
 	appPort: number
 }
 
+/**
+ * Phase 219 T5 — DNS label rule: lowercase alphanum, dashes allowed but not
+ * at edges. RFC 1035 / 1123 with the 63-char per-label limit. Operator quote:
+ * "{filebrowser}-bruce.livinity.io diye gostermesi lazim {} icindeki kismi
+ *  degistirebilmeliyim sadece."
+ */
+const SLUG_PATTERN = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
+
+function validateSlug(raw: string): string | null {
+	const v = raw.trim().toLowerCase()
+	if (v.length === 0) return 'Slug is required.'
+	if (!SLUG_PATTERN.test(v)) {
+		return 'Use only lowercase letters, digits, and dashes (cannot start or end with a dash).'
+	}
+	return null
+}
+
 export function PublicAccessSection({appId, appName, appPort}: PublicAccessSectionProps) {
 	const [subdomain, setSubdomain] = useState('')
 	const [isEditing, setIsEditing] = useState(false)
+	const [slugError, setSlugError] = useState<string | null>(null)
 
 	const utils = trpcReact.useUtils()
 
@@ -66,7 +84,7 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 		)
 	}
 
-	const {mainDomain, mainDomainActive, subdomain: existingSubdomain} = subdomainQuery.data || {}
+	const {mainDomain, mainDomainActive, subdomain: existingSubdomain, userSlug} = subdomainQuery.data || {}
 
 	// Main domain not configured yet
 	if (!mainDomainActive) {
@@ -94,8 +112,14 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 	const isConfigured = !!existingSubdomain
 	const isEnabled = existingSubdomain?.enabled || false
 
+	// Phase 219 T5 — hyphen-pattern preview + DNS label validation.
+	const slugSuffix = userSlug && mainDomain ? `-${userSlug}.${mainDomain}` : mainDomain ? `.${mainDomain}` : ''
+	const previewHost = subdomain.trim() ? `${subdomain.trim().toLowerCase()}${slugSuffix}` : null
+
 	const handleSave = () => {
-		if (!subdomain.trim()) return
+		const err = validateSlug(subdomain)
+		setSlugError(err)
+		if (err) return
 		setSubdomainMut.mutate({
 			appId,
 			subdomain: subdomain.trim().toLowerCase(),
@@ -121,24 +145,44 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 			</div>
 
 			{!isConfigured || isEditing ? (
-				// Configuration form
+				// Phase 219 T5 — hyphen-pattern template: [<editable>]-<userSlug>.<root>.
+				// Only the slug is an <input>; the suffix is a non-editable label so the
+				// operator can't accidentally type the user prefix or apex.
 				<div className='space-y-3'>
-					<div className='flex items-center gap-2'>
+					<div className='flex items-center gap-1 font-mono text-sm'>
 						<Input
 							value={subdomain}
-							onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+							onChange={(e) => {
+								const cleaned = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')
+								setSubdomain(cleaned)
+								if (slugError) setSlugError(null)
+							}}
+							onBlur={() => setSlugError(validateSlug(subdomain))}
 							placeholder={appName.toLowerCase().replace(/[^a-z0-9]/g, '-')}
-							className='max-w-[200px] font-mono text-sm'
+							className='max-w-[160px] font-mono text-sm'
+							aria-invalid={slugError ? 'true' : undefined}
 						/>
-						<span className='text-body-sm text-text-secondary'>.{mainDomain}</span>
+						<span className='text-text-secondary'>{slugSuffix}</span>
 					</div>
+
+					{previewHost ? (
+						<p className='text-caption text-text-tertiary'>
+							Preview: <span className='font-mono'>https://{previewHost}</span>
+						</p>
+					) : null}
+
+					{slugError ? (
+						<p role='alert' className='text-caption text-red-400'>
+							{slugError}
+						</p>
+					) : null}
 
 					<div className='flex gap-2'>
 						<Button
 							size='sm'
 							variant='default'
 							onClick={handleSave}
-							disabled={!subdomain.trim() || setSubdomainMut.isPending}
+							disabled={!subdomain.trim() || setSubdomainMut.isPending || Boolean(slugError)}
 						>
 							{setSubdomainMut.isPending ? (
 								<TbLoader2 className='mr-1 h-4 w-4 animate-spin' />
@@ -148,16 +192,40 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 							{isEditing ? 'Update' : 'Enable'}
 						</Button>
 						{isEditing && (
-							<Button size='sm' variant='ghost' onClick={() => setIsEditing(false)}>
+							<Button
+								size='sm'
+								variant='ghost'
+								onClick={() => {
+									setIsEditing(false)
+									setSlugError(null)
+								}}
+							>
 								Cancel
 							</Button>
 						)}
 					</div>
 
 					<p className='text-caption text-text-tertiary'>
-						Make sure to add an A record for <span className='font-mono'>{subdomain || '*'}.{mainDomain}</span> pointing
-						to your server IP, or use a wildcard A record (*.{mainDomain}).
+						{userSlug ? (
+							<>
+								The host is minted on Server5 as{' '}
+								<span className='font-mono'>&lt;slug&gt;-{userSlug}.{mainDomain}</span> — wildcard{' '}
+								<span className='font-mono'>*.{mainDomain}</span> A record covers every slug.
+							</>
+						) : (
+							<>
+								Make sure to add an A record for{' '}
+								<span className='font-mono'>{subdomain || '*'}.{mainDomain}</span> pointing to your server IP, or
+								use a wildcard A record (*.{mainDomain}).
+							</>
+						)}
 					</p>
+
+					{setSubdomainMut.isError ? (
+						<p role='alert' className='text-caption text-red-400'>
+							{setSubdomainMut.error?.message ?? 'Save failed — try again.'}
+						</p>
+					) : null}
 				</div>
 			) : (
 				// Configured state
