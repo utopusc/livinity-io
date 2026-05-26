@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { asc, sql } from 'drizzle-orm';
-import { validateApiKey, unauthorizedResponse } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/auth-admin';
 import { db } from '@/lib/drizzle';
 import { apps } from '@/db/schema';
 
@@ -13,8 +13,8 @@ const VALID_SECTIONS = ['app', 'webapp', 'native', 'ai', 'plugin'] as const;
 type Section = (typeof VALID_SECTIONS)[number];
 
 export async function GET(req: NextRequest) {
-  const auth = await validateApiKey(req);
-  if (!auth.valid) return unauthorizedResponse(auth.error);
+  const ctx = await requireAdmin(req);
+  if (ctx instanceof NextResponse) return ctx;
 
   const rows = await db
     .select()
@@ -41,8 +41,8 @@ type CreateBody = {
 };
 
 export async function POST(req: NextRequest) {
-  const auth = await validateApiKey(req);
-  if (!auth.valid) return unauthorizedResponse(auth.error);
+  const ctx = await requireAdmin(req);
+  if (ctx instanceof NextResponse) return ctx;
 
   let body: CreateBody;
   try {

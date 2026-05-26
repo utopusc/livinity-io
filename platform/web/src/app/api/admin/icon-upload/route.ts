@@ -2,7 +2,7 @@
 // → returns the public URL ready to drop into apps.icon_url.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { validateApiKey, unauthorizedResponse } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/auth-admin';
 import { getSupabaseService, getSupabasePublicUrl } from '@/lib/supabase-server';
 
 const MAX_BYTES = 2 * 1024 * 1024; // matches bucket file_size_limit
@@ -14,8 +14,8 @@ const ALLOWED_MIMES = new Set([
 ]);
 
 export async function POST(req: NextRequest) {
-  const auth = await validateApiKey(req);
-  if (!auth.valid) return unauthorizedResponse(auth.error);
+  const ctx = await requireAdmin(req);
+  if (ctx instanceof NextResponse) return ctx;
 
   const form = await req.formData();
   const file = form.get('file');
