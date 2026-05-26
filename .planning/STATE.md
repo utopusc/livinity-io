@@ -2,24 +2,65 @@
 gsd_state_version: 1.0
 milestone: v41
 milestone_name: Admin Panel + Store Hardening + Subdomain Reliability
-status: planning
-last_updated: "2026-05-26T00:00:00.000Z"
+status: executing
+last_updated: "2026-05-26T09:42:00.000Z"
 progress:
   total_phases: 9
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 33
 ---
 
-## Current Position (v41 — opened 2026-05-26)
+## Current Position (v41 — autonomous run 2026-05-26 paused after 3/9 phases)
 
-Phase: Not started (milestone just bootstrapped)
+Phase: 211 just shipped partial
 Plan: —
-Status: Defining requirements + roadmap
-Last activity: 2026-05-26 — v41 milestone opened, REQUIREMENTS.md + ROADMAP.md v41 section written from `.planning/v41-DRAFT.md`. 5 operator gating decisions locked (admin seed=hello@bruceoz.com, static HTML kept, bandwidth=Supabase rollups, relay state probe deferred to P210 entry, CF cert audit deferred to P216).
+Status: Awaiting context refresh to start Phase 212 (production Supabase migration, recommended for fresh-context session)
+Last activity: 2026-05-26 — three phases shipped end-to-end via `/gsd-autonomous --from 209`:
 
-**Next action:** `/gsd-discuss-phase 209` (Phase 209 = 5-min Claude CLI reuse, ships TODAY).
+### ✅ Phase 209 SHIPPED (commit `8ad89ee6`)
+openclaw → `claude-cli/claude-haiku-4-5` default. 5-min Mini PC ops, zero code change. Journalctl confirms model swap. AI-04/05/06 (UAT metrics) deferred to P217 live battery.
+
+### 🟡 Phase 210 CODE-COMPLETE (commit `1b478f9a`)
+3 bugs fixed:
+- **Bug A** — `platform/relay/src/subdomain-parser.ts` hyphen-format split (13 vitest cases)
+- **Bug B** — `livos/packages/livinityd/source/modules/apps/apps.ts:578-589` loud-LOG on `provisioned=null` (softened from THROW per D-210-02)
+- **Bug C** — `apps.ts:45` `REDIS_PLATFORM_URL` constant declared (was silent ReferenceError dropping every install event)
+
+15/15 tests PASS. SUB-08/09/10 live-verify deferred to P217 pending **CARRY-V41-RELAY-DOWN** (Server5 PM2 `relay` process STOPPED since 2026-05-18, FK violations on `bandwidth_usage_user_id_fkey` exhausted PM2 restart budget).
+
+### 🟡 Phase 211 PARTIAL (commit `e3e0e206`)
+**211.1 only** — defensive dual-writer collision guard on `liv:mcp:config`. liv-core `McpConfigManager` now type-checks before SET (refuses on HASH, the livinityd-owned primitive) + cross-publishes on `liv:mcp:updated`. 4/4 vitest cases. Live state: `redis-cli TYPE liv:mcp:config` = `none` (collision was latent, not yet triggered).
+
+**Carries filed for next session:**
+- **CARRY-P211-UNIFY** — Full HASH-primitive unification (~2h, supersedes defensive guard)
+- **CARRY-P211-DIALOG** — `EnvironmentOverridesDialog` UI buildout (~6-8h)
+- **CARRY-P211-ADMIN-GATE** — `is_admin=true` enforcement on install routes (~2h, blocked on P212)
+- **CARRY-V41-RELAY-DOWN** — Restart Server5 PM2 relay (orphan-row cleanup OR soft-fail FK)
+- **CARRY-P210-RECONCILE** — Backfill `host` field on pre-Phase-141-03 SubdomainConfig rows
+- **CARRY-P210-BUG-D** — Single-char slug validation in `provisionAppSubdomain()`
+
+## Remaining v41 phases (P212-P217 = ~15 days)
+
+- **P212** — Admin panel auth + data model. Supabase `is_admin BOOLEAN` migration + RLS + 6 API routes + bandwidth rollup tables + heartbeat audit. **2 days.** _Recommend fresh context — production DB migration._
+- **P213** — Admin panel UI. 6 Next.js pages on shadcn/ui + recharts. **4 days.**
+- **P214** — Store admin-only gate + sync function. **3 days.**
+- **P215** — One-click install wiring + walkthrough docs. **2 days.**
+- **P216** — Cloudflare audit (incl. live wildcard cert audit). **1-2 days.**
+- **P217** — E2E UAT + verification + milestone archive. **2 days.**
+
+## Resume command after /clear
+
+```
+/gsd-autonomous --from 212
+```
+
+or per-phase: `/gsd-discuss-phase 212` (Supabase migration is the heavy piece — fresh context recommended).
+
+## Sacred SHA
+
+`f3538e1d811992b782a9bb057d1b7f0a0189f95f` — UNTOUCHED across all 3 shipped phases.
 
 ---
 
