@@ -672,3 +672,26 @@ CREATE TABLE IF NOT EXISTS pinned_windows (
 
 CREATE INDEX IF NOT EXISTS pinned_windows_user_idx
   ON pinned_windows (user_id, position_in_shelf ASC, pinned_at ASC);
+
+-- =========================================================================
+-- Phase 218 T3 — user_app_subdomains table.
+--
+-- Mini PC schema drift fix: Phase 140-05 added this table to Supabase but
+-- never to the on-box Postgres. T2's buildCaddyConfigFromState() reads
+-- subdomain (full host) per (user_id, app_slug) to derive Caddyfile shape.
+-- See migrations/2026-05-26-p218-user-app-subdomains.sql for full rationale.
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS user_app_subdomains (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  app_id           TEXT,
+  app_slug         TEXT NOT NULL,
+  subdomain        TEXT NOT NULL,
+  cf_dns_record_id TEXT,
+  port             INTEGER,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, app_slug)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_app_subdomains_user
+  ON user_app_subdomains (user_id);
