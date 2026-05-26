@@ -158,7 +158,47 @@ if (!/^[a-z0-9][a-z0-9_:-]*$/.test(name)) {
   }
 
   private async saveAndPublish(config: McpConfig): Promise<void> {
+    // Phase 211.1 — defensive dual-writer collision guard.
+    //
+    // The livinityd tRPC `mcp-config-router.ts` stores this same key
+    // (`liv:mcp:config`) as a Redis HASH (HSET/HGETALL primitives), while
+    // McpConfigManager here stores it as a STRING (SET/GET, JSON-stringified).
+    // Writing to a HASH key with SET would Redis-WRONGTYPE-error. The two
+    // writers existed in parallel because no production deploy has actually
+    // written through both paths yet (live `TYPE liv:mcp:config` returned
+    // `none` on Mini PC 2026-05-26) — but the moment one writes, the other
+    // crashes. Defensive: type-check before SET. Full unification (pick a
+    // single primitive across both writers + migrate UI calls + delete the
+    // loser) is filed as CARRY-P211-UNIFY in `.planning/phases/211-*`.
+    try {
+      const t = await this.redis.type(CONFIG_KEY);
+      if (t !== 'none' && t !== 'string') {
+        logger.error(
+          `McpConfigManager: refusing to SET ${CONFIG_KEY} — existing Redis type is "${t}" ` +
+            `(expected "string" or "none"). Another writer (likely livinityd ` +
+            `mcp-config-router.ts) owns this key with a different primitive. ` +
+            `See CARRY-P211-UNIFY in .planning/phases/211-*/211-CONTEXT.md.`,
+        );
+        return;
+      }
+    } catch (err) {
+      // ioredis may throw on type errors in unusual states; do not block the
+      // write entirely (older behavior). Log and proceed.
+      logger.warn(`McpConfigManager: TYPE check failed for ${CONFIG_KEY}`, err);
+    }
     await this.redis.set(CONFIG_KEY, JSON.stringify(config));
+    // Phase 211.1 — also publish on the channel livinityd's `mcp-bridge`
+    // subscribes to (`liv:mcp:updated`). Without this cross-publish, any
+    // McpConfigManager mutation would update Redis but never trigger the
+    // agent runtime's live-reload (subscribed at mcp-bridge.ts:545).
     await this.redis.publish(UPDATE_CHANNEL, 'mcp_config');
+    try {
+      await this.redis.publish(
+        'liv:mcp:updated',
+        JSON.stringify({op: 'set', name: 'config', ts: new Date().toISOString()}),
+      );
+    } catch (err) {
+      logger.warn('McpConfigManager: cross-publish to liv:mcp:updated failed', err);
+    }
   }
 }
