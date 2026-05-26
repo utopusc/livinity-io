@@ -370,6 +370,12 @@ export const httpOnlyPaths = [
 	'skills.list',
 	'skills.get',
 	'skills.delete',
+	// Phase 219 T7 — `skills.market.{list,install}` for the in-product
+	// Skills marketplace tab. list is a render dependency; install is a
+	// settings-page mutation that writes SKILL.md to disk. Same
+	// WS-half-broken concern as skills.delete.
+	'skills.market.list',
+	'skills.market.install',
 	// v32-redo Stage 2b — conversations namespace (sidebar feed + thread view +
 	// composer persistence path). All 6 paths route via HTTP because:
 	//   - list / listMessages are page-render dependencies for the AI Chat

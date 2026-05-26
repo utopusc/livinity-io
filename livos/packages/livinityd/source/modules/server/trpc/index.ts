@@ -69,6 +69,7 @@ import mcpRouter from './mcp-router.js'
 // agents pattern).
 import {mcpConfigRouter, createMcpConfigRouter} from './mcp-config-router.js'
 import {skillsRouter, createSkillsRouter} from './skills-router.js'
+import {skillsMarketRouter, createSkillsMarketRouter} from './skills-market-router.js'
 // v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01). Single procedure
 // `webapp.extractMetadata({url})` returning `{title, faviconUrl, description,
 // ogImage}`. The path is added to httpOnlyPaths in ./common.ts because clean
@@ -261,6 +262,11 @@ export function createAppRouter(opts: {
 	// throws PRECONDITION_FAILED until production boot wires the real router
 	// built against a SkillsLoader instance.
 	skills?: ReturnType<typeof createSkillsRouter>
+	// Phase 219 T7 — `skills.market.*` sub-router (curated registry +
+	// install). The stub `skillsMarketRouter` has a working `list` (catalog
+	// is a TS const, no IO needed) but `install` throws PRECONDITION_FAILED
+	// until production boot wires a real createSkillsMarketRouter({...}).
+	skillsMarket?: ReturnType<typeof createSkillsMarketRouter>
 }) {
 	return router({
 		migration,
@@ -379,10 +385,15 @@ export function createAppRouter(opts: {
 		// OPENCLAW_CLI_UNAVAILABLE until production boot swaps in a real
 		// `createOpenclawCliRouter({...})` build.
 		openclaw: opts.openclawCli ?? openclawCliRouter,
-		// Phase 219 T6 — `skills.*` namespace (per-agent SKILL.md CRUD).
-		// Default empty-injection stub throws PRECONDITION_FAILED until
-		// production boot wires SkillsLoader.
-		skills: opts.skills ?? skillsRouter,
+		// Phase 219 T6+T7 — `skills.*` namespace combines:
+		//   - skills.{list,get,delete} (T6, per-agent CRUD over SkillsLoader)
+		//   - skills.market.{list,install} (T7, curated registry → write to disk)
+		// Both default to empty-injection stubs; production boot supplies the
+		// real instances.
+		skills: t.mergeRouters(
+			opts.skills ?? skillsRouter,
+			router({market: opts.skillsMarket ?? skillsMarketRouter}),
+		),
 	})
 }
 
