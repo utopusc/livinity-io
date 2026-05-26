@@ -1309,7 +1309,12 @@ export default class Apps {
 							(user_id, app_id, subdomain, container_name, port, volume_path, status)
 						 VALUES ($1, $2, $3, $4, $5, $6, 'running')
 						 ON CONFLICT (user_id, app_id) DO NOTHING`,
-						[userId, appSlug, `${appSlug}-${username}`, name, port, '/opt/livos/data/orphan-reconciled'],
+						// subdomain = appSlug (short slug only). UI's appToUrl()
+						// adds the `-<userPart>.livinity.io` suffix from
+						// location.hostname; storing pre-suffixed values here
+						// double-suffixes the rendered link (operator saw
+						// `n8n-bruce-oz-bruce.livinity.io` on 2026-05-26 UAT).
+						[userId, appSlug, appSlug, name, port, '/opt/livos/data/orphan-reconciled'],
 					)
 					this.logger.log(`[recon] inserted user_app_instances for orphan ${name} (user=${username}, app=${appSlug}, port=${port})`)
 					inserted++
@@ -1553,12 +1558,17 @@ export default class Apps {
 			throw new Error(`Failed to start container: ${(error as Error).message}`)
 		}
 
-		// Record in database — use per-user subdomain so frontend routes to this user's instance
-		const subdomain = `${appId}-${user.username}`
+		// Record in database — `subdomain` stores the SHORT slug (just appId)
+		// because the UI's `appToUrl()` helper (livos/packages/ui/src/utils/
+		// misc.ts) computes `<subdomain>-<userPart>.livinity.io` itself, where
+		// userPart comes from location.hostname. Storing a pre-suffixed value
+		// here (`appId-username`) caused double-suffixing on Mini PC UAT
+		// 2026-05-26 — operator saw `n8n-bruce-oz-bruce.livinity.io`. Fix:
+		// keep the slug clean; the UI is the single source of suffix truth.
 		await createUserAppInstance({
 			userId,
 			appId,
-			subdomain,
+			subdomain: appId,
 			containerName: `${appId}_${mainServiceName || 'app'}_user_${user.username}_1`,
 			port,
 			volumePath: userDataDir,
