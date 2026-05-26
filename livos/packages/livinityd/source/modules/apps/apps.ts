@@ -36,6 +36,13 @@ import {
 const REDIS_DOMAIN_KEY = 'livos:domain:config'
 const REDIS_SUBDOMAINS_KEY = 'livos:domain:subdomains'
 const REDIS_PLATFORM_API_KEY = 'livos:platform:api_key'
+// Phase 210 Bug C: this constant was referenced by reportInstallEvent() but
+// never declared; tsx hides the bug as a runtime ReferenceError caught by the
+// surrounding try/catch, silently dropping every install/uninstall event.
+// Value matches the key tunnel-client.ts writes (the instance URL like
+// https://bruce.livinity.io), which is what reportInstallEvent strips for the
+// instance_name body field.
+const REDIS_PLATFORM_URL = 'livos:platform:url'
 // Phase 140-08.1 (2026-05-17): `livos:platform:url` is overwritten by
 // platform/tunnel-client.ts:463 with the INSTANCE'S assigned URL (e.g.
 // https://socinity.livinity.io). Phase 140-08 reads the same key expecting
@@ -576,6 +583,21 @@ export default class Apps {
 		// (previously discarded → Caddy emitted `n8n.socinity.livinity.io`
 		// instead of `n8n-socinity.livinity.io` → CF Tunnel 404).
 		const provisioned = await this.provisionAppSubdomain(appId, manifest.port)
+		if (!provisioned) {
+			// Phase 210 Bug B: surface the silent provisioning failure. Without
+			// the Server5-minted host the local Caddy block falls back to
+			// `<sub>.<mainDomain>` (dot format) which does NOT match the
+			// CF Tunnel ingress (`<sub>-<user>.livinity.io`, hyphen format)
+			// — apps appear to "install" but are unreachable through the
+			// public subdomain. Log loudly + report through the platform
+			// event channel so operator dashboards see the missing wire.
+			this.logger.error(
+				`Phase 210: CF subdomain provisioning failed for ${appId}. ` +
+					`App will use legacy dot-format subdomain which likely won't resolve via CF Tunnel. ` +
+					`Causes: Server5 unreachable, missing platform api-key, 409 conflict from re-install, or single-char slug. ` +
+					`Re-run install after Server5 connectivity is verified.`,
+			)
+		}
 
 		// Register subdomain in Caddy for reverse proxy
 		try {
