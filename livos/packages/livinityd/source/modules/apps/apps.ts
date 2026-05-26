@@ -28,6 +28,7 @@ import {
 	getUserAppInstance,
 	listAllUserAppInstances,
 	findUserById,
+	findUserByUsername,
 	getAdminUser,
 	getPool,
 } from '../database/index.js'
@@ -297,6 +298,12 @@ export default class Apps {
 			this.nativeInstances.push(nativeApp)
 			this.logger.log(`Registered native app ${config.id} (${nativeApp.state})`)
 		}
+
+		// Phase 218 T4 — backfill orphan Docker containers that landed via a
+		// pre-multi-user install path (operator dogfood: bolt-diy, immich).
+		// Runs BEFORE T5's boot-time Caddyfile regen so reconciled rows
+		// participate in the regen.
+		await this.reconcileOrphanInstances()
 	}
 
 	private async reinstallMissingAppsAfterRestore(appIds: string[]) {
@@ -1138,6 +1145,147 @@ export default class Apps {
 			this.logger.log(`[caddy] regenerated from state: ${caddyConfig.subdomains.length} subdomain blocks`)
 		} catch (err) {
 			this.logger.error('[caddy] rebuildCaddyFromState failed (non-fatal)', err)
+		}
+	}
+
+	/**
+	 * Phase 218 T4 — backfill orphan Docker containers into user_app_instances.
+	 *
+	 * Operator's box (2026-05-26) had bolt-diy and immich containers running
+	 * from a pre-multi-user install path that didn't write to the
+	 * user_app_instances table, so the admin UI couldn't see them AND the
+	 * Caddyfile regen (T1/T5) couldn't emit blocks for them. This method
+	 * walks `docker ps`, matches container names against the two known
+	 * install shapes (single-user `<slug>_<service>_<N>` and multi-user
+	 * `<slug>_<service>_user_<username>_<N>`), and INSERTs missing rows.
+	 *
+	 * Attribution: single-user-shape orphans are attributed to the admin
+	 * user (the only user that existed pre-multi-user). Multi-user-shape
+	 * orphans resolve username → user lookup.
+	 *
+	 * Idempotent: re-runs are safe (ON CONFLICT (user_id, app_id) DO NOTHING).
+	 * Non-fatal: any failure logs and continues to the next container.
+	 */
+	private async reconcileOrphanInstances(): Promise<void> {
+		try {
+			const pool = getPool()
+			if (!pool) {
+				this.logger.log('[recon] database pool unavailable, skipping orphan reconciliation')
+				return
+			}
+
+			const admin = await getAdminUser()
+			if (!admin) {
+				this.logger.log('[recon] no admin user, skipping orphan reconciliation')
+				return
+			}
+
+			let containerNames: string[]
+			try {
+				const result = await $`docker ps --format {{.Names}}`
+				containerNames = result.stdout.split('\n').filter(Boolean)
+			} catch (err) {
+				this.logger.error('[recon] docker ps failed, skipping orphan reconciliation', err)
+				return
+			}
+
+			// System / livinityd-managed containers we should never reconcile.
+			const SYSTEM_PATTERNS = [
+				/^caddy/i,
+				/^livinityd/i,
+				/^liv-core/i,
+				/^liv-worker/i,
+				/^liv-memory/i,
+				/^liv-mcp/i,
+				/^postgres/i,
+				/^redis/i,
+				/_run_/, // ephemeral docker compose run containers
+			]
+
+			let inserted = 0
+			let skipped = 0
+
+			for (const name of containerNames) {
+				if (SYSTEM_PATTERNS.some((re) => re.test(name))) continue
+
+				// Multi-user shape: <appSlug>_<service>_user_<username>_<N>
+				let appSlug: string | null = null
+				let userId: string | null = null
+				let username: string | null = null
+
+				const muMatch = name.match(/^(.+?)_(?:.+?)_user_(.+?)_(\d+)$/)
+				if (muMatch) {
+					appSlug = muMatch[1]
+					const candidateUsername = muMatch[2]
+					const user = await findUserByUsername(candidateUsername).catch(() => null)
+					if (!user) {
+						skipped++
+						continue
+					}
+					userId = user.id
+					username = user.username
+				} else {
+					// Single-user shape: <appSlug>_<service>_<N>
+					const suMatch = name.match(/^([a-z0-9][a-z0-9-]*)_([a-z0-9][a-z0-9-]*)_(\d+)$/i)
+					if (!suMatch) {
+						skipped++
+						continue
+					}
+					appSlug = suMatch[1]
+					userId = admin.id
+					username = admin.username
+				}
+
+				// Already reconciled?
+				const {rows: existing} = await pool.query(
+					`SELECT 1 FROM user_app_instances WHERE container_name = $1 OR (user_id = $2 AND app_id = $3) LIMIT 1`,
+					[name, userId, appSlug],
+				)
+				if (existing.length > 0) {
+					skipped++
+					continue
+				}
+
+				// Resolve host port via `docker port <name>`.
+				// Output lines look like: `8080/tcp -> 127.0.0.1:10001`.
+				let port = 0
+				try {
+					const portResult = await $`docker port ${name}`
+					for (const line of portResult.stdout.split('\n')) {
+						const m = line.match(/->\s*[^:]+:(\d+)/)
+						if (m) {
+							port = parseInt(m[1], 10)
+							break
+						}
+					}
+				} catch {
+					skipped++
+					continue
+				}
+				if (!port) {
+					skipped++
+					continue
+				}
+
+				try {
+					await pool.query(
+						`INSERT INTO user_app_instances
+							(user_id, app_id, subdomain, container_name, port, volume_path, status)
+						 VALUES ($1, $2, $3, $4, $5, $6, 'running')
+						 ON CONFLICT (user_id, app_id) DO NOTHING`,
+						[userId, appSlug, `${appSlug}-${username}`, name, port, '/opt/livos/data/orphan-reconciled'],
+					)
+					this.logger.log(`[recon] inserted user_app_instances for orphan ${name} (user=${username}, app=${appSlug}, port=${port})`)
+					inserted++
+				} catch (err) {
+					this.logger.error(`[recon] failed to insert orphan ${name}`, err)
+					skipped++
+				}
+			}
+
+			this.logger.log(`[recon] orphan reconciliation complete: ${inserted} inserted, ${skipped} skipped`)
+		} catch (err) {
+			this.logger.error('[recon] reconcileOrphanInstances failed (non-fatal)', err)
 		}
 	}
 
