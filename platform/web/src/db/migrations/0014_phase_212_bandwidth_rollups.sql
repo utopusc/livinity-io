@@ -20,7 +20,10 @@ CREATE TABLE IF NOT EXISTS public.daily_bandwidth (
 CREATE INDEX IF NOT EXISTS hourly_bandwidth_hour_idx ON public.hourly_bandwidth (hour_start DESC);
 CREATE INDEX IF NOT EXISTS daily_bandwidth_day_idx ON public.daily_bandwidth (day_start DESC);
 
-CREATE OR REPLACE FUNCTION public.bandwidth_rollup_upsert() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.bandwidth_rollup_upsert() RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
 DECLARE
   delta_in BIGINT;
   delta_out BIGINT;
@@ -49,7 +52,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS bandwidth_rollup_trigger ON public.bandwidth_usage;
 CREATE TRIGGER bandwidth_rollup_trigger
