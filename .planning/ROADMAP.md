@@ -3124,7 +3124,7 @@ Plus Phase 206 carry-overs:
 
 ---
 
-### Phase 211: MCP/App install reliability + auto-install MCP — ⚪ NOT STARTED
+### Phase 211: MCP/App install reliability + auto-install MCP — 🟡 PARTIAL 2026-05-26 (211.1 defensive dual-writer guard shipped; 211.2 + 211.3 + full unification carried)
 
 **Goal:** Click "Install" in store → MCP/app working, zero manual config, zero restart, clear feedback on env-vars needed.
 
