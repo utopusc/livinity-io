@@ -165,10 +165,13 @@ const LUSE_TOOL_DEFS: ReadonlyArray<LuseToolDef> = [
     parameters: { type: "object", properties: {} },
   },
   {
-    name: "luse_get_cursor_position",
+    // 208-10: canonical server name is `computer_cursor_position`; the plugin
+    // previously advertised `get_cursor_position` which the MCP adapter
+    // forwarded as-is and the server rejected with "tool not registered".
+    name: "luse_computer_cursor_position",
     label: "Get Cursor Position",
     description:
-      "Read the current X11 cursor coordinates on the LivOS desktop.",
+      "Read the current X11 cursor coordinates on the LivOS desktop. Returns 'Cursor at (x, y)'.",
     parameters: { type: "object", properties: {} },
   },
 ];

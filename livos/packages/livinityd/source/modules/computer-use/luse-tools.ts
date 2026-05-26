@@ -152,7 +152,7 @@ const _clickMouseTool = {
 			holdKeys: holdKeysSchema,
 			clickCount: {
 				type: 'integer' as const,
-				description: 'Number of clicks to perform (e.g., 2 for double-click)',
+				description: 'Number of clicks (default 1; pass 2 for double-click). OPTIONAL.',
 				default: 1,
 			},
 			display: {
@@ -162,7 +162,10 @@ const _clickMouseTool = {
 				nullable: true,
 			},
 		},
-		required: ['button', 'clickCount'],
+		// 208-10: clickCount dropped from `required` — LLM consistently omits it
+		// and MCP SDK schema validation rejected before the handler default
+		// kicked in. button is the only truly necessary field.
+		required: ['button'],
 	},
 }
 
