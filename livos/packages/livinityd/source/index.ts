@@ -1856,9 +1856,21 @@ export default class Livinityd {
 
 		// Phase 215 / CARRY-P215-MINIPC-POLLER — start install_commands poller.
 		// Silent when api-key not configured (LAN-only installs).
+		// Cloud user_id → local user_id: Vercel users.id is a SEPARATE table
+		// from livinityd users.id. Cloud id is routing ("which Mini PC?"),
+		// local id is the install target. Resolve via getAdminUser() (local
+		// operator account). Single-user Mini PC for now; multi-user mapping
+		// can come later if needed.
 		this.installPoller = new InstallPoller({
 			redis: this.ai.redis,
 			apps: this.apps,
+			userResolver: {
+				resolveLocalUserId: async (_cloudUserId: string) => {
+					const dbMod = await import('./modules/database/index.js')
+					const adminUser = await dbMod.getAdminUser().catch(() => null)
+					return adminUser?.id ?? null
+				},
+			},
 			version: packageJson.version,
 			logger: {
 				log: (...args: unknown[]) => this.logger.log(args.map(String).join(' ')),

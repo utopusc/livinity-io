@@ -42,14 +42,23 @@ export interface InstallPollerApps {
 	installForUser(appId: string, userId: string): Promise<boolean>
 }
 
+export interface InstallPollerUserResolver {
+	// Returns the LOCAL livinityd users.id to install for, given a Vercel-
+	// side (Supabase) user_id. The two systems have separate user tables —
+	// the cloud user_id is just a routing handle ("which Mini PC?"), once
+	// we're on the Mini PC the actual install target is the local operator.
+	resolveLocalUserId(cloudUserId: string): Promise<string | null>
+}
+
 export interface InstallPollerOptions {
 	redis: Redis
 	apps: InstallPollerApps
+	userResolver: InstallPollerUserResolver
 	version: string
 	logger: InstallPollerLogger
 	/** Override for tests / preview Vercel URLs. Default https://livinity.io. */
 	platformBaseUrl?: string
-	/** Override poll interval in ms (default 5000). */
+	/** Override poll interval in ms (default 60000). */
 	pollIntervalMs?: number
 }
 
@@ -72,6 +81,7 @@ interface ClaimedCommand extends QueuedCommand {
 export class InstallPoller {
 	private readonly redis: Redis
 	private readonly apps: InstallPollerApps
+	private readonly userResolver: InstallPollerUserResolver
 	private readonly version: string
 	private readonly logger: InstallPollerLogger
 	private readonly baseUrl: string
@@ -83,6 +93,7 @@ export class InstallPoller {
 	constructor(opts: InstallPollerOptions) {
 		this.redis = opts.redis
 		this.apps = opts.apps
+		this.userResolver = opts.userResolver
 		this.version = opts.version
 		this.logger = opts.logger
 		this.baseUrl = opts.platformBaseUrl ?? DEFAULT_PLATFORM_BASE
@@ -205,58 +216,76 @@ export class InstallPoller {
 		const claimed = (await claimResp.json()) as ClaimedCommand
 
 		this.logger.log(
-			`[install-poller] claimed cmd=${cmd.id} app=${cmd.app_slug ?? cmd.app_id} user=${claimed.user_id}`,
+			`[install-poller] claimed cmd=${cmd.id} app=${cmd.app_slug ?? cmd.app_id} cloud_user=${claimed.user_id}`,
 		)
 
-		// Step 2: execute install (Apps.installForUser uses appId — which here is
-		// app_slug per the existing apps.ts schema. Both UUID-id and slug-id are
-		// accepted by the underlying template chain.)
+		// Step 2: resolve cloud user_id → local user_id. Vercel users.id and
+		// livinityd users.id are TWO DIFFERENT TABLES — the cloud id is a
+		// routing handle ("which Mini PC?"), the local id is the install target.
+		const localUserId = await this.userResolver.resolveLocalUserId(claimed.user_id)
+		if (!localUserId) {
+			const errorMessage = `Cannot resolve local user for cloud_user=${claimed.user_id}`
+			this.logger.error(`[install-poller] ${errorMessage}`)
+			await this.reportComplete(apiKey, cmd.id, 'failed', {
+				duration_ms: 0,
+				success: false,
+				error: errorMessage,
+				app_identifier: cmd.app_slug ?? cmd.app_id,
+				instance_name: cmd.instance_name,
+			})
+			return
+		}
+
+		// Step 3: execute install (Apps.installForUser uses appId — which here
+		// is app_slug per the existing apps.ts schema. Both UUID-id and
+		// slug-id are accepted by the underlying template chain.)
 		const appIdentifier = cmd.app_slug ?? cmd.app_id
 		let success = false
 		let errorMessage: string | null = null
 		const startedAt = Date.now()
 		try {
-			success = await this.apps.installForUser(appIdentifier, claimed.user_id)
+			success = await this.apps.installForUser(appIdentifier, localUserId)
 		} catch (err) {
 			errorMessage = err instanceof Error ? err.message : String(err)
 		}
 		const durationMs = Date.now() - startedAt
 
-		// Step 3: report terminal
+		// Step 4: report terminal
 		const terminalStatus = success && !errorMessage ? 'ready' : 'failed'
-		const completeBody = {
-			status: terminalStatus,
-			result: {
-				duration_ms: durationMs,
-				success,
-				error: errorMessage,
-				app_identifier: appIdentifier,
-				instance_name: cmd.instance_name,
-			},
-		}
-		const completeResp = await fetch(
-			`${this.baseUrl}/api/me/install-commands/${cmd.id}/complete`,
-			{
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'X-API-Key': apiKey,
-					'User-Agent': `livinityd-presence/${this.version}`,
-				},
-				body: JSON.stringify(completeBody),
-			},
-		)
-		if (!completeResp.ok) {
-			// Don't throw — the install itself completed, only the report failed.
-			// Next poll will see the row still in 'running' and the operator can
-			// manually resolve. Log so it's discoverable.
-			this.logger.error(
-				`[install-poller] complete HTTP ${completeResp.status} for cmd=${cmd.id}: ${await completeResp.text()}`,
-			)
-			return
-		}
+		await this.reportComplete(apiKey, cmd.id, terminalStatus, {
+			duration_ms: durationMs,
+			success,
+			error: errorMessage,
+			app_identifier: appIdentifier,
+			instance_name: cmd.instance_name,
+		})
 		this.logger.log(
 			`[install-poller] done cmd=${cmd.id} status=${terminalStatus} duration=${durationMs}ms`,
 		)
+	}
+
+	private async reportComplete(
+		apiKey: string,
+		cmdId: string,
+		status: 'ready' | 'failed',
+		result: Record<string, unknown>,
+	): Promise<void> {
+		const resp = await fetch(`${this.baseUrl}/api/me/install-commands/${cmdId}/complete`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-API-Key': apiKey,
+				'User-Agent': `livinityd-presence/${this.version}`,
+			},
+			body: JSON.stringify({status, result}),
+		})
+		if (!resp.ok) {
+			// Don't throw — the install itself completed, only the report failed.
+			// Next poll will see the row still in 'running' (or stays as the failed
+			// state we attempted to write). Log so it's discoverable.
+			this.logger.error(
+				`[install-poller] complete HTTP ${resp.status} for cmd=${cmdId}: ${(await resp.text()).slice(0, 200)}`,
+			)
+		}
 	}
 }
