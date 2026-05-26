@@ -513,18 +513,43 @@ export function useAppStoreBridge(
 
 	const handleOpen = useCallback(async (appId: string) => {
 		const domain = domainRef.current?.domain
-		if (domain) {
-			// Use actual subdomain from config (e.g. jellyfin uses "media" not "jellyfin")
-			try {
-				const domainStatus = await trpcClient.domain.getStatus.query()
-				const sub = (domainStatus.subdomains || []).find((s: {appId: string}) => s.appId === appId)
-				const subdomain = sub?.subdomain ?? appId
+		if (!domain) {
+			window.open(`${window.location.origin}/${appId}`, '_blank')
+			return
+		}
+
+		// Phase 218 follow-up — store iframe bridge was emitting the legacy
+		// dot-format `<slug>.<userdomain>` (e.g. `n8n.bruce.livinity.io`),
+		// which is a sub-of-sub the CF wildcard cert doesn't cover and the
+		// new state-derived Caddyfile doesn't route. Convert to the same
+		// hyphen-pattern shape `appToUrl()` (utils/misc.ts) emits for dock
+		// clicks: `<slug>-<userPart>.livinity.io` when running under the
+		// livinity.io platform, dot pattern otherwise (custom domains).
+		try {
+			const domainStatus = await trpcClient.domain.getStatus.query()
+			const sub = (domainStatus.subdomains || []).find((s: {appId: string}) => s.appId === appId)
+			// Phase 141-03 canonical FQDN (Server5-minted) takes precedence
+			// when present — same precedence appToUrl uses for app.host.
+			if (sub?.host) {
+				window.open(`https://${sub.host}`, '_blank')
+				return
+			}
+			const subdomain = sub?.subdomain ?? appId
+			const livinityIoSuffix = '.livinity.io'
+			if (domain.endsWith(livinityIoSuffix)) {
+				const userPart = domain.slice(0, -livinityIoSuffix.length)
+				window.open(`https://${subdomain}-${userPart}.livinity.io`, '_blank')
+			} else {
 				window.open(`https://${subdomain}.${domain}`, '_blank')
-			} catch {
+			}
+		} catch {
+			const livinityIoSuffix = '.livinity.io'
+			if (domain.endsWith(livinityIoSuffix)) {
+				const userPart = domain.slice(0, -livinityIoSuffix.length)
+				window.open(`https://${appId}-${userPart}.livinity.io`, '_blank')
+			} else {
 				window.open(`https://${appId}.${domain}`, '_blank')
 			}
-		} else {
-			window.open(`${window.location.origin}/${appId}`, '_blank')
 		}
 	}, [])
 
