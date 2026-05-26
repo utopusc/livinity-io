@@ -688,3 +688,75 @@
   }
   .admin-detail dt { padding-top: 10px; }
 }
+
+/* Phase 215: walkthrough page */
+.walkthrough-section {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 28px 32px;
+}
+
+.walkthrough-section h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.walkthrough-sub {
+  color: var(--fg-mute);
+  font-size: 14px;
+  margin: 0 0 22px;
+}
+
+.walkthrough-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  counter-reset: wstep;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.walkthrough-steps li {
+  padding-left: 22px;
+  position: relative;
+}
+
+.walkthrough-steps h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.walkthrough-steps p {
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.walkthrough-sample {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--line);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.walkthrough-sample-note {
+  color: var(--fg-mute);
+  font-size: 12px;
+  margin: 0;
+}
+
+.walkthrough-sample-note code {
+  font-family: var(--mono);
+  background: var(--bg-2);
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+}
