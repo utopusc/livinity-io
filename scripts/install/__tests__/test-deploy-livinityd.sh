@@ -1150,15 +1150,38 @@ else
     fail "Phase 109: _dld_seed_mcp_servers helper NOT defined in deploy-livinityd.sh"
 fi
 
-# Assertion 3: helper body has the four required tokens (substitution + SET + idempotency gate)
+# Assertion 3: helper body has the four required tokens (substitution + HSET + TYPE idempotency gate).
+# Phase 219 T1 — seed now writes HASH (HSET per entry) instead of STRING (SET whole JSON).
+# The runtime mcp-config-router uses HASH operations, so SET historically left the
+# key in a WRONGTYPE state for the first UI add ("Add failed (HTTP 500)" with no
+# operator-visible cause). The TYPE gate replaces the EXISTS gate to keep
+# idempotency while letting the seed re-coerce a legacy STRING into HASH.
 phase109_body=$(awk '/^_dld_seed_mcp_servers\(\)/,/^}/' "$DEPLOY_SH")
 if echo "$phase109_body" | grep -q "__LIVOS_REDIS_URL__" \
-   && echo "$phase109_body" | grep -q "SET liv:mcp:config" \
-   && echo "$phase109_body" | grep -q "EXISTS liv:mcp:config" \
+   && echo "$phase109_body" | grep -q "HSET liv:mcp:config" \
+   && echo "$phase109_body" | grep -q "TYPE liv:mcp:config" \
    && echo "$phase109_body" | grep -qE "sed.*__LIVOS_REDIS_URL__"; then
-    pass "Phase 109: helper has placeholder substitution + SET + EXISTS idempotency gate"
+    pass "Phase 219 T1: helper has placeholder substitution + HSET + TYPE idempotency gate (HASH primitive)"
 else
-    fail "Phase 109: helper missing one of __LIVOS_REDIS_URL__ / SET liv:mcp:config / EXISTS liv:mcp:config / sed-substitution"
+    fail "Phase 219 T1: helper missing one of __LIVOS_REDIS_URL__ / HSET liv:mcp:config / TYPE liv:mcp:config / sed-substitution"
+fi
+
+# Phase 219 T1 — helper must NOT use the legacy `SET liv:mcp:config` write
+# anymore (would re-introduce the WRONGTYPE bug on every fresh install).
+# Use grep -w to match SET as a whole word so HSET doesn't false-positive.
+if echo "$phase109_body" | grep -E "liv:mcp:config" | grep -qwE "SET"; then
+    fail "Phase 219 T1: helper still writes SET liv:mcp:config — must use HSET (STRING leaves runtime in WRONGTYPE state)"
+else
+    pass "Phase 219 T1: helper does not use legacy SET liv:mcp:config write"
+fi
+
+# Phase 219 T1 — helper must handle the pre-219 STRING leftover so existing
+# Mini PCs self-heal on next deploy. Expect a `string` type branch that DELs
+# the legacy key before re-seeding as HASH.
+if echo "$phase109_body" | grep -qE 'string.*DEL liv:mcp:config|DEL liv:mcp:config'; then
+    pass "Phase 219 T1: helper handles legacy STRING case with DEL + re-seed"
+else
+    fail "Phase 219 T1: helper missing legacy STRING self-heal (DEL + re-seed) — pre-219 boxes stay broken"
 fi
 
 # 109-02 hotfix: helper uses BASH_SOURCE dirname as the first seed-file candidate

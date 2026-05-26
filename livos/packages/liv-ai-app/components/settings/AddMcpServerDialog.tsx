@@ -41,7 +41,13 @@ interface AddMcpServerDialogProps {
 	open: boolean;
 	onOpenChange: (next: boolean) => void;
 	existingNames: string[];
-	onAdded: () => Promise<void> | void;
+	/**
+	 * Phase 219 T1 — optional `warnings` parameter so the parent can surface
+	 * non-blocking mutation warnings (e.g. openclaw.json mirror failure) in a
+	 * toast or banner after the dialog closes. Pre-219 callers that pass a
+	 * zero-arg callback still work.
+	 */
+	onAdded: (warnings?: string[]) => Promise<void> | void;
 }
 
 interface EnvRow {
@@ -185,7 +191,13 @@ export function AddMcpServerDialog({
 				setSubmitting(false);
 				return;
 			}
-			await onAdded();
+			// Phase 219 T1 — surface non-blocking warnings (openclaw mirror,
+			// etc.) so the operator knows about partial-success cases.
+			const result = data?.[0]?.result?.data?.json;
+			const warnings: string[] = Array.isArray(result?.warnings)
+				? (result.warnings.filter((w: unknown): w is string => typeof w === "string"))
+				: [];
+			await onAdded(warnings.length > 0 ? warnings : undefined);
 			handleOpenChange(false);
 		} catch (e) {
 			setFormError(e instanceof Error ? e.message : "Network error");

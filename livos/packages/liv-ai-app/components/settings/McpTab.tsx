@@ -36,6 +36,9 @@ export function McpTab() {
 	const [addOpen, setAddOpen] = useState<boolean>(false);
 	const [actingOn, setActingOn] = useState<string | null>(null);
 	const [actionError, setActionError] = useState<string | null>(null);
+	// Phase 219 T1 — surface non-blocking mutation warnings (e.g. openclaw
+	// mirror failure) inline so the operator knows a partial-success landed.
+	const [actionWarnings, setActionWarnings] = useState<string[]>([]);
 
 	const toggleServer = useCallback(
 		async (name: string, enabled: boolean) => {
@@ -207,6 +210,23 @@ export function McpTab() {
 						{actionError}
 					</p>
 				) : null}
+				{actionWarnings.length > 0 ? (
+					<div
+						role="status"
+						className="space-y-1 rounded-md border border-amber-500/40 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+					>
+						{actionWarnings.map((w, i) => (
+							<p key={i}>{w}</p>
+						))}
+						<button
+							type="button"
+							className="text-[10px] underline hover:no-underline"
+							onClick={() => setActionWarnings([])}
+						>
+							Dismiss
+						</button>
+					</div>
+				) : null}
 
 				{isLoading ? (
 					<p className="text-sm text-muted-foreground">Loading…</p>
@@ -233,8 +253,11 @@ export function McpTab() {
 				open={addOpen}
 				onOpenChange={setAddOpen}
 				existingNames={servers.map((s) => s.name)}
-				onAdded={async () => {
+				onAdded={async (warnings) => {
 					await refetch();
+					if (warnings && warnings.length > 0) {
+						setActionWarnings(warnings);
+					}
 				}}
 			/>
 		</div>

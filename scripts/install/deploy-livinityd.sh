@@ -1019,6 +1019,15 @@ EOF
 # so a fresh install boots with 2 MCP servers registered (AI Chat shows them
 # without operator-initiated Marketplace setup).
 #
+# Phase 219 T1 — writes as HASH (HSET per entry) instead of a single STRING.
+# The historical SET write produced a Redis STRING, but the runtime router
+# (livos/packages/livinityd/.../mcp-config-router.ts) uses HASH operations,
+# so the first UI add threw WRONGTYPE → "Add failed (HTTP 500)" with no
+# operator-visible cause. Phase 218 T6 added a STRING→HASH self-heal in
+# liv-core's McpConfigManager and Phase 219 T1 added the equivalent self-heal
+# to the tRPC router, but ALSO: stop writing STRING in the first place so
+# fresh installs land in the correct primitive.
+#
 # Idempotency (D-109-IDEMPOTENT):
 #   - SKIP if liv:mcp:config already exists in Redis. This protects user
 #     customizations made via Marketplace/UI and survives re-runs of update.sh.
@@ -1033,10 +1042,11 @@ EOF
 # Fail-soft (D-109-FAIL-SOFT):
 #   - Missing seed file → info + return 0 (older repo SHA without the seed
 #     file should not break new installs)
-#   - redis-cli SET failure → warn + return 0 (install should still ship a
+#   - python3 missing → warn + return 0
+#   - redis-cli failure → warn + return 0 (install should still ship a
 #     working LivOS even if MCP seed fails)
 _dld_seed_mcp_servers() {
-    step "Phase 109 — seed liv:mcp:config (sequential-thinking + luse)"
+    step "Phase 109 — seed liv:mcp:config (HASH, sequential-thinking + luse)"
 
     # Phase 109-02 hotfix: multi-candidate seed file lookup.
     # `scripts/install/seeds/` lives in the repo root, NOT in the `livos/`
@@ -1080,12 +1090,23 @@ _dld_seed_mcp_servers() {
         return 0
     fi
 
-    # Idempotency gate (D-109-IDEMPOTENT): EXISTS liv:mcp:config returns "1"
-    # if the key is already populated. Skip to preserve user customizations.
-    local existing
-    existing=$(redis-cli -a "$redis_pass" --no-auth-warning EXISTS liv:mcp:config 2>/dev/null || echo "0")
-    if [[ "$existing" == "1" ]]; then
-        ok "liv:mcp:config already present (reuse — preserves user customizations)"
+    # Phase 219 T1 — gate against the canonical HASH primitive specifically.
+    # If the key exists and is already a HASH, preserve operator customizations.
+    # If it's a STRING (legacy from pre-219 installs), DEL and re-seed as HASH
+    # so the runtime router stops throwing WRONGTYPE on the next Add click.
+    local existing_type
+    existing_type=$(redis-cli -a "$redis_pass" --no-auth-warning TYPE liv:mcp:config 2>/dev/null || echo "none")
+    if [[ "$existing_type" == "hash" ]]; then
+        ok "liv:mcp:config already present as HASH (reuse — preserves user customizations)"
+        return 0
+    elif [[ "$existing_type" == "string" ]]; then
+        warn "liv:mcp:config exists as STRING (legacy pre-219 install) — re-seeding as HASH"
+        if ! redis-cli -a "$redis_pass" --no-auth-warning DEL liv:mcp:config >/dev/null 2>&1; then
+            warn "redis-cli DEL of STRING liv:mcp:config failed — install continues, runtime will self-heal"
+            return 0
+        fi
+    elif [[ "$existing_type" != "none" ]]; then
+        warn "liv:mcp:config exists as unexpected type '$existing_type' — skipping MCP seed (manual fix needed)"
         return 0
     fi
 
@@ -1098,21 +1119,55 @@ _dld_seed_mcp_servers() {
         return 0
     fi
 
-    # SET the key (D-109-FAIL-SOFT: warn-not-fail on error).
-    if ! redis-cli -a "$redis_pass" --no-auth-warning SET liv:mcp:config "$substituted_json" >/dev/null 2>&1; then
-        warn "redis-cli SET liv:mcp:config failed — install continues without MCP seed"
+    # Phase 219 T1 — emit one HSET per server using python3 to safely traverse
+    # the JSON and quote values for redis-cli. python3 is part of every Ubuntu
+    # 24.04 base image we target (also a hard dep of livinityd's tsx runtime).
+    if ! command -v python3 >/dev/null 2>&1; then
+        warn "python3 not found — cannot emit HSET commands. Skipping MCP seed."
         return 0
     fi
 
-    # Verify the SET landed.
-    local verify
-    verify=$(redis-cli -a "$redis_pass" --no-auth-warning EXISTS liv:mcp:config 2>/dev/null || echo "0")
-    if [[ "$verify" != "1" ]]; then
-        warn "liv:mcp:config not present after SET — install continues without MCP seed"
+    # python3 prints `<name>\t<json>` rows (TAB-separated; names are
+    # `[a-zA-Z0-9_-]+`, never contain TAB). Bash reads each row and HSETs it.
+    # Stdin: the substituted JSON. Stdout: the rows. Errors → fail-soft.
+    local rows
+    if ! rows=$(printf '%s' "$substituted_json" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+servers = data.get("mcpServers") or data.get("servers") or {}
+for name, entry in servers.items():
+    if not isinstance(entry, dict):
+        continue
+    # Strip seed-only metadata (installedAt, installedFrom) — runtime contract
+    # is McpServerConfig without these fields. description is allowed to flow
+    # through; the Phase 219 T2 catalog uses it.
+    clean = {k: v for k, v in entry.items() if k not in ("installedAt", "installedFrom")}
+    sys.stdout.write(name + "\t" + json.dumps(clean, separators=(",", ":")) + "\n")
+' 2>&1); then
+        warn "python3 JSON parse of seed failed — install continues without MCP seed"
+        warn "python3 stderr: $rows"
         return 0
     fi
 
-    ok "Seeded liv:mcp:config with 2 MCP servers (sequential-thinking, luse) — substituted REDIS_URL"
+    local count=0
+    while IFS=$'\t' read -r entry_name entry_json; do
+        if [[ -z "$entry_name" || -z "$entry_json" ]]; then continue; fi
+        if redis-cli -a "$redis_pass" --no-auth-warning HSET liv:mcp:config "$entry_name" "$entry_json" >/dev/null 2>&1; then
+            count=$((count + 1))
+        else
+            warn "redis-cli HSET liv:mcp:config '$entry_name' failed — entry skipped"
+        fi
+    done <<< "$rows"
+
+    # Verify the HSET landed as the right primitive.
+    local verify_type
+    verify_type=$(redis-cli -a "$redis_pass" --no-auth-warning TYPE liv:mcp:config 2>/dev/null || echo "none")
+    if [[ "$verify_type" != "hash" ]]; then
+        warn "liv:mcp:config not a HASH after HSET (got '$verify_type') — install continues without MCP seed"
+        return 0
+    fi
+
+    ok "Seeded liv:mcp:config with $count MCP server(s) as HASH — substituted REDIS_URL"
 }
 
 # ── 7c. Phase 112 — seed livos:domain:config from local_mode keys ───────────
