@@ -194,3 +194,136 @@ export const CATEGORY_OPTIONS = [
   'networking',
   'notes',
 ];
+
+// ---------------------------------------------------------------------------
+// Phase 213: wrappers for the P212 admin metrics/users/tunnels/bandwidth/
+// install-failures/apps-summary routes. All gated server-side by
+// requireAdmin() which accepts either session cookie or x-api-key
+// (via the Phase 213 T1 bridge).
+// ---------------------------------------------------------------------------
+
+export type MetricsSummary = {
+  users_total: number;
+  users_active_24h: number;
+  tunnels_online: number;
+  installs_total: number;
+  installs_failed_24h: number;
+  bandwidth_total_bytes: number;
+  apps_total: number;
+};
+
+export type AdminUserRow = {
+  id: string;
+  username: string;
+  email: string | null;
+  is_admin: boolean;
+  email_verified: boolean;
+  created_at: string;
+  last_seen_at: string | null;
+};
+
+export type UsersListResult = {
+  users: AdminUserRow[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type AdminTunnelRow = {
+  id: string;
+  user_id: string;
+  username: string | null;
+  session_id: string;
+  status: string;
+  connected_at: string;
+  disconnected_at: string | null;
+  client_version: string | null;
+  client_ip: string | null;
+};
+
+export type TunnelsListResult = {
+  tunnels: AdminTunnelRow[];
+  limit: number;
+};
+
+export type AppsSummary = {
+  apps_total: number;
+  installs_per_app: { app_id: string; slug: string; name: string; install_count: number }[];
+};
+
+export type BandwidthUserRow = {
+  user_id: string;
+  username: string | null;
+  bytes_in: number;
+  bytes_out: number;
+};
+
+export type BandwidthResult = {
+  period: string;
+  users: BandwidthUserRow[];
+  total_bytes_in: number;
+  total_bytes_out: number;
+};
+
+export type InstallFailureRow = {
+  id: string;
+  user_id: string | null;
+  username: string | null;
+  app_id: string | null;
+  app_slug: string | null;
+  action: string;
+  instance_name: string | null;
+  created_at: string;
+};
+
+export type InstallFailuresResult = {
+  failures: InstallFailureRow[];
+  limit: number;
+};
+
+async function adminGet<T>(url: string): Promise<T> {
+  const res = await fetch(url, { headers: authHeaders(), credentials: 'same-origin' });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`${url} ${res.status}: ${body}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export function getMetricsSummary(): Promise<MetricsSummary> {
+  return adminGet<MetricsSummary>('/api/admin/metrics/summary');
+}
+
+export function listAdminUsers(opts: { limit?: number; offset?: number } = {}): Promise<UsersListResult> {
+  const params = new URLSearchParams();
+  if (opts.limit != null) params.set('limit', String(opts.limit));
+  if (opts.offset != null) params.set('offset', String(opts.offset));
+  const qs = params.toString();
+  return adminGet<UsersListResult>(`/api/admin/users${qs ? `?${qs}` : ''}`);
+}
+
+export function listTunnels(opts: { status?: 'connected' | 'disconnected'; limit?: number } = {}): Promise<TunnelsListResult> {
+  const params = new URLSearchParams();
+  if (opts.status) params.set('status', opts.status);
+  if (opts.limit != null) params.set('limit', String(opts.limit));
+  const qs = params.toString();
+  return adminGet<TunnelsListResult>(`/api/admin/tunnels${qs ? `?${qs}` : ''}`);
+}
+
+export function getAdminAppsSummary(): Promise<AppsSummary> {
+  return adminGet<AppsSummary>('/api/admin/apps/summary');
+}
+
+export function getBandwidth(opts: { period?: string } = {}): Promise<BandwidthResult> {
+  const params = new URLSearchParams();
+  if (opts.period) params.set('period', opts.period);
+  const qs = params.toString();
+  return adminGet<BandwidthResult>(`/api/admin/bandwidth${qs ? `?${qs}` : ''}`);
+}
+
+export function listInstallFailures(opts: { limit?: number } = {}): Promise<InstallFailuresResult> {
+  const params = new URLSearchParams();
+  if (opts.limit != null) params.set('limit', String(opts.limit));
+  const qs = params.toString();
+  return adminGet<InstallFailuresResult>(`/api/admin/install-failures${qs ? `?${qs}` : ''}`);
+}
