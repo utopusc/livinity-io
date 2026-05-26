@@ -1383,7 +1383,12 @@ export default class Apps {
 		}
 
 		await this.setSubdomains(subdomains)
-		await this.rebuildCaddy()
+		// Phase 218 follow-up: use the state-derived regen so both single-user
+		// Redis-tracked subdomains AND multi-user user_app_instances rows land
+		// in the same Caddyfile. The legacy rebuildCaddy() only reads Redis,
+		// so any single-user install (Linkwarden 2026-05-26 UAT) wiped the
+		// multi-user app blocks that T1+T5 had emitted.
+		await this.rebuildCaddyFromState()
 
 		const displayHost = newSub.host ?? `${subdomainName}.${domainConfig.domain}`
 		this.logger.log(`Registered subdomain ${displayHost} -> localhost:${port} for ${appId}`)
@@ -1399,7 +1404,12 @@ export default class Apps {
 
 		if (filtered.length !== subdomains.length) {
 			await this.setSubdomains(filtered)
-			await this.rebuildCaddy()
+			// Phase 218 follow-up: use the state-derived regen so both single-user
+		// Redis-tracked subdomains AND multi-user user_app_instances rows land
+		// in the same Caddyfile. The legacy rebuildCaddy() only reads Redis,
+		// so any single-user install (Linkwarden 2026-05-26 UAT) wiped the
+		// multi-user app blocks that T1+T5 had emitted.
+		await this.rebuildCaddyFromState()
 			this.logger.log(`Removed subdomain registration for ${appId}`)
 		}
 	}
@@ -1420,7 +1430,12 @@ export default class Apps {
 	 */
 	async setMultiUserEnabled(enabled: boolean): Promise<void> {
 		await this.#livinityd.ai.redis.set('livos:system:multi_user', enabled ? 'true' : 'false')
-		await this.rebuildCaddy()
+		// Phase 218 follow-up: use the state-derived regen so both single-user
+		// Redis-tracked subdomains AND multi-user user_app_instances rows land
+		// in the same Caddyfile. The legacy rebuildCaddy() only reads Redis,
+		// so any single-user install (Linkwarden 2026-05-26 UAT) wiped the
+		// multi-user app blocks that T1+T5 had emitted.
+		await this.rebuildCaddyFromState()
 		this.logger.log(`Multi-user mode ${enabled ? 'enabled' : 'disabled'}`)
 	}
 
