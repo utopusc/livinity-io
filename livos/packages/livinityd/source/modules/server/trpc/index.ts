@@ -68,6 +68,7 @@ import mcpRouter from './mcp-router.js'
 // PRECONDITION_FAILED on every call (mirrors xaiAuth + mastra +
 // agents pattern).
 import {mcpConfigRouter, createMcpConfigRouter} from './mcp-config-router.js'
+import {skillsRouter, createSkillsRouter} from './skills-router.js'
 // v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01). Single procedure
 // `webapp.extractMetadata({url})` returning `{title, faviconUrl, description,
 // ogImage}`. The path is added to httpOnlyPaths in ./common.ts because clean
@@ -256,6 +257,10 @@ export function createAppRouter(opts: {
 	// router built against the openclaw CLI binary path + state dir +
 	// onProvidersChanged hook.
 	openclawCli?: ReturnType<typeof createOpenclawCliRouter>
+	// Phase 219 T6 — `skills.*` namespace slot. Default empty-injection stub
+	// throws PRECONDITION_FAILED until production boot wires the real router
+	// built against a SkillsLoader instance.
+	skills?: ReturnType<typeof createSkillsRouter>
 }) {
 	return router({
 		migration,
@@ -374,6 +379,10 @@ export function createAppRouter(opts: {
 		// OPENCLAW_CLI_UNAVAILABLE until production boot swaps in a real
 		// `createOpenclawCliRouter({...})` build.
 		openclaw: opts.openclawCli ?? openclawCliRouter,
+		// Phase 219 T6 — `skills.*` namespace (per-agent SKILL.md CRUD).
+		// Default empty-injection stub throws PRECONDITION_FAILED until
+		// production boot wires SkillsLoader.
+		skills: opts.skills ?? skillsRouter,
 	})
 }
 

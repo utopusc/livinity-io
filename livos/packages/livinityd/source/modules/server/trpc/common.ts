@@ -358,6 +358,18 @@ export const httpOnlyPaths = [
 	'mcp.config.update',
 	'mcp.config.delete',
 	'mcp.config.toggle',
+	// Phase 219 T2 — `mcp.config.catalog` reads the curated MCP browse list
+	// from the AddMcpServerDialog. HTTP for the same render-flicker reason
+	// as mcp.config.list.
+	'mcp.config.catalog',
+	// Phase 219 T6 — `skills.*` per-agent SKILL.md CRUD. list is the
+	// Settings → AI → Skills tab render dependency (HTTP avoids the
+	// WS-handshake-delay flicker); get + delete are settings-page mutations
+	// gated by admin auth (memory pitfall B-12 / X-04 — same rationale as
+	// mcp.config.add at line 357).
+	'skills.list',
+	'skills.get',
+	'skills.delete',
 	// v32-redo Stage 2b — conversations namespace (sidebar feed + thread view +
 	// composer persistence path). All 6 paths route via HTTP because:
 	//   - list / listMessages are page-render dependencies for the AI Chat
