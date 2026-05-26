@@ -54,6 +54,7 @@ import type {
 	OpenclawConfigStore,
 	OpenclawMcpServerConfig,
 } from '../../openclawos/openclaw-config-store.js'
+import {MCP_CATALOG, type McpCatalogEntry} from './mcp-catalog-data.js'
 import {adminProcedure, router} from './trpc.js'
 
 export const MCP_CONFIG_REDIS_HASH_KEY = 'liv:mcp:config'
@@ -555,6 +556,19 @@ export function createMcpConfigRouter(deps: McpConfigRouterDeps) {
 			return {ok: true as const, warnings: warning ? [warning] : []}
 		}),
 
+		// ── catalog ────────────────────────────────────────────────────────────
+		// Phase 219 T2 — read-only curated MCP catalog rendered by the
+		// `/settings → MCP → Add → Browse` picker. Returns the catalog sorted
+		// alphabetically (matches list's sort for UI consistency). System
+		// entries (luse, liv-*) are filtered OUT because they're auto-seeded
+		// and cannot be deleted — offering them in the Add form would let
+		// operators stack duplicates.
+		catalog: adminProcedure.query(async (): Promise<McpCatalogEntry[]> => {
+			return [...MCP_CATALOG]
+				.filter((entry) => !entry.system)
+				.sort((a, b) => a.name.localeCompare(b.name))
+		}),
+
 		// ── getAutoApprove ─────────────────────────────────────────────────────
 		// Phase 207 UAT 2026-05-24 round 4 — read the live auto-approve flag.
 		// Returns false when no override is set AND the env var is unset.
@@ -635,6 +649,15 @@ export const mcpConfigRouter = router({
 	update: adminProcedure.input(UpdateInput).mutation(() => notInjected()),
 	delete: adminProcedure.input(DeleteInput).mutation(() => notInjected()),
 	toggle: adminProcedure.input(ToggleInput).mutation(() => notInjected()),
+	// Phase 219 T2 — catalog needs no Redis surface; provide a real impl
+	// even in the empty-injection stub so the picker keeps working before
+	// boot wires the Redis-backed routes. Mirrors the production catalog
+	// route 1:1.
+	catalog: adminProcedure.query(async (): Promise<McpCatalogEntry[]> => {
+		return [...MCP_CATALOG]
+			.filter((entry) => !entry.system)
+			.sort((a, b) => a.name.localeCompare(b.name))
+	}),
 	getAutoApprove: adminProcedure.query(() => notInjected()),
 	setAutoApprove: adminProcedure
 		.input(z.object({enabled: z.boolean()}))
