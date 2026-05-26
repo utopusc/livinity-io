@@ -1,8 +1,26 @@
-# Phase 218 — SUMMARY (T1–T7 code-complete, awaiting Mini PC UAT)
+# Phase 218 — SUMMARY (T1–T7 SHIPPED + UAT-verified on Mini PC)
 
-**Status:** CODE-COMPLETE 2026-05-26
-**Sacred SHA:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across all 7 commits.
-**Branch:** `master` — ready to push and deploy.
+**Status:** SHIPPED 2026-05-26. Mini PC deploy at SHA `2c8bcea0` (post-UAT follow-up).
+**Sacred SHA:** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across all commits.
+**Branch:** `master` — pushed.
+
+## UAT verification (Mini PC, 2026-05-26)
+
+Live Mini PC deploy + post-deploy checks:
+
+- **Schema migration** ✅ `Database schema applied successfully` in livinityd journal; `\d user_app_subdomains` lists all 8 columns + unique constraint.
+- **Orphan reconciliation** ✅ `[recon] inserted user_app_instances for orphan immich_server_1` + `n8n_server_1` + `open-webui_server_1` (3 inserted, 3 skipped: adguard already-tracked + 2 system containers). `user_app_instances` row count went 1 → 4.
+- **Boot-time Caddyfile regen** ✅ `[caddy] regenerated from state: 7 subdomain blocks`. `/etc/caddy/Caddyfile` contains hyphen-pattern blocks for `adguard-home-bruce-oz`, `immich-bruce-oz`, `n8n-bruce-oz`, `open-webui-bruce-oz` (plus 2 legacy `-bruce` Redis-registry duplicates — harmless, separate hosts).
+- **Caddy reverse-proxy routing** ✅ `curl -H 'Host: immich-bruce-oz.livinity.io' http://127.0.0.1/` returns 308 (Immich's HTTP→HTTPS redirect, NOT LivOS UI). Same for n8n / adguard / open-webui.
+- **MCP HASH primitive** ✅ `redis-cli TYPE liv:mcp:config` returns `hash`; `HKEYS` returns `filesystem`. STRING→HASH inline migration didn't need to fire (Mini PC's key was already HASH from the prior router-only path).
+- **UI version banner** ✅ `/version.txt` served by livinityd's express.static at `:8080`, 200 OK, 13-byte Date.now() timestamp body.
+
+## Post-deploy fixes (UAT-driven)
+
+Two latent bugs that T1+T5 unmasked by actually making the dynamic Caddyfile regen reach disk, fixed in commit `2c8bcea0`:
+
+1. **Caddy v2 `handle_path` syntax** — LIV_AI_APP_HANDLE was emitting two-arg `handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*`. Caddy v2 accepts only ONE path matcher per `handle_path`. The two-arg form had never reached production because the static install.sh Caddyfile was the live config until 218. Fix: switch both Liv AI surfaces to named `path` matchers (multi-value is fine there) + `handle` + explicit `uri strip_prefix` to recreate the prefix-stripping handle_path provided. caddy.test.ts updated; 49/49 pass.
+2. **`/etc/caddy/Caddyfile` ownership** — was `root:root` (Phase 86 moved livinityd to bruce but the Caddyfile stayed root-owned). Every dynamic regen since has been silently EACCES'ing. Fix: `scripts/install/deploy-livinityd.sh` now `chown bruce:bruce` the Caddyfile after writing. Existing boxes need a one-time `sudo chown bruce:bruce /etc/caddy/Caddyfile` to recover (Mini PC done by hand during UAT).
 
 ## What shipped
 
