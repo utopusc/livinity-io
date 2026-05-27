@@ -255,12 +255,28 @@ fi
 # Scope is ${REBRAND_TARGET}=${CURRENT_LINK}/static/, so LICENSE+NOTICE at
 # ${INSTALL_ROOT}/ remain outside the find walk (D-V42-APACHE-NOTICE).
 # ---------------------------------------------------------------------------
-if [[ -d "${REBRAND_TARGET}" ]]; then
-  PATH_PRE_HITS="$(grep -rEl '"/api/|`/api/|"/ws"|`/ws`' \
-    "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' \
+# Helper: count files containing UNPREFIXED quoted API/WS forms whose content
+# does NOT yet carry the prefixed form. Wrapped in a function so we can
+# temporarily disable pipefail (grep -L exits 1 when zero files print; under
+# `set -euo pipefail` that nonzero kills the parent shell at command-
+# substitution time). The function locally `set +o pipefail` + always
+# `echo` a numeric result + always `return 0`.
+count_unprefixed_paths() {
+  local target="$1"
+  set +o pipefail
+  local n
+  n="$(grep -rEl '"/api/|`/api/|"/ws"|`/ws`' \
+    "${target}" --include='*.html' --include='*.js' --include='*.css' \
     2>/dev/null \
     | xargs -r grep -LE '"/liv/api/|`/liv/api/|"/liv/ws"|`/liv/ws`' 2>/dev/null \
     | wc -l)"
+  set -o pipefail
+  echo "${n:-0}"
+  return 0
+}
+
+if [[ -d "${REBRAND_TARGET}" ]]; then
+  PATH_PRE_HITS="$(count_unprefixed_paths "${REBRAND_TARGET}")"
   if [[ "${PATH_PRE_HITS}" -gt 0 ]]; then
     log "Path rewrite: applying /api/ -> /liv/api/ and /ws -> /liv/ws sed pass on ${PATH_PRE_HITS} files"
     find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) \
@@ -272,11 +288,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
            -e "s|'/ws'|'/liv/ws'|g" \
            -e 's|`/ws`|`/liv/ws`|g' \
            {} +
-    POST_HITS="$(grep -rEl '"/api/|`/api/|"/ws"|`/ws`' \
-      "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' \
-      2>/dev/null \
-      | xargs -r grep -LE '"/liv/api/|`/liv/api/|"/liv/ws"|`/liv/ws`' 2>/dev/null \
-      | wc -l)"
+    POST_HITS="$(count_unprefixed_paths "${REBRAND_TARGET}")"
     log "Path rewrite: post-pass unprefixed-only file count = ${POST_HITS}"
   else
     log "Path rewrite: absolute API/WS paths already prefixed (or absent); skipping sed pass"
