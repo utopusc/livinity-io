@@ -3401,7 +3401,7 @@ Plans:
 
 3. **Sacred SHA**: No touches under `liv/packages/core/`. update.sh lives at repo root + Mini PC `/opt/livos/update.sh`.
 
-**Plans:** ~2-3 plans (small phase)
+**Plans:** 3/3 plans complete
 
 **Depends on:** Phase 223 ✅ SHIPPED (install-liv-assistant.sh, systemd unit, password capture all exist on Mini PC + repo).
 
