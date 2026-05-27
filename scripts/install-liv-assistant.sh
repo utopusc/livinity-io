@@ -418,6 +418,66 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Phase 238.1 Step C — Footer URL redirect (iOfficeAI/* -> livinity.io)
+#
+# Phase 234-03's case-sensitive sed `s/AionUi/Liv AI/g` literally rewrote
+# vendored AionUi footer URLs from `https://github.com/iOfficeAI/AionUi/wiki`
+# into `https://github.com/iOfficeAI/Liv AI/wiki` — with a literal SPACE
+# breaking the URL AND still pointing at the upstream org. Operator surfaced
+# this gap 2026-05-27 evening: 5 footer links (Yardım Dokümantasyonu /
+# Güncelleme Günlüğü / Sorun Bildir / Bana Ulaşın / Resmi Web Sitesi) all
+# need to redirect to Livinity.
+#
+# Blanket pattern: `https://github.com/iOfficeAI/<anything-non-quote>` ->
+# `https://livinity.io`. Covers known variants:
+#   - https://github.com/iOfficeAI/Liv AI/wiki   (helpDocumentation, broken)
+#   - https://github.com/iOfficeAI/Liv AI        (officialWebsite, contactMe)
+#   - https://github.com/iOfficeAI/AionHub       (index-BBQOKL1b, AionHub link)
+# All 8+ affected files become a single Livinity homepage redirect.
+#
+# The charset [A-Za-z0-9 ._/-] intentionally INCLUDES a literal SPACE to
+# catch the `Liv AI/wiki` variant from Phase 234-03's collateral. JS-minified
+# bundles keep URLs inside quoted strings, so the next non-charset char
+# (quote / backtick / less-than) terminates the match cleanly.
+#
+# Idempotency: grep pre-check skips when no iOfficeAI URLs remain; post-grep
+# verify warns if any survive. Pipefail wrap per Phase 238 hot-fix precedent.
+#
+# D-V43-APACHE-NOTICE: scope is ${REBRAND_TARGET}=${CURRENT_LINK}/static/,
+# LICENSE + NOTICE structurally outside.
+#
+# KNOWN LIMITATION (documented in docs/liv-assistant-install.md): built-in
+# skill names + descriptions visible in Liv AI → Settings → Skills tab are
+# baked into the 94MB Bun ELF binary (BuildID a9a0d18d...). Phase 234-03's
+# design rule excludes the binary from sed-rebrand to prevent ELF corruption.
+# This step does NOT address those — separate phase if operator demands.
+# ---------------------------------------------------------------------------
+if [[ -d "${REBRAND_TARGET}" ]]; then
+  set +o pipefail
+  IO_PRE_HITS="$(grep -rilE 'https?://github\.com/iOfficeAI/' "${REBRAND_TARGET}" \
+    --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
+  set -o pipefail
+  if [[ "${IO_PRE_HITS}" -gt 0 ]]; then
+    log "Footer redirect: applying iOfficeAI/* -> livinity.io sed pass on ${IO_PRE_HITS} files"
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) \
+         -exec sed -E -i 's|https?://github\.com/iOfficeAI/[A-Za-z0-9 ._/-]+|https://livinity.io|g' {} +
+    set +o pipefail
+    IO_POST_HITS="$(grep -rilE 'https?://github\.com/iOfficeAI/' "${REBRAND_TARGET}" \
+      --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
+    set -o pipefail
+    if [[ "${IO_POST_HITS}" -ne 0 ]]; then
+      log "WARN: ${IO_POST_HITS} files still contain iOfficeAI/* URLs after redirect sed pass (investigate)"
+    else
+      log "Footer redirect: all iOfficeAI/* URLs rewritten to livinity.io (verified by post-grep)"
+    fi
+  else
+    log "Footer redirect: no iOfficeAI/* URLs found (already redirected or absent); skipping"
+  fi
+else
+  log "Footer redirect: WARN ${REBRAND_TARGET} missing; skipping"
+fi
+
+# ---------------------------------------------------------------------------
 # Install bun if missing (Claude Code ACP bridge requires it)
 # See 222-SPIKE.md "Bun runtime dependency" — risk #3.
 # ---------------------------------------------------------------------------
