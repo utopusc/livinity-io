@@ -107,3 +107,39 @@ button[type='submit'],
 	font-weight: 700 !important;
 	letter-spacing: 0.01em;
 }
+
+/* ── Phase 238.8 — Adaptive Livinity donut for sidebar brand mark ──────────
+ *
+ * Operator 2026-05-27 night: "karanlik mod da beyaz cember aydinlik modda
+ * siyah ama bu logo bire bir Bizim logomuz olmali" — the brand mark needs
+ * to be the EXACT Livinity website donut, adaptive to light/dark theme.
+ *
+ * The AionUi sidebar wrapper is hardcoded `bg-black` with an inline SVG
+ * (the V-mountain / 'L' / donut path we sed-replaced in Phase 238.6/238.7).
+ * Hardcoded SVG fill colors can't adapt to theme.
+ *
+ * Strategy:
+ *   1. install-script Step 238.6-F now also adds a `liv-brand-donut`
+ *      marker class to the wrapper via sed (idempotent).
+ *   2. This CSS targets `.liv-brand-donut`, hides the inline SVG, and sets
+ *      `background-image: url('/liv/branding/favicon.svg')` — which is the
+ *      EXACT favicon.svg from platform/web/public/ (the canonical Livinity
+ *      logo, already adaptive via internal `@media (prefers-color-scheme: dark)`).
+ *   3. Browser renders the SVG bg-image and the SVG's own prefers-color-scheme
+ *      style flips outer/inner fills based on user's OS theme.
+ *
+ * Result: sidebar shows the EXACT same donut shape + color behavior as
+ * the livinity.io website favicon — black donut on light, white donut on dark.
+ */
+.liv-brand-donut {
+	background-color: transparent !important;
+	background-image: url('/liv/branding/favicon.svg') !important;
+	background-size: contain !important;
+	background-position: center !important;
+	background-repeat: no-repeat !important;
+}
+
+/* Hide the inline SVG inside the wrapper — the bg-image is now the logo. */
+.liv-brand-donut > svg {
+	display: none !important;
+}
