@@ -39,6 +39,20 @@ export default defineConfig({
 			include: /src\/features\/files\/assets\/file-items-thumbnails\/[^?]+\.svg(\?.*)?$/,
 		}),
 		VitePWA({
+			// Phase 220 follow-up 2026-05-26 — operator console showed workbox SW
+			// failing on every nav: `workbox-2b3e6643.js: Failed to fetch
+			// https://bruce.livinity.io/`. Symptom: random panel crashes,
+			// stale chunk references after deploys, CF SSL toggle loops
+			// getting "stuck" in SW cache. Root cause: PWA brings nothing
+			// useful to LivOS (Mini PC at home — if the server is offline the
+			// PWA can't help) and brings real risk every time the bundle moves.
+			// `selfDestroying: true` ships an empty SW that unregisters
+			// itself on first install AND deletes every cache it knows about.
+			// Existing operator SWs will detect the new SW on next page load,
+			// activate, immediately unregister, and the browser drops back to
+			// regular network behavior. Subsequent operators never get a SW
+			// at all.
+			selfDestroying: true,
 			registerType: 'autoUpdate',
 			includeAssets: ['favicon/favicon.ico', 'favicon/apple-touch-icon.png'],
 			manifest: {
