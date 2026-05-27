@@ -3693,6 +3693,22 @@ Plans:
 
 ---
 
+### Phase 238.6: Inline brand-mark sed — AionUi V-mountain SVG → Livinity 'L' letter — ✅ SHIPPED 2026-05-27 (1/1 plan)
+
+**Goal:** Operator 2026-05-27 evening: "Hala sol en ustde sidebarin en ust sol tarafinda <path d=\"M40 20 Q38 22 25 40 ...\" fill=\"white\"> Duruyor amk Liv AI yaziyor Sag tarafinda ama sol tarafinda Logo kisminda Aion CLI var!"
+
+Sidebar top-left renders an inline SVG hardcoded in the AionUi JS bundle — NOT tied to the selected agent. The AionUi brand mark (V-mountain + dot + smile arc) appears EXACTLY ONCE as a literal SVG path tree wrapped in `<div class="bg-black shrink-0 size-32px relative rd-0.5rem">`. Phase 238.3's lastSelectedAgent fix doesn't affect this hardcoded brand.
+
+**Plans:** 1/1 plan complete ✅
+
+- [x] 238.6-01 — install-script Step 238.6-F: 3-substitution sed pass over ${REBRAND_TARGET}/assets/*.js — SHIPPED 2026-05-27 (`94785c51`)
+
+**Outcome:** PRE 1 JS file with V-mountain path → POST 0. Livinity 'L' polygon `M30 15 L42 15 L42 53 L65 53 L65 65 L30 65 Z` present. Circle dot `r:"3"` → `r:"0"` (invisible). Smile-arc `d:"M18 50 Q40 70 62 50"` → `d:""` (empty). Wrapper geometry (black 32px rounded) preserved — result is clean white "L" on black square, matches Phase 238.4 brand language. Non-regressions GREEN. Sacred SHA UNCHANGED. Deployed SHA `94785c5`.
+
+**Bonus** (out-of-band): `set-default-liv-agent.sh` helper fired during this deploy and corrected `guid.lastSelectedAgent: 'claude' → '2d23ff1c'` — operator had flipped it via UI to agent_type string; helper restored canonical id format. Persistence chain working as designed.
+
+---
+
 ### Phase 238.5: Livinity-themed Liv AI dock tile icon — ✅ SHIPPED 2026-05-27 (1/1 plan)
 
 **Goal:** Operator 2026-05-27 evening: "Bu arada Logo hala degismemis Liv AI livinity logosu istiyordum". Phase 238.4 fixed iframe-internal branding (favicon + theme-color + CSS) but the LivOS desktop dock tile for Liv AI still rendered the upstream purple-blue gradient chat icon (`#6366f1 → #3b82f6`). Replace `livos/packages/ui/public/figma-exports/dock-ai-chat.svg` with Livinity-themed version (`#1d1d1f` solid background + white speech bubble), bump cache-bust query.
