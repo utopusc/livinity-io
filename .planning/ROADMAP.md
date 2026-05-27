@@ -3466,7 +3466,7 @@ Plans:
 
 ---
 
-### Phase 234: Liv AI polish — auth bypass + larger window + chat icon + AionUi→Liv AI rebrand — 🟡 IN PROGRESS 1/4 (234-01 ✅)
+### Phase 234: Liv AI polish — auth bypass + larger window + chat icon + AionUi→Liv AI rebrand — 🟡 IN PROGRESS 2/4 (234-01 ✅ + 234-02 ✅)
 
 **Goal:** Post-v42 UX polish (operator-requested 2026-05-27 night). Make Liv Assistant feel native: bigger window, chat-style dock icon, "Liv AI" brand string everywhere visible (NOT just our wrapper — vendored binary too), and auto-login so operators never see AionUi login form.
 
