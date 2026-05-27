@@ -3329,7 +3329,7 @@ Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (broker subscription path)
 
 ---
 
-### Phase 224: App Store — hide Skills/MCP/AI tabs (feature-flagged) — 🟡 IN PROGRESS (2/4)
+### Phase 224: App Store — hide Skills/MCP/AI tabs (feature-flagged) — 🟡 IN PROGRESS (3/4)
 
 **Goal:** During v42 migration, hide the legacy AI-related entry points in the LivOS UI so users don't try to configure MCP servers / Skills / AI providers via the OLD chat-surface code path while Liv Assistant is being wired in. Reversibility is mandatory: a single Redis feature flag toggles everything back ON. NO code deletion — only conditional hides + a banner.
 
@@ -3355,7 +3355,7 @@ Scope per v42 PROJECT.md "What we ARE temporarily disabling" table:
 Plans:
 - [x] 224-01-PLAN.md — Backend tRPC config.getV42MigrationActive + useV42MigrationActive UI hook ✅ SHIPPED 2026-05-27 (`285885f9`) — see [224-01-SUMMARY.md](phases/224-app-store-hide-ai-tabs/224-01-SUMMARY.md)
 - [x] 224-02-PLAN.md — App Store nav `ai` category hide + Settings sidebar MCP-Servers hide (filter logic) ✅ SHIPPED 2026-05-27 (`206961bc`) — see [224-02-SUMMARY.md](phases/224-app-store-hide-ai-tabs/224-02-SUMMARY.md)
-- [ ] 224-03-PLAN.md — V42MigrationBanner component + mount in App Store + Settings layouts + unit test
+- [x] 224-03-PLAN.md — V42MigrationBanner component + mount in App Store + Settings layouts + unit test ✅ SHIPPED 2026-05-27 (`72e21f3f`) — see [224-03-SUMMARY.md](phases/224-app-store-hide-ai-tabs/224-03-SUMMARY.md)
 - [ ] 224-04-PLAN.md — Mini PC deploy + Redis flag set + curl smoke + operator UAT (SC-01..SC-05)
 
 **Tasks:**
