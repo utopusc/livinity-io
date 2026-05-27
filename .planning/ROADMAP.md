@@ -3693,6 +3693,24 @@ Plans:
 
 ---
 
+### Phase 238.7: Real Livinity donut logo everywhere — ✅ SHIPPED 2026-05-27 (1/1 plan)
+
+**Goal:** Operator 2026-05-27 night: "Ben L yi istemedim ki Ben Livinity nin bire bir logosunu istedim web sitemizde kullandigimiz". Phase 238.6 rendered a simple 'L' letter as the brand mark — wrong. The canonical Livinity logo is `platform/web/public/favicon.svg` (outer circle + inner circle = donut/halo). Replace ALL Livinity brand surfaces with the real donut design.
+
+**Plans:** 1/1 plan complete ✅
+
+- [x] 238.7-01 — caddy/branding/{favicon,liv-logo}.svg + dock-ai-chat.svg + install-script Step 238.6-F evolution + apps.tsx cache-bust v238_5→v238_7 — SHIPPED 2026-05-27 (`18737d3c`)
+
+**Outcome:**
+- `caddy/branding/favicon.svg`: replaced "L" letter with EXACT donut markup from `platform/web/public/favicon.svg` (outer r=14 + inner r=5 + prefers-color-scheme dark/light)
+- `caddy/branding/liv-logo.svg`: replaced "Liv" wordmark with donut + "Livinity" text
+- `livos/packages/ui/public/figma-exports/dock-ai-chat.svg`: replaced speech-bubble placeholder with Livinity donut on `#1d1d1f` rounded square
+- `scripts/install-liv-assistant.sh` Step 238.6-F evolution: expanded sed to converge BOTH PRE-states (V-mountain from fresh AionUi AND L-polygon from Phase 238.6 deploy) onto the Livinity donut. Idempotent for any deployment state.
+
+Mini PC POST: V-mountain=0, L-polygon=0, donut outer=1, inner hole=1. Browser favicon + dock tile served donut content. `Deployed SHA: 18737d3`. **Bonus**: set-default-liv-agent helper fired again ('claude' → '2d23ff1c'), Phase 238.3 persistence chain still working as designed. Phase 238/238.1/238.2/238.4/238.5/238.6 all non-regressed. Sacred SHA UNCHANGED.
+
+---
+
 ### Phase 238.6: Inline brand-mark sed — AionUi V-mountain SVG → Livinity 'L' letter — ✅ SHIPPED 2026-05-27 (1/1 plan)
 
 **Goal:** Operator 2026-05-27 evening: "Hala sol en ustde sidebarin en ust sol tarafinda <path d=\"M40 20 Q38 22 25 40 ...\" fill=\"white\"> Duruyor amk Liv AI yaziyor Sag tarafinda ama sol tarafinda Logo kisminda Aion CLI var!"
