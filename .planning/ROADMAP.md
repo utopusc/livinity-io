@@ -3337,14 +3337,14 @@ Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (broker subscription path)
 
 ---
 
-### Phase 223: Vendor AionUi tarball + LivOS install scaffold — 🟡 IN PROGRESS (4/5 plans shipped)
+### Phase 223: Vendor AionUi tarball + LivOS install scaffold — ✅ SHIPPED (5/5 plans)
 
 **Plan progress:**
 - ✅ **223-01** SHIPPED 2026-05-27 (`d1276e12`) — `scripts/install-liv-assistant.sh` idempotent installer, SHA-pinned, Apache LICENSE preserved. See [223-01-SUMMARY.md](phases/223-vendor-aionui-install/223-01-SUMMARY.md).
 - ✅ **223-02** SHIPPED 2026-05-27 (`ec6f5855`) — `systemd/liv-assistant.service` unit (Type=simple, User=bruce, port 3020, bun PATH, journal output for Plan 03 password capture). See [223-02-SUMMARY.md](phases/223-vendor-aionui-install/223-02-SUMMARY.md).
 - ✅ **223-03** SHIPPED 2026-05-27 (`98cf098e`) — `scripts/capture-liv-assistant-password.sh` idempotent journald → `/etc/livos/liv-assistant-credentials` (mode 0600, bruce:bruce), atomic write, race-tolerant (exit 0 when marker not yet emitted), first-occurrence semantics, root-required. See [223-03-SUMMARY.md](phases/223-vendor-aionui-install/223-03-SUMMARY.md).
 - ✅ **223-04** SHIPPED 2026-05-27 (`e6230661`) — `docs/liv-assistant-install.md` operator runbook (147 lines): provenance table, file layout, install/upgrade/rotation procedures, locked invariants (D-V42-SACRED/APACHE-NOTICE/NO-PHONE-HOME/NO-DATA-LOSS), troubleshooting matrix, related-phases cross-reference. See [223-04-SUMMARY.md](phases/223-vendor-aionui-install/223-04-SUMMARY.md).
-- ⚪ **223-05** READY — Mini PC live deploy + UAT + Phase 222 scratch cleanup.
+- ✅ **223-05** SHIPPED 2026-05-27 (`12279e70`) — Mini PC live deploy + 8/8 SC GREEN + Phase 222 spike cleanup. `liv-assistant.service` active on 127.0.0.1:3020 PID 201259, password captured to `/etc/livos/liv-assistant-credentials` (600 bruce:bruce 16 chars), idempotent re-run = empty diff, SHA hard-gate confirmed via patched-EXPECTED_SHA256 test, Phase 222 PID 129244 killed + `/tmp/v42-spike/` removed + port 9099 freed, sacred SHA `f3538e1d...` UNCHANGED, Task 2 checkpoint:human-verify auto-approved per --auto chain (operator UAT walk deferred). See [223-05-SUMMARY.md](phases/223-vendor-aionui-install/223-05-SUMMARY.md) + [223-05-DEPLOY-LOG.md](phases/223-vendor-aionui-install/223-05-DEPLOY-LOG.md).
 
 
 **Goal:** Land the install scaffolding that downloads, verifies, extracts, and runs the upstream AionUi WebUI tarball as a Mini PC system service named `liv-assistant`. **No source fork.** Apache `LICENSE` + `NOTICE` preserved. First-boot admin password captured into a known location for later LivOS UI integration. Service is idempotent (re-running `install.sh` heals partial state, does not re-download if SHA matches). No Caddy routing yet (deferred to Phase 226), no LivOS UI changes yet (Phase 227), no auth bridge (Phase 228), no brand overlay (Phase 232).
