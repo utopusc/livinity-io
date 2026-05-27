@@ -3700,6 +3700,23 @@ Plans:
 
 ---
 
+### Phase 238.2: Built-in skill SKILL.md Aion → Liv rebrand — ✅ SHIPPED 2026-05-27 (1/1 plan, 12/12 SCs GREEN)
+
+**Goal:** Hot-fix continuation of Phase 238 + 238.1. Close the visible-Aion gap in Liv AI → Settings → Skills tab (24 built-in skills with AionUi-branded names/descriptions). Phase 238.1 closure documented "binary-embedded skills" as KNOWN LIMITATION; Phase 238.2 probe with corrected path discovered the skills live as ON-DISK `.md` files (not binary-embedded) — sed-replace feasible.
+
+**Plans:** 1/1 plan complete ✅
+
+- [x] 238.2-01-PLAN.md — Step 238.2-D sed pass on data/builtin-skills/**/*.md — SHIPPED 2026-05-27 (`c23c032e`)
+
+**Outcome:** PRE 8 .md files with Aion variants → POST 0 (`AionUi/AionUI/aionui-web/aionui/word-boundary` chain). External `/liv/api/skills` response shows 0 AionUi + 0 case-insensitive Aion + ≥1 `Liv AI` + ≥1 `liv-ai-skills`. Sample rebrand: `name: liv-ai-skills`, `description: 'Access the Liv AI Skills registry...'`, `# Liv AI Skills Market`, `Homepage: https://skills.liv-ai.com`. D-V42-NO-DATA-LOSS preserved (data/sessions, data/secrets, data/skills, aionui-backend.db untouched by sed). Phase 238 + 238.1 + 237 + 234-04 all non-regressed. LICENSE+NOTICE byte-identical. Sacred SHA UNCHANGED 4-snapshot agreement. Auto-approved per chain.
+
+**Residual cosmetic artifacts (documented, NOT fixed):**
+- /api/skills JSON `relative_location`/`location` backend internal fields still contain `aionui-skills/` as directory name — not user-visible UI text
+- 3 non-`.md` code files (xiaohongshu scripts + star-office-doctor.sh) excluded from scope to avoid breaking code identifiers
+- `/api/agents` "Aion CLI" agent entry name comes from Bun binary — future phase if operator demands (would need JS-injection or Caddy response-rewrite)
+
+---
+
 ### Phase 238.1: AionUi footer URL redirect — github.com/iOfficeAI/* → https://livinity.io — ✅ SHIPPED 2026-05-27 (1/1 plan, 12/12 SCs GREEN)
 
 **Goal:** Hot-fix continuation of Phase 238. Phase 234-03's `s/AionUi/Liv AI/g` sed inserted literal SPACE into AionUi footer URLs (`iOfficeAI/AionUi/wiki` → `iOfficeAI/Liv AI/wiki`) — broken AND still pointing at upstream org. Redirect ALL `github.com/iOfficeAI/*` URLs (footer + AionHub) to `https://livinity.io` via install-liv-assistant.sh Step 238.1-C.
