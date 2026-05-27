@@ -3700,6 +3700,20 @@ Plans:
 
 ---
 
+### Phase 238.3: Default agent persistence — Claude Code default + Aion CLI visible — ✅ SHIPPED 2026-05-27 (1/1 plan, 10/10 SCs GREEN)
+
+**Goal:** Persist `client_settings.guid.lastSelectedAgent = "2d23ff1c"` (Claude Code) across deploys. Operator explicitly requested Aion CLI stay VISIBLE in picker; only the DEFAULT changes.
+
+**Plans:** 1/1 plan complete ✅
+
+- [x] 238.3-01-PLAN.md — set-default-liv-agent.sh helper + update.sh integration — SHIPPED 2026-05-27
+
+**Outcome:** Live Mini PC state `lastSelectedAgent=2d23ff1c`, `agents.hidden=[]`, `agents.disabled=[]` verified persistent across `systemctl restart liv-assistant`. Repo commit adds idempotent helper for future-proofing — any future `update.sh` run re-normalizes the state. Operator's "Disable etmene gerek yok cli kalabilir" preference honored (all 3 agents — Aion CLI, Claude Code, OpenCode — remain visible in `/api/agents`).
+
+**Why not Caddy response-rewrite (to rename "Aion CLI" → "Liv CLI"):** Mini PC's Caddy v2.11.3 lacks `http.handlers.replace_response` plugin. **Why not binary patch:** Phase 234-03 design rule prohibits ELF mutation. Agent rename remains a future option (would require either Bun fork or installing the Caddy plugin) but operator has not requested it.
+
+---
+
 ### Phase 238.2: Built-in skill SKILL.md Aion → Liv rebrand — ✅ SHIPPED 2026-05-27 (1/1 plan, 12/12 SCs GREEN)
 
 **Goal:** Hot-fix continuation of Phase 238 + 238.1. Close the visible-Aion gap in Liv AI → Settings → Skills tab (24 built-in skills with AionUi-branded names/descriptions). Phase 238.1 closure documented "binary-embedded skills" as KNOWN LIMITATION; Phase 238.2 probe with corrected path discovered the skills live as ON-DISK `.md` files (not binary-embedded) — sed-replace feasible.
