@@ -228,6 +228,63 @@ else
   log "Rebrand: WARN ${REBRAND_TARGET} missing; skipping rebrand step"
 fi
 
+# ---------------------------------------------------------------------------
+# Phase 235 — absolute API/WS path rewrite (AionUi JS bundle hot-fix)
+#
+# AionUi's vendored JS bundle issues requests to ROOT-relative paths
+# (/api/..., /ws). When iframe-mounted at https://bruce.livinity.io/liv/, the
+# browser resolves those against the iframe's ORIGIN, NOT its path -- so they
+# hit https://bruce.livinity.io/api/... which the Caddy LIV_ASSISTANT_HANDLE
+# (`@liv path /liv /liv/*` + `uri strip_prefix /liv`) does NOT match. Result:
+# /api/* requests fall through to the LivOS shell (root domain), which 404s.
+#
+# Fix: rewrite the JS/HTML/CSS bundle in place so absolute paths carry the
+# `/liv` prefix the matcher needs. Caddy then strips `/liv` and forwards
+# `/api/...` to AionUi :3020 unchanged.
+#
+# Patterns covered (all quoted-string forms in JS sources):
+#   "/api/  -> "/liv/api/
+#   '/api/  -> '/liv/api/
+#   `/api/  -> `/liv/api/
+#   "/ws"   -> "/liv/ws"
+#   '/ws'   -> '/liv/ws'
+#   `/ws`   -> `/liv/ws`
+#
+# Idempotency guard: find files containing the UNPREFIXED quoted forms whose
+# content does NOT yet carry the PREFIXED form. Zero such files => no-op.
+# Scope is ${REBRAND_TARGET}=${CURRENT_LINK}/static/, so LICENSE+NOTICE at
+# ${INSTALL_ROOT}/ remain outside the find walk (D-V42-APACHE-NOTICE).
+# ---------------------------------------------------------------------------
+if [[ -d "${REBRAND_TARGET}" ]]; then
+  PATH_PRE_HITS="$(grep -rEl '"/api/|`/api/|"/ws"|`/ws`' \
+    "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' \
+    2>/dev/null \
+    | xargs -r grep -LE '"/liv/api/|`/liv/api/|"/liv/ws"|`/liv/ws`' 2>/dev/null \
+    | wc -l)"
+  if [[ "${PATH_PRE_HITS}" -gt 0 ]]; then
+    log "Path rewrite: applying /api/ -> /liv/api/ and /ws -> /liv/ws sed pass on ${PATH_PRE_HITS} files"
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) \
+         -exec sed -i \
+           -e 's|"/api/|"/liv/api/|g' \
+           -e "s|'/api/|'/liv/api/|g" \
+           -e 's|`/api/|`/liv/api/|g' \
+           -e 's|"/ws"|"/liv/ws"|g' \
+           -e "s|'/ws'|'/liv/ws'|g" \
+           -e 's|`/ws`|`/liv/ws`|g' \
+           {} +
+    POST_HITS="$(grep -rEl '"/api/|`/api/|"/ws"|`/ws`' \
+      "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' \
+      2>/dev/null \
+      | xargs -r grep -LE '"/liv/api/|`/liv/api/|"/liv/ws"|`/liv/ws`' 2>/dev/null \
+      | wc -l)"
+    log "Path rewrite: post-pass unprefixed-only file count = ${POST_HITS}"
+  else
+    log "Path rewrite: absolute API/WS paths already prefixed (or absent); skipping sed pass"
+  fi
+else
+  log "Path rewrite: WARN ${REBRAND_TARGET} missing; skipping path rewrite step"
+fi
+
 # LICENSE + NOTICE byte-identity check (defensive -- sed pass should never
 # touch them because they live at ${INSTALL_ROOT}, not inside the static/
 # subtree the find above traverses). If a future code change broadens the
