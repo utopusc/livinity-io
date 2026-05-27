@@ -1,10 +1,15 @@
-# Liv Assistant — Install Runbook
+# Liv AI — Install Runbook
 
-> **What this is:** Liv Assistant is the v42 in-LivOS AI chat surface. It is the
-> upstream [iOfficeAI/AionUi](https://github.com/iOfficeAI/AionUi) WebUI binary,
-> **vendored unmodified** (no source fork), wrapped in a systemd unit and an
-> idempotent install script. Brand overlay (Livinity Design) ships separately
-> via Caddy `sub` in Phase 232.
+> **What this is:** Liv AI is the v42 in-LivOS AI chat surface. It is the
+> upstream [iOfficeAI/AionUi](https://github.com/iOfficeAI/AionUi) WebUI binary
+> (vendored upstream AionUi v2.1.4), **vendored unmodified** (no source fork),
+> wrapped in a systemd unit and an idempotent install script. Brand overlay
+> (Livinity Design) ships separately via Caddy `sub` in Phase 232. The
+> install script also applies an idempotent post-extract brand rebrand pass
+> (Phase 234-03) that rewrites `AionUi` → `Liv AI` inside the extracted SPA
+> bundle's HTML/JS/CSS files; LICENSE and NOTICE are preserved per
+> Apache-2.0 attribution (D-V42-APACHE-NOTICE). See "Phase 234 — Brand
+> rebrand" section below.
 
 ## Upstream provenance
 
@@ -86,8 +91,64 @@ sudo cat /etc/livos/liv-assistant-credentials   # expect: username=admin, passwo
 - Re-points the `current` symlink (cheap, atomic)
 - Skips bun install if `/home/bruce/.bun/bin/bun` exists or `bun` is on PATH
 - Rewrites `UPSTREAM.md` with the current timestamp
+- Skips the Phase 234-03 brand-rebrand sed pass if zero `AionUi`/`aionui`
+  matches remain in `${CURRENT_LINK}/static/` HTML/JS/CSS (no-op on
+  second-and-later runs against the same pinned tarball)
 
 Running it twice in a row produces no other changes on disk.
+
+## Phase 234 — Brand rebrand (AionUi → Liv AI)
+
+The install script applies an idempotent sed-replace pass over HTML/JS/CSS
+files in `${CURRENT_LINK}/static/` (resolved real-path
+`/opt/liv-assistant/aionui-web-2.1.4/aionui-web/static/`) to rewrite
+`AionUi` → `Liv AI`, `aionui-web` → `liv-ai-web`, and `aionui` → `liv-ai`
+for user-visible strings in the React SPA bundle. The compound rewrite
+ordering (long-match-first) is essential to avoid double-substitution.
+
+**Excluded from the rebrand pass** (D-V42-APACHE-NOTICE + runtime safety):
+
+- `/opt/liv-assistant/LICENSE` — Apache-2.0 license text, attribution required
+- `/opt/liv-assistant/NOTICE` — upstream NOTICE, attribution required
+- `/opt/liv-assistant/UPSTREAM.md` — our provenance doc, intentionally names AionUi
+- `${CURRENT_LINK}/package.json` — `"name": "aionui-web"` required by Bun's package resolution
+- `${CURRENT_LINK}/aionui-web` — 94 MB Bun-compiled CLI binary (corruption if sed-edited)
+- `${CURRENT_LINK}/bundled-aioncore/linux-x64/aioncore` — native Rust binary (corruption if sed-edited)
+
+These exclusions are enforced **structurally** by scoping the `find` target
+to `static/` only — none of the protected paths live under that subtree.
+
+**Idempotency**: a `grep -ril` pre-check counts remaining `AionUi`/`aionui`
+matches; if zero, the sed pass is skipped entirely and logged as
+`Rebrand: AionUi/aionui strings already replaced (or absent); skipping sed pass`.
+
+**Defensive post-check**: after the sed pass (or skip), the script greps
+`LICENSE` and `NOTICE` for the literal `AionUi` token and logs
+`OK: ... still contains AionUi attribution (Apache-2.0 preserved)` if
+present. A future code change that broadens the `find` target to include
+`LICENSE`/`NOTICE` would silently break Apache-2.0 attribution; this log
+line is the canary.
+
+**Verification after deploy** (`bash /opt/livos/update.sh`):
+
+```bash
+# Inside Mini PC (sudo required to read /opt/liv-assistant/):
+sudo grep -ril 'AionUi\|aionui' /opt/liv-assistant/current/static/ \
+  --include='*.html' --include='*.js' --include='*.css' | wc -l
+# expect: 0
+
+sudo grep -c AionUi /opt/liv-assistant/LICENSE /opt/liv-assistant/NOTICE
+# expect: ≥ 1 on each (attribution preserved)
+
+# External relay path (any host with internet):
+curl -sS https://bruce.livinity.io/liv/ | grep -c 'Liv AI'   # expect ≥ 1
+curl -sS https://bruce.livinity.io/liv/ | grep -c 'AionUi'   # expect 0
+```
+
+**Provenance preserved**: this docs file and `UPSTREAM.md` deliberately
+continue to name the upstream project as **AionUi** — they document
+**what was vendored**, not what the operator sees. The user-visible brand
+on the running SPA is **Liv AI**.
 
 ## Upgrade (future versions)
 

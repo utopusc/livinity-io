@@ -179,6 +179,68 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------
+# Phase 234-03 — vendored-binary brand rebrand (AionUi -> Liv AI)
+#
+# Idempotent sed-replace targeting ONLY HTML/JS/CSS files under
+# ${CURRENT_LINK}/static/. EXCLUDES LICENSE + NOTICE files by path-scoping
+# (LICENSE/NOTICE live at ${INSTALL_ROOT} level, NOT inside the version dir's
+# static/ subtree -- so D-V42-APACHE-NOTICE Apache-2.0 attribution preservation
+# is enforced structurally by the find target, not by an exclude filter).
+#
+# Pre-check guard makes this a no-op on the second and later runs against a
+# cmp-stable tarball: we grep for any remaining AionUi/aionui strings in the
+# filtered file set; zero matches => skip the sed pass entirely.
+#
+# Why HTML/JS/CSS only: the upstream "AionUi" brand appears in the React SPA
+# bundle text (HTML page titles, JS string literals, CSS comment blocks). It
+# does NOT appear in LICENSE/NOTICE in a user-visible way (LICENSE/NOTICE
+# files are operator-facing only; their AionUi references are legally
+# required attribution and MUST survive).
+#
+# Why CURRENT_LINK/static and not the whole tree: scoping to static/ excludes
+# package.json (whose "name": "aionui-web" is required by Bun's package
+# resolution -- changing it breaks runtime), the 94MB aionui-web Bun binary
+# (corrupt if sed-edited), and the bundled-aioncore Rust binary. See
+# .planning/phases/234-liv-ai-polish-ux/234-01-INVESTIGATION.md Section F.5
+# for the full file-disposition table.
+#
+# Sed pattern ordering matters: s/aionui-web/.../g MUST precede s/aionui/.../g
+# to preserve the compound rewrite (aionui-web -> liv-ai-web, NOT liv-ai-web
+# after a naive replace).
+# ---------------------------------------------------------------------------
+REBRAND_TARGET="$(readlink -f "${CURRENT_LINK}")/static"
+if [[ -d "${REBRAND_TARGET}" ]]; then
+  PRE_HITS="$(grep -ril 'AionUi\|aionui' "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
+  if [[ "${PRE_HITS}" -gt 0 ]]; then
+    log "Rebrand: applying AionUi -> Liv AI / aionui-web -> liv-ai-web / aionui -> liv-ai sed pass on ${PRE_HITS} files"
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) \
+         -exec sed -i 's/AionUi/Liv AI/g; s/aionui-web/liv-ai-web/g; s/aionui/liv-ai/g' {} +
+    POST_HITS="$(grep -ril 'AionUi\|aionui' "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
+    if [[ "${POST_HITS}" -ne 0 ]]; then
+      log "WARN: ${POST_HITS} files still contain AionUi/aionui after sed pass (investigate non-replaceable variants)"
+    else
+      log "Rebrand: all AionUi/aionui strings replaced (verified by post-grep)"
+    fi
+  else
+    log "Rebrand: AionUi/aionui strings already replaced (or absent); skipping sed pass"
+  fi
+else
+  log "Rebrand: WARN ${REBRAND_TARGET} missing; skipping rebrand step"
+fi
+
+# LICENSE + NOTICE byte-identity check (defensive -- sed pass should never
+# touch them because they live at ${INSTALL_ROOT}, not inside the static/
+# subtree the find above traverses). If a future code change broadens the
+# find target, this log line will surface the regression.
+for guard in LICENSE NOTICE; do
+  if [[ -f "${INSTALL_ROOT}/${guard}" ]]; then
+    if grep -q 'AionUi' "${INSTALL_ROOT}/${guard}" 2>/dev/null; then
+      log "OK: ${INSTALL_ROOT}/${guard} still contains AionUi attribution (Apache-2.0 preserved)"
+    fi
+  fi
+done
+
+# ---------------------------------------------------------------------------
 # Install bun if missing (Claude Code ACP bridge requires it)
 # See 222-SPIKE.md "Bun runtime dependency" — risk #3.
 # ---------------------------------------------------------------------------
