@@ -3466,7 +3466,7 @@ Plans:
 
 ---
 
-### Phase 234: Liv AI polish — auth bypass + larger window + chat icon + AionUi→Liv AI rebrand — ⚪ READY
+### Phase 234: Liv AI polish — auth bypass + larger window + chat icon + AionUi→Liv AI rebrand — 🟡 IN PROGRESS 1/4 (234-01 ✅)
 
 **Goal:** Post-v42 UX polish (operator-requested 2026-05-27 night). Make Liv Assistant feel native: bigger window, chat-style dock icon, "Liv AI" brand string everywhere visible (NOT just our wrapper — vendored binary too), and auto-login so operators never see AionUi login form.
 
@@ -3477,11 +3477,7 @@ Plans:
    - Wrapper-side: dock label + systemApps name + window title → all "Liv AI" (was "Liv Assistant" or referencing AionUi)
    - Vendored binary text-replace: extend `install-liv-assistant.sh` with a post-extract step that sed-replaces `AionUi` → `Liv AI` and `aionui` → `liv-ai` inside extracted HTML/JS bundle files. Idempotent.
    - Docs: docs/liv-assistant-install.md updated wording
-4. **Auth bypass in UI** — STRATEGY TBD pending investigation:
-   - Option A (preferred if works): inspect AionUi config for auth-disable flag, flip via install script
-   - Option B: tRPC `config.getLivAssistantCreds()` admin-only procedure + iframe wrapper auto-fill (same-origin iframe so contentDocument access OK)
-   - Option C: Caddy `header_up Cookie` after one-time login captures session
-   Plan 234-01 = investigation, decides which option ships in subsequent plans.
+4. **Auth bypass in UI** — STRATEGY LOCKED 2026-05-27 by 234-01-INVESTIGATION.md Section H: **Option B (modified)**. AionUi 2.1.4 has NO password-login endpoint (404 on /api/login, /api/auth/login, /api/auth/signin) and NO config-file auth-disable knob; the only working login path is `POST /api/webui/generate-qr-token` → `POST /api/auth/qr-login {qr_token}` → server returns `Set-Cookie: aionui-session=<JWT>; Path=/; HttpOnly`. Cookie is HttpOnly so JS contentDocument injection is impossible; instead livinityd serves a new same-origin endpoint `GET /liv-login` that performs the qr-mint+qr-login flow server-side, forwards Set-Cookie to the browser unchanged, and 302-redirects to `/liv/`. Frontend swaps `LIV_ASSISTANT_DEFAULT_URL` from `/liv/` to `/liv-login`. Redis flag `liv:config:liv_ai_autologin_enabled` (default ON) gates the bypass; flip to false → handler 302's straight to /liv/ without qr-login (operator sees AionUi qr-login UI fallback).
 
 **Success Criteria:**
 - SC-01: LivAssistantWindow default render size ≥ 1280×800
