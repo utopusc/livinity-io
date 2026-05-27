@@ -259,6 +259,39 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------
+# Phase 232: install branding assets to /etc/liv-assistant/branding/
+# Repo source: caddy/branding/{livinity-overlay.css,favicon.svg,manifest.json}
+# Destination: /etc/liv-assistant/branding/ (served by Caddy via livinityd-
+# emitted /liv/branding/* handler — see livos/packages/livinityd/source/
+# modules/domain/caddy.ts LIV_BRANDING_HANDLE constant).
+# Idempotent via `cmp -s` — files only written when content differs.
+# ---------------------------------------------------------------------------
+BRANDING_DST="/etc/liv-assistant/branding"
+install -d -m 0755 -o root -g root "${BRANDING_DST}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BRANDING_SRC="${SCRIPT_DIR}/../caddy/branding"
+
+if [[ ! -d "${BRANDING_SRC}" ]]; then
+  log "WARN: ${BRANDING_SRC} not found; skipping Phase 232 branding overlay install"
+else
+  for asset in livinity-overlay.css favicon.svg manifest.json; do
+    SRC="${BRANDING_SRC}/${asset}"
+    DST="${BRANDING_DST}/${asset}"
+    if [[ ! -f "${SRC}" ]]; then
+      log "WARN: source asset missing: ${SRC}; skipping ${asset}"
+      continue
+    fi
+    if [[ -f "${DST}" ]] && cmp -s "${SRC}" "${DST}"; then
+      log "Branding asset ${asset}: unchanged"
+    else
+      install -m 0644 -o root -g root "${SRC}" "${DST}"
+      log "Branding asset ${asset}: copied"
+    fi
+  done
+fi
+
+# ---------------------------------------------------------------------------
 # Final summary
 # ---------------------------------------------------------------------------
 log "Install complete:"
@@ -269,4 +302,5 @@ log "  Data:    ${DATA_DIR}    (owned by ${BRUCE_USER})"
 log "  License: ${INSTALL_ROOT}/LICENSE"
 log "  Notice:  ${INSTALL_ROOT}/NOTICE"
 log "  Bun:     ${BUN_BIN}"
+log "  Branding: ${BRANDING_DST} (Phase 232 — livinity-overlay.css + favicon.svg + manifest.json)"
 log "Next: systemctl daemon-reload && systemctl enable --now liv-assistant"

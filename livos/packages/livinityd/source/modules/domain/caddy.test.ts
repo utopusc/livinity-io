@@ -852,3 +852,132 @@ describe('Phase 226-04 — /liv reverse-proxy handle (regen-survivable)', () => 
 		expect(livHandleBlock).not.toContain('header_up Upgrade')
 	})
 })
+
+// ─── Phase 232 — Livinity brand overlay (sub directive + /liv/branding static) ───
+// New LIV_BRANDING_HANDLE constant serves /etc/liv-assistant/branding/* as
+// static files at /liv/branding/*. Existing LIV_ASSISTANT_HANDLE gains a
+// `replace "</head>" "<link rel=stylesheet href=/liv/branding/livinity-overlay.css>"`
+// directive that injects the overlay CSS link tag into upstream HTML responses.
+// Both pieces emit in all 3 site blocks (fallback :80 + apex + multi-user
+// subdomain). Tests assert directive shape, ordering, multi-block coverage,
+// strip_prefix correctness, and Phase 226-04 non-regression.
+
+describe('Phase 232 — Livinity brand overlay (sub directive + /liv/branding static)', () => {
+	it('apex block emits handle /liv/branding/* with root + file_server + strip_prefix', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('handle /liv/branding/*')
+		expect(out).toContain('root * /etc/liv-assistant/branding')
+		expect(out).toContain('file_server')
+		expect(out).toContain('uri strip_prefix /liv/branding')
+	})
+
+	it('apex block emits replace directive injecting overlay link before </head>', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('replace "</head>"')
+		expect(out).toContain('/liv/branding/livinity-overlay.css')
+	})
+
+	it('apex block — branding handle appears BEFORE @liv handle (specificity-safe ordering)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const apexStart = out.indexOf('bruce.livinity.io {')
+		expect(apexStart).toBeGreaterThan(-1)
+		const brandingIdx = out.indexOf('handle /liv/branding/*', apexStart)
+		const livIdx = out.indexOf('@liv path /liv /liv/*', apexStart)
+		expect(brandingIdx).toBeGreaterThan(-1)
+		expect(livIdx).toBeGreaterThan(-1)
+		expect(brandingIdx).toBeLessThan(livIdx)
+	})
+
+	it('multi-user subdomain block also emits branding handle + replace directive', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			},
+			true,
+			false,
+			[],
+		)
+		const subStart = out.indexOf('bruce.livinity.io {')
+		expect(subStart).toBeGreaterThan(-1)
+		const brandingIdx = out.indexOf('handle /liv/branding/*', subStart)
+		const replaceIdx = out.indexOf('replace "</head>"', subStart)
+		expect(brandingIdx).toBeGreaterThan(subStart)
+		expect(replaceIdx).toBeGreaterThan(subStart)
+	})
+
+	it('null mainDomain :80 fallback block also emits branding handle + replace directive', () => {
+		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expect(out).toContain('handle /liv/branding/*')
+		expect(out).toContain('root * /etc/liv-assistant/branding')
+		expect(out).toContain('replace "</head>"')
+	})
+
+	it('overlay link href is /liv/branding/livinity-overlay.css (matches static handler path)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		// The TS template literal produces a literal `\"` in the runtime string.
+		// Assert via toContain on the runtime-visible substring.
+		expect(out).toContain('href=\\"/liv/branding/livinity-overlay.css\\"')
+	})
+
+	it('branding handle strips /liv/branding (NOT /liv) — basename reaches file_server', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const brandingIdx = out.indexOf('handle /liv/branding/*')
+		expect(brandingIdx).toBeGreaterThan(-1)
+		const tail = out.slice(brandingIdx, brandingIdx + 200)
+		expect(tail).toContain('uri strip_prefix /liv/branding')
+	})
+
+	it('Phase 226-04 invariants STILL hold post-232: @liv → :3020 + XFO/CSP strip + frame-ancestors CSP', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('reverse_proxy 127.0.0.1:3020')
+		expect(out).toContain('header_down -X-Frame-Options')
+		expect(out).toContain('header_down -Content-Security-Policy')
+		expect(out).toContain("frame-ancestors 'self' https://bruce.livinity.io")
+	})
+
+	it('tunnel-mode apex block also emits branding handle + replace directive (CF tunnel non-regression)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			true, // tunnel mode — http:// prefix
+			[],
+		)
+		expect(out).toContain('http://bruce.livinity.io {')
+		const apexStart = out.indexOf('http://bruce.livinity.io {')
+		const brandingIdx = out.indexOf('handle /liv/branding/*', apexStart)
+		const replaceIdx = out.indexOf('replace "</head>"', apexStart)
+		expect(brandingIdx).toBeGreaterThan(apexStart)
+		expect(replaceIdx).toBeGreaterThan(apexStart)
+	})
+})
