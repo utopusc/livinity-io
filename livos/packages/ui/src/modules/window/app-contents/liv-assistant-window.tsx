@@ -42,8 +42,22 @@
  * file is UI-only and imports nothing from `liv/packages/core/*`.
  */
 
-/** Default URL — relative path so it resolves through the same host the shell is served on. */
-export const LIV_ASSISTANT_DEFAULT_URL = '/liv/'
+/**
+ * Default URL — relative path so it resolves through the same host the shell is served on.
+ *
+ * Phase 234-04 — flipped from '/liv/' to '/liv-login'. The new path hits the
+ * livinityd same-origin auto-login handler, which mints an AionUi qr-token,
+ * exchanges it for an `aionui-session` HttpOnly cookie, forwards the
+ * Set-Cookie unchanged to the browser, and 302-redirects to /liv/. The
+ * iframe's subsequent /liv/* requests then carry the cookie automatically
+ * and the AionUi SPA renders the chat surface directly -- no login form
+ * visible to the operator. Reversibility: set Redis
+ * `liv:config:liv_ai_autologin_enabled=false` to force the handler to skip
+ * the auto-login flow (operator sees the upstream qr-login UI as a safety
+ * hatch). The env override `VITE_LIV_ASSISTANT_URL` semantic is preserved
+ * for non-Mini-PC deployments that want to point at a different shell.
+ */
+export const LIV_ASSISTANT_DEFAULT_URL = '/liv-login'
 
 /** Exact sandbox token list (locked by test). Order + spacing matter. */
 export const LIV_ASSISTANT_SANDBOX = 'allow-same-origin allow-scripts allow-forms allow-popups allow-downloads'

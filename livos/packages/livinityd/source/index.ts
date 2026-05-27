@@ -84,6 +84,14 @@ import {NativeAppConfigStore} from './modules/apps/native-app-config.js'
 // /liv-ai-app/liv-ai iframe, bypassing the setup form thanks to the
 // Hot-fix E reconnect-race fix).
 import {seedLivAiDockEntry} from './modules/openclawos/liv-ai-dock-seed.js'
+// Phase 234-04 — Liv AI auto-login handler. Same-origin GET /liv-login
+// performs the AionUi qr-token + qr-login flow server-side against the
+// 127.0.0.1:3020 loopback and forwards the resulting Set-Cookie to the
+// browser, then 302-redirects to /liv/. Eliminates the AionUi login form
+// for LivOS operators. Feature-flagged by Redis
+// `liv:config:liv_ai_autologin_enabled` (default ON; flip 'false' to fall
+// back to the upstream AionUi qr-login UI).
+import {makeLivLoginHandler} from './modules/server/liv-login-handler.js'
 // Phase 157 — v37 install dispatcher service. Wires NativeInstaller +
 // AiInstaller into a module-scope InstallDispatcher consumed by the
 // `apps.installV37` / `apps.uninstallV37` / `apps.v37Progress` trpc
@@ -492,6 +500,25 @@ export default class Livinityd {
 		// SERVICE_UNAVAILABLE if this field were undefined.
 		this.nativeAppConfigStore = new NativeAppConfigStore(this.ai.redis)
 		this.logger.log('NativeAppConfigStore wired (liv:apps:native:* namespace)')
+
+		// Phase 234-04 — Liv AI auto-login. Wire GET /liv-login on the shared
+		// Express app so the dock-tile iframe's first request lands on a
+		// same-origin endpoint that mints + forwards the AionUi
+		// `aionui-session` cookie. Default ON via Redis flag
+		// `liv:config:liv_ai_autologin_enabled` (only 'false' disables;
+		// missing OR any other value = enabled). On error, the handler falls
+		// back to a 302 to /liv/ so the operator sees the upstream AionUi
+		// login UI rather than a 500.
+		try {
+			if (this.server.app) {
+				this.server.app.get('/liv-login', makeLivLoginHandler(this.ai.redis))
+				this.logger.log('Phase 234-04 — GET /liv-login mounted (Liv AI auto-login; flag: liv:config:liv_ai_autologin_enabled, default ON)')
+			} else {
+				this.logger.error('Phase 234-04 — /liv-login mount skipped: this.server.app missing (boot race)', new Error('this.server.app missing'))
+			}
+		} catch (livLoginErr) {
+			this.logger.error('Phase 234-04 — /liv-login mount failed; Liv AI iframe will land on the upstream AionUi login form', livLoginErr as Error)
+		}
 
 		// Phase 203 Hot-fix F 2026-05-24 — DELETE the Hot-fix D/E desktop
 		// entries that were mistakenly seeded into NativeAppConfigStore
