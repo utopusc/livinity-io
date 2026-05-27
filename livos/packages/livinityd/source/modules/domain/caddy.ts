@@ -307,6 +307,30 @@ ${WS_TRANSPORT_BODY}
 \t}`
 
 /**
+ * Phase 232 — Livinity brand overlay static file handler.
+ * Serves /etc/liv-assistant/branding/{livinity-overlay.css,favicon.svg,manifest.json}
+ * at https://bruce.livinity.io/liv/branding/* without proxying to the AionUi
+ * backend on :3020. Branding assets are installed by scripts/install-liv-assistant.sh
+ * (Phase 232 step) from the repo's caddy/branding/ directory.
+ *
+ * Ordering — emitted IMMEDIATELY BEFORE LIV_ASSISTANT_HANDLE in every emit
+ * site. The path matcher `/liv/branding/*` is more specific than @liv's
+ * `/liv /liv/*` so Caddy routes branding requests here even if reordered
+ * by specificity at parse time.
+ *
+ * Path strategy — `uri strip_prefix /liv/branding` reduces
+ * /liv/branding/livinity-overlay.css → /livinity-overlay.css before
+ * file_server resolves it against `root * /etc/liv-assistant/branding`.
+ *
+ * See caddy/branding/README.md for asset inventory + update flow.
+ */
+const LIV_BRANDING_HANDLE = `\thandle /liv/branding/* {
+\t\turi strip_prefix /liv/branding
+\t\troot * /etc/liv-assistant/branding
+\t\tfile_server
+\t}`
+
+/**
  * Phase 226-04 (recovery from 226-03 BLOCKED) — Liv Assistant (AionUi WebUI)
  * `/liv` reverse-proxy handle. Phase 223 shipped liv-assistant.service on
  * 127.0.0.1:3020; Phase 226 makes it reachable at https://bruce.livinity.io/liv/*
@@ -342,6 +366,16 @@ ${WS_TRANSPORT_BODY}
  * `handle { reverse_proxy 127.0.0.1:8080 ... }`. Caddy v2 evaluates by
  * matcher specificity (not source order) so ordering is cosmetic, but the
  * pattern keeps diff review easy.
+ *
+ * Phase 232 — adds `replace "</head>" "<link rel=\"stylesheet\"
+ * href=\"/liv/branding/livinity-overlay.css\"></head>"` directive that
+ * injects the Livinity brand overlay CSS link tag into upstream HTML
+ * responses just before `</head>`. Default `replace` behavior matches
+ * `text/html` responses only — JS / CSS / JSON bodies pass through
+ * untouched. Required Caddy module: `caddyserver/replace-response`,
+ * included in Caddy v2.6+ standard distribution (Mini PC runs v2.11.2
+ * per MEMORY.md). Sibling LIV_BRANDING_HANDLE constant serves the
+ * referenced CSS file from /etc/liv-assistant/branding/ on disk.
  */
 const LIV_ASSISTANT_HANDLE = `\t@liv path /liv /liv/*
 \thandle @liv {
@@ -352,6 +386,7 @@ const LIV_ASSISTANT_HANDLE = `\t@liv path /liv /liv/*
 ${WS_TRANSPORT_BODY}
 \t\t}
 \t\theader Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
+\t\treplace "</head>" "<link rel=\\"stylesheet\\" href=\\"/liv/branding/livinity-overlay.css\\"></head>"
 \t}`
 
 /**
@@ -370,6 +405,7 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 		blocks.push(`:80 {
 ${OPENCLAWOS_HANDSHAKE_HANDLE}
 ${LIV_AI_APP_HANDLE}
+${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
@@ -401,6 +437,7 @@ ${WS_TRANSPORT_BODY}
 	blocks.push(`${prefix}${config.mainDomain} {
 ${apexCacheHeader}${OPENCLAWOS_HANDSHAKE_HANDLE}
 ${LIV_AI_APP_HANDLE}
+${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
@@ -430,6 +467,7 @@ ${WS_TRANSPORT_BODY}
 			blocks.push(`${fullDomain} {
 ${OPENCLAWOS_HANDSHAKE_HANDLE}
 ${LIV_AI_APP_HANDLE}
+${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {

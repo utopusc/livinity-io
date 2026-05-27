@@ -1,0 +1,27 @@
+/* Livinity brand overlay — Phase 232
+ * Applied to AionUi-served HTML at /liv/* via Caddy `replace` directive.
+ * Injection point: just before </head> in upstream HTML responses.
+ * NO source patches to /opt/liv-assistant/aionui-web-* (D-V42-SACRED).
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
+
+:root {
+	--accent: #1d1d1f;
+	--livinity-font: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+}
+
+body,
+html,
+button,
+input,
+textarea,
+select {
+	font-family: var(--livinity-font) !important;
+}
+
+[class*='accent'],
+[class*='primary'],
+button[type='submit'] {
+	--accent-color: var(--accent) !important;
+}
