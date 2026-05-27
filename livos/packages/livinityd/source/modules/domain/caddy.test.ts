@@ -657,3 +657,59 @@ describe('generateFullCaddyfile — Phase 141-03 host (canonical FQDN) preferred
 		expect(out).not.toContain('reverse_proxy 127.0.0.1:5678')
 	})
 })
+
+describe('Phase 219 hotfix — CF trusted_proxies global block (universal CF proxy resilience)', () => {
+	it('emits Cloudflare IPv4 + IPv6 ranges as trusted_proxies at file start', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'bruce.livinity.io',
+				subdomains: [],
+			},
+			false,
+			false,
+			[],
+		)
+		// Must begin with the global block — global options can't appear after a site block.
+		expect(out.startsWith('{')).toBe(true)
+		expect(out).toContain('trusted_proxies static')
+		expect(out).toContain('173.245.48.0/20') // CF v4
+		expect(out).toContain('104.16.0.0/13') // CF v4
+		expect(out).toContain('2400:cb00::/32') // CF v6
+		expect(out).toContain('client_ip_headers CF-Connecting-IP')
+	})
+
+	it('portal Caddyfile also carries the CF trusted_proxies block', () => {
+		const out = generatePortalCaddyfile('socinity.livinity.io', [])
+		expect(out.startsWith('{')).toBe(true)
+		expect(out).toContain('trusted_proxies static')
+		expect(out).toContain('162.158.0.0/15')
+	})
+
+	it('no-domain fallback still ships the CF block (consistency)', () => {
+		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expect(out).toContain('trusted_proxies static')
+	})
+
+	it('default IP-only Caddyfile ships the CF block too', async () => {
+		const {generateDefaultCaddyfile} = await import('./caddy.js')
+		const out = generateDefaultCaddyfile()
+		expect(out).toContain('trusted_proxies static')
+		expect(out).toContain(':80 {')
+	})
+
+	it('site blocks still come AFTER the global block (Caddy parses top-down)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'bruce.livinity.io',
+				subdomains: [{subdomain: 'files', appId: 'filebrowser', port: 8070, enabled: true, host: 'files-bruce.livinity.io'}],
+			},
+			false,
+			false,
+			[],
+		)
+		const globalEndIdx = out.indexOf('}\n')
+		const firstSiteIdx = out.indexOf('bruce.livinity.io {')
+		expect(globalEndIdx).toBeGreaterThan(-1)
+		expect(firstSiteIdx).toBeGreaterThan(globalEndIdx)
+	})
+})
