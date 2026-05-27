@@ -13,7 +13,13 @@ progress:
   percent: 100
 ---
 
-## Current Position (v43 — autonomous run 2026-05-27 evening: 5 hot-fix phases SHIPPED (238 → 238.4), Phase 244 OBSOLETED; substantial phases 239/240/241/243 deferred to focused planning sessions; Phase 242 deferred pending 241)
+## Current Position (v43 — Phase 238.5 ✅ SHIPPED — Livinity dock tile icon LIVE on LivOS desktop, cumulative 6 hot-fix phases (238→238.5), Phase 244 OBSOLETED, 239/240/241/242/243/245 deferred)
+
+**Plan 238.5-01 (1-task — `99f4ecb6` feat commit)** — Operator 2026-05-27 evening: "Bu arada Logo hala degismemis Liv AI livinity logosu istiyordum" → Phase 238.4 fixed iframe-internal favicon+theme+CSS but **LivOS desktop dock tile** (the prominent app icon operator sees on the desktop) was untouched — still upstream purple-blue gradient chat icon (`#6366f1 → #3b82f6`). Fix: replaced `livos/packages/ui/public/figma-exports/dock-ai-chat.svg` with Livinity-themed version (`#1d1d1f` solid + white speech bubble + dark dots) + bumped cache-bust `?v=235 → ?v=238_5` in apps.tsx + test mock. Mini PC `bash /opt/livos/update.sh` EXIT 0 + `Deployed SHA recorded: 99f4ecb` + UI rebuilt via vite. POST served SVG = 790B (was 691B), 5 `#1d1d1f` paint occurrences, Phase 238.5 marker, comment block notes upstream colors. Phase 238/238.1/238.2/238.3/238.4 all non-regressed (static Aion=0, builtin-skills Aion=0, iframe overlay CSS link present, theme-color #1d1d1f). LICENSE+NOTICE byte-identical. Sacred SHA `f3538e1d...` UNCHANGED. All 6 services active. **Operator action:** browser hard-reload `https://bruce.livinity.io/` → dock tile için Liv AI artık dark Livinity-styled speech-bubble icon (önceden mor-mavi gradient). Cumulative v43 visible-rebrand FULLY COMPLETE: dock tile + browser tab + theme color + iframe font + Arco palette + footer URLs + skill descriptions + default agent.
+
+---
+
+## Previous Position (v43 — autonomous run 2026-05-27 evening: 5 hot-fix phases SHIPPED (238 → 238.4), Phase 244 OBSOLETED; substantial phases 239/240/241/243 deferred to focused planning sessions; Phase 242 deferred pending 241)
 
 **Autonomous run summary (operator invoked `/gsd-autonomous` 2026-05-27 evening):**
 

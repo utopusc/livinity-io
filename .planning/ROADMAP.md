@@ -3693,6 +3693,18 @@ Plans:
 
 ---
 
+### Phase 238.5: Livinity-themed Liv AI dock tile icon — ✅ SHIPPED 2026-05-27 (1/1 plan)
+
+**Goal:** Operator 2026-05-27 evening: "Bu arada Logo hala degismemis Liv AI livinity logosu istiyordum". Phase 238.4 fixed iframe-internal branding (favicon + theme-color + CSS) but the LivOS desktop dock tile for Liv AI still rendered the upstream purple-blue gradient chat icon (`#6366f1 → #3b82f6`). Replace `livos/packages/ui/public/figma-exports/dock-ai-chat.svg` with Livinity-themed version (`#1d1d1f` solid background + white speech bubble), bump cache-bust query.
+
+**Plans:** 1/1 plan complete ✅
+
+- [x] 238.5-01 — SVG replace + cache-bust v235→v238_5 + test mock update — SHIPPED 2026-05-27 (`99f4ecb6`)
+
+**Outcome:** Dock tile served at `/figma-exports/dock-ai-chat.svg`: 691B (purple-blue gradient) → 790B (Livinity #1d1d1f + 5 brand-color occurrences, Phase 238.5 comment block). Cache-bust `?v=238_5` ensures operator browsers refetch. Test mock in `dock.test.tsx` updated to mirror production. Phase 238/238.1/238.2/238.4 all non-regressed (static Aion=0, builtin-skills Aion=0, overlay CSS link present, theme-color #1d1d1f). Sacred SHA `f3538e1d...` UNCHANGED. Deployed SHA `99f4ecb`.
+
+---
+
 ### Phase 238.4: Livinity brand layer LIVE in iframe — CSS injection + favicon + theme-color + Space Grotesk — ✅ SHIPPED 2026-05-27 (1/1 plan, 12/12 SCs GREEN)
 
 **Goal:** Operator reported "Logo değişmemiş, Fontlar vs". Phase 232's `livinity-overlay.css` was DEAD since Phase 232 ship — designed to inject into iframe via Caddy `replace` directive, but Mini PC's Caddy v2.11.3 lacks `http.handlers.replace_response` plugin. Fix by sed-editing `${CURRENT_LINK}/static/index.html` directly (same approach as Phase 234-03 + 238.2 rebrand sed — AionUi backend doesn't regenerate static/index.html on restart).
