@@ -113,6 +113,57 @@ sudo systemctl start liv-assistant
 # file directly.)
 ```
 
+## Claude subscription credentials (Phase 228)
+
+Liv Assistant ships AionUi's built-in Claude Code agent. That agent uses the
+host's `claude` CLI to talk to Anthropic, which reads its session token from
+`$HOME/.claude/.credentials.json`. The systemd unit sets `HOME=/home/bruce`
+explicitly so the agent (running as `bruce`) finds the file at the expected
+path.
+
+| Field | Value |
+|---|---|
+| Credentials file | `/home/bruce/.claude/.credentials.json` |
+| Owner / mode | `bruce:bruce 0600` |
+| Written by | Phase 221 LivOS Settings → Claude Auth (OAuth code exchange), or interactive `claude` CLI login |
+| Read by | AionUi's vendored Claude Code agent on agent spawn (per-chat-turn) |
+| systemd grant | `liv-assistant.service` `ReadWritePaths=/home/bruce/.claude` (Phase 223-02) |
+| Required env | `liv-assistant.service` `Environment="HOME=/home/bruce"` (Phase 223-02) |
+
+### Verify creds are usable by the service
+
+```bash
+sudo -u bruce test -r /home/bruce/.claude/.credentials.json && echo OK
+# expect: OK
+ls -la /home/bruce/.claude/.credentials.json
+# expect: -rw------- 1 bruce bruce ... .credentials.json
+systemctl show liv-assistant -p Environment | grep -o 'HOME=/home/bruce'
+# expect: HOME=/home/bruce
+```
+
+If any line fails, the agent will show `available: false` in `/api/agents`
+(see Troubleshooting row "Claude Code agent shows `available: false`" below).
+
+### Recovery — credentials missing or expired
+
+1. **Preferred — LivOS Settings (Phase 221 UI):** Open
+   `https://bruce.livinity.io` → Settings → Claude Auth → "Sign in to Claude".
+   Walk the OAuth device-code prompt. Phase 221's `submitLoginCode(code)` writes
+   `/home/bruce/.claude/.credentials.json` with the correct ownership + mode.
+2. **CLI fallback:** SSH to the Mini PC as `bruce` (or `sudo -u bruce`) and run
+   `HOME=/home/bruce claude` — the binary's interactive login flow writes the
+   credentials file directly. Then `sudo systemctl restart liv-assistant` to
+   re-pick up the file.
+3. **Post-recovery smoke:** Re-run the three verify commands in the table above.
+
+### Why this is split out from the install runbook
+
+Install (Phase 223) only stands up AionUi's process; the Claude credentials are
+a separate concern that depends on the operator having a Claude subscription
+linked via Phase 221. Phase 228 is the audit + docs that wire these together
+so a future operator onboarding from a fresh Mini PC knows the exact file path
+and recovery flow without spelunking the systemd unit.
+
 ## Locked invariants (don't break these)
 
 - **D-V42-SACRED:** `liv/packages/core/src/sdk-agent-runner.ts` blob SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` is NEVER modified. Pre-commit hook enforces.
