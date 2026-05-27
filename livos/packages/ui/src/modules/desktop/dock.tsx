@@ -224,6 +224,13 @@ export function Dock() {
 				    data-test-dock-item ... className='contents'>` is a layout-neutral
 				    test seam (CSS display: contents) so dock.test.tsx can query the
 				    tile reliably without ordinal fragility (D-P227-TEST-SEAM). */}
+				{/* Phase 234-02 — Liv AI brand rename: window title argument
+				    flipped from 'Liv Assistant' to 'Liv AI' per Section G.1
+				    Resolution (operator directive 2026-05-27). Icon is now
+				    resolved from systemAppsKeyed['LIVINITY_liv-assistant'].icon
+				    which apps.tsx points at /figma-exports/dock-ai-chat.svg
+				    (was /figma-exports/liv-ai.svg shared with the retired
+				    LIVINITY_liv-ai surface). */}
 				{showLivAssistant && (
 					<div data-test-dock-item='liv-assistant' className='contents'>
 						<DockItem
@@ -236,7 +243,7 @@ export function Dock() {
 								handleOpenWindow(
 									'LIVINITY_liv-assistant',
 									'/liv-assistant',
-									'Liv Assistant',
+									'Liv AI',
 									systemAppsKeyed['LIVINITY_liv-assistant'].icon,
 									originRect,
 								)

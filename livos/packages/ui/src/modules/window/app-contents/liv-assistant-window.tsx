@@ -1,7 +1,13 @@
 /**
  * Phase 227-01 — LivAssistantWindow iframe shell.
+ * Phase 234-02 — iframe title attribute rebranded 'Liv Assistant' -> 'Liv AI'
+ * per 234-01-INVESTIGATION.md Section G.1 (operator directive 2026-05-27 —
+ * unify the v42 chat-surface brand under 'Liv AI', retiring the parallel
+ * 'Liv Assistant' wrapper label). The component name + module path stay
+ * `LivAssistantWindow` / `liv-assistant-window.tsx` to avoid a deeper
+ * file-rename cascade — only user-visible strings flip.
  *
- * Mounts the AionUi-backed Liv Assistant surface as a same-origin iframe.
+ * Mounts the AionUi-backed Liv AI surface as a same-origin iframe.
  * The Liv Assistant binary listens on the Mini PC at 127.0.0.1:3020 and is
  * proxied through Caddy at https://bruce.livinity.io/liv/ (Phase 226-04
  * SHIPPED — caddy.ts LIV_ASSISTANT_HANDLE constant emits the reverse-proxy
@@ -55,7 +61,7 @@ export default function LivAssistantWindow() {
 	return (
 		<iframe
 			src={LIV_ASSISTANT_URL}
-			title='Liv Assistant'
+			title='Liv AI'
 			data-testid='liv-assistant-iframe'
 			className='h-full w-full border-0 bg-background'
 			sandbox={LIV_ASSISTANT_SANDBOX}

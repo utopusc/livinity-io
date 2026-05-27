@@ -10,8 +10,11 @@
 //   1. Liv Assistant DockItem renders when useV42MigrationActive() === true.
 //   2. Liv Assistant DockItem is absent when useV42MigrationActive() === false.
 //   3. Clicking the Liv Assistant tile calls openWindow(
-//        'LIVINITY_liv-assistant', '/liv-assistant', 'Liv Assistant',
-//        '/figma-exports/liv-ai.svg', <originRect>).
+//        'LIVINITY_liv-assistant', '/liv-assistant', 'Liv AI',
+//        '/figma-exports/dock-ai-chat.svg', <originRect>).
+//        Phase 234-02 — title rename 'Liv Assistant' -> 'Liv AI' (operator
+//        directive 2026-05-27) + dedicated chat icon swap (was reusing the
+//        legacy liv-ai.svg). Section G.1 Resolution.
 //   4. Phase 231 retirement guard — legacy chat-iframe dock tiles are
 //      absent (the Phase 227 coexistence assertion is gone; this assertion
 //      replaces it).
@@ -34,6 +37,8 @@ vi.mock('@/providers/window-manager', () => ({
 }))
 
 vi.mock('@/providers/apps', () => ({
+	// Phase 234-02 — LIVINITY_liv-ai removed (Section G.1 cleanup);
+	// LIVINITY_liv-assistant icon swapped to dock-ai-chat.svg.
 	systemAppsKeyed: {
 		'LIVINITY_files': {icon: '/figma-exports/dock-files-new.svg', systemAppTo: '/files/Home'},
 		'LIVINITY_settings': {icon: '/figma-exports/dock-settings-new.svg', systemAppTo: '/settings'},
@@ -42,8 +47,7 @@ vi.mock('@/providers/apps', () => ({
 		'LIVINITY_server-control': {icon: '/figma-exports/dock-server.svg', systemAppTo: '/server-control'},
 		'LIVINITY_my-devices': {icon: '/figma-exports/dock-settings.png', systemAppTo: '/my-devices'},
 		'LIVINITY_terminal': {icon: '/figma-exports/dock-terminal.svg', systemAppTo: '/terminal'},
-		'LIVINITY_liv-ai': {icon: '/figma-exports/liv-ai.svg', systemAppTo: '/liv-ai'},
-		'LIVINITY_liv-assistant': {icon: '/figma-exports/liv-ai.svg', systemAppTo: '/liv-assistant'},
+		'LIVINITY_liv-assistant': {icon: '/figma-exports/dock-ai-chat.svg', systemAppTo: '/liv-assistant'},
 	},
 	useApps: () => ({userAppsKeyed: {}}),
 }))
@@ -175,11 +179,12 @@ describe('Dock — Liv Assistant entry (Phase 227-02)', () => {
 			clickable!.click()
 		})
 		expect(openWindowSpy).toHaveBeenCalledTimes(1)
+		// Phase 234-02 — title 'Liv Assistant' -> 'Liv AI' + icon swap to dock-ai-chat.svg
 		expect(openWindowSpy).toHaveBeenCalledWith(
 			'LIVINITY_liv-assistant',
 			'/liv-assistant',
-			'Liv Assistant',
-			'/figma-exports/liv-ai.svg',
+			'Liv AI',
+			'/figma-exports/dock-ai-chat.svg',
 			expect.anything(),
 		)
 	})

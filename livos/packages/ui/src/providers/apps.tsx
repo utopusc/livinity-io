@@ -115,26 +115,21 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/terminal',
 	},
-	// Phase 197-06 — Liv AI Dock app. Clicking the icon opens a window at
-	// /liv-ai, which mounts LivAiChatWindow. Plan 197-05's mastra.agent.*
-	// tRPC namespace powers the chat (stream / approve / cancel / threads).
-	{
-		id: 'LIVINITY_liv-ai',
-		name: 'Liv AI',
-		icon: '/figma-exports/liv-ai.svg',
-		systemApp: true,
-		systemAppTo: '/liv-ai',
-	},
-	// Phase 227-02 — LivOS shell entry for the Liv Assistant iframe window.
-	// Clicking the dock icon opens window-content's LIVINITY_liv-assistant
-	// branch which lazy-loads LivAssistantWindow (Plan 227-01), iframing the
-	// Phase 226 Caddy handle at /liv/. Reuses the existing liv-ai.svg figma
-	// export so we don't have to ship a new asset in this phase (icon swap
-	// can land in Phase 232 brand overlay).
+	// Phase 234-02 (D-234-BRAND) — 'Liv AI' is the v42 user-visible name for
+	// the AionUi-backed assistant surface (operator directive 2026-05-27).
+	// The legacy LIVINITY_liv-ai dock entry (Phase 197-06 assistant-ui chat
+	// surface) was removed here per 234-01-INVESTIGATION.md Section G.1 —
+	// Phase 231 already retired its dock tile (no JSX consumer in dock.tsx);
+	// this plan cleans up the orphan systemApps registry entry + the
+	// window-content lazy-import + the fullHeightApps Set membership + the
+	// switch-case arm + the liv-ai-content.tsx file in lock-step. The
+	// LIVINITY_liv-assistant entry below absorbs the 'Liv AI' brand identity
+	// + swaps to a dedicated chat-style icon (Phase 227-02 deferred the
+	// asset swap; this is that follow-on).
 	{
 		id: 'LIVINITY_liv-assistant',
-		name: 'Liv Assistant',
-		icon: '/figma-exports/liv-ai.svg',
+		name: 'Liv AI',
+		icon: '/figma-exports/dock-ai-chat.svg',
 		systemApp: true,
 		systemAppTo: '/liv-assistant',
 	},

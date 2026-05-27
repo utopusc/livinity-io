@@ -190,8 +190,13 @@ export function validateHost(host: string): boolean {
  * (Phase 226-04 + Phase 227) fully replaces the legacy chat surface, so
  * the three gateway-routed blocks are dead. The surviving block routes
  * /liv-ai-app/* to the :3010 Next.js dashboard (Phase 202 agents +
- * settings, Phase 203-10/11 app + icon routes) — still consumed by the
- * LIVINITY_liv-ai window in window-content.tsx (`LivAiContent`).
+ * settings, Phase 203-10/11 app + icon routes). Phase 234-02 Section G.1
+ * removed the in-shell `LivAiContent` consumer (the LIVINITY_liv-ai
+ * window-content branch was deleted alongside its apps.tsx entry); the
+ * /liv-ai-app/* handle survives because OpenUI app windows (the
+ * `OPENUI_<slug>` window-content branch in window-content.tsx) still
+ * iframe-target `/liv-ai-app/openclawos/apps/<slug>` via this proxy
+ * (T-203-06 trust chain).
  */
 const LIV_AI_APP_HANDLE = `\t@livaiSubapp path /liv-ai-app /liv-ai-app/*
 \thandle @livaiSubapp {
