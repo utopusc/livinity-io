@@ -3575,25 +3575,20 @@ Then revert `fix(232-02)` to re-enable the `replace` directive. Adds ~30 MB bina
 
 ---
 
-### Phase 230: Backup + pre-cutover checkpoint — ⚪ READY
+### Phase 230: Backup + pre-cutover checkpoint — ✅ SHIPPED 2026-05-27
 
 **Goal:** Snapshot Mini PC state before Phase 231's destructive OpenClawOS retirement. Redis SAVE + tar archive of critical paths.
 
-**Scope:**
-1. **Mini PC backup script** at `scripts/pre-v42-cutover-backup.sh`:
-   - `redis-cli SAVE` (snapshot Redis to RDB)
-   - `tar -czf /opt/livos/backups/pre-v42-cutover-$(date +%F).tgz /opt/livos/data /home/bruce/.claude /home/bruce/livinity /etc/livos /etc/caddy /etc/systemd/system/liv*.service /etc/systemd/system/livos.service`
-   - Verify tarball integrity with `tar -tzf`
-   - Log `/opt/livos/backups/pre-v42-cutover-<date>.tgz: <size>` to STATE.md trail
-2. **Mini PC live run** — SSH and execute the backup script.
-3. **Audit log** — DEPLOY-LOG.md with tarball size + sha256 + restore procedure.
+**Plans shipped:**
+- [x] 230-01-PLAN.md — `scripts/pre-v42-cutover-backup.sh` (NEW, 204 lines, mode 100755). Redis SAVE + tar `--ignore-failed-read` of 7 paths + `tar -tzf` integrity check + sha256 capture + RESTORE-INDEX append + idempotent `--force` + Mini-PC-only safety guard. ✅ **SHIPPED 2026-05-27** (commit `b0c01d22`).
+- [x] 230-02-PLAN.md — Mini PC live deploy + post-verify + Restore procedure. Push + (Rule 3) curl-from-GitHub-raw delivery + sudo bash run + 6,382-entry tarball at `/opt/livos/backups/pre-v42-cutover-2026-05-27.tgz` (3.8 GB, sha256 `ad532b80…`, INTEGRITY_PASS) + RESTORE-INDEX seeded + 5x services still active. ✅ **SHIPPED 2026-05-27** (commit `d2c85fa5`). See [PHASE-SUMMARY.md](phases/230-pre-cutover-backup/PHASE-SUMMARY.md) + [230-02-DEPLOY-LOG.md](phases/230-pre-cutover-backup/230-02-DEPLOY-LOG.md).
 
 **Success Criteria:**
-- SC-01: Backup script created in repo
-- SC-02: Live tarball exists at `/opt/livos/backups/pre-v42-cutover-2026-05-27.tgz`
-- SC-03: Tarball passes integrity check
-- SC-04: Restore procedure documented in DEPLOY-LOG.md
-- SC-05: Sacred SHA unchanged
+- [x] SC-01 PASS: Backup script created in repo (`scripts/pre-v42-cutover-backup.sh`, mode 100755)
+- [x] SC-02 PASS: Live tarball exists at `/opt/livos/backups/pre-v42-cutover-2026-05-27.tgz` (3,799,523,183 bytes, root:root, mode 644)
+- [x] SC-03 PASS: Tarball passes integrity check (`tar -tzf` exit 0, script-side + independent post-verify)
+- [x] SC-04 PASS: Restore procedure documented in 230-02-DEPLOY-LOG.md (pre-flight + restore steps + Redis recovery + caveats)
+- [x] SC-05 PASS: Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` unchanged (4 independent snapshots)
 
 **Depends on:** Phase 226 ✅. Must run BEFORE Phase 231 (point of no return).
 
