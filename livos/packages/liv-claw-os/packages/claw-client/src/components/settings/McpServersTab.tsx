@@ -150,6 +150,37 @@ function parseEnvText(raw: string): Record<string, string> {
   return out;
 }
 
+/**
+ * Parse the Args textarea — one arg per line, blank lines skipped.
+ * Phase 219 post-deploy 2026-05-26 fix.
+ */
+function parseArgsText(raw: string): string[] {
+  return raw
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/**
+ * Operator-rescue: if the operator typed the WHOLE command line
+ * (e.g. `npx -y @modelcontextprotocol/server-git`) into the Command field
+ * and left Args empty, split on whitespace so the first token is the binary
+ * and the rest become args. Preserves the historical UX while routing the
+ * stored shape through the spawn-compatible split.
+ */
+function splitCommandLine(commandRaw: string, argsRaw: string): {command: string; args?: string[]} {
+  const explicitArgs = parseArgsText(argsRaw);
+  const trimmed = commandRaw.trim();
+  if (explicitArgs.length > 0) {
+    return {command: trimmed, args: explicitArgs};
+  }
+  if (!trimmed.includes(" ")) {
+    return {command: trimmed};
+  }
+  const parts = trimmed.split(/\s+/);
+  return {command: parts[0]!, args: parts.slice(1)};
+}
+
 export function McpServersTab() {
   const [servers, setServers] = useState<McpEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -162,6 +193,17 @@ export function McpServersTab() {
     "stdio",
   );
   const [pendingCommand, setPendingCommand] = useState<string>("");
+  /**
+   * Phase 219 post-deploy 2026-05-26 fix — separate Args field. Operator quote:
+   * "MCP ekleme sadece Filesystemda calisiyor!" — root cause: this dialog
+   * never had an Args input, so operators who typed
+   * `npx -y @modelcontextprotocol/server-git` into Command got persisted as
+   * `{command: "npx -y @modelcontextprotocol/server-git", args: undefined}`.
+   * spawn() then ENOENT'd because the entire string is interpreted as a
+   * single binary path. Adding Args (one per line) + a Command-line splitter
+   * fallback fixes the silent failure.
+   */
+  const [pendingArgs, setPendingArgs] = useState<string>("");
   const [pendingUrl, setPendingUrl] = useState<string>("");
   const [pendingEnv, setPendingEnv] = useState<string>("");
 
@@ -200,7 +242,13 @@ export function McpServersTab() {
         setError("Command is required for stdio transport.");
         return;
       }
-      body.command = cmd;
+      // Phase 219 post-deploy 2026-05-26 fix — Args field + command-line
+      // splitter so `npx -y @modelcontextprotocol/server-git` typed into the
+      // Command field works without leaving operators stuck on silent
+      // spawn-ENOENT failures.
+      const split = splitCommandLine(cmd, pendingArgs);
+      body.command = split.command;
+      if (split.args && split.args.length > 0) body.args = split.args;
     } else {
       const url = pendingUrl.trim();
       if (!url) {
@@ -218,6 +266,7 @@ export function McpServersTab() {
       // Reset the form on success.
       setPendingName("");
       setPendingCommand("");
+      setPendingArgs("");
       setPendingUrl("");
       setPendingEnv("");
       await refresh();
@@ -226,7 +275,7 @@ export function McpServersTab() {
     } finally {
       setSaving(false);
     }
-  }, [pendingName, pendingTransport, pendingCommand, pendingUrl, pendingEnv, refresh]);
+  }, [pendingName, pendingTransport, pendingCommand, pendingArgs, pendingUrl, pendingEnv, refresh]);
 
   const onDelete = useCallback(
     async (name: string) => {
@@ -384,17 +433,32 @@ export function McpServersTab() {
             </select>
           </label>
           {pendingTransport === "stdio" ? (
-            <label className="space-y-xxs text-xs text-text-neutral-tertiary sm:col-span-2">
-              <span>Command</span>
-              <input
-                type="text"
-                value={pendingCommand}
-                onChange={(e) => setPendingCommand(e.target.value)}
-                placeholder="/usr/bin/my-mcp-server"
-                className="w-full rounded-md border border-border-default/60 bg-background px-s py-xxs font-mono text-sm text-text-neutral-primary"
-                disabled={saving}
-              />
-            </label>
+            <>
+              <label className="space-y-xxs text-xs text-text-neutral-tertiary sm:col-span-2">
+                <span>Command</span>
+                <input
+                  type="text"
+                  value={pendingCommand}
+                  onChange={(e) => setPendingCommand(e.target.value)}
+                  placeholder="npx  (or paste full line: npx -y @modelcontextprotocol/server-git)"
+                  className="w-full rounded-md border border-border-default/60 bg-background px-s py-xxs font-mono text-sm text-text-neutral-primary"
+                  disabled={saving}
+                />
+              </label>
+              <label className="space-y-xxs text-xs text-text-neutral-tertiary sm:col-span-2">
+                <span>
+                  Args <span className="text-text-neutral-tertiary/60">(one per line — leave empty if pasted into Command)</span>
+                </span>
+                <textarea
+                  value={pendingArgs}
+                  onChange={(e) => setPendingArgs(e.target.value)}
+                  placeholder={"-y\n@modelcontextprotocol/server-git"}
+                  rows={3}
+                  className="w-full rounded-md border border-border-default/60 bg-background px-s py-xxs font-mono text-xs text-text-neutral-primary"
+                  disabled={saving}
+                />
+              </label>
+            </>
           ) : (
             <label className="space-y-xxs text-xs text-text-neutral-tertiary sm:col-span-2">
               <span>URL</span>
