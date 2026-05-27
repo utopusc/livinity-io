@@ -3329,7 +3329,7 @@ Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (broker subscription path)
 
 ---
 
-### Phase 224: App Store — hide Skills/MCP/AI tabs (feature-flagged) — 🟡 IN PROGRESS (3/4)
+### Phase 224: App Store — hide Skills/MCP/AI tabs (feature-flagged) — ✅ SHIPPED 2026-05-27 (4/4, Mini PC live, Redis flag ON)
 
 **Goal:** During v42 migration, hide the legacy AI-related entry points in the LivOS UI so users don't try to configure MCP servers / Skills / AI providers via the OLD chat-surface code path while Liv Assistant is being wired in. Reversibility is mandatory: a single Redis feature flag toggles everything back ON. NO code deletion — only conditional hides + a banner.
 
@@ -3356,7 +3356,7 @@ Plans:
 - [x] 224-01-PLAN.md — Backend tRPC config.getV42MigrationActive + useV42MigrationActive UI hook ✅ SHIPPED 2026-05-27 (`285885f9`) — see [224-01-SUMMARY.md](phases/224-app-store-hide-ai-tabs/224-01-SUMMARY.md)
 - [x] 224-02-PLAN.md — App Store nav `ai` category hide + Settings sidebar MCP-Servers hide (filter logic) ✅ SHIPPED 2026-05-27 (`206961bc`) — see [224-02-SUMMARY.md](phases/224-app-store-hide-ai-tabs/224-02-SUMMARY.md)
 - [x] 224-03-PLAN.md — V42MigrationBanner component + mount in App Store + Settings layouts + unit test ✅ SHIPPED 2026-05-27 (`72e21f3f`) — see [224-03-SUMMARY.md](phases/224-app-store-hide-ai-tabs/224-03-SUMMARY.md)
-- [ ] 224-04-PLAN.md — Mini PC deploy + Redis flag set + curl smoke + operator UAT (SC-01..SC-05)
+- [x] 224-04-PLAN.md — Mini PC deploy + Redis flag set + curl smoke + operator UAT (SC-01..SC-05) ✅ SHIPPED 2026-05-27 (`99110fca`) — see [224-04-SUMMARY.md](phases/224-app-store-hide-ai-tabs/224-04-SUMMARY.md) + [224-04-DEPLOY-LOG.md](phases/224-app-store-hide-ai-tabs/224-04-DEPLOY-LOG.md). Deployed SHA `7007108` on Mini PC; Redis flag `liv:config:liv_v42_migration_active=true`; 4 services active; curl round-trip true/false/true GREEN; SC-03 HTTP 200; sacred SHA UNCHANGED. Operator browser UAT auto-approved per --auto chain.
 
 **Tasks:**
 1. Add `liv:config:liv_v42_migration_active` flag accessor: tRPC procedure `config.getV42MigrationActive` returning `{ active: boolean }` (defaults to `true` if key missing). Single existing tRPC router file extended; no new schema.
