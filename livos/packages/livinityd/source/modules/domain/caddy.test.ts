@@ -110,12 +110,13 @@ describe('Phase 203-05 — /openclawos/handshake handle (D-203-12 / INV-203-10)'
 		expect(out).toContain('reverse_proxy 127.0.0.1:18789') // openclaw gateway (claw-client)
 		expect(out).toContain('reverse_proxy 127.0.0.1:3010') // Phase 203-09 — Next.js subapp
 		expect(out).toContain('reverse_proxy 127.0.0.1:5678') // n8n subdomain
-		// No new port targets beyond {8080, 18789, 3010, 5678}
+		// No new port targets beyond {8080, 18789, 3010, 5678, 3020}
+		// Phase 226-04 added :3020 (liv-assistant /liv reverse-proxy).
 		const portMatches = (out.match(/reverse_proxy 127\.0\.0\.1:(\d+)/g) ?? []).map((m) =>
 			Number(m.split(':').pop()),
 		)
 		for (const port of portMatches) {
-			expect([8080, 18789, 3010, 5678]).toContain(port)
+			expect([8080, 18789, 3010, 5678, 3020]).toContain(port)
 		}
 	})
 })
@@ -711,5 +712,143 @@ describe('Phase 219 hotfix — CF trusted_proxies global block (universal CF pro
 		const firstSiteIdx = out.indexOf('bruce.livinity.io {')
 		expect(globalEndIdx).toBeGreaterThan(-1)
 		expect(firstSiteIdx).toBeGreaterThan(globalEndIdx)
+	})
+})
+
+// ─── Phase 226-04 — /liv reverse-proxy handle (regen-survivable) ────────
+// Recovery from Plan 226-03 BLOCKED — emission moved from
+// caddy/conf.d/liv-assistant.caddy (snippet, doomed by livinityd regen)
+// into the generateFullCaddyfile() emitter so every reloadCaddy() rewrite
+// preserves the /liv handler. Asserts the handler appears in apex + multi-user
+// subdomain + null-mainDomain blocks, strips upstream X-Frame-Options + CSP,
+// sets frame-ancestors CSP at handle scope, and lives ABOVE the catch-all
+// :8080 handle so first-match-wins routes /liv* to :3020.
+
+describe('Phase 226-04 — /liv reverse-proxy handle (regen-survivable)', () => {
+	it('apex bruce.livinity.io block emits @liv path matcher + handle + uri strip_prefix /liv', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('@liv path /liv /liv/*')
+		expect(out).toContain('handle @liv {')
+		expect(out).toContain('uri strip_prefix /liv')
+	})
+
+	it('apex /liv handle reverse-proxies to 127.0.0.1:3020 (liv-assistant)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const livIdx = out.indexOf('@liv path /liv /liv/*')
+		const blockTail = out.slice(livIdx)
+		expect(blockTail).toContain('reverse_proxy 127.0.0.1:3020')
+	})
+
+	it('apex /liv handle strips upstream X-Frame-Options AND Content-Security-Policy', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const livIdx = out.indexOf('@liv path /liv /liv/*')
+		const blockTail = out.slice(livIdx)
+		expect(blockTail).toContain('header_down -X-Frame-Options')
+		expect(blockTail).toContain('header_down -Content-Security-Policy')
+	})
+
+	it('apex /liv handle sets frame-ancestors CSP at handle scope', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain(
+			"header Content-Security-Policy \"frame-ancestors 'self' https://bruce.livinity.io\"",
+		)
+	})
+
+	it('apex /liv handle appears BEFORE the catch-all handle to :8080 (first-match-wins)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const apexBlockStart = out.indexOf('bruce.livinity.io {')
+		expect(apexBlockStart).toBeGreaterThan(-1)
+		const livIdx = out.indexOf('@liv path /liv /liv/*', apexBlockStart)
+		// Match the catch-all `\thandle {\n\t\treverse_proxy 127.0.0.1:8080` pattern,
+		// NOT the earlier `/openclawos/handshake` handle which ALSO reverse-proxies
+		// to :8080. The catch-all is the one with bare `handle {` (no matcher).
+		const catchAllIdx = out.indexOf('\thandle {\n\t\treverse_proxy 127.0.0.1:8080', apexBlockStart)
+		expect(livIdx).toBeGreaterThan(-1)
+		expect(catchAllIdx).toBeGreaterThan(-1)
+		expect(livIdx).toBeLessThan(catchAllIdx)
+	})
+
+	it('multi-user subdomain block (bruce.livinity.io) also emits /liv handle', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			},
+			true, // multiUser
+			false,
+			[],
+		)
+		// In multi-user mode, the subdomain block is the one that routes to :8080
+		// via the app gateway — it MUST emit /liv too so iframe access works for
+		// every user, not just the operator on the apex.
+		const subBlockStart = out.indexOf('bruce.livinity.io {')
+		expect(subBlockStart).toBeGreaterThan(-1)
+		const livIdx = out.indexOf('@liv path /liv /liv/*', subBlockStart)
+		// Match the catch-all `\thandle {\n\t\treverse_proxy 127.0.0.1:8080` pattern
+		// (NOT the /openclawos/handshake handle which also targets :8080).
+		const catchAllIdx = out.indexOf('\thandle {\n\t\treverse_proxy 127.0.0.1:8080', subBlockStart)
+		expect(livIdx).toBeGreaterThan(subBlockStart)
+		expect(catchAllIdx).toBeGreaterThan(subBlockStart)
+		expect(livIdx).toBeLessThan(catchAllIdx)
+	})
+
+	it('null mainDomain :80 fallback block also emits /liv handle (dev/IP-only operator)', () => {
+		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expect(out).toContain('@liv path /liv /liv/*')
+		expect(out).toContain('reverse_proxy 127.0.0.1:3020')
+	})
+
+	it('tunnel-mode apex block keeps http:// prefix AND emits /liv (CF tunnel compatibility)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			true, // tunnel mode — Phase 134+ http:// prefix
+			[],
+		)
+		expect(out).toContain('http://bruce.livinity.io {')
+		const apexBlockStart = out.indexOf('http://bruce.livinity.io {')
+		const livIdx = out.indexOf('@liv path /liv /liv/*', apexBlockStart)
+		expect(livIdx).toBeGreaterThan(apexBlockStart)
+	})
+
+	it('/liv handle does NOT emit header_up Connection / Upgrade (preserves Caddy v2 WS auto-upgrade)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const livIdx = out.indexOf('@liv path /liv /liv/*')
+		// Find the closing brace of the /liv handle block — search for the next
+		// matcher-prefix or the catch-all handle, whichever comes first.
+		const catchAllIdx = out.indexOf('handle {', livIdx)
+		const livHandleBlock = out.slice(livIdx, catchAllIdx)
+		expect(livHandleBlock).not.toContain('header_up Connection')
+		expect(livHandleBlock).not.toContain('header_up Upgrade')
 	})
 })
