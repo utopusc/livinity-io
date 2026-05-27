@@ -376,6 +376,11 @@ export const httpOnlyPaths = [
 	// WS-half-broken concern as skills.delete.
 	'skills.market.list',
 	'skills.market.install',
+	// Phase 220 T1 — `openclawos.gateway.config.{read,write}` for the
+	// MCP Servers raw editor panel. read = render dep; write = atomic save
+	// the operator MUST not see drop on a half-broken WS.
+	'openclawos.gateway.config.read',
+	'openclawos.gateway.config.write',
 	// v32-redo Stage 2b — conversations namespace (sidebar feed + thread view +
 	// composer persistence path). All 6 paths route via HTTP because:
 	//   - list / listMessages are page-render dependencies for the AI Chat
