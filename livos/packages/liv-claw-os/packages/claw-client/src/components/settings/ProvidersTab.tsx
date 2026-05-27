@@ -45,6 +45,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { callMutation, callQuery } from "@/lib/livinityd-client";
 import { providersCache } from "@/lib/providers-cache";
+import { ClaudeAuthCard } from "./ClaudeAuthCard";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Wire-format types — mirror livinityd `openclaw-router.ts` outputs
@@ -1036,6 +1037,12 @@ export function ProvidersTab() {
           restart required.
         </p>
       </div>
+
+      {/* Phase 221 — Claude Auth (subscription) card. Mirrors xAI auth UX but
+          targets the liv-core /api/claude/* OAuth PKCE flow exposed via the
+          auth.claude.* tRPC namespace. Sits above the legacy provider grid so
+          operators see it first. */}
+      <ClaudeAuthCard />
 
       {loadError ? (
         <StatusBanner

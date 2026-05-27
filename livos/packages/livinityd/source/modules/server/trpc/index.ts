@@ -70,6 +70,7 @@ import mcpRouter from './mcp-router.js'
 import {mcpConfigRouter, createMcpConfigRouter} from './mcp-config-router.js'
 import {skillsRouter, createSkillsRouter} from './skills-router.js'
 import {skillsMarketRouter, createSkillsMarketRouter} from './skills-market-router.js'
+import {claudeAuthRouter} from './claude-auth-router.js'
 // v33 Phase 92 — webapp metadata extractor (V33-WEBAPP-01). Single procedure
 // `webapp.extractMetadata({url})` returning `{title, faviconUrl, description,
 // ogImage}`. The path is added to httpOnlyPaths in ./common.ts because clean
@@ -326,7 +327,11 @@ export function createAppRouter(opts: {
 		// WS reconnect after `systemctl restart livos` (memory pitfall
 		// B-12 / X-04). Default `xaiAuthRouter` throws on access until
 		// production swap (mirrors chromeMaster factory pattern above).
-		auth: router({xai: opts.xaiAuth ?? xaiAuthRouter}),
+		// Phase 221 — `auth.claude.*` HTTP proxy to liv-core /api/claude/* so
+		// claw-client ProvidersTab can run the Claude OAuth PKCE flow with
+		// the same callMutation/callQuery plumbing every other admin action
+		// uses. Stateless — no factory needed.
+		auth: router({xai: opts.xaiAuth ?? xaiAuthRouter, claude: claudeAuthRouter}),
 		// Phase 196-04 — setup.setRegion onboarding-only mutation namespace.
 		// The empty-injection default setupRouter throws on any procedure call
 		// until Plan 196-05's production swap injects a real
