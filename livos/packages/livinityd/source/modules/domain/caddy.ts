@@ -183,128 +183,28 @@ export function validateHost(host: string): boolean {
 }
 
 /**
- * Phase 201-06 → Phase 203-03 (D-203-05) → Phase 203-09 → Phase 203-10 — Liv
- * AI surface routing. Two co-existing surfaces share the `/liv-ai-app/*` URL
- * prefix:
- *
- *   1. Openclaw claw-gateway at 127.0.0.1:18789 owns the desktop-style chat
- *      experience under `/liv-ai-app/openclawos[/*]`. The gateway's in-process
- *      plugin (livos/packages/liv-claw-os/packages/claw-plugin/src/index.ts)
- *      registers its static-file route at the upstream-canonical
- *      `/plugins/openclawos` path (matching upstream openclaw-os). Caddy uses
- *      `handle_path` to strip the external `/liv-ai-app/openclawos` prefix +
- *      a `rewrite` directive to prepend `/plugins/openclawos` so the gateway
- *      receives the URL shape its plugin already matches. Phase 203-09
- *      handoff note: pre-203-10 the gateway received bare `/` paths and
- *      404'd; the rewrite below closes that gap.
- *
- *   2. Next.js Phase 202 subapp at 127.0.0.1:3010 owns the agents +
- *      settings dashboard at `/liv-ai-app/agents[/...]` and
- *      `/liv-ai-app/settings[/...]`, PLUS the new Phase 203-10/11 routes
- *      `/liv-ai-app/icons/*` (placeholder SVG) and `/liv-ai-app/apps/<slug>`
- *      (standalone OpenUI app page). Per Phase 203-09 the `@assistant-ui`
- *      chat surface that previously lived at `/` is GONE; the subapp now
- *      only serves the Phase 202+203-10/11 routes (plus a `/` → `/agents`
- *      redirect stub for dev port-direct access).
- *
- * Ordering — Caddy evaluates `handle` blocks by path-matcher specificity,
- * not source order, so emitting the openclawos handle alongside the bare
- * `/liv-ai-app/*` handle is safe: the longer-prefix matcher wins for
- * openclawos paths and the shorter matcher catches the rest. We still emit
- * the openclawos handle FIRST for readability and so a future maintainer
- * sees the two are paired.
- *
- * History — pre-203-03 routed the bare prefix to a vanished Next.js subapp
- * (livos-app-liv-ai.service). Phase 203-03 unified everything onto :18789.
- * Phase 203-09 splits it again because the Phase 202 dashboard (kept by
- * INV-203-09 contract) lives on the Next.js subapp and would otherwise be
- * shadowed by the gateway. Phase 203-10 adds the `/plugins/openclawos`
- * rewrite for the gateway path so the gateway's plugin URL match succeeds.
+ * Phase 231 retirement — Liv AI legacy chat-surface routing removed.
+ * Previously this constant emitted four handle blocks routing the
+ * /liv-ai-app/* family + plugin-asset matcher to the :18789 gateway plus
+ * a :3010 catch-all. Phase 233 UAT GREEN gated Phase 231: Liv Assistant
+ * (Phase 226-04 + Phase 227) fully replaces the legacy chat surface, so
+ * the three gateway-routed blocks are dead. The surviving block routes
+ * /liv-ai-app/* to the :3010 Next.js dashboard (Phase 202 agents +
+ * settings, Phase 203-10/11 app + icon routes) — still consumed by the
+ * LIVINITY_liv-ai window in window-content.tsx (`LivAiContent`).
  */
-// Phase 203 Hot-fix C addendum 2026-05-24: rewrite target corrected to
-// `/plugins/openclawos{path}` (was `/openclawos{path}`). Plan 203-10 inline
-// comment above already specified the correct intent; the code emitted the
-// wrong path which caused the gateway to serve its stock `/openclawos` root
-// (claw-control UI, `<title>OpenClaw Control</title>`) instead of the plugin's
-// rebranded `/plugins/openclawos` static export (`<title>Liv AI</title>`).
-//
-// Companion `handle /plugins/openclawos*` block proxies Next.js static export
-// asset requests: the export's basePath is `/plugins/openclawos`, so the HTML
-// references `_next/`/asset URLs as `/plugins/openclawos/_next/...`. Browsers
-// would hit that path on the apex host (bruce.livinity.io) which has no other
-// handle for it — the additional handle steers those asset hits to :18789
-// where the plugin's `registerHttpRoute` already serves them.
-// Phase 203 Hot-fix D 2026-05-24 — operator-facing URL rename. The internal
-// gateway plugin path is `/plugins/openclawos` (openclaw's immutable plugin
-// id). Operator sees `/liv-ai-app/liv-ai` instead of the legacy
-// `/liv-ai-app/openclawos` so the URL bar reads "Liv AI" rather than the
-// upstream codename. Both prefixes coexist (back-compat for any persisted
-// bookmark, deep link, or in-flight iframe src) — they rewrite to the same
-// upstream `/plugins/openclawos{path}` so a single gateway-side route serves
-// them both.
-//
-// Ordering note (handle vs handle_path): Caddy evaluates by matcher
-// specificity, NOT source order. The two `handle_path` blocks are disjoint
-// (different external prefix matchers), so emit order is purely cosmetic
-// — putting `/liv-ai-app/liv-ai` first reads top-to-bottom matching what
-// operators type into the URL bar.
-// Phase 218 T1 follow-up — `handle_path` in Caddy v2 only accepts a SINGLE
-// path matcher. The original two-arg form (`handle_path /a /a/* { ... }`)
-// silently never reached production because the static install.sh Caddyfile
-// was never overwritten by livinityd's dynamic regen path. Phase 218 T1+T5
-// made the regen actually deploy, surfacing the parse error
-//   `wrong argument count or unexpected line ending after '/liv-ai-app/liv-ai/*'`
-// Fix: switch to a named `path` matcher (which DOES accept multiple values)
-// + `handle` + an explicit `uri strip_prefix` to recreate handle_path's
-// prefix-stripping behavior.
-const LIV_AI_APP_HANDLE = `\t@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*
-\thandle @livAiLivAi {
-\t\turi strip_prefix /liv-ai-app/liv-ai
-\t\trewrite * /plugins/openclawos{path}
-\t\treverse_proxy 127.0.0.1:18789 {
-${WS_TRANSPORT_BODY}
-\t}
-\t}
-\t@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*
-\thandle @livAiOpenclawos {
-\t\turi strip_prefix /liv-ai-app/openclawos
-\t\trewrite * /plugins/openclawos{path}
-\t\treverse_proxy 127.0.0.1:18789 {
-${WS_TRANSPORT_BODY}
-\t}
-\t}
-\t@openclawosPluginAssets path /plugins/openclawos /plugins/openclawos/*
-\thandle @openclawosPluginAssets {
-\t\treverse_proxy 127.0.0.1:18789 {
-${WS_TRANSPORT_BODY}
-\t}
-\t}
-\t@livaiSubapp path /liv-ai-app /liv-ai-app/*
+const LIV_AI_APP_HANDLE = `\t@livaiSubapp path /liv-ai-app /liv-ai-app/*
 \thandle @livaiSubapp {
 \t\treverse_proxy 127.0.0.1:3010 {
 ${WS_TRANSPORT_BODY}
 \t}
 \t}`
 
-/**
- * Phase 203-05 (D-203-12 / INV-203-10) — `/openclawos/handshake` is the
- * outer-auth bridge: parent UI (LIVINITY_SESSION JWT cookie) POSTs here, and
- * livinityd on :8080 mints a 5-minute Ed25519 openclaw device token that the
- * iframe forwards to the openclaw gateway WebSocket handshake.
- *
- * This handle MUST emit BEFORE `LIV_AI_APP_HANDLE` so Caddy's first-match-wins
- * matcher steers the handshake POST to livinityd (:8080) instead of the
- * gateway (:18789). The gateway has no idea what LIVINITY_SESSION means; only
- * livinityd can verify it.
- *
- * INV-203-08 PASS — this is the ONLY second routing surface added in Phase 203.
- * Apex + subdomain + every other path stays unchanged.
- */
-const OPENCLAWOS_HANDSHAKE_HANDLE = `\thandle /openclawos/handshake {
-\t\treverse_proxy 127.0.0.1:8080 {
-${WS_TRANSPORT_BODY}
-\t}
-\t}`
+// Phase 231 retirement — legacy handshake-bridge handle constant removed
+// (was the outer-auth bridge Phase 203-05 D-203-12). Per DISCOVERY R17 the
+// Express mount on :8080 still exists inside livinityd boot wire-up
+// (KEEP_SCOPE_EXPANSION) but receives zero traffic post-deploy since this
+// handle is no longer emitted into the Caddyfile.
 
 /**
  * Phase 232 — Livinity brand overlay static file handler.
@@ -415,10 +315,11 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 
 	if (!config.mainDomain) {
 		// No domain configured — minimal :80 fallback. Multi-user / subdomain
-		// routing requires a domain. Liv AI claw-gateway handle still goes
-		// ABOVE the catch-all so dev/IP-only operators can also reach :18789.
+		// routing requires a domain. Phase 231 retirement — legacy openclaw
+		// handshake bridge removed; Liv AI subapp (Next.js :3010 dashboard)
+		// + Liv Assistant (Phase 226-04 /liv handle) are the surviving Liv
+		// surfaces above the catch-all.
 		blocks.push(`:80 {
-${OPENCLAWOS_HANDSHAKE_HANDLE}
 ${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
@@ -447,11 +348,11 @@ ${WS_TRANSPORT_BODY}
 	// behavior is app-specific and should be left to the app itself.
 	const apexCacheHeader = tunnel ? `\theader Cache-Control "no-store, must-revalidate"\n` : ''
 
-	// Main domain block — openclaw handshake bridge first (Phase 203-05),
-	// then Liv AI subapp handle, then livinityd catch-all.
+	// Main domain block — Phase 231 retirement: legacy openclaw handshake
+	// bridge removed; Liv AI Next.js subapp (LIV_AI_APP_HANDLE) + Liv
+	// Assistant (Phase 226-04) handles emit above the livinityd catch-all.
 	blocks.push(`${prefix}${config.mainDomain} {
-${apexCacheHeader}${OPENCLAWOS_HANDSHAKE_HANDLE}
-${LIV_AI_APP_HANDLE}
+${apexCacheHeader}${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 	handle {
@@ -480,7 +381,6 @@ ${WS_TRANSPORT_BODY}
 		const fullDomain = `${prefix}${host}`
 		if (multiUser) {
 			blocks.push(`${fullDomain} {
-${OPENCLAWOS_HANDSHAKE_HANDLE}
 ${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
