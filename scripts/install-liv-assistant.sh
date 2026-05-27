@@ -782,7 +782,12 @@ fi
 
 # ---------------------------------------------------------------------------
 # Phase 232: install branding assets to /etc/liv-assistant/branding/
-# Repo source: caddy/branding/{livinity-overlay.css,favicon.svg,manifest.json}
+# Repo source: caddy/branding/{livinity-overlay.css,favicon.svg,manifest.json,
+#              favicon-light.svg,favicon-dark.svg}
+# Phase 238.9 — added favicon-light.svg + favicon-dark.svg so the .liv-brand-
+#   donut CSS rule can swap between them via @media (prefers-color-scheme).
+#   CSS bg-image SVGs are loaded sandboxed, so @media-inside-SVG doesn't
+#   work; we ship two separate files instead.
 # Destination: /etc/liv-assistant/branding/ (served by Caddy via livinityd-
 # emitted /liv/branding/* handler — see livos/packages/livinityd/source/
 # modules/domain/caddy.ts LIV_BRANDING_HANDLE constant).
@@ -797,7 +802,7 @@ BRANDING_SRC="${SCRIPT_DIR}/../caddy/branding"
 if [[ ! -d "${BRANDING_SRC}" ]]; then
   log "WARN: ${BRANDING_SRC} not found; skipping Phase 232 branding overlay install"
 else
-  for asset in livinity-overlay.css favicon.svg manifest.json; do
+  for asset in livinity-overlay.css favicon.svg manifest.json favicon-light.svg favicon-dark.svg; do
     SRC="${BRANDING_SRC}/${asset}"
     DST="${BRANDING_DST}/${asset}"
     if [[ ! -f "${SRC}" ]]; then
