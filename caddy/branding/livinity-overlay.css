@@ -131,7 +131,11 @@ button[type='submit'],
  * Result: sidebar shows the EXACT same donut shape + color behavior as
  * the livinity.io website favicon — black donut on light, white donut on dark.
  */
-/* Phase 238.9 — CSS background-image SVGs are loaded by browsers in a
+/* Phase 238.10 — Cache-bust applied via install-script `?v=238_10` query in
+ * the index.html CSS link so browser/Cloudflare refetch this file every
+ * time content changes. Bump version above on any meaningful change.
+ *
+ * Phase 238.9 — CSS background-image SVGs are loaded by browsers in a
  * sandboxed "secure" context that DISABLES the SVG's internal
  * @media (prefers-color-scheme) rules. (This works only when SVG is
  * referenced via <img> or <link rel="icon">.) Workaround: ship TWO
@@ -149,6 +153,11 @@ button[type='submit'],
 	background-size: contain !important;
 	background-position: center !important;
 	background-repeat: no-repeat !important;
+	/* Defensive sizing — Tailwind's `size-32px` class should already provide
+	 * width+height, but ensure a sensible minimum in case the utility class
+	 * doesn't resolve (UnoCSS vs Tailwind v3 vs v4 syntax). */
+	min-width: 32px !important;
+	min-height: 32px !important;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -164,7 +173,15 @@ button[type='submit'],
 	background-image: url('/liv/branding/favicon-dark.svg') !important;
 }
 
-/* Hide the inline SVG inside the wrapper — the bg-image is now the logo. */
-.liv-brand-donut > svg {
+[data-theme='light'] .liv-brand-donut {
+	background-image: url('/liv/branding/favicon-light.svg') !important;
+}
+
+/* Hide ALL nested SVG inside the wrapper (not just direct children) — the
+ * bg-image is now the logo. Robust against React-introduced wrapper spans. */
+.liv-brand-donut svg,
+.liv-brand-donut > svg,
+.liv-brand-donut > * > svg {
 	display: none !important;
+	visibility: hidden !important;
 }

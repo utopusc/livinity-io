@@ -576,12 +576,17 @@ fi
 # ---------------------------------------------------------------------------
 INDEX_HTML="${REBRAND_TARGET}/index.html"
 if [[ -f "${INDEX_HTML}" ]]; then
-  # Substitution 1 — CSS link injection (skip if already present)
-  if grep -q 'livinity-overlay.css' "${INDEX_HTML}"; then
-    log "index.html overlay: CSS link already injected; skipping"
+  # Substitution 1 — CSS link injection (with Phase 238.10 cache-bust query
+  # to force browser/Cloudflare revalidation when CSS content changes).
+  # Cache-bust marker: ?v=238_10. Bump on every CSS content change.
+  if grep -q 'livinity-overlay.css?v=238_10' "${INDEX_HTML}"; then
+    log "index.html overlay: CSS link with cache-bust v238_10 already injected; skipping"
+  elif grep -q 'livinity-overlay.css' "${INDEX_HTML}"; then
+    log "index.html overlay: bumping cache-bust on existing CSS link → v238_10"
+    sed -E -i 's|livinity-overlay\.css(\?v=[A-Za-z0-9_-]+)?|livinity-overlay.css?v=238_10|g' "${INDEX_HTML}"
   else
-    log "index.html overlay: injecting livinity-overlay.css <link> before </head>"
-    sed -i 's|</head>|    <link rel="stylesheet" href="/liv/branding/livinity-overlay.css" />\n  </head>|' "${INDEX_HTML}"
+    log "index.html overlay: injecting livinity-overlay.css <link> with cache-bust before </head>"
+    sed -i 's|</head>|    <link rel="stylesheet" href="/liv/branding/livinity-overlay.css?v=238_10" />\n  </head>|' "${INDEX_HTML}"
     if grep -q 'livinity-overlay.css' "${INDEX_HTML}"; then
       log "index.html overlay: CSS link injection verified"
     else
