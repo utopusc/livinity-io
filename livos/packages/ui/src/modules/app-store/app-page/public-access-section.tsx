@@ -112,8 +112,18 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 	const isConfigured = !!existingSubdomain
 	const isEnabled = existingSubdomain?.enabled || false
 
-	// Phase 219 T5 — hyphen-pattern preview + DNS label validation.
-	const slugSuffix = userSlug && mainDomain ? `-${userSlug}.${mainDomain}` : mainDomain ? `.${mainDomain}` : ''
+	// Phase 219 T5 + post-deploy 2026-05-26 fix — hyphen-pattern preview.
+	// Operator quote 2026-05-26: "files-bruce.bruce.livinity.io Burasi hala
+	// yanlis gosteriyor!". The stored `mainDomain` already includes the user
+	// prefix (e.g. `bruce.livinity.io`), so naively concatenating
+	// `-${userSlug}.${mainDomain}` produced `-bruce.bruce.livinity.io`. Strip
+	// the leading `${userSlug}.` from mainDomain to get the canonical base
+	// root (`livinity.io`) BEFORE composing the hyphen-pattern label.
+	let baseRoot = mainDomain ?? ''
+	if (userSlug && baseRoot.toLowerCase().startsWith(`${userSlug.toLowerCase()}.`)) {
+		baseRoot = baseRoot.slice(userSlug.length + 1)
+	}
+	const slugSuffix = userSlug && baseRoot ? `-${userSlug}.${baseRoot}` : mainDomain ? `.${mainDomain}` : ''
 	const previewHost = subdomain.trim() ? `${subdomain.trim().toLowerCase()}${slugSuffix}` : null
 
 	const handleSave = () => {
@@ -209,8 +219,8 @@ export function PublicAccessSection({appId, appName, appPort}: PublicAccessSecti
 						{userSlug ? (
 							<>
 								The host is minted on Server5 as{' '}
-								<span className='font-mono'>&lt;slug&gt;-{userSlug}.{mainDomain}</span> — wildcard{' '}
-								<span className='font-mono'>*.{mainDomain}</span> A record covers every slug.
+								<span className='font-mono'>&lt;slug&gt;-{userSlug}.{baseRoot}</span> — wildcard{' '}
+								<span className='font-mono'>*.{baseRoot}</span> A record covers every slug.
 							</>
 						) : (
 							<>
