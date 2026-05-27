@@ -51,7 +51,7 @@ vi.mock('@/providers/apps', () => ({
 		// so operator browsers that cached the pre-Plan-234-02 404 refetch
 		// the now-present SVG. Mock mirrors production exactly.
 		// Phase 238.5 — bumped to v238_5 (Livinity-themed SVG swap).
-		'LIVINITY_liv-assistant': {icon: '/figma-exports/dock-ai-chat.svg?v=238_5', systemAppTo: '/liv-assistant'},
+		'LIVINITY_liv-assistant': {icon: '/figma-exports/dock-ai-chat.svg?v=238_7', systemAppTo: '/liv-assistant'},
 	},
 	useApps: () => ({userAppsKeyed: {}}),
 }))
@@ -189,7 +189,7 @@ describe('Dock — Liv Assistant entry (Phase 227-02)', () => {
 			'LIVINITY_liv-assistant',
 			'/liv-assistant',
 			'Liv AI',
-			'/figma-exports/dock-ai-chat.svg?v=238_5',
+			'/figma-exports/dock-ai-chat.svg?v=238_7',
 			expect.anything(),
 		)
 	})
