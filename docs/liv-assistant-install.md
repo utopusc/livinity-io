@@ -299,6 +299,45 @@ AionUi tarball (the Phase 234-03 rollback path still applies). LICENSE +
 NOTICE sha256 byte-identity preserved across this phase
 (`a515d5a7...` / `be9e969f...`).
 
+### Step 238.1-C — Footer URL redirect (iOfficeAI/* → livinity.io)
+
+Phase 234-03's `s/AionUi/Liv AI/g` sed literally rewrote vendored AionUi
+footer URLs from `https://github.com/iOfficeAI/AionUi/wiki` into
+`https://github.com/iOfficeAI/Liv AI/wiki` — a literal space breaks the
+URL AND still points at the upstream org. Operator surfaced this 2026-05-27
+evening: 5 footer links (Yardım Dokümantasyonu / Güncelleme Günlüğü /
+Sorun Bildir / Bana Ulaşın / Resmi Web Sitesi) all need to redirect to
+Livinity.
+
+Step 238.1-C extends the install-script with a blanket sed pattern:
+`https://github.com/iOfficeAI/<anything-non-quote>` → `https://livinity.io`.
+Charset intentionally includes a literal space to catch the `Liv AI/wiki`
+broken variant. Idempotent — grep pre/post checks wrapped with
+`set +o pipefail` per Phase 238 hot-fix precedent.
+
+Coverage:
+- `iOfficeAI/Liv AI/wiki` (helpDocumentation, 234-03 collateral)
+- `iOfficeAI/Liv AI` (officialWebsite, contactMe, 234-03 collateral)
+- `iOfficeAI/AionHub` (separate upstream link in index-BBQOKL1b.js)
+
+### KNOWN LIMITATION — Built-in skill names/descriptions
+
+The 24 Built-in skills shown in Liv AI → Settings → Skills tab
+(`aionui-skills`, `aionui-webui-setup`, `openclaw-setup`, `star-office-helper`,
+etc.) have NAMES and DESCRIPTIONS baked into the 94MB AionUi Bun ELF binary
+at `/opt/liv-assistant/aionui-web-2.1.4/aionui-web/aionui-web` (BuildID
+`a9a0d18d...`). Phase 234-03's design rule deliberately excludes the binary
+from sed-rebrand (`234-01-INVESTIGATION.md` Section F.5 — sed-edited ELF
+would corrupt). Rebranding these requires either:
+
+1. **Upstream fork** — out of scope per D-V42-SACRED (vendor-and-wrap only)
+2. **JS-injection via Caddy `sub`/`replace`** — feasible but complex; would
+   walk the iframe DOM at runtime to rewrite skill name text nodes. Phase
+   232's `livinity-overlay.css` is the precedent for CSS-side injection.
+3. **Hide the Skills tab via CSS** — operator loses access to the feature
+
+Future phase if operator requirement persists.
+
 ## Related phases
 
 - **222** (spike): `.planning/phases/222-aionui-spike/222-SPIKE.md` — feasibility verdict.
