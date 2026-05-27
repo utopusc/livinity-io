@@ -12,6 +12,7 @@
 - ✅ **v35.0 Design System Unification (UI/UX)** — Phases 115-121 (shipped 2026-05-15; 77 commits, sacred SHA preserved 77/77, AC#3 cross-surface parity 92.5%, operator UAT pending) — see [milestones/v35.0-ROADMAP.md](milestones/v35.0-ROADMAP.md)
 - 🟢 **v36.0 LivOS Design Port** — Phases 122-129 (active 2026-05-15; 8-step additive port of the Livinity Design System from claude.ai/design into `livos/packages/ui/` — component-by-component, screenshot per step). Master plan: [v36-DESIGN-PORT-MASTER.md](v36-DESIGN-PORT-MASTER.md). Superseded the old [v36-DRAFT.md](v36-DRAFT.md) (segment-dock direction rejected; see [feedback-v36-no-bold-redesigns](../../../.claude/projects/.../memory/feedback_v36_no_bold_redesigns.md)).
 - 🟢 **v37.0 Store Reimagining + Plugin Platform** — Phases 148-155 (opened 2026-05-18; LOCKED draft at [v37-DRAFT.md](v37-DRAFT.md)). Redesigns `/store` with 5 sections (Apps/WebApp/Native/AI/Plugin), reuses WebApp window infra for native Linux apps, AI section bundles MCP+Agents+GSD, plugin runtime supports HOT-RELOAD. 7-11 days. Operator-signed plugins for v37; third-party submission deferred to v38.
+- 🟢 **v43.0 Liv AI Deeper Integration + UI Polish** — Phases 238-245 (opened 2026-05-27; 8 phases, 8-11 days est). Completes AionUi → Liv rebrand (logo + case-insensitive text + .md docs), adds onboarding CLI Tools section, auto-registers Liv MCP tools (Luse/docker/shell), adds Local Agents UI install, ships Luse skill set for Claude Code, adds persistent xterm.js terminal panel. Plans 238-{01,02,03} authored 2026-05-27; phases 239-245 plan one-at-a-time. Master: [milestones/v43/PROJECT.md](milestones/v43/PROJECT.md), per-phase plan: [milestones/v43/ROADMAP.md](milestones/v43/ROADMAP.md).
 - 🟢 **v42.0 Liv Assistant (AionUi-based replacement for OpenClawOS)** — Phases 222-237 (opened 2026-05-27; spike 222 PASSED `b2be397f` → vendor-and-wrap strategy). Replaces openclaw + claw-client chat surface with vendored AionUi tarball, iframe-embedded in LivOS shell, Claude Code subscription via local CLI. **As of 2026-05-27 evening: 16 ✅ shipped (222/223/224/225/226/227/228/229/230/231/232/233/234/235/236/237).** Phase 234 polish (auth bypass + 'Liv AI' brand) + Phase 235 hot-fix (path-rewrite for quoted `/api/`) + Phase 236 hot-fix (Caddy referer-gated catch-all + Claude Code default agent) + Phase 237 hot-fix (split @liv_subresource into @liv_ws unconditional + @liv_api_subresource referer-gated; RFC 6455 WS handshake fix) shipped same-day in response to operator live-browser testing. Master: [milestones/v42/PROJECT.md](milestones/v42/PROJECT.md), per-phase plan: [milestones/v42/ROADMAP.md](milestones/v42/ROADMAP.md).
 - ⏸ **(deferred) Backup & Restore** — paused, 8 phases / 47 BAK-* reqs defined in [milestones/v30.0-DEFINED/](milestones/v30.0-DEFINED/) (resumes as future slot e.g. v34+)
 
@@ -3536,6 +3537,185 @@ Plans:
 **Reversibility:** Path-rewrite sed is purely cosmetic-on-disk + idempotent. Full revert: `git revert <235-commits>` + re-deploy. Cache-bust query has zero functional impact when reverted (icon still serves).
 
 **Outcome:** Operator's live browser test recovered. Hard-reload (Ctrl+F5) once and Liv AI iframe loads cleanly into chat surface (no login form, dock tile visible, all AionUi /api/* and /ws requests resolve through the `/liv` Caddy handler to backend).
+
+---
+
+### Phase 245: v43 E2E UAT + milestone close — 🟡 PLANNED 2026-05-27 (0/1 plans)
+
+**Goal:** Operator walks every Phase 238-244 deliverable; UAT-CHECKLIST.md sections per phase; fix any FAIL; archive milestone to `.planning/milestones/v43/` per v42 precedent.
+
+**Plans:** 0/1 plans complete
+
+Plans:
+- [ ] 245-PLAN.md — TBD (final operator walk + close)
+
+**UAT:** every Phase 238-244 box GREEN → milestone archived → v44 unblocked.
+
+---
+
+### Phase 244: MD docs Aion → Liv text sed pass — 🟡 PLANNED 2026-05-27 (0/1 plans)
+
+**Goal:** sed-replace "Aion" → "Liv" (and case variants per Phase 238 pattern) in all .md files under `/opt/liv-assistant/current/`. Idempotent install-script extension. Excludes LICENSE/NOTICE/UPSTREAM by structural path scope. Mirrors Phase 234-03 pattern but `.md` include filter.
+
+**Direction:**
+- Extend `scripts/install-liv-assistant.sh` with new step scoped to `${CURRENT_LINK}/**/*.md`
+- Exclude any path containing LICENSE/NOTICE/UPSTREAM (defensive grep + first-10-line attribution gate)
+- Idempotent (Phase 234-03 grep-pre-check pattern)
+- Deploy via `bash /opt/livos/update.sh`; verify zero `Aion` references in downloaded help .md content under `/opt/liv-assistant/current/` post-deploy
+
+**Plans:** 0/1 plans complete
+
+Plans:
+- [ ] 244-PLAN.md — TBD (single-file extension to install-liv-assistant.sh + Mini PC deploy)
+
+**UAT:** operator opens Liv AI help docs → zero "Aion" references in user-facing copy.
+
+---
+
+### Phase 243: Persistent UI terminal (xterm.js + livinityd PTY backend) — 🟡 PLANNED 2026-05-27 (0/? plans)
+
+**Goal:** Add a persistent terminal panel to the LivOS shell. Browser frontend = xterm.js. Backend = livinityd PTY session manager. Sessions are multi, named, attachable/detachable, survive page reload, only die on operator explicit close.
+
+**Direction:**
+- New livinityd module `pty-sessions/` with `node-pty` or `node-pty-prebuilt-multiarch` (pick during planning)
+- Session metadata in Redis (`livos:pty:session:{id}` HSET name/createdAt/lastAttachAt/cwd)
+- WebSocket upgrade endpoint reusing Phase 226-04 + 237 Caddy pattern
+- JWT auth via Phase 234-04 cookie pattern; PTY spawned as `bruce` (not root)
+- TTL GC: 24h since last attach (admin-visible session list with kill-by-id)
+- Frontend xterm.js panel in LivOS shell dock; new "Terminal" dock entry
+- D-243-NO-ROOT: PTY never spawned as root; reuses bruce user shell
+- D-243-PER-USER-READY: data model includes user_id from day one (single-user v43, multi-user v44+)
+- D-243-FEATURE-FLAG: `livos:v43:terminal_panel` Redis flag (default off, operator-enabled in dock context menu)
+
+**Plan count estimate:** 4-6 plans (investigation + livinityd PTY module + WS endpoint + xterm.js frontend + dock integration + Mini PC deploy + UAT)
+
+**Plans:** 0/? plans complete
+
+Plans:
+- [ ] 243-PLAN.md series — TBD (planned individually after Phase 238)
+
+**UAT:** operator clicks Terminal dock entry → xterm session starts → operator types commands → reloads page → terminal still attached + history preserved. Operator explicit "Close" kills session; idle 24h auto-kill.
+
+---
+
+### Phase 242: Luse skill set for Claude Code (.claude/skills/luse/) — 🟡 PLANNED 2026-05-27 (0/1 plans)
+
+**Goal:** Provide a Claude Code skill set for Luse computer-use so operators using the Claude Code agent inside Liv AI can issue natural-language click/type/screenshot/key/scroll commands.
+
+**Direction:**
+- New directory `.claude/skills/luse/` with `SKILL.md` (high-level intent + when-to-use)
+- Sub-skill markdown files: `click.md`, `type.md`, `screenshot.md`, `key.md`, `scroll.md`
+- Each sub-skill documents inputs/outputs + safety preconditions
+- Docs-only phase — no Mini PC deploy required; ships when the .claude/ files are committed and Claude Code reloads its skill registry
+- D-242-DOCS-ONLY: zero source-tree code changes
+
+**Plans:** 0/1 plans complete
+
+Plans:
+- [ ] 242-PLAN.md — TBD (single-plan docs-only authoring)
+
+**UAT:** operator opens Claude Code agent inside Liv AI → asks "screenshot the desktop" → Claude Code uses the luse skill → screenshot returned.
+
+---
+
+### Phase 241: MCP auto-add Liv tools (Luse / docker / shell) — 🟡 PLANNED 2026-05-27 (0/? plans)
+
+**Goal:** livinityd auto-registers Liv's MCP tools (Luse computer-use, docker, shell) into AionUi's MCP config on liv-assistant first boot. Idempotent (per-tool EXISTS gate + sentinel). Never overwrites operator-customized entries.
+
+**Direction:**
+- Investigation step (similar to Phase 238-02): SSH probe AionUi MCP config storage path + write API
+- New livinityd module `mcp-registrar/` that runs on liv-assistant first-boot detection (sentinel in Redis `livos:v43:mcp_seeded`)
+- Per-tool entry: Luse / docker / shell with stable IDs the operator can detect-and-skip
+- Idempotency: EXISTS check before write; never overwrite operator-set entries
+- D-241-IDEMPOTENT: re-running first-boot path = no-op
+- D-241-OPERATOR-SAFE: operator-customized MCP config entries preserved across livinityd restarts
+
+**Plan count estimate:** 3-4 plans (investigation + livinityd module + Mini PC deploy + UAT)
+
+**Plans:** 0/? plans complete
+
+Plans:
+- [ ] 241-PLAN.md series — TBD (planned after Phase 238)
+
+**UAT:** fresh liv-assistant boot → operator opens Liv AI MCP config → Luse / docker / shell auto-registered. Operator edits one → restarts liv-assistant → operator edit preserved.
+
+---
+
+### Phase 240: Local Agents — install-from-UI — 🟡 PLANNED 2026-05-27 (0/? plans)
+
+**Goal:** Extend AionUi's Local Agents tab inside Liv AI with an "Available to Install" section for undetected CLIs + one-click install + auth flow.
+
+**Direction:**
+- Depends on Phase 241 — install scripts injected via MCP tool registered by livinityd
+- OR alternative: AionUi backend extension to expose an "install agent" API that livinityd serves
+- UI: Local Agents tab grows "Available to Install" subsection (Claude Code / OpenCode / Gemini / OpenClaw / Aion CLI rows with Install + Auth buttons)
+- Install action calls livinityd-served install script (per-agent recipe)
+- Auth flow: launches per-agent auth in detached process; reports back via Redis status key
+- Reuses `device_audit_log` for install + auth events
+- D-240-DEPENDS-241: scoping decision lives in Phase 241; Phase 240 picks up whichever surface 241 exposes
+
+**Plan count estimate:** 3-5 plans (planned after 241 ships and surfaces its install/auth API)
+
+**Plans:** 0/? plans complete
+
+Plans:
+- [ ] 240-PLAN.md series — TBD
+
+**UAT:** operator opens Local Agents tab → undetected CLI shows Install button → click → install runs → Auth button appears → click → auth flow completes → agent shows as detected.
+
+---
+
+### Phase 239: Onboarding "CLI Tools" section + remove "AI" section — 🟡 PLANNED 2026-05-27 (0/? plans)
+
+**Goal:** Onboarding wizard gains a new "CLI Tools" step that lists supported CLIs (Claude Code, OpenCode, Gemini, OpenClaw, Aion CLI) with one-click install via livinityd. Existing "AI" section removed (replaced by CLI Tools).
+
+**Direction:**
+- Onboarding wizard source: `livos/packages/ui/` (file path investigated during planning)
+- New "CLI Tools" step renders a card grid of supported CLIs with Install buttons
+- Install buttons hit livinityd install endpoint (reused or extended from Phase 240/241 surface)
+- Remove existing "AI" section from wizard flow
+- D-239-FEATURE-FLAG: `livos:v43:onboarding_cli_section` Redis flag (default off until UAT green)
+- D-239-NO-AI-SECTION-DATA-LOSS: removing AI section preserves any operator data captured there (none expected, but doc-verify in planning)
+
+**Plan count estimate:** 2-3 plans (UI rebuild + livinityd install bridge + Mini PC deploy + UAT)
+
+**Plans:** 0/? plans complete
+
+Plans:
+- [ ] 239-PLAN.md series — TBD (planned after Phase 238)
+
+**UAT:** fresh onboarding walk → "CLI Tools" step appears → operator installs Claude Code via one click → install succeeds → CLI detected → onboarding completes.
+
+---
+
+### Phase 238: Complete AionUi visual + textual rebrand (logo + case-insensitive text) — 🟡 PLANNED 2026-05-27 (0/3 plans)
+
+**Goal:** Close v42 Phase 234-03's residual gap. Overlay a Livinity logo SVG onto AionUi's logo asset(s) during install-script run; extend Phase 234-03's case-sensitive sed pass with a case-insensitive word-boundary `Aion` / `AION` / `aion` pattern. HİÇ BİR Aion yazısı kalmaz post-deploy.
+
+**Direction:**
+- Plan 238-02: investigation — SSH probe `/opt/liv-assistant/current/static/` for all `*.svg`/`*.png` matching `logo|favicon|brand|aion` + grep all remaining `Aion*` text occurrences post-Phase-234 → `238-INVESTIGATION.md`
+- Plan 238-01: repo-side — add Livinity logo asset to `caddy/branding/` (reuse existing pattern from Phase 232); extend `scripts/install-liv-assistant.sh` with (a) logo asset overlay step (cp into `/opt/liv-assistant/current/static/assets/`) (b) case-insensitive word-boundary sed pass extending Phase 234-03. Both idempotent.
+- Plan 238-03: Mini PC deploy via `bash /opt/livos/update.sh` + external curl probe: HTML/JS contains NO `Aion` / `AION` / `aion` case-variants; external curl serves Livinity logo at expected paths. Auto-approved per chain protocol.
+
+**Plans:** 0/3 plans complete
+
+Plans:
+- [ ] 238-01-PLAN.md — Repo-side logo asset + install-script extension (autonomous, ~2-3 tasks)
+- [ ] 238-02-PLAN.md — Investigation: SSH probe logo asset paths + remaining Aion text occurrences (autonomous, 1 task)
+- [ ] 238-03-PLAN.md — Mini PC deploy + verify + auto-approve checkpoint (3 tasks, has checkpoint:human-verify)
+
+**Execution order:** 238-02 (investigation) → 238-01 (repo-side, uses investigation findings) → 238-03 (deploy).
+
+**Invariants:**
+- Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED
+- D-V43-APACHE-NOTICE: LICENSE + NOTICE byte-identical PRE/POST
+- D-V43-AUTH-BYPASS-PRESERVE: Phase 234-04 `/liv-login` 302 + `Set-Cookie: aionui-session` non-regression
+- D-V43-MINI-PC-ONLY: Mini PC `bruce@10.69.31.68` only; Server4/Server5 untouched
+- D-V43-SED-EXTEND-234-03: New sed step follows Phase 234-03 idempotency pattern (grep-pre-check + conditional + post-grep verify)
+- Phase 234 `Liv AI` strings still present 3+ in external `/liv/` HTML body (non-regression)
+- Phase 235 path-rewrite + Phase 237 WS routing non-regressed (curl probes in deploy log)
+
+**UAT (auto-approved per chain):** external `curl https://bruce.livinity.io/liv/` HTML body shows Livinity logo URL + zero Aion variants in text.
 
 ---
 

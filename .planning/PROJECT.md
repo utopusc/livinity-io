@@ -340,6 +340,39 @@ v42's scope was the OpenClawOS → AionUi Liv Assistant swap (Phases 222-228 + 2
 - [x] FR-BROKER-E2-01..02 → Phase 62 (Settings API Keys CRUD + filter dropdown + admin filter chip)
 - [⚠] FR-VERIFY-V30-01..08 → Phase 63 (R1-R3.11 live-verified ad-hoc; formal walkthrough waived via --accept-debt; lifted into v31 P64)
 
+## Current Milestone: v43 — Liv AI Deeper Integration + UI Polish (ACTIVE — opened 2026-05-27)
+
+**Goal:** Take the v42 AionUi-based Liv Assistant from "live and working" to "feels like a Livinity-native product end-to-end" — every visible Aion string + asset replaced with Liv equivalents, onboarding teaches the operator about the CLI agents Liv ships with, Liv's tools register into the MCP layer automatically, the Local Agents tab can install missing agents from the UI, a persistent xterm-backed terminal lives inside the LivOS shell, and a Luse skill set is available to Claude Code agents running inside Liv AI.
+
+**Estimated effort:** 8-11 days wall-clock (8 phases, P238-P245).
+
+**Phase outline:**
+
+- **P238 — Complete AionUi rebrand (logo + text)** — Livinity logo SVG overlay during install-script + case-insensitive `Aion` / `AION` / `aion` (word-boundary) sed extending Phase 234-03. **Plans 238-{01,02,03} authored 2026-05-27.**
+- **P239 — Onboarding "CLI Tools" section** — Wizard step listing Claude Code / OpenCode / Gemini / OpenClaw / Aion CLI with one-click install. Removes old "AI" section.
+- **P240 — Local Agents — install-from-UI** — AionUi Local Agents tab gains "Available to Install" + one-click install + auth flow.
+- **P241 — MCP auto-add Liv tools** — livinityd registers Luse / docker / shell into AionUi's MCP config on liv-assistant first boot, idempotently.
+- **P242 — Luse skill set for Claude Code** — `.claude/skills/luse/` with SKILL.md + click/type/screenshot/key/scroll sub-skills.
+- **P243 — Persistent UI terminal** — xterm.js panel + livinityd PTY backend, multi-session, attachable/detachable, survives page reload.
+- **P244 — MD docs Aion → Liv text** — sed-replace in `*.md` under `/opt/liv-assistant/current/`, excludes LICENSE/NOTICE/UPSTREAM.
+- **P245 — v43 E2E UAT + milestone close** — Operator walks every Phase 238-244 deliverable; milestone archived.
+
+**Locked invariants:**
+- **D-V43-SACRED:** `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED.
+- **D-V43-MINI-PC-ONLY:** Per hard rule 2026-04-27, Server4 + Server5 receive zero v43 commits.
+- **D-V43-CADDY-REUSE-226-04:** Caddy edits go through `caddy.ts` pattern.
+- **D-V43-SED-EXTEND-234-03:** New sed passes follow Phase 234-03 idempotency pattern.
+- **D-V43-AUTH-BYPASS-PRESERVE:** Phase 234-04 `/liv-login` continues to work every deploy.
+- **D-V43-APACHE-NOTICE:** LICENSE + NOTICE byte-identical PRE/POST every deploy.
+- **D-V43-REVERSIBLE:** User-visible changes behind Redis feature flags.
+- **D-V43-NO-UPSTREAM-FORK:** No AionUi fork. All changes via install script / livinityd / LivOS UI / `.claude/skills/`.
+
+**Master:** [milestones/v43/PROJECT.md](milestones/v43/PROJECT.md) · **ROADMAP:** [milestones/v43/ROADMAP.md](milestones/v43/ROADMAP.md).
+
+**Next action:** `/gsd-execute-phase 238` (plans 238-{01,02,03} authored 2026-05-27 — investigation + repo-side logo+sed + Mini PC deploy).
+
+---
+
 ## Current Milestone: v41 — Admin Panel + Store Hardening + Subdomain Reliability (ACTIVE — opened 2026-05-26)
 
 **Goal:** Ship a Vercel-hosted admin panel at `livinity.io/admin`, lock the public store down to admin-only, end the `n8n-bruce` vs `n8n.bruce` subdomain chaos with a single canonical format, make MCP/app install one-click reliable from the store, and switch openclaw's Liv AI chat from nemotron-9B to Anthropic Claude Haiku 4.5 via the existing `claude-cli` reuse path. Last shipped: Phase 208 LuseMCP toolchain audit + 208-11/11b perf passes on Mini PC SHA `035b2937` (operator UAT pending).
