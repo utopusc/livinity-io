@@ -125,6 +125,19 @@ export const systemApps = [
 		systemApp: true,
 		systemAppTo: '/liv-ai',
 	},
+	// Phase 227-02 — LivOS shell entry for the Liv Assistant iframe window.
+	// Clicking the dock icon opens window-content's LIVINITY_liv-assistant
+	// branch which lazy-loads LivAssistantWindow (Plan 227-01), iframing the
+	// Phase 226 Caddy handle at /liv/. Reuses the existing liv-ai.svg figma
+	// export so we don't have to ship a new asset in this phase (icon swap
+	// can land in Phase 232 brand overlay).
+	{
+		id: 'LIVINITY_liv-assistant',
+		name: 'Liv Assistant',
+		icon: '/figma-exports/liv-ai.svg',
+		systemApp: true,
+		systemAppTo: '/liv-assistant',
+	},
 ] as const satisfies readonly AppT[]
 
 export const systemAppsKeyed = keyBy(systemApps, 'id')
