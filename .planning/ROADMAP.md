@@ -3700,6 +3700,20 @@ Plans:
 
 ---
 
+### Phase 238.1: AionUi footer URL redirect — github.com/iOfficeAI/* → https://livinity.io — ✅ SHIPPED 2026-05-27 (1/1 plan, 12/12 SCs GREEN)
+
+**Goal:** Hot-fix continuation of Phase 238. Phase 234-03's `s/AionUi/Liv AI/g` sed inserted literal SPACE into AionUi footer URLs (`iOfficeAI/AionUi/wiki` → `iOfficeAI/Liv AI/wiki`) — broken AND still pointing at upstream org. Redirect ALL `github.com/iOfficeAI/*` URLs (footer + AionHub) to `https://livinity.io` via install-liv-assistant.sh Step 238.1-C.
+
+**Plans:** 1/1 plan complete ✅
+
+- [x] 238.1-01-PLAN.md — Single sed pass in install-script + KNOWN LIMITATION docs — SHIPPED 2026-05-27 (`515149b2`)
+
+**Outcome:** PRE 7 files → POST 0 iOfficeAI/* URLs; POST 7 livinity.io URLs (1:1 substitution). External `curl /liv/assets/SystemSettings-*.js` body shows 0 iOfficeAI + 1 livinity.io (proof). Phase 238 word-boundary Aion non-regressed (=0). Phase 237 /liv/ws → 101. Phase 234-04 /liv-login → 302 + Set-Cookie. LICENSE+NOTICE sha256 byte-identical (D-V43-APACHE-NOTICE). Sacred SHA UNCHANGED 4-snapshot agreement. Auto-approved per chain.
+
+**KNOWN LIMITATION (documented, NOT fixed):** Built-in skill names + descriptions (`aionui-skills`, `aionui-webui-setup`, `'Access the AionUI Skills registry...'`) are baked into the 94MB AionUi Bun ELF binary (BuildID `a9a0d18d...`). Phase 234-03 deliberately excludes the binary. Future phase if operator requires: JS-injection via Caddy `sub` directive (DOM-walks iframe to rewrite skill text nodes at runtime) OR upstream fork (out of scope per D-V42-SACRED).
+
+---
+
 ### Phase 238: Complete AionUi visual + textual rebrand (logo + case-insensitive text) — ✅ SHIPPED 2026-05-27 (3/3 plans, 11/11 applicable SCs GREEN)
 
 **Goal:** Close v42 Phase 234-03's residual gap. Overlay a Livinity logo SVG onto AionUi's logo asset(s) during install-script run; extend Phase 234-03's case-sensitive sed pass with a case-insensitive word-boundary `Aion` / `AION` / `aion` pattern. HİÇ BİR Aion yazısı kalmaz post-deploy.
