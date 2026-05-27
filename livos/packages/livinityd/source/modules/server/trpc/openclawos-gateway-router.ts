@@ -440,6 +440,64 @@ export function createOpenclawosGatewayRouter(
 				}
 			}),
 		}),
+
+		// ── config: raw openclaw.json read/write (Phase 220 T1) ─────────────
+		// Operator quote 2026-05-26: "MCP Servers kismina Config dosyasini
+		// editleme bolumude koy". Surfaces the canonical /opt/livos/data/
+		// openclaw/openclaw.json content + a Save that goes through the same
+		// atomic OpenclawConfigStore.patch primitive every mutation already
+		// uses. JSON-validate before write so a malformed paste cannot brick
+		// the gateway.
+		config: router({
+			read: adminProcedure.query(async () => {
+				try {
+					const cfg = deps.configStore.read()
+					return {
+						json: JSON.stringify(cfg, null, 2),
+						readAt: new Date().toISOString(),
+					}
+				} catch (err) {
+					throw mapConfigError(err)
+				}
+			}),
+
+			write: adminProcedure
+				.input(z.object({json: z.string().max(500_000)}))
+				.mutation(async ({input}) => {
+					let parsed: unknown
+					try {
+						parsed = JSON.parse(input.json)
+					} catch (err) {
+						throw new TRPCError({
+							code: 'BAD_REQUEST',
+							message: `OPENCLAW_CONFIG_INVALID_JSON: ${(err as Error).message}`,
+						})
+					}
+					if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+						throw new TRPCError({
+							code: 'BAD_REQUEST',
+							message: 'OPENCLAW_CONFIG_NOT_OBJECT',
+						})
+					}
+					try {
+						// Replace-all semantics: every top-level key from the new
+						// JSON wins; keys absent from input are dropped. Matches the
+						// SSH-edit behavior operators are used to.
+						deps.configStore.patch((cfg) => {
+							for (const k of Object.keys(cfg)) {
+								delete (cfg as Record<string, unknown>)[k]
+							}
+							for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+								(cfg as Record<string, unknown>)[k] = v
+							}
+						})
+						deps.logger.info('[openclawos.gateway] config.write applied raw JSON')
+						return {ok: true as const, writtenAt: new Date().toISOString()}
+					} catch (err) {
+						throw mapConfigError(err)
+					}
+				}),
+		}),
 	})
 }
 

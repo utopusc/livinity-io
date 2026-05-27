@@ -207,6 +207,17 @@ export function McpServersTab() {
   const [pendingUrl, setPendingUrl] = useState<string>("");
   const [pendingEnv, setPendingEnv] = useState<string>("");
 
+  // Phase 220 T1 — raw openclaw.json editor state (operator: "MCP Servers
+  // kismina Config dosyasini editleme bolumude koy"). The useCallback
+  // declarations land BELOW the existing `refresh` definition so `saveEditor`
+  // can include `refresh` in its dependency array without a TDZ trip.
+  const [editorOpen, setEditorOpen] = useState<boolean>(false);
+  const [editorJson, setEditorJson] = useState<string>("");
+  const [editorLoading, setEditorLoading] = useState<boolean>(false);
+  const [editorSaving, setEditorSaving] = useState<boolean>(false);
+  const [editorMsg, setEditorMsg] = useState<string | null>(null);
+  const [editorErr, setEditorErr] = useState<string | null>(null);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -294,6 +305,47 @@ export function McpServersTab() {
     },
     [refresh],
   );
+
+  // Phase 220 T1 — raw editor callbacks. Declared HERE (after `refresh`) so
+  // `saveEditor`'s dep array can include refresh without a TDZ trip.
+  const loadEditor = useCallback(async () => {
+    setEditorLoading(true);
+    setEditorErr(null);
+    try {
+      const res = await callQuery<undefined, {json: string; readAt: string}>(
+        "openclawos.gateway.config.read",
+      );
+      setEditorJson(res.json);
+    } catch (e) {
+      setEditorErr(e instanceof Error ? e.message : "Failed to read config");
+    } finally {
+      setEditorLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (editorOpen && !editorJson && !editorLoading) {
+      void loadEditor();
+    }
+  }, [editorOpen, editorJson, editorLoading, loadEditor]);
+
+  const saveEditor = useCallback(async () => {
+    setEditorSaving(true);
+    setEditorErr(null);
+    setEditorMsg(null);
+    try {
+      await callMutation<{json: string}, {ok: true; writtenAt: string}>(
+        "openclawos.gateway.config.write",
+        {json: editorJson},
+      );
+      setEditorMsg("Saved. Gateway picks up the change within ~5 seconds.");
+      await refresh();
+    } catch (e) {
+      setEditorErr(e instanceof Error ? e.message : "Failed to save config");
+    } finally {
+      setEditorSaving(false);
+    }
+  }, [editorJson, refresh]);
 
   return (
     <div className="space-y-l p-m">
@@ -495,6 +547,85 @@ export function McpServersTab() {
             Add MCP Server
           </Button>
         </div>
+      </div>
+
+      {/* ── Phase 220 T1 — Raw openclaw.json editor ─────────────────────── */}
+      <div className="space-y-s rounded-md border border-border-default/60 p-s">
+        <button
+          type="button"
+          onClick={() => setEditorOpen((v) => !v)}
+          className="flex w-full items-center justify-between text-sm font-medium text-text-neutral-primary"
+        >
+          <span>
+            Edit raw config{" "}
+            <span className="font-mono text-xs text-text-neutral-tertiary">
+              /opt/livos/data/openclaw/openclaw.json
+            </span>
+          </span>
+          <span aria-hidden className="text-text-neutral-tertiary">
+            {editorOpen ? "▾" : "▸"}
+          </span>
+        </button>
+
+        {editorOpen ? (
+          <div className="space-y-xs">
+            <p className="text-xs text-text-neutral-tertiary">
+              Direct edit of the gateway config file. JSON is validated before
+              save; a parse error blocks the write. Saves are atomic and the
+              gateway picks up changes within ~5 seconds — no restart needed.
+            </p>
+            {editorErr ? (
+              <p
+                role="alert"
+                className="rounded-md border border-border-danger/40 bg-danger-background px-s py-xxs text-xs text-text-danger-primary"
+              >
+                {editorErr}
+              </p>
+            ) : null}
+            {editorMsg ? (
+              <p
+                role="status"
+                className="rounded-md border border-border-success/40 bg-success-background px-s py-xxs text-xs text-text-success-primary"
+              >
+                {editorMsg}
+              </p>
+            ) : null}
+            {editorLoading ? (
+              <p className="text-xs text-text-neutral-tertiary">Loading…</p>
+            ) : (
+              <textarea
+                value={editorJson}
+                onChange={(e) => {
+                  setEditorJson(e.target.value);
+                  if (editorMsg) setEditorMsg(null);
+                  if (editorErr) setEditorErr(null);
+                }}
+                spellCheck={false}
+                rows={18}
+                className="w-full rounded-md border border-border-default/60 bg-background px-s py-xxs font-mono text-xs leading-relaxed text-text-neutral-primary"
+                disabled={editorSaving}
+              />
+            )}
+            <div className="flex items-center justify-between gap-s">
+              <button
+                type="button"
+                onClick={loadEditor}
+                disabled={editorLoading || editorSaving}
+                className="text-xs text-text-neutral-tertiary underline hover:text-text-neutral-primary disabled:opacity-50"
+              >
+                Reload from disk
+              </button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={saveEditor}
+                disabled={editorLoading || editorSaving || !editorJson.trim()}
+              >
+                {editorSaving ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -1,6 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Phase 220 T2 — Livinity Design System body typography.
+ * Aligns claw-client with /opt/landing/livinity.io aesthetic (Space Grotesk,
+ * geometricPrecision text-rendering). The CSS-var :root block below was
+ * repainted to Livinity tokens in the same pass — search "Phase 220 T2". */
+body {
+  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
 
 /* Cron detail tray slide-in (desktop) and full-page mobile detail slide-in. */
 @keyframes claw-slide-in-right {
@@ -142,13 +154,17 @@
   --color-text-neutral-primary: 26 26 26;
   --color-text-neutral-secondary: 82 82 82;
   --color-text-neutral-tertiary: 128 128 128;
-  --color-text-neutral-link: #6366f1;
-  --color-text-brand: #6366f1;
+  /* Phase 220 T2 — Livinity monochrome accent (was indigo #6366f1).
+   * Operator: "Livinity Design System tokens (renkler, fontlar, spacing —
+   * landing page'deki gibi)". Landing apex aesthetic is mono near-black for
+   * marketing-shaped surfaces; settings tab qualifies. */
+  --color-text-neutral-link: #1d1d1f;
+  --color-text-brand: #1d1d1f;
   --color-text-white: #ffffff;
   --color-text-black: #000000;
-  --color-text-accent-primary: 79 70 229;
-  --color-text-accent-secondary: 99 102 241;
-  --color-text-accent-tertiary: 165 180 252;
+  --color-text-accent-primary: 29 29 31;
+  --color-text-accent-secondary: 66 66 69;
+  --color-text-accent-tertiary: 161 161 166;
   --color-text-success-primary: #2b8a3e;
   --color-text-success-inverted: #ffffff;
   --color-text-alert-primary: #e67700;
@@ -165,10 +181,11 @@
   --color-text-pink-inverted: #ffffff;
   --color-text-purple-primary: #7048e8;
   --color-text-purple-inverted: #ffffff;
-  --color-interactive-accent-default: #6366f1;
-  --color-interactive-accent-hover: #4f46e5;
-  --color-interactive-accent-disabled: #c7d2fe;
-  --color-interactive-accent-pressed: #4338ca;
+  /* Phase 220 T2 — primary buttons + interactive accent: Livinity mono. */
+  --color-interactive-accent-default: #1d1d1f;
+  --color-interactive-accent-hover: #000000;
+  --color-interactive-accent-disabled: #d2d2d7;
+  --color-interactive-accent-pressed: #424245;
   --color-interactive-destructive-default: #e03131;
   --color-interactive-destructive-hover: #c92a2a;
   --color-interactive-destructive-disabled: #ffc9c9;
@@ -180,14 +197,15 @@
   --color-border-default: 212 212 212;
   --color-border-interactive: #a0a0a0;
   --color-border-interactive-emphasis: #808080;
-  --color-border-interactive-selected: #6366f1;
+  --color-border-interactive-selected: #1d1d1f; /* Phase 220 T2 — mono */
   /* Stored as space-separated rgb channels so the
      `border-border-{type}/N` Tailwind opacity modifier resolves; see
      `tailwind.config.ts` border colors. The `*-emphasis` variants stay
      as hex since they're consumed without alpha. */
-  --color-border-accent: 199 210 254;
-  --color-border-accent-emphasis: #a5b4fc;
-  --color-border-accent-selected: #6366f1;
+  /* Phase 220 T2 — accent borders also mono. */
+  --color-border-accent: 220 220 222;
+  --color-border-accent-emphasis: #a1a1a6;
+  --color-border-accent-selected: #1d1d1f;
   --color-border-info: 165 216 255;
   --color-border-info-emphasis: #339af0;
   --color-border-alert: 255 224 102;
@@ -196,8 +214,10 @@
   --color-border-success-emphasis: #51cf66;
   --color-border-danger: 255 201 201;
   --color-border-danger-emphasis: #ff6b6b;
-  --color-chat-user-response-bg: #6366f1;
-  --color-chat-user-response-text: #ffffff;
+  /* Phase 220 T2 — chat user bubble: Livinity surface-2 with mono fg.
+   * Replaces the indigo bubble for consistency with landing aesthetic. */
+  --color-chat-user-response-bg: #f5f5f7;
+  --color-chat-user-response-text: #1d1d1f;
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -308,13 +328,14 @@
   --color-text-neutral-primary: 229 229 229;
   --color-text-neutral-secondary: 160 160 160;
   --color-text-neutral-tertiary: 128 128 128;
-  --color-text-neutral-link: #c7d2fe;
-  --color-text-brand: #c7d2fe;
+  /* Phase 220 T2 — dark-mode mirror of mono accent (was indigo #c7d2fe). */
+  --color-text-neutral-link: #f5f5f7;
+  --color-text-brand: #f5f5f7;
   --color-text-white: #ffffff;
   --color-text-black: #000000;
-  --color-text-accent-primary: 199 210 254;
-  --color-text-accent-secondary: 165 180 252;
-  --color-text-accent-tertiary: 129 140 248;
+  --color-text-accent-primary: 245 245 247;
+  --color-text-accent-secondary: 209 209 214;
+  --color-text-accent-tertiary: 142 142 147;
   --color-text-success-primary: #69db7c;
   --color-text-success-inverted: #141414;
   --color-text-alert-primary: #ffd43b;
@@ -331,10 +352,11 @@
   --color-text-pink-inverted: #141414;
   --color-text-purple-primary: #b197fc;
   --color-text-purple-inverted: #141414;
-  --color-interactive-accent-default: #6366f1;
-  --color-interactive-accent-hover: #818cf8;
+  /* Phase 220 T2 — dark mode primary button mono. */
+  --color-interactive-accent-default: #f5f5f7;
+  --color-interactive-accent-hover: #ffffff;
   --color-interactive-accent-disabled: #2a2a2a;
-  --color-interactive-accent-pressed: #4f46e5;
+  --color-interactive-accent-pressed: #d2d2d7;
   --color-interactive-destructive-default: #d63031;
   --color-interactive-destructive-hover: #ff8787;
   --color-interactive-destructive-disabled: #3d1c1c;
@@ -346,11 +368,11 @@
   --color-border-default: 44 44 44;
   --color-border-interactive: #525252;
   --color-border-interactive-emphasis: #666666;
-  --color-border-interactive-selected: #c7d2fe;
+  --color-border-interactive-selected: #f5f5f7; /* Phase 220 T2 — mono dark */
   /* Space-separated rgb channels so `border-border-{type}/N` works. */
   --color-border-accent: 51 51 51;
   --color-border-accent-emphasis: #444444;
-  --color-border-accent-selected: #c7d2fe;
+  --color-border-accent-selected: #f5f5f7;
   --color-border-info: 28 61 92;
   --color-border-info-emphasis: #1e6cb0;
   --color-border-alert: 77 62 10;
@@ -359,8 +381,9 @@
   --color-border-success-emphasis: #2b6e36;
   --color-border-danger: 77 35 35;
   --color-border-danger-emphasis: #8a2c2c;
-  --color-chat-user-response-bg: #818cf8;
-  --color-chat-user-response-text: #ffffff;
+  /* Phase 220 T2 — dark chat user bubble mono. */
+  --color-chat-user-response-bg: #2c2c2e;
+  --color-chat-user-response-text: #f5f5f7;
   --shadow-xs: none;
   --shadow-sm: none;
   --shadow-md: none;
