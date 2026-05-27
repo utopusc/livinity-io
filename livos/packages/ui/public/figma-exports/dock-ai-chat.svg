@@ -1,12 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
-  <!-- Phase 238.5 — Livinity-themed Liv AI dock tile.
-       Replaces upstream purple-blue gradient (#6366f1 -> #3b82f6) with the
-       Livinity brand accent #1d1d1f (matches Phase 238.4 theme-color + favicon).
-       Shape preserved (speech bubble + 3 dots) so the dock-tile silhouette
-       remains identifiable as the AI/chat surface. -->
+  <!-- Phase 238.7 — LivOS dock tile uses the canonical Livinity donut mark
+       (same shape as platform/web/public/favicon.svg). Replaces the chat-
+       bubble + dots placeholder from Phase 238.5. Black rounded square
+       backdrop matches Phase 238.4 brand language (#1d1d1f). -->
   <rect width="120" height="120" rx="26" fill="#1d1d1f"/>
-  <path d="M60 28C42.3 28 28 40.1 28 55c0 8.5 4.5 16.1 11.5 21.2L36 88l14.3-6.2c3.1.8 6.3 1.2 9.7 1.2 17.7 0 32-12.1 32-27S77.7 28 60 28z" fill="#ffffff"/>
-  <circle cx="45" cy="55" r="4" fill="#1d1d1f"/>
-  <circle cx="60" cy="55" r="4" fill="#1d1d1f"/>
-  <circle cx="75" cy="55" r="4" fill="#1d1d1f"/>
+  <circle cx="60" cy="60" r="42" fill="#ffffff"/>
+  <circle cx="60" cy="60" r="15" fill="#1d1d1f"/>
 </svg>

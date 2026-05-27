@@ -1,4 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60">
-  <rect width="200" height="60" rx="8" fill="#1d1d1f"/>
-  <text x="100" y="40" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, 'Space Grotesk', sans-serif" font-size="32" font-weight="700" letter-spacing="0.04em">Liv</text>
+  <!-- Livinity wordmark — donut mark + "Livinity" text, matches platform/web/public/favicon.svg style.
+       Used as the canonical Livinity logo across LivOS surfaces. -->
+  <circle cx="30" cy="30" r="22" fill="#0a0a0a"/>
+  <circle cx="30" cy="30" r="8" fill="#ffffff"/>
+  <text x="64" y="38" fill="#0a0a0a" font-family="system-ui, -apple-system, 'Space Grotesk', sans-serif" font-size="28" font-weight="700" letter-spacing="-0.02em">Livinity</text>
 </svg>

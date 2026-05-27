@@ -137,7 +137,7 @@ export const systemApps = [
 		// SVG (purple-blue gradient #6366f1/#3b82f6 → Livinity accent #1d1d1f,
 		// matches Phase 238.4 theme-color + favicon). Operator directive
 		// 2026-05-27: "Liv AI livinity logosu istiyordum".
-		icon: '/figma-exports/dock-ai-chat.svg?v=238_5',
+		icon: '/figma-exports/dock-ai-chat.svg?v=238_7',
 		systemApp: true,
 		systemAppTo: '/liv-assistant',
 	},

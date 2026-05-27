@@ -617,61 +617,76 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Phase 238.6 Step F — Inline brand mark sed (AionUi V-mountain → Livinity "L")
+# Phase 238.6 Step F (Phase 238.7 evolution) — Inline brand mark sed:
+# AionUi V-mountain (or Phase-238.6 'L') → canonical Livinity donut mark
 #
-# Operator 2026-05-27 evening: sidebar top-left still shows AionUi brand mark
-# (the famous M40 20 Q38 22 ... V-mountain + circle dot + smile-arc SVG path)
-# hardcoded INLINE in the JS bundle. The path appears EXACTLY ONCE in
-# index-*.js (unique enough for safe sed). It's wrapped in `<div class="bg-
-# black shrink-0 size-32px relative rd-0.5rem">` — a clickable 32px black-
-# bg rounded square containing an 80x80 viewBox SVG.
+# Operator 2026-05-27 evening (Phase 238.6): "Hala sol en ustde sidebarin
+# en ust sol tarafinda <path d='M40 20 Q38 22 25 40 ...'> Duruyor amk!"
+# Operator 2026-05-27 night (Phase 238.7): "Ben L yi istemedim ki Ben
+# Livinity nin bire bir logosunu istedim web sitemizde kullandigimiz" —
+# requesting the EXACT Livinity logo from platform/web/public/favicon.svg
+# (outer + inner circle = donut/halo).
 #
-# This brand mark is NOT tied to the selected-agent's icon — it's the
-# AionUi BRAND itself (operator-visible regardless of which agent is
-# active in /api/settings/client.guid.lastSelectedAgent).
+# AionUi's brand mark is an inline SVG hardcoded in the JS bundle
+# (index-*.js). Appears EXACTLY ONCE. Wrapped in `<div class="bg-black
+# shrink-0 size-32px relative rd-0.5rem">`. NOT tied to selected-agent.
 #
-# Sed strategy — keep the wrapper geometry untouched, rewrite the 3 SVG
-# child elements:
-#   1. First path (V-mountain) `d=...` → Livinity "L" letter polygon
-#      (M30 15 L42 15 L42 53 L65 53 L65 65 L30 65 Z)
-#   2. Circle dot `r:"3"` → `r:"0"` (invisible)
-#   3. Smile-arc path `d:"M18 50..."` → `d:""` (empty path renders nothing)
+# Sed strategy — keep wrapper geometry untouched, rewrite the 3 SVG
+# child elements into a Livinity donut (white outer disk + black inner
+# hole on the wrapper's black background):
+#   1. First path (V-mountain OR Phase-238.6 'L') → outer circle as path:
+#      `M40 5 A35 35 0 1 0 40 75 A35 35 0 1 0 40 5 Z` (white fill)
+#   2. Circle (was dot at cy=46 r=3, or Phase-238.6 invisible at r=0)
+#      → inner donut hole at cx=40 cy=40 r=12 fill=black (cuts the donut)
+#   3. Smile-arc path d → empty (no smile)
 #
-# Result: black 32px rounded square with a clean white "L" letter mark —
-# matches Phase 238.4's brand language (Livinity #1d1d1f + favicon "L" mark
-# + dock tile theme).
+# Both PRE-states detected idempotently: fresh AionUi (V-mountain) AND
+# Phase-238.6-deployed (L polygon). All converge on the donut.
 #
-# Idempotency: grep pre-check for the AionUi V-path; skip when absent.
-# Post-grep verify; warn if AionUi path survives.
+# Result: black 32px rounded square with a clean white donut/halo mark —
+# matches platform/web/public/favicon.svg, Livinity's canonical logo.
+#
+# Idempotency: pre-check for ANY non-donut path/circle signature. If
+# donut path already present AND circle already centered/sized correctly,
+# skip the entire block.
 #
 # D-V43-APACHE-NOTICE: scope strictly inside ${REBRAND_TARGET}=${CURRENT_LINK}/static/;
 # LICENSE+NOTICE at ${INSTALL_ROOT} structurally outside.
 # ---------------------------------------------------------------------------
 if [[ -d "${REBRAND_TARGET}" ]]; then
   set +o pipefail
-  BM_PRE_HITS="$(grep -lE 'M40 20 Q38 22 25 40' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
+  # Detect EITHER pre-state: V-mountain (fresh) OR L polygon (Phase 238.6) OR misaligned circle
+  BM_VMOUNTAIN_HITS="$(grep -lE 'M40 20 Q38 22 25 40' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
+  BM_LSHAPE_HITS="$(grep -lE 'M30 15 L42 15 L42 53 L65 53 L65 65 L30 65 Z' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
+  BM_DONUT_HITS="$(grep -lE 'M40 5 A35 35 0 1 0 40 75 A35 35 0 1 0 40 5 Z' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
   set -o pipefail
-  if [[ "${BM_PRE_HITS}" -gt 0 ]]; then
-    log "Brand-mark sed: replacing AionUi V-mountain inline SVG with Livinity 'L' in ${BM_PRE_HITS} file(s)"
-    # Atomic 3-pattern sed pass.
-    # Pattern 1: V-mountain path → "L" letter polygon
-    # Pattern 2: circle dot r:"3" → r:"0" (must scope to the logo-circle key to avoid collisions)
-    # Pattern 3: smile-arc path d → empty
+  BM_NEED_REWRITE=$(( BM_VMOUNTAIN_HITS + BM_LSHAPE_HITS ))
+  if [[ "${BM_NEED_REWRITE}" -gt 0 ]] || [[ "${BM_DONUT_HITS}" -eq 0 ]]; then
+    log "Brand-mark sed: converging inline SVG to Livinity donut (V-mountain hits=${BM_VMOUNTAIN_HITS}, L-shape hits=${BM_LSHAPE_HITS}, donut hits=${BM_DONUT_HITS})"
+    # Atomic multi-pattern sed pass — both PRE-states converge on the donut.
+    # Pattern 1a: V-mountain path → donut outer circle
+    # Pattern 1b: L polygon → donut outer circle (idempotent re-run from Phase 238.6 deploy)
+    # Pattern 2a: dot at cy=46 r=3 (V-mountain era) → centered hole at r=12 fill=black
+    # Pattern 2b: invisible dot at cy=46 r=0 (Phase 238.6 era) → centered hole at r=12 fill=black
+    # Pattern 3: smile-arc → empty (already done in Phase 238.6; safe to re-apply)
     sed -i \
-      -e 's|M40 20 Q38 22 25 40 Q23 42 26 42 L30 42 Q32 40 40 30 Q48 40 50 42 L54 42 Q57 42 55 40 Q42 22 40 20|M30 15 L42 15 L42 53 L65 53 L65 65 L30 65 Z|g' \
-      -e 's|key:"logo-circle",cx:"40",cy:"46",r:"3"|key:"logo-circle",cx:"40",cy:"46",r:"0"|g' \
+      -e 's|M40 20 Q38 22 25 40 Q23 42 26 42 L30 42 Q32 40 40 30 Q48 40 50 42 L54 42 Q57 42 55 40 Q42 22 40 20|M40 5 A35 35 0 1 0 40 75 A35 35 0 1 0 40 5 Z|g' \
+      -e 's|M30 15 L42 15 L42 53 L65 53 L65 65 L30 65 Z|M40 5 A35 35 0 1 0 40 75 A35 35 0 1 0 40 5 Z|g' \
+      -e 's|key:"logo-circle",cx:"40",cy:"46",r:"3",fill:"white"|key:"logo-circle",cx:"40",cy:"40",r:"12",fill:"black"|g' \
+      -e 's|key:"logo-circle",cx:"40",cy:"46",r:"0",fill:"white"|key:"logo-circle",cx:"40",cy:"40",r:"12",fill:"black"|g' \
       -e 's|d:"M18 50 Q40 70 62 50"|d:""|g' \
       "${REBRAND_TARGET}"/assets/*.js
     set +o pipefail
-    BM_POST_HITS="$(grep -lE 'M40 20 Q38 22 25 40' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
+    BM_POST_DONUT="$(grep -lE 'M40 5 A35 35 0 1 0 40 75 A35 35 0 1 0 40 5 Z' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
+    BM_POST_HOLE="$(grep -lE 'key:"logo-circle",cx:"40",cy:"40",r:"12",fill:"black"' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
     set -o pipefail
-    if [[ "${BM_POST_HITS}" -ne 0 ]]; then
-      log "WARN: ${BM_POST_HITS} JS file(s) still contain AionUi V-path after sed pass (investigate — path text drift?)"
+    if [[ "${BM_POST_DONUT}" -gt 0 ]] && [[ "${BM_POST_HOLE}" -gt 0 ]]; then
+      log "Brand-mark sed: Livinity donut applied (outer path in ${BM_POST_DONUT} file(s), inner hole in ${BM_POST_HOLE} file(s))"
     else
-      log "Brand-mark sed: AionUi inline SVG paths replaced with Livinity 'L' (verified by post-grep)"
+      log "WARN: Brand-mark sed end-state incomplete (donut=${BM_POST_DONUT}, hole=${BM_POST_HOLE}); investigate"
     fi
   else
-    log "Brand-mark sed: no AionUi V-path found (already replaced or absent); skipping"
+    log "Brand-mark sed: Livinity donut already present (V-mountain=0, L-shape=0, donut=${BM_DONUT_HITS}); skipping"
   fi
 else
   log "Brand-mark sed: WARN ${REBRAND_TARGET} missing; skipping"
