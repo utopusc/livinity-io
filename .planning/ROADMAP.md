@@ -3693,6 +3693,23 @@ Plans:
 
 ---
 
+### Phase 238.8: Adaptive Livinity donut via CSS background-image (matches website prefers-color-scheme) — ✅ SHIPPED 2026-05-27 (1/1 plan)
+
+**Goal:** Operator 2026-05-27 night: "Hala kotu duruyor ya inanilmaz hatta Ne bileyim bire bir yapmaya calismissin ama ben karanlik mod da beyaz cember aydinlik modda siyah ama bu logo bire bir Bizim logomuz olmali" — Phase 238.7's white-on-black inline SVG isn't adaptive. Operator wants the EXACT website behavior: dark mode = white donut, light mode = black donut.
+
+**Plans:** 1/1 plan complete ✅
+
+- [x] 238.8-01 — liv-brand-donut marker class + CSS background-image to favicon.svg — SHIPPED 2026-05-27 (`997242c8`)
+
+**Strategy:** 
+- install-script Step 238.6-F (Phase 238.8 evolution) — sed adds `liv-brand-donut` marker class to the wrapper className, idempotent (only matches bare bg-black string)
+- `caddy/branding/livinity-overlay.css` — `.liv-brand-donut` rule sets `background-image: url('/liv/branding/favicon.svg')`, makes wrapper transparent, hides inline SVG (which becomes redundant fallback)
+- `/liv/branding/favicon.svg` is the EXACT copy of `platform/web/public/favicon.svg` (Phase 238.7) — already has internal `@media (prefers-color-scheme: dark)` that flips outer (`#0a0a0a` ↔ `#f5f5f7`) and inner (`#ffffff` ↔ `#050507`)
+
+**Outcome:** Browser renders favicon.svg as background; SVG's own style media query handles theme flip. Sidebar brand identical to livinity.io website favicon behavior. Mini PC POST: liv-brand-donut marker=1, stale bare bg-black wrapper=0, CSS served 5809B with 4 marker rule hits + 2 bg-image refs + 1 svg-hide rule. Phase 238/238.1/238.2/238.4/238.5/238.6/238.7 all non-regressed. Sacred SHA UNCHANGED. Deployed SHA `997242c`.
+
+---
+
 ### Phase 238.7: Real Livinity donut logo everywhere — ✅ SHIPPED 2026-05-27 (1/1 plan)
 
 **Goal:** Operator 2026-05-27 night: "Ben L yi istemedim ki Ben Livinity nin bire bir logosunu istedim web sitemizde kullandigimiz". Phase 238.6 rendered a simple 'L' letter as the brand mark — wrong. The canonical Livinity logo is `platform/web/public/favicon.svg` (outer circle + inner circle = donut/halo). Replace ALL Livinity brand surfaces with the real donut design.
