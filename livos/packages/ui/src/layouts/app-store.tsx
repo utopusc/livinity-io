@@ -4,8 +4,10 @@ import {TbDots, TbSearch} from 'react-icons/tb'
 import {Link, Outlet, useSearchParams} from 'react-router-dom'
 import {useKeyPressEvent} from 'react-use'
 
+import {V42MigrationBanner} from '@/components/banners/v42-migration-banner'
 import {Loading} from '@/components/ui/loading'
 import {useQueryParams} from '@/hooks/use-query-params'
+import {useV42MigrationActive} from '@/hooks/use-v42-migration-active'
 import {CommunityAppStoreDialog} from '@/modules/app-store/community-app-store-dialog'
 import {AppWithDescription} from '@/modules/app-store/discover/apps-grid-section'
 import {
@@ -36,6 +38,10 @@ export function AppStoreLayout() {
 
 	const inputRef = useRef<HTMLInputElement>(null)
 
+	// Phase 224 — hide AI-shaped surfaces (App Store `ai` category) when the
+	// Liv Assistant migration is active. Banner explains WHY to operators.
+	const v42MigrationActive = useV42MigrationActive()
+
 	// Remember query as part of the URL so we can navigate back to the results
 	useEffect(() => {
 		if (deferredSearchQuery) searchParams.set('q', deferredSearchQuery)
@@ -61,6 +67,7 @@ export function AppStoreLayout() {
 				</motion.div>
 			}
 		>
+			{v42MigrationActive && <V42MigrationBanner context='app-store' />}
 			{deferredSearchQuery ? (
 				<SearchResultsMemoized query={deferredSearchQuery} onNavigate={() => setSearchQuery('')} />
 			) : (
