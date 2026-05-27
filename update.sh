@@ -611,6 +611,27 @@ else
     info "scripts/install/install-openclaw-cli.sh not in TEMP_DIR — skipping (pre-Phase 208-03 deploy)"
 fi
 
+# ── Step 4.6: Phase 225 — liv-assistant install (Phase 223 vendored AionUi v2.1.4) ────
+# Re-runs the idempotent installer on every update so the on-box vendored binary +
+# systemd unit are guaranteed-fresh. Installer is content-addressed (pinned SHA),
+# so on unchanged source this is a sub-second no-op (UPSTREAM.md timestamp preserved,
+# tarball cache hit, symlink unchanged). Phase 223-01 contract.
+step "Phase 225: liv-assistant install (vendored AionUi v2.1.4)"
+_LIV_ASSISTANT_INSTALLER_SRC="$TEMP_DIR/scripts/install-liv-assistant.sh"
+# Fallback to on-disk copy (for the rare case TEMP_DIR was pruned mid-run)
+if [[ ! -f "$_LIV_ASSISTANT_INSTALLER_SRC" ]]; then
+    _LIV_ASSISTANT_INSTALLER_SRC="$LIVOS_DIR/scripts/install-liv-assistant.sh"
+fi
+if [[ -f "$_LIV_ASSISTANT_INSTALLER_SRC" ]]; then
+    if bash "$_LIV_ASSISTANT_INSTALLER_SRC" 2>&1 | tail -10; then
+        ok "liv-assistant install ensured (vendored AionUi v2.1.4 at /opt/liv-assistant/current)"
+    else
+        fail "install-liv-assistant.sh failed — see output above (SHA mismatch / network / disk?)"
+    fi
+else
+    info "scripts/install-liv-assistant.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 223-01 deploy)"
+fi
+
 # ── Step 5: Build packages ────────────────────────────────
 step "Building packages"
 
@@ -1010,6 +1031,49 @@ else
     info "liv-claw-gateway.service source not found — skipping install (Caddy /liv-ai-app/* will route to legacy :3010 unit until landed)"
 fi
 
+# ── Step 7.9: Phase 225 — install liv-assistant.service unit (if missing) ──────
+# Mirror of Step 7.7/7.8's idempotent pattern. update.sh runs on pre-existing
+# deploys that may not have re-run scripts/install-liv-assistant.sh's sibling
+# install of the unit file; copy the file ourselves so the restart step below
+# has a unit to manage. cmp -s guard keeps re-runs cheap (no daemon-reload churn
+# on byte-identical writes). Phase 223-02 shipped the unit at repo-root
+# `systemd/liv-assistant.service` — try that path first.
+step "Phase 225: install liv-assistant.service unit (if missing)"
+
+_LIV_ASSISTANT_UNIT_SRC="$LIVOS_DIR/systemd/liv-assistant.service"
+# Fallback to TEMP_DIR repo-root systemd dir (fresh clone)
+if [[ ! -f "$_LIV_ASSISTANT_UNIT_SRC" && -d "${TEMP_DIR:-}" ]]; then
+    _LIV_ASSISTANT_UNIT_SRC="$TEMP_DIR/systemd/liv-assistant.service"
+fi
+# Secondary fallback: scripts/install/systemd/ (parity with Step 7.7/7.8 layout)
+if [[ ! -f "$_LIV_ASSISTANT_UNIT_SRC" ]]; then
+    _LIV_ASSISTANT_UNIT_SRC="$LIVOS_DIR/scripts/install/systemd/liv-assistant.service"
+    if [[ ! -f "$_LIV_ASSISTANT_UNIT_SRC" && -d "${TEMP_DIR:-}" ]]; then
+        _LIV_ASSISTANT_UNIT_SRC="$TEMP_DIR/scripts/install/systemd/liv-assistant.service"
+    fi
+fi
+# Tertiary fallback: scripts/systemd/ (alternate layout)
+if [[ ! -f "$_LIV_ASSISTANT_UNIT_SRC" ]]; then
+    _LIV_ASSISTANT_UNIT_SRC="$LIVOS_DIR/scripts/systemd/liv-assistant.service"
+    if [[ ! -f "$_LIV_ASSISTANT_UNIT_SRC" && -d "${TEMP_DIR:-}" ]]; then
+        _LIV_ASSISTANT_UNIT_SRC="$TEMP_DIR/scripts/systemd/liv-assistant.service"
+    fi
+fi
+
+if [[ -f "$_LIV_ASSISTANT_UNIT_SRC" ]]; then
+    _LIV_ASSISTANT_UNIT_DST="/etc/systemd/system/liv-assistant.service"
+    if [[ ! -f "$_LIV_ASSISTANT_UNIT_DST" ]] || ! cmp -s "$_LIV_ASSISTANT_UNIT_SRC" "$_LIV_ASSISTANT_UNIT_DST"; then
+        install -m 0644 -o root -g root "$_LIV_ASSISTANT_UNIT_SRC" "$_LIV_ASSISTANT_UNIT_DST"
+        systemctl daemon-reload
+        systemctl enable liv-assistant.service 2>/dev/null || true
+        ok "liv-assistant.service installed at $_LIV_ASSISTANT_UNIT_DST"
+    else
+        ok "liv-assistant.service already byte-identical"
+    fi
+else
+    info "liv-assistant.service unit source not found — skipping install (the unit may already be installed from a prior Phase 223-05 deploy)"
+fi
+
 # ── Phase 202-10: bruce ownership hook (recurring P198/P199/P200/P201 patch) ──
 # When update.sh runs as root, rsync + pnpm install + builds end up root-owned.
 # livos.service runs as `bruce`, and pnpm-store / .next / dist directories
@@ -1074,6 +1138,57 @@ else
     info "liv-claw-gateway.service not installed yet — pre-203-03 deploy; run scripts/install/systemd-units-install.sh as root to enable"
 fi
 
+# ── Phase 225 — restart liv-assistant.service + /api/health smoke ──────────────
+# Guarded so legacy deploys without the unit are no-ops. Restart is required so
+# the freshly-installed binary at /opt/liv-assistant/current is picked up (the
+# install script's atomic symlink swap doesn't trigger a reload by itself).
+# The /api/health probe enforces that the service ACTUALLY booted to a serving
+# state — not just `active (running)` (which can be true for a few seconds while
+# the HTTP server is still initialising). A 5s timeout is generous given Phase
+# 223-05's measured cold-boot of ~3s.
+if [[ -f /etc/systemd/system/liv-assistant.service || -f /usr/lib/systemd/system/liv-assistant.service ]]; then
+    systemctl enable liv-assistant.service 2>/dev/null || true
+    if systemctl restart liv-assistant.service 2>/dev/null; then
+        ok "Restarted liv-assistant (AionUi WebUI :3020)"
+    else
+        warn "liv-assistant restart failed — check journalctl -u liv-assistant -n 30"
+    fi
+    # Give the service a moment to bind port 3020 before probing.
+    sleep 2
+    info "Probing http://127.0.0.1:3020/api/health (5s timeout)..."
+    if curl -fsS --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:3020/api/health 2>/dev/null | grep -qE '^(200|204)$'; then
+        ok "liv-assistant /api/health = 200/204 OK"
+    else
+        # Capture the failing response for the deploy log before aborting.
+        warn "liv-assistant /api/health probe non-2xx; collecting diagnostics..."
+        curl -sS -o /dev/null -w 'HTTP %{http_code} (curl exit %{exitcode}, time %{time_total}s)\n' --max-time 5 http://127.0.0.1:3020/api/health 2>&1 || true
+        journalctl -u liv-assistant -n 20 --no-pager 2>/dev/null || true
+        fail "liv-assistant health probe FAILED (http://127.0.0.1:3020/api/health did not return 200/204 within 5s). Deploy aborted."
+    fi
+
+    # ── Phase 225 — first-boot password capture (race-tolerant) ─────────────────
+    # Phase 223-03 helper is idempotent (no-op if creds file already populated)
+    # and exits 0 even when the journald marker line hasn't landed yet (Plan 05
+    # retry-loop contract). So we ALWAYS invoke it; the helper itself decides
+    # whether to write or no-op. We only skip outright if the helper script is
+    # missing (pre-Phase 223-03 deploy).
+    _LIV_ASSISTANT_CAPTURE_SRC="$TEMP_DIR/scripts/capture-liv-assistant-password.sh"
+    if [[ ! -f "$_LIV_ASSISTANT_CAPTURE_SRC" ]]; then
+        _LIV_ASSISTANT_CAPTURE_SRC="$LIVOS_DIR/scripts/capture-liv-assistant-password.sh"
+    fi
+    if [[ -f "$_LIV_ASSISTANT_CAPTURE_SRC" ]]; then
+        if bash "$_LIV_ASSISTANT_CAPTURE_SRC" 2>&1 | tail -5; then
+            ok "liv-assistant credentials capture step ran (no-op if already captured)"
+        else
+            warn "capture-liv-assistant-password.sh exited non-zero — operator can re-run manually: sudo bash $_LIV_ASSISTANT_CAPTURE_SRC"
+        fi
+    else
+        info "scripts/capture-liv-assistant-password.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 223-03 deploy)"
+    fi
+else
+    info "liv-assistant.service not installed — skipping restart + health probe (pre-Phase 225 deploy)"
+fi
+
 # Verify services
 sleep 3
 if systemctl is-active --quiet livos.service; then
@@ -1086,6 +1201,14 @@ if systemctl is-active --quiet liv-core.service; then
     ok "Liv-core service running"
 else
     warn "Liv-core service may not have started - check: journalctl -u liv-core -n 30"
+fi
+
+if systemctl is-active --quiet liv-assistant.service; then
+    ok "liv-assistant service running"
+else
+    # Non-fatal — if the unit isn't installed yet (legacy deploy) this is normal.
+    # If it IS installed and the health probe above already aborted, we won't reach here.
+    info "liv-assistant service not active (may not be installed on this deploy)"
 fi
 
 # ── Phase 30 UPD-03: Record deployed SHA ──────────────────
@@ -1125,6 +1248,7 @@ echo -e "  ${YELLOW}What was updated:${NC}"
 echo -e "    - livinityd source code"
 echo -e "    - UI (rebuilt from source)"
 echo -e "    - Liv AI packages (core, worker, mcp-server)"
+echo -e "    - liv-assistant (AionUi WebUI, vendored v2.1.4, port 3020)"
 echo -e "    - Gallery app cache"
 echo -e "    - Dependencies"
 echo ""
