@@ -106,16 +106,21 @@ describe('EmptyState', () => {
 
 // Phase 199-01 — brand-string regression-lock (INV-199-02).
 //
-// Locks the literal 'Liv AI' brand string at three surfaces:
+// Locks the literal 'Liv AI' brand string at the EmptyState surfaces.
+// Phase 234-02 Section G.1 Resolution — the third assertion (apps.tsx
+// systemApps entry id="LIVINITY_liv-ai") was retired because the entry
+// itself was removed when LIVINITY_liv-assistant absorbed the 'Liv AI'
+// brand identity. The dock-label brand-string lock is now carried by
+// dock.test.tsx Test 3 against the LIVINITY_liv-assistant click contract
+// (`'Liv AI'` literal in the openWindow third argument).
+//
+// Surviving locks:
 //   1. EmptyState <h2> hero heading
 //   2. EmptyState outermost div data-testid='liv-ai-empty-state'
 //      (carry-forward lock for Plan 199-05 which rebuilds this surface)
-//   3. apps.tsx systemApps registry entry name === 'Liv AI'
-//      (dock label string — must not revert to 'Liv' / 'LivinityAI')
 //
 // Any future rename regression (e.g. accidental 'Livinity AI' or 'Liv')
 // breaks CI; the operator directive 2026-05-22 locks 'Liv AI' literally.
-import {systemApps} from '../../providers/apps'
 
 describe('EmptyState — Phase 199-01 brand regression-lock', () => {
 	it('Test 1: hero <h2> renders the literal text "Liv AI"', () => {
@@ -139,11 +144,5 @@ describe('EmptyState — Phase 199-01 brand regression-lock', () => {
 
 		const el = document.querySelector('[data-testid="liv-ai-empty-state"]')
 		expect(el).not.toBeNull()
-	})
-
-	it('Test 3: apps.tsx systemApps entry id="LIVINITY_liv-ai" has name === "Liv AI"', () => {
-		const livAiEntry = systemApps.find((a) => a.id === 'LIVINITY_liv-ai')
-		expect(livAiEntry).toBeDefined()
-		expect(livAiEntry!.name).toBe('Liv AI')
 	})
 })

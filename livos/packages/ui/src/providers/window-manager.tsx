@@ -132,14 +132,17 @@ export const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	'LIVINITY_subagents': {width: 950, height: 650},
 	'LIVINITY_schedules': {width: 950, height: 650},
 	'LIVINITY_terminal': {width: 900, height: 600},
-	// Phase 205 Hot-fix N 2026-05-24 — bumped from {1180, 820} (D-199-01) to
-	// {1400, 900} so the new in-shell Settings route (content-swap, horizontal
-	// tabs) has room without compressing the chat surface. Matches the Docker
-	// window's footprint — another moderately content-heavy LivOS app.
-	'LIVINITY_liv-ai': {width: 1400, height: 900},
-	// Phase 231 retirement — legacy chat-iframe default-size entry removed
-	// (was Phase 203 Hot-fix E). Liv Assistant (Phase 227) is the v42 chat
-	// surface.
+	// Phase 234-02 (D-234-WINDOW) — explicit default for the Liv AI window
+	// (the v42 AionUi-backed chat surface, registered as LIVINITY_liv-assistant
+	// in apps.tsx). Pre-Phase-234 this lookup fell through to the {900, 600}
+	// default which felt cramped for the iframe SPA's left-rail + chat layout.
+	// Operator directive 2026-05-27 night: bump to {1280, 800}.
+	//
+	// The legacy LIVINITY_liv-ai entry (Phase 199-01 / Hot-fix N at {1400, 900})
+	// was removed in this same plan per 234-01-INVESTIGATION.md Section G.1 —
+	// LIVINITY_liv-assistant absorbed the 'Liv AI' brand identity and is now
+	// the sole v42 chat surface, so the legacy entry was dead config.
+	'LIVINITY_liv-assistant': {width: 1280, height: 800},
 	default: {width: 900, height: 600},
 }
 

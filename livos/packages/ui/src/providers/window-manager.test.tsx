@@ -62,34 +62,39 @@ describe('window-manager — Phase 159 close-handler registry', () => {
     })
 })
 
-// Phase 199-01 — DEFAULT_WINDOW_SIZES Liv AI entry + regression-lock.
+// Phase 234-02 — DEFAULT_WINDOW_SIZES Liv AI entry retired + Liv Assistant
+// (the v42 AionUi-backed chat surface) takes its place at 1280x800.
 //
-// D-199-01: Liv AI window opens at {width: 1180, height: 820} instead of
-// the {900, 600} default-fallback. INV-199-02 brand-string lock is in
-// empty-state.test.tsx; this block locks the SIZE contract.
-//
-// Phase 205 Hot-fix N 2026-05-24 — bumped to {1400, 900} to fit the new
-// in-shell Settings content-swap route. The exact-size assertion is updated
-// here; the divergence-from-default lock (Test 2) and existence lock (Test 3)
-// remain in force.
-describe('DEFAULT_WINDOW_SIZES Phase 199-01 + Hot-fix N', () => {
-    it('Test 1: DEFAULT_WINDOW_SIZES["LIVINITY_liv-ai"] is exactly {width: 1400, height: 900}', () => {
-        expect(DEFAULT_WINDOW_SIZES['LIVINITY_liv-ai']).toEqual({
-            width: 1400,
-            height: 900,
+// Phase 199-01 / Hot-fix N originally locked LIVINITY_liv-ai (the legacy
+// assistant-ui chat surface) to {1400, 900}. Per 234-01-INVESTIGATION.md
+// Section G.1 (Resolution G.1, preferred), the LIVINITY_liv-ai surface +
+// systemApps entry + DEFAULT_WINDOW_SIZES entry are all removed together
+// as the deferred Phase 231 cleanup. LIVINITY_liv-assistant (Phase 227,
+// the iframe over the AionUi /liv/ Caddy handle) becomes the sole v42
+// chat surface and gains its own explicit 1280x800 entry (operator
+// directive 2026-05-27 night — was falling through to default {900, 600}
+// pre-Phase-234 which felt cramped for the iframe SPA).
+describe('DEFAULT_WINDOW_SIZES Phase 234-02 — LIVINITY_liv-assistant entry', () => {
+    it('Test 1: DEFAULT_WINDOW_SIZES["LIVINITY_liv-assistant"] is exactly {width: 1280, height: 800}', () => {
+        expect(DEFAULT_WINDOW_SIZES['LIVINITY_liv-assistant']).toEqual({
+            width: 1280,
+            height: 800,
         })
     })
 
-    it('Test 2: LIVINITY_liv-ai size is NOT equal to the default-fallback (regression-lock against Phase 198 fallback bug)', () => {
-        // Without the Phase 199-01 entry, this lookup would fall through
-        // to DEFAULT_WINDOW_SIZES.default ({900, 600}). Lock the divergence.
-        const livAi = DEFAULT_WINDOW_SIZES['LIVINITY_liv-ai']
+    it('Test 2: LIVINITY_liv-assistant size is NOT equal to the default-fallback (regression-lock against the pre-Phase-234 fallthrough bug)', () => {
+        // Pre-Phase-234 this lookup fell through to DEFAULT_WINDOW_SIZES.default
+        // ({900, 600}) which was too small for the AionUi iframe SPA. Lock the
+        // divergence so a future cleanup pass can't silently delete the entry.
+        const livAssistant = DEFAULT_WINDOW_SIZES['LIVINITY_liv-assistant']
         const fallback = DEFAULT_WINDOW_SIZES.default
-        expect(livAi).not.toEqual(fallback)
-        expect(livAi).toBeDefined()
+        expect(livAssistant).not.toEqual(fallback)
+        expect(livAssistant).toBeDefined()
+        expect(livAssistant!.width).toBeGreaterThan(fallback.width)
+        expect(livAssistant!.height).toBeGreaterThan(fallback.height)
     })
 
-    it('Test 3: DEFAULT_WINDOW_SIZES still contains all 10 pre-existing entries (regression-lock — adding shouldn\'t delete)', () => {
+    it('Test 3: DEFAULT_WINDOW_SIZES still contains all pre-existing entries + the new LIVINITY_liv-assistant (regression-lock — adding shouldn\'t delete)', () => {
         const expectedKeys = [
             'LIVINITY_app-store',
             'LIVINITY_files',
@@ -101,11 +106,20 @@ describe('DEFAULT_WINDOW_SIZES Phase 199-01 + Hot-fix N', () => {
             'LIVINITY_subagents',
             'LIVINITY_schedules',
             'LIVINITY_terminal',
+            'LIVINITY_liv-assistant',
             'default',
         ]
         for (const key of expectedKeys) {
             expect(DEFAULT_WINDOW_SIZES[key]).toBeDefined()
         }
+    })
+
+    it('Test 4: legacy LIVINITY_liv-ai entry is REMOVED (Phase 234-02 Section G.1 cleanup)', () => {
+        // The LIVINITY_liv-ai dock tile + systemApps entry + window-content
+        // mapping were removed together in Phase 234-02. The DEFAULT_WINDOW_SIZES
+        // entry must also be gone — keeping it would be dead config that misleads
+        // future maintainers about a surface that no longer exists.
+        expect(DEFAULT_WINDOW_SIZES['LIVINITY_liv-ai']).toBeUndefined()
     })
 })
 

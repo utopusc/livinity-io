@@ -11,10 +11,10 @@ const DockerWindowContent = React.lazy(() => import('./app-contents/docker-conte
 const ServerControlWindowContent = React.lazy(() => import('./app-contents/server-control-content'))
 const TerminalWindowContent = React.lazy(() => import('./app-contents/terminal-content'))
 const MyDevicesWindowContent = React.lazy(() => import('./app-contents/my-devices-content'))
-// Phase 197-06 — Liv AI Dock app. Operator clicks the icon → window-manager
-// opens → LivAiChatWindow renders here. Chat surface consumes mastra.agent.*
-// tRPC namespace (stream + approve + cancel + threads.list/delete).
-const LivAiWindowContent = React.lazy(() => import('./app-contents/liv-ai-content'))
+// Phase 234-02 — Phase 197-06 LivAiWindowContent (legacy assistant-ui chat
+// iframe over /liv-ai-app) was removed here as the deferred Phase 231 cleanup
+// per 234-01-INVESTIGATION.md Section G.1. LIVINITY_liv-assistant
+// (Phase 227-01 below — AionUi iframe over /liv/) is the sole v42 chat surface.
 // Phase 95-02 — WebApp stream content (VNC pane + AI panel + mode selector).
 // The discriminator is the `WEBAPP_<webappId>` prefix on `appId` (per CONTEXT
 // C-95-05 and PLAN 95-02). The real component lands in 95-08; 95-02 ships a
@@ -71,7 +71,10 @@ type WindowContentProps = {
 // Apps that manage their own scroll and layout (no wrapper padding/scroll).
 // WebApps (any appId starting with WEBAPP_) are full-height too — handled
 // via `isWebAppKind(appId)` in `WindowContent` rather than expanding this set.
-const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_liv-ai', LIV_ASSISTANT_APP_ID])
+// Phase 234-02 — LIVINITY_liv-ai removed from the fullHeightApps set as part
+// of the Section G.1 cleanup (entry no longer reachable; switch-case + lazy
+// import + apps.tsx registry entry all deleted in the same commit).
+const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', LIV_ASSISTANT_APP_ID])
 
 export function WindowContent({route, appId, windowId}: WindowContentProps) {
 	if (
@@ -171,10 +174,9 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 		case 'LIVINITY_terminal':
 			return <TerminalWindowContent />
 
-		// Phase 197-06 — Liv AI Dock app surface.
-		case 'LIVINITY_liv-ai':
-			return <LivAiWindowContent />
-
+		// Phase 234-02 — LIVINITY_liv-ai switch arm removed (Section G.1
+		// cleanup); LIV_ASSISTANT_APP_ID branch above handles the v42 chat
+		// surface.
 
 		default:
 			return (

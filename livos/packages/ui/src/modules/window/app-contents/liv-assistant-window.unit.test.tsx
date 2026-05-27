@@ -8,7 +8,9 @@
 //
 // Coverage:
 //   1. Component renders exactly one iframe with src ending in '/liv/'
-//      (relative default) and title 'Liv Assistant'.
+//      (relative default) and title 'Liv AI' (Phase 234-02 rename — was
+//      'Liv Assistant' pre-Phase-234 per Section G.1 brand collision
+//      resolution).
 //   2. iframe sandbox attribute is the exact locked token list.
 //   3. iframe allow attribute carries clipboard-read + clipboard-write.
 //   4. iframe className fills its parent (h-full + w-full).
@@ -48,7 +50,7 @@ afterEach(() => {
 })
 
 describe('LivAssistantWindow', () => {
-	it('renders exactly one iframe with the default /liv/ src and Liv Assistant title', () => {
+	it('renders exactly one iframe with the default /liv/ src and Liv AI title', () => {
 		act(() => {
 			root!.render(<LivAssistantWindow />)
 		})
@@ -57,7 +59,8 @@ describe('LivAssistantWindow', () => {
 		const frame = iframes[0] as HTMLIFrameElement
 		// src resolves to an absolute URL in jsdom; assert tail.
 		expect(frame.getAttribute('src') || frame.src).toMatch(/\/liv\/$/)
-		expect(frame.getAttribute('title')).toBe('Liv Assistant')
+		// Phase 234-02 — iframe title rebrand: 'Liv Assistant' -> 'Liv AI'.
+		expect(frame.getAttribute('title')).toBe('Liv AI')
 		expect(LIV_ASSISTANT_DEFAULT_URL).toBe('/liv/')
 	})
 
