@@ -133,7 +133,11 @@ export const systemApps = [
 		// pre-Plan-234-02 404 (empty tile) refetch the now-present SVG. File
 		// is on Mini PC dist at /figma-exports/dock-ai-chat.svg (HTTP 200, 691
 		// bytes — verified via curl on bruce-EQ 2026-05-27 19:05 UTC).
-		icon: '/figma-exports/dock-ai-chat.svg?v=235',
+		// Phase 238.5 — bumped to v238_5 so caches refetch the Livinity-themed
+		// SVG (purple-blue gradient #6366f1/#3b82f6 → Livinity accent #1d1d1f,
+		// matches Phase 238.4 theme-color + favicon). Operator directive
+		// 2026-05-27: "Liv AI livinity logosu istiyordum".
+		icon: '/figma-exports/dock-ai-chat.svg?v=238_5',
 		systemApp: true,
 		systemAppTo: '/liv-assistant',
 	},
