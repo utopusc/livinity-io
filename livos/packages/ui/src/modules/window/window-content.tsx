@@ -33,12 +33,18 @@ const OpenUiAppContent = React.lazy(() => import('./app-contents/openui-app-cont
 // an iframe at /liv-ai-app/liv-ai — distinct from the legacy
 // `LIVINITY_liv-ai` literal-appId path which iframes the Next.js dashboard.
 const LivAiChatIframeContent = React.lazy(() => import('./app-contents/liv-ai-chat-iframe-content'))
+// Phase 227-01 — Liv Assistant iframe window. Discriminator is the exact
+// appId `LIVINITY_liv-assistant` (set by systemApps in apps.tsx). Renders
+// the AionUi surface served at /liv/ via Phase 226 Caddy handle.
+const LivAssistantWindow = React.lazy(() => import('./app-contents/liv-assistant-window'))
 
 const WEBAPP_APP_ID_PREFIX = 'WEBAPP_'
 const NATIVE_APP_ID_PREFIX = 'NATIVE_'
 const OPENUI_APP_ID_PREFIX = 'OPENUI_'
 /** Phase 203 Hot-fix D — exact appId for the seeded Liv AI chat iframe window. */
 const LIV_AI_CHAT_APP_ID = 'LIV_AI_CHAT'
+/** Phase 227-01 — exact appId for the Liv Assistant iframe window. */
+const LIV_ASSISTANT_APP_ID = 'LIVINITY_liv-assistant'
 
 /** True when the appId belongs to a WebApp window (P95). */
 function isWebAppKind(appId: string): boolean {
@@ -70,7 +76,7 @@ type WindowContentProps = {
 // Apps that manage their own scroll and layout (no wrapper padding/scroll).
 // WebApps (any appId starting with WEBAPP_) are full-height too — handled
 // via `isWebAppKind(appId)` in `WindowContent` rather than expanding this set.
-const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_liv-ai', LIV_AI_CHAT_APP_ID])
+const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_liv-ai', LIV_AI_CHAT_APP_ID, LIV_ASSISTANT_APP_ID])
 
 export function WindowContent({route, appId, windowId}: WindowContentProps) {
 	if (
@@ -145,6 +151,13 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 	// so it can't collide with any future literal appId case.
 	if (appId === LIV_AI_CHAT_APP_ID) {
 		return <LivAiChatIframeContent />
+	}
+
+	// Phase 227-01 — Liv Assistant iframe window. Mounts LivAssistantWindow
+	// pointed at /liv/ (Phase 226 Caddy handle). Checked BEFORE the switch
+	// so the literal appId wins over any future collision.
+	if (appId === LIV_ASSISTANT_APP_ID) {
+		return <LivAssistantWindow />
 	}
 
 	switch (appId) {
