@@ -543,6 +543,80 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Phase 238.4 Step E — index.html sed inject (Livinity CSS + favicon + theme)
+#
+# Phase 232's `livinity-overlay.css` was DESIGNED to be injected into the
+# iframe HTML via a Caddy `replace` directive, but Mini PC's Caddy v2.11.3
+# lacks the http.handlers.replace_response plugin (Phase 238.3 finding).
+# Result: the CSS file IS served at /liv/branding/livinity-overlay.css (200
+# OK) but the iframe HTML never references it, so font + accent overrides
+# stay dead.
+#
+# Fix: sed-edit the on-disk index.html directly (same approach as Phase
+# 234-03 rebrand sed). AionUi's Bun binary serves but does NOT regenerate
+# index.html on restart, so edits PERSIST (verified by Phase 234-03 +
+# 238.2 deploy history).
+#
+# Three substitutions, all idempotent via grep pre-check:
+#   1. Inject `<link rel="stylesheet" href="/liv/branding/livinity-overlay.css">`
+#      immediately before `</head>` (mirrors what the Caddy `replace`
+#      directive would have done)
+#   2. Replace browser favicon
+#      `<link rel="icon" type="image/png" href="./pwa/icon-192.png" />`
+#      → `<link rel="icon" type="image/svg+xml" href="/liv/branding/favicon.svg" />`
+#   3. Replace apple-touch-icon
+#      `<link rel="apple-touch-icon" href="./pwa/icon-180.png" />`
+#      → `<link rel="apple-touch-icon" href="/liv/branding/favicon.svg" />`
+#   4. Update theme-color from AionUi's grey #4E5969 to Livinity #1d1d1f
+#
+# All substitutions skip if marker is already present (idempotent on re-run).
+#
+# D-V43-APACHE-NOTICE: scope strictly inside ${CURRENT_LINK}/static/;
+# LICENSE + NOTICE at ${INSTALL_ROOT}/ structurally outside.
+# ---------------------------------------------------------------------------
+INDEX_HTML="${REBRAND_TARGET}/index.html"
+if [[ -f "${INDEX_HTML}" ]]; then
+  # Substitution 1 — CSS link injection (skip if already present)
+  if grep -q 'livinity-overlay.css' "${INDEX_HTML}"; then
+    log "index.html overlay: CSS link already injected; skipping"
+  else
+    log "index.html overlay: injecting livinity-overlay.css <link> before </head>"
+    sed -i 's|</head>|    <link rel="stylesheet" href="/liv/branding/livinity-overlay.css" />\n  </head>|' "${INDEX_HTML}"
+    if grep -q 'livinity-overlay.css' "${INDEX_HTML}"; then
+      log "index.html overlay: CSS link injection verified"
+    else
+      log "WARN: index.html overlay: CSS link injection failed (anchor </head> not matched?)"
+    fi
+  fi
+
+  # Substitution 2 — favicon: PNG -> Livinity SVG (skip if already SVG)
+  if grep -qE 'rel="icon"[^>]*href="/liv/branding/favicon\.svg"' "${INDEX_HTML}"; then
+    log "index.html overlay: favicon already redirected to /liv/branding/favicon.svg; skipping"
+  else
+    log "index.html overlay: redirecting favicon PNG -> /liv/branding/favicon.svg"
+    sed -E -i 's|<link rel="icon"[^>]*href="\./pwa/icon-192\.png"[^/]*/>|<link rel="icon" type="image/svg+xml" href="/liv/branding/favicon.svg" />|' "${INDEX_HTML}"
+  fi
+
+  # Substitution 3 — apple-touch-icon: PNG -> Livinity SVG
+  if grep -qE 'rel="apple-touch-icon"[^>]*href="/liv/branding/favicon\.svg"' "${INDEX_HTML}"; then
+    log "index.html overlay: apple-touch-icon already redirected; skipping"
+  else
+    log "index.html overlay: redirecting apple-touch-icon -> /liv/branding/favicon.svg"
+    sed -E -i 's|<link rel="apple-touch-icon"[^>]*href="\./pwa/icon-180\.png"[^/]*/>|<link rel="apple-touch-icon" href="/liv/branding/favicon.svg" />|' "${INDEX_HTML}"
+  fi
+
+  # Substitution 4 — theme-color: AionUi grey #4E5969 -> Livinity accent #1d1d1f
+  if grep -qE 'name="theme-color"[^>]*content="#1d1d1f"' "${INDEX_HTML}"; then
+    log "index.html overlay: theme-color already #1d1d1f; skipping"
+  else
+    log "index.html overlay: updating theme-color -> #1d1d1f (Livinity accent)"
+    sed -E -i 's|<meta name="theme-color" content="#4E5969"[^/]*/>|<meta name="theme-color" content="#1d1d1f" />|' "${INDEX_HTML}"
+  fi
+else
+  log "index.html overlay: WARN ${INDEX_HTML} missing; skipping all 4 substitutions"
+fi
+
+# ---------------------------------------------------------------------------
 # Install bun if missing (Claude Code ACP bridge requires it)
 # See 222-SPIKE.md "Bun runtime dependency" — risk #3.
 # ---------------------------------------------------------------------------

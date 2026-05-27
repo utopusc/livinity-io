@@ -1,27 +1,109 @@
-/* Livinity brand overlay — Phase 232
- * Applied to AionUi-served HTML at /liv/* via Caddy `replace` directive.
- * Injection point: just before </head> in upstream HTML responses.
- * NO source patches to /opt/liv-assistant/aionui-web-* (D-V42-SACRED).
+/* Livinity brand overlay — Phase 232 (CSS) + Phase 238.4 (injection mechanism)
+ *
+ * Injected into AionUi's index.html <head> by scripts/install-liv-assistant.sh
+ * Step 238.4-E (sed-edit of /opt/liv-assistant/current/static/index.html).
+ * Served from /etc/liv-assistant/branding/livinity-overlay.css via Caddy
+ * `handle /liv/branding/*` block emitted by livos/packages/livinityd/source/
+ * modules/domain/caddy.ts (Phase 232 file_server route).
+ *
+ * NO source patches to /opt/liv-assistant/aionui-web-*'s Bun binary
+ * (D-V42-SACRED). All edits happen on the on-disk static/ tree which the
+ * binary serves but does not regenerate on restart.
+ *
+ * Targets the AionUi WebUI iframe (v2.1.4) which uses Arco Design as its UI
+ * component lib. Arco's primary color is driven by `--primary-N` RGB
+ * triplets; overriding those at :root cascades to every Arco button/tag/
+ * progress-bar/etc.
  */
 
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
 
 :root {
+	/* Livinity brand tokens */
 	--accent: #1d1d1f;
-	--livinity-font: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+	--accent-rgb: 29, 29, 31;
+	--livinity-font: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont,
+		'Segoe UI', Roboto, sans-serif;
+
+	/* Override Arco Design's primary palette to Livinity mono-dark.
+	 * Arco uses --primary-1..10 RGB triplets; tier 6 is the "main" tone.
+	 * Setting all tiers to the accent triplet collapses the palette to a
+	 * monochrome (acceptable for a brand-overlay layer — Arco still renders
+	 * with subtle alpha variations via rgba). */
+	--primary-1: var(--accent-rgb);
+	--primary-2: var(--accent-rgb);
+	--primary-3: var(--accent-rgb);
+	--primary-4: var(--accent-rgb);
+	--primary-5: var(--accent-rgb);
+	--primary-6: var(--accent-rgb);
+	--primary-7: var(--accent-rgb);
+	--primary-8: var(--accent-rgb);
+	--primary-9: var(--accent-rgb);
+	--primary-10: var(--accent-rgb);
+
+	/* Common semantic mappings AionUi may read */
+	--color-primary: var(--accent);
+	--brand: var(--accent);
 }
 
-body,
+/* ── Font enforcement ──────────────────────────────────────────────────────
+ * AionUi's index-w756Mz3n.css declares the system font stack on `body`. Our
+ * @import loads Space Grotesk and we re-declare with !important to win the
+ * cascade. Including all interactive controls because Arco Design's button/
+ * input styles set explicit font-family per-component. */
 html,
+body,
+#root,
 button,
 input,
 textarea,
-select {
+select,
+.arco-btn,
+.arco-input,
+.arco-input-inner,
+.arco-select-view-input,
+.arco-modal,
+.arco-message,
+.arco-notification,
+.app-titlebar__brand-text,
+.app-titlebar__brand-mobile,
+[class*='arco-'] {
 	font-family: var(--livinity-font) !important;
 }
 
+/* Headings inherit but make weight crisper for the wordmark feel. */
+h1, h2, h3, h4, h5, h6 {
+	font-family: var(--livinity-font) !important;
+	letter-spacing: -0.01em;
+}
+
+/* ── Color overrides ───────────────────────────────────────────────────────
+ * Catch-all selectors for AionUi components that read --accent-color or
+ * paint a brand color via inline style. Arco's --primary-N cascade above
+ * handles most cases; this is a defensive backstop. */
 [class*='accent'],
 [class*='primary'],
-button[type='submit'] {
+button[type='submit'],
+.arco-btn-primary,
+.arco-link {
 	--accent-color: var(--accent) !important;
+}
+
+.arco-btn-primary {
+	background-color: var(--accent) !important;
+	border-color: var(--accent) !important;
+	color: #ffffff !important;
+}
+
+.arco-btn-primary:hover {
+	background-color: #2c2c2e !important;  /* slightly lifted */
+	border-color: #2c2c2e !important;
+}
+
+/* ── Titlebar brand polish ─────────────────────────────────────────────────
+ * Phase 234-03 sed already rewrote the brand TEXT to "Liv AI". This block
+ * just ensures the text uses Space Grotesk crisply at full weight. */
+.app-titlebar__brand-text {
+	font-weight: 700 !important;
+	letter-spacing: 0.01em;
 }
