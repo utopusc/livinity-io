@@ -3466,6 +3466,41 @@ Plans:
 
 ---
 
+### Phase 234: Liv AI polish — auth bypass + larger window + chat icon + AionUi→Liv AI rebrand — ⚪ READY
+
+**Goal:** Post-v42 UX polish (operator-requested 2026-05-27 night). Make Liv Assistant feel native: bigger window, chat-style dock icon, "Liv AI" brand string everywhere visible (NOT just our wrapper — vendored binary too), and auto-login so operators never see AionUi login form.
+
+**Scope:**
+1. **Window enlarge** — LivAssistantWindow default size 1280×800 (current likely 800×600 from inherited WindowFrame defaults). Also raise min-size to prevent tiny crops.
+2. **Dock icon** — replace current icon with chat-style (lucide-react `MessageCircle` or `Sparkles`). Plan 227-02 used an existing icon; this swaps to chat semantics.
+3. **"Liv AI" brand** —
+   - Wrapper-side: dock label + systemApps name + window title → all "Liv AI" (was "Liv Assistant" or referencing AionUi)
+   - Vendored binary text-replace: extend `install-liv-assistant.sh` with a post-extract step that sed-replaces `AionUi` → `Liv AI` and `aionui` → `liv-ai` inside extracted HTML/JS bundle files. Idempotent.
+   - Docs: docs/liv-assistant-install.md updated wording
+4. **Auth bypass in UI** — STRATEGY TBD pending investigation:
+   - Option A (preferred if works): inspect AionUi config for auth-disable flag, flip via install script
+   - Option B: tRPC `config.getLivAssistantCreds()` admin-only procedure + iframe wrapper auto-fill (same-origin iframe so contentDocument access OK)
+   - Option C: Caddy `header_up Cookie` after one-time login captures session
+   Plan 234-01 = investigation, decides which option ships in subsequent plans.
+
+**Success Criteria:**
+- SC-01: LivAssistantWindow default render size ≥ 1280×800
+- SC-02: Dock icon swapped to chat-style icon (vitest grep for new import)
+- SC-03: All UI-side `AionUi` strings replaced with `Liv AI` (grep in `livos/packages/ui/src/` returns 0)
+- SC-04: Mini PC extracted `/opt/liv-assistant/current/` HTML/JS: `grep -ric 'AionUi'` returns 0 post-install
+- SC-05: External `https://bruce.livinity.io/liv/` HTML title/body contains `Liv AI` (NOT `AionUi`)
+- SC-06: Opening Liv AI window auto-pastes operator to chat screen (NO login form visible)
+- SC-07: Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` unchanged
+- SC-08: Feature-flagged auth bypass via Redis key (e.g. `liv:config:liv_ai_autologin_enabled` default true). Flip to false restores upstream AionUi UX.
+
+**Plans:** ~4 (investigation + UI rebrand/window/icon + install-script sed extension + auth bypass)
+
+**Depends on:** Phase 226 ✅, 227 ✅, 228 ✅, 232 ✅ reduced.
+
+**Reversibility:** Feature-flagged + vendored binary text replace is idempotent + always restorable by re-running install script from clean tarball.
+
+---
+
 ### Phase 227: LivOS shell integration — LivAssistantWindow iframe mount — ✅ SHIPPED 3/3
 
 **Goal:** Wire a `LivAssistantWindow` React component into the LivOS shell that iframes `https://bruce.livinity.io/liv/` (Phase 226 routing). Add dock icon that opens this window. Replace OpenClawOS dock entry / chat surface so operators land on Liv Assistant by default.
