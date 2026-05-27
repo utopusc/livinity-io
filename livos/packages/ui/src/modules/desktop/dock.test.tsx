@@ -12,8 +12,9 @@
 //   3. Clicking the Liv Assistant tile calls openWindow(
 //        'LIVINITY_liv-assistant', '/liv-assistant', 'Liv Assistant',
 //        '/figma-exports/liv-ai.svg', <originRect>).
-//   4. Legacy LIV_AI_CHAT tile remains rendered in both states (Phase 231
-//      is the remover; Phase 227 is additive-only).
+//   4. Phase 231 retirement guard — legacy chat-iframe dock tiles are
+//      absent (the Phase 227 coexistence assertion is gone; this assertion
+//      replaces it).
 
 import * as React from 'react'
 import {act} from 'react'
@@ -183,12 +184,18 @@ describe('Dock — Liv Assistant entry (Phase 227-02)', () => {
 		)
 	})
 
-	it('legacy LIV_AI_CHAT entry remains rendered alongside Liv Assistant (Phase 231 is the remover)', () => {
+	it('Phase 231 retirement — legacy chat-iframe dock tiles are absent', () => {
 		migrationActive = true
 		act(() => {
 			root!.render(<Dock />)
 		})
-		expect(container!.querySelector('[data-test-dock-item="liv-ai-chat"]')).not.toBeNull()
+		// The two legacy dock-tile wrappers and the appId-keyed DockItems
+		// (legacy launcher) MUST be absent post Phase 231 excision.
+		expect(container!.querySelector('[data-test-dock-item="liv-ai-chat"]')).toBeNull()
+		// Liv Assistant (Phase 227) is the surviving AI chat dock tile.
 		expect(container!.querySelector('[data-test-dock-item="liv-assistant"]')).not.toBeNull()
+		// Negative-grep on the rendered HTML — no legacy dock label / link.
+		const html = container!.innerHTML
+		expect(html).not.toContain('/liv-ai-chat')
 	})
 })

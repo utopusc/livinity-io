@@ -27,12 +27,9 @@ const NativeAppStreamWindowContent = React.lazy(() => import('./app-contents/nat
 // The slug is sliced off the appId and rendered as
 // `<iframe src="/liv-ai-app/apps/<slug>">` (D-203-10, T-203-06).
 const OpenUiAppContent = React.lazy(() => import('./app-contents/openui-app-content'))
-// Phase 203 Hot-fix D 2026-05-24 — Liv AI chat iframe window. Discriminator
-// is the EXACT appId `LIV_AI_CHAT` (set by useLaunchNativeApp short-circuit
-// when wmClassHint==='liv-ai'). Renders the openclaw claw-client surface as
-// an iframe at /liv-ai-app/liv-ai — distinct from the legacy
-// `LIVINITY_liv-ai` literal-appId path which iframes the Next.js dashboard.
-const LivAiChatIframeContent = React.lazy(() => import('./app-contents/liv-ai-chat-iframe-content'))
+// Phase 231 retirement — legacy chat-iframe window removed (was the
+// Phase 203 Hot-fix D surface). Liv Assistant (Phase 227-01) below is
+// the v42 chat surface.
 // Phase 227-01 — Liv Assistant iframe window. Discriminator is the exact
 // appId `LIVINITY_liv-assistant` (set by systemApps in apps.tsx). Renders
 // the AionUi surface served at /liv/ via Phase 226 Caddy handle.
@@ -41,8 +38,6 @@ const LivAssistantWindow = React.lazy(() => import('./app-contents/liv-assistant
 const WEBAPP_APP_ID_PREFIX = 'WEBAPP_'
 const NATIVE_APP_ID_PREFIX = 'NATIVE_'
 const OPENUI_APP_ID_PREFIX = 'OPENUI_'
-/** Phase 203 Hot-fix D — exact appId for the seeded Liv AI chat iframe window. */
-const LIV_AI_CHAT_APP_ID = 'LIV_AI_CHAT'
 /** Phase 227-01 — exact appId for the Liv Assistant iframe window. */
 const LIV_ASSISTANT_APP_ID = 'LIVINITY_liv-assistant'
 
@@ -76,7 +71,7 @@ type WindowContentProps = {
 // Apps that manage their own scroll and layout (no wrapper padding/scroll).
 // WebApps (any appId starting with WEBAPP_) are full-height too — handled
 // via `isWebAppKind(appId)` in `WindowContent` rather than expanding this set.
-const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_liv-ai', LIV_AI_CHAT_APP_ID, LIV_ASSISTANT_APP_ID])
+const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', 'LIVINITY_liv-ai', LIV_ASSISTANT_APP_ID])
 
 export function WindowContent({route, appId, windowId}: WindowContentProps) {
 	if (
@@ -143,15 +138,8 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 		return <OpenUiAppContent slug={slug} name={slug} />
 	}
 
-	// Phase 203 Hot-fix D 2026-05-24 — permanent "Liv AI" chat iframe window.
-	// The dock launcher's wmClassHint='liv-ai' short-circuit set this exact
-	// appId; mount the iframe pointed at /liv-ai-app/liv-ai (Caddy Hot-fix-D
-	// part 1 rewrites that to /plugins/openclawos so the openclaw gateway
-	// plugin serves the claw-client chat surface). Checked BEFORE the switch
-	// so it can't collide with any future literal appId case.
-	if (appId === LIV_AI_CHAT_APP_ID) {
-		return <LivAiChatIframeContent />
-	}
+	// Phase 231 retirement — legacy chat-iframe branch removed.
+	// Liv Assistant (Phase 227-01 below) is the v42 chat surface.
 
 	// Phase 227-01 — Liv Assistant iframe window. Mounts LivAssistantWindow
 	// pointed at /liv/ (Phase 226 Caddy handle). Checked BEFORE the switch

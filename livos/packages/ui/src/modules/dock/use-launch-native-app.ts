@@ -29,19 +29,15 @@ export const OPENUI_WMCLASS_PREFIX = 'liv-openui-'
 export const OPENUI_APP_ID_PREFIX = 'OPENUI_'
 
 /**
- * Phase 203 Hot-fix D 2026-05-24 — EXACT wmClassHint string marking the
- * permanent "Liv AI" dock entry seeded by livinityd's liv-ai-dock-seed.ts.
- * Distinct from the `liv-openui-` PREFIX (per-app OpenUI tiles); this is an
- * exact-match string so the two short-circuit branches stay disjoint.
+ * Phase 231 retirement — legacy chat-iframe wmClassHint + appId consts
+ * removed. The seeded "Liv AI" wmClassHint short-circuit branch in
+ * useLaunchNativeApp is gone; if livinityd's seedLivAiDockEntry
+ * (KEEP_SCOPE_EXPANSION R17) still emits a native-app config with the
+ * `liv-ai` wmClassHint, that hint now falls through to the standard
+ * NATIVE_<id> branch — the seeded config has no real backing process so
+ * the click is effectively a no-op. Liv Assistant (Phase 227) is the
+ * v42 chat surface.
  */
-export const LIV_AI_WMCLASS_HINT = 'liv-ai'
-
-/**
- * Window-manager appId for the Liv AI chat iframe. window-content.tsx
- * dispatches on this exact string and mounts LivAiChatIframeContent
- * (iframe → /liv-ai-app/liv-ai → openclaw claw-client).
- */
-export const LIV_AI_CHAT_APP_ID = 'LIV_AI_CHAT'
 
 export interface LaunchNativeAppArgs {
 	/** UUID matching the persisted NativeAppConfig (apps.native.list[].id). */
@@ -75,17 +71,10 @@ export function useLaunchNativeApp(): (args: LaunchNativeAppArgs) => Promise<voi
 			return
 		}
 
-		// Phase 203 Hot-fix D 2026-05-24 — permanent "Liv AI" dock entry
-		// short-circuit. The seeded NativeAppConfig has wmClassHint='liv-ai'
-		// (EXACT match, NOT a prefix). Open the LIV_AI_CHAT window which
-		// window-content.tsx mounts as an iframe pointed at /liv-ai-app/liv-ai
-		// (Caddy Hot-fix-D part 1 rewrites that to /plugins/openclawos so the
-		// openclaw gateway plugin serves the claw-client chat surface).
-		// Checked BEFORE the OpenUI prefix branch so the two stay disjoint.
-		if (wmClassHint === LIV_AI_WMCLASS_HINT) {
-			windowManager.openWindow(LIV_AI_CHAT_APP_ID, name, name, iconUrl ?? '')
-			return
-		}
+		// Phase 231 retirement — legacy "Liv AI" wmClassHint short-circuit
+		// removed (was Phase 203 Hot-fix D). Liv Assistant (Phase 227) is
+		// the v42 chat surface; legacy chat-window hints fall through to
+		// the standard NATIVE_<id> branch below.
 
 		// Phase 203-10 — OpenUI app short-circuit. The slug we want to render
 		// lives past the prefix in wmClassHint; the underlying UUID (`id`) is
