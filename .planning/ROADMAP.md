@@ -12,6 +12,7 @@
 - ✅ **v35.0 Design System Unification (UI/UX)** — Phases 115-121 (shipped 2026-05-15; 77 commits, sacred SHA preserved 77/77, AC#3 cross-surface parity 92.5%, operator UAT pending) — see [milestones/v35.0-ROADMAP.md](milestones/v35.0-ROADMAP.md)
 - 🟢 **v36.0 LivOS Design Port** — Phases 122-129 (active 2026-05-15; 8-step additive port of the Livinity Design System from claude.ai/design into `livos/packages/ui/` — component-by-component, screenshot per step). Master plan: [v36-DESIGN-PORT-MASTER.md](v36-DESIGN-PORT-MASTER.md). Superseded the old [v36-DRAFT.md](v36-DRAFT.md) (segment-dock direction rejected; see [feedback-v36-no-bold-redesigns](../../../.claude/projects/.../memory/feedback_v36_no_bold_redesigns.md)).
 - 🟢 **v37.0 Store Reimagining + Plugin Platform** — Phases 148-155 (opened 2026-05-18; LOCKED draft at [v37-DRAFT.md](v37-DRAFT.md)). Redesigns `/store` with 5 sections (Apps/WebApp/Native/AI/Plugin), reuses WebApp window infra for native Linux apps, AI section bundles MCP+Agents+GSD, plugin runtime supports HOT-RELOAD. 7-11 days. Operator-signed plugins for v37; third-party submission deferred to v38.
+- 🟢 **v42.0 Liv Assistant (AionUi-based replacement for OpenClawOS)** — Phases 222-233 (opened 2026-05-27; spike 222 PASSED `b2be397f` → vendor-and-wrap strategy). Replaces openclaw + claw-client chat surface with vendored AionUi tarball, iframe-embedded in LivOS shell, Claude Code subscription via local CLI. 3-4 days. Master: [milestones/v42/PROJECT.md](milestones/v42/PROJECT.md), per-phase plan: [milestones/v42/ROADMAP.md](milestones/v42/ROADMAP.md).
 - ⏸ **(deferred) Backup & Restore** — paused, 8 phases / 47 BAK-* reqs defined in [milestones/v30.0-DEFINED/](milestones/v30.0-DEFINED/) (resumes as future slot e.g. v34+)
 
 ---
@@ -3315,3 +3316,74 @@ All 66 requirements from `.planning/REQUIREMENTS.md` mapped to exactly one phase
 - **Supabase RLS misconfiguration** could leak user data — Phase 212 must include RLS verification tests asserting non-admin row counts.
 - **Server5 relay state unknown** at milestone open (D-V41-RELAY-STATE-UNKNOWN) — Phase 210 entry probe must run before patching.
 - **CF wildcard cert may be broken post-migration** (D-V41-CF-CERT-AUDIT-DEFERRED) — Phase 216 live audit will surface.
+
+---
+
+## v42 — Liv Assistant (AionUi-based) — OPENED 2026-05-27
+
+Replaces the openclaw + claw-client chat surface in LivOS with a vendored AionUi v2.1.4 headless WebUI (`aionui-web-2.1.4-linux-x86_64.tar.gz`), iframe-embedded into the LivOS desktop shell. Uses local `claude` CLI binary for Claude subscription auth — no Anthropic API key required for end users.
+
+**Strategy decision (post-Phase 222 spike, SHA `b2be397f`):** vendor-and-wrap upstream tarball, **no source fork**. License: Apache-2.0. See [milestones/v42/PROJECT.md](milestones/v42/PROJECT.md) for full milestone scope (12 phases 222-233) and locked invariants.
+
+Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (broker subscription path) must remain untouched across all v42 phases — pre-commit hook enforces.
+
+---
+
+### Phase 222: Spike — AionUi feasibility on Mini PC — ✅ DONE 2026-05-27 (`b2be397f`)
+
+**Goal:** PASS/FAIL on 4 gates (build, iframe headers, Claude CLI subscription, license) before committing engineering time to the rest of v42.
+
+**Outcome:** All 4 PASS. Pre-built tarball boots in 2s, no XFO/CSP, built-in Claude Code agent uses local CLI + subscription creds, Apache-2.0 with no GPL deps. Verdict PROCEED. Strategy: vendor-and-wrap (no fork). See [.planning/phases/222-aionui-spike/222-SPIKE.md](phases/222-aionui-spike/222-SPIKE.md).
+
+---
+
+### Phase 223: Vendor AionUi tarball + LivOS install scaffold — ⚪ READY
+
+**Goal:** Land the install scaffolding that downloads, verifies, extracts, and runs the upstream AionUi WebUI tarball as a Mini PC system service named `liv-assistant`. **No source fork.** Apache `LICENSE` + `NOTICE` preserved. First-boot admin password captured into a known location for later LivOS UI integration. Service is idempotent (re-running `install.sh` heals partial state, does not re-download if SHA matches). No Caddy routing yet (deferred to Phase 226), no LivOS UI changes yet (Phase 227), no auth bridge (Phase 228), no brand overlay (Phase 232).
+
+**Effort:** 3h.
+
+**Requirements:** This phase has no formal REQ-IDs because v42 was opened post-REQUIREMENTS.md. Acceptance is goal-backward: install script works, service boots, password captured. Future REQ-ID mapping (LIV-* prefix) can be added when v42 REQUIREMENTS.md gets formalized.
+
+**Depends on:** Phase 222 ✅ (spike PROCEED verdict).
+
+**Tasks:**
+1. Write `scripts/install-liv-assistant.sh` — idempotent installer:
+   - Downloads `aionui-web-2.1.4-linux-x86_64.tar.gz` from upstream GitHub Releases to `/opt/liv-assistant/cache/`.
+   - Verifies sha256 against pinned hash `0bb02d0028d932c2e65e676c63074bcee2079508aa954e088c16ece92ba36778`.
+   - Extracts to `/opt/liv-assistant/aionui-web-2.1.4/` (versioned dir for future upgrades).
+   - Symlinks `/opt/liv-assistant/current` → versioned dir for stable path.
+   - Installs `bun` to `/home/bruce/.bun/` if not present (`curl https://bun.sh/install | bash` as bruce).
+   - Preserves Apache `LICENSE` + `NOTICE` next to the binary; creates `/opt/liv-assistant/UPSTREAM.md` documenting source repo + version + SHA + license.
+2. Write `systemd/liv-assistant.service` unit:
+   - Runs as `bruce` user.
+   - Working dir `/opt/liv-assistant/current`.
+   - `ExecStart` = `./aionui-web start --port 3020 --data-dir /opt/liv-assistant/data --backend-bin ./bundled-aioncore/linux-x64/aioncore`.
+   - `Environment="PATH=/home/bruce/.bun/bin:/usr/local/bin:/usr/bin:/bin"` so the Claude Code ACP bridge finds `bun`.
+   - Restart=on-failure, RestartSec=5.
+   - Stdout/stderr → journald.
+3. Write `scripts/capture-liv-assistant-password.sh` — post-first-boot helper:
+   - Reads journald for the first-boot `Generated initial admin password: ...` line.
+   - Writes credentials to `/etc/livos/liv-assistant-credentials` (mode 0600, owned by bruce).
+   - File format: `username=admin\npassword=<captured>\n`.
+   - Idempotent: if file exists and is non-empty, no-op; if first-boot line not yet in journald, exits 0 with a "not yet ready" message (caller polls).
+4. Document install + service in `docs/liv-assistant-install.md` for operator + future runbook.
+5. **Deploy to Mini PC** — run installer, start service, verify `systemctl is-active liv-assistant` = `active`, `curl http://127.0.0.1:3020/api/auth/status` returns 200, `/etc/livos/liv-assistant-credentials` exists with non-empty password.
+6. **Cleanup Phase 222 scratch** on Mini PC: `kill $(cat /tmp/v42-spike/aionui.pid) 2>/dev/null; rm -rf /tmp/v42-spike`. Confirm port 9099 free.
+
+**Success criteria:**
+1. `scripts/install-liv-assistant.sh` is idempotent — running twice in a row produces zero diff in `/opt/liv-assistant/`.
+2. SHA256 mismatch on the downloaded tarball aborts installation with a clear error (does not extract garbage).
+3. `systemctl status liv-assistant` shows `active (running)` on Mini PC.
+4. `curl -sSI http://127.0.0.1:3020/` returns `HTTP/1.1 200 OK` with no `X-Frame-Options` and no `Content-Security-Policy`.
+5. `sudo cat /etc/livos/liv-assistant-credentials` returns a non-empty `password=...` line, file mode `0600`, owner `bruce`.
+6. `/opt/liv-assistant/LICENSE` and `/opt/liv-assistant/NOTICE` (or `cache/.../LICENSE`) exist and contain Apache-2.0 text.
+7. `/opt/liv-assistant/UPSTREAM.md` exists and records upstream URL, version `2.1.4`, SHA, and license.
+8. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` unchanged (pre-commit hook verifies).
+
+**Risks:**
+- Mini PC `bun` install path divergence — installer must check both `/home/bruce/.bun/bin/bun` and `/usr/local/bin/bun` before re-downloading.
+- Port 3020 may collide with an existing service — installer should `ss -tlnp \| grep ':3020 '` and abort with a clear message if collision detected.
+- First-boot password line race — journald may not have the line yet when `capture-liv-assistant-password.sh` runs; the script must tolerate this and the deploy step retries.
+
+---
