@@ -659,34 +659,42 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   BM_VMOUNTAIN_HITS="$(grep -lE 'M40 20 Q38 22 25 40' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
   BM_LSHAPE_HITS="$(grep -lE 'M30 15 L42 15 L42 53 L65 53 L65 65 L30 65 Z' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
   BM_DONUT_HITS="$(grep -lE 'M40 5 A35 35 0 1 0 40 75 A35 35 0 1 0 40 5 Z' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
+  BM_MARKER_HITS="$(grep -lE 'liv-brand-donut' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
   set -o pipefail
   BM_NEED_REWRITE=$(( BM_VMOUNTAIN_HITS + BM_LSHAPE_HITS ))
-  if [[ "${BM_NEED_REWRITE}" -gt 0 ]] || [[ "${BM_DONUT_HITS}" -eq 0 ]]; then
-    log "Brand-mark sed: converging inline SVG to Livinity donut (V-mountain hits=${BM_VMOUNTAIN_HITS}, L-shape hits=${BM_LSHAPE_HITS}, donut hits=${BM_DONUT_HITS})"
-    # Atomic multi-pattern sed pass — both PRE-states converge on the donut.
+  BM_NEED_MARKER=$(( 1 - (BM_MARKER_HITS > 0 ? 1 : 0) ))
+  if [[ "${BM_NEED_REWRITE}" -gt 0 ]] || [[ "${BM_DONUT_HITS}" -eq 0 ]] || [[ "${BM_MARKER_HITS}" -eq 0 ]]; then
+    log "Brand-mark sed: converging inline SVG to Livinity donut + adding liv-brand-donut marker (V-mountain hits=${BM_VMOUNTAIN_HITS}, L-shape hits=${BM_LSHAPE_HITS}, donut hits=${BM_DONUT_HITS}, marker hits=${BM_MARKER_HITS})"
+    # Atomic multi-pattern sed pass.
     # Pattern 1a: V-mountain path → donut outer circle
     # Pattern 1b: L polygon → donut outer circle (idempotent re-run from Phase 238.6 deploy)
     # Pattern 2a: dot at cy=46 r=3 (V-mountain era) → centered hole at r=12 fill=black
     # Pattern 2b: invisible dot at cy=46 r=0 (Phase 238.6 era) → centered hole at r=12 fill=black
     # Pattern 3: smile-arc → empty (already done in Phase 238.6; safe to re-apply)
+    # Pattern 4 (Phase 238.8): add `liv-brand-donut` marker class to the
+    #   wrapper className string, so livinity-overlay.css can target it and
+    #   replace the inline SVG with the adaptive /liv/branding/favicon.svg
+    #   bg-image. Idempotent (only matches the bare bg-black class string).
     sed -i \
       -e 's|M40 20 Q38 22 25 40 Q23 42 26 42 L30 42 Q32 40 40 30 Q48 40 50 42 L54 42 Q57 42 55 40 Q42 22 40 20|M40 5 A35 35 0 1 0 40 75 A35 35 0 1 0 40 5 Z|g' \
       -e 's|M30 15 L42 15 L42 53 L65 53 L65 65 L30 65 Z|M40 5 A35 35 0 1 0 40 75 A35 35 0 1 0 40 5 Z|g' \
       -e 's|key:"logo-circle",cx:"40",cy:"46",r:"3",fill:"white"|key:"logo-circle",cx:"40",cy:"40",r:"12",fill:"black"|g' \
       -e 's|key:"logo-circle",cx:"40",cy:"46",r:"0",fill:"white"|key:"logo-circle",cx:"40",cy:"40",r:"12",fill:"black"|g' \
       -e 's|d:"M18 50 Q40 70 62 50"|d:""|g' \
+      -e 's|"bg-black shrink-0 size-32px relative rd-0.5rem"|"bg-black shrink-0 size-32px relative rd-0.5rem liv-brand-donut"|g' \
       "${REBRAND_TARGET}"/assets/*.js
     set +o pipefail
     BM_POST_DONUT="$(grep -lE 'M40 5 A35 35 0 1 0 40 75 A35 35 0 1 0 40 5 Z' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
     BM_POST_HOLE="$(grep -lE 'key:"logo-circle",cx:"40",cy:"40",r:"12",fill:"black"' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
+    BM_POST_MARKER="$(grep -lE 'liv-brand-donut' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
     set -o pipefail
-    if [[ "${BM_POST_DONUT}" -gt 0 ]] && [[ "${BM_POST_HOLE}" -gt 0 ]]; then
-      log "Brand-mark sed: Livinity donut applied (outer path in ${BM_POST_DONUT} file(s), inner hole in ${BM_POST_HOLE} file(s))"
+    if [[ "${BM_POST_DONUT}" -gt 0 ]] && [[ "${BM_POST_HOLE}" -gt 0 ]] && [[ "${BM_POST_MARKER}" -gt 0 ]]; then
+      log "Brand-mark sed: Livinity donut + marker applied (outer=${BM_POST_DONUT}, hole=${BM_POST_HOLE}, marker=${BM_POST_MARKER})"
     else
-      log "WARN: Brand-mark sed end-state incomplete (donut=${BM_POST_DONUT}, hole=${BM_POST_HOLE}); investigate"
+      log "WARN: Brand-mark sed end-state incomplete (donut=${BM_POST_DONUT}, hole=${BM_POST_HOLE}, marker=${BM_POST_MARKER}); investigate"
     fi
   else
-    log "Brand-mark sed: Livinity donut already present (V-mountain=0, L-shape=0, donut=${BM_DONUT_HITS}); skipping"
+    log "Brand-mark sed: Livinity donut + marker already present (donut=${BM_DONUT_HITS}, marker=${BM_MARKER_HITS}); skipping"
   fi
 else
   log "Brand-mark sed: WARN ${REBRAND_TARGET} missing; skipping"
