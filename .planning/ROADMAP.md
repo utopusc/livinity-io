@@ -3598,23 +3598,35 @@ Plans:
 
 ---
 
-### Phase 242: Luse skill set for Claude Code (.claude/skills/luse/) — 🟡 PLANNED 2026-05-27 (0/1 plans)
+### Phase 242: Luse skill set — UNIVERSAL across all Liv AI agents — 🟡 PLANNED 2026-05-27 (0/1 plans)
 
-**Goal:** Provide a Claude Code skill set for Luse computer-use so operators using the Claude Code agent inside Liv AI can issue natural-language click/type/screenshot/key/scroll commands.
+**Goal:** Provide a Luse computer-use skill set that works across **ALL agents Liv AI supports** (Aion CLI, Claude Code, OpenCode, Gemini, OpenClaw — anything AionUi can dispatch to), NOT just Claude Code. Operators using any agent inside Liv AI can issue natural-language click/type/screenshot/key/scroll commands.
 
-**Direction:**
-- New directory `.claude/skills/luse/` with `SKILL.md` (high-level intent + when-to-use)
-- Sub-skill markdown files: `click.md`, `type.md`, `screenshot.md`, `key.md`, `scroll.md`
-- Each sub-skill documents inputs/outputs + safety preconditions
-- Docs-only phase — no Mini PC deploy required; ships when the .claude/ files are committed and Claude Code reloads its skill registry
-- D-242-DOCS-ONLY: zero source-tree code changes
+**Architecture (universal-by-default):**
+- Luse capability is already exposed via MCP in Phase 241 — MCP is the universal protocol every supported agent speaks. The "skill" in this phase is the USAGE DOCUMENTATION that travels with the MCP server so every agent's tool-discovery surface shows Luse with consistent hints.
+- Canonical docs at `docs/luse/` (agent-agnostic):
+  - `LUSE.md` — capability overview, when-to-use, prerequisites (Mini PC, X session, permissions)
+  - `tools/click.md`, `tools/type.md`, `tools/screenshot.md`, `tools/key.md`, `tools/scroll.md` — per-tool inputs/outputs + safety preconditions
+  - `LUSE-WORKFLOW.md` — end-to-end example (screenshot → identify element → click → verify)
+- Agent-specific shim files generated FROM the canonical docs (single source of truth):
+  - `.claude/skills/luse/SKILL.md` + tool files — Claude Code skill format (operator-invokable via `/luse` or natural language)
+  - `.aion/skills/luse.md` (or whatever Aion CLI's skill location is — Phase 242 investigation determines)
+  - `.opencode/skills/luse.md` — OpenCode equivalent if their skill system exists
+  - MCP tool descriptions in the Luse MCP server (Phase 241) reference back to `docs/luse/` for the canonical text
+- Generation script `scripts/sync-luse-skills.sh` walks the canonical docs and emits/refreshes the agent-shim files. Idempotent — only writes when source content changed.
+- Docs-only phase — no Mini PC deploy required; ships when the docs/shims are committed.
+- D-242-UNIVERSAL: NO agent should be privileged. Luse usage instructions are the same prose across all shim formats — only the wrapper frontmatter / file location differs.
 
 **Plans:** 0/1 plans complete
 
 Plans:
-- [ ] 242-PLAN.md — TBD (single-plan docs-only authoring)
+- [ ] 242-PLAN.md — TBD (single-plan multi-format docs authoring + generation script)
 
-**UAT:** operator opens Claude Code agent inside Liv AI → asks "screenshot the desktop" → Claude Code uses the luse skill → screenshot returned.
+**UAT:** Operator opens any agent (Claude Code, Aion CLI, OpenCode) inside Liv AI → asks "screenshot the desktop" → that agent discovers the luse tool (via skills directory or MCP) → screenshot returned with identical hint copy regardless of which agent ran it.
+
+**Cross-references:**
+- Depends on Phase 241 (MCP Luse server) for the protocol-level exposure
+- Companion to Phase 244 (Aion → Liv text rebrand in docs)
 
 ---
 
