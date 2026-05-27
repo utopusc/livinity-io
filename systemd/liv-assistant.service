@@ -1,0 +1,29 @@
+[Unit]
+Description=Liv Assistant (AionUi WebUI, vendored v2.1.4)
+Documentation=file:///opt/liv-assistant/UPSTREAM.md
+Documentation=https://github.com/iOfficeAI/AionUi
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bruce
+Group=bruce
+WorkingDirectory=/opt/liv-assistant/current
+Environment="PATH=/home/bruce/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="HOME=/home/bruce"
+ExecStart=/opt/liv-assistant/current/aionui-web start --port 3020 --data-dir /opt/liv-assistant/data --backend-bin /opt/liv-assistant/current/bundled-aioncore/linux-x64/aioncore
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=liv-assistant
+
+# Hardening (minimal — keep aionui's HTTP listener + claude CLI spawn working)
+NoNewPrivileges=false
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/opt/liv-assistant/data /home/bruce/.claude /home/bruce/.bun /home/bruce/.cache
+
+[Install]
+WantedBy=multi-user.target
