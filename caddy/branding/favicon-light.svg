@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Phase 238.9 — Livinity logo, light-theme variant.
+       Big black ring (outer) + small white dot (inner). Used as CSS
+       background-image inside .liv-brand-donut when prefers-color-scheme:
+       light (default). Matches platform/web/public/favicon.svg light
+       branch. -->
+  <circle cx="16" cy="16" r="14" fill="#0a0a0a"/>
+  <circle cx="16" cy="16" r="5" fill="#ffffff"/>
+</svg>
