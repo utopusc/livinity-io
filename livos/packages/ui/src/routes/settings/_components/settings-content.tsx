@@ -55,6 +55,7 @@ import {Card} from '@/components/ui/card'
 import {useCpuForUi} from '@/hooks/use-cpu'
 import {useMemoryForUi} from '@/hooks/use-memory'
 import {useDiskForUi} from '@/hooks/use-disk'
+import {useV42MigrationActive} from '@/hooks/use-v42-migration-active'
 import {IconButton} from '@/components/ui/icon-button'
 import {IconButtonLink} from '@/components/ui/icon-button-link'
 import {usePassword} from '@/hooks/use-password'
@@ -189,12 +190,29 @@ const GROUP_LABELS: Record<SettingsGroup, string> = {
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Phase 224 — Sidebar entries hidden while v42 Liv Assistant migration is
+// active. Direct URLs (e.g. /settings/mcp-servers) STILL serve their routes
+// for admin recovery (SC-03). Only the discovery sidebar entry is removed.
+// Reversible via Redis key `liv:config:liv_v42_migration_active=false`.
+// Sacred SHA `f3538e1d` UNCHANGED — this is a sidebar filter, not a route delete.
+const V42_HIDDEN_MENU_IDS: ReadonlyArray<SettingsSection> = ['mcp-servers']
+// NOTE: `ai-config` / `liv-agent` / `ai-chat-settings` / `autonomous-agents` /
+// `integrations` / `gmail` / `dm-pairing` / `usage` / `webhooks` / `voice` /
+// `memory` were already removed from MENU_ITEMS in the prior "AI Chat
+// teardown" (see comment at line ~105). If any of those (or new AI-shaped
+// items) get re-added before Phase 224 flips OFF, add their IDs to this
+// array to suppress them while the migration is active.
+
 function useVisibleMenuItems(): MenuItem[] {
 	const userQ = trpcReact.user.get.useQuery()
 	const role = userQ.data?.role
 	// In legacy single-user mode (no role set), treat as admin
 	const isAdmin = !role || role === 'admin'
-	return MENU_ITEMS.filter((item) => !item.adminOnly || isAdmin)
+	// Phase 224 — hide AI-shaped entries while Liv Assistant migration is active.
+	const v42MigrationActive = useV42MigrationActive()
+	return MENU_ITEMS
+		.filter((item) => !item.adminOnly || isAdmin)
+		.filter((item) => !(v42MigrationActive && V42_HIDDEN_MENU_IDS.includes(item.id)))
 }
 
 export function SettingsContent() {
