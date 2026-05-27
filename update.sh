@@ -645,7 +645,7 @@ if [[ ! -f "$_LIV_CADDY_INSTALLER_SRC" ]]; then
 fi
 if [[ -f "$_LIV_CADDY_INSTALLER_SRC" ]]; then
     if bash "$_LIV_CADDY_INSTALLER_SRC" 2>&1 | tail -15; then
-        ok "Caddy /liv snippet ensured (snippet + Caddyfile imports + caddy validate)"
+        ok "Caddy /liv routing ensured (deprecation stub; routing emitted by livinityd caddy.ts since Phase 226-04)"
     else
         fail "install-liv-caddy-snippet.sh failed — see output above (caddy validate fail / EACCES / awk fail?)"
     fi
@@ -1317,7 +1317,7 @@ echo -e "    - livinityd source code"
 echo -e "    - UI (rebuilt from source)"
 echo -e "    - Liv AI packages (core, worker, mcp-server)"
 echo -e "    - liv-assistant (AionUi WebUI, vendored v2.1.4, port 3020)"
-echo -e "    - Caddy /liv reverse-proxy snippet (bruce.livinity.io/liv → :3020, iframe CSP override) [Phase 226]"
+echo -e "    - Caddy /liv reverse-proxy (livinityd-emitted; bruce.livinity.io/liv → :3020, iframe CSP override) [Phase 226-04]"
 echo -e "    - Gallery app cache"
 echo -e "    - Dependencies"
 echo ""
