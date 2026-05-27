@@ -1138,14 +1138,17 @@ else
     info "liv-claw-gateway.service not installed yet — pre-203-03 deploy; run scripts/install/systemd-units-install.sh as root to enable"
 fi
 
-# ── Phase 225 — restart liv-assistant.service + /api/health smoke ──────────────
+# ── Phase 225 — restart liv-assistant.service + /api/auth/status smoke ─────────
 # Guarded so legacy deploys without the unit are no-ops. Restart is required so
 # the freshly-installed binary at /opt/liv-assistant/current is picked up (the
 # install script's atomic symlink swap doesn't trigger a reload by itself).
-# The /api/health probe enforces that the service ACTUALLY booted to a serving
-# state — not just `active (running)` (which can be true for a few seconds while
-# the HTTP server is still initialising). A 5s timeout is generous given Phase
-# 223-05's measured cold-boot of ~3s.
+# The /api/auth/status probe enforces that the service ACTUALLY booted to a
+# serving state — not just `active (running)` (which can be true for a few
+# seconds while the HTTP server is still initialising). A 5s timeout is generous
+# given Phase 223-05's measured cold-boot of ~3s. Plan 225-03 pivoted the probe
+# URL to /api/auth/status because vendored AionUi v2.1.4 binary returns HTTP 200
+# from the application-layer auth controller (router-alive + handler-alive) —
+# see Plan 225-02 DEPLOY-LOG Step 2d endpoint matrix for the full evidence.
 if [[ -f /etc/systemd/system/liv-assistant.service || -f /usr/lib/systemd/system/liv-assistant.service ]]; then
     systemctl enable liv-assistant.service 2>/dev/null || true
     if systemctl restart liv-assistant.service 2>/dev/null; then
@@ -1155,15 +1158,15 @@ if [[ -f /etc/systemd/system/liv-assistant.service || -f /usr/lib/systemd/system
     fi
     # Give the service a moment to bind port 3020 before probing.
     sleep 2
-    info "Probing http://127.0.0.1:3020/api/health (5s timeout)..."
-    if curl -fsS --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:3020/api/health 2>/dev/null | grep -qE '^(200|204)$'; then
-        ok "liv-assistant /api/health = 200/204 OK"
+    info "Probing http://127.0.0.1:3020/api/auth/status (5s timeout)..."
+    if curl -fsS --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:3020/api/auth/status 2>/dev/null | grep -qE '^(200|204)$'; then
+        ok "liv-assistant /api/auth/status = 200/204 OK"
     else
         # Capture the failing response for the deploy log before aborting.
-        warn "liv-assistant /api/health probe non-2xx; collecting diagnostics..."
-        curl -sS -o /dev/null -w 'HTTP %{http_code} (curl exit %{exitcode}, time %{time_total}s)\n' --max-time 5 http://127.0.0.1:3020/api/health 2>&1 || true
+        warn "liv-assistant /api/auth/status probe non-2xx; collecting diagnostics..."
+        curl -sS -o /dev/null -w 'HTTP %{http_code} (curl exit %{exitcode}, time %{time_total}s)\n' --max-time 5 http://127.0.0.1:3020/api/auth/status 2>&1 || true
         journalctl -u liv-assistant -n 20 --no-pager 2>/dev/null || true
-        fail "liv-assistant health probe FAILED (http://127.0.0.1:3020/api/health did not return 200/204 within 5s). Deploy aborted."
+        fail "liv-assistant health probe FAILED (http://127.0.0.1:3020/api/auth/status did not return 200/204 within 5s). Deploy aborted."
     fi
 
     # ── Phase 225 — first-boot password capture (race-tolerant) ─────────────────
