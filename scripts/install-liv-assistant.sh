@@ -617,6 +617,67 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Phase 238.6 Step F — Inline brand mark sed (AionUi V-mountain → Livinity "L")
+#
+# Operator 2026-05-27 evening: sidebar top-left still shows AionUi brand mark
+# (the famous M40 20 Q38 22 ... V-mountain + circle dot + smile-arc SVG path)
+# hardcoded INLINE in the JS bundle. The path appears EXACTLY ONCE in
+# index-*.js (unique enough for safe sed). It's wrapped in `<div class="bg-
+# black shrink-0 size-32px relative rd-0.5rem">` — a clickable 32px black-
+# bg rounded square containing an 80x80 viewBox SVG.
+#
+# This brand mark is NOT tied to the selected-agent's icon — it's the
+# AionUi BRAND itself (operator-visible regardless of which agent is
+# active in /api/settings/client.guid.lastSelectedAgent).
+#
+# Sed strategy — keep the wrapper geometry untouched, rewrite the 3 SVG
+# child elements:
+#   1. First path (V-mountain) `d=...` → Livinity "L" letter polygon
+#      (M30 15 L42 15 L42 53 L65 53 L65 65 L30 65 Z)
+#   2. Circle dot `r:"3"` → `r:"0"` (invisible)
+#   3. Smile-arc path `d:"M18 50..."` → `d:""` (empty path renders nothing)
+#
+# Result: black 32px rounded square with a clean white "L" letter mark —
+# matches Phase 238.4's brand language (Livinity #1d1d1f + favicon "L" mark
+# + dock tile theme).
+#
+# Idempotency: grep pre-check for the AionUi V-path; skip when absent.
+# Post-grep verify; warn if AionUi path survives.
+#
+# D-V43-APACHE-NOTICE: scope strictly inside ${REBRAND_TARGET}=${CURRENT_LINK}/static/;
+# LICENSE+NOTICE at ${INSTALL_ROOT} structurally outside.
+# ---------------------------------------------------------------------------
+if [[ -d "${REBRAND_TARGET}" ]]; then
+  set +o pipefail
+  BM_PRE_HITS="$(grep -lE 'M40 20 Q38 22 25 40' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
+  set -o pipefail
+  if [[ "${BM_PRE_HITS}" -gt 0 ]]; then
+    log "Brand-mark sed: replacing AionUi V-mountain inline SVG with Livinity 'L' in ${BM_PRE_HITS} file(s)"
+    # Atomic 3-pattern sed pass.
+    # Pattern 1: V-mountain path → "L" letter polygon
+    # Pattern 2: circle dot r:"3" → r:"0" (must scope to the logo-circle key to avoid collisions)
+    # Pattern 3: smile-arc path d → empty
+    sed -i \
+      -e 's|M40 20 Q38 22 25 40 Q23 42 26 42 L30 42 Q32 40 40 30 Q48 40 50 42 L54 42 Q57 42 55 40 Q42 22 40 20|M30 15 L42 15 L42 53 L65 53 L65 65 L30 65 Z|g' \
+      -e 's|key:"logo-circle",cx:"40",cy:"46",r:"3"|key:"logo-circle",cx:"40",cy:"46",r:"0"|g' \
+      -e 's|d:"M18 50 Q40 70 62 50"|d:""|g' \
+      "${REBRAND_TARGET}"/assets/*.js
+    set +o pipefail
+    BM_POST_HITS="$(grep -lE 'M40 20 Q38 22 25 40' "${REBRAND_TARGET}"/assets/*.js 2>/dev/null | wc -l)"
+    set -o pipefail
+    if [[ "${BM_POST_HITS}" -ne 0 ]]; then
+      log "WARN: ${BM_POST_HITS} JS file(s) still contain AionUi V-path after sed pass (investigate — path text drift?)"
+    else
+      log "Brand-mark sed: AionUi inline SVG paths replaced with Livinity 'L' (verified by post-grep)"
+    fi
+  else
+    log "Brand-mark sed: no AionUi V-path found (already replaced or absent); skipping"
+  fi
+else
+  log "Brand-mark sed: WARN ${REBRAND_TARGET} missing; skipping"
+fi
+
+# ---------------------------------------------------------------------------
 # Install bun if missing (Claude Code ACP bridge requires it)
 # See 222-SPIKE.md "Bun runtime dependency" — risk #3.
 # ---------------------------------------------------------------------------
