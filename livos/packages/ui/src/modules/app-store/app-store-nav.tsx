@@ -5,6 +5,7 @@ import {useParams} from 'react-router-dom'
 import {FadeScroller} from '@/components/fade-scroller'
 import {AnimatedBackground} from '@/components/motion-primitives/animated-background'
 import {ButtonLink} from '@/components/ui/button-link'
+import {useV42MigrationActive} from '@/hooks/use-v42-migration-active'
 import {useAvailableApps} from '@/providers/available-apps'
 import {useBreakpoint} from '@/utils/tw'
 
@@ -14,6 +15,7 @@ import {getAllCategories, getCategoryLabel} from './utils'
 export function ConnectedAppStoreNav() {
 	const {categoryishId} = useParams<{categoryishId: string}>()
 	const {appsGroupedByCategory} = useAvailableApps()
+	const v42MigrationActive = useV42MigrationActive()
 
 	// Get all categories (predefined + others from actual app data)
 	const allCategories = getAllCategories(appsGroupedByCategory || {})
@@ -22,6 +24,13 @@ export function ConnectedAppStoreNav() {
 	const categoriesWithApps = allCategories.filter((categoryId) => {
 		// Always include 'discover' and 'all' regardless of app count
 		if (categoryId === 'discover' || categoryId === 'all') return true
+		// Phase 224 — v42 Liv Assistant migration: hide the `ai` category
+		// entirely so operators don't try to install AI providers via the
+		// legacy App Store path while Liv Assistant is being wired in.
+		// Reversible via Redis key `liv:config:liv_v42_migration_active=false`.
+		// Sacred SHA `f3538e1d` UNCHANGED — this is a UI-only filter, the
+		// `ai` category data still exists and reappears on flag flip.
+		if (v42MigrationActive && categoryId === 'ai') return false
 		// For other categories, only include if they have apps
 		// A category may have no apps if it is a hardcoded one in the OS and we have changed the app manifests to no longer include it.
 		return (appsGroupedByCategory as any)?.[categoryId]?.length > 0
