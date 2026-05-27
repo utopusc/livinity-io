@@ -3700,6 +3700,20 @@ Plans:
 
 ---
 
+### Phase 238.4: Livinity brand layer LIVE in iframe — CSS injection + favicon + theme-color + Space Grotesk — ✅ SHIPPED 2026-05-27 (1/1 plan, 12/12 SCs GREEN)
+
+**Goal:** Operator reported "Logo değişmemiş, Fontlar vs". Phase 232's `livinity-overlay.css` was DEAD since Phase 232 ship — designed to inject into iframe via Caddy `replace` directive, but Mini PC's Caddy v2.11.3 lacks `http.handlers.replace_response` plugin. Fix by sed-editing `${CURRENT_LINK}/static/index.html` directly (same approach as Phase 234-03 + 238.2 rebrand sed — AionUi backend doesn't regenerate static/index.html on restart).
+
+**Plans:** 1/1 plan complete ✅
+
+- [x] 238.4-01-PLAN.md — install-script Step 238.4-E + livinity-overlay.css strengthen — SHIPPED 2026-05-27 (`33317d28`)
+
+**Outcome:** 4 idempotent sed substitutions on index.html: (1) inject `<link>` to overlay CSS before `</head>`, (2) favicon PNG → Livinity SVG, (3) apple-touch-icon → Livinity SVG, (4) theme-color `#4E5969` → `#1d1d1f`. livinity-overlay.css strengthened from 669B → 4126B (Arco Design `--primary-1..10` palette override + font-family !important on more selectors + `.arco-btn-primary` styles + heading polish). External `/liv/` verified all 4 changes live; livinity-overlay.css served 4126B. Non-regressions GREEN: static Aion=0, iOfficeAI=0, builtin-skills Aion=0, /liv/ws HTTP/1.1 → 101, /liv-login → 302, LICENSE+NOTICE byte-identical, sacred SHA UNCHANGED 4-snapshot. Auto-approved per chain.
+
+**What operator sees post-reload:** Livinity "L" favicon in browser tab, dark Livinity theme-color in browser chrome, all UI text in Space Grotesk, primary buttons solid black + white text + crisp wordmark titlebar.
+
+---
+
 ### Phase 238.3: Default agent persistence — Claude Code default + Aion CLI visible — ✅ SHIPPED 2026-05-27 (1/1 plan, 10/10 SCs GREEN)
 
 **Goal:** Persist `client_settings.guid.lastSelectedAgent = "2d23ff1c"` (Claude Code) across deploys. Operator explicitly requested Aion CLI stay VISIBLE in picker; only the DEFAULT changes.
