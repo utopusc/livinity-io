@@ -13,7 +13,41 @@ progress:
   percent: 100
 ---
 
-## Current Position (v43 — Phase 238.4 ✅ SHIPPED 1/1 plan — Livinity brand layer LIVE in iframe — CSS injection + favicon + theme-color + Space Grotesk + Arco palette overrides, 12/12 SCs GREEN, sacred SHA UNCHANGED)
+## Current Position (v43 — autonomous run 2026-05-27 evening: 5 hot-fix phases SHIPPED (238 → 238.4), Phase 244 OBSOLETED; substantial phases 239/240/241/243 deferred to focused planning sessions; Phase 242 deferred pending 241)
+
+**Autonomous run summary (operator invoked `/gsd-autonomous` 2026-05-27 evening):**
+
+✅ **SHIPPED this session:**
+- Phase 238 (3 plans): word-boundary Aion in static/ → 0; logo SVG scaffold
+- Phase 238.1 (1 plan): footer URLs `iOfficeAI/*` → `livinity.io`
+- Phase 238.2 (1 plan): builtin-skills/*.md AionUi → Liv AI
+- Phase 238.3 (1 plan): default agent persistence (Claude Code; Aion CLI visible per operator)
+- Phase 238.4 (1 plan): index.html sed inject — livinity-overlay.css link + favicon SVG + theme-color #1d1d1f + Space Grotesk font + Arco palette monochrome
+
+⏭️ **Phase 244 OBSOLETED**: Mini PC probe found 0 `.md` files under `/opt/liv-assistant/current/` (all AionUi markdown lives at `data/builtin-skills/` which Phase 238.2 already covered). ROADMAP updated; no commit needed.
+
+⏸️ **Deferred to focused planning sessions:**
+- **Phase 239** (Onboarding "CLI Tools" section): substantial frontend rebuild in `livos/packages/ui/`. Operator-visible UX redesign — needs discuss-phase to scope card layout, install-button wiring, AI section removal data-loss verification.
+- **Phase 240** (Local Agents install-from-UI): HARD-depends on Phase 241 (uses the install/auth API surface 241 exposes). Cannot plan until 241 lands.
+- **Phase 241** (MCP auto-add Liv tools): foundational. Probe 2026-05-27 evening discovered `/api/extensions/mcp-servers` is GET-only (POST/PUT/PATCH/DELETE all 405); write API path uncertain — candidates `/api/mcp/agent-configs`, `/api/mcp/sync-to-agents`. Phase needs (a) deeper API probe to identify write surface (b) new livinityd `mcp-registrar/` module (c) Redis first-boot sentinel (d) per-tool EXISTS gate. Multi-plan investigation+code+deploy.
+- **Phase 242** (Luse skill UNIVERSAL docs): docs-only on the surface, but the docs describe a capability that requires Phase 241's MCP exposure to be USEFUL. Shipping docs alone before 241 = hollow. Defer until 241 ships.
+- **Phase 243** (Persistent UI terminal — xterm.js + node-pty): substantial 4-6 plan effort (livinityd PTY module + WS endpoint + frontend xterm.js panel + dock entry + Mini PC deploy). Needs investigation of node-pty vs node-pty-prebuilt-multiarch + dock integration design.
+- **Phase 245** (E2E UAT + milestone close): operator-gated walk. Cannot run until 239–243 ship.
+
+**Honest scope assessment:** the autonomous run optimized for shippable, low-risk hot-fixes (238.x pattern). The remaining phases (239/240/241/243) are substantial feature work that demands proper discuss→plan workflow with operator input on UX/architecture choices. Mechanically running them autonomously without that input risks shipping half-baked features that need rework.
+
+**Cumulative v43 visible-rebrand SHIPPED:** Phase 238 → 238.4 close out operator's "HİÇ BİR Aion yazısı kalmasın + Livinity branding" theme. Browser tab favicon + theme-color + font + Arco palette + footer URLs + skill descriptions + default agent all Livinity-branded. Operator hard-reload `https://bruce.livinity.io/liv/` to see complete brand layer LIVE.
+
+**Recommended next steps for next session:**
+1. `/gsd-discuss-phase 241` — deep API probe for MCP write surface + module design decisions
+2. After 241 ships: `/gsd-plan-phase 240` then `/gsd-plan-phase 242` (both unblock)
+3. `/gsd-discuss-phase 239` — onboarding wizard UX (card layout, install button copy, AI section removal)
+4. `/gsd-discuss-phase 243` — terminal panel architecture (node-pty selection, WS reuse, dock UX)
+5. `/gsd-execute-phase 245` — operator walk + milestone close after all of the above ship
+
+---
+
+## Previous Position (v43 — Phase 238.4 ✅ SHIPPED 1/1 plan — Livinity brand layer LIVE in iframe — CSS injection + favicon + theme-color + Space Grotesk + Arco palette overrides, 12/12 SCs GREEN, sacred SHA UNCHANGED)
 
 **Plan 238.4-01 (1-task hot-fix — `33317d28` feat commit)** — Operator 2026-05-27 evening: "Logo değişmemiş bu arada Fontlar vs oralara gectin mi devam et" → fix. **Critical discovery**: Phase 232's `livinity-overlay.css` (font + accent + palette) was DEAD since Phase 232 ship — designed to inject into iframe via Caddy `replace` directive, but Mini PC's Caddy v2.11.3 lacks `http.handlers.replace_response` plugin (Phase 238.3 finding). External `curl /liv/` HTML body grep `livinity-overlay.css` = 0. The CSS file IS served at `/liv/branding/livinity-overlay.css` (HTTP 200, 669B) but iframe HTML never references it. **Fix:** install-liv-assistant.sh Step 238.4-E — sed-edits `${CURRENT_LINK}/static/index.html` with 4 idempotent substitutions (skip if marker present): (1) inject `<link rel="stylesheet" href="/liv/branding/livinity-overlay.css">` before `</head>` (replaces missing Caddy replace directive), (2) favicon `pwa/icon-192.png` → `/liv/branding/favicon.svg` (Livinity "L" mark), (3) apple-touch-icon `pwa/icon-180.png` → `/liv/branding/favicon.svg`, (4) theme-color `#4E5969` (AionUi grey) → `#1d1d1f` (Livinity accent). **caddy/branding/livinity-overlay.css strengthened** (669B → 4126B): Arco Design `--primary-1..10` RGB triplet overrides → entire palette monochrome to Livinity accent; font-family !important extended to `.arco-btn`, `.arco-input`, `.arco-modal`, `.app-titlebar__brand-text`, `[class*='arco-']`; explicit `.arco-btn-primary` background/border/hover; heading `letter-spacing -0.01em` for wordmark polish. **Mini PC deploy:** `sudo bash /opt/livos/update.sh` EXIT 0 + `Deployed SHA recorded: 33317d2` + `LivOS updated successfully!`. POST index.html: theme-color `#1d1d1f`, favicon `image/svg+xml href=/liv/branding/favicon.svg`, apple-touch-icon `/liv/branding/favicon.svg`, livinity-overlay.css `<link>` before `</head>`. **External UAT** via Cloudflare→Server5→Mini PC: livinity-overlay.css link present=1, favicon.svg present=2 (icon+apple-touch), theme-color `#1d1d1f` present=1, stale `icon-192.png`=0, stale `#4E5969`=0. CSS file 4126B with `--primary-6` override + 3 `.arco-btn-primary` rules. Phase 238 (static word-boundary Aion=0) + Phase 238.1 (static iOfficeAI=0) + Phase 238.2 (builtin-skills Aion=0) + Phase 237 (`/liv/ws` HTTP/1.1 → 101 Switching Protocols) + Phase 234-04 (`/liv-login` 302) all non-regressed. LICENSE+NOTICE sha256 byte-identical baseline. Sacred SHA `f3538e1d...` UNCHANGED 4-snapshot. **12/12 SCs PASS.** Auto-approved per chain protocol. **Operator action:** browser hard-reload `https://bruce.livinity.io/liv/` → tab favicon shows Livinity "L" mark; theme-color dark Livinity black; all UI text Space Grotesk; primary buttons solid black with white text + crisp wordmark titlebar. DEPLOY-LOG at `.planning/phases/238.4-logo-font-visibility/238.4-DEPLOY-LOG.md`. **Cumulative v43 visible-rebrand complete:** static Aion+iOfficeAI+builtin-skills cleaned, default agent Claude Code, brand favicon + font + accent palette LIVE.
 

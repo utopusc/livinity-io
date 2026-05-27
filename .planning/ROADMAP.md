@@ -3553,22 +3553,15 @@ Plans:
 
 ---
 
-### Phase 244: MD docs Aion → Liv text sed pass — 🟡 PLANNED 2026-05-27 (0/1 plans)
+### Phase 244: MD docs Aion → Liv text sed pass — ⏭️ OBSOLETED 2026-05-27 (superseded by Phase 238.2)
 
-**Goal:** sed-replace "Aion" → "Liv" (and case variants per Phase 238 pattern) in all .md files under `/opt/liv-assistant/current/`. Idempotent install-script extension. Excludes LICENSE/NOTICE/UPSTREAM by structural path scope. Mirrors Phase 234-03 pattern but `.md` include filter.
+**Goal (original):** sed-replace "Aion" → "Liv" in all .md files under `/opt/liv-assistant/current/`. Excludes LICENSE/NOTICE/UPSTREAM.
 
-**Direction:**
-- Extend `scripts/install-liv-assistant.sh` with new step scoped to `${CURRENT_LINK}/**/*.md`
-- Exclude any path containing LICENSE/NOTICE/UPSTREAM (defensive grep + first-10-line attribution gate)
-- Idempotent (Phase 234-03 grep-pre-check pattern)
-- Deploy via `bash /opt/livos/update.sh`; verify zero `Aion` references in downloaded help .md content under `/opt/liv-assistant/current/` post-deploy
+**Why OBSOLETED:** Mini PC probe 2026-05-27 evening found that `/opt/liv-assistant/current/` (the AionUi tarball-extraction symlink) contains ZERO `.md` files. All AionUi-related markdown lives under `/opt/liv-assistant/data/builtin-skills/` which is `${INSTALL_ROOT}/data/`, not `${CURRENT_LINK}/`. Phase 238.2 already shipped a sed pass over `data/builtin-skills/**/*.md` (8 files PRE → 0 POST). There is no remaining `.md` scope for Phase 244 to cover.
 
-**Plans:** 0/1 plans complete
+**Plans:** N/A (no work needed)
 
-Plans:
-- [ ] 244-PLAN.md — TBD (single-file extension to install-liv-assistant.sh + Mini PC deploy)
-
-**UAT:** operator opens Liv AI help docs → zero "Aion" references in user-facing copy.
+**Resolution:** Documented as OBSOLETED in ROADMAP. No commit. Operator's MD-docs Aion concern is structurally satisfied by Phase 238.2.
 
 ---
 
