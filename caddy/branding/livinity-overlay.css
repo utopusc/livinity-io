@@ -131,12 +131,37 @@ button[type='submit'],
  * Result: sidebar shows the EXACT same donut shape + color behavior as
  * the livinity.io website favicon — black donut on light, white donut on dark.
  */
+/* Phase 238.9 — CSS background-image SVGs are loaded by browsers in a
+ * sandboxed "secure" context that DISABLES the SVG's internal
+ * @media (prefers-color-scheme) rules. (This works only when SVG is
+ * referenced via <img> or <link rel="icon">.) Workaround: ship TWO
+ * separate SVGs (favicon-light.svg + favicon-dark.svg) and switch
+ * between them with a CSS @media (prefers-color-scheme) rule on the
+ * .liv-brand-donut selector itself — CSS media queries on the host
+ * page DO work regardless of how the SVG is referenced.
+ *
+ * Light theme (default): black ring + white dot (favicon-light.svg)
+ * Dark theme: white ring + black dot (favicon-dark.svg)
+ */
 .liv-brand-donut {
 	background-color: transparent !important;
-	background-image: url('/liv/branding/favicon.svg') !important;
+	background-image: url('/liv/branding/favicon-light.svg') !important;
 	background-size: contain !important;
 	background-position: center !important;
 	background-repeat: no-repeat !important;
+}
+
+@media (prefers-color-scheme: dark) {
+	.liv-brand-donut {
+		background-image: url('/liv/branding/favicon-dark.svg') !important;
+	}
+}
+
+/* Also honor AionUi's own theme toggle: when the document has
+ * data-theme="dark" (Arco Design pattern, set by AionUi's theme picker)
+ * the donut flips even if the OS prefers-color-scheme is light. */
+[data-theme='dark'] .liv-brand-donut {
+	background-image: url('/liv/branding/favicon-dark.svg') !important;
 }
 
 /* Hide the inline SVG inside the wrapper — the bg-image is now the logo. */
