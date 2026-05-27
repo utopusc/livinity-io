@@ -3466,7 +3466,7 @@ Plans:
 
 ---
 
-### Phase 227: LivOS shell integration — LivAssistantWindow iframe mount — ⚪ READY
+### Phase 227: LivOS shell integration — LivAssistantWindow iframe mount — 🟡 1/3 IN PROGRESS
 
 **Goal:** Wire a `LivAssistantWindow` React component into the LivOS shell that iframes `https://bruce.livinity.io/liv/` (Phase 226 routing). Add dock icon that opens this window. Replace OpenClawOS dock entry / chat surface so operators land on Liv Assistant by default.
 
@@ -3488,7 +3488,7 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 227-01-PLAN.md — Create LivAssistantWindow component + jsdom unit test (iframe shell pointing at /liv/ with locked sandbox)
+- [x] 227-01-PLAN.md — Create LivAssistantWindow component + jsdom unit test (iframe shell pointing at /liv/ with locked sandbox) — ✅ **SHIPPED 2026-05-27** — single atomic commit `49a08391`, `livos/packages/ui/src/modules/window/app-contents/liv-assistant-window.tsx` (65 LOC, default export, locked sandbox const `'allow-same-origin allow-scripts allow-forms allow-popups allow-downloads'`, relative `/liv/` default src + `VITE_LIV_ASSISTANT_URL` env override) + `liv-assistant-window.unit.test.tsx` (94 LOC, react-dom/client + jsdom — NO @testing-library/react per D-NO-NEW-DEPS, mirrors Phase 224-03 v42-migration-banner.test.tsx). 4/4 vitest assertions GREEN. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED (pre-commit `[sacred-sha] PASS: 20 files verified`). SC-01 PARTIAL (component exists, Plan 02 closes via dock+registry), SC-04 PARTIAL (unit tests GREEN, Plan 02 closes via dock-click event test), **SC-05 FULL PASS**. SUMMARY at `.planning/phases/227-livos-shell-livassistant-window/227-01-SUMMARY.md`.
 - [ ] 227-02-PLAN.md — Register LIVINITY_liv-assistant systemApp + window-content branch + feature-flagged dock entry + dock vitest
 - [ ] 227-03-PLAN.md — Mini PC deploy (update.sh) + curl smoke + sacred SHA verify + operator UAT (autonomous: false)
 
