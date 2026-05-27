@@ -381,6 +381,14 @@ export const httpOnlyPaths = [
 	// the operator MUST not see drop on a half-broken WS.
 	'openclawos.gateway.config.read',
 	'openclawos.gateway.config.write',
+	// Phase 221 — `auth.claude.*` OAuth (PKCE) flow proxies to liv-core
+	// /api/claude/*. All 4 paths are page-render / settings-mutation
+	// dependencies that MUST survive a WS reconnect mid-flow. Mirrors
+	// auth.xai.* httpOnlyPaths block above.
+	'auth.claude.status',
+	'auth.claude.startLogin',
+	'auth.claude.submitCode',
+	'auth.claude.logout',
 	// v32-redo Stage 2b — conversations namespace (sidebar feed + thread view +
 	// composer persistence path). All 6 paths route via HTTP because:
 	//   - list / listMessages are page-render dependencies for the AI Chat
