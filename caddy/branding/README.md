@@ -11,6 +11,7 @@ upstream tarball (per `D-V42-SACRED` in `.planning/milestones/v42/PROJECT.md`).
 | `livinity-overlay.css` | Space Grotesk font + `#1d1d1f` accent + body font-family override | ~700 B |
 | `favicon.svg` | 32x32 Livinity `L` mark, `#1d1d1f` on transparent | ~330 B |
 | `manifest.json` | PWA manifest overlay with Livinity `theme_color` | ~220 B |
+| `liv-logo.svg` | 200x60 Livinity `Liv` wordmark — `#1d1d1f` rounded background, white text. Repo scaffold for Phase 238 Step 238-A logo overlay; install-script ships with empty `LOGO_TARGETS=()` per Plan 238-02 Section C (no AionUi-branded asset on disk to overlay today). | ~270 B |
 
 ## How these reach the Mini PC
 
