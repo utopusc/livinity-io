@@ -1,18 +1,36 @@
 ---
 gsd_state_version: 1.0
-milestone: v41
-milestone_name: Admin Panel + Store Hardening + Subdomain Reliability
+milestone: v42
+milestone_name: Liv Assistant (AionUi-based replacement for OpenClawOS)
 status: executing
-last_updated: "2026-05-26T15:00:00.000Z"
+last_updated: "2026-05-27T08:31:28Z"
+last_activity: 2026-05-27
+current_phase: 223-vendor-aionui-install
+current_plan: 223-02
 progress:
-  total_phases: 9
-  completed_phases: 8
-  total_plans: 9
-  completed_plans: 9
-  percent: 89
+  total_phases: 12
+  completed_phases: 1
+  total_plans: 5
+  completed_plans: 1
+  percent: 20
 ---
 
-## Current Position (v41 — autonomous run 2026-05-26 COMPLETE on Claude side, P217 operator-walk pending)
+## Current Position (v42 — Phase 223 Plan 01 SHIPPED 2026-05-27 — installer scaffolding landed)
+
+**Plan 223-01 (`d1276e12`)** — `scripts/install-liv-assistant.sh` written: idempotent, SHA-pinned, Apache-LICENSE-preserving installer for AionUi v2.1.4. Pure file-write plan, no live install yet. Sacred SHA `f3538e1d...` untouched (hook PASS, 20 files verified). Next: Plan 223-02 (`systemd/liv-assistant.service` unit, port 3020).
+
+| v42 Plan | Status | Commit |
+|---|---|---|
+| 222 (spike) | ✅ SHIPPED | `b2be397f` |
+| 223-01 | ✅ SHIPPED | `d1276e12` (installer scaffold) |
+| 223-02 | ⚪ READY | systemd unit |
+| 223-03 | ⚪ READY | password capture helper |
+| 223-04 | ⚪ READY | install docs |
+| 223-05 | ⚪ READY | Mini PC live deploy + UAT |
+
+---
+
+## Previous Position (v41 — autonomous run 2026-05-26 COMPLETE on Claude side, P217 operator-walk pending)
 
 **Autonomous run 2026-05-26 shipped 6 phases end-to-end in one session: P212 → P213 → P214 → P215 → P216 → P217 (prep).**
 
@@ -29,31 +47,35 @@ progress:
 | P217 | 🟡 OPERATOR-PENDING | UAT-CHECKLIST.md ready; operator walks ~70 rows |
 
 ### What's left
+
 **ONLY operator-walked UAT.** All Claude-side autonomous work is complete. ~70 rows in UAT-CHECKLIST.md, est. 2–4h to walk.
 
 After walk: STATE.md `status:complete`, ROADMAP v41 → ✅ Shipped, archive to `.planning/milestones/v41/`.
 
 ### Carry count
+
 ~25 carries filed across phases. Catalogued in `.planning/phases/217-e2e-uat/UAT-CHECKLIST.md` with suggested v42 phase groupings.
 
 ### Sacred SHA
+
 `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across ALL commits this session (~25 commits).
 
 ---
 
 ## Previous run history (compressed)
 
-
 Phase: 214 just shipped CODE-COMPLETE (`4f90360f..1a4c7f65`, 4 commits)
 Plan: 214-01 (T1 middleware+client gate + T2 sync-catalog + T3 curation UI)
 Status: Ready for Phase 215 (one-click install — install channel architecture is open)
 
 ### ✅ Phase 214 SHIPPED 2026-05-26
+
 - **T1** middleware.ts /store matcher + store/admin-gate.tsx client check
 - **T2** POST /api/admin/sync-catalog (GitHub REST, chunked, idempotent upsert preserving curated fields)
 - **T3** /admin/store curation UI (featured/verified toggle + sync button)
 
 ### Verdict matrix (all GREEN)
+
 | Criterion | Status |
 |---|---|
 | STORE-01 non-admin /store → /dashboard | 🟢 |
@@ -62,15 +84,15 @@ Status: Ready for Phase 215 (one-click install — install channel architecture 
 | STORE-04 admin marks featured/verified | 🟢 |
 
 ### Deferred (carries)
+
 - CARRY-P214-STORE-SEARCH, CARRY-P214-DETAIL-REDESIGN, CARRY-P214-MARKETING-LANDING, CARRY-P214-FULL-SYNC-304
-
-
 
 Phase: 213 just shipped CODE-COMPLETE (`713a47eb..e4242552`, 3 commits)
 Plan: 213-01 (T1 auth bridge + T2-T7 admin UI bundle)
 Status: Ready for Phase 214 (Store admin-only gate + UX polish)
 
 ### ✅ Phase 213 SHIPPED 2026-05-26
+
 - **T1** Auth bridge: `requireAdmin()` accepts session cookie OR x-api-key; `/api/auth/me` returns `is_admin`.
 - **T2** `admin-api.ts` typed wrappers for 6 P212 routes.
 - **T3** 3-group sidebar nav (Overview / Catalog / Operations).
@@ -81,20 +103,21 @@ Status: Ready for Phase 214 (Store admin-only gate + UX polish)
 - Sacred SHA `f3538e1d...` preserved 3/3.
 
 ### Pragmatic deviations (Claude's discretion, documented)
+
 - **shadcn/ui + recharts NOT installed** despite ROADMAP wording. Existing admin uses custom CSS tokens; mid-milestone install risks visual drift. Filed CARRY-P213-DESIGN-SYSTEM-POLISH.
 - **Pages remain client components** (RSC refactor → CARRY-P213-RSC-REFACTOR).
 - **users/[id] is a placeholder** (full drill-down → CARRY-P213-USERS-DRILLDOWN).
 
 ### Verdict matrix
+
 | Criterion | Status |
 |---|---|
 | UI-01..06 all pages render real data | 🟢 4/6 real; 2 explicit placeholders by ROADMAP (P214/P215) |
 | UI-08 non-admin redirect to /dashboard | 🟡 partial (middleware no-cookie ✓; client-side `is_admin=false` redirect → CARRY) |
 | UI-09 mobile responsive 1024×768 + 1920×1080 | 🟢 GREEN (auto-fit grids + media query) |
 
-
-
 ### ✅ Phase 212 SHIPPED 2026-05-26
+
 - **T1** `0013_phase_212_admin_auth.sql` — `is_admin BOOLEAN` + `last_seen_at TIMESTAMPTZ` on `public.users`; seeded `bruce` admin live.
 - **T2** `lib/auth-admin.ts` (`requireAdmin()`) + new `middleware.ts` (cookie soft-gate + legacy x-api-key allow-list).
 - **T3** 6 admin API routes: `/api/admin/{metrics/summary,users,tunnels,apps/summary,bandwidth,install-failures}`.
@@ -104,6 +127,7 @@ Status: Ready for Phase 214 (Store admin-only gate + UX polish)
 - Sacred SHA `f3538e1d...` preserved through all 7 commits.
 
 ### Verdict matrix
+
 | Criterion | Status |
 |---|---|
 | ADM-05 metrics/summary returns real numbers | 🟢 GREEN |
@@ -113,19 +137,22 @@ Status: Ready for Phase 214 (Store admin-only gate + UX polish)
 | ADM-12 rollup lag <5min | 🟢 GREEN (sync trigger, near-zero lag) |
 
 **New carries (4):**
+
 - CARRY-P212-TUNNEL-PERSIST — wire INSERT/UPDATE in `tunnel-registry.ts` (~50–80 LOC)
 - CARRY-P212-TUNNEL-SESSION-UNIQUE — UNIQUE(session_id) constraint decision
 - CARRY-P212-RLS-POLICIES — real RLS policies on 4 tables → P214
 - CARRY-P212-LEGACY-ADMIN-UNIFY — migrate legacy api-key admin routes to cookie path (cosmetic)
 
-
-Last activity: 2026-05-26 — three phases shipped end-to-end via `/gsd-autonomous --from 209`:
+Last activity: 2026-05-27
 
 ### ✅ Phase 209 SHIPPED (commit `8ad89ee6`)
+
 openclaw → `claude-cli/claude-haiku-4-5` default. 5-min Mini PC ops, zero code change. Journalctl confirms model swap. AI-04/05/06 (UAT metrics) deferred to P217 live battery.
 
 ### 🟡 Phase 210 CODE-COMPLETE (commit `1b478f9a`)
+
 3 bugs fixed:
+
 - **Bug A** — `platform/relay/src/subdomain-parser.ts` hyphen-format split (13 vitest cases)
 - **Bug B** — `livos/packages/livinityd/source/modules/apps/apps.ts:578-589` loud-LOG on `provisioned=null` (softened from THROW per D-210-02)
 - **Bug C** — `apps.ts:45` `REDIS_PLATFORM_URL` constant declared (was silent ReferenceError dropping every install event)
@@ -133,9 +160,11 @@ openclaw → `claude-cli/claude-haiku-4-5` default. 5-min Mini PC ops, zero code
 15/15 tests PASS. SUB-08/09/10 live-verify deferred to P217 pending **CARRY-V41-RELAY-DOWN** (Server5 PM2 `relay` process STOPPED since 2026-05-18, FK violations on `bandwidth_usage_user_id_fkey` exhausted PM2 restart budget).
 
 ### 🟡 Phase 211 PARTIAL (commit `e3e0e206`)
+
 **211.1 only** — defensive dual-writer collision guard on `liv:mcp:config`. liv-core `McpConfigManager` now type-checks before SET (refuses on HASH, the livinityd-owned primitive) + cross-publishes on `liv:mcp:updated`. 4/4 vitest cases. Live state: `redis-cli TYPE liv:mcp:config` = `none` (collision was latent, not yet triggered).
 
 **Carries filed for next session:**
+
 - **CARRY-P211-UNIFY** — Full HASH-primitive unification (~2h, supersedes defensive guard)
 - **CARRY-P211-DIALOG** — `EnvironmentOverridesDialog` UI buildout (~6-8h)
 - **CARRY-P211-ADMIN-GATE** — `is_admin=true` enforcement on install routes (~2h, blocked on P212)
@@ -166,7 +195,6 @@ or per-phase: `/gsd-discuss-phase 212` (Supabase migration is the heavy piece �
 
 ---
 
-
 # Project State
 
 ## Project Reference
@@ -191,7 +219,7 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 
 ## Current Position
 
-Phase: --phase (208) — EXECUTING
+Phase: --phase (223) — EXECUTING
 Plan: 1 of --name
 
 Previously: Plan: 9 of 13 — **203-05 ✅ CODE-COMPLETE 2026-05-23** (Wave 2 second plan — JWT ↔ openclaw Ed25519 handshake shim shipped end-to-end. New `modules/openclawos/device-token.ts` (287 lines): Node-native `crypto.generateKeyPairSync('ed25519')` keypair persisted to `/opt/livos/data/secrets/openclaw-ed25519` (Mini PC) or `livos/data/secrets/openclaw-ed25519` (dev fallback) with mode 0o600, JSON-wrapped PEM for forward-compat key rotation; `mintToken(userId, {redis?})` signs `{alg:EdDSA, v:1, sub, iat, exp:iat+300, jti}` payload returns `base64url(payload).base64url(signature)` + caches `liv:openclaw:device-token:{jti}` in Redis with `EX 300` (T-203-02); `verifyToken(token, {redis?})` re-verifies signature + payload shape + `exp > now` + jti-in-Redis (revoke channel) returns `{userId, jti, exp}` or null on any failure. Zero new deps (plan suggested tweetnacl but Node ≥16 native sidesteps a workspace install gap). New `modules/openclawos/handshake-route.ts` (125 lines): `createHandshakeRouteHandler({verifyToken, redis?, logger?, resolveUserId?})` factory — two-source token resolution (`Authorization: Bearer <jwt>` header first, then `LIVINITY_SESSION` cookie, mirrors chatAuthGate pattern at `source/index.ts:1279`); default `resolveUserId` prefers multi-user `userId` claim, falls back to `'admin'` for legacy single-user tokens; calls `mintToken(userId, {redis})` and returns 200 `{token, expiresAt, sessionId}`; 401 on missing/invalid JWT; 500 on mint failure; logs at info level `[openclawos-handshake] userId=X jti=Y… expiresAt=Z`. Mounted in `livos/packages/livinityd/source/index.ts` after Phase 202-04 `/agents/status/stream` block (`app.post('/openclawos/handshake', express.json({limit:'4kb'}), handshakeHandler)`); `verifyToken` wired to `this.server.verifyToken`, `redis` wired to `this.ai.redis`; failure non-fatal (try/catch). Caddy generator `modules/domain/caddy.ts` extended with new `OPENCLAWOS_HANDSHAKE_HANDLE` constant emitting `handle /openclawos/handshake { reverse_proxy 127.0.0.1:8080 { flush_interval -1 transport http {versions 1.1} } }`, emitted in **all 3 generator sites** (null-mainDomain `:80` block + apex block + multi-user subdomain block) BEFORE the existing `LIV_AI_APP_HANDLE` so Caddy's first-match-wins steers the JWT POST to livinityd:8080 not gateway:18789. Same block injected into **all 3 bootstrap heredocs** in `scripts/install/deploy-livinityd.sh` (tunnel mode CF-Tunnel-terminates-TLS, local-LAN tls-internal mode, cloud plain-:80 mode). Client-side: new `livos/packages/liv-claw-os/packages/claw-client/src/lib/gateway/livinityd-handshake.ts` (124 lines): `fetchLivinitydDeviceToken(endpoint?, fetchImpl?)` POSTs same-origin to `/openclawos/handshake` with `credentials:'include'` so LIVINITY_SESSION cookie is auto-forwarded, returns `{token, expiresAt, sessionId}`, throws `LivinitydHandshakeError` on 401/500/network/malformed; `shouldRefreshDeviceToken(expiresAt?, now?, bufferMs?)` returns true when missing or within 30s of expiry (D-205-D-05 — conservative 1/10-of-TTL budget avoids in-flight expiry). `socket.ts` patched (+58 lines): new private fields `livinitydDeviceToken: string | null` + `livinitydDeviceTokenExpiresAt: number | null` cached on GatewaySocket; in `handleOpen` BEFORE `buildConnectParams`, calls `fetchHandshakeToken` (default = helper above) if cache stale → augments local settings copy with the new `deviceToken` → `buildConnectParams` uses it via `auth.deviceToken` path; on `LivinitydHandshakeError`, warns + clears cache + falls through to raw `settings.token` path so stand-alone (non-LivOS) deploys keep working. New `fetchHandshakeToken?` option on `GatewaySocketOptions` for test injection. Upstream wire-protocol constants in `handshake.ts` (`PROTOCOL_VERSION`, `SCOPES`, `GATEWAY_CLIENT_*` enums) UNCHANGED — we only ADD a pre-step that fills `settings.deviceToken`; the Ed25519 device-identity signature path (D-203-12 internal handshake) is preserved verbatim. 4 atomic commits `79f88ce7..0e5dcc76`: `79f88ce7` Task 1 device-token + 12-case test (2 files: 457 insertions), `43fdbde8` Task 2 route + boot mount + 12-case test (3 files: 418 insertions), `c6dd8808` Task 3 Caddy generator + 3 heredocs + caddy.test +5 cases (3 files: 130 insertions / 5 deletions), `0e5dcc76` Task 4 claw-client patch (livinityd-handshake.ts + 13-case test + socket.ts patch) (3 files: 301 insertions / 2 deletions). Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` PRESERVED 4/4 (`[sacred-sha] PASS: 20 files verified` on every commit — ZERO sacred source files touched). 60/60 livinityd vitest cases PASS via `npx vitest run source/modules/openclawos/device-token.test.ts source/modules/openclawos/handshake-route.test.ts source/modules/domain/caddy.test.ts` — device-token 12 + handshake-route 12 + caddy 36. `npx tsc --noEmit -p .` in claw-client CLEAN (exit=0). 0 new TypeScript errors in livinityd (filtered tsc output for `openclawos|handshake|source/index.ts` → empty). INV-203-01 PASS 4/4; INV-203-08 PASS (handshake handle is THE ONLY second routing surface added in Phase 203; negative-grep test asserts no new port targets beyond {8080, 18789, app-port}); INV-203-10 PASS (LIVINITY_SESSION JWT remains outer auth; Ed25519 device token minted only AFTER JWT verify — never bypasses); T-203-02 PASS (each handshake call returns DIFFERENT token, asserted by test 12 of handshake-route.test.ts: same JWT, two calls, distinct sessionIds + distinct token bytes). 6 deviations all auto-fixed in band: (1) Rule-1 bug — test file's `Server` type import from node:http conflicted with Express's listen-return shape (TS2740 in strict mode); replaced with `any` for test-scope server handle; (2) Rule-2 critical functionality — 30s proactive refresh buffer on client (without it 5-min token can expire mid-WS-handshake → reconnect loop); (3) Rule-2 critical functionality — fall-through on LivinitydHandshakeError so stand-alone (non-LivOS) openclaw-os deploys keep working (plan assumed LivOS-iframe-only, upstream client should still function when /openclawos/handshake returns 404); (4) Rule-2 critical functionality — `OPENCLAW_KEYPAIR_PATH` env override for tests (without it tests would either share state across runs or modify the prod `/opt/livos/data/secrets/` path); (5) Rule-3 pre-existing dependency drift — plugin vitest 4.x Vite-7-requirement gap (203-04 deviation carry-over); livinityd-handshake.test.ts TS-clean but can't run via plugin's npx vitest; same fetch shape exercised end-to-end by route-level handshake-route.test.ts via livinityd vitest 2.1.9; (6) Plan-level — Task 5 "Commit" satisfied by 4 atomic per-task commits matching Plan 203-04 delivery shape (plan's `success_criteria` block explicitly demands atomic per-task commits, so per-task wins over the single Task 5 instruction). 0 auth gates (no live Mini PC interaction this plan — Mini PC deploy + keypair self-init on first request is Plan 203-12 territory). NO mutations to `livos/packages/liv-ai-app/` (assistant-ui purge is Plan 203-09); NO mutations to `livos/packages/livinityd/source/modules/mastra/` (Mastra purge is Plan 203-08); NO mutations to `agents.*` / `agents.tasks.*` / `mcp.config.*` tRPC namespaces (INV-203-09 preserved). Plan 203-06 (Luse + 11 built-in tools as openclaw gateway tools via api.registerTool + ApprovalManager before_tool_call hook) now unblocked. Details in `.planning/phases/203-liv-ai-openclaw-os/203-05-SUMMARY.md` (full file matrix, decisions table, deviations breakdown, self-check section).
@@ -1170,7 +1198,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 208 (luseMCP-toolchain-audit) — 10 plans — 2026-05-25T01:31:14.288Z
+**Planned Phase:** 223 (Vendor AionUi tarball + LivOS install scaffold) — 5 plans — 2026-05-27T08:26:02.052Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
