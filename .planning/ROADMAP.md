@@ -3380,6 +3380,51 @@ Plans:
 
 ---
 
+### Phase 226: Caddy `/liv` reverse proxy + iframe headers — ⚪ READY
+
+**Goal:** Expose `liv-assistant.service` (Mini PC `127.0.0.1:3020`) at `bruce.livinity.io/liv` via Caddy reverse-proxy + strip iframe-blocking headers so the LivOS shell can iframe-embed it (Phase 227 will do the iframe mount). Without this routing, the service is reachable only on the Mini PC LAN.
+
+**Scope:**
+
+1. **Caddyfile patch** (Mini PC `/etc/caddy/Caddyfile`, bruce-owned per `feedback_caddyfile_must_be_bruce_owned`) — add `handle_path /liv*` block (or `@liv path /liv /liv/*` matcher + `handle` per Caddy v2 multi-path pitfall noted in same feedback memory) that reverse-proxies to `127.0.0.1:3020` AND:
+   - Strips `X-Frame-Options` and `Content-Security-Policy: frame-ancestors` upstream response headers
+   - Sets `Content-Security-Policy: frame-ancestors 'self' https://bruce.livinity.io` so LivOS shell origin can iframe
+   - Preserves WebSocket upgrade (AionUi uses WS for chat streaming)
+   - Sub-path stripping: `/liv/foo` → AionUi sees `/foo`
+
+2. **Repo-side artifact** — vendored Caddyfile snippet at `caddy/conf.d/liv-assistant.caddy` (or equivalent project pattern), referenced from main Caddyfile via `import`. Goal: idempotent deploy via a script (mirroring Phase 223-01 install-liv-assistant.sh idiom) so future `bash /opt/livos/update.sh` re-applies the snippet without overwriting other Caddy state.
+
+3. **update.sh wire** — extend update.sh's Caddy reload section to: (a) ensure `/etc/caddy/Caddyfile` is bruce-owned (defensive hot-fix per the feedback memory), (b) run a Caddy snippet installer script, (c) `caddy validate` before reload, (d) `systemctl reload caddy`.
+
+4. **Mini PC deploy** + curl smoke from EXTERNAL (e.g. from the orchestrator's shell or relay-side):
+   - `curl -fsS -I https://bruce.livinity.io/liv/api/auth/status` → HTTP 200 (or 204 if redirected)
+   - Response headers contain `Content-Security-Policy: frame-ancestors 'self' https://bruce.livinity.io`
+   - Response headers do NOT contain `X-Frame-Options: DENY` or `X-Frame-Options: SAMEORIGIN`
+   - WebSocket upgrade smoke: `wscat` or `websocat` ping to `wss://bruce.livinity.io/liv/...` returns 101
+
+5. **Sacred SHA** preserved (`liv/packages/core/` untouched). Caddyfile/snippet under `caddy/` + update.sh + planning files.
+
+**Plans:** ~3 plans (Caddyfile snippet + repo wire; update.sh extension; Mini PC deploy + smoke)
+
+**Depends on:** Phase 225 ✅ SHIPPED (update.sh now has Caddy reload section + liv-assistant restart).
+
+**Reversibility:** Single Caddy snippet revert + `caddy reload` restores pre-Phase-226 routing. Service itself stays running.
+
+**Success Criteria:**
+- SC-01: `caddy validate /etc/caddy/Caddyfile` exit 0 post-deploy
+- SC-02: `curl -fsS https://bruce.livinity.io/liv/api/auth/status` returns HTTP 200
+- SC-03: Response headers have `Content-Security-Policy: frame-ancestors 'self' https://bruce.livinity.io` and NO `X-Frame-Options`
+- SC-04: WebSocket upgrade smoke succeeds (`wss://bruce.livinity.io/liv/...` returns 101)
+- SC-05: Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` unchanged
+- SC-06: `/etc/caddy/Caddyfile` ownership is `bruce:bruce` post-deploy
+
+**Pitfalls to honor:**
+- `feedback_caddyfile_must_be_bruce_owned` — every Caddyfile dynamic regen has been silently EACCES'ing for ~50 phases pre-218 because file was root-owned. Phase 226 must guarantee bruce ownership.
+- `feedback_caddyfile_must_be_bruce_owned` (same memory) — Caddy v2 `handle_path` takes ONE matcher only. Use `@liv path /liv /liv/*` + `handle` + `uri strip_prefix /liv` for multi-path stripping.
+- Relay topology: `livinity.io` is Cloudflare DNS-only → Server5 (relay) → Mini PC via private LivOS tunnel. `bruce.livinity.io/liv` will reach Mini PC through Server5's existing tunnel forwarding — confirm via curl from a host outside the Mini PC LAN that the relay path is unbroken. NO Cloudflare tunnel/proxy (per `reference_minipc.md`).
+
+---
+
 ### Phase 225: Wire liv-assistant install into update.sh + /api/auth/status smoke — ✅ SHIPPED (3/3 plans, all 4 SC GREEN, Mini PC live)
 
 **Plan progress:**
