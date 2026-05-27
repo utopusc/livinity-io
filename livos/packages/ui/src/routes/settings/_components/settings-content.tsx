@@ -51,6 +51,7 @@ import {
 } from 'react-icons/tb'
 import {IconType} from 'react-icons'
 
+import {V42MigrationBanner} from '@/components/banners/v42-migration-banner'
 import {Card} from '@/components/ui/card'
 import {useCpuForUi} from '@/hooks/use-cpu'
 import {useMemoryForUi} from '@/hooks/use-memory'
@@ -218,6 +219,12 @@ function useVisibleMenuItems(): MenuItem[] {
 export function SettingsContent() {
 	const [activeSection, setActiveSection] = useState<SettingsSection>('home')
 	const visibleItems = useVisibleMenuItems()
+	// Phase 224-03 — banner pinned at the top of every SettingsContent return
+	// branch (mobile-detail, mobile-home, desktop-detail-redirect, desktop-home)
+	// when the Liv Assistant migration is active. Hook is already consumed inside
+	// useVisibleMenuItems() — calling it again here is harmless (React Query
+	// dedupes by procedure key, no extra network call).
+	const v42MigrationActive = useV42MigrationActive()
 	const isMobile = useIsMobile()
 
 	// Mobile: drill-down detail view (no sidebar)
@@ -225,6 +232,7 @@ export function SettingsContent() {
 		const menuItem = visibleItems.find((m) => m.id === activeSection)
 		return (
 			<div className='animate-in fade-in'>
+				{v42MigrationActive && <V42MigrationBanner context='settings' />}
 				{/* Mobile detail header */}
 				<div className='flex items-center gap-3 px-1 pb-4'>
 					<button
@@ -260,6 +268,7 @@ export function SettingsContent() {
 	if (isMobile) {
 		return (
 			<div className='animate-in fade-in'>
+				{v42MigrationActive && <V42MigrationBanner context='settings' />}
 				<Card className='!p-2'>
 					<div className='space-y-0.5'>
 						{visibleItems.map((item, i) => (
@@ -295,6 +304,7 @@ export function SettingsContent() {
 	if (activeSection !== 'home') {
 		return (
 			<div className='animate-in fade-in'>
+				{v42MigrationActive && <V42MigrationBanner context='settings' />}
 				<SettingsDetailView
 					section={activeSection}
 					onBack={() => setActiveSection('home')}
@@ -315,6 +325,7 @@ export function SettingsContent() {
 
 	return (
 		<div className='animate-in fade-in'>
+			{v42MigrationActive && <V42MigrationBanner context='settings' />}
 			<div className='grid w-full gap-x-[30px] gap-y-[20px] lg:grid-cols-[280px_auto]'>
 				{/* Left Sidebar - Menu */}
 				<div className='flex flex-col gap-3'>
