@@ -187,3 +187,17 @@ auto-approved per chain protocol at 2026-05-27T18:48:00Z. Rationale: `workflow._
 | (TBD)      | docs | DEPLOY-LOG + STATE/ROADMAP — Phase 234 SHIPPED |
 
 Mini PC deployed SHA at deploy close: `49284b9`.
+
+## Self-Check: PASSED
+
+All artifacts verified present on disk + all commits verified in git log + sacred SHA byte-identical:
+
+- FOUND `livos/packages/livinityd/source/modules/server/liv-login-handler.ts`
+- FOUND `livos/packages/livinityd/source/modules/server/liv-login-handler.test.ts`
+- FOUND `.planning/phases/234-liv-ai-polish-ux/234-04-DEPLOY-LOG.md`
+- FOUND commit `b64edccd` (feat 234-04)
+- FOUND commit `49284b92` (fix 234-04 SPA shadow)
+- FOUND commit `e5f4dcfc` (docs 234-04)
+- Sacred SHA: `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED
+
+Phase 234 ✅ SHIPPED 4/4 plans, 8/8 SCs GREEN.
