@@ -1,0 +1,38 @@
+# liv-assistant: AionUi WebUI on 127.0.0.1:3020 — Phase 226
+#
+# Named snippet (parens). Imported from the existing `bruce.livinity.io { ... }`
+# site block in /etc/caddy/Caddyfile via a single `import liv_assistant` line.
+# DO NOT convert this into a standalone `bruce.livinity.io { ... }` site block
+# — that would conflict with the existing livinityd-managed site config
+# (Phase 86 / Phase 218 — feedback_caddyfile_must_be_bruce_owned).
+#
+# Path strategy (Caddy v2 multi-path pitfall — `handle_path` takes only ONE
+# matcher; use `@liv path` + `handle` + `uri strip_prefix` for `/liv` AND
+# `/liv/*` together — per feedback_caddyfile_must_be_bruce_owned):
+#   /liv         → 127.0.0.1:3020/    (root)
+#   /liv/foo     → 127.0.0.1:3020/foo (sub-path)
+#
+# WebSocket: reverse_proxy auto-handles Upgrade/Connection in Caddy v2. We
+# do NOT set any `header_up Connection` / `header_up Upgrade` directives that
+# would strip WS headers. AionUi uses WS for chat streaming (Phase 222 spike
+# confirmed).
+#
+# Iframe / CSP override: AionUi upstream may emit X-Frame-Options DENY and
+# its own CSP. We strip both on the way out and replace with a CSP that
+# allows ONLY `https://bruce.livinity.io` (the LivOS shell origin — Phase 227
+# iframe mount) plus `'self'` (so the embedded page itself can navigate).
+
+(liv_assistant) {
+	@liv path /liv /liv/*
+	handle @liv {
+		uri strip_prefix /liv
+		reverse_proxy 127.0.0.1:3020 {
+			header_down -X-Frame-Options
+			header_down -Content-Security-Policy
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			flush_interval -1
+		}
+		header Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
+	}
+}
