@@ -3485,6 +3485,13 @@ Plans:
 - SC-05: Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` unchanged
 - SC-06: pnpm UI build succeeds on Mini PC + livos.service restarts cleanly
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 227-01-PLAN.md — Create LivAssistantWindow component + jsdom unit test (iframe shell pointing at /liv/ with locked sandbox)
+- [ ] 227-02-PLAN.md — Register LIVINITY_liv-assistant systemApp + window-content branch + feature-flagged dock entry + dock vitest
+- [ ] 227-03-PLAN.md — Mini PC deploy (update.sh) + curl smoke + sacred SHA verify + operator UAT (autonomous: false)
+
 **Depends on:** Phase 226 ✅ (Caddy /liv proxy live).
 
 **Reversibility:** Feature-flag-friendly. If iframe doesn't load cleanly, dock entry can be hidden via flag without removing the component.
