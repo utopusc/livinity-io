@@ -3,21 +3,23 @@ gsd_state_version: 1.0
 milestone: v42
 milestone_name: Liv Assistant (AionUi-based replacement for OpenClawOS)
 status: executing
-last_updated: "2026-05-27T08:35:08Z"
+last_updated: "2026-05-27T08:42:00Z"
 last_activity: 2026-05-27
 current_phase: 223-vendor-aionui-install
-current_plan: 223-03
+current_plan: 223-04
 progress:
   total_phases: 12
   completed_phases: 1
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 3
+  percent: 60
 ---
 
-## Current Position (v42 — Phase 223 Plan 02 SHIPPED 2026-05-27 — systemd unit landed)
+## Current Position (v42 — Phase 223 Plan 03 SHIPPED 2026-05-27 — password capture helper landed)
 
-**Plan 223-02 (`ec6f5855`)** — `systemd/liv-assistant.service` written: Type=simple unit, User=bruce, port 3020, explicit PATH override for `/home/bruce/.bun/bin` so Claude Code ACP bridge can spawn bun (222-SPIKE Risk #3), `Restart=on-failure`, journal output + `SyslogIdentifier=liv-assistant` (consumed by Plan 03 password capture). Pure file-write, mode 0644, sacred SHA `f3538e1d...` untouched (hook PASS, 20 files verified). Next: Plan 223-03 (`scripts/capture-liv-assistant-password.sh` — journalctl-based first-boot password extractor).
+**Plan 223-03 (`98cf098e`)** — `scripts/capture-liv-assistant-password.sh` written: idempotent journald scraper, root-required (sudo from Plan 05), greps `Generated initial admin password:` from `journalctl -u liv-assistant`, atomically writes `/etc/livos/liv-assistant-credentials` (mode 0600, owner bruce:bruce), no-ops when creds already captured, exit 0 with "not ready" log when journald hasn't emitted (Plan 05 retry-loop friendly), first-occurrence semantics (head -n1) preserves original first-boot value. Pure file-write, mode 0755 (executable), 72 lines, sacred SHA `f3538e1d...` untouched (hook PASS, 20 files verified). One deviation: added literal-path header comment to satisfy plan verify grep (otherwise byte-for-byte match to plan `<action>` block). Next: Plan 223-04 (`docs/liv-assistant-install.md` operator runbook).
+
+**Plan 223-02 (`ec6f5855`)** — `systemd/liv-assistant.service` written: Type=simple unit, User=bruce, port 3020, explicit PATH override for `/home/bruce/.bun/bin` so Claude Code ACP bridge can spawn bun (222-SPIKE Risk #3), `Restart=on-failure`, journal output + `SyslogIdentifier=liv-assistant` (consumed by Plan 03 password capture). Pure file-write, mode 0644, sacred SHA `f3538e1d...` untouched (hook PASS, 20 files verified).
 
 **Plan 223-01 (`d1276e12`)** — `scripts/install-liv-assistant.sh` written: idempotent, SHA-pinned, Apache-LICENSE-preserving installer for AionUi v2.1.4. Pure file-write plan, no live install yet.
 
@@ -26,7 +28,7 @@ progress:
 | 222 (spike) | ✅ SHIPPED | `b2be397f` |
 | 223-01 | ✅ SHIPPED | `d1276e12` (installer scaffold) |
 | 223-02 | ✅ SHIPPED | `ec6f5855` (systemd unit) |
-| 223-03 | ⚪ READY | password capture helper |
+| 223-03 | ✅ SHIPPED | `98cf098e` (password capture helper) |
 | 223-04 | ⚪ READY | install docs |
 | 223-05 | ⚪ READY | Mini PC live deploy + UAT |
 
