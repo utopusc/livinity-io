@@ -708,3 +708,194 @@ describe('Phase 231 — OpenClawOS handles excised', () => {
 		})
 	}
 })
+
+// ─── Phase 236 — /api + /ws Referer-gated subresource handle ────────────
+//
+// New LIV_ASSISTANT_SUBRESOURCE_HANDLE constant emits an @liv_subresource
+// named matcher that catches root-relative `/api/*` and `/ws[/...]` ONLY
+// when the request's Referer matches `https?://[^/]+/liv(/|$)`. These are
+// the dynamic-URL fall-throughs Phase 235's static-quoted sed pass could
+// not rewrite (backtick-template `wss://${location.host}/ws` and runtime-
+// inserted `<img src="/api/assets/...">`). Routes them losslessly to
+// AionUi on :3020 while leaving LivOS-shell apex `/api/*` traffic on the
+// :8080 catch-all (which has Referer=`/` or `/app-store`, not `/liv/`).
+//
+// Tests assert: matcher block emission, regex literal, path token list,
+// reverse_proxy target, header strip pair, frame-ancestors CSP, source
+// ordering above @liv path, presence in all 3 site blocks, Phase 226-04
+// non-regression.
+
+describe('Phase 236 — /api + /ws Referer-gated subresource handle', () => {
+	it('apex block emits @liv_subresource named matcher with header_regexp + path tokens', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('@liv_subresource {')
+		expect(out).toContain('header_regexp Referer ^https?://[^/]+/liv(/|$)')
+		expect(out).toContain('path /api/* /ws /ws/*')
+		expect(out).toContain('handle @liv_subresource {')
+	})
+
+	it('apex @liv_subresource handle reverse-proxies to 127.0.0.1:3020 (liv-assistant)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const idx = out.indexOf('handle @liv_subresource {')
+		expect(idx).toBeGreaterThan(-1)
+		// Slice forward through the closing brace of the handle body.
+		const blockTail = out.slice(idx, idx + 400)
+		expect(blockTail).toContain('reverse_proxy 127.0.0.1:3020')
+	})
+
+	it('apex @liv_subresource handle strips upstream X-Frame-Options AND Content-Security-Policy', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const idx = out.indexOf('handle @liv_subresource {')
+		const blockTail = out.slice(idx, idx + 400)
+		expect(blockTail).toContain('header_down -X-Frame-Options')
+		expect(blockTail).toContain('header_down -Content-Security-Policy')
+	})
+
+	it('apex @liv_subresource handle sets frame-ancestors CSP at handle scope', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const idx = out.indexOf('handle @liv_subresource {')
+		const blockTail = out.slice(idx, idx + 600)
+		expect(blockTail).toContain(
+			"header Content-Security-Policy \"frame-ancestors 'self' https://bruce.livinity.io\"",
+		)
+	})
+
+	it('apex block — @liv_subresource emitted BEFORE @liv path (source ordering for diff review)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const apexStart = out.indexOf('bruce.livinity.io {')
+		expect(apexStart).toBeGreaterThan(-1)
+		const subIdx = out.indexOf('@liv_subresource {', apexStart)
+		const livIdx = out.indexOf('@liv path /liv /liv/*', apexStart)
+		expect(subIdx).toBeGreaterThan(apexStart)
+		expect(livIdx).toBeGreaterThan(apexStart)
+		expect(subIdx).toBeLessThan(livIdx)
+	})
+
+	it('apex @liv_subresource handle appears BEFORE the catch-all :8080 handle (first-match-wins safety)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const apexStart = out.indexOf('bruce.livinity.io {')
+		const subIdx = out.indexOf('handle @liv_subresource {', apexStart)
+		const catchAllIdx = out.indexOf(
+			'\thandle {\n\t\treverse_proxy 127.0.0.1:8080',
+			apexStart,
+		)
+		expect(subIdx).toBeGreaterThan(-1)
+		expect(catchAllIdx).toBeGreaterThan(-1)
+		expect(subIdx).toBeLessThan(catchAllIdx)
+	})
+
+	it('null mainDomain :80 fallback block also emits @liv_subresource handle', () => {
+		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expect(out).toContain('@liv_subresource {')
+		expect(out).toContain('header_regexp Referer ^https?://[^/]+/liv(/|$)')
+		expect(out).toContain('path /api/* /ws /ws/*')
+	})
+
+	it('multi-user subdomain block also emits @liv_subresource handle (per-user iframe access)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			},
+			true, // multiUser
+			false,
+			[],
+		)
+		const subBlockStart = out.indexOf('bruce.livinity.io {')
+		expect(subBlockStart).toBeGreaterThan(-1)
+		const subIdx = out.indexOf('@liv_subresource {', subBlockStart)
+		const livIdx = out.indexOf('@liv path /liv /liv/*', subBlockStart)
+		expect(subIdx).toBeGreaterThan(subBlockStart)
+		expect(livIdx).toBeGreaterThan(subBlockStart)
+		expect(subIdx).toBeLessThan(livIdx)
+	})
+
+	it('tunnel-mode apex block keeps http:// prefix AND emits @liv_subresource (CF tunnel compatibility)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			true, // tunnel mode → http:// prefix
+			[],
+		)
+		expect(out).toContain('http://bruce.livinity.io {')
+		const apexStart = out.indexOf('http://bruce.livinity.io {')
+		const subIdx = out.indexOf('@liv_subresource {', apexStart)
+		expect(subIdx).toBeGreaterThan(apexStart)
+	})
+
+	it('@liv_subresource handle does NOT emit header_up Connection / Upgrade (preserves WS auto-upgrade)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const idx = out.indexOf('handle @liv_subresource {')
+		// Slice between subresource handle and next major matcher / catch-all.
+		const livIdx = out.indexOf('@liv path /liv /liv/*', idx)
+		const subHandleBlock = out.slice(idx, livIdx)
+		expect(subHandleBlock).not.toContain('header_up Connection')
+		expect(subHandleBlock).not.toContain('header_up Upgrade')
+	})
+
+	it('Phase 226-04 invariants STILL hold post-236: @liv → :3020 + XFO/CSP strip + frame-ancestors CSP', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		// @liv handle still emitted exactly as Phase 226-04 specified
+		expect(out).toContain('@liv path /liv /liv/*')
+		expect(out).toContain('handle @liv {')
+		expect(out).toContain('uri strip_prefix /liv')
+		// And both :3020 reverse_proxies coexist (one in each handle)
+		const reverseProxyMatches = out.match(/reverse_proxy 127\.0\.0\.1:3020/g) || []
+		expect(reverseProxyMatches.length).toBeGreaterThanOrEqual(2) // at least @liv + @liv_subresource in apex
+	})
+
+	it('@liv_subresource emits in exactly 2+ site blocks for multi-user + apex config', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			},
+			true,
+			false,
+			[],
+		)
+		const matches = out.match(/@liv_subresource \{/g) || []
+		// apex livinity.io block + multi-user bruce.livinity.io block = >= 2
+		expect(matches.length).toBeGreaterThanOrEqual(2)
+	})
+})
