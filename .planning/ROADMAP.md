@@ -3518,23 +3518,36 @@ Plans:
 
 ---
 
-### Phase 232: Livinity brand overlay via Caddy `sub` directive — ⚪ READY
+### Phase 232: Livinity brand overlay via Caddy `sub` directive — ✅ **SHIPPED 2026-05-27 REDUCED SCOPE** (2/2 plans, 4/6 SCs GREEN, SC-01 + SC-03 deferred to architectural follow-up)
 
-**Goal:** Apply Livinity brand (Space Grotesk font + `#1d1d1f` accent + favicon + manifest theme_color) to AionUi's served HTML without forking the upstream tarball. Use Caddy's `sub` directive to inject a `<link rel="stylesheet">` tag into the served index.html, and serve overlay CSS + branding assets from `/etc/liv-assistant/branding/` at `/branding/*`.
+**Goal:** Apply Livinity brand (Space Grotesk font + `#1d1d1f` accent + favicon + manifest theme_color) to AionUi's served HTML without forking the upstream tarball. Original strategy: Caddy `replace` (sub) directive to inject `<link rel="stylesheet">` tag into served HTML + serve overlay CSS + branding assets from `/etc/liv-assistant/branding/` at `/liv/branding/*`.
 
-**Scope:**
-1. **Branding assets** in repo at `caddy/branding/` (or similar): `livinity-overlay.css` (font + colors + favicon), `favicon.ico`, `manifest.json` overlay.
-2. **caddy.ts patch** (Phase 226 pattern) — extend the `/liv` handle to also serve `/branding/*` static files via `handle /branding/* { root * /etc/liv-assistant/branding; file_server }` + add `sub` directive to inject the CSS link tag into HTML responses.
-3. **Mini PC asset deploy** — install-liv-assistant.sh (Phase 223-01) extended to copy `caddy/branding/*` → `/etc/liv-assistant/branding/` on every update.sh run.
-4. **Visual smoke** — `curl https://bruce.livinity.io/liv/` HTML contains overlay link tag + `curl https://bruce.livinity.io/liv/branding/livinity-overlay.css` HTTP 200.
+**Deploy-time discovery (Plan 232-02 RUN 1):** Caddy v2.11.3 standard distribution does NOT include the `caddyserver/replace-response` module. `caddy validate` rejected the directive: `Error: parsing caddyfile tokens for 'handle': unrecognized directive: replace - are you sure your Caddyfile structure (nesting and braces) is correct?, at /etc/caddy/Caddyfile:76`. Hot-fix commit `26e956cf` reverted the directive, restoring Caddy reload health. Static `/liv/branding/*` handler ships and serves all 3 assets at HTTP 200 with correct content-types.
+
+**Plans:**
+- [x] 232-01-PLAN.md — Repo-side scaffold (4 branding assets + caddy.ts patch + caddy.test.ts +9 assertions + install-liv-assistant.sh Phase 232 step) — ✅ **SHIPPED 2026-05-27** (commit `fab62d8c`). Single atomic commit, 7 files, 72/72 vitest PASS. Sacred SHA hook `[sacred-sha] PASS: 20 files verified`.
+- [x] 232-02-PLAN.md — Mini PC deploy + 6-SC smoke + DEPLOY-LOG — ✅ **SHIPPED 2026-05-27 REDUCED SCOPE** (commits `26e956cf` hot-fix + `fd88a454` DEPLOY-LOG). 4-RUN deploy chain (`bash /opt/livos/update.sh`), batched SSH per `feedback_ssh_rate_limit`. RUN 1 revealed Caddy module gap → hot-fix `26e956cf` dropped replace directive, reshaped 9 vitest assertions to static-only, 72/72 PASS preserved. RUN 4 with hot-fix deployed cleanly: `caddy validate` GREEN, `systemctl reload caddy` succeeded zero-downtime. Post-hot-fix external curls (full Cloudflare DNS → Server5 relay → Mini PC tunnel → Caddy `/liv/branding/*` handle → file_server): `/liv/branding/livinity-overlay.css` HTTP 200 + ct=text/css + size=669 (matches repo first 200 B); `/liv/branding/favicon.svg` HTTP 200 + image/svg+xml + 240; `/liv/branding/manifest.json` HTTP 200 + application/json + 203. Non-regression: `/liv/api/auth/status` 200, `/liv/` 200, `/` 200. Idempotency proven across 4 RUNs (find-newer EMPTY + md5-stable + cmp -s zero-exit + `Branding asset *: unchanged` log lines). DEPLOY-LOG.md 1002 lines.
 
 **Success Criteria:**
-- SC-01: caddy.ts emits `sub` directive for /liv HTML responses
-- SC-02: `/branding/*` static file handler emits in caddy.ts
-- SC-03: HTML at /liv/ contains injected `<link>` tag
-- SC-04: CSS at /liv/branding/livinity-overlay.css returns 200
-- SC-05: Sacred SHA unchanged
-- SC-06: Idempotent on update.sh re-run
+- [ ] SC-01: caddy.ts emits `replace`/`sub` directive — **FAIL → REVERTED** (architectural — Caddy v2.11.3 lacks `replace-response` module; needs xcaddy rebuild)
+- [x] SC-02: `/branding/*` static file handler emits in caddy.ts — **PASS** (handle/root counts = 1 each in /etc/caddy/Caddyfile, caddy validate GREEN post-hot-fix)
+- [ ] SC-03: HTML at /liv/ contains injected `<link>` tag — **DEFERRED** (depends on SC-01)
+- [x] SC-04: CSS at /liv/branding/livinity-overlay.css returns 200 — **PASS** (external + loopback both HTTP 200 + text/css + 669 B)
+- [x] SC-05: Sacred SHA unchanged — **PASS** (3 commits × 4 deploy verifies all confirm `f3538e1d811992b782a9bb057d1b7f0a0189f95f` repo blob + `62f924594e81331afb159a9a50ef718ef3eb7e79cd5287d9bd2e4788cbab1bfe` Mini PC sha256)
+- [x] SC-06: Idempotent on update.sh re-run — **PASS** (find -newer EMPTY × 3 RUNs, cmp -s identical × 3 assets, install-liv-assistant.sh `Branding asset *: unchanged` log lines)
+
+**Architectural follow-up (Rule 4 escalation — operator decision required):**
+
+To unblock SC-01 + SC-03, rebuild Caddy via xcaddy with the `caddyserver/replace-response` plugin:
+```bash
+sudo apt install -y golang-go
+go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+xcaddy build v2.11.3 --with github.com/caddyserver/replace-response
+sudo systemctl stop caddy
+sudo cp ./caddy /usr/bin/caddy
+sudo systemctl start caddy
+```
+Then revert `fix(232-02)` to re-enable the `replace` directive. Adds ~30 MB binary + 1 install step + ~5 min build. Net benefit: full HTML overlay injection live.
 
 **Depends on:** Phase 226 ✅. Independent of 227/228 (they're UI; 232 is HTML/CSS injection at the proxy layer).
 
