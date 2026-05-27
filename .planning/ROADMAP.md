@@ -3466,7 +3466,7 @@ Plans:
 
 ---
 
-### Phase 234: Liv AI polish — auth bypass + larger window + chat icon + AionUi→Liv AI rebrand — 🟡 IN PROGRESS 2/4 (234-01 ✅ + 234-02 ✅)
+### Phase 234: Liv AI polish — auth bypass + larger window + chat icon + AionUi→Liv AI rebrand — 🟡 IN PROGRESS 3/4 (234-01 ✅ + 234-02 ✅ + 234-03 ✅)
 
 **Goal:** Post-v42 UX polish (operator-requested 2026-05-27 night). Make Liv Assistant feel native: bigger window, chat-style dock icon, "Liv AI" brand string everywhere visible (NOT just our wrapper — vendored binary too), and auto-login so operators never see AionUi login form.
 
@@ -3490,6 +3490,12 @@ Plans:
 - SC-08: Feature-flagged auth bypass via Redis key (e.g. `liv:config:liv_ai_autologin_enabled` default true). Flip to false restores upstream AionUi UX.
 
 **Plans:** ~4 (investigation + UI rebrand/window/icon + install-script sed extension + auth bypass)
+
+Plans:
+- [x] 234-01-PLAN.md — Investigation (auth-bypass option lock + brand-string inventory + window/icon spec) — ✅ **SHIPPED 2026-05-27** (`eb9f51df`)
+- [x] 234-02-PLAN.md — UI polish (window 1280×800 + dock chat icon + 'Liv AI' rename + LIVINITY_liv-ai retirement) — ✅ **SHIPPED 2026-05-27** (`d91563fd`)
+- [x] **234-03-PLAN.md — Vendored binary sed-replace + Mini PC deploy (AionUi → Liv AI in HTML/JS/CSS, LICENSE/NOTICE preserved per D-V42-APACHE-NOTICE) — ✅ SHIPPED 2026-05-27** (`d9ed2324`) — install-liv-assistant.sh extended with idempotent sed-replace step (~60 LOC + 10 LOC defensive post-check); pattern `s/AionUi/Liv AI/g; s/aionui-web/liv-ai-web/g; s/aionui/liv-ai/g` applied to *.html/*.js/*.css under `${CURRENT_LINK}/static/`; grep-guarded for idempotency. Mini PC deploy via `bash /opt/livos/update.sh` EXIT 0: PRE AionUi grep count **51 files → POST 0** (proves sed pass fired); LICENSE sha256 `a515d5a7...` + NOTICE sha256 `be9e969f...` **byte-identical PRE/POST** (Apache-2.0 attribution preserved); 'Liv AI' present in 51 files post-deploy (1:1 in-place replacement). External `https://bruce.livinity.io/liv/` HTML body: Liv AI count = 3 (`<title>Liv AI</title>` + 2 meta tags), AionUi count = 0, aionui count = 0 (compound rewrite worked — `__liv-ai_theme` localStorage namespace replaces `__aionui_theme`). Phase 233 UAT subset 5/5 GREEN post-rebrand (SC-01 /liv/ 200 + CSP, SC-02 auth-status 200 baseline body, SC-03 WS 101, SC-04 / 200, SC-05 /app-store 200). Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED across 4 snapshots (pre-commit hook `[sacred-sha] PASS: 20 files verified` on d9ed2324). Auto-chain `checkpoint:human-verify` auto-approved per `workflow._auto_chain_active=true`. **5/5 SCs PASS** (SC-04, SC-05, SC-07, SC-07 non-regression, D-V42-APACHE-NOTICE). DEPLOY-LOG at `.planning/phases/234-liv-ai-polish-ux/234-03-DEPLOY-LOG.md` (468 lines).
+- [ ] 234-04-PLAN.md — Auth bypass (STRATEGY LOCKED by 234-01 Section H: Option B modified — livinityd `/liv-login` Express handler performs qr-mint+qr-login server-side via loopback, forwards Set-Cookie to browser, 302→/liv/; iframe src swap; Redis flag `liv:config:liv_ai_autologin_enabled` default ON) — ⚪ READY (orchestrator must rewrite PLAN.md `<action>` block from 234-01 Section I 'Plan 234-04 spec' before execution)
 
 **Depends on:** Phase 226 ✅, 227 ✅, 228 ✅, 232 ✅ reduced.
 
