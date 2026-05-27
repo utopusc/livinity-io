@@ -1853,6 +1853,14 @@ class Server {
 				// short-circuiting before Express, so listing it here is
 				// defense-in-depth only.
 				'/ws/',
+				// Phase 234-04 — `/liv-login` is mounted in livinityd.start()
+				// AFTER server.start() runs, so without this entry the SPA
+				// catch-all would shadow the handler and the browser would
+				// receive a 200 + text/html shell instead of the 302 +
+				// Set-Cookie auto-login response. Same root cause as the
+				// 207 R5 fix for `/openclawos/*` above. Exact-prefix match;
+				// `/liv-login` is the only path on the namespace.
+				'/liv-login',
 			]
 			this.app.use('*', (request, response, next) => {
 				const path = request.originalUrl?.split('?')[0] ?? request.path ?? ''
