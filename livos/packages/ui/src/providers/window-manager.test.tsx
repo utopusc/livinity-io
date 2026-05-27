@@ -109,30 +109,6 @@ describe('DEFAULT_WINDOW_SIZES Phase 199-01 + Hot-fix N', () => {
     })
 })
 
-// Phase 203 Hot-fix E 2026-05-24 — LIV_AI_CHAT (dock-seed appId, distinct
-// from LIVINITY_liv-ai). Operator complained Hot-fix D window was cramped
-// because LIV_AI_CHAT fell through to default (900x600). Lock 1200x800.
-describe('DEFAULT_WINDOW_SIZES Phase 203 Hot-fix E', () => {
-    it('LIV_AI_CHAT is exactly {width: 1200, height: 800}', () => {
-        expect(DEFAULT_WINDOW_SIZES['LIV_AI_CHAT']).toEqual({
-            width: 1200,
-            height: 800,
-        })
-    })
-
-    it('LIV_AI_CHAT does NOT fall through to default (Hot-fix D regression-lock)', () => {
-        const livAiChat = DEFAULT_WINDOW_SIZES['LIV_AI_CHAT']
-        const fallback = DEFAULT_WINDOW_SIZES.default
-        expect(livAiChat).not.toEqual(fallback)
-        expect(livAiChat).toBeDefined()
-    })
-
-    it('LIV_AI_CHAT is distinct from LIVINITY_liv-ai (they are two different appIds and may diverge)', () => {
-        // LIVINITY_liv-ai is the legacy Phase 201 Next.js dashboard iframe;
-        // LIV_AI_CHAT is the openclaw claw-client iframe. Two different
-        // surfaces, two different windows.
-        expect(DEFAULT_WINDOW_SIZES['LIV_AI_CHAT']).not.toBe(
-            DEFAULT_WINDOW_SIZES['LIVINITY_liv-ai'],
-        )
-    })
-})
+// Phase 231 retirement — Hot-fix E describe (3 tests for legacy chat-iframe
+// default window size) deleted wholesale. The default-size entry was removed
+// from window-manager.tsx; Liv Assistant (Phase 227) is the v42 chat surface.

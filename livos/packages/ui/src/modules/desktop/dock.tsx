@@ -212,28 +212,12 @@ export function Dock() {
 						)
 					}
 				/>
-				{/* Phase 203 Hot-fix F 2026-05-24 — DOCK Liv + Chat entries.
-				    Operator UAT (post Hot-fix D/E): "Where's the dock, why are
-				    you putting it on desktop?" Hot-fix D/E seeded into
-				    NativeAppConfigStore — which feeds the DESKTOP grid, not the
-				    dock. The dock is hardcoded here; the previous LIVINITY_liv-ai
-				    icon opened the LEGACY Next.js dashboard iframe
-				    (LIVINITY_liv-ai → LivAiContent → /liv-ai-app) instead of the
-				    openclaw chat surface. Hot-fix F switches both dock tiles to
-				    open the LIV_AI_CHAT window (the chat-iframe variant at
-				    /liv-ai-app/liv-ai → claw-client) so clicking either tile
-				    lands on the chat surface, matching what Hot-fix D/E meant
-				    to ship. Both tiles share the same target window — the
-				    second entry is a second shortcut, not a second surface
-				    (mirrors the Hot-fix E seeded behaviour, just relocated
-				    from desktop → dock). Icons fall back to the systemApps
-				    'LIVINITY_liv-ai' entry (the placeholder figma-export svg)
-				    so we don't need a separate icon asset. */}
 				{/* Phase 227-02 — Liv Assistant dock entry (the v42 AI surface). Gated
 				    by Phase 224-01's `useV42MigrationActive()` so flipping the Redis
 				    key `liv:config:liv_v42_migration_active=false` hides this icon
-				    without removing code (D-V42-ROLLBACK pattern). Sits in the chat
-				    neighbourhood immediately before the legacy LIV_AI_CHAT entries.
+				    without removing code (D-V42-ROLLBACK pattern). Phase 231 retirement
+				    removed the legacy Liv + Chat dock tiles that previously sat below
+				    this one; Liv Assistant is now the sole AI chat dock surface.
 				    The openWindow call targets the LIVINITY_liv-assistant appId
 				    registered in apps.tsx (Plan 227-02 Task 1), which window-content
 				    maps to LivAssistantWindow (Plan 227-01). The wrapping `<div
@@ -260,40 +244,6 @@ export function Dock() {
 						/>
 					</div>
 				)}
-				<div data-test-dock-item='liv-ai-chat' className='contents'>
-					<DockItem
-						appId='LIV_AI_CHAT'
-						iconSize={iconSize}
-						iconSizeZoomed={iconSizeZoomed}
-						open={false}
-						mouseX={mouseX}
-						onOpenWindow={(originRect) =>
-							handleOpenWindow(
-								'LIV_AI_CHAT',
-								'/liv-ai-chat',
-								'Liv',
-								systemAppsKeyed['LIVINITY_liv-ai'].icon,
-								originRect,
-							)
-						}
-					/>
-				</div>
-				<DockItem
-					appId='LIV_AI_CHAT_SHORTCUT'
-					iconSize={iconSize}
-					iconSizeZoomed={iconSizeZoomed}
-					open={false}
-					mouseX={mouseX}
-					onOpenWindow={(originRect) =>
-						handleOpenWindow(
-							'LIV_AI_CHAT',
-							'/liv-ai-chat',
-							'Chat',
-							systemAppsKeyed['LIVINITY_liv-ai'].icon,
-							originRect,
-						)
-					}
-				/>
 				{/* Recent apps */}
 				<RecentAppsDock mouseX={mouseX} iconSize={iconSize} iconSizeZoomed={iconSizeZoomed} />
 			</motion.div>

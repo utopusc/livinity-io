@@ -137,13 +137,9 @@ export const DEFAULT_WINDOW_SIZES: Record<string, Size> = {
 	// tabs) has room without compressing the chat surface. Matches the Docker
 	// window's footprint — another moderately content-heavy LivOS app.
 	'LIVINITY_liv-ai': {width: 1400, height: 900},
-	// Phase 203 Hot-fix E 2026-05-24 — LIV_AI_CHAT is the appId opened by
-	// useLaunchNativeApp short-circuit when wmClassHint === 'liv-ai' (the
-	// dock-seed entry from liv-ai-dock-seed.ts). Hot-fix D shipped without
-	// a matching entry → window fell through to `default` (900x600) and the
-	// operator complained the chat surface was cramped. 1200x800 picked to
-	// match operator directive ("~1200x800 or 80%% viewport").
-	'LIV_AI_CHAT': {width: 1200, height: 800},
+	// Phase 231 retirement — legacy chat-iframe default-size entry removed
+	// (was Phase 203 Hot-fix E). Liv Assistant (Phase 227) is the v42 chat
+	// surface.
 	default: {width: 900, height: 600},
 }
 
