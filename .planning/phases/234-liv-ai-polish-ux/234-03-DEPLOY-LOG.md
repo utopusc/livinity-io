@@ -466,3 +466,28 @@ Sacred SHA + Apache-2.0 attribution unaffected by either rollback path.
 - [ ] Plan 234-04 — Auth bypass (STRATEGY locked by 234-01 Section H Option B modified) — READY
 
 Phase 234 advances 3/4 plans. Plan 04 orchestrator must rewrite PLAN.md `<action>` block from 234-01 Section I 'Plan 234-04 spec' before execution (per ROADMAP guidance).
+
+---
+
+## Self-Check: PASSED
+
+Executor self-verification (per gsd-executor protocol):
+
+- [x] `scripts/install-liv-assistant.sh` — FOUND, parse OK, contains "Phase 234-03 — vendored-binary brand rebrand" + `s/AionUi/Liv AI/g` + `s/aionui/liv-ai/g` + "Apache-2.0 preserved"
+- [x] `docs/liv-assistant-install.md` — FOUND, H1 = "Liv AI — Install Runbook", contains 7 "Liv AI" mentions + new `## Phase 234 — Brand rebrand` section
+- [x] `.planning/phases/234-liv-ai-polish-ux/234-03-DEPLOY-LOG.md` — FOUND, 468 lines, all 5 STEP blocks (A/B/C/D/E) + Operator verdict + SC verdict table present
+- [x] `.planning/STATE.md` — FOUND, Current Position flipped to Plan 234-03 SHIPPED, Previous Position preserves Plan 234-02
+- [x] `.planning/ROADMAP.md` — FOUND, Phase 234 header "🟡 IN PROGRESS 3/4 (234-01 ✅ + 234-02 ✅ + 234-03 ✅)", Plans list added with per-plan ship status
+- [x] Commit `d9ed2324` (feat) — FOUND in git log, pre-commit `[sacred-sha] PASS: 20 files verified`
+- [x] Commit `6cd1ac84` (docs) — FOUND in git log, pre-commit `[sacred-sha] PASS: 20 files verified`
+- [x] Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` — UNCHANGED (`git hash-object liv/packages/core/src/sdk-agent-runner.ts` final-state match)
+- [x] Branch `master` in sync with `origin/master` (`git log origin/master..HEAD` empty)
+- [x] Mini PC `bash /opt/livos/update.sh` EXIT 0 (verified via SSH session logged in STEP B)
+- [x] PRE 51 → POST 0 AionUi grep delta (STEP A.2 + STEP C.1)
+- [x] LICENSE sha256 `a515d5a76da6c082f0d3d33a597bf82e32ecdac8841ed1783ac081ebd6d62ebf` byte-identical PRE/POST (STEP A.3 + STEP C.2)
+- [x] NOTICE sha256 `be9e969f948d5a8c95d888bfb67b4b30ccea5e27732d924346acff6ff9741470` byte-identical PRE/POST (STEP A.3 + STEP C.2)
+- [x] External HTML probe: Liv AI = 3, AionUi = 0, aionui = 0 (STEP D)
+- [x] Phase 233 UAT subset 5/5 GREEN post-rebrand (STEP D)
+
+Plan duration: ~12 minutes (start 2026-05-27T18:21:20Z → end 2026-05-27T18:33:26Z).
+
