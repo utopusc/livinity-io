@@ -147,29 +147,9 @@ import {mastraRouter, createMastraRouter} from './mastra-router.js'
 // boot wire-up replaces them via setProductionAppRouter().
 import {createAgentRouter} from './agent-router.js'
 import {createAgentTaskRouter} from './agent-task-router.js'
-// Phase 203-04 — `openclawos.apps.*` namespace. Factory-DI: production
-// livinityd boot supplies a real `createOpenclawosAppsRouter({repo, logger})`
-// built against an OpenUIAppsRepository instance. The default exported
-// router is an empty-injection stub that throws PRECONDITION_FAILED on
-// every call until boot wires the real repo. All 6 procedure paths are
-// added to `httpOnlyPaths` in ./common.ts so the plugin's loopback fetch
-// from `liv-claw-gateway.service` can never accidentally route via WS.
-import {
-	createOpenclawosAppsRouter,
-	openclawosAppsRouter,
-} from './openclawos-router.js'
-// Phase 205-04 — `openclawos.gateway.*` namespace. Factory-DI: production
-// livinityd boot supplies a real `createOpenclawosGatewayRouter({configStore,
-// devicesDir, redis, logger})` build. The default exported router is an
-// empty-injection stub that throws PRECONDITION_FAILED + OPENCLAW_GATEWAY_UNAVAILABLE
-// on every call until production boot wires the real deps. All 8 procedure
-// paths are added to httpOnlyPaths in ./common.ts so the Gateway tab
-// mutations (revoke / setMode / rotateToken) survive `systemctl restart
-// livos` mid-call (pitfall B-12 / X-04).
-import {
-	createOpenclawosGatewayRouter,
-	openclawosGatewayRouter,
-} from './openclawos-gateway-router.js'
+// Phase 231 retirement — Phase 203-04 + Phase 205-04 chat-surface tRPC
+// imports removed (legacy OpenUI app registry + Gateway tab CRUD).
+// Liv Assistant (Phase 226-04 + Phase 227) is the v42 chat surface.
 // Phase 204-01 — `provider.config.*` namespace. Factory-DI: production
 // livinityd boot supplies a real `createProviderConfigRouter({keyStore,
 // envFileWriter, restartHook, logger})` build. The default exported
@@ -181,16 +161,9 @@ import {
 	createProviderConfigRouter,
 	providerConfigRouter,
 } from './provider-config-router.js'
-// Phase 206 — `openclaw.*` namespace. Factory-DI: production livinityd boot
-// supplies a real `createOpenclawCliRouter({stateDir, onProvidersChanged,
-// logger})` build. The default exported router throws PRECONDITION_FAILED +
-// OPENCLAW_CLI_UNAVAILABLE on every call until boot wires the real deps.
-// All paths added to httpOnlyPaths in ./common.ts so settings + composer
-// mutations survive `systemctl restart livos` mid-call.
-import {
-	createOpenclawCliRouter,
-	openclawCliRouter,
-} from './openclaw-router.js'
+// Phase 231 retirement — Phase 206 chat-surface tRPC import removed
+// (legacy CLI-wrapped provider+model config). Provider config now lives
+// under `provider.config.*` (Phase 204-01) only.
 
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
@@ -244,18 +217,9 @@ export function createAppRouter(opts: {
 	// throws PRECONDITION_FAILED until production boot wires the real router
 	// built against a Redis client.
 	config?: ReturnType<typeof createConfigRouter>
-	// Phase 203-04 — `openclawos.apps.*` namespace slot. Default empty-
-	// injection stub keeps the appRouter type-stable; production boot
-	// supplies the real router built against `OpenUIAppsRepository` (Plan
-	// 203-04). Mounted under `openclawos` as a NEW top-level namespace —
-	// INV-203-09 untouched (mcp.* + agents.* contracts unchanged).
-	openclawosApps?: ReturnType<typeof createOpenclawosAppsRouter>
-	// Phase 205-04 — `openclawos.gateway.*` namespace slot. Default empty-
-	// injection stub keeps the appRouter type-stable; production boot supplies
-	// the real router built against OpenclawConfigStore (+ devicesDir + redis).
-	// Mounted as a sibling of openclawosApps under the existing `openclawos`
-	// namespace.
-	openclawosGateway?: ReturnType<typeof createOpenclawosGatewayRouter>
+	// Phase 231 retirement — chat-surface opt slots removed
+	// (Phase 203-04 + Phase 205-04 + Phase 206). Liv Assistant
+	// (Phase 226-04 + 227) is the v42 chat surface.
 	// Phase 204-01 — `provider.config.*` namespace slot. Default empty-
 	// injection stub keeps the appRouter type-stable; production boot
 	// supplies the real router built against ProviderKeyStore + EnvFileWriter
@@ -263,11 +227,6 @@ export function createAppRouter(opts: {
 	// INV-204-08 satisfied (no other routing surface mutations beyond the 3
 	// httpOnlyPaths additions).
 	providerConfig?: ReturnType<typeof createProviderConfigRouter>
-	// Phase 206 — `openclaw.*` namespace slot. Default empty-injection stub
-	// keeps the appRouter type-stable; production boot supplies the real
-	// router built against the openclaw CLI binary path + state dir +
-	// onProvidersChanged hook.
-	openclawCli?: ReturnType<typeof createOpenclawCliRouter>
 	// Phase 219 T6 — `skills.*` namespace slot. Default empty-injection stub
 	// throws PRECONDITION_FAILED until production boot wires the real router
 	// built against a SkillsLoader instance.
@@ -375,19 +334,9 @@ export function createAppRouter(opts: {
 			// only here to keep `createAppRouter()` shape stable for tests.
 			return router({})
 		})(),
-		// Phase 203-04 — `openclawos.apps.*` namespace (slug-keyed Postgres
-		// app registry consumed by the rebranded liv-claw plugin). The
-		// default `openclawosAppsRouter` stub throws PRECONDITION_FAILED +
-		// OPENUI_REPO_UNAVAILABLE on every call until production boot swaps
-		// in a real `createOpenclawosAppsRouter({repo})` build.
-		openclawos: router({
-			apps: opts.openclawosApps ?? openclawosAppsRouter,
-			// Phase 205-04 — `openclawos.gateway.*` admin namespace for the
-			// in-chat Gateway tab. Default empty-injection stub throws
-			// PRECONDITION_FAILED + OPENCLAW_GATEWAY_UNAVAILABLE until
-			// production boot wires the real router.
-			gateway: opts.openclawosGateway ?? openclawosGatewayRouter,
-		}),
+		// Phase 231 retirement — legacy chat-surface mount sites removed
+		// (Phase 203-04 + Phase 205-04 + Phase 206 namespaces all retired).
+		// Liv Assistant (Phase 226-04 + 227) is the v42 chat surface.
 		// Phase 204-01 — `provider.config.*` namespace (LLM provider API
 		// key entry for liv-claw-gateway). Default empty-injection stub
 		// throws PRECONDITION_FAILED + PROVIDER_CONFIG_UNAVAILABLE until
@@ -397,11 +346,6 @@ export function createAppRouter(opts: {
 		provider: router({
 			config: opts.providerConfig ?? providerConfigRouter,
 		}),
-		// Phase 206 — `openclaw.*` namespace (CLI-wrapped provider+model
-		// config). Default empty-injection stub throws PRECONDITION_FAILED +
-		// OPENCLAW_CLI_UNAVAILABLE until production boot swaps in a real
-		// `createOpenclawCliRouter({...})` build.
-		openclaw: opts.openclawCli ?? openclawCliRouter,
 		// Phase 219 T6+T7 — `skills.*` namespace combines:
 		//   - skills.{list,get,delete} (T6, per-agent CRUD over SkillsLoader)
 		//   - skills.market.{list,install} (T7, curated registry → write to disk)

@@ -376,11 +376,8 @@ export const httpOnlyPaths = [
 	// WS-half-broken concern as skills.delete.
 	'skills.market.list',
 	'skills.market.install',
-	// Phase 220 T1 — `openclawos.gateway.config.{read,write}` for the
-	// MCP Servers raw editor panel. read = render dep; write = atomic save
-	// the operator MUST not see drop on a half-broken WS.
-	'openclawos.gateway.config.read',
-	'openclawos.gateway.config.write',
+	// Phase 231 retirement — Phase 220 T1 legacy MCP raw-editor entries
+	// removed (chat-surface namespace gone with Plan 231-01).
 	// Phase 221 — `auth.claude.*` OAuth (PKCE) flow proxies to liv-core
 	// /api/claude/*. All 4 paths are page-render / settings-mutation
 	// dependencies that MUST survive a WS reconnect mid-flow. Mirrors
@@ -682,18 +679,8 @@ export const httpOnlyPaths = [
 	// panel "Built-in tools" group. Same WS-handshake-delay-flicker rationale
 	// as mastra.agent.listAvailableModels (the panel hydrates on first mount).
 	'mastra.agent.listBuiltInTools',
-	// Phase 203-04 — openclawos.apps.* namespace consumed by the rebranded
-	// liv-claw plugin (loopback HTTP fetch from `liv-claw-gateway.service`
-	// to livinityd `:8080`). All 6 paths MUST be HTTP — the plugin process
-	// has no WS pipe to livinityd, and mutations on a half-broken WS hang
-	// silently (memory pitfall B-12). Same rationale as mastra.config.*
-	// + agents.* clusters above.
-	'openclawos.apps.list',
-	'openclawos.apps.get',
-	'openclawos.apps.create',
-	'openclawos.apps.update',
-	'openclawos.apps.delete',
-	'openclawos.apps.version',
+	// Phase 231 retirement — Phase 203-04 legacy chat-surface app-registry
+	// entries removed (namespace gone with Plan 231-01).
 	// Phase 204-01 — provider.config.{list,set,delete} routes the operator's
 	// LLM provider API key entry flow. set/delete trigger sudo systemctl restart
 	// liv-claw-gateway and a 30s health poll. All 3 paths route via HTTP for the
@@ -702,45 +689,9 @@ export const httpOnlyPaths = [
 	'provider.config.list',
 	'provider.config.set',
 	'provider.config.delete',
-	// Phase 205-04 — openclawos.gateway.* admin namespace for the in-chat
-	// Gateway tab (paired devices + allowed origins + auth mode CRUD inside
-	// claw-client SettingsDialog). All 8 paths route via HTTP for the standard
-	// WS-reconnect-survival reason (memory pitfall B-12 / X-04 — same cluster
-	// as provider.config.* immediately above). devices.revoke / origins.add /
-	// origins.remove / auth.setMode / auth.rotateToken are admin mutations
-	// called immediately after operator clicks Save / Revoke / Rotate; a
-	// half-broken WS after `systemctl restart livos` would silently drop them.
-	// Queries (devices.list / origins.list / auth.get) are page-render
-	// dependencies for the Gateway tab body — HTTP avoids the WS-handshake-
-	// delay flicker on first paint. D-205-19.
-	'openclawos.gateway.devices.list',
-	'openclawos.gateway.devices.revoke',
-	'openclawos.gateway.origins.list',
-	'openclawos.gateway.origins.add',
-	'openclawos.gateway.origins.remove',
-	'openclawos.gateway.auth.get',
-	'openclawos.gateway.auth.setMode',
-	'openclawos.gateway.auth.rotateToken',
-	// Phase 206 — `openclaw.*` namespace (CLI-wrapped provider+model
-	// config). All paths route via HTTP because: (a) every procedure
-	// shells out to the openclaw binary which can take 200-3000ms; a
-	// half-broken WS after `systemctl restart livos` would silently
-	// drop the response (memory pitfall B-12 / X-04); (b) the queries
-	// hydrate the Providers tab + Default-model picker on first paint —
-	// WS-handshake-delay flicker is undesirable (precedent: provider.
-	// config.list line 671 and openclawos.gateway.devices.list line 685);
-	// (c) auth.setApiKey / logout / config.setDefaultModel are mutations
-	// the gateway picks up via file-watch (Phase 205-01 Probe A6) — the
-	// operator must see "Saved" banner reliably even across a livinityd
-	// restart window.
-	'openclaw.providers.list',
-	'openclaw.models.list',
-	'openclaw.auth.status',
-	'openclaw.auth.setApiKey',
-	'openclaw.auth.logout',
-	'openclaw.config.setDefaultModel',
-	'openclaw.config.getDefaultModel',
-	'openclaw.profiles.list',
+	// Phase 231 retirement — Phase 205-04 gateway-tab (8 entries) +
+	// Phase 206 CLI-wrapper (8 entries) chat-surface namespaces removed.
+	// Both retired with Plan 231-01.
 	// Phase 224 — config.getV42MigrationActive is a publicProcedure render
 	// dependency for the App Store nav + Settings sidebar hides. HTTP delivery
 	// avoids the WS-handshake-delay flicker on first paint (precedent:
