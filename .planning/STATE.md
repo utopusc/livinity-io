@@ -13,6 +13,18 @@ progress:
   percent: 100
 ---
 
+## 🚨 RESUME AFTER /clear — READ FIRST 🚨
+
+Operator clearing context 2026-05-27 night. Full handoff at **`.planning/RESUME-HERE.md`**. TL;DR:
+
+- ✅ **v43 cumulative visible-rebrand FULLY COMPLETE** (11 hot-fix phases 238→238.10). Sidebar donut adaptive (light = black ring + white dot, dark = white ring + black dot). Operator confirmed "Şimdi daha iyi".
+- ⏭️ **Phase 244 OBSOLETED** (Phase 238.2 covered the scope).
+- ⏸️ **6 phases deferred to focused discuss+plan sessions**: 241 (MCP foundational) → unblocks 240 + 242. Then 239 (Onboarding UI) + 243 (Terminal). Finally 245 (E2E UAT close).
+- 🎯 **Recommended first command after /clear**: `/gsd-discuss-phase 241`
+- 📚 **10 critical learnings** documented in `.planning/RESUME-HERE.md` — read before any future work touches install-liv-assistant.sh, Caddy, SVG branding, or AionUi's binary surfaces.
+
+---
+
 ## Current Position (v43 — Phase 238.10 ✅ SHIPPED — Cache-bust `?v=238_10` + robust SVG hide; forces browser to refetch CSS, defensive sizing + theme variants, cumulative 11 hot-fix phases (238→238.10))
 
 **Plan 238.10-01 (1-task — `c4f734ed` fix commit)** — Operator 2026-05-27 night: "Hala ayni gozukuyor sanki" — Phase 238.9 ship verified GREEN via curl (CSS link injected, 6933B served with proper @media + data-theme + display:none, both SVGs HTTP 200, JS bundle marker present), but operator's browser still showed unchanged. Most likely culprit: browser/Cloudflare cache holding the OLD livinity-overlay.css. Pipeline correctness wasn't the issue. **Fix:** (1) install-script Step 238.4-E: CSS link gains `?v=238_10` cache-bust query — forces every browser to revalidate. Idempotent: matches existing `?v=*` and bumps to `238_10`, or injects fresh link with cache-bust. (2) `livinity-overlay.css` `.liv-brand-donut svg` rule expanded from `> svg` (direct child only) to `svg, > svg, > * > svg` (catches React-introduced wrapper spans). Added both `display: none` AND `visibility: hidden` redundancy. (3) Explicit `[data-theme='light'] .liv-brand-donut` variant added (mirror of dark override). (4) Defensive `min-width: 32px; min-height: 32px` in case Tailwind `size-32px` utility doesn't resolve in AionUi's build (UnoCSS vs Tailwind v3/v4 syntax). **Mini PC POST:** index.html → `livinity-overlay.css?v=238_10` (cache-busted). CSS served 7701B (was 6933B). All 4 new defensive rules present in CSS body (min-width, expanded selector, visibility hidden, light variant). Non-regressions GREEN. Sacred SHA `f3538e1d...` UNCHANGED. 6/6 services active. `Deployed SHA: c4f734e`. **Operator action:** browser hard-reload `https://bruce.livinity.io/liv/` (the cache-bust URL change ALONE should trigger fresh fetch even without manual hard-reload, since the URL is different than what's cached). The sidebar brand should now correctly show: light theme = black ring + white dot, dark theme = white ring + black dot. **Cumulative v43 visible-rebrand: 11 hot-fix phases (238→238.10) FULLY COMPLETE with full robustness layer.**
