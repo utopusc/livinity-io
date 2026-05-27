@@ -3380,7 +3380,7 @@ Plans:
 
 ---
 
-### Phase 226: Caddy `/liv` reverse proxy + iframe headers — 🟡 IN PROGRESS (1/3 plans shipped)
+### Phase 226: Caddy `/liv` reverse proxy + iframe headers — 🟡 IN PROGRESS (2/3 plans shipped)
 
 **Goal:** Expose `liv-assistant.service` (Mini PC `127.0.0.1:3020`) at `bruce.livinity.io/liv` via Caddy reverse-proxy + strip iframe-blocking headers so the LivOS shell can iframe-embed it (Phase 227 will do the iframe mount). Without this routing, the service is reachable only on the Mini PC LAN.
 
@@ -3408,7 +3408,7 @@ Plans:
 
 Plans:
 - [x] 226-01-PLAN.md — Author Caddy snippet at `caddy/conf.d/liv-assistant.caddy` (named `(liv_assistant)` snippet using `@liv path /liv /liv/*` + `handle` + `uri strip_prefix /liv` + `header_down` strips for XFO/CSP + `header` sets CSP `frame-ancestors 'self' https://bruce.livinity.io`) plus idempotent root-required installer `scripts/install-liv-caddy-snippet.sh` (cmp -s guard + defensive Caddyfile bruce:bruce chown + import line wiring + `caddy validate` hard gate). Wave 1, autonomous. (✅ SHIPPED 2026-05-27, commit `870c5bdf`, 2 files +177 lines, 14/14 grep PASS, sacred SHA unchanged)
-- [ ] 226-02-PLAN.md — Patch `update.sh` with Step 4.7 (Caddy snippet install) + Step 8 extension (`systemctl reload caddy` + `/liv/api/auth/status` loopback smoke via `--resolve bruce.livinity.io:443:127.0.0.1 -k` + `fail` halt on non-2xx). Wave 2, autonomous, depends on 01.
+- [x] 226-02-PLAN.md — Patch `update.sh` with Step 4.7 (Caddy snippet install) + Step 8 extension (`systemctl reload caddy` + `/liv/api/auth/status` loopback smoke via `--resolve bruce.livinity.io:443:127.0.0.1 -k` + `fail` halt on non-2xx). Wave 2, autonomous, depends on 01. (✅ SHIPPED 2026-05-27, commit `bef03544`, 1 file +66 lines, 6/6 grep PASS, sacred SHA unchanged)
 - [ ] 226-03-PLAN.md — Mini PC deploy + 3-run idempotency + 6 SC evidence captures (in-Mini-PC loopback + external relay-path `curl -I` for SC-02/03 + WS upgrade smoke across 3 candidate paths for SC-04 + SC-06 bruce:bruce stat) → DEPLOY-LOG.md. Wave 3, `checkpoint:human-verify` (auto-approved per `_auto_chain_active=true`), depends on 01+02.
 
 **Depends on:** Phase 225 ✅ SHIPPED (update.sh now has Caddy reload section + liv-assistant restart).
