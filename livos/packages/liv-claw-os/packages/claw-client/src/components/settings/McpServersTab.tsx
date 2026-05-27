@@ -312,9 +312,16 @@ export function McpServersTab() {
     setEditorLoading(true);
     setEditorErr(null);
     try {
-      const res = await callQuery<undefined, {json: string; readAt: string}>(
+      const res = await callQuery<undefined, {json: string; readAt: string; hasRedactedSecrets?: boolean}>(
         "openclawos.gateway.config.read",
       );
+      // Defensive: ensure shape is right before render. The textarea breaks if
+      // value is undefined; if backend returns an unexpected payload, surface
+      // an error instead of crashing the panel.
+      if (!res || typeof res.json !== "string") {
+        setEditorErr("Config response missing 'json' field.");
+        return;
+      }
       setEditorJson(res.json);
     } catch (e) {
       setEditorErr(e instanceof Error ? e.message : "Failed to read config");
@@ -573,6 +580,11 @@ export function McpServersTab() {
               Direct edit of the gateway config file. JSON is validated before
               save; a parse error blocks the write. Saves are atomic and the
               gateway picks up changes within ~5 seconds — no restart needed.
+            </p>
+            <p className="text-xs text-text-neutral-tertiary/80">
+              <strong>Secrets:</strong> <code className="font-mono">gateway.auth.token</code> is shown as{" "}
+              <code className="font-mono">__REDACTED_KEEP_AS_IS__</code> — leave that sentinel in place
+              to preserve the live token; only replace it if you intend to rotate.
             </p>
             {editorErr ? (
               <p
