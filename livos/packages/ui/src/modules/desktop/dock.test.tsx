@@ -47,7 +47,10 @@ vi.mock('@/providers/apps', () => ({
 		'LIVINITY_server-control': {icon: '/figma-exports/dock-server.svg', systemAppTo: '/server-control'},
 		'LIVINITY_my-devices': {icon: '/figma-exports/dock-settings.png', systemAppTo: '/my-devices'},
 		'LIVINITY_terminal': {icon: '/figma-exports/dock-terminal.svg', systemAppTo: '/terminal'},
-		'LIVINITY_liv-assistant': {icon: '/figma-exports/dock-ai-chat.svg', systemAppTo: '/liv-assistant'},
+		// Phase 235 — apps.tsx icon string carries a ?v=235 cache-bust query
+		// so operator browsers that cached the pre-Plan-234-02 404 refetch
+		// the now-present SVG. Mock mirrors production exactly.
+		'LIVINITY_liv-assistant': {icon: '/figma-exports/dock-ai-chat.svg?v=235', systemAppTo: '/liv-assistant'},
 	},
 	useApps: () => ({userAppsKeyed: {}}),
 }))
@@ -180,11 +183,12 @@ describe('Dock — Liv Assistant entry (Phase 227-02)', () => {
 		})
 		expect(openWindowSpy).toHaveBeenCalledTimes(1)
 		// Phase 234-02 — title 'Liv Assistant' -> 'Liv AI' + icon swap to dock-ai-chat.svg
+		// Phase 235 — icon string carries ?v=235 cache-bust query (mirrors apps.tsx)
 		expect(openWindowSpy).toHaveBeenCalledWith(
 			'LIVINITY_liv-assistant',
 			'/liv-assistant',
 			'Liv AI',
-			'/figma-exports/dock-ai-chat.svg',
+			'/figma-exports/dock-ai-chat.svg?v=235',
 			expect.anything(),
 		)
 	})
