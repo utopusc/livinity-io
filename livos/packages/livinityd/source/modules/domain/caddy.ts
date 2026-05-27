@@ -367,15 +367,31 @@ const LIV_BRANDING_HANDLE = `\thandle /liv/branding/* {
  * matcher specificity (not source order) so ordering is cosmetic, but the
  * pattern keeps diff review easy.
  *
- * Phase 232 — adds `replace "</head>" "<link rel=\"stylesheet\"
- * href=\"/liv/branding/livinity-overlay.css\"></head>"` directive that
- * injects the Livinity brand overlay CSS link tag into upstream HTML
- * responses just before `</head>`. Default `replace` behavior matches
- * `text/html` responses only — JS / CSS / JSON bodies pass through
- * untouched. Required Caddy module: `caddyserver/replace-response`,
- * included in Caddy v2.6+ standard distribution (Mini PC runs v2.11.2
- * per MEMORY.md). Sibling LIV_BRANDING_HANDLE constant serves the
- * referenced CSS file from /etc/liv-assistant/branding/ on disk.
+ * Phase 232 — Plan 02 DEPLOY-TIME DISCOVERY: the `replace "</head>" ...`
+ * directive originally specified for HTML injection was REJECTED by the
+ * Mini PC's Caddy v2.11.3 binary, which does NOT ship the
+ * `caddyserver/replace-response` module in its standard distribution.
+ * `caddy validate` output:
+ *   Error: parsing caddyfile tokens for 'handle': unrecognized
+ *   directive: replace - are you sure your Caddyfile structure (nesting
+ *   and braces) is correct?, at /etc/caddy/Caddyfile:76
+ * Result: silent reload failure. Caddy kept running the pre-232 config,
+ * making BOTH the static /liv/branding/* handler AND the replace
+ * directive ineffective live.
+ *
+ * Hot-fix (Plan 232-02): drop the `replace` directive line entirely.
+ * Static /liv/branding/* handler (LIV_BRANDING_HANDLE constant above)
+ * remains — file_server is built into Caddy v2 core, so the static
+ * handler does deploy. SC-02 + SC-04 (asset reachability) are achievable
+ * with the static handler alone; SC-01 + SC-03 (HTML injection) require
+ * a follow-up phase that rebuilds Caddy via xcaddy with the
+ * caddyserver/replace-response plugin. Tracked as a Phase 232 follow-up
+ * (architectural — Rule 4 escalation).
+ *
+ * The sibling LIV_BRANDING_HANDLE constant still serves the static
+ * assets at /liv/branding/*; the missing piece is browser-side HTML
+ * referencing them. Until the follow-up phase ships, the overlay CSS
+ * exists on the wire but is never loaded by AionUi's HTML.
  */
 const LIV_ASSISTANT_HANDLE = `\t@liv path /liv /liv/*
 \thandle @liv {
@@ -386,7 +402,6 @@ const LIV_ASSISTANT_HANDLE = `\t@liv path /liv /liv/*
 ${WS_TRANSPORT_BODY}
 \t\t}
 \t\theader Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
-\t\treplace "</head>" "<link rel=\\"stylesheet\\" href=\\"/liv/branding/livinity-overlay.css\\"></head>"
 \t}`
 
 /**
