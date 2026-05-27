@@ -249,6 +249,56 @@ and recovery flow without spelunking the systemd unit.
 | `curl http://127.0.0.1:3020/` returns connection refused | Service not running OR bound to wrong interface | `systemctl is-active liv-assistant`; check unit's ExecStart `--port` value |
 | Claude Code agent shows `available: false` in `/api/agents` | `bun` missing OR `claude` CLI missing OR `~/.claude/.credentials.json` missing | Verify all three: `which bun`, `which claude`, `ls -la /home/bruce/.claude/.credentials.json` |
 
+## Phase 238 — Complete AionUi rebrand (logo + case-insensitive text)
+
+Two idempotent steps in `scripts/install-liv-assistant.sh` close residual
+AionUi-branding gaps left by Phase 234-03 (which only rewrote case-sensitive
+compound forms `AionUi` / `aionui-web` / `aionui`).
+
+**Step 238-A — Logo asset overlay.** Reads `caddy/branding/liv-logo.svg`
+(and any future companion assets) from the cloned repo and copies them via
+`install -m 0644` into AionUi bundle logo asset path(s) inside
+`${CURRENT_LINK}/static/`. Uses `cmp -s` gating — re-runs against an
+unchanged repo are no-ops (file mtime preserved). Target paths come from
+the Plan 238-02 investigation disposition table.
+
+The 238-A block ships in install-liv-assistant.sh with an EMPTY
+`LOGO_TARGETS=()` array. Plan 238-02 Section C found ZERO on-disk
+AionUi-branded logo assets requiring overlay (PWA icons are out-of-scope,
+the Lark SVG is third-party trademark, theme art is cosmetic). The
+"no targets configured" log line is the expected steady-state. The
+framework is forward-compatible — when a future Livinity-branded asset
+target needs overlay, an operator appends paths to `LOGO_TARGETS=(...)`.
+
+**Step 238-B — Case-insensitive word-boundary sed.** Extends Phase 234-03's
+case-sensitive pattern with `sed -E -i 's/\b(Aion|AION|aion)\b/Liv/g'` over
+HTML/JS/CSS files in `${CURRENT_LINK}/static/`. Catches orphan standalone
+`Aion` / `AION` / `aion` tokens that Phase 234-03's compound patterns
+missed — most notably inline CSS class selectors
+`.aion-url-viewer-toolbar` and `.aion-file-changes-panel` baked into the
+JS bundle.
+
+Word-boundary regex is REQUIRED — Plan 238-02 Section E.1 enumerated 311+
+dictionary-word occurrences (`tension`=108, `version`=90, `application`=36,
+`region`=29, `attention`=19, `dimension`=20, `mention`=6, `pension`=3,
+`companion`=5) that a naive case-insensitive sed without `\b` would
+catastrophically mangle. With `\b` the regex correctly excludes all of
+these and matches only standalone tokens. Section E.2 dry-run scoped
+PRE=7 files; Plan 238-03 verifies PRE=7 → POST=0 delta after deploy.
+
+Both steps:
+- Run AFTER Phase 235 path-rewrite block, BEFORE bun-install block
+- Scoped to `${CURRENT_LINK}/static/` only — LICENSE + NOTICE at
+  `${INSTALL_ROOT}/` are structurally outside (D-V43-APACHE-NOTICE
+  preserved by path scope, not by an exclude filter)
+- Idempotent — grep / cmp pre-check skips when no work needed
+
+**Reversibility:** `git revert` the Phase 238 install-script commit and
+redeploy via `bash /opt/livos/update.sh`; OR re-extract the upstream
+AionUi tarball (the Phase 234-03 rollback path still applies). LICENSE +
+NOTICE sha256 byte-identity preserved across this phase
+(`a515d5a7...` / `be9e969f...`).
+
 ## Related phases
 
 - **222** (spike): `.planning/phases/222-aionui-spike/222-SPIKE.md` — feasibility verdict.
@@ -257,3 +307,5 @@ and recovery flow without spelunking the systemd unit.
 - **228** (auth bridge): wires Phase 221 Claude OAuth → Liv Assistant credentials surface.
 - **231** (cleanup): retires `liv-claw-gateway.service` after UAT green.
 - **232** (brand overlay): Caddy `sub` injects Livinity Design CSS — no source patch.
+- **234-03** (compound rebrand): case-sensitive sed for `AionUi` / `aionui-web` / `aionui`.
+- **238** (this section): completes the rebrand — logo scaffold + word-boundary text catch-all.

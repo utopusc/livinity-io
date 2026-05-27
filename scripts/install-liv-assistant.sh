@@ -310,6 +310,104 @@ for guard in LICENSE NOTICE; do
 done
 
 # ---------------------------------------------------------------------------
+# Phase 238 Step A — Livinity logo asset overlay
+#
+# Copies the Livinity logo SVG(s) from the cloned repo's caddy/branding/ dir
+# into AionUi bundle logo asset target paths inside ${CURRENT_LINK}/static/.
+#
+# Idempotent via cmp -s — only writes when content differs (file mtime is
+# preserved on no-op, which keeps the rest of install-liv-assistant.sh's
+# cmp-stable tarball pattern intact).
+#
+# Plan 238-02 Section C disposition table found ZERO on-disk AionUi-branded
+# logo assets requiring overlay (the 3 PWA icons are out-of-scope; the Lark
+# SVG is third-party trademark; theme covers + pet animations are cosmetic
+# non-brand). Hence LOGO_TARGETS=() ships empty — the framework is FORWARD
+# COMPATIBLE for any future operator-supplied target list. The WARN-skip
+# path below is the EXPECTED steady-state.
+#
+# D-V43-APACHE-NOTICE: target paths are strictly inside
+# ${CURRENT_LINK}/static/; LICENSE + NOTICE at ${INSTALL_ROOT}/ are
+# structurally outside this scope.
+# ---------------------------------------------------------------------------
+# REPO_BRANDING_DIR points at the cloned repo's caddy/branding/ dir.
+# update.sh runs this script from /tmp/livinity-update-<pid>/scripts/, so
+# the sibling caddy/branding/ subtree is reachable via ../caddy/branding.
+REPO_BRANDING_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/caddy/branding"
+LOGO_SRC="${REPO_BRANDING_DIR}/liv-logo.svg"
+LOGO_TARGETS=(
+  # Empty per Plan 238-02 Section C disposition table — no AionUi-branded
+  # logo asset found on disk in /opt/liv-assistant/current/static/. Reserved
+  # for future use; operator can append target paths here if/when AionUi
+  # upstream ships a logo asset, or if Livinity-branded PWA icons are
+  # introduced. The WARN-no-targets log line below is expected steady-state.
+)
+
+if [[ -f "${LOGO_SRC}" ]] && [[ "${#LOGO_TARGETS[@]}" -gt 0 ]]; then
+  for tgt in "${LOGO_TARGETS[@]}"; do
+    if [[ -e "${tgt}" ]]; then
+      if cmp -s "${LOGO_SRC}" "${tgt}"; then
+        log "Logo overlay: ${tgt} already matches Livinity logo; skipping"
+      else
+        install -m 0644 -o root -g root "${LOGO_SRC}" "${tgt}"
+        log "Logo overlay: ${tgt} overwritten with Livinity logo"
+      fi
+    else
+      log "Logo overlay: WARN target ${tgt} missing (path drift from Plan 238-02); skipping"
+    fi
+  done
+else
+  log "Logo overlay: no targets configured (Plan 238-02 Section C found zero overlay candidates); skipping logo overlay step"
+fi
+
+# ---------------------------------------------------------------------------
+# Phase 238 Step B — Case-insensitive word-boundary Aion -> Liv sed pass
+#
+# Phase 234-03's sed pass was case-sensitive and pattern-matched the
+# compound AionUi / aionui-web / aionui literal strings. It MISSED orphan
+# standalone tokens (no `Ui` suffix, no `-web` compound) such as inline
+# CSS class selectors `.aion-url-viewer-toolbar` and `.aion-file-changes-
+# panel` baked into the JS bundle (operator surfaced this gap during live
+# UAT on 2026-05-27 night).
+#
+# Word-boundary regex `\b(Aion|AION|aion)\b` is REQUIRED to avoid
+# catastrophically mangling 311+ dictionary-word occurrences inside the
+# bundle (Plan 238-02 Section E.1: tension=108, version=90, application=
+# 36, region=29, etc.). With `\b` the regex correctly matches ONLY
+# standalone tokens — `tension` and `version` are safe; `.aion-url-...`
+# is rewritten because the `.` and `-` are non-word boundaries.
+#
+# Plan 238-02 Section E.2 dry-run: 7 files in scope (PRE). Plan 238-03
+# verifies PRE=7 -> POST=0 on Mini PC deploy.
+#
+# Idempotency: grep-pre-check skips entirely when no word-boundary
+# matches remain; post-grep verify warns if any survive the sed pass.
+#
+# D-V43-APACHE-NOTICE: scope is ${REBRAND_TARGET}=${CURRENT_LINK}/static/,
+# LICENSE + NOTICE structurally outside.
+# ---------------------------------------------------------------------------
+if [[ -d "${REBRAND_TARGET}" ]]; then
+  WB_PRE_HITS="$(grep -rilE '\b(Aion|AION|aion)\b' "${REBRAND_TARGET}" \
+    --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
+  if [[ "${WB_PRE_HITS}" -gt 0 ]]; then
+    log "Word-boundary rebrand: applying \\b(Aion|AION|aion)\\b -> Liv sed pass on ${WB_PRE_HITS} files"
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) \
+         -exec sed -E -i 's/\b(Aion|AION|aion)\b/Liv/g' {} +
+    WB_POST_HITS="$(grep -rilE '\b(Aion|AION|aion)\b' "${REBRAND_TARGET}" \
+      --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
+    if [[ "${WB_POST_HITS}" -ne 0 ]]; then
+      log "WARN: ${WB_POST_HITS} files still contain word-boundary Aion variants after sed pass (investigate)"
+    else
+      log "Word-boundary rebrand: all standalone Aion/AION/aion tokens replaced (verified by post-grep)"
+    fi
+  else
+    log "Word-boundary rebrand: no standalone Aion/AION/aion tokens found; skipping"
+  fi
+else
+  log "Word-boundary rebrand: WARN ${REBRAND_TARGET} missing; skipping"
+fi
+
+# ---------------------------------------------------------------------------
 # Install bun if missing (Claude Code ACP bridge requires it)
 # See 222-SPIKE.md "Bun runtime dependency" — risk #3.
 # ---------------------------------------------------------------------------
