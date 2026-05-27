@@ -478,6 +478,71 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Phase 238.2 Step D — Built-in skill SKILL.md rebrand
+#
+# AionUi's built-in skills live as on-disk SKILL.md (+ references/) files
+# under /opt/liv-assistant/data/builtin-skills/. The AionUi backend
+# extracts them on first start (the dir is NOT shipped in the tarball;
+# bruce-owned mtime locks to install time) and DOES NOT re-extract on
+# subsequent restarts — so sed-replacements PERSIST across restarts.
+# Verified by Phase 238.2 probe: mtime unchanged across multiple
+# `systemctl restart liv-assistant` cycles.
+#
+# Scope: `.md` files only — scripts (.js / .py / .sh) and JSON config
+# are deliberately EXCLUDED because the compound `s/AionUi/Liv AI/g`
+# substitution inserts a SPACE which would corrupt code identifiers.
+# Operator's visible-text concern is satisfied by markdown rebrand alone.
+#
+# Pattern chain mirrors Phase 234-03 + Phase 238 Step B + extended for
+# `AionUI` case variant found in the skills (e.g. `AionUI Skills`):
+#   1. AionUi   -> Liv AI
+#   2. AionUI   -> Liv AI         (case variant — added in this phase)
+#   3. aionui-web -> liv-ai-web
+#   4. aionui   -> liv-ai
+#   5. \b(Aion|AION|aion)\b -> Liv  (word-boundary catch-all)
+#
+# Order matters: longer patterns first so compound rewrites take
+# precedence over the word-boundary catch-all.
+#
+# Idempotency: grep pre/post via pipefail-wrap (Phase 238 hot-fix pattern).
+#
+# D-V42-NO-DATA-LOSS: scope strictly inside data/builtin-skills/. Never
+# touch data/skills/ (user import dir), data/sessions/, data/secrets/,
+# or any other operator-state subdir.
+# ---------------------------------------------------------------------------
+SKILL_TARGET="${INSTALL_ROOT}/data/builtin-skills"
+if [[ -d "${SKILL_TARGET}" ]]; then
+  set +o pipefail
+  SK_PRE_HITS="$(grep -rilE 'AionUi|AionUI|aionui|\b(Aion|AION|aion)\b' "${SKILL_TARGET}" \
+    --include='*.md' 2>/dev/null | wc -l)"
+  set -o pipefail
+  if [[ "${SK_PRE_HITS}" -gt 0 ]]; then
+    log "Skill rebrand: applying AionUi/AionUI/aionui-web/aionui/\\b(Aion|AION|aion)\\b -> Liv sed pass on ${SK_PRE_HITS} files"
+    find "${SKILL_TARGET}" -name '*.md' \
+         -exec sed -E -i \
+           -e 's/AionUi/Liv AI/g' \
+           -e 's/AionUI/Liv AI/g' \
+           -e 's/aionui-web/liv-ai-web/g' \
+           -e 's/aionui/liv-ai/g' \
+           -e 's/\b(Aion|AION|aion)\b/Liv/g' \
+           {} +
+    set +o pipefail
+    SK_POST_HITS="$(grep -rilE 'AionUi|AionUI|aionui|\b(Aion|AION|aion)\b' "${SKILL_TARGET}" \
+      --include='*.md' 2>/dev/null | wc -l)"
+    set -o pipefail
+    if [[ "${SK_POST_HITS}" -ne 0 ]]; then
+      log "WARN: ${SK_POST_HITS} SKILL.md files still contain Aion variants after sed pass (investigate)"
+    else
+      log "Skill rebrand: all Aion variants in builtin-skills/*.md replaced (verified by post-grep)"
+    fi
+  else
+    log "Skill rebrand: no Aion variants found in builtin-skills/*.md; skipping"
+  fi
+else
+  log "Skill rebrand: WARN ${SKILL_TARGET} missing (AionUi has not extracted built-in skills yet); skipping"
+fi
+
+# ---------------------------------------------------------------------------
 # Install bun if missing (Claude Code ACP bridge requires it)
 # See 222-SPIKE.md "Bun runtime dependency" — risk #3.
 # ---------------------------------------------------------------------------

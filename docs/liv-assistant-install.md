@@ -320,23 +320,38 @@ Coverage:
 - `iOfficeAI/Liv AI` (officialWebsite, contactMe, 234-03 collateral)
 - `iOfficeAI/AionHub` (separate upstream link in index-BBQOKL1b.js)
 
-### KNOWN LIMITATION — Built-in skill names/descriptions
+### Step 238.2-D — Built-in skill `SKILL.md` Aion → Liv rebrand
 
-The 24 Built-in skills shown in Liv AI → Settings → Skills tab
-(`aionui-skills`, `aionui-webui-setup`, `openclaw-setup`, `star-office-helper`,
-etc.) have NAMES and DESCRIPTIONS baked into the 94MB AionUi Bun ELF binary
-at `/opt/liv-assistant/aionui-web-2.1.4/aionui-web/aionui-web` (BuildID
-`a9a0d18d...`). Phase 234-03's design rule deliberately excludes the binary
-from sed-rebrand (`234-01-INVESTIGATION.md` Section F.5 — sed-edited ELF
-would corrupt). Rebranding these requires either:
+**Update 2026-05-27 evening**: the previous "binary-embedded skills" KNOWN
+LIMITATION was based on a faulty probe. Subsequent Phase 238.2 SSH probe
+discovered that the built-in skills live as on-disk `.md` files under
+`/opt/liv-assistant/data/builtin-skills/` (extracted by the AionUi backend
+on first start; `bruce`-owned; mtime locks to install time; subsequent
+`systemctl restart liv-assistant` cycles do NOT re-extract). This means
+sed-replace is feasible.
 
-1. **Upstream fork** — out of scope per D-V42-SACRED (vendor-and-wrap only)
-2. **JS-injection via Caddy `sub`/`replace`** — feasible but complex; would
-   walk the iframe DOM at runtime to rewrite skill name text nodes. Phase
-   232's `livinity-overlay.css` is the precedent for CSS-side injection.
-3. **Hide the Skills tab via CSS** — operator loses access to the feature
+Step 238.2-D extends the install-script with a 5-substitution sed chain
+over `${INSTALL_ROOT}/data/builtin-skills/**/*.md`:
 
-Future phase if operator requirement persists.
+1. `AionUi` → `Liv AI` (mirrors Phase 234-03)
+2. `AionUI` → `Liv AI` (case variant — NEW for skills "AionUI Skills" text)
+3. `aionui-web` → `liv-ai-web`
+4. `aionui` → `liv-ai`
+5. `\b(Aion|AION|aion)\b` → `Liv` (word-boundary catch-all from Phase 238-B)
+
+**Scope discipline**: `.md` files ONLY. Code files (`.js` / `.py` / `.sh`)
+are deliberately excluded — the compound `Liv AI` substitution inserts a
+SPACE, which would corrupt code identifiers. Markdown rebrand satisfies
+the operator's visible-text concern (descriptions in the Skills settings
+tab).
+
+**D-V42-NO-DATA-LOSS preserved**: target path strictly inside
+`data/builtin-skills/`. The install-script does NOT touch `data/skills/`
+(user import dir), `data/sessions/`, `data/secrets/`,
+`data/aionui-backend.db`, or any other operator-state subdir.
+
+Idempotent via grep pre/post (wrapped with `set +o pipefail` per Phase 238
+hot-fix precedent).
 
 ## Related phases
 
