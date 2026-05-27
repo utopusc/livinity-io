@@ -16,337 +16,15 @@ import {
 	validateHost,
 } from './caddy.js'
 
-// ─── Phase 203-05 — /openclawos/handshake bridge handle ─────────────────
-
-describe('Phase 203-05 — /openclawos/handshake handle (D-203-12 / INV-203-10)', () => {
-	it('null mainDomain :80 block emits /openclawos/handshake → :8080 BEFORE Liv AI handles', () => {
-		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
-		expect(out).toContain('handle /openclawos/handshake')
-		expect(out).toContain('reverse_proxy 127.0.0.1:8080')
-		// Phase 203-09 split: openclaw gateway (:18789) for /liv-ai-app/openclawos,
-		// Next.js subapp (:3010) for everything else under /liv-ai-app/*.
-		expect(out).toContain('@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
-		expect(out).toContain('reverse_proxy 127.0.0.1:18789')
-		expect(out).toContain('@livaiSubapp path /liv-ai-app /liv-ai-app/*')
-		expect(out).toContain('reverse_proxy 127.0.0.1:3010')
-		// Ordering — handshake handle MUST appear before the livai handles so
-		// the JWT POST routes to livinityd, not the gateway.
-		const handshakeIdx = out.indexOf('handle /openclawos/handshake')
-		const livaiClawIdx = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos')
-		const livaiSubappIdx = out.indexOf('@livaiSubapp path')
-		expect(handshakeIdx).toBeGreaterThan(-1)
-		expect(livaiClawIdx).toBeGreaterThan(-1)
-		expect(livaiSubappIdx).toBeGreaterThan(-1)
-		expect(handshakeIdx).toBeLessThan(livaiClawIdx)
-		expect(livaiClawIdx).toBeLessThan(livaiSubappIdx)
-	})
-
-	it('apex block (mainDomain set) emits /openclawos/handshake BEFORE Liv AI handles', () => {
-		const out = generateFullCaddyfile(
-			{mainDomain: 'bruce.livinity.io', subdomains: []},
-			false,
-			false,
-			[],
-		)
-		expect(out).toContain('handle /openclawos/handshake')
-		const apexBlockStart = out.indexOf('bruce.livinity.io {')
-		const apexBlockEnd = out.indexOf('}', apexBlockStart + 100) // skip the opening { and the cache header
-		// Find first handshake + livai occurrences INSIDE the apex block
-		const handshakeInside = out.indexOf('handle /openclawos/handshake', apexBlockStart)
-		const livaiClawInside = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos', apexBlockStart)
-		const livaiSubappInside = out.indexOf('@livaiSubapp path', apexBlockStart)
-		expect(handshakeInside).toBeGreaterThan(apexBlockStart)
-		expect(livaiClawInside).toBeGreaterThan(handshakeInside)
-		expect(livaiSubappInside).toBeGreaterThan(livaiClawInside)
-		expect(handshakeInside).toBeLessThan(apexBlockEnd)
-	})
-
-	it('multi-user subdomain block also emits /openclawos/handshake BEFORE Liv AI handles', () => {
-		const out = generateFullCaddyfile(
-			{
-				mainDomain: 'livinity.io',
-				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
-			},
-			true, // multiUser
-			false,
-			[],
-		)
-		const subdomainBlockStart = out.indexOf('bruce.livinity.io {')
-		const handshakeInside = out.indexOf('handle /openclawos/handshake', subdomainBlockStart)
-		const livaiClawInside = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos', subdomainBlockStart)
-		const livaiSubappInside = out.indexOf('@livaiSubapp path', subdomainBlockStart)
-		expect(handshakeInside).toBeGreaterThan(subdomainBlockStart)
-		expect(livaiClawInside).toBeGreaterThan(handshakeInside)
-		expect(livaiSubappInside).toBeGreaterThan(livaiClawInside)
-	})
-
-	it('handshake handle routes to :8080 (livinityd), NOT :18789 (openclaw gateway)', () => {
-		const out = generateFullCaddyfile(
-			{mainDomain: 'bruce.livinity.io', subdomains: []},
-			false,
-			false,
-			[],
-		)
-		// Extract the handshake handle block + its single reverse_proxy line
-		const handshakeIdx = out.indexOf('handle /openclawos/handshake')
-		const blockEnd = out.indexOf('}', handshakeIdx + 'handle /openclawos/handshake'.length + 1)
-		const handshakeBlock = out.slice(handshakeIdx, blockEnd)
-		expect(handshakeBlock).toContain('reverse_proxy 127.0.0.1:8080')
-		expect(handshakeBlock).not.toContain(':18789')
-	})
-
-	it('Liv AI port targets match the Phase 203-09 split (claw → :18789, subapp → :3010)', () => {
-		const out = generateFullCaddyfile(
-			{
-				mainDomain: 'bruce.livinity.io',
-				subdomains: [{subdomain: 'n8n', appId: 'n8n', port: 5678, enabled: true}],
-			},
-			false,
-			false,
-			[],
-		)
-		// All existing legacy reverse_proxy targets still present
-		expect(out).toContain('reverse_proxy 127.0.0.1:8080') // livinityd catch-all + handshake
-		expect(out).toContain('reverse_proxy 127.0.0.1:18789') // openclaw gateway (claw-client)
-		expect(out).toContain('reverse_proxy 127.0.0.1:3010') // Phase 203-09 — Next.js subapp
-		expect(out).toContain('reverse_proxy 127.0.0.1:5678') // n8n subdomain
-		// No new port targets beyond {8080, 18789, 3010, 5678, 3020}
-		// Phase 226-04 added :3020 (liv-assistant /liv reverse-proxy).
-		const portMatches = (out.match(/reverse_proxy 127\.0\.0\.1:(\d+)/g) ?? []).map((m) =>
-			Number(m.split(':').pop()),
-		)
-		for (const port of portMatches) {
-			expect([8080, 18789, 3010, 5678, 3020]).toContain(port)
-		}
-	})
-})
-
-// ─── Phase 203-09 — Liv AI surface split (claw gateway vs Next.js subapp) ──
-
-describe('Phase 203-09 — /liv-ai-app split: openclaw gateway vs Next.js subapp', () => {
-	it('apex block: openclawos sub-prefix uses handle_path (strip_prefix) and routes to :18789', () => {
-		const out = generateFullCaddyfile(
-			{mainDomain: 'bruce.livinity.io', subdomains: []},
-			false,
-			false,
-			[],
-		)
-		// handle_path automatically strips the matched prefix before forwarding
-		// — the openclaw gateway in-process router sees "/" not "/liv-ai-app/openclawos"
-		const clawIdx = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
-		expect(clawIdx).toBeGreaterThan(-1)
-		const clawBlockEnd = out.indexOf('\t}\n\t}', clawIdx)
-		const clawBlock = out.slice(clawIdx, clawBlockEnd)
-		expect(clawBlock).toContain('reverse_proxy 127.0.0.1:18789')
-		expect(clawBlock).not.toContain(':3010')
-	})
-
-	it('apex block: bare /liv-ai-app + /liv-ai-app/* routes to Next.js subapp :3010 (Phase 202 dashboard)', () => {
-		const out = generateFullCaddyfile(
-			{mainDomain: 'bruce.livinity.io', subdomains: []},
-			false,
-			false,
-			[],
-		)
-		const subappIdx = out.indexOf('@livaiSubapp path /liv-ai-app /liv-ai-app/*')
-		expect(subappIdx).toBeGreaterThan(-1)
-		// Find the handle block right after the matcher declaration
-		const handleIdx = out.indexOf('handle @livaiSubapp', subappIdx)
-		expect(handleIdx).toBeGreaterThan(subappIdx)
-		const handleBlockEnd = out.indexOf('\t}\n\t}', handleIdx)
-		const handleBlock = out.slice(handleIdx, handleBlockEnd)
-		expect(handleBlock).toContain('reverse_proxy 127.0.0.1:3010')
-		expect(handleBlock).not.toContain(':18789')
-	})
-
-	it('multi-user subdomain block also carries both Liv AI handles', () => {
-		const out = generateFullCaddyfile(
-			{
-				mainDomain: 'livinity.io',
-				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
-			},
-			true,
-			false,
-			[],
-		)
-		const subdomainBlockStart = out.indexOf('bruce.livinity.io {')
-		const clawInside = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos', subdomainBlockStart)
-		const subappInside = out.indexOf('@livaiSubapp path', subdomainBlockStart)
-		expect(clawInside).toBeGreaterThan(subdomainBlockStart)
-		expect(subappInside).toBeGreaterThan(clawInside)
-	})
-})
-
-// ─── Phase 203-10 — gateway URL rewrite (handoff from Plan 203-09) ─────────
-
-describe('Phase 203-10/12/Hot-fix-C — gateway URL rewrite to /plugins/openclawos', () => {
-	it('handle_path strips external prefix AND rewrites to /plugins/openclawos before forwarding', () => {
-		const out = generateFullCaddyfile(
-			{mainDomain: 'bruce.livinity.io', subdomains: []},
-			false,
-			false,
-			[],
-		)
-		// The rewrite directive MUST appear inside the openclawos handle_path
-		// block, BEFORE the reverse_proxy line, so the gateway plugin's
-		// `path: '/plugins/openclawos'` prefix matcher fires (upstream
-		// openclaw-os shape; see liv-claw-os/packages/claw-plugin/src/index.ts).
-		const clawIdx = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
-		expect(clawIdx).toBeGreaterThan(-1)
-		const clawBlockEnd = out.indexOf('\t}\n\t}', clawIdx)
-		const clawBlock = out.slice(clawIdx, clawBlockEnd)
-		const rewriteIdx = clawBlock.indexOf('rewrite * /plugins/openclawos{path}')
-		const proxyIdx = clawBlock.indexOf('reverse_proxy 127.0.0.1:18789')
-		expect(rewriteIdx).toBeGreaterThan(-1)
-		expect(proxyIdx).toBeGreaterThan(-1)
-		expect(rewriteIdx).toBeLessThan(proxyIdx)
-	})
-
-	it('the rewrite is also present in the multi-user subdomain block', () => {
-		const out = generateFullCaddyfile(
-			{
-				mainDomain: 'livinity.io',
-				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
-			},
-			true,
-			false,
-			[],
-		)
-		const subdomainBlockStart = out.indexOf('bruce.livinity.io {')
-		const clawInside = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos', subdomainBlockStart)
-		const rewriteInside = out.indexOf(
-			'rewrite * /plugins/openclawos{path}',
-			clawInside,
-		)
-		expect(rewriteInside).toBeGreaterThan(clawInside)
-	})
-
-	it('the null-mainDomain :80 fallback block also carries the rewrite', () => {
-		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
-		const clawIdx = out.indexOf('@livAiOpenclawos path /liv-ai-app/openclawos')
-		expect(clawIdx).toBeGreaterThan(-1)
-		const rewriteIdx = out.indexOf('rewrite * /plugins/openclawos{path}', clawIdx)
-		expect(rewriteIdx).toBeGreaterThan(clawIdx)
-	})
-
-	// Hot-fix-C addendum 2026-05-24: the Next.js static export's basePath is
-	// /plugins/openclawos so the rendered HTML references _next/* assets via
-	// /plugins/openclawos/_next/... — those external URLs would otherwise hit
-	// the default reverse_proxy to :8080 (livinityd) which doesn't serve them.
-	// Asset handle steers them directly to :18789 (no rewrite needed since the
-	// plugin already matches /plugins/openclawos*).
-	it('also emits a /plugins/openclawos asset handle pointing at :18789', () => {
-		const out = generateFullCaddyfile(
-			{mainDomain: 'bruce.livinity.io', subdomains: []},
-			false,
-			false,
-			[],
-		)
-		expect(out).toContain('@openclawosPluginAssets path /plugins/openclawos /plugins/openclawos/*')
-		// The asset handle must NOT carry a rewrite (gateway already serves the path as-is).
-		const assetIdx = out.indexOf('@openclawosPluginAssets path')
-		const handleIdx = out.indexOf('handle @openclawosPluginAssets', assetIdx)
-		expect(handleIdx).toBeGreaterThan(assetIdx)
-	})
-})
-
-// ─── Phase 203 Hot-fix D 2026-05-24 — operator-facing URL rename ─────────
-//
-// External path `/liv-ai-app/liv-ai` is added BEFORE the legacy
-// `/liv-ai-app/openclawos` handle so operators see "Liv AI" in the URL bar.
-// Both rewrite to the same upstream `/plugins/openclawos{path}` so the
-// gateway plugin doesn't need to change. The legacy path stays for
-// backwards-compat with any in-flight iframe src / bookmark.
-
-describe('Phase 203 Hot-fix D — /liv-ai-app/liv-ai rename (operator-facing URL)', () => {
-	it('apex block emits BOTH /liv-ai-app/liv-ai AND /liv-ai-app/openclawos handle_paths', () => {
-		const out = generateFullCaddyfile(
-			{mainDomain: 'bruce.livinity.io', subdomains: []},
-			false,
-			false,
-			[],
-		)
-		expect(out).toContain('@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
-		expect(out).toContain('@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*')
-	})
-
-	it('the new /liv-ai-app/liv-ai handle rewrites to /plugins/openclawos and proxies to :18789', () => {
-		const out = generateFullCaddyfile(
-			{mainDomain: 'bruce.livinity.io', subdomains: []},
-			false,
-			false,
-			[],
-		)
-		const livAiIdx = out.indexOf('@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
-		expect(livAiIdx).toBeGreaterThan(-1)
-		const livAiBlockEnd = out.indexOf('\t}\n\t}', livAiIdx)
-		const livAiBlock = out.slice(livAiIdx, livAiBlockEnd)
-		expect(livAiBlock).toContain('rewrite * /plugins/openclawos{path}')
-		expect(livAiBlock).toContain('reverse_proxy 127.0.0.1:18789')
-		expect(livAiBlock).not.toContain(':3010')
-	})
-
-	it('the new handle is emitted BEFORE the legacy openclawos handle (cosmetic top-to-bottom)', () => {
-		const out = generateFullCaddyfile(
-			{mainDomain: 'bruce.livinity.io', subdomains: []},
-			false,
-			false,
-			[],
-		)
-		const livAiIdx = out.indexOf('@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
-		const openclawosIdx = out.indexOf(
-			'@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*',
-		)
-		expect(livAiIdx).toBeGreaterThan(-1)
-		expect(openclawosIdx).toBeGreaterThan(-1)
-		expect(livAiIdx).toBeLessThan(openclawosIdx)
-	})
-
-	it('multi-user subdomain block also carries the new /liv-ai-app/liv-ai handle', () => {
-		const out = generateFullCaddyfile(
-			{
-				mainDomain: 'livinity.io',
-				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
-			},
-			true,
-			false,
-			[],
-		)
-		const subdomainBlockStart = out.indexOf('bruce.livinity.io {')
-		const livAiInside = out.indexOf(
-			'@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*',
-			subdomainBlockStart,
-		)
-		expect(livAiInside).toBeGreaterThan(subdomainBlockStart)
-		const rewriteInside = out.indexOf('rewrite * /plugins/openclawos{path}', livAiInside)
-		expect(rewriteInside).toBeGreaterThan(livAiInside)
-	})
-
-	it('the null-mainDomain :80 fallback block also carries the new /liv-ai-app/liv-ai handle', () => {
-		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
-		expect(out).toContain('@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
-		const livAiIdx = out.indexOf('@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
-		const rewriteIdx = out.indexOf('rewrite * /plugins/openclawos{path}', livAiIdx)
-		expect(rewriteIdx).toBeGreaterThan(livAiIdx)
-	})
-
-	it('the handshake handle still emits BEFORE both /liv-ai-app/* handles (ordering invariant preserved)', () => {
-		const out = generateFullCaddyfile(
-			{mainDomain: 'bruce.livinity.io', subdomains: []},
-			false,
-			false,
-			[],
-		)
-		const handshakeIdx = out.indexOf('handle /openclawos/handshake')
-		const livAiIdx = out.indexOf('@livAiLivAi path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*')
-		const openclawosIdx = out.indexOf(
-			'@livAiOpenclawos path /liv-ai-app/openclawos /liv-ai-app/openclawos/*',
-		)
-		expect(handshakeIdx).toBeGreaterThan(-1)
-		expect(handshakeIdx).toBeLessThan(livAiIdx)
-		expect(livAiIdx).toBeLessThan(openclawosIdx)
-	})
-})
+// Phase 203 retirement (Plan 231-01) — the following describe blocks
+// were removed:
+//   - Phase 203-05 handshake handle (5 tests)
+//   - Phase 203-09 Liv AI surface split (3 tests)
+//   - Phase 203-10/12/Hot-fix-C gateway URL rewrite (4 tests)
+//   - Phase 203 Hot-fix D operator-facing URL rename (5 tests)
+// Liv Assistant (Phase 226-04 + Phase 227) is the v42 chat surface;
+// the legacy Liv AI chat routing is no longer emitted by caddy.ts.
+// Phase 231 negative-grep guard describe lives at the end of this file.
 
 describe('generateFullCaddyfile — cloud-mode regression (D-104-NO-PROD-IMPACT)', () => {
 	it('does NOT emit any pki or import directive in cloud mode (AC-104-3 unit-level)', () => {
@@ -784,9 +462,10 @@ describe('Phase 226-04 — /liv reverse-proxy handle (regen-survivable)', () => 
 		const apexBlockStart = out.indexOf('bruce.livinity.io {')
 		expect(apexBlockStart).toBeGreaterThan(-1)
 		const livIdx = out.indexOf('@liv path /liv /liv/*', apexBlockStart)
-		// Match the catch-all `\thandle {\n\t\treverse_proxy 127.0.0.1:8080` pattern,
-		// NOT the earlier `/openclawos/handshake` handle which ALSO reverse-proxies
-		// to :8080. The catch-all is the one with bare `handle {` (no matcher).
+		// Match the catch-all `\thandle {\n\t\treverse_proxy 127.0.0.1:8080` pattern
+		// (bare `handle {` with no matcher). Post Phase 231 retirement this is the
+		// ONLY :8080 reverse-proxy in the apex block — the legacy handshake handle
+		// at the same upstream was removed by Plan 231-01.
 		const catchAllIdx = out.indexOf('\thandle {\n\t\treverse_proxy 127.0.0.1:8080', apexBlockStart)
 		expect(livIdx).toBeGreaterThan(-1)
 		expect(catchAllIdx).toBeGreaterThan(-1)
@@ -810,7 +489,7 @@ describe('Phase 226-04 — /liv reverse-proxy handle (regen-survivable)', () => 
 		expect(subBlockStart).toBeGreaterThan(-1)
 		const livIdx = out.indexOf('@liv path /liv /liv/*', subBlockStart)
 		// Match the catch-all `\thandle {\n\t\treverse_proxy 127.0.0.1:8080` pattern
-		// (NOT the /openclawos/handshake handle which also targets :8080).
+		// (post Phase 231 retirement, only :8080 reverse-proxy in the subdomain block).
 		const catchAllIdx = out.indexOf('\thandle {\n\t\treverse_proxy 127.0.0.1:8080', subBlockStart)
 		expect(livIdx).toBeGreaterThan(subBlockStart)
 		expect(catchAllIdx).toBeGreaterThan(subBlockStart)
@@ -989,4 +668,43 @@ describe('Phase 232 — Livinity brand overlay (/liv/branding static handler)', 
 		const matches = out.match(/handle \/liv\/branding\/\*/g) || []
 		expect(matches.length).toBeGreaterThanOrEqual(2)
 	})
+})
+
+// ─── Phase 231 retirement — OpenClawOS handles excised (negative-grep) ───
+//
+// Plan 231-01 removed OPENCLAWOS_HANDSHAKE_HANDLE + @livAiLivAi + @livAiOpenclawos
+// + @openclawosPluginAssets handles from caddy.ts. The describe below locks
+// in the excision against accidental reintroduction by a future regen of the
+// LIV_AI_APP_HANDLE constant.
+
+describe('Phase 231 — OpenClawOS handles excised', () => {
+	const fixtures = [
+		{name: 'null mainDomain :80 block', config: {mainDomain: null, subdomains: []} as const, multiUser: false},
+		{name: 'apex with mainDomain', config: {mainDomain: 'bruce.livinity.io', subdomains: []} as const, multiUser: false},
+		{
+			name: 'multi-user subdomain block',
+			config: {
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			} as const,
+			multiUser: true,
+		},
+	]
+
+	for (const fixture of fixtures) {
+		it(`${fixture.name} contains zero legacy openclaw chat-surface references`, () => {
+			const out = generateFullCaddyfile(fixture.config, fixture.multiUser, false, [])
+			expect(out).not.toContain('/openclawos/handshake')
+			expect(out).not.toContain('@livAiOpenclawos')
+			expect(out).not.toContain('@openclawosPluginAssets')
+			expect(out).not.toContain('@livAiLivAi')
+			expect(out).not.toContain('/plugins/openclawos')
+			expect(out).not.toContain('/liv-ai-app/openclawos')
+		})
+
+		it(`${fixture.name} contains zero :18789 reverse_proxy targets`, () => {
+			const out = generateFullCaddyfile(fixture.config, fixture.multiUser, false, [])
+			expect(out).not.toContain('127.0.0.1:18789')
+		})
+	}
 })
