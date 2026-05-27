@@ -3700,7 +3700,7 @@ Plans:
 
 ---
 
-### Phase 238: Complete AionUi visual + textual rebrand (logo + case-insensitive text) — 🟡 PLANNED 2026-05-27 (0/3 plans)
+### Phase 238: Complete AionUi visual + textual rebrand (logo + case-insensitive text) — ✅ SHIPPED 2026-05-27 (3/3 plans, 11/11 applicable SCs GREEN)
 
 **Goal:** Close v42 Phase 234-03's residual gap. Overlay a Livinity logo SVG onto AionUi's logo asset(s) during install-script run; extend Phase 234-03's case-sensitive sed pass with a case-insensitive word-boundary `Aion` / `AION` / `aion` pattern. HİÇ BİR Aion yazısı kalmaz post-deploy.
 
@@ -3709,14 +3709,16 @@ Plans:
 - Plan 238-01: repo-side — add Livinity logo asset to `caddy/branding/` (reuse existing pattern from Phase 232); extend `scripts/install-liv-assistant.sh` with (a) logo asset overlay step (cp into `/opt/liv-assistant/current/static/assets/`) (b) case-insensitive word-boundary sed pass extending Phase 234-03. Both idempotent.
 - Plan 238-03: Mini PC deploy via `bash /opt/livos/update.sh` + external curl probe: HTML/JS contains NO `Aion` / `AION` / `aion` case-variants; external curl serves Livinity logo at expected paths. Auto-approved per chain protocol.
 
-**Plans:** 0/3 plans complete
+**Plans:** 3/3 plans complete ✅
 
 Plans:
-- [ ] 238-01-PLAN.md — Repo-side logo asset + install-script extension (autonomous, ~2-3 tasks)
-- [ ] 238-02-PLAN.md — Investigation: SSH probe logo asset paths + remaining Aion text occurrences (autonomous, 1 task)
-- [ ] 238-03-PLAN.md — Mini PC deploy + verify + auto-approve checkpoint (3 tasks, has checkpoint:human-verify)
+- [x] 238-02-PLAN.md — Investigation: SSH probe logo asset paths + remaining Aion text occurrences — SHIPPED 2026-05-27 (`8a5e2608`)
+- [x] 238-01-PLAN.md — Repo-side logo asset + install-script extension — SHIPPED 2026-05-27 (`52f1232b` feat + `09cb8ebf` pipefail hot-fix)
+- [x] 238-03-PLAN.md — Mini PC deploy + verify + auto-approve checkpoint — SHIPPED 2026-05-27 (`09cb8ebf` deploy SHA; `LivOS updated successfully!` second-pass)
 
 **Execution order:** 238-02 (investigation) → 238-01 (repo-side, uses investigation findings) → 238-03 (deploy).
+
+**Outcome:** PRE word-boundary `\b(Aion|AION|aion)\b` grep count = 7 (matches Plan 238-02 Section E.2 dry-run) → POST = 0 (sed pass fired cleanly). LICENSE + NOTICE sha256 byte-identical PRE vs POST (`a515d5a7...` / `be9e969f...` — D-V43-APACHE-NOTICE preserved). External `https://bruce.livinity.io/liv/` HTML body: Aion=0, AionUi=0, Liv=3 (operator's "HİÇ BİR Aion yazısı kalmasın" requirement satisfied). Phase 234-03 non-regressed (51 `Liv AI`/`liv-ai` files; 0 AionUi/aionui-web/aionui leftovers). Phase 237 RFC 6455 non-regressed (/liv/ws → 101 Switching Protocols). Phase 234-04 auth bypass non-regressed (/liv-login → 302 + Set-Cookie). Sacred SHA `f3538e1d...` UNCHANGED across 4 snapshots. Hot-fix `09cb8ebf` wrapped post-grep+wc pipelines with `set +o pipefail` to survive the zero-match POST case (same latent bug exists in Phase 234-03 line but never fires there because POST > 0). Step 238-A logo overlay framework ships with empty `LOGO_TARGETS=()` per Plan 238-02 Section C disposition (zero on-disk AionUi-branded logo assets requiring overlay; PWA icons out-of-scope, Lark SVG third-party trademark, theme art cosmetic) — forward-compatible scaffold for future operator-supplied targets. Auto-approved per chain protocol (`workflow._auto_chain_active=true`, v42 precedent).
 
 **Invariants:**
 - Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED
