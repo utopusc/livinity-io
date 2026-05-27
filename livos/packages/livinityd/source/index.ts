@@ -162,21 +162,14 @@ import {createMastraRouter} from './modules/server/trpc/mastra-router.js'
 import {AgentScheduler} from './modules/agent-runtime/scheduler.js'
 import {createAgentRouter} from './modules/server/trpc/agent-router.js'
 import {createAgentTaskRouter} from './modules/server/trpc/agent-task-router.js'
-// Phase 203-04 — OpenUIAppsRepository + openclawos.apps.* tRPC router.
-// Drizzle-backed CRUD against the Postgres `livos_openui_apps` table
-// (migration 0003); consumed by the rebranded liv-claw plugin's app-store
-// HTTP client (livos/packages/liv-claw-os/packages/claw-plugin/src/
-// app-store.ts) in place of the upstream fs.writeJson backend.
-import {OpenUIAppsRepository} from './modules/openclawos/openui-apps-repository.js'
-import {createOpenclawosAppsRouter} from './modules/server/trpc/openclawos-router.js'
-// Phase 205-04 — `openclawos.gateway.*` tRPC router (Wave 3).
-// Surfaces paired-device + allowed-origin + auth-mode CRUD inside the
-// claw-client SettingsDialog Gateway tab. Backed by OpenclawConfigStore
-// (atomic JSON read/patch over /opt/livos/data/openclaw/openclaw.json)
-// and `device-auto-approver.ts`'s paired.json + pending.json + revoked.json
-// trio (Probe A5 race mitigation).
+// Phase 231 retirement — Phase 203-04 OpenUIAppsRepository +
+// createOpenclawosAppsRouter imports removed; Phase 205-04
+// createOpenclawosGatewayRouter import removed. OpenclawConfigStore import
+// retained below — still consumed by mcp-config-router for the openclaw.json
+// MCP-servers mirror (Phase 207 R1). The standalone tRPC router source files
+// (`openclawos-router.ts`, `openclawos-gateway-router.ts`) were deleted by
+// Plan 231-01.
 import {OpenclawConfigStore} from './modules/openclawos/openclaw-config-store.js'
-import {createOpenclawosGatewayRouter} from './modules/server/trpc/openclawos-gateway-router.js'
 // Phase 202-07 — MCP external server config sub-router (`mcp.config.*`).
 // Backed by Redis hash `liv:mcp:config` (D-202-12). Boot wire-up builds the
 // real factory with `this.ai.redis` so the /settings → MCP tab can CRUD
@@ -200,12 +193,9 @@ import {ProviderKeyStore} from './modules/provider/key-store.js'
 import {EnvFileWriter} from './modules/provider/env-file-writer.js'
 import {createRestartHook} from './modules/provider/restart-hook.js'
 import {createProviderConfigRouter} from './modules/server/trpc/provider-config-router.js'
-// Phase 206 — openclaw CLI wrapper router. Wraps the openclaw 2026.5.20
-// `capability model` + `config` subcommands as tRPC procedures so the
-// claw-client Providers tab can drive provider auth + default model
-// selection without inventing yet another storage path. Replaces the dead
-// Phase 204 gateway env file approach (which the running agent never read).
-import {createOpenclawCliRouter} from './modules/server/trpc/openclaw-router.js'
+// Phase 231 retirement — Phase 206 createOpenclawCliRouter import removed
+// (CLI-wrapped provider+model config). Provider config now lives under
+// `provider.config.*` (Phase 204-01) only.
 // Phase 202-04 — SSE endpoint that pushes live agent status to the
 // /agents dashboard. Subscribes to the same scheduler statusEvents
 // EventEmitter that runOnce / drainAgentStream emit on.
@@ -1617,53 +1607,10 @@ export default class Livinityd {
 				)
 			}
 
-			// Phase 203-04 — openclawos.apps.* tRPC router. Reuses the same
-			// PostgreSQL pool used by AgentRepository (D-202-01 — same `livos`
-			// DB). Failure here is non-fatal — the empty-injection stub
-			// returns OPENUI_REPO_UNAVAILABLE so the plugin's app-store HTTP
-			// client surfaces a clean error rather than hanging.
-			let openclawosAppsRouterProductionInstance:
-				| ReturnType<typeof createOpenclawosAppsRouter>
-				| undefined
-			try {
-				const databaseUrl = process.env.DATABASE_URL
-				if (databaseUrl) {
-					const {Pool} = await import('pg')
-					const {drizzle} = await import('drizzle-orm/node-postgres')
-					const openuiPool = new Pool({connectionString: databaseUrl})
-					const openuiDb = drizzle(openuiPool)
-					const openuiRepo = new OpenUIAppsRepository(openuiDb)
-					openclawosAppsRouterProductionInstance = createOpenclawosAppsRouter({
-						repo: openuiRepo,
-						// Phase 203-10 — wire NativeAppConfigStore so successful
-						// create/update fire the desktop-registrar hook (D-203-10).
-						// `this.nativeAppConfigStore` is constructed earlier in
-						// boot (after this.ai.start) and is guaranteed live here.
-						nativeAppStore: this.nativeAppConfigStore,
-						logger: {
-							info: (msg) => webappLogger.info(msg),
-							warn: (msg, err) => this.logger.error(msg, err),
-						},
-					})
-					webappLogger.info(
-						'Phase 203-04 — openclawos.apps.* tRPC router wired (livos_openui_apps Postgres CRUD; consumed by liv-claw plugin HTTP client)',
-					)
-					if (this.nativeAppConfigStore) {
-						webappLogger.info(
-							'Phase 203-10 — desktop-registrar hook ENABLED (openclawos.apps.create/update/delete propagate to dock via liv:apps:native:* + liv:config:updated)',
-						)
-					}
-				} else {
-					this.logger.error(
-						'Phase 203-04 — DATABASE_URL missing; openclawos.apps.* falls back to OPENUI_REPO_UNAVAILABLE stub until next restart',
-					)
-				}
-			} catch (openuiRouterErr) {
-				this.logger.error(
-					'Phase 203-04 — openclawos.apps.* router factory failed; falls back to OPENUI_REPO_UNAVAILABLE stub until next restart',
-					openuiRouterErr,
-				)
-			}
+			// Phase 231 retirement — Phase 203-04 openclawosAppsRouterProductionInstance
+			// factory block removed (OpenUIAppsRepository import + Drizzle pool
+			// + createOpenclawosAppsRouter call all gone). The standalone
+			// router source file was deleted by Plan 231-01.
 
 			// Phase 204-01 — provider.config.* router. Same Redis-availability
 			// guard as mcp-config-router above; if `this.ai.redis` is somehow
@@ -1727,67 +1674,11 @@ export default class Livinityd {
 				}
 			}
 
-			// Phase 205-04 — openclawos.gateway.* router. Atomic OpenclawConfigStore
-			// over /opt/livos/data/openclaw/openclaw.json + devicesDir for the
-			// paired/pending/revoked JSON trio. `this.ai.redis` is used for
-			// best-effort device-token poison on revoke. Failure here is non-
-			// fatal — the empty-injection stub surfaces OPENCLAW_GATEWAY_UNAVAILABLE
-			// so the UI gets a clean error rather than hanging.
-			let openclawosGatewayRouterProductionInstance:
-				| ReturnType<typeof createOpenclawosGatewayRouter>
-				| undefined
-			try {
-				const openclawConfigPath =
-					process.env['OPENCLAW_CONFIG_PATH'] ??
-					'/opt/livos/data/openclaw/openclaw.json'
-				const openclawDevicesDir =
-					process.env['OPENCLAW_DEVICES_DIR'] ??
-					'/opt/livos/data/openclaw/devices'
-				const gatewayConfigStore = new OpenclawConfigStore(openclawConfigPath)
-				const gatewayRedis = this.ai?.redis
-					? {
-							del: async (key: string) => this.ai.redis.del(key),
-						}
-					: {del: async () => 0}
-				openclawosGatewayRouterProductionInstance =
-					createOpenclawosGatewayRouter({
-						configStore: gatewayConfigStore,
-						devicesDir: openclawDevicesDir,
-						redis: gatewayRedis,
-						logger: {
-							info: (msg) => webappLogger.info(msg),
-							warn: (msg, err) => this.logger.error(msg, err),
-						},
-					})
-				webappLogger.info(
-					`Phase 205-04 — openclawos.gateway.* tRPC router wired (configPath=${openclawConfigPath}, devicesDir=${openclawDevicesDir})`,
-				)
-			} catch (gatewayRouterErr) {
-				this.logger.error(
-					'Phase 205-04 — openclawos.gateway.* router factory failed; falls back to OPENCLAW_GATEWAY_UNAVAILABLE stub until next restart',
-					gatewayRouterErr,
-				)
-			}
-
-			// Phase 206 — openclaw CLI router. Self-contained (no external
-			// service deps); just instantiates with default state-dir +
-			// binary resolution. The router itself handles binary discovery
-			// and env var defaults. No try/catch needed because the factory
-			// is pure construction — every shellout is lazy at procedure
-			// call time. If the binary turns out missing at runtime, the
-			// `OpenclawNotInstalledError` mapping in the router surfaces a
-			// clean TRPCError to the UI.
-			const openclawCliRouterProductionInstance = createOpenclawCliRouter({
-				logger: {
-					info: (...args) => webappLogger.info(args.map(String).join(' ')),
-					warn: (...args) => this.logger.error(args.map(String).join(' ')),
-					error: (...args) => this.logger.error(args.map(String).join(' ')),
-					debug: () => undefined,
-				},
-			})
-			webappLogger.info(
-				'Phase 206 — openclaw.* tRPC router wired (CLI-wrapped provider+model config; replaces dead Phase 204 env file path)',
-			)
+			// Phase 231 retirement — Phase 205-04 openclawosGatewayRouterProductionInstance
+			// + Phase 206 openclawCliRouterProductionInstance factory blocks
+			// removed. Both standalone router source files were deleted by
+			// Plan 231-01. The Phase 207 R6 periodic bridge refresher below
+			// remains (KEEP_SCOPE_EXPANSION R18) — out-of-scope for Plan 01.
 
 			// Phase 207 R6 — periodic opencode→openclaw bridge auto-refresh.
 			// Phase 206 ships the manual bridge (`openclaw.bridgeFromOpencode`
@@ -1852,10 +1743,9 @@ export default class Livinityd {
 				agents: agentsRouterProductionInstance,
 				agentTasks: agentTasksRouterProductionInstance,
 				mcpConfig: mcpConfigRouterProductionInstance,
-				openclawosApps: openclawosAppsRouterProductionInstance,
-				openclawosGateway: openclawosGatewayRouterProductionInstance,
+				// Phase 231 retirement — openclawosApps / openclawosGateway /
+				// openclawCli opts removed; factory blocks gone above.
 				providerConfig: providerConfigRouterProductionInstance,
-				openclawCli: openclawCliRouterProductionInstance,
 				skills: skillsRouterProductionInstance,
 				skillsMarket: skillsMarketRouterProductionInstance,
 				config: configRouterProductionInstance,
