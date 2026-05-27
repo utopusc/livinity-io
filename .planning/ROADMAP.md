@@ -3380,6 +3380,36 @@ Plans:
 
 ---
 
+### Phase 225: Wire liv-assistant install into update.sh + /api/health smoke — ⚪ READY
+
+**Goal:** Make Phase 223's `liv-assistant.service` deployment automatic during every `bash /opt/livos/update.sh` run, instead of the current one-time manual `install-liv-assistant.sh` + `systemctl enable` install path. Add a curl health smoke (`/api/health` → 200) so update.sh fails loudly if the service comes up degraded.
+
+**Scope (narrowed — Phase 223 already shipped the install script + systemd unit + Mini PC live deploy):**
+
+1. **Patch `/opt/livos/update.sh`** to:
+   - After rsyncing the new source tree to `/opt/livos`, run `bash /opt/livos/scripts/install-liv-assistant.sh` (idempotent — Phase 223-01) so the on-box vendored tarball + systemd unit are guaranteed-fresh.
+   - After `systemctl restart livos liv-core liv-worker liv-memory`, also `systemctl restart liv-assistant`.
+   - Add `curl -fsS http://127.0.0.1:3020/api/health` smoke with a 5s timeout — non-zero exit halts the update with a clear "liv-assistant health probe FAILED" message before the script exits 0.
+   - Capture the admin password (Phase 223-03 `capture-liv-assistant-password.sh`) if `/etc/livos/liv-assistant-credentials` is missing — race-tolerant.
+
+2. **Deploy patched update.sh to Mini PC** + dry-run (re-deploy current source, no new content) to prove idempotency. Confirm liv-assistant.service still `active (running)` post-update and health probe returns 200.
+
+3. **Sacred SHA**: No touches under `liv/packages/core/`. update.sh lives at repo root + Mini PC `/opt/livos/update.sh`.
+
+**Plans:** ~2-3 plans (small phase)
+
+**Depends on:** Phase 223 ✅ SHIPPED (install-liv-assistant.sh, systemd unit, password capture all exist on Mini PC + repo).
+
+**Reversibility:** Single update.sh patch is one-commit revert. liv-assistant.service is already standalone — removing the update.sh wiring leaves the service running.
+
+**Success Criteria:**
+- SC-01: `bash /opt/livos/update.sh` succeeds on Mini PC re-run (idempotent)
+- SC-02: `systemctl is-active liv-assistant` returns `active` post-update
+- SC-03: `curl -fsS http://127.0.0.1:3020/api/health` returns 200 inside update.sh smoke
+- SC-04: Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` unchanged
+
+---
+
 ### Phase 222: Spike — AionUi feasibility on Mini PC — ✅ DONE 2026-05-27 (`b2be397f`)
 
 **Goal:** PASS/FAIL on 4 gates (build, iframe headers, Claude CLI subscription, license) before committing engineering time to the rest of v42.
