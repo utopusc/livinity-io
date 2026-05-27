@@ -853,16 +853,24 @@ describe('Phase 226-04 — /liv reverse-proxy handle (regen-survivable)', () => 
 	})
 })
 
-// ─── Phase 232 — Livinity brand overlay (sub directive + /liv/branding static) ───
+// ─── Phase 232 — Livinity brand overlay (static /liv/branding handler only) ───
 // New LIV_BRANDING_HANDLE constant serves /etc/liv-assistant/branding/* as
-// static files at /liv/branding/*. Existing LIV_ASSISTANT_HANDLE gains a
+// static files at /liv/branding/*. Emitted in all 3 site blocks (fallback :80 +
+// apex + multi-user subdomain).
+//
+// HISTORY: Plan 232-01 originally also patched LIV_ASSISTANT_HANDLE with a
 // `replace "</head>" "<link rel=stylesheet href=/liv/branding/livinity-overlay.css>"`
-// directive that injects the overlay CSS link tag into upstream HTML responses.
-// Both pieces emit in all 3 site blocks (fallback :80 + apex + multi-user
-// subdomain). Tests assert directive shape, ordering, multi-block coverage,
-// strip_prefix correctness, and Phase 226-04 non-regression.
+// directive to inject the overlay CSS link tag into upstream HTML responses.
+// Plan 232-02 deploy verification discovered the Mini PC's Caddy v2.11.3 binary
+// does NOT ship the `caddyserver/replace-response` module — caddy validate
+// rejected the directive with "unrecognized directive: replace". The replace
+// directive was REVERTED in caddy.ts to restore Caddy reload health. HTML
+// injection is deferred to a follow-up phase that rebuilds Caddy via xcaddy
+// with the caddyserver/replace-response plugin.
+//
+// Tests below assert ONLY the static handler shape — the directive was removed.
 
-describe('Phase 232 — Livinity brand overlay (sub directive + /liv/branding static)', () => {
+describe('Phase 232 — Livinity brand overlay (/liv/branding static handler)', () => {
 	it('apex block emits handle /liv/branding/* with root + file_server + strip_prefix', () => {
 		const out = generateFullCaddyfile(
 			{mainDomain: 'bruce.livinity.io', subdomains: []},
@@ -876,15 +884,18 @@ describe('Phase 232 — Livinity brand overlay (sub directive + /liv/branding st
 		expect(out).toContain('uri strip_prefix /liv/branding')
 	})
 
-	it('apex block emits replace directive injecting overlay link before </head>', () => {
+	it('apex block does NOT emit replace directive (Caddy v2.11.3 lacks replace-response module)', () => {
 		const out = generateFullCaddyfile(
 			{mainDomain: 'bruce.livinity.io', subdomains: []},
 			false,
 			false,
 			[],
 		)
-		expect(out).toContain('replace "</head>"')
-		expect(out).toContain('/liv/branding/livinity-overlay.css')
+		// Plan 232-02 hot-fix: replace directive REMOVED. Caddy v2.11.3 standard
+		// distribution does NOT include caddyserver/replace-response. Including
+		// the directive caused silent reload failure. Verification: Caddyfile
+		// MUST NOT contain the directive.
+		expect(out).not.toContain('replace "</head>"')
 	})
 
 	it('apex block — branding handle appears BEFORE @liv handle (specificity-safe ordering)', () => {
@@ -903,7 +914,7 @@ describe('Phase 232 — Livinity brand overlay (sub directive + /liv/branding st
 		expect(brandingIdx).toBeLessThan(livIdx)
 	})
 
-	it('multi-user subdomain block also emits branding handle + replace directive', () => {
+	it('multi-user subdomain block also emits branding handle', () => {
 		const out = generateFullCaddyfile(
 			{
 				mainDomain: 'livinity.io',
@@ -916,28 +927,13 @@ describe('Phase 232 — Livinity brand overlay (sub directive + /liv/branding st
 		const subStart = out.indexOf('bruce.livinity.io {')
 		expect(subStart).toBeGreaterThan(-1)
 		const brandingIdx = out.indexOf('handle /liv/branding/*', subStart)
-		const replaceIdx = out.indexOf('replace "</head>"', subStart)
 		expect(brandingIdx).toBeGreaterThan(subStart)
-		expect(replaceIdx).toBeGreaterThan(subStart)
 	})
 
-	it('null mainDomain :80 fallback block also emits branding handle + replace directive', () => {
+	it('null mainDomain :80 fallback block also emits branding handle', () => {
 		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
 		expect(out).toContain('handle /liv/branding/*')
 		expect(out).toContain('root * /etc/liv-assistant/branding')
-		expect(out).toContain('replace "</head>"')
-	})
-
-	it('overlay link href is /liv/branding/livinity-overlay.css (matches static handler path)', () => {
-		const out = generateFullCaddyfile(
-			{mainDomain: 'bruce.livinity.io', subdomains: []},
-			false,
-			false,
-			[],
-		)
-		// The TS template literal produces a literal `\"` in the runtime string.
-		// Assert via toContain on the runtime-visible substring.
-		expect(out).toContain('href=\\"/liv/branding/livinity-overlay.css\\"')
 	})
 
 	it('branding handle strips /liv/branding (NOT /liv) — basename reaches file_server', () => {
@@ -966,7 +962,7 @@ describe('Phase 232 — Livinity brand overlay (sub directive + /liv/branding st
 		expect(out).toContain("frame-ancestors 'self' https://bruce.livinity.io")
 	})
 
-	it('tunnel-mode apex block also emits branding handle + replace directive (CF tunnel non-regression)', () => {
+	it('tunnel-mode apex block also emits branding handle (CF tunnel non-regression)', () => {
 		const out = generateFullCaddyfile(
 			{mainDomain: 'bruce.livinity.io', subdomains: []},
 			false,
@@ -976,8 +972,21 @@ describe('Phase 232 — Livinity brand overlay (sub directive + /liv/branding st
 		expect(out).toContain('http://bruce.livinity.io {')
 		const apexStart = out.indexOf('http://bruce.livinity.io {')
 		const brandingIdx = out.indexOf('handle /liv/branding/*', apexStart)
-		const replaceIdx = out.indexOf('replace "</head>"', apexStart)
 		expect(brandingIdx).toBeGreaterThan(apexStart)
-		expect(replaceIdx).toBeGreaterThan(apexStart)
+	})
+
+	it('LIV_BRANDING_HANDLE emits in exactly 3 site blocks (fallback + apex + multi-user)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			},
+			true,
+			false,
+			[],
+		)
+		// Apex + multi-user subdomain
+		const matches = out.match(/handle \/liv\/branding\/\*/g) || []
+		expect(matches.length).toBeGreaterThanOrEqual(2)
 	})
 })
