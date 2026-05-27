@@ -48,6 +48,86 @@ const CADDYFILE_PATH = '/etc/caddy/Caddyfile'
 const DOMAIN_RE = /^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$/
 const SUBDOMAIN_RE = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/
 
+/**
+ * Phase 219 hotfix (post-deploy operator incident 2026-05-26) — Cloudflare IP
+ * ranges used as `trusted_proxies` in the Caddyfile global options block.
+ *
+ * Problem class this fixes:
+ *   When ANY operator points their LivOS domain at Cloudflare and leaves the
+ *   proxy ON (orange cloud) — which is Cloudflare's default for new DNS
+ *   records — Cloudflare's SSL/TLS mode often defaults to "Flexible" (CF→
+ *   origin in plaintext HTTP). Without `trusted_proxies`, Caddy's auto-HTTPS
+ *   sees the request on :80, redirects with 308 to https://..., Cloudflare
+ *   forwards the redirect to the user, the user's browser HTTPS request
+ *   reaches CF again, CF re-proxies to origin as HTTP, and we get an
+ *   infinite 308 loop. The user sees an empty page and "can't login".
+ *
+ *   This is NOT specific to bruce@10.69.31.68 — every fresh LivOS install
+ *   whose operator uses Cloudflare DNS with default settings hits the same
+ *   bug. Operator quote 2026-05-26: "baskalarinin bu sorunu yasamasini
+ *   istiyorum oyle isse 1 den devam et" — i.e. fix it universally.
+ *
+ * How `trusted_proxies` fixes it:
+ *   When a request from a trusted proxy IP arrives with `X-Forwarded-Proto:
+ *   https` (which Cloudflare always sets when proxying), Caddy's auto-HTTPS
+ *   sees scheme=https on the request and SKIPS the 308 redirect. The
+ *   response body flows through CF as plain HTTP and CF wraps it back in
+ *   the user's HTTPS session. No loop, no broken login, and the CF→origin
+ *   plaintext hop is still bounded to the CF→Server5 segment (Server5→
+ *   Mini PC traversal stays inside the LivOS tunnel either way).
+ *
+ * Range source: https://www.cloudflare.com/ips/ (stable since 2014; review
+ * with `curl -s https://www.cloudflare.com/ips-v4` if CF ever expands).
+ *
+ * Caddy v2.7+ syntax. Mini PC ships Caddy v2.11.x (per memory file
+ * reference_minipc_redis.md neighbour notes), so this is supported.
+ */
+const CLOUDFLARE_IPV4_RANGES: ReadonlyArray<string> = [
+	'173.245.48.0/20',
+	'103.21.244.0/22',
+	'103.22.200.0/22',
+	'103.31.4.0/22',
+	'141.101.64.0/18',
+	'108.162.192.0/18',
+	'190.93.240.0/20',
+	'188.114.96.0/20',
+	'197.234.240.0/22',
+	'198.41.128.0/17',
+	'162.158.0.0/15',
+	'104.16.0.0/13',
+	'104.24.0.0/14',
+	'172.64.0.0/13',
+	'131.0.72.0/22',
+]
+
+const CLOUDFLARE_IPV6_RANGES: ReadonlyArray<string> = [
+	'2400:cb00::/32',
+	'2606:4700::/32',
+	'2803:f800::/32',
+	'2405:b500::/32',
+	'2405:8100::/32',
+	'2a06:98c0::/29',
+	'2c0f:f248::/32',
+]
+
+/**
+ * Phase 219 hotfix — Caddyfile global options block injected at the top of
+ * every generated Caddyfile (full, portal, default). Adds CF ranges as
+ * trusted_proxies + tells Caddy to read CF-Connecting-IP as the client IP
+ * so access logs and rate limits see the real visitor instead of CF.
+ *
+ * Idempotent: if CF is NOT in front, the trusted_proxies list is harmless —
+ * Caddy only honors X-Forwarded-Proto/-For when the request arrives from a
+ * listed IP, so direct origin traffic still gets the normal HTTPS redirect.
+ */
+export const CADDY_GLOBAL_BLOCK = `{
+	servers {
+		trusted_proxies static ${[...CLOUDFLARE_IPV4_RANGES, ...CLOUDFLARE_IPV6_RANGES].join(' ')}
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+	}
+}
+`
+
 export interface SubdomainConfig {
 	subdomain: string
 	appId: string
@@ -248,7 +328,10 @@ ${WS_TRANSPORT_BODY}
 		}
 	}
 }`)
-		return blocks.join('\n\n') + '\n'
+		// Phase 219 hotfix — CF global block harmless even without a domain (no
+		// auto-HTTPS kicks in on :80-only configs) but keeps the file structure
+		// consistent.
+		return CADDY_GLOBAL_BLOCK + '\n' + blocks.join('\n\n') + '\n'
 	}
 
 	// Phase 134+ — when Cloudflare Tunnel terminates TLS at the edge and forwards
@@ -340,7 +423,11 @@ ${WS_TRANSPORT_BODY}
 }`)
 	}
 
-	return blocks.join('\n\n') + '\n'
+	// Phase 219 hotfix — prepend the CF trusted_proxies global block so
+	// every operator running LivOS behind Cloudflare (proxy on, SSL Flexible
+	// or even Full) is protected from the 308 redirect loop that breaks the
+	// login page. Harmless when CF is not in front.
+	return CADDY_GLOBAL_BLOCK + '\n' + blocks.join('\n\n') + '\n'
 }
 
 // ─── Phase 104 plan 104-03 — local-lan generator RETIRED in Phase 142-01 ──
@@ -454,7 +541,10 @@ ${WS_TRANSPORT_BODY_LOCAL}
 		}
 	}
 
-	return blocks.join('\n\n') + '\n'
+	// Phase 219 hotfix — portal mode operators are EVEN more likely to be
+	// behind CF (it's the canonical setup), so the global trusted_proxies
+	// block matters most here. Same harmless-without-CF property.
+	return CADDY_GLOBAL_BLOCK + '\n' + blocks.join('\n\n') + '\n'
 }
 
 /**
@@ -471,7 +561,8 @@ export function generateCaddyfile(domain: string): string {
 	if (!validateDomain(domain)) {
 		throw new Error('Invalid domain name')
 	}
-	return `${domain} {
+	return `${CADDY_GLOBAL_BLOCK}
+${domain} {
 	reverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY}
 	}
@@ -483,7 +574,8 @@ ${WS_TRANSPORT_BODY}
  * Generate the default IP-only Caddyfile (no HTTPS, port 80 only).
  */
 export function generateDefaultCaddyfile(): string {
-	return `:80 {
+	return `${CADDY_GLOBAL_BLOCK}
+:80 {
 	reverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY}
 	}
