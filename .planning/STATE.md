@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
-status: executing
+status: milestone_complete
 last_updated: "2026-05-27T09:56:00.000Z"
 last_activity: 2026-05-27
 progress:
   total_phases: 8
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 12
   completed_plans: 12
-  percent: 100
+  percent: 113
 ---
 
 ## Current Position (v42 — Phase 224 ✅ SHIPPED 4/4 plans — Mini PC live 2026-05-27)
@@ -84,7 +84,7 @@ After walk: STATE.md `status:complete`, ROADMAP v41 → ✅ Shipped, archive to 
 ## Previous run history (compressed)
 
 Phase: 214 just shipped CODE-COMPLETE (`4f90360f..1a4c7f65`, 4 commits)
-Plan: 214-01 (T1 middleware+client gate + T2 sync-catalog + T3 curation UI)
+Plan: Not started
 Status: Ready for Phase 215 (one-click install — install channel architecture is open)
 
 ### ✅ Phase 214 SHIPPED 2026-05-26
@@ -229,8 +229,8 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 
 ## Next Planned Phase
 
-- **Phase:** 203-liv-ai-openclaw-os
-- **Status:** Executing Phase 224
+- **Phase:** 224
+- **Status:** Milestone complete
 - **Plan count:** 13
 - **CONTEXT:** .planning/phases/203-liv-ai-openclaw-os/203-CONTEXT.md
 - **Wave plan:** Wave 1 (203-01 spike → 203-02 clone+rebrand → 203-03 systemd gateway) → Wave 2 (203-04 plugin+openui apps tRPC, 203-05 auth+caddy, 203-06 luse+builtin tool re-registration) → Wave 3 (203-07 LivOSAgent swap, 203-08 mastra purge, 203-09 assistant-ui purge) → Wave 4 (203-10 desktop integration, 203-11 /apps/[slug] route, 203-12 Mini PC deploy, 203-13 VERIFICATION + STATE/ROADMAP flip)

@@ -3350,7 +3350,7 @@ Scope per v42 PROJECT.md "What we ARE temporarily disabling" table:
 
 **Depends on:** Phase 223 ✅ SHIPPED (`630fc882`) — Liv Assistant service must be live before we hide the legacy surface so operators have an alternative chat path.
 
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 224-01-PLAN.md — Backend tRPC config.getV42MigrationActive + useV42MigrationActive UI hook ✅ SHIPPED 2026-05-27 (`285885f9`) — see [224-01-SUMMARY.md](phases/224-app-store-hide-ai-tabs/224-01-SUMMARY.md)
