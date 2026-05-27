@@ -310,43 +310,57 @@ ${WS_TRANSPORT_BODY}
 \t}`
 
 /**
- * Phase 236 — Referer-gated subresource catch-all for AionUi.
+ * Phase 236 → Phase 237 — split subresource matcher for AionUi.
  *
- * Problem class this fixes:
- *   Phase 235 sed-replaced QUOTED `/api/` -> `/liv/api/` in the vendored
- *   AionUi JS bundle. That covered string-literal API calls but missed:
- *     (a) Dynamic backtick-template URLs:
- *         `new WebSocket(\`wss://${location.host}/ws\`)` — `/ws` is
- *         interpolated, not a quoted literal. After minification the
- *         literal `/ws` is reconstructed at runtime, so sed could not
- *         touch it. The browser issues `wss://bruce.livinity.io/ws`
- *         which bypasses the @liv matcher and reaches the LivOS shell
- *         catch-all on :8080 — 404, chat unusable until manual reload.
- *     (b) Runtime-inserted DOM `src` attributes:
- *         `<img src="/api/assets/logos/...">` injected via React render,
- *         not present as a literal in the bundle post-minification's
- *         template-string transformation. Assets 404 -> AionUi icon set
- *         (Aion, Claude, OpenCode logos) shows blank.
+ * Phase 236 introduced a single `@liv_subresource` matcher that combined
+ * `header_regexp Referer ^https?://[^/]+/liv(/|$)` AND
+ * `path /api/* /ws /ws/*`. The intent was to route only iframe-originated
+ * subresource fetches to AionUi while leaving LivOS-shell apex `/api/*`
+ * traffic on the `:8080` catch-all.
  *
- * Why a referer-gated handle (not a path rewrite):
- *   Extending the sed pass to cover dynamic URL construction would require
- *   AST-level rewriting (brittle, would re-break on every AionUi upstream
- *   version bump). Instead, observe that:
- *     - Iframe loaded at https://bruce.livinity.io/liv/ sets
- *       `Referer: https://bruce.livinity.io/liv/...` on every subresource fetch
- *     - LivOS shell apex traffic has `Referer: https://bruce.livinity.io/`
- *       (or `/app-store`, etc.) — never `/liv/`
- *   So a Referer-gated catch-all on `/api/* /ws /ws/*` losslessly routes
- *   only iframe-originated subresource fetches to AionUi while leaving
- *   livinityd's own `/api/*` traffic on the :8080 catch-all unaffected.
+ * Why Phase 237 splits the matcher:
+ *   RFC 6455 (WebSocket) browsers do NOT send a `Referer` header on the
+ *   WS upgrade handshake — only `Origin`. Phase 236's combined matcher
+ *   silently MISSED the `wss://bruce.livinity.io/ws` upgrade because the
+ *   AND condition `header_regexp Referer ...` failed. The request fell
+ *   through to the `:8080` catch-all (which has no `/ws` route) → 404 /
+ *   502 → chat streaming broken (operator had to reload the page to see
+ *   each response). Phase 236 EXT-4 falsely passed because the curl
+ *   smoke explicitly set `-H "Referer: .../liv/"`; the real browser sets
+ *   only Origin and so failed.
+ *
+ *   Phase 236 EXT-4b ("WITHOUT Referer → 502") was the canary for this
+ *   bug but was filed as a "correct" negative control — in reality the
+ *   browser is forced into exactly that negative case for WS upgrades,
+ *   so it is the OPERATIVE case.
+ *
+ * Phase 237 fix — two matchers:
+ *   1. `@liv_ws` — UNCONDITIONAL on paths `/ws` and `/ws/*`. AionUi
+ *      exclusively owns the `/ws` path on this Caddy host; livinityd has
+ *      no `/ws` route. Therefore routing every `/ws*` request to :3020
+ *      is safe + consistent and does not require any header check.
+ *      (No Referer/Origin matching needed — and per RFC 6455 browsers do
+ *      not send Referer here anyway.)
+ *   2. `@liv_api_subresource` — KEEP the referer-gated pattern, but for
+ *      `/api/*` ONLY. This preserves Phase 236's protection of LivOS-shell
+ *      apex `/api/*` traffic from collateral-routing to AionUi: shell
+ *      `/api/*` requests have Referer=`/` or `/app-store`, never `/liv/`,
+ *      so they fall through to the `:8080` catch-all as designed.
+ *
+ * Why a path-rewrite was NOT chosen (carry-over from Phase 236 rationale):
+ *   Phase 235's sed pass rewrote QUOTED string-literal `/api/` -> `/liv/api/`
+ *   but cannot reach (a) dynamic backtick-template URLs
+ *   (`new WebSocket(\`wss://${location.host}/ws\`)` — `/ws` interpolated,
+ *   not a quoted literal in source post-minification) nor (b) runtime-
+ *   inserted DOM `src` attributes (`<img src="/api/assets/...">` injected
+ *   via React render). Extending the sed to AST-level rewriting would
+ *   re-break on every AionUi upstream bump. Caddy-layer routing is the
+ *   robust place to disambiguate.
  *
  * Caddy v2 named matcher semantics:
- *   Multi-condition matcher block uses `{ }` with two stanzas — Caddy ANDs
- *   them. `header_regexp Referer ^https?://[^/]+/liv(/|$)` matches any
- *   origin so long as the path-prefix is `/liv` or `/liv/...` (trailing
- *   slash optional — covers iframe initial load at /liv exact). The `path`
- *   list catches `/api/*` (covers /api/assets, /api/auth, /api/conversations,
- *   /api/agents, /api/settings, etc.) + `/ws` exact + `/ws/*` sub-routes.
+ *   `@liv_ws path /ws /ws/*` is a single-stanza path matcher (no curly
+ *   braces needed). `@liv_api_subresource { header_regexp ...; path /api/* }`
+ *   is a multi-condition matcher block where Caddy ANDs the stanzas.
  *
  * WebSocket upgrade — Caddy v2's `reverse_proxy` auto-handles `Upgrade:
  * websocket` + `Connection: upgrade` headers. We deliberately do NOT set
@@ -360,22 +374,33 @@ ${WS_TRANSPORT_BODY}
  *
  * Ordering — emitted IMMEDIATELY BEFORE LIV_ASSISTANT_HANDLE in every emit
  * site. Caddy v2 evaluates by matcher specificity (not source order) so
- * @liv_subresource's path-list-with-header-regex naturally beats @liv's
- * 2-path-only matcher when Referer matches. Source-ordering is cosmetic
- * and kept above @liv for diff review.
+ * source-ordering is cosmetic and kept above @liv for diff review.
  *
  * Threat model — a malicious origin could spoof `Referer: .../liv/` to
  * reach `/api/auth/...` on the AionUi backend. AionUi enforces its own
  * auth gate (qr-session cookie, Phase 234-04), so spoofed Referer alone
  * grants no privilege escalation — it only routes traffic to a different
- * backend. No new vector vs. the pre-236 state where /liv/api/* was
- * always reachable.
+ * backend. The unconditional `@liv_ws` matcher does NOT widen the threat
+ * surface: livinityd has no `/ws` route to compromise, and the route was
+ * effectively unconditional in Phase 235 too (just via a path-rewrite sed
+ * pass on the bundle).
+ *
+ * Constant name preserved (`LIV_ASSISTANT_SUBRESOURCE_HANDLE`) to avoid
+ * touching the 3 emit sites in `generateFullCaddyfile`.
  */
-const LIV_ASSISTANT_SUBRESOURCE_HANDLE = `\t@liv_subresource {
-\t\theader_regexp Referer ^https?://[^/]+/liv(/|$)
-\t\tpath /api/* /ws /ws/*
+const LIV_ASSISTANT_SUBRESOURCE_HANDLE = `\t@liv_ws path /ws /ws/*
+\thandle @liv_ws {
+\t\treverse_proxy 127.0.0.1:3020 {
+\t\t\theader_down -X-Frame-Options
+\t\t\theader_down -Content-Security-Policy
+${WS_TRANSPORT_BODY}
+\t\t}
 \t}
-\thandle @liv_subresource {
+\t@liv_api_subresource {
+\t\theader_regexp Referer ^https?://[^/]+/liv(/|$)
+\t\tpath /api/*
+\t}
+\thandle @liv_api_subresource {
 \t\treverse_proxy 127.0.0.1:3020 {
 \t\t\theader_down -X-Frame-Options
 \t\t\theader_down -Content-Security-Policy
