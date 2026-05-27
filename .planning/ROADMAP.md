@@ -3466,6 +3466,169 @@ Plans:
 
 ---
 
+### Phase 227: LivOS shell integration — LivAssistantWindow iframe mount — ⚪ READY
+
+**Goal:** Wire a `LivAssistantWindow` React component into the LivOS shell that iframes `https://bruce.livinity.io/liv/` (Phase 226 routing). Add dock icon that opens this window. Replace OpenClawOS dock entry / chat surface so operators land on Liv Assistant by default.
+
+**Scope:**
+1. **New component** `livos/packages/ui/src/components/windows/LivAssistantWindow.tsx` — iframe wrapping the `/liv/` URL with `sandbox` attribute, focus/resize/min/max controls matching existing WindowFrame contract.
+2. **Dock entry** — add Liv Assistant icon to default dock items (or replace OpenClaw dock entry, behind feature flag if needed for rollback safety).
+3. **Window registry** — register `liv-assistant` window type in the LivOS window manager so dock-click opens it.
+4. **iframe smoke test** — vitest verifying component renders with correct iframe src + sandbox attrs.
+5. **Mini PC deploy** + visual UAT walk auto-approved (operator checks: dock icon visible, click opens iframe, AionUi login page renders).
+
+**Success Criteria:**
+- SC-01: `LivAssistantWindow.tsx` exists + renders iframe with `src="https://bruce.livinity.io/liv/"` (or env-driven URL) and sandbox attrs
+- SC-02: Dock has Liv Assistant entry (rendered by ui after deploy)
+- SC-03: Click on dock icon registers + opens window (vitest event smoke)
+- SC-04: Unit test passing
+- SC-05: Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` unchanged
+- SC-06: pnpm UI build succeeds on Mini PC + livos.service restarts cleanly
+
+**Depends on:** Phase 226 ✅ (Caddy /liv proxy live).
+
+**Reversibility:** Feature-flag-friendly. If iframe doesn't load cleanly, dock entry can be hidden via flag without removing the component.
+
+---
+
+### Phase 228: Claude auth bridge — subscription creds work inside Liv Assistant — ⚪ READY
+
+**Goal:** Verify that AionUi's built-in Claude Code agent picks up the host's `~/.claude/.credentials.json` (Phase 221 / Phase 223-05 captured already) so the first chat turn from a fresh login uses the operator's subscription without manual configuration. Model picker shows Sonnet/Opus/Haiku.
+
+**Scope:**
+1. **Audit on Mini PC** — `ls -la /home/bruce/.claude/.credentials.json`, confirm bruce user can read it.
+2. **liv-assistant.service environment** — extend systemd unit (Phase 223-02) to ensure `HOME=/home/bruce` and `XDG_CONFIG_HOME` are set so AionUi's Claude Code agent finds creds at expected path. If they're already set, verify via systemctl show.
+3. **Smoke test** — curl AionUi's internal `/api/auth/claude/status` (or whatever the runtime calls it) on Mini PC to confirm auth detected.
+4. **External smoke** — via `https://bruce.livinity.io/liv/api/auth/status`, confirm response shape includes Claude auth marker.
+5. **Documentation note** in `docs/liv-assistant-install.md` (Phase 223-04) — credential file path + recovery steps if auth lost.
+
+**Success Criteria:**
+- SC-01: `/home/bruce/.claude/.credentials.json` exists + readable by liv-assistant service user
+- SC-02: liv-assistant.service env contains `HOME=/home/bruce`
+- SC-03: AionUi auth endpoint reports Claude detected
+- SC-04: External `https://bruce.livinity.io/liv/...` reflects auth state
+- SC-05: Sacred SHA unchanged
+- SC-06: Docs updated
+
+**Depends on:** Phase 226 ✅ + Phase 227 ✅.
+
+---
+
+### Phase 232: Livinity brand overlay via Caddy `sub` directive — ⚪ READY
+
+**Goal:** Apply Livinity brand (Space Grotesk font + `#1d1d1f` accent + favicon + manifest theme_color) to AionUi's served HTML without forking the upstream tarball. Use Caddy's `sub` directive to inject a `<link rel="stylesheet">` tag into the served index.html, and serve overlay CSS + branding assets from `/etc/liv-assistant/branding/` at `/branding/*`.
+
+**Scope:**
+1. **Branding assets** in repo at `caddy/branding/` (or similar): `livinity-overlay.css` (font + colors + favicon), `favicon.ico`, `manifest.json` overlay.
+2. **caddy.ts patch** (Phase 226 pattern) — extend the `/liv` handle to also serve `/branding/*` static files via `handle /branding/* { root * /etc/liv-assistant/branding; file_server }` + add `sub` directive to inject the CSS link tag into HTML responses.
+3. **Mini PC asset deploy** — install-liv-assistant.sh (Phase 223-01) extended to copy `caddy/branding/*` → `/etc/liv-assistant/branding/` on every update.sh run.
+4. **Visual smoke** — `curl https://bruce.livinity.io/liv/` HTML contains overlay link tag + `curl https://bruce.livinity.io/liv/branding/livinity-overlay.css` HTTP 200.
+
+**Success Criteria:**
+- SC-01: caddy.ts emits `sub` directive for /liv HTML responses
+- SC-02: `/branding/*` static file handler emits in caddy.ts
+- SC-03: HTML at /liv/ contains injected `<link>` tag
+- SC-04: CSS at /liv/branding/livinity-overlay.css returns 200
+- SC-05: Sacred SHA unchanged
+- SC-06: Idempotent on update.sh re-run
+
+**Depends on:** Phase 226 ✅. Independent of 227/228 (they're UI; 232 is HTML/CSS injection at the proxy layer).
+
+---
+
+### Phase 229: Single-user posture documentation — ⚪ READY
+
+**Goal:** Pure-docs phase. Update `PROJECT.md` + `STATE.md` + `docs/` to record v42's single-user posture decision (multi-user explicitly deferred to v43). Document per-user data isolation discussion for future reference.
+
+**Scope:**
+1. PROJECT.md update — add "v42 Posture: Single-User (Multi-User Deferred to v43)" section. Cite v7.0 multi-user infrastructure preserved but inactive.
+2. STATE.md note — single-user mode is the v42 production posture.
+3. New doc `docs/v42-single-user-posture.md` — captures the rationale, the deferred multi-user pieces, the per-user-data-isolation thinking for v43.
+
+**Success Criteria:**
+- SC-01: PROJECT.md has v42 single-user section
+- SC-02: docs/v42-single-user-posture.md exists with rationale
+- SC-03: Sacred SHA unchanged
+- SC-04: docs commit lands
+
+**Depends on:** Nothing technical. Run anytime.
+
+---
+
+### Phase 230: Backup + pre-cutover checkpoint — ⚪ READY
+
+**Goal:** Snapshot Mini PC state before Phase 231's destructive OpenClawOS retirement. Redis SAVE + tar archive of critical paths.
+
+**Scope:**
+1. **Mini PC backup script** at `scripts/pre-v42-cutover-backup.sh`:
+   - `redis-cli SAVE` (snapshot Redis to RDB)
+   - `tar -czf /opt/livos/backups/pre-v42-cutover-$(date +%F).tgz /opt/livos/data /home/bruce/.claude /home/bruce/livinity /etc/livos /etc/caddy /etc/systemd/system/liv*.service /etc/systemd/system/livos.service`
+   - Verify tarball integrity with `tar -tzf`
+   - Log `/opt/livos/backups/pre-v42-cutover-<date>.tgz: <size>` to STATE.md trail
+2. **Mini PC live run** — SSH and execute the backup script.
+3. **Audit log** — DEPLOY-LOG.md with tarball size + sha256 + restore procedure.
+
+**Success Criteria:**
+- SC-01: Backup script created in repo
+- SC-02: Live tarball exists at `/opt/livos/backups/pre-v42-cutover-2026-05-27.tgz`
+- SC-03: Tarball passes integrity check
+- SC-04: Restore procedure documented in DEPLOY-LOG.md
+- SC-05: Sacred SHA unchanged
+
+**Depends on:** Phase 226 ✅. Must run BEFORE Phase 231 (point of no return).
+
+---
+
+### Phase 233: E2E UAT — Claude-walked + operator-deferred items — ⚪ READY
+
+**Goal:** Walk the v42 acceptance UAT items end-to-end. Claude executes the curl-verifiable checks; operator-only visual checks documented as deferred items in HUMAN-UAT.md. Gate for Phase 231.
+
+**Scope:** Per v42 ROADMAP, the UAT items are:
+1. Open Liv (= `https://bruce.livinity.io/liv/` reachable + iframe-friendly) — curl-verifiable (SC from 226 already proven)
+2. Ask a question (chat works) — auth + WS must work — curl-verifiable for auth state, WS upgrade handshake; actual chat turn requires operator
+3. Switch model (Sonnet ↔ Opus ↔ Haiku) — UI-only, operator-deferred
+4. Check apps still work — visit App Store, open non-AI apps (Files, AdGuard) — operator-deferred but curl-verifiable that App Store + apps still respond
+5. Check public subdomain still works — `https://bruce.livinity.io/` (root LivOS) + `https://bruce.livinity.io/app-store` reachable — curl-verifiable
+
+**Success Criteria (Claude-walked subset):**
+- SC-01: `https://bruce.livinity.io/liv/` → 200, headers OK
+- SC-02: `https://bruce.livinity.io/liv/api/auth/status` → 200 + Claude auth marker
+- SC-03: WS upgrade probe → 101
+- SC-04: Root LivOS shell `https://bruce.livinity.io/` → 200 (no regression from /liv overlay)
+- SC-05: App Store `/app-store` reachable, non-AI apps responsive
+- SC-06: Sacred SHA byte-identical
+- SC-07: 5 services active (livos, liv-core, liv-worker, liv-memory, liv-assistant, caddy)
+- SC-08 (HUMAN-UAT.md): Operator-deferred items persisted with status:partial
+
+**Depends on:** Phases 226 ✅ + 227 + 228 + 232. Gates Phase 231 (cleanup).
+
+---
+
+### Phase 231: OpenClawOS retirement — ⚪ READY (GATED by 233 GREEN)
+
+**Goal:** Remove the now-superseded OpenClawOS chat surface. `systemctl disable --now liv-claw-gateway` + `systemctl mask`. Move `liv-claw-os/` → `attic/liv-claw-os/`. Remove openclaw / openclawos tRPC routes. Caddy `/openclaw` handle removed (caddy.ts).
+
+**Scope:**
+1. **systemd disable** — `systemctl disable --now liv-claw-gateway && systemctl mask liv-claw-gateway` on Mini PC.
+2. **Move directory** — `git mv liv-claw-os/ attic/liv-claw-os/` (preserves git history).
+3. **tRPC route excision** — remove `openclaw.*` and `openclawos.*` routes from the livinityd router (grep through `livos/packages/livinityd/source/modules/server/trpc/`).
+4. **caddy.ts** — remove `OPENCLAWOS_HANDSHAKE_HANDLE` emit (Phase 226-04 tests already reference this — those tests need adjustment).
+5. **Mini PC deploy** + verify openclaw routes return 404 + Liv Assistant still works (the gate from Phase 233).
+6. **Rollback** documented in DEPLOY-LOG.md (restore from Phase 230 tarball).
+
+**Success Criteria:**
+- SC-01: `liv-claw-gateway` service masked + disabled
+- SC-02: `attic/liv-claw-os/` exists, original path gone
+- SC-03: openclaw/openclawos tRPC routes returns 404
+- SC-04: Caddy /openclaw handle absent from generated Caddyfile
+- SC-05: Liv Assistant /liv route STILL works post-retirement (no regression)
+- SC-06: Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` unchanged
+- SC-07: Phase 233 UAT items still GREEN post-retirement
+
+**Depends on:** Phase 233 ✅ (UAT GREEN), Phase 230 ✅ (backup exists). POINT OF NO RETURN.
+
+---
+
 ### Phase 222: Spike — AionUi feasibility on Mini PC — ✅ DONE 2026-05-27 (`b2be397f`)
 
 **Goal:** PASS/FAIL on 4 gates (build, iframe headers, Claude CLI subscription, license) before committing engineering time to the rest of v42.
