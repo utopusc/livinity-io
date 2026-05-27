@@ -3380,7 +3380,11 @@ Plans:
 
 ---
 
-### Phase 225: Wire liv-assistant install into update.sh + /api/health smoke — ⚪ READY
+### Phase 225: Wire liv-assistant install into update.sh + /api/health smoke — 🟡 1/2 plans
+
+**Plan progress:**
+- ✅ **225-01** CODE-COMPLETE 2026-05-27 (`7922b987`) — Patched `update.sh` with Step 4.6 (install-liv-assistant.sh idempotent re-run), Step 7.9 (liv-assistant.service unit copy via cmp -s guard), Step 8 extension (restart + `/api/health` 5s curl probe with `fail`-halt on non-2xx + race-tolerant password capture), verify-services is-active block, and "What was updated" footer line. All 6 grep-count thresholds satisfied (5/22/8/4/7 vs ≥2/4/2/2/4). Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED — hook `[sacred-sha] PASS: 20 files verified`. One Rule-3 deviation: unit-file source primary path adjusted to repo-root `systemd/liv-assistant.service` (where Phase 223-02 actually shipped it); plan's two original paths kept as secondary/tertiary fallbacks. See [225-01-SUMMARY.md](phases/225-update-sh-liv-assistant-wire/225-01-SUMMARY.md).
+- ⚪ **225-02** READY — Deploy patched update.sh to Mini PC + idempotent re-run verification + SC-01..04 GREEN.
 
 **Goal:** Make Phase 223's `liv-assistant.service` deployment automatic during every `bash /opt/livos/update.sh` run, instead of the current one-time manual `install-liv-assistant.sh` + `systemctl enable` install path. Add a curl health smoke (`/api/health` → 200) so update.sh fails loudly if the service comes up degraded.
 
