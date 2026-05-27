@@ -3337,11 +3337,11 @@ Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (broker subscription path)
 
 ---
 
-### Phase 223: Vendor AionUi tarball + LivOS install scaffold — 🟡 IN PROGRESS (1/5 plans shipped)
+### Phase 223: Vendor AionUi tarball + LivOS install scaffold — 🟡 IN PROGRESS (2/5 plans shipped)
 
 **Plan progress:**
 - ✅ **223-01** SHIPPED 2026-05-27 (`d1276e12`) — `scripts/install-liv-assistant.sh` idempotent installer, SHA-pinned, Apache LICENSE preserved. See [223-01-SUMMARY.md](phases/223-vendor-aionui-install/223-01-SUMMARY.md).
-- ⚪ **223-02** READY — `systemd/liv-assistant.service` unit (port 3020).
+- ✅ **223-02** SHIPPED 2026-05-27 (`ec6f5855`) — `systemd/liv-assistant.service` unit (Type=simple, User=bruce, port 3020, bun PATH, journal output for Plan 03 password capture). See [223-02-SUMMARY.md](phases/223-vendor-aionui-install/223-02-SUMMARY.md).
 - ⚪ **223-03** READY — `scripts/capture-liv-assistant-password.sh` first-boot password capture.
 - ⚪ **223-04** READY — `docs/liv-assistant-install.md` operator runbook.
 - ⚪ **223-05** READY — Mini PC live deploy + UAT + Phase 222 scratch cleanup.

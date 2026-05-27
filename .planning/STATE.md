@@ -3,27 +3,29 @@ gsd_state_version: 1.0
 milestone: v42
 milestone_name: Liv Assistant (AionUi-based replacement for OpenClawOS)
 status: executing
-last_updated: "2026-05-27T08:31:28Z"
+last_updated: "2026-05-27T08:35:08Z"
 last_activity: 2026-05-27
 current_phase: 223-vendor-aionui-install
-current_plan: 223-02
+current_plan: 223-03
 progress:
   total_phases: 12
   completed_phases: 1
   total_plans: 5
-  completed_plans: 1
-  percent: 20
+  completed_plans: 2
+  percent: 40
 ---
 
-## Current Position (v42 — Phase 223 Plan 01 SHIPPED 2026-05-27 — installer scaffolding landed)
+## Current Position (v42 — Phase 223 Plan 02 SHIPPED 2026-05-27 — systemd unit landed)
 
-**Plan 223-01 (`d1276e12`)** — `scripts/install-liv-assistant.sh` written: idempotent, SHA-pinned, Apache-LICENSE-preserving installer for AionUi v2.1.4. Pure file-write plan, no live install yet. Sacred SHA `f3538e1d...` untouched (hook PASS, 20 files verified). Next: Plan 223-02 (`systemd/liv-assistant.service` unit, port 3020).
+**Plan 223-02 (`ec6f5855`)** — `systemd/liv-assistant.service` written: Type=simple unit, User=bruce, port 3020, explicit PATH override for `/home/bruce/.bun/bin` so Claude Code ACP bridge can spawn bun (222-SPIKE Risk #3), `Restart=on-failure`, journal output + `SyslogIdentifier=liv-assistant` (consumed by Plan 03 password capture). Pure file-write, mode 0644, sacred SHA `f3538e1d...` untouched (hook PASS, 20 files verified). Next: Plan 223-03 (`scripts/capture-liv-assistant-password.sh` — journalctl-based first-boot password extractor).
+
+**Plan 223-01 (`d1276e12`)** — `scripts/install-liv-assistant.sh` written: idempotent, SHA-pinned, Apache-LICENSE-preserving installer for AionUi v2.1.4. Pure file-write plan, no live install yet.
 
 | v42 Plan | Status | Commit |
 |---|---|---|
 | 222 (spike) | ✅ SHIPPED | `b2be397f` |
 | 223-01 | ✅ SHIPPED | `d1276e12` (installer scaffold) |
-| 223-02 | ⚪ READY | systemd unit |
+| 223-02 | ✅ SHIPPED | `ec6f5855` (systemd unit) |
 | 223-03 | ⚪ READY | password capture helper |
 | 223-04 | ⚪ READY | install docs |
 | 223-05 | ⚪ READY | Mini PC live deploy + UAT |
