@@ -310,6 +310,81 @@ ${WS_TRANSPORT_BODY}
 \t}`
 
 /**
+ * Phase 236 — Referer-gated subresource catch-all for AionUi.
+ *
+ * Problem class this fixes:
+ *   Phase 235 sed-replaced QUOTED `/api/` -> `/liv/api/` in the vendored
+ *   AionUi JS bundle. That covered string-literal API calls but missed:
+ *     (a) Dynamic backtick-template URLs:
+ *         `new WebSocket(\`wss://${location.host}/ws\`)` — `/ws` is
+ *         interpolated, not a quoted literal. After minification the
+ *         literal `/ws` is reconstructed at runtime, so sed could not
+ *         touch it. The browser issues `wss://bruce.livinity.io/ws`
+ *         which bypasses the @liv matcher and reaches the LivOS shell
+ *         catch-all on :8080 — 404, chat unusable until manual reload.
+ *     (b) Runtime-inserted DOM `src` attributes:
+ *         `<img src="/api/assets/logos/...">` injected via React render,
+ *         not present as a literal in the bundle post-minification's
+ *         template-string transformation. Assets 404 -> AionUi icon set
+ *         (Aion, Claude, OpenCode logos) shows blank.
+ *
+ * Why a referer-gated handle (not a path rewrite):
+ *   Extending the sed pass to cover dynamic URL construction would require
+ *   AST-level rewriting (brittle, would re-break on every AionUi upstream
+ *   version bump). Instead, observe that:
+ *     - Iframe loaded at https://bruce.livinity.io/liv/ sets
+ *       `Referer: https://bruce.livinity.io/liv/...` on every subresource fetch
+ *     - LivOS shell apex traffic has `Referer: https://bruce.livinity.io/`
+ *       (or `/app-store`, etc.) — never `/liv/`
+ *   So a Referer-gated catch-all on `/api/* /ws /ws/*` losslessly routes
+ *   only iframe-originated subresource fetches to AionUi while leaving
+ *   livinityd's own `/api/*` traffic on the :8080 catch-all unaffected.
+ *
+ * Caddy v2 named matcher semantics:
+ *   Multi-condition matcher block uses `{ }` with two stanzas — Caddy ANDs
+ *   them. `header_regexp Referer ^https?://[^/]+/liv(/|$)` matches any
+ *   origin so long as the path-prefix is `/liv` or `/liv/...` (trailing
+ *   slash optional — covers iframe initial load at /liv exact). The `path`
+ *   list catches `/api/*` (covers /api/assets, /api/auth, /api/conversations,
+ *   /api/agents, /api/settings, etc.) + `/ws` exact + `/ws/*` sub-routes.
+ *
+ * WebSocket upgrade — Caddy v2's `reverse_proxy` auto-handles `Upgrade:
+ * websocket` + `Connection: upgrade` headers. We deliberately do NOT set
+ * any `header_up Connection` / `header_up Upgrade` directives that would
+ * strip the upgrade. Mirrors the LIV_ASSISTANT_HANDLE pattern.
+ *
+ * Header stripping mirrors LIV_ASSISTANT_HANDLE: drop upstream
+ * X-Frame-Options + Content-Security-Policy (AionUi emits its own and we
+ * iframe-embed), then set our own minimal frame-ancestors CSP at handle
+ * scope. Iframe-safety guarantees from Phase 226-04 carry through.
+ *
+ * Ordering — emitted IMMEDIATELY BEFORE LIV_ASSISTANT_HANDLE in every emit
+ * site. Caddy v2 evaluates by matcher specificity (not source order) so
+ * @liv_subresource's path-list-with-header-regex naturally beats @liv's
+ * 2-path-only matcher when Referer matches. Source-ordering is cosmetic
+ * and kept above @liv for diff review.
+ *
+ * Threat model — a malicious origin could spoof `Referer: .../liv/` to
+ * reach `/api/auth/...` on the AionUi backend. AionUi enforces its own
+ * auth gate (qr-session cookie, Phase 234-04), so spoofed Referer alone
+ * grants no privilege escalation — it only routes traffic to a different
+ * backend. No new vector vs. the pre-236 state where /liv/api/* was
+ * always reachable.
+ */
+const LIV_ASSISTANT_SUBRESOURCE_HANDLE = `\t@liv_subresource {
+\t\theader_regexp Referer ^https?://[^/]+/liv(/|$)
+\t\tpath /api/* /ws /ws/*
+\t}
+\thandle @liv_subresource {
+\t\treverse_proxy 127.0.0.1:3020 {
+\t\t\theader_down -X-Frame-Options
+\t\t\theader_down -Content-Security-Policy
+${WS_TRANSPORT_BODY}
+\t\t}
+\t\theader Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
+\t}`
+
+/**
  * Generate a complete Caddyfile with main domain and all subdomains.
  * In multi-user mode, uses a single wildcard block that routes all subdomains
  * to livinityd's app gateway (port 8080) for dynamic per-user routing.
@@ -327,6 +402,7 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 		blocks.push(`:80 {
 ${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
+${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
@@ -359,6 +435,7 @@ ${WS_TRANSPORT_BODY}
 	blocks.push(`${prefix}${config.mainDomain} {
 ${apexCacheHeader}${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
+${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
@@ -388,6 +465,7 @@ ${WS_TRANSPORT_BODY}
 			blocks.push(`${fullDomain} {
 ${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
+${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
