@@ -3329,6 +3329,57 @@ Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (broker subscription path)
 
 ---
 
+### Phase 224: App Store — hide Skills/MCP/AI tabs (feature-flagged) — ⚪ READY
+
+**Goal:** During v42 migration, hide the legacy AI-related entry points in the LivOS UI so users don't try to configure MCP servers / Skills / AI providers via the OLD chat-surface code path while Liv Assistant is being wired in. Reversibility is mandatory: a single Redis feature flag toggles everything back ON. NO code deletion — only conditional hides + a banner.
+
+Scope per v42 PROJECT.md "What we ARE temporarily disabling" table:
+
+| Surface | Where (actual code) | Action |
+|---|---|---|
+| App Store `ai` category tab | `livos/packages/ui/src/modules/app-store/constants.ts` (categoryishDescriptions array) | Filter out when flag ON |
+| Settings → MCP Servers route in sidebar | `livos/packages/ui/src/routes/settings/_components/settings-content.tsx` (settings nav) | Hide nav item when flag ON (route stays accessible by direct URL for admin) |
+| AI Chat Settings panel route in sidebar | same settings-content.tsx | Same as above |
+| Banner in App Store + Settings | new component `<V42MigrationBanner />` | Show when flag ON |
+
+**Feature flag:** Redis key `liv:config:liv_v42_migration_active` (bool). Default `true` for the duration of v42; flipped to `false` when v42 ships (Phase 233 closes milestone) or later when AI surfaces are rebuilt natively in Liv Assistant.
+
+**Effort:** 2-3h.
+
+**Requirements:** No formal REQ-IDs (v42 opened post-REQUIREMENTS.md). Success criteria SC-01..SC-05 below substitute.
+
+**Depends on:** Phase 223 ✅ SHIPPED (`630fc882`) — Liv Assistant service must be live before we hide the legacy surface so operators have an alternative chat path.
+
+**Plans:** 4 plans
+
+Plans:
+- [ ] 224-01-PLAN.md — Backend tRPC config.getV42MigrationActive + useV42MigrationActive UI hook
+- [ ] 224-02-PLAN.md — App Store nav `ai` category hide + Settings sidebar MCP-Servers hide (filter logic)
+- [ ] 224-03-PLAN.md — V42MigrationBanner component + mount in App Store + Settings layouts + unit test
+- [ ] 224-04-PLAN.md — Mini PC deploy + Redis flag set + curl smoke + operator UAT (SC-01..SC-05)
+
+**Tasks:**
+1. Add `liv:config:liv_v42_migration_active` flag accessor: tRPC procedure `config.getV42MigrationActive` returning `{ active: boolean }` (defaults to `true` if key missing). Single existing tRPC router file extended; no new schema.
+2. Modify `livos/packages/ui/src/modules/app-store/app-store-nav.tsx` `ConnectedAppStoreNav`: filter out `id === 'ai'` when flag is `true`. Existing filter `categoriesWithApps` extended.
+3. Modify the settings sidebar source: hide MCP Servers + AI Chat Settings sidebar entries when flag is `true`. Direct URL access still works (graceful degradation for admin recovery).
+4. Create `livos/packages/ui/src/components/banners/v42-migration-banner.tsx` — small dismissible banner: "AI integrations temporarily disabled during Liv Assistant migration. Open Liv Assistant from the dock to use AI features." Mount in App Store layout + Settings layout when flag is `true`.
+5. Add unit test or visual sanity check: feature-flag-on state has no `ai` tab + no MCP/AI Chat sidebar items + banner visible. Feature-flag-off state matches pre-Phase-224 baseline.
+6. **Deploy to Mini PC** — push UI bundle, set `liv:config:liv_v42_migration_active=true` in Redis, hard-reload browser, visually confirm hides + banner.
+
+**Success criteria:**
+1. SC-01 (App Store): `liv:config:liv_v42_migration_active=true` → `/app-store` does NOT render an `ai` category tab in the nav. Set to `false` → tab re-appears (live, no server restart needed beyond cache invalidation).
+2. SC-02 (Settings): flag `true` → settings sidebar does NOT show MCP Servers or AI Chat Settings items. Flag `false` → items re-appear.
+3. SC-03 (Direct URL): `/settings/mcp-servers` STILL serves a 200 (route not 404'd; admin recovery works) when flag `true`. Just hidden from nav.
+4. SC-04 (Banner): banner renders in App Store + Settings when flag `true`, hidden when `false`. Dismissible per-session.
+5. SC-05 (Sacred SHA + non-regression): `f3538e1d811992b782a9bb057d1b7f0a0189f95f` unchanged. Files browser, Linkwarden, AdGuard, all non-AI surfaces work exactly as before.
+
+**Risks:**
+- Hiding the sidebar nav item while leaving the route accessible may confuse operators who forget the URL — mitigated by the banner + Phase 224 runbook entry in `docs/liv-assistant-install.md`.
+- App Store `ai` category may already have apps installed pre-v42 — those installed apps STAY (App Store nav controls discovery only, not installed-app management). Verify no regression in `/app-store/installed`.
+- Cache invalidation: tRPC query `config.getV42MigrationActive` must invalidate on flag write so UI updates without reload.
+
+---
+
 ### Phase 222: Spike — AionUi feasibility on Mini PC — ✅ DONE 2026-05-27 (`b2be397f`)
 
 **Goal:** PASS/FAIL on 4 gates (build, iframe headers, Claude CLI subscription, license) before committing engineering time to the rest of v42.
