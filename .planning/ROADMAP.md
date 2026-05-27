@@ -3511,6 +3511,34 @@ All gated by Redis feature flags for reversibility (`liv:config:liv_ai_autologin
 
 ---
 
+### Phase 235: Liv AI hot-fix — absolute API path rewrite + icon visibility — ✅ SHIPPED 2026-05-27 (1/1 plan, 5/5 SCs GREEN)
+
+**Goal:** Resolve two operator-reported live-browser failures post-Phase 234 deploy without re-opening Phase 234 plan boundaries. (1) AionUi vendored JS bundle issues root-relative API/WS requests (`/api/...`, `/ws`) that bypass the Caddy `LIV_ASSISTANT_HANDLE` `/liv /liv/*` matcher (which uses `uri strip_prefix /liv`), so they 404 at the LivOS shell root domain — AionUi falls back to login UI despite Plan 234-04 auto-login setting the cookie correctly. (2) Dock tile for Liv AI shows blank in operator browser despite icon being present + HTTP 200 on Mini PC dist (browser cache from pre-Plan-234-02 404).
+
+**Scope:**
+1. Extend Phase 234-03 idempotent sed block in `scripts/install-liv-assistant.sh` with 6 absolute-path patterns covering quoted-string forms in HTML/JS/CSS: `"/api/`, `'/api/`, `` `/api/ ``, `"/ws"`, `'/ws'`, `` `/ws` `` → `/liv/api/` / `/liv/ws`. Caddy then strips `/liv` and forwards `/api/...` to AionUi `:3020`. Idempotency guard via `count_unprefixed_paths()` helper. Scope `${CURRENT_LINK}/static/` preserves D-V42-APACHE-NOTICE structurally.
+2. Cache-bust `?v=235` query on `livos/packages/ui/src/providers/apps.tsx` dock-ai-chat icon ref so operator browsers refetch the (already-present) SVG. `dock.test.tsx` mock + assertion updated in lock-step.
+
+**Success Criteria:**
+- SC-01: External `https://bruce.livinity.io/liv/api/settings/client` returns non-404 (200/401/403/204 acceptable) — proves `/liv/api/*` reaches AionUi backend.
+- SC-02: Mini PC dist `dock-ai-chat.svg` present OR cache-bust applied.
+- SC-03: Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED.
+- SC-04: Phase 233 UAT brand subset GREEN post-fix (`<title>Liv AI</title>`, AionUi count = 0, /liv/api/auth/status canonical JSON, /liv-login 302+Set-Cookie aionui-session).
+- SC-05: RUN 2 of update.sh is no-op for the new sed (`Path rewrite: ... skipping sed pass`).
+
+**Plans:** 1 plan
+
+Plans:
+- [x] **235-PLAN.md — install-liv-assistant.sh path rewrite + icon cache-bust + Mini PC deploy — ✅ SHIPPED 2026-05-27** (3 atomic commits `ed618706` feat path rewrite + `5048b246` feat icon cache-bust + `541848a5` fix pipefail-safe + docs commit) — Hot-fix resolves operator's live browser console errors. **install-liv-assistant.sh extension**: 6-pattern sed inserted between Phase 234-03 rebrand and LICENSE/NOTICE defensive grep loop. Idempotency via `count_unprefixed_paths()` helper that locally toggles pipefail off + always echoes a number + always returns 0 (Rule 1+3 auto-fix during deploy — first deploy failed because `grep -L` exits 1 when zero files print, under pipefail killed the command substitution). **Cache-bust**: apps.tsx icon ref `'/figma-exports/dock-ai-chat.svg'` → `'/figma-exports/dock-ai-chat.svg?v=235'`. dock.test.tsx 4/4 vitest GREEN. **Mini PC deploy**: RUN-A EXIT 0 with `Path rewrite: applying /api/ -> /liv/api/ and /ws -> /liv/ws sed pass on 4 files` + `post-pass unprefixed-only file count = 0` + `Deployed SHA recorded: 541848a`. RUN-B EXIT 0 (`skipping sed pass`). **External post-fix probes**: `/liv/api/settings/client` HTTP 200 + Content-Type: application/json (was 404); `/liv/api/auth/user` HTTP 403 (auth gate — backend reached); `/liv/api/agents` HTTP 200. **Non-regression GREEN**: `<title>Liv AI</title>` + 3 'Liv AI' hits + 0 AionUi; `/liv/api/auth/status` canonical JSON; `/liv-login` 302 + Set-Cookie aionui-session intact. **Sacred SHA** `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED across all 4 commits. **LICENSE+NOTICE byte-identical PRE/POST** (D-V42-APACHE-NOTICE preserved via structural scope). **5/5 SCs PASS.** DEPLOY-LOG at `.planning/phases/235-liv-ai-hotfix-paths/235-DEPLOY-LOG.md`. SUMMARY at `235-SUMMARY.md`.
+
+**Depends on:** Phase 226 ✅ (Caddy /liv handler), Phase 227 ✅ (LivAssistantWindow), Phase 234 ✅ (rebrand + auto-login).
+
+**Reversibility:** Path-rewrite sed is purely cosmetic-on-disk + idempotent. Full revert: `git revert <235-commits>` + re-deploy. Cache-bust query has zero functional impact when reverted (icon still serves).
+
+**Outcome:** Operator's live browser test recovered. Hard-reload (Ctrl+F5) once and Liv AI iframe loads cleanly into chat surface (no login form, dock tile visible, all AionUi /api/* and /ws requests resolve through the `/liv` Caddy handler to backend).
+
+---
+
 ### Phase 227: LivOS shell integration — LivAssistantWindow iframe mount — ✅ SHIPPED 3/3
 
 **Goal:** Wire a `LivAssistantWindow` React component into the LivOS shell that iframes `https://bruce.livinity.io/liv/` (Phase 226 routing). Add dock icon that opens this window. Replace OpenClawOS dock entry / chat surface so operators land on Liv Assistant by default.
