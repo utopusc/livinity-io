@@ -3594,7 +3594,10 @@ Then revert `fix(232-02)` to re-enable the `replace` directive. Adds ~30 MB bina
 
 ---
 
-### Phase 233: E2E UAT — Claude-walked + operator-deferred items — ⚪ READY
+### Phase 233: E2E UAT — Claude-walked + operator-deferred items — ✅ SHIPPED 2026-05-27 (1/1 plan, 7/7 Claude-walked SCs GREEN + SC-08 PASS-PARTIAL by design, Phase 231 gate GREEN)
+
+**Plans shipped:**
+- [x] 233-01-PLAN.md — Run Claude-walked UAT (SC-01..SC-07 via external curls + ONE batched Mini PC SSH), author DEPLOY-LOG + HUMAN-UAT + SUMMARY, update STATE + ROADMAP. ✅ **SHIPPED 2026-05-27** — 7/7 Claude-walked SCs GREEN: SC-01 `/liv/` HTTP 200 + frame-ancestors CSP + no XFO; SC-02 `/liv/api/auth/status` HTTP 200 + body `{"success":true,...}` + loopback `/api/agents` Claude Code id=`2d23ff1c` available=True; SC-03 `/liv/ws` `HTTP/1.1 101 Switching Protocols` + `Sec-Websocket-Accept`; SC-04 root LivOS shell `/` HTTP 200; SC-05 `/app-store` HTTP 200 + representative non-AI app `filebrowser-bruce.livinity.io` HTTP 200; SC-06 sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` byte-identical (3 independent snapshots — repo pre, Mini PC sha256 `62f924594e81331afb159a9a50ef718ef3eb7e79cd5287d9bd2e4788cbab1bfe`, repo post); SC-07 6/6 services `active` (livos, liv-core, liv-worker, liv-memory, liv-assistant, caddy); SC-08 `233-HUMAN-UAT.md` authored with 3 operator-deferred visual items (first chat turn, model picker Sonnet/Opus/Haiku, dock tile visibility) at `status: partial`. ONE batched SSH (fail2ban discipline). Auto-chain `checkpoint:human-verify` AUTO-APPROVED per `workflow._auto_chain_active=true` precedent (223-05/224-04/225-02/225-03/226-04/227-03/228-02/230-02/232-02). ZERO code, ZERO Mini PC file-system state. Sacred SHA pre-commit hook PASS. **Phase 231 gate: GREEN — POINT OF NO RETURN UNBLOCKED.** See [233-DEPLOY-LOG.md](phases/233-v42-e2e-uat/233-DEPLOY-LOG.md) + [233-HUMAN-UAT.md](phases/233-v42-e2e-uat/233-HUMAN-UAT.md) + [233-SUMMARY.md](phases/233-v42-e2e-uat/233-SUMMARY.md).
 
 **Goal:** Walk the v42 acceptance UAT items end-to-end. Claude executes the curl-verifiable checks; operator-only visual checks documented as deferred items in HUMAN-UAT.md. Gate for Phase 231.
 
@@ -3619,7 +3622,7 @@ Then revert `fix(232-02)` to re-enable the `replace` directive. Adds ~30 MB bina
 
 ---
 
-### Phase 231: OpenClawOS retirement — ⚪ READY (GATED by 233 GREEN)
+### Phase 231: OpenClawOS retirement — ⚪ READY (UNBLOCKED — 233 GREEN 2026-05-27)
 
 **Goal:** Remove the now-superseded OpenClawOS chat surface. `systemctl disable --now liv-claw-gateway` + `systemctl mask`. Move `liv-claw-os/` → `attic/liv-claw-os/`. Remove openclaw / openclawos tRPC routes. Caddy `/openclaw` handle removed (caddy.ts).
 
