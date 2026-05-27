@@ -1209,6 +1209,27 @@ if [[ -f /etc/systemd/system/liv-assistant.service || -f /usr/lib/systemd/system
     else
         info "scripts/capture-liv-assistant-password.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 223-03 deploy)"
     fi
+
+    # ── Phase 238.3 — set Claude Code as default agent ──────────────────────
+    # Idempotent post-restart helper: ensures guid.lastSelectedAgent points at
+    # the Claude Code agent (id=2d23ff1c) rather than AionUi's built-in
+    # `aionrs` default. Operator preference: Aion CLI stays VISIBLE in the
+    # picker (agents.hidden/disabled remain []); only the DEFAULT changes.
+    # Helper itself decides write-vs-no-op and never fails the deploy on
+    # transient API hiccups.
+    _LIV_DEFAULT_AGENT_SRC="$TEMP_DIR/scripts/set-default-liv-agent.sh"
+    if [[ ! -f "$_LIV_DEFAULT_AGENT_SRC" ]]; then
+        _LIV_DEFAULT_AGENT_SRC="$LIVOS_DIR/scripts/set-default-liv-agent.sh"
+    fi
+    if [[ -f "$_LIV_DEFAULT_AGENT_SRC" ]]; then
+        if bash "$_LIV_DEFAULT_AGENT_SRC" 2>&1 | tail -5; then
+            ok "Default agent normalization step ran (no-op if already Claude Code)"
+        else
+            warn "set-default-liv-agent.sh exited non-zero — operator can re-run manually: sudo bash $_LIV_DEFAULT_AGENT_SRC"
+        fi
+    else
+        info "scripts/set-default-liv-agent.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 238.3 deploy)"
+    fi
 else
     info "liv-assistant.service not installed — skipping restart + health probe (pre-Phase 225 deploy)"
 fi
