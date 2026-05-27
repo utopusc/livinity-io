@@ -3693,6 +3693,26 @@ Plans:
 
 ---
 
+### Phase 238.9: Split light/dark favicon SVGs + CSS @media switch (CSS bg-image sandboxes SVG internal @media) — ✅ SHIPPED 2026-05-27 (1/1 plan)
+
+**Goal:** Operator 2026-05-27 night: "Aydinlik temada halka siyah icindeki nokta beyaz olmali! Karanlik temada halka beyaz icindeki nokta siyah olmaliydi" — confirming Phase 238.8's adaptive donut wasn't actually adapting. Root cause: SVG internal `@media (prefers-color-scheme)` rules are SANDBOXED OFF when SVG referenced via CSS `background-image: url(...)`. Browser loads CSS-bg SVGs in restricted context that disables @media queries. Works ONLY for `<img>`, `<object>`, `<link rel="icon">`.
+
+**Plans:** 1/1 plan complete ✅
+
+- [x] 238.9-01 — split SVG files + CSS @media switch + install-script branding asset list extension — SHIPPED 2026-05-27 (`d13bd1df` + `7842706a`)
+
+**Fix:**
+- `caddy/branding/favicon-light.svg` (NEW, 459B): outer `#0a0a0a` black ring + inner `#ffffff` white dot
+- `caddy/branding/favicon-dark.svg` (NEW, 446B): outer `#f5f5f7` white ring + inner `#050507` black dot
+- `caddy/branding/livinity-overlay.css`: `.liv-brand-donut` defaults to favicon-light.svg; `@media (prefers-color-scheme: dark) .liv-brand-donut` switches to favicon-dark.svg; ALSO `[data-theme='dark'] .liv-brand-donut` override so AionUi's in-app Arco theme picker triggers the flip without needing OS-level preference change
+- `scripts/install-liv-assistant.sh` Phase 232 branding-copy loop extended from 3 to 5 assets (added favicon-light.svg + favicon-dark.svg)
+
+**Mini PC POST:** both SVGs deployed (446B/459B), CSS served with 3 light-refs + 4 dark-refs + 6 prefers-color-scheme + 1 data-theme rules. External GET 200 for both variants. Phase 238.8 marker (liv-brand-donut) in JS bundle = 1 (reused). Non-regressions GREEN. Sacred SHA UNCHANGED.
+
+**Operator action:** browser hard-reload `https://bruce.livinity.io/liv/` → sidebar donut adapts: light theme = black ring + white dot, dark theme = white ring + black dot. Identical to livinity.io website tab favicon behavior. AionUi's own theme picker also flips it.
+
+---
+
 ### Phase 238.8: Adaptive Livinity donut via CSS background-image (matches website prefers-color-scheme) — ✅ SHIPPED 2026-05-27 (1/1 plan)
 
 **Goal:** Operator 2026-05-27 night: "Hala kotu duruyor ya inanilmaz hatta Ne bileyim bire bir yapmaya calismissin ama ben karanlik mod da beyaz cember aydinlik modda siyah ama bu logo bire bir Bizim logomuz olmali" — Phase 238.7's white-on-black inline SVG isn't adaptive. Operator wants the EXACT website behavior: dark mode = white donut, light mode = black donut.
