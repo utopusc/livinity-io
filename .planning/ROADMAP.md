@@ -3553,7 +3553,7 @@ Then revert `fix(232-02)` to re-enable the `replace` directive. Adds ~30 MB bina
 
 ---
 
-### Phase 229: Single-user posture documentation — ⚪ READY
+### Phase 229: Single-user posture documentation — ✅ **SHIPPED 2026-05-27** (1/1 plan, 4/4 SCs GREEN)
 
 **Goal:** Pure-docs phase. Update `PROJECT.md` + `STATE.md` + `docs/` to record v42's single-user posture decision (multi-user explicitly deferred to v43). Document per-user data isolation discussion for future reference.
 
@@ -3563,10 +3563,13 @@ Then revert `fix(232-02)` to re-enable the `replace` directive. Adds ~30 MB bina
 3. New doc `docs/v42-single-user-posture.md` — captures the rationale, the deferred multi-user pieces, the per-user-data-isolation thinking for v43.
 
 **Success Criteria:**
-- SC-01: PROJECT.md has v42 single-user section
-- SC-02: docs/v42-single-user-posture.md exists with rationale
-- SC-03: Sacred SHA unchanged
-- SC-04: docs commit lands
+- [x] SC-01: PROJECT.md has v42 single-user section ✅ (new H2 `## v42 Posture: Single-User (Multi-User Deferred to v43)` inserted before `### Validated (v23.0)`)
+- [x] SC-02: docs/v42-single-user-posture.md exists with rationale ✅ (71-line file with Decision + Rationale + 9-row preserved-surfaces table + 4 deferred sub-sections incl. 3 Liv Assistant option sketches A/B/C)
+- [x] SC-03: Sacred SHA unchanged ✅ (`f3538e1d811992b782a9bb057d1b7f0a0189f95f` pre+post, pre-commit hook PASS)
+- [x] SC-04: docs commit lands ✅ (commit `02c70a26`, single atomic, hook `[sacred-sha] PASS: 20 files verified`)
+
+**Plans shipped:**
+- [x] 229-01-PLAN.md — Repo-only docs commit (NEW `docs/v42-single-user-posture.md` + PROJECT.md H2 insertion) — ✅ **SHIPPED 2026-05-27** (commit `02c70a26`). See [229-01-SUMMARY.md](phases/229-single-user-posture-docs/229-01-SUMMARY.md).
 
 **Depends on:** Nothing technical. Run anytime.
 
