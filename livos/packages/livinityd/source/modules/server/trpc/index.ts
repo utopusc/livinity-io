@@ -126,6 +126,11 @@ import {xaiAuthRouter, createXaiAuthRouter} from './xai-auth-router.js'
 // (line 104). The default setupRouter Proxy throws on any service access
 // until real injection lands (Plan 196-05).
 import {setupRouter, createSetupRouter} from './setup-router.js'
+// Phase 224 — `config.*` namespace (feature-flag accessors). Default empty-
+// injection stub throws PRECONDITION_FAILED until production boot wires the
+// real router via createConfigRouter({redis}). UI consumes this via the
+// useV42MigrationActive() hook in Phase 224-02 + 224-03.
+import {configRouter, createConfigRouter} from './config-router.js'
 // Phase 197-05 — Liv AI Mastra tRPC namespace. Plan 197-01 pre-declared the
 // `mastra?: unknown` opts slot; this import narrows it to the real router
 // type. Production livinityd boot supplies the createMastraRouter({...}) build
@@ -235,6 +240,10 @@ export function createAppRouter(opts: {
 	// `mcp` namespace below as `mcp.config.*`. Optional with empty-injection
 	// fallback so the default appRouter still type-checks.
 	mcpConfig?: ReturnType<typeof createMcpConfigRouter>
+	// Phase 224 — config.* namespace slot. Default empty-injection stub
+	// throws PRECONDITION_FAILED until production boot wires the real router
+	// built against a Redis client.
+	config?: ReturnType<typeof createConfigRouter>
 	// Phase 203-04 — `openclawos.apps.*` namespace slot. Default empty-
 	// injection stub keeps the appRouter type-stable; production boot
 	// supplies the real router built against `OpenUIAppsRepository` (Plan
@@ -337,6 +346,9 @@ export function createAppRouter(opts: {
 		// until Plan 196-05's production swap injects a real
 		// createSetupRouter({redis}) build.
 		setup: opts.setup ?? setupRouter,
+		// Phase 224 — config.* namespace (Redis-backed feature flags). Mounts
+		// `config.getV42MigrationActive` for the v42 migration UI hides.
+		config: opts.config ?? configRouter,
 		// Phase 197-05 — Liv AI Mastra namespace. Empty-injection default
 		// `mastraRouter` throws PRECONDITION_FAILED until production swap
 		// injects a real createMastraRouter({livOSMastra, approvalManager})

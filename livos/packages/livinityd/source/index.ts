@@ -182,6 +182,11 @@ import {createOpenclawosGatewayRouter} from './modules/server/trpc/openclawos-ga
 // real factory with `this.ai.redis` so the /settings → MCP tab can CRUD
 // the hash; McpBridge picks up changes at next livinityd boot.
 import {createMcpConfigRouter} from './modules/server/trpc/mcp-config-router.js'
+// Phase 224 — `config.*` namespace production wire. Builds the
+// getV42MigrationActive procedure against the live ioredis client; the
+// default empty-injection stub throws PRECONDITION_FAILED until this
+// factory call lands in createAppRouter() below.
+import {createConfigRouter} from './modules/server/trpc/config-router.js'
 import {createSkillsRouter} from './modules/server/trpc/skills-router.js'
 import {createSkillsMarketRouter} from './modules/server/trpc/skills-market-router.js'
 import {SkillsLoader} from './modules/skills/loader.js'
@@ -1830,6 +1835,15 @@ export default class Livinityd {
 				},
 			})
 
+			// Phase 224 — config.* production wire. Uses the same ioredis
+			// instance as the rest of the livinityd boot graph (this.ai.redis).
+			// The single procedure `config.getV42MigrationActive` reads
+			// 'liv:config:liv_v42_migration_active' and returns {active: boolean},
+			// defaulting to true (migration mode ON) when the key is missing.
+			const configRouterProductionInstance = createConfigRouter({
+				redis: this.ai.redis,
+			})
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
@@ -1844,6 +1858,7 @@ export default class Livinityd {
 				openclawCli: openclawCliRouterProductionInstance,
 				skills: skillsRouterProductionInstance,
 				skillsMarket: skillsMarketRouterProductionInstance,
+				config: configRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(
