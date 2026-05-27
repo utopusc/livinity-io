@@ -448,13 +448,28 @@ export function createOpenclawosGatewayRouter(
 		// atomic OpenclawConfigStore.patch primitive every mutation already
 		// uses. JSON-validate before write so a malformed paste cannot brick
 		// the gateway.
+		//
+		// Phase 220 T1 fix-up 2026-05-26 — `gateway.auth.token` is a real
+		// secret used by claw-client to authenticate against the gateway.
+		// Exposing it in the textarea was a leak (screenshot, accidental
+		// delete, etc.). Read redacts to a sentinel; write substitutes the
+		// sentinel back to the live value so a round-trip save preserves the
+		// real token without ever rendering it.
 		config: router({
 			read: adminProcedure.query(async () => {
 				try {
 					const cfg = deps.configStore.read()
+					// Defensive clone via JSON round-trip so the redact mutation
+					// doesn't touch the on-disk in-memory representation.
+					const redacted = JSON.parse(JSON.stringify(cfg)) as Record<string, unknown>
+					const gw = redacted.gateway as Record<string, unknown> | undefined
+					const auth = gw?.auth as Record<string, unknown> | undefined
+					const hadToken = typeof auth?.token === 'string' && (auth.token as string).length > 0
+					if (auth && hadToken) auth.token = '__REDACTED_KEEP_AS_IS__'
 					return {
-						json: JSON.stringify(cfg, null, 2),
+						json: JSON.stringify(redacted, null, 2),
 						readAt: new Date().toISOString(),
+						hasRedactedSecrets: hadToken,
 					}
 				} catch (err) {
 					throw mapConfigError(err)
@@ -480,14 +495,32 @@ export function createOpenclawosGatewayRouter(
 						})
 					}
 					try {
+						const incoming = parsed as Record<string, unknown>
 						// Replace-all semantics: every top-level key from the new
 						// JSON wins; keys absent from input are dropped. Matches the
 						// SSH-edit behavior operators are used to.
 						deps.configStore.patch((cfg) => {
+							// Phase 220 T1 fix-up — preserve the live auth.token
+							// when the operator left the redaction sentinel in place
+							// (no edit). Operators who genuinely want to rotate the
+							// token use the dedicated `auth.rotateToken` mutation
+							// above; pasting a real token in here also works.
+							const currentGw = cfg.gateway as Record<string, unknown> | undefined
+							const currentToken = (currentGw?.auth as Record<string, unknown> | undefined)
+								?.token
+							const incomingGw = incoming.gateway as Record<string, unknown> | undefined
+							const incomingAuth = incomingGw?.auth as Record<string, unknown> | undefined
+							if (
+								incomingAuth &&
+								incomingAuth.token === '__REDACTED_KEEP_AS_IS__' &&
+								typeof currentToken === 'string'
+							) {
+								incomingAuth.token = currentToken
+							}
 							for (const k of Object.keys(cfg)) {
 								delete (cfg as Record<string, unknown>)[k]
 							}
-							for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+							for (const [k, v] of Object.entries(incoming)) {
 								(cfg as Record<string, unknown>)[k] = v
 							}
 						})
