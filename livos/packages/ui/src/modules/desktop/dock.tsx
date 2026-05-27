@@ -6,6 +6,7 @@ import {useLocation} from 'react-router-dom'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useQueryParams} from '@/hooks/use-query-params'
 import {useSettingsNotificationCount} from '@/hooks/use-settings-notification-count'
+import {useV42MigrationActive} from '@/hooks/use-v42-migration-active'
 import {systemAppsKeyed, useApps} from '@/providers/apps'
 import {trpcReact} from '@/trpc/trpc'
 import {useWindowManagerOptional} from '@/providers/window-manager'
@@ -66,6 +67,10 @@ export function Dock() {
 	const isMobile = useIsMobile()
 	const {iconSize, iconSizeZoomed, padding, dockHeight} = useDockDimensions()
 	const windowManager = useWindowManagerOptional()
+	// Phase 227-02 — gate the new Liv Assistant dock entry behind the v42
+	// migration flag (default ON). Flip Redis `liv:config:liv_v42_migration_active=false`
+	// to hide it without code revert (D-V42-ROLLBACK pattern).
+	const showLivAssistant = useV42MigrationActive()
 
 	const lastFilesPath = sessionStorage.getItem('lastFilesPath')
 
@@ -224,22 +229,55 @@ export function Dock() {
 				    from desktop → dock). Icons fall back to the systemApps
 				    'LIVINITY_liv-ai' entry (the placeholder figma-export svg)
 				    so we don't need a separate icon asset. */}
-				<DockItem
-					appId='LIV_AI_CHAT'
-					iconSize={iconSize}
-					iconSizeZoomed={iconSizeZoomed}
-					open={false}
-					mouseX={mouseX}
-					onOpenWindow={(originRect) =>
-						handleOpenWindow(
-							'LIV_AI_CHAT',
-							'/liv-ai-chat',
-							'Liv',
-							systemAppsKeyed['LIVINITY_liv-ai'].icon,
-							originRect,
-						)
-					}
-				/>
+				{/* Phase 227-02 — Liv Assistant dock entry (the v42 AI surface). Gated
+				    by Phase 224-01's `useV42MigrationActive()` so flipping the Redis
+				    key `liv:config:liv_v42_migration_active=false` hides this icon
+				    without removing code (D-V42-ROLLBACK pattern). Sits in the chat
+				    neighbourhood immediately before the legacy LIV_AI_CHAT entries.
+				    The openWindow call targets the LIVINITY_liv-assistant appId
+				    registered in apps.tsx (Plan 227-02 Task 1), which window-content
+				    maps to LivAssistantWindow (Plan 227-01). The wrapping `<div
+				    data-test-dock-item ... className='contents'>` is a layout-neutral
+				    test seam (CSS display: contents) so dock.test.tsx can query the
+				    tile reliably without ordinal fragility (D-P227-TEST-SEAM). */}
+				{showLivAssistant && (
+					<div data-test-dock-item='liv-assistant' className='contents'>
+						<DockItem
+							appId='LIVINITY_liv-assistant'
+							iconSize={iconSize}
+							iconSizeZoomed={iconSizeZoomed}
+							open={false}
+							mouseX={mouseX}
+							onOpenWindow={(originRect) =>
+								handleOpenWindow(
+									'LIVINITY_liv-assistant',
+									'/liv-assistant',
+									'Liv Assistant',
+									systemAppsKeyed['LIVINITY_liv-assistant'].icon,
+									originRect,
+								)
+							}
+						/>
+					</div>
+				)}
+				<div data-test-dock-item='liv-ai-chat' className='contents'>
+					<DockItem
+						appId='LIV_AI_CHAT'
+						iconSize={iconSize}
+						iconSizeZoomed={iconSizeZoomed}
+						open={false}
+						mouseX={mouseX}
+						onOpenWindow={(originRect) =>
+							handleOpenWindow(
+								'LIV_AI_CHAT',
+								'/liv-ai-chat',
+								'Liv',
+								systemAppsKeyed['LIVINITY_liv-ai'].icon,
+								originRect,
+							)
+						}
+					/>
+				</div>
 				<DockItem
 					appId='LIV_AI_CHAT_SHORTCUT'
 					iconSize={iconSize}
