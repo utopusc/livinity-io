@@ -741,4 +741,10 @@ export const httpOnlyPaths = [
 	'openclaw.config.setDefaultModel',
 	'openclaw.config.getDefaultModel',
 	'openclaw.profiles.list',
+	// Phase 224 — config.getV42MigrationActive is a publicProcedure render
+	// dependency for the App Store nav + Settings sidebar hides. HTTP delivery
+	// avoids the WS-handshake-delay flicker on first paint (precedent:
+	// mcp.config.list line ~357). Must be reachable pre-auth (login screen
+	// React tree calls the hook too).
+	'config.getV42MigrationActive',
 ] as const
