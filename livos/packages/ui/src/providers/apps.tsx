@@ -129,7 +129,11 @@ export const systemApps = [
 	{
 		id: 'LIVINITY_liv-assistant',
 		name: 'Liv AI',
-		icon: '/figma-exports/dock-ai-chat.svg',
+		// Phase 235 — cache-bust ?v=235 so operator browsers that cached the
+		// pre-Plan-234-02 404 (empty tile) refetch the now-present SVG. File
+		// is on Mini PC dist at /figma-exports/dock-ai-chat.svg (HTTP 200, 691
+		// bytes — verified via curl on bruce-EQ 2026-05-27 19:05 UTC).
+		icon: '/figma-exports/dock-ai-chat.svg?v=235',
 		systemApp: true,
 		systemAppTo: '/liv-assistant',
 	},
