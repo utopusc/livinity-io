@@ -632,6 +632,27 @@ else
     info "scripts/install-liv-assistant.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 223-01 deploy)"
 fi
 
+# ── Step 4.7: Phase 226 — Caddy /liv reverse-proxy snippet install ─────────
+# Lays down /etc/caddy/conf.d/liv-assistant.caddy + wires `import liv_assistant`
+# into the existing bruce.livinity.io site block, defensively chowns Caddyfile
+# to bruce:bruce (feedback_caddyfile_must_be_bruce_owned), and HARD-GATES on
+# `caddy validate` exit 0. Installer is idempotent (cmp -s guard); re-runs on
+# unchanged source = no Caddyfile write.
+step "Phase 226: Caddy /liv reverse-proxy snippet install"
+_LIV_CADDY_INSTALLER_SRC="$TEMP_DIR/scripts/install-liv-caddy-snippet.sh"
+if [[ ! -f "$_LIV_CADDY_INSTALLER_SRC" ]]; then
+    _LIV_CADDY_INSTALLER_SRC="$LIVOS_DIR/scripts/install-liv-caddy-snippet.sh"
+fi
+if [[ -f "$_LIV_CADDY_INSTALLER_SRC" ]]; then
+    if bash "$_LIV_CADDY_INSTALLER_SRC" 2>&1 | tail -15; then
+        ok "Caddy /liv snippet ensured (snippet + Caddyfile imports + caddy validate)"
+    else
+        fail "install-liv-caddy-snippet.sh failed — see output above (caddy validate fail / EACCES / awk fail?)"
+    fi
+else
+    info "scripts/install-liv-caddy-snippet.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 226-01 deploy)"
+fi
+
 # ── Step 5: Build packages ────────────────────────────────
 step "Building packages"
 
@@ -1192,6 +1213,50 @@ else
     info "liv-assistant.service not installed — skipping restart + health probe (pre-Phase 225 deploy)"
 fi
 
+# ── Phase 226 — reload caddy + /liv proxy smoke ───────────────────────────
+# Reload (not restart) so existing connections are preserved. Guarded on the
+# snippet file's presence so legacy deploys without Phase 226-01 are no-ops.
+# Smoke probe uses --resolve loopback so it does NOT depend on public DNS or
+# the Server5 relay — it exercises ONLY the Mini PC's local Caddy listener.
+# Plan 226-03 deploy will additionally exercise the full external relay path.
+if [[ -f /etc/caddy/conf.d/liv-assistant.caddy ]]; then
+    if systemctl reload caddy 2>/dev/null; then
+        ok "Reloaded caddy (snippet conf.d/liv-assistant.caddy active)"
+    else
+        # Reload can fail if caddy isn't running; try start.
+        warn "caddy reload failed — attempting systemctl start caddy"
+        if systemctl start caddy 2>/dev/null; then
+            ok "Started caddy"
+        else
+            warn "caddy start failed — check journalctl -u caddy -n 30"
+        fi
+    fi
+    # Give caddy a moment to apply the new config before probing.
+    sleep 2
+    info "Probing https://bruce.livinity.io/liv/api/auth/status via --resolve loopback (5s timeout)..."
+    _LIV_PROXY_CODE="$(curl -sS -o /dev/null -w '%{http_code}' \
+        --max-time 5 \
+        --resolve bruce.livinity.io:443:127.0.0.1 \
+        -k \
+        https://bruce.livinity.io/liv/api/auth/status 2>/dev/null || echo '000')"
+    if [[ "$_LIV_PROXY_CODE" =~ ^(200|204)$ ]]; then
+        ok "/liv proxy smoke = HTTP $_LIV_PROXY_CODE OK (bruce.livinity.io/liv/api/auth/status → 127.0.0.1:3020)"
+    else
+        # Collect diagnostics before aborting (mirrors Phase 225-01 Step C diagnostic pattern).
+        warn "/liv proxy smoke non-2xx (got HTTP $_LIV_PROXY_CODE); collecting diagnostics..."
+        curl -sS -o /dev/null -w 'HTTP %{http_code} (time %{time_total}s)\n' --max-time 5 \
+            --resolve bruce.livinity.io:443:127.0.0.1 -k \
+            https://bruce.livinity.io/liv/api/auth/status 2>&1 || true
+        # Show the Caddy snippet path it should have read.
+        ls -la /etc/caddy/conf.d/liv-assistant.caddy 2>&1 || true
+        # Show caddy's most recent errors.
+        journalctl -u caddy -n 20 --no-pager 2>/dev/null || true
+        fail "/liv proxy smoke FAILED (https://bruce.livinity.io/liv/api/auth/status returned $_LIV_PROXY_CODE, expected 200/204). Deploy aborted."
+    fi
+else
+    info "/etc/caddy/conf.d/liv-assistant.caddy not installed — skipping caddy reload + /liv smoke (pre-Phase 226 deploy)"
+fi
+
 # Verify services
 sleep 3
 if systemctl is-active --quiet livos.service; then
@@ -1252,6 +1317,7 @@ echo -e "    - livinityd source code"
 echo -e "    - UI (rebuilt from source)"
 echo -e "    - Liv AI packages (core, worker, mcp-server)"
 echo -e "    - liv-assistant (AionUi WebUI, vendored v2.1.4, port 3020)"
+echo -e "    - Caddy /liv reverse-proxy snippet (bruce.livinity.io/liv → :3020, iframe CSP override) [Phase 226]"
 echo -e "    - Gallery app cache"
 echo -e "    - Dependencies"
 echo ""
