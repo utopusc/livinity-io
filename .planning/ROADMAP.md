@@ -3410,7 +3410,7 @@ Plans:
 **Success Criteria:**
 - SC-01: `bash /opt/livos/update.sh` succeeds on Mini PC re-run (idempotent)
 - SC-02: `systemctl is-active liv-assistant` returns `active` post-update
-- SC-03: `curl -fsS http://127.0.0.1:3020/api/health` returns 200 inside update.sh smoke
+- SC-03: `curl -fsS http://127.0.0.1:3020/api/auth/status` returns 200 inside update.sh smoke (amended Plan 225-03 — AionUi v2.1.4 binary returns 404 on `/api/health`, 200 on `/api/auth/status`)
 - SC-04: Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` unchanged
 
 ---
