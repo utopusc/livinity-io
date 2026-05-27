@@ -387,14 +387,24 @@ fi
 # LICENSE + NOTICE structurally outside.
 # ---------------------------------------------------------------------------
 if [[ -d "${REBRAND_TARGET}" ]]; then
+  # Wrap PRE/POST grep+wc pipelines: grep -E exits 1 when zero files match
+  # (the desired POST state after a successful sed pass). Under `set -euo
+  # pipefail` the pipeline propagates 1 → command substitution fails →
+  # assignment fails → set -e exits the entire install-script before bun-
+  # install / UPSTREAM.md / service-restart steps run. Disable pipefail
+  # around the assignments so wc -l's 0-count return is honored.
+  set +o pipefail
   WB_PRE_HITS="$(grep -rilE '\b(Aion|AION|aion)\b' "${REBRAND_TARGET}" \
     --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
+  set -o pipefail
   if [[ "${WB_PRE_HITS}" -gt 0 ]]; then
     log "Word-boundary rebrand: applying \\b(Aion|AION|aion)\\b -> Liv sed pass on ${WB_PRE_HITS} files"
     find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) \
          -exec sed -E -i 's/\b(Aion|AION|aion)\b/Liv/g' {} +
+    set +o pipefail
     WB_POST_HITS="$(grep -rilE '\b(Aion|AION|aion)\b' "${REBRAND_TARGET}" \
       --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
+    set -o pipefail
     if [[ "${WB_POST_HITS}" -ne 0 ]]; then
       log "WARN: ${WB_POST_HITS} files still contain word-boundary Aion variants after sed pass (investigate)"
     else
