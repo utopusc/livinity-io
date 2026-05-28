@@ -4,6 +4,7 @@ import type {Region} from '../../../../livinityd/source/modules/locale/region-su
  * Phase 196.1 — wizard collapsed 9 → 7 steps.
  *   - ConnectAi merged into Provider (inline auth)
  *   - Region + Locale & Time merged into single Location step (Country + City)
+ * Phase 239 — slot 4 (Provider) replaced by CLI Tools; auth deferred post-onboarding.
  */
 export const TOTAL = 7
 
@@ -12,7 +13,7 @@ export const STEP_NAMES = [
 	'Account',
 	'Wallpaper',
 	'Personalize',
-	'Provider',
+	'CLI Tools',
 	'Location',
 	'All set',
 ] as const
@@ -21,9 +22,9 @@ export const STEP_NAMES = [
  * Rough seconds per remaining step — used for the ETA pill.
  * Order mirrors STEP_NAMES exactly:
  *   Welcome 15, Account 60, Wallpaper 20, Personalize 45,
- *   Provider+Auth 35, Location 20, All set 5.
+ *   CLI Tools 40, Location 20, All set 5.
  */
-export const STEP_WEIGHT = [15, 60, 20, 45, 35, 20, 5] as const
+export const STEP_WEIGHT = [15, 60, 20, 45, 40, 20, 5] as const
 
 export function etaSeconds(idx: number): number {
 	let total = 0
@@ -43,9 +44,6 @@ export type OnboardingData = {
 	name: string
 	password: string
 	confirm: string
-	authMode: 'password' | '2fa'
-	otpSecret?: string
-	otpCode?: string
 	wallpaper: string
 	role: string
 	style: 'concise' | 'direct' | 'detailed'
@@ -53,8 +51,8 @@ export type OnboardingData = {
 	useCasesTouched: boolean
 	tone: number
 	memory: 'off' | 'session' | 'persistent'
-	/** Phase 196-03 — AI provider selection (xAI only enabled; Claude/OpenAI/Anthropic land in Phase 197+). */
-	provider?: 'xai' | 'claude' | 'openai' | 'anthropic'
+	/** Phase 239 — names of CLIs successfully installed during onboarding (subset of SUPPORTED_CLIS). */
+	cliInstalled: string[]
 	/** Phase 196-04 — region selection (continent-level). Derived in 196.1 from country. */
 	region?: Region
 	/** Phase 196-04 — optional country sub-pick (ISO-3166-1 alpha-2). Required in 196.1. */
@@ -72,7 +70,6 @@ export const DEFAULT_DATA: OnboardingData = {
 	name: '',
 	password: '',
 	confirm: '',
-	authMode: 'password',
 	wallpaper: 'fluid',
 	role: 'Developer',
 	style: 'direct',
@@ -80,4 +77,5 @@ export const DEFAULT_DATA: OnboardingData = {
 	useCasesTouched: false,
 	tone: 55,
 	memory: 'session',
+	cliInstalled: [],
 }
