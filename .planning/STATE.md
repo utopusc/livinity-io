@@ -15,7 +15,13 @@ progress:
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
 
-**v43.0 milestone artifact-complete 2026-05-28.** Operator UAT walk is the only remaining gate before milestone fully closes.
+**v43.0 milestone CLOSED 2026-05-28.** Plus 1 post-close hot-fix (Phase 245.1) live on Mini PC.
+
+- ✅ **Phase 245.1 SHIPPED 2026-05-28** — MCP seed env-thread + default-enabled hotfix. Repo: `mcp-servers.json` gains 4 placeholders on luse + LIVINITYD_API_URL/LIV_API_KEY env on 4 local liv-* MCPs + all 5 system MCPs `enabled:true`; `deploy-livinityd.sh _dld_seed_mcp_servers` substitutes 4 placeholders (was 1); +6 payload-contract drift-lock tests + 2 new seed.test.ts scenarios (J+K). Mini PC ratchet (HSET 5 → DELETE 5 → DEL sentinel → restart): `Phase 241: AionUi MCP seed (created=5 skipped=0 errored=0 sentinel=set)` + 5 × `→ toggled enabled` + manual luse spawn `resolver: constructed (LIVINITYD_API_URL=..., userSlug=bruce, domainRoot=livinity.io)` + `redis=connected` (zero `env-thread incomplete`). 45/45 vitest GREEN. Sacred SHA `293a499...` byte-identical PRE/POST. Sacred blob SHA `f3538e1d...` preserved. SUMMARY: `.planning/phases/245.1-mcp-seed-fix/245.1-SUMMARY.md`. Deployed SHA: `db83a7d`.
+
+---
+
+**Original v43 close note (still valid):** v43.0 milestone artifact-complete 2026-05-28; operator UAT walk is the only remaining gate before milestone fully closes.
 
 - ✅ **Phase 245 SHIPPED 1/1 2026-05-28** — v43 E2E UAT + milestone close. `.planning/milestones/v43/v43-UAT-CHECKLIST.md` (41 operator-walk items, 11 sections — one per shipped phase) + `v43-SHIP-NOTES.md` (what landed / what's deferred / operator UAT status) + `245-SUMMARY.md` all committed. Sacred SHA `f3538e1d...` PRESERVED through all 3 commits. **v43.0 milestone status:** artifact-complete pending operator UAT walk. Next: operator walks `v43-UAT-CHECKLIST.md` at-leisure, ticks each `[x]` on PASS; once all applicable boxes ticked → flip frontmatter `status: partial → complete` → archive `.planning/milestones/v43/` per v42 precedent → v44 unblocked.
 - ✅ **v43 cumulative visible-rebrand FULLY COMPLETE** (11 hot-fix phases 238→238.10). Sidebar donut adaptive (light = black ring + white dot, dark = white ring + black dot). Operator confirmed "Şimdi daha iyi".
