@@ -1,107 +1,124 @@
 # Resume Here — v43 Continuation Plan
 
-**Last session ended**: 2026-05-27 night, after Phase 238.10 ship.
+**Last session ended**: 2026-05-28 early morning, after Phase 241 ship + Phase 239 planning.
 
-**Operator handoff**: "Şimdi daha iyi. Plan hazırsa /clear çekip plandan devam edelim." → ready to clear context and resume from this plan.
+**Operator handoff**: Planner explicitly recommended `/clear` before Phase 239 execute. Context budget tight after Phase 241's 5-agent chain (researcher + planner + checker + 4× executor + multiple UAT walks). Phase 239 execute will spawn 3 more executor agents + Mini PC deploy.
 
 ---
 
 ## TL;DR — What's Done, What's Next
 
-### ✅ v43 SHIPPED (11 hot-fix phases, cumulative visible-rebrand)
+### ✅ v43 SHIPPED this session
 
-Operator's "HİÇ BİR Aion yazısı kalmasın + Livinity branding her yerde" theme is now FULLY COMPLETE. All surfaces visible to the operator inside `https://bruce.livinity.io/liv/` are Livinity-branded:
+| Phase | What | Plans | Status |
+|-------|------|-------|--------|
+| 241 | **MCP auto-add Liv tools (Luse / docker / shell)** | 4 | ✅ SHIPPED 2026-05-27 |
 
-| Phase | What |
-|-------|------|
-| 238 | static/ word-boundary Aion 7→0 + logo SVG scaffold |
-| 238.1 | static/ footer URLs `github.com/iOfficeAI/*` → `https://livinity.io` |
-| 238.2 | data/builtin-skills/*.md → Liv AI |
-| 238.3 | Default agent = Claude Code (Aion CLI visible per operator); persistence helper |
-| 238.4 | iframe CSS injection + favicon SVG + theme-color #1d1d1f + Space Grotesk + Arco palette monochrome |
-| 238.5 | LivOS dock tile (purple-blue → evolved to donut in 238.7) |
-| 238.6 | Inline brand-mark sed (V-mountain → 'L' → evolved to donut in 238.7) |
-| 238.7 | Real Livinity donut hardcoded white-on-black |
-| 238.8 | CSS bg-image approach (sandbox bug — broken in adaptive flow) |
-| 238.9 | 2-file split + CSS @media switch — adaptive works |
-| 238.10 | Cache-bust `?v=238_10` + defensive SVG hide + theme variants |
+**Phase 241 specifics:**
+- 16 commits, sacred SHA `f3538e1d...` preserved across all commits
+- Mini PC sha256 `62f924594e8...` byte-identical PRE/POST
+- 5 sistem MCP (luse, liv-docker, liv-system, liv-apps, liv-vault) AionUi'a inject edildi
+- 8 CLI agent'a distribute edildi (claude, gemini, qwen, codex, codebuddy, opencode, aionrs, aionui)
+- 3 UAT walk GREEN: first-seed / idempotency / customization
+- Sentinel `livos:v43:mcp_seeded:v1` SET
+- Rule 3 deviation logged: Phase 109 install seed D-109-IDEMPOTENT (existing box'larda re-run etmiyor), executor manuel HSET ile 5 sistem MCP'sini `liv:mcp:config` hash'ine yazdı
+- All artifacts at `.planning/phases/241-mcp-auto-add-liv-tools/`
 
-### ⏭️ OBSOLETED: Phase 244
+### 🟡 v43 PLANNED — ready to execute next session
 
-`/opt/liv-assistant/current/**/*.md` has zero files. All AionUi markdown lives at `data/builtin-skills/` which Phase 238.2 already covered.
+| Phase | What | Plans | Status |
+|-------|------|-------|--------|
+| 239 | **Onboarding "CLI Tools" section + remove "AI" section** | 3 | 🟡 PLANNED 2026-05-28 |
 
-### ⏸️ DEFERRED to focused planning sessions (substantial feature work)
+**Phase 239 specifics:**
+- CONTEXT.md (17 decisions auto-resolved per `--auto` flag)
+- 3 PLAN.md files (239-01 cli-installer module + 239-02 UI rebuild + 239-03 deploy/UAT)
+- Wave 1 parallel: 239-01 + 239-02 (zero files_modified overlap, planner-verified)
+- Wave 2: 239-03 (depends on both, includes operator browser-walk checkpoint)
+- Estimated 8-12 commits across 12 tasks
+- All artifacts at `.planning/phases/239-onboarding-cli-tools/`
 
-| Phase | Why deferred |
-|-------|--------------|
-| **241** (MCP auto-add) | Foundational. Probe found `/api/extensions/mcp-servers` is GET-only; write API path uncertain. Needs deeper API discovery + livinityd `mcp-registrar/` module + Redis first-boot sentinel + per-tool EXISTS gate. Multi-plan. |
-| **240** (Local Agents install) | HARD-depends on 241 — cannot plan until 241 ships and exposes the install/auth API surface. |
-| **242** (Luse universal docs) | Docs-only but pointless without 241's MCP exposure (the docs describe a capability that requires Phase 241 to be USEFUL). Defer until 241 ships. |
-| **239** (Onboarding "CLI Tools" UI) | Substantial frontend rebuild in `livos/packages/ui/`. Needs discuss-phase for UX (card layout, install-button copy, AI section removal data-loss verification). |
-| **243** (Persistent UI terminal) | Substantial 4-6 plan effort (livinityd PTY module + WS endpoint + xterm.js panel + dock entry + Mini PC deploy). Needs architecture discuss (node-pty selection, WS reuse, dock UX). |
-| **245** (E2E UAT + milestone close) | Operator-gated walk. Last in line. |
+**Important resolution captured in Plan 239-02 Task 4:** D-239-03 ("no shim") and D-239-15 ("legacy ProviderStep when flag off") are type-incompatible. Resolution: flag-OFF renders informational notice (not legacy step). No backwards-compat shim.
+
+**Best-effort flag in Plan 239-01 Task 3:** Aion CLI install command — WebFetch couldn't reach canonical source during planning. Plan ships `npm install -g @aion-ai/cli` placeholder with executor instructed to re-verify at task time.
 
 ---
 
-## Recommended Next-Session Sequence
+## Recommended First Command After /clear
 
-1. **`/gsd-discuss-phase 241`** — deep API probe + module design decisions. Critical foundational phase that unblocks 240 + 242.
-2. After 241 ships: **`/gsd-plan-phase 240`** + **`/gsd-plan-phase 242`** (both unblock once 241 exposes install/auth API).
-3. **`/gsd-discuss-phase 239`** — onboarding wizard UX with operator (card layout, install button copy, AI section removal flow).
-4. **`/gsd-discuss-phase 243`** — terminal panel architecture (node-pty vs node-pty-prebuilt-multiarch, WS reuse pattern from Phase 226-04/237, dock UX).
-5. **`/gsd-execute-phase 245`** — operator walks all Phase 238–243 deliverables → milestone archive → v44 unblock.
+```
+/gsd-execute-phase 239 --auto
+```
+
+This will spawn:
+- Wave 1: 2 executor agents in parallel (239-01 + 239-02)
+- Wave 2: 1 executor agent (239-03) — pauses at human-verify checkpoint for operator browser walk
+
+---
+
+## ⏸️ Remaining v43 Phases (still queued)
+
+| Phase | Why pending |
+|-------|--------------|
+| **240** (Local Agents install-from-UI) | Now unblocked by 241 + 239's `cliInstaller` endpoint surface. Needs its own discuss-phase. ~1-2 days. |
+| **242** (Luse skill set docs — UNIVERSAL across agents) | Unblocked by 241. LOW risk, 4h, docs-only. canonical `docs/luse/` + auto-generated agent shims. |
+| **243** (Persistent UI terminal — xterm.js + livinityd PTY) | Independent. HIGH risk, 2-3 days. Biggest v43 phase. |
+| **245** (E2E UAT + milestone close) | Operator-gated walk. Last in line. |
+| **244** | ⏭️ OBSOLETED last session — Phase 238.2 already covered. |
+
+### Recommended Next-Session Sequence
+
+1. **Execute Phase 239** (3 plans) — `/gsd-execute-phase 239 --auto`
+2. **Phase 242** (docs-only, 4h) — `/gsd-discuss-phase 242 --auto` → chain
+3. **Phase 240** (Local Agents UI) — `/gsd-discuss-phase 240 --auto` → chain
+4. **Phase 243** (terminal, biggest) — dedicated session, `/gsd-discuss-phase 243` (interactive recommended for architecture decisions)
+5. **Phase 245** (UAT close) — operator walks 238–243 deliverables
 
 ---
 
 ## Critical Session Learnings (do NOT re-discover)
 
-### 1. Caddy `replace_response` plugin is NOT installed on Mini PC
+### 1. AionUi MCP architecture (Phase 241 probe)
 
-Mini PC Caddy v2.11.3 only has `caddy.logging.encoders.filter.replace` (log encoder, NOT HTTP response). Phase 232's original design of Caddy `replace` directive for HTML injection was therefore dead since Phase 232. **Workaround used**: sed-edit the on-disk `index.html` directly (Phase 238.4-E pattern). Same technique applies to any future response-rewrite needs.
+`POST /api/mcp/sync-to-agents` is NOT the registration endpoint — it's the distribution step. Actual write surface is `POST /api/mcp/servers` (201 + UUID), **upsert-by-name**. Two-step flow required:
+1. Per-server `POST /api/mcp/servers` with `{name, transport, command, args, env}` — gate with GET first (else clobbers operator edits)
+2. Bulk `POST /api/mcp/sync-to-agents` with `{servers: [<name>, ...]}` — distributes to all 8 agent CLIs
 
-### 2. AionUi's index.html on disk does NOT regenerate on restart
+`enabled` field IGNORED on create — follow-up `POST /api/mcp/servers/{id}/toggle` required for entries that should be enabled (only `luse` in current Liv catalog).
 
-Phase 234-03 / 238.2 / 238.4 deploy history confirms: AionUi backend serves `/opt/liv-assistant/current/static/index.html` as-is and does NOT rewrite it on each restart. Sed-edits persist across `systemctl restart liv-assistant`.
+### 2. Phase 109 install seed is fire-once
 
-### 3. CSS `background-image` SVGs are SANDBOXED — no `@media` adapts
+`scripts/install/seeds/mcp-servers.json` only seeds `liv:mcp:config` on FRESH install. Existing Mini PC operators have empty/partial hash. Phase 241 executor manually HSET'd the 5 system MCPs to make first-seed work. Future phases that depend on `liv:mcp:config` should not assume it's populated — read fresh from `scripts/install/seeds/mcp-servers.json` if needed.
 
-When SVG is referenced via CSS `background-image: url(...)`, browsers load it in a restricted context that DISABLES the SVG's internal `@media (prefers-color-scheme)` rules. SVG media queries work ONLY for `<img>`, `<object>`, and `<link rel="icon">` references. **Workaround**: ship 2 separate SVG files (light + dark variants) and switch via CSS `@media` query on the host page.
+### 3. Phase 241 mcp-registrar module is a reusable analog
 
-### 4. AionUi `/api/settings/client.guid.lastSelectedAgent` drifts to `agent_type` strings
+`livos/packages/livinityd/source/modules/mcp-registrar/` has the pattern Phase 239's `cli-installer/` should mirror:
+- types.ts → install-scripts.ts whitelist map
+- aionui-client.ts → installer.ts spawn logic
+- ready-poll.ts → detector.ts (which-based)
+- seed.ts → router glue
+- 9-scenario test pattern → adapt for installer happy/error/timeout paths
 
-Operator UI flips `lastSelectedAgent` to `agent_type` strings like `"claude"` / `"opencode"` instead of canonical agent `id` like `"2d23ff1c"`. Phase 238.3 helper `scripts/set-default-liv-agent.sh` fires on every `update.sh` post-restart and re-normalizes to `"2d23ff1c"` (Claude Code id). Persistence chain verified working across multiple deploys this session.
+### 4. CONTEXT.md is enough for planner (sometimes)
 
-### 5. Built-in skills are ON-DISK markdown, NOT binary-embedded
+For Phase 239, operator chose "leaner mode": skip ui-phase + research, spawn planner directly. Planner produced 3 valid plans with multi-source coverage GREEN, STRIDE threat models, and all CONTEXT decisions covered. This pattern is safe when CONTEXT.md is exhaustively detailed (Phase 239's was ~170 lines).
 
-`/opt/liv-assistant/data/builtin-skills/` contains 24 SKILL.md + ~100 total .md files. AionUi Bun binary extracts on first start; subsequent restarts don't re-extract. Sed-replacements PERSIST. (Phase 238.1 closure had incorrectly documented these as binary-embedded — Phase 238.2 disproved.)
+### 5. Sacred SHA hook reliability
 
-### 6. `/api/agents` Aion CLI entry name is binary-embedded
+`[sacred-sha] PASS: 20 files verified` printed on every commit this session (~22 commits across Phase 241 + Phase 239 planning). Hook is reliable — never had to override.
 
-The "Aion CLI" agent name + `/api/assets/logos/brand/aion.svg` icon come from the AionUi Bun binary, NOT from disk. Cannot be sed-replaced without violating Phase 234-03 (binary sed → ELF corruption). To rename would require either upstream fork (D-V42-SACRED violation) or installing Caddy `replace_response` plugin for response-body rewrite. Operator-accepted to keep visible as-is (Phase 238.3 spec: "Disable etmene gerek yok cli kalabilir").
+### 6. Onboarding wizard slot structure
 
-### 7. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f`
+`livos/packages/ui/src/features/onboarding-flow/constants.ts` defines 7-step wizard:
+`Welcome (0) → Account (1) → Wallpaper (2) → Personalize (3) → Provider (4) → Location (5) → All set (6)`
 
-Pre-commit hook gates this. All 22 Phase 238.x commits this session PASSED. Never touch `liv/packages/core/src/sdk-agent-runner.ts`.
-
-### 8. Mini PC sacred sha256 = `62f924594e81331afb159a9a50ef718ef3eb7e79cd5287d9bd2e4788cbab1bfe`
-
-Verified UNCHANGED across every Phase 238.x deploy. Continue to gate all future phase deploys with 4-snapshot agreement (repo pre-push + Mini PC sha256 PRE + Mini PC sha256 POST + repo POST-verify).
-
-### 9. install-liv-assistant.sh now has 6 sed/copy steps
-
-Run order: 234-03 (compound rebrand) → 235 (path-rewrite) → 238-A (logo overlay scaffold) → 238-B (word-boundary sed) → 238.1-C (footer redirect) → 238.2-D (builtin-skills rebrand) → 238.4-E (index.html sed + cache-bust) → 238.6-F (brand-mark sed → donut + marker class) → 238 branding asset copy (5 files now: livinity-overlay.css, favicon.svg, manifest.json, favicon-light.svg, favicon-dark.svg) → bun install → UPSTREAM.md.
-
-### 10. Cumulative session commit list (22 commits)
-
-`8a5e2608` → `52f1232b` → `09cb8ebf` → `a11a7746` → `515149b2` → `bf5eb863` → `c23c032e` → `0fa64cd4` → `f57d3cf7` → `33317d28` → `c2ee9974` → `fab57c5d` → `99f4ecb6` → `2fa135e9` → `94785c51` → `51126346` → `18737d3c` → `a34740d9` → `997242c8` → `7d96d167` → `d13bd1df` → `7842706a` → `56be8601` → `c4f734ed` → `75a28005`
-
-All sacred-sha hook PASSED. All on master, pushed to origin.
+Phase 239 replaces slot 4 (Provider → CLI Tools), preserving step count.
 
 ---
 
 ## Mini PC Live State (verify before resuming)
 
-Single batched SSH probe to confirm state:
+Single batched SSH probe:
 
 ```bash
 SSH_KEY="C:/Users/hello/Desktop/Projects/contabo/pem/minipc"
@@ -110,44 +127,54 @@ echo "=== Sacred + LICENSE ==="
 sudo sha256sum /opt/liv/packages/core/src/sdk-agent-runner.ts /opt/liv-assistant/LICENSE /opt/liv-assistant/NOTICE
 echo "=== Services ==="
 systemctl is-active livos liv-core liv-worker liv-memory liv-assistant caddy
-echo "=== Deployed SHA ==="
-cat /opt/livos/.deployed-sha 2>/dev/null
-echo "=== lastSelectedAgent ==="
-curl -sS http://127.0.0.1:3020/api/settings/client | python3 -c 'import json,sys; print(json.load(sys.stdin).get("data",{}).get("guid.lastSelectedAgent"))'
-echo "=== Phase 238 verify (all zeros) ==="
-echo "static word-boundary Aion: $(sudo find /opt/liv-assistant/current/static/ -maxdepth 6 -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' \) -not -name 'LICENSE*' -not -name 'NOTICE*' 2>/dev/null | xargs sudo grep -lE '\b(Aion|AION|aion)\b' 2>/dev/null | wc -l)"
-echo "static iOfficeAI: $(sudo find /opt/liv-assistant/current/static/ -maxdepth 6 -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' \) 2>/dev/null | xargs sudo grep -lE 'github\.com/iOfficeAI' 2>/dev/null | wc -l)"
-echo "builtin-skills Aion: $(sudo find /opt/liv-assistant/data/builtin-skills/ -type f -name '*.md' 2>/dev/null | xargs sudo grep -lE 'AionUi|AionUI|aionui' 2>/dev/null | wc -l)"
+echo "=== Phase 241 verify — MCP seeded ==="
+curl -sS http://127.0.0.1:3020/api/mcp/servers | head -c 500
+echo ""
+echo "=== Sentinel ==="
+PASS=$(grep REDIS_URL /opt/livos/.env | sed -E 's/.*:([^:@]+)@.*/\1/' | sed 's/%21/!/g')
+redis-cli -a "$PASS" GET livos:v43:mcp_seeded:v1 2>/dev/null
 EOF
 ```
 
-Expected output:
-- Sacred sha256: `f3538e1d...` repo + `62f92459...` Mini PC
-- LICENSE: `a515d5a7...`, NOTICE: `be9e969f...`
+Expected:
+- Sacred sha256: `62f924594e8...`
 - 6/6 services active
-- Deployed SHA: `c4f734e` (or whatever is the latest after operator's session)
-- lastSelectedAgent: `2d23ff1c`
-- All Phase 238 verify metrics = 0
+- 5 entries in `/api/mcp/servers` (luse, liv-docker, liv-system, liv-apps, liv-vault) PLUS operator's `filesystem` preserved
+- Sentinel = `true`
 
 ---
 
 ## Operator Preferences Loaded This Session
 
-- **Autonomous execution** ([feedback_autonomous]) — run GSD A-Z without interrupting
-- **Full-autonomous overrides cautious gates** ([feedback_full_autonomous_no_questions]) — "soru sorma"; override planner flags
-- **Turkish status updates** ([user_language]) — code/paths/commits stay English, prose Turkish
-- **Subscription-only** ([feedback_subscription_only]) — Claude Code via sdk-subscription mode, never BYOK
-- **Mini PC ONLY** ([feedback_minipc_is_owncloud_primary]) — Server4/Server5 off-limits for LivOS work
-- **SSH discipline** ([feedback_ssh_rate_limit]) — batch read-only commands into ONE ssh session per fail2ban
-- **Aion CLI agent can stay visible** (operator clarified Phase 238.3) — only DEFAULT changes to Claude Code
-- **Real website logo, not approximations** (operator clarified Phase 238.7) — donut from `platform/web/public/favicon.svg`, adaptive light/dark
+- **Mini PC ONLY** ([feedback_minipc_is_owncloud_primary]) — Server4/Server5 off-limits
+- **Autonomous execution** ([feedback_autonomous]) — A-Z without interrupting
+- **Full-autonomous overrides cautious gates** ([feedback_full_autonomous_no_questions])
+- **Turkish status updates** ([user_language]) — code/paths/commits stay English
+- **Subscription-only** ([feedback_subscription_only]) — Claude Code via sdk-subscription mode
+- **SSH discipline** ([feedback_ssh_rate_limit]) — batch read-only commands per fail2ban
+- **No backwards-compat shims** (CLAUDE.md) — when removing fields, delete clean
 
 ---
 
-## Recommended FIRST command after /clear
+## Session Commits (this autonomous run)
 
-```
-/gsd-discuss-phase 241
-```
+Phase 241 (16 commits) + Phase 239 planning (2 commits):
+- `f9348bc2` test(241-01): failing transform tests
+- `788348af` feat(241-01): implement transformRedisToAionUi
+- `bebc3d9d` test(241-01): failing redis-catalog tests
+- `988a6ede` feat(241-01): implement readSystemMcpCatalog
+- `b0d52cfc` docs(241-01): complete plan
+- `c375032d` test(241-02): failing AionUiMcpClient tests
+- `4b5630ef` feat(241-02): implement AionUiMcpClient
+- `c8100dff` test(241-02): failing waitForAionUiReady tests
+- `a369db0d` feat(241-02): implement waitForAionUiReady
+- `c67c154b` docs(241-02): complete plan
+- `8d9b1924` test(241-03): 9-scenario failing tests
+- `f94a0852` feat(241-03): implement seedAionUiMcpConfig orchestrator
+- `a8bd7931` docs(241-03): complete plan
+- `814a6ebd` feat(241-04): livinityd boot wire-up
+- `bc00ee7e` docs(241): Phase 241 SHIPPED 4/4
+- `cb5604de` docs(239): capture phase context
+- `082a7fd5` docs(239): plan phase — 3 plans in 2 waves
 
-Or if operator wants a different ordering, options are documented above in "Recommended Next-Session Sequence".
+All sacred-sha hook PASSED. All on master, pushed to origin.
