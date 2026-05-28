@@ -1110,10 +1110,36 @@ _dld_seed_mcp_servers() {
         return 0
     fi
 
-    # Substitute __LIVOS_REDIS_URL__ placeholder with the host's REDIS_URL.
-    # Pipe delimiter: REDIS_URL contains `/` and `:` but no `|`.
+    # Phase 245.1: read LIV_API_KEY from .env (written by _dld_write_env_file
+    # when 104-09 produced a key, or absent if no key was generated).
+    local liv_api_key=""
+    if [[ -f "$_DLD_ENV_FILE" ]]; then
+        liv_api_key=$(grep -E '^LIV_API_KEY=' "$_DLD_ENV_FILE" 2>/dev/null \
+            | sed -E 's|^LIV_API_KEY=(.*)$|\1|' \
+            | head -1)
+    fi
+    if [[ -z "$liv_api_key" ]]; then
+        warn "LIV_API_KEY missing from $_DLD_ENV_FILE — liv-* MCPs will spawn with empty API key. They'll surface 401 to the agent until operator wires a key via UI."
+        # leave placeholder unsubstituted on purpose; the runtime resolver's
+        # 'env-thread incomplete' warning is the documented signal for this case.
+    fi
+
+    # Phase 245.1: single-user v43 — slug defaults to 'bruce', domain to
+    # 'livinity.io'. Multi-user v44+ should plumb these from per-user context.
+    local user_slug="${LIVOS_USER_SLUG:-bruce}"
+    local domain_root="${LIVOS_DOMAIN_ROOT:-livinity.io}"
+
+    # Substitute the 4 placeholders with the host's values.
+    # Pipe delimiter: none of the substitution values contain `|` (Redis URL
+    # contains `/` and `:`, the API key is base64-ish alphanumeric, slug is
+    # plain ASCII, domain is dotted DNS).
     local substituted_json
-    substituted_json=$(sed "s|__LIVOS_REDIS_URL__|${redis_url}|g" "$seed_file")
+    substituted_json=$(sed \
+        -e "s|__LIVOS_REDIS_URL__|${redis_url}|g" \
+        -e "s|__LIVOS_LIV_API_KEY__|${liv_api_key}|g" \
+        -e "s|__LIVOS_USER_SLUG__|${user_slug}|g" \
+        -e "s|__LIVOS_DOMAIN_ROOT__|${domain_root}|g" \
+        "$seed_file")
     if [[ -z "$substituted_json" ]]; then
         warn "Seed substitution produced empty JSON — skipping MCP seed"
         return 0
