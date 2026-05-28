@@ -3627,7 +3627,7 @@ Plans:
 
 ---
 
-### Phase 246: Terminal v2 — multi-session + reattach + TTL GC — 🟡 EXECUTING 2026-05-28 (2/6 plans)
+### Phase 246: Terminal v2 — multi-session + reattach + TTL GC — 🟡 EXECUTING 2026-05-28 (3/6 plans)
 
 **Goal:** Take the v43 Phase 243 single-session MVP terminal and ship the v44 production version: multiple named tabs in one dock window, each session survives browser reload, idle sessions auto-collect at 24h, admin "kill session by id" UI.
 
@@ -3642,12 +3642,12 @@ Plans:
 
 **Plan count estimate:** 6 plans (backend session manager + scrollback ring + WS protocol extension + UI tab bar + TTL GC + admin kill + Mini PC deploy + UAT).
 
-**Plans:** 2/6 plans complete
+**Plans:** 3/6 plans complete
 
 Plans:
 - [x] 246-01-PLAN.md — Backend SessionManager (multi-session map wrapping PtySession) ✅ SHIPPED 2026-05-28 (4 commits `9080228e..a17c8616`; 12/12 vitest new + 45/45 cumulative pty-sessions GREEN; 0 tsc errors in module; PtySession class UNTOUCHED; D-V44-SACRED preserved; SUMMARY at `.planning/phases/246-terminal-v2-multi-session/246-01-SUMMARY.md`)
 - [x] 246-02-PLAN.md — Redis scrollback ring + lastAttachAt persistence ✅ SHIPPED 2026-05-28 (3 commits `42000a6e..f7ca5006`; 10/10 vitest new + 55/55 cumulative pty-sessions GREEN; 0 tsc errors in module; PtyMetadataRedisClient interface UNCHANGED — new PtyScrollbackRedisClient lives alongside scrollback.ts; D-V44-TERMINAL-SCROLLBACK-RING + D-V44-SACRED preserved; SUMMARY at `.planning/phases/246-terminal-v2-multi-session/246-02-SUMMARY.md`)
-- [ ] 246-03-PLAN.md — WS protocol extension (?create/?attach) + admin tRPC router (list/kill)
+- [x] 246-03-PLAN.md — WS protocol extension (?create/?attach) + admin tRPC router (list/kill) ✅ SHIPPED 2026-05-28 (5 commits `7f6d961f..7ddb35b8` — Task 1 RED+GREEN ws-handler + Task 2 RED+GREEN admin-router + Task 3 wiring; 8 NEW ws-handler vitest cases + 4 NEW admin-router cases + 13 ws cases preserved-with-edits = 21+4 GREEN; 67/67 cumulative pty-sessions GREEN; 28/28 server/trpc preserved; 0 new tsc errors in pty-sessions; server module went 27→26 errors (one removed by fixing WS mount dep type); ws.close NO LONGER kills (PTY survives reload — semantic break drift-locked by test 20); {type:'reattached',scrollback} single-frame on attach; 4404 close on unknown id; SessionManager singleton on Server.ptySessionManager shared by WS + admin tRPC; adminProcedure-gated ptySessions.{listSessions,killSession} mounted in createAppRouter; 2 httpOnlyPaths entries added; D-V44-CADDY-REUSE-226-04 honored — caddy.ts diff empty; D-V44-SACRED preserved; SUMMARY at `.planning/phases/246-terminal-v2-multi-session/246-03-SUMMARY.md`)
 - [ ] 246-04-PLAN.md — UI tab bar + localStorage reattach
 - [ ] 246-05-PLAN.md — TTL GC (24h idle / 1h sweep) + Settings → System Active Terminals panel
 - [ ] 246-06-PLAN.md — Mini PC deploy + 5 smoke probes + UAT checklist
