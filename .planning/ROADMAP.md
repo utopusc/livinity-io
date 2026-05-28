@@ -3627,7 +3627,7 @@ Plans:
 
 ---
 
-### Phase 246: Terminal v2 — multi-session + reattach + TTL GC — 🟡 PLANNED 2026-05-28 (0/? plans)
+### Phase 246: Terminal v2 — multi-session + reattach + TTL GC — 🟡 PLANNED 2026-05-28 (0/6 plans)
 
 **Goal:** Take the v43 Phase 243 single-session MVP terminal and ship the v44 production version: multiple named tabs in one dock window, each session survives browser reload, idle sessions auto-collect at 24h, admin "kill session by id" UI.
 
@@ -3640,12 +3640,17 @@ Plans:
 - **Backward compat:** existing v43 single-session API preserved; v2 multi-session API is opt-in via UI tab bar. Feature flag stays `livos:v43:terminal_panel` (no separate v44 flag — v44 is a UI/UX evolution, not a new feature).
 - D-V43-NO-ROOT-PTY + D-V43-PER-USER-READY carried forward.
 
-**Plan count estimate:** 5-6 plans (backend session manager refactor + WS protocol extension + scrollback + TTL GC + UI tab bar + admin kill + Mini PC deploy + UAT).
+**Plan count estimate:** 6 plans (backend session manager + scrollback ring + WS protocol extension + UI tab bar + TTL GC + admin kill + Mini PC deploy + UAT).
 
-**Plans:** 0/? plans complete
+**Plans:** 0/6 plans complete
 
 Plans:
-- [ ] 246-PLAN.md series — TBD
+- [ ] 246-01-PLAN.md — Backend SessionManager (multi-session map wrapping PtySession)
+- [ ] 246-02-PLAN.md — Redis scrollback ring + lastAttachAt persistence
+- [ ] 246-03-PLAN.md — WS protocol extension (?create/?attach) + admin tRPC router (list/kill)
+- [ ] 246-04-PLAN.md — UI tab bar + localStorage reattach
+- [ ] 246-05-PLAN.md — TTL GC (24h idle / 1h sweep) + Settings → System Active Terminals panel
+- [ ] 246-06-PLAN.md — Mini PC deploy + 5 smoke probes + UAT checklist
 
 **UAT:** Operator opens Terminal dock entry → 1 session. Click "+" → 2nd tab. Type `whoami` in each (different sessions). Reload browser → both tabs reattach with scrollback. Open new browser → admin UI shows 2 active sessions. Click "kill" → tab in original browser shows session-ended notice.
 
