@@ -310,6 +310,54 @@ for guard in LICENSE NOTICE; do
 done
 
 # ---------------------------------------------------------------------------
+# Phase 240-02 — inject Local Agents install section
+#
+# Ships a standalone JS + CSS pair into the post-extract static/assets/ dir
+# of the AionUi bundle, plus a <script> + <link> reference appended to
+# static/index.html before </head>. The standalone module mounts an
+# "Available to Install" subsection into the Local Agents tab via the
+# MutationObserver strategy locked in 240-02-INVESTIGATION.md (option-a).
+#
+# The injected JS calls livinityd's cliInstaller.{detect,install,auth} tRPC
+# procedures via the Phase 226 Caddy /liv proxy (browser-side fetch to
+# /liv/trpc/cliInstaller.* gets strip-prefixed by Caddy and forwarded to
+# livinityd :8080).
+#
+# Idempotency: pre-grep for sentinel 'liv-240-install-section.js' in
+# static/index.html — zero matches means inject; >=1 means skip.
+#
+# D-V42-APACHE-NOTICE: scoped under ${CURRENT_LINK}/static/ — LICENSE +
+# NOTICE files at ${INSTALL_ROOT}/ are structurally excluded.
+# ---------------------------------------------------------------------------
+PATCH_SRC_DIR="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}/aionui-patches"
+PATCH_TARGET_DIR="${REBRAND_TARGET}/assets"
+PATCH_INDEX_HTML="${REBRAND_TARGET}/index.html"
+
+if [[ -d "${PATCH_TARGET_DIR}" && -f "${PATCH_INDEX_HTML}" ]]; then
+  if grep -q 'liv-240-install-section.js' "${PATCH_INDEX_HTML}" 2>/dev/null; then
+    log "Phase 240-02: Local Agents section already injected; skipping"
+  else
+    if [[ -f "${PATCH_SRC_DIR}/local-agents-install-section.js" && -f "${PATCH_SRC_DIR}/local-agents-install-section.css" ]]; then
+      install -m 0644 -o root -g root "${PATCH_SRC_DIR}/local-agents-install-section.js" "${PATCH_TARGET_DIR}/liv-240-install-section.js"
+      install -m 0644 -o root -g root "${PATCH_SRC_DIR}/local-agents-install-section.css" "${PATCH_TARGET_DIR}/liv-240-install-section.css"
+
+      # Inject <link> + <script> before </head> (idempotency guarded above)
+      sed -i '/<\/head>/i \    <link rel="stylesheet" href="./assets/liv-240-install-section.css" />\n    <script src="./assets/liv-240-install-section.js" defer></script>' "${PATCH_INDEX_HTML}"
+
+      if grep -q 'liv-240-install-section.js' "${PATCH_INDEX_HTML}" 2>/dev/null; then
+        log "Phase 240-02: Local Agents install section injected (JS + CSS + index.html refs)"
+      else
+        log "WARN: Phase 240-02: index.html injection sed pass did not register; investigate </head> anchor"
+      fi
+    else
+      log "Phase 240-02: WARN patch sources missing at ${PATCH_SRC_DIR}; skipping injection"
+    fi
+  fi
+else
+  log "Phase 240-02: WARN ${PATCH_TARGET_DIR} or ${PATCH_INDEX_HTML} missing; skipping injection"
+fi
+
+# ---------------------------------------------------------------------------
 # Phase 238 Step A — Livinity logo asset overlay
 #
 # Copies the Livinity logo SVG(s) from the cloned repo's caddy/branding/ dir
