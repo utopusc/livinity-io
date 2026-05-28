@@ -20,3 +20,13 @@ export type {
 	SessionEventMap,
 	PtyMetadataRedisClient,
 } from './types.js'
+
+// Phase 243-02 — WS endpoint factory + feature flag.
+export {
+	isTerminalPanelEnabled,
+	TERMINAL_PANEL_REDIS_KEY,
+} from './feature-flag.js'
+export type {TerminalFlagRedisClient} from './feature-flag.js'
+
+export {createPtyTerminalWsHandler} from './ws-handler.js'
+export type {CreateHandlerDeps, PtySessionLike} from './ws-handler.js'

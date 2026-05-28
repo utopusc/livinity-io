@@ -958,3 +958,99 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 		expect(apiMatches.length).toBeGreaterThanOrEqual(2)
 	})
 })
+
+// ─── Phase 243-02 — @livos_terminal_ws (persistent UI terminal endpoint) ───
+//
+// Mirrors Phase 237 @liv_ws pattern but with two divergences:
+//   1. Reverse-proxies to livinityd :8080 (NOT AionUi :3020).
+//   2. Path is fixed at /livos/terminal/ws (single, unconditional).
+//
+// L-243-C requires the matcher to be unconditional (no Referer regex)
+// because RFC 6455 forbids browsers from sending Referer on the WS
+// upgrade handshake — Phase 237 already learned this lesson with
+// @liv_subresource.
+describe('Phase 243-02 — @livos_terminal_ws matcher (L-243-C unconditional + L-243-D backend)', () => {
+	it('apex block emits @livos_terminal_ws path matcher with /livos/terminal/ws token (exactly once per site block)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('@livos_terminal_ws path /livos/terminal/ws')
+		expect(out).toContain('handle @livos_terminal_ws {')
+		// Exactly one matcher declaration per site block (apex-only here).
+		const matcherMatches = out.match(/@livos_terminal_ws path \/livos\/terminal\/ws/g) || []
+		expect(matcherMatches.length).toBe(1)
+	})
+
+	it('@livos_terminal_ws handle reverse-proxies to 127.0.0.1:8080 (livinityd, NOT :3020 AionUi)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const idx = out.indexOf('handle @livos_terminal_ws {')
+		expect(idx).toBeGreaterThan(-1)
+		// Slice ends at the next matcher declaration (@liv) — the next handle
+		// in the apex block. This keeps the assertion scoped to ONLY the
+		// @livos_terminal_ws handle body.
+		const nextMatcherIdx = out.indexOf('@liv path /liv', idx)
+		expect(nextMatcherIdx).toBeGreaterThan(idx)
+		const slice = out.slice(idx, nextMatcherIdx)
+		expect(slice).toContain('reverse_proxy 127.0.0.1:8080')
+		// MUST NOT route to AionUi (port 3020) — that would be a wrong-backend regression.
+		expect(slice).not.toContain('reverse_proxy 127.0.0.1:3020')
+	})
+
+	it('@livos_terminal_ws matcher emits BEFORE the catch-all :8080 handle in the apex block', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const apexStart = out.indexOf('bruce.livinity.io {')
+		expect(apexStart).toBeGreaterThan(-1)
+		const matcherIdx = out.indexOf('@livos_terminal_ws path /livos/terminal/ws', apexStart)
+		expect(matcherIdx).toBeGreaterThan(apexStart)
+		// Catch-all is `handle {` (no matcher) — must be AFTER the new matcher.
+		const catchAllIdx = out.indexOf('\thandle {', matcherIdx)
+		expect(catchAllIdx).toBeGreaterThan(matcherIdx)
+	})
+
+	it('@livos_terminal_ws block does NOT contain header_regexp Referer (L-243-C unconditional contract)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const matcherIdx = out.indexOf('@livos_terminal_ws path /livos/terminal/ws')
+		expect(matcherIdx).toBeGreaterThan(-1)
+		// Slice through the handle body — stop at the closing `\t}` end-of-handle.
+		const handleIdx = out.indexOf('handle @livos_terminal_ws {', matcherIdx)
+		const endIdx = out.indexOf('\t}', handleIdx)
+		const slice = out.slice(matcherIdx, endIdx)
+		expect(slice).not.toContain('header_regexp')
+		expect(slice).not.toContain('Referer')
+	})
+
+	it('@livos_terminal_ws emits in apex + multi-user wildcard subdomain blocks (≥2 emits)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			},
+			true,
+			false,
+			[],
+		)
+		const matches = out.match(/@livos_terminal_ws path \/livos\/terminal\/ws/g) || []
+		expect(matches.length).toBeGreaterThanOrEqual(2)
+		// Both must point at :8080 (livinityd) — count handle declarations too.
+		const handleMatches = out.match(/handle @livos_terminal_ws \{/g) || []
+		expect(handleMatches.length).toBeGreaterThanOrEqual(2)
+	})
+})

@@ -29,6 +29,7 @@ import createTerminalWebSocketHandler from './terminal-socket.js'
 import createDockerExecHandler from '../docker/docker-exec-socket.js'
 import createDockerLogsHandler from '../docker/docker-logs-socket.js'
 import {createSshSessionsWsHandler} from '../ssh-sessions/index.js'
+import {createPtyTerminalWsHandler} from '../pty-sessions/index.js'
 import {
 	downloadArchive as downloadContainerArchive,
 	writeFile as writeContainerFile,
@@ -1332,6 +1333,22 @@ class Server {
 		this.mountWebSocketServer('/ws/ssh-sessions', (wss) => {
 			const logger = this.logger.createChildLogger('ssh-sessions')
 			const handler = createSshSessionsWsHandler({livinityd: this.livinityd, logger})
+			wss.on('connection', handler)
+		})
+
+		// Phase 243-02 — Persistent UI terminal WS endpoint.
+		// Feature-flag gated (livos:v43:terminal_panel === 'true'); cookie-auth
+		// via LIVINITY_PROXY_TOKEN; bruce-only PTY (defense-in-depth backing
+		// 243-01's PtySession.start guard). Caddy emits @livos_terminal_ws
+		// matcher unconditionally per L-243-C (RFC 6455 — no Referer on WS
+		// upgrade) reverse-proxying /livos/terminal/ws → :8080.
+		this.mountWebSocketServer('/livos/terminal/ws', (wss) => {
+			const logger = this.logger.createChildLogger('pty-terminal')
+			const handler = createPtyTerminalWsHandler({
+				livinityd: this.livinityd as never,
+				logger,
+				redis: this.livinityd.ai.redis as never,
+			})
 			wss.on('connection', handler)
 		})
 
