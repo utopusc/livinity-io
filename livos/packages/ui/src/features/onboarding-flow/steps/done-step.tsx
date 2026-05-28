@@ -55,7 +55,7 @@ export function DoneStep({data, onEnter, isActive}: Props) {
 				<div className='done-row'>
 					<div className='lbl'>Account</div>
 					<div className='val'>
-						{firstName} <span className='val-sub'>· {data.authMode === '2fa' ? 'two-factor' : 'password'}</span>
+						{firstName} <span className='val-sub'>· password</span>
 					</div>
 				</div>
 				<div className='done-row'>

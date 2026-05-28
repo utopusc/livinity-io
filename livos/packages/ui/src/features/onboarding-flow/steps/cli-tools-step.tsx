@@ -1,5 +1,5 @@
 /* =========================================================
-   CliToolsStep — Phase 239 (replaces ProviderStep).
+   CliToolsStep — Phase 239 (replaces the legacy onboarding provider step).
 
    Operator picks which CLI agents to install for use with Liv AI.
    Each card has 4 states: not-installed / installing / installed / failed.
