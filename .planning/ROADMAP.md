@@ -3540,16 +3540,23 @@ Plans:
 
 ---
 
-### Phase 245: v43 E2E UAT + milestone close — 🟡 PLANNED 2026-05-27 (0/1 plans)
+### Phase 245: v43 E2E UAT + milestone close — ✅ SHIPPED 2026-05-28 (1/1 plan)
 
 **Goal:** Operator walks every Phase 238-244 deliverable; UAT-CHECKLIST.md sections per phase; fix any FAIL; archive milestone to `.planning/milestones/v43/` per v42 precedent.
 
-**Plans:** 0/1 plans complete
+**Outcome:** Docs-only aggregation phase closes the v43.0 milestone artifact layer. Aggregated UAT/human_verification items from every shipped v43 phase (238, 238.1, 238.2, 238.3, 238.4, 238.5, 238.6, 238.7, 238.8, 238.9, 239, 240, 241, 242, 243) into `.planning/milestones/v43/v43-UAT-CHECKLIST.md` (41 actionable operator-walk items in 11 sections). `.planning/milestones/v43/v43-SHIP-NOTES.md` captures what landed (15 entries with deployed SHA + drift-locks), what's deferred (v44+ items grouped by source phase plus milestone-level deferrals), and operator UAT status (auto-approval reasons per phase). Phase 244 documented N/A (OBSOLETED 2026-05-27 by Phase 238.2). Cross-agent prose verification probe wired in for Phase 242 (operator asks same Luse question to Claude Code / Aion CLI / OpenCode / OpenClaw, confirms identical hint copy). Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` PRESERVED through all 3 commits. **v43.0 milestone status:** artifact-complete pending operator UAT walk.
+
+**Plans:** 1/1 plan complete
 
 Plans:
-- [ ] 245-PLAN.md — TBD (final operator walk + close)
+- [x] 245-PLAN.md — UAT checklist + ship notes + SUMMARY + STATE/ROADMAP close — SHIPPED 2026-05-28 (3 commits: `d3a41e24` UAT checklist + `b53fbd54` ship notes + this docs SUMMARY/STATE/ROADMAP close)
 
-**UAT:** every Phase 238-244 box GREEN → milestone archived → v44 unblocked.
+**UAT:** Operator opens `https://bruce.livinity.io` and walks every box in `v43-UAT-CHECKLIST.md`. On all PASS → flip checklist frontmatter `status: partial → complete` → archive `.planning/milestones/v43/` per v42 precedent → v44 unblocked.
+
+**Next milestone pre-conditions** (from `v43-SHIP-NOTES.md`):
+1. Operator completes `v43-UAT-CHECKLIST.md` walk (40 actionable items; Phase 244 row N/A by design)
+2. Milestone archive (move `.planning/milestones/v43/` to stable home per v42 precedent)
+3. v44 design space opens (candidates: Phase 238/239/241/242/243 deferred polish wave OR Livinity-native chat shell replacing AionUi vendor)
 
 ---
 
