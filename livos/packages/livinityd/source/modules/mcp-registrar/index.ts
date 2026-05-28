@@ -13,3 +13,4 @@ export {
 	type RedisCatalogClient,
 } from './redis-catalog.js'
 export {AionUiMcpClient, type AionUiSyncResult} from './aionui-client.js'
+export {waitForAionUiReady, type ReadyPollOptions} from './ready-poll.js'

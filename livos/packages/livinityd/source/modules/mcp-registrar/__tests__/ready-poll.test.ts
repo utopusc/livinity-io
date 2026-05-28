@@ -37,10 +37,11 @@ function makeCapturingLogger(): {
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
+	// Cast through `unknown` — undici-types vs Node global Response drift.
 	return new Response(JSON.stringify(body), {
 		status,
 		headers: {'Content-Type': 'application/json'},
-	})
+	}) as unknown as Response
 }
 
 describe('waitForAionUiReady', () => {
@@ -128,13 +129,14 @@ describe('waitForAionUiReady', () => {
 		vi.useFakeTimers({shouldAdvanceTime: false})
 		const {logger} = makeCapturingLogger()
 		const promise = waitForAionUiReady(BASE_URL, logger, {
-			totalTimeoutMs: 5_000,
-			pollIntervalMs: 2_000,
+			totalTimeoutMs: 2_000,
+			pollIntervalMs: 1_000,
 			perAttemptTimeoutMs: 1_500,
 		})
 
-		// 1500ms — first attempt should abort. 2000ms sleep then second attempt.
-		await vi.advanceTimersByTimeAsync(6_000)
+		// 1500ms — first attempt should abort. Then sleep 1000ms; second attempt
+		// fires at ~2500ms and on entering the loop Date.now() >= deadline → returns false.
+		await vi.advanceTimersByTimeAsync(5_000)
 
 		await promise
 		expect(abortFired).toBe(true)
