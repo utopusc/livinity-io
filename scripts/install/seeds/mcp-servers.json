@@ -3,7 +3,7 @@
     "exported_from": "Mini PC bruce@10.69.31.68 liv:mcp:config",
     "exported_at": "2026-05-26",
     "phase": "219-T2",
-    "_note": "Placeholder tokens (LIVOS_REDIS_URL surrounded by double underscores) in this file are substituted at install-time by _dld_seed_mcp_servers helper with the host's actual REDIS_URL from /opt/livos/.env. installedAt is 0 because seed installs have no meaningful install epoch. Phase 219 T2: 15+ curated MCPs across categories (search, dev, files, productivity, system, database, web). Only `luse` + `sequential-thinking` ship enabled — operators opt into the rest via /settings → MCP. T3 added 4 local liv-* MCPs (system category)."
+    "_note": "Placeholder tokens (surrounded by double underscores) in this file are substituted at install-time by _dld_seed_mcp_servers helper: __LIVOS_REDIS_URL__ ← REDIS_URL from /opt/livos/.env; __LIVOS_LIV_API_KEY__ ← LIV_API_KEY from /opt/livos/.env; __LIVOS_USER_SLUG__ ← single-user owner slug (default 'bruce' on Mini PC v43); __LIVOS_DOMAIN_ROOT__ ← per-host LivOS domain (default 'livinity.io'). installedAt is 0 because seed installs have no meaningful install epoch. Phase 219 T2: 15+ curated MCPs across categories (search, dev, files, productivity, system, database, web). Phase 245.1 (hot-fix 2026-05-28): all 5 system MCPs (luse + liv-apps + liv-docker + liv-system + liv-vault) ship enabled:true because operator declared them mandatory; the 4 local liv-* MCPs gained LIVINITYD_API_URL + LIV_API_KEY env to talk back to livinityd; luse gained LIVINITYD_API_URL + LIV_API_KEY + LUSE_USER_SLUG + LUSE_DOMAIN_ROOT so the [luse-mcp] resolver env-thread is complete (was emitting 'env-thread incomplete; falling back to APP_MAP' + redis=null in production). Non-system MCPs (sequential-thinking + the search/dev/files/productivity/database/web set) remain enabled:false — operators opt in via /settings → MCP. T3 added 4 local liv-* MCPs (system category)."
   },
   "mcpServers": {
     "brave-search": {
@@ -115,9 +115,13 @@
       "transport": "stdio",
       "command": "/usr/bin/npx",
       "args": ["tsx", "/opt/livos/packages/livinityd/source/modules/mcp/local/liv-apps/index.ts"],
-      "description": "List installed LivOS app instances + resolve slug → subdomain/port. Read-only. Needs LIVINITYD_API_URL + LIV_API_KEY env wired via the UI before enabling.",
+      "env": {
+        "LIVINITYD_API_URL": "http://127.0.0.1:8080",
+        "LIV_API_KEY": "__LIVOS_LIV_API_KEY__"
+      },
+      "description": "List installed LivOS app instances + resolve slug → subdomain/port. Read-only. Talks back to livinityd via LIVINITYD_API_URL + LIV_API_KEY.",
       "category": "system",
-      "enabled": false,
+      "enabled": true,
       "installedAt": 0
     },
     "liv-docker": {
@@ -125,9 +129,13 @@
       "transport": "stdio",
       "command": "/usr/bin/npx",
       "args": ["tsx", "/opt/livos/packages/livinityd/source/modules/mcp/local/liv-docker/index.ts"],
+      "env": {
+        "LIVINITYD_API_URL": "http://127.0.0.1:8080",
+        "LIV_API_KEY": "__LIVOS_LIV_API_KEY__"
+      },
       "description": "Inspect the host Docker daemon — list containers, tail logs, restart (destructive, gated).",
       "category": "system",
-      "enabled": false,
+      "enabled": true,
       "installedAt": 0
     },
     "liv-system": {
@@ -135,9 +143,13 @@
       "transport": "stdio",
       "command": "/usr/bin/npx",
       "args": ["tsx", "/opt/livos/packages/livinityd/source/modules/mcp/local/liv-system/index.ts"],
+      "env": {
+        "LIVINITYD_API_URL": "http://127.0.0.1:8080",
+        "LIV_API_KEY": "__LIVOS_LIV_API_KEY__"
+      },
       "description": "Read CPU / memory / disk / uptime metrics for the LivOS host. Read-only.",
       "category": "system",
-      "enabled": false,
+      "enabled": true,
       "installedAt": 0
     },
     "liv-vault": {
@@ -145,9 +157,13 @@
       "transport": "stdio",
       "command": "/usr/bin/npx",
       "args": ["tsx", "/opt/livos/packages/livinityd/source/modules/mcp/local/liv-vault/index.ts"],
+      "env": {
+        "LIVINITYD_API_URL": "http://127.0.0.1:8080",
+        "LIV_API_KEY": "__LIVOS_LIV_API_KEY__"
+      },
       "description": "Note CRUD over ~bruce/livinity/<agent>/notes/. Write + delete are destructive (gated).",
       "category": "system",
-      "enabled": false,
+      "enabled": true,
       "installedAt": 0
     },
     "luse": {
@@ -158,7 +174,11 @@
       "env": {
         "DISPLAY": ":1",
         "XAUTHORITY": "/run/user/1000/gdm/Xauthority",
-        "LUSE_REDIS_URL": "__LIVOS_REDIS_URL__"
+        "LUSE_REDIS_URL": "__LIVOS_REDIS_URL__",
+        "LIVINITYD_API_URL": "http://127.0.0.1:8080",
+        "LIV_API_KEY": "__LIVOS_LIV_API_KEY__",
+        "LUSE_USER_SLUG": "__LIVOS_USER_SLUG__",
+        "LUSE_DOMAIN_ROOT": "__LIVOS_DOMAIN_ROOT__"
       },
       "description": "Computer-use tools (keyboard / mouse / screenshot). System MCP — required for the WebApp surface.",
       "category": "system",

@@ -416,6 +416,117 @@ describe('seedAionUiMcpConfig', () => {
 		expect(redis._setCalls).toEqual([])
 	})
 
+	// -------------------------------------------------------------------------
+	// Phase 245.1 contract scenarios — env-thread + default-enabled
+	// -------------------------------------------------------------------------
+
+	test('Scenario J (245.1) — all 5 system MCPs enabled:true triggers 5 toggleServer calls', async () => {
+		// Build a catalog where every system MCP carries enabled:true (the
+		// 245.1 contract — operator declared the 5 system MCPs mandatory).
+		const hash: Record<string, string> = {
+			luse: stdioEntry('luse', '/usr/local/bin/luse', true),
+			'liv-docker': stdioEntry('liv-docker', 'liv-docker-mcp', true),
+			'liv-system': stdioEntry('liv-system', 'liv-system-mcp', true),
+			'liv-apps': stdioEntry('liv-apps', 'liv-apps-mcp', true),
+			'liv-vault': stdioEntry('liv-vault', 'liv-vault-mcp', true),
+		}
+		const redis = makeFakeRedis({sentinel: null, hash})
+		const {logger} = makeCapturingLogger()
+		const client = makeMockClient()
+		client.listServers.mockResolvedValue([])
+		client.createServer.mockImplementation(async (req: AionUiCreateMcpServerRequest) => {
+			return makeServerRecord(req.name, `mcp_${req.name}`)
+		})
+		client.toggleServer.mockResolvedValue(undefined)
+		client.syncToAgents.mockResolvedValue(fullSyncOk)
+
+		const result = await seedAionUiMcpConfig({
+			redis,
+			aionUiBaseUrl: BASE_URL,
+			logger,
+			client: asClient(client),
+			waitForReady: waitFnTrue,
+		})
+
+		expect(result).toEqual({created: 5, skipped: 0, errored: 0, sentinelSet: true})
+		// CRITICAL Phase 245.1 contract: ALL 5 system MCPs toggled enabled.
+		expect(client.toggleServer).toHaveBeenCalledTimes(5)
+		const toggledIds = client.toggleServer.mock.calls.map((c) => c[0] as string).sort()
+		expect(toggledIds).toEqual(
+			[...SYSTEM_MCP_NAMES].map((n) => `mcp_${n}`).sort(),
+		)
+		// Each toggle call must pass `true` as the second arg.
+		for (const call of client.toggleServer.mock.calls) {
+			expect(call[1]).toBe(true)
+		}
+	})
+
+	test('Scenario K (245.1) — luse env passed through to AionUi payload (7-key contract)', async () => {
+		// luse carries the full Phase 245.1 env-thread (DISPLAY, XAUTHORITY,
+		// LUSE_REDIS_URL, LIVINITYD_API_URL, LIV_API_KEY, LUSE_USER_SLUG,
+		// LUSE_DOMAIN_ROOT). The seed orchestrator must forward all 7 keys
+		// to AionUi via transformRedisToAionUi.
+		const luseEntry: LivRedisEntry = {
+			name: 'luse',
+			transport: 'stdio',
+			command: '/usr/bin/npx',
+			args: ['tsx', '/opt/livos/packages/livinityd/source/modules/computer-use/mcp/server.ts'],
+			env: {
+				DISPLAY: ':1',
+				XAUTHORITY: '/run/user/1000/gdm/Xauthority',
+				LUSE_REDIS_URL: 'redis://default:pw@127.0.0.1:6379',
+				LIVINITYD_API_URL: 'http://127.0.0.1:8080',
+				LIV_API_KEY: 'test-api-key',
+				LUSE_USER_SLUG: 'bruce',
+				LUSE_DOMAIN_ROOT: 'livinity.io',
+			},
+			enabled: true,
+		}
+		const redis = makeFakeRedis({
+			sentinel: null,
+			hash: {luse: JSON.stringify(luseEntry)},
+		})
+		const {logger} = makeCapturingLogger()
+		const client = makeMockClient()
+		client.listServers.mockResolvedValue([])
+		client.createServer.mockImplementation(async (req: AionUiCreateMcpServerRequest) => {
+			return makeServerRecord(req.name, `mcp_${req.name}`)
+		})
+		client.toggleServer.mockResolvedValue(undefined)
+		client.syncToAgents.mockResolvedValue(fullSyncOk)
+
+		await seedAionUiMcpConfig({
+			redis,
+			aionUiBaseUrl: BASE_URL,
+			logger,
+			client: asClient(client),
+			waitForReady: waitFnTrue,
+		})
+
+		expect(client.createServer).toHaveBeenCalledTimes(1)
+		const payload = client.createServer.mock.calls[0][0] as AionUiCreateMcpServerRequest
+		expect(payload.name).toBe('luse')
+		expect(payload.transport.type).toBe('stdio')
+		// Drift-lock: all 7 env keys must travel through.
+		const stdio = payload.transport as {type: 'stdio'; env?: Record<string, string>}
+		expect(stdio.env).toBeDefined()
+		const envKeys = Object.keys(stdio.env ?? {}).sort()
+		expect(envKeys).toEqual([
+			'DISPLAY',
+			'LIVINITYD_API_URL',
+			'LIV_API_KEY',
+			'LUSE_DOMAIN_ROOT',
+			'LUSE_REDIS_URL',
+			'LUSE_USER_SLUG',
+			'XAUTHORITY',
+		])
+		// Specific value drift-lock on the Phase 245.1-introduced vars.
+		expect(stdio.env?.LIVINITYD_API_URL).toBe('http://127.0.0.1:8080')
+		expect(stdio.env?.LIV_API_KEY).toBe('test-api-key')
+		expect(stdio.env?.LUSE_USER_SLUG).toBe('bruce')
+		expect(stdio.env?.LUSE_DOMAIN_ROOT).toBe('livinity.io')
+	})
+
 	test('Scenario I — luse toggle fails: NON-fatal (errored stays 0, sentinel SET)', async () => {
 		const redis = makeFakeRedis({sentinel: null, hash: makeFullCatalog()})
 		const {logger, warns} = makeCapturingLogger()
