@@ -26,10 +26,15 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 
 // Mutable per-test toggles.
 let migrationActive = true
+let terminalPanelEnabled = false
 const openWindowSpy = vi.fn()
 
 vi.mock('@/hooks/use-v42-migration-active', () => ({
 	useV42MigrationActive: () => migrationActive,
+}))
+
+vi.mock('@/hooks/use-terminal-panel-enabled', () => ({
+	useTerminalPanelEnabled: () => terminalPanelEnabled,
 }))
 
 vi.mock('@/providers/window-manager', () => ({
@@ -136,6 +141,7 @@ beforeEach(() => {
 	root = createRoot(container)
 	openWindowSpy.mockReset()
 	migrationActive = true
+	terminalPanelEnabled = false
 })
 
 afterEach(() => {
@@ -192,6 +198,33 @@ describe('Dock — Liv Assistant entry (Phase 227-02)', () => {
 			'/figma-exports/dock-ai-chat.svg?v=238_7',
 			expect.anything(),
 		)
+	})
+
+	it('Phase 243-03 — hides the Terminal DockItem when terminal-panel flag is OFF (default)', () => {
+		migrationActive = true
+		terminalPanelEnabled = false
+		act(() => {
+			root!.render(<Dock />)
+		})
+		const tile = container!.querySelector('[data-test-dock-item="terminal"]')
+		expect(tile).toBeNull()
+		// Negative-grep on rendered HTML — the LIVINITY_terminal DockItem is
+		// gone entirely (no leaked title / route).
+		const html = container!.innerHTML
+		expect(html).not.toContain("appId='LIVINITY_terminal'")
+		// The bare appId literal is also absent from any data-* attribute the
+		// DockItem might surface.
+		expect(html).not.toMatch(/data-test-dock-item=["']terminal["']/)
+	})
+
+	it('Phase 243-03 — renders the Terminal DockItem when terminal-panel flag is ON', () => {
+		migrationActive = true
+		terminalPanelEnabled = true
+		act(() => {
+			root!.render(<Dock />)
+		})
+		const tile = container!.querySelector('[data-test-dock-item="terminal"]')
+		expect(tile).not.toBeNull()
 	})
 
 	it('Phase 231 retirement — legacy chat-iframe dock tiles are absent', () => {

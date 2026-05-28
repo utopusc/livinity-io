@@ -1,6 +1,7 @@
 import React, {Suspense} from 'react'
 
 import {Loading} from '@/components/ui/loading'
+import {useTerminalPanelEnabled} from '@/hooks/use-terminal-panel-enabled'
 import {tw} from '@/utils/tw'
 
 // Lazy load content components for each app type
@@ -9,7 +10,15 @@ const FilesWindowContent = React.lazy(() => import('./app-contents/files-content
 const SettingsWindowContent = React.lazy(() => import('./app-contents/settings-content'))
 const DockerWindowContent = React.lazy(() => import('./app-contents/docker-content'))
 const ServerControlWindowContent = React.lazy(() => import('./app-contents/server-control-content'))
-const TerminalWindowContent = React.lazy(() => import('./app-contents/terminal-content'))
+// Phase 243-03 — terminal route swap. The legacy `terminal-content.tsx`
+// surface (LivOS/App tabs, XTermTerminal reading from /terminal?token= WS)
+// stays as the OFF-state fallback (D-243-FLAG-ROLLBACK). The new
+// `PersistentTerminalPanel` (xterm.js + /livos/terminal/ws cookie auth)
+// replaces it when the `livos:v43:terminal_panel` flag is `'true'`.
+const LegacyTerminalWindowContent = React.lazy(() => import('./app-contents/terminal-content'))
+const PersistentTerminalPanel = React.lazy(
+	() => import('@/features/v43-terminal/PersistentTerminalPanel'),
+)
 const MyDevicesWindowContent = React.lazy(() => import('./app-contents/my-devices-content'))
 // Phase 234-02 — Phase 197-06 LivAiWindowContent (legacy assistant-ui chat
 // iframe over /liv-ai-app) was removed here as the deferred Phase 231 cleanup
@@ -75,6 +84,33 @@ type WindowContentProps = {
 // of the Section G.1 cleanup (entry no longer reachable; switch-case + lazy
 // import + apps.tsx registry entry all deleted in the same commit).
 const fullHeightApps = new Set(['LIVINITY_terminal', 'LIVINITY_files', 'LIVINITY_app-store', 'LIVINITY_docker', 'LIVINITY_server-control', 'LIVINITY_my-devices', LIV_ASSISTANT_APP_ID])
+
+/**
+ * Phase 243-03 — Terminal route shell. Swaps between the new persistent
+ * xterm.js panel and the legacy LivOS/App-tabs terminal based on the
+ * `livos:v43:terminal_panel` Redis flag (read via the tRPC query that
+ * backs `useTerminalPanelEnabled`).
+ *
+ * Both branches use lazy-loaded children wrapped in their own Suspense
+ * boundary so the outer WindowContent Suspense (which gates the parent
+ * import resolution) doesn't double-fire on flag toggle.
+ *
+ * Legacy fallback is intentional — flipping the flag back to `'false'`
+ * (or removing it) restores the pre-Phase-243 surface live without code
+ * revert (D-243-FLAG-ROLLBACK).
+ */
+function TerminalRouteShell() {
+	const enabled = useTerminalPanelEnabled()
+	return enabled ? (
+		<Suspense fallback={<Loading />}>
+			<PersistentTerminalPanel />
+		</Suspense>
+	) : (
+		<Suspense fallback={<Loading />}>
+			<LegacyTerminalWindowContent />
+		</Suspense>
+	)
+}
 
 export function WindowContent({route, appId, windowId}: WindowContentProps) {
 	if (
@@ -172,7 +208,16 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 
 
 		case 'LIVINITY_terminal':
-			return <TerminalWindowContent />
+			// Phase 243-03 — flag-aware swap. When `livos:v43:terminal_panel`
+			// is `'true'`, mount the new persistent xterm.js panel; otherwise
+			// keep the legacy LivOS/App-tabs terminal (D-243-FLAG-ROLLBACK
+			// reversibility — flipping the Redis key restores the previous
+			// surface without code revert). The server-side `/livos/terminal/ws`
+			// WS handler enforces the same flag (Plan 243-02 SC-06), so a
+			// direct URL navigation can NEVER reach the new panel when the
+			// flag is OFF (T-243-03-01 mitigation).
+			return <TerminalRouteShell />
+
 
 		// Phase 234-02 — LIVINITY_liv-ai switch arm removed (Section G.1
 		// cleanup); LIV_ASSISTANT_APP_ID branch above handles the v42 chat
