@@ -12,3 +12,4 @@ export {
 	SYSTEM_MCP_NAMES_SET,
 	type RedisCatalogClient,
 } from './redis-catalog.js'
+export {AionUiMcpClient, type AionUiSyncResult} from './aionui-client.js'
