@@ -42,7 +42,10 @@ docker-images/*.tar
 docker-images/*.tar.gz
 
 # === Internal tooling / agent state (local-only) ===
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/luse/
 .serena/
 
 # === Internal planning, research, and audit artifacts (local-only) ===
