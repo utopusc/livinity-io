@@ -50,6 +50,22 @@ import {publicProcedure, router} from './trpc.js'
 export const V42_MIGRATION_REDIS_KEY = 'liv:config:liv_v42_migration_active'
 
 /**
+ * Phase 243-03 — Redis string key backing the Persistent UI Terminal panel
+ * feature flag. Default-OFF: only the literal string `'true'` opens the gate.
+ * Operator opt-in:
+ *
+ *     redis-cli SET livos:v43:terminal_panel true
+ *
+ * This literal is INTENTIONALLY duplicated with 243-02's
+ * `pty-sessions/feature-flag.ts` `TERMINAL_PANEL_REDIS_KEY` constant. The
+ * duplication is load-bearing: the two layers test different surfaces —
+ * the tRPC client-cache visibility (this router) vs the raw WS-handler
+ * server-side gate (243-02). Both must agree on the literal; both are
+ * drift-locked by their own tests.
+ */
+export const TERMINAL_PANEL_REDIS_KEY = 'livos:v43:terminal_panel'
+
+/**
  * Minimal Redis surface — just `.get`. Matches the ioredis runtime and the
  * test-mock pattern used by sibling routers (mcp-config-router.ts uses
  * the same shape with optional fields, but this router only needs the
@@ -79,6 +95,16 @@ export function createConfigRouter(deps: ConfigRouterDeps) {
 			// Default ON when value is anything other than the literal string 'false'.
 			const active = raw === null ? true : raw !== 'false'
 			return {active}
+		}),
+		// Phase 243-03 — Persistent UI Terminal feature flag (default OFF).
+		// Mirrors getV42MigrationActive's `publicProcedure` choice so the
+		// dock/window-content gates can read the flag pre-login without
+		// flicker. Default-OFF — only the literal string 'true' opens the
+		// gate (L-243-D). Leaking the boolean to anonymous callers is
+		// harmless; the dock entry HTML reveals it anyway.
+		getTerminalPanelEnabled: publicProcedure.query(async () => {
+			const raw = await deps.redis.get(TERMINAL_PANEL_REDIS_KEY)
+			return {enabled: raw === 'true'}
 		}),
 	})
 }
