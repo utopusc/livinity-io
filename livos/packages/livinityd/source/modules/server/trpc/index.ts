@@ -68,6 +68,17 @@ import mcpRouter from './mcp-router.js'
 // PRECONDITION_FAILED on every call (mirrors xaiAuth + mastra +
 // agents pattern).
 import {mcpConfigRouter, createMcpConfigRouter} from './mcp-config-router.js'
+// Phase 239-01 — cli-installer router. Whitelist-gated install + detect for
+// the 5 SUPPORTED_CLIS (Claude Code, OpenCode, Gemini, OpenClaw, Aion CLI).
+// Phase 240 extends this namespace with uninstall + auth-status probes;
+// the SUPPORTED_CLIS contract (D-239-10) is the shared single source of
+// truth. Default `cliInstallerRouter` is an empty-injection stub that
+// throws PRECONDITION_FAILED until production boot wires real deps via
+// setProductionAppRouter().
+import {
+	cliInstallerRouter,
+	createCliInstallerRouter,
+} from './cli-installer-router.js'
 import {skillsRouter, createSkillsRouter} from './skills-router.js'
 import {skillsMarketRouter, createSkillsMarketRouter} from './skills-market-router.js'
 import {claudeAuthRouter} from './claude-auth-router.js'
@@ -213,6 +224,10 @@ export function createAppRouter(opts: {
 	// `mcp` namespace below as `mcp.config.*`. Optional with empty-injection
 	// fallback so the default appRouter still type-checks.
 	mcpConfig?: ReturnType<typeof createMcpConfigRouter>
+	// Phase 239-01 — cli-installer namespace slot. Whitelist-gated install +
+	// detect for the 5 SUPPORTED_CLIS. Default empty-injection stub throws
+	// PRECONDITION_FAILED until production boot wires the real router.
+	cliInstaller?: ReturnType<typeof createCliInstallerRouter>
 	// Phase 224 — config.* namespace slot. Default empty-injection stub
 	// throws PRECONDITION_FAILED until production boot wires the real router
 	// built against a Redis client.
@@ -308,6 +323,12 @@ export function createAppRouter(opts: {
 		// Phase 224 — config.* namespace (Redis-backed feature flags). Mounts
 		// `config.getV42MigrationActive` for the v42 migration UI hides.
 		config: opts.config ?? configRouter,
+		// Phase 239-01 — cli-installer namespace. Whitelist-gated install +
+		// detect for the 5 SUPPORTED_CLIS (Claude Code, OpenCode, Gemini,
+		// OpenClaw, Aion CLI). Phase 240 extends with uninstall + auth-status
+		// probes. Both paths are in httpOnlyPaths because install spawns a
+		// bash script that may take 30-300s (same precedent as system.update).
+		cliInstaller: opts.cliInstaller ?? cliInstallerRouter,
 		// Phase 197-05 — Liv AI Mastra namespace. Empty-injection default
 		// `mastraRouter` throws PRECONDITION_FAILED until production swap
 		// injects a real createMastraRouter({livOSMastra, approvalManager})

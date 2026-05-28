@@ -184,6 +184,10 @@ import {OpenclawConfigStore} from './modules/openclawos/openclaw-config-store.js
 // real factory with `this.ai.redis` so the /settings → MCP tab can CRUD
 // the hash; McpBridge picks up changes at next livinityd boot.
 import {createMcpConfigRouter} from './modules/server/trpc/mcp-config-router.js'
+// Phase 239-01 — cli-installer router (whitelist-gated install + detect for
+// the 5 SUPPORTED_CLIS). Stateless — only dep is the boot logger; no Redis,
+// no config check. Production swap happens unconditionally at every boot.
+import {createCliInstallerRouter} from './modules/server/trpc/cli-installer-router.js'
 // Phase 224 — `config.*` namespace production wire. Builds the
 // getV42MigrationActive procedure against the live ioredis client; the
 // default empty-injection stub throws PRECONDITION_FAILED until this
@@ -1795,6 +1799,22 @@ export default class Livinityd {
 				redis: this.ai.redis,
 			})
 
+			// Phase 239-01 — cli-installer router. Stateless; only deps are the
+			// boot logger. No Redis check needed (whitelist + spawn impl are
+			// self-contained). Wired unconditionally into appRouter.cliInstaller
+			// below so the UI's install button + Phase 240's UI can both reach
+			// the whitelist-gated install + detect procedures.
+			const cliInstallerRouterProductionInstance = createCliInstallerRouter({
+				logger: {
+					info: (msg) => webappLogger.info(msg),
+					warn: (msg, err) => this.logger.error(msg, err),
+					error: (msg, err) => this.logger.error(msg, err),
+				},
+			})
+			webappLogger.info(
+				'Phase 239-01 — cliInstaller.* tRPC router wired (whitelist: claude-code / opencode / gemini / openclaw / aion-cli; D-239-07 RCE boundary)',
+			)
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
@@ -1809,6 +1829,7 @@ export default class Livinityd {
 				skills: skillsRouterProductionInstance,
 				skillsMarket: skillsMarketRouterProductionInstance,
 				config: configRouterProductionInstance,
+				cliInstaller: cliInstallerRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(
