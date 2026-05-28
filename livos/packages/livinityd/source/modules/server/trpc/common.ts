@@ -707,4 +707,12 @@ export const httpOnlyPaths = [
 	// 357-358).
 	'cliInstaller.install',
 	'cliInstaller.detect',
+	// Phase 240-01 — cliInstaller.auth spawns the per-CLI canonical login
+	// command (e.g. `claude code login`, `opencode auth login`) which can
+	// take up to AUTH_TIMEOUT_MS=300_000 ms if the operator walks through a
+	// one-time browser device-code paste. Same WS-disconnect-survival
+	// rationale as cliInstaller.install above (pitfall B-12 / X-04).
+	// Mounted under the same cliInstaller.* namespace as the install + detect
+	// routes (cli-installer-router.ts declaration order [detect, install, auth]).
+	'cliInstaller.auth',
 ] as const
