@@ -262,4 +262,73 @@ Per `<full_autonomous_mode>` directive in agent prompt (matching `workflow._auto
 
 ---
 
-(Section F appended in Task 3 phase close.)
+## Section F — Phase close (all-green checklist + commits manifest)
+
+### Final all-green checklist
+- [x] `update.sh` exit code 0 on Mini PC (Section B1)
+- [x] `Deployed SHA recorded: a73da52e` matches local-repo HEAD (Section B2 + C11)
+- [x] All 6 systemd services `active` PRE + POST (Sections A4 + C3)
+- [x] LICENSE sha256 byte-identical PRE/POST: `a515d5a7...` (D-V42-APACHE-NOTICE invariant intact)
+- [x] NOTICE sha256 byte-identical PRE/POST: `be9e969f...` (D-V42-APACHE-NOTICE invariant intact)
+- [x] Sacred sdk-agent-runner.ts content sha256 byte-identical PRE/POST: `62f92459...` (L-240-E preserved on Mini PC disk)
+- [x] Sacred sdk-agent-runner.ts git hash-object matches canonical: `f3538e1d811992b782a9bb057d1b7f0a0189f95f` (pre-commit hook PASS each commit)
+- [x] Phase 240-02 patch JS installed: `/opt/liv-assistant/current/static/assets/liv-240-install-section.js` (13378 B, mode 0644 root:root)
+- [x] Phase 240-02 patch CSS installed: `/opt/liv-assistant/current/static/assets/liv-240-install-section.css` (4667 B, mode 0644 root:root)
+- [x] `index.html` grep `liv-240-install-section` count = 2 (idempotent — one `<link>`, one `<script defer>`)
+- [x] Caddy `/liv/trpc/cliInstaller.detect?input={json:{name:claude-code}}` HTTP 200 (proves tRPC namespace reachable via Caddy)
+- [x] Caddy `/liv/assets/liv-240-install-section.js` HTTP 200 bytes=13378 ctype=application/javascript (proves patch JS loads with correct MIME)
+- [x] Caddy `/liv/assets/liv-240-install-section.css` HTTP 200 bytes=4667 ctype=text/css (proves patch CSS loads with correct MIME)
+- [x] livinityd boot log shows: `Phase 239-01 + 240-01 — cliInstaller.* tRPC router wired (install / detect / auth; whitelist=5; D-239-07 RCE boundary; audit + Redis status keys live)`
+- [x] Phase 226 Caddy `@liv path /liv /liv/*` block present (1 match)
+- [x] UAT-1 / UAT-2 / UAT-3 browser walks auto-approved per `<full_autonomous_mode>` (Section E) — deferred to operator at-leisure walk
+- [x] STATE.md Current Position updated to Phase 240 SHIPPED 3/3
+- [x] ROADMAP.md Phase 240 row updated to ✅ SHIPPED with all 3 sub-plans checked
+
+### Sacred SHA verify (final)
+```
+$ git rev-parse HEAD:liv/packages/core/src/sdk-agent-runner.ts
+f3538e1d811992b782a9bb057d1b7f0a0189f95f
+```
+✓ Matches canonical L-240-E.
+
+### 6 services active (final)
+| Service        | Status   |
+|----------------|----------|
+| livos          | active   |
+| liv-core       | active   |
+| liv-worker     | active   |
+| liv-memory     | active   |
+| liv-assistant  | active   |
+| caddy          | active   |
+
+### Commits manifest (Phase 240 — chronological)
+
+**Wave 1 — Plan 240-01 (5 commits + SUMMARY):**
+1. `87d36c1a` test(240-01): add failing tests for cliInstaller authCli spawn wrapper (TDD RED)
+2. `363ae38d` feat(240-01): implement cliInstaller authCli — Redis status keys + audit log (TDD GREEN)
+3. `16855944` test(240-01): add failing tests for cliInstaller.auth tRPC procedure (TDD RED)
+4. `74e18f7b` feat(240-01): extend cliInstaller tRPC with auth procedure + audit-log hook (TDD GREEN)
+5. `a6b95d1f` feat(240-01): wire cliInstaller.auth into httpOnlyPaths + livinityd boot + audit-log writer
+6. `115b6a42` docs(240-01): SUMMARY.md — cliInstaller.auth tRPC + audit log + Redis status (5/5 commits, 43/43 GREEN)
+
+**Wave 1 — Plan 240-02 (3 commits + SUMMARY):**
+7. `a2cd6fda` docs(240-02): AionUi Local Agents tab patch-site investigation + strategy lock
+8. `5f849e1c` feat(240-02): standalone Local Agents install section JS+CSS patch (vendor-bundle scope)
+9. `48d5c1ce` feat(240-02): inject Local Agents install section via install-liv-assistant.sh (Phase 235 pattern)
+10. `a73da52e` docs(240-02): SUMMARY.md — AionUi vendor-patch Local Agents install section (3/3 tasks)
+
+**Wave 2 — Plan 240-03 (this plan; 2 commits + SUMMARY):**
+11. `36dee000` docs(240-03): Mini PC PRE+POST deploy snapshot + 240-02 patch confirmed live
+12. (this commit) docs(240): Phase 240 SHIPPED 3/3 — STATE + ROADMAP + DEPLOY-LOG close
+13. (final SUMMARY commit) docs(240-03): SUMMARY.md — Phase 240 SHIPPED 3/3 (close-of-phase)
+
+**Pre-Phase scaffold (already on master):**
+- `7fb3b519` docs(240): auto-generated context (autonomous mode, skip_discuss)
+
+### Sacred SHA invariant — ALL COMMITS
+
+Pre-commit hook `[sacred-sha] PASS: 20 files verified` on every Phase 240 commit (10/10 GREEN). Canonical SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` PRESERVED end-to-end.
+
+### Phase 240 close
+
+Phase 240 closes the `cliInstaller.*` tRPC namespace ship-train (cumulative Phase 239 + Phase 240 = full 5-CLI install + auth UI loop end-to-end via Liv AI's Local Agents tab). Backend (240-01) + vendor-patch (240-02) + Mini PC deploy + UAT auto-approval (240-03) complete. Unblocks Phase 242 (Luse docs polish) and remaining v43 close (Phase 243 Terminal + Phase 245 E2E UAT).

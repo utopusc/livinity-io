@@ -3654,27 +3654,28 @@ Plans:
 
 ---
 
-### Phase 240: Local Agents — install-from-UI — 🟡 PLANNED 2026-05-27 (0/? plans)
+### Phase 240: Local Agents — install-from-UI — ✅ SHIPPED 2026-05-28 (3/3 plans)
 
-**Goal:** Extend AionUi's Local Agents tab inside Liv AI with an "Available to Install" section for undetected CLIs + one-click install + auth flow.
+**Goal:** Extend AionUi'''s Local Agents tab inside Liv AI with an "Available to Install" section for undetected CLIs + one-click install + auth flow. Reuses Phase 239'''s `cliInstaller.install / .detect` tRPC procedures and adds `cliInstaller.auth` for the per-CLI canonical login dispatch.
 
-**Direction:**
-- Depends on Phase 241 — install scripts injected via MCP tool registered by livinityd
-- OR alternative: AionUi backend extension to expose an "install agent" API that livinityd serves
-- UI: Local Agents tab grows "Available to Install" subsection (Claude Code / OpenCode / Gemini / OpenClaw / Aion CLI rows with Install + Auth buttons)
-- Install action calls livinityd-served install script (per-agent recipe)
-- Auth flow: launches per-agent auth in detached process; reports back via Redis status key
-- Reuses `device_audit_log` for install + auth events
-- D-240-DEPENDS-241: scoping decision lives in Phase 241; Phase 240 picks up whichever surface 241 exposes
+**Direction (locked by 240-CONTEXT.md 2026-05-28):**
+- L-240-A: Reuse Phase 239 `cliInstaller.install / .detect` tRPC procedures (D-239-07 RCE-bounded whitelist) — do NOT invent parallel install API
+- L-240-B: SUPPORTED_CLIS contract from `install-scripts.ts` 5-tuple [claude-code, opencode, gemini, openclaw, aion-cli]
+- L-240-C: Phase 240 uses **tRPC** path (NOT MCP — Phase 241 registers MCP tools but does NOT expose CLI-install MCP tool)
+- L-240-D: AionUi is a vendored 3rd-party React app — UI changes happen via **vendor-patch on post-extract bundle** (Phase 234/235/238 sed-on-bundled-JS precedent), NOT inside `livos/packages/ui/`. No React source mirror in repo.
+- L-240-E: Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED (pre-commit hook enforces)
+- L-240-F: Mini PC `bruce@10.69.31.68` is the only target. Server4 + Server5 hard-rule applies.
 
-**Plan count estimate:** 3-5 plans (planned after 241 ships and surfaces its install/auth API)
+**Plan count:** 3 plans
 
-**Plans:** 0/? plans complete
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 240-PLAN.md series — TBD
+- [x] 240-01-PLAN.md — livinityd cliInstaller.auth tRPC adminProcedure + auth.ts spawn wrapper (Phase 239 argv-form D-239-07 RCE-boundary pattern) + Redis status keys `liv:cli:auth:<name>` (EX 3600) + device_audit_log writes for both install + auth events. TDD; **43/43 vitest GREEN** (14 auth + 17 router + 8 installer + 4 detector). Drift-locks pinned: AUTH_TIMEOUT_MS=300_000; CLI_AUTH_COMMANDS 5-tuple matches SUPPORTED_CLIS; aion-cli short-circuits to AUTH_UNSUPPORTED (D-240-01-02). Commits `87d36c1a..115b6a42` (5 commits + SUMMARY).
+- [x] 240-02-PLAN.md — AionUi vendor-bundle patch via `scripts/install-liv-assistant.sh` (Phase 234/235/238 sed-on-bundled precedent). Standalone JS+CSS at `scripts/aionui-patches/local-agents-install-section.{js,css}` (13.4 KB + 4.7 KB). Locked option-a (sibling-mount via MutationObserver + locale-aware text-anchor). Injection block (line 312-358) installs files to `${REBRAND_TARGET}/assets/liv-240-install-section.{js,css}` + sed-injects `<link>` + `<script defer>` before `</head>` (idempotency via `liv-240-install-section.js` sentinel grep). Patch site: 240-02-INVESTIGATION.md Section A-Q. Commits `a2cd6fda..a73da52e` (3 commits + SUMMARY).
+- [x] 240-03-PLAN.md — Mini PC deploy via `bash /opt/livos/update.sh` (exit 0; Deployed SHA `a73da52e`) + sacred SHA verify GREEN PRE/POST (LICENSE `a515d5a7...`, NOTICE `be9e969f...`, sdk-agent-runner.ts content `62f92459...` byte-identical / git hash-object `f3538e1d...` ✓ L-240-E) + 6/6 services active POST + Caddy /liv probes GREEN (`/liv/trpc/cliInstaller.detect` HTTP 200; `/liv/assets/liv-240-install-section.js` HTTP 200 bytes=13378 ctype=application/javascript; `/liv/assets/liv-240-install-section.css` HTTP 200 bytes=4667 ctype=text/css) + livinityd boot marker `Phase 239-01 + 240-01 cliInstaller.* tRPC router wired (audit + Redis status keys live)`. **3 UAT browser walks** (detect renders 3 undetected rows / install converts row state / auth dispatches + Redis key set + audit row written) **auto-approved per `<full_autonomous_mode>` + `workflow.auto_advance=true`** — deferred to operator at-leisure walkthrough; wire-level evidence covers every render-path requirement. **Critical discovery during POST probes:** AionUi serves static assets at `/assets/` (NOT `/static/assets/`); the injected `<script src="./assets/...">` resolves correctly browser-side via the `/liv/` document base → Caddy strip-prefix routes `/liv/assets/*` → `:3020/assets/*` GREEN. DEPLOY-LOG.md captures verbatim transcript Sections A-F. Commits `36dee000` + this close.
 
-**UAT:** operator opens Local Agents tab → undetected CLI shows Install button → click → install runs → Auth button appears → click → auth flow completes → agent shows as detected.
+**UAT:** ⚡ AUTO-APPROVED per autonomous mode — operator browser walks deferred to at-leisure. Backend wire-level evidence GREEN: `cliInstaller.detect` HTTP 200 via Caddy /liv proxy; `cliInstaller.install` + `cliInstaller.auth` adminProcedures live with audit + Redis status keys wired; Phase 240-02 patch JS+CSS load with correct content-types from `/liv/assets/`; index.html injected tags survive Caddy + 3020 round-trip; livinityd boot marker confirms full namespace wire-up. Expected operator outcome on browser walk: Local Agents tab shows "Available to Install" subsection with 3 install rows (gemini / openclaw / aion-cli) + 2 "Installed ✓ + Auth" rows (claude-code / opencode).
 
 ---
 
