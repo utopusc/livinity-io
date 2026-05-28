@@ -3623,7 +3623,7 @@ Plans:
 
 ---
 
-### Phase 241: MCP auto-add Liv tools (Luse / docker / shell) — 🟡 IN PROGRESS 2026-05-28 (1/4 plans)
+### Phase 241: MCP auto-add Liv tools (Luse / docker / shell) — 🟡 IN PROGRESS 2026-05-28 (3/4 plans)
 
 **Goal:** livinityd auto-registers Liv's MCP tools (Luse computer-use, docker, shell) into AionUi's MCP config on liv-assistant first boot. Idempotent (per-tool EXISTS gate + sentinel). Never overwrites operator-customized entries.
 
@@ -3637,12 +3637,12 @@ Plans:
 
 **Plan count estimate:** 4 plans (registrar skeleton + HTTP client + orchestrator + wire-up/deploy)
 
-**Plans:** 2/4 plans complete
+**Plans:** 3/4 plans complete
 
 Plans:
 - [x] 241-01-PLAN.md — registrar module skeleton (types + transform + redis-catalog) — ✅ **SHIPPED 2026-05-28** — 6 files / 14 vitest cases / 4 TDD commits (`f9348bc2` test + `788348af` feat + `bebc3d9d` test + `988a6ede` feat). Pure transform + pure async catalog reader, zero new deps, zero wire-up changes, drift-lock test on SYSTEM_MCP_NAMES. SUMMARY at `.planning/phases/241-mcp-auto-add-liv-tools/241-01-SUMMARY.md`.
 - [x] 241-02-PLAN.md — AionUi HTTP client + readiness poll — ✅ **SHIPPED 2026-05-28** — 4 files / 14 new vitest cases (28 cumulative) / 4 TDD commits (`c375032d` test + `4b5630ef` feat + `c8100dff` test + `a369db0d` feat). `AionUiMcpClient` (5 methods, single fetchJson chokepoint with AbortController+clearTimeout in finally — no listener leaks; Pitfall 3 + 4 guarded) + `waitForAionUiReady` (D-241-06 verbatim: 2s/60s/1.5s defaults; opt-in Pitfall 5 layered mcp/servers sub-probe; final-attempt-only warn). Zero new deps. One Rule-3 Response-type-cast fix. SUMMARY at `.planning/phases/241-mcp-auto-add-liv-tools/241-02-SUMMARY.md`.
-- [ ] 241-03-PLAN.md — seedAionUiMcpConfig orchestrator + 9-scenario unit tests
+- [x] 241-03-PLAN.md — seedAionUiMcpConfig orchestrator + 9-scenario unit tests — ✅ **SHIPPED 2026-05-28** — 2 files (seed.ts + seed.test.ts) + index.ts barrel update / 9 new vitest cases (37 cumulative) / 2 TDD commits (`8d9b1924` test + `f94a0852` feat). Single boot-time orchestrator (~165 lines, NEVER throws) implementing 7-stage Idempotency Strategy: sentinel short-circuit / readiness probe / catalog read / GET existing / per-tool decide (Pitfall 1 strict GET-and-skip) / conditional toggle (NON-fatal per A2) / sync-to-agents FULL set / sentinel SET only on errored===0 (Pitfall 2 guard). All 9 scenarios A-I PASS (idempotent / first-boot / partial-resume / fully-customized / Pitfall-1-edit-preserved / readiness-timeout / Pitfall-2-sync-failed / partial-failure-resilient / Pitfall-4-toggle-non-fatal). Zero new deps, zero typecheck errors. SUMMARY at `.planning/phases/241-mcp-auto-add-liv-tools/241-03-SUMMARY.md`.
 - [ ] 241-04-PLAN.md — livinityd wire-up + Mini PC deploy + idempotency/customization UAT
 
 **UAT:** fresh liv-assistant boot → operator opens Liv AI MCP config → Luse / docker / shell auto-registered. Operator edits one → restarts liv-assistant → operator edit preserved.
