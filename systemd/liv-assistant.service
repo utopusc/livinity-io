@@ -12,6 +12,11 @@ Group=bruce
 WorkingDirectory=/opt/liv-assistant/current
 Environment="PATH=/home/bruce/.bun/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="HOME=/home/bruce"
+# Phase 245.2 hotfix — extend MCP init timeout for 6 parallel `npx tsx` cold-starts.
+# Default Claude Code MCP timeout is too short; without this, only aionui-team-guide
+# (native binary) connects; the 5 stdio tsx-based local MCPs (liv-system / liv-vault /
+# liv-apps / liv-docker / luse) time out silently and never register tools to the agent.
+Environment="MCP_TIMEOUT=30000"
 ExecStart=/opt/liv-assistant/current/aionui-web start --port 3020 --data-dir /opt/liv-assistant/data --backend-bin /opt/liv-assistant/current/bundled-aioncore/linux-x64/aioncore
 Restart=on-failure
 RestartSec=5
