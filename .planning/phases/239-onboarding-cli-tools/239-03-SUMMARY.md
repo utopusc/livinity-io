@@ -279,3 +279,5 @@ None introduced by Plan 239-03. Plan 239-02's localStorage-vs-Redis transport ga
 **v43 milestone status:**
 
 Phase 239 is the last visible-UX phase of v43 before terminal Phase 243 per ROADMAP framing. Phase 240 (Local Agents tab "Available to Install" UI) is now unblocked — the `cliInstaller.install` + `cliInstaller.detect` contract is live, the SUPPORTED_CLIS namespace stable, and the D-239-10 5-tuple ordering immutable across the milestone.
+
+**Final commit:** `afb03df4` — `docs(239-03): Phase 239 SHIPPED — onboarding CLI Tools section live on Mini PC` — pushed to `origin/master` 2026-05-27. Sacred SHA preserved (pre-commit `[sacred-sha] PASS: 20 files verified`).
