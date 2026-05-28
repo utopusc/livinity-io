@@ -779,6 +779,36 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 		expect(blockTail).toContain('header_down -Content-Security-Policy')
 	})
 
+	// Phase 245.6 — /ws/stream/* carve-out for livinityd's WebApp RFB streaming
+	// endpoint. Must be emitted BEFORE @liv_ws so the broader /ws /ws/* matcher
+	// doesn't claim /ws/stream/* and silently send it to :3020 (where it 404s).
+	it('apex block emits @webapp_stream_ws BEFORE @liv_ws (route precedence)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const streamIdx = out.indexOf('@webapp_stream_ws path /ws/stream/*')
+		const livWsIdx = out.indexOf('@liv_ws path /ws /ws/*')
+		expect(streamIdx).toBeGreaterThan(-1)
+		expect(livWsIdx).toBeGreaterThan(-1)
+		expect(streamIdx).toBeLessThan(livWsIdx)
+	})
+
+	it('apex @webapp_stream_ws handle reverse-proxies to 127.0.0.1:8080 (livinityd)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const idx = out.indexOf('handle @webapp_stream_ws {')
+		expect(idx).toBeGreaterThan(-1)
+		const blockTail = out.slice(idx, idx + 300)
+		expect(blockTail).toContain('reverse_proxy 127.0.0.1:8080')
+	})
+
 	it('apex block emits @liv_api_subresource block-style matcher with header_regexp + path /api/* (no /ws)', () => {
 		const out = generateFullCaddyfile(
 			{mainDomain: 'bruce.livinity.io', subdomains: []},
