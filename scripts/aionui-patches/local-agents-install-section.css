@@ -1,0 +1,175 @@
+/**
+ * Phase 240-02 — AionUi vendor-bundle patch styles
+ *
+ * Companion stylesheet for local-agents-install-section.js.
+ *
+ * All selectors are scoped under #liv-240-install-section to prevent leakage
+ * into AionUi's existing CSS surface — see MEMORY:feedback_css_class_collision_namespace
+ * (Phase 149 lesson — single-word block selectors collide with arco tokens).
+ *
+ * Uses arco-design CSS custom properties exposed by AionUi for theme
+ * consistency (light + dark mode auto-adapt via arco-theme data attribute).
+ */
+
+#liv-240-install-section {
+  padding: 16px 20px;
+  margin-top: 16px;
+  border-top: 1px solid var(--color-border-2, #e5e6eb);
+  font-family: inherit;
+  color: var(--color-text-1, #1d2129);
+}
+
+#liv-240-install-section .liv-240-heading {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: var(--color-text-1, #1d2129);
+}
+
+#liv-240-install-section .liv-240-hint {
+  font-size: 12px;
+  color: var(--color-text-3, #86909c);
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+}
+
+#liv-240-install-section .liv-240-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border-1, #f2f3f5);
+}
+
+#liv-240-install-section .liv-240-row:last-of-type {
+  border-bottom: none;
+}
+
+#liv-240-install-section .liv-240-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--color-fill-2, #f7f8fa);
+  color: var(--color-text-2, #4e5969);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+#liv-240-install-section .liv-240-label {
+  flex: 1;
+  min-width: 0;
+}
+
+#liv-240-install-section .liv-240-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-1, #1d2129);
+  line-height: 1.4;
+}
+
+#liv-240-install-section .liv-240-status {
+  font-size: 11px;
+  color: var(--color-text-3, #86909c);
+  line-height: 1.4;
+}
+
+#liv-240-install-section .liv-240-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+#liv-240-install-section .liv-240-btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border-2, #e5e6eb);
+  background: var(--color-fill-2, #f7f8fa);
+  color: var(--color-text-1, #1d2129);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+#liv-240-install-section .liv-240-btn:hover:not(:disabled) {
+  background: var(--color-fill-3, #e5e6eb);
+  border-color: var(--color-border-3, #c9cdd4);
+}
+
+#liv-240-install-section .liv-240-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+#liv-240-install-section .liv-240-btn-install {
+  background: var(--color-primary-light-1, #e8f3ff);
+  border-color: var(--color-primary-light-2, #bedaff);
+  color: var(--color-primary-6, #165dff);
+}
+
+#liv-240-install-section .liv-240-btn-install:hover:not(:disabled) {
+  background: var(--color-primary-light-2, #bedaff);
+  border-color: var(--color-primary-light-3, #94bfff);
+}
+
+#liv-240-install-section .liv-240-btn-auth {
+  background: var(--color-success-light-1, #e8ffea);
+  border-color: var(--color-success-light-2, #aff0b5);
+  color: var(--color-success-6, #00b42a);
+}
+
+#liv-240-install-section .liv-240-row.installing .liv-240-icon,
+#liv-240-install-section .liv-240-row.authing .liv-240-icon {
+  animation: liv-240-pulse 1.2s ease-in-out infinite;
+}
+
+#liv-240-install-section .liv-240-row.installed,
+#liv-240-install-section .liv-240-row.authed,
+#liv-240-install-section .liv-240-row.detected {
+  background: var(--color-success-light-1, #e8ffea);
+}
+
+#liv-240-install-section .liv-240-row.installed .liv-240-status,
+#liv-240-install-section .liv-240-row.authed .liv-240-status,
+#liv-240-install-section .liv-240-row.detected .liv-240-status {
+  color: var(--color-success-6, #00b42a);
+  font-weight: 500;
+}
+
+#liv-240-install-section .liv-240-row.failed .liv-240-status {
+  color: var(--color-danger-6, #f53f3f);
+  font-weight: 500;
+}
+
+#liv-240-install-section .liv-240-error {
+  flex-basis: 100%;
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--color-danger-light-1, #ffece8);
+  color: var(--color-danger-6, #f53f3f);
+  font-size: 11px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 4px;
+}
+
+@keyframes liv-240-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+/* Dark mode adjustments — AionUi sets data-theme="dark" on <html> */
+html[data-theme="dark"] #liv-240-install-section {
+  border-top-color: var(--color-border-2, #3c3c3c);
+}
+
+html[data-theme="dark"] #liv-240-install-section .liv-240-icon {
+  background: var(--color-fill-2, #2a2a2b);
+}
