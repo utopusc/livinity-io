@@ -9,6 +9,8 @@
  * guard in `PtySession.start()`.
  */
 
+import {PtySession} from './session.js'
+
 /** Session metadata persisted at Redis key `livos:pty:session:{id}`. */
 export interface PtySessionMetadata {
 	/** v43 MVP: always the bruce user uid. v44+ multi-user populates per-user. */
@@ -51,4 +53,30 @@ export interface PtyMetadataRedisClient {
 	del(key: string): Promise<number>
 	/** Reserved for v44+ TTL GC; not used in v43 MVP. */
 	expire?(key: string, seconds: number): Promise<number>
+}
+
+/**
+ * Phase 246-01 — multi-session record.
+ * `pty` is the live PtySession instance (composed, not extended).
+ * Stripped to SessionSummary before serializing to clients or admin UI.
+ */
+export interface Session {
+	id: string
+	name: string
+	pty: PtySession
+	createdAt: string
+	lastAttachAt: string
+}
+
+/** Serializable shape — `pty` removed. Returned by SessionManager.list() and the admin tRPC query (246-05). */
+export interface SessionSummary {
+	id: string
+	name: string
+	createdAt: string
+	lastAttachAt: string
+}
+
+export interface SessionManagerDeps {
+	ptySessionFactory?: (opts: PtySpawnOptions) => PtySession
+	nowFn?: () => string
 }
