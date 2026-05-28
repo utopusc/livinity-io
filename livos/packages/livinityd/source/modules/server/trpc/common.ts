@@ -698,4 +698,13 @@ export const httpOnlyPaths = [
 	// mcp.config.list line ~357). Must be reachable pre-auth (login screen
 	// React tree calls the hook too).
 	'config.getV42MigrationActive',
+	// Phase 239-01 — cliInstaller.install spawns bash install scripts that
+	// may run 30-300 seconds (curl-pipe-bash, npm install -g, etc). Same
+	// precedent as system.update line 27 — HTTP avoids the WS-disconnect
+	// hang during a long mutation (pitfall B-12 / X-04). detect is a
+	// shorter (~5s) query but routes via HTTP for transport consistency
+	// with install (mirrors mcp.config.list / mcp.config.add at lines
+	// 357-358).
+	'cliInstaller.install',
+	'cliInstaller.detect',
 ] as const
