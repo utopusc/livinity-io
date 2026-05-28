@@ -3,9 +3,8 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: executing
-last_updated: "2026-05-28T23:13:00.000Z"
+last_updated: "2026-05-28T23:18:17.726Z"
 last_activity: 2026-05-28
-last_shipped_plan: 246-01
 progress:
   total_phases: 8
   completed_phases: 8
@@ -516,6 +515,15 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 - **Estimate:** 14-20 days wall-clock
 
 ## Current Position
+
+Phase: 246 (Terminal v2 — multi-session + reattach + TTL GC) — EXECUTING
+Plan: 2 of 6 ✅ SHIPPED 2026-05-28
+
+**Plan 246-02 (3 tasks — 3 commits: `42000a6e` test RED + `8633add1` feat GREEN + `f7ca5006` feat barrel)** — Redis scrollback ring + lastAttachAt persistence. New file `livos/packages/livinityd/source/modules/pty-sessions/scrollback.ts` (101 lines) exports 2 drift-lock constants (`PTY_SESSION_SCROLLBACK_SUFFIX = ':scrollback'` + `SCROLLBACK_MAX_LINES = 10000` per D-V44-TERMINAL-SCROLLBACK-RING) plus 4 stateless functions (`buildScrollbackKey` reusing Phase 243's `PTY_SESSION_REDIS_PREFIX` so the prefix literal isn't duplicated; `appendScrollback` does `RPUSH key chunk` then `LTRIM key -10000 -1` in order — drift-locked by test case 5 via `mock.invocationCallOrder` comparison; `readScrollback` returns `LRANGE 0 -1`; `deleteScrollback` does `DEL` on the scrollback key) plus `touchLastAttachAt` which writes the `lastAttachAt` field on the EXISTING metadata HASH key written by Phase 243's `writeSessionMetadata` (test case 10 asserts `redis.hset.mock.calls[0][0]` `.not.toContain(':scrollback')` — drift-lock that the metadata HASH and the scrollback LIST are different keys; 246-05's TTL GC reads this field to decide whether a session is idle > 24h). New narrow Redis interface `PtyScrollbackRedisClient` (rpush + ltrim + lrange + del + hset) is defined IN scrollback.ts (NOT in types.ts) so Phase 243's `PtyMetadataRedisClient` stays unchanged per SC-05 — different module, different contract. New file `__tests__/scrollback.test.ts` (148 lines, 10 vitest cases): drift-locks 1+2 (suffix literal + max-lines value), case 3 (`buildScrollbackKey('abc') === 'livos:pty:session:abc:scrollback'`), cases 4+5+6 (appendScrollback rpush args + ltrim args + rpush-before-ltrim order check + once-each), cases 7+8 (readScrollback returns lrange result + empty default), case 9 (deleteScrollback DEL the scrollback key), case 10 (touchLastAttachAt hset target is metadata key NO `:scrollback` suffix). Mocked Redis via plain `vi.fn()` literal `{rpush, ltrim, lrange, del, hset}` mirroring the `metadata.test.ts` idiom. `index.ts` barrel extended with the Phase 246-02 export block: 2 constants + 4 functions + 1 type re-export (exactly 2 occurrences of `from './scrollback.js'` — runtime + type). Drift-locks: `PTY_SESSION_SCROLLBACK_SUFFIX` exact literal `':scrollback'`, `SCROLLBACK_MAX_LINES` exact value `10000`, key shape `livos:pty:session:<id>:scrollback`, RPUSH-before-LTRIM order, touchLastAttachAt targets the metadata HASH (not the scrollback LIST). Full pty-sessions vitest sweep: **55/55 GREEN** (4 feature-flag + 6 metadata + 10 session + 13 ws-handler + 12 session-manager baseline + 10 NEW scrollback). `pnpm tsc --noEmit` zero new errors in `source/modules/pty-sessions/` (pre-existing errors in user/, webapps/, vault-graph/ etc. out of scope). Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` of `liv/packages/core/src/sdk-agent-runner.ts` PRESERVED through all 3 commits (`[sacred-sha] PASS: 20 files verified` on each). Plan 246-01's `SessionManager` and Phase 243's `metadata.ts` files UNTOUCHED. REFACTOR phase skipped — 101-line module with no duplication observed. RED gate confirmed: vitest ran with `scrollback.test.ts` before `scrollback.js` existed and produced suite-level `Failed to load url ../scrollback.js` — no "test passes unexpectedly during RED" risk. 0 deviations from plan. No Mini PC deploy (deploy is plan 246-06). Plan 246-03 (WS protocol extension `?create/?attach` + admin tRPC router list/kill) now unblocked — consumes `appendScrollback` on every PTY data event, `readScrollback` on the reattach branch, `touchLastAttachAt` on every attach. 246-05 GC will consume `deleteScrollback` to drain dead sessions. SUMMARY at `.planning/phases/246-terminal-v2-multi-session/246-02-SUMMARY.md`.
+
+---
+
+### Previous Current Position
 
 Phase: 246 (Terminal v2 — multi-session + reattach + TTL GC) — EXECUTING
 Plan: 1 of 6 ✅ SHIPPED 2026-05-28

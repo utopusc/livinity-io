@@ -3627,7 +3627,7 @@ Plans:
 
 ---
 
-### Phase 246: Terminal v2 — multi-session + reattach + TTL GC — 🟡 EXECUTING 2026-05-28 (1/6 plans)
+### Phase 246: Terminal v2 — multi-session + reattach + TTL GC — 🟡 EXECUTING 2026-05-28 (2/6 plans)
 
 **Goal:** Take the v43 Phase 243 single-session MVP terminal and ship the v44 production version: multiple named tabs in one dock window, each session survives browser reload, idle sessions auto-collect at 24h, admin "kill session by id" UI.
 
@@ -3642,11 +3642,11 @@ Plans:
 
 **Plan count estimate:** 6 plans (backend session manager + scrollback ring + WS protocol extension + UI tab bar + TTL GC + admin kill + Mini PC deploy + UAT).
 
-**Plans:** 1/6 plans complete
+**Plans:** 2/6 plans complete
 
 Plans:
 - [x] 246-01-PLAN.md — Backend SessionManager (multi-session map wrapping PtySession) ✅ SHIPPED 2026-05-28 (4 commits `9080228e..a17c8616`; 12/12 vitest new + 45/45 cumulative pty-sessions GREEN; 0 tsc errors in module; PtySession class UNTOUCHED; D-V44-SACRED preserved; SUMMARY at `.planning/phases/246-terminal-v2-multi-session/246-01-SUMMARY.md`)
-- [ ] 246-02-PLAN.md — Redis scrollback ring + lastAttachAt persistence
+- [x] 246-02-PLAN.md — Redis scrollback ring + lastAttachAt persistence ✅ SHIPPED 2026-05-28 (3 commits `42000a6e..f7ca5006`; 10/10 vitest new + 55/55 cumulative pty-sessions GREEN; 0 tsc errors in module; PtyMetadataRedisClient interface UNCHANGED — new PtyScrollbackRedisClient lives alongside scrollback.ts; D-V44-TERMINAL-SCROLLBACK-RING + D-V44-SACRED preserved; SUMMARY at `.planning/phases/246-terminal-v2-multi-session/246-02-SUMMARY.md`)
 - [ ] 246-03-PLAN.md — WS protocol extension (?create/?attach) + admin tRPC router (list/kill)
 - [ ] 246-04-PLAN.md — UI tab bar + localStorage reattach
 - [ ] 246-05-PLAN.md — TTL GC (24h idle / 1h sweep) + Settings → System Active Terminals panel
