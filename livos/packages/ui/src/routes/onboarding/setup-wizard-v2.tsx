@@ -5,12 +5,13 @@ import {HelpBubble, ParallaxOrbs, SoundProvider, useSound} from '@/features/onbo
 import {ResumeBanner} from '@/features/onboarding-flow/resume-banner'
 import {Step} from '@/features/onboarding-flow/step'
 import {AccountStep} from '@/features/onboarding-flow/steps/account-step'
+import {CliToolsStep} from '@/features/onboarding-flow/steps/cli-tools-step'
 import {DoneStep} from '@/features/onboarding-flow/steps/done-step'
 import {LocationStep} from '@/features/onboarding-flow/steps/location-step'
 import {PersonalizeStep} from '@/features/onboarding-flow/steps/personalize-step'
-import {ProviderStep} from '@/features/onboarding-flow/steps/provider-step'
 import {WallpaperStep} from '@/features/onboarding-flow/steps/wallpaper-step'
 import {WelcomeStep} from '@/features/onboarding-flow/steps/welcome-step'
+import {FooterBar} from '@/features/onboarding-flow/footer-bar'
 import {TopBar} from '@/features/onboarding-flow/top-bar'
 import {useDebouncedCallback} from '@/features/onboarding-flow/use-debounced-callback'
 import {useStepper} from '@/features/onboarding-flow/use-stepper'
@@ -170,6 +171,20 @@ function WizardInner() {
 
 	const eta = etaSeconds(stepper.idx)
 
+	// Phase 239 D-239-15 — feature flag `livos:v43:onboarding_cli_section`
+	// controls which step renders at slot 4. Defaults FALSE (an informational
+	// "flag disabled" notice — see policy resolution in 239-02-PLAN.md Task 4)
+	// until operator flips via Redis. Until a dedicated backend procedure
+	// ships (deferred to a Phase 239-04 micro-plan), this reads localStorage:
+	//   window.localStorage.setItem('livos.v43.onboarding_cli_section', 'true')
+	// Plan 239-03 (deploy) seeds the Redis key; operator can also set the
+	// localStorage value in browser DevTools to preview locally.
+	let cliSectionFlagEnabled = false
+	if (typeof window !== 'undefined') {
+		cliSectionFlagEnabled =
+			window.localStorage.getItem('livos.v43.onboarding_cli_section') === 'true'
+	}
+
 	return (
 		<>
 			<div className='onb-ambient' aria-hidden='true'>
@@ -219,16 +234,46 @@ function WizardInner() {
 							/>
 						</Step>
 						<Step stepIndex={4} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
-							<ProviderStep
-								data={data}
-								setData={setData}
-								onContinue={() => {
-									sound.play('success')
-									stepper.next()
-								}}
-								onSkip={stepper.next}
-								onBack={stepper.back}
-							/>
+							{cliSectionFlagEnabled ? (
+								<CliToolsStep
+									data={data}
+									setData={setData}
+									onContinue={() => {
+										sound.play('success')
+										stepper.next()
+									}}
+									onSkip={stepper.next}
+									onBack={stepper.back}
+								/>
+							) : (
+								<div
+									className='fade-up'
+									style={{display: 'flex', flexDirection: 'column', gap: 18}}
+								>
+									<div className='onb-eyebrow'>05 · CLI Tools</div>
+									<h1 className='onb-title' style={{marginTop: 8}}>
+										This step is disabled
+									</h1>
+									<p className='onb-sub' style={{marginTop: 10}}>
+										The Phase 239 CLI Tools step is gated by feature flag{' '}
+										<code>livos:v43:onboarding_cli_section</code>. Operator must
+										flip the flag to <code>true</code> in Redis (or set{' '}
+										<code>
+											window.localStorage.setItem('livos.v43.onboarding_cli_section','true')
+										</code>{' '}
+										in DevTools) to see the install grid. Skip is enabled below
+										so onboarding still completes.
+									</p>
+									<FooterBar
+										onBack={stepper.back}
+										onContinue={stepper.next}
+										onSkip={stepper.next}
+										continueLabel='Skip'
+										continueDisabled={false}
+										hint='Feature flag disabled — skipping'
+									/>
+								</div>
+							)}
 						</Step>
 						<Step stepIndex={5} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<LocationStep
