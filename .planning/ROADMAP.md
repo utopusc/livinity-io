@@ -3623,7 +3623,7 @@ Plans:
 
 ---
 
-### Phase 241: MCP auto-add Liv tools (Luse / docker / shell) — 🟡 IN PROGRESS 2026-05-28 (3/4 plans)
+### Phase 241: MCP auto-add Liv tools (Luse / docker / shell) — ✅ SHIPPED 2026-05-28 (4/4 plans)
 
 **Goal:** livinityd auto-registers Liv's MCP tools (Luse computer-use, docker, shell) into AionUi's MCP config on liv-assistant first boot. Idempotent (per-tool EXISTS gate + sentinel). Never overwrites operator-customized entries.
 
@@ -3637,13 +3637,18 @@ Plans:
 
 **Plan count estimate:** 4 plans (registrar skeleton + HTTP client + orchestrator + wire-up/deploy)
 
-**Plans:** 3/4 plans complete
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 241-01-PLAN.md — registrar module skeleton (types + transform + redis-catalog) — ✅ **SHIPPED 2026-05-28** — 6 files / 14 vitest cases / 4 TDD commits (`f9348bc2` test + `788348af` feat + `bebc3d9d` test + `988a6ede` feat). Pure transform + pure async catalog reader, zero new deps, zero wire-up changes, drift-lock test on SYSTEM_MCP_NAMES. SUMMARY at `.planning/phases/241-mcp-auto-add-liv-tools/241-01-SUMMARY.md`.
 - [x] 241-02-PLAN.md — AionUi HTTP client + readiness poll — ✅ **SHIPPED 2026-05-28** — 4 files / 14 new vitest cases (28 cumulative) / 4 TDD commits (`c375032d` test + `4b5630ef` feat + `c8100dff` test + `a369db0d` feat). `AionUiMcpClient` (5 methods, single fetchJson chokepoint with AbortController+clearTimeout in finally — no listener leaks; Pitfall 3 + 4 guarded) + `waitForAionUiReady` (D-241-06 verbatim: 2s/60s/1.5s defaults; opt-in Pitfall 5 layered mcp/servers sub-probe; final-attempt-only warn). Zero new deps. One Rule-3 Response-type-cast fix. SUMMARY at `.planning/phases/241-mcp-auto-add-liv-tools/241-02-SUMMARY.md`.
 - [x] 241-03-PLAN.md — seedAionUiMcpConfig orchestrator + 9-scenario unit tests — ✅ **SHIPPED 2026-05-28** — 2 files (seed.ts + seed.test.ts) + index.ts barrel update / 9 new vitest cases (37 cumulative) / 2 TDD commits (`8d9b1924` test + `f94a0852` feat). Single boot-time orchestrator (~165 lines, NEVER throws) implementing 7-stage Idempotency Strategy: sentinel short-circuit / readiness probe / catalog read / GET existing / per-tool decide (Pitfall 1 strict GET-and-skip) / conditional toggle (NON-fatal per A2) / sync-to-agents FULL set / sentinel SET only on errored===0 (Pitfall 2 guard). All 9 scenarios A-I PASS (idempotent / first-boot / partial-resume / fully-customized / Pitfall-1-edit-preserved / readiness-timeout / Pitfall-2-sync-failed / partial-failure-resilient / Pitfall-4-toggle-non-fatal). Zero new deps, zero typecheck errors. SUMMARY at `.planning/phases/241-mcp-auto-add-liv-tools/241-03-SUMMARY.md`.
-- [ ] 241-04-PLAN.md — livinityd wire-up + Mini PC deploy + idempotency/customization UAT
+- [x] 241-04-PLAN.md — livinityd wire-up + Mini PC deploy + idempotency/customization UAT — ✅ **SHIPPED 2026-05-28** — 1 file modified (`livos/packages/livinityd/source/index.ts` — 33 inserted lines: import + boot block after Phase 112 fallback + before Phase 104 heartbeat). 1 wire-up commit (`814a6ebd`) + 1 docs commit (this entry). Mini PC `bruce@10.69.31.68` deployed via `bash /opt/livos/update.sh` (exit 0); journalctl confirms exact line `Phase 241: AionUi MCP seed (created=5 skipped=0 errored=0 sentinel=set)` on first boot, `created=0 skipped=5 errored=0 sentinel=set` on idempotency UAT (sentinel DEL + restart), `created=0 skipped=0 errored=0 sentinel=unchanged` on no-op restart (sentinel-SET fast path). Operator-customization UAT: liv-system DELETE+POST with `/operator/edit/marker` survived BOTH no-op restart AND forced re-run (sentinel DEL + restart). Sacred AionUi sha256 `293a49927b408a264660a1136087c05cdf39c4c63a4dd68aa5fdfe30c53fb04b` byte-identical PRE/POST (NB: prior phase drift from MEMORY's `62f924...`; documented). Sacred blob SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` for `liv/packages/core/src/sdk-agent-runner.ts` PRESERVED via pre-commit hook (PASS: 20 files verified). 6/6 services active (livos, liv-core, liv-worker, liv-memory, liv-assistant, caddy). Phase 226 Caddy `@liv path /liv /liv/*` block intact. **Rule 3 deviation:** Mini PC's `liv:mcp:config` only contained operator-added `filesystem` (not the 5 expected system MCPs); install-seed never re-runs on existing boxes (D-109-IDEMPOTENT). Surgically HSET'd the 5 system MCP payloads from `scripts/install/seeds/mcp-servers.json` into Redis before deploy (preserved `filesystem`). SUMMARY at `.planning/phases/241-mcp-auto-add-liv-tools/241-04-SUMMARY.md`.
+
+**UAT evidence (Mini PC 2026-05-28):**
+- First-boot seed: `Phase 241: AionUi MCP seed (created=5 skipped=0 errored=0 sentinel=set)` — 5 servers visible in AionUi GET /api/mcp/servers; luse toggled enabled; 8 agent CLI configs distributed
+- Idempotency walk: `created=0 skipped=5 errored=0 sentinel=set` — luse.updated_at byte-identical (1779929612071 PRE=POST)
+- Customization walk: operator's `transport.command=/operator/edit/marker` + `description=OPERATOR-EDITED-MARKER` preserved across sentinel-SET restart AND forced re-run (sentinel DEL + restart)
 
 **UAT:** fresh liv-assistant boot → operator opens Liv AI MCP config → Luse / docker / shell auto-registered. Operator edits one → restarts liv-assistant → operator edit preserved.
 
