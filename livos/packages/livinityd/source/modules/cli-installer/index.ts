@@ -20,3 +20,14 @@ export {
 	type InstallCliInput,
 } from './installer.js'
 export {detectCli, type DetectCliDeps, type DetectCliInput} from './detector.js'
+// Phase 240-01 Task 1 — authCli + AuthResult + drift-lock constants.
+export {
+	AUTH_TIMEOUT_MS,
+	CLI_AUTH_COMMANDS,
+	authCli,
+	type AuthCliDeps,
+	type AuthCliInput,
+	type AuthResult,
+	type AuditLogRow,
+	type AuditLogFn,
+} from './auth.js'
