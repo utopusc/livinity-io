@@ -3678,24 +3678,24 @@ Plans:
 
 ---
 
-### Phase 239: Onboarding "CLI Tools" section + remove "AI" section — 🟡 PLANNED 2026-05-27 (0/? plans)
+### Phase 239: Onboarding "CLI Tools" section + remove "AI" section — 🟡 PLANNED 2026-05-27 (0/3 plans)
 
 **Goal:** Onboarding wizard gains a new "CLI Tools" step that lists supported CLIs (Claude Code, OpenCode, Gemini, OpenClaw, Aion CLI) with one-click install via livinityd. Existing "AI" section removed (replaced by CLI Tools).
 
 **Direction:**
-- Onboarding wizard source: `livos/packages/ui/` (file path investigated during planning)
-- New "CLI Tools" step renders a card grid of supported CLIs with Install buttons
-- Install buttons hit livinityd install endpoint (reused or extended from Phase 240/241 surface)
-- Remove existing "AI" section from wizard flow
-- D-239-FEATURE-FLAG: `livos:v43:onboarding_cli_section` Redis flag (default off until UAT green)
-- D-239-NO-AI-SECTION-DATA-LOSS: removing AI section preserves any operator data captured there (none expected, but doc-verify in planning)
+- Onboarding wizard source: `livos/packages/ui/src/features/onboarding-flow/`
+- New "CLI Tools" step renders a 5-card grid of supported CLIs with Install buttons + per-card state machine (not-installed / installing / installed / failed)
+- Install buttons hit new livinityd `cliInstaller.install` tRPC mutation (whitelist-gated to SUPPORTED_CLIS — D-239-07 RCE boundary; Phase 240 extends with uninstall + auth-status)
+- Remove existing "AI" / Provider section from wizard flow (no shim, no back-compat OnboardingData fields per D-239-03)
+- D-239-FEATURE-FLAG: `livos:v43:onboarding_cli_section` Redis flag (default off until UAT green); flag-off renders informational notice (legacy ProviderStep deleted per D-239-04, no in-tree fallback)
+- D-239-NO-AI-SECTION-DATA-LOSS: bruce-EQ Mini PC already past onboarding; no live operator data lost
 
-**Plan count estimate:** 2-3 plans (UI rebuild + livinityd install bridge + Mini PC deploy + UAT)
-
-**Plans:** 0/? plans complete
+**Plans:** 0/3 plans complete
 
 Plans:
-- [ ] 239-PLAN.md series — TBD (planned after Phase 238)
+- [ ] 239-01-PLAN.md — livinityd cli-installer module + cliInstaller tRPC router + 5 install scripts (whitelist-gated, RCE boundary D-239-07; vitest TDD)
+- [ ] 239-02-PLAN.md — Onboarding UI: CliToolsStep component + constants.ts rewrite + feature-flag wizard mount + legacy step deletions (provider-step + connect-ai-step)
+- [ ] 239-03-PLAN.md — Mini PC deploy via update.sh + sacred-SHA verify + 3 UAT walks (detect probes / flag-on render / flag-off notice) + STATE/ROADMAP close
 
 **UAT:** fresh onboarding walk → "CLI Tools" step appears → operator installs Claude Code via one click → install succeeds → CLI detected → onboarding completes.
 
