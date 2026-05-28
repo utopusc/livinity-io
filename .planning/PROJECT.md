@@ -349,7 +349,7 @@ v42's scope was the OpenClawOS → AionUi Liv Assistant swap (Phases 222-228 + 2
 **Phase outline:**
 
 - **P238 — Complete AionUi rebrand (logo + text)** — Livinity logo SVG overlay during install-script + case-insensitive `Aion` / `AION` / `aion` (word-boundary) sed extending Phase 234-03. **Plans 238-{01,02,03} authored 2026-05-27.**
-- **P239 — Onboarding "CLI Tools" section** — Wizard step listing Claude Code / OpenCode / Gemini / OpenClaw / Aion CLI with one-click install. Removes old "AI" section.
+- **P239 — Onboarding "CLI Tools" section** — Wizard step listing Claude Code / OpenCode / Gemini / OpenClaw / Aion CLI with one-click install. Removes old "AI" section. **SHIPPED 2026-05-27 (3/3 plans, 18/18 truths verified, 2 browser walks pending operator at-leisure).**
 - **P240 — Local Agents — install-from-UI** — AionUi Local Agents tab gains "Available to Install" + one-click install + auth flow.
 - **P241 — MCP auto-add Liv tools** — livinityd registers Luse / docker / shell into AionUi's MCP config on liv-assistant first boot, idempotently.
 - **P242 — Luse skill set for Claude Code** — `.claude/skills/luse/` with SKILL.md + click/type/screenshot/key/scroll sub-skills.
