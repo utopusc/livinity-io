@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: completed
-last_updated: "2026-05-27T19:48:00.000Z"
+last_updated: "2026-05-27T23:51:00.498Z"
 last_activity: 2026-05-27
 progress:
   total_phases: 8
@@ -66,6 +66,7 @@ Operator clearing context 2026-05-27 night. Full handoff at **`.planning/RESUME-
 **Autonomous run summary (operator invoked `/gsd-autonomous` 2026-05-27 evening):**
 
 ✅ **SHIPPED this session:**
+
 - Phase 238 (3 plans): word-boundary Aion in static/ → 0; logo SVG scaffold
 - Phase 238.1 (1 plan): footer URLs `iOfficeAI/*` → `livinity.io`
 - Phase 238.2 (1 plan): builtin-skills/*.md AionUi → Liv AI
@@ -75,6 +76,7 @@ Operator clearing context 2026-05-27 night. Full handoff at **`.planning/RESUME-
 ⏭️ **Phase 244 OBSOLETED**: Mini PC probe found 0 `.md` files under `/opt/liv-assistant/current/` (all AionUi markdown lives at `data/builtin-skills/` which Phase 238.2 already covered). ROADMAP updated; no commit needed.
 
 ⏸️ **Deferred to focused planning sessions:**
+
 - **Phase 239** (Onboarding "CLI Tools" section): substantial frontend rebuild in `livos/packages/ui/`. Operator-visible UX redesign — needs discuss-phase to scope card layout, install-button wiring, AI section removal data-loss verification.
 - **Phase 240** (Local Agents install-from-UI): HARD-depends on Phase 241 (uses the install/auth API surface 241 exposes). Cannot plan until 241 lands.
 - **Phase 241** (MCP auto-add Liv tools): foundational. Probe 2026-05-27 evening discovered `/api/extensions/mcp-servers` is GET-only (POST/PUT/PATCH/DELETE all 405); write API path uncertain — candidates `/api/mcp/agent-configs`, `/api/mcp/sync-to-agents`. Phase needs (a) deeper API probe to identify write surface (b) new livinityd `mcp-registrar/` module (c) Redis first-boot sentinel (d) per-tool EXISTS gate. Multi-plan investigation+code+deploy.
@@ -87,6 +89,7 @@ Operator clearing context 2026-05-27 night. Full handoff at **`.planning/RESUME-
 **Cumulative v43 visible-rebrand SHIPPED:** Phase 238 → 238.4 close out operator's "HİÇ BİR Aion yazısı kalmasın + Livinity branding" theme. Browser tab favicon + theme-color + font + Arco palette + footer URLs + skill descriptions + default agent all Livinity-branded. Operator hard-reload `https://bruce.livinity.io/liv/` to see complete brand layer LIVE.
 
 **Recommended next steps for next session:**
+
 1. `/gsd-discuss-phase 241` — deep API probe for MCP write surface + module design decisions
 2. After 241 ships: `/gsd-plan-phase 240` then `/gsd-plan-phase 242` (both unblock)
 3. `/gsd-discuss-phase 239` — onboarding wizard UX (card layout, install button copy, AI section removal)

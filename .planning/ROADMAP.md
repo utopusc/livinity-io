@@ -3635,12 +3635,15 @@ Plans:
 - D-241-IDEMPOTENT: re-running first-boot path = no-op
 - D-241-OPERATOR-SAFE: operator-customized MCP config entries preserved across livinityd restarts
 
-**Plan count estimate:** 3-4 plans (investigation + livinityd module + Mini PC deploy + UAT)
+**Plan count estimate:** 4 plans (registrar skeleton + HTTP client + orchestrator + wire-up/deploy)
 
-**Plans:** 0/? plans complete
+**Plans:** 0/4 plans complete
 
 Plans:
-- [ ] 241-PLAN.md series — TBD (planned after Phase 238)
+- [ ] 241-01-PLAN.md — registrar module skeleton (types + transform + redis-catalog)
+- [ ] 241-02-PLAN.md — AionUi HTTP client + readiness poll
+- [ ] 241-03-PLAN.md — seedAionUiMcpConfig orchestrator + 9-scenario unit tests
+- [ ] 241-04-PLAN.md — livinityd wire-up + Mini PC deploy + idempotency/customization UAT
 
 **UAT:** fresh liv-assistant boot → operator opens Liv AI MCP config → Luse / docker / shell auto-registered. Operator edits one → restarts liv-assistant → operator edit preserved.
 
