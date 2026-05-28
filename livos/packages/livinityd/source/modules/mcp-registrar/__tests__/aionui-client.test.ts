@@ -10,7 +10,8 @@
  *   - .planning/phases/241-mcp-auto-add-liv-tools/241-RESEARCH.md §1 Endpoints A-G
  *     (every endpoint payload + response shape probe-verified 2026-05-27)
  *   - .planning/phases/241-mcp-auto-add-liv-tools/241-RESEARCH.md §Pitfalls 3 + 4
- *     (must NOT use /api/extensions/mcp-servers; must NOT pass enabled in create)
+ *     (must use canonical /api/mcp/* — never the extensions sibling; never
+ *      pass enabled in createServer body — use toggleServer follow-up)
  */
 
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest'
@@ -20,12 +21,13 @@ import type {AionUiCreateMcpServerRequest, AionUiServerRecord} from '../types.js
 
 const BASE_URL = 'http://127.0.0.1:3020'
 
-/** Build a fake `Response` with a JSON body. */
+/** Build a fake `Response` with a JSON body. Cast through `unknown` to side-step
+ * the undici-types vs Node global Response drift (missing `bytes` property). */
 function jsonResponse(body: unknown, init: {status?: number} = {}): Response {
 	return new Response(JSON.stringify(body), {
 		status: init.status ?? 200,
 		headers: {'Content-Type': 'application/json'},
-	})
+	}) as unknown as Response
 }
 
 describe('AionUiMcpClient', () => {
