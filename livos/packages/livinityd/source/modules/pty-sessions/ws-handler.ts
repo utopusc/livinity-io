@@ -1,37 +1,45 @@
 /**
- * Phase 243-02 Task 2 — /livos/terminal/ws WebSocket handler.
+ * Phase 246-03 — /livos/terminal/ws WebSocket handler (multi-session).
  *
- * Wires the xterm.js panel (Plan 243-03) to the PtySession engine (Plan 243-01).
+ * Extends Phase 243-02's single-session handler with create/attach routing
+ * through SessionManager + Redis scrollback writes on every PTY chunk.
  *
- * Auth gates (in order, all MUST pass before any PTY spawn):
- *   1. LIVINITY_PROXY_TOKEN cookie present + verifyProxyToken passes.
- *      → on failure: ws.close(4403, 'unauthorized'). No PtySession created.
- *   2. Feature flag `livos:v43:terminal_panel` === 'true' (default OFF).
- *      → on failure: ws.close(4403, 'feature disabled'). No PtySession.
- *   3. Username forced to literal 'bruce' — defense in depth backing the
- *      runtime guard in 243-01's PtySession.start().
+ * Auth gates (preserved verbatim from Phase 243-02):
+ *   1. LIVINITY_PROXY_TOKEN cookie present + verifyProxyToken passes
+ *      → on failure: ws.close(4403, 'unauthorized')
+ *   2. Feature flag `livos:v43:terminal_panel` === 'true'
+ *      → on failure: ws.close(4403, 'feature disabled')
+ *   3. Username forced to literal 'bruce' — D-V44-NO-ROOT-PTY defense-in-depth
  *
- * Wire protocol (see 243-02-PLAN <protocol> section):
- *   Client→Server: init / data / resize / close
- *   Server→Client: ready / data / exit / error
+ * Connection routing (URL query parsing):
+ *   - /livos/terminal/ws            → CREATE branch (Phase 243 default)
+ *   - /livos/terminal/ws?create     → CREATE branch (explicit, same as above)
+ *   - /livos/terminal/ws?attach=<id>→ ATTACH branch (NEW Phase 246-03)
  *
- * Lifecycle:
- *   - ws.on('close')  → session?.kill() + deleteMetadata (best-effort)
- *   - session 'exit'  → ws.send({type:'exit'}) + ws.close(1000) + deleteMetadata
- *   - All Redis del/write errors logged at warn, NEVER thrown.
+ * Wire protocol:
+ *   Client → Server: init / data / resize / close
+ *   Server → Client: ready / reattached / data / exit / error
  *
- * No `?token=` query-string fallback — cookie-only auth (clean break from the
- * legacy /terminal handler).
+ * Lifecycle (semantic break from Phase 243-02):
+ *   - Phase 243: ws.close() called session.kill() in cleanup
+ *   - Phase 246: ws.close() is a no-op — PTY survives reload. Only
+ *               explicit {type:'close'} OR session 'exit' OR admin kill
+ *               destroys the PtySession.
  *
- * DI surface mirrors ssh-sessions/ws-handler.ts so tests inject fakes for
- * sessionFactory, flagChecker, verifyProxyTokenFn, getAdminUserFn,
- * writeMetadataFn, deleteMetadataFn — handler is fully synchronous in tests.
+ * Scrollback persistence:
+ *   - Every PTY 'data' chunk → ws.send + appendScrollback(redis, id, chunk)
+ *   - On exit: deleteSessionMetadata + deleteScrollback (best-effort)
+ *
+ * D-V44-CADDY-REUSE-226-04: this handler reuses the existing
+ * /livos/terminal/* Caddy matcher unchanged — the query-string variants are
+ * matched by path prefix.
+ *
+ * D-V44-SACRED: this module does NOT touch sdk-agent-runner.ts.
  */
 
 import type http from 'node:http'
 import type {WebSocket} from 'ws'
 
-import {PtySession} from './session.js'
 import type {PtySpawnOptions, PtySessionMetadata} from './types.js'
 import {
 	isTerminalPanelEnabled,
@@ -41,6 +49,14 @@ import {
 	writeSessionMetadata,
 	deleteSessionMetadata,
 } from './metadata.js'
+import {
+	appendScrollback,
+	readScrollback,
+	deleteScrollback,
+	touchLastAttachAt,
+	type PtyScrollbackRedisClient,
+} from './scrollback.js'
+import type {SessionManager} from './session-manager.js'
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -48,6 +64,7 @@ interface MinimalLogger {
 	warn?: (message: string, ...args: unknown[]) => void
 	error: (message: string, ...args: unknown[]) => void
 	log?: (message?: string) => void
+	info?: (message: string, ...args: unknown[]) => void
 	verbose?: (message: string) => void
 }
 
@@ -71,6 +88,15 @@ export interface PtySessionLike {
 	kill(): void
 }
 
+/** Surface the handler needs from a SessionManager record (Session). */
+interface SessionRecordLike {
+	id: string
+	name: string
+	pty: PtySessionLike
+	createdAt: string
+	lastAttachAt: string
+}
+
 /** Narrow shape of the livinityd binding the handler uses. */
 interface MinimalLivinityd {
 	server: {
@@ -80,11 +106,15 @@ interface MinimalLivinityd {
 	}
 }
 
-/** Redis client surface — superset of TerminalFlagRedisClient + metadata. */
-interface MinimalRedis extends TerminalFlagRedisClient {
-	hset(key: string, fields: Record<string, string>): Promise<number>
+/** Redis client surface — superset of flag + metadata + scrollback. */
+interface MinimalRedis extends TerminalFlagRedisClient, PtyScrollbackRedisClient {
 	hgetall(key: string): Promise<Record<string, string>>
-	del(key: string): Promise<number>
+	// Phase 243 metadata.ts wants a {hset(key, fields: Record<string,string>)}
+	// overload — scrollback.ts wants {hset(key, field, value)}. ioredis supports
+	// both at runtime. Declare the field-record overload here so the metadata
+	// function-call sites typecheck against the same shape.
+	hset(key: string, field: string, value: string): Promise<number>
+	hset(key: string, fields: Record<string, string>): Promise<number>
 }
 
 /** Admin user shape returned by the database module's getAdminUser. */
@@ -93,12 +123,20 @@ interface AdminUserShape {
 	role: 'admin' | 'member' | 'guest'
 }
 
+/** Minimal surface the handler needs from SessionManager (testable via mock). */
+export interface SessionManagerLike {
+	create(opts: PtySpawnOptions, nameHint?: string): SessionRecordLike
+	get(sessionId: string): SessionRecordLike | null
+	touch(sessionId: string): boolean
+	kill(sessionId: string): boolean
+}
+
 export interface CreateHandlerDeps {
 	livinityd: MinimalLivinityd
 	logger: MinimalLogger
 	redis: MinimalRedis
-	/** Test-injectable factory; production constructs a real PtySession. */
-	sessionFactory?: (opts: PtySpawnOptions) => PtySessionLike
+	/** Phase 246-01 — shared per-livinityd-process SessionManager singleton. */
+	sessionManager: SessionManager | SessionManagerLike
 	/** Test-injectable flag check; default = `isTerminalPanelEnabled`. */
 	flagChecker?: (redis: TerminalFlagRedisClient) => Promise<boolean>
 	/** Test-injectable; production dynamically imports from database module. */
@@ -114,6 +152,28 @@ export interface CreateHandlerDeps {
 		redis: MinimalRedis,
 		sessionId: string,
 	) => Promise<void>
+	/** Test-injectable; production uses scrollback.ts appendScrollback. */
+	appendScrollbackFn?: (
+		redis: PtyScrollbackRedisClient,
+		sessionId: string,
+		chunk: string,
+	) => Promise<void>
+	/** Test-injectable; production uses scrollback.ts readScrollback. */
+	readScrollbackFn?: (
+		redis: PtyScrollbackRedisClient,
+		sessionId: string,
+	) => Promise<string[]>
+	/** Test-injectable; production uses scrollback.ts deleteScrollback. */
+	deleteScrollbackFn?: (
+		redis: PtyScrollbackRedisClient,
+		sessionId: string,
+	) => Promise<void>
+	/** Test-injectable; production uses scrollback.ts touchLastAttachAt. */
+	touchLastAttachAtFn?: (
+		redis: PtyScrollbackRedisClient,
+		sessionId: string,
+		isoTimestamp: string,
+	) => Promise<void>
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -124,6 +184,22 @@ function extractProxyToken(
 	const cookieHeader = request.headers.cookie ?? ''
 	const m = cookieHeader.match(/LIVINITY_PROXY_TOKEN=([^;]+)/)
 	return m ? m[1] : null
+}
+
+function parseUrlMode(rawUrl: string | undefined): {
+	mode: 'create' | 'attach'
+	attachId: string | null
+} {
+	try {
+		const url = new URL(rawUrl ?? '/', 'http://internal')
+		const attachId = url.searchParams.get('attach')
+		if (attachId !== null && attachId.length > 0) {
+			return {mode: 'attach', attachId}
+		}
+	} catch {
+		// fall through to create
+	}
+	return {mode: 'create', attachId: null}
 }
 
 function safeSend(ws: WebSocket, obj: unknown, logger: MinimalLogger): void {
@@ -144,10 +220,13 @@ function isFinitePositiveInt(value: unknown): value is number {
 
 export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 	const flagChecker = deps.flagChecker ?? isTerminalPanelEnabled
-	const sessionFactory =
-		deps.sessionFactory ?? ((opts: PtySpawnOptions) => new PtySession(opts) as unknown as PtySessionLike)
 	const writeMetadataFn = deps.writeMetadataFn ?? writeSessionMetadata
 	const deleteMetadataFn = deps.deleteMetadataFn ?? deleteSessionMetadata
+	const appendScrollbackFn = deps.appendScrollbackFn ?? appendScrollback
+	const readScrollbackFn = deps.readScrollbackFn ?? readScrollback
+	const deleteScrollbackFn = deps.deleteScrollbackFn ?? deleteScrollback
+	const touchLastAttachAtFn = deps.touchLastAttachAtFn ?? touchLastAttachAt
+	const sessionManager = deps.sessionManager as SessionManagerLike
 
 	async function resolveGetAdminUser(): Promise<() => Promise<AdminUserShape | null>> {
 		if (deps.getAdminUserFn) return deps.getAdminUserFn
@@ -222,34 +301,112 @@ export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 			return
 		}
 
-		// ─── State for this connection ────────────────────────────────────
-		let session: PtySessionLike | null = null
-		let cleanedUp = false
+		// ─── URL mode routing (Phase 246-03) ──────────────────────────────
+		const requestUrl = (request as {url?: string}).url
+		const {mode, attachId} = parseUrlMode(requestUrl)
 
-		async function cleanup(): Promise<void> {
-			if (cleanedUp) return
-			cleanedUp = true
-			const s = session
-			if (s) {
-				try {
-					s.kill()
-				} catch (err) {
+		// ─── State for this connection ────────────────────────────────────
+		let activeSession: SessionRecordLike | null = null
+
+		function wireForwarders(session: SessionRecordLike): void {
+			const sessionId = session.id
+			session.pty.on('data', (chunk: string) => {
+				safeSend(ws, {type: 'data', data: chunk}, deps.logger)
+				// Fire-and-log: scrollback writes are observability + reload-replay,
+				// not auth — never throw out of the data callback.
+				void appendScrollbackFn(deps.redis, sessionId, chunk).catch((err) => {
 					warnOrError(
 						deps.logger,
-						'[pty-terminal] kill threw during cleanup:',
+						'[pty-terminal] appendScrollback failed:',
 						(err as Error)?.message || err,
 					)
-				}
-				try {
-					await deleteMetadataFn(deps.redis, s.sessionId)
-				} catch (err) {
-					warnOrError(
+				})
+			})
+			session.pty.on(
+				'exit',
+				(info: {exitCode: number; signal: string | null}) => {
+					safeSend(
+						ws,
+						{type: 'exit', code: info.exitCode, signal: info.signal},
 						deps.logger,
-						'[pty-terminal] deleteMetadata failed:',
-						(err as Error)?.message || err,
 					)
-				}
+					try {
+						ws.close(1000)
+					} catch {
+						// transport already closed — ignore
+					}
+					// Phase 246-03: pty exit removes from SessionManager + cleans Redis.
+					try {
+						sessionManager.kill(sessionId)
+					} catch (err) {
+						warnOrError(
+							deps.logger,
+							'[pty-terminal] sessionManager.kill on exit threw:',
+							(err as Error)?.message || err,
+						)
+					}
+					void deleteMetadataFn(deps.redis, sessionId).catch((err) => {
+						warnOrError(
+							deps.logger,
+							'[pty-terminal] deleteMetadata failed:',
+							(err as Error)?.message || err,
+						)
+					})
+					void deleteScrollbackFn(deps.redis, sessionId).catch((err) => {
+						warnOrError(
+							deps.logger,
+							'[pty-terminal] deleteScrollback failed:',
+							(err as Error)?.message || err,
+						)
+					})
+				},
+			)
+		}
+
+		// ─── ATTACH branch (Phase 246-03) ─────────────────────────────────
+		if (mode === 'attach' && attachId) {
+			const existing = sessionManager.get(attachId)
+			if (!existing) {
+				ws.close(4404, 'session not found')
+				return
 			}
+			activeSession = existing
+			// Best-effort Redis HSET on the metadata hash — observability only.
+			const nowIso = new Date().toISOString()
+			void touchLastAttachAtFn(deps.redis, attachId, nowIso).catch((err) => {
+				warnOrError(
+					deps.logger,
+					'[pty-terminal] touchLastAttachAt failed:',
+					(err as Error)?.message || err,
+				)
+			})
+			try {
+				sessionManager.touch(attachId)
+			} catch (err) {
+				warnOrError(
+					deps.logger,
+					'[pty-terminal] sessionManager.touch threw:',
+					(err as Error)?.message || err,
+				)
+			}
+			let scrollback: string[] = []
+			try {
+				scrollback = await readScrollbackFn(deps.redis, attachId)
+			} catch (err) {
+				warnOrError(
+					deps.logger,
+					'[pty-terminal] readScrollback failed (empty replay):',
+					(err as Error)?.message || err,
+				)
+				scrollback = []
+			}
+			safeSend(
+				ws,
+				{type: 'reattached', sessionId: attachId, scrollback},
+				deps.logger,
+			)
+			wireForwarders(existing)
+			// Fall through to the message router below so resize/data/close work.
 		}
 
 		// ─── Message routing ──────────────────────────────────────────────
@@ -267,7 +424,7 @@ export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 			}
 
 			if (parsed.type === 'init') {
-				if (session) {
+				if (activeSession) {
 					// already initialized — silently ignore duplicate init
 					return
 				}
@@ -288,10 +445,9 @@ export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 					rows,
 					...(cwd !== undefined ? {cwd} : {}),
 				}
-				let created: PtySessionLike
+				let created: SessionRecordLike
 				try {
-					created = sessionFactory(spawnOpts)
-					created.start()
+					created = sessionManager.create(spawnOpts)
 				} catch (err) {
 					const message = (err as Error)?.message ?? String(err)
 					warnOrError(
@@ -301,67 +457,60 @@ export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 					)
 					safeSend(ws, {type: 'error', message}, deps.logger)
 					ws.close(1011, 'spawn failed')
-					// Best-effort cleanup — created session if any.
-					void cleanup()
 					return
 				}
-				session = created
-				const nowIso = new Date().toISOString()
+				activeSession = created
 				const meta: PtySessionMetadata = {
 					user_id: userId,
-					name: 'terminal',
-					createdAt: nowIso,
-					lastAttachAt: nowIso,
+					name: created.name,
+					createdAt: created.createdAt,
+					lastAttachAt: created.lastAttachAt,
 					cwd: cwd ?? '',
 				}
 				// Fire-and-log: Redis metadata is observability, not auth.
-				void writeMetadataFn(deps.redis, created.sessionId, meta).catch((err) => {
+				void writeMetadataFn(deps.redis, created.id, meta).catch((err) => {
 					warnOrError(
 						deps.logger,
 						'[pty-terminal] writeMetadata failed (continuing):',
 						(err as Error)?.message || err,
 					)
 				})
-				safeSend(ws, {type: 'ready', sessionId: created.sessionId}, deps.logger)
-				created.on('data', (chunk: string) => {
-					safeSend(ws, {type: 'data', data: chunk}, deps.logger)
-				})
-				created.on('exit', (info: {exitCode: number; signal: string | null}) => {
-					safeSend(
-						ws,
-						{type: 'exit', code: info.exitCode, signal: info.signal},
-						deps.logger,
-					)
-					try {
-						ws.close(1000)
-					} catch {
-						// transport already closed — ignore
-					}
-					void cleanup()
-				})
+				safeSend(ws, {type: 'ready', sessionId: created.id}, deps.logger)
+				wireForwarders(created)
 				return
 			}
 
 			// Messages other than 'init' before session exists → silently ignored
 			// per protocol (no PtySession spawn yet).
-			if (!session) {
+			if (!activeSession) {
 				return
 			}
 
 			if (parsed.type === 'data') {
 				if (typeof parsed.data === 'string') {
-					session.write(parsed.data)
+					activeSession.pty.write(parsed.data)
 				}
 				return
 			}
 			if (parsed.type === 'resize') {
 				if (isFinitePositiveInt(parsed.cols) && isFinitePositiveInt(parsed.rows)) {
-					session.resize(parsed.cols, parsed.rows)
+					activeSession.pty.resize(parsed.cols, parsed.rows)
 				}
 				return
 			}
 			if (parsed.type === 'close') {
-				session.kill()
+				// Phase 246-03: route teardown through SessionManager so the map
+				// stays consistent. The manager-kill triggers pty.kill internally
+				// — the 'exit' forwarder above then sends {type:'exit'} + closes.
+				try {
+					sessionManager.kill(activeSession.id)
+				} catch (err) {
+					warnOrError(
+						deps.logger,
+						'[pty-terminal] sessionManager.kill on close threw:',
+						(err as Error)?.message || err,
+					)
+				}
 				return
 			}
 
@@ -369,7 +518,15 @@ export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 		})
 
 		ws.on('close', () => {
-			void cleanup()
+			// Phase 246-03 semantic break — do NOT kill the PtySession on ws
+			// disconnect. The session survives browser reload; the next attach
+			// reattaches via ?attach=<id>. Only explicit {type:'close'}, pty
+			// exit, or admin kill destroys the session.
+			if (typeof deps.logger.info === 'function' && activeSession) {
+				deps.logger.info('[pty-terminal] ws disconnected', {
+					sessionId: activeSession.id,
+				})
+			}
 		})
 
 		ws.on('error', (err: Error) => {
