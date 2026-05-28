@@ -188,6 +188,10 @@ import {createMcpConfigRouter} from './modules/server/trpc/mcp-config-router.js'
 // the 5 SUPPORTED_CLIS). Stateless — only dep is the boot logger; no Redis,
 // no config check. Production swap happens unconditionally at every boot.
 import {createCliInstallerRouter} from './modules/server/trpc/cli-installer-router.js'
+// Phase 240-01 — authCli is the per-CLI canonical login spawn wrapper
+// (needs Redis for status-key writes). The router does NOT pull this in
+// directly so it remains test-isolated; the boot block below wires it in.
+import {authCli} from './modules/cli-installer/index.js'
 // Phase 224 — `config.*` namespace production wire. Builds the
 // getV42MigrationActive procedure against the live ioredis client; the
 // default empty-injection stub throws PRECONDITION_FAILED until this
@@ -1799,20 +1803,72 @@ export default class Livinityd {
 				redis: this.ai.redis,
 			})
 
-			// Phase 239-01 — cli-installer router. Stateless; only deps are the
-			// boot logger. No Redis check needed (whitelist + spawn impl are
-			// self-contained). Wired unconditionally into appRouter.cliInstaller
-			// below so the UI's install button + Phase 240's UI can both reach
-			// the whitelist-gated install + detect procedures.
+			// Phase 239-01 + Phase 240-01 — cli-installer router. Wires:
+			//   - install + detect (Phase 239) — whitelist-gated bash spawn
+			//   - auth (Phase 240) — per-CLI canonical login spawn, needs Redis
+			//     for liv:cli:auth:<name> status keys (running/ok/failed, EX 3600)
+			//   - auditLogFactory — writes one device_audit_log row per install
+			//     and per auth attempt (tool_name='cliInstaller.install'/'auth',
+			//     params_digest=sha256({name}), user_id=ctx.currentUser.id).
+			//
+			// authFn is a thin wrapper that closes over `this.ai.redis` so the
+			// router itself stays Redis-free (testability). The wrapper signature
+			// matches what cli-installer-router calls (input + {logger, auditLog}).
+			//
+			// auditLogFactory.body is wrapped in try/catch — write failures are
+			// warn-logged and NEVER reflected to the user-visible response
+			// (defense-in-depth: audit observability MUST NEVER block the
+			// functional install/auth path).
+			const livRedis = this.ai.redis
 			const cliInstallerRouterProductionInstance = createCliInstallerRouter({
 				logger: {
 					info: (msg) => webappLogger.info(msg),
 					warn: (msg, err) => this.logger.error(msg, err),
 					error: (msg, err) => this.logger.error(msg, err),
 				},
+				authFn: async (input, deps) =>
+					authCli(input, {
+						logger: deps.logger,
+						redis: livRedis,
+						auditLog: deps.auditLog,
+					}),
+				auditLogFactory: (ctx: unknown) => async (row) => {
+					try {
+						const pool = getPool()
+						if (!pool) {
+							webappLogger.warn(
+								'Phase 240-01: device_audit_log write skipped — pg pool not initialized',
+							)
+							return
+						}
+						const ctxRec = ctx as {currentUser?: {id?: string}} | undefined
+						const userId =
+							ctxRec?.currentUser?.id && ctxRec.currentUser.id.length > 0
+								? ctxRec.currentUser.id
+								: '00000000-0000-0000-0000-000000000000'
+						await pool.query(
+							`INSERT INTO device_audit_log
+								(user_id, device_id, tool_name, params_digest, success, error)
+							 VALUES ($1, $2, $3, $4, $5, $6)`,
+							[
+								userId,
+								'livinityd-trpc',
+								row.tool_name,
+								row.params_digest,
+								row.success,
+								row.error,
+							],
+						)
+					} catch (err) {
+						webappLogger.warn(
+							'Phase 240-01: device_audit_log write failed (non-fatal)',
+							err,
+						)
+					}
+				},
 			})
 			webappLogger.info(
-				'Phase 239-01 — cliInstaller.* tRPC router wired (whitelist: claude-code / opencode / gemini / openclaw / aion-cli; D-239-07 RCE boundary)',
+				'Phase 239-01 + 240-01 — cliInstaller.* tRPC router wired (install / detect / auth; whitelist=5; D-239-07 RCE boundary; audit + Redis status keys live)',
 			)
 
 			const productionAppRouter = createAppRouter({
