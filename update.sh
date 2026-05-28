@@ -669,6 +669,77 @@ else
     info "Phase 245.2: $_CLAUDE_REAL not present — claude wrapper deferred (run `claude doctor` to install)"
 fi
 
+# ── Phase 245.4 — Single-binary MCP wrappers under /usr/local/bin/ ─────────
+# AionUi's "One-Click Import" UI flow concatenates `command + args[]` into a single
+# string and runs `which` on it → "Command not found" when args are present. Plus,
+# even when bypassing import via direct `claude mcp add`, AionUi spawns under the
+# liv-assistant.service sandbox (`ProtectHome=read-only`, ReadWritePaths excludes
+# ~/.npm), so `npx tsx ...` fails with EROFS when it tries to write its package cache.
+#
+# Fix: lay down 5 single-binary wrapper scripts that exec `/usr/bin/tsx ...` directly
+# (no npx, no npm cache needed). MCP config in AionUi/Claude Code uses these wrappers
+# as the `command` with empty `args[]` — works for both One-Click Import path and the
+# direct spawn path under the sandboxed liv-assistant service.
+step "Phase 245.4: Liv MCP wrapper scripts (npm-free spawn under read-only \$HOME sandbox)"
+_MCP_DIR=/usr/local/bin
+declare -A _MCP_PATHS=(
+    [liv-system]="/opt/livos/packages/livinityd/source/modules/mcp/local/liv-system/index.ts"
+    [liv-vault]="/opt/livos/packages/livinityd/source/modules/mcp/local/liv-vault/index.ts"
+    [liv-apps]="/opt/livos/packages/livinityd/source/modules/mcp/local/liv-apps/index.ts"
+    [liv-docker]="/opt/livos/packages/livinityd/source/modules/mcp/local/liv-docker/index.ts"
+    [luse]="/opt/livos/packages/livinityd/source/modules/computer-use/mcp/server.ts"
+)
+_MCP_WRAPPED=0
+for _NAME in "${!_MCP_PATHS[@]}"; do
+    _WRAPPER="${_MCP_DIR}/liv-mcp-${_NAME}"
+    _PATH="${_MCP_PATHS[$_NAME]}"
+    _DESIRED="#!/bin/bash
+# Phase 245.4 wrapper — direct tsx spawn (npx avoided to bypass EROFS under
+# liv-assistant.service ProtectHome=read-only sandbox).
+exec /usr/bin/tsx ${_PATH} \"\$@\""
+    if [[ ! -f "$_WRAPPER" ]] || ! diff -q <(echo "$_DESIRED") "$_WRAPPER" >/dev/null 2>&1; then
+        echo "$_DESIRED" | sudo tee "$_WRAPPER" > /dev/null
+        sudo chmod 755 "$_WRAPPER"
+        _MCP_WRAPPED=$((_MCP_WRAPPED + 1))
+    fi
+done
+if [[ "$_MCP_WRAPPED" -gt 0 ]]; then
+    ok "Phase 245.4: ${_MCP_WRAPPED}/5 MCP wrapper(s) installed/updated"
+else
+    ok "Phase 245.4: 5/5 MCP wrappers already current (idempotent skip)"
+fi
+
+# Patch AionUi backend MCP entries to use wrapper paths (only if entries exist
+# from Phase 241 seed AND still reference the old /usr/bin/npx command). The
+# PATCH is HTTP-driven so it survives across liv-assistant restarts. Idempotent.
+step "Phase 245.4: AionUi backend MCP entry patching (wrapper paths)"
+_PATCH_COUNT=0
+for _NAME in "${!_MCP_PATHS[@]}"; do
+    _ID=$(curl -s http://localhost:3020/api/mcp/servers 2>/dev/null | \
+        python3 -c "import sys,json; d=json.load(sys.stdin); [print(m['id']) for m in d.get('data',[]) if m['name']=='${_NAME}']" 2>/dev/null | head -1)
+    if [[ -n "$_ID" ]]; then
+        _CURRENT_CMD=$(curl -s "http://localhost:3020/api/mcp/servers/$_ID" 2>/dev/null | \
+            python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('transport',{}).get('command',''))" 2>/dev/null)
+        if [[ "$_CURRENT_CMD" != "/usr/local/bin/liv-mcp-${_NAME}" ]]; then
+            _ENV_JSON='{}'
+            if [[ "$_NAME" == "luse" ]]; then
+                _ENV_JSON="{\"DISPLAY\":\":1\",\"XAUTHORITY\":\"/run/user/1000/gdm/Xauthority\",\"LIVINITYD_API_URL\":\"http://127.0.0.1:8080\",\"LIV_API_KEY\":\"$(grep -oP 'LIV_API_KEY=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\",\"LUSE_REDIS_URL\":\"$(grep -oP 'REDIS_URL=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\",\"LUSE_USER_SLUG\":\"bruce\",\"LUSE_DOMAIN_ROOT\":\"livinity.io\"}"
+            else
+                _ENV_JSON="{\"LIVINITYD_API_URL\":\"http://127.0.0.1:8080\",\"LIV_API_KEY\":\"$(grep -oP 'LIV_API_KEY=\K[^\n]+' /opt/livos/.env 2>/dev/null || echo missing)\"}"
+            fi
+            curl -s -X PUT "http://localhost:3020/api/mcp/servers/$_ID" \
+                -H "Content-Type: application/json" \
+                -d "{\"transport\":{\"type\":\"stdio\",\"command\":\"/usr/local/bin/liv-mcp-${_NAME}\",\"args\":[],\"env\":${_ENV_JSON}}}" > /dev/null
+            _PATCH_COUNT=$((_PATCH_COUNT + 1))
+        fi
+    fi
+done
+if [[ "$_PATCH_COUNT" -gt 0 ]]; then
+    ok "Phase 245.4: ${_PATCH_COUNT} AionUi MCP entries patched to wrapper paths"
+else
+    ok "Phase 245.4: AionUi MCP entries already on wrapper paths (idempotent skip)"
+fi
+
 # ── Phase 245.3 — Claude Code user-level MCP permissions allowlist ─────────
 # AionUi's @agentclientprotocol/claude-agent-acp wrapper enforces tool permissions
 # strictly: only mcp__* patterns listed in user/project settings.json `permissions.allow`
