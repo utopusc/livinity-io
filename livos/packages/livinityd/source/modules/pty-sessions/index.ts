@@ -30,3 +30,7 @@ export type {TerminalFlagRedisClient} from './feature-flag.js'
 
 export {createPtyTerminalWsHandler} from './ws-handler.js'
 export type {CreateHandlerDeps, PtySessionLike} from './ws-handler.js'
+
+// Phase 246-01 — multi-session manager.
+export {SessionManager} from './session-manager.js'
+export type {Session, SessionSummary, SessionManagerDeps} from './types.js'
