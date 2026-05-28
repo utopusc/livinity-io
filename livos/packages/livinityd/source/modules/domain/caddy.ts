@@ -334,11 +334,19 @@ ${WS_TRANSPORT_BODY}
  *   browser is forced into exactly that negative case for WS upgrades,
  *   so it is the OPERATIVE case.
  *
- * Phase 237 fix — two matchers:
+ * Phase 237 fix — two matchers (extended in Phase 245.6 with a third for
+ * livinityd's `/ws/stream/*` WebApp RFB streaming endpoint that pre-dated
+ * the AionUi WS land-grab):
+ *   0. `@webapp_stream_ws` — `path /ws/stream/*` matched FIRST. Routes to
+ *      :8080 (livinityd) which hosts the Phase 100-07 WebApp RFB stream
+ *      upgrade handler. Without this prefix-precedence carve-out, the
+ *      broader `@liv_ws path /ws /ws/*` below claims `/ws/stream/*` and
+ *      sends it to :3020 (AionUi) → 404 → stream window stays blank.
  *   1. `@liv_ws` — UNCONDITIONAL on paths `/ws` and `/ws/*`. AionUi
- *      exclusively owns the `/ws` path on this Caddy host; livinityd has
- *      no `/ws` route. Therefore routing every `/ws*` request to :3020
- *      is safe + consistent and does not require any header check.
+ *      exclusively owns the `/ws` path on this Caddy host once
+ *      `/ws/stream/*` is carved out by matcher (0). Routing every
+ *      remaining `/ws*` request to :3020 is safe + consistent and does
+ *      not require any header check.
  *      (No Referer/Origin matching needed — and per RFC 6455 browsers do
  *      not send Referer here anyway.)
  *   2. `@liv_api_subresource` — KEEP the referer-gated pattern, but for
@@ -388,7 +396,13 @@ ${WS_TRANSPORT_BODY}
  * Constant name preserved (`LIV_ASSISTANT_SUBRESOURCE_HANDLE`) to avoid
  * touching the 3 emit sites in `generateFullCaddyfile`.
  */
-const LIV_ASSISTANT_SUBRESOURCE_HANDLE = `\t@liv_ws path /ws /ws/*
+const LIV_ASSISTANT_SUBRESOURCE_HANDLE = `\t@webapp_stream_ws path /ws/stream/*
+\thandle @webapp_stream_ws {
+\t\treverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY}
+\t\t}
+\t}
+\t@liv_ws path /ws /ws/*
 \thandle @liv_ws {
 \t\treverse_proxy 127.0.0.1:3020 {
 \t\t\theader_down -X-Frame-Options
