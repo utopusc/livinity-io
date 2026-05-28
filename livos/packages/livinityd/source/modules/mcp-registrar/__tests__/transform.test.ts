@@ -37,7 +37,7 @@ describe('transformRedisToAionUi', () => {
 			builtin: false,
 		})
 		// Belt-and-braces: enabled must not appear anywhere in the payload
-		expect((out as Record<string, unknown>).enabled).toBeUndefined()
+		expect((out as unknown as Record<string, unknown>).enabled).toBeUndefined()
 	})
 
 	test('stdio with missing args defaults to []', () => {
