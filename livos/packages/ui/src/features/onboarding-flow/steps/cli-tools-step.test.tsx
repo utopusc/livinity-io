@@ -3,8 +3,7 @@
 // Phase 239 Plan 02 — CliToolsStep vitest coverage.
 //
 // RTL absent — same `react-dom/client + act + vi.mock` harness used by
-// connect-ai-step.test.tsx / provider-step.test.tsx / locale-timezone-step.test.tsx
-// (D-NO-NEW-DEPS).
+// locale-timezone-step.test.tsx / region-step.test.tsx (D-NO-NEW-DEPS).
 //
 // Coverage (>=9 it() blocks per acceptance criteria):
 //   1. Renders exactly 5 cards in document order (drift-lock vs Plan 239-01 SUPPORTED_CLIS)
@@ -220,7 +219,10 @@ describe('CliToolsStep — install dispatch', () => {
 		const installing = container.querySelector('[data-testid="cli-installing-gemini"]')
 		expect(installing).not.toBeNull()
 		// Cleanup — resolve the dangling promise to avoid unhandled rejection.
-		if (resolveInstall) resolveInstall({ok: true, output: '', exitCode: 0, durationMs: 1})
+		const r = resolveInstall as
+			| ((v: {ok: boolean; output: string; exitCode: number; durationMs: number}) => void)
+			| null
+		if (r !== null) r({ok: true, output: '', exitCode: 0, durationMs: 1})
 	})
 })
 

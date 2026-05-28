@@ -4,8 +4,9 @@
 //
 // RTL (testing-library/react) is intentionally NOT used (D-NO-NEW-DEPS,
 // established Phase 25/30/33/38/62/67-04/68/195-04/196-03 precedent —
-// see connect-ai-step.test.tsx + provider-step.test.tsx for the
-// canonical react-dom/client + vi.mock harness).
+// see locale-timezone-step.test.tsx + cli-tools-step.test.tsx for the
+// canonical react-dom/client + vi.mock harness.
+// (Legacy harness references were retired in Phase 239-02.)
 //
 // Coverage (6 it() blocks):
 //
