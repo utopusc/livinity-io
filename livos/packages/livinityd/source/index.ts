@@ -30,6 +30,7 @@ import {initDatabase, migrateFromYaml, closeDatabase} from './modules/database/i
 import {seedLocalEnvironment} from './modules/docker/environments.js'
 import {seedBuiltinTools} from './modules/seed-builtin-tools.js'
 import {drainInstallPendingRedisKeys} from './modules/drain-install-pending-redis.js'
+import {seedAionUiMcpConfig} from './modules/mcp-registrar/index.js'
 // Phase 169-05 — Vault graph factory import is kept here (source/index.ts) for
 // grep visibility per the 169-05 sacred-guard contract; the actual app.use()
 // mount happens inside server/index.ts via the mountVaultGraphRoutes helper,
@@ -636,6 +637,38 @@ export default class Livinityd {
 			}
 		} catch (err) {
 			this.logger.error('Phase 112: failed to bootstrap livos:domain:config', err)
+		}
+
+		// Phase 241 — seed AionUi's MCP config with Liv's 5 system MCPs.
+		// Boot-time, single-shot per version sentinel (livos:v43:mcp_seeded:v1).
+		// Reads from Redis hash liv:mcp:config (D-202-12 source of truth), pushes
+		// missing entries to AionUi via http://127.0.0.1:3020 HTTP API, then
+		// distributes to all 8 agent CLIs via /api/mcp/sync-to-agents.
+		//
+		// NEVER throws (orchestrator catches every failure path); livinityd boot
+		// continues even if AionUi is down. On readiness-poll timeout the sentinel
+		// is LEFT UNSET so the next boot retries.
+		//
+		// Locked decisions: .planning/phases/241-mcp-auto-add-liv-tools/241-CONTEXT.md
+		// API contract:     .planning/phases/241-mcp-auto-add-liv-tools/241-RESEARCH.md §1
+		try {
+			const aionUiBaseUrl = process.env.AIONUI_BASE_URL ?? 'http://127.0.0.1:3020'
+			const r = await seedAionUiMcpConfig({
+				redis: this.ai.redis,
+				aionUiBaseUrl,
+				logger: {
+					info: (msg) => this.logger.log(`[mcp-registrar] ${msg}`),
+					warn: (msg, err) => this.logger.error(`[mcp-registrar] ${msg}`, err),
+					error: (msg, err) => this.logger.error(`[mcp-registrar] ${msg}`, err),
+				},
+			})
+			this.logger.log(
+				`Phase 241: AionUi MCP seed (created=${r.created} skipped=${r.skipped} errored=${r.errored} sentinel=${r.sentinelSet ? 'set' : 'unchanged'})`,
+			)
+		} catch (err) {
+			// Defense in depth — seedAionUiMcpConfig should never throw, but if it
+			// does, livinityd boot must continue.
+			this.logger.error('Phase 241: AionUi MCP seed threw (non-fatal — livinityd boot continues)', err)
 		}
 
 		// Phase 104 plan 104-10 — LivOS → livinity.io heartbeat client (FIRST
