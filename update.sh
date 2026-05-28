@@ -632,6 +632,43 @@ else
     info "scripts/install-liv-assistant.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 223-01 deploy)"
 fi
 
+# ── Phase 245.2 — Claude Code wrapper for MCP_TIMEOUT ─────────────────────
+# aioncore (AionUi backend) sanitizes env when spawning Claude Code child processes,
+# dropping any MCP_TIMEOUT set via systemd unit or shell. Without 30s timeout, 5 of 6
+# stdio MCPs (luse / liv-system / liv-vault / liv-apps / liv-docker) silently fail
+# to register tools during 6× parallel `npx tsx` cold-start. Wrapper script at
+# `/home/bruce/.local/bin/claude` exports MCP_TIMEOUT=30000 before exec'ing the real
+# claude binary. Idempotent: only re-installs if wrapper missing or stale.
+step "Phase 245.2: Claude Code MCP_TIMEOUT wrapper"
+_CLAUDE_BIN="/home/bruce/.local/bin/claude"
+_CLAUDE_REAL="/home/bruce/.local/share/claude/versions/2.1.148"
+_WRAPPER_MARKER="Phase 245.2 wrapper"
+if [[ -f "$_CLAUDE_REAL" ]]; then
+    _NEEDS_INSTALL=0
+    if [[ ! -f "$_CLAUDE_BIN" ]] || ! grep -q "$_WRAPPER_MARKER" "$_CLAUDE_BIN" 2>/dev/null; then
+        _NEEDS_INSTALL=1
+    fi
+    if [[ "$_NEEDS_INSTALL" -eq 1 ]]; then
+        # Preserve original symlink if it exists
+        if [[ -L "$_CLAUDE_BIN" && ! -L "$_CLAUDE_BIN.real-symlink" ]]; then
+            sudo -u bruce mv "$_CLAUDE_BIN" "$_CLAUDE_BIN.real-symlink" 2>/dev/null || true
+        fi
+        sudo -u bruce tee "$_CLAUDE_BIN" > /dev/null <<'CLAUDE_WRAPPER_EOF'
+#!/bin/bash
+# Phase 245.2 wrapper — aioncore sanitizes env when spawning Claude Code, dropping MCP_TIMEOUT.
+# Without 30s timeout, 5 of 6 stdio MCPs (luse/liv-*) silently fail during cold-start.
+export MCP_TIMEOUT=${MCP_TIMEOUT:-30000}
+exec /home/bruce/.local/share/claude/versions/2.1.148 "$@"
+CLAUDE_WRAPPER_EOF
+        sudo -u bruce chmod 755 "$_CLAUDE_BIN"
+        ok "Phase 245.2: claude wrapper installed at $_CLAUDE_BIN (MCP_TIMEOUT=30000)"
+    else
+        ok "Phase 245.2: claude wrapper already in place (idempotent skip)"
+    fi
+else
+    info "Phase 245.2: $_CLAUDE_REAL not present — claude wrapper deferred (run `claude doctor` to install)"
+fi
+
 # ── Step 4.7: Phase 226 — Caddy /liv reverse-proxy snippet install ─────────
 # Lays down /etc/caddy/conf.d/liv-assistant.caddy + wires `import liv_assistant`
 # into the existing bruce.livinity.io site block, defensively chowns Caddyfile
