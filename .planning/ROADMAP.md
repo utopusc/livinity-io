@@ -3623,7 +3623,7 @@ Plans:
 
 ---
 
-### Phase 241: MCP auto-add Liv tools (Luse / docker / shell) — 🟡 PLANNED 2026-05-27 (0/? plans)
+### Phase 241: MCP auto-add Liv tools (Luse / docker / shell) — 🟡 IN PROGRESS 2026-05-28 (1/4 plans)
 
 **Goal:** livinityd auto-registers Liv's MCP tools (Luse computer-use, docker, shell) into AionUi's MCP config on liv-assistant first boot. Idempotent (per-tool EXISTS gate + sentinel). Never overwrites operator-customized entries.
 
@@ -3637,10 +3637,10 @@ Plans:
 
 **Plan count estimate:** 4 plans (registrar skeleton + HTTP client + orchestrator + wire-up/deploy)
 
-**Plans:** 0/4 plans complete
+**Plans:** 1/4 plans complete
 
 Plans:
-- [ ] 241-01-PLAN.md — registrar module skeleton (types + transform + redis-catalog)
+- [x] 241-01-PLAN.md — registrar module skeleton (types + transform + redis-catalog) — ✅ **SHIPPED 2026-05-28** — 6 files / 14 vitest cases / 4 TDD commits (`f9348bc2` test + `788348af` feat + `bebc3d9d` test + `988a6ede` feat). Pure transform + pure async catalog reader, zero new deps, zero wire-up changes, drift-lock test on SYSTEM_MCP_NAMES. SUMMARY at `.planning/phases/241-mcp-auto-add-liv-tools/241-01-SUMMARY.md`.
 - [ ] 241-02-PLAN.md — AionUi HTTP client + readiness poll
 - [ ] 241-03-PLAN.md — seedAionUiMcpConfig orchestrator + 9-scenario unit tests
 - [ ] 241-04-PLAN.md — livinityd wire-up + Mini PC deploy + idempotency/customization UAT
