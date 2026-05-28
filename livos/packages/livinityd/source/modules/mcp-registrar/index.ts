@@ -14,3 +14,9 @@ export {
 } from './redis-catalog.js'
 export {AionUiMcpClient, type AionUiSyncResult} from './aionui-client.js'
 export {waitForAionUiReady, type ReadyPollOptions} from './ready-poll.js'
+export {
+	MCP_SEED_SENTINEL_KEY,
+	seedAionUiMcpConfig,
+	type SeedDeps,
+	type SeedRedisClient,
+} from './seed.js'
