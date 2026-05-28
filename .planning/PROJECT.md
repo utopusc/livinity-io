@@ -340,7 +340,13 @@ v42's scope was the OpenClawOS → AionUi Liv Assistant swap (Phases 222-228 + 2
 - [x] FR-BROKER-E2-01..02 → Phase 62 (Settings API Keys CRUD + filter dropdown + admin filter chip)
 - [⚠] FR-VERIFY-V30-01..08 → Phase 63 (R1-R3.11 live-verified ad-hoc; formal walkthrough waived via --accept-debt; lifted into v31 P64)
 
-## Current Milestone: v43 — Liv AI Deeper Integration + UI Polish (ACTIVE — opened 2026-05-27)
+## Previous Milestone: v43 — Liv AI Deeper Integration + UI Polish — CLOSED 2026-05-28 ✅
+
+**Outcome:** 17/17 declared phases SHIPPED (1 obsoleted). Archive: `.planning/milestones/v43/v43-MILESTONE-CLOSED.md`. Operator UAT walks pending via `.planning/milestones/v43/v43-UAT-CHECKLIST.md` (41 items, auto-approved during autonomous chain). Sacred SHA `f3538e1d…` preserved across every commit. Git tag: `v43.0`.
+
+---
+
+## Current Milestone: v43 — Liv AI Deeper Integration + UI Polish (CLOSED — opened 2026-05-27, closed 2026-05-28)
 
 **Goal:** Take the v42 AionUi-based Liv Assistant from "live and working" to "feels like a Livinity-native product end-to-end" — every visible Aion string + asset replaced with Liv equivalents, onboarding teaches the operator about the CLI agents Liv ships with, Liv's tools register into the MCP layer automatically, the Local Agents tab can install missing agents from the UI, a persistent xterm-backed terminal lives inside the LivOS shell, and a Luse skill set is available to Claude Code agents running inside Liv AI.
 
