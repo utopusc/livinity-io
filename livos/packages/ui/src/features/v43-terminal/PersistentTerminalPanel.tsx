@@ -1,29 +1,37 @@
 /**
- * Phase 243-03 — Persistent UI Terminal panel.
+ * Phase 243-03 + Phase 246-04 — Persistent UI Terminal panel.
  *
- * Browser-side xterm.js panel that talks to the new `/livos/terminal/ws`
- * cookie-auth WebSocket endpoint (Plan 243-02) backed by the bruce-only
- * PtySession module (Plan 243-01).
+ * Multi-tab host. Each tab is a long-lived xterm.js instance backed by a
+ * server-side PtySession. Tabs survive browser reload via the
+ * `livos.v44.terminal.session.<tabKey>` localStorage map: on mount the
+ * panel iterates that prefix, mints one `TerminalTabPane` per entry in
+ * attach mode, and the panel renders ?attach=<sessionId> WS connections
+ * in parallel. Switching tabs flips a CSS `hidden` class — inactive
+ * panes keep their WS open and their xterm DOM attached, so scroll
+ * position + state never tear down.
  *
- * Theme matches CONTEXT spec:
- *   - background `#0b0b0c`
- *   - foreground `#e7e7e8`
- *   - accent     `#7dd3fc`
+ * Theme matches Phase 243 spec verbatim (background `#0b0b0c`, foreground
+ * `#e7e7e8`, accent `#7dd3fc`). The Phase 243 dock entry and the
+ * window-content route swap (`useTerminalPanelEnabled` gate) are
+ * UNCHANGED — this is a drop-in upgrade of the single-pane panel.
  *
- * Hidden behind the `livos:v43:terminal_panel` Redis feature flag — the
- * dock entry and the route swap in `window-content.tsx` both gate visibility
- * via `useTerminalPanelEnabled()`. When the flag is OFF the legacy
- * `terminal-content.tsx` surface is rendered instead (D-243-FLAG-ROLLBACK).
- *
- * Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED — this
+ * D-V44-SACRED preserved: `liv/packages/core/src/sdk-agent-runner.ts`
+ * blob SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED — this
  * file lives under `livos/packages/ui/` and does not touch `liv/`.
  */
 import {FitAddon} from '@xterm/addon-fit'
 import {WebLinksAddon} from '@xterm/addon-web-links'
 import {Terminal} from '@xterm/xterm'
-import {useEffect, useRef, useState} from 'react'
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
+import {uuidv7} from 'uuidv7'
 
-import {useTerminalWs, type ServerToClient} from './use-terminal-ws'
+import {TerminalTabBar, type TerminalTab} from './TerminalTabBar'
+import {
+	readAllTabSessions,
+	removeTabSession,
+	writeTabSession,
+} from './terminal-session-storage'
+import {useTerminalWs, type ClientToServer, type ServerToClient} from './use-terminal-ws'
 
 import '@xterm/xterm/css/xterm.css'
 
@@ -37,18 +45,206 @@ const TERMINAL_THEME = {
 const FONT_FAMILY =
 	"'SF Mono', SFMono-Regular, ui-monospace, 'DejaVu Sans Mono', Menlo, Consolas, monospace"
 
+/**
+ * Tab state owned by `PersistentTerminalPanel`. Each tab maps to one
+ * `TerminalTabPane` child, which owns the actual xterm instance + WS
+ * via `useTerminalWs`. The parent only needs the metadata required to
+ * render the tab strip + dispatch handlers.
+ */
+interface ParentTabState {
+	tabKey: string
+	/** Server-side session id once `{type:'ready'|'reattached'}` arrives. */
+	sessionId: string | null
+	/** Initial WS mode — never changes for a given tab pane mount. */
+	initialMode: 'create' | 'attach'
+	/** Initial sessionId carried over from localStorage in attach mode. */
+	initialSessionId: string | null
+	name: string
+	status: 'connecting' | 'live' | 'exited' | 'expired'
+}
+
+function makeInitialTabs(): ParentTabState[] {
+	const stored = readAllTabSessions()
+	const entries = Object.entries(stored)
+	if (entries.length === 0) {
+		// First-ever mount (or cleared storage): one fresh tab in create mode.
+		// Feels identical to Phase 243 single-session.
+		return [
+			{
+				tabKey: uuidv7(),
+				sessionId: null,
+				initialMode: 'create',
+				initialSessionId: null,
+				name: 'Terminal',
+				status: 'connecting',
+			},
+		]
+	}
+	return entries.map(([tabKey, sessionId], idx) => ({
+		tabKey,
+		sessionId,
+		initialMode: 'attach' as const,
+		initialSessionId: sessionId,
+		name: idx === 0 ? 'Terminal' : `Terminal ${idx + 1}`,
+		status: 'connecting' as const,
+	}))
+}
+
 export default function PersistentTerminalPanel() {
+	const [tabs, setTabs] = useState<ParentTabState[]>(() => makeInitialTabs())
+	const [activeTabKey, setActiveTabKey] = useState<string>(() => tabs[0]?.tabKey ?? '')
+	// Ref-keyed map of tabKey → close-sender so the parent can ask the
+	// pane to dispatch `{type:'close'}` on its WS without prop-drilling
+	// a per-tab ref pattern through React state.
+	const closeSendersRef = useRef<Map<string, () => void>>(new Map())
+
+	const handleSessionResolved = useCallback((tabKey: string, sessionId: string) => {
+		writeTabSession(tabKey, sessionId)
+		setTabs((prev) =>
+			prev.map((t) =>
+				t.tabKey === tabKey ? {...t, sessionId, status: 'live'} : t,
+			),
+		)
+	}, [])
+
+	const handleExited = useCallback((tabKey: string) => {
+		removeTabSession(tabKey)
+		setTabs((prev) =>
+			prev.map((t) => (t.tabKey === tabKey ? {...t, status: 'exited'} : t)),
+		)
+	}, [])
+
+	const handleExpired = useCallback((tabKey: string) => {
+		removeTabSession(tabKey)
+		setTabs((prev) =>
+			prev.map((t) => (t.tabKey === tabKey ? {...t, status: 'expired'} : t)),
+		)
+	}, [])
+
+	const registerCloseSender = useCallback((tabKey: string, fn: (() => void) | null) => {
+		if (fn === null) {
+			closeSendersRef.current.delete(tabKey)
+		} else {
+			closeSendersRef.current.set(tabKey, fn)
+		}
+	}, [])
+
+	const onActivate = useCallback((tabKey: string) => {
+		setActiveTabKey(tabKey)
+	}, [])
+
+	const onCreate = useCallback(() => {
+		const tabKey = uuidv7()
+		setTabs((prev) => [
+			...prev,
+			{
+				tabKey,
+				sessionId: null,
+				initialMode: 'create',
+				initialSessionId: null,
+				name: prev.length === 0 ? 'Terminal' : `Terminal ${prev.length + 1}`,
+				status: 'connecting',
+			},
+		])
+		setActiveTabKey(tabKey)
+	}, [])
+
+	const onRename = useCallback((tabKey: string, newName: string) => {
+		setTabs((prev) => prev.map((t) => (t.tabKey === tabKey ? {...t, name: newName} : t)))
+	}, [])
+
+	const onClose = useCallback((tabKey: string) => {
+		// Ask the pane to fire `{type:'close'}` on its WS first. The pane
+		// then receives `{type:'exit'}` (server replies before closing)
+		// and the parent removes the tab from state below.
+		const sender = closeSendersRef.current.get(tabKey)
+		try {
+			sender?.()
+		} catch {
+			// no-op — best-effort
+		}
+		removeTabSession(tabKey)
+		closeSendersRef.current.delete(tabKey)
+		setTabs((prev) => {
+			const filtered = prev.filter((t) => t.tabKey !== tabKey)
+			// If we just closed the active tab, pick a new active.
+			setActiveTabKey((current) => {
+				if (current !== tabKey) return current
+				return filtered[0]?.tabKey ?? ''
+			})
+			return filtered
+		})
+	}, [])
+
+	const tabBarItems: TerminalTab[] = useMemo(
+		() =>
+			tabs.map((t) => ({
+				tabKey: t.tabKey,
+				name: t.name,
+				status: t.status,
+			})),
+		[tabs],
+	)
+
+	return (
+		<div className='flex h-full w-full flex-col bg-[#0b0b0c]'>
+			<TerminalTabBar
+				tabs={tabBarItems}
+				activeTabKey={activeTabKey || null}
+				onActivate={onActivate}
+				onCreate={onCreate}
+				onRename={onRename}
+				onClose={onClose}
+			/>
+			<div className='relative flex-1 overflow-hidden'>
+				{tabs.map((t) => (
+					<TerminalTabPane
+						key={t.tabKey}
+						tabKey={t.tabKey}
+						initialMode={t.initialMode}
+						initialSessionId={t.initialSessionId}
+						isActive={t.tabKey === activeTabKey}
+						onSessionResolved={handleSessionResolved}
+						onExited={handleExited}
+						onExpired={handleExpired}
+						registerCloseSender={registerCloseSender}
+					/>
+				))}
+			</div>
+		</div>
+	)
+}
+
+interface TerminalTabPaneProps {
+	tabKey: string
+	initialMode: 'create' | 'attach'
+	initialSessionId: string | null
+	isActive: boolean
+	onSessionResolved: (tabKey: string, sessionId: string) => void
+	onExited: (tabKey: string) => void
+	onExpired: (tabKey: string) => void
+	registerCloseSender: (tabKey: string, fn: (() => void) | null) => void
+}
+
+function TerminalTabPane({
+	tabKey,
+	initialMode,
+	initialSessionId,
+	isActive,
+	onSessionResolved,
+	onExited,
+	onExpired,
+	registerCloseSender,
+}: TerminalTabPaneProps) {
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	const terminalRef = useRef<Terminal | null>(null)
 	const fitAddonRef = useRef<FitAddon | null>(null)
 	const lastDimsRef = useRef<{cols: number; rows: number} | null>(null)
 	const isClosedRef = useRef(false)
-	const sendRef = useRef<((msg: import('./use-terminal-ws').ClientToServer) => void) | null>(null)
+	const hasReadyArrivedRef = useRef(false)
+	const sendRef = useRef<((msg: ClientToServer) => void) | null>(null)
 
-	const [sessionId, setSessionId] = useState<string | null>(null)
-	const [statusText, setStatusText] = useState<string>('connecting…')
-
-	// ─── xterm mount (one-shot) ───────────────────────────────────────────
+	// One-shot xterm mount, mirroring Phase 243's setup verbatim.
 	useEffect(() => {
 		if (!containerRef.current) return
 
@@ -66,20 +262,17 @@ export default function PersistentTerminalPanel() {
 		try {
 			fit.fit()
 		} catch {
-			// jsdom + headless paths can throw if the container has no layout;
-			// the resize observer below will retry once a real width arrives.
+			// jsdom / hidden-container paths can throw; ResizeObserver retries.
 		}
 
 		terminalRef.current = term
 		fitAddonRef.current = fit
 
-		// Forward xterm keystrokes to the WS.
 		term.onData((data) => {
 			if (isClosedRef.current) return
 			sendRef.current?.({type: 'data', data})
 		})
 
-		// Container ResizeObserver → re-fit + resize message when dims change.
 		let observer: ResizeObserver | null = null
 		if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
 			observer = new ResizeObserver(() => {
@@ -117,9 +310,11 @@ export default function PersistentTerminalPanel() {
 		}
 	}, [])
 
-	// ─── WebSocket lifecycle ──────────────────────────────────────────────
 	const {send} = useTerminalWs({
+		mode: initialMode,
+		sessionId: initialSessionId ?? undefined,
 		onOpen: () => {
+			if (initialMode !== 'create') return
 			const fit = fitAddonRef.current
 			let cols = 80
 			let rows = 24
@@ -135,22 +330,34 @@ export default function PersistentTerminalPanel() {
 				}
 			}
 			lastDimsRef.current = {cols, rows}
-			setStatusText('initializing…')
-			// Send init IMMEDIATELY on WS open (243-02 protocol).
-			send({type: 'init', cols, rows})
+			// Send init IMMEDIATELY on WS open (243-02 protocol for the
+			// CREATE branch — ATTACH branch never sends init).
+			sendRef.current?.({type: 'init', cols, rows})
 		},
 		onMessage: (msg: ServerToClient) => {
 			const term = terminalRef.current
 			if (!term) return
 			switch (msg.type) {
 				case 'ready':
-					setSessionId(msg.sessionId)
-					setStatusText('connected')
+					hasReadyArrivedRef.current = true
+					onSessionResolved(tabKey, msg.sessionId)
 					try {
 						term.writeln(`\x1b[2m[session ${msg.sessionId} ready]\x1b[0m`)
 					} catch {
 						// no-op
 					}
+					break
+				case 'reattached':
+					hasReadyArrivedRef.current = true
+					// Replay scrollback BEFORE live data resumes (246-03 contract).
+					try {
+						msg.scrollback.forEach((line) => term.write(line))
+					} catch {
+						// no-op
+					}
+					// sessionId already in localStorage from mount, but call
+					// the resolver so the parent flips status: 'connecting' → 'live'.
+					onSessionResolved(tabKey, msg.sessionId)
 					break
 				case 'data':
 					term.write(msg.data)
@@ -164,7 +371,7 @@ export default function PersistentTerminalPanel() {
 						// no-op
 					}
 					isClosedRef.current = true
-					setStatusText('disconnected')
+					onExited(tabKey)
 					break
 				case 'error':
 					try {
@@ -172,14 +379,12 @@ export default function PersistentTerminalPanel() {
 					} catch {
 						// no-op
 					}
-					// Do NOT close — server may recover for non-fatal errors.
 					break
 				default:
-					// Unknown message — ignore (forward-compatible).
 					break
 			}
 		},
-		onClose: () => {
+		onClose: (event) => {
 			const term = terminalRef.current
 			if (term) {
 				try {
@@ -189,21 +394,39 @@ export default function PersistentTerminalPanel() {
 				}
 			}
 			isClosedRef.current = true
-			setStatusText('disconnected')
+			// Attach branch: if the close arrived before any `ready`/`reattached`
+			// AND the server signalled 4404, the session is gone — drop the
+			// localStorage entry and flip the tab to expired so the operator
+			// sees the failure surface.
+			if (
+				initialMode === 'attach' &&
+				!hasReadyArrivedRef.current &&
+				event?.code === 4404
+			) {
+				onExpired(tabKey)
+			}
 		},
 	})
 
-	// Keep the send ref current so the xterm onData / ResizeObserver
-	// closures always reach the latest socket reference.
+	// Keep send ref current for xterm.onData / ResizeObserver closures.
 	sendRef.current = send
 
+	// Register a close-sender with the parent so onClose can dispatch
+	// `{type:'close'}` on this pane's WS.
+	useEffect(() => {
+		registerCloseSender(tabKey, () => {
+			sendRef.current?.({type: 'close'})
+		})
+		return () => registerCloseSender(tabKey, null)
+	}, [tabKey, registerCloseSender])
+
 	return (
-		<div className='relative flex h-full w-full flex-col bg-[#0b0b0c]'>
-			{/* Status pill */}
-			<div className='pointer-events-none absolute right-3 top-3 z-10 select-none rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-mono text-[#7dd3fc] shadow-sm backdrop-blur-sm'>
-				{sessionId ? `${statusText} · ${sessionId.slice(0, 8)}` : statusText}
-			</div>
-			<div ref={containerRef} className='h-full w-full p-2' />
-		</div>
+		<div
+			data-test-tab-pane={tabKey}
+			className={`absolute inset-0 h-full w-full bg-[#0b0b0c] p-2 ${
+				isActive ? '' : 'hidden'
+			}`}
+			ref={containerRef}
+		/>
 	)
 }

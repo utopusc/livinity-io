@@ -1,18 +1,22 @@
 /**
- * Phase 243-03 — Persistent UI Terminal WebSocket hook.
+ * Phase 243-03 + Phase 246-04 — Persistent UI Terminal WebSocket hook.
  *
- * Encapsulates the WS lifecycle for `PersistentTerminalPanel`:
- *   - Open WS to `/livos/terminal/ws` on mount (cookie auth, no ?token query)
+ * Encapsulates the WS lifecycle for one `PersistentTerminalPanel` tab:
+ *   - Open WS to `/livos/terminal/ws` (cookie auth, no ?token query)
+ *   - In v44 (Plan 246-04) the URL grows a `?attach=<id>` query when the
+ *     hook is constructed in attach mode — Phase 243 `?create` path is
+ *     the default (no query, matches 246-03 backward-compat default
+ *     branch in livinityd's ws-handler).
  *   - JSON parse every inbound `event.data`; malformed → onMessage with
  *     {type:'error', message:'parse error'}
  *   - `send` JSON.stringifies and guards on `readyState === OPEN`; silently
  *     drops sends when not open (e.g. before-open keystrokes during init).
- *   - useEffect cleanup closes the WS — Phase 243-02 contract: ws.close()
- *     alone kills the server-side PtySession via the WS close handler.
+ *   - useEffect cleanup closes the WS — note: from 246-03 ws.close() no
+ *     longer kills the server-side session (PTY survives reload).
  *
- * Protocol mirrors 243-02 SUMMARY (drift-locked):
+ * Protocol mirrors 243-02 + 246-03 SUMMARY (drift-locked):
  *   Client → Server: 'init' | 'data' | 'resize' | 'close'
- *   Server → Client: 'ready' | 'data' | 'exit' | 'error'
+ *   Server → Client: 'ready' | 'reattached' | 'data' | 'exit' | 'error'
  */
 import {useEffect, useRef, useState} from 'react'
 
@@ -24,14 +28,19 @@ export type ClientToServer =
 
 export type ServerToClient =
 	| {type: 'ready'; sessionId: string}
+	| {type: 'reattached'; sessionId: string; scrollback: string[]}
 	| {type: 'data'; data: string}
 	| {type: 'exit'; code: number; signal: string | null}
 	| {type: 'error'; message: string}
 
+export type TerminalWsMode = 'create' | 'attach'
+
 export interface UseTerminalWsOpts {
+	mode?: TerminalWsMode
+	sessionId?: string
 	onMessage: (msg: ServerToClient) => void
 	onOpen?: () => void
-	onClose?: () => void
+	onClose?: (event?: CloseEvent) => void
 }
 
 export interface UseTerminalWsResult {
@@ -41,11 +50,15 @@ export interface UseTerminalWsResult {
 
 /**
  * Build the WS URL for `/livos/terminal/ws` relative to the current host.
- * JWT travels via cookie automatically (Phase 243-02 cookie-only auth — NO
- * ?token query-string fallback, clean break from the legacy /terminal
- * handler).
+ * JWT travels via cookie automatically (Phase 243-02 cookie-only auth).
+ *
+ * Phase 246-04 extension:
+ *   - mode 'create' (or no mode) → no query (243-02 path; routes to the
+ *     CREATE branch in livinityd's ws-handler per 246-03 default rule)
+ *   - mode 'attach' WITH sessionId → `?attach=<encoded sessionId>` (routes
+ *     to the ATTACH branch which emits `{type:'reattached', scrollback}`)
  */
-function buildTerminalWsUrl(): string {
+export function buildTerminalWsUrl(mode: TerminalWsMode = 'create', sessionId?: string): string {
 	const wsProtocol =
 		typeof window !== 'undefined' && window.location.protocol === 'https:'
 			? 'wss://'
@@ -53,7 +66,11 @@ function buildTerminalWsUrl(): string {
 	const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
 	const port =
 		typeof window !== 'undefined' && window.location.port ? `:${window.location.port}` : ''
-	return `${wsProtocol}${hostname}${port}/livos/terminal/ws`
+	const base = `${wsProtocol}${hostname}${port}/livos/terminal/ws`
+	if (mode === 'attach' && sessionId) {
+		return `${base}?attach=${encodeURIComponent(sessionId)}`
+	}
+	return base
 }
 
 export function useTerminalWs(opts: UseTerminalWsOpts): UseTerminalWsResult {
@@ -71,8 +88,11 @@ export function useTerminalWs(opts: UseTerminalWsOpts): UseTerminalWsResult {
 	onOpenRef.current = opts.onOpen
 	onCloseRef.current = opts.onClose
 
+	const mode = opts.mode ?? 'create'
+	const sessionId = opts.sessionId
+
 	useEffect(() => {
-		const url = buildTerminalWsUrl()
+		const url = buildTerminalWsUrl(mode, sessionId)
 		const ws = new WebSocket(url)
 		wsRef.current = ws
 		setReadyState(ws.readyState)
@@ -98,9 +118,9 @@ export function useTerminalWs(opts: UseTerminalWsOpts): UseTerminalWsResult {
 			onMessageRef.current({type: 'error', message: 'websocket error'})
 		}
 
-		ws.onclose = () => {
+		ws.onclose = (event: CloseEvent) => {
 			setReadyState(ws.readyState)
-			onCloseRef.current?.()
+			onCloseRef.current?.(event)
 		}
 
 		return () => {
@@ -111,9 +131,10 @@ export function useTerminalWs(opts: UseTerminalWsOpts): UseTerminalWsResult {
 			}
 			wsRef.current = null
 		}
-		// One-shot mount/unmount; callback refs handle latest closures.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [])
+		// Effect depends on (mode, sessionId) — reopen if either changes.
+		// In practice the parent panel doesn't mutate them after mount;
+		// each tab pane keeps its own hook instance with stable args.
+	}, [mode, sessionId])
 
 	function send(msg: ClientToServer): void {
 		const ws = wsRef.current
