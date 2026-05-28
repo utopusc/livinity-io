@@ -3583,7 +3583,7 @@ Plans:
 - D-243-FEATURE-FLAG: `livos:v43:terminal_panel` Redis flag default OFF; only literal string `'true'` opens the gate (drift-locked at both livinityd `pty-sessions/feature-flag.ts` AND tRPC `config-router.ts` layers)
 - D-243-FLAG-ROLLBACK: legacy `LegacyTerminalWindowContent` kept as OFF-state fallback — instant rollback via Redis flag, no code revert
 
-**Plans:** 4/4 plans complete (MVP SCOPE — multi-session/attach-detach/TTL-GC deferred to v44+)
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 243-01-PLAN.md — livinityd pty-sessions module (node-pty wrapper + Redis metadata writer + types) — TDD ✅ 5 commits, 16/16 vitest GREEN
