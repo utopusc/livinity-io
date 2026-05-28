@@ -669,6 +669,54 @@ else
     info "Phase 245.2: $_CLAUDE_REAL not present — claude wrapper deferred (run `claude doctor` to install)"
 fi
 
+# ── Phase 245.3 — Claude Code user-level MCP permissions allowlist ─────────
+# AionUi's @agentclientprotocol/claude-agent-acp wrapper enforces tool permissions
+# strictly: only mcp__* patterns listed in user/project settings.json `permissions.allow`
+# are surfaced to the agent. Without this, Claude Code receives all 6 stdio MCPs via
+# --mcp-config and they connect, BUT the ACP layer filters out the unallowed mcp__*
+# tools from the agent's tool list. Agent then sees only Bash/Read/etc. + Claude.AI
+# hosted MCPs + aionui-team-guide (always pre-allowed by AionUi).
+#
+# Fix: write /home/bruce/.claude/settings.json with wildcard MCP allowlist for the
+# 6 system MCPs (luse, liv-system, liv-vault, liv-apps, liv-docker, aionui-team-guide).
+# Idempotent — only rewrites if missing or content drifts.
+step "Phase 245.3: Claude Code MCP permissions allowlist"
+_CLAUDE_SETTINGS="/home/bruce/.claude/settings.json"
+_CLAUDE_SETTINGS_DESIRED='{
+  "permissions": {
+    "allow": [
+      "mcp__luse__*",
+      "mcp__liv-system__*",
+      "mcp__liv-vault__*",
+      "mcp__liv-apps__*",
+      "mcp__liv-docker__*",
+      "mcp__aionui-team-guide__*"
+    ]
+  }
+}'
+if [[ -f "$_CLAUDE_SETTINGS" ]] && diff -q <(echo "$_CLAUDE_SETTINGS_DESIRED") "$_CLAUDE_SETTINGS" >/dev/null 2>&1; then
+    ok "Phase 245.3: settings.json already has MCP allowlist (idempotent skip)"
+else
+    sudo -u bruce mkdir -p /home/bruce/.claude
+    echo "$_CLAUDE_SETTINGS_DESIRED" | sudo -u bruce tee "$_CLAUDE_SETTINGS" > /dev/null
+    ok "Phase 245.3: settings.json written with 6 MCP wildcard permissions"
+fi
+
+# ── Phase 245.3 — liv-assistant restart to pick up settings + wrapper ──────
+# Live-applies the 245.2 wrapper + 245.3 settings to any future Claude Code spawns.
+# Without restart, in-flight chat sessions keep their pre-fix env/settings.
+step "Phase 245.3: liv-assistant restart for MCP fix activation"
+if sudo systemctl restart liv-assistant 2>&1; then
+    sleep 3
+    if sudo systemctl is-active liv-assistant | grep -q '^active'; then
+        ok "Phase 245.3: liv-assistant restarted — new chats will see all 6 MCPs"
+    else
+        warn "Phase 245.3: liv-assistant restart reported active=false — check journalctl"
+    fi
+else
+    warn "Phase 245.3: liv-assistant restart failed (continuing — manual fix may be needed)"
+fi
+
 # ── Step 4.7: Phase 226 — Caddy /liv reverse-proxy snippet install ─────────
 # Lays down /etc/caddy/conf.d/liv-assistant.caddy + wires `import liv_assistant`
 # into the existing bruce.livinity.io site block, defensively chowns Caddyfile
