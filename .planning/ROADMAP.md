@@ -3637,11 +3637,11 @@ Plans:
 
 **Plan count estimate:** 4 plans (registrar skeleton + HTTP client + orchestrator + wire-up/deploy)
 
-**Plans:** 1/4 plans complete
+**Plans:** 2/4 plans complete
 
 Plans:
 - [x] 241-01-PLAN.md — registrar module skeleton (types + transform + redis-catalog) — ✅ **SHIPPED 2026-05-28** — 6 files / 14 vitest cases / 4 TDD commits (`f9348bc2` test + `788348af` feat + `bebc3d9d` test + `988a6ede` feat). Pure transform + pure async catalog reader, zero new deps, zero wire-up changes, drift-lock test on SYSTEM_MCP_NAMES. SUMMARY at `.planning/phases/241-mcp-auto-add-liv-tools/241-01-SUMMARY.md`.
-- [ ] 241-02-PLAN.md — AionUi HTTP client + readiness poll
+- [x] 241-02-PLAN.md — AionUi HTTP client + readiness poll — ✅ **SHIPPED 2026-05-28** — 4 files / 14 new vitest cases (28 cumulative) / 4 TDD commits (`c375032d` test + `4b5630ef` feat + `c8100dff` test + `a369db0d` feat). `AionUiMcpClient` (5 methods, single fetchJson chokepoint with AbortController+clearTimeout in finally — no listener leaks; Pitfall 3 + 4 guarded) + `waitForAionUiReady` (D-241-06 verbatim: 2s/60s/1.5s defaults; opt-in Pitfall 5 layered mcp/servers sub-probe; final-attempt-only warn). Zero new deps. One Rule-3 Response-type-cast fix. SUMMARY at `.planning/phases/241-mcp-auto-add-liv-tools/241-02-SUMMARY.md`.
 - [ ] 241-03-PLAN.md — seedAionUiMcpConfig orchestrator + 9-scenario unit tests
 - [ ] 241-04-PLAN.md — livinityd wire-up + Mini PC deploy + idempotency/customization UAT
 
