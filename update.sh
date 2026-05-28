@@ -694,9 +694,14 @@ for _NAME in "${!_MCP_PATHS[@]}"; do
     _WRAPPER="${_MCP_DIR}/liv-mcp-${_NAME}"
     _PATH="${_MCP_PATHS[$_NAME]}"
     _DESIRED="#!/bin/bash
-# Phase 245.4 wrapper — direct tsx spawn (npx avoided to bypass EROFS under
-# liv-assistant.service ProtectHome=read-only sandbox).
-exec /usr/bin/tsx ${_PATH} \"\$@\""
+# Phase 245.5 wrapper — explicit /usr/bin/node + tsx cli.mjs bypasses TWO traps:
+# (1) EROFS under liv-assistant.service ProtectHome=read-only sandbox when npx
+#     tries to write its package cache to ~/.npm.
+# (2) Bun runtime resolution when AionUi's @agentclientprotocol/claude-agent-acp
+#     bunx prepends /tmp/bunx-*/node_modules/.bin to PATH. tsx's shebang
+#     '#!/usr/bin/env node' then resolves to Bun runtime which cannot import
+#     tsx's CJS implementation ('Cannot find module ./cjs/index.cjs from \"\"').
+exec /usr/bin/node /usr/lib/node_modules/tsx/dist/cli.mjs ${_PATH} \"\$@\""
     if [[ ! -f "$_WRAPPER" ]] || ! diff -q <(echo "$_DESIRED") "$_WRAPPER" >/dev/null 2>&1; then
         echo "$_DESIRED" | sudo tee "$_WRAPPER" > /dev/null
         sudo chmod 755 "$_WRAPPER"
