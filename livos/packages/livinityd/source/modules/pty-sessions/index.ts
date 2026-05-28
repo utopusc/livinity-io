@@ -46,3 +46,10 @@ export {
 	touchLastAttachAt,
 } from './scrollback.js'
 export type {PtyScrollbackRedisClient} from './scrollback.js'
+
+// Phase 246-03 — admin tRPC router (listSessions + killSession).
+export {createPtySessionsAdminRouter} from './admin-router.js'
+export type {
+	PtySessionsAdminRouter,
+	PtySessionsAdminRouterDeps,
+} from './admin-router.js'

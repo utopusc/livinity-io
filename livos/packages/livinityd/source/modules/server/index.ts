@@ -29,7 +29,7 @@ import createTerminalWebSocketHandler from './terminal-socket.js'
 import createDockerExecHandler from '../docker/docker-exec-socket.js'
 import createDockerLogsHandler from '../docker/docker-logs-socket.js'
 import {createSshSessionsWsHandler} from '../ssh-sessions/index.js'
-import {createPtyTerminalWsHandler} from '../pty-sessions/index.js'
+import {createPtyTerminalWsHandler, SessionManager} from '../pty-sessions/index.js'
 import {
 	downloadArchive as downloadContainerArchive,
 	writeFile as writeContainerFile,
@@ -89,6 +89,12 @@ class Server {
 	server?: http.Server
 	webSocketRouter = new Map<string, WebSocketServer>()
 	private appGatewayProxyCache = new Map<number, ReturnType<typeof createProxyMiddleware>>()
+	// Phase 246-03 — single SessionManager instance per livinityd process.
+	// Shared between the /livos/terminal/ws handler (create/attach) and the
+	// `ptySessions.*` admin tRPC sub-router (list/kill). Exposed as a public
+	// field so livinityd boot can pass it to createAppRouter via
+	// `createPtySessionsAdminRouter({sessionManager: this.server.ptySessionManager})`.
+	readonly ptySessionManager: SessionManager = new SessionManager()
 
 	constructor({livinityd}: ServerOptions) {
 		this.livinityd = livinityd
@@ -1348,6 +1354,10 @@ class Server {
 				livinityd: this.livinityd as never,
 				logger,
 				redis: this.livinityd.ai.redis as never,
+				// Phase 246-03 — inject the shared per-livinityd-process
+				// SessionManager singleton so create/attach + admin kill
+				// operate on the same in-memory Map.
+				sessionManager: this.ptySessionManager,
 			})
 			wss.on('connection', handler)
 		})
