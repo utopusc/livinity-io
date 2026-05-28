@@ -3690,7 +3690,7 @@ Plans:
 - D-239-FEATURE-FLAG: `livos:v43:onboarding_cli_section` Redis flag (default off until UAT green); flag-off renders informational notice (legacy ProviderStep deleted per D-239-04, no in-tree fallback)
 - D-239-NO-AI-SECTION-DATA-LOSS: bruce-EQ Mini PC already past onboarding; no live operator data lost
 
-**Plans:** 3/3 plans complete ✅
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 239-01-PLAN.md — livinityd cli-installer module + cliInstaller tRPC router + 5 install scripts (whitelist-gated, RCE boundary D-239-07; vitest TDD) — commits `244b3627`, `34bbd861`, `fca7330b`, doc `61e79f9e`. 21/21 vitest GREEN. See `.planning/phases/239-onboarding-cli-tools/239-01-SUMMARY.md`.
