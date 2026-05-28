@@ -53,3 +53,7 @@ export type {
 	PtySessionsAdminRouter,
 	PtySessionsAdminRouterDeps,
 } from './admin-router.js'
+
+// Phase 246-05 — TTL GC (24h idle / 1h sweep).
+export {createTtlGc, TTL_GC_DEFAULT_IDLE_MS, TTL_GC_DEFAULT_SWEEP_MS} from './ttl-gc.js'
+export type {TtlGcDeps, IdleSweep} from './ttl-gc.js'

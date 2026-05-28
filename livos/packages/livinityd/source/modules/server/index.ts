@@ -29,7 +29,7 @@ import createTerminalWebSocketHandler from './terminal-socket.js'
 import createDockerExecHandler from '../docker/docker-exec-socket.js'
 import createDockerLogsHandler from '../docker/docker-logs-socket.js'
 import {createSshSessionsWsHandler} from '../ssh-sessions/index.js'
-import {createPtyTerminalWsHandler, SessionManager} from '../pty-sessions/index.js'
+import {createPtyTerminalWsHandler, SessionManager, createTtlGc, type IdleSweep} from '../pty-sessions/index.js'
 import {
 	downloadArchive as downloadContainerArchive,
 	writeFile as writeContainerFile,
@@ -95,11 +95,29 @@ class Server {
 	// field so livinityd boot can pass it to createAppRouter via
 	// `createPtySessionsAdminRouter({sessionManager: this.server.ptySessionManager})`.
 	readonly ptySessionManager: SessionManager = new SessionManager()
+	// Phase 246-05 — TTL GC singleton (24h idle / 1h sweep). Bounded cleanup
+	// for stale PTYs after 246-03 broke the ws.close → kill semantic. Wired
+	// in the constructor (needs `this.logger`); started at the tail of start()
+	// after the WS endpoint is mounted. Audit trail goes through the child
+	// logger 'pty-ttl-gc'; journalctl captures every kill (T-246-05-03 mit).
+	private readonly ptyTtlGc: IdleSweep
 
 	constructor({livinityd}: ServerOptions) {
 		this.livinityd = livinityd
 		const {name} = this.constructor
 		this.logger = livinityd.logger.createChildLogger(name.toLowerCase())
+		// Livinityd's logger surface is {log, verbose, error, createChildLogger}.
+		// TtlGcDeps wants `info(msg, ctx)` — wrap the child logger's `log` to
+		// preserve the audit trail (T-246-05-03 journalctl mit) without
+		// reshaping the parent logger contract.
+		const ttlGcChild = this.logger.createChildLogger('pty-ttl-gc')
+		this.ptyTtlGc = createTtlGc({
+			sessionManager: this.ptySessionManager,
+			logger: {
+				info: (msg, ctx) =>
+					ttlGcChild.log(ctx ? `${msg} ${JSON.stringify(ctx)}` : msg),
+			},
+		})
 	}
 
 	async getJwtSecret() {
@@ -1361,6 +1379,12 @@ class Server {
 			})
 			wss.on('connection', handler)
 		})
+
+		// Phase 246-05 — kick off the idle PTY session sweeper. Runs every 1h,
+		// kills any session whose lastAttachAt is > 24h ago. Bounds the worst
+		// case of the 246-03 ws.close-no-kill semantic. No-op until the first
+		// /livos/terminal/ws CREATE/ATTACH populates SessionManager.
+		this.ptyTtlGc.start()
 
 		// Phase 22 MH-05 — Subscribe to docker-agent token revocations on Redis.
 		// Any livinityd instance receiving the message disconnects the live agent
