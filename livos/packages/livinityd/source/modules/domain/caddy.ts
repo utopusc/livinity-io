@@ -410,6 +410,42 @@ ${WS_TRANSPORT_BODY}
 \t}`
 
 /**
+ * Phase 243-02 — /livos/terminal/ws (persistent UI terminal endpoint).
+ *
+ * Unconditional path matcher (mirrors Phase 237 @liv_ws pattern) reverse-
+ * proxying to livinityd's :8080 — NOT AionUi's :3020. The next gate after
+ * Caddy is the JWT cookie + feature-flag check in the WS handler itself
+ * (`livos/packages/livinityd/source/modules/pty-sessions/ws-handler.ts`).
+ *
+ * Why unconditional (no Referer regex):
+ *   Per RFC 6455 browsers send only `Origin` (not `Referer`) on the WS
+ *   upgrade handshake — Phase 237 hit this same issue with the legacy
+ *   @liv_subresource matcher. L-243-C explicitly requires unconditional
+ *   path matching for the new terminal endpoint.
+ *
+ * Why :8080 (NOT :3020):
+ *   The PTY backend lives in livinityd (port 8080). AionUi (port 3020) has
+ *   no /livos/terminal/* route. Caddy routes the terminal path away from
+ *   AionUi to the LivOS shell backend.
+ *
+ * Header stripping mirrors @liv_ws: drop upstream X-Frame-Options +
+ * Content-Security-Policy so the xterm panel can iframe-embed cleanly in
+ * the LivOS shell (Phase 243-03).
+ *
+ * Ordering — emitted IMMEDIATELY AFTER LIV_ASSISTANT_SUBRESOURCE_HANDLE in
+ * every emit site (apex + multi-user wildcard). Caddy v2 routes by matcher
+ * specificity not source order, but source-order is kept for diff review.
+ */
+const LIVOS_TERMINAL_WS_HANDLE = `\t@livos_terminal_ws path /livos/terminal/ws
+\thandle @livos_terminal_ws {
+\t\treverse_proxy 127.0.0.1:8080 {
+\t\t\theader_down -X-Frame-Options
+\t\t\theader_down -Content-Security-Policy
+${WS_TRANSPORT_BODY}
+\t\t}
+\t}`
+
+/**
  * Generate a complete Caddyfile with main domain and all subdomains.
  * In multi-user mode, uses a single wildcard block that routes all subdomains
  * to livinityd's app gateway (port 8080) for dynamic per-user routing.
@@ -428,6 +464,7 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 ${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
+${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
@@ -461,6 +498,7 @@ ${WS_TRANSPORT_BODY}
 ${apexCacheHeader}${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
+${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
@@ -491,6 +529,7 @@ ${WS_TRANSPORT_BODY}
 ${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
+${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
