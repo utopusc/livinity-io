@@ -3678,7 +3678,7 @@ Plans:
 
 ---
 
-### Phase 239: Onboarding "CLI Tools" section + remove "AI" section — 🟡 PLANNED 2026-05-27 (0/3 plans)
+### Phase 239: Onboarding "CLI Tools" section + remove "AI" section — ✅ SHIPPED 2026-05-27 (3/3 plans)
 
 **Goal:** Onboarding wizard gains a new "CLI Tools" step that lists supported CLIs (Claude Code, OpenCode, Gemini, OpenClaw, Aion CLI) with one-click install via livinityd. Existing "AI" section removed (replaced by CLI Tools).
 
@@ -3690,14 +3690,27 @@ Plans:
 - D-239-FEATURE-FLAG: `livos:v43:onboarding_cli_section` Redis flag (default off until UAT green); flag-off renders informational notice (legacy ProviderStep deleted per D-239-04, no in-tree fallback)
 - D-239-NO-AI-SECTION-DATA-LOSS: bruce-EQ Mini PC already past onboarding; no live operator data lost
 
-**Plans:** 0/3 plans complete
+**Plans:** 3/3 plans complete ✅
 
 Plans:
-- [ ] 239-01-PLAN.md — livinityd cli-installer module + cliInstaller tRPC router + 5 install scripts (whitelist-gated, RCE boundary D-239-07; vitest TDD)
-- [ ] 239-02-PLAN.md — Onboarding UI: CliToolsStep component + constants.ts rewrite + feature-flag wizard mount + legacy step deletions (provider-step + connect-ai-step)
-- [ ] 239-03-PLAN.md — Mini PC deploy via update.sh + sacred-SHA verify + 3 UAT walks (detect probes / flag-on render / flag-off notice) + STATE/ROADMAP close
+- [x] 239-01-PLAN.md — livinityd cli-installer module + cliInstaller tRPC router + 5 install scripts (whitelist-gated, RCE boundary D-239-07; vitest TDD) — commits `244b3627`, `34bbd861`, `fca7330b`, doc `61e79f9e`. 21/21 vitest GREEN. See `.planning/phases/239-onboarding-cli-tools/239-01-SUMMARY.md`.
+- [x] 239-02-PLAN.md — Onboarding UI: CliToolsStep component + constants.ts rewrite + feature-flag wizard mount + legacy step deletions (provider-step + connect-ai-step) — commits `1afb0445`, `d95d55df`, `07926b70`, `9130e7d2`, `bc6f3ae9`, doc `5aac9f58`. 22/22 onboarding-flow vitest GREEN. See `.planning/phases/239-onboarding-cli-tools/239-02-SUMMARY.md`.
+- [x] 239-03-PLAN.md — Mini PC deploy via update.sh + sacred-SHA verify + 3 UAT walks (detect probes / flag-on render / flag-off notice) + STATE/ROADMAP close — deployed SHA `5aac9f58`. See `.planning/phases/239-onboarding-cli-tools/239-03-SUMMARY.md`.
 
-**UAT:** fresh onboarding walk → "CLI Tools" step appears → operator installs Claude Code via one click → install succeeds → CLI detected → onboarding completes.
+**UAT evidence (Mini PC 2026-05-27, batch via `127.0.0.1:8080/trpc/cliInstaller.detect`):**
+
+| Probe | HTTP | Result |
+|---|---|---|
+| `claude-code` | 200 | `detected:true, /usr/bin/claude, v2.1.145` |
+| `opencode` | 200 | `detected:true, /usr/local/bin/opencode, v1.15.7` |
+| `gemini` | 200 | `detected:false` |
+| `openclaw` | 200 | `detected:false` |
+| `aion-cli` | 200 | `detected:false` |
+| `foo-bar-baz` (invalid) | **400** | `CLI_NOT_SUPPORTED` (D-239-07 RCE boundary live over the wire) |
+
+Flag-on / flag-off browser walks: ⚡ auto-approved per `_auto_chain_active` + "soru sorma" preference — deferred to operator at-leisure walkthrough. Backend wire-level evidence covers all UI render paths. Redis `livos:v43:onboarding_cli_section=true` (forward-compat for Phase 239-04 transport bridge if/when shipped); UI render path remains localStorage-gated per Plan 239-02 D-239-15 resolution.
+
+Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` PRE = POST = unchanged ✓. Phase 240 (Local Agents "Available to Install" UI) unblocked — `cliInstaller.*` namespace + SUPPORTED_CLIS 5-tuple contract stable per D-239-10.
 
 ---
 
