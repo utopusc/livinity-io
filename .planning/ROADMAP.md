@@ -3610,12 +3610,12 @@ Plans:
 - Docs-only phase — no Mini PC deploy required; ships when the docs/shims are committed.
 - D-242-UNIVERSAL: NO agent should be privileged. Luse usage instructions are the same prose across all shim formats — only the wrapper frontmatter / file location differs.
 
-**Plans:** 1/1 plans complete
+**Plans:** 1/0 plans complete
 
 - [x] **Plan 242-01:** Canonical docs + sync script + per-agent shims — SHIPPED 2026-05-28 (3 commits: `a23017d9` docs Task 1 + `1b1cd115` feat Task 2 + this docs Task 3). 7 canonical files under `docs/luse/` (LUSE.md + LUSE-WORKFLOW.md + 5 tool files, all agent-agnostic prose), `scripts/sync-luse-skills.sh` (213 lines POSIX bash, sha256-keyed idempotency via per-shim `source-sha:` marker, no jq, portable across Linux / macOS / Git Bash on Windows), 9 generated shims (6 under `.claude/skills/luse/` with proper YAML frontmatter matching the `.claude/skills/cloud/SKILL.md` format precedent, 3 single-file placeholders under `.aion/skills/` `.opencode/skills/` `.openclaw/skills/` with comment-header documenting placeholder status until each agent's skill format is locked). Gemini intentionally skipped — Gemini agents discover Luse via MCP tool-discovery only (D-242-C; no `.gemini/` shipped). Idempotency verified: first run `9 new / 0 updated / 0 unchanged`, second run `0 new / 0 updated / 9 unchanged`. `.gitignore` 4-line negation hierarchy added to repo-track exactly `.claude/skills/luse/` while keeping every other `.claude/*` local (D-242-G). Rule 3 deviation: gitignore exception added inline during Task 2 commit. Phase 241 MCP tool descriptions unchanged per D-242-F (out-of-scope micro-phase candidate). Sacred SHA `f3538e1d...` PRESERVED through every commit. Docs-only phase — no Mini PC deploy, no compiled JS, no new tests. SUMMARY at `.planning/phases/242-luse-skill-set-universal/242-SUMMARY.md`.
 
 Plans:
-- [ ] 242-PLAN.md — TBD (single-plan multi-format docs authoring + generation script)
+- [x] 242-PLAN.md — TBD (single-plan multi-format docs authoring + generation script)
 
 **UAT:** Operator opens any agent (Claude Code, Aion CLI, OpenCode) inside Liv AI → asks "screenshot the desktop" → that agent discovers the luse tool (via skills directory or MCP) → screenshot returned with identical hint copy regardless of which agent ran it.
 
