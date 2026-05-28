@@ -3540,6 +3540,121 @@ Plans:
 
 ---
 
+## v44 — Liv AI Tooling Depth (OPENED 2026-05-28)
+
+**Milestone goal:** Production-depth pass on v43 deliverables — Terminal v2 (multi-session + reattach + TTL GC), Luse skill set v2 (professional reference docs), Luse display lifecycle (create/list/kill virtual displays + place apps).
+
+**Locked invariants:** D-V44-SACRED · D-V44-MINI-PC-ONLY · D-V44-CADDY-REUSE-226-04 · D-V44-NO-ROOT-PTY · D-V44-DISPLAY-XEPHYR-DEFAULT · D-V44-DISPLAY-OWNER-SCOPED · D-V44-TERMINAL-SCROLLBACK-RING.
+
+---
+
+### Phase 249: v44 E2E UAT + milestone close — 🟡 PLANNED 2026-05-28 (0/1 plans)
+
+**Goal:** Operator walks every Phase 246-248 deliverable; UAT-CHECKLIST.md sections per phase; fix any FAIL; archive milestone to `.planning/milestones/v44/` per v43 precedent.
+
+**Plans:** 0/1 plans complete
+
+Plans:
+- [ ] 249-PLAN.md — TBD (final operator walk + close)
+
+**UAT:** every Phase 246-248 box GREEN → milestone archived → v45 unblocked.
+
+**Cross-references:**
+- Depends on Phase 246, 247, 248 SHIPPED
+
+---
+
+### Phase 248: Luse display lifecycle — create/list/kill displays + app placement — 🟡 PLANNED 2026-05-28 (0/? plans)
+
+**Goal:** Extend the Luse MCP server (Phase 241 registrar / Phase 242 docs surface) with display-lifecycle tools. AI can create isolated nested X servers (Xephyr default, Xvfb headless), launch any LivOS app inside a specific display, list active displays with running apps, and kill displays it created. Cleanup discipline + isolation guarantees enforce that an agent's experiments don't leak into the operator's main session.
+
+**Direction:**
+- New MCP tools registered in `livos/packages/livinityd/source/modules/computer-use/mcp/server.ts`:
+  - `computer_create_display({name?, mode: "xephyr" | "xvfb", width?: 1920, height?: 1080})` → `{display: ":N", name}`
+  - `computer_list_displays()` → `[{display, name, mode, created_at, owner_session, running_apps: [...]}]`
+  - `computer_kill_display({display})` → `{ok, killed_apps_count}` (only displays created by the calling session)
+  - `computer_launch_app_in_display({display, app, args?})` → `{pid, app_name}` (resolves app via LivOS catalog like `computer_application`)
+- Backend: spawn Xephyr (visible nested X server, default — operator can watch what AI does) or Xvfb (headless, for batch screenshots / no-display-needed workflows). Display numbers allocated from `:10` upward (avoid collision with system :0 / :1).
+- Redis state: `luse:display:<display>` HSET (`owner_session`, `mode`, `created_at`, `name`, `width`, `height`); `luse:display:<display>:apps` LIST (running pids).
+- Owner-scoped kill: D-V44-DISPLAY-OWNER-SCOPED — only the creator session can kill its own displays. Other sessions can `list` for awareness.
+- AI guidance: new `docs/luse/DISPLAY-LIFECYCLE.md` (when-to-create, cleanup discipline, isolation guarantees, app-placement recipes). Re-syncs into shims via `scripts/sync-luse-skills.sh`.
+- Auto-cleanup: TTL gc on idle displays (4h since last app activity → kill).
+- Existing `computer_application` tool gets an optional `display` param so AI can target an existing display instead of always landing on `:1`.
+
+**Plan count estimate:** 4-5 plans (backend tools + Redis state + Xephyr/Xvfb spawn module + UI guidance docs + Mini PC deploy + UAT).
+
+**Plans:** 0/? plans complete
+
+Plans:
+- [ ] 248-PLAN.md series — TBD
+
+**UAT:** AI asks `computer_create_display({mode:"xephyr"})` → returns display ID → `computer_launch_app_in_display({display, app:"firefox"})` → operator sees Firefox window in a NEW separate X server (not on main desktop) → AI takes screenshot of that display only → `computer_list_displays()` shows the display + running Firefox → `computer_kill_display({display})` → display + Firefox closed.
+
+**Cross-references:**
+- Depends on Phase 241 (MCP registrar) + Phase 242 (Luse docs surface)
+- Companion to Phase 247 (skill v2 docs reference these new tools)
+
+---
+
+### Phase 247: Luse skill set v2 — professional reference documentation — 🟡 PLANNED 2026-05-28 (0/? plans)
+
+**Goal:** Take the v43 Phase 242 minimum-viable Luse docs and turn `docs/luse/` into a production reference an AI can rely on for complex automation. Add the patterns/troubleshooting/limits layer that distinguishes "this tool exists" from "here's how to use it well."
+
+**Direction:**
+- New canonical files (agent-agnostic — all flow through `scripts/sync-luse-skills.sh` to 5 shims):
+  - `docs/luse/PATTERNS.md` — 5-10 production patterns: screenshot-then-act, landmark-anchored clicks (not pixel coords), retry-with-screenshot-verify, multi-step wizard navigation, focus-before-type, modal dismissal, scroll-and-search.
+  - `docs/luse/TROUBLESHOOTING.md` — failure modes + diagnostic steps (display gone away / X server not reachable / Luse MCP can't reach Redis / wrong DISPLAY env / window not focused / xdotool race conditions).
+  - `docs/luse/ANTI-PATTERNS.md` — what NOT to do: brittle pixel coords without screenshot verify, fire-and-forget clicks without exit-criteria check, modifier-key combos that trigger desktop-shell shortcuts, sensitive-text via `computer_type_text` (use `computer_paste_text` + `isSensitive: true`).
+  - `docs/luse/INTEGRATION-RECIPES.md` — one section per supported CLI agent (Claude Code / Aion CLI / OpenCode / Gemini / OpenClaw) — how to invoke luse tools idiomatically in each, including the per-agent shim location reminder.
+  - `docs/luse/KNOWN-LIMITS.md` — DPI / scaling table, multi-monitor caveats, Wayland gaps, sandboxed-app limits (snap/flatpak isolation), root-only apps (gated).
+- Update existing tool docs (`click.md`/`type.md`/`screenshot.md`/`key.md`/`scroll.md`) with cross-references to PATTERNS.md examples.
+- New `docs/luse/CHEAT-SHEET.md` — single-page quick reference (one-line examples per tool).
+- Run sync script — verify each of `.claude/skills/luse/`, `.aion/skills/luse.md`, `.opencode/skills/luse.md`, `.openclaw/skills/luse.md` picks up new content (sha256 marker drift detection).
+- Optional: link Phase 248's `DISPLAY-LIFECYCLE.md` into the index if Phase 248 ships first.
+
+**Plan count estimate:** 2 plans (docs + sync verification).
+
+**Plans:** 0/? plans complete
+
+Plans:
+- [ ] 247-PLAN.md series — TBD
+
+**UAT:** Operator opens `.claude/skills/luse/PATTERNS.md` in editor — sees 5+ concrete patterns with real code examples. Operator opens `.aion/skills/luse.md` — sees the same patterns content with the AUTO-GENERATED FROM banner. Sync re-run reports `0 new / N updated / 0 unchanged` confirming all shims got the v2 docs.
+
+**Cross-references:**
+- Depends on Phase 242 (initial docs scaffold)
+- Companion to Phase 248 (new display tools land in PATTERNS.md examples)
+
+---
+
+### Phase 246: Terminal v2 — multi-session + reattach + TTL GC — 🟡 PLANNED 2026-05-28 (0/? plans)
+
+**Goal:** Take the v43 Phase 243 single-session MVP terminal and ship the v44 production version: multiple named tabs in one dock window, each session survives browser reload, idle sessions auto-collect at 24h, admin "kill session by id" UI.
+
+**Direction:**
+- **Multi-session UI:** xterm.js panel grows a tab bar at top (one tab per session). "+" button creates a new session. Right-click tab → "Rename" / "Close". Session list panel (sidebar) shows all sessions with last-active timestamps.
+- **Redis-backed scrollback:** per-session ring buffer at `livos:pty:session:<id>:scrollback` LIST (LTRIM to 10000 lines). Server writes every output chunk to the ring; client reads it on reattach.
+- **Reload-survive reattach:** session ID stored in `localStorage['livos.v44.terminal.session.<tab-id>']`. On page load, UI tries `wss://.../livos/terminal/ws?attach=<session-id>`; livinityd looks up Redis metadata + scrollback, sends `{ type: "reattached", sessionId, scrollback: [...lines] }` then resumes live stream.
+- **TTL GC:** new cron-like timer in livinityd: every 1h, scan `livos:pty:session:*`, kill PTY processes whose `lastAttachAt` is > 24h. Admin can override per-session TTL.
+- **Admin kill UI:** new "Active terminals" section in LivOS Settings → System. Lists all sessions across all browser tabs (per-user when v45 multi-user lands; v44 still single-user). Kill button next to each.
+- **Backward compat:** existing v43 single-session API preserved; v2 multi-session API is opt-in via UI tab bar. Feature flag stays `livos:v43:terminal_panel` (no separate v44 flag — v44 is a UI/UX evolution, not a new feature).
+- D-V43-NO-ROOT-PTY + D-V43-PER-USER-READY carried forward.
+
+**Plan count estimate:** 5-6 plans (backend session manager refactor + WS protocol extension + scrollback + TTL GC + UI tab bar + admin kill + Mini PC deploy + UAT).
+
+**Plans:** 0/? plans complete
+
+Plans:
+- [ ] 246-PLAN.md series — TBD
+
+**UAT:** Operator opens Terminal dock entry → 1 session. Click "+" → 2nd tab. Type `whoami` in each (different sessions). Reload browser → both tabs reattach with scrollback. Open new browser → admin UI shows 2 active sessions. Click "kill" → tab in original browser shows session-ended notice.
+
+**Cross-references:**
+- Depends on Phase 243 (single-session MVP)
+- Optional dependency: Phase 248 (display lifecycle) — terminal v2 doesn't need it, but the admin UI pattern from 248 could share UX
+
+---
+
 ### Phase 245: v43 E2E UAT + milestone close — ✅ SHIPPED 2026-05-28 (1/1 plan)
 
 **Goal:** Operator walks every Phase 238-244 deliverable; UAT-CHECKLIST.md sections per phase; fix any FAIL; archive milestone to `.planning/milestones/v43/` per v42 precedent.

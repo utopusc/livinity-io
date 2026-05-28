@@ -340,9 +340,48 @@ v42's scope was the OpenClawOS → AionUi Liv Assistant swap (Phases 222-228 + 2
 - [x] FR-BROKER-E2-01..02 → Phase 62 (Settings API Keys CRUD + filter dropdown + admin filter chip)
 - [⚠] FR-VERIFY-V30-01..08 → Phase 63 (R1-R3.11 live-verified ad-hoc; formal walkthrough waived via --accept-debt; lifted into v31 P64)
 
+## Current Milestone: v44 — Liv AI Tooling Depth (ACTIVE — opened 2026-05-28)
+
+**Goal:** Take the v43 foundation (Liv Assistant + onboarding + Local Agents UI + MCP auto-add + Luse skill set + Persistent terminal MVP) and deepen each pillar into production-grade tooling. Three independent axes:
+
+1. **Terminal v2 — persistence + multi-session** (extends Phase 243 MVP). Operator opens multiple named terminals as tabs in one dock window. Each session survives browser reload via Redis-backed scrollback + reattach. 24h idle TTL auto-kills orphan sessions; admin panel shows live session list with kill-by-id.
+
+2. **Luse skill set v2 — professional reference** (extends Phase 242 docs). The v43 docs ship the minimum viable surface. v44 turns `docs/luse/` into a production reference: end-to-end workflow recipes, common patterns (multi-step UI automation, retry logic, screenshot-driven self-correction), troubleshooting matrix, anti-patterns (e.g. brittle pixel-coord clicks vs landmark-anchored), integration recipes per CLI agent (Claude Code / Aion CLI / OpenCode), known-limit table (DPI / scaling / multi-monitor / Wayland gaps).
+
+3. **Luse display lifecycle — virtual displays** (NEW capability layer on top of luse MCP). AI can spin up isolated nested X servers (Xephyr or Xvfb) on demand, launch any LivOS app inside a specific display, list active displays with running apps, and kill displays it created. Use cases: parallel browser automation in different sessions without contaminating the operator's main display; sandbox a flaky app in its own display; spin up an ephemeral display for a one-shot screenshot task.
+
+**Estimated effort:** 6-9 days wall-clock (4 phases, P246-P249).
+
+**Phase outline:**
+
+- **P246 — Terminal v2** — Multi-session UI (tabs + session list panel), Redis-backed scrollback (per-session ring buffer), reload-survive reattach (session ID in localStorage + handshake), 24h idle TTL GC, admin "kill session by id" UI. Extends Phase 243 module; preserves D-243-NO-ROOT + D-243-PER-USER-READY.
+- **P247 — Luse skill set v2** — Deep documentation pass on `docs/luse/`. New files: `PATTERNS.md` (5-10 production patterns), `TROUBLESHOOTING.md`, `ANTI-PATTERNS.md`, `INTEGRATION-RECIPES.md` (one section per supported CLI agent), `KNOWN-LIMITS.md`. Re-runs `scripts/sync-luse-skills.sh` to push enriched docs into every agent shim.
+- **P248 — Luse display lifecycle** — New MCP tools registered in `computer-use/mcp/server.ts`: `computer_create_display(name?, mode=xephyr|xvfb)` returns display id, `computer_list_displays()` returns active list + running apps, `computer_kill_display(display)`, `computer_launch_app_in_display(display, app)`. Backend uses Xephyr (visible nested X server, default) or Xvfb (headless, for screenshots-only). Display IDs stored in Redis `luse:display:<id>` HSET with `owner_session`, `mode`, `created_at`, `running_apps[]`. AI guidance in `docs/luse/DISPLAY-LIFECYCLE.md` (cleanup discipline, when-to-create, isolation guarantees).
+- **P249 — v44 E2E UAT + milestone close** — Operator walks every Phase 246-248 deliverable; milestone archived.
+
+**Locked invariants (carry forward from v43):**
+- **D-V44-SACRED:** `liv/packages/core/src/sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED.
+- **D-V44-MINI-PC-ONLY:** Per hard rule 2026-04-27, Server4 + Server5 receive zero v44 commits.
+- **D-V44-CADDY-REUSE-226-04:** Caddy edits go through `caddy.ts` pattern.
+- **D-V44-NO-ROOT-PTY:** Terminal sessions + display-spawned processes run as `bruce`, NEVER root.
+
+**v44-specific decisions:**
+- **D-V44-DISPLAY-XEPHYR-DEFAULT:** Xephyr is the default display backend (visible nested X server, operator can see what AI is doing). Xvfb opt-in for headless screenshot batch tasks.
+- **D-V44-DISPLAY-OWNER-SCOPED:** Each MCP-created display is bound to the session that created it. Other sessions can `list` but not `kill` displays they didn't create.
+- **D-V44-TERMINAL-SCROLLBACK-RING:** Per-session scrollback is a fixed-size Redis ring buffer (default 10000 lines). Reload-reattach replays the buffer client-side, then resumes live stream.
+
+---
+
 ## Previous Milestone: v43 — Liv AI Deeper Integration + UI Polish — CLOSED 2026-05-28 ✅
 
 **Outcome:** 17/17 declared phases SHIPPED (1 obsoleted). Archive: `.planning/milestones/v43/v43-MILESTONE-CLOSED.md`. Operator UAT walks pending via `.planning/milestones/v43/v43-UAT-CHECKLIST.md` (41 items, auto-approved during autonomous chain). Sacred SHA `f3538e1d…` preserved across every commit. Git tag: `v43.0`.
+
+**Post-close hot-fixes during v44 opening session (2026-05-28):**
+- Phase 245.2 — Claude wrapper at `/home/bruce/.local/bin/claude` injects `MCP_TIMEOUT=30000` because aioncore sanitizes env when spawning Claude Code.
+- Phase 245.3 — `/home/bruce/.claude/settings.json` wildcard `permissions.allow` for `mcp__luse__*` + `mcp__liv-*__*` + `mcp__aionui-team-guide__*` so the ACP layer surfaces stdio MCPs to the agent.
+- Phase 245.4 — Single-binary `/usr/local/bin/liv-mcp-{luse,liv-system,liv-vault,liv-apps,liv-docker}` wrappers exec `tsx` directly (avoid AionUi UI "Command not found" join + npx EROFS under ProtectHome=ro).
+- Phase 245.5 — Wrappers use explicit `/usr/bin/node` to bypass Bun shebang resolution under `@agentclientprotocol/claude-agent-acp` bunx PATH (Bun cannot import tsx CJS impl from .mjs entry → silent stdio close → tools never registered).
+- Phase 245.6 — Caddy `@webapp_stream_ws path /ws/stream/*` matcher added BEFORE `@liv_ws`, routes to livinityd `:8080` for Phase 100-07 WebApp RFB streaming (was being captured by `@liv_ws` and 404'd into AionUi `:3020`).
 
 **Post-close hot-fixes (gap-closure micro-phases on top of the shipped milestone):**
 - **Phase 245.1 (2026-05-28)** — MCP seed env-thread completed + all 5 system MCPs default-enabled. Operator-surfaced gap during live UAT: `[luse-mcp] resolver: env-thread incomplete (... MISSING); falling back to APP_MAP` + `redis=null, create_stream gated off`; only `luse` of the 5 system MCPs (luse / liv-apps / liv-docker / liv-system / liv-vault) shipped `enabled:true`. Patches: `scripts/install/seeds/mcp-servers.json` gains 4 new placeholders (`__LIVOS_LIV_API_KEY__` / `__LIVOS_USER_SLUG__` / `__LIVOS_DOMAIN_ROOT__` + literal `LIVINITYD_API_URL=http://127.0.0.1:8080`) on luse + LIVINITYD_API_URL + LIV_API_KEY env on the 4 local liv-* MCPs + all 5 flipped to `enabled:true`; `scripts/install/deploy-livinityd.sh _dld_seed_mcp_servers` substitutes 4 placeholders (was 1); `seed-payload-contract.test.ts` adds 6 drift-lock tests + `seed.test.ts` scenarios J + K. Mini PC ratchet (HSET 5 system entries → DELETE 5 from AionUi → DEL sentinel → restart) re-seeded: `Phase 241: AionUi MCP seed (created=5 skipped=0 errored=0 sentinel=set)` + 5 × `→ toggled enabled` lines + manual luse spawn now logs `resolver: constructed (LIVINITYD_API_URL=http://127.0.0.1:8080, userSlug=bruce, domainRoot=livinity.io)` + `redis=connected` (zero `env-thread incomplete` warning). 45/45 vitest GREEN, sacred SHA `293a499...4788cbab1bfe` byte-identical PRE/POST, sacred blob SHA `f3538e1d...` preserved. SUMMARY: `.planning/phases/245.1-mcp-seed-fix/245.1-SUMMARY.md`.
