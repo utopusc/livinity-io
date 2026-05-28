@@ -6,8 +6,10 @@
 // to a structured InstallResult. Never throws on subprocess failure — only
 // the whitelist guard throws (so the tRPC layer can map it to BAD_REQUEST).
 
+import {createHash} from 'node:crypto'
 import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
 
+import type {AuditLogFn} from './auth.js'
 import {resolveInstallScript, SUPPORTED_CLIS_SET} from './install-scripts.js'
 import type {CliName, InstallResult, InstallerLogger} from './types.js'
 
@@ -24,6 +26,14 @@ export interface InstallCliDeps {
 	 * `node:child_process` spawn is used.
 	 */
 	spawnFn?: typeof nodeSpawn
+	/**
+	 * Phase 240-01 — Optional audit-log writer. When provided, installCli
+	 * invokes it ONCE on completion with a structured row (tool_name =
+	 * 'cliInstaller.install', SHA-256 params_digest of {name}, success,
+	 * error). Failure to write is logged warn-level and never reflected to
+	 * the caller — audit observability MUST NEVER block the functional path.
+	 */
+	auditLog?: AuditLogFn
 }
 
 export interface InstallCliInput {
@@ -65,7 +75,7 @@ export async function installCli(
 
 	deps.logger.info(`[cli-installer] install start: ${input.name} (${scriptPath})`)
 
-	return new Promise<InstallResult>((resolve) => {
+	const result = await new Promise<InstallResult>((resolve) => {
 		let settled = false
 		const stdoutChunks: Buffer[] = []
 		const stderrChunks: Buffer[] = []
@@ -156,4 +166,27 @@ export async function installCli(
 			})
 		})
 	})
+
+	// Phase 240-01 — auditLog hook on completion (when provided). Failures
+	// are warn-logged but never reflected to the caller (defense-in-depth:
+	// audit observability MUST NEVER block the functional path).
+	if (deps.auditLog) {
+		try {
+			await deps.auditLog({
+				tool_name: 'cliInstaller.install',
+				params_digest: createHash('sha256')
+					.update(JSON.stringify({name: input.name}))
+					.digest('hex'),
+				success: result.ok,
+				error: result.ok ? null : `exit=${result.exitCode}`,
+			})
+		} catch (err) {
+			deps.logger.warn(
+				`[cli-installer] auditLog install row failed for ${input.name}`,
+				err,
+			)
+		}
+	}
+
+	return result
 }
