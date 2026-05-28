@@ -131,6 +131,12 @@ import {createProfileSeeder, type ProfileSeederHandle} from './modules/chrome-ma
 // route through the injected router from this swap forward.
 import {createChromeMasterRouter} from './modules/chrome-master/index.js'
 import {createAppRouter, setProductionAppRouter} from './modules/server/trpc/index.js'
+// Phase 246-03 — pty-sessions admin sub-router (listSessions + killSession).
+// Wired against the per-livinityd-process SessionManager singleton on
+// `this.server.ptySessionManager` and injected into createAppRouter via the
+// `ptySessions` slot. Same singleton is reused by the WS handler at
+// /livos/terminal/ws (server/index.ts mount block).
+import {createPtySessionsAdminRouter} from './modules/pty-sessions/index.js'
 // Phase 196-01 — xAI OAuth dependency injection. Closes Phase 195 HUMAN-UAT #1:
 // before this plan landed, the bare `xaiAuthRouter` empty-injection Proxy
 // threw HTTP 500 emptyInjectionStub on the first procedure call (live probe
@@ -1871,6 +1877,15 @@ export default class Livinityd {
 				'Phase 239-01 + 240-01 — cliInstaller.* tRPC router wired (install / detect / auth; whitelist=5; D-239-07 RCE boundary; audit + Redis status keys live)',
 			)
 
+			// Phase 246-03 — wire the pty-sessions admin sub-router against the
+			// per-livinityd-process SessionManager singleton exposed on Server.
+			// Same singleton is injected into the /livos/terminal/ws handler
+			// (server/index.ts WS mount block) so create/attach + admin kill
+			// operate on the same in-memory Map.
+			const ptySessionsAdminRouterProductionInstance = createPtySessionsAdminRouter(
+				{sessionManager: this.server.ptySessionManager},
+			)
+
 			const productionAppRouter = createAppRouter({
 				chromeMaster: chromeMasterRouterInjected,
 				xaiAuth: xaiAuthRouterProductionInstance,
@@ -1886,6 +1901,8 @@ export default class Livinityd {
 				skillsMarket: skillsMarketRouterProductionInstance,
 				config: configRouterProductionInstance,
 				cliInstaller: cliInstallerRouterProductionInstance,
+				// Phase 246-03 — pty-sessions admin namespace wired here.
+				ptySessions: ptySessionsAdminRouterProductionInstance,
 			})
 			setProductionAppRouter(productionAppRouter)
 			webappLogger.info(

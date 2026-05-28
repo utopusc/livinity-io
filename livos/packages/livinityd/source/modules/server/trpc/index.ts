@@ -79,6 +79,12 @@ import {
 	cliInstallerRouter,
 	createCliInstallerRouter,
 } from './cli-installer-router.js'
+// Phase 246-03 — pty-sessions admin sub-router (listSessions + killSession).
+// Factory-DI: production livinityd boot supplies a real
+// createPtySessionsAdminRouter({sessionManager: this.server.ptySessionManager})
+// build. Default empty-injection stub throws PRECONDITION_FAILED on every
+// call (mirrors mcpConfig + cliInstaller + provider.config pattern).
+import {createPtySessionsAdminRouter} from '../../pty-sessions/admin-router.js'
 import {skillsRouter, createSkillsRouter} from './skills-router.js'
 import {skillsMarketRouter, createSkillsMarketRouter} from './skills-market-router.js'
 import {claudeAuthRouter} from './claude-auth-router.js'
@@ -179,6 +185,20 @@ import {
 import {type WebSocketServer} from 'ws'
 import type Livinityd from '../../../index.js'
 
+// Phase 246-03 — empty-injection default stub for the pty-sessions admin
+// sub-router. Used by `createAppRouter()` when no `ptySessions` opt is
+// supplied so the type-inference path stays intact for tests + back-compat
+// callers. Mirrors mcpConfig + cliInstaller + provider.config Proxy stub
+// pattern in sibling routers — any property access on the Proxy throws so
+// the failure mode is loud and traceable rather than a silent default.
+const ptySessionsAdminRouterStub = createPtySessionsAdminRouter({
+	sessionManager: new Proxy({} as never, {
+		get() {
+			throw new Error('PTY_SESSIONS_ADMIN_ROUTER_NOT_WIRED')
+		},
+	}),
+})
+
 // Merge Phase 47 healthProbe + Phase 101-03 native-app sub-router into the
 // existing apps router (tRPC v11 mergeRouters). The wrapper `router({native:
 // nativeAppsRouter})` creates the `apps.native.*` sub-namespace path shape;
@@ -251,6 +271,12 @@ export function createAppRouter(opts: {
 	// is a TS const, no IO needed) but `install` throws PRECONDITION_FAILED
 	// until production boot wires a real createSkillsMarketRouter({...}).
 	skillsMarket?: ReturnType<typeof createSkillsMarketRouter>
+	// Phase 246-03 — pty-sessions admin namespace slot. Default falls back to
+	// the empty-injection stub via createPtySessionsAdminRouter with a Proxy-
+	// throwing SessionManager (see bottom of this file). Production boot
+	// supplies the real router built against the per-livinityd-process
+	// SessionManager singleton on Server (server/index.ts).
+	ptySessions?: ReturnType<typeof createPtySessionsAdminRouter>
 }) {
 	return router({
 		migration,
@@ -376,6 +402,11 @@ export function createAppRouter(opts: {
 			opts.skills ?? skillsRouter,
 			router({market: opts.skillsMarket ?? skillsMarketRouter}),
 		),
+		// Phase 246-03 — `ptySessions.*` admin namespace (listSessions +
+		// killSession). Default empty-injection stub throws PRECONDITION_FAILED
+		// on every call until production boot supplies the real router built
+		// against the per-livinityd-process SessionManager singleton on Server.
+		ptySessions: opts.ptySessions ?? ptySessionsAdminRouterStub,
 	})
 }
 

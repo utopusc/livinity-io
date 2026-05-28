@@ -715,4 +715,18 @@ export const httpOnlyPaths = [
 	// Mounted under the same cliInstaller.* namespace as the install + detect
 	// routes (cli-installer-router.ts declaration order [detect, install, auth]).
 	'cliInstaller.auth',
+	// Phase 246-03 — pty-sessions admin namespace (listSessions + killSession).
+	// adminProcedure-gated mutations from the future "Active terminals"
+	// admin UI (deferred to Phase 246-05). HTTP-only per the standard
+	// admin-mutation cluster rationale (memory pitfall B-12 / X-04):
+	// killSession is autosave-adjacent — a half-broken WS after
+	// `systemctl restart livos` would silently drop the kill request
+	// (same precedent as chromeMaster.reset line ~540 + apiKeys.revoke
+	// line ~248). listSessions is a page-render dependency for the admin
+	// UI where the WS-handshake-delay flicker is undesirable (precedent:
+	// agents.list line ~303). D-V44-CADDY-REUSE-226-04: the /trpc HTTP
+	// path is already covered by the existing tRPC matcher — no new
+	// Caddy emission needed.
+	'ptySessions.listSessions',
+	'ptySessions.killSession',
 ] as const
