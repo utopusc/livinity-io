@@ -4441,9 +4441,14 @@ Then revert `fix(232-02)` to re-enable the `replace` directive. Adds ~30 MB bina
 **Goal:** Close the fresh-install portability gaps found by the Phase 251 audit so a clean `get.livinity.io` install brings up the full Luse + terminal stack with no manual steps. Scope is the ready-made backlog at `.planning/phases/251-fresh-install-portability-audit/REMEDIATION-BACKLOG.md` (16 items R1–R16, file:line + effort + kind, P0/P1/P2, with 5-wave sequencing). The 5 P0 blockers gate the go/no-go: R1 install `xserver-xephyr`, R2 install `xterm`, R3 `child.on('error')` in display-manager `create()` (kills the false-positive-success class), R4 PTY user runtime lookup (drop the `bruce` triple-pin), R8 drop the PTY self-`sudo` (recommended — also collapses R4's argv layer), R9 pin `get.livinity.io` → install Path A. Then P1 env/seed hardening (R5–R7, R10–R12) and P2 hygiene (R13–R16).
 **Requirements**: PORT-251 backlog R1–R16 (see REMEDIATION-BACKLOG.md)
 **Depends on:** Phase 251 (audit findings)
-**Plans:** 0 plans
+**Plans:** 6 plans (5 waves)
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 252 to break down)
+- [ ] 252-01-PLAN.md — Wave 1: P0 apt + display fail-closed (R1,R2,R3,R7,R16)
+- [ ] 252-02-PLAN.md — Wave 2: PTY drop self-sudo + runtime user + terminal_panel seed (R8,R4,R10)
+- [ ] 252-03-PLAN.md — Wave 3: resolve live get.livinity.io entrypoint (R11, autonomous:false)
+- [ ] 252-04-PLAN.md — Wave 3: pin route.ts → Path A + env-seed openssl-rand + README (R9)
+- [ ] 252-05-PLAN.md — Wave 4: liv-assistant EnvironmentFile + resolved XAUTH/DISPLAY + loud empty-catalog (R5,R6,R12)
+- [ ] 252-06-PLAN.md — Wave 5: unify LUSE_USER_ID + single $LIVOS_ROOT + XDG_RUNTIME_DIR markers (R13,R14,R15)
 
 ---
