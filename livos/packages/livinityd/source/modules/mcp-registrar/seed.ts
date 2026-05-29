@@ -99,7 +99,15 @@ export async function seedAionUiMcpConfig(deps: SeedDeps): Promise<SeedResult> {
 			return result
 		}
 		if (targets.length === 0) {
-			logger.warn('no system MCPs in liv:mcp:config — install seed missing? skipping')
+			result.emptyCatalog = true
+			// R12: an empty liv:mcp:config means the install MCP seed never ran
+			// (Path B/C) — surface it LOUDLY so the missing AionUi luse entry is
+			// not invisible. ERROR level so it shows in journalctl + any /api/health
+			// aggregation of seed state. The boot wiring (index.ts) re-surfaces the
+			// emptyCatalog flag for operator visibility.
+			logger.error(
+				'[mcp-seed] EMPTY liv:mcp:config catalog — install MCP seed missing (Path B/C?); AionUi luse will NOT be configured. Re-run the Path A installer or seed liv:mcp:config manually.',
+			)
 			return result
 		}
 
