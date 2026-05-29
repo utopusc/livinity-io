@@ -43,6 +43,7 @@ import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js'
 // ioredis exports Redis as a named export (NOT default) per project memory.
 import {Redis} from 'ioredis'
 
+import {createDisplayManager} from '../displays/index.js'
 import {defaultLivosAppResolver, type LivosAppMatch} from '../native/window.js'
 import {registerLuseTools} from './tools.js'
 
@@ -136,6 +137,29 @@ async function main(): Promise<void> {
 		)
 	}
 
+	// Phase 248-02 — display lifecycle manager. Reuses the SAME fresh redis
+	// client constructed above (one connection per MCP child, NOT shared with
+	// parent livinityd). When redis is null, displayManager is omitted and the
+	// 4 new tool handlers (computer_create_display / computer_list_displays /
+	// computer_kill_display / computer_launch_app_in_display) return
+	// "Error: displayManager not wired" — same fail-closed pattern as
+	// streamManager from P100-10-04.
+	//
+	// The redis client surface used by createDisplayManager is the 6-method
+	// DisplayRedisClient subset (hset/hgetall/rpush/lrange/del/scan). ioredis's
+	// Redis class implements all 6 with compatible signatures, so the cast is
+	// type-safe at the wire level even though TS's structural subtype check
+	// requires a `never` cast for the hset overload variance.
+	const displayManager =
+		redis !== null
+			? createDisplayManager({
+					redis: redis as never,
+					logger: {
+						info: (msg) => process.stderr.write(`[luse-mcp] displays: ${msg}\n`),
+					},
+				})
+			: undefined
+
 	// Phase 161-03 — Construct livosAppResolver via env-thread + HTTP fetch.
 	// Mirrors ws-agent.ts:160-172 IntentRouter getCapabilities idiom.
 	//
@@ -208,6 +232,9 @@ async function main(): Promise<void> {
 		userId: process.env.LUSE_USER_ID ?? 'admin',
 		// Phase 161-03 — undefined falls through to APP_MAP (pre-Phase-160-03 behavior)
 		livosAppResolver,
+		// Phase 248-02 — display-lifecycle backend (undefined when redis is null,
+		// in which case the 4 display tools fail-closed).
+		displayManager,
 	})
 
 	const transport = new StdioServerTransport()
@@ -219,7 +246,7 @@ async function main(): Promise<void> {
 			defaultWindowId !== undefined ? ` (windowId=${defaultWindowId})` : ''
 		}${defaultDisplay !== undefined ? ` (display=${defaultDisplay})` : ''}${
 			redis !== null ? ' (redis=connected)' : ' (redis=null, create_stream gated off)'
-		}\n`,
+		} (displayManager=${displayManager !== undefined ? 'wired' : 'null'})\n`,
 	)
 }
 
