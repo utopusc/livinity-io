@@ -59,19 +59,25 @@ _env_file="/opt/livos/.env"
 if [[ -f "$_env_file" ]]; then
     ok "✓ ${_env_file} already present (operator-customized — not overwriting)"
 else
-    info "Writing default ${_env_file} (CHANGEME passwords — rotate before service-up!)"
+    info "Writing default ${_env_file} (auto-generated secrets)"
     mkdir -p /opt/livos
-    cat > "$_env_file" <<'ENV'
-# /opt/livos/.env — seeded by scripts/install/env-seed.sh (Phase 196-02)
-# IMPORTANT: rotate CHANGEME passwords before starting services in production.
-
-DATABASE_URL=postgresql://livos:CHANGEME@localhost:5432/livos
-REDIS_URL=redis://:CHANGEME@localhost:6379
+    # R9 part 3: generate real secrets (mirror Path A deploy-livinityd.sh:_dld_write_env_file).
+    # URL-safe (no @ / : / / which would break the redis:// and postgres:// URLs).
+    _pg_pass=$(openssl rand -hex 24)
+    _redis_pass=$(openssl rand -hex 24)
+    umask 0177
+    cat > "$_env_file" <<ENV
+# /opt/livos/.env — seeded by scripts/install/env-seed.sh (Phase 196-02; secrets auto-generated Phase 252 R9)
+DATABASE_URL=postgresql://livos:${_pg_pass}@localhost:5432/livos
+REDIS_URL=redis://:${_redis_pass}@localhost:6379
 JWT_SECRET_FILE=/opt/livos/data/secrets/jwt
 ENV
+    umask 0022
     chown bruce:bruce "$_env_file"
     chmod 0640 "$_env_file"
-    warn "⚠ ${_env_file} contains CHANGEME placeholders — update DATABASE_URL + REDIS_URL passwords before service-up!"
+    # NEVER echo the generated secrets — only confirm they were written.
+    unset _pg_pass _redis_pass
+    ok "✓ ${_env_file} written with auto-generated DATABASE_URL + REDIS_URL secrets"
 fi
 
 info "✓ env-seed complete"
