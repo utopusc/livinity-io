@@ -48,7 +48,7 @@ import {existsSync, readFileSync} from 'node:fs'
 
 import {createDisplayManager, createDisplayTtlGc} from '../displays/index.js'
 import {defaultLivosAppResolver, type LivosAppMatch} from '../native/window.js'
-import {registerLuseTools, resolveLuseUserId} from './tools.js'
+import {registerLuseTools, resolveLuseUserId, LIVOS_ROOT} from './tools.js'
 
 /**
  * Phase 102-06 — display-target resolution with precedence:
@@ -121,7 +121,9 @@ export function resolveLuseRedisUrl(deps: ResolveRedisUrlDeps = {}): string | un
 	const readEnvFile =
 		deps.readEnvFile ??
 		((p: string) => (existsSync(p) ? readFileSync(p, 'utf8') : undefined))
-	const paths = deps.envFilePaths ?? ['/opt/livos/.env', '/opt/livos/livos/.env']
+	// Phase 252-06 (R14) — derive from the single LIVOS_ROOT source (tools.ts)
+	// instead of re-hardcoding /opt/livos, so a moved-root box resolves Redis.
+	const paths = deps.envFilePaths ?? [`${LIVOS_ROOT}/.env`, `${LIVOS_ROOT}/livos/.env`]
 	for (const p of paths) {
 		let contents: string | undefined
 		try {

@@ -443,9 +443,9 @@ async function discoverActiveX11Displays(): Promise<string[]> {
 // jailbreak vector (e.g. agent coerced into reading /etc/passwd or
 // /opt/livos/.env). We restrict reads to a per-user allowlist:
 //
-//   /home/<user>/                        — user home, read-only
-//   /tmp/luse-*/                         — Luse-owned temp workspace
-//   /opt/livos/data/uploads/<userId>/    — user uploads
+//   /home/<user>/                          — user home, read-only
+//   /tmp/luse-*/                           — Luse-owned temp workspace
+//   ${LIVOS_ROOT}/data/uploads/<userId>/   — user uploads (R14: LIVOS_ROOT-derived)
 //
 // Symlinks are resolved via fs.realpath BEFORE the allowlist check so a
 // symlink inside /home/bruce/ that points at /etc/passwd is still rejected.
@@ -474,7 +474,7 @@ export function __setRealpathForTest(
 /**
  * Phase 160-05 — pure allowlist check. `resolved` is expected to be the
  * post-realpath absolute path. `userSlug` controls the `/home/<user>/`
- * branch; `userId` controls the `/opt/livos/data/uploads/<userId>/` branch.
+ * branch; `userId` controls the `${LIVOS_ROOT}/data/uploads/<userId>/` branch.
  * Returns true ONLY if `resolved` starts with one of the three allowed
  * prefixes. The `/tmp/luse-` prefix matches any `/tmp/luse-<anything>` dir.
  */
@@ -486,7 +486,10 @@ export function isPathAllowed(
 	const allowlist = [
 		`/home/${userSlug}/`,
 		'/tmp/luse-',
-		`/opt/livos/data/uploads/${userId}/`,
+		// Phase 252-06 (R14) — derive from the single LIVOS_ROOT source instead
+		// of re-hardcoding /opt/livos, so a moved-root box's uploads dir is
+		// still inside the sandbox.
+		`${LIVOS_ROOT}/data/uploads/${userId}/`,
 	]
 	return allowlist.some((prefix) => resolved.startsWith(prefix))
 }
@@ -958,7 +961,7 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 					type: 'text',
 					text:
 						`path outside sandbox: requested=${requestedPath} resolved=${resolved} ` +
-						`(allowed prefixes: /home/${userSlug}/, /tmp/luse-, /opt/livos/data/uploads/${userId}/)`,
+						`(allowed prefixes: /home/${userSlug}/, /tmp/luse-, ${LIVOS_ROOT}/data/uploads/${userId}/)`,
 				}],
 				isError: true,
 			}
