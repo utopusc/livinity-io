@@ -244,6 +244,43 @@ function TerminalTabPane({
 	const hasReadyArrivedRef = useRef(false)
 	const sendRef = useRef<((msg: ClientToServer) => void) | null>(null)
 
+	// Phase 246 hot-fix — right-click clipboard menu position (null = closed).
+	const [ctxMenu, setCtxMenu] = useState<{x: number; y: number} | null>(null)
+
+	// ── Clipboard helpers (shared by the right-click menu + key handler) ──
+	// Copy: write the current xterm selection to the system clipboard.
+	// Paste: read the clipboard and feed it through term.paste() which applies
+	// bracketed-paste transforms and triggers onData → {type:'data'} → PTY.
+	// navigator.clipboard requires a secure context (bruce.livinity.io is
+	// https) and a user gesture (menu click / keypress both qualify).
+	const doCopy = useCallback(() => {
+		const sel = terminalRef.current?.getSelection()
+		if (sel) void navigator.clipboard?.writeText(sel).catch(() => {})
+		setCtxMenu(null)
+	}, [])
+
+	const doPaste = useCallback(() => {
+		const term = terminalRef.current
+		setCtxMenu(null)
+		if (!term || isClosedRef.current) return
+		void navigator.clipboard
+			?.readText()
+			.then((text) => {
+				if (text) term.paste(text)
+			})
+			.catch(() => {})
+	}, [])
+
+	const doSelectAll = useCallback(() => {
+		terminalRef.current?.selectAll()
+		setCtxMenu(null)
+	}, [])
+
+	const doClear = useCallback(() => {
+		terminalRef.current?.clear()
+		setCtxMenu(null)
+	}, [])
+
 	// One-shot xterm mount, mirroring Phase 243's setup verbatim.
 	useEffect(() => {
 		if (!containerRef.current) return
@@ -267,6 +304,43 @@ function TerminalTabPane({
 
 		terminalRef.current = term
 		fitAddonRef.current = fit
+
+		// Phase 246 hot-fix — clipboard key bindings.
+		// Ctrl+Shift+C / Ctrl+Shift+V (Linux/Windows convention — plain Ctrl+C
+		// must stay SIGINT) plus Cmd+C / Cmd+V on macOS. Returning false stops
+		// xterm from forwarding the combo to the PTY.
+		term.attachCustomKeyEventHandler((event) => {
+			if (event.type !== 'keydown') return true
+			const isMac =
+				typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+			const isCopyCombo =
+				event.code === 'KeyC' && ((event.ctrlKey && event.shiftKey) || (isMac && event.metaKey))
+			const isPasteCombo =
+				event.code === 'KeyV' && ((event.ctrlKey && event.shiftKey) || (isMac && event.metaKey))
+			if (isCopyCombo) {
+				const sel = term.getSelection()
+				if (sel) void navigator.clipboard?.writeText(sel).catch(() => {})
+				return false
+			}
+			if (isPasteCombo) {
+				void navigator.clipboard
+					?.readText()
+					.then((text) => {
+						if (text && !isClosedRef.current) term.paste(text)
+					})
+					.catch(() => {})
+				return false
+			}
+			return true
+		})
+
+		// Phase 246 hot-fix — right-click opens the clipboard context menu.
+		const ctxEl = containerRef.current
+		const onContextMenu = (e: MouseEvent) => {
+			e.preventDefault()
+			setCtxMenu({x: e.clientX, y: e.clientY})
+		}
+		ctxEl?.addEventListener('contextmenu', onContextMenu)
 
 		term.onData((data) => {
 			if (isClosedRef.current) return
@@ -299,6 +373,7 @@ function TerminalTabPane({
 		}
 
 		return () => {
+			ctxEl?.removeEventListener('contextmenu', onContextMenu)
 			observer?.disconnect()
 			try {
 				term.dispose()
@@ -421,12 +496,66 @@ function TerminalTabPane({
 	}, [tabKey, registerCloseSender])
 
 	return (
-		<div
-			data-test-tab-pane={tabKey}
-			className={`absolute inset-0 h-full w-full bg-[#0b0b0c] p-2 ${
-				isActive ? '' : 'hidden'
-			}`}
-			ref={containerRef}
-		/>
+		<>
+			<div
+				data-test-tab-pane={tabKey}
+				className={`absolute inset-0 h-full w-full bg-[#0b0b0c] p-2 ${
+					isActive ? '' : 'hidden'
+				}`}
+				ref={containerRef}
+			/>
+			{ctxMenu && isActive && (
+				<>
+					{/* Click-away backdrop — also swallows the next right-click. */}
+					<div
+						className='fixed inset-0 z-40'
+						onClick={() => setCtxMenu(null)}
+						onContextMenu={(e) => {
+							e.preventDefault()
+							setCtxMenu(null)
+						}}
+					/>
+					<div
+						data-test-terminal-ctxmenu
+						className='fixed z-50 min-w-[150px] overflow-hidden rounded-md border border-white/10 bg-[#161617] py-1 text-sm text-[#e7e7e8] shadow-xl'
+						style={{
+							left: Math.min(ctxMenu.x, (typeof window !== 'undefined' ? window.innerWidth : 9999) - 160),
+							top: Math.min(ctxMenu.y, (typeof window !== 'undefined' ? window.innerHeight : 9999) - 140),
+						}}
+					>
+						<button
+							type='button'
+							className='flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left hover:bg-white/10'
+							onClick={doCopy}
+						>
+							<span>Copy</span>
+							<span className='text-xs text-white/40'>Ctrl+Shift+C</span>
+						</button>
+						<button
+							type='button'
+							className='flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left hover:bg-white/10'
+							onClick={doPaste}
+						>
+							<span>Paste</span>
+							<span className='text-xs text-white/40'>Ctrl+Shift+V</span>
+						</button>
+						<button
+							type='button'
+							className='block w-full px-3 py-1.5 text-left hover:bg-white/10'
+							onClick={doSelectAll}
+						>
+							Select All
+						</button>
+						<button
+							type='button'
+							className='block w-full px-3 py-1.5 text-left hover:bg-white/10'
+							onClick={doClear}
+						>
+							Clear
+						</button>
+					</div>
+				</>
+			)}
+		</>
 	)
 }
