@@ -4445,7 +4445,7 @@ Then revert `fix(232-02)` to re-enable the `replace` directive. Adds ~30 MB bina
 
 Plans:
 - [x] 252-01-PLAN.md — Wave 1: P0 apt + display fail-closed (R1,R2,R3,R7,R16) — ✅ DONE 2026-05-29 (commits `bc0210f6` apt block both installers + `f272265b` fail-closed create() R3; 17/17 display-manager tests; sacred SHA preserved)
-- [ ] 252-02-PLAN.md — Wave 2: PTY drop self-sudo + runtime user + terminal_panel seed (R8,R4,R10)
+- [x] 252-02-PLAN.md — Wave 2: PTY drop self-sudo + runtime user + terminal_panel seed (R8,R4,R10) — ✅ DONE 2026-05-29 (commits `af39490f` sudo-less bash spawn + root-only guard + `string` username + Redis `livos:desktop:user` resolve + `f5b0554b` `_dld_seed_terminal_panel_flag`; 78/78 pty-sessions tests; zero NEW typecheck errors; sacred SHA preserved)
 - [ ] 252-03-PLAN.md — Wave 3: resolve live get.livinity.io entrypoint (R11, autonomous:false)
 - [ ] 252-04-PLAN.md — Wave 3: pin route.ts → Path A + env-seed openssl-rand + README (R9)
 - [ ] 252-05-PLAN.md — Wave 4: liv-assistant EnvironmentFile + resolved XAUTH/DISPLAY + loud empty-catalog (R5,R6,R12)
