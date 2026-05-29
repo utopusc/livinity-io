@@ -42,6 +42,9 @@ import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js'
 import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js'
 // ioredis exports Redis as a named export (NOT default) per project memory.
 import {Redis} from 'ioredis'
+// Phase 250-hotfix — read livinityd's env file as a last-resort Redis fallback
+// (see resolveLuseRedisUrl below).
+import {existsSync, readFileSync} from 'node:fs'
 
 import {createDisplayManager, createDisplayTtlGc} from '../displays/index.js'
 import {defaultLivosAppResolver, type LivosAppMatch} from '../native/window.js'
@@ -83,6 +86,58 @@ export function resolveDisplay(deps: ResolveDisplayDeps = {}): string | undefine
 	return env.LUSE_DISPLAY ?? env.DISPLAY
 }
 
+/**
+ * Phase 250-hotfix — resolve the Redis URL for this luse MCP child.
+ *
+ * Precedence:
+ *   1. LUSE_REDIS_URL — canonical, threaded by the descriptor / wrapper.
+ *   2. REDIS_URL — generic env, in case a spawner forwards that name.
+ *   3. The `REDIS_URL=` line in livinityd's env file (/opt/livos/.env) —
+ *      last-resort fallback for spawn paths that drop the env block entirely.
+ *
+ * Why (3) exists: some AionUi / Claude-Code internal ACP spawn paths start the
+ * luse server via a DIRECT `node tsx server.ts` (NOT the env-bearing wrapper),
+ * so LUSE_REDIS_URL never reaches the process. That left `redis === null`,
+ * which fails-closed `displayManager` (computer_create_display etc.) AND
+ * create_stream — even though Redis was reachable the whole time. Reading the
+ * co-located, mode-600 env file keeps the password authoritative (never
+ * hardcoded) and makes every luse boot wire Redis regardless of which spawner
+ * started it. Pure + DI'd so server.test.ts can cover precedence without I/O.
+ */
+export interface ResolveRedisUrlDeps {
+	env?: NodeJS.ProcessEnv
+	readEnvFile?: (path: string) => string | undefined
+	envFilePaths?: string[]
+}
+
+export function resolveLuseRedisUrl(deps: ResolveRedisUrlDeps = {}): string | undefined {
+	const env = deps.env ?? process.env
+	if (typeof env.LUSE_REDIS_URL === 'string' && env.LUSE_REDIS_URL.length > 0) {
+		return env.LUSE_REDIS_URL
+	}
+	if (typeof env.REDIS_URL === 'string' && env.REDIS_URL.length > 0) {
+		return env.REDIS_URL
+	}
+	const readEnvFile =
+		deps.readEnvFile ??
+		((p: string) => (existsSync(p) ? readFileSync(p, 'utf8') : undefined))
+	const paths = deps.envFilePaths ?? ['/opt/livos/.env', '/opt/livos/livos/.env']
+	for (const p of paths) {
+		let contents: string | undefined
+		try {
+			contents = readEnvFile(p)
+		} catch {
+			contents = undefined
+		}
+		if (!contents) continue
+		const m = contents.match(/^REDIS_URL=(.+)$/m)
+		if (m && m[1].trim().length > 0) {
+			return m[1].trim()
+		}
+	}
+	return undefined
+}
+
 async function main(): Promise<void> {
 	// @deprecated since Phase 102-06 — `LUSE_TARGET_WINDOW_ID` is no longer
 	// set by the per-WebApp descriptor (see luse-mcp-config.ts: the descriptor
@@ -117,7 +172,12 @@ async function main(): Promise<void> {
 	// When `LUSE_REDIS_URL` is absent or the empty string, we DO NOT construct
 	// a client — the handler treats `redis === null` as "deny" (fail-closed,
 	// same semantics as a thrown Redis error).
-	const luseRedisUrl = process.env.LUSE_REDIS_URL
+	// Phase 250-hotfix — resolve via env → /opt/livos/.env fallback (see
+	// resolveLuseRedisUrl). `fromEnv` tracks whether the canonical env var was
+	// present so we can log when the fallback rescued an env-less spawn.
+	const luseRedisUrl = resolveLuseRedisUrl()
+	const luseRedisUrlFromEnv =
+		typeof process.env.LUSE_REDIS_URL === 'string' && process.env.LUSE_REDIS_URL.length > 0
 	let redis: Redis | null = null
 	if (typeof luseRedisUrl === 'string' && luseRedisUrl.length > 0) {
 		try {
@@ -125,15 +185,20 @@ async function main(): Promise<void> {
 				lazyConnect: true,
 				maxRetriesPerRequest: 1,
 			})
+			if (!luseRedisUrlFromEnv) {
+				process.stderr.write(
+					'[luse-mcp] note: LUSE_REDIS_URL absent at boot; recovered Redis URL via fallback (REDIS_URL / /opt/livos/.env) so displayManager + create_stream stay wired\n',
+				)
+			}
 		} catch (err) {
 			process.stderr.write(
-				`[luse-mcp] warning: failed to construct Redis client from LUSE_REDIS_URL: ${(err as Error).message}; create_stream will fail-closed\n`,
+				`[luse-mcp] warning: failed to construct Redis client from resolved URL: ${(err as Error).message}; create_stream + displayManager will fail-closed\n`,
 			)
 			redis = null
 		}
 	} else {
 		process.stderr.write(
-			'[luse-mcp] warning: LUSE_REDIS_URL not set; mcp__luse__create_stream will fail-closed (privilege gate denies)\n',
+			'[luse-mcp] warning: no Redis URL resolvable (LUSE_REDIS_URL / REDIS_URL / /opt/livos/.env all empty); mcp__luse__create_stream + displayManager fail-closed (privilege gate denies)\n',
 		)
 	}
 

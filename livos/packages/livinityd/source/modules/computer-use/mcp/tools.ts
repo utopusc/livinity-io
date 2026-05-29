@@ -1290,8 +1290,26 @@ const LUSE_WINDOW_TOOL_NAMES = new Set<string>([
 ])
 
 export function registerLuseTools(server: McpServerLike, options?: LuseToolsOptions): void {
+	// Phase 250-hotfix — Phase 248-02 added `displayManager` + `redis` +
+	// `livosAppResolver` to LuseToolsOptions and the buildHandlers() closures,
+	// but FORGOT to extend this gate. So whenever LUSE_TARGET_WINDOW_ID was
+	// unset (the normal aioncore/host-display case — it was deprecated in
+	// 102-06) AND skillReplayDeps was absent, registerLuseTools fell back to the
+	// module-level HANDLERS, which is buildHandlers() built with EMPTY options.
+	// That left options.displayManager undefined inside every handler, so
+	// computer_create_display / computer_list_displays / etc. ALWAYS returned
+	// "displayManager not wired" even when main() had constructed + passed a
+	// live displayManager (boot log said wired; the handler map never saw it).
+	// Fix: build fresh handlers whenever ANY handler-relevant option is present,
+	// not just the two original ones.
 	const handlers =
-		options?.defaultWindowId !== undefined || options?.skillReplayDeps !== undefined
+		options?.defaultWindowId !== undefined ||
+		options?.skillReplayDeps !== undefined ||
+		options?.displayManager !== undefined ||
+		options?.redis !== undefined ||
+		options?.livosAppResolver !== undefined ||
+		options?.defaultDisplay !== undefined ||
+		options?.streamManager !== undefined
 			? buildHandlers(options)
 			: HANDLERS
 	// Phase 97-07: only register Auto-mode-only tools when skillReplayDeps
