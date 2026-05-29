@@ -679,6 +679,23 @@ export default class Livinityd {
 			this.logger.log(
 				`Phase 241: AionUi MCP seed (created=${r.created} skipped=${r.skipped} errored=${r.errored} sentinel=${r.sentinelSet ? 'set' : 'unchanged'})`,
 			)
+			// Phase 252-05 (R12) — surface an empty liv:mcp:config loudly. An empty
+			// catalog means the install MCP seed never ran (Path B/C) — without a
+			// signal the missing AionUi luse entry is invisible. Write a health key
+			// + emit a loud boot error. Fail-soft: never let this break boot.
+			if (r.emptyCatalog) {
+				this.logger.error(
+					'Phase 252 (R12): liv:mcp:config is EMPTY — install MCP seed missing (Path B/C?); AionUi luse NOT configured. Re-run the Path A installer or seed liv:mcp:config manually.',
+				)
+				try {
+					await this.ai.redis.set('livos:v43:mcp_seed:empty_catalog', '1')
+				} catch (healthErr) {
+					this.logger.error(
+						'Phase 252 (R12): failed to write empty-catalog health key (non-fatal)',
+						healthErr,
+					)
+				}
+			}
 		} catch (err) {
 			// Defense in depth — seedAionUiMcpConfig should never throw, but if it
 			// does, livinityd boot must continue.

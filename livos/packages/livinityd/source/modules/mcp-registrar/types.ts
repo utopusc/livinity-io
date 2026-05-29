@@ -64,6 +64,13 @@ export interface SeedResult {
 	skipped: number
 	errored: number
 	sentinelSet: boolean
+	/**
+	 * Phase 252-05 (R12) — set true when liv:mcp:config is empty (no system
+	 * MCPs to seed). An empty catalog means the install MCP seed never ran
+	 * (Path B/C) — the boot wiring surfaces this loudly instead of silently
+	 * no-op'ing. Absent/false on the happy path.
+	 */
+	emptyCatalog?: boolean
 }
 
 /** A single Liv→AionUi mirror target — name + parsed Redis cfg. */
