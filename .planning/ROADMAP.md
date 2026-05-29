@@ -3583,11 +3583,11 @@ Plans:
 
 **Plan count estimate:** 5 plans (backend module + MCP tools + TTL GC + docs + deploy/UAT).
 
-**Plans:** 1/5 plans complete
+**Plans:** 2/5 plans complete
 
 Plans:
 - [x] 248-01-PLAN.md — Backend display module: Xephyr/Xvfb spawn factory + display-number allocator (:10+) + Redis HSET state + apps LIST tracker + owner-scope enforcement — ✅ SHIPPED 2026-05-29 (`5ff2f0fb` test RED + `f4c42eae` feat GREEN + `9a72fa99` chore typecheck-clean; 15/15 vitest GREEN; SUMMARY at `.planning/phases/248-luse-display-lifecycle/248-01-SUMMARY.md`)
-- [ ] 248-02-PLAN.md — Register 4 new MCP tools (computer_create_display / list_displays / kill_display / launch_app_in_display) + extend computer_application with optional display param
+- [x] 248-02-PLAN.md — Register 4 new MCP tools (computer_create_display / list_displays / kill_display / launch_app_in_display) + extend computer_application with optional display param — ✅ SHIPPED 2026-05-28 (`d4c718aa` test RED + `c79c3d8b` feat GREEN + `201b13d8` feat wire mcp/server.ts; 18/18 vitest GREEN in tools.test.ts; 33/33 GREEN with display-manager.test.ts; boot smoke confirms `(displayManager=null|wired)` log line; SUMMARY at `.planning/phases/248-luse-display-lifecycle/248-02-SUMMARY.md`)
 - [ ] 248-03-PLAN.md — TTL GC sweep for idle displays (1h sweep / 4h idle) + boot wiring in mcp/server.ts
 - [ ] 248-04-PLAN.md — Canonical agent-agnostic display-lifecycle docs (DISPLAY-LIFECYCLE.md + 4 per-tool refs) + sync to all 4 agent shims
 - [ ] 248-05-PLAN.md — Mini PC deploy via update.sh + Xephyr/Xvfb apt-install probe + 5 wire-level probes + UAT checklist
