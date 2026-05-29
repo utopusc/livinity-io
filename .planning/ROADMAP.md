@@ -3596,7 +3596,7 @@ Plans:
 
 ---
 
-### Phase 247: Luse skill set v2 — professional reference documentation — 🟡 PLANNED 2026-05-28 (0/? plans)
+### Phase 247: Luse skill set v2 — professional reference documentation — 🟡 EXECUTING 2026-05-28 (1/2 plans — 247-01 SHIPPED, 247-02 sync-script verification next)
 
 **Goal:** Take the v43 Phase 242 minimum-viable Luse docs and turn `docs/luse/` into a production reference an AI can rely on for complex automation. Add the patterns/troubleshooting/limits layer that distinguishes "this tool exists" from "here's how to use it well."
 
@@ -3614,10 +3614,11 @@ Plans:
 
 **Plan count estimate:** 2 plans (docs + sync verification).
 
-**Plans:** 0/? plans complete
+**Plans:** 1/2 plans complete
 
 Plans:
-- [ ] 247-PLAN.md series — TBD
+- [x] 247-01 — Write 6 canonical docs (PATTERNS / TROUBLESHOOTING / ANTI-PATTERNS / INTEGRATION-RECIPES / KNOWN-LIMITS / CHEAT-SHEET) + cross-reference 5 per-tool docs — ✅ SHIPPED 2026-05-28 (commits `f16f12e2` + `41f4a96b`, 848 new lines, sacred SHA preserved)
+- [ ] 247-02 — Run `scripts/sync-luse-skills.sh`, verify 4 shim dirs pick up new content via sha256 drift detection, commit shim deltas
 
 **UAT:** Operator opens `.claude/skills/luse/PATTERNS.md` in editor — sees 5+ concrete patterns with real code examples. Operator opens `.aion/skills/luse.md` — sees the same patterns content with the AUTO-GENERATED FROM banner. Sync re-run reports `0 new / N updated / 0 unchanged` confirming all shims got the v2 docs.
 
