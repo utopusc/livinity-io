@@ -292,7 +292,7 @@ export function registerSetupCommand(program: Command): void {
     .command('setup')
     .description('Install dependencies, build, and start PM2 services')
     .option('--livos-dir <path>', 'LivOS base directory', '/opt/livos')
-    .option('--nexus-dir <path>', 'Nexus base directory', '/opt/nexus')
+    .option('--nexus-dir <path>', 'Nexus base directory', '/opt/liv')
     .action(async (opts: { livosDir: string; nexusDir: string }) => {
       p.intro(pc.bold('LivOS Service Setup'));
 

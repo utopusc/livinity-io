@@ -14,7 +14,7 @@ export class TestJob {
 
     try {
       const { stdout, stderr } = await execAsync(testCmd, {
-        cwd: job.data.cwd || '/opt/nexus',
+        cwd: job.data.cwd || '/opt/liv',
         timeout,
         env: { ...process.env, CI: 'true' },
       });

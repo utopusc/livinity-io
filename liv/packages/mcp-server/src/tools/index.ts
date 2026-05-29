@@ -144,7 +144,7 @@ export function registerTools(server: McpServer, redis: IORedis) {
     title: 'Shell Command',
     description: 'Execute a shell command on Server 4. Commands that match a safety blocklist (rm -rf /, fork bomb, mkfs, etc.) are rejected. Output is truncated to 10K chars. Timeout: 30s.',
     inputSchema: {
-      command: z.string().describe('Shell command to execute (e.g. "ls -la /opt/nexus", "uptime", "df -h")'),
+      command: z.string().describe('Shell command to execute (e.g. "ls -la /opt/liv", "uptime", "df -h")'),
       timeout_ms: z.number().optional().describe('Timeout in milliseconds (default: 30000, max: 60000)'),
     },
   }, async ({ command, timeout_ms }) => {

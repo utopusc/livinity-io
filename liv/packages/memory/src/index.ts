@@ -12,7 +12,7 @@ import fs from 'fs';
 import { requireApiKey } from './auth.js';
 
 const PORT = parseInt(process.env.MEMORY_PORT || '3300', 10);
-const DATA_DIR = process.env.MEMORY_DATA_DIR || '/opt/nexus/data/memory';
+const DATA_DIR = process.env.MEMORY_DATA_DIR || '/opt/liv/data/memory';
 const DB_PATH = path.join(DATA_DIR, 'memory.db');
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
