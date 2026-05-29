@@ -17,6 +17,11 @@ Environment="HOME=/home/bruce"
 # (native binary) connects; the 5 stdio tsx-based local MCPs (liv-system / liv-vault /
 # liv-apps / liv-docker / luse) time out silently and never register tools to the agent.
 Environment="MCP_TIMEOUT=30000"
+# Phase 252 (R5) — inherit REDIS_URL/DATABASE_URL from the shared env file the
+# other livos units use. The `-` prefix makes a missing file non-fatal (fresh
+# box before env-seed runs). aioncore→claude→luse then resolve Redis via
+# resolveLuseRedisUrl step 2 (REDIS_URL) with no dependence on the per-MCP env seed.
+EnvironmentFile=-/opt/livos/.env
 ExecStart=/opt/liv-assistant/current/aionui-web start --port 3020 --data-dir /opt/liv-assistant/data --backend-bin /opt/liv-assistant/current/bundled-aioncore/linux-x64/aioncore
 Restart=on-failure
 RestartSec=5
