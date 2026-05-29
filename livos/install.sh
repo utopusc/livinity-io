@@ -1334,13 +1334,31 @@ ENVFILE
         local user_slug="${LIVOS_USER_SLUG:-bruce}"
         local domain_root="${LIVOS_DOMAIN_ROOT:-livinity.io}"
 
-        # Substitute the 4 placeholders (pipe delimiter — values contain no '|').
+        # Phase 252 (R6 / code-review WR-01) — resolve the desktop user's DISPLAY +
+        # Xauthority at seed time so the Path C / route.ts-fallback install does NOT
+        # HSET literal __LIVOS_DISPLAY__/__LIVOS_XAUTHORITY__ placeholders (which break
+        # luse screenshot/input). Mirrors deploy-livinityd.sh:_dld_seed_mcp_servers.
+        # Bind the fallback to the already-resolved $user_slug (one default source)
+        # rather than re-introducing a standalone 'bruce' literal — Phase 252 R13.
+        local _desktop_user="${DESKTOP_USER:-$user_slug}"
+        local _desktop_uid
+        _desktop_uid=$(id -u "$_desktop_user" 2>/dev/null || echo 1000)
+        local luse_display=":1"
+        local luse_xauthority
+        luse_xauthority=$(find "/run/user/${_desktop_uid}" -maxdepth 2 -name 'Xauthority' 2>/dev/null | head -1)
+        if [[ -z "$luse_xauthority" ]]; then
+            luse_xauthority="/home/${_desktop_user}/.Xauthority"
+        fi
+
+        # Substitute the 6 placeholders (pipe delimiter — values contain no '|').
         local substituted_json
         substituted_json=$(printf '%s' "$seed_json" | sed \
             -e "s|__LIVOS_REDIS_URL__|${redis_url}|g" \
             -e "s|__LIVOS_LIV_API_KEY__|${liv_api_key}|g" \
             -e "s|__LIVOS_USER_SLUG__|${user_slug}|g" \
-            -e "s|__LIVOS_DOMAIN_ROOT__|${domain_root}|g")
+            -e "s|__LIVOS_DOMAIN_ROOT__|${domain_root}|g" \
+            -e "s|__LIVOS_DISPLAY__|${luse_display}|g" \
+            -e "s|__LIVOS_XAUTHORITY__|${luse_xauthority}|g")
         if [[ -z "$substituted_json" ]]; then
             warn "Seed substitution produced empty JSON — skipping MCP seed"
             return 0
