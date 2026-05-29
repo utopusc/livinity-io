@@ -26,13 +26,13 @@ export async function GET() {
     // Fallback below
   }
 
-  // Fallback: bootstrap script that clones repo and runs installer
+  // Fallback: clone repo and run the canonical Path A installer (scripts/install.sh — seeds liv:mcp:config).
   const fallback = `#!/bin/bash
 set -euo pipefail
 echo "Downloading LivOS installer..."
 TMPDIR=$(mktemp -d)
 git clone --depth 1 https://github.com/utopusc/livinity-io.git "$TMPDIR/livinity-io"
-exec bash "$TMPDIR/livinity-io/livos/install.sh" "$@"
+exec bash "$TMPDIR/livinity-io/scripts/install.sh" "$@"
 `;
 
   return new NextResponse(fallback, {
