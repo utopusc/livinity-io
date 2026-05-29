@@ -1156,7 +1156,10 @@ _dld_seed_mcp_servers() {
     _desktop_uid=$(id -u "$_desktop_user" 2>/dev/null || echo 1000)
     local luse_display=":1"
     local luse_xauthority
-    luse_xauthority=$(find "/run/user/${_desktop_uid}" -maxdepth 2 -name 'Xauthority' 2>/dev/null | head -1)
+    # `|| true`: on a fresh box /run/user/<uid> may not exist yet → find exits
+    # non-zero → under `set -euo pipefail` the bare assignment would abort the
+    # whole install (UAT 252 G5 — only reachable once the seed actually runs).
+    luse_xauthority=$(find "/run/user/${_desktop_uid}" -maxdepth 2 -name 'Xauthority' 2>/dev/null | head -1 || true)
     if [[ -z "$luse_xauthority" ]]; then
         luse_xauthority="/home/${_desktop_user}/.Xauthority"
     fi

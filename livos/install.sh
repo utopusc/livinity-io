@@ -1345,7 +1345,10 @@ ENVFILE
         _desktop_uid=$(id -u "$_desktop_user" 2>/dev/null || echo 1000)
         local luse_display=":1"
         local luse_xauthority
-        luse_xauthority=$(find "/run/user/${_desktop_uid}" -maxdepth 2 -name 'Xauthority' 2>/dev/null | head -1)
+        # `|| true`: /run/user/<uid> may be absent on a fresh box → find exits
+        # non-zero → under `set -euo pipefail` the bare assignment aborts install
+        # (UAT 252 G5).
+        luse_xauthority=$(find "/run/user/${_desktop_uid}" -maxdepth 2 -name 'Xauthority' 2>/dev/null | head -1 || true)
         if [[ -z "$luse_xauthority" ]]; then
             luse_xauthority="/home/${_desktop_user}/.Xauthority"
         fi
