@@ -3548,7 +3548,7 @@ Plans:
 
 ---
 
-### Phase 251: Fresh-Install Portability & Hardcode Audit — read-only parallel audit of the v44/250-hotfix change surface — 🟡 IN PROGRESS 2026-05-29 (7/9 plans)
+### Phase 251: Fresh-Install Portability & Hardcode Audit — read-only parallel audit of the v44/250-hotfix change surface — 🟡 IN PROGRESS 2026-05-29 (8/9 plans)
 
 **Goal:** Definitively answer two operator questions about the recent terminal + Luse computer-use debugging session: (1) is there any **hardcoded value** in those changes that breaks on a different box, and (2) would a **brand-new Mini PC / VPS install** come up seamlessly with the terminal + Luse features working — or are there gaps that only the live Mini PC has because we patched it by hand (xterm/imagemagick installs, a `redis-env.conf` systemd drop-in, a Claude version pin)?
 
@@ -3562,7 +3562,7 @@ Plans:
 - **251-05** — Install-root & sandbox-path portability (/opt/livos, uploads, /home, /tmp markers) [S, Wave 1] — ✅ DONE 2026-05-29 (commit `cd236b88`; verdict: `/opt/livos` is a LEAKY HALF-DECLARED PARAMETER — installer root `_DLD_LIVOS_DIR="/opt/livos"` hard-pinned (no `${VAR:-default}` unlike `_DLD_LIVOS_USER`/`_DLD_DESKTOP_USER`) while daemon `dataDirectory` IS movable via `--data-directory`; luse `server.ts:124` Redis fallback + `tools.ts:454` uploads sandbox RE-HARDCODE the root, ignoring `dataDirectory` → MISMATCH (moved data dir → luse fail-closed + sandbox over-block); `/tmp/livos-active-webapp-wid` (tools.ts:278) + `/tmp/luse-` prefix = multi-user collision+symlink-race surface, fix `$XDG_RUNTIME_DIR` per-uid; `<LIV_DATA_ROOT>` comment names a convention never wired; README has zero install-root-override docs)
 - **251-06** — Systemd & env delivery (redis-env.conf live-only; liv-assistant.service env inheritance) [M, Wave 1] ✅ DONE 2026-05-29 (commit 2c31d5bb; verdict: WITHOUT redis-env.conf a fresh box gives luse Redis ONLY via the /opt/livos/.env file fallback at server.ts:124. liv-assistant.service has NO EnvironmentFile or REDIS_URL so aioncore-claude-luse children inherit nothing. The per-MCP env seed at update.sh:737 is gated on a pre-existing AionUi entry that no script first-creates (the Phase 241 seed POST exists nowhere). redis-env.conf and any .service.d drop-in are absent everywhere (0 grep matches). Recommend EnvironmentFile=-/opt/livos/.env on the committed liv-assistant.service unit, NEVER productize the literal drop-in. HIGH severity, LOW effort.)
 - **251-07** — Terminal hot-fix (246) portability (PTY user, WS route, WebGL addon, cookie auth, font) [S, Wave 1] — ✅ DONE 2026-05-29 (commit `eeaa159a`; verdict: panel BUILDS clean fresh (WebGL addon exact-pin 0.18.0 + lockfile @ 821/8393/27154, node-pty dep present, WS host fully relative via window.location — no hardcode) + WS route/Caddy `@livos_terminal_ws` unconditional/cookie-auth all COVERED, but WILL NOT open a shell fresh: (1) PTY spawns `sudo --user bruce --login bash` (session.ts:103) with NO sudoers grant in sudoers.d/livinityd — `bruce→bruce` self-sudo prompts for unsupplyable password, BLOCKER (overlaps 251-04); (2) feature flag `livos:v43:terminal_panel` default-OFF (feature-flag.ts:28) seeded nowhere in scripts/install → dock entry hidden, GAP)
-- **251-08** — Installer-path divergence & MCP-seed integrity (Path A vs B, get.livinity.io, first-create gap) [M, Wave 1]
+- **251-08** — Installer-path divergence & MCP-seed integrity (Path A vs B, get.livinity.io, first-create gap) [M, Wave 1] — ✅ DONE 2026-05-29 (commit `5fc74f4c`; verdict: FOUR install entrypoints not two — `scripts/install.sh`→`deploy_livinityd` (Path A, real secrets + `liv:mcp:config` seed), `/install.sh` (Path B, CHANGEME, no seed), `livos/install.sh` (Path C, real `openssl rand` secrets but NO MCP seed), `route.ts` shim (Path D → proxies A, fallback runs C); **`get.livinity.io`→script mapping is UNPROVABLE in-repo (only README/landing display text, no Vercel route/rewrite/DNS) = CRITICAL open question**; `liv:mcp:config` luse entry gets non-stale REDIS_URL via sed-subst `__LIVOS_REDIS_URL__` on Path A — COVERED; **the "Phase 241 seed" recon couldn't find = runtime `seedAionUiMcpConfig` boot orchestrator (seed.ts:64, index.ts:670), NOT a shell script**; AionUi luse first-create GAP on Path B/C — boot orchestrator silently no-ops on empty catalog (seed.ts:101-104); seed `DISPLAY=:1`+`XAUTHORITY=…gdm…` bare literals — GAP (dup 251-02/04); 5 backlog items)
 - **251-09** — Synthesis → PORTABILITY-AUDIT.md + REMEDIATION-BACKLOG.md [M, Wave 2, depends on 251-01..08]
 
 **New dependency:** none (read-only audit; produces markdown only).
@@ -3578,17 +3578,17 @@ Plans:
 
 **UAT:** operator reads `PORTABILITY-AUDIT.md` and confirms the GO/NO-GO verdict + decides whether to greenlight Phase 252 remediation.
 
-**Plans:** 2/9 plans complete
+**Plans:** 8/9 plans complete
 
 Plans:
 - [x] 251-01-PLAN.md — Luse Redis-URL resolution audit (Wave 1)
 - [x] 251-02-PLAN.md — Luse display backend audit (Wave 1)
-- [ ] 251-03-PLAN.md — binary/package dependency matrix (Wave 1)
-- [ ] 251-04-PLAN.md — identity hardcode audit (Wave 1)
+- [x] 251-03-PLAN.md — binary/package dependency matrix (Wave 1)
+- [x] 251-04-PLAN.md — identity hardcode audit (Wave 1)
 - [x] 251-05-PLAN.md — install-root & sandbox-path audit (Wave 1)
 - [x] 251-06-PLAN.md — systemd & env-delivery audit (Wave 1)
-- [ ] 251-07-PLAN.md — terminal hot-fix (246) portability audit (Wave 1)
-- [ ] 251-08-PLAN.md — installer-path divergence & MCP-seed audit (Wave 1)
+- [x] 251-07-PLAN.md — terminal hot-fix (246) portability audit (Wave 1)
+- [x] 251-08-PLAN.md — installer-path divergence & MCP-seed audit (Wave 1)
 - [ ] 251-09-PLAN.md — synthesis: PORTABILITY-AUDIT + REMEDIATION-BACKLOG (Wave 2)
 
 **Cross-references:**
