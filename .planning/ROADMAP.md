@@ -3548,7 +3548,7 @@ Plans:
 
 ---
 
-### Phase 251: Fresh-Install Portability & Hardcode Audit — read-only parallel audit of the v44/250-hotfix change surface — 🟡 IN PROGRESS 2026-05-29 (8/9 plans)
+### Phase 251: Fresh-Install Portability & Hardcode Audit — read-only parallel audit of the v44/250-hotfix change surface — ✅ COMPLETE 2026-05-29 (9/9 plans; verdict: NO-GO for seamless fresh install — 5 P0 blockers; PORTABILITY-AUDIT.md + REMEDIATION-BACKLOG.md (R1-R16) seed Phase 252)
 
 **Goal:** Definitively answer two operator questions about the recent terminal + Luse computer-use debugging session: (1) is there any **hardcoded value** in those changes that breaks on a different box, and (2) would a **brand-new Mini PC / VPS install** come up seamlessly with the terminal + Luse features working — or are there gaps that only the live Mini PC has because we patched it by hand (xterm/imagemagick installs, a `redis-env.conf` systemd drop-in, a Claude version pin)?
 
@@ -3589,7 +3589,7 @@ Plans:
 - [x] 251-06-PLAN.md — systemd & env-delivery audit (Wave 1)
 - [x] 251-07-PLAN.md — terminal hot-fix (246) portability audit (Wave 1)
 - [x] 251-08-PLAN.md — installer-path divergence & MCP-seed audit (Wave 1)
-- [ ] 251-09-PLAN.md — synthesis: PORTABILITY-AUDIT + REMEDIATION-BACKLOG (Wave 2)
+- [x] 251-09-PLAN.md — synthesis: PORTABILITY-AUDIT + REMEDIATION-BACKLOG (Wave 2) — ✅ DONE 2026-05-29 (commits `4929916f` audit + `6bc1ee70` backlog; NO-GO verdict, 5 P0 blockers, 16-item Phase-252 backlog)
 
 **Cross-references:**
 - Audits the change surface of commits `b4f2a345`, `e87b9dfd`, `b774c20b` (250-hotfix luse) + `7187824a`, `01852a5d`, `a1cb55ef`, `1316efa7` (246-hotfix terminal) + server-side hand-artifacts (redis-env.conf drop-in, xterm/imagemagick apt, claude pin).
