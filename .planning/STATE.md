@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: executing
-last_updated: "2026-05-29T15:46:17.890Z"
+last_updated: "2026-05-29T16:13:20.557Z"
 last_activity: 2026-05-29
 progress:
   total_phases: 8
@@ -41,7 +41,15 @@ progress:
 
 ---
 
-## Current Position (v45-prep — Phase 251 Fresh-Install Portability & Hardcode Audit 🟡 PLANNED 2026-05-29 — 9 GSD plans authored on disk: 8 parallel read-only audit work-streams (Wave 1, `wave:1` `depends_on:[]`, disjoint findings docs) + 1 synthesis (Wave 2) producing PORTABILITY-AUDIT.md + REMEDIATION-BACKLOG.md; 251-CONTEXT.md + 251-RESEARCH.md recon-seeded by 4 parallel agents; ROADMAP Phase 251 row added above Phase 250. **EXECUTING (8/9 Wave-1 plans done) — run `/gsd-execute-phase 251` after /clear** to fan out the parallel audit. NOTE: the v44.0 close (Phase 249) is still OPERATOR-PENDING — see Previous Position below; Phase 251 is an independent audit and does NOT block or depend on the v44 close.)
+## Current Position (v45-prep — Phase 252 Fresh-Install Portability Remediation 🟢 EXECUTING — Wave 1 (Plan 252-01) ✅ DONE 2026-05-29)
+
+### Latest update 2026-05-29 (Phase 252 execution — Plan 252-01 / Wave 1 complete)
+
+- ✅ **252-01 DONE** (commits `bc0210f6` + `f272265b`) — Wave-1 P0/P1/P2 install blockers closed (R1,R2,R3,R7,R16). **Task 1 (`bc0210f6`):** added the Phase-252 apt block `xserver-xephyr xterm gnome-terminal x11-utils xclip wmctrl` (`|| warn` non-fatal) to BOTH `scripts/install/deploy-livinityd.sh` (`_dld_install_streaming_packages`, after the VAAPI block) and `update.sh` (mirror site), byte-identical; extended both streaming verify loops to `for bin in ffmpeg gst-launch-1.0 dbus-send xdotool maim Xvfb fluxbox Xephyr xterm` so a fresh box warns loud if Xephyr/xterm still absent post-apt. `bash -n` clean on both; grep count = 1 each. **Task 2 (`f272265b`, TDD):** `display-manager.create()` now fails closed on spawn ENOENT — added `isError?`/`error?` to `CreateDisplayResult` + optional `on?(event,'error',listener)` to `SpawnHandle` (`displays/types.ts`); `create()` latches a synchronous `'error'` (yields one microtask via `await Promise.resolve()` so a sync ENOENT is observed) and returns `{isError:true,error,pid:-1}` WITHOUT the `luse:display:<id>` HSET (kills the false-positive-success class flagged in 251-02); `computer_create_display` MCP wrapper (`mcp/tools.ts`) branches on `result.isError` → `isError:true` envelope; +2 vitest cases (fail-closed ENOENT with zero `luse:display:` keys + happy-path drift-lock). **17/17** display-manager tests GREEN via `npm run test:run -- display-manager` (note: `pnpm --filter livinityd test` is WATCH mode → use `test:run` for CI). Typecheck: livinityd has a 389-error PRE-EXISTING baseline (unrelated `webapps/`/`widgets/`/`xai-auth/`/`computer-use/native/` spawn-`on` patterns); my changes add ZERO new errors (389==389 via git-stash A/B) — clean-tree typecheck is out of scope (SCOPE BOUNDARY). Sacred blob `f3538e1d…` preserved (`[sacred-sha] PASS: 20 files` on both commits). NOT YET DEPLOYED to Mini PC — repo-side script+source changes take effect on next `update.sh`/fresh install. SUMMARY: `.planning/phases/252-fresh-install-portability-remediation/252-01-SUMMARY.md`. Remaining Phase-252 plans: 252-02 (R8/R4/R10 PTY), 252-03 (R11 get.livinity.io, autonomous:false), 252-04 (R9), 252-05 (R5/R6/R12), 252-06 (R13/R14/R15).
+
+---
+
+## Previous Position (v45-prep — Phase 251 Fresh-Install Portability & Hardcode Audit 🟡 PLANNED 2026-05-29 — 9 GSD plans authored on disk: 8 parallel read-only audit work-streams (Wave 1, `wave:1` `depends_on:[]`, disjoint findings docs) + 1 synthesis (Wave 2) producing PORTABILITY-AUDIT.md + REMEDIATION-BACKLOG.md; 251-CONTEXT.md + 251-RESEARCH.md recon-seeded by 4 parallel agents; ROADMAP Phase 251 row added above Phase 250. **EXECUTING (8/9 Wave-1 plans done) — run `/gsd-execute-phase 251` after /clear** to fan out the parallel audit. NOTE: the v44.0 close (Phase 249) is still OPERATOR-PENDING — see Previous Position below; Phase 251 is an independent audit and does NOT block or depend on the v44 close.)
 
 ## Latest update 2026-05-29 (Phase 251 execution — 8/9 Wave-1 plans complete)
 
