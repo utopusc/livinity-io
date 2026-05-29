@@ -527,6 +527,67 @@ describe('seedAionUiMcpConfig', () => {
 		expect(stdio.env?.LUSE_DOMAIN_ROOT).toBe('livinity.io')
 	})
 
+	// -------------------------------------------------------------------------
+	// Phase 252-05 (R12) — loud empty-catalog health signal
+	// -------------------------------------------------------------------------
+
+	test('Scenario L (252-05/R12) — empty liv:mcp:config: emptyCatalog flag set + ERROR log', async () => {
+		// readSystemMcpCatalog returns [] (empty hash). The seed must NOT silently
+		// no-op: it sets result.emptyCatalog = true AND logs at ERROR level so the
+		// missing AionUi luse entry is operator-visible.
+		const redis = makeFakeRedis({sentinel: null, hash: {}})
+		const {logger, errors, warns} = makeCapturingLogger()
+		const client = makeMockClient()
+
+		const result = await seedAionUiMcpConfig({
+			redis,
+			aionUiBaseUrl: BASE_URL,
+			logger,
+			client: asClient(client),
+			waitForReady: waitFnTrue,
+		})
+
+		// CRITICAL R12 contract: empty-catalog flag set, no AionUi calls, no sentinel.
+		expect(result.emptyCatalog).toBe(true)
+		expect(result.created).toBe(0)
+		expect(result.skipped).toBe(0)
+		expect(result.sentinelSet).toBe(false)
+		expect(client.listServers).not.toHaveBeenCalled()
+		expect(client.createServer).not.toHaveBeenCalled()
+		expect(client.syncToAgents).not.toHaveBeenCalled()
+		expect(redis._setCalls).toEqual([])
+		// LOUD: ERROR (not warn) level so it surfaces in journalctl + health.
+		expect(errors.some((e) => /EMPTY liv:mcp:config/i.test(e.msg))).toBe(true)
+		// And NOT downgraded to a warn-only no-op.
+		expect(warns.some((w) => /no system MCPs.*skipping/i.test(w.msg))).toBe(false)
+	})
+
+	test('Scenario M (252-05/R12) — non-empty catalog: emptyCatalog stays falsy (happy-path drift-lock)', async () => {
+		const redis = makeFakeRedis({sentinel: null, hash: makeFullCatalog()})
+		const {logger, errors} = makeCapturingLogger()
+		const client = makeMockClient()
+		client.listServers.mockResolvedValue([])
+		client.createServer.mockImplementation(async (req: AionUiCreateMcpServerRequest) => {
+			return makeServerRecord(req.name, `mcp_${req.name}`)
+		})
+		client.toggleServer.mockResolvedValue(undefined)
+		client.syncToAgents.mockResolvedValue(fullSyncOk)
+
+		const result = await seedAionUiMcpConfig({
+			redis,
+			aionUiBaseUrl: BASE_URL,
+			logger,
+			client: asClient(client),
+			waitForReady: waitFnTrue,
+		})
+
+		// Non-empty path must NOT set the flag (false or absent) and emit NO
+		// empty-catalog ERROR.
+		expect(result.emptyCatalog).toBeFalsy()
+		expect(result.created).toBe(5)
+		expect(errors.some((e) => /EMPTY liv:mcp:config/i.test(e.msg))).toBe(false)
+	})
+
 	test('Scenario I — luse toggle fails: NON-fatal (errored stays 0, sentinel SET)', async () => {
 		const redis = makeFakeRedis({sentinel: null, hash: makeFullCatalog()})
 		const {logger, warns} = makeCapturingLogger()
