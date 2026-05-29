@@ -14,7 +14,13 @@ updated: 2026-05-29
 
 ### 1. Fresh-install smoke test on a clean VPS
 expected: Running `curl -fsSL https://livinity.io/install.sh | sudo bash -s <liv_k_key>` on a clean Ubuntu 24.04 server brings up the full stack with NO manual steps: apt packages (`xserver-xephyr`, `xterm`, `gnome-terminal`, `x11-utils`, `xclip`, `wmctrl`) installed; `livos:v43:terminal_panel` seeded; `liv:mcp:config` populated as a HASH with a REAL `DISPLAY` value (`:1`, NOT the literal `__LIVOS_DISPLAY__`); the UI terminal opens without a password prompt; no `REDIS_URL`/auth errors in the `liv-assistant` journal; Liv AI gets the luse computer-use MCP.
-result: [pending]
+result: ISSUES — ran 2026-05-29 on a freshly-wiped Ubuntu 24.04.3 VPS (154.53.56.75 / vmi2892419), installer pulled the pushed 252 code from master (self-bootstrap got the updated helpers). The install ABORTED and the stack did NOT come up (livos=inactive, liv-core=inactive, caddy=failed). Root causes are all OUTSIDE Phase 252's R1–R16 scope (NEW fresh-install blockers — candidate for a follow-up remediation phase):
+  1. **pnpm-lock.yaml drift** — root package.json `overrides: { zod: ^3.25.0 }` is not reflected in the committed lockfile → `pnpm install --frozen-lockfile` (install.sh default) fails with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH, AND every subsequent `pnpm --filter <pkg> build` fails at pnpm 11's pre-run `runDepsStatusCheck` (not bypassable via --config.verifyDepsBeforeRun=false). The UI/stack cannot build → install aborts. PRIMARY blocker. Fix: regenerate pnpm-lock.yaml.
+  2. **pnpm 11 ignored-builds** — `ERR_PNPM_IGNORED_BUILDS` (@google/genai, koffi, openclaw, tree-sitter-bash, workerd) makes `pnpm install` exit 1; install.sh treats the non-zero exit as fatal. Fix: add `pnpm.onlyBuiltDependencies` allowlist or make the installer tolerant.
+  3. **Caddyfile `handle_path` two-matcher bug** — tunnel-mode Caddyfile generator emits `handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* { ... }` (line 20); Caddy v2 `handle_path` takes exactly ONE matcher → `caddy validate` fails → caddy.service fails. (Confirms the documented memory: handle_path takes one matcher — use `@m path /a /b` + `handle` + `uri strip_prefix`.) Fix: split the matcher in the installer template.
+
+  252 results that DID validate live: R10 `livos:v43:terminal_panel=true` seeded OK; the pushed 252 installer helpers were fetched from master. NOT validated (install died before reaching them): R1/R2 apt install, the deploy-livinityd `_dld_seed_mcp_servers` MCP seed (so `liv:mcp:config`=none — the WR-01 DISPLAY-substitution fix is UNVERIFIED live), PTY/terminal behavior.
+  252-adjacent gap also surfaced: the install.sh INLINE Phase-109 MCP seed skips on curl|bash self-bootstrap because `scripts/install/seeds/mcp-servers.json` is NOT among the 9 bootstrapped helpers ("Seed file not found in any candidate path").
 
 ### 2. XDG_RUNTIME_DIR marker path after update.sh (Mini PC)
 expected: After the next `update.sh` on the Mini PC, with a WebApp window active, the active-webapp-wid marker lives under `$XDG_RUNTIME_DIR/livos/` (e.g. `/run/user/<uid>/livos/`) — NOT under world-shared `/tmp/`. The luse temp workspace allowlist resolves under `$XDG_RUNTIME_DIR/luse-`.
@@ -25,9 +31,25 @@ result: [pending]
 
 total: 2
 passed: 0
-issues: 0
-pending: 2
+issues: 1
+pending: 1
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+### G1 — pnpm-lock.yaml drift blocks fresh-install build (NEW, out of 252 scope)
+status: failed
+detail: root package.json `overrides: { zod: ^3.25.0 }` absent from committed pnpm-lock.yaml → frozen-lockfile install + pnpm-11 deps-status-check both fail → UI/stack build impossible → install aborts. Fix: regenerate + commit pnpm-lock.yaml.
+
+### G2 — pnpm 11 ignored-builds makes install.sh treat pnpm as failed (NEW)
+status: failed
+detail: ERR_PNPM_IGNORED_BUILDS (@google/genai, koffi, openclaw, tree-sitter-bash, workerd) → exit 1. Fix: `pnpm.onlyBuiltDependencies` allowlist in package.json or installer tolerance.
+
+### G3 — tunnel-mode Caddyfile handle_path two-matcher bug (NEW)
+status: failed
+detail: install.sh emits `handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* { }` (2 matchers); Caddy v2 handle_path takes 1 → caddy validate + caddy.service fail. Fix: `@m path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*` + `handle @m` + `uri strip_prefix`.
+
+### G4 — install.sh inline MCP seed skips on self-bootstrap (252-adjacent)
+status: failed
+detail: Phase-109 inline seed can't find `scripts/install/seeds/mcp-servers.json` (not among the 9 self-bootstrapped helpers). deploy-livinityd's GitHub-raw seed is the backstop but runs post-build (never reached). Fix: bootstrap the seed file too, or rely solely on the deploy-livinityd GitHub-raw seed.
