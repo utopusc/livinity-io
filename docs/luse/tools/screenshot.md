@@ -56,3 +56,8 @@ is returned to avoid blowing the message budget. On failure:
   "arguments": { "region": { "x": 1700, "y": 0, "w": 220, "h": 40 } }
 }
 ```
+
+## See also
+
+- [PATTERNS.md#pattern-1-screenshot-then-act](../PATTERNS.md#pattern-1-screenshot-then-act)
+- [PATTERNS.md#pattern-7-scroll-and-search](../PATTERNS.md#pattern-7-scroll-and-search)

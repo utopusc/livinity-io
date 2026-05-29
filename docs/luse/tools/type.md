@@ -45,3 +45,9 @@ client), `"display_unavailable"`, and `"xdotool_failed"`.
   "arguments": { "text": "wi-fi settings" }
 }
 ```
+
+## See also
+
+- [PATTERNS.md#pattern-5-focus-before-type](../PATTERNS.md#pattern-5-focus-before-type)
+- [PATTERNS.md#pattern-8-secrets-via-clipboard-not-type](../PATTERNS.md#pattern-8-secrets-via-clipboard-not-type)
+- [ANTI-PATTERNS.md#anti-pattern-4-sensitive-text-via-computer_type_text-instead-of-computer_paste_text--issensitive](../ANTI-PATTERNS.md#anti-pattern-4-sensitive-text-via-computer_type_text-instead-of-computer_paste_text--issensitive)

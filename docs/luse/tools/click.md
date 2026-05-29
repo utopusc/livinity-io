@@ -44,3 +44,9 @@ On failure:
   "arguments": { "x": 120, "y": 340 }
 }
 ```
+
+## See also
+
+- [PATTERNS.md#pattern-2-landmark-anchored-clicks-not-pixel-coords](../PATTERNS.md#pattern-2-landmark-anchored-clicks-not-pixel-coords)
+- [PATTERNS.md#pattern-3-retry-with-screenshot-verify-cap-3-attempts](../PATTERNS.md#pattern-3-retry-with-screenshot-verify-cap-3-attempts)
+- [ANTI-PATTERNS.md#anti-pattern-1-brittle-pixel-coords-without-screenshot-verify](../ANTI-PATTERNS.md#anti-pattern-1-brittle-pixel-coords-without-screenshot-verify)
