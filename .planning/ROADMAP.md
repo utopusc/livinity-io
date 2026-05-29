@@ -3548,6 +3548,55 @@ Plans:
 
 ---
 
+### Phase 251: Fresh-Install Portability & Hardcode Audit — read-only parallel audit of the v44/250-hotfix change surface — 🟡 IN PROGRESS 2026-05-29 (1/9 plans)
+
+**Goal:** Definitively answer two operator questions about the recent terminal + Luse computer-use debugging session: (1) is there any **hardcoded value** in those changes that breaks on a different box, and (2) would a **brand-new Mini PC / VPS install** come up seamlessly with the terminal + Luse features working — or are there gaps that only the live Mini PC has because we patched it by hand (xterm/imagemagick installs, a `redis-env.conf` systemd drop-in, a Claude version pin)?
+
+**Direction:** Read-only audit, NOT remediation. 8 parallel audit work-streams (Wave 1) each investigate ONE dimension against the repo + installer scripts and write a findings doc; 1 synthesis (Wave 2) produces a single `PORTABILITY-AUDIT.md` GO/NO-GO verdict + a prioritized `REMEDIATION-BACKLOG.md` (seed for a future Phase 252 fix). Recon (4 parallel agents, 2026-05-29) already surfaced the prime suspects, baked into `251-RESEARCH.md` as verified leads.
+
+**Plans (9, wave-ordered):**
+- **251-01** — Luse Redis-URL resolution & `resolveLuseRedisUrl` fallback portability [S, Wave 1] — ✅ DONE 2026-05-29 (commit `a7a5097d`; verdict: Path-A COVERED via seed.ts env-thread + /opt/livos/.env fallback, RESEARCH first-create GAP corrected; Path-B GAP (CHANGEME, pre-existing); server.ts:124 hardcoded-root RISK)
+- **251-02** — Luse display backend (Xephyr default vs only-Xvfb-installed) [S, Wave 1]
+- **251-03** — Spawned-binary dependency matrix → missing-package list (xterm/imagemagick/Xephyr/…) [M, Wave 1]
+- **251-04** — Identity hardcodes (bruce / uid 1000 / gdm Xauthority / :1 / admin-vs-bruce) [M, Wave 1]
+- **251-05** — Install-root & sandbox-path portability (/opt/livos, uploads, /home, /tmp markers) [S, Wave 1]
+- **251-06** — Systemd & env delivery (redis-env.conf live-only; liv-assistant.service env inheritance) [M, Wave 1]
+- **251-07** — Terminal hot-fix (246) portability (PTY user, WS route, WebGL addon, cookie auth, font) [S, Wave 1]
+- **251-08** — Installer-path divergence & MCP-seed integrity (Path A vs B, get.livinity.io, first-create gap) [M, Wave 1]
+- **251-09** — Synthesis → PORTABILITY-AUDIT.md + REMEDIATION-BACKLOG.md [M, Wave 2, depends on 251-01..08]
+
+**New dependency:** none (read-only audit; produces markdown only).
+
+**Out of scope (deferred — see RESEARCH.md):** applying fixes (→ future Phase 252, scoped by the backlog); non-session code beyond the changed-file neighbourhood; Claude Code version-pin durability.
+
+**Locked invariants:** D-251-READONLY (only markdown under `.planning/phases/251-*/` may be created/modified — no `livos/`/`liv/`/`scripts/` edits). D-V44-SACRED (`sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f`) — trivially held (no source touched). D-251-LIVE-OPTIONAL (any live check uses Tailscale `bruce@100.112.68.1`, batched into ONE ssh).
+
+**Success criteria:**
+- `PORTABILITY-AUDIT.md` gives a crisp GO / NO-GO-FOR-SEAMLESS-FRESH-INSTALL verdict + the P0 blocker list, every claim traced to a findings doc.
+- `REMEDIATION-BACKLOG.md` is ready to become Phase 252 with zero further analysis (each gap → file:line + fix + severity + effort).
+- All 8 Wave-1 findings docs exist with evidence (file:line / script:line), NEW-vs-PRE-EXISTING + COVERED/GAP/RISK classification.
+
+**UAT:** operator reads `PORTABILITY-AUDIT.md` and confirms the GO/NO-GO verdict + decides whether to greenlight Phase 252 remediation.
+
+**Plans:** 0/9 plans complete
+
+Plans:
+- [ ] 251-01-PLAN.md — Luse Redis-URL resolution audit (Wave 1)
+- [ ] 251-02-PLAN.md — Luse display backend audit (Wave 1)
+- [ ] 251-03-PLAN.md — binary/package dependency matrix (Wave 1)
+- [ ] 251-04-PLAN.md — identity hardcode audit (Wave 1)
+- [ ] 251-05-PLAN.md — install-root & sandbox-path audit (Wave 1)
+- [ ] 251-06-PLAN.md — systemd & env-delivery audit (Wave 1)
+- [ ] 251-07-PLAN.md — terminal hot-fix (246) portability audit (Wave 1)
+- [ ] 251-08-PLAN.md — installer-path divergence & MCP-seed audit (Wave 1)
+- [ ] 251-09-PLAN.md — synthesis: PORTABILITY-AUDIT + REMEDIATION-BACKLOG (Wave 2)
+
+**Cross-references:**
+- Audits the change surface of commits `b4f2a345`, `e87b9dfd`, `b774c20b` (250-hotfix luse) + `7187824a`, `01852a5d`, `a1cb55ef`, `1316efa7` (246-hotfix terminal) + server-side hand-artifacts (redis-env.conf drop-in, xterm/imagemagick apt, claude pin).
+- Feeds a future **Phase 252: Fresh-Install Portability Remediation** (created from `REMEDIATION-BACKLOG.md`).
+
+---
+
 ### Phase 250: Terminal Professional UI — IDE-grade polish + discoverability — 🟡 PLANNED 2026-05-29 (0/6 plans)
 
 **Goal:** Turn the v44 Phase 246 multi-tab terminal from a raw xterm embed into a deliberately-crafted, IDE-grade terminal. Operator goals (verbatim): "more professional" + "easier to use." Five client-side waves: surface/theme polish, find-in-scrollback, resilient reconnect, a discoverability layer, and a live settings drawer.

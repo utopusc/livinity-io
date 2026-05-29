@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: executing
-last_updated: "2026-05-29T12:00:00Z"
+last_updated: "2026-05-29T14:26:28.620Z"
 last_activity: 2026-05-29
 progress:
   total_phases: 8
@@ -14,6 +14,12 @@ progress:
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
+
+### ▶ NEXT ACTION (2026-05-29): run `/gsd-execute-phase 251`
+
+**Phase 251 — Fresh-Install Portability & Hardcode Audit** is authored and READY. It fans out **8 parallel read-only audit subagents** (Wave 1) + 1 synthesis (Wave 2) to verify the v44/250-hotfix terminal + Luse changes have no install-breaking hardcodes and that a fresh Mini PC/VPS install is seamless. Output: `PORTABILITY-AUDIT.md` (GO/NO-GO) + `REMEDIATION-BACKLOG.md`. Read-only (D-251-READONLY) — produces docs only. See "## Current Position" below + `.planning/phases/251-fresh-install-portability-audit/`. (This is independent of — and does NOT block — the still-pending v44.0 operator close.)
+
+---
 
 **v43.0 milestone CLOSED 2026-05-28.** Plus 1 post-close hot-fix (Phase 245.1) live on Mini PC.
 
@@ -35,7 +41,15 @@ progress:
 
 ---
 
-## Current Position (v44 — Phase 249 Plan 01 ⏳ ARTIFACT-COMPLETE / OPERATOR-PENDING — staged v44.0 milestone close: consolidated UAT index `.planning/v44-UAT-CONSOLIDATED.md` (317 lines, inlines Phase 246 UAT-1..UAT-7 + Phase 248 A..G verbatim, GO/NO-GO matrix, sacred-SHA gate, audit trail) + sequenced browser walk `.planning/v44-OPERATOR-WALK.md` (309 lines, 29 UAT-id cross-refs) + guarded close script `scripts/close-v44-when-uat-green.sh` (267 lines, `bash -n` PASS, sacred SHA + UAT tick gates, archives to `.planning/milestones/v44/`, prints `/gsd-complete-milestone v44.0` next step — operator-only, NOT executed by this phase); D-V44-SACRED `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved (`[sacred-sha] PASS: 20 files verified` on every commit); v44.0 milestone remains OPEN (not flipped) per `feedback_milestone_uat_gate.md`; both 249-01-SUMMARY.md + 249-SUMMARY.md declare `status: human_needed` — close is operator-only)
+## Current Position (v45-prep — Phase 251 Fresh-Install Portability & Hardcode Audit 🟡 PLANNED 2026-05-29 — 9 GSD plans authored on disk: 8 parallel read-only audit work-streams (Wave 1, `wave:1` `depends_on:[]`, disjoint findings docs) + 1 synthesis (Wave 2) producing PORTABILITY-AUDIT.md + REMEDIATION-BACKLOG.md; 251-CONTEXT.md + 251-RESEARCH.md recon-seeded by 4 parallel agents; ROADMAP Phase 251 row added above Phase 250. **READY TO EXECUTE — run `/gsd-execute-phase 251` after /clear** to fan out the parallel audit. NOTE: the v44.0 close (Phase 249) is still OPERATOR-PENDING — see Previous Position below; Phase 251 is an independent audit and does NOT block or depend on the v44 close.)
+
+## Latest update 2026-05-29 (later)
+
+Authored **Phase 251 — Fresh-Install Portability & Hardcode Audit** per operator request: verify the v44/250-hotfix terminal + Luse change surface has no install-breaking hardcodes and that a brand-new Mini PC/VPS install comes up seamlessly. 4 parallel recon agents already surfaced the prime suspects (baked into `251-RESEARCH.md` as verified leads): **xterm/imagemagick/Xephyr missing from ALL installer apt lists** (only Xvfb present, but create_display defaults to xephyr); **`username:'bruce'` hardcoded in the PTY spawn with no Redis/env lookup**; the **`redis-env.conf` systemd drop-in we hand-added exists nowhere in the repo** (live-only); `/opt/livos/.env` fallback paths + uid-1000/gdm-Xauthority + `admin`-vs-`bruce` LUSE_USER_ID inconsistency; **two divergent install paths** (A comprehensive vs B CHANGEME-secrets — which does get.livinity.io use?); liv-assistant luse MCP **first-create gap** (update.sh only patches-if-exists). Phase 251 = 8 parallel audit work-streams + 1 synthesis; deliverables are docs only (D-251-READONLY — no source edits). Run `/gsd-execute-phase 251`. Files: `.planning/phases/251-fresh-install-portability-audit/` (251-CONTEXT.md + 251-RESEARCH.md + 251-01..09-PLAN.md) + ROADMAP Phase 251 row. Feeds a future **Phase 252** remediation from the backlog.
+
+---
+
+## Previous Position (v44 — Phase 249 Plan 01 ⏳ ARTIFACT-COMPLETE / OPERATOR-PENDING — staged v44.0 milestone close: consolidated UAT index `.planning/v44-UAT-CONSOLIDATED.md` (317 lines, inlines Phase 246 UAT-1..UAT-7 + Phase 248 A..G verbatim, GO/NO-GO matrix, sacred-SHA gate, audit trail) + sequenced browser walk `.planning/v44-OPERATOR-WALK.md` (309 lines, 29 UAT-id cross-refs) + guarded close script `scripts/close-v44-when-uat-green.sh` (267 lines, `bash -n` PASS, sacred SHA + UAT tick gates, archives to `.planning/milestones/v44/`, prints `/gsd-complete-milestone v44.0` next step — operator-only, NOT executed by this phase); D-V44-SACRED `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved (`[sacred-sha] PASS: 20 files verified` on every commit); v44.0 milestone remains OPEN (not flipped) per `feedback_milestone_uat_gate.md`; both 249-01-SUMMARY.md + 249-SUMMARY.md declare `status: human_needed` — close is operator-only)
 
 ## Latest update 2026-05-29
 
@@ -560,7 +574,7 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 ## Next Planned Phase
 
 - **Phase:** 245
-- **Status:** Executing Phase 248
+- **Status:** Executing Phase 251
 - **Plan count:** 5
 - **CONTEXT:** .planning/phases/248-luse-display-lifecycle/248-CONTEXT.md
 - **Wave plan:** Wave 1 (248-01 backend display-manager ✅) → Wave 2 (248-02 MCP tool registrations ✅) → Wave 3 (248-03 TTL GC sweep — NEXT) → Wave 4 (248-04 canonical docs + shim sync) → Wave 5 (248-05 Mini PC deploy + UAT)
@@ -568,8 +582,8 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 
 ## Current Position
 
-Phase: 248 (Luse display lifecycle) — EXECUTING
-Plan: 2 of 5 ✅ SHIPPED — next is 248-03 (TTL GC sweep for idle displays)
+Phase: 251 (fresh-install-portability-audit) — EXECUTING
+Plan: 1 of 9
 
 **Plan 247-01 (2 tasks — 2 commits: `f16f12e2` docs patterns+anti-patterns+cheat-sheet + `41f4a96b` docs troubleshooting+integration-recipes+known-limits+per-tool cross-refs)** — Layered production reference docs on top of Phase 242 minimum-viable Luse scaffold. **6 new canonical files** under `docs/luse/` (848 new lines): `PATTERNS.md` (240 lines, 8 named patterns: screenshot-then-act / landmark-anchored clicks / retry-with-screenshot-verify cap-3 / multi-step wizard / focus-before-type / modal dismissal / scroll-and-search / secrets via clipboard NOT type — each with ≥1 fenced JSON example using real `computer_*` MCP tool names), `ANTI-PATTERNS.md` (147 lines, 4 banned patterns: brittle pixel coords / fire-and-forget clicks / modifier-key collisions with desktop shell / sensitive text via `computer_type_text` — each with wrong-vs-right inline + corrective PATTERNS.md anchor), `CHEAT-SHEET.md` (54 lines, 8-row tool table + at-a-glance reminders + 4 common composition shapes — fits single-page bar ≤80 lines), `TROUBLESHOOTING.md` (168 lines, 6 named failure modes: Display gone away / X server unreachable / Luse MCP cannot reach Redis / Wrong DISPLAY env / Window not focused (keystrokes leak) / xdotool race conditions — each with Symptom / Likely cause / Diagnose-shell-command / Fix), `INTEGRATION-RECIPES.md` (144 lines, 5 agent sections: Claude Code `.claude/skills/luse/SKILL.md` MCP tool-use block / Aion CLI `.aion/skills/luse.md` / OpenCode `.opencode/skills/luse.md` / **Gemini = no shim, MCP tool-discovery only — Phase 242 D-242-C honored verbatim** / OpenClaw `.openclaw/skills/luse.md`), `KNOWN-LIMITS.md` (95 lines, 5 limits: DPI/scaling table 100%/125%/150% / multi-monitor / Wayland gaps / snap-flatpak isolation / root-only apps). **5 per-tool docs modified** (additive only, existing bodies byte-stable) — `tools/click.md` + 3 anchor refs (PATTERNS#pattern-2/#pattern-3 + ANTI-PATTERNS#anti-pattern-1), `tools/type.md` + 3 (PATTERNS#pattern-5/#pattern-8 + ANTI-PATTERNS#anti-pattern-4), `tools/screenshot.md` + 2 (PATTERNS#pattern-1/#pattern-7), `tools/key.md` + 2 (PATTERNS#pattern-6 + ANTI-PATTERNS#anti-pattern-3), `tools/scroll.md` + 1 (PATTERNS#pattern-7). **D-V44-SACRED preserved**: `git rev-parse HEAD:liv/packages/core/src/sdk-agent-runner.ts` returns `f3538e1d811992b782a9bb057d1b7f0a0189f95f` on both commits; sacred-sha pre-commit hook fired `PASS: 20 files verified` twice. Docs-only — zero tool code, zero package.json, zero shim file touched (shim regeneration is Plan 247-02). All `<verify>` automated grep gates green (line counts, named pattern/anti-pattern/failure-mode headers, real MCP tool names, isSensitive citation, PATTERNS.md cross-link from every per-tool doc, Gemini "MCP tool-discovery" phrase verbatim). 0 deviations from plan. SUMMARY at `.planning/phases/247-luse-skill-v2-docs/247-01-SUMMARY.md`. Plan 247-02 (run `scripts/sync-luse-skills.sh` → verify each of 4 shim dirs picks up new content with sha256 drift detection → commit shim deltas) now unblocked.
 
