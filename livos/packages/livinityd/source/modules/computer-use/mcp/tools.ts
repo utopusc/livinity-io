@@ -1036,6 +1036,12 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 			height,
 			ownerSession: options.userId ?? 'admin',
 		})
+		if (result.isError) {
+			return {
+				content: [{type: 'text', text: `Error: ${result.error ?? 'display creation failed'}`}],
+				isError: true,
+			}
+		}
 		return {
 			content: [{type: 'text', text: JSON.stringify(result)}],
 			isError: false,
