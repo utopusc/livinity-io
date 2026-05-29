@@ -28,16 +28,13 @@
 
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 
-import {
-	createDisplayManager,
-	type DisplayManager,
-} from '../display-manager.js'
+import {createDisplayManager} from '../display-manager.js'
 import {
 	DISPLAY_REDIS_PREFIX,
 	redisKeyForDisplay,
 	redisKeyForDisplayApps,
 } from '../redis-keys.js'
-import type {DisplayMode} from '../types.js'
+import type {DisplayManager, DisplayMode, DisplayRecord} from '../types.js'
 
 // ----------------------------------------------------------------------------
 // Fake ioredis client — Map-backed in-memory; covers the 6-method surface.
@@ -276,7 +273,9 @@ describe('display-manager — list()', () => {
 
 		const list = await mgr.list()
 		expect(list.length).toBe(2)
-		const byDisplay = new Map(list.map((r) => [r.display, r]))
+		const byDisplay = new Map<string, DisplayRecord>(
+			list.map((r: DisplayRecord) => [r.display, r]),
+		)
 		const recA = byDisplay.get(a.display)!
 		const recB = byDisplay.get(b.display)!
 		expect(recA.name).toBe('A')
