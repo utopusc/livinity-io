@@ -43,7 +43,7 @@ import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js'
 // ioredis exports Redis as a named export (NOT default) per project memory.
 import {Redis} from 'ioredis'
 
-import {createDisplayManager} from '../displays/index.js'
+import {createDisplayManager, createDisplayTtlGc} from '../displays/index.js'
 import {defaultLivosAppResolver, type LivosAppMatch} from '../native/window.js'
 import {registerLuseTools} from './tools.js'
 
@@ -160,6 +160,24 @@ async function main(): Promise<void> {
 				})
 			: undefined
 
+	// Phase 248-03 — TTL GC for idle displays. 1h sweep / 4h idle threshold.
+	// Owner-impersonates so it can kill any stale display the user-facing
+	// owner-scope check would otherwise block. Only constructed when
+	// displayManager is wired — null branch leaks no interval handle.
+	const displayTtlGc = displayManager
+		? createDisplayTtlGc({
+				displayManager,
+				logger: {
+					info: (msg, ctx) =>
+						process.stderr.write(
+							`[luse-mcp] display-ttl-gc: ${msg}${
+								ctx ? ' ' + JSON.stringify(ctx) : ''
+							}\n`,
+						),
+				},
+			})
+		: undefined
+
 	// Phase 161-03 — Construct livosAppResolver via env-thread + HTTP fetch.
 	// Mirrors ws-agent.ts:160-172 IntentRouter getCapabilities idiom.
 	//
@@ -240,13 +258,25 @@ async function main(): Promise<void> {
 	const transport = new StdioServerTransport()
 	await server.connect(transport)
 
+	// Phase 248-03 — start the TTL GC sweep after the MCP transport is live
+	// so vitest / dev restarts that never make it past `server.connect` don't
+	// leak the 1h interval handle. `beforeExit` handler clears it on graceful
+	// shutdown; `displayTtlGc?.stop()` is null-safe so the handler is fine
+	// when displayManager is null (TTL GC was never constructed).
+	if (displayTtlGc) {
+		displayTtlGc.start()
+		process.on('beforeExit', () => displayTtlGc.stop())
+	}
+
 	// Log to STDERR so the MCP stdout wire stays clean.
 	process.stderr.write(
 		`[luse-mcp] connected via stdio transport${
 			defaultWindowId !== undefined ? ` (windowId=${defaultWindowId})` : ''
 		}${defaultDisplay !== undefined ? ` (display=${defaultDisplay})` : ''}${
 			redis !== null ? ' (redis=connected)' : ' (redis=null, create_stream gated off)'
-		} (displayManager=${displayManager !== undefined ? 'wired' : 'null'})\n`,
+		} (displayManager=${displayManager !== undefined ? 'wired' : 'null'}) (displayTtlGc=${
+			displayTtlGc !== undefined ? 'started' : 'null'
+		})\n`,
 	)
 }
 
