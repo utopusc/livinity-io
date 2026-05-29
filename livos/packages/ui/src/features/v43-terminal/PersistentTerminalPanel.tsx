@@ -20,6 +20,7 @@
  * file lives under `livos/packages/ui/` and does not touch `liv/`.
  */
 import {FitAddon} from '@xterm/addon-fit'
+import {WebglAddon} from '@xterm/addon-webgl'
 import {WebLinksAddon} from '@xterm/addon-web-links'
 import {Terminal} from '@xterm/xterm'
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
@@ -42,8 +43,13 @@ const TERMINAL_THEME = {
 	selectionBackground: '#1f2937',
 } as const
 
+// Prefer each OS's native terminal monospace so the panel matches the
+// system terminal: ui-monospace → SF Mono on macOS / Cascadia Mono on
+// Windows 11; explicit Cascadia/Menlo/Consolas fallbacks cover the rest.
+// (Phase 246 hot-fix — the old stack led with macOS-only 'SF Mono', so on
+// Windows it silently fell through to Consolas under the DOM renderer.)
 const FONT_FAMILY =
-	"'SF Mono', SFMono-Regular, ui-monospace, 'DejaVu Sans Mono', Menlo, Consolas, monospace"
+	"ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace"
 
 /**
  * Tab state owned by `PersistentTerminalPanel`. Each tab maps to one
@@ -296,6 +302,26 @@ function TerminalTabPane({
 		term.loadAddon(fit)
 		term.loadAddon(links)
 		term.open(containerRef.current)
+
+		// Phase 246 hot-fix — GPU (WebGL2) renderer for crisp, native-feeling
+		// glyphs. xterm's default DOM renderer (one <span> per cell) renders
+		// noticeably differently from native terminals and VS Code, which use
+		// this same WebGL renderer. MUST run after term.open(). Falls back to
+		// the DOM renderer if WebGL2 is unavailable or the GL context is lost.
+		try {
+			const webgl = new WebglAddon()
+			webgl.onContextLoss(() => {
+				try {
+					webgl.dispose() // xterm auto-reverts to the DOM renderer
+				} catch {
+					// no-op
+				}
+			})
+			term.loadAddon(webgl)
+		} catch {
+			// WebGL2 unavailable — DOM renderer stays active (still functional).
+		}
+
 		try {
 			fit.fit()
 		} catch {

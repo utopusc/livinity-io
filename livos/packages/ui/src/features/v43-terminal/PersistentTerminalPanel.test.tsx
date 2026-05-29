@@ -90,6 +90,13 @@ vi.mock('@xterm/addon-web-links', () => ({
 	WebLinksAddon: vi.fn().mockImplementation(() => ({})),
 }))
 
+vi.mock('@xterm/addon-webgl', () => ({
+	WebglAddon: vi.fn().mockImplementation(() => ({
+		onContextLoss: vi.fn(),
+		dispose: vi.fn(),
+	})),
+}))
+
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}))
 
 // Stub uuidv7 so generated tab keys are deterministic across tests.
