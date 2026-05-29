@@ -375,9 +375,15 @@ if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
         libva-utils intel-media-va-driver libdrm-intel1 \
         2>&1 | tail -5 || warn "VAAPI userspace install failed — libx264 fallback will be used"
 
+    # Phase 252 portability — luse display-lifecycle + terminal binaries the
+    # v44/250-hotfix code now hard-requires but were never on the apt list.
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        xserver-xephyr xterm gnome-terminal x11-utils xclip wmctrl \
+        2>&1 | tail -5 || warn "Some luse display/terminal packages failed (non-fatal)"
+
     # Verify the critical streaming binaries are present after install
     streaming_missing=()
-    for bin in ffmpeg gst-launch-1.0 dbus-send xdotool maim Xvfb fluxbox; do
+    for bin in ffmpeg gst-launch-1.0 dbus-send xdotool maim Xvfb fluxbox Xephyr xterm; do
         if ! command -v "$bin" >/dev/null 2>&1; then
             streaming_missing+=("$bin")
         fi
