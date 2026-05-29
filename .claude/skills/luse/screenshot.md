@@ -1,4 +1,4 @@
-<!-- source-sha: cd2098df0efbcc559931227441ce1045d8b391144d4a00d95cf60e3c018e87a7 -->
+<!-- source-sha: 5bddc4b0126a5d8594252445ac6714e8a203aab82dfdf112ef64014ec738fc26 -->
 <!-- AUTO-GENERATED FROM docs/luse/tools/screenshot.md — DO NOT EDIT. -->
 
 # `screenshot` — Capture the current screen
@@ -59,3 +59,8 @@ is returned to avoid blowing the message budget. On failure:
   "arguments": { "region": { "x": 1700, "y": 0, "w": 220, "h": 40 } }
 }
 ```
+
+## See also
+
+- [PATTERNS.md#pattern-1-screenshot-then-act](../PATTERNS.md#pattern-1-screenshot-then-act)
+- [PATTERNS.md#pattern-7-scroll-and-search](../PATTERNS.md#pattern-7-scroll-and-search)

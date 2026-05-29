@@ -1,4 +1,4 @@
-<!-- source-sha: 3871905f02fdf3b7861882b05e171d6235436cb46668d6bcbe76ca25db698ffc -->
+<!-- source-sha: 23f3707de623d53fae7fc136a05162a328467b0476747eadbc8605f4c4649783 -->
 <!-- AUTO-GENERATED FROM docs/luse/tools/type.md — DO NOT EDIT. -->
 
 # `type` — Type a string into the focused window
@@ -48,3 +48,9 @@ client), `"display_unavailable"`, and `"xdotool_failed"`.
   "arguments": { "text": "wi-fi settings" }
 }
 ```
+
+## See also
+
+- [PATTERNS.md#pattern-5-focus-before-type](../PATTERNS.md#pattern-5-focus-before-type)
+- [PATTERNS.md#pattern-8-secrets-via-clipboard-not-type](../PATTERNS.md#pattern-8-secrets-via-clipboard-not-type)
+- [ANTI-PATTERNS.md#anti-pattern-4-sensitive-text-via-computer_type_text-instead-of-computer_paste_text--issensitive](../ANTI-PATTERNS.md#anti-pattern-4-sensitive-text-via-computer_type_text-instead-of-computer_paste_text--issensitive)

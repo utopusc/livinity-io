@@ -123,10 +123,23 @@ SCREENSHOT_MD="$(read_canonical "$CANONICAL_DIR/tools/screenshot.md")"
 KEY_MD="$(read_canonical "$CANONICAL_DIR/tools/key.md")"
 SCROLL_MD="$(read_canonical "$CANONICAL_DIR/tools/scroll.md")"
 
+# Phase 247 v2 canonical reference docs — production patterns + diagnostics.
+# Six top-level docs under docs/luse/ that layer reference material on top of
+# the Phase 242 minimum-viable docs. Order is deterministic for stable
+# concatenation sha. Per-agent shims receive them as both bundled prose
+# (Aion / OpenCode / OpenClaw) and standalone .md files (Claude skill dir).
+PATTERNS_MD="$(read_canonical "$CANONICAL_DIR/PATTERNS.md")"
+TROUBLESHOOTING_MD="$(read_canonical "$CANONICAL_DIR/TROUBLESHOOTING.md")"
+ANTI_PATTERNS_MD="$(read_canonical "$CANONICAL_DIR/ANTI-PATTERNS.md")"
+INTEGRATION_RECIPES_MD="$(read_canonical "$CANONICAL_DIR/INTEGRATION-RECIPES.md")"
+KNOWN_LIMITS_MD="$(read_canonical "$CANONICAL_DIR/KNOWN-LIMITS.md")"
+CHEAT_SHEET_MD="$(read_canonical "$CANONICAL_DIR/CHEAT-SHEET.md")"
+
 # Concatenated "single-file" payload used by Aion / OpenCode / OpenClaw
 # shims (they ship one file, not a directory).
-CONCAT_PAYLOAD="$(printf '%s\n\n---\n\n## Tool: click\n\n%s\n\n---\n\n## Tool: type\n\n%s\n\n---\n\n## Tool: screenshot\n\n%s\n\n---\n\n## Tool: key\n\n%s\n\n---\n\n## Tool: scroll\n\n%s\n\n---\n\n## Workflow\n\n%s\n' \
-  "$LUSE_MD" "$CLICK_MD" "$TYPE_MD" "$SCREENSHOT_MD" "$KEY_MD" "$SCROLL_MD" "$WORKFLOW_MD")"
+CONCAT_PAYLOAD="$(printf '%s\n\n---\n\n## Tool: click\n\n%s\n\n---\n\n## Tool: type\n\n%s\n\n---\n\n## Tool: screenshot\n\n%s\n\n---\n\n## Tool: key\n\n%s\n\n---\n\n## Tool: scroll\n\n%s\n\n---\n\n## Workflow\n\n%s\n\n---\n\n## PATTERNS\n\n%s\n\n---\n\n## TROUBLESHOOTING\n\n%s\n\n---\n\n## ANTI-PATTERNS\n\n%s\n\n---\n\n## INTEGRATION-RECIPES\n\n%s\n\n---\n\n## KNOWN-LIMITS\n\n%s\n\n---\n\n## CHEAT-SHEET\n\n%s\n' \
+  "$LUSE_MD" "$CLICK_MD" "$TYPE_MD" "$SCREENSHOT_MD" "$KEY_MD" "$SCROLL_MD" "$WORKFLOW_MD" \
+  "$PATTERNS_MD" "$TROUBLESHOOTING_MD" "$ANTI_PATTERNS_MD" "$INTEGRATION_RECIPES_MD" "$KNOWN_LIMITS_MD" "$CHEAT_SHEET_MD")"
 
 # --- generators ----------------------------------------------------------
 
@@ -166,6 +179,24 @@ EOF
     local tool_md
     tool_md="$(printf '<!-- source-sha: __PAYLOAD_SHA__ -->\n<!-- AUTO-GENERATED FROM docs/luse/tools/%s.md — DO NOT EDIT. -->\n\n%s' "$tool" "$src_var")"
     write_shim "$REPO_ROOT/.claude/skills/luse/$tool.md" "$tool_md"
+  done
+
+  # Phase 247: top-level reference docs as standalone .claude/skills/luse/<NAME>.md
+  # files. Same shape as the per-tool shims (HTML-comment source-sha marker
+  # + AUTO-GENERATED banner + canonical body).
+  for top in PATTERNS TROUBLESHOOTING ANTI-PATTERNS INTEGRATION-RECIPES KNOWN-LIMITS CHEAT-SHEET; do
+    local top_var
+    case "$top" in
+      PATTERNS) top_var="$PATTERNS_MD" ;;
+      TROUBLESHOOTING) top_var="$TROUBLESHOOTING_MD" ;;
+      ANTI-PATTERNS) top_var="$ANTI_PATTERNS_MD" ;;
+      INTEGRATION-RECIPES) top_var="$INTEGRATION_RECIPES_MD" ;;
+      KNOWN-LIMITS) top_var="$KNOWN_LIMITS_MD" ;;
+      CHEAT-SHEET) top_var="$CHEAT_SHEET_MD" ;;
+    esac
+    local top_md
+    top_md="$(printf '<!-- source-sha: __PAYLOAD_SHA__ -->\n<!-- AUTO-GENERATED FROM docs/luse/%s.md — DO NOT EDIT. -->\n\n%s' "$top" "$top_var")"
+    write_shim "$REPO_ROOT/.claude/skills/luse/$top.md" "$top_md"
   done
 }
 

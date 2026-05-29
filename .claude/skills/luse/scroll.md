@@ -1,4 +1,4 @@
-<!-- source-sha: 401dd4a538143c239adfff29320f37a1e0dc487af2043067891cffe1bce5382a -->
+<!-- source-sha: e4b13a6799b92ce6cc0feb71d53553435ef430d70125a4f1762cd41af4deea18 -->
 <!-- AUTO-GENERATED FROM docs/luse/tools/scroll.md — DO NOT EDIT. -->
 
 # `scroll` — Scroll up / down / left / right
@@ -56,3 +56,7 @@ On failure:
   "arguments": { "direction": "down", "amount": 5, "x": 80, "y": 400 }
 }
 ```
+
+## See also
+
+- [PATTERNS.md#pattern-7-scroll-and-search](../PATTERNS.md#pattern-7-scroll-and-search)

@@ -1,4 +1,4 @@
-<!-- source-sha: 216c57f74337bec8dece80b654f9d649f015dd1d24780dea9308a548b85b101b -->
+<!-- source-sha: c95973776432917415e4618bb33370cc7760027c136ab35d5fa109b0c388bdaa -->
 <!-- AUTO-GENERATED FROM docs/luse/tools/key.md — DO NOT EDIT. -->
 
 # `key` — Send a keystroke or modifier combo
@@ -60,3 +60,8 @@ symbol), `"no_focused_window"`, and `"xdotool_failed"`.
   "arguments": { "key": "ctrl+v" }
 }
 ```
+
+## See also
+
+- [PATTERNS.md#pattern-6-modal-dismissal](../PATTERNS.md#pattern-6-modal-dismissal)
+- [ANTI-PATTERNS.md#anti-pattern-3-modifier-key-collisions-with-desktop-shell](../ANTI-PATTERNS.md#anti-pattern-3-modifier-key-collisions-with-desktop-shell)
