@@ -33,32 +33,54 @@ function makeFakePty(): MinimalPty & {
 	}
 }
 
-describe('PtySession.start() — username guard (D-243-NO-ROOT)', () => {
-	test('throws "non-bruce username rejected" when opts.username === "root"', () => {
+describe('PtySession.start() — root-only username guard (R4 + D-243-NO-ROOT)', () => {
+	test('throws root/uid-0 rejection when opts.username === "root"', () => {
 		const fake = makeFakePty()
 		const ptyFactory = vi.fn().mockReturnValue(fake)
 		const session = new PtySession(
-			{username: 'root' as any, cols: 80, rows: 24},
+			{username: 'root', cols: 80, rows: 24},
 			{ptyFactory},
 		)
-		expect(() => session.start()).toThrow(/non-bruce username rejected/i)
+		expect(() => session.start()).toThrow(/root\/uid-0 username rejected/i)
 		expect(ptyFactory).not.toHaveBeenCalled()
 	})
 
-	test('throws "non-bruce username rejected" when opts.username === "ubuntu"', () => {
+	test('throws root/uid-0 rejection when opts.username === "0"', () => {
 		const fake = makeFakePty()
 		const ptyFactory = vi.fn().mockReturnValue(fake)
 		const session = new PtySession(
-			{username: 'ubuntu' as any, cols: 80, rows: 24},
+			{username: '0', cols: 80, rows: 24},
 			{ptyFactory},
 		)
-		expect(() => session.start()).toThrow(/non-bruce username rejected/i)
+		expect(() => session.start()).toThrow(/root\/uid-0 username rejected/i)
 		expect(ptyFactory).not.toHaveBeenCalled()
+	})
+
+	test('does NOT throw when opts.username === "bruce"', () => {
+		const fake = makeFakePty()
+		const ptyFactory = vi.fn().mockReturnValue(fake)
+		const session = new PtySession(
+			{username: 'bruce', cols: 80, rows: 24},
+			{ptyFactory},
+		)
+		expect(() => session.start()).not.toThrow()
+		expect(ptyFactory).toHaveBeenCalledTimes(1)
+	})
+
+	test('does NOT throw when opts.username === "alice" (any non-root desktop user)', () => {
+		const fake = makeFakePty()
+		const ptyFactory = vi.fn().mockReturnValue(fake)
+		const session = new PtySession(
+			{username: 'alice', cols: 80, rows: 24},
+			{ptyFactory},
+		)
+		expect(() => session.start()).not.toThrow()
+		expect(ptyFactory).toHaveBeenCalledTimes(1)
 	})
 })
 
-describe('PtySession.start() — spawn argv contract', () => {
-	test('with username="bruce" calls ptyFactory with argv[0]="sudo" and argv[1..3]=["--user","bruce","--login"]', () => {
+describe('PtySession.start() — sudo-less bash spawn contract (R8)', () => {
+	test('spawns file="bash" with argv=["--login","-c",MOTD] — NO sudo, NO --user', () => {
 		const fake = makeFakePty()
 		const ptyFactory = vi.fn().mockReturnValue(fake)
 		const session = new PtySession(
@@ -68,10 +90,14 @@ describe('PtySession.start() — spawn argv contract', () => {
 		session.start()
 		expect(ptyFactory).toHaveBeenCalledTimes(1)
 		const [file, args] = ptyFactory.mock.calls[0]
-		expect(file).toBe('sudo')
-		expect(args[0]).toBe('--user')
-		expect(args[1]).toBe('bruce')
-		expect(args[2]).toBe('--login')
+		expect(file).toBe('bash')
+		expect(args[0]).toBe('--login')
+		expect(args[1]).toBe('-c')
+		expect(args[2]).toBe(
+			'if [ -f /etc/motd ]; then cat /etc/motd; fi; exec bash',
+		)
+		expect(args).not.toContain('--user')
+		expect(file).not.toBe('sudo')
 	})
 
 	test('forwards cols/rows from opts to ptyFactory options', () => {
@@ -177,7 +203,7 @@ describe('PtySession — event forwarding & IO', () => {
 	})
 })
 
-// Drift-lock: PtySpawnOptions is correctly typed to the literal 'bruce'.
-// This is a compile-time check — verified by tsc, not by runtime.
-const _typeProof: PtySpawnOptions = {username: 'bruce', cols: 80, rows: 24}
+// Drift-lock (R4): PtySpawnOptions.username is `string` — an arbitrary
+// non-bruce desktop user typechecks. This is a compile-time check.
+const _typeProof: PtySpawnOptions = {username: 'alice', cols: 80, rows: 24}
 void _typeProof
