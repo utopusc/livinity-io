@@ -1085,6 +1085,30 @@ class Server {
 					return
 				}
 
+				// ── Phase 246 — Persistent terminal WS cookie auth ────────────
+				// /livos/terminal/ws authenticates via the LIVINITY_PROXY_TOKEN
+				// cookie INSIDE the pty-terminal ws-handler (Gate 1), NOT via the
+				// ?token= query the generic dispatcher below requires. The browser
+				// terminal panel (use-terminal-ws.ts) deliberately sends no ?token=
+				// (RFC 6455 forbids custom WS headers; the cookie travels with the
+				// upgrade automatically). Route straight to handleUpgrade so the
+				// handler's own verifyProxyToken + feature-flag gates run. Without
+				// this branch the generic "no token → socket.destroy()" gate below
+				// kills the connection before the handler can authenticate it,
+				// surfacing as a 502 through Caddy / failed WS in the browser.
+				if (pathname === '/livos/terminal/ws') {
+					const terminalWss = this.webSocketRouter.get(pathname)
+					if (!terminalWss) {
+						if (this.livinityd.developmentMode) return
+						socket.destroy()
+						return
+					}
+					terminalWss.handleUpgrade(request, socket, head, (ws) =>
+						terminalWss.emit('connection', ws, request),
+					)
+					return
+				}
+
 				// See if we have a WebSocket server for this path in our router
 				const wss = this.webSocketRouter.get(pathname)
 

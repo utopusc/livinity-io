@@ -50,6 +50,12 @@ let terminalMocks: Array<{
 	loadAddon: ReturnType<typeof vi.fn>
 	open: ReturnType<typeof vi.fn>
 	dispose: ReturnType<typeof vi.fn>
+	// Phase 246 hot-fix — clipboard surface used by the copy/paste handler.
+	attachCustomKeyEventHandler: ReturnType<typeof vi.fn>
+	getSelection: ReturnType<typeof vi.fn>
+	paste: ReturnType<typeof vi.fn>
+	selectAll: ReturnType<typeof vi.fn>
+	clear: ReturnType<typeof vi.fn>
 }> = []
 
 vi.mock('@xterm/xterm', () => ({
@@ -61,6 +67,12 @@ vi.mock('@xterm/xterm', () => ({
 			loadAddon: vi.fn(),
 			open: vi.fn(),
 			dispose: vi.fn(),
+			// Phase 246 hot-fix — clipboard surface used by the copy/paste handler.
+			attachCustomKeyEventHandler: vi.fn(),
+			getSelection: vi.fn().mockReturnValue(''),
+			paste: vi.fn(),
+			selectAll: vi.fn(),
+			clear: vi.fn(),
 		}
 		terminalMocks.push(m)
 		return m
