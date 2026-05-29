@@ -120,3 +120,21 @@ Once A + B PASS, operator commits the update to 246-06-DEPLOY-LOG.md flipping it
 | Sacred git blob preserved | `git rev-parse HEAD:liv/packages/core/src/sdk-agent-runner.ts` = `f3538e1d...` | ✅ verified |
 
 **Plan 246-06 status:** ✅ ARTIFACT-COMPLETE / ⏳ OPERATOR-PENDING DEPLOY. No FAIL probes. No D-V44 invariant violations.
+
+## Self-Check: PASSED
+
+Verified after all 4 commits landed:
+
+| Item | Verification | Result |
+|---|---|---|
+| `246-06-DEPLOY-LOG.md` exists | `ls .planning/phases/246-terminal-v2-multi-session/` | ✅ FOUND |
+| `246-06-UAT-CHECKLIST.md` exists | `ls ...` | ✅ FOUND |
+| `246-SUMMARY.md` exists | `ls ...` | ✅ FOUND |
+| `246-06-SUMMARY.md` exists | `ls ...` | ✅ FOUND |
+| ROADMAP Phase 246 flipped | commit `d8f47a88` | ✅ FOUND |
+| STATE.md Current Position updated | commit `d8f47a88` | ✅ FOUND |
+| Sacred SHA at HEAD | `git rev-parse HEAD:liv/packages/core/src/sdk-agent-runner.ts` = `f3538e1d811992b782a9bb057d1b7f0a0189f95f` | ✅ MATCH |
+| 4 doc commits landed | `git log --oneline -n 6` shows `b5df12f2` + `ea55972e` + `ee33dead` + `d8f47a88` | ✅ FOUND |
+| Pre-commit `[sacred-sha] PASS: 20 files verified` on every commit | hook output | ✅ PASS x4 |
+| No Server4 references introduced as deploy targets | grep all 4 new docs — 3 hits, all negative-control assertions ("Server4 not mentioned anywhere in deploy script") affirming D-V44-MINI-PC-ONLY | ✅ COMPLIANT |
+
