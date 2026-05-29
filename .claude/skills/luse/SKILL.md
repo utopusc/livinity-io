@@ -1,7 +1,7 @@
 ---
 name: luse
 description: Computer-use capability for Liv AI agents — click, type, screenshot, key, scroll on the LivOS desktop via the Luse MCP server. Use when the task requires direct interaction with a graphical application on the host.
-source-sha: 510a727e26c2bb76eda4b228781836c904ae4c8040cadcfdbe67cd6138904471
+source-sha: e713bccc1512d829a89b9a8449a3995c37e61cb440cd0f36c4aef787ee51f156
 ---
 
 <!--
@@ -39,6 +39,19 @@ Do NOT use Luse when:
 - Secrets need to be entered. Use the clipboard path (paste via `key`
   `ctrl+v` after the secret is already in the clipboard) rather than
   feeding the secret through `type` arguments, which may be logged.
+
+## Display lifecycle (Phase 248)
+
+Beyond direct interaction with the host desktop, agents can create isolated
+nested X servers (Xephyr — visible default, Xvfb — headless opt-in) to run
+apps without disturbing the operator's main session. Four tools:
+`computer_create_display`, `computer_list_displays`, `computer_kill_display`,
+`computer_launch_app_in_display`. See [DISPLAY-LIFECYCLE.md](DISPLAY-LIFECYCLE.md)
+for full workflow + cleanup discipline. Per-tool refs:
+[create_display](tools/create_display.md) ·
+[list_displays](tools/list_displays.md) ·
+[kill_display](tools/kill_display.md) ·
+[launch_app_in_display](tools/launch_app_in_display.md).
 
 ## Prerequisites
 

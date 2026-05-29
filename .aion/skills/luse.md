@@ -1,5 +1,5 @@
 <!--
-  source-sha: 16bbf3c1311f44f2062f986660ac8e16ddacb18272db3501a26c9ef14c3afd79
+  source-sha: 8826beeda1d9d463320eea077a78b255e951ed494e02dd9ee1c852776bad8d8c
 
   AUTO-GENERATED FROM docs/luse/ — DO NOT EDIT.
   Re-run scripts/sync-luse-skills.sh to refresh.
@@ -42,6 +42,19 @@ Do NOT use Luse when:
 - Secrets need to be entered. Use the clipboard path (paste via `key`
   `ctrl+v` after the secret is already in the clipboard) rather than
   feeding the secret through `type` arguments, which may be logged.
+
+## Display lifecycle (Phase 248)
+
+Beyond direct interaction with the host desktop, agents can create isolated
+nested X servers (Xephyr — visible default, Xvfb — headless opt-in) to run
+apps without disturbing the operator's main session. Four tools:
+`computer_create_display`, `computer_list_displays`, `computer_kill_display`,
+`computer_launch_app_in_display`. See [DISPLAY-LIFECYCLE.md](DISPLAY-LIFECYCLE.md)
+for full workflow + cleanup discipline. Per-tool refs:
+[create_display](tools/create_display.md) ·
+[list_displays](tools/list_displays.md) ·
+[kill_display](tools/kill_display.md) ·
+[launch_app_in_display](tools/launch_app_in_display.md).
 
 ## Prerequisites
 
@@ -1429,3 +1442,614 @@ compose these primitives into real workflows.
 - **Diagnose a hung step:** `computer_screenshot` → if blank,
   consult TROUBLESHOOTING.md#failure-display-gone-away and
   TROUBLESHOOTING.md#failure-window-not-focused-keystrokes-leak.
+
+---
+
+## DISPLAY-LIFECYCLE
+
+# Luse Display Lifecycle
+
+Luse exposes four MCP tools — `computer_create_display`, `computer_list_displays`,
+`computer_kill_display`, `computer_launch_app_in_display` — that let an agent
+spawn isolated nested X servers, place apps inside them, observe what is
+running, and tear them down cleanly. This document is the canonical, agent-
+agnostic guide to using them. Per-tool reference docs live under
+`docs/luse/tools/`.
+
+The agent that drives this surface is responsible for cleanup discipline. The
+TTL garbage collector is a safety net, not a license to leave displays running.
+
+## When to create a display
+
+Create a new display when the workflow needs visual isolation from the
+operator's main session (`:1`) or from other agents:
+
+- Isolated visual UAT walk for a specific app without disturbing the operator
+  desktop.
+- Side-by-side comparison of two or more apps running in parallel displays.
+- Batch screenshot capture (headless) where there is no operator to watch and
+  the resulting images are the only deliverable.
+- Dry-running an unknown or untrusted app safely — input events stay inside
+  the nested X server and cannot reach apps on `:1`.
+
+## When NOT to create a display
+
+Reuse the existing operator desktop in these cases:
+
+- The task is a single click / type / screenshot on an app the operator
+  already has open. Call `computer_application` (no `display` arg) and then
+  `computer_click_mouse` / `computer_type` / `computer_screenshot` against
+  `:1`.
+- The task needs to interact with windows that are already open on `:1`. Use
+  `computer_list_windows` against `:1` and act on the existing window IDs.
+- The action will be a one-shot screenshot of the operator's current desktop
+  state — creating and tearing down a Xephyr just to capture `:1` is wasted
+  work.
+
+## Mode decision matrix — Xephyr vs Xvfb
+
+`computer_create_display` accepts `mode: "xephyr" | "xvfb"`. Default when
+omitted is `xephyr` per **D-V44-DISPLAY-XEPHYR-DEFAULT**.
+
+| Property                              | Xephyr (default) | Xvfb               |
+| ------------------------------------- | ---------------- | ------------------ |
+| Operator can watch what AI does       | Yes              | No                 |
+| Renders to a visible nested window    | Yes              | No (virtual only)  |
+| Useful for headless batch screenshots | Acceptable       | Preferred          |
+| Useful for visual UAT / pair-walk     | Preferred        | No (invisible)     |
+| GPU / display server required         | X11 host session | None               |
+| Default for ad-hoc agent work         | Yes              | Opt-in only        |
+
+Pick Xephyr unless the deliverable is a stream of screenshots intended only
+for the agent itself. Xvfb is correct for fully unattended batch work where
+nobody will look at the nested window.
+
+## Lifecycle protocol
+
+Every display goes through the same four steps. Skipping step 4 is the most
+common mistake — the TTL GC will eventually reclaim the display at 4 hours
+idle, but until then it consumes a slot and continues to register in
+`computer_list_displays`.
+
+1. `computer_create_display` → captures `{display, name, pid}`. Record the
+   returned `display` (e.g. `:10`) — every subsequent call needs it.
+2. `computer_launch_app_in_display({display, app, args?})` → launches the
+   app in the new display and registers its pid for cleanup tracking.
+3. Work against the display — every Luse tool that touches X (screenshot,
+   click, type, key, scroll) accepts an optional `display` arg. Pass the
+   value captured in step 1.
+4. `computer_kill_display({display})` — SIGTERMs every tracked app pid, then
+   the X server, then deletes the Redis state. The response includes
+   `killed_apps_count`.
+
+## Cleanup discipline
+
+Every successful `computer_create_display` MUST be matched by a
+`computer_kill_display` in the same agent session, even on the error path.
+A try/finally-shaped wrapper is the safest pattern: capture the display id
+on create, do the work, kill it whether the work succeeded or threw.
+
+The 4-hour idle TTL GC (Phase 248 Plan 03) reclaims displays whose most
+recent app activity is older than 4 hours. This is a safety net for the
+case where the agent process crashed before reaching kill. It is NOT a
+substitute for explicit cleanup. An agent that relies on the GC will
+accumulate slot pressure during an active session and leave stale entries
+visible to other agents calling `computer_list_displays`.
+
+## Owner-scope rule
+
+Per **D-V44-DISPLAY-OWNER-SCOPED**, only the session that called
+`computer_create_display` for a given display may call
+`computer_kill_display` on it. Other sessions calling kill receive an
+isError response containing the string `not-owner`.
+
+`computer_list_displays` is global — any session can see every display
+that exists, including displays owned by other sessions. Use this to
+detect collisions before naming a new display, to observe what an
+operator-spawned helper session is doing, or to confirm a display still
+exists before working against it.
+
+The owner-scope rule prevents cross-session display kills but does NOT
+prevent cross-session app launches. Any session can launch an app into
+any display via `computer_launch_app_in_display` if it knows the display
+id. Treat the display id as a soft capability handle, not a secret.
+
+## Isolation guarantees
+
+Apps spawned inside a nested display:
+
+- Cannot send synthetic input events to apps on `:1` or on other
+  displays. X11 input isolation applies at the server boundary.
+- Are visible only inside the nested display surface (Xephyr: the host's
+  nested window; Xvfb: not rendered at all).
+- Are tracked by pid in `luse:display:<display>:apps` (Redis LIST). On
+  kill_display, every tracked pid receives SIGTERM via the
+  in-process processKillFn; the response field `killed_apps_count`
+  reports how many pids the SIGTERM loop touched.
+
+## App-placement recipes
+
+### Recipe 1 — Open Firefox in a fresh Xephyr, screenshot, close
+
+```jsonc
+// Step 1 — create the nested display (default mode = "xephyr")
+{ "tool": "computer_create_display", "arguments": {} }
+// → {"display": ":10", "name": "display-10", "pid": 12345}
+
+// Step 2 — launch Firefox inside it
+{
+  "tool": "computer_launch_app_in_display",
+  "arguments": { "display": ":10", "app": "firefox" }
+}
+// → {"pid": 12346, "app_name": "firefox", "display": ":10", "kind": "binary"}
+
+// Step 3 — screenshot the nested display
+{ "tool": "computer_screenshot", "arguments": { "display": ":10" } }
+
+// Step 4 — clean up
+{ "tool": "computer_kill_display", "arguments": { "display": ":10" } }
+// → {"ok": true, "killed_apps_count": 1}
+```
+
+### Recipe 2 — Side-by-side, two displays running different apps
+
+```jsonc
+// Display A — libreoffice
+{ "tool": "computer_create_display", "arguments": { "name": "office" } }
+// → {"display": ":10", "name": "office", "pid": 22345}
+{
+  "tool": "computer_launch_app_in_display",
+  "arguments": { "display": ":10", "app": "libreoffice" }
+}
+
+// Display B — firefox
+{ "tool": "computer_create_display", "arguments": { "name": "browser" } }
+// → {"display": ":11", "name": "browser", "pid": 22346}
+{
+  "tool": "computer_launch_app_in_display",
+  "arguments": { "display": ":11", "app": "firefox" }
+}
+
+// Confirm both are tracked
+{ "tool": "computer_list_displays", "arguments": {} }
+// → [{"display":":10","name":"office",...},{"display":":11","name":"browser",...}]
+
+// Clean up — order does not matter; each kill is independent
+{ "tool": "computer_kill_display", "arguments": { "display": ":10" } }
+{ "tool": "computer_kill_display", "arguments": { "display": ":11" } }
+```
+
+### Recipe 3 — Headless batch screenshot capture (Xvfb)
+
+```jsonc
+// Step 1 — create a headless display
+{
+  "tool": "computer_create_display",
+  "arguments": { "mode": "xvfb", "width": 1920, "height": 1080 }
+}
+// → {"display": ":12", "name": "display-12", "pid": 32345}
+
+// Step 2 — launch the app under test
+{
+  "tool": "computer_launch_app_in_display",
+  "arguments": { "display": ":12", "app": "chromium", "args": ["--kiosk", "https://example.com"] }
+}
+
+// Step 3 — capture N screenshots in a loop
+{ "tool": "computer_screenshot", "arguments": { "display": ":12" } }
+// (repeat as needed)
+
+// Step 4 — tear down
+{ "tool": "computer_kill_display", "arguments": { "display": ":12" } }
+```
+
+## Failure modes
+
+- **Display creation race / binary missing.** If Xephyr or Xvfb is not
+  installed (`xserver-xephyr` / `xvfb` packages), `computer_create_display`
+  fails before allocating a display id. Surface as an isError response
+  with the underlying spawn error.
+- **kill on not-owner.** `computer_kill_display` returns isError with
+  text containing `not-owner` when the caller session does not match
+  the owner session recorded in `luse:display:<display>` HSET. The
+  X server is NOT touched; the Redis state is preserved.
+- **App failed to spawn.** `computer_launch_app_in_display` returns an
+  isError response describing the spawn failure. The display itself
+  remains alive — call `computer_kill_display` to clean it up or
+  attempt a different `app`.
+- **Display vanished between list and act.** Another session (or the
+  TTL GC) may kill a display between a `computer_list_displays` and
+  the next action. Tools that take a `display` arg return an isError
+  response when the display no longer exists; re-list to recover.
+
+## Cross-references
+
+- [PATTERNS.md](PATTERNS.md) — screenshot-then-act, retry-with-screenshot-verify
+  and other patterns that compose with the display arg passed in step 3
+  above.
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — named failure modes for the
+  underlying X11 tooling.
+- [ANTI-PATTERNS.md](ANTI-PATTERNS.md) — banned shapes that frequently
+  surface when an agent forgets cleanup discipline.
+- Per-tool refs: [create_display](tools/create_display.md) ·
+  [list_displays](tools/list_displays.md) ·
+  [kill_display](tools/kill_display.md) ·
+  [launch_app_in_display](tools/launch_app_in_display.md).
+
+---
+
+## Tool: create_display
+
+# `computer_create_display` — Spawn an isolated nested X server
+
+Allocates a new nested X display under either Xephyr (visible nested window —
+default) or Xvfb (headless virtual framebuffer), registers the display in
+Redis under the calling session's identity, and returns the display id for
+use with `computer_launch_app_in_display` and the rest of the Luse tool
+surface.
+
+## Inputs
+
+| Field    | Type                          | Required | Default      | Notes                                                            |
+| -------- | ----------------------------- | -------- | ------------ | ---------------------------------------------------------------- |
+| `name`   | string                        | no       | `display-N`  | Operator-visible label. Defaulted from the allocated `:N` id.    |
+| `mode`   | `"xephyr" \| "xvfb"`          | no       | `"xephyr"`   | D-V44-DISPLAY-XEPHYR-DEFAULT — visible nested window by default. |
+| `width`  | number (pixels)               | no       | `1920`       | Width of the nested display surface.                             |
+| `height` | number (pixels)               | no       | `1080`       | Height of the nested display surface.                            |
+
+## Output
+
+On success:
+
+```json
+{ "display": ":10", "name": "display-10", "pid": 12345 }
+```
+
+`display` is the X11 display literal (`:10`, `:11`, …) starting at `:10`
+and incrementing monotonically per livinityd boot. `pid` is the
+Xephyr/Xvfb process id for operator-side debugging — agents should NOT
+rely on it for cleanup; call `computer_kill_display` instead.
+
+On failure (binary missing, spawn error, allocator collision):
+
+```json
+{ "ok": false, "error": "<reason>" }
+```
+
+surfaced via the MCP isError envelope.
+
+## When to use
+
+- Visual isolation from `:1` is required (UAT walk, untrusted app, batch
+  side-by-side comparison).
+- Headless screenshot capture where there is no operator to watch — use
+  `mode: "xvfb"`.
+- Reset known-good state between independent app interactions.
+
+## When NOT to use
+
+- The agent only needs to interact with an app already open on `:1`. Use
+  `computer_application` (no `display` arg) instead.
+- A single one-shot screenshot of the operator's current desktop.
+
+## Safety
+
+- Every successful create MUST be matched by `computer_kill_display` in
+  the same session.
+- The 4-hour idle TTL GC is a safety net, not a license to skip cleanup.
+- Display ids are NOT secrets — any session can launch apps into a known
+  display id. Owner-scope applies to kill only.
+
+## Example
+
+```jsonc
+// Default Xephyr at 1920x1080
+{
+  "tool": "computer_create_display",
+  "arguments": {}
+}
+// → {"display": ":10", "name": "display-10", "pid": 12345}
+
+// Named headless Xvfb at 1280x800 for batch screenshots
+{
+  "tool": "computer_create_display",
+  "arguments": { "name": "batch-shots", "mode": "xvfb", "width": 1280, "height": 800 }
+}
+```
+
+## See also
+
+- [DISPLAY-LIFECYCLE.md](../DISPLAY-LIFECYCLE.md) — full create/work/kill protocol.
+- [launch_app_in_display.md](launch_app_in_display.md) — the typical next call.
+- [list_displays.md](list_displays.md) — confirm the display landed before working.
+
+---
+
+## Tool: list_displays
+
+# `computer_list_displays` — Enumerate every active nested display
+
+Returns the full set of active nested displays across all sessions on the
+host. Global read — no input arguments, no owner-scope filter. Used to
+detect collisions before naming a new display, to observe what other
+sessions are doing, and to verify cleanup at the end of a workflow.
+
+## Inputs
+
+None. The MCP schema declares an empty `properties` object and no
+`required` array.
+
+## Output
+
+JSON-stringified array of display records. One entry per active
+display:
+
+```json
+[
+  {
+    "display": ":10",
+    "name": "browser",
+    "mode": "xephyr",
+    "created_at": "2026-05-29T01:30:00.000Z",
+    "owner_session": "s1",
+    "width": 1920,
+    "height": 1080,
+    "last_app_at": "2026-05-29T01:31:00.000Z",
+    "running_apps": ["12346", "12347"]
+  }
+]
+```
+
+`owner_session` is the session that called `computer_create_display`
+and is the only session permitted to call `computer_kill_display` on
+this display (D-V44-DISPLAY-OWNER-SCOPED). `running_apps` is the list
+of pids registered via `computer_launch_app_in_display` for this
+display. `last_app_at` (optional) is the ISO timestamp of the most
+recent app activity — used by the 4-hour idle TTL GC to identify
+reclaimable displays.
+
+## When to use
+
+- Before naming a new display — check that the desired name is not
+  already in use by another session.
+- Periodically during a long-running workflow to verify expected
+  displays are still alive.
+- At the end of a session to confirm every display the agent created
+  has been killed (the agent's `owner_session` should not appear).
+
+## Safety
+
+- Treat the returned list as a snapshot. Another session (or the
+  TTL GC) may add or remove entries at any time.
+- Do not call `computer_kill_display` on a display whose
+  `owner_session` does not match the calling session — the call
+  will return a `not-owner` isError response and have no effect.
+
+## Example
+
+```jsonc
+{ "tool": "computer_list_displays", "arguments": {} }
+```
+
+## See also
+
+- [DISPLAY-LIFECYCLE.md](../DISPLAY-LIFECYCLE.md) — full lifecycle protocol.
+- [kill_display.md](kill_display.md) — owner-scope rules for the kill call.
+- [create_display.md](create_display.md) — what `owner_session` means.
+
+---
+
+## Tool: kill_display
+
+# `computer_kill_display` — Tear down a nested display + every app inside it
+
+SIGTERMs every tracked app pid inside the display, SIGTERMs the
+Xephyr/Xvfb process, and deletes the Redis state under
+`luse:display:<display>` and `luse:display:<display>:apps`. Only the
+session that called `computer_create_display` for this display may
+call kill — D-V44-DISPLAY-OWNER-SCOPED is enforced at the manager
+layer.
+
+## Inputs
+
+| Field     | Type   | Required | Notes                                                  |
+| --------- | ------ | -------- | ------------------------------------------------------ |
+| `display` | string | yes      | The display id returned by `computer_create_display`.  |
+
+## Output
+
+On success (caller is owner, display existed):
+
+```json
+{ "ok": true, "killed_apps_count": 2 }
+```
+
+`killed_apps_count` reflects the number of tracked app pids the
+SIGTERM loop touched. Process kills are best-effort — vanished pids
+(ESRCH) are silently swallowed.
+
+On owner mismatch (D-V44-DISPLAY-OWNER-SCOPED denial):
+
+```text
+Error: not-owner — only the session that called computer_create_display can kill this display (D-V44-DISPLAY-OWNER-SCOPED)
+```
+
+surfaced via isError. The X server and Redis state are NOT touched.
+
+On other failures (display not found, Redis unavailable):
+
+```json
+{ "ok": false, "error": "<reason>" }
+```
+
+## Side effects
+
+- Every pid in `luse:display:<display>:apps` receives SIGTERM via the
+  in-process processKillFn.
+- The Xephyr/Xvfb process for the display receives SIGTERM via the
+  in-memory spawn-handle map.
+- Both Redis keys (`luse:display:<display>` HSET and
+  `luse:display:<display>:apps` LIST) are DEL'd.
+- The display id `:N` is NOT reused — the monotonic allocator never
+  rewinds. A fresh `computer_create_display` returns the next free id.
+
+## Owner-scope rule
+
+Per D-V44-DISPLAY-OWNER-SCOPED, the kill check happens at the
+manager layer:
+
+1. Manager reads `owner_session` via HGETALL on the display's Redis
+   hash.
+2. If `owner_session` does not match the caller session, the manager
+   returns `{ok:false, error:'not-owner'}` and performs no
+   destructive action.
+3. The MCP wrapper converts that discriminated-union denial into an
+   isError response containing the literal string `not-owner` and a
+   pointer to D-V44-DISPLAY-OWNER-SCOPED so the calling agent can
+   recover.
+
+The 4-hour idle TTL GC bypasses this rule by impersonating each
+display's owner session (Phase 248-03 D-248-03-A). Agents themselves
+cannot.
+
+## When to use
+
+- Cleanup at the end of a workflow that created a display.
+- Recovering from an error — call kill in a finally block to ensure
+  the display does not leak.
+- Pruning a previously created display that is no longer needed.
+
+## When NOT to use
+
+- On a display the calling session did not create — the call will
+  return `not-owner` and have no effect.
+- On `:1` or any other display the agent did not create — the kill
+  surface refuses to touch displays that are not in the manager's
+  registry.
+
+## Example
+
+```jsonc
+{
+  "tool": "computer_kill_display",
+  "arguments": { "display": ":10" }
+}
+// → {"ok": true, "killed_apps_count": 1}
+```
+
+## See also
+
+- [DISPLAY-LIFECYCLE.md](../DISPLAY-LIFECYCLE.md) — cleanup discipline + try/finally pattern.
+- [create_display.md](create_display.md) — the call that establishes ownership.
+- [list_displays.md](list_displays.md) — discover `owner_session` for a display.
+
+---
+
+## Tool: launch_app_in_display
+
+# `computer_launch_app_in_display` — Spawn an app inside a nested display
+
+Launches an app with its DISPLAY environment variable scoped to the
+target nested display, registers the new pid in
+`luse:display:<display>:apps`, and returns the pid + resolved app
+name for the agent's record. The app catalog resolution path is
+shared with `computer_application` — LivOS WebApps and native
+catalog entries resolve first, with `spawn(app, args)` as the
+fallback for arbitrary binaries on PATH.
+
+## Inputs
+
+| Field     | Type              | Required | Notes                                                                  |
+| --------- | ----------------- | -------- | ---------------------------------------------------------------------- |
+| `display` | string            | yes      | The display id returned by `computer_create_display` (e.g. `":10"`).   |
+| `app`     | string            | yes      | App identifier — LivOS catalog slug, native app name, or binary name.  |
+| `args`    | string[]          | no       | Argument list passed through to the spawn call.                        |
+
+## Output
+
+On success:
+
+```json
+{ "pid": 12346, "app_name": "firefox", "display": ":10", "kind": "binary" }
+```
+
+`kind` discriminates the resolution path:
+
+- `"webapp"` — LivOS WebApp dispatched through windowManager IPC. The
+  `pid` field is the livinityd parent process pid (sentinel) per
+  Phase 248-02 D-248-02-B; the manager's processKillFn swallows
+  ESRCH on vanished sentinels.
+- `"native"` — LivOS native catalog entry resolved via
+  `livosAppResolver`. `pid` is the spawned process pid.
+- `"binary"` — Fallback `spawn(app, args)` on a binary found on PATH.
+  `pid` is the spawned process pid.
+
+On failure (display vanished, app spawn error):
+
+```json
+{ "ok": false, "error": "<reason>" }
+```
+
+surfaced via isError.
+
+## Behaviour
+
+1. Validate `display` against the regex `/^:[1-9][0-9]?$/`. Hostile
+   strings are dropped before any process.env mutation.
+2. Resolve `app` via the LivOS catalog. WebApp / native match → emit
+   `[luse-mcp] open_livos_app` IPC stderr line; binary fallback →
+   `spawn(app, args, {detached:true, stdio:'ignore'})` with the
+   scoped DISPLAY env.
+3. Call `displayManager.attachApp({display, pid, app_name: app})` so
+   the pid registers in `luse:display:<display>:apps` LIST and
+   surfaces in `computer_list_displays.running_apps`.
+4. Update the display's `last_app_at` Redis hash field with the
+   current ISO timestamp — refreshes the TTL GC idle clock.
+
+When `display` is omitted from the regex-validated set, the wrapper
+falls back to the default DISPLAY (typically `:1`) — same behaviour
+as `computer_application` without a `display` arg.
+
+## When to use
+
+- Launching apps inside a display you created via
+  `computer_create_display`.
+- Replacing an app inside an existing display — call kill_display
+  first if you want a fresh display, or just launch another app
+  into the same one for side-by-side testing.
+
+## When NOT to use
+
+- Launching apps on the operator's main desktop. Use
+  `computer_application` (no `display` arg).
+- Launching apps in a display owned by a different session — the
+  display owner cannot enforce isolation against you, but mixing
+  apps across owners makes cleanup ambiguous.
+
+## Example
+
+```jsonc
+// Native LivOS app inside a nested display
+{
+  "tool": "computer_launch_app_in_display",
+  "arguments": { "display": ":10", "app": "firefox" }
+}
+// → {"pid": 12346, "app_name": "firefox", "display": ":10", "kind": "native"}
+
+// Binary fallback with args
+{
+  "tool": "computer_launch_app_in_display",
+  "arguments": {
+    "display": ":12",
+    "app": "chromium",
+    "args": ["--kiosk", "https://example.com"]
+  }
+}
+// → {"pid": 12347, "app_name": "chromium", "display": ":12", "kind": "binary"}
+```
+
+## See also
+
+- [DISPLAY-LIFECYCLE.md](../DISPLAY-LIFECYCLE.md) — full create/launch/work/kill protocol.
+- [create_display.md](create_display.md) — the call that allocates the display.
+- [kill_display.md](kill_display.md) — cleanup that SIGTERMs every launched pid.
