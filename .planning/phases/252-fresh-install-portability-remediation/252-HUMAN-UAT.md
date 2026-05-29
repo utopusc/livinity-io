@@ -53,3 +53,14 @@ detail: install.sh emits `handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* { 
 ### G4 — install.sh inline MCP seed skips on self-bootstrap (252-adjacent)
 status: failed
 detail: Phase-109 inline seed can't find `scripts/install/seeds/mcp-servers.json` (not among the 9 self-bootstrapped helpers). deploy-livinityd's GitHub-raw seed is the backstop but runs post-build (never reached). Fix: bootstrap the seed file too, or rely solely on the deploy-livinityd GitHub-raw seed.
+
+## Resolution (2026-05-29, same session — live fix + reinstall on 154.53.56.75)
+
+Test 1 re-run after fixing the blockers. **The fresh `curl|bash` install now COMPLETES and the stack is live + publicly reachable** (`https://hello.livinity.io/` HTTP 200 via CF tunnel; livinityd `:8080` HTTP 200; all services active; 22 MCP servers; **luse `DISPLAY=:1` — WR-01 validated LIVE, not the placeholder**; terminal_panel=true; apt xephyr/xterm/wmctrl/xclip installed; caddy validates).
+
+Fixed in-repo + pushed (master): G1 pnpm overrides→workspace.yaml + lockfile regen (`cfa2d945`), G2 allowBuilds 5 pkgs (`cfa2d945`), G3 12 handle_path blocks (`cfa2d945`), G4 seed GitHub-raw fetch fallback (`cfa2d945`), G5 `find|head` `set -e` guard (`d16d41f1`, a 252-05-introduced bug), G6 @liv/core exclude test files (`1035ad33`).
+
+STILL requires 2 manual stopgaps for full seamlessness (NOT yet in-repo — follow-up phase):
+- **G7**: `chown -R bruce:bruce /opt/livos /opt/liv` (installer chowns to root by default; units run as bruce → CHDIR crash). Fix: default deploy owner to the desktop user.
+- **G8**: `mkdir -p /opt/nexus && chown bruce:bruce /opt/nexus` (liv/core still defaults runtime paths to legacy `/opt/nexus/*`). Fix: change `/opt/nexus`→`/opt/liv` defaults in liv/packages/core/src/{logger,index,daemon,shell,subagent-manager}.ts.
+- Minor: chown `/var/lib/livos` to bruce (pending-redis-keys drain EACCES, non-fatal).
