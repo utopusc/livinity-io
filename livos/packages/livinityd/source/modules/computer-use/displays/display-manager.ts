@@ -227,6 +227,35 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 			stdio: 'ignore',
 			detached: false,
 		}) as SpawnHandle
+
+		// R3 (251-02 rec C): a missing X binary (Xephyr/Xvfb) makes node-pty/
+		// child_process emit 'error' (ENOENT). Latch it synchronously so we fail
+		// closed — do NOT HSET the display key, do NOT report a pid, return
+		// isError:true.
+		let spawnError: Error | null = null
+		if (typeof handle.on === 'function') {
+			handle.on('error', (err: Error) => {
+				spawnError = err
+			})
+		}
+		// Yield one microtask so a synchronous ENOENT 'error' is observed before
+		// we commit state.
+		await Promise.resolve()
+		if (spawnError !== null) {
+			logger.warn?.('display-manager: spawn failed — display not created', {
+				display,
+				mode,
+				cmd,
+				error: (spawnError as Error).message,
+			})
+			return {
+				display,
+				name,
+				pid: -1,
+				isError: true,
+				error: `display spawn failed (${cmd}): ${(spawnError as Error).message}`,
+			}
+		}
 		handles.set(display, handle)
 
 		await redis.hset(redisKeyForDisplay(display), {
@@ -249,6 +278,7 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 			display,
 			name,
 			pid: handle.pid ?? -1,
+			isError: false,
 		}
 	}
 

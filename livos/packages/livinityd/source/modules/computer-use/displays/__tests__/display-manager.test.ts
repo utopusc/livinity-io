@@ -350,6 +350,63 @@ describe('display-manager — attachApp', () => {
 	})
 })
 
+// ----------------------------------------------------------------------------
+// R3 (Phase 252-01) — fail-closed on spawn ENOENT (missing X binary).
+// A spawn handle whose on('error', cb) fires synchronously simulates the
+// node child_process ENOENT path when Xephyr/Xvfb is absent.
+// ----------------------------------------------------------------------------
+
+function makeErrorSpawnFn(errMessage = "spawn Xephyr ENOENT") {
+	const calls: Array<{cmd: string; args: string[]}> = []
+	const spawnFn = vi.fn((cmd: string, args: string[], _opts?: unknown) => {
+		calls.push({cmd, args})
+		const handle = {
+			pid: undefined as number | undefined,
+			kill: vi.fn().mockReturnValue(true),
+			on(event: 'error', listener: (err: Error) => void) {
+				if (event === 'error') {
+					// Fire synchronously — node emits ENOENT on next tick, but a
+					// synchronous emit is the strictest test of the latch.
+					listener(new Error(errMessage))
+				}
+			},
+		}
+		return handle as any
+	})
+	return {spawnFn, calls}
+}
+
+describe('display-manager — fail-closed on spawn error (R3)', () => {
+	it('Test 1: spawn ENOENT → isError:true and NO luse:display key written', async () => {
+		const errHarness = makeErrorSpawnFn()
+		const mgr = createDisplayManager({
+			redis: redis as any,
+			spawnFn: errHarness.spawnFn as any,
+			nowFn,
+			allocatorStart: 10,
+		} as any)
+		if (typeof (mgr as any).initialized === 'object') {
+			await (mgr as any).initialized
+		}
+		const out = await mgr.create({mode: 'xephyr', ownerSession: 's1'})
+		expect(out.isError).toBe(true)
+		expect(out.error).toBeTruthy()
+		// No Redis display key written — fail closed.
+		const scanned = await redis.scan('0', 'MATCH', 'luse:display:*', 'COUNT', 100)
+		expect(scanned[1].length).toBe(0)
+	})
+
+	it('Test 2: happy path → isError:false and Redis key IS written', async () => {
+		const mgr = await makeMgr()
+		const out = await mgr.create({mode: 'xephyr', ownerSession: 's1'})
+		expect(out.isError).toBe(false)
+		expect(out.display).toBe(':10')
+		expect(typeof out.pid).toBe('number')
+		const hash = await redis.hgetall(redisKeyForDisplay(':10'))
+		expect(hash.owner_session).toBe('s1')
+	})
+})
+
 // Confirm DisplayMode union is exported and includes both modes.
 describe('types', () => {
 	it('exposes DisplayMode union with xephyr and xvfb', () => {

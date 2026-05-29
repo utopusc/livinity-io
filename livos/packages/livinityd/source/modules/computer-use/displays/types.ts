@@ -44,6 +44,10 @@ export interface CreateDisplayResult {
 	display: string
 	name: string
 	pid: number
+	/** R3 (Phase 252-01): true when the X server spawn failed (e.g. ENOENT). */
+	isError?: boolean
+	/** Human-readable spawn failure message when isError is true. */
+	error?: string
 }
 
 export type KillDisplayResult =
@@ -88,6 +92,8 @@ export interface DisplayRedisClient {
 export interface SpawnHandle {
 	pid: number | undefined
 	kill(signal?: NodeJS.Signals | number): boolean
+	/** R3 (Phase 252-01): attach an error listener to fail closed on ENOENT. */
+	on?(event: 'error', listener: (err: Error) => void): void
 }
 
 export type DisplaySpawnFn = (
