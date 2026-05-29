@@ -60,6 +60,13 @@ import {
 // calls the resolver BEFORE openOrFocus so LivOS apps (n8n, libreoffice, etc.)
 // dispatch through windowManager IPC instead of the classic Bytebot APP_MAP.
 import type {LivosAppResolver} from '../native/window.js'
+// Phase 248-02 — display lifecycle manager surface. When `displayManager` is
+// passed to buildHandlers via LuseToolsOptions, the 4 new display-lifecycle
+// tool handlers (computer_create_display / computer_list_displays /
+// computer_kill_display / computer_launch_app_in_display) become active.
+// When omitted, those handlers return "Error: displayManager not wired"
+// (same fail-closed pattern as streamManager from P100-10-04).
+import type {DisplayManager, DisplayMode} from '../displays/index.js'
 // Phase 201 restore: skill-replay-tool was removed in 782ee4a3 along with the
 // rest of computer-use/. The webapp_replay_skill handler below now returns a
 // permanent error stub — Auto-mode skill replay is Phase 100 carry-over not
@@ -214,6 +221,21 @@ export interface LuseToolsOptions {
 	 * straight to APP_MAP).
 	 */
 	livosAppResolver?: LivosAppResolver
+	/**
+	 * Phase 248-02 — display-lifecycle manager surface (Phase 248-01 module).
+	 * When set, the 4 new display-lifecycle tools are wired into the handler
+	 * map (computer_create_display / computer_list_displays / computer_kill_display
+	 * / computer_launch_app_in_display). When omitted, those handlers return
+	 * an "Error: displayManager not wired" envelope (fail-closed — same
+	 * pattern as `streamManager` from P100-10-04).
+	 *
+	 * Owner-session enforcement (D-V44-DISPLAY-OWNER-SCOPED) lives at the
+	 * manager layer; this MCP wrapper just passes `options.userId` as the
+	 * `ownerSession` (for create) / `callerSession` (for kill) and surfaces
+	 * the manager's `{ok:false, error:'not-owner'}` response as
+	 * `isError:true` with a helpful text block.
+	 */
+	displayManager?: DisplayManager
 }
 
 /**
@@ -792,51 +814,58 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 			}
 		}
 
-		// Phase 160-03 — LivOS resolver FIRST. The resolver is injected via
-		// registerLuseTools options so a test harness can mock it; production
-		// path gets the default resolver wired from livinityd's trpc context.
-		// On match, the handler emits a structured `open_livos_app` line on
-		// stderr — the parent livinityd parses it and drives windowManager.
-		// On miss (or no resolver wired), fall through to the classic
-		// openOrFocus / APP_MAP Bytebot binary spawn path.
-		if (options.livosAppResolver) {
-			try {
-				const match = await options.livosAppResolver(application)
-				if (match) {
-					// Phase 160-03 — IPC line consumed by parent livinityd.
-					// Single-line stderr write keeps the parsing trivial; the
-					// agent loop's settle screenshot follows via withPostScreenshot.
+		// Phase 248-02 — optional `display:":N"` arg. parseDisplayArg
+		// regex-validates against /^:[1-9][0-9]?$/ so a hostile string can't
+		// poison process.env.DISPLAY. When set, withScopedDisplay swaps DISPLAY
+		// for the duration of the app spawn and restores it on return.
+		const displayArg = parseDisplayArg(args)
+		return withScopedDisplay(displayArg, options.defaultDisplay, async () => {
+			// Phase 160-03 — LivOS resolver FIRST. The resolver is injected via
+			// registerLuseTools options so a test harness can mock it; production
+			// path gets the default resolver wired from livinityd's trpc context.
+			// On match, the handler emits a structured `open_livos_app` line on
+			// stderr — the parent livinityd parses it and drives windowManager.
+			// On miss (or no resolver wired), fall through to the classic
+			// openOrFocus / APP_MAP Bytebot binary spawn path.
+			if (options.livosAppResolver) {
+				try {
+					const match = await options.livosAppResolver(application)
+					if (match) {
+						// Phase 160-03 — IPC line consumed by parent livinityd.
+						// Single-line stderr write keeps the parsing trivial; the
+						// agent loop's settle screenshot follows via withPostScreenshot.
+						process.stderr.write(
+							`[luse-mcp] open_livos_app kind=${match.kind} appId=${match.appId} route=${match.route}\n`,
+						)
+						return withPostScreenshot(
+							`application → ${application} (LivOS ${match.kind})${displayArg ? ` display=${displayArg}` : ''}`,
+							async () => {
+								/* settle — windowManager.openWindow happens in parent process */
+							},
+						)
+					}
+				} catch (err) {
 					process.stderr.write(
-						`[luse-mcp] open_livos_app kind=${match.kind} appId=${match.appId} route=${match.route}\n`,
-					)
-					return withPostScreenshot(
-						`application → ${application} (LivOS ${match.kind})`,
-						async () => {
-							/* settle — windowManager.openWindow happens in parent process */
-						},
+						`[luse-mcp] livosAppResolver error: ${(err as Error).message}; falling through to APP_MAP\n`,
 					)
 				}
-			} catch (err) {
-				process.stderr.write(
-					`[luse-mcp] livosAppResolver error: ${(err as Error).message}; falling through to APP_MAP\n`,
-				)
 			}
-		}
 
-		// Fallback: classic Bytebot APP_MAP path (firefox/thunderbird/vscode/etc).
-		const result = await openOrFocus(application as never)
-		if (result.isError) {
-			return {
-				content: [{type: 'text', text: result.message ?? 'application launch failed'}],
-				isError: true,
+			// Fallback: classic Bytebot APP_MAP path (firefox/thunderbird/vscode/etc).
+			const result = await openOrFocus(application as never)
+			if (result.isError) {
+				return {
+					content: [{type: 'text', text: result.message ?? 'application launch failed'}],
+					isError: true,
+				}
 			}
-		}
-		return withPostScreenshot(
-			`application → ${application}`,
-			async () => {
-				// The action already happened inside openOrFocus; we just settle + shot.
-			},
-		)
+			return withPostScreenshot(
+				`application → ${application}${displayArg ? ` display=${displayArg}` : ''}`,
+				async () => {
+					// The action already happened inside openOrFocus; we just settle + shot.
+				},
+			)
+		})
 	},
 
 	// ── File read ────────────────────────────────────────────────────────────
@@ -974,6 +1003,201 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 			],
 			isError: true,
 		}
+	},
+
+	// ── Phase 248-02 — Display lifecycle (D-V44-DISPLAY-XEPHYR-DEFAULT,
+	//                                     D-V44-DISPLAY-OWNER-SCOPED) ───────
+	//
+	// Wires the 4 display-lifecycle tools to options.displayManager
+	// (Phase 248-01 backend). ownerSession (create) / callerSession (kill)
+	// come from options.userId — the MCP child's per-connection session
+	// identity, populated from LUSE_USER_ID env in mcp/server.ts and
+	// defaulting to 'admin' for the host-display single-tenant case.
+	//
+	// When options.displayManager is omitted (no Redis OR test stub did not
+	// inject one), every handler returns "Error: displayManager not wired"
+	// with isError:true — same fail-closed semantics as streamManager.
+
+	computer_create_display: async (args) => {
+		if (!options.displayManager) {
+			return {
+				content: [{type: 'text', text: 'Error: displayManager not wired (no Redis client at MCP boot)'}],
+				isError: true,
+			}
+		}
+		const mode = typeof args.mode === 'string' ? (args.mode as DisplayMode) : undefined
+		const name = typeof args.name === 'string' ? args.name : undefined
+		const width = typeof args.width === 'number' ? args.width : undefined
+		const height = typeof args.height === 'number' ? args.height : undefined
+		const result = await options.displayManager.create({
+			mode,
+			name,
+			width,
+			height,
+			ownerSession: options.userId ?? 'admin',
+		})
+		return {
+			content: [{type: 'text', text: JSON.stringify(result)}],
+			isError: false,
+		}
+	},
+
+	computer_list_displays: async () => {
+		if (!options.displayManager) {
+			return {
+				content: [{type: 'text', text: 'Error: displayManager not wired (no Redis client at MCP boot)'}],
+				isError: true,
+			}
+		}
+		const records = await options.displayManager.list()
+		return {
+			content: [{type: 'text', text: JSON.stringify(records)}],
+			isError: false,
+		}
+	},
+
+	computer_kill_display: async (args) => {
+		if (!options.displayManager) {
+			return {
+				content: [{type: 'text', text: 'Error: displayManager not wired (no Redis client at MCP boot)'}],
+				isError: true,
+			}
+		}
+		const display = typeof args.display === 'string' ? args.display : ''
+		if (!display) {
+			return {
+				content: [{type: 'text', text: 'Error: display is required (e.g. ":12")'}],
+				isError: true,
+			}
+		}
+		const result = await options.displayManager.kill({
+			display,
+			callerSession: options.userId ?? 'admin',
+		})
+		if (!result.ok) {
+			// D-V44-DISPLAY-OWNER-SCOPED — surface manager's discriminated-union
+			// denial as an MCP-layer error envelope. The display is NOT killed;
+			// the X server + Redis state remain intact (the manager guarantees
+			// this before this branch runs).
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `Error: ${result.error} — only the session that called computer_create_display can kill this display (D-V44-DISPLAY-OWNER-SCOPED)`,
+					},
+				],
+				isError: true,
+			}
+		}
+		return {
+			content: [{type: 'text', text: JSON.stringify(result)}],
+			isError: false,
+		}
+	},
+
+	computer_launch_app_in_display: async (args) => {
+		if (!options.displayManager) {
+			return {
+				content: [{type: 'text', text: 'Error: displayManager not wired (no Redis client at MCP boot)'}],
+				isError: true,
+			}
+		}
+		const display = typeof args.display === 'string' ? args.display : ''
+		const app = typeof args.app === 'string' ? args.app : ''
+		if (!display || !app) {
+			return {
+				content: [{type: 'text', text: 'Error: display and app are required'}],
+				isError: true,
+			}
+		}
+		const extraArgs = Array.isArray(args.args)
+			? (args.args as unknown[]).filter((a): a is string => typeof a === 'string')
+			: []
+
+		// Validate the display arg the same way every other X11-touching tool
+		// does (parseDisplayArg + withScopedDisplay) so a hostile string can't
+		// inject into process.env.DISPLAY. parseDisplayArg returns undefined
+		// for any non-matching string → withScopedDisplay falls back to the
+		// defaultDisplay, which is the existing safe behavior.
+		const displayArg = parseDisplayArg({display})
+
+		return withScopedDisplay(displayArg, options.defaultDisplay, async () => {
+			// Phase 160-03 LivOS resolver path. On WebApp/native match we emit
+			// the structured IPC line for parent livinityd to drive windowManager
+			// (same as computer_application). The spawn pid for app-attach
+			// purposes comes from a child_process.spawn of the app binary —
+			// for WebApp matches there is no binary to spawn so we still need
+			// SOMETHING to register with attachApp. The fallback is the current
+			// MCP child's pid (process.pid) — a documented sentinel that
+			// computer_kill_display's SIGTERM loop will gracefully no-op on
+			// because parseDisplayNumber + the manager's processKillFn swallow
+			// ESRCH for vanished pids. This keeps the running_apps list
+			// observable in computer_list_displays for UAT clarity.
+			let pid = process.pid
+			let matched: 'webapp' | 'native' | null = null
+			if (options.livosAppResolver) {
+				try {
+					const match = await options.livosAppResolver(app)
+					if (match) {
+						matched = match.kind
+						process.stderr.write(
+							`[luse-mcp] open_livos_app kind=${match.kind} appId=${match.appId} route=${match.route} display=${displayArg ?? '(default)'}\n`,
+						)
+					}
+				} catch (err) {
+					process.stderr.write(
+						`[luse-mcp] livosAppResolver error in launch_app_in_display: ${(err as Error).message}; falling through to APP_MAP\n`,
+					)
+				}
+			}
+
+			// If no LivOS match, spawn the binary directly with the current
+			// (already-scoped) DISPLAY env so the window opens on the nested X.
+			// Detached so it survives this handler's return; unref'd so node
+			// doesn't keep the child as a parent dep.
+			if (matched === null) {
+				try {
+					const child = spawn(app, extraArgs, {
+						env: process.env,
+						detached: true,
+						stdio: 'ignore',
+					})
+					child.unref()
+					if (typeof child.pid === 'number') {
+						pid = child.pid
+					}
+				} catch (err) {
+					return {
+						content: [
+							{
+								type: 'text',
+								text: `Error: failed to spawn app "${app}": ${(err as Error).message}`,
+							},
+						],
+						isError: true,
+					}
+				}
+			}
+
+			// Register the spawn (or sentinel pid for WebApp matches) with the
+			// display so computer_list_displays.running_apps reflects it and
+			// computer_kill_display can SIGTERM it on cleanup.
+			await options.displayManager!.attachApp({
+				display,
+				pid,
+				app_name: app,
+			})
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: JSON.stringify({pid, app_name: app, display, kind: matched ?? 'binary'}),
+					},
+				],
+				isError: false,
+			}
+		})
 	},
 	}
 }
