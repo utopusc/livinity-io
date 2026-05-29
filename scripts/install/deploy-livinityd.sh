@@ -1072,8 +1072,20 @@ _dld_seed_mcp_servers() {
         fi
     done
     if [[ -z "$seed_file" ]]; then
-        info "Seed file not found in any candidate path — skipping MCP seed (forward-compat)"
-        return 0
+        # Phase 252 (UAT G4): on a `curl | bash` self-bootstrap install the
+        # seed file is NOT among the downloaded helpers, so both local candidates
+        # miss. Fetch it from GitHub-raw (mirrors livos/install.sh:seed_mcp_servers)
+        # so a fresh install still seeds liv:mcp:config instead of silently skipping.
+        local _seed_raw_url="https://raw.githubusercontent.com/utopusc/livinity-io/master/scripts/install/seeds/mcp-servers.json"
+        local _seed_tmp
+        _seed_tmp="$(mktemp -t mcp-servers-XXXXXX.json 2>/dev/null)" || _seed_tmp="/tmp/mcp-servers.$$.json"
+        if command -v curl >/dev/null 2>&1 && curl -fsSL "$_seed_raw_url" -o "$_seed_tmp" 2>/dev/null && [[ -s "$_seed_tmp" ]]; then
+            seed_file="$_seed_tmp"
+            info "Seed file fetched from GitHub-raw (self-bootstrap fallback): $seed_file"
+        else
+            info "Seed file not found locally and GitHub-raw fetch failed — skipping MCP seed (forward-compat)"
+            return 0
+        fi
     fi
 
     # Read REDIS_URL from .env (already written by _dld_write_env_file).
@@ -1733,11 +1745,15 @@ _dld_update_caddy_to_livinityd() {
     handle /openclawos/handshake {
         reverse_proxy 127.0.0.1:8080
     }
-    handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* {
+    @livai path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*
+    handle @livai {
+        uri strip_prefix /liv-ai-app/liv-ai
         rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
     }
-    handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
+    @livaiopenclaw path /liv-ai-app/openclawos /liv-ai-app/openclawos/*
+    handle @livaiopenclaw {
+        uri strip_prefix /liv-ai-app/openclawos
         rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
     }
@@ -1769,11 +1785,15 @@ import /etc/caddy/pki-global.conf
     handle /openclawos/handshake {
         reverse_proxy 127.0.0.1:8080
     }
-    handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* {
+    @livai path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*
+    handle @livai {
+        uri strip_prefix /liv-ai-app/liv-ai
         rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
     }
-    handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
+    @livaiopenclaw path /liv-ai-app/openclawos /liv-ai-app/openclawos/*
+    handle @livaiopenclaw {
+        uri strip_prefix /liv-ai-app/openclawos
         rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
     }
@@ -1798,11 +1818,15 @@ CADDYFILE
     handle /openclawos/handshake {
         reverse_proxy 127.0.0.1:8080
     }
-    handle_path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/* {
+    @livai path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*
+    handle @livai {
+        uri strip_prefix /liv-ai-app/liv-ai
         rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
     }
-    handle_path /liv-ai-app/openclawos /liv-ai-app/openclawos/* {
+    @livaiopenclaw path /liv-ai-app/openclawos /liv-ai-app/openclawos/*
+    handle @livaiopenclaw {
+        uri strip_prefix /liv-ai-app/openclawos
         rewrite * /plugins/openclawos{path}
         reverse_proxy 127.0.0.1:18789
     }
