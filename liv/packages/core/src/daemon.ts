@@ -41,7 +41,7 @@ import type { CanvasArtifact } from './canvas-manager.js';
 import { CapabilityRegistry } from './capability-registry.js';
 import type { CapabilityManifest } from './capability-registry.js';
 
-const NEXUS_LOGS_DIR = process.env.LIV_LOGS_DIR || '/opt/nexus/logs';
+const NEXUS_LOGS_DIR = process.env.LIV_LOGS_DIR || '/opt/liv/logs';
 
 const SELF_IMPROVEMENT_TASK = `You are the Self-Improvement Agent. Your job is to identify and fill capability gaps in Nexus.
 
