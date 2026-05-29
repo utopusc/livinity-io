@@ -4436,4 +4436,14 @@ Then revert `fix(232-02)` to re-enable the `replace` directive. Adds ~30 MB bina
 - Port 3020 may collide with an existing service — installer should `ss -tlnp \| grep ':3020 '` and abort with a clear message if collision detected.
 - First-boot password line race — journald may not have the line yet when `capture-liv-assistant-password.sh` runs; the script must tolerate this and the deploy step retries.
 
+### Phase 252: Fresh-Install Portability Remediation
+
+**Goal:** Close the fresh-install portability gaps found by the Phase 251 audit so a clean `get.livinity.io` install brings up the full Luse + terminal stack with no manual steps. Scope is the ready-made backlog at `.planning/phases/251-fresh-install-portability-audit/REMEDIATION-BACKLOG.md` (16 items R1–R16, file:line + effort + kind, P0/P1/P2, with 5-wave sequencing). The 5 P0 blockers gate the go/no-go: R1 install `xserver-xephyr`, R2 install `xterm`, R3 `child.on('error')` in display-manager `create()` (kills the false-positive-success class), R4 PTY user runtime lookup (drop the `bruce` triple-pin), R8 drop the PTY self-`sudo` (recommended — also collapses R4's argv layer), R9 pin `get.livinity.io` → install Path A. Then P1 env/seed hardening (R5–R7, R10–R12) and P2 hygiene (R13–R16).
+**Requirements**: PORT-251 backlog R1–R16 (see REMEDIATION-BACKLOG.md)
+**Depends on:** Phase 251 (audit findings)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 252 to break down)
+
 ---
