@@ -30,8 +30,8 @@ result: [pending]
 ## Summary
 
 total: 2
-passed: 0
-issues: 1
+passed: 1
+issues: 0
 pending: 1
 skipped: 0
 blocked: 0
@@ -64,3 +64,7 @@ STILL requires 2 manual stopgaps for full seamlessness (NOT yet in-repo — foll
 - **G7**: `chown -R bruce:bruce /opt/livos /opt/liv` (installer chowns to root by default; units run as bruce → CHDIR crash). Fix: default deploy owner to the desktop user.
 - **G8**: `mkdir -p /opt/nexus && chown bruce:bruce /opt/nexus` (liv/core still defaults runtime paths to legacy `/opt/nexus/*`). Fix: change `/opt/nexus`→`/opt/liv` defaults in liv/packages/core/src/{logger,index,daemon,shell,subagent-manager}.ts.
 - Minor: chown `/var/lib/livos` to bruce (pending-redis-keys drain EACCES, non-fatal).
+
+## FINAL (attempt 6, from-scratch, ZERO manual steps) — Test 1 PASS
+
+After fixing all 9 blockers (G1-G9, pushed to master), a from-scratch wipe + `curl|bash` install came up SEAMLESSLY: 0 install failures; all 6 services active with 0 restarts (livos, liv-core, liv-worker, liv-memory, caddy, cloudflared); `/opt/{livos,liv}` auto-owned by bruce; no `/opt/nexus`; local `:8080` + public `https://hello.livinity.io/` both HTTP 200; `liv:mcp:config` = 22 servers with luse `DISPLAY=:1` (WR-01 live). Fixes beyond G1-G4: G5 `find|head` set-e guard (`d16d41f1`), G6 @liv/core test-exclude (`1035ad33`), G7 deploy-owner=bruce + /var/lib/livos chown (`5d3f7a78`), G8 liv/core /opt/nexus->/opt/liv (`5d3f7a78`), G9 liv worker/memory/cli/mcp-server /opt/nexus->/opt/liv (`41aa2e97`).
