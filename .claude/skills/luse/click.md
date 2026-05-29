@@ -1,4 +1,4 @@
-<!-- source-sha: ae44c01535a6dec5aaa2d52cc71ce4b9e5f4bae18a4715d3992af6466fcf400d -->
+<!-- source-sha: 775ad2ad9c3f5f540b799461795a3b061d9b4789283bd70f407e9e1d7cfb15da -->
 <!-- AUTO-GENERATED FROM docs/luse/tools/click.md — DO NOT EDIT. -->
 
 # `click` — Mouse click at coordinates
@@ -47,3 +47,9 @@ On failure:
   "arguments": { "x": 120, "y": 340 }
 }
 ```
+
+## See also
+
+- [PATTERNS.md#pattern-2-landmark-anchored-clicks-not-pixel-coords](../PATTERNS.md#pattern-2-landmark-anchored-clicks-not-pixel-coords)
+- [PATTERNS.md#pattern-3-retry-with-screenshot-verify-cap-3-attempts](../PATTERNS.md#pattern-3-retry-with-screenshot-verify-cap-3-attempts)
+- [ANTI-PATTERNS.md#anti-pattern-1-brittle-pixel-coords-without-screenshot-verify](../ANTI-PATTERNS.md#anti-pattern-1-brittle-pixel-coords-without-screenshot-verify)
