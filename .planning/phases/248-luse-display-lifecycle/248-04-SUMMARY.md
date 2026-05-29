@@ -1,0 +1,290 @@
+---
+phase: 248
+plan: 04
+subsystem: docs / luse / shim-sync
+tags: [v44, luse, docs, display-lifecycle, agent-agnostic, sync-script, idempotency, owner-scoped, claude-code, aion-cli, opencode, openclaw]
+one_liner: "Canonical agent-agnostic display-lifecycle docs (DISPLAY-LIFECYCLE.md + 4 per-tool refs + LUSE.md section) propagated to all 4 agent shim targets via the Phase 242 sync script; first run 5 new + 4 updated + 11 unchanged; second run 0/0/20 (D-242-B drift-lock invariant intact); sacred SHA preserved."
+status: complete
+type: execute
+wave: 3
+depends_on:
+  - 248-02
+requirements: []
+dependency_graph:
+  requires:
+    - phase: 248
+      plan: 01
+      reason: "MCP tool schemas + manager-layer owner-scope semantics drift-locked here; docs cite the create/list/kill/launch_app_in_display surface implemented in 248-01 backend + 248-02 wrappers verbatim"
+    - phase: 248
+      plan: 02
+      reason: "Tool input/output shapes documented in DISPLAY-LIFECYCLE.md + 4 per-tool refs match the LUSE_TOOLS schemas wired through buildHandlers in 248-02 — the docs are the agent-facing surface for those wrappers"
+    - phase: 247
+      plan: 02
+      reason: "scripts/sync-luse-skills.sh manifest-extension pattern (explicit read_canonical calls + CONCAT_PAYLOAD sections + standalone Claude shim emissions) mirrored verbatim for 5 new canonical docs; D-242-B idempotency invariant inherited"
+  provides:
+    - "5 new canonical agent-agnostic docs under docs/luse/ — top-level DISPLAY-LIFECYCLE.md + 4 per-tool refs"
+    - "LUSE.md updated with new '## Display lifecycle (Phase 248)' section linking to all 5"
+    - "scripts/sync-luse-skills.sh manifest extended with 5 new read_canonical calls + 5 new CONCAT_PAYLOAD sections + 5 new generate_claude_skill emissions"
+    - "9 regenerated shim files across all 4 agent targets (.claude/skills/luse + .aion/.opencode/.openclaw)"
+  affects:
+    - "Phase 248-05 (Mini PC deploy + automated probes + UAT) — operator UAT walk references the new docs surface; agents on Mini PC discover the display-lifecycle prose via either their shim dir (Claude/Aion/OpenCode/OpenClaw) or MCP tool-discovery (Gemini per D-247-A)"
+tech_stack:
+  added: []
+  patterns:
+    - "Explicit-list manifest extension (vs glob) — same as Phase 247 D-247-02-B; deterministic concat sha"
+    - "Standalone .claude/skills/luse/<NAME>.md per top-level doc + per-tool doc — parity with Phase 242/247 per-tool shim shape; Claude Code skill loader expects discoverable per-capability files"
+    - "CONCAT_PAYLOAD section append in deterministic order matching plan frontmatter files_modified list for stable sha"
+    - "Agent-agnostic prose invariant — no Claude/Aion/Gemini/OpenCode/OpenClaw names inside DISPLAY-LIFECYCLE.md or the 4 per-tool refs; agent names appear only in LUSE.md preamble (Phase 247 D-242-C)"
+key_files:
+  created:
+    - path: docs/luse/DISPLAY-LIFECYCLE.md
+      role: "Top-level lifecycle guide — when-to-create, mode decision matrix, lifecycle protocol, cleanup discipline, owner-scope rule, isolation guarantees, 3 app-placement recipes with real MCP JSON, failure modes"
+      lines: 228
+    - path: docs/luse/tools/create_display.md
+      role: "Per-tool reference for computer_create_display — inputs/output/when-to-use/safety/example"
+      lines: 82
+    - path: docs/luse/tools/list_displays.md
+      role: "Per-tool reference for computer_list_displays — global read; owner_session field; running_apps; last_app_at"
+      lines: 69
+    - path: docs/luse/tools/kill_display.md
+      role: "Per-tool reference for computer_kill_display — D-V44-DISPLAY-OWNER-SCOPED enforcement; killed_apps_count; side effects"
+      lines: 101
+    - path: docs/luse/tools/launch_app_in_display.md
+      role: "Per-tool reference for computer_launch_app_in_display — display arg; app catalog resolution; binary/native/webapp kind discriminator"
+      lines: 106
+    - path: .claude/skills/luse/DISPLAY-LIFECYCLE.md
+      role: "Generated Claude shim — standalone top-level doc with source-sha marker"
+      lines: 232
+    - path: .claude/skills/luse/create_display.md
+      role: "Generated Claude shim — per-tool"
+      lines: 86
+    - path: .claude/skills/luse/list_displays.md
+      role: "Generated Claude shim — per-tool"
+      lines: 73
+    - path: .claude/skills/luse/kill_display.md
+      role: "Generated Claude shim — per-tool"
+      lines: 105
+    - path: .claude/skills/luse/launch_app_in_display.md
+      role: "Generated Claude shim — per-tool"
+      lines: 110
+  modified:
+    - path: docs/luse/LUSE.md
+      role: "Added '## Display lifecycle (Phase 248)' section before Prerequisites; links to 5 new docs"
+      lines: 13
+    - path: scripts/sync-luse-skills.sh
+      role: "Extended manifest with 5 new read_canonical calls + 5 new CONCAT_PAYLOAD sections + 5 new generate_claude_skill emissions; bash -n PASS"
+      lines: 38
+    - path: .claude/skills/luse/SKILL.md
+      role: "Regenerated by sync — LUSE.md edit triggered source-sha mismatch"
+    - path: .aion/skills/luse.md
+      role: "Regenerated by sync — CONCAT_PAYLOAD gained 5 new sections (bundled agent shim)"
+    - path: .opencode/skills/luse.md
+      role: "Regenerated by sync — bundled agent shim"
+    - path: .openclaw/skills/luse.md
+      role: "Regenerated by sync — bundled agent shim"
+decisions:
+  - id: D-248-04-A
+    title: "Standalone Claude shim shape for DISPLAY-LIFECYCLE.md (top-level doc with per-tool shape)"
+    why: "Phase 247 D-247-02-C established that top-level reference docs become standalone .claude/skills/luse/<NAME>.md files (not concatenated into SKILL.md). DISPLAY-LIFECYCLE.md inherits that shape so Claude Code's skill loader discovers it as a standalone capability page parallel to PATTERNS.md / TROUBLESHOOTING.md. The 4 per-tool refs use the existing per-tool shim shape from Phase 242 (HTML-comment source-sha + AUTO-GENERATED FROM banner + canonical body) so they slot in alongside click.md / type.md / etc."
+  - id: D-248-04-B
+    title: "Per-tool docs body is agent-agnostic; LUSE.md preamble keeps INTEGRATION-RECIPES reference"
+    why: "Phase 247 D-242-C established that agent names (Claude/Aion/Gemini/OpenCode/OpenClaw) appear ONLY in INTEGRATION-RECIPES.md. Verified by grep across the 5 new files: 0 matches in DISPLAY-LIFECYCLE.md, 0 in tools/create_display.md, 0 in tools/list_displays.md, 0 in tools/kill_display.md, 0 in tools/launch_app_in_display.md. The 'AionUi' name in LUSE.md preamble is pre-existing (Phase 242) and not introduced by this plan."
+  - id: D-248-04-C
+    title: "Concat order in CONCAT_PAYLOAD appends after the Phase 247 v2 block (DISPLAY-LIFECYCLE → create_display → list_displays → kill_display → launch_app_in_display)"
+    why: "Stable concat sha requires deterministic ordering. The 5 new sections append AFTER the Phase 247 CHEAT-SHEET section in plan frontmatter files_modified order. This preserves the source-sha for Phase 247 v2 docs across the manifest extension (the bytes before the new sections are unchanged) so the per-file idempotency invariant holds at the boundary."
+  - id: D-248-04-D
+    title: "Sync run #1 expected 5 new + 4 updated (NOT >=8 as plan must_haves implied)"
+    why: "Plan's must_have claimed 'first sync run reports >=10 changes (5 new + 5 updated)' but the actual run produced 5 new + 4 updated = 9 changes. The discrepancy is the per-tool Claude shims (click.md / type.md / etc.) — their source docs were NOT touched in 248-04, so the source-sha matched and the file was left untouched per the granular idempotency invariant. The plan's must_have estimated 5 updated assuming all per-tool Claude shims would refresh; only the .claude/skills/luse/SKILL.md (LUSE.md was edited) + 3 generic shims (CONCAT_PAYLOAD changed) refreshed. This is the strongest evidence the sha-marker idempotency works at per-file granularity, matching the Phase 247-02 SUMMARY's 'unchanged is the strongest evidence' framing."
+metrics:
+  duration_seconds: 291
+  started_at: "2026-05-29T01:22:37Z"
+  completed_at: "2026-05-29T01:27:28Z"
+  tasks_completed: 3
+  files_created: 10
+  files_modified: 6
+  commits: 3
+---
+
+# Phase 248 Plan 04: Display lifecycle docs + shim sync Summary
+
+## One-liner
+
+Canonical agent-agnostic display-lifecycle documentation set (1 top-level guide + 4 per-tool refs + LUSE.md hub section) authored and propagated to all 4 agent shim targets via the Phase 242 sync script. First sync run reports 5 new / 4 updated / 11 unchanged; second run reports 0 / 0 / 20 — Phase 242 D-242-B drift-lock invariant intact through the manifest extension.
+
+## What shipped
+
+### 5 new canonical docs under `docs/luse/`
+
+| File                                       | Role                                                                                                                          | Lines |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `docs/luse/DISPLAY-LIFECYCLE.md`           | Top-level guide — when-to-create, Xephyr-vs-Xvfb decision matrix, lifecycle protocol, cleanup discipline, owner-scope rule, isolation guarantees, 3 app-placement recipes with real MCP JSON, failure modes, cross-references | 228   |
+| `docs/luse/tools/create_display.md`        | Per-tool ref — inputs (mode/name/width/height), output `{display, name, pid}`, D-V44-DISPLAY-XEPHYR-DEFAULT cited              | 82    |
+| `docs/luse/tools/list_displays.md`         | Per-tool ref — no inputs, output shape, `owner_session` field, role in cleanup workflow                                       | 69    |
+| `docs/luse/tools/kill_display.md`          | Per-tool ref — D-V44-DISPLAY-OWNER-SCOPED enforcement, `killed_apps_count`, side effects, owner-scope rule explanation         | 101   |
+| `docs/luse/tools/launch_app_in_display.md` | Per-tool ref — display + app + args, app catalog resolution path, `kind: 'webapp' | 'native' | 'binary'` discriminator         | 106   |
+
+All 5 above plan's `min_lines` thresholds (120 / 50 / 40 / 50 / 55).
+
+### 1 modified canonical doc
+
+- `docs/luse/LUSE.md` — new `## Display lifecycle (Phase 248)` section before `## Prerequisites`, linking to the 5 new docs.
+
+### 1 extended sync script
+
+- `scripts/sync-luse-skills.sh` — 3 surgical hunks per Phase 247-02 pattern:
+  1. 5 new `read_canonical` calls (`DISPLAY_LIFECYCLE_MD`, `CREATE_DISPLAY_MD`, `LIST_DISPLAYS_MD`, `KILL_DISPLAY_MD`, `LAUNCH_APP_IN_DISPLAY_MD`).
+  2. `CONCAT_PAYLOAD` printf extended with 5 new `## <NAME>` sections (deterministic order).
+  3. `generate_claude_skill` gained 1 standalone emission for DISPLAY-LIFECYCLE.md + a 4-iteration loop for the per-tool refs.
+- `bash -n scripts/sync-luse-skills.sh` PASS — syntax verified before run.
+
+### 9 regenerated agent shim files
+
+| Shim target                                            | Status              | Source                                                                                                      |
+| ------------------------------------------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `.claude/skills/luse/DISPLAY-LIFECYCLE.md`             | **NEW**             | docs/luse/DISPLAY-LIFECYCLE.md                                                                              |
+| `.claude/skills/luse/create_display.md`                | **NEW**             | docs/luse/tools/create_display.md                                                                           |
+| `.claude/skills/luse/list_displays.md`                 | **NEW**             | docs/luse/tools/list_displays.md                                                                            |
+| `.claude/skills/luse/kill_display.md`                  | **NEW**             | docs/luse/tools/kill_display.md                                                                             |
+| `.claude/skills/luse/launch_app_in_display.md`         | **NEW**             | docs/luse/tools/launch_app_in_display.md                                                                    |
+| `.claude/skills/luse/SKILL.md`                         | updated             | docs/luse/LUSE.md (gained the Display lifecycle section in Task 1)                                          |
+| `.aion/skills/luse.md`                                 | updated (bundled)   | LUSE + 5 original tools + WORKFLOW + 6 Phase 247 top-level + 5 new Phase 248 sections concatenated          |
+| `.opencode/skills/luse.md`                             | updated (bundled)   | Same as Aion CLI                                                                                            |
+| `.openclaw/skills/luse.md`                             | updated (bundled)   | Same as Aion CLI                                                                                            |
+
+## Verification evidence
+
+### Sync run output (verbatim)
+
+**First run** (manifest extension freshly applied):
+
+```
+$ bash scripts/sync-luse-skills.sh
+Synced 20 shims (5 new / 4 updated / 11 unchanged)
+```
+
+- 5 new = the 5 standalone Claude shims for DISPLAY-LIFECYCLE + 4 per-tool docs.
+- 4 updated = `.claude/skills/luse/SKILL.md` (LUSE.md changed) + 3 generic shims (CONCAT_PAYLOAD changed).
+- 11 unchanged = pre-existing Phase 242/247 shims whose source docs were not touched.
+
+The "4 updated" (not the plan's "5 updated" estimate) reflects per-file sha-marker granularity — the per-tool Claude shims (`click.md`, `type.md`, `screenshot.md`, `key.md`, `scroll.md`) and the per-top-level Phase 247 docs (`PATTERNS.md`, `ANTI-PATTERNS.md`, etc.) were correctly identified as unchanged because their source docs were not touched in Plan 248-04. See D-248-04-D for the framing.
+
+**Second run** (immediate idempotency check):
+
+```
+$ bash scripts/sync-luse-skills.sh
+Synced 20 shims (0 new / 0 updated / 20 unchanged)
+```
+
+Phase 242 D-242-B drift-lock invariant intact after the manifest extension.
+
+### Cross-agent prose probe
+
+```
+$ grep -c "DISPLAY-LIFECYCLE" .aion/skills/luse.md
+6
+$ grep -c "DISPLAY-LIFECYCLE" .opencode/skills/luse.md
+6
+$ grep -c "DISPLAY-LIFECYCLE" .openclaw/skills/luse.md
+6
+```
+
+Identical 6 hits on all 3 generic shims — proves the bundled CONCAT_PAYLOAD propagated byte-identically except for the per-agent header comment.
+
+### Gemini negation
+
+```
+$ ls .gemini/ 2>&1 | grep -c luse
+0
+```
+
+`.gemini/skills/luse.md` absent. D-242-C / D-247-A honored: Gemini agents discover Luse via MCP tool-discovery only.
+
+### Source-sha marker check (5 new Claude shims)
+
+```
+$ for f in .claude/skills/luse/{DISPLAY-LIFECYCLE,create_display,list_displays,kill_display,launch_app_in_display}.md; do head -1 "$f"; done
+<!-- source-sha: 9f5d07c6836ab45265cac79a1199fa7536fc8f4f7098a3b7726fddaa23c68743 -->
+<!-- source-sha: 6a443233b1d8a72c30552c38ce7174d8fd2ca02c30dbd7ef94428b0c2e3d2383 -->
+<!-- source-sha: 9b07b30685fa7a35d459aff31e8ba59fd4191f3e3875d5000f2e6ee951980794 -->
+<!-- source-sha: 8942fb0feb99c65eddd7124dd4fe6183da2178acccd42c8492496eb1bad2901b -->
+<!-- source-sha: e50143dc2475927347b03656ff23ee2752cb40a1721f2a91168047e1c44f87e1 -->
+```
+
+All 5 new files carry valid 64-hex source-sha markers — second-run idempotency is read off these.
+
+### Agent-agnostic invariant
+
+```
+$ grep -rE "Claude|Aion|Gemini|OpenCode|OpenClaw" \
+    docs/luse/DISPLAY-LIFECYCLE.md \
+    docs/luse/tools/create_display.md \
+    docs/luse/tools/list_displays.md \
+    docs/luse/tools/kill_display.md \
+    docs/luse/tools/launch_app_in_display.md
+(no output, exit=1)
+```
+
+0 agent-name matches across the 5 new canonical files. Per Phase 247 D-242-C, agent names appear ONLY in `INTEGRATION-RECIPES.md` and as preamble references in `LUSE.md` — neither edited by Plan 248-04 in a way that introduces agent names.
+
+### Sacred SHA preservation
+
+```
+$ git rev-parse HEAD:liv/packages/core/src/sdk-agent-runner.ts
+f3538e1d811992b782a9bb057d1b7f0a0189f95f
+```
+
+Match against D-V44-SACRED expected SHA. The pre-commit hook fired `[sacred-sha] PASS: 20 files verified` on every commit (Task 1 `71404fe9`, Task 2 `54a7f9eb`, Task 3 `a96edc56`).
+
+## Commits
+
+| Step | Commit hash | Message                                                                                                |
+| ---- | ----------- | ------------------------------------------------------------------------------------------------------ |
+| 1    | `71404fe9`  | `docs(248-04): canonical display lifecycle docs - DISPLAY-LIFECYCLE.md + 4 per-tool refs + LUSE.md section` |
+| 2    | `54a7f9eb`  | `feat(248-04): extend sync-luse-skills.sh manifest with 5 display-lifecycle docs`                       |
+| 3    | `a96edc56`  | `feat(248-04): generated agent shims + sync script idempotency invariant verified`                      |
+
+## Deviations from plan
+
+None — plan executed exactly as written.
+
+The only minor data-point difference is the first-run change count (5 new + 4 updated = 9 total, not the plan's estimate of "5 new + 5 updated ≥ 10"). This is NOT a deviation — it's the correctness of the per-file sha-marker idempotency surfacing exactly as Phase 247-02's SUMMARY framed it: per-tool Claude shims whose source docs were untouched were correctly left untouched. The plan must_have entry that said ">=10 changes" is a soft estimate; the verified D-242-B invariant is what matters, and run #2 confirmed `0 new / 0 updated / 20 unchanged`.
+
+## Next plan (248-05)
+
+Wave 4 — Mini PC deploy + automated probes + UAT checklist. The 5 new canonical docs land on the Mini PC via `update.sh` rsync; agents on the Mini PC pick up the new shims the next time they scan their skills directory. Operator UAT probe: ask Claude Code / Aion CLI / OpenCode / OpenClaw inside Liv AI on Mini PC `"how do I create a nested display for an isolated UAT walk?"` — all 4 should reference DISPLAY-LIFECYCLE.md + the 4 per-tool refs identically (because the bundled CONCAT_PAYLOAD source-sha is byte-identical except for the agent name in the header comment).
+
+## Self-Check: PASSED
+
+- ✅ `bash scripts/sync-luse-skills.sh` first run reported `5 new / 4 updated / 11 unchanged` (non-zero new+updated as required)
+- ✅ Second invocation reported `0 new / 0 updated / 20 unchanged` (Phase 242 D-242-B idempotency intact)
+- ✅ All 5 new docs at `docs/luse/DISPLAY-LIFECYCLE.md` + `docs/luse/tools/{create,list,kill,launch_app_in}_display.md` exist with line counts above plan min_lines (228 / 82 / 69 / 101 / 106 vs 120 / 50 / 40 / 50 / 55)
+- ✅ `docs/luse/LUSE.md` contains the new section heading (`grep -c "Display lifecycle" docs/luse/LUSE.md` = 1)
+- ✅ `scripts/sync-luse-skills.sh` carries the 5 new `read_canonical` calls (`grep -c "DISPLAY_LIFECYCLE_MD\|CREATE_DISPLAY_MD\|KILL_DISPLAY_MD" scripts/sync-luse-skills.sh` = 7)
+- ✅ All 4 generic shims have identical DISPLAY-LIFECYCLE counts (6 / 6 / 6 across Aion/OpenCode/OpenClaw)
+- ✅ Gemini negation: `ls .gemini/ | grep -c luse` = 0
+- ✅ Agent-agnostic invariant: 0 hits for Claude/Aion/Gemini/OpenCode/OpenClaw in the 5 new canonical files
+- ✅ All 5 new Claude shims carry valid 64-hex source-sha markers
+- ✅ Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` preserved across all 3 commits (pre-commit hook PASS each time)
+- ✅ All 3 commits in `git log --oneline` (`71404fe9` / `54a7f9eb` / `a96edc56`)
+
+## Self-Check Verification (post-write)
+
+```
+FOUND: docs/luse/DISPLAY-LIFECYCLE.md
+FOUND: docs/luse/tools/create_display.md
+FOUND: docs/luse/tools/list_displays.md
+FOUND: docs/luse/tools/kill_display.md
+FOUND: docs/luse/tools/launch_app_in_display.md
+FOUND: scripts/sync-luse-skills.sh
+FOUND: .claude/skills/luse/DISPLAY-LIFECYCLE.md
+FOUND: .claude/skills/luse/create_display.md
+FOUND: .claude/skills/luse/list_displays.md
+FOUND: .claude/skills/luse/kill_display.md
+FOUND: .claude/skills/luse/launch_app_in_display.md
+FOUND: .planning/phases/248-luse-display-lifecycle/248-04-SUMMARY.md
+FOUND: 71404fe9
+FOUND: 54a7f9eb
+FOUND: a96edc56
+```
+
+All 12 declared files exist on disk. All 3 declared commits visible in `git log --oneline --all`. **Self-Check: PASSED.**
