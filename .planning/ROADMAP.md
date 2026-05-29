@@ -3548,7 +3548,7 @@ Plans:
 
 ---
 
-### Phase 250: Terminal Professional UI — IDE-grade polish + discoverability — 🟡 PLANNED 2026-05-29 (0/5 plans)
+### Phase 250: Terminal Professional UI — IDE-grade polish + discoverability — 🟡 PLANNED 2026-05-29 (0/6 plans)
 
 **Goal:** Turn the v44 Phase 246 multi-tab terminal from a raw xterm embed into a deliberately-crafted, IDE-grade terminal. Operator goals (verbatim): "more professional" + "easier to use." Five client-side waves: surface/theme polish, find-in-scrollback, resilient reconnect, a discoverability layer, and a live settings drawer.
 
@@ -3576,14 +3576,15 @@ Plans:
 
 **UAT:** Operator opens Terminal → polished theme + toolbar + status bar. Ctrl+Shift+F → find works with match count + ruler markers. Pull network → "Reconnecting…" → restores with full scrollback. Ctrl+= zooms (persists on reload). Gear → switch color scheme live. `?` → shortcut sheet. Right-click copy/paste still works.
 
-**Plans:** 0/5 plans complete
+**Plans:** 0/6 plans complete
 
 Plans:
-- [ ] 250-01-PLAN.md — TBD
-- [ ] 250-02-PLAN.md — TBD
-- [ ] 250-03-PLAN.md — TBD
-- [ ] 250-04-PLAN.md — TBD
-- [ ] 250-05-PLAN.md — TBD
+- [ ] 250-01-PLAN.md — Surface polish: tuned 16-color ITheme + ergonomics + WebLinks + allowProposedApi/overviewRulerWidth + focus ring (Wave 1)
+- [ ] 250-02-PLAN.md — Find-in-terminal: @xterm/addon-search (0.15.x) + per-pane SearchAddon + React find box + overview-ruler markers (Wave 2)
+- [ ] 250-03-PLAN.md — Resilience: bounded-backoff auto-reconnect (reuse session id) + 4404-vs-transient UX + thin bottom status bar (Wave 3)
+- [ ] 250-04-PLAN.md — Discoverability: icon toolbar + font zoom (re-fit+persist) + cheat-sheet + empty-state + tab status dots + zen (Wave 4)
+- [ ] 250-05-PLAN.md — Settings drawer (4-6 dark presets, live-apply+re-fit) + Clear-wipes-Redis-ring (WS+server) + optional command palette (Wave 5)
+- [ ] 250-06-PLAN.md — Mini PC deploy via git push + update.sh + smoke probes (incl. clear-scrollback) + operator UAT checklist (Wave 6)
 
 **Cross-references:**
 - Depends on Phase 246 (multi-tab terminal) ✅ + the 2026-05-29 hot-fixes (WS cookie-auth route `01852a5d`, silent-disconnect `a1cb55ef`, WebGL renderer + font `1316efa7`, copy/paste).
