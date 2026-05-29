@@ -253,3 +253,208 @@ describe('R3 — Parameter alias coalescence in luse_* tool handlers', () => {
 		})
 	})
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 248-02 — Display lifecycle MCP tools.
+//
+// RED gate: these cases pin the schema drift-locks for the 4 new tools and
+// the additive `display` prop on `computer_application`, plus the handler
+// wire-through to options.displayManager. Before Task 2 GREEN, NONE of these
+// pass (the tools don't exist in LUSE_TOOLS, the handler entries are absent,
+// and LuseToolsOptions has no displayManager field).
+//
+// Key invariants under test:
+//   - D-V44-DISPLAY-XEPHYR-DEFAULT — mode enum is ['xephyr','xvfb'] (Test A)
+//   - D-V44-DISPLAY-OWNER-SCOPED — owner mismatch surfaces as isError:true
+//                                  (Test G)
+//   - additive `computer_application.display` — schema `required` unchanged
+//                                              (Test E)
+// ─────────────────────────────────────────────────────────────────────────────
+
+import {LUSE_TOOLS} from '../luse-tools.js'
+
+interface FakeDisplayManager {
+	create: ReturnType<typeof vi.fn>
+	list: ReturnType<typeof vi.fn>
+	kill: ReturnType<typeof vi.fn>
+	attachApp: ReturnType<typeof vi.fn>
+	listAppsForDisplay: ReturnType<typeof vi.fn>
+	isOwner: ReturnType<typeof vi.fn>
+	initialized: Promise<void>
+}
+
+function makeFakeDisplayManager(overrides: Partial<FakeDisplayManager> = {}): FakeDisplayManager {
+	return {
+		create: vi.fn(async () => ({display: ':10', name: 'display-10', pid: 12345})),
+		list: vi.fn(async () => []),
+		kill: vi.fn(async () => ({ok: true, killed_apps_count: 0})),
+		attachApp: vi.fn(async () => undefined),
+		listAppsForDisplay: vi.fn(async () => []),
+		isOwner: vi.fn(async () => true),
+		initialized: Promise.resolve(),
+		...overrides,
+	}
+}
+
+describe('Phase 248 — display lifecycle tools', () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+	})
+
+	// ── Schema drift-locks ────────────────────────────────────────────────
+
+	test('Test A: computer_create_display schema — properties + mode enum + no required', () => {
+		const tool = LUSE_TOOLS.find((t) => t.name === 'computer_create_display')
+		expect(tool, 'computer_create_display tool must exist in LUSE_TOOLS').toBeDefined()
+		const props = tool!.input_schema.properties
+		expect(props).toHaveProperty('name')
+		expect(props).toHaveProperty('mode')
+		expect(props).toHaveProperty('width')
+		expect(props).toHaveProperty('height')
+		const mode = props.mode as {type: string; enum: string[]}
+		expect(mode.type).toBe('string')
+		expect(mode.enum).toEqual(['xephyr', 'xvfb'])
+		expect(tool!.input_schema.required).toBeUndefined()
+	})
+
+	test('Test B: computer_list_displays schema — empty properties, no required', () => {
+		const tool = LUSE_TOOLS.find((t) => t.name === 'computer_list_displays')
+		expect(tool, 'computer_list_displays tool must exist in LUSE_TOOLS').toBeDefined()
+		expect(Object.keys(tool!.input_schema.properties).length).toBe(0)
+		expect(tool!.input_schema.required).toBeUndefined()
+	})
+
+	test('Test C: computer_kill_display schema — required:["display"]', () => {
+		const tool = LUSE_TOOLS.find((t) => t.name === 'computer_kill_display')
+		expect(tool, 'computer_kill_display tool must exist in LUSE_TOOLS').toBeDefined()
+		expect(tool!.input_schema.properties).toHaveProperty('display')
+		expect(tool!.input_schema.required).toEqual(['display'])
+	})
+
+	test('Test D: computer_launch_app_in_display schema — required:["display","app"]', () => {
+		const tool = LUSE_TOOLS.find((t) => t.name === 'computer_launch_app_in_display')
+		expect(tool, 'computer_launch_app_in_display tool must exist in LUSE_TOOLS').toBeDefined()
+		const props = tool!.input_schema.properties
+		expect(props).toHaveProperty('display')
+		expect(props).toHaveProperty('app')
+		expect(props).toHaveProperty('args')
+		const argsProp = props.args as {type: string; items: {type: string}}
+		expect(argsProp.type).toBe('array')
+		expect(argsProp.items.type).toBe('string')
+		expect(tool!.input_schema.required).toEqual(['display', 'app'])
+	})
+
+	test('Test E: computer_application schema — additive display prop, required unchanged', () => {
+		const tool = LUSE_TOOLS.find((t) => t.name === 'computer_application')
+		expect(tool, 'computer_application tool must exist in LUSE_TOOLS').toBeDefined()
+		expect(tool!.input_schema.properties).toHaveProperty('display')
+		const disp = tool!.input_schema.properties.display as {type: string}
+		expect(disp.type).toBe('string')
+		// `required` was undefined pre-248-02 (per 208-09); MUST stay undefined.
+		expect(tool!.input_schema.required).toBeUndefined()
+	})
+
+	// ── Handler wire-through ──────────────────────────────────────────────
+
+	test('Test F: computer_create_display handler forwards args to displayManager.create with ownerSession=userId', async () => {
+		const fakeMgr = makeFakeDisplayManager()
+		const handlers = buildHandlers({
+			displayManager: fakeMgr as never,
+			userId: 's1',
+		})
+		const handler = handlers.computer_create_display
+		expect(handler, 'computer_create_display handler must be registered').toBeDefined()
+		const result = await handler({mode: 'xephyr'})
+		expect(fakeMgr.create).toHaveBeenCalledTimes(1)
+		const callArg = fakeMgr.create.mock.calls[0][0]
+		expect(callArg).toMatchObject({mode: 'xephyr', ownerSession: 's1'})
+		// Default-shape returned payload — handler stringifies the manager result.
+		expect(result.isError).toBe(false)
+		expect(result.content[0]).toMatchObject({type: 'text'})
+		const text = (result.content[0] as {text: string}).text
+		expect(text).toContain(':10')
+		expect(text).toContain('display-10')
+		expect(text).toContain('12345')
+	})
+
+	test('Test G: computer_kill_display owner-mismatch surfaces as isError:true with not-owner text', async () => {
+		const fakeMgr = makeFakeDisplayManager({
+			kill: vi.fn(async () => ({ok: false, error: 'not-owner'})),
+		})
+		const handlers = buildHandlers({
+			displayManager: fakeMgr as never,
+			userId: 's2',
+		})
+		const handler = handlers.computer_kill_display
+		expect(handler).toBeDefined()
+		const result = await handler({display: ':10'})
+		expect(fakeMgr.kill).toHaveBeenCalledWith({display: ':10', callerSession: 's2'})
+		expect(result.isError).toBe(true)
+		const text = (result.content[0] as {text: string}).text
+		expect(text.toLowerCase()).toContain('not-owner')
+	})
+
+	test('Test H: computer_launch_app_in_display resolves app, spawns with DISPLAY env, calls attachApp', async () => {
+		const fakeMgr = makeFakeDisplayManager()
+		const resolver = vi.fn(async (name: string) => ({
+			kind: 'native' as const,
+			appId: name,
+			route: `/${name}`,
+			title: name,
+			icon: '',
+		}))
+		const handlers = buildHandlers({
+			displayManager: fakeMgr as never,
+			livosAppResolver: resolver,
+			userId: 's1',
+		})
+		const handler = handlers.computer_launch_app_in_display
+		expect(handler).toBeDefined()
+
+		// Before the handler runs, DISPLAY may or may not be set; after the
+		// handler returns, the env MUST be restored (withScopedDisplay).
+		const before = process.env.DISPLAY
+
+		const result = await handler({display: ':12', app: 'firefox'})
+
+		// After the handler returns, DISPLAY env is restored.
+		expect(process.env.DISPLAY).toBe(before)
+
+		// Resolver invoked + attachApp called with the resolved match.
+		expect(resolver).toHaveBeenCalledWith('firefox')
+		expect(fakeMgr.attachApp).toHaveBeenCalledTimes(1)
+		const attachArg = fakeMgr.attachApp.mock.calls[0][0]
+		expect(attachArg).toMatchObject({display: ':12', app_name: 'firefox'})
+		expect(typeof attachArg.pid).toBe('number')
+
+		expect(result.isError).toBe(false)
+		const text = (result.content[0] as {text: string}).text
+		expect(text).toContain('firefox')
+	})
+
+	test('Test I: computer_application with display:":12" scopes DISPLAY env for the underlying call', async () => {
+		// Capture DISPLAY at the moment openOrFocus runs — the handler must
+		// have already applied withScopedDisplay by then.
+		const openOrFocusMock = vi.mocked(native.openOrFocus)
+		let capturedDisplay: string | undefined
+		openOrFocusMock.mockImplementationOnce(async () => {
+			capturedDisplay = process.env.DISPLAY
+			return {isError: false}
+		})
+
+		const handlers = buildHandlers({
+			defaultDisplay: ':1',
+			userId: 's1',
+		})
+		const before = process.env.DISPLAY
+		const result = await handlers.computer_application({
+			application: 'firefox',
+			display: ':12',
+		})
+		// DISPLAY env restored after the handler returns.
+		expect(process.env.DISPLAY).toBe(before)
+		// DISPLAY was set to ':12' while openOrFocus ran.
+		expect(capturedDisplay).toBe(':12')
+		expect(result.isError).toBe(false)
+	})
+})
