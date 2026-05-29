@@ -131,7 +131,7 @@ export function configFileToEnvConfig(config: SetupJsonConfig): EnvConfig {
 
     // Paths
     livosBaseDir: config.paths?.livosBaseDir ?? '/opt/livos',
-    nexusBaseDir: config.paths?.nexusBaseDir ?? '/opt/nexus',
+    nexusBaseDir: config.paths?.nexusBaseDir ?? '/opt/liv',
 
     // Ports
     apiPort: config.ports?.api ?? 3200,

@@ -331,7 +331,7 @@ async function runOnboardWizard(): Promise<void> {
 
     const nexusBaseDir = guard(await p.text({
       message: 'Liv base directory',
-      defaultValue: '/opt/nexus',
+      defaultValue: '/opt/liv',
       validate: validateNotEmpty('Liv base directory'),
     }));
 
