@@ -277,6 +277,9 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 				width: Number(hash.width ?? DEFAULT_WIDTH),
 				height: Number(hash.height ?? DEFAULT_HEIGHT),
 				running_apps,
+				// Phase 248-03 — surface last_app_at so the TTL GC can compute
+				// staleness without re-HGETALLing each display.
+				...(hash.last_app_at ? {last_app_at: hash.last_app_at} : {}),
 			})
 		}
 		return out
