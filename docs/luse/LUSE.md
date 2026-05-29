@@ -29,6 +29,19 @@ Do NOT use Luse when:
   `ctrl+v` after the secret is already in the clipboard) rather than
   feeding the secret through `type` arguments, which may be logged.
 
+## Display lifecycle (Phase 248)
+
+Beyond direct interaction with the host desktop, agents can create isolated
+nested X servers (Xephyr — visible default, Xvfb — headless opt-in) to run
+apps without disturbing the operator's main session. Four tools:
+`computer_create_display`, `computer_list_displays`, `computer_kill_display`,
+`computer_launch_app_in_display`. See [DISPLAY-LIFECYCLE.md](DISPLAY-LIFECYCLE.md)
+for full workflow + cleanup discipline. Per-tool refs:
+[create_display](tools/create_display.md) ·
+[list_displays](tools/list_displays.md) ·
+[kill_display](tools/kill_display.md) ·
+[launch_app_in_display](tools/launch_app_in_display.md).
+
 ## Prerequisites
 
 1. **Mini PC X session is running.** Luse drives an actual desktop, not a
