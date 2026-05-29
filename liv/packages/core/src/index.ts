@@ -89,8 +89,8 @@ import { logger } from './logger.js';
 import { CircuitBreaker } from './infra/circuit-breaker.js';
 import { formatErrorMessage } from './infra/errors.js';
 
-const NEXUS_BASE_DIR = process.env.LIV_BASE_DIR || '/opt/nexus';
-const NEXUS_SKILLS_DIR = process.env.LIV_SKILLS_DIR || '/opt/nexus/app/skills';
+const NEXUS_BASE_DIR = process.env.LIV_BASE_DIR || '/opt/liv';
+const NEXUS_SKILLS_DIR = process.env.LIV_SKILLS_DIR || '/opt/liv/app/skills';
 
 // Prevent unhandled errors from crashing the process (e.g. stream parse errors)
 process.on('unhandledRejection', (reason: any) => {
@@ -450,7 +450,7 @@ Conversation:`;
   });
 
   // Skill marketplace: registry client + installer
-  const skillCacheDir = process.env.SKILL_CACHE_DIR || '/opt/nexus/data/skill-cache';
+  const skillCacheDir = process.env.SKILL_CACHE_DIR || '/opt/liv/data/skill-cache';
   const skillRegistryClient = new SkillRegistryClient({ cacheDir: skillCacheDir });
   const defaultSkillRegistry = process.env.SKILL_REGISTRY_URL || 'https://github.com/utopusc/livinity-skills';
   skillRegistryClient.addRegistry(defaultSkillRegistry);
@@ -469,7 +469,7 @@ Conversation:`;
     logger.warn('SkillRegistryClient: failed to load persisted registries', { error: formatErrorMessage(err) });
   }
 
-  const skillInstallDir = process.env.SKILL_INSTALL_DIR || '/opt/nexus/skills/marketplace';
+  const skillInstallDir = process.env.SKILL_INSTALL_DIR || '/opt/liv/skills/marketplace';
   const skillInstaller = new SkillInstaller({
     skillLoader,
     registryClient: skillRegistryClient,

@@ -73,17 +73,19 @@ _DLD_STAGE_DIR="/tmp/livos-install-stage"
 # Plan 105-02 (G7) will swap to PID-scoped /tmp/livinity-update-$$ + add cleanup.
 _DLD_TEMP_DIR="$_DLD_STAGE_DIR"
 _DLD_CADDYFILE="/etc/caddy/Caddyfile"
-# 105-02 (G6): configurable owner for chown -R. Default root for first-install
-# (matches update.sh:619-620 `chown -R root:root`). Mini PC uses `bruce` post-
-# install via manual chown. Future install.sh `--user` flag deferred.
-_DLD_LIVOS_USER="${_DLD_LIVOS_USER:-root}"
-
 # 106 Bug #10: desktop session user (sudo + docker groups, NOPASSWD sudoers).
-# Distinct from _DLD_LIVOS_USER — that one owns /opt/livos/ + /opt/liv/ trees
-# (defaults to root to match Mini PC first-install). This one is the
-# human-friendly login the operator uses for GUI sessions + sudo elevation.
+# The human-friendly login the operator uses for GUI sessions + sudo elevation,
+# AND the User= the livos/liv-* systemd units run as.
 _DLD_DESKTOP_USER="${_DLD_DESKTOP_USER:-bruce}"
 _DLD_DESKTOP_UID="${_DLD_DESKTOP_UID:-1000}"
+
+# UAT 252 G7: owner for chown -R of /opt/livos + /opt/liv. MUST equal the
+# systemd unit User= (the desktop user) — otherwise bruce-run services fail to
+# chdir into a root-owned WorkingDirectory (status=200/CHDIR crash loop on a
+# fresh install). Previously defaulted to root "to match update.sh", which is
+# exactly why the Mini PC needed a manual post-install chown; defaulting to the
+# desktop user makes a fresh curl|bash install come up with zero manual steps.
+_DLD_LIVOS_USER="${_DLD_LIVOS_USER:-$_DLD_DESKTOP_USER}"
 
 # ── 1. System packages ──────────────────────────────────────────────────────
 _dld_install_system_packages() {
@@ -1951,6 +1953,14 @@ _dld_fix_permissions() {
     chown -R "${livos_user}:${livos_user}" "$_DLD_LIVOS_DIR" 2>/dev/null || true
     if [[ -d "$_DLD_LIV_DIR" ]]; then
         chown -R "${livos_user}:${livos_user}" "$_DLD_LIV_DIR" 2>/dev/null || true
+    fi
+
+    # UAT 252: livinityd boot drains /var/lib/livos/install-pending-redis-keys.txt
+    # (written here as the install user). It runs as ${livos_user}, so that dir
+    # must be readable by it — otherwise the Phase 141-01 drain EACCESes (non-fatal
+    # but logs an error and skips queued seeds).
+    if [[ -d /var/lib/livos ]]; then
+        chown -R "${livos_user}:${livos_user}" /var/lib/livos 2>/dev/null || true
     fi
 
     ok "Permissions fixed (owner=${livos_user})"

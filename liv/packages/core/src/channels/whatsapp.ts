@@ -97,7 +97,7 @@ export class WhatsAppProvider implements ChannelProvider {
 
     try {
       this.client = new Client({
-        authStrategy: new LocalAuth({ dataPath: '/opt/nexus/data/whatsapp-session' }),
+        authStrategy: new LocalAuth({ dataPath: '/opt/liv/data/whatsapp-session' }),
         puppeteer: {
           headless: true,
           args: [
@@ -209,7 +209,7 @@ export class WhatsAppProvider implements ChannelProvider {
     // Clear session directory
     try {
       const { execSync } = await import('child_process');
-      execSync('rm -rf /opt/nexus/data/whatsapp-session');
+      execSync('rm -rf /opt/liv/data/whatsapp-session');
       logger.info('WhatsAppProvider: session data cleared');
     } catch {}
     if (this.redis) {
@@ -285,7 +285,7 @@ export class WhatsAppProvider implements ChannelProvider {
   private async hasExistingSession(): Promise<boolean> {
     try {
       const { existsSync } = await import('fs');
-      return existsSync('/opt/nexus/data/whatsapp-session');
+      return existsSync('/opt/liv/data/whatsapp-session');
     } catch {
       return false;
     }

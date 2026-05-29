@@ -63,7 +63,7 @@ export class SubagentManager {
 
   constructor(redis: Redis, dataDir?: string) {
     this.redis = redis;
-    this.dataDir = dataDir || join(process.env.LIV_DATA_DIR || process.env.DATA_DIR || '/opt/nexus/data', 'agents');
+    this.dataDir = dataDir || join(process.env.LIV_DATA_DIR || process.env.DATA_DIR || '/opt/liv/data', 'agents');
   }
 
   /** Get workspace path for an agent */
