@@ -15,12 +15,23 @@ packages:
   # Phase 203-03: thin systemd-deployable wrapper around `openclaw` npm
   - packages/liv-claw-gateway
 
+# pnpm v11+ reads `overrides` from pnpm-workspace.yaml (NOT package.json.pnpm).
+# When it lived only in package.json, pnpm 11 computed expected-overrides={}
+# while the lockfile recorded {zod:^3.25.0} → ERR_PNPM_LOCKFILE_CONFIG_MISMATCH
+# aborted every fresh `--frozen-lockfile` install (UAT 252 G1). Kept in sync
+# with package.json.pnpm.overrides for pnpm 10 (local-dev) compatibility.
+overrides:
+  zod: ^3.25.0
+
 # pnpm v11+ uses `allowBuilds` map (booleans) at workspace root, NOT the
 # legacy `onlyBuiltDependencies` list. Without explicit `true` values for
 # every postinstall-needing dep, fresh installs hit ERR_PNPM_IGNORED_BUILDS
 # = exit 1 and abort install.sh. Keep the lower-case form (kebab + at-scoped
 # quoted) to match what `pnpm approve-builds` interactive picker would write.
+# UAT 252 G2: added @google/genai, koffi, openclaw, tree-sitter-bash, workerd
+# (these were ignored → exit 1 on a fresh pnpm-11 install).
 allowBuilds:
+  "@google/genai": true
   "@parcel/watcher": true
   "@swc/core": true
   baileys: true
@@ -29,10 +40,14 @@ allowBuilds:
   cpu-features: true
   drivelist: true
   esbuild: true
+  koffi: true
   msgpackr-extract: true
   node-git-server: true
   node-pty: true
+  openclaw: true
   protobufjs: true
   sharp: true
   ssh2: true
+  tree-sitter-bash: true
   usocket: true
+  workerd: true

@@ -42,6 +42,7 @@
       "zod": "^3.25.0"
     },
     "onlyBuiltDependencies": [
+      "@google/genai",
       "@parcel/watcher",
       "@swc/core",
       "baileys",
@@ -50,13 +51,17 @@
       "cpu-features",
       "drivelist",
       "esbuild",
+      "koffi",
       "msgpackr-extract",
       "node-git-server",
       "node-pty",
+      "openclaw",
       "protobufjs",
       "sharp",
       "ssh2",
-      "usocket"
+      "tree-sitter-bash",
+      "usocket",
+      "workerd"
     ]
   }
 }
