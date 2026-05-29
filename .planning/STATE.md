@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
-status: executing
+status: milestone_complete
 last_updated: "2026-05-29T15:10:07.595Z"
 last_activity: 2026-05-29
 progress:
   total_phases: 8
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 12
   completed_plans: 12
-  percent: 100
+  percent: 113
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
@@ -585,8 +585,8 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 
 ## Next Planned Phase
 
-- **Phase:** 245
-- **Status:** Executing Phase 251
+- **Phase:** 251
+- **Status:** Milestone complete
 - **Plan count:** 5
 - **CONTEXT:** .planning/phases/248-luse-display-lifecycle/248-CONTEXT.md
 - **Wave plan:** Wave 1 (248-01 backend display-manager ✅) → Wave 2 (248-02 MCP tool registrations ✅) → Wave 3 (248-03 TTL GC sweep — NEXT) → Wave 4 (248-04 canonical docs + shim sync) → Wave 5 (248-05 Mini PC deploy + UAT)

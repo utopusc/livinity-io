@@ -3578,7 +3578,7 @@ Plans:
 
 **UAT:** operator reads `PORTABILITY-AUDIT.md` and confirms the GO/NO-GO verdict + decides whether to greenlight Phase 252 remediation.
 
-**Plans:** 8/9 plans complete
+**Plans:** 9/9 plans complete
 
 Plans:
 - [x] 251-01-PLAN.md — Luse Redis-URL resolution audit (Wave 1)
