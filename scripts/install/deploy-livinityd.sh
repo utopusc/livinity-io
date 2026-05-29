@@ -58,7 +58,7 @@
 # path — it only orchestrates apt + systemctl + rsync + pnpm + npm + curl.
 
 # Constants — 104-12 flat layout (livos/ contents → /opt/livos/, liv/ → /opt/liv/)
-_DLD_LIVOS_DIR="/opt/livos"
+_DLD_LIVOS_DIR="${_DLD_LIVOS_DIR:-/opt/livos}"
 _DLD_LIV_DIR="/opt/liv"
 _DLD_ENV_FILE="${_DLD_LIVOS_DIR}/.env"
 _DLD_SECRETS_DIR="${_DLD_LIVOS_DIR}/data/secrets"

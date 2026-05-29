@@ -1820,7 +1820,11 @@ class Server {
 		//   - sessionId: UUID v4 (path-traversal-safe via UUID_RE check).
 		//   - filename: <ts>.jpg or <ts>.thumb.jpg (regex enforced).
 		//   - Streams the JPEG bytes from
-		//     <LIV_DATA_ROOT>/webapp-skills/<userId>/<sessionId>/<filename>.
+		//     $LIV_DATA_ROOT/webapp-skills/<userId>/<sessionId>/<filename>,
+		//     where $LIV_DATA_ROOT is the env-rooted data dir (default
+		//     /opt/livos/data) resolved in webapps/skills-storage.ts:dataRoot().
+		//     Phase 252-06 (R14) — reconciled the dangling placeholder to the
+		//     concrete env var the project actually ships.
 		// Lower friction than a tRPC frameUrl procedure: the scrubber's
 		// <img src> tags can hit this endpoint directly with credentials,
 		// no base64 round-trip, no extra round-trip for cache headers.
