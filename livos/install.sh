@@ -1268,6 +1268,125 @@ ENVFILE
         ok "PostgreSQL: database 'livos' ready"
     }
 
+    # ── MCP catalog seed (Phase 252 R9 — ported from Path A) ──────────────────
+    # Mirror of scripts/install/deploy-livinityd.sh:_dld_seed_mcp_servers so a
+    # fresh install via the route.ts clone-fallback OR the legacy get.livinity.io
+    # (Path C) ALSO seeds Redis key `liv:mcp:config` (→ AionUi luse). Without this,
+    # a Path-C install boots with an empty MCP catalog and no operator-visible cause.
+    #
+    # Differences from the Path A original:
+    #   - Path C's REDIS_URL is `redis://:<pass>@` (password-only), not
+    #     `redis://default:<pass>@`; we use the in-scope $SECRET_REDIS directly,
+    #     with an .env fallback for re-runs.
+    #   - scripts/install/seeds/mcp-servers.json lives in the repo ROOT, which
+    #     setup_repository does NOT copy to disk; fetch it from GitHub-raw.
+    #
+    # Idempotency: skip if liv:mcp:config is already a HASH; re-seed if it's a
+    #   legacy STRING. Fail-soft: every error → warn + return 0 (never brick install).
+    seed_mcp_servers() {
+        step "Phase 252 R9 — seed liv:mcp:config (HASH, ported from Path A)"
+
+        # Redis password: prefer the freshly-generated $SECRET_REDIS; fall back to
+        # parsing /opt/livos/.env REDIS_URL (covers re-runs that preserved .env).
+        local redis_pass="${SECRET_REDIS:-}"
+        if [[ -z "$redis_pass" && -f "$LIVOS_DIR/.env" ]]; then
+            redis_pass=$(grep -E '^REDIS_URL=' "$LIVOS_DIR/.env" 2>/dev/null \
+                | sed -E 's|^REDIS_URL=redis://(default)?:([^@]+)@.*|\2|' | head -1)
+        fi
+        if [[ -z "$redis_pass" ]]; then
+            warn "Could not determine Redis password — skipping MCP seed"
+            return 0
+        fi
+        local redis_url="redis://:${redis_pass}@localhost:6379"
+
+        # Gate on the canonical HASH primitive (mirror deploy-livinityd.sh).
+        local existing_type
+        existing_type=$(redis-cli -a "$redis_pass" --no-auth-warning TYPE liv:mcp:config 2>/dev/null || echo "none")
+        if [[ "$existing_type" == "hash" ]]; then
+            ok "liv:mcp:config already present as HASH (reuse — preserves user customizations)"
+            return 0
+        elif [[ "$existing_type" == "string" ]]; then
+            warn "liv:mcp:config exists as STRING (legacy) — re-seeding as HASH"
+            redis-cli -a "$redis_pass" --no-auth-warning DEL liv:mcp:config >/dev/null 2>&1 || {
+                warn "redis-cli DEL of STRING liv:mcp:config failed — runtime will self-heal"; return 0; }
+        elif [[ "$existing_type" != "none" ]]; then
+            warn "liv:mcp:config exists as unexpected type '$existing_type' — skipping MCP seed"
+            return 0
+        fi
+
+        # Seed file: repo-root scripts/install/seeds/ is not on disk → fetch GitHub-raw.
+        local raw_url="https://raw.githubusercontent.com/utopusc/livinity-io/master/scripts/install/seeds/mcp-servers.json"
+        local seed_json=""
+        if command -v curl >/dev/null 2>&1; then
+            seed_json=$(curl -fsSL "$raw_url" 2>/dev/null || echo "")
+        fi
+        if [[ -z "$seed_json" ]]; then
+            info "MCP seed file unreachable (GitHub-raw) — skipping MCP seed (forward-compat)"
+            return 0
+        fi
+
+        # LIV_API_KEY for liv-* MCPs (the freshly-generated $SECRET_API_KEY, or .env).
+        local liv_api_key="${SECRET_API_KEY:-}"
+        if [[ -z "$liv_api_key" && -f "$LIVOS_DIR/.env" ]]; then
+            liv_api_key=$(grep -E '^LIV_API_KEY=' "$LIVOS_DIR/.env" 2>/dev/null \
+                | sed -E 's|^LIV_API_KEY=(.*)$|\1|' | head -1)
+        fi
+        local user_slug="${LIVOS_USER_SLUG:-bruce}"
+        local domain_root="${LIVOS_DOMAIN_ROOT:-livinity.io}"
+
+        # Substitute the 4 placeholders (pipe delimiter — values contain no '|').
+        local substituted_json
+        substituted_json=$(printf '%s' "$seed_json" | sed \
+            -e "s|__LIVOS_REDIS_URL__|${redis_url}|g" \
+            -e "s|__LIVOS_LIV_API_KEY__|${liv_api_key}|g" \
+            -e "s|__LIVOS_USER_SLUG__|${user_slug}|g" \
+            -e "s|__LIVOS_DOMAIN_ROOT__|${domain_root}|g")
+        if [[ -z "$substituted_json" ]]; then
+            warn "Seed substitution produced empty JSON — skipping MCP seed"
+            return 0
+        fi
+
+        if ! command -v python3 >/dev/null 2>&1; then
+            warn "python3 not found — cannot emit HSET commands. Skipping MCP seed."
+            return 0
+        fi
+
+        # python3 prints `<name>\t<json>` rows; bash HSETs each.
+        local rows
+        if ! rows=$(printf '%s' "$substituted_json" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+servers = data.get("mcpServers") or data.get("servers") or {}
+for name, entry in servers.items():
+    if not isinstance(entry, dict):
+        continue
+    clean = {k: v for k, v in entry.items() if k not in ("installedAt", "installedFrom")}
+    sys.stdout.write(name + "\t" + json.dumps(clean, separators=(",", ":")) + "\n")
+' 2>&1); then
+            warn "python3 JSON parse of seed failed — install continues without MCP seed"
+            return 0
+        fi
+
+        local count=0
+        while IFS=$'\t' read -r entry_name entry_json; do
+            if [[ -z "$entry_name" || -z "$entry_json" ]]; then continue; fi
+            if redis-cli -a "$redis_pass" --no-auth-warning HSET liv:mcp:config "$entry_name" "$entry_json" >/dev/null 2>&1; then
+                count=$((count + 1))
+            else
+                warn "redis-cli HSET liv:mcp:config '$entry_name' failed — entry skipped"
+            fi
+        done <<< "$rows"
+
+        local verify_type
+        verify_type=$(redis-cli -a "$redis_pass" --no-auth-warning TYPE liv:mcp:config 2>/dev/null || echo "none")
+        if [[ "$verify_type" != "hash" ]]; then
+            warn "liv:mcp:config not a HASH after HSET (got '$verify_type') — install continues without MCP seed"
+            return 0
+        fi
+
+        ok "Seeded liv:mcp:config with $count MCP server(s) as HASH"
+    }
+
     configure_caddy() {
         step "Configuring Caddy"
 
@@ -1662,6 +1781,9 @@ FWSVC
     # === Services ===
     create_systemd_service
     start_services
+
+    # === MCP catalog seed (Phase 252 R9 — fail-soft) ===
+    seed_mcp_servers || warn "MCP seed skipped (non-critical)"
 
     # === Desktop Streaming ===
     setup_desktop_streaming
