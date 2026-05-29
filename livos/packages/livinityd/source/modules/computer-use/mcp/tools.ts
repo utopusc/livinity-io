@@ -1156,11 +1156,40 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 			// Detached so it survives this handler's return; unref'd so node
 			// doesn't keep the child as a parent dep.
 			if (matched === null) {
+				// Phase 250-hotfix — resolve common symbolic app names to their
+				// actual binaries, mirroring APP_MAP in native/window.ts. Without
+				// this, an agent calling launch_app_in_display({app:'terminal'})
+				// (the natural name, same as computer_application accepts) would
+				// spawn a non-existent binary "terminal". Unknown names pass through
+				// unchanged so explicit binaries still work.
+				const APP_ALIASES: Record<string, string> = {
+					terminal: 'gnome-terminal',
+					firefox: 'firefox',
+					vscode: 'code',
+					directory: 'nautilus',
+					files: 'nautilus',
+				}
+				const bin = APP_ALIASES[app] ?? app
 				try {
-					const child = spawn(app, extraArgs, {
+					const child = spawn(bin, extraArgs, {
 						env: process.env,
 						detached: true,
 						stdio: 'ignore',
+					})
+					// Phase 250-hotfix — CRITICAL: attach an 'error' listener.
+					// A missing/failed binary makes spawn emit an ASYNC 'error'
+					// event (e.g. ENOENT) on the ChildProcess. With no listener,
+					// Node re-throws it as an uncaught exception, which crashes
+					// this entire MCP server process and closes the stdio JSON-RPC
+					// transport — the client sees "Connection closed" (the spawn's
+					// synchronous try/catch never catches it because it fires on a
+					// later tick, AFTER attachApp + the response). Swallowing it to
+					// stderr makes a bad app name fail this ONE call gracefully
+					// instead of killing luse.
+					child.on('error', (err) => {
+						process.stderr.write(
+							`[luse-mcp] launch_app_in_display: spawn error for "${bin}" on ${display}: ${(err as Error).message}\n`,
+						)
 					})
 					child.unref()
 					if (typeof child.pid === 'number') {
@@ -1171,7 +1200,7 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 						content: [
 							{
 								type: 'text',
-								text: `Error: failed to spawn app "${app}": ${(err as Error).message}`,
+								text: `Error: failed to spawn app "${app}" (resolved "${bin}"): ${(err as Error).message}`,
 							},
 						],
 						isError: true,
