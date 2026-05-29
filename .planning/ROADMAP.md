@@ -3548,6 +3548,49 @@ Plans:
 
 ---
 
+### Phase 250: Terminal Professional UI — IDE-grade polish + discoverability — 🟡 PLANNED 2026-05-29 (0/5 plans)
+
+**Goal:** Turn the v44 Phase 246 multi-tab terminal from a raw xterm embed into a deliberately-crafted, IDE-grade terminal. Operator goals (verbatim): "more professional" + "easier to use." Five client-side waves: surface/theme polish, find-in-scrollback, resilient reconnect, a discoverability layer, and a live settings drawer.
+
+**Direction:** Establish a clear three-tier hierarchy — tab strip (top) / terminal surface (middle, padded) / thin status bar (bottom). Lean almost entirely on first-party xterm.js options + addons + light React overlays so everything stays client-side and snappy over the relay tunnel. Restraint over decoration; respect `prefers-reduced-motion`; preserve the shipped Phase 243 identity (`#0b0b0c` bg / `#e7e7e8` fg / `#7dd3fc` accent). Build ON the shipped Phase 246 + 2026-05-29 hot-fixes (multi-tab, WebGL renderer, native font stack, copy/paste, Redis scrollback ring, reattach, 24h TTL GC, admin panel) — do NOT rebuild these.
+
+**Plans (5, wave-ordered):**
+- **250-01** — Surface polish: promote the full 16-color ANSI palette into `TERMINAL_THEME` + `minimumContrastRatio` + `selectionInactiveBackground` + scrollbar/overviewRuler colors; ergonomics (`cursorInactiveStyle:'outline'`, `smoothScrollDuration`, `lineHeight ~1.1`, raised `scrollback`, path-aware `wordSeparator`); WebLinks modifier-click + `noopener`; `allowProposedApi:true` (prereq for 250-02); internal padding + focus ring. [S, no new deps — lands first, de-risks renderer/decorations]
+- **250-02** — Find-in-terminal: add `@xterm/addon-search` (v5.4-compatible 0.1x line); per-pane SearchAddon; React find box (Ctrl+Shift+F, prev/next, "N of M", case/word/regex) anchored top-right; overview-ruler markers themed for dark; `onDidChangeResults` count; debounced incremental search; verify under WebGL. [M, +1 dep]
+- **250-03** — Resilience: extend `useTerminalWs` with bounded exponential-backoff auto-reconnect REUSING the session id (fires existing `?attach` reattach + Redis scrollback replay, same Terminal instance); 4404/TTL-expiry vs transient-drop UX (dim + "Reconnecting… (n)" + "Reconnected" flash + manual Retry); thin bottom status bar (connection pill + cols×rows-on-resize + user@host/session). [M]
+- **250-04** — Discoverability: compact monochrome icon toolbar (New/Search/Clear/Zoom±/Fullscreen/Help + shortcut tooltips); font-size zoom (Ctrl/Cmd +/-/0 + Ctrl+wheel, re-fit + localStorage persist); keyboard cheat-sheet modal (?/F1); first-run empty-state hint (auto-clears on first keystroke); per-tab status DOTS + activity glyph + 120–150ms transitions; zen/maximize + cols×rows overlay. [M, mostly React/CSS]
+- **250-05** — Settings drawer (4–6 curated dark theme presets + live preview, fontSize/family, cursorStyle/blink, scrollback — applied live via `term.options.*` with mandatory `fit()`); Clear action also wipes the Redis scrollback ring (small server endpoint — fixes reload-resurrect); optional Ctrl+Shift+P command palette of UI actions (hand-rolled, no cmdk). [M]
+
+**New dependency:** `@xterm/addon-search` (0.1x line — match xterm 5.4, NOT the v6 release). Already installed: addon-fit, addon-web-links, addon-webgl, xterm.
+
+**Out of scope (deferred — see RESEARCH.md):** split panes, Warp/Wave command blocks, OSC-133 shell-integration decorations (success/fail gutter, prompt jump, sticky scroll), ligatures (WebGL conflict), inline images (Sixel), OSC-52 clipboard, serialize/export, screen-reader mode, first-class mobile/touch, multi-user/named-profiles, OS-global drop-down.
+
+**Locked invariants:** D-V44-SACRED (`sdk-agent-runner.ts` SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f`) — all work under `livos/`, `liv/` untouched. D-V44-MINI-PC-ONLY for deploy.
+
+**Success criteria:**
+- Find box (Ctrl+Shift+F) highlights all matches with "N of M" count + overview-ruler markers, rendering correctly under the WebGL renderer.
+- A WS drop auto-reconnects reusing the session id, replays Redis scrollback, and shows honest status; a 4404 surfaces "session expired."
+- Toolbar + bottom status bar + cheat-sheet render; font zoom persists across reload and re-fits the PTY (cols×rows propagate).
+- Settings drawer changes (theme/font/cursor/scrollback) apply live with correct re-fit; no clipping/desync.
+- Tuned 16-color ANSI theme applied; per-tab status dots reflect connecting/live/exited/expired; zero regression to shipped multi-tab/copy-paste/reattach.
+
+**UAT:** Operator opens Terminal → polished theme + toolbar + status bar. Ctrl+Shift+F → find works with match count + ruler markers. Pull network → "Reconnecting…" → restores with full scrollback. Ctrl+= zooms (persists on reload). Gear → switch color scheme live. `?` → shortcut sheet. Right-click copy/paste still works.
+
+**Plans:** 0/5 plans complete
+
+Plans:
+- [ ] 250-01-PLAN.md — TBD
+- [ ] 250-02-PLAN.md — TBD
+- [ ] 250-03-PLAN.md — TBD
+- [ ] 250-04-PLAN.md — TBD
+- [ ] 250-05-PLAN.md — TBD
+
+**Cross-references:**
+- Depends on Phase 246 (multi-tab terminal) ✅ + the 2026-05-29 hot-fixes (WS cookie-auth route `01852a5d`, silent-disconnect `a1cb55ef`, WebGL renderer + font `1316efa7`, copy/paste).
+- Phase 249 (v44 milestone close) runs AFTER Phase 250 ships.
+
+---
+
 ### Phase 249: v44 E2E UAT + milestone close — ⏳ ARTIFACT-COMPLETE / OPERATOR-PENDING 2026-05-29 (1/1 plans — artifacts staged: consolidated UAT index + sequenced operator walk + guarded close script; D-V44-SACRED preserved (`f3538e1d811992b782a9bb057d1b7f0a0189f95f`); milestone NOT flipped to CLOSED per `feedback_milestone_uat_gate.md` — operator must walk `.planning/v44-OPERATOR-WALK.md` + tick `.planning/v44-UAT-CONSOLIDATED.md` mandatory rows + run `scripts/close-v44-when-uat-green.sh`)
 
 **Goal:** Stage the operator-facing artifacts for v44.0 milestone close — consolidated UAT index, sequenced browser walk, guarded close script. Operator (NOT executor) walks the deliverable, ticks rows, and runs the close script. Phase 249 itself produces artifacts only; it does NOT flip the milestone.
