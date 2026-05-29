@@ -1000,8 +1000,11 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 			}
 		}
 
-		// Sandbox passed — preserve the original read + base64 wrap behavior.
-		const file = await readFileBase64(requestedPath)
+		// Sandbox passed — read from the VALIDATED `resolved` path, not the
+		// original `requestedPath`, to close the realpath→read TOCTOU window
+		// (a symlink swapped in at requestedPath after the check would otherwise
+		// be followed). code-review WR-04, same class as the WID-marker hardening.
+		const file = await readFileBase64(resolved)
 		return {
 			content: [
 				{

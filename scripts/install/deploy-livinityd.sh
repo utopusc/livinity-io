@@ -232,7 +232,7 @@ _dld_setup_redis() {
     # Reuse from .env if present
     if [[ -f "$_DLD_ENV_FILE" ]]; then
         redis_pass=$(grep -E '^REDIS_URL=' "$_DLD_ENV_FILE" 2>/dev/null \
-            | sed -E 's|^REDIS_URL=redis://default:([^@]+)@.*|\1|' \
+            | sed -E 's|^REDIS_URL=redis://(default)?:([^@]+)@.*|\2|' \
             | head -1)
     fi
     if [[ -z "$redis_pass" ]]; then
@@ -1090,7 +1090,7 @@ _dld_seed_mcp_servers() {
 
     # Extract the bare password for redis-cli auth.
     local redis_pass
-    redis_pass=$(echo "$redis_url" | sed -E 's|^redis://default:([^@]+)@.*|\1|')
+    redis_pass=$(echo "$redis_url" | sed -E 's|^redis://(default)?:([^@]+)@.*|\2|')
     if [[ -z "$redis_pass" || "$redis_pass" == "$redis_url" ]]; then
         warn "Could not extract Redis password from REDIS_URL — skipping MCP seed"
         return 0
@@ -1246,7 +1246,7 @@ _dld_seed_domain_config() {
     fi
 
     local redis_pass
-    redis_pass=$(echo "$redis_url" | sed -E 's|^redis://default:([^@]+)@.*|\1|')
+    redis_pass=$(echo "$redis_url" | sed -E 's|^redis://(default)?:([^@]+)@.*|\2|')
     if [[ -z "$redis_pass" || "$redis_pass" == "$redis_url" ]]; then
         warn "Could not extract Redis password from REDIS_URL — skipping domain-config seed"
         return 0
@@ -1419,7 +1419,7 @@ _dld_seed_terminal_panel_flag() {
     fi
 
     local redis_pass
-    redis_pass=$(echo "$redis_url" | sed -E 's|^redis://default:([^@]+)@.*|\1|')
+    redis_pass=$(echo "$redis_url" | sed -E 's|^redis://(default)?:([^@]+)@.*|\2|')
     if [[ -z "$redis_pass" || "$redis_pass" == "$redis_url" ]]; then
         warn "Could not extract Redis password from REDIS_URL — skipping terminal_panel seed"
         return 0
@@ -1479,7 +1479,7 @@ _dld_seed_platform_api_key() {
     fi
 
     local redis_pass
-    redis_pass=$(echo "$redis_url" | sed -E 's|^redis://default:([^@]+)@.*|\1|')
+    redis_pass=$(echo "$redis_url" | sed -E 's|^redis://(default)?:([^@]+)@.*|\2|')
     if [[ -z "$redis_pass" || "$redis_pass" == "$redis_url" ]]; then
         warn "Could not extract Redis password — skipping platform API key seed"
         return 0
