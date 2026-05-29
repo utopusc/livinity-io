@@ -310,7 +310,20 @@ function resolveWindowId(
  * want to thrash readFileSync on the hot path. Cache invalidates if the
  * file's mtime changed.
  */
-const ACTIVE_WID_MARKER = '/tmp/livos-active-webapp-wid'
+// Phase 252-06 (R15) — per-user runtime dir (0700 tmpfs) instead of world-shared
+// /tmp. Closes the multi-user collision (T-252-18) + TOCTOU symlink-follow
+// surface (T-252-17) on the marker file. $XDG_RUNTIME_DIR is per-uid 0700 on
+// systemd hosts; fall back to /run/user/<uid> when the env is unset. Both the
+// luse MCP child (reader, here) AND livinityd (writer, window-manager.ts) run as
+// the SAME desktop user, so this path resolves identically in both processes.
+export const XDG_RUNTIME_DIR =
+	process.env.XDG_RUNTIME_DIR && process.env.XDG_RUNTIME_DIR.length > 0
+		? process.env.XDG_RUNTIME_DIR
+		: `/run/user/${process.getuid?.() ?? 1000}`
+const LIVOS_RUNTIME_DIR = `${XDG_RUNTIME_DIR}/livos`
+const ACTIVE_WID_MARKER = `${LIVOS_RUNTIME_DIR}/active-webapp-wid`
+/** R15 — runtime-dir-scoped Luse temp prefix (replaces world-shared /tmp/luse-). */
+export const LUSE_TMP_PREFIX = `${XDG_RUNTIME_DIR}/luse-`
 let widCache: {wid: number | undefined; cachedAt: number; mtimeMs: number} | null = null
 const WID_CACHE_TTL_MS = 250
 
@@ -324,7 +337,15 @@ function readSingleActiveWebappWidFromFile(): number | undefined {
 		const fs = require('node:fs') as typeof import('node:fs')
 		let mtimeMs = 0
 		try {
-			mtimeMs = fs.statSync(ACTIVE_WID_MARKER).mtimeMs
+			// Phase 252-06 (R15) — lstat (NOT stat) so a planted symlink at the
+			// marker path is REJECTED rather than followed. Combined with the
+			// O_NOFOLLOW open below, this closes the TOCTOU symlink-follow race.
+			const st = fs.lstatSync(ACTIVE_WID_MARKER)
+			if (!st.isFile()) {
+				widCache = null
+				return undefined
+			}
+			mtimeMs = st.mtimeMs
 		} catch {
 			widCache = null
 			return undefined
@@ -332,7 +353,16 @@ function readSingleActiveWebappWidFromFile(): number | undefined {
 		if (widCache && widCache.mtimeMs === mtimeMs && now - widCache.cachedAt < WID_CACHE_TTL_MS) {
 			return widCache.wid
 		}
-		const raw = fs.readFileSync(ACTIVE_WID_MARKER, 'utf8').trim()
+		// Phase 252-06 (R15) — open with O_NOFOLLOW so a symlink swapped in
+		// between the lstat and the read is not followed (TOCTOU close).
+		let raw: string
+		let fd: number | undefined
+		try {
+			fd = fs.openSync(ACTIVE_WID_MARKER, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW)
+			raw = fs.readFileSync(fd, 'utf8').trim()
+		} finally {
+			if (fd !== undefined) fs.closeSync(fd)
+		}
 		if (raw.length === 0) {
 			widCache = {wid: undefined, cachedAt: now, mtimeMs}
 			return undefined
@@ -444,7 +474,7 @@ async function discoverActiveX11Displays(): Promise<string[]> {
 // /opt/livos/.env). We restrict reads to a per-user allowlist:
 //
 //   /home/<user>/                          — user home, read-only
-//   /tmp/luse-*/                           — Luse-owned temp workspace
+//   ${XDG_RUNTIME_DIR}/luse-*/             — Luse-owned temp workspace (R15: per-uid)
 //   ${LIVOS_ROOT}/data/uploads/<userId>/   — user uploads (R14: LIVOS_ROOT-derived)
 //
 // Symlinks are resolved via fs.realpath BEFORE the allowlist check so a
@@ -476,7 +506,8 @@ export function __setRealpathForTest(
  * post-realpath absolute path. `userSlug` controls the `/home/<user>/`
  * branch; `userId` controls the `${LIVOS_ROOT}/data/uploads/<userId>/` branch.
  * Returns true ONLY if `resolved` starts with one of the three allowed
- * prefixes. The `/tmp/luse-` prefix matches any `/tmp/luse-<anything>` dir.
+ * prefixes. The LUSE_TMP_PREFIX (`${XDG_RUNTIME_DIR}/luse-`) matches any
+ * runtime-dir-scoped `luse-<anything>` dir (R15: per-uid, was world-shared /tmp).
  */
 export function isPathAllowed(
 	resolved: string,
@@ -485,7 +516,9 @@ export function isPathAllowed(
 ): boolean {
 	const allowlist = [
 		`/home/${userSlug}/`,
-		'/tmp/luse-',
+		// Phase 252-06 (R15) — runtime-dir-scoped (per-uid 0700) instead of the
+		// world-shared /tmp/luse- prefix.
+		LUSE_TMP_PREFIX,
 		// Phase 252-06 (R14) — derive from the single LIVOS_ROOT source instead
 		// of re-hardcoding /opt/livos, so a moved-root box's uploads dir is
 		// still inside the sandbox.
@@ -961,7 +994,7 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 					type: 'text',
 					text:
 						`path outside sandbox: requested=${requestedPath} resolved=${resolved} ` +
-						`(allowed prefixes: /home/${userSlug}/, /tmp/luse-, ${LIVOS_ROOT}/data/uploads/${userId}/)`,
+						`(allowed prefixes: /home/${userSlug}/, ${LUSE_TMP_PREFIX}, ${LIVOS_ROOT}/data/uploads/${userId}/)`,
 				}],
 				isError: true,
 			}
