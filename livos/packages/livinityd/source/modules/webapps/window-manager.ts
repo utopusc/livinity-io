@@ -819,14 +819,25 @@ export class WebAppWindowManager {
 	}
 
 	/**
-	 * Phase 100-07.4 — write the SOLE active WebApp's wid to
-	 * `/tmp/livos-active-webapp-wid` for the Luse MCP child to read at
-	 * tool dispatch time (cross-process fallback). Under 102-04 the wid is
-	 * always 0; 102-06 will rewrite this helper to broadcast the display
-	 * instead.
+	 * Phase 100-07.4 — write the SOLE active WebApp's wid to the per-user
+	 * runtime-dir marker (`$XDG_RUNTIME_DIR/livos/active-webapp-wid`) for the
+	 * Luse MCP child to read at tool dispatch time (cross-process fallback).
+	 * Under 102-04 the wid is always 0; 102-06 will rewrite this helper to
+	 * broadcast the display instead.
+	 *
+	 * Phase 252-06 (R15) — moved off world-shared /tmp into the per-uid 0700
+	 * runtime dir. livinityd (writer) AND the luse MCP child (reader,
+	 * mcp/tools.ts) run as the SAME desktop user, so $XDG_RUNTIME_DIR resolves
+	 * to the same path in both processes. Closes the multi-user collision +
+	 * TOCTOU symlink surface (the reader now lstat-rejects + O_NOFOLLOW-opens).
 	 */
 	private broadcastActiveWid(): void {
-		const marker = '/tmp/livos-active-webapp-wid'
+		const xdgRuntimeDir =
+			process.env.XDG_RUNTIME_DIR && process.env.XDG_RUNTIME_DIR.length > 0
+				? process.env.XDG_RUNTIME_DIR
+				: `/run/user/${process.getuid?.() ?? 1000}`
+		const runtimeDir = `${xdgRuntimeDir}/livos`
+		const marker = `${runtimeDir}/active-webapp-wid`
 		try {
 			// Phase 102 deploy fix — livinityd is ESM, `require()` is undefined
 			// here. Use the synchronous node:fs API imported at module top
@@ -844,6 +855,10 @@ export class WebAppWindowManager {
 				}
 				return
 			}
+			// Phase 252-06 (R15) — ensure the per-uid 0700 runtime dir exists
+			// before writing the marker (it normally does on systemd hosts, but
+			// a non-systemd / fresh box may not have created $XDG/livos yet).
+			fsSync.mkdirSync(runtimeDir, {recursive: true, mode: 0o700})
 			fsSync.writeFileSync(marker, wid !== undefined ? String(wid) : '', {encoding: 'utf8'})
 		} catch (err) {
 			this.logger?.warn?.(`failed to broadcast active wid to ${marker}`, err)
