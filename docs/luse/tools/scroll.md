@@ -53,3 +53,7 @@ On failure:
   "arguments": { "direction": "down", "amount": 5, "x": 80, "y": 400 }
 }
 ```
+
+## See also
+
+- [PATTERNS.md#pattern-7-scroll-and-search](../PATTERNS.md#pattern-7-scroll-and-search)

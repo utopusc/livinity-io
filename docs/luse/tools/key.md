@@ -57,3 +57,8 @@ symbol), `"no_focused_window"`, and `"xdotool_failed"`.
   "arguments": { "key": "ctrl+v" }
 }
 ```
+
+## See also
+
+- [PATTERNS.md#pattern-6-modal-dismissal](../PATTERNS.md#pattern-6-modal-dismissal)
+- [ANTI-PATTERNS.md#anti-pattern-3-modifier-key-collisions-with-desktop-shell](../ANTI-PATTERNS.md#anti-pattern-3-modifier-key-collisions-with-desktop-shell)
