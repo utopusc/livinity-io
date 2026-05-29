@@ -140,13 +140,17 @@ let spawnHarness: ReturnType<typeof makeSpawnFn>
 const FIXED_NOW = Date.parse('2026-05-29T01:00:00.000Z')
 const nowFn = () => FIXED_NOW
 
-async function makeMgr(opts?: {allocatorStart?: number}): Promise<DisplayManager> {
+async function makeMgr(opts?: {
+	allocatorStart?: number
+	processKillFn?: (pid: number, signal?: NodeJS.Signals | number) => boolean
+}): Promise<DisplayManager> {
 	const mgr = createDisplayManager({
 		redis: redis as any,
 		spawnFn: spawnHarness.spawnFn as any,
 		nowFn,
 		allocatorStart: opts?.allocatorStart ?? 10,
-	})
+		processKillFn: opts?.processKillFn as any,
+	} as any)
 	// Allow the factory to seed its allocator from Redis SCAN before tests act.
 	if (typeof (mgr as any).initialized === 'object') {
 		await (mgr as any).initialized
@@ -302,26 +306,17 @@ describe('display-manager — owner-scoped kill', () => {
 	})
 
 	it('Case 12: caller === owner → SIGTERM X + every app pid, DEL both keys', async () => {
-		const mgr = await makeMgr()
+		// processKillFn is DI'd into the SAME manager that spawned the X
+		// server — the in-memory spawn-handle map lives per-instance, so
+		// kill() must run on the manager that holds it.
+		const processKillFn = vi.fn().mockReturnValue(true)
+		const mgr = await makeMgr({processKillFn})
 		await mgr.create({mode: 'xephyr', ownerSession: 's1'})
 		const xHandle = spawnHarness.handles[0]
 		await mgr.attachApp({display: ':10', pid: 4001, app_name: 'firefox'})
 		await mgr.attachApp({display: ':10', pid: 4002, app_name: 'gedit'})
 
-		// Inject a process.kill spy via the manager's signal hook (DI seam).
-		// The manager invokes `(deps.processKillFn ?? process.kill)(pid, sig)`
-		// — see truth #7. Tests construct a fresh manager with the spy.
-		const processKillFn = vi.fn().mockReturnValue(true)
-		const mgr2 = createDisplayManager({
-			redis: redis as any,
-			spawnFn: spawnHarness.spawnFn as any,
-			nowFn,
-			allocatorStart: 10,
-			processKillFn,
-		} as any)
-		if ((mgr2 as any).initialized) await (mgr2 as any).initialized
-
-		const result = await mgr2.kill({display: ':10', callerSession: 's1'})
+		const result = await mgr.kill({display: ':10', callerSession: 's1'})
 		expect(result.ok).toBe(true)
 		if (result.ok) {
 			expect(result.killed_apps_count).toBe(2)
