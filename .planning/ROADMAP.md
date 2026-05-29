@@ -3548,7 +3548,7 @@ Plans:
 
 ---
 
-### Phase 251: Fresh-Install Portability & Hardcode Audit — read-only parallel audit of the v44/250-hotfix change surface — 🟡 IN PROGRESS 2026-05-29 (3/9 plans)
+### Phase 251: Fresh-Install Portability & Hardcode Audit — read-only parallel audit of the v44/250-hotfix change surface — 🟡 IN PROGRESS 2026-05-29 (4/9 plans)
 
 **Goal:** Definitively answer two operator questions about the recent terminal + Luse computer-use debugging session: (1) is there any **hardcoded value** in those changes that breaks on a different box, and (2) would a **brand-new Mini PC / VPS install** come up seamlessly with the terminal + Luse features working — or are there gaps that only the live Mini PC has because we patched it by hand (xterm/imagemagick installs, a `redis-env.conf` systemd drop-in, a Claude version pin)?
 
@@ -3558,7 +3558,7 @@ Plans:
 - **251-01** — Luse Redis-URL resolution & `resolveLuseRedisUrl` fallback portability [S, Wave 1] — ✅ DONE 2026-05-29 (commit `a7a5097d`; verdict: Path-A COVERED via seed.ts env-thread + /opt/livos/.env fallback, RESEARCH first-create GAP corrected; Path-B GAP (CHANGEME, pre-existing); server.ts:124 hardcoded-root RISK)
 - **251-02** — Luse display backend (Xephyr default vs only-Xvfb-installed) [S, Wave 1] — ✅ DONE 2026-05-29 (commit `42db9429`; verdict: create_display default mode=xephyr FAILS fresh — no xserver-xephyr installed (only xvfb), GAP HIGH; silent false-positive success — no child.on('error') in display-manager create(), GAP/RISK HIGH; GDM Xauthority hardcode vs fluxbox+Xvfb fresh box, RISK MEDIUM; xvfb opt-in path COVERED)
 - **251-03** — Spawned-binary dependency matrix → missing-package list (xterm/imagemagick/Xephyr/…) [M, Wave 1] — ✅ DONE 2026-05-29 (commit `5bf39936`; 17-binary matrix; 6 MISSING pkgs — xserver-xephyr + xterm HIGH, gnome-terminal MED, x11-utils/xclip/wmctrl LOW; xterm the only NEW-this-session dep (`b774c20b`); imagemagick/import RULED OUT — no code spawns it, live-box install was manual-only; copy-paste remediation snippet targets `_dld_install_streaming_packages` + `update.sh` mirror)
-- **251-04** — Identity hardcodes (bruce / uid 1000 / gdm Xauthority / :1 / admin-vs-bruce) [M, Wave 1]
+- **251-04** — Identity hardcodes (bruce / uid 1000 / gdm Xauthority / :1 / admin-vs-bruce) [M, Wave 1] — ✅ DONE 2026-05-29 (commit `ad40e87c`; 11-literal identity table; SEVEREST: PTY `username:'bruce'` pinned in THREE layers (ws-handler.ts:466 literal + types.ts:31 literal type + session.ts:77 guard / :82 hardcoded `--user bruce` argv), NO `livos:desktop:user` lookup unlike Chrome — LATENT-RISK on default install, REAL-GAP if `_DLD_DESKTOP_USER` overridden; `LUSE_USER_ID` admin-vs-bruce default divergence (server.ts:315 vs tools.ts:915-916), unset on fresh install — REAL-GAP; seed `XAUTHORITY=/run/user/1000/gdm/Xauthority` uid-1000+gdm REAL-GAP; uid `1000` + `DISPLAY=:1` + `:0` fallbacks LATENT-RISK; Chrome path COVERED reference pattern)
 - **251-05** — Install-root & sandbox-path portability (/opt/livos, uploads, /home, /tmp markers) [S, Wave 1]
 - **251-06** — Systemd & env delivery (redis-env.conf live-only; liv-assistant.service env inheritance) [M, Wave 1]
 - **251-07** — Terminal hot-fix (246) portability (PTY user, WS route, WebGL addon, cookie auth, font) [S, Wave 1]
