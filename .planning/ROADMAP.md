@@ -3564,7 +3564,7 @@ Plans:
 
 ---
 
-### Phase 248: Luse display lifecycle — create/list/kill displays + app placement — 🟡 PLANNED 2026-05-28 (0/? plans)
+### Phase 248: Luse display lifecycle — create/list/kill displays + app placement — 🟡 PLANNED 2026-05-28 (0/5 plans)
 
 **Goal:** Extend the Luse MCP server (Phase 241 registrar / Phase 242 docs surface) with display-lifecycle tools. AI can create isolated nested X servers (Xephyr default, Xvfb headless), launch any LivOS app inside a specific display, list active displays with running apps, and kill displays it created. Cleanup discipline + isolation guarantees enforce that an agent's experiments don't leak into the operator's main session.
 
@@ -3581,12 +3581,16 @@ Plans:
 - Auto-cleanup: TTL gc on idle displays (4h since last app activity → kill).
 - Existing `computer_application` tool gets an optional `display` param so AI can target an existing display instead of always landing on `:1`.
 
-**Plan count estimate:** 4-5 plans (backend tools + Redis state + Xephyr/Xvfb spawn module + UI guidance docs + Mini PC deploy + UAT).
+**Plan count estimate:** 5 plans (backend module + MCP tools + TTL GC + docs + deploy/UAT).
 
-**Plans:** 0/? plans complete
+**Plans:** 0/5 plans complete
 
 Plans:
-- [ ] 248-PLAN.md series — TBD
+- [ ] 248-01-PLAN.md — Backend display module: Xephyr/Xvfb spawn factory + display-number allocator (:10+) + Redis HSET state + apps LIST tracker + owner-scope enforcement
+- [ ] 248-02-PLAN.md — Register 4 new MCP tools (computer_create_display / list_displays / kill_display / launch_app_in_display) + extend computer_application with optional display param
+- [ ] 248-03-PLAN.md — TTL GC sweep for idle displays (1h sweep / 4h idle) + boot wiring in mcp/server.ts
+- [ ] 248-04-PLAN.md — Canonical agent-agnostic display-lifecycle docs (DISPLAY-LIFECYCLE.md + 4 per-tool refs) + sync to all 4 agent shims
+- [ ] 248-05-PLAN.md — Mini PC deploy via update.sh + Xephyr/Xvfb apt-install probe + 5 wire-level probes + UAT checklist
 
 **UAT:** AI asks `computer_create_display({mode:"xephyr"})` → returns display ID → `computer_launch_app_in_display({display, app:"firefox"})` → operator sees Firefox window in a NEW separate X server (not on main desktop) → AI takes screenshot of that display only → `computer_list_displays()` shows the display + running Firefox → `computer_kill_display({display})` → display + Firefox closed.
 
