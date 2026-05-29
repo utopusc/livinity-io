@@ -135,11 +135,24 @@ INTEGRATION_RECIPES_MD="$(read_canonical "$CANONICAL_DIR/INTEGRATION-RECIPES.md"
 KNOWN_LIMITS_MD="$(read_canonical "$CANONICAL_DIR/KNOWN-LIMITS.md")"
 CHEAT_SHEET_MD="$(read_canonical "$CANONICAL_DIR/CHEAT-SHEET.md")"
 
+# Phase 248 v44 display-lifecycle canonical docs — top-level guide +
+# four per-tool refs for the nested-display surface. Same propagation
+# shape as Phase 247: bundled prose into the generic shims AND
+# standalone .claude/skills/luse/<NAME>.md files for the Claude shim
+# directory. Order matches the Phase 248-04 plan frontmatter
+# files_modified list for stable concat sha.
+DISPLAY_LIFECYCLE_MD="$(read_canonical "$CANONICAL_DIR/DISPLAY-LIFECYCLE.md")"
+CREATE_DISPLAY_MD="$(read_canonical "$CANONICAL_DIR/tools/create_display.md")"
+LIST_DISPLAYS_MD="$(read_canonical "$CANONICAL_DIR/tools/list_displays.md")"
+KILL_DISPLAY_MD="$(read_canonical "$CANONICAL_DIR/tools/kill_display.md")"
+LAUNCH_APP_IN_DISPLAY_MD="$(read_canonical "$CANONICAL_DIR/tools/launch_app_in_display.md")"
+
 # Concatenated "single-file" payload used by Aion / OpenCode / OpenClaw
 # shims (they ship one file, not a directory).
-CONCAT_PAYLOAD="$(printf '%s\n\n---\n\n## Tool: click\n\n%s\n\n---\n\n## Tool: type\n\n%s\n\n---\n\n## Tool: screenshot\n\n%s\n\n---\n\n## Tool: key\n\n%s\n\n---\n\n## Tool: scroll\n\n%s\n\n---\n\n## Workflow\n\n%s\n\n---\n\n## PATTERNS\n\n%s\n\n---\n\n## TROUBLESHOOTING\n\n%s\n\n---\n\n## ANTI-PATTERNS\n\n%s\n\n---\n\n## INTEGRATION-RECIPES\n\n%s\n\n---\n\n## KNOWN-LIMITS\n\n%s\n\n---\n\n## CHEAT-SHEET\n\n%s\n' \
+CONCAT_PAYLOAD="$(printf '%s\n\n---\n\n## Tool: click\n\n%s\n\n---\n\n## Tool: type\n\n%s\n\n---\n\n## Tool: screenshot\n\n%s\n\n---\n\n## Tool: key\n\n%s\n\n---\n\n## Tool: scroll\n\n%s\n\n---\n\n## Workflow\n\n%s\n\n---\n\n## PATTERNS\n\n%s\n\n---\n\n## TROUBLESHOOTING\n\n%s\n\n---\n\n## ANTI-PATTERNS\n\n%s\n\n---\n\n## INTEGRATION-RECIPES\n\n%s\n\n---\n\n## KNOWN-LIMITS\n\n%s\n\n---\n\n## CHEAT-SHEET\n\n%s\n\n---\n\n## DISPLAY-LIFECYCLE\n\n%s\n\n---\n\n## Tool: create_display\n\n%s\n\n---\n\n## Tool: list_displays\n\n%s\n\n---\n\n## Tool: kill_display\n\n%s\n\n---\n\n## Tool: launch_app_in_display\n\n%s\n' \
   "$LUSE_MD" "$CLICK_MD" "$TYPE_MD" "$SCREENSHOT_MD" "$KEY_MD" "$SCROLL_MD" "$WORKFLOW_MD" \
-  "$PATTERNS_MD" "$TROUBLESHOOTING_MD" "$ANTI_PATTERNS_MD" "$INTEGRATION_RECIPES_MD" "$KNOWN_LIMITS_MD" "$CHEAT_SHEET_MD")"
+  "$PATTERNS_MD" "$TROUBLESHOOTING_MD" "$ANTI_PATTERNS_MD" "$INTEGRATION_RECIPES_MD" "$KNOWN_LIMITS_MD" "$CHEAT_SHEET_MD" \
+  "$DISPLAY_LIFECYCLE_MD" "$CREATE_DISPLAY_MD" "$LIST_DISPLAYS_MD" "$KILL_DISPLAY_MD" "$LAUNCH_APP_IN_DISPLAY_MD")"
 
 # --- generators ----------------------------------------------------------
 
@@ -197,6 +210,29 @@ EOF
     local top_md
     top_md="$(printf '<!-- source-sha: __PAYLOAD_SHA__ -->\n<!-- AUTO-GENERATED FROM docs/luse/%s.md — DO NOT EDIT. -->\n\n%s' "$top" "$top_var")"
     write_shim "$REPO_ROOT/.claude/skills/luse/$top.md" "$top_md"
+  done
+
+  # Phase 248: display-lifecycle top-level guide as a standalone
+  # .claude/skills/luse/DISPLAY-LIFECYCLE.md (mirrors the Phase 247
+  # top-level shim shape exactly).
+  local display_lifecycle_md
+  display_lifecycle_md="$(printf '<!-- source-sha: __PAYLOAD_SHA__ -->\n<!-- AUTO-GENERATED FROM docs/luse/DISPLAY-LIFECYCLE.md — DO NOT EDIT. -->\n\n%s' "$DISPLAY_LIFECYCLE_MD")"
+  write_shim "$REPO_ROOT/.claude/skills/luse/DISPLAY-LIFECYCLE.md" "$display_lifecycle_md"
+
+  # Phase 248: 4 per-tool display refs reuse the Phase 242 per-tool
+  # shim shape (same HTML-comment marker + AUTO-GENERATED FROM
+  # docs/luse/tools/<tool>.md banner).
+  for tool in create_display list_displays kill_display launch_app_in_display; do
+    local display_tool_var
+    case "$tool" in
+      create_display) display_tool_var="$CREATE_DISPLAY_MD" ;;
+      list_displays) display_tool_var="$LIST_DISPLAYS_MD" ;;
+      kill_display) display_tool_var="$KILL_DISPLAY_MD" ;;
+      launch_app_in_display) display_tool_var="$LAUNCH_APP_IN_DISPLAY_MD" ;;
+    esac
+    local display_tool_md
+    display_tool_md="$(printf '<!-- source-sha: __PAYLOAD_SHA__ -->\n<!-- AUTO-GENERATED FROM docs/luse/tools/%s.md — DO NOT EDIT. -->\n\n%s' "$tool" "$display_tool_var")"
+    write_shim "$REPO_ROOT/.claude/skills/luse/$tool.md" "$display_tool_md"
   done
 }
 
