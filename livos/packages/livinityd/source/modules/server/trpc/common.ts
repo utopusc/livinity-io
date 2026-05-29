@@ -729,4 +729,10 @@ export const httpOnlyPaths = [
 	// Caddy emission needed.
 	'ptySessions.listSessions',
 	'ptySessions.killSession',
+	// HOT-FIX 2026-05-29 — config.getTerminalPanelEnabled was WS-routed;
+	// when WS is half-broken the query stays isLoading forever, the hook
+	// returns false, and the terminal dock entry hides. Default-ON gates
+	// (e.g. V42 migration) masked the same WS bug. Force HTTP so the
+	// terminal dock entry survives WS hang.
+	'config.getTerminalPanelEnabled',
 ] as const
