@@ -227,6 +227,26 @@ describe('createPtyTerminalWsHandler — auth + feature-flag gates', () => {
 		expect(ctx.ws.close).toHaveBeenCalledWith(4403, 'feature disabled')
 		expect(ctx.sessionManager.create).not.toHaveBeenCalled()
 	})
+
+	// Regression lock for the 2026-05-29 silent-disconnect hot-fix.
+	// The REAL verifyProxyToken returns the boolean `true` (jwt.ts signs
+	// `{proxyToken:true}` and verify returns true), NOT an object with
+	// userId/loggedIn. The pre-fix handler fell through to a silent
+	// close(4403) on that shape, disconnecting every real terminal. A valid
+	// proxy token with no identity must now resolve to the admin user and
+	// proceed to spawn — never close(4403, "unauthorized").
+	test('3b. realistic verifyProxyToken → true (no identity) → admin, NOT closed', async () => {
+		const ctx = build({cookie: VALID_COOKIE, flag: true, verifyResult: true})
+		await ctx.handler(ctx.ws as never, ctx.request as never)
+		expect(ctx.ws.close).not.toHaveBeenCalledWith(4403, 'unauthorized')
+		ctx.ws._emit(
+			'message',
+			Buffer.from(JSON.stringify({type: 'init', cols: 80, rows: 24})),
+		)
+		await new Promise((resolve) => setImmediate(resolve))
+		expect(ctx.getAdminUserFn).toHaveBeenCalled()
+		expect(ctx.sessionManager.create).toHaveBeenCalledTimes(1)
+	})
 })
 
 describe('createPtyTerminalWsHandler — init + spawn happy path', () => {

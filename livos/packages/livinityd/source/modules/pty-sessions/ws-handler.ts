@@ -243,6 +243,10 @@ export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 		// ─── Gate 1: cookie auth ──────────────────────────────────────────
 		const proxyToken = extractProxyToken(request as never)
 		if (!proxyToken) {
+			warnOrError(
+				deps.logger,
+				'[pty-terminal] upgrade rejected: no LIVINITY_PROXY_TOKEN cookie on request',
+			)
 			ws.close(4403, 'unauthorized')
 			return
 		}
@@ -279,11 +283,33 @@ export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 			return
 		}
 
-		// ─── Resolve user_id (legacy {loggedIn:true} → getAdminUser) ──────
+		// ─── Resolve user_id ──────────────────────────────────────────────
+		// Reaching here means verifyProxyToken RESOLVED (a throw would have
+		// closed above), so the proxy token is valid = authenticated browser
+		// session. That token carries NO identity by design: jwt.ts signs
+		// `{proxyToken:true}` and verifyProxyToken returns the boolean `true`,
+		// NOT a payload object. For v44 (single-user) a valid proxy token
+		// therefore resolves to the admin user; the PTY still runs as bruce
+		// per D-V44-NO-ROOT-PTY. The userId branch below is retained for
+		// forward-compat in case a future token gains an identity payload
+		// (v45 multi-user).
+		//
+		// HOT-FIX 2026-05-29: the previous `else { ws.close(4403) }` here was a
+		// silent-disconnect bug — it fired on EVERY real connection because the
+		// live payload is the boolean `true`, never an object with
+		// userId/loggedIn. The 12 unit tests mocked verifyProxyToken to return
+		// `{userId:'u1', loggedIn:true}`, so the broken path went unnoticed
+		// until the terminal feature flag was first turned on (Phase 246 UAT).
 		let userId: string
-		if (typeof tokenPayload.userId === 'string' && tokenPayload.userId.length > 0) {
-			userId = tokenPayload.userId
-		} else if (tokenPayload.loggedIn === true) {
+		const idPayload = tokenPayload as {userId?: string; loggedIn?: boolean} | boolean
+		if (
+			idPayload &&
+			typeof idPayload === 'object' &&
+			typeof idPayload.userId === 'string' &&
+			idPayload.userId.length > 0
+		) {
+			userId = idPayload.userId
+		} else {
 			try {
 				const getAdminUser = await resolveGetAdminUser()
 				const admin = await getAdminUser()
@@ -296,9 +322,6 @@ export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 				)
 				userId = 'admin'
 			}
-		} else {
-			ws.close(4403, 'unauthorized')
-			return
 		}
 
 		// ─── URL mode routing (Phase 246-03) ──────────────────────────────
