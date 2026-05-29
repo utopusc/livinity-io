@@ -22,3 +22,30 @@ the Phase 252 changes. Logged per the executor SCOPE BOUNDARY rule; NOT fixed.
   they fail IDENTICALLY with the 252-06 `broadcastActiveWid` change reverted, so
   they are unrelated to the R15 marker-path move. 37 passed / 22 skipped /
   3 pre-existing-fail, unchanged by 252-06. Out of scope per SCOPE BOUNDARY.
+
+## Code review (252-REVIEW.md) — deferred findings
+
+WR-01, WR-02, WR-04 were FIXED post-review (commit `dd9c1a0e`). The following are
+deferred — all same-uid/0700-bounded, and the fixes are broader than a safe
+post-review patch:
+
+### WR-03 — `LUSE_TMP_PREFIX` is a string prefix, not a path-boundary prefix
+- `isPathAllowed` (`mcp/tools.ts:512-527`) matches `${XDG_RUNTIME_DIR}/luse-` via
+  `startsWith`, so a sibling dir literally named `luse-<x>` under `$XDG_RUNTIME_DIR`
+  is accepted. Bounded: the dir is 0700 and same-uid, so only the user's own
+  process can create it — no cross-user escalation. The reviewer's fix restructures
+  the workspace layout to `${XDG_RUNTIME_DIR}/luse/<id>/` and anchors on
+  `${XDG_RUNTIME_DIR}/luse/`, which also touches the WRITER (`webapps/window-manager.ts`
+  `broadcastActiveWid`) and the luse spawn path — out of scope for a post-review
+  patch; track for a dedicated hardening pass.
+
+### IN-01 — Path A / Path C MCP-seed helpers are near-duplicate (~90 lines, drift risk)
+- `_dld_seed_mcp_servers` (deploy-livinityd.sh) and `seed_mcp_servers` (livos/install.sh)
+  are intentional mirrors (per the 252-03 resolution: both entrypoints must seed).
+  WR-01 was exactly the drift IN-01 warns about. A shared sourced helper would
+  remove the drift surface but requires both scripts to resolve a common include
+  path (the Path C self-bootstrap fetches from GitHub-raw) — deferred.
+
+### IN-02..IN-04 — stale Kimi banner text; `uid ?? 1000` fallback duplicated; `:1`-`:99` display-regex cap
+- Cosmetic / low-impact. IN-02 (Kimi→Claude banner copy) overlaps the broader
+  provider-rename cleanup tracked in project memory. Deferred.
