@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
 status: executing
-last_updated: "2026-05-29T14:26:28.620Z"
+last_updated: "2026-05-29T14:30:17.247Z"
 last_activity: 2026-05-29
 progress:
   total_phases: 8
@@ -43,7 +43,14 @@ progress:
 
 ## Current Position (v45-prep — Phase 251 Fresh-Install Portability & Hardcode Audit 🟡 PLANNED 2026-05-29 — 9 GSD plans authored on disk: 8 parallel read-only audit work-streams (Wave 1, `wave:1` `depends_on:[]`, disjoint findings docs) + 1 synthesis (Wave 2) producing PORTABILITY-AUDIT.md + REMEDIATION-BACKLOG.md; 251-CONTEXT.md + 251-RESEARCH.md recon-seeded by 4 parallel agents; ROADMAP Phase 251 row added above Phase 250. **READY TO EXECUTE — run `/gsd-execute-phase 251` after /clear** to fan out the parallel audit. NOTE: the v44.0 close (Phase 249) is still OPERATOR-PENDING — see Previous Position below; Phase 251 is an independent audit and does NOT block or depend on the v44 close.)
 
-## Latest update 2026-05-29 (later)
+## Latest update 2026-05-29 (Phase 251 execution — 2/9 Wave-1 plans complete)
+
+- ✅ **251-02 DONE** (commit `42db9429`) — Luse display backend audit. **Verdict: `computer_create_display` with DEFAULT args FAILS on a fresh install.** Default mode = `xephyr` (`display-manager.ts:216` + `tools.ts:1028`) but **no installer apt list installs `xserver-xephyr`** (only `xvfb`; `deploy-livinityd.sh:523`, `update.sh:369`). The spawn ENOENT is **silently swallowed** — `display-manager.ts create()` (`:212-253`) has NO `child.on('error')` handler, so it returns a success envelope + writes the Redis key + reports `pid:-1` (false-positive success). GAP HIGH. Secondary: seed `XAUTHORITY=/run/user/1000/gdm/Xauthority` (`mcp-servers.json:176`) assumes GDM; fresh box runs Xvfb `:1` via fluxbox (no GDM) → RISK MEDIUM. `mode:'xvfb'` opt-in path COVERED. Fixes for 251-09 backlog: (1) add `xserver-xephyr` to apt+verify lists, (2) xephyr→xvfb fallback, (3) add `child.on('error')`, (4) resolve XAUTHORITY at seed time. Findings: `.planning/phases/251-fresh-install-portability-audit/findings/251-02-FINDINGS.md`.
+- ✅ **251-01 DONE** (commit `a7a5097d`) — Luse Redis-URL resolution audit (Path-A COVERED, Path-B CHANGEME GAP, server.ts:124 hardcoded-root RISK).
+
+---
+
+## Authored 2026-05-29 (earlier)
 
 Authored **Phase 251 — Fresh-Install Portability & Hardcode Audit** per operator request: verify the v44/250-hotfix terminal + Luse change surface has no install-breaking hardcodes and that a brand-new Mini PC/VPS install comes up seamlessly. 4 parallel recon agents already surfaced the prime suspects (baked into `251-RESEARCH.md` as verified leads): **xterm/imagemagick/Xephyr missing from ALL installer apt lists** (only Xvfb present, but create_display defaults to xephyr); **`username:'bruce'` hardcoded in the PTY spawn with no Redis/env lookup**; the **`redis-env.conf` systemd drop-in we hand-added exists nowhere in the repo** (live-only); `/opt/livos/.env` fallback paths + uid-1000/gdm-Xauthority + `admin`-vs-`bruce` LUSE_USER_ID inconsistency; **two divergent install paths** (A comprehensive vs B CHANGEME-secrets — which does get.livinity.io use?); liv-assistant luse MCP **first-create gap** (update.sh only patches-if-exists). Phase 251 = 8 parallel audit work-streams + 1 synthesis; deliverables are docs only (D-251-READONLY — no source edits). Run `/gsd-execute-phase 251`. Files: `.planning/phases/251-fresh-install-portability-audit/` (251-CONTEXT.md + 251-RESEARCH.md + 251-01..09-PLAN.md) + ROADMAP Phase 251 row. Feeds a future **Phase 252** remediation from the backlog.
 

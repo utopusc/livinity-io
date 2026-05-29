@@ -3548,7 +3548,7 @@ Plans:
 
 ---
 
-### Phase 251: Fresh-Install Portability & Hardcode Audit — read-only parallel audit of the v44/250-hotfix change surface — 🟡 IN PROGRESS 2026-05-29 (1/9 plans)
+### Phase 251: Fresh-Install Portability & Hardcode Audit — read-only parallel audit of the v44/250-hotfix change surface — 🟡 IN PROGRESS 2026-05-29 (2/9 plans)
 
 **Goal:** Definitively answer two operator questions about the recent terminal + Luse computer-use debugging session: (1) is there any **hardcoded value** in those changes that breaks on a different box, and (2) would a **brand-new Mini PC / VPS install** come up seamlessly with the terminal + Luse features working — or are there gaps that only the live Mini PC has because we patched it by hand (xterm/imagemagick installs, a `redis-env.conf` systemd drop-in, a Claude version pin)?
 
@@ -3556,7 +3556,7 @@ Plans:
 
 **Plans (9, wave-ordered):**
 - **251-01** — Luse Redis-URL resolution & `resolveLuseRedisUrl` fallback portability [S, Wave 1] — ✅ DONE 2026-05-29 (commit `a7a5097d`; verdict: Path-A COVERED via seed.ts env-thread + /opt/livos/.env fallback, RESEARCH first-create GAP corrected; Path-B GAP (CHANGEME, pre-existing); server.ts:124 hardcoded-root RISK)
-- **251-02** — Luse display backend (Xephyr default vs only-Xvfb-installed) [S, Wave 1]
+- **251-02** — Luse display backend (Xephyr default vs only-Xvfb-installed) [S, Wave 1] — ✅ DONE 2026-05-29 (commit `42db9429`; verdict: create_display default mode=xephyr FAILS fresh — no xserver-xephyr installed (only xvfb), GAP HIGH; silent false-positive success — no child.on('error') in display-manager create(), GAP/RISK HIGH; GDM Xauthority hardcode vs fluxbox+Xvfb fresh box, RISK MEDIUM; xvfb opt-in path COVERED)
 - **251-03** — Spawned-binary dependency matrix → missing-package list (xterm/imagemagick/Xephyr/…) [M, Wave 1]
 - **251-04** — Identity hardcodes (bruce / uid 1000 / gdm Xauthority / :1 / admin-vs-bruce) [M, Wave 1]
 - **251-05** — Install-root & sandbox-path portability (/opt/livos, uploads, /home, /tmp markers) [S, Wave 1]
@@ -3578,11 +3578,11 @@ Plans:
 
 **UAT:** operator reads `PORTABILITY-AUDIT.md` and confirms the GO/NO-GO verdict + decides whether to greenlight Phase 252 remediation.
 
-**Plans:** 0/9 plans complete
+**Plans:** 2/9 plans complete
 
 Plans:
-- [ ] 251-01-PLAN.md — Luse Redis-URL resolution audit (Wave 1)
-- [ ] 251-02-PLAN.md — Luse display backend audit (Wave 1)
+- [x] 251-01-PLAN.md — Luse Redis-URL resolution audit (Wave 1)
+- [x] 251-02-PLAN.md — Luse display backend audit (Wave 1)
 - [ ] 251-03-PLAN.md — binary/package dependency matrix (Wave 1)
 - [ ] 251-04-PLAN.md — identity hardcode audit (Wave 1)
 - [ ] 251-05-PLAN.md — install-root & sandbox-path audit (Wave 1)
