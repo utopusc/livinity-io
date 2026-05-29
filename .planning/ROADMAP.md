@@ -3564,7 +3564,7 @@ Plans:
 
 ---
 
-### Phase 248: Luse display lifecycle — create/list/kill displays + app placement — 🟡 IN PROGRESS 2026-05-29 (1/5 plans — 248-01 backend display-manager SHIPPED 5ff2f0fb/f4c42eae/9a72fa99; 15/15 vitest GREEN; sacred SHA preserved)
+### Phase 248: Luse display lifecycle — create/list/kill displays + app placement — 🟡 IN PROGRESS 2026-05-29 (3/5 plans — 248-01 backend + 248-02 MCP tools + 248-03 TTL GC SHIPPED; 41/41 cumulative vitest GREEN across displays/ + mcp/tools.test.ts; sacred SHA preserved)
 
 **Goal:** Extend the Luse MCP server (Phase 241 registrar / Phase 242 docs surface) with display-lifecycle tools. AI can create isolated nested X servers (Xephyr default, Xvfb headless), launch any LivOS app inside a specific display, list active displays with running apps, and kill displays it created. Cleanup discipline + isolation guarantees enforce that an agent's experiments don't leak into the operator's main session.
 
@@ -3583,12 +3583,12 @@ Plans:
 
 **Plan count estimate:** 5 plans (backend module + MCP tools + TTL GC + docs + deploy/UAT).
 
-**Plans:** 2/5 plans complete
+**Plans:** 3/5 plans complete
 
 Plans:
 - [x] 248-01-PLAN.md — Backend display module: Xephyr/Xvfb spawn factory + display-number allocator (:10+) + Redis HSET state + apps LIST tracker + owner-scope enforcement — ✅ SHIPPED 2026-05-29 (`5ff2f0fb` test RED + `f4c42eae` feat GREEN + `9a72fa99` chore typecheck-clean; 15/15 vitest GREEN; SUMMARY at `.planning/phases/248-luse-display-lifecycle/248-01-SUMMARY.md`)
 - [x] 248-02-PLAN.md — Register 4 new MCP tools (computer_create_display / list_displays / kill_display / launch_app_in_display) + extend computer_application with optional display param — ✅ SHIPPED 2026-05-28 (`d4c718aa` test RED + `c79c3d8b` feat GREEN + `201b13d8` feat wire mcp/server.ts; 18/18 vitest GREEN in tools.test.ts; 33/33 GREEN with display-manager.test.ts; boot smoke confirms `(displayManager=null|wired)` log line; SUMMARY at `.planning/phases/248-luse-display-lifecycle/248-02-SUMMARY.md`)
-- [ ] 248-03-PLAN.md — TTL GC sweep for idle displays (1h sweep / 4h idle) + boot wiring in mcp/server.ts
+- [x] 248-03-PLAN.md — TTL GC sweep for idle displays (1h sweep / 4h idle) + boot wiring in mcp/server.ts — ✅ SHIPPED 2026-05-29 (`e8a6ab01` test RED + `6ac2c3ac` feat GREEN + `0f9fcc95` feat wire mcp/server.ts; 8/8 vitest GREEN on display-ttl-gc.test.ts; 23/23 cumulative under displays/; 41/41 across computer-use/; DISPLAY_TTL_GC_DEFAULT_IDLE_MS=14_400_000 (4h) + DISPLAY_TTL_GC_DEFAULT_SWEEP_MS=3_600_000 (1h) drift-locked; owner-impersonation lift via callerSession=record.owner_session; boot smoke confirms `(displayTtlGc=null)` fail-closed branch; sacred SHA preserved; SUMMARY at `.planning/phases/248-luse-display-lifecycle/248-03-SUMMARY.md`)
 - [ ] 248-04-PLAN.md — Canonical agent-agnostic display-lifecycle docs (DISPLAY-LIFECYCLE.md + 4 per-tool refs) + sync to all 4 agent shims
 - [ ] 248-05-PLAN.md — Mini PC deploy via update.sh + Xephyr/Xvfb apt-install probe + 5 wire-level probes + UAT checklist
 
