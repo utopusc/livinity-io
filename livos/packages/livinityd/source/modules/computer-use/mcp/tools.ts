@@ -1162,8 +1162,17 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 				// (the natural name, same as computer_application accepts) would
 				// spawn a non-existent binary "terminal". Unknown names pass through
 				// unchanged so explicit binaries still work.
+				// Phase 250-hotfix — `terminal` maps to xterm (NOT gnome-terminal)
+				// for launch_app_in_display specifically: this tool targets nested
+				// Xephyr displays which have NO window manager and NO session dbus,
+				// where gnome-terminal (dbus-activated, single-instance-per-bus)
+				// will not render. xterm maps its own window standalone, so it is
+				// the reliable terminal for an isolated agent display. (The host
+				// :1 path via computer_application still uses gnome-terminal through
+				// native/window.ts APP_MAP — that surface has fluxbox + dbus.)
 				const APP_ALIASES: Record<string, string> = {
-					terminal: 'gnome-terminal',
+					terminal: 'xterm',
+					'gnome-terminal': 'gnome-terminal',
 					firefox: 'firefox',
 					vscode: 'code',
 					directory: 'nautilus',
