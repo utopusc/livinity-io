@@ -48,7 +48,7 @@ import {existsSync, readFileSync} from 'node:fs'
 
 import {createDisplayManager, createDisplayTtlGc} from '../displays/index.js'
 import {defaultLivosAppResolver, type LivosAppMatch} from '../native/window.js'
-import {registerLuseTools} from './tools.js'
+import {registerLuseTools, resolveLuseUserId} from './tools.js'
 
 /**
  * Phase 102-06 — display-target resolution with precedence:
@@ -312,7 +312,9 @@ async function main(): Promise<void> {
 		defaultWindowId,
 		defaultDisplay,
 		redis,
-		userId: process.env.LUSE_USER_ID ?? 'admin',
+		// Phase 252-06 (R13) — single source: was '?? admin' here vs '?? bruce'
+		// in tools.ts. Unified on the shared resolver (default 'bruce').
+		userId: resolveLuseUserId(),
 		// Phase 161-03 — undefined falls through to APP_MAP (pre-Phase-160-03 behavior)
 		livosAppResolver,
 		// Phase 248-02 — display-lifecycle backend (undefined when redis is null,

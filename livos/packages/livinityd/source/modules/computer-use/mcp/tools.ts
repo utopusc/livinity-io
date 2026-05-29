@@ -74,6 +74,41 @@ import type {DisplayManager, DisplayMode} from '../displays/index.js'
 // have to change and the MCP client doesn't get a missing-handler error.
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Phase 252-06 (R13/R14) — single-source identity + install-root resolution.
+// These live in tools.ts (not server.ts) because server.ts already imports from
+// tools.ts (`registerLuseTools`); re-exporting from here keeps ONE source with
+// no circular import. server.ts imports DEFAULT_LUSE_USER_ID / LIVOS_ROOT below.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * R13 — the SINGLE default Luse user id. Drives the read-sandbox allowlist
+ * (`/home/<slug>/`, `${LIVOS_ROOT}/data/uploads/<userId>/`). Unified on 'bruce'
+ * (the single-tenant desktop user); previously server.ts defaulted to 'admin'
+ * while tools.ts defaulted to 'bruce' in the SAME process — a fresh box left it
+ * unset, so the two halves disagreed. Now ONE const + one resolver, seeded
+ * explicitly via `LUSE_USER_ID` in seeds/mcp-servers.json.
+ */
+export const DEFAULT_LUSE_USER_ID = 'bruce'
+
+/** R13 — resolve the Luse user id from the env (single source). Empty string
+ *  is treated as unset. Pure + DI'd so the default is testable without booting
+ *  the MCP server. */
+export function resolveLuseUserId(env: NodeJS.ProcessEnv = process.env): string {
+	const v = env.LUSE_USER_ID
+	return typeof v === 'string' && v.length > 0 ? v : DEFAULT_LUSE_USER_ID
+}
+
+/**
+ * R14 — single install-root source. Prefer $LIVOS_ROOT, then $LIVOS_BASE_DIR
+ * (the @livos/config env var), default /opt/livos. The luse MCP runs as a
+ * standalone tsx child so resolve locally rather than importing @livos/config
+ * (whose env may not propagate to the child). Consumed for the read-sandbox
+ * uploads prefix here AND for the Redis env-file fallback in server.ts.
+ */
+export const LIVOS_ROOT =
+	process.env.LIVOS_ROOT ?? process.env.LIVOS_BASE_DIR ?? '/opt/livos'
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Types — local to this module (avoids importing the full @modelcontextprotocol
 // SDK type tree just to type the McpServer surface we touch).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -912,8 +947,8 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		// separate so a future uuid/slug split can be wired without changing
 		// the allowlist shape. Falls back to 'bruce' for the host-display
 		// case where LUSE_USER_ID is not set.
-		const userSlug = process.env.LUSE_USER_ID ?? 'bruce'
-		const userId = process.env.LUSE_USER_ID ?? 'bruce'
+		const userSlug = resolveLuseUserId()
+		const userId = resolveLuseUserId()
 		if (!isPathAllowed(resolved, userSlug, userId)) {
 			// Rejection includes resolved path (so the LLM sees the symlink
 			// target if any — debugging) but NEVER the file content. Allowed

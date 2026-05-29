@@ -178,6 +178,7 @@
         "LIVINITYD_API_URL": "http://127.0.0.1:8080",
         "LIV_API_KEY": "__LIVOS_LIV_API_KEY__",
         "LUSE_USER_SLUG": "__LIVOS_USER_SLUG__",
+        "LUSE_USER_ID": "__LIVOS_USER_SLUG__",
         "LUSE_DOMAIN_ROOT": "__LIVOS_DOMAIN_ROOT__"
       },
       "description": "Computer-use tools (keyboard / mouse / screenshot). System MCP — required for the WebApp surface.",
