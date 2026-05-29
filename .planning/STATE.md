@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v34.0
 milestone_name: Bootstrap Polish + First-Run UX
-status: milestone_complete
-last_updated: "2026-05-29T15:10:07.595Z"
+status: completed
+last_updated: "2026-05-29T15:42:42.420Z"
 last_activity: 2026-05-29
 progress:
   total_phases: 8
-  completed_phases: 9
+  completed_phases: 8
   total_plans: 12
   completed_plans: 12
-  percent: 113
+  percent: 100
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
@@ -1626,7 +1626,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 239 (onboarding-cli-tools) — ✅ SHIPPED 3/3 plans 2026-05-27 (deploy SHA 5aac9f58 GREEN, sacred SHA preserved, cliInstaller.detect 5/5 + RCE-boundary smoke-tested over the wire)
+**Planned Phase:** 252 () — 0 plans — 2026-05-29T15:42:42.400Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
