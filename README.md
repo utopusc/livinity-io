@@ -97,6 +97,31 @@ The installer provisions Docker, Caddy, PostgreSQL, and Redis, then brings
 the systemd services up. When it finishes, open `http://<your-host>` and
 follow the onboarding wizard.
 
+### Install entrypoint
+
+The canonical, panel-issued install command is:
+
+```bash
+curl -fsSL https://livinity.io/install.sh | sudo bash -s <liv_k_API_KEY>
+```
+
+`livinity.io/install.sh` is served by the Vercel Next.js shim
+`platform/web/src/app/install.sh/route.ts`, which fetches GitHub-raw
+`scripts/install.sh` (**Path A**) — with a clone fallback to the **same**
+`scripts/install.sh`. Path A runs `deploy-livinityd.sh`, which generates real
+secrets and seeds `liv:mcp:config` (→ AionUi luse).
+
+`get.livinity.io` is a **separate legacy Caddy host** (`154.12.245.35`) that
+301-redirects `/install` to GitHub-raw `livos/install.sh` (**Path C**). It is
+not the panel-issued entrypoint. As of Phase 252 R9, `livos/install.sh` also
+seeds `liv:mcp:config` (idempotent, fail-soft port of the Path A seed), so the
+legacy URL and the route.ts fallback no longer downgrade a fresh install to a
+missing MCP catalog. The repo-root `/install.sh` (**Path B**, via
+`scripts/install/env-seed.sh`) is an internal path and now writes
+`openssl rand` secrets rather than `CHANGEME`. The live DNS/Vercel alias
+confirmation is recorded in
+`.planning/phases/252-fresh-install-portability-remediation/GET-LIVINITY-IO-RESOLUTION.md`.
+
 ### Manual install (developer mode)
 
 ```bash
