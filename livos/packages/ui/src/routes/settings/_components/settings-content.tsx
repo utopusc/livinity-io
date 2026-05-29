@@ -117,6 +117,14 @@ const AdminDevicesSectionLazy = React.lazy(() =>
 const ChromeMasterLazy = React.lazy(() => import('@/routes/settings/chrome-master'))
 // Phase 182-04 — MCP Servers management panel.
 const McpServersLazy = React.lazy(() => import('@/routes/settings/mcp-servers'))
+// Phase 246-05 — Settings → System section (hosts the v44 "Active terminals"
+// admin panel). The panel self-gates via useTerminalPanelEnabled, so when the
+// v43 feature flag is OFF the section renders nothing — the surface vanishes
+// alongside the dock entry. Appended at the bottom of TroubleshootSection
+// (system-group) without removing anything (v36 additive rule).
+const SystemSectionLazy = React.lazy(() =>
+	import('@/modules/settings/system-section').then((m) => ({default: m.SystemSection})),
+)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -1281,6 +1289,15 @@ function TroubleshootSection() {
 					</Suspense>
 				</TabsContent>
 			</Tabs>
+
+			{/* Phase 246-05 — Active terminals admin panel. Self-gated by the
+			    v43 feature flag (livos:v43:terminal_panel). When OFF, the
+			    SystemSection renders nothing — no visual delta. */}
+			<div className='mt-6 border-t border-line pt-6'>
+				<Suspense fallback={null}>
+					<SystemSectionLazy />
+				</Suspense>
+			</div>
 		</div>
 	)
 }
