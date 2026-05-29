@@ -1381,6 +1381,41 @@ _dld_seed_domain_config() {
     ok "Seeded livos:domain:config domain=${domain} active=true source=install-112"
 }
 
+# ── 7a2. Phase 252 (R10) — seed the v43 terminal-panel feature flag ─────────
+# The /livos/terminal/ws handler (Gate 2) + the dock terminal entry both gate
+# on `livos:v43:terminal_panel === 'true'`. The code default is OFF (safe), so
+# a fresh box hides the terminal + 4403s the WS until an operator sets the key
+# by hand. Seed it ON at install time. Idempotent: SET is harmless if already
+# true. Fail-soft: any Redis error → warn + return 0.
+_dld_seed_terminal_panel_flag() {
+    step "Phase 252 (R10) — seed livos:v43:terminal_panel=true"
+
+    # Read Redis password from .env (mirror _dld_seed_platform_api_key idiom).
+    local redis_url=""
+    if [[ -f "$_DLD_ENV_FILE" ]]; then
+        redis_url=$(grep -E '^REDIS_URL=' "$_DLD_ENV_FILE" 2>/dev/null \
+            | sed -E 's|^REDIS_URL=(.*)$|\1|' \
+            | head -1)
+    fi
+    if [[ -z "$redis_url" ]]; then
+        warn "Could not read REDIS_URL from $_DLD_ENV_FILE — skipping terminal_panel seed"
+        return 0
+    fi
+
+    local redis_pass
+    redis_pass=$(echo "$redis_url" | sed -E 's|^redis://default:([^@]+)@.*|\1|')
+    if [[ -z "$redis_pass" || "$redis_pass" == "$redis_url" ]]; then
+        warn "Could not extract Redis password from REDIS_URL — skipping terminal_panel seed"
+        return 0
+    fi
+
+    if redis-cli -a "$redis_pass" --no-auth-warning SET livos:v43:terminal_panel "true" 2>&1 | head -1 | grep -q "^OK$"; then
+        ok "livos:v43:terminal_panel set to true"
+    else
+        warn "Failed to SET livos:v43:terminal_panel — terminal dock entry will be hidden until set by hand"
+    fi
+}
+
 # ── 7b. v34 — auto-seed livos:platform:api_key from --api-key install flag ──
 # When operator runs `bash install.sh --api-key liv_k_...` (a key issued by
 # livinity.io dashboard), this helper writes the key DIRECTLY into Redis as
@@ -2003,6 +2038,7 @@ deploy_livinityd() {
     _dld_generate_jwt_secret              # 105-01: moved earlier — secrets BEFORE pnpm install per CONTEXT pipeline order
     _dld_write_env_file                   # 105-01: moved earlier
     _dld_seed_mcp_servers                 # Phase 109 — auto-seed liv:mcp:config (sequential-thinking + luse)
+    _dld_seed_terminal_panel_flag         # Phase 252 (R10) — seed livos:v43:terminal_panel=true (terminal dock entry + WS gate)
     _dld_seed_domain_config               # Phase 112 — seed livos:domain:config from local_mode keys (App Gateway gate)
     _dld_seed_platform_api_key            # v34 — auto-seed livos:platform:api_key from --api-key flag (App Store no-prompt UX)
     _dld_write_pnpm_npmrc
