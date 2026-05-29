@@ -458,3 +458,21 @@ describe('Phase 248 — display lifecycle tools', () => {
 		expect(result.isError).toBe(false)
 	})
 })
+
+// ── Phase 252-06 Task 1 (R13) — LUSE_USER_ID single-source default ──────────
+// The same env var resolved to 'admin' (server.ts:315) vs 'bruce' (tools.ts:915-916)
+// in one process and was unset on a fresh box. Unify on 'bruce' (it drives the
+// read-sandbox allowlist) via ONE shared resolver consumed by both files.
+describe('R13 — LUSE_USER_ID single-source default', () => {
+	test('Test 1: unset LUSE_USER_ID resolves to "bruce" (was "admin")', async () => {
+		const {resolveLuseUserId, DEFAULT_LUSE_USER_ID} = await import('./tools.js')
+		expect(DEFAULT_LUSE_USER_ID).toBe('bruce')
+		expect(resolveLuseUserId({})).toBe('bruce')
+		expect(resolveLuseUserId({LUSE_USER_ID: ''})).toBe('bruce')
+	})
+
+	test('Test 2: LUSE_USER_ID="alice" is honored (single source)', async () => {
+		const {resolveLuseUserId} = await import('./tools.js')
+		expect(resolveLuseUserId({LUSE_USER_ID: 'alice'})).toBe('alice')
+	})
+})
