@@ -56,19 +56,22 @@ const DEFAULT_ALLOCATOR_START = 10
 /**
  * Default real spawn — lazily imports node:child_process so the module
  * doesn't pull in spawn unless production runs without an injected fn.
- * The async wrapper boxes the import behind a sync-looking signature by
- * caching the resolved spawn after first invocation.
+ * Cached on first call so subsequent create()s don't re-import.
  */
-let cachedRealSpawn:
-	| ((cmd: string, args: readonly string[], opts?: object) => SpawnHandle)
-	| null = null
+type RealSpawn = (
+	cmd: string,
+	args: readonly string[],
+	opts?: object,
+) => SpawnHandle
+let cachedRealSpawn: RealSpawn | null = null
 
-async function getDefaultSpawnFn() {
+async function getDefaultSpawnFn(): Promise<RealSpawn> {
 	if (cachedRealSpawn) return cachedRealSpawn
 	const cp = await import('node:child_process')
-	cachedRealSpawn = ((cmd, args, opts) =>
-		cp.spawn(cmd, [...args], opts ?? {}) as unknown as SpawnHandle) as typeof cachedRealSpawn
-	return cachedRealSpawn!
+	const real: RealSpawn = (cmd, args, opts) =>
+		cp.spawn(cmd, [...args], (opts ?? {}) as object) as unknown as SpawnHandle
+	cachedRealSpawn = real
+	return real
 }
 
 function defaultProcessKill(): ProcessKillFn {
