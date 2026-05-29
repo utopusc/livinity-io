@@ -465,6 +465,20 @@ const _applicationTool = {
 				type: 'string' as const,
 				description: 'Alias for "application". Handler coalesces via R3 (Phase 208-01).',
 			},
+			// Phase 248-02 — additive optional display arg. When set to ":N"
+			// (regex-validated by parseDisplayArg in tools.ts), the application
+			// is opened with DISPLAY=:N for the spawn duration via
+			// withScopedDisplay. The `required` array stays absent (208-09).
+			display: {
+				type: 'string' as const,
+				description:
+					'Optional X display string like ":12" — when set, the application ' +
+					'launches inside that nested X server (created by computer_create_display) ' +
+					'instead of the default :1 desktop. The handler scopes DISPLAY env ' +
+					'for the spawn via withScopedDisplay; invalid forms (anything not ' +
+					'matching /^:[1-9][0-9]?$/) are silently dropped and the spawn ' +
+					'falls back to the default display.',
+			},
 		},
 		// 208-09: NO `required` — MCP SDK rejects at schema before handler R3 alias
 		// can coalesce. Handler at tools.ts:761 validates with explicit error.
@@ -666,6 +680,149 @@ const _listStreamsTool = {
 	},
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 248-02 — Display lifecycle tools.
+//
+// Wraps the backend display-manager (Phase 248-01) for AI agents. Lets the
+// agent spawn an isolated nested X server (Xephyr visible by default per
+// D-V44-DISPLAY-XEPHYR-DEFAULT, Xvfb opt-in headless), launch a LivOS app
+// inside it, list active displays + their running apps, and kill displays
+// it created. Owner-scoped kill (D-V44-DISPLAY-OWNER-SCOPED) is enforced
+// at the manager layer; the MCP wrapper surfaces the manager's
+// {ok:false, error:'not-owner'} as isError:true with a helpful text block.
+// ─────────────────────────────────────────────────────────────────────────
+
+const _createDisplayTool = {
+	name: 'computer_create_display',
+	description:
+		'Create a new isolated nested X server (display). Use this when you want to ' +
+		'open an app WITHOUT touching the operator\'s main desktop (:1) — typical ' +
+		'cases: running a flaky web app, doing batch screenshots that should not ' +
+		'interrupt the human, or quarantining a process that may misbehave. ' +
+		'Defaults to mode="xephyr" (D-V44-DISPLAY-XEPHYR-DEFAULT — a VISIBLE nested ' +
+		'X window the operator can watch); pass mode="xvfb" for an off-screen ' +
+		'headless display. Defaults to 1920x1080. The returned display string ' +
+		'(":N", N≥10) is what you pass to computer_launch_app_in_display, ' +
+		'computer_application({display:":N"}), and computer_kill_display. ' +
+		'Returns {display, name, pid}. Clean up via computer_kill_display when ' +
+		'you are done — idle displays are auto-killed after 4h, but explicit ' +
+		'cleanup is preferred.',
+	input_schema: {
+		type: 'object' as const,
+		properties: {
+			name: {
+				type: 'string' as const,
+				description:
+					'Optional human-readable name for the display. Defaults to "display-N" ' +
+					'(where N is the allocated display number). Visible in computer_list_displays.',
+			},
+			mode: {
+				type: 'string' as const,
+				enum: ['xephyr', 'xvfb'],
+				description:
+					'Optional. "xephyr" (default, D-V44-DISPLAY-XEPHYR-DEFAULT) spawns a ' +
+					'VISIBLE nested X server window the operator can watch + interact with. ' +
+					'"xvfb" spawns a headless off-screen X server for batch screenshots / ' +
+					'no-display-needed workflows.',
+			},
+			width: {
+				type: 'number' as const,
+				description: 'Optional display width in pixels. Defaults to 1920.',
+			},
+			height: {
+				type: 'number' as const,
+				description: 'Optional display height in pixels. Defaults to 1080.',
+			},
+		},
+	},
+}
+
+const _listDisplaysTool = {
+	name: 'computer_list_displays',
+	description:
+		'List ALL active nested-X displays known to Luse (global read, NOT scoped ' +
+		'to your session — you see other sessions\' displays for awareness, but ' +
+		'computer_kill_display will refuse to kill them per D-V44-DISPLAY-OWNER-SCOPED). ' +
+		'Returns an array of {display, name, mode, created_at, owner_session, ' +
+		'width, height, running_apps} where running_apps is the list of PIDs ' +
+		'attached to that display. Useful before computer_create_display to check ' +
+		'whether you already have an idle display to reuse, and before ' +
+		'computer_kill_display to confirm the display still exists.',
+	input_schema: {
+		type: 'object' as const,
+		properties: {},
+	},
+}
+
+const _killDisplayTool = {
+	name: 'computer_kill_display',
+	description:
+		'Kill a nested-X display you created. SIGTERMs every app pid attached to ' +
+		'the display, SIGTERMs the X server itself, then DELs the Redis state. ' +
+		'Returns {ok:true, killed_apps_count:N} on success. ' +
+		'D-V44-DISPLAY-OWNER-SCOPED: only the SESSION that called ' +
+		'computer_create_display for this display can kill it. If a different ' +
+		'session calls kill, the response is {ok:false, error:"not-owner"} ' +
+		'surfaced as isError:true and NEITHER the X server NOR the Redis state ' +
+		'is touched (display stays alive). Use computer_list_displays to discover ' +
+		'whether a display is yours via owner_session before attempting kill.',
+	input_schema: {
+		type: 'object' as const,
+		properties: {
+			display: {
+				type: 'string' as const,
+				description:
+					'X display string like ":12" — must match a display you created via ' +
+					'computer_create_display.',
+			},
+		},
+		required: ['display'],
+	},
+}
+
+const _launchAppInDisplayTool = {
+	name: 'computer_launch_app_in_display',
+	description:
+		'Launch a LivOS app (resolved via the same catalog as computer_application) ' +
+		'inside a specific nested X display you previously created via ' +
+		'computer_create_display. The spawned process inherits DISPLAY=:N for the ' +
+		'duration of the launch, so the app window opens on the nested display ' +
+		'instead of the operator\'s main desktop. On success, registers the spawn ' +
+		'PID with the display so computer_kill_display can SIGTERM it on cleanup ' +
+		'and computer_list_displays shows it under running_apps. Returns ' +
+		'{pid, app_name}. Use this when you want to drive an app through Luse ' +
+		'without it appearing on the operator\'s primary screen — e.g. running a ' +
+		'browser-based wizard while the operator continues working.',
+	input_schema: {
+		type: 'object' as const,
+		properties: {
+			display: {
+				type: 'string' as const,
+				description:
+					'X display string like ":12" — the target display from ' +
+					'computer_create_display. Must match /^:[1-9][0-9]?$/.',
+			},
+			app: {
+				type: 'string' as const,
+				description:
+					'App name to launch. Resolved via the same LivOS catalog as ' +
+					'computer_application (preferred — LivOS apps from the LIVOS CONTEXT ' +
+					'overlay), with classic Bytebot APP_MAP (firefox/thunderbird/vscode/etc) ' +
+					'as a fallback.',
+			},
+			args: {
+				type: 'array' as const,
+				items: {type: 'string' as const},
+				description:
+					'Optional extra command-line arguments to pass to the resolved app binary. ' +
+					'Ignored when the resolver matches a LivOS WebApp (which dispatches ' +
+					'through windowManager IPC, not a binary spawn).',
+			},
+		},
+		required: ['display', 'app'],
+	},
+}
+
 /**
  * The complete set of Luse tool schemas, in upstream order plus the
  * P100-10-03 window-aware extension. Pass this to the Anthropic / Kimi
@@ -697,6 +854,12 @@ export const LUSE_TOOLS: readonly AnthropicTool[] = [
 	// P100-10-04 — stream-management tools (D-100-10-C, G-100-10-E gate)
 	_createStreamTool,
 	_listStreamsTool,
+	// Phase 248-02 — display lifecycle tools (D-V44-DISPLAY-XEPHYR-DEFAULT,
+	// D-V44-DISPLAY-OWNER-SCOPED). Backed by createDisplayManager (Phase 248-01).
+	_createDisplayTool,
+	_listDisplaysTool,
+	_killDisplayTool,
+	_launchAppInDisplayTool,
 ] as const
 
 /**
