@@ -12,6 +12,12 @@
 export {createDisplayManager} from './display-manager.js'
 
 export {
+	createDisplayTtlGc,
+	DISPLAY_TTL_GC_DEFAULT_IDLE_MS,
+	DISPLAY_TTL_GC_DEFAULT_SWEEP_MS,
+} from './display-ttl-gc.js'
+
+export {
 	DISPLAY_REDIS_PREFIX,
 	DISPLAY_REDIS_SCAN_PATTERN,
 	redisKeyForDisplay,
@@ -33,3 +39,5 @@ export type {
 	ProcessKillFn,
 	SpawnHandle,
 } from './types.js'
+
+export type {DisplayTtlGcDeps, IdleDisplaySweep} from './display-ttl-gc.js'

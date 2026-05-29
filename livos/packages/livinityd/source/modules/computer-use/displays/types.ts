@@ -24,6 +24,12 @@ export interface DisplayRecord {
 	height: number
 	/** PIDs of apps RPUSH'd into luse:display:<display>:apps */
 	running_apps: number[]
+	/**
+	 * ISO timestamp of the most recent `attachApp` call for this display.
+	 * Optional — absent when no app has ever been attached. The Phase 248-03
+	 * TTL GC falls back to `created_at` when this field is undefined.
+	 */
+	last_app_at?: string
 }
 
 export interface CreateDisplayInput {
