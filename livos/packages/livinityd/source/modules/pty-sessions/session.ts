@@ -1,9 +1,14 @@
 /**
  * Phase 243-01 Task 2 — PtySession class wrapping node-pty.
  *
- * D-243-NO-ROOT (L-243-B): start() THROWS synchronously if opts.username
- *   is anything other than 'bruce'. This is defense-in-depth backing the
- *   WS-layer auth check in Plan 243-02. Tests 1+2 drift-lock the guard.
+ * D-243-NO-ROOT (L-243-B) + R4 (Phase 252-02): start() THROWS synchronously
+ *   if opts.username is root/uid-0 ('root' or '0'). Any non-root desktop user
+ *   is allowed (the WS layer resolves it from `livos:desktop:user`). This is
+ *   defense-in-depth backing the WS-layer auth check in Plan 243-02.
+ *
+ * R8 (Phase 252-02): the PTY spawns `bash --login` DIRECTLY — no self-`sudo`,
+ *   no user-switch flag, no sudoers grant. livos.service already runs as the
+ *   desktop user, so the spawned shell inherits the correct uid.
  *
  * MOTD bash literal copied verbatim from legacy `terminal-socket.ts` line 102:
  *   'if [ -f /etc/motd ]; then cat /etc/motd; fi; exec bash'
@@ -67,26 +72,26 @@ export class PtySession {
 	}
 
 	/**
-	 * Spawn the underlying PTY. Throws synchronously on non-'bruce' username
-	 * (D-243-NO-ROOT). Idempotent — second start() is a no-op.
+	 * Spawn the underlying PTY. Throws synchronously if opts.username is
+	 * root/uid-0 (D-243-NO-ROOT). Idempotent — second start() is a no-op.
 	 */
 	start(): void {
 		if (this.#pty) {
 			return
 		}
-		if (this.#opts.username !== 'bruce') {
+		// R4 + D-243-NO-ROOT: reject root/uid-0 ONLY; any non-root desktop user
+		// is allowed.
+		if (this.#opts.username === 'root' || this.#opts.username === '0') {
 			throw new Error(
-				`pty-sessions: non-bruce username rejected: ${this.#opts.username}`,
+				`pty-sessions: root/uid-0 username rejected (D-243-NO-ROOT): ${this.#opts.username}`,
 			)
 		}
-		const argv = [
-			'--user',
-			'bruce',
-			'--login',
-			'bash',
-			'-c',
-			MOTD_BASH_LITERAL,
-		]
+		// R8(b): livos.service already runs as the desktop user, so spawn bash
+		// --login directly — no self-`sudo`, no sudoers grant. The resolved
+		// username is enforced by the WS-layer lookup (ws-handler) + this root
+		// guard; we do NOT re-switch users here because the process is already
+		// the correct uid.
+		const argv = ['--login', '-c', MOTD_BASH_LITERAL]
 		const factoryOpts: {
 			name: string
 			cols: number
@@ -100,7 +105,7 @@ export class PtySession {
 		if (this.#opts.cwd !== undefined) {
 			factoryOpts.cwd = this.#opts.cwd
 		}
-		const child = this.#ptyFactory('sudo', argv, factoryOpts)
+		const child = this.#ptyFactory('bash', argv, factoryOpts)
 		this.#pty = child
 		child.onData((chunk) => {
 			this.#emitter.emit('data', chunk)

@@ -103,6 +103,8 @@ interface BuildOpts {
 	existingSession?: ReturnType<typeof makeFakeSessionRecord> | null
 	/** Scrollback array returned by readScrollbackFn mock. */
 	scrollback?: string[]
+	/** R4 (Phase 252-02): value redis.get('livos:desktop:user') resolves to. */
+	desktopUser?: string | null
 }
 
 function makeFakeSessionRecord(opts: {
@@ -159,7 +161,11 @@ function build(opts: BuildOpts = {}) {
 	const touchLastAttachAtFn = vi.fn().mockResolvedValue(undefined)
 	const getAdminUserFn = vi.fn().mockResolvedValue({id: 'admin-id', role: 'admin'})
 	const redis = {
-		get: vi.fn(),
+		get: vi.fn().mockImplementation((key: string) =>
+			key === 'livos:desktop:user'
+				? Promise.resolve(opts.desktopUser ?? null)
+				: Promise.resolve(null),
+		),
 		hset: vi.fn(),
 		hgetall: vi.fn(),
 		del: vi.fn(),
@@ -267,6 +273,31 @@ describe('createPtyTerminalWsHandler — init + spawn happy path', () => {
 		expect(args.cols).toBe(80)
 		expect(args.rows).toBe(24)
 		expect(args.cwd).toBe('/home/bruce')
+	})
+
+	test('4b. (R4) desktop user resolved from livos:desktop:user → create username:"alice"', async () => {
+		const ctx = build({cookie: VALID_COOKIE, flag: true, desktopUser: 'alice'})
+		await ctx.handler(ctx.ws as never, ctx.request as never)
+		ctx.ws._emit(
+			'message',
+			Buffer.from(JSON.stringify({type: 'init', cols: 80, rows: 24})),
+		)
+		await new Promise((resolve) => setImmediate(resolve))
+		expect(ctx.sessionManager.create).toHaveBeenCalledTimes(1)
+		const args = ctx.sessionManager.create.mock.calls[0][0]
+		expect(args.username).toBe('alice')
+	})
+
+	test('4c. (R4) livos:desktop:user unset → falls back to username:"bruce"', async () => {
+		const ctx = build({cookie: VALID_COOKIE, flag: true, desktopUser: null})
+		await ctx.handler(ctx.ws as never, ctx.request as never)
+		ctx.ws._emit(
+			'message',
+			Buffer.from(JSON.stringify({type: 'init', cols: 80, rows: 24})),
+		)
+		await new Promise((resolve) => setImmediate(resolve))
+		const args = ctx.sessionManager.create.mock.calls[0][0]
+		expect(args.username).toBe('bruce')
 	})
 
 	test('5. after session create → ws.send was called with JSON {type:"ready",sessionId}', async () => {

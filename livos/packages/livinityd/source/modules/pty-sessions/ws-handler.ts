@@ -324,6 +324,20 @@ export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 			}
 		}
 
+		// ─── Resolve desktop user (R4, Phase 252-02) ──────────────────────
+		// Mirror server/index.ts:1774 — resolve the OS user the PTY runs as
+		// from Redis `livos:desktop:user` so a non-bruce box gets a working
+		// terminal. Fail-soft to 'bruce'. Resolved here (async handler scope)
+		// because the `init` branch runs inside a synchronous ws.on('message').
+		let desktopUser = 'bruce'
+		try {
+			const u = await (deps.redis as {get?: (k: string) => Promise<string | null>})
+				.get?.('livos:desktop:user')
+			if (typeof u === 'string' && u.length > 0) desktopUser = u
+		} catch {
+			desktopUser = 'bruce'
+		}
+
 		// ─── URL mode routing (Phase 246-03) ──────────────────────────────
 		const requestUrl = (request as {url?: string}).url
 		const {mode, attachId} = parseUrlMode(requestUrl)
@@ -463,7 +477,7 @@ export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 				}
 				const cwd = typeof parsed.cwd === 'string' ? parsed.cwd : undefined
 				const spawnOpts: PtySpawnOptions = {
-					username: 'bruce',
+					username: desktopUser,
 					cols,
 					rows,
 					...(cwd !== undefined ? {cwd} : {}),

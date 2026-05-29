@@ -4,9 +4,10 @@
  * D-243-PER-USER-READY: `user_id` field present from day one in
  * `PtySessionMetadata` so v44+ multi-user does not require a schema migration.
  *
- * D-243-NO-ROOT (L-243-B): `PtySpawnOptions.username` is the literal string
- * `'bruce'` — typed at compile-time as defense-in-depth backing the runtime
- * guard in `PtySession.start()`.
+ * D-243-NO-ROOT (L-243-B): `PtySpawnOptions.username` is any non-root desktop
+ * user (Phase 252-02 widened the literal `'bruce'` to `string`); the runtime
+ * guard in `PtySession.start()` rejects ONLY root/uid-0 as defense-in-depth
+ * backing the WS-layer `livos:desktop:user` lookup.
  */
 
 import {PtySession} from './session.js'
@@ -27,8 +28,12 @@ export interface PtySessionMetadata {
 
 /** Spawn options for a new PTY session. */
 export interface PtySpawnOptions {
-	/** D-243-NO-ROOT: literal `'bruce'` only. Runtime guard enforces. */
-	username: 'bruce'
+	/**
+	 * Any non-root desktop user (Phase 252-02 widened from literal `'bruce'`);
+	 * the runtime guard rejects root/uid-0. Resolved at the WS layer from
+	 * `livos:desktop:user` with a `'bruce'` fallback.
+	 */
+	username: string
 	cols: number
 	rows: number
 	cwd?: string
