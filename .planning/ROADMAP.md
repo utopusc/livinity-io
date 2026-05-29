@@ -3548,19 +3548,21 @@ Plans:
 
 ---
 
-### Phase 249: v44 E2E UAT + milestone close — 🟡 PLANNED 2026-05-28 (0/1 plans)
+### Phase 249: v44 E2E UAT + milestone close — ⏳ ARTIFACT-COMPLETE / OPERATOR-PENDING 2026-05-29 (1/1 plans — artifacts staged: consolidated UAT index + sequenced operator walk + guarded close script; D-V44-SACRED preserved (`f3538e1d811992b782a9bb057d1b7f0a0189f95f`); milestone NOT flipped to CLOSED per `feedback_milestone_uat_gate.md` — operator must walk `.planning/v44-OPERATOR-WALK.md` + tick `.planning/v44-UAT-CONSOLIDATED.md` mandatory rows + run `scripts/close-v44-when-uat-green.sh`)
 
-**Goal:** Operator walks every Phase 246-248 deliverable; UAT-CHECKLIST.md sections per phase; fix any FAIL; archive milestone to `.planning/milestones/v44/` per v43 precedent.
+**Goal:** Stage the operator-facing artifacts for v44.0 milestone close — consolidated UAT index, sequenced browser walk, guarded close script. Operator (NOT executor) walks the deliverable, ticks rows, and runs the close script. Phase 249 itself produces artifacts only; it does NOT flip the milestone.
 
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete (artifact-complete; operator UAT pending)
 
 Plans:
-- [ ] 249-PLAN.md — TBD (final operator walk + close)
+- [x] 249-01-PLAN.md — Consolidated v44 UAT + close staging (UAT-CONSOLIDATED.md + OPERATOR-WALK.md + close-v44-when-uat-green.sh + 249-SUMMARY) — ⏳ ARTIFACT-COMPLETE / OPERATOR-PENDING 2026-05-29 (`status: human_needed`; SUMMARY at `.planning/phases/249-v44-e2e-uat-close/249-01-SUMMARY.md`)
 
-**UAT:** every Phase 246-248 box GREEN → milestone archived → v45 unblocked.
+**UAT:** every Phase 246-248 box GREEN → milestone archived → v45 unblocked. (UAT is operator-only — Phase 249 produced artifacts only.)
 
 **Cross-references:**
-- Depends on Phase 246, 247, 248 SHIPPED
+- Depends on Phase 246 (⏳ OPERATOR-PENDING), 247 (✅ SHIPPED), 248 (⏳ DEPLOYED OPERATOR-PENDING)
+- Locked invariant: D-V44-SACRED preserved
+- Companion artifacts: `.planning/v44-UAT-CONSOLIDATED.md`, `.planning/v44-OPERATOR-WALK.md`, `scripts/close-v44-when-uat-green.sh`
 
 ---
 
