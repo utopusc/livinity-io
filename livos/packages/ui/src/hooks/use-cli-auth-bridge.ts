@@ -30,13 +30,28 @@ import {useWindowManagerOptional} from '@/providers/window-manager'
 // D-239-07 RCE BOUNDARY mirror — the iframe sends only a CLI NAME; we map it
 // to a fixed login command string here. Must stay drift-locked with
 // livos/packages/livinityd/source/modules/cli-installer/auth.ts CLI_AUTH_COMMANDS.
-// aion-cli is intentionally absent (auth UNSUPPORTED — its Auth button is
-// never rendered, per CLI_META.authHidden in the patch JS).
+// Only AUTH-CAPABLE CLIs appear here. The authHidden CLIs (aion-cli + the 6
+// Wave C install-only CLIs: kimi-cli, mistral-vibe, hermes-agent, nanobot,
+// snow-cli, kiro) are intentionally absent — their Auth button is never
+// rendered (CLI_META.authHidden in the patch JS) and an unknown name is
+// ignored by the handler (RCE boundary).
 const CLI_AUTH_COMMANDS: Readonly<Record<string, string>> = {
 	'claude-code': 'claude auth login',
 	opencode: 'opencode auth login',
 	gemini: 'gemini auth login',
 	openclaw: 'openclaw auth login',
+	// Phase 253-04 — 9 auth-capable Local Agents CLIs (mirror auth.ts)
+	// Wave A
+	codex: 'codex auth login',
+	'qwen-code': 'qwen auth',
+	augment: 'auggie login',
+	'github-copilot': 'copilot',
+	codebuddy: 'codebuddy',
+	'qoder-cli': 'qodercli',
+	// Wave B
+	goose: 'goose configure',
+	'factory-droid': 'droid login',
+	'cursor-agent': 'cursor-agent login',
 }
 
 function isAllowedOrigin(origin: string): boolean {

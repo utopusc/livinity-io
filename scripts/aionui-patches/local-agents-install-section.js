@@ -23,16 +23,45 @@
   // DRIFT-LOCK: must match livos/packages/livinityd/source/modules/cli-installer/install-scripts.ts SUPPORTED_CLIS
   // Fixed tuple order matching D-239-10 (Plan 240 contract).
   // -------------------------------------------------------------------------
-  var SUPPORTED_CLIS = ['claude-code', 'opencode', 'gemini', 'openclaw', 'aion-cli'];
+  // Phase 253-04: expanded 5 -> 20 (15 Local Agents CLIs). Canonical tuple
+  // order mirrors install-scripts.ts SUPPORTED_CLIS exactly.
+  var SUPPORTED_CLIS = [
+    'claude-code', 'opencode', 'gemini', 'openclaw', 'aion-cli',
+    // Wave A (npm-global)
+    'codex', 'qwen-code', 'augment', 'github-copilot', 'codebuddy', 'qoder-cli',
+    // Wave B (curl-installer)
+    'goose', 'factory-droid', 'cursor-agent',
+    // Wave C (install-only / authHidden)
+    'kimi-cli', 'mistral-vibe', 'hermes-agent', 'nanobot', 'snow-cli', 'kiro'
+  ];
 
   // CLI display metadata. authHidden:true => no Auth button rendered (Plan
-  // 240-01 AUTH_UNSUPPORTED short-circuit for aion-cli).
+  // 240-01 AUTH_UNSUPPORTED short-circuit). aion-cli + the 6 Wave C CLIs are
+  // authHidden (null CLI_AUTH_COMMANDS in auth.ts).
   var CLI_META = {
-    'claude-code': { label: 'Claude Code', icon: 'CC' },
-    'opencode':    { label: 'OpenCode',    icon: 'OC' },
-    'gemini':      { label: 'Gemini',      icon: 'G'  },
-    'openclaw':    { label: 'OpenClaw',    icon: 'CL' },
-    'aion-cli':    { label: 'Aion CLI',    icon: 'AI', authHidden: true }
+    'claude-code':    { label: 'Claude Code',   icon: 'CC' },
+    'opencode':       { label: 'OpenCode',      icon: 'OC' },
+    'gemini':         { label: 'Gemini',        icon: 'G'  },
+    'openclaw':       { label: 'OpenClaw',      icon: 'CL' },
+    'aion-cli':       { label: 'Aion CLI',      icon: 'AI', authHidden: true },
+    // Wave A
+    'codex':          { label: 'Codex',         icon: 'CX' },
+    'qwen-code':      { label: 'Qwen Code',     icon: 'QW' },
+    'augment':        { label: 'Augment',       icon: 'AG' },
+    'github-copilot': { label: 'GitHub Copilot', icon: 'GH' },
+    'codebuddy':      { label: 'CodeBuddy',     icon: 'CB' },
+    'qoder-cli':      { label: 'Qoder',         icon: 'QO' },
+    // Wave B
+    'goose':          { label: 'Goose',         icon: 'GS' },
+    'factory-droid':  { label: 'Factory Droid', icon: 'FD' },
+    'cursor-agent':   { label: 'Cursor Agent',  icon: 'CA' },
+    // Wave C (install-only / authHidden)
+    'kimi-cli':       { label: 'Kimi CLI',      icon: 'KM', authHidden: true },
+    'mistral-vibe':   { label: 'Mistral Vibe',  icon: 'MV', authHidden: true },
+    'hermes-agent':   { label: 'Hermes Agent',  icon: 'HM', authHidden: true },
+    'nanobot':        { label: 'Nanobot',       icon: 'NB', authHidden: true },
+    'snow-cli':       { label: 'Snow CLI',      icon: 'SN', authHidden: true },
+    'kiro':           { label: 'Kiro',          icon: 'KI', authHidden: true }
   };
 
   // Locale-aware Local Agents label fallbacks (5 most common locales in
@@ -268,7 +297,7 @@
     var section = el('section', { id: SENTINEL_ID, className: 'liv-240-section' });
     section.appendChild(el('h3', { className: 'liv-240-heading' }, ['Available to Install']));
     section.appendChild(el('p', { className: 'liv-240-hint' }, [
-      'One-click install for the 5 supported CLI agents. After install, click Auth to run the per-CLI login flow.'
+      'One-click install for the 20 supported CLI agents. After install, click Auth to run the per-CLI login flow.'
     ]));
     for (var i = 0; i < SUPPORTED_CLIS.length; i++) {
       section.appendChild(renderRow(SUPPORTED_CLIS[i]));
