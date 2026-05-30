@@ -382,14 +382,21 @@ function TerminalTabPane({
 				typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 			const isCopyCombo =
 				event.code === 'KeyC' && ((event.ctrlKey && event.shiftKey) || (isMac && event.metaKey))
+			// G19.4 — operator: only Ctrl+Shift+V pasted; plain Ctrl+V did not.
+			// Accept BOTH (Shift optional) on Ctrl, plus Cmd+V on macOS. Plain
+			// Ctrl+V in a web terminal has no useful native meaning, so claiming
+			// it for paste is safe.
 			const isPasteCombo =
-				event.code === 'KeyV' && ((event.ctrlKey && event.shiftKey) || (isMac && event.metaKey))
+				event.code === 'KeyV' && (event.ctrlKey || (isMac && event.metaKey))
 			if (isCopyCombo) {
 				const sel = term.getSelection()
 				if (sel) void copyTextRobust(sel)
 				return false
 			}
 			if (isPasteCombo) {
+				// preventDefault so the browser does not ALSO fire a native paste
+				// event (the onPaste listener below) → avoids a double paste.
+				event.preventDefault()
 				void navigator.clipboard
 					?.readText()
 					.then((text) => {
