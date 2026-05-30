@@ -409,8 +409,32 @@ function TerminalTabPane({
 		}
 		ctxEl?.addEventListener('contextmenu', onContextMenu)
 
+		// Phase 252 (G19.2) — native paste event = the RELIABLE paste path. The
+		// async Clipboard API (navigator.clipboard.readText, which xterm uses) is
+		// permission-gated and silently rejects in many Chrome contexts so paste
+		// looked broken. The browser own paste DOM event (Ctrl+V and the native
+		// right-click Paste) carries the data SYNCHRONOUSLY in e.clipboardData
+		// with NO permission prompt. Feed it through term.paste() and
+		// stopPropagation so xterm own failing handler cannot double-fire. Plain
+		// DOM API so no xterm test mock needed.
+		const onPaste = (e: ClipboardEvent) => {
+			if (isClosedRef.current) return
+			const text = e.clipboardData?.getData('text') ?? ''
+			if (!text) return
+			e.preventDefault()
+			e.stopPropagation()
+			term.paste(text)
+		}
+		ctxEl?.addEventListener('paste', onPaste, true)
 
-
+		// Phase 252 (G19.2) — auto-copy on selection (PuTTY / Linux UX): selecting
+		// text auto-writes it to the clipboard, so copy needs no keypress and no
+		// async-Clipboard-API permission (copyTextRobust falls back to execCommand).
+		// onSelectionChange returns an xterm IDisposable torn down on cleanup.
+		const selDisposable = term.onSelectionChange(() => {
+			const selText = term.getSelection()
+			if (selText) void copyTextRobust(selText)
+		})
 
 		term.onData((data) => {
 			if (isClosedRef.current) return
