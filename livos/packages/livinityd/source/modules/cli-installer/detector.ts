@@ -1,7 +1,7 @@
 // Phase 239-01 Task 1 — `detectCli` probe wrapper.
 //
-// Whitelist-gated (D-239-07) presence-and-version probe for each of the 5
-// supported CLIs. Two-stage probe per call:
+// Whitelist-gated (D-239-07) presence-and-version probe for each of the 20
+// supported CLIs (Phase 253-04; was 5). Two-stage probe per call:
 //   1. `bash -c "command -v <bin>"` to locate the binary on PATH
 //   2. `<bin> --version` to capture a version string (first line)
 //
