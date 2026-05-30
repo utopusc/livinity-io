@@ -19,6 +19,19 @@ export function StoreAdminGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    // UAT 252: the embedded LivOS App Store iframe loads /store?token=<api_key>
+    // — it carries no livinity.io session and is authenticated per-request at
+    // /api/apps via X-Api-Key. Skip the admin-console is_admin check (which
+    // would otherwise bounce the iframe to /dashboard) and render the store
+    // directly when a token is present. The bare /store admin console (no
+    // token) still runs the full is_admin gate below.
+    const hasToken =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).has('token');
+    if (hasToken) {
+      setStatus('allowed');
+      return;
+    }
     fetch('/api/auth/me', { credentials: 'same-origin' })
       .then(async (res) => {
         if (cancelled) return;

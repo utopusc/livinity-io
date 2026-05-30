@@ -38,7 +38,15 @@ export function middleware(req: NextRequest): NextResponse {
   // - no cookie → /login?next=/store/...
   // - cookie present → continue; client-side <StoreAdminGate /> finalizes
   //   the is_admin check and redirects non-admin to /dashboard.
+  // UAT 252: the embedded LivOS App Store iframe loads /store?token=<api_key>
+  // (cross-origin, no liv_session cookie) and authenticates each /api/apps call
+  // with X-Api-Key. Phase 214's cookie gate broke that flow (307→/login). Let
+  // token-bearing requests through to the token-authenticated store-provider;
+  // the bare /store admin console stays cookie-gated.
   if (pathname === '/store' || pathname.startsWith('/store/')) {
+    if (req.nextUrl.searchParams.has('token')) {
+      return NextResponse.next();
+    }
     if (!hasSession) {
       const loginUrl = new URL('/login', req.url);
       loginUrl.searchParams.set('next', pathname);
