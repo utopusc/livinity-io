@@ -313,10 +313,25 @@ describe('authCli — drift-lock constants', () => {
 		expect(AUTH_TIMEOUT_MS).toBe(300_000)
 	})
 
-	test('Test 14: CLI_AUTH_COMMANDS has exactly 5 keys matching SUPPORTED_CLIS tuple', () => {
+	test('Test 14: CLI_AUTH_COMMANDS has exactly 20 keys matching SUPPORTED_CLIS tuple', () => {
 		const keys = Object.keys(CLI_AUTH_COMMANDS).sort()
 		const expected = [...SUPPORTED_CLIS].sort()
 		expect(keys).toEqual(expected)
-		expect(keys.length).toBe(5)
+		expect(keys.length).toBe(20)
+	})
+
+	test('Test 15: Wave C install-only CLIs have null auth (authHidden — AUTH_UNSUPPORTED)', () => {
+		for (const name of [
+			'kimi-cli',
+			'mistral-vibe',
+			'hermes-agent',
+			'nanobot',
+			'snow-cli',
+			'kiro',
+		] as const) {
+			expect(CLI_AUTH_COMMANDS[name]).toBeNull()
+		}
+		// cursor-agent's auth bin MUST equal its install/detector binary (BLOCKER 1).
+		expect(CLI_AUTH_COMMANDS['cursor-agent']).toEqual(['cursor-agent', ['login']])
 	})
 })

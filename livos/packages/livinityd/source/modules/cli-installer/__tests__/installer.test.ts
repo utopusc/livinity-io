@@ -144,15 +144,33 @@ describe('installCli — drift-lock constants', () => {
 		expect(INSTALL_TIMEOUT_MS).toBe(300_000)
 	})
 
-	test('SUPPORTED_CLIS exported as exactly 5 names in fixed order (Phase 240 contract)', () => {
+	test('SUPPORTED_CLIS exported as exactly 20 names in fixed order (Phase 253-04 contract)', () => {
 		expect([...SUPPORTED_CLIS]).toEqual([
 			'claude-code',
 			'opencode',
 			'gemini',
 			'openclaw',
 			'aion-cli',
+			// Wave A (npm-global)
+			'codex',
+			'qwen-code',
+			'augment',
+			'github-copilot',
+			'codebuddy',
+			'qoder-cli',
+			// Wave B (curl-installer)
+			'goose',
+			'factory-droid',
+			'cursor-agent',
+			// Wave C (install-only / authHidden)
+			'kimi-cli',
+			'mistral-vibe',
+			'hermes-agent',
+			'nanobot',
+			'snow-cli',
+			'kiro',
 		])
-		expect(SUPPORTED_CLIS_SET.size).toBe(5)
+		expect(SUPPORTED_CLIS_SET.size).toBe(20)
 		for (const name of SUPPORTED_CLIS) {
 			expect(SUPPORTED_CLIS_SET.has(name)).toBe(true)
 		}
