@@ -53,6 +53,7 @@ let terminalMocks: Array<{
 	// Phase 246 hot-fix — clipboard surface used by the copy/paste handler.
 	attachCustomKeyEventHandler: ReturnType<typeof vi.fn>
 	getSelection: ReturnType<typeof vi.fn>
+	onSelectionChange: ReturnType<typeof vi.fn>
 	paste: ReturnType<typeof vi.fn>
 	selectAll: ReturnType<typeof vi.fn>
 	clear: ReturnType<typeof vi.fn>
@@ -70,6 +71,9 @@ vi.mock('@xterm/xterm', () => ({
 			// Phase 246 hot-fix — clipboard surface used by the copy/paste handler.
 			attachCustomKeyEventHandler: vi.fn(),
 			getSelection: vi.fn().mockReturnValue(''),
+			// Phase 252 (G19.2) — auto-copy-on-selection registers a listener
+			// via onSelectionChange; it returns an xterm IDisposable.
+			onSelectionChange: vi.fn(() => ({dispose: vi.fn()})),
 			paste: vi.fn(),
 			selectAll: vi.fn(),
 			clear: vi.fn(),
