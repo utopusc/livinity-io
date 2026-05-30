@@ -435,6 +435,25 @@ rsync -a --delete \
     "$LIVOS_DIR/packages/livinityd/source/"
 ok "livinityd source updated"
 
+# ── Phase 253 (G21): deploy repo-root scripts/install/cli/<name>.sh ────────
+# The livinityd `cliInstaller.install` tRPC mutation spawns
+# `bash /opt/livos/scripts/install/cli/<name>.sh`. On a FRESH install these
+# land via deploy-livinityd.sh, but update.sh (the existing-box path) never
+# copied them — so new Local Agents CLIs shipped after the last fresh install
+# silently never reached the box (Phase 253 found 0/15 landed). Mirror the
+# deploy-livinityd.sh G12 directory-glob rsync here so update.sh stays in sync.
+if [[ -d "$TEMP_DIR/scripts/install/cli" ]]; then
+    info "Updating Local Agents install scripts (scripts/install/cli/)..."
+    mkdir -p "$LIVOS_DIR/scripts/install/cli"
+    rsync -a "$TEMP_DIR/scripts/install/cli/" "$LIVOS_DIR/scripts/install/cli/"
+    [[ -f "$TEMP_DIR/scripts/install/_logging.sh" ]] \
+        && cp "$TEMP_DIR/scripts/install/_logging.sh" "$LIVOS_DIR/scripts/install/_logging.sh"
+    chmod +x "$LIVOS_DIR/scripts/install/cli/"*.sh 2>/dev/null || true
+    ok "Local Agents install scripts updated (G21)"
+else
+    info "scripts/install/cli/ not in TEMP_DIR — skipping (pre-Phase 253 clone)"
+fi
+
 # v29.1 mini-milestone: self-rsync — deploy update.sh itself so future
 # update.sh hot-patches reach Mini PC automatically without manual SCP.
 # IMPORTANT: must use atomic mv (not in-place cp), otherwise the running
