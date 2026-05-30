@@ -68,19 +68,22 @@
 
   // -------------------------------------------------------------------------
   // tRPC HTTP wire helpers
-  // tRPC v10 HTTP wire shape:
-  //   GET  /trpc/<proc>?input=<urlencoded JSON {json:input}>      (queries)
-  //   POST /trpc/<proc>   body: {json: input}                     (mutations)
-  // Response: {result:{data:{json: <output>}}} | {error:{message,...}}
+  // G13b — livinityd's tRPC server is v11 with NO data transformer (trpc.ts uses
+  // httpLink, no superjson), so the wire shape is RAW (no {json:...} wrapper):
+  //   GET  /trpc/<proc>?input=<urlencoded JSON input>      (queries)
+  //   POST /trpc/<proc>   body: <input>                    (mutations)
+  // Response: {result:{data: <output>}} | {error:{message,...}}
+  // The old {json:input} / result.data.json shape (tRPC v10 / with-transformer)
+  // made livinityd see input.name === undefined → "invalid_type … Required".
   // -------------------------------------------------------------------------
   function trpcQuery(proc, input) {
-    var url = TRPC_BASE + '.' + proc + '?input=' + encodeURIComponent(JSON.stringify({ json: input }));
+    var url = TRPC_BASE + '.' + proc + '?input=' + encodeURIComponent(JSON.stringify(input));
     return fetch(url, {
       credentials: 'include',
       headers: { 'content-type': 'application/json' }
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (j && j.error) throw new Error(j.error.message || ('trpc error: ' + proc));
-      return j && j.result && j.result.data && j.result.data.json;
+      return j && j.result && j.result.data;
     });
   }
 
@@ -89,10 +92,10 @@
       method: 'POST',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ json: input })
+      body: JSON.stringify(input)
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (j && j.error) throw new Error(j.error.message || ('trpc error: ' + proc));
-      return j && j.result && j.result.data && j.result.data.json;
+      return j && j.result && j.result.data;
     });
   }
 
