@@ -52,12 +52,13 @@ if ! command -v gemini >/dev/null 2>&1; then
     fail "Gemini CLI install completed but binary still not on PATH" 75
 fi
 
-# G20 — persist ~/.npm-global/bin on bruce's interactive-shell PATH (~/.bashrc)
-# so the terminal-based `gemini auth login` (Liv AI → Local Agents → Auth)
-# resolves the binary. The `export PATH` above is process-local; without this
-# the login terminal reports "gemini: command not found" (operator-reported).
-if [[ -f "${HOME}/.bashrc" ]] && ! grep -qF '.npm-global/bin' "${HOME}/.bashrc"; then
-    printf '\n# LivOS — npm-global CLIs on PATH\nexport PATH="$HOME/.npm-global/bin:$PATH"\n' >> "${HOME}/.bashrc"
+# G20.1 — persist ~/.npm-global/bin on PATH for the LivOS terminal. The PTY
+# spawns `bash --login` (pty-sessions/session.ts), and a LOGIN shell reads
+# ~/.profile, NOT ~/.bashrc — so the binary must be added to ~/.profile or the
+# terminal-based `gemini auth login` reports "command not found" (operator-
+# reported; the earlier ~/.bashrc attempt was the wrong file). Idempotent.
+if [[ -f "${HOME}/.profile" ]] && ! grep -qF 'LivOS CLI PATH' "${HOME}/.profile"; then
+    printf '\n# LivOS CLI PATH (login shells read .profile, not .bashrc)\nexport PATH="/opt/livos/bin:$HOME/.npm-global/bin:$HOME/.opencode/bin:$HOME/.local/bin:$PATH"\n' >> "${HOME}/.profile"
 fi
 
 ok "Gemini CLI installed: $(gemini --version 2>/dev/null | head -1 || echo unknown)"
