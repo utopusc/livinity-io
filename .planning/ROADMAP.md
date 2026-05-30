@@ -4466,7 +4466,7 @@ Plans:
 
 Plans:
 - [x] 253-01-PLAN.md — Wave 1: Wave A npm-global install scripts (codex, qwen-code, augment, github-copilot, codebuddy, qoder-cli)
-- [ ] 253-02-PLAN.md — Wave 1: Wave B curl-installer binary scripts (goose, factory-droid, cursor-agent)
+- [x] 253-02-PLAN.md — Wave 1: Wave B curl-installer binary scripts (goose, factory-droid, cursor-agent)
 - [ ] 253-03-PLAN.md — Wave 1: Wave C install-only/authHidden scripts (kimi-cli, mistral-vibe, hermes-agent, nanobot, snow-cli, kiro)
 - [ ] 253-04-PLAN.md — Wave 2: register all 15 names across the 6 drift-locked files + bump 3 vitest count assertions 5→20
 - [ ] 253-05-PLAN.md — Wave 3: deploy to test box + verify glob pickup (G12) and panel cache-bust (G18)

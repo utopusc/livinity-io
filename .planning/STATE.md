@@ -9,7 +9,7 @@ progress:
   total_phases: 165
   completed_phases: 83
   total_plans: 556
-  completed_plans: 472
+  completed_plans: 473
   percent: 85
 ---
 
@@ -41,9 +41,13 @@ progress:
 
 ---
 
-## Current Position (Phase 253 — Local Agents CLI Expansion 🟡 EXECUTING — Wave 1 Plan 253-01 ✅ DONE 2026-05-30)
+## Current Position (Phase 253 — Local Agents CLI Expansion 🟡 EXECUTING — Wave 1 Plans 253-01 + 253-02 ✅ DONE 2026-05-30)
 
-### Latest update 2026-05-30 (Phase 253 execution — Plan 253-01 / Wave 1 Wave A npm-global scripts complete)
+### Latest update 2026-05-30 (Phase 253 execution — Plan 253-02 / Wave 1 Wave B curl-installer scripts complete)
+
+- ✅ **253-02 DONE** (commits `87f7b141` Task 1 + `36cb4c2f` Task 2) — Wave B curl-installer Local Agents install scripts created. **3 new self-contained scripts under `scripts/install/cli/`**, each mirroring the verified `claude-code.sh`/`opencode.sh` curl-installer pattern (shebang + header docblock + `set -euo pipefail` + `source ../_logging.sh` inline-fallback + `~/.local/bin` PATH export BEFORE the idempotency probe per G14 + `command -v <bin>` short-circuit + official `curl | bash` installer with `fail … 75` on error + `hash -r` reverify + idempotent `.profile` `LivOS CLI PATH` marker G20.1 + version echo). **Task 1 (`87f7b141`):** `goose.sh` (`download_cli.sh` + `CONFIGURE=false bash` so the provider wizard never blocks install → binary `goose`), `factory-droid.sh` (`app.factory.ai/cli | sh` → binary `droid`). **Task 2 (`36cb4c2f`):** `cursor-agent.sh` (`cursor.com/install | bash`) — **BLOCKER 1 resolved:** the installer drops a DUAL symlink (bare `agent` + `cursor-agent`); the script PINS the canonical binary to `cursor-agent` at both the idempotency probe AND the post-install PATH assertion, NEVER the collision-prone bare `agent` (verified 0 `command -v agent` probes); header comment documents the four-map binary identity (install == `CLI_BIN_NAMES['cursor-agent']` == `detector.test.ts` probe == auth binary) so Plan 04 edits stay aligned (prevents G13d detect-after-install false-negative). All 3 pass `bash -n`, contain `.local/bin`, and `fail … 75` (non-zero) on installer error (never silent exit 0 — covers RESEARCH A6 cursor 403). Mitigates T-253-03 (official HTTPS installer hosts only) + T-253-04 (cursor-agent pin). File-disjoint from Plans 01/03/04 (parallel-safe). NOT YET DEPLOYED — repo-side scripts take effect on next `update.sh`/fresh install + deploy glob pickup. SUMMARY: `.planning/phases/253-local-agents-cli-expansion/253-02-SUMMARY.md`. Remaining Phase-253 plans: 253-03 (Wave C kimi-cli/mistral-vibe/hermes-agent/nanobot/snow-cli/kiro), 253-04 (register names + drift-lock bump), 253-05 (deploy + glob verify), 253-06 (operator browser walk), 253-07.
+
+### Earlier update 2026-05-30 (Phase 253 execution — Plan 253-01 / Wave 1 Wave A npm-global scripts complete)
 
 - ✅ **253-01 DONE** (commits `ab019d57` Task 1 + `388d7b1e` Task 2) — Wave A npm-global Local Agents install scripts created. **6 new self-contained scripts under `scripts/install/cli/`**, each a near-verbatim mirror of the verified `gemini.sh` pattern (shebang + header docblock + `set -euo pipefail` + `source ../_logging.sh` with inline fallback stubs + `NPM_PREFIX=~/.npm-global` G15-EACCES prefix + PATH export + `command -v <bin>` idempotency short-circuit + `npm` guard fail-75 + `npm install -g --prefix` + `hash -r` reverify + idempotent `.profile` `LivOS CLI PATH` marker G20.1 + final version echo). **Task 1 (`ab019d57`):** `codex.sh` (`@openai/codex`→`codex`, scoped name guards the unscoped 2012 silent-fail trap), `qwen-code.sh` (`@qwen-code/qwen-code@latest`→binary `qwen`, NOT `qwen-code`), `augment.sh` (`@augmentcode/auggie`→binary `auggie`, NOT `augment`). **Task 2 (`388d7b1e`):** `github-copilot.sh` (`@github/copilot`→`copilot`, the NEW standalone CLI not the `gh copilot` extension), `codebuddy.sh` (`@tencent-ai/codebuddy-code`→`codebuddy`), `qoder-cli.sh` (`@qoder-ai/qodercli`→binary `qodercli`, NOT `qoder`). All 6 pass `bash -n`, are chmod +x, and contain `npm install -g --prefix`; no sibling-delegate (self-contained, file-disjoint from Plans 02/03/04). Exact scoped package names per RESEARCH fact table mitigate T-253-01 (tampering); user-writable prefix mitigates T-253-02 (elevation). Auth wiring for the 3 TUI-auth CLIs (github-copilot/codebuddy/qoder-cli) + CLI_AUTH_COMMANDS + drift-lock count bumps land in Plan 04. NOT YET DEPLOYED — repo-side scripts take effect on next `update.sh`/fresh install + deploy glob pickup. SUMMARY: `.planning/phases/253-local-agents-cli-expansion/253-01-SUMMARY.md`. Remaining Phase-253 plans: 253-02 (Wave B goose/factory-droid/cursor-agent), 253-03 (Wave C kimi-cli/mistral-vibe/hermes-agent/nanobot/snow-cli/kiro), 253-04 (register 15 names + drift-lock 5→20), 253-05 (deploy + glob verify), 253-06 (operator browser walk).
 
