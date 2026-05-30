@@ -89,6 +89,31 @@ describe('detectCli', () => {
 		expect(CLI_BIN_NAMES['openclaw']).toBe('openclaw')
 		expect(CLI_BIN_NAMES['opencode']).toBe('opencode')
 		expect(CLI_BIN_NAMES['gemini']).toBe('gemini')
+		// Phase 253-04 — verified binaries for the 15 new Local Agents CLIs
+		// (RESEARCH Pitfall 2). Several differ from their key (qwen-code→qwen,
+		// augment→auggie, github-copilot→copilot, qoder-cli→qodercli,
+		// factory-droid→droid, kimi-cli→kimi, mistral-vibe→vibe,
+		// hermes-agent→hermes, snow-cli→snow).
+		// Wave A
+		expect(CLI_BIN_NAMES['codex']).toBe('codex')
+		expect(CLI_BIN_NAMES['qwen-code']).toBe('qwen')
+		expect(CLI_BIN_NAMES['augment']).toBe('auggie')
+		expect(CLI_BIN_NAMES['github-copilot']).toBe('copilot')
+		expect(CLI_BIN_NAMES['codebuddy']).toBe('codebuddy')
+		expect(CLI_BIN_NAMES['qoder-cli']).toBe('qodercli')
+		// Wave B
+		expect(CLI_BIN_NAMES['goose']).toBe('goose')
+		expect(CLI_BIN_NAMES['factory-droid']).toBe('droid')
+		// BLOCKER 1 — cursor-agent's probe binary MUST equal the install binary
+		// (Plan 02) + auth bin + CLI_BIN_NAMES — never the collision-prone 'agent'.
+		expect(CLI_BIN_NAMES['cursor-agent']).toBe('cursor-agent')
+		// Wave C
+		expect(CLI_BIN_NAMES['kimi-cli']).toBe('kimi')
+		expect(CLI_BIN_NAMES['mistral-vibe']).toBe('vibe')
+		expect(CLI_BIN_NAMES['hermes-agent']).toBe('hermes')
+		expect(CLI_BIN_NAMES['nanobot']).toBe('nanobot')
+		expect(CLI_BIN_NAMES['snow-cli']).toBe('snow')
+		expect(CLI_BIN_NAMES['kiro']).toBe('kiro')
 
 		const child = makeFakeChild()
 		const spawnFn = vi.fn(() => child as any)
