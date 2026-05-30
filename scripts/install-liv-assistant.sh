@@ -358,22 +358,35 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# G13c — AionUi ships its OWN service worker (sw.js, CACHE_NAME 'liv-ai-webui-vN')
-# that precaches index.html + './'. After we inject/patch the Local Agents assets,
-# a browser holding the prior SW keeps serving the STALE precached index.html (+ old
-# liv-240 JS) → users run old code (e.g. the old tRPC {json} wire shape → 400
-# invalid_type). Pin the SW cache version to the patched JS's content hash so every
-# patch revision busts the SW precache automatically. Idempotent: the regex strips
-# any prior -liv<hash> suffix before re-appending, so unchanged JS = no churn.
+# G13e — AionUi ships its OWN caching service worker (sw.js, precaches index.html
+# + './'). Inside the always-online LivOS iframe it provides ZERO value and
+# repeatedly served STALE assets after we patch the bundle: a browser holding the
+# prior SW kept running old liv-240 JS (→ old tRPC {json} wire shape → 400
+# invalid_type) or the old routing fallback (→ AionUi HTML → "Unexpected token
+# '<'"), and a cache-version bump alone could not be picked up reliably. Replace
+# it with a self-destroying stub (mirrors LivOS's own sw.js): on next load it
+# unregisters itself + deletes ALL caches, so AionUi assets are ALWAYS served
+# fresh by Caddy. Idempotent via the 'self-destruct stub' sentinel.
 # ---------------------------------------------------------------------------
 SW_FILE="${REBRAND_TARGET}/sw.js"
-LA_JS="${PATCH_TARGET_DIR}/liv-240-install-section.js"
-if [[ -f "${SW_FILE}" && -f "${LA_JS}" ]] && command -v sha256sum >/dev/null 2>&1; then
-  if grep -qE "CACHE_NAME = 'liv-ai-webui-v[0-9]+(-liv[0-9a-f]+)?'" "${SW_FILE}"; then
-    LA_HASH="$(sha256sum "${LA_JS}" | cut -c1-8)"
-    sed -i -E "s/(CACHE_NAME = 'liv-ai-webui-v[0-9]+)(-liv[0-9a-f]+)?'/\1-liv${LA_HASH}'/" "${SW_FILE}"
-    log "Phase 240-02 (G13c): AionUi SW CACHE_NAME pinned to patch hash (-liv${LA_HASH}) — busts stale precache on update"
-  fi
+if [[ -f "${SW_FILE}" ]] && ! grep -q 'self-destruct stub' "${SW_FILE}" 2>/dev/null; then
+  [[ -f "${SW_FILE}.caching-orig" ]] || cp "${SW_FILE}" "${SW_FILE}.caching-orig"
+  cat > "${SW_FILE}" <<'LIVSW'
+// LivOS — AionUi caching SW caused stale-asset bugs inside the always-online LivOS
+// iframe. self-destruct stub: unregister + clear all caches on next load so assets
+// are always fresh from Caddy. (Mirrors LivOS's own sw.js.)
+self.addEventListener('install', function () { self.skipWaiting(); });
+self.addEventListener('activate', function (e) {
+  e.waitUntil(
+    self.registration.unregister()
+      .then(function () { return self.caches.keys(); })
+      .then(function (keys) { return Promise.all(keys.map(function (k) { return self.caches.delete(k); })); })
+      .then(function () { return self.clients.matchAll(); })
+      .then(function (clients) { clients.forEach(function (c) { if (c.navigate) { try { c.navigate(c.url); } catch (_) {} } }); })
+  );
+});
+LIVSW
+  log "Phase 240-02 (G13e): AionUi sw.js replaced with self-destruct stub — ends stale-cache asset bugs"
 fi
 
 # ---------------------------------------------------------------------------
