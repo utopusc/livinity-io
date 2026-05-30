@@ -24,6 +24,12 @@ fi
 
 step "Phase 239 — installing OpenCode"
 
+# G14 — opencode's upstream installer drops the binary in ~/.opencode/bin (and
+# appends that dir to ~/.bashrc), NOT ~/.local/bin. livinityd's PATH lacks it, so
+# both the idempotency check below and the post-install verify fail → the install
+# reports ok:false even though it succeeded. Put ~/.opencode/bin on PATH up front.
+export PATH="${HOME}/.local/bin:${HOME}/.opencode/bin:/usr/local/bin:${PATH}"
+
 if command -v opencode >/dev/null 2>&1; then
     _v=$(opencode --version 2>/dev/null | head -1 || echo unknown)
     ok "✓ OpenCode already installed: ${_v}"
@@ -31,11 +37,11 @@ if command -v opencode >/dev/null 2>&1; then
 fi
 
 info "Fetching https://opencode.ai/install ..."
-export PATH="${HOME}/.local/bin:/usr/local/bin:${PATH}"
+export PATH="${HOME}/.local/bin:${HOME}/.opencode/bin:/usr/local/bin:${PATH}"
 if ! curl -fsSL https://opencode.ai/install | bash; then
     fail "opencode: upstream installer failed" 75
 fi
-export PATH="${HOME}/.local/bin:/usr/local/bin:${PATH}"
+export PATH="${HOME}/.local/bin:${HOME}/.opencode/bin:/usr/local/bin:${PATH}"
 hash -r 2>/dev/null || true
 
 if ! command -v opencode >/dev/null 2>&1; then

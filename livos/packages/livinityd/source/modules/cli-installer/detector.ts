@@ -120,6 +120,7 @@ export async function detectCli(
 	const home = os.homedir() || process.env.HOME || '/home/bruce'
 	const probePath = [
 		`${home}/.local/bin`,
+		`${home}/.opencode/bin`,
 		'/opt/livos/bin',
 		`${home}/.bun/bin`,
 		`${home}/.npm-global/bin`,
