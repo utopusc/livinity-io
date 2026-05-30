@@ -286,6 +286,9 @@ function TerminalTabPane({
 	const isClosedRef = useRef(false)
 	const hasReadyArrivedRef = useRef(false)
 	const sendRef = useRef<((msg: ClientToServer) => void) | null>(null)
+	// G19.5 — set true briefly when the browser native `paste` event fires,
+	// so the keydown readText() fallback does not double-paste.
+	const nativePasteJustFiredRef = useRef(false)
 	// Phase 252 G17 — flips true once the PTY is ready/reattached. Drives the
 	// active-terminal-sender registration so the Liv AI CLI-auth bridge only
 	// dispatches login commands into a TTY that can actually accept input.
@@ -394,13 +397,18 @@ function TerminalTabPane({
 				return false
 			}
 			if (isPasteCombo) {
-				// preventDefault so the browser does not ALSO fire a native paste
-				// event (the onPaste listener below) → avoids a double paste.
-				event.preventDefault()
+				// G19.5 — do NOT preventDefault: let the browser fire its native
+				// `paste` event, which onPaste (below) handles WITHOUT a clipboard
+				// permission (this is the path that actually works). Return false
+				// only to stop xterm emitting ^V (\x16) to the PTY. readText() is a
+				// best-effort fallback for the rare case the native paste event does
+				// not fire; the nativePasteJustFiredRef flag prevents a double paste.
 				void navigator.clipboard
 					?.readText()
 					.then((text) => {
-						if (text && !isClosedRef.current) term.paste(text)
+						if (text && !isClosedRef.current && !nativePasteJustFiredRef.current) {
+							term.paste(text)
+						}
 					})
 					.catch(() => {})
 				return false
@@ -430,6 +438,11 @@ function TerminalTabPane({
 			if (!text) return
 			e.preventDefault()
 			e.stopPropagation()
+			// G19.5 — flag so the keydown readText() fallback does not also paste.
+			nativePasteJustFiredRef.current = true
+			setTimeout(() => {
+				nativePasteJustFiredRef.current = false
+			}, 150)
 			term.paste(text)
 		}
 		ctxEl?.addEventListener('paste', onPaste, true)
