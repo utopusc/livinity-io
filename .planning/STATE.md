@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v44.0
 milestone_name: Liv AI Tooling Depth
 status: executing
-last_updated: "2026-05-29T19:05:00.000Z"
-last_activity: 2026-05-29
+last_updated: "2026-05-30T13:29:53.000Z"
+last_activity: 2026-05-30
 progress:
-  total_phases: 6
-  completed_phases: 5
-  total_plans: 29
-  completed_plans: 23
-  percent: 79
+  total_phases: 165
+  completed_phases: 83
+  total_plans: 556
+  completed_plans: 472
+  percent: 85
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
@@ -41,7 +41,15 @@ progress:
 
 ---
 
-## Current Position (v45-prep — Phase 252 Fresh-Install Portability Remediation ✅ COMPLETE 6/6 — Wave 1 (252-01) + Wave 2 (252-02) + Wave 3 (252-03 + 252-04) + Wave 4 (252-05) + Wave 5 (252-06) ✅ DONE 2026-05-29)
+## Current Position (Phase 253 — Local Agents CLI Expansion 🟡 EXECUTING — Wave 1 Plan 253-01 ✅ DONE 2026-05-30)
+
+### Latest update 2026-05-30 (Phase 253 execution — Plan 253-01 / Wave 1 Wave A npm-global scripts complete)
+
+- ✅ **253-01 DONE** (commits `ab019d57` Task 1 + `388d7b1e` Task 2) — Wave A npm-global Local Agents install scripts created. **6 new self-contained scripts under `scripts/install/cli/`**, each a near-verbatim mirror of the verified `gemini.sh` pattern (shebang + header docblock + `set -euo pipefail` + `source ../_logging.sh` with inline fallback stubs + `NPM_PREFIX=~/.npm-global` G15-EACCES prefix + PATH export + `command -v <bin>` idempotency short-circuit + `npm` guard fail-75 + `npm install -g --prefix` + `hash -r` reverify + idempotent `.profile` `LivOS CLI PATH` marker G20.1 + final version echo). **Task 1 (`ab019d57`):** `codex.sh` (`@openai/codex`→`codex`, scoped name guards the unscoped 2012 silent-fail trap), `qwen-code.sh` (`@qwen-code/qwen-code@latest`→binary `qwen`, NOT `qwen-code`), `augment.sh` (`@augmentcode/auggie`→binary `auggie`, NOT `augment`). **Task 2 (`388d7b1e`):** `github-copilot.sh` (`@github/copilot`→`copilot`, the NEW standalone CLI not the `gh copilot` extension), `codebuddy.sh` (`@tencent-ai/codebuddy-code`→`codebuddy`), `qoder-cli.sh` (`@qoder-ai/qodercli`→binary `qodercli`, NOT `qoder`). All 6 pass `bash -n`, are chmod +x, and contain `npm install -g --prefix`; no sibling-delegate (self-contained, file-disjoint from Plans 02/03/04). Exact scoped package names per RESEARCH fact table mitigate T-253-01 (tampering); user-writable prefix mitigates T-253-02 (elevation). Auth wiring for the 3 TUI-auth CLIs (github-copilot/codebuddy/qoder-cli) + CLI_AUTH_COMMANDS + drift-lock count bumps land in Plan 04. NOT YET DEPLOYED — repo-side scripts take effect on next `update.sh`/fresh install + deploy glob pickup. SUMMARY: `.planning/phases/253-local-agents-cli-expansion/253-01-SUMMARY.md`. Remaining Phase-253 plans: 253-02 (Wave B goose/factory-droid/cursor-agent), 253-03 (Wave C kimi-cli/mistral-vibe/hermes-agent/nanobot/snow-cli/kiro), 253-04 (register 15 names + drift-lock 5→20), 253-05 (deploy + glob verify), 253-06 (operator browser walk).
+
+---
+
+## Previous Position (v45-prep — Phase 252 Fresh-Install Portability Remediation ✅ COMPLETE 6/6 — Wave 1 (252-01) + Wave 2 (252-02) + Wave 3 (252-03 + 252-04) + Wave 4 (252-05) + Wave 5 (252-06) ✅ DONE 2026-05-29)
 
 ### Latest update 2026-05-29 (Phase 252 execution — Plan 252-06 / Wave 5 R13/R14/R15 complete — PHASE 252 DONE 6/6)
 
@@ -542,7 +550,7 @@ Status: Ready for Phase 214 (Store admin-only gate + UX polish)
 - CARRY-P212-RLS-POLICIES — real RLS policies on 4 tables → P214
 - CARRY-P212-LEGACY-ADMIN-UNIFY — migrate legacy api-key admin routes to cookie path (cosmetic)
 
-Last activity: 2026-05-29
+Last activity: 2026-05-30
 
 ### ✅ Phase 209 SHIPPED (commit `8ad89ee6`)
 
@@ -610,7 +618,7 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 ## Next Planned Phase
 
 - **Phase:** 251
-- **Status:** Executing Phase 252
+- **Status:** Executing Phase --phase
 - **Plan count:** 5
 - **CONTEXT:** .planning/phases/248-luse-display-lifecycle/248-CONTEXT.md
 - **Wave plan:** Wave 1 (248-01 backend display-manager ✅) → Wave 2 (248-02 MCP tool registrations ✅) → Wave 3 (248-03 TTL GC sweep — NEXT) → Wave 4 (248-04 canonical docs + shim sync) → Wave 5 (248-05 Mini PC deploy + UAT)
@@ -618,8 +626,8 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 
 ## Current Position
 
-Phase: 252 (fresh-install-portability-remediation) — EXECUTING
-Plan: 1 of 6
+Phase: --phase (253) — EXECUTING
+Plan: 1 of --name
 
 **Plan 251-09 (4 tasks — 3 commits: `4929916f` docs PORTABILITY-AUDIT + `6bc1ee70` docs REMEDIATION-BACKLOG + final docs flip)** — Wave-2 synthesis closing Phase 251. Aggregated the eight Wave-1 findings docs (251-01…251-08) into two artifacts under the phase dir. **PORTABILITY-AUDIT.md** (156 lines): a 30-row per-dimension COVERED/GAP/RISK matrix across 8 dimensions (luse-redis / display-backend / binaries / identity / paths / systemd-env / terminal / installer-path) with severity (P0/P1/P2) + evidence refs, plus the two explicit operator verdicts. **Q1 (any session-introduced hardcode that breaks portability?)** → YES: three NEW hardcodes — `xterm` hard-dep (P0, ENOENT silently swallowed at `tools.ts:1198`), PTY `username:'bruce'` triple-pin with no `livos:desktop:user` lookup (P1, `ws-handler.ts:466`+`types.ts:31`+`session.ts:77,82-89`), `/opt/livos` Redis-fallback literal (P2 RISK, `server.ts:124`); plus two un-reproducible live-only hand artifacts (`redis-env.conf` drop-in + manual `apt install xterm imagemagick xserver-xephyr`) that mask gaps on the Mini PC. **Q2 (would a brand-new install come up seamlessly with terminal + Luse?)** → **NO-GO**, with **5 P0 blockers**: (1) `xserver-xephyr` not installed → `create_display` default mode fails as a *false-positive success* (no `child.on('error')` in `display-manager.ts:224-253`); (2) `xterm` not installed → `launch_app_in_display(terminal)` silently no-ops; (3) PTY sudoers gap → `bruce→bruce` `sudo --user bruce --login bash` prompts for a password it can't supply; (4) `livos:v43:terminal_panel` flag never seeded → dock entry hidden + WS 4403; (5) `get.livinity.io` → install-script mapping UNPROVABLE from repo (4 entrypoints; only Path A seeds `liv:mcp:config` → AionUi luse; Path B writes `CHANGEME`, Path C seeds no MCP config). `imagemagick`/`import` confirmed NOT a code dependency (251-03) — excluded. **REMEDIATION-BACKLOG.md** (153 lines): 16 items R1-R16 ordered P0→P1→P2, each with file:line + exact change + effort (S/M/L) + kind (installer/code/both), a copy-pasteable apt remediation block (covers R1/R2/R7/R16), and a 5-wave Phase 252 sequencing recommendation. De-duplicated the four cross-referenced findings to single owners (PTY-bruce→R4+R8, GDM-Xauthority→R6, redis-env→R5, empty-catalog→R9+R12). **Task 3 (optional live Mini PC ssh corroboration) SKIPPED** per D-251-LIVE-OPTIONAL — never blocks synthesis; the one genuinely live-only question (`get.livinity.io` alias) is a DNS/Vercel question unanswerable by SSH to the box, captured as backlog R11. Read-only synthesis — zero source touched (D-251-READONLY held), sacred SHA `f3538e1d…` trivially preserved (`[sacred-sha] PASS: 20 files verified` on both content commits). 0 deviations from plan. Self-check PASSED (both reports exist + exceed min_lines; both commits present in git log). SUMMARY at `.planning/phases/251-fresh-install-portability-audit/251-SUMMARY.md`. **Phase 251 CLOSED 9/9.** Next: Phase 252 (remediation) is fully seeded by REMEDIATION-BACKLOG.md — zero further analysis needed to start.
 
@@ -1650,7 +1658,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 252 () — 0 plans — 2026-05-29T15:42:42.400Z
+**Planned Phase:** 253 (Local Agents CLI Expansion) — 7 plans — 2026-05-30T13:15:10.083Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
