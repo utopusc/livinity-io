@@ -20,6 +20,7 @@
 
 import {createHash} from 'node:crypto'
 import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
+import os from 'node:os'
 
 import type {Redis} from 'ioredis'
 
@@ -39,7 +40,7 @@ const REDIS_TTL_SECONDS = 3600
  * Phase 240-01 contract: exactly 5 keys matching SUPPORTED_CLIS. Drift-lock
  * test enforces shape.
  *
- *   claude-code → ['claude', ['code', 'login']]    // Phase 224 reference
+ *   claude-code → ['claude', ['auth', 'login']]    // verified: `claude auth {login,logout,status}`
  *   opencode    → ['opencode', ['auth', 'login']]  // Phase 195/196 reference
  *   gemini      → ['gemini',   ['auth', 'login']]  // best-effort
  *   openclaw    → ['openclaw', ['auth', 'login']]  // best-effort
@@ -48,7 +49,10 @@ const REDIS_TTL_SECONDS = 3600
 export const CLI_AUTH_COMMANDS: Readonly<
 	Record<CliName, readonly [string, readonly string[]] | null>
 > = {
-	'claude-code': ['claude', ['code', 'login']],
+	// G13g — was ['code','login'] (Phase 224 typo); `claude` treats "code login"
+	// as a prompt → "Input must be provided …" error. The real subcommand group
+	// is `claude auth login` (verified via `claude auth --help`: login/logout/status).
+	'claude-code': ['claude', ['auth', 'login']],
 	opencode: ['opencode', ['auth', 'login']],
 	gemini: ['gemini', ['auth', 'login']],
 	openclaw: ['openclaw', ['auth', 'login']],
@@ -183,6 +187,24 @@ export async function authCli(
 	const [bin, args] = command
 	const startMs = Date.now()
 
+	// G13f — same PATH gap as the detector (G13d): livinityd's systemd PATH lacks
+	// the CLI install dirs (claude/opencode ~/.local/bin, openclaw /opt/livos/bin,
+	// gemini/aion npm-global), so `spawn('claude', …)` fails with ENOENT ("spawn
+	// claude ENOENT"). Prepend the known install dirs so the auth command resolves.
+	const authHome = os.homedir() || process.env.HOME || '/home/bruce'
+	const authEnv: NodeJS.ProcessEnv = {
+		...process.env,
+		HOME: authHome,
+		PATH: [
+			`${authHome}/.local/bin`,
+			'/opt/livos/bin',
+			`${authHome}/.bun/bin`,
+			`${authHome}/.npm-global/bin`,
+			'/usr/local/bin',
+			process.env.PATH ?? '/usr/sbin:/usr/bin:/sbin:/bin',
+		].join(':'),
+	}
+
 	deps.logger.info(`[cli-installer] auth start: ${input.name} (${bin} ${args.join(' ')})`)
 
 	// 3. Redis SET 'running' on dispatch (best-effort).
@@ -200,7 +222,7 @@ export async function authCli(
 		// 4. Argv-array spawn (no shell, no string interpolation).
 		let child: ChildProcess
 		try {
-			child = spawn(bin, args as string[])
+			child = spawn(bin, args as string[], {env: authEnv})
 		} catch (spawnErr) {
 			const durationMs = Date.now() - startMs
 			deps.logger.error(
