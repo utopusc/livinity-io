@@ -409,50 +409,8 @@ function TerminalTabPane({
 		}
 		ctxEl?.addEventListener('contextmenu', onContextMenu)
 
-		// Phase 252 — auto-copy on selection (PuTTY / Linux terminal UX): the
-		// moment you finish selecting text it is written to the clipboard, so
-		// "copy" works with no keypress and no reliance on the async Clipboard
-		// API permission path (copyTextRobust has an execCommand fallback).
-		const onSelChange = () => {
-			const selText = term.getSelection()
-			if (selText) void copyTextRobust(selText)
-		}
-		term.onSelectionChange(onSelChange)
 
-		// Phase 252 — middle-click paste (Linux convention). Best-effort via the
-		// Clipboard API; plain Ctrl+V still works through xterm native paste.
-		const onAuxClick = (e: MouseEvent) => {
-			if (e.button !== 1) return
-			e.preventDefault()
-			if (isClosedRef.current) return
-			void navigator.clipboard
-				?.readText()
-				.then((t) => {
-					if (t && !isClosedRef.current) term.paste(t)
-				})
-				.catch(() => {})
-		}
-		ctxEl?.addEventListener("auxclick", onAuxClick)
 
-		// Phase 252 — native paste event (the RELIABLE paste path). The async
-		// Clipboard API (navigator.clipboard.readText) is permission-gated and
-		// silently rejects in many Chrome contexts → paste appeared "broken".
-		// The browser's own `paste` DOM event (fired by Ctrl+V and the native
-		// right-click "Paste") carries the data SYNCHRONOUSLY in
-		// e.clipboardData with NO permission prompt. Read it here and feed it
-		// through term.paste() (bracketed-paste aware), and stopPropagation so
-		// xterm's own (Clipboard-API-based, failing) handler doesn't double-fire.
-		const onPaste = (e: ClipboardEvent) => {
-			if (isClosedRef.current) return
-			const text = e.clipboardData?.getData('text') ?? ''
-			if (!text) return
-			e.preventDefault()
-			e.stopPropagation()
-			term.paste(text)
-		}
-		// Capture phase on the container so it runs before xterm's listener on
-		// its inner helper-textarea.
-		ctxEl?.addEventListener('paste', onPaste, true)
 
 		term.onData((data) => {
 			if (isClosedRef.current) return
@@ -486,8 +444,12 @@ function TerminalTabPane({
 
 		return () => {
 			ctxEl?.removeEventListener('contextmenu', onContextMenu)
-			ctxEl?.removeEventListener("auxclick", onAuxClick)
 			ctxEl?.removeEventListener('paste', onPaste, true)
+			try {
+				selDisposable?.dispose()
+			} catch {
+				// no-op — mock/real both tolerate
+			}
 			observer?.disconnect()
 			try {
 				term.dispose()
