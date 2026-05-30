@@ -298,7 +298,12 @@ const LIV_BRANDING_HANDLE = `\thandle /liv/branding/* {
  * referencing them. Until the follow-up phase ships, the overlay CSS
  * exists on the wire but is never loaded by AionUi's HTML.
  */
-const LIV_ASSISTANT_HANDLE = `\t@liv path /liv /liv/*
+const LIV_ASSISTANT_HANDLE = `\t@liv_trpc path /liv/trpc /liv/trpc/*
+\thandle @liv_trpc {
+\t\turi strip_prefix /liv
+\t\treverse_proxy 127.0.0.1:8080
+\t}
+\t@liv path /liv /liv/*
 \thandle @liv {
 \t\turi strip_prefix /liv
 \t\treverse_proxy 127.0.0.1:3020 {

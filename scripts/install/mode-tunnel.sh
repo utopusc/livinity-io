@@ -352,6 +352,15 @@ _configure_caddy_for_tunnel() {
             }
         }
     }
+    # G13 — the Liv AI "Local Agents" panel (Phase 240-02 injected JS) calls
+    # /liv/trpc/cliInstaller.{detect,install,auth} expecting livinityd :8080.
+    # MUST precede @liv, else /liv/trpc/* falls into @liv → AionUi :3020 →
+    # AionUi serves its SPA index.html → "Unexpected token '<' … not valid JSON".
+    @liv_trpc path /liv/trpc /liv/trpc/*
+    handle @liv_trpc {
+        uri strip_prefix /liv
+        reverse_proxy 127.0.0.1:8080
+    }
     @liv path /liv /liv/*
     handle @liv {
         uri strip_prefix /liv
