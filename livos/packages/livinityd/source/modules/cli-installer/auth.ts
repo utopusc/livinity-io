@@ -8,10 +8,11 @@
 // Drift-locks (vitest enforced):
 //   - AUTH_TIMEOUT_MS === 300_000 (matches INSTALL_TIMEOUT_MS magnitude —
 //     auth flows can include a one-time browser device-code paste).
-//   - CLI_AUTH_COMMANDS has exactly 5 keys matching SUPPORTED_CLIS tuple.
-//     aion-cli is null — auth is EXPLICITLY UNSUPPORTED upstream (Phase 239
-//     verification found canonical sources unreachable). authCli short-circuits
-//     to AUTH_UNSUPPORTED without spawning.
+//   - CLI_AUTH_COMMANDS has exactly 20 keys matching SUPPORTED_CLIS tuple
+//     (Phase 253-04; was 5). null entries are EXPLICITLY UNSUPPORTED — auth
+//     short-circuits to AUTH_UNSUPPORTED without spawning. null keys: aion-cli
+//     (Phase 239 unreachable) + the 6 Wave C install-only CLIs (kimi-cli,
+//     mistral-vibe, hermes-agent, nanobot, snow-cli, kiro — authHidden).
 //
 // Side-effects beyond spawn:
 //   - Redis SET liv:cli:auth:<name> = 'running' (on dispatch), 'ok' | 'failed'
@@ -37,14 +38,27 @@ const REDIS_TTL_SECONDS = 3600
  * Per-CLI canonical login argv. `null` = explicitly unsupported (no canonical
  * login command exists upstream — authCli short-circuits to AUTH_UNSUPPORTED).
  *
- * Phase 240-01 contract: exactly 5 keys matching SUPPORTED_CLIS. Drift-lock
- * test enforces shape.
+ * Phase 253-04 contract: exactly 20 keys matching SUPPORTED_CLIS. Drift-lock
+ * test enforces shape. Subcommands verified in Phase 253 RESEARCH.
  *
  *   claude-code → ['claude', ['auth', 'login']]    // verified: `claude auth {login,logout,status}`
  *   opencode    → ['opencode', ['auth', 'login']]  // Phase 195/196 reference
  *   gemini      → ['gemini',   ['auth', 'login']]  // best-effort
  *   openclaw    → ['openclaw', ['auth', 'login']]  // best-effort
  *   aion-cli    → null                             // EXPLICITLY UNSUPPORTED
+ *   --- Wave A ---
+ *   codex          → ['codex', ['auth','login']]
+ *   qwen-code      → ['qwen', ['auth']]
+ *   augment        → ['auggie', ['login']]
+ *   github-copilot → ['copilot', []]    // bare TUI → operator types /login
+ *   codebuddy      → ['codebuddy', []]  // bare TUI
+ *   qoder-cli      → ['qodercli', []]   // bare TUI
+ *   --- Wave B ---
+ *   goose          → ['goose', ['configure']]
+ *   factory-droid  → ['droid', ['login']]
+ *   cursor-agent   → ['cursor-agent', ['login']]  // bin == install/detector/auth (BLOCKER 1)
+ *   --- Wave C (install-only / authHidden) ---
+ *   kimi-cli/mistral-vibe/hermes-agent/nanobot/snow-cli/kiro → null
  */
 export const CLI_AUTH_COMMANDS: Readonly<
 	Record<CliName, readonly [string, readonly string[]] | null>
@@ -57,6 +71,24 @@ export const CLI_AUTH_COMMANDS: Readonly<
 	gemini: ['gemini', ['auth', 'login']],
 	openclaw: ['openclaw', ['auth', 'login']],
 	'aion-cli': null,
+	// Wave A
+	codex: ['codex', ['auth', 'login']],
+	'qwen-code': ['qwen', ['auth']],
+	augment: ['auggie', ['login']],
+	'github-copilot': ['copilot', []],
+	codebuddy: ['codebuddy', []],
+	'qoder-cli': ['qodercli', []],
+	// Wave B
+	goose: ['goose', ['configure']],
+	'factory-droid': ['droid', ['login']],
+	'cursor-agent': ['cursor-agent', ['login']],
+	// Wave C (install-only / authHidden — null short-circuits to AUTH_UNSUPPORTED)
+	'kimi-cli': null,
+	'mistral-vibe': null,
+	'hermes-agent': null,
+	nanobot: null,
+	'snow-cli': null,
+	kiro: null,
 }
 
 /**
