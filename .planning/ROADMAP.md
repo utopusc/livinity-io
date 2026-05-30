@@ -2,6 +2,7 @@
 
 ## Milestones
 
+- 🚧 **v44.0 Liv AI Tooling Depth** — Phases 246-252 (CURRENT; v43 CLOSED 2026-05-28). Terminal v2 + Luse skill/display tooling + fresh-install portability remediation (Phase 252 ✅ 6/6). Open: Phase 250 (Terminal Pro UI) + Phase 249 operator close walk. See `## v44 — Liv AI Tooling Depth` section below. _(NOTE: the older `### 🟢 vNN.0 … (Active)` headings further down — v31/v32/v33/v34/v36/v37 — are STALE label drift from long-shipped milestones; this 🚧 marker is the authoritative current-milestone pointer that `gsd-sdk getMilestoneInfo` reads first.)_
 - ✅ **v29.3 Marketplace AI Broker (Subscription-Only)** — Phases 39-44 (shipped local 2026-05-01) — see [milestones/v29.3-ROADMAP.md](milestones/v29.3-ROADMAP.md)
 - ✅ **v29.4 Server Management Tooling + Bug Sweep** — Phases 45-48 (shipped local 2026-05-01) — see [milestones/v29.4-ROADMAP.md](milestones/v29.4-ROADMAP.md)
 - ✅ **v29.5 v29.4 Hot-Patch Recovery + Verification Discipline** — Phases 49-54 (shipped local 2026-05-02 via `--accept-debt`) — see [milestones/v29.5-ROADMAP.md](milestones/v29.5-ROADMAP.md)

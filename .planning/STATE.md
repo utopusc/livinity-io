@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v34.0
-milestone_name: Bootstrap Polish + First-Run UX
+milestone: v44.0
+milestone_name: Liv AI Tooling Depth
 status: executing
-last_updated: "2026-05-29T18:30:00.000Z"
+last_updated: "2026-05-29T19:05:00.000Z"
 last_activity: 2026-05-29
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
+  total_phases: 6
+  completed_phases: 5
+  total_plans: 29
+  completed_plans: 23
+  percent: 79
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
