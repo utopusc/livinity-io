@@ -232,16 +232,29 @@
         }
 
         // Auth handler (skipped for aion-cli per authHidden meta)
+        // G17 — interactive CLI login (OAuth / browser device-code) CANNOT complete
+        // through a fire-and-forget livinityd spawn (the old cliInstaller.auth path).
+        // Instead, ask the LivOS shell (the parent of this /liv iframe) to open its
+        // Terminal and run the CLI's login command there, so the operator completes
+        // the sign-in interactively. We post only the CLI NAME (not a raw command);
+        // the shell maps it to a whitelisted command (RCE boundary preserved).
         var authBtn = row.querySelector('.liv-240-btn-auth');
         if (authBtn) {
           authBtn.addEventListener('click', function () {
-            setRowState(row, 'authing');
-            authCli(name).then(function (out) {
-              if (out && out.ok) setRowState(row, 'authed');
-              else setRowState(row, 'failed', truncate((out && out.output) || 'Auth failed'));
-            }).catch(function (e) {
-              setRowState(row, 'failed', e && e.message);
-            });
+            try {
+              window.parent.postMessage(
+                { source: 'liv-240-local-agents', type: 'cli-auth', cli: name },
+                window.location.origin
+              );
+              var st = row.querySelector('.liv-240-status');
+              if (st) st.textContent = 'Login opened in Terminal — finish there, then Re-detect';
+              authBtn.textContent = 'Open Terminal again';
+              authBtn.disabled = false;
+              var errEl = row.querySelector('.liv-240-error');
+              if (errEl) errEl.style.display = 'none';
+            } catch (e) {
+              setRowState(row, 'failed', 'Could not open Terminal: ' + (e && e.message));
+            }
           });
         }
       })(SUPPORTED_CLIS[i]);

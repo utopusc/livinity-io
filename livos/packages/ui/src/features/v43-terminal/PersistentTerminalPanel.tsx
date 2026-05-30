@@ -27,6 +27,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {uuidv7} from 'uuidv7'
 
 import {TerminalTabBar, type TerminalTab} from './TerminalTabBar'
+import {setActiveTerminalSender} from './terminal-command-queue'
 import {
 	readAllTabSessions,
 	removeTabSession,
@@ -249,6 +250,10 @@ function TerminalTabPane({
 	const isClosedRef = useRef(false)
 	const hasReadyArrivedRef = useRef(false)
 	const sendRef = useRef<((msg: ClientToServer) => void) | null>(null)
+	// Phase 252 G17 — flips true once the PTY is ready/reattached. Drives the
+	// active-terminal-sender registration so the Liv AI CLI-auth bridge only
+	// dispatches login commands into a TTY that can actually accept input.
+	const [isLive, setIsLive] = useState(false)
 
 	// Phase 246 hot-fix — right-click clipboard menu position (null = closed).
 	const [ctxMenu, setCtxMenu] = useState<{x: number; y: number} | null>(null)
@@ -441,6 +446,7 @@ function TerminalTabPane({
 			switch (msg.type) {
 				case 'ready':
 					hasReadyArrivedRef.current = true
+					setIsLive(true)
 					onSessionResolved(tabKey, msg.sessionId)
 					try {
 						term.writeln(`\x1b[2m[session ${msg.sessionId} ready]\x1b[0m`)
@@ -450,6 +456,7 @@ function TerminalTabPane({
 					break
 				case 'reattached':
 					hasReadyArrivedRef.current = true
+					setIsLive(true)
 					// Replay scrollback BEFORE live data resumes (246-03 contract).
 					try {
 						msg.scrollback.forEach((line) => term.write(line))
@@ -472,6 +479,7 @@ function TerminalTabPane({
 						// no-op
 					}
 					isClosedRef.current = true
+					setIsLive(false)
 					onExited(tabKey)
 					break
 				case 'error':
@@ -520,6 +528,21 @@ function TerminalTabPane({
 		})
 		return () => registerCloseSender(tabKey, null)
 	}, [tabKey, registerCloseSender])
+
+	// Phase 252 G17 — while THIS pane is the focused, live tab, register it as
+	// the active terminal sender so the Liv AI CLI-auth bridge can dispatch a
+	// `<cli> auth login` command into it. Only the active+live pane registers,
+	// so a queued command always lands in the tab the operator is looking at.
+	// Registering flushes any command that was requested before the Terminal
+	// window finished opening (the freshly opened tab claims it on `ready`).
+	useEffect(() => {
+		if (!isActive || !isLive) return
+		setActiveTerminalSender((command: string) => {
+			if (isClosedRef.current) return
+			sendRef.current?.({type: 'data', data: command + '\n'})
+		})
+		return () => setActiveTerminalSender(null)
+	}, [isActive, isLive])
 
 	return (
 		<>
