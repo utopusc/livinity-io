@@ -292,25 +292,78 @@ _configure_caddy_for_tunnel() {
 }
 
 :80 {
-    @livai path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*
-    handle @livai {
-        uri strip_prefix /liv-ai-app/liv-ai
-        rewrite * /plugins/openclawos{path}
-        reverse_proxy 127.0.0.1:18789
-    }
-    @livaiopenclaw path /liv-ai-app/openclawos /liv-ai-app/openclawos/*
-    handle @livaiopenclaw {
-        uri strip_prefix /liv-ai-app/openclawos
-        rewrite * /plugins/openclawos{path}
-        reverse_proxy 127.0.0.1:18789
-    }
-    @openclawosPluginAssets path /plugins/openclawos /plugins/openclawos/*
-    handle @openclawosPluginAssets {
-        reverse_proxy 127.0.0.1:18789
-    }
     @livaiSubapp path /liv-ai-app /liv-ai-app/*
     handle @livaiSubapp {
-        reverse_proxy 127.0.0.1:3010
+        reverse_proxy 127.0.0.1:3010 {
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+    }
+    handle /liv/branding/* {
+        uri strip_prefix /liv/branding
+        root * /etc/liv-assistant/branding
+        file_server
+    }
+    @webapp_stream_ws path /ws/stream/*
+    handle @webapp_stream_ws {
+        reverse_proxy 127.0.0.1:8080 {
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+    }
+    @liv_ws path /ws /ws/*
+    handle @liv_ws {
+        reverse_proxy 127.0.0.1:3020 {
+            header_down -X-Frame-Options
+            header_down -Content-Security-Policy
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+    }
+    @liv_api_subresource {
+        header_regexp Referer ^https?://[^/]+/liv(/|\$)
+        path /api/*
+    }
+    handle @liv_api_subresource {
+        reverse_proxy 127.0.0.1:3020 {
+            header_down -X-Frame-Options
+            header_down -Content-Security-Policy
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+        header Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
+    }
+    @livos_terminal_ws path /livos/terminal/ws
+    handle @livos_terminal_ws {
+        reverse_proxy 127.0.0.1:8080 {
+            header_down -X-Frame-Options
+            header_down -Content-Security-Policy
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+    }
+    @liv path /liv /liv/*
+    handle @liv {
+        uri strip_prefix /liv
+        reverse_proxy 127.0.0.1:3020 {
+            header_down -X-Frame-Options
+            header_down -Content-Security-Policy
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+        header Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
     }
     handle {
         reverse_proxy 127.0.0.1:8080
