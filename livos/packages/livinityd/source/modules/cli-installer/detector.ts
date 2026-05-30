@@ -10,6 +10,7 @@
 // version probe uses argv-array form for defense in depth.
 
 import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
+import os from 'node:os'
 
 import {
 	CLI_BIN_NAMES,
@@ -39,6 +40,7 @@ function runProbe(
 	spawn: typeof nodeSpawn,
 	command: string,
 	args: string[],
+	env?: NodeJS.ProcessEnv,
 ): Promise<ProbeResult> {
 	return new Promise<ProbeResult>((resolve) => {
 		let settled = false
@@ -46,7 +48,7 @@ function runProbe(
 		const stdoutChunks: Buffer[] = []
 
 		try {
-			child = spawn(command, args)
+			child = env ? spawn(command, args, {env}) : spawn(command, args)
 		} catch {
 			resolve({exitCode: -1, stdout: ''})
 			return
@@ -107,10 +109,28 @@ export async function detectCli(
 	const bin = CLI_BIN_NAMES[input.name]
 	const versionArgs = CLI_VERSION_ARGS[input.name]
 
-	// Stage 1 — locate the binary. `bash -c "command -v <bin>"` is safe
-	// because `<bin>` comes from CLI_BIN_NAMES (enum-constrained), never
-	// user input.
-	const locate = await runProbe(spawn, 'bash', ['-c', `command -v ${bin}`])
+	// G13d — livinityd's systemd PATH is /usr/local/sbin:/usr/local/bin:/usr/sbin:
+	// /usr/bin:/snap/bin, and a plain `bash -c` is non-login, so the install
+	// scripts' targets are invisible to `command -v` (claude/opencode →
+	// ~/.local/bin, openclaw → /opt/livos/bin, gemini/aion → npm-global prefix).
+	// Result: detect returned {detected:false} even right after a successful
+	// install (the agent re-shows as "Available to Install" after a refresh).
+	// Fix: (1) login shell (`-lc`) so the user's profile PATH (npm/nvm/etc.) is
+	// sourced; (2) explicitly prepend the known install dirs.
+	const home = os.homedir() || process.env.HOME || '/home/bruce'
+	const probePath = [
+		`${home}/.local/bin`,
+		'/opt/livos/bin',
+		`${home}/.bun/bin`,
+		`${home}/.npm-global/bin`,
+		'/usr/local/bin',
+		process.env.PATH ?? '/usr/sbin:/usr/bin:/sbin:/bin',
+	].join(':')
+	const probeEnv: NodeJS.ProcessEnv = {...process.env, HOME: home, PATH: probePath}
+
+	// Stage 1 — locate the binary. `bash -lc "command -v <bin>"` is safe
+	// because `<bin>` comes from CLI_BIN_NAMES (enum-constrained), never user input.
+	const locate = await runProbe(spawn, 'bash', ['-lc', `command -v ${bin}`], probeEnv)
 	if (locate.exitCode !== 0) {
 		return {detected: false}
 	}
@@ -119,9 +139,10 @@ export async function detectCli(
 		return {detected: false}
 	}
 
-	// Stage 2 — version probe. argv-array form (no shell). Failure here
-	// is non-fatal: detection still succeeds with `version` undefined.
-	const version = await runProbe(spawn, bin, versionArgs)
+	// Stage 2 — version probe. Spawn the absolute `probedPath` (from `command -v`
+	// above) directly — resolves regardless of PATH and uses no shell. Failure
+	// here is non-fatal: detection still succeeds with `version` undefined.
+	const version = await runProbe(spawn, probedPath, versionArgs, probeEnv)
 	if (version.exitCode === 0) {
 		const firstLine = version.stdout.split(/\r?\n/)[0]?.trim()
 		return {
