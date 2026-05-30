@@ -2,6 +2,7 @@ import {motion, Variant} from 'framer-motion'
 import {useLocation} from 'react-router-dom'
 import {useState, useEffect, useCallback, useMemo, useRef} from 'react'
 
+import {useCliAuthBridge} from '@/hooks/use-cli-auth-bridge'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useMobileApp} from '@/modules/mobile/mobile-app-context'
 import {useApps, systemAppsKeyed} from '@/providers/apps'
@@ -243,6 +244,12 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 	// userApps is undefined). Moves a runtime crash into a no-op render.
 
 	const windowManager = useWindowManagerOptional()
+
+	// Phase 252 G17 — bridge the Liv AI "Local Agents" CLI-auth postMessage to
+	// the LivOS Terminal (opens it + runs `<cli> auth login` interactively).
+	// Mounted here because DesktopContent is guaranteed to live inside the
+	// window-manager provider (it already drives openWindow for Docker etc.).
+	useCliAuthBridge()
 
 
 	const gridItems: AppGridItem[] = useMemo(() => {
