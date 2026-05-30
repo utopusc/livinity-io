@@ -1718,12 +1718,138 @@ _dld_health_check() {
     return 0
 }
 
+# ── 9c. Phase 223/225/226 — install liv-assistant (AionUi :3020) + /liv ──────
+# UAT 252: the fresh curl|bash installer (a pre-Phase-223 port of update.sh)
+# never deployed Liv AI, so https://<host>/liv/ returned "Cannot GET /liv/" and
+# the surface was absent on a fresh box. Mirror update.sh's chain (install at
+# :625-639 + unit at :1229-1263) using the staged clone, then enable+start the
+# unit so :3020 is UP before _dld_update_caddy_to_livinityd validates the
+# Caddyfile that proxies /liv to it. Non-fatal: a Liv-AI failure must not brick
+# the core install.
+_dld_install_liv_assistant() {
+    step "Phase 223/225 — install liv-assistant (vendored AionUi :3020) + unit"
+
+    local installer="$_DLD_STAGE_DIR/scripts/install-liv-assistant.sh"
+    if [[ ! -f "$installer" ]]; then
+        warn "install-liv-assistant.sh not in stage dir ($_DLD_STAGE_DIR) — skipping Liv AI install (/liv will 404)"
+        return 0
+    fi
+    if bash "$installer" 2>&1 | tail -10; then
+        ok "liv-assistant binary installed (/opt/liv-assistant/current)"
+    else
+        warn "install-liv-assistant.sh failed — Liv AI (/liv) unavailable until re-run (SHA/network/disk?)"
+        return 0
+    fi
+
+    local unit_src="$_DLD_STAGE_DIR/systemd/liv-assistant.service"
+    local unit_dst="/etc/systemd/system/liv-assistant.service"
+    if [[ ! -f "$unit_src" ]]; then
+        warn "liv-assistant.service unit not in stage dir — skipping unit install"
+        return 0
+    fi
+    if [[ ! -f "$unit_dst" ]] || ! cmp -s "$unit_src" "$unit_dst"; then
+        install -m 0644 -o root -g root "$unit_src" "$unit_dst"
+        systemctl daemon-reload
+    fi
+    systemctl enable liv-assistant.service >/dev/null 2>&1 || true
+    if systemctl restart liv-assistant.service 2>/dev/null; then
+        ok "liv-assistant.service enabled + started (:3020)"
+    else
+        warn "liv-assistant.service failed to start — check journalctl -u liv-assistant -n 30 (/liv will 502 until fixed)"
+    fi
+}
+
 # ── 10. Caddy reverse_proxy 127.0.0.1:8080 ──────────────────────────────────
 # Rewrites /etc/caddy/Caddyfile to the final shape appropriate for the active
 # mode. Plan 104-08 hybrid mode + 104-09 tunnel mode + 104-03 local-lan mode
 # all need this — Caddy must terminate at livinityd, not at a placeholder.
 _dld_update_caddy_to_livinityd() {
     step "Plan 104-11 — update Caddy to reverse_proxy 127.0.0.1:8080"
+
+    # UAT 252 (Liv AI /liv): the fresh-install Caddyfile must serve the Liv
+    # Assistant surface (/liv → AionUi :3020) + branding + WS + terminal handles.
+    # The /liv route otherwise exists ONLY in the runtime caddy.ts generator,
+    # which is invoked at app-install — never at boot — so on a fresh box GET
+    # /liv/ fell through to livinityd → "Cannot GET /liv/". This block byte-
+    # mirrors caddy.ts generateFullCaddyfile's :80 ordering (Phase 226-04 /
+    # 237 split WS matchers / 243 terminal / 232 branding). Quoted heredoc so
+    # the @liv_api_subresource Referer regex's trailing `$` stays literal.
+    local _DLD_LIV_AI_HANDLES
+    read -r -d '' _DLD_LIV_AI_HANDLES <<'LIVAI_HANDLES' || true
+    @livaiSubapp path /liv-ai-app /liv-ai-app/*
+    handle @livaiSubapp {
+        reverse_proxy 127.0.0.1:3010 {
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+    }
+    handle /liv/branding/* {
+        uri strip_prefix /liv/branding
+        root * /etc/liv-assistant/branding
+        file_server
+    }
+    @webapp_stream_ws path /ws/stream/*
+    handle @webapp_stream_ws {
+        reverse_proxy 127.0.0.1:8080 {
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+    }
+    @liv_ws path /ws /ws/*
+    handle @liv_ws {
+        reverse_proxy 127.0.0.1:3020 {
+            header_down -X-Frame-Options
+            header_down -Content-Security-Policy
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+    }
+    @liv_api_subresource {
+        header_regexp Referer ^https?://[^/]+/liv(/|$)
+        path /api/*
+    }
+    handle @liv_api_subresource {
+        reverse_proxy 127.0.0.1:3020 {
+            header_down -X-Frame-Options
+            header_down -Content-Security-Policy
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+        header Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
+    }
+    @livos_terminal_ws path /livos/terminal/ws
+    handle @livos_terminal_ws {
+        reverse_proxy 127.0.0.1:8080 {
+            header_down -X-Frame-Options
+            header_down -Content-Security-Policy
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+    }
+    @liv path /liv /liv/*
+    handle @liv {
+        uri strip_prefix /liv
+        reverse_proxy 127.0.0.1:3020 {
+            header_down -X-Frame-Options
+            header_down -Content-Security-Policy
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+        header Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
+    }
+LIVAI_HANDLES
 
     case "${MODE:-hybrid}" in
         hybrid|tunnel)
@@ -1747,29 +1873,7 @@ _dld_update_caddy_to_livinityd() {
     auto_https off
 }
 :80 {
-    handle /openclawos/handshake {
-        reverse_proxy 127.0.0.1:8080
-    }
-    @livai path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*
-    handle @livai {
-        uri strip_prefix /liv-ai-app/liv-ai
-        rewrite * /plugins/openclawos{path}
-        reverse_proxy 127.0.0.1:18789
-    }
-    @livaiopenclaw path /liv-ai-app/openclawos /liv-ai-app/openclawos/*
-    handle @livaiopenclaw {
-        uri strip_prefix /liv-ai-app/openclawos
-        rewrite * /plugins/openclawos{path}
-        reverse_proxy 127.0.0.1:18789
-    }
-    @openclawosPluginAssets path /plugins/openclawos /plugins/openclawos/*
-    handle @openclawosPluginAssets {
-        reverse_proxy 127.0.0.1:18789
-    }
-    @livaiSubapp path /liv-ai-app /liv-ai-app/*
-    handle @livaiSubapp {
-        reverse_proxy 127.0.0.1:3010
-    }
+${_DLD_LIV_AI_HANDLES}
     handle {
         reverse_proxy 127.0.0.1:8080
     }
@@ -1787,29 +1891,7 @@ import /etc/caddy/pki-global.conf
             ca liv-local
         }
     }
-    handle /openclawos/handshake {
-        reverse_proxy 127.0.0.1:8080
-    }
-    @livai path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*
-    handle @livai {
-        uri strip_prefix /liv-ai-app/liv-ai
-        rewrite * /plugins/openclawos{path}
-        reverse_proxy 127.0.0.1:18789
-    }
-    @livaiopenclaw path /liv-ai-app/openclawos /liv-ai-app/openclawos/*
-    handle @livaiopenclaw {
-        uri strip_prefix /liv-ai-app/openclawos
-        rewrite * /plugins/openclawos{path}
-        reverse_proxy 127.0.0.1:18789
-    }
-    @openclawosPluginAssets path /plugins/openclawos /plugins/openclawos/*
-    handle @openclawosPluginAssets {
-        reverse_proxy 127.0.0.1:18789
-    }
-    @livaiSubapp path /liv-ai-app /liv-ai-app/*
-    handle @livaiSubapp {
-        reverse_proxy 127.0.0.1:3010
-    }
+${_DLD_LIV_AI_HANDLES}
     handle {
         reverse_proxy 127.0.0.1:8080
     }
@@ -1820,29 +1902,7 @@ CADDYFILE
         cloud)
             cat > "$_DLD_CADDYFILE" <<CADDYFILE
 :80 {
-    handle /openclawos/handshake {
-        reverse_proxy 127.0.0.1:8080
-    }
-    @livai path /liv-ai-app/liv-ai /liv-ai-app/liv-ai/*
-    handle @livai {
-        uri strip_prefix /liv-ai-app/liv-ai
-        rewrite * /plugins/openclawos{path}
-        reverse_proxy 127.0.0.1:18789
-    }
-    @livaiopenclaw path /liv-ai-app/openclawos /liv-ai-app/openclawos/*
-    handle @livaiopenclaw {
-        uri strip_prefix /liv-ai-app/openclawos
-        rewrite * /plugins/openclawos{path}
-        reverse_proxy 127.0.0.1:18789
-    }
-    @openclawosPluginAssets path /plugins/openclawos /plugins/openclawos/*
-    handle @openclawosPluginAssets {
-        reverse_proxy 127.0.0.1:18789
-    }
-    @livaiSubapp path /liv-ai-app /liv-ai-app/*
-    handle @livaiSubapp {
-        reverse_proxy 127.0.0.1:3010
-    }
+${_DLD_LIV_AI_HANDLES}
     handle {
         reverse_proxy 127.0.0.1:8080
     }
@@ -2106,6 +2166,7 @@ deploy_livinityd() {
     _dld_write_liv_systemd_units
     _dld_write_systemd_unit
     _dld_health_check
+    _dld_install_liv_assistant            # UAT 252 — install Liv AI (AionUi :3020) + unit so /liv resolves
     _dld_update_caddy_to_livinityd
     _dld_cleanup_temp_dir                 # 105-02 G7+G9 — cleanup + .deployed-sha
 
