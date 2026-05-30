@@ -435,6 +435,28 @@ _dld_clone_source() {
         --exclude='*.log' \
         "$_DLD_STAGE_DIR/liv/" "$_DLD_LIV_DIR/"
     ok "liv source rsynced to $_DLD_LIV_DIR/"
+
+    # G12 (fresh-install, 2026-05-30): the CLI-installer shell scripts live at
+    # repo-root scripts/install/cli/<name>.sh — NOT under livos/. The livos/
+    # rsync above therefore never deploys them, so the cliInstaller.install()
+    # tRPC mutation spawns `bash /opt/livos/scripts/install/cli/<name>.sh`
+    # against a MISSING file → bash exit 127 → onboarding "CLI Tools" step shows
+    # "Failed" for all 5 agents ("Unexpected token '<' … is not valid JSON" in
+    # the browser). resolveInstallScript() (cli-installer/install-scripts.ts)
+    # expects them at $LIVOS_ROOT/scripts/install/cli/, so copy them there.
+    # Also copy _logging.sh (the scripts source ../_logging.sh; they fall back to
+    # inline loggers if absent, but ship it for parity with the repo layout).
+    if [[ -d "$_DLD_STAGE_DIR/scripts/install/cli" ]]; then
+        info "deploy repo/scripts/install/cli/ → $_DLD_LIVOS_DIR/scripts/install/cli/ (G12 CLI-installer scripts)"
+        mkdir -p "$_DLD_LIVOS_DIR/scripts/install/cli"
+        rsync -a "$_DLD_STAGE_DIR/scripts/install/cli/" "$_DLD_LIVOS_DIR/scripts/install/cli/"
+        [[ -f "$_DLD_STAGE_DIR/scripts/install/_logging.sh" ]] \
+            && cp "$_DLD_STAGE_DIR/scripts/install/_logging.sh" "$_DLD_LIVOS_DIR/scripts/install/_logging.sh"
+        chmod +x "$_DLD_LIVOS_DIR/scripts/install/cli/"*.sh 2>/dev/null || true
+        ok "CLI-installer scripts deployed ($(ls "$_DLD_LIVOS_DIR/scripts/install/cli/"*.sh 2>/dev/null | wc -l) scripts)"
+    else
+        warn "repo/scripts/install/cli/ not in stage dir — CLI Tools onboarding installs will exit 127 (G12)"
+    fi
 }
 
 # ── 4c. LivOS Docker images (Phase 105-05 UAT Bug #6 fix) ───────────────────
