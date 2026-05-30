@@ -49,4 +49,12 @@ if ! command -v openclaw >/dev/null 2>&1; then
     fail "OpenClaw install completed but binary still not on PATH" 75
 fi
 
+# G20 — persist /opt/livos/bin on bruce's interactive-shell PATH (~/.bashrc) so
+# the terminal-based `openclaw auth login` (Liv AI → Local Agents → Auth)
+# resolves the binary. The `export PATH` above is process-local; without this
+# the login terminal reports "openclaw: command not found" (operator-reported).
+if [[ -f "${HOME}/.bashrc" ]] && ! grep -qF '/opt/livos/bin' "${HOME}/.bashrc"; then
+    printf '\n# LivOS — OpenClaw CLI on PATH\nexport PATH="/opt/livos/bin:$PATH"\n' >> "${HOME}/.bashrc"
+fi
+
 ok "OpenClaw installed: $(openclaw --version 2>/dev/null | head -1 || echo unknown)"

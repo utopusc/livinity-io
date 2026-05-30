@@ -52,4 +52,12 @@ if ! command -v gemini >/dev/null 2>&1; then
     fail "Gemini CLI install completed but binary still not on PATH" 75
 fi
 
+# G20 — persist ~/.npm-global/bin on bruce's interactive-shell PATH (~/.bashrc)
+# so the terminal-based `gemini auth login` (Liv AI → Local Agents → Auth)
+# resolves the binary. The `export PATH` above is process-local; without this
+# the login terminal reports "gemini: command not found" (operator-reported).
+if [[ -f "${HOME}/.bashrc" ]] && ! grep -qF '.npm-global/bin' "${HOME}/.bashrc"; then
+    printf '\n# LivOS — npm-global CLIs on PATH\nexport PATH="$HOME/.npm-global/bin:$PATH"\n' >> "${HOME}/.bashrc"
+fi
+
 ok "Gemini CLI installed: $(gemini --version 2>/dev/null | head -1 || echo unknown)"
