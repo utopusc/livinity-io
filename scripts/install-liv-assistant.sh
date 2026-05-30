@@ -358,6 +358,25 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# G13c — AionUi ships its OWN service worker (sw.js, CACHE_NAME 'liv-ai-webui-vN')
+# that precaches index.html + './'. After we inject/patch the Local Agents assets,
+# a browser holding the prior SW keeps serving the STALE precached index.html (+ old
+# liv-240 JS) → users run old code (e.g. the old tRPC {json} wire shape → 400
+# invalid_type). Pin the SW cache version to the patched JS's content hash so every
+# patch revision busts the SW precache automatically. Idempotent: the regex strips
+# any prior -liv<hash> suffix before re-appending, so unchanged JS = no churn.
+# ---------------------------------------------------------------------------
+SW_FILE="${REBRAND_TARGET}/sw.js"
+LA_JS="${PATCH_TARGET_DIR}/liv-240-install-section.js"
+if [[ -f "${SW_FILE}" && -f "${LA_JS}" ]] && command -v sha256sum >/dev/null 2>&1; then
+  if grep -qE "CACHE_NAME = 'liv-ai-webui-v[0-9]+(-liv[0-9a-f]+)?'" "${SW_FILE}"; then
+    LA_HASH="$(sha256sum "${LA_JS}" | cut -c1-8)"
+    sed -i -E "s/(CACHE_NAME = 'liv-ai-webui-v[0-9]+)(-liv[0-9a-f]+)?'/\1-liv${LA_HASH}'/" "${SW_FILE}"
+    log "Phase 240-02 (G13c): AionUi SW CACHE_NAME pinned to patch hash (-liv${LA_HASH}) — busts stale precache on update"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Phase 238 Step A — Livinity logo asset overlay
 #
 # Copies the Livinity logo SVG(s) from the cloned repo's caddy/branding/ dir
