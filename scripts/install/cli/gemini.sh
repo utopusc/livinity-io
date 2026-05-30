@@ -24,6 +24,14 @@ fi
 
 step "Phase 239 — installing Gemini CLI"
 
+# G15 — `npm install -g` as the (non-root) livinityd user hits EACCES because
+# npm's global prefix defaults to /usr (root-owned: mkdir /usr/lib/node_modules
+# denied). Use a user-writable prefix (~/.npm-global) and put its bin dir on PATH
+# for the idempotency + post-install verify checks.
+NPM_PREFIX="${HOME}/.npm-global"
+export PATH="${NPM_PREFIX}/bin:${HOME}/.local/bin:/usr/local/bin:${PATH}"
+mkdir -p "${NPM_PREFIX}"
+
 if command -v gemini >/dev/null 2>&1; then
     _v=$(gemini --version 2>/dev/null | head -1 || echo unknown)
     ok "✓ Gemini CLI already installed: ${_v}"
@@ -34,8 +42,8 @@ if ! command -v npm >/dev/null 2>&1; then
     fail "gemini: npm not on PATH — install Node.js first" 75
 fi
 
-info "Running: npm install -g @google/gemini-cli"
-if ! npm install -g @google/gemini-cli; then
+info "Running: npm install -g --prefix ${NPM_PREFIX} @google/gemini-cli"
+if ! npm install -g --prefix "${NPM_PREFIX}" @google/gemini-cli; then
     fail "gemini: npm install failed" 75
 fi
 hash -r 2>/dev/null || true

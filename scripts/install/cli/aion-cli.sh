@@ -41,16 +41,23 @@ if ! command -v npm >/dev/null 2>&1; then
     fail "aion-cli: npm not on PATH — install Node.js first" 75
 fi
 
+# G15 — user-writable npm prefix (same EACCES fix as gemini.sh: default /usr
+# prefix is root-owned). Aion is also the BUILT-IN Liv CLI, so this npm path is
+# only a best-effort fallback for a standalone install.
+NPM_PREFIX="${HOME}/.npm-global"
+export PATH="${NPM_PREFIX}/bin:${HOME}/.local/bin:/usr/local/bin:${PATH}"
+mkdir -p "${NPM_PREFIX}"
+
 # NOTE: Aion CLI canonical install command unverified at Phase 239 planning
 # time (docs.aion.ai / github.com/aion-ai/aion-cli / npmjs.com/@aion-ai/cli
 # all unreachable). Best-effort attempt; operator may need to manually
 # install. Phase 240 may supersede this script once official packaging is
 # confirmed.
 warn "aion-cli: install command is best-effort (canonical source unverified)"
-info "Attempting: npm install -g @aion-ai/cli"
-if ! npm install -g @aion-ai/cli 2>/dev/null; then
-    info "Fallback: npm install -g aion-cli"
-    if ! npm install -g aion-cli 2>/dev/null; then
+info "Attempting: npm install -g --prefix ${NPM_PREFIX} @aion-ai/cli"
+if ! npm install -g --prefix "${NPM_PREFIX}" @aion-ai/cli 2>/dev/null; then
+    info "Fallback: npm install -g --prefix ${NPM_PREFIX} aion-cli"
+    if ! npm install -g --prefix "${NPM_PREFIX}" aion-cli 2>/dev/null; then
         fail "aion-cli: no install command succeeded — operator must install manually" 75
     fi
 fi

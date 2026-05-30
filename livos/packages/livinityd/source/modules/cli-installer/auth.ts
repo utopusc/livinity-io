@@ -197,6 +197,7 @@ export async function authCli(
 		HOME: authHome,
 		PATH: [
 			`${authHome}/.local/bin`,
+			`${authHome}/.opencode/bin`,
 			'/opt/livos/bin',
 			`${authHome}/.bun/bin`,
 			`${authHome}/.npm-global/bin`,

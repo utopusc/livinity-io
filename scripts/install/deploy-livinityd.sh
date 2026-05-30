@@ -452,6 +452,11 @@ _dld_clone_source() {
         rsync -a "$_DLD_STAGE_DIR/scripts/install/cli/" "$_DLD_LIVOS_DIR/scripts/install/cli/"
         [[ -f "$_DLD_STAGE_DIR/scripts/install/_logging.sh" ]] \
             && cp "$_DLD_STAGE_DIR/scripts/install/_logging.sh" "$_DLD_LIVOS_DIR/scripts/install/_logging.sh"
+        # G16 — openclaw.sh delegates to ../install-openclaw-cli.sh (a SIBLING of
+        # cli/, not under it), so the cli/ rsync above misses it → openclaw install
+        # fails "delegate script not found". Deploy the delegate too.
+        [[ -f "$_DLD_STAGE_DIR/scripts/install/install-openclaw-cli.sh" ]] \
+            && install -m 0755 "$_DLD_STAGE_DIR/scripts/install/install-openclaw-cli.sh" "$_DLD_LIVOS_DIR/scripts/install/install-openclaw-cli.sh"
         chmod +x "$_DLD_LIVOS_DIR/scripts/install/cli/"*.sh 2>/dev/null || true
         ok "CLI-installer scripts deployed ($(ls "$_DLD_LIVOS_DIR/scripts/install/cli/"*.sh 2>/dev/null | wc -l) scripts)"
     else
