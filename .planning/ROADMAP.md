@@ -4453,3 +4453,23 @@ Plans:
 - [x] 252-06-PLAN.md — Wave 5: unify LUSE_USER_ID + single $LIVOS_ROOT + XDG_RUNTIME_DIR markers (R13,R14,R15) — ✅ DONE 2026-05-29 (commits `e6273de6` RED + `f497e9e1` GREEN shared DEFAULT_LUSE_USER_ID/resolveLuseUserId 'bruce' single-source + seed R13 + `ddf0c375` exported LIVOS_ROOT=$LIVOS_ROOT??$LIVOS_BASE_DIR??/opt/livos drives Redis env-file fallback + uploads allowlist + overridable _DLD_LIVOS_DIR + reconciled <LIV_DATA_ROOT> comment R14 + `a4265820` $XDG_RUNTIME_DIR/livos per-uid 0700 markers + $XDG/luse- allowlist + lstat-reject/O_NOFOLLOW TOCTOU close + writer moved coherently R15; 20/20 tools tests; zero NEW typecheck errors; sacred SHA preserved. **Phase 252 COMPLETE 6/6.**)
 
 ---
+
+### Phase 253: Local Agents CLI Expansion — add AionUi's full supported-CLI roster
+
+**Goal:** Expand the Liv AI "Local Agents → Available to Install" panel (Phase 240) from the current 5 CLIs (claude-code, opencode, gemini, openclaw, aion-cli) to AionUi's full Multi-Agent roster so every CLI agent AionUi can drive is one-click installable + auth-able from inside Liv AI. Each new CLI needs: (a) an install script under `scripts/install/cli/<name>.sh` mirroring the gemini.sh/openclaw.sh pattern (user-writable npm prefix, idempotent, `.profile` PATH persistence per G20.1), (b) a `cliInstaller` whitelist + auth-command entry (drift-locked across install-scripts.ts SUPPORTED_CLIS, auth.ts CLI_AUTH_COMMANDS, the patch JS SUPPORTED_CLIS, and the shell-bridge CLI_AUTH_COMMANDS), (c) a detect PATH entry, (d) the Local Agents panel row metadata. New CLIs to add (beyond the existing 5): **Codex, Qwen Code, Goose AI, Augment Code, CodeBuddy, Kimi CLI, Factory Droid, GitHub Copilot, Qoder CLI, Mistral Vibe, Nanobot, Snow CLI, Kiro, Hermes Agent, Cursor Agent**. Where a CLI is editor-bound or has no headless `auth login` flow, render it install-only (authHidden) rather than dropping it.
+
+**Requirements:** LAX-253 (Local Agents roster parity with AionUi Multi-Agent supported list)
+
+**Depends on:** Phase 240 (Local Agents install-from-UI), Phase 252 (G17–G20 terminal-auth + PATH chain — the install→detect→terminal-auth flow this extends)
+
+**Plans:** 6 plans (4 waves)
+
+Plans:
+- [ ] 253-01-PLAN.md — Wave 1: Wave A npm-global install scripts (codex, qwen-code, augment, github-copilot, codebuddy, qoder-cli)
+- [ ] 253-02-PLAN.md — Wave 1: Wave B curl-installer binary scripts (goose, factory-droid, cursor-agent)
+- [ ] 253-03-PLAN.md — Wave 1: Wave C install-only/authHidden scripts (kimi-cli, mistral-vibe, hermes-agent, nanobot, snow-cli, kiro)
+- [ ] 253-04-PLAN.md — Wave 2: register all 15 names across the 6 drift-locked files + bump 3 vitest count assertions 5→20
+- [ ] 253-05-PLAN.md — Wave 3: deploy to test box + verify glob pickup (G12) and panel cache-bust (G18)
+- [ ] 253-06-PLAN.md — Wave 4: operator browser walk (checkpoint:human-verify) — 20 rows, install+terminal-auth, authHidden
+
+---
