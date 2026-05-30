@@ -1751,6 +1751,17 @@ _dld_install_liv_assistant() {
         install -m 0644 -o root -g root "$unit_src" "$unit_dst"
         systemctl daemon-reload
     fi
+    # UAT 252 (G10): the unit's ReadWritePaths binds /home/<user>/.claude +
+    # .cache + .bun under ProtectHome=read-only. systemd fails the start with
+    # status=226/NAMESPACE if any of those dirs is MISSING (fresh box has no
+    # ~/.claude until Claude Code runs). install-liv-assistant.sh creates .bun;
+    # pre-create the rest bruce-owned so the mount namespace sets up.
+    local _bru_home
+    _bru_home=$(getent passwd "$_DLD_DESKTOP_USER" 2>/dev/null | cut -d: -f6 || true)
+    [[ -n "$_bru_home" ]] || _bru_home="/home/$_DLD_DESKTOP_USER"
+    mkdir -p "$_bru_home/.claude" "$_bru_home/.cache" "$_bru_home/.bun" 2>/dev/null || true
+    chown "$_DLD_DESKTOP_USER:$_DLD_DESKTOP_USER" "$_bru_home/.claude" "$_bru_home/.cache" "$_bru_home/.bun" 2>/dev/null || true
+
     systemctl enable liv-assistant.service >/dev/null 2>&1 || true
     if systemctl restart liv-assistant.service 2>/dev/null; then
         ok "liv-assistant.service enabled + started (:3020)"
