@@ -171,18 +171,18 @@ function WizardInner() {
 
 	const eta = etaSeconds(stepper.idx)
 
-	// Phase 239 D-239-15 — feature flag `livos:v43:onboarding_cli_section`
-	// controls which step renders at slot 4. Defaults FALSE (an informational
-	// "flag disabled" notice — see policy resolution in 239-02-PLAN.md Task 4)
-	// until operator flips via Redis. Until a dedicated backend procedure
-	// ships (deferred to a Phase 239-04 micro-plan), this reads localStorage:
-	//   window.localStorage.setItem('livos.v43.onboarding_cli_section', 'true')
-	// Plan 239-03 (deploy) seeds the Redis key; operator can also set the
-	// localStorage value in browser DevTools to preview locally.
-	let cliSectionFlagEnabled = false
+	// Phase 239 D-239-15 / UAT 252 — feature flag `livos.v43.onboarding_cli_section`
+	// controls which step renders at slot 4. Per the v43/R10 policy (shipped v43
+	// features are ON for a fresh box) this now DEFAULTS TRUE; localStorage is an
+	// explicit OFF/preview override only:
+	//   window.localStorage.setItem('livos.v43.onboarding_cli_section', 'false')
+	// NOTE: there is NO Redis→localStorage bridge — the Redis key is never read
+	// here — so seeding Redis is inert; this code default is the load-bearing
+	// switch (a backend bridge was deferred to a Phase 239-04 micro-plan).
+	let cliSectionFlagEnabled = true
 	if (typeof window !== 'undefined') {
-		cliSectionFlagEnabled =
-			window.localStorage.getItem('livos.v43.onboarding_cli_section') === 'true'
+		if (window.localStorage.getItem('livos.v43.onboarding_cli_section') === 'false')
+			cliSectionFlagEnabled = false
 	}
 
 	return (
@@ -252,17 +252,17 @@ function WizardInner() {
 								>
 									<div className='onb-eyebrow'>05 · CLI Tools</div>
 									<h1 className='onb-title' style={{marginTop: 8}}>
-										This step is disabled
+										This step is turned off
 									</h1>
 									<p className='onb-sub' style={{marginTop: 10}}>
-										The Phase 239 CLI Tools step is gated by feature flag{' '}
-										<code>livos:v43:onboarding_cli_section</code>. Operator must
-										flip the flag to <code>true</code> in Redis (or set{' '}
+										The CLI Tools step is ON by default. It was turned off on
+										this browser via the override{' '}
 										<code>
-											window.localStorage.setItem('livos.v43.onboarding_cli_section','true')
-										</code>{' '}
-										in DevTools) to see the install grid. Skip is enabled below
-										so onboarding still completes.
+											window.localStorage.setItem('livos.v43.onboarding_cli_section','false')
+										</code>
+										. Remove that key (or set it to <code>'true'</code>) in
+										DevTools and reload to see the install grid. Skip is enabled
+										below so onboarding still completes.
 									</p>
 									<FooterBar
 										onBack={stepper.back}
