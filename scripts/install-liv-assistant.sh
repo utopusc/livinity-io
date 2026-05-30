@@ -323,8 +323,17 @@ done
 # /liv/trpc/cliInstaller.* gets strip-prefixed by Caddy and forwarded to
 # livinityd :8080).
 #
-# Idempotency: pre-grep for sentinel 'liv-240-install-section.js' in
-# static/index.html — zero matches means inject; >=1 means skip.
+# Idempotency / freshness (G17 fix): the OLD logic skipped the ENTIRE block
+# (including the asset copy) whenever the sentinel was already present in
+# index.html — so an UPDATED patch JS (e.g. the G17 terminal-auth postMessage
+# rewrite) NEVER overwrote the deployed copy on `update.sh` re-runs. Split the
+# two concerns:
+#   1. ALWAYS copy the JS/CSS into static/assets/ (idempotent — refreshes on
+#      every deploy so a patch revision actually lands).
+#   2. Cache-bust: stamp the <script>/<link> with `?v=<sha256-of-js>` so the
+#      browser HTTP cache picks up a changed JS even with the same filename.
+#      Insert the tags only when the sentinel is absent; otherwise rewrite the
+#      existing `?v=` to the current sha (no duplicate tags).
 #
 # D-V42-APACHE-NOTICE: scoped under ${CURRENT_LINK}/static/ — LICENSE +
 # NOTICE files at ${INSTALL_ROOT}/ are structurally excluded.
@@ -334,24 +343,31 @@ PATCH_TARGET_DIR="${REBRAND_TARGET}/assets"
 PATCH_INDEX_HTML="${REBRAND_TARGET}/index.html"
 
 if [[ -d "${PATCH_TARGET_DIR}" && -f "${PATCH_INDEX_HTML}" ]]; then
-  if grep -q 'liv-240-install-section.js' "${PATCH_INDEX_HTML}" 2>/dev/null; then
-    log "Phase 240-02: Local Agents section already injected; skipping"
-  else
-    if [[ -f "${PATCH_SRC_DIR}/local-agents-install-section.js" && -f "${PATCH_SRC_DIR}/local-agents-install-section.css" ]]; then
-      install -m 0644 -o root -g root "${PATCH_SRC_DIR}/local-agents-install-section.js" "${PATCH_TARGET_DIR}/liv-240-install-section.js"
-      install -m 0644 -o root -g root "${PATCH_SRC_DIR}/local-agents-install-section.css" "${PATCH_TARGET_DIR}/liv-240-install-section.css"
+  if [[ -f "${PATCH_SRC_DIR}/local-agents-install-section.js" && -f "${PATCH_SRC_DIR}/local-agents-install-section.css" ]]; then
+    # 1. ALWAYS refresh the deployed assets (this is the G17 fix — previously
+    #    gated behind the sentinel grep and so never re-copied on updates).
+    install -m 0644 -o root -g root "${PATCH_SRC_DIR}/local-agents-install-section.js" "${PATCH_TARGET_DIR}/liv-240-install-section.js"
+    install -m 0644 -o root -g root "${PATCH_SRC_DIR}/local-agents-install-section.css" "${PATCH_TARGET_DIR}/liv-240-install-section.css"
 
-      # Inject <link> + <script> before </head> (idempotency guarded above)
-      sed -i '/<\/head>/i \    <link rel="stylesheet" href="./assets/liv-240-install-section.css" />\n    <script src="./assets/liv-240-install-section.js" defer></script>' "${PATCH_INDEX_HTML}"
+    # 2. Content-hash cache-bust token (first 12 hex of the JS sha256).
+    PATCH_JS_VER="$(sha256sum "${PATCH_TARGET_DIR}/liv-240-install-section.js" | cut -c1-12)"
 
+    if grep -q 'liv-240-install-section.js' "${PATCH_INDEX_HTML}" 2>/dev/null; then
+      # Tags already present — just rewrite the ?v= token to the new hash so a
+      # changed JS busts the browser cache (matches the file in place).
+      sed -i -E "s#(liv-240-install-section\.(js|css))(\?v=[0-9a-f]+)?#\1?v=${PATCH_JS_VER}#g" "${PATCH_INDEX_HTML}"
+      log "Phase 240-02 (G17): Local Agents assets refreshed; cache-bust ?v=${PATCH_JS_VER}"
+    else
+      # First-time inject — tags carry the ?v= token from the start.
+      sed -i "/<\/head>/i \    <link rel=\"stylesheet\" href=\"./assets/liv-240-install-section.css?v=${PATCH_JS_VER}\" />\n    <script src=\"./assets/liv-240-install-section.js?v=${PATCH_JS_VER}\" defer></script>" "${PATCH_INDEX_HTML}"
       if grep -q 'liv-240-install-section.js' "${PATCH_INDEX_HTML}" 2>/dev/null; then
-        log "Phase 240-02: Local Agents install section injected (JS + CSS + index.html refs)"
+        log "Phase 240-02: Local Agents install section injected (JS + CSS + index.html refs, ?v=${PATCH_JS_VER})"
       else
         log "WARN: Phase 240-02: index.html injection sed pass did not register; investigate </head> anchor"
       fi
-    else
-      log "Phase 240-02: WARN patch sources missing at ${PATCH_SRC_DIR}; skipping injection"
     fi
+  else
+    log "Phase 240-02: WARN patch sources missing at ${PATCH_SRC_DIR}; skipping injection"
   fi
 else
   log "Phase 240-02: WARN ${PATCH_TARGET_DIR} or ${PATCH_INDEX_HTML} missing; skipping injection"
