@@ -54,6 +54,8 @@ import {StreamManager} from './modules/streaming/stream-manager.js'
 // stdio MCP wrote.
 import {
 	createDisplayManager,
+	DEFAULT_DISPLAY_WIDTH,
+	DEFAULT_DISPLAY_HEIGHT,
 	type DisplayManager,
 } from './modules/computer-use/displays/index.js'
 // Phase 101-05 — shared PortAllocator instance. ONE allocator backs BOTH the
@@ -934,7 +936,8 @@ export default class Livinityd {
 			try {
 				this.xvfbHandle = await startXvfb({
 					display: ':1',
-					resolution: '1920x1080x24',
+					// Phase 254 (decision #3) — :1 resolution sourced from the shared display-creation default (matches MCP computer_create_display), not an independent hardcode.
+					resolution: `${DEFAULT_DISPLAY_WIDTH}x${DEFAULT_DISPLAY_HEIGHT}x24`,
 					logger: streamingLogger,
 				})
 				streamingLogger.info(`Xvfb :1 up (pid=${this.xvfbHandle.pid})`)
