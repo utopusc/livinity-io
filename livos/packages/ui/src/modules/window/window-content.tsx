@@ -43,10 +43,17 @@ const OpenUiAppContent = React.lazy(() => import('./app-contents/openui-app-cont
 // appId `LIVINITY_liv-assistant` (set by systemApps in apps.tsx). Renders
 // the AionUi surface served at /liv/ via Phase 226 Caddy handle.
 const LivAssistantWindow = React.lazy(() => import('./app-contents/liv-assistant-window'))
+// Phase 254-03 — X11DisplayStreamWindow. Discriminator is the `DISPLAY_:N`
+// prefix on appId (set by the Plan 04 Active-Displays hover panel when it calls
+// openWindow). Renders a LIVE, interactive noVNC stream of a real X display via
+// displays.getVncUrl + useWebAppVnc({viewOnly:false}) (locked decision #1).
+const X11DisplayStreamWindow = React.lazy(() => import('./app-contents/x11-display-stream-window'))
 
 const WEBAPP_APP_ID_PREFIX = 'WEBAPP_'
 const NATIVE_APP_ID_PREFIX = 'NATIVE_'
 const OPENUI_APP_ID_PREFIX = 'OPENUI_'
+/** Phase 254-03 — prefix for a live-VNC X-display window (`DISPLAY_:11`). */
+const DISPLAY_APP_ID_PREFIX = 'DISPLAY_'
 /** Phase 227-01 — exact appId for the Liv Assistant iframe window. */
 const LIV_ASSISTANT_APP_ID = 'LIVINITY_liv-assistant'
 
@@ -63,6 +70,11 @@ function isNativeAppKind(appId: string): boolean {
 /** True when the appId belongs to an OpenUI app iframe window (Phase 203-10). */
 function isOpenUiAppKind(appId: string): boolean {
 	return appId.startsWith(OPENUI_APP_ID_PREFIX)
+}
+
+/** True when the appId belongs to a live-VNC X-display window (Phase 254-03). */
+function isDisplayKind(appId: string): boolean {
+	return appId.startsWith(DISPLAY_APP_ID_PREFIX)
 }
 
 type WindowContentProps = {
@@ -117,7 +129,8 @@ export function WindowContent({route, appId, windowId}: WindowContentProps) {
 		fullHeightApps.has(appId) ||
 		isWebAppKind(appId) ||
 		isNativeAppKind(appId) ||
-		isOpenUiAppKind(appId)
+		isOpenUiAppKind(appId) ||
+		isDisplayKind(appId)
 	) {
 		return (
 			<div className='h-full overflow-hidden'>
@@ -175,6 +188,16 @@ export function WindowAppContent({appId, initialRoute, windowId}: {appId: string
 	if (isOpenUiAppKind(appId)) {
 		const slug = appId.slice(OPENUI_APP_ID_PREFIX.length)
 		return <OpenUiAppContent slug={slug} name={slug} />
+	}
+
+	// Phase 254-03 — live-VNC X-display window. appId is `DISPLAY_:N`; the
+	// display string (':N') is sliced off and passed to the lazy-loaded
+	// X11DisplayStreamWindow, which resolves the display's VNC ws URL via
+	// displays.getVncUrl and renders it with native RFB input (viewOnly:false).
+	// Matched before the `switch` so the prefix wins over any literal collision.
+	if (isDisplayKind(appId)) {
+		const displayId = appId.slice(DISPLAY_APP_ID_PREFIX.length)
+		return <X11DisplayStreamWindow displayId={displayId} windowId={windowId} />
 	}
 
 	// Phase 231 retirement — legacy chat-iframe branch removed.
