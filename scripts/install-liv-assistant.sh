@@ -213,7 +213,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   PRE_HITS="$(grep -ril 'AionUi\|aionui' "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
   if [[ "${PRE_HITS}" -gt 0 ]]; then
     log "Rebrand: applying AionUi -> Liv AI / aionui-web -> liv-ai-web / aionui -> liv-ai sed pass on ${PRE_HITS} files"
-    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) \
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' \
          -exec sed -i 's/AionUi/Liv AI/g; s/aionui-web/liv-ai-web/g; s/aionui/liv-ai/g' {} +
     POST_HITS="$(grep -ril 'AionUi\|aionui' "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
     if [[ "${POST_HITS}" -ne 0 ]]; then
@@ -279,7 +279,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   PATH_PRE_HITS="$(count_unprefixed_paths "${REBRAND_TARGET}")"
   if [[ "${PATH_PRE_HITS}" -gt 0 ]]; then
     log "Path rewrite: applying /api/ -> /liv/api/ and /ws -> /liv/ws sed pass on ${PATH_PRE_HITS} files"
-    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) \
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' \
          -exec sed -i \
            -e 's|"/api/|"/liv/api/|g' \
            -e "s|'/api/|'/liv/api/|g" \
@@ -495,7 +495,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   set -o pipefail
   if [[ "${WB_PRE_HITS}" -gt 0 ]]; then
     log "Word-boundary rebrand: applying \\b(Aion|AION|aion)\\b -> Liv sed pass on ${WB_PRE_HITS} files"
-    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) \
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' \
          -exec sed -E -i 's/\b(Aion|AION|aion)\b/Liv/g' {} +
     set +o pipefail
     WB_POST_HITS="$(grep -rilE '\b(Aion|AION|aion)\b' "${REBRAND_TARGET}" \
@@ -555,7 +555,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   set -o pipefail
   if [[ "${IO_PRE_HITS}" -gt 0 ]]; then
     log "Footer redirect: applying iOfficeAI/* -> livinity.io sed pass on ${IO_PRE_HITS} files"
-    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) \
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' \
          -exec sed -E -i 's|https?://github\.com/iOfficeAI/[A-Za-z0-9 ._/-]+|https://livinity.io|g' {} +
     set +o pipefail
     IO_POST_HITS="$(grep -rilE 'https?://github\.com/iOfficeAI/' "${REBRAND_TARGET}" \
