@@ -17,6 +17,13 @@ Environment="HOME=/home/bruce"
 # (native binary) connects; the 5 stdio tsx-based local MCPs (liv-system / liv-vault /
 # liv-apps / liv-docker / luse) time out silently and never register tools to the agent.
 Environment="MCP_TIMEOUT=30000"
+# Phase 253 GC-E — Gemini CLI 0.44.x "Folder Trust": in --experimental-acp mode
+# it trust-checks its CWD (an aioncore conversations temp dir, not in
+# trustedFolders.json) and on "untrusted" walks ancestors looking for GEMINI.md,
+# lstat'ing /root/GEMINI.md → EACCES (we run as bruce) → process crashes → the
+# ACP `initialize` handshake times out 30s → chat 502. This official bypass env
+# marks the workspace trusted and skips the scan, so gemini chat works.
+Environment="GEMINI_CLI_TRUST_WORKSPACE=true"
 # Phase 252 (R5) — inherit REDIS_URL/DATABASE_URL from the shared env file the
 # other livos units use. The `-` prefix makes a missing file non-fatal (fresh
 # box before env-seed runs). aioncore→claude→luse then resolve Redis via
@@ -33,7 +40,9 @@ SyslogIdentifier=liv-assistant
 NoNewPrivileges=false
 ProtectSystem=full
 ProtectHome=read-only
-ReadWritePaths=/opt/liv-assistant/data /home/bruce/.claude /home/bruce/.bun /home/bruce/.cache
+# Phase 253 GC-E — /home/bruce/.gemini added so the Gemini ACP agent can write
+# its state.json / history under ProtectHome=read-only.
+ReadWritePaths=/opt/liv-assistant/data /home/bruce/.claude /home/bruce/.bun /home/bruce/.cache /home/bruce/.gemini
 
 [Install]
 WantedBy=multi-user.target

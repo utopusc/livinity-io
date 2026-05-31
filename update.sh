@@ -1357,6 +1357,24 @@ fi
 # from the application-layer auth controller (router-alive + handler-alive) —
 # see Plan 225-02 DEPLOY-LOG Step 2d endpoint matrix for the full evidence.
 if [[ -f /etc/systemd/system/liv-assistant.service || -f /usr/lib/systemd/system/liv-assistant.service ]]; then
+    # ── Phase 253 GC-E — keep the liv-assistant unit in sync from the repo ──────
+    # The unit was historically installed only on fresh install, so Environment=
+    # changes (e.g. GEMINI_CLI_TRUST_WORKSPACE) never reached existing boxes. Sync
+    # it from the fresh clone and daemon-reload so the restart below picks up unit
+    # edits. Idempotent (cmp guard); only the on-disk /etc unit is touched.
+    _LIV_ASSISTANT_UNIT_SRC="$TEMP_DIR/systemd/liv-assistant.service"
+    if [[ -f "$_LIV_ASSISTANT_UNIT_SRC" ]]; then
+        if ! cmp -s "$_LIV_ASSISTANT_UNIT_SRC" /etc/systemd/system/liv-assistant.service 2>/dev/null; then
+            install -m 0644 -o root -g root "$_LIV_ASSISTANT_UNIT_SRC" /etc/systemd/system/liv-assistant.service
+            systemctl daemon-reload 2>/dev/null || true
+            ok "liv-assistant.service unit synced from repo + daemon-reload (GC-E)"
+        else
+            info "liv-assistant.service unit unchanged"
+        fi
+    else
+        info "systemd/liv-assistant.service not in TEMP_DIR — skipping unit sync (pre-Phase 253 clone)"
+    fi
+
     systemctl enable liv-assistant.service 2>/dev/null || true
     if systemctl restart liv-assistant.service 2>/dev/null; then
         ok "Restarted liv-assistant (AionUi WebUI :3020)"
@@ -1415,6 +1433,26 @@ if [[ -f /etc/systemd/system/liv-assistant.service || -f /usr/lib/systemd/system
         fi
     else
         info "scripts/set-default-liv-agent.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 238.3 deploy)"
+    fi
+
+    # ── Phase 253 GC-F — register LivOS MCP servers into the Claude agent config ──
+    # AionUi's one-click MCP import filters by the selected agent's source; LivOS
+    # servers live under source "aionui" (not a selectable agent) so they never
+    # surfaced. This helper copies them into ~/.claude.json mcpServers (read from
+    # aioncore's live agent-configs API — secrets stay per-box). Idempotent;
+    # never fails the deploy.
+    _LIV_MCP_SEED_SRC="$TEMP_DIR/scripts/install/seed-liv-mcp-into-claude.sh"
+    if [[ ! -f "$_LIV_MCP_SEED_SRC" ]]; then
+        _LIV_MCP_SEED_SRC="$LIVOS_DIR/scripts/install/seed-liv-mcp-into-claude.sh"
+    fi
+    if [[ -f "$_LIV_MCP_SEED_SRC" ]]; then
+        if bash "$_LIV_MCP_SEED_SRC" 2>&1 | tail -5; then
+            ok "LivOS MCP servers registered into Claude agent config (GC-F; no-op if already present)"
+        else
+            warn "seed-liv-mcp-into-claude.sh exited non-zero — operator can re-run: sudo bash $_LIV_MCP_SEED_SRC"
+        fi
+    else
+        info "scripts/install/seed-liv-mcp-into-claude.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 253 deploy)"
     fi
 else
     info "liv-assistant.service not installed — skipping restart + health probe (pre-Phase 225 deploy)"
