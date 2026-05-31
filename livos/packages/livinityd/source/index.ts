@@ -48,6 +48,14 @@ import {startHeartbeat, REDIS_KEY_API_KEY_PATH, type StopHandle as HeartbeatStop
 // instantiated in start() AFTER ai.start() (StreamManager needs the boot-time
 // `vainfo` probe persisted to ai.redis as `liv:streaming:caps`).
 import {StreamManager} from './modules/streaming/stream-manager.js'
+// Phase 254-01 — display lifecycle manager (UI seam). Constructed in start()
+// with the SAME daemon Redis client the MCP createDisplayManager uses, so the
+// UI displays.list tRPC route reads the identical `luse:display:*` keys the
+// stdio MCP wrote.
+import {
+	createDisplayManager,
+	type DisplayManager,
+} from './modules/computer-use/displays/index.js'
 // Phase 101-05 — shared PortAllocator instance. ONE allocator backs BOTH the
 // StreamManager's vnc-window spawn path AND the native-app binder's
 // stream-port wiring (apps.native.spawn route). Sharing the allocator is what
@@ -359,6 +367,13 @@ export default class Livinityd {
 	// T93-11 wires the lifecycle in start(); this field is declared up-front so
 	// the /ws/stream/:id upgrade handler in server/index.ts can typecheck.
 	streamManager?: StreamManager
+	// Phase 254-01 — display lifecycle manager (UI seam). Optional because it is
+	// wired in start() AFTER ai.start() (needs this.ai.redis) and its
+	// construction is non-fatal: if Redis is unavailable the field stays
+	// undefined and the displays.list / displays.getVncUrl tRPC routes
+	// fail-closed with SERVICE_UNAVAILABLE (mirrors the streamManager pattern).
+	// Reachable as ctx.livinityd.displayManager from the tRPC ctx.
+	displayManager?: DisplayManager
 	// Phase 93 — WebApp Window Manager (T93-10 spawn/focus/close/list).
 	// Composes window-discovery + portal/geometry-tracker + StreamManager
 	// for the v33 WebApp UX. Optional for the same wiring reason as
@@ -820,6 +835,34 @@ export default class Livinityd {
 			streamingLogger.info(
 				`StreamManager started (cap=${this.streamManager.getCap()}, port-range=[15900,16000))`,
 			)
+
+			// Phase 254-01 — construct the displayManager on the SAME daemon
+			// Redis client the MCP createDisplayManager uses (this.ai.redis), so
+			// the UI displays.list route reads the identical `luse:display:*`
+			// keys the stdio MCP server wrote. Non-fatal: a Redis/construction
+			// failure leaves this.displayManager undefined and the displays.*
+			// tRPC routes fail-closed with SERVICE_UNAVAILABLE (mirrors the
+			// streamManager / Xvfb :1 fallback pattern). The `never` cast on
+			// redis matches the MCP server's createDisplayManager call — ioredis
+			// implements the 6-method DisplayRedisClient subset at the wire
+			// level even though TS's structural check needs the cast.
+			try {
+				this.displayManager = createDisplayManager({
+					redis: this.ai.redis as never,
+					logger: {
+						info: (msg) => streamingLogger.info(`displays: ${msg}`),
+						warn: (msg, ctx) => streamingLogger.warn(`displays: ${msg}`, ctx),
+					},
+				})
+				await this.displayManager.initialized
+				streamingLogger.info('displayManager constructed (UI displays.list seam ready)')
+			} catch (err) {
+				this.displayManager = undefined
+				streamingLogger.error(
+					'Failed to construct displayManager (UI displays.list will fail-closed)',
+					err,
+				)
+			}
 
 			// Phase 159 — arm the native-app idle reaper. Reads activeNative +
 			// nativeDisplayAllocator module-scope singletons exported from
