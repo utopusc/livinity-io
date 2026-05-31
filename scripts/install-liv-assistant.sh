@@ -213,7 +213,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   PRE_HITS="$(grep -ril 'AionUi\|aionui' "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
   if [[ "${PRE_HITS}" -gt 0 ]]; then
     log "Rebrand: applying AionUi -> Liv AI / aionui-web -> liv-ai-web / aionui -> liv-ai sed pass on ${PRE_HITS} files"
-    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' \
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'CapabilitiesSettings-*' \
          -exec sed -i 's/AionUi/Liv AI/g; s/aionui-web/liv-ai-web/g; s/aionui/liv-ai/g' {} +
     POST_HITS="$(grep -ril 'AionUi\|aionui' "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
     if [[ "${POST_HITS}" -ne 0 ]]; then
@@ -279,7 +279,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   PATH_PRE_HITS="$(count_unprefixed_paths "${REBRAND_TARGET}")"
   if [[ "${PATH_PRE_HITS}" -gt 0 ]]; then
     log "Path rewrite: applying /api/ -> /liv/api/ and /ws -> /liv/ws sed pass on ${PATH_PRE_HITS} files"
-    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' \
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'CapabilitiesSettings-*' \
          -exec sed -i \
            -e 's|"/api/|"/liv/api/|g' \
            -e "s|'/api/|'/liv/api/|g" \
@@ -495,7 +495,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   set -o pipefail
   if [[ "${WB_PRE_HITS}" -gt 0 ]]; then
     log "Word-boundary rebrand: applying \\b(Aion|AION|aion)\\b -> Liv sed pass on ${WB_PRE_HITS} files"
-    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' \
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'CapabilitiesSettings-*' \
          -exec sed -E -i 's/\b(Aion|AION|aion)\b/Liv/g' {} +
     set +o pipefail
     WB_POST_HITS="$(grep -rilE '\b(Aion|AION|aion)\b' "${REBRAND_TARGET}" \
@@ -555,7 +555,7 @@ if [[ -d "${REBRAND_TARGET}" ]]; then
   set -o pipefail
   if [[ "${IO_PRE_HITS}" -gt 0 ]]; then
     log "Footer redirect: applying iOfficeAI/* -> livinity.io sed pass on ${IO_PRE_HITS} files"
-    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' \
+    find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'CapabilitiesSettings-*' \
          -exec sed -E -i 's|https?://github\.com/iOfficeAI/[A-Za-z0-9 ._/-]+|https://livinity.io|g' {} +
     set +o pipefail
     IO_POST_HITS="$(grep -rilE 'https?://github\.com/iOfficeAI/' "${REBRAND_TARGET}" \
@@ -917,6 +917,30 @@ else
       log "Branding asset ${asset}: copied"
     fi
   done
+fi
+
+# ---------------------------------------------------------------------------
+# Phase 253 W4 — one-click MCP importer: always include LivOS's own MCP servers.
+#
+# aioncore reports LivOS's MCP servers (liv-vault, liv-system, liv-docker,
+# liv-apps, luse) under SOURCE "aionui", which is not a selectable CLI-agent
+# backend. The importer modal filters servers by the SELECTED agent's source
+# (`F.source===c`), so the LivOS tools never appeared under Gemini/OpenCode/etc.
+# Patch the minified filter to ALSO admit source==="aionui" so the LivOS tools
+# are importable no matter which agent is selected.
+#
+# Runs AFTER the rebrand passes (and CapabilitiesSettings-* is excluded from
+# the s/aionui/liv-ai/g rebrand above) so the injected "aionui" literal — which
+# must match aioncore's untouched backend source string — is not rewritten.
+# Idempotent: keys on the ORIGINAL filter text, so a re-run is a no-op.
+# ---------------------------------------------------------------------------
+if [[ -d "${REBRAND_TARGET}" ]]; then
+  while IFS= read -r _cap; do
+    if grep -q 'F.source===c&&_.push(...F.servers)' "$_cap" 2>/dev/null; then
+      sed -i 's/F\.source===c&&_\.push(\.\.\.F\.servers)/(F.source===c||F.source==="aionui")\&\&_.push(...F.servers)/' "$_cap"
+      log "Phase 253 W4: importer filter patched to admit aionui-source LivOS MCP ($(basename "$_cap"))"
+    fi
+  done < <(find "${REBRAND_TARGET}" -name 'CapabilitiesSettings-*.js' 2>/dev/null)
 fi
 
 # ---------------------------------------------------------------------------
