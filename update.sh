@@ -705,6 +705,30 @@ fi
 # (no npx, no npm cache needed). MCP config in AionUi/Claude Code uses these wrappers
 # as the `command` with empty `args[]` — works for both One-Click Import path and the
 # direct spawn path under the sandboxed liv-assistant service.
+# ── Phase 253 (tsx gap) — ensure tsx is installed for the MCP wrappers ───────
+# The wrappers below exec `/usr/bin/node /usr/lib/node_modules/tsx/dist/cli.mjs`,
+# but nothing here ever INSTALLED tsx. A fresh box (the test box) was missing it,
+# so EVERY LivOS MCP server failed to start ("Cannot find module .../tsx/dist/
+# cli.mjs"), which HUNG the Claude ACP session/new — claude-agent-acp waits for
+# its injected MCP servers — and Claude chat silently broke (no 401, no
+# deadlock). Mini PC worked only because tsx happened to be installed there.
+# Pin to 4.21.0 (the version proven on Mini PC). Idempotent.
+if [[ ! -f /usr/lib/node_modules/tsx/dist/cli.mjs ]]; then
+    if command -v npm >/dev/null 2>&1; then
+        info "Installing tsx@4.21.0 globally (/usr) for the Liv MCP wrappers..."
+        if npm install -g tsx@4.21.0 --prefix /usr >/dev/null 2>&1; then
+            chmod -R a+rX /usr/lib/node_modules/tsx 2>/dev/null || true
+            ok "tsx installed at /usr/lib/node_modules/tsx"
+        else
+            warn "tsx global install failed — Liv MCP servers + Claude chat may not work; run: sudo npm install -g tsx@4.21.0 --prefix /usr"
+        fi
+    else
+        warn "npm not found — cannot install tsx; Liv MCP servers will not start"
+    fi
+else
+    info "tsx already present at /usr/lib/node_modules/tsx"
+fi
+
 step "Phase 245.4: Liv MCP wrapper scripts (npm-free spawn under read-only \$HOME sandbox)"
 _MCP_DIR=/usr/local/bin
 declare -A _MCP_PATHS=(
