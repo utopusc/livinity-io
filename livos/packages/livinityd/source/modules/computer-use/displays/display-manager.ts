@@ -49,8 +49,12 @@ import {
 	redisKeyForDisplayApps,
 } from './redis-keys.js'
 
-const DEFAULT_WIDTH = 1920
-const DEFAULT_HEIGHT = 1080
+// Phase 254 (decision #3) — exported so the host display `:1` creation in
+// index.ts can source its resolution from the SAME default the MCP
+// display-creation path (create() below) uses, instead of an independent
+// hardcoded 1920x1080 literal. Values are UNCHANGED (1920/1080).
+export const DEFAULT_DISPLAY_WIDTH = 1920
+export const DEFAULT_DISPLAY_HEIGHT = 1080
 const DEFAULT_ALLOCATOR_START = 10
 
 /**
@@ -214,8 +218,8 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 	): Promise<CreateDisplayResult> {
 		await initialized
 		const mode: DisplayMode = input.mode ?? 'xephyr' // D-V44-DISPLAY-XEPHYR-DEFAULT
-		const width = input.width ?? DEFAULT_WIDTH
-		const height = input.height ?? DEFAULT_HEIGHT
+		const width = input.width ?? DEFAULT_DISPLAY_WIDTH
+		const height = input.height ?? DEFAULT_DISPLAY_HEIGHT
 		const display = allocateNext()
 		const displayNum = Number(display.slice(1))
 		const name = input.name ?? `display-${displayNum}`
@@ -304,8 +308,8 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 				mode: ((hash.mode as DisplayMode | undefined) ?? 'xephyr'),
 				created_at: hash.created_at ?? '',
 				owner_session: hash.owner_session ?? '',
-				width: Number(hash.width ?? DEFAULT_WIDTH),
-				height: Number(hash.height ?? DEFAULT_HEIGHT),
+				width: Number(hash.width ?? DEFAULT_DISPLAY_WIDTH),
+				height: Number(hash.height ?? DEFAULT_DISPLAY_HEIGHT),
 				running_apps,
 				// Phase 248-03 — surface last_app_at so the TTL GC can compute
 				// staleness without re-HGETALLing each display.

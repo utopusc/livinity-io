@@ -9,7 +9,13 @@
  * NodeNext / ESM resolution.
  */
 
-export {createDisplayManager} from './display-manager.js'
+export {
+	createDisplayManager,
+	// Phase 254 (decision #3) — shared default display resolution so the host
+	// `:1` creation in index.ts matches the MCP display-creation default size.
+	DEFAULT_DISPLAY_WIDTH,
+	DEFAULT_DISPLAY_HEIGHT,
+} from './display-manager.js'
 
 export {
 	createDisplayTtlGc,
