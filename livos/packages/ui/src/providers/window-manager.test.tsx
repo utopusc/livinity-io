@@ -126,3 +126,29 @@ describe('DEFAULT_WINDOW_SIZES Phase 234-02 — LIVINITY_liv-assistant entry', (
 // Phase 231 retirement — Hot-fix E describe (3 tests for legacy chat-iframe
 // default window size) deleted wholesale. The default-size entry was removed
 // from window-manager.tsx; Liv Assistant (Phase 227) is the v42 chat surface.
+
+// Phase 254-03 — openWindow gains a trailing optional `suggested` size so a
+// DISPLAY_:N window opens at the X display's real WxH (locked decision #1 /
+// CONTEXT openWindow sizing seam). Source-text invariants lock the contract:
+//   - the context type signature widens to accept `suggested?: {width; height}`
+//   - the useCallback param is widened to match
+//   - baseSize selection prefers `suggested ?? …` when present
+//   - DISPLAY_ windows preserve aspect via getResponsiveSize (like WebApp)
+describe('window-manager — Phase 254-03 openWindow suggested size', () => {
+    it('context type openWindow signature accepts a trailing suggested {width; height}', () => {
+        // The widened param must appear with the exact {width: number; height: number} shape.
+        const sigMatches = SRC.match(/suggested\?: ?\{width: number; height: number\}/g) ?? []
+        // Expect BOTH the context type declaration and the callback param.
+        expect(sigMatches.length).toBeGreaterThanOrEqual(2)
+    })
+
+    it('openWindow baseSize prefers the suggested size via `suggested ??`', () => {
+        expect(SRC).toMatch(/suggested \?\?/)
+    })
+
+    it('DISPLAY_ windows preserve aspect (isDisplay branch threaded into getResponsiveSize)', () => {
+        // appId.startsWith('DISPLAY_') must drive a preserve-aspect getResponsiveSize call.
+        expect(SRC).toMatch(/appId\.startsWith\('DISPLAY_'\)/)
+        expect(SRC).toMatch(/getResponsiveSize\([^)]*isWebApp \|\| isDisplay \|\| suggested != null\)/)
+    })
+})
