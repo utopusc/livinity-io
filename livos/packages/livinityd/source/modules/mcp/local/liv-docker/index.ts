@@ -51,7 +51,9 @@ async function main(): Promise<void> {
 							return {raw: l}
 						}
 					})
-				return {content: [{type: 'text', text: JSON.stringify(rows, null, 2)}]}
+				// Wrap array in a record — MCP clients (gemini-cli) reject a bare
+				// top-level JSON array with "expected record, received array".
+				return {content: [{type: 'text', text: JSON.stringify({containers: rows, count: rows.length}, null, 2)}]}
 			} catch (err) {
 				return {
 					content: [{type: 'text', text: `docker ps failed: ${(err as Error).message}`}],

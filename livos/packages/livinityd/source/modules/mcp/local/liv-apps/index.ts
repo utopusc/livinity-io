@@ -72,7 +72,9 @@ async function main(): Promise<void> {
 			}
 			try {
 				const rows = await fetchAppList(env.apiUrl, env.apiKey)
-				return {content: [{type: 'text', text: JSON.stringify(rows, null, 2)}]}
+				// Wrap array in a record — MCP clients (gemini-cli) reject a bare
+				// top-level JSON array with "expected record, received array".
+				return {content: [{type: 'text', text: JSON.stringify({apps: rows, count: rows.length}, null, 2)}]}
 			} catch (err) {
 				return {
 					content: [{type: 'text', text: `apps.list failed: ${(err as Error).message}`}],
