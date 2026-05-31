@@ -56,7 +56,7 @@ export type CloseHandler = () => void | Promise<void>
 
 type WindowManagerContextT = {
 	windows: WindowState[]
-	openWindow: (appId: string, route: string, title: string, icon: string, originRect?: OriginRect) => WindowId
+	openWindow: (appId: string, route: string, title: string, icon: string, originRect?: OriginRect, suggested?: {width: number; height: number}) => WindowId
 	closeWindow: (windowId: WindowId) => void
 	focusWindow: (windowId: WindowId) => void
 	minimizeWindow: (windowId: WindowId) => void
@@ -329,18 +329,26 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		}
 	}, [pinnedListQuery.data])
 
-	const openWindow = useCallback((appId: string, route: string, title: string, icon: string, originRect?: OriginRect): WindowId => {
+	const openWindow = useCallback((appId: string, route: string, title: string, icon: string, originRect?: OriginRect, suggested?: {width: number; height: number}): WindowId => {
 		const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)
 		// Phase 100-06: WebApp windows ship with a stable 1280x720 base size
 		// regardless of viewport (honored within getResponsiveSize clamp).
 		// Phase 100-06.2: preserve 16:9 aspect when clamping — narrow
 		// viewports were producing portrait windows because W and H were
 		// being clamped independently.
+		//
+		// Phase 254-03: DISPLAY_:N windows pass an explicit `suggested`
+		// {width,height} = the X display's real WxH (from displays.list).
+		// When present, baseSize = suggested and we preserve aspect so the
+		// full desktop never degrades to a portrait window on narrow viewports
+		// (same clamp treatment as WebApp). Absent `suggested` keeps the
+		// pre-254 behavior byte-identical.
 		const isWebApp = appId.startsWith('WEBAPP_')
-		const baseSize = isWebApp
+		const isDisplay = appId.startsWith('DISPLAY_')
+		const baseSize = suggested ?? (isWebApp
 			? {width: 1280, height: 720}
-			: (DEFAULT_WINDOW_SIZES[appId] || DEFAULT_WINDOW_SIZES.default)
-		const size = getResponsiveSize(baseSize.width, baseSize.height, isWebApp)
+			: (DEFAULT_WINDOW_SIZES[appId] || DEFAULT_WINDOW_SIZES.default))
+		const size = getResponsiveSize(baseSize.width, baseSize.height, isWebApp || isDisplay || suggested != null)
 		// Use current state.windows.length at call time, not as dependency
 		const windowCount = state.windows.length
 
