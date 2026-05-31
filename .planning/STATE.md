@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v44.0
 milestone_name: Liv AI Tooling Depth
 status: executing
-last_updated: "2026-05-31T17:21:02.000Z"
+last_updated: "2026-05-31T17:25:56.778Z"
 last_activity: 2026-05-31
 progress:
   total_phases: 166
   completed_phases: 83
   total_plans: 560
-  completed_plans: 478
-  percent: 85
+  completed_plans: 479
+  percent: 86
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
@@ -41,9 +41,13 @@ progress:
 
 ---
 
-## Current Position (Phase 254 — Active Displays hover panel + live VNC display windows 🟡 EXECUTING — Plans 254-01 + 254-03 ✅ DONE 2026-05-31)
+## Current Position (Phase 254 — Active Displays hover panel + live VNC display windows 🟡 EXECUTING — Plans 254-01 + 254-02 + 254-03 ✅ DONE 2026-05-31)
 
-### Latest update 2026-05-31 (Phase 254 execution — Plan 254-03 / live VNC display window + openWindow sizing seam complete)
+### Latest update 2026-05-31 (Phase 254 execution — Plan 254-02 / main `:1` display resolution single-sourced from MCP display-creation default)
+
+- ✅ **254-02 DONE** (commits `e6a06793` Task 1 refactor + `dce7c874` Task 2 feat) — **the boot-time `:1` Xvfb resolution now derives from the SAME constants the MCP `computer_create_display` defaults to, removing the divergent `'1920x1080x24'` hardcode in livinityd boot (locked decision #3).** **Task 1 (`e6a06793`):** renamed module-private `DEFAULT_WIDTH`/`DEFAULT_HEIGHT` (1920/1080 — values UNCHANGED) → exported `DEFAULT_DISPLAY_WIDTH`/`DEFAULT_DISPLAY_HEIGHT` in `display-manager.ts`; updated `create()` (~L221-222) + `list()` (~L311-312) refs; re-exported both from the `displays/index.ts` barrel. `display-manager.test.ts` 17/17 GREEN (geometry default case 8 = 1920/1080 intact, acts as regression guard — tdd=true task was a byte-identical export refactor so no new RED warranted). **Task 2 (`dce7c874`):** extended the displays import in `index.ts` (L55-59) with the two constants; replaced the `:1` startXvfb literal `resolution: '1920x1080x24'` (index.ts ~L937) with `` resolution: `${DEFAULT_DISPLAY_WIDTH}x${DEFAULT_DISPLAY_HEIGHT}x24` `` + a decision-#3 comment. **tsc gate:** total error count **389 PRE and POST = ZERO new errors** (389 = documented Plan 254-01 baseline; the only `*/index.ts` errors live in unrelated `source/modules/server/index.ts` + `server/trpc/index.ts`, not the edited root `source/index.ts`). **No deviations** — plan executed exactly as written (plan line-number hints were stale; located via Grep, no functional impact). Net effect: `:1` still boots 1920x1080, now from ONE shared constant so the boot path and MCP create() path cannot drift. Takes effect on next livinityd boot after `update.sh` deploy. SUMMARY: `.planning/phases/254-active-displays-hover-reveal-panel-live-vnc-display-windows-/254-02-SUMMARY.md`. Remaining Phase-254 plan: 254-04 (hover panel — consumes `displays.list`).
+
+### Earlier update 2026-05-31 (Phase 254 execution — Plan 254-03 / live VNC display window + openWindow sizing seam complete)
 
 - ✅ **254-03 DONE** (TDD: `de1e3c35` Task 1 RED + `d8e9ba56` Task 1 GREEN + `280f30af` Task 2 RED + `513033a0` Task 2 GREEN + `105c248f` Task 3) — **built the live, interactive VNC display window (locked decision #1: reuse noVNC/RFB) + the window-content routing + openWindow sizing it needs.** A LivOS window whose appId is `DISPLAY_:N` resolves that display's VNC ws via `displays.getVncUrl` (Plan 01) and renders through the existing `useWebAppVnc` hook with **`viewOnly:false`** so mouse+keyboard are forwarded **natively over RFB** (NO screenshot-poll, NO per-event tRPC dispatch — unlike the WebApp xdotool path). **Task 1 — openWindow sizing seam:** widened `WindowManager` context type + `openWindow` useCallback with a trailing optional `suggested?: {width;height}`; `baseSize = suggested ?? (isWebApp?{1280,720}:DEFAULT_WINDOW_SIZES[appId]||default)`; `getResponsiveSize(w,h, isWebApp||isDisplay||suggested!=null)` preserves aspect so a full desktop never degrades to portrait. Absent `suggested` = byte-identical pre-254. **Task 2 — `x11-display-stream-window.tsx`:** fire-once `displays.getVncUrl.useMutation()` `{display:displayId}` (guarded by `resolvedForRef` ↔ `spawnedForRef`) → wsUrl state → `useWebAppVnc(wsUrl,{viewOnly:false})`; `object-contain` container (full desktop not cropped); connecting + error overlays w/ Retry (re-resolve wsUrl + `vnc.reconnect()`); no client-side close route (StreamManager owns x11vnc lifecycle); never logs wsUrl (T-254-08). **Task 3 — DISPLAY_ routing in `window-content.tsx`:** lazy import + `DISPLAY_APP_ID_PREFIX` + `isDisplayKind`; threaded into full-bleed OR chain + a WindowAppContent branch that slices `:N` and mounts the window forwarding `windowId`. **21/21 vitest GREEN** (window-manager 15 incl. 3 new + x11-display 6 new). **tsc:** zero new non-baseline errors across all 3 files; the only 2 errors in the new file are the package-wide lucide `TS2786 'cannot be used as a JSX component'` React-types drift baseline (same class webapp-stream-window.tsx + hundreds of files carry); the getVncUrl/useWebAppVnc wiring is fully type-correct. **Auto-fix [Rule 3]:** reworded source comments that contained the literal tokens `xdotool`/`webapp.input` (tripped the plan's own negative invariant + RED test) → "canvas event interceptors"; behavior unchanged. SUMMARY: `.planning/phases/254-active-displays-hover-reveal-panel-live-vnc-display-windows-/254-03-SUMMARY.md`. **Downstream:** Plan 04 hover panel opens a display via `openWindow('DISPLAY_'+display, …, originRect, {width,height})` (WxH from `displays.list`). Remaining Phase-254 plans: 254-02, 254-04 (hover panel — consumes `displays.list`).
 
