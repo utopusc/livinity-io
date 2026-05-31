@@ -29,6 +29,20 @@ Environment="GEMINI_CLI_TRUST_WORKSPACE=true"
 # box before env-seed runs). aioncore→claude→luse then resolve Redis via
 # resolveLuseRedisUrl step 2 (REDIS_URL) with no dependence on the per-MCP env seed.
 EnvironmentFile=-/opt/livos/.env
+# Phase 253 — ACP orphan reaper. Claude/adapter/guide-MCP child processes spawned
+# for a chat session can escape the unit's cgroup (re-parented to init), so a plain
+# `systemctl restart liv-assistant` does NOT reap them (verified: KillMode=control-group
+# leaves them behind). A hung/orphaned claude wedged on `session/new` (e.g. from a
+# half-killed prior session) then blocks new sessions until manually pkilled — this was
+# the root cause of the "Claude chat hangs after initialize" symptom on test boxes.
+# Reap ONLY ACP-spawned children — matched by the non-interactive `--input-format
+# stream-json` flag plus the adapter/guide binary names — so interactive terminal
+# `claude`/`gemini` sessions (the Phase 253 CLI-tools feature, also run as bruce) are
+# untouched. The `[x]` bracket trick keeps the reaper's own bash cmdline from self-matching.
+# Runs as User=bruce, so it can only signal bruce's own processes. `-` prefix + `exit 0`
+# make a no-match (nothing to reap) non-fatal.
+ExecStartPre=-/bin/bash -c 'pkill -9 -f "[-]-input-format stream-json"; pkill -9 -f "claude-agent-ac[p]"; pkill -9 -f "mcp-guide-stdi[o]"; exit 0'
+ExecStopPost=-/bin/bash -c 'pkill -9 -f "[-]-input-format stream-json"; pkill -9 -f "claude-agent-ac[p]"; pkill -9 -f "mcp-guide-stdi[o]"; exit 0'
 ExecStart=/opt/liv-assistant/current/aionui-web start --port 3020 --data-dir /opt/liv-assistant/data --backend-bin /opt/liv-assistant/current/bundled-aioncore/linux-x64/aioncore
 Restart=on-failure
 RestartSec=5
