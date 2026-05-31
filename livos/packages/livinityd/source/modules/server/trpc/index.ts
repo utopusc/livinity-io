@@ -96,6 +96,11 @@ import {claudeAuthRouter} from './claude-auth-router.js'
 // CRUD procedures (create/list/delete/update) are deferred to P94.
 import {webappRouter} from '../../webapps/index.js'
 import streamsRouter from '../../streaming/trpc-router.js'
+// Phase 254-01 — computer-use displays.* namespace (UI seam for the active-X-
+// displays hover panel + live-VNC display window). Mounted directly as the
+// inner displaysRouter so the path shape is exactly displays.list /
+// displays.getVncUrl.
+import {displaysRouter} from '../../computer-use/trpc-router.js'
 // Phase 101-03 — Native-app CRUD router (apps.native.{list,get,create,delete}).
 // Merged into the existing `apps` namespace below alongside Phase 47
 // healthProbe. All 4 paths are added to httpOnlyPaths in ./common.ts.
@@ -322,6 +327,9 @@ export function createAppRouter(opts: {
 		webapp: webappRouter,
 		// v33 Phase 93 — streams.* (start/stop/list) namespace.
 		streams: streamsRouter,
+		// Phase 254-01 — displays.* (list/getVncUrl) namespace. UI seam for the
+		// active-X-displays hover panel + live-VNC display window.
+		displays: displaysRouter,
 		// Phase 102-07 / Phase 103-01 — chromeMaster.* injected via factory.
 		// Default appRouter passes the bare chromeMasterRouter (back-compat);
 		// production livinityd boot replaces it via setProductionAppRouter().

@@ -433,6 +433,8 @@ export const httpOnlyPaths = [
 	'streams.start',
 	'streams.stop',
 	'streams.list',
+	// Phase 254 — displays.getVncUrl spawns x11vnc via startStream (same rationale as streams.start).
+	'displays.getVncUrl',
 	'webapp.window.spawn',
 	'webapp.window.focus',
 	'webapp.window.close',
