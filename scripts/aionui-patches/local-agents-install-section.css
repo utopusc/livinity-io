@@ -1,5 +1,6 @@
 /**
  * Phase 240-02 — AionUi vendor-bundle patch styles
+ * GC-D (Phase 253 gap closure) — card redesign + brand-coloured avatars.
  *
  * Companion stylesheet for local-agents-install-section.js.
  *
@@ -12,7 +13,7 @@
  */
 
 #liv-240-install-section {
-  padding: 16px 20px;
+  padding: 18px 20px 8px;
   margin-top: 16px;
   border-top: 1px solid var(--color-border-2, #e5e6eb);
   font-family: inherit;
@@ -20,7 +21,7 @@
 }
 
 #liv-240-install-section .liv-240-heading {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   margin: 0 0 4px 0;
   color: var(--color-text-1, #1d2129);
@@ -29,50 +30,64 @@
 #liv-240-install-section .liv-240-hint {
   font-size: 12px;
   color: var(--color-text-3, #86909c);
-  margin: 0 0 12px 0;
+  margin: 0 0 14px 0;
   line-height: 1.5;
 }
 
+/* ── Card grid — responsive, mirrors the native "detected agents" cards ── */
 #liv-240-install-section .liv-240-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
   align-items: center;
   gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--color-border-1, #f2f3f5);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--color-border-2, #e5e6eb);
+  border-radius: 10px;
+  background: var(--color-bg-2, #fff);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
-#liv-240-install-section .liv-240-row:last-of-type {
-  border-bottom: none;
+#liv-240-install-section .liv-240-row:hover {
+  border-color: var(--color-border-3, #c9cdd4);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
 }
 
+/* ── Brand-coloured monogram avatar (background set inline by the JS) ── */
 #liv-240-install-section .liv-240-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  background: var(--color-fill-2, #f7f8fa);
-  color: var(--color-text-2, #4e5969);
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--color-fill-3, #e5e6eb);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 #liv-240-install-section .liv-240-label {
-  flex: 1;
   min-width: 0;
 }
 
 #liv-240-install-section .liv-240-name {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--color-text-1, #1d2129);
   line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* Status shown as a subtle pill */
 #liv-240-install-section .liv-240-status {
+  display: inline-block;
+  margin-top: 3px;
   font-size: 11px;
   color: var(--color-text-3, #86909c);
   line-height: 1.4;
@@ -85,15 +100,17 @@
 }
 
 #liv-240-install-section .liv-240-btn {
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 4px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 8px;
   border: 1px solid var(--color-border-2, #e5e6eb);
   background: var(--color-fill-2, #f7f8fa);
   color: var(--color-text-1, #1d2129);
   font-size: 12px;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
+  white-space: nowrap;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
@@ -108,14 +125,14 @@
 }
 
 #liv-240-install-section .liv-240-btn-install {
-  background: var(--color-primary-light-1, #e8f3ff);
-  border-color: var(--color-primary-light-2, #bedaff);
-  color: var(--color-primary-6, #165dff);
+  background: var(--color-primary-6, #165dff);
+  border-color: var(--color-primary-6, #165dff);
+  color: #fff;
 }
 
 #liv-240-install-section .liv-240-btn-install:hover:not(:disabled) {
-  background: var(--color-primary-light-2, #bedaff);
-  border-color: var(--color-primary-light-3, #94bfff);
+  background: var(--color-primary-5, #4080ff);
+  border-color: var(--color-primary-5, #4080ff);
 }
 
 #liv-240-install-section .liv-240-btn-auth {
@@ -124,14 +141,23 @@
   color: var(--color-success-6, #00b42a);
 }
 
+#liv-240-install-section .liv-240-btn-redetect {
+  background: transparent;
+  border-color: var(--color-border-2, #e5e6eb);
+  color: var(--color-text-2, #4e5969);
+}
+
+/* ── State styling ── */
 #liv-240-install-section .liv-240-row.installing .liv-240-icon,
-#liv-240-install-section .liv-240-row.authing .liv-240-icon {
+#liv-240-install-section .liv-240-row.authing .liv-240-icon,
+#liv-240-install-section .liv-240-row.terminal .liv-240-icon {
   animation: liv-240-pulse 1.2s ease-in-out infinite;
 }
 
 #liv-240-install-section .liv-240-row.installed,
 #liv-240-install-section .liv-240-row.authed,
 #liv-240-install-section .liv-240-row.detected {
+  border-color: var(--color-success-light-3, #7be188);
   background: var(--color-success-light-1, #e8ffea);
 }
 
@@ -139,17 +165,31 @@
 #liv-240-install-section .liv-240-row.authed .liv-240-status,
 #liv-240-install-section .liv-240-row.detected .liv-240-status {
   color: var(--color-success-6, #00b42a);
+  font-weight: 600;
+}
+
+#liv-240-install-section .liv-240-row.terminal {
+  border-color: var(--color-warning-light-3, #ffcf8b);
+  background: var(--color-warning-light-1, #fff7e8);
+}
+
+#liv-240-install-section .liv-240-row.terminal .liv-240-status {
+  color: var(--color-warning-6, #ff7d00);
   font-weight: 500;
+}
+
+#liv-240-install-section .liv-240-row.failed {
+  border-color: var(--color-danger-light-3, #fbaca3);
 }
 
 #liv-240-install-section .liv-240-row.failed .liv-240-status {
   color: var(--color-danger-6, #f53f3f);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 #liv-240-install-section .liv-240-error {
-  flex-basis: 100%;
-  margin-top: 6px;
+  grid-column: 1 / -1;
+  margin-top: 8px;
   padding: 6px 8px;
   background: var(--color-danger-light-1, #ffece8);
   color: var(--color-danger-6, #f53f3f);
@@ -157,7 +197,7 @@
   font-family: monospace;
   white-space: pre-wrap;
   word-break: break-word;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 @keyframes liv-240-pulse {
@@ -165,11 +205,16 @@
   50%      { opacity: 0.5; }
 }
 
-/* Dark mode adjustments — AionUi sets data-theme="dark" on <html> */
+/* ── Dark mode — AionUi sets data-theme="dark" on <html> ── */
 html[data-theme="dark"] #liv-240-install-section {
   border-top-color: var(--color-border-2, #3c3c3c);
 }
 
-html[data-theme="dark"] #liv-240-install-section .liv-240-icon {
-  background: var(--color-fill-2, #2a2a2b);
+html[data-theme="dark"] #liv-240-install-section .liv-240-row {
+  background: var(--color-bg-2, #232324);
+  border-color: var(--color-border-2, #3c3c3c);
+}
+
+html[data-theme="dark"] #liv-240-install-section .liv-240-row:hover {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
