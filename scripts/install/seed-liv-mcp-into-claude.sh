@@ -43,11 +43,17 @@ fi
 
 # Merge the aionui-source stdio servers into ~/.claude.json mcpServers.
 # Pure-stdlib python; idempotent; preserves all other claude.json content.
-ADDED="$(printf '%s' "$CONFIGS" | python3 - "$CLAUDE_JSON" <<'PY'
+# NB: the python script is delivered via the `<<PY` heredoc (which IS stdin),
+# so the API JSON cannot also come through stdin — pass it via a temp file arg.
+_SEED_TMP="$(mktemp)"
+printf '%s' "$CONFIGS" > "$_SEED_TMP"
+trap 'rm -f "$_SEED_TMP"' EXIT
+ADDED="$(python3 - "$CLAUDE_JSON" "$_SEED_TMP" <<'PY'
 import json, sys, os
 
-api_raw = sys.stdin.read()
 claude_path = sys.argv[1]
+with open(sys.argv[2], "r", encoding="utf-8") as _f:
+    api_raw = _f.read()
 
 try:
     api = json.loads(api_raw)
