@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v44.0
 milestone_name: Liv AI Tooling Depth
 status: executing
-last_updated: "2026-05-31T17:09:04.501Z"
+last_updated: "2026-05-31T17:21:02.000Z"
 last_activity: 2026-05-31
 progress:
   total_phases: 166
   completed_phases: 83
   total_plans: 560
-  completed_plans: 476
+  completed_plans: 478
   percent: 85
 ---
 
@@ -41,9 +41,13 @@ progress:
 
 ---
 
-## Current Position (Phase 254 — Active Displays hover panel + live VNC display windows 🟡 EXECUTING — Plan 254-01 ✅ DONE 2026-05-31)
+## Current Position (Phase 254 — Active Displays hover panel + live VNC display windows 🟡 EXECUTING — Plans 254-01 + 254-03 ✅ DONE 2026-05-31)
 
-### Latest update 2026-05-31 (Phase 254 execution — Plan 254-01 / displays.* tRPC seam complete)
+### Latest update 2026-05-31 (Phase 254 execution — Plan 254-03 / live VNC display window + openWindow sizing seam complete)
+
+- ✅ **254-03 DONE** (TDD: `de1e3c35` Task 1 RED + `d8e9ba56` Task 1 GREEN + `280f30af` Task 2 RED + `513033a0` Task 2 GREEN + `105c248f` Task 3) — **built the live, interactive VNC display window (locked decision #1: reuse noVNC/RFB) + the window-content routing + openWindow sizing it needs.** A LivOS window whose appId is `DISPLAY_:N` resolves that display's VNC ws via `displays.getVncUrl` (Plan 01) and renders through the existing `useWebAppVnc` hook with **`viewOnly:false`** so mouse+keyboard are forwarded **natively over RFB** (NO screenshot-poll, NO per-event tRPC dispatch — unlike the WebApp xdotool path). **Task 1 — openWindow sizing seam:** widened `WindowManager` context type + `openWindow` useCallback with a trailing optional `suggested?: {width;height}`; `baseSize = suggested ?? (isWebApp?{1280,720}:DEFAULT_WINDOW_SIZES[appId]||default)`; `getResponsiveSize(w,h, isWebApp||isDisplay||suggested!=null)` preserves aspect so a full desktop never degrades to portrait. Absent `suggested` = byte-identical pre-254. **Task 2 — `x11-display-stream-window.tsx`:** fire-once `displays.getVncUrl.useMutation()` `{display:displayId}` (guarded by `resolvedForRef` ↔ `spawnedForRef`) → wsUrl state → `useWebAppVnc(wsUrl,{viewOnly:false})`; `object-contain` container (full desktop not cropped); connecting + error overlays w/ Retry (re-resolve wsUrl + `vnc.reconnect()`); no client-side close route (StreamManager owns x11vnc lifecycle); never logs wsUrl (T-254-08). **Task 3 — DISPLAY_ routing in `window-content.tsx`:** lazy import + `DISPLAY_APP_ID_PREFIX` + `isDisplayKind`; threaded into full-bleed OR chain + a WindowAppContent branch that slices `:N` and mounts the window forwarding `windowId`. **21/21 vitest GREEN** (window-manager 15 incl. 3 new + x11-display 6 new). **tsc:** zero new non-baseline errors across all 3 files; the only 2 errors in the new file are the package-wide lucide `TS2786 'cannot be used as a JSX component'` React-types drift baseline (same class webapp-stream-window.tsx + hundreds of files carry); the getVncUrl/useWebAppVnc wiring is fully type-correct. **Auto-fix [Rule 3]:** reworded source comments that contained the literal tokens `xdotool`/`webapp.input` (tripped the plan's own negative invariant + RED test) → "canvas event interceptors"; behavior unchanged. SUMMARY: `.planning/phases/254-active-displays-hover-reveal-panel-live-vnc-display-windows-/254-03-SUMMARY.md`. **Downstream:** Plan 04 hover panel opens a display via `openWindow('DISPLAY_'+display, …, originRect, {width,height})` (WxH from `displays.list`). Remaining Phase-254 plans: 254-02, 254-04 (hover panel — consumes `displays.list`).
+
+### Earlier update 2026-05-31 (Phase 254 execution — Plan 254-01 / displays.* tRPC seam complete)
 
 - ✅ **254-01 DONE** (commits `09e8b9ae` Task 1 + `8daf7ef0` Task 2 + `10e1c471` Task 3) — **exposed the active X displays (previously only reachable via the stdio MCP `computer_list_displays`) to the LivOS UI over tRPC + added a per-display VNC ws-URL resolver.** **Task 1 (`09e8b9ae`):** wired `displayManager?: DisplayManager` onto the `Livinityd` singleton, constructed in `start()` after `StreamManager` on the SAME daemon Redis (`this.ai.redis`) the MCP `createDisplayManager` uses → `displays.list` reads identical `luse:display:*` keys; non-fatal try/catch (Redis fail → undefined → routes fail-closed `SERVICE_UNAVAILABLE`); `await displayManager.initialized`. **Task 2 (`8daf7ef0`):** new `computer-use/trpc-router.ts` (`computerUseRouter` + inner `displaysRouter`) — `displays.list` query → `{displays, count}` (byte-identical wrap to MCP), `displays.getVncUrl` mutation → `{wsUrl}` via `streamManager.startStream({mode:'vnc-window', target:{display}})`; zod `:N` regex; `userId` from `ctx.currentUser.id` ONLY (STRIDE-S T-254-02); owner-scoped authz (non-empty `owner_session` + `!isOwner` → FORBIDDEN, T-254-01); logs only display id never wsUrl (T-254-03). **Task 3 (`10e1c471`):** mounted `displays: displaysRouter` on appRouter (exact path shape) + `'displays.getVncUrl'` added to `httpOnlyPaths` (x11vnc spawn, WS-reconnect survival). **tsc gate: 389 errors PRE and POST = ZERO new errors** (389 are pre-existing in unrelated files). **Auto-fix [Rule 1]:** plan's `ctx.logger.info` example doesn't exist on `Livinityd['logger']` → used `.log` (correct surface) to avoid bumping the baseline. **Mapping note:** MCP stores `owner_session` as luse session id ('bruce') while UI carries `ctx.currentUser.id` — FORBIDDEN gate kept intact; empty owner_session (host/shared) allowed. **Downstream note:** boot-time Xvfb `:1` is NOT a DisplayManager record → not in `list()` (CONTEXT #2 `:1`-listable + #3 `:1`-resolution are separate-plan scope). SUMMARY: `.planning/phases/254-active-displays-hover-reveal-panel-live-vnc-display-windows-/254-01-SUMMARY.md`. Remaining Phase-254 plans: 254-02, 254-03 (live-VNC display window — consumes `displays.getVncUrl`), 254-04 (hover panel — consumes `displays.list`).
 
