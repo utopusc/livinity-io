@@ -70,7 +70,9 @@ async function main(): Promise<void> {
 						const st = statSync(join(dir, f))
 						return {slug: f.replace(/\.md$/, ''), bytes: st.size, modified_at: st.mtime.toISOString()}
 					})
-				return {content: [{type: 'text', text: JSON.stringify(entries, null, 2)}]}
+				// Wrap array in a record — MCP clients (gemini-cli) reject a bare
+				// top-level JSON array with "expected record, received array".
+				return {content: [{type: 'text', text: JSON.stringify({entries, count: entries.length}, null, 2)}]}
 			} catch (err) {
 				return {
 					content: [{type: 'text', text: `list_notes failed: ${(err as Error).message}`}],
