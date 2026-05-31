@@ -1130,8 +1130,12 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 			}
 		}
 		const records = await options.displayManager.list()
+		// Wrap the array in a record. MCP clients that validate tool results
+		// (e.g. gemini-cli) reject a bare top-level JSON array with
+		// "Invalid input: expected record, received array"; an object is the
+		// portable shape (Claude tolerated the bare array, Gemini does not).
 		return {
-			content: [{type: 'text', text: JSON.stringify(records)}],
+			content: [{type: 'text', text: JSON.stringify({displays: records, count: records.length})}],
 			isError: false,
 		}
 	},
@@ -1556,7 +1560,7 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 					// path (returns empty array via listWindows({})).
 					const windows = await listWindows({})
 					return {
-						content: [{type: 'text', text: JSON.stringify(windows)}],
+						content: [{type: 'text', text: JSON.stringify({windows, count: windows.length})}],
 						isError: false,
 					}
 				}
@@ -1580,7 +1584,7 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 					}
 				}
 				return {
-					content: [{type: 'text', text: JSON.stringify(aggregated)}],
+					content: [{type: 'text', text: JSON.stringify({windows: aggregated, count: aggregated.length})}],
 					isError: false,
 				}
 			}
@@ -1595,7 +1599,7 @@ function registerLuseWindowTools(server: McpServerLike, options?: LuseToolsOptio
 					? await listWindows({display: resolvedDisplay})
 					: await listWindows({})
 				return {
-					content: [{type: 'text', text: JSON.stringify(windows)}],
+					content: [{type: 'text', text: JSON.stringify({windows, count: windows.length})}],
 					isError: false,
 				}
 			})
@@ -1818,8 +1822,9 @@ function registerLuseStreamTools(
 		},
 		wrapHandler(async () => {
 			const records = sm.listStreams({userId})
+			// Wrap in a record — MCP clients (gemini-cli) reject bare top-level arrays.
 			return {
-				content: [{type: 'text', text: JSON.stringify(records)}],
+				content: [{type: 'text', text: JSON.stringify({streams: records, count: records.length})}],
 				isError: false,
 			}
 		}),
