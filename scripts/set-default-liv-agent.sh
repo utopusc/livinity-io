@@ -4,10 +4,17 @@
 # Idempotent post-restart helper: ensures the AionUi backend's
 # client_settings have Claude Code (id=2d23ff1c) set as the default
 # selected agent (`guid.lastSelectedAgent`). Without this, AionUi
-# defaults to `aionrs` (the Aion CLI agent), which the operator does
-# not want as the default — although operator preference is to keep
-# Aion CLI VISIBLE in the picker (`agents.hidden` + `agents.disabled`
-# stay empty arrays).
+# defaults to `aionrs` (the built-in agent), which the operator does
+# not want as the default.
+#
+# Phase 253 GC-C (2026-05-30): the operator also asked to HIDE the
+# built-in aionrs agent entirely — it renders as a confusing
+# "Liv CLI … Failed" entry (rebranded display name; backend None →
+# detection fails). So we now put the built-in agent id in
+# `agents.hidden`. This SUPERSEDES the earlier "keep CLI visible"
+# preference for the built-in agent specifically; the operator's
+# INSTALLED CLIs (Aion CLI npm, Claude, Gemini, OpenCode, OpenClaw…)
+# are separate detected agents and remain visible.
 #
 # Phase 236 fixed this once via a one-shot PUT, but the value was
 # subsequently observed reverted to `aionrs` (cause unknown — possibly
@@ -31,15 +38,18 @@
 #   - D-V42-NO-DATA-LOSS : we only mutate client_settings (operator
 #     can override via UI any time); we do NOT touch sessions/secrets/
 #     conversations/skills.
-#   - Operator preference (2026-05-27 evening): "disable etmene gerek
-#     yok cli kalabilir" → never set agents.hidden / agents.disabled
-#     to anything except [].
+#   - Operator preference (2026-05-30, GC-C): hide ONLY the built-in
+#     aionrs agent (id below); keep agents.disabled empty so nothing is
+#     functionally disabled, and never hide the installed CLI agents.
 
 set -euo pipefail
 IFS=$'\n\t'
 
 API="http://127.0.0.1:3020"
 DESIRED_AGENT_ID="2d23ff1c"  # Claude Code agent (id from /api/agents)
+# GC-C — built-in aionrs agent shown as "Aion CLI"/"Liv CLI (Failed)"; the
+# operator wants it hidden. Stable seeded id from /api/agents (backend=None).
+BUILTIN_AGENT_ID="632f31d2"
 PROBE_TIMEOUT=5
 
 log() { echo "[set-default-liv-agent] $*" >&2; }
@@ -60,17 +70,18 @@ except Exception:
 
 if [[ "${CURRENT}" == "${DESIRED_AGENT_ID}" ]]; then
   log "guid.lastSelectedAgent already ${DESIRED_AGENT_ID} (Claude Code); no-op"
-  # Also normalize agents.hidden/disabled to [] in case they got dirty out-of-band
+  # GC-C — keep the built-in aionrs agent hidden (and disabled empty) even when
+  # the default is already correct, in case the lists got dirty out-of-band.
   curl -sS -X PUT -H 'Content-Type: application/json' \
-    -d '{"agents.hidden":[],"agents.disabled":[]}' \
+    -d "{\"agents.hidden\":[\"${BUILTIN_AGENT_ID}\"],\"agents.disabled\":[]}" \
     --max-time "${PROBE_TIMEOUT}" "${API}/api/settings/client" >/dev/null 2>&1 || true
   exit 0
 fi
 
-# Step 2 — PUT desired value + clear any hidden/disabled lists (operator: CLI visible)
-log "Setting guid.lastSelectedAgent: '${CURRENT}' -> '${DESIRED_AGENT_ID}' (Claude Code)"
+# Step 2 — PUT desired default + hide the built-in aionrs agent (GC-C)
+log "Setting guid.lastSelectedAgent: '${CURRENT}' -> '${DESIRED_AGENT_ID}' (Claude Code); hiding built-in ${BUILTIN_AGENT_ID}"
 PUT_RESULT="$(curl -sS -X PUT -H 'Content-Type: application/json' \
-  -d "{\"guid.lastSelectedAgent\":\"${DESIRED_AGENT_ID}\",\"agents.hidden\":[],\"agents.disabled\":[]}" \
+  -d "{\"guid.lastSelectedAgent\":\"${DESIRED_AGENT_ID}\",\"agents.hidden\":[\"${BUILTIN_AGENT_ID}\"],\"agents.disabled\":[]}" \
   --max-time "${PROBE_TIMEOUT}" "${API}/api/settings/client" 2>/dev/null || echo "")"
 
 if [[ "${PUT_RESULT}" != *"\"success\":true"* ]]; then
