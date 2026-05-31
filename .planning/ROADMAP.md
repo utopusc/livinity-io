@@ -4483,6 +4483,6 @@ Plans:
 - [x] 254-01-PLAN.md — Wave 1: computer-use tRPC router (displays.list + displays.getVncUrl via StreamManager VNC) + displayManager wired onto livinityd
 - [x] 254-02-PLAN.md — Wave 2: :1 host display created from shared MCP display-creation resolution constant (no independent 1920x1080 hardcode)
 - [x] 254-03-PLAN.md — Wave 1: live interactive x11-display-stream-window VNC component + DISPLAY_ routing + openWindow suggested sizing
-- [ ] 254-04-PLAN.md — Wave 2: top-edge hover-reveal Active Displays strip → click opens sized live VNC window (+ operator browser walk)
+- [x] 254-04-PLAN.md — Wave 2: top-edge hover-reveal Active Displays strip → click opens sized live VNC window (+ operator browser walk)
 
 ---
