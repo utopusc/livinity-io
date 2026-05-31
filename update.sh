@@ -1435,25 +1435,14 @@ if [[ -f /etc/systemd/system/liv-assistant.service || -f /usr/lib/systemd/system
         info "scripts/set-default-liv-agent.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 238.3 deploy)"
     fi
 
-    # ── Phase 253 GC-F — register LivOS MCP servers into the Claude agent config ──
-    # AionUi's one-click MCP import filters by the selected agent's source; LivOS
-    # servers live under source "aionui" (not a selectable agent) so they never
-    # surfaced. This helper copies them into ~/.claude.json mcpServers (read from
-    # aioncore's live agent-configs API — secrets stay per-box). Idempotent;
-    # never fails the deploy.
-    _LIV_MCP_SEED_SRC="$TEMP_DIR/scripts/install/seed-liv-mcp-into-claude.sh"
-    if [[ ! -f "$_LIV_MCP_SEED_SRC" ]]; then
-        _LIV_MCP_SEED_SRC="$LIVOS_DIR/scripts/install/seed-liv-mcp-into-claude.sh"
-    fi
-    if [[ -f "$_LIV_MCP_SEED_SRC" ]]; then
-        if bash "$_LIV_MCP_SEED_SRC" 2>&1 | tail -5; then
-            ok "LivOS MCP servers registered into Claude agent config (GC-F; no-op if already present)"
-        else
-            warn "seed-liv-mcp-into-claude.sh exited non-zero — operator can re-run: sudo bash $_LIV_MCP_SEED_SRC"
-        fi
-    else
-        info "scripts/install/seed-liv-mcp-into-claude.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 253 deploy)"
-    fi
+    # ── Phase 253 W4 — LivOS MCP import is handled by the CapabilitiesSettings
+    # importer patch (install-liv-assistant.sh), NOT by seeding agent configs.
+    # Seeding ~/.claude.json mcpServers (the old GC-F approach) DOUBLE-injected
+    # the LivOS servers into Claude's ACP session/new (aioncore already injects
+    # them from its own registry), which HUNG session/new and broke Claude chat
+    # on a box whose claude.json was non-empty (Mini PC works precisely because
+    # its claude.json mcpServers is empty). So we deliberately do NOT seed here.
+    info "LivOS MCP import handled by the importer patch (W4); not seeding agent configs (keeps claude.json mcpServers empty so ACP session/new does not double-inject)"
 else
     info "liv-assistant.service not installed — skipping restart + health probe (pre-Phase 225 deploy)"
 fi
