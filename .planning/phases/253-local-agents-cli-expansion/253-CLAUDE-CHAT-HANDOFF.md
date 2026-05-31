@@ -1,12 +1,52 @@
 ---
-status: in_progress
+status: RESOLVED
 type: debug-handoff
 phase: 253-local-agents-cli-expansion
 created: 2026-05-31
+resolved: 2026-05-31
+resolution_commit: 915f7f25
 goal: Make the TEST BOX Liv AI Claude chat work exactly like the working Mini PC, via a single clean setup (replicate Mini PC's install/runtime logic).
 ---
 
-# Plan B — Liv AI Claude chat: replicate Mini PC on the test box (single setup)
+# ✅ RESOLVED 2026-05-31 — read this first
+
+**The Claude chat round-trip now works on the test box (154.53.56.75), exactly like Mini PC:**
+`warmup=200/~1.5s`, `send=202`, `event_type="Finish" text_len>0` — stable across restart + bunx-cache clear.
+
+**Root cause (named, not guessed): it was NOT a version/auth/MCP/config defect.**
+The handoff's central premise ("both boxes 2.1.156, version ruled out") was right on version
+but missed the real mechanism. Proven by driving the ACP adapter directly over stdio: with NO
+MCP / guide-only / all-5-LivOS-MCP, `session/new` returns in 1–3s every time. claude-core +
+adapter + every MCP server are fine. Ruled out: claude version, npm-global claude (removed it,
+still worked), MCP servers, guide_mcp, process count (Mini PC runs fine with 17 stuck claude
+procs), claude.ai MCP (identical Gmail/Drive ✓ + Calendar needs-auth on BOTH boxes),
+settings/skills, bunx cache, in-memory state.
+
+**What actually broke it:** orphaned/hung claude processes from the prior debugging session.
+Found a claude **2.1.126** orphan (the old version that 401s), launched from `bash`, stuck in
+`ep_poll` for ~2h, plus a stale `2.1.126.lock` and the deadlock-prone **2.1.158** build (which
+the handoff itself flagged). ACP-spawned claude/adapter/guide children **escape the unit cgroup**
+(re-parented to init), so `systemctl restart liv-assistant` does NOT reap them despite
+`KillMode=control-group` (verified: 1 claude/adapter/guide each survived a `stop`). A wedged
+claude then blocks new `session/new`. `pkill` of the orphans restored chat; the hang was then
+**unreproducible** (survives restart + cache clear). So there was no persistent install defect —
+it was degraded runtime state from manual debug churn. A clean `curl|bash` install wouldn't hit it.
+
+**Fix baked into install (commit `915f7f25`, pushed to master):** `systemd/liv-assistant.service`
+now has `ExecStartPre` + `ExecStopPost` reapers scoped to ONLY non-interactive ACP children
+(`--input-format stream-json` + `claude-agent-acp`/`mcp-guide-stdio` binary names; `[x]` bracket
+trick avoids self-match; runs as bruce so only signals bruce procs). Interactive terminal
+claude/gemini sessions (the Phase 253 CLI feature) are spared — verified a masquerading
+interactive claude survived a restart while the ACP procs went 2→0. `systemctl restart
+liv-assistant` is now a reliable reset for a wedged chat. update.sh GC-E syncs the unit to all
+boxes on next run (Mini PC untouched per hard rule; it never had the orphan problem anyway).
+
+**Test box residue cleaned to match Mini PC:** removed 2.1.158, stale 2.1.126.lock, the 2.1.126
+orphan. versions=[2.1.126, 2.1.156], locks=[], symlink→2.1.156.
+
+---
+
+# Plan B — Liv AI Claude chat: replicate Mini PC on the test box (single setup)  [ORIGINAL HANDOFF BELOW — superseded]
 
 > **READ THIS FIRST after /clear.** This is a continuation handoff. A very long
 > session debugged "Liv AI Claude chat broken on the test box." Most of the
