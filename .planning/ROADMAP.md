@@ -4472,4 +4472,17 @@ Plans:
 - [ ] 253-05-PLAN.md — Wave 3: deploy to test box + verify glob pickup (G12) and panel cache-bust (G18)
 - [ ] 253-06-PLAN.md — Wave 4: operator browser walk (checkpoint:human-verify) — 20 rows, install+terminal-auth, authHidden
 
+### Phase 254: Active Displays hover-reveal panel + live VNC display windows: top-edge hover reveals a drop-down of active X displays (computer_list_displays/displayManager.list, not LivOS app windows); clicking opens a display as a LivOS window via live VNC (reuse use-webapp-vnc/noVNC), interactive; new computer-use tRPC router (displays.list + display->VNC websocket URL, x11vnc per display); window sized to display WxH; change main display :1 creation resolution from hardcoded 1920x1080 to MCP display-creation size
+
+**Goal:** Operators reveal active X displays from a top-edge hover strip and open any display as a live, interactive VNC window inside LivOS; the main :1 display is created at the shared MCP display-creation resolution.
+**Requirements**: GOAL-254-DISPLAYS-TRPC, GOAL-254-VNC-RESOLVE, GOAL-254-MAIN-DISPLAY-RES, GOAL-254-VNC-WINDOW, GOAL-254-WINDOW-SIZING, GOAL-254-HOVER-PANEL
+**Depends on:** Phase 253
+**Plans:** 4 plans
+
+Plans:
+- [ ] 254-01-PLAN.md — Wave 1: computer-use tRPC router (displays.list + displays.getVncUrl via StreamManager VNC) + displayManager wired onto livinityd
+- [ ] 254-02-PLAN.md — Wave 2: :1 host display created from shared MCP display-creation resolution constant (no independent 1920x1080 hardcode)
+- [ ] 254-03-PLAN.md — Wave 1: live interactive x11-display-stream-window VNC component + DISPLAY_ routing + openWindow suggested sizing
+- [ ] 254-04-PLAN.md — Wave 2: top-edge hover-reveal Active Displays strip → click opens sized live VNC window (+ operator browser walk)
+
 ---
