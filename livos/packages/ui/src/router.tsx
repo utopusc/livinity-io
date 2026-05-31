@@ -22,6 +22,7 @@ import {EnsureLoggedIn, EnsureLoggedOut} from './modules/auth/ensure-logged-in'
 import {EnsureUserDoesntExist, EnsureUserExists} from './modules/auth/ensure-user-exists'
 import {Dock, DockBottomPositioner} from './modules/desktop/dock'
 import {TopBar} from './modules/desktop/top-bar'
+import {ActiveDisplaysPanel} from './modules/desktop/active-displays-panel'
 import {FloatingIslandContainer} from './modules/floating-island/container'
 import {AppsProvider} from './providers/apps'
 import {AvailableAppsProvider} from './providers/available-apps'
@@ -86,6 +87,12 @@ export const router = createBrowserRouter([
 							    no-op'd every pin (useWindowManagerOptional returned
 							    null). Fixed Phase 131-01. */}
 							<TopBar />
+							{/* Phase 254-04 — top-edge hover-reveal Active Displays
+							    strip. Sibling of <TopBar /> so it shares the
+							    WindowManagerProvider scope (it calls
+							    windowManager.openWindow on click). Lists X DISPLAYS
+							    only (displays.list), never LivOS app windows. */}
+							<ActiveDisplaysPanel />
 							<MobileAppProvider>
 								<CmdkProvider>
 									<DesktopContextMenu>
