@@ -23,7 +23,7 @@
  */
 import {useEffect} from 'react'
 
-import {requestTerminalCommand} from '@/features/v43-terminal/terminal-command-queue'
+import {requestTerminalCommandInNewTab} from '@/features/v43-terminal/terminal-command-queue'
 import {systemAppsKeyed} from '@/providers/apps'
 import {useWindowManagerOptional} from '@/providers/window-manager'
 
@@ -52,6 +52,28 @@ const CLI_AUTH_COMMANDS: Readonly<Record<string, string>> = {
 	goose: 'goose configure',
 	'factory-droid': 'droid login',
 	'cursor-agent': 'cursor-agent login',
+}
+
+// GC-B — install also runs in the LivOS Terminal (not the old headless
+// livinityd spawn) so the operator SEES interactive install prompts (some CLIs
+// ask questions during install). The iframe sends only a CLI NAME; we validate
+// it against the known install roster and build a FIXED command here (RCE
+// boundary mirror — we never accept a raw command from the iframe).
+// Drift-locked with SUPPORTED_CLIS in install-scripts.ts / the panel patch JS.
+const INSTALLABLE_CLIS: ReadonlySet<string> = new Set([
+	'claude-code', 'opencode', 'gemini', 'openclaw', 'aion-cli',
+	'codex', 'qwen-code', 'augment', 'github-copilot', 'codebuddy', 'qoder-cli',
+	'goose', 'factory-droid', 'cursor-agent',
+	'kimi-cli', 'mistral-vibe', 'hermes-agent', 'nanobot', 'snow-cli', 'kiro',
+])
+
+function installCommandFor(cli: string): string | null {
+	// Strict allowlist + charset guard before interpolating into the command.
+	if (!/^[a-z0-9-]+$/.test(cli)) return null
+	if (!INSTALLABLE_CLIS.has(cli)) return null
+	// Server-side path: the Terminal PTY runs on the box where deploy lands the
+	// install scripts (G12/G21). The 20-CLI script names are install-scripts.ts.
+	return `bash /opt/livos/scripts/install/cli/${cli}.sh`
 }
 
 function isAllowedOrigin(origin: string): boolean {
@@ -83,11 +105,21 @@ export function useCliAuthBridge(): void {
 				| {source?: string; type?: string; cli?: string}
 				| null
 				| undefined
-			if (!data || data.source !== 'liv-240-local-agents' || data.type !== 'cli-auth') {
+			if (!data || data.source !== 'liv-240-local-agents') return
+			const cli = typeof data.cli === 'string' ? data.cli : ''
+
+			// Two message types share this bridge:
+			//   cli-auth    → run the whitelisted `<cli> auth login` command
+			//   cli-install → run the install script (GC-B — interactive prompts)
+			// Both map the iframe-supplied NAME to a FIXED command here.
+			let command: string | null = null
+			if (data.type === 'cli-auth') {
+				command = CLI_AUTH_COMMANDS[cli] ?? null
+			} else if (data.type === 'cli-install') {
+				command = installCommandFor(cli)
+			} else {
 				return
 			}
-			const cli = typeof data.cli === 'string' ? data.cli : ''
-			const command = CLI_AUTH_COMMANDS[cli]
 			if (!command) return // unknown / unsupported CLI — ignore (RCE boundary)
 			if (!windowManager) return
 
@@ -100,10 +132,11 @@ export function useCliAuthBridge(): void {
 				systemAppsKeyed['LIVINITY_terminal'].icon,
 			)
 
-			// Hand the command to the terminal queue. If a live tab is already
-			// focused it runs now; otherwise the freshly opened tab claims it on
-			// `ready`. (terminal-command-queue.ts)
-			requestTerminalCommand(command)
+			// GC-A/GC-B — run in a FRESH terminal tab so the command never lands
+			// in a tab already running a CLI (e.g. a live `claude` session the
+			// operator was using). The clean new tab claims the command once its
+			// PTY is live. (terminal-command-queue.ts)
+			requestTerminalCommandInNewTab(command)
 		}
 
 		window.addEventListener('message', handleMessage)

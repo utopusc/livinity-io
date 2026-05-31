@@ -27,7 +27,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {uuidv7} from 'uuidv7'
 
 import {TerminalTabBar, type TerminalTab} from './TerminalTabBar'
-import {setActiveTerminalSender} from './terminal-command-queue'
+import {setActiveTerminalSender, setNewTabOpener} from './terminal-command-queue'
 import {
 	readAllTabSessions,
 	removeTabSession,
@@ -191,6 +191,14 @@ export default function PersistentTerminalPanel() {
 		])
 		setActiveTabKey(tabKey)
 	}, [])
+
+	// GC-A/GC-B — let the Liv AI CLI-auth/install bridge open a clean new tab
+	// (via requestTerminalCommandInNewTab) so a `<cli> auth login` / install
+	// command never lands in a tab that already has a CLI running.
+	useEffect(() => {
+		setNewTabOpener(onCreate)
+		return () => setNewTabOpener(null)
+	}, [onCreate])
 
 	const onRename = useCallback((tabKey: string, newName: string) => {
 		setTabs((prev) => prev.map((t) => (t.tabKey === tabKey ? {...t, name: newName} : t)))
@@ -630,7 +638,29 @@ function TerminalTabPane({
 			if (isClosedRef.current) return
 			sendRef.current?.({type: 'data', data: command + '\n'})
 		})
-		return () => setActiveTerminalSender(null)
+		// GC-G — claim xterm DOM focus when this pane becomes the active, live
+		// tab so paste (Ctrl+V / native paste event) works immediately without
+		// the operator having to click inside the terminal first. Also makes a
+		// freshly opened auth/install tab (GC-A) typeable right away.
+		// The pane's `hidden` class (isActive ? '' : 'hidden') is dropped on the
+		// SAME render that flips isActive→true; focus() on a display:none element
+		// is a browser no-op, so defer one frame until the element is visible.
+		const raf =
+			typeof requestAnimationFrame === 'function'
+				? requestAnimationFrame(() => {
+						try {
+							terminalRef.current?.focus()
+						} catch {
+							// no-op — jsdom / disposed term
+						}
+				  })
+				: null
+		return () => {
+			if (raf != null && typeof cancelAnimationFrame === 'function') {
+				cancelAnimationFrame(raf)
+			}
+			setActiveTerminalSender(null)
+		}
 	}, [isActive, isLive])
 
 	return (
