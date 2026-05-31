@@ -392,17 +392,20 @@
     return true;
   }
 
+  // W5 (Phase 253 gap closure) — the old observer disconnected on first mount
+  // (and after a 60 s safety timeout). But AionUi RE-RENDERS the Local Agents
+  // tab on every tab switch, ripping our injected section out of the DOM; once
+  // the observer was disconnected the panel never came back until a full reload
+  // — the operator saw it "sometimes there, sometimes gone". Keep observing for
+  // the life of the page and self-heal: re-mount whenever our section is absent.
+  // mount() is idempotent (no-ops when the section already exists), so the
+  // steady-state cost is a single getElementById per mutation batch.
   function observe() {
-    // First pass — try immediate mount
-    if (mount()) return;
+    mount();
     var obs = new MutationObserver(function () {
-      if (mount()) obs.disconnect();
+      if (!document.getElementById(SENTINEL_ID)) mount();
     });
     obs.observe(document.body, { childList: true, subtree: true });
-    // Safety: stop observing after 60 s if still nothing found, to avoid
-    // perpetual document-body mutation observation cost (T-240-02-07
-    // accept disposition).
-    setTimeout(function () { try { obs.disconnect(); } catch (e) {} }, 60000);
   }
 
   if (document.readyState === 'loading') {

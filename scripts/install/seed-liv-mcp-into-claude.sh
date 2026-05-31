@@ -48,7 +48,11 @@ fi
 _SEED_TMP="$(mktemp)"
 printf '%s' "$CONFIGS" > "$_SEED_TMP"
 trap 'rm -f "$_SEED_TMP"' EXIT
-ADDED="$(python3 - "$CLAUDE_JSON" "$_SEED_TMP" <<'PY'
+# W4 — merge the LivOS servers into ONE agent config's mcpServers; echoes the
+# count added. Run once per agent the importer might select (it filters by the
+# selected agent's source), so the Liv tools surface under claude AND gemini etc.
+merge_into() {
+  python3 - "$1" "$_SEED_TMP" <<'PY'
 import json, sys, os
 
 claude_path = sys.argv[1]
@@ -111,11 +115,24 @@ if added:
 
 print(str(added))
 PY
-)" || { log "merge step failed — skipping (non-fatal)"; exit 0; }
+}
 
-# Keep the file owned by the LivOS user (root writes it during update.sh).
-if id "$LIV_USER" >/dev/null 2>&1 && [ -f "$CLAUDE_JSON" ]; then
-  chown "$LIV_USER:$LIV_USER" "$CLAUDE_JSON" 2>/dev/null || true
-fi
+# W4 — seed EVERY agent config the operator might pick in the importer. Skip
+# agents whose config dir is absent (not installed). claude → ~/.claude.json;
+# gemini → ~/.gemini/settings.json (same mcpServers shape). Add more here as
+# other agents gain MCP import support.
+GEMINI_JSON="${LIV_HOME}/.gemini/settings.json"
+TOTAL=0
+for _tgt in "$CLAUDE_JSON" "$GEMINI_JSON"; do
+  _dir="$(dirname "$_tgt")"
+  [ -d "$_dir" ] || { log "  ${_dir} absent — skipping ${_tgt}"; continue; }
+  _n="$(merge_into "$_tgt" 2>/dev/null || echo 0)"
+  [ -n "$_n" ] || _n=0
+  if [ "$_n" != "0" ] && id "$LIV_USER" >/dev/null 2>&1; then
+    chown "$LIV_USER:$LIV_USER" "$_tgt" 2>/dev/null || true
+  fi
+  log "  ${_tgt}: +${_n} server(s)"
+  TOTAL=$((TOTAL + _n))
+done
 
-log "registered $ADDED LivOS MCP server(s) into ${CLAUDE_JSON} mcpServers (GC-F)"
+log "registered LivOS MCP servers into agent configs (total +${TOTAL}; GC-F/W4)"
