@@ -497,9 +497,10 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 		const records = await list()
 		const reaped: string[] = []
 		for (const rec of records) {
-			// Never reap the host :1 boot display — livinityd owns its Xvfb and it
-			// is registered host/shared; always kept.
-			if (rec.display === ':1') continue
+			// Never reap the host displays: `:0` (the GDM Ubuntu/GNOME desktop, may be
+			// momentarily unreachable during a GNOME restart) and `:1` (livinityd's
+			// internal Xvfb). Both are host/shared and always kept.
+			if (rec.display === ':0' || rec.display === ':1') continue
 			// Fail-safe: only reap on a DEFINITE dead probe. A probe that throws is
 			// treated as alive so a transient glitch never deletes a live display.
 			let alive = true

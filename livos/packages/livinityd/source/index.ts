@@ -969,36 +969,56 @@ export default class Livinityd {
 				})
 				streamingLogger.info(`fluxbox up on :1 (pid=${this.fluxboxHandle.pid})`)
 
-				// Phase 254 Gap 1 (254-05) — record the boot :1 host display into the
-				// DisplayManager so it appears in displays.list (the Active Displays
-				// hover strip) and getVncUrl(':1') resolves. startXvfb ALREADY launched
-				// the :1 X server above — this is a register-only write (NO second Xvfb
-				// spawn). EMPTY owner_session = host/shared so any authenticated user
-				// passes the getVncUrl gate. Idempotent (registerExisting no-ops if :1
-				// is already recorded), so a livinityd restart neither duplicates nor
-				// clobbers a user-renamed record. Resolution from the dedicated
-				// HOST_DISPLAY_WIDTH/HEIGHT constants (1280x720). Guarded
-				// (this.displayManager?) + try/catch + non-fatal so a Redis write
-				// failure logs a warning but never breaks boot.
+				// Operator directive 2026-06-02: show the REAL Ubuntu/GNOME desktop
+				// (`:0`) in the Displays popover instead of the bare `:1` branded shell.
+				// `:1` still boots above for internal WebApp / computer-use fallback, but
+				// is NO LONGER registered, so it doesn't appear as a popover card.
+				//
+				// `:0` is the GDM-managed GNOME Xorg. On this headless box every physical
+				// output reads "disconnected", so GNOME collapses to a tiny fallback res —
+				// force a stable 1280x720 onto HDMI-1 via xrandr (newmode + addmode +
+				// output; the mode persists in the running X server, so re-runs across
+				// livinityd restarts just no-op via the .catch). Runs as the livinityd
+				// user (bruce, uid 1000) with the GDM cookie. Fully non-fatal.
+				try {
+					const x0 = $({
+						env: {
+							...process.env,
+							DISPLAY: ':0',
+							XAUTHORITY: '/run/user/1000/gdm/Xauthority',
+						},
+						timeout: 8000,
+					})
+					await x0`xrandr --newmode LV720 74.50 1280 1344 1472 1664 720 723 728 748 -hsync +vsync`.catch(
+						() => {},
+					)
+					await x0`xrandr --addmode HDMI-1 LV720`.catch(() => {})
+					await x0`xrandr --output HDMI-1 --mode LV720`.catch(() => {})
+					streamingLogger.info('displays: forced :0 (Ubuntu/GNOME) to a stable 1280x720')
+				} catch (resErr) {
+					streamingLogger.warn('displays: failed to force :0 resolution (non-fatal)', resErr)
+				}
+
+				// Register `:0` (the live Ubuntu/GNOME desktop) as the host display so it
+				// appears in the Displays popover and getVncUrl(':0') resolves. The
+				// x11vnc spawn for `:0` adds `-auth` (GDM cookie) — see vnc-bridge.ts.
+				// EMPTY owner_session = host/shared. Guarded + non-fatal.
 				if (this.displayManager) {
 					try {
 						await this.displayManager.registerExisting({
-							display: ':1',
-							// Must match the Xvfb -screen geometry above (1280x720) so
-							// displays.list / popover thumbs / openWindow size the :1
-							// VNC window to the real host resolution, not a stale 1080p.
+							display: ':0',
 							width: HOST_DISPLAY_WIDTH,
 							height: HOST_DISPLAY_HEIGHT,
 							mode: 'xvfb',
-							name: 'Host Display',
+							name: 'Ubuntu Desktop',
 							ownerSession: '',
 						})
 						streamingLogger.info(
-							'displays: registered :1 host display (host/shared, no spawn)',
+							'displays: registered :0 Ubuntu/GNOME desktop (host/shared, x11vnc -auth)',
 						)
 					} catch (regErr) {
 						streamingLogger.warn(
-							'displays: failed to register :1 host display (strip will omit :1)',
+							'displays: failed to register :0 Ubuntu desktop',
 							regErr,
 						)
 					}
