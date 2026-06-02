@@ -33,6 +33,19 @@ export interface DisplayAllocatorOpts {
 }
 
 /**
+ * Phase 255-03 (D-255-WEBAPP-REGISTER / Pitfall 2) — disjoint allocator ranges
+ * so a WebApp-allocated `:N` can NEVER collide with an MCP `computer_create_display`
+ * allocated `:N` within a single boot. WebApps own [10, 60); the MCP create()
+ * displayManager allocator floor (`allocatorStart`) is 60, so it hands out
+ * [60, ..). The two allocators share one Redis `:N` namespace but their ranges
+ * are provably disjoint (max <= floor). A unit test (window-manager.test.ts
+ * T-255-09) locks this invariant. The :1 host display is below both ranges and
+ * registered via registerExisting (no allocator advance), so it never collides.
+ */
+export const WEBAPP_DISPLAY_ALLOCATOR_RANGE = {min: 10, max: 60} as const
+export const MCP_CREATE_ALLOCATOR_START = 60
+
+/**
  * Linear-walking allocator over [min, max). On allocate(), advances a cursor
  * skipping in-use slots; wraps at max back to min. On release(), drops the
  * display from the in-use set. release() is idempotent and ignores out-of-range

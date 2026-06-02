@@ -74,7 +74,12 @@ import {startFluxbox, type FluxboxHandle} from './modules/webapps/fluxbox-wm.js'
 // lives at `streaming/display-allocator.ts` (composed with `streaming/
 // xvfb-spawner.ts` for per-app X display orchestration). Phase 102-04 wires
 // `new DisplayAllocator()` into `WebAppWindowManager` ctor (below).
-import {DisplayAllocator} from './modules/streaming/display-allocator.js'
+import {
+	DisplayAllocator,
+	// Phase 255-03 — disjoint webapp ↔ MCP-create allocator ranges (Pitfall 2).
+	WEBAPP_DISPLAY_ALLOCATOR_RANGE,
+	MCP_CREATE_ALLOCATOR_START,
+} from './modules/streaming/display-allocator.js'
 // Phase 100-08-04 — McpConfigManager + Luse server path threaded into
 // WebAppWindowManager so spawn/close lifecycle registers a per-WebApp
 // Luse MCP child via Redis pub-sub (liv-core's McpClientManager
@@ -851,6 +856,12 @@ export default class Livinityd {
 			try {
 				this.displayManager = createDisplayManager({
 					redis: this.ai.redis as never,
+					// Phase 255-03 — disjoint range floor. MCP create() hands out
+					// [60, ..) so it can never collide with webapp registerExisting
+					// :N values in [10,60) (Pitfall 2). The Redis seed still bumps
+					// nextDisplayNum past any existing record; the floor only sets
+					// the minimum.
+					allocatorStart: MCP_CREATE_ALLOCATOR_START,
 					logger: {
 						info: (msg) => streamingLogger.info(`displays: ${msg}`),
 						warn: (msg, ctx) => streamingLogger.warn(`displays: ${msg}`, ctx),
@@ -1081,11 +1092,17 @@ export default class Livinityd {
 			// liv-core's McpClientManager directly (different process at
 			// port 3200).
 			const webappMcpConfigManager = new McpConfigManager(this.ai.redis)
-			// Phase 102-04 — per-app display allocator (number-returning,
-			// range [10, 100); 90 slots). Construct here so the same instance
-			// flows into WebAppWindowManager.spawn() display orchestration AND
-			// (in 102-05) into native-app-binder for parallel Native apps.
-			const webappDisplayAllocator = new DisplayAllocator()
+			// Phase 102-04 — per-app display allocator (number-returning).
+			// Construct here so the same instance flows into
+			// WebAppWindowManager.spawn() display orchestration AND into the
+			// chrome-master router below.
+			// Phase 255-03: disjoint range [10,60) so webapp registerExisting :N
+			// can never collide with MCP create() within a boot (Pitfall 2). The
+			// MCP create() displayManager floor is MCP_CREATE_ALLOCATOR_START (60).
+			const webappDisplayAllocator = new DisplayAllocator({
+				min: WEBAPP_DISPLAY_ALLOCATOR_RANGE.min,
+				max: WEBAPP_DISPLAY_ALLOCATOR_RANGE.max,
+			})
 			this.webappWindowManager = new WebAppWindowManager({
 				streamManager: this.streamManager,
 				spawn: x11Spawn as unknown as ConstructorParameters<
@@ -1110,6 +1127,10 @@ export default class Livinityd {
 				// (102-04 spawn body no longer consults it; the CDP bootstrap at
 				// livinityd.start() still happens for other CDP consumers).
 				chromeCdpClient: this.chromeCdpClient,
+				// Phase 255-03 — enables registerExisting/kill on spawn/close so an
+				// installed WebApp appears in displays.list / the Displays popover,
+				// owned by its user. Constructed above (L852) before this ctor.
+				displayManager: this.displayManager,
 			})
 			this.webappWindowManager.startIdleCleanup()
 			webappLogger.info(
