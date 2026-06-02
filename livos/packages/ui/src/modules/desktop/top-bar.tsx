@@ -540,7 +540,7 @@ function ClockWithLocation() {
 	const {city, tempC, weatherCode, isDay} = useLocationWeather()
 	// Phase 255-04 — additive: source the operator name from the SAME cached
 	// tRPC query the profile button uses (no new fetch) so the greeting reads
-	// e.g. "İyi akşamlar, Bruce". Falls back to the bare greeting if absent.
+	// e.g. "Good evening, Bruce". Falls back to the bare greeting if absent.
 	const userQ = trpcReact.user.get.useQuery()
 	const userName = userQ.data?.name || undefined
 

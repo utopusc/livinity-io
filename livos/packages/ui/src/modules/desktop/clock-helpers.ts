@@ -1,14 +1,17 @@
 // Phase 255-04 (Wave 2 GREEN) — clock-helpers pure-function contract.
 //
-// Extracted out of top-bar.tsx so the WMO-glyph map + the Turkish greeting
+// Extracted out of top-bar.tsx so the WMO-glyph map + the English greeting
 // bands are pure, testable functions (GREEN gate for the 255-01 RED suite
 // `clock-helpers.test.ts`). Consumed by ClockWithLocation in top-bar.tsx for
 // the additive navbar glow-up (weather glyph + day/night accent + greeting).
 //
+// The product UI is English — the greeting MUST be English (the navbar is not
+// localized; only Claude's progress narration is Turkish, not the product).
+//
 // WMO map (research §5 / PATTERNS.md): 0→☀️, 1-2→⛅, 3→☁️, 45-48→🌫️,
 // 51-67→🌧️, 71-77→❄️, 80-82→🌧️, 95-99→⛈️, unknown→☁️ (fallback).
-// Greeting bands (user_language.md): h<6 'İyi geceler' | h<12 'Günaydın' |
-// h<18 'İyi günler' | else 'İyi akşamlar'.
+// Greeting bands: h<6 'Good night' | h<12 'Good morning' |
+// h<18 'Good afternoon' | else 'Good evening'.
 
 export function wmoGlyph(code: number): string {
 	if (code === 0) return '☀️'
@@ -23,6 +26,6 @@ export function wmoGlyph(code: number): string {
 }
 
 export function greeting(hour: number, name?: string): string {
-	const g = hour < 6 ? 'İyi geceler' : hour < 12 ? 'Günaydın' : hour < 18 ? 'İyi günler' : 'İyi akşamlar'
+	const g = hour < 6 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
 	return name ? `${g}, ${name}` : g
 }
