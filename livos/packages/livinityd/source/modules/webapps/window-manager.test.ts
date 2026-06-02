@@ -33,6 +33,15 @@ import {PortalUnavailable} from './pipewire-portal.js'
 // 102-04 wires into WebAppWindowManager. Re-imported indirectly so the test
 // file's TypeScript references match the production opt shapes the rewrite adds.
 import type {DisplayAllocator, XvfbHandle} from '../streaming/index.js'
+// Phase 255-03 — runtime import for the disjoint-range invariant test + the two
+// allocator-range constants. Live in streaming/display-allocator.ts (a light
+// leaf module — importing index.ts here would load the whole daemon + native
+// bindings) and are consumed by livinityd index.ts to wire the disjoint ranges.
+import {
+	DisplayAllocator as RealDisplayAllocator,
+	WEBAPP_DISPLAY_ALLOCATOR_RANGE,
+	MCP_CREATE_ALLOCATOR_START,
+} from '../streaming/index.js'
 import type {ChromeProcessHandle} from './chrome-process-spawner.js'
 import type {ProfileSeederHandle} from '../chrome-master/index.js'
 import type {PortAllocator} from '../streaming/port-allocator.js'
@@ -1791,5 +1800,49 @@ describe('Phase 255-03 — displayManager registerExisting on spawn / kill on cl
 		expect(displayManager.registerExisting).toHaveBeenCalledTimes(1)
 		expect((displayManager as any).create).toBeUndefined()
 		mgr._clearForTests()
+	})
+})
+
+// ============================================================================
+// Phase 255-03 — disjoint webapp ↔ MCP-create allocator ranges (no :N collision)
+//
+// T-255-09: webapps register their already-running Xvfb via registerExisting
+// (no allocator advance), but the in-memory webapp DisplayAllocator still hands
+// out :N values for the per-app Xvfb spawn. The MCP `computer_create_display`
+// path uses a SEPARATE displayManager allocator seeded from Redis. Within a
+// single boot these two allocators share one `:N` Redis namespace, so they MUST
+// be disjoint or a webapp and an MCP create() could claim the same `:N`
+// ("server already active for display N"). The fix: webapps [10,60) + MCP
+// create() floor at 60 ([60,..)). This test locks the wiring constants so the
+// ranges can never silently re-overlap.
+// ============================================================================
+
+describe('Phase 255-03 — disjoint webapp/MCP-create display allocator ranges', () => {
+	it('T-255-09a: WEBAPP_DISPLAY_ALLOCATOR_RANGE is [10, 60) and floor is below the MCP-create floor', () => {
+		expect(WEBAPP_DISPLAY_ALLOCATOR_RANGE.min).toBe(10)
+		expect(WEBAPP_DISPLAY_ALLOCATOR_RANGE.max).toBe(60)
+		// MCP create() must start AT OR ABOVE the webapp range ceiling.
+		expect(MCP_CREATE_ALLOCATOR_START).toBe(60)
+		expect(WEBAPP_DISPLAY_ALLOCATOR_RANGE.max).toBeLessThanOrEqual(MCP_CREATE_ALLOCATOR_START)
+	})
+
+	it('T-255-09b: a DisplayAllocator over the webapp range only ever returns values in [10, 60) — never colliding with MCP create [60, ..)', () => {
+		const alloc = new RealDisplayAllocator({
+			min: WEBAPP_DISPLAY_ALLOCATOR_RANGE.min,
+			max: WEBAPP_DISPLAY_ALLOCATOR_RANGE.max,
+		})
+		const seen: number[] = []
+		// Exhaust the whole range (50 slots) — every value must be < 60 (the MCP
+		// create floor) and >= 10, so no webapp :N can equal an MCP-create :N.
+		const capacity = WEBAPP_DISPLAY_ALLOCATOR_RANGE.max - WEBAPP_DISPLAY_ALLOCATOR_RANGE.min
+		for (let i = 0; i < capacity; i++) {
+			const n = alloc.allocate()
+			seen.push(n)
+			expect(n).toBeGreaterThanOrEqual(WEBAPP_DISPLAY_ALLOCATOR_RANGE.min)
+			expect(n).toBeLessThan(WEBAPP_DISPLAY_ALLOCATOR_RANGE.max)
+			expect(n).toBeLessThan(MCP_CREATE_ALLOCATOR_START)
+		}
+		// All allocated values are unique (no double-hand-out within the range).
+		expect(new Set(seen).size).toBe(capacity)
 	})
 })
