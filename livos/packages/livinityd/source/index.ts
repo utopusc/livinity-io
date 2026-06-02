@@ -948,6 +948,38 @@ export default class Livinityd {
 					logger: streamingLogger,
 				})
 				streamingLogger.info(`fluxbox up on :1 (pid=${this.fluxboxHandle.pid})`)
+
+				// Phase 254 Gap 1 (254-05) — record the boot :1 host display into the
+				// DisplayManager so it appears in displays.list (the Active Displays
+				// hover strip) and getVncUrl(':1') resolves. startXvfb ALREADY launched
+				// the :1 X server above — this is a register-only write (NO second Xvfb
+				// spawn). EMPTY owner_session = host/shared so any authenticated user
+				// passes the getVncUrl gate. Idempotent (registerExisting no-ops if :1
+				// is already recorded), so a livinityd restart neither duplicates nor
+				// clobbers a user-renamed record. Resolution from the shared
+				// DEFAULT_DISPLAY_WIDTH/HEIGHT constants (decision #3). Guarded
+				// (this.displayManager?) + try/catch + non-fatal so a Redis write
+				// failure logs a warning but never breaks boot.
+				if (this.displayManager) {
+					try {
+						await this.displayManager.registerExisting({
+							display: ':1',
+							width: DEFAULT_DISPLAY_WIDTH,
+							height: DEFAULT_DISPLAY_HEIGHT,
+							mode: 'xvfb',
+							name: 'Host Display',
+							ownerSession: '',
+						})
+						streamingLogger.info(
+							'displays: registered :1 host display (host/shared, no spawn)',
+						)
+					} catch (regErr) {
+						streamingLogger.warn(
+							'displays: failed to register :1 host display (strip will omit :1)',
+							regErr,
+						)
+					}
+				}
 			} catch (err) {
 				// Non-fatal — livinityd still boots; legacy non-WebApp X11
 				// consumers will be broken until recovery. Per-WebApp paths
