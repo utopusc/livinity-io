@@ -56,6 +56,17 @@ import {
 // hardcoded 1920x1080 literal. Values are UNCHANGED (1920/1080).
 export const DEFAULT_DISPLAY_WIDTH = 1920
 export const DEFAULT_DISPLAY_HEIGHT = 1080
+
+// The boot `:1` HOST display (the branded LivOS shell + main desktop stream that
+// livinityd's Xvfb owns). Pinned to a fixed 720p so `:1` is a stable, lightweight
+// host surface regardless of the viewer. Intentionally DECOUPLED from
+// DEFAULT_DISPLAY_* above (the MCP `computer_create_display` default, which stays
+// 1080p): the operator wants `:1` specifically at 1280x720, not AI-created displays.
+// Used by index.ts for BOTH the Xvfb `-screen` geometry AND the displays.list
+// registration so the popover thumb + openWindow sizing match the real `:1` size.
+export const HOST_DISPLAY_WIDTH = 1280
+export const HOST_DISPLAY_HEIGHT = 720
+
 const DEFAULT_ALLOCATOR_START = 10
 
 /**

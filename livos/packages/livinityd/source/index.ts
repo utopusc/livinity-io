@@ -56,6 +56,8 @@ import {
 	createDisplayManager,
 	DEFAULT_DISPLAY_WIDTH,
 	DEFAULT_DISPLAY_HEIGHT,
+	HOST_DISPLAY_WIDTH,
+	HOST_DISPLAY_HEIGHT,
 	type DisplayManager,
 } from './modules/computer-use/displays/index.js'
 // Phase 101-05 — shared PortAllocator instance. ONE allocator backs BOTH the
@@ -950,8 +952,11 @@ export default class Livinityd {
 			try {
 				this.xvfbHandle = await startXvfb({
 					display: ':1',
-					// Phase 254 (decision #3) — :1 resolution sourced from the shared display-creation default (matches MCP computer_create_display), not an independent hardcode.
-					resolution: `${DEFAULT_DISPLAY_WIDTH}x${DEFAULT_DISPLAY_HEIGHT}x24`,
+					// :1 host display pinned to a stable 1280x720 (HOST_DISPLAY_*),
+					// decoupled from the MCP computer_create_display default
+					// (DEFAULT_DISPLAY_* = 1080p). Xvfb -screen geometry is fixed so
+					// :1 never auto-resizes — it stays 720p across reboots.
+					resolution: `${HOST_DISPLAY_WIDTH}x${HOST_DISPLAY_HEIGHT}x24`,
 					logger: streamingLogger,
 				})
 				streamingLogger.info(`Xvfb :1 up (pid=${this.xvfbHandle.pid})`)
@@ -970,16 +975,19 @@ export default class Livinityd {
 				// spawn). EMPTY owner_session = host/shared so any authenticated user
 				// passes the getVncUrl gate. Idempotent (registerExisting no-ops if :1
 				// is already recorded), so a livinityd restart neither duplicates nor
-				// clobbers a user-renamed record. Resolution from the shared
-				// DEFAULT_DISPLAY_WIDTH/HEIGHT constants (decision #3). Guarded
+				// clobbers a user-renamed record. Resolution from the dedicated
+				// HOST_DISPLAY_WIDTH/HEIGHT constants (1280x720). Guarded
 				// (this.displayManager?) + try/catch + non-fatal so a Redis write
 				// failure logs a warning but never breaks boot.
 				if (this.displayManager) {
 					try {
 						await this.displayManager.registerExisting({
 							display: ':1',
-							width: DEFAULT_DISPLAY_WIDTH,
-							height: DEFAULT_DISPLAY_HEIGHT,
+							// Must match the Xvfb -screen geometry above (1280x720) so
+							// displays.list / popover thumbs / openWindow size the :1
+							// VNC window to the real host resolution, not a stale 1080p.
+							width: HOST_DISPLAY_WIDTH,
+							height: HOST_DISPLAY_HEIGHT,
 							mode: 'xvfb',
 							name: 'Host Display',
 							ownerSession: '',
