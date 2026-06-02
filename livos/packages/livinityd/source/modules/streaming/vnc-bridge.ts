@@ -139,13 +139,26 @@ export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 	// mitigation: x11vnc inherits bruce's X session via env injection, NOT
 	// via env_keep on sudoers.
 	// P100-08-02: XAUTHORITY removed — x11vnc on Xvfb (-ac) needs no cookie.
+	//
+	// EXCEPTION — the host `:0` is the GDM-managed GNOME/Ubuntu Xorg, which is
+	// access-control PROTECTED (NOT started with -ac like the Xvfb displays), so
+	// x11vnc must present the GDM session cookie via -auth or it fails to open
+	// the display. bruce is uid 1000 (autologin), so the cookie lives at
+	// /run/user/1000/gdm/Xauthority. Only `:0` gets this; -ac Xvfb displays
+	// (:1/:10/:60…) keep the cookie-free path. Verified: x11vnc -display :0
+	// -auth … binds + serves the live GNOME desktop.
+	const GDM_XAUTHORITY = '/run/user/1000/gdm/Xauthority'
+	const authFlags: string[] =
+		opts.display === ':0' ? ['-auth', GDM_XAUTHORITY] : []
 	const args = [
 		'-n',
 		'-u',
 		'bruce',
 		`DISPLAY=${displayForEnv}`,
+		...(opts.display === ':0' ? [`XAUTHORITY=${GDM_XAUTHORITY}`] : []),
 		'/usr/bin/x11vnc',
 		...captureFlags,
+		...authFlags,
 		'-rfbport',
 		String(opts.rfbPort),
 		'-localhost',
