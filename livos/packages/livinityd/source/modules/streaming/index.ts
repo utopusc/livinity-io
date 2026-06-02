@@ -20,5 +20,7 @@ export type {PortAllocatorOpts} from './port-allocator.js'
 // webapps/display-allocator.ts (deleted in 102-01-04).
 export {DisplayAllocator, DisplayRangeExhaustedError} from './display-allocator.js'
 export type {DisplayAllocatorOpts} from './display-allocator.js'
+// Phase 255-03 — disjoint webapp ↔ MCP-create allocator range constants.
+export {WEBAPP_DISPLAY_ALLOCATOR_RANGE, MCP_CREATE_ALLOCATOR_START} from './display-allocator.js'
 export {spawnXvfb, XvfbReadyTimeoutError} from './xvfb-spawner.js'
 export type {XvfbSpawnOpts, XvfbHandle, XvfbSpawnFn, XvfbExecFileFn, XvfbLogger} from './xvfb-spawner.js'

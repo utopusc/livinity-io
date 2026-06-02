@@ -49,6 +49,9 @@ import {existsSync, readFileSync} from 'node:fs'
 import {createDisplayManager, createDisplayTtlGc} from '../displays/index.js'
 import {defaultLivosAppResolver, type LivosAppMatch} from '../native/window.js'
 import {registerLuseTools, resolveLuseUserId, LIVOS_ROOT} from './tools.js'
+// Phase 255-03 — MCP create() allocator floor (60). Keeps create()-allocated
+// :N disjoint from webapp registerExisting :N in [10,60) (Pitfall 2).
+import {MCP_CREATE_ALLOCATOR_START} from '../../streaming/index.js'
 
 /**
  * Phase 102-06 — display-target resolution with precedence:
@@ -221,6 +224,10 @@ async function main(): Promise<void> {
 		redis !== null
 			? createDisplayManager({
 					redis: redis as never,
+					// Phase 255-03 — disjoint range floor. computer_create_display
+					// hands out [60, ..) so it can never collide with a webapp's
+					// registerExisting :N in [10,60) within one boot (Pitfall 2).
+					allocatorStart: MCP_CREATE_ALLOCATOR_START,
 					logger: {
 						info: (msg) => process.stderr.write(`[luse-mcp] displays: ${msg}\n`),
 					},
