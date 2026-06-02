@@ -4492,9 +4492,13 @@ Plans:
 **Goal:** Operators see ALL active X displays (host `:1` + MCP-created + their installed WebApps) as live-preview cards in a single navbar "Displays" popover that replaces the Phase 254 top-edge hover strip and merges the windows-manager popover; clicking a card opens the display as the existing interactive VNC window (254-03); opened displays render inside a branded LivOS desktop shell (LivOS wallpaper + design-token-themed window manager + slim LivOS dock) instead of bare fluxbox; and the navbar clock/weather area is creatively refreshed (weather-condition glyph, day/night accent, greeting) additively — no teardown.
 **Requirements**: GOAL-255-DISPLAYS-POPOVER, GOAL-255-LIVE-THUMBS, GOAL-255-WEBAPP-DISPLAYS, GOAL-255-LIVOS-SHELL, GOAL-255-NAVBAR-GLOWUP
 **Depends on:** Phase 254
-**Plans:** 0 plans
+**Plans:** 5 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 255 to break down)
+- [ ] 255-01-PLAN.md — Wave 0: RED test scaffolds (displays.screenshot authz, branded-shell argv, clock-helpers wmoGlyph/greeting)
+- [ ] 255-02-PLAN.md — Wave 1: displays.screenshot tRPC query + captureScreenshot({display}) subprocess-scoped DISPLAY (GOAL-255-LIVE-THUMBS)
+- [ ] 255-03-PLAN.md — Wave 1: WebApp displays register/unregister in displayManager (registerExisting/kill) + disjoint allocator range (GOAL-255-WEBAPP-DISPLAYS)
+- [ ] 255-04-PLAN.md — Wave 2: single navbar Displays popover (screenshot thumbs + folded window rows) + strip removal + additive clock glow-up (GOAL-255-DISPLAYS-POPOVER, LIVE-THUMBS, NAVBAR-GLOWUP)
+- [ ] 255-05-PLAN.md — Wave 2: in-display LivOS branded shell (feh wallpaper + themed fluxbox style + tint2 dock) + apt patch (GOAL-255-LIVOS-SHELL)
 
 ---
