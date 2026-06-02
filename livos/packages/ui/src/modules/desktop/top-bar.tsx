@@ -2,7 +2,7 @@ import {useEffect, useMemo, useRef, useState} from 'react'
 import {AnimatePresence, motion} from 'framer-motion'
 import {useNavigate} from 'react-router-dom'
 import {TbLogout, TbPalette, TbPencil, TbRefresh} from 'react-icons/tb'
-import {LayoutGrid} from 'lucide-react'
+import {Monitor} from 'lucide-react'
 
 import {trpcReact} from '@/trpc/trpc'
 import {useCurrentUser} from '@/hooks/use-current-user'
@@ -19,7 +19,7 @@ import {
 	ContextMenuSeparator,
 } from '@/shadcn-components/ui/context-menu'
 import {Popover, PopoverContent, PopoverTrigger} from '@/shadcn-components/ui/popover'
-import {WindowsManagerPanel} from './windows-manager-panel'
+import {DisplaysPopover} from './displays-popover'
 import {greeting, wmoGlyph} from './clock-helpers'
 import {cn} from '@/shadcn-lib/utils'
 import {
@@ -88,6 +88,10 @@ function TopBarDesktop() {
 	const initial = (userName.trim().charAt(0) || 'L').toUpperCase()
 
 	const [menuOpen, setMenuOpen] = useState(false)
+	// Phase 255-04 — drive the single 🖥️ Displays popover open state so the
+	// merged DisplaysPopover only polls (displays.list + per-card screenshot)
+	// while open (T-255-14: zero requests when closed).
+	const [displaysOpen, setDisplaysOpen] = useState(false)
 	const [showChangeName, setShowChangeName] = useState(false)
 	const [showChangeIcon, setShowChangeIcon] = useState(false)
 	const [isHoverExpanded, setIsHoverExpanded] = useState(false)
@@ -351,24 +355,27 @@ function TopBarDesktop() {
 						)}
 					</div>
 
-					{/* RIGHT — windows manager dropdown + clock + location. Phase 159 adds
-					    the windows-manager Popover BEFORE the clock. Existing pinned-window
-					    shelf in the Center drop-zone stays untouched (duplication between
-					    shelf + panel is acceptable per RESEARCH C risk #4). */}
+					{/* RIGHT — single 🖥️ Displays popover + clock + location.
+					    Phase 255-04 replaces the Phase 159 grid-icon windows-manager
+					    popover with ONE Displays popover (display cards + ~2s screenshot
+					    thumbs + folded-in windows rows). The 254-04 top-edge hover strip
+					    is also gone (deleted in 255-04 Task 4) — this is now the SINGLE
+					    navbar display/windows surface. Existing pinned-window shelf in
+					    the Center drop-zone stays untouched. */}
 					<div className='flex items-center justify-end gap-1.5 pr-1.5'>
-						<Popover>
+						<Popover open={displaysOpen} onOpenChange={setDisplaysOpen}>
 							<PopoverTrigger asChild>
 								<button
 									type='button'
-									aria-label='Windows manager'
-									title='Windows manager'
+									aria-label='Displays'
+									title='Displays'
 									className='grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-[color:var(--bg-2)]'
 								>
-									<LayoutGrid className='h-4 w-4' />
+									<Monitor className='h-4 w-4' />
 								</button>
 							</PopoverTrigger>
 							<PopoverContent align='end' className='p-0'>
-								<WindowsManagerPanel />
+								<DisplaysPopover open={displaysOpen} />
 							</PopoverContent>
 						</Popover>
 						<ClockWithLocation />
