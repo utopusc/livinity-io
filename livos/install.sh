@@ -640,6 +640,7 @@ LAUNCHER
             xfwm4 \
             xfce4-session \
             xfce4-panel \
+            xfce4-whiskermenu-plugin \
             xfdesktop4 \
             xfce4-settings \
             xfce4-terminal \
