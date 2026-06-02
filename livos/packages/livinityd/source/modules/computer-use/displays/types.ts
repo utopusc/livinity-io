@@ -148,10 +148,12 @@ export interface DisplayManager {
 	create(input: CreateDisplayInput): Promise<CreateDisplayResult>
 	/**
 	 * Phase 254-05 (Gap 1) — RECORD an already-running display into Redis
-	 * WITHOUT spawning a new X server. Idempotent: a no-op (returns the
-	 * existing record untouched) when a record for `input.display` already
-	 * exists, so a livinityd restart neither duplicates nor clobbers a
-	 * user-renamed display. Does NOT touch the :N allocator.
+	 * WITHOUT spawning a new X server. Identity (name / owner_session / mode /
+	 * created_at) is idempotent — never clobbered, so a livinityd restart neither
+	 * duplicates nor clobbers a user-renamed display. BUT geometry (width/height)
+	 * is reconciled to the passed values, so re-pinning a display's resolution
+	 * (e.g. `:1` 1080p → 720p) takes effect on the next boot. Does NOT touch the
+	 * :N allocator.
 	 */
 	registerExisting(input: RegisterExistingInput): Promise<DisplayRecord>
 	list(): Promise<DisplayRecord[]>
@@ -159,6 +161,17 @@ export interface DisplayManager {
 		display: string
 		callerSession: string
 	}): Promise<KillDisplayResult>
+	/**
+	 * Boot-time orphan reaper. Enumerates every display record and removes any
+	 * whose X server is dead per the injected `isAlive` probe — EXCEPT the host
+	 * `:1` boot display, which is never reaped. Fixes stale webapp displays left
+	 * in the registry after a livinityd restart/crash: the in-memory window
+	 * manager loses them but the persistent Redis records survive, so the
+	 * Displays popover kept listing dead `:N` and spamming failed screenshots.
+	 * A probe that THROWS is treated as alive (fail-safe — never reap on a
+	 * transient glitch). Returns the reaped display ids.
+	 */
+	reapDeadDisplays(isAlive: (display: string) => Promise<boolean>): Promise<string[]>
 	attachApp(input: AttachAppInput): Promise<void>
 	listAppsForDisplay(display: string): Promise<number[]>
 	isOwner(input: IsOwnerInput): Promise<boolean>

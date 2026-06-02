@@ -524,6 +524,54 @@ describe('display-manager — registerExisting() (Phase 254-05 Gap 1)', () => {
 		expect(hash.owner_session).toBe('someoneelse')
 	})
 
+	it('Case 17c: reapDeadDisplays removes dead webapp orphans, keeps :1 and live displays', async () => {
+		// :1 host (alive), :11 + :12 webapp orphans (dead Xvfb), :13 still alive.
+		await redis.hset(redisKeyForDisplay(':1'), {
+			owner_session: '', mode: 'xvfb', created_at: 't', name: 'Host Display', width: '1280', height: '720',
+		})
+		await redis.hset(redisKeyForDisplay(':11'), {
+			owner_session: 'user-1', mode: 'xvfb', created_at: 't', name: 'https://a.com/', width: '1280', height: '720',
+		})
+		await redis.hset(redisKeyForDisplay(':12'), {
+			owner_session: 'user-1', mode: 'xvfb', created_at: 't', name: 'https://b.com/', width: '1280', height: '720',
+		})
+		await redis.hset(redisKeyForDisplay(':13'), {
+			owner_session: 'user-1', mode: 'xvfb', created_at: 't', name: 'https://c.com/', width: '1280', height: '720',
+		})
+		const mgr = await makeMgr()
+		const dead = new Set([':11', ':12'])
+		const reaped = await mgr.reapDeadDisplays(async (d) => !dead.has(d))
+		expect(reaped.sort()).toEqual([':11', ':12'])
+		// Dead orphans gone...
+		expect(await redis.hgetall(redisKeyForDisplay(':11'))).toEqual({})
+		expect(await redis.hgetall(redisKeyForDisplay(':12'))).toEqual({})
+		// ...host :1 and the live :13 untouched.
+		expect((await redis.hgetall(redisKeyForDisplay(':1'))).name).toBe('Host Display')
+		expect((await redis.hgetall(redisKeyForDisplay(':13'))).name).toBe('https://c.com/')
+	})
+
+	it('Case 17d: reapDeadDisplays never reaps :1 even if the probe reports it dead', async () => {
+		await redis.hset(redisKeyForDisplay(':1'), {
+			owner_session: '', mode: 'xvfb', created_at: 't', name: 'Host Display', width: '1280', height: '720',
+		})
+		const mgr = await makeMgr()
+		const reaped = await mgr.reapDeadDisplays(async () => false) // everything "dead"
+		expect(reaped).toEqual([])
+		expect((await redis.hgetall(redisKeyForDisplay(':1'))).name).toBe('Host Display')
+	})
+
+	it('Case 17e: reapDeadDisplays treats a throwing probe as alive (fail-safe, no reap)', async () => {
+		await redis.hset(redisKeyForDisplay(':11'), {
+			owner_session: 'user-1', mode: 'xvfb', created_at: 't', name: 'https://a.com/', width: '1280', height: '720',
+		})
+		const mgr = await makeMgr()
+		const reaped = await mgr.reapDeadDisplays(async () => {
+			throw new Error('probe glitch')
+		})
+		expect(reaped).toEqual([])
+		expect((await redis.hgetall(redisKeyForDisplay(':11'))).name).toBe('https://a.com/')
+	})
+
 	it('Case 18: registerExisting(:1) does NOT advance the :N allocator — next create() still :10', async () => {
 		const mgr = await makeMgr()
 		await mgr.registerExisting({
