@@ -38,6 +38,7 @@ import {z} from 'zod'
 import {TRPCError} from '@trpc/server'
 
 import {privateProcedure, router} from '../server/trpc/trpc.js'
+import {captureScreenshot} from './native/screenshot.js'
 
 // Same display-id shape the streaming router validates (`:N` or `:N.S`).
 const displayIdSchema = z.string().regex(/^:\d+(\.\d+)?$/)
@@ -145,6 +146,84 @@ export const displaysRouter = router({
 			// routers' `.info?.()` calls carry.
 			ctx.logger?.log?.(`displays.getVncUrl user=${userId} display=${input.display}`)
 			return {wsUrl}
+		}),
+
+	/**
+	 * Phase 255-02 — `displays.screenshot({display})` → {dataUrl, width, height}.
+	 *
+	 * Powers the ~2s auto-refreshing JPEG thumbnails in the Displays popover
+	 * (D-255-THUMBS-SCREENSHOT) WITHOUT opening any RFB socket: the popover
+	 * polls each card via useQuery({enabled: open, refetchInterval: 2000}).
+	 *
+	 * A QUERY (not a mutation) by design — refetchInterval-friendly and needs
+	 * NO httpOnlyPaths entry (unlike getVncUrl, which spawns a survive-reconnect
+	 * x11vnc). It reuses the SAME authorization contract getVncUrl uses:
+	 * canAccessDisplay verbatim (254-06 / CR-01 Option A), with the caller
+	 * identity sourced from ctx.currentUser ONLY (never input).
+	 *
+	 * STRIDE (threat_model 255-02):
+	 *   S (T-255-02) — userId = ctx.currentUser?.id, UNAUTHORIZED if absent;
+	 *                  role/userId NEVER read from input.
+	 *   I (T-255-01) — canAccessDisplay gates BEFORE any capture: a non-admin
+	 *                  member/guest cannot screenshot a display whose non-empty
+	 *                  owner_session is not their own session (FORBIDDEN).
+	 *   T (T-255-03) — `display` validated by displayIdSchema (`:N`/`:N.M`) at
+	 *                  the zod boundary; passed as a subprocess env var (not a
+	 *                  shell string), captureScreenshot uses execFile (not exec).
+	 *   I (T-255-04) — captureScreenshot({display}) threads DISPLAY into the
+	 *                  subprocess env only; process.env is never mutated, so
+	 *                  concurrent 2s polls cannot cross-contaminate.
+	 *   I (T-255-05) — only the display id is logged; the dataUrl/base64 image
+	 *                  bytes are NEVER logged.
+	 */
+	screenshot: privateProcedure
+		.input(z.object({display: displayIdSchema}))
+		.query(async ({ctx, input}) => {
+			// STRIDE-S (T-255-02): caller identity from ctx.currentUser ONLY.
+			const userId = ctx.currentUser?.id
+			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+
+			const dm = ctx.livinityd?.displayManager
+			if (!dm) {
+				throw new TRPCError({
+					code: 'SERVICE_UNAVAILABLE',
+					message: 'displayManager not initialised',
+				})
+			}
+
+			const record = (await dm.list()).find((d) => d.display === input.display)
+			if (!record) throw new TRPCError({code: 'NOT_FOUND'})
+
+			// STRIDE-I (T-255-01): reuse canAccessDisplay verbatim (254-06) —
+			// empty owner_session = host/shared = allowed; admin bypass; else only
+			// the legitimate owner. Gates BEFORE any capture so a foreign member
+			// never triggers a screenshot of another user's display.
+			const callerRole = ctx.currentUser?.role ?? 'member'
+			if (
+				!canAccessDisplay({
+					ownerSession: record.owner_session,
+					callerSession: userId,
+					callerRole,
+				})
+			) {
+				throw new TRPCError({
+					code: 'FORBIDDEN',
+					message: 'display owned by another session',
+				})
+			}
+
+			// STRIDE-I (T-255-05): log only the display id — never the dataUrl
+			// or base64 image bytes.
+			ctx.logger?.log?.(`displays.screenshot user=${userId} display=${input.display}`)
+
+			// Subprocess-scoped DISPLAY (T-255-04): captureScreenshot threads
+			// input.display into the maim/scrot env only, no global mutation.
+			const shot = await captureScreenshot({display: input.display})
+			return {
+				dataUrl: `data:${shot.mimeType};base64,${shot.base64}`,
+				width: shot.width,
+				height: shot.height,
+			}
 		}),
 })
 
