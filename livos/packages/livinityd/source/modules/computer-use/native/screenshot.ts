@@ -96,6 +96,17 @@ export interface CaptureScreenshotOptions {
 	 * host display (existing pre-P97 behavior — the default branch).
 	 */
 	windowId?: number
+	/**
+	 * 2026-06-02 P255-02 — NEW: subprocess-scoped DISPLAY, no global
+	 * process.env mutation. When set, the DISPLAY env var is threaded into the
+	 * maim/scrot subprocess `env` ONLY (not `process.env`), so the ~2s
+	 * displays-popover thumbnail polls stay concurrency-safe — two concurrent
+	 * captures of different displays cannot cross-contaminate via a shared
+	 * global (threat_model T-255-04, Pitfall 1). Validated `:N`/`:N.M` at the
+	 * tRPC zod boundary before reaching here. When undefined, the existing
+	 * `env: process.env` behavior is preserved byte-for-byte.
+	 */
+	display?: string
 }
 
 /**
@@ -136,6 +147,15 @@ export async function captureScreenshot(options?: CaptureScreenshotOptions): Pro
 	const tempPath = join(dir, `${filename}.png`)
 	const windowId = options?.windowId
 
+	// P255-02 — subprocess-scoped DISPLAY override. When options.display is set
+	// we hand maim/scrot a SHALLOW COPY of process.env with DISPLAY overridden;
+	// process.env itself is never mutated, so concurrent ~2s thumbnail polls of
+	// different displays cannot race on a shared global (T-255-04, Pitfall 1).
+	// When absent, we pass the live process.env reference exactly as before.
+	const subprocessEnv: NodeJS.ProcessEnv = options?.display
+		? {...process.env, DISPLAY: options.display}
+		: process.env
+
 	let primaryError: string | null = null
 
 	// Build maim argv. Window-scoped path: `maim -i 0x<hex> <path>`. Default
@@ -157,7 +177,7 @@ export async function captureScreenshot(options?: CaptureScreenshotOptions): Pro
 	// (X11) where scrot's imlib2-based XGetImage returns black.
 	try {
 		await execFileAsync('maim', maimArgs, {
-			env: process.env,
+			env: subprocessEnv,
 			timeout: 10_000,
 		})
 		const buffer = await readFile(tempPath)
@@ -197,7 +217,7 @@ export async function captureScreenshot(options?: CaptureScreenshotOptions): Pro
 	// gets the wider context plus a windowId-tagged error message.
 	try {
 		await execFileAsync('scrot', ['-z', '-o', tempPath], {
-			env: process.env,
+			env: subprocessEnv,
 			timeout: 10_000,
 		})
 	} catch (err: unknown) {
