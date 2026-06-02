@@ -41,6 +41,7 @@ import type {
 	IsOwnerInput,
 	KillDisplayResult,
 	ProcessKillFn,
+	RegisterExistingInput,
 	SpawnHandle,
 } from './types.js'
 import {
@@ -286,6 +287,70 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 		}
 	}
 
+	/**
+	 * Phase 254-05 (Gap 1) — RECORD an already-running display into Redis,
+	 * matching the exact HSET shape create() writes, but WITHOUT spawning a new
+	 * X server (the boot `startXvfb(':1')` already owns the running :1 server,
+	 * so spawning a second Xvfb on :1 would collide). Used to adopt the boot
+	 * host `:1` display so it appears in list() / resolves via getVncUrl.
+	 *
+	 * Idempotent: no-op when a record for input.display already exists —
+	 * returns the EXISTING record untouched so a livinityd restart neither
+	 * duplicates nor clobbers a user-renamed / re-owned display.
+	 *
+	 * Does NOT call allocateNext() / advance nextDisplayNum — registering :1
+	 * (below allocatorStart) must not perturb the :10+ allocator.
+	 */
+	async function registerExisting(
+		input: RegisterExistingInput,
+	): Promise<DisplayRecord> {
+		const key = redisKeyForDisplay(input.display)
+		const existing = await redis.hgetall(key)
+		if (existing && Object.keys(existing).length > 0) {
+			// Idempotent: never clobber an existing record.
+			logger.info('display-manager: registerExisting no-op (record exists)', {
+				display: input.display,
+			})
+			return {
+				display: input.display,
+				name: existing.name ?? input.name ?? `display-${input.display.slice(1)}`,
+				mode: (existing.mode as DisplayMode | undefined) ?? input.mode,
+				created_at: existing.created_at ?? '',
+				owner_session: existing.owner_session ?? input.ownerSession,
+				width: Number(existing.width ?? input.width),
+				height: Number(existing.height ?? input.height),
+				running_apps: [],
+			}
+		}
+		const createdAt = isoNow(nowFn)
+		const name = input.name ?? `display-${input.display.slice(1)}`
+		// Same HSET shape as create() — but NO spawn call: the X server is
+		// already running. owner_session='' (host/shared) for the :1 case.
+		await redis.hset(key, {
+			owner_session: input.ownerSession,
+			mode: input.mode,
+			created_at: createdAt,
+			name,
+			width: String(input.width),
+			height: String(input.height),
+		})
+		logger.info('display-manager: registered existing display (no spawn)', {
+			display: input.display,
+			mode: input.mode,
+			owner_session: input.ownerSession,
+		})
+		return {
+			display: input.display,
+			name,
+			mode: input.mode,
+			created_at: createdAt,
+			owner_session: input.ownerSession,
+			width: input.width,
+			height: input.height,
+			running_apps: [],
+		}
+	}
+
 	async function list(): Promise<DisplayRecord[]> {
 		const keys = await scanAllDisplayKeys(redis)
 		const displayKeys = keys.filter((k) => !k.endsWith(':apps'))
@@ -397,6 +462,7 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 
 	return {
 		create,
+		registerExisting,
 		list,
 		kill,
 		attachApp,

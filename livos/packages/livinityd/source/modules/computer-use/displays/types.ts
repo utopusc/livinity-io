@@ -50,6 +50,27 @@ export interface CreateDisplayResult {
 	error?: string
 }
 
+/**
+ * Phase 254-05 (Gap 1) — input for `registerExisting`, which RECORDS an
+ * already-running X server into Redis WITHOUT spawning a new one. Unlike
+ * `create()` (which always spawns + allocates a fresh :N starting at :10),
+ * this targets an explicit `display` (e.g. the boot `:1` host Xvfb launched
+ * by startXvfb OUTSIDE the manager) so it appears in `list()` and resolves
+ * via getVncUrl. `ownerSession: ''` = host/shared.
+ */
+export interface RegisterExistingInput {
+	/** e.g. ':1' — an ALREADY-RUNNING X server (no spawn happens). */
+	display: string
+	width: number
+	height: number
+	/** 'xvfb' for the boot :1. */
+	mode: DisplayMode
+	/** Defaults to `display-<N>`. */
+	name?: string
+	/** '' for host/shared (the :1 case). */
+	ownerSession: string
+}
+
 export type KillDisplayResult =
 	| {ok: true; killed_apps_count: number}
 	| {ok: false; error: 'not-owner' | 'not-found'}
@@ -125,6 +146,14 @@ export interface DisplayManagerDeps {
 
 export interface DisplayManager {
 	create(input: CreateDisplayInput): Promise<CreateDisplayResult>
+	/**
+	 * Phase 254-05 (Gap 1) — RECORD an already-running display into Redis
+	 * WITHOUT spawning a new X server. Idempotent: a no-op (returns the
+	 * existing record untouched) when a record for `input.display` already
+	 * exists, so a livinityd restart neither duplicates nor clobbers a
+	 * user-renamed display. Does NOT touch the :N allocator.
+	 */
+	registerExisting(input: RegisterExistingInput): Promise<DisplayRecord>
 	list(): Promise<DisplayRecord[]>
 	kill(input: {
 		display: string
