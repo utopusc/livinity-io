@@ -209,8 +209,10 @@ export function AppIconConnected({appId}: {appId: string}) {
 	const uninstallDisabled = false
 
 	const handleAppClick = async () => {
-		// Launch the app if it's ready
-		if (state === 'ready') {
+		// Launch the app if it's up — 'running' (Docker-derived) and 'ready'
+		// (in-memory lifecycle) both mean "app is up and openable" (cf.
+		// use-app-store-bridge.ts which gates open on `running || ready`).
+		if (state === 'ready' || state === 'running') {
 			return launchApp(appId)
 		}
 		// Start the app if it's stopped
