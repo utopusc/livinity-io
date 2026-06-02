@@ -370,6 +370,9 @@ v42's scope was the OpenClawOS → AionUi Liv Assistant swap (Phases 222-228 + 2
 - **D-V44-DISPLAY-OWNER-SCOPED:** Each MCP-created display is bound to the session that created it. Other sessions can `list` but not `kill` displays they didn't create.
 - **D-V44-TERMINAL-SCROLLBACK-RING:** Per-session scrollback is a fixed-size Redis ring buffer (default 10000 lines). Reload-reattach replays the buffer client-side, then resumes live stream.
 
+**v44 progress (milestone expanded P246→P255 during execution):**
+- **Phase 255 — LivOS Spaces ✅ CODE-COMPLETE 2026-06-02 (5/5 plans, last phase of v44).** Single navbar 🖥️ "Displays" popover (live ~2s JPEG screenshot thumbs, no RFB) replaces the 254-04 top-edge hover strip and folds in the windows-manager rows; WebApp Xvfb displays now register into `displays.list` via `registerExisting` with a disjoint allocator range ([10,60) vs MCP create floor 60); opened displays render a branded in-`:1` LivOS shell (`bootBrandedShell`: design-token fluxbox style + `feh` wallpaper + slim `tint2` dock, graceful degrade, `feh`/`tint2` added to update.sh + install.sh apt lists); additive clock/weather navbar glow-up. Verifier 5/5 must-haves PASS, no gaps; 2 operator walks persisted as `255-HUMAN-UAT.md` (browser popover walk + branded-shell VNC walk). Code review 0 critical / 2 warning (WebApp display TTL-GC race + crash orphan — future hardening). STATE → `milestone_complete`. New surfaces: `displays.screenshot` tRPC query (subprocess-scoped DISPLAY, never mutates process.env), `clock-helpers.ts`, `displays-popover.tsx`, `branded-shell.ts`.
+
 ---
 
 ## Previous Milestone: v43 — Liv AI Deeper Integration + UI Polish — CLOSED 2026-05-28 ✅
