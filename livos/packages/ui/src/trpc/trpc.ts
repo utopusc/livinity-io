@@ -116,7 +116,13 @@ export const progressStates = [
 	// 'not-installed',
 	'installing',
 	'starting',
-	'running',
+	// NOTE: 'running' is a STABLE "app is up" state (the backend derives it from a
+	// live Docker `running` container — see livinityd apps/routes.ts stateMap), NOT a
+	// transient in-progress state. It must NOT live here: keeping it made every running
+	// app render a perpetual sliding-loader sweep + brightness-50 dim and (combined with
+	// handleAppClick only launching on 'ready') made running apps un-openable after any
+	// livinityd restart, when in-memory 'ready' is lost and apps report Docker-derived
+	// 'running'. Treat 'running' like 'ready' (cf. use-app-store-bridge.ts).
 	'stopping',
 	'restarting',
 	'uninstalling',
