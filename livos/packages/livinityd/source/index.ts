@@ -75,6 +75,11 @@ import {startFluxbox, type FluxboxHandle} from './modules/webapps/fluxbox-wm.js'
 // Phase 255-05 (D-255-SHELL-LIVOS-BRANDED) — in-display LivOS shell (feh
 // wallpaper + design-token fluxbox style + slim tint2 dock) on the :1 host.
 import {bootBrandedShell} from './modules/shell/branded-shell.js'
+// Phase 256 (D-256-XFCE-HOST-DESKTOP) — real, usable XFCE desktop on the :1 host
+// (xfwm4 compositor OFF + xfce4-panel + xfdesktop, captured by the existing
+// non-compositing x11vnc/maim path). Replaces the bare fluxbox + tint2 shell;
+// degrades back to fluxbox + bootBrandedShell on failure.
+import {startXfceShell, type XfceShellHandle} from './modules/shell/xfce-shell.js'
 // Phase 102-01 — legacy `webapps/display-allocator.ts` (string-returning,
 // Phase 100-10-01 scaffolding) DELETED. The number-returning replacement
 // lives at `streaming/display-allocator.ts` (composed with `streaming/
@@ -398,6 +403,9 @@ export default class Livinityd {
 	// SERVICE_UNAVAILABLE downstream).
 	xvfbHandle?: XvfbHandle
 	fluxboxHandle?: FluxboxHandle
+	// Phase 256 — XFCE host desktop on :1 (replaces fluxbox+branded as the host
+	// shell; fluxboxHandle is only set if XFCE fails and we degrade).
+	xfceShellHandle?: XfceShellHandle
 	// Phase 101-03 — Native-app config store (D-101-NATIVE-APPS). Optional
 	// because the tRPC routes return SERVICE_UNAVAILABLE if it has not yet
 	// been wired (boot edge before ai.start() finishes, or Redis offline).
@@ -961,13 +969,45 @@ export default class Livinityd {
 					logger: streamingLogger,
 				})
 				streamingLogger.info(`Xvfb :1 up (pid=${this.xvfbHandle.pid})`)
-				// 500ms grace so X server is ready before fluxbox connects:
+				// 500ms grace so the X server is ready before the WM connects:
 				await new Promise((resolve) => setTimeout(resolve, 500))
-				this.fluxboxHandle = await startFluxbox({
-					display: ':1',
-					logger: streamingLogger,
-				})
-				streamingLogger.info(`fluxbox up on :1 (pid=${this.fluxboxHandle.pid})`)
+
+				// Phase 256 (D-256-XFCE-HOST-DESKTOP) — the `:1` host shell now runs a
+				// real, usable XFCE desktop (xfwm4 with the compositor OFF + xfce4-panel +
+				// xfdesktop + xfsettingsd, under a private dbus session) instead of the
+				// bare fluxbox + tint2 branded shell. XFCE's non-compositing xfwm4 paints
+				// into the X11 framebuffer, so the existing x11vnc/maim capture path
+				// renders it correctly — unlike the real GNOME `:0`, whose mutter GL
+				// compositing on this headless/software-GL box captures solid BLACK
+				// (x11vnc/maim/ffmpeg-x11grab all verified BLACK 2026-06-02). If XFCE
+				// fails to start we degrade to the legacy fluxbox + branded shell so the
+				// host display is never lost.
+				try {
+					this.xfceShellHandle = await startXfceShell({
+						display: ':1',
+						logger: streamingLogger,
+					})
+					streamingLogger.info(
+						`XFCE host desktop up on :1 (pid=${this.xfceShellHandle.pid}, compositor OFF)`,
+					)
+				} catch (xfceErr) {
+					streamingLogger.error(
+						'XFCE host desktop failed to start on :1 — degrading to fluxbox + branded shell',
+						xfceErr,
+					)
+					try {
+						this.fluxboxHandle = await startFluxbox({
+							display: ':1',
+							logger: streamingLogger,
+						})
+						streamingLogger.info(
+							`fluxbox up on :1 (pid=${this.fluxboxHandle.pid}) [XFCE degrade fallback]`,
+						)
+						await bootBrandedShell({display: ':1', logger: streamingLogger})
+					} catch (fbErr) {
+						streamingLogger.error('fluxbox degrade fallback also failed on :1', fbErr)
+					}
+				}
 
 				// 2026-06-02 — we register the branded `:1` (fluxbox) host display here,
 				// NOT the real GNOME `:0` Ubuntu desktop. Investigated exposing `:0`:
@@ -1029,11 +1069,11 @@ export default class Livinityd {
 					}
 				}
 
-				// Phase 255-05 (D-255-SHELL-LIVOS-BRANDED) — brand the :1 host shell:
-				// feh wallpaper + design-token fluxbox style + slim tint2 dock. Native
-				// (NOT Chromium kiosk — Pitfall 3). Non-fatal: bootBrandedShell never
-				// throws; a missing feh/tint2 degrades to xsetroot/fluxbox-toolbar.
-				await bootBrandedShell({display: ':1', logger: streamingLogger})
+				// Phase 256 — branding now lives inside the XFCE shell (the LivOS
+				// wallpaper is applied by startXfceShell via xfconf). The legacy
+				// Phase 255 bootBrandedShell (feh + design-token fluxbox style + tint2)
+				// now runs ONLY in the fluxbox degrade path above, so a missing
+				// XFCE/dbus still yields a branded host shell.
 			} catch (err) {
 				// Non-fatal — livinityd still boots; legacy non-WebApp X11
 				// consumers will be broken until recovery. Per-WebApp paths
@@ -2191,8 +2231,15 @@ export default class Livinityd {
 				this.logger.error('Failed to stop WebAppWindowManager idle cleanup', err)
 			}
 
-			// Phase 100-08-01 — tear down fluxbox first (depends on Xvfb),
-			// then Xvfb. Both helpers SIGTERM → 2s grace → SIGKILL.
+			// Phase 256 / 100-08-01 — tear down the host shell first (XFCE desktop,
+			// or the fluxbox degrade fallback), then Xvfb. Both helpers SIGTERM →
+			// 2s grace → SIGKILL (XFCE kills the whole detached process group so the
+			// private dbus session + xfwm4/panel/desktop all die).
+			try {
+				await this.xfceShellHandle?.stop()
+			} catch (err) {
+				this.logger.error('Failed to stop XFCE host shell', err)
+			}
 			try {
 				await this.fluxboxHandle?.stop()
 			} catch (err) {
