@@ -11,10 +11,14 @@
 
 export {
 	createDisplayManager,
-	// Phase 254 (decision #3) — shared default display resolution so the host
-	// `:1` creation in index.ts matches the MCP display-creation default size.
+	// Phase 254 (decision #3) — shared default display resolution for the MCP
+	// computer_create_display path (1080p).
 	DEFAULT_DISPLAY_WIDTH,
 	DEFAULT_DISPLAY_HEIGHT,
+	// Dedicated 720p geometry for the boot `:1` host display (decoupled from the
+	// MCP default above) — see index.ts `:1` Xvfb spawn + registration.
+	HOST_DISPLAY_WIDTH,
+	HOST_DISPLAY_HEIGHT,
 } from './display-manager.js'
 
 export {
