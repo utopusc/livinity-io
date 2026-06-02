@@ -37,6 +37,35 @@ import {privateProcedure, router} from '../server/trpc/trpc.js'
 // Same display-id shape the streaming router validates (`:N` or `:N.S`).
 const displayIdSchema = z.string().regex(/^:\d+(\.\d+)?$/)
 
+/**
+ * Phase 254 Gap 2 (254-06 / CR-01 Option A) — authorization decision for
+ * getVncUrl, extracted pure for unit-testing.
+ *
+ * Returns true when the caller may resolve a VNC ws URL for a display:
+ *   - empty owner_session  → host/shared → ANY authenticated caller (true)
+ *   - caller is admin      → bypass owner check (single-tenant operator;
+ *                            the MCP writes owner_session as the luse user id
+ *                            'bruce', which never equals the UI user's UUID —
+ *                            without this bypass every MCP-created display is
+ *                            permanently FORBIDDEN to the operator)
+ *   - callerSession === owner_session → the legitimate owner (true)
+ *   - otherwise → false (FORBIDDEN: a non-admin reaching ANOTHER user's display)
+ *
+ * STRIDE-I (T-254-01 amended): the admin bypass is scoped to role==='admin'
+ * ONLY. A non-admin member/guest still cannot reach a display whose non-empty
+ * owner_session does not equal their own session, preserving multi-user
+ * isolation. Shared (empty owner_session) displays remain readable by anyone.
+ */
+export function canAccessDisplay(input: {
+	ownerSession: string
+	callerSession: string
+	callerRole: string
+}): boolean {
+	if (!input.ownerSession) return true // host/shared
+	if (input.callerRole === 'admin') return true // single-tenant operator bypass
+	return input.callerSession === input.ownerSession // legitimate owner only
+}
+
 export const displaysRouter = router({
 	list: privateProcedure.query(async ({ctx}) => {
 		const dm = ctx.livinityd?.displayManager
