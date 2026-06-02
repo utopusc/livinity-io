@@ -4477,12 +4477,14 @@ Plans:
 **Goal:** Operators reveal active X displays from a top-edge hover strip and open any display as a live, interactive VNC window inside LivOS; the main :1 display is created at the shared MCP display-creation resolution.
 **Requirements**: GOAL-254-DISPLAYS-TRPC, GOAL-254-VNC-RESOLVE, GOAL-254-MAIN-DISPLAY-RES, GOAL-254-VNC-WINDOW, GOAL-254-WINDOW-SIZING, GOAL-254-HOVER-PANEL
 **Depends on:** Phase 253
-**Plans:** 4 plans
+**Plans:** 6 plans (4 shipped + 2 gap-closure)
 
 Plans:
 - [x] 254-01-PLAN.md — Wave 1: computer-use tRPC router (displays.list + displays.getVncUrl via StreamManager VNC) + displayManager wired onto livinityd
 - [x] 254-02-PLAN.md — Wave 2: :1 host display created from shared MCP display-creation resolution constant (no independent 1920x1080 hardcode)
 - [x] 254-03-PLAN.md — Wave 1: live interactive x11-display-stream-window VNC component + DISPLAY_ routing + openWindow suggested sizing
 - [x] 254-04-PLAN.md — Wave 2: top-edge hover-reveal Active Displays strip → click opens sized live VNC window (+ operator browser walk)
+- [ ] 254-05-PLAN.md — Wave 1 (gap closure): register the boot :1 host display into DisplayManager (registerExisting, no second Xvfb spawn, empty owner_session) so it appears in displays.list — closes Gap 1
+- [ ] 254-06-PLAN.md — Wave 1 (gap closure): admin-bypass authorization in getVncUrl (canAccessDisplay predicate) so MCP-created displays are reachable by the admin operator — closes Gap 2 / CR-01
 
 ---
