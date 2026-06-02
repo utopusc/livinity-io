@@ -4484,7 +4484,7 @@ Plans:
 - [x] 254-02-PLAN.md — Wave 2: :1 host display created from shared MCP display-creation resolution constant (no independent 1920x1080 hardcode)
 - [x] 254-03-PLAN.md — Wave 1: live interactive x11-display-stream-window VNC component + DISPLAY_ routing + openWindow suggested sizing
 - [x] 254-04-PLAN.md — Wave 2: top-edge hover-reveal Active Displays strip → click opens sized live VNC window (+ operator browser walk)
-- [ ] 254-05-PLAN.md — Wave 1 (gap closure): register the boot :1 host display into DisplayManager (registerExisting, no second Xvfb spawn, empty owner_session) so it appears in displays.list — closes Gap 1
-- [ ] 254-06-PLAN.md — Wave 1 (gap closure): admin-bypass authorization in getVncUrl (canAccessDisplay predicate) so MCP-created displays are reachable by the admin operator — closes Gap 2 / CR-01
+- [x] 254-05-PLAN.md — Wave 1 (gap closure): register the boot :1 host display into DisplayManager (registerExisting, no second Xvfb spawn, empty owner_session) so it appears in displays.list — closes Gap 1
+- [x] 254-06-PLAN.md — Wave 1 (gap closure): admin-bypass authorization in getVncUrl (canAccessDisplay predicate) so MCP-created displays are reachable by the admin operator — closes Gap 2 / CR-01
 
 ---
