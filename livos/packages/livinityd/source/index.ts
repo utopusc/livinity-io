@@ -1,5 +1,6 @@
 import path from 'node:path'
 import {spawn as childProcessSpawn} from 'node:child_process'
+import {$} from 'execa'
 import fse from 'fs-extra'
 
 // TODO: import packageJson from '../package.json' assert {type: 'json'}
@@ -1000,6 +1001,34 @@ export default class Livinityd {
 							'displays: failed to register :1 host display (strip will omit :1)',
 							regErr,
 						)
+					}
+				}
+
+				// Reap orphan webapp displays whose Xvfb died across a livinityd
+				// restart/crash. The in-memory WebAppWindowManager loses them, but
+				// the persistent Redis records survive — so displays.list / the
+				// Displays popover kept listing dead :N and spamming failed ~2s
+				// screenshots (code-review WR-02). Host :1 is never reaped. The
+				// probe uses xdpyinfo (Xvfb runs with -ac, so no Xauthority needed).
+				// Guarded + non-fatal — a probe/Redis hiccup never breaks boot.
+				if (this.displayManager) {
+					try {
+						const isXDisplayAlive = async (d: string): Promise<boolean> => {
+							try {
+								await $({timeout: 3000})`xdpyinfo -display ${d}`
+								return true
+							} catch {
+								return false
+							}
+						}
+						const reaped = await this.displayManager.reapDeadDisplays(isXDisplayAlive)
+						if (reaped.length > 0) {
+							streamingLogger.info(
+								`displays: reaped ${reaped.length} dead orphan display(s): ${reaped.join(', ')}`,
+							)
+						}
+					} catch (reapErr) {
+						streamingLogger.warn('displays: orphan reap failed (non-fatal)', reapErr)
 					}
 				}
 

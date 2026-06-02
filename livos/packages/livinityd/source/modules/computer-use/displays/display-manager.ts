@@ -490,11 +490,54 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 		})
 	}
 
+	async function reapDeadDisplays(
+		isAlive: (display: string) => Promise<boolean>,
+	): Promise<string[]> {
+		const records = await list()
+		const reaped: string[] = []
+		for (const rec of records) {
+			// Never reap the host :1 boot display — livinityd owns its Xvfb and it
+			// is registered host/shared; always kept.
+			if (rec.display === ':1') continue
+			// Fail-safe: only reap on a DEFINITE dead probe. A probe that throws is
+			// treated as alive so a transient glitch never deletes a live display.
+			let alive = true
+			try {
+				alive = await isAlive(rec.display)
+			} catch {
+				alive = true
+			}
+			if (alive) continue
+			// System reap (no owner gate — the X server is gone, so this is an
+			// orphan, e.g. a webapp display left behind by a livinityd restart).
+			const handle = handles.get(rec.display)
+			if (handle) {
+				try {
+					handle.kill('SIGTERM')
+				} catch {
+					/* best-effort */
+				}
+				handles.delete(rec.display)
+			}
+			await redis.del(
+				redisKeyForDisplay(rec.display),
+				redisKeyForDisplayApps(rec.display),
+			)
+			reaped.push(rec.display)
+			logger.info('display-manager: reaped dead orphan display', {
+				display: rec.display,
+				owner_session: rec.owner_session,
+			})
+		}
+		return reaped
+	}
+
 	return {
 		create,
 		registerExisting,
 		list,
 		kill,
+		reapDeadDisplays,
 		attachApp,
 		listAppsForDisplay,
 		isOwner,
