@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 //
-// Phase 159 — top-bar source-text invariants (Workstream C mount).
+// top-bar source-text invariants — right-cluster popover mount.
 //
-// Locks the WindowsManagerPanel mount via Radix Popover in the right
-// cluster. Existing pinned-window shelf logic must remain intact.
+// Originally Phase 159 (WindowsManagerPanel mount). Phase 255-04 rewired the
+// right cluster to a SINGLE 🖥️ Displays popover (Monitor icon + DisplaysPopover),
+// folding the old per-window manager surface into the merged DisplaysPopover.
+// This file now locks the 255-04 contract. The existing pinned-window shelf and
+// ClockWithLocation must remain intact (regression guards).
 
 import {readFileSync} from 'node:fs'
 import {resolve} from 'node:path'
@@ -13,31 +16,30 @@ import {describe, expect, it} from 'vitest'
 const COMPONENT_PATH = resolve(__dirname, 'top-bar.tsx')
 const SRC = readFileSync(COMPONENT_PATH, 'utf8')
 
-describe('top-bar — Phase 159 windows manager mount', () => {
-    it('imports LayoutGrid from lucide-react', () => {
-        expect(SRC).toMatch(/import\s*\{\s*LayoutGrid\s*\}\s*from\s*['"]lucide-react['"]/)
+describe('top-bar — Phase 255-04 single Displays popover mount', () => {
+    it('imports Monitor from lucide-react (the 🖥️ trigger glyph)', () => {
+        expect(SRC).toMatch(/import\s*\{\s*Monitor\s*\}\s*from\s*['"]lucide-react['"]/)
     })
 
     it('imports Popover/PopoverContent/PopoverTrigger from shadcn popover', () => {
         expect(SRC).toMatch(/import\s*\{[\s\S]*?Popover[\s\S]*?PopoverContent[\s\S]*?PopoverTrigger[\s\S]*?\}\s*from\s*['"]@\/shadcn-components\/ui\/popover['"]/)
     })
 
-    it('imports WindowsManagerPanel from sibling file', () => {
-        expect(SRC).toMatch(/import\s*\{\s*WindowsManagerPanel\s*\}\s*from\s*['"]\.\/windows-manager-panel['"]/)
+    it('imports DisplaysPopover from sibling file', () => {
+        expect(SRC).toMatch(/import\s*\{\s*DisplaysPopover\s*\}\s*from\s*['"]\.\/displays-popover['"]/)
     })
 
-    it('mounts <WindowsManagerPanel /> inside a <PopoverContent>', () => {
-        expect(SRC).toMatch(/<PopoverContent[\s\S]*?<WindowsManagerPanel\s*\/>[\s\S]*?<\/PopoverContent>/)
+    it('mounts <DisplaysPopover /> inside a <PopoverContent>', () => {
+        expect(SRC).toMatch(/<PopoverContent[\s\S]*?<DisplaysPopover[\s\S]*?\/>[\s\S]*?<\/PopoverContent>/)
     })
 
-    it('Popover trigger button has aria-label "Windows manager"', () => {
-        expect(SRC).toMatch(/aria-label=['"]Windows manager['"]/)
+    it('Popover trigger button has aria-label "Displays"', () => {
+        expect(SRC).toMatch(/aria-label=['"]Displays['"]/)
     })
 
     it('preserves the existing pinned-window shelf (PinnedWindowChip render)', () => {
-        // Regression guard — Plan 08 must NOT remove the existing pinned
-        // shelf in the Center drop-zone. Both surfaces coexist per
-        // RESEARCH C risk #4.
+        // Regression guard — the right-cluster rewire must NOT remove the existing
+        // pinned shelf in the Center drop-zone. Both surfaces coexist.
         expect(SRC).toMatch(/<PinnedWindowChip/)
     })
 
