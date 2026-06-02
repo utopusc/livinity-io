@@ -231,11 +231,11 @@ describe('display-manager — mode + geometry defaults', () => {
 		expect(spawnHarness.calls[0].cmd).toBe('Xvfb')
 	})
 
-	it('Case 8: default geometry 1920x1080 in spawn args', async () => {
+	it('Case 8: default geometry 1280x720 in spawn args', async () => {
 		const mgr = await makeMgr()
 		await mgr.create({mode: 'xephyr', ownerSession: 's1'})
 		const args = spawnHarness.calls[0].args
-		expect(args.some((a) => a.includes('1920x1080'))).toBe(true)
+		expect(args.some((a) => a.includes('1280x720'))).toBe(true)
 	})
 })
 
@@ -251,8 +251,8 @@ describe('display-manager — Redis HSET shape', () => {
 		expect(hash.owner_session).toBe('s1')
 		expect(hash.mode).toBe('xephyr')
 		expect(hash.created_at).toBe(new Date(FIXED_NOW).toISOString())
-		expect(hash.width).toBe('1920')
-		expect(hash.height).toBe('1080')
+		expect(hash.width).toBe('1280')
+		expect(hash.height).toBe('720')
 		// Auto-name when omitted: "display-10" (the :N tail).
 		expect(hash.name).toBe('display-10')
 	})

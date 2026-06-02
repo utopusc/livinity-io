@@ -1,9 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
-  <!-- Phase 238.7 — LivOS dock tile uses the canonical Livinity donut mark
-       (same shape as platform/web/public/favicon.svg). Replaces the chat-
-       bubble + dots placeholder from Phase 238.5. Black rounded square
-       backdrop matches Phase 238.4 brand language (#1d1d1f). -->
+  <!-- LivOS "Liv AI" dock/app tile — chat bubble. Operator directive 2026-06-02:
+       "chat iconu olarak ayarla önceden öyleydi" (restore the chat icon; the
+       Phase 238.7 Livinity donut replaced the original chat bubble). Black
+       rounded-square backdrop (#1d1d1f, Phase 238.4 brand language) + white
+       speech bubble with 3 dots = the AI chat surface. -->
   <rect width="120" height="120" rx="26" fill="#1d1d1f"/>
-  <circle cx="60" cy="60" r="42" fill="#ffffff"/>
-  <circle cx="60" cy="60" r="15" fill="#1d1d1f"/>
+  <rect x="28" y="34" width="64" height="44" rx="12" fill="#ffffff"/>
+  <path d="M44 74 L44 94 L62 76 Z" fill="#ffffff"/>
+  <circle cx="46" cy="56" r="5" fill="#1d1d1f"/>
+  <circle cx="60" cy="56" r="5" fill="#1d1d1f"/>
+  <circle cx="74" cy="56" r="5" fill="#1d1d1f"/>
 </svg>
