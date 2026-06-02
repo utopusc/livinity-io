@@ -4495,7 +4495,7 @@ Plans:
 **Plans:** 5 plans
 
 Plans:
-- [ ] 255-01-PLAN.md — Wave 0: RED test scaffolds (displays.screenshot authz, branded-shell argv, clock-helpers wmoGlyph/greeting)
+- [x] 255-01-PLAN.md — Wave 0: RED test scaffolds (displays.screenshot authz, branded-shell argv, clock-helpers wmoGlyph/greeting) ✅ DONE 2026-06-02 (3 RED commits `c8cb9e36`/`6d4cd48e`/`3ce905cb`; no production code; GREEN gates for 255-02/04/05)
 - [ ] 255-02-PLAN.md — Wave 1: displays.screenshot tRPC query + captureScreenshot({display}) subprocess-scoped DISPLAY (GOAL-255-LIVE-THUMBS)
 - [ ] 255-03-PLAN.md — Wave 1: WebApp displays register/unregister in displayManager (registerExisting/kill) + disjoint allocator range (GOAL-255-WEBAPP-DISPLAYS)
 - [ ] 255-04-PLAN.md — Wave 2: single navbar Displays popover (screenshot thumbs + folded window rows) + strip removal + additive clock glow-up (GOAL-255-DISPLAYS-POPOVER, LIVE-THUMBS, NAVBAR-GLOWUP)

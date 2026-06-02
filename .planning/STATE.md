@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v44.0
 milestone_name: Liv AI Tooling Depth
 status: executing
-last_updated: "2026-05-31T17:55:00.000Z"
-last_activity: 2026-05-31
+last_updated: "2026-06-02T13:14:18.654Z"
+last_activity: 2026-06-02
 progress:
-  total_phases: 166
+  total_phases: 167
   completed_phases: 84
-  total_plans: 560
-  completed_plans: 480
-  percent: 86
+  total_plans: 567
+  completed_plans: 482
+  percent: 85
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
@@ -41,7 +41,15 @@ progress:
 
 ---
 
-## Current Position (Phase 254 — Active Displays hover panel + live VNC display windows 🟡 EXECUTING — Plans 254-01 + 254-02 + 254-03 + 254-04 ✅ DONE 2026-05-31 — phase code-complete, operator UAT pending)
+## Current Position (Phase 255 — LivOS Spaces: Displays popover + WebApp visibility + LivOS shell + navbar glow-up 🟡 EXECUTING — Wave 0 Plan 255-01 ✅ DONE 2026-06-02)
+
+### Latest update 2026-06-02 (Phase 255 execution — Plan 255-01 / Wave 0 RED test scaffolds complete)
+
+- ✅ **255-01 DONE** (TDD RED-only: `c8cb9e36` Task 1 + `6d4cd48e` Task 2 + `3ce905cb` Task 3) — **laid the three Wave 0 RED test scaffolds that become the GREEN gates for plans 255-02 (screenshot), 255-04 (clock-helpers), 255-05 (branded-shell).** No production code — negative invariant verified (`clock-helpers.ts` / `displays-popover.tsx` / `branded-shell.ts` all absent; `screenshot:` 0 matches in `trpc-router.ts`). **Task 1 — `computer-use/__tests__/trpc-router-screenshot.test.ts`:** 6 tests. Tests 1-3 (PURE) PASS — they lock the `canAccessDisplay` reuse contract (foreign member FORBIDDEN, 254-06 admin bypass, host/shared open). Tests 4-6 (HANDLER) FAIL (RED) because `displays.screenshot` is **not mounted** on `displaysRouter` — drive the UNAUTHORIZED / SERVICE_UNAVAILABLE guards + the `data:image/jpeg;base64,…` dataUrl wrap; resolved via `displaysRouter._def.procedures.screenshot._def.resolver` (undefined today → named-error RED). vitest exit 1, 3 failed / 3 passed. **Task 2 — `shell/__tests__/branded-shell.test.ts`:** 5 tests, suite errors at collection — "Failed to load url ../branded-shell.js. Does the file exist?" (module unbuilt). Asserts feh `--bg-fill` + absolute wallpaperPath with subprocess-scoped `env.DISPLAY===':1'`, tint2 same DISPLAY, an idempotent fluxbox style-file write containing a LivOS token color (`#0a0a0c`/`#2563eb`), NO global `process.env.DISPLAY` mutation (Pitfall-1), and non-fatal degrade when a binary is missing. Modeled on `webapps/fluxbox-wm.ts` (injected spawnFn/writeFileFn). vitest exit 1. **Task 3 — `desktop/clock-helpers.test.ts`:** parametrized `it.each` WMO map (codes 0,1,2,3,45,48,51,67,71,77,80,82,95,99 + 200 fallback) + 4 Turkish greeting bands (İyi geceler / Günaydın / İyi günler / İyi akşamlar) + bare no-name case; suite errors — "Failed to load url ./clock-helpers. Does the file exist?" (module unbuilt). vitest exit 1. **Test-runner note (NOT a code deviation):** the package is named `livinityd` (not `@livos/livinityd`) and the `ui` pkg exposes `test:run`/`vitest run` (no `test` script) — ran via `pnpm --filter livinityd test` + `npx vitest run`; identical RED outcomes. **Requirements:** GOAL-255-LIVE-THUMBS / GOAL-255-LIVOS-SHELL / GOAL-255-NAVBAR-GLOWUP are NOT marked complete — they are satisfied by the GREEN plans (02/04/05), not this RED scaffold (`requirements.mark-complete` reported `changed:0`, correctly flipping nothing). SUMMARY: `.planning/phases/255-livos-spaces-displays-popover-webapp-visibility-in-display-l/255-01-SUMMARY.md`. Remaining Phase-255 plans: 255-02 (screenshot GREEN), 255-03, 255-04 (clock-helpers GREEN), 255-05 (branded-shell GREEN).
+
+---
+
+## Earlier Position (Phase 254 — Active Displays hover panel + live VNC display windows 🟡 EXECUTING — Plans 254-01 + 254-02 + 254-03 + 254-04 ✅ DONE 2026-05-31 — phase code-complete, operator UAT pending)
 
 ### Latest update 2026-05-31 (Phase 254 execution — Plan 254-04 / Active Displays top-edge hover-reveal strip complete + deployed to Mini PC)
 
@@ -582,7 +590,7 @@ Status: Ready for Phase 214 (Store admin-only gate + UX polish)
 - CARRY-P212-RLS-POLICIES — real RLS policies on 4 tables → P214
 - CARRY-P212-LEGACY-ADMIN-UNIFY — migrate legacy api-key admin routes to cookie path (cosmetic)
 
-Last activity: 2026-05-31
+Last activity: 2026-06-02
 
 ### ✅ Phase 209 SHIPPED (commit `8ad89ee6`)
 
@@ -650,7 +658,7 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 ## Next Planned Phase
 
 - **Phase:** 251
-- **Status:** Executing Phase 254
+- **Status:** Executing Phase --phase
 - **Plan count:** 5
 - **CONTEXT:** .planning/phases/248-luse-display-lifecycle/248-CONTEXT.md
 - **Wave plan:** Wave 1 (248-01 backend display-manager ✅) → Wave 2 (248-02 MCP tool registrations ✅) → Wave 3 (248-03 TTL GC sweep — NEXT) → Wave 4 (248-04 canonical docs + shim sync) → Wave 5 (248-05 Mini PC deploy + UAT)
@@ -658,8 +666,8 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 
 ## Current Position
 
-Phase: 254 (active-displays-hover-reveal-panel-live-vnc-display-windows-) — EXECUTING
-Plan: 1 of 4
+Phase: --phase (255) — EXECUTING
+Plan: 1 of --name
 
 **Plan 251-09 (4 tasks — 3 commits: `4929916f` docs PORTABILITY-AUDIT + `6bc1ee70` docs REMEDIATION-BACKLOG + final docs flip)** — Wave-2 synthesis closing Phase 251. Aggregated the eight Wave-1 findings docs (251-01…251-08) into two artifacts under the phase dir. **PORTABILITY-AUDIT.md** (156 lines): a 30-row per-dimension COVERED/GAP/RISK matrix across 8 dimensions (luse-redis / display-backend / binaries / identity / paths / systemd-env / terminal / installer-path) with severity (P0/P1/P2) + evidence refs, plus the two explicit operator verdicts. **Q1 (any session-introduced hardcode that breaks portability?)** → YES: three NEW hardcodes — `xterm` hard-dep (P0, ENOENT silently swallowed at `tools.ts:1198`), PTY `username:'bruce'` triple-pin with no `livos:desktop:user` lookup (P1, `ws-handler.ts:466`+`types.ts:31`+`session.ts:77,82-89`), `/opt/livos` Redis-fallback literal (P2 RISK, `server.ts:124`); plus two un-reproducible live-only hand artifacts (`redis-env.conf` drop-in + manual `apt install xterm imagemagick xserver-xephyr`) that mask gaps on the Mini PC. **Q2 (would a brand-new install come up seamlessly with terminal + Luse?)** → **NO-GO**, with **5 P0 blockers**: (1) `xserver-xephyr` not installed → `create_display` default mode fails as a *false-positive success* (no `child.on('error')` in `display-manager.ts:224-253`); (2) `xterm` not installed → `launch_app_in_display(terminal)` silently no-ops; (3) PTY sudoers gap → `bruce→bruce` `sudo --user bruce --login bash` prompts for a password it can't supply; (4) `livos:v43:terminal_panel` flag never seeded → dock entry hidden + WS 4403; (5) `get.livinity.io` → install-script mapping UNPROVABLE from repo (4 entrypoints; only Path A seeds `liv:mcp:config` → AionUi luse; Path B writes `CHANGEME`, Path C seeds no MCP config). `imagemagick`/`import` confirmed NOT a code dependency (251-03) — excluded. **REMEDIATION-BACKLOG.md** (153 lines): 16 items R1-R16 ordered P0→P1→P2, each with file:line + exact change + effort (S/M/L) + kind (installer/code/both), a copy-pasteable apt remediation block (covers R1/R2/R7/R16), and a 5-wave Phase 252 sequencing recommendation. De-duplicated the four cross-referenced findings to single owners (PTY-bruce→R4+R8, GDM-Xauthority→R6, redis-env→R5, empty-catalog→R9+R12). **Task 3 (optional live Mini PC ssh corroboration) SKIPPED** per D-251-LIVE-OPTIONAL — never blocks synthesis; the one genuinely live-only question (`get.livinity.io` alias) is a DNS/Vercel question unanswerable by SSH to the box, captured as backlog R11. Read-only synthesis — zero source touched (D-251-READONLY held), sacred SHA `f3538e1d…` trivially preserved (`[sacred-sha] PASS: 20 files verified` on both content commits). 0 deviations from plan. Self-check PASSED (both reports exist + exceed min_lines; both commits present in git log). SUMMARY at `.planning/phases/251-fresh-install-portability-audit/251-SUMMARY.md`. **Phase 251 CLOSED 9/9.** Next: Phase 252 (remediation) is fully seeded by REMEDIATION-BACKLOG.md — zero further analysis needed to start.
 
@@ -1690,7 +1698,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 254 (Active Displays hover-reveal + live VNC display windows) — 4 plans — 2026-05-31T16:59:26.988Z
+**Planned Phase:** 255 () — 0 plans — 2026-06-02T12:52:07.149Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
