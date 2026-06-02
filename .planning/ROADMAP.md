@@ -2,7 +2,7 @@
 
 ## Milestones
 
-- 🚧 **v44.0 Liv AI Tooling Depth** — Phases 246-252 (CURRENT; v43 CLOSED 2026-05-28). Terminal v2 + Luse skill/display tooling + fresh-install portability remediation (Phase 252 ✅ 6/6). Open: Phase 250 (Terminal Pro UI) + Phase 249 operator close walk. See `## v44 — Liv AI Tooling Depth` section below. _(NOTE: the older `### 🟢 vNN.0 … (Active)` headings further down — v31/v32/v33/v34/v36/v37 — are STALE label drift from long-shipped milestones; this 🚧 marker is the authoritative current-milestone pointer that `gsd-sdk getMilestoneInfo` reads first.)_
+- 🚧 **v44.0 Liv AI Tooling Depth** — Phases 246-255 (CURRENT; v43 CLOSED 2026-05-28). Terminal v2 + Luse skill/display tooling + fresh-install portability remediation (Phase 252 ✅ 6/6). Open: Phase 250 (Terminal Pro UI) + Phase 249 operator close walk. See `## v44 — Liv AI Tooling Depth` section below. _(NOTE: the older `### 🟢 vNN.0 … (Active)` headings further down — v31/v32/v33/v34/v36/v37 — are STALE label drift from long-shipped milestones; this 🚧 marker is the authoritative current-milestone pointer that `gsd-sdk getMilestoneInfo` reads first.)_
 - ✅ **v29.3 Marketplace AI Broker (Subscription-Only)** — Phases 39-44 (shipped local 2026-05-01) — see [milestones/v29.3-ROADMAP.md](milestones/v29.3-ROADMAP.md)
 - ✅ **v29.4 Server Management Tooling + Bug Sweep** — Phases 45-48 (shipped local 2026-05-01) — see [milestones/v29.4-ROADMAP.md](milestones/v29.4-ROADMAP.md)
 - ✅ **v29.5 v29.4 Hot-Patch Recovery + Verification Discipline** — Phases 49-54 (shipped local 2026-05-02 via `--accept-debt`) — see [milestones/v29.5-ROADMAP.md](milestones/v29.5-ROADMAP.md)
@@ -4486,5 +4486,15 @@ Plans:
 - [x] 254-04-PLAN.md — Wave 2: top-edge hover-reveal Active Displays strip → click opens sized live VNC window (+ operator browser walk)
 - [x] 254-05-PLAN.md — Wave 1 (gap closure): register the boot :1 host display into DisplayManager (registerExisting, no second Xvfb spawn, empty owner_session) so it appears in displays.list — closes Gap 1
 - [x] 254-06-PLAN.md — Wave 1 (gap closure): admin-bypass authorization in getVncUrl (canAccessDisplay predicate) so MCP-created displays are reachable by the admin operator — closes Gap 2 / CR-01
+
+### Phase 255: LivOS Spaces — Displays popover + WebApp visibility + in-display LivOS shell + navbar glow-up: a single navbar 🖥️ "Displays" popover (live-preview cards) replaces the Phase 254 top-edge hover strip and merges the windows-manager popover; the user's installed WebApps become listable displays; opened displays render a branded LivOS shell (wallpaper + design-token-themed WM + slim LivOS dock) instead of bare fluxbox; the clock/weather navbar area gets a creative additive glow-up.
+
+**Goal:** Operators see ALL active X displays (host `:1` + MCP-created + their installed WebApps) as live-preview cards in a single navbar "Displays" popover that replaces the Phase 254 top-edge hover strip and merges the windows-manager popover; clicking a card opens the display as the existing interactive VNC window (254-03); opened displays render inside a branded LivOS desktop shell (LivOS wallpaper + design-token-themed window manager + slim LivOS dock) instead of bare fluxbox; and the navbar clock/weather area is creatively refreshed (weather-condition glyph, day/night accent, greeting) additively — no teardown.
+**Requirements**: GOAL-255-DISPLAYS-POPOVER, GOAL-255-LIVE-THUMBS, GOAL-255-WEBAPP-DISPLAYS, GOAL-255-LIVOS-SHELL, GOAL-255-NAVBAR-GLOWUP
+**Depends on:** Phase 254
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 255 to break down)
 
 ---
