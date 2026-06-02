@@ -318,10 +318,29 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 		const key = redisKeyForDisplay(input.display)
 		const existing = await redis.hgetall(key)
 		if (existing && Object.keys(existing).length > 0) {
-			// Idempotent: never clobber an existing record.
-			logger.info('display-manager: registerExisting no-op (record exists)', {
-				display: input.display,
-			})
+			// Identity is idempotent — name / owner_session / mode / created_at are
+			// NEVER clobbered, so a user rename or re-own survives a restart.
+			// BUT geometry is reconciled: the registry width/height MUST track the
+			// actual running X server (the boot Xvfb -screen is authoritative), or
+			// displays.list / popover thumbnails / openWindow would size a stale
+			// resolution. This is what lets re-pinning `:1` (e.g. 1080p → 720p) take
+			// effect on the next boot without manual Redis surgery.
+			const desiredW = String(input.width)
+			const desiredH = String(input.height)
+			if (existing.width !== desiredW || existing.height !== desiredH) {
+				await redis.hset(key, {width: desiredW, height: desiredH})
+				logger.info('display-manager: registerExisting reconciled geometry', {
+					display: input.display,
+					from: `${existing.width}x${existing.height}`,
+					to: `${desiredW}x${desiredH}`,
+				})
+				existing.width = desiredW
+				existing.height = desiredH
+			} else {
+				logger.info('display-manager: registerExisting no-op (record exists)', {
+					display: input.display,
+				})
+			}
 			return {
 				display: input.display,
 				name: existing.name ?? input.name ?? `display-${input.display.slice(1)}`,
