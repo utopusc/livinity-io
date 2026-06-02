@@ -493,6 +493,37 @@ describe('display-manager — registerExisting() (Phase 254-05 Gap 1)', () => {
 		expect(hash.owner_session).toBe('someoneelse')
 	})
 
+	it('Case 17b: registerExisting reconciles geometry on an existing record while preserving name/owner', async () => {
+		// Pre-seed :1 at the OLD 1080p geometry with a user rename + owner.
+		await redis.hset(redisKeyForDisplay(':1'), {
+			owner_session: 'someoneelse',
+			mode: 'xvfb',
+			created_at: '2026-05-28T10:00:00.000Z',
+			name: 'Renamed By User',
+			width: '1920',
+			height: '1080',
+		})
+		const mgr = await makeMgr()
+		// Re-register at the NEW pinned 720p geometry (as the :1 boot does).
+		const rec = await mgr.registerExisting({
+			display: ':1',
+			width: 1280,
+			height: 720,
+			mode: 'xvfb',
+			name: 'Host Display',
+			ownerSession: '',
+		})
+		const hash = await redis.hgetall(redisKeyForDisplay(':1'))
+		// Geometry reconciled to match the actual X server...
+		expect(hash.width).toBe('1280')
+		expect(hash.height).toBe('720')
+		expect(rec.width).toBe(1280)
+		expect(rec.height).toBe(720)
+		// ...but identity (name + owner) is still preserved (no clobber).
+		expect(hash.name).toBe('Renamed By User')
+		expect(hash.owner_session).toBe('someoneelse')
+	})
+
 	it('Case 18: registerExisting(:1) does NOT advance the :N allocator — next create() still :10', async () => {
 		const mgr = await makeMgr()
 		await mgr.registerExisting({
