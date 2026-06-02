@@ -14,19 +14,24 @@
  * STRIDE (threat_model 254-01):
  *   S — userId is ALWAYS sourced from ctx.currentUser.id, NEVER from input
  *       (T-254-02). Both routes are privateProcedure (auth-gated) (T-254-04).
- *   I — getVncUrl is owner-scoped: a non-empty owner_session that does not
- *       match the caller session → FORBIDDEN (T-254-01). The returned wsUrl is
- *       a capability token, so only the display id is logged, never the wsUrl
- *       (T-254-03).
+ *   I — getVncUrl is authorization-scoped via canAccessDisplay (T-254-01
+ *       amended, 254-06 / CR-01 Option A): see the owner-session mapping note
+ *       below. The returned wsUrl is a capability token, so only the display id
+ *       is logged, never the wsUrl (T-254-03).
  *   D — repeated getVncUrl reuses StreamManager's per-user stream cap
  *       (StreamCapExceededError) — no new control needed (T-254-05).
  *
- * Owner-session mapping note: the stdio MCP stores `owner_session` as the luse
- * session id (resolveLuseUserId → LUSE_USER_ID env, default 'bruce'), whereas
- * the UI carries ctx.currentUser.id. On the single-tenant Mini PC these may
- * differ; the FORBIDDEN gate is kept intact (it correctly denies a caller
- * whose id does not match a display's non-empty owner_session). Displays with
- * an empty owner_session (host/shared) are readable by any authenticated user.
+ * Owner-session mapping note (T-254-01 amended, 254-06): the stdio MCP stores
+ * `owner_session` as the luse session id (resolveLuseUserId → LUSE_USER_ID env,
+ * default 'bruce'), whereas the UI carries ctx.currentUser.id (a PostgreSQL
+ * UUID on the multi-user Mini PC). These never match, so the original
+ * id-vs-owner_session gate FORBADE the admin operator from EVERY MCP-created
+ * display. The gate is therefore DELIBERATELY amended: an admin-role caller
+ * (the single-tenant operator) BYPASSES the owner-session check, restoring the
+ * headline VNC feature. A non-admin member/guest is STILL FORBIDDEN from a
+ * display whose non-empty owner_session is not their own session — multi-user
+ * isolation is preserved. Displays with an empty owner_session (host/shared)
+ * remain readable by any authenticated user. See canAccessDisplay below.
  */
 
 import {z} from 'zod'
@@ -98,11 +103,20 @@ export const displaysRouter = router({
 			const record = (await dm.list()).find((d) => d.display === input.display)
 			if (!record) throw new TRPCError({code: 'NOT_FOUND'})
 
-			// STRIDE-I (T-254-01): a non-empty owner_session that the caller does
-			// not own → FORBIDDEN. Empty owner_session = host/shared = allowed.
+			// STRIDE-I (T-254-01 amended, 254-06 / CR-01 Option A): empty
+			// owner_session = host/shared = allowed; an admin caller (the
+			// single-tenant operator) bypasses the owner check so MCP-created
+			// displays (owner_session='bruce') are reachable despite the
+			// UUID-vs-luse-id mismatch; otherwise only the legitimate owner.
+			// Uses `record.owner_session` already in hand from dm.list() above —
+			// no extra dm.isOwner round-trip.
+			const callerRole = ctx.currentUser?.role ?? 'member'
 			if (
-				record.owner_session &&
-				!(await dm.isOwner({display: input.display, session: userId}))
+				!canAccessDisplay({
+					ownerSession: record.owner_session,
+					callerSession: userId,
+					callerRole,
+				})
 			) {
 				throw new TRPCError({
 					code: 'FORBIDDEN',
