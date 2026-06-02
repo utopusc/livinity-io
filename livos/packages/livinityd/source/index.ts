@@ -69,6 +69,9 @@ import {WEBAPPS_X11_ENV} from './modules/webapps/window-discovery.js'
 // Phase 100-08-01 — dedicated Xvfb :1 + fluxbox WM lifecycle (D-100-08-A).
 import {startXvfb, type XvfbHandle} from './modules/webapps/xvfb-display.js'
 import {startFluxbox, type FluxboxHandle} from './modules/webapps/fluxbox-wm.js'
+// Phase 255-05 (D-255-SHELL-LIVOS-BRANDED) — in-display LivOS shell (feh
+// wallpaper + design-token fluxbox style + slim tint2 dock) on the :1 host.
+import {bootBrandedShell} from './modules/shell/branded-shell.js'
 // Phase 102-01 — legacy `webapps/display-allocator.ts` (string-returning,
 // Phase 100-10-01 scaffolding) DELETED. The number-returning replacement
 // lives at `streaming/display-allocator.ts` (composed with `streaming/
@@ -991,6 +994,12 @@ export default class Livinityd {
 						)
 					}
 				}
+
+				// Phase 255-05 (D-255-SHELL-LIVOS-BRANDED) — brand the :1 host shell:
+				// feh wallpaper + design-token fluxbox style + slim tint2 dock. Native
+				// (NOT Chromium kiosk — Pitfall 3). Non-fatal: bootBrandedShell never
+				// throws; a missing feh/tint2 degrades to xsetroot/fluxbox-toolbar.
+				await bootBrandedShell({display: ':1', logger: streamingLogger})
 			} catch (err) {
 				// Non-fatal — livinityd still boots; legacy non-WebApp X11
 				// consumers will be broken until recovery. Per-WebApp paths
