@@ -4492,13 +4492,13 @@ Plans:
 **Goal:** Operators see ALL active X displays (host `:1` + MCP-created + their installed WebApps) as live-preview cards in a single navbar "Displays" popover that replaces the Phase 254 top-edge hover strip and merges the windows-manager popover; clicking a card opens the display as the existing interactive VNC window (254-03); opened displays render inside a branded LivOS desktop shell (LivOS wallpaper + design-token-themed window manager + slim LivOS dock) instead of bare fluxbox; and the navbar clock/weather area is creatively refreshed (weather-condition glyph, day/night accent, greeting) additively — no teardown.
 **Requirements**: GOAL-255-DISPLAYS-POPOVER, GOAL-255-LIVE-THUMBS, GOAL-255-WEBAPP-DISPLAYS, GOAL-255-LIVOS-SHELL, GOAL-255-NAVBAR-GLOWUP
 **Depends on:** Phase 254
-**Plans:** 5 plans
+**Plans:** 5/5 plans complete
 
 Plans:
 - [x] 255-01-PLAN.md — Wave 0: RED test scaffolds (displays.screenshot authz, branded-shell argv, clock-helpers wmoGlyph/greeting) ✅ DONE 2026-06-02 (3 RED commits `c8cb9e36`/`6d4cd48e`/`3ce905cb`; no production code; GREEN gates for 255-02/04/05)
 - [x] 255-02-PLAN.md — Wave 1: displays.screenshot tRPC query + captureScreenshot({display}) subprocess-scoped DISPLAY (GOAL-255-LIVE-THUMBS) ✅ DONE 2026-06-02 (TDD: `aca19e3f` RED + `46d08f75` GREEN Task1 + `e0d01f7a` GREEN Task2; 10/10 tests GREEN incl. plan-01 Tests 4-6 flipped; 0 new tsc errors vs 389 baseline; DISPLAY subprocess-scoped, never mutates process.env)
 - [x] 255-03-PLAN.md — Wave 1: WebApp displays register/unregister in displayManager (registerExisting/kill) + disjoint allocator range (GOAL-255-WEBAPP-DISPLAYS) ✅ DONE 2026-06-02 (TDD: `a584b3fa`/`10419dc9` Task1 RED→GREEN + `46e6dc90`/`41c503ca` Task2 RED→GREEN; spawn registerExisting(owner=userId, xvfb, NEVER create) + close kill, both best-effort; webapp range [10,60) ⊥ MCP create floor 60 (allocatorStart on BOTH createDisplayManager sites — Rule 2); 8 new tests GREEN; tsc 390 unchanged baseline; 3 pre-existing baseline failures out-of-scope → deferred-items.md)
 - [x] 255-04-PLAN.md — Wave 2: single navbar Displays popover (screenshot thumbs + folded window rows) + strip removal + additive clock glow-up (GOAL-255-DISPLAYS-POPOVER, LIVE-THUMBS, NAVBAR-GLOWUP) ✅ DONE 2026-06-02 (`82383782` clock-helpers GREEN + glow-up + `e79841f7` DisplaysPopover + `9c236ff6` TopBar single 🖥️ popover + `9b296cff` delete 254-04 strip; clock-helpers 20/20 + displays-popover 10/10 = 30/30 GREEN; screenshot thumbs only, 0 RFB(/new WebSocket(; @livos/config + ui build clean vite ✓ 38.15s; 3 auto-fixes [glyph 95-99, running_apps unknown[], comment-token reword]; Task 5 operator walk auto-approved → UAT)
-- [ ] 255-05-PLAN.md — Wave 2: in-display LivOS branded shell (feh wallpaper + themed fluxbox style + tint2 dock) + apt patch (GOAL-255-LIVOS-SHELL)
+- [x] 255-05-PLAN.md — Wave 2: in-display LivOS branded shell (feh wallpaper + themed fluxbox style + tint2 dock) + apt patch (GOAL-255-LIVOS-SHELL)
 
 ---
