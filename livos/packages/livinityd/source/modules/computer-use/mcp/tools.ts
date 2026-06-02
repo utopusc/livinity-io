@@ -1269,15 +1269,16 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 				}
 				const bin = APP_ALIASES[app] ?? app
 
-				// Chromium-family browsers need an ISOLATED profile + headless-safe
-				// flags or they silently fail to render on a nested display: launched
-				// against the DEFAULT profile they detect the already-running master /
-				// WebApp Chrome (profile singleton lock), hand off to it, and EXIT
-				// immediately — so the nested display stays black with no window (the
-				// exact symptom the operator hit on :60). A per-display --user-data-dir
-				// breaks the singleton; --no-sandbox/--disable-gpu/--disable-dev-shm-usage
-				// keep Chrome alive on the headless/nested X; --window-size fills the
-				// 720p display without needing a window manager.
+				// Chromium-family browsers need an ISOLATED profile to render on a
+				// nested display: launched against the DEFAULT profile they detect the
+				// already-running master / WebApp Chrome (profile singleton lock), hand
+				// off to it, and EXIT immediately — so the nested display stays black
+				// with no window (the exact symptom the operator hit on :60). A
+				// per-display --user-data-dir breaks the singleton (verified: Chrome
+				// renders fine WITHOUT --no-sandbox once the profile is isolated, so we
+				// omit it to avoid Chrome's "unsupported flag" warning banner).
+				// --disable-gpu/--disable-dev-shm-usage keep Chrome stable on the
+				// headless X; --window-size fills the 720p display without a WM.
 				const CHROME_BINS = new Set([
 					'google-chrome',
 					'google-chrome-stable',
@@ -1289,7 +1290,6 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 					const dnum = display.replace(/[^0-9]/g, '') || 'host'
 					const chromeFlags = [
 						`--user-data-dir=/tmp/livos-luse-chrome-${dnum}`,
-						'--no-sandbox',
 						'--disable-gpu',
 						'--disable-dev-shm-usage',
 						'--no-first-run',
