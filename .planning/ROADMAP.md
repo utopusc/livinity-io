@@ -4496,7 +4496,7 @@ Plans:
 
 Plans:
 - [x] 255-01-PLAN.md — Wave 0: RED test scaffolds (displays.screenshot authz, branded-shell argv, clock-helpers wmoGlyph/greeting) ✅ DONE 2026-06-02 (3 RED commits `c8cb9e36`/`6d4cd48e`/`3ce905cb`; no production code; GREEN gates for 255-02/04/05)
-- [ ] 255-02-PLAN.md — Wave 1: displays.screenshot tRPC query + captureScreenshot({display}) subprocess-scoped DISPLAY (GOAL-255-LIVE-THUMBS)
+- [x] 255-02-PLAN.md — Wave 1: displays.screenshot tRPC query + captureScreenshot({display}) subprocess-scoped DISPLAY (GOAL-255-LIVE-THUMBS) ✅ DONE 2026-06-02 (TDD: `aca19e3f` RED + `46d08f75` GREEN Task1 + `e0d01f7a` GREEN Task2; 10/10 tests GREEN incl. plan-01 Tests 4-6 flipped; 0 new tsc errors vs 389 baseline; DISPLAY subprocess-scoped, never mutates process.env)
 - [ ] 255-03-PLAN.md — Wave 1: WebApp displays register/unregister in displayManager (registerExisting/kill) + disjoint allocator range (GOAL-255-WEBAPP-DISPLAYS)
 - [ ] 255-04-PLAN.md — Wave 2: single navbar Displays popover (screenshot thumbs + folded window rows) + strip removal + additive clock glow-up (GOAL-255-DISPLAYS-POPOVER, LIVE-THUMBS, NAVBAR-GLOWUP)
 - [ ] 255-05-PLAN.md — Wave 2: in-display LivOS branded shell (feh wallpaper + themed fluxbox style + tint2 dock) + apt patch (GOAL-255-LIVOS-SHELL)
