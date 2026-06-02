@@ -367,6 +367,7 @@ if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
         gstreamer1.0-plugins-ugly \
         xdg-desktop-portal-gnome \
         xvfb fluxbox \
+        feh tint2 \
         2>&1 | tail -5 || warn "Some streaming packages failed to install (non-fatal)"
 
     # VAAPI userspace — separate group so an Intel-iGPU-less host doesn't fail the run.
@@ -383,7 +384,7 @@ if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
 
     # Verify the critical streaming binaries are present after install
     streaming_missing=()
-    for bin in ffmpeg gst-launch-1.0 dbus-send xdotool maim Xvfb fluxbox Xephyr xterm; do
+    for bin in ffmpeg gst-launch-1.0 dbus-send xdotool maim Xvfb fluxbox Xephyr xterm feh tint2; do
         if ! command -v "$bin" >/dev/null 2>&1; then
             streaming_missing+=("$bin")
         fi

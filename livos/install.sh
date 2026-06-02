@@ -623,7 +623,9 @@ LAUNCHER
             websockify \
             vncsnapshot \
             xvfb \
-            fluxbox
+            fluxbox \
+            feh \
+            tint2
 
         # ffmpeg + GStreamer family (full pipeline incl. PipeWire src)
         apt-get install -y -qq \
@@ -654,7 +656,7 @@ LAUNCHER
         # Per Phase 93 acceptance criteria: which-each binary so a missing
         # package fails the install loudly rather than at first stream.
         local missing=()
-        for bin in ffmpeg gst-launch-1.0 dbus-send vainfo xdotool maim; do
+        for bin in ffmpeg gst-launch-1.0 dbus-send vainfo xdotool maim feh tint2; do
             if ! command -v "$bin" >/dev/null 2>&1; then
                 missing+=("$bin")
             fi
@@ -662,7 +664,7 @@ LAUNCHER
         if (( ${#missing[@]} > 0 )); then
             fail "Streaming subsystem post-install verify failed — missing: ${missing[*]}"
         fi
-        ok "Streaming subsystem binaries verified: ffmpeg, gst-launch-1.0, dbus-send, vainfo, xdotool, maim"
+        ok "Streaming subsystem binaries verified: ffmpeg, gst-launch-1.0, dbus-send, vainfo, xdotool, maim, feh, tint2"
 
         # ── ydotoold systemd unit ────────────────────────────
         setup_ydotoold_service
