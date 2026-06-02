@@ -415,3 +415,95 @@ describe('types', () => {
 		expect([a, b]).toEqual(['xephyr', 'xvfb'])
 	})
 })
+
+// ----------------------------------------------------------------------------
+// Phase 254-05 (Gap 1) — registerExisting(): RECORD an already-running display
+// into Redis WITHOUT spawning a new X server. The boot `:1` Xvfb is launched by
+// startXvfb OUTSIDE the manager, so it has no luse:display::1 record and never
+// appears in list(). registerExisting adopts it: same HSET shape as create(),
+// EMPTY owner_session (host/shared so getVncUrl passes), idempotent (no clobber
+// of a user-renamed record), and it must NEVER spawn (no second Xvfb on :1) nor
+// perturb the :N allocator.
+// ----------------------------------------------------------------------------
+
+describe('display-manager — registerExisting() (Phase 254-05 Gap 1)', () => {
+	it('Case 15: registerExisting(:1) writes the create()-shaped hash with empty owner_session, no spawn', async () => {
+		const mgr = await makeMgr()
+		await mgr.registerExisting({
+			display: ':1',
+			width: 1920,
+			height: 1080,
+			mode: 'xvfb',
+			name: 'Host Display',
+			ownerSession: '',
+		})
+		const hash = await redis.hgetall(redisKeyForDisplay(':1'))
+		expect(hash.owner_session).toBe('')
+		expect(hash.mode).toBe('xvfb')
+		expect(hash.name).toBe('Host Display')
+		expect(hash.width).toBe('1920')
+		expect(hash.height).toBe('1080')
+		expect(hash.created_at).toBe(new Date(FIXED_NOW).toISOString())
+		// register-only: it must NOT spawn an X server (boot startXvfb owns :1).
+		expect(spawnHarness.spawnFn).toHaveBeenCalledTimes(0)
+	})
+
+	it('Case 16: after registerExisting(:1), list() returns a :1 DisplayRecord (empty owner, WxH numeric, no apps)', async () => {
+		const mgr = await makeMgr()
+		await mgr.registerExisting({
+			display: ':1',
+			width: 1920,
+			height: 1080,
+			mode: 'xvfb',
+			name: 'Host Display',
+			ownerSession: '',
+		})
+		const list = await mgr.list()
+		const rec = list.find((r: DisplayRecord) => r.display === ':1')!
+		expect(rec).toBeTruthy()
+		expect(rec.display).toBe(':1')
+		expect(rec.owner_session).toBe('')
+		expect(rec.width).toBe(1920)
+		expect(rec.height).toBe(1080)
+		expect(rec.running_apps).toEqual([])
+	})
+
+	it('Case 17: registerExisting is idempotent — never clobbers an existing record', async () => {
+		// Pre-seed Redis with a user-renamed / owner-changed :1 record.
+		await redis.hset(redisKeyForDisplay(':1'), {
+			owner_session: 'someoneelse',
+			mode: 'xvfb',
+			created_at: '2026-05-28T10:00:00.000Z',
+			name: 'Renamed By User',
+			width: '1920',
+			height: '1080',
+		})
+		const mgr = await makeMgr()
+		await mgr.registerExisting({
+			display: ':1',
+			width: 1920,
+			height: 1080,
+			mode: 'xvfb',
+			name: 'Host Display',
+			ownerSession: '',
+		})
+		const hash = await redis.hgetall(redisKeyForDisplay(':1'))
+		// Existing record untouched — no clobber.
+		expect(hash.name).toBe('Renamed By User')
+		expect(hash.owner_session).toBe('someoneelse')
+	})
+
+	it('Case 18: registerExisting(:1) does NOT advance the :N allocator — next create() still :10', async () => {
+		const mgr = await makeMgr()
+		await mgr.registerExisting({
+			display: ':1',
+			width: 1920,
+			height: 1080,
+			mode: 'xvfb',
+			name: 'Host Display',
+			ownerSession: '',
+		})
+		const out = await mgr.create({mode: 'xephyr', ownerSession: 's1'})
+		expect(out.display).toBe(':10')
+	})
+})
