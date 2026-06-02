@@ -22,7 +22,6 @@ import {EnsureLoggedIn, EnsureLoggedOut} from './modules/auth/ensure-logged-in'
 import {EnsureUserDoesntExist, EnsureUserExists} from './modules/auth/ensure-user-exists'
 import {Dock, DockBottomPositioner} from './modules/desktop/dock'
 import {TopBar} from './modules/desktop/top-bar'
-import {ActiveDisplaysPanel} from './modules/desktop/active-displays-panel'
 import {FloatingIslandContainer} from './modules/floating-island/container'
 import {AppsProvider} from './providers/apps'
 import {AvailableAppsProvider} from './providers/available-apps'
@@ -86,13 +85,14 @@ export const router = createBrowserRouter([
 							    still mounted outside this provider, which silently
 							    no-op'd every pin (useWindowManagerOptional returned
 							    null). Fixed Phase 131-01. */}
+							{/* Phase 255-04 — the single navbar display/windows
+							    surface now lives INSIDE <TopBar /> as the 🖥️
+							    DisplaysPopover (display cards + ~2s screenshot thumbs
+							    + folded-in windows rows). The 254-04 top-edge
+							    hover-reveal strip was deleted — no separate mount is
+							    needed since TopBar is already inside
+							    WindowManagerProvider. */}
 							<TopBar />
-							{/* Phase 254-04 — top-edge hover-reveal Active Displays
-							    strip. Sibling of <TopBar /> so it shares the
-							    WindowManagerProvider scope (it calls
-							    windowManager.openWindow on click). Lists X DISPLAYS
-							    only (displays.list), never LivOS app windows. */}
-							<ActiveDisplaysPanel />
 							<MobileAppProvider>
 								<CmdkProvider>
 									<DesktopContextMenu>
