@@ -627,6 +627,27 @@ LAUNCHER
             feh \
             tint2
 
+        # Phase 256 (D-256-XFCE-HOST-DESKTOP): real, usable XFCE desktop on the
+        # host :1 display (xfwm4 with the compositor OFF + xfce4-panel + xfdesktop
+        # + xfsettingsd, under a private dbus session). Non-compositing → captured
+        # by the same x11vnc/maim path as fluxbox (the real GNOME :0 captures BLACK
+        # because mutter GL-composites and XGetImage can't read it on this
+        # headless/software-GL box). dbus-x11 provides dbus-run-session (the
+        # private bus). Explicit component packages (NOT the `xfce4` metapackage)
+        # so no display-manager / greeter is pulled in. Non-fatal: if these fail,
+        # livinityd degrades the :1 host shell to fluxbox + the branded shell.
+        apt-get install -y -qq \
+            xfwm4 \
+            xfce4-session \
+            xfce4-panel \
+            xfdesktop4 \
+            xfce4-settings \
+            xfce4-terminal \
+            thunar \
+            xfce4-appfinder \
+            dbus-x11 \
+            || warn "XFCE host-desktop install failed — :1 will degrade to fluxbox branded shell"
+
         # ffmpeg + GStreamer family (full pipeline incl. PipeWire src)
         apt-get install -y -qq \
             ffmpeg \
@@ -665,6 +686,12 @@ LAUNCHER
             fail "Streaming subsystem post-install verify failed — missing: ${missing[*]}"
         fi
         ok "Streaming subsystem binaries verified: ffmpeg, gst-launch-1.0, dbus-send, vainfo, xdotool, maim, feh, tint2"
+
+        # Phase 256 — XFCE host-desktop binaries (NON-fatal: a missing one just
+        # degrades the :1 host shell to fluxbox + the branded shell at boot).
+        for bin in xfwm4 xfce4-panel xfdesktop dbus-run-session; do
+            command -v "$bin" >/dev/null 2>&1 || warn "XFCE host-desktop binary missing: $bin (:1 will degrade to fluxbox)"
+        done
 
         # ── ydotoold systemd unit ────────────────────────────
         setup_ydotoold_service
