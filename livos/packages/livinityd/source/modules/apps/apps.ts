@@ -885,6 +885,12 @@ export default class Apps {
 				developer: data.developer || '',
 				support: data.website || '',
 				gallery: [],
+				// Carry the catalog icon_url into the installed-app manifest so the
+				// desktop tile renders it. The UI (apps.list / app-icon.tsx) reads
+				// manifest `icon`; without this, platform-API apps fell back to the
+				// livinity-apps-gallery icon path, which 404s for apps not in that
+				// gallery (e.g. MCP-published store apps) → blank icon.
+				icon: data.icon_url || data.icon || undefined,
 			}
 
 			const yaml = (await import('js-yaml')).default
