@@ -1261,10 +1261,51 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 					vscode: 'code',
 					directory: 'nautilus',
 					files: 'nautilus',
+					// Chromium-family aliases so `chrome`/`chromium` resolve to a real
+					// binary on the nested display (Bytebot APP_MAP used 'google-chrome').
+					chrome: 'google-chrome',
+					'google-chrome': 'google-chrome',
+					chromium: 'chromium',
 				}
 				const bin = APP_ALIASES[app] ?? app
+
+				// Chromium-family browsers need an ISOLATED profile + headless-safe
+				// flags or they silently fail to render on a nested display: launched
+				// against the DEFAULT profile they detect the already-running master /
+				// WebApp Chrome (profile singleton lock), hand off to it, and EXIT
+				// immediately — so the nested display stays black with no window (the
+				// exact symptom the operator hit on :60). A per-display --user-data-dir
+				// breaks the singleton; --no-sandbox/--disable-gpu/--disable-dev-shm-usage
+				// keep Chrome alive on the headless/nested X; --window-size fills the
+				// 720p display without needing a window manager.
+				const CHROME_BINS = new Set([
+					'google-chrome',
+					'google-chrome-stable',
+					'chromium',
+					'chromium-browser',
+				])
+				let spawnArgs = extraArgs
+				if (CHROME_BINS.has(bin)) {
+					const dnum = display.replace(/[^0-9]/g, '') || 'host'
+					const chromeFlags = [
+						`--user-data-dir=/tmp/livos-luse-chrome-${dnum}`,
+						'--no-sandbox',
+						'--disable-gpu',
+						'--disable-dev-shm-usage',
+						'--no-first-run',
+						'--no-default-browser-check',
+						'--window-position=0,0',
+						'--window-size=1280,720',
+					]
+					// Don't duplicate any flag the caller already supplied.
+					const passedKeys = new Set(extraArgs.map((a) => a.split('=')[0]))
+					spawnArgs = [
+						...chromeFlags.filter((f) => !passedKeys.has(f.split('=')[0])),
+						...extraArgs,
+					]
+				}
 				try {
-					const child = spawn(bin, extraArgs, {
+					const child = spawn(bin, spawnArgs, {
 						env: process.env,
 						detached: true,
 						stdio: 'ignore',

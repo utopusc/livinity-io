@@ -50,20 +50,21 @@ import {
 	redisKeyForDisplayApps,
 } from './redis-keys.js'
 
-// Phase 254 (decision #3) — exported so the host display `:1` creation in
-// index.ts can source its resolution from the SAME default the MCP
-// display-creation path (create() below) uses, instead of an independent
-// hardcoded 1920x1080 literal. Values are UNCHANGED (1920/1080).
-export const DEFAULT_DISPLAY_WIDTH = 1920
-export const DEFAULT_DISPLAY_HEIGHT = 1080
+// Default geometry for MCP `computer_create_display` (AI-created displays) when
+// the caller omits width/height. Operator directive 2026-06-02: AI displays
+// should be a stable 1280x720 (matches the `:1` host display), not 1080p — the
+// agent kept creating 1920x1080 `:60` displays. Now unified at 720p with
+// HOST_DISPLAY_* below (both 1280x720), so every LivOS display defaults to 720p.
+export const DEFAULT_DISPLAY_WIDTH = 1280
+export const DEFAULT_DISPLAY_HEIGHT = 720
 
 // The boot `:1` HOST display (the branded LivOS shell + main desktop stream that
 // livinityd's Xvfb owns). Pinned to a fixed 720p so `:1` is a stable, lightweight
-// host surface regardless of the viewer. Intentionally DECOUPLED from
-// DEFAULT_DISPLAY_* above (the MCP `computer_create_display` default, which stays
-// 1080p): the operator wants `:1` specifically at 1280x720, not AI-created displays.
-// Used by index.ts for BOTH the Xvfb `-screen` geometry AND the displays.list
-// registration so the popover thumb + openWindow sizing match the real `:1` size.
+// host surface regardless of the viewer. Now the SAME value as DEFAULT_DISPLAY_*
+// above (both 1280x720) — every LivOS display defaults to 720p as of 2026-06-02.
+// Kept as a distinct named constant for the host-display concept. Used by index.ts
+// for BOTH the Xvfb `-screen` geometry AND the displays.list registration so the
+// popover thumb + openWindow sizing match the real `:1` size.
 export const HOST_DISPLAY_WIDTH = 1280
 export const HOST_DISPLAY_HEIGHT = 720
 
