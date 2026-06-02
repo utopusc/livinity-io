@@ -193,6 +193,28 @@ export type WebAppWindowManagerOpts = {
 		updateServer(name: string, updates: Partial<McpServerConfigInput>): Promise<unknown>
 		removeServer(name: string): Promise<boolean>
 	}
+	/**
+	 * Phase 255-03 (D-255-WEBAPP-REGISTER) — optional handle to the daemon's
+	 * displayManager (the SAME one the MCP `computer_create_display` path uses,
+	 * backed by the daemon Redis). When provided, spawn() adopts the already-
+	 * running per-app Xvfb into the display registry via `registerExisting`
+	 * (Redis-only HSET, NO second Xvfb spawn, does NOT advance the :N allocator)
+	 * so the WebApp appears in `displays.list` / the Displays popover owned by
+	 * the WebApp user; close() removes the record via `kill`. NEVER `create()`
+	 * (Pitfall 2 — that would spawn a duplicate Xvfb on a divergent :N).
+	 * Optional — when absent, spawn/close are byte-identical to pre-255.
+	 */
+	displayManager?: {
+		registerExisting(input: {
+			display: string
+			width: number
+			height: number
+			mode: 'xvfb' | 'xephyr'
+			name?: string
+			ownerSession: string
+		}): Promise<unknown>
+		kill(input: {display: string; callerSession: string}): Promise<{ok: boolean}>
+	}
 	/** Phase 100-08-04 — resolved path to the Luse MCP stdio server. Required when mcpConfigManager is set. */
 	luseServerPath?: string
 	/** Phase 100-08-04 — env passed to buildLuseConfig. Defaults to process.env. */
@@ -317,6 +339,8 @@ export class WebAppWindowManager {
 	private readonly idlePollMs: number
 	private readonly webappCap: number
 	private readonly mcpConfigManager: WebAppWindowManagerOpts['mcpConfigManager']
+	// Phase 255-03 — optional displayManager (registerExisting on spawn / kill on close).
+	private readonly displayManager: WebAppWindowManagerOpts['displayManager']
 	private readonly luseServerPath: string | undefined
 	private readonly luseMcpEnv: NodeJS.ProcessEnv
 	// Phase 102-04 — per-app primitives (REQUIRED, strong-typed now).
@@ -347,6 +371,8 @@ export class WebAppWindowManager {
 		this.idlePollMs = opts.idlePollMs ?? DEFAULT_IDLE_POLL_MS
 		this.webappCap = opts.webappCap ?? DEFAULT_WEBAPP_CAP
 		this.mcpConfigManager = opts.mcpConfigManager
+		// Phase 255-03 — optional displayManager DI (enables registerExisting/kill).
+		this.displayManager = opts.displayManager
 		this.luseServerPath = opts.luseServerPath
 		this.luseMcpEnv = opts.luseMcpEnv ?? process.env
 		// Phase 102-04 — per-app primitives wiring.
@@ -494,6 +520,31 @@ export class WebAppWindowManager {
 			this.logger?.info?.(
 				`webapp ${opts.webappId} spawned (user=${opts.userId} display=${display} chromePid=${chrome.pid} streamId=${entry.streamId})`,
 			)
+
+			// Phase 255-03 (D-255-WEBAPP-REGISTER) — adopt the already-running
+			// per-app Xvfb into the display registry so this WebApp appears in
+			// `displays.list` / the Displays popover, owned by the WebApp user.
+			// Uses registerExisting (Redis-only HSET, NO second Xvfb spawn, does
+			// NOT advance the :N allocator) — NEVER create() (Pitfall 2). Mirrors
+			// the boot :1 registerExisting guard at index.ts: best-effort try/catch
+			// so a Redis write failure NEVER breaks the WebApp launch.
+			if (this.displayManager) {
+				try {
+					await this.displayManager.registerExisting({
+						display,
+						width: WEBAPP_DISPLAY_WIDTH,
+						height: WEBAPP_DISPLAY_HEIGHT,
+						mode: 'xvfb',
+						name: opts.url,
+						ownerSession: opts.userId,
+					})
+				} catch (regErr) {
+					this.logger?.warn?.(
+						`webapp ${opts.webappId}: displayManager.registerExisting threw (non-fatal)`,
+						regErr as Error,
+					)
+				}
+			}
 
 			// Phase 103-05 (REQ-103-B5) — flip default OFF. Phase 103-03 + 103-04
 			// ship the single-MCP display-aware path: the global `luse` MCP accepts
@@ -700,6 +751,23 @@ export class WebAppWindowManager {
 				`webapp ${opts.webappId}: displayAllocator.release threw (non-fatal)`,
 				err,
 			)
+		}
+
+		// Phase 255-03 (D-255-WEBAPP-REGISTER) — remove the display-registry
+		// record so the WebApp disappears from `displays.list` / the popover.
+		// kill gates on owner_session === callerSession (display-manager.ts) —
+		// spawn wrote ownerSession: userId, so callerSession: entry.userId (the
+		// owner) matches. Best-effort try/catch: a registry delete failure NEVER
+		// breaks the WebApp close.
+		if (this.displayManager) {
+			try {
+				await this.displayManager.kill({display: entry.display, callerSession: entry.userId})
+			} catch (killErr) {
+				this.logger?.warn?.(
+					`webapp ${opts.webappId}: displayManager.kill threw (non-fatal)`,
+					killErr as Error,
+				)
+			}
 		}
 
 		// 6. Release tracking port slot (idempotent — stream-manager already released
