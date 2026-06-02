@@ -43,6 +43,7 @@ export type {
 	IsOwnerInput,
 	KillDisplayResult,
 	ProcessKillFn,
+	RegisterExistingInput,
 	SpawnHandle,
 } from './types.js'
 
