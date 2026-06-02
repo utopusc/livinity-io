@@ -4,17 +4,17 @@
  * RED-before-GREEN (Nyquist): `desktop/clock-helpers.ts` does NOT exist yet —
  * the import below is unresolved, so the whole suite errors at collection
  * (RED for the right reason: the module is unimplemented). The GREEN comes in
- * plan 255-04, which extracts the WMO-glyph map + the Turkish greeting bands
+ * plan 255-04, which extracts the WMO-glyph map + the English greeting bands
  * out of top-bar.tsx into two pure, testable functions:
  *
  *   wmoGlyph(code: number): string   — WMO weather_code → emoji glyph
- *   greeting(hour: number, name?: string): string — Turkish time-of-day greeting
+ *   greeting(hour: number, name?: string): string — English time-of-day greeting
  *
  * WMO map (research §5 / PATTERNS.md): 0→☀️, 1-2→⛅, 3→☁️, 45-48→🌫️,
  * 51-67→🌧️, 71-77→❄️, 80-82→🌧️, 95-99→⛈️, unknown→☁️ (fallback).
- * Greeting bands (user_language.md): h<6 'İyi geceler' | h<12 'Günaydın' |
- * h<18 'İyi günler' | else 'İyi akşamlar'. With a name → `${greet}, ${name}`,
- * without → just `${greet}`.
+ * Greeting bands (English — product UI is not localized): h<6 'Good night' |
+ * h<12 'Good morning' | h<18 'Good afternoon' | else 'Good evening'. With a
+ * name → `${greet}, ${name}`, without → just `${greet}`.
  */
 
 import {describe, expect, it} from 'vitest'
@@ -43,24 +43,24 @@ describe('wmoGlyph — WMO weather_code → glyph (RED until 255-04)', () => {
 	})
 })
 
-describe('greeting — Turkish time-of-day greeting (RED until 255-04)', () => {
-	it('hour=2 (pre-dawn) → İyi geceler, Bruce', () => {
-		expect(greeting(2, 'Bruce')).toBe('İyi geceler, Bruce')
+describe('greeting — English time-of-day greeting', () => {
+	it('hour=2 (pre-dawn) → Good night, Bruce', () => {
+		expect(greeting(2, 'Bruce')).toBe('Good night, Bruce')
 	})
 
-	it('hour=9 (morning) → Günaydın, Bruce', () => {
-		expect(greeting(9, 'Bruce')).toBe('Günaydın, Bruce')
+	it('hour=9 (morning) → Good morning, Bruce', () => {
+		expect(greeting(9, 'Bruce')).toBe('Good morning, Bruce')
 	})
 
-	it('hour=14 (afternoon) → İyi günler, Bruce', () => {
-		expect(greeting(14, 'Bruce')).toBe('İyi günler, Bruce')
+	it('hour=14 (afternoon) → Good afternoon, Bruce', () => {
+		expect(greeting(14, 'Bruce')).toBe('Good afternoon, Bruce')
 	})
 
-	it('hour=20 (evening) → İyi akşamlar, Bruce', () => {
-		expect(greeting(20, 'Bruce')).toBe('İyi akşamlar, Bruce')
+	it('hour=20 (evening) → Good evening, Bruce', () => {
+		expect(greeting(20, 'Bruce')).toBe('Good evening, Bruce')
 	})
 
 	it('no name → bare greeting (no trailing comma+name)', () => {
-		expect(greeting(9)).toBe('Günaydın')
+		expect(greeting(9)).toBe('Good morning')
 	})
 })
