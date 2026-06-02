@@ -1162,6 +1162,10 @@ function makeManager102(overrides: any = {}) {
 	const xvfbBundle = overrides.xvfbBundle ?? makeFakeXvfbSpawnFn()
 	const chromeBundle = overrides.chromeBundle ?? makeFakeChromeSpawnFn()
 	const fluxboxFn = overrides.fluxboxFn
+	// Phase 255-03 — optional displayManager DI (mirrors mcpConfigManager). When
+	// `overrides.displayManager` is undefined the field is left unset so the
+	// optional-dep backward-compat path is exercised by callers that don't pass it.
+	const displayManager = overrides.displayManager
 
 	const mgr = new WebAppWindowManager({
 		streamManager,
@@ -1184,6 +1188,8 @@ function makeManager102(overrides: any = {}) {
 		chromeSpawnFn: chromeBundle.fn,
 		withWindowManager: overrides.withWindowManager,
 		fluxboxSpawnFn: fluxboxFn,
+		// Phase 255-03 — optional displayManager (registerExisting on spawn / kill on close).
+		displayManager,
 		// chromeCdpClient intentionally OMITTED — 102-04 removes the CDP path.
 	} as any)
 
@@ -1201,7 +1207,28 @@ function makeManager102(overrides: any = {}) {
 		profileBundle,
 		xvfbBundle,
 		chromeBundle,
+		displayManager,
 	}
+}
+
+/**
+ * Phase 255-03 — fake displayManager with the two methods WebAppWindowManager
+ * uses. registerExisting + kill default to resolved spies; pass `rejectRegister`
+ * / `rejectKill` to assert the best-effort try/catch never propagates the error
+ * out of spawn() / close().
+ */
+function makeFakeDisplayManager(
+	opts: {rejectRegister?: Error; rejectKill?: Error} = {},
+) {
+	const registerExisting = vi.fn(async (_input: any) => {
+		if (opts.rejectRegister) throw opts.rejectRegister
+		return {}
+	})
+	const kill = vi.fn(async (_input: any) => {
+		if (opts.rejectKill) throw opts.rejectKill
+		return {ok: true}
+	})
+	return {registerExisting, kill}
 }
 
 describe('Phase 102-04 — per-app Xvfb + Chrome subprocess spawn body', () => {
@@ -1646,5 +1673,123 @@ describe('Phase 102-08 — close lifecycle (ordered teardown + idempotency)', ()
 		expect(portBundle.releaseCalls).toEqual([15900])
 		expect(chromeBundle.stopCalls).toEqual([':10'])
 		expect(xvfbBundle.stopCalls).toEqual([':10'])
+	})
+})
+
+// ============================================================================
+// Phase 255-03 — displayManager registerExisting on spawn / kill on close
+//
+// D-255-WEBAPP-REGISTER: a spawned WebApp must appear in displays.list (and
+// therefore the Displays popover) owned by the WebApp user; closing it must
+// remove the record. The window-manager uses the SAME displayManager the MCP
+// `computer_create_display` path uses, but via `registerExisting` (Redis-only
+// HSET, NO second Xvfb spawn, does NOT advance the :N allocator) — never
+// `create()` (which would spawn a duplicate Xvfb on a divergent :N).
+//
+// Invariants under test (plan must_haves):
+//   1. spawn() calls registerExisting exactly once with the entry's display,
+//      width 1280 / height 720, mode 'xvfb', name = the spawn url, and
+//      ownerSession = opts.userId (per-user isolation — NOT '').
+//   2. close() calls kill exactly once with {display: entry.display,
+//      callerSession: entry.userId} (the owner gates display-manager kill).
+//   3. displayManager is OPTIONAL — spawn/close succeed when it is absent.
+//   4. A rejecting registerExisting / kill is best-effort (try/catch) and
+//      never propagates out of spawn() / close().
+//
+// Sacred SHA f3538e1d811992b782a9bb057d1b7f0a0189f95f UNTOUCHED.
+// ============================================================================
+
+describe('Phase 255-03 — displayManager registerExisting on spawn / kill on close', () => {
+	beforeEach(() => {
+		vi.useRealTimers()
+	})
+	afterEach(() => {
+		vi.useRealTimers()
+	})
+
+	it('T-255-03-01: spawn() calls displayManager.registerExisting once with {display, 1280x720, xvfb, name=url, ownerSession=userId}', async () => {
+		const displayManager = makeFakeDisplayManager()
+		const {mgr} = makeManager102({displayManager})
+		await mgr.spawn({userId: 'user-1', webappId: 'app1', url: 'https://github.com'})
+
+		expect(displayManager.registerExisting).toHaveBeenCalledTimes(1)
+		const input = (displayManager.registerExisting as any).mock.calls[0][0]
+		// First WebApp allocates :10 (fake allocator starts at 10).
+		expect(input.display).toBe(':10')
+		expect(input.width).toBe(1280)
+		expect(input.height).toBe(720)
+		expect(input.mode).toBe('xvfb')
+		expect(input.name).toBe('https://github.com')
+		// Per-user isolation: owner = the WebApp user's id (NEVER '' = host/shared).
+		expect(input.ownerSession).toBe('user-1')
+		mgr._clearForTests()
+	})
+
+	it('T-255-03-02: close() calls displayManager.kill once with {display: entry.display, callerSession: entry.userId}', async () => {
+		const displayManager = makeFakeDisplayManager()
+		const {mgr} = makeManager102({displayManager})
+		await mgr.spawn({userId: 'user-1', webappId: 'app1', url: 'https://github.com'})
+		await mgr.close({webappId: 'app1', userId: 'user-1'})
+
+		expect(displayManager.kill).toHaveBeenCalledTimes(1)
+		const input = (displayManager.kill as any).mock.calls[0][0]
+		expect(input.display).toBe(':10')
+		// callerSession must equal the OWNER (the user that spawned), so the
+		// display-manager owner-gate (owner_session === callerSession) passes.
+		expect(input.callerSession).toBe('user-1')
+		mgr._clearForTests()
+	})
+
+	it('T-255-03-03: registerExisting / kill are NOT called when displayManager is undefined (optional dep, no throw)', async () => {
+		const {mgr} = makeManager102() // no displayManager injected
+		await expect(
+			mgr.spawn({userId: 'user-1', webappId: 'app-bare', url: 'https://example.com'}),
+		).resolves.toBeDefined()
+		await expect(
+			mgr.close({webappId: 'app-bare', userId: 'user-1'}),
+		).resolves.toEqual({ok: true})
+		mgr._clearForTests()
+	})
+
+	it('T-255-03-04: a rejecting registerExisting does NOT throw out of spawn() (best-effort, non-fatal)', async () => {
+		const displayManager = makeFakeDisplayManager({rejectRegister: new Error('redis down')})
+		const {mgr} = makeManager102({displayManager})
+		// spawn must still resolve with a valid SpawnResult despite the registry write failing.
+		const r = await mgr.spawn({userId: 'user-1', webappId: 'app-reg-fail', url: 'https://example.com'})
+		expect(r.webappId).toBe('app-reg-fail')
+		expect(r.windowId).toBe(0)
+		expect(displayManager.registerExisting).toHaveBeenCalledTimes(1)
+		// The entry was still created (registration failure must not roll back the spawn).
+		expect(mgr.list({userId: 'user-1'})).toHaveLength(1)
+		mgr._clearForTests()
+	})
+
+	it('T-255-03-05: a rejecting kill does NOT throw out of close() (best-effort, non-fatal)', async () => {
+		const displayManager = makeFakeDisplayManager({rejectKill: new Error('redis down')})
+		const {mgr} = makeManager102({displayManager})
+		await mgr.spawn({userId: 'user-1', webappId: 'app-kill-fail', url: 'https://example.com'})
+		await expect(
+			mgr.close({webappId: 'app-kill-fail', userId: 'user-1'}),
+		).resolves.toEqual({ok: true})
+		expect(displayManager.kill).toHaveBeenCalledTimes(1)
+		// Entry still removed from the manager despite the registry delete failing.
+		expect(mgr.list({userId: 'user-1'})).toHaveLength(0)
+		mgr._clearForTests()
+	})
+
+	it('T-255-03-06: spawn uses registerExisting (NEVER create) — registry write is the no-spawn adopt path', async () => {
+		// Lock the Pitfall-2 contract: the manager must adopt the already-running
+		// per-app Xvfb via registerExisting, never spawn a second X server via a
+		// create() call. The fake displayManager intentionally has NO `create`
+		// method — if window-manager ever called create() the spawn would throw,
+		// so a clean spawn here proves create() is never invoked.
+		const displayManager = makeFakeDisplayManager()
+		const {mgr} = makeManager102({displayManager})
+		await expect(
+			mgr.spawn({userId: 'user-1', webappId: 'app-adopt', url: 'https://example.com'}),
+		).resolves.toBeDefined()
+		expect(displayManager.registerExisting).toHaveBeenCalledTimes(1)
+		expect((displayManager as any).create).toBeUndefined()
+		mgr._clearForTests()
 	})
 })
