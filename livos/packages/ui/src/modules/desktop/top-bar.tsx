@@ -20,6 +20,7 @@ import {
 } from '@/shadcn-components/ui/context-menu'
 import {Popover, PopoverContent, PopoverTrigger} from '@/shadcn-components/ui/popover'
 import {WindowsManagerPanel} from './windows-manager-panel'
+import {greeting, wmoGlyph} from './clock-helpers'
 import {cn} from '@/shadcn-lib/utils'
 import {
 	Dialog,
@@ -466,6 +467,11 @@ function useLocationWeather() {
 		}
 	}, [])
 	const [tempC, setTempC] = useState<number | null>(null)
+	// Phase 255-04 — additive: WMO weather_code + is_day power the navbar
+	// glow-up (glyph + day/night accent). Both nullable; a missing field never
+	// breaks the clock (silent-fallback try/catch preserved below).
+	const [weatherCode, setWeatherCode] = useState<number | null>(null)
+	const [isDay, setIsDay] = useState<0 | 1 | null>(null)
 
 	useEffect(() => {
 		if (!city || typeof window === 'undefined') return
@@ -473,9 +479,11 @@ function useLocationWeather() {
 		try {
 			const raw = window.localStorage.getItem(cacheKey)
 			if (raw) {
-				const cached = JSON.parse(raw) as {at: number; tempC: number}
+				const cached = JSON.parse(raw) as {at: number; tempC: number; weatherCode?: number; isDay?: 0 | 1}
 				if (Date.now() - cached.at < 60 * 60 * 1000) {
 					setTempC(cached.tempC)
+					if (typeof cached.weatherCode === 'number') setWeatherCode(cached.weatherCode)
+					if (cached.isDay === 0 || cached.isDay === 1) setIsDay(cached.isDay)
 					return
 				}
 			}
@@ -492,14 +500,21 @@ function useLocationWeather() {
 				const first = geo.results?.[0]
 				if (!first) return
 				const wxRes = await fetch(
-					`https://api.open-meteo.com/v1/forecast?latitude=${first.latitude}&longitude=${first.longitude}&current=temperature_2m`,
+					`https://api.open-meteo.com/v1/forecast?latitude=${first.latitude}&longitude=${first.longitude}&current=temperature_2m,weather_code,is_day`,
 				)
 				if (!wxRes.ok) return
-				const wx = await wxRes.json() as {current?: {temperature_2m?: number}}
+				const wx = await wxRes.json() as {current?: {temperature_2m?: number; weather_code?: number; is_day?: number}}
 				const t = wx.current?.temperature_2m
 				if (typeof t !== 'number' || cancelled) return
+				const code = typeof wx.current?.weather_code === 'number' ? wx.current.weather_code : null
+				const day = wx.current?.is_day === 0 || wx.current?.is_day === 1 ? (wx.current.is_day as 0 | 1) : null
 				setTempC(Math.round(t))
-				window.localStorage.setItem(cacheKey, JSON.stringify({at: Date.now(), tempC: Math.round(t)}))
+				if (code !== null) setWeatherCode(code)
+				if (day !== null) setIsDay(day)
+				window.localStorage.setItem(
+					cacheKey,
+					JSON.stringify({at: Date.now(), tempC: Math.round(t), weatherCode: code ?? undefined, isDay: day ?? undefined}),
+				)
 			} catch {
 				// Network failure / blocked — silent fallback to city-only.
 			}
@@ -510,12 +525,17 @@ function useLocationWeather() {
 		}
 	}, [city])
 
-	return {city, tempC}
+	return {city, tempC, weatherCode, isDay}
 }
 
 function ClockWithLocation() {
 	const [now, setNow] = useState(() => new Date())
-	const {city, tempC} = useLocationWeather()
+	const {city, tempC, weatherCode, isDay} = useLocationWeather()
+	// Phase 255-04 — additive: source the operator name from the SAME cached
+	// tRPC query the profile button uses (no new fetch) so the greeting reads
+	// e.g. "İyi akşamlar, Bruce". Falls back to the bare greeting if absent.
+	const userQ = trpcReact.user.get.useQuery()
+	const userName = userQ.data?.name || undefined
 
 	useEffect(() => {
 		// Tick every 30s — we only display HH:MM so per-second is wasteful.
@@ -530,8 +550,19 @@ function ClockWithLocation() {
 	const mm = String(now.getMinutes()).padStart(2, '0')
 	const ampm = h24 >= 12 ? 'PM' : 'AM'
 
+	// Phase 255-04 — additive glow-up (D-255-NAVBAR-ADDITIVE): a small Turkish
+	// greeting line, a weather glyph beside the temp, and a day/night accent
+	// tint on the greeting/glyph text ONLY. Layout (pill/donut/profile + the
+	// existing hh:mm/AM-PM + city/temp rows) stays structurally intact.
+	const dayLike = isDay !== null ? isDay === 1 : h24 >= 6 && h24 < 20
+	// Warmer tint by day, cooler tint by night — text-color swap only.
+	const accentColor = dayLike ? '#f5b042' : '#7aa2ff'
+
 	return (
 		<div className='flex flex-col items-end gap-px rounded-xl px-2.5 py-1 text-right leading-[1.05] transition-colors hover:bg-[color:var(--bg-2)]'>
+			<span className='whitespace-nowrap text-[10.5px] font-medium' style={{color: accentColor}}>
+				{greeting(h24, userName)}
+			</span>
 			<span className='whitespace-nowrap font-mono text-[14.5px] font-medium tracking-[-0.01em] text-[color:var(--fg)] tabular-nums'>
 				{hh}:{mm}
 				<span className='ml-1 text-[10.5px] font-medium text-[color:var(--fg-mute)]'>{ampm}</span>
@@ -556,6 +587,11 @@ function ClockWithLocation() {
 						{tempC !== null && (
 							<>
 								{' · '}
+								{weatherCode !== null && (
+									<span aria-hidden style={{color: accentColor}}>
+										{wmoGlyph(weatherCode)}{' '}
+									</span>
+								)}
 								<span className='text-[color:var(--fg-dim)] tabular-nums'>{tempC}°C</span>
 							</>
 						)}
