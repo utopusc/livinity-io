@@ -368,7 +368,46 @@ if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
         xdg-desktop-portal-gnome \
         xvfb fluxbox \
         feh tint2 \
+        bubblewrap tinyproxy \
         2>&1 | tail -5 || warn "Some streaming packages failed to install (non-fatal)"
+
+    # ── Phase 256-01 (WS-A): egress allowlist proxy for the bwrap'd agent ──────
+    # Byte-identical to scripts/install/deploy-livinityd.sh — tinyproxy
+    # default-deny + hostname allowlist; the agent's bwrap child gets
+    # HTTPS_PROXY=http://127.0.0.1:13128 (sandbox.ts buildScrubbedEnv). bwrap is
+    # the hard requirement, the proxy is defense-in-depth — all warn-not-fail.
+    info "Phase 256-01: writing livos-egress allowlist proxy config + unit"
+    cat > /etc/tinyproxy/livos-egress.conf <<'EGRESS_CONF' || warn "livos-egress.conf write failed (non-fatal)"
+Port 13128
+Listen 127.0.0.1
+Allow 127.0.0.1
+FilterDefaultDeny Yes
+Filter /etc/tinyproxy/livos-egress.filter
+ConnectPort 443
+EGRESS_CONF
+    cat > /etc/tinyproxy/livos-egress.filter <<'EGRESS_FILTER' || warn "livos-egress.filter write failed (non-fatal)"
+^api\.anthropic\.com$
+^generativelanguage\.googleapis\.com$
+^github\.com$
+\.githubusercontent\.com$
+^registry\.npmjs\.org$
+^registry\.npmjs\.com$
+EGRESS_FILTER
+    cat > /etc/systemd/system/livos-egress.service <<'EGRESS_UNIT' || warn "livos-egress.service write failed (non-fatal)"
+[Unit]
+Description=LivOS egress allowlist proxy (tinyproxy)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/tinyproxy -d -c /etc/tinyproxy/livos-egress.conf
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EGRESS_UNIT
+    systemctl daemon-reload 2>/dev/null || warn "daemon-reload failed (non-fatal)"
+    systemctl enable --now livos-egress 2>/dev/null || warn "livos-egress enable failed (non-fatal)"
+    ok "livos-egress proxy configured"
 
     # VAAPI userspace — separate group so an Intel-iGPU-less host doesn't fail the run.
     # apt package is `libva-utils` (provides the `vainfo` binary), NOT `vainfo`.
@@ -384,7 +423,7 @@ if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
 
     # Verify the critical streaming binaries are present after install
     streaming_missing=()
-    for bin in ffmpeg gst-launch-1.0 dbus-send xdotool maim Xvfb fluxbox Xephyr xterm feh tint2; do
+    for bin in ffmpeg gst-launch-1.0 dbus-send xdotool maim Xvfb fluxbox Xephyr xterm feh tint2 bwrap; do
         if ! command -v "$bin" >/dev/null 2>&1; then
             streaming_missing+=("$bin")
         fi
