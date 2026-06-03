@@ -921,7 +921,7 @@ export async function typeText(text: string, delay?: number, isSensitive?: boole
  *
  * `isSensitive=true` triggers log redaction (T-72N2-01).
  */
-export async function pasteText(text: string, isSensitive?: boolean): Promise<void> {
+export async function pasteText(text: string, isSensitive?: boolean, windowId?: number): Promise<void> {
 	if (isSensitive) {
 		// eslint-disable-next-line no-console -- log redaction is a security feature.
 		console.log(`[REDACTED — pasted ${text.length} chars sensitive]`)
@@ -929,23 +929,64 @@ export async function pasteText(text: string, isSensitive?: boolean): Promise<vo
 
 	const xclipOk = await tryXclipCopy(text)
 	if (xclipOk) {
-		// Issue Ctrl+V via raw press/release so any modifier already held by
-		// the agent isn't disturbed by `keyboard.type` quirks. Symmetric
-		// release order (V first, then LeftControl) matches typeKeys.
+		// 2026-06-02 — Issue Ctrl+V via XDOTOOL, not nut-js. nut-js's
+		// `pressKey(Ctrl, V)` fires XTestFakeKeyEvent press/release pairs with
+		// no sync flush; on Xvfb the target app can process the `v` keypress
+		// before the Ctrl modifier registers, so the paste lands as a literal
+		// `v` (modifier-drop race — reported across every app, not just Chrome).
+		// `xdotool key --clearmodifiers ctrl+v` holds the modifier across the
+		// keypress atomically, and the activate-first prefix focuses the bound
+		// window so the paste lands on the right surface (nut-js has no window
+		// scoping). Same pattern that fixed click/typeKeys/typeText (P100-07.3).
+		const okPaste = await tryXdotoolPaste(windowId)
+		if (okPaste) return
+		// xdotool unavailable — fall back to the legacy nut-js Ctrl+V (racy on
+		// Xvfb, but better than nothing on hosts without xdotool).
 		await keyboard.pressKey(Key.LeftControl, Key.V)
 		await keyboard.releaseKey(Key.V, Key.LeftControl)
 		return
 	}
 
-	// Fallback path: type the text as if the user typed it.
+	// Clipboard copy failed (xclip missing). Type the text instead — app-
+	// agnostic, no clipboard/modifier needed. Prefer xdotool `type` (window-
+	// focused, handles the modifier-less path cleanly) over nut-js. NOTE: typed
+	// newlines become Enter keypresses, so clipboard+Ctrl+V above is preferred
+	// for multi-line text in submit-on-Enter boxes.
+	if (typeof windowId === 'number') {
+		const widStr = String(windowId)
+		const ok = await spawnXdotool([
+			'windowactivate', '--sync', widStr,
+			'windowfocus', '--sync', widStr,
+			'type', '--', text,
+		])
+		if (ok) return
+	}
 	if (!isSensitive) {
 		// eslint-disable-next-line no-console -- operator visibility into the fallback.
 		console.warn(
-			'[computer-use/native/input] xclip unavailable or failed — falling back to keyboard.type. ' +
-				'Install xclip (apt-get install xclip) for proper paste support.',
+			'[computer-use/native/input] xclip + xdotool unavailable or failed — falling back to keyboard.type. ' +
+				'Install xclip + xdotool (apt-get install xclip xdotool) for proper paste support.',
 		)
 	}
 	await keyboard.type(text)
+}
+
+/**
+ * Send Ctrl+V via xdotool. When `windowId` is set, activate-first the bound
+ * window so the paste targets it (Chrome & GTK filter synthetic `--window`
+ * key events, so we focus then send a real, unscoped key event — same fix as
+ * tryXdotoolKey/tryXdotoolClick). `--clearmodifiers` clears any stuck modifier
+ * before the combo and restores it after. Returns true on clean exit, false on
+ * ENOENT / non-zero exit. Never throws.
+ */
+async function tryXdotoolPaste(windowId?: number): Promise<boolean> {
+	const args: string[] = []
+	if (typeof windowId === 'number') {
+		const widStr = String(windowId)
+		args.push('windowactivate', '--sync', widStr, 'windowfocus', '--sync', widStr)
+	}
+	args.push('key', '--clearmodifiers', 'ctrl+v')
+	return await spawnXdotool(args)
 }
 
 /**
