@@ -35,28 +35,16 @@ const ONE_WEEK = 7 * ONE_DAY
 
 const DEFAULT_WALLPAPER = 'aurora'
 
-/**
- * Cookie Domain for the LIVINITY_SESSION session cookie.
- *
- * The session cookie must cover BOTH the main host (`<user>.livinity.io`) and
- * the per-app subdomains, which use a HYPHEN sibling pattern for CF-Tunnel
- * compatibility (`<app>-<user>.livinity.io`) — these are NOT children of the
- * main host, so a `.<user>.livinity.io` cookie never reaches them. Widening to
- * the registrable parent (`.livinity.io`) makes the login cookie flow to the
- * gated app subdomains so the `@notauth` Caddy gate can recognise a logged-in
- * session. For a 2-label domain (`example.com`) there is no safe parent to
- * widen to, so we keep `.example.com`.
- *
- * Trade-off: a `.livinity.io` cookie is also sent to the shared platform host
- * (livinity.io / apps.livinity.io). It's HttpOnly + only meaningful to
- * livinityd, but be aware it leaves the box. Acceptable for the single-user
- * Mini PC; revisit if app subdomains move to true dot-subdomains.
- */
-function sessionCookieDomain(domain: string): string {
-	const parts = domain.split('.')
-	const parent = parts.length >= 3 ? parts.slice(1).join('.') : domain
-	return `.${parent}`
-}
+// Phase 257-04 WS-A (LIVOS-023): the old `sessionCookieDomain()` helper widened
+// the LIVINITY_SESSION cookie to the registrable parent (`.livinity.io`) so it
+// would reach the hyphen-sibling app subdomains — but that leaked the session JWT
+// to the shared platform host (livinity.io / apps.livinity.io) and sibling
+// tenants. It has been REMOVED from the SET path: the session cookie is now
+// host-only and cross-subdomain app auth goes through the 256-04 forward_auth
+// gate. NOTE: the logout clear path below DELIBERATELY keeps the wide
+// `.${dc.domain}` clear so an already-logged-in browser still holding a
+// previously-widened stale `.livinity.io` session cookie can flush it (a
+// host-only clearCookie would NOT remove a domain-scoped cookie).
 
 export default router({
 	// Registers a new user
@@ -215,23 +203,21 @@ export default router({
 				}
 			}
 
-			// Set domain-wide session cookie for cross-subdomain auth
-			// Read the configured domain so the cookie covers *.domain too
-			let cookieDomain: string | undefined
-			try {
-				const domainConfigRaw = await ctx.livinityd.ai.redis.get('livos:domain:config')
-				if (domainConfigRaw) {
-					const dc = JSON.parse(domainConfigRaw)
-					if (dc.active && dc.domain) cookieDomain = sessionCookieDomain(dc.domain)
-				}
-			} catch { /* ignore – fall back to no explicit domain */ }
-
+			// Phase 257-04 WS-A (LIVOS-023): the LIVINITY_SESSION cookie is now
+			// HOST-ONLY. Previously it was widened to the registrable parent
+			// (`.livinity.io`) so it would reach the hyphen-sibling app subdomains
+			// (`<app>-<user>.livinity.io`) — but that also leaked the session JWT
+			// to the SHARED platform host (livinity.io / apps.livinity.io on
+			// Server5) and to every sibling tenant. Cross-subdomain app auth is
+			// handled by the 256-04 forward_auth gate, NOT by a widened cookie, so
+			// we drop the `domain` attribute entirely (sent only to the exact host
+			// that set it). The LIVINITY_PROXY_TOKEN cookie (above) was already
+			// host-only and is left unchanged.
 			ctx.response!.cookie('LIVINITY_SESSION', apiToken, {
 				httpOnly: true,
 				secure: true,
 				sameSite: 'lax',
 				maxAge: 30 * ONE_DAY,
-				...(cookieDomain ? {domain: cookieDomain} : {}),
 			})
 
 			return apiToken
