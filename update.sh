@@ -345,6 +345,87 @@ LIVOS_UPDATE_TO_SHA=$(git -C "$TEMP_DIR" rev-parse HEAD 2>/dev/null || echo "")
 
 ok "Latest code fetched"
 
+# ── Phase 257-01 WS-B (LIVOS-011): verify-before-deploy commit pin ─────────
+# The fetched HEAD is rsync'd + built + restarted as ROOT. With no pin/signature
+# a compromised remote or TLS MITM = silent root RCE on the operator's next
+# Update. Resolve an EXPECTED ref and REFUSE (before the first rsync) when the
+# fetched HEAD does not match. Priority: (a) env LIVOS_EXPECTED_SHA, (b) repo
+# pin file scripts/install/EXPECTED_RELEASE, (c) signed-tag verification when a
+# maintainer key is shipped at scripts/install/maintainer.gpg.
+# OPT-IN-STRICT: when NO pin material exists, warn loudly + proceed so the
+# current unpinned Mini PC still updates (no deploy regression). Shipping an
+# EXPECTED_RELEASE / maintainer key flips it to fail-closed.
+livos_verify_fetched_ref() {
+    local to_sha="$LIVOS_UPDATE_TO_SHA"
+    local pin_file="$TEMP_DIR/scripts/install/EXPECTED_RELEASE"
+    local maintainer_key="$TEMP_DIR/scripts/install/maintainer.gpg"
+    local expected="" expected_source="" had_pin_material=0
+
+    if [[ -z "$to_sha" ]]; then
+        warn "update.sh: could not resolve fetched HEAD SHA — cannot verify pin (proceeding unverified)"
+        return 0
+    fi
+
+    # (a) explicit env override — highest priority
+    if [[ -n "${LIVOS_EXPECTED_SHA:-}" ]]; then
+        expected="${LIVOS_EXPECTED_SHA}"
+        expected_source="env LIVOS_EXPECTED_SHA"
+        had_pin_material=1
+    # (b) repo-shipped pin file (single SHA or refs/tags/<tag> line)
+    elif [[ -f "$pin_file" ]]; then
+        had_pin_material=1
+        local pin_line
+        pin_line=$(grep -vE '^\s*(#|$)' "$pin_file" 2>/dev/null | head -1 | tr -d '[:space:]')
+        if [[ "$pin_line" == refs/tags/* ]]; then
+            # resolve the tag to its commit SHA inside the cloned tree
+            expected=$(git -C "$TEMP_DIR" rev-parse "${pin_line#refs/tags/}^{commit}" 2>/dev/null \
+                || git -C "$TEMP_DIR" rev-parse "$pin_line" 2>/dev/null || echo "")
+            expected_source="pin file tag ${pin_line}"
+        else
+            expected="$pin_line"
+            expected_source="pin file scripts/install/EXPECTED_RELEASE"
+        fi
+    fi
+
+    # (c) signed-tag verification (only when a maintainer key is present and HEAD is a tag)
+    if [[ -z "$expected" && -f "$maintainer_key" ]]; then
+        had_pin_material=1
+        local head_tag
+        head_tag=$(git -C "$TEMP_DIR" describe --exact-match --tags HEAD 2>/dev/null || echo "")
+        if [[ -n "$head_tag" ]]; then
+            local gnupg_tmp
+            gnupg_tmp=$(mktemp -d)
+            if GNUPGHOME="$gnupg_tmp" gpg --quiet --import "$maintainer_key" 2>/dev/null \
+               && GNUPGHOME="$gnupg_tmp" git -C "$TEMP_DIR" -c gpg.program=gpg verify-tag "$head_tag" 2>/dev/null; then
+                ok "update.sh: signed tag ${head_tag} verified against shipped maintainer key"
+                rm -rf "$gnupg_tmp" 2>/dev/null || true
+                return 0
+            fi
+            rm -rf "$gnupg_tmp" 2>/dev/null || true
+            fail "Refusing to deploy: signed-tag verification of ${head_tag} (HEAD ${to_sha}) failed against the shipped maintainer key"
+        else
+            fail "Refusing to deploy: a maintainer key is shipped but the fetched HEAD ${to_sha} is not an annotated tag (cannot verify-tag)"
+        fi
+    fi
+
+    if [[ -n "$expected" ]]; then
+        if [[ "$to_sha" != "$expected" ]]; then
+            fail "Refusing to deploy: fetched HEAD ${to_sha} does not match the expected pinned ref ${expected} (source: ${expected_source})"
+        fi
+        ok "update.sh: fetched HEAD ${to_sha} matches the expected pinned ref (source: ${expected_source})"
+        return 0
+    fi
+
+    if (( had_pin_material == 0 )); then
+        warn "update.sh: no commit pin / signature available — deploying unverified HEAD ${to_sha} (set LIVOS_EXPECTED_SHA or ship scripts/install/EXPECTED_RELEASE to enforce)"
+        return 0
+    fi
+
+    # Pin material was present but did not yield an expected SHA (e.g. unresolvable tag)
+    fail "Refusing to deploy: pin material present but no expected SHA could be resolved (HEAD ${to_sha})"
+}
+livos_verify_fetched_ref
+
 # ── Step 1b: Phase 93 streaming subsystem apt packages ────
 # Idempotent apt-install so existing Mini PC deploys (which never re-ran
 # install.sh) pick up the streaming subsystem binaries on next update.
