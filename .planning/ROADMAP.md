@@ -3582,6 +3582,38 @@ Plans:
 
 ---
 
+### Phase 257: Security Hardening Pass 2 — remaining audit findings (High → Medium → Low/Info) — 🟡 PLANNING 2026-06-03
+
+**Goal:** Close the audit findings Phase 256 left out of scope. Phase 256 closed the 3 Critical (1 accepted) + the highest-impact coupled High/Medium (LIVOS-001/002/004/007/008/009/013/014/017/018/019/025/037). Phase 257 sweeps the rest, grouped by theme + module, prioritized High→Medium→Low/Info. **Each task must FIRST re-verify the finding still exists in current code** (some may be partially/fully closed by 256 — e.g. LIVOS-029 memory fail-open may already be closed by 256-04; skip-with-note if so). Source: `SECURITY-AUDIT.md` (repo root).
+
+- **WS-A — Session & token lifecycle (LIVOS-005, 006, 023, 028).** Wire the unused `sessions` table for JWT revocation on password-change + deactivation (005); tighten legacy/proxy-token cross-user file-tree isolation (006); narrow the `LIVINITY_SESSION` cookie scope off `.livinity.io` (023); bind JWT aud/iss + split proxy vs session signing secrets (028). Touch: `is-authenticated.ts`, `jwt.ts`, `user/routes.ts`, `server/index.ts`, schema.
+- **WS-B — Supply-chain integrity (LIVOS-011, 012, 026).** `update.sh` commit-pin / signature verification (011); skill marketplace `import()` sandbox/signature gate (012); `curl|bash` installer checksum/integrity (026). Touch: `update.sh`, `install.sh`, `skill-registry-client.ts`/`skill-loader.ts`, `README.md`.
+- **WS-C — Network & request-forgery surface (LIVOS-015, 024, 038).** Bind/firewall livinityd :8080 off the LAN (015); add scheme/host allowlist + DNS-rebind guard to `apps.addRepository` SSRF (024); harden MCP streamableHttp SSRF guard against DNS-rebind/IPv6 (038). Touch: `cli.ts`/server bind, UFW (Mini PC), `routes.ts`/`app-repository.ts`, `mcp-client-manager.ts`.
+- **WS-D — luse file exposure (LIVOS-010).** Sandbox luse `computer_read_file` so it cannot read the whole `/home/<slug>/` (OAuth creds). Touch: `computer-use/mcp/tools.ts`.
+- **WS-E — Secret hygiene (LIVOS-020, 021, 030, 031, 032, 033, 034).** Remove hardcoded Redis (020) / platform-DB (021) / livinityd-PG (030) / legacy (031, 032) passwords + fallbacks; derive at-rest encryption key independently of the JWT secret (033); fix the world-writable (0o777) scratch HOME nesting the cred mount (034). Touch: `heartbeat-runner.ts`, `platform/web/.../db.ts`, `database/index.ts`, `registry-credentials.ts`, `inject-local-ai-clis.ts`, `livos/setup.sh`, `liv/deploy/setup-server4.sh`.
+- **WS-F — Remaining Low/Info hygiene (LIVOS-027, 029, 035, 036, 039, 040).** openclawos approvals role check (027); confirm/close memory fail-open (029, may be done by 256-04); escape upstreamBearer in Caddyfile (035); custom-domain gateway auth + exact container-name match (036); `share-password` file mode 600 (039); pin/avoid blanket apt in update.sh (040). Touch: `openclawos/approvals-routes.ts`, `memory/src/auth.ts`, `caddy.ts`, `server/index.ts`, `samba.ts`, `update.sh`.
+
+**Depends on:** Phase 256 (shares auth/installer/caddy touch points — 257 builds on the 256 fail-closed + sanitizer baseline). `SECURITY-AUDIT.md`.
+
+**Out of scope:** the 256-accepted items (LIVOS-003/016 docker.sock curated, LIVOS-022 Portainer builtin); per-app metered-key marketplace expansion; microVM isolation.
+
+**Success criteria (goal-backward, per WS):** SC-A token revoked after password-change/deactivation + cookie not sent to sibling hosts; SC-B update.sh refuses an unpinned/unsigned HEAD + skill import rejects unsigned bundle + installer verifies checksum; SC-C :8080 not reachable from the LAN + addRepository rejects internal/SSRF targets; SC-D luse read of `~/.claude/.credentials.json` denied; SC-E no hardcoded secret remains in tracked source (grep-clean) + at-rest key independent of JWT secret; SC-F each Low/Info item verified closed or explicitly accepted. Plus regression: no auth/curated-app/agent-autonomy regression from 256.
+
+**UAT:** operator deploys to Mini PC + walks per-WS probes (synthetic acceptable).
+
+**Plans:** 7 plans (waves: W1 = 01/02/03/04/05 parallel · W2 = 06 · W3 = 07 deploy gate)
+
+Plans:
+- [ ] 257-01-PLAN.md — WS-B supply-chain: update.sh commit-pin + apt-guard, skill-import signature gate, installer checksum (LIVOS-011/012/026/040)
+- [ ] 257-02-PLAN.md — WS-C network/SSRF: loopback bind + UFW, addRepository SSRF guard, MCP DNS-rebind guard (LIVOS-015/024/038)
+- [ ] 257-03-PLAN.md — WS-D luse: credential-dir denylist in computer_read_file sandbox (LIVOS-010)
+- [ ] 257-04-PLAN.md — WS-A session/token: sessions-table jti revocation, fail-closed file scope, host-only cookie, aud/iss + dual secret (LIVOS-005/006/023/028)
+- [ ] 257-05-PLAN.md — WS-E secret hygiene: env/fail-closed for all default passwords + grep-clean, independent at-rest DEK, 0o700 HOME (LIVOS-020/021/030/031/032/033/034)
+- [ ] 257-06-PLAN.md — WS-F Low/Info: approvals admin-gate, Caddyfile bearer escape, exact container-name match, 0600 share secret; LIVOS-029 verified-closed-by-256 (LIVOS-027/035/036/039)
+- [ ] 257-07-PLAN.md — Integration/deploy gate: Mini PC update.sh deploy + per-WS probe walk + regression guard
+
+---
+
 ## v44 — Liv AI Tooling Depth (OPENED 2026-05-28)
 
 **Milestone goal:** Production-depth pass on v43 deliverables — Terminal v2 (multi-session + reattach + TTL GC), Luse skill set v2 (professional reference docs), Luse display lifecycle (create/list/kill virtual displays + place apps).
