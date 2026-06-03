@@ -583,6 +583,18 @@ ${WS_TRANSPORT_BODY}
 			// OpenDesign upstreamBearer + loopback Host/Origin rewrite) now runs ONLY
 			// after a positive auth decision, which also closes the LIVOS-037 residual
 			// (the pre-auth loopback rewrite no longer fires on forged-cookie requests).
+			// Phase 257-06 (LIVOS-035): the upstreamBearer is read verbatim from
+			// the app's compose (readAppDaemonToken only trims + unwraps ${VAR:-x}
+			// + rejects `${`), so a hostile app could ship a token containing a
+			// double-quote + newline + brace and inject ARBITRARY Caddy config
+			// here. Validate against a strict charset before interpolation: emit
+			// the bearer (and its Host/Origin loopback rewrite) ONLY when the
+			// token matches; otherwise omit the line entirely. A malformed/hostile
+			// token must NEVER break out into the generated Caddyfile.
+			const safeBearer =
+				sub.upstreamBearer && /^[A-Za-z0-9._-]+$/.test(sub.upstreamBearer)
+					? sub.upstreamBearer
+					: undefined
 			blocks.push(`${fullDomain} {
 	forward_auth 127.0.0.1:8080 {
 		uri /auth/verify
@@ -593,7 +605,7 @@ ${WS_TRANSPORT_BODY}
 		}
 	}
 	reverse_proxy 127.0.0.1:${sub.port} {
-${sub.upstreamBearer ? `\t\theader_up Authorization "Bearer ${sub.upstreamBearer}"\n\t\theader_up Host 127.0.0.1:${sub.port}\n\t\theader_up Origin http://127.0.0.1:${sub.port}\n` : ''}${WS_TRANSPORT_BODY}
+${safeBearer ? `\t\theader_up Authorization "Bearer ${safeBearer}"\n\t\theader_up Host 127.0.0.1:${sub.port}\n\t\theader_up Origin http://127.0.0.1:${sub.port}\n` : ''}${WS_TRANSPORT_BODY}
 	}
 }`)
 		}
