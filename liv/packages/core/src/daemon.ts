@@ -18,6 +18,7 @@ import { COMPLEXITY_PROMPT, SELF_REFLECTION_PROMPT, subagentPrompt } from './pro
 import type { Tool, ToolResult } from './types.js';
 import { logger } from './logger.js';
 import { formatErrorMessage } from './infra/errors.js';
+import { isFilePathAllowed } from './files-sandbox.js';
 import type Redis from 'ioredis';
 import type { Queue } from 'bullmq';
 import type { McpConfigManager } from './mcp-config-manager.js';
@@ -917,6 +918,8 @@ export class Daemon {
     router.register('files', async (intent) => {
       const { operation, path, content } = intent.params;
       if (!path) return { success: false, message: 'File path required.' };
+      // Phase 256-01 (WS-A / LIVOS-002): path-allowlist the files tool.
+      if (!isFilePathAllowed(path)) return { success: false, message: 'Access denied: path outside agent sandbox' };
 
       const fs = await import('fs/promises');
 
@@ -1675,6 +1678,8 @@ ${task}`;
       execute: async (params) => {
         const { operation, path, content } = params as { operation: string; path: string; content?: string };
         if (!path) return { success: false, output: '', error: 'File path required.' };
+        // Phase 256-01 (WS-A / LIVOS-002): path-allowlist the files tool.
+        if (!isFilePathAllowed(path)) return { success: false, output: '', error: 'Access denied: path outside agent sandbox' };
         const fs = await import('fs/promises');
         try {
           switch (operation) {
