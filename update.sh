@@ -382,7 +382,7 @@ Port 13128
 Listen 127.0.0.1
 Allow 127.0.0.1
 FilterDefaultDeny Yes
-Filter /etc/tinyproxy/livos-egress.filter
+Filter "/etc/tinyproxy/livos-egress.filter"
 ConnectPort 443
 EGRESS_CONF
     cat > /etc/tinyproxy/livos-egress.filter <<'EGRESS_FILTER' || warn "livos-egress.filter write failed (non-fatal)"
