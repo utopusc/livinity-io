@@ -214,13 +214,31 @@ export class HeartbeatRunner {
       }
     };
 
+    // LIVOS-020: derive the Redis password from REDIS_URL instead of a hardcoded
+    // literal. Build the `-a <pw>` flag only when a password is present; never
+    // embed a default credential. If REDIS_URL is unset/passwordless, ping
+    // without auth (auth-less local Redis) — fail-closed: no literal fallback.
+    const redisCliCmd = (() => {
+      const redisUrl = process.env.REDIS_URL;
+      if (!redisUrl) return 'redis-cli ping 2>/dev/null';
+      let pw = '';
+      try {
+        pw = decodeURIComponent(new URL(redisUrl).password || '');
+      } catch {
+        pw = '';
+      }
+      if (!pw) return 'redis-cli ping 2>/dev/null';
+      // Pass the password via REDISCLI_AUTH env so it never appears in argv/ps.
+      return `REDISCLI_AUTH=${JSON.stringify(pw)} redis-cli ping 2>/dev/null`;
+    })();
+
     // Run all commands in parallel
     const [pm2Raw, diskRaw, memRaw, uptimeRaw, redisRaw] = await Promise.all([
       run('pm2 jlist 2>/dev/null'),
       run('df / --output=used,size,pcent | tail -1'),
       run('free -m | grep Mem'),
       run('uptime'),
-      run('redis-cli -a "LivRedis2024!" ping 2>/dev/null'),
+      run(redisCliCmd),
     ]);
 
     // Parse PM2

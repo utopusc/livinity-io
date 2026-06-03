@@ -7,7 +7,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: livos
-      POSTGRES_PASSWORD: LivPostgres2024!
+      # LIVOS-030: require the password from the environment — no committed default.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
       POSTGRES_DB: livos
     ports:
       - '127.0.0.1:5432:5432'
