@@ -164,6 +164,25 @@ EGRESS_UNIT
     systemctl enable --now livos-egress 2>/dev/null || warn "livos-egress enable failed (non-fatal)"
     ok "livos-egress proxy configured"
 
+    # ── Phase 256-01b (WS-A): AppArmor userns profile for bwrap (Ubuntu 24.04) ─
+    # Ubuntu 24.04 sets kernel.apparmor_restrict_unprivileged_userns=1, so bwrap's
+    # --unshare-all fails ("setting up uid map: Permission denied") and the agent
+    # sandbox (sandbox.ts) would break the shell tool. Grant bwrap the userns cap
+    # via a scoped AppArmor profile — least-broad fix; does NOT disable unprivileged
+    # userns globally. Idempotent; warn-not-fail.
+    if [ -d /etc/apparmor.d ]; then
+        cat > /etc/apparmor.d/bwrap <<'BWRAP_AA' || warn "bwrap apparmor profile write failed (non-fatal)"
+abi <abi/4.0>,
+include <tunables/global>
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}
+BWRAP_AA
+        apparmor_parser -r /etc/apparmor.d/bwrap 2>/dev/null || warn "bwrap apparmor profile load failed (non-fatal — bwrap may need it on Ubuntu 24.04)"
+        ok "bwrap AppArmor userns profile installed"
+    fi
+
     # ── Phase 256-02 (WS-B): cred-egress-proxy CA material (LIVOS-001) ─────────
     # The host credential-injecting egress proxy (cred-egress-proxy.ts) MITM-
     # terminates the AI hosts to inject the operator OAuth bearer at the wire.
