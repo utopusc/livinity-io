@@ -1,6 +1,24 @@
 import { logger } from './logger.js';
-import type { Tool, ToolResult, ToolParameter } from './types.js';
+import type { Tool, ToolResult, ToolParameter, ApprovalRequest, ApprovalResponse } from './types.js';
 import type { ToolDefinition } from './providers/types.js';
+import { classifyToolCall } from './irreversible-classifier.js';
+
+/**
+ * Structural interface for the approval gate the registry consults on
+ * irreversible ops. ApprovalManager (approval-manager.ts) satisfies it; kept
+ * structural so the registry has no hard dependency on Redis and is trivially
+ * stubbable in tests. (Phase 256-06, LIVOS-002 layer 5.)
+ */
+export interface ApprovalGate {
+  createRequest(opts: {
+    sessionId: string;
+    tool: string;
+    params: Record<string, unknown>;
+    thought: string;
+    timeoutMs?: number;
+  }): Promise<ApprovalRequest>;
+  waitForResponse(requestId: string, timeoutMs?: number): Promise<ApprovalResponse | null>;
+}
 
 /**
  * Tool policy configuration for filtering available tools
@@ -49,6 +67,26 @@ const TOOL_PROFILES: Record<string, string[]> = {
 export class ToolRegistry {
   private tools = new Map<string, Tool>();
 
+  /**
+   * Phase 256-06 (LIVOS-002 layer 5) — the injection-proof approval gate. When
+   * an ApprovalManager is wired, execute() routes ONLY irreversible/off-box ops
+   * (per classifyToolCall) through operator approval; everything else
+   * fast-allows. When NO gate is wired, irreversible ops FAIL-SAFE DENY (never
+   * silent-allow) while ordinary ops still run autonomously.
+   */
+  private approvalGate?: ApprovalGate;
+  private approvalSessionId?: string;
+
+  /**
+   * Wire the approval gate (Phase 256-06). Called by SdkAgentRunner.run() and
+   * AgentLoop.run() with the agent's Redis-backed ApprovalManager + sessionId.
+   * Idempotent; passing undefined clears the gate.
+   */
+  setApprovalGate(approvalGate: ApprovalGate | undefined, sessionId: string): void {
+    this.approvalGate = approvalGate;
+    this.approvalSessionId = sessionId;
+  }
+
   /** Register a tool. Overwrites if name already exists. */
   register(tool: Tool): void {
     this.tools.set(tool.name, tool);
@@ -86,6 +124,47 @@ export class ToolRegistry {
       return { success: false, output: '', error: `Unknown tool: ${name}` };
     }
     try {
+      // -------------------------------------------------------------------
+      // Phase 256-06 (LIVOS-002 layer 5) — injection-proof irreversible gate.
+      // The classifier reads ONLY (name, params) — the agent-emitted call — and
+      // NEVER any tool output / prior result. It runs HERE, before tool.execute
+      // produces any output, so injected file/web content can't reach it.
+      // Default is ALLOW: only an affirmative irreversible match blocks.
+      // -------------------------------------------------------------------
+      const verdict = classifyToolCall(name, params);
+      if (verdict.irreversible) {
+        const category = verdict.category ?? 'irreversible';
+        const reason = verdict.reason ?? category;
+        if (this.approvalGate) {
+          const req = await this.approvalGate.createRequest({
+            sessionId: this.approvalSessionId ?? 'unknown',
+            tool: name,
+            params,
+            thought: `Irreversible/off-box op (${category}): ${reason}`,
+          });
+          const resp = await this.approvalGate.waitForResponse(req.id);
+          if (resp?.decision !== 'approve') {
+            const how = resp ? 'denied' : 'approval timed out';
+            logger.warn(`ToolRegistry: BLOCKED irreversible "${name}" (${category}) — ${how}`);
+            return {
+              success: false,
+              output: '',
+              error: `Blocked: ${category} requires operator approval (${how}).`,
+            };
+          }
+          logger.info(`ToolRegistry: irreversible "${name}" (${category}) APPROVED by operator`);
+        } else {
+          // FAIL-SAFE: no gate wired → never silently allow an irreversible op.
+          logger.warn(
+            `ToolRegistry: BLOCKED irreversible "${name}" (${category}) — no ApprovalManager wired (fail-safe deny)`,
+          );
+          return {
+            success: false,
+            output: '',
+            error: `Blocked: ${category} requires operator approval (no approval gate configured).`,
+          };
+        }
+      }
       return await tool.execute(params);
     } catch (err: any) {
       logger.error(`ToolRegistry: "${name}" threw`, { error: err.message });
@@ -213,6 +292,11 @@ export class ToolRegistry {
     const allowedTools = this.listAllFiltered(policy);
     for (const tool of allowedTools) {
       scoped.register(tool);
+    }
+    // Propagate the irreversible-op approval gate to the scoped registry so the
+    // subagent path stays gated identically (Phase 256-06).
+    if (this.approvalGate) {
+      scoped.setApprovalGate(this.approvalGate, this.approvalSessionId ?? 'unknown');
     }
     return scoped;
   }
