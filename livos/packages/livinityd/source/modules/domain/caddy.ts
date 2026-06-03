@@ -145,14 +145,19 @@ export interface SubdomainConfig {
 	 */
 	host?: string
 	/**
-	 * Optional upstream bearer token. When set, the gated app-subdomain block
-	 * injects `header_up Authorization "Bearer <token>"` into the reverse_proxy
-	 * so an app whose bundled web UI calls its own daemon WITHOUT a token (and
-	 * relies on a loopback bypass that never fires in a container) is
-	 * authenticated by Caddy instead. Used by agent-native apps like Open Design
-	 * (OD_API_TOKEN). The daemon stays bound to loopback + behind the login gate,
-	 * so the token is never exposed off-box. registerAppSubdomain populates this
-	 * from the app's compose; it round-trips through Redis so it survives regen.
+	 * Optional upstream bearer token for an agent-native app whose bundled web
+	 * UI talks to its OWN daemon assuming localhost. When set, the gated
+	 * app-subdomain block rewrites three request headers on the way upstream:
+	 *   - `Authorization: Bearer <token>` — the UI calls /api WITHOUT a token
+	 *     (it relies on a loopback bypass that never fires in a container), so
+	 *     Caddy authenticates it.
+	 *   - `Host: 127.0.0.1:<port>` and `Origin: http://127.0.0.1:<port>` — the
+	 *     daemon has a DNS-rebinding/CSRF guard that 403s any non-loopback Host
+	 *     or Origin, so both are rewritten to loopback.
+	 * Used by Open Design (OD_API_TOKEN). The daemon stays bound to loopback +
+	 * behind the login gate, so the token is never usable off-box.
+	 * registerAppSubdomain populates this from the app's compose; it round-trips
+	 * through Redis so it survives regen.
 	 */
 	upstreamBearer?: string
 }
@@ -583,7 +588,7 @@ ${WS_TRANSPORT_BODY}
 		redir https://${config.mainDomain}/login?redirect={scheme}://{host}{uri}
 	}
 	reverse_proxy 127.0.0.1:${sub.port} {
-${sub.upstreamBearer ? `\t\theader_up Authorization "Bearer ${sub.upstreamBearer}"\n` : ''}${WS_TRANSPORT_BODY}
+${sub.upstreamBearer ? `\t\theader_up Authorization "Bearer ${sub.upstreamBearer}"\n\t\theader_up Host 127.0.0.1:${sub.port}\n\t\theader_up Origin http://127.0.0.1:${sub.port}\n` : ''}${WS_TRANSPORT_BODY}
 	}
 }`)
 		}
