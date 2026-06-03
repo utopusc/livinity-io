@@ -40,7 +40,9 @@ describe('AppRepository', async () => {
 
 	test('throws error on invalid URL', async () => {
 		const livinityd = new Livinityd({dataDirectory: '/tmp'})
-		expect(() => new AppRepository(livinityd, 'invalid-url')).toThrow('Invalid URL')
+		// Phase 257-02 (WS-C, LIVOS-024): the bare-URL check was replaced by the
+		// webapps SSRF validator, which wraps the reason as 'Invalid repository URL: …'.
+		expect(() => new AppRepository(livinityd, 'invalid-url')).toThrow('Invalid repository URL')
 	})
 })
 
