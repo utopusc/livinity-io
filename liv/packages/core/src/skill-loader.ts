@@ -6,6 +6,7 @@ import { ToolRegistry } from './tool-registry.js';
 import { AgentLoop } from './agent.js';
 import { KimiAgentRunner } from './kimi-agent-runner.js';
 import { scanSkillDirectory } from './skill-manifest.js';
+import { verifySkillBundle } from './skill-signature.js';
 import type { Brain } from './brain.js';
 import type Redis from 'ioredis';
 import type { Skill, SkillFrontmatter, SkillContext, SkillResult, SkillRedis, RunAgentOptions } from './skill-types.js';
@@ -408,7 +409,12 @@ export class SkillLoader {
    * Skills are loaded using scanSkillDirectory for manifest parsing,
    * then dynamically imported. Loaded skills are marked with source: 'marketplace'.
    */
-  async loadMarketplaceSkills(marketplaceDir: string): Promise<void> {
+  async loadMarketplaceSkills(
+    marketplaceDir: string,
+    resolveTrust?: (
+      skillName: string,
+    ) => Promise<{ registryUrl?: string; manifestChecksum?: string } | undefined>,
+  ): Promise<void> {
     let entries: string[];
     try {
       entries = await readdir(marketplaceDir);
@@ -424,7 +430,11 @@ export class SkillLoader {
         const dirStat = await stat(dirPath);
         if (!dirStat.isDirectory()) continue;
 
-        const success = await this.loadSkillLazy(entry, dirPath);
+        // Phase 257-01 WS-B (LIVOS-012): re-apply the origin trust gate on
+        // reload — pull the persisted registry-of-origin so an official-registry
+        // bundle stays trusted; an unverifiable one fails closed inside loadSkillLazy.
+        const trust = resolveTrust ? await resolveTrust(entry).catch(() => undefined) : undefined;
+        const success = await this.loadSkillLazy(entry, dirPath, trust);
         if (success) loaded++;
       } catch (err: any) {
         logger.error(`SkillLoader: failed to load marketplace skill "${entry}"`, { error: err.message });
@@ -445,7 +455,11 @@ export class SkillLoader {
    *
    * Returns true if loaded successfully, false otherwise.
    */
-  async loadSkillLazy(skillName: string, dirPath: string): Promise<boolean> {
+  async loadSkillLazy(
+    skillName: string,
+    dirPath: string,
+    opts?: { registryUrl?: string; manifestChecksum?: string },
+  ): Promise<boolean> {
     try {
       const scanResult = await scanSkillDirectory(dirPath);
       if (!scanResult) {
@@ -457,6 +471,27 @@ export class SkillLoader {
 
       // Dynamic import of the skill entry point
       const jsPath = entryPoint.endsWith('.ts') ? entryPoint.replace(/\.ts$/, '.js') : entryPoint;
+
+      // ── Phase 257-01 WS-B (LIVOS-012): MARKETPLACE origin/checksum gate ──────
+      // This is a DOWNLOADED bundle (source:'marketplace'). Refuse to import its
+      // entry file unless it is trusted-by-origin (the pinned official registry)
+      // or its checksum verifies. The BUILTIN loadSkill path (this.skillsDir,
+      // first-party path-bundled) is intentionally NOT gated. If the registry-of-
+      // origin is not threaded in, registryUrl stays undefined → fail closed.
+      const verdict = await verifySkillBundle({
+        entryPath: jsPath,
+        origin: 'marketplace',
+        registryUrl: opts?.registryUrl,
+        manifestChecksum: opts?.manifestChecksum,
+      });
+      if (!verdict.ok) {
+        logger.error(
+          `SkillLoader: refusing to import marketplace skill "${skillName}" — ${verdict.reason}`,
+          { dirPath, registryUrl: opts?.registryUrl ?? null },
+        );
+        return false;
+      }
+
       const moduleUrl = pathToFileURL(jsPath).href + `?t=${Date.now()}`;
       const mod = await import(moduleUrl);
 
