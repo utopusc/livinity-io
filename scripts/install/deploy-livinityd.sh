@@ -1106,13 +1106,27 @@ LIVOS_HOST_IP=${host_ip_val}
 LUSE_MCP_ENABLED=true
 EOF
 
-    # Append optional --api-key if 104-09 wrote one
-    if [[ -n "${LIVOS_API_KEY:-}" ]]; then
-        echo "LIV_API_KEY=${LIVOS_API_KEY}" >> "$_DLD_ENV_FILE"
+    # Phase 256-04 (LIVOS-014): ALWAYS write LIV_API_KEY (was: only if
+    # LIVOS_API_KEY happened to be set). liv-core + the memory API now FAIL
+    # CLOSED (503) when LIV_API_KEY is unset, so this .env MUST carry one or
+    # liv-core boots refusing all /api traffic. Resolution order (idempotent
+    # across re-runs — the .env is rewritten fresh every run):
+    #   1. the explicit --api-key (LIVOS_API_KEY) if provided;
+    #   2. else reuse the prior key from the .env.bak this run just made
+    #      (so the key — and any JWTs/clients pinned to it — does not churn);
+    #   3. else generate a fresh openssl key.
+    local _dld_liv_api_key="${LIVOS_API_KEY:-}"
+    if [[ -z "$_dld_liv_api_key" && -f "${_DLD_ENV_FILE}.bak" ]]; then
+        _dld_liv_api_key=$(grep -E '^LIV_API_KEY=' "${_DLD_ENV_FILE}.bak" 2>/dev/null \
+            | head -n1 | sed -E 's|^LIV_API_KEY=(.*)$|\1|' || true)
     fi
+    if [[ -z "$_dld_liv_api_key" ]]; then
+        _dld_liv_api_key=$(openssl rand -hex 32)
+    fi
+    echo "LIV_API_KEY=${_dld_liv_api_key}" >> "$_DLD_ENV_FILE"
 
     chmod 0600 "$_DLD_ENV_FILE"
-    ok ".env written at $_DLD_ENV_FILE (mode 0600)"
+    ok ".env written at $_DLD_ENV_FILE (mode 0600, LIV_API_KEY seeded)"
 }
 
 # ── 7. Phase 109 — auto-seed liv:mcp:config (sequential-thinking + luse) ────
