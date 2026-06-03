@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 import type { Request, Response, NextFunction } from 'express';
 import { logger } from './logger.js';
 
-const LIV_API_KEY = process.env.LIV_API_KEY;
+// Phase 256-04 (LIVOS-014): LIV_API_KEY is read at CALL time inside
+// verifyApiKey/requireApiKey (so a late-seeded key is honored and the fns can
+// fail closed) — no module-load capture (which would freeze an unset value).
 
 // Cached JWT secret (read once from /data/secrets/jwt)
 let cachedJwtSecret: string | null = null;
@@ -179,11 +181,15 @@ export async function extractUserIdFromRequest(req: Request): Promise<string | u
  * Returns true if the key is valid.
  */
 export function verifyApiKey(key: string): boolean {
-  // If no API key configured, allow through (graceful degradation)
-  if (!LIV_API_KEY) return true;
+  // Phase 256-04 (LIVOS-014/018/019): read the key at CALL time (so a
+  // late-seeded key is honored and tests can toggle it) and FAIL CLOSED —
+  // if no API key is configured, reject ALL keys (was: fail-open `return true`,
+  // which silently disabled auth on every /api route incl. skill-install RCE).
+  const expected = process.env.LIV_API_KEY;
+  if (!expected) return false;
 
   try {
-    const expectedBuffer = Buffer.from(LIV_API_KEY, 'utf8');
+    const expectedBuffer = Buffer.from(expected, 'utf8');
     const providedBuffer = Buffer.from(key, 'utf8');
 
     if (expectedBuffer.length !== providedBuffer.length) return false;
@@ -199,10 +205,14 @@ export function verifyApiKey(key: string): boolean {
  * Uses constant-time comparison to prevent timing attacks.
  */
 export function requireApiKey(req: Request, res: Response, next: NextFunction): void {
-  // Graceful degradation: if no API key configured, allow requests through with warning
-  if (!LIV_API_KEY) {
-    logger.warn('[Auth] LIV_API_KEY not configured - running without authentication');
-    next();
+  // Phase 256-04 (LIVOS-014/018/019): FAIL CLOSED. Read the key at CALL time;
+  // if LIV_API_KEY is unset, REFUSE the request (503) instead of running next()
+  // — an env/deploy regression that drops the key must NOT expose the
+  // unauthenticated agent-RCE surface (/api/skills/install etc.).
+  const expected = process.env.LIV_API_KEY;
+  if (!expected) {
+    logger.error('[Auth] LIV_API_KEY not configured — refusing requests (fail-closed)');
+    res.status(503).json({ error: 'Server auth not configured' });
     return;
   }
 
