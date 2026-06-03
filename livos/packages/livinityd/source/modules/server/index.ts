@@ -200,10 +200,14 @@ class Server {
 		// Strategy 1: Look up Docker container by name and get its published host port
 		try {
 			const containers = await this.livinityd.apps.docker.listContainers({all: false})
-			const container = containers.find(
-				(c) =>
-					c.Names.some((n) => n === `/${appSlug}` || n === appSlug) ||
-					c.Names.some((n) => n.replace('/', '').includes(appSlug)),
+			// Phase 257-06 (LIVOS-036): EXACT container-name match only. The prior
+			// `.includes(appSlug)` substring fallback could cross-route custom-domain
+			// traffic to an unintended container (e.g. slug `web` matching
+			// `webhook-admin`), exposing it publicly with no LivOS auth. An unknown or
+			// colliding slug now resolves to no container, so the not-found 503 below
+			// fires instead of proxying to the wrong port.
+			const container = containers.find((c) =>
+				c.Names.some((n) => n === `/${appSlug}` || n === appSlug),
 			)
 			if (container) {
 				const portBinding = container.Ports.find((p) => p.PublicPort && p.Type === 'tcp')
@@ -709,10 +713,10 @@ class Server {
 									let cdTargetPort: number | null = null
 									try {
 										const cdContainers = await this.livinityd.apps.docker.listContainers({all: false})
-										const cdContainer = cdContainers.find(
-											(c) =>
-												c.Names.some((n) => n === `/${appSlug}` || n === appSlug) ||
-												c.Names.some((n) => n.replace('/', '').includes(appSlug)),
+										// Phase 257-06 (LIVOS-036): EXACT container-name match only (no
+										// substring fallback) — see the routeCustomDomain note above.
+										const cdContainer = cdContainers.find((c) =>
+											c.Names.some((n) => n === `/${appSlug}` || n === appSlug),
 										)
 										if (cdContainer) {
 											const cdPortBinding = cdContainer.Ports.find((p) => p.PublicPort && p.Type === 'tcp')
