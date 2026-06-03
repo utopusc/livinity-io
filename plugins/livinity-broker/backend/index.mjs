@@ -36,6 +36,10 @@ function hashKey(key, salt) {
 
 const KEY_PREFIX = 'lvb_'
 
+// Captured at onActivate so the route handlers (invoked as `handler(req, res)`
+// by plugin-loader.dispatchRequest — NO `api` arg) can reach `api.pg` / `api.log`.
+let _api = null
+
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 async function findKeyByPlaintext(api, plaintext) {
@@ -63,6 +67,7 @@ async function recordUsage(api, keyId, model, inTokens, outTokens) {
 
 export default {
 	async onActivate(api) {
+		_api = api
 		api.log.info('livinity-broker plugin activated')
 		// Pre-populate a rate-limit window so the first request doesn't
 		// crash on a missing key.
@@ -111,23 +116,68 @@ export default {
 			}
 			const body = req.body && typeof req.body === 'object' ? req.body : {}
 			const name = typeof body.name === 'string' ? body.name : 'untitled'
+			// 256-02 SC4b: per-app metered virtual key — thread the per-app SCOPE
+			// (budget + model allowlist) through so the key is genuinely metered,
+			// not unscoped. The app slug is already encoded in `name`
+			// (metered:app=<slug>:user=<uid>). Budget is { maxUsd } | undefined;
+			// modelAllowlist is string[] | undefined.
+			const budget =
+				body.budget && typeof body.budget === 'object' ? body.budget : null
+			const modelAllowlist = Array.isArray(body.modelAllowlist)
+				? body.modelAllowlist.filter((m) => typeof m === 'string')
+				: null
 			const plaintext = KEY_PREFIX + randomBytes(24).toString('base64url')
 			const salt = randomBytes(8).toString('hex')
 			const hash = hashKey(plaintext, salt)
 			const id = randomUUID()
-			await req // touch req to satisfy linter
-			await new Promise((r) => setTimeout(r, 1)) // yield to event loop
+			const prefix = plaintext.slice(0, 10)
+			// Persist the key + its per-app scope. `scope` carries budget +
+			// modelAllowlist (jsonb); the migration adds the column (0002).
+			try {
+				await _api.pg.query(
+					`INSERT INTO plugin_livinity_broker.api_keys
+					   (id, user_id, name, prefix, hash, salt, revoked, scope, created_at)
+					 VALUES ($1, $2, $3, $4, $5, $6, false, $7, NOW())`,
+					[id, userId, name, prefix, hash, salt, JSON.stringify({budget, modelAllowlist})],
+				)
+			} catch (err) {
+				_api?.log?.error?.(`createKey: failed to persist api_key ${id}: ${err?.message ?? err}`)
+				res.status(500).json({error: 'failed to persist key'})
+				return
+			}
 			res.status(201).json({
 				id,
 				name,
-				prefix: plaintext.slice(0, 10),
+				prefix,
 				plaintext,
+				budget,
+				modelAllowlist,
 				note: 'store this somewhere safe — it will not be shown again',
 			})
 		},
 
 		async deleteKey(req, res) {
-			res.json({ok: true})
+			// 256-02 SC4b: per-app metered keys must be independently revocable.
+			// Revoke by keyId (id param or body.keyId) — sets revoked=true so the
+			// key stops authenticating immediately. Other apps' keys untouched.
+			const keyId =
+				(req.params && req.params.id) ||
+				(req.body && typeof req.body === 'object' ? req.body.keyId : undefined)
+			if (typeof keyId !== 'string' || !keyId) {
+				res.status(400).json({error: 'keyId required'})
+				return
+			}
+			try {
+				await _api.pg.query(
+					'UPDATE plugin_livinity_broker.api_keys SET revoked = true WHERE id = $1',
+					[keyId],
+				)
+			} catch (err) {
+				_api?.log?.error?.(`deleteKey: failed to revoke ${keyId}: ${err?.message ?? err}`)
+				res.status(500).json({error: 'failed to revoke key'})
+				return
+			}
+			res.json({ok: true, revoked: keyId})
 		},
 	},
 
