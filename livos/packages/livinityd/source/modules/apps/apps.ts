@@ -26,6 +26,7 @@ import {
 } from './inject-local-ai-clis.js'
 import {startCredEgressProxyIfNeeded} from './cred-egress-proxy.js'
 import {sanitizeNonBuiltinCompose, ComposeRejected} from './compose-sanitizer.js'
+import {assertInstallAllowed, InstallForbidden} from './install-admin-gate.js'
 import {
 	chooseCredentialPath,
 	mintMeteredKeyForApp,
@@ -426,7 +427,7 @@ export default class Apps {
 		return NATIVE_APP_CONFIGS.some((c) => c.id === appId)
 	}
 
-	async install(appId: string, alternatives?: AppSettings['dependencies'], environmentOverrides?: Record<string, string>) {
+	async install(appId: string, alternatives?: AppSettings['dependencies'], environmentOverrides?: Record<string, string>, isAdmin: boolean = true) {
 		// Native apps don't need Docker install — they're installed via setup script
 		if (this.isNativeApp(appId)) {
 			// Just register as installed
@@ -524,6 +525,14 @@ export default class Apps {
 		if (!manifestVersionIsSupported) {
 			throw new Error(`App manifest version not supported`)
 		}
+
+		// WS-C (256-03, LIVOS-007/013, SC5): admin-gate the privileged install
+		// surface. A non-admin cannot install an app that uses the operator's AI
+		// credentials (requiresLocalAiClis / requiresAiProvider) nor a NEW
+		// non-builtin community-repo app (!isGeneratedTemplate). Builtin +
+		// platform-DB apps remain installable by members. Legacy single-user
+		// (no currentUser at the route) passes isAdmin=true. Throws InstallForbidden.
+		assertInstallAllowed({isAdmin, isGeneratedTemplate, manifest})
 
 		this.logger.log(`Setting up data directory for ${appId}`)
 		const appDataDirectory = `${this.#livinityd.dataDirectory}/app-data/${appId}`
