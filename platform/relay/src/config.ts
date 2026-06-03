@@ -20,15 +20,28 @@ function envStr(key: string, defaultValue: string): string {
   return process.env[key] ?? defaultValue;
 }
 
+/**
+ * LIVOS-021: require an env var with NO fallback credential. Throws if unset so
+ * a misconfigured deploy fails loud at boot instead of connecting with a
+ * committed default password.
+ */
+function envRequired(key: string): string {
+  const val = process.env[key];
+  if (!val) {
+    throw new Error(`[config] ${key} is required — committed default removed (LIVOS-021)`);
+  }
+  return val;
+}
+
 export const config = {
   /** Port the relay HTTP/WS server listens on */
   RELAY_PORT: envInt('RELAY_PORT', 4000),
 
-  /** PostgreSQL connection URL */
-  DATABASE_URL: envStr('DATABASE_URL', 'postgresql://platform:LivPlatform2024!@localhost:5432/platform'),
+  /** PostgreSQL connection URL (required — no committed default credential) */
+  DATABASE_URL: envRequired('DATABASE_URL'),
 
-  /** Redis connection URL */
-  REDIS_URL: envStr('REDIS_URL', 'redis://:LivRelayRedis2024!@localhost:6379'),
+  /** Redis connection URL (required — no committed default credential) */
+  REDIS_URL: envRequired('REDIS_URL'),
 
   /** Base domain for subdomain parsing (e.g., "livinity.io") */
   RELAY_HOST: envStr('RELAY_HOST', 'livinity.io'),

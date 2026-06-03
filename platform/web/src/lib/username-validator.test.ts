@@ -26,7 +26,7 @@
  *   # Unit + integration (requires DB reachable)
  *   cd platform/web
  *   LIV_INTEGRATION=1 \
- *   DATABASE_URL='postgresql://platform:LivPlatform2024@127.0.0.1:5432/platform' \
+ *   DATABASE_URL='postgresql://platform:<DATABASE_PASSWORD>@127.0.0.1:5432/platform' \
  *     npx tsx --test src/lib/username-validator.test.ts
  *
  * The whole integration block is gated behind LIV_INTEGRATION=1 so `npx tsc
