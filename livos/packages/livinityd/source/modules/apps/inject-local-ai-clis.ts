@@ -297,8 +297,16 @@ export async function writeLocalAiCliWrappers(
 	const homeDir = path.join(appDataDir, 'host-clis', 'home')
 	await fse.mkdirp(binDir)
 	await fse.mkdirp(homeDir)
-	// World-writable so any container uid can write CLI self-config into $HOME.
-	await fse.chmod(homeDir, 0o777).catch(() => {})
+	// LIVOS-034: least-privilege scratch HOME — 0o700 owned by the livinityd
+	// process user, NOT world-writable. The container's CLI self-config
+	// is written into the rw-mounted ${CLI_MOUNT_PREFIX}/home; 0o700 removes the
+	// world-writable "plant a poisoned config" vector while preserving function
+	// (the per-app data dir is already livinityd-owned, and verified apps run
+	// with the operator-trusted compose). The container uid is not available in
+	// this code path (the cred-ACL step is a no-op since 256-02 — creds are no
+	// longer bind-mounted here), so we fall back to 0o700 owned by the process
+	// user rather than chowning to a container uid.
+	await fse.chmod(homeDir, 0o700).catch(() => {})
 
 	const written: string[] = []
 	const writeWrapper = async (name: string, body: string) => {
