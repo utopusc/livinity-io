@@ -18,6 +18,7 @@ import { logger } from './logger.js';
 import type { ToolRegistry } from './tool-registry.js';
 import type { McpConfigManager } from './mcp-config-manager.js';
 import type { McpServerConfig, McpServerStatus } from './mcp-types.js';
+import { assertResolvedHostSafe } from './mcp-ssrf-guard.js';
 
 const STATUS_KEY_PREFIX = 'liv:mcp:status:';
 const STATUS_TTL = 3600; // 1 hour
@@ -324,8 +325,17 @@ export class McpClientManager {
     }
   }
 
-  /** Validate that a streamableHttp URL doesn't point to internal resources */
-  private validateUrl(urlStr: string): void {
+  /**
+   * Validate that a streamableHttp URL doesn't point to internal resources.
+   *
+   * Phase 257-02 (WS-C, LIVOS-038): the literal-hostname-only check below was
+   * bypassable via DNS rebinding, IPv4-mapped IPv6 ([::ffff:127.0.0.1]), and
+   * integer-encoded IPs. The authoritative gate is now assertResolvedHostSafe(),
+   * which resolves the host and classifies EVERY resolved IP. BLOCKED_HOST_PATTERNS
+   * is kept only as a cheap literal pre-filter; the resolve-and-check is what
+   * actually closes the SSRF surface. validateUrl is async accordingly.
+   */
+  private async validateUrl(urlStr: string): Promise<void> {
     let parsed: URL;
     try {
       parsed = new URL(urlStr);
@@ -338,12 +348,17 @@ export class McpClientManager {
       throw new Error(`URL protocol must be http or https, got: ${parsed.protocol}`);
     }
 
+    // Fast-path literal pre-filter (cheap, defense in depth).
     const hostname = parsed.hostname;
     for (const pattern of BLOCKED_HOST_PATTERNS) {
       if (pattern.test(hostname)) {
         throw new Error(`URL hostname "${hostname}" is blocked (internal/private address)`);
       }
     }
+
+    // Authoritative gate: resolve the host and reject if ANY resolved address
+    // (incl. IPv4-mapped IPv6 / integer-encoded forms) is private/internal.
+    await assertResolvedHostSafe(urlStr);
   }
 
   private async connectServer(config: McpServerConfig, reconnectAttempt = 0): Promise<void> {
@@ -377,8 +392,8 @@ export class McpClientManager {
       } else if (config.transport === 'streamableHttp') {
         if (!config.url) throw new Error('streamableHttp transport requires "url"');
 
-        // Validate URL to prevent SSRF
-        this.validateUrl(config.url);
+        // Validate URL to prevent SSRF (resolve-and-check — LIVOS-038)
+        await this.validateUrl(config.url);
 
         transport = new StreamableHTTPClientTransport(
           new URL(config.url),
