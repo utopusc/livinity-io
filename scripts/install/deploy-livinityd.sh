@@ -25,6 +25,8 @@
 #      liv-memory.service (mcp-server is spawned on-demand by livinityd) [104-12]
 #   9. Health check (curl :8080, 30s budget)
 #   10. Caddy reverse_proxy 127.0.0.1:8080 (final Caddyfile)
+#   10b. Firewall hardening (257-02 WS-C / LIVOS-015): deny :8080 from the LAN
+#        (defense in depth — daemon already binds loopback; ufw-guarded)
 #
 # Sourced by scripts/install.sh AFTER the mode dispatch case. Public entry
 # point: `deploy_livinityd`. Skipped silently when SKIP_DEPLOY=1.
@@ -2103,6 +2105,47 @@ CADDYFILE
     fi
 }
 
+# ── 10b. Firewall hardening (257-02 WS-C / LIVOS-015) ───────────────────────
+# The livinityd admin daemon now binds 127.0.0.1 by default (loopback only —
+# see server/index.ts resolveBindHost / LIVOS_BIND_HOST). Caddy is the public
+# front door on :80/:443 and reverse-proxies to 127.0.0.1:8080. This step adds
+# a defense-in-depth UFW rule so that even if a future change re-binds :8080 to
+# the wildcard (or an operator flushes the loopback constraint), the admin
+# console stays LAN-blocked. SSH (22) + Caddy (80/443) are left untouched.
+# Guarded on `command -v ufw` — warn-not-fail when ufw is absent (e.g. a host
+# using nftables/iptables directly). Never enables ufw if it is inactive (that
+# could lock out a remote operator mid-install); only adds the deny rule when
+# ufw is already present + active.
+_dld_harden_firewall() {
+    step "257-02 (WS-C / LIVOS-015) — UFW deny :8080 from the LAN (defense in depth)"
+
+    if ! command -v ufw >/dev/null 2>&1; then
+        warn "ufw not installed — skipping :8080 LAN-deny rule (daemon already binds loopback; LIVOS-015 still mitigated by the bind)"
+        return 0
+    fi
+
+    # Only touch firewall rules when ufw is already active, so we never change a
+    # host's connectivity posture out from under a remote operator.
+    if ! ufw status 2>/dev/null | grep -qi '^Status: active'; then
+        warn "ufw present but inactive — skipping :8080 LAN-deny rule (daemon binds loopback; enable ufw to add defense-in-depth)"
+        return 0
+    fi
+
+    # Drop any stale permissive allow first (older installs may have added one).
+    ufw delete allow 8080/tcp >/dev/null 2>&1 || true
+    ufw delete allow 8080 >/dev/null 2>&1 || true
+
+    # Deny :8080 from anywhere. Loopback traffic is NOT filtered by ufw's default
+    # forward/input chains for the lo interface, so Caddy→127.0.0.1:8080 and the
+    # liv-core↔livinityd loopback calls are unaffected; only off-host (LAN) reach
+    # is blocked.
+    if ufw deny 8080/tcp >/dev/null 2>&1; then
+        ok "ufw: deny 8080/tcp (LAN admin-console reach blocked; loopback/Caddy path intact)"
+    else
+        warn "ufw deny 8080/tcp failed — daemon still binds loopback (LIVOS-015 mitigated); review ufw manually"
+    fi
+}
+
 # ── 11. Gallery cache (105-02 G5 — update.sh:596-610) ───────────────────────
 # Idempotent git pull on /opt/livos/data/app-stores/*livinity-apps* clone.
 # Graceful skip if cache dir or .git is absent (lazy-created on first store access).
@@ -2305,6 +2348,7 @@ deploy_livinityd() {
     _dld_health_check
     _dld_install_liv_assistant            # UAT 252 — install Liv AI (AionUi :3020) + unit so /liv resolves
     _dld_update_caddy_to_livinityd
+    _dld_harden_firewall                  # 257-02 (WS-C / LIVOS-015) — UFW deny :8080 from the LAN (defense in depth)
     _dld_cleanup_temp_dir                 # 105-02 G7+G9 — cleanup + .deployed-sha
 
     ok "Plan 104-11/104-12/104-13/105-01/105-02 / 109 / 112 — livinityd + liv stack deploy complete"

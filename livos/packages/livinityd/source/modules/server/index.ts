@@ -18,6 +18,7 @@ import {WebSocketServer, WebSocket} from 'ws'
 import {createProxyMiddleware} from 'http-proxy-middleware'
 
 import getOrCreateFile from '../utilities/get-or-create-file.js'
+import {resolveBindHost} from './bind-host.js'
 import randomToken from '../utilities/random-token.js'
 import {domains} from '@livos/config'
 
@@ -1994,11 +1995,18 @@ class Server {
 
 		// Start the server with retry — handles EADDRINUSE during PM2 restarts
 		const targetPort = this.livinityd.port
+		// Phase 257-02 (WS-C, LIVOS-015): bind the loopback interface by default so
+		// the admin daemon is NOT reachable from the LAN. Caddy already
+		// reverse-proxies to 127.0.0.1:<port> (the public front door) and liv-core
+		// talks to livinityd over loopback, so this does not break the public path.
+		// LIVOS_BIND_HOST opts into a non-loopback bind for a legitimate overlay
+		// (ZeroTier/Tailscale) without re-exposing the LAN.
+		const bindHost = resolveBindHost()
 		await new Promise<void>((resolve, reject) => {
 			let attempts = 0
 			const maxAttempts = 30
 			const tryListen = () => {
-				this.server.listen(targetPort, () => {
+				this.server.listen(targetPort, bindHost, () => {
 					this.port = (this.server.address() as any).port
 					this.logger.log(`Listening on port ${this.port}`)
 					resolve()
