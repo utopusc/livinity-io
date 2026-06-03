@@ -1,23 +1,27 @@
 ---
 gsd_state_version: 1.0
-milestone: v44.0
-milestone_name: Liv AI Tooling Depth
-status: milestone_complete
-last_updated: "2026-06-02T14:06:34.835Z"
-last_activity: 2026-06-02
+milestone: v45.0
+milestone_name: Security Hardening
+status: in_progress
+last_updated: "2026-06-03T00:00:00.000Z"
+last_activity: 2026-06-03
 progress:
-  total_phases: 167
+  total_phases: 168
   completed_phases: 86
-  total_plans: 567
+  total_plans: 572
   completed_plans: 486
   percent: 51
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
 
-### ▶ NEXT ACTION (2026-05-29): run `/gsd-execute-phase 251`
+### ▶ NEXT ACTION (2026-06-03): run `/gsd-execute-phase 256`
 
-**Phase 251 — Fresh-Install Portability & Hardcode Audit** is authored and READY. It fans out **8 parallel read-only audit subagents** (Wave 1) + 1 synthesis (Wave 2) to verify the v44/250-hotfix terminal + Luse changes have no install-breaking hardcodes and that a fresh Mini PC/VPS install is seamless. Output: `PORTABILITY-AUDIT.md` (GO/NO-GO) + `REMEDIATION-BACKLOG.md`. Read-only (D-251-READONLY) — produces docs only. See "## Current Position" below + `.planning/phases/251-fresh-install-portability-audit/`. (This is independent of — and does NOT block — the still-pending v44.0 operator close.)
+**Phase 256 — Security Hardening (Contained Autonomy + Credential Egress Proxy + Pipeline Admin-Gate + Auth Fail-Closed)** is AUTHORED + checker-verified (PASS-WITH-NOTES, all 6 notes fixed) + committed (`8e2f5661`). Remediates the authorized LivOS security audit (`SECURITY-AUDIT.md`, 40 findings) per operator-locked design (`SECURITY-REMEDIATION-DESIGN.md`). 5 plans / 17 tasks across 4 workstreams closing LIVOS-001/002/004/007/008/013/014/018/019/025. Serialized waves (shared installer/apps.ts edits across distinct waves): 256-01 (WS-A bubblewrap+egress+cred-scrub+git-undo) → 256-02 (WS-B cred egress proxy) → 256-03 (WS-C pipeline admin-gate) → 256-04 (WS-D auth fail-closed) → 256-05 (Mini PC deploy + SC1–SC7 live walk). Mini PC only. See `.planning/phases/256-security-hardening-contained-autonomy/`.
+
+**Two operator scope confirmations pending before execute:** (1) WS-A injection-proof classifier gate is DEFERRED (the 4 OS/network layers already break the lethal trifecta) — confirm or add as 256-06. (2) WS-B ships the egress proxy for operator-trusted apps (OpenDesign); per-app metered-key path for untrusted marketplace apps is deferred (ToS caveat in design doc) — confirm.
+
+**v44.0** is artifact-complete / operator-close pending (independent; not blocked by v45). Its prior NEXT ACTION (`/gsd-execute-phase 251`) already completed (251 ✅, 252 ✅).
 
 ---
 
