@@ -8,8 +8,6 @@ import type Livinityd from '../../index.js'
 
 const {Pool} = pg
 
-const DEFAULT_DATABASE_URL = 'postgresql://livos:LivPostgres2024!@localhost:5432/livos'
-
 // Read schema SQL at module load time
 const currentFilename = fileURLToPath(import.meta.url)
 const currentDirname = dirname(currentFilename)
@@ -51,7 +49,13 @@ export function getPool(): pg.Pool | null {
 export async function initDatabase(logger: Livinityd['logger']): Promise<boolean> {
 	if (initialized && pool) return true
 
-	const databaseUrl = process.env.DATABASE_URL || DEFAULT_DATABASE_URL
+	// LIVOS-030: fail closed when DATABASE_URL is unset — never fall back to a
+	// committed default credential. Production (.env) always sets DATABASE_URL.
+	const databaseUrl = process.env.DATABASE_URL
+	if (!databaseUrl) {
+		logger.error('DATABASE_URL is required — refusing to start the database with a default credential')
+		return false
+	}
 
 	try {
 		pool = new Pool({
