@@ -838,7 +838,7 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
 			withPostScreenshot(
 				`pasteText ${JSON.stringify(safeText)}${displayArg ? ` display=${displayArg}` : ''}`,
-				() => pasteText(text, isSensitive ?? undefined),
+				() => pasteText(text, isSensitive ?? undefined, w),
 				w,
 			),
 		)
