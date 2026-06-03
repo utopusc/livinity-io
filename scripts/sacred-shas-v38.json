@@ -1,9 +1,9 @@
 [
   {
     "path": "liv/packages/core/src/sdk-agent-runner.ts",
-    "expected_sha": "f3538e1d811992b782a9bb057d1b7f0a0189f95f",
-    "frozen_in_phase": "97-auto-mode",
-    "rationale": "D-100-SACRED — SDK agent runner is the load-bearing extension surface; all wrappers go through liv-agent-runner.ts + mcp-client-manager.ts."
+    "expected_sha": "a31d607937c499c5899b259eb0323dcc2f74bf55",
+    "frozen_in_phase": "256-01-security-hardening",
+    "rationale": "D-100-SACRED — SDK agent runner is the load-bearing extension surface; all wrappers go through liv-agent-runner.ts + mcp-client-manager.ts. Re-frozen in 256-01 (WS-A) after adding the guarded best-effort per-session git-snapshot pre/post calls (LIVOS-002 reversibility); agent loop / watchdog / budget caps / safeEnv unchanged."
   },
   {
     "path": "livos/packages/cli/src/cli.ts",

@@ -12,6 +12,7 @@ import { EventEmitter } from 'events';
 import { randomUUID } from 'node:crypto';
 import { request } from 'node:http';
 import { z } from 'zod';
+import { snapshotWorkspace } from './agent-git-snapshot.js';
 import {
   query,
   tool,
@@ -370,6 +371,13 @@ CRITICAL RULES:
       }
     }, 10_000);
 
+    // Phase 256-01 (WS-A / LIVOS-002): per-session reversibility snapshot of the
+    // agent workspace (LIV_AGENT_WORKSPACE) before the run. Best-effort, never
+    // throws; disable with LIV_AGENT_SNAPSHOT=0.
+    if (process.env.LIV_AGENT_SNAPSHOT !== '0') {
+      await snapshotWorkspace({ sessionId, when: 'pre' }).catch(() => undefined);
+    }
+
     try {
       const messages = query({
         prompt: task,
@@ -476,6 +484,12 @@ CRITICAL RULES:
 
       const durationMs = Date.now() - runStartTime;
       logger.info('SdkAgentRunner: completed', { turns, answerLength: answer.length, turnLimitReached, tokenBudgetExceeded, ttfbMs, toolCallCount, durationMs });
+
+      // Phase 256-01 (WS-A / LIVOS-002): post-run reversibility snapshot. The
+      // pre/post refs bracket every run so any change is one revert away.
+      if (process.env.LIV_AGENT_SNAPSHOT !== '0') {
+        await snapshotWorkspace({ sessionId, when: 'post' }).catch(() => undefined);
+      }
 
       return {
         success: !turnLimitReached && !tokenBudgetExceeded,
