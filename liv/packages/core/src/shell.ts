@@ -1,7 +1,22 @@
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
+import { mkdirSync } from 'fs';
 import { logger } from './logger.js';
+import {
+  wrapWithBwrap,
+  buildScrubbedEnv,
+  BWRAP_AVAILABLE,
+  LIV_AGENT_WORKSPACE,
+} from './sandbox.js';
 
 const NEXUS_BASE_DIR = process.env.LIV_BASE_DIR || '/opt/liv';
+
+// Phase 256-01 (WS-A): ensure the agent-workspace bind target exists. Best-effort,
+// sync, swallow errors — the workspace is created on the host (not /opt/liv).
+try {
+  mkdirSync(LIV_AGENT_WORKSPACE, { recursive: true });
+} catch {
+  /* best-effort */
+}
 
 const BLOCKED_PATTERNS = [
   /rm\s+-rf\s+\/(?!\w)/,         // rm -rf /
@@ -33,24 +48,35 @@ export class ShellExecutor {
       }
     }
 
-    logger.info('Shell: executing', { command, timeout: timeoutMs });
+    logger.info('Shell: executing', { command, timeout: timeoutMs, sandboxed: BWRAP_AVAILABLE });
+
+    // Phase 256-01 (WS-A / LIVOS-002): scrub host creds from the child env
+    // ALWAYS (defense-in-depth, even on dev boxes without bwrap). The agent
+    // shell's write-confined root is LIV_AGENT_WORKSPACE, NOT this.cwd / /opt/liv.
+    const env = buildScrubbedEnv();
+    const truncate = (s: string) => (s.length > MAX_OUTPUT ? s.slice(0, MAX_OUTPUT) + '\n...[truncated]' : s);
+
+    const { argv, usable } = wrapWithBwrap(command, { workspace: LIV_AGENT_WORKSPACE });
 
     return new Promise((resolve) => {
-      exec(command, { cwd: this.cwd, timeout: timeoutMs, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
-        const truncate = (s: string) => s.length > MAX_OUTPUT ? s.slice(0, MAX_OUTPUT) + '\n...[truncated]' : s;
+      const cb = (error: any, stdout: string, stderr: string) => {
         const code = error ? (error as any).code ?? 1 : 0;
-
         if (error && (error as any).killed) {
           resolve({ stdout: truncate(stdout), stderr: `Command timed out after ${timeoutMs}ms`, code: 124 });
           return;
         }
+        resolve({ stdout: truncate(stdout), stderr: truncate(stderr), code });
+      };
 
-        resolve({
-          stdout: truncate(stdout),
-          stderr: truncate(stderr),
-          code,
-        });
-      });
+      if (usable) {
+        // bwrap-sandboxed: write-root = LIV_AGENT_WORKSPACE, deny-read secrets,
+        // no docker.sock, egress via proxy (HTTPS_PROXY in scrubbed env).
+        execFile('bwrap', argv.slice(1), { timeout: timeoutMs, maxBuffer: 1024 * 1024, env }, cb);
+      } else {
+        // Dev/non-Linux fallback: still env-scrubbed, still run in the agent
+        // workspace (NOT this.cwd / /opt/liv) so the liv code stays unwritable.
+        exec(command, { cwd: LIV_AGENT_WORKSPACE, timeout: timeoutMs, maxBuffer: 1024 * 1024, env }, cb);
+      }
     });
   }
 }
