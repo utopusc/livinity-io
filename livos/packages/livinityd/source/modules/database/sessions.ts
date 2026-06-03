@@ -82,3 +82,22 @@ export async function isSessionActive(jti: string, runner?: QueryRunner | null):
 	)
 	return rows.length > 0
 }
+
+/**
+ * Has the session for this jti been EXPLICITLY revoked? Returns true ONLY when a
+ * row exists for `jti` with `revoked = TRUE`. A MISSING row → `false` (NOT
+ * revoked): a token whose jti was never recorded (minted before session-tracking
+ * existed, or if `createSession` failed) must be ALLOWED, not locked out. This is
+ * the fail-OPEN revocation check the auth gate uses — only a deliberate revoke
+ * (password change / deactivation, which sets `revoked = TRUE`) rejects a token.
+ * Per-token expiry is enforced by the JWT's own `exp`, not here. DB-absent → false.
+ */
+export async function isSessionRevoked(jti: string, runner?: QueryRunner | null): Promise<boolean> {
+	const db = resolveRunner(runner)
+	if (!db) return false
+	const {rows} = await db.query(
+		`SELECT 1 FROM sessions WHERE jti = $1 AND revoked = TRUE`,
+		[jti],
+	)
+	return rows.length > 0
+}

@@ -3,7 +3,7 @@ import {timingSafeEqual} from 'node:crypto'
 
 import {type Context} from './context.js'
 import {findUserById, getAdminUser, getPool} from '../../database/index.js'
-import {isSessionActive} from '../../database/sessions.js'
+import {isSessionRevoked} from '../../database/sessions.js'
 
 type MiddlewareOptions = {
 	ctx: Context
@@ -81,17 +81,17 @@ export const isAuthenticated = async ({ctx, next}: MiddlewareOptions) => {
 			// admin, silently promoting a disabled user to admin-equivalent).
 			const dbUser = await findUserById(payload.userId)
 			if (dbUser && dbUser.isActive) {
-				// Phase 257-04 (LIVOS-005): jti revocation gate. A token whose
-				// per-session jti was revoked (password change / deactivation /
-				// deletion) or has expired in the sessions table is REJECTED —
-				// even for an otherwise-active user. Only runs when a DB pool
-				// exists AND the token carries a jti: a legacy/pre-migration
-				// token (no jti) is NOT rejected here (back-compat), and the
-				// pure-legacy single-user no-DB path skips the lookup entirely
-				// (legacy tokens have no jti, single-user mode stays working).
+				// Phase 257-04 (LIVOS-005), FAIL-OPEN-FIXED 257-04.1: jti revocation
+				// gate. Reject ONLY when the token's jti has an EXPLICITLY revoked
+				// row (password change / deactivation set revoked=TRUE). A MISSING
+				// row → ALLOW: tokens minted before session-tracking existed (or if
+				// createSession ever fails) carry a jti but no row, and must NOT be
+				// locked out (the original isSessionActive check rejected on missing
+				// row → false-revoked every existing session = production lockout).
+				// Legacy no-jti tokens + single-user no-DB path skip this entirely.
 				if (payload.jti && getPool()) {
-					const active = await isSessionActive(payload.jti)
-					if (!active) {
+					const revoked = await isSessionRevoked(payload.jti)
+					if (revoked) {
 						throw new TRPCError({
 							code: 'UNAUTHORIZED',
 							message: 'Session revoked',
