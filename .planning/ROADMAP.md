@@ -3582,7 +3582,7 @@ Plans:
 
 ---
 
-### Phase 257: Security Hardening Pass 2 — remaining audit findings (High → Medium → Low/Info) — 🟡 PLANNING 2026-06-03
+### Phase 257: Security Hardening Pass 2 — remaining audit findings (High → Medium → Low/Info) — 🟢 DEPLOYED 2026-06-03 (7/7 plans; live on Mini PC SHA 8da7140; SC-C/:8080-loopback live-proven; LIVOS-005/006/010/011/012/015/020/021/023/024/026/027/028/030/031/032/033/034/035/036/038/039/040 closed, 029 already-closed-by-256; operator must rotate Server5 platform/relay secrets out of band)
 
 **Goal:** Close the audit findings Phase 256 left out of scope. Phase 256 closed the 3 Critical (1 accepted) + the highest-impact coupled High/Medium (LIVOS-001/002/004/007/008/009/013/014/017/018/019/025/037). Phase 257 sweeps the rest, grouped by theme + module, prioritized High→Medium→Low/Info. **Each task must FIRST re-verify the finding still exists in current code** (some may be partially/fully closed by 256 — e.g. LIVOS-029 memory fail-open may already be closed by 256-04; skip-with-note if so). Source: `SECURITY-AUDIT.md` (repo root).
 

@@ -15,7 +15,13 @@ progress:
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
 
-### ▶ NEXT ACTION (2026-06-03): Phase 256 DEPLOYED + live on Mini PC — only operator interactive agent-walk remains
+### ▶ NEXT ACTION (2026-06-03): Phases 256 + 257 DEPLOYED — audit fully remediated. Operator: rotate Server5 platform/relay secrets out of band.
+
+**Phase 257 DEPLOYED 2026-06-03** (SHA `8da7140`, `origin/master`). Security Hardening Pass 2 — the remaining audit findings after 256. 7 plans / 25 commits. **SC-C / LIVOS-015 live-proven:** livinityd now binds `127.0.0.1:8080` (LAN reach gone) + loopback→200 (Caddy preserved) + UFW deny 8080. Closed LIVOS-005/006/010/011/012/015/020/021/023/024/026/027/028/030/031/032/033/034/035/036/038/039/040 (029 already closed by 256-04). Highlights: jti session-revocation (warm-migrated → no forced re-login), marketplace-only skill-import gate (builtin still loads), SSRF validators, luse credential-dotfile deny, secret hygiene (`git grep` default-pw = 0 source hits; at-rest DEK independent of JWT secret), Caddy bearer charset-validation. **Caught + fixed a HEAD-inconsistency** (256 TLS `forwardRequest` test-seam was committed in the test but left uncommitted in source). DEPLOY-LOG: `.planning/phases/257-.../257-DEPLOY-LOG.md`. **OPERATOR OUT-OF-BAND:** rotate Server5 `platform` DB pw + relay Redis pw (committed literals removed from source → compromised). **Fast-follow (later):** sibling JWT-keyed cred stores (`git-credentials`/`stack-secrets`/`backup-secrets`); `sandbox.ts usable` userns runtime-probe; luse live-apply needs `liv-assistant` restart + `pkill` of luse MCP procs.
+
+---
+
+### ▶ PRIOR (2026-06-03): Phase 256 DEPLOYED + live on Mini PC
 
 **Phase 256 DEPLOYED 2026-06-03** (SHA `74fc49c` + 3 deploy hot-fixes → `efe706c2`, all on `origin/master`). `update.sh` ×2 on Mini PC; all 6 plans live. gsd-verifier GO 8/8 at code level. **Live-PROVEN on the box:** SC1 (bwrap denies `.env`/secrets read + `/opt/liv` self-modify, workspace writable), SC2 (livos-egress allowlist: attacker/evil→403, anthropic/github→allow), SC6 (`/auth/verify` rejects garbage `LIVINITY_SESSION` cookie — LIVOS-008). **2 deploy-time bugs caught+fixed by the live walk:** (1) `livos-egress` tinyproxy `Filter` path needed quoting (`c919c2fc`); (2) bwrap broke on Ubuntu 24.04 `apparmor_restrict_unprivileged_userns=1` → added scoped AppArmor `userns` profile (`dbfd3e0b`) — without it the agent shell tool errored on every command (sandbox.ts `usable` gates on bwrap-on-PATH only). All 7 services active. DEPLOY-LOG: `.planning/phases/256-.../256-DEPLOY-LOG.md`.
 
