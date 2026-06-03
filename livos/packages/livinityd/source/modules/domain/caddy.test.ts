@@ -1084,3 +1084,91 @@ describe('Phase 243-02 — @livos_terminal_ws matcher (L-243-C unconditional + L
 		expect(handleMatches.length).toBeGreaterThanOrEqual(2)
 	})
 })
+
+// ─── Phase 256-04 WS-D — forward_auth JWT gate for subdomains (LIVOS-008) ────
+describe('generateFullCaddyfile — Phase 256-04 LIVOS-008 forward_auth gate', () => {
+	test('WS-D.T1 — single-user installed-app block uses forward_auth, not presence glob', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'bruce.livinity.io',
+				subdomains: [{subdomain: 'n8n', appId: 'n8n', port: 9001, enabled: true}],
+			},
+			false, // single-user — the vulnerable path
+			false,
+			[],
+		)
+		// The installed-app block must validate the JWT via forward_auth → /auth/verify
+		expect(out).toContain('forward_auth')
+		expect(out).toContain('/auth/verify')
+		expect(out).toContain('127.0.0.1:8080')
+		// The presence-only glob must be GONE.
+		expect(out).not.toContain('header Cookie *LIVINITY_SESSION=*')
+		// The container is still the upstream after a positive auth decision.
+		expect(out).toContain('reverse_proxy 127.0.0.1:9001')
+	})
+
+	test('WS-D.T2 — native-app block uses forward_auth', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[{subdomain: 'opendesign', port: 9100}],
+		)
+		expect(out).toContain('forward_auth')
+		expect(out).toContain('/auth/verify')
+		expect(out).not.toContain('header Cookie *LIVINITY_SESSION=*')
+		expect(out).toContain('reverse_proxy 127.0.0.1:9100')
+	})
+
+	test('WS-D.T3 — on a 401 the gate still redirects to /login', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'bruce.livinity.io',
+				subdomains: [{subdomain: 'n8n', appId: 'n8n', port: 9001, enabled: true}],
+			},
+			false,
+			false,
+			[{subdomain: 'opendesign', port: 9100}],
+		)
+		// Redirect to the login page preserved (handle_response 401 → redir).
+		expect(out).toContain('redir https://bruce.livinity.io/login?redirect=')
+		// Caddy needs to react to the upstream auth verdict.
+		expect(out).toMatch(/handle_response|@(bad|unauth)/)
+	})
+
+	test('WS-D.T4 — OpenDesign upstreamBearer block preserved (runs post-auth)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'bruce.livinity.io',
+				subdomains: [
+					{
+						subdomain: 'open-design',
+						appId: 'od',
+						port: 9200,
+						enabled: true,
+						upstreamBearer: 'OD_SECRET_TOKEN',
+					},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain('forward_auth')
+		expect(out).toContain('header_up Authorization "Bearer OD_SECRET_TOKEN"')
+		expect(out).toContain('header_up Host 127.0.0.1:9200')
+	})
+
+	test('WS-D.T5 — multi-user wildcard block unchanged (still :8080 reverse_proxy, no forward_auth gate added)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: 'bruce.livinity.io',
+				subdomains: [{subdomain: 'n8n', appId: 'n8n', port: 9001, enabled: true}],
+			},
+			true, // multi-user — validated by livinityd :8080 already
+			false,
+			[],
+		)
+		expect(out).toContain('reverse_proxy 127.0.0.1:8080')
+	})
+})

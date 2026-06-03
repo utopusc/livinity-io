@@ -573,19 +573,24 @@ ${WS_TRANSPORT_BODY}
 	}
 }`)
 		} else {
-			// Installed app subdomains are JWT-gated via the LIVINITY_SESSION
-			// cookie (same pattern as native apps below) — redirect to the login
-			// page when the cookie is absent. This requires the session cookie to
-			// be scoped to the registrable parent domain (see sessionCookieDomain
-			// in user/routes.ts) so it reaches these hyphen-sibling hosts.
+			// Phase 256-04 (LIVOS-008): installed app subdomains are JWT-gated
+			// via livinityd's /auth/verify forward_auth endpoint — which VALIDATES
+			// the JWT (signature + exp), NOT mere cookie presence. The previous
+			// `@notauth { not { header Cookie *LIVINITY_SESSION=* } }` glob admitted
+			// any `LIVINITY_SESSION=<garbage>` cookie. forward_auth proxies the
+			// request headers (incl. the cookie) to :8080/auth/verify; on a 401 the
+			// handle_response branch redirects to /login. The reverse_proxy (with the
+			// OpenDesign upstreamBearer + loopback Host/Origin rewrite) now runs ONLY
+			// after a positive auth decision, which also closes the LIVOS-037 residual
+			// (the pre-auth loopback rewrite no longer fires on forged-cookie requests).
 			blocks.push(`${fullDomain} {
-	@notauth {
-		not {
-			header Cookie *LIVINITY_SESSION=*
+	forward_auth 127.0.0.1:8080 {
+		uri /auth/verify
+		copy_headers Cookie
+		@bad status 401
+		handle_response @bad {
+			redir https://${config.mainDomain}/login?redirect={scheme}://{host}{uri}
 		}
-	}
-	handle @notauth {
-		redir https://${config.mainDomain}/login?redirect={scheme}://{host}{uri}
 	}
 	reverse_proxy 127.0.0.1:${sub.port} {
 ${sub.upstreamBearer ? `\t\theader_up Authorization "Bearer ${sub.upstreamBearer}"\n\t\theader_up Host 127.0.0.1:${sub.port}\n\t\theader_up Origin http://127.0.0.1:${sub.port}\n` : ''}${WS_TRANSPORT_BODY}
@@ -609,14 +614,17 @@ ${WS_TRANSPORT_BODY}
 ${WS_TRANSPORT_BODY}
 	}`
 
+		// Phase 256-04 (LIVOS-008): native-app subdomains are JWT-gated via the
+		// livinityd /auth/verify forward_auth endpoint (validates the JWT, not
+		// cookie presence). On a 401 the handle_response branch redirects to /login.
 		blocks.push(`${fullDomain} {
-	@notauth {
-		not {
-			header Cookie *LIVINITY_SESSION=*
+	forward_auth 127.0.0.1:8080 {
+		uri /auth/verify
+		copy_headers Cookie
+		@bad status 401
+		handle_response @bad {
+			redir https://${config.mainDomain}/login?redirect={scheme}://{host}{uri}
 		}
-	}
-	handle @notauth {
-		redir https://${config.mainDomain}/login?redirect={scheme}://{host}{uri}
 	}
 	${reverseProxyLine}
 }`)

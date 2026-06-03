@@ -1173,6 +1173,32 @@ class Server {
 			})
 		})
 
+		// Phase 256-04 (LIVOS-008) — forward_auth target for the Caddy subdomain
+		// login gate. Caddy proxies the gated request's headers here; we return
+		// 200 ONLY when a valid (signature + exp) JWT is present, else 401. This
+		// replaces the old cookie-PRESENCE-only Caddy glob (which any
+		// LIVINITY_SESSION=<garbage> cookie satisfied) with real JWT validation.
+		// Reachable on the livinityd :8080 listener for ALL hosts — it is NOT
+		// itself gated by the subdomain logic. Kept cheap: verifyToken only.
+		this.app.get('/auth/verify', async (request, response) => {
+			try {
+				// Prefer the Authorization: Bearer header, fall back to the
+				// LIVINITY_SESSION cookie (cookieParser already mounted).
+				let token = request.headers.authorization?.split(' ')[1]
+				if (!token) token = request.cookies?.LIVINITY_SESSION
+				if (!token) {
+					return response.status(401).json({error: 'unauthorized'})
+				}
+				const payload = await this.verifyToken(token).catch(() => null)
+				if (!payload) {
+					return response.status(401).json({error: 'unauthorized'})
+				}
+				return response.status(200).end()
+			} catch {
+				return response.status(401).json({error: 'unauthorized'})
+			}
+		})
+
 		// Proxy MCP API requests to liv-core (Nexus) on port 3200
 		this.app.use('/api/mcp', async (request, response, next) => {
 			try {
