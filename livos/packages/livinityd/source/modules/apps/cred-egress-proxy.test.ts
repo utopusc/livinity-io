@@ -3,6 +3,8 @@ import {test} from 'node:test'
 import os from 'node:os'
 import path from 'node:path'
 
+import {mkdtemp} from 'node:fs/promises'
+
 import fse from 'fs-extra'
 
 import {
@@ -27,7 +29,7 @@ test('Test 1: isInjectableHost allowlists only the AI provider hosts', () => {
 
 // ── Test 2: bearer source (read-only token from host cred file) ─────────────
 test('Test 2: readBearerFor reads the OAuth token from the host cred file; null on garbage', async () => {
-	const tmp = await fse.mkdtemp(path.join(os.tmpdir(), 'credproxy-test-'))
+	const tmp = await mkdtemp(path.join(os.tmpdir(), 'credproxy-test-'))
 	const claudeDir = path.join(tmp, '.claude')
 	const geminiDir = path.join(tmp, '.gemini')
 	await fse.mkdirp(claudeDir)
@@ -97,7 +99,7 @@ test('Test 4: isFromBridge accepts docker-bridge IPs, rejects everything else', 
 
 // ── Test 5: no token leak — proxy never writes back to the cred file ────────
 test('Test 5: readBearerFor opens the cred file read-only (no write-back / overwrite path)', async () => {
-	const tmp = await fse.mkdtemp(path.join(os.tmpdir(), 'credproxy-ro-'))
+	const tmp = await mkdtemp(path.join(os.tmpdir(), 'credproxy-ro-'))
 	const claudeDir = path.join(tmp, '.claude')
 	await fse.mkdirp(claudeDir)
 	const credFile = path.join(claudeDir, '.credentials.json')

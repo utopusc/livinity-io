@@ -409,6 +409,32 @@ EGRESS_UNIT
     systemctl enable --now livos-egress 2>/dev/null || warn "livos-egress enable failed (non-fatal)"
     ok "livos-egress proxy configured"
 
+    # ── Phase 256-02 (WS-B): cred-egress-proxy CA material (LIVOS-001) ─────────
+    # The host credential-injecting egress proxy (cred-egress-proxy.ts) MITM-
+    # terminates the AI hosts to inject the operator OAuth bearer at the wire.
+    # The container trusts that leg via a PUBLIC CA cert mounted read-only
+    # (credproxy-ca.pem). Generate the CA once here (cert + 0600 key); the key
+    # never leaves the host, the cert is mounted into containers (not a secret).
+    # This is a DISTINCT region from the 256-01 tinyproxy block above — a
+    # different proxy (in-process node service, not an apt package). All steps
+    # warn-not-fail (the inject degrades gracefully if the CA is absent).
+    info "Phase 256-02: generating cred-egress-proxy CA material (if absent)"
+    _CREDPROXY_SECRETS="${LIVOS_DIR}/data/secrets"
+    _CREDPROXY_CA="${_CREDPROXY_SECRETS}/credproxy-ca.pem"
+    _CREDPROXY_KEY="${_CREDPROXY_SECRETS}/credproxy-ca.key"
+    mkdir -p "$_CREDPROXY_SECRETS" 2>/dev/null || warn "credproxy secrets dir mkdir failed (non-fatal)"
+    if [[ ! -s "$_CREDPROXY_CA" ]]; then
+        openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout "$_CREDPROXY_KEY" -out "$_CREDPROXY_CA" \
+            -days 3650 -subj "/CN=livinity-credproxy" 2>/dev/null \
+            && chmod 0600 "$_CREDPROXY_KEY" 2>/dev/null \
+            && chmod 0644 "$_CREDPROXY_CA" 2>/dev/null \
+            && ok "cred-egress-proxy CA generated at $_CREDPROXY_CA" \
+            || warn "cred-egress-proxy CA generation failed (non-fatal — inject degrades)"
+    else
+        ok "cred-egress-proxy CA already present at $_CREDPROXY_CA (reuse)"
+    fi
+
     # VAAPI userspace — separate group so an Intel-iGPU-less host doesn't fail the run.
     # apt package is `libva-utils` (provides the `vainfo` binary), NOT `vainfo`.
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \

@@ -24,6 +24,7 @@ import {
 	writeLocalAiCliWrappers,
 	grantContainerCredsAcl,
 } from './inject-local-ai-clis.js'
+import {startCredEgressProxyIfNeeded} from './cred-egress-proxy.js'
 import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
 import {buildCaddyConfigFromState, type CaddyStateInstance, type CaddyStateSubdomain} from '../domain/caddy-state.js'
 import {getTunnelStatus} from '../domain/tunnel.js'
@@ -572,12 +573,17 @@ export default class Apps {
 
 		// Direct host-AI-CLI access (NO broker): when the manifest opts in via
 		// `requiresLocalAiClis: true`, mount the host's claude/gemini CLIs +
-		// glibc runtime + the operator's creds into the app container and drop
-		// PATH wrappers, so agent-native apps (e.g. Open Design) run the real
-		// local CLIs directly. No-op when the flag is absent/false. Non-fatal.
+		// glibc runtime + PATH wrappers, so agent-native apps (e.g. Open Design)
+		// run the real local CLIs directly. Creds are NOT mounted (LIVOS-001) —
+		// the CLIs reach the model through the host cred-egress proxy. No-op when
+		// the flag is absent/false. Non-fatal.
 		if (manifest.requiresLocalAiClis === true) {
 			const composeFile = `${appDataDirectory}/docker-compose.yml`
 			try {
+				// LIVOS-001 / SC4: start the host cred-egress proxy BEFORE the
+				// container comes up so the CLIs' HTTPS_PROXY target is listening.
+				// Idempotent; best-effort.
+				await startCredEgressProxyIfNeeded(this.logger)
 				const detected = await detectHostAiClis()
 				if (!detected) {
 					this.logger.error(`requiresLocalAiClis: no host AI CLIs detected for ${appId}; skipping mount`)
@@ -588,7 +594,7 @@ export default class Apps {
 					const composeData = yaml.load(composeContent)
 					injectLocalAiClisConfig(composeData, detected, appDataDirectory, manifest)
 					await fse.writeFile(composeFile, yaml.dump(composeData))
-					this.logger.log(`requiresLocalAiClis: mounted host AI CLIs into ${appId} (claude=${!!detected.claude}, gemini=${!!detected.gemini})`)
+					this.logger.log(`requiresLocalAiClis: mounted host AI CLIs into ${appId} (claude=${!!detected.claude}, gemini=${!!detected.gemini}) via cred-egress proxy`)
 				}
 			} catch (error) {
 				this.logger.error(`requiresLocalAiClis: failed to inject host CLIs for ${appId}`, error)
@@ -757,9 +763,12 @@ export default class Apps {
 
 		// Re-mount host AI CLIs (no broker) for apps that opt in. Idempotent —
 		// injectLocalAiClisConfig de-dupes volume strings + the PATH prefix.
-		// Recreates the container then re-grants the creds ACL for its uid.
+		// LIVOS-001: creds are NOT mounted; the cred-egress proxy serves them.
 		if (requiresLocalAiClis) {
 			try {
+				// LIVOS-001 / SC4: ensure the cred-egress proxy is up before the
+				// recreated container starts. Idempotent; best-effort.
+				await startCredEgressProxyIfNeeded(this.logger)
 				const detected = await detectHostAiClis()
 				if (!detected) {
 					this.logger.error(`reapplyAppConfig: no host AI CLIs detected for ${appId}; skipping re-mount`)
