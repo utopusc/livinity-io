@@ -144,6 +144,17 @@ export interface SubdomainConfig {
 	 * in for backwards compatibility.
 	 */
 	host?: string
+	/**
+	 * Optional upstream bearer token. When set, the gated app-subdomain block
+	 * injects `header_up Authorization "Bearer <token>"` into the reverse_proxy
+	 * so an app whose bundled web UI calls its own daemon WITHOUT a token (and
+	 * relies on a loopback bypass that never fires in a container) is
+	 * authenticated by Caddy instead. Used by agent-native apps like Open Design
+	 * (OD_API_TOKEN). The daemon stays bound to loopback + behind the login gate,
+	 * so the token is never exposed off-box. registerAppSubdomain populates this
+	 * from the app's compose; it round-trips through Redis so it survives regen.
+	 */
+	upstreamBearer?: string
 }
 
 export interface CaddyConfig {
@@ -557,9 +568,22 @@ ${WS_TRANSPORT_BODY}
 	}
 }`)
 		} else {
+			// Installed app subdomains are JWT-gated via the LIVINITY_SESSION
+			// cookie (same pattern as native apps below) — redirect to the login
+			// page when the cookie is absent. This requires the session cookie to
+			// be scoped to the registrable parent domain (see sessionCookieDomain
+			// in user/routes.ts) so it reaches these hyphen-sibling hosts.
 			blocks.push(`${fullDomain} {
+	@notauth {
+		not {
+			header Cookie *LIVINITY_SESSION=*
+		}
+	}
+	handle @notauth {
+		redir https://${config.mainDomain}/login?redirect={scheme}://{host}{uri}
+	}
 	reverse_proxy 127.0.0.1:${sub.port} {
-${WS_TRANSPORT_BODY}
+${sub.upstreamBearer ? `\t\theader_up Authorization "Bearer ${sub.upstreamBearer}"\n` : ''}${WS_TRANSPORT_BODY}
 	}
 }`)
 		}

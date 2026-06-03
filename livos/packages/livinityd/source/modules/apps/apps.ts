@@ -1440,6 +1440,60 @@ export default class Apps {
 	 * emitter + UI use it directly. Absent → legacy `${subdomain}.${mainDomain}`
 	 * compute path. Always lowercased.
 	 */
+	/**
+	 * Read an app's daemon API token from its installed docker-compose.yml so
+	 * the gated Caddy block can inject it as an upstream `Authorization: Bearer`
+	 * header (see SubdomainConfig.upstreamBearer). Looks at the first service's
+	 * environment (map or array form) for a known daemon-token var. Returns the
+	 * literal non-empty value, or undefined when absent / still a `${VAR}`
+	 * placeholder (nothing to inject). Best-effort: never throws.
+	 */
+	private async readAppDaemonToken(appId: string): Promise<string | undefined> {
+		// Extend this list as more agent-native apps ship bundled web UIs that
+		// gate their own daemon with a single bearer token.
+		const DAEMON_TOKEN_ENV_VARS = ['OD_API_TOKEN']
+		try {
+			const composeFile = `${this.#livinityd.dataDirectory}/app-data/${appId}/docker-compose.yml`
+			if (!(await fse.pathExists(composeFile))) return undefined
+			const yaml = (await import('js-yaml')).default
+			const compose = yaml.load(await fse.readFile(composeFile, 'utf8')) as any
+			const services = compose?.services
+			if (!services || typeof services !== 'object') return undefined
+			const service = services[Object.keys(services)[0]]
+			if (!service) return undefined
+			const env = service.environment
+			const readVar = (name: string): string | undefined => {
+				let raw: string | undefined
+				if (Array.isArray(env)) {
+					const hit = env.find((e: unknown) => typeof e === 'string' && e.startsWith(`${name}=`)) as string | undefined
+					raw = hit?.slice(name.length + 1)
+				} else if (env && typeof env === 'object') {
+					raw = env[name] != null ? String(env[name]) : undefined
+				}
+				if (!raw) return undefined
+				let trimmed = raw.trim()
+				// The on-disk compose keeps Docker's `${VAR:-default}` form (rsynced
+				// verbatim). Resolve to the literal default — that's exactly what
+				// Docker passes the container when VAR is unset, so Caddy injects a
+				// matching token. A bare `${VAR}` (no default) has no materialised
+				// value to inject → skip.
+				const interp = /^\$\{[^:}]+:-(.*)\}$/.exec(trimmed)
+				if (interp) trimmed = interp[1].trim()
+				else if (trimmed.includes('${')) return undefined
+				if (trimmed.length === 0) return undefined
+				return trimmed
+			}
+			for (const name of DAEMON_TOKEN_ENV_VARS) {
+				const v = readVar(name)
+				if (v) return v
+			}
+			return undefined
+		} catch (error) {
+			this.logger.error(`readAppDaemonToken: failed for ${appId}`, error)
+			return undefined
+		}
+	}
+
 	async registerAppSubdomain(appId: string, port: number, subdomain?: string, fullHost?: string): Promise<void> {
 		const domainConfig = await this.getDomainConfig()
 		if (!domainConfig?.active) {
@@ -1452,6 +1506,15 @@ export default class Apps {
 		// Use provided subdomain or default to appId
 		const subdomainName = subdomain || appId
 
+		// Agent-native apps (Open Design) bind their daemon to 0.0.0.0 inside the
+		// container and require a token for non-loopback callers, but their web
+		// UI calls /api WITHOUT a token (it expects a loopback bypass that never
+		// fires through Docker's NAT). Read the daemon token from the app's
+		// compose so the gated Caddy block can inject it as an upstream bearer —
+		// authenticating the UI while the daemon stays loopback-bound + login-
+		// gated. Persisted on the Redis SubdomainConfig so it survives regen.
+		const upstreamBearer = await this.readAppDaemonToken(appId)
+
 		// Check if already exists
 		const existingIdx = subdomains.findIndex((s) => s.appId === appId)
 		const newSub: SubdomainConfig = {
@@ -1460,6 +1523,7 @@ export default class Apps {
 			port,
 			enabled: true,
 			...(fullHost ? {host: fullHost.toLowerCase()} : {}),
+			...(upstreamBearer ? {upstreamBearer} : {}),
 		}
 
 		if (existingIdx >= 0) {
