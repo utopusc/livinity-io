@@ -179,6 +179,9 @@ if [[ ! -f "$LIVOS_DIR/.env" ]]; then
   REDIS_PASS=$(openssl rand -hex 24)
   JWT_SECRET=$(openssl rand -hex 32)
   LIV_KEY=$(openssl rand -hex 32)
+  # LIVOS-031: generate the Postgres password instead of the committed weak
+  # literal (was `liv:liv`). Hex (no URL-special chars) so the URL needs no encoding.
+  PG_PASS=$(openssl rand -hex 24)
 
   cat > "$LIVOS_DIR/.env" << ENVFILE
 # === AI API Keys ===
@@ -187,7 +190,7 @@ ANTHROPIC_API_KEY=
 
 # === Database ===
 REDIS_URL=redis://:${REDIS_PASS}@localhost:6379
-DATABASE_URL=postgresql://liv:liv@localhost:5432/livos
+DATABASE_URL=postgresql://liv:${PG_PASS}@localhost:5432/livos
 
 # === Security ===
 JWT_SECRET=${JWT_SECRET}
