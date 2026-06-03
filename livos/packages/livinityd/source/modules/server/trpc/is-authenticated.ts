@@ -2,7 +2,8 @@ import {TRPCError} from '@trpc/server'
 import {timingSafeEqual} from 'node:crypto'
 
 import {type Context} from './context.js'
-import {findUserById, getAdminUser} from '../../database/index.js'
+import {findUserById, getAdminUser, getPool} from '../../database/index.js'
+import {isSessionActive} from '../../database/sessions.js'
 
 type MiddlewareOptions = {
 	ctx: Context
@@ -80,6 +81,23 @@ export const isAuthenticated = async ({ctx, next}: MiddlewareOptions) => {
 			// admin, silently promoting a disabled user to admin-equivalent).
 			const dbUser = await findUserById(payload.userId)
 			if (dbUser && dbUser.isActive) {
+				// Phase 257-04 (LIVOS-005): jti revocation gate. A token whose
+				// per-session jti was revoked (password change / deactivation /
+				// deletion) or has expired in the sessions table is REJECTED —
+				// even for an otherwise-active user. Only runs when a DB pool
+				// exists AND the token carries a jti: a legacy/pre-migration
+				// token (no jti) is NOT rejected here (back-compat), and the
+				// pure-legacy single-user no-DB path skips the lookup entirely
+				// (legacy tokens have no jti, single-user mode stays working).
+				if (payload.jti && getPool()) {
+					const active = await isSessionActive(payload.jti)
+					if (!active) {
+						throw new TRPCError({
+							code: 'UNAUTHORIZED',
+							message: 'Session revoked',
+						})
+					}
+				}
 				ctx.currentUser = {
 					id: dbUser.id,
 					username: dbUser.username,
