@@ -2,7 +2,8 @@
 
 ## Milestones
 
-- 🚧 **v44.0 Liv AI Tooling Depth** — Phases 246-255 (CURRENT; v43 CLOSED 2026-05-28). Terminal v2 + Luse skill/display tooling + fresh-install portability remediation (Phase 252 ✅ 6/6). Open: Phase 250 (Terminal Pro UI) + Phase 249 operator close walk. See `## v44 — Liv AI Tooling Depth` section below. _(NOTE: the older `### 🟢 vNN.0 … (Active)` headings further down — v31/v32/v33/v34/v36/v37 — are STALE label drift from long-shipped milestones; this 🚧 marker is the authoritative current-milestone pointer that `gsd-sdk getMilestoneInfo` reads first.)_
+- 🚧 **v45.0 Security Hardening** — Phase 256 (CURRENT; opened 2026-06-03). Remediates the authorized LivOS security audit (`SECURITY-AUDIT.md`, 40 findings) per operator-locked design (`SECURITY-REMEDIATION-DESIGN.md`): **Contained Autonomy** (bubblewrap sandbox + egress allowlist + cred-scrub + git-undo for the agent's host shell/files exec — closes LIVOS-002), **credential egress proxy** (stop bind-mounting operator OAuth tokens into app containers — closes LIVOS-001), **pipeline admin-gate** (privileged/docker.sock/host-mount strip + admin-only install — closes LIVOS-007/013 + #1 residual), and **auth fail-closed** (LIVOS-004/008/014/018/019/025). Mini PC only. See `## v45 — Security Hardening` section below. _(This 🚧 marker is the authoritative current-milestone pointer `gsd-sdk getMilestoneInfo` reads first.)_
+- ⏳ **v44.0 Liv AI Tooling Depth** — Phases 246-255 (artifact-complete; operator close walk pending — `.planning/v44-OPERATOR-WALK.md`). Terminal v2 + Luse skill/display tooling + fresh-install portability remediation (Phase 252 ✅ 6/6). See `## v44 — Liv AI Tooling Depth` section below. _(NOTE: the older `### 🟢 vNN.0 … (Active)` headings further down — v31/v32/v33/v34/v36/v37 — are STALE label drift from long-shipped milestones.)_
 - ✅ **v29.3 Marketplace AI Broker (Subscription-Only)** — Phases 39-44 (shipped local 2026-05-01) — see [milestones/v29.3-ROADMAP.md](milestones/v29.3-ROADMAP.md)
 - ✅ **v29.4 Server Management Tooling + Bug Sweep** — Phases 45-48 (shipped local 2026-05-01) — see [milestones/v29.4-ROADMAP.md](milestones/v29.4-ROADMAP.md)
 - ✅ **v29.5 v29.4 Hot-Patch Recovery + Verification Discipline** — Phases 49-54 (shipped local 2026-05-02 via `--accept-debt`) — see [milestones/v29.5-ROADMAP.md](milestones/v29.5-ROADMAP.md)
@@ -3538,6 +3539,45 @@ Plans:
 **Reversibility:** Path-rewrite sed is purely cosmetic-on-disk + idempotent. Full revert: `git revert <235-commits>` + re-deploy. Cache-bust query has zero functional impact when reverted (icon still serves).
 
 **Outcome:** Operator's live browser test recovered. Hard-reload (Ctrl+F5) once and Liv AI iframe loads cleanly into chat surface (no login form, dock tile visible, all AionUi /api/* and /ws requests resolve through the `/liv` Caddy handler to backend).
+
+---
+
+## v45 — Security Hardening (OPENED 2026-06-03)
+
+Remediates the authorized LivOS security audit. **Inputs (repo root):** `SECURITY-AUDIT.md` (40 findings: 3 Critical / 14 High / 9 Medium / 13 Low / 1 Info) + `SECURITY-REMEDIATION-DESIGN.md` (operator-locked, industry-grounded design). **Target:** Mini PC only (Server4/Server5 off-limits per project hard rule). **Context:** single operator.
+
+### Phase 256: Security Hardening — Contained Autonomy + Credential Egress Proxy + Pipeline Admin-Gate + Auth Fail-Closed — 🟡 PLANNING 2026-06-03
+
+**Goal:** Close the audit's Critical + tightly-coupled High findings without removing the agent's autonomy or breaking the operator's curated-app workflow. Four workstreams, each mapped to the finding(s) it closes:
+
+- **WS-A — Contained Autonomy (closes LIVOS-002).** The SDK agent runner executes shell/files/docker on the host with `permissionMode:'dontAsk'` and a dead approval gate. KEEP autonomy; add OS/network containment modeled on Claude Code / OpenAI Codex: (1) bubblewrap sandbox for shell/files — write-confine to per-user workspace, deny-read `/opt/livos/.env` + `/opt/livos/data/secrets/` + `~/.ssh` + `~/.claude` + `~/.gemini` + other users' `/home/*`, no `/var/run/docker.sock` inside; (2) egress allowlist via local proxy (LLM API + GitHub + npm/pnpm only) — breaks the lethal-trifecta exfil leg; (3) subprocess credential scrub (strip `LIV_API_KEY`/`DATABASE_URL`/JWT/Redis/PG from child env); (4) git auto-commit per agent session for one-revert undo; (5) retain ONLY a stripped-context (injection-proof) classifier gate for irreversible ops (force-push, prod deploy/migration, off-box data send). Touch: `liv/packages/core/src/sdk-agent-runner.ts`, `tool-registry.ts`, `shell.ts`, `daemon.ts`.
+- **WS-B — Credential Egress Proxy (closes LIVOS-001).** Stop bind-mounting the operator's `~/.claude`/`~/.gemini` OAuth token dirs into third-party app containers. Run a host-side credential-injecting egress proxy (Infisical agent-vault / Cloudflare Sandbox model) that holds the tokens and injects the bearer at the wire; container gets `HTTPS_PROXY` + placeholder key only. Extend the existing good pattern (`inject-ai-provider.ts` + `plugins/livinity-broker`). Touch: `livos/packages/livinityd/source/modules/apps/inject-local-ai-clis.ts`, `apps.ts`, `inject-ai-provider.ts`.
+- **WS-C — Pipeline Admin-Gate (closes LIVOS-007/013 + #1 residual).** Restrict `requiresLocalAiClis`, `requiresAiProvider`-with-creds, `apps.addRepository`, and install-of-new-non-builtin-apps to admin/verified-only; strip `privileged`/`network_mode:host`/`docker.sock`/arbitrary host-path mounts from any non-builtin compose. Touch: `apps.ts`, `routes.ts`, `schema.ts`, `app-store.ts`, `app-repository.ts`, `compose-generator.ts`.
+- **WS-D — Auth Fail-Closed (closes LIVOS-004/008/014/018/019/025).** Throw on inactive/deleted user; never treat "no currentUser" as admin (LIVOS-004); subdomain gate validates JWT not cookie-presence (LIVOS-008); liv-core + memory API auth fail CLOSED when key unset (LIVOS-014/018/019/025). Touch: `is-authenticated.ts`, `trpc.ts`, `caddy.ts`, `liv/packages/core/src/auth.ts`, `liv/packages/memory/src/auth.ts`.
+
+**Depends on:** SECURITY-AUDIT.md + SECURITY-REMEDIATION-DESIGN.md (both in repo root).
+
+**Out of scope (deferred):** Finding #1 docker.sock on curated OpenHands (operator-accepted; only the pipeline-gate residual is in WS-C); Low/Info findings LIVOS-020/021/030/031/032/033/034/035/036/037/038/039/040 (separate hardening pass); per-app metered-key marketplace path (future — egress-proxy covers operator-trusted apps now); microVM/gVisor isolation (future multi-tenant; bubblewrap suffices single-operator).
+
+**Success criteria (goal-backward):**
+- SC1 — Agent shell exec runs inside bubblewrap: a tasked `cat /opt/livos/.env` from the agent returns permission-denied / empty, not the secret. (LIVOS-002)
+- SC2 — Agent egress: a tasked `curl https://attacker.example` from the agent fails (not on allowlist); `curl https://api.anthropic.com` succeeds. (LIVOS-002)
+- SC3 — Subprocess env scrub: agent child process sees no `LIV_API_KEY`/`DATABASE_URL`/JWT secret. (LIVOS-002)
+- SC4 — `requiresLocalAiClis` install no longer mounts `~/.claude`/`~/.gemini`; container reaches the model via the egress proxy with no token file present. (LIVOS-001)
+- SC5 — A non-admin user cannot install a new non-builtin app / add a repo; a non-builtin compose with `privileged`/`docker.sock`/host-path mount is rejected or stripped. (LIVOS-007/013)
+- SC6 — A deactivated user's still-valid JWT is rejected (not admin-promoted); subdomain gate rejects a garbage `LIVINITY_SESSION` cookie; liv-core/memory reject requests when API key unset. (LIVOS-004/008/014/018/019/025)
+- SC7 — Operator's curated apps (OpenDesign, OpenHands) still function; agent autonomy preserved (no manual approval gate for ordinary ops). Regression guard.
+
+**UAT:** operator deploys to Mini PC and walks SC1–SC7 live (synthetic probes acceptable for SC1–SC3 per prior phase pattern).
+
+**Plans:** 5 plans in 2 waves (planned 2026-06-03; one PLAN per workstream + a final deploy/UAT gate)
+
+Plans:
+- [ ] 256-01-PLAN.md (Wave 1) — WS-A Contained Autonomy: bubblewrap sandbox + cred-scrub for `shell`, path-allowlist for `files`, per-session git snapshot, tinyproxy egress allowlist (LIVOS-002 / SC1-3). Injection-proof classifier gate DEFERRED (operator-confirm).
+- [ ] 256-02-PLAN.md (Wave 1) — WS-B Credential Egress Proxy: host-side credential-injecting proxy replaces the `~/.claude`/`~/.gemini` RW bind mounts; container gets HTTPS_PROXY + placeholder key only (LIVOS-001 / SC4).
+- [ ] 256-03-PLAN.md (Wave 1) — WS-C Pipeline Admin-Gate: non-builtin compose sanitizer (strip privileged/host-net/caps, reject docker.sock/host-path) + adminProcedure on addRepository/cred-installs (LIVOS-007/013 / SC5).
+- [ ] 256-04-PLAN.md (Wave 1) — WS-D Auth Fail-Closed: is-authenticated throw-on-inactive + forward_auth JWT subdomain gate + liv-core/memory fail-closed + always-seed LIV_API_KEY (LIVOS-004/008/014/018/019/025 / SC6).
+- [ ] 256-05-PLAN.md (Wave 2, deps 01-04, has checkpoints) — build + combined test gate, deploy to Mini PC via update.sh, live SC1–SC7 synthetic-probe walk + DEPLOY-LOG.
 
 ---
 
