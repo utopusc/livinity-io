@@ -437,20 +437,32 @@ if [[ -x /usr/bin/apt-get ]] && command -v apt-get >/dev/null 2>&1; then
     info "Ensuring streaming subsystem apt packages are installed..."
     # Phase 100-08-01: xvfb + fluxbox added for dedicated WebApp display :1
     # (D-100-08-A — livinityd spawns Xvfb :1 + fluxbox on boot).
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        x11vnc xdotool x11-xserver-utils \
-        ydotool maim scrot gnome-screenshot \
-        websockify vncsnapshot \
-        ffmpeg \
-        gstreamer1.0-tools \
-        gstreamer1.0-plugins-good \
-        gstreamer1.0-plugins-bad \
-        gstreamer1.0-plugins-ugly \
-        xdg-desktop-portal-gnome \
-        xvfb fluxbox \
-        feh tint2 \
-        bubblewrap tinyproxy \
-        2>&1 | tail -5 || warn "Some streaming packages failed to install (non-fatal)"
+    # ── Phase 257-01 WS-B (LIVOS-040): gate the blanket apt install ──────────
+    # Only run the (unpinned) heavy apt set when at least one key binary is
+    # actually missing — a re-run on a fully-provisioned box now skips apt
+    # entirely instead of trusting the host apt source set as root every time.
+    streaming_need_install=0
+    for bin in x11vnc xdotool maim scrot websockify ffmpeg gst-launch-1.0 Xvfb fluxbox feh tint2 bwrap tinyproxy; do
+        if ! command -v "$bin" >/dev/null 2>&1; then streaming_need_install=1; break; fi
+    done
+    if (( streaming_need_install == 1 )); then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            x11vnc xdotool x11-xserver-utils \
+            ydotool maim scrot gnome-screenshot \
+            websockify vncsnapshot \
+            ffmpeg \
+            gstreamer1.0-tools \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad \
+            gstreamer1.0-plugins-ugly \
+            xdg-desktop-portal-gnome \
+            xvfb fluxbox \
+            feh tint2 \
+            bubblewrap tinyproxy \
+            2>&1 | tail -5 || warn "Some streaming packages failed to install (non-fatal)"
+    else
+        info "update.sh: streaming deps already present — skipping apt install"
+    fi
 
     # ── Phase 256-01 (WS-A): egress allowlist proxy for the bwrap'd agent ──────
     # Byte-identical to scripts/install/deploy-livinityd.sh — tinyproxy
@@ -537,15 +549,29 @@ BWRAP_AA
 
     # VAAPI userspace — separate group so an Intel-iGPU-less host doesn't fail the run.
     # apt package is `libva-utils` (provides the `vainfo` binary), NOT `vainfo`.
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        libva-utils intel-media-va-driver libdrm-intel1 \
-        2>&1 | tail -5 || warn "VAAPI userspace install failed — libx264 fallback will be used"
+    # Phase 257-01 WS-B (LIVOS-040): only install when `vainfo` is missing.
+    if ! command -v vainfo >/dev/null 2>&1; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            libva-utils intel-media-va-driver libdrm-intel1 \
+            2>&1 | tail -5 || warn "VAAPI userspace install failed — libx264 fallback will be used"
+    else
+        info "update.sh: VAAPI userspace already present — skipping apt install"
+    fi
 
     # Phase 252 portability — luse display-lifecycle + terminal binaries the
     # v44/250-hotfix code now hard-requires but were never on the apt list.
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        xserver-xephyr xterm gnome-terminal x11-utils xclip wmctrl \
-        2>&1 | tail -5 || warn "Some luse display/terminal packages failed (non-fatal)"
+    # Phase 257-01 WS-B (LIVOS-040): only install when a key binary is missing.
+    luse_need_install=0
+    for bin in Xephyr xterm gnome-terminal xprop xclip wmctrl; do
+        if ! command -v "$bin" >/dev/null 2>&1; then luse_need_install=1; break; fi
+    done
+    if (( luse_need_install == 1 )); then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            xserver-xephyr xterm gnome-terminal x11-utils xclip wmctrl \
+            2>&1 | tail -5 || warn "Some luse display/terminal packages failed (non-fatal)"
+    else
+        info "update.sh: luse display/terminal deps already present — skipping apt install"
+    fi
 
     # Verify the critical streaming binaries are present after install
     streaming_missing=()
