@@ -184,6 +184,60 @@ assume the key is present).
 
 ---
 
+## 4a. Optional manifest flags (AI / agent apps)
+
+Beyond `port` / `subdomain` / `env`, the manifest accepts two optional boolean
+flags for apps that need AI. Both default to `false`; omit them for normal apps.
+
+| Flag | Effect |
+|---|---|
+| `requiresAiProvider` | Routes the app's LLM calls through the **Livinity broker** (the operator's managed Claude subscription). The installer injects `ANTHROPIC_BASE_URL` / `OPENAI_API_BASE_URL` / etc. + an `extra_hosts` entry pointing at `livinity-broker`. Use for apps that read an OpenAI/Anthropic-compatible base-URL env (Open WebUI, Bolt.diy, MiroFish). No host CLIs involved. |
+| `requiresLocalAiClis` | Mounts the **host's installed AI CLIs** (`claude`, `gemini`) + the host glibc runtime + the operator's CLI credentials into the container, and puts thin wrappers on `PATH`. The app then **detects and runs the real local CLIs directly** — with the operator's own auth, **no broker**. Use for agent-native tools that shell out to `claude`/`gemini` (e.g. Open Design). |
+
+### `requiresLocalAiClis` — what it does + what your app must do
+
+Set `"requiresLocalAiClis": true` in the manifest. At install the LivOS installer:
+
+- mounts the host glibc into an **isolated prefix** (`/opt/livos-clis/glibc`) and
+  the CLI packages + host `node` under `/opt/livos-clis/…` (never over the
+  container's own `/lib`, so musl **and** glibc base images both work);
+- writes `claude` / `gemini` wrapper scripts into the container and **prepends
+  `/opt/livos-clis/bin` to `PATH`**;
+- grants the container's uid a POSIX ACL on the mounted creds (so non-root
+  containers can read/refresh the host OAuth tokens).
+
+**Your app just needs to call `claude` / `gemini` by name** (e.g. `which claude`,
+`execvp("claude", …)`). It inherits the wrapper PATH from PID 1. Nothing
+app-specific is required beyond the flag.
+
+### If your app's web UI talks to its OWN bundled daemon (the "local-first" case)
+
+Tools that were originally desktop apps (Open Design is the reference) ship a web
+UI that calls its own backend daemon assuming it's on `localhost`. Three things
+bite through a reverse proxy — handle them in your `docker_compose`:
+
+1. **Bind the published port to loopback:** `"127.0.0.1:{port}:{port}"`. The
+   daemon is then only reachable through LivOS's Caddy, never off-box.
+2. **Give the daemon a token env** if it refuses to bind `0.0.0.0` without one.
+   LivOS auto-detects the env var **by name** (currently `OD_API_TOKEN`) from the
+   compose, reads its literal default (`${VAR:-<literal>}` is resolved), and
+   **injects it as `Authorization: Bearer`** in the gated Caddy block — so the
+   token-less same-origin UI is authenticated by Caddy. To support a new app with
+   a different token env name, add it to `DAEMON_TOKEN_ENV_VARS` in
+   `livinityd/source/modules/apps/apps.ts` (`readAppDaemonToken`).
+3. LivOS also **rewrites `Host` + `Origin` to loopback** for that block, because
+   such daemons usually 403 any non-loopback Host/Origin (DNS-rebinding/CSRF
+   guard). This is automatic whenever the bearer is injected.
+
+**Auth/security note:** every installed app subdomain is now **login-gated**
+(`@notauth → /login` redirect; the `LIVINITY_SESSION` cookie is scoped to the
+registrable parent so it reaches `{slug}-{user}.livinity.io`). Combined with the
+loopback bind, an agent app's mounted credentials are never reachable without a
+LivOS login. See `livos/packages/livinityd/source/modules/apps/inject-local-ai-clis.ts`
+for the full mount design.
+
+---
+
 ## 5. Insert SQL — the template
 
 Save as `scripts/add-marketplace-app.sql` and run on Server5 against the
