@@ -63,7 +63,11 @@ export default class AppStore {
 
 	async getRepositories() {
 		const repositoryUrls = await this.#livinityd.store.get('appRepositories')
-		const repositories = repositoryUrls.map((url) => new AppRepository(this.#livinityd, url))
+		// Phase 257-02 (WS-C, LIVOS-024): persisted repository URLs are already
+		// operator-curated/trusted, so construct them with isAdmin:true — the
+		// SSRF gate must not retroactively break an already-added private/overlay
+		// store. New adds go through addRepository's adminProcedure-gated path.
+		const repositories = repositoryUrls.map((url) => new AppRepository(this.#livinityd, url, {isAdmin: true}))
 
 		return repositories
 	}
@@ -119,6 +123,15 @@ export default class AppStore {
 	}
 
 	async addRepository(url: string) {
+		// Phase 257-02 (WS-C, LIVOS-024): construct (and thereby SSRF-validate) the
+		// repository FIRST so a private/loopback/metadata host or non-http(s) scheme
+		// is rejected before any dedup/persist. addRepository is reached only via the
+		// adminProcedure-gated route (256-03), so isAdmin:true matches validateUrl's
+		// operator carve-out; any non-admin/automated path that constructs an
+		// AppRepository directly stays strict (isAdmin defaults false). this.url is
+		// the raw input (cache-dir + dedup key stability — see AppRepository ctor).
+		const repository = new AppRepository(this.#livinityd, url, {isAdmin: true})
+
 		// Check if repo already exists
 		const existingRepositories = await this.getRepositories()
 		if (existingRepositories.some((existingRepo) => existingRepo.url === url)) {
@@ -127,8 +140,7 @@ export default class AppStore {
 
 		this.logger.log(`Adding new repository: ${url}`)
 
-		// Create repository instance and initialise it
-		const repository = new AppRepository(this.#livinityd, url)
+		// Initialise it
 		await repository.update()
 
 		// Save the repository URL

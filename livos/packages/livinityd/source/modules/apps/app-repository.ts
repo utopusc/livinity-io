@@ -12,6 +12,7 @@ import type Livinityd from '../../index.js'
 import randomToken from '../utilities/random-token.js'
 import {type AppRepositoryMeta, type AppManifest, validateManifest} from './schema.js'
 import {LIVINITY_APP_STORE_REPO} from '../../constants.js'
+import {validateUrl} from '../webapps/url-validator.js'
 
 async function readYaml(path: string) {
 	return yaml.load(await fse.readFile(path, 'utf8'))
@@ -19,14 +20,13 @@ async function readYaml(path: string) {
 
 // TODO: Refactor some of this logic out into utilities
 
-// Validate URL
-function isValidUrl(url: string) {
-	try {
-		void new URL(url)
-		return true
-	} catch {
-		return false
-	}
+export type AppRepositoryOptions = {
+	// Phase 257-02 (WS-C, LIVOS-024): the SSRF-strict path defaults to non-admin
+	// (private/loopback/link-local/metadata hosts + non-http(s) schemes rejected).
+	// addRepository is reached via the now-adminProcedure route (256-03), so the
+	// operator-initiated add passes isAdmin:true; any non-admin/automated path
+	// stays strict.
+	isAdmin?: boolean
 }
 
 export default class AppRepository {
@@ -35,8 +35,20 @@ export default class AppRepository {
 	url: string
 	path: string
 
-	constructor(livinityd: Livinityd, url: string) {
-		if (!isValidUrl(url)) throw new Error('Invalid URL')
+	constructor(livinityd: Livinityd, url: string, opts: AppRepositoryOptions = {}) {
+		// Phase 257-02 (WS-C, LIVOS-024): reuse the webapps SSRF validator (scheme
+		// allowlist + isPrivateHost) BEFORE any git.clone / git.listServerRefs
+		// fetch, so livinityd can't be driven to reach internal targets.
+		//
+		// We intentionally keep `this.url` as the ORIGINAL input (not
+		// res.normalized): cleanUrl() hashes this.url to derive the on-disk
+		// app-store cache directory name, and the persisted appRepositories set is
+		// keyed on the raw url. Swapping in the normalized form would rename every
+		// existing cache dir (orphaning the clone) and change dedup keys. The
+		// security gate (reject private/loopback/link-local/metadata + non-http(s))
+		// is fully enforced regardless of which string we then store.
+		const res = validateUrl(url, {isAdmin: opts.isAdmin ?? false})
+		if (!res.ok) throw new Error(`Invalid repository URL: ${res.reason}`)
 		this.#livinityd = livinityd
 		this.url = url
 		this.path = `${livinityd.dataDirectory}/app-stores/${this.cleanUrl()}`
