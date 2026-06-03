@@ -377,6 +377,25 @@ CREATE INDEX IF NOT EXISTS idx_broker_usage_api_key_id
   WHERE api_key_id IS NOT NULL;
 
 -- =========================================================================
+-- Phase 257-04 WS-A (LIVOS-005) — sessions.jti for JWT revocation.
+-- The sessions table (lines 16-26) has long existed (token_hash/revoked/
+-- expires_at) but was never written/read. WS-A wires it: every DB-backed user
+-- JWT carries a `jti` (jwt.signUserToken), login records a session row keyed off
+-- that jti, and a password change / deactivation / deletion sets revoked=TRUE,
+-- which is-authenticated checks via isSessionActive(jti). Idempotent ADD COLUMN
+-- IF NOT EXISTS in a DO-block (matches the Phase 25 / Phase 62 pattern above);
+-- partial index on the live (non-revoked) jti keeps the per-request lookup hot.
+-- =========================================================================
+DO $$
+BEGIN
+  ALTER TABLE sessions ADD COLUMN IF NOT EXISTS jti TEXT;
+END$$;
+
+CREATE INDEX IF NOT EXISTS idx_sessions_jti
+  ON sessions(jti)
+  WHERE revoked = FALSE;
+
+-- =========================================================================
 -- Conversations + Messages (Phase 75 MEM-04 — Postgres FTS)
 -- Mirror of the in-memory/Redis conversation cache in livos/packages/livinityd/
 -- source/modules/ai/index.ts. Postgres is search-index-only; Redis remains the

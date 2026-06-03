@@ -25,6 +25,7 @@ import {
 	deleteUserPreference,
 	deleteUser,
 } from '../database/index.js'
+import {createSession, revokeSessionsForUser} from '../database/sessions.js'
 
 const ONE_SECOND = 1000
 const ONE_MINUTE = 60 * ONE_SECOND
@@ -194,6 +195,26 @@ export default router({
 				? await ctx.server.signUserToken(dbUserId, dbUserRole)
 				: await ctx.server.signToken()
 
+			// Phase 257-04 (LIVOS-005): record a revocable session row keyed off
+			// the token's jti so a later password change / deactivation can kill
+			// this token. Only for DB-backed user tokens (legacy single-user
+			// tokens carry no jti and there is no sessions table to write).
+			if (dbUserId && pool) {
+				try {
+					const verified = await ctx.server.verifyToken(apiToken)
+					if (verified?.jti) {
+						await createSession({
+							userId: dbUserId,
+							jti: verified.jti,
+							expiresAt: new Date(Date.now() + ONE_WEEK),
+						})
+					}
+				} catch (error) {
+					// Non-fatal: a failed session record must not block login.
+					ctx.logger.error('Failed to record session for revocation tracking', error)
+				}
+			}
+
 			// Set domain-wide session cookie for cross-subdomain auth
 			// Read the configured domain so the cookie covers *.domain too
 			let cookieDomain: string | undefined
@@ -295,6 +316,10 @@ export default router({
 						hashedPassword,
 						ctx.currentUser.id,
 					])
+					// Phase 257-04 (LIVOS-005): a password change revokes every
+					// outstanding session for this user, so any previously-issued
+					// JWT is rejected on its next request.
+					await revokeSessionsForUser(ctx.currentUser.id)
 				} catch (error) {
 					ctx.logger.error('Failed to update password in database', error)
 				}
@@ -631,6 +656,13 @@ export default router({
 				throw new TRPCError({code: 'NOT_FOUND', message: 'User not found'})
 			}
 
+			// Phase 257-04 (LIVOS-005): deactivating a user revokes all of their
+			// outstanding sessions so their existing JWT stops working immediately
+			// (in addition to the is-authenticated active-user fail-closed check).
+			if (!input.isActive) {
+				await revokeSessionsForUser(input.userId)
+			}
+
 			return {success: true}
 		}),
 
@@ -645,6 +677,12 @@ export default router({
 			if (ctx.currentUser && input.userId === ctx.currentUser.id) {
 				throw new TRPCError({code: 'BAD_REQUEST', message: 'Cannot delete your own account'})
 			}
+
+			// Phase 257-04 (LIVOS-005): revoke sessions BEFORE deletion. The
+			// sessions FK is ON DELETE CASCADE so rows vanish with the user, but
+			// revoking first also kills any session if the delete is soft/partial
+			// and is explicit defense-in-depth.
+			await revokeSessionsForUser(input.userId)
 
 			const deleted = await deleteUser(input.userId)
 			if (!deleted) {

@@ -1,3 +1,5 @@
+import crypto from 'node:crypto'
+
 import jwt from 'jsonwebtoken'
 
 const ONE_MINUTE = 60
@@ -17,6 +19,9 @@ type UserJwtPayload = {
 	loggedIn: boolean
 	userId: string
 	role: string
+	// Phase 257-04 (LIVOS-005): per-session token id so a credential/state
+	// change can revoke this token via the sessions table.
+	jti: string
 }
 
 // Combined type for verification results
@@ -24,6 +29,7 @@ export type VerifiedJwtPayload = {
 	loggedIn: boolean
 	userId?: string
 	role?: string
+	jti?: string
 }
 
 const validateSecret = (secret: string) => {
@@ -48,10 +54,16 @@ export async function sign(secret: string) {
 
 /**
  * Sign a new multi-user token with userId and role.
+ *
+ * Phase 257-04 (LIVOS-005): every user token carries a `jti` so a credential or
+ * account-state change can revoke it via the sessions table. The token signature
+ * is unchanged (returns the token string) so the server wrapper + renewToken
+ * caller are untouched — the login caller recovers the jti via `verify()` (or
+ * `decode()`), which now returns `payload.jti`.
  */
-export async function signUserToken(secret: string, userId: string, role: string) {
+export async function signUserToken(secret: string, userId: string, role: string): Promise<string> {
 	validateSecret(secret)
-	const payload: UserJwtPayload = {loggedIn: true, userId, role}
+	const payload: UserJwtPayload = {loggedIn: true, userId, role, jti: crypto.randomUUID()}
 	const token = jwt.sign(payload, secret, {expiresIn: ONE_WEEK, algorithm: JWT_ALGORITHM})
 
 	return token
@@ -71,6 +83,7 @@ export async function verify(token: string, secret: string): Promise<VerifiedJwt
 		loggedIn: true,
 		userId: payload.userId,
 		role: payload.role,
+		jti: payload.jti,
 	}
 }
 

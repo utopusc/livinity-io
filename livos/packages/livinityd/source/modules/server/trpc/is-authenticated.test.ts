@@ -27,11 +27,19 @@ import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest'
 const mocks = vi.hoisted(() => ({
 	findUserById: vi.fn(),
 	getAdminUser: vi.fn(),
+	getPool: vi.fn(),
+	isSessionActive: vi.fn(),
 }))
 
 vi.mock('../../database/index.js', () => ({
 	findUserById: mocks.findUserById,
 	getAdminUser: mocks.getAdminUser,
+	getPool: mocks.getPool,
+}))
+
+// Phase 257-04 WS-A — sessions DAO (jti revocation lookup).
+vi.mock('../../database/sessions.js', () => ({
+	isSessionActive: mocks.isSessionActive,
 }))
 
 const {isAuthenticated, requireRole} = await import('./is-authenticated.js')
@@ -67,6 +75,13 @@ function makeCtx(opts: {
 beforeEach(() => {
 	mocks.findUserById.mockReset()
 	mocks.getAdminUser.mockReset()
+	mocks.getPool.mockReset()
+	mocks.isSessionActive.mockReset()
+	// Defaults: a DB pool exists and sessions are active unless a test overrides.
+	// This keeps the 256-04 fail-closed tests (which carry no jti) unaffected —
+	// the jti gate only fires when payload.jti is present.
+	mocks.getPool.mockReturnValue({} as any)
+	mocks.isSessionActive.mockResolvedValue(true)
 	delete process.env['LIV_API_KEY']
 })
 
@@ -272,5 +287,103 @@ describe('isAuthenticated — Phase 256-04 WS-D fail-closed (LIVOS-004)', () => 
 		expect(next).toHaveBeenCalledOnce()
 		expect(result).toBe('OK')
 		expect(ctx.currentUser).toEqual({id: 'admin-id', username: 'admin', role: 'admin'})
+	})
+})
+
+// ─── Phase 257-04 WS-A — jti revocation (LIVOS-005) ─────────────────────────
+describe('isAuthenticated — Phase 257-04 WS-A jti revocation (LIVOS-005)', () => {
+	test('WS-A.T3 — active user but REVOKED jti THROWS UNAUTHORIZED (Session revoked)', async () => {
+		mocks.findUserById.mockResolvedValue({
+			id: 'm-id',
+			username: 'mary',
+			role: 'member',
+			isActive: true,
+		})
+		mocks.getPool.mockReturnValue({} as any)
+		mocks.isSessionActive.mockResolvedValue(false) // revoked / expired
+		const ctx = makeCtx({
+			cookies: {LIVINITY_SESSION: 'tok'},
+			verifyToken: async () => ({userId: 'm-id', role: 'member', jti: 'jti-revoked'}),
+		})
+		const next = vi.fn()
+		await expect(isAuthenticated({ctx, next})).rejects.toThrow(/session revoked/i)
+		expect(next).not.toHaveBeenCalled()
+		expect(ctx.currentUser).toBeUndefined()
+		expect(mocks.isSessionActive).toHaveBeenCalledWith('jti-revoked')
+	})
+
+	test('WS-A.T4 — active user with ACTIVE jti passes (currentUser set, next())', async () => {
+		mocks.findUserById.mockResolvedValue({
+			id: 'm-id',
+			username: 'mary',
+			role: 'member',
+			isActive: true,
+		})
+		mocks.getPool.mockReturnValue({} as any)
+		mocks.isSessionActive.mockResolvedValue(true)
+		const ctx = makeCtx({
+			cookies: {LIVINITY_SESSION: 'tok'},
+			verifyToken: async () => ({userId: 'm-id', role: 'member', jti: 'jti-live'}),
+		})
+		const next = vi.fn(async () => 'OK')
+		const result = await isAuthenticated({ctx, next})
+		expect(result).toBe('OK')
+		expect(next).toHaveBeenCalledOnce()
+		expect(ctx.currentUser).toEqual({id: 'm-id', username: 'mary', role: 'member'})
+	})
+
+	test('WS-A.T5 — userId token with NO jti (legacy/pre-migration) is NOT subject to the jti check', async () => {
+		mocks.findUserById.mockResolvedValue({
+			id: 'm-id',
+			username: 'mary',
+			role: 'member',
+			isActive: true,
+		})
+		mocks.getPool.mockReturnValue({} as any)
+		// isSessionActive would return false, but it must NEVER be consulted
+		// for a token that carries no jti (back-compat for tokens minted before
+		// this phase).
+		mocks.isSessionActive.mockResolvedValue(false)
+		const ctx = makeCtx({
+			cookies: {LIVINITY_SESSION: 'tok'},
+			verifyToken: async () => ({userId: 'm-id', role: 'member'}), // no jti
+		})
+		const next = vi.fn(async () => 'OK')
+		const result = await isAuthenticated({ctx, next})
+		expect(result).toBe('OK')
+		expect(next).toHaveBeenCalledOnce()
+		expect(mocks.isSessionActive).not.toHaveBeenCalled()
+	})
+
+	test('WS-A.T6 — DB-absent (getPool null) SKIPS the jti check (single-user not broken)', async () => {
+		mocks.findUserById.mockResolvedValue({
+			id: 'm-id',
+			username: 'mary',
+			role: 'member',
+			isActive: true,
+		})
+		mocks.getPool.mockReturnValue(null as any) // no DB / pure legacy
+		mocks.isSessionActive.mockResolvedValue(false)
+		const ctx = makeCtx({
+			cookies: {LIVINITY_SESSION: 'tok'},
+			verifyToken: async () => ({userId: 'm-id', role: 'member', jti: 'jti-whatever'}),
+		})
+		const next = vi.fn(async () => 'OK')
+		const result = await isAuthenticated({ctx, next})
+		expect(result).toBe('OK')
+		expect(next).toHaveBeenCalledOnce()
+		expect(mocks.isSessionActive).not.toHaveBeenCalled()
+	})
+
+	test('WS-A.T7 — service-token (X-Api-Key) path is NOT subject to the jti check (no user JWT)', async () => {
+		const KEY = 'liv_k_257A_serviceToken_xxxxx'
+		process.env['LIV_API_KEY'] = KEY
+		mocks.getAdminUser.mockResolvedValue({id: 'admin-id', username: 'admin', role: 'admin'})
+		const ctx = makeCtx({headers: {'x-api-key': KEY}})
+		const next = vi.fn(async () => 'OK')
+		const result = await isAuthenticated({ctx, next})
+		expect(result).toBe('OK')
+		expect(next).toHaveBeenCalledOnce()
+		expect(mocks.isSessionActive).not.toHaveBeenCalled()
 	})
 })
