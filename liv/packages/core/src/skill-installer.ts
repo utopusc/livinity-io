@@ -22,6 +22,12 @@ interface InstalledSkillMeta {
   manifest: SkillManifest;
   installedAt: number;
   source: 'marketplace';
+  /**
+   * Phase 257-01 WS-B (LIVOS-012): registry-of-origin persisted so the boot-time
+   * loadMarketplaceSkills reload path can re-apply the origin trust gate (the
+   * pinned official registry stays trusted across restarts).
+   */
+  registryUrl?: string;
 }
 
 // ── SkillInstaller ───────────────────────────────────────────────────────────
@@ -139,8 +145,13 @@ export class SkillInstaller {
         };
       }
 
-      // Load the skill into the running SkillLoader (lazy load)
-      const loaded = await this.skillLoader.loadSkillLazy(skillName, skillDir);
+      // Load the skill into the running SkillLoader (lazy load).
+      // Phase 257-01 WS-B (LIVOS-012): thread the registry-of-origin so the
+      // loader's MARKETPLACE import gate can trust the pinned official registry;
+      // a non-official registry with no checksum fails closed inside the loader.
+      const loaded = await this.skillLoader.loadSkillLazy(skillName, skillDir, {
+        registryUrl: entry.repoUrl,
+      });
       if (!loaded) {
         await rm(skillDir, { recursive: true, force: true });
         return { success: false, skillName, error: 'Failed to load skill after download' };
@@ -151,6 +162,7 @@ export class SkillInstaller {
         manifest,
         installedAt: Date.now(),
         source: 'marketplace',
+        registryUrl: entry.repoUrl,
       };
       await this.redis.set(
         `liv:skills:installed:${skillName}`,

@@ -477,8 +477,21 @@ Conversation:`;
     redis,
   });
 
-  // Load previously installed marketplace skills from disk
-  await skillLoader.loadMarketplaceSkills(skillInstallDir);
+  // Load previously installed marketplace skills from disk.
+  // Phase 257-01 WS-B (LIVOS-012): resolve each skill's persisted registry-of-
+  // origin from Redis so the loader's MARKETPLACE import gate keeps trusting the
+  // pinned official registry across restarts; bundles with no recorded origin
+  // and no checksum fail closed (unverifiable downloaded code is not imported).
+  await skillLoader.loadMarketplaceSkills(skillInstallDir, async (skillName) => {
+    try {
+      const raw = await redis.get(`liv:skills:installed:${skillName}`);
+      if (!raw) return undefined;
+      const meta = JSON.parse(raw) as { registryUrl?: string };
+      return { registryUrl: meta.registryUrl };
+    } catch {
+      return undefined;
+    }
+  });
   logger.info('SkillInstaller initialized', { installDir: skillInstallDir, registry: defaultSkillRegistry });
 
   // Unified capability registry — aggregates tools, skills, MCPs, hooks, agents
