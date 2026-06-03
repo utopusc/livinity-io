@@ -114,6 +114,12 @@ export default class Files {
 	logger: Livinityd['logger']
 	baseDirectories: Map<string, string>
 	trashMetaDirectory: string
+	// Phase 257-04 WS-A (LIVOS-006): cached multi-user flag (livos:system:multi_user).
+	// getActiveBaseDirectories() is synchronous and called on every file op, so we
+	// cache the redis flag here (refreshed by a lightweight poller) rather than
+	// reading redis per call. Directly settable in unit tests.
+	multiUserMode = false
+	#multiUserPoll?: ReturnType<typeof setInterval>
 	fileOwner = {userId: 1000, groupId: 1000}
 	maxDirectoryListing = 10000
 	// Prevent loads of .DS_Store (macOS) and .directory (KDE Dolphin) results
@@ -156,6 +162,25 @@ export default class Files {
 
 		// TODO: This should really be in a proper DB, refactor this once we've moved to SQLite
 		this.trashMetaDirectory = `${livinityd.dataDirectory}/trash-meta`
+
+		// Phase 257-04 WS-A (LIVOS-006): keep the cached multi-user flag fresh.
+		// Read once at construction, then poll. Failures (e.g. redis not yet up)
+		// leave the safe default (false → single-user behavior), and a later poll
+		// picks up the real value once redis is available.
+		void this.refreshMultiUserMode()
+		this.#multiUserPoll = setInterval(() => void this.refreshMultiUserMode(), 30_000)
+		// Don't keep the event loop alive just for this poll.
+		this.#multiUserPoll.unref?.()
+	}
+
+	// Refresh the cached multi-user flag from redis (livos:system:multi_user).
+	async refreshMultiUserMode(): Promise<void> {
+		try {
+			const val = await this.#livinityd.ai.redis.get('livos:system:multi_user')
+			this.multiUserMode = val === 'true'
+		} catch {
+			// Leave the previous (or default) value; a later poll retries.
+		}
 	}
 
 	// Get base directories for a non-admin user (per-user isolation).
@@ -173,14 +198,43 @@ export default class Files {
 	}
 
 	// Returns the active base directories based on the current request's user context.
-	// Admin or legacy (no user context) → global directories.
-	// Non-admin → per-user directories.
-	getActiveBaseDirectories(): Map<string, string> {
-		const userInfo = fileUserContext.getStore()
-		if (!userInfo || userInfo.role === 'admin') {
+	//
+	// Phase 257-04 WS-A (LIVOS-006): FAIL CLOSED. The legacy "absent userInfo →
+	// global admin tree" fallback is a privilege-escalation hole in multi-user
+	// mode — a member can omit LIVINITY_SESSION (presenting only the user-agnostic
+	// proxy token, which resolves NO per-user identity) and reach the admin/shared
+	// tree. We now gate that fallback on multi-user mode:
+	//   - MULTI-user mode + absent userInfo  → EMPTY scope (never the admin tree).
+	//   - MULTI-user mode + admin userInfo   → admin/global tree (unchanged).
+	//   - MULTI-user mode + member userInfo  → users/<username> subtree (unchanged).
+	//   - SINGLE-user (legacy) mode          → absent userInfo still gets the global
+	//                                          tree (the single-operator Mini PC is
+	//                                          unaffected — no regression).
+	//
+	// `userInfo` / `multiUser` default to the per-request AsyncLocalStorage store
+	// and the redis-backed `multiUserMode` flag, but are overridable for unit tests.
+	getActiveBaseDirectories(
+		userInfo: FileUserInfo | undefined = fileUserContext.getStore(),
+		opts?: {multiUser?: boolean},
+	): Map<string, string> {
+		const multiUser = opts?.multiUser ?? this.multiUserMode
+
+		if (userInfo?.role === 'admin') {
 			return this.baseDirectories
 		}
-		return this.getUserBaseDirectories(userInfo.username)
+		if (userInfo) {
+			// member / guest → per-user isolated subtree
+			return this.getUserBaseDirectories(userInfo.username)
+		}
+
+		// No resolved per-user identity (proxy/legacy token).
+		if (multiUser) {
+			// FAIL CLOSED: never expose the global admin tree to an unidentified
+			// caller in multi-user mode.
+			return new Map<string, string>()
+		}
+		// Single-user (legacy) mode: the global tree is the only tree.
+		return this.baseDirectories
 	}
 
 	// Ensure per-user directories exist. Called on first access.
