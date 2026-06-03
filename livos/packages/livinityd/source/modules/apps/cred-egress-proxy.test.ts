@@ -2,6 +2,11 @@ import assert from 'node:assert/strict'
 import {test} from 'node:test'
 import os from 'node:os'
 import path from 'node:path'
+import http from 'node:http'
+import net from 'node:net'
+import tls from 'node:tls'
+import {execFile} from 'node:child_process'
+import {promisify} from 'node:util'
 
 import {mkdtemp} from 'node:fs/promises'
 
@@ -15,7 +20,89 @@ import {
 	readBearerFor,
 	injectAuthHeader,
 	isFromBridge,
+	mintLeafCert,
+	buildLeafContexts,
+	createCredEgressProxy,
 } from './cred-egress-proxy.js'
+
+const execFileAsync = promisify(execFile)
+
+/** Generate a throwaway CA (cert + key) in a temp dir, mirroring the installer. */
+async function makeTestCa(): Promise<{dir: string; caCert: string; caKey: string}> {
+	const dir = await mkdtemp(path.join(os.tmpdir(), 'credproxy-ca-'))
+	const caCert = path.join(dir, 'credproxy-ca.pem')
+	const caKey = path.join(dir, 'credproxy-ca.key')
+	await execFileAsync('openssl', [
+		'req',
+		'-x509',
+		'-newkey',
+		'rsa:2048',
+		'-nodes',
+		'-keyout',
+		caKey,
+		'-out',
+		caCert,
+		'-days',
+		'3650',
+		'-subj',
+		'/CN=livinity-credproxy',
+	])
+	return {dir, caCert, caKey}
+}
+
+/**
+ * Drive a real CONNECT + TLS handshake through the proxy to `host`, send one GET,
+ * and resolve with the upstream-forwarded headers the proxy injected (captured by
+ * a stub `forwardRequest`) plus the response body. The proxy is created with the
+ * given opts so each test controls the leaf contexts / bridge subnet / bearer.
+ */
+async function connectThroughProxy(opts: {
+	proxyPort: number
+	host: string
+	caCert: string
+	expectFailClosed?: boolean
+}): Promise<{status: number | null; body: string; connectFailed: boolean}> {
+	return new Promise((resolve, reject) => {
+		const socket = net.connect(opts.proxyPort, '127.0.0.1', () => {
+			socket.write(`CONNECT ${opts.host}:443 HTTP/1.1\r\nHost: ${opts.host}:443\r\n\r\n`)
+		})
+		let connectBuf = ''
+		const onConnectData = (chunk: Buffer) => {
+			connectBuf += chunk.toString('utf8')
+			if (!connectBuf.includes('\r\n\r\n')) return
+			socket.removeListener('data', onConnectData)
+			const statusLine = connectBuf.split('\r\n')[0]
+			if (!statusLine.includes('200')) {
+				// Proxy refused the CONNECT (fail-closed / deny).
+				resolve({status: null, body: '', connectFailed: true})
+				socket.destroy()
+				return
+			}
+			// CONNECT accepted → start the inner TLS handshake against the proxy's
+			// MITM leaf, trusting our test CA.
+			const tlsSock = tls.connect(
+				{socket, servername: opts.host, ca: fse.readFileSync(opts.caCert)},
+				() => {
+					tlsSock.write(
+						`GET /v1/messages HTTP/1.1\r\nHost: ${opts.host}\r\nAuthorization: Bearer __livinity_credproxy__\r\nConnection: close\r\n\r\n`,
+					)
+				},
+			)
+			let respBuf = ''
+			tlsSock.on('data', (d) => {
+				respBuf += d.toString('utf8')
+			})
+			tlsSock.on('error', reject)
+			tlsSock.on('close', () => {
+				const status = respBuf ? Number(respBuf.split(' ')[1]) || null : null
+				const body = respBuf.split('\r\n\r\n').slice(1).join('\r\n\r\n')
+				resolve({status, body, connectFailed: false})
+			})
+		}
+		socket.on('data', onConnectData)
+		socket.on('error', reject)
+	})
+}
 
 // ── Test 1: host allowlist ─────────────────────────────────────────────────
 test('Test 1: isInjectableHost allowlists only the AI provider hosts', () => {
@@ -124,4 +211,158 @@ test('Test 6: exported constants match the container wiring contract', () => {
 	assert.equal(CREDPROXY_HOST, 'livinity-credproxy')
 	assert.equal(CREDPROXY_PORT, 13129)
 	assert.equal(CREDPROXY_HOST_GATEWAY, 'livinity-credproxy:host-gateway')
+})
+
+// ── Test 7: leaf-cert minting + SNI context build (signed by the CA) ─────────
+test('Test 7: mintLeafCert signs a per-host leaf with the CA; buildLeafContexts maps the allowlist', async () => {
+	const {dir, caCert, caKey} = await makeTestCa()
+	try {
+		const leaf = await mintLeafCert('api.anthropic.com', caCert, caKey)
+		assert.ok(leaf, 'leaf should mint for an allowlisted host')
+		assert.ok(leaf!.cert.includes('BEGIN CERTIFICATE'))
+		assert.ok(leaf!.key.includes('PRIVATE KEY'))
+		// The leaf must actually be usable to build a TLS context.
+		assert.doesNotThrow(() => tls.createSecureContext({cert: leaf!.cert, key: leaf!.key}))
+
+		// Hostile / non-DNS names are rejected before openssl (defence-in-depth).
+		assert.equal(await mintLeafCert('api.anthropic.com; rm -rf /', caCert, caKey), null)
+		assert.equal(await mintLeafCert('$(touch pwned)', caCert, caKey), null)
+
+		// Missing CA material → null (caller fails closed).
+		assert.equal(await mintLeafCert('api.anthropic.com', path.join(dir, 'nope.pem'), caKey), null)
+
+		// buildLeafContexts returns a context per host that minted.
+		const ctxs = await buildLeafContexts(['api.anthropic.com', 'generativelanguage.googleapis.com'], caCert, caKey)
+		assert.equal(ctxs.size, 2)
+		assert.ok(ctxs.get('api.anthropic.com'))
+		assert.ok(ctxs.get('generativelanguage.googleapis.com'))
+	} finally {
+		await fse.remove(dir)
+	}
+})
+
+// ── Test 8: allowlisted CONNECT from allowed IP is TLS-terminated + bearer injected ─
+test('Test 8: MITM terminates TLS for an allowlisted host and injects the real bearer (placeholder replaced)', async () => {
+	const {dir, caCert, caKey} = await makeTestCa()
+	const leafContexts = await buildLeafContexts(['api.anthropic.com'], caCert, caKey)
+
+	// A real local HTTP upstream stands in for the genuine AI host; forwardRequest
+	// re-originates here (proving the upstream leg carries the injected header).
+	let forwardedAuth: string | undefined
+	let forwardedXApiKey: string | undefined
+	const upstream = http.createServer((ureq, ures) => {
+		forwardedAuth = ureq.headers['authorization'] as string | undefined
+		forwardedXApiKey = ureq.headers['x-api-key'] as string | undefined
+		ures.writeHead(200, {'content-type': 'text/plain'})
+		ures.end('ok-from-upstream')
+	})
+	await new Promise<void>((r) => upstream.listen(0, '127.0.0.1', () => r()))
+	const upstreamPort = (upstream.address() as net.AddressInfo).port
+
+	const proxy = createCredEgressProxy({
+		creds: {claudeDir: null, geminiDir: null},
+		bridgeSubnet: '127.0.0.0/8', // allow the loopback test client
+		leafContexts,
+		readBearer: async () => 'sk-ant-oat-REAL-WIRE',
+		// Redirect the re-originated leg to the local upstream (test-only hook); the
+		// header set is the one the MITM produced after injectAuthHeader.
+		forwardRequest: (_hostname, fopts, onResponse) =>
+			http.request(
+				{host: '127.0.0.1', port: upstreamPort, method: fopts.method, path: fopts.path, headers: fopts.headers},
+				onResponse,
+			),
+	})
+
+	await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', () => r()))
+	const port = (proxy.address() as net.AddressInfo).port
+	try {
+		const res = await connectThroughProxy({proxyPort: port, host: 'api.anthropic.com', caCert})
+		assert.equal(res.connectFailed, false, 'CONNECT should be accepted (200)')
+		// The placeholder the client sent must be REPLACED with the real bearer.
+		assert.equal(forwardedAuth, 'Bearer sk-ant-oat-REAL-WIRE')
+		assert.notEqual(forwardedAuth, 'Bearer __livinity_credproxy__')
+		assert.equal(forwardedXApiKey, undefined, 'x-api-key must be stripped')
+		assert.equal(res.status, 200)
+		assert.ok(res.body.includes('ok-from-upstream'))
+	} finally {
+		proxy.close()
+		upstream.close()
+		await fse.remove(dir)
+	}
+})
+
+// ── Test 9: non-allowlisted host is still rejected at CONNECT (default-deny intact) ─
+test('Test 9: a non-allowlisted host CONNECT is refused — never MITM, never pass-through', async () => {
+	const {dir, caCert, caKey} = await makeTestCa()
+	const leafContexts = await buildLeafContexts(['api.anthropic.com'], caCert, caKey)
+	let forwarded = false
+	const proxy = createCredEgressProxy({
+		creds: {claudeDir: null, geminiDir: null},
+		bridgeSubnet: '127.0.0.0/8',
+		leafContexts,
+		readBearer: async () => 'sk-ant-oat-REAL',
+		forwardRequest: () => {
+			forwarded = true
+			return {on: () => undefined, write: () => true, end: () => undefined} as unknown as http.ClientRequest
+		},
+	})
+	await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', () => r()))
+	const port = (proxy.address() as net.AddressInfo).port
+	try {
+		const res = await connectThroughProxy({proxyPort: port, host: 'attacker.example', caCert})
+		assert.equal(res.connectFailed, true, 'non-allowlisted CONNECT must be refused')
+		assert.equal(forwarded, false, 'no upstream leg for a denied host')
+	} finally {
+		proxy.close()
+		await fse.remove(dir)
+	}
+})
+
+// ── Test 10: disallowed source IP is still rejected ──────────────────────────
+test('Test 10: a source IP outside the bridge subnet is refused at CONNECT', async () => {
+	const {dir, caCert, caKey} = await makeTestCa()
+	const leafContexts = await buildLeafContexts(['api.anthropic.com'], caCert, caKey)
+	const proxy = createCredEgressProxy({
+		creds: {claudeDir: null, geminiDir: null},
+		// The loopback test client (127.0.0.1) is NOT in this subnet → must be refused.
+		bridgeSubnet: '172.16.0.0/12',
+		leafContexts,
+		readBearer: async () => 'sk-ant-oat-REAL',
+	})
+	await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', () => r()))
+	const port = (proxy.address() as net.AddressInfo).port
+	try {
+		const res = await connectThroughProxy({proxyPort: port, host: 'api.anthropic.com', caCert})
+		assert.equal(res.connectFailed, true, 'a non-bridge source IP must be refused even for an allowlisted host')
+	} finally {
+		proxy.close()
+		await fse.remove(dir)
+	}
+})
+
+// ── Test 11: fail-closed when no leaf context exists for an allowed host ──────
+test('Test 11: allowlisted host with NO leaf context fails closed (no unauthenticated pass-through)', async () => {
+	const {dir, caCert} = await makeTestCa()
+	let forwarded = false
+	const proxy = createCredEgressProxy({
+		creds: {claudeDir: null, geminiDir: null},
+		bridgeSubnet: '127.0.0.0/8',
+		// Empty leaf map → TLS cannot be terminated → MUST refuse, not pass through.
+		leafContexts: new Map(),
+		readBearer: async () => 'sk-ant-oat-REAL',
+		forwardRequest: () => {
+			forwarded = true
+			return {on: () => undefined, write: () => true, end: () => undefined} as unknown as http.ClientRequest
+		},
+	})
+	await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', () => r()))
+	const port = (proxy.address() as net.AddressInfo).port
+	try {
+		const res = await connectThroughProxy({proxyPort: port, host: 'api.anthropic.com', caCert})
+		assert.equal(res.connectFailed, true, 'missing leaf cert must fail closed (CONNECT refused)')
+		assert.equal(forwarded, false, 'no upstream leg — the placeholder key must NOT leak upstream')
+	} finally {
+		proxy.close()
+		await fse.remove(dir)
+	}
 })
