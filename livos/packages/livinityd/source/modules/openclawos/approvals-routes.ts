@@ -48,6 +48,30 @@ export interface ApprovalsRoutesOptions {
 	}
 }
 
+/**
+ * Phase 257-06 (LIVOS-027): the approvals stream + resolve endpoints control
+ * which agent tool-calls execute, so they require an ADMIN-equivalent caller —
+ * NOT merely any valid token. We capture the decoded payload (verifyToken
+ * returns it) and admit ONLY:
+ *   - a multi-user token whose `role === 'admin'`, OR
+ *   - a genuine legacy single-user token (`loggedIn === true` with NO role and
+ *     NO userId) — the Mini PC operator's own session, which predates RBAC and
+ *     is admin-equivalent by construction.
+ * A multi-user `member`/`guest` token, or any other shape, is rejected. This
+ * mirrors the 256-04 principle: legacy single-user is admin-equivalent, a
+ * resolved non-admin user is not.
+ */
+function isAdminEquivalent(payload: unknown): boolean {
+	if (!payload || typeof payload !== 'object') return false
+	const p = payload as Record<string, unknown>
+	if (p['role'] === 'admin') return true
+	// Genuine legacy single-user token: loggedIn:true, no role, no userId.
+	if (p['loggedIn'] === true && p['role'] === undefined && p['userId'] === undefined) {
+		return true
+	}
+	return false
+}
+
 async function authenticate(
 	req: Parameters<RequestHandler>[0],
 	verifyToken: VerifyTokenFn,
@@ -60,8 +84,10 @@ async function authenticate(
 	}
 	if (!token) return false
 	try {
-		await verifyToken(token)
-		return true
+		const payload = await verifyToken(token)
+		// LIVOS-027: admit only admin-equivalent callers (admin role or genuine
+		// legacy single-user). A valid member/guest token is NOT authorized here.
+		return isAdminEquivalent(payload)
 	} catch {
 		return false
 	}

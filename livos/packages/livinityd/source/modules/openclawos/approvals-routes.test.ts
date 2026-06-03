@@ -86,7 +86,7 @@ describe('createApprovalsStreamHandler', () => {
 		const am = new ApprovalManager()
 		const handler = createApprovalsStreamHandler({
 			approvalManager: am,
-			verifyToken: async () => ({}),
+			verifyToken: async () => ({role: 'admin'}),
 		})
 		const req = fakeReq()
 		const res = fakeRes()
@@ -109,6 +109,63 @@ describe('createApprovalsStreamHandler', () => {
 		expect(res._status()).toBe(401)
 	})
 
+	// Phase 257-06 (LIVOS-027): the approvals surface controls agent tool-call
+	// execution, so it must require an ADMIN-equivalent caller — not merely a
+	// valid token. A multi-user member/guest is rejected; a genuine legacy
+	// single-user (loggedIn:true, no role/userId) is the Mini PC operator and
+	// is admitted.
+	test('admin role allowed', async () => {
+		const am = new ApprovalManager()
+		const handler = createApprovalsStreamHandler({
+			approvalManager: am,
+			verifyToken: async () => ({role: 'admin', userId: 'u-admin'}),
+		})
+		const req = fakeReq({token: 'good'})
+		const res = fakeRes()
+		void handler(req, res, () => undefined)
+		await new Promise((r) => setImmediate(r))
+		expect(res._status()).toBe(200)
+		req._fire('close')
+	})
+
+	test('guest role rejected (401)', async () => {
+		const am = new ApprovalManager()
+		const handler = createApprovalsStreamHandler({
+			approvalManager: am,
+			verifyToken: async () => ({role: 'guest', userId: 'u-guest'}),
+		})
+		const req = fakeReq({token: 'good'})
+		const res = fakeRes()
+		await handler(req, res, () => undefined)
+		expect(res._status()).toBe(401)
+	})
+
+	test('member role rejected (401)', async () => {
+		const am = new ApprovalManager()
+		const handler = createApprovalsStreamHandler({
+			approvalManager: am,
+			verifyToken: async () => ({role: 'member', userId: 'u-member'}),
+		})
+		const req = fakeReq({token: 'good'})
+		const res = fakeRes()
+		await handler(req, res, () => undefined)
+		expect(res._status()).toBe(401)
+	})
+
+	test('legacy single-user (loggedIn:true, no role/userId) allowed', async () => {
+		const am = new ApprovalManager()
+		const handler = createApprovalsStreamHandler({
+			approvalManager: am,
+			verifyToken: async () => ({loggedIn: true}),
+		})
+		const req = fakeReq({token: 'good'})
+		const res = fakeRes()
+		void handler(req, res, () => undefined)
+		await new Promise((r) => setImmediate(r))
+		expect(res._status()).toBe(200)
+		req._fire('close')
+	})
+
 	test('emits bootstrap frame on connect', async () => {
 		const am = new ApprovalManager()
 		// Seed a pending approval BEFORE the stream connects.
@@ -120,7 +177,7 @@ describe('createApprovalsStreamHandler', () => {
 
 		const handler = createApprovalsStreamHandler({
 			approvalManager: am,
-			verifyToken: async () => ({userId: 'admin'}),
+			verifyToken: async () => ({role: 'admin', userId: 'admin'}),
 		})
 		const req = fakeReq({token: 'good'})
 		const res = fakeRes()
@@ -143,7 +200,7 @@ describe('createApprovalsStreamHandler', () => {
 		const am = new ApprovalManager()
 		const handler = createApprovalsStreamHandler({
 			approvalManager: am,
-			verifyToken: async () => ({userId: 'admin'}),
+			verifyToken: async () => ({role: 'admin', userId: 'admin'}),
 		})
 		const req = fakeReq({token: 'good'})
 		const res = fakeRes()
@@ -186,7 +243,7 @@ describe('createApprovalsRespondHandler', () => {
 		const am = new ApprovalManager()
 		const handler = createApprovalsRespondHandler({
 			approvalManager: am,
-			verifyToken: async () => ({}),
+			verifyToken: async () => ({role: 'admin', userId: 'admin'}),
 		})
 		const req = fakeReq({token: 'good'})
 		const res = fakeRes()
@@ -198,7 +255,7 @@ describe('createApprovalsRespondHandler', () => {
 		const am = new ApprovalManager()
 		const handler = createApprovalsRespondHandler({
 			approvalManager: am,
-			verifyToken: async () => ({}),
+			verifyToken: async () => ({role: 'admin', userId: 'admin'}),
 		})
 		const req = fakeReq({
 			token: 'good',
@@ -213,7 +270,7 @@ describe('createApprovalsRespondHandler', () => {
 		const am = new ApprovalManager()
 		const handler = createApprovalsRespondHandler({
 			approvalManager: am,
-			verifyToken: async () => ({}),
+			verifyToken: async () => ({role: 'admin', userId: 'admin'}),
 		})
 		const resolveSpy = vi.spyOn(am, 'resolve')
 
@@ -237,7 +294,7 @@ describe('createApprovalsRespondHandler', () => {
 		const am = new ApprovalManager()
 		const handler = createApprovalsRespondHandler({
 			approvalManager: am,
-			verifyToken: async () => ({}),
+			verifyToken: async () => ({role: 'admin', userId: 'admin'}),
 		})
 
 		const pendingPromise = am.requestSync({toolName: 'tool'})
