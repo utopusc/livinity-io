@@ -502,12 +502,54 @@ export function __setRealpathForTest(
 }
 
 /**
- * Phase 160-05 — pure allowlist check. `resolved` is expected to be the
- * post-realpath absolute path. `userSlug` controls the `/home/<user>/`
- * branch; `userId` controls the `${LIVOS_ROOT}/data/uploads/<userId>/` branch.
- * Returns true ONLY if `resolved` starts with one of the three allowed
- * prefixes. The LUSE_TMP_PREFIX (`${XDG_RUNTIME_DIR}/luse-`) matches any
- * runtime-dir-scoped `luse-<anything>` dir (R15: per-uid, was world-shared /tmp).
+ * Phase 257-03 (WS-D, LIVOS-010) — SENSITIVE credential/secret dotfiles that
+ * sit INSIDE the allowed `/home/<slug>/` prefix but must NEVER be read back to
+ * the model. The whole-home allowlist (below) would otherwise let an injected
+ * computer-use instruction exfiltrate the operator's live AI-provider OAuth
+ * tokens (`~/.claude/.credentials.json`, `~/.gemini/oauth_creds.json`,
+ * `~/.kimi/credentials/*`), SSH keys, or a poisoned Claude Code config
+ * (`~/.claude.json`, LIVOS-034). Mirrors 256-01 files-sandbox.ts "deny wins".
+ *
+ * Each entry is a home-relative path. `.config` also covers app-scoped creds
+ * that XDG-store there. `.claude.json` is a bare FILE (not a dir) — the
+ * boundary compare below handles both forms.
+ */
+const SENSITIVE_HOME_DIRS = [
+	'.claude',
+	'.gemini',
+	'.kimi',
+	'.ssh',
+	'.config',
+	'.claude.json',
+]
+
+/**
+ * Path-boundary compare with POSIX semantics: true when `target` IS `root` or
+ * is nested under `root/`. The trailing-`/` guard means `.claudeX` is NOT a
+ * match for `.claude` (no false-deny of a sibling whose name merely prefixes a
+ * denied dir). `root` here is already an absolute POSIX path.
+ */
+function isUnderPosix(target: string, root: string): boolean {
+	return target === root || target.startsWith(root + '/')
+}
+
+/**
+ * Phase 160-05 — pure allowlist check, Phase 257-03 — + credential DENYLIST.
+ * `resolved` is expected to be the post-realpath absolute path. `userSlug`
+ * controls the `/home/<user>/` branch; `userId` controls the
+ * `${LIVOS_ROOT}/data/uploads/<userId>/` branch.
+ *
+ * Two-stage gate (DENY WINS):
+ *  1. Admit only if `resolved` starts with one of the three allowed prefixes
+ *     (whole-home, LUSE_TMP_PREFIX, uploads).
+ *  2. THEN reject if it falls inside a SENSITIVE_HOME_DIRS credential/secret
+ *     path under the home prefix — even though stage 1 admitted it. This is
+ *     what closes LIVOS-010 (in-home credential read). Path-boundary-safe.
+ *
+ * Stays pure (no fs/realpath) — the caller realpaths before calling, which
+ * closes symlink-escape; this denylist closes the in-home credential read.
+ * The LUSE_TMP_PREFIX (`${XDG_RUNTIME_DIR}/luse-`) matches any runtime-dir-
+ * scoped `luse-<anything>` dir (R15: per-uid, was world-shared /tmp).
  */
 export function isPathAllowed(
 	resolved: string,
@@ -524,7 +566,17 @@ export function isPathAllowed(
 		// still inside the sandbox.
 		`${LIVOS_ROOT}/data/uploads/${userId}/`,
 	]
-	return allowlist.some((prefix) => resolved.startsWith(prefix))
+	const admitted = allowlist.some((prefix) => resolved.startsWith(prefix))
+	if (!admitted) return false
+
+	// Phase 257-03 (LIVOS-010) — DENY WINS: even an admitted home path is
+	// rejected when it is, or is nested under, a sensitive credential/secret
+	// dotfile within the home prefix.
+	const homePrefix = `/home/${userSlug}`
+	for (const dir of SENSITIVE_HOME_DIRS) {
+		if (isUnderPosix(resolved, `${homePrefix}/${dir}`)) return false
+	}
+	return true
 }
 
 /**
