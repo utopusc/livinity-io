@@ -325,6 +325,38 @@ export interface CredEgressProxyOpts {
 	 * the unit test can supply a deterministic token without touching disk.
 	 */
 	readBearer?: (provider: 'anthropic' | 'gemini') => Promise<string | null>
+	/**
+	 * Upstream re-origination hook. Defaults to a genuine `https.request` to the
+	 * real `hostname:443` (validating the real public cert). Injectable ONLY so
+	 * the unit test can point the re-originated leg at a local mock upstream
+	 * WITHOUT a DNS/:443 override — the production default always reaches the real
+	 * AI host. The `headers` it receives already carry the injected
+	 * `Authorization: Bearer` (placeholder dropped).
+	 */
+	forwardRequest?: (
+		hostname: string,
+		opts: {method?: string; path?: string; headers: Record<string, string>},
+		onResponse: (res: http.IncomingMessage) => void,
+	) => http.ClientRequest
+}
+
+/** Default upstream re-origination: a real TLS request to the genuine host:443. */
+function defaultForwardRequest(
+	hostname: string,
+	opts: {method?: string; path?: string; headers: Record<string, string>},
+	onResponse: (res: http.IncomingMessage) => void,
+): http.ClientRequest {
+	return https.request(
+		{
+			host: hostname,
+			port: 443,
+			method: opts.method,
+			path: opts.path,
+			headers: opts.headers,
+			servername: hostname,
+		},
+		onResponse,
+	)
 }
 
 /**
@@ -357,6 +389,7 @@ export function createCredEgressProxy(opts: CredEgressProxyOpts): http.Server {
 	const leafContexts = opts.leafContexts
 	const readBearer =
 		opts.readBearer ?? ((provider: 'anthropic' | 'gemini') => readBearerFor(provider, opts.creds))
+	const forwardRequest = opts.forwardRequest ?? defaultForwardRequest
 
 	const server = http.createServer((_req, res) => {
 		// Plain HTTP is not used by the CLIs (they speak HTTPS via CONNECT).
@@ -397,7 +430,7 @@ export function createCredEgressProxy(opts: CredEgressProxyOpts): http.Server {
 
 		// Allowlisted host + allowed source + leaf cert present → MITM.
 		clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
-		mitmTerminateAndForward({hostname, clientSocket, head, leafCtx, readBearer, log})
+		mitmTerminateAndForward({hostname, clientSocket, head, leafCtx, readBearer, forwardRequest, log})
 	})
 
 	return server
@@ -415,9 +448,10 @@ function mitmTerminateAndForward(args: {
 	head: Buffer
 	leafCtx: tls.SecureContext
 	readBearer: (provider: 'anthropic' | 'gemini') => Promise<string | null>
+	forwardRequest: NonNullable<CredEgressProxyOpts['forwardRequest']>
 	log?: {log: (m: string) => void; error: (m: string, e?: unknown) => void}
 }): void {
-	const {hostname, clientSocket, head, leafCtx, readBearer, log} = args
+	const {hostname, clientSocket, head, leafCtx, readBearer, forwardRequest, log} = args
 
 	const clientTls = new tls.TLSSocket(clientSocket, {
 		isServer: true,
@@ -452,15 +486,9 @@ function mitmTerminateAndForward(args: {
 					return
 				}
 
-				const upstreamReq = https.request(
-					{
-						host: hostname,
-						port: 443,
-						method: creq.method,
-						path: creq.url,
-						headers,
-						servername: hostname,
-					},
+				const upstreamReq = forwardRequest(
+					hostname,
+					{method: creq.method, path: creq.url, headers},
 					(upRes) => {
 						cres.writeHead(upRes.statusCode || 502, upRes.headers)
 						upRes.pipe(cres)
