@@ -65,19 +65,37 @@ else
     # URL-safe (no @ / : / / which would break the redis:// and postgres:// URLs).
     _pg_pass=$(openssl rand -hex 24)
     _redis_pass=$(openssl rand -hex 24)
+    # Phase 256-04 (LIVOS-014): ALWAYS seed LIV_API_KEY. liv-core + the memory
+    # API now FAIL CLOSED (503) when LIV_API_KEY is unset, so the repo-root
+    # install path MUST write one or liv-core boots refusing all /api traffic.
+    _liv_api_key=$(openssl rand -hex 32)
     umask 0177
     cat > "$_env_file" <<ENV
-# /opt/livos/.env — seeded by scripts/install/env-seed.sh (Phase 196-02; secrets auto-generated Phase 252 R9)
+# /opt/livos/.env — seeded by scripts/install/env-seed.sh (Phase 196-02; secrets auto-generated Phase 252 R9; LIV_API_KEY Phase 256-04)
 DATABASE_URL=postgresql://livos:${_pg_pass}@localhost:5432/livos
 REDIS_URL=redis://:${_redis_pass}@localhost:6379
 JWT_SECRET_FILE=/opt/livos/data/secrets/jwt
+LIV_API_KEY=${_liv_api_key}
 ENV
     umask 0022
     chown bruce:bruce "$_env_file"
     chmod 0640 "$_env_file"
     # NEVER echo the generated secrets — only confirm they were written.
-    unset _pg_pass _redis_pass
-    ok "✓ ${_env_file} written with auto-generated DATABASE_URL + REDIS_URL secrets"
+    unset _pg_pass _redis_pass _liv_api_key
+    ok "✓ ${_env_file} written with auto-generated DATABASE_URL + REDIS_URL + LIV_API_KEY secrets"
+fi
+
+# Phase 256-04 (LIVOS-014): idempotently ensure LIV_API_KEY is present even when
+# the .env already existed (operator-customized) WITHOUT a key — otherwise
+# liv-core would fail closed (503) on every /api request after this hardening.
+if [[ -f "$_env_file" ]] && ! grep -q '^LIV_API_KEY=' "$_env_file"; then
+    info "Appending missing LIV_API_KEY to existing ${_env_file}"
+    umask 0177
+    echo "LIV_API_KEY=$(openssl rand -hex 32)" >> "$_env_file"
+    umask 0022
+    chown bruce:bruce "$_env_file" 2>/dev/null || true
+    chmod 0640 "$_env_file" 2>/dev/null || true
+    ok "✓ LIV_API_KEY seeded into existing ${_env_file}"
 fi
 
 info "✓ env-seed complete"
