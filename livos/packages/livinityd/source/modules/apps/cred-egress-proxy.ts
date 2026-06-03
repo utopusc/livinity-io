@@ -206,7 +206,7 @@ export function createCredEgressProxy(opts: CredEgressProxyOpts): http.Server {
 		res.writeHead(405).end('cred-egress-proxy: use CONNECT')
 	})
 
-	server.on('connect', (req, clientSocket, head) => {
+	server.on('connect', (req, clientSocket: import('node:net').Socket, head) => {
 		const remote = clientSocket.remoteAddress || ''
 		if (!isFromBridge(remote, subnet)) {
 			log?.error?.(`cred-egress-proxy: refused CONNECT from non-bridge source ${remote}`)
