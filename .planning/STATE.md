@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
 status: completed
-last_updated: "2026-06-03T18:33:04.186Z"
+last_updated: "2026-06-03T21:24:11.244Z"
 last_activity: 2026-06-02
 progress:
-  total_phases: 168
-  completed_phases: 85
-  total_plans: 573
-  completed_plans: 489
+  total_phases: 169
+  completed_phases: 86
+  total_plans: 580
+  completed_plans: 495
   percent: 85
 ---
 
@@ -30,6 +30,8 @@ progress:
 **Two operator scope confirmations pending before execute:** (1) WS-A injection-proof classifier gate is DEFERRED (the 4 OS/network layers already break the lethal trifecta) — confirm or add as 256-06. (2) WS-B ships the egress proxy for operator-trusted apps (OpenDesign); per-app metered-key path for untrusted marketplace apps is deferred (ToS caveat in design doc) — confirm.
 
 **v44.0** is artifact-complete / operator-close pending (independent; not blocked by v45). Its prior NEXT ACTION (`/gsd-execute-phase 251`) already completed (251 ✅, 252 ✅).
+
+> ✅ **257-03 DONE (WS-D luse file exposure, LIVOS-010)** — 1 commit `12a187b8`. luse `isPathAllowed` (`computer-use/mcp/tools.ts`) now enforces a credential/secret dotfile DENYLIST (deny wins) AFTER the whole-home allowlist admit: `~/.claude`, `~/.gemini`, `~/.kimi`, `~/.ssh`, `~/.config`, and the bare `~/.claude.json` (LIVOS-034) are rejected even though they sit inside the allowed `/home/<slug>/` prefix — closing the computer-use token-exfiltration primitive (an injected instruction can no longer read OAuth creds back via `computer_read_file`). POSIX path-boundary compare (`isUnderPosix`) so `.claudeX` is NOT false-denied; `isPathAllowed` stays pure (caller still realpaths → symlink-escape stays closed). New `tools.sandbox.test.ts` 6 RED→GREEN cases; existing `tools.test.ts` 20/20 (no regression). **CODE+TESTS ONLY — NO DEPLOY** (Mini PC only; deploy = 257-07). **DEPLOY GOTCHA:** luse MCP servers run as `tsx computer-use/mcp/server.ts` spawned PER session — a `livos` restart does NOT reload them; live apply needs `systemctl restart liv-assistant` THEN `pkill -f "computer-use/mcp/server.ts"`. SUMMARY: `.planning/phases/257-security-hardening-pass-2/257-03-SUMMARY.md`. (STATE machine-counters not advanced — this STATE.md uses the narrative format; SDK `state.advance-plan`/`record-metric`/`add-decision` no-op against it.)
 
 ---
 
