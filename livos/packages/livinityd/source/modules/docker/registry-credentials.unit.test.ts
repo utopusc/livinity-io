@@ -18,12 +18,23 @@
 // touching APIs are exercised against a tiny in-memory pg pool stub that
 // records the SQL it sees.
 
+import crypto from 'node:crypto'
+
 import {beforeEach, describe, expect, test, vi} from 'vitest'
 
-// Mock node:fs/promises to short-circuit JWT secret read
+// Mock node:fs/promises to short-circuit any real disk access. The module-under-
+// test reads its keys through the injectable _setKeyProvidersForTests hook
+// (LIVOS-033), so these are just safety stubs for the default import path.
 vi.mock('node:fs/promises', () => ({
 	readFile: vi.fn(async () => 'test-jwt-secret-do-not-use-in-prod'),
+	writeFile: vi.fn(async () => undefined),
+	mkdir: vi.fn(async () => undefined),
 }))
+
+// An in-memory DEK + JWT so getKey() is deterministic and offline. The DEK is a
+// FIXED 32-byte buffer (distinct from sha256(JWT)) so round-trips are stable.
+const TEST_DEK = Buffer.alloc(32, 0x42)
+const TEST_JWT = 'test-jwt-secret-do-not-use-in-prod'
 
 // Mock the database module — getPool() returns a stub pool we control.
 type Row = {
@@ -67,6 +78,13 @@ const fakePool = {
 			rows.push(newRow)
 			return {rows: [newRow], rowCount: 1}
 		}
+		if (trimmed.startsWith('UPDATE')) {
+			// LIVOS-033 lazy re-key: UPDATE ... SET encrypted_data = $1 WHERE id = $2
+			const [encrypted_data, id] = params!
+			const row = rows.find((r) => r.id === id)
+			if (row) row.encrypted_data = encrypted_data
+			return {rows: [], rowCount: row ? 1 : 0}
+		}
 		if (trimmed.startsWith('DELETE')) {
 			const id = params![0]
 			const before = rows.length
@@ -87,6 +105,12 @@ describe('registry-credentials', () => {
 	beforeEach(() => {
 		rows = []
 		fakePool.query.mockClear()
+		// Default: a present DEK file (the fixed TEST_DEK), plus the legacy JWT.
+		mod._setKeyProvidersForTests({
+			readFileRaw: async () => Buffer.from(TEST_DEK),
+			readFile: async () => TEST_JWT,
+			randomBytes: (n: number) => Buffer.alloc(n, 0x99),
+		})
 	})
 
 	test('A: encrypt produces base64 string > 50 chars', async () => {
@@ -171,5 +195,81 @@ describe('registry-credentials', () => {
 		expect(decrypted!.password).toBe('s3cret')
 		expect(decrypted!.username).toBe('admin')
 		expect(decrypted!.registryUrl).toBe('https://registry.example.com')
+	})
+
+	// ── LIVOS-033: at-rest DEK independent of the JWT secret ──────────────────
+
+	test('033-1: round-trip with the DEK-derived key', async () => {
+		const key = await mod._getKeyForTests()
+		const blob = mod._encryptForTests('round-trip-plaintext', key)
+		expect(mod._decryptForTests(blob, key)).toBe('round-trip-plaintext')
+	})
+
+	test('033-2: getKey returns the DEK, NOT sha256(JWT secret)', async () => {
+		const key = await mod._getKeyForTests()
+		// The DEK is the raw 32-byte file contents (TEST_DEK), independent of JWT.
+		expect(key.equals(TEST_DEK)).toBe(true)
+		// And it is explicitly NOT the legacy JWT-derived key.
+		const jwtDerived = crypto.createHash('sha256').update(TEST_JWT.trim()).digest()
+		expect(key.equals(jwtDerived)).toBe(false)
+	})
+
+	test('033-3: a fresh 32-byte DEK is generated + persisted (0600) when absent', async () => {
+		const generated = Buffer.alloc(32, 0x7e)
+		let writtenPath: string | null = null
+		let writtenData: Buffer | null = null
+		let writtenMode: number | null = null
+		mod._setKeyProvidersForTests({
+			// DEK file absent → ENOENT.
+			readFileRaw: async () => {
+				throw Object.assign(new Error('ENOENT'), {code: 'ENOENT'})
+			},
+			readFile: async () => TEST_JWT,
+			randomBytes: () => Buffer.from(generated),
+			mkdir: async () => undefined,
+			writeFile: async (p: string, data: Buffer, opts: {mode: number}) => {
+				writtenPath = p
+				writtenData = data
+				writtenMode = opts.mode
+			},
+		})
+		const key1 = await mod._getKeyForTests()
+		expect(key1.equals(generated)).toBe(true)
+		expect(key1.length).toBe(32)
+		expect(writtenPath).toContain('credential-dek')
+		expect(writtenData!.equals(generated)).toBe(true)
+		expect(writtenMode).toBe(0o600)
+		// Reused (cached) on the next call — no second generation.
+		const key2 = await mod._getKeyForTests()
+		expect(key2.equals(generated)).toBe(true)
+	})
+
+	test('033-4: legacy JWT-keyed blobs still decrypt via lazy re-key fallback', async () => {
+		// Simulate a row written with the OLD key = sha256(JWT).
+		const legacyKey = crypto.createHash('sha256').update(TEST_JWT.trim()).digest()
+		const legacyBlob = mod._encryptForTests(JSON.stringify({password: 'legacy-pw'}), legacyKey)
+		rows.push({
+			id: 'legacy-row',
+			user_id: null,
+			name: 'old-cred',
+			registry_url: 'https://legacy.example.com',
+			username: 'olduser',
+			encrypted_data: legacyBlob,
+			created_at: new Date(),
+		})
+		// Current DEK (TEST_DEK) cannot decrypt the legacy blob directly; the
+		// fallback must kick in and return the plaintext.
+		const decrypted = await mod.decryptCredentialData('legacy-row')
+		expect(decrypted).not.toBeNull()
+		expect(decrypted!.password).toBe('legacy-pw')
+		// Lazy re-key: the row should have been UPDATEd with a DEK-encrypted blob.
+		const updateCall = fakePool.query.mock.calls.find(
+			(c: any[]) => typeof c[0] === 'string' && c[0].includes('UPDATE registry_credentials'),
+		)
+		expect(updateCall).toBeTruthy()
+		// The re-encrypted blob now decrypts under the DEK (not the legacy key).
+		const reBlob = rows.find((r) => r.id === 'legacy-row')!.encrypted_data
+		const dek = await mod._getKeyForTests()
+		expect(JSON.parse(mod._decryptForTests(reBlob, dek)).password).toBe('legacy-pw')
 	})
 })

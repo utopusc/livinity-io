@@ -1,15 +1,27 @@
 import crypto from 'node:crypto'
-import {readFile} from 'node:fs/promises'
+import {mkdir, readFile, writeFile} from 'node:fs/promises'
+import {dirname} from 'node:path'
 
 import {getPool} from '../database/index.js'
 
 /**
  * Registry credentials store (Phase 29 DOC-16).
  *
- * Mirrors the AES-256-GCM-with-JWT-key pattern from git-credentials.ts /
- * stack-secrets.ts. Plaintext passwords/tokens are NEVER persisted to disk.
- * The encrypted_data column holds the base64(iv12 + tag16 + ciphertext) blob;
- * decryption is gated by access to /opt/livos/data/secrets/jwt.
+ * AES-256-GCM at-rest encryption. Plaintext passwords/tokens are NEVER
+ * persisted to disk. The encrypted_data column holds the
+ * base64(iv12 + tag16 + ciphertext) blob.
+ *
+ * LIVOS-033 (Phase 257-05): the at-rest data-encryption key (DEK) is now
+ * derived from a DEDICATED key file (`/opt/livos/data/secrets/credential-dek`,
+ * 32 random bytes, mode 0600), INDEPENDENT of the JWT signing secret. Previously
+ * the key was `sha256(JWT secret)`, which coupled auth-token forgery and
+ * at-rest-credential decryption into a single secret. A leak of the JWT secret
+ * no longer also decrypts stored registry/git/stack credentials.
+ *
+ * Migration safety (lazy re-key): blobs written with the OLD JWT-derived key
+ * still decrypt — `decryptCredentialData` falls back to the legacy key on a
+ * GCM auth-tag failure, then re-encrypts the row with the DEK and persists it.
+ * Existing vault entries are not bricked during the grace window.
  *
  * Plain payload shape (JSON, before encryption):
  *   {"password": "..."}
@@ -19,14 +31,84 @@ import {getPool} from '../database/index.js'
  */
 
 const JWT_SECRET_PATH = '/opt/livos/data/secrets/jwt'
+const CREDENTIAL_DEK_PATH = '/opt/livos/data/secrets/credential-dek'
+
+// Injectable fs + path config so the unit test runs fully offline.
+type FsDeps = {
+	readFile: (p: string, enc: BufferEncoding) => Promise<string>
+	readFileRaw: (p: string) => Promise<Buffer>
+	writeFile: (p: string, data: Buffer, opts: {mode: number}) => Promise<void>
+	mkdir: (p: string, opts: {recursive: boolean}) => Promise<unknown>
+	randomBytes: (n: number) => Buffer
+	dekPath: string
+	jwtPath: string
+}
+
+const realFsDeps: FsDeps = {
+	readFile: (p, enc) => readFile(p, enc),
+	readFileRaw: (p) => readFile(p),
+	writeFile: (p, data, opts) => writeFile(p, data, opts),
+	mkdir: (p, opts) => mkdir(p, opts),
+	randomBytes: (n) => crypto.randomBytes(n),
+	dekPath: CREDENTIAL_DEK_PATH,
+	jwtPath: JWT_SECRET_PATH,
+}
+
+let _fsDeps: FsDeps = realFsDeps
 
 let _key: Buffer | null = null
+let _legacyKey: Buffer | null = null
 
+/**
+ * Derive the at-rest DEK from a dedicated 32-byte key file, generating it
+ * (mode 0600) on first use if absent. Independent of the JWT signing secret.
+ */
 async function getKey(): Promise<Buffer> {
 	if (_key) return _key
-	const jwt = await readFile(JWT_SECRET_PATH, 'utf-8')
-	_key = crypto.createHash('sha256').update(jwt.trim()).digest() // 32 bytes for AES-256
+	const d = _fsDeps
+	try {
+		const raw = await d.readFileRaw(d.dekPath)
+		if (raw.length >= 32) {
+			_key = raw.subarray(0, 32)
+			return _key
+		}
+		// File exists but is too short — treat as corrupt and regenerate below.
+	} catch {
+		// ENOENT (or unreadable) — generate a fresh DEK.
+	}
+	const fresh = d.randomBytes(32)
+	try {
+		await d.mkdir(dirname(d.dekPath), {recursive: true})
+		await d.writeFile(d.dekPath, fresh, {mode: 0o600})
+	} catch {
+		// If persistence fails we still proceed in-memory; the next process start
+		// will retry. (Round-trips within this process remain consistent.)
+	}
+	_key = fresh
 	return _key
+}
+
+/**
+ * LIVOS-033 migration: the legacy at-rest key = sha256(JWT secret). Only used as
+ * a decrypt fallback for blobs written before the DEK cutover. Never used to
+ * encrypt new data.
+ */
+async function getLegacyKey(): Promise<Buffer | null> {
+	if (_legacyKey) return _legacyKey
+	try {
+		const jwt = await _fsDeps.readFile(_fsDeps.jwtPath, 'utf-8')
+		_legacyKey = crypto.createHash('sha256').update(jwt.trim()).digest()
+		return _legacyKey
+	} catch {
+		return null
+	}
+}
+
+// Test-only injection hook: override the fs deps + reset the cached keys.
+export function _setKeyProvidersForTests(overrides: Partial<FsDeps> | null): void {
+	_fsDeps = overrides ? {...realFsDeps, ...overrides} : realFsDeps
+	_key = null
+	_legacyKey = null
 }
 
 function encrypt(plaintext: string, key: Buffer): string {
@@ -172,7 +254,28 @@ export async function decryptCredentialData(
 	)
 	if (rows.length === 0) return null
 	const key = await getKey()
-	const plaintext = decrypt(rows[0].encrypted_data, key)
+	const blob = rows[0].encrypted_data
+	let plaintext: string
+	try {
+		plaintext = decrypt(blob, key)
+	} catch (err) {
+		// LIVOS-033 lazy re-key: the blob may have been written with the legacy
+		// JWT-derived key. Retry once with the legacy key; on success, re-encrypt
+		// with the DEK and persist so the row migrates to the new key.
+		const legacy = await getLegacyKey()
+		if (!legacy) throw err
+		plaintext = decrypt(blob, legacy) // throws if legacy also fails (genuine tamper)
+		try {
+			const reEncrypted = encrypt(plaintext, key)
+			await pool.query(`UPDATE registry_credentials SET encrypted_data = $1 WHERE id = $2`, [
+				reEncrypted,
+				id,
+			])
+		} catch {
+			// Re-key persistence failure is non-fatal — the decrypt already
+			// succeeded; the row stays on the legacy key and re-migrates next read.
+		}
+	}
 	const parsed = JSON.parse(plaintext) as {password: string}
 	return {
 		username: rows[0].username,
