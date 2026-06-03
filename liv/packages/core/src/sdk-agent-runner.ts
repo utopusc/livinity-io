@@ -89,8 +89,12 @@ export function buildSdkTools(
       t.description,
       shape,
       async (args: Record<string, unknown>) => {
-        // SDK mode: skip Nexus approval gate — Claude Code CLI handles permissions
-        // via permissionMode + allowedTools. No need for double approval.
+        // Phase 256-06 (LIVOS-002 layer 5): the irreversible-op approval gate now
+        // lives INSIDE toolRegistry.execute() — an output-blind classifier that
+        // blocks ONLY force-push/push-to-main, prod deploy/migration,
+        // out-of-workspace mass-delete, IAM/secret grants, and off-box uploads.
+        // Ordinary ops still fast-allow (permissionMode:'dontAsk' autonomy intact).
+        // This is NOT a second SDK-level prompt; it's the in-process choke point.
         const startMs = Date.now();
         try {
           const result = await toolRegistry.execute(name, args);
@@ -200,6 +204,13 @@ export class SdkAgentRunner extends EventEmitter {
     const maxTurns = Math.min(this.config.maxTurns ?? agentDefaults?.maxTurns ?? 15, 25);
     const maxTokenBudget = this.config.maxTokens ?? 0; // 0 = unlimited
     const tier = this.config.tier ?? agentDefaults?.tier ?? 'sonnet';
+
+    // Phase 256-06 (LIVOS-002 layer 5): wire the irreversible-op approval gate
+    // into the SINGLE in-process choke point (toolRegistry.execute). Only the
+    // irreversible set blocks; ordinary ops stay autonomous. If no
+    // ApprovalManager is configured, execute() fail-safe DENIES the irreversible
+    // set (never silent-allow) — so a misconfig can't fast-allow a force-push.
+    this.config.toolRegistry.setApprovalGate(this.config.approvalManager, sessionId);
 
     // Build MCP tool definitions from Nexus ToolRegistry
     const sdkTools = buildSdkTools(

@@ -1,9 +1,9 @@
 [
   {
     "path": "liv/packages/core/src/sdk-agent-runner.ts",
-    "expected_sha": "a31d607937c499c5899b259eb0323dcc2f74bf55",
-    "frozen_in_phase": "256-01-security-hardening",
-    "rationale": "D-100-SACRED — SDK agent runner is the load-bearing extension surface; all wrappers go through liv-agent-runner.ts + mcp-client-manager.ts. Re-frozen in 256-01 (WS-A) after adding the guarded best-effort per-session git-snapshot pre/post calls (LIVOS-002 reversibility); agent loop / watchdog / budget caps / safeEnv unchanged."
+    "expected_sha": "1d34f79523ac691d5da3c969ebe0c9a68ecd8789",
+    "frozen_in_phase": "256-06-security-hardening",
+    "rationale": "D-100-SACRED — SDK agent runner is the load-bearing extension surface; all wrappers go through liv-agent-runner.ts + mcp-client-manager.ts. Re-frozen in 256-06 (WS-A layer 5) after wiring the irreversible-op approval gate into toolRegistry.execute via toolRegistry.setApprovalGate(approvalManager, sessionId) + replacing the stale 'skip Nexus approval gate' comment; agent loop / watchdog / budget caps / safeEnv / per-session git-snapshot (256-01) unchanged. The gate is the in-process choke point, NOT a second SDK-level prompt — permissionMode:'dontAsk' autonomy is intact."
   },
   {
     "path": "livos/packages/cli/src/cli.ts",

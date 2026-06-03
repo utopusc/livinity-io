@@ -400,6 +400,12 @@ export class AgentLoop extends EventEmitter {
       this.config.sessionId = randomUUID();
     }
 
+    // Phase 256-06 (LIVOS-002 layer 5): wire the irreversible-op approval gate
+    // into toolRegistry.execute so the legacy loop is gated identically to the
+    // SDK path. Only the irreversible set blocks; ordinary ops stay autonomous.
+    // No ApprovalManager → execute() fail-safe DENIES the irreversible set.
+    toolRegistry.setApprovalGate(this.config.approvalManager, this.config.sessionId);
+
     // Resolve config with defaults from NexusConfig
     const resolved = resolveAgentConfig(this.config);
     const { maxTurns, maxTokens, timeoutMs, tier, maxDepth, stream, toolPolicy } = resolved;
