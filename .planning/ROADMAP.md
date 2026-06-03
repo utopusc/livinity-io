@@ -2,7 +2,7 @@
 
 ## Milestones
 
-- 🚧 **v45.0 Security Hardening** — Phase 256 (CURRENT; opened 2026-06-03). Remediates the authorized LivOS security audit (`SECURITY-AUDIT.md`, 40 findings) per operator-locked design (`SECURITY-REMEDIATION-DESIGN.md`): **Contained Autonomy** (bubblewrap sandbox + egress allowlist + cred-scrub + git-undo for the agent's host shell/files exec — closes LIVOS-002), **credential egress proxy** (stop bind-mounting operator OAuth tokens into app containers — closes LIVOS-001), **pipeline admin-gate** (privileged/docker.sock/host-mount strip + admin-only install — closes LIVOS-007/013 + #1 residual), and **auth fail-closed** (LIVOS-004/008/014/018/019/025). Mini PC only. See `## v45 — Security Hardening` section below. _(This 🚧 marker is the authoritative current-milestone pointer `gsd-sdk getMilestoneInfo` reads first.)_
+- 🚧 **v45.0 Security Hardening** — Phase 256 (CURRENT; opened 2026-06-03). Remediates the authorized LivOS security audit (`SECURITY-AUDIT.md`, 40 findings) per operator-locked design (`SECURITY-REMEDIATION-DESIGN.md`): **Contained Autonomy** (bubblewrap sandbox + egress allowlist + cred-scrub + git-undo + an injection-proof classifier gate for irreversible/off-box ops only, ordinary ops stay autonomous — closes LIVOS-002), **credential egress proxy** (stop bind-mounting operator OAuth tokens into app containers; verified apps get OAuth at the wire, unverified/community apps get a per-app metered virtual key — closes LIVOS-001), **pipeline admin-gate** (privileged/docker.sock/host-mount strip + admin-only install — closes LIVOS-007/013 + #1 residual), and **auth fail-closed** (LIVOS-004/008/014/018/019/025). Mini PC only. See `## v45 — Security Hardening` section below. _(This 🚧 marker is the authoritative current-milestone pointer `gsd-sdk getMilestoneInfo` reads first.)_
 - ⏳ **v44.0 Liv AI Tooling Depth** — Phases 246-255 (artifact-complete; operator close walk pending — `.planning/v44-OPERATOR-WALK.md`). Terminal v2 + Luse skill/display tooling + fresh-install portability remediation (Phase 252 ✅ 6/6). See `## v44 — Liv AI Tooling Depth` section below. _(NOTE: the older `### 🟢 vNN.0 … (Active)` headings further down — v31/v32/v33/v34/v36/v37 — are STALE label drift from long-shipped milestones.)_
 - ✅ **v29.3 Marketplace AI Broker (Subscription-Only)** — Phases 39-44 (shipped local 2026-05-01) — see [milestones/v29.3-ROADMAP.md](milestones/v29.3-ROADMAP.md)
 - ✅ **v29.4 Server Management Tooling + Bug Sweep** — Phases 45-48 (shipped local 2026-05-01) — see [milestones/v29.4-ROADMAP.md](milestones/v29.4-ROADMAP.md)
@@ -3568,16 +3568,17 @@ Remediates the authorized LivOS security audit. **Inputs (repo root):** `SECURIT
 - SC6 — A deactivated user's still-valid JWT is rejected (not admin-promoted); subdomain gate rejects a garbage `LIVINITY_SESSION` cookie; liv-core/memory reject requests when API key unset. (LIVOS-004/008/014/018/019/025)
 - SC7 — Operator's curated apps (OpenDesign, OpenHands) still function; agent autonomy preserved (no manual approval gate for ordinary ops). Regression guard.
 
-**UAT:** operator deploys to Mini PC and walks SC1–SC7 live (synthetic probes acceptable for SC1–SC3 per prior phase pattern).
+**UAT:** operator deploys to Mini PC and walks SC1–SC8 live, incl. SC4b (per-app metered virtual key for unverified apps) + SC8 (injection-proof classifier gate blocks irreversible/off-box ops while ordinary ops stay autonomous) (synthetic probes acceptable for SC1–SC3 per prior phase pattern).
 
-**Plans:** 5 plans in 2 waves (planned 2026-06-03; one PLAN per workstream + a final deploy/UAT gate)
+**Plans:** 6 plans in 5 waves (planned 2026-06-03; extended 2026-06-03 with +1 plan: WS-A layer-5 classifier gate. Serialized chain 01(W1)->{02,06}(W2)->03(W3)->04(W4)->05(W5) — same-wave plans share zero files.)
 
 Plans:
-- [ ] 256-01-PLAN.md (Wave 1) — WS-A Contained Autonomy: bubblewrap sandbox + cred-scrub for `shell`, path-allowlist for `files`, per-session git snapshot, tinyproxy egress allowlist (LIVOS-002 / SC1-3). Injection-proof classifier gate DEFERRED (operator-confirm).
-- [ ] 256-02-PLAN.md (Wave 1) — WS-B Credential Egress Proxy: host-side credential-injecting proxy replaces the `~/.claude`/`~/.gemini` RW bind mounts; container gets HTTPS_PROXY + placeholder key only (LIVOS-001 / SC4).
-- [ ] 256-03-PLAN.md (Wave 1) — WS-C Pipeline Admin-Gate: non-builtin compose sanitizer (strip privileged/host-net/caps, reject docker.sock/host-path) + adminProcedure on addRepository/cred-installs (LIVOS-007/013 / SC5).
-- [ ] 256-04-PLAN.md (Wave 1) — WS-D Auth Fail-Closed: is-authenticated throw-on-inactive + forward_auth JWT subdomain gate + liv-core/memory fail-closed + always-seed LIV_API_KEY (LIVOS-004/008/014/018/019/025 / SC6).
-- [ ] 256-05-PLAN.md (Wave 2, deps 01-04, has checkpoints) — build + combined test gate, deploy to Mini PC via update.sh, live SC1–SC7 synthetic-probe walk + DEPLOY-LOG.
+- [ ] 256-01-PLAN.md (Wave 1) — WS-A Contained Autonomy: bubblewrap sandbox + cred-scrub for `shell`, path-allowlist for `files`, per-session git snapshot, tinyproxy egress allowlist (LIVOS-002 / SC1-3).
+- [ ] 256-02-PLAN.md (Wave 2, deps 01) — WS-B Credential Egress Proxy: host-side credential-injecting proxy replaces the `~/.claude`/`~/.gemini` RW bind mounts (verified apps get OAuth at the wire); PLUS the per-app metered virtual-key path for UNVERIFIED/community apps via the broker (budget+model allowlist, revocable) (LIVOS-001 / SC4 + SC4b).
+- [ ] 256-03-PLAN.md (Wave 3, deps 02) — WS-C Pipeline Admin-Gate: non-builtin compose sanitizer (strip privileged/host-net/caps, reject docker.sock/host-path) + adminProcedure on addRepository/cred-installs (LIVOS-007/013 / SC5).
+- [ ] 256-04-PLAN.md (Wave 4, deps 03) — WS-D Auth Fail-Closed: is-authenticated throw-on-inactive + forward_auth JWT subdomain gate + liv-core/memory fail-closed + always-seed LIV_API_KEY (LIVOS-004/008/014/018/019/025 / SC6).
+- [ ] 256-06-PLAN.md (Wave 2, deps 01) — WS-A layer 5: injection-proof stripped-context classifier gate — blocks ONLY irreversible/off-box ops (force-push/push-to-main, prod deploy/migration, mass-delete, IAM/secret grants, off-box POST) pending operator approval while ordinary ops stay fully autonomous; revives the dead ApprovalManager at the toolRegistry.execute choke point (LIVOS-002 layer 5 / SC8). Runs parallel to 256-02 (zero shared files).
+- [ ] 256-05-PLAN.md (Wave 5, deps 04 + 06, has checkpoints) — build + combined test gate, deploy to Mini PC via update.sh, live SC1–SC8 synthetic-probe walk (incl. SC4b + SC8) + DEPLOY-LOG.
 
 ---
 
