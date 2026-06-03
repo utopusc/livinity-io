@@ -25,6 +25,7 @@ import {
 	grantContainerCredsAcl,
 } from './inject-local-ai-clis.js'
 import {startCredEgressProxyIfNeeded} from './cred-egress-proxy.js'
+import {sanitizeNonBuiltinCompose, ComposeRejected} from './compose-sanitizer.js'
 import {
 	chooseCredentialPath,
 	mintMeteredKeyForApp,
@@ -549,6 +550,28 @@ export default class Apps {
 		// Clean up generated template directory (not needed after rsync)
 		if (isGeneratedTemplate) {
 			await fse.remove(appTemplatePath).catch(() => {})
+		}
+
+		// WS-C (256-03, LIVOS-007/013, SC5): sanitize the compose for NON-builtin
+		// community-repo apps BEFORE any inject + before `docker compose up`. Strip
+		// privileged / network_mode:host / pid:host / userns_mode:host / cap_add /
+		// security_opt unconfined; REJECT any host-path bind outside the app data
+		// dir (docker.sock, /, other users' data, operator secrets). Builtin +
+		// platform-DB composes (isGeneratedTemplate===true) are operator-curated and
+		// are NOT sanitized — Portainer/OpenHands keep their declared mounts (SC7).
+		// Ordering invariant (fix F): this runs BEFORE the WS-B requiresLocalAiClis
+		// inject below, so the operator-trusted CA/CLI mounts under CLI_MOUNT_PREFIX
+		// are added post-sanitize and never subject to the host-path check.
+		if (!isGeneratedTemplate) {
+			const composeFile = `${appDataDirectory}/docker-compose.yml`
+			const yaml = (await import('js-yaml')).default
+			const composeContent = await fse.readFile(composeFile, 'utf8')
+			const composeData = yaml.load(composeContent)
+			// Let ComposeRejected propagate — the install must abort on an
+			// irremediable directive (a mount the app depends on we cannot allow).
+			const {compose, removed} = sanitizeNonBuiltinCompose(composeData, appDataDirectory)
+			await fse.writeFile(composeFile, yaml.dump(compose))
+			this.logger.log(`LIVOS-013: sanitized non-builtin compose for ${appId} removed=${removed.join(',') || '(none)'}`)
 		}
 
 		// Phase 43.2 (FR-MARKET-01 single-user mode): inject AI broker config when
@@ -1813,6 +1836,24 @@ export default class Apps {
 					return v
 				})
 			}
+		}
+
+		// WS-C (256-03, LIVOS-007/013, SC5): this per-user path is ALWAYS
+		// non-builtin marketplace compose templated for a user — sanitize it
+		// (strip privileged/host-net/pid/userns/caps/unconfined, reject host-path
+		// binds outside the user's own data subtree incl. docker.sock, /,
+		// operator secrets, OTHER users' data). Run AFTER the volume-remap above
+		// so the legacy `/data/storage`→`/users/<user>/home` rewrites have already
+		// landed inside the user subtree; the allowlist root is the user's own
+		// `${dataDirectory}/users/${username}` tree (covers both the app-data dir
+		// and the remapped per-user /home + /data/storage mounts). The
+		// CLI_MOUNT_PREFIX allowlist additionally preserves any WS-B inject mounts
+		// (fix F). Runs BEFORE injectAiProviderConfig + `docker compose up -d`.
+		// Reject propagates (install aborts).
+		{
+			const userSubtreeRoot = `${this.#livinityd.dataDirectory}/users/${user.username}`
+			const {removed} = sanitizeNonBuiltinCompose(composeData, userSubtreeRoot)
+			this.logger.log(`LIVOS-013: sanitized per-user non-builtin compose for ${appId} (user ${user.username}) removed=${removed.join(',') || '(none)'}`)
 		}
 
 		// Phase 43 (FR-MARKET-01, D-43-06/07): inject AI broker config when manifest opts in.
