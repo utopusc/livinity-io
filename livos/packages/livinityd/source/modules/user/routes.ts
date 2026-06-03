@@ -34,6 +34,29 @@ const ONE_WEEK = 7 * ONE_DAY
 
 const DEFAULT_WALLPAPER = 'aurora'
 
+/**
+ * Cookie Domain for the LIVINITY_SESSION session cookie.
+ *
+ * The session cookie must cover BOTH the main host (`<user>.livinity.io`) and
+ * the per-app subdomains, which use a HYPHEN sibling pattern for CF-Tunnel
+ * compatibility (`<app>-<user>.livinity.io`) — these are NOT children of the
+ * main host, so a `.<user>.livinity.io` cookie never reaches them. Widening to
+ * the registrable parent (`.livinity.io`) makes the login cookie flow to the
+ * gated app subdomains so the `@notauth` Caddy gate can recognise a logged-in
+ * session. For a 2-label domain (`example.com`) there is no safe parent to
+ * widen to, so we keep `.example.com`.
+ *
+ * Trade-off: a `.livinity.io` cookie is also sent to the shared platform host
+ * (livinity.io / apps.livinity.io). It's HttpOnly + only meaningful to
+ * livinityd, but be aware it leaves the box. Acceptable for the single-user
+ * Mini PC; revisit if app subdomains move to true dot-subdomains.
+ */
+function sessionCookieDomain(domain: string): string {
+	const parts = domain.split('.')
+	const parent = parts.length >= 3 ? parts.slice(1).join('.') : domain
+	return `.${parent}`
+}
+
 export default router({
 	// Registers a new user
 	register: publicProcedure
@@ -178,7 +201,7 @@ export default router({
 				const domainConfigRaw = await ctx.livinityd.ai.redis.get('livos:domain:config')
 				if (domainConfigRaw) {
 					const dc = JSON.parse(domainConfigRaw)
-					if (dc.active && dc.domain) cookieDomain = `.${dc.domain}`
+					if (dc.active && dc.domain) cookieDomain = sessionCookieDomain(dc.domain)
 				}
 			} catch { /* ignore – fall back to no explicit domain */ }
 
