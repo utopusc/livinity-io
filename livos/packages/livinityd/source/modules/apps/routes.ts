@@ -37,7 +37,9 @@ export const appStore = router({
 	registry: privateProcedure.query(async ({ctx}) => ctx.appStore.registry()),
 
 	// Add a repository to the app store
-	addRepository: privateProcedure
+	// WS-C (256-03, LIVOS-013, SC5): admin-only — a non-admin must not be able to
+	// register an attacker-controlled repo that supplies arbitrary compose content.
+	addRepository: adminProcedure
 		.input(
 			z.object({
 				url: z.string(),
@@ -46,7 +48,8 @@ export const appStore = router({
 		.mutation(async ({ctx, input}) => ctx.appStore.addRepository(input.url)),
 
 	// Remove a repository to the app store
-	removeRepository: privateProcedure
+	// WS-C (256-03, LIVOS-013, SC5): admin-only (mirrors addRepository).
+	removeRepository: adminProcedure
 		.input(
 			z.object({
 				url: z.string(),
@@ -208,7 +211,12 @@ export const apps = router({
 				return {alreadyInstalled: true, reapplied: true}
 			}
 
-			const result = await ctx.apps.install(input.appId, input.alternatives, input.environmentOverrides)
+			// WS-C (256-03, SC5): thread the caller's admin status into install so
+			// the cred-bearing + new-non-builtin gate can reject non-admins. Legacy
+			// single-user (no currentUser) stays admin-equivalent — WS-D (256-04)
+			// tightens the no-currentUser case separately.
+			const isAdmin = ctx.currentUser ? ctx.currentUser.role === 'admin' : true
+			const result = await ctx.apps.install(input.appId, input.alternatives, input.environmentOverrides, isAdmin)
 			// Auto-grant access to the installing user
 			if (ctx.currentUser?.id) {
 				await grantAppAccess(ctx.currentUser.id, input.appId, ctx.currentUser.id)
