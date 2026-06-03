@@ -34,7 +34,7 @@ vi.mock('../../database/index.js', () => ({
 	getAdminUser: mocks.getAdminUser,
 }))
 
-const {isAuthenticated} = await import('./is-authenticated.js')
+const {isAuthenticated, requireRole} = await import('./is-authenticated.js')
 
 const ORIGINAL_LIV_API_KEY = process.env['LIV_API_KEY']
 
@@ -149,5 +149,128 @@ describe('isAuthenticated — Phase 203 Hot-fix F5 service-token shortcut', () =
 		expect(next).toHaveBeenCalledOnce()
 		expect(result).toBe('OK')
 		expect(ctx.currentUser).toBeUndefined()
+	})
+})
+
+// ─── Phase 256-04 WS-D — Auth fail-closed (LIVOS-004 / fix E / SC6+SC7) ──────
+describe('isAuthenticated — Phase 256-04 WS-D fail-closed (LIVOS-004)', () => {
+	const VALID_KEY = 'liv_k_256D_serviceToken_xxxxx'
+
+	test('WS-D.T1 — inactive user JWT THROWS UNAUTHORIZED (not promoted to admin)', async () => {
+		mocks.findUserById.mockResolvedValue({
+			id: 'guest-id',
+			username: 'guest',
+			role: 'guest',
+			isActive: false,
+		})
+		const ctx = makeCtx({
+			cookies: {LIVINITY_SESSION: 'tok'},
+			verifyToken: async () => ({userId: 'guest-id', role: 'guest'}),
+		})
+		const next = vi.fn()
+		await expect(isAuthenticated({ctx, next})).rejects.toThrow(/inactive or not found/i)
+		expect(next).not.toHaveBeenCalled()
+		expect(ctx.currentUser).toBeUndefined()
+	})
+
+	test('WS-D.T2 — missing (deleted) user JWT THROWS UNAUTHORIZED', async () => {
+		mocks.findUserById.mockResolvedValue(null)
+		const ctx = makeCtx({
+			cookies: {LIVINITY_SESSION: 'tok'},
+			verifyToken: async () => ({userId: 'ghost-id'}),
+		})
+		const next = vi.fn()
+		await expect(isAuthenticated({ctx, next})).rejects.toThrow(/inactive or not found/i)
+		expect(next).not.toHaveBeenCalled()
+		expect(ctx.currentUser).toBeUndefined()
+	})
+
+	test('WS-D.T3 — active member JWT passes with role member', async () => {
+		mocks.findUserById.mockResolvedValue({
+			id: 'm-id',
+			username: 'mary',
+			role: 'member',
+			isActive: true,
+		})
+		const ctx = makeCtx({
+			cookies: {LIVINITY_SESSION: 'tok'},
+			verifyToken: async () => ({userId: 'm-id', role: 'member'}),
+		})
+		const next = vi.fn(async () => 'OK')
+		const result = await isAuthenticated({ctx, next})
+		expect(next).toHaveBeenCalledOnce()
+		expect(result).toBe('OK')
+		expect(ctx.currentUser).toEqual({id: 'm-id', username: 'mary', role: 'member'})
+	})
+
+	test('WS-D.T4 — legacy single-user JWT (no userId) maps to admin (unchanged)', async () => {
+		mocks.getAdminUser.mockResolvedValue({
+			id: 'admin-id',
+			username: 'admin',
+			role: 'admin',
+		})
+		const ctx = makeCtx({
+			cookies: {LIVINITY_SESSION: 'tok'},
+			verifyToken: async () => ({loggedIn: true}),
+		})
+		const next = vi.fn(async () => 'OK')
+		const result = await isAuthenticated({ctx, next})
+		expect(next).toHaveBeenCalledOnce()
+		expect(result).toBe('OK')
+		expect(ctx.currentUser).toEqual({id: 'admin-id', username: 'admin', role: 'admin'})
+	})
+
+	test('WS-D.T4b — legacy JWT (no userId) + no DB admin sets legacySingleUser flag', async () => {
+		mocks.getAdminUser.mockResolvedValue(undefined)
+		const ctx = makeCtx({
+			cookies: {LIVINITY_SESSION: 'tok'},
+			verifyToken: async () => ({loggedIn: true}),
+		})
+		const next = vi.fn(async () => 'OK')
+		await isAuthenticated({ctx, next})
+		expect(next).toHaveBeenCalledOnce()
+		expect(ctx.currentUser).toBeUndefined()
+		expect(ctx.legacySingleUser).toBe(true)
+	})
+
+	test('WS-D.T5 — requireRole: absent currentUser without legacy flag → FORBIDDEN', async () => {
+		const ctx = {currentUser: undefined, legacySingleUser: undefined} as any
+		const next = vi.fn()
+		await expect(requireRole('admin')({ctx, next})).rejects.toThrow(/Authentication required/i)
+		expect(next).not.toHaveBeenCalled()
+	})
+
+	test('WS-D.T5b — requireRole: absent currentUser WITH legacySingleUser flag → next()', async () => {
+		const ctx = {currentUser: undefined, legacySingleUser: true} as any
+		const next = vi.fn(async () => 'OK')
+		const result = await requireRole('admin')({ctx, next})
+		expect(next).toHaveBeenCalledOnce()
+		expect(result).toBe('OK')
+	})
+
+	test('WS-D.T6 — service-token no-DB path sets legacySingleUser, downstream requireRole admin PASSES (fix E)', async () => {
+		process.env['LIV_API_KEY'] = VALID_KEY
+		mocks.getAdminUser.mockRejectedValue(new Error('no DB'))
+		const ctx = makeCtx({headers: {'x-api-key': VALID_KEY}})
+		const next = vi.fn(async () => 'NEXT')
+		await isAuthenticated({ctx, next})
+		expect(ctx.currentUser).toBeUndefined()
+		expect(ctx.legacySingleUser).toBe(true)
+		// downstream requireRole must NOT regress to FORBIDDEN
+		const next2 = vi.fn(async () => 'ADMIN_OK')
+		const result = await requireRole('admin')({ctx, next: next2})
+		expect(next2).toHaveBeenCalledOnce()
+		expect(result).toBe('ADMIN_OK')
+	})
+
+	test('WS-D.T7 — service-token WITH DB → currentUser admin, next()', async () => {
+		process.env['LIV_API_KEY'] = VALID_KEY
+		mocks.getAdminUser.mockResolvedValue({id: 'admin-id', username: 'admin', role: 'admin'})
+		const ctx = makeCtx({headers: {'x-api-key': VALID_KEY}})
+		const next = vi.fn(async () => 'OK')
+		const result = await isAuthenticated({ctx, next})
+		expect(next).toHaveBeenCalledOnce()
+		expect(result).toBe('OK')
+		expect(ctx.currentUser).toEqual({id: 'admin-id', username: 'admin', role: 'admin'})
 	})
 })

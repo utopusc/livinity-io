@@ -51,8 +51,12 @@ export const isAuthenticated = async ({ctx, next}: MiddlewareOptions) => {
 				}
 			}
 		} catch {
-			// Legacy single-user mode (no DB) — fall through with no
-			// currentUser; downstream procedures handle that case.
+			// Legacy single-user mode (no DB) — Phase 256-04 fix E:
+			// mark the service call as admin-equivalent via the EXPLICIT
+			// legacySingleUser flag so the new requireRole rule (which no
+			// longer treats absent currentUser as admin) does NOT regress
+			// the openclaw/loopback service path to FORBIDDEN.
+			ctx.legacySingleUser = true
 		}
 		return next()
 	}
@@ -68,7 +72,12 @@ export const isAuthenticated = async ({ctx, next}: MiddlewareOptions) => {
 
 		// Try to resolve the current user from the token payload
 		if (payload.userId) {
-			// New multi-user token: look up user by ID
+			// New multi-user token: look up user by ID.
+			// Phase 256-04 (LIVOS-004): a userId-bearing token MUST resolve to
+			// an ACTIVE user. If the user was deactivated or deleted, FAIL
+			// CLOSED — throw UNAUTHORIZED rather than falling through with no
+			// currentUser (which requireRole previously treated as legacy
+			// admin, silently promoting a disabled user to admin-equivalent).
 			const dbUser = await findUserById(payload.userId)
 			if (dbUser && dbUser.isActive) {
 				ctx.currentUser = {
@@ -76,6 +85,11 @@ export const isAuthenticated = async ({ctx, next}: MiddlewareOptions) => {
 					username: dbUser.username,
 					role: dbUser.role,
 				}
+			} else {
+				throw new TRPCError({
+					code: 'UNAUTHORIZED',
+					message: 'User inactive or not found',
+				})
 			}
 		} else {
 			// Legacy token (no userId): map to admin user if DB is available
@@ -86,10 +100,17 @@ export const isAuthenticated = async ({ctx, next}: MiddlewareOptions) => {
 					username: adminUser.username,
 					role: adminUser.role,
 				}
+			} else {
+				// Genuine legacy single-user mode (no DB admin). Phase 256-04:
+				// mark admin-equivalent via the EXPLICIT flag so requireRole
+				// admits it (no longer inferring admin from absent currentUser).
+				ctx.legacySingleUser = true
 			}
-			// If no DB admin found, that's okay -- legacy single-user mode still works
 		}
 	} catch (error) {
+		// Preserve the fail-closed UNAUTHORIZED from the userId branch above;
+		// don't relabel it as a generic "Invalid token".
+		if (error instanceof TRPCError) throw error
 		ctx.logger.error('Failed to verify token', error)
 		throw new TRPCError({code: 'UNAUTHORIZED', message: 'Invalid token'})
 	}
@@ -114,8 +135,19 @@ export const isAuthenticatedIfUserExists = async ({ctx, next}: MiddlewareOptions
  */
 export const requireRole = (requiredRole: string) => {
 	return async ({ctx, next}: MiddlewareOptions) => {
-		// If no currentUser is set, we're in legacy single-user mode -- treat as admin
-		if (!ctx.currentUser) return next()
+		// Phase 256-04 (LIVOS-004): never INFER legacy/admin from an absent
+		// currentUser. Admit the no-currentUser case ONLY when isAuthenticated
+		// set the EXPLICIT ctx.legacySingleUser flag (genuine single-user mode
+		// or the X-Api-Key service-token no-DB path / fix E). Any other absent
+		// currentUser (e.g. a userId-bearing token that failed to resolve —
+		// which now throws upstream anyway) is FORBIDDEN, not admin.
+		if (!ctx.currentUser) {
+			if (ctx.legacySingleUser === true) return next()
+			throw new TRPCError({
+				code: 'FORBIDDEN',
+				message: 'Authentication required',
+			})
+		}
 
 		const roleHierarchy: Record<string, number> = {
 			admin: 3,
