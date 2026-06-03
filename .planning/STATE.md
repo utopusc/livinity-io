@@ -2,20 +2,22 @@
 gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
-status: in_progress
-last_updated: "2026-06-03T00:00:00.000Z"
-last_activity: 2026-06-03
+status: completed
+last_updated: "2026-06-03T18:08:42.799Z"
+last_activity: 2026-06-02
 progress:
   total_phases: 168
-  completed_phases: 86
-  total_plans: 572
-  completed_plans: 486
-  percent: 51
+  completed_phases: 85
+  total_plans: 573
+  completed_plans: 487
+  percent: 85
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
 
-### ▶ NEXT ACTION (2026-06-03): run `/gsd-execute-phase 256`
+### ▶ NEXT ACTION (2026-06-03): run `/gsd-execute-phase 256` → continue with 256-02 (WS-B)
+
+> ✅ **256-01 DONE (WS-A Contained Autonomy, LIVOS-002)** — 4 commits `f00f89a2` (bwrap sandbox + cred-scrub for `shell`), `8a031ab4` (files-tool realpath allowlist), `b34af13e` (per-session git-snapshot reversibility), `63636e2f` (bubblewrap+tinyproxy egress-allowlist proxy in both installers). 3 new tsx test suites (17 checks) GREEN. `LIV_AGENT_WORKSPACE` (default `/opt/livos/data/agent-workspace`) is the single write-root for the bwrap shell + files-allowlist + git-snapshot — `/opt/liv` stays unwritable, `/opt/livos/.env`+secrets unreadable, host creds scrubbed from the agent child env, egress forced through the deny-by-default proxy. **Deviations:** tests use tsx+node:assert (vitest absent/offline in `liv/`); `sdk-agent-runner.ts` sacred-SHA re-frozen in `scripts/sacred-shas-v38.json` (declared writer per plan frontmatter — agent loop/watchdog/budget/safeEnv untouched). SC1/SC2/SC3 satisfied at code+unit level; live synthetic-agent probes + SC7 regression land with the Mini PC deploy in **256-05** (this plan is local-only). SUMMARY: `.planning/phases/256-security-hardening-contained-autonomy/256-01-SUMMARY.md`. **Resume at 256-02 (WS-B credential egress proxy).**
 
 **Phase 256 — Security Hardening (Contained Autonomy + Credential Egress Proxy + Pipeline Admin-Gate + Auth Fail-Closed)** is AUTHORED + checker-verified (PASS-WITH-NOTES, all 6 notes fixed) + committed (`8e2f5661`). Remediates the authorized LivOS security audit (`SECURITY-AUDIT.md`, 40 findings) per operator-locked design (`SECURITY-REMEDIATION-DESIGN.md`). 5 plans / 17 tasks across 4 workstreams closing LIVOS-001/002/004/007/008/013/014/018/019/025. Serialized waves (shared installer/apps.ts edits across distinct waves): 256-01 (WS-A bubblewrap+egress+cred-scrub+git-undo) → 256-02 (WS-B cred egress proxy) → 256-03 (WS-C pipeline admin-gate) → 256-04 (WS-D auth fail-closed) → 256-05 (Mini PC deploy + SC1–SC7 live walk). Mini PC only. See `.planning/phases/256-security-hardening-contained-autonomy/`.
 
