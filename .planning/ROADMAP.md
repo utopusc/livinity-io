@@ -3546,7 +3546,7 @@ Plans:
 
 Remediates the authorized LivOS security audit. **Inputs (repo root):** `SECURITY-AUDIT.md` (40 findings: 3 Critical / 14 High / 9 Medium / 13 Low / 1 Info) + `SECURITY-REMEDIATION-DESIGN.md` (operator-locked, industry-grounded design). **Target:** Mini PC only (Server4/Server5 off-limits per project hard rule). **Context:** single operator.
 
-### Phase 256: Security Hardening — Contained Autonomy + Credential Egress Proxy + Pipeline Admin-Gate + Auth Fail-Closed — 🟡 PLANNING 2026-06-03
+### Phase 256: Security Hardening — Contained Autonomy + Credential Egress Proxy + Pipeline Admin-Gate + Auth Fail-Closed — 🟢 DEPLOYED 2026-06-03 (6/6 plans; live on Mini PC SHA efe706c2; SC1/SC2/SC6 live-proven; operator agent-walk pending for SC3/4/4b/5/7/8; 2 deploy bugs caught+fixed — tinyproxy Filter-quote + bwrap Ubuntu-24.04 AppArmor userns)
 
 **Goal:** Close the audit's Critical + tightly-coupled High findings without removing the agent's autonomy or breaking the operator's curated-app workflow. Four workstreams, each mapped to the finding(s) it closes:
 
