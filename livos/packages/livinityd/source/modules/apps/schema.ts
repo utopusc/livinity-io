@@ -66,6 +66,17 @@ export const AppManifestSchema = z.object({
 	 */
 	requiresAiProvider: z.boolean().optional(),
 	/**
+	 * When true, the installer mounts the HOST's installed AI CLIs (claude,
+	 * gemini, …) + the host glibc runtime + the operator's CLI credentials into
+	 * this app's container, and puts thin wrappers on PATH. The app then detects
+	 * and runs the real local CLIs directly (no broker), exactly as they run on
+	 * the host — e.g. agent-native tools like Open Design that shell out to
+	 * `claude`/`gemini`. Credentials are shared from the host (read/write so the
+	 * CLIs refresh tokens) and access is granted to the container's uid via ACL.
+	 * Optional; defaults to false. Gated by install-time consent at the UI layer.
+	 */
+	requiresLocalAiClis: z.boolean().optional(),
+	/**
 	 * Optional install-time configuration. `subdomain` overrides the auto-derived
 	 * Caddy subdomain (defaults to app id). `environmentOverrides` declares fields
 	 * the install dialog must prompt for and pass through to the compose `environment`
