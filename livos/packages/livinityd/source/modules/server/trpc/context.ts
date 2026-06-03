@@ -62,6 +62,12 @@ const createContext = ({livinityd, logger}: {livinityd: Livinityd; logger: Livin
 		logger,
 		dangerouslyBypassAuthentication: false,
 		currentUser: undefined as CurrentUser | undefined,
+		// Phase 256-04 (LIVOS-004 / fix E): explicit admin-equivalent marker.
+		// Set by isAuthenticated ONLY for genuine legacy single-user mode (no
+		// DB admin) and the X-Api-Key service-token no-DB path. requireRole
+		// admits an absent currentUser ONLY when this flag is true — it never
+		// infers admin from a merely unresolved currentUser.
+		legacySingleUser: undefined as boolean | undefined,
 	}
 }
 
