@@ -25,6 +25,12 @@ import {
 	grantContainerCredsAcl,
 } from './inject-local-ai-clis.js'
 import {startCredEgressProxyIfNeeded} from './cred-egress-proxy.js'
+import {
+	chooseCredentialPath,
+	mintMeteredKeyForApp,
+	revokeMeteredKeyForApp,
+	type BrokerClient,
+} from './metered-key.js'
 import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
 import {buildCaddyConfigFromState, type CaddyStateInstance, type CaddyStateSubdomain} from '../domain/caddy-state.js'
 import {getTunnelStatus} from '../domain/tunnel.js'
@@ -550,6 +556,12 @@ export default class Apps {
 		// installForUser logic (line ~963) but runs in the single-user install path
 		// that was originally missed by Phase 43 (only multi-user got the inject).
 		// No-op when manifest.requiresAiProvider is absent or false.
+		//
+		// 256-02 SC4b: the credential PATH keys off isGeneratedTemplate (the same
+		// trust dimension WS-C's admin-gate uses). VERIFIED → broker sentinel
+		// (OAuth-managed, unchanged); UNVERIFIED → per-app metered virtual key
+		// (budget + model allowlist, independently revocable on uninstall).
+		let meteredKeyId: string | null = null
 		if (manifest.requiresAiProvider === true) {
 			const composeFile = `${appDataDirectory}/docker-compose.yml`
 			try {
@@ -561,12 +573,25 @@ export default class Apps {
 				// makes broker share /root/.claude/ creds across all users).
 				const adminUser = await getAdminUser().catch(() => null)
 				const userId = adminUser?.id || 'default'
-				injectAiProviderConfig(composeData, userId, manifest)
+				// 256-02 SC4b: verified→broker sentinel (unchanged); unverified→
+				// per-app metered virtual key (community apps NEVER ride the
+				// operator's personal subscription).
+				if (chooseCredentialPath({isGeneratedTemplate}) === 'metered-key') {
+					const {virtualKey, keyId} = await mintMeteredKeyForApp(
+						{appSlug: appId, userId, budget: {maxUsd: 5}, modelAllowlist: undefined},
+						this.#brokerClient(),
+					)
+					meteredKeyId = keyId
+					injectAiProviderConfig(composeData, userId, manifest, {virtualKey})
+					this.logger.log(`256-02 SC4b: minted per-app metered key for UNVERIFIED ${appId} (keyId=${keyId})`)
+				} else {
+					injectAiProviderConfig(composeData, userId, manifest)
+				}
 				await fse.writeFile(composeFile, yaml.dump(composeData))
 				this.logger.log(`Phase 43.2: injected AI broker config for ${appId} (single-user, userId=${userId})`)
 			} catch (error) {
-				// Non-fatal — log + continue install. Container will start without
-				// broker env vars, app may fall back to its default behavior.
+				// Non-fatal for the verified path. The metered path does NOT fall
+				// back to lending the operator subscription (ToS-safe failure mode).
 				this.logger.error(`Phase 43.2: failed to inject broker config for ${appId}`, error)
 			}
 		}
@@ -580,21 +605,42 @@ export default class Apps {
 		if (manifest.requiresLocalAiClis === true) {
 			const composeFile = `${appDataDirectory}/docker-compose.yml`
 			try {
-				// LIVOS-001 / SC4: start the host cred-egress proxy BEFORE the
-				// container comes up so the CLIs' HTTPS_PROXY target is listening.
-				// Idempotent; best-effort.
-				await startCredEgressProxyIfNeeded(this.logger)
-				const detected = await detectHostAiClis()
-				if (!detected) {
-					this.logger.error(`requiresLocalAiClis: no host AI CLIs detected for ${appId}; skipping mount`)
-				} else {
-					await writeLocalAiCliWrappers(appDataDirectory, detected)
+				// 256-02 SC4b: a community (UNVERIFIED) app must NOT get the operator
+				// OAuth subscription via the cred-egress proxy. Instead it gets a
+				// per-app metered virtual key through the broker (base-URL + key in
+				// env, no host CLI mount). Only VERIFIED apps take the OAuth proxy.
+				if (chooseCredentialPath({isGeneratedTemplate}) === 'metered-key') {
+					const adminUser = await getAdminUser().catch(() => null)
+					const userId = adminUser?.id || 'default'
+					const {virtualKey, keyId} = await mintMeteredKeyForApp(
+						{appSlug: appId, userId, budget: {maxUsd: 5}, modelAllowlist: undefined},
+						this.#brokerClient(),
+					)
+					meteredKeyId = keyId
 					const composeContent = await fse.readFile(composeFile, 'utf8')
 					const yaml = (await import('js-yaml')).default
 					const composeData = yaml.load(composeContent)
-					injectLocalAiClisConfig(composeData, detected, appDataDirectory, manifest)
+					// Treat as a broker-provider app for the metered key injection.
+					injectAiProviderConfig(composeData, userId, {...manifest, requiresAiProvider: true}, {virtualKey})
 					await fse.writeFile(composeFile, yaml.dump(composeData))
-					this.logger.log(`requiresLocalAiClis: mounted host AI CLIs into ${appId} (claude=${!!detected.claude}, gemini=${!!detected.gemini}) via cred-egress proxy`)
+					this.logger.log(`256-02 SC4b: UNVERIFIED ${appId} requiresLocalAiClis → metered key (keyId=${keyId}); operator OAuth NOT lent`)
+				} else {
+					// VERIFIED: the host cred-egress proxy / OAuth path (unchanged).
+					// LIVOS-001 / SC4: start the proxy BEFORE the container comes up
+					// so the CLIs' HTTPS_PROXY target is listening. Idempotent.
+					await startCredEgressProxyIfNeeded(this.logger)
+					const detected = await detectHostAiClis()
+					if (!detected) {
+						this.logger.error(`requiresLocalAiClis: no host AI CLIs detected for ${appId}; skipping mount`)
+					} else {
+						await writeLocalAiCliWrappers(appDataDirectory, detected)
+						const composeContent = await fse.readFile(composeFile, 'utf8')
+						const yaml = (await import('js-yaml')).default
+						const composeData = yaml.load(composeContent)
+						injectLocalAiClisConfig(composeData, detected, appDataDirectory, manifest)
+						await fse.writeFile(composeFile, yaml.dump(composeData))
+						this.logger.log(`requiresLocalAiClis: mounted host AI CLIs into ${appId} (claude=${!!detected.claude}, gemini=${!!detected.gemini}) via cred-egress proxy`)
+					}
 				}
 			} catch (error) {
 				this.logger.error(`requiresLocalAiClis: failed to inject host CLIs for ${appId}`, error)
@@ -605,6 +651,11 @@ export default class Apps {
 		const app = new App(this.#livinityd, appId)
 		const filledSelectedDependencies = fillSelectedDependencies(manifest.dependencies, alternatives)
 		await app.store.set('dependencies', filledSelectedDependencies)
+		// 256-02 SC4b: persist the per-app metered keyId (if minted) so uninstall
+		// can independently revoke it.
+		if (meteredKeyId) {
+			await app.store.set('meteredKeyId', meteredKeyId).catch(() => {})
+		}
 		this.instances.push(app)
 
 		// Filter environment overrides to only allow keys declared in the builtin manifest
@@ -812,6 +863,22 @@ export default class Apps {
 		if (isDependency) throw new Error(`App ${appId} is a dependency of another app and cannot be uninstalled`)
 
 		const app = this.getApp(appId)
+
+		// 256-02 SC4b: revoke this app's per-app metered virtual key (if any) so
+		// the key stops authenticating the moment the app is removed. Independent
+		// per app — never touches another app's key. Best-effort.
+		try {
+			const meteredKeyId = (await app.store.get('meteredKeyId').catch(() => null)) as
+				| string
+				| null
+				| undefined
+			if (meteredKeyId) {
+				await revokeMeteredKeyForApp({keyId: meteredKeyId}, this.#brokerClient())
+				this.logger.log(`256-02 SC4b: revoked per-app metered key for ${appId} (keyId=${meteredKeyId})`)
+			}
+		} catch (error) {
+			this.logger.error(`256-02 SC4b: failed to revoke metered key for ${appId}`, error)
+		}
 
 		// Phase 140 plan 140-08 — deprovision the CF DNS + Tunnel ingress
 		// subdomain BEFORE tearing down the container. We do it first so the
@@ -1192,6 +1259,44 @@ export default class Apps {
 	 * (post-install hooks, boot regen) must not abort their own flow if
 	 * Caddy is unavailable.
 	 */
+	/**
+	 * 256-02 SC4b: a BrokerClient backed by the livinityd pg pool, writing to
+	 * `plugin_livinity_broker.api_keys` (the same table the livinity-broker
+	 * plugin owns). Mints/revokes per-app metered virtual keys for UNVERIFIED
+	 * apps. Mirrors the plugin createKey/deleteKey SQL so the key authenticates
+	 * + revokes identically. Throws if pg is unavailable (the caller surfaces
+	 * the failure — we must NOT silently lend the operator OAuth instead).
+	 */
+	#brokerClient(): BrokerClient {
+		return {
+			createKey: async (opts) => {
+				const pool = getPool()
+				if (!pool) throw new Error('brokerClient: no pg pool — cannot mint a metered key')
+				const {randomBytes, randomUUID, createHash} = await import('node:crypto')
+				const plaintext = 'lvb_' + randomBytes(24).toString('base64url')
+				const salt = randomBytes(8).toString('hex')
+				const hash = createHash('sha256').update(salt + ':' + plaintext).digest('hex')
+				const id = randomUUID()
+				const prefix = plaintext.slice(0, 10)
+				await pool.query(
+					`INSERT INTO plugin_livinity_broker.api_keys
+					   (id, user_id, name, prefix, hash, salt, revoked, scope, created_at)
+					 VALUES ($1, $2, $3, $4, $5, $6, false, $7, NOW())`,
+					[id, opts.userId, opts.name, prefix, hash, salt, JSON.stringify({budget: opts.budget ?? null, modelAllowlist: opts.modelAllowlist ?? null})],
+				)
+				return {id, plaintext, prefix}
+			},
+			deleteKey: async (keyId) => {
+				const pool = getPool()
+				if (!pool) return
+				await pool.query(
+					'UPDATE plugin_livinity_broker.api_keys SET revoked = true WHERE id = $1',
+					[keyId],
+				)
+			},
+		}
+	}
+
 	private async rebuildCaddyFromState(): Promise<void> {
 		try {
 			const pool = getPool()

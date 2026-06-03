@@ -4,7 +4,15 @@ const BROKER_HOST = 'livinity-broker'
 const BROKER_PORT = 8080
 const HOST_GATEWAY_ENTRY = `${BROKER_HOST}:host-gateway`
 
-function buildBrokerEnv(userId: string): Record<string, string> {
+/**
+ * Build the broker env block. `apiKey` is the value injected into the various
+ * `*_API_KEY` slots:
+ *   - the 'livinity-broker-managed' SENTINEL for VERIFIED apps (the broker
+ *     authenticates them by source-IP + URL path), OR
+ *   - a REAL per-app `lvb_…` virtual key for UNVERIFIED apps (256-02 SC4b), so
+ *     the broker meters + budget-caps that key independently per app.
+ */
+function buildBrokerEnv(userId: string, apiKey: string = 'livinity-broker-managed'): Record<string, string> {
 	const base = `http://${BROKER_HOST}:${BROKER_PORT}/u/${userId}`
 	const v1 = `${base}/v1`
 	return {
@@ -22,19 +30,22 @@ function buildBrokerEnv(userId: string): Record<string, string> {
 		OPENAI_LIKE_API_BASE_URL: v1,
 		// Anthropic SDK convention also under a frequently-used alternative name
 		// (some clients read ANTHROPIC_API_KEY rather than relying on the SDK
-		// default). Sentinel; broker validates by source IP + URL path.
-		ANTHROPIC_API_KEY: 'livinity-broker-managed',
+		// default). For VERIFIED apps this is the sentinel (broker validates by
+		// source IP + URL path); for UNVERIFIED apps it is a REAL per-app
+		// `lvb_…` virtual key the broker meters + budget-caps (256-02 SC4b).
+		ANTHROPIC_API_KEY: apiKey,
 		// Many OpenAI-compat clients require a non-empty API key string even when
 		// using a custom base URL (Open WebUI's OAuth UI rejects empty key field).
-		// The string is ignored by the broker; auth is enforced by URL path + IP guard.
-		OPENAI_API_KEY: 'livinity-broker-managed',
+		// For verified apps the string is ignored (URL path + IP guard); for
+		// unverified apps it is the real metered virtual key.
+		OPENAI_API_KEY: apiKey,
 		// Phase 58 (v29.5 post-deploy hot-fix): Bolt.diy's "OpenAI-Like" provider
 		// looks up its API key under apiTokenKey: 'OPENAI_LIKE_API_KEY' (NOT the
 		// generic OPENAI_API_KEY). When this var is empty, Bolt.diy's
 		// getDynamicModels returns [] and the model picker dropdown stays empty.
-		// Same broker-managed sentinel — auth is enforced by URL path + IP guard.
+		// Same value as the other key slots (sentinel or per-app metered key).
 		// See: bolt.diy/app/lib/modules/llm/providers/openai-like.ts:32-39
-		OPENAI_LIKE_API_KEY: 'livinity-broker-managed',
+		OPENAI_LIKE_API_KEY: apiKey,
 		// v30.5 — OpenCode runtime config (used by Suna and any OpenCode-based agent
 		// platform). OpenCode reads provider config from `~/.config/opencode/config.json`,
 		// not from env vars directly. Apps that bundle OpenCode can read this JSON
@@ -47,7 +58,7 @@ function buildBrokerEnv(userId: string): Record<string, string> {
 				anthropic: {
 					options: {
 						baseURL: v1,
-						apiKey: 'livinity-broker-managed',
+						apiKey,
 					},
 				},
 			},
@@ -66,12 +77,18 @@ function buildBrokerEnv(userId: string): Record<string, string> {
  * @param composeData - js-yaml-parsed docker-compose object (mutated in place)
  * @param userId - LivOS user UUID (used verbatim in broker URL path)
  * @param manifest - the app manifest (read for `requiresAiProvider` flag)
+ * @param opts - optional. `opts.virtualKey` (256-02 SC4b): a REAL per-app
+ *   `lvb_…` metered virtual key for an UNVERIFIED app — injected into the
+ *   `*_API_KEY` slots so the broker meters + budget-caps it independently.
+ *   When omitted (VERIFIED apps / OAuth path), the 'livinity-broker-managed'
+ *   sentinel is used and behavior is UNCHANGED (regression-locked by SC7).
  * @returns the same composeData object (for chaining/test ergonomics)
  */
 export function injectAiProviderConfig(
 	composeData: any,
 	userId: string,
 	manifest: AppManifest,
+	opts?: {virtualKey?: string},
 ): any {
 	if (manifest.requiresAiProvider !== true) {
 		return composeData
@@ -92,8 +109,10 @@ export function injectAiProviderConfig(
 		return composeData
 	}
 
-	// Inject env vars (preserve existing keys; do not overwrite)
-	const brokerEnv = buildBrokerEnv(userId)
+	// Inject env vars (preserve existing keys; do not overwrite). A real per-app
+	// virtual key (unverified app) replaces the sentinel in the *_API_KEY slots.
+	const apiKey = opts?.virtualKey && opts.virtualKey.length > 0 ? opts.virtualKey : undefined
+	const brokerEnv = buildBrokerEnv(userId, apiKey)
 	if (!service.environment || typeof service.environment !== 'object') {
 		service.environment = {}
 	}
