@@ -8,7 +8,9 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
-        DATABASE_URL: 'postgresql://platform:LivPlatform2024@127.0.0.1:5432/platform',
+        // LIVOS-021: read DATABASE_URL from the PM2 process environment / env file
+        // — never commit the live platform DB credential to the repo.
+        DATABASE_URL: process.env.DATABASE_URL,
         NEXT_PUBLIC_BASE_URL: 'https://livinity.io',
       },
       max_memory_restart: '512M',

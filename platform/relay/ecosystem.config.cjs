@@ -10,8 +10,10 @@ module.exports = {
         NODE_ENV: 'production',
         RELAY_PORT: 4000,
         RELAY_HOST: 'livinity.io',
-        DATABASE_URL: 'postgresql://platform:LivPlatform2024@127.0.0.1:5432/platform',
-        REDIS_URL: 'redis://:680542add448464d754a6303418580ecf678ab8be15e2625@localhost:6379',
+        // LIVOS-021: read DB/Redis URLs from the PM2 process environment / env
+        // file — never commit live platform credentials to the repo.
+        DATABASE_URL: process.env.DATABASE_URL,
+        REDIS_URL: process.env.REDIS_URL,
       },
       max_memory_restart: '1G',
       restart_delay: 3000,
