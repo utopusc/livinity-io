@@ -1,9 +1,19 @@
 import http from 'node:http'
+import https from 'node:https'
+import net from 'node:net'
+import os from 'node:os'
+import path from 'node:path'
+import tls from 'node:tls'
 import {Buffer} from 'node:buffer'
+import {execFile} from 'node:child_process'
+import {mkdtemp} from 'node:fs/promises'
+import {promisify} from 'node:util'
 
 import fse from 'fs-extra'
 
 import {detectHostAiClis} from './inject-local-ai-clis.js'
+
+const execFileAsync = promisify(execFile)
 
 /**
  * Host-side credential-injecting egress proxy (LIVOS-001 / SC4).
@@ -52,6 +62,20 @@ const DEFAULT_BRIDGE_SUBNET = '172.16.0.0/12'
  * anything not on this list is refused egress (consistent with WS-A).
  */
 const INJECTABLE_HOSTS = new Set<string>(['api.anthropic.com', 'generativelanguage.googleapis.com'])
+
+/**
+ * Host paths to the cred-egress-proxy CA material (generated once by the
+ * installer's `openssl req -x509` step — `deploy-livinityd.sh` / `update.sh`
+ * Phase 256-02 region). The PRIVATE key (`credproxy-ca.key`, mode 0600) NEVER
+ * leaves the host and is used ONLY to sign the per-host leaf certs below; the
+ * public cert (`credproxy-ca.pem`, 0644) is what the container trusts via
+ * `NODE_EXTRA_CA_CERTS`. Overridable for non-default layouts / tests.
+ */
+const SECRETS_DIR = process.env.LIVOS_CREDPROXY_SECRETS_DIR || '/opt/livos/data/secrets'
+export const CREDPROXY_CA_CERT_PATH =
+	process.env.LIVOS_CREDPROXY_CA || path.join(SECRETS_DIR, 'credproxy-ca.pem')
+export const CREDPROXY_CA_KEY_PATH =
+	process.env.LIVOS_CREDPROXY_CA_KEY || path.join(SECRETS_DIR, 'credproxy-ca.key')
 
 /** Strip any `:port` suffix from a CONNECT/Host value, lowercase it. */
 function hostnameOnly(host: string): string {
@@ -175,38 +199,171 @@ export function isFromBridge(remoteAddr: string, subnet: string = DEFAULT_BRIDGE
 	return (ipInt & mask) === (netInt & mask)
 }
 
+// ─── TLS-MITM leaf certificates (signed by the cred-proxy CA) ────────────────
+
+/** An in-memory minted leaf: PEM cert + PEM key for one allowlisted hostname. */
+export interface LeafCert {
+	cert: string
+	key: string
+}
+
+/**
+ * Mint a leaf certificate for `hostname`, signed by the cred-proxy CA, using the
+ * HOST `openssl` binary (the SAME tool the installer used to create the CA — no
+ * new npm cert-minting dependency, honouring the phase's no-new-deps invariant).
+ *
+ * The CA PRIVATE key (`caKeyPath`, 0600) is read by the HOST process only and
+ * NEVER exposed to any container; only the resulting leaf cert/key (kept in
+ * memory) terminate the intercepted TLS leg. The leaf carries a SAN for
+ * `hostname` so node/the CLIs accept it for that host.
+ *
+ * Returns null on any openssl failure (caller fails CLOSED — no unauthenticated
+ * pass-through).
+ */
+export async function mintLeafCert(
+	hostname: string,
+	caCertPath: string = CREDPROXY_CA_CERT_PATH,
+	caKeyPath: string = CREDPROXY_CA_KEY_PATH,
+): Promise<LeafCert | null> {
+	// Reject anything that isn't a plain DNS hostname before it ever reaches the
+	// shell-less execFile arg / openssl config (defence-in-depth — the caller
+	// already gates on the exact-match allowlist).
+	if (!/^[a-z0-9.-]+$/i.test(hostname)) return null
+	let work: string | null = null
+	try {
+		// Both CA files must exist and be readable by the host process.
+		if (!(await fse.pathExists(caCertPath)) || !(await fse.pathExists(caKeyPath))) return null
+
+		work = await mkdtemp(path.join(os.tmpdir(), 'credproxy-leaf-'))
+		const keyPath = path.join(work, 'leaf.key')
+		const csrPath = path.join(work, 'leaf.csr')
+		const certPath = path.join(work, 'leaf.crt')
+		const extPath = path.join(work, 'leaf.ext')
+
+		await fse.writeFile(extPath, `subjectAltName=DNS:${hostname}\n`)
+
+		// 1) leaf private key
+		await execFileAsync('openssl', ['genrsa', '-out', keyPath, '2048'])
+		// 2) CSR (CN = hostname)
+		await execFileAsync('openssl', [
+			'req',
+			'-new',
+			'-key',
+			keyPath,
+			'-out',
+			csrPath,
+			'-subj',
+			`/CN=${hostname}`,
+		])
+		// 3) sign the CSR with the CA → leaf cert (with the SAN extension)
+		await execFileAsync('openssl', [
+			'x509',
+			'-req',
+			'-in',
+			csrPath,
+			'-CA',
+			caCertPath,
+			'-CAkey',
+			caKeyPath,
+			'-CAcreateserial',
+			'-days',
+			'825',
+			'-extfile',
+			extPath,
+			'-out',
+			certPath,
+		])
+
+		const [cert, key] = await Promise.all([
+			fse.readFile(certPath, 'utf8'),
+			fse.readFile(keyPath, 'utf8'),
+		])
+		if (!cert.includes('BEGIN CERTIFICATE') || !key.includes('PRIVATE KEY')) return null
+		return {cert, key}
+	} catch {
+		return null
+	} finally {
+		if (work) await fse.remove(work).catch(() => {})
+	}
+}
+
+/**
+ * Pre-mint a `tls.SecureContext` for every host in the (small, static)
+ * allowlist at proxy startup, keyed by hostname. The contexts are then selected
+ * per-connection by `SNICallback`. Hosts that fail to mint are simply absent
+ * from the map → their CONNECT fails closed (no MITM, no pass-through).
+ */
+export async function buildLeafContexts(
+	hosts: Iterable<string> = INJECTABLE_HOSTS,
+	caCertPath: string = CREDPROXY_CA_CERT_PATH,
+	caKeyPath: string = CREDPROXY_CA_KEY_PATH,
+): Promise<Map<string, tls.SecureContext>> {
+	const map = new Map<string, tls.SecureContext>()
+	for (const host of hosts) {
+		const leaf = await mintLeafCert(host, caCertPath, caKeyPath)
+		if (!leaf) continue
+		map.set(host, tls.createSecureContext({cert: leaf.cert, key: leaf.key}))
+	}
+	return map
+}
+
 // ─── Live HTTP CONNECT proxy ────────────────────────────────────────────────
 
 export interface CredEgressProxyOpts {
 	creds: {claudeDir?: string | null; geminiDir?: string | null}
 	bridgeSubnet?: string
 	logger?: {log: (m: string) => void; error: (m: string, e?: unknown) => void}
+	/**
+	 * Pre-minted per-host TLS contexts (from `buildLeafContexts`). When omitted
+	 * (e.g. unit tests that exercise only the CONNECT guards), CONNECT to an
+	 * allowlisted host still fails CLOSED — there is NO unauthenticated
+	 * pass-through fallback. Production wires this from `startCredEgressProxyIfNeeded`.
+	 */
+	leafContexts?: Map<string, tls.SecureContext>
+	/**
+	 * Bearer source. Defaults to the read-only on-disk cred reader; injectable so
+	 * the unit test can supply a deterministic token without touching disk.
+	 */
+	readBearer?: (provider: 'anthropic' | 'gemini') => Promise<string | null>
 }
 
 /**
- * Build the host CONNECT proxy. Kept deliberately minimal: it enforces the
- * source-IP gate + the host allowlist at CONNECT time. For allowlisted hosts it
- * establishes a tunnel; the wire-level Authorization injection is performed by
- * the TLS-MITM leg in production (the CA material is generated by the installer
- * and the CA cert mounted read-only into the container). The pure logic
- * (allowlist / bearer-read / header-inject / IP-gate) is unit-tested above; this
- * server wires those guards so a rogue source or non-AI host is refused.
+ * Build the host CONNECT proxy with the TLS-MITM credential-injection leg.
  *
- * NOTE: the full TLS-MITM termination is intentionally NOT inlined here to keep
- * the secret-handling surface small and testable; `injectAuthHeader` is the
- * single injection point the MITM leg calls. The CONNECT-level guards below are
- * the security-relevant boundary (source-IP + host allowlist default-deny).
+ * SECURITY BOUNDARY (unchanged from the original, all preserved):
+ *   - source-IP gate (`isFromBridge`) — non-bridge sources get 403.
+ *   - host-allowlist DEFAULT-DENY (`isInjectableHost`) — a non-allowlisted
+ *     CONNECT is REFUSED (403), never MITM'd and never passed through.
+ *   - read-only token use (`readBearerFor`) — no write-back.
+ *   - single injection point (`injectAuthHeader`).
+ *
+ * For an allowlisted host from an allowed source the proxy now actually:
+ *   1. replies `200 Connection Established`,
+ *   2. TERMINATES the client TLS with the pre-minted leaf cert for that host
+ *      (selected by SNI; the container trusts it via the CA it has mounted),
+ *   3. parses the decrypted HTTP request and injects `Authorization: Bearer`
+ *      via `injectAuthHeader` (the placeholder key the container holds is
+ *      dropped),
+ *   4. RE-ORIGINATES a genuine upstream TLS connection to the real host:443
+ *      (validating the real public cert) and streams the request/response.
+ *
+ * FAIL-CLOSED: if no leaf context exists for the host, or TLS termination fails,
+ * the connection is destroyed — the proxy NEVER falls back to an unauthenticated
+ * plain pass-through that would leak the container's placeholder key upstream.
  */
 export function createCredEgressProxy(opts: CredEgressProxyOpts): http.Server {
 	const subnet = opts.bridgeSubnet ?? DEFAULT_BRIDGE_SUBNET
 	const log = opts.logger
+	const leafContexts = opts.leafContexts
+	const readBearer =
+		opts.readBearer ?? ((provider: 'anthropic' | 'gemini') => readBearerFor(provider, opts.creds))
 
 	const server = http.createServer((_req, res) => {
 		// Plain HTTP is not used by the CLIs (they speak HTTPS via CONNECT).
 		res.writeHead(405).end('cred-egress-proxy: use CONNECT')
 	})
 
-	server.on('connect', (req, clientSocket: import('node:net').Socket, head) => {
+	server.on('connect', (req, clientSocket: net.Socket, head) => {
 		const remote = clientSocket.remoteAddress || ''
 		if (!isFromBridge(remote, subnet)) {
 			log?.error?.(`cred-egress-proxy: refused CONNECT from non-bridge source ${remote}`)
@@ -222,25 +379,110 @@ export function createCredEgressProxy(opts: CredEgressProxyOpts): http.Server {
 			clientSocket.destroy()
 			return
 		}
-		// Allowlisted host from an allowed source → establish the tunnel. The
-		// TLS-MITM injection leg (production) terminates here and calls
-		// injectAuthHeader against the operator creds. Best-effort connect.
-		const net = require('node:net') as typeof import('node:net')
+
 		const hostname = hostnameOnly(target)
-		const upstream = net.connect(443, hostname, () => {
-			clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
-			if (head && head.length) upstream.write(head)
-			upstream.pipe(clientSocket)
-			clientSocket.pipe(upstream)
-		})
-		upstream.on('error', (e: unknown) => {
-			log?.error?.(`cred-egress-proxy: upstream error for ${hostname}`, e)
+		const leafCtx = leafContexts?.get(hostname)
+		if (!leafCtx) {
+			// FAIL CLOSED: no leaf cert for this (allowlisted) host → we cannot
+			// terminate TLS to inject the bearer. Refusing is correct — a plain
+			// pass-through here would forward the container's PLACEHOLDER key
+			// upstream (auth failure) and bypass injection.
+			log?.error?.(
+				`cred-egress-proxy: no leaf context for allowlisted host ${hostname} — refusing (fail-closed)`,
+			)
+			clientSocket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n')
 			clientSocket.destroy()
-		})
-		clientSocket.on('error', () => upstream.destroy())
+			return
+		}
+
+		// Allowlisted host + allowed source + leaf cert present → MITM.
+		clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
+		mitmTerminateAndForward({hostname, clientSocket, head, leafCtx, readBearer, log})
 	})
 
 	return server
+}
+
+/**
+ * The TLS-MITM leg for a single allowlisted CONNECT. Terminates the client TLS
+ * with `leafCtx`, parses the decrypted HTTP request(s), injects the bearer via
+ * `injectAuthHeader`, and re-originates a genuine upstream TLS connection per
+ * request to the real host. Any failure destroys both sockets (fail-closed).
+ */
+function mitmTerminateAndForward(args: {
+	hostname: string
+	clientSocket: net.Socket
+	head: Buffer
+	leafCtx: tls.SecureContext
+	readBearer: (provider: 'anthropic' | 'gemini') => Promise<string | null>
+	log?: {log: (m: string) => void; error: (m: string, e?: unknown) => void}
+}): void {
+	const {hostname, clientSocket, head, leafCtx, readBearer, log} = args
+
+	const clientTls = new tls.TLSSocket(clientSocket, {
+		isServer: true,
+		secureContext: leafCtx,
+		// SNI is fixed (we already know the host from CONNECT); the single context
+		// is correct for this hostname.
+	})
+	clientTls.on('error', (e) => {
+		log?.error?.(`cred-egress-proxy: client TLS error for ${hostname}`, e)
+		clientSocket.destroy()
+	})
+
+	// Drive an in-process HTTP server over the decrypted client stream so node's
+	// own parser handles framing/chunking. For each request we re-originate an
+	// upstream HTTPS request with the injected Authorization header.
+	const mitm = http.createServer()
+	mitm.on('request', (creq: http.IncomingMessage, cres: http.ServerResponse) => {
+		void (async () => {
+			try {
+				// Normalise incoming headers to a flat string map for injection.
+				const headers: Record<string, string> = {}
+				for (const [k, v] of Object.entries(creq.headers)) {
+					if (typeof v === 'string') headers[k.toLowerCase()] = v
+					else if (Array.isArray(v)) headers[k.toLowerCase()] = v.join(', ')
+				}
+
+				const result = await injectAuthHeader(hostname, headers, {readBearer})
+				if (result.denied) {
+					// Defensive: should never happen (host is allowlisted), fail closed.
+					cres.writeHead(403).end()
+					clientTls.destroy()
+					return
+				}
+
+				const upstreamReq = https.request(
+					{
+						host: hostname,
+						port: 443,
+						method: creq.method,
+						path: creq.url,
+						headers,
+						servername: hostname,
+					},
+					(upRes) => {
+						cres.writeHead(upRes.statusCode || 502, upRes.headers)
+						upRes.pipe(cres)
+					},
+				)
+				upstreamReq.on('error', (e) => {
+					log?.error?.(`cred-egress-proxy: upstream TLS error for ${hostname}`, e)
+					if (!cres.headersSent) cres.writeHead(502).end()
+					else cres.destroy()
+				})
+				creq.pipe(upstreamReq)
+			} catch (e) {
+				log?.error?.(`cred-egress-proxy: MITM request handling failed for ${hostname}`, e)
+				if (!cres.headersSent) cres.writeHead(502).end()
+				clientTls.destroy()
+			}
+		})()
+	})
+
+	// Feed the already-decrypted TLS socket to the HTTP server as a connection.
+	mitm.emit('connection', clientTls)
+	if (head && head.length) clientTls.unshift(head)
 }
 
 let _runningProxy: http.Server | null = null
@@ -258,7 +500,17 @@ export async function startCredEgressProxyIfNeeded(logger?: {
 	try {
 		const detected = await detectHostAiClis()
 		const creds = detected?.creds ?? {claudeDir: null, geminiDir: null}
-		const server = createCredEgressProxy({creds, logger})
+		// Pre-mint the per-host TLS leaf contexts (signed by the cred-proxy CA) so
+		// the CONNECT MITM leg can terminate TLS and inject the bearer. If the CA
+		// material is absent / openssl fails, the map is empty and allowlisted
+		// CONNECTs fail CLOSED (no unauthenticated pass-through).
+		const leafContexts = await buildLeafContexts()
+		if (leafContexts.size === 0) {
+			logger?.error?.(
+				'cred-egress-proxy: no leaf TLS contexts minted (CA material missing or openssl failed) — allowlisted egress will fail closed',
+			)
+		}
+		const server = createCredEgressProxy({creds, logger, leafContexts})
 		await new Promise<void>((resolve, reject) => {
 			server.once('error', reject)
 			// Bind on all interfaces so the docker bridge (host-gateway) can reach
@@ -267,7 +519,7 @@ export async function startCredEgressProxyIfNeeded(logger?: {
 		})
 		_runningProxy = server
 		logger?.log(
-			`cred-egress-proxy: listening on :${CREDPROXY_PORT} (claude=${!!creds.claudeDir}, gemini=${!!creds.geminiDir})`,
+			`cred-egress-proxy: listening on :${CREDPROXY_PORT} (claude=${!!creds.claudeDir}, gemini=${!!creds.geminiDir}, leaf-ctx=${leafContexts.size})`,
 		)
 		return server
 	} catch (error) {
@@ -276,5 +528,3 @@ export async function startCredEgressProxyIfNeeded(logger?: {
 	}
 }
 
-// Touch Buffer import so bundlers keep it available for the MITM leg.
-void Buffer
