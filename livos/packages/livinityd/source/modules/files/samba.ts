@@ -118,13 +118,21 @@ export default class Samba {
 	async getSharePassword() {
 		const sharePasswordFile = `${this.#livinityd.dataDirectory}/secrets/share-password`
 
-		// Get or create the share password
+		// Get or create the share password.
+		// Phase 257-06 (LIVOS-039): write mode 0600 like the sibling secrets
+		// (jwt, openclaw-ed25519) — the default umask-022 write was 0644, leaving
+		// the share secret group/world-readable if the parent chain is ever loosened.
 		const sharePassword = await fse.readFile(sharePasswordFile, 'utf8').catch(async () => {
 			this.logger.log('Creating share password on first run')
 			const sharePassword = randomToken(128)
-			await fse.writeFile(sharePasswordFile, sharePassword)
+			await fse.writeFile(sharePasswordFile, sharePassword, {mode: 0o600})
 			return sharePassword
 		})
+
+		// LIVOS-039: correct an EXISTING 0644 file (the live Mini PC's current
+		// state) to 0600 on next access. Best-effort — ignore platforms/FS that
+		// don't support POSIX modes.
+		await fse.chmod(sharePasswordFile, 0o600).catch(() => {})
 
 		return sharePassword
 	}
