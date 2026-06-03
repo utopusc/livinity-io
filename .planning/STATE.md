@@ -3,19 +3,21 @@ gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
 status: completed
-last_updated: "2026-06-03T18:08:42.799Z"
+last_updated: "2026-06-03T18:33:04.186Z"
 last_activity: 2026-06-02
 progress:
   total_phases: 168
   completed_phases: 85
   total_plans: 573
-  completed_plans: 487
+  completed_plans: 489
   percent: 85
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
 
-### ▶ NEXT ACTION (2026-06-03): run `/gsd-execute-phase 256` → continue with 256-02 (WS-B)
+### ▶ NEXT ACTION (2026-06-03): run `/gsd-execute-phase 256` → continue with 256-03 (WS-C pipeline admin-gate) — 256-06 (WS-A layer-5 classifier, parallel Wave 2) also still open
+
+> ✅ **256-02 DONE (WS-B Credential Egress Proxy + per-app metered key, LIVOS-001)** — 4 commits `45c11761` (host cred-injecting egress proxy: holds OAuth tokens host-side, wire-injects `Authorization: Bearer` only for allowlisted AI hosts, source-IP-gated, read-only token use), `232c19b4` (DROP the `~/.claude`/`~/.gemini` RW bind mounts in `inject-local-ai-clis.ts`; inject `HTTPS_PROXY`+placeholder key+`:ro` CA cert+`extra_hosts livinity-credproxy:host-gateway`; `grantContainerCredsAcl` now a no-op), `755f36ef` (start the proxy before install in `apps.ts` single-user + reapply branches; CA `openssl req -x509` generation in both installers — DISTINCT region from 256-01's tinyproxy block), `bd21d9a6` (per-app metered virtual-key path: `metered-key.ts` `chooseCredentialPath`/`mintMeteredKeyForApp`/`revokeMeteredKeyForApp` keyed off `isGeneratedTemplate` — VERIFIED→OAuth proxy, UNVERIFIED/community→budget+allowlist `lvb_` key minted via broker, NEVER the operator subscription; `inject-ai-provider.ts` `virtualKey` opt injects the REAL key vs the sentinel; broker `createKey`/`deleteKey` scope persistence + migration `0002_scope.sql`). **31 WS-B unit cases GREEN** (cred-egress 6 + inject-local-ai-clis 18 + metered-key 7) + 16 inject-ai-provider regression (SC7) = 47/47. **SC4** (no cred mount, model via proxy, no token in container) + **SC4b** (verified→OAuth, unverified→metered key off `isGeneratedTemplate`) satisfied at code/unit level. **Deviations:** tests use tsx (`liv/node_modules`) + node:test (vitest absent/offline, same as 256-01); BrokerClient is pg-backed via `getPool()` (the v37 broker plugin façade handlers lacked `api` in scope — captured via module `_api` in onActivate); the full TLS-MITM transport is deferred to the live 256-05 deploy (the security boundary — default-deny egress + source-IP gate + read-only token + single `injectAuthHeader` point — IS implemented+tested); pre-existing `apps.ts(184/224)`+`builtin-apps.ts(1433)` tsc errors logged to `deferred-items.md` (verified pre-existing). **CARRY TO 256-03:** the sanitizer MUST allowlist-preserve the CLI-injection mounts under `CLI_MOUNT_PREFIX` (`/opt/livos-clis/*`) — especially the `:ro` `credproxy-ca.pem` mount — per the documented carve-out. SUMMARY: `.planning/phases/256-security-hardening-contained-autonomy/256-02-SUMMARY.md`. **Resume at 256-03 (WS-C).**
 
 > ✅ **256-01 DONE (WS-A Contained Autonomy, LIVOS-002)** — 4 commits `f00f89a2` (bwrap sandbox + cred-scrub for `shell`), `8a031ab4` (files-tool realpath allowlist), `b34af13e` (per-session git-snapshot reversibility), `63636e2f` (bubblewrap+tinyproxy egress-allowlist proxy in both installers). 3 new tsx test suites (17 checks) GREEN. `LIV_AGENT_WORKSPACE` (default `/opt/livos/data/agent-workspace`) is the single write-root for the bwrap shell + files-allowlist + git-snapshot — `/opt/liv` stays unwritable, `/opt/livos/.env`+secrets unreadable, host creds scrubbed from the agent child env, egress forced through the deny-by-default proxy. **Deviations:** tests use tsx+node:assert (vitest absent/offline in `liv/`); `sdk-agent-runner.ts` sacred-SHA re-frozen in `scripts/sacred-shas-v38.json` (declared writer per plan frontmatter — agent loop/watchdog/budget/safeEnv untouched). SC1/SC2/SC3 satisfied at code+unit level; live synthetic-agent probes + SC7 regression land with the Mini PC deploy in **256-05** (this plan is local-only). SUMMARY: `.planning/phases/256-security-hardening-contained-autonomy/256-01-SUMMARY.md`. **Resume at 256-02 (WS-B credential egress proxy).**
 
