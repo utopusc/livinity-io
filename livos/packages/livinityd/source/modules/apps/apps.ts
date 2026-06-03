@@ -18,6 +18,12 @@ import {getBuiltinApp} from './builtin-apps.js'
 import {NativeApp, NATIVE_APP_CONFIGS} from './native-app.js'
 import {generateAppTemplate} from './compose-generator.js'
 import {injectAiProviderConfig} from './inject-ai-provider.js'
+import {
+	detectHostAiClis,
+	injectLocalAiClisConfig,
+	writeLocalAiCliWrappers,
+	grantContainerCredsAcl,
+} from './inject-local-ai-clis.js'
 import {applyCaddyConfig, generateFullCaddyfile, writeCaddyfile, reloadCaddy, type SubdomainConfig, type CaddyConfig} from '../domain/caddy.js'
 import {buildCaddyConfigFromState, type CaddyStateInstance, type CaddyStateSubdomain} from '../domain/caddy-state.js'
 import {getTunnelStatus} from '../domain/tunnel.js'
@@ -564,6 +570,31 @@ export default class Apps {
 			}
 		}
 
+		// Direct host-AI-CLI access (NO broker): when the manifest opts in via
+		// `requiresLocalAiClis: true`, mount the host's claude/gemini CLIs +
+		// glibc runtime + the operator's creds into the app container and drop
+		// PATH wrappers, so agent-native apps (e.g. Open Design) run the real
+		// local CLIs directly. No-op when the flag is absent/false. Non-fatal.
+		if (manifest.requiresLocalAiClis === true) {
+			const composeFile = `${appDataDirectory}/docker-compose.yml`
+			try {
+				const detected = await detectHostAiClis()
+				if (!detected) {
+					this.logger.error(`requiresLocalAiClis: no host AI CLIs detected for ${appId}; skipping mount`)
+				} else {
+					await writeLocalAiCliWrappers(appDataDirectory, detected)
+					const composeContent = await fse.readFile(composeFile, 'utf8')
+					const yaml = (await import('js-yaml')).default
+					const composeData = yaml.load(composeContent)
+					injectLocalAiClisConfig(composeData, detected, appDataDirectory, manifest)
+					await fse.writeFile(composeFile, yaml.dump(composeData))
+					this.logger.log(`requiresLocalAiClis: mounted host AI CLIs into ${appId} (claude=${!!detected.claude}, gemini=${!!detected.gemini})`)
+				}
+			} catch (error) {
+				this.logger.error(`requiresLocalAiClis: failed to inject host CLIs for ${appId}`, error)
+			}
+		}
+
 		// Save reference to app instance
 		const app = new App(this.#livinityd, appId)
 		const filledSelectedDependencies = fillSelectedDependencies(manifest.dependencies, alternatives)
@@ -596,6 +627,18 @@ export default class Apps {
 			this.logger.error(`Failed to install app ${appId}`, error)
 			this.instances = this.instances.filter((app) => app.id !== appId)
 			return false
+		}
+
+		// requiresLocalAiClis: now that the container is up, grant its uid ACL
+		// access to the operator's mounted creds so non-root containers can read
+		// (and refresh) the host OAuth tokens. Best-effort; never throws.
+		if (manifest.requiresLocalAiClis === true) {
+			try {
+				const detected = await detectHostAiClis()
+				await grantContainerCredsAcl(appDataDirectory, detected, this.logger)
+			} catch (error) {
+				this.logger.error(`requiresLocalAiClis: failed to grant creds ACL for ${appId}`, error)
+			}
 		}
 
 		// Save installed app
@@ -682,6 +725,8 @@ export default class Apps {
 		const builtinApp = getBuiltinApp(appId)
 		const requiresAiProvider =
 			manifest?.requiresAiProvider ?? builtinApp?.requiresAiProvider ?? false
+		const requiresLocalAiClis =
+			manifest?.requiresLocalAiClis ?? (builtinApp as any)?.requiresLocalAiClis ?? false
 		const port = manifest?.port ?? builtinApp?.port
 		const subdomain =
 			builtinApp?.installOptions?.subdomain ?? (manifest as any)?.subdomain
@@ -707,6 +752,34 @@ export default class Apps {
 				}
 			} catch (error) {
 				this.logger.error(`reapplyAppConfig: failed to re-inject broker for ${appId}`, error)
+			}
+		}
+
+		// Re-mount host AI CLIs (no broker) for apps that opt in. Idempotent —
+		// injectLocalAiClisConfig de-dupes volume strings + the PATH prefix.
+		// Recreates the container then re-grants the creds ACL for its uid.
+		if (requiresLocalAiClis) {
+			try {
+				const detected = await detectHostAiClis()
+				if (!detected) {
+					this.logger.error(`reapplyAppConfig: no host AI CLIs detected for ${appId}; skipping re-mount`)
+				} else {
+					await writeLocalAiCliWrappers(appDataDirectory, detected)
+					const composeContent = await fse.readFile(composeFile, 'utf8')
+					const yaml = (await import('js-yaml')).default
+					const composeData = yaml.load(composeContent)
+					injectLocalAiClisConfig(composeData, detected, appDataDirectory, {requiresLocalAiClis: true})
+					await fse.writeFile(composeFile, yaml.dump(composeData))
+					try {
+						await $({cwd: appDataDirectory})`docker compose up -d --force-recreate`
+						this.logger.log(`reapplyAppConfig: re-mounted host AI CLIs + recreated container for ${appId}`)
+					} catch (error) {
+						this.logger.error(`reapplyAppConfig: failed to recreate container for ${appId}`, error)
+					}
+					await grantContainerCredsAcl(appDataDirectory, detected, this.logger)
+				}
+			} catch (error) {
+				this.logger.error(`reapplyAppConfig: failed to re-mount host CLIs for ${appId}`, error)
 			}
 		}
 
@@ -891,6 +964,13 @@ export default class Apps {
 				// livinity-apps-gallery icon path, which 404s for apps not in that
 				// gallery (e.g. MCP-published store apps) → blank icon.
 				icon: data.icon_url || data.icon || undefined,
+				// Carry the broker / local-CLI opt-in flags from the catalog so the
+				// installer's inject steps fire for platform-API apps (the manifest
+				// is rebuilt here from the API response, so flags must be threaded
+				// through explicitly or they'd be lost). Read top-level first, then
+				// the nested manifest blob.
+				requiresAiProvider: data.requiresAiProvider ?? data.manifest?.requiresAiProvider ?? undefined,
+				requiresLocalAiClis: data.requiresLocalAiClis ?? data.manifest?.requiresLocalAiClis ?? undefined,
 			}
 
 			const yaml = (await import('js-yaml')).default
