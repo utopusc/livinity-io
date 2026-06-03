@@ -1106,6 +1106,32 @@ ENVFILE
         rm -rf "$temp_dir"
         git clone --depth 1 "$REPO_URL" "$temp_dir" || fail "Failed to clone repository"
 
+        # ── Phase 257-01 WS-B (LIVOS-026): verify the cloned tree before deploy ──
+        # The cloned HEAD is cp -a'd over /opt/livos + /opt/liv (destructive). Log
+        # the entry-script sha256 and — when pin material is provided — refuse a
+        # mismatch BEFORE the destructive rm -rf below. OPT-IN-STRICT: warn +
+        # proceed when unset (no install regression); set LIVOS_INSTALL_EXPECTED_SHA
+        # or ship scripts/install/EXPECTED_RELEASE to enforce fail-closed.
+        local _clone_head _entry_sha256 _expected_sha="" _expected_src=""
+        _clone_head=$(git -C "$temp_dir" rev-parse HEAD 2>/dev/null || echo "")
+        _entry_sha256=$(sha256sum "$temp_dir/livos/install.sh" 2>/dev/null | awk '{print $1}')
+        info "install.sh: cloned HEAD ${_clone_head:-unknown}; entry sha256 ${_entry_sha256:-unknown}"
+        if [[ -n "${LIVOS_INSTALL_EXPECTED_SHA:-}" ]]; then
+            _expected_sha="${LIVOS_INSTALL_EXPECTED_SHA}"
+            _expected_src="env LIVOS_INSTALL_EXPECTED_SHA"
+        elif [[ -f "$temp_dir/scripts/install/EXPECTED_RELEASE" ]]; then
+            _expected_sha=$(grep -vE '^\s*(#|$)' "$temp_dir/scripts/install/EXPECTED_RELEASE" 2>/dev/null | head -1 | tr -d '[:space:]')
+            _expected_src="pin file scripts/install/EXPECTED_RELEASE"
+        fi
+        if [[ -n "$_expected_sha" ]]; then
+            if [[ "$_clone_head" != "$_expected_sha" ]]; then
+                fail "install.sh: refusing to deploy — cloned HEAD ${_clone_head} does not match the expected pinned ref ${_expected_sha} (source: ${_expected_src})"
+            fi
+            info "install.sh: cloned HEAD matches the expected pinned ref (source: ${_expected_src})"
+        else
+            warn "install.sh: deploying unverified HEAD ${_clone_head} — set LIVOS_INSTALL_EXPECTED_SHA to pin"
+        fi
+
         # Preserve data directory and app-data across updates
         local saved_data=""
         if [[ -d "$LIVOS_DIR/data" ]]; then

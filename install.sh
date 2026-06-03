@@ -91,6 +91,38 @@ if [[ ! -d "${SCRIPT_DIR}/livos" ]] && [[ ! -d "${SCRIPT_DIR}/.git" ]]; then
     cd "$_clone_dir"
     SCRIPT_DIR="$_clone_dir"
     PHASE_DIR="${SCRIPT_DIR}/scripts/install"
+
+    # ── Phase 257-01 WS-B (LIVOS-026): verify the cloned tree before re-exec ───
+    # The curl|bash one-liner runs whatever the remote serves AS ROOT. Before we
+    # re-exec the cloned entry script, log its sha256 (so the operator can record
+    # /compare it) and — when pin material is provided — refuse a mismatch.
+    # OPT-IN-STRICT: warn + proceed when no pin is set (no install regression);
+    # set LIVOS_INSTALL_EXPECTED_SHA or ship scripts/install/EXPECTED_RELEASE to
+    # enforce fail-closed.
+    _clone_head=$(git -C "$_clone_dir" rev-parse HEAD 2>/dev/null || echo "")
+    _entry_script="${SCRIPT_DIR}/install.sh"
+    _entry_sha256=$(sha256sum "$_entry_script" 2>/dev/null | awk '{print $1}')
+    info "install.sh: cloned HEAD ${_clone_head:-unknown}; entry sha256 ${_entry_sha256:-unknown}"
+
+    _expected_sha=""
+    _expected_src=""
+    if [[ -n "${LIVOS_INSTALL_EXPECTED_SHA:-}" ]]; then
+        _expected_sha="${LIVOS_INSTALL_EXPECTED_SHA}"
+        _expected_src="env LIVOS_INSTALL_EXPECTED_SHA"
+    elif [[ -f "${SCRIPT_DIR}/scripts/install/EXPECTED_RELEASE" ]]; then
+        _expected_sha=$(grep -vE '^\s*(#|$)' "${SCRIPT_DIR}/scripts/install/EXPECTED_RELEASE" 2>/dev/null | head -1 | tr -d '[:space:]')
+        _expected_src="pin file scripts/install/EXPECTED_RELEASE"
+    fi
+
+    if [[ -n "$_expected_sha" ]]; then
+        if [[ "$_clone_head" != "$_expected_sha" ]]; then
+            fail "install.sh: refusing to run — cloned HEAD ${_clone_head} does not match the expected pinned ref ${_expected_sha} (source: ${_expected_src})" 90
+        fi
+        info "install.sh: cloned HEAD matches the expected pinned ref (source: ${_expected_src})"
+    else
+        warn "install.sh: running unverified HEAD ${_clone_head} — set LIVOS_INSTALL_EXPECTED_SHA to pin"
+    fi
+
     info "Re-execing from cloned checkout"
     exec bash "${SCRIPT_DIR}/install.sh" "$@"
 fi

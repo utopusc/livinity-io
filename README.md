@@ -97,6 +97,35 @@ The installer provisions Docker, Caddy, PostgreSQL, and Redis, then brings
 the systemd services up. When it finishes, open `http://<your-host>` and
 follow the onboarding wizard.
 
+### Verify before running (recommended)
+
+`curl … | bash` runs whatever the remote serves **as root** with no integrity
+check. Prefer **download → verify → run** so a compromised remote or TLS MITM
+cannot silently run code on your host:
+
+```bash
+# 1. Download the script (don't pipe straight to a shell)
+curl -fsSL https://get.livinity.io -o livos-install.sh
+
+# 2. Print its checksum and compare against the published value
+sha256sum livos-install.sh
+
+# 3. Run only after the checksum matches
+sudo bash livos-install.sh
+```
+
+To pin a specific release commit (fail-closed if the cloned tree does not match),
+export `LIVOS_INSTALL_EXPECTED_SHA` before running — the installer refuses to
+proceed when the cloned `HEAD` does not equal the pin, and logs the entry
+script's `sha256sum` either way:
+
+```bash
+LIVOS_INSTALL_EXPECTED_SHA=<full-40-char-commit-sha> sudo bash livos-install.sh
+```
+
+Shipping a `scripts/install/EXPECTED_RELEASE` pin file in the release tree has
+the same effect without needing the env var.
+
 ### Install entrypoint
 
 The canonical, panel-issued install command is:
