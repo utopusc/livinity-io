@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
 	findUserById: vi.fn(),
 	getAdminUser: vi.fn(),
 	getPool: vi.fn(),
-	isSessionActive: vi.fn(),
+	isSessionRevoked: vi.fn(),
 }))
 
 vi.mock('../../database/index.js', () => ({
@@ -37,9 +37,9 @@ vi.mock('../../database/index.js', () => ({
 	getPool: mocks.getPool,
 }))
 
-// Phase 257-04 WS-A — sessions DAO (jti revocation lookup).
+// Phase 257-04 WS-A — sessions DAO (jti revocation lookup, fail-open).
 vi.mock('../../database/sessions.js', () => ({
-	isSessionActive: mocks.isSessionActive,
+	isSessionRevoked: mocks.isSessionRevoked,
 }))
 
 const {isAuthenticated, requireRole} = await import('./is-authenticated.js')
@@ -76,12 +76,12 @@ beforeEach(() => {
 	mocks.findUserById.mockReset()
 	mocks.getAdminUser.mockReset()
 	mocks.getPool.mockReset()
-	mocks.isSessionActive.mockReset()
-	// Defaults: a DB pool exists and sessions are active unless a test overrides.
-	// This keeps the 256-04 fail-closed tests (which carry no jti) unaffected —
-	// the jti gate only fires when payload.jti is present.
+	mocks.isSessionRevoked.mockReset()
+	// Defaults: a DB pool exists and sessions are NOT revoked unless a test overrides
+	// (fail-open: missing/unrevoked → allow). This keeps the 256-04 fail-closed tests
+	// (which carry no jti) unaffected — the jti gate only fires when payload.jti is present.
 	mocks.getPool.mockReturnValue({} as any)
-	mocks.isSessionActive.mockResolvedValue(true)
+	mocks.isSessionRevoked.mockResolvedValue(false)
 	delete process.env['LIV_API_KEY']
 })
 
@@ -300,7 +300,7 @@ describe('isAuthenticated — Phase 257-04 WS-A jti revocation (LIVOS-005)', () 
 			isActive: true,
 		})
 		mocks.getPool.mockReturnValue({} as any)
-		mocks.isSessionActive.mockResolvedValue(false) // revoked / expired
+		mocks.isSessionRevoked.mockResolvedValue(true) // explicitly revoked
 		const ctx = makeCtx({
 			cookies: {LIVINITY_SESSION: 'tok'},
 			verifyToken: async () => ({userId: 'm-id', role: 'member', jti: 'jti-revoked'}),
@@ -309,10 +309,10 @@ describe('isAuthenticated — Phase 257-04 WS-A jti revocation (LIVOS-005)', () 
 		await expect(isAuthenticated({ctx, next})).rejects.toThrow(/session revoked/i)
 		expect(next).not.toHaveBeenCalled()
 		expect(ctx.currentUser).toBeUndefined()
-		expect(mocks.isSessionActive).toHaveBeenCalledWith('jti-revoked')
+		expect(mocks.isSessionRevoked).toHaveBeenCalledWith('jti-revoked')
 	})
 
-	test('WS-A.T4 — active user with ACTIVE jti passes (currentUser set, next())', async () => {
+	test('WS-A.T4 — active user with jti but NO revoked row (missing/unrevoked) PASSES — fail-open, no lockout', async () => {
 		mocks.findUserById.mockResolvedValue({
 			id: 'm-id',
 			username: 'mary',
@@ -320,7 +320,7 @@ describe('isAuthenticated — Phase 257-04 WS-A jti revocation (LIVOS-005)', () 
 			isActive: true,
 		})
 		mocks.getPool.mockReturnValue({} as any)
-		mocks.isSessionActive.mockResolvedValue(true)
+		mocks.isSessionRevoked.mockResolvedValue(false) // missing row → NOT revoked → allow
 		const ctx = makeCtx({
 			cookies: {LIVINITY_SESSION: 'tok'},
 			verifyToken: async () => ({userId: 'm-id', role: 'member', jti: 'jti-live'}),
@@ -343,7 +343,7 @@ describe('isAuthenticated — Phase 257-04 WS-A jti revocation (LIVOS-005)', () 
 		// isSessionActive would return false, but it must NEVER be consulted
 		// for a token that carries no jti (back-compat for tokens minted before
 		// this phase).
-		mocks.isSessionActive.mockResolvedValue(false)
+		mocks.isSessionRevoked.mockResolvedValue(false)
 		const ctx = makeCtx({
 			cookies: {LIVINITY_SESSION: 'tok'},
 			verifyToken: async () => ({userId: 'm-id', role: 'member'}), // no jti
@@ -352,7 +352,7 @@ describe('isAuthenticated — Phase 257-04 WS-A jti revocation (LIVOS-005)', () 
 		const result = await isAuthenticated({ctx, next})
 		expect(result).toBe('OK')
 		expect(next).toHaveBeenCalledOnce()
-		expect(mocks.isSessionActive).not.toHaveBeenCalled()
+		expect(mocks.isSessionRevoked).not.toHaveBeenCalled()
 	})
 
 	test('WS-A.T6 — DB-absent (getPool null) SKIPS the jti check (single-user not broken)', async () => {
@@ -363,7 +363,7 @@ describe('isAuthenticated — Phase 257-04 WS-A jti revocation (LIVOS-005)', () 
 			isActive: true,
 		})
 		mocks.getPool.mockReturnValue(null as any) // no DB / pure legacy
-		mocks.isSessionActive.mockResolvedValue(false)
+		mocks.isSessionRevoked.mockResolvedValue(false)
 		const ctx = makeCtx({
 			cookies: {LIVINITY_SESSION: 'tok'},
 			verifyToken: async () => ({userId: 'm-id', role: 'member', jti: 'jti-whatever'}),
@@ -372,7 +372,7 @@ describe('isAuthenticated — Phase 257-04 WS-A jti revocation (LIVOS-005)', () 
 		const result = await isAuthenticated({ctx, next})
 		expect(result).toBe('OK')
 		expect(next).toHaveBeenCalledOnce()
-		expect(mocks.isSessionActive).not.toHaveBeenCalled()
+		expect(mocks.isSessionRevoked).not.toHaveBeenCalled()
 	})
 
 	test('WS-A.T7 — service-token (X-Api-Key) path is NOT subject to the jti check (no user JWT)', async () => {
@@ -384,6 +384,6 @@ describe('isAuthenticated — Phase 257-04 WS-A jti revocation (LIVOS-005)', () 
 		const result = await isAuthenticated({ctx, next})
 		expect(result).toBe('OK')
 		expect(next).toHaveBeenCalledOnce()
-		expect(mocks.isSessionActive).not.toHaveBeenCalled()
+		expect(mocks.isSessionRevoked).not.toHaveBeenCalled()
 	})
 })

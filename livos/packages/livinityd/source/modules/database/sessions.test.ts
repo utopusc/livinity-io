@@ -17,7 +17,7 @@
 
 import {beforeEach, describe, expect, test} from 'vitest'
 
-import {createSession, revokeSessionsForUser, isSessionActive, type QueryRunner} from './sessions.js'
+import {createSession, revokeSessionsForUser, isSessionActive, isSessionRevoked, type QueryRunner} from './sessions.js'
 
 // A tiny in-memory sessions store behind a pg-shaped query runner so the DAO's
 // real SQL strings drive a fake DB. We pattern-match the SQL the DAO emits.
@@ -91,5 +91,14 @@ describe('sessions DAO — LIVOS-005 revocation', () => {
 		await expect(createSession({userId: USER_A, jti: JTI_A, expiresAt: FUTURE}, null)).resolves.toBeUndefined()
 		await expect(revokeSessionsForUser(USER_A, null)).resolves.toBeUndefined()
 		expect(await isSessionActive(JTI_A, null)).toBe(false)
+	})
+
+	test('T5 — isSessionRevoked is FAIL-OPEN: missing row → false (no lockout); DB-absent → false', async () => {
+		// Missing jti (never recorded — the production-lockout scenario) → NOT revoked.
+		expect(await isSessionRevoked('jti-never-recorded', runner)).toBe(false)
+		// DB-absent (single-user) → false; never locked out.
+		expect(await isSessionRevoked(JTI_A, null)).toBe(false)
+		// (The gate-level behavior — jti present + missing/unrevoked row → ALLOW,
+		//  explicit revoke → reject — is fully covered in is-authenticated.test WS-A.T3/T4.)
 	})
 })
