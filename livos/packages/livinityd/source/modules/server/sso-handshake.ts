@@ -70,8 +70,12 @@ export function parseSsoReturnTarget(returnUrl: string, mainDomain: string): Sso
 	} catch {
 		return null
 	}
-	// https only — the app subdomains are always served over TLS at the edge.
-	if (url.protocol !== 'https:') return null
+	// Accept http OR https: behind the Cloudflare-tunnel relay Caddy serves plain
+	// `http://` internally (the relay terminates TLS), so the gated-block 401 redirect
+	// reflects `{scheme}=http` even though the browser-facing URL is https. The scheme
+	// is NOT the security gate — the host check below is, and every OUTPUT redirect
+	// (/__livos_sso → /__livos_auth, and the final landing) is forced to https.
+	if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
 	// No embedded credentials (userinfo) — defense against `https://app-bruce.livinity.io@evil.com`.
 	if (url.username || url.password) return null
 	if (!isOwnAppHost(url.hostname, mainDomain)) return null
