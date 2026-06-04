@@ -49,8 +49,17 @@ describe('parseSsoReturnTarget', () => {
 			path: '/',
 		})
 	})
-	test('rejects http (non-TLS)', () => {
-		expect(parseSsoReturnTarget('http://n8n-bruce.livinity.io/', MAIN)).toBeNull()
+	test('accepts http (tunnel-mode internal scheme — relay terminates TLS)', () => {
+		// Behind the CF-tunnel relay Caddy serves http:// internally, so the gated
+		// 401 redirect reflects {scheme}=http. Host is the real gate; output forces https.
+		expect(parseSsoReturnTarget('http://n8n-bruce.livinity.io/', MAIN)).toEqual({
+			host: 'n8n-bruce.livinity.io',
+			path: '/',
+		})
+	})
+	test('rejects non-http(s) schemes (ftp/file/javascript)', () => {
+		expect(parseSsoReturnTarget('ftp://n8n-bruce.livinity.io/', MAIN)).toBeNull()
+		expect(parseSsoReturnTarget('file:///etc/passwd', MAIN)).toBeNull()
 	})
 	test('rejects embedded credentials (userinfo spoof)', () => {
 		expect(parseSsoReturnTarget('https://n8n-bruce.livinity.io@evil.com/', MAIN)).toBeNull()
