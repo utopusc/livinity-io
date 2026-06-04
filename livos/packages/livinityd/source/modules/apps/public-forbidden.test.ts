@@ -11,7 +11,7 @@
 // installed app's on-disk compose may no longer carry them. These tests prove the
 // load-bearing triggers hold even for a fully-sanitized compose (Test 9).
 import {describe, it, expect} from 'vitest'
-import {isPublicForbidden} from './public-forbidden.js'
+import {isPublicForbidden, effectivePublicAccess} from './public-forbidden.js'
 
 describe('isPublicForbidden (258-03 WS-C)', () => {
 	// ── LOAD-BEARING triggers (not stripped by the 257 sanitizer) ──────────
@@ -120,5 +120,61 @@ describe('isPublicForbidden (258-03 WS-C)', () => {
 			},
 		}
 		expect(isPublicForbidden({compose})).toEqual({forbidden: true, reason: 'docker-sock'})
+	})
+})
+
+// effectivePublicAccess composes isPublicForbidden + resolvePublicAccess into the
+// ONE decision Task 2 (registerAppSubdomain) + Task 3 (read side) reuse:
+//   forbidden → undefined (never public, fail-closed)   else resolvePublicAccess()
+//   resolved mode 'none' → undefined                     (private; SubdomainConfig.publicAccess omitted)
+describe('effectivePublicAccess (258-03 WS-C — Task 2 composition)', () => {
+	it('Test 1 — no persisted setting → undefined (default private, SC5)', () => {
+		const out = effectivePublicAccess({}, {publicAccess: {mode: 'paths'}}, undefined)
+		expect(out).toBeUndefined()
+	})
+
+	it('Test 2 — paths setting on a CLEAN app → resolved paths config', () => {
+		const out = effectivePublicAccess(
+			{}, // no forbidden signals
+			{publicAccess: {mode: 'paths', paths: ['/booking/'], hasOwnAuth: true}},
+			{mode: 'paths', paths: ['/booking/']},
+		)
+		expect(out).toEqual({mode: 'paths', paths: ['/booking/'], hasOwnAuth: true})
+	})
+
+	it('Test 3 — forbidden re-assert: daemon-bearer load-bearing forces undefined even with a stale paths setting', () => {
+		// The compose was sanitized (no docker.sock/privileged left) but the
+		// 256-04 daemon bearer is present → a stale/forged public setting can NEVER
+		// make a forbidden app public (fail-closed).
+		const sanitizedCompose = {services: {od: {image: 'opendesign/agent', volumes: ['./data:/data']}}}
+		const out = effectivePublicAccess(
+			{hasDaemonBearer: true, compose: sanitizedCompose},
+			{publicAccess: {mode: 'whole-app'}},
+			{mode: 'whole-app'}, // stale/forged public setting
+		)
+		expect(out).toBeUndefined()
+	})
+
+	it('Test 3b — forbidden via requiresLocalAiClis also forces undefined', () => {
+		const out = effectivePublicAccess(
+			{requiresLocalAiClis: true},
+			{publicAccess: {mode: 'paths'}},
+			{mode: 'paths', paths: ['/foo']},
+		)
+		expect(out).toBeUndefined()
+	})
+
+	it('resolved mode none on a clean app → undefined (no public block emitted)', () => {
+		const out = effectivePublicAccess({}, {publicAccess: {mode: 'paths'}}, {mode: 'none'})
+		expect(out).toBeUndefined()
+	})
+
+	it('whole-app on a clean app → whole-app config (paths empty)', () => {
+		const out = effectivePublicAccess(
+			{},
+			{publicAccess: {mode: 'whole-app', hasOwnAuth: true}},
+			{mode: 'whole-app'},
+		)
+		expect(out).toEqual({mode: 'whole-app', paths: [], hasOwnAuth: true})
 	})
 })
