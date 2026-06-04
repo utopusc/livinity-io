@@ -48,6 +48,28 @@ const WS_TRANSPORT_BODY_LOCAL = `        flush_interval -1
             versions 1.1
         }`
 
+/**
+ * Phase 258 WS-B (258-02) — THE SECURITY SPINE. The mandatory, NON-CONFIGURABLE
+ * header strip emitted in EVERY public (login-bypassed) handle block AND in the
+ * multi-user app-subdomain block (defense in depth). It deletes any CLIENT-supplied
+ * identity headers (Remote-User / Remote-Role — used by forward_auth to convey an
+ * authenticated identity upstream) and the high-privilege daemon bearer marker
+ * (X-Daemon-Bearer) BEFORE the request reaches the container. This is hard-coded
+ * into the carve-out template — it is NOT driven by SubdomainConfig and can never
+ * be turned off by a manifest or per-install setting.
+ *
+ *   T-258B-01 (spoofing/EoP): a public visitor injecting Remote-User/Remote-Role to
+ *     impersonate an authed user → stripped here, always.
+ *   T-258B-02 (info-disclosure): the daemon bearer leaking onto a public route →
+ *     X-Daemon-Bearer stripped here; the bearer `header_up Authorization` is emitted
+ *     ONLY inside the gated catch-all, never in a public block.
+ *
+ * Tab-indented (two tabs) so it composes into the `\thandle … {` public blocks.
+ */
+const PUBLIC_HEADER_STRIP = `\t\trequest_header -Remote-User
+\t\trequest_header -Remote-Role
+\t\trequest_header -X-Daemon-Bearer`
+
 const CADDYFILE_PATH = '/etc/caddy/Caddyfile'
 const DOMAIN_RE = /^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$/
 const SUBDOMAIN_RE = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/
@@ -576,6 +598,24 @@ ${WS_TRANSPORT_BODY}
 		}
 		const fullDomain = `${prefix}${host}`
 		if (multiUser) {
+			// Phase 258 WS-B (258-02) NOTE-1 — SINGLE-USER-EMIT ASSUMPTION (the one way
+			// the 258 spine is silently bypassed): the public-access carve-out (public
+			// path / whole-app handles) + the gated forward_auth block live ONLY in the
+			// single-user `else` branch below. Under livos:system:multi_user==='true'
+			// EVERY app subdomain takes THIS branch — a plain reverse_proxy to the :8080
+			// Express gateway with NO forward_auth and NO carve-out — so public-access
+			// routing is NOT enforced at Caddy in multi-user mode. The Mini PC is
+			// single-user today so the gap is not live, but it MUST be closed at the :8080
+			// gateway BEFORE multi-user ships (T-258B-05; documented 258-05 precondition +
+			// DEPLOY-LOG follow-up). Defense in depth: we STILL strip the three identity/
+			// bearer headers here so a CLIENT-injected Remote-User/Remote-Role/
+			// X-Daemon-Bearer can never pass through to :8080 (this branch injects none).
+			if (sub.publicAccess && sub.publicAccess.mode !== 'none') {
+				// eslint-disable-next-line no-console
+				console.warn(
+					`[caddy] publicAccess config present under multi_user — carve-out routing is single-user only; app auth/public-access for ${fullDomain} is enforced at the :8080 gateway, NOT here`,
+				)
+			}
 			blocks.push(`${fullDomain} {
 ${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
@@ -584,6 +624,7 @@ ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
+${PUBLIC_HEADER_STRIP}
 ${WS_TRANSPORT_BODY}
 		}
 	}
@@ -611,19 +652,76 @@ ${WS_TRANSPORT_BODY}
 				sub.upstreamBearer && /^[A-Za-z0-9._-]+$/.test(sub.upstreamBearer)
 					? sub.upstreamBearer
 					: undefined
-			blocks.push(`${fullDomain} {
-	forward_auth 127.0.0.1:8080 {
-		uri /auth/verify
-		copy_headers Cookie
-		@bad status 401
-		handle_response @bad {
-			redir https://${config.mainDomain}/login?redirect={scheme}://{host}{uri}
-		}
-	}
-	reverse_proxy 127.0.0.1:${sub.port} {
+			// Phase 258 WS-B (258-02) — the gated catch-all body, refactored out of the
+			// inline emit so it is the SINGLE source of the 256-04 forward_auth gate. Both
+			// the `none`/absent path (SC5 byte-equivalence — must stay character-identical
+			// to the pre-258 emit, with AND without the 257-06 safeBearer) and the
+			// paths-mode carve-out below reuse THIS verbatim. The daemon bearer
+			// (`header_up Authorization`) is emitted ONLY here — never in a public block.
+			const gatedHandleBody = `\tforward_auth 127.0.0.1:8080 {
+\t\turi /auth/verify
+\t\tcopy_headers Cookie
+\t\t@bad status 401
+\t\thandle_response @bad {
+\t\t\tredir https://${config.mainDomain}/login?redirect={scheme}://{host}{uri}
+\t\t}
+\t}
+\treverse_proxy 127.0.0.1:${sub.port} {
 ${safeBearer ? `\t\theader_up Authorization "Bearer ${safeBearer}"\n\t\theader_up Host 127.0.0.1:${sub.port}\n\t\theader_up Origin http://127.0.0.1:${sub.port}\n` : ''}${WS_TRANSPORT_BODY}
-	}
+\t}`
+
+			// Phase 258 WS-B (258-02) — PUBLIC-ACCESS CARVE-OUT (SC1/SC2/SC4/SC5). When the
+			// operator has activated public access (sub.publicAccess.mode !== 'none'), split
+			// the subdomain into mutually-exclusive `handle` blocks. The header strip
+			// (PUBLIC_HEADER_STRIP) is NON-CONFIGURABLE and present in EVERY public block;
+			// the daemon bearer is GATED-ONLY (lives in gatedHandleBody, never a public
+			// block). Caddy is first-match-wins on `handle` blocks → public path handles are
+			// emitted BEFORE the gated catch-all (which has no matcher) so a public prefix
+			// matches the public block and every other path falls through to the gate.
+			// NOTE-1: this routing is enforced ONLY here in the single-user branch; see the
+			// multi-user branch above for the bypass caveat.
+			const pub = sub.publicAccess
+			if (pub && pub.mode === 'whole-app') {
+				// whole-app — the app provides its OWN auth. Drop the gated catch-all
+				// entirely; emit a SINGLE header-stripped reverse_proxy. No forward_auth,
+				// NO daemon bearer (the bearer must never ride a public route).
+				blocks.push(`${fullDomain} {
+\thandle {
+${PUBLIC_HEADER_STRIP}
+\t\treverse_proxy 127.0.0.1:${sub.port} {
+${WS_TRANSPORT_BODY}
+\t\t}
+\t}
 }`)
+			} else if (pub && pub.mode === 'paths' && pub.paths.length > 0) {
+				// paths — specific prefixes are public on an otherwise-gated subdomain.
+				// Emit one header-stripped public `handle <prefix>*` per prefix FIRST, then
+				// the unchanged gated catch-all LAST. Defense in depth (mirrors the 257-06
+				// safeBearer charset gate): skip any prefix containing whitespace, brace, or
+				// quote so a hostile manifest path can never break out of the Caddyfile.
+				const publicBlocks: string[] = []
+				for (const prefix of pub.paths) {
+					if (/[\s{}"]/.test(prefix)) continue
+					publicBlocks.push(`\thandle ${prefix}* {
+${PUBLIC_HEADER_STRIP}
+\t\treverse_proxy 127.0.0.1:${sub.port} {
+${WS_TRANSPORT_BODY}
+\t\t}
+\t}`)
+				}
+				blocks.push(`${fullDomain} {
+${publicBlocks.join('\n')}
+\thandle {
+${gatedHandleBody.replace(/^\t/gm, '\t\t')}
+\t}
+}`)
+			} else {
+				// 'none' / absent / empty-paths — the EXACT current 256-04 gated block,
+				// byte-for-byte (SC5). gatedHandleBody is wrapped to produce identical bytes.
+				blocks.push(`${fullDomain} {
+${gatedHandleBody}
+}`)
+			}
 		}
 	}
 
