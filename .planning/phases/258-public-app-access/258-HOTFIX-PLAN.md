@@ -1,7 +1,12 @@
 # Phase 258 — HOTFIX PLAN: public-access setting not reaching the Caddy emit
 
 **Created:** 2026-06-03 (handoff to next session)
-**Status:** FIXED 2026-06-03 — root cause confirmed H2 (H1 ruled out); both layers patched + unit-tested. Deploy + live-verify pending.
+**Status:** ✅ FIXED + DEPLOYED + LIVE-VERIFIED 2026-06-03 (master `88b3b2e9`). Root cause = H2, refined to the DB-state Caddy path (H1 ruled out). Both layers patched + tested.
+
+**LIVE VERIFICATION (Mini PC, 2026-06-03 after restart):**
+- `n8n-bruce.livinity.io` via public CF-tunnel edge → **200** (whole-app public, no login). Caddyfile block = header-stripped `reverse_proxy :5678`, no `forward_auth`.
+- Control `open-webui-bruce.livinity.io` (Redis sub, no setting) → **302 → /login** (still gated).
+- Control `adguard-home-bruce.livinity.io` (DB-state sub, no setting) → **302 → /login** (still gated — proves DB-state subs re-derive correctly and stay fail-closed without a setting).
 **Severity:** Feature-broken (no security regression — apps stay GATED, fail-closed)
 
 ## RESOLUTION (2026-06-03)
