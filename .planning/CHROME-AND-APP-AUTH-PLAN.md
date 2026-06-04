@@ -12,7 +12,19 @@
 
 ---
 
-## SORUN 1 — Gated app'e tıklayınca `bruce.livinity.io`'ya redirect
+## SORUN 1 — Gated app'e tıklayınca `bruce.livinity.io`'ya redirect — ✅ SHIPPED + LIVE-VERIFIED 2026-06-04 (master `a6edc119`)
+
+**Çözüm: Seçenek A (cross-subdomain SSO bounce) uygulandı + deploy edildi + canlı doğrulandı.**
+- `jwt.ts` signSsoToken/verifySsoToken (30s, audience `livinityd-sso`, host+identity+jti bağlı).
+- `server/sso-handshake.ts` saf open-redirect/cross-tenant guard (`isOwnAppHost` / `parseSsoReturnTarget` / `sanitizeSsoPath`).
+- `server/index.ts` `GET /__livos_sso` (apex: session doğrula → tek-kullanım token → bounce) + `GET /__livos_auth` (app host: token tüket → host-scoped cookie set → geri dön). jti tek-kullanım Redis GETDEL.
+- `caddy.ts` gated bloklara ungated `handle /__livos_auth*` → :8080 carve-out + 401 redirect `/login` → `/__livos_sso`.
+- Testler: 128 (jwt SSO aud/exp/cross-type, sso-handshake guard'lar, caddy emit).
+- **Canlı doğrulama (open-webui):** cookie-yok → `/__livos_sso`'ya 302 (login değil); login'li tam zincir → **200 (app)**; token replay → 401 (tek-kullanım); foreign return → 400 (open-redirect guard); cookie host-only (Domain yok). Apex 200, public/whole-app blokları değişmedi.
+
+---
+
+### (Orijinal teşhis — referans)
 
 ### Kök neden (KESİN — kanıtlandı)
 `user/routes.ts:206-221` (Phase **257-04 / LIVOS-023**): `LIVINITY_SESSION` cookie'si bilinçli **host-only** yapıldı (`domain` attribute'u düşürüldü). Gerekçe güvenlik: geniş `.livinity.io` cookie'si session JWT'yi **paylaşılan platforma** (`livinity.io`, `apps.livinity.io`) ve **diğer kiracılara** sızdırıyordu.
