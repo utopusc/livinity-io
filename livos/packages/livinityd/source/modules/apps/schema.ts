@@ -77,6 +77,40 @@ export const AppManifestSchema = z.object({
 	 */
 	requiresLocalAiClis: z.boolean().optional(),
 	/**
+	 * Phase 258 WS-A — the app AUTHOR's declaration that this app SUPPORTS public
+	 * (login-bypassed) access, plus the suggested public surface. This is NOT the
+	 * per-install enable toggle — declaring it does not expose anything. The
+	 * operator's per-install setting (persisted on the Redis SubdomainConfig by
+	 * 258-03) is merged with this declaration by resolvePublicAccess() into the
+	 * single effective PublicAccessConfig the Caddy emitter (258-02) consumes.
+	 *   - mode: 'none' (default/private) | 'whole-app' (drop the gated catch-all —
+	 *     for apps with their own login) | 'paths' (specific prefixes public on an
+	 *     otherwise-gated subdomain, e.g. Cal.com booking pages).
+	 *   - paths: author-suggested public prefixes (used to pre-fill the UI and as a
+	 *     fallback when the operator picks 'paths' without overriding the list).
+	 *   - hasOwnAuth: advisory signal that the app protects its own dashboard (e.g.
+	 *     Cal.com/Gitea/Vaultwarden); surfaced in the 258-04 confirm dialog. Never a
+	 *     substitute for the server-side forbidden-app guard (258-03).
+	 * Optional; omitted = the app never supports public access (behaves as today).
+	 */
+	publicAccess: z
+		.object({
+			mode: z.enum(['none', 'whole-app', 'paths']),
+			paths: z.array(z.string()).optional(),
+			hasOwnAuth: z.boolean().optional(),
+		})
+		.optional(),
+	/**
+	 * Phase 258 WS-A — hard marker that this app must NEVER be exposed publicly,
+	 * regardless of any operator toggle. Set on the admin/host-access app class
+	 * (alongside the runtime signals 258-03 also checks: requiresLocalAiClis,
+	 * docker.sock / privileged / network_mode:host, and the 256-04 daemon-bearer
+	 * apps). The enable-public API (258-03) rejects these and the UI (258-04)
+	 * locks the toggle with a reason. Optional; absence does not by itself make an
+	 * app public — public access is opt-in only.
+	 */
+	neverPublic: z.boolean().optional(),
+	/**
 	 * Optional install-time configuration. `subdomain` overrides the auto-derived
 	 * Caddy subdomain (defaults to app id). `environmentOverrides` declares fields
 	 * the install dialog must prompt for and pass through to the compose `environment`
