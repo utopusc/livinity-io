@@ -4,6 +4,10 @@ import {promisify} from 'node:util'
 import fse from 'fs-extra'
 import {$} from 'execa'
 import {ensureFirewallPorts} from './firewall.js'
+// Phase 258 WS-A (258-01) — type-only import of the resolved public-access shape.
+// `import type` erases at compile time, so caddy.ts gains NO runtime dependency on
+// the apps module; it only carries the field shape through SubdomainConfig.
+import type {PublicAccessConfig} from '../apps/public-access.js'
 
 const execAsync = promisify(exec)
 
@@ -160,6 +164,18 @@ export interface SubdomainConfig {
 	 * through Redis so it survives regen.
 	 */
 	upstreamBearer?: string
+	/**
+	 * Phase 258 WS-A — the RESOLVED public-access config for this install. Absent =
+	 * fully gated (256-04 forward_auth unchanged, SC5). When present + mode!=='none',
+	 * the 258-02 emitter splits the subdomain block into public handle blocks
+	 * (header-stripped: -Remote-User -Remote-Role -X-Daemon-Bearer) + a gated
+	 * catch-all that keeps forward_auth + daemon-bearer injection. Populated by
+	 * registerAppSubdomain (258-03) from the per-install operator setting via
+	 * resolvePublicAccess; round-trips through Redis like upstreamBearer.
+	 *
+	 * 258-01 adds the field ONLY — the emit carve-out that reads it is 258-02.
+	 */
+	publicAccess?: PublicAccessConfig
 }
 
 export interface CaddyConfig {
