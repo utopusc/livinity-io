@@ -1694,7 +1694,7 @@ export default class Apps {
 	 * Best-effort: a manifest/compose read failure yields a signal struct that
 	 * still carries the load-bearing flags it could read (never fails open).
 	 */
-	private async buildPublicForbiddenSignals(
+	async buildPublicForbiddenSignals(
 		appId: string,
 		upstreamBearer: string | undefined,
 	): Promise<{signals: PublicForbiddenSignals; manifest: any}> {
@@ -1714,6 +1714,18 @@ export default class Apps {
 			compose,
 		}
 		return {signals, manifest}
+	}
+
+	/**
+	 * Public read of an app's PublicForbiddenSignals + manifest for the
+	 * setPublicAccess/getPublicAccess routes — reads the 256-04 daemon bearer
+	 * itself so the route layer never needs the private readAppDaemonToken. The
+	 * ONE forbidden-input builder both apps.ts (computeEffectivePublicAccess) and
+	 * routes.ts (the 403 gate) feed into isPublicForbidden.
+	 */
+	async getPublicForbiddenSignals(appId: string): Promise<{signals: PublicForbiddenSignals; manifest: any}> {
+		const upstreamBearer = await this.readAppDaemonToken(appId)
+		return this.buildPublicForbiddenSignals(appId, upstreamBearer)
 	}
 
 	/**
