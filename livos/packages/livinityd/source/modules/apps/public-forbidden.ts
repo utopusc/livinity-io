@@ -41,6 +41,8 @@
 // signals (it already reads the manifest + compose + the daemon token).
 // ──────────────────────────────────────────────────────────────────────────
 
+import {resolvePublicAccess, type PublicAccessConfig, type PublicAccessInstallSetting} from './public-access.js'
+
 /**
  * Why an app is public-forbidden. The order here is the deterministic reporting
  * order in isPublicForbidden: LOAD-BEARING first, DEFENSE-IN-DEPTH second.
@@ -150,4 +152,41 @@ export function isPublicForbidden(
 	if (composeReason) return {forbidden: true, reason: composeReason}
 
 	return {forbidden: false}
+}
+
+/** The author-declared manifest shape resolvePublicAccess reads (structural subset). */
+type ManifestPublicDeclaration = {
+	publicAccess?: {mode: 'none' | 'whole-app' | 'paths'; paths?: string[]; hasOwnAuth?: boolean}
+	neverPublic?: boolean
+}
+
+/**
+ * The ONE effective-public-access decision both call sites reuse (Task 2
+ * registerAppSubdomain wiring + Task 3 getPublicAccess read side):
+ *
+ *   1. isPublicForbidden(signals) → forbidden ⇒ return undefined (NEVER public,
+ *      fail-closed). This is the re-assert that defeats a stale/forged persisted
+ *      setting (T-258C-03): even if a public setting survives on Redis, a now-
+ *      forbidden app (e.g. an update added requiresLocalAiClis, or the daemon
+ *      bearer is present) is forced back to private on every regen.
+ *   2. else resolvePublicAccess(manifest, setting). When the resolved mode is
+ *      'none' (no operator opt-in) ⇒ return undefined so SubdomainConfig.publicAccess
+ *      is OMITTED and the emit is the fully-gated 256-04 block (default private, SC5).
+ *   3. else return the resolved PublicAccessConfig to thread onto SubdomainConfig.
+ *
+ * Pure — the caller supplies the forbidden signals (manifest flags + daemon
+ * bearer + the compose it chose to read), the manifest, and the persisted setting.
+ */
+export function effectivePublicAccess(
+	signals: PublicForbiddenSignals,
+	manifest: ManifestPublicDeclaration | null | undefined,
+	installSetting: PublicAccessInstallSetting | null | undefined,
+): PublicAccessConfig | undefined {
+	// Re-assert never-public on EVERY call — a forbidden app can never be public,
+	// regardless of any persisted/forged setting (fail-closed).
+	if (isPublicForbidden(signals).forbidden) return undefined
+
+	const resolved = resolvePublicAccess(manifest, installSetting)
+	if (resolved.mode === 'none') return undefined
+	return resolved
 }

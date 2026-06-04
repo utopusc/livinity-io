@@ -27,6 +27,8 @@ import {
 import {startCredEgressProxyIfNeeded} from './cred-egress-proxy.js'
 import {sanitizeNonBuiltinCompose, ComposeRejected} from './compose-sanitizer.js'
 import {assertInstallAllowed, InstallForbidden} from './install-admin-gate.js'
+import {effectivePublicAccess, isPublicForbidden, type PublicForbiddenSignals} from './public-forbidden.js'
+import type {PublicAccessConfig, PublicAccessInstallSetting} from './public-access.js'
 import {
 	chooseCredentialPath,
 	mintMeteredKeyForApp,
@@ -53,6 +55,15 @@ import {
 // Redis keys for domain config
 const REDIS_DOMAIN_KEY = 'livos:domain:config'
 const REDIS_SUBDOMAINS_KEY = 'livos:domain:subdomains'
+// Phase 258 WS-C (258-03) — per-install public-access operator setting, persisted
+// on a SubdomainConfig-ADJACENT sibling key (same `livos:domain:` namespace +
+// same Redis store registerAppSubdomain writes the SubdomainConfig to). Chosen as
+// a sibling key (not a field on the SubdomainConfig entry) so the setting survives
+// even when no subdomain row exists yet (set-before-register) and so a stale
+// public setting on a now-forbidden app is independently inspectable; the
+// fail-closed re-assert in computeEffectivePublicAccess guarantees a forbidden app
+// can never emit a public block regardless of this stored value (T-258C-03).
+const REDIS_PUBLIC_ACCESS_PREFIX = 'livos:apps:public-access:'
 const REDIS_PLATFORM_API_KEY = 'livos:platform:api_key'
 // Phase 210 Bug C: this constant was referenced by reportInstallEvent() but
 // never declared; tsx hides the bug as a runtime ReferenceError caught by the
@@ -1640,6 +1651,94 @@ export default class Apps {
 		}
 	}
 
+	// ─── Phase 258 WS-C (258-03) — public-access persistence + re-assert ─────
+
+	/**
+	 * Read the per-install public-access operator setting for an app from Redis
+	 * (the SubdomainConfig-adjacent sibling key). Returns undefined when the
+	 * operator never opted in (→ default private / mode 'none'). Best-effort:
+	 * never throws — a parse/read error fails CLOSED to undefined (private).
+	 */
+	async getPublicAccessSetting(appId: string): Promise<PublicAccessInstallSetting | undefined> {
+		try {
+			const raw = await this.#livinityd.ai.redis.get(`${REDIS_PUBLIC_ACCESS_PREFIX}${appId}`)
+			if (!raw) return undefined
+			return JSON.parse(raw) as PublicAccessInstallSetting
+		} catch (error) {
+			this.logger.error(`getPublicAccessSetting: failed for ${appId}`, error)
+			return undefined
+		}
+	}
+
+	/**
+	 * Persist the per-install public-access operator setting (the runtime toggle
+	 * 258-03's setPublicAccess mutation writes BEFORE re-registering the subdomain).
+	 * Stored as-is; the fail-closed re-assert in computeEffectivePublicAccess is
+	 * what guarantees a forbidden app can never emit a public block even if a stale
+	 * non-'none' value lands here.
+	 */
+	async setPublicAccessSetting(appId: string, setting: PublicAccessInstallSetting): Promise<void> {
+		await this.#livinityd.ai.redis.set(`${REDIS_PUBLIC_ACCESS_PREFIX}${appId}`, JSON.stringify(setting))
+	}
+
+	/**
+	 * Build the PublicForbiddenSignals for an app from its manifest + parsed
+	 * compose + the (already-read) daemon bearer.
+	 *
+	 * WHICH COMPOSE (NOTE-2): we read the app's on-disk compose via
+	 * `app.readCompose()`. That compose may have been SANITIZED at install
+	 * (privileged/network_mode:host deleted, docker.sock rejected), so the compose
+	 * signals here are DEFENSE-IN-DEPTH only. The LOAD-BEARING guarantee comes from
+	 * manifest.neverPublic / manifest.requiresLocalAiClis / the daemon bearer —
+	 * those are NOT stripped and are sufficient to protect the dangerous classes.
+	 * Best-effort: a manifest/compose read failure yields a signal struct that
+	 * still carries the load-bearing flags it could read (never fails open).
+	 */
+	private async buildPublicForbiddenSignals(
+		appId: string,
+		upstreamBearer: string | undefined,
+	): Promise<{signals: PublicForbiddenSignals; manifest: any}> {
+		let manifest: any
+		let compose: any
+		try {
+			const app = this.getApp(appId)
+			manifest = await app.readManifest().catch(() => undefined)
+			compose = await app.readCompose().catch(() => undefined)
+		} catch {
+			// getApp throws for an unregistered app — fall through with whatever we have.
+		}
+		const signals: PublicForbiddenSignals = {
+			neverPublic: manifest?.neverPublic === true,
+			requiresLocalAiClis: manifest?.requiresLocalAiClis === true,
+			hasDaemonBearer: !!upstreamBearer,
+			compose,
+		}
+		return {signals, manifest}
+	}
+
+	/**
+	 * Compute the EFFECTIVE PublicAccessConfig for an app install — the value that
+	 * rides on SubdomainConfig.publicAccess. Re-asserts isPublicForbidden on EVERY
+	 * call (fail-closed against a stale/forged persisted setting, T-258C-03): a
+	 * forbidden app returns undefined (private) regardless of the stored setting.
+	 * Otherwise resolves the persisted operator setting; returns undefined when the
+	 * resolved mode is 'none' so the emit stays the fully-gated 256-04 block (SC5).
+	 */
+	async computeEffectivePublicAccess(
+		appId: string,
+		upstreamBearer: string | undefined,
+	): Promise<PublicAccessConfig | undefined> {
+		try {
+			const {signals, manifest} = await this.buildPublicForbiddenSignals(appId, upstreamBearer)
+			const setting = await this.getPublicAccessSetting(appId)
+			return effectivePublicAccess(signals, manifest, setting)
+		} catch (error) {
+			// Never fail open to public — any error → private.
+			this.logger.error(`computeEffectivePublicAccess: failed for ${appId}`, error)
+			return undefined
+		}
+	}
+
 	async registerAppSubdomain(appId: string, port: number, subdomain?: string, fullHost?: string): Promise<void> {
 		const domainConfig = await this.getDomainConfig()
 		if (!domainConfig?.active) {
@@ -1661,6 +1760,15 @@ export default class Apps {
 		// gated. Persisted on the Redis SubdomainConfig so it survives regen.
 		const upstreamBearer = await this.readAppDaemonToken(appId)
 
+		// Phase 258 WS-C (258-03): resolve the persisted per-install public-access
+		// setting → effective PublicAccessConfig, re-asserting isPublicForbidden so a
+		// forbidden app (load-bearing: neverPublic/requiresLocalAiClis/daemon-bearer;
+		// defense-in-depth: compose docker.sock/privileged/host-net) NEVER gets a
+		// public block emitted even if a stale/forged setting exists (fail-closed,
+		// T-258C-03). undefined → SubdomainConfig.publicAccess omitted → the
+		// fully-gated 256-04 block is emitted exactly as today (default private, SC5).
+		const publicAccess = await this.computeEffectivePublicAccess(appId, upstreamBearer)
+
 		// Check if already exists
 		const existingIdx = subdomains.findIndex((s) => s.appId === appId)
 		const newSub: SubdomainConfig = {
@@ -1670,6 +1778,7 @@ export default class Apps {
 			enabled: true,
 			...(fullHost ? {host: fullHost.toLowerCase()} : {}),
 			...(upstreamBearer ? {upstreamBearer} : {}),
+			...(publicAccess ? {publicAccess} : {}),
 		}
 
 		if (existingIdx >= 0) {
