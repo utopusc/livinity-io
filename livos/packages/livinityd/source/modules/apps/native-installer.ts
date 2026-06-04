@@ -29,8 +29,9 @@
 
 import {randomUUID} from 'crypto'
 import {spawn} from 'child_process'
-import {createWriteStream, promises as fs} from 'fs'
+import {createWriteStream, existsSync, promises as fs} from 'fs'
 import {createHash} from 'crypto'
+import {homedir} from 'os'
 import * as path from 'path'
 import * as https from 'https'
 import * as http from 'http'
@@ -167,9 +168,19 @@ async function sha256File(file: string): Promise<string> {
 }
 
 function userHome(userId: string): string {
-	// Convention matches Mini PC layout — single-user box uses /home/bruce;
-	// the userId here is the livos DB id, mapped 1:1 in v37.
-	return `/home/${userId === 'bruce' ? 'bruce' : userId}`
+	// Phase 259 BUGFIX — native apps install into the OS DESKTOP user's home: the
+	// `:1` XFCE session runs as that user and its dock / .desktop launchers + the
+	// installed binary must live there to be launchable. The LivOS DB `userId` is a
+	// UUID (or the literal 'admin') — NOT an OS account — so the old
+	// `/home/<userId>` resolved to a non-existent dir and EVERY native install on
+	// the single-user Mini PC silently failed at writeDesktopFile (EACCES under the
+	// root-owned /home), leaving no .desktop + no Redis config. Resolve the home of
+	// the user livinityd runs as (the desktop user, bruce); honor `userId` ONLY when
+	// it is a real OS username whose home exists (defensive multi-user path).
+	if (userId && /^[a-z_][a-z0-9_-]*$/.test(userId) && existsSync(`/home/${userId}`)) {
+		return `/home/${userId}`
+	}
+	return process.env.HOME || homedir() || '/home/bruce'
 }
 
 function writeDesktopFile(
