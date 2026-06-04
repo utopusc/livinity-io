@@ -18,9 +18,18 @@ while the setting key `livos:apps:public-access:n8n` was `{"mode":"whole-app","p
   app would keep a stale public block across a restart).
 
 **Fixes shipped:**
-1. **Layer 2 (`apps.ts` `rebuildCaddyFromState`):** re-derive `publicAccess` per redis sub via
-   `computeEffectivePublicAccess(r.appId, r.upstreamBearer)` on EVERY regen, dropping the cached
-   field. Restart now reflects the live setting AND re-asserts isPublicForbidden every emit.
+1. **Layer 2 (`apps.ts` `rebuildCaddyFromState`):** re-derive `publicAccess` for EVERY emitted sub
+   (the final `merged` list) via `computeEffectivePublicAccess(appId, bearer)` on EVERY regen,
+   dropping the cached field. Restart now reflects the live setting AND re-asserts
+   isPublicForbidden every emit.
+   - **First attempt (commit aee36cb0) was INSUFFICIENT** — it re-derived only over `redisSubs`.
+     Live deploy still emitted the gated n8n block. Root cause refined: **n8n is a
+     `user_app_instances` row** (Phase 218 orphan reconciliation backfills single-user installs
+     into the multi-user table), so it flows through `buildCaddyConfigFromState` (the DB-state
+     path), whose subs carry NO `publicAccess`. In the merge, the DB-state n8n (host
+     `n8n-bruce.livinity.io`) shadows the Redis n8n sub (`stateHosts.has(host)` → `continue`), so
+     the Redis-only re-derive never saw it. Fixed by re-deriving over the **merged** list (both
+     sources), reading the daemon bearer fresh for the forbidden re-assert.
 2. **Layer 1 (`public-access-section.tsx`):** "Enable public paths" now rejects an empty prefix
    list (extracted pure `parsePublicPathsInput`) — the empty list was saving `mode:'paths',paths:[]`
    which exposes nothing yet reads as "public". Points the operator at "Make whole app public".
