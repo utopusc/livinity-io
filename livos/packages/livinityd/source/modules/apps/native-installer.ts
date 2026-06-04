@@ -59,6 +59,11 @@ import {
 type NativeManifest = {
 	install:
 		| {primary: 'apt'; aptPackages: string[]}
+		// Phase 259 — for apps NOT in the default Ubuntu repos (VS Code, Brave, …):
+		// download the official .deb and `apt-get install -y <file>` (apt resolves
+		// deps). Works for EVERY install (no per-box manual repo setup). Optional
+		// sha256 pin.
+		| {primary: 'deb'; debUrl: string; debSha256?: string}
 		| {primary: 'appimage'; appimageUrl: string; appimageSha256: string}
 	launch: {
 		binaryPath: string
@@ -288,6 +293,36 @@ export class NativeInstaller implements InstallHandler<'native'> {
 					`apt-get install -y ${pkgs.join(' ')} exited ${code}`,
 					stderr,
 				)
+			}
+		} else if (manifest.install.primary === 'deb') {
+			// Phase 259 — download the official .deb and let apt install it (resolving
+			// dependencies). For apps NOT in the default Ubuntu repos (VS Code, Brave)
+			// — works on every box without manual per-machine repo setup.
+			const {debUrl, debSha256} = manifest.install
+			if (!debUrl || !/^https?:\/\//.test(debUrl)) {
+				return fail(app.id, 'native', 'manifest_invalid', `debUrl missing or not http(s): ${String(debUrl)}`)
+			}
+			const tmpDeb = path.join('/tmp', `livos-native-${app.id.replace(/[^a-zA-Z0-9_-]/g, '')}.deb`)
+			progress(15, `Downloading ${debUrl}`)
+			try {
+				await downloadToFile(debUrl, tmpDeb)
+			} catch (err) {
+				return fail(app.id, 'native', 'network_failed', `download failed: ${err instanceof Error ? err.message : String(err)}`)
+			}
+			if (debSha256 && debSha256.length === 64) {
+				progress(45, 'Verifying SHA-256')
+				const actual = await sha256File(tmpDeb)
+				if (actual !== debSha256.toLowerCase()) {
+					await fs.unlink(tmpDeb).catch(() => {})
+					return fail(app.id, 'native', 'signature_invalid', `sha256 mismatch — manifest=${debSha256} actual=${actual}`)
+				}
+			}
+			progress(60, 'Installing .deb (apt resolves dependencies)')
+			const {code, stderr} = await execCmd('sudo', ['-n', '/usr/bin/apt-get', 'install', '-y', tmpDeb], ctx.logger)
+			await fs.unlink(tmpDeb).catch(() => {})
+			if (code !== 0) {
+				const sudoDenied = stderr.includes('sudo:') || stderr.includes('password is required')
+				return fail(app.id, 'native', sudoDenied ? 'sudo_denied' : 'apt_failed', `apt-get install -y <deb> exited ${code}`, stderr)
 			}
 		} else if (manifest.install.primary === 'appimage') {
 			const {appimageUrl, appimageSha256} = manifest.install
