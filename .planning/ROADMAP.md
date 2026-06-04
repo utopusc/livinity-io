@@ -3614,6 +3614,38 @@ Plans:
 
 ---
 
+### Phase 258: Public App Access — selective no-auth links (extends the 256-04 forward_auth gate) — 🟡 PLANNING 2026-06-03
+
+**Goal:** Let an operator expose an app — or specific paths of it — to the PUBLIC internet WITHOUT the LivOS login, for share-by-link use cases (Cal.com booking pages, public status pages, shared dashboards). Today the 256-04 `forward_auth /auth/verify` gate protects EVERY app subdomain; this phase adds a **secure-by-default, opt-in** carve-out so chosen apps/paths skip the gate — while making it IMPOSSIBLE to expose admin/host-access apps or to leak the daemon bearer onto a public route. Grounded in real-world patterns (Cal.com two-layer auth, Caddy mutually-exclusive `handle` blocks, YunoHost `visitors`+`protected` model, Cloudflare Access path-bypass; see RESEARCH).
+
+- **WS-A — Manifest + config model.** Add manifest fields: `publicAccess` (`mode: none|whole-app|paths`, `paths: string[]` of public prefixes the app author declares, `hasOwnAuth: boolean`) and `neverPublic: true` (admin/host-access apps). Add a per-install operator setting (the chosen public mode + paths) persisted in the app-instance config. Touch: `apps/schema.ts`, `apps/apps.ts`, `apps/routes.ts`, the user_app_instances store.
+- **WS-B — Caddy emit (the carve-out).** In `caddy.ts`, for a public-configured app emit mutually-exclusive `handle` blocks: each public path prefix → `reverse_proxy` to the container **with `request_header -Remote-User -Remote-Role -X-Daemon-Bearer`** (strip identity + bearer); the catch-all `handle` keeps `forward_auth /auth/verify` + daemon-bearer injection unchanged. Whole-app-public drops the gated block but KEEPS the header-strip. Touch: `domain/caddy.ts` (+ the 256-04 forward_auth + daemon-bearer emit path).
+- **WS-C — Hard guardrails (the security spine).** Server-side enforce (not just UI): an app is PUBLIC-FORBIDDEN if `neverPublic`, OR it has docker.sock / privileged / `network_mode:host` / `requiresLocalAiClis` / receives the daemon bearer in its standard flow. The public toggle is rejected at the API for these, and the daemon bearer is NEVER injected into a public `handle` block. Default = private; opt-in only; the app OWNER (or admin) may enable for their own non-forbidden app. Interlocks with 257 WS-C sanitizer + 256-04 bearer injection. Touch: `apps/routes.ts`, `apps/apps.ts`, `caddy.ts`, the daemon-bearer inject path.
+- **WS-D — UX (Share dialog).** A "Public access" section in the app Share/settings dialog: locked+disabled with a reason for `neverPublic` apps; pre-filled suggested public paths from the manifest for `paths`-mode apps; a whole-app toggle with an "anyone with the link can reach this; the app has [its own / no] login" confirmation; show the generated public URL. Runtime (Caddy reload), no reinstall. Touch: UI Share dialog + app settings.
+
+**Plans:** 5 plans (4 waves)
+- [ ] 258-01-PLAN.md — WS-A: manifest fields (publicAccess/neverPublic) + resolvePublicAccess resolver + SubdomainConfig.publicAccess contract (wave 1)
+- [ ] 258-02-PLAN.md — WS-B: caddy.ts emit carve-out (mutually-exclusive handles + non-configurable bearer/identity strip + byte-equivalent gated catch-all) (wave 2)
+- [ ] 258-03-PLAN.md — WS-C: isPublicForbidden (ONE source of truth) + setPublicAccess owner/admin-gated 403 mutation + registerAppSubdomain wiring (wave 2)
+- [ ] 258-04-PLAN.md — WS-D: Share-dialog PublicAccessSection (locked/forbidden, paths pre-fill, whole-app confirm, public URL) (wave 3)
+- [ ] 258-05-PLAN.md — Integration + Mini-PC deploy gate + SC1-SC6 walk incl. Cal.com end-to-end + bearer-absent security probes (wave 4)
+
+**Depends on:** Phase 256 (forward_auth gate + daemon bearer), Phase 257 (compose sanitizer + admin-gate). `SECURITY-AUDIT.md` interlocks.
+
+**Out of scope:** rate-limiting / WAF for public routes (future); per-visitor analytics; custom public domains (Runtipi-style) — reuse the existing subdomain.
+
+**Success criteria:**
+- SC1 — An app configured `mode:paths` with `["/booking/","/[a-z][^/]*/"]`: those paths reachable with NO LivOS session (200, app content); other paths still 302 → /login.
+- SC2 — A `whole-app` public app is reachable without login AND the daemon bearer / `Remote-User` headers are absent on every request to it (verified at the container).
+- SC3 — A `neverPublic` app (OpenHands, Portainer, any docker.sock/daemon-bearer/requiresLocalAiClis app) → the public toggle is REJECTED server-side + hidden/locked in the UI.
+- SC4 — Public `handle` blocks strip `Remote-User`/`Remote-Role`/`X-Daemon-Bearer`; a client cannot inject them to reach a privileged backend.
+- SC5 — Default unchanged: apps without `publicAccess` stay fully gated; only the owner/admin can enable.
+- SC6 — Cal.com end-to-end: `/[user]` + `/booking/*` public; `/settings` + `/event-types` still protected (by Cal's own login).
+
+**UAT:** operator installs Cal.com (or a test app), enables public access on the booking paths, opens the booking link in a private window (no LivOS login) → booking page loads; the dashboard path redirects to the app's own login; a `neverPublic` app shows the toggle locked.
+
+---
+
 ## v44 — Liv AI Tooling Depth (OPENED 2026-05-28)
 
 **Milestone goal:** Production-depth pass on v43 deliverables — Terminal v2 (multi-session + reattach + TTL GC), Luse skill set v2 (professional reference docs), Luse display lifecycle (create/list/kill virtual displays + place apps).
