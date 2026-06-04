@@ -1388,23 +1388,37 @@ export default class Apps {
 				if (!r.enabled) continue
 				const candidateHost = (r.host ?? (stateConfig.mainDomain ? `${r.subdomain}.${stateConfig.mainDomain}` : '')).toLowerCase()
 				if (candidateHost && stateHosts.has(candidateHost)) continue
-				// Phase 258 HOTFIX — re-derive publicAccess FRESH on every regen instead of
-				// trusting the cached SubdomainConfig.publicAccess. The cached field is only
-				// re-threaded by a registerAppSubdomain call, so a plain `systemctl restart`
-				// (which runs this regen, not registerAppSubdomain) — or any setting change
-				// that didn't re-register — would keep emitting the STALE public shape. The
-				// live operator setting lives in livos:apps:public-access:<appId>; resolve it
-				// here so a restart reflects it. This also re-asserts isPublicForbidden
-				// (fail-closed) on EVERY emit, so a now-forbidden app loses a stale public
-				// block at restart, not only at the next install/registerAppSubdomain.
-				const publicAccess = await this.computeEffectivePublicAccess(r.appId, r.upstreamBearer)
-				const {publicAccess: _stale, ...rest} = r
-				merged.push(publicAccess ? {...rest, publicAccess} : rest)
+				merged.push(r)
 			}
+
+			// Phase 258 HOTFIX — re-derive publicAccess FRESH for EVERY emitted sub,
+			// keyed by appId, regardless of which source it came from. This MUST run
+			// over the merged list (not just the Redis subs) because:
+			//   1. DB-state subs (buildCaddyConfigFromState, from user_app_instances)
+			//      NEVER carry publicAccess — and a single-user app can live there via
+			//      the Phase 218 orphan reconciliation (the n8n symptom: n8n is a
+			//      user_app_instances row, so it took the DB-state path and shadowed the
+			//      Redis sub in the merge above, dropping the operator's setting).
+			//   2. The cached SubdomainConfig.publicAccess on Redis subs is only
+			//      re-threaded by a registerAppSubdomain call, so a plain restart (which
+			//      runs this regen, not registerAppSubdomain) would keep the STALE shape.
+			// The live operator setting lives in livos:apps:public-access:<appId>;
+			// resolve it here so a restart reflects it. Read the daemon bearer fresh for
+			// the forbidden re-assert (DB-state subs carry none) — isPublicForbidden is
+			// re-asserted on EVERY emit (fail-closed), so a now-forbidden app loses any
+			// stale public block at restart, not only at the next install.
+			const resolvedSubs: SubdomainConfig[] = await Promise.all(
+				merged.map(async (s) => {
+					const bearer = s.upstreamBearer ?? (await this.readAppDaemonToken(s.appId))
+					const publicAccess = await this.computeEffectivePublicAccess(s.appId, bearer)
+					const {publicAccess: _stale, ...rest} = s
+					return publicAccess ? {...rest, publicAccess} : rest
+				}),
+			)
 
 			const caddyConfig: CaddyConfig = {
 				mainDomain: stateConfig.mainDomain,
-				subdomains: merged,
+				subdomains: resolvedSubs,
 			}
 
 			const multiUserEnabled = await this.#livinityd.ai.redis.get('livos:system:multi_user')
