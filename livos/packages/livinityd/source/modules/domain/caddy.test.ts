@@ -1246,3 +1246,343 @@ describe('generateFullCaddyfile — Phase 257-06 LIVOS-035 upstreamBearer charse
 		expect(out).toContain('header_up Authorization "Bearer OD_SECRET_TOKEN"')
 	})
 })
+
+// ─── Phase 258-02 WS-B — public-access carve-out (the security spine) ─────────
+// Helper: slice the single-user subdomain block (fullDomain { … }) out of the
+// full Caddyfile by counting braces from the block header.
+function sliceSubdomainBlock(out: string, fullDomain: string): string {
+	const start = out.indexOf(`${fullDomain} {`)
+	if (start === -1) throw new Error(`block for ${fullDomain} not found`)
+	let depth = 0
+	let i = start
+	for (; i < out.length; i++) {
+		if (out[i] === '{') depth++
+		else if (out[i] === '}') {
+			depth--
+			if (depth === 0) {
+				i++
+				break
+			}
+		}
+	}
+	return out.slice(start, i)
+}
+
+describe('generateFullCaddyfile — Phase 258-02 WS-B public-access carve-out', () => {
+	const baseDomain = 'bruce.livinity.io'
+
+	// ── Task 1: paths-mode + multi-user hardening ──
+	test('T1 — paths mode emits one public handle per prefix BEFORE the gated catch-all', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: baseDomain,
+				subdomains: [
+					{
+						subdomain: 'cal',
+						appId: 'calcom',
+						port: 9300,
+						enabled: true,
+						publicAccess: {mode: 'paths', paths: ['/booking/', '/d/'], hasOwnAuth: false},
+					},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		const block = sliceSubdomainBlock(out, `cal.${baseDomain}`)
+		// each public prefix gets a handle + reverse_proxy to the container
+		expect(block).toContain('handle /booking/* {')
+		expect(block).toContain('handle /d/* {')
+		expect(block).toContain('reverse_proxy 127.0.0.1:9300')
+		// the gated catch-all is preserved and appears AFTER both public handles
+		const bookingIdx = block.indexOf('handle /booking/* {')
+		const dIdx = block.indexOf('handle /d/* {')
+		const gateIdx = block.indexOf('forward_auth')
+		expect(bookingIdx).toBeGreaterThan(-1)
+		expect(dIdx).toBeGreaterThan(-1)
+		expect(gateIdx).toBeGreaterThan(bookingIdx)
+		expect(gateIdx).toBeGreaterThan(dIdx)
+	})
+
+	test('T2 — every public block strips Remote-User / Remote-Role / X-Daemon-Bearer', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: baseDomain,
+				subdomains: [
+					{
+						subdomain: 'cal',
+						appId: 'calcom',
+						port: 9300,
+						enabled: true,
+						publicAccess: {mode: 'paths', paths: ['/booking/', '/d/'], hasOwnAuth: false},
+					},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		const block = sliceSubdomainBlock(out, `cal.${baseDomain}`)
+		// extract each public handle slice and assert the strip trio in EACH
+		for (const prefix of ['/booking/*', '/d/*']) {
+			const hStart = block.indexOf(`handle ${prefix} {`)
+			const hSlice = block.slice(hStart, block.indexOf('}', hStart + prefix.length))
+			expect(hSlice).toContain('request_header -Remote-User')
+			expect(hSlice).toContain('request_header -Remote-Role')
+			expect(hSlice).toContain('request_header -X-Daemon-Bearer')
+		}
+	})
+
+	test('T3 — gated catch-all preserved for paths mode (forward_auth + /auth/verify + redir)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: baseDomain,
+				subdomains: [
+					{
+						subdomain: 'cal',
+						appId: 'calcom',
+						port: 9300,
+						enabled: true,
+						publicAccess: {mode: 'paths', paths: ['/booking/'], hasOwnAuth: false},
+					},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		const block = sliceSubdomainBlock(out, `cal.${baseDomain}`)
+		expect(block).toContain('forward_auth 127.0.0.1:8080')
+		expect(block).toContain('uri /auth/verify')
+		expect(block).toContain('copy_headers Cookie')
+		expect(block).toContain(`redir https://${baseDomain}/login?redirect=`)
+		expect(block).toContain('reverse_proxy 127.0.0.1:9300')
+	})
+
+	test('T4 — daemon bearer is GATED-ONLY, never in a public handle block', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: baseDomain,
+				subdomains: [
+					{
+						subdomain: 'cal',
+						appId: 'calcom',
+						port: 9300,
+						enabled: true,
+						upstreamBearer: 'OD_SECRET_TOKEN',
+						publicAccess: {mode: 'paths', paths: ['/booking/'], hasOwnAuth: false},
+					},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		const block = sliceSubdomainBlock(out, `cal.${baseDomain}`)
+		// bearer present (gated path runs) but ONLY after the forward_auth gate
+		const bearerIdx = block.indexOf('header_up Authorization')
+		const gateIdx = block.indexOf('forward_auth')
+		expect(bearerIdx).toBeGreaterThan(-1)
+		expect(gateIdx).toBeGreaterThan(-1)
+		expect(bearerIdx).toBeGreaterThan(gateIdx)
+		// the public handle slice must NOT contain the bearer
+		const hStart = block.indexOf('handle /booking/* {')
+		const hSlice = block.slice(hStart, block.indexOf('forward_auth'))
+		expect(hSlice).not.toContain('header_up Authorization')
+		expect(hSlice).toContain('handle /booking/* {')
+	})
+
+	test('T5 — public handles emit BEFORE the gated handle (first-match ordering)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: baseDomain,
+				subdomains: [
+					{
+						subdomain: 'cal',
+						appId: 'calcom',
+						port: 9300,
+						enabled: true,
+						publicAccess: {mode: 'paths', paths: ['/booking/'], hasOwnAuth: false},
+					},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		const block = sliceSubdomainBlock(out, `cal.${baseDomain}`)
+		const publicIdx = block.indexOf('handle /booking/* {')
+		// the gated catch-all has no matcher: `\thandle {` (one tab, then `handle {`)
+		const gatedHandleIdx = block.indexOf('\thandle {')
+		expect(publicIdx).toBeGreaterThan(-1)
+		expect(gatedHandleIdx).toBeGreaterThan(-1)
+		expect(publicIdx).toBeLessThan(gatedHandleIdx)
+	})
+
+	test('T5b — hostile path prefix (brace/quote/whitespace) is skipped, never interpolated', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: baseDomain,
+				subdomains: [
+					{
+						subdomain: 'cal',
+						appId: 'calcom',
+						port: 9300,
+						enabled: true,
+						publicAccess: {
+							mode: 'paths',
+							paths: ['/booking/', '/x"\n}\n:80 {\nreverse_proxy http://attacker.example\n}'],
+							hasOwnAuth: false,
+						},
+					},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		expect(out).not.toContain('attacker.example')
+		// the clean prefix still emits
+		expect(out).toContain('handle /booking/* {')
+	})
+
+	test('T6 — NOTE-1: multi-user app block ALSO strips the three identity headers', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: baseDomain,
+				subdomains: [{subdomain: 'n8n', appId: 'n8n', port: 9001, enabled: true}],
+			},
+			true, // multi-user
+			false,
+			[],
+		)
+		const block = sliceSubdomainBlock(out, `n8n.${baseDomain}`)
+		expect(block).toContain('reverse_proxy 127.0.0.1:8080')
+		expect(block).toContain('request_header -Remote-User')
+		expect(block).toContain('request_header -Remote-Role')
+		expect(block).toContain('request_header -X-Daemon-Bearer')
+	})
+
+	// ── Task 2: whole-app mode + SC5 byte-equivalence ──
+	test('WA1 — whole-app: single reverse_proxy, NO forward_auth, strip present', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: baseDomain,
+				subdomains: [
+					{
+						subdomain: 'app',
+						appId: 'someapp',
+						port: 9400,
+						enabled: true,
+						publicAccess: {mode: 'whole-app', paths: [], hasOwnAuth: true},
+					},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		const block = sliceSubdomainBlock(out, `app.${baseDomain}`)
+		expect(block).toContain('reverse_proxy 127.0.0.1:9400')
+		expect(block).not.toContain('forward_auth')
+		expect(block).not.toContain('/auth/verify')
+		expect(block).toContain('request_header -Remote-User')
+		expect(block).toContain('request_header -Remote-Role')
+		expect(block).toContain('request_header -X-Daemon-Bearer')
+	})
+
+	test('WA2 — whole-app never bears the daemon token (bearer is gated-only)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: baseDomain,
+				subdomains: [
+					{
+						subdomain: 'app',
+						appId: 'someapp',
+						port: 9400,
+						enabled: true,
+						upstreamBearer: 'OD_SECRET_TOKEN',
+						publicAccess: {mode: 'whole-app', paths: [], hasOwnAuth: true},
+					},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		const block = sliceSubdomainBlock(out, `app.${baseDomain}`)
+		expect(block).not.toContain('header_up Authorization')
+		expect(block).not.toContain('OD_SECRET_TOKEN')
+	})
+
+	// SC5 — byte-equivalence: a non-public single-user app block is CHARACTER-
+	// identical to the pre-258 256-04 emit, with AND without the 257-06 bearer.
+	function expectedGatedBlock(domain: string, port: number, bearer?: string): string {
+		const bearerLines = bearer
+			? `\t\theader_up Authorization "Bearer ${bearer}"\n\t\theader_up Host 127.0.0.1:${port}\n\t\theader_up Origin http://127.0.0.1:${port}\n`
+			: ''
+		return `${domain} {
+\tforward_auth 127.0.0.1:8080 {
+\t\turi /auth/verify
+\t\tcopy_headers Cookie
+\t\t@bad status 401
+\t\thandle_response @bad {
+\t\t\tredir https://${baseDomain}/login?redirect={scheme}://{host}{uri}
+\t\t}
+\t}
+\treverse_proxy 127.0.0.1:${port} {
+${bearerLines}\t\tflush_interval -1
+\t\ttransport http {
+\t\t\tversions 1.1
+\t\t}
+\t}
+}`
+	}
+
+	test('SC5 — no publicAccess single-user block is byte-identical to 256-04 (no bearer)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: baseDomain,
+				subdomains: [{subdomain: 'n8n', appId: 'n8n', port: 9001, enabled: true}],
+			},
+			false,
+			false,
+			[],
+		)
+		const block = sliceSubdomainBlock(out, `n8n.${baseDomain}`)
+		expect(block).toBe(expectedGatedBlock(`n8n.${baseDomain}`, 9001))
+	})
+
+	test('SC5 — no publicAccess single-user block byte-identical WITH bearer (257-06 path)', () => {
+		const out = generateFullCaddyfile(
+			{
+				mainDomain: baseDomain,
+				subdomains: [
+					{subdomain: 'od', appId: 'od', port: 9200, enabled: true, upstreamBearer: 'OD_SECRET_TOKEN'},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		const block = sliceSubdomainBlock(out, `od.${baseDomain}`)
+		expect(block).toBe(expectedGatedBlock(`od.${baseDomain}`, 9200, 'OD_SECRET_TOKEN'))
+	})
+
+	test("SC5 — mode 'none' produces byte-identical output to no publicAccess", () => {
+		const withNone = generateFullCaddyfile(
+			{
+				mainDomain: baseDomain,
+				subdomains: [
+					{subdomain: 'n8n', appId: 'n8n', port: 9001, enabled: true, publicAccess: {mode: 'none', paths: [], hasOwnAuth: false}},
+				],
+			},
+			false,
+			false,
+			[],
+		)
+		const blockNone = sliceSubdomainBlock(withNone, `n8n.${baseDomain}`)
+		expect(blockNone).toBe(expectedGatedBlock(`n8n.${baseDomain}`, 9001))
+	})
+})
