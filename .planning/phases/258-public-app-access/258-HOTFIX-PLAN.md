@@ -1,8 +1,35 @@
 # Phase 258 — HOTFIX PLAN: public-access setting not reaching the Caddy emit
 
 **Created:** 2026-06-03 (handoff to next session)
-**Status:** OPEN — diagnosed, not yet fixed
+**Status:** FIXED 2026-06-03 — root cause confirmed H2 (H1 ruled out); both layers patched + unit-tested. Deploy + live-verify pending.
 **Severity:** Feature-broken (no security regression — apps stay GATED, fail-closed)
+
+## RESOLUTION (2026-06-03)
+
+**Live evidence settled it.** The n8n SubdomainConfig in Redis was
+`{"subdomain":"n8n","appId":"n8n",…,"publicAccess":{"mode":"paths","paths":[],"hasOwnAuth":false}}`
+while the setting key `livos:apps:public-access:n8n` was `{"mode":"whole-app","paths":[]}`.
+
+- **H1 (appId mismatch) — RULED OUT.** Subdomain `appId` = `n8n` = the setting key suffix. No mismatch.
+- **H2 (regen reads cached) — CONFIRMED.** `rebuildCaddyFromState` trusted the CACHED
+  `SubdomainConfig.publicAccess` (the stale `paths:[]` the UI wrote) instead of re-deriving from
+  the live setting. The fail-closed re-assert (`computeEffectivePublicAccess`) only ran in
+  `registerAppSubdomain`, never on a plain restart — also a latent security gap (a now-forbidden
+  app would keep a stale public block across a restart).
+
+**Fixes shipped:**
+1. **Layer 2 (`apps.ts` `rebuildCaddyFromState`):** re-derive `publicAccess` per redis sub via
+   `computeEffectivePublicAccess(r.appId, r.upstreamBearer)` on EVERY regen, dropping the cached
+   field. Restart now reflects the live setting AND re-asserts isPublicForbidden every emit.
+2. **Layer 1 (`public-access-section.tsx`):** "Enable public paths" now rejects an empty prefix
+   list (extracted pure `parsePublicPathsInput`) — the empty list was saving `mode:'paths',paths:[]`
+   which exposes nothing yet reads as "public". Points the operator at "Make whole app public".
+
+**Tests:** 6 UI (`public-access-section.unit.test.ts`) + 132 livinityd
+(`public-access` / `public-forbidden` / `routes-public-access` / `caddy`) — all green.
+
+**Note:** the live n8n setting is already `whole-app`, so after deploy a restart/regen alone makes
+it public (no re-toggle needed).
 
 ## Symptom (operator-reported)
 Operator enabled "Public access" on n8n in the Share dialog. `https://n8n-bruce.livinity.io/` STILL redirects to `https://bruce.livinity.io/login?redirect=…` (gated). The carve-out never fires.
