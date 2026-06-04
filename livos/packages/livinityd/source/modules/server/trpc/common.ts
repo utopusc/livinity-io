@@ -69,6 +69,12 @@ export const httpOnlyPaths = [
 	'apps.sharedUsers',
 	'apps.allUsers',
 	'apps.myApps',
+	// Phase 258 WS-C (258-03) — public-access toggle: setPublicAccess persists a
+	// Redis setting + regenerates the Caddyfile + reloads Caddy (1-5s, file I/O),
+	// so it must use HTTP to survive a WS reconnect during the reload. getPublicAccess
+	// rides HTTP for namespace locality + reliability with its sibling mutation.
+	'apps.setPublicAccess',
+	'apps.getPublicAccess',
 	// Tunnel management routes — use HTTP to avoid WS connection dependency
 	'domain.tunnel.getStatus',
 	'domain.tunnel.configure',

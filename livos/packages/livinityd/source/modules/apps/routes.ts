@@ -1,7 +1,10 @@
 import z from 'zod'
+import {TRPCError} from '@trpc/server'
 
 import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
 import {BUILTIN_APPS, getBuiltinApp, searchBuiltinApps} from './builtin-apps.js'
+import {isPublicForbidden, type PublicForbiddenSignals} from './public-forbidden.js'
+import {resolvePublicAccess} from './public-access.js'
 import {
 	grantAppAccess,
 	revokeAppAccess,
@@ -466,6 +469,93 @@ export const apps = router({
 		.mutation(async ({ctx, input}) => {
 			await revokeAppAccess(input.userId, input.appId)
 			return {success: true}
+		}),
+
+	// ─── Phase 258 WS-C (258-03) — public (login-bypassed) app access ──────
+	//
+	// setPublicAccess is the SECURITY SPINE: it rejects a public-forbidden app
+	// (load-bearing: neverPublic/requiresLocalAiClis/the 256-04 daemon-bearer;
+	// defense-in-depth: compose docker.sock/privileged/host-net) with a 403 TRPCError
+	// BEFORE any persist/regen, and gates non-owner-non-admin callers. The UI lock
+	// (258-04) is cosmetic — THIS is the real enforcement, re-asserted again at every
+	// caddy regen in registerAppSubdomain (computeEffectivePublicAccess, fail-closed).
+	setPublicAccess: privateProcedure
+		.input(z.object({
+			appId: z.string(),
+			mode: z.enum(['none', 'whole-app', 'paths']),
+			paths: z.array(z.string()).optional(),
+		}))
+		.mutation(async ({ctx, input}) => {
+			const {appId, mode, paths} = input
+
+			// (a) Authority — owner OR admin. Legacy single-user (no currentUser) is
+			// admin-equivalent (matches the install gate convention, routes.ts:218).
+			const userId = ctx.currentUser?.id
+			const isAdmin = ctx.currentUser ? ctx.currentUser.role === 'admin' : true
+			if (!isAdmin) {
+				if (!userId) {
+					throw new TRPCError({code: 'FORBIDDEN', message: 'Authentication required'})
+				}
+				const inst = await getUserAppInstance(userId, appId)
+				if (!inst) {
+					throw new TRPCError({
+						code: 'FORBIDDEN',
+						message: 'Only the app owner or an admin can change public access',
+					})
+				}
+			}
+
+			// (b) Forbidden gate (the spine) — reject server-side BEFORE persist/regen.
+			// Disabling (mode 'none') is ALWAYS allowed (it removes public access).
+			if (mode !== 'none') {
+				const {signals} = await ctx.apps.getPublicForbiddenSignals(appId)
+				const verdict = isPublicForbidden(signals)
+				if (verdict.forbidden) {
+					throw new TRPCError({
+						code: 'FORBIDDEN',
+						message: `This app cannot be made public (${verdict.reason})`,
+					})
+				}
+			}
+
+			// (c) Persist the per-install setting, THEN re-register the subdomain so
+			// the runtime Caddy regen picks up the new publicAccess field (no reinstall).
+			// registerAppSubdomain re-asserts isPublicForbidden (fail-closed) as a
+			// second line of defense.
+			await ctx.apps.setPublicAccessSetting(appId, {mode, paths})
+
+			const subs = await ctx.apps.getAllSubdomains()
+			const existing = subs.find((s) => s.appId === appId)
+			let publicUrl: string | undefined
+			if (existing) {
+				await ctx.apps.registerAppSubdomain(appId, existing.port, existing.subdomain, existing.host)
+				publicUrl = existing.host ?? existing.subdomain
+			}
+
+			return {success: true, mode, publicUrl}
+		}),
+
+	// Read side for the 258-04 toggle: the resolved current config + whether the
+	// app is forbidden (with reason) + the manifest's suggested default paths so the
+	// UI can render the locked state and pre-fill the path list.
+	getPublicAccess: privateProcedure
+		.input(z.object({appId: z.string()}))
+		.query(async ({ctx, input}) => {
+			const {signals, manifest} = await ctx.apps.getPublicForbiddenSignals(input.appId)
+			const verdict = isPublicForbidden(signals)
+			const setting = await ctx.apps.getPublicAccessSetting(input.appId)
+			const resolved = resolvePublicAccess(manifest, setting)
+			const subs = await ctx.apps.getAllSubdomains()
+			const existing = subs.find((s) => s.appId === input.appId)
+			return {
+				forbidden: verdict.forbidden,
+				reason: verdict.reason,
+				mode: resolved.mode,
+				paths: resolved.paths,
+				hasOwnAuth: resolved.hasOwnAuth,
+				suggestedPaths: manifest?.publicAccess?.paths ?? [],
+				publicUrl: existing ? (existing.host ?? existing.subdomain) : undefined,
+			}
 		}),
 
 	// List users who have access to an app (for share dialog)
