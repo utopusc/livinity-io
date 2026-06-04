@@ -53,7 +53,17 @@ AMA `/auth/verify` forward_auth gate'i (`server/index.ts:1188-1205`) hâlâ **co
 
 ---
 
-## SORUN 2 — Chrome konsolidasyonu
+## SORUN 2 — Chrome konsolidasyonu — ✅ SHIPPED 2026-06-04 (master `5c570226`)
+
+**Yol 1-rafine uygulandı (operatör onayı: tarayıcı değiştirme yok, `:N`/streaming'e dokunma yok).**
+- **2a (deploy + canlı doğrulandı):** XFCE dock Chrome launcher artık `--user-data-dir=/home/bruce/.config/livos-chrome` ile yazılıyor (`shell/xfce-shell.ts`) → masaüstü Chrome ikonu tek singleton instance'ta yeni pencere açar (tek Chrome, tek profil, tek login). Mini PC'de `launcher-2/google-chrome.desktop` doğrulandı.
+- **2b (deploy — sonraki WebApp açılışında etkin):** WebApp profilleri tek-seferlik `/tmp` klonu yerine **kalıcı** `/opt/livos/data/chrome-webapps/<webappId>` (`profile-seeder.ts seed({persistent:true})` + `window-manager.ts`); kapanışta SİLİNMİYOR, sonraki açılışta yeniden kullanılıyor → login + veri kalıcı ("kapanınca veri gitmesin"). webappId ile anahtarlı (domain değil) → eşzamanlı çakışma yok. Singleton lock her açılışta temizleniyor. `chrome-process-spawner` regex'i kalıcı path'i kabul ediyor.
+- **Dokunulmadı:** `:N` display + x11vnc streaming (operatörün kırılgan/AI-paylaşımlı dediği) — sadece profil dizini yaşam döngüsü değişti.
+- Testler: profile-seeder fresh/reuse/throwaway + xfce dock-Chrome içeriği + spawner regex (37 yeşil; 3 pre-existing window-manager Luse-MCP fail stale dead-code, alakasız).
+
+---
+
+### (Orijinal tasarım — referans)
 
 ### Mevcut durum (canlı, kanıtlandı)
 - Boot'ta **tek** Chrome çalışıyor: `:1`, profil `/home/bruce/.config/livos-chrome` (**4.4 GB**, Google login'li, CDP 9222). XFCE masaüstü popover'ında görünen bu.
