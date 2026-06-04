@@ -1130,8 +1130,9 @@ describe('generateFullCaddyfile — Phase 256-04 LIVOS-008 forward_auth gate', (
 			false,
 			[{subdomain: 'opendesign', port: 9100}],
 		)
-		// Redirect to the login page preserved (handle_response 401 → redir).
-		expect(out).toContain('redir https://bruce.livinity.io/login?redirect=')
+		// Phase 259 — the 401 now bounces through the apex SSO handshake (which
+		// itself falls through to /login when the operator is genuinely logged out).
+		expect(out).toContain('redir https://bruce.livinity.io/__livos_sso?return=')
 		// Caddy needs to react to the upstream auth verdict.
 		expect(out).toMatch(/handle_response|@(bad|unauth)/)
 	})
@@ -1356,7 +1357,7 @@ describe('generateFullCaddyfile — Phase 258-02 WS-B public-access carve-out', 
 		expect(block).toContain('forward_auth 127.0.0.1:8080')
 		expect(block).toContain('uri /auth/verify')
 		expect(block).toContain('copy_headers Cookie')
-		expect(block).toContain(`redir https://${baseDomain}/login?redirect=`)
+		expect(block).toContain(`redir https://${baseDomain}/__livos_sso?return=`)
 		expect(block).toContain('reverse_proxy 127.0.0.1:9300')
 	})
 
@@ -1522,13 +1523,27 @@ describe('generateFullCaddyfile — Phase 258-02 WS-B public-access carve-out', 
 		const bearerLines = bearer
 			? `\t\theader_up Authorization "Bearer ${bearer}"\n\t\theader_up Host 127.0.0.1:${port}\n\t\theader_up Origin http://127.0.0.1:${port}\n`
 			: ''
-		return `${domain} {
-\tforward_auth 127.0.0.1:8080 {
+		// Phase 259 — mirrors the production emit (caddy.ts): the ungated
+		// /__livos_auth SSO-landing carve-out FIRST, then the gated catch-all
+		// wrapped in `handle {}`, with the 401 redirect now pointing at the apex
+		// /__livos_sso bounce instead of straight to /login.
+		const ssoAuthHandle = `\thandle /__livos_auth* {
+\t\trequest_header -Remote-User
+\t\trequest_header -Remote-Role
+\t\trequest_header -X-Daemon-Bearer
+\t\treverse_proxy 127.0.0.1:8080 {
+\t\tflush_interval -1
+\t\ttransport http {
+\t\t\tversions 1.1
+\t\t}
+\t\t}
+\t}`
+		const gatedHandleBody = `\tforward_auth 127.0.0.1:8080 {
 \t\turi /auth/verify
 \t\tcopy_headers Cookie
 \t\t@bad status 401
 \t\thandle_response @bad {
-\t\t\tredir https://${baseDomain}/login?redirect={scheme}://{host}{uri}
+\t\t\tredir https://${baseDomain}/__livos_sso?return={scheme}://{host}{uri}
 \t\t}
 \t}
 \treverse_proxy 127.0.0.1:${port} {
@@ -1536,6 +1551,11 @@ ${bearerLines}\t\tflush_interval -1
 \t\ttransport http {
 \t\t\tversions 1.1
 \t\t}
+\t}`
+		return `${domain} {
+${ssoAuthHandle}
+\thandle {
+${gatedHandleBody.replace(/^\t/gm, '\t\t')}
 \t}
 }`
 	}

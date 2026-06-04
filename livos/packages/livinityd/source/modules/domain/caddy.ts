@@ -658,16 +658,37 @@ ${WS_TRANSPORT_BODY}
 			// to the pre-258 emit, with AND without the 257-06 safeBearer) and the
 			// paths-mode carve-out below reuse THIS verbatim. The daemon bearer
 			// (`header_up Authorization`) is emitted ONLY here — never in a public block.
+			// Phase 259 — on a 401 the gate bounces a (possibly logged-in) operator
+			// through the cross-subdomain SSO handshake at the apex instead of straight
+			// to /login. The host-only LIVINITY_SESSION cookie never reaches THIS app
+			// host, so /auth/verify always 401s for a browser nav; /__livos_sso (which
+			// DOES receive the apex cookie) validates the session and bounces back to
+			// /__livos_auth here to set a host-scoped cookie. A genuinely logged-out
+			// operator falls through /__livos_sso → /login (no loop).
 			const gatedHandleBody = `\tforward_auth 127.0.0.1:8080 {
 \t\turi /auth/verify
 \t\tcopy_headers Cookie
 \t\t@bad status 401
 \t\thandle_response @bad {
-\t\t\tredir https://${config.mainDomain}/login?redirect={scheme}://{host}{uri}
+\t\t\tredir https://${config.mainDomain}/__livos_sso?return={scheme}://{host}{uri}
 \t\t}
 \t}
 \treverse_proxy 127.0.0.1:${sub.port} {
 ${safeBearer ? `\t\theader_up Authorization "Bearer ${safeBearer}"\n\t\theader_up Host 127.0.0.1:${sub.port}\n\t\theader_up Origin http://127.0.0.1:${sub.port}\n` : ''}${WS_TRANSPORT_BODY}
+\t}`
+
+			// Phase 259 — the UNGATED SSO landing carve-out. /__livos_auth must reach
+			// livinityd (:8080), NOT the app port, and must bypass forward_auth (the
+			// browser has no valid cookie yet — that's the whole point). Emitted FIRST
+			// (first-match-wins) in every block that still carries a gated catch-all
+			// (none + paths modes). Header-stripped like every other carve-out; NO
+			// daemon bearer (that is gated-catch-all only). whole-app blocks have no
+			// gate so they need no SSO landing.
+			const ssoAuthHandle = `\thandle /__livos_auth* {
+${PUBLIC_HEADER_STRIP}
+\t\treverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY}
+\t\t}
 \t}`
 
 			// Phase 258 WS-B (258-02) — PUBLIC-ACCESS CARVE-OUT (SC1/SC2/SC4/SC5). When the
@@ -710,16 +731,22 @@ ${WS_TRANSPORT_BODY}
 \t}`)
 				}
 				blocks.push(`${fullDomain} {
+${ssoAuthHandle}
 ${publicBlocks.join('\n')}
 \thandle {
 ${gatedHandleBody.replace(/^\t/gm, '\t\t')}
 \t}
 }`)
 			} else {
-				// 'none' / absent / empty-paths — the EXACT current 256-04 gated block,
-				// byte-for-byte (SC5). gatedHandleBody is wrapped to produce identical bytes.
+				// 'none' / absent / empty-paths — the 256-04 gated block PLUS the Phase 259
+				// SSO landing carve-out. The gated body is wrapped in a matcher-less
+				// `handle {}` so /__livos_auth (emitted first) wins on first-match; every
+				// other path still falls through to the unchanged forward_auth gate.
 				blocks.push(`${fullDomain} {
-${gatedHandleBody}
+${ssoAuthHandle}
+\thandle {
+${gatedHandleBody.replace(/^\t/gm, '\t\t')}
+\t}
 }`)
 			}
 		}
