@@ -13,6 +13,8 @@ import {
 } from '@/shadcn-components/ui/dialog'
 import {cn} from '@/shadcn-lib/utils'
 
+import {PublicAccessSection} from './public-access-section'
+
 export function ShareAppDialog({
 	open,
 	onOpenChange,
@@ -127,6 +129,8 @@ export function ShareAppDialog({
 						)
 					})}
 				</div>
+
+				<PublicAccessSection appId={appId} />
 
 				<DialogFooter>
 					<button
