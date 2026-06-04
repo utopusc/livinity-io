@@ -3614,7 +3614,7 @@ Plans:
 
 ---
 
-### Phase 258: Public App Access — selective no-auth links (extends the 256-04 forward_auth gate) — 🟡 PLANNING 2026-06-03
+### Phase 258: Public App Access — selective no-auth links — 🟢 DEPLOYED 2026-06-03 (5/5 plans; live Mini PC SHA fe10188; ~140 tests green; carve-out + bearer-strip spine + isPublicForbidden 403/regen + Share-UX; non-public apps byte-equivalent/no regression; operator UAT: Cal.com browser walk pending)
 
 **Goal:** Let an operator expose an app — or specific paths of it — to the PUBLIC internet WITHOUT the LivOS login, for share-by-link use cases (Cal.com booking pages, public status pages, shared dashboards). Today the 256-04 `forward_auth /auth/verify` gate protects EVERY app subdomain; this phase adds a **secure-by-default, opt-in** carve-out so chosen apps/paths skip the gate — while making it IMPOSSIBLE to expose admin/host-access apps or to leak the daemon bearer onto a public route. Grounded in real-world patterns (Cal.com two-layer auth, Caddy mutually-exclusive `handle` blocks, YunoHost `visitors`+`protected` model, Cloudflare Access path-bypass; see RESEARCH).
 
