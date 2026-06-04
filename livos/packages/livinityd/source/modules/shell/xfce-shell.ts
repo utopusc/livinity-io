@@ -51,11 +51,33 @@ import type {EventEmitter} from 'node:events'
 export const DEFAULT_WALLPAPER_PATH =
 	'/opt/livos/packages/livinityd/source/modules/shell/assets/livos-wallpaper.png'
 
-/** Dock launchers — each references a system .desktop seeded into a per-launcher
- * dir. `id` is the xfce4-panel plugin id; `desktop` is the basename under
- * /usr/share/applications. */
-const DOCK_LAUNCHERS: ReadonlyArray<{id: number; desktop: string}> = [
-	{id: 2, desktop: 'google-chrome.desktop'},
+/**
+ * Phase 259 — the dock Chrome launcher must open the SAME profile as the boot
+ * singleton (chrome-cdp/bootstrap.ts CHROME_ARGS `--user-data-dir=…/livos-chrome`).
+ * The stock /usr/share/applications/google-chrome.desktop has NO --user-data-dir,
+ * so clicking it spawned a SECOND Chrome on the DEFAULT profile (the "2 Chrome / 2
+ * profil" the operator saw). Pointing it at livos-chrome makes Chrome's process-
+ * singleton open a new WINDOW in the existing instance instead → one Chrome, one
+ * persistent profile, one Google login. Path hard-coded to match bootstrap.ts.
+ */
+const LIVOS_CHROME_PROFILE_DIR = '/home/bruce/.config/livos-chrome'
+const LIVOS_CHROME_DESKTOP = `[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Google Chrome
+Exec=/usr/bin/google-chrome --user-data-dir=${LIVOS_CHROME_PROFILE_DIR} --no-first-run --no-default-browser-check %U
+Icon=google-chrome
+Terminal=false
+Categories=Network;WebBrowser;
+StartupNotify=true
+`
+
+/** Dock launchers. `id` is the xfce4-panel plugin id; `desktop` is the basename
+ * written into the per-launcher dir. When `content` is set it is written verbatim
+ * (the LivOS-profile Chrome); otherwise the system .desktop under
+ * /usr/share/applications is copied. */
+const DOCK_LAUNCHERS: ReadonlyArray<{id: number; desktop: string; content?: string}> = [
+	{id: 2, desktop: 'google-chrome.desktop', content: LIVOS_CHROME_DESKTOP},
 	{id: 3, desktop: 'thunar.desktop'},
 	{id: 4, desktop: 'xfce4-terminal.desktop'},
 ]
@@ -229,12 +251,18 @@ export function writeXfceConfig(
 	} catch (err) {
 		logger?.warn?.('xfce-shell: failed to write perchannel xfconf (dock/wallpaper)', err)
 	}
-	// Seed dock launcher .desktop files from the system applications dir.
+	// Seed dock launcher .desktop files. The Chrome launcher (l.content set) is
+	// written verbatim so it opens the livos-chrome profile (Phase 259); the rest
+	// are copied from the system applications dir.
 	for (const l of DOCK_LAUNCHERS) {
 		const dir = join(homeDir, '.config', 'xfce4', 'panel', `launcher-${l.id}`)
 		try {
 			fns.mkdir(dir)
-			fns.copyFile(join('/usr/share/applications', l.desktop), join(dir, l.desktop))
+			if (l.content) {
+				fns.writeFile(join(dir, l.desktop), l.content)
+			} else {
+				fns.copyFile(join('/usr/share/applications', l.desktop), join(dir, l.desktop))
+			}
 		} catch (err) {
 			logger?.warn?.(`xfce-shell: failed to seed launcher ${l.desktop} (dock icon may be empty)`, err)
 		}

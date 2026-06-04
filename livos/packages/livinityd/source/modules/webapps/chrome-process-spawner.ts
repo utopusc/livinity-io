@@ -44,8 +44,11 @@ import {spawn as nodeSpawn, type ChildProcess, type SpawnOptions} from 'node:chi
  * /etc/passwd, /opt/livos/data/chrome-master/.. or trailing-path injection
  * is possible because both alternatives are fully anchored (^ ... $).
  */
+// Phase 259 — a third anchored alternative for the PERSISTENT per-WebApp profile
+// `/opt/livos/data/chrome-webapps/<uuid v4>` (profile-seeder.ts seed({persistent}))
+// — same fully-anchored UUID shape as the /tmp branch, so no traversal is possible.
 const USER_DATA_DIR_RE =
-	/^(\/tmp\/livos-chrome-app-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|\/opt\/livos\/data\/chrome-master)$/
+	/^(\/tmp\/livos-chrome-app-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|\/opt\/livos\/data\/chrome-webapps\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|\/opt\/livos\/data\/chrome-master)$/
 
 /**
  * Display regex — `:1` .. `:99` only.

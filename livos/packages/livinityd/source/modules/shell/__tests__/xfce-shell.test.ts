@@ -110,6 +110,21 @@ describe('xfce-shell — launcher + dock contract + subprocess-scoped DISPLAY', 
 		expect(written.some((p) => /xfce.*\.sh$/.test(p))).toBe(true)
 	})
 
+	it('Test 1b (Phase 259): dock Chrome launcher is WRITTEN with the livos-chrome profile, not copied from system', async () => {
+		await startXfceShell(baseOpts())
+		// launcher-2 (Chrome) is written verbatim with the livos-chrome --user-data-dir
+		// so it opens the SAME singleton profile as the boot Chrome (no 2nd profile).
+		const chromeWrite = writeFileFn.mock.calls.find(
+			(c) => String(c[0]).includes('launcher-2') && String(c[0]).endsWith('google-chrome.desktop'),
+		)
+		expect(chromeWrite, 'chrome dock launcher not written').toBeTruthy()
+		expect(String(chromeWrite![1])).toContain('--user-data-dir=/home/bruce/.config/livos-chrome')
+		// It is NOT copied from /usr/share/applications (that one lacks --user-data-dir).
+		expect(copyFileFn.mock.calls.find((c) => String(c[1]).includes('google-chrome.desktop'))).toBeUndefined()
+		// thunar + terminal are still COPIED from the system dir (unchanged).
+		expect(copyFileFn.mock.calls.find((c) => String(c[0]).includes('thunar.desktop'))).toBeTruthy()
+	})
+
 	it('Test 2: spawns `bash <launcher>` with env.DISPLAY===":1"', async () => {
 		await startXfceShell(baseOpts())
 		const bashCall = spawnFn.mock.calls.find((c) => c[0] === 'bash')
