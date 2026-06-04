@@ -17,7 +17,19 @@ const VALID_SECTIONS: readonly Section[] = ['app', 'webapp', 'native', 'ai', 'pl
 
 function StoreProviderInner({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
-  const token = searchParams.get('token');
+  // Token rides in the URL on the iframe's first load, but Next.js client-side
+  // navigation drops the query param. The middleware persists it as the
+  // `liv_store_token` cookie on the first token-bearing request, so fall back to
+  // that cookie when the URL no longer carries it (keeps /api/apps X-Api-Key calls
+  // working after navigating into an app detail page). See middleware.ts.
+  const token =
+    searchParams.get('token') ??
+    (typeof document !== 'undefined'
+      ? (() => {
+          const m = document.cookie.match(/(?:^|;\s*)liv_store_token=([^;]+)/);
+          return m ? decodeURIComponent(m[1]) : null;
+        })()
+      : null);
   const instanceName = searchParams.get('instance');
   // Section hint via URL — set by SectionTabs when navigating from a
   // detail page back to /store. Only read once at mount; subsequent

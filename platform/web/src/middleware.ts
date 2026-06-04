@@ -44,15 +44,33 @@ export function middleware(req: NextRequest): NextResponse {
   // token-bearing requests through to the token-authenticated store-provider;
   // the bare /store admin console stays cookie-gated.
   if (pathname === '/store' || pathname.startsWith('/store/')) {
-    if (req.nextUrl.searchParams.has('token')) {
+    // The embedded LivOS App Store iframe loads /store?token=<api_key> (the
+    // store-provider authenticates each /api/apps call with X-Api-Key). The token
+    // rides ONLY in the URL — Next.js client-side navigation (clicking an app →
+    // /store/<id>) DROPS the query param, so a bare /store/<id> hit had no token
+    // and 307→/login→404 (operator "install çalışmıyor", post-Vercel migration).
+    // Fix: on a token-bearing request, PERSIST the token as a cookie so every
+    // subsequent navigation stays authed; accept that cookie in the gate too.
+    const urlToken = req.nextUrl.searchParams.get('token');
+    const STORE_TOKEN_COOKIE = 'liv_store_token';
+    if (urlToken) {
+      const res = NextResponse.next();
+      // httpOnly:false so the client store-provider can read it back for the
+      // X-Api-Key header after the URL param is gone. Scoped to /store.
+      res.cookies.set(STORE_TOKEN_COOKIE, urlToken, {
+        path: '/store',
+        sameSite: 'lax',
+        secure: true,
+        maxAge: 60 * 60 * 12,
+      });
+      return res;
+    }
+    if (req.cookies.has(STORE_TOKEN_COOKIE) || hasSession) {
       return NextResponse.next();
     }
-    if (!hasSession) {
-      const loginUrl = new URL('/login', req.url);
-      loginUrl.searchParams.set('next', pathname);
-      return NextResponse.redirect(loginUrl);
-    }
-    return NextResponse.next();
+    const loginUrl = new URL('/login', req.url);
+    loginUrl.searchParams.set('next', pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
