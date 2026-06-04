@@ -16,6 +16,14 @@ const JWT_ALGORITHM = 'HS256'
 const TOKEN_ISSUER = 'livinityd'
 const SESSION_AUDIENCE = 'livinityd'
 const PROXY_AUDIENCE = 'livinityd-proxy'
+// Phase 259 (cross-subdomain SSO handshake) — the short-lived bounce token that
+// lets a logged-in operator reach a GATED app subdomain without the host-only
+// LIVINITY_SESSION cookie (which never crosses to the hyphen-sibling app host).
+// Distinct audience so it is NOT interchangeable with a session/proxy token; it
+// carries the target host it was minted for (replay to a different app host is
+// rejected) and a jti for single-use consumption via Redis.
+const SSO_AUDIENCE = 'livinityd-sso'
+const SSO_TTL_SECONDS = 30
 
 /**
  * Phase 257-04 WS-A (LIVOS-028): derive a SEPARATE proxy signing secret from the
@@ -98,6 +106,72 @@ export async function signUserToken(secret: string, userId: string, role: string
 	})
 
 	return token
+}
+
+/**
+ * Phase 259 — sign a short-lived cross-subdomain SSO bounce token. Carries the
+ * exact target host it is minted for (replay to another app host is rejected at
+ * verify) plus the caller identity (userId/role for multi-user, or the legacy
+ * flag) so the consuming `/__livos_auth` endpoint can mint a real host-scoped
+ * session cookie for that user WITHOUT the session JWT ever riding the URL. The
+ * returned `jti` is recorded in Redis by the caller for single-use consumption.
+ */
+export async function signSsoToken(
+	secret: string,
+	opts: {targetHost: string; userId?: string; role?: string; legacy?: boolean},
+): Promise<{token: string; jti: string}> {
+	validateSecret(secret)
+	const jti = crypto.randomUUID()
+	const payload = {
+		sso: true,
+		targetHost: opts.targetHost,
+		...(opts.userId ? {userId: opts.userId, role: opts.role ?? 'member'} : {legacy: true}),
+		jti,
+	}
+	const token = jwt.sign(payload, secret, {
+		expiresIn: SSO_TTL_SECONDS,
+		algorithm: JWT_ALGORITHM,
+		audience: SSO_AUDIENCE,
+		issuer: TOKEN_ISSUER,
+	})
+	return {token, jti}
+}
+
+export type VerifiedSsoToken = {
+	targetHost: string
+	userId?: string
+	role?: string
+	legacy?: boolean
+	jti: string
+}
+
+/**
+ * Phase 259 — verify an SSO bounce token. Enforces the SSO audience + issuer
+ * (a session/proxy token can NOT be presented here, and vice-versa) and returns
+ * the bound target host + identity. Throws on any failure (signature, expiry,
+ * wrong audience, missing targetHost) — the caller fails closed to a 401.
+ */
+export async function verifySsoToken(token: string, secret: string): Promise<VerifiedSsoToken> {
+	validateSecret(secret)
+	const payload = jwt.verify(token, secret, {
+		algorithms: [JWT_ALGORITHM],
+		audience: SSO_AUDIENCE,
+		issuer: TOKEN_ISSUER,
+	}) as any
+	if (payload.sso !== true) throw new Error('Invalid SSO token')
+	if (typeof payload.targetHost !== 'string' || payload.targetHost.length === 0) {
+		throw new Error('Invalid SSO token (no targetHost)')
+	}
+	if (typeof payload.jti !== 'string' || payload.jti.length === 0) {
+		throw new Error('Invalid SSO token (no jti)')
+	}
+	return {
+		targetHost: payload.targetHost,
+		userId: payload.userId,
+		role: payload.role,
+		legacy: payload.legacy === true,
+		jti: payload.jti,
+	}
 }
 
 /**

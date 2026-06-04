@@ -26,7 +26,7 @@ import crypto from 'node:crypto'
 import jwt from 'jsonwebtoken'
 import {describe, expect, test} from 'vitest'
 
-import {sign, signUserToken, verify, signProxyToken, verifyProxyToken} from './jwt.js'
+import {sign, signUserToken, verify, signProxyToken, verifyProxyToken, signSsoToken, verifySsoToken} from './jwt.js'
 
 // Two valid 64-hex (256-bit) secrets.
 const SESSION_SECRET = 'a'.repeat(64)
@@ -128,5 +128,53 @@ describe('jwt — LIVOS-028 aud/iss + dual proxy secret', () => {
 		const v = await verify(token, SESSION_SECRET)
 		expect(v.loggedIn).toBe(true)
 		expect(v.userId).toBeUndefined()
+	})
+})
+
+describe('jwt — Phase 259 SSO bounce token', () => {
+	test('signSsoToken round-trips targetHost + identity + jti', async () => {
+		const {token, jti} = await signSsoToken(SESSION_SECRET, {
+			targetHost: 'n8n-bruce.livinity.io',
+			userId: 'u1',
+			role: 'admin',
+		})
+		const claims = await verifySsoToken(token, SESSION_SECRET)
+		expect(claims.targetHost).toBe('n8n-bruce.livinity.io')
+		expect(claims.userId).toBe('u1')
+		expect(claims.role).toBe('admin')
+		expect(claims.legacy).toBe(false)
+		expect(claims.jti).toBe(jti)
+	})
+
+	test('legacy (no userId) SSO token carries legacy=true', async () => {
+		const {token} = await signSsoToken(SESSION_SECRET, {targetHost: 'immich-bruce.livinity.io', legacy: true})
+		const claims = await verifySsoToken(token, SESSION_SECRET)
+		expect(claims.legacy).toBe(true)
+		expect(claims.userId).toBeUndefined()
+	})
+
+	test('an SSO token is NOT accepted by the session verifier (audience binding)', async () => {
+		const {token} = await signSsoToken(SESSION_SECRET, {targetHost: 'x-bruce.livinity.io', userId: 'u1', role: 'member'})
+		await expect(verify(token, SESSION_SECRET)).rejects.toThrow()
+	})
+
+	test('a session token is NOT accepted by the SSO verifier', async () => {
+		const sess = await signUserToken(SESSION_SECRET, 'u1', 'member')
+		await expect(verifySsoToken(sess, SESSION_SECRET)).rejects.toThrow()
+	})
+
+	test('a wrong-secret SSO token fails verification', async () => {
+		const {token} = await signSsoToken(SESSION_SECRET, {targetHost: 'x-bruce.livinity.io', userId: 'u1', role: 'member'})
+		await expect(verifySsoToken(token, OTHER_SECRET)).rejects.toThrow()
+	})
+
+	test('an expired SSO token fails verification', async () => {
+		// Hand-craft a token already past its exp using the same secret + claims.
+		const expired = jwt.sign(
+			{sso: true, targetHost: 'x-bruce.livinity.io', userId: 'u1', role: 'member', jti: 'j1'},
+			SESSION_SECRET,
+			{algorithm: 'HS256', audience: 'livinityd-sso', issuer: 'livinityd', expiresIn: -10},
+		)
+		await expect(verifySsoToken(expired, SESSION_SECRET)).rejects.toThrow()
 	})
 })

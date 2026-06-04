@@ -24,6 +24,7 @@ import {domains} from '@livos/config'
 
 import type Livinityd from '../../index.js'
 import * as jwt from '../jwt.js'
+import {parseSsoReturnTarget, sanitizeSsoPath} from './sso-handshake.js'
 import {attachVncBridge} from '../streaming/vnc-bridge.js'
 import {trpcExpressHandler, trpcWssHandler} from './trpc/index.js'
 import createTerminalWebSocketHandler from './terminal-socket.js'
@@ -153,6 +154,33 @@ class Server {
 
 	async verifyProxyToken(token: string) {
 		return jwt.verifyProxyToken(token, await this.getJwtSecret())
+	}
+
+	/** Phase 259 — mint a short-lived cross-subdomain SSO bounce token. */
+	async signSsoToken(opts: {targetHost: string; userId?: string; role?: string; legacy?: boolean}) {
+		return jwt.signSsoToken(await this.getJwtSecret(), opts)
+	}
+
+	/** Phase 259 — verify an SSO bounce token (audience-bound, throws on failure). */
+	async verifySsoToken(token: string) {
+		return jwt.verifySsoToken(token, await this.getJwtSecret())
+	}
+
+	/**
+	 * Phase 259 — the operator's active main domain (`bruce.livinity.io`) or null
+	 * when no domain is configured. The SSO bounce uses it to (a) validate that a
+	 * return target is one of THIS operator's own app subdomains and (b) build the
+	 * `/__livos_sso` host the gated app block redirects to.
+	 */
+	async getActiveMainDomain(): Promise<string | null> {
+		try {
+			const raw = await this.livinityd.ai.redis.get('livos:domain:config')
+			if (!raw) return null
+			const cfg = JSON.parse(raw)
+			return cfg?.active && cfg?.domain ? String(cfg.domain) : null
+		} catch {
+			return null
+		}
 	}
 
 	/**
@@ -1201,6 +1229,94 @@ class Server {
 				return response.status(200).end()
 			} catch {
 				return response.status(401).json({error: 'unauthorized'})
+			}
+		})
+
+		// Phase 259 — cross-subdomain SSO bounce. STEP 1 (runs on the operator's
+		// apex `<user>.<base>`, where the host-only LIVINITY_SESSION cookie IS sent):
+		// validate the parent session, then mint a 30s single-use token bound to the
+		// target app host and redirect to that host's /__livos_auth. A truly logged-
+		// out caller falls through to the real /login. The gated app block (caddy.ts)
+		// 401-redirects here instead of straight to /login so a logged-in operator is
+		// transparently admitted to the app subdomain WITHOUT re-widening the cookie.
+		this.app.get('/__livos_sso', async (request, response) => {
+			try {
+				const ret = typeof request.query.return === 'string' ? request.query.return : ''
+				const mainDomain = await this.getActiveMainDomain()
+				if (!mainDomain) return response.status(404).send('no domain configured')
+				const target = parseSsoReturnTarget(ret, mainDomain)
+				// Bad / foreign / non-app return target → never redirect to it (open-redirect guard).
+				if (!target) return response.status(400).send('invalid return target')
+
+				const sessionToken = request.cookies?.LIVINITY_SESSION
+				const payload = sessionToken ? await this.verifyToken(sessionToken).catch(() => null) : null
+				if (!payload) {
+					// Genuinely unauthenticated — send to the real login, preserving the return.
+					return response.redirect(
+						`https://${mainDomain}/login?redirect=${encodeURIComponent(ret)}`,
+					)
+				}
+
+				const {token, jti} = await this.signSsoToken({
+					targetHost: target.host,
+					userId: payload.userId,
+					role: payload.role,
+					legacy: !payload.userId,
+				})
+				// Single-use: record the jti (consumed via GETDEL at /__livos_auth). TTL a
+				// hair above the token TTL so an expired token can't find a live jti.
+				await this.livinityd.ai.redis.set(`livos:sso:jti:${jti}`, '1', 'EX', 35)
+
+				return response.redirect(
+					`https://${target.host}/__livos_auth?t=${encodeURIComponent(token)}&r=${encodeURIComponent(target.path)}`,
+				)
+			} catch (err) {
+				this.logger.error('[sso] /__livos_sso failed', err)
+				return response.status(500).send('sso error')
+			}
+		})
+
+		// Phase 259 — cross-subdomain SSO bounce. STEP 2 (runs ON the app subdomain
+		// `<app>-<user>.<base>` — Caddy routes /__livos_auth here, bypassing the gate):
+		// verify the single-use token, confirm it was minted for THIS host, then set a
+		// HOST-SCOPED session cookie (no `domain` attr → bound to this app host only,
+		// no cross-tenant leak) and redirect to the original path. The forward_auth
+		// gate now sees a valid cookie on the next request.
+		this.app.get('/__livos_auth', async (request, response) => {
+			try {
+				const t = typeof request.query.t === 'string' ? request.query.t : ''
+				const r = sanitizeSsoPath(typeof request.query.r === 'string' ? request.query.r : '/')
+				// The host the browser asked for (Caddy preserves it; prefer XFH behind the proxy).
+				const host = String(request.headers['x-forwarded-host'] ?? request.headers.host ?? '')
+					.split(',')[0]
+					.trim()
+					.split(':')[0]
+					.toLowerCase()
+				if (!host) return response.status(400).send('no host')
+
+				const claims = await this.verifySsoToken(t).catch(() => null)
+				if (!claims) return response.status(401).send('invalid sso token')
+				// Host binding — a token minted for app A can never authenticate app B.
+				if (claims.targetHost.toLowerCase() !== host) return response.status(401).send('host mismatch')
+				// Single-use consume — replay (token reused / left in history) is rejected.
+				const consumed = await this.livinityd.ai.redis.getdel(`livos:sso:jti:${claims.jti}`)
+				if (!consumed) return response.status(401).send('sso token already used or expired')
+
+				// Mint a real session token for this user and set it HOST-ONLY on this app
+				// subdomain (no domain attr → the browser scopes it to exactly this host).
+				const sessionToken = claims.userId
+					? await this.signUserToken(claims.userId, claims.role ?? 'member')
+					: await this.signToken()
+				response.cookie('LIVINITY_SESSION', sessionToken, {
+					httpOnly: true,
+					secure: true,
+					sameSite: 'lax',
+					maxAge: 30 * 24 * 60 * 60 * 1000,
+				})
+				return response.redirect(`https://${host}${r}`)
+			} catch (err) {
+				this.logger.error('[sso] /__livos_auth failed', err)
+				return response.status(500).send('sso error')
 			}
 		})
 
