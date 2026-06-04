@@ -1388,7 +1388,18 @@ export default class Apps {
 				if (!r.enabled) continue
 				const candidateHost = (r.host ?? (stateConfig.mainDomain ? `${r.subdomain}.${stateConfig.mainDomain}` : '')).toLowerCase()
 				if (candidateHost && stateHosts.has(candidateHost)) continue
-				merged.push(r)
+				// Phase 258 HOTFIX — re-derive publicAccess FRESH on every regen instead of
+				// trusting the cached SubdomainConfig.publicAccess. The cached field is only
+				// re-threaded by a registerAppSubdomain call, so a plain `systemctl restart`
+				// (which runs this regen, not registerAppSubdomain) — or any setting change
+				// that didn't re-register — would keep emitting the STALE public shape. The
+				// live operator setting lives in livos:apps:public-access:<appId>; resolve it
+				// here so a restart reflects it. This also re-asserts isPublicForbidden
+				// (fail-closed) on EVERY emit, so a now-forbidden app loses a stale public
+				// block at restart, not only at the next install/registerAppSubdomain.
+				const publicAccess = await this.computeEffectivePublicAccess(r.appId, r.upstreamBearer)
+				const {publicAccess: _stale, ...rest} = r
+				merged.push(publicAccess ? {...rest, publicAccess} : rest)
 			}
 
 			const caddyConfig: CaddyConfig = {

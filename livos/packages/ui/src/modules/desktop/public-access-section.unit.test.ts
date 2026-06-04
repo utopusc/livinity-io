@@ -10,7 +10,7 @@
 
 import {describe, expect, it} from 'vitest'
 
-import {PublicAccessSection, forbiddenReasonCopy, wholeAppConfirmText} from './public-access-section'
+import {PublicAccessSection, forbiddenReasonCopy, parsePublicPathsInput, wholeAppConfirmText} from './public-access-section'
 
 describe('forbiddenReasonCopy', () => {
 	it('maps each server reason to friendly, self-explaining copy', () => {
@@ -42,6 +42,22 @@ describe('wholeAppConfirmText', () => {
 		const noAuth = wholeAppConfirmText('Some Dashboard', false)
 		expect(noAuth).toContain('Some Dashboard has no detected login')
 		expect(noAuth).toContain('without logging into LivOS')
+	})
+})
+
+describe('parsePublicPathsInput (258 HOTFIX Layer 1)', () => {
+	it('rejects an empty / whitespace-only buffer instead of saving paths:[]', () => {
+		for (const empty of ['', '   ', '\n\n', '  \n \t \n']) {
+			const res = parsePublicPathsInput(empty)
+			expect(res.ok).toBe(false)
+			if (!res.ok) expect(res.error).toMatch(/at least one public path|Make whole app public/i)
+		}
+	})
+
+	it('trims, drops blank lines, and keeps the real prefixes', () => {
+		const res = parsePublicPathsInput('  /booking \n\n  /d/ \n   ')
+		expect(res.ok).toBe(true)
+		if (res.ok) expect(res.paths).toEqual(['/booking', '/d/'])
 	})
 })
 

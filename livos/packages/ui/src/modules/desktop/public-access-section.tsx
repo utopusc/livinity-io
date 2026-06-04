@@ -56,6 +56,30 @@ export function wholeAppConfirmText(appName: string, hasOwnAuth: boolean): strin
 	)
 }
 
+/**
+ * Parse the textarea buffer into normalized public path prefixes and validate it.
+ * Pure + unit-tested (the UI package has no RTL). An empty list is REJECTED:
+ * mode:'paths' with paths:[] exposes nothing yet reads as "public" — the exact
+ * trap the operator hit on n8n (258 HOTFIX, Layer 1). Whole-app is the path for
+ * apps that want their entire surface public.
+ */
+export function parsePublicPathsInput(
+	text: string,
+): {ok: true; paths: string[]} | {ok: false; error: string} {
+	const paths = text
+		.split('\n')
+		.map((p) => p.trim())
+		.filter((p) => p.length > 0)
+	if (paths.length === 0) {
+		return {
+			ok: false,
+			error:
+				'Add at least one public path prefix (one per line), or use "Make whole app public" for an app with its own login.',
+		}
+	}
+	return {ok: true, paths}
+}
+
 export function PublicAccessSection({appId}: {appId: string}) {
 	const utils = trpcReact.useUtils()
 	const q = trpcReact.apps.getPublicAccess.useQuery({appId})
@@ -95,11 +119,12 @@ export function PublicAccessSection({appId}: {appId: string}) {
 	}
 
 	const enablePaths = () => {
-		const paths = pathsText
-			.split('\n')
-			.map((p) => p.trim())
-			.filter((p) => p.length > 0)
-		void apply('paths', paths)
+		const parsed = parsePublicPathsInput(pathsText)
+		if (!parsed.ok) {
+			toast.error(parsed.error)
+			return
+		}
+		void apply('paths', parsed.paths)
 	}
 
 	// ── Section shell ──────────────────────────────────────────────────────────
