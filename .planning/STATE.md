@@ -3,17 +3,19 @@ gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
 status: completed
-last_updated: "2026-06-03T21:49:33.632Z"
+last_updated: "2026-06-04T04:40:55.722Z"
 last_activity: 2026-06-02
 progress:
-  total_phases: 169
-  completed_phases: 86
-  total_plans: 580
-  completed_plans: 497
+  total_phases: 170
+  completed_phases: 87
+  total_plans: 585
+  completed_plans: 502
   percent: 86
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
+
+> ✅ **258-03 DONE (WS-C public-access hard guardrails — the SERVER-SIDE SPINE, PUB-C)** — 3 commits `22951ae7` (public-forbidden.ts: `isPublicForbidden(signals)` the ONE never-public policy + `effectivePublicAccess` pure composition; 11+6 vitest), `42b34a37` (apps.ts: get/setPublicAccessSetting on Redis sibling key `livos:apps:public-access:<appId>`; `computeEffectivePublicAccess` re-asserts `isPublicForbidden` on EVERY `registerAppSubdomain` regen → **fail-closed**; threads `SubdomainConfig.publicAccess`), `dc123d8f` (routes.ts: `setPublicAccess` tRPC mutation — owner-OR-admin gate + **403 TRPCError BEFORE persist/regen** for forbidden apps + runtime Caddy regen + `publicUrl`; `getPublicAccess` query for the 258-04 UI lock; both added to `httpOnlyPaths`). **35 tests GREEN** across 4 files; ZERO new tsc errors (baseline-confirmed via `git stash`). **LOAD-BEARING vs DEFENSE-IN-DEPTH (NOTE-2):** primary guard = `neverPublic` / `requiresLocalAiClis` / 256-04 daemon-bearer (NOT stripped by the 257 sanitizer → protect OpenDesign/OpenHands-class); compose `docker.sock`/`privileged`/`network_mode:host` = documented backstop (Test 9 proves a sanitized compose is still forbidden via a load-bearing trigger). **Confirmed: a forbidden app is rejected server-side at BOTH the API (setPublicAccess→403) AND the caddy-regen layer (computeEffectivePublicAccess→`publicAccess` undefined), fail-closed against a forged/stale config.** `isPublicForbidden` imported by BOTH routes.ts + apps.ts (single policy, two call sites). **CODE+TESTS ONLY — NO DEPLOY** (Mini PC only). My files this wave: apps.ts + routes.ts (258-02 owns caddy.ts). SUMMARY: `.planning/phases/258-public-app-access/258-03-SUMMARY.md`. (STATE narrative format — SDK counters no-op, per the 257-03 convention.)
 
 ### ▶ NEXT ACTION (2026-06-03): Phases 256 + 257 DEPLOYED — audit fully remediated. Operator: rotate Server5 platform/relay secrets out of band.
 

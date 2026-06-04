@@ -3626,7 +3626,7 @@ Plans:
 **Plans:** 5 plans (4 waves)
 - [ ] 258-01-PLAN.md — WS-A: manifest fields (publicAccess/neverPublic) + resolvePublicAccess resolver + SubdomainConfig.publicAccess contract (wave 1)
 - [ ] 258-02-PLAN.md — WS-B: caddy.ts emit carve-out (mutually-exclusive handles + non-configurable bearer/identity strip + byte-equivalent gated catch-all) (wave 2)
-- [ ] 258-03-PLAN.md — WS-C: isPublicForbidden (ONE source of truth) + setPublicAccess owner/admin-gated 403 mutation + registerAppSubdomain wiring (wave 2)
+- [x] 258-03-PLAN.md — WS-C: isPublicForbidden (ONE source of truth) + setPublicAccess owner/admin-gated 403 mutation + registerAppSubdomain wiring (wave 2) ✅ 2026-06-03 (`22951ae7`/`42b34a37`/`dc123d8f`)
 - [ ] 258-04-PLAN.md — WS-D: Share-dialog PublicAccessSection (locked/forbidden, paths pre-fill, whole-app confirm, public URL) (wave 3)
 - [ ] 258-05-PLAN.md — Integration + Mini-PC deploy gate + SC1-SC6 walk incl. Cal.com end-to-end + bearer-absent security probes (wave 4)
 
