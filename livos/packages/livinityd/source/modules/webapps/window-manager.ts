@@ -296,6 +296,12 @@ type ActiveWebApp = {
 	chromeHandle: ChromeProcessHandle
 	/** Phase 102-04 — uuid of the per-app profile dir (= webappId). */
 	profileUuid: string
+	/**
+	 * Phase 259 — true when the profile is the PERSISTENT
+	 * /opt/livos/data/chrome-webapps/<uuid> (close() must NOT delete it). False for
+	 * the legacy throwaway /tmp profile (close() cleans it up as before).
+	 */
+	profilePersistent: boolean
 	/** Phase 102-04 — port allocated for this WebApp (rfb capture port). */
 	port: number
 	/** Phase 101-04 — CDP targetId retained for back-compat; vestigial in 102-04. */
@@ -442,7 +448,7 @@ export class WebAppWindowManager {
 		let xvfb: XvfbHandle | null = null
 		let chrome: ChromeProcessHandle | null = null
 		let port: number | null = null
-		let seed: {uuid: string; appDir: string} | null = null
+		let seed: {uuid: string; appDir: string; persistent: boolean} | null = null
 
 		try {
 			// 4. Spawn Xvfb on :N with readiness poll.
@@ -475,7 +481,12 @@ export class WebAppWindowManager {
 			}
 
 			// 6. Seed master profile (uuid = webappId for traceability).
-			seed = await this.profileSeeder.seed({uuid: opts.webappId})
+			// Phase 259 — PERSISTENT per-WebApp profile: keyed by webappId (a UUID),
+			// it lives on the livos data volume and is REUSED on the next open so the
+			// WebApp's login + state survive close + reboot (operator requirement:
+			// "kapanınca veri gitmesin"). webappId idempotency (step 1) + the unique
+			// key mean two concurrent opens never collide on one --user-data-dir.
+			seed = await this.profileSeeder.seed({uuid: opts.webappId, persistent: true})
 
 			// 7. Spawn per-app Chrome subprocess on :N with seeded profile.
 			chrome = await this.chromeSpawnFn({
@@ -508,6 +519,7 @@ export class WebAppWindowManager {
 				xvfbHandle: xvfb,
 				chromeHandle: chrome,
 				profileUuid: seed.uuid,
+				profilePersistent: seed.persistent,
 				port,
 				streamId: streamStart!.streamId,
 				wsUrl: streamStart!.wsUrl,
@@ -600,7 +612,7 @@ export class WebAppWindowManager {
 					)
 				}
 			}
-			if (seed) {
+			if (seed && !seed.persistent) {
 				try {
 					await this.profileSeeder.cleanup(seed.uuid)
 				} catch (cleanupErr) {
@@ -731,8 +743,11 @@ export class WebAppWindowManager {
 			}
 		}
 
-		// 4. /tmp profile cleanup (rm -rf /tmp/livos-chrome-app-<uuid>).
-		if (entry.profileUuid) {
+		// 4. Profile cleanup — ONLY the legacy throwaway /tmp profile. Phase 259
+		// PERSISTENT profiles (/opt/livos/data/chrome-webapps/<uuid>) are KEPT on close
+		// so the WebApp's login + state survive (operator requirement "kapanınca veri
+		// gitmesin"); they're reused on the next open via seed({persistent:true}).
+		if (entry.profileUuid && !entry.profilePersistent) {
 			try {
 				await this.profileSeeder.cleanup(entry.profileUuid)
 			} catch (err) {

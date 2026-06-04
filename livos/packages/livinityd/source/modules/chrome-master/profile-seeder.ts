@@ -71,6 +71,14 @@ const DEFAULT_PREFERENCES_JSON = JSON.stringify({
 
 export const MASTER_PROFILE_DIR = '/opt/livos/data/chrome-master'
 export const APP_PROFILE_PREFIX = '/tmp/livos-chrome-app-'
+// Phase 259 (WebApp persistent profiles) — persistent per-WebApp profile root on
+// the livos data volume (survives close AND reboot). Keyed by webappId (already a
+// UUID), NOT by domain, so two concurrent opens never collide on one
+// --user-data-dir (Chrome's process-singleton would otherwise merge them) and the
+// window-manager's webappId idempotency already prevents a double-open of the same
+// WebApp. The throwaway /tmp/livos-chrome-app-<uuid> path stays for any caller that
+// does NOT pass persistent (back-compat).
+export const WEBAPP_PROFILE_DIR = '/opt/livos/data/chrome-webapps'
 
 // RFC 4122 v4 UUID. Used to validate caller-supplied uuid opts before they
 // are interpolated into a filesystem path. Default-generation via
@@ -114,6 +122,8 @@ export interface ProfileSeederOpts {
 	masterDir?: string
 	/** Override app prefix (tests). Defaults to /tmp/livos-chrome-app-. */
 	appPrefix?: string
+	/** Override the persistent WebApp profile root (tests). Defaults to /opt/livos/data/chrome-webapps. */
+	webappProfileDir?: string
 	/** Override execFile (tests). Promisified internally. */
 	execFileFn?: ExecFileFn
 	/** Override fs.access (tests). */
@@ -129,22 +139,36 @@ export interface ProfileSeederOpts {
 export interface SeedOpts {
 	/** When supplied, MUST match RFC 4122 v4. Default: randomUUID(). */
 	uuid?: string
+	/**
+	 * Phase 259 — when true the profile is PERSISTENT at
+	 * /opt/livos/data/chrome-webapps/<uuid> (survives close + reboot) and is
+	 * REUSED on the next open for the same uuid (no re-clone → the WebApp's login
+	 * + state carry over, the operator's "kapanınca veri gitmesin" requirement).
+	 * When false/absent → the legacy throwaway /tmp/livos-chrome-app-<uuid>.
+	 */
+	persistent?: boolean
 }
 
 export interface ProfileSeederHandle {
-	/** Seed-copy master → /tmp/livos-chrome-app-<uuid>. */
-	seed(opts?: SeedOpts): Promise<{uuid: string; appDir: string}>
+	/**
+	 * Seed-copy master → the per-app profile dir. Default: throwaway
+	 * /tmp/livos-chrome-app-<uuid>. With `persistent:true`: persistent
+	 * /opt/livos/data/chrome-webapps/<uuid>, REUSED (not re-cloned) when it
+	 * already exists. Returns `persistent` so the caller knows whether to clean up.
+	 */
+	seed(opts?: SeedOpts): Promise<{uuid: string; appDir: string; persistent: boolean}>
 	/** Idempotent — mkdir -p masterDir when absent. Used at livinityd boot. */
 	ensureMasterExists(): Promise<void>
-	/** Remove /tmp/livos-chrome-app-<uuid>. Idempotent (swallows rm errors). */
+	/** Remove /tmp/livos-chrome-app-<uuid>. Idempotent (swallows rm errors). NEVER touches persistent dirs. */
 	cleanup(uuid: string): Promise<void>
-	/** Remove all /tmp/livos-chrome-app-* dirs (boot-time orphan sweep). */
+	/** Remove all /tmp/livos-chrome-app-* dirs (boot-time orphan sweep). Persistent dirs are NOT swept. */
 	sweepOrphans(): Promise<number>
 }
 
 export function createProfileSeeder(opts: ProfileSeederOpts = {}): ProfileSeederHandle {
 	const masterDir = opts.masterDir ?? MASTER_PROFILE_DIR
 	const appPrefix = opts.appPrefix ?? APP_PROFILE_PREFIX
+	const webappDir = opts.webappProfileDir ?? WEBAPP_PROFILE_DIR
 	const execFn = opts.execFileFn ?? execFile
 	const accFn = opts.accessFn ?? access
 	const mkFn = opts.mkdirFn ?? mkdir
@@ -176,7 +200,7 @@ export function createProfileSeeder(opts: ProfileSeederOpts = {}): ProfileSeeder
 			}
 		},
 
-		async seed(seedOpts: SeedOpts = {}): Promise<{uuid: string; appDir: string}> {
+		async seed(seedOpts: SeedOpts = {}): Promise<{uuid: string; appDir: string; persistent: boolean}> {
 			// T-102-03 — validate caller-supplied uuid BEFORE any side effect.
 			// Default-generation via randomUUID() always conforms; this only
 			// fires when a caller passes their own uuid (rare, primarily tests).
@@ -188,26 +212,49 @@ export function createProfileSeeder(opts: ProfileSeederOpts = {}): ProfileSeeder
 				)
 			}
 
-			// Master must exist BEFORE we attempt cp. Without this guard, cp
-			// would surface a less-actionable ENOENT.
-			try {
-				await accFn(masterDir, fsConstants.R_OK | fsConstants.X_OK)
-			} catch {
-				throw new MasterProfileMissingError(masterDir)
-			}
-
-			const appDir = `${appPrefix}${uuid}`
+			// Phase 259 — persistent vs throwaway target. Persistent dirs live on the
+			// livos data volume keyed by uuid and are REUSED across opens (the login +
+			// state carry over); throwaway dirs are the legacy /tmp/<uuid> clone.
+			const persistent = seedOpts.persistent === true
+			const appDir = persistent ? `${webappDir}/${uuid}` : `${appPrefix}${uuid}`
 			const t0 = Date.now()
 
-			// A1 — CoW reflink first; fall back to plain cp -r on rejection.
-			try {
-				await execP('cp', ['-r', '--reflink=auto', masterDir, appDir])
-			} catch (err) {
-				log.warn?.(
-					`profile-seeder: cp --reflink=auto failed (likely non-CoW fs) — retrying plain cp -r`,
-					err,
-				)
-				await execP('cp', ['-r', masterDir, appDir])
+			// Persistent: if the dir already exists, REUSE it (no cp → preserve the
+			// WebApp's accumulated state). Only seed-from-master on the FIRST open.
+			let reused = false
+			if (persistent) {
+				try {
+					await mkFn(webappDir, {recursive: true})
+				} catch (err) {
+					log.warn?.(`profile-seeder: mkdir ${webappDir} failed (non-fatal)`, err)
+				}
+				try {
+					await accFn(appDir, fsConstants.R_OK | fsConstants.X_OK)
+					reused = true
+				} catch {
+					reused = false
+				}
+			}
+
+			if (!reused) {
+				// Master must exist BEFORE we attempt cp. Without this guard, cp
+				// would surface a less-actionable ENOENT.
+				try {
+					await accFn(masterDir, fsConstants.R_OK | fsConstants.X_OK)
+				} catch {
+					throw new MasterProfileMissingError(masterDir)
+				}
+
+				// A1 — CoW reflink first; fall back to plain cp -r on rejection.
+				try {
+					await execP('cp', ['-r', '--reflink=auto', masterDir, appDir])
+				} catch (err) {
+					log.warn?.(
+						`profile-seeder: cp --reflink=auto failed (likely non-CoW fs) — retrying plain cp -r`,
+						err,
+					)
+					await execP('cp', ['-r', masterDir, appDir])
+				}
 			}
 
 			// A7 — strip the master's Singleton{Lock,Cookie,Socket} so the
@@ -276,8 +323,12 @@ export function createProfileSeeder(opts: ProfileSeederOpts = {}): ProfileSeeder
 				log.warn?.(`profile-seeder: failed to prime Default/Preferences at ${appDir} (non-fatal — Chrome may show first-launch modal)`, err)
 			}
 
-			log.info?.(`profile-seeder: seeded ${appDir} from ${masterDir} in ${Date.now() - t0}ms`)
-			return {uuid, appDir}
+			log.info?.(
+				reused
+					? `profile-seeder: reused persistent ${appDir} in ${Date.now() - t0}ms`
+					: `profile-seeder: seeded ${appDir} from ${masterDir} in ${Date.now() - t0}ms`,
+			)
+			return {uuid, appDir, persistent}
 		},
 
 		async cleanup(uuid: string): Promise<void> {

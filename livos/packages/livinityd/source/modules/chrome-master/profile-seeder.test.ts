@@ -29,6 +29,7 @@ import {
 	ProfileSeederInputError,
 	MASTER_PROFILE_DIR,
 	APP_PROFILE_PREFIX,
+	WEBAPP_PROFILE_DIR,
 } from './profile-seeder.js'
 
 const VALID_UUID = '12345678-1234-1234-1234-123456789abc'
@@ -271,6 +272,64 @@ describe('102-03-01 MasterProfileSeeder', () => {
 			const shCall = execFn.mock.calls.find((c) => c[0] === 'sh')
 			expect(shCall).toBeDefined()
 			expect(shCall![1]).toEqual(['-c', `rm -rf ${APP_PROFILE_PREFIX}*`])
+		})
+	})
+
+	describe('seed() — Phase 259 persistent profiles', () => {
+		const PERSIST_DIR = `${WEBAPP_PROFILE_DIR}/${VALID_UUID}`
+
+		it('persistent FRESH: seeds master → chrome-webapps/<uuid>, persistent=true', async () => {
+			const execFn = makeOkExec()
+			// Reject ONLY the appDir existence probe (fresh); master + prefs resolve.
+			const accessFn = vi.fn(async (p: string) => {
+				if (p === PERSIST_DIR) throw Object.assign(new Error('ENOENT'), {code: 'ENOENT'})
+			})
+			const seeder = createProfileSeeder({
+				execFileFn: execFn as never,
+				accessFn: accessFn as never,
+				mkdirFn: makeOkMkdir() as never,
+				uuidFn: () => VALID_UUID,
+			})
+			const r = await seeder.seed({persistent: true})
+			expect(r.persistent).toBe(true)
+			expect(r.appDir).toBe(PERSIST_DIR)
+			const cpCall = execFn.mock.calls.find((c) => c[0] === 'cp')
+			expect(cpCall).toBeDefined()
+			expect((cpCall![1] as string[]).at(-1)).toBe(PERSIST_DIR)
+		})
+
+		it('persistent REUSE: existing dir is NOT re-cloned (state preserved), locks still stripped', async () => {
+			const execFn = makeOkExec()
+			const accessFn = makeOkAccess() // everything resolves → appDir exists → reuse
+			const seeder = createProfileSeeder({
+				execFileFn: execFn as never,
+				accessFn: accessFn as never,
+				mkdirFn: makeOkMkdir() as never,
+				uuidFn: () => VALID_UUID,
+			})
+			const r = await seeder.seed({persistent: true})
+			expect(r.persistent).toBe(true)
+			expect(r.appDir).toBe(PERSIST_DIR)
+			// No cp — the persistent dir was reused, preserving login + state.
+			expect(execFn.mock.calls.find((c) => c[0] === 'cp')).toBeUndefined()
+			// Singleton{Lock,Cookie,Socket} stripped so a crashed prior session can restart.
+			const rmCall = execFn.mock.calls.find(
+				(c) => c[0] === 'rm' && (c[1] as string[]).some((a) => a.includes('SingletonLock')),
+			)
+			expect(rmCall).toBeDefined()
+		})
+
+		it('default (no persistent flag): throwaway /tmp dir + persistent=false', async () => {
+			const execFn = makeOkExec()
+			const seeder = createProfileSeeder({
+				execFileFn: execFn as never,
+				accessFn: makeOkAccess() as never,
+				mkdirFn: makeOkMkdir() as never,
+				uuidFn: () => VALID_UUID,
+			})
+			const r = await seeder.seed()
+			expect(r.persistent).toBe(false)
+			expect(r.appDir).toBe(`${APP_PROFILE_PREFIX}${VALID_UUID}`)
 		})
 	})
 })
