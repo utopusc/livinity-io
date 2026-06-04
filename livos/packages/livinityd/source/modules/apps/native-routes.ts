@@ -26,7 +26,47 @@
 
 import {z} from 'zod'
 import {TRPCError} from '@trpc/server'
-import type {ChildProcess} from 'node:child_process'
+import {execFile as _execFile, type ChildProcess} from 'node:child_process'
+import {promisify} from 'node:util'
+
+const execFileP = promisify(_execFile)
+
+/**
+ * Phase 259 — fullscreen a freshly-spawned native app so it FILLS the 1280x720
+ * Xvfb. The stream captures the WHOLE display, so without this the app opens at
+ * its default size with the fluxbox desktop visible around it (operator: "açılan
+ * uygulamanın boyutu full screen olmalı"). Best-effort + fire-and-forget: the
+ * top-level window maps asynchronously after spawn, so we poll xdotool for it,
+ * then set EWMH fullscreen (fluxbox honors _NET_WM_STATE_FULLSCREEN) with a
+ * size+move fallback. livinityd runs as the desktop user (bruce), so xdotool/wmctrl
+ * run directly with DISPLAY=:N — no sudo needed.
+ */
+async function fullscreenNativeWindow(
+	pid: number,
+	display: string,
+	logger?: {info?(m: string): void; warn?(m: string): void},
+): Promise<void> {
+	const env = {...process.env, DISPLAY: display}
+	for (let attempt = 0; attempt < 24; attempt++) {
+		await new Promise((r) => setTimeout(r, 250))
+		let wid = ''
+		try {
+			const {stdout} = await execFileP('xdotool', ['search', '--pid', String(pid), '--onlyvisible'], {env})
+			// Last visible window = the most-recently-mapped top-level (the main
+			// window appears after any splash); ignore blank lines.
+			wid = stdout.split('\n').map((s) => s.trim()).filter(Boolean).pop() ?? ''
+		} catch {
+			/* window not mapped yet — keep polling */
+		}
+		if (!wid) continue
+		await execFileP('wmctrl', ['-i', '-r', wid, '-b', 'add,fullscreen'], {env}).catch(() => {})
+		await execFileP('xdotool', ['windowsize', wid, '1280', '720'], {env}).catch(() => {})
+		await execFileP('xdotool', ['windowmove', wid, '0', '0'], {env}).catch(() => {})
+		logger?.info?.(`native-app: fullscreened wid=${wid} on ${display}`)
+		return
+	}
+	logger?.warn?.(`native-app: no window found for pid=${pid} on ${display} to fullscreen (non-fatal)`)
+}
 
 import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
 import {
@@ -284,6 +324,10 @@ export const nativeAppsRouter = router({
 						message: 'native-app spawn failed: ' + msg,
 					})
 				}
+
+				// 4.5 — Phase 259: fullscreen the app window so it fills the 1280x720
+				// Xvfb (fire-and-forget; the window maps asynchronously after spawn).
+				void fullscreenNativeWindow(spawnedPid, display, adaptLogger)
 
 				// 5. Bind display to stream port via new display-based binder.
 				const startStreamFn = makeStartStreamFn(sm, userId)
