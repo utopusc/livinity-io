@@ -344,11 +344,12 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		// (same clamp treatment as WebApp). Absent `suggested` keeps the
 		// pre-254 behavior byte-identical.
 		const isWebApp = appId.startsWith('WEBAPP_')
+		const isNative = appId.startsWith('NATIVE_')
 		const isDisplay = appId.startsWith('DISPLAY_')
-		const baseSize = suggested ?? (isWebApp
+		const baseSize = suggested ?? ((isWebApp || isNative)
 			? {width: 1280, height: 720}
 			: (DEFAULT_WINDOW_SIZES[appId] || DEFAULT_WINDOW_SIZES.default))
-		const size = getResponsiveSize(baseSize.width, baseSize.height, isWebApp || isDisplay || suggested != null)
+		const size = getResponsiveSize(baseSize.width, baseSize.height, isWebApp || isNative || isDisplay || suggested != null)
 		// Use current state.windows.length at call time, not as dependency
 		const windowCount = state.windows.length
 
