@@ -4622,15 +4622,45 @@ Plans:
 **Goal:** Stream windows dock into the top-right Displays button with a slide-into-button animation, are recallable from there or the app icon, persist across page refresh, with WebApp=multi-instance / Native=single-instance, an {n} count badge, and stuck "uninstalling"/"restarting" states fixed.
 **Requirements:** SC1-SC8 (tracked in CONTEXT.md)
 **Depends on:** Phase 259
-**Plans:** 7 plans
+**Plans:** 7/7 plans complete
 
 Plans:
-- [ ] 260-01-PLAN.md — SC1: reconcile transient app.state against Docker + harden restart()/uninstall()
-- [ ] 260-02-PLAN.md — SC2: register native :N displays into displayManager so they surface in displays.list
-- [ ] 260-03-PLAN.md — SC3/SC4: collapse navbar + retarget drop-zone to Displays button + slide-into-button animation
-- [ ] 260-04-PLAN.md — SC3/SC5: {n} count badge on Displays button + recall docked windows from the popover
-- [ ] 260-05-PLAN.md — SC6: persist docked set across refresh + reconcile dead pins against displays.list
-- [ ] 260-06-PLAN.md — SC3/SC7/SC8: native single-instance focus/recall + webapp multi-instance (gated on backend concurrency)
-- [ ] 260-07-PLAN.md — Deploy to Mini PC + live verify CONTEXT steps 1-6 (manual checkpoint)
+- [x] 260-01-PLAN.md — SC1: reconcile transient app.state against Docker + harden restart()/uninstall()
+- [x] 260-02-PLAN.md — SC2: register native :N displays into displayManager so they surface in displays.list
+- [x] 260-03-PLAN.md — SC3/SC4: collapse navbar + retarget drop-zone to Displays button + slide-into-button animation
+- [x] 260-04-PLAN.md — SC3/SC5: {n} count badge on Displays button + recall docked windows from the popover
+- [x] 260-05-PLAN.md — SC6: persist docked set across refresh + reconcile dead pins against displays.list
+- [x] 260-06-PLAN.md — SC3/SC7/SC8: native single-instance focus/recall + webapp multi-instance (gated on backend concurrency)
+- [x] 260-07-PLAN.md — Deploy to Mini PC + live verify CONTEXT steps 1-6 (manual checkpoint)
+
+---
+
+### Phase 260.1: Displays Popover Hover/Recall/Fullscreen + AI Glow
+
+**Goal:** Polish the dock/Displays UX — drop→slide-right→into-button intake animation, hover-reveal popover with side-by-side displays, per-display × close (fixes the can't-close-display bug via a new displays.close teardown route), recall-by-drag + browser fullscreen, and a live AI/luse activity glow (last_input_at pulse). High bar on design + animation.
+**Requirements:** SC-A..SC-F (tracked in CONTEXT.md)
+**Depends on:** Phase 260
+**Plans:** 6 plans (4 waves)
+
+Plans:
+- [ ] 260.1-01-PLAN.md — SC-F backend: last_input_at on DisplayRecord + updateLastInputAt + luse input stamp (glow signal)
+- [ ] 260.1-02-PLAN.md — SC-B backend: displays.close tRPC route (owner-scope fix + native vs luse teardown dispatch)
+- [ ] 260.1-03-PLAN.md — SC-A/SC-C: top-bar hover-open popover + Displays-button intake animation
+- [ ] 260.1-04-PLAN.md — SC-B/SC-E: window-manager closeDisplay + window-chrome fullscreen button/prop
+- [ ] 260.1-05-PLAN.md — SC-C/SC-D/SC-E/SC-F: popover side-by-side + x close + drag-recall + fullscreen + glow; window.tsx requestFullscreen
+- [ ] 260.1-06-PLAN.md — deploy to Mini PC (SW clear + luse pkill) + operator live verify SC-A..SC-F
+
+---
+
+## Backlog
+
+### Phase 999.1: SC7 WebApp multi-instance backend re-key (deferred from Phase 260) (BACKLOG)
+
+**Goal:** Deliver SC7 (WebApp = unlimited instances) — deferred from Phase 260 because the webapp streaming backend keys every stream by `webappId` only, so a UI-only uniqueness change would let two webapp windows tear down each other's shared stream (forbidden, T-260-13). Requires a backend re-key: (1) re-key the active stream Map in `webapps/window-manager.ts` (`active = Map<string, ActiveWebApp>` ~:335) from webappId → per-instance key; (2) add an instance key to all 7 tRPC inputs in `webapps/trpc-router.ts` (window.spawn/focus/close + input.click/keypress/type/scroll); (3) thread it through input dispatch (`getWidForWebapp`/`getDisplayForWebapp` ~:955/:969), spawn idempotency (~:428), close (~:712/:719); (4) update `webapp-stream-window.tsx` (keys spawn/close/input + `spawnedForRef` by webappId); (5) decide the Phase-259 persistent-profile product question (N instances share one Chrome profile vs isolated). Then flip `hooks/use-launch-webapp.ts:30` (`WEBAPP_<id>`) to a unique per-instance appId. Full enumeration in `.planning/phases/260-window-dock-to-displays-stream-recall-ux/260-06-SUMMARY.md` § "SC7 BACKEND SPLIT NEEDED". SC1–SC6 + SC8 already shipped in Phase 260.
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
 
 ---
