@@ -45,5 +45,20 @@ chmod 0644 "$keyring"
 printf 'deb [arch=amd64 signed-by=%s] %s\n' "$keyring" "$repoLine" > "$listfile"
 chmod 0644 "$listfile"
 
+# --- Priority pin so this single-vendor repo wins over Ubuntu's package ------
+# Needed for e.g. Firefox: Ubuntu 24.04 ships a snap *transitional* `firefox`
+# that would otherwise shadow Mozilla's real .deb. These repos are single-vendor,
+# so pinning their origin at 1000 only affects their own packages.
+repoHost="$(printf '%s' "$repoLine" | awk '{print $1}' | sed -E 's#^https?://##; s#/.*##')"
+if [[ -n "$repoHost" ]]; then
+	prefs="/etc/apt/preferences.d/livos-${name}"
+	{
+		echo "Package: *"
+		echo "Pin: origin ${repoHost}"
+		echo "Pin-Priority: 1000"
+	} > "$prefs"
+	chmod 0644 "$prefs"
+fi
+
 # --- Refresh so the new packages resolve ------------------------------------
 DEBIAN_FRONTEND=noninteractive apt-get update
