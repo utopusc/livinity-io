@@ -672,6 +672,17 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 	const widResolver = options.activeWebappWidResolver
 	const wid = (args: Record<string, unknown>): number | undefined =>
 		resolveWindowId(args, defaultWindowId, widResolver)
+	// SC-F (260.1): stamp the display's last_input_at AFTER a successful INPUT action so the
+	// Displays popover can pulse-glow a display the agent is actively driving. Best-effort,
+	// fire-and-forget — a stamp failure must NEVER affect the input result. Additive only.
+	// Read-only tools (screenshot/list_windows/cursor_position) do NOT call this.
+	function stampInputActivity(target: string | undefined): void {
+		const dm = options.displayManager
+		if (!dm || !target) return
+		void Promise.resolve()
+			.then(() => dm.updateLastInputAt(target))
+			.catch(() => undefined)
+	}
 	return {
 	// ── Mouse primitives ──────────────────────────────────────────────────────
 
@@ -705,13 +716,15 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		const coordinates = args.coordinates as {x: number; y: number}
 		const w = wid(args)
 		const displayArg = parseDisplayArg(args)
-		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+		const r = await withScopedDisplay(displayArg, options.defaultDisplay, () =>
 			withPostScreenshot(
 				`moveMouse → (${coordinates.x}, ${coordinates.y})${displayArg ? ` display=${displayArg}` : ''}`,
 				() => moveMouse(coordinates, w),
 				w,
 			),
 		)
+		stampInputActivity(displayArg ?? options.defaultDisplay)
+		return r
 	},
 
 	computer_trace_mouse: async (args) => {
@@ -744,7 +757,7 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 			typeof (argsWithCoord as {clickCount?: unknown}).clickCount === 'number'
 				? ((argsWithCoord as {clickCount: number}).clickCount)
 				: 1
-		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+		const r = await withScopedDisplay(displayArg, options.defaultDisplay, () =>
 			withPostScreenshot(
 				`clickMouse ${summarizeArgs(argsWithCoord)}${displayArg ? ` display=${displayArg}` : ''}`,
 				() =>
@@ -760,6 +773,8 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 				w,
 			),
 		)
+		stampInputActivity(displayArg ?? options.defaultDisplay)
+		return r
 	},
 
 	computer_press_mouse: async (args) => {
@@ -796,19 +811,21 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		const holdKeys = args.holdKeys as ReadonlyArray<string> | undefined
 		const w = wid(args)
 		const displayArg = parseDisplayArg(args)
-		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+		const r = await withScopedDisplay(displayArg, options.defaultDisplay, () =>
 			withPostScreenshot(
 				`dragMouse ${button} along ${path.length} points${displayArg ? ` display=${displayArg}` : ''}`,
 				() => dragMouse(path, button, holdKeys ?? undefined),
 				w,
 			),
 		)
+		stampInputActivity(displayArg ?? options.defaultDisplay)
+		return r
 	},
 
 	computer_scroll: async (args) => {
 		const w = wid(args)
 		const displayArg = parseDisplayArg(args)
-		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+		const r = await withScopedDisplay(displayArg, options.defaultDisplay, () =>
 			withPostScreenshot(
 				`scroll ${summarizeArgs(args)}${displayArg ? ` display=${displayArg}` : ''}`,
 				() =>
@@ -829,6 +846,8 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 				w,
 			),
 		)
+		stampInputActivity(displayArg ?? options.defaultDisplay)
+		return r
 	},
 
 	// ── Keyboard primitives ──────────────────────────────────────────────────
@@ -838,13 +857,15 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		const delay = args.delay as number | undefined
 		const w = wid(args)
 		const displayArg = parseDisplayArg(args)
-		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+		const r = await withScopedDisplay(displayArg, options.defaultDisplay, () =>
 			withPostScreenshot(
 				`typeKeys [${keys.join('+')}]${displayArg ? ` display=${displayArg}` : ''}`,
 				() => typeKeys(keys, delay ?? undefined, w),
 				w,
 			),
 		)
+		stampInputActivity(displayArg ?? options.defaultDisplay)
+		return r
 	},
 
 	computer_press_keys: async (args) => {
@@ -870,13 +891,15 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		const safeText = isSensitive ? `<${text.length} sensitive chars>` : text
 		const w = wid(args)
 		const displayArg = parseDisplayArg(args)
-		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+		const r = await withScopedDisplay(displayArg, options.defaultDisplay, () =>
 			withPostScreenshot(
 				`typeText ${JSON.stringify(safeText)}${displayArg ? ` display=${displayArg}` : ''}`,
 				() => typeText(text, delay ?? undefined, isSensitive ?? undefined, w),
 				w,
 			),
 		)
+		stampInputActivity(displayArg ?? options.defaultDisplay)
+		return r
 	},
 
 	computer_paste_text: async (args) => {
@@ -887,13 +910,15 @@ export function buildHandlers(options: LuseToolsOptions = {}): Record<string, Ha
 		const safeText = isSensitive ? `<${text.length} sensitive chars>` : text
 		const w = wid(args)
 		const displayArg = parseDisplayArg(args)
-		return withScopedDisplay(displayArg, options.defaultDisplay, () =>
+		const r = await withScopedDisplay(displayArg, options.defaultDisplay, () =>
 			withPostScreenshot(
 				`pasteText ${JSON.stringify(safeText)}${displayArg ? ` display=${displayArg}` : ''}`,
 				() => pasteText(text, isSensitive ?? undefined, w),
 				w,
 			),
 		)
+		stampInputActivity(displayArg ?? options.defaultDisplay)
+		return r
 	},
 
 	// ── Utility actions ──────────────────────────────────────────────────────
