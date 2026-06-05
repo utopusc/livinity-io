@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useRef, useState, type RefObject} from 'react'
-import {motion} from 'framer-motion'
+import {AnimatePresence, motion} from 'framer-motion'
 import {useNavigate} from 'react-router-dom'
 import {TbLogout, TbPalette, TbPencil, TbRefresh} from 'react-icons/tb'
 import {Monitor} from 'lucide-react'
@@ -100,6 +100,30 @@ function TopBarDesktop() {
 	// stays alive and renderable when minimized into the shelf. The TopBar
 	// derives its chip list directly from windowManager.windows.
 	const pinnedWindows = (windowManager?.windows ?? []).filter((w) => w.isPinnedToTopBar)
+
+	// Phase 260-04 (SC5) — the {n} count badge on the Displays button.
+	//
+	// BADGE SEMANTICS (resolved Open Question Q1 / Assumption A3):
+	// CONTEXT SC5 says "number of currently open/docked windows (displays)" and
+	// verify step 1 says the badge "reflects" a native app the MOMENT you OPEN it
+	// (before docking). Both point at the count the Displays POPOVER itself shows
+	// — i.e. the live `displays.list` count (which, after 260-02, includes open
+	// native-app displays), NOT only the docked/pinned subset. So the badge is
+	// driven by an always-on lightweight `displays.list` query, floored by the
+	// number of docked (pinned) windows so a docked stream is never under-counted
+	// even if its server-side display record has not yet refreshed:
+	//
+	//   badge = max(displays.list.length, pinnedWindows.length)
+	//
+	// This keeps the count == the popover contents (SC5 "matches the popover")
+	// while guaranteeing every docked window is represented. The query polls at
+	// the same 4s cadence the popover uses; it is always-on (not gated on the
+	// popover being open) because the badge must update live without the popover.
+	const displaysQuery = trpcReact.displays.list.useQuery(undefined, {
+		refetchInterval: 4000,
+	})
+	const liveDisplaysCount = displaysQuery.data?.displays?.length ?? 0
+	const displaysBadgeCount = Math.max(liveDisplaysCount, pinnedWindows.length)
 
 	// Phase 130-09 — bar expands either while a window is being dragged
 	// (drag-to-pin gesture) OR while the cursor is hovering the bar (so
@@ -349,11 +373,32 @@ function TopBarDesktop() {
 									aria-label='Displays'
 									title='Displays'
 									className={cn(
-										'grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-[color:var(--bg-2)]',
+										'relative grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-[color:var(--bg-2)]',
 										isDragOverShelf && 'bg-[color:var(--bg-2)] ring-2 ring-[color:var(--fg)] ring-offset-1',
 									)}
 								>
 									<Monitor className='h-4 w-4' />
+									{/* Phase 260-04 (SC5) — {n} count badge. Hidden when the
+									    count is 0; pops in/out + animates on change via
+									    AnimatePresence + a spring (same spring family as the
+									    former PinnedWindowChip, top-bar.tsx pre-260-03). The
+									    count is displaysBadgeCount (live displays.list count
+									    floored by docked windows — see derivation above). */}
+									<AnimatePresence>
+										{displaysBadgeCount > 0 && (
+											<motion.span
+												key={displaysBadgeCount}
+												initial={{scale: 0, opacity: 0}}
+												animate={{scale: 1, opacity: 1}}
+												exit={{scale: 0, opacity: 0}}
+												transition={{type: 'spring', stiffness: 500, damping: 28}}
+												className='pointer-events-none absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[color:var(--fg)] px-1 text-[10px] font-semibold leading-none text-[color:var(--bg)] tabular-nums'
+												aria-label={`${displaysBadgeCount} display${displaysBadgeCount === 1 ? '' : 's'}`}
+											>
+												{displaysBadgeCount}
+											</motion.span>
+										)}
+									</AnimatePresence>
 								</button>
 							</PopoverTrigger>
 							<PopoverContent align='end' className='p-0'>
