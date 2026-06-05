@@ -282,6 +282,29 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 	const pinnedUpsertMutation = trpcReact.pinnedWindows.upsert.useMutation()
 	const pinnedDeleteMutation = trpcReact.pinnedWindows.delete.useMutation()
 
+	// Phase 260-05 (SC6) — server-side liveness source of truth for the
+	// hydrate reconcile. After 260-02 native-app `:N` displays register into
+	// the Redis-backed displayManager, so `displays.list` lists EVERY live
+	// stream (luse + webapp + native). On hydrate we reconcile each persisted
+	// native pin against this list: a pin whose underlying stream is no longer
+	// live (e.g. the in-memory `activeNative` was cleared by a livinityd
+	// RESTART — see 260-RESEARCH Assumption A5 / SC6 boundary) must be dropped
+	// instead of re-opening as a dead chip that recalls into a spinner.
+	//
+	// "refresh" (page reload) keeps livinityd + the streams alive, so the pin
+	// stays live and re-mounting re-attaches to the running stream (idempotent
+	// spawn, native-app-stream-window.tsx). A livinityd RESTART is the only
+	// case that produces a dead pin — that is exactly what this reconcile heals.
+	//
+	// We must NOT drop pins just because this list hasn't loaded yet (that
+	// would erase good pins on a slow network), so the hydrate effect below is
+	// gated on BOTH queries being ready before it sets hydratedRef.
+	const displaysListQuery = trpcReact.displays.list.useQuery(undefined, {
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: false,
+		retry: 1,
+	})
+
 	// Mirror state.windows in a ref so the pin/unpin mutation callbacks
 	// can look up a window's full payload without taking state in their
 	// dep array (which would re-create the callbacks on every reducer
@@ -303,15 +326,59 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 
 	// One-shot hydration guard — only dispatch hydrated rows once even if
 	// the query refetches under StrictMode-double-mount.
+	//
+	// Phase 260-05 (SC6) — the hydrate now RECONCILES each persisted pin
+	// against `displays.list` (the server-side liveness truth) before
+	// re-opening it. It is gated on BOTH `pinnedWindows.list` AND
+	// `displays.list` being ready so a slow/pending displays query can never
+	// cause a good native pin to be dropped prematurely (T-260-10).
 	const hydratedRef = useRef(false)
 	useEffect(() => {
 		if (hydratedRef.current) return
 		const rows = pinnedListQuery.data
 		if (!rows || rows.length === 0) return
+		// SC6 gate: wait until displays.list has resolved (success or error)
+		// before reconciling. `data` is undefined while loading; once the
+		// query settles it is an object (even an empty-list payload), so we
+		// key on `data !== undefined`. Without this guard we would treat
+		// "still loading" as "no live displays" and erase every native pin.
+		const displaysData = displaysListQuery.data
+		if (displaysData === undefined) return
 		hydratedRef.current = true
+
+		// Set of live display NAMES (after 260-02, a native display's `name`
+		// is its app name — the same value persisted as the pin `title`).
+		const liveDisplayNames = new Set(
+			(displaysData.displays ?? []).map((d) => d.name),
+		)
+
 		for (const row of rows) {
 			// Skip rows whose window is already mounted (defense in depth).
 			if (windowsRef.current.some((w) => w.id === row.windowId)) continue
+
+			// SC6 reconcile — NATIVE pins only. A native pin is LIVE iff a
+			// displays.list entry exists whose `name` matches the pin title
+			// (the native app name). The `:N` itself is allocated per-spawn
+			// server-side and is NOT stored on the pinned row, so the app
+			// name is the stable client-visible key. If no matching live
+			// display exists the underlying stream is gone (livinityd
+			// restart) → drop the pin: do NOT OPEN_WINDOW and delete the
+			// dead Postgres row so it does not resurrect on the next refresh.
+			//
+			// WEBAPP (and any other) pins are NOT reconciled here: webapp
+			// liveness is not represented in displays.list, so we keep the
+			// existing behavior (re-open + let the idempotent re-spawn
+			// re-attach). 260-06's webapp backend work may add a liveness
+			// signal later; until then dropping webapp pins here would be a
+			// false-positive. (Documented in 260-05-SUMMARY.)
+			const isNative = row.appId.startsWith('NATIVE_')
+			if (isNative && !liveDisplayNames.has(row.title)) {
+				// Dead native pin → reap it (UI + Postgres) instead of
+				// re-opening a chip that recalls into a spinner.
+				pinnedDeleteMutation.mutate({windowId: row.windowId})
+				continue
+			}
+
 			dispatch({
 				type: 'OPEN_WINDOW',
 				payload: {
@@ -327,7 +394,7 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 				},
 			})
 		}
-	}, [pinnedListQuery.data])
+	}, [pinnedListQuery.data, displaysListQuery.data, pinnedDeleteMutation])
 
 	const openWindow = useCallback((appId: string, route: string, title: string, icon: string, originRect?: OriginRect, suggested?: {width: number; height: number}): WindowId => {
 		const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)
