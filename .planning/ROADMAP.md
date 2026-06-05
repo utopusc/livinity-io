@@ -4606,4 +4606,31 @@ Plans:
 - [x] 255-04-PLAN.md — Wave 2: single navbar Displays popover (screenshot thumbs + folded window rows) + strip removal + additive clock glow-up (GOAL-255-DISPLAYS-POPOVER, LIVE-THUMBS, NAVBAR-GLOWUP) ✅ DONE 2026-06-02 (`82383782` clock-helpers GREEN + glow-up + `e79841f7` DisplaysPopover + `9c236ff6` TopBar single 🖥️ popover + `9b296cff` delete 254-04 strip; clock-helpers 20/20 + displays-popover 10/10 = 30/30 GREEN; screenshot thumbs only, 0 RFB(/new WebSocket(; @livos/config + ui build clean vite ✓ 38.15s; 3 auto-fixes [glyph 95-99, running_apps unknown[], comment-token reword]; Task 5 operator walk auto-approved → UAT)
 - [x] 255-05-PLAN.md — Wave 2: in-display LivOS branded shell (feh wallpaper + themed fluxbox style + tint2 dock) + apt patch (GOAL-255-LIVOS-SHELL)
 
+### Phase 259: Native App UX Polish - install icons, consistent window sizing, fullscreen
+
+**Goal:** Installed native apps surface as launch icons immediately and open at a consistent fullscreen 1280x720 with no letterbox; Docker + WebApp windows keep working.
+**Requirements**: SC1-SC4 (tracked in CONTEXT.md)
+**Depends on:** Phase 258
+**Plans:** 2 plans
+
+Plans:
+- [ ] 259-01-PLAN.md — UI: invalidate apps.native.list post-install (SC1) + size NATIVE_ windows 16:9 (SC2)
+- [ ] 259-02-PLAN.md — livinityd: robust fullscreen re-apply loop (SC3) + native iconUrl from manifest (SC1 cosmetic)
+
+### Phase 260: Window Dock-to-Displays Stream Recall UX
+
+**Goal:** Stream windows dock into the top-right Displays button with a slide-into-button animation, are recallable from there or the app icon, persist across page refresh, with WebApp=multi-instance / Native=single-instance, an {n} count badge, and stuck "uninstalling"/"restarting" states fixed.
+**Requirements:** SC1-SC8 (tracked in CONTEXT.md)
+**Depends on:** Phase 259
+**Plans:** 7 plans
+
+Plans:
+- [ ] 260-01-PLAN.md — SC1: reconcile transient app.state against Docker + harden restart()/uninstall()
+- [ ] 260-02-PLAN.md — SC2: register native :N displays into displayManager so they surface in displays.list
+- [ ] 260-03-PLAN.md — SC3/SC4: collapse navbar + retarget drop-zone to Displays button + slide-into-button animation
+- [ ] 260-04-PLAN.md — SC3/SC5: {n} count badge on Displays button + recall docked windows from the popover
+- [ ] 260-05-PLAN.md — SC6: persist docked set across refresh + reconcile dead pins against displays.list
+- [ ] 260-06-PLAN.md — SC3/SC7/SC8: native single-instance focus/recall + webapp multi-instance (gated on backend concurrency)
+- [ ] 260-07-PLAN.md — Deploy to Mini PC + live verify CONTEXT steps 1-6 (manual checkpoint)
+
 ---
