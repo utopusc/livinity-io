@@ -570,6 +570,12 @@ export const nativeAppsRouter = router({
 					}
 				: undefined
 
+			// [SC2 — Phase 260-02] Capture the display BEFORE closeNativeApp runs:
+			// closeNativeApp deletes the activeNative handle (the only place the
+			// `:N` is known), so we must read it first to remove the matching
+			// displayManager registry record after teardown.
+			const closingDisplay = activeNative.get(input.id)?.display
+
 			await closeNativeApp({
 				id: input.id,
 				active: activeNative,
@@ -578,6 +584,33 @@ export const nativeAppsRouter = router({
 				streamManager: sm,
 				logger: adaptLogger,
 			})
+
+			// [SC2 — Phase 260-02] Explicitly remove the native display's Redis
+			// record so it disappears from the Displays popover IMMEDIATELY on
+			// close (RESEARCH Open Q4 prefers explicit del over waiting for the
+			// TTL/orphan GC — which is kept as a backstop). kill() with
+			// callerSession:'' passes the owner gate because native displays are
+			// registered with ownerSession:'' (host/shared). There is no
+			// displayManager-owned X handle and no attached apps for a native
+			// display, so kill() only DELs the two Redis keys — it never touches
+			// the native binary/Xvfb (closeNativeApp already tore those down) or
+			// the nativeDisplayAllocator. Guarded + try/catch so removal can NEVER
+			// crash close (preserves Phase 259 stability).
+			if (closingDisplay && ctx.livinityd?.displayManager) {
+				try {
+					await ctx.livinityd.displayManager.kill({
+						display: closingDisplay,
+						callerSession: '',
+					})
+				} catch (delErr) {
+					adaptLogger?.warn(
+						'apps.native.close: displayManager.kill failed for ' +
+							closingDisplay +
+							' (continuing — TTL/orphan GC will reap it): ' +
+							(delErr instanceof Error ? delErr.message : String(delErr)),
+					)
+				}
+			}
 
 			return {ok: true as const}
 		}),
