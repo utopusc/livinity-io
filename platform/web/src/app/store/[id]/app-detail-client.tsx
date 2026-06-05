@@ -210,6 +210,7 @@ export function AppDetailClient({ appId }: AppDetailClientProps) {
                 name: app.name,
                 category: app.category,
                 manifest: app.manifest,
+                iconUrl: app.icon_url,
               })
             }
             onUninstall={() => sendUninstall(appId, app.section)}

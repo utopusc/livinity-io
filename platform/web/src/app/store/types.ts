@@ -66,6 +66,8 @@ export type StoreToLivOSMessage =
       name?: string;
       category?: string;
       manifest?: unknown;
+      // Phase 259 — hosted icon image URL for the native desktop tile.
+      iconUrl?: string;
     }
   // Phase 157 round 3 — uninstall also carries section so the bridge
   // routes v37 sections to apps.uninstallV37 instead of the legacy
@@ -140,7 +142,7 @@ export interface StoreContextValue {
   sendInstall: (
     appId: string,
     section: Section,
-    payload?: { name?: string; category?: string; manifest?: unknown },
+    payload?: { name?: string; category?: string; manifest?: unknown; iconUrl?: string },
   ) => void;
   sendUninstall: (appId: string, section?: Section) => void;
   sendOpen: (appId: string) => void;

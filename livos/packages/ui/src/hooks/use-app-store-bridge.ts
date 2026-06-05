@@ -24,6 +24,9 @@ type StoreToLivOSMessage =
 			name?: string
 			category?: string
 			manifest?: unknown
+			// Phase 259 — hosted icon image URL so the native desktop tile renders
+			// real artwork (manifest.desktopEntry.icon is a non-renderable bare name).
+			iconUrl?: string
 		}
 	| {type: 'uninstall'; appId: string; section?: Section}
 	| {type: 'open'; appId: string}
@@ -40,7 +43,7 @@ type StoreToLivOSMessage =
 // catalog row alongside section. Without it the bridge cannot resolve
 // manifests for non-Docker sections (LivOS UI CSP blocks cross-origin
 // fetch back to livinity.io apex).
-type InstallPayload = {appId: string; section: Section; name?: string; category?: string; manifest?: unknown}
+type InstallPayload = {appId: string; section: Section; name?: string; category?: string; manifest?: unknown; iconUrl?: string}
 
 type AppStatusEntry = {id: string; status: 'running' | 'stopped' | 'not_installed' | 'installing' | 'uninstalling'; progress?: number; subdomain?: string; defaultUsername?: string; defaultPassword?: string}
 
@@ -277,7 +280,7 @@ export function useAppStoreBridge(
 	// install message, then poll v37Progress until done.
 	const handleInstallV37 = useCallback(
 		async (payload: InstallPayload) => {
-			const {appId, section, name, category, manifest} = payload
+			const {appId, section, name, category, manifest, iconUrl} = payload
 			if (!name || !category || manifest === undefined) {
 				sendToIframe({
 					type: 'installed',
@@ -340,6 +343,7 @@ export function useAppStoreBridge(
 					name,
 					category,
 					manifest,
+					iconUrl,
 				})
 				if (resolved) return // polling already finalised
 				resolved = true
@@ -607,6 +611,7 @@ export function useAppStoreBridge(
 							name: data.name,
 							category: data.category,
 							manifest: data.manifest,
+							iconUrl: data.iconUrl,
 						})
 					}
 					break

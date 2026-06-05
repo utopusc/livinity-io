@@ -17,7 +17,7 @@ import { Icon } from './icons';
 async function fetchAppFull(
   appId: string,
   token: string | null,
-): Promise<{ name?: string; category?: string; manifest?: unknown }> {
+): Promise<{ name?: string; category?: string; manifest?: unknown; iconUrl?: string }> {
   try {
     const res = await fetch(`/api/apps/${encodeURIComponent(appId)}`, {
       headers: token ? { 'X-Api-Key': token } : undefined,
@@ -28,6 +28,9 @@ async function fetchAppFull(
       name: typeof full?.name === 'string' ? full.name : undefined,
       category: typeof full?.category === 'string' ? full.category : undefined,
       manifest: full?.manifest,
+      // Phase 259 — forward the hosted icon so the native desktop tile shows
+      // real artwork (the manifest's freedesktop icon name isn't renderable).
+      iconUrl: typeof full?.icon_url === 'string' ? full.icon_url : undefined,
     };
   } catch {
     return {};

@@ -42,7 +42,7 @@ import {
 import {contextMenuClasses} from '@/shadcn-components/ui/shared/menu'
 import {trpcReact} from '@/trpc/trpc'
 
-import {AppIcon} from '../desktop/app-icon'
+import {AppIcon, APP_ICON_PLACEHOLDER_SRC} from '../desktop/app-icon'
 import {useLaunchNativeApp} from './use-launch-native-app'
 
 export interface NativeAppIconProps {
@@ -92,7 +92,7 @@ export function NativeAppIcon({id, name, iconUrl, wmClassHint}: NativeAppIconPro
 				<ContextMenuTrigger className='group'>
 					<AppIcon
 						label={name}
-						src={iconUrl ?? ''}
+						src={iconUrl ?? APP_ICON_PLACEHOLDER_SRC}
 						onClick={handleClick}
 						state='ready'
 					/>
