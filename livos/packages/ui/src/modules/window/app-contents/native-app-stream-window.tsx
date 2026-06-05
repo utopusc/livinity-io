@@ -215,10 +215,14 @@ export default function NativeAppStreamWindow({nativeAppId, windowId}: NativeApp
 				</div>
 			)}
 
-			{/* VNC canvas. useWebAppVnc owns the noVNC RFB connection. */}
+			{/* VNC canvas. useWebAppVnc owns the noVNC RFB connection. The
+			    [&_canvas] rules force the noVNC <canvas> to fill the container
+			    with object-contain — byte-identical to the X11 Display window,
+			    which seats flush — so the 16:9 stream has no top/bottom bands.
+			    min-h-0 lets the flex child shrink instead of overflowing. */}
 			<div
 				ref={vnc.containerRef}
-				className='flex-1 outline-none'
+				className='flex-1 min-h-0 outline-none [&_canvas]:h-full [&_canvas]:w-full [&_canvas]:object-contain'
 				style={{background: 'black'}}
 			/>
 		</div>
