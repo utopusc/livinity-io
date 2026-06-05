@@ -130,6 +130,21 @@ export async function spawnNativeApp(
 		while (stderrTail.length > STDERR_TAIL_LIMIT) stderrTail.shift()
 	})
 
+	// (c2) Spawn-error handler — CRITICAL. Without an 'error' listener a failed
+	// spawn (ENOENT for a missing/wrong binaryPath, EACCES, …) emits an UNHANDLED
+	// 'error' event that throws and CRASHES the entire livinityd process — taking
+	// down every app (incl. Docker, → 502). A single bad native-app config must
+	// never crash the daemon. The async 'error' fires after this function returns,
+	// so the listener MUST be attached here (synchronously) to catch it.
+	child.on('error', (err) => {
+		const tail = stderrTail.length > 0
+			? `\n--- native-app[${cfg.name}] stderr (last ${stderrTail.length}) ---\n${stderrTail.join('\n')}`
+			: ''
+		log?.warn?.(
+			`native-app[${cfg.name}] spawn error (${cfg.binaryPath}): ${err instanceof Error ? err.message : String(err)}${tail}`,
+		)
+	})
+
 	child.on('exit', (code, signal) => {
 		// code=0 → clean exit; code=null → killed by signal (signal arg carries
 		// detail). We warn only on non-zero numeric codes so a deliberate
