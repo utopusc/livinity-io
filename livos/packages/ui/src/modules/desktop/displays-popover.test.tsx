@@ -93,3 +93,61 @@ describe('displays-popover — Phase 260-04 (SC3) docked-window recall surface',
 		expect(SRC).not.toMatch(/\.closeWindow\(/)
 	})
 })
+
+describe('displays-popover — Phase 260.1 SC-C (side-by-side layout)', () => {
+	it('lays cards out in a wrapping horizontal flex row (not a 2-col grid)', () => {
+		expect(SRC).toMatch(/flex flex-wrap/)
+		// the old stacked grid must be gone from the displays section
+		expect(SRC).not.toMatch(/grid grid-cols-2/)
+	})
+
+	it('gives each card a fixed basis so they sit abreast', () => {
+		expect(SRC).toMatch(/w-\[160px\]/)
+	})
+
+	it('uses the established hover-lift spring on the card', () => {
+		expect(SRC).toMatch(/whileHover=\{\{translateY:\s*-6\}\}/)
+		expect(SRC).toMatch(/stiffness:\s*500/)
+	})
+
+	it('keeps the thumbnail screenshot poll + DISPLAY_ click-to-open after the redesign', () => {
+		expect(SRC).toMatch(/refetchInterval:\s*2000/)
+		expect(SRC).toMatch(/openWindow\(`DISPLAY_\$\{d\.display\}`/)
+	})
+})
+
+describe('displays-popover — Phase 260.1 SC-D (per-card × close)', () => {
+	it('renders a hover-revealed × close button', () => {
+		expect(SRC).toMatch(/aria-label='Close display'/)
+		expect(SRC).toMatch(/group-hover:opacity-100/)
+	})
+
+	it('wires × close to the displays.close backend mutation', () => {
+		expect(SRC).toMatch(/displays\.close\.useMutation/)
+		expect(SRC).toMatch(/closeMutation\.mutate\(\{display:\s*d\.display\}\)/)
+	})
+
+	it('refetches the list after close so the card disappears + badge decrements', () => {
+		expect(SRC).toMatch(/displaysQuery\.refetch\(\)/)
+	})
+})
+
+describe('displays-popover — Phase 260.1 SC-F (last_input_at activity glow)', () => {
+	it('extends DisplayRecord with last_input_at', () => {
+		expect(SRC).toMatch(/last_input_at\?:\s*string/)
+	})
+
+	it('computes a ~3s recency flag from last_input_at', () => {
+		expect(SRC).toMatch(/Date\.now\(\)\s*-\s*Date\.parse\(d\.last_input_at\)/)
+		expect(SRC).toMatch(/ACTIVITY_WINDOW_MS/)
+	})
+
+	it('renders an on-brand pulsing boxShadow glow gated on the active flag', () => {
+		expect(SRC).toMatch(/122,\s*162,\s*255/)
+		expect(SRC).toMatch(/boxShadow:/)
+		expect(SRC).toMatch(/repeat:\s*Infinity/)
+		// the glow is mounted only when active (fades via AnimatePresence)
+		expect(SRC).toMatch(/\{active\s*&&/)
+		expect(SRC).toMatch(/AnimatePresence/)
+	})
+})
