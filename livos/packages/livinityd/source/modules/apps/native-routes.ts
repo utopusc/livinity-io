@@ -47,25 +47,64 @@ async function fullscreenNativeWindow(
 	logger?: {info?(m: string): void; warn?(m: string): void},
 ): Promise<void> {
 	const env = {...process.env, DISPLAY: display}
+
+	// Find at least one visible top-level for this pid (poll up to ~6s).
+	let wids: string[] = []
 	for (let attempt = 0; attempt < 24; attempt++) {
 		await new Promise((r) => setTimeout(r, 250))
-		let wid = ''
 		try {
-			const {stdout} = await execFileP('xdotool', ['search', '--pid', String(pid), '--onlyvisible'], {env})
-			// Last visible window = the most-recently-mapped top-level (the main
-			// window appears after any splash); ignore blank lines.
-			wid = stdout.split('\n').map((s) => s.trim()).filter(Boolean).pop() ?? ''
+			const {stdout} = await execFileP(
+				'xdotool',
+				['search', '--pid', String(pid), '--onlyvisible'],
+				{env},
+			)
+			wids = stdout.split('\n').map((s) => s.trim()).filter(Boolean)
 		} catch {
 			/* window not mapped yet — keep polling */
 		}
-		if (!wid) continue
-		await execFileP('wmctrl', ['-i', '-r', wid, '-b', 'add,fullscreen'], {env}).catch(() => {})
-		await execFileP('xdotool', ['windowsize', wid, '1280', '720'], {env}).catch(() => {})
-		await execFileP('xdotool', ['windowmove', wid, '0', '0'], {env}).catch(() => {})
-		logger?.info?.(`native-app: fullscreened wid=${wid} on ${display}`)
+		if (wids.length > 0) break
+	}
+
+	if (wids.length === 0) {
+		logger?.warn?.(
+			`native-app: no window found for pid=${pid} on ${display} to fullscreen (non-fatal)`,
+		)
 		return
 	}
-	logger?.warn?.(`native-app: no window found for pid=${pid} on ${display} to fullscreen (non-fatal)`)
+
+	// Re-apply EWMH fullscreen + maximize + explicit geometry across several spaced
+	// iterations (~3s total) so apps like OBS that restore their own layout AFTER mapping
+	// get corrected. Re-query the window list each pass so a late-mapped main window
+	// (after a splash closes) is also covered. Best-effort — each call swallows errors.
+	for (let pass = 0; pass < 6; pass++) {
+		try {
+			const {stdout} = await execFileP(
+				'xdotool',
+				['search', '--pid', String(pid), '--onlyvisible'],
+				{env},
+			)
+			const current = stdout.split('\n').map((s) => s.trim()).filter(Boolean)
+			if (current.length > 0) wids = current
+		} catch {
+			/* keep the last known set */
+		}
+		for (const wid of wids) {
+			await execFileP(
+				'wmctrl',
+				['-i', '-r', wid, '-b', 'add,maximized_vert,maximized_horz'],
+				{env},
+			).catch(() => {})
+			await execFileP('wmctrl', ['-i', '-r', wid, '-b', 'add,fullscreen'], {env}).catch(
+				() => {},
+			)
+			await execFileP('xdotool', ['windowsize', wid, '1280', '720'], {env}).catch(() => {})
+			await execFileP('xdotool', ['windowmove', wid, '0', '0'], {env}).catch(() => {})
+		}
+		logger?.info?.(
+			`native-app: fullscreen pass ${pass + 1}/6 applied to ${wids.length} window(s) on ${display}`,
+		)
+		await new Promise((r) => setTimeout(r, 500))
+	}
 }
 
 import {router, privateProcedure, adminProcedure} from '../server/trpc/trpc.js'
