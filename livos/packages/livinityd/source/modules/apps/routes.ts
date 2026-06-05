@@ -716,6 +716,9 @@ export const apps = router({
 				name: z.string(),
 				category: z.string(),
 				manifest: z.unknown(),
+				// Phase 259 — hosted icon image URL from the store row, used by the
+				// native desktop tile (optional; older store builds omit it).
+				iconUrl: z.string().optional(),
 			}),
 		)
 		.mutation(async ({ctx, input}) => {
@@ -764,6 +767,7 @@ export const apps = router({
 					section: input.section,
 					category: input.category,
 					manifest: input.manifest,
+					iconUrl: input.iconUrl,
 				},
 				installCtx,
 				emit,

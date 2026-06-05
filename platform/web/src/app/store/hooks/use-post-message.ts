@@ -178,7 +178,7 @@ export function usePostMessage() {
     (
       appId: string,
       section: Section,
-      payload?: { name?: string; category?: string; manifest?: unknown },
+      payload?: { name?: string; category?: string; manifest?: unknown; iconUrl?: string },
     ) => {
       const composeUrl =
         section === 'app'
@@ -192,6 +192,8 @@ export function usePostMessage() {
         name: payload?.name,
         category: payload?.category,
         manifest: payload?.manifest,
+        // Phase 259 — native desktop tile icon (see app-card.fetchAppFull).
+        iconUrl: payload?.iconUrl,
       });
       // Optimistic: mark as installing
       setInstalledApps((prev) => {
