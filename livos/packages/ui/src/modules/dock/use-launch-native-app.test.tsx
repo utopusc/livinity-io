@@ -63,6 +63,41 @@ describe('useLaunchNativeApp — source-text invariants', () => {
 	})
 })
 
+// Phase 260-06 (SC8 native single-instance + SC3 icon-recall) — the hook must
+// scan for an already-open NATIVE_<id> window and RECALL it instead of opening a
+// duplicate. Source-text invariants (the established harness for this hook —
+// @testing-library/react is not installed; mirrors the 260-03 / 260-05 decision).
+describe('useLaunchNativeApp — SC8 single-instance focus/recall', () => {
+	it('scans windowManager.windows for the singleton NATIVE_<id> appId before opening', () => {
+		// The find() must match on the NATIVE_ template (singleton appId), not a
+		// per-instance suffix — native stays single-instance.
+		expect(HOOK_SRC).toMatch(/windowManager\.windows\.find/)
+		expect(HOOK_SRC).toMatch(/w\.appId === `NATIVE_\$\{id\}`/)
+	})
+
+	it('recalls a docked window via unpinWindowFromTopBar (SC3 icon-recall path)', () => {
+		expect(HOOK_SRC).toMatch(/isPinnedToTopBar/)
+		expect(HOOK_SRC).toMatch(/unpinWindowFromTopBar\(existing\.id\)/)
+	})
+
+	it('restores a minimized window and focuses an open one', () => {
+		expect(HOOK_SRC).toMatch(/isMinimized/)
+		expect(HOOK_SRC).toMatch(/restoreWindow\(existing\.id\)/)
+		expect(HOOK_SRC).toMatch(/focusWindow\(existing\.id\)/)
+	})
+
+	it('returns from the existing-window branch WITHOUT calling openWindow again', () => {
+		// The recall branch must early-return so the openWindow below is never
+		// reached when a window already exists.
+		expect(HOOK_SRC).toMatch(/if\s*\(existing\)\s*\{[\s\S]*return[\s\S]*\}/)
+	})
+
+	it('keeps NATIVE_<id> a singleton appId (NO randomUUID / per-instance suffix)', () => {
+		// Native must NOT become per-instance — the opposite of SC7's webapp rule.
+		expect(HOOK_SRC).not.toMatch(/randomUUID/)
+	})
+})
+
 describe('useLaunchNativeApp — smoke import', () => {
 	it('loads without throwing', async () => {
 		// Dynamic import — we are not invoking React hooks here, just verifying
