@@ -89,6 +89,32 @@ export function useLaunchNativeApp(): (args: LaunchNativeAppArgs) => Promise<voi
 		}
 
 		const appId = `NATIVE_${id}`
+
+		// Phase 260-06 (SC8 + SC3 icon-recall) — native apps are SINGLE-INSTANCE.
+		// Before opening a new window, scan for an already-open window with the
+		// SAME singleton appId. If one exists, RECALL it instead of spawning a
+		// duplicate (a second window would mount NativeAppStreamWindow over the
+		// SAME idempotent server-side stream, and closing one would tear the
+		// shared stream out from under the other — see 260-RESEARCH §SC8).
+		//
+		// Recall precedence:
+		//   1. pinned (docked into the Displays button) → unpin = SC3's
+		//      recall-from-app-icon path (window animates back to full size).
+		//   2. minimized → restore.
+		//   3. otherwise → focus (raise z-index).
+		// In all three branches we RETURN without calling openWindow.
+		const existing = windowManager.windows.find((w) => w.appId === `NATIVE_${id}`)
+		if (existing) {
+			if (existing.isPinnedToTopBar) {
+				windowManager.unpinWindowFromTopBar(existing.id)
+			} else if (existing.isMinimized) {
+				windowManager.restoreWindow(existing.id)
+			} else {
+				windowManager.focusWindow(existing.id)
+			}
+			return
+		}
+
 		// initialRoute is unused by NativeAppStreamWindow (id is sliced
 		// from appId prefix) — pass the name as a placeholder so the
 		// window chrome / focus stack carries something readable.
