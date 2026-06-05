@@ -92,6 +92,13 @@ function parseManifest(raw: unknown): NativeManifest | null {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
+// Phase 259 — apt hardening for the headless Mini PC. `DEBIAN_FRONTEND` is
+// preserved across `sudo` by the `env_keep` line in the livos-native sudoers
+// file. `--force-confold` keeps existing config files on package upgrades so
+// dpkg never opens an interactive conffile prompt that would hang the install.
+const APT_ENV: Record<string, string> = {DEBIAN_FRONTEND: 'noninteractive'}
+const APT_CONFOLD: readonly string[] = ['-o', 'Dpkg::Options::=--force-confold']
+
 /**
  * Run a child process, stream stdout/stderr into the logger, resolve
  * when it exits. Never goes through a shell, so even if argv contains
@@ -101,9 +108,16 @@ function execCmd(
 	cmd: string,
 	args: readonly string[],
 	logger: InstallContext['logger'],
+	extraEnv?: Record<string, string>,
 ): Promise<{code: number; stdout: string; stderr: string}> {
 	return new Promise((resolve, reject) => {
-		const child = spawn(cmd, args, {stdio: ['ignore', 'pipe', 'pipe']})
+		const child = spawn(cmd, args, {
+			stdio: ['ignore', 'pipe', 'pipe'],
+			// Phase 259 — pass DEBIAN_FRONTEND=noninteractive (kept across sudo via the
+			// env_keep in scripts/install/sudoers.d/livos-native) so apt never blocks on
+			// a debconf/conffile prompt on the headless Mini PC (a prior silent hang/fail).
+			...(extraEnv ? {env: {...process.env, ...extraEnv}} : {}),
+		})
 		let stdout = ''
 		let stderr = ''
 		child.stdout.on('data', (chunk: Buffer) => {
@@ -249,13 +263,15 @@ export class NativeInstaller implements InstallHandler<'native'> {
 		// Re-parse launch through the schema BEFORE running any external
 		// command. This is the trust boundary — manifests from Supabase
 		// are operator-controlled but defense-in-depth check is cheap.
-		// `desktopEntry.icon` is usually a bare freedesktop name ("vscode",
-		// "brave-browser"), which nativeAppConfigSchema's iconUrl gate rejects
-		// (it only accepts http(s) URLs or root-relative paths). Forwarding a
-		// bare name would throw at parse() below and abort the install. Only
-		// promote it to iconUrl when it already satisfies the schema; otherwise
-		// leave it undefined — the bare name still reaches the .desktop Icon=
-		// line via writeDesktopFile.
+		//
+		// Icon: prefer the catalog row's hosted `icon_url` (a real https image
+		// the desktop tile can render). `desktopEntry.icon` is usually a bare
+		// freedesktop name ("vscode", "brave-browser") which both fails
+		// nativeAppConfigSchema's iconUrl gate AND can't be rendered as <img>;
+		// only fall back to it when it already satisfies the schema (a URL or
+		// root-relative path). Anything non-conforming → undefined so parse()
+		// doesn't throw; the bare name still reaches the .desktop Icon= line via
+		// writeDesktopFile, and the tile shows the placeholder.
 		const rawIcon = manifest.desktopEntry.icon
 		const isSchemaValidIconUrl = (v: string): boolean => {
 			if (v.startsWith('/')) return /^\/[A-Za-z0-9_\-./]*$/.test(v)
@@ -266,10 +282,13 @@ export class NativeInstaller implements InstallHandler<'native'> {
 				return false
 			}
 		}
+		const catalogIcon =
+			app.iconUrl && isSchemaValidIconUrl(app.iconUrl) ? app.iconUrl : undefined
 		const configCandidate: NativeAppConfig = {
 			id: randomUUID(),
 			name: app.name,
-			iconUrl: rawIcon && isSchemaValidIconUrl(rawIcon) ? rawIcon : undefined,
+			iconUrl:
+				catalogIcon ?? (rawIcon && isSchemaValidIconUrl(rawIcon) ? rawIcon : undefined),
 			binaryPath: manifest.launch.binaryPath,
 			args: manifest.launch.args,
 			env: manifest.launch.env,
@@ -294,13 +313,24 @@ export class NativeInstaller implements InstallHandler<'native'> {
 			if (pkgs.length === 0) {
 				return fail(app.id, 'native', 'manifest_invalid', `aptPackages empty`)
 			}
+			progress(12, 'apt-get update')
+			// Best-effort cache refresh so packages added to repos (or .deb deps)
+			// resolve. Never fail the install on a stale/offline update — a present
+			// cache may still satisfy the package. (sudoers allows `apt-get update`.)
+			await execCmd(
+				'sudo',
+				['-n', '/usr/bin/apt-get', 'update'],
+				ctx.logger,
+				APT_ENV,
+			).catch(() => undefined)
 			progress(15, `apt install ${pkgs.join(' ')}`)
 			// The sudoers entry (scripts/install/sudoers.d/livos-native) must
 			// allow exactly this argv pattern. Any drift here breaks install.
 			const {code, stderr} = await execCmd(
 				'sudo',
-				['-n', '/usr/bin/apt-get', 'install', '-y', ...pkgs],
+				['-n', '/usr/bin/apt-get', 'install', '-y', ...APT_CONFOLD, ...pkgs],
 				ctx.logger,
+				APT_ENV,
 			)
 			if (code !== 0) {
 				const sudoDenied = stderr.includes('sudo:') || stderr.includes('password is required')
@@ -335,8 +365,12 @@ export class NativeInstaller implements InstallHandler<'native'> {
 					return fail(app.id, 'native', 'signature_invalid', `sha256 mismatch — manifest=${debSha256} actual=${actual}`)
 				}
 			}
+			progress(55, 'apt-get update')
+			await execCmd('sudo', ['-n', '/usr/bin/apt-get', 'update'], ctx.logger, APT_ENV).catch(
+				() => undefined,
+			)
 			progress(60, 'Installing .deb (apt resolves dependencies)')
-			const {code, stderr} = await execCmd('sudo', ['-n', '/usr/bin/apt-get', 'install', '-y', tmpDeb], ctx.logger)
+			const {code, stderr} = await execCmd('sudo', ['-n', '/usr/bin/apt-get', 'install', '-y', ...APT_CONFOLD, tmpDeb], ctx.logger, APT_ENV)
 			await fs.unlink(tmpDeb).catch(() => {})
 			if (code !== 0) {
 				const sudoDenied = stderr.includes('sudo:') || stderr.includes('password is required')

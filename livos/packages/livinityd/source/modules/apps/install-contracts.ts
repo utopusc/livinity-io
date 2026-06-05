@@ -39,6 +39,12 @@ export interface AppCatalogRow {
 	section: Section
 	category: string
 	manifest: unknown // section-specific JSON; each handler re-parses
+	// Phase 259 — the store row's hosted icon image URL (Supabase `icon_url`).
+	// Native apps render this on the desktop tile; `manifest.desktopEntry.icon`
+	// is only a bare freedesktop name and is NOT browser-renderable. Optional so
+	// older store builds that don't forward it still install (tile falls back to
+	// the placeholder).
+	iconUrl?: string
 }
 
 // ─── Logger contract (subset; livinityd has a richer one) ────────────────
