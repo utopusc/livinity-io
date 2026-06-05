@@ -47,6 +47,9 @@ type AppState =
 	| 'uninstalling'
 	| 'updating'
 	| 'ready'
+	// Phase 260-01 (SC1): terminal state set by uninstall() so the field never
+	// wedges on the transient 'uninstalling' value.
+	| 'not-installed'
 // TODO: Change ready to running.
 // Also note that we don't currently handle failing events to update the app state into a failed state.
 // That should be ok for now since apps rarely fail, but there will be the potential for state bugs here
@@ -400,48 +403,77 @@ export default class App {
 	}
 
 	async restart() {
+		// Phase 260-01 (SC1): wrap in try/finally so a throw inside appScript()
+		// never leaves this.state wedged on the transient 'restarting' value
+		// (which would render the tile as a perpetual un-clickable spinner). The
+		// finally only resets a STILL-transient field; the success path already
+		// set 'ready'. The original error is re-thrown for the caller/logging.
 		this.state = 'restarting'
-		await appScript(this.#livinityd, 'stop', this.id)
-		await appScript(this.#livinityd, 'start', this.id)
-		this.state = 'ready'
+		try {
+			await appScript(this.#livinityd, 'stop', this.id)
+			await appScript(this.#livinityd, 'start', this.id)
+			this.state = 'ready'
 
-		// Enable auto-start on boot
-		await this.setAutoStart(true)
+			// Enable auto-start on boot
+			await this.setAutoStart(true)
 
-		return true
+			return true
+		} finally {
+			if (this.state === 'restarting') {
+				// appScript threw before the success line — land on a stable,
+				// clickable state instead of wedging.
+				this.state = 'ready'
+			}
+		}
 	}
 
 	async uninstall() {
+		// Phase 260-01 (SC1): wrap in try/finally so a throw mid-uninstall never
+		// leaves this.state wedged on 'uninstalling'. On success we set
+		// 'not-installed'; if the body threw the finally lands a clickable
+		// fallback ('ready') rather than the transient value. Re-throws on error.
 		this.state = 'uninstalling'
-		await pRetry(() => appScript(this.#livinityd, 'stop', this.id), {
-			onFailedAttempt: (error) => {
-				this.logger.error(
-					`Attempt ${error.attemptNumber} stopping app ${this.id} failed. There are ${error.retriesLeft} retries left.`,
-					error,
-				)
-			},
-			retries: 2,
-		})
-		await appScript(this.#livinityd, 'nuke-images', this.id)
-		await fse.remove(this.dataDirectory)
+		try {
+			await pRetry(() => appScript(this.#livinityd, 'stop', this.id), {
+				onFailedAttempt: (error) => {
+					this.logger.error(
+						`Attempt ${error.attemptNumber} stopping app ${this.id} failed. There are ${error.retriesLeft} retries left.`,
+						error,
+					)
+				},
+				retries: 2,
+			})
+			await appScript(this.#livinityd, 'nuke-images', this.id)
+			await fse.remove(this.dataDirectory)
 
-		await this.#livinityd.store.getWriteLock(async ({get, set}) => {
-			let apps = (await get('apps')) || []
-			apps = apps.filter((appId) => appId !== this.id)
-			await set('apps', apps)
+			await this.#livinityd.store.getWriteLock(async ({get, set}) => {
+				let apps = (await get('apps')) || []
+				apps = apps.filter((appId) => appId !== this.id)
+				await set('apps', apps)
 
-			// Remove app from recentlyOpenedApps
-			let recentlyOpenedApps = (await get('recentlyOpenedApps')) || []
-			recentlyOpenedApps = recentlyOpenedApps.filter((appId) => appId !== this.id)
-			await set('recentlyOpenedApps', recentlyOpenedApps)
+				// Remove app from recentlyOpenedApps
+				let recentlyOpenedApps = (await get('recentlyOpenedApps')) || []
+				recentlyOpenedApps = recentlyOpenedApps.filter((appId) => appId !== this.id)
+				await set('recentlyOpenedApps', recentlyOpenedApps)
 
-			// Disable any associated widgets
-			let widgets = (await get('widgets')) || []
-			widgets = widgets.filter((widget) => !widget.startsWith(`${this.id}:`))
-			await set('widgets', widgets)
-		})
+				// Disable any associated widgets
+				let widgets = (await get('widgets')) || []
+				widgets = widgets.filter((widget) => !widget.startsWith(`${this.id}:`))
+				await set('widgets', widgets)
+			})
 
-		return true
+			// Uninstall succeeded — the containers + data are gone.
+			this.state = 'not-installed'
+
+			return true
+		} finally {
+			if (this.state === 'uninstalling') {
+				// The body threw before completing — don't wedge on the transient
+				// value. Default to a clickable state; the next apps.state poll
+				// reconciles against Docker for the real status.
+				this.state = 'ready'
+			}
+		}
 	}
 
 	async getPids() {
