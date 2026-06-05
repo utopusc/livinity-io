@@ -39,6 +39,7 @@ import {TRPCError} from '@trpc/server'
 
 import {privateProcedure, router} from '../server/trpc/trpc.js'
 import {captureScreenshot} from './native/screenshot.js'
+import {closeNativeAppByDisplay} from '../apps/native-routes.js'
 
 // Same display-id shape the streaming router validates (`:N` or `:N.S`).
 const displayIdSchema = z.string().regex(/^:\d+(\.\d+)?$/)
@@ -224,6 +225,117 @@ export const displaysRouter = router({
 				width: shot.width,
 				height: shot.height,
 			}
+		}),
+
+	/**
+	 * Phase 260.1-02 SC-B — `displays.close({display})` → tear a created display
+	 * down server-side. Before this route a `closeWindow` only detached the UI,
+	 * leaving the `:N` alive in Redis (it re-appeared in displays.list). This
+	 * mutation removes the display for real: native → the EXISTING closeNativeApp
+	 * teardown (via closeNativeAppByDisplay); luse/computer-use → displayManager.kill.
+	 *
+	 * Owner-scope resolution (the single-user box problem): the MCP writes
+	 * owner_session='bruce', which never equals the UI user's PostgreSQL UUID.
+	 * Authorization reuses canAccessDisplay VERBATIM (the same gate getVncUrl /
+	 * screenshot use): empty owner_session = shared; admin = single-tenant operator
+	 * bypass; else callerSession must equal owner_session. A non-admin therefore
+	 * CANNOT tear down another session's non-shared display (FORBIDDEN before any
+	 * teardown). The luse branch then passes record.owner_session as the kill
+	 * callerSession ONLY AFTER canAccessDisplay already authorized the caller — so
+	 * it satisfies the manager-layer owner gate without widening access.
+	 *
+	 * HARD CONSTRAINT (260.1): does NOT touch the `:N` allocator or the x11vnc
+	 * transport — it only calls the existing teardown primitives. Native teardown
+	 * is try/catch-guarded so close can NEVER crash livinityd (preserves Phase 259).
+	 */
+	close: privateProcedure
+		.input(z.object({display: displayIdSchema}))
+		.mutation(async ({ctx, input}) => {
+			// STRIDE-S: caller identity from ctx.currentUser ONLY, never input.
+			const userId = ctx.currentUser?.id
+			if (!userId) throw new TRPCError({code: 'UNAUTHORIZED'})
+
+			const dm = ctx.livinityd?.displayManager
+			if (!dm) {
+				throw new TRPCError({
+					code: 'SERVICE_UNAVAILABLE',
+					message: 'displayManager not initialised',
+				})
+			}
+
+			const record = (await dm.list()).find((d) => d.display === input.display)
+			if (!record) throw new TRPCError({code: 'NOT_FOUND'})
+
+			// STRIDE-I/E (T-260.1-04): owner-scope gate, reused verbatim from
+			// getVncUrl/screenshot. FORBIDDEN before ANY teardown for a non-admin
+			// reaching another session's non-shared display.
+			const callerRole = ctx.currentUser?.role ?? 'member'
+			if (
+				!canAccessDisplay({
+					ownerSession: record.owner_session,
+					callerSession: userId,
+					callerRole,
+				})
+			) {
+				throw new TRPCError({
+					code: 'FORBIDDEN',
+					message: 'display owned by another session',
+				})
+			}
+
+			// NATIVE display → delegate to the existing closeNativeApp teardown
+			// (never double-tear the binary/Xvfb/port), then DEL the Redis record
+			// (native displays use ownerSession:'' → '' passes the owner gate). The
+			// DEL is try/catch-guarded so close can NEVER crash (preserves Phase 259).
+			const sm = ctx.livinityd?.streamManager
+			if (sm) {
+				const adapt = ctx.logger
+					? {
+							info: (m: string) => ctx.logger!.log(m),
+							warn: (m: string) => ctx.logger!.error(m),
+							error: (m: string) => ctx.logger!.error(m),
+							verbose: (m: string) => ctx.logger!.verbose(m),
+						}
+					: undefined
+				const wasNative = await closeNativeAppByDisplay(input.display, {
+					streamManager: sm,
+					logger: adapt,
+				})
+				if (wasNative) {
+					try {
+						await dm.kill({display: input.display, callerSession: ''})
+					} catch {
+						/* TTL/orphan GC backstop — never crash close */
+					}
+					ctx.logger?.log?.(
+						`displays.close user=${userId} display=${input.display} kind=native`,
+					)
+					return {ok: true as const, kind: 'native' as const}
+				}
+			}
+
+			// luse/computer-use display: kill with the record's OWN owner_session so
+			// the manager owner gate passes even though the operator UI's UUID never
+			// equals owner_session='bruce'. Owner-scope is ALREADY enforced above by
+			// canAccessDisplay (admin bypass / legit owner), so this does NOT widen
+			// access. A record already gone (not-found) is treated as success.
+			const res = await dm.kill({
+				display: input.display,
+				callerSession: record.owner_session,
+			})
+			if (!res.ok && res.error === 'not-found') {
+				return {ok: true as const, kind: 'luse' as const}
+			}
+			if (!res.ok) {
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: `kill failed: ${res.error}`,
+				})
+			}
+			ctx.logger?.log?.(
+				`displays.close user=${userId} display=${input.display} kind=luse apps=${res.killed_apps_count}`,
+			)
+			return {ok: true as const, kind: 'luse' as const}
 		}),
 })
 
