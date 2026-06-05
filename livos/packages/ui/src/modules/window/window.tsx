@@ -51,6 +51,33 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 	const resizeStartSize = useRef({width: 0, height: 0})
 	const resizeStartPosition = useRef({x: 0, y: 0})
 
+	// Phase 260.1 (SC-E, locked decision #2) — the content element ref used by
+	// the chrome fullscreen button. The window content motion.div is bound to
+	// the forwarded `ref` (which call sites currently leave unset), so we keep
+	// our OWN local handle and a callback ref that mirrors into both, ensuring
+	// requestFullscreen always has a real element to target.
+	const contentRef = useRef<HTMLDivElement | null>(null)
+	const setContentRef = useCallback(
+		(node: HTMLDivElement | null) => {
+			contentRef.current = node
+			if (typeof ref === 'function') ref(node)
+			else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node
+		},
+		[ref],
+	)
+
+	// Phase 260.1 (SC-E) — BROWSER fullscreen on the content element (standards
+	// Fullscreen API + a webkit fallback). Works for ALL display types
+	// (native / webapp / luse stream + DISPLAY_:N VNC canvas) since it targets
+	// the window content element, not a backend EWMH call.
+	const handleFullscreen = useCallback(() => {
+		const el = contentRef.current as
+			| (HTMLElement & {webkitRequestFullscreen?: () => void})
+			| null
+		if (!el) return
+		;(el.requestFullscreen?.bind(el) ?? el.webkitRequestFullscreen?.bind(el))?.()
+	}, [])
+
 	const handleDragStart = useCallback((e: React.MouseEvent) => {
 		e.preventDefault()
 		e.stopPropagation()
@@ -295,12 +322,22 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 					windowWidth={size.width}
 					webappId={webappId}
 					nativeAppId={nativeAppId}
+					// Phase 260.1 (SC-E, locked decision #2 = BROWSER fullscreen).
+					// window.tsx receives webappId / nativeAppId but NOT the
+					// appId, so it cannot detect a DISPLAY_:N window here to gate
+					// the button to stream/display windows only. Since the locked
+					// decision wants fullscreen to "work for ALL display types"
+					// and the chrome already only renders the button when
+					// onFullscreen is present, we pass it for every window — the
+					// browser Fullscreen API on the content element is a harmless,
+					// useful affordance and covers DISPLAY_/webapp/native streams.
+					onFullscreen={handleFullscreen}
 				/>
 			</motion.div>
 
 			{/* Window content */}
 			<motion.div
-				ref={ref}
+				ref={setContentRef}
 				className={windowClass}
 				style={{
 					width: size.width,
