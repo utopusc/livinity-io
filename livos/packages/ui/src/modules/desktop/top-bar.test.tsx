@@ -143,3 +143,82 @@ describe('top-bar — Phase 260-04 (SC5) {n} count badge on the Displays button'
         expect(SRC).toMatch(/>\s*\{displaysBadgeCount\}\s*</)
     })
 })
+
+describe('top-bar — Phase 260.1-03 (SC-C) hover-open Displays popover', () => {
+    // The popover opens on HOVER, not click — both the Monitor button AND the
+    // (portalled) PopoverContent carry onMouseEnter/onMouseLeave so the cursor
+    // can travel between them without snapping shut.
+    it('the Monitor button uses onMouseEnter/onMouseLeave (hover-open, not click)', () => {
+        // The button block (aria-label "Displays") must wire both hover handlers.
+        const buttonBlock = SRC.slice(SRC.indexOf("aria-label='Displays'"))
+        expect(buttonBlock).toMatch(/onMouseEnter=\{openDisplays\}/)
+        expect(buttonBlock).toMatch(/onMouseLeave=\{scheduleCloseDisplays\}/)
+    })
+
+    it('the PopoverContent uses onMouseEnter/onMouseLeave to stay open over the portal', () => {
+        const contentBlock = SRC.slice(SRC.indexOf('<PopoverContent'))
+        expect(contentBlock).toMatch(/onMouseEnter=\{openDisplays\}/)
+        expect(contentBlock).toMatch(/onMouseLeave=\{scheduleCloseDisplays\}/)
+    })
+
+    // openDisplays clears the pending close timer and opens; scheduleCloseDisplays
+    // arms a ~140ms grace-delay timeout that closes via setDisplaysOpen(false).
+    it('openDisplays calls setDisplaysOpen(true) and clears the pending timer', () => {
+        expect(SRC).toMatch(/const\s+openDisplays\s*=\s*\(\)\s*=>\s*\{[\s\S]*?clearTimeout\(displaysHoverTimer\.current\)[\s\S]*?setDisplaysOpen\(true\)/)
+    })
+
+    it('scheduleCloseDisplays arms a ~140ms grace-delay timeout that closes the popover', () => {
+        expect(SRC).toMatch(/const\s+scheduleCloseDisplays\s*=\s*\(\)\s*=>\s*\{[\s\S]*?setTimeout\([\s\S]*?setDisplaysOpen\(false\)[\s\S]*?\},\s*140\)/)
+        // The timer is stored in a ref so a re-enter can cancel it.
+        expect(SRC).toMatch(/displaysHoverTimer\s*=\s*useRef/)
+    })
+
+    it('keeps the Popover controlled (open={displaysOpen}) so Escape/outside-close still work', () => {
+        expect(SRC).toMatch(/<Popover\s+open=\{displaysOpen\}\s+onOpenChange=\{setDisplaysOpen\}/)
+    })
+
+    it('clears the grace-delay timer on unmount (no stale setDisplaysOpen)', () => {
+        expect(SRC).toMatch(/return\s*\(\)\s*=>\s*\{[\s\S]*?clearTimeout\(displaysHoverTimer\.current\)/)
+    })
+
+    // 260-03 collapse fix must NOT be regressed by this plan.
+    it('does not regress the 260-03 collapse fix (no pinnedWindows.length wedge term)', () => {
+        const isExpandedLine = SRC.split('\n').find((l) => /const\s+isExpanded\s*=/.test(l))
+        expect(isExpandedLine!).toMatch(/dragState\.isDragging\s*\|\|\s*isHoverExpanded/)
+        expect(isExpandedLine!).not.toMatch(/pinnedWindows\.length\s*>\s*0/)
+    })
+})
+
+describe('top-bar — Phase 260.1-03 (SC-A) Displays-button intake animation on drop', () => {
+    it('imports useAnimationControls from framer-motion', () => {
+        expect(SRC).toMatch(/import\s*\{[\s\S]*?useAnimationControls[\s\S]*?\}\s*from\s*['"]framer-motion['"]/)
+    })
+
+    it('creates intakeControls via useAnimationControls', () => {
+        expect(SRC).toMatch(/const\s+intakeControls\s*=\s*useAnimationControls\(\)/)
+    })
+
+    // The intake pop is a 500-stiffness spring scale-pop fired in the drop path.
+    it('fires intakeControls.start({scale: [1, 1.28, 1]}) with a 500-stiffness spring', () => {
+        expect(SRC).toMatch(/intakeControls\.start\(\s*\{\s*scale:\s*\[1,\s*1\.28,\s*1\]\s*\}/)
+        expect(SRC).toMatch(/stiffness:\s*500/)
+    })
+
+    // The intake must be fired inside the drop `inside` branch AFTER pinWindowToTopBar.
+    it('fires the intake AFTER pinWindowToTopBar inside the drop `inside` branch', () => {
+        expect(SRC).toMatch(/if\s*\(inside\)\s*\{[\s\S]*?pinWindowToTopBar\(event\.windowId\)[\s\S]*?intakeControls\.start\(/)
+    })
+
+    // The Monitor button is a motion.button driven by animate={intakeControls}.
+    it('the Monitor button is a motion.button with animate={intakeControls}', () => {
+        const buttonBlock = SRC.slice(SRC.indexOf('<motion.button'), SRC.indexOf("aria-label='Displays'") + 400)
+        expect(SRC).toMatch(/<motion\.button[\s\S]*?ref=\{dropZoneRef/)
+        expect(buttonBlock).toMatch(/animate=\{intakeControls\}/)
+    })
+
+    // 260-03 keep-alive: docking never routes through closeWindow.
+    it('the drop path never CALLS closeWindow (260-03 keep-alive invariant)', () => {
+        expect(SRC).not.toMatch(/\.closeWindow\(/)
+        expect(SRC).toMatch(/pinWindowToTopBar/)
+    })
+})

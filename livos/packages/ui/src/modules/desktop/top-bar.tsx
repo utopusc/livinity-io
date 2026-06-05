@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useRef, useState, type RefObject} from 'react'
-import {AnimatePresence, motion} from 'framer-motion'
+import {AnimatePresence, motion, useAnimationControls} from 'framer-motion'
 import {useNavigate} from 'react-router-dom'
 import {TbLogout, TbPalette, TbPencil, TbRefresh} from 'react-icons/tb'
 import {Monitor} from 'lucide-react'
@@ -85,6 +85,44 @@ function TopBarDesktop() {
 	// merged DisplaysPopover only polls (displays.list + per-card screenshot)
 	// while open (T-255-14: zero requests when closed).
 	const [displaysOpen, setDisplaysOpen] = useState(false)
+	// Phase 260.1-03 (SC-C, locked decision #3) — the Displays popover opens on
+	// HOVER, not click. A grace-delay close timer (~140ms) bridges the gap so the
+	// cursor can travel from the button to the (portalled) PopoverContent without
+	// the popover snapping shut. The timer ref lets a re-enter cancel a pending
+	// close. The Popover stays CONTROLLED (open={displaysOpen}) so Radix still
+	// closes it on Escape / outside-interaction.
+	const displaysHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const openDisplays = () => {
+		if (displaysHoverTimer.current) {
+			clearTimeout(displaysHoverTimer.current)
+			displaysHoverTimer.current = null
+		}
+		setDisplaysOpen(true)
+	}
+	const scheduleCloseDisplays = () => {
+		if (displaysHoverTimer.current) clearTimeout(displaysHoverTimer.current)
+		displaysHoverTimer.current = setTimeout(() => {
+			setDisplaysOpen(false)
+			displaysHoverTimer.current = null
+		}, 140)
+	}
+	// Clear any pending grace-delay timer on unmount so a stale timeout never
+	// fires setDisplaysOpen after the component is gone.
+	useEffect(() => {
+		return () => {
+			if (displaysHoverTimer.current) clearTimeout(displaysHoverTimer.current)
+		}
+	}, [])
+
+	// Phase 260.1-03 (SC-A) — the Displays button plays an "intake" spring
+	// scale-pop + ring flash when a dragged window docks (drop INSIDE the button),
+	// confirming it absorbed the window. Fired AFTER pinWindowToTopBar in the drop
+	// subscriber. The 500/18 spring is a snappier cousin of the badge's 500/28 —
+	// a deliberate pop. intakeFlash toggles the same accent ring as isDragOverShelf
+	// so the flash reads as the same accent, then self-clears after ~350ms.
+	const intakeControls = useAnimationControls()
+	const [intakeFlash, setIntakeFlash] = useState(false)
+
 	const [showChangeName, setShowChangeName] = useState(false)
 	const [showChangeIcon, setShowChangeIcon] = useState(false)
 	const [isHoverExpanded, setIsHoverExpanded] = useState(false)
@@ -187,10 +225,19 @@ function TopBarDesktop() {
 				&& event.clientY >= rect.top && event.clientY <= rect.bottom
 			if (inside) {
 				windowManager?.pinWindowToTopBar(event.windowId)
+				// Phase 260.1-03 (SC-A) — fire the intake pop + ring flash AFTER the
+				// keep-alive pin so the button visibly "absorbs" the docked window as
+				// the morph in window.tsx slides it into this button's rect.
+				void intakeControls.start(
+					{scale: [1, 1.28, 1]},
+					{type: 'spring', stiffness: 500, damping: 18, mass: 0.6},
+				)
+				setIntakeFlash(true)
+				setTimeout(() => setIntakeFlash(false), 350)
 			}
 		})
 		return unsubscribe
-	}, [windowManager])
+	}, [windowManager, intakeControls])
 
 	useEffect(() => {
 		if (!menuOpen) return
@@ -367,14 +414,23 @@ function TopBarDesktop() {
 								    (keep-alive — NEVER closeWindow). While dragging over it,
 								    isDragOverShelf adds a highlight ring so the operator sees
 								    the target. */}
-								<button
+								<motion.button
 									ref={dropZoneRef as RefObject<HTMLButtonElement>}
 									type='button'
 									aria-label='Displays'
 									title='Displays'
+									// Phase 260.1-03 (SC-C) — HOVER opens the popover; the grace
+									// delay (scheduleCloseDisplays) bridges the button→portal gap.
+									onMouseEnter={openDisplays}
+									onMouseLeave={scheduleCloseDisplays}
+									// Phase 260.1-03 (SC-A) — intake spring scale-pop on drop-dock.
+									animate={intakeControls}
 									className={cn(
 										'relative grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-[color:var(--bg-2)]',
 										isDragOverShelf && 'bg-[color:var(--bg-2)] ring-2 ring-[color:var(--fg)] ring-offset-1',
+										// Intake ring flash — reuses the isDragOverShelf accent ring so
+										// the "absorbed" beat reads as the same accent.
+										intakeFlash && 'ring-2 ring-[color:var(--fg)] ring-offset-1',
 									)}
 								>
 									<Monitor className='h-4 w-4' />
@@ -399,9 +455,18 @@ function TopBarDesktop() {
 											</motion.span>
 										)}
 									</AnimatePresence>
-								</button>
+								</motion.button>
 							</PopoverTrigger>
-							<PopoverContent align='end' className='p-0'>
+							<PopoverContent
+								align='end'
+								className='p-0'
+								// Phase 260.1-03 (SC-C) — keep the popover open while the cursor
+								// is over the (portalled) content itself; leaving re-arms the
+								// grace-delay close. PopoverContent renders in a portal, so the
+								// ~140ms grace delay — not DOM adjacency — bridges the gap.
+								onMouseEnter={openDisplays}
+								onMouseLeave={scheduleCloseDisplays}
+							>
 								<DisplaysPopover open={displaysOpen} />
 							</PopoverContent>
 						</Popover>
