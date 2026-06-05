@@ -1,5 +1,5 @@
-import {useEffect, useMemo, useRef, useState} from 'react'
-import {AnimatePresence, motion} from 'framer-motion'
+import {useEffect, useMemo, useRef, useState, type RefObject} from 'react'
+import {motion} from 'framer-motion'
 import {useNavigate} from 'react-router-dom'
 import {TbLogout, TbPalette, TbPencil, TbRefresh} from 'react-icons/tb'
 import {Monitor} from 'lucide-react'
@@ -11,13 +11,6 @@ import {useLinkToDialog} from '@/utils/dialog'
 import {useUserName} from '@/hooks/use-user-name'
 import {onWindowDragDrop, useWindowDragState} from '@/providers/window-drag-state'
 import {useWindowManagerOptional} from '@/providers/window-manager'
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuTrigger,
-	ContextMenuSeparator,
-} from '@/shadcn-components/ui/context-menu'
 import {Popover, PopoverContent, PopoverTrigger} from '@/shadcn-components/ui/popover'
 import {DisplaysPopover} from './displays-popover'
 import {greeting, wmoGlyph} from './clock-helpers'
@@ -96,7 +89,11 @@ function TopBarDesktop() {
 	const [showChangeIcon, setShowChangeIcon] = useState(false)
 	const [isHoverExpanded, setIsHoverExpanded] = useState(false)
 	const profileWrapRef = useRef<HTMLDivElement>(null)
-	const dropZoneRef = useRef<HTMLDivElement>(null)
+	// Phase 260-03 (SC4) — dropZoneRef now points at the Displays/Monitor
+	// BUTTON (right cluster), not the old center shelf div. Typed as a
+	// generic HTMLElement so it can attach to the <button> trigger; the
+	// hit-test only reads getBoundingClientRect, which every element has.
+	const dropZoneRef = useRef<HTMLElement>(null)
 
 	// Phase 130-09 — pinned windows now live in the WindowManager as
 	// `isPinnedToTopBar` instead of a local array, so the actual WindowState
@@ -109,11 +106,16 @@ function TopBarDesktop() {
 	// the user can see the shelf without having to drag). User direction
 	// 2026-05-15: "fare ile ustune geldigimde acilsin yinede goreyim".
 	//
-	// Phase 131-01 — also stay expanded while there's at least one pinned
-	// window, otherwise the bar collapses the instant the user releases
-	// the drag and the freshly-dropped chip never gets to show itself.
+	// Phase 260-03 (SC4) — REMOVED the `|| pinnedWindows.length > 0` term.
+	// That term kept the navbar PERMANENTLY EXPANDED whenever any window
+	// was pinned and wedged the dropped pill in the navbar center (the
+	// "Hermes Agent pill stuck in the navbar" operator bug). Docking now
+	// targets the Displays button (slide-RIGHT into it) instead of a
+	// center shelf, so the bar must COLLAPSE the instant the drag ends.
+	// Pinned windows are surfaced by the {n} badge (260-04 / SC5) + the
+	// Displays popover list (260-04 / SC3), not a center chip shelf.
 	const dragState = useWindowDragState()
-	const isExpanded = dragState.isDragging || isHoverExpanded || pinnedWindows.length > 0
+	const isExpanded = dragState.isDragging || isHoverExpanded
 	const [isDragOverShelf, setIsDragOverShelf] = useState(false)
 
 	// Hit-test cursor against the drop-zone rect while a drag is active.
@@ -158,22 +160,11 @@ function TopBarDesktop() {
 		return () => document.removeEventListener('mousedown', handler)
 	}, [menuOpen])
 
-	const restorePinnedWindow = (windowId: string) => {
-		windowManager?.unpinWindowFromTopBar(windowId)
-	}
-
-	// Phase 131-05 — right-click context-menu actions. "Close window"
-	// drops the window entirely (the underlying CLOSE_WINDOW reducer
-	// action also removes the pinned-windows row via the existing
-	// unpin mirror when 131-02 ships — see the closeWindow action).
-	const closePinnedWindow = (windowId: string) => {
-		// Order matters: unpin first (drops the Postgres row via the
-		// mirror in WindowManagerProvider) THEN close (removes the
-		// WindowState entirely). Closing first would leave a
-		// dangling pinned_windows row until next refresh.
-		windowManager?.unpinWindowFromTopBar(windowId)
-		windowManager?.closeWindow(windowId)
-	}
+	// Phase 260-03 (SC4) — the center-shelf chip restore/close handlers
+	// (restorePinnedWindow / closePinnedWindow) were removed along with the
+	// shelf. Recall + close of docked windows moves to the Displays popover
+	// list in plan 260-04 (SC3), which reuses windowManager.unpinWindowFromTopBar
+	// directly. `pinnedWindows` (derived above) is retained for the 260-04 badge.
 
 	const menuItems: Array<
 		| {icon: typeof TbPencil; label: string; action: () => void; danger?: boolean}
@@ -288,71 +279,31 @@ function TopBarDesktop() {
 						</div>
 					</div>
 
-					{/* CENTER — collapsed: brand donut (and hover trigger).
-					    Expanded: pinned-windows drop-zone shelf. */}
+					{/* CENTER — brand donut + hover trigger.
+					    Phase 260-03 (SC4) — the old center "pinned-windows drop-zone
+					    shelf" is REMOVED. Docking no longer lands a chip here (that
+					    wedged the navbar open). The drop target moved to the Displays
+					    button on the RIGHT (see dropZoneRef below). While dragging the
+					    bar still expands (isExpanded) so the gesture reads, but the
+					    center now only ever shows the brand donut. */}
 					<div className='flex min-w-0 items-center justify-center'>
-						{!isExpanded ? (
-							<button
-								type='button'
-								onMouseEnter={() => setIsHoverExpanded(true)}
-								onClick={() => undefined}
-								className='grid h-10 w-10 cursor-pointer place-items-center rounded-full transition-[transform,background] duration-200 hover:scale-[1.04] hover:bg-[color:var(--bg-2)]'
-								aria-label='Show pinned windows shelf'
+						<button
+							type='button'
+							onMouseEnter={() => setIsHoverExpanded(true)}
+							onClick={() => undefined}
+							className='grid h-10 w-10 cursor-pointer place-items-center rounded-full transition-[transform,background] duration-200 hover:scale-[1.04] hover:bg-[color:var(--bg-2)]'
+							aria-label='LivOS'
+						>
+							<span
+								aria-hidden='true'
+								className='relative inline-block h-6 w-6 rounded-full bg-[color:var(--fg)]'
 							>
 								<span
-									aria-hidden='true'
-									className='relative inline-block h-6 w-6 rounded-full bg-[color:var(--fg)]'
-								>
-									<span
-										className='absolute rounded-full bg-[color:var(--bg)]'
-										style={{inset: 7}}
-									/>
-								</span>
-							</button>
-						) : (
-							<div
-								ref={dropZoneRef}
-								className={cn(
-									'flex min-h-[44px] w-full max-w-[820px] items-center justify-center gap-2 rounded-full border border-dashed px-3 transition-colors',
-									isDragOverShelf
-										? 'border-[color:var(--fg)] bg-[color:var(--bg-2)]'
-										: 'border-line',
-								)}
-							>
-								{pinnedWindows.length === 0 ? (
-									<span className='inline-flex select-none items-center gap-1.5 whitespace-nowrap text-[12px] font-medium text-[color:var(--fg-faint)]'>
-										<svg
-											viewBox='0 0 24 24'
-											fill='none'
-											stroke='currentColor'
-											strokeWidth='2'
-											strokeLinecap='round'
-											strokeLinejoin='round'
-											className='h-3 w-3 shrink-0'
-											aria-hidden='true'
-										>
-											<path d='M12 17v5' />
-											<path d='M9 11.5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v7.5l2 1.5v3H7v-3l2-1.5z' />
-										</svg>
-										<span>Drag a window here to pin it</span>
-									</span>
-								) : (
-									<div className='flex items-center gap-1.5 overflow-x-auto'>
-										<AnimatePresence initial={false}>
-											{pinnedWindows.map((w) => (
-												<PinnedWindowChip
-													key={w.id}
-													title={w.title}
-													icon={w.icon}
-													onClick={() => restorePinnedWindow(w.id)}
-													onClose={() => closePinnedWindow(w.id)}
-												/>
-											))}
-										</AnimatePresence>
-									</div>
-								)}
-							</div>
-						)}
+									className='absolute rounded-full bg-[color:var(--bg)]'
+									style={{inset: 7}}
+								/>
+							</span>
+						</button>
 					</div>
 
 					{/* RIGHT — single 🖥️ Displays popover + clock + location.
@@ -365,11 +316,23 @@ function TopBarDesktop() {
 					<div className='flex items-center justify-end gap-1.5 pr-1.5'>
 						<Popover open={displaysOpen} onOpenChange={setDisplaysOpen}>
 							<PopoverTrigger asChild>
+								{/* Phase 260-03 (SC4) — this Displays/Monitor button is now the
+								    DROP TARGET for docking a dragged stream window. dropZoneRef
+								    is attached here so the existing mousemove hit-test (above)
+								    and the onWindowDragDrop subscriber both resolve against the
+								    button's rect; a drop INSIDE it calls pinWindowToTopBar
+								    (keep-alive — NEVER closeWindow). While dragging over it,
+								    isDragOverShelf adds a highlight ring so the operator sees
+								    the target. */}
 								<button
+									ref={dropZoneRef as RefObject<HTMLButtonElement>}
 									type='button'
 									aria-label='Displays'
 									title='Displays'
-									className='grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-[color:var(--bg-2)]'
+									className={cn(
+										'grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-[color:var(--bg-2)]',
+										isDragOverShelf && 'bg-[color:var(--bg-2)] ring-2 ring-[color:var(--fg)] ring-offset-1',
+									)}
 								>
 									<Monitor className='h-4 w-4' />
 								</button>
@@ -389,68 +352,14 @@ function TopBarDesktop() {
 	)
 }
 
-// ── Pinned-window chip ──────────────────────────────────────────────
-
-/**
- * Visual chip representing a pinned window in the TopBar drop-zone. The
- * chip shows the live WindowState title (e.g. "Google" rather than
- * "wid_abc123…"). Clicking it restores the window with the reverse of
- * the shrink-to-shelf animation.
- *
- * Whole-chip click = restore. Hover lifts a soft background; the
- * framer-motion enter springs the chip in from scale 0.4 so a freshly
- * dropped window pops into the shelf rather than just appearing.
- */
-function PinnedWindowChip({title, icon, onClick, onClose}: {
-	title: string
-	icon?: string
-	onClick: () => void
-	onClose: () => void
-}) {
-	// Phase 131-05 — wrap the chip in a Radix ContextMenu so the user
-	// can right-click to either restore or fully close the pinned
-	// window. Whole-chip left-click still restores (matching the
-	// 130-09 contract); right-click brings up Restore / Close (close
-	// also removes the persisted row via the unpin → close ordering
-	// in TopBar.closePinnedWindow).
-	return (
-		<ContextMenu>
-			<ContextMenuTrigger asChild>
-				<motion.button
-					type='button'
-					onClick={onClick}
-					layout
-					initial={{opacity: 0, scale: 0.4, y: -4}}
-					animate={{opacity: 1, scale: 1, y: 0}}
-					exit={{opacity: 0, scale: 0.4, y: -4}}
-					transition={{type: 'spring', stiffness: 280, damping: 22, mass: 0.6}}
-					className='group flex items-center gap-1.5 rounded-full border border-line bg-[color:var(--bg-2)] py-1 pl-1.5 pr-3 text-[12px] font-medium text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg)]'
-					title={`Restore "${title}" — right-click for more`}
-				>
-					{icon ? (
-						<span
-							className='h-5 w-5 shrink-0 rounded-md bg-cover bg-center'
-							style={{backgroundImage: `url(${icon})`}}
-							aria-hidden='true'
-						/>
-					) : (
-						<span className='h-5 w-5 shrink-0 rounded-md bg-[color:var(--fg)]' aria-hidden='true' />
-					)}
-					<span className='max-w-[160px] truncate'>{title}</span>
-				</motion.button>
-			</ContextMenuTrigger>
-			<ContextMenuContent className='w-44'>
-				<ContextMenuItem onClick={onClick} className='cursor-pointer'>
-					Restore window
-				</ContextMenuItem>
-				<ContextMenuSeparator />
-				<ContextMenuItem onClick={onClose} className='cursor-pointer text-red-500 focus:text-red-500'>
-					Close window
-				</ContextMenuItem>
-			</ContextMenuContent>
-		</ContextMenu>
-	)
-}
+// ── Pinned-window chip (REMOVED — Phase 260-03 / SC4) ───────────────
+//
+// The center-shelf PinnedWindowChip was deleted: docking no longer renders
+// a chip in the navbar center (that wedged the bar open). Docked windows are
+// now represented by the {n} badge on the Displays button (plan 260-04 / SC5)
+// and listed in the Displays popover (plan 260-04 / SC3, reusing
+// WindowsManagerPanel). The chip's restore/close verbs map to
+// windowManager.unpinWindowFromTopBar / closeWindow there.
 
 // ── Clock + Location ────────────────────────────────────────────────
 
