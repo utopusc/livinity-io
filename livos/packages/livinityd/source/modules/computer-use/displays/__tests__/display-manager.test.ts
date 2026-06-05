@@ -407,6 +407,43 @@ describe('display-manager — fail-closed on spawn error (R3)', () => {
 	})
 })
 
+// ----------------------------------------------------------------------------
+// Phase 260.1-01 (SC-F) — updateLastInputAt(): stamp a display's last_input_at
+// ISO timestamp on every luse/computer-use INPUT action so the Displays popover
+// can pulse-glow a display the agent is actively driving. Additive, best-effort:
+// a stamp on a torn-down display is a silent no-op (must NEVER crash the agent).
+// list() surfaces last_input_at the same way it surfaces last_app_at.
+// ----------------------------------------------------------------------------
+
+describe('display-manager — updateLastInputAt() (Phase 260.1-01 SC-F)', () => {
+	it('Case 19: updateLastInputAt writes last_input_at = isoNow on the display hash', async () => {
+		const mgr = await makeMgr()
+		await mgr.create({mode: 'xephyr', ownerSession: 's1'})
+		await mgr.updateLastInputAt(':10')
+		const hash = await redis.hgetall(redisKeyForDisplay(':10'))
+		expect(hash.last_input_at).toBe(new Date(FIXED_NOW).toISOString())
+	})
+
+	it('Case 20: updateLastInputAt on a non-existent display is a silent no-op (no throw, no key)', async () => {
+		const mgr = await makeMgr()
+		await expect(mgr.updateLastInputAt(':999')).resolves.toBeUndefined()
+		const hash = await redis.hgetall(redisKeyForDisplay(':999'))
+		expect(Object.keys(hash).length).toBe(0)
+	})
+
+	it('Case 21: list() surfaces last_input_at when present, undefined when absent', async () => {
+		const mgr = await makeMgr()
+		const a = await mgr.create({mode: 'xephyr', ownerSession: 's1', name: 'A'})
+		const b = await mgr.create({mode: 'xephyr', ownerSession: 's1', name: 'B'})
+		await mgr.updateLastInputAt(a.display)
+		const list = await mgr.list()
+		const recA = list.find((r: DisplayRecord) => r.display === a.display)!
+		const recB = list.find((r: DisplayRecord) => r.display === b.display)!
+		expect(recA.last_input_at).toBe(new Date(FIXED_NOW).toISOString())
+		expect(recB.last_input_at).toBeUndefined()
+	})
+})
+
 // Confirm DisplayMode union is exported and includes both modes.
 describe('types', () => {
 	it('exposes DisplayMode union with xephyr and xvfb', () => {
