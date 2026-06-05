@@ -857,6 +857,15 @@ else
     info "scripts/install-liv-assistant.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 223-01 deploy)"
 fi
 
+# Phase 259 — the liv-assistant / Claude-Code / AionUi MCP tooling below (245.2–
+# 245.3) is OPTIONAL polish, NOT core to livos. Under `set -e` a non-critical
+# failure here (e.g. `tee .../claude: Text file busy` while liv-assistant holds
+# the binary, or an AionUi patch hiccup) aborted the WHOLE deploy BEFORE the
+# package build + service restart — leaving livos on stale/half-built code or
+# down. Disable errexit for this best-effort block so it can never block the real
+# deploy; re-enabled right after, before the load-bearing Caddy snippet.
+set +e
+
 # ── Phase 245.2 — Claude Code wrapper for MCP_TIMEOUT ─────────────────────
 # aioncore (AionUi backend) sanitizes env when spawning Claude Code child processes,
 # dropping any MCP_TIMEOUT set via systemd unit or shell. Without 30s timeout, 5 of 6
@@ -1041,6 +1050,10 @@ if sudo systemctl restart liv-assistant 2>&1; then
 else
     warn "Phase 245.3: liv-assistant restart failed (continuing — manual fix may be needed)"
 fi
+
+# Phase 259 — re-enable errexit; everything below (Caddy snippet, package build,
+# service restart) is load-bearing and MUST still abort on failure.
+set -e
 
 # ── Step 4.7: Phase 226 — Caddy /liv reverse-proxy snippet install ─────────
 # Lays down /etc/caddy/conf.d/liv-assistant.caddy + wires `import liv_assistant`
