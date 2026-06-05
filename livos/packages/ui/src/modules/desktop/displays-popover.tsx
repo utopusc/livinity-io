@@ -13,6 +13,10 @@
 // (D-255-THUMBS-SCREENSHOT / T-255-13). Clicking a card opens the existing
 // interactive VNC window (DISPLAY_:N openWindow, verbatim 254-03 contract).
 
+import {useEffect, useState} from 'react'
+import {AnimatePresence, motion, type PanInfo} from 'framer-motion'
+import {Maximize2, X} from 'lucide-react'
+
 import {trpcReact} from '@/trpc/trpc'
 import {useWindowManagerOptional} from '@/providers/window-manager'
 import {useIsMobile} from '@/hooks/use-is-mobile'
@@ -23,7 +27,26 @@ import {WindowsManagerPanel} from './windows-manager-panel'
 // (its element type is irrelevant here — only `.length` is read), so the
 // permissive `unknown[]` keeps the card decoupled from the backend element
 // type while still type-checking `.length`.
-type DisplayRecord = {display: string; width: number; height: number; running_apps: unknown[]}
+//
+// Phase 260.1 (SC-F) — `last_input_at` is the ISO timestamp of the latest
+// luse/computer-use INPUT action on this display (Plan 01 surfaces it through
+// displays.list). The card derives a live "AI is acting on this" pulse-glow
+// from its recency (<~3s).
+type DisplayRecord = {
+	display: string
+	width: number
+	height: number
+	running_apps: unknown[]
+	last_input_at?: string
+}
+
+// Phase 260.1 (SC-F) — on-brand LivOS dark night accent for the activity glow
+// (same #7aa2ff the navbar uses). Kept as rgb channels so the pulsing
+// box-shadow keyframes can vary only the alpha.
+const ACCENT_RGB = '122, 162, 255' // #7aa2ff
+// A display "is active" (AI/luse acted on it) when its last input was within
+// this window; the glow fades out once recency lapses.
+const ACTIVITY_WINDOW_MS = 3000
 
 /**
  * The merged popover body. `open` gates polling so we issue zero tRPC requests
@@ -46,7 +69,9 @@ export function DisplaysPopover({open = true}: {open?: boolean}) {
 	const displays = (displaysQuery.data?.displays ?? []) as DisplayRecord[]
 
 	return (
-		<div className='flex max-h-[560px] w-[360px] flex-col gap-3 overflow-y-auto rounded-2xl border border-line bg-card-bg/78 p-3 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55'>
+		// Phase 260.1 (SC-C) — widened from w-[360px] so the side-by-side
+		// wrapping card row reads well (~2-3 cards abreast at w-[160px] each).
+		<div className='flex max-h-[560px] w-[520px] flex-col gap-3 overflow-y-auto rounded-2xl border border-line bg-card-bg/78 p-3 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55'>
 			{/* ── Section A — Displays ─────────────────────────────────── */}
 			<div className='flex flex-col gap-2'>
 				<div className='text-[11px] font-semibold uppercase tracking-wide text-text-secondary'>
@@ -55,9 +80,17 @@ export function DisplaysPopover({open = true}: {open?: boolean}) {
 				{displays.length === 0 ? (
 					<p className='px-1 py-1.5 text-[12px] text-text-tertiary'>No active displays</p>
 				) : (
-					<div className='grid grid-cols-2 gap-2'>
+					// Phase 260.1 (SC-C) — side-by-side wrapping flex row (was a
+					// grid-cols-2 stack). Each card has a fixed basis so they sit
+					// abreast and wrap.
+					<div className='flex flex-wrap gap-2'>
 						{displays.map((d) => (
-							<DisplayCard key={d.display} d={d} open={open} />
+							<DisplayCard
+								key={d.display}
+								d={d}
+								open={open}
+								onClosed={() => void displaysQuery.refetch()}
+							/>
 						))}
 					</div>
 				)}
@@ -126,10 +159,22 @@ function DockedWindowsSection() {
 
 /**
  * One display card with its own ~2s screenshot poll (scoped per-card so each
- * card's query is independent). Clicking opens the live interactive VNC window
- * sized to the display's real WxH — verbatim 254-03 contract.
+ * card's query is independent).
+ *
+ * Phase 260.1:
+ *  • SC-C — root is a `motion.div` (was a plain <button>) so the × close and
+ *    fullscreen controls can be SIBLINGS of the clickable thumbnail (no nested
+ *    buttons). `whileHover={{translateY:-6}}` is the established hover-lift.
+ *  • SC-D — a hover-revealed × tears the display down server-side via
+ *    displays.close (works even when no DISPLAY_ window is open), then refetches
+ *    the list so the card disappears + the badge decrements.
+ *  • SC-E — the card is draggable to the desktop to recall the display as a
+ *    window, and a fullscreen control opens it; the thumbnail click-to-open
+ *    (254-03 contract) is retained as the recall fallback (Task 2).
+ *  • SC-F — when `last_input_at` is within ~3s the card pulses an on-brand
+ *    edge glow that fades when idle.
  */
-function DisplayCard({d, open}: {d: DisplayRecord; open: boolean}) {
+function DisplayCard({d, open, onClosed}: {d: DisplayRecord; open: boolean; onClosed: () => void}) {
 	const windowManager = useWindowManagerOptional()
 
 	// ~2s auto-refreshing JPEG thumbnail (D-255-THUMBS-SCREENSHOT): screenshot
@@ -140,41 +185,116 @@ function DisplayCard({d, open}: {d: DisplayRecord; open: boolean}) {
 		{enabled: open, refetchInterval: 2000},
 	)
 
+	// SC-D — per-card × close. Calls the backend directly (Plan 02
+	// displays.close) so it works even when no DISPLAY_ window is open; the
+	// server enforces owner-scope (T-260.1-10). Optimistically refetch the list
+	// on settle so the card drops + badge decrements.
+	const closeMutation = trpcReact.displays.close.useMutation({
+		onSettled: () => onClosed(),
+	})
+
+	// SC-F — 1s ticker so the glow recency re-evaluates (and fades out) live,
+	// even between the ~4s displays.list polls.
+	const [, setTick] = useState(0)
+	useEffect(() => {
+		const id = setInterval(() => setTick((t) => t + 1), 1000)
+		return () => clearInterval(id)
+	}, [])
+	const active = !!d.last_input_at && Date.now() - Date.parse(d.last_input_at) < ACTIVITY_WINDOW_MS
+
+	// SC-E — recall the display to the desktop as the live interactive VNC
+	// window (254-03 contract), sized to its real WxH. Shared by the thumbnail
+	// click (fallback) and the drag-to-desktop gesture (Task 2).
+	const recall = () => {
+		windowManager?.openWindow(`DISPLAY_${d.display}`, '/', `Display ${d.display}`, '🖥️', undefined, {width: d.width, height: d.height})
+	}
+
 	return (
-		<button
-			type='button'
-			onClick={() => {
-				// Open the display as the existing interactive VNC window
-				// (254-03), sized to its real WxH via the trailing `suggested`
-				// openWindow param.
-				windowManager?.openWindow(`DISPLAY_${d.display}`, '/', `Display ${d.display}`, '🖥️', undefined, {width: d.width, height: d.height})
-			}}
-			className={cn(
-				'flex flex-col gap-1.5 rounded-xl border border-line p-2 text-left transition-colors',
-				'hover:border-line-strong hover:bg-[color:var(--bg-2)]',
-			)}
-			title={`Open display ${d.display} (${d.width}×${d.height})`}
+		<motion.div
+			className='group relative w-[160px]'
+			whileHover={{translateY: -6}}
+			transition={{type: 'spring', stiffness: 500, damping: 28}}
 		>
-			<div className='aspect-video w-full overflow-hidden rounded-lg bg-[color:var(--bg-2)]'>
-				{shot.data?.dataUrl ? (
-					<img
-						src={shot.data.dataUrl}
-						alt={`Display ${d.display}`}
-						className='h-full w-full object-cover'
-						draggable={false}
+			{/* SC-F — animated edge glow gated on the `active` recency flag.
+			    Absolute overlay matching the card radius, pointer-events-none so
+			    it never intercepts clicks/drag; wrapped in AnimatePresence so it
+			    fades out when activity lapses. On-brand #7aa2ff accent. */}
+			<AnimatePresence>
+				{active && (
+					<motion.div
+						key='glow'
+						className='pointer-events-none absolute inset-0 z-10 rounded-xl'
+						initial={{opacity: 0}}
+						animate={{
+							opacity: 1,
+							boxShadow: [
+								`0 0 0 0 rgba(${ACCENT_RGB}, 0.0)`,
+								`0 0 0 3px rgba(${ACCENT_RGB}, 0.55)`,
+								`0 0 0 0 rgba(${ACCENT_RGB}, 0.0)`,
+							],
+						}}
+						exit={{opacity: 0}}
+						transition={{
+							boxShadow: {duration: 1.4, repeat: Infinity, ease: 'easeInOut'},
+							opacity: {duration: 0.3},
+						}}
+						aria-hidden
 					/>
-				) : (
-					<div className='grid h-full w-full place-items-center text-[18px] opacity-40' aria-hidden>
-						🖥️
-					</div>
 				)}
-			</div>
-			<div className='flex flex-col'>
-				<span className='text-[12px] font-medium text-[color:var(--fg)]'>{d.display}</span>
-				<span className='text-[10.5px] text-text-tertiary'>
-					{d.width}×{d.height} · {d.running_apps.length} app(s)
-				</span>
-			</div>
-		</button>
+			</AnimatePresence>
+
+			{/* Clickable thumbnail area — the card-click-to-open contract
+			    (254-03) stays the click target. */}
+			<button
+				type='button'
+				onClick={recall}
+				className={cn(
+					'flex w-full flex-col gap-1.5 rounded-xl border border-line p-2 text-left transition-colors',
+					'hover:border-line-strong hover:bg-[color:var(--bg-2)]',
+				)}
+				title={`Open display ${d.display} (${d.width}×${d.height})`}
+			>
+				<div className='aspect-video w-full overflow-hidden rounded-lg bg-[color:var(--bg-2)]'>
+					{shot.data?.dataUrl ? (
+						<img
+							src={shot.data.dataUrl}
+							alt={`Display ${d.display}`}
+							className='h-full w-full object-cover'
+							draggable={false}
+						/>
+					) : (
+						<div className='grid h-full w-full place-items-center text-[18px] opacity-40' aria-hidden>
+							🖥️
+						</div>
+					)}
+				</div>
+				<div className='flex flex-col'>
+					<span className='text-[12px] font-medium text-[color:var(--fg)]'>{d.display}</span>
+					<span className='text-[10.5px] text-text-tertiary'>
+						{d.width}×{d.height} · {d.running_apps.length} app(s)
+					</span>
+				</div>
+			</button>
+
+			{/* SC-D — hover-revealed × close (top-right). stopPropagation so it
+			    never triggers the thumbnail's recall click. */}
+			<button
+				type='button'
+				aria-label='Close display'
+				title='Close display'
+				onClick={(e) => {
+					e.stopPropagation()
+					closeMutation.mutate({display: d.display})
+				}}
+				className={cn(
+					'absolute right-1 top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full',
+					'border border-line bg-card-bg/90 text-text-secondary shadow-sm backdrop-blur',
+					'opacity-0 transition-opacity group-hover:opacity-100',
+					'hover:border-destructive/80 hover:bg-destructive hover:text-white',
+				)}
+			>
+				<X className='h-3.5 w-3.5' strokeWidth={2.5} />
+			</button>
+		</motion.div>
 	)
 }
