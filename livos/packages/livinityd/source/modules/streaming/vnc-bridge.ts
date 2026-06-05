@@ -194,7 +194,7 @@ export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 				stderrTail.length > 0
 					? `\n--- x11vnc stderr (last ${stderrTail.length}) ---\n${stderrTail.join('\n')}`
 					: ' (no stderr captured)'
-			opts.logger?.error(
+			opts.logger?.error?.(
 				`x11vnc[${logTag}] crashed (code=${code} signal=${signal} argv=${JSON.stringify(args)})${tailMsg}`,
 			)
 		}
@@ -312,7 +312,7 @@ export function attachVncBridge(ws: VncBridgeSocket, opts: AttachVncBridgeOpts):
 			tcp.on('data', (data: Buffer) => {
 				const buffered = ws.bufferedAmount ?? 0
 				if (buffered > backpressureBytes) {
-					opts.logger?.warn(
+					opts.logger?.warn?.(
 						`vnc-bridge: dropping slow subscriber (buffered=${buffered} > ${backpressureBytes})`,
 					)
 					try {
@@ -332,7 +332,7 @@ export function attachVncBridge(ws: VncBridgeSocket, opts: AttachVncBridgeOpts):
 				try {
 					ws.send(data)
 				} catch (err) {
-					opts.logger?.warn(`vnc-bridge: ws.send threw — destroying tcp`, err)
+					opts.logger?.warn?.(`vnc-bridge: ws.send threw — destroying tcp`, err)
 					try {
 						tcp.destroy()
 					} catch {
@@ -351,7 +351,7 @@ export function attachVncBridge(ws: VncBridgeSocket, opts: AttachVncBridgeOpts):
 				}
 			})
 			tcp.on('error', (err) => {
-				opts.logger?.warn(`vnc-bridge: tcp error`, err)
+				opts.logger?.warn?.(`vnc-bridge: tcp error`, err)
 				if (wsClosed || backendDone) return
 				backendDone = true
 				try {
@@ -375,7 +375,7 @@ export function attachVncBridge(ws: VncBridgeSocket, opts: AttachVncBridgeOpts):
 				return
 			}
 			// Out of retries OR non-ECONNREFUSED
-			opts.logger?.warn(
+			opts.logger?.warn?.(
 				`vnc-bridge: connect failed after ${attempts} attempts (code=${err.code ?? 'unknown'})`,
 			)
 			if (!wsClosed) {
@@ -402,7 +402,7 @@ export function attachVncBridge(ws: VncBridgeSocket, opts: AttachVncBridgeOpts):
 		}
 	})
 	ws.on('error', (err: unknown) => {
-		opts.logger?.warn(`vnc-bridge: ws error`, err)
+		opts.logger?.warn?.(`vnc-bridge: ws error`, err)
 		wsClosed = true
 		if (activeTcp) {
 			try {
