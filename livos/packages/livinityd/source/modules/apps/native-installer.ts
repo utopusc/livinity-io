@@ -76,6 +76,12 @@ type NativeManifest = {
 				aptRepoLine: string // e.g. "https://repo.example.com/ stable main"
 				aptKeyUrl: string // https URL to the (armored or binary) signing key
 		  }
+		// Phase 259 (round 2) — for apps whose ONLY official Linux install is a
+		// `curl … | bash` script that clones/builds locally (e.g. the official
+		// Hermes Agent). The script is run as the unprivileged install user (bruce),
+		// NEVER root — its blast radius is that user's account. stdin is closed so
+		// any optional sudo/interactive prompt gets EOF and is skipped.
+		| {primary: 'script'; scriptUrl: string; scriptArgs?: string[]; scriptSha256?: string}
 	launch: {
 		binaryPath: string
 		args?: string[]
@@ -534,6 +540,63 @@ export class NativeInstaller implements InstallHandler<'native'> {
 				}
 			}
 			await fs.chmod(targetPath, 0o755)
+		} else if (manifest.install.primary === 'script') {
+			const {scriptUrl, scriptArgs, scriptSha256} = manifest.install
+			if (!scriptUrl || !/^https:\/\//.test(scriptUrl)) {
+				return fail(
+					app.id,
+					'native',
+					'manifest_invalid',
+					`scriptUrl must be https: ${String(scriptUrl)}`,
+				)
+			}
+			const tmpScript = path.join(
+				'/tmp',
+				`livos-native-${app.id.replace(/[^a-zA-Z0-9_-]/g, '')}.sh`,
+			)
+			progress(15, 'Downloading installer')
+			try {
+				await downloadToFile(scriptUrl, tmpScript)
+			} catch (err) {
+				return fail(
+					app.id,
+					'native',
+					'network_failed',
+					`download failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+			if (scriptSha256 && scriptSha256.length === 64) {
+				progress(35, 'Verifying SHA-256')
+				const actual = await sha256File(tmpScript)
+				if (actual !== scriptSha256.toLowerCase()) {
+					await fs.unlink(tmpScript).catch(() => {})
+					return fail(
+						app.id,
+						'native',
+						'signature_invalid',
+						`sha256 mismatch — manifest=${scriptSha256} actual=${actual}`,
+					)
+				}
+			}
+			progress(50, 'Running installer (may take several minutes)')
+			// Run as the install user (bruce) — NEVER sudo. execCmd uses stdio
+			// 'ignore' for stdin, so any optional sudo/interactive prompt gets EOF
+			// and is skipped instead of hanging.
+			const {code, stderr} = await execCmd(
+				'bash',
+				[tmpScript, ...(scriptArgs ?? [])],
+				ctx.logger,
+			)
+			await fs.unlink(tmpScript).catch(() => {})
+			if (code !== 0) {
+				return fail(
+					app.id,
+					'native',
+					'apt_failed',
+					`install script exited ${code}`,
+					stderr,
+				)
+			}
 		} else {
 			return fail(
 				app.id,
