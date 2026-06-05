@@ -252,6 +252,7 @@ export class NativeInstaller implements InstallHandler<'native'> {
 		const configCandidate: NativeAppConfig = {
 			id: randomUUID(),
 			name: app.name,
+			iconUrl: manifest.desktopEntry.icon || undefined,
 			binaryPath: manifest.launch.binaryPath,
 			args: manifest.launch.args,
 			env: manifest.launch.env,
