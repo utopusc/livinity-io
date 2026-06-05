@@ -72,11 +72,63 @@ async function fullscreenNativeWindow(
 		return
 	}
 
-	// Re-apply EWMH fullscreen + maximize + explicit geometry across several spaced
-	// iterations (~3s total) so apps like OBS that restore their own layout AFTER mapping
-	// get corrected. Re-query the window list each pass so a late-mapped main window
-	// (after a splash closes) is also covered. Best-effort — each call swallows errors.
-	for (let pass = 0; pass < 6; pass++) {
+	// Pick the REAL main top-level among a pid's windows. Electron (VS Code) and Qt
+	// (OBS) map several X windows (splash / IME / utility); blindly resizing all of
+	// them does nothing useful and never focuses the one that matters. Prefer a
+	// _NET_WM_WINDOW_TYPE_NORMAL window, then the largest by area.
+	const pickMain = async (candidates: string[]): Promise<string | null> => {
+		let best: {wid: string; area: number; normal: boolean} | null = null
+		for (const wid of candidates) {
+			let w = 0
+			let h = 0
+			try {
+				const {stdout} = await execFileP(
+					'xdotool',
+					['getwindowgeometry', '--shell', wid],
+					{env},
+				)
+				w = Number(stdout.match(/WIDTH=(\d+)/)?.[1] ?? 0)
+				h = Number(stdout.match(/HEIGHT=(\d+)/)?.[1] ?? 0)
+			} catch {
+				/* geometry unavailable — treat as zero-area */
+			}
+			let normal = true
+			try {
+				const {stdout} = await execFileP(
+					'xprop',
+					['-id', wid, '_NET_WM_WINDOW_TYPE'],
+					{env},
+				)
+				// Absent type => assume normal; otherwise require the NORMAL atom.
+				normal =
+					!/_NET_WM_WINDOW_TYPE\(/.test(stdout) ||
+					stdout.includes('_NET_WM_WINDOW_TYPE_NORMAL')
+			} catch {
+				/* xprop unavailable — assume normal */
+			}
+			const area = w * h
+			if (
+				!best ||
+				(normal && !best.normal) ||
+				(normal === best.normal && area > best.area)
+			) {
+				best = {wid, area, normal}
+			}
+		}
+		return best?.wid ?? null
+	}
+
+	// EWMH alone is unreliable for Electron/Qt under the deliberately-minimal fluxbox
+	// WM — the app ignores an external client's _NET_WM_STATE request. F11 invokes the
+	// app's OWN fullscreen handler (works for Chromium / VS Code), sent via the proven
+	// activate-first xdotool pattern (see computer-use/native/input.ts:tryXdotoolKey —
+	// `key --window` is dropped by Chrome's synthetic-event filter, so we activate+focus
+	// then send a real key). F11 is a TOGGLE, so send it at most ONCE per window —
+	// re-sending on a later pass would toggle fullscreen back OFF. OBS has no main-window
+	// fullscreen key, so for it the maximize + geometry path (now correctly targeted) is
+	// what fills the screen and a stray F11 is a harmless no-op.
+	const f11Sent = new Set<string>()
+	for (let pass = 0; pass < 4; pass++) {
 		try {
 			const {stdout} = await execFileP(
 				'xdotool',
@@ -88,21 +140,49 @@ async function fullscreenNativeWindow(
 		} catch {
 			/* keep the last known set */
 		}
-		for (const wid of wids) {
+
+		const target = (await pickMain(wids)) ?? wids[0]
+		if (target) {
+			// Activate + focus so a REAL key event lands on the right window.
 			await execFileP(
-				'wmctrl',
-				['-i', '-r', wid, '-b', 'add,maximized_vert,maximized_horz'],
+				'xdotool',
+				['windowactivate', '--sync', target, 'windowfocus', '--sync', target],
 				{env},
 			).catch(() => {})
-			await execFileP('wmctrl', ['-i', '-r', wid, '-b', 'add,fullscreen'], {env}).catch(
+			await execFileP(
+				'wmctrl',
+				['-i', '-r', target, '-b', 'add,maximized_vert,maximized_horz'],
+				{env},
+			).catch(() => {})
+			await execFileP('wmctrl', ['-i', '-r', target, '-b', 'add,fullscreen'], {env}).catch(
 				() => {},
 			)
-			await execFileP('xdotool', ['windowsize', wid, '1280', '720'], {env}).catch(() => {})
-			await execFileP('xdotool', ['windowmove', wid, '0', '0'], {env}).catch(() => {})
+			await execFileP('xdotool', ['windowsize', target, '1280', '720'], {env}).catch(() => {})
+			await execFileP('xdotool', ['windowmove', target, '0', '0'], {env}).catch(() => {})
+			if (!f11Sent.has(target)) {
+				// F11 LAST (after geometry) on its first pass so it locks true app-internal
+				// fullscreen; tracked so we never toggle it back off on a later pass.
+				f11Sent.add(target)
+				await execFileP(
+					'xdotool',
+					[
+						'windowactivate',
+						'--sync',
+						target,
+						'windowfocus',
+						'--sync',
+						target,
+						'key',
+						'--clearmodifiers',
+						'F11',
+					],
+					{env},
+				).catch(() => {})
+			}
+			logger?.info?.(
+				`native-app: fullscreen pass ${pass + 1}/4 applied to wid=${target} on ${display}`,
+			)
 		}
-		logger?.info?.(
-			`native-app: fullscreen pass ${pass + 1}/6 applied to ${wids.length} window(s) on ${display}`,
-		)
 		await new Promise((r) => setTimeout(r, 500))
 	}
 }
