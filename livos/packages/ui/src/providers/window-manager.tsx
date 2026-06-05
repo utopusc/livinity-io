@@ -346,9 +346,16 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		const isWebApp = appId.startsWith('WEBAPP_')
 		const isNative = appId.startsWith('NATIVE_')
 		const isDisplay = appId.startsWith('DISPLAY_')
-		const baseSize = suggested ?? ((isWebApp || isNative)
-			? {width: 1280, height: 720}
-			: (DEFAULT_WINDOW_SIZES[appId] || DEFAULT_WINDOW_SIZES.default))
+		// Native windows are sized a touch larger (+2px each axis) so that the
+		// CONTENT area, once the 1px window border is subtracted on each side, is
+		// exactly the 1280x720 16:9 stream — otherwise the noVNC canvas letterboxes
+		// a hair inside a 1278x718 box (operator: window should seat flush with the
+		// inner resolution, "bir tık büyük"). WebApp keeps its exact 1280x720.
+		const baseSize = suggested ?? (isNative
+			? {width: 1282, height: 722}
+			: isWebApp
+				? {width: 1280, height: 720}
+				: (DEFAULT_WINDOW_SIZES[appId] || DEFAULT_WINDOW_SIZES.default))
 		const size = getResponsiveSize(baseSize.width, baseSize.height, isWebApp || isNative || isDisplay || suggested != null)
 		// Use current state.windows.length at call time, not as dependency
 		const windowCount = state.windows.length
