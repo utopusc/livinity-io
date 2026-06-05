@@ -151,3 +151,30 @@ describe('displays-popover — Phase 260.1 SC-F (last_input_at activity glow)', 
 		expect(SRC).toMatch(/AnimatePresence/)
 	})
 })
+
+describe('displays-popover — Phase 260.1 SC-E (recall-by-drag + fullscreen)', () => {
+	it('makes the card draggable with snap-to-origin', () => {
+		expect(SRC).toMatch(/dragSnapToOrigin/)
+		expect(SRC).toMatch(/onDragEnd=/)
+	})
+
+	it('recalls the display on a downward drag past the threshold', () => {
+		expect(SRC).toMatch(/info\.offset\.y\s*>\s*80/)
+		// recall opens the DISPLAY_ window (shared with the click fallback)
+		expect(SRC).toMatch(/openWindow\(`DISPLAY_\$\{d\.display\}`/)
+	})
+
+	it('uses the established spring family for the drag snap-back', () => {
+		expect(SRC).toMatch(/dragTransition=/)
+		expect(SRC).toMatch(/bounceStiffness:\s*500/)
+	})
+
+	it('renders a hover-revealed fullscreen control that opens the display', () => {
+		expect(SRC).toMatch(/aria-label='Fullscreen display'/)
+		expect(SRC).toMatch(/Maximize2/)
+	})
+
+	it('keeps the thumbnail click-to-open as the recall fallback', () => {
+		expect(SRC).toMatch(/onClick=\{recall\}/)
+	})
+})
