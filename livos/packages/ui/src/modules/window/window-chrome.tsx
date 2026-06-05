@@ -1,4 +1,5 @@
 import {motion} from 'framer-motion'
+import {Maximize2} from 'lucide-react'
 import {TbX} from 'react-icons/tb'
 
 import {Magnetic} from '@/components/motion-primitives/magnetic'
@@ -17,6 +18,14 @@ type WindowChromeProps = {
 	// Teach, no Skills) for a NativeApp window. Mutually exclusive
 	// with webappId per windows-container assertion.
 	nativeAppId?: string
+	// Phase 260.1 (SC-E) — when provided, the chrome renders a fullscreen
+	// button (locked decision #2 = BROWSER fullscreen, frontend only, all
+	// display types). The actual requestFullscreen call (standards API +
+	// webkit fallback) lives in window.tsx (Plan 05), which passes this
+	// callback bound to the content ref. This file delivers the button +
+	// prop only; an absent onFullscreen hides the button (plain non-stream
+	// windows + existing call sites compile unchanged).
+	onFullscreen?: () => void
 }
 
 // Sacred SHA: f3538e1d811992b782a9bb057d1b7f0a0189f95f (sdk-agent-runner.ts) unchanged.
@@ -59,6 +68,7 @@ export function WindowChrome({
 	windowWidth,
 	webappId,
 	nativeAppId,
+	onFullscreen,
 }: WindowChromeProps) {
 	// Phase 159 — discriminator: 'webapp' = full chrome (Chat + Teach +
 	// Skills); 'native' = Chat only (Teach + Skills omitted, RESEARCH A5);
@@ -116,6 +126,34 @@ export function WindowChrome({
 					/>
 				</button>
 			</Magnetic>
+
+			{/* Fullscreen pill — Phase 260.1 (SC-E), locked decision #2 =
+			    BROWSER fullscreen (frontend only, all display types). Rendered
+			    only when an onFullscreen callback is supplied (so plain
+			    non-stream windows don't show it). Mirrors the close button's
+			    w-9 h-9 rounded-full shape for visual consistency but uses a
+			    NEUTRAL hover (not the close button's destructive hover). The
+			    actual requestFullscreen call (standards Fullscreen API + a
+			    webkit fallback) is supplied by window.tsx in Plan 05 — this
+			    file delivers the button + prop only (keeps files disjoint). */}
+			{onFullscreen && (
+				<button
+					type='button'
+					onClick={(e) => {
+						e.stopPropagation()
+						onFullscreen?.()
+					}}
+					onMouseDown={(e) => e.stopPropagation()}
+					className='flex shrink-0 items-center justify-center w-9 h-9 rounded-full bg-white/95 dark:bg-zinc-800/95 border border-dash-line dark:border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)] hover:bg-[color:var(--bg-2)] transition-colors duration-200'
+					aria-label='Fullscreen'
+					title='Fullscreen'
+				>
+					<Maximize2
+						className='h-4 w-4 text-neutral-500 dark:text-neutral-400'
+						strokeWidth={2.5}
+					/>
+				</button>
+			)}
 
 			{/* WebApp action area — Chat + Teach icons (default), or the
 			    chat-input / streaming-response pill. Width is animated
