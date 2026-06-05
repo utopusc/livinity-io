@@ -2,18 +2,20 @@
 gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
-status: completed
-last_updated: "2026-06-04T04:48:05.634Z"
-last_activity: 2026-06-02
+status: executing
+last_updated: "2026-06-05T00:23:38.315Z"
+last_activity: 2026-06-05
 progress:
-  total_phases: 170
+  total_phases: 171
   completed_phases: 87
-  total_plans: 585
+  total_plans: 588
   completed_plans: 503
   percent: 86
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
+
+> ✅ **259-01 DONE (Native App UX Polish — icons + window sizing, SC1+SC2)** — 2 commits `8d46fc71` (use-app-store-bridge.ts: add `utilsRef.current.apps.native.list.invalidate()` at the THREE install/uninstall completion sites — polling-done, `handleInstallV37` return, `handleUninstall` — so the desktop grid refetches native icons immediately instead of waiting out the 30s staleTime; "apps'de yok" fix), `79b7576e` (window-manager.tsx: add `const isNative = appId.startsWith('NATIVE_')` mirroring `isWebApp`, ORed into BOTH the 1280x720 base-size ternary and the `getResponsiveSize` preserveAspect flag → `NATIVE_<uuid>` windows now open 16:9 with aspect-clamp, no top/bottom black letterbox, matching the Displays-popover proportion). **ADDITIVE only — `WEBAPP_`/`DISPLAY_`/default (Docker/community) size paths byte-identical (SC4 no-regression); `use-webapp-vnc.ts` + `:N` allocation + x11vnc transport UNTOUCHED.** Both edits mirror an existing same-file/same-function correct sibling. Automated checks PASS (3 native invalidations; isNative routed into base+preserveAspect). UI typecheck: the 2 edited files produce ZERO errors; remaining tsc errors are pre-existing cross-package `livinityd` lib/Buffer/ctx drift (same baseline as 256-02 `deferred-items.md`, out of scope). **CODE ONLY — NO DEPLOY** (Mini PC single-user; operator deploys via `pnpm --filter ui build` + `systemctl restart livos` + SW-cache clear; live walk = install native app → icon appears + opens 16:9 no-letterbox + WebApp/beszel still fine). SC3 (fullscreen robustness/OBS) + SC1-cosmetic iconUrl are NOT in this plan (259-PATTERNS maps them to native-routes.ts + native-installer.ts for a later plan). SUMMARY: `.planning/phases/259-native-app-ux-polish-install-icons-consistent-window-sizing-/259-01-SUMMARY.md`. (STATE narrative format — SDK counters no-op.)
 
 > ✅ **258-03 DONE (WS-C public-access hard guardrails — the SERVER-SIDE SPINE, PUB-C)** — 3 commits `22951ae7` (public-forbidden.ts: `isPublicForbidden(signals)` the ONE never-public policy + `effectivePublicAccess` pure composition; 11+6 vitest), `42b34a37` (apps.ts: get/setPublicAccessSetting on Redis sibling key `livos:apps:public-access:<appId>`; `computeEffectivePublicAccess` re-asserts `isPublicForbidden` on EVERY `registerAppSubdomain` regen → **fail-closed**; threads `SubdomainConfig.publicAccess`), `dc123d8f` (routes.ts: `setPublicAccess` tRPC mutation — owner-OR-admin gate + **403 TRPCError BEFORE persist/regen** for forbidden apps + runtime Caddy regen + `publicUrl`; `getPublicAccess` query for the 258-04 UI lock; both added to `httpOnlyPaths`). **35 tests GREEN** across 4 files; ZERO new tsc errors (baseline-confirmed via `git stash`). **LOAD-BEARING vs DEFENSE-IN-DEPTH (NOTE-2):** primary guard = `neverPublic` / `requiresLocalAiClis` / 256-04 daemon-bearer (NOT stripped by the 257 sanitizer → protect OpenDesign/OpenHands-class); compose `docker.sock`/`privileged`/`network_mode:host` = documented backstop (Test 9 proves a sanitized compose is still forbidden via a load-bearing trigger). **Confirmed: a forbidden app is rejected server-side at BOTH the API (setPublicAccess→403) AND the caddy-regen layer (computeEffectivePublicAccess→`publicAccess` undefined), fail-closed against a forged/stale config.** `isPublicForbidden` imported by BOTH routes.ts + apps.ts (single policy, two call sites). **CODE+TESTS ONLY — NO DEPLOY** (Mini PC only). My files this wave: apps.ts + routes.ts (258-02 owns caddy.ts). SUMMARY: `.planning/phases/258-public-app-access/258-03-SUMMARY.md`. (STATE narrative format — SDK counters no-op, per the 257-03 convention.)
 
@@ -636,7 +638,7 @@ Status: Ready for Phase 214 (Store admin-only gate + UX polish)
 - CARRY-P212-RLS-POLICIES — real RLS policies on 4 tables → P214
 - CARRY-P212-LEGACY-ADMIN-UNIFY — migrate legacy api-key admin routes to cookie path (cosmetic)
 
-Last activity: 2026-06-02
+Last activity: 2026-06-05
 
 ### ✅ Phase 209 SHIPPED (commit `8ad89ee6`)
 
@@ -704,7 +706,7 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 ## Next Planned Phase
 
 - **Phase:** 255
-- **Status:** Milestone complete
+- **Status:** Executing Phase 259
 - **Plan count:** 5
 - **CONTEXT:** .planning/phases/248-luse-display-lifecycle/248-CONTEXT.md
 - **Wave plan:** Wave 1 (248-01 backend display-manager ✅) → Wave 2 (248-02 MCP tool registrations ✅) → Wave 3 (248-03 TTL GC sweep — NEXT) → Wave 4 (248-04 canonical docs + shim sync) → Wave 5 (248-05 Mini PC deploy + UAT)
@@ -712,8 +714,8 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 
 ## Current Position
 
-Phase: --phase (255) — EXECUTING
-Plan: 1 of --name
+Phase: 259 (native-app-ux-polish-install-icons-consistent-window-sizing) — EXECUTING
+Plan: 1 of 2
 
 **Plan 251-09 (4 tasks — 3 commits: `4929916f` docs PORTABILITY-AUDIT + `6bc1ee70` docs REMEDIATION-BACKLOG + final docs flip)** — Wave-2 synthesis closing Phase 251. Aggregated the eight Wave-1 findings docs (251-01…251-08) into two artifacts under the phase dir. **PORTABILITY-AUDIT.md** (156 lines): a 30-row per-dimension COVERED/GAP/RISK matrix across 8 dimensions (luse-redis / display-backend / binaries / identity / paths / systemd-env / terminal / installer-path) with severity (P0/P1/P2) + evidence refs, plus the two explicit operator verdicts. **Q1 (any session-introduced hardcode that breaks portability?)** → YES: three NEW hardcodes — `xterm` hard-dep (P0, ENOENT silently swallowed at `tools.ts:1198`), PTY `username:'bruce'` triple-pin with no `livos:desktop:user` lookup (P1, `ws-handler.ts:466`+`types.ts:31`+`session.ts:77,82-89`), `/opt/livos` Redis-fallback literal (P2 RISK, `server.ts:124`); plus two un-reproducible live-only hand artifacts (`redis-env.conf` drop-in + manual `apt install xterm imagemagick xserver-xephyr`) that mask gaps on the Mini PC. **Q2 (would a brand-new install come up seamlessly with terminal + Luse?)** → **NO-GO**, with **5 P0 blockers**: (1) `xserver-xephyr` not installed → `create_display` default mode fails as a *false-positive success* (no `child.on('error')` in `display-manager.ts:224-253`); (2) `xterm` not installed → `launch_app_in_display(terminal)` silently no-ops; (3) PTY sudoers gap → `bruce→bruce` `sudo --user bruce --login bash` prompts for a password it can't supply; (4) `livos:v43:terminal_panel` flag never seeded → dock entry hidden + WS 4403; (5) `get.livinity.io` → install-script mapping UNPROVABLE from repo (4 entrypoints; only Path A seeds `liv:mcp:config` → AionUi luse; Path B writes `CHANGEME`, Path C seeds no MCP config). `imagemagick`/`import` confirmed NOT a code dependency (251-03) — excluded. **REMEDIATION-BACKLOG.md** (153 lines): 16 items R1-R16 ordered P0→P1→P2, each with file:line + exact change + effort (S/M/L) + kind (installer/code/both), a copy-pasteable apt remediation block (covers R1/R2/R7/R16), and a 5-wave Phase 252 sequencing recommendation. De-duplicated the four cross-referenced findings to single owners (PTY-bruce→R4+R8, GDM-Xauthority→R6, redis-env→R5, empty-catalog→R9+R12). **Task 3 (optional live Mini PC ssh corroboration) SKIPPED** per D-251-LIVE-OPTIONAL — never blocks synthesis; the one genuinely live-only question (`get.livinity.io` alias) is a DNS/Vercel question unanswerable by SSH to the box, captured as backlog R11. Read-only synthesis — zero source touched (D-251-READONLY held), sacred SHA `f3538e1d…` trivially preserved (`[sacred-sha] PASS: 20 files verified` on both content commits). 0 deviations from plan. Self-check PASSED (both reports exist + exceed min_lines; both commits present in git log). SUMMARY at `.planning/phases/251-fresh-install-portability-audit/251-SUMMARY.md`. **Phase 251 CLOSED 9/9.** Next: Phase 252 (remediation) is fully seeded by REMEDIATION-BACKLOG.md — zero further analysis needed to start.
 
@@ -1744,7 +1746,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 255 () — 0 plans — 2026-06-02T12:52:07.149Z
+**Planned Phase:** 259 (native-app-ux-polish-install-icons-consistent-window-sizing) — 2 plans — 2026-06-05T00:22:09.693Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
@@ -1817,4 +1819,5 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
 
 ### Roadmap Evolution
 
+- Phase 259 added (2026-06-04): Native App UX Polish — (1) installed native apps must surface as launch icons on the LivOS desktop/apps grid (currently "apps'de yok"); (2) consistent window size + no top/bottom letterbox in the noVNC canvas (16:9 1280x720); (3) ALL native apps open fullscreen filling the Xvfb (OBS resists the current fullscreen step). Constraint: do NOT touch :N display alloc / x11vnc transport (fragile, AI-shared). See phase CONTEXT.md. Predecessor fixes already shipped: native-install userHome (40b3afcf), .deb support (14c63d65), fullscreen step (e0d5873e), platform store token-on-nav (7ac2fb8c).
 - Phase 254 added (2026-05-31): Active Displays hover-reveal panel + live VNC display windows — top-edge hover reveals dropdown of active X displays (computer_list_displays, not LivOS app windows); click opens a display as a live-VNC interactive LivOS window; new computer-use tRPC router (displays.list + display→VNC websocket URL via x11vnc); window sized to display WxH; main display :1 creation resolution changed from hardcoded 1920x1080 to MCP display-creation size. Decisions locked: render=live VNC, list=active X displays, resolution=change :1 creation. For GDG Stanford Gemini hackathon Liv AI surface.
