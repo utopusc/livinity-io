@@ -26,6 +26,8 @@ import {
 	clearProgress,
 } from './v37-install-service.js'
 import type {InstallProgressEvent} from './install-contracts.js'
+// Phase 260-01 (SC1) — reconcile wedged transient app states against Docker.
+import {isTransientAppState, reconcileTransientAppState} from './app-state-reconcile.js'
 
 export const appStore = router({
 	// Returns builtin apps (priority apps with official Docker images)
@@ -267,6 +269,27 @@ export const apps = router({
 			}
 
 			const app = ctx.apps.getApp(input.appId)
+
+			// Phase 260-01 (SC1): if the in-memory state is wedged on a transient
+			// value ('restarting'/'uninstalling'/…) — e.g. a throw mid-lifecycle or
+			// a livinityd restart — reconcile it against the real Docker container
+			// status so the tile never stays un-clickable. Stable states bypass the
+			// Docker call (no perf regression on the ~2s grid poll).
+			if (isTransientAppState(app.state)) {
+				let containerNames: string[] = []
+				try {
+					const compose = await app.readCompose()
+					containerNames = Object.values(compose.services ?? {})
+						.map((service) => service?.container_name)
+						.filter((name): name is string => Boolean(name))
+				} catch {
+					// Compose unreadable (e.g. dir removed during uninstall) → no
+					// containers; reconcile falls through to the stable fallback.
+				}
+				const reconciled = await reconcileTransientAppState(app.state, containerNames)
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any -- reconciled.state may be 'not-installed' (already a valid apps.state return) which is outside AppState; matches the per-user reconcile cast above.
+				return {state: reconciled.state as any, progress: reconciled.progress} as const
+			}
 
 			return {
 				state: app.state,
