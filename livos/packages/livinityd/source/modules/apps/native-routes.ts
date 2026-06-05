@@ -472,6 +472,38 @@ export const nativeAppsRouter = router({
 				}
 				activeNative.set(cfg.id, handle)
 
+				// [SC2 — Phase 260-02] Surface this native :N in the Displays popover.
+				// Native apps allocate from their OWN nativeDisplayAllocator + the
+				// in-memory activeNative Map and write ZERO Redis records, so
+				// displays.list (which SCANs the Redis-backed displayManager) never
+				// sees them. registerExisting (display-manager.ts) is the idempotent,
+				// no-second-X-server, no-allocator-advance adopt path built for the
+				// boot `:1` case — it ONLY writes the Redis registry, so it does NOT
+				// touch nativeDisplayAllocator or the x11vnc transport (hard
+				// constraint). ownerSession:'' = host/shared (same as boot `:1`) so
+				// canAccessDisplay lets the operator reach it. Guarded + try/catch so
+				// a registry failure can NEVER abort the native spawn (Phase 259
+				// stability).
+				if (ctx.livinityd?.displayManager) {
+					try {
+						await ctx.livinityd.displayManager.registerExisting({
+							display,
+							mode: 'xvfb',
+							width: 1280,
+							height: 720,
+							ownerSession: '',
+							name: cfg.name,
+						})
+					} catch (regErr) {
+						adaptLogger?.warn(
+							'apps.native.spawn: displayManager.registerExisting failed for ' +
+								display +
+								' (continuing — display will not appear in popover): ' +
+								(regErr instanceof Error ? regErr.message : String(regErr)),
+						)
+					}
+				}
+
 				logger?.log(
 					'apps.native.spawn: ' + cfg.name + ' pid=' + spawnedPid + ' display=' + display + ' port=' + bound.port + ' streamId=' + bound.streamId,
 				)
