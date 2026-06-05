@@ -26,6 +26,12 @@
 #   sudo -u bruce -n /usr/bin/apt-get install -y --force-yes evil  # → denied (flag not allowed)
 #   sudo -u bruce -n /usr/bin/apt-get remove gimp  # → denied (subcommand not allowed)
 
-Cmnd_Alias LIVOS_NATIVE = /usr/bin/apt-get install -y *
+# Phase 259 — also allow `apt-get update` (best-effort cache refresh before
+# install so newly-added repo packages and .deb dependencies resolve), and keep
+# DEBIAN_FRONTEND across sudo so apt runs fully non-interactively on the headless
+# Mini PC (no debconf/conffile prompt can hang an install).
+Cmnd_Alias LIVOS_NATIVE = /usr/bin/apt-get install -y *, /usr/bin/apt-get update
+
+Defaults!LIVOS_NATIVE env_keep += "DEBIAN_FRONTEND"
 
 bruce ALL=(root) NOPASSWD: LIVOS_NATIVE
