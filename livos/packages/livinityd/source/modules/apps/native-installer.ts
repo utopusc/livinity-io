@@ -65,6 +65,17 @@ type NativeManifest = {
 		// sha256 pin.
 		| {primary: 'deb'; debUrl: string; debSha256?: string}
 		| {primary: 'appimage'; appimageUrl: string; appimageSha256: string}
+		// Phase 259 (round 2) — for apps officially distributed via a 3rd-party APT
+		// repo (Brave, Signal, Spotify, …): add the repo + signing key, then apt
+		// install. The privileged work is done by a single allow-listed helper
+		// (livos-add-apt-repo.sh) so sudoers stays tightly scoped.
+		| {
+				primary: 'apt-repo'
+				aptPackages: string[]
+				aptRepoName: string // [a-z0-9-] slug used for the keyring + list filenames
+				aptRepoLine: string // e.g. "https://repo.example.com/ stable main"
+				aptKeyUrl: string // https URL to the (armored or binary) signing key
+		  }
 	launch: {
 		binaryPath: string
 		args?: string[]
@@ -98,6 +109,52 @@ function parseManifest(raw: unknown): NativeManifest | null {
 // dpkg never opens an interactive conffile prompt that would hang the install.
 const APT_ENV: Record<string, string> = {DEBIAN_FRONTEND: 'noninteractive'}
 const APT_CONFOLD: readonly string[] = ['-o', 'Dpkg::Options::=--force-confold']
+// Allow-listed helper (shipped via scripts/install/livos-add-apt-repo.sh) that does
+// the privileged repo+key writes for the `apt-repo` install method. sudoers grants
+// `bruce` NOPASSWD on exactly this path so the installer never needs broad root.
+const LIVOS_ADD_APT_REPO = '/usr/local/lib/livos/livos-add-apt-repo.sh'
+
+// Redis key holding the platform API key (mirrors apps.ts REDIS_PLATFORM_API_KEY).
+const REDIS_PLATFORM_API_KEY = 'livos:platform:api_key'
+
+/**
+ * nativeAppConfigSchema's iconUrl gate accepts only http(s) URLs (parseable by
+ * URL) or root-relative paths — NOT bare freedesktop icon names. Mirror it here
+ * so we never store an iconUrl that would throw at parse().
+ */
+function isSchemaValidIconUrl(v: string): boolean {
+	if (v.startsWith('/')) return /^\/[A-Za-z0-9_\-./]*$/.test(v)
+	try {
+		new URL(v)
+		return true
+	} catch {
+		return false
+	}
+}
+
+/**
+ * Phase 259 — fetch the catalog row's hosted icon_url SERVER-SIDE so native tiles
+ * show real artwork even when the store webapp (Server5) hasn't been redeployed to
+ * forward iconUrl in the install postMessage. Same endpoint + api-key the Docker
+ * installer uses (apps.ts:fetchPlatformTemplate). Best-effort: any failure → undefined.
+ */
+async function fetchCatalogIconUrl(
+	slug: string,
+	ctx: InstallContext,
+): Promise<string | undefined> {
+	try {
+		const apiKey = await ctx.redis.get(REDIS_PLATFORM_API_KEY)
+		if (!apiKey) return undefined
+		const res = await fetch(`https://livinity.io/api/apps/${encodeURIComponent(slug)}`, {
+			headers: {'X-Api-Key': apiKey},
+		})
+		if (!res.ok) return undefined
+		const data = (await res.json()) as {icon_url?: unknown}
+		return typeof data.icon_url === 'string' ? data.icon_url : undefined
+	} catch {
+		return undefined
+	}
+}
 
 /**
  * Run a child process, stream stdout/stderr into the logger, resolve
@@ -273,22 +330,26 @@ export class NativeInstaller implements InstallHandler<'native'> {
 		// doesn't throw; the bare name still reaches the .desktop Icon= line via
 		// writeDesktopFile, and the tile shows the placeholder.
 		const rawIcon = manifest.desktopEntry.icon
-		const isSchemaValidIconUrl = (v: string): boolean => {
-			if (v.startsWith('/')) return /^\/[A-Za-z0-9_\-./]*$/.test(v)
-			try {
-				new URL(v)
-				return true
-			} catch {
-				return false
-			}
-		}
-		const catalogIcon =
+		// Resolve a displayable icon in priority order:
+		//   1. iconUrl the store webapp forwarded in the install message
+		//   2. the catalog row's icon_url fetched SERVER-SIDE (works even when the
+		//      Server5 store webapp hasn't been redeployed to forward it)
+		//   3. a schema-valid manifest desktopEntry.icon (rarely — usually a bare name)
+		// Anything non-conforming is dropped so parse() can't throw and the tile shows
+		// the placeholder.
+		let resolvedIconUrl: string | undefined =
 			app.iconUrl && isSchemaValidIconUrl(app.iconUrl) ? app.iconUrl : undefined
+		if (!resolvedIconUrl) {
+			const fetched = await fetchCatalogIconUrl(app.id, ctx)
+			if (fetched && isSchemaValidIconUrl(fetched)) resolvedIconUrl = fetched
+		}
+		if (!resolvedIconUrl && rawIcon && isSchemaValidIconUrl(rawIcon)) {
+			resolvedIconUrl = rawIcon
+		}
 		const configCandidate: NativeAppConfig = {
 			id: randomUUID(),
 			name: app.name,
-			iconUrl:
-				catalogIcon ?? (rawIcon && isSchemaValidIconUrl(rawIcon) ? rawIcon : undefined),
+			iconUrl: resolvedIconUrl,
 			binaryPath: manifest.launch.binaryPath,
 			args: manifest.launch.args,
 			env: manifest.launch.env,
@@ -375,6 +436,74 @@ export class NativeInstaller implements InstallHandler<'native'> {
 			if (code !== 0) {
 				const sudoDenied = stderr.includes('sudo:') || stderr.includes('password is required')
 				return fail(app.id, 'native', sudoDenied ? 'sudo_denied' : 'apt_failed', `apt-get install -y <deb> exited ${code}`, stderr)
+			}
+		} else if (manifest.install.primary === 'apt-repo') {
+			// Apps distributed via a 3rd-party APT repo (Brave, Signal, Spotify, …).
+			const {aptPackages, aptRepoName, aptRepoLine, aptKeyUrl} = manifest.install
+			if (!aptPackages?.length) {
+				return fail(app.id, 'native', 'manifest_invalid', `aptPackages empty`)
+			}
+			if (!/^[a-z0-9][a-z0-9-]*$/.test(aptRepoName)) {
+				return fail(
+					app.id,
+					'native',
+					'manifest_invalid',
+					`aptRepoName must be a lowercase [a-z0-9-] slug: ${String(aptRepoName)}`,
+				)
+			}
+			if (!aptKeyUrl || !/^https:\/\//.test(aptKeyUrl)) {
+				return fail(
+					app.id,
+					'native',
+					'manifest_invalid',
+					`aptKeyUrl must be https: ${String(aptKeyUrl)}`,
+				)
+			}
+			if (!aptRepoLine || !/^https?:\/\/\S+\s+\S+/.test(aptRepoLine)) {
+				return fail(
+					app.id,
+					'native',
+					'manifest_invalid',
+					`aptRepoLine must be "<url> <suite> [components]": ${String(aptRepoLine)}`,
+				)
+			}
+			progress(15, `Adding apt repo ${aptRepoName}`)
+			// The helper writes the keyring + sources.list.d entry and runs apt-get
+			// update (all root-only work) behind a single sudoers allow-list entry.
+			const repo = await execCmd(
+				'sudo',
+				['-n', LIVOS_ADD_APT_REPO, aptRepoName, aptKeyUrl, aptRepoLine],
+				ctx.logger,
+				APT_ENV,
+			)
+			if (repo.code !== 0) {
+				const sudoDenied =
+					repo.stderr.includes('sudo:') || repo.stderr.includes('password is required')
+				return fail(
+					app.id,
+					'native',
+					sudoDenied ? 'sudo_denied' : 'apt_failed',
+					`add-apt-repo ${aptRepoName} exited ${repo.code}`,
+					repo.stderr,
+				)
+			}
+			progress(45, `apt install ${aptPackages.join(' ')}`)
+			const {code, stderr} = await execCmd(
+				'sudo',
+				['-n', '/usr/bin/apt-get', 'install', '-y', ...APT_CONFOLD, ...aptPackages],
+				ctx.logger,
+				APT_ENV,
+			)
+			if (code !== 0) {
+				const sudoDenied =
+					stderr.includes('sudo:') || stderr.includes('password is required')
+				return fail(
+					app.id,
+					'native',
+					sudoDenied ? 'sudo_denied' : 'apt_failed',
+					`apt-get install -y ${aptPackages.join(' ')} exited ${code}`,
+					stderr,
+				)
 			}
 		} else if (manifest.install.primary === 'appimage') {
 			const {appimageUrl, appimageSha256} = manifest.install

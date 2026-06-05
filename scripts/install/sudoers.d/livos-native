@@ -30,7 +30,11 @@
 # install so newly-added repo packages and .deb dependencies resolve), and keep
 # DEBIAN_FRONTEND across sudo so apt runs fully non-interactively on the headless
 # Mini PC (no debconf/conffile prompt can hang an install).
-Cmnd_Alias LIVOS_NATIVE = /usr/bin/apt-get install -y *, /usr/bin/apt-get update
+# Phase 259 round 2 — the `apt-repo` install method (Brave/Signal/Spotify …) adds a
+# 3rd-party repo + key via a single allow-listed helper. The helper does ALL the
+# privileged work (keyring + sources.list.d write + apt-get update); sudoers grants
+# only this exact path, so no broad root (no arbitrary tee/cp) is exposed.
+Cmnd_Alias LIVOS_NATIVE = /usr/bin/apt-get install -y *, /usr/bin/apt-get update, /usr/local/lib/livos/livos-add-apt-repo.sh *
 
 Defaults!LIVOS_NATIVE env_keep += "DEBIAN_FRONTEND"
 
