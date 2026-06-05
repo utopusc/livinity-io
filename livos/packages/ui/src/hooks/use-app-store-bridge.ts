@@ -326,6 +326,7 @@ export function useAppStoreBridge(
 						await sendStatusToIframe()
 						utilsRef.current.apps.list.invalidate()
 						utilsRef.current.apps.myApps.invalidate()
+						utilsRef.current.apps.native.list.invalidate()
 					}
 				} catch {
 					// ignore polling errors — server is source of truth
@@ -364,6 +365,7 @@ export function useAppStoreBridge(
 			await sendStatusToIframe()
 			utilsRef.current.apps.list.invalidate()
 			utilsRef.current.apps.myApps.invalidate()
+			utilsRef.current.apps.native.list.invalidate()
 		},
 		[reportEvent, sendStatusToIframe, sendToIframe],
 	)
@@ -507,6 +509,7 @@ export function useAppStoreBridge(
 			utilsRef.current.apps.list.invalidate()
 			utilsRef.current.apps.myApps.invalidate()
 			utilsRef.current.apps.state.invalidate()
+			utilsRef.current.apps.native.list.invalidate()
 		},
 		[sendToIframe, sendStatusToIframe, reportEvent],
 	)
