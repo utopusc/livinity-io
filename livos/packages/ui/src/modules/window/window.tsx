@@ -2,7 +2,7 @@ import {motion} from 'framer-motion'
 import React, {forwardRef, useCallback, useEffect, useRef, useState} from 'react'
 
 import {OriginRect, Position, Size, useWindowManager, WindowId} from '@/providers/window-manager'
-import {emitWindowDragDrop, setWindowDragState} from '@/providers/window-drag-state'
+import {emitWindowDragDrop, getDisplaysButtonRect, setWindowDragState} from '@/providers/window-drag-state'
 import {tw} from '@/utils/tw'
 
 import {WindowChrome} from './window-chrome'
@@ -207,12 +207,19 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 
 	// Phase 130-09 — pinned-to-topbar animation target.
 	// When the window is pinned, both the title pill and the content panel
-	// morph to a small "minimized chip" at the top of the viewport
-	// (approximating the TopBar drop-zone position) with scale + opacity
-	// fading out. On unpin, the same morph runs in reverse and the
-	// window grows back to its actual position/size.
-	const pinTargetX = typeof window !== 'undefined' ? window.innerWidth / 2 : 600
-	const pinTargetY = 28 // matches the TopBar drop-zone vertical center
+	// morph to a small "minimized chip" with scale + opacity fading out. On
+	// unpin, the same morph runs in reverse and the window grows back to its
+	// actual position/size.
+	//
+	// Phase 260-03 (SC4) — the morph now lands ON the Displays/Monitor button
+	// (slide-RIGHT into it) instead of the navbar center. The TopBar publishes
+	// the button's live center coords via setDisplaysButtonRect; we read them
+	// here with a graceful fallback to the old navbar-center coords so the
+	// animation never breaks when the rect hasn't been published yet (e.g.
+	// mobile/no-TopBar, or the very first frame before the publish effect runs).
+	const displaysRect = getDisplaysButtonRect()
+	const pinTargetX = displaysRect?.x ?? (typeof window !== 'undefined' ? window.innerWidth / 2 : 600)
+	const pinTargetY = displaysRect?.y ?? 28 // fallback: TopBar drop-zone vertical center
 	const pinAnimateContent = isPinnedToTopBar
 		? {
 			opacity: 0,

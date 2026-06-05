@@ -9,7 +9,7 @@ import {useCurrentUser} from '@/hooks/use-current-user'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useLinkToDialog} from '@/utils/dialog'
 import {useUserName} from '@/hooks/use-user-name'
-import {onWindowDragDrop, useWindowDragState} from '@/providers/window-drag-state'
+import {onWindowDragDrop, setDisplaysButtonRect, useWindowDragState} from '@/providers/window-drag-state'
 import {useWindowManagerOptional} from '@/providers/window-manager'
 import {Popover, PopoverContent, PopoverTrigger} from '@/shadcn-components/ui/popover'
 import {DisplaysPopover} from './displays-popover'
@@ -135,7 +135,26 @@ function TopBarDesktop() {
 		return () => document.removeEventListener('mousemove', onMove)
 	}, [dragState.isDragging])
 
-	// Drop subscriber: when the user releases over the shelf, pin.
+	// Phase 260-03 (SC4) — publish the Displays-button center coords so the
+	// pin "shrink-to-chip" morph in window.tsx lands ON the button. Recompute
+	// on mount and on window resize; clear on unmount so a stale rect never
+	// drives the animation. dropZoneRef points at the Displays/Monitor button.
+	useEffect(() => {
+		const publish = () => {
+			const rect = dropZoneRef.current?.getBoundingClientRect()
+			if (rect) {
+				setDisplaysButtonRect({x: rect.left + rect.width / 2, y: rect.top + rect.height / 2})
+			}
+		}
+		publish()
+		window.addEventListener('resize', publish)
+		return () => {
+			window.removeEventListener('resize', publish)
+			setDisplaysButtonRect(null)
+		}
+	}, [])
+
+	// Drop subscriber: when the user releases over the Displays button, pin.
 	useEffect(() => {
 		const unsubscribe = onWindowDragDrop((event) => {
 			const rect = dropZoneRef.current?.getBoundingClientRect()
