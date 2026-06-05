@@ -152,3 +152,84 @@ describe('window-manager — Phase 254-03 openWindow suggested size', () => {
         expect(SRC).toMatch(/getResponsiveSize\([^)]*isWebApp \|\| isDisplay \|\| suggested != null\)/)
     })
 })
+
+// Phase 260-05 (SC6) — hydrate reconciliation against displays.list.
+//
+// On mount the window-manager rehydrates the persisted pinned (docked) set
+// from Postgres (pinnedWindows.list). After 260-02, native-app `:N` displays
+// register into the Redis-backed displayManager, so `displays.list` is the
+// single source of truth for which streams are still LIVE. The hydrate now
+// RECONCILES each persisted native pin against that list:
+//   - native pin WITH a matching live display → re-open as docked (idempotent
+//     re-spawn re-attaches to the running stream)
+//   - native pin with NO matching live display (livinityd restart cleared the
+//     in-memory activeNative) → DROP it: skip OPEN_WINDOW + delete the dead
+//     Postgres row so it does not resurrect on the next refresh
+//   - the reconcile is gated on BOTH pinnedWindows.list AND displays.list being
+//     ready, so a still-loading displays query never drops a good pin (T-260-10)
+//
+// The match key for a native pin is its `title` (= the native app name), which
+// equals the display record `name` set by 260-02 — the per-spawn `:N` is not
+// stored on the pinned row, so the app name is the stable client-visible key.
+//
+// These assertions are source-text invariants (the established harness for this
+// provider — rendering the full provider in jsdom needs trpc+router wiring,
+// high fragility). Each would FAIL against pre-260-05 code (which had no
+// displays.list query, no liveDisplayNames set, and no isNative drop branch in
+// the hydrate effect).
+describe('window-manager — Phase 260-05 hydrate reconciliation (SC6)', () => {
+    it('Test 1 (live pin kept): a native pin whose name IS in displays.list re-opens as docked', () => {
+        // The reconcile must dispatch OPEN_WINDOW with isPinnedToTopBar:true for
+        // a native pin that matches a live display. The hydrate retains its
+        // OPEN_WINDOW + isPinnedToTopBar:true dispatch (the kept-pin path).
+        expect(SRC).toMatch(/liveDisplayNames\.has\(row\.title\)/)
+        expect(SRC).toMatch(/type: 'OPEN_WINDOW'/)
+        expect(SRC).toMatch(/isPinnedToTopBar: true/)
+        // The drop branch must be guarded so it only applies to native pins —
+        // i.e. a matching-name native pin (and every webapp pin) falls through
+        // to OPEN_WINDOW.
+        expect(SRC).toMatch(/const isNative = row\.appId\.startsWith\('NATIVE_'\)/)
+    })
+
+    it('Test 2 (dead pin dropped): a native pin whose name is NOT in displays.list is skipped + Postgres row deleted', () => {
+        // The dead-native-pin branch must (a) test isNative && !live, (b) call
+        // pinnedDeleteMutation for that windowId, and (c) `continue` (skip
+        // OPEN_WINDOW). Lock the full branch shape so a refactor can't silently
+        // drop the delete or the skip.
+        expect(SRC).toMatch(/if \(isNative && !liveDisplayNames\.has\(row\.title\)\)/)
+        const dropBranch = SRC.match(
+            /if \(isNative && !liveDisplayNames\.has\(row\.title\)\)\s*\{[\s\S]*?\n\t\t\t\}/,
+        )
+        expect(dropBranch).not.toBeNull()
+        const body = dropBranch![0]
+        expect(body).toMatch(/pinnedDeleteMutation\.mutate\(\{windowId: row\.windowId\}\)/)
+        expect(body).toMatch(/continue/)
+    })
+
+    it('Test 3 (premature-deletion guard): hydrate does not reconcile/drop before displays.list has loaded', () => {
+        // The hydrate must bail (return) while displays.list is still loading
+        // (`data === undefined`) and BEFORE setting hydratedRef — otherwise a
+        // slow displays query would treat "loading" as "no live displays" and
+        // erase every native pin. Lock: the displaysData undefined-guard appears
+        // textually BEFORE `hydratedRef.current = true`.
+        expect(SRC).toMatch(/const displaysData = displaysListQuery\.data/)
+        expect(SRC).toMatch(/if \(displaysData === undefined\) return/)
+        const effect = SRC.match(
+            /const hydratedRef = useRef\(false\)[\s\S]*?\}, \[pinnedListQuery\.data, displaysListQuery\.data, pinnedDeleteMutation\]\)/,
+        )
+        expect(effect).not.toBeNull()
+        const body = effect![0]
+        const guardIdx = body.indexOf('if (displaysData === undefined) return')
+        const setHydratedIdx = body.indexOf('hydratedRef.current = true')
+        expect(guardIdx).toBeGreaterThan(-1)
+        expect(setHydratedIdx).toBeGreaterThan(-1)
+        expect(guardIdx).toBeLessThan(setHydratedIdx)
+    })
+
+    it('Test 4 (query wired): the provider reads displays.list as the liveness source', () => {
+        // The provider must declare a displays.list query whose data feeds the
+        // reconcile. Without this query there is no liveness signal.
+        expect(SRC).toMatch(/trpcReact\.displays\.list\.useQuery/)
+        expect(SRC).toMatch(/const liveDisplayNames = new Set/)
+    })
+})
