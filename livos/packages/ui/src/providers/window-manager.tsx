@@ -68,6 +68,11 @@ type WindowManagerContextT = {
 	// Phase 159 — close-handler registry (Workstream B).
 	registerCloseHandler: (windowId: WindowId, handler: CloseHandler) => void
 	unregisterCloseHandler: (windowId: WindowId) => void
+	// Phase 260.1 (SC-B) — close a DISPLAY_ window: tear the backend `:N`
+	// down via the displays.close tRPC route (Plan 02) AND remove the window
+	// from UI state. A non-display window simply skips the mutate and runs
+	// the normal close path.
+	closeDisplay: (windowId: WindowId) => void
 }
 
 // Get responsive window size based on screen dimensions.
@@ -305,6 +310,15 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		retry: 1,
 	})
 
+	// Phase 260.1 (SC-B) — server-side display teardown. closeDisplay (below)
+	// fires this for DISPLAY_:N windows so the `:N` actually tears down
+	// (Redis record gone, stream stopped, badge decrements) and does NOT
+	// re-appear in displays.list — fixing the "created displays can't be
+	// closed" bug. Authorization is enforced entirely server-side in
+	// displays.close (canAccessDisplay, Plan 02); this client only passes
+	// the `:N`.
+	const displaysCloseMutation = trpcReact.displays.close.useMutation()
+
 	// Mirror state.windows in a ref so the pin/unpin mutation callbacks
 	// can look up a window's full payload without taking state in their
 	// dep array (which would re-create the callbacks on every reducer
@@ -463,6 +477,36 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 		dispatch({type: 'CLOSE_WINDOW', payload: windowId})
 	}, [])
 
+	// Phase 260.1 (SC-B) — close a display: tear the backend `:N` down via
+	// displays.close (Plan 02) THEN drop the window from UI state. We do NOT
+	// call closeWindow here (that would double-dispatch the close handler) —
+	// instead we run the registered close handler + dispatch CLOSE_WINDOW
+	// inline, exactly mirroring closeWindow's UI teardown.
+	const closeDisplay = useCallback((windowId: WindowId) => {
+		// Read the full window payload via the ref so state stays out of the
+		// dep array (mirrors pinWindowToTopBar).
+		const w = windowsRef.current.find((x) => x.id === windowId)
+		// DISPLAY_ windows carry appId `DISPLAY_:N` (openWindow `DISPLAY_${d.display}`
+		// — displays-popover.tsx). Derive the `:N` for the backend teardown.
+		const display = w?.appId.startsWith('DISPLAY_') ? w.appId.slice('DISPLAY_'.length) : undefined
+		if (display) {
+			// SC-B: server-side teardown so the `:N` does NOT re-appear in
+			// displays.list. Fire-and-forget — the UI must not hang on a slow
+			// backend.
+			displaysCloseMutation.mutate({display})
+		}
+		// Drop the window from the UI regardless (also runs any registered
+		// close handler with the same 2s fire-and-forget race as closeWindow).
+		const handler = closeHandlersRef.current.get(windowId)
+		if (handler) {
+			const handlerPromise = Promise.resolve().then(() => handler())
+			const timeout = new Promise<void>((resolve) => setTimeout(resolve, 2000))
+			void Promise.race([handlerPromise, timeout]).catch(() => undefined)
+			closeHandlersRef.current.delete(windowId)
+		}
+		dispatch({type: 'CLOSE_WINDOW', payload: windowId})
+	}, [displaysCloseMutation])
+
 	const focusWindow = useCallback((windowId: WindowId) => {
 		dispatch({type: 'FOCUS_WINDOW', payload: windowId})
 	}, [])
@@ -511,6 +555,7 @@ export function WindowManagerProvider({children}: {children: React.ReactNode}) {
 				windows: state.windows,
 				openWindow,
 				closeWindow,
+				closeDisplay,
 				focusWindow,
 				minimizeWindow,
 				restoreWindow,
