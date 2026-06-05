@@ -30,6 +30,13 @@ export interface DisplayRecord {
 	 * TTL GC falls back to `created_at` when this field is undefined.
 	 */
 	last_app_at?: string
+	/**
+	 * ISO timestamp of the most recent luse/computer-use INPUT action
+	 * (click/type/scroll/paste/drag/move) on this display. Drives SC-F activity
+	 * glow recency — the Displays popover computes `now - last_input_at < ~3s`
+	 * to pulse-glow a display the AI is actively driving. Additive (Phase 260.1-01).
+	 */
+	last_input_at?: string
 }
 
 export interface CreateDisplayInput {
@@ -173,6 +180,15 @@ export interface DisplayManager {
 	 */
 	reapDeadDisplays(isAlive: (display: string) => Promise<boolean>): Promise<string[]>
 	attachApp(input: AttachAppInput): Promise<void>
+	/**
+	 * Phase 260.1-01 (SC-F) — stamp `last_input_at` on `display` to the current
+	 * time. Called fire-and-forget by the luse/computer-use INPUT handlers after
+	 * each action so the Displays popover can pulse-glow an actively-driven
+	 * display. Additive + best-effort: a stamp on a non-existent / torn-down
+	 * display is a silent no-op that does NOT throw (an input on a killed display
+	 * must never crash the agent).
+	 */
+	updateLastInputAt(display: string): Promise<void>
 	listAppsForDisplay(display: string): Promise<number[]>
 	isOwner(input: IsOwnerInput): Promise<boolean>
 	/**
