@@ -231,11 +231,19 @@ precheck() {
     fi
 
     # Guard 3: GitHub reachable (only if guards 1+2 passed)
+    # Check github.com (the CLONE host — what actually matters), not
+    # api.github.com: the unauthenticated API is rate-limited to 60 req/hr/IP and
+    # returns 403 from residential IPs, which would falsely block a deploy even
+    # though `git clone` from github.com works fine. Fall back to the API only if
+    # the repo page check fails (e.g. transient DNS), so the guard still catches
+    # genuine "no network" cases.
     if [[ -z "$fail_reason" ]]; then
         local curl_exit=0
-        curl -fsI -m 5 https://api.github.com/repos/utopusc/livinity-io >/dev/null 2>&1 || curl_exit=$?
+        curl -fsI -m 5 https://github.com/utopusc/livinity-io >/dev/null 2>&1 \
+            || curl -fsI -m 5 https://api.github.com/repos/utopusc/livinity-io >/dev/null 2>&1 \
+            || curl_exit=$?
         if (( curl_exit != 0 )); then
-            fail_reason="PRECHECK-FAIL: GitHub api.github.com unreachable (curl exit ${curl_exit} — check network or rate-limit)"
+            fail_reason="PRECHECK-FAIL: GitHub unreachable (curl exit ${curl_exit} — check network)"
         fi
     fi
 
