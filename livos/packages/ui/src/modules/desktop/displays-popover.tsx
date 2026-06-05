@@ -203,10 +203,21 @@ function DisplayCard({d, open, onClosed}: {d: DisplayRecord; open: boolean; onCl
 	const active = !!d.last_input_at && Date.now() - Date.parse(d.last_input_at) < ACTIVITY_WINDOW_MS
 
 	// SC-E — recall the display to the desktop as the live interactive VNC
-	// window (254-03 contract), sized to its real WxH. Shared by the thumbnail
-	// click (fallback) and the drag-to-desktop gesture (Task 2).
+	// window (254-03 contract), sized to its real WxH. A fresh
+	// openWindow(DISPLAY_:N) re-attaches the live `:N` stream by the verbatim
+	// 254-03 contract, so opening IS a correct recall for a non-pinned display.
+	// Shared by: the thumbnail click (fallback), the drag-to-desktop gesture,
+	// and the per-card fullscreen button.
 	const recall = () => {
 		windowManager?.openWindow(`DISPLAY_${d.display}`, '/', `Display ${d.display}`, '🖥️', undefined, {width: d.width, height: d.height})
+	}
+
+	// SC-E — recall-by-drag. The popover floats near the top-right, so a
+	// downward drag of meaningful distance reads as "drag onto the desktop".
+	// Framer suppresses the thumbnail click when a real drag occurs, so the
+	// non-drag tap (recall fallback) still works.
+	const handleDragEnd = (_e: unknown, info: PanInfo) => {
+		if (info.offset.y > 80) recall()
 	}
 
 	return (
@@ -214,6 +225,14 @@ function DisplayCard({d, open, onClosed}: {d: DisplayRecord; open: boolean; onCl
 			className='group relative w-[160px]'
 			whileHover={{translateY: -6}}
 			transition={{type: 'spring', stiffness: 500, damping: 28}}
+			// SC-E recall-by-drag: drag the card down onto the desktop to recall
+			// the display as a window; snaps back otherwise. Bounce matches the
+			// established badge spring family (stiffness ~500) so it reads native.
+			drag
+			dragSnapToOrigin
+			dragElastic={0.2}
+			dragTransition={{bounceStiffness: 500, bounceDamping: 28}}
+			onDragEnd={handleDragEnd}
 		>
 			{/* SC-F — animated edge glow gated on the `active` recency flag.
 			    Absolute overlay matching the card radius, pointer-events-none so
@@ -274,6 +293,31 @@ function DisplayCard({d, open, onClosed}: {d: DisplayRecord; open: boolean; onCl
 						{d.width}×{d.height} · {d.running_apps.length} app(s)
 					</span>
 				</div>
+			</button>
+
+			{/* SC-E — hover-revealed fullscreen control (top-left). Card-fullscreen
+			    behavior (chosen): ONE click RECALLS/opens the display as a live
+			    window on the desktop. Browser-fullscreen itself is then one more
+			    click on the window's own chrome fullscreen button (Plan 04 +
+			    window.tsx Task 3) — resolving the freshly-opened content element
+			    here by query is fragile, so we hand off to the chrome button
+			    whose ref is the real content element. */}
+			<button
+				type='button'
+				aria-label='Fullscreen display'
+				title='Open display (then use the window fullscreen button)'
+				onClick={(e) => {
+					e.stopPropagation()
+					recall()
+				}}
+				className={cn(
+					'absolute left-1 top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full',
+					'border border-line bg-card-bg/90 text-text-secondary shadow-sm backdrop-blur',
+					'opacity-0 transition-opacity group-hover:opacity-100',
+					'hover:border-line-strong hover:bg-[color:var(--bg-2)]',
+				)}
+			>
+				<Maximize2 className='h-3.5 w-3.5' strokeWidth={2.5} />
 			</button>
 
 			{/* SC-D — hover-revealed × close (top-right). stopPropagation so it
