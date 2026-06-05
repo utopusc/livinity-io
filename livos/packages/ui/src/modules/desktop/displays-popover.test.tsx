@@ -73,3 +73,23 @@ describe('displays-popover — Phase 255-04 contract', () => {
 		expect(SRC).not.toMatch(/new WebSocket\(/)
 	})
 })
+
+describe('displays-popover — Phase 260-04 (SC3) docked-window recall surface', () => {
+	// A dedicated Docked section lists pinned windows for recall.
+	it('renders a Docked section listing pinned windows', () => {
+		expect(SRC).toMatch(/Docked\s*\(/)
+		expect(SRC).toMatch(/\.filter\(\(w\)\s*=>\s*w\.isPinnedToTopBar\)/)
+	})
+
+	// Recall MUST go through unpinWindowFromTopBar (re-expands the still-mounted
+	// window — stream stays alive), labeled "Recall".
+	it('recalls a docked window via unpinWindowFromTopBar (labeled Recall)', () => {
+		expect(SRC).toMatch(/unpinWindowFromTopBar\(w\.id\)/)
+		expect(SRC).toMatch(/Recall/)
+	})
+
+	// LANDMINE — recall must NEVER call closeWindow (that tears the stream down).
+	it('the recall path never CALLS closeWindow (keep-alive)', () => {
+		expect(SRC).not.toMatch(/\.closeWindow\(/)
+	})
+})

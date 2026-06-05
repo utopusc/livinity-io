@@ -116,3 +116,30 @@ describe('top-bar — Phase 260-03 (SC4) pin animation repointed at the Displays
         expect(SRC).toMatch(/setDisplaysButtonRect\(\{\s*x:\s*rect\.left\s*\+\s*rect\.width\s*\/\s*2/)
     })
 })
+
+describe('top-bar — Phase 260-04 (SC5) {n} count badge on the Displays button', () => {
+    // Test 1 — the badge is conditionally rendered, hidden when the count is 0.
+    // The `displaysBadgeCount > 0` guard is the hidden-at-0 contract.
+    it('hides the badge when the count is 0 (guarded by displaysBadgeCount > 0)', () => {
+        expect(SRC).toMatch(/displaysBadgeCount\s*>\s*0\s*&&/)
+    })
+
+    // Test 2 — the count derives from BOTH the live displays.list count AND the
+    // docked (pinned) windows: badge = max(displays.list length, pinnedWindows.length).
+    // The pinnedWindows.length floor guarantees a docked stream is never under-counted.
+    it('derives the count from displays.list floored by pinnedWindows.length', () => {
+        expect(SRC).toMatch(/displays\.list\.useQuery/)
+        expect(SRC).toMatch(/const\s+displaysBadgeCount\s*=\s*Math\.max\([\s\S]*?pinnedWindows\.length/)
+    })
+
+    // Test 3 — the badge uses AnimatePresence + a motion.span for the pop on change.
+    it('renders the badge inside AnimatePresence as a motion.span', () => {
+        expect(SRC).toMatch(/import\s*\{[\s\S]*?AnimatePresence[\s\S]*?\}\s*from\s*['"]framer-motion['"]/)
+        expect(SRC).toMatch(/<AnimatePresence>[\s\S]*?<motion\.span[\s\S]*?<\/AnimatePresence>/)
+    })
+
+    // Test 4 — the badge renders the count value itself.
+    it('renders the displaysBadgeCount value in the badge', () => {
+        expect(SRC).toMatch(/>\s*\{displaysBadgeCount\}\s*</)
+    })
+})
