@@ -63,9 +63,62 @@ export function DisplaysPopover({open = true}: {open?: boolean}) {
 				)}
 			</div>
 
-			{/* ── Section B — Windows (folded-in Phase 159 panel) ──────── */}
+			{/* ── Section B — Docked windows (recall surface, Phase 260-04 / SC3) ─ */}
+			<DockedWindowsSection />
+
+			{/* ── Section C — Windows (folded-in Phase 159 panel) ──────── */}
 			<div className='border-t border-line pt-1'>
 				<WindowsManagerPanel />
+			</div>
+		</div>
+	)
+}
+
+/**
+ * Phase 260-04 (SC3) — recall-from-Displays surface.
+ *
+ * Lists every DOCKED (pinned) window. Clicking a row RECALLS it via
+ * `windowManager.unpinWindowFromTopBar(w.id)` — which re-expands the
+ * still-mounted window so its server-side x11vnc stream is reused (NEVER
+ * `closeWindow`, which would tear the stream down). Hidden entirely when no
+ * window is docked so the popover stays compact.
+ */
+function DockedWindowsSection() {
+	const windowManager = useWindowManagerOptional()
+	const docked = (windowManager?.windows ?? []).filter((w) => w.isPinnedToTopBar)
+	if (docked.length === 0) return null
+
+	return (
+		<div className='flex flex-col gap-2 border-t border-line pt-2'>
+			<div className='text-[11px] font-semibold uppercase tracking-wide text-text-secondary'>
+				Docked ({docked.length})
+			</div>
+			<div className='flex flex-col gap-1'>
+				{docked.map((w) => (
+					<button
+						key={w.id}
+						type='button'
+						// Recall = unpin only (stream stays alive — never closeWindow).
+						onClick={() => windowManager?.unpinWindowFromTopBar(w.id)}
+						className={cn(
+							'flex items-center gap-2 rounded-md border border-line px-2 py-1.5 text-left transition-colors',
+							'hover:border-line-strong hover:bg-[color:var(--bg-2)]',
+						)}
+						title={`Recall ${w.title}`}
+					>
+						<span
+							className='inline-block h-5 w-5 shrink-0 rounded bg-cover bg-center'
+							style={w.icon ? {backgroundImage: `url(${w.icon})`} : undefined}
+							aria-hidden
+						/>
+						<span className='min-w-0 flex-1 truncate text-[13px] font-medium' title={w.title}>
+							{w.title}
+						</span>
+						<span className='shrink-0 rounded px-1.5 py-0.5 text-[11px] text-[color:var(--fg-dim)]'>
+							Recall
+						</span>
+					</button>
+				))}
 			</div>
 		</div>
 	)

@@ -85,13 +85,18 @@ function WindowRow({window: w, wm}: {window: WindowState; wm: NonNullable<Return
 			>
 				{w.isMinimized ? 'Restore' : 'Min'}
 			</button>
+			{/* Phase 260-04 (SC3) — for a DOCKED (pinned) window this button is the
+			    RECALL affordance: clicking it calls unpinWindowFromTopBar, which
+			    re-expands the still-mounted window (stream stays alive — NEVER
+			    closeWindow). For a visible window it still docks via
+			    pinWindowToTopBar. Label flips Recall ⇄ Dock accordingly. */}
 			<button
 				type='button'
 				onClick={() => (w.isPinnedToTopBar ? wm.unpinWindowFromTopBar(w.id) : wm.pinWindowToTopBar(w.id))}
 				className='rounded px-1.5 py-0.5 text-[11px] hover:bg-[color:var(--bg-2)]'
-				title={w.isPinnedToTopBar ? 'Unpin from TopBar' : 'Pin to TopBar'}
+				title={w.isPinnedToTopBar ? 'Recall this docked window' : 'Dock to Displays'}
 			>
-				{w.isPinnedToTopBar ? 'Unpin' : 'Pin'}
+				{w.isPinnedToTopBar ? 'Recall' : 'Dock'}
 			</button>
 			<button
 				type='button'
