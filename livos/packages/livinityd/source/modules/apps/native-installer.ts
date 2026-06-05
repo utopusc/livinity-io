@@ -249,10 +249,27 @@ export class NativeInstaller implements InstallHandler<'native'> {
 		// Re-parse launch through the schema BEFORE running any external
 		// command. This is the trust boundary — manifests from Supabase
 		// are operator-controlled but defense-in-depth check is cheap.
+		// `desktopEntry.icon` is usually a bare freedesktop name ("vscode",
+		// "brave-browser"), which nativeAppConfigSchema's iconUrl gate rejects
+		// (it only accepts http(s) URLs or root-relative paths). Forwarding a
+		// bare name would throw at parse() below and abort the install. Only
+		// promote it to iconUrl when it already satisfies the schema; otherwise
+		// leave it undefined — the bare name still reaches the .desktop Icon=
+		// line via writeDesktopFile.
+		const rawIcon = manifest.desktopEntry.icon
+		const isSchemaValidIconUrl = (v: string): boolean => {
+			if (v.startsWith('/')) return /^\/[A-Za-z0-9_\-./]*$/.test(v)
+			try {
+				new URL(v)
+				return true
+			} catch {
+				return false
+			}
+		}
 		const configCandidate: NativeAppConfig = {
 			id: randomUUID(),
 			name: app.name,
-			iconUrl: manifest.desktopEntry.icon || undefined,
+			iconUrl: rawIcon && isSchemaValidIconUrl(rawIcon) ? rawIcon : undefined,
 			binaryPath: manifest.launch.binaryPath,
 			args: manifest.launch.args,
 			env: manifest.launch.env,
