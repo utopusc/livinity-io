@@ -74,3 +74,23 @@ export function onWindowDragDrop(listener: (e: WindowDragDropEvent) => void): ()
 		dropListeners = dropListeners.filter((l) => l !== listener)
 	}
 }
+
+// ── Displays-button rect channel (Phase 260-03 / SC4) ───────────────
+// The TopBar publishes the LIVE center coordinates of the Displays/Monitor
+// button here (on mount + on window resize). window.tsx reads them so the
+// pin "shrink-to-chip" morph lands ON the Displays button (slide-RIGHT into
+// it) instead of the old hard-coded navbar center. A plain module-scope
+// value (no subscription needed): window.tsx reads it lazily at render time
+// for the animation target and falls back gracefully when it's null.
+
+export type DisplaysButtonRect = {x: number; y: number}
+
+let displaysButtonRect: DisplaysButtonRect | null = null
+
+export function setDisplaysButtonRect(rect: DisplaysButtonRect | null) {
+	displaysButtonRect = rect
+}
+
+export function getDisplaysButtonRect(): DisplaysButtonRect | null {
+	return displaysButtonRect
+}
