@@ -278,6 +278,7 @@ interface FakeDisplayManager {
 	list: ReturnType<typeof vi.fn>
 	kill: ReturnType<typeof vi.fn>
 	attachApp: ReturnType<typeof vi.fn>
+	updateLastInputAt: ReturnType<typeof vi.fn>
 	listAppsForDisplay: ReturnType<typeof vi.fn>
 	isOwner: ReturnType<typeof vi.fn>
 	initialized: Promise<void>
@@ -289,6 +290,7 @@ function makeFakeDisplayManager(overrides: Partial<FakeDisplayManager> = {}): Fa
 		list: vi.fn(async () => []),
 		kill: vi.fn(async () => ({ok: true, killed_apps_count: 0})),
 		attachApp: vi.fn(async () => undefined),
+		updateLastInputAt: vi.fn(async () => undefined),
 		listAppsForDisplay: vi.fn(async () => []),
 		isOwner: vi.fn(async () => true),
 		initialized: Promise.resolve(),
@@ -474,5 +476,93 @@ describe('R13 — LUSE_USER_ID single-source default', () => {
 	test('Test 2: LUSE_USER_ID="alice" is honored (single source)', async () => {
 		const {resolveLuseUserId} = await import('./tools.js')
 		expect(resolveLuseUserId({LUSE_USER_ID: 'alice'})).toBe('alice')
+	})
+})
+
+// ── Phase 260.1-01 Task 2 (SC-F) — input-action last_input_at stamp ─────────
+// Every luse/computer-use INPUT handler (move/click/drag/scroll/type_keys/
+// type_text/paste) must stamp the display it acted on via
+// options.displayManager.updateLastInputAt(target) — fire-and-forget, target =
+// displayArg ?? options.defaultDisplay. Read-only tools (screenshot) must NOT
+// stamp. Absent displayManager is a no-op (no crash). The stamp is async (a
+// microtask) so tests flush microtasks before asserting.
+const flush = () => new Promise<void>((r) => setTimeout(r, 0))
+
+describe('Phase 260.1-01 (SC-F) — input handlers stamp last_input_at', () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+	})
+
+	const inputCases: Array<[string, Record<string, unknown>]> = [
+		['computer_move_mouse', {coordinates: {x: 1, y: 2}}],
+		['computer_click_mouse', {coordinates: {x: 1, y: 2}, button: 'left', clickCount: 1}],
+		['computer_drag_mouse', {path: [{x: 0, y: 0}, {x: 5, y: 5}], button: 'left'}],
+		['computer_scroll', {coordinates: {x: 1, y: 2}, direction: 'down', scrollCount: 1}],
+		['computer_type_keys', {keys: ['a']}],
+		['computer_type_text', {text: 'hi'}],
+		['computer_paste_text', {text: 'hi'}],
+	]
+
+	test.each(inputCases)(
+		'%s stamps updateLastInputAt with the explicit display arg',
+		async (handlerName, args) => {
+			const fakeMgr = makeFakeDisplayManager()
+			const handlers = buildHandlers({
+				displayManager: fakeMgr as never,
+				defaultDisplay: ':1',
+			})
+			await handlers[handlerName]({...args, display: ':12'})
+			await flush()
+			expect(fakeMgr.updateLastInputAt).toHaveBeenCalledTimes(1)
+			expect(fakeMgr.updateLastInputAt).toHaveBeenCalledWith(':12')
+		},
+	)
+
+	test('input handler falls back to defaultDisplay when no display arg given', async () => {
+		const fakeMgr = makeFakeDisplayManager()
+		const handlers = buildHandlers({
+			displayManager: fakeMgr as never,
+			defaultDisplay: ':7',
+		})
+		await handlers.computer_click_mouse({coordinates: {x: 1, y: 2}, button: 'left'})
+		await flush()
+		expect(fakeMgr.updateLastInputAt).toHaveBeenCalledWith(':7')
+	})
+
+	test('read-only computer_screenshot does NOT stamp last_input_at', async () => {
+		const fakeMgr = makeFakeDisplayManager()
+		const handlers = buildHandlers({
+			displayManager: fakeMgr as never,
+			defaultDisplay: ':1',
+		})
+		await handlers.computer_screenshot({display: ':12'})
+		await flush()
+		expect(fakeMgr.updateLastInputAt).not.toHaveBeenCalled()
+	})
+
+	test('absent displayManager → input handler does not crash, no stamp', async () => {
+		const handlers = buildHandlers({defaultDisplay: ':1'})
+		const result = await handlers.computer_click_mouse({
+			coordinates: {x: 1, y: 2},
+			button: 'left',
+		})
+		await flush()
+		expect(result.isError).toBe(false)
+	})
+
+	test('a throwing updateLastInputAt never fails the input action', async () => {
+		const fakeMgr = makeFakeDisplayManager({
+			updateLastInputAt: vi.fn(async () => {
+				throw new Error('redis down')
+			}),
+		})
+		const handlers = buildHandlers({
+			displayManager: fakeMgr as never,
+			defaultDisplay: ':1',
+		})
+		const result = await handlers.computer_type_text({text: 'hi', display: ':12'})
+		await flush()
+		expect(result.isError).toBe(false)
+		expect(fakeMgr.updateLastInputAt).toHaveBeenCalledWith(':12')
 	})
 })
