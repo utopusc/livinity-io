@@ -410,6 +410,9 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 				// Phase 248-03 — surface last_app_at so the TTL GC can compute
 				// staleness without re-HGETALLing each display.
 				...(hash.last_app_at ? {last_app_at: hash.last_app_at} : {}),
+				// Phase 260.1-01 (SC-F) — surface last_input_at so the Displays
+				// popover can compute activity-glow recency (now - last_input_at).
+				...(hash.last_input_at ? {last_input_at: hash.last_input_at} : {}),
 			})
 		}
 		return out
@@ -491,6 +494,33 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 		})
 	}
 
+	/**
+	 * Phase 260.1-01 (SC-F) — stamp `last_input_at` for a display the luse /
+	 * computer-use agent just acted on (click/type/scroll/paste/drag/move).
+	 * Modeled on attachApp's last_app_at HSET, but additive + best-effort:
+	 *
+	 *   - Guards on an EMPTY Redis hash FIRST, so a stamp on a torn-down /
+	 *     non-existent display is a silent no-op (never re-creates the key).
+	 *   - The HSET is wrapped so a transient Redis hiccup never throws into
+	 *     the input handler — the input action result must never be affected
+	 *     (T-260.1-02 DoS mitigation). The caller already fires this and
+	 *     swallows rejections, but we belt-and-suspenders it here too.
+	 */
+	async function updateLastInputAt(display: string): Promise<void> {
+		const hash = await redis.hgetall(redisKeyForDisplay(display))
+		if (!hash || Object.keys(hash).length === 0) return
+		try {
+			await redis.hset(redisKeyForDisplay(display), {
+				last_input_at: isoNow(nowFn),
+			})
+		} catch (err) {
+			logger.warn?.('display-manager: updateLastInputAt hset failed (ignored)', {
+				display,
+				error: (err as Error).message,
+			})
+		}
+	}
+
 	async function reapDeadDisplays(
 		isAlive: (display: string) => Promise<boolean>,
 	): Promise<string[]> {
@@ -541,6 +571,7 @@ export function createDisplayManager(deps: DisplayManagerDeps): DisplayManager {
 		kill,
 		reapDeadDisplays,
 		attachApp,
+		updateLastInputAt,
 		listAppsForDisplay,
 		isOwner,
 		initialized,
