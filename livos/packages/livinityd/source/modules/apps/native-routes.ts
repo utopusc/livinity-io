@@ -244,6 +244,46 @@ export interface ActiveNativeApp {
 // tRPC routes — single source of truth for live native-app handles.
 export const activeNative = new Map<string, ActiveNativeApp>()
 
+/**
+ * SC-B (260.1) — close a NATIVE app by its X display (':N'), reusing the SAME
+ * closeNativeApp teardown apps.native.close uses. Returns true if a native app
+ * was found+closed, false if the display is not a native app (caller then falls
+ * through to displayManager.kill for luse displays).
+ *
+ * Lets displays.close (computer-use/trpc-router.ts) tear native displays down
+ * WITHOUT double-tearing the binary/Xvfb/port. It does NOT re-implement teardown
+ * — it iterates the module-scope `activeNative` map for the entry whose
+ * handle.display matches, then delegates to the existing closeNativeApp primitive
+ * with the existing `nativeDisplayAllocator` + the stream manager's port
+ * allocator (exactly as apps.native.close does). Does NOT change the :N allocator
+ * (only passes it to closeNativeApp).
+ */
+export async function closeNativeAppByDisplay(
+	display: string,
+	deps: {
+		streamManager: StreamManager
+		logger?: {info(m: string): void; warn(m: string): void; error(m: string): void; verbose?(m: string): void}
+	},
+): Promise<boolean> {
+	let nativeId: string | undefined
+	for (const [id, handle] of activeNative) {
+		if (handle.display === display) {
+			nativeId = id
+			break
+		}
+	}
+	if (!nativeId) return false
+	await closeNativeApp({
+		id: nativeId,
+		active: activeNative,
+		displayAllocator: nativeDisplayAllocator,
+		portAllocator: deps.streamManager.getPortAllocator(),
+		streamManager: deps.streamManager,
+		logger: deps.logger,
+	})
+	return true
+}
+
 // Test injection (do not use in production)
 
 export function _setXvfbSpawnFnForTest(fn: typeof spawnXvfb): typeof spawnXvfb {
