@@ -6,7 +6,6 @@ import {useLocation} from 'react-router-dom'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useQueryParams} from '@/hooks/use-query-params'
 import {useSettingsNotificationCount} from '@/hooks/use-settings-notification-count'
-import {useTerminalPanelEnabled} from '@/hooks/use-terminal-panel-enabled'
 import {useV42MigrationActive} from '@/hooks/use-v42-migration-active'
 import {systemAppsKeyed, useApps} from '@/providers/apps'
 import {trpcReact} from '@/trpc/trpc'
@@ -72,11 +71,6 @@ export function Dock() {
 	// migration flag (default ON). Flip Redis `liv:config:liv_v42_migration_active=false`
 	// to hide it without code revert (D-V42-ROLLBACK pattern).
 	const showLivAssistant = useV42MigrationActive()
-	// Phase 243-03 — Persistent UI Terminal feature flag (default OFF).
-	// Flip Redis `livos:v43:terminal_panel=true` to reveal the dock entry
-	// (L-243-D). Inverse default of v42 migration flag so the new
-	// persistent-terminal surface stays hidden until operator opt-in.
-	const showTerminal = useTerminalPanelEnabled()
 
 	const lastFilesPath = sessionStorage.getItem('lastFilesPath')
 
@@ -140,14 +134,8 @@ export function Dock() {
 						)
 					}
 				/>
-				<DockItem
-					appId='LIVINITY_live-usage'
-					iconSize={iconSize}
-					iconSizeZoomed={iconSizeZoomed}
-					to={{search: addLinkSearchParams({dialog: 'live-usage'})}}
-					open={pathname.startsWith(systemAppsKeyed['LIVINITY_live-usage'].systemAppTo)}
-					mouseX={mouseX}
-				/>
+				{/* Phase 260.2 — Live Usage moved to the navbar (expanded nav utility
+				    button). Removed from the dock per operator. */}
 				<DockItem
 					appId='LIVINITY_app-store'
 					iconSize={iconSize}
@@ -202,34 +190,6 @@ export function Dock() {
 						)
 					}
 				/>
-				{/* Phase 243-03 — Persistent UI Terminal feature flag gate.
-				    The existing LIVINITY_terminal entry is hidden by default;
-				    operator opt-in via `redis-cli SET livos:v43:terminal_panel true`
-				    reveals it (L-243-D). Mirrors the `{showLivAssistant && (...)}`
-				    pattern below. The `<div data-test-dock-item ... className='contents'>`
-				    wrapper is a layout-neutral test seam (CSS display: contents) so
-				    dock.test.tsx can query the tile reliably (D-P227-TEST-SEAM).
-				    DockItem props are byte-identical to the pre-gate version. */}
-				{showTerminal && (
-					<div data-test-dock-item='terminal' className='contents'>
-						<DockItem
-							appId='LIVINITY_terminal'
-							iconSize={iconSize}
-							iconSizeZoomed={iconSizeZoomed}
-							open={false}
-							mouseX={mouseX}
-							onOpenWindow={(originRect) =>
-								handleOpenWindow(
-									'LIVINITY_terminal',
-									'/terminal',
-									'Terminal',
-									systemAppsKeyed['LIVINITY_terminal'].icon,
-									originRect,
-								)
-							}
-						/>
-					</div>
-				)}
 				{/* Phase 227-02 — Liv Assistant dock entry (the v42 AI surface). Gated
 				    by Phase 224-01's `useV42MigrationActive()` so flipping the Redis
 				    key `liv:config:liv_v42_migration_active=false` hides this icon

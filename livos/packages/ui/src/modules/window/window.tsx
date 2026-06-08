@@ -17,6 +17,10 @@ type WindowProps = {
 	children: React.ReactNode
 	originRect?: OriginRect
 	isPinnedToTopBar?: boolean
+	// Phase 260.2 — the window's appId (DISPLAY_:N / NATIVE_:id / WEBAPP_:id /
+	// LIVINITY_*). Used to detect VNC/stream windows so X closes the port
+	// (closeDisplay) and the − minimize (dock keep-alive) is stream-only.
+	appId?: string
 	// Phase 157 round 8 — when this window is a WebApp surface, the
 	// webapp id is passed through so the chrome row can render the
 	// inline Chat / Teach action buttons (right of the X) and shrink
@@ -30,10 +34,15 @@ type WindowProps = {
 }
 
 export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
-	{id, title, icon, position, size, zIndex, children, originRect, isPinnedToTopBar = false, webappId, nativeAppId},
+	{id, title, icon, position, size, zIndex, children, originRect, isPinnedToTopBar = false, appId, webappId, nativeAppId},
 	ref,
 ) {
-	const {closeWindow, focusWindow, updateWindowPosition, updateWindowSize} = useWindowManager()
+	const {closeWindow, closeDisplay, focusWindow, updateWindowPosition, updateWindowSize, pinWindowToTopBar} = useWindowManager()
+	// Phase 260.2 — VNC/stream windows (a raw DISPLAY_ or an app streamed via
+	// webapp/native) get the − minimize (dock keep-alive) + an X that closes the
+	// PORT. Plain system windows (Settings/Files/dialogs) get neither.
+	const isDisplayWindow = !!appId?.startsWith('DISPLAY_')
+	const isStreamWindow = isDisplayWindow || !!webappId || !!nativeAppId
 	// Phase 159 — mutual exclusion. webappId and nativeAppId must never
 	// both be set for the same window. Dev console-warn so accidental
 	// double-threading is caught quickly without throwing in prod.
@@ -198,9 +207,21 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 		focusWindow(id)
 	}
 
+	// Phase 260.2 — X on a DISPLAY_ window closes the PORT (server-side teardown
+	// via displays.close), not just the UI window. Other windows: plain close.
 	const handleClose = () => {
-		closeWindow(id)
+		if (isDisplayWindow) {
+			closeDisplay(id)
+		} else {
+			closeWindow(id)
+		}
 	}
+
+	// Phase 260.2 — minimize sends the window back to the docked "windows"
+	// surface (pin-to-topbar keeps the stream alive; NEVER closeWindow).
+	const handleMinimize = useCallback(() => {
+		pinWindowToTopBar(id)
+	}, [pinWindowToTopBar, id])
 
 	const currentX = position.x + dragOffset.x
 	const currentY = position.y + dragOffset.y
@@ -332,6 +353,9 @@ export const Window = forwardRef<HTMLDivElement, WindowProps>(function Window(
 					// browser Fullscreen API on the content element is a harmless,
 					// useful affordance and covers DISPLAY_/webapp/native streams.
 					onFullscreen={handleFullscreen}
+					// − minimize only on VNC/stream windows (operator: "sadece VNC
+					// yayını yapanlarda"). Plain windows get no − button.
+					onMinimize={isStreamWindow ? handleMinimize : undefined}
 				/>
 			</motion.div>
 

@@ -339,37 +339,9 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 			}
 		}
 
-		// Hardcoded system apps on desktop — Docker + Server Management open as
-		// windows from the desktop tile, mirroring how they launch from the dock.
-		const launchWindowApp = (appId: string, route: string, title: string, icon: string) => {
-			if (isMobile) {
-				openApp(appId, route, title, icon)
-				return
-			}
-			if (!windowManager) return
-			windowManager.openWindow(appId, route, title, icon)
-		}
-
-		const dockerItem: AppGridItem = {
-			id: 'LIVINITY_docker',
-			node: (
-				<motion.div
-					initial={{opacity: 0, scale: 0}}
-					animate={{opacity: 1, scale: 1}}
-					transition={{type: 'spring', stiffness: 400, damping: 25}}
-				>
-					<AppIcon
-						label='Docker'
-						src='/figma-exports/docker-app-icon.png'
-						onClick={() => launchWindowApp('LIVINITY_docker', '/docker', 'Docker', systemAppsKeyed['LIVINITY_docker'].icon)}
-					/>
-				</motion.div>
-			),
-		}
-		appItems.push(dockerItem)
-
-		// Server Management is dock-only (TbServerCog icon) — desktop entry removed per user request.
-		// Symmetric to Docker which is desktop-only-not-dock; together they keep dock minimal.
+		// Docker desktop tile REMOVED 2026-06-08 (operator) — Docker now launches
+		// from the navbar utility cluster (top-bar.tsx). Server Management stays
+		// dock-only. Both kept off the desktop grid to reduce clutter.
 
 		const folderItems: AppGridItem[] = folders.map((folder) => ({
 			id: `folder-${folder.name}`,

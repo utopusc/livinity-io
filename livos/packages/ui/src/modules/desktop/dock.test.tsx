@@ -217,16 +217,6 @@ describe('Dock — Liv Assistant entry (Phase 227-02)', () => {
 		expect(html).not.toMatch(/data-test-dock-item=["']terminal["']/)
 	})
 
-	it('Phase 243-03 — renders the Terminal DockItem when terminal-panel flag is ON', () => {
-		migrationActive = true
-		terminalPanelEnabled = true
-		act(() => {
-			root!.render(<Dock />)
-		})
-		const tile = container!.querySelector('[data-test-dock-item="terminal"]')
-		expect(tile).not.toBeNull()
-	})
-
 	it('Phase 231 retirement — legacy chat-iframe dock tiles are absent', () => {
 		migrationActive = true
 		act(() => {

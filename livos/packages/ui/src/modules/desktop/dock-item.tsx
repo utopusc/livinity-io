@@ -51,6 +51,7 @@ const DOCK_LABELS: Record<string, string> = {
 	'LIVINITY_settings': 'Settings',
 	'LIVINITY_live-usage': 'Live Usage',
 	'LIVINITY_ai-chat': 'AI Chat',
+	'LIVINITY_liv-assistant': 'Liv AI',
 	'LIVINITY_docker': 'Docker',
 	'LIVINITY_server-control': 'Server Management',
 	'LIVINITY_my-devices': 'Devices',
@@ -74,6 +75,9 @@ const DOCK_ICONS: Record<string, DockGlyph> = {
 	'LIVINITY_settings': IconSettings,
 	'LIVINITY_live-usage': IconAnalytics,
 	'LIVINITY_ai-chat': IconLiv,
+	// Phase 260.2 — Liv AI dock tile was rendering blank (no glyph mapped → gradient
+	// fallback). Map it to the chat-bubble glyph so it shows as the Chat icon.
+	'LIVINITY_liv-assistant': IconLiv,
 	'LIVINITY_docker': IconServer,
 	'LIVINITY_server-control': IconServer,
 	'LIVINITY_my-devices': IconDevices,
@@ -96,6 +100,7 @@ const DOCK_TINTS: Record<string, string> = {
 	'LIVINITY_live-usage': 'rgba(91, 141, 239, 0.30)',
 	'LIVINITY_app-store': 'rgba(77, 219, 195, 0.30)',
 	'LIVINITY_ai-chat': 'rgba(255, 138, 101, 0.40)',
+	'LIVINITY_liv-assistant': 'rgba(122, 162, 255, 0.35)',
 	'LIVINITY_server-control': 'rgba(255, 186, 110, 0.30)',
 	'LIVINITY_my-devices': 'rgba(195, 156, 255, 0.30)',
 	'LIVINITY_terminal': 'rgba(74, 222, 128, 0.30)',

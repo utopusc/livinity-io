@@ -1,8 +1,8 @@
 import {useEffect, useMemo, useRef, useState, type RefObject} from 'react'
-import {AnimatePresence, motion, useAnimationControls} from 'framer-motion'
+import {AnimatePresence, motion, useAnimationControls, type Variants} from 'framer-motion'
 import {useNavigate} from 'react-router-dom'
-import {TbLogout, TbPalette, TbPencil, TbRefresh} from 'react-icons/tb'
-import {Monitor} from 'lucide-react'
+import {TbBrandDocker, TbLogout, TbPalette, TbPencil, TbRefresh} from 'react-icons/tb'
+import {Activity, Maximize2, Minimize2, Monitor, Moon, Search, Sun, Terminal} from 'lucide-react'
 
 import {trpcReact} from '@/trpc/trpc'
 import {useCurrentUser} from '@/hooks/use-current-user'
@@ -11,8 +11,10 @@ import {useLinkToDialog} from '@/utils/dialog'
 import {useUserName} from '@/hooks/use-user-name'
 import {onWindowDragDrop, setDisplaysButtonRect, useWindowDragState} from '@/providers/window-drag-state'
 import {useWindowManagerOptional} from '@/providers/window-manager'
-import {Popover, PopoverContent, PopoverTrigger} from '@/shadcn-components/ui/popover'
-import {DisplaysPopover} from './displays-popover'
+import {systemAppsKeyed} from '@/providers/apps'
+import {useTheme} from '@/hooks/use-theme'
+import {openCommandPalette} from '@/components/cmdk'
+import {DisplaysSurfaceLive} from './displays-surface'
 import {greeting, wmoGlyph} from './clock-helpers'
 import {cn} from '@/shadcn-lib/utils'
 import {
@@ -61,6 +63,22 @@ const ANIMAL_EMOJIS = [
 	'🐯', '🐰', '🦜', '🐻', '🦒', '🐙', '🦝', '🐨', '🦩', '🐵', '🦕', '🐢',
 ]
 
+// Phase 260.2 — the navbar⇄displays swap spring (shared by both crossfade
+// layers so the pill sliding up and the strip sliding down move as one).
+const SWAP_SPRING = {type: 'spring', stiffness: 320, damping: 30} as const
+
+// Phase 260.2 — utility buttons (Displays, Live Usage) live in the EXPANDED
+// navbar only (revealed on LivOS-logo hover / during a window drag). Each pops
+// in with a staggered scale/opacity spring ("buton açılma animasyonları").
+const navUtilGroup: Variants = {
+	hidden: {opacity: 0, width: 0, transition: {when: 'afterChildren', staggerChildren: 0.04, staggerDirection: -1}},
+	show: {opacity: 1, width: 'auto', transition: {when: 'beforeChildren', staggerChildren: 0.06, delayChildren: 0.04}},
+}
+const navUtilItem: Variants = {
+	hidden: {opacity: 0, scale: 0.5, x: 8},
+	show: {opacity: 1, scale: 1, x: 0, transition: {type: 'spring', stiffness: 480, damping: 26}},
+}
+
 export function TopBar() {
 	const isMobile = useIsMobile()
 	if (isMobile) return null
@@ -72,6 +90,9 @@ function TopBarDesktop() {
 	const linkToDialog = useLinkToDialog()
 	const {user} = useCurrentUser()
 	const windowManager = useWindowManagerOptional()
+	// Phase 260.2 (operator-chosen 2026-06-08) — left-side feature buttons read the
+	// theme provider (TopBar is inside ThemeProvider, like the dock).
+	const {resolvedTheme, setTheme} = useTheme()
 
 	const userQ = trpcReact.user.get.useQuery()
 	const userName = userQ.data?.name || user?.name || 'User'
@@ -81,38 +102,38 @@ function TopBarDesktop() {
 	const initial = (userName.trim().charAt(0) || 'L').toUpperCase()
 
 	const [menuOpen, setMenuOpen] = useState(false)
-	// Phase 255-04 — drive the single 🖥️ Displays popover open state so the
-	// merged DisplaysPopover only polls (displays.list + per-card screenshot)
-	// while open (T-255-14: zero requests when closed).
-	const [displaysOpen, setDisplaysOpen] = useState(false)
-	// Phase 260.1-03 (SC-C, locked decision #3) — the Displays popover opens on
-	// HOVER, not click. A grace-delay close timer (~140ms) bridges the gap so the
-	// cursor can travel from the button to the (portalled) PopoverContent without
-	// the popover snapping shut. The timer ref lets a re-enter cancel a pending
-	// close. The Popover stays CONTROLLED (open={displaysOpen}) so Radix still
-	// closes it on Escape / outside-interaction.
-	const displaysHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-	const openDisplays = () => {
-		if (displaysHoverTimer.current) {
-			clearTimeout(displaysHoverTimer.current)
-			displaysHoverTimer.current = null
-		}
-		setDisplaysOpen(true)
-	}
-	const scheduleCloseDisplays = () => {
-		if (displaysHoverTimer.current) clearTimeout(displaysHoverTimer.current)
-		displaysHoverTimer.current = setTimeout(() => {
-			setDisplaysOpen(false)
-			displaysHoverTimer.current = null
-		}, 140)
-	}
-	// Clear any pending grace-delay timer on unmount so a stale timeout never
-	// fires setDisplaysOpen after the component is gone.
+	// Phase 260.2 — navbar⇄displays swap. Clicking the 🖥️ Displays icon slides
+	// the navbar pill UP and the displays strip DOWN into its place (replaces the
+	// 260.1 hover dropdown). Cleared by Escape, clicking a display, or re-clicking
+	// the icon. `showDisplays` will also OR in the drag-reveal in a later step.
+	const [surfaceClicked, setSurfaceClicked] = useState(false)
+	const showDisplays = surfaceClicked
+	// Strip container — anything clicked OUTSIDE it (while open) returns the navbar.
+	const surfaceRef = useRef<HTMLDivElement>(null)
+
+	// Phase 260.2 — Escape OR a click anywhere outside the strip returns the
+	// navbar (closes the displays surface).
 	useEffect(() => {
-		return () => {
-			if (displaysHoverTimer.current) clearTimeout(displaysHoverTimer.current)
+		if (!surfaceClicked) return
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') setSurfaceClicked(false)
 		}
-	}, [])
+		const onPointerDown = (e: MouseEvent) => {
+			// Ignore clicks on the Displays toggle button (it handles its own toggle)
+			// and clicks inside the strip itself; everything else returns the navbar.
+			const target = e.target as Node
+			if (surfaceRef.current?.contains(target)) return
+			if (dropZoneRef.current?.contains(target)) return
+			setSurfaceClicked(false)
+		}
+		window.addEventListener('keydown', onKey)
+		// mousedown (capture) so the navbar returns on the very next click anywhere.
+		document.addEventListener('mousedown', onPointerDown, true)
+		return () => {
+			window.removeEventListener('keydown', onKey)
+			document.removeEventListener('mousedown', onPointerDown, true)
+		}
+	}, [surfaceClicked])
 
 	// Phase 260.1-03 (SC-A) — the Displays button plays an "intake" spring
 	// scale-pop + ring flash when a dragged window docks (drop INSIDE the button),
@@ -127,6 +148,8 @@ function TopBarDesktop() {
 	const [showChangeIcon, setShowChangeIcon] = useState(false)
 	const [isHoverExpanded, setIsHoverExpanded] = useState(false)
 	const profileWrapRef = useRef<HTMLDivElement>(null)
+	// Phase 260.2 — nav element ref for the hover-collapse safety net (bug fix).
+	const navRef = useRef<HTMLElement>(null)
 	// Phase 260-03 (SC4) — dropZoneRef now points at the Displays/Monitor
 	// BUTTON (right cluster), not the old center shelf div. Typed as a
 	// generic HTMLElement so it can attach to the <button> trigger; the
@@ -162,6 +185,27 @@ function TopBarDesktop() {
 	})
 	const liveDisplaysCount = displaysQuery.data?.displays?.length ?? 0
 	const displaysBadgeCount = Math.max(liveDisplaysCount, pinnedWindows.length)
+
+	// Open the ⌘K command palette. TopBar is mounted OUTSIDE CmdkProvider, so we
+	// can't call useCmdkOpen() here — use the module-level opener the provider
+	// registers (same setOpen the ⌘K handler uses).
+	const triggerCmdk = () => openCommandPalette()
+
+	// Phase 260.2 (operator-chosen 2026-06-08) — LEFT feature buttons.
+	// Show Desktop: collect (minimize) all VISIBLE windows; toggle restores them.
+	// Pinned/docked windows are intentionally stowed, so they're left untouched.
+	const hasVisibleWindows = (windowManager?.windows ?? []).some((w) => !w.isMinimized && !w.isPinnedToTopBar)
+	const toggleShowDesktop = () => {
+		const wins = (windowManager?.windows ?? []).filter((w) => !w.isPinnedToTopBar)
+		if (wins.some((w) => !w.isMinimized)) {
+			wins.forEach((w) => !w.isMinimized && windowManager?.minimizeWindow(w.id))
+		} else {
+			wins.forEach((w) => windowManager?.restoreWindow(w.id))
+		}
+	}
+	// Theme: one-click dark ⇄ light (iridescent counts as "dark-ish" → goes light).
+	const isDark = resolvedTheme !== 'light'
+	const toggleTheme = () => setTheme(resolvedTheme === 'light' ? 'dark' : 'light')
 
 	// Phase 130-09 — bar expands either while a window is being dragged
 	// (drag-to-pin gesture) OR while the cursor is hovering the bar (so
@@ -214,7 +258,9 @@ function TopBarDesktop() {
 			window.removeEventListener('resize', publish)
 			setDisplaysButtonRect(null)
 		}
-	}, [])
+		// Phase 260.2 — re-publish when the button mounts/unmounts with the
+		// expanded navbar (the button is hidden in the compact bar now).
+	}, [isExpanded])
 
 	// Drop subscriber: when the user releases over the Displays button, pin.
 	useEffect(() => {
@@ -250,6 +296,33 @@ function TopBarDesktop() {
 		return () => document.removeEventListener('mousedown', handler)
 	}, [menuOpen])
 
+	// Phase 260.2 (bug fix 2026-06-08) — robust hover-collapse. The lone
+	// <nav onMouseLeave> misses cases where the bar goes pointer-events:none
+	// (displays surface opens) or a click opens a dialog/window OVER the bar →
+	// the revealed utility icons would stay stuck visible. Two backstops:
+	//   (1) collapse the instant the displays surface opens;
+	//   (2) a document mousemove that collapses as soon as the cursor is
+	//       measurably (>24px) outside the nav rect — no missed leave survives.
+	useEffect(() => {
+		if (showDisplays) setIsHoverExpanded(false)
+	}, [showDisplays])
+	useEffect(() => {
+		if (!isHoverExpanded) return
+		const onMove = (e: MouseEvent) => {
+			const rect = navRef.current?.getBoundingClientRect()
+			if (!rect) return
+			const pad = 24
+			if (
+				e.clientX < rect.left - pad || e.clientX > rect.right + pad ||
+				e.clientY < rect.top - pad || e.clientY > rect.bottom + pad
+			) {
+				setIsHoverExpanded(false)
+			}
+		}
+		document.addEventListener('mousemove', onMove)
+		return () => document.removeEventListener('mousemove', onMove)
+	}, [isHoverExpanded])
+
 	// Phase 260-03 (SC4) — the center-shelf chip restore/close handlers
 	// (restorePinnedWindow / closePinnedWindow) were removed along with the
 	// shelf. Recall + close of docked windows moves to the Displays popover
@@ -277,24 +350,35 @@ function TopBarDesktop() {
 				role='banner'
 				aria-label='Top bar'
 			>
-				<nav
+				<motion.nav
+					ref={navRef}
 					onMouseLeave={() => setIsHoverExpanded(false)}
+					// Phase 260.2 — slide UP + fade out when the displays surface shows.
+					initial={false}
+					animate={showDisplays ? {y: -56, opacity: 0} : {y: 0, opacity: 1}}
+					transition={SWAP_SPRING}
+					style={{pointerEvents: showDisplays ? 'none' : 'auto'}}
+					aria-hidden={showDisplays}
 					className={cn(
-						'pointer-events-auto grid h-16 w-full grid-cols-[auto_1fr_auto] items-center gap-2.5 rounded-full border bg-card-bg/78 px-3.5 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55',
-						// Compact 580px ➜ expanded 1180px. 1400ms ease-out-v36 morph
-						// per user direction 2026-05-15 ("biraz yavas genislesin").
-						// Triggered by EITHER hovering the bar (so the user can
-						// inspect the shelf) OR actively dragging a window.
-						'transition-[max-width,border-color,box-shadow] duration-[1400ms] ease-out-v36',
+						// Phase 260.2 — SYMMETRIC columns [1fr auto 1fr] so the brand logo
+						// (center, auto-sized) stays pinned to the bar centre and NEVER
+						// shifts when the right cluster reveals the utility buttons or the
+						// bar expands (both 1fr sides grow equally around the centre).
+						'pointer-events-auto grid h-16 w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 rounded-full border bg-card-bg/78 px-3.5 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55',
+						// Compact 580 ➜ expand wide enough for 3 left features + 4 right
+						// utilities. CRITICAL: minmax(0,1fr) — NOT plain 1fr (= minmax(auto,
+						// 1fr)) — so BOTH side columns are forced exactly equal regardless of
+						// content min-width; the centre logo can never drift mid-animation
+						// when one side is heavier (logo-shift bug fix 2026-06-08).
+						'transition-[max-width,border-color,box-shadow] duration-[700ms] ease-out-v36',
 						isExpanded
-							? 'max-w-[1180px] border-line-strong shadow-[0_18px_50px_-28px_rgba(0,0,0,0.22)] dark:shadow-[0_18px_50px_-20px_rgba(0,0,0,0.6)]'
+							? 'max-w-[800px] border-line-strong shadow-[0_18px_50px_-28px_rgba(0,0,0,0.22)] dark:shadow-[0_18px_50px_-20px_rgba(0,0,0,0.6)]'
 							: 'max-w-[580px] border-line shadow-none',
 					)}
 					aria-label='Top bar'
 				>
-					{/* LEFT — profile (pill enlarged so the hover bg wraps the
-					    avatar + name with breathing room equal to the text height). */}
-					<div className='flex min-w-0 items-center justify-start'>
+					{/* LEFT — profile + feature buttons (revealed on hover/drag). */}
+					<div className='flex min-w-0 items-center justify-start gap-1.5'>
 						<div ref={profileWrapRef} className='relative min-w-0'>
 							<button
 								type='button'
@@ -367,6 +451,59 @@ function TopBarDesktop() {
 								</motion.div>
 							)}
 						</div>
+
+						{/* Phase 260.2 (operator-chosen, re-split 2026-06-08) — LEFT = quick
+						    controls (revealed on hover/drag): Show Desktop, theme toggle,
+						    Search. System tools (Live Usage/Displays/Docker/Terminal) sit on
+						    the RIGHT, grouped by function per operator direction. */}
+						<AnimatePresence>
+							{isExpanded && (
+								<motion.div
+									key='nav-features'
+									className='flex items-center gap-1.5'
+									variants={navUtilGroup}
+									initial='hidden'
+									animate='show'
+									exit='hidden'
+								>
+									{/* Show Desktop — collect (minimize) all windows / restore. */}
+									<motion.button
+										variants={navUtilItem}
+										type='button'
+										aria-label='Show desktop'
+										title={hasVisibleWindows ? 'Show desktop' : 'Restore windows'}
+										onClick={toggleShowDesktop}
+										className='grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg-2)]'
+									>
+										{hasVisibleWindows ? <Minimize2 className='h-4 w-4' /> : <Maximize2 className='h-4 w-4' />}
+									</motion.button>
+
+									{/* Theme — one-click dark ⇄ light. */}
+									<motion.button
+										variants={navUtilItem}
+										type='button'
+										aria-label='Toggle theme'
+										title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+										onClick={toggleTheme}
+										className='grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg-2)]'
+									>
+										{isDark ? <Sun className='h-4 w-4' /> : <Moon className='h-4 w-4' />}
+									</motion.button>
+
+									{/* Search — opens the ⌘K command palette (a quick action). */}
+									<motion.button
+										variants={navUtilItem}
+										type='button'
+										aria-label='Search'
+										title='Search (⌘K)'
+										onClick={triggerCmdk}
+										className='grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg-2)]'
+									>
+										<Search className='h-4 w-4' />
+									</motion.button>
+								</motion.div>
+							)}
+						</AnimatePresence>
 					</div>
 
 					{/* CENTER — brand donut + hover trigger.
@@ -403,76 +540,135 @@ function TopBarDesktop() {
 					    is also gone (deleted in 255-04 Task 4) — this is now the SINGLE
 					    navbar display/windows surface. Existing pinned-window shelf in
 					    the Center drop-zone stays untouched. */}
-					<div className='flex items-center justify-end gap-1.5 pr-1.5'>
-						<Popover open={displaysOpen} onOpenChange={setDisplaysOpen}>
-							<PopoverTrigger asChild>
-								{/* Phase 260-03 (SC4) — this Displays/Monitor button is now the
-								    DROP TARGET for docking a dragged stream window. dropZoneRef
-								    is attached here so the existing mousemove hit-test (above)
-								    and the onWindowDragDrop subscriber both resolve against the
-								    button's rect; a drop INSIDE it calls pinWindowToTopBar
-								    (keep-alive — NEVER closeWindow). While dragging over it,
-								    isDragOverShelf adds a highlight ring so the operator sees
-								    the target. */}
-								<motion.button
-									ref={dropZoneRef as RefObject<HTMLButtonElement>}
-									type='button'
-									aria-label='Displays'
-									title='Displays'
-									// Phase 260.1-03 (SC-C) — HOVER opens the popover; the grace
-									// delay (scheduleCloseDisplays) bridges the button→portal gap.
-									onMouseEnter={openDisplays}
-									onMouseLeave={scheduleCloseDisplays}
-									// Phase 260.1-03 (SC-A) — intake spring scale-pop on drop-dock.
-									animate={intakeControls}
-									className={cn(
-										'relative grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-[color:var(--bg-2)]',
-										isDragOverShelf && 'bg-[color:var(--bg-2)] ring-2 ring-[color:var(--fg)] ring-offset-1',
-										// Intake ring flash — reuses the isDragOverShelf accent ring so
-										// the "absorbed" beat reads as the same accent.
-										intakeFlash && 'ring-2 ring-[color:var(--fg)] ring-offset-1',
-									)}
+					<div className='flex min-w-0 items-center justify-end gap-1.5 pr-1.5'>
+						{/* Phase 260.2 — utility buttons (Live Usage + Displays) live in the
+						    EXPANDED navbar ONLY (revealed on LivOS-logo hover / during a
+						    window drag, since isExpanded = isHoverExpanded || isDragging).
+						    Hidden in the compact bar; pop in with a staggered spring. */}
+						<AnimatePresence>
+							{isExpanded && (
+								<motion.div
+									key='nav-utils'
+									// No overflow-hidden — it was CLIPPING the Displays {n} badge
+									// (-top-1 -right-1), which made "display N" disappear. The
+									// collapse is handled by the group's opacity/width variant.
+									className='flex items-center gap-1.5'
+									variants={navUtilGroup}
+									initial='hidden'
+									animate='show'
+									exit='hidden'
 								>
-									<Monitor className='h-4 w-4' />
-									{/* Phase 260-04 (SC5) — {n} count badge. Hidden when the
-									    count is 0; pops in/out + animates on change via
-									    AnimatePresence + a spring (same spring family as the
-									    former PinnedWindowChip, top-bar.tsx pre-260-03). The
-									    count is displaysBadgeCount (live displays.list count
-									    floored by docked windows — see derivation above). */}
-									<AnimatePresence>
-										{displaysBadgeCount > 0 && (
-											<motion.span
-												key={displaysBadgeCount}
-												initial={{scale: 0, opacity: 0}}
-												animate={{scale: 1, opacity: 1}}
-												exit={{scale: 0, opacity: 0}}
-												transition={{type: 'spring', stiffness: 500, damping: 28}}
-												className='pointer-events-none absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[color:var(--fg)] px-1 text-[10px] font-semibold leading-none text-[color:var(--bg)] tabular-nums'
-												aria-label={`${displaysBadgeCount} display${displaysBadgeCount === 1 ? '' : 's'}`}
-											>
-												{displaysBadgeCount}
-											</motion.span>
-										)}
-									</AnimatePresence>
-								</motion.button>
-							</PopoverTrigger>
-							<PopoverContent
-								align='end'
-								className='p-0'
-								// Phase 260.1-03 (SC-C) — keep the popover open while the cursor
-								// is over the (portalled) content itself; leaving re-arms the
-								// grace-delay close. PopoverContent renders in a portal, so the
-								// ~140ms grace delay — not DOM adjacency — bridges the gap.
-								onMouseEnter={openDisplays}
-								onMouseLeave={scheduleCloseDisplays}
-							>
-								<DisplaysPopover open={displaysOpen} />
-							</PopoverContent>
-						</Popover>
+									{/* Live Usage — moved here from the dock; opens the live-usage dialog. */}
+									<motion.button
+										variants={navUtilItem}
+										type='button'
+										aria-label='Live Usage'
+										title='Live Usage'
+										onClick={() => navigate(linkToDialog('live-usage'))}
+										className='grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg-2)]'
+									>
+										<Activity className='h-4 w-4' />
+									</motion.button>
+
+									{/* Displays — toggles the navbar⇄displays swap. Wrapped so the
+									    reveal variant lives on the outer div while the button keeps
+									    its imperative intake-pop (animate={intakeControls}) +
+									    dropZoneRef for the drag-dock drop target. */}
+									<motion.div variants={navUtilItem} className='shrink-0'>
+										<motion.button
+											ref={dropZoneRef as RefObject<HTMLButtonElement>}
+											type='button'
+											aria-label='Displays'
+											title='Displays'
+											onClick={() => setSurfaceClicked((v) => !v)}
+											animate={intakeControls}
+											className={cn(
+												'relative grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-[color:var(--bg-2)]',
+												(isDragOverShelf || showDisplays) && 'bg-[color:var(--bg-2)] ring-2 ring-[color:var(--fg)] ring-offset-1',
+												intakeFlash && 'ring-2 ring-[color:var(--fg)] ring-offset-1',
+											)}
+										>
+											<Monitor className='h-4 w-4' />
+											{/* Phase 260-04 (SC5) — {n} count badge. */}
+											<AnimatePresence>
+												{displaysBadgeCount > 0 && (
+													<motion.span
+														key={displaysBadgeCount}
+														initial={{scale: 0, opacity: 0}}
+														animate={{scale: 1, opacity: 1}}
+														exit={{scale: 0, opacity: 0}}
+														transition={{type: 'spring', stiffness: 500, damping: 28}}
+														className='pointer-events-none absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[color:var(--fg)] px-1 text-[10px] font-semibold leading-none text-[color:var(--bg)] tabular-nums'
+														aria-label={`${displaysBadgeCount} display${displaysBadgeCount === 1 ? '' : 's'}`}
+													>
+														{displaysBadgeCount}
+													</motion.span>
+												)}
+											</AnimatePresence>
+										</motion.button>
+									</motion.div>
+
+									{/* Docker — opens the Docker window (operator-chosen 4th
+									    utility 2026-06-08). */}
+									<motion.button
+										variants={navUtilItem}
+										type='button'
+										aria-label='Docker'
+										title='Docker'
+										onClick={() =>
+											windowManager
+												? windowManager.openWindow('LIVINITY_docker', '/docker', 'Docker', systemAppsKeyed['LIVINITY_docker'].icon)
+												: navigate(systemAppsKeyed['LIVINITY_docker'].systemAppTo)
+										}
+										className='grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg-2)]'
+									>
+										<TbBrandDocker className='h-4 w-4' />
+									</motion.button>
+
+									{/* Terminal — opens the Terminal window (dev tool, operator-added 2026-06-08). */}
+										<motion.button
+											variants={navUtilItem}
+											type='button'
+											aria-label='Terminal'
+											title='Terminal'
+											onClick={() =>
+												windowManager
+													? windowManager.openWindow('LIVINITY_terminal', '/terminal', 'Terminal', systemAppsKeyed['LIVINITY_terminal'].icon)
+													: navigate(systemAppsKeyed['LIVINITY_terminal'].systemAppTo)
+											}
+											className='grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg-2)]'
+										>
+											<Terminal className='h-4 w-4' />
+										</motion.button>
+
+										{/* Divider — separates the utility controls from the clock so
+									    they don't read as "crammed too far right" and the {n} badge
+									    has clear room. */}
+									<motion.span variants={navUtilItem} className='mx-0.5 h-5 w-px shrink-0 bg-line' aria-hidden />
+								</motion.div>
+							)}
+						</AnimatePresence>
 						<ClockWithLocation />
 					</div>
-				</nav>
+				</motion.nav>
+
+				{/* Phase 260.2 — displays strip layer. Slides DOWN into the navbar's
+				    place (and the pill slides up) when showDisplays. The OUTER div
+				    handles centering (flex) so the INNER motion layer's transform is
+				    free for the y/opacity crossfade — framer's inline transform would
+				    otherwise clobber a Tailwind -translate-x-1/2. */}
+				<div className='pointer-events-none absolute inset-x-0 top-[18px] flex justify-center'>
+					<motion.div
+						ref={surfaceRef}
+						initial={false}
+						animate={showDisplays ? {y: 0, opacity: 1} : {y: -24, opacity: 0}}
+						transition={SWAP_SPRING}
+						style={{pointerEvents: showDisplays ? 'auto' : 'none'}}
+						aria-hidden={!showDisplays}
+					>
+						<DisplaysSurfaceLive open={showDisplays} onActivate={() => setSurfaceClicked(false)} />
+					</motion.div>
+				</div>
 			</motion.div>
 
 			<ChangeNamePopup open={showChangeName} onOpenChange={setShowChangeName} />

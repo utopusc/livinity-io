@@ -45,6 +45,7 @@ export function WindowsContainer() {
 								zIndex={window.zIndex}
 								originRect={window.originRect}
 								isPinnedToTopBar={window.isPinnedToTopBar}
+								appId={window.appId}
 								webappId={webappId ?? undefined}
 								nativeAppId={nativeAppId ?? undefined}
 							>
