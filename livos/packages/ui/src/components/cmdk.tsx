@@ -1,5 +1,5 @@
 import {useCommandState} from 'cmdk'
-import {ComponentPropsWithoutRef, createContext, SetStateAction, useContext, useRef, useState} from 'react'
+import {ComponentPropsWithoutRef, createContext, SetStateAction, useContext, useEffect, useRef, useState} from 'react'
 import {ErrorBoundary} from 'react-error-boundary'
 import {useNavigate} from 'react-router-dom'
 import {useKey} from 'react-use'
@@ -53,8 +53,23 @@ export function useCmdkOpen() {
 	return ctx
 }
 
+// Module-level opener so surfaces mounted OUTSIDE CmdkProvider (e.g. the TopBar,
+// which renders above the provider in router.tsx) can open the palette without
+// the context. CmdkProvider registers its setter on mount.
+let externalSetOpen: ((value: boolean) => void) | null = null
+export function openCommandPalette() {
+	externalSetOpen?.(true)
+}
+
 export function CmdkProvider({children}: {children: React.ReactNode}) {
 	const [open, setOpen] = useState(false)
+
+	useEffect(() => {
+		externalSetOpen = setOpen
+		return () => {
+			if (externalSetOpen === setOpen) externalSetOpen = null
+		}
+	}, [])
 
 	return <CmdkOpenContext.Provider value={{open, setOpen}}>{children}</CmdkOpenContext.Provider>
 }

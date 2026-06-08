@@ -138,7 +138,9 @@ function SearchResultCard({
 			onClick={onSelect}
 			className={cn(
 				'group/card flex w-full items-center justify-start gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-150',
-				isSelected ? 'bg-card-bg shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'hover:bg-card-bg/60',
+				// Phase 260.2 — pure-white palette: selected/hover row uses a theme-independent
+				// light neutral (card-bg is dark in the dark theme → unreadable on white).
+				isSelected ? 'bg-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.06)]' : 'hover:bg-neutral-100',
 			)}
 		>
 			<div className='flex aspect-square size-8 shrink-0 items-center justify-center [&_svg]:size-5 [&_svg]:stroke-[1.5]'>
@@ -176,7 +178,9 @@ function SearchResultsContainer({
 			layout
 			ref={listRef as React.RefObject<HTMLDivElement>}
 			onMouseLeave={() => onHover(null)}
-			className='flex max-h-80 w-full flex-col overflow-y-auto border-t border-dash-line bg-card-bg-2/80 px-2 py-1.5'
+			// Phase 260.2 — pure-white palette: results list stays white (was card-bg-2/80,
+			// which is dark/translucent in the dark theme). Border keeps the input divider.
+			className='flex max-h-80 w-full flex-col overflow-y-auto border-t border-dash-line bg-white px-2 py-1.5'
 		>
 			{searchResults.map((result, index) => (
 				<motion.div
@@ -616,7 +620,12 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 						style={{filter: 'url(#blob)'}}
 						className={cn(
 							'z-20 flex w-full max-w-2xl items-center justify-end gap-4 group',
-							'[&>div]:rounded-full [&>div]:bg-card-bg/95 [&>div]:text-neutral-800 [&>div]:backdrop-blur-2xl',
+							// Phase 260.2 (operator-locked 2026-06-06): the Spotlight palette is a
+							// PURE-WHITE opaque surface in ALL themes. The `card-bg` token renders
+							// dark/transparent under the dark theme (the see-through bug), so the
+							// input pill + shortcut bubbles are pinned to solid white. Child text is
+							// already neutral-800/400 (this component was designed for a light panel).
+							'[&>div]:rounded-full [&>div]:bg-white [&>div]:text-neutral-800 [&>div]:backdrop-blur-2xl',
 							'[&_svg]:size-6 [&_svg]:stroke-[1.4]',
 						)}
 					>
@@ -659,7 +668,7 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 								{searchValue && searchResults.length === 0 && !appsLoading && (
 									<motion.div
 										layout
-										className='border-t border-dash-line bg-card-bg-2/80 px-5 py-6 text-center text-[13px] text-neutral-400'
+										className='border-t border-dash-line bg-white px-5 py-6 text-center text-[13px] text-neutral-400'
 									>
 										{t('no-results-found')}
 									</motion.div>

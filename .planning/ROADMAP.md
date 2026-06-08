@@ -4640,15 +4640,15 @@ Plans:
 **Goal:** Polish the dock/Displays UX — drop→slide-right→into-button intake animation, hover-reveal popover with side-by-side displays, per-display × close (fixes the can't-close-display bug via a new displays.close teardown route), recall-by-drag + browser fullscreen, and a live AI/luse activity glow (last_input_at pulse). High bar on design + animation.
 **Requirements:** SC-A..SC-F (tracked in CONTEXT.md)
 **Depends on:** Phase 260
-**Plans:** 6 plans (4 waves)
+**Plans:** 6/6 plans complete
 
 Plans:
-- [ ] 260.1-01-PLAN.md — SC-F backend: last_input_at on DisplayRecord + updateLastInputAt + luse input stamp (glow signal)
-- [ ] 260.1-02-PLAN.md — SC-B backend: displays.close tRPC route (owner-scope fix + native vs luse teardown dispatch)
-- [ ] 260.1-03-PLAN.md — SC-A/SC-C: top-bar hover-open popover + Displays-button intake animation
-- [ ] 260.1-04-PLAN.md — SC-B/SC-E: window-manager closeDisplay + window-chrome fullscreen button/prop
-- [ ] 260.1-05-PLAN.md — SC-C/SC-D/SC-E/SC-F: popover side-by-side + x close + drag-recall + fullscreen + glow; window.tsx requestFullscreen
-- [ ] 260.1-06-PLAN.md — deploy to Mini PC (SW clear + luse pkill) + operator live verify SC-A..SC-F
+- [x] 260.1-01-PLAN.md — SC-F backend: last_input_at on DisplayRecord + updateLastInputAt + luse input stamp (glow signal)
+- [x] 260.1-02-PLAN.md — SC-B backend: displays.close tRPC route (owner-scope fix + native vs luse teardown dispatch)
+- [x] 260.1-03-PLAN.md — SC-A/SC-C: top-bar hover-open popover + Displays-button intake animation
+- [x] 260.1-04-PLAN.md — SC-B/SC-E: window-manager closeDisplay + window-chrome fullscreen button/prop
+- [x] 260.1-05-PLAN.md — SC-C/SC-D/SC-E/SC-F: popover side-by-side + x close + drag-recall + fullscreen + glow; window.tsx requestFullscreen
+- [x] 260.1-06-PLAN.md — deploy to Mini PC (SW clear + luse pkill) + operator live verify SC-A..SC-F
 
 ---
 

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
-status: executing
-last_updated: "2026-06-05T00:23:38.315Z"
+status: ready_to_plan
+last_updated: "2026-06-05T11:53:41.521Z"
 last_activity: 2026-06-05
 progress:
-  total_phases: 171
-  completed_phases: 87
-  total_plans: 588
-  completed_plans: 503
-  percent: 86
+  total_phases: 172
+  completed_phases: 90
+  total_plans: 595
+  completed_plans: 511
+  percent: 52
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
@@ -707,8 +707,8 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 
 ## Next Planned Phase
 
-- **Phase:** 255
-- **Status:** Executing Phase 259
+- **Phase:** 999.1
+- **Status:** Ready to plan
 - **Plan count:** 5
 - **CONTEXT:** .planning/phases/248-luse-display-lifecycle/248-CONTEXT.md
 - **Wave plan:** Wave 1 (248-01 backend display-manager ✅) → Wave 2 (248-02 MCP tool registrations ✅) → Wave 3 (248-03 TTL GC sweep — NEXT) → Wave 4 (248-04 canonical docs + shim sync) → Wave 5 (248-05 Mini PC deploy + UAT)
@@ -716,8 +716,8 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 
 ## Current Position
 
-Phase: 259 (native-app-ux-polish-install-icons-consistent-window-sizing) — EXECUTING
-Plan: 1 of 2
+Phase: --phase (260) — EXECUTING
+Plan: 1 of --name
 
 **Plan 251-09 (4 tasks — 3 commits: `4929916f` docs PORTABILITY-AUDIT + `6bc1ee70` docs REMEDIATION-BACKLOG + final docs flip)** — Wave-2 synthesis closing Phase 251. Aggregated the eight Wave-1 findings docs (251-01…251-08) into two artifacts under the phase dir. **PORTABILITY-AUDIT.md** (156 lines): a 30-row per-dimension COVERED/GAP/RISK matrix across 8 dimensions (luse-redis / display-backend / binaries / identity / paths / systemd-env / terminal / installer-path) with severity (P0/P1/P2) + evidence refs, plus the two explicit operator verdicts. **Q1 (any session-introduced hardcode that breaks portability?)** → YES: three NEW hardcodes — `xterm` hard-dep (P0, ENOENT silently swallowed at `tools.ts:1198`), PTY `username:'bruce'` triple-pin with no `livos:desktop:user` lookup (P1, `ws-handler.ts:466`+`types.ts:31`+`session.ts:77,82-89`), `/opt/livos` Redis-fallback literal (P2 RISK, `server.ts:124`); plus two un-reproducible live-only hand artifacts (`redis-env.conf` drop-in + manual `apt install xterm imagemagick xserver-xephyr`) that mask gaps on the Mini PC. **Q2 (would a brand-new install come up seamlessly with terminal + Luse?)** → **NO-GO**, with **5 P0 blockers**: (1) `xserver-xephyr` not installed → `create_display` default mode fails as a *false-positive success* (no `child.on('error')` in `display-manager.ts:224-253`); (2) `xterm` not installed → `launch_app_in_display(terminal)` silently no-ops; (3) PTY sudoers gap → `bruce→bruce` `sudo --user bruce --login bash` prompts for a password it can't supply; (4) `livos:v43:terminal_panel` flag never seeded → dock entry hidden + WS 4403; (5) `get.livinity.io` → install-script mapping UNPROVABLE from repo (4 entrypoints; only Path A seeds `liv:mcp:config` → AionUi luse; Path B writes `CHANGEME`, Path C seeds no MCP config). `imagemagick`/`import` confirmed NOT a code dependency (251-03) — excluded. **REMEDIATION-BACKLOG.md** (153 lines): 16 items R1-R16 ordered P0→P1→P2, each with file:line + exact change + effort (S/M/L) + kind (installer/code/both), a copy-pasteable apt remediation block (covers R1/R2/R7/R16), and a 5-wave Phase 252 sequencing recommendation. De-duplicated the four cross-referenced findings to single owners (PTY-bruce→R4+R8, GDM-Xauthority→R6, redis-env→R5, empty-catalog→R9+R12). **Task 3 (optional live Mini PC ssh corroboration) SKIPPED** per D-251-LIVE-OPTIONAL — never blocks synthesis; the one genuinely live-only question (`get.livinity.io` alias) is a DNS/Vercel question unanswerable by SSH to the box, captured as backlog R11. Read-only synthesis — zero source touched (D-251-READONLY held), sacred SHA `f3538e1d…` trivially preserved (`[sacred-sha] PASS: 20 files verified` on both content commits). 0 deviations from plan. Self-check PASSED (both reports exist + exceed min_lines; both commits present in git log). SUMMARY at `.planning/phases/251-fresh-install-portability-audit/251-SUMMARY.md`. **Phase 251 CLOSED 9/9.** Next: Phase 252 (remediation) is fully seeded by REMEDIATION-BACKLOG.md — zero further analysis needed to start.
 
@@ -1748,7 +1748,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 259 (native-app-ux-polish-install-icons-consistent-window-sizing) — 2 plans — 2026-06-05T00:22:09.693Z
+**Planned Phase:** 260 (window-dock-to-displays-stream-recall-ux) — 7 plans — 2026-06-05T10:52:13.428Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
@@ -1821,5 +1821,6 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
 
 ### Roadmap Evolution
 
+- Phase 260 added (2026-06-05): Window Dock-to-Displays & Stream Recall UX — operator live-test feedback after 259 deploy. SC1 fix stuck "uninstalling"/"restarting" app states; SC2 Displays popover (top-right) must list open NATIVE-app displays; SC3 drag a stream window to the top to DOCK it (stream stays alive, recallable via app icon or Displays button); SC4 replace navbar-expand with a slide-right-into-Displays-button animation + navbar returns to normal; SC5 {n} count badge on the Displays button; SC6 docked state persists across page refresh; SC7 WebApp = unlimited instances (click again = new stream); SC8 Native = single instance (re-focus existing). Constraint: do NOT touch :N alloc / x11vnc transport; keep 259 crash fixes. Full spec: phases/260-window-dock-to-displays-stream-recall-ux/CONTEXT.md.
 - Phase 259 added (2026-06-04): Native App UX Polish — (1) installed native apps must surface as launch icons on the LivOS desktop/apps grid (currently "apps'de yok"); (2) consistent window size + no top/bottom letterbox in the noVNC canvas (16:9 1280x720); (3) ALL native apps open fullscreen filling the Xvfb (OBS resists the current fullscreen step). Constraint: do NOT touch :N display alloc / x11vnc transport (fragile, AI-shared). See phase CONTEXT.md. Predecessor fixes already shipped: native-install userHome (40b3afcf), .deb support (14c63d65), fullscreen step (e0d5873e), platform store token-on-nav (7ac2fb8c).
 - Phase 254 added (2026-05-31): Active Displays hover-reveal panel + live VNC display windows — top-edge hover reveals dropdown of active X displays (computer_list_displays, not LivOS app windows); click opens a display as a live-VNC interactive LivOS window; new computer-use tRPC router (displays.list + display→VNC websocket URL via x11vnc); window sized to display WxH; main display :1 creation resolution changed from hardcoded 1920x1080 to MCP display-creation size. Decisions locked: render=live VNC, list=active X displays, resolution=change :1 creation. For GDG Stanford Gemini hackathon Liv AI surface.

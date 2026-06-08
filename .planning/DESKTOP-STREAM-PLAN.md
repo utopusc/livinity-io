@@ -1,3 +1,11 @@
+> ✅ **RESOLVED 2026-06-02 — Approach #3 (non-compositing real desktop) chosen: XFCE on `:1`.**
+> Commit `2eb81104` (branch `feat/xfce-host-desktop`, NOT yet merged to master).
+> Proven this session: GNOME `:0` is BLACK for x11vnc AND ffmpeg-x11grab AND maim
+> (all XGetImage); mutter ScreenCast creates a node but external `pipewiresrc` can't
+> link without an fd; GRD is RDP-only in GNOME 46. XFCE (xfwm4 compositor-off +
+> panel + xfdesktop) on the existing Xvfb `:1` captures perfectly. See memory
+> `project_xfce_host_desktop.md`. The ranked approaches below are kept for history.
+
 # PLAN — Show a real, usable desktop in the Displays popover (1280×720)
 
 > Handoff doc written 2026-06-02 for review AFTER `/clear`. Self-contained: a fresh

@@ -22,6 +22,7 @@ import {useWindowManagerOptional} from '@/providers/window-manager'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {cn} from '@/shadcn-lib/utils'
 import {WindowsManagerPanel} from './windows-manager-panel'
+import {DisplaysSurfaceLive} from './displays-surface'
 
 // Structural shape of a displays.list record. running_apps is a count list
 // (its element type is irrelevant here — only `.length` is read), so the
@@ -56,45 +57,18 @@ const ACTIVITY_WINDOW_MS = 3000
 export function DisplaysPopover({open = true}: {open?: boolean}) {
 	const isMobile = useIsMobile()
 
-	// Poll the active-displays list only while the popover is open so a display
-	// created via computer_create_display (or a spawned WebApp, plan 255-03)
-	// shows up within ~4s; do NOT poll while closed.
-	const displaysQuery = trpcReact.displays.list.useQuery(undefined, {
-		enabled: open,
-		refetchInterval: 4000,
-	})
-
 	if (isMobile) return null
 
-	const displays = (displaysQuery.data?.displays ?? []) as DisplayRecord[]
-
+	// Displays data now lives in <DisplaysSurfaceLive> (its own gated poll); the
+	// 260.1 list query here was removed with the card grid.
 	return (
 		// Phase 260.1 (SC-C) — widened from w-[360px] so the side-by-side
 		// wrapping card row reads well (~2-3 cards abreast at w-[160px] each).
 		<div className='flex max-h-[560px] w-[520px] flex-col gap-3 overflow-y-auto rounded-2xl border border-line bg-card-bg/78 p-3 backdrop-blur-2xl backdrop-saturate-150 dark:bg-black/55'>
-			{/* ── Section A — Displays ─────────────────────────────────── */}
-			<div className='flex flex-col gap-2'>
-				<div className='text-[11px] font-semibold uppercase tracking-wide text-text-secondary'>
-					Displays ({displays.length})
-				</div>
-				{displays.length === 0 ? (
-					<p className='px-1 py-1.5 text-[12px] text-text-tertiary'>No active displays</p>
-				) : (
-					// Phase 260.1 (SC-C) — side-by-side wrapping flex row (was a
-					// grid-cols-2 stack). Each card has a fixed basis so they sit
-					// abreast and wrap.
-					<div className='flex flex-wrap gap-2'>
-						{displays.map((d) => (
-							<DisplayCard
-								key={d.display}
-								d={d}
-								open={open}
-								onClosed={() => void displaysQuery.refetch()}
-							/>
-						))}
-					</div>
-				)}
-			</div>
+			{/* ── Section A — Displays (Phase 260.2 bare strip) ─────────────
+			    Replaces the 260.1 card grid: bare side-by-side thumbnails,
+			    labelled by NAME, no card chrome / metadata text. */}
+			<DisplaysSurfaceLive open={open} />
 
 			{/* ── Section B — Docked windows (recall surface, Phase 260-04 / SC3) ─ */}
 			<DockedWindowsSection />
