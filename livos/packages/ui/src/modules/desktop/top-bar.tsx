@@ -71,11 +71,21 @@ const SWAP_SPRING = {type: 'spring', stiffness: 320, damping: 30} as const
 // navbar only (revealed on LivOS-logo hover / during a window drag). Each pops
 // in with a staggered scale/opacity spring ("buton açılma animasyonları").
 const navUtilGroup: Variants = {
-	hidden: {opacity: 0, width: 0, transition: {when: 'afterChildren', staggerChildren: 0.04, staggerDirection: -1}},
+	// CLOSE must be FAST + UN-staggered. The pill's max-width collapse is heavily
+	// front-loaded (ease-out-v36 ≈ easeOutExpo → compact width in ~140ms), but the
+	// old reverse-staggered (`staggerDirection:-1`) ~300ms-tween exit with
+	// `when:'afterChildren'` left all 7 icons fully visible INSIDE the already-
+	// compact pill for ~250ms ("kapandığında ikonlar görünüyor" — measured frame
+	// by frame 2026-06-08: icons still vis=7 at navW=580 from c+143 → c+216, not
+	// gone until c+427). Drop afterChildren/stagger on HIDE so the group + children
+	// fade together in ~0.14s, synced with the pill gulping shut. The delightful
+	// staggered pop-in is KEPT on SHOW (only the exit changed).
+	hidden: {opacity: 0, width: 0, transition: {duration: 0.14, ease: 'easeOut'}},
 	show: {opacity: 1, width: 'auto', transition: {when: 'beforeChildren', staggerChildren: 0.06, delayChildren: 0.04}},
 }
 const navUtilItem: Variants = {
-	hidden: {opacity: 0, scale: 0.5, x: 8},
+	// Fast exit (0.12s) so an individual icon never lingers past the pill collapse.
+	hidden: {opacity: 0, scale: 0.5, x: 8, transition: {duration: 0.12, ease: 'easeOut'}},
 	show: {opacity: 1, scale: 1, x: 0, transition: {type: 'spring', stiffness: 480, damping: 26}},
 }
 
@@ -518,7 +528,10 @@ function TopBarDesktop() {
 							type='button'
 							onMouseEnter={() => setIsHoverExpanded(true)}
 							onClick={() => undefined}
-							className='grid h-10 w-10 cursor-pointer place-items-center rounded-full transition-[transform,background] duration-200 hover:scale-[1.04] hover:bg-[color:var(--bg-2)]'
+							// Logo grows clearly on hover (operator request 2026-06-08
+							// "Logonun üzerine geldiğimde büyüsün"). scale-125 reads as a
+							// deliberate grow, not the old barely-there scale-[1.04].
+							className='grid h-10 w-10 cursor-pointer place-items-center rounded-full transition-[transform,background] duration-200 ease-out hover:scale-125 hover:bg-[color:var(--bg-2)]'
 							aria-label='LivOS'
 						>
 							<span
