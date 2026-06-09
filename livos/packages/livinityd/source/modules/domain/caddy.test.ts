@@ -809,6 +809,29 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 		expect(blockTail).toContain('reverse_proxy 127.0.0.1:8080')
 	})
 
+	// 2026-06-08 — the @webapp_stream_ws carve-out MUST also claim livinityd's
+	// other WS endpoints (docker logs/exec, ssh-sessions), otherwise the broad
+	// @liv_ws `/ws /ws/*` matcher routes them to :3020 (AionUi) → 500/disconnect.
+	// This is why Docker Logs/Shell + Security SSH-Sessions worked in dev (Vite
+	// proxies /ws→:8080) but failed through the public Caddy path.
+	it('apex @webapp_stream_ws carve-out routes docker + ssh-sessions WS to :8080 (not AionUi)', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'bruce.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		const matcherIdx = out.indexOf('@webapp_stream_ws path /ws/stream/*')
+		expect(matcherIdx).toBeGreaterThan(-1)
+		// The matcher line carries all four livinityd WS path tokens.
+		const matcherLine = out.slice(matcherIdx, out.indexOf('\n', matcherIdx))
+		expect(matcherLine).toContain('/ws/docker/*')
+		expect(matcherLine).toContain('/ws/docker-exec')
+		expect(matcherLine).toContain('/ws/ssh-sessions')
+		// And it is still emitted BEFORE the AionUi @liv_ws catch-all.
+		expect(matcherIdx).toBeLessThan(out.indexOf('@liv_ws path /ws /ws/*'))
+	})
+
 	it('apex block emits @liv_api_subresource block-style matcher with header_regexp + path /api/* (no /ws)', () => {
 		const out = generateFullCaddyfile(
 			{mainDomain: 'bruce.livinity.io', subdomains: []},
