@@ -174,22 +174,9 @@ export function Dock() {
 						)
 					}
 				/>
-				<DockItem
-					appId='LIVINITY_my-devices'
-					iconSize={iconSize}
-					iconSizeZoomed={iconSizeZoomed}
-					open={false}
-					mouseX={mouseX}
-					onOpenWindow={(originRect) =>
-						handleOpenWindow(
-							'LIVINITY_my-devices',
-							'/my-devices',
-							'Devices',
-							systemAppsKeyed['LIVINITY_my-devices'].icon,
-							originRect,
-						)
-					}
-				/>
+				{/* Devices dock tile removed 2026-06-09 per operator ("Dockdan Devices'i
+				    kaldır"). The app registry + route + spotlight entry stay so it's
+				    still launchable via ⌘K / CLI (same precedent as Live Usage removal). */}
 				{/* Phase 227-02 — Liv Assistant dock entry (the v42 AI surface). Gated
 				    by Phase 224-01's `useV42MigrationActive()` so flipping the Redis
 				    key `liv:config:liv_v42_migration_active=false` hides this icon
