@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install-liv-assistant.sh
 #
-# Idempotent installer for the vendored AionUi v2.1.4 binary distribution
+# Idempotent installer for the vendored AionUi v2.1.14 binary distribution
 # that powers Liv Assistant (v42 milestone, Phase 223).
 #
 # Strategy: vendor-and-wrap (no source fork). See:
@@ -23,11 +23,18 @@ IFS=$'\n\t'
 # ---------------------------------------------------------------------------
 # Pinned constants (DO NOT EDIT without bumping Phase + re-running spike)
 # ---------------------------------------------------------------------------
-AIONUI_VERSION="2.1.4"
+# AionUi bump 2026-06-09: v2.1.4 -> v2.1.14 (10 upstream releases; unified theme
+# system, bundled managed runtime, conversation-scoped MCP, Markdown preview,
+# skill folder/zip import, aioncore -> v0.1.24). SHA256 = the official
+# .sha256 sidecar for the linux-x86_64 web tarball, re-verified by downloading
+# the 352MB tarball on the Mini PC and running sha256sum (matched exactly).
+# Rollback is trivial: the prior aionui-web-2.1.4/ version dir is left intact;
+# `ln -sfn .../aionui-web-2.1.4/aionui-web /opt/liv-assistant/current` + restart.
+AIONUI_VERSION="2.1.14"
 AIONUI_ARCH="linux-x86_64"
 AIONUI_TARBALL="aionui-web-${AIONUI_VERSION}-${AIONUI_ARCH}.tar.gz"
 AIONUI_URL="https://github.com/iOfficeAI/AionUi/releases/download/v${AIONUI_VERSION}/${AIONUI_TARBALL}"
-EXPECTED_SHA256="0bb02d0028d932c2e65e676c63074bcee2079508aa954e088c16ece92ba36778"
+EXPECTED_SHA256="2da3e1ffbe710f45f66c4a0ead24f2715726ab2e480d0a93ad6e07d7b5c35f83"
 
 INSTALL_ROOT="/opt/liv-assistant"
 CACHE_DIR="${INSTALL_ROOT}/cache"

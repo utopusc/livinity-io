@@ -841,7 +841,7 @@ fi
 # systemd unit are guaranteed-fresh. Installer is content-addressed (pinned SHA),
 # so on unchanged source this is a sub-second no-op (UPSTREAM.md timestamp preserved,
 # tarball cache hit, symlink unchanged). Phase 223-01 contract.
-step "Phase 225: liv-assistant install (vendored AionUi v2.1.4)"
+step "Phase 225: liv-assistant install (vendored AionUi v2.1.14)"
 _LIV_ASSISTANT_INSTALLER_SRC="$TEMP_DIR/scripts/install-liv-assistant.sh"
 # Fallback to on-disk copy (for the rare case TEMP_DIR was pruned mid-run)
 if [[ ! -f "$_LIV_ASSISTANT_INSTALLER_SRC" ]]; then
@@ -849,7 +849,7 @@ if [[ ! -f "$_LIV_ASSISTANT_INSTALLER_SRC" ]]; then
 fi
 if [[ -f "$_LIV_ASSISTANT_INSTALLER_SRC" ]]; then
     if bash "$_LIV_ASSISTANT_INSTALLER_SRC" 2>&1 | tail -10; then
-        ok "liv-assistant install ensured (vendored AionUi v2.1.4 at /opt/liv-assistant/current)"
+        ok "liv-assistant install ensured (vendored AionUi v2.1.14 at /opt/liv-assistant/current)"
     else
         fail "install-liv-assistant.sh failed — see output above (SHA mismatch / network / disk?)"
     fi
@@ -1790,7 +1790,7 @@ echo -e "  ${YELLOW}What was updated:${NC}"
 echo -e "    - livinityd source code"
 echo -e "    - UI (rebuilt from source)"
 echo -e "    - Liv AI packages (core, worker, mcp-server)"
-echo -e "    - liv-assistant (AionUi WebUI, vendored v2.1.4, port 3020)"
+echo -e "    - liv-assistant (AionUi WebUI, vendored v2.1.14, port 3020)"
 echo -e "    - Caddy /liv reverse-proxy (livinityd-emitted; bruce.livinity.io/liv → :3020, iframe CSP override) [Phase 226-04]"
 echo -e "    - Gallery app cache"
 echo -e "    - Dependencies"
