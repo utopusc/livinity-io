@@ -10,8 +10,25 @@
 // `delete`s privileged/network_mode:host and THROWS on a docker.sock bind, so an
 // installed app's on-disk compose may no longer carry them. These tests prove the
 // load-bearing triggers hold even for a fully-sanitized compose (Test 9).
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, vi} from 'vitest'
 import {isPublicForbidden, effectivePublicAccess} from './public-forbidden.js'
+
+// ── Phase 262-05 (LIVOS-057) — exercise the REAL buildPublicForbiddenSignals ──
+// The builtin catalog is mocked ONLY for the synthetic test appId; every other
+// id passes through to the real getBuiltinApp so the rest of the module graph
+// behaves normally.
+vi.mock('./builtin-apps.js', async (importOriginal) => {
+	const orig = await importOriginal<typeof import('./builtin-apps.js')>()
+	return {
+		...orig,
+		getBuiltinApp: (appId: string) =>
+			appId === 'livos-test-credentialed-builtin'
+				? ({id: appId, requiresLocalAiClis: true} as any)
+				: orig.getBuiltinApp(appId),
+	}
+})
+
+const {default: Apps} = await import('./apps.js')
 
 describe('isPublicForbidden (258-03 WS-C)', () => {
 	// ── LOAD-BEARING triggers (not stripped by the 257 sanitizer) ──────────
@@ -176,5 +193,62 @@ describe('effectivePublicAccess (258-03 WS-C — Task 2 composition)', () => {
 			{mode: 'whole-app'},
 		)
 		expect(out).toEqual({mode: 'whole-app', paths: [], hasOwnAuth: true})
+	})
+})
+
+// ── Phase 262-05 (LIVOS-057) — buildPublicForbiddenSignals OR-sources the
+// builtin definition. The builtin/native install paths historically wrote a
+// manifest WITHOUT requiresLocalAiClis (compose-generator.ts / apps.ts native
+// branch), so the on-disk manifest alone read `false` for a credentialed
+// builtin — a latent fail-open. The signal builder must mirror the mount path
+// (apps.ts:828-829) and OR the on-disk flag with getBuiltinApp(appId).
+describe('buildPublicForbiddenSignals ORs getBuiltinApp (262-05, LIVOS-057)', () => {
+	// Minimal `this` stub: buildPublicForbiddenSignals only touches this.getApp().
+	const makeStub = (manifest: any) => ({
+		getApp: (_appId: string) => ({
+			readManifest: async () => manifest,
+			readCompose: async () => ({
+				services: {app: {image: 'x/y', volumes: ['./data:/data']}},
+			}),
+		}),
+	})
+
+	it('install-path-written (flag-absent) manifest + builtin requiresLocalAiClis → forbidden (local-ai-clis)', async () => {
+		// Simulates the LIVOS-057 regression: a credentialed builtin installed via
+		// the compose-generator/native path whose on-disk manifest DROPPED the flag.
+		const flagAbsentManifest = {
+			manifestVersion: '1.1',
+			id: 'livos-test-credentialed-builtin',
+			name: 'Credentialed Builtin',
+			version: '1.0.0',
+			port: 8080,
+		}
+		const {signals} = await (Apps.prototype.buildPublicForbiddenSignals as any).call(
+			makeStub(flagAbsentManifest),
+			'livos-test-credentialed-builtin',
+			undefined,
+		)
+		expect(signals.requiresLocalAiClis).toBe(true)
+		expect(isPublicForbidden(signals)).toEqual({forbidden: true, reason: 'local-ai-clis'})
+	})
+
+	it('non-builtin flag-absent manifest stays NOT forbidden (no false positive)', async () => {
+		const {signals} = await (Apps.prototype.buildPublicForbiddenSignals as any).call(
+			makeStub({manifestVersion: '1.1', id: 'clean-community-app', name: 'Clean'}),
+			'clean-community-app',
+			undefined,
+		)
+		expect(signals.requiresLocalAiClis).toBe(false)
+		expect(isPublicForbidden(signals)).toEqual({forbidden: false})
+	})
+
+	it('on-disk manifest flag still forbids independently of the builtin catalog', async () => {
+		const {signals} = await (Apps.prototype.buildPublicForbiddenSignals as any).call(
+			makeStub({manifestVersion: '1.1', id: 'community-cli-app', requiresLocalAiClis: true}),
+			'community-cli-app',
+			undefined,
+		)
+		expect(signals.requiresLocalAiClis).toBe(true)
+		expect(isPublicForbidden(signals)).toEqual({forbidden: true, reason: 'local-ai-clis'})
 	})
 })
