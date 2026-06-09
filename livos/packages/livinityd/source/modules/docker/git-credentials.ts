@@ -1,49 +1,24 @@
-import crypto from 'node:crypto'
-import {readFile} from 'node:fs/promises'
-
 import {getPool} from '../database/index.js'
+import {decrypt, encrypt, getKey, getLegacyKey} from '../secrets/dek.js'
 
 /**
  * Git credentials store (Phase 21 GIT-01).
  *
- * Mirrors the AES-256-GCM-with-JWT-key pattern from stack-secrets.ts. Plaintext
- * credentials are NEVER persisted to disk. The encrypted_data column holds the
- * base64(iv12 + tag16 + ciphertext) blob; decryption is gated by access to
- * /opt/livos/data/secrets/jwt.
+ * AES-256-GCM at-rest encryption. Plaintext credentials are NEVER persisted to
+ * disk. The encrypted_data column holds the base64(iv12 + tag16 + ciphertext)
+ * blob.
+ *
+ * LIVOS-052 (Phase 262-05): the at-rest key now comes from the SHARED
+ * credential DEK module (`../secrets/dek.js` → `/opt/livos/data/secrets/
+ * credential-dek`), INDEPENDENT of the JWT signing secret. Previously the key
+ * was `sha256(JWT secret)`. Legacy JWT-keyed blobs still decrypt via the
+ * getLegacyKey() lazy re-key fallback on the read path (LIVOS-052b — a
+ * JWT-secret rotation does not brick stored credentials).
  *
  * Plain payload shapes (JSON, before encryption):
  *   type='https' -> {"username": "...", "password": "..."}   (PAT goes in password)
  *   type='ssh'   -> {"privateKey": "<PEM>"}                  (full PEM-formatted key)
  */
-
-const JWT_SECRET_PATH = '/opt/livos/data/secrets/jwt'
-
-let _key: Buffer | null = null
-
-async function getKey(): Promise<Buffer> {
-	if (_key) return _key
-	const jwt = await readFile(JWT_SECRET_PATH, 'utf-8')
-	_key = crypto.createHash('sha256').update(jwt.trim()).digest() // 32 bytes for AES-256
-	return _key
-}
-
-function encrypt(plaintext: string, key: Buffer): string {
-	const iv = crypto.randomBytes(12)
-	const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
-	const ct = Buffer.concat([cipher.update(plaintext, 'utf-8'), cipher.final()])
-	const tag = cipher.getAuthTag()
-	return Buffer.concat([iv, tag, ct]).toString('base64')
-}
-
-function decrypt(blob: string, key: Buffer): string {
-	const buf = Buffer.from(blob, 'base64')
-	const iv = buf.subarray(0, 12)
-	const tag = buf.subarray(12, 28)
-	const ct = buf.subarray(28)
-	const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv)
-	decipher.setAuthTag(tag)
-	return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf-8')
-}
 
 export type GitCredentialType = 'ssh' | 'https'
 
@@ -148,6 +123,27 @@ export async function decryptCredentialData(
 	)
 	if (rows.length === 0) return null
 	const key = await getKey()
-	const plaintext = decrypt(rows[0].encrypted_data, key)
+	const blob = rows[0].encrypted_data
+	let plaintext: string
+	try {
+		plaintext = decrypt(blob, key)
+	} catch (err) {
+		// LIVOS-052 lazy re-key: the blob may have been written with the legacy
+		// JWT-derived key. Retry once with the legacy key; on success, re-encrypt
+		// with the DEK and persist so the row migrates to the new key.
+		const legacy = await getLegacyKey()
+		if (!legacy) throw err
+		plaintext = decrypt(blob, legacy) // throws if legacy also fails (genuine tamper)
+		try {
+			const reEncrypted = encrypt(plaintext, key)
+			await pool.query(`UPDATE git_credentials SET encrypted_data = $1 WHERE id = $2`, [
+				reEncrypted,
+				id,
+			])
+		} catch {
+			// Re-key persistence failure is non-fatal — the decrypt already
+			// succeeded; the row stays on the legacy key and re-migrates next read.
+		}
+	}
 	return {type: rows[0].type, data: JSON.parse(plaintext) as GitCredentialData}
 }
