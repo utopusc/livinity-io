@@ -7,6 +7,11 @@
  * - buildScrubbedEnv() allow-list-copies HOME/PATH/LANG (etc.) and strips
  *   LIV_API_KEY/DATABASE_URL/REDIS_URL/JWT_SECRET, and sets the egress proxy env.
  *
+ * Phase 262-05 (LIVOS-058) additions:
+ * - The bwrap usability probe is a REAL runtime userns command, not `--version`.
+ * - present-but-userns-unavailable → stable refusal (code 126), NEVER a silent
+ *   unsandboxed fallback; genuinely-off-PATH dev fallback unchanged.
+ *
  * Runner: tsx + node:assert/strict (sibling to agent-session.*.test.ts).
  * Run with: npx tsx src/sandbox.test.ts
  */
@@ -15,7 +20,11 @@ import {
   wrapWithBwrap,
   buildScrubbedEnv,
   LIV_AGENT_WORKSPACE,
+  BWRAP_RUNTIME_PROBE_ARGV,
+  resolveShellExecutionMode,
+  SANDBOX_REFUSAL,
 } from './sandbox.js';
+import { ShellExecutor } from './shell.js';
 
 const WS = '/opt/livos/data/agent-workspace';
 
@@ -136,7 +145,61 @@ function test0_workspaceConstant() {
   console.log('  PASS: LIV_AGENT_WORKSPACE default = /opt/livos/data/agent-workspace');
 }
 
-console.log('sandbox.test.ts — Phase 256-01 Task 1');
+// ── Phase 262-05 (LIVOS-058) — runtime userns probe + fail-safe refusal ────
+
+function test7_runtimeProbeArgv() {
+  // The probe must be a REAL namespace command, not the PATH-only `--version`
+  // check (which succeeds whenever the binary exists, even when unprivileged
+  // user namespaces are denied at runtime).
+  const probe = [...BWRAP_RUNTIME_PROBE_ARGV];
+  assert.notDeepEqual(probe, ['--version'], 'probe must NOT be --version');
+  assert.ok(!probe.includes('--version'), 'probe must not contain --version');
+  assert.ok(probe.includes('--unshare-all'), 'probe must unshare namespaces');
+  assert.ok(probe.join(' ').includes('--ro-bind / /'), 'probe must ro-bind /');
+  assert.equal(probe[probe.length - 1], 'true', 'probe payload must be `true`');
+  console.log('  PASS: runtime probe argv is a real userns command (not --version)');
+}
+
+function test8_executionModeResolution() {
+  // runtime-usable → bwrap-sandboxed exec.
+  assert.equal(resolveShellExecutionMode(true, true), 'bwrap');
+  // genuinely off PATH (dev/non-Linux box) → the UNCHANGED env-scrubbed fallback.
+  assert.equal(resolveShellExecutionMode(false, false), 'unsandboxed-dev');
+  // present but userns unavailable → REFUSE (never silently unsandboxed).
+  assert.equal(resolveShellExecutionMode(true, false), 'refuse');
+  console.log('  PASS: mode resolution (bwrap / unsandboxed-dev / refuse)');
+}
+
+function test9_refusalShape() {
+  assert.equal(SANDBOX_REFUSAL.code, 126, 'refusal exit code must be 126');
+  assert.equal(SANDBOX_REFUSAL.stdout, '', 'refusal stdout must be empty');
+  assert.ok(SANDBOX_REFUSAL.stderr.includes('LIVOS-058'), 'refusal must cite LIVOS-058');
+  assert.ok(
+    SANDBOX_REFUSAL.stderr.includes('user namespaces'),
+    'refusal must explain the userns cause',
+  );
+  assert.ok(
+    SANDBOX_REFUSAL.stderr.toLowerCase().includes('refusing'),
+    'refusal must state it is refusing to run unsandboxed',
+  );
+  console.log('  PASS: stable refusal shape (code 126, explanatory stderr)');
+}
+
+async function test10_refusalNeverExecs() {
+  // Stubbed probe-failure (bwrap on PATH, userns probe failed): the shell tool
+  // must resolve the stable refusal WITHOUT executing the command — a silent
+  // unsandboxed fallback here would disable the contained-autonomy control.
+  const ex = new ShellExecutor(undefined, { onPath: true, usable: false });
+  const res = await ex.execute('echo LIVOS058_MUST_NOT_RUN');
+  assert.deepEqual(res, { ...SANDBOX_REFUSAL }, 'must resolve the stable refusal');
+  assert.ok(
+    !res.stdout.includes('LIVOS058_MUST_NOT_RUN'),
+    'the command must NOT have been executed',
+  );
+  console.log('  PASS: present-but-unusable → refusal, command never executed');
+}
+
+console.log('sandbox.test.ts — Phase 256-01 Task 1 + Phase 262-05 (LIVOS-058)');
 test0_workspaceConstant();
 test1_argvShape();
 test2_denyReadSecrets();
@@ -144,4 +207,8 @@ test3_noDockerSock();
 test4_noLivSourceWrite();
 test5_envScrub();
 test6_proxyWired();
-console.log('ALL PASS (7 checks)');
+test7_runtimeProbeArgv();
+test8_executionModeResolution();
+test9_refusalShape();
+await test10_refusalNeverExecs();
+console.log('ALL PASS (11 checks)');
