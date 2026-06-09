@@ -438,7 +438,15 @@ _dld_create_desktop_user() {
     # bruce migration). Re-provision actively removes a legacy drop-in left
     # by older installs.
     rm -f "/etc/sudoers.d/99-${user}"
-    ok "Legacy blanket sudoers drop-in absent/removed: /etc/sudoers.d/99-${user}"
+    # Phase 262 live-pentest: a SECOND legacy blanket drop-in `/etc/sudoers.d/${user}`
+    # (lowercase, from a pre-99-bruce install) was found still granting NOPASSWD:ALL on the
+    # live box — removing only 99-bruce left passwordless root intact. Remove it too. Never
+    # remove a non-blanket file: only the bare-username legacy drop-in is a blanket.
+    if [[ -f "/etc/sudoers.d/${user}" ]] && grep -qE "NOPASSWD: ?ALL" "/etc/sudoers.d/${user}"; then
+        rm -f "/etc/sudoers.d/${user}"
+        ok "Legacy lowercase blanket drop-in removed: /etc/sudoers.d/${user}"
+    fi
+    ok "Legacy blanket sudoers drop-in(s) absent/removed: /etc/sudoers.d/99-${user} (+ legacy ${user})"
 }
 
 # ── 4. Source clone ─────────────────────────────────────────────────────────
@@ -495,7 +503,13 @@ _dld_clone_source() {
         cp "$_DLD_STAGE_DIR/update.sh" "$_DLD_LIVOS_DIR/update.sh.new"
         chmod +x "$_DLD_LIVOS_DIR/update.sh.new"
         mv "$_DLD_LIVOS_DIR/update.sh.new" "$_DLD_LIVOS_DIR/update.sh"
-        ok "update.sh updated (next run will use new version)"
+        # Phase 262 WS3: root-own update.sh so the scoped LIVINITYD_UPDATE sudoers grant
+        # (`sudo -n bash /opt/livos/update.sh`) is SAFE — bruce can execute but not rewrite
+        # it, so it cannot be hijacked into arbitrary root. Without this, granting the
+        # Update button would let bruce edit update.sh → passwordless root.
+        chown root:root "$_DLD_LIVOS_DIR/update.sh" 2>/dev/null || true
+        chmod 0755 "$_DLD_LIVOS_DIR/update.sh" 2>/dev/null || true
+        ok "update.sh updated + root-owned (next run will use new version)"
     else
         warn "update.sh not in stage dir — skipping self-update"
     fi

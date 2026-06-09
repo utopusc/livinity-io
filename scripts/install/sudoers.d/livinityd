@@ -66,3 +66,35 @@ bruce ALL=(root) NOPASSWD: LIVINITYD_TIMEDATECTL
 # under this scoped grant with no blanket drop-in present.
 Cmnd_Alias LIVINITYD_FAIL2BAN = /usr/bin/fail2ban-client status, /usr/bin/fail2ban-client status *, /usr/bin/fail2ban-client set * banip *, /usr/bin/fail2ban-client set * unbanip *, /usr/bin/fail2ban-client set * addignoreip *
 bruce ALL=(root) NOPASSWD: LIVINITYD_FAIL2BAN
+
+# 25. Phase 262 WS3 (LIVOS-043 completion) — found during live deploy+pentest that the
+# blanket /etc/sudoers.d/99-bruce was being relied on by THREE things the WS3 fragment
+# did not cover, so removing the blanket broke them. Adding scoped grants:
+#
+# (a) The "Update LivOS" button: system/update.ts shells out
+#     `sudo -n bash /opt/livos/update.sh`. Granting this is ONLY safe because
+#     /opt/livos/update.sh is root-owned (deploy-livinityd.sh + update.sh self-chown to
+#     root:root 0755 — bruce can execute but NOT rewrite it, so it cannot be hijacked
+#     into arbitrary root). NEVER grant `bash *` or a bruce-writable script path.
+Cmnd_Alias LIVINITYD_UPDATE = /usr/bin/bash /opt/livos/update.sh, /bin/bash /opt/livos/update.sh
+bruce ALL=(root) NOPASSWD: LIVINITYD_UPDATE
+
+# (b) Display window-manager + helper binaries co-located with the Xvfb/Chrome flows
+#     (per-webapp fluxbox WM + wmctrl). Self-target (bruce) — no root escalation; these
+#     run on the operator's own X displays.
+Cmnd_Alias LIVINITYD_FLUXBOX = /usr/bin/fluxbox *
+Cmnd_Alias LIVINITYD_WMCTRL  = /usr/bin/wmctrl *
+bruce ALL=(bruce) NOPASSWD: LIVINITYD_FLUXBOX, LIVINITYD_WMCTRL
+
+# (c) Restart/reload of the LivOS service units ONLY (operational: ops + UI restart
+#     paths). Restart-only of fixed units = low risk; bruce already owns this code. This
+#     is NOT a general `systemctl *` grant.
+Cmnd_Alias LIVINITYD_SVC = /usr/bin/systemctl restart livos, /usr/bin/systemctl restart liv-core, /usr/bin/systemctl restart liv-worker, /usr/bin/systemctl restart liv-memory, /usr/bin/systemctl restart liv-assistant, /usr/bin/systemctl restart caddy, /usr/bin/systemctl reload caddy, /bin/systemctl restart livos, /bin/systemctl restart liv-core, /bin/systemctl restart liv-worker, /bin/systemctl restart liv-memory, /bin/systemctl restart liv-assistant, /bin/systemctl restart caddy, /bin/systemctl reload caddy
+bruce ALL=(root) NOPASSWD: LIVINITYD_SVC
+
+# NOTE (defense-in-depth gap documented during the Phase 262 pentest): removing the
+# sudoers blanket does NOT by itself remove bruce's root, because bruce is in the
+# `docker` group — the docker socket is a root-equivalent (a bruce-shell can
+# `docker run -v /:/host …` → root). Fully de-rooting bruce/the AI agent requires a
+# docker-socket proxy + removing bruce from the docker group (separate architectural
+# phase). See SECURITY-RESEARCH-PASS-3.md.

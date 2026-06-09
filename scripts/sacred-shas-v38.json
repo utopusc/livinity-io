@@ -115,8 +115,8 @@
   },
   {
     "path": "scripts/install/sudoers.d/livinityd",
-    "expected_sha": "e01ec0e68ce1933fb27495dd0c08d18c7abcf791",
-    "frozen_in_phase": "262-03-security-hardening-pass-3 (extended from 196-05 / 192-01)",
-    "rationale": "Phase 192-01 sudoers security boundary; widening this file (e.g., adding NOPASSWD: ALL or new Cmnd_Alias entries) must be a deliberate, reviewed change that re-pins the SHA. Silent edits would grant livinityd unintended root privileges. Plan 196-05 added LIVINITYD_TIMEDATECTL (`/usr/bin/timedatectl set-timezone *` only). Plan 262-03 (LIVOS-043) added LIVINITYD_FAIL2BAN — exact /usr/bin/fail2ban-client status/banip/unbanip/addignoreip shapes only — so the fail2ban panel works via `sudo -n` after the blanket 99-bruce drop-in removal."
+    "expected_sha": "b724d75ad18d47d3102b8fd433f1b3187f2049ff",
+    "frozen_in_phase": "262-deploy-pentest (extended from 262-03 / 196-05 / 192-01)",
+    "rationale": "Phase 192-01 sudoers security boundary; widening this file (e.g., adding NOPASSWD: ALL or new Cmnd_Alias entries) must be a deliberate, reviewed change that re-pins the SHA. Silent edits would grant livinityd unintended root privileges. Plan 196-05 added LIVINITYD_TIMEDATECTL. Plan 262-03 (LIVOS-043) added LIVINITYD_FAIL2BAN. Phase 262 live deploy+pentest added LIVINITYD_UPDATE (root-owned /opt/livos/update.sh ONLY — the Update button), LIVINITYD_FLUXBOX/WMCTRL (bruce-self display WM), and LIVINITYD_SVC (restart of fixed LivOS units only) — the three things the blanket 99-bruce was covering, so the fragment is now self-sufficient WITHOUT any blanket drop-in. Doc-note added: bruce∈docker is a separate root-equivalent (docker-socket) requiring a future docker-proxy phase."
   }
 ]
