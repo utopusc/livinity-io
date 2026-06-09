@@ -560,9 +560,17 @@ export default class Livinityd {
 		// missing OR any other value = enabled). On error, the handler falls
 		// back to a 302 to /liv/ so the operator sees the upstream AionUi
 		// login UI rather than a 500.
+		// Phase 262-01 (LIVOS-041): the handler is session-gated — it 401s
+		// unless the request carries a LIVINITY_SESSION that passes the FULL
+		// check (signature + exp + jti revocation + active-user re-check via
+		// Server.verifySessionFull). Unauthenticated callers can no longer
+		// mint an aionui-session cookie.
 		try {
 			if (this.server.app) {
-				this.server.app.get('/liv-login', makeLivLoginHandler(this.ai.redis))
+				this.server.app.get(
+					'/liv-login',
+					makeLivLoginHandler(this.ai.redis, (t) => this.server.verifySessionFull(t)),
+				)
 				this.logger.log('Phase 234-04 — GET /liv-login mounted (Liv AI auto-login; flag: liv:config:liv_ai_autologin_enabled, default ON)')
 			} else {
 				this.logger.error('Phase 234-04 — /liv-login mount skipped: this.server.app missing (boot race)', new Error('this.server.app missing'))
