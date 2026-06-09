@@ -46,6 +46,7 @@ import {
 } from '@/shadcn-components/ui/alert-dialog'
 import {useWebAppVnc} from '@/hooks/use-webapp-vnc'
 import {trpcReact} from '@/trpc/trpc'
+import {cn} from '@/shadcn-lib/utils'
 
 // Master Chrome Xvfb canvas is locked to 1280x720 by the spawnXvfb call in
 // chrome-master/master-login-routes.ts — coord math here must mirror that
@@ -185,26 +186,81 @@ export function MasterChromeLogin() {
 	// title string is retained in this comment to satisfy the source-text
 	// invariant in master-chrome-login.test.tsx.
 	return (
-		<div className='flex flex-col gap-4'>
-			<div className='flex flex-col gap-1.5 text-sm'>
-				<div>
-					<span className='text-text-secondary'>Status: </span>
-					<span className={loggedIn ? 'text-green-600 dark:text-green-400' : 'text-text-primary'}>
-						{loggedIn ? 'Logged in' : 'Not logged in'}
+		<div className='flex flex-col gap-6'>
+			{/* Status card — colored dot + Logged in / Not logged in + running pill */}
+			<div className='rounded-[var(--r-lg)] border border-line bg-[color:var(--bg)] p-5'>
+				<div className='flex flex-wrap items-center justify-between gap-3'>
+					<div className='flex items-center gap-3'>
+						<span
+							className={cn(
+								'inline-flex h-2.5 w-2.5 shrink-0 rounded-full',
+								loggedIn ? 'bg-green-500' : 'bg-amber-500',
+							)}
+							aria-hidden='true'
+						/>
+						<div className='flex flex-col gap-0.5'>
+							<span
+								className={cn(
+									'text-[14px] font-medium',
+									loggedIn ? 'text-green-600 dark:text-green-400' : 'text-text-primary',
+								)}
+							>
+								{loggedIn ? 'Logged in' : 'Not logged in'}
+							</span>
+							<span className='text-[12px] text-text-secondary'>
+								{loggedIn
+									? 'Every WebApp browser inherits this Google session.'
+									: 'Sign in once to share the session with every WebApp.'}
+							</span>
+						</div>
+					</div>
+					{/* Master Chrome running indicator */}
+					<span
+						className={cn(
+							'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium',
+							running
+								? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+								: 'bg-[color:var(--bg-2)] text-text-secondary',
+						)}
+						title='Master Chrome running'
+					>
+						Master Chrome running: {running ? 'yes' : 'no'}
 					</span>
-				</div>
-				<div>
-					<span className='text-text-secondary'>Master Chrome running: </span>
-					<span className='text-text-primary'>{running ? 'yes' : 'no'}</span>
 				</div>
 			</div>
 
-			<div className='flex flex-row gap-2'>
+			{/* 3-step guide — only until a session exists */}
+			{!loggedIn && !running ? (
+				<ol className='flex flex-col gap-1.5 text-[13px] text-text-secondary'>
+					<li>
+						<span className='font-mono text-[color:var(--fg-faint)]'>1.</span> Click{' '}
+						<span className='font-medium text-text-primary'>Open Master Chrome</span> below.
+					</li>
+					<li>
+						<span className='font-mono text-[color:var(--fg-faint)]'>2.</span> Sign into your
+						Google account in the window that appears.
+					</li>
+					<li>
+						<span className='font-mono text-[color:var(--fg-faint)]'>3.</span> Close it — Gmail,
+						Calendar &amp; Drive WebApps now work without re-auth.
+					</li>
+				</ol>
+			) : null}
+
+			{/* Primary actions */}
+			<div className='flex flex-row flex-wrap gap-2'>
 				<Button
+					variant='primary'
 					onClick={onOpenMasterClick}
 					disabled={running || startMut.isPending}
 				>
-					{running ? 'Master Chrome running' : 'Open Master Chrome'}
+					{running
+						? 'Master Chrome running'
+						: startMut.isPending
+							? 'Opening…'
+							: loggedIn
+								? 'Re-open to update login'
+								: 'Open Master Chrome'}
 				</Button>
 
 				<Button
@@ -214,35 +270,11 @@ export function MasterChromeLogin() {
 				>
 					Close Master Chrome
 				</Button>
-
-				<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-					<Button
-						variant='destructive'
-						disabled={running || resetMut.isPending}
-						onClick={() => setConfirmOpen(true)}
-					>
-						Reset Master Profile
-					</Button>
-					<AlertDialogContent>
-						<AlertDialogHeader>
-							<AlertDialogTitle>Reset Master Profile?</AlertDialogTitle>
-							<AlertDialogDescription>
-								Your current master profile will be backed up to{' '}
-								<code className='text-xs'>/opt/livos/data/chrome-master.backup</code>.
-								After reset you must run Master Login again before any LivOS app
-								can inherit a Google login.
-							</AlertDialogDescription>
-						</AlertDialogHeader>
-						<AlertDialogFooter>
-							<AlertDialogCancel>Cancel</AlertDialogCancel>
-							<AlertDialogAction onClick={onConfirmReset}>Reset</AlertDialogAction>
-						</AlertDialogFooter>
-					</AlertDialogContent>
-				</AlertDialog>
 			</div>
 
+			{/* Embedded noVNC viewer when a master Chrome is live */}
 			{running && wsUrl !== undefined ? (
-				<div className='relative aspect-[16/9] w-full max-w-[1280px] overflow-hidden rounded border bg-black'>
+				<div className='relative aspect-[16/9] w-full max-w-[1280px] overflow-hidden rounded-[var(--r-md)] border border-line bg-black'>
 					<div
 						ref={vnc.containerRef}
 						data-testid='master-chrome-viewer'
@@ -271,6 +303,41 @@ export function MasterChromeLogin() {
 			{resetMut.isError ? (
 				<p className='text-xs text-red-600 dark:text-red-400'>{resetMut.error.message}</p>
 			) : null}
+
+			{/* Danger zone — Reset Master Profile (de-emphasized) */}
+			<div className='mt-1 flex flex-wrap items-center justify-between gap-3 rounded-[var(--r-md)] border border-line px-4 py-3'>
+				<div className='flex flex-col gap-0.5'>
+					<span className='text-[13px] font-medium text-text-primary'>Reset Master Profile</span>
+					<span className='text-[12px] text-text-secondary'>
+						Clears the saved Google login. The current profile is backed up first.
+					</span>
+				</div>
+				<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+					<Button
+						variant='destructive'
+						size='sm'
+						disabled={running || resetMut.isPending}
+						onClick={() => setConfirmOpen(true)}
+					>
+						Reset
+					</Button>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>Reset Master Profile?</AlertDialogTitle>
+							<AlertDialogDescription>
+								Your current master profile will be backed up to{' '}
+								<code className='text-xs'>/opt/livos/data/chrome-master.backup</code>.
+								After reset you must run Master Login again before any LivOS app
+								can inherit a Google login.
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>Cancel</AlertDialogCancel>
+							<AlertDialogAction onClick={onConfirmReset}>Reset</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+			</div>
 		</div>
 	)
 }
