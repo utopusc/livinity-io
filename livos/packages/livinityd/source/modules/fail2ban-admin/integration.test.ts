@@ -149,8 +149,12 @@ async function runTests() {
 		execCalls = []
 		const fakeRun = clientMod.makeFail2banClient(async (binary, args, runOpts) => {
 			execCalls.push({binary, args, opts: runOpts})
+			// Phase 262 WS3 (LIVOS-043): client spawns
+			// `/usr/bin/sudo -n /usr/bin/fail2ban-client <args>` — strip the
+			// sudo prefix and dispatch on the underlying fail2ban argv.
+			const f2bArgs = binary === '/usr/bin/sudo' ? args.slice(2) : args
 			// `set <jail> unbanip|banip|addignoreip <ip>`
-			if (args[0] === 'set') {
+			if (f2bArgs[0] === 'set') {
 				if (opts.setErr) {
 					const e: any = new Error('set failed')
 					if (opts.setErr.code) e.code = opts.setErr.code
@@ -160,7 +164,7 @@ async function runTests() {
 				return {stdout: opts.setOk ?? '', stderr: ''}
 			}
 			// `status` (no jail) → listJails
-			if (args[0] === 'status' && args.length === 1) {
+			if (f2bArgs[0] === 'status' && f2bArgs.length === 1) {
 				if (opts.statusErr) {
 					const e: any = new Error('status failed')
 					if (opts.statusErr.code) e.code = opts.statusErr.code
@@ -170,7 +174,7 @@ async function runTests() {
 				return {stdout: opts.statusOk ?? '', stderr: ''}
 			}
 			// `status <jail>` → getJailStatus
-			if (args[0] === 'status' && args.length === 2) {
+			if (f2bArgs[0] === 'status' && f2bArgs.length === 2) {
 				if (opts.statusJailErr) {
 					const e: any = new Error('status jail failed')
 					if (opts.statusJailErr.code) e.code = opts.statusJailErr.code
@@ -284,7 +288,14 @@ async function runTests() {
 		assert.deepEqual(r, {ok: true})
 		// Argv shape (B-01: action-targeted)
 		assert.equal(execCalls.length, 1, `expected 1 execFile call, got ${execCalls.length}`)
-		assert.deepEqual(execCalls[0].args, ['set', 'sshd', 'unbanip', '1.2.3.4'])
+		assert.deepEqual(execCalls[0].args, [
+			'-n',
+			'/usr/bin/fail2ban-client',
+			'set',
+			'sshd',
+			'unbanip',
+			'1.2.3.4',
+		])
 		// Audit row
 		assert.equal(insertedAuditRows.length, 1)
 		assert.equal(insertedAuditRows[0].device_id, 'fail2ban-host')
@@ -303,8 +314,22 @@ async function runTests() {
 		const r = await c.unbanIp({jail: 'sshd', ip: '1.2.3.4', addToWhitelist: true})
 		assert.deepEqual(r, {ok: true})
 		assert.equal(execCalls.length, 2, `expected 2 execFile calls, got ${execCalls.length}`)
-		assert.deepEqual(execCalls[0].args, ['set', 'sshd', 'unbanip', '1.2.3.4'])
-		assert.deepEqual(execCalls[1].args, ['set', 'sshd', 'addignoreip', '1.2.3.4'])
+		assert.deepEqual(execCalls[0].args, [
+			'-n',
+			'/usr/bin/fail2ban-client',
+			'set',
+			'sshd',
+			'unbanip',
+			'1.2.3.4',
+		])
+		assert.deepEqual(execCalls[1].args, [
+			'-n',
+			'/usr/bin/fail2ban-client',
+			'set',
+			'sshd',
+			'addignoreip',
+			'1.2.3.4',
+		])
 		assert.equal(insertedAuditRows.length, 1)
 		assert.equal(insertedAuditRows[0].tool_name, 'whitelist_ip')
 		restore()
@@ -363,7 +388,14 @@ async function runTests() {
 		})
 		assert.deepEqual(r, {ok: true})
 		assert.equal(execCalls.length, 1)
-		assert.deepEqual(execCalls[0].args, ['set', 'sshd', 'banip', '203.0.113.5'])
+		assert.deepEqual(execCalls[0].args, [
+			'-n',
+			'/usr/bin/fail2ban-client',
+			'set',
+			'sshd',
+			'banip',
+			'203.0.113.5',
+		])
 		assert.equal(insertedAuditRows.length, 1)
 		assert.equal(insertedAuditRows[0].tool_name, 'ban_ip')
 		assert.equal(insertedAuditRows[0].success, true)
@@ -389,7 +421,14 @@ async function runTests() {
 		assert.deepEqual(r, {ok: true})
 		// No confirmation needed when cellularBypass=true — execFile spawns
 		assert.equal(execCalls.length, 1)
-		assert.deepEqual(execCalls[0].args, ['set', 'sshd', 'banip', '203.0.113.5'])
+		assert.deepEqual(execCalls[0].args, [
+			'-n',
+			'/usr/bin/fail2ban-client',
+			'set',
+			'sshd',
+			'banip',
+			'203.0.113.5',
+		])
 		assert.equal(insertedAuditRows.length, 1)
 		assert.equal(insertedAuditRows[0].tool_name, 'ban_ip')
 		restore()

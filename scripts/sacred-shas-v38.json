@@ -115,8 +115,8 @@
   },
   {
     "path": "scripts/install/sudoers.d/livinityd",
-    "expected_sha": "aea64b87278636cc94ade3af9a615342200c65eb",
-    "frozen_in_phase": "196-05-locale-timezone (extended from 192-01)",
-    "rationale": "Phase 192-01 sudoers security boundary; widening this file (e.g., adding NOPASSWD: ALL or new Cmnd_Alias entries) must be a deliberate, reviewed change that re-pins the SHA. Silent edits would grant livinityd unintended root privileges. Plan 196-05 added LIVINITYD_TIMEDATECTL Cmnd_Alias allowing only `/usr/bin/timedatectl set-timezone *`."
+    "expected_sha": "e01ec0e68ce1933fb27495dd0c08d18c7abcf791",
+    "frozen_in_phase": "262-03-security-hardening-pass-3 (extended from 196-05 / 192-01)",
+    "rationale": "Phase 192-01 sudoers security boundary; widening this file (e.g., adding NOPASSWD: ALL or new Cmnd_Alias entries) must be a deliberate, reviewed change that re-pins the SHA. Silent edits would grant livinityd unintended root privileges. Plan 196-05 added LIVINITYD_TIMEDATECTL (`/usr/bin/timedatectl set-timezone *` only). Plan 262-03 (LIVOS-043) added LIVINITYD_FAIL2BAN — exact /usr/bin/fail2ban-client status/banip/unbanip/addignoreip shapes only — so the fail2ban panel works via `sudo -n` after the blanket 99-bruce drop-in removal."
   }
 ]

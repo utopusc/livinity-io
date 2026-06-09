@@ -12,6 +12,10 @@
  *     jail name or IP string.
  *   - args is always an array (NEVER a shell string). No `shell: true`.
  *   - Hardcoded BINARY_PATH (no PATH lookup) verified in 46-01-DIAGNOSTIC.md.
+ *   - Phase 262 WS3 (LIVOS-043): every spawn goes through `sudo -n` and is
+ *     authorized by the scoped LIVINITYD_FAIL2BAN Cmnd_Alias
+ *     (scripts/install/sudoers.d/livinityd) — NOT by any blanket NOPASSWD
+ *     drop-in (the 99-bruce blanket grant provisioning was removed in 262-03).
  *
  * Action-targeted unban (per pitfall B-01): `unbanIp` calls
  * `set <jail> unbanip <ip>` — NEVER `unban` (which would flush the entire
@@ -32,6 +36,13 @@ import {parseAuthLogForLastUser, parseJailList, parseJailStatus} from './parser.
 // Verified against fail2ban 1.0.2-3ubuntu0.1 on Mini PC bruce@10.69.31.68 (2026-05-01)
 // Captured live in .planning/phases/46-fail2ban-admin-panel/46-01-DIAGNOSTIC.md.
 const BINARY_PATH = '/usr/bin/fail2ban-client'
+
+// Phase 262 WS3 (LIVOS-043): fail2ban-client talks to the root-owned
+// /var/run/fail2ban socket. livinityd runs as bruce (Phase 192), so every
+// spawn is wrapped in `sudo -n` (non-interactive — fails fast instead of
+// hanging on a password prompt) and authorized by the scoped
+// LIVINITYD_FAIL2BAN Cmnd_Alias in scripts/install/sudoers.d/livinityd.
+const SUDO_PATH = '/usr/bin/sudo'
 
 // Per pitfall M-07: 5s is tight on slow Mini PC I/O peaks; 10s is the
 // sweet-spot used by the Phase 45 broker subprocess timeouts.
@@ -137,6 +148,17 @@ function wrapExecError(err: unknown): Fail2banClientError {
 	if (code === 'ETIMEDOUT') {
 		return new Fail2banClientError('fail2ban-client timed out', 'timeout')
 	}
+	// Phase 262 WS3: with the `sudo -n` wrapper, a missing fail2ban-client no
+	// longer surfaces as spawn ENOENT (sudo itself spawns fine) — sudo exits
+	// non-zero with "command not found" on stderr. Map it back to the
+	// documented binary-missing contract (drives the UI service-state banner).
+	if (stderr.includes('command not found')) {
+		return new Fail2banClientError(
+			'fail2ban-client binary not found',
+			'binary-missing',
+			stderr,
+		)
+	}
 	// fail2ban-server down — two distinct stderr shapes:
 	//   "Could not find server"                 → newer fail2ban-client
 	//   "Failed to access socket path: …sock. Is fail2ban running?" → server
@@ -164,7 +186,11 @@ function wrapExecError(err: unknown): Fail2banClientError {
 export function makeFail2banClient(execFile: ExecFileFn): Fail2banClient {
 	async function spawn(args: string[]): Promise<{stdout: string; stderr: string}> {
 		try {
-			return await execFile(BINARY_PATH, args, {timeout: EXECFILE_TIMEOUT_MS})
+			// Phase 262 WS3 (LIVOS-043): `sudo -n /usr/bin/fail2ban-client <args>` —
+			// matches the scoped LIVINITYD_FAIL2BAN Cmnd_Alias shapes exactly.
+			return await execFile(SUDO_PATH, ['-n', BINARY_PATH, ...args], {
+				timeout: EXECFILE_TIMEOUT_MS,
+			})
 		} catch (err) {
 			throw wrapExecError(err)
 		}
