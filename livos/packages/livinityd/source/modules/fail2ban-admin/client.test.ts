@@ -147,6 +147,23 @@ async function runTests() {
 		console.log('  PASS Test 7: stderr "Could not find server" → kind=service-down')
 	}
 
+	// Test 7b: stderr socket-access error (DISABLED service) → kind='service-down'
+	{
+		// What a disabled/stopped fail2ban actually emits (verified live on the
+		// Mini PC 2026-06-09). Without the socket-path match this fell through to
+		// 'transient' → the UI looped "Fail2ban restarting…" forever.
+		const childErr: any = new Error('Command failed')
+		childErr.stderr =
+			'2026-06-09 02:06:57,531 fail2ban [123]: ERROR   Failed to access socket path: /var/run/fail2ban/fail2ban.sock. Is fail2ban running?\n'
+		childErr.stdout = ''
+		const client = makeFail2banClient(makeThrowingExec(childErr))
+		await assert.rejects(
+			() => client.listJails(),
+			(err: unknown) => err instanceof Fail2banClientError && err.kind === 'service-down',
+		)
+		console.log('  PASS Test 7b: stderr "Failed to access socket path" → kind=service-down')
+	}
+
 	// Test 8: stderr 'does not exist' → kind='jail-not-found'
 	{
 		const childErr: any = new Error('Command failed')

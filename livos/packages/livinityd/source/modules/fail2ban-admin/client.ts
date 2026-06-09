@@ -137,7 +137,18 @@ function wrapExecError(err: unknown): Fail2banClientError {
 	if (code === 'ETIMEDOUT') {
 		return new Fail2banClientError('fail2ban-client timed out', 'timeout')
 	}
-	if (stderr.includes('Could not find server')) {
+	// fail2ban-server down — two distinct stderr shapes:
+	//   "Could not find server"                 → newer fail2ban-client
+	//   "Failed to access socket path: …sock. Is fail2ban running?" → server
+	//        not running / socket absent (the message a DISABLED service emits;
+	//        without this match a disabled service fell through to 'transient' →
+	//        the UI looped "Fail2ban restarting…" forever instead of showing the
+	//        correct service-inactive state). Verified live on Mini PC 2026-06-09.
+	if (
+		stderr.includes('Could not find server') ||
+		stderr.includes('Failed to access socket path') ||
+		stderr.includes('Is fail2ban running?')
+	) {
 		return new Fail2banClientError('fail2ban server is down', 'service-down', stderr)
 	}
 	if (stderr.includes('does not exist')) {
