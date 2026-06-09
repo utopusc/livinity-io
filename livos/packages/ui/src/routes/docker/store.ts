@@ -29,7 +29,6 @@ export type SectionId =
 	| 'registry'
 	| 'activity'
 	| 'security'
-	| 'schedules'
 	| 'settings'
 
 /**
@@ -53,7 +52,6 @@ export const SECTION_IDS = [
 	// operator-cluster ordering: both surface real-time host signal. Placed
 	// BEFORE 'schedules' / 'settings' so it stays in the bottom-cluster.
 	'security',
-	'schedules',
 	'settings',
 ] as const satisfies readonly SectionId[]
 

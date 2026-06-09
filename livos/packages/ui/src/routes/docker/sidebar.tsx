@@ -67,7 +67,7 @@ export const SECTION_META: Record<SectionId, SectionMetaEntry> = {
 	// Label is 'Security' (NOT 'Fail2ban') per architecture research: leaves
 	// room for future audit/sessions/alerts sub-tabs without rename.
 	security: {icon: IconShieldLock, label: 'Security', comingPhase: 46},
-	schedules: {icon: IconClock, label: 'Schedules', comingPhase: 27},
+	// Schedules removed 2026-06-09 per operator (maintenance/backup cron panel).
 	settings: {icon: IconSettings, label: 'Settings', comingPhase: 29},
 }
 
