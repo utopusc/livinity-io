@@ -101,3 +101,49 @@ export async function isSessionRevoked(jti: string, runner?: QueryRunner | null)
 	)
 	return rows.length > 0
 }
+
+// A row as returned to the Settings → Security & Sessions panel.
+export type SessionRow = {
+	id: string
+	jti: string | null
+	device_name: string | null
+	ip_address: string | null
+	created_at: Date
+	last_seen_at: Date
+	expires_at: Date
+}
+
+/**
+ * List a user's currently-active (not revoked, not expired) sessions, newest
+ * first. DB-only: returns [] when no DB is available (legacy single-user).
+ */
+export async function listSessions(userId: string, runner?: QueryRunner | null): Promise<SessionRow[]> {
+	const db = resolveRunner(runner)
+	if (!db) return []
+	const {rows} = await db.query(
+		`SELECT id, jti, device_name, ip_address, created_at, last_seen_at, expires_at
+		 FROM sessions
+		 WHERE user_id = $1 AND revoked = FALSE AND expires_at > NOW()
+		 ORDER BY created_at DESC`,
+		[userId],
+	)
+	return rows as SessionRow[]
+}
+
+/**
+ * Revoke ONE specific session, scoped to the owning user so a caller can never
+ * revoke another user's session. Returns true when a row was actually revoked.
+ * No-op (false) when no DB is available.
+ */
+export async function revokeSession(
+	args: {sessionId: string; userId: string},
+	runner?: QueryRunner | null,
+): Promise<boolean> {
+	const db = resolveRunner(runner)
+	if (!db) return false
+	const {rowCount} = await db.query(
+		`UPDATE sessions SET revoked = TRUE WHERE id = $1 AND user_id = $2 AND revoked = FALSE`,
+		[args.sessionId, args.userId],
+	)
+	return (rowCount ?? 0) > 0
+}
