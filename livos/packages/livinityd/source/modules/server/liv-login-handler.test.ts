@@ -1,5 +1,10 @@
 /**
  * Phase 234-04 — liv-login-handler unit tests.
+ * Phase 262-01 (LIVOS-041) — session-gate tests: the handler now requires a
+ * VERIFIED LIVINITY_SESSION before any qr-mint traffic. The factory takes a
+ * second `verifySession` argument (wired to Server.verifySessionFull at the
+ * mount); without a cookie — or with one the verifier rejects — the handler
+ * returns 401 JSON, fires ZERO fetches to :3020, and sets NO cookie.
  *
  * Strategy: stand up a tiny `http.createServer` mock listening on 127.0.0.1
  * to impersonate the AionUi loopback at port 3020. Because the handler
@@ -9,12 +14,16 @@
  * matching URLs to that mock port (cleanest single-test pattern that keeps
  * the handler source unchanged).
  *
- * Coverage (per Plan 234-04 LOCKED spec):
- *   1. Flag missing -> enabled (302 + Set-Cookie forwarded)
- *   2. Flag = 'true' -> enabled
- *   3. Flag = 'false' -> disabled (302 to /liv/, no qr-token fetch)
- *   4. Flag = 'TRUE' or other -> enabled (non-'false' = enabled)
- *   5. qr-token mint failure -> safety hatch redirect to /liv/ without throw
+ * Coverage (per Plan 234-04 LOCKED spec, updated 262-01):
+ *   1. Flag missing -> enabled (302 + Set-Cookie forwarded)   [now with auth]
+ *   2. Flag = 'true' -> enabled                               [now with auth]
+ *   3. Flag = 'false' -> disabled (302 to /liv/, no qr fetch) [now with auth]
+ *   4. Flag = 'TRUE' or other -> enabled (non-'false')        [now with auth]
+ *   5. qr-token mint failure -> safety hatch redirect          [now with auth]
+ *   6. qr-login no Set-Cookie -> safety hatch redirect         [now with auth]
+ *   7. NO cookie -> 401, zero qr fetches, no Set-Cookie (LIVOS-041 RED)
+ *   8. cookie but verifySession rejects (null) -> 401, zero qr fetches
+ *   9. cookie but verifySession THROWS -> 401, zero qr fetches (fail-closed)
  */
 
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
@@ -29,6 +38,7 @@ interface MockResponse {
 	statusCode?: number
 	headers: Record<string, string | string[]>
 	redirectArg?: [number, string]
+	jsonBody?: unknown
 }
 
 function makeRes(): {res: Response; out: MockResponse} {
@@ -41,12 +51,19 @@ function makeRes(): {res: Response; out: MockResponse} {
 			out.redirectArg = [status, location]
 			out.statusCode = status
 		}),
+		status: vi.fn((code: number) => {
+			out.statusCode = code
+			return res
+		}),
+		json: vi.fn((body: unknown) => {
+			out.jsonBody = body
+		}),
 	} as unknown as Response
 	return {res, out}
 }
 
-function makeReq(): Request {
-	return {} as Request
+function makeReq(cookies?: Record<string, string>): Request {
+	return {cookies} as unknown as Request
 }
 
 function makeRedis(flagValue: string | null): Redis {
@@ -54,6 +71,19 @@ function makeRedis(flagValue: string | null): Redis {
 		get: vi.fn(async (_key: string) => flagValue),
 	} as unknown as Redis
 }
+
+// Phase 262-01 — stub verifier for the authenticated (happy-path) tests.
+// Mirrors Server.verifySessionFull's contract: resolves a payload object for
+// a valid session, null for an invalid one.
+const verifyOk = async () => ({loggedIn: true})
+const verifyReject = async () => null
+const verifyThrow = async () => {
+	throw new Error('verifier exploded')
+}
+
+// A request that carries a LIVINITY_SESSION cookie (token value is opaque to
+// the handler — the stub verifier decides).
+const authedReq = () => makeReq({LIVINITY_SESSION: 'session-token-x'})
 
 interface MockAionUiState {
 	qrTokenCalls: number
@@ -128,9 +158,9 @@ afterEach(async () => {
 
 describe('liv-login-handler', () => {
 	it('Test 1: flag missing -> enabled (302 + Set-Cookie forwarded)', async () => {
-		const handler = makeLivLoginHandler(makeRedis(null))
+		const handler = makeLivLoginHandler(makeRedis(null), verifyOk)
 		const {res, out} = makeRes()
-		await handler(makeReq(), res)
+		await handler(authedReq(), res)
 		expect(mockState.qrTokenCalls).toBe(1)
 		expect(mockState.qrLoginCalls).toBe(1)
 		expect(out.redirectArg).toEqual([302, '/liv/'])
@@ -140,9 +170,9 @@ describe('liv-login-handler', () => {
 	})
 
 	it("Test 2: flag = 'true' -> enabled", async () => {
-		const handler = makeLivLoginHandler(makeRedis('true'))
+		const handler = makeLivLoginHandler(makeRedis('true'), verifyOk)
 		const {res, out} = makeRes()
-		await handler(makeReq(), res)
+		await handler(authedReq(), res)
 		expect(mockState.qrTokenCalls).toBe(1)
 		expect(mockState.qrLoginCalls).toBe(1)
 		expect(out.redirectArg).toEqual([302, '/liv/'])
@@ -150,9 +180,9 @@ describe('liv-login-handler', () => {
 	})
 
 	it("Test 3: flag = 'false' -> disabled (302 to /liv/, no qr-token fetch)", async () => {
-		const handler = makeLivLoginHandler(makeRedis('false'))
+		const handler = makeLivLoginHandler(makeRedis('false'), verifyOk)
 		const {res, out} = makeRes()
-		await handler(makeReq(), res)
+		await handler(authedReq(), res)
 		expect(mockState.qrTokenCalls).toBe(0)
 		expect(mockState.qrLoginCalls).toBe(0)
 		expect(out.redirectArg).toEqual([302, '/liv/'])
@@ -162,9 +192,9 @@ describe('liv-login-handler', () => {
 	it("Test 4: flag = 'TRUE' or other value -> enabled (non-'false' = enabled)", async () => {
 		// 'TRUE' (uppercase) is NOT 'false' -> should be enabled per the
 		// "non-'false' = enabled" semantic. Same for arbitrary garbage.
-		const handler = makeLivLoginHandler(makeRedis('TRUE'))
+		const handler = makeLivLoginHandler(makeRedis('TRUE'), verifyOk)
 		const {res, out} = makeRes()
-		await handler(makeReq(), res)
+		await handler(authedReq(), res)
 		expect(mockState.qrTokenCalls).toBe(1)
 		expect(mockState.qrLoginCalls).toBe(1)
 		expect(out.redirectArg).toEqual([302, '/liv/'])
@@ -174,10 +204,10 @@ describe('liv-login-handler', () => {
 	it('Test 5: qr-token mint failure -> safety hatch redirect to /liv/ without throw', async () => {
 		mockState.qrTokenStatus = 500
 		mockState.qrTokenBody = {error: 'boom'}
-		const handler = makeLivLoginHandler(makeRedis(null))
+		const handler = makeLivLoginHandler(makeRedis(null), verifyOk)
 		const {res, out} = makeRes()
 		// Must NOT throw — handler is supposed to swallow + redirect
-		await expect(handler(makeReq(), res)).resolves.toBeUndefined()
+		await expect(handler(authedReq(), res)).resolves.toBeUndefined()
 		expect(mockState.qrTokenCalls).toBe(1)
 		expect(mockState.qrLoginCalls).toBe(0)
 		expect(out.redirectArg).toEqual([302, '/liv/'])
@@ -187,12 +217,53 @@ describe('liv-login-handler', () => {
 
 	it('Test 6: qr-login returns no Set-Cookie -> safety hatch redirect', async () => {
 		mockState.qrLoginSetCookie = null
-		const handler = makeLivLoginHandler(makeRedis(null))
+		const handler = makeLivLoginHandler(makeRedis(null), verifyOk)
 		const {res, out} = makeRes()
-		await expect(handler(makeReq(), res)).resolves.toBeUndefined()
+		await expect(handler(authedReq(), res)).resolves.toBeUndefined()
 		expect(mockState.qrTokenCalls).toBe(1)
 		expect(mockState.qrLoginCalls).toBe(1)
 		expect(out.redirectArg).toEqual([302, '/liv/'])
 		expect(out.headers['set-cookie']).toBeUndefined()
+	})
+
+	// ── Phase 262-01 (LIVOS-041) — session gate ─────────────────────────────
+
+	it('Test 7 (LIVOS-041): NO LIVINITY_SESSION cookie -> 401 JSON, ZERO qr fetches, NO Set-Cookie', async () => {
+		const handler = makeLivLoginHandler(makeRedis(null), verifyOk)
+		const {res, out} = makeRes()
+		await handler(makeReq(), res)
+		// 401 before ANY loopback traffic — the qr-mint flow must never fire.
+		expect(out.statusCode).toBe(401)
+		expect(out.jsonBody).toEqual({error: 'unauthorized'})
+		expect(mockState.qrTokenCalls).toBe(0)
+		expect(mockState.qrLoginCalls).toBe(0)
+		expect(out.headers['set-cookie']).toBeUndefined()
+		// And NO redirect — the catch-all failure redirect must not mint a
+		// path into /liv/ for unauthenticated callers.
+		expect(out.redirectArg).toBeUndefined()
+	})
+
+	it('Test 8 (LIVOS-041): cookie present but verifySession rejects (null) -> 401, zero qr fetches', async () => {
+		const handler = makeLivLoginHandler(makeRedis(null), verifyReject)
+		const {res, out} = makeRes()
+		await handler(authedReq(), res)
+		expect(out.statusCode).toBe(401)
+		expect(out.jsonBody).toEqual({error: 'unauthorized'})
+		expect(mockState.qrTokenCalls).toBe(0)
+		expect(mockState.qrLoginCalls).toBe(0)
+		expect(out.headers['set-cookie']).toBeUndefined()
+		expect(out.redirectArg).toBeUndefined()
+	})
+
+	it('Test 9 (LIVOS-041): verifySession THROWS -> 401 fail-closed, zero qr fetches', async () => {
+		const handler = makeLivLoginHandler(makeRedis(null), verifyThrow)
+		const {res, out} = makeRes()
+		await expect(handler(authedReq(), res)).resolves.toBeUndefined()
+		expect(out.statusCode).toBe(401)
+		expect(out.jsonBody).toEqual({error: 'unauthorized'})
+		expect(mockState.qrTokenCalls).toBe(0)
+		expect(mockState.qrLoginCalls).toBe(0)
+		expect(out.headers['set-cookie']).toBeUndefined()
+		expect(out.redirectArg).toBeUndefined()
 	})
 })
