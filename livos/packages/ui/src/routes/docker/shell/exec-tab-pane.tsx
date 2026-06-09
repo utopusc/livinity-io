@@ -89,7 +89,9 @@ export function ExecTabPane({containerName, envId, isActive}: ExecTabPaneProps) 
 		const params = new URLSearchParams({
 			container: containerName,
 			envId,
-			shell: 'bash',
+			// `sh` not `bash`: alpine/BusyBox images lack bash → exec closes 1011 →
+			// "[Disconnected]". sh is POSIX and present in ~all images. (2026-06-08)
+			shell: 'sh',
 			token,
 		})
 		const wsUrl = `${wsProtocol}//${window.location.hostname}${port}/ws/docker-exec?${params}`

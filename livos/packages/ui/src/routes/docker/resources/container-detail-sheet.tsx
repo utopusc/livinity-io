@@ -749,7 +749,12 @@ function StatsTab({containerName}: {containerName: string}) {
 // ---------------------------------------------------------------------------
 
 function ConsoleTab({containerName}: {containerName: string}) {
-	const [shell, setShell] = useState<'bash' | 'sh' | 'ash'>('bash')
+	// Default to `sh`, not `bash`: alpine/BusyBox images (adguard, redis, nginx, …)
+	// have no bash, so a bash exec fails with "executable file not found" → the
+	// socket closes 1011 → "[Disconnected]" before the user can do anything. sh is
+	// POSIX and present in nearly every image; the selector below still lets the
+	// user pick bash/ash on images that ship them. (Docker shell fix 2026-06-08.)
+	const [shell, setShell] = useState<'bash' | 'sh' | 'ash'>('sh')
 	const [user, setUser] = useState('')
 	const [connected, setConnected] = useState(false)
 
