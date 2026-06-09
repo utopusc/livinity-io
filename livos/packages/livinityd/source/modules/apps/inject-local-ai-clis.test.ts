@@ -76,13 +76,18 @@ test('Test 2b (LIVOS-001 / SC4): NO cred bind mount for .claude / .gemini', () =
 	assert.ok(!v.some((s) => s.includes('/.gemini:')), 'no .gemini cred mount')
 })
 
-test('Test 2c (SC4): proxy env injected — HTTPS_PROXY + placeholder key', () => {
+test('Test 2c (SC4 + LIVOS-046): proxy env injected — HTTPS_PROXY carries a per-app token + placeholder key', () => {
 	const compose = {services: {app: {image: 'foo'}}} as any
 	injectLocalAiClisConfig(compose, detected, APP_DIR, {requiresLocalAiClis: true})
 	const env = compose.services.app.environment
-	const proxyUrl = `http://${CREDPROXY_HOST}:${CREDPROXY_PORT}`
-	assert.equal(env.HTTPS_PROXY, proxyUrl)
-	assert.equal(env.HTTP_PROXY, proxyUrl)
+	// LIVOS-046 (262-04): the proxy URL now carries `app:<token>` userinfo so the
+	// CLIs' CONNECT presents Proxy-Authorization: Basic. Host:port still match the
+	// credproxy authority; the userinfo token is a 48-hex per-app secret.
+	const authority = `${CREDPROXY_HOST}:${CREDPROXY_PORT}`
+	const proxyRe = new RegExp(`^http://app:[0-9a-f]{48}@${authority.replace('.', '\\.')}$`)
+	assert.match(env.HTTPS_PROXY, proxyRe, 'HTTPS_PROXY carries app:<48-hex-token>@credproxy')
+	assert.match(env.HTTP_PROXY, proxyRe, 'HTTP_PROXY carries the same shape')
+	assert.equal(env.HTTPS_PROXY, env.HTTP_PROXY, 'both proxy vars share the one token')
 	assert.equal(env.ANTHROPIC_API_KEY, CREDPROXY_PLACEHOLDER_KEY)
 })
 

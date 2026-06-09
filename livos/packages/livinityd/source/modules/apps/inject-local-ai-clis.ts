@@ -10,6 +10,8 @@ import {
 	CREDPROXY_PORT,
 	CREDPROXY_HOST_GATEWAY,
 	CREDPROXY_PLACEHOLDER_KEY,
+	mintAppToken,
+	registerAppToken,
 } from './cred-egress-proxy.js'
 
 /**
@@ -263,11 +265,29 @@ export function injectLocalAiClisConfig(
 	// The container holds only the proxy URL + a PLACEHOLDER key (never a real
 	// token). The proxy injects the real OAuth bearer at the wire for the
 	// allowlisted AI hosts only. NODE_EXTRA_CA_CERTS makes node/the CLIs trust
-	// the intercepted leg. We do NOT overwrite an app-declared HTTPS_PROXY/key
-	// if it already set one (idempotent / non-clobbering).
-	const proxyUrl = `http://${CREDPROXY_HOST}:${CREDPROXY_PORT}`
-	if (getServiceEnv(service, 'HTTPS_PROXY') === undefined) setServiceEnv(service, 'HTTPS_PROXY', proxyUrl)
-	if (getServiceEnv(service, 'HTTP_PROXY') === undefined) setServiceEnv(service, 'HTTP_PROXY', proxyUrl)
+	// the intercepted leg.
+	//
+	// LIVOS-046 (262-04): source-IP alone is no longer sufficient to use the
+	// proxy. Mint a unique per-app token, register it UNBOUND (bind-on-first-use
+	// — the container's compose-network IP is not known at inject time, so the
+	// token claims its source IP on the container's first CONNECT and is pinned
+	// thereafter; any OTHER container presenting the same token is 403'd), and
+	// deliver it ONLY via the proxy-URL userinfo so the CLIs' CONNECT carries
+	// `Proxy-Authorization: Basic base64(app:<token>)`. We (re)issue whenever the
+	// proxy URL is unset OR already ours (a reapply reads the on-disk compose with
+	// a stale token that the in-memory registry lost across a livinityd restart —
+	// re-minting keeps disk + registry in sync). An app-declared, NON-ours
+	// HTTPS_PROXY is left untouched (non-clobbering).
+	const existingProxy = getServiceEnv(service, 'HTTPS_PROXY')
+	const proxyAuthority = `${CREDPROXY_HOST}:${CREDPROXY_PORT}`
+	const isOursOrUnset = existingProxy === undefined || existingProxy.includes(proxyAuthority)
+	if (isOursOrUnset) {
+		const appToken = mintAppToken()
+		registerAppToken(appToken) // unbound → bind-on-first-use to the container's source IP
+		const proxyUrl = `http://app:${appToken}@${proxyAuthority}`
+		setServiceEnv(service, 'HTTPS_PROXY', proxyUrl)
+		setServiceEnv(service, 'HTTP_PROXY', proxyUrl)
+	}
 	if (getServiceEnv(service, 'ANTHROPIC_API_KEY') === undefined)
 		setServiceEnv(service, 'ANTHROPIC_API_KEY', CREDPROXY_PLACEHOLDER_KEY)
 	if (getServiceEnv(service, 'NODE_EXTRA_CA_CERTS') === undefined)

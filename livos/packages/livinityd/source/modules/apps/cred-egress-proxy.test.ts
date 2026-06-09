@@ -23,6 +23,11 @@ import {
 	mintLeafCert,
 	buildLeafContexts,
 	createCredEgressProxy,
+	registerAppToken,
+	revokeAppToken,
+	mintAppToken,
+	checkAppToken,
+	parseAppToken,
 } from './cred-egress-proxy.js'
 
 const execFileAsync = promisify(execFile)
@@ -61,10 +66,15 @@ async function connectThroughProxy(opts: {
 	host: string
 	caCert: string
 	expectFailClosed?: boolean
+	/** Per-app token (LIVOS-046) sent as Proxy-Authorization: Basic base64(app:token). */
+	token?: string
 }): Promise<{status: number | null; body: string; connectFailed: boolean}> {
 	return new Promise((resolve, reject) => {
 		const socket = net.connect(opts.proxyPort, '127.0.0.1', () => {
-			socket.write(`CONNECT ${opts.host}:443 HTTP/1.1\r\nHost: ${opts.host}:443\r\n\r\n`)
+			const proxyAuth = opts.token
+				? `Proxy-Authorization: Basic ${Buffer.from(`app:${opts.token}`).toString('base64')}\r\n`
+				: ''
+			socket.write(`CONNECT ${opts.host}:443 HTTP/1.1\r\nHost: ${opts.host}:443\r\n${proxyAuth}\r\n`)
 		})
 		let connectBuf = ''
 		const onConnectData = (chunk: Buffer) => {
@@ -177,6 +187,11 @@ test('Test 4: isFromBridge accepts docker-bridge IPs, rejects everything else', 
 	// docker default bridge range 172.16.0.0/12.
 	assert.equal(isFromBridge('172.17.0.2', '172.16.0.0/12'), true)
 	assert.equal(isFromBridge('172.18.0.5', '172.16.0.0/12'), true)
+	// LIVOS-046 (262-04): a per-app compose-network source (br-*, 172.18.x) MUST
+	// still pass — the /12 must NOT be narrowed to a single /16 that would 403 the
+	// legitimate requiresLocalAiClis container. The TOKEN is the primary auth.
+	assert.equal(isFromBridge('172.18.0.2', '172.16.0.0/12'), true)
+	assert.equal(isFromBridge('172.31.255.254', '172.16.0.0/12'), true)
 	// Outside the subnet → refused.
 	assert.equal(isFromBridge('10.0.0.5', '172.16.0.0/12'), false)
 	assert.equal(isFromBridge('8.8.8.8', '172.16.0.0/12'), false)
@@ -275,8 +290,11 @@ test('Test 8: MITM terminates TLS for an allowlisted host and injects the real b
 
 	await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', () => r()))
 	const port = (proxy.address() as net.AddressInfo).port
+	// LIVOS-046 (262-04): the CONNECT now also requires a known per-app token.
+	const token = mintAppToken()
+	registerAppToken(token) // unbound → bind-on-first-use to the loopback test client
 	try {
-		const res = await connectThroughProxy({proxyPort: port, host: 'api.anthropic.com', caCert})
+		const res = await connectThroughProxy({proxyPort: port, host: 'api.anthropic.com', caCert, token})
 		assert.equal(res.connectFailed, false, 'CONNECT should be accepted (200)')
 		// The placeholder the client sent must be REPLACED with the real bearer.
 		assert.equal(forwardedAuth, 'Bearer sk-ant-oat-REAL-WIRE')
@@ -285,6 +303,7 @@ test('Test 8: MITM terminates TLS for an allowlisted host and injects the real b
 		assert.equal(res.status, 200)
 		assert.ok(res.body.includes('ok-from-upstream'))
 	} finally {
+		revokeAppToken(token)
 		proxy.close()
 		upstream.close()
 		await fse.remove(dir)
@@ -308,11 +327,16 @@ test('Test 9: a non-allowlisted host CONNECT is refused — never MITM, never pa
 	})
 	await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', () => r()))
 	const port = (proxy.address() as net.AddressInfo).port
+	// Present a valid token so the request reaches (and is rejected by) the
+	// host-allowlist check, not merely the token gate.
+	const token = mintAppToken()
+	registerAppToken(token)
 	try {
-		const res = await connectThroughProxy({proxyPort: port, host: 'attacker.example', caCert})
+		const res = await connectThroughProxy({proxyPort: port, host: 'attacker.example', caCert, token})
 		assert.equal(res.connectFailed, true, 'non-allowlisted CONNECT must be refused')
 		assert.equal(forwarded, false, 'no upstream leg for a denied host')
 	} finally {
+		revokeAppToken(token)
 		proxy.close()
 		await fse.remove(dir)
 	}
@@ -357,12 +381,143 @@ test('Test 11: allowlisted host with NO leaf context fails closed (no unauthenti
 	})
 	await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', () => r()))
 	const port = (proxy.address() as net.AddressInfo).port
+	// Valid token so the request reaches the leaf-context check (which must then
+	// fail closed because the map is empty).
+	const token = mintAppToken()
+	registerAppToken(token)
 	try {
-		const res = await connectThroughProxy({proxyPort: port, host: 'api.anthropic.com', caCert})
+		const res = await connectThroughProxy({proxyPort: port, host: 'api.anthropic.com', caCert, token})
 		assert.equal(res.connectFailed, true, 'missing leaf cert must fail closed (CONNECT refused)')
 		assert.equal(forwarded, false, 'no upstream leg — the placeholder key must NOT leak upstream')
 	} finally {
+		revokeAppToken(token)
 		proxy.close()
 		await fse.remove(dir)
+	}
+})
+
+// ─── LIVOS-046 (262-04): per-app token gate (bind-on-first-use) ───────────────
+
+// ── Test 12: checkAppToken bind-on-first-use + wrong-source + revoke ──────────
+test('Test 12: checkAppToken binds on first use, pins to that source IP, and honours revoke', () => {
+	const token = mintAppToken()
+	assert.equal(token.length, 48, 'mintAppToken → 48 hex chars (24 random bytes)')
+
+	// Unknown / absent token → false (fail-closed).
+	assert.equal(checkAppToken(token, '172.18.0.2'), false, 'unregistered token rejected')
+	assert.equal(checkAppToken(null, '172.18.0.2'), false, 'null token rejected')
+
+	// Register UNBOUND → first CONNECT claims its source IP (bind-on-first-use).
+	registerAppToken(token)
+	assert.equal(checkAppToken(token, '172.18.0.2'), true, 'first use binds + passes')
+	// Same token from the SAME source → still passes.
+	assert.equal(checkAppToken(token, '172.18.0.2'), true, 'bound source passes')
+	// Same token from a DIFFERENT source → 403 (pinned).
+	assert.equal(checkAppToken(token, '172.18.0.9'), false, 'different source after bind rejected')
+	// IPv4-mapped-IPv6 form of the bound source still matches.
+	assert.equal(checkAppToken(token, '::ffff:172.18.0.2'), true, 'IPv4-mapped form of bound source matches')
+
+	// Revoke → token no longer valid from any source.
+	revokeAppToken(token)
+	assert.equal(checkAppToken(token, '172.18.0.2'), false, 'revoked token rejected')
+})
+
+// ── Test 12b: pre-binding a token pins it without a first-use claim ───────────
+test('Test 12b: registerAppToken with an explicit bridgeIp pins immediately', () => {
+	const token = mintAppToken()
+	registerAppToken(token, '172.18.0.5')
+	try {
+		assert.equal(checkAppToken(token, '172.18.0.6'), false, 'wrong source rejected even on first use when pre-bound')
+		assert.equal(checkAppToken(token, '172.18.0.5'), true, 'bound source passes')
+	} finally {
+		revokeAppToken(token)
+	}
+})
+
+// ── Test 13: parseAppToken extracts the token from both delivery shapes ───────
+test('Test 13: parseAppToken reads Proxy-Authorization Basic and X-Livinity-App-Token', () => {
+	const basic = `Basic ${Buffer.from('app:tok-ABC').toString('base64')}`
+	assert.equal(parseAppToken({'proxy-authorization': basic}), 'tok-ABC')
+	// Header fallback.
+	assert.equal(parseAppToken({'x-livinity-app-token': 'tok-XYZ'}), 'tok-XYZ')
+	// Neither present → null.
+	assert.equal(parseAppToken({}), null)
+	// Basic with no colon → the whole decoded value is the token.
+	assert.equal(parseAppToken({'proxy-authorization': `Basic ${Buffer.from('justtoken').toString('base64')}`}), 'justtoken')
+	// Empty credential → null.
+	assert.equal(parseAppToken({'proxy-authorization': `Basic ${Buffer.from('app:').toString('base64')}`}), null)
+})
+
+// ── Test 14: CONNECT with NO token is refused (403) ──────────────────────────
+test('Test 14: a CONNECT with no per-app token is refused (token is now mandatory)', async () => {
+	const {dir, caCert, caKey} = await makeTestCa()
+	const leafContexts = await buildLeafContexts(['api.anthropic.com'], caCert, caKey)
+	let forwarded = false
+	const proxy = createCredEgressProxy({
+		creds: {claudeDir: null, geminiDir: null},
+		bridgeSubnet: '127.0.0.0/8', // loopback test client passes the coarse bridge gate
+		leafContexts,
+		readBearer: async () => 'sk-ant-oat-REAL',
+		forwardRequest: () => {
+			forwarded = true
+			return {on: () => undefined, write: () => true, end: () => undefined} as unknown as http.ClientRequest
+		},
+	})
+	await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', () => r()))
+	const port = (proxy.address() as net.AddressInfo).port
+	try {
+		// No token presented → 403 even though source IP + host are allowed.
+		const res = await connectThroughProxy({proxyPort: port, host: 'api.anthropic.com', caCert})
+		assert.equal(res.connectFailed, true, 'a CONNECT without a per-app token must be refused')
+		assert.equal(forwarded, false, 'no upstream leg for a tokenless CONNECT')
+	} finally {
+		proxy.close()
+		await fse.remove(dir)
+	}
+})
+
+// ── Test 15: CONNECT with an UNKNOWN token is refused (403) ───────────────────
+test('Test 15: a CONNECT with an unknown per-app token is refused', async () => {
+	const {dir, caCert, caKey} = await makeTestCa()
+	const leafContexts = await buildLeafContexts(['api.anthropic.com'], caCert, caKey)
+	let forwarded = false
+	const proxy = createCredEgressProxy({
+		creds: {claudeDir: null, geminiDir: null},
+		bridgeSubnet: '127.0.0.0/8',
+		leafContexts,
+		readBearer: async () => 'sk-ant-oat-REAL',
+		forwardRequest: () => {
+			forwarded = true
+			return {on: () => undefined, write: () => true, end: () => undefined} as unknown as http.ClientRequest
+		},
+	})
+	await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', () => r()))
+	const port = (proxy.address() as net.AddressInfo).port
+	try {
+		// A well-formed but never-registered token → 403.
+		const res = await connectThroughProxy({proxyPort: port, host: 'api.anthropic.com', caCert, token: mintAppToken()})
+		assert.equal(res.connectFailed, true, 'an unknown per-app token must be refused')
+		assert.equal(forwarded, false, 'no upstream leg for an unknown token')
+	} finally {
+		proxy.close()
+		await fse.remove(dir)
+	}
+})
+
+// ── Test 16: per-app compose-network source (172.18.x) with a valid token passes ─
+test('Test 16: isFromBridge ACCEPTS a per-app br-* source — token, not a narrowed CIDR, is the auth', () => {
+	// The legitimate requiresLocalAiClis container sits on a per-app br-* network
+	// (e.g. 172.18.0.2). The /12 bridge gate MUST accept it; a /16 narrowed to
+	// docker0 (172.17.0.0/16) would 403 the very feature this protects.
+	assert.equal(isFromBridge('172.18.0.2', '172.16.0.0/12'), true)
+	assert.equal(isFromBridge('172.17.0.2', '172.16.0.0/12'), true) // docker0
+	assert.equal(isFromBridge('10.0.0.5', '172.16.0.0/12'), false) // non-bridge/public
+	// The token check then pins identity regardless of which bridge the source is on.
+	const token = mintAppToken()
+	registerAppToken(token)
+	try {
+		assert.equal(checkAppToken(token, '172.18.0.2'), true, 'a per-app source binds + passes with a valid token')
+	} finally {
+		revokeAppToken(token)
 	}
 })
