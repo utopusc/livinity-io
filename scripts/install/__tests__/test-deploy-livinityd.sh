@@ -1020,8 +1020,11 @@ else
     fail "Bug #9: pipeline order broken (streaming=${bug9_a:-MISSING}, google_chrome=${bug9_b:-MISSING}, docker_images=${bug9_c:-MISSING})"
 fi
 
-# ── TEST_BUG_10_DESKTOP_USER: _dld_create_desktop_user defined + sudoers ────
-info "TEST_BUG_10_DESKTOP_USER: _dld_create_desktop_user helper + visudo validation (Bug #10 — bruce user + sudoers)"
+# ── TEST_BUG_10_DESKTOP_USER: _dld_create_desktop_user defined + groups ─────
+# Phase 262 WS3 (LIVOS-043): the Bug #10-era assertions REQUIRING the blanket
+# /etc/sudoers.d/99-<user> NOPASSWD drop-in are INVERTED — the helper must now
+# NOT write any sudoers file and must actively remove a legacy drop-in.
+info "TEST_BUG_10_DESKTOP_USER: _dld_create_desktop_user helper (Bug #10 user/groups + LIVOS-043 no-blanket-sudoers)"
 if grep -qE "^_dld_create_desktop_user\(\)" "$DEPLOY_SH"; then
     pass "Bug #10: _dld_create_desktop_user function defined"
 else
@@ -1042,20 +1045,28 @@ if awk '/^_dld_create_desktop_user\(\)/,/^}/' "$DEPLOY_SH" | grep -q "usermod -a
 else
     fail "Bug #10: helper body missing usermod -aG"
 fi
-if awk '/^_dld_create_desktop_user\(\)/,/^}/' "$DEPLOY_SH" | grep -q "/etc/sudoers.d/99-"; then
-    pass "Bug #10: helper body writes /etc/sudoers.d/99-<user>"
+# LIVOS-043 (262 WS3) — INVERTED from the Bug #10 era: the helper must NOT
+# write ANY sudoers file (no `> .../sudoers...` redirect, no tmp+visudo+mv
+# plumbing). The blanket 99-<user> drop-in silently subsumed the scoped
+# Phase-192 fragment and made every bruce-level bug a root bug.
+if awk '/^_dld_create_desktop_user\(\)/,/^}/' "$DEPLOY_SH" | grep -qE '> .*sudoers'; then
+    fail "LIVOS-043: helper body still WRITES a sudoers file (blanket drop-in regression)"
 else
-    fail "Bug #10: helper body missing /etc/sudoers.d/99- drop-in"
+    pass "LIVOS-043: helper body has NO sudoers file write (blanket 99-<user> drop-in gone)"
 fi
-if awk '/^_dld_create_desktop_user\(\)/,/^}/' "$DEPLOY_SH" | grep -q "visudo -cf"; then
-    pass "Bug #10: helper body validates sudoers via visudo -cf"
+# LIVOS-043 — re-provision must actively REMOVE a legacy 99-<user> drop-in
+# (a code change alone does not clean an already-provisioned box).
+if awk '/^_dld_create_desktop_user\(\)/,/^}/' "$DEPLOY_SH" | grep -qF 'rm -f "/etc/sudoers.d/99-${user}"'; then
+    pass "LIVOS-043: re-provision actively removes legacy /etc/sudoers.d/99-<user> drop-in (rm -f)"
 else
-    fail "Bug #10: helper body missing visudo -cf validation"
+    fail "LIVOS-043: helper missing rm -f cleanup of legacy /etc/sudoers.d/99-<user> drop-in"
 fi
-if awk '/^_dld_create_desktop_user\(\)/,/^}/' "$DEPLOY_SH" | grep -q "NOPASSWD:ALL"; then
-    pass "Bug #10: sudoers drop-in is NOPASSWD:ALL"
+# LIVOS-043 — the literal NOPASSWD:ALL must appear ZERO times in the WHOLE
+# deploy script (including comments — reworded in 262-03).
+if grep -q "NOPASSWD:ALL" "$DEPLOY_SH"; then
+    fail "LIVOS-043: literal NOPASSWD:ALL still present in deploy-livinityd.sh"
 else
-    fail "Bug #10: sudoers drop-in missing NOPASSWD:ALL"
+    pass "LIVOS-043: zero NOPASSWD:ALL occurrences in deploy-livinityd.sh (incl. comments)"
 fi
 # D-104-NO-PROD-IMPACT: existing _DLD_LIVOS_USER:-root default UNTOUCHED
 if grep -qE '_DLD_LIVOS_USER=.*:-root' "$DEPLOY_SH"; then

@@ -96,6 +96,59 @@ else
     fail "no Cmnd_Alias entries (file is empty or comment-only)"
 fi
 
+# ── LIVOS-043 (262 WS3): scoped LIVINITYD_FAIL2BAN fail2ban grant ────────────
+# The blanket 99-bruce drop-in provisioning is gone (deploy-livinityd.sh);
+# the fail2ban Settings panel must keep working via this narrow alias invoked
+# with `sudo -n` from fail2ban-admin/client.ts.
+info "LIVOS-043: LIVINITYD_FAIL2BAN scoped fail2ban grant"
+if grep -qE "^Cmnd_Alias[[:space:]]+LIVINITYD_FAIL2BAN[[:space:]]*=" "$SUDOERS_FILE"; then
+    pass "LIVOS-043: Cmnd_Alias LIVINITYD_FAIL2BAN present"
+else
+    fail "LIVOS-043: Cmnd_Alias LIVINITYD_FAIL2BAN missing"
+fi
+
+# Alias must grant ONLY /usr/bin/fail2ban-client subcommand shapes — exactly
+# the argv set fail2ban-admin/client.ts builds. NEVER a bare
+# `/usr/bin/fail2ban-client *` (that would also grant the global-flush
+# `unban`, config reload, `set ... action*`, etc.).
+f2b_line=$(grep -E "^Cmnd_Alias[[:space:]]+LIVINITYD_FAIL2BAN[[:space:]]*=" "$SUDOERS_FILE" \
+    | sed -E 's/^Cmnd_Alias[[:space:]]+LIVINITYD_FAIL2BAN[[:space:]]*=[[:space:]]*//')
+f2b_bad=0
+IFS=',' read -ra f2b_members <<< "$f2b_line"
+for m in "${f2b_members[@]}"; do
+    m_trimmed=$(echo "$m" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')
+    case "$m_trimmed" in
+        "/usr/bin/fail2ban-client status") ;;
+        "/usr/bin/fail2ban-client status *") ;;
+        "/usr/bin/fail2ban-client set * banip *") ;;
+        "/usr/bin/fail2ban-client set * unbanip *") ;;
+        "/usr/bin/fail2ban-client set * addignoreip *") ;;
+        *)
+            fail "LIVOS-043: unexpected LIVINITYD_FAIL2BAN member: '$m_trimmed'"
+            f2b_bad=1
+            ;;
+    esac
+done
+if [[ $f2b_bad -eq 0 && -n "$f2b_line" ]]; then
+    pass "LIVOS-043: LIVINITYD_FAIL2BAN grants ONLY the exact fail2ban-client status/banip/unbanip/addignoreip shapes"
+fi
+
+# Alias must be wired into a bruce ALL=(root) NOPASSWD: user-spec line
+# (fail2ban-client talks to the root-owned /var/run/fail2ban socket).
+if grep -qE "^bruce[[:space:]]+ALL=\(root\)[[:space:]]+NOPASSWD:.*LIVINITYD_FAIL2BAN" "$SUDOERS_FILE"; then
+    pass "LIVOS-043: LIVINITYD_FAIL2BAN referenced by a bruce ALL=(root) NOPASSWD: user-spec"
+else
+    fail "LIVOS-043: LIVINITYD_FAIL2BAN not referenced by a bruce ALL=(root) line"
+fi
+
+# Re-assert the no-blanket invariant FILE-WIDE (AC-192-01-3 covers active
+# rules; this LIVOS-043 lock also covers comments — header reworded in 262-03).
+if grep -qE "NOPASSWD: ?ALL([[:space:]]|,|$)" "$SUDOERS_FILE"; then
+    fail "LIVOS-043: blanket NOPASSWD ALL text present (active rule or comment)"
+else
+    pass "LIVOS-043: zero blanket NOPASSWD ALL occurrences anywhere in fragment"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo ""
 echo "─────────────────────────────────────────"
