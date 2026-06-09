@@ -28,6 +28,10 @@ import {
 import type {InstallProgressEvent} from './install-contracts.js'
 // Phase 260-01 (SC1) — reconcile wedged transient app states against Docker.
 import {isTransientAppState, reconcileTransientAppState} from './app-state-reconcile.js'
+// Phase 262-02 (LIVOS-042) — pre-dispatch admin gate for the v37 install path
+// (defense-in-depth under adminProcedure; keeps the path safe if the procedure
+// declaration is ever downgraded).
+import {assertInstallAllowed, InstallForbidden} from './install-admin-gate.js'
 
 export const appStore = router({
 	// Returns builtin apps (priority apps with official Docker images)
@@ -731,7 +735,11 @@ export const apps = router({
 	// Legacy `section='app'` continues to flow through `apps.install`
 	// above — Docker compose handler is unchanged.
 
-	installV37: privateProcedure
+	// Phase 262-02 (LIVOS-042): adminProcedure — native/script/apt-repo installs
+	// are inherently privileged (sudo apt sinks, bash-as-bruce). LIV_API_KEY and
+	// legacy single-user map to admin via requireRole's ctx.legacySingleUser
+	// admit, so the operator flow is unaffected.
+	installV37: adminProcedure
 		.input(
 			z.object({
 				appId: z.string(),
@@ -761,6 +769,39 @@ export const apps = router({
 					message: 'PostgreSQL pool unavailable',
 				}
 			}
+
+			// Phase 262-02 (LIVOS-042) — privileged sections NEVER trust the client
+			// manifest: re-fetch by appId from the trusted catalog; fail closed when
+			// unresolvable. The 256-04 ctx-resolved admin pattern (legacy single-user
+			// is admin-equivalent ONLY via the explicit legacySingleUser flag).
+			const isAdmin = ctx.currentUser ? ctx.currentUser.role === 'admin' : ctx.legacySingleUser === true
+			let manifest = input.manifest
+			if (input.section === 'native') {
+				const trusted = await ctx.apps.fetchPlatformAppManifest(input.appId)
+				if (!trusted) {
+					return {
+						ok: false as const,
+						code: 'manifest_unresolved' as const,
+						message: `native install refused: no trusted catalog manifest for ${input.appId}`,
+					}
+				}
+				manifest = trusted
+			}
+			// Defense-in-depth under adminProcedure (mirrors the apps.ts legacy-path
+			// gate call): InstallForbidden surfaces as FORBIDDEN, not a 500.
+			try {
+				assertInstallAllowed({
+					isAdmin,
+					isGeneratedTemplate: false,
+					manifest: manifest as {requiresLocalAiClis?: boolean; requiresAiProvider?: boolean},
+				})
+			} catch (err) {
+				if (err instanceof InstallForbidden) {
+					throw new TRPCError({code: 'FORBIDDEN', message: err.message})
+				}
+				throw err
+			}
+
 			const userId = ctx.currentUser?.id ?? 'admin'
 			const installCtx = buildInstallContext({
 				userId,
@@ -789,7 +830,9 @@ export const apps = router({
 					name: input.name,
 					section: input.section,
 					category: input.category,
-					manifest: input.manifest,
+					// LIVOS-042: the SERVER-resolved manifest (trusted catalog row for
+					// native) — never input.manifest for privileged sections.
+					manifest,
 					iconUrl: input.iconUrl,
 				},
 				installCtx,
@@ -807,7 +850,9 @@ export const apps = router({
 			return outcome
 		}),
 
-	uninstallV37: privateProcedure
+	// Phase 262-02 (LIVOS-042): adminProcedure (mirrors installV37) — uninstall
+	// of privileged sections removes .desktop files / apt state as the OS user.
+	uninstallV37: adminProcedure
 		.input(
 			z.object({
 				appId: z.string(),

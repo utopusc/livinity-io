@@ -1102,6 +1102,37 @@ export default class Apps {
 		}
 	}
 
+	/**
+	 * Phase 262-02 (LIVOS-042) — fetch the TRUSTED catalog manifest for a v37
+	 * install by appId. Privileged install methods (native apt/deb/apt-repo/
+	 * appimage/script) must NEVER trust a client-supplied manifest; routes.ts
+	 * installV37 discards the client `manifest` for section==='native' and
+	 * re-fetches it here — same endpoint + X-Api-Key plumbing as
+	 * fetchPlatformTemplate above. Fails closed: returns null on missing api
+	 * key, fetch failure, no row, or a row without a manifest jsonb.
+	 */
+	async fetchPlatformAppManifest(appId: string): Promise<Record<string, unknown> | null> {
+		try {
+			const apiKey = await this.#livinityd.ai.redis.get(REDIS_PLATFORM_API_KEY)
+			if (!apiKey) return null
+
+			const response = await fetch(`https://livinity.io/api/apps/${encodeURIComponent(appId)}`, {
+				headers: {'X-Api-Key': apiKey},
+			})
+			if (!response.ok) return null
+
+			const data = (await response.json()) as any
+			if (!data || typeof data !== 'object') return null
+			// The catalog row carries the section-specific manifest as a jsonb blob
+			// (same `data.manifest` the platform install path above consumes).
+			if (!data.manifest || typeof data.manifest !== 'object') return null
+			return data.manifest as Record<string, unknown>
+		} catch (error) {
+			this.logger.error(`Failed to fetch platform manifest for ${appId}`, error)
+			return null
+		}
+	}
+
 	// ─── Platform Event Reporting ────────────────────────────────────
 	// Reports install/uninstall events to livinity.io platform API (server-to-server)
 
