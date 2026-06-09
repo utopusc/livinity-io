@@ -66,6 +66,17 @@ export function SecuritySessionsSection() {
 	const [selectedJail, setSelectedJail] = useState<string | null>(null)
 	const [unbanCtx, setUnbanCtx] = useState<UnbanContext | null>(null)
 	const [signOutOpen, setSignOutOpen] = useState(false)
+	const [revokeTarget, setRevokeTarget] = useState<{id: string; label: string} | null>(null)
+
+	// The operator's own active login sessions (multi-user only). hasDb=false in
+	// legacy single-user mode → we fall back to the static "this device" row.
+	const sessionsQuery = trpcReact.user.listSessions.useQuery(undefined, {staleTime: 10_000})
+	const revokeSessionMut = trpcReact.user.revokeSession.useMutation({
+		onSuccess: () => {
+			setRevokeTarget(null)
+			void sessionsQuery.refetch()
+		},
+	})
 
 	// 5s polling cadence; staleTime = half-interval so React Query flips
 	// cached→fresh ~once/cycle (mirrors docker SecuritySection).
@@ -273,23 +284,97 @@ export function SecuritySessionsSection() {
 							</span>
 						}
 					/>
-					<FieldRow
-						label='This device'
-						value={<span className='text-[color:var(--fg-mute)]'>You are signed in on this device.</span>}
-						trailing={
-							<Button
-								variant='destructive'
-								size='sm'
-								onClick={() => setSignOutOpen(true)}
-								disabled={logoutMutation.isPending}
-							>
-								{logoutMutation.isPending ? 'Signing out…' : 'Sign out'}
-							</Button>
-						}
-					/>
+					{sessionsQuery.isLoading ? (
+						<div className='flex items-center justify-center py-4'>
+							<Loader2 className='size-4 animate-spin text-[color:var(--fg-mute)]' />
+						</div>
+					) : sessionsQuery.data?.hasDb && sessionsQuery.data.sessions.length > 0 ? (
+						sessionsQuery.data.sessions.map((s) => {
+							const device = s.deviceName ?? 'Unknown device'
+							const meta = [s.ipAddress, `signed in ${new Date(s.createdAt).toLocaleDateString()}`]
+								.filter(Boolean)
+								.join(' · ')
+							return (
+								<FieldRow
+									key={s.id}
+									label={device}
+									value={
+										<span className='flex flex-wrap items-center gap-2 text-[12px] text-[color:var(--fg-mute)]'>
+											{s.current ? (
+												<span className='rounded-full bg-[color:var(--bg-2)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--fg)]'>
+													This device
+												</span>
+											) : null}
+											<span>{meta}</span>
+										</span>
+									}
+									trailing={
+										s.current ? (
+											<Button
+												variant='destructive'
+												size='sm'
+												onClick={() => setSignOutOpen(true)}
+												disabled={logoutMutation.isPending}
+											>
+												{logoutMutation.isPending ? 'Signing out…' : 'Sign out'}
+											</Button>
+										) : (
+											<Button
+												variant='destructive'
+												size='sm'
+												onClick={() => setRevokeTarget({id: s.id, label: device})}
+												disabled={revokeSessionMut.isPending}
+											>
+												Revoke
+											</Button>
+										)
+									}
+								/>
+							)
+						})
+					) : (
+						<FieldRow
+							label='This device'
+							value={<span className='text-[color:var(--fg-mute)]'>You are signed in on this device.</span>}
+							trailing={
+								<Button
+									variant='destructive'
+									size='sm'
+									onClick={() => setSignOutOpen(true)}
+									disabled={logoutMutation.isPending}
+								>
+									{logoutMutation.isPending ? 'Signing out…' : 'Sign out'}
+								</Button>
+							}
+						/>
+					)}
 				</FieldCard>
-				<p className='px-1 text-[12px] text-[color:var(--fg-faint)]'>Per-session management coming soon.</p>
 			</div>
+
+			{/* Revoke a non-current session — confirm before killing it. */}
+			<AlertDialog open={!!revokeTarget} onOpenChange={(o) => { if (!o) setRevokeTarget(null) }}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Revoke this session?</AlertDialogTitle>
+						<AlertDialogDescription>
+							This session will be signed out on its next request and cannot be undone.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							variant='destructive'
+							onClick={(e) => {
+								e.preventDefault()
+								if (revokeTarget) revokeSessionMut.mutate({sessionId: revokeTarget.id})
+							}}
+							disabled={revokeSessionMut.isPending}
+						>
+							{revokeSessionMut.isPending ? 'Revoking…' : 'Revoke'}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 
 			{/* Unban confirm (reused leaf) */}
 			{unbanCtx ? (

@@ -62,6 +62,10 @@ export const httpOnlyPaths = [
 	'user.updateUserRole',
 	'user.toggleUserActive',
 	'user.deleteUser',
+	// Settings → Security & Sessions: per-session list + revoke. HTTP so the
+	// current-session jti reads from the request header and revoke survives a WS reconnect.
+	'user.listSessions',
+	'user.revokeSession',
 	'apps.isMultiUserEnabled',
 	'apps.setMultiUserEnabled',
 	'apps.shareApp',

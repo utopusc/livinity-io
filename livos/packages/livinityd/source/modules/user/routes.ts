@@ -25,7 +25,7 @@ import {
 	deleteUserPreference,
 	deleteUser,
 } from '../database/index.js'
-import {createSession, revokeSessionsForUser} from '../database/sessions.js'
+import {createSession, revokeSessionsForUser, listSessions as listUserSessions, revokeSession as revokeUserSession} from '../database/sessions.js'
 
 const ONE_SECOND = 1000
 const ONE_MINUTE = 60 * ONE_SECOND
@@ -695,6 +695,51 @@ export default router({
 				throw new TRPCError({code: 'NOT_FOUND', message: 'User not found'})
 			}
 
+			return {success: true}
+		}),
+
+	// Private - list the current user's own active sessions (Settings → Security &
+	// Sessions). Multi-user only; legacy single-user has no sessions table so this
+	// returns an empty list. The session matching the current request is flagged
+	// `current` so the UI can label "this device" and avoid a self-revoke.
+	listSessions: privateProcedure.query(async ({ctx}) => {
+		if (!ctx.currentUser) return {hasDb: false, sessions: []}
+		let currentJti: string | null = null
+		try {
+			const token = ctx.request?.headers.authorization?.split(' ')[1]
+			if (token) {
+				const verified = await ctx.server.verifyToken(token)
+				currentJti = verified?.jti ?? null
+			}
+		} catch {
+			// best-effort: the `current` flag just won't be set
+		}
+		const rows = await listUserSessions(ctx.currentUser.id)
+		return {
+			hasDb: true,
+			sessions: rows.map((r) => ({
+				id: r.id,
+				deviceName: r.device_name,
+				ipAddress: r.ip_address,
+				createdAt: r.created_at.toISOString(),
+				current: r.jti != null && r.jti === currentJti,
+			})),
+		}
+	}),
+
+	// Private - revoke ONE of the current user's sessions by id (scoped to the
+	// owner so a caller can never revoke another user's session). The revoked JWT
+	// is rejected on its next request by the is-authenticated jti gate.
+	revokeSession: privateProcedure
+		.input(z.object({sessionId: z.string().uuid()}))
+		.mutation(async ({input, ctx}) => {
+			if (!ctx.currentUser) {
+				throw new TRPCError({code: 'BAD_REQUEST', message: 'Sessions are only tracked in multi-user mode'})
+			}
+			const ok = await revokeUserSession({sessionId: input.sessionId, userId: ctx.currentUser.id})
+			if (!ok) {
+				throw new TRPCError({code: 'NOT_FOUND', message: 'Session not found or already revoked'})
+			}
 			return {success: true}
 		}),
 })
