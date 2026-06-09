@@ -396,11 +396,18 @@ ${WS_TRANSPORT_BODY}
  * Phase 237 fix — two matchers (extended in Phase 245.6 with a third for
  * livinityd's `/ws/stream/*` WebApp RFB streaming endpoint that pre-dated
  * the AionUi WS land-grab):
- *   0. `@webapp_stream_ws` — `path /ws/stream/*` matched FIRST. Routes to
- *      :8080 (livinityd) which hosts the Phase 100-07 WebApp RFB stream
- *      upgrade handler. Without this prefix-precedence carve-out, the
- *      broader `@liv_ws path /ws /ws/*` below claims `/ws/stream/*` and
- *      sends it to :3020 (AionUi) → 404 → stream window stays blank.
+ *   0. `@webapp_stream_ws` — matched FIRST, routes to :8080 (livinityd).
+ *      Originally just `/ws/stream/*` (Phase 100-07 WebApp RFB stream).
+ *      EXTENDED 2026-06-08 to also carve out livinityd's OTHER WS endpoints
+ *      that the AionUi `/ws/*` land-grab was stealing:
+ *        `/ws/docker/*`     — Docker container LOGS streaming
+ *        `/ws/docker-exec`  — Docker container SHELL/exec
+ *        `/ws/ssh-sessions` — host SSH-session live tail (Security panel)
+ *      Without this carve-out the broader `@liv_ws path /ws /ws/*` below
+ *      claims them and sends them to :3020 (AionUi) → 500/disconnect. This
+ *      is exactly why the Docker Logs/Shell + Security SSH-Sessions panels
+ *      worked in dev (Vite proxies /ws straight to :8080) but failed through
+ *      the public Caddy path on bruce.livinity.io.
  *   1. `@liv_ws` — UNCONDITIONAL on paths `/ws` and `/ws/*`. AionUi
  *      exclusively owns the `/ws` path on this Caddy host once
  *      `/ws/stream/*` is carved out by matcher (0). Routing every
@@ -455,7 +462,7 @@ ${WS_TRANSPORT_BODY}
  * Constant name preserved (`LIV_ASSISTANT_SUBRESOURCE_HANDLE`) to avoid
  * touching the 3 emit sites in `generateFullCaddyfile`.
  */
-const LIV_ASSISTANT_SUBRESOURCE_HANDLE = `\t@webapp_stream_ws path /ws/stream/*
+const LIV_ASSISTANT_SUBRESOURCE_HANDLE = `\t@webapp_stream_ws path /ws/stream/* /ws/docker/* /ws/docker-exec /ws/ssh-sessions
 \thandle @webapp_stream_ws {
 \t\treverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY}

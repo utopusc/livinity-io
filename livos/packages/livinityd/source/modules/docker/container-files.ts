@@ -17,7 +17,7 @@ export interface ContainerFileEntry {
 	type: 'file' | 'dir' | 'symlink' | 'other'
 	/** Bytes (0 for directories). */
 	size: number
-	/** UNIX seconds (from `ls --time-style=+%s`). */
+	/** UNIX seconds (from `stat -c %Y`). */
 	mtime: number
 	/** 10-char ls mode string, e.g. `-rw-r--r--` or `drwxr-xr-x`. */
 	mode: string
@@ -128,46 +128,67 @@ export async function listDir(
 	const docker = await getDockerClient(environmentId ?? null)
 	const container = docker.getContainer(containerName)
 
+	// Portable listing (2026-06-08): GNU `ls --time-style=+%s` is REJECTED by
+	// BusyBox/Alpine (`ls: unrecognized option: time-style=+%s` → every alpine
+	// container's Files tab errored), and plain BusyBox `ls -la` emits human dates
+	// the old regex can't read. `stat -c` works on BOTH coreutils and BusyBox (it's
+	// already used by readFile below), so we enumerate entries with a shell glob and
+	// stat each one. dirPath is passed as $1 (argv) so it's never interpolated into
+	// the script. Per line: `<mode>|<size>|<mtime-epoch>|<name>` where
+	//   - GNU stat quotes %N: `'name'` or `'name' -> 'target'` (symlinks)
+	//   - BusyBox stat leaves %N bare: `name` (no symlink target)
+	const LIST_SCRIPT =
+		'cd "$1" 2>/dev/null || exit 2; ' +
+		'for e in * .[!.]* ..?*; do ' +
+		'[ -e "$e" ] || [ -L "$e" ] || continue; ' +
+		'stat -c "%A|%s|%Y|%N" -- "$e" 2>/dev/null; ' +
+		'done'
+
 	let result: {stdout: string; stderr: string; exitCode: number}
 	try {
-		result = await execCapture(container, ['ls', '-la', '--time-style=+%s', '--', dirPath])
+		result = await execCapture(container, ['sh', '-c', LIST_SCRIPT, '_', dirPath])
 	} catch (err: any) {
 		wrap404(containerName, err)
 	}
 
-	if (result!.exitCode !== 0) {
-		const detail = (result!.stderr || result!.stdout).trim() || `exit ${result!.exitCode}`
-		throw new Error(`[ls-failed] ${detail}`)
+	// exit 2 = `cd` failed → path missing or not a directory.
+	if (result!.exitCode === 2) {
+		throw new Error(`[ls-failed] No such directory: ${dirPath}`)
 	}
 
 	const entries: ContainerFileEntry[] = []
-	const lines = result!.stdout.split('\n')
 
-	// Pattern: mode, link-count, owner, group, size, mtime (epoch seconds), rest (name [-> target])
-	const lineRegex = /^(\S+)\s+\d+\s+\S+\s+\S+\s+(\d+)\s+(\d+)\s+(.+)$/
-
-	for (const raw of lines) {
-		const line = raw.trimEnd()
+	for (const raw of result!.stdout.split('\n')) {
+		const line = raw.trim()
 		if (!line) continue
-		// Skip the leading `total N` summary that ls -l emits.
-		if (/^total\s+\d+/.test(line)) continue
 
-		const match = line.match(lineRegex)
-		if (!match) continue
+		// Split on the FIRST three pipes; the name (which may itself contain '|')
+		// is everything after the third. mode/size/mtime never contain '|'.
+		const i1 = line.indexOf('|')
+		const i2 = line.indexOf('|', i1 + 1)
+		const i3 = line.indexOf('|', i2 + 1)
+		if (i1 < 0 || i2 < 0 || i3 < 0) continue
 
-		const [, mode, sizeStr, mtimeStr, rest] = match
+		const mode = line.slice(0, i1)
+		const sizeStr = line.slice(i1 + 1, i2)
+		const mtimeStr = line.slice(i2 + 1, i3)
+		const nameField = line.slice(i3 + 1)
 
-		let name = rest
+		// Unwrap GNU stat's single-quoted %N (`'name'` / `'name' -> 'target'`);
+		// BusyBox leaves the name bare with no symlink target.
+		let name = nameField
 		let target: string | undefined
-		if (mode.startsWith('l')) {
-			const arrowIdx = rest.indexOf(' -> ')
-			if (arrowIdx !== -1) {
-				name = rest.slice(0, arrowIdx)
-				target = rest.slice(arrowIdx + 4)
+		if (nameField.startsWith("'")) {
+			const arrow = nameField.indexOf("' -> '")
+			if (arrow !== -1) {
+				name = nameField.slice(1, arrow)
+				target = nameField.slice(arrow + 6, nameField.length - 1)
+			} else {
+				name = nameField.replace(/^'/, '').replace(/'$/, '')
 			}
 		}
 
-		if (name === '.' || name === '..') continue
+		if (name === '.' || name === '..' || name === '') continue
 
 		let type: ContainerFileEntry['type']
 		if (mode.startsWith('d')) type = 'dir'

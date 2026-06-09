@@ -406,14 +406,43 @@ export async function removeStack(
 	return {success: true, message: `Stack '${name}' removed`}
 }
 
-export async function getStackCompose(name: string): Promise<string> {
-	const composePath = join(STACKS_DIR, name, 'docker-compose.yml')
+/**
+ * Resolve a compose project's actual compose-file path from the
+ * `com.docker.compose.project.config_files` label Docker stamps on its
+ * containers. Per-user app stacks live under
+ * `/opt/livos/data/users/<user>/app-data/<app>/docker-compose.yml`, NOT the
+ * central STACKS_DIR — so the old `join(STACKS_DIR, name)` lookup always 404'd
+ * for them ("compose file not found"). The label is the canonical source and
+ * works for central, per-user, and any other compose project. Returns null when
+ * no running/stopped container carries the label (hand-deployed stacks).
+ */
+async function resolveComposePathFromLabel(project: string): Promise<string | null> {
+	try {
+		const docker = await getDockerClient(null)
+		const containers = await docker.listContainers({all: true})
+		const match = containers.find((c) => c.Labels?.['com.docker.compose.project'] === project)
+		const configFiles = match?.Labels?.['com.docker.compose.project.config_files']
+		// config_files may be comma-separated for multi-file projects; take the first.
+		return configFiles ? configFiles.split(',')[0]?.trim() || null : null
+	} catch {
+		return null
+	}
+}
 
-	if (!existsSync(composePath)) {
-		throw new Error(`[not-found] Stack '${name}' compose file not found`)
+export async function getStackCompose(name: string): Promise<string> {
+	// Prefer the path Docker itself recorded on the project's containers.
+	const labelPath = await resolveComposePathFromLabel(name)
+	if (labelPath && existsSync(labelPath)) {
+		return readFile(labelPath, 'utf-8')
 	}
 
-	return readFile(composePath, 'utf-8')
+	// Fall back to the central stacks dir (hand-deployed stacks with no container).
+	const composePath = join(STACKS_DIR, name, 'docker-compose.yml')
+	if (existsSync(composePath)) {
+		return readFile(composePath, 'utf-8')
+	}
+
+	throw new Error(`[not-found] Stack '${name}' compose file not found`)
 }
 
 // Return shape for a single env var as shown in the UI.
