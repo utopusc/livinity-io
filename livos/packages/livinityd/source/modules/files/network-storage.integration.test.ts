@@ -8,6 +8,12 @@ import pRetry from 'p-retry'
 
 import createTestLivinityd from '../test-utilities/create-test-livinityd.js'
 
+// LIVOS-051 (262-04): production code now blocks loopback/RFC1918/link-local
+// SMB hosts (SSRF guard in network-storage.ts). This suite legitimately mounts
+// a samba server on localhost inside the test VM, so opt in to the
+// test-harness escape. Charset/credential validation is NOT bypassed.
+process.env.LIVOS_ALLOW_PRIVATE_SMB_HOSTS = '1'
+
 let livinityd: Awaited<ReturnType<typeof createTestLivinityd>>
 
 // Create a new livinityd instance for each test
