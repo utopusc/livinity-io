@@ -193,8 +193,15 @@ function TopBarDesktop() {
 	const displaysQuery = trpcReact.displays.list.useQuery(undefined, {
 		refetchInterval: 4000,
 	})
-	const liveDisplaysCount = displaysQuery.data?.displays?.length ?? 0
-	const displaysBadgeCount = Math.max(liveDisplaysCount, pinnedWindows.length)
+	// Count APP displays only — exclude the always-present host `:1` ("Host
+	// Display", the XFCE desktop infra). Counting it made the badge read ≥1 even
+	// with no app window open, so it never matched "how many windows are open"
+	// (operator 2026-06-09: "display sayısı düzgün çalışmıyor … kaç pencere açık
+	// kontrol etsin"). Floored by pinned (docked) windows so a just-docked stream
+	// is never under-counted before its server-side display record refreshes. The
+	// 4s poll already gives the "check every few seconds" cadence requested.
+	const appDisplays = (displaysQuery.data?.displays ?? []).filter((d) => d.display !== ':1')
+	const displaysBadgeCount = Math.max(appDisplays.length, pinnedWindows.length)
 
 	// Open the ⌘K command palette. TopBar is mounted OUTSIDE CmdkProvider, so we
 	// can't call useCmdkOpen() here — use the module-level opener the provider
@@ -418,7 +425,7 @@ function TopBarDesktop() {
 									initial={{opacity: 0, y: -8, scale: 0.97}}
 									animate={{opacity: 1, y: 0, scale: 1}}
 									transition={{duration: 0.12}}
-									className='absolute left-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-2xl border border-line bg-card-bg/95 py-1.5 backdrop-blur-2xl shadow-[0_20px_50px_-20px_rgba(0,0,0,0.35)]'
+									className='absolute left-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-2xl border border-line bg-card-bg py-1.5 backdrop-blur-2xl shadow-[0_20px_50px_-20px_rgba(0,0,0,0.35)]'
 									role='menu'
 								>
 									<div className='flex items-center gap-2.5 px-3.5 pb-2 pt-2'>
