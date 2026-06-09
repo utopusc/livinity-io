@@ -294,8 +294,20 @@ const LIV_BRANDING_HANDLE = `\thandle /liv/branding/* {
  *
  * Mirrors the 256-04 `gatedHandleBody` forward_auth (caddy.ts:~675) but as a
  * module-level constant: module constants have no `config` in scope, so the
- * 401 redirect uses Caddy placeholders + a relative /login path instead of an
- * absolute `https://${config.mainDomain}/...` URL. Emitted as the FIRST
+ * 401 redirect uses the Caddy `{host}` placeholder to build an ABSOLUTE
+ * `https://{host}/login...` URL.
+ *
+ * ⚠ Phase 262 live-pentest finding (LIVOS-041 incomplete fix): a RELATIVE
+ * `redir /login?redirect={uri}` inside `handle_response @bad` does NOT
+ * short-circuit `forward_auth` on Caddy v2.11.3 — the request falls through to
+ * the backend reverse_proxy (AionUi :3020), leaving the qr-mint endpoints
+ * reachable unauthenticated (an attacker could still mint an admin
+ * `aionui-session` straight through `@liv` despite the gate being "present").
+ * Only an ABSOLUTE redir URL terminates the gate. The 256-04 app-subdomain
+ * gate worked because it already used `https://${config.mainDomain}/__livos_sso`.
+ * Verified live: relative → unauth mint succeeds; absolute `https://{host}/...`
+ * → 302 to /login, mint blocked. DO NOT revert to a relative redir.
+ * Emitted as the FIRST
  * directive inside EVERY /liv-family handle (@liv, @liv_ws,
  * @liv_api_subresource, @livos_terminal_ws, @liv_login) so a valid
  * LIVINITY_SESSION is required at the Caddy layer before ANY AionUi traffic —
@@ -310,7 +322,7 @@ const LIV_GATE_BODY = `\t\tforward_auth 127.0.0.1:8080 {
 \t\t\tcopy_headers Cookie
 \t\t\t@bad status 401
 \t\t\thandle_response @bad {
-\t\t\t\tredir /login?redirect={uri} 302
+\t\t\t\tredir https://{host}/login?redirect={scheme}://{host}{uri} 302
 \t\t\t}
 \t\t}`
 
