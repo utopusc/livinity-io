@@ -75,7 +75,8 @@ _DLD_STAGE_DIR="/tmp/livos-install-stage"
 # Plan 105-02 (G7) will swap to PID-scoped /tmp/livinity-update-$$ + add cleanup.
 _DLD_TEMP_DIR="$_DLD_STAGE_DIR"
 _DLD_CADDYFILE="/etc/caddy/Caddyfile"
-# 106 Bug #10: desktop session user (sudo + docker groups, NOPASSWD sudoers).
+# 106 Bug #10 / 262 WS3: desktop session user (sudo + docker groups; root
+# privileges ONLY via the scoped sudoers.d/livinityd Cmnd_Alias fragment).
 # The human-friendly login the operator uses for GUI sessions + sudo elevation,
 # AND the User= the livos/liv-* systemd units run as.
 _DLD_DESKTOP_USER="${_DLD_DESKTOP_USER:-bruce}"
@@ -350,24 +351,29 @@ _dld_setup_redis() {
     _DLD_REDIS_PASS="$redis_pass"
 }
 
-# ── 3b. Desktop session user (Phase 106 Bug #10 — bruce + sudoers + groups) ──
+# ── 3b. Desktop session user (Phase 106 Bug #10 — bruce + groups) ───────────
 # Creates the human-friendly login `bruce` (configurable via _DLD_DESKTOP_USER)
-# with sudo + docker group membership and a NOPASSWD sudoers drop-in.
-# Without this, livinityd's Streaming module crashes with `sudo: unknown user
-# bruce` on per-host display features. fluxbox is already installed by
-# _dld_install_streaming_packages — no apt install here.
+# with sudo + docker group membership. Without this, livinityd's Streaming
+# module crashes with `sudo: unknown user bruce` on per-host display features.
+# fluxbox is already installed by _dld_install_streaming_packages — no apt
+# install here.
+#
+# Phase 262 WS3 (LIVOS-043): this helper used to ALSO write a blanket
+# passwordless-everything drop-in to /etc/sudoers.d/99-${user}, silently
+# subsuming the scoped Phase-192 Cmnd_Alias fragment (sudoers.d/livinityd).
+# That write is GONE. Root privileges for the livinityd user come ONLY from
+# the scoped fragment; `sudo` group membership alone means password-prompted
+# sudo for interactive operator sessions — the intended posture.
 #
 # Idempotent:
 #   - `id -u "$user"` short-circuits when user exists
 #   - `usermod -aG` is no-op when membership already present
-#   - sudoers drop-in overwritten unconditionally (single-line, we control content)
-#   - visudo -cf validates BEFORE leaving the file in place; failure → rm + warn
+#   - legacy /etc/sudoers.d/99-${user} drop-in removed unconditionally (rm -f)
 _dld_create_desktop_user() {
-    step "Phase 106 Bug #10 — create desktop user (sudo + docker + NOPASSWD sudoers)"
+    step "Phase 106 Bug #10 / 262 WS3 — create desktop user (sudo + docker groups; scoped sudoers fragment only)"
 
     local user="${_DLD_DESKTOP_USER:-bruce}"
     local uid="${_DLD_DESKTOP_UID:-1000}"
-    local sudoers_file="/etc/sudoers.d/99-${user}"
 
     # Sanity: useradd only available on Linux. Skip silently on non-Linux hosts.
     if ! command -v useradd >/dev/null 2>&1; then
@@ -426,26 +432,13 @@ _dld_create_desktop_user() {
         warn "/home/${user} missing — useradd may have failed; WebApp Launcher will not work"
     fi
 
-    # NOPASSWD sudoers drop-in. Write to a tmp file first, validate with
-    # `visudo -cf`, then mv to /etc/sudoers.d/. visudo failure → rm tmp + warn
-    # (do NOT leave a broken sudoers file in place — that bricks sudo).
-    local tmp_sudoers
-    tmp_sudoers=$(mktemp /tmp/sudoers-${user}-XXXXXX) || {
-        warn "mktemp failed — skipping sudoers drop-in for '${user}'"
-        return 0
-    }
-    printf '%s\n' "${user} ALL=(ALL) NOPASSWD:ALL" > "$tmp_sudoers"
-    chmod 0440 "$tmp_sudoers"
-
-    if visudo -cf "$tmp_sudoers" >/dev/null 2>&1; then
-        mv "$tmp_sudoers" "$sudoers_file"
-        chmod 0440 "$sudoers_file"
-        chown root:root "$sudoers_file" 2>/dev/null || true
-        ok "Sudoers drop-in written: ${sudoers_file} (validated by visudo -cf)"
-    else
-        warn "visudo -cf failed on tmp file — sudoers drop-in NOT installed for '${user}'"
-        rm -f "$tmp_sudoers"
-    fi
+    # Phase 262 WS3 (LIVOS-043): the blanket "${user} ALL=(ALL)" passwordless-
+    # everything drop-in is GONE. Privileges come ONLY from the scoped
+    # Cmnd_Alias fragment (sudoers.d/livinityd, installed by the Phase 192-02
+    # bruce migration). Re-provision actively removes a legacy drop-in left
+    # by older installs.
+    rm -f "/etc/sudoers.d/99-${user}"
+    ok "Legacy blanket sudoers drop-in absent/removed: /etc/sudoers.d/99-${user}"
 }
 
 # ── 4. Source clone ─────────────────────────────────────────────────────────
@@ -2323,7 +2316,7 @@ deploy_livinityd() {
     _dld_install_system_packages
     _dld_setup_postgres
     _dld_setup_redis
-    _dld_create_desktop_user              # 106 Bug #10 — bruce user + sudo + docker groups + NOPASSWD sudoers
+    _dld_create_desktop_user              # 106 Bug #10 / 262 WS3 — bruce user + sudo + docker groups (scoped sudoers fragment only)
     _dld_clone_source
     _dld_install_streaming_packages       # 105-02 G2 — streaming apt + ydotoold unit
     _dld_install_google_chrome            # 106 Bug #9 — google-chrome-stable (WebApp Launcher blocker)
