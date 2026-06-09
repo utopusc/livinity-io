@@ -4663,4 +4663,14 @@ Plans:
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
 
+### Phase 261: Security Research Pass — post-remediation posture audit and next-hardening research
+
+**Goal:** RESEARCH-ONLY (no code). Re-audit LivOS's security posture AFTER the v45 remediation wave (256/257/258 deployed): (A) audit the NEW attack surface added since `SECURITY-AUDIT.md` was written — per-session management (`user.listSessions`/`revokeSession`), the new Settings sections (Power/Date & Time/Storage & Drives/Security & Sessions), fail2ban enablement, AionUi v2.1.14 vendored chat (iframe + Caddy WS carve-outs), public app access (Phase 258 guardrails), native app installers (Phase 259, sudoers helpers), container→host AI CLI access (`requiresLocalAiClis` + cred-egress proxy); (B) verify the deferred fast-follows still hold — sibling JWT-keyed cred stores (`git-credentials`/`stack-secrets`/`backup-secrets`), `sandbox.ts` userns runtime-probe gap, Server5 secret-rotation status (document only — Server5 itself off-limits); (C) research industry best practice for self-hosted home-server OS security (Umbrel/CasaOS/Tailscale models: network-edge posture, secrets management, update/supply-chain integrity, backup security); (D) produce a prioritized findings + recommendations report (`SECURITY-RESEARCH-PASS-3.md`) that seeds the NEXT hardening phase. Target: Mini PC only. Full brief: `261-CONTEXT.md` in the phase dir.
+**Requirements**: research deliverable only — no source changes, no deploys
+**Depends on:** Phases 256, 257, 258 (deployed); inputs `SECURITY-AUDIT.md` + `SECURITY-REMEDIATION-DESIGN.md` (repo root)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-research-phase 261 to start the research, then /gsd-plan-phase 261)
+
 ---
