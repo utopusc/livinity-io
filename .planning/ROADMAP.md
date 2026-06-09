@@ -4686,7 +4686,7 @@ Plans:
 
 Plans:
 - [ ] 262-01-PLAN.md — WS1 close the /liv unauthenticated front door: forward_auth over the whole /liv family + apex fail-closed gate + verifySession on /liv-login + path-prefix /api matcher + jti revocation re-check (LIVOS-041/047/049/053/054 + revocation gap) [wave 1]
-- [ ] 262-02-PLAN.md — WS2 native-installer lockdown: adminProcedure + server-side manifest re-fetch + aptPackages/URL/checksum/apt-key-fingerprint validation + redirect SSRF guard (LIVOS-042/044/045/055) [wave 1]
+- [x] 262-02-PLAN.md — WS2 native-installer lockdown: adminProcedure + server-side manifest re-fetch + aptPackages/URL/checksum/apt-key-fingerprint validation + redirect SSRF guard (LIVOS-042/044/045/055) [wave 1] — ✅ CODE-COMPLETE 2026-06-09, commits `997fe2a9`+`dc6a272b`+`93acb06a`, SUMMARY in phase dir; operator deploy + live walk pending (catalog rows need sha256/aptKeyFingerprint/allowlisted hosts — see SUMMARY "Known Behavior Changes")
 - [ ] 262-03-PLAN.md — WS3 remove the blanket bruce NOPASSWD:ALL sudoers grant + scoped LIVINITYD_FAIL2BAN alias + sudo -n fail2ban client (LIVOS-043) [wave 1]
 - [ ] 262-04-PLAN.md — WS4 adminProcedure for power/storage/share backends + deviceId/CIFS validation + cred-egress per-app token + gateway bind (LIVOS-046/048/050/051/056) [wave 1]
 - [ ] 262-05-PLAN.md — WS5 shared credential-dek migration (git/stack/backup + legacy fallback) + manifest-flag threading + buildPublicForbiddenSignals OR + legacySingleUser guard + bwrap runtime probe (LIVOS-052/052b/057/058) [wave 2, depends_on 262-02]
