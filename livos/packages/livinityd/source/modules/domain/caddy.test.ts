@@ -1737,7 +1737,10 @@ describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', (
 	it('401 gate redirect points at /login with the original uri preserved', () => {
 		const out = apexOut()
 		const livIdx = out.indexOf('handle @liv {')
-		const redirIdx = out.indexOf('redir /login?redirect={uri} 302', livIdx)
+		// Phase 262 live-pentest fix: the redir MUST be an ABSOLUTE URL — a relative
+		// `/login` does not short-circuit forward_auth on Caddy v2.11.3, leaving the
+		// AionUi qr-mint endpoints reachable unauthenticated (LIVOS-041).
+		const redirIdx = out.indexOf('redir https://{host}/login?redirect={scheme}://{host}{uri} 302', livIdx)
 		expect(redirIdx).toBeGreaterThan(livIdx)
 	})
 })
