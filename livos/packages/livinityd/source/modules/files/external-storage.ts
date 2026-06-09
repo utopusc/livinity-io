@@ -28,6 +28,13 @@ type BlockDevice = {
 	}[]
 }
 
+// LIVOS-050 (262-04): strict shape guard for caller-supplied block-device ids.
+// Only plain kernel device names (sdX / nvmeXnY / mmcblkX) may ever reach the
+// destructive sgdisk/wipefs/parted/mkfs sinks or the /sys/block eject path —
+// and even a well-formed id must ALSO be a member of the USB-transport-only
+// external set (never the OS disk).
+const DEVICE_ID_RE = /^(sd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/
+
 // Get block devices
 // TODO: This should probably be in a system module once we have a proper one
 export async function getBlockDevices() {
@@ -228,6 +235,11 @@ export default class ExternalStorage {
 		// points that are in the process of being mounted.
 		// This can happen if the user unmounts a device while attaching another.
 		return await this.#mountQueue.add(async () => {
+			// LIVOS-050 (262-04): shape guard before the id is interpolated anywhere
+			// (umount /dev/<id>, /sys/block/<id>/device/delete). The find() below is
+			// the load-bearing external-set membership check; this is defence-in-depth.
+			if (!DEVICE_ID_RE.test(deviceId)) throw new Error('[invalid-device-id]')
+
 			// Get mount points for block device
 			const externalBlockDevices = await this.#getExternalDevices()
 			const blockDevice = externalBlockDevices.find((device) => device.id === deviceId)
@@ -277,6 +289,10 @@ export default class ExternalStorage {
 		label: string
 	}) {
 		try {
+			// LIVOS-050 (262-04): NEVER trust the caller's deviceId. Strict shape
+			// guard FIRST — only plain kernel device names may proceed.
+			if (!DEVICE_ID_RE.test(deviceId)) throw new Error('[invalid-device-id]')
+
 			// Check if job is already in progress
 			if (this.formatJobs.has(deviceId)) throw new Error('[format-job-already-in-progress]')
 			this.formatJobs.add(deviceId)
@@ -289,6 +305,13 @@ export default class ExternalStorage {
 			const labelSupportedLength = label.length >= 1 && label.length <= 11
 			const labelIsValid = labelSupportedCharacters && labelSupportedLength
 			if (!labelIsValid) throw new Error('[invalid-label]')
+
+			// LIVOS-050 (262-04): resolve deviceId against the USB-transport-only
+			// external set BEFORE any destructive command — the OS/data disk
+			// (e.g. nvme0n1, transport != usb) must be unreachable here. Mirrors
+			// the find() lookup unmountExternalDevice already does.
+			const externalDevices = await this.#getExternalDevices()
+			if (!externalDevices.some((device) => device.id === deviceId)) throw new Error('[invalid-device-id]')
 
 			this.logger.log(`Formatting device ${deviceId} as ${filesystem} with label ${label}`)
 

@@ -1,6 +1,6 @@
 import z from 'zod'
 
-import {router, privateProcedure, publicProcedureWhenNoUserExists} from '../server/trpc/trpc.js'
+import {router, adminProcedure, privateProcedure, publicProcedureWhenNoUserExists} from '../server/trpc/trpc.js'
 import {fileUserContext, type FileUserInfo} from './files.js'
 
 // Helper to run file operations within the user's file context
@@ -177,23 +177,30 @@ export default router({
 		),
 
 	// Get the share password
-	sharePassword: privateProcedure.query(async ({ctx}) => ctx.livinityd.files.samba.getSharePassword()),
+	// LIVOS-056 (262-04): adminProcedure — leaks the 128-char Samba secret;
+	// server-side gate required (reachable from the Files app, not just Settings).
+	sharePassword: adminProcedure.query(async ({ctx}) => ctx.livinityd.files.samba.getSharePassword()),
 
 	// Get shares
 	shares: privateProcedure.query(async ({ctx}) => withFileUser(ctx, () => ctx.livinityd.files.samba.listShares())),
 
 	// Share a directory
-	addShare: privateProcedure
+	// LIVOS-056 (262-04): adminProcedure — host storage management is admin-only
+	// server-side (the existing getAllowedOperations check is a path check, not a role check).
+	addShare: adminProcedure
 		.input(z.object({path: z.string()}))
 		.mutation(async ({ctx, input}) => withFileUser(ctx, () => ctx.livinityd.files.samba.addShare(input.path))),
 
 	// Remove a share
-	removeShare: privateProcedure
+	removeShare: adminProcedure
 		.input(z.object({path: z.string()}))
 		.mutation(async ({ctx, input}) => withFileUser(ctx, () => ctx.livinityd.files.samba.removeShare(input.path))),
 
 	// Format an external device
-	formatExternalDevice: privateProcedure
+	// LIVOS-050 (262-04): adminProcedure + deviceId is re-validated server-side in
+	// external-storage.ts (strict regex + USB-only external-set membership) before
+	// any destructive sgdisk/wipefs/parted/mkfs command.
+	formatExternalDevice: adminProcedure
 		.input(
 			z.object({
 				deviceId: z.string(),
@@ -209,7 +216,9 @@ export default router({
 	),
 
 	// Unmount an external device
-	unmountExternalDevice: privateProcedure
+	// LIVOS-056 (262-04): adminProcedure — hard-ejects the kernel block device
+	// (/sys/block/<id>/device/delete), mid-write data loss for other users.
+	unmountExternalDevice: adminProcedure
 		.input(z.object({deviceId: z.string()}))
 		.mutation(async ({ctx, input}) =>
 			ctx.livinityd.files.externalStorage.unmountExternalDevice(input.deviceId, {remove: true}),
@@ -238,7 +247,10 @@ export default router({
 	),
 
 	// Add a network share
-	addNetworkShare: publicProcedureWhenNoUserExists
+	// LIVOS-051 (262-04): adminProcedure (was publicProcedureWhenNoUserExists —
+	// unauthenticated during the pre-onboarding window). Inputs are additionally
+	// charset/SSRF-validated in network-storage.ts before any mount side effect.
+	addNetworkShare: adminProcedure
 		.input(
 			z.object({
 				host: z.string(),
@@ -250,7 +262,8 @@ export default router({
 		.mutation(async ({ctx, input}) => ctx.livinityd.files.networkStorage.addShare(input)),
 
 	// Remove a network share
-	removeNetworkShare: privateProcedure
+	// LIVOS-056 (262-04): adminProcedure — host storage management is admin-only.
+	removeNetworkShare: adminProcedure
 		.input(z.object({mountPath: z.string()}))
 		.mutation(async ({ctx, input}) => ctx.livinityd.files.networkStorage.removeShare(input.mountPath)),
 
@@ -260,7 +273,9 @@ export default router({
 	),
 
 	// Discover shares for a given samba server
-	discoverNetworkSharesOnServer: publicProcedureWhenNoUserExists
+	// LIVOS-051 (262-04): adminProcedure — this is an SSRF probe primitive
+	// (smbclient --list //<host>); was unauthenticated pre-onboarding.
+	discoverNetworkSharesOnServer: adminProcedure
 		.input(z.object({host: z.string(), username: z.string(), password: z.string()}))
 		.query(async ({ctx, input}) =>
 			ctx.livinityd.files.networkStorage.discoverSharesOnServer(input.host, input.username, input.password),
