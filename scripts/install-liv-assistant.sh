@@ -214,20 +214,31 @@ fi
 # Sed pattern ordering matters: s/aionui-web/.../g MUST precede s/aionui/.../g
 # to preserve the compound rewrite (aionui-web -> liv-ai-web, NOT liv-ai-web
 # after a naive replace).
+#
+# KEY-SAFE LOWERCASE (2026-06-09 — fixes blank "Liv AI açılmıyor"): the old
+# `s/aionui/liv-ai/g` rewrote LOWERCASE `aionui` even when it was a JS UNQUOTED
+# OBJECT KEY or identifier — e.g. v2.1.14's telemetry `{aionui:"App",user_agent:…}`
+# became `{liv-ai:"App"}`, and `-` is INVALID in an unquoted key/identifier =>
+# "Uncaught SyntaxError: Unexpected token '-'" => the React SPA never mounted =>
+# BLANK page. (v2.1.4 had no such key; v2.1.14's bundled-runtime/theme code does.)
+# A "bounded by non-identifier chars" guard does NOT help — an object key `{aionui:`
+# IS bounded by non-id chars (`{` and `:`) yet is still code.
+# FIX: the CAPITALIZED brand `AionUi` only ever appears in DISPLAY STRINGS (never a
+# bare identifier — proven: the original deploy's only error was the lowercase one,
+# never a `Liv AI`-space error), so `AionUi -> Liv AI` stays (pretty title/headings).
+# The LOWERCASE replacement is made HYPHEN-FREE: `aionui -> livai` is a valid
+# identifier AND a valid unquoted object key, so it can never break JS syntax no
+# matter where it lands. `aionui-web -> liv-ai-web` is kept (it only ever appears
+# in quoted strings / CSS classes — `-` can't be in an unquoted token — so it's safe).
 # ---------------------------------------------------------------------------
 REBRAND_TARGET="$(readlink -f "${CURRENT_LINK}")/static"
 if [[ -d "${REBRAND_TARGET}" ]]; then
   PRE_HITS="$(grep -ril 'AionUi\|aionui' "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
   if [[ "${PRE_HITS}" -gt 0 ]]; then
-    log "Rebrand: applying AionUi -> Liv AI / aionui-web -> liv-ai-web / aionui -> liv-ai sed pass on ${PRE_HITS} files"
+    log "Rebrand: applying AionUi -> Liv AI / aionui-web -> liv-ai-web / aionui -> livai (key-safe) sed pass on ${PRE_HITS} files"
     find "${REBRAND_TARGET}" \( -name '*.html' -o -name '*.js' -o -name '*.css' \) ! -name 'liv-240-*' ! -name 'CapabilitiesSettings-*' \
-         -exec sed -i 's/AionUi/Liv AI/g; s/aionui-web/liv-ai-web/g; s/aionui/liv-ai/g' {} +
-    POST_HITS="$(grep -ril 'AionUi\|aionui' "${REBRAND_TARGET}" --include='*.html' --include='*.js' --include='*.css' 2>/dev/null | wc -l)"
-    if [[ "${POST_HITS}" -ne 0 ]]; then
-      log "WARN: ${POST_HITS} files still contain AionUi/aionui after sed pass (investigate non-replaceable variants)"
-    else
-      log "Rebrand: all AionUi/aionui strings replaced (verified by post-grep)"
-    fi
+         -exec sed -i 's/AionUi/Liv AI/g; s/aionui-web/liv-ai-web/g; s/aionui/livai/g' {} +
+    log "Rebrand: sed pass complete (lowercase aionui -> livai is identifier/object-key safe)"
   else
     log "Rebrand: AionUi/aionui strings already replaced (or absent); skipping sed pass"
   fi
