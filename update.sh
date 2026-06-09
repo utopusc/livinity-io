@@ -1224,16 +1224,14 @@ fi
 # covers claw-plugin (esbuild → dist/index.js, ~170kb) AND claw-client (Next.js
 # static export → out/) per the upstream prepack/build wiring.
 # Guarded so legacy deploys without Phase 203 source don't fail.
-step "Phase 203-03: Building liv-claw-os plugin + claw-client"
-if [[ -d "$LIVOS_DIR/packages/liv-claw-os" ]]; then
-    if (cd "$LIVOS_DIR" && pnpm --filter @livos/liv-claw-os build 2>&1) ; then
-        ok "liv-claw-os build complete (claw-plugin dist + claw-client out)"
-    else
-        warn "liv-claw-os build failed — liv-claw-gateway will fail to boot until plugin bundle exists; check journalctl -u liv-claw-gateway -n 30 after deploy"
-    fi
-else
-    info "liv-claw-os not present in this checkout — skipping (Phase 203 fork not deployed yet)"
-fi
+step "Phase 203-03: liv-claw-os build (RETIRED 2026-06-09)"
+# RETIRED — OpenClawOS was replaced by AionUi in Phase 231; the liv-claw-os
+# fork + liv-claw-gateway are dead. The Next.js `claw-client` build started
+# failing tsc on every deploy (ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL), spamming the
+# log for a component nothing serves. We no longer build it. The packages remain
+# on disk (harmless, unbuilt) pending a full repo-level removal phase; livinityd's
+# separate modules/openclawos backend (config/handshake/dock-seed) is UNAFFECTED.
+info "liv-claw-os build skipped (retired — replaced by AionUi in Phase 231)"
 
 # ── Step 7.3b: Phase 203 Hot-fix-C — bundle claw-client static export into claw-plugin/static ──
 # § G.2 Fix-C root cause: claw-plugin's `registerHttpRoute` handler streams
@@ -1567,20 +1565,25 @@ else
     info "livos-app-liv-ai.service not installed yet — run scripts/install/systemd-units-install.sh as root to enable"
 fi
 
-# Phase 203-03 — restart liv-claw-gateway (openclaw runtime on 127.0.0.1:18789).
-# Guarded so legacy deploys without the unit installed are no-ops. Caddy
-# `handle /liv-ai-app/*` will steer traffic to :18789 once D-203-05 routing
-# lands (Plan 203-12 deploy walk).
-if [[ -f /etc/systemd/system/liv-claw-gateway.service || -f /usr/lib/systemd/system/liv-claw-gateway.service ]]; then
-    systemctl enable liv-claw-gateway.service 2>/dev/null || true
-    if systemctl restart liv-claw-gateway.service 2>/dev/null; then
-        ok "Restarted liv-claw-gateway (openclaw + plugin :18789)"
-    else
-        warn "liv-claw-gateway restart failed — check journalctl -u liv-claw-gateway -n 30"
-    fi
-else
-    info "liv-claw-gateway.service not installed yet — pre-203-03 deploy; run scripts/install/systemd-units-install.sh as root to enable"
+# Phase 203-03 → RETIRED 2026-06-09 — liv-claw-gateway (openclaw :18789).
+# OpenClawOS was retired in Phase 231 (AI chat moved to AionUi). The gateway's
+# Phase-231 force-mask kept getting undone because the service-install step above
+# re-installed + re-enabled the unit on every deploy, leaving a dead runtime
+# bound to :18789. We now RETIRE it explicitly here (runs after the install step,
+# so the mask wins): stop, disable, and mask so future deploys can't resurrect it.
+_LIV_CLAW_UNIT="/etc/systemd/system/liv-claw-gateway.service"
+systemctl stop liv-claw-gateway.service 2>/dev/null || true
+systemctl disable liv-claw-gateway.service 2>/dev/null || true
+# FORCE-mask via /dev/null symlink (plain `systemctl mask` fails when the
+# install step above wrote a REAL unit file at this path — see Phase 231 notes).
+# This runs AFTER the install step, so the mask always wins; the service is
+# never started in the brief same-run window (install only enables, never starts).
+if [[ ! -L "$_LIV_CLAW_UNIT" || "$(readlink "$_LIV_CLAW_UNIT" 2>/dev/null)" != "/dev/null" ]]; then
+    rm -f "$_LIV_CLAW_UNIT"
+    ln -sf /dev/null "$_LIV_CLAW_UNIT"
+    systemctl daemon-reload 2>/dev/null || true
 fi
+ok "liv-claw-gateway retired (stopped + disabled + force-masked — openclaw replaced by AionUi)"
 
 # ── Phase 225 — restart liv-assistant.service + /api/auth/status smoke ─────────
 # Guarded so legacy deploys without the unit are no-ops. Restart is required so
