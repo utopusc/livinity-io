@@ -9,6 +9,10 @@ import {beforeEach, describe, expect, test} from 'vitest'
 
 import {SECTION_IDS, type SectionId, useDockerStore} from './store'
 
+// 2026-06-09: synced to the live SECTION_IDS — added 'security' (Phase 46, the
+// test predated it) and removed 'schedules' (operator removal). This list was
+// already stale before the schedules removal (it lacked 'security'), which is
+// why "has length 12" only passed by coincidence after the removal.
 const EXPECTED_IDS: readonly SectionId[] = [
 	'dashboard',
 	'containers',
@@ -20,7 +24,7 @@ const EXPECTED_IDS: readonly SectionId[] = [
 	'networks',
 	'registry',
 	'activity',
-	'schedules',
+	'security',
 	'settings',
 ] as const
 

@@ -22,7 +22,6 @@ import {Images} from './sections/images'
 import {Logs} from './sections/logs'
 import {Networks} from './sections/networks'
 import {Registry} from './sections/registry'
-import {Schedules} from './sections/schedules'
 import {Security} from './sections/security'
 import {Settings} from './sections/settings'
 import {Shell} from './sections/shell'
@@ -86,9 +85,11 @@ function SectionView({section}: {section: SectionId}) {
 			return <Activity />
 		case 'security':
 			return <Security />
-		case 'schedules':
-			return <Schedules />
 		case 'settings':
 			return <Settings />
+		default:
+			// Fallback for any stale/removed section persisted in the zustand store
+			// (e.g. 'schedules' after its 2026-06-09 removal) — avoids a blank pane.
+			return <Dashboard />
 	}
 }

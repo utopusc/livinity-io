@@ -29,12 +29,9 @@ import {trpcReact} from '@/trpc/trpc'
 import {useContainers} from '@/hooks/use-containers'
 import {formatBytes} from '@/hooks/use-images'
 import {useNetworkStats, useDiskIO, useProcesses} from '@/hooks/use-monitoring'
-import {usePM2} from '@/hooks/use-pm2'
 import {useEngineInfo} from '@/hooks/use-engine-info'
 import {useEnvironments} from '@/hooks/use-environments'
 import {useEnvironmentStore} from '@/stores/environment-store'
-// Cross-import from new Docker app home (relocated in Phase 27-02).
-import {DomainsTab} from '../docker/resources/domains-tab'
 import {Progress} from '@/shadcn-components/ui/progress'
 import {Tabs, TabsList, TabsTrigger, TabsContent} from '@/shadcn-components/ui/tabs'
 import {Table, TableHeader, TableBody, TableHead, TableRow, TableCell} from '@/shadcn-components/ui/table'
@@ -302,9 +299,8 @@ function OverviewTab() {
 	const diskUsage = useSystemDiskForUi({poll: true})
 	const {temperature, warning: tempWarning, isLoading: tempLoading} = useCpuTemperature()
 
-	// Container and PM2 summaries
+	// Container summary (PM2 removed 2026-06-09 — LivOS is systemd, not PM2)
 	const {runningCount: containerRunning, totalCount: containerTotal, isLoading: containersLoading} = useContainers()
-	const {onlineCount: pm2Online, totalCount: pm2Total, isLoading: pm2Loading} = usePM2()
 
 	// Network throughput
 	const {data: networkData, isLoading: networkLoading} = useNetworkStats()
@@ -334,13 +330,6 @@ function OverviewTab() {
 				? 'bg-accent-red'
 				: 'bg-accent-amber'
 
-	const pm2StatusColor = pm2Total === 0
-		? 'bg-neutral-400'
-		: pm2Online === pm2Total
-			? 'bg-emerald-500'
-			: pm2Online === 0
-				? 'bg-accent-red'
-				: 'bg-accent-amber'
 
 	// Temperature color
 	const tempColor = tempWarning ? 'text-accent-red' : (temperature ?? 0) > 70 ? 'text-accent-amber' : 'text-text-primary'
@@ -483,26 +472,8 @@ function OverviewTab() {
 					)}
 				</div>
 
-				{/* PM2 Processes */}
-				<div className='rounded-xl border border-border-default bg-surface-base p-3 sm:p-4'>
-					<div className='mb-3 flex items-center gap-2'>
-						<IconActivity size={16} className='text-text-secondary' />
-						<span className='text-xs font-bold uppercase tracking-wider text-text-secondary'>PM2 Processes</span>
-					</div>
-					{pm2Loading ? (
-						<div className='text-sm text-text-tertiary'>Loading...</div>
-					) : (
-						<div className='flex items-center gap-3'>
-							<div className={cn('h-2 w-2 rounded-full', pm2StatusColor)} />
-							<div>
-								<div className='text-2xl font-semibold text-text-primary'>
-									{pm2Online} <span className='text-base font-normal text-text-tertiary'>/ {pm2Total}</span>
-								</div>
-								<div className='text-xs uppercase tracking-wider text-text-secondary'>processes online</div>
-							</div>
-						</div>
-					)}
-				</div>
+				{/* PM2 Processes card removed 2026-06-09 — LivOS runs on systemd, not PM2,
+				    so this always showed 0/0 processes online (operator request). */}
 
 				{/* Network Throughput */}
 				<div className='rounded-xl border border-border-default bg-surface-base p-3 sm:p-4'>
@@ -769,271 +740,6 @@ function PM2StatusBadge({status}: {status: string}) {
 	)
 }
 
-// PM2 Detail Panel - shown when a process row is expanded
-function PM2DetailPanel({name}: {name: string}) {
-	const describeQuery = trpcReact.pm2.describe.useQuery({name})
-	const [logLines, setLogLines] = useState(200)
-	const [autoScroll, setAutoScroll] = useState(true)
-	const preRef = useRef<HTMLPreElement>(null)
-
-	const logsQuery = trpcReact.pm2.logs.useQuery({name, lines: logLines}, {enabled: true})
-
-	useEffect(() => {
-		if (autoScroll && preRef.current && logsQuery.data) {
-			preRef.current.scrollTop = preRef.current.scrollHeight
-		}
-	}, [logsQuery.data, autoScroll])
-
-	const detail = describeQuery.data
-
-	return (
-		<div className='flex flex-col gap-4 p-3 sm:flex-row sm:p-4'>
-			{/* Info Section */}
-			<div className='w-full sm:w-[280px] sm:shrink-0 space-y-2'>
-				<h4 className='text-xs font-semibold uppercase tracking-wider text-text-secondary mb-3'>Process Info</h4>
-				{describeQuery.isLoading ? (
-					<div className='space-y-2'>
-						{Array.from({length: 7}).map((_, i) => (
-							<div key={i} className='h-4 rounded bg-surface-2 animate-pulse' />
-						))}
-					</div>
-				) : detail ? (
-					<div className='space-y-1.5 text-xs'>
-						{([
-							['PID', detail.pid ? String(detail.pid) : 'N/A'],
-							['Script', detail.script],
-							['Working Dir', detail.cwd],
-							['Node', detail.nodeVersion],
-							['Mode', detail.execMode],
-							['Restarts', String(detail.restarts)],
-							['Uptime', formatUptime(detail.uptime)],
-						] as const).map(([label, value]) => (
-							<div key={label} className='flex items-start gap-2'>
-								<span className='w-20 shrink-0 font-medium text-text-secondary'>{label}</span>
-								<span className='truncate text-text-primary font-mono' title={value}>{value}</span>
-							</div>
-						))}
-					</div>
-				) : (
-					<p className='text-xs text-text-tertiary'>Failed to load details</p>
-				)}
-			</div>
-
-			{/* Log Section */}
-			<div className='flex flex-1 flex-col min-w-0'>
-				<div className='mb-2 flex items-center gap-3'>
-					<h4 className='text-xs font-semibold uppercase tracking-wider text-text-secondary'>Logs</h4>
-					<div className='flex items-center gap-1'>
-						<input
-							type='range'
-							min={50}
-							max={500}
-							step={50}
-							value={logLines}
-							onChange={(e) => setLogLines(Number(e.target.value))}
-							className='w-24 accent-brand'
-						/>
-						<span className='text-xs text-text-tertiary ml-1'>{logLines} lines</span>
-					</div>
-					<button
-						onClick={() => logsQuery.refetch()}
-						disabled={logsQuery.isFetching}
-						className='ml-auto flex items-center gap-1 rounded-lg bg-surface-1 px-2 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
-					>
-						<IconRefresh size={12} className={logsQuery.isFetching ? 'animate-spin' : ''} />
-						Refresh
-					</button>
-				</div>
-				<pre
-					ref={preRef}
-					className='flex-1 max-h-[300px] overflow-y-auto rounded-lg bg-neutral-900/50 p-3 font-mono text-xs text-neutral-200 leading-relaxed'
-				>
-					{logsQuery.isLoading ? 'Loading logs...' : logsQuery.data ?? 'No logs available'}
-				</pre>
-			</div>
-		</div>
-	)
-}
-
-// PM2 Tab Component
-function PM2Tab() {
-	const {
-		processes,
-		isLoading,
-		isError,
-		error,
-		isFetching,
-		refetch,
-		manage,
-		isManaging,
-		actionResult,
-		onlineCount,
-		totalCount,
-	} = usePM2()
-
-	const [expandedProcess, setExpandedProcess] = useState<string | null>(null)
-
-	return (
-		<>
-			{/* Summary Row */}
-			<div className='mb-4 flex flex-wrap items-center justify-between gap-2'>
-				<div className='text-sm text-text-secondary'>
-					<span className='font-medium text-emerald-500'>{onlineCount}</span>
-					<span className='mx-1'>/</span>
-					<span>{totalCount}</span>
-					<span className='ml-1'>online</span>
-				</div>
-				<button
-					onClick={() => refetch()}
-					disabled={isFetching}
-					className='flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50'
-				>
-					<IconRefresh size={14} className={isFetching ? 'animate-spin' : ''} />
-					Refresh
-				</button>
-			</div>
-
-			{/* Action Result Toast */}
-			<AnimatePresence>
-				{actionResult && (
-					<motion.div
-						initial={{opacity: 0, y: -10}}
-						animate={{opacity: 1, y: 0}}
-						exit={{opacity: 0, y: -10}}
-						className={cn(
-							'mb-4 rounded-lg px-4 py-3 text-sm font-medium',
-							actionResult.type === 'success'
-								? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
-								: 'bg-accent-red/20 text-accent-red border border-accent-red/30',
-						)}
-					>
-						{actionResult.message}
-					</motion.div>
-				)}
-			</AnimatePresence>
-
-			{/* Process Table */}
-			{isLoading ? (
-				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
-					<IconRefresh size={24} className='mx-auto mb-3 animate-spin text-text-tertiary' />
-					<p className='text-sm text-text-tertiary'>Loading PM2 processes...</p>
-				</div>
-			) : isError ? (
-				<div className='rounded-xl border border-accent-red/20 bg-accent-red/10 p-8 text-center'>
-					<IconActivity size={24} className='mx-auto mb-3 text-accent-red' />
-					<p className='text-sm text-accent-red'>Failed to load PM2 processes</p>
-					<p className='mt-1 text-xs text-accent-red/60'>{error?.message}</p>
-				</div>
-			) : !processes.length ? (
-				<div className='rounded-xl border border-border-default bg-surface-base p-12 text-center'>
-					<IconActivity size={32} className='mx-auto mb-3 text-text-tertiary' />
-					<p className='text-sm text-text-tertiary'>No PM2 processes found</p>
-				</div>
-			) : (
-				<div className='overflow-x-auto'>
-				<div className='rounded-xl border border-border-default bg-surface-base overflow-hidden'>
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead className='pl-4'>Name</TableHead>
-								<TableHead>Status</TableHead>
-								<TableHead>CPU</TableHead>
-								<TableHead>Memory</TableHead>
-								<TableHead>Uptime</TableHead>
-								<TableHead>Restarts</TableHead>
-								<TableHead className='text-right pr-4'>Actions</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{processes.map((process) => {
-								const isOnline = process.status === 'online'
-								const isExpanded = expandedProcess === process.name
-								return (
-									<Fragment key={process.name}>
-										<TableRow
-											onClick={() => setExpandedProcess(isExpanded ? null : process.name)}
-											className={cn('cursor-pointer transition-colors hover:bg-surface-1/50', isExpanded && 'bg-surface-1')}
-										>
-											<TableCell className='pl-4 font-medium'>
-												<div className='flex items-center gap-2'>
-													{isExpanded ? (
-														<IconChevronDown size={14} className='shrink-0 text-text-tertiary' />
-													) : (
-														<IconChevronRight size={14} className='shrink-0 text-text-tertiary' />
-													)}
-													{process.isProtected && (
-														<IconLock size={14} className='shrink-0 text-accent-amber' title='Protected process' />
-													)}
-													<span className='truncate' title={process.name}>
-														{process.name}
-													</span>
-												</div>
-											</TableCell>
-											<TableCell>
-												<PM2StatusBadge status={process.status} />
-											</TableCell>
-											<TableCell>
-												<span className='text-sm text-text-secondary'>{process.cpu.toFixed(1)}%</span>
-											</TableCell>
-											<TableCell>
-												<span className='text-sm text-text-secondary'>{formatBytes(process.memory)}</span>
-											</TableCell>
-											<TableCell>
-												<span className='text-sm text-text-secondary'>{formatUptime(process.uptime)}</span>
-											</TableCell>
-											<TableCell>
-												<span className='text-sm text-text-secondary'>{process.restarts}</span>
-											</TableCell>
-											<TableCell className='text-right pr-4'>
-												<div className='flex items-center justify-end gap-1'>
-													<span onClick={(e) => e.stopPropagation()}>
-														<ActionButton
-															icon={IconPlayerPlay}
-															onClick={() => manage(process.name, 'start')}
-															disabled={isManaging || isOnline}
-															color='emerald'
-															title='Start'
-														/>
-													</span>
-													<span onClick={(e) => e.stopPropagation()}>
-														<ActionButton
-															icon={IconPlayerStop}
-															onClick={() => manage(process.name, 'stop')}
-															disabled={isManaging || !isOnline || process.isProtected}
-															color='red'
-															title={process.isProtected ? 'Protected -- cannot stop' : 'Stop'}
-														/>
-													</span>
-													<span onClick={(e) => e.stopPropagation()}>
-														<ActionButton
-															icon={IconRotateClockwise}
-															onClick={() => manage(process.name, 'restart')}
-															disabled={isManaging}
-															color='blue'
-															title='Restart'
-														/>
-													</span>
-												</div>
-											</TableCell>
-										</TableRow>
-										{isExpanded && (
-											<TableRow key={`${process.name}-detail`}>
-												<TableCell colSpan={7} className='p-0 border-t border-border-default bg-surface-1/30'>
-													<PM2DetailPanel name={process.name} />
-												</TableCell>
-											</TableRow>
-										)}
-									</Fragment>
-								)
-							})}
-						</TableBody>
-					</Table>
-				</div>
-				</div>
-			)}
-		</>
-	)
-}
 
 export default function ServerControl() {
 	const isMobile = useIsMobile()
@@ -1090,28 +796,23 @@ export default function ServerControl() {
 			</div>
 
 			{/* Tabbed Interface — Docker management surface lives in the Docker app
-			    (Phase 27-02). Server Management is now Overview / PM2 / Monitoring / Domains only. */}
+			    (Phase 27-02). PM2 + Domains tabs removed 2026-06-09 per operator: PM2
+			    is retired (LivOS uses systemd, the tab always showed 0/0), and Domains
+			    duplicated the Docker-app surface. Server Management is now Overview /
+			    Monitoring only. */}
 			<Tabs defaultValue='overview' className={cn('flex flex-col px-4 pb-3 sm:px-6 sm:pb-4', !isMobile && 'min-h-0 flex-1')}>
 				<div className='shrink-0 overflow-x-auto -mx-4 px-4 sm:-mx-0 sm:px-0' style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
 					<TabsList className='shrink-0 w-max justify-start gap-1 bg-transparent p-0 sm:w-full'>
 						<TabsTrigger value='overview'>Overview</TabsTrigger>
-						<TabsTrigger value='pm2'>PM2</TabsTrigger>
 						<TabsTrigger value='monitoring'>Monitoring</TabsTrigger>
-						<TabsTrigger value='domains'>Domains</TabsTrigger>
 					</TabsList>
 				</div>
 
 				<TabsContent value='overview' className={isMobile ? '' : 'flex-1 overflow-auto'}>
 					<OverviewTab />
 				</TabsContent>
-				<TabsContent value='pm2' className={isMobile ? '' : 'flex-1 overflow-auto'}>
-					<PM2Tab />
-				</TabsContent>
 				<TabsContent value='monitoring' className={isMobile ? '' : 'flex-1 overflow-auto'}>
 					<MonitoringTab />
-				</TabsContent>
-				<TabsContent value='domains' className={isMobile ? '' : 'flex-1 overflow-auto'}>
-					<DomainsTab />
 				</TabsContent>
 			</Tabs>
 		</div>
