@@ -29,6 +29,17 @@ Environment="GEMINI_CLI_TRUST_WORKSPACE=true"
 # box before env-seed runs). aioncore→claude→luse then resolve Redis via
 # resolveLuseRedisUrl step 2 (REDIS_URL) with no dependence on the per-MCP env seed.
 EnvironmentFile=-/opt/livos/.env
+# Phase 262 WS1 (LIVOS-049) — pin aionui-web to loopback (DIRECT control).
+# Probe result (upstream iOfficeAI/AionUi packages/web-cli/src/index.ts +
+# packages/web-host/src/static-server.ts, 2026-06-09): there is NO --host
+# flag; the bind is binary — `host = allowRemote ? '0.0.0.0' : '127.0.0.1'`,
+# where allowRemote comes from the `--remote` flag (absent from ExecStart
+# below) or the AIONUI_ALLOW_REMOTE / AIONUI_REMOTE env. Pinning
+# AIONUI_ALLOW_REMOTE=0 AFTER the EnvironmentFile line wins over anything a
+# future /opt/livos/.env edit could inject (resolveAllowRemote short-circuits
+# on AIONUI_ALLOW_REMOTE before ever consulting AIONUI_REMOTE), so :3020
+# stays 127.0.0.1-only regardless of env drift.
+Environment="AIONUI_ALLOW_REMOTE=0"
 # Phase 253 — ACP orphan reaper. Claude/adapter/guide-MCP child processes spawned
 # for a chat session can escape the unit's cgroup (re-parented to init), so a plain
 # `systemctl restart liv-assistant` does NOT reap them (verified: KillMode=control-group
@@ -44,6 +55,12 @@ EnvironmentFile=-/opt/livos/.env
 ExecStartPre=-/bin/bash -c 'pkill -9 -f "[-]-input-format stream-json"; pkill -9 -f "claude-agent-ac[p]"; pkill -9 -f "mcp-guide-stdi[o]"; exit 0'
 ExecStopPost=-/bin/bash -c 'pkill -9 -f "[-]-input-format stream-json"; pkill -9 -f "claude-agent-ac[p]"; pkill -9 -f "mcp-guide-stdi[o]"; exit 0'
 ExecStart=/opt/liv-assistant/current/aionui-web start --port 3020 --data-dir /opt/liv-assistant/data --backend-bin /opt/liv-assistant/current/bundled-aioncore/linux-x64/aioncore
+# LIVOS-049 (Phase 262 WS1): pin aionui-web to loopback. AIONUI_ALLOW_REMOTE=0
+# above is the direct control (no --host flag exists upstream); this assertion
+# is the drift backstop — it fail-stops the unit if a future AionUi bump ever
+# binds :3020 non-loopback (defense-in-depth; UFW-deny 3020 is the operator
+# WS6 step).
+ExecStartPost=/bin/bash -c 'for i in $(seq 1 30); do ss -ltnH "sport = :3020" | grep -q . && break; sleep 1; done; if ss -ltnH "sport = :3020" | grep ":3020" | grep -vq "127.0.0.1:3020"; then echo "FATAL: aionui-web bound non-loopback on :3020" >&2; exit 1; fi'
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

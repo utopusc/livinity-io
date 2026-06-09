@@ -77,6 +77,54 @@ const asyncHandler = (
 		return Promise.resolve(handler(request, response, next)).catch(next)
 	}
 
+// Phase 262-01 (LIVOS-053) — the apex fail-closed gate's EXPLICIT allowlist.
+// The apex host (`bruce.livinity.io`) previously had NO server-side auth gate:
+// the app-gateway middleware bails with next() for host===mainDomain and the
+// apex Caddy block is a bare reverse_proxy to :8080, so any route that forgot
+// its own per-route check was exposed unauthenticated by default (the
+// structural reason LIVOS-041 was reachable). The apexSessionGate middleware
+// below inverts that posture: everything is session-gated UNLESS its path
+// prefix is listed here. Allowlist construction is the dangerous part (per the
+// LIVOS-053 residual-risk note) — keep entries minimal and justify each:
+//   /login, /__livos_sso, /__livos_auth — the pre-auth login + SSO surfaces
+//   /auth/                              — /auth/verify (forward_auth target;
+//                                         validates the token itself)
+//   /trpc                               — per-procedure auth enforced by the
+//                                         tRPC isAuthenticated middleware
+//   /api/auth                           — pre-auth auth API namespace
+//   /api/mcp                            — own LIVINITY_PROXY_TOKEN check
+//   /api/webhooks/                      — GitOps webhook: HMAC-SHA256
+//                                         signature IS the auth (GitHub POSTs
+//                                         carry no session cookie; gating it
+//                                         would silently break deploy-on-push)
+//   /assets/ /icons/ /fonts/ /favicon /manifest /sw.js /registerSW.js
+//   /workbox-                           — SPA shell + PWA statics the /login
+//                                         page needs pre-auth
+// DELIBERATELY NOT LISTED: /liv-login and /liv (LIVOS-041 — they are the
+// gated surfaces), /api/gmail (operator browser carries the apex cookie).
+const APEX_PUBLIC_PREFIXES = [
+	'/login',
+	'/auth/',
+	'/__livos_sso',
+	'/__livos_auth',
+	'/trpc',
+	'/api/auth',
+	'/api/mcp',
+	'/api/webhooks/',
+	'/assets/',
+	'/icons/',
+	'/fonts/',
+	'/favicon',
+	'/manifest',
+	'/sw.js',
+	'/registerSW.js',
+	'/workbox-',
+]
+
+// Pre-auth static assets (login wallpaper, hashed bundle chunks, fonts the
+// regexless prefixes above don't cover). GET-only — see apexSessionGate.
+const APEX_STATIC_ASSET_RE = /\.(js|css|map|svg|png|jpg|ico|woff2?|webmanifest)$/
+
 // Iterate over all routes and wrap them in an async handler
 const wrapHandlersWithAsyncHandler = (router: express.Router) => {
 	// Loop over each layer of the router stack
@@ -575,6 +623,60 @@ class Server {
 			} catch (error) {
 				this.logger.error('App gateway error:', error)
 				return next()
+			}
+		})
+
+		// ── Apex Session Gate (Phase 262-01, LIVOS-053) ─────────────────────
+		// FAIL-CLOSED auth gate for the apex host. Registered immediately AFTER
+		// the app-gateway middleware so subdomain/custom-domain routing is
+		// untouched; only requests whose hostname IS the active main domain are
+		// gated. Dev / no-domain boxes are unaffected (no active domain config
+		// → next()). Everything not on the explicit APEX_PUBLIC_PREFIXES
+		// allowlist (or the GET static-asset shapes the /login SPA shell needs)
+		// requires a session that passes verifySessionFull (signature + exp +
+		// jti revocation + active-user re-check). On internal error: 401 —
+		// NEVER next() — the inverse of the fail-open posture LIVOS-053 flags.
+		this.app.use(async (request, response, next) => {
+			try {
+				// Same domain-config resolution as the app-gateway middleware.
+				const domainConfigRaw = await this.livinityd.ai.redis.get('livos:domain:config')
+				if (!domainConfigRaw) return next()
+				const domainConfig = JSON.parse(domainConfigRaw)
+				if (!domainConfig.active || !domainConfig.domain) return next()
+				if (request.hostname !== domainConfig.domain) return next()
+
+				const path = request.path ?? ''
+				// The SPA shell itself (serves the /login route pre-auth).
+				if (path === '/') return next()
+				for (const prefix of APEX_PUBLIC_PREFIXES) {
+					if (path.startsWith(prefix)) return next()
+				}
+				// Hashed bundle chunks / wallpapers / fonts — GET-only.
+				if (request.method === 'GET' && APEX_STATIC_ASSET_RE.test(path)) return next()
+
+				// Token resolution mirrors /auth/verify: Bearer header first,
+				// then the LIVINITY_SESSION cookie.
+				let token = request.headers.authorization?.split(' ')[1]
+				if (!token) token = request.cookies?.LIVINITY_SESSION
+				const session = token ? await this.verifySessionFull(token) : null
+				if (session) return next()
+
+				// Logged-out browser navigation keeps the deep-link UX.
+				const accept = String(request.headers.accept ?? '')
+				if (request.method === 'GET' && accept.includes('text/html')) {
+					return response.redirect(
+						302,
+						`/login?redirect=${encodeURIComponent(request.originalUrl ?? '/')}`,
+					)
+				}
+				return response.status(401).json({error: 'unauthorized'})
+			} catch (error) {
+				// FAIL-CLOSED: an internal error must never admit the request.
+				this.logger.error('Apex session gate error (failing closed)', error)
+				if (!response.headersSent) {
+					response.status(401).json({error: 'unauthorized'})
+				}
+				return
 			}
 		})
 
