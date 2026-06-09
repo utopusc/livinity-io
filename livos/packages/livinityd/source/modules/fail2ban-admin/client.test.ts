@@ -17,9 +17,15 @@ import {
  *
  * Critical assertion (per pitfall B-01): unbanIp argv MUST be
  * `['set', jail, 'unbanip', ip]` — action-targeted unban. NEVER global flush.
+ *
+ * Phase 262 WS3 (LIVOS-043): every spawn is wrapped in `sudo -n` so it runs
+ * under the scoped LIVINITYD_FAIL2BAN Cmnd_Alias (no blanket grant). Argv
+ * assertions check binary === /usr/bin/sudo and the ['-n', BINARY_PATH, ...]
+ * prefix on every call.
  */
 
 const BINARY_PATH = '/usr/bin/fail2ban-client'
+const SUDO_PATH = '/usr/bin/sudo'
 
 interface CapturedCall {
 	binary: string
@@ -50,7 +56,7 @@ async function runTests() {
 	// argv shape — Tests 1-5 (B-01 action-targeted unban + FR-F2B-02 whitelist)
 	// ---------------------------------------------------------------
 
-	// Test 1: listJails calls (BINARY_PATH, ['status'], {timeout: 10000})
+	// Test 1: listJails calls (SUDO_PATH, ['-n', BINARY_PATH, 'status'], {timeout: 10000})
 	{
 		const {exec, calls} = makeRecordingExec(`Status
 |- Number of jail:	1
@@ -60,10 +66,10 @@ async function runTests() {
 		const jails = await client.listJails()
 		assert.deepEqual(jails, ['sshd'])
 		assert.equal(calls.length, 1)
-		assert.equal(calls[0].binary, BINARY_PATH)
-		assert.deepEqual(calls[0].args, ['status'])
+		assert.equal(calls[0].binary, SUDO_PATH)
+		assert.deepEqual(calls[0].args, ['-n', BINARY_PATH, 'status'])
 		assert.equal(calls[0].opts.timeout, 10_000)
-		console.log('  PASS Test 1: listJails argv shape')
+		console.log('  PASS Test 1: listJails argv shape (sudo -n prefix, 262 WS3)')
 	}
 
 	// Test 2: getJailStatus('sshd') calls with ['status', 'sshd']
@@ -81,38 +87,42 @@ async function runTests() {
 		const client = makeFail2banClient(exec)
 		await client.getJailStatus('sshd')
 		assert.equal(calls.length, 1)
-		assert.deepEqual(calls[0].args, ['status', 'sshd'])
-		console.log('  PASS Test 2: getJailStatus argv shape')
+		assert.equal(calls[0].binary, SUDO_PATH)
+		assert.deepEqual(calls[0].args, ['-n', BINARY_PATH, 'status', 'sshd'])
+		console.log('  PASS Test 2: getJailStatus argv shape (sudo -n prefix)')
 	}
 
-	// Test 3: unbanIp argv = ['set', 'sshd', 'unbanip', '1.2.3.4'] (pitfall B-01)
+	// Test 3: unbanIp argv = ['-n', BINARY_PATH, 'set', 'sshd', 'unbanip', '1.2.3.4'] (pitfall B-01)
 	{
 		const {exec, calls} = makeRecordingExec()
 		const client = makeFail2banClient(exec)
 		await client.unbanIp('sshd', '1.2.3.4')
 		assert.equal(calls.length, 1)
-		assert.deepEqual(calls[0].args, ['set', 'sshd', 'unbanip', '1.2.3.4'])
-		console.log('  PASS Test 3: unbanIp action-targeted argv (B-01)')
+		assert.equal(calls[0].binary, SUDO_PATH)
+		assert.deepEqual(calls[0].args, ['-n', BINARY_PATH, 'set', 'sshd', 'unbanip', '1.2.3.4'])
+		console.log('  PASS Test 3: unbanIp action-targeted argv (B-01, sudo -n prefix)')
 	}
 
-	// Test 4: banIp argv = ['set', 'sshd', 'banip', '1.2.3.4']
+	// Test 4: banIp argv = ['-n', BINARY_PATH, 'set', 'sshd', 'banip', '1.2.3.4']
 	{
 		const {exec, calls} = makeRecordingExec()
 		const client = makeFail2banClient(exec)
 		await client.banIp('sshd', '1.2.3.4')
 		assert.equal(calls.length, 1)
-		assert.deepEqual(calls[0].args, ['set', 'sshd', 'banip', '1.2.3.4'])
-		console.log('  PASS Test 4: banIp argv shape')
+		assert.equal(calls[0].binary, SUDO_PATH)
+		assert.deepEqual(calls[0].args, ['-n', BINARY_PATH, 'set', 'sshd', 'banip', '1.2.3.4'])
+		console.log('  PASS Test 4: banIp argv shape (sudo -n prefix)')
 	}
 
-	// Test 5: addIgnoreIp argv = ['set', 'sshd', 'addignoreip', '1.2.3.4'] (FR-F2B-02 whitelist)
+	// Test 5: addIgnoreIp argv = ['-n', BINARY_PATH, 'set', 'sshd', 'addignoreip', '1.2.3.4'] (FR-F2B-02 whitelist)
 	{
 		const {exec, calls} = makeRecordingExec()
 		const client = makeFail2banClient(exec)
 		await client.addIgnoreIp('sshd', '1.2.3.4')
 		assert.equal(calls.length, 1)
-		assert.deepEqual(calls[0].args, ['set', 'sshd', 'addignoreip', '1.2.3.4'])
-		console.log('  PASS Test 5: addIgnoreIp whitelist argv (FR-F2B-02)')
+		assert.equal(calls[0].binary, SUDO_PATH)
+		assert.deepEqual(calls[0].args, ['-n', BINARY_PATH, 'set', 'sshd', 'addignoreip', '1.2.3.4'])
+		console.log('  PASS Test 5: addIgnoreIp whitelist argv (FR-F2B-02, sudo -n prefix)')
 	}
 
 	// ---------------------------------------------------------------
@@ -129,6 +139,23 @@ async function runTests() {
 				err instanceof Fail2banClientError && err.kind === 'binary-missing',
 		)
 		console.log('  PASS Test 6: ENOENT → kind=binary-missing')
+	}
+
+	// Test 6b (262 WS3): sudo-wrapped missing binary — sudo spawns fine but exits
+	// non-zero with "command not found" on stderr → kind='binary-missing'.
+	// Under the `sudo -n` wrapper a missing fail2ban-client no longer surfaces
+	// as spawn ENOENT, so the stderr mapping carries the documented contract.
+	{
+		const childErr: any = new Error('Command failed')
+		childErr.stderr = 'sudo: /usr/bin/fail2ban-client: command not found\n'
+		childErr.stdout = ''
+		const client = makeFail2banClient(makeThrowingExec(childErr))
+		await assert.rejects(
+			() => client.listJails(),
+			(err: unknown) =>
+				err instanceof Fail2banClientError && err.kind === 'binary-missing',
+		)
+		console.log('  PASS Test 6b: stderr "command not found" → kind=binary-missing (262 WS3)')
 	}
 
 	// Test 7: stderr 'Could not find server' → kind='service-down'
@@ -243,7 +270,7 @@ async function runTests() {
 		console.log('  PASS Test 13: ping() ENOENT → graceful degrade')
 	}
 
-	console.log('\nAll client.test.ts tests passed (13/13)')
+	console.log('\nAll client.test.ts tests passed (14/14)')
 }
 
 runTests().catch((err) => {

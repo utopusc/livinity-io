@@ -4,7 +4,8 @@
 # commands identified by .planning/phases/192-livinityd-bruce-user-switch/
 # 192-AUDIT.md (sections SUDO_WRAPPER #19-#22).
 #
-# No NOPASSWD: ALL. No shell wildcards inside binary paths. Globs only in
+# No passwordless-everything (blanket) grant — every entry is a scoped
+# Cmnd_Alias. No shell wildcards inside binary paths. Globs only in
 # argument-position, following the precedent established by
 # scripts/install/sudoers.d/livos-native (Phase 150-B).
 #
@@ -55,3 +56,13 @@ bruce ALL=(bruce) NOPASSWD: LIVINITYD_LAUNCH_CHROME, LIVINITYD_GOOGLE_CHROME, LI
 # 23. Phase 196-05 — onboarding locale-timezone step ships timedatectl set-timezone
 Cmnd_Alias LIVINITYD_TIMEDATECTL = /usr/bin/timedatectl set-timezone *
 bruce ALL=(root) NOPASSWD: LIVINITYD_TIMEDATECTL
+
+# 24. Phase 262 WS3 (LIVOS-043) — fail2ban Settings panel (fail2ban-admin/client.ts).
+# Exact subcommand shapes only — status reads, per-jail banip/unbanip, and the
+# per-jail addignoreip whitelist. NEVER a bare `/usr/bin/fail2ban-client *`
+# (that would also grant the global-flush `unban`, config reload, `set ...
+# action*`, etc.). client.ts validates jail (/^[a-zA-Z0-9_.-]+$/) and IPv4 via
+# zod+regex BEFORE every spawn, and invokes via `sudo -n` so the panel works
+# under this scoped grant with no blanket drop-in present.
+Cmnd_Alias LIVINITYD_FAIL2BAN = /usr/bin/fail2ban-client status, /usr/bin/fail2ban-client status *, /usr/bin/fail2ban-client set * banip *, /usr/bin/fail2ban-client set * unbanip *, /usr/bin/fail2ban-client set * addignoreip *
+bruce ALL=(root) NOPASSWD: LIVINITYD_FAIL2BAN
