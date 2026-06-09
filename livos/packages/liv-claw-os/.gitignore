@@ -1,0 +1,63 @@
+# OS
+.DS_Store
+
+# IDEs and editors
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Cursor
+.cursor/plans
+.cursor/agents
+
+# Claude
+Claude.md
+.claude/
+CLAUDE.local.md
+.workspace/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+.pnpm-debug.log
+package-lock.json
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Cloudflare / OpenNext
+.wrangler/
+.open-next/
+
+# Build outputs
+dist/
+build/
+
+# claw-client static export bundled into claw-plugin by `pnpm bundle-ui`
+packages/claw-plugin/static/
+
+# TypeScript
+*.tsbuildinfo
+.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Future Plans
+PLAN*
+draft/
