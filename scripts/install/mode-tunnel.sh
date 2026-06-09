@@ -352,15 +352,10 @@ _configure_caddy_for_tunnel() {
             }
         }
     }
-    # G13 — the Liv AI "Local Agents" panel (Phase 240-02 injected JS) calls
-    # /liv/trpc/cliInstaller.{detect,install,auth} expecting livinityd :8080.
-    # MUST precede @liv, else /liv/trpc/* falls into @liv → AionUi :3020 →
-    # AionUi serves its SPA index.html → "Unexpected token '<' … not valid JSON".
-    @liv_trpc path /liv/trpc /liv/trpc/*
-    handle @liv_trpc {
-        uri strip_prefix /liv
-        reverse_proxy 127.0.0.1:8080
-    }
+    # Phase 262 WS1 (LIVOS-054): the /liv/trpc/* → livinityd :8080 bridge was REMOVED.
+    # The framed AionUi SPA must NOT reach the full LivOS tRPC API with the operator's
+    # same-origin cookie auto-attached. (The dynamic livinityd Caddy regen no longer emits
+    # this bridge either; the in-repo cliInstaller consumer breakage is accepted/LOCKED.)
     @liv path /liv /liv/*
     handle @liv {
         uri strip_prefix /liv
