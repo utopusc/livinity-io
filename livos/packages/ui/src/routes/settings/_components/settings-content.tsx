@@ -10,7 +10,6 @@ import {
 	TbPlug,
 	TbSettings,
 	TbTool,
-	TbWorld,
 	TbPhoto,
 	TbShield,
 	TbLanguage,
@@ -39,8 +38,6 @@ import {
 	TbLogin,
 	TbUsers,
 	TbBrain,
-	TbServer2,
-	TbCalendarTime,
 	TbStethoscope,
 	TbBrandChrome,
 	TbPlayerPlay,
@@ -108,9 +105,6 @@ import {TbSun, TbMoon, TbDeviceDesktop} from 'react-icons/tb'
 const UsersSectionLazy = React.lazy(() =>
 	import('@/routes/settings/users').then((m) => ({default: m.UsersSection})),
 )
-const AdminDevicesSectionLazy = React.lazy(() =>
-	import('./admin-devices-section').then((m) => ({default: m.AdminDevicesSection})),
-)
 // AI-chat-specific settings (memory / ai-config / liv-agent / autonomous-agents /
 // ai-chat-settings) removed with the AI Chat teardown.
 // Phase 102-07 — Chrome Master Login (D-102-MASTER-LOGIN-UI).
@@ -134,18 +128,15 @@ type SettingsSection =
 	| 'home'
 	| 'account'
 	| 'users'
-	| 'admin-devices'
 	| 'wallpaper'
 	| '2fa'
 	| 'chrome-master'
 	| 'mcp-servers'
-	| 'my-domains'
 	| 'backups'
 	| 'migration'
 	| 'language'
 	| 'troubleshoot'
 	| 'advanced'
-	| 'scheduler'
 	| 'software-update'
 	// v29.4 Phase 47 Plan 05 — AI Diagnostics admin section.
 	| 'diagnostics'
@@ -175,10 +166,7 @@ const MENU_ITEMS: MenuItem[] = [
 	{id: 'mcp-servers',      group: 'workspace', icon: TbPlugConnected, label: 'MCP Servers',      description: 'Manage Model Context Protocol servers',   adminOnly: true},
 	// ── SYSTEM ────────────────────────────────────────────────────────
 	{id: 'users',            group: 'system', icon: TbUsers,           label: 'Users',             description: 'Manage users & invites',                  adminOnly: true},
-	{id: 'admin-devices',    group: 'system', icon: TbServer2,         label: 'Devices',           description: 'All devices across all users',            adminOnly: true},
-	{id: 'my-domains',       group: 'system', icon: TbWorld,           label: 'My Domains',        description: 'Domains synced from livinity.io',         adminOnly: true},
 	{id: 'chrome-master',    group: 'system', icon: TbBrandChrome,     label: 'Chrome Profile',    description: 'Master Chrome login for WebApps',         adminOnly: true},
-	{id: 'scheduler',        group: 'system', icon: TbCalendarTime,    label: 'Scheduler',         description: 'Scheduled backup & maintenance jobs',     adminOnly: true},
 	{id: 'backups',          group: 'system', icon: TbDatabase,        label: 'Backups',           description: 'Backup, restore & migration',             adminOnly: true},
 	{id: 'software-update',  group: 'system', icon: TbDownload,        label: 'Software Update',   description: 'Apply updates & view deploy history',     adminOnly: true},
 	// ── FOOTER ────────────────────────────────────────────────────────
@@ -554,8 +542,6 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <AccountSection />
 		case 'users':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><UsersSectionLazy /></Suspense>
-		case 'admin-devices':
-			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><AdminDevicesSectionLazy /></Suspense>
 		case 'wallpaper':
 			return <WallpaperSection />
 		case '2fa':
@@ -567,10 +553,6 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 		// ai-config / liv-agent / ai-chat-settings / autonomous-agents / integrations
 		// / gmail / dm-pairing / usage / webhooks / voice / memory cases removed
 		// with the AI Chat teardown.
-		case 'my-domains':
-			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><MyDomainsSectionLazy /></Suspense>
-		case 'scheduler':
-			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><SchedulerSectionLazy /></Suspense>
 		case 'backups':
 			return <BackupsSection />
 		case 'migration':
@@ -1005,12 +987,6 @@ function TwoFaSection() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Other Sections (Simplified)
 // ─────────────────────────────────────────────────────────────────────────────
-
-const MyDomainsSectionLazy = React.lazy(() => import('./my-domains-section'))
-
-const SchedulerSectionLazy = React.lazy(() =>
-	import('./scheduler-section').then((m) => ({default: m.SchedulerSection})),
-)
 
 // v29.4 Phase 47 Plan 05 — AI Diagnostics lazy section.
 // settings-content.tsx is at livos/packages/ui/src/routes/settings/_components/settings-content.tsx
