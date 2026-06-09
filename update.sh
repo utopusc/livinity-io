@@ -667,7 +667,12 @@ if [[ -f "$TEMP_DIR/update.sh" ]]; then
     cp "$TEMP_DIR/update.sh" "$LIVOS_DIR/update.sh.new"
     chmod +x "$LIVOS_DIR/update.sh.new"
     mv "$LIVOS_DIR/update.sh.new" "$LIVOS_DIR/update.sh"
-    ok "update.sh updated (next run will use new version)"
+    # Phase 262 WS3: keep update.sh root-owned so the scoped LIVINITYD_UPDATE sudoers grant
+    # (`sudo -n bash /opt/livos/update.sh`) stays SAFE across deploys — bruce executes but
+    # cannot rewrite it (else the Update-button grant would be a passwordless-root hole).
+    chown root:root "$LIVOS_DIR/update.sh" 2>/dev/null || true
+    chmod 0755 "$LIVOS_DIR/update.sh" 2>/dev/null || true
+    ok "update.sh updated + root-owned (next run will use new version)"
 else
     warn "update.sh not in TEMP_DIR — skipping self-update"
 fi
