@@ -43,6 +43,10 @@ import {
 	TbPlayerPlay,
 	TbPlayerPause,
 	TbDownload,
+	TbPower,
+	TbClock,
+	TbDeviceSdCard,
+	TbShieldLock,
 	TbMessages,
 	TbRobot,
 } from 'react-icons/tb'
@@ -89,7 +93,6 @@ import {useIsMobile} from '@/hooks/use-is-mobile'
 import {ChangePasswordWarning, ContactSupportLink} from './shared'
 import {SettingsInfoCard} from './settings-info-card'
 import {SettingsToggleRow} from './settings-toggle-row'
-import {SecurityToggleRow} from './security-toggle-row'
 import {SoftwareUpdateListRow} from './software-update-list-row'
 import {PastDeploysTable} from './past-deploys-table'
 import {MenuItemBadge} from './menu-item-badge'
@@ -111,6 +114,11 @@ const UsersSectionLazy = React.lazy(() =>
 const ChromeMasterLazy = React.lazy(() => import('@/routes/settings/chrome-master'))
 // Phase 182-04 — MCP Servers management panel.
 const McpServersLazy = React.lazy(() => import('@/routes/settings/mcp-servers'))
+// Settings overhaul 2026-06-09 — Power / Date & Time / Storage & Drives / Security & Sessions.
+const PowerSectionLazy = React.lazy(() => import('./power-section').then((m) => ({default: m.PowerSection})))
+const DateTimeSectionLazy = React.lazy(() => import('./date-time-section').then((m) => ({default: m.DateTimeSection})))
+const StorageDrivesSectionLazy = React.lazy(() => import('./storage-section').then((m) => ({default: m.StorageDrivesSection})))
+const SecuritySessionsSectionLazy = React.lazy(() => import('./security-sessions-section').then((m) => ({default: m.SecuritySessionsSection})))
 // Phase 246-05 — Settings → System section (hosts the v44 "Active terminals"
 // admin panel). The panel self-gates via useTerminalPanelEnabled, so when the
 // v43 feature flag is OFF the section renders nothing — the surface vanishes
@@ -131,6 +139,10 @@ type SettingsSection =
 	| 'wallpaper'
 	| '2fa'
 	| 'chrome-master'
+	| 'power'
+	| 'date-time'
+	| 'storage'
+	| 'security-sessions'
 	| 'mcp-servers'
 	| 'backups'
 	| 'migration'
@@ -167,6 +179,10 @@ const MENU_ITEMS: MenuItem[] = [
 	// ── SYSTEM ────────────────────────────────────────────────────────
 	{id: 'users',            group: 'system', icon: TbUsers,           label: 'Users',             description: 'Manage users & invites',                  adminOnly: true},
 	{id: 'chrome-master',    group: 'system', icon: TbBrandChrome,     label: 'Chrome Profile',    description: 'Master Chrome login for WebApps',         adminOnly: true},
+	{id: 'power',            group: 'system', icon: TbPower,           label: 'Power',             description: 'Restart or shut down this device',        adminOnly: true},
+	{id: 'date-time',        group: 'system', icon: TbClock,           label: 'Date & Time',       description: 'Time zone & language',                    adminOnly: true},
+	{id: 'storage',          group: 'system', icon: TbDeviceSdCard,    label: 'Storage',           description: 'USB drives, network shares & sharing',    adminOnly: true},
+	{id: 'security-sessions', group: 'system', icon: TbShieldLock,     label: 'Security & Sessions', description: 'Banned IPs, access & sign-out',         adminOnly: true},
 	{id: 'backups',          group: 'system', icon: TbDatabase,        label: 'Backups',           description: 'Backup, restore & migration',             adminOnly: true},
 	{id: 'software-update',  group: 'system', icon: TbDownload,        label: 'Software Update',   description: 'Apply updates & view deploy history',     adminOnly: true},
 	// ── FOOTER ────────────────────────────────────────────────────────
@@ -548,6 +564,14 @@ function SectionContent({section, onBack}: {section: SettingsSection; onBack: ()
 			return <TwoFaSection />
 		case 'chrome-master':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><ChromeMasterLazy /></Suspense>
+		case 'power':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><PowerSectionLazy /></Suspense>
+		case 'date-time':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><DateTimeSectionLazy /></Suspense>
+		case 'storage':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><StorageDrivesSectionLazy /></Suspense>
+		case 'security-sessions':
+			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><SecuritySessionsSectionLazy /></Suspense>
 		case 'mcp-servers':
 			return <Suspense fallback={<div className='flex items-center justify-center py-8'><Loader2 className='size-5 animate-spin text-text-tertiary' /></div>}><McpServersLazy /></Suspense>
 		// ai-config / liv-agent / ai-chat-settings / autonomous-agents / integrations
@@ -1459,9 +1483,6 @@ function AdvancedSection() {
 				onCheckedChange={(checked) => externalDnsMut.mutate(checked)}
 				disabled={isExternalDnsLoading}
 			/>
-
-			{/* Security panel (FR-F2B-06) — toggle visibility of Server Management > Security sidebar entry. */}
-			<SecurityToggleRow />
 
 			{/* Factory Reset */}
 			<div className='flex items-center justify-between rounded-radius-md border border-accent-red/20 bg-accent-red/5 p-4'>
