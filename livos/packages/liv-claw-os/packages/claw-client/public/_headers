@@ -1,0 +1,22 @@
+# https://developers.cloudflare.com/workers/static-assets/headers
+# https://opennext.js.org/cloudflare/caching#static-assets-caching
+/_next/static/*
+  Cache-Control: public,max-age=31536000,immutable
+
+# Phase 203 Hot-fix I 2026-05-24 — shell + SW + manifest MUST NOT be cached.
+# Content-hashed chunks under /_next/static/* stay immutable (their filenames
+# change on every build) but `index.html`, `sw.js`, and the manifest are
+# stable URLs whose CONTENT changes between deploys. Without `no-store` here,
+# operator browsers keep returning the stale shell + stale SW, and Hot-fix H's
+# "no form inside LivOS" logic never reaches the operator without a manual
+# hard-reload. (Whether the openclaw plugin's static-serve middleware honors
+# `_headers` is checked by Plan 203-12; if not, the per-request SW + storage
+# scrubs added in Hot-fix I parts 1-2 still recover the operator on next mount.)
+/
+  Cache-Control: no-store, must-revalidate
+/index.html
+  Cache-Control: no-store, must-revalidate
+/sw.js
+  Cache-Control: no-store, must-revalidate
+/manifest.webmanifest
+  Cache-Control: no-store, must-revalidate

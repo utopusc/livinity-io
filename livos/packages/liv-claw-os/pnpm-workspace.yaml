@@ -1,0 +1,24 @@
+packages:
+  - "packages/*"
+
+# Pre-approved native build scripts. pnpm >=10 blocks postinstall scripts of
+# transitive deps unless they're listed here or approved interactively. The
+# installer runs via `curl | bash` (no TTY), so the interactive prompt is
+# unreachable — without this, esbuild/sharp/workerd never compile their native
+# binaries and the subsequent `pnpm bundle-ui` / `pnpm build` fail.
+#
+# Two formats coexist intentionally: pnpm 9–10 reads `onlyBuiltDependencies`
+# (list); pnpm 11+ reads `allowBuilds` (map). Either pnpm version honors its
+# field and ignores the other.
+onlyBuiltDependencies:
+  - esbuild
+  - koffi
+  - protobufjs
+  - sharp
+  - workerd
+allowBuilds:
+  esbuild: true
+  koffi: true
+  protobufjs: true
+  sharp: true
+  workerd: true

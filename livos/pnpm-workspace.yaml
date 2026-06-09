@@ -8,11 +8,12 @@ packages:
   - packages/design-tokens
   - packages/cli
   - packages/liv-ai-app
-  # liv-claw-os / liv-claw-gateway (Phase 203 OpenClawOS fork + gateway) REMOVED
-  # 2026-06-09 — OpenClawOS was retired in Phase 231 (AI chat -> AionUi); the
-  # packages were dead code (nothing depends on them) and the gateway service is
-  # force-masked in update.sh. livinityd's separate modules/openclawos backend
-  # (config/handshake/dock-seed) is unaffected and stays.
+  # Phase 203-02: fork of thesysdev/openclaw-os pinned at SHA 076ae63 (see UPSTREAM-COMMIT)
+  # Root container = @livos/liv-claw-os; inner packages registered flatly so pnpm sees them
+  - packages/liv-claw-os
+  - packages/liv-claw-os/packages/*
+  # Phase 203-03: thin systemd-deployable wrapper around `openclaw` npm
+  - packages/liv-claw-gateway
 
 # pnpm v11+ reads `overrides` from pnpm-workspace.yaml (NOT package.json.pnpm).
 # When it lived only in package.json, pnpm 11 computed expected-overrides={}
