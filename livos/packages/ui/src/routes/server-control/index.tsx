@@ -189,39 +189,10 @@ function ActionButton({
 	)
 }
 
-// Format port mappings for display
-function formatPorts(ports: Array<{hostPort: number | null; containerPort: number; protocol: string}>) {
-	if (!ports.length) return '-'
-	return ports
-		.map((p) => (p.hostPort != null ? `${p.hostPort}:${p.containerPort}/${p.protocol}` : `${p.containerPort}/${p.protocol}`))
-		.join(', ')
-}
-
-// State badge with color coding
-function StateBadge({state}: {state: string}) {
-	const colorClasses: Record<string, string> = {
-		running: 'bg-emerald-500/20 text-emerald-600',
-		exited: 'bg-accent-red/20 text-accent-red',
-		paused: 'bg-accent-amber/20 text-accent-amber',
-	}
-	const classes = colorClasses[state] ?? 'bg-neutral-500/20 text-neutral-600'
-	return (
-		<span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide', classes)}>
-			{state}
-		</span>
-	)
-}
-
-// Placeholder tab content for future phases
-function PlaceholderTab({title, icon: Icon}: {title: string; icon: React.ComponentType<{size?: number; className?: string}>}) {
-	return (
-		<div className='flex flex-col items-center justify-center py-20'>
-			<Icon size={40} className='mb-3 text-text-tertiary' />
-			<p className='text-sm font-medium text-text-secondary'>{title}</p>
-			<p className='mt-1 text-xs text-text-tertiary'>Coming soon</p>
-		</div>
-	)
-}
+// Dead code removed 2026-06-09 (plan #4.1): formatPorts / StateBadge /
+// PlaceholderTab were defined but never referenced — leftovers from an earlier
+// server-control Docker-table scaffold that moved to the Docker app (Phase
+// 27-02). The container-table formatPorts lives in docker/resources/format-ports.
 
 // Format bytes/sec to human-readable speed string
 function formatSpeed(bytesPerSec: number): string {

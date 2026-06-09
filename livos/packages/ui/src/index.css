@@ -27,6 +27,32 @@
 	animation-duration: 0.1s;
 }
 
+/* 2026-06-09 — fullscreen theme fix (plan #3.1).
+ *
+ * The window chrome's Fullscreen button calls requestFullscreen() on the WINDOW
+ * CONTENT element. The UA paints an OPAQUE BLACK `::backdrop` behind a
+ * fullscreened element, and any letterbox / transparent region of the content
+ * (e.g. a VNC DISPLAY_:N canvas with a fixed aspect ratio, or content that
+ * relies on a parent for its background) lets that black show through — so in
+ * LIGHT theme fullscreen looked dark ("Full screen çok kötü oluyor karanlık
+ * temaya geçiyor"). Paint BOTH the fullscreened element and its backdrop with
+ * the active theme background. `var(--bg)` resolves through normal inheritance
+ * (`:root` = #fff light / `body.dark` = #0a0a0c dark); `::backdrop` inherits
+ * from its originating element per spec, so the same var resolves there too. */
+:fullscreen {
+	background-color: var(--bg);
+}
+:fullscreen::backdrop {
+	background-color: var(--bg);
+}
+/* WebKit prefix fallback (Safari / older Chromium WebViews). */
+:-webkit-full-screen {
+	background-color: var(--bg);
+}
+:-webkit-full-screen::-webkit-backdrop {
+	background-color: var(--bg);
+}
+
 html,
 body {
 	/* To match Figma weight */
