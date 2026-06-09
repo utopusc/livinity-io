@@ -766,6 +766,18 @@ else
     info "liv-claw-gateway not in TEMP_DIR — skipping (Phase 203 wrapper not in this checkout)"
 fi
 
+# ── liv-claw-os / liv-claw-gateway REPO REMOVAL cleanup (2026-06-09) ──────────
+# The two packages were deleted from the repo (OpenClawOS retired in Phase 231).
+# A Mini PC that deployed an older revision still has STALE on-disk copies at
+# $LIVOS_DIR/packages/liv-claw-{os,gateway}; left in place they would trigger the
+# downstream `pnpm --filter @livos/liv-claw-* …` steps which now fail (the
+# filters no longer resolve — the packages are gone from pnpm-workspace.yaml).
+# Remove them so every guarded claw step below becomes a clean no-op. Idempotent.
+if [[ -d "$LIVOS_DIR/packages/liv-claw-os" || -d "$LIVOS_DIR/packages/liv-claw-gateway" ]]; then
+    rm -rf "$LIVOS_DIR/packages/liv-claw-os" "$LIVOS_DIR/packages/liv-claw-gateway"
+    ok "Removed stale liv-claw-os / liv-claw-gateway packages (retired — repo removal 2026-06-09)"
+fi
+
 # ── Step 3: Update Liv source files ───────────────────────
 step "Updating Liv source files"
 
