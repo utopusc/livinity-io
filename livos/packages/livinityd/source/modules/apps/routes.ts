@@ -515,10 +515,15 @@ export const apps = router({
 		.mutation(async ({ctx, input}) => {
 			const {appId, mode, paths} = input
 
-			// (a) Authority — owner OR admin. Legacy single-user (no currentUser) is
-			// admin-equivalent (matches the install gate convention, routes.ts:218).
+			// (a) Authority — owner OR admin. Phase 262-05 (LIVOS-057 companion,
+			// WS-A5 parity): an absent currentUser is admin-equivalent ONLY via the
+			// EXPLICIT ctx.legacySingleUser flag (parity with the 256-04 requireRole
+			// guard) — a legacy no-userId token over the /trpc WS must NOT infer
+			// isAdmin=true in multi-user mode.
 			const userId = ctx.currentUser?.id
-			const isAdmin = ctx.currentUser ? ctx.currentUser.role === 'admin' : true
+			const isAdmin = ctx.currentUser
+				? ctx.currentUser.role === 'admin'
+				: ctx.legacySingleUser === true
 			if (!isAdmin) {
 				if (!userId) {
 					throw new TRPCError({code: 'FORBIDDEN', message: 'Authentication required'})

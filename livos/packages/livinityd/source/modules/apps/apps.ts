@@ -470,6 +470,10 @@ export default class Apps {
 					website: builtinApp.website,
 					port: builtinApp.port,
 					icon: builtinApp.icon,
+					// Phase 262-05 (LIVOS-057): thread the public-forbidden load-bearing
+					// flags into the written manifest (js-yaml drops undefined keys).
+					requiresLocalAiClis: (builtinApp as any).requiresLocalAiClis ?? undefined,
+					neverPublic: (builtinApp as any).neverPublic ?? undefined,
 				}
 				await fse.writeFile(`${appDataDirectory}/livinity-app.yml`, yaml.dump(manifest))
 			}
@@ -1090,6 +1094,11 @@ export default class Apps {
 				// the nested manifest blob.
 				requiresAiProvider: data.requiresAiProvider ?? data.manifest?.requiresAiProvider ?? undefined,
 				requiresLocalAiClis: data.requiresLocalAiClis ?? data.manifest?.requiresLocalAiClis ?? undefined,
+				// Phase 262-05 (LIVOS-057): the platform path threaded
+				// requiresLocalAiClis but DROPPED neverPublic — a platform app whose
+				// ONLY forbidden signal is neverPublic could be made public against
+				// author intent. Thread it the same way.
+				neverPublic: data.neverPublic ?? data.manifest?.neverPublic ?? undefined,
 			}
 
 			const yaml = (await import('js-yaml')).default
@@ -1763,9 +1772,16 @@ export default class Apps {
 		} catch {
 			// getApp throws for an unregistered app — fall through with whatever we have.
 		}
+		// Phase 262-05 (LIVOS-057): OR the load-bearing flags with the builtin
+		// catalog definition (mirroring the credential mount path at the
+		// reapplyAppConfig getBuiltinApp OR) so a manifest-write regression on an
+		// install path can never silently disable the public-forbidden guard for
+		// a credentialed builtin.
+		const builtinDef = getBuiltinApp(appId) as any
 		const signals: PublicForbiddenSignals = {
-			neverPublic: manifest?.neverPublic === true,
-			requiresLocalAiClis: manifest?.requiresLocalAiClis === true,
+			neverPublic: manifest?.neverPublic === true || builtinDef?.neverPublic === true,
+			requiresLocalAiClis:
+				manifest?.requiresLocalAiClis === true || builtinDef?.requiresLocalAiClis === true,
 			hasDaemonBearer: !!upstreamBearer,
 			compose,
 		}

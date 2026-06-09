@@ -132,6 +132,13 @@ export async function generateAppTemplate(appId: string): Promise<string | null>
 	if ((app as any).icon) manifest.icon = (app as any).icon
 	if ((app as any).repo) manifest.repo = (app as any).repo
 	if ((app as any).requiresAiProvider === true) manifest.requiresAiProvider = true
+	// Phase 262-05 (LIVOS-057): thread the public-forbidden LOAD-BEARING flags
+	// into the written manifest exactly as requiresAiProvider above. Without
+	// this, a credentialed builtin installed via the compose-generated path
+	// writes a flag-absent manifest and buildPublicForbiddenSignals would read
+	// requiresLocalAiClis/neverPublic as false (latent fail-open).
+	if ((app as any).requiresLocalAiClis === true) manifest.requiresLocalAiClis = true
+	if ((app as any).neverPublic === true) manifest.neverPublic = true
 	// Phase 43.5: propagate installOptions so generated manifest carries the
 	// install dialog's environmentOverrides + subdomain. Without this, builtin
 	// apps installed via the compose-generated path lose their env-prompt
