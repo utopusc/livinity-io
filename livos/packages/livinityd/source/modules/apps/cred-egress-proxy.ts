@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
@@ -163,6 +164,108 @@ export async function injectAuthHeader(
 	headers['authorization'] = `Bearer ${token}`
 	delete headers['x-api-key']
 	return {injected: true, denied: false}
+}
+
+// ─── LIVOS-046 (262-04): per-app token registry (bind-on-first-use) ──────────
+//
+// Source-IP alone is NOT auth: ANY container on a docker bridge has a
+// `172.16.0.0/12` source and sees the host gateway, so the old `isFromBridge`
+// gate let any container borrow the operator's OAuth subscription. Each
+// `requiresLocalAiClis` install now mints a unique opaque token delivered via
+// the proxy URL userinfo (`http://app:<token>@livinity-credproxy:13129`), so the
+// CLIs' CONNECT carries `Proxy-Authorization: Basic <base64(app:token)>`.
+//
+// BIND-ON-FIRST-USE: the container's compose-network IP is not deterministically
+// known at inject time (no docker-inspect race), so the token claims its source
+// IP on its FIRST CONNECT and is pinned to it thereafter — a later CONNECT
+// presenting the SAME token from a DIFFERENT source is 403'd. The token (not a
+// narrowed CIDR) is the PRIMARY auth; `isFromBridge` stays a coarse
+// "are-you-on-a-docker-bridge-at-all" defence-in-depth gate.
+const _appTokens = new Map<string, {bridgeIp: string | null}>() // token -> bound source IP (null until first use)
+
+/** Normalise the IPv4-mapped-IPv6 form docker sometimes presents. */
+function normalizeIp(ip: string): string {
+	return ip.startsWith('::ffff:') ? ip.slice('::ffff:'.length) : ip
+}
+
+/** Register a per-app token. `bridgeIp` null (default) → bind-on-first-use. */
+export function registerAppToken(token: string, bridgeIp: string | null = null): void {
+	_appTokens.set(token, {bridgeIp})
+}
+
+/** Revoke a per-app token (app stop / uninstall). A revoked token → 403. */
+export function revokeAppToken(token: string): void {
+	_appTokens.delete(token)
+}
+
+/** Mint a fresh opaque token (48 hex chars). */
+export function mintAppToken(): string {
+	return crypto.randomBytes(24).toString('hex')
+}
+
+/**
+ * Validate a presented token against its bound source IP. Unknown/absent token
+ * → false. Known-but-unbound → claims `remoteIp` (bind-on-first-use) and passes.
+ * Known-and-bound → passes only from the bound IP. Fail-closed.
+ */
+export function checkAppToken(token: string | null, remoteIp: string): boolean {
+	if (!token) return false
+	const rec = _appTokens.get(token)
+	if (!rec) return false
+	const src = normalizeIp(remoteIp)
+	if (rec.bridgeIp == null) {
+		// Bind-on-first-use: pin this token to the first source that presents it.
+		rec.bridgeIp = src
+		return true
+	}
+	return normalizeIp(rec.bridgeIp) === src
+}
+
+/**
+ * Extract the per-app token from a CONNECT request's headers. Prefers
+ * `Proxy-Authorization: Basic <base64(user:token)>` (what Node emits when
+ * HTTPS_PROXY carries userinfo), falls back to `X-Livinity-App-Token`. Returns
+ * null when neither is present / parseable.
+ */
+export function parseAppToken(headers: http.IncomingHttpHeaders): string | null {
+	const xToken = headers['x-livinity-app-token']
+	if (typeof xToken === 'string' && xToken.length > 0) return xToken
+	const auth = headers['proxy-authorization']
+	if (typeof auth === 'string' && /^Basic\s+/i.test(auth)) {
+		try {
+			const decoded = Buffer.from(auth.replace(/^Basic\s+/i, ''), 'base64').toString('utf8')
+			const idx = decoded.indexOf(':')
+			const token = idx >= 0 ? decoded.slice(idx + 1) : decoded
+			return token.length > 0 ? token : null
+		} catch {
+			return null
+		}
+	}
+	return null
+}
+
+/**
+ * Resolve the docker-bridge gateway address to bind the proxy to (NOT 0.0.0.0).
+ * This is the `host-gateway` IP every container uses to reach the host
+ * (docker0's host-side address, conventionally 172.17.0.1) — containers on
+ * per-app `br-*` networks still reach it via host-gateway while presenting their
+ * own (172.18.x) source IP, which is why the source-IP CIDR stays at /12.
+ * Binding here keeps the proxy off the public/LAN (eth0) interface. Falls back
+ * to loopback (127.0.0.1) when docker0 is absent, so it never silently binds
+ * 0.0.0.0.
+ */
+export function resolveBridgeGatewayAddr(): string {
+	try {
+		const ifaces = os.networkInterfaces()
+		const docker0 = ifaces['docker0']
+		if (docker0) {
+			const v4 = docker0.find((a) => a.family === 'IPv4' && !a.internal)
+			if (v4?.address) return v4.address
+		}
+	} catch {
+		// fall through to loopback
+	}
+	return '127.0.0.1'
 }
 
 /** Parse a dotted IPv4 into a 32-bit unsigned int, or null. */
@@ -404,6 +507,17 @@ export function createCredEgressProxy(opts: CredEgressProxyOpts): http.Server {
 			clientSocket.destroy()
 			return
 		}
+		// LIVOS-046 (262-04): per-app token is the PRIMARY auth — source-IP alone
+		// is no longer sufficient. Require a known token (bind-on-first-use to this
+		// container's source IP) AFTER the coarse bridge gate. Absent / unknown /
+		// wrong-source token → 403.
+		const appToken = parseAppToken(req.headers)
+		if (!checkAppToken(appToken, remote)) {
+			log?.error?.(`cred-egress-proxy: refused CONNECT — missing/invalid per-app token from ${remote}`)
+			clientSocket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+			clientSocket.destroy()
+			return
+		}
 		const target = req.url || ''
 		if (!isInjectableHost(target)) {
 			// Default-deny: only the AI provider hosts may be tunnelled.
@@ -539,15 +653,24 @@ export async function startCredEgressProxyIfNeeded(logger?: {
 			)
 		}
 		const server = createCredEgressProxy({creds, logger, leafContexts})
+		// LIVOS-046 (262-04): bind to the docker-bridge gateway interface (the
+		// host-gateway IP every container uses to reach the host), NOT 0.0.0.0 —
+		// keeps the proxy off the public/LAN (eth0) interface. Containers on
+		// per-app br-* networks still reach it via host-gateway. Falls back to
+		// loopback (never 0.0.0.0) when docker0 is absent.
+		const bindAddr = resolveBridgeGatewayAddr()
+		if (bindAddr === '127.0.0.1') {
+			logger?.error?.(
+				'cred-egress-proxy: could not resolve docker0 gateway — binding loopback (127.0.0.1); containers will be unable to reach the proxy until docker0 is up',
+			)
+		}
 		await new Promise<void>((resolve, reject) => {
 			server.once('error', reject)
-			// Bind on all interfaces so the docker bridge (host-gateway) can reach
-			// it; the source-IP gate restricts who may actually use it.
-			server.listen(CREDPROXY_PORT, () => resolve())
+			server.listen(CREDPROXY_PORT, bindAddr, () => resolve())
 		})
 		_runningProxy = server
 		logger?.log(
-			`cred-egress-proxy: listening on :${CREDPROXY_PORT} (claude=${!!creds.claudeDir}, gemini=${!!creds.geminiDir}, leaf-ctx=${leafContexts.size})`,
+			`cred-egress-proxy: listening on ${bindAddr}:${CREDPROXY_PORT} (claude=${!!creds.claudeDir}, gemini=${!!creds.geminiDir}, leaf-ctx=${leafContexts.size})`,
 		)
 		return server
 	} catch (error) {
