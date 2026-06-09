@@ -30,12 +30,15 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Phase 201-06 — livos-app-liv-ai.service ships from scripts/install/systemd/
-# Phase 203-03 — liv-claw-gateway.service appended (openclaw gateway + plugin on :18789).
+# Phase 203-03's liv-claw-gateway.service was RETIRED 2026-06-09 (claw replaced
+# by AionUi in Phase 231; the liv-claw-os fork + gateway packages were removed
+# from the repo). Its unit file + array entry are gone; the runtime service is
+# already force-masked on deployed hosts.
 # Note: P201's livos-app-liv-ai.service stays in the array — it is the legacy
 # Liv AI Next.js subapp; Plan 203-12 (Mini PC deploy walk) is responsible for
 # retiring it once the openclaw path is proven. Until then both units coexist
 # (Caddy's `handle /liv-ai-app/*` reverse-proxy decides which one is reachable).
-_units=(livos.service liv-core.service liv-worker.service liv-memory.service livos-app-liv-ai.service liv-claw-gateway.service)
+_units=(livos.service liv-core.service liv-worker.service liv-memory.service livos-app-liv-ai.service)
 _repo_systemd_dir="${SCRIPT_DIR}/../../systemd"
 _install_systemd_dir="${SCRIPT_DIR}/systemd"
 _seeds_dir="${SCRIPT_DIR}/seeds"

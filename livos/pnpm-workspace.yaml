@@ -8,12 +8,6 @@ packages:
   - packages/design-tokens
   - packages/cli
   - packages/liv-ai-app
-  # Phase 203-02: fork of thesysdev/openclaw-os pinned at SHA 076ae63 (see UPSTREAM-COMMIT)
-  # Root container = @livos/liv-claw-os; inner packages registered flatly so pnpm sees them
-  - packages/liv-claw-os
-  - packages/liv-claw-os/packages/*
-  # Phase 203-03: thin systemd-deployable wrapper around `openclaw` npm
-  - packages/liv-claw-gateway
 
 # pnpm v11+ reads `overrides` from pnpm-workspace.yaml (NOT package.json.pnpm).
 # When it lived only in package.json, pnpm 11 computed expected-overrides={}
