@@ -34,8 +34,10 @@ import {createHash} from 'crypto'
 import {homedir} from 'os'
 import * as path from 'path'
 import * as https from 'https'
-import * as http from 'http'
 
+// Phase 262-02 (LIVOS-055) — SSRF guard reused on EVERY download hop: blocks
+// loopback/RFC1918/link-local (incl. 169.254.169.254 metadata)/ULA targets.
+import {validateUrl} from '../webapps/url-validator.js'
 import {
 	type AppCatalogRow,
 	type InstallContext,
@@ -61,9 +63,9 @@ type NativeManifest = {
 		| {primary: 'apt'; aptPackages: string[]}
 		// Phase 259 — for apps NOT in the default Ubuntu repos (VS Code, Brave, …):
 		// download the official .deb and `apt-get install -y <file>` (apt resolves
-		// deps). Works for EVERY install (no per-box manual repo setup). Optional
-		// sha256 pin.
-		| {primary: 'deb'; debUrl: string; debSha256?: string}
+		// deps). Works for EVERY install (no per-box manual repo setup).
+		// Phase 262-02 (LIVOS-045): sha256 pin is MANDATORY — fail-closed.
+		| {primary: 'deb'; debUrl: string; debSha256: string}
 		| {primary: 'appimage'; appimageUrl: string; appimageSha256: string}
 		// Phase 259 (round 2) — for apps officially distributed via a 3rd-party APT
 		// repo (Brave, Signal, Spotify, …): add the repo + signing key, then apt
@@ -75,13 +77,18 @@ type NativeManifest = {
 				aptRepoName: string // [a-z0-9-] slug used for the keyring + list filenames
 				aptRepoLine: string // e.g. "https://repo.example.com/ stable main"
 				aptKeyUrl: string // https URL to the (armored or binary) signing key
+				// Phase 262-02 (LIVOS-045): REQUIRED 40-hex full fingerprint of the
+				// signing key. The downloaded key is verified against this pin BEFORE
+				// the root-capable livos-add-apt-repo.sh helper is invoked.
+				aptKeyFingerprint: string
 		  }
 		// Phase 259 (round 2) — for apps whose ONLY official Linux install is a
 		// `curl … | bash` script that clones/builds locally (e.g. the official
 		// Hermes Agent). The script is run as the unprivileged install user (bruce),
 		// NEVER root — its blast radius is that user's account. stdin is closed so
 		// any optional sudo/interactive prompt gets EOF and is skipped.
-		| {primary: 'script'; scriptUrl: string; scriptArgs?: string[]; scriptSha256?: string}
+		// Phase 262-02 (LIVOS-045): sha256 pin is MANDATORY — fail-closed.
+		| {primary: 'script'; scriptUrl: string; scriptArgs?: string[]; scriptSha256: string}
 	launch: {
 		binaryPath: string
 		args?: string[]
@@ -122,6 +129,78 @@ const LIVOS_ADD_APT_REPO = '/usr/local/lib/livos/livos-add-apt-repo.sh'
 
 // Redis key holding the platform API key (mirrors apps.ts REDIS_PLATFORM_API_KEY).
 const REDIS_PLATFORM_API_KEY = 'livos:platform:api_key'
+
+// ─── Phase 262-02 — fail-closed input validators (LIVOS-044/045/055) ─────
+
+/**
+ * LIVOS-044 — Debian package-name charset. Structurally rejects leading `-`
+ * (apt `-o DPkg::Pre-Invoke` hook injection through the `apt-get install -y *`
+ * NOPASSWD sudoers wildcard), `/` (local .deb paths), `=` (version pinning /
+ * option syntax), whitespace, and `::` option syntax.
+ */
+export const APT_PACKAGE_RE = /^[a-z0-9][a-z0-9+._-]*$/
+
+/** Returns an error message, or null when every element is a valid name. */
+export function validateAptPackages(pkgs: string[]): string | null {
+	if (!pkgs.length) return 'aptPackages empty'
+	for (const p of pkgs) {
+		if (!APT_PACKAGE_RE.test(p)) return `invalid apt package name: ${JSON.stringify(p)}`
+	}
+	return null
+}
+
+/** LIVOS-045 — checksums are MANDATORY: exactly 64 hex chars, fail-closed. */
+export const SHA256_RE = /^[0-9a-f]{64}$/i
+
+/** LIVOS-045 — apt-repo signing keys carry a REQUIRED 40-hex full fingerprint pin. */
+export const GPG_FINGERPRINT_RE = /^[0-9a-f]{40}$/i
+
+/**
+ * LIVOS-045 — https-only host allowlist for EVERY artifact the native
+ * installer downloads (scriptUrl / debUrl / appimageUrl / aptKeyUrl / the URL
+ * token inside aptRepoLine). Seeded from the hosts the curated catalog
+ * actually uses: GitHub release infrastructure (incl. the CDN hosts GitHub
+ * 302s to) + the official vendor repo hosts of the Phase 259 catalog apps
+ * (Brave / Signal / Spotify / VS Code / Chrome). Extend deliberately when a
+ * new catalog row needs a new vendor host — never wildcard.
+ */
+export const NATIVE_DOWNLOAD_HOST_ALLOWLIST: ReadonlySet<string> = new Set([
+	// GitHub releases + raw + the CDN hosts release downloads redirect to.
+	'github.com',
+	'objects.githubusercontent.com',
+	'release-assets.githubusercontent.com',
+	'raw.githubusercontent.com',
+	// Vendor apt-repo / artifact hosts used by the curated native catalog.
+	'brave-browser-apt-release.s3.brave.com', // Brave repo + key
+	'updates.signal.org', // Signal repo + key
+	'repository.spotify.com', // Spotify repo
+	'download.spotify.com', // Spotify signing key
+	'packages.microsoft.com', // VS Code repo + key
+	'dl.google.com', // Chrome .deb / repo
+])
+
+/**
+ * LIVOS-045/055 — returns an error message (string) when `raw` is not an
+ * https URL on an allowlisted host; null when acceptable. Used both at
+ * manifest-validation time (per install method) and on EVERY downloadToFile
+ * redirect hop (no cross-host escape via redirect).
+ */
+export function assertAllowedDownloadUrl(raw: string): string | null {
+	let u: URL
+	try {
+		u = new URL(raw)
+	} catch {
+		return `invalid download URL: ${JSON.stringify(raw)}`
+	}
+	if (u.protocol !== 'https:') {
+		return `download URL must be https (got ${u.protocol.replace(':', '')}): ${raw}`
+	}
+	const host = u.hostname.toLowerCase()
+	if (!NATIVE_DOWNLOAD_HOST_ALLOWLIST.has(host)) {
+		return `download host not allowlisted: ${host}`
+	}
+	return null
+}
 
 /**
  * nativeAppConfigSchema's iconUrl gate accepts only http(s) URLs (parseable by
@@ -198,20 +277,36 @@ function execCmd(
 	})
 }
 
-async function downloadToFile(url: string, dest: string): Promise<void> {
+/**
+ * Phase 262-02 (LIVOS-055) — hardened downloader. https-only, SSRF-checked
+ * (validateUrl: loopback/RFC1918/link-local/metadata/ULA rejected), host
+ * allowlisted — re-validated at function entry AND on EVERY redirect hop
+ * (each hop recurses through this entry), with the redirect chain capped.
+ */
+async function downloadToFile(url: string, dest: string, redirectsLeft = 5): Promise<void> {
 	const u = new URL(url)
-	if (u.protocol !== 'https:' && u.protocol !== 'http:') {
-		throw new Error(`unsupported protocol "${u.protocol}"`)
+	if (u.protocol !== 'https:') {
+		throw new Error(`unsupported protocol "${u.protocol}" — https only`)
 	}
-	const lib = u.protocol === 'https:' ? https : http
+	const ssrf = validateUrl(url, {isAdmin: false})
+	if (!ssrf.ok) {
+		throw new Error(`download URL rejected (${ssrf.code}): ${ssrf.reason}`)
+	}
+	const allowErr = assertAllowedDownloadUrl(url)
+	if (allowErr) {
+		throw new Error(`download URL rejected: ${allowErr}`)
+	}
 	await fs.mkdir(path.dirname(dest), {recursive: true})
 	await new Promise<void>((resolve, reject) => {
 		const out = createWriteStream(dest, {mode: 0o755})
-		const req = lib.get(
+		const req = https.get(
 			url,
 			{headers: {'User-Agent': 'LivinityNativeInstaller/1.0'}},
 			(res) => {
-				// Follow one redirect — typical for GitHub releases.
+				// Follow redirects (typical for GitHub releases) — capped, and every
+				// hop re-enters downloadToFile, re-running the scheme + SSRF + host
+				// allowlist checks above (no https→http downgrade, no private-target
+				// or cross-host escape via redirect).
 				if (
 					res.statusCode &&
 					[301, 302, 307, 308].includes(res.statusCode) &&
@@ -219,7 +314,19 @@ async function downloadToFile(url: string, dest: string): Promise<void> {
 				) {
 					out.close()
 					fs.unlink(dest).catch(() => {})
-					downloadToFile(res.headers.location, dest)
+					if (redirectsLeft <= 0) {
+						reject(new Error('too many redirects'))
+						return
+					}
+					let next: string
+					try {
+						// Resolve relative Location headers against the current URL.
+						next = new URL(res.headers.location, url).toString()
+					} catch {
+						reject(new Error(`invalid redirect location: ${String(res.headers.location)}`))
+						return
+					}
+					downloadToFile(next, dest, redirectsLeft - 1)
 						.then(resolve)
 						.catch(reject)
 					return
@@ -305,6 +412,26 @@ export class NativeInstaller implements InstallHandler<'native'> {
 
 	constructor(private readonly configStore: NativeAppConfigStore) {}
 
+	/**
+	 * Phase 262-02 (LIVOS-044) — the ONE fixed apt-install spawn for the apt +
+	 * apt-repo branches. Every flag is a pinned constant; callers supply ONLY
+	 * pre-validated (APT_PACKAGE_RE) package names, and the `--` end-of-options
+	 * marker precedes them — belt-and-suspenders under the sudoers
+	 * `apt-get install -y *` wildcard so no caller-supplied element can ever be
+	 * parsed as an apt option (`-o DPkg::Pre-Invoke` hook injection).
+	 */
+	async #aptInstall(
+		pkgs: readonly string[],
+		logger: InstallContext['logger'],
+	): Promise<{code: number; stdout: string; stderr: string}> {
+		return execCmd(
+			'sudo',
+			['-n', '/usr/bin/apt-get', 'install', '-y', ...APT_CONFOLD, '--', ...pkgs],
+			logger,
+			APT_ENV,
+		)
+	}
+
 	async install(
 		app: AppCatalogRow,
 		ctx: InstallContext,
@@ -380,6 +507,12 @@ export class NativeInstaller implements InstallHandler<'native'> {
 			if (pkgs.length === 0) {
 				return fail(app.id, 'native', 'manifest_invalid', `aptPackages empty`)
 			}
+			// Phase 262-02 (LIVOS-044) — charset-validate BEFORE any spawn so an
+			// injected `-o DPkg::Pre-Invoke` element can never reach the sudo argv.
+			const pkgErr = validateAptPackages(pkgs)
+			if (pkgErr) {
+				return fail(app.id, 'native', 'manifest_invalid', pkgErr)
+			}
 			progress(12, 'apt-get update')
 			// Best-effort cache refresh so packages added to repos (or .deb deps)
 			// resolve. Never fail the install on a stale/offline update — a present
@@ -393,12 +526,7 @@ export class NativeInstaller implements InstallHandler<'native'> {
 			progress(15, `apt install ${pkgs.join(' ')}`)
 			// The sudoers entry (scripts/install/sudoers.d/livos-native) must
 			// allow exactly this argv pattern. Any drift here breaks install.
-			const {code, stderr} = await execCmd(
-				'sudo',
-				['-n', '/usr/bin/apt-get', 'install', '-y', ...APT_CONFOLD, ...pkgs],
-				ctx.logger,
-				APT_ENV,
-			)
+			const {code, stderr} = await this.#aptInstall(pkgs, ctx.logger)
 			if (code !== 0) {
 				const sudoDenied = stderr.includes('sudo:') || stderr.includes('password is required')
 				return fail(
@@ -414,8 +542,15 @@ export class NativeInstaller implements InstallHandler<'native'> {
 			// dependencies). For apps NOT in the default Ubuntu repos (VS Code, Brave)
 			// — works on every box without manual per-machine repo setup.
 			const {debUrl, debSha256} = manifest.install
-			if (!debUrl || !/^https?:\/\//.test(debUrl)) {
-				return fail(app.id, 'native', 'manifest_invalid', `debUrl missing or not http(s): ${String(debUrl)}`)
+			// Phase 262-02 (LIVOS-045) — https-only + host allowlist (the old check
+			// accepted plaintext http:// → MITM-to-root via the apt sink).
+			const debUrlErr = assertAllowedDownloadUrl(debUrl ?? '')
+			if (debUrlErr) {
+				return fail(app.id, 'native', 'manifest_invalid', `debUrl: ${debUrlErr}`)
+			}
+			// Phase 262-02 (LIVOS-045) — checksum is MANDATORY, fail-closed.
+			if (!SHA256_RE.test(debSha256 ?? '')) {
+				return fail(app.id, 'native', 'signature_invalid', 'debSha256: sha256 checksum required (64 hex chars)')
 			}
 			const tmpDeb = path.join('/tmp', `livos-native-${app.id.replace(/[^a-zA-Z0-9_-]/g, '')}.deb`)
 			progress(15, `Downloading ${debUrl}`)
@@ -424,8 +559,8 @@ export class NativeInstaller implements InstallHandler<'native'> {
 			} catch (err) {
 				return fail(app.id, 'native', 'network_failed', `download failed: ${err instanceof Error ? err.message : String(err)}`)
 			}
-			if (debSha256 && debSha256.length === 64) {
-				progress(45, 'Verifying SHA-256')
+			progress(45, 'Verifying SHA-256')
+			{
 				const actual = await sha256File(tmpDeb)
 				if (actual !== debSha256.toLowerCase()) {
 					await fs.unlink(tmpDeb).catch(() => {})
@@ -437,7 +572,9 @@ export class NativeInstaller implements InstallHandler<'native'> {
 				() => undefined,
 			)
 			progress(60, 'Installing .deb (apt resolves dependencies)')
-			const {code, stderr} = await execCmd('sudo', ['-n', '/usr/bin/apt-get', 'install', '-y', ...APT_CONFOLD, tmpDeb], ctx.logger, APT_ENV)
+			// `--` end-of-options: tmpDeb is server-constructed (sanitized appId),
+			// but pin the argv shape anyway (LIVOS-044 belt-and-suspenders).
+			const {code, stderr} = await execCmd('sudo', ['-n', '/usr/bin/apt-get', 'install', '-y', ...APT_CONFOLD, '--', tmpDeb], ctx.logger, APT_ENV)
 			await fs.unlink(tmpDeb).catch(() => {})
 			if (code !== 0) {
 				const sudoDenied = stderr.includes('sudo:') || stderr.includes('password is required')
@@ -445,9 +582,15 @@ export class NativeInstaller implements InstallHandler<'native'> {
 			}
 		} else if (manifest.install.primary === 'apt-repo') {
 			// Apps distributed via a 3rd-party APT repo (Brave, Signal, Spotify, …).
-			const {aptPackages, aptRepoName, aptRepoLine, aptKeyUrl} = manifest.install
+			const {aptPackages, aptRepoName, aptRepoLine, aptKeyUrl, aptKeyFingerprint} = manifest.install
 			if (!aptPackages?.length) {
 				return fail(app.id, 'native', 'manifest_invalid', `aptPackages empty`)
+			}
+			// Phase 262-02 (LIVOS-044) — charset-validate BEFORE any spawn (the
+			// follow-on apt install reuses the same NOPASSWD wildcard grant).
+			const repoPkgErr = validateAptPackages(aptPackages)
+			if (repoPkgErr) {
+				return fail(app.id, 'native', 'manifest_invalid', repoPkgErr)
 			}
 			if (!/^[a-z0-9][a-z0-9-]*$/.test(aptRepoName)) {
 				return fail(
@@ -457,13 +600,10 @@ export class NativeInstaller implements InstallHandler<'native'> {
 					`aptRepoName must be a lowercase [a-z0-9-] slug: ${String(aptRepoName)}`,
 				)
 			}
-			if (!aptKeyUrl || !/^https:\/\//.test(aptKeyUrl)) {
-				return fail(
-					app.id,
-					'native',
-					'manifest_invalid',
-					`aptKeyUrl must be https: ${String(aptKeyUrl)}`,
-				)
+			// Phase 262-02 (LIVOS-045) — key URL must be https on an allowlisted host.
+			const keyUrlErr = assertAllowedDownloadUrl(aptKeyUrl ?? '')
+			if (keyUrlErr) {
+				return fail(app.id, 'native', 'manifest_invalid', `aptKeyUrl: ${keyUrlErr}`)
 			}
 			if (!aptRepoLine || !/^https?:\/\/\S+\s+\S+/.test(aptRepoLine)) {
 				return fail(
@@ -472,6 +612,73 @@ export class NativeInstaller implements InstallHandler<'native'> {
 					'manifest_invalid',
 					`aptRepoLine must be "<url> <suite> [components]": ${String(aptRepoLine)}`,
 				)
+			}
+			// Phase 262-02 (LIVOS-045) — the repo line's URL token must ALSO be https
+			// on an allowlisted host (the old check permitted http:// → MITM-able
+			// package fetch even with an https key).
+			const repoLineUrl = aptRepoLine.trim().split(/\s+/)[0]
+			const repoLineErr = assertAllowedDownloadUrl(repoLineUrl)
+			if (repoLineErr) {
+				return fail(app.id, 'native', 'manifest_invalid', `aptRepoLine URL: ${repoLineErr}`)
+			}
+			// Phase 262-02 (LIVOS-045) — REQUIRED key-fingerprint pin: download the
+			// key ourselves and verify its full 40-hex fingerprint BEFORE the
+			// root-capable livos-add-apt-repo.sh trusts it as a keyring.
+			if (!GPG_FINGERPRINT_RE.test(aptKeyFingerprint ?? '')) {
+				return fail(
+					app.id,
+					'native',
+					'signature_invalid',
+					'aptKeyFingerprint required (40 hex chars — full GPG key fingerprint)',
+				)
+			}
+			progress(12, 'Verifying repo signing key fingerprint')
+			const tmpKey = path.join(
+				'/tmp',
+				`livos-native-${app.id.replace(/[^a-zA-Z0-9_-]/g, '')}.key`,
+			)
+			try {
+				await downloadToFile(aptKeyUrl, tmpKey)
+			} catch (err) {
+				return fail(
+					app.id,
+					'native',
+					'network_failed',
+					`key download failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+			try {
+				const gpg = await execCmd(
+					'gpg',
+					['--show-keys', '--with-colons', tmpKey],
+					ctx.logger,
+				)
+				if (gpg.code !== 0) {
+					return fail(
+						app.id,
+						'native',
+						'signature_invalid',
+						`gpg --show-keys failed (exit ${gpg.code}) — cannot verify key fingerprint`,
+						gpg.stderr,
+					)
+				}
+				// Colon-format fingerprint records: `fpr:::::::::<40HEX>:`
+				const fingerprints = gpg.stdout
+					.split('\n')
+					.filter((line) => line.startsWith('fpr:'))
+					.map((line) => line.split(':')[9] ?? '')
+					.filter((fpr) => GPG_FINGERPRINT_RE.test(fpr))
+				const pin = aptKeyFingerprint.toLowerCase()
+				if (!fingerprints.some((fpr) => fpr.toLowerCase() === pin)) {
+					return fail(
+						app.id,
+						'native',
+						'signature_invalid',
+						`apt key fingerprint mismatch — pinned=${aptKeyFingerprint} got=[${fingerprints.join(', ') || 'none'}]`,
+					)
+				}
+			} finally {
+				await fs.unlink(tmpKey).catch(() => {})
 			}
 			progress(15, `Adding apt repo ${aptRepoName}`)
 			// The helper writes the keyring + sources.list.d entry and runs apt-get
@@ -494,12 +701,7 @@ export class NativeInstaller implements InstallHandler<'native'> {
 				)
 			}
 			progress(45, `apt install ${aptPackages.join(' ')}`)
-			const {code, stderr} = await execCmd(
-				'sudo',
-				['-n', '/usr/bin/apt-get', 'install', '-y', ...APT_CONFOLD, ...aptPackages],
-				ctx.logger,
-				APT_ENV,
-			)
+			const {code, stderr} = await this.#aptInstall(aptPackages, ctx.logger)
 			if (code !== 0) {
 				const sudoDenied =
 					stderr.includes('sudo:') || stderr.includes('password is required')
@@ -513,6 +715,22 @@ export class NativeInstaller implements InstallHandler<'native'> {
 			}
 		} else if (manifest.install.primary === 'appimage') {
 			const {appimageUrl, appimageSha256} = manifest.install
+			// Phase 262-02 (LIVOS-045) — https-only + host allowlist (previously the
+			// appimage URL was not validated at all).
+			const appimageUrlErr = assertAllowedDownloadUrl(appimageUrl ?? '')
+			if (appimageUrlErr) {
+				return fail(app.id, 'native', 'manifest_invalid', `appimageUrl: ${appimageUrlErr}`)
+			}
+			// Phase 262-02 (LIVOS-045) — the type said required but the runtime check
+			// silently skipped empty/malformed values. Fail-closed now.
+			if (!SHA256_RE.test(appimageSha256 ?? '')) {
+				return fail(
+					app.id,
+					'native',
+					'signature_invalid',
+					'appimageSha256: sha256 checksum required (64 hex chars)',
+				)
+			}
 			const targetDir = path.join(homeDir, '.local/bin')
 			const targetPath = path.join(targetDir, app.id)
 			progress(15, `Downloading ${appimageUrl}`)
@@ -526,8 +744,8 @@ export class NativeInstaller implements InstallHandler<'native'> {
 					`download failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
-			if (appimageSha256 && appimageSha256.length === 64) {
-				progress(50, 'Verifying SHA-256')
+			progress(50, 'Verifying SHA-256')
+			{
 				const actual = await sha256File(targetPath)
 				if (actual !== appimageSha256.toLowerCase()) {
 					await fs.unlink(targetPath).catch(() => {})
@@ -542,12 +760,19 @@ export class NativeInstaller implements InstallHandler<'native'> {
 			await fs.chmod(targetPath, 0o755)
 		} else if (manifest.install.primary === 'script') {
 			const {scriptUrl, scriptArgs, scriptSha256} = manifest.install
-			if (!scriptUrl || !/^https:\/\//.test(scriptUrl)) {
+			// Phase 262-02 (LIVOS-045) — https-only + host allowlist (the old check
+			// accepted ANY https host → curl|bash-as-bruce from anywhere).
+			const scriptUrlErr = assertAllowedDownloadUrl(scriptUrl ?? '')
+			if (scriptUrlErr) {
+				return fail(app.id, 'native', 'manifest_invalid', `scriptUrl: ${scriptUrlErr}`)
+			}
+			// Phase 262-02 (LIVOS-045) — checksum is MANDATORY, fail-closed.
+			if (!SHA256_RE.test(scriptSha256 ?? '')) {
 				return fail(
 					app.id,
 					'native',
-					'manifest_invalid',
-					`scriptUrl must be https: ${String(scriptUrl)}`,
+					'signature_invalid',
+					'scriptSha256: sha256 checksum required (64 hex chars)',
 				)
 			}
 			const tmpScript = path.join(
@@ -565,8 +790,8 @@ export class NativeInstaller implements InstallHandler<'native'> {
 					`download failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
-			if (scriptSha256 && scriptSha256.length === 64) {
-				progress(35, 'Verifying SHA-256')
+			progress(35, 'Verifying SHA-256')
+			{
 				const actual = await sha256File(tmpScript)
 				if (actual !== scriptSha256.toLowerCase()) {
 					await fs.unlink(tmpScript).catch(() => {})
