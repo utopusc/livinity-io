@@ -1,14 +1,16 @@
-import crypto from 'node:crypto'
-import {readFile} from 'node:fs/promises'
-
 import {Redis} from 'ioredis'
+
+import {decrypt, encrypt, getKey, getLegacyKey} from '../secrets/dek.js'
 
 /**
  * Encrypted stack secret store (QW-02).
  *
  * Secrets are:
- *  - encrypted with AES-256-GCM using a key derived from the daemon's JWT secret
- *    (SHA-256 of `/opt/livos/data/secrets/jwt`)
+ *  - encrypted with AES-256-GCM using the SHARED credential DEK
+ *    (`../secrets/dek.js` → `/opt/livos/data/secrets/credential-dek`),
+ *    INDEPENDENT of the JWT signing secret (LIVOS-052, Phase 262-05).
+ *    Legacy sha256(jwt)-keyed blobs still decrypt via the getLegacyKey()
+ *    lazy re-key fallback on the read path (LIVOS-052b).
  *  - stored in Redis under `liv:stack:secrets:{stackName}` as a hash
  *    `{key -> base64(iv || tag || ciphertext)}`
  *  - NEVER written to `/opt/livos/data/stacks/<name>/.env` on disk
@@ -20,36 +22,6 @@ import {Redis} from 'ioredis'
 
 // Redis key layout: nexus:stack:secrets:{stackName}  ->  hash {key -> base64(iv+tag+ciphertext)}
 const REDIS_KEY = (stack: string) => `liv:stack:secrets:${stack}`
-
-const JWT_SECRET_PATH = '/opt/livos/data/secrets/jwt'
-
-let _key: Buffer | null = null
-
-async function getKey(): Promise<Buffer> {
-	if (_key) return _key
-	// JWT secret lives at /opt/livos/data/secrets/jwt (per CLAUDE.md memory)
-	const jwt = await readFile(JWT_SECRET_PATH, 'utf-8')
-	_key = crypto.createHash('sha256').update(jwt.trim()).digest() // 32 bytes for AES-256
-	return _key
-}
-
-function encrypt(plaintext: string, key: Buffer): string {
-	const iv = crypto.randomBytes(12)
-	const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
-	const ct = Buffer.concat([cipher.update(plaintext, 'utf-8'), cipher.final()])
-	const tag = cipher.getAuthTag()
-	return Buffer.concat([iv, tag, ct]).toString('base64')
-}
-
-function decrypt(blob: string, key: Buffer): string {
-	const buf = Buffer.from(blob, 'base64')
-	const iv = buf.subarray(0, 12)
-	const tag = buf.subarray(12, 28)
-	const ct = buf.subarray(28)
-	const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv)
-	decipher.setAuthTag(tag)
-	return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf-8')
-}
 
 export function createStackSecretStore(redis: Redis) {
 	return {
@@ -70,7 +42,25 @@ export function createStackSecretStore(redis: Redis) {
 			const raw = await redis.hgetall(REDIS_KEY(stackName))
 			const k = await getKey()
 			const out: Record<string, string> = {}
-			for (const [key, blob] of Object.entries(raw)) out[key] = decrypt(blob, k)
+			for (const [key, blob] of Object.entries(raw)) {
+				try {
+					out[key] = decrypt(blob, k)
+				} catch (err) {
+					// LIVOS-052 lazy re-key: the field may have been written with the
+					// legacy JWT-derived key. Retry with the legacy key; on success,
+					// re-encrypt with the DEK and persist the hash field.
+					const legacy = await getLegacyKey()
+					if (!legacy) throw err
+					const plaintext = decrypt(blob, legacy) // throws if legacy also fails
+					out[key] = plaintext
+					try {
+						await redis.hset(REDIS_KEY(stackName), key, encrypt(plaintext, k))
+					} catch {
+						// Re-key persistence failure is non-fatal — the decrypt already
+						// succeeded; the field re-migrates on the next read.
+					}
+				}
+			}
 			return out
 		},
 	}
