@@ -15,6 +15,17 @@
  * so the operator can manually authenticate via AionUi's qr-login UI as
  * a fallback. D-LIVAI-AUTOLOGIN-ROLLBACK pattern matching D-V42-ROLLBACK.
  *
+ * Phase 262-01 (LIVOS-041, Critical): the handler is now SESSION-GATED. The
+ * factory takes a `verifySession` function (wired to Server.verifySessionFull
+ * at the mount in source/index.ts — full validation incl. jti revocation +
+ * active-user re-check) and 401s BEFORE the feature-flag read when the
+ * request carries no LIVINITY_SESSION cookie or the verifier rejects it.
+ * Previously ANY unauthenticated caller could mint an `aionui-session`
+ * cookie and reach the operator-credentialed Claude Code agent behind /liv.
+ * The Caddy @liv_login forward_auth handle (domain/caddy.ts) is the sibling
+ * gate — both are required (the qr-mint endpoints are otherwise reachable
+ * through @liv).
+ *
  * Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` UNCHANGED -- this
  * file lives in livinityd, NOT in liv/packages/core/.
  */
@@ -23,8 +34,21 @@ import type {Redis} from 'ioredis'
 
 const AIONUI_LOOPBACK = 'http://127.0.0.1:3020'
 
-export function makeLivLoginHandler(redis: Redis) {
-	return async function livLoginHandler(_req: Request, res: Response): Promise<void> {
+export function makeLivLoginHandler(
+	redis: Redis,
+	verifySession: (token: string) => Promise<unknown | null>,
+) {
+	return async function livLoginHandler(req: Request, res: Response): Promise<void> {
+		// Phase 262-01 (LIVOS-041) — auth gate FIRST, outside the try below:
+		// the catch-all failure redirect to /liv/ must never fire for an
+		// unauthenticated caller (it would hand them AionUi's login surface).
+		const token = req.cookies?.LIVINITY_SESSION
+		const session = token ? await verifySession(token).catch(() => null) : null
+		if (!session) {
+			res.status(401).json({error: 'unauthorized'})
+			return
+		}
+
 		try {
 			// Honor feature flag (default ON when missing or non-'false')
 			const flagValue = await redis.get('liv:config:liv_ai_autologin_enabled')

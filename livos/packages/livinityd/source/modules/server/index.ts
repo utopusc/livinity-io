@@ -24,6 +24,13 @@ import {domains} from '@livos/config'
 
 import type Livinityd from '../../index.js'
 import * as jwt from '../jwt.js'
+// Phase 262-01 (WS1 revocation gap): the jti revocation + active-user re-check
+// previously lived ONLY in the tRPC isAuthenticated middleware. verifySessionFull
+// below replicates it for the HTTP auth surfaces (/auth/verify forward_auth
+// target, /__livos_sso bounce, apex session gate); /__livos_auth records its
+// minted sessions via createSession so they are revocable.
+import {findUserById, getPool} from '../database/index.js'
+import {createSession, isSessionRevoked} from '../database/sessions.js'
 import {parseSsoReturnTarget, sanitizeSsoPath} from './sso-handshake.js'
 import {attachVncBridge} from '../streaming/vnc-bridge.js'
 import {trpcExpressHandler, trpcWssHandler} from './trpc/index.js'
@@ -150,6 +157,39 @@ class Server {
 	 */
 	async verifyToken(token: string) {
 		return jwt.verify(token, await this.getJwtSecret())
+	}
+
+	/**
+	 * Phase 262-01 (WS1 revocation gap) — FULL session validation for HTTP auth
+	 * surfaces. Mirrors the tRPC isAuthenticated middleware
+	 * (server/trpc/is-authenticated.ts:80-100) exactly:
+	 *   1. signature + exp via verifyToken (invalid → null);
+	 *   2. userId-bearing tokens must resolve to an ACTIVE user (missing or
+	 *      deactivated → null; fail closed). Skipped when no PG pool — the
+	 *      single-user no-DB path only ever holds legacy no-userId tokens;
+	 *   3. jti revocation: reject ONLY an EXPLICITLY revoked row. A MISSING
+	 *      session row must NOT reject (257-04.1: tokens minted before
+	 *      session-tracking carry a jti but no row — a false-revoke would lock
+	 *      out every existing session). isSessionRevoked implements this.
+	 * Any internal error → null (fail closed), matching the middleware's
+	 * catch → UNAUTHORIZED behavior.
+	 */
+	async verifySessionFull(token: string): Promise<jwt.VerifiedJwtPayload | null> {
+		try {
+			const payload = await this.verifyToken(token).catch(() => null)
+			if (!payload) return null
+			if (payload.userId && getPool()) {
+				const dbUser = await findUserById(payload.userId)
+				if (!dbUser || !dbUser.isActive) return null
+			}
+			if (payload.jti && getPool()) {
+				const revoked = await isSessionRevoked(payload.jti)
+				if (revoked) return null
+			}
+			return payload
+		} catch {
+			return null
+		}
 	}
 
 	async verifyProxyToken(token: string) {
@@ -1208,11 +1248,16 @@ class Server {
 
 		// Phase 256-04 (LIVOS-008) — forward_auth target for the Caddy subdomain
 		// login gate. Caddy proxies the gated request's headers here; we return
-		// 200 ONLY when a valid (signature + exp) JWT is present, else 401. This
-		// replaces the old cookie-PRESENCE-only Caddy glob (which any
-		// LIVINITY_SESSION=<garbage> cookie satisfied) with real JWT validation.
+		// 200 ONLY when a valid JWT is present, else 401. This replaces the old
+		// cookie-PRESENCE-only Caddy glob (which any LIVINITY_SESSION=<garbage>
+		// cookie satisfied) with real JWT validation.
+		// Phase 262-01 (WS1 revocation gap): upgraded from bare verifyToken to
+		// verifySessionFull — a revoked or deactivated-user session now 401s
+		// here, which transitively hardens EVERY forward_auth consumer: the
+		// 256-04 app/native subdomain gates AND the new /liv-family gates
+		// (@liv, @liv_ws, @liv_api_subresource, @livos_terminal_ws, @liv_login).
 		// Reachable on the livinityd :8080 listener for ALL hosts — it is NOT
-		// itself gated by the subdomain logic. Kept cheap: verifyToken only.
+		// itself gated by the subdomain logic.
 		this.app.get('/auth/verify', async (request, response) => {
 			try {
 				// Prefer the Authorization: Bearer header, fall back to the
@@ -1222,7 +1267,7 @@ class Server {
 				if (!token) {
 					return response.status(401).json({error: 'unauthorized'})
 				}
-				const payload = await this.verifyToken(token).catch(() => null)
+				const payload = await this.verifySessionFull(token)
 				if (!payload) {
 					return response.status(401).json({error: 'unauthorized'})
 				}
@@ -1248,8 +1293,10 @@ class Server {
 				// Bad / foreign / non-app return target → never redirect to it (open-redirect guard).
 				if (!target) return response.status(400).send('invalid return target')
 
+				// Phase 262-01 (WS1 revocation gap): verifySessionFull — a revoked
+				// or deactivated-user session must not get an SSO bounce token.
 				const sessionToken = request.cookies?.LIVINITY_SESSION
-				const payload = sessionToken ? await this.verifyToken(sessionToken).catch(() => null) : null
+				const payload = sessionToken ? await this.verifySessionFull(sessionToken) : null
 				if (!payload) {
 					// Genuinely unauthenticated — send to the real login, preserving the return.
 					return response.redirect(
@@ -1307,6 +1354,30 @@ class Server {
 				const sessionToken = claims.userId
 					? await this.signUserToken(claims.userId, claims.role ?? 'member')
 					: await this.signToken()
+
+				// Phase 262-01 (WS1 revocation gap): record the minted session's jti
+				// so it is REVOCABLE — previously /__livos_auth minted a 30-day
+				// cookie via signUserToken but never wrote a sessions row, so a
+				// password change / deactivation could not kill it. Mirrors the
+				// login call-site (user/routes.ts:191-202): recover the jti via
+				// verifyToken, write via createSession, non-fatal on failure (a
+				// failed session record must not block the SSO landing). Legacy
+				// signToken() path skips — no userId, no jti, no user row.
+				if (claims.userId) {
+					try {
+						const minted = await this.verifyToken(sessionToken).catch(() => null)
+						if (minted?.jti) {
+							await createSession({
+								userId: claims.userId,
+								jti: minted.jti,
+								expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+							})
+						}
+					} catch (error) {
+						this.logger.error('Failed to record SSO session for revocation tracking', error)
+					}
+				}
+
 				response.cookie('LIVINITY_SESSION', sessionToken, {
 					httpOnly: true,
 					secure: true,
