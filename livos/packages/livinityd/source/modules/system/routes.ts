@@ -247,14 +247,19 @@ export default router({
 	memoryUsage: privateProcedure.query(({ctx}) => getMemoryUsage(ctx.livinityd)),
 	cpuUsage: privateProcedure.query(({ctx}) => getCpuUsage(ctx.livinityd)),
 	getIpAddresses: privateProcedure.query(() => getIpAddresses()),
-	shutdown: privateProcedure.mutation(async ({ctx}) => {
+	// LIVOS-048 (262-04): adminProcedure, NOT privateProcedure — a non-admin
+	// member/guest must not be able to power off the host or DoS the management
+	// plane (livinityd.stop() runs unconditionally before the power call).
+	// Mirrors the factoryReset precedent below; matches the client-side
+	// adminOnly flag in settings-content.tsx.
+	shutdown: adminProcedure.mutation(async ({ctx}) => {
 		systemStatus = 'shutting-down'
 		await ctx.livinityd.stop()
 		await shutdown()
 
 		return true
 	}),
-	restart: privateProcedure.mutation(async ({ctx}) => {
+	restart: adminProcedure.mutation(async ({ctx}) => {
 		systemStatus = 'restarting'
 		await ctx.livinityd.stop()
 		await reboot()
