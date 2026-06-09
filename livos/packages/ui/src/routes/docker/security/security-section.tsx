@@ -206,9 +206,11 @@ export function SecuritySection() {
 					</div>
 				) : null}
 				{serviceState === 'service-inactive' ? (
-					<div className='m-4 rounded-radius-md border border-accent-amber bg-accent-amber/10 px-4 py-3 text-body-sm text-accent-amber dark:border-accent-amber dark:bg-accent-amber/30 dark:text-accent-amber'>
-						<strong>Fail2ban service is stopped.</strong> Run{' '}
-						<span className='font-mono'>systemctl start fail2ban</span> on Mini PC.
+					<div className='m-4 rounded-radius-md border border-border-default bg-surface-1 px-4 py-3 text-body-sm text-text-secondary'>
+						<strong className='text-text-primary'>Fail2ban is not running on this host.</strong>{' '}
+						Intrusion-prevention bans are disabled. This is expected on single-user
+						home servers — SSH brute-force protection is handled at the network edge.
+						The panel will populate automatically if fail2ban is enabled.
 					</div>
 				) : null}
 				{serviceState === 'no-jails' ? (
