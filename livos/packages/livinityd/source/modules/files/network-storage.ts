@@ -1,4 +1,6 @@
+import os from 'node:os'
 import nodePath from 'node:path'
+import {mkdtemp} from 'node:fs/promises'
 import {setTimeout} from 'node:timers/promises'
 
 import fse from 'fs-extra'
@@ -15,6 +17,64 @@ type NetworkShare = {
 	username: string
 	password: string
 	mountPath: string
+}
+
+// ─── LIVOS-051 (262-04) input guards ─────────────────────────────────────────
+// The CIFS mount options used to be built by string interpolation
+// (`-o username=...,password=...`), so a `,`/`=`/newline inside any field
+// injected attacker-chosen mount options; the host param doubled as an
+// arbitrary-host SMB/HTTP connect (SSRF) primitive. These guards run BEFORE
+// any mount/probe side effect, and creds now travel via a 0600 credentials=
+// file so option-string injection is structurally impossible.
+
+/** Hostname / IPv4 literal only — no `,`/`=`/`/`/`:`/whitespace/newline. */
+const SMB_HOST_RE = /^[a-zA-Z0-9._-]+$/
+/**
+ * Typical SMB share names. Includes `(`/`)`/`'` because LivOS's own Samba
+ * shares are named `<dir> (Livinity)`; still excludes every option-injection
+ * char (`,`/`=`), path separators, and control chars.
+ */
+const SMB_SHARE_RE = /^[a-zA-Z0-9._$ ()'-]+$/
+/** The CIFS option-string injection characters — never allowed in creds. */
+const CRED_INJECTION_RE = /[\n\r,=]/
+
+/**
+ * Block loopback / RFC1918 / link-local (incl. 169.254.169.254 metadata) /
+ * IPv6-private literals so the SMB host param cannot probe internal services.
+ * Replicates webapps/url-validator.ts's syntactic range checks (no DNS
+ * resolution — mDNS `<host>.local` names from discoverServers must keep
+ * working). `LIVOS_ALLOW_PRIVATE_SMB_HOSTS=1` is a test-harness escape used by
+ * the integration suite, which mounts a samba server on localhost.
+ */
+function isPrivateSmbHost(host: string): boolean {
+	if (process.env.LIVOS_ALLOW_PRIVATE_SMB_HOSTS === '1') return false
+	const lower = host.toLowerCase()
+	if (lower === 'localhost') return true
+	const m = lower.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+	if (m) {
+		const a = Number(m[1])
+		const b = Number(m[2])
+		if (a > 255 || b > 255 || Number(m[3]) > 255 || Number(m[4]) > 255) return true // malformed → reject
+		if (a === 127) return true // loopback
+		if (a === 10) return true // RFC1918
+		if (a === 172 && b >= 16 && b <= 31) return true // RFC1918
+		if (a === 192 && b === 168) return true // RFC1918
+		if (a === 169 && b === 254) return true // link-local + cloud metadata
+	}
+	// IPv6 loopback / ULA (SMB_HOST_RE already rejects `:`, defence-in-depth).
+	if (lower === '::1' || /^f[cd][0-9a-f]{0,2}:/.test(lower)) return true
+	return false
+}
+
+/** Throws `[invalid-smb-host]` unless `host` is a safe, non-internal SMB host. */
+function assertValidSmbHost(host: string): void {
+	if (!SMB_HOST_RE.test(host) || isPrivateSmbHost(host)) throw new Error('[invalid-smb-host]')
+}
+
+/** Throws on share-name / credential charset violations (option injection). */
+function assertValidSmbShareAndCreds({share, username, password}: {share?: string; username: string; password: string}): void {
+	if (share !== undefined && !SMB_SHARE_RE.test(share)) throw new Error('[invalid-smb-share]')
+	if (CRED_INJECTION_RE.test(username) || CRED_INJECTION_RE.test(password)) throw new Error('[invalid-credentials]')
 }
 
 export default class NetworkStorage {
@@ -128,6 +188,12 @@ export default class NetworkStorage {
 	async #mountShare(share: NetworkShare): Promise<void> {
 		this.logger.log(`Mounting network share: ${share.mountPath}`)
 
+		// LIVOS-051 (262-04): re-validate at the mount sink too — covers shares
+		// persisted BEFORE this fix that the 60s #watchAndMountShares loop would
+		// otherwise keep re-mounting with injectable values.
+		assertValidSmbHost(share.host)
+		assertValidSmbShareAndCreds(share)
+
 		// Ensure mount directory exists
 		const systemMountPath = this.#livinityd.files.virtualToSystemPathUnsafe(share.mountPath)
 		await fse.ensureDir(systemMountPath)
@@ -136,7 +202,20 @@ export default class NetworkStorage {
 			// Mount the network share
 			const smbPath = `//${share.host}/${share.share}`
 			const {userId, groupId} = this.#livinityd.files.fileOwner
-			await $`mount -t cifs ${smbPath} ${systemMountPath} -o username=${share.username},password=${share.password},uid=${userId},gid=${groupId},iocharset=utf8`
+			// LIVOS-051 (262-04): pass credentials via a 0600 `credentials=` file
+			// instead of inline `-o username=...,password=...` — option-string
+			// injection is structurally impossible even if a charset check is ever
+			// bypassed. The temp dir is 0700 (mkdtemp) and owned by the livinityd
+			// process user; the file is deleted in `finally` (success OR failure).
+			const credDir = await mkdtemp(nodePath.join(os.tmpdir(), 'livos-cifs-'))
+			const credFile = nodePath.join(credDir, 'credentials')
+			try {
+				const credLines = [`username=${share.username}`, 'password=' + share.password]
+				await fse.writeFile(credFile, credLines.join('\n') + '\n', {mode: 0o600})
+				await $`mount -t cifs ${smbPath} ${systemMountPath} -o credentials=${credFile},uid=${userId},gid=${groupId},iocharset=utf8`
+			} finally {
+				await fse.remove(credDir).catch(() => {})
+			}
 			this.mountedShares.add(share.mountPath)
 			this.logger.log(`Successfully mounted network share: ${smbPath} to ${share.mountPath}`)
 		} catch (error) {
@@ -185,6 +264,12 @@ export default class NetworkStorage {
 
 	// Add a new share
 	async addShare(newShare: Omit<NetworkShare, 'mountPath'>) {
+		// LIVOS-051 (262-04): validate ALL inputs before any mount/persist side
+		// effect — host charset + internal-range SSRF block, share-name charset,
+		// and strict `,`/`=`/newline rejection in creds (option injection).
+		assertValidSmbHost(newShare.host)
+		assertValidSmbShareAndCreds(newShare)
+
 		// Generate mount path
 		const sanitize = (string: string) => string.replace(/[^a-zA-Z0-9\-\.\' \(\)]/g, '')
 		const mountPath = `/Network/${sanitize(newShare.host)}/${sanitize(newShare.share)}`
@@ -260,6 +345,11 @@ export default class NetworkStorage {
 	// Discover shares for a given samba server
 	// Used to help the user find share names if they don't already know them
 	async discoverSharesOnServer(host: string, username: string, password: string) {
+		// LIVOS-051 (262-04): same host guard as addShare — `smbclient --list
+		// //<host>` is an arbitrary-host SMB connect (SSRF) primitive otherwise.
+		assertValidSmbHost(host)
+		assertValidSmbShareAndCreds({username, password})
+
 		// TODO: Figure out if we can speed this up
 		// The command usually returns data quite quickly but then hangs for like 10 seconds
 		// and returns some weird compatibility error. Is there some way we can disable whatever
@@ -283,6 +373,13 @@ export default class NetworkStorage {
 	// Checks if the given network address is an Livinity device
 	async isServerAnLivinityDevice(address: string) {
 		try {
+			// LIVOS-051 (262-04): same host guard as addShare (the `ky(http://...)`
+			// probe is an SSRF primitive). `address` may carry an optional :port —
+			// validate the host part; anything else returns false (no probe).
+			const addressMatch = address.match(/^([a-zA-Z0-9._-]+)(:\d{1,5})?$/)
+			if (!addressMatch) return false
+			assertValidSmbHost(addressMatch[1])
+
 			const responseText = (await ky(`http://${address}/trpc/system.version`, {timeout: 1000}).text()) as any
 			return responseText.toLowerCase().includes('livinity')
 		} catch {
