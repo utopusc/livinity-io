@@ -2,18 +2,20 @@
 gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
-status: ready_to_plan
-last_updated: "2026-06-05T11:53:41.521Z"
+status: planning
+last_updated: "2026-06-09T21:11:32.331Z"
 last_activity: 2026-06-05
 progress:
-  total_phases: 172
+  total_phases: 176
   completed_phases: 90
-  total_plans: 595
-  completed_plans: 511
-  percent: 52
+  total_plans: 606
+  completed_plans: 519
+  percent: 86
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
+
+> ✅ **262-01 DONE (Security Hardening Pass 3 WS1 — /liv AionUi front door closed: LIVOS-041/047/049/053/054 + revocation gap)** — 4 commits `b3267493` (caddy.ts: new `LIV_GATE_BODY` forward_auth→/auth/verify emitted FIRST inside @liv/@liv_ws/@liv_api_subresource/@livos_terminal_ws + NEW `@liv_login` handle at all 3 emit sites; `@liv_trpc` /liv/trpc→:8080 bridge DELETED (LIVOS-054); spoofable Referer matcher → `@liv_api_subresource path /liv/api/*` + strip (LIVOS-047); caddy.test.ts 114/114 incl. new 262-01 suite), `8fb779e0` (RED: 3 failing /liv-login gate tests), `8eb76653` (GREEN: liv-login-handler 401s w/o verified LIVINITY_SESSION BEFORE any qr-mint fetch — LIVOS-041 Critical; new `Server.verifySessionFull` = tRPC is-authenticated's jti-revocation + active-user re-check for HTTP surfaces; /auth/verify + /__livos_sso upgraded to it (transitively hardens ALL 256-04 forward_auth consumers); /__livos_auth records jti via createSession → 30-day SSO cookie now revocable; 9/9 tests), `782f1a96` (apexSessionGate: apex host fail-closed behind explicit `APEX_PUBLIC_PREFIXES` allowlist — /liv-login + /liv deliberately absent; GET+html→302 /login, else 401; catch→401 NEVER next(); systemd liv-assistant: `AIONUI_ALLOW_REMOTE=0` loopback pin (probe-backed: upstream web-cli has NO --host flag, bind = allowRemote ? 0.0.0.0 : 127.0.0.1) + ExecStartPost non-loopback :3020 fail-stop). **Deviation (Rule 2):** `/api/webhooks/` allowlisted (HMAC IS the auth; gate would break deploy-on-push). **Expected breakage (LOCKED):** aionui-patches local-agents section's /liv/trpc/cliInstaller.* calls; `scripts/install/mode-tunnel.sh:359` static Caddyfile still emits the bridge until first regen (cross-plan note for 262-05). tsc baseline unchanged (399 pre/post, 0 errors in edited regions). **CODE ONLY — NO DEPLOY** (operator: update.sh + UFW-deny 3020 + WS1 live walk). SUMMARY: `.planning/phases/262-security-hardening-pass-3/262-01-SUMMARY.md`. (STATE narrative format — SDK counters no-op.) **Next: 262-02 (WS2 native installer).**
 
 > ✅ **259-02 DONE (Native App UX Polish — fullscreen robustness + cosmetic icons, SC3 + SC1-cosmetic)** — 2 commits `6c022069` (native-routes.ts: rewrite `fullscreenNativeWindow` from one-shot/last-window-only/`return` into a spaced EWMH re-apply loop — poll once to find a visible top-level, then 6 passes ~500ms apart (~3s total) re-querying the window list each pass and applying `wmctrl add,maximized_vert,maximized_horz` + `add,fullscreen` + `xdotool windowsize 1280 720` + `windowmove 0 0` to EVERY matched window; fixes OBS reverting the early resize after its own Qt layout → "black on the right" gone), `b38e425f` (native-installer.ts: one line `iconUrl: manifest.desktopEntry.icon || undefined` on `configCandidate`, mirroring apps.ts:1085 `icon: data.icon_url || data.icon` → native desktop tiles render real artwork instead of the `NativeAppIcon` placeholder). **Signature + caller (native-routes.ts:330 `void fullscreenNativeWindow(spawnedPid, display, adaptLogger)`) UNCHANGED; `const env = {...process.env, DISPLAY: display}` + per-call `.catch(()=>{})` best-effort preserved verbatim.** **SC4 no-regression:** helper runs ONLY on the native `:N` Xvfb (Docker = no Xvfb; WebApp/Chrome = own geometry-tracker); `iconUrl` is native-config-only; ZERO edits to DisplayAllocator/spawnXvfb/bind/StreamManager/x11vnc/`:N` allocation (operator hard constraint honored). Both automated `<verify>` node checks PASS. **Typecheck:** native-routes.ts ZERO errors; native-installer.ts only the pre-existing `lib.get` block errors at `:133/:136` (confirmed in `HEAD~2`, unrelated to the `iconUrl` line at `:256`) — same baseline drift as 256-02/259-01 deferred-items, no new errors. **CODE ONLY — NO DEPLOY** (Mini PC single-user; livinityd = tsx, deploy = `systemctl restart livos`, no build; operator live walk = install native app → real icon + opens fullscreen, OBS specifically fills with no right-side black strip, Docker/beszel + WebApp still fine). All four Phase-259 SCs now have code (SC1 invalidation+iconUrl, SC2 16:9 sizing, SC3 fullscreen, SC4 preserved); only operator visual UAT remains. SUMMARY: `.planning/phases/259-native-app-ux-polish-install-icons-consistent-window-sizing-/259-02-SUMMARY.md`. (STATE narrative format — SDK counters no-op.)
 
