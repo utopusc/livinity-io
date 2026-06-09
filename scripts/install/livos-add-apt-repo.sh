@@ -45,17 +45,19 @@ chmod 0644 "$keyring"
 printf 'deb [arch=amd64 signed-by=%s] %s\n' "$keyring" "$repoLine" > "$listfile"
 chmod 0644 "$listfile"
 
-# --- Priority pin so this single-vendor repo wins over Ubuntu's package ------
-# Needed for e.g. Firefox: Ubuntu 24.04 ships a snap *transitional* `firefox`
-# that would otherwise shadow Mozilla's real .deb. These repos are single-vendor,
-# so pinning their origin at 1000 only affects their own packages.
+# --- Priority pin for the vendor repo's own packages -------------------------
+# Phase 262-02 (LIVOS-045): de-escalated 1000 → 500. 500 equals Ubuntu's default
+# priority, so the vendor repo can PROVIDE packages absent from Ubuntu (e.g.
+# Mozilla's real Firefox .deb vs the snap transitional) but can no longer SHADOW
+# Ubuntu's own package versions across upgrades — a malicious-or-compromised
+# pinned origin at 1000 was a persistent, root-level package-source override.
 repoHost="$(printf '%s' "$repoLine" | awk '{print $1}' | sed -E 's#^https?://##; s#/.*##')"
 if [[ -n "$repoHost" ]]; then
 	prefs="/etc/apt/preferences.d/livos-${name}"
 	{
 		echo "Package: *"
 		echo "Pin: origin ${repoHost}"
-		echo "Pin-Priority: 1000"
+		echo "Pin-Priority: 500"
 	} > "$prefs"
 	chmod 0644 "$prefs"
 fi
