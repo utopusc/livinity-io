@@ -832,25 +832,23 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 		expect(matcherIdx).toBeLessThan(out.indexOf('@liv_ws path /ws /ws/*'))
 	})
 
-	it('apex block emits @liv_api_subresource block-style matcher with header_regexp + path /api/* (no /ws)', () => {
+	// Phase 262-01 (LIVOS-047) — the Referer-gated matcher was REPLACED with a
+	// path-prefix matcher: Referer is client-spoofable and is NOT auth.
+	it('apex block emits @liv_api_subresource as a single-line path-prefix matcher (no Referer, no /ws)', () => {
 		const out = generateFullCaddyfile(
 			{mainDomain: 'bruce.livinity.io', subdomains: []},
 			false,
 			false,
 			[],
 		)
-		expect(out).toContain('@liv_api_subresource {')
-		expect(out).toContain('header_regexp Referer ^https?://[^/]+/liv(/|$)')
+		expect(out).toContain('@liv_api_subresource path /liv/api/*')
 		expect(out).toContain('handle @liv_api_subresource {')
-		// Locate the @liv_api_subresource block and verify it contains
-		// `path /api/*` but NOT a path token referencing /ws.
-		const apiIdx = out.indexOf('@liv_api_subresource {')
-		const apiBlockClose = out.indexOf('\t}', apiIdx)
-		expect(apiBlockClose).toBeGreaterThan(apiIdx)
-		const apiMatcherBlock = out.slice(apiIdx, apiBlockClose)
-		expect(apiMatcherBlock).toContain('path /api/*')
-		// Crucial: the matcher MUST NOT route /ws — that's @liv_ws's job.
-		expect(apiMatcherBlock).not.toContain('/ws')
+		// The matcher line MUST NOT route /ws — that's @liv_ws's job — and MUST
+		// NOT carry any header condition.
+		const apiIdx = out.indexOf('@liv_api_subresource path /liv/api/*')
+		const matcherLine = out.slice(apiIdx, out.indexOf('\n', apiIdx))
+		expect(matcherLine).not.toContain('/ws')
+		expect(matcherLine).not.toContain('header_regexp')
 	})
 
 	it('apex @liv_api_subresource handle reverse-proxies to 127.0.0.1:3020 + strips XFO/CSP + sets frame-ancestors CSP', () => {
@@ -862,7 +860,9 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 		)
 		const idx = out.indexOf('handle @liv_api_subresource {')
 		expect(idx).toBeGreaterThan(-1)
-		const blockTail = out.slice(idx, idx + 600)
+		// Phase 262-01 — slice widened: the handle body now leads with the
+		// LIV_GATE_BODY forward_auth block before the reverse_proxy.
+		const blockTail = out.slice(idx, idx + 900)
 		expect(blockTail).toContain('reverse_proxy 127.0.0.1:3020')
 		expect(blockTail).toContain('header_down -X-Frame-Options')
 		expect(blockTail).toContain('header_down -Content-Security-Policy')
@@ -894,7 +894,7 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 		const apexStart = out.indexOf('bruce.livinity.io {')
 		expect(apexStart).toBeGreaterThan(-1)
 		const wsIdx = out.indexOf('@liv_ws path /ws /ws/*', apexStart)
-		const apiIdx = out.indexOf('@liv_api_subresource {', apexStart)
+		const apiIdx = out.indexOf('@liv_api_subresource path /liv/api/*', apexStart)
 		const livIdx = out.indexOf('@liv path /liv /liv/*', apexStart)
 		expect(wsIdx).toBeGreaterThan(apexStart)
 		expect(apiIdx).toBeGreaterThan(wsIdx) // @liv_ws first, then @liv_api_subresource
@@ -926,8 +926,8 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
 		expect(out).toContain('@liv_ws path /ws /ws/*')
 		expect(out).toContain('handle @liv_ws {')
-		expect(out).toContain('@liv_api_subresource {')
-		expect(out).toContain('header_regexp Referer ^https?://[^/]+/liv(/|$)')
+		expect(out).toContain('@liv_api_subresource path /liv/api/*')
+		expect(out).toContain('handle @liv_api_subresource {')
 	})
 
 	it('multi-user subdomain block emits BOTH matchers (per-user iframe access)', () => {
@@ -943,7 +943,7 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 		const subBlockStart = out.indexOf('bruce.livinity.io {')
 		expect(subBlockStart).toBeGreaterThan(-1)
 		const wsIdx = out.indexOf('@liv_ws path /ws /ws/*', subBlockStart)
-		const apiIdx = out.indexOf('@liv_api_subresource {', subBlockStart)
+		const apiIdx = out.indexOf('@liv_api_subresource path /liv/api/*', subBlockStart)
 		const livIdx = out.indexOf('@liv path /liv /liv/*', subBlockStart)
 		expect(wsIdx).toBeGreaterThan(subBlockStart)
 		expect(apiIdx).toBeGreaterThan(wsIdx)
@@ -960,7 +960,7 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 		expect(out).toContain('http://bruce.livinity.io {')
 		const apexStart = out.indexOf('http://bruce.livinity.io {')
 		expect(out.indexOf('@liv_ws path /ws /ws/*', apexStart)).toBeGreaterThan(apexStart)
-		expect(out.indexOf('@liv_api_subresource {', apexStart)).toBeGreaterThan(apexStart)
+		expect(out.indexOf('@liv_api_subresource path /liv/api/*', apexStart)).toBeGreaterThan(apexStart)
 	})
 
 	it('neither matcher emits header_up Connection / Upgrade (preserves Caddy WS auto-upgrade)', () => {
@@ -1006,7 +1006,7 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 			[],
 		)
 		const wsMatches = out.match(/@liv_ws path \/ws \/ws\/\*/g) || []
-		const apiMatches = out.match(/@liv_api_subresource \{/g) || []
+		const apiMatches = out.match(/@liv_api_subresource path \/liv\/api\/\*/g) || []
 		expect(wsMatches.length).toBeGreaterThanOrEqual(2)
 		expect(apiMatches.length).toBeGreaterThanOrEqual(2)
 	})
@@ -1627,5 +1627,117 @@ ${gatedHandleBody.replace(/^\t/gm, '\t\t')}
 		)
 		const blockNone = sliceSubdomainBlock(withNone, `n8n.${baseDomain}`)
 		expect(blockNone).toBe(expectedGatedBlock(`n8n.${baseDomain}`, 9001))
+	})
+})
+
+// ─── Phase 262-01 WS1 — /liv-family forward_auth gate (LIVOS-041/047/053/054) ───
+//
+// Every /liv-family Caddy surface (@liv, @liv_ws, @liv_api_subresource,
+// @livos_terminal_ws, @liv_login) must carry the LIV_GATE_BODY forward_auth
+// to livinityd's /auth/verify BEFORE its reverse_proxy, so a valid
+// LIVINITY_SESSION is required for ANY AionUi traffic — including the
+// qr-mint endpoints that made LIVOS-041 a Critical. The /liv/trpc bridge
+// (LIVOS-054) and the spoofable Referer matcher (LIVOS-047) are GONE.
+describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', () => {
+	const apexOut = () =>
+		generateFullCaddyfile({mainDomain: 'bruce.livinity.io', subdomains: []}, false, false, [])
+
+	// Helper: assert forward_auth → /auth/verify appears INSIDE the named
+	// handle body (between the handle opener and its reverse_proxy line),
+	// mirroring the existing index-order assertion idiom.
+	function expectGatedHandle(out: string, handleOpener: string) {
+		const handleIdx = out.indexOf(handleOpener)
+		expect(handleIdx).toBeGreaterThan(-1)
+		const gateIdx = out.indexOf('forward_auth 127.0.0.1:8080', handleIdx)
+		const verifyIdx = out.indexOf('uri /auth/verify', handleIdx)
+		const proxyIdx = out.indexOf('reverse_proxy 127.0.0.1:', handleIdx)
+		expect(gateIdx).toBeGreaterThan(handleIdx)
+		expect(verifyIdx).toBeGreaterThan(gateIdx)
+		expect(proxyIdx).toBeGreaterThan(verifyIdx) // gate BEFORE the proxy
+	}
+
+	it('handle @liv carries forward_auth → /auth/verify before its :3020 proxy', () => {
+		expectGatedHandle(apexOut(), 'handle @liv {')
+	})
+
+	it('handle @liv_ws carries forward_auth before its :3020 proxy', () => {
+		expectGatedHandle(apexOut(), 'handle @liv_ws {')
+	})
+
+	it('handle @liv_api_subresource carries forward_auth before its :3020 proxy', () => {
+		expectGatedHandle(apexOut(), 'handle @liv_api_subresource {')
+	})
+
+	it('handle @livos_terminal_ws carries forward_auth before its :8080 proxy', () => {
+		expectGatedHandle(apexOut(), 'handle @livos_terminal_ws {')
+	})
+
+	it('handle @liv_login carries forward_auth before its :8080 proxy', () => {
+		expectGatedHandle(apexOut(), 'handle @liv_login {')
+	})
+
+	it('LIVOS-054 — the /liv/trpc → :8080 bridge is GONE', () => {
+		const out = apexOut()
+		expect(out).not.toContain('@liv_trpc')
+		expect(out).not.toContain('path /liv/trpc')
+	})
+
+	it('LIVOS-047 — no Referer header matcher anywhere in the output', () => {
+		const out = apexOut()
+		expect(out).not.toContain('header_regexp Referer')
+		expect(out).not.toContain('header_regexp')
+	})
+
+	it('LIVOS-047 — @liv_api_subresource is the path-prefix matcher /liv/api/*', () => {
+		const out = apexOut()
+		expect(out).toContain('@liv_api_subresource path /liv/api/*')
+	})
+
+	it('@liv_api_subresource strips /liv so :3020 still receives /api/*', () => {
+		const out = apexOut()
+		const idx = out.indexOf('handle @liv_api_subresource {')
+		expect(idx).toBeGreaterThan(-1)
+		const stripIdx = out.indexOf('uri strip_prefix /liv', idx)
+		const proxyIdx = out.indexOf('reverse_proxy 127.0.0.1:3020', idx)
+		expect(stripIdx).toBeGreaterThan(idx)
+		expect(proxyIdx).toBeGreaterThan(stripIdx)
+	})
+
+	it('LIVOS-041 — @liv_login emits in all three site shapes (fallback :80 + apex + multi-user)', () => {
+		const apex = apexOut()
+		expect(apex).toContain('@liv_login path /liv-login')
+		const fallback = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expect(fallback).toContain('@liv_login path /liv-login')
+		const multi = generateFullCaddyfile(
+			{
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			},
+			true,
+			false,
+			[],
+		)
+		const subStart = multi.indexOf('bruce.livinity.io {')
+		expect(subStart).toBeGreaterThan(-1)
+		expect(multi.indexOf('@liv_login path /liv-login', subStart)).toBeGreaterThan(subStart)
+	})
+
+	it('@webapp_stream_ws (LivOS-owned WS carve-out) stays UNGATED', () => {
+		const out = apexOut()
+		const idx = out.indexOf('handle @webapp_stream_ws {')
+		expect(idx).toBeGreaterThan(-1)
+		// Slice ends at the next matcher (@liv_ws) — the carve-out body must
+		// contain NO forward_auth (livinityd's own WS endpoints carry their
+		// own JWT checks; gating here would break the RFB/docker/ssh streams).
+		const nextIdx = out.indexOf('@liv_ws path /ws /ws/*', idx)
+		expect(nextIdx).toBeGreaterThan(idx)
+		expect(out.slice(idx, nextIdx)).not.toContain('forward_auth')
+	})
+
+	it('401 gate redirect points at /login with the original uri preserved', () => {
+		const out = apexOut()
+		const livIdx = out.indexOf('handle @liv {')
+		const redirIdx = out.indexOf('redir /login?redirect={uri} 302', livIdx)
+		expect(redirIdx).toBeGreaterThan(livIdx)
 	})
 })

@@ -290,6 +290,31 @@ const LIV_BRANDING_HANDLE = `\thandle /liv/branding/* {
 \t}`
 
 /**
+ * Phase 262-01 (LIVOS-041/047/053/054) — the /liv-family forward_auth gate.
+ *
+ * Mirrors the 256-04 `gatedHandleBody` forward_auth (caddy.ts:~675) but as a
+ * module-level constant: module constants have no `config` in scope, so the
+ * 401 redirect uses Caddy placeholders + a relative /login path instead of an
+ * absolute `https://${config.mainDomain}/...` URL. Emitted as the FIRST
+ * directive inside EVERY /liv-family handle (@liv, @liv_ws,
+ * @liv_api_subresource, @livos_terminal_ws, @liv_login) so a valid
+ * LIVINITY_SESSION is required at the Caddy layer before ANY AionUi traffic —
+ * including the qr-mint endpoints (`/liv/api/webui/generate-qr-token`,
+ * `/liv/api/auth/qr-login`) that made LIVOS-041 a Critical (an unauthenticated
+ * caller could mint an `aionui-session` cookie straight through `@liv`).
+ * livinityd's /auth/verify performs full validation (signature + exp + jti
+ * revocation + active-user re-check per Phase 262-01 Task 2).
+ */
+const LIV_GATE_BODY = `\t\tforward_auth 127.0.0.1:8080 {
+\t\t\turi /auth/verify
+\t\t\tcopy_headers Cookie
+\t\t\t@bad status 401
+\t\t\thandle_response @bad {
+\t\t\t\tredir /login?redirect={uri} 302
+\t\t\t}
+\t\t}`
+
+/**
  * Phase 226-04 (recovery from 226-03 BLOCKED) — Liv Assistant (AionUi WebUI)
  * `/liv` reverse-proxy handle. Phase 223 shipped liv-assistant.service on
  * 127.0.0.1:3020; Phase 226 makes it reachable at https://bruce.livinity.io/liv/*
@@ -352,13 +377,16 @@ const LIV_BRANDING_HANDLE = `\thandle /liv/branding/* {
  * referencing them. Until the follow-up phase ships, the overlay CSS
  * exists on the wire but is never loaded by AionUi's HTML.
  */
-const LIV_ASSISTANT_HANDLE = `\t@liv_trpc path /liv/trpc /liv/trpc/*
-\thandle @liv_trpc {
-\t\turi strip_prefix /liv
-\t\treverse_proxy 127.0.0.1:8080
-\t}
-\t@liv path /liv /liv/*
+// Phase 262-01 (LIVOS-054): the legacy /liv/trpc bridge matcher+handle
+// (path /liv/trpc + /liv/trpc/*, strip /liv → :8080) is DELETED. It let the
+// same-origin framed AionUi SPA (sandbox `allow-same-origin allow-scripts`)
+// drive the FULL LivOS tRPC API with the operator's cookie auto-attached.
+// The in-repo consumer (scripts/aionui-patches/local-agents-install-section.js
+// cliInstaller.* calls) breaks by design — LOCKED decision; the full
+// origin-split is the deferred WS6 follow-up.
+const LIV_ASSISTANT_HANDLE = `\t@liv path /liv /liv/*
 \thandle @liv {
+${LIV_GATE_BODY}
 \t\turi strip_prefix /liv
 \t\treverse_proxy 127.0.0.1:3020 {
 \t\t\theader_down -X-Frame-Options
@@ -369,10 +397,27 @@ ${WS_TRANSPORT_BODY}
 \t}`
 
 /**
+ * Phase 262-01 (LIVOS-041) — Caddy-layer gate for the /liv-login auto-login
+ * endpoint. The Express handler (modules/server/liv-login-handler.ts) is ALSO
+ * session-gated (defense in depth — Task 2); this handle puts forward_auth in
+ * front of it at the Caddy layer so the cookie-minting flow is unreachable
+ * without a valid LIVINITY_SESSION even if a future refactor regresses the
+ * Express-side check. Emitted immediately after LIV_ASSISTANT_HANDLE at all
+ * three emit sites in generateFullCaddyfile.
+ */
+const LIV_LOGIN_HANDLE = `\t@liv_login path /liv-login
+\thandle @liv_login {
+${LIV_GATE_BODY}
+\t\treverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY}
+\t\t}
+\t}`
+
+/**
  * Phase 236 → Phase 237 — split subresource matcher for AionUi.
  *
  * Phase 236 introduced a single `@liv_subresource` matcher that combined
- * `header_regexp Referer ^https?://[^/]+/liv(/|$)` AND
+ * a Referer header regexp (`^https?://[^/]+/liv(/|$)`) AND
  * `path /api/* /ws /ws/*`. The intent was to route only iframe-originated
  * subresource fetches to AionUi while leaving LivOS-shell apex `/api/*`
  * traffic on the `:8080` catch-all.
@@ -381,7 +426,7 @@ ${WS_TRANSPORT_BODY}
  *   RFC 6455 (WebSocket) browsers do NOT send a `Referer` header on the
  *   WS upgrade handshake — only `Origin`. Phase 236's combined matcher
  *   silently MISSED the `wss://bruce.livinity.io/ws` upgrade because the
- *   AND condition `header_regexp Referer ...` failed. The request fell
+ *   AND condition (the Referer regexp) failed. The request fell
  *   through to the `:8080` catch-all (which has no `/ws` route) → 404 /
  *   502 → chat streaming broken (operator had to reload the page to see
  *   each response). Phase 236 EXT-4 falsely passed because the curl
@@ -415,11 +460,17 @@ ${WS_TRANSPORT_BODY}
  *      not require any header check.
  *      (No Referer/Origin matching needed — and per RFC 6455 browsers do
  *      not send Referer here anyway.)
- *   2. `@liv_api_subresource` — KEEP the referer-gated pattern, but for
- *      `/api/*` ONLY. This preserves Phase 236's protection of LivOS-shell
- *      apex `/api/*` traffic from collateral-routing to AionUi: shell
- *      `/api/*` requests have Referer=`/` or `/app-store`, never `/liv/`,
- *      so they fall through to the `:8080` catch-all as designed.
+ *   2. `@liv_api_subresource` — Phase 237 kept a referer-gated pattern for
+ *      `/api/*` here; Phase 262-01 (LIVOS-047) REPLACED it with the
+ *      path-prefix matcher `path /liv/api/*` + `uri strip_prefix /liv`.
+ *      Referer is a client-controlled header — trivially forged by
+ *      curl/fetch — and was the SOLE routing boundary in front of the
+ *      operator-credentialed agent API. install-liv-assistant.sh already
+ *      rewrites quoted `/api/` → `/liv/api/` literals in the AionUi bundle,
+ *      so iframe subresource fetches arrive prefixed; LivOS-shell apex
+ *      `/api/*` traffic never matches and falls through to the `:8080`
+ *      catch-all as designed. The strip_prefix keeps :3020 receiving the
+ *      bare `/api/*` it expects.
  *
  * Why a path-rewrite was NOT chosen (carry-over from Phase 236 rationale):
  *   Phase 235's sed pass rewrote QUOTED string-literal `/api/` -> `/liv/api/`
@@ -432,9 +483,8 @@ ${WS_TRANSPORT_BODY}
  *   robust place to disambiguate.
  *
  * Caddy v2 named matcher semantics:
- *   `@liv_ws path /ws /ws/*` is a single-stanza path matcher (no curly
- *   braces needed). `@liv_api_subresource { header_regexp ...; path /api/* }`
- *   is a multi-condition matcher block where Caddy ANDs the stanzas.
+ *   `@liv_ws path /ws /ws/*` and `@liv_api_subresource path /liv/api/*` are
+ *   single-stanza path matchers (no curly braces needed).
  *
  * WebSocket upgrade — Caddy v2's `reverse_proxy` auto-handles `Upgrade:
  * websocket` + `Connection: upgrade` headers. We deliberately do NOT set
@@ -450,14 +500,17 @@ ${WS_TRANSPORT_BODY}
  * site. Caddy v2 evaluates by matcher specificity (not source order) so
  * source-ordering is cosmetic and kept above @liv for diff review.
  *
- * Threat model — a malicious origin could spoof `Referer: .../liv/` to
- * reach `/api/auth/...` on the AionUi backend. AionUi enforces its own
- * auth gate (qr-session cookie, Phase 234-04), so spoofed Referer alone
- * grants no privilege escalation — it only routes traffic to a different
- * backend. The unconditional `@liv_ws` matcher does NOT widen the threat
- * surface: livinityd has no `/ws` route to compromise, and the route was
- * effectively unconditional in Phase 235 too (just via a path-rewrite sed
- * pass on the bundle).
+ * Threat model — Phase 262-01 (LIVOS-041/047): the old "AionUi enforces its
+ * own auth gate so a spoofed Referer grants no escalation" argument collapsed
+ * once LIVOS-041 showed the `aionui-session` cookie was freely mintable via
+ * the unauthenticated /liv-login flow. Every /liv-family handle (including
+ * @liv_ws and @liv_api_subresource below) now carries LIV_GATE_BODY —
+ * forward_auth to livinityd's /auth/verify — so a valid LIVINITY_SESSION is
+ * required BEFORE any traffic reaches :3020, and the /api routing decision is
+ * a path prefix, not a client-forgeable header. The unconditional `@liv_ws`
+ * matcher still does NOT widen the threat surface: livinityd has no `/ws`
+ * route to compromise, and the WS upgrade carries the session cookie that
+ * forward_auth validates.
  *
  * Constant name preserved (`LIV_ASSISTANT_SUBRESOURCE_HANDLE`) to avoid
  * touching the 3 emit sites in `generateFullCaddyfile`.
@@ -470,17 +523,17 @@ ${WS_TRANSPORT_BODY}
 \t}
 \t@liv_ws path /ws /ws/*
 \thandle @liv_ws {
+${LIV_GATE_BODY}
 \t\treverse_proxy 127.0.0.1:3020 {
 \t\t\theader_down -X-Frame-Options
 \t\t\theader_down -Content-Security-Policy
 ${WS_TRANSPORT_BODY}
 \t\t}
 \t}
-\t@liv_api_subresource {
-\t\theader_regexp Referer ^https?://[^/]+/liv(/|$)
-\t\tpath /api/*
-\t}
+\t@liv_api_subresource path /liv/api/*
 \thandle @liv_api_subresource {
+${LIV_GATE_BODY}
+\t\turi strip_prefix /liv
 \t\treverse_proxy 127.0.0.1:3020 {
 \t\t\theader_down -X-Frame-Options
 \t\t\theader_down -Content-Security-Policy
@@ -518,6 +571,7 @@ ${WS_TRANSPORT_BODY}
  */
 const LIVOS_TERMINAL_WS_HANDLE = `\t@livos_terminal_ws path /livos/terminal/ws
 \thandle @livos_terminal_ws {
+${LIV_GATE_BODY}
 \t\treverse_proxy 127.0.0.1:8080 {
 \t\t\theader_down -X-Frame-Options
 \t\t\theader_down -Content-Security-Policy
@@ -546,6 +600,7 @@ ${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
+${LIV_LOGIN_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY}
@@ -580,6 +635,7 @@ ${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
+${LIV_LOGIN_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY}
@@ -629,6 +685,7 @@ ${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
+${LIV_LOGIN_HANDLE}
 	handle {
 		reverse_proxy 127.0.0.1:8080 {
 ${PUBLIC_HEADER_STRIP}
