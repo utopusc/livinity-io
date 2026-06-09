@@ -19,6 +19,7 @@
 import { execFileSync } from 'child_process';
 import os from 'os';
 import path from 'path';
+import { logger } from './logger.js';
 
 /**
  * The SINGLE agent-workspace root shared by the bwrap write-root (this file),
@@ -62,11 +63,24 @@ const SCRUB_KEYS = new Set([
 const ENV_ALLOW = ['HOME', 'PATH', 'LANG', 'NODE_ENV', 'TERM', 'USER'] as const;
 
 /**
- * Probe whether `bwrap` is on PATH (resolved ONCE at module load). On non-Linux
- * / dev boxes without bubblewrap this is false, and shell.ts degrades gracefully
- * (still scrubbing the env) — see shell.ts execute().
+ * Phase 262-05 (LIVOS-058): the RUNTIME usability probe argv. A real namespace
+ * command — `--version` only proves the binary exists; it succeeds even when
+ * unprivileged user namespaces are denied by the kernel/AppArmor at runtime
+ * (apparmor_restrict_unprivileged_userns, unprivileged_userns_clone=0,
+ * max_user_namespaces=0, nested container without CAP_SYS_ADMIN), in which
+ * case every actual bwrap exec fails with a namespace EPERM.
  */
-function probeBwrap(): boolean {
+export const BWRAP_RUNTIME_PROBE_ARGV = [
+  '--unshare-all',
+  '--share-net',
+  '--ro-bind', '/', '/',
+  'true',
+] as const;
+
+/** Cheap PATH-presence check (the old probe) — distinguishes "off PATH" from
+ * "present but userns-unusable" so shell.ts can fail SAFE (refusal) instead of
+ * silently downgrading to an unsandboxed exec. */
+function probeBwrapOnPath(): boolean {
   try {
     execFileSync('bwrap', ['--version'], { stdio: 'ignore' });
     return true;
@@ -75,7 +89,66 @@ function probeBwrap(): boolean {
   }
 }
 
-export const BWRAP_AVAILABLE: boolean = probeBwrap();
+/** True runtime userns probe (resolved ONCE at module load). */
+function probeBwrapRuntime(): boolean {
+  try {
+    execFileSync('bwrap', [...BWRAP_RUNTIME_PROBE_ARGV], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** bwrap binary is on PATH (says NOTHING about runtime userns usability). */
+export const BWRAP_ON_PATH: boolean = probeBwrapOnPath();
+
+/**
+ * bwrap is ACTUALLY usable at runtime (on PATH AND the userns probe entered a
+ * namespace successfully). On non-Linux / dev boxes without bubblewrap this is
+ * false, and shell.ts degrades gracefully (still scrubbing the env) — see
+ * shell.ts execute(). When bwrap is present but userns is unavailable, shell.ts
+ * REFUSES (never silently unsandboxed) — LIVOS-058.
+ */
+export const BWRAP_AVAILABLE: boolean = BWRAP_ON_PATH && probeBwrapRuntime();
+
+// ONE operator-facing health log at module load (LIVOS-058): the agent shell is
+// disabled (stable refusal per call) until userns is restored on the host.
+if (BWRAP_ON_PATH && !BWRAP_AVAILABLE) {
+  logger.error(
+    'bwrap present but userns unavailable; agent shell disabled (LIVOS-058). ' +
+      'Check AppArmor unprivileged-userns restrictions / kernel.unprivileged_userns_clone / max_user_namespaces.',
+  );
+}
+
+/** The execution modes shell.ts resolves from the two probe facts (LIVOS-058). */
+export type ShellExecutionMode = 'bwrap' | 'unsandboxed-dev' | 'refuse';
+
+/**
+ * Pure decision: how must the shell tool execute?
+ *  - runtime-usable            → 'bwrap' (sandboxed exec, the normal path)
+ *  - genuinely off PATH        → 'unsandboxed-dev' (the UNCHANGED env-scrubbed
+ *                                dev/non-Linux fallback — fires ONLY when bwrap
+ *                                is absent)
+ *  - present but userns broken → 'refuse' (stable refusal; NEVER a silent
+ *                                unsandboxed fallback — that would disable the
+ *                                contained-autonomy control)
+ */
+export function resolveShellExecutionMode(
+  onPath: boolean,
+  runtimeUsable: boolean,
+): ShellExecutionMode {
+  if (runtimeUsable) return 'bwrap';
+  if (!onPath) return 'unsandboxed-dev';
+  return 'refuse';
+}
+
+/** The stable refusal the shell tool returns in 'refuse' mode (LIVOS-058). */
+export const SANDBOX_REFUSAL = {
+  stdout: '',
+  stderr:
+    'Shell sandbox unavailable: bwrap present but user namespaces are not permitted on this host. Refusing to run unsandboxed (LIVOS-058).',
+  code: 126,
+} as const;
 
 /**
  * Build a credential-scrubbed child environment for the agent exec. Allow-list
@@ -101,9 +174,11 @@ export function buildScrubbedEnv(srcEnv: NodeJS.ProcessEnv = process.env): NodeJ
  * `opts.workspace` (the agent-workspace). The ONLY writable bind is the
  * workspace; secrets / docker.sock / /opt/liv are never bound.
  *
- * The argv is always constructed (pure string building); `usable` reflects
- * whether `bwrap` is actually on PATH. When `usable:false` callers fall back to
- * a plain (still env-scrubbed) exec on dev boxes — see shell.ts execute().
+ * The argv is always constructed (pure string building); `usable` reflects the
+ * RUNTIME userns probe (BWRAP_AVAILABLE, Phase 262-05 LIVOS-058) — not mere
+ * PATH presence. When `usable:false` shell.ts consults BWRAP_ON_PATH: off-PATH
+ * dev boxes fall back to a plain (still env-scrubbed) exec; present-but-
+ * userns-unavailable hosts get the stable SANDBOX_REFUSAL instead.
  */
 export function wrapWithBwrap(
   command: string,

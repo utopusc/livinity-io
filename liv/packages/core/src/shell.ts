@@ -4,8 +4,10 @@ import { logger } from './logger.js';
 import {
   wrapWithBwrap,
   buildScrubbedEnv,
-  BWRAP_AVAILABLE,
+  BWRAP_ON_PATH,
   LIV_AGENT_WORKSPACE,
+  resolveShellExecutionMode,
+  SANDBOX_REFUSAL,
 } from './sandbox.js';
 
 const NEXUS_BASE_DIR = process.env.LIV_BASE_DIR || '/opt/liv';
@@ -34,9 +36,13 @@ const DEFAULT_TIMEOUT = 30_000;
 
 export class ShellExecutor {
   private cwd: string;
+  /** Test-only probe-state override (Phase 262-05) — production always uses the
+   * module-load BWRAP_ON_PATH / wrapWithBwrap().usable facts. */
+  private sandboxStateOverride?: { onPath: boolean; usable: boolean };
 
-  constructor(cwd = NEXUS_BASE_DIR) {
+  constructor(cwd = NEXUS_BASE_DIR, sandboxStateOverride?: { onPath: boolean; usable: boolean }) {
     this.cwd = cwd;
+    this.sandboxStateOverride = sandboxStateOverride;
   }
 
   async execute(command: string, timeoutMs = DEFAULT_TIMEOUT): Promise<{ stdout: string; stderr: string; code: number }> {
@@ -48,15 +54,35 @@ export class ShellExecutor {
       }
     }
 
-    logger.info('Shell: executing', { command, timeout: timeoutMs, sandboxed: BWRAP_AVAILABLE });
+    const { argv, usable } = wrapWithBwrap(command, { workspace: LIV_AGENT_WORKSPACE });
+
+    // Phase 262-05 (LIVOS-058): resolve the execution mode from the TWO probe
+    // facts (PATH presence vs runtime userns usability) instead of the old
+    // PATH-only gate.
+    const onPath = this.sandboxStateOverride?.onPath ?? BWRAP_ON_PATH;
+    const runtimeUsable = this.sandboxStateOverride?.usable ?? usable;
+    const mode = resolveShellExecutionMode(onPath, runtimeUsable);
+    // `sandboxed` reflects ACTUAL engagement (true only when the bwrap branch
+    // runs) — not the stale PATH-presence flag (LIVOS-058 log fix).
+    const sandboxed = mode === 'bwrap';
+
+    if (mode === 'refuse') {
+      // bwrap is present but user namespaces are unavailable at runtime.
+      // DO NOT execute — and NEVER silently fall back to unsandboxed exec
+      // (that would disable the contained-autonomy control and convert this
+      // availability gap into a security downgrade). The single operator
+      // health log fired at sandbox.ts module load.
+      logger.warn('Shell: refusing — bwrap present but userns unavailable (LIVOS-058)', { command });
+      return { ...SANDBOX_REFUSAL };
+    }
+
+    logger.info('Shell: executing', { command, timeout: timeoutMs, sandboxed });
 
     // Phase 256-01 (WS-A / LIVOS-002): scrub host creds from the child env
     // ALWAYS (defense-in-depth, even on dev boxes without bwrap). The agent
     // shell's write-confined root is LIV_AGENT_WORKSPACE, NOT this.cwd / /opt/liv.
     const env = buildScrubbedEnv();
     const truncate = (s: string) => (s.length > MAX_OUTPUT ? s.slice(0, MAX_OUTPUT) + '\n...[truncated]' : s);
-
-    const { argv, usable } = wrapWithBwrap(command, { workspace: LIV_AGENT_WORKSPACE });
 
     return new Promise((resolve) => {
       const cb = (error: any, stdout: string, stderr: string) => {
@@ -68,13 +94,15 @@ export class ShellExecutor {
         resolve({ stdout: truncate(stdout), stderr: truncate(stderr), code });
       };
 
-      if (usable) {
+      if (mode === 'bwrap') {
         // bwrap-sandboxed: write-root = LIV_AGENT_WORKSPACE, deny-read secrets,
         // no docker.sock, egress via proxy (HTTPS_PROXY in scrubbed env).
         execFile('bwrap', argv.slice(1), { timeout: timeoutMs, maxBuffer: 1024 * 1024, env }, cb);
       } else {
-        // Dev/non-Linux fallback: still env-scrubbed, still run in the agent
-        // workspace (NOT this.cwd / /opt/liv) so the liv code stays unwritable.
+        // Dev/non-Linux fallback (bwrap genuinely OFF PATH — UNCHANGED, fires
+        // only in 'unsandboxed-dev' mode): still env-scrubbed, still run in the
+        // agent workspace (NOT this.cwd / /opt/liv) so the liv code stays
+        // unwritable.
         exec(command, { cwd: LIV_AGENT_WORKSPACE, timeout: timeoutMs, maxBuffer: 1024 * 1024, env }, cb);
       }
     });
