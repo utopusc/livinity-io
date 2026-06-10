@@ -538,6 +538,12 @@ export async function provisionUserHostnames(username: string): Promise<{
 // callers can land later and skip the wrapper — guarding here means single-
 // char slugs / malformed inputs cannot reach the CF API.
 const CF_SUBDOMAIN_PART_RE = /^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$/;
+// L-066 (Phase 263-04): the username half must NOT contain a hyphen, otherwise
+// `${app_slug}-${username}` is ambiguous (user `jean-luc`+app `radarr` vs user
+// `luc`+app slug `radarr-jean` both → `radarr-jean-luc`). App slugs MAY keep a
+// hyphen, so this tighter regex is applied to the username ONLY; the app_slug
+// check below stays on CF_SUBDOMAIN_PART_RE.
+const CF_USERNAME_RE = /^[a-z0-9]{2,32}$/;
 
 export async function provisionAppSubdomain(opts: {
   tunnel_id: string;
@@ -554,9 +560,9 @@ export async function provisionAppSubdomain(opts: {
       endpoint: 'provisionAppSubdomain',
     });
   }
-  if (!CF_SUBDOMAIN_PART_RE.test(opts.username)) {
+  if (!CF_USERNAME_RE.test(opts.username)) {
     throw new CfApiError({
-      message: `Invalid username "${opts.username}": must be 2-32 chars, lowercase alphanumeric or hyphen, no leading/trailing hyphen`,
+      message: `Invalid username "${opts.username}": must be 2-32 lowercase alphanumeric chars, no hyphen (L-066)`,
       code: 400,
       cfErrorCode: 0,
       cfMessage: 'validation rejected username',

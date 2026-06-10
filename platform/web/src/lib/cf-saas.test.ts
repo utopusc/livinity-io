@@ -223,3 +223,108 @@ describe('cf-saas error class', () => {
     assert.ok(err instanceof Error);
   });
 });
+
+// ---------------------------------------------------------------------------
+// L-066 (Phase 263-04): hyphen-free username guard in provisionAppSubdomain.
+//
+// These run UNCONDITIONALLY (no CF_INTEGRATION) because the username guard is a
+// pure pre-flight check that throws BEFORE any Cloudflare call. A hyphen in the
+// username makes the `{app_slug}-{username}` subdomain ambiguous → cross-tenant
+// CNAME-squat. The guard rejects it before it can reach the CF provisioning API.
+//
+// NOTE: app slugs may legitimately keep a hyphen (`radarr-jean`); only the
+// username half is tightened. The hyphen-free username + hyphen app_slug case
+// must PASS the username guard (and then fail later on missing CF env / network,
+// NOT on username validation). We assert no CF env is set so the later failure
+// is the env-missing plain Error, proving the username guard was cleared.
+// ---------------------------------------------------------------------------
+describe('cf-saas provisionAppSubdomain — hyphen-free username guard (L-066)', () => {
+  // Ensure the CF env is absent so a passed username guard surfaces as the
+  // env-missing plain Error (NOT a CfApiError username rejection).
+  const CF_ENV_KEYS = ['CF_API_TOKEN', 'CF_ACCOUNT_ID', 'CF_ZONE_ID_LIVINITY_IO'];
+  const savedEnv: Record<string, string | undefined> = {};
+  before(() => {
+    for (const k of CF_ENV_KEYS) {
+      savedEnv[k] = process.env[k];
+      delete process.env[k];
+    }
+    __resetClientForTests();
+  });
+  after(() => {
+    for (const k of CF_ENV_KEYS) {
+      if (savedEnv[k] === undefined) delete process.env[k];
+      else process.env[k] = savedEnv[k];
+    }
+    __resetClientForTests();
+  });
+
+  it('rejects a hyphen-bearing username with a CfApiError BEFORE any CF call', async () => {
+    let caught: unknown;
+    try {
+      await provisionAppSubdomain({
+        tunnel_id: 'tnl-test',
+        username: 'jean-luc',
+        app_slug: 'radarr',
+        port: 9999,
+      });
+      assert.fail('expected provisionAppSubdomain to throw for hyphen username');
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof CfApiError, 'hyphen username must throw a CfApiError');
+    assert.equal((caught as CfApiError).code, 400);
+    assert.match(
+      (caught as CfApiError).message,
+      /username/i,
+      'error message names the username',
+    );
+    assert.match(
+      (caught as CfApiError).message,
+      /hyphen/i,
+      'error message explains the hyphen rejection',
+    );
+  });
+
+  it('a hyphen-free username + hyphen app_slug PASSES the username guard (slug unaffected)', async () => {
+    // username 'luc' is hyphen-free → clears the username guard; app_slug
+    // 'radarr-jean' keeps its hyphen → clears the app_slug guard. Execution
+    // then reaches readEnv() and throws the env-missing plain Error. We assert
+    // the thrown error is NOT the username-validation CfApiError.
+    let caught: unknown;
+    try {
+      await provisionAppSubdomain({
+        tunnel_id: 'tnl-test',
+        username: 'luc',
+        app_slug: 'radarr-jean',
+        port: 9999,
+      });
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught, 'expected a downstream (env/network) throw, not a clean resolve in unit env');
+    const isUsernameRejection =
+      caught instanceof CfApiError &&
+      /username/i.test(caught.message) &&
+      /hyphen/i.test(caught.message);
+    assert.equal(
+      isUsernameRejection,
+      false,
+      'hyphen-free username + hyphen app_slug must NOT be rejected by the username guard',
+    );
+  });
+
+  it('rejects an empty username with a CfApiError (length floor preserved)', async () => {
+    let caught: unknown;
+    try {
+      await provisionAppSubdomain({
+        tunnel_id: 'tnl-test',
+        username: 'a',
+        app_slug: 'radarr',
+        port: 9999,
+      });
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof CfApiError, 'too-short username must throw a CfApiError');
+  });
+});
