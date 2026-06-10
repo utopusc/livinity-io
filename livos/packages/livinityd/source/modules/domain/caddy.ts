@@ -319,7 +319,6 @@ const LIV_BRANDING_HANDLE = `\thandle /liv/branding/* {
  */
 const LIV_GATE_BODY = `\t\tforward_auth 127.0.0.1:8080 {
 \t\t\turi /auth/verify
-\t\t\tcopy_headers Cookie
 \t\t\t@bad status 401
 \t\t\thandle_response @bad {
 \t\t\t\tredir https://{host}/login?redirect={scheme}://{host}{uri} 302
