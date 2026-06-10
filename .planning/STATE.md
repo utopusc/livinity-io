@@ -2,18 +2,20 @@
 gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
-status: planning
-last_updated: "2026-06-09T22:35:00.177Z"
-last_activity: 2026-06-05
+status: executing
+last_updated: "2026-06-10T18:34:51.906Z"
+last_activity: 2026-06-10
 progress:
-  total_phases: 176
+  total_phases: 179
   completed_phases: 91
-  total_plans: 606
+  total_plans: 612
   completed_plans: 523
-  percent: 86
+  percent: 85
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
+
+> ✅ **263-01 DONE (Commercial-Launch Security Wave 1 — L-064 Critical: unauth chrome-route command-injection RCE CLOSED)** — 3 commits `8c46294d` (TDD RED: 10 vitest cases for the gate + both no-shell url sinks, `./chrome-launch.js` missing → fail), `b7cfbc04` (TDD GREEN — Task 1+2: NEW pure `modules/server/chrome-launch.ts` = `chromeSessionGate(cookies,verify)` (fail-closed 401 on missing/null-verify/throwing-verify, ok:true on valid) + `buildCdpNewTabUrl(url)` (encoded CDP URL) + `buildChromeLaunchArgv(user,url)` (spawn argv array, url=one element); index.ts wires `verifySessionFull` as the gate's FIRST statement in all THREE `/api/chrome/{launch,kill,status}` handlers (`_request`→`request` on kill/status so the cookie is reachable) → `verifySessionFull` grep 8→11; **SINK 1** CDP open `$({shell:true})\`curl ...?${url}\`` → `fetch(buildCdpNewTabUrl(url),{method:'PUT'})` encodeURIComponent — no shell; **SINK 2** launcher `$({shell:true})\`sudo ... "${url}" &\`` → `spawn('sudo', buildChromeLaunchArgv(desktopUser,url), {detached,stdio:'ignore'}).unref()` argv — `url` can never be a shell token; `urlArg` quoting DELETED; added `import {spawn} from 'node:child_process'`; **audit-grep: ZERO `${url}` inside any `$({shell:true})` in the launch region** (only `${url}` left is a `this.logger.log` template). NON-tainted shell calls kept (port checks, killall, `id -u ${desktopUser}`, `find /run/user/${uid}/gdm` — admin-set Redis/derived, not request-tainted; latent siblings deferred to 265 audit). **NO admin role gate** (desktop-stream relaunches chrome for any logged-in member; admin gate would break member streaming — session-required IS the L-064 fix)), `a9143705` (Task 3 chore: `@trpc/server ^11.1.1→^11.17.0` GHSA-43p4-m455-4f4j prototype-pollution + `ws ^8.16.0→^8.21.0` GHSA-58qx-3vcg-4xpx memory disclosure; lockfile re-resolved; `@trpc/client` left at ^11.1.1 per plan scope). **Tests:** 10/10 chrome-launch vitest + 9/9 liv-login-handler (no regression). **tsc: ZERO new** — non-chrome-launch error count 398 baseline-identical (actually DROPPED 398→320 after the bump as newer `@types/ws` fixed a pre-existing `trpc/index.ts(492)` WebSocketServer mismatch); chrome-launch.ts + .test.ts contribute 0. **Deviation (Rule 1):** my own test accessed `gate.status` without union-narrowing → 2 TS2339; fixed with `if (gate.ok) throw` guards (confined to the test file, no scope creep). **⚠️ NOT launch-done until 263-06:** the MANDATORY live curl (unauth `POST /api/chrome/launch {"url":"$(id>/tmp/pwn)"}`→401 + no /tmp/pwn; `GET /api/chrome/status` unauth→401) lives in plan 263-06 — string tests can't catch a fail-open gate (LIVOS-041 lesson). **CODE ONLY — NO DEPLOY** (no update.sh/systemctl/ssh; livinityd=tsx so source needs no build, the dep bump rides update.sh's pnpm install). SUMMARY: `.planning/phases/263-commercial-launch-security-multi-tenant/263-01-SUMMARY.md`. (STATE narrative format — SDK counters no-op.) **Next: 263-04/263-05 (Wave 1 siblings: L-066 hyphen-username ban, L-067 DEVICE_JWT_SECRET fail-closed) — all Wave 1, no shared files with 263-01.**
 
 > ✅ **262-05 DONE (Security Hardening Pass 3 WS5 — DEK migration + manifest-flag threading + bwrap runtime probe: LIVOS-052 Medium / 052b / 057 / 058) — PHASE 262 CODE-COMPLETE (all 5 plans)** — 3 commits `14d6aa4c` (NEW shared `modules/secrets/dek.ts` = verbatim 257-05 registry pattern: getKey reads `/opt/livos/data/secrets/credential-dek` (32B 0600 auto-gen), getLegacyKey = sha256(trim(jwt)) **DECRYPT-ONLY**, iv12||tag16||ct base64 codec, fs-deps test seam; git-credentials.ts + stack-secrets.ts + backup-secrets.ts DELETE their local sha256(JWT) getKey + duplicate crypto and import dek.js; all three read paths port the registry lazy re-key — DEK first, legacy fallback on GCM throw, re-encrypt + persist (PG UPDATE / Redis hset) non-fatal → **a leaked jwt no longer decrypts git PATs/SSH keys/stack secrets/backup S3-SFTP creds AND a JWT rotation no longer bricks them**; dek.unit.test.ts 7 cases incl. leaked-jwt + legacy-migration properties), `2acde1fa` (LIVOS-057: compose-generator.ts builtin manifest builder + apps.ts native-builtin branch thread `requiresLocalAiClis`+`neverPublic` exactly as requiresAiProvider (js-yaml drops undefined keys — verified); platform path adds the dropped `neverPublic` thread; **buildPublicForbiddenSignals ORs BOTH flags with getBuiltinApp(appId)** (mirrors the :828 mount-path OR) → a manifest-write regression can no longer make a credentialed builtin public-exposable; routes.ts setPublicAccess `: true` → `: ctx.legacySingleUser === true` (WS-A5 parity w/ 256-04 requireRole, same pattern as 262-02's installV37); public-forbidden.test.ts +3 cases exercising the REAL `Apps.prototype.buildPublicForbiddenSignals` via this-stub + surgical getBuiltinApp vi.mock — 20/20), `dbf21020` (LIVOS-058: sandbox.ts `BWRAP_RUNTIME_PROBE_ARGV = --unshare-all --share-net --ro-bind / / true` replaces the PATH-only `--version` gate; `BWRAP_ON_PATH` vs `BWRAP_AVAILABLE` now DISTINCT; ONE module-load health log on present-but-userns-unavailable; new pure `resolveShellExecutionMode` → bwrap|unsandboxed-dev|refuse + `SANDBOX_REFUSAL` {code:126, explanatory stderr}; shell.ts refuse-branch resolves BEFORE any exec — **no-silent-unsandboxed-fallback property (WS-B2 Mitigation-Confirmed) preserved + now test-locked**; off-PATH dev fallback unchanged; `sandboxed:` log = actual branch taken; sandbox.test.ts 11/11 incl. stubbed-probe-failure-never-execs via test-only ShellExecutor sandboxStateOverride param; **liv/core REBUILT** tsc clean, dist gitignored — update.sh rebuilds on-server). **Verification:** 38/38 vitest (dek 7 + public-forbidden 20 + registry 11) + 11/11 tsx; three `../secrets/dek.js` imports grep-confirmed; livinityd tsc **zero new** (stash-compared 64-error apps-module baseline identical). **Carry-forward (recorded, NOT done):** Kopia backup pw cleartext (`backups.ts:246,286,432`) → vault pattern; dedicated `backup-vault-key`; registry-credentials.ts dedup onto dek.ts. **NOTE this resolves the 256-deploy follow-up** "make sandbox.ts usable runtime-probe userns" — on hosts where the 256-05 AppArmor bwrap profile is absent the shell now refuses with a clear LIVOS-058 message instead of opaque per-command namespace EPERMs. **CODE ONLY — NO DEPLOY** (no update.sh/systemctl/ssh/ufw). SUMMARY: `.planning/phases/262-security-hardening-pass-3/262-05-SUMMARY.md`. (STATE narrative format — SDK counters no-op.) **Next: Phase 262 operator deploy + WS6 out-of-band checklist (update.sh; first post-deploy read lazy-re-keys legacy blobs to credential-dek).**
 
@@ -650,7 +652,7 @@ Status: Ready for Phase 214 (Store admin-only gate + UX polish)
 - CARRY-P212-RLS-POLICIES — real RLS policies on 4 tables → P214
 - CARRY-P212-LEGACY-ADMIN-UNIFY — migrate legacy api-key admin routes to cookie path (cosmetic)
 
-Last activity: 2026-06-05
+Last activity: 2026-06-10
 
 ### ✅ Phase 209 SHIPPED (commit `8ad89ee6`)
 
@@ -718,7 +720,7 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 ## Next Planned Phase
 
 - **Phase:** 999.1
-- **Status:** Ready to plan
+- **Status:** Executing Phase 263
 - **Plan count:** 5
 - **CONTEXT:** .planning/phases/248-luse-display-lifecycle/248-CONTEXT.md
 - **Wave plan:** Wave 1 (248-01 backend display-manager ✅) → Wave 2 (248-02 MCP tool registrations ✅) → Wave 3 (248-03 TTL GC sweep — NEXT) → Wave 4 (248-04 canonical docs + shim sync) → Wave 5 (248-05 Mini PC deploy + UAT)
@@ -726,8 +728,8 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 
 ## Current Position
 
-Phase: --phase (260) — EXECUTING
-Plan: 1 of --name
+Phase: 263 — EXECUTING
+Plan: 1 of ?
 
 **Plan 251-09 (4 tasks — 3 commits: `4929916f` docs PORTABILITY-AUDIT + `6bc1ee70` docs REMEDIATION-BACKLOG + final docs flip)** — Wave-2 synthesis closing Phase 251. Aggregated the eight Wave-1 findings docs (251-01…251-08) into two artifacts under the phase dir. **PORTABILITY-AUDIT.md** (156 lines): a 30-row per-dimension COVERED/GAP/RISK matrix across 8 dimensions (luse-redis / display-backend / binaries / identity / paths / systemd-env / terminal / installer-path) with severity (P0/P1/P2) + evidence refs, plus the two explicit operator verdicts. **Q1 (any session-introduced hardcode that breaks portability?)** → YES: three NEW hardcodes — `xterm` hard-dep (P0, ENOENT silently swallowed at `tools.ts:1198`), PTY `username:'bruce'` triple-pin with no `livos:desktop:user` lookup (P1, `ws-handler.ts:466`+`types.ts:31`+`session.ts:77,82-89`), `/opt/livos` Redis-fallback literal (P2 RISK, `server.ts:124`); plus two un-reproducible live-only hand artifacts (`redis-env.conf` drop-in + manual `apt install xterm imagemagick xserver-xephyr`) that mask gaps on the Mini PC. **Q2 (would a brand-new install come up seamlessly with terminal + Luse?)** → **NO-GO**, with **5 P0 blockers**: (1) `xserver-xephyr` not installed → `create_display` default mode fails as a *false-positive success* (no `child.on('error')` in `display-manager.ts:224-253`); (2) `xterm` not installed → `launch_app_in_display(terminal)` silently no-ops; (3) PTY sudoers gap → `bruce→bruce` `sudo --user bruce --login bash` prompts for a password it can't supply; (4) `livos:v43:terminal_panel` flag never seeded → dock entry hidden + WS 4403; (5) `get.livinity.io` → install-script mapping UNPROVABLE from repo (4 entrypoints; only Path A seeds `liv:mcp:config` → AionUi luse; Path B writes `CHANGEME`, Path C seeds no MCP config). `imagemagick`/`import` confirmed NOT a code dependency (251-03) — excluded. **REMEDIATION-BACKLOG.md** (153 lines): 16 items R1-R16 ordered P0→P1→P2, each with file:line + exact change + effort (S/M/L) + kind (installer/code/both), a copy-pasteable apt remediation block (covers R1/R2/R7/R16), and a 5-wave Phase 252 sequencing recommendation. De-duplicated the four cross-referenced findings to single owners (PTY-bruce→R4+R8, GDM-Xauthority→R6, redis-env→R5, empty-catalog→R9+R12). **Task 3 (optional live Mini PC ssh corroboration) SKIPPED** per D-251-LIVE-OPTIONAL — never blocks synthesis; the one genuinely live-only question (`get.livinity.io` alias) is a DNS/Vercel question unanswerable by SSH to the box, captured as backlog R11. Read-only synthesis — zero source touched (D-251-READONLY held), sacred SHA `f3538e1d…` trivially preserved (`[sacred-sha] PASS: 20 files verified` on both content commits). 0 deviations from plan. Self-check PASSED (both reports exist + exceed min_lines; both commits present in git log). SUMMARY at `.planning/phases/251-fresh-install-portability-audit/251-SUMMARY.md`. **Phase 251 CLOSED 9/9.** Next: Phase 252 (remediation) is fully seeded by REMEDIATION-BACKLOG.md — zero further analysis needed to start.
 
@@ -1758,7 +1760,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 260 (window-dock-to-displays-stream-recall-ux) — 7 plans — 2026-06-05T10:52:13.428Z
+**Planned Phase:** 263 (Commercial-Launch Security — research + P0 launch-blockers) — 6 plans — 2026-06-10T18:27:52.504Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
