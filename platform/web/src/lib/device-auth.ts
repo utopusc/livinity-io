@@ -2,8 +2,28 @@ import jwt from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
 import pool from './db';
 
-// Shared secret between platform and relay for device JWT validation
-const DEVICE_JWT_SECRET = process.env.DEVICE_JWT_SECRET || 'dev-device-jwt-secret-change-me';
+// Shared secret between platform and relay for device JWT validation.
+// L-067 (Phase 263-05): NO committed default. The signing key must be a real
+// secret set in the Vercel project env (dashboard, NOT committed). requireDeviceSecret()
+// fails closed — it throws if DEVICE_JWT_SECRET is unset OR equal to the old
+// committed default. It is called LAZILY inside signDeviceToken (not at module
+// top-level) so importing this module never throws: the fail-closed check fires
+// exactly when a device token is actually minted, which is the security-relevant
+// moment. A top-level throw would break the entire Next.js route bundle on cold
+// start even for routes that never sign a device token.
+const DEVICE_JWT_DEFAULT = 'dev-device-jwt-secret-change-me';
+
+function requireDeviceSecret(): string {
+  const v = process.env.DEVICE_JWT_SECRET;
+  if (!v) {
+    throw new Error('[device-auth] DEVICE_JWT_SECRET is required — set it in the Vercel project env (L-067)');
+  }
+  if (v === DEVICE_JWT_DEFAULT) {
+    throw new Error('[device-auth] DEVICE_JWT_SECRET is the committed default — set a real secret (L-067)');
+  }
+  return v;
+}
+
 const DEVICE_TOKEN_EXPIRY = '24h';
 const GRANT_EXPIRY_MINUTES = 15;
 const POLL_INTERVAL_SECONDS = 5;
@@ -141,9 +161,19 @@ export interface DeviceTokenPayload {
 }
 
 export function signDeviceToken(payload: DeviceTokenPayload): string {
-  return jwt.sign(payload, DEVICE_JWT_SECRET, {
+  // Lazy fail-closed secret read (L-067) — throws on unset/default at mint time.
+  const secret = requireDeviceSecret();
+  // Bind audience/issuer so a future verifier can reject token-confusion/replay
+  // across audiences. NOTE: there is no live jwt.verify of the device token in
+  // platform/web today (the verifier is the dead relay + the Supabase
+  // sessionId+deviceId+userId DB cross-check). If a verify path is added later
+  // (264/265 follow-up) it MUST pass { algorithms: ['HS256'], audience:
+  // 'livinity-device', issuer: 'livinity-web' }.
+  return jwt.sign(payload, secret, {
     algorithm: 'HS256',
     expiresIn: DEVICE_TOKEN_EXPIRY,
+    audience: 'livinity-device',
+    issuer: 'livinity-web',
   });
 }
 
