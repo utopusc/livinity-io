@@ -4692,3 +4692,67 @@ Plans:
 - [x] 262-05-PLAN.md — WS5 shared credential-dek migration (git/stack/backup + legacy fallback) + manifest-flag threading + buildPublicForbiddenSignals OR + legacySingleUser guard + bwrap runtime probe (LIVOS-052/052b/057/058) [wave 2, depends_on 262-02] — ✅ CODE-COMPLETE 2026-06-09, commits `14d6aa4c`+`2acde1fa`+`dbf21020`, SUMMARY in phase dir; Kopia-cleartext + dedicated backup-vault-key + registry-dedup recorded as carry-forward. **PHASE 262 = 5/5 plans code-complete; remaining = operator deploy (update.sh) + WS6 out-of-band checklist**
 
 ---
+
+## Milestone v46 — Commercial Launch Security (multi-tenant `{username}.livinity.io`)
+
+> **Business context:** product ships as a **$5/month commercial multi-tenant SaaS**. Primary objective:
+> **a tenant must not compromise another tenant's PC via `{username}.livinity.io`**; the cloud relay/isolation
+> boundary must hold. Driven by `SECURITY-AUDIT-PASS4.md` (15 findings L-059..L-073: 3 Critical/4 High/6 Medium
+> +Low). **Audit verdict: do NOT launch as-is — close the P0s first.** Full report (gitignored, NOT in the
+> public repo): `.planning/security/SECURITY-AUDIT-PASS4.md`.
+
+### Phase 263: Commercial-Launch Security — research + P0 launch-blockers
+
+**Goal:** Research the multi-tenant threat model deeply, then close the 5 launch-blocking findings. (A) RESEARCH:
+live-verify the cloud ingress/routing boundary (cloudflared/relay → user PC `:8080`: forwards apex-only Host?
+multi-user Caddy forward_auth gap real?), design the "secure-by-default" daemon refactor that structurally kills
+the L-041/053/064/073 family, dependency/lockfile CVE scan + DAST scope. (B) REMEDIATE P0: **L-073** apex gate
+fail-OPEN on non-apex Host → fail-CLOSED (Host allowlist) + restrict cloudflared ingress; **L-064** `/api/chrome/*`
+unauth command-injection RCE → session/admin gate + argv spawn (no `execa({shell:true})` on `url`); **L-062**
+container/host WS+HTTP endpoints (`/terminal`,`/ws/docker-exec`,`/ws/docker/logs`,`/api/docker/container/:name/file`)
+have NO RBAC → role+ownership re-verify at the boundary (mirror `ssh-sessions`); **L-066** username/subdomain parse
+mismatch → cross-tenant misrouting → forbid hyphens in usernames (or DB-based resolution); **L-067**
+`DEVICE_JWT_SECRET` weak default → fail-closed `requireEnv` + envs. **Deploy split:** livinityd (L-073/064/062) →
+Mini PC + every user PC. Platform (L-066/067 under `platform/`) → CODE ONLY; **Server5 deploy is operator/off-limits**.
+**Requirements**: close L-073, L-064, L-062, L-066, L-067 + research deliverables
+**Depends on:** Phase 262 (deployed); input `.planning/security/SECURITY-AUDIT-PASS4.md`; full brief `263-CONTEXT.md`
+**Plans:** 6 plans
+
+Plans:
+- [ ] 263-01-PLAN.md — L-064 chrome unauth RCE: session-gate /api/chrome/* + argv spawn (no shell on url) + @trpc/server/ws CVE bumps (Wave 1)
+- [ ] 263-02-PLAN.md — L-073 apex fail-open: fail-CLOSED daemon Host allowlist before the app gateway + CF-Tunnel-ingress operator note (Wave 2)
+- [ ] 263-03-PLAN.md — L-062 container/host RBAC: ssh-sessions pattern on terminal/docker-exec/docker-logs/docker-file + userOwnsContainer ownership (Wave 3)
+- [ ] 263-04-PLAN.md — L-066 hyphen-username ban across 3 live chokepoints (username-validator/auth/cf-saas) + next/drizzle CVE bumps (Wave 1)
+- [ ] 263-05-PLAN.md — L-067 fail-closed DEVICE_JWT_SECRET read + aud/iss-bound sign + .env.example (Wave 1)
+- [ ] 263-06-PLAN.md — MANDATORY live curl/wscat verification matrix on the deployed Mini PC daemon (L-073/064/062) — checkpoint (Wave 4)
+
+### Phase 264: Commercial-Launch Security — P1 multi-tenant hardening
+
+**Goal:** Close P1 before opening multi-tenant signups: **L-059** compose-sanitizer container-escape gaps
+(`devices`/`ipc:host`/`volumes_from`/`group_add`/`cgroup` + top-level `volumes` driver_opts host-bind); **L-063**
+`displays.*` cross-user desktop snooping (host/native display → admin-only + per-user filter); **L-065**
+`webapp.extractMetadata` non-admin SSRF (IPv4-mapped IPv6 + redirect-revalidate via `assertResolvedHostSafe`);
+**L-068** platform `/api/webapp/preview` SSRF; **caddy.ts:683** multi-user app-subdomain forward_auth gap (T-258B-05).
+**Requirements**: L-059, L-063, L-065, L-068 + multi-user caddy forward_auth gap
+**Depends on:** Phase 263
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD
+
+### Phase 265: Commercial-Launch Security — P2 + "secure-by-default" architectural refactor
+
+**Goal:** P2 + structural fixes: **secure-by-default daemon** (every `:8080` route auth-required unless explicitly
+public — kills the L-041/053/064/073 root cause), **docker-socket proxy** + remove `bruce` from docker group
+(**L-061**, dominant root-equivalent), unify container-mgmt authz behind one `requireRole+ownership` middleware,
+single DB-based tenant-identity resolver. Plus **L-060** (installV37 ai/mcp manifest), **L-069** (lifecycle-hook
+exec persistence), **L-070** (smb.conf injection), **L-071** (portal Caddyfile injection), **L-072** (platform CORS
+`ACAO:*`), Low cluster (API-key bcrypt DoS, TOTP window:1, `Math.random()` device code, install.sh HEAD pinning).
+**Requirements**: L-060, L-061, L-069, L-070, L-071, L-072 + Low cluster + secure-by-default refactor
+**Depends on:** Phase 264
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD
+
+---
