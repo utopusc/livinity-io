@@ -20,6 +20,14 @@
  * and 403s (or 302 -> /login for text/html GET) any Host NOT in that set —
  * NEVER next(). Dev / no-domain-config boxes are a no-op (next()).
  *
+ * Loopback carve-out (CR-01 / T-263-073-NEW): a genuine on-box loopback caller
+ * (loopback Host AND loopback TCP peer AND no x-forwarded-for) is admitted —
+ * this restores PRE-263 reachability for first-party internal callers (the
+ * Nexus device-tool callback, the luse /trpc resolver) WITHOUT re-opening the
+ * fail-open hole, because a forged loopback Host from a non-loopback peer (a
+ * container at 172.17.x.x, or a proxied external request) still 403s. See the
+ * inline carve-out comment for the full rationale.
+ *
  * Extracted into a factory (mirrors liv-login-handler.ts / chrome-launch.ts) so
  * the fail-closed branches are unit-testable in isolation — string-level Caddy
  * tests cannot catch a fail-open OR a fail-closed-too-hard regression (the
@@ -83,6 +91,52 @@ export function makeHostAllowlistMiddleware(deps: HostAllowlistDeps) {
 			if (!host) {
 				response.status(403).json({error: 'forbidden host'})
 				return
+			}
+
+			// ── Loopback carve-out (CR-01, threat-model row T-263-073-NEW
+			// "fail-closed TOO hard" realized) ─────────────────────────────────
+			//
+			// L-073 closed a fail-OPEN apex gate: a forged Host arriving via Caddy
+			// (`Host: evil.example.com`) must 403. But the SAME fail-closed branch
+			// also 403s LEGITIMATE first-party on-box callers that reach the
+			// loopback-bound :8080 directly using `Host: localhost`/`127.0.0.1` —
+			// and these ran fine pre-263 (the old apex gate `next()`d non-apex
+			// hosts). The two real callers (CR-01):
+			//   1. Nexus device-tool callback — device-bridge.ts:190 defaults
+			//      `callbackBaseUrl = 'http://localhost:8080'`; :251 POSTs
+			//      `${callbackBaseUrl}/internal/device-tool-execute` → Host:
+			//      localhost → 403 before the route runs → device tools break
+			//      with NO fallback.
+			//   2. luse MCP resolver — computer-use/mcp/server.ts (~:279) fetches
+			//      `http://127.0.0.1:8080/trpc/...` → Host: 127.0.0.1 → 403 → the
+			//      app resolver silently degrades to its static map.
+			//
+			// We admit ONLY a genuine on-box loopback caller, NOT a forged
+			// loopback Host arriving over the network. ALL THREE must hold:
+			//   (a) Host is a loopback literal (Express strips the port; handle
+			//       the bracketed IPv6 form too).
+			//   (b) The TCP PEER is loopback — the load-bearing condition.
+			//       Containers reach :8080 from docker-bridge IPs (172.17.x.x)
+			//       and LAN/tunnel traffic from LAN IPs, so a FORGED loopback
+			//       Host from a non-loopback peer stays 403. Never trust the Host
+			//       header alone.
+			//   (c) The request is NOT proxied — no `x-forwarded-for` header.
+			//       Caddy ALWAYS adds XFF when proxying; a direct on-box fetch
+			//       never does. This stops any local reverse proxy from
+			//       laundering an external request into the carve-out.
+			//
+			// This is strictly NARROWER than the old fail-open (which admitted any
+			// non-apex Host regardless of peer): it restores PRE-263 reachability
+			// for genuine on-box callers ONLY. The downstream per-route gates from
+			// 263-01 (chrome session gate) / 263-03 (docker RBAC) / the
+			// `/internal/*` ownership check / per-procedure /trpc auth still apply
+			// — this only declines to Host-gate the loopback class.
+			const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
+			const LOOPBACK_PEERS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
+			const peer = request.socket?.remoteAddress ?? ''
+			const isProxied = request.headers['x-forwarded-for'] != null
+			if (LOOPBACK_HOSTS.has(host) && LOOPBACK_PEERS.has(peer) && !isProxied) {
+				return next()
 			}
 
 			// Apex is always allowed (the apex session gate downstream does the

@@ -28,6 +28,13 @@
  *   + Custom-domain status 'dns_changed' -> NOT approved -> 403
  *   + domainConfig present but active:false -> next() (no-op)
  *   + internal error (redis throws) -> fail-CLOSED 403
+ *
+ * Loopback carve-out (CR-01 / T-263-073-NEW) — separate describe block:
+ *   loopback Host + loopback peer + no XFF -> next() (localhost/127.0.0.1/::1,
+ *   incl. ::ffff:127.0.0.1 peer); loopback Host + container peer (172.17.0.5)
+ *   -> 403; loopback Host + loopback peer + x-forwarded-for -> 403; forged
+ *   non-loopback Host + loopback peer -> 403; apex/subdomain from loopback
+ *   peer -> unchanged.
  */
 
 import {describe, it, expect, vi} from 'vitest'
@@ -66,11 +73,24 @@ function makeRes(): {res: Response; out: MockOut} {
 	return {res, out}
 }
 
-function makeReq(opts: {hostname?: string; method?: string; accept?: string}): Request {
+function makeReq(opts: {
+	hostname?: string
+	method?: string
+	accept?: string
+	/** TCP peer (request.socket.remoteAddress). Default: a non-loopback LAN IP
+	 * so existing fail-closed assertions (e.g. Host: 127.0.0.1 → 403) hold —
+	 * the loopback carve-out requires a loopback PEER, not just a loopback Host. */
+	remoteAddress?: string
+	/** When set, becomes the `x-forwarded-for` header (i.e. proxied). */
+	xff?: string
+}): Request {
+	const headers: Record<string, string> = {accept: opts.accept ?? 'application/json'}
+	if (opts.xff != null) headers['x-forwarded-for'] = opts.xff
 	return {
 		hostname: opts.hostname,
 		method: opts.method ?? 'GET',
-		headers: {accept: opts.accept ?? 'application/json'},
+		headers,
+		socket: {remoteAddress: opts.remoteAddress ?? '192.168.1.50'},
 	} as unknown as Request
 }
 
@@ -146,7 +166,10 @@ describe('host-allowlist middleware (L-073 fail-closed)', () => {
 		expect(out.statusCode).toBeUndefined()
 	})
 
-	it('Test 3: Host = 127.0.0.1 (loopback) -> 403, NEVER next()', async () => {
+	it('Test 3: Host = 127.0.0.1 from a NON-loopback peer -> 403, NEVER next()', async () => {
+		// The loopback carve-out (CR-01) requires a loopback PEER. makeReq's
+		// default peer is a LAN IP (192.168.1.50), so a forged loopback Host
+		// from off-box stays fail-closed — the original L-073 intent.
 		const mw = makeHostAllowlistMiddleware(makeDeps())
 		const {res, out} = makeRes()
 		const next = vi.fn()
@@ -285,5 +308,117 @@ describe('host-allowlist middleware (L-073 fail-closed)', () => {
 		await mw(makeReq({hostname: 'myblog.com'}), res, next)
 		expect(next).not.toHaveBeenCalled()
 		expect(out.statusCode).toBe(403)
+	})
+})
+
+// ───────────────────────────────────────────────────────────────────────────
+// CR-01 / T-263-073-NEW — loopback carve-out.
+//
+// A genuine on-box loopback caller (the Nexus device-tool callback to
+// Host: localhost, the luse /trpc resolver to Host: 127.0.0.1) is admitted
+// ONLY when ALL THREE hold: loopback Host + loopback TCP peer + no
+// x-forwarded-for. A forged loopback Host from a non-loopback peer (a
+// container, or a proxied external request) stays fail-closed (403). This
+// proves the carve-out is strictly narrower than the old fail-open and does
+// NOT re-open L-073.
+// ───────────────────────────────────────────────────────────────────────────
+describe('host-allowlist loopback carve-out (CR-01)', () => {
+	it('loopback Host localhost + loopback peer 127.0.0.1 + no XFF -> next()', async () => {
+		const mw = makeHostAllowlistMiddleware(makeDeps())
+		const {res, out} = makeRes()
+		const next = vi.fn()
+		await mw(makeReq({hostname: 'localhost', remoteAddress: '127.0.0.1'}), res, next)
+		expect(next).toHaveBeenCalledOnce()
+		expect(out.statusCode).toBeUndefined()
+	})
+
+	it('loopback Host 127.0.0.1 + loopback peer 127.0.0.1 + no XFF -> next() (luse /trpc class)', async () => {
+		const mw = makeHostAllowlistMiddleware(makeDeps())
+		const {res, out} = makeRes()
+		const next = vi.fn()
+		await mw(makeReq({hostname: '127.0.0.1', remoteAddress: '127.0.0.1'}), res, next)
+		expect(next).toHaveBeenCalledOnce()
+		expect(out.statusCode).toBeUndefined()
+	})
+
+	it('loopback Host localhost + IPv4-mapped IPv6 peer ::ffff:127.0.0.1 + no XFF -> next()', async () => {
+		// Node commonly reports loopback as the IPv4-mapped IPv6 form.
+		const mw = makeHostAllowlistMiddleware(makeDeps())
+		const {res, out} = makeRes()
+		const next = vi.fn()
+		await mw(makeReq({hostname: 'localhost', remoteAddress: '::ffff:127.0.0.1'}), res, next)
+		expect(next).toHaveBeenCalledOnce()
+		expect(out.statusCode).toBeUndefined()
+	})
+
+	it('loopback Host ::1 + loopback peer ::1 + no XFF -> next()', async () => {
+		const mw = makeHostAllowlistMiddleware(makeDeps())
+		const {res, out} = makeRes()
+		const next = vi.fn()
+		await mw(makeReq({hostname: '::1', remoteAddress: '::1'}), res, next)
+		expect(next).toHaveBeenCalledOnce()
+		expect(out.statusCode).toBeUndefined()
+	})
+
+	it('loopback Host 127.0.0.1 + CONTAINER peer 172.17.0.5 + no XFF -> 403 (forged Host, non-loopback peer)', async () => {
+		// The load-bearing condition: a container reaches :8080 from a
+		// docker-bridge IP. A loopback Host header must NOT admit it.
+		const mw = makeHostAllowlistMiddleware(makeDeps())
+		const {res, out} = makeRes()
+		const next = vi.fn()
+		await mw(makeReq({hostname: '127.0.0.1', remoteAddress: '172.17.0.5'}), res, next)
+		expect(next).not.toHaveBeenCalled()
+		expect(out.statusCode).toBe(403)
+		expect(out.jsonBody).toEqual({error: 'forbidden host'})
+	})
+
+	it('loopback Host 127.0.0.1 + loopback peer + x-forwarded-for: 1.2.3.4 -> 403 (proxied, not direct)', async () => {
+		// Caddy always adds XFF when proxying; a local reverse proxy must not be
+		// able to launder an external request into the carve-out.
+		const mw = makeHostAllowlistMiddleware(makeDeps())
+		const {res, out} = makeRes()
+		const next = vi.fn()
+		await mw(
+			makeReq({hostname: '127.0.0.1', remoteAddress: '127.0.0.1', xff: '1.2.3.4'}),
+			res,
+			next,
+		)
+		expect(next).not.toHaveBeenCalled()
+		expect(out.statusCode).toBe(403)
+		expect(out.jsonBody).toEqual({error: 'forbidden host'})
+	})
+
+	it('forged non-loopback Host evil.example.com + loopback peer -> 403 (Host not loopback-literal)', async () => {
+		// The carve-out is gated on a loopback HOST literal too — a loopback
+		// peer alone does not admit an arbitrary forged Host (unchanged L-073).
+		const mw = makeHostAllowlistMiddleware(makeDeps())
+		const {res, out} = makeRes()
+		const next = vi.fn()
+		await mw(makeReq({hostname: 'evil.example.com', remoteAddress: '127.0.0.1'}), res, next)
+		expect(next).not.toHaveBeenCalled()
+		expect(out.statusCode).toBe(403)
+		expect(out.jsonBody).toEqual({error: 'forbidden host'})
+	})
+
+	it('apex Host from loopback peer -> still next() via apex path (carve-out unchanged for apex)', async () => {
+		const mw = makeHostAllowlistMiddleware(makeDeps())
+		const {res, out} = makeRes()
+		const next = vi.fn()
+		await mw(makeReq({hostname: APEX, remoteAddress: '127.0.0.1'}), res, next)
+		expect(next).toHaveBeenCalledOnce()
+		expect(out.statusCode).toBeUndefined()
+	})
+
+	it('subdomain Host from loopback peer -> unchanged (resolves via subdomain path, not carve-out)', async () => {
+		const redis = makeRedis({
+			...activeDomainConfig(),
+			'livos:domain:subdomains': JSON.stringify([{subdomain: 'n8n', enabled: true}]),
+		})
+		const mw = makeHostAllowlistMiddleware(makeDeps({redis}))
+		const {res, out} = makeRes()
+		const next = vi.fn()
+		await mw(makeReq({hostname: `n8n.${APEX}`, remoteAddress: '127.0.0.1'}), res, next)
+		expect(next).toHaveBeenCalledOnce()
+		expect(out.statusCode).toBeUndefined()
 	})
 })
