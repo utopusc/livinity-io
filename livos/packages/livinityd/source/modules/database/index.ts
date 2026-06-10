@@ -205,6 +205,34 @@ export async function getAdminUser(): Promise<DatabaseUser | null> {
 }
 
 /**
+ * Phase 263-03 (L-062) — per-container ownership predicate.
+ *
+ * Returns true iff the named container is owned by `userId` per the
+ * `user_app_instances` table (the per-user app-install registry; columns
+ * include user_id + container_name, the per-user name format
+ * `${appId}_${serviceName}_user_${username}_1`, see apps.ts).
+ *
+ * Used by the docker-exec / docker-logs / terminal WS handlers and the
+ * GET/POST /api/docker/container/:name/file HTTP endpoints to gate a
+ * non-admin tenant to ONLY their own containers. Admin bypass is NOT handled
+ * here — callers check `role === 'admin'` first, then fall back to this
+ * predicate for non-admins.
+ *
+ * Intentionally fail-closed: no pool, empty inputs, or zero matching rows all
+ * return false. Parameterized query — userId/containerName are never
+ * string-interpolated into SQL.
+ */
+export async function userOwnsContainer(userId: string, containerName: string): Promise<boolean> {
+	if (!pool) return false
+	if (!userId || !containerName) return false
+	const {rowCount} = await pool.query(
+		'SELECT 1 FROM user_app_instances WHERE container_name = $1 AND user_id = $2 LIMIT 1',
+		[containerName, userId],
+	)
+	return rowCount != null && rowCount > 0
+}
+
+/**
  * Create a new user in the database.
  */
 export async function createUser(data: {
