@@ -4722,7 +4722,7 @@ Plans:
 - [x] 263-01-PLAN.md — L-064 chrome unauth RCE: session-gate /api/chrome/* + argv spawn (no shell on url) + @trpc/server/ws CVE bumps (Wave 1) ✅ CODE-COMPLETE 2026-06-10 (commits 8c46294d/b7cfbc04/a9143705; live curl verify deferred to 263-06)
 - [ ] 263-02-PLAN.md — L-073 apex fail-open: fail-CLOSED daemon Host allowlist before the app gateway + CF-Tunnel-ingress operator note (Wave 2)
 - [ ] 263-03-PLAN.md — L-062 container/host RBAC: ssh-sessions pattern on terminal/docker-exec/docker-logs/docker-file + userOwnsContainer ownership (Wave 3)
-- [ ] 263-04-PLAN.md — L-066 hyphen-username ban across 3 live chokepoints (username-validator/auth/cf-saas) + next/drizzle CVE bumps (Wave 1)
+- [x] 263-04-PLAN.md — L-066 hyphen-username ban across 3 live chokepoints (username-validator/auth/cf-saas) + next/drizzle CVE bumps (Wave 1) ✅ CODE-COMPLETE 2026-06-10 (commits a7e527f0/26e35bcb/eb29ea91; 20/20 tests green; A1 Supabase re-query deferred to operator at deploy — MCP not callable this session)
 - [ ] 263-05-PLAN.md — L-067 fail-closed DEVICE_JWT_SECRET read + aud/iss-bound sign + .env.example (Wave 1)
 - [ ] 263-06-PLAN.md — MANDATORY live curl/wscat verification matrix on the deployed Mini PC daemon (L-073/064/062) — checkpoint (Wave 4)
 
