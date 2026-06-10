@@ -1,10 +1,14 @@
 import {readFileSync} from 'node:fs'
+import {execFile} from 'node:child_process'
 import {fileURLToPath} from 'node:url'
 import {dirname, join} from 'node:path'
+import {promisify} from 'node:util'
 
 import pg from 'pg'
 
 import type Livinityd from '../../index.js'
+
+const execFileAsync = promisify(execFile)
 
 const {Pool} = pg
 
@@ -504,16 +508,124 @@ export async function deleteUserAppInstance(userId: string, appId: string): Prom
 	return (result.rowCount ?? 0) > 0
 }
 
+// ── Port allocation (Phase 263.5-0 — host-aware + atomic) ──────────────
+//
+// Root cause this fixes (port-collision v3 plan §2.1/§2.2):
+//   The old allocator was `SELECT COALESCE(MAX(port),9999)+1` over its OWN
+//   user_app_instances table, floored at 10000. It NEVER probed the host, so it
+//   could hand out a port already bound by a builtin app, a system service, or a
+//   manually-run container — the collision only surfaced as a `docker compose up`
+//   bind failure AFTER data was already written. The allocate→insert was also
+//   non-atomic (no lock), so concurrent installs raced the same MAX+1 and the
+//   loser hit the `port … UNIQUE` (schema.sql:58) constraint as a hard failure.
+//
+// The fix keeps the SAME signature (caller apps.ts:1972 unchanged) and touches
+// NONE of the routing sites / compose shape:
+//   - pg_advisory_xact_lock serialises concurrent scans within the daemon's pool
+//     (the daemon has awaits between scan and reserve, so two in-flight installs
+//     could otherwise interleave and pick the same candidate).
+//   - The candidate is rejected if it is in the DB, host-bound (ss probe), OR
+//     reserved-in-flight (the TTL map below bridges the gap between this scan and
+//     the eventual createUserAppInstance INSERT, and self-heals on a failed
+//     install via expiry — no caller-side release needed).
+//
+// The pure selection algorithm (`nextFreePort`) is exported and unit-tested in
+// isolation; `allocatePort` just wires it to Postgres + the real `ss` probe.
+
+/** Floor for per-user app container ports (below this = standard services). */
+export const PORT_FLOOR = 10000
+/** Upper bound (exclusive) — keep clear of the streaming RFB range [15900,16000). */
+const PORT_CEILING = 15900
+/** How long a chosen-but-not-yet-inserted port stays reserved (ms). Longer than a
+ *  worst-case install so concurrent installs never collide; expires on failure. */
+const PORT_RESERVATION_TTL_MS = 180_000
+/** Advisory-lock key (arbitrary constant, namespaced to this allocator). */
+const PORT_ALLOC_LOCK_KEY = 778_263
+
+/** port -> expiry timestamp (ms). In-process reservation of in-flight allocations. */
+const reservedPorts = new Map<number, number>()
+
 /**
- * Get the next available port for a per-user app container.
- * Allocates ports starting from 10000 to avoid conflicts with standard services.
+ * Default host-port liveness probe. Returns true if a TCP listener is bound to
+ * `port` on the host (any interface), using `ss`. Reuses the idiom from
+ * native-apps/native-app.ts:47 but with an exact filter (NOT `grep :${port}`,
+ * which matches 1000x for :100). Fails OPEN (returns false) if `ss` is missing
+ * or errors — that degrades to the pre-fix no-probe behaviour, never worse.
  */
-export async function allocatePort(): Promise<number> {
+export async function isHostPortBound(port: number): Promise<boolean> {
+	try {
+		const {stdout} = await execFileAsync('ss', ['-ltnH', `sport = :${port}`])
+		return stdout.trim().length > 0
+	} catch {
+		return false
+	}
+}
+
+/**
+ * Pure port-selection algorithm — no DB, no shell. Scans [floor, ceiling),
+ * returning the first port that is NOT in `usedPorts`, NOT currently reserved,
+ * and NOT host-bound (per the injected async probe). Reuses freed interior gaps
+ * (the old MAX+1 leaked them permanently). Throws if the range is exhausted.
+ */
+export async function nextFreePort(opts: {
+	usedPorts: Set<number>
+	reserved: Map<number, number>
+	isPortInUse: (port: number) => Promise<boolean>
+	floor?: number
+	ceiling?: number
+	now?: number
+}): Promise<number> {
+	const floor = opts.floor ?? PORT_FLOOR
+	const ceiling = opts.ceiling ?? PORT_CEILING
+	const now = opts.now ?? Date.now()
+	for (let port = floor; port < ceiling; port++) {
+		if (opts.usedPorts.has(port)) continue
+		const reservedUntil = opts.reserved.get(port)
+		if (reservedUntil !== undefined && reservedUntil > now) continue
+		// eslint-disable-next-line no-await-in-loop -- sequential by design: stop at the first free port
+		if (await opts.isPortInUse(port)) continue
+		return port
+	}
+	throw new Error(`No free port in range [${floor}, ${ceiling}) for app container allocation`)
+}
+
+/** Drop expired reservations so the map cannot grow unbounded on repeated failures. */
+function pruneReservations(now: number): void {
+	for (const [port, expiry] of reservedPorts) {
+		if (expiry <= now) reservedPorts.delete(port)
+	}
+}
+
+/**
+ * Get the next available port for a per-user app container, host-aware and
+ * race-safe. See the block comment above for the full rationale.
+ *
+ * @param probe optional host-port probe (defaults to the real `ss` check;
+ *   tests inject a fake).
+ */
+export async function allocatePort(
+	probe: (port: number) => Promise<boolean> = isHostPortBound,
+): Promise<number> {
 	if (!pool) throw new Error('Database not initialized')
-	const {rows} = await pool.query(
-		`SELECT COALESCE(MAX(port), 9999) + 1 AS next_port FROM user_app_instances`,
-	)
-	return Math.max(rows[0].next_port, 10000)
+	const client = await pool.connect()
+	try {
+		await client.query('BEGIN')
+		// Serialise concurrent allocations across the pool; auto-released on COMMIT/ROLLBACK.
+		await client.query('SELECT pg_advisory_xact_lock($1)', [PORT_ALLOC_LOCK_KEY])
+		const {rows} = await client.query('SELECT port FROM user_app_instances')
+		const usedPorts = new Set<number>(rows.map((r) => Number(r.port)))
+		const now = Date.now()
+		pruneReservations(now)
+		const port = await nextFreePort({usedPorts, reserved: reservedPorts, isPortInUse: probe, now})
+		reservedPorts.set(port, now + PORT_RESERVATION_TTL_MS)
+		await client.query('COMMIT')
+		return port
+	} catch (error) {
+		await client.query('ROLLBACK').catch(() => {})
+		throw error
+	} finally {
+		client.release()
+	}
 }
 
 // ── User App Access (shared app permissions) ──────────────────────
