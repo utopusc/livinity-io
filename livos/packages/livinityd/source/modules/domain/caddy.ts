@@ -514,19 +514,33 @@ ${WS_TRANSPORT_BODY}
  * Threat model — Phase 262-01 (LIVOS-041/047): the old "AionUi enforces its
  * own auth gate so a spoofed Referer grants no escalation" argument collapsed
  * once LIVOS-041 showed the `aionui-session` cookie was freely mintable via
- * the unauthenticated /liv-login flow. Every /liv-family handle (including
- * @liv_ws and @liv_api_subresource below) now carries LIV_GATE_BODY —
- * forward_auth to livinityd's /auth/verify — so a valid LIVINITY_SESSION is
- * required BEFORE any traffic reaches :3020, and the /api routing decision is
- * a path prefix, not a client-forgeable header. The unconditional `@liv_ws`
- * matcher still does NOT widen the threat surface: livinityd has no `/ws`
- * route to compromise, and the WS upgrade carries the session cookie that
- * forward_auth validates.
+ * the unauthenticated /liv-login flow. The HTTP /liv-family handles
+ * (@liv_api_subresource, @liv, @liv_login) carry LIV_GATE_BODY — forward_auth
+ * to livinityd's /auth/verify — so a valid LIVINITY_SESSION is required BEFORE
+ * any traffic reaches :3020, and the /api routing decision is a path prefix,
+ * not a client-forgeable header.
+ *
+ * NOTE (2026-06-10, LIVOS-041 follow-up): the WS handles @liv_ws (and
+ * @livos_terminal_ws) do NOT use forward_auth. Its auth subrequest inherits the
+ * `Upgrade: websocket` header and gets hijacked by livinityd's
+ * server.on('upgrade') at :8080/auth/verify (the Express route never runs) →
+ * socket reset → 502 on EVERY WS upgrade. WS is gated at its own layer instead
+ * (AionUi's aionui-session; the pty WS handler), mirroring @webapp_stream_ws
+ * (ssh-sessions/docker-exec). @aionui_assets is ungated static logos.
  *
  * Constant name preserved (`LIV_ASSISTANT_SUBRESOURCE_HANDLE`) to avoid
  * touching the 3 emit sites in `generateFullCaddyfile`.
  */
-const LIV_ASSISTANT_SUBRESOURCE_HANDLE = `\t@webapp_stream_ws path /ws/stream/* /ws/docker/* /ws/docker-exec /ws/ssh-sessions
+const LIV_ASSISTANT_SUBRESOURCE_HANDLE = `\t# AionUI builds logo URLs as absolute /api/assets/logos/... (no /liv base) so they escape the iframe prefix and hit livinityd -> 404. Route the AionUI asset namespace to :3020 (static public logos; livinityd owns nothing under /api/assets; shell does not use it). 2026-06-10.
+\t@aionui_assets path /api/assets/*
+\thandle @aionui_assets {
+\t\treverse_proxy 127.0.0.1:3020 {
+\t\t\theader_down -X-Frame-Options
+\t\t\theader_down -Content-Security-Policy
+${WS_TRANSPORT_BODY}
+\t\t}
+\t}
+\t@webapp_stream_ws path /ws/stream/* /ws/docker/* /ws/docker-exec /ws/ssh-sessions
 \thandle @webapp_stream_ws {
 \t\treverse_proxy 127.0.0.1:8080 {
 ${WS_TRANSPORT_BODY}
