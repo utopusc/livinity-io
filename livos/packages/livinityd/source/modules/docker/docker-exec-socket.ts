@@ -8,11 +8,15 @@ import type createLogger from '../utilities/logger.js'
 
 /**
  * Phase 263-03 (L-062) — minimal user shape returned by findUserById /
- * getAdminUser. Only `id` and `role` are consulted at this boundary.
+ * getAdminUser. `id`/`role` drive the RBAC gate; `isActive` (WR-02) lets the
+ * gate reject deactivated/revoked tenants immediately instead of honoring a
+ * still-valid JWT until expiry. Optional so legacy fakes/admins without the
+ * flag are treated as active (only an explicit `false` rejects).
  */
 interface DatabaseUserShape {
 	id: string
 	role: 'admin' | 'member' | 'guest'
+	isActive?: boolean
 }
 
 /**
@@ -186,6 +190,12 @@ export default function createDockerExecHandler(deps: CreateDockerExecHandlerDep
 				const user2 = await findUserById(userId)
 				if (!user2) {
 					ws.close(4403, 'unauthorized')
+					return
+				}
+				// WR-02: a deactivated/revoked tenant must lose container access
+				// immediately, not at JWT expiry (the row carries `is_active`).
+				if (user2.isActive === false) {
+					ws.close(4403, 'account inactive')
 					return
 				}
 				if (user2.role !== 'admin') {

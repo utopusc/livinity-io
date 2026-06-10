@@ -250,4 +250,24 @@ describe('createDockerLogsHandler — RBAC gate (L-062)', () => {
 		await handler(ws as never, makeRequest('/ws/docker/logs?container=any&token=legacy'))
 		expect(ws.closes.some((c) => c.code === 4403)).toBe(false)
 	})
+
+	test('Test 11 (WR-02): deactivated owner (isActive:false) → ws.close(4403); no logs', async () => {
+		// An owning-but-deactivated member must lose log access immediately.
+		let getClientCalled = false
+		const handler = createDockerLogsHandler({
+			livinityd: fakeLivinityd({userId: 'member-id'}),
+			logger: silentLogger,
+			findUserByIdFn: async () => ({...MEMBER, isActive: false}),
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => true, // owns it, but inactive trumps
+			getDockerClientFn: async () => {
+				getClientCalled = true
+				throw new Error('should not reach docker')
+			},
+		})
+		const ws = makeFakeWs()
+		await handler(ws as never, makeRequest('/ws/docker/logs?container=my-app&token=t'))
+		expect(ws.closes.some((c) => c.code === 4403)).toBe(true)
+		expect(getClientCalled).toBe(false)
+	})
 })

@@ -14,6 +14,10 @@ import type createLogger from '../utilities/logger.js'
 interface DatabaseUserShape {
 	id: string
 	role: 'admin' | 'member' | 'guest'
+	// WR-02: lets the gate reject deactivated/revoked tenants immediately
+	// (the users row carries `is_active`). Optional so legacy fakes/admins
+	// without the flag are treated as active (only an explicit `false` rejects).
+	isActive?: boolean
 }
 
 const DEFAULT_SHELL_CONTAINERS: Record<string, string> = {
@@ -28,18 +32,25 @@ const DEFAULT_SHELL_CONTAINERS: Record<string, string> = {
 	photoprism: 'web',
 }
 
+interface TerminalDbShape {
+	findUserById: (id: string) => Promise<DatabaseUserShape | null>
+	getAdminUser: () => Promise<DatabaseUserShape | null>
+	userOwnsContainer: (userId: string, containerName: string) => Promise<boolean>
+}
+
 export default function createTerminalWebSocketHandler({
 	livinityd,
 	logger,
+	dbFn,
 }: {
 	livinityd: Livinityd
 	logger: ReturnType<typeof createLogger>
+	/** Test seam (WR-02): inject a fake DB so the active-user gate can be
+	 * driven without a real PG. Production omits it -> dynamic import. */
+	dbFn?: () => Promise<TerminalDbShape>
 }) {
-	async function resolveDb(): Promise<{
-		findUserById: (id: string) => Promise<DatabaseUserShape | null>
-		getAdminUser: () => Promise<DatabaseUserShape | null>
-		userOwnsContainer: (userId: string, containerName: string) => Promise<boolean>
-	}> {
+	async function resolveDb(): Promise<TerminalDbShape> {
+		if (dbFn) return dbFn()
 		return (await import('../database/index.js')) as never
 	}
 
@@ -86,6 +97,12 @@ export default function createTerminalWebSocketHandler({
 				const found = await db.findUserById(resolvedId)
 				if (!found) {
 					ws.close(4403, 'unauthorized')
+					return
+				}
+				// WR-02: a deactivated/revoked tenant must lose terminal access
+				// immediately, not at JWT expiry (the row carries `is_active`).
+				if (found.isActive === false) {
+					ws.close(4403, 'account inactive')
 					return
 				}
 				user = found
