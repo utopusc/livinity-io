@@ -30,7 +30,7 @@ import * as jwt from '../jwt.js'
 // below replicates it for the HTTP auth surfaces (/auth/verify forward_auth
 // target, /__livos_sso bounce, apex session gate); /__livos_auth records its
 // minted sessions via createSession so they are revocable.
-import {findUserById, getPool} from '../database/index.js'
+import {findUserById, getAdminUser, getPool, userOwnsContainer} from '../database/index.js'
 import {createSession, isSessionRevoked} from '../database/sessions.js'
 import {parseSsoReturnTarget, sanitizeSsoPath} from './sso-handshake.js'
 // Phase 263-01 (LIVOS-064 Critical) — pure security helpers for /api/chrome/*:
@@ -2019,6 +2019,20 @@ class Server {
 					return response.status(400).json({error: 'name required and path must be absolute'})
 				}
 
+				// Phase 263-03 (L-062) — verifyToken alone is NOT enough: resolve the
+				// user and require admin OR ownership of `name`, else 403. Legacy
+				// {loggedIn:true} tokens resolve to the admin (single-user mode).
+				const payload = (await this.verifyToken(sessionToken).catch(() => null)) as
+					| {userId?: string; loggedIn?: boolean}
+					| null
+				let uid = typeof payload?.userId === 'string' ? payload.userId : undefined
+				if (!uid && payload?.loggedIn === true) uid = (await getAdminUser())?.id
+				const u = uid ? await findUserById(uid) : null
+				if (!u) return response.status(401).json({error: 'unauthorized'})
+				if (u.role !== 'admin' && !(await userOwnsContainer(uid!, name))) {
+					return response.status(403).json({error: 'forbidden: not owner'})
+				}
+
 				let stream: NodeJS.ReadableStream
 				try {
 					stream = await downloadContainerArchive(name, path)
@@ -2063,6 +2077,20 @@ class Server {
 				const dirPath = typeof request.query.path === 'string' ? request.query.path : ''
 				if (!name || !dirPath.startsWith('/')) {
 					return response.status(400).json({error: 'name required and path must be absolute directory'})
+				}
+
+				// Phase 263-03 (L-062) — verifyToken alone is NOT enough: resolve the
+				// user and require admin OR ownership of `name`, else 403. Legacy
+				// {loggedIn:true} tokens resolve to the admin (single-user mode).
+				const payload = (await this.verifyToken(sessionToken).catch(() => null)) as
+					| {userId?: string; loggedIn?: boolean}
+					| null
+				let uid = typeof payload?.userId === 'string' ? payload.userId : undefined
+				if (!uid && payload?.loggedIn === true) uid = (await getAdminUser())?.id
+				const u = uid ? await findUserById(uid) : null
+				if (!u) return response.status(401).json({error: 'unauthorized'})
+				if (u.role !== 'admin' && !(await userOwnsContainer(uid!, name))) {
+					return response.status(403).json({error: 'forbidden: not owner'})
 				}
 
 				const contentType = request.headers['content-type'] || ''
