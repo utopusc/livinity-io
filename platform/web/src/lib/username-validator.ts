@@ -57,20 +57,23 @@ export type ValidationResult =
 // ---------------------------------------------------------------------------
 
 /**
- * 3-32 lowercase alphanumerics + single hyphens, no leading/trailing dash.
- * `--` is rejected by an explicit `includes` check for a clearer error before
- * this regex runs (see validateUsername below).
+ * 3-32 lowercase alphanumerics — NO hyphens (L-066, Phase 263-04).
  *
- * NOTE: the regex literal from the plan (`^[a-z0-9]([a-z0-9-]{1,30}[a-z0-9])?$`)
- * accidentally permits length 1 because the trailing group is optional —
- * `^[a-z0-9]$` matches `"a"`. The plan's own unit-test case `expect('a')
- * .toFail('FORMAT')` proves the regex doesn't match the intent. We enforce
- * the 3-32 length bound explicitly with MIN_LEN / MAX_LEN BEFORE running the
- * regex so length-1 / length-2 inputs are caught with the right error code
- * and never hit the optional group. (Deviation Rule 1, documented in
- * SUMMARY.)
+ * A hyphen in the username makes the `{app_slug}-{username}.livinity.io`
+ * per-app subdomain namespace AMBIGUOUS: user `jean-luc` provisioning app
+ * `radarr` and user `luc` provisioning app slug `radarr-jean` BOTH resolve to
+ * `radarr-jean-luc.livinity.io` — same hostname, two owners → cross-tenant
+ * CNAME-squat / subdomain hijack. Forbidding the hyphen in usernames makes the
+ * namespace unambiguous by construction (exactly one valid owner per hostname).
+ * App slugs may still legitimately contain a hyphen (`radarr-jean`); only the
+ * username half is hyphen-free.
+ *
+ * The 3-32 length bound is still enforced explicitly via MIN_LEN / MAX_LEN
+ * below (and is now also encoded in the regex). The `--` includes check at the
+ * call site is redundant once hyphens are banned outright but is left in place
+ * (harmless).
  */
-const FORMAT = /^[a-z0-9]([a-z0-9-]{1,30}[a-z0-9])?$/;
+const FORMAT = /^[a-z0-9]{3,32}$/;
 const MIN_LEN = 3;
 const MAX_LEN = 32;
 
@@ -102,7 +105,7 @@ const RESERVED = new Set<string>([
 // ---------------------------------------------------------------------------
 
 const FORMAT_ERR =
-  'Username must be 3-32 lowercase letters, digits, or single hyphens — no leading/trailing dash, no double-dash.';
+  'Username must be 3-32 lowercase letters or digits — no hyphens, no spaces, no special characters.';
 
 const reservedErr = (normalized: string): string =>
   `"${normalized}" is reserved. Please pick a different name.`;
