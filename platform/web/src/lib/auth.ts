@@ -28,8 +28,12 @@ export function validateUsername(username: string): { valid: boolean; error?: st
   if (username.length > 30) {
     return { valid: false, error: 'Username must be at most 30 characters' };
   }
-  if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(username) && !/^[a-z0-9]$/.test(username)) {
-    return { valid: false, error: 'Username must be lowercase alphanumeric with hyphens, cannot start or end with a hyphen' };
+  // L-066 (Phase 263-04): hyphens are forbidden in usernames so the
+  // `{app_slug}-{username}.livinity.io` subdomain namespace stays unambiguous
+  // (a hyphen username can collide a different tenant's `{slug-with-hyphen}`).
+  const ok = /^[a-z0-9]{3,30}$/.test(username);
+  if (!ok) {
+    return { valid: false, error: 'Username must be 3-30 lowercase letters or digits, no hyphens' };
   }
   if (RESERVED_USERNAMES.has(username)) {
     return { valid: false, error: 'This username is reserved' };

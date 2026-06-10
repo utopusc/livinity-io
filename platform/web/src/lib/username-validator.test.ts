@@ -93,6 +93,35 @@ describe('username-validator — FORMAT', () => {
     await expectFail('lu--cy', 'FORMAT');
   });
 
+  // L-066 (Phase 263-04): a single hyphen is now forbidden too. A hyphen in the
+  // username makes the `{app_slug}-{username}.livinity.io` subdomain namespace
+  // ambiguous (user `jean-luc` app `radarr` vs user `luc` app `radarr-jean` both
+  // → `radarr-jean-luc.livinity.io`). Forbidding hyphens makes the namespace
+  // unambiguous by construction.
+  it('rejects a single hyphen (L-066 — namespace ambiguity)', async () => {
+    await expectFail('jean-luc', 'FORMAT');
+    await expectFail('a-b', 'FORMAT');
+    await expectFail('radarr-jean', 'FORMAT');
+  });
+
+  it('hyphen-free names still PASS the FORMAT gate (no regression on real tenants)', async () => {
+    // Unit-safe: these clear FORMAT + RESERVED (no hyphen, not reserved) and
+    // would proceed to the DB checks. We only assert they do NOT fail with
+    // FORMAT — the live outcome (ok / TAKEN / APP_COLLISION) needs the DB, so
+    // we stay DB-free here like the integration normalization test. Live
+    // Supabase users are all hyphen-free as of 2026-06-09 (A1) → the hyphen
+    // ban orphans nobody.
+    for (const u of ['baris', 'hello']) {
+      const r = await validateUsername(u).catch(() => null);
+      // r is null if the DB hit threw (no DB in unit env) — that's fine: the
+      // throw happens AFTER FORMAT/RESERVED, proving FORMAT was passed. If r is
+      // non-null it must not be a FORMAT failure.
+      if (r && !r.ok) {
+        assert.notEqual(r.code, 'FORMAT', `"${u}" should pass FORMAT, not fail it`);
+      }
+    }
+  });
+
   it('rejects spaces and special chars', async () => {
     await expectFail('lu cy', 'FORMAT');
     await expectFail('lucy@', 'FORMAT');
