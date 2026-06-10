@@ -1745,15 +1745,18 @@ class Server {
 		})
 
 		// Handle Docker exec WebSocket routes (container console)
+		// Phase 263-03 (L-062): thread livinityd so the handler can re-verify the
+		// token + enforce admin-OR-container-ownership at its boundary.
 		this.mountWebSocketServer('/ws/docker-exec', (wss) => {
 			const logger = this.logger.createChildLogger('docker-exec')
-			wss.on('connection', createDockerExecHandler({logger}))
+			wss.on('connection', createDockerExecHandler({livinityd: this.livinityd, logger}))
 		})
 
 		// Handle Docker logs WebSocket routes (real-time log streaming — QW-01)
+		// Phase 263-03 (L-062): same admin-OR-ownership gate as docker-exec.
 		this.mountWebSocketServer('/ws/docker/logs', (wss) => {
 			const logger = this.logger.createChildLogger('docker-logs')
-			wss.on('connection', createDockerLogsHandler({logger}))
+			wss.on('connection', createDockerLogsHandler({livinityd: this.livinityd, logger}))
 		})
 
 		// /ws/agent removed — AI Chat feature torn out.
