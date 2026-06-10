@@ -20,7 +20,7 @@
 
 import {describe, expect, test} from 'vitest'
 
-import {parseExecParams} from './docker-exec-socket.js'
+import createDockerExecHandler, {parseExecParams} from './docker-exec-socket.js'
 
 describe('parseExecParams', () => {
 	test('A: ?container=n8n&shell=bash → back-compat shape, envId null', () => {
@@ -123,5 +123,172 @@ describe('parseExecParams', () => {
 			containerName: 'app',
 			user: 'root',
 		})
+	})
+})
+
+// ───────────────────────────────────────────────────────────────────────────
+// Phase 263-03 (L-062) — RBAC gate at the docker-exec WS handler boundary.
+//
+// The generic WS upgrade gate (index.ts) does verifyToken ONLY — no role, no
+// ownership. ANY valid token used to reach `exec bash as root into ANY
+// container`. These tests pin the handler-boundary re-verify + admin-OR-owner
+// gate: non-owner member → ws.close(4403); owner/admin/legacy proceed.
+//
+// A "proceed" is asserted as the ABSENCE of a 4403 close (we do NOT wire a
+// real Docker socket — getDockerClient will throw/hang past the gate, which is
+// fine; we only care the gate did not 4403). We stub getDockerClient via a
+// fake that rejects so the post-gate path errors out cleanly.
+// ───────────────────────────────────────────────────────────────────────────
+
+interface FakeClose {
+	code: number
+	reason: string
+}
+
+function makeFakeWs() {
+	const closes: FakeClose[] = []
+	const ws = {
+		OPEN: 1,
+		readyState: 1,
+		closes,
+		close(code?: number, reason?: string) {
+			closes.push({code: code ?? 1000, reason: reason ?? ''})
+			ws.readyState = 3 // CLOSED
+		},
+		send() {},
+		on() {},
+		terminate() {},
+		ping() {},
+	}
+	return ws
+}
+
+function fakeLivinityd(verifyResult: unknown) {
+	return {
+		server: {
+			verifyToken: async (_token: string) => {
+				if (verifyResult instanceof Error) throw verifyResult
+				return verifyResult
+			},
+		},
+	} as never
+}
+
+const silentLogger = {
+	log() {},
+	verbose() {},
+	error() {},
+	warn() {},
+} as never
+
+function makeRequest(url: string) {
+	return {url} as never
+}
+
+const ADMIN = {id: 'admin-id', role: 'admin' as const}
+const MEMBER = {id: 'member-id', role: 'member' as const}
+
+describe('createDockerExecHandler — RBAC gate (L-062)', () => {
+	test('Test 1: member token, container NOT owned → ws.close(4403); no exec', async () => {
+		let getClientCalled = false
+		const handler = createDockerExecHandler({
+			livinityd: fakeLivinityd({userId: 'member-id'}),
+			logger: silentLogger,
+			findUserByIdFn: async () => MEMBER,
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => false,
+			getDockerClientFn: async () => {
+				getClientCalled = true
+				throw new Error('should not reach docker')
+			},
+		})
+		const ws = makeFakeWs()
+		await handler(ws as never, makeRequest('/ws/docker-exec?container=other-app&token=t'))
+		expect(ws.closes.some((c) => c.code === 4403)).toBe(true)
+		expect(getClientCalled).toBe(false)
+	})
+
+	test('Test 2: member token, container OWNED → proceeds past gate (no 4403)', async () => {
+		const handler = createDockerExecHandler({
+			livinityd: fakeLivinityd({userId: 'member-id'}),
+			logger: silentLogger,
+			findUserByIdFn: async () => MEMBER,
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => true,
+			getDockerClientFn: async () => {
+				throw new Error('docker-down') // past the gate; handler maps to 1011
+			},
+		})
+		const ws = makeFakeWs()
+		await handler(ws as never, makeRequest('/ws/docker-exec?container=my-app&token=t'))
+		expect(ws.closes.some((c) => c.code === 4403)).toBe(false)
+	})
+
+	test('Test 3: admin token → proceeds for ANY container (ownership not consulted)', async () => {
+		let ownershipConsulted = false
+		const handler = createDockerExecHandler({
+			livinityd: fakeLivinityd({userId: 'admin-id'}),
+			logger: silentLogger,
+			findUserByIdFn: async () => ADMIN,
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => {
+				ownershipConsulted = true
+				return false
+			},
+			getDockerClientFn: async () => {
+				throw new Error('docker-down')
+			},
+		})
+		const ws = makeFakeWs()
+		await handler(ws as never, makeRequest('/ws/docker-exec?container=anyones-app&token=t'))
+		expect(ws.closes.some((c) => c.code === 4403)).toBe(false)
+		expect(ownershipConsulted).toBe(false)
+	})
+
+	test('Test 4: no token / invalid token → ws.close(4403)', async () => {
+		const handlerNoToken = createDockerExecHandler({
+			livinityd: fakeLivinityd({userId: 'member-id'}),
+			logger: silentLogger,
+			findUserByIdFn: async () => MEMBER,
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => false,
+			getDockerClientFn: async () => {
+				throw new Error('should not reach docker')
+			},
+		})
+		const ws1 = makeFakeWs()
+		await handlerNoToken(ws1 as never, makeRequest('/ws/docker-exec?container=app'))
+		expect(ws1.closes.some((c) => c.code === 4403)).toBe(true)
+
+		// invalid token → verifyToken throws → 4403
+		const handlerBadToken = createDockerExecHandler({
+			livinityd: fakeLivinityd(new Error('bad sig')),
+			logger: silentLogger,
+			findUserByIdFn: async () => MEMBER,
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => false,
+			getDockerClientFn: async () => {
+				throw new Error('should not reach docker')
+			},
+		})
+		const ws2 = makeFakeWs()
+		await handlerBadToken(ws2 as never, makeRequest('/ws/docker-exec?container=app&token=bad'))
+		expect(ws2.closes.some((c) => c.code === 4403)).toBe(true)
+	})
+
+	test('Test 5: legacy {loggedIn:true} token → resolves to admin → proceeds', async () => {
+		const handler = createDockerExecHandler({
+			livinityd: fakeLivinityd({loggedIn: true}),
+			logger: silentLogger,
+			findUserByIdFn: async (id: string) => (id === 'admin-id' ? ADMIN : null),
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => false,
+			getDockerClientFn: async () => {
+				throw new Error('docker-down')
+			},
+		})
+		const ws = makeFakeWs()
+		await handler(ws as never, makeRequest('/ws/docker-exec?container=any&token=legacy'))
+		expect(ws.closes.some((c) => c.code === 4403)).toBe(false)
 	})
 })
