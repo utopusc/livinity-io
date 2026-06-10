@@ -7,6 +7,7 @@ import {dirname, join} from 'node:path'
 import {createGzip} from 'node:zlib'
 import {pipeline} from 'node:stream/promises'
 import {createConnection} from 'node:net'
+import {spawn} from 'node:child_process'
 
 import {$} from 'execa'
 import express from 'express'
@@ -32,6 +33,10 @@ import * as jwt from '../jwt.js'
 import {findUserById, getPool} from '../database/index.js'
 import {createSession, isSessionRevoked} from '../database/sessions.js'
 import {parseSsoReturnTarget, sanitizeSsoPath} from './sso-handshake.js'
+// Phase 263-01 (LIVOS-064 Critical) — pure security helpers for /api/chrome/*:
+// the unauth 401 gate + the two no-shell url sinks (URL-encoded CDP fetch +
+// argv spawn). See chrome-launch.ts for the threat rationale.
+import {chromeSessionGate, buildCdpNewTabUrl, buildChromeLaunchArgv} from './chrome-launch.js'
 import {attachVncBridge} from '../streaming/vnc-bridge.js'
 import {trpcExpressHandler, trpcWssHandler} from './trpc/index.js'
 import createTerminalWebSocketHandler from './terminal-socket.js'
@@ -2073,6 +2078,10 @@ class Server {
 		// Both UI (Remote Desktop stream) and AI (Chrome MCP) use the same Chrome.
 		this.app.post('/api/chrome/launch', express.json(), async (request, response) => {
 			try {
+				// Phase 263-01 (LIVOS-064) — session gate BEFORE any shell-out.
+				const gate = await chromeSessionGate(request?.cookies, t => this.verifySessionFull(t))
+				if (!gate.ok) return response.status(gate.status).json(gate.body)
+
 				const url = request.body?.url || ''
 
 				// Check if MCP-ready Chrome is already running
@@ -2080,7 +2089,8 @@ class Server {
 				if (portCheck === 0) {
 					// Chrome running — open URL via CDP if requested
 					if (url) {
-						await $({shell: true, reject: false})`curl -s -X PUT "http://127.0.0.1:9222/json/new?${url}"`
+						// Phase 263-01 (LIVOS-064 SINK 1) — URL-encoded fetch, NO shell.
+						await fetch(buildCdpNewTabUrl(url), {method: 'PUT'}).catch(() => {})
 						this.logger.log(`Chrome CDP: opened ${url} in new tab`)
 					}
 					return response.json({success: true, already_running: true, debugging_port: 9222})
@@ -2097,11 +2107,15 @@ class Server {
 				const xauth = (await $({shell: true, reject: false})`find /run/user/${uid}/gdm -name 'Xauthority' 2>/dev/null | head -1`).stdout.trim()
 					|| `/home/${desktopUser}/.Xauthority`
 
-				const urlArg = url ? `"${url}"` : ''
-
 				// Launch Chrome via the livos-launch-chrome script (installed by install.sh)
 				// Uses sudo -u to run as desktop user (livos service user can sudo without password)
-				await $({shell: true, reject: false})`sudo -u ${desktopUser} nohup /usr/local/bin/livos-launch-chrome ${urlArg} &>/dev/null &`
+				// Phase 263-01 (LIVOS-064 SINK 2) — argv spawn, NO shell: `url` is a
+				// single argv element (when present) and can never be a shell token.
+				const child = spawn('sudo', buildChromeLaunchArgv(desktopUser, url), {
+					detached: true,
+					stdio: 'ignore',
+				})
+				child.unref()
 
 				// Wait for debugging port to become available (max 10s)
 				let ready = false
@@ -2124,12 +2138,18 @@ class Server {
 			}
 		})
 
-		this.app.post('/api/chrome/kill', async (_request, response) => {
+		this.app.post('/api/chrome/kill', async (request, response) => {
+			// Phase 263-01 (LIVOS-064) — session gate BEFORE any shell-out.
+			const gate = await chromeSessionGate(request?.cookies, t => this.verifySessionFull(t))
+			if (!gate.ok) return response.status(gate.status).json(gate.body)
 			await $({shell: true, reject: false})`killall -9 google-chrome-stable chrome 2>/dev/null`
 			response.json({success: true})
 		})
 
-		this.app.get('/api/chrome/status', async (_request, response) => {
+		this.app.get('/api/chrome/status', async (request, response) => {
+			// Phase 263-01 (LIVOS-064) — session gate BEFORE any shell-out.
+			const gate = await chromeSessionGate(request?.cookies, t => this.verifySessionFull(t))
+			if (!gate.ok) return response.status(gate.status).json(gate.body)
 			const {exitCode} = await $({shell: true, reject: false})`curl -s -o /dev/null http://127.0.0.1:9222/json/version`
 			response.json({running: exitCode === 0, debugging_port: exitCode === 0 ? 9222 : null})
 		})

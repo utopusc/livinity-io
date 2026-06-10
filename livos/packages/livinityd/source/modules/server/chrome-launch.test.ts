@@ -40,6 +40,7 @@ describe('chromeSessionGate (LIVOS-064 Task 1)', () => {
 	it('Test 1: NO LIVINITY_SESSION cookie -> 401 {error:unauthorized}', async () => {
 		const gate = await chromeSessionGate(undefined, verifyOk)
 		expect(gate.ok).toBe(false)
+		if (gate.ok) throw new Error('expected gate to fail')
 		expect(gate.status).toBe(401)
 		expect(gate.body).toEqual({error: 'unauthorized'})
 	})
@@ -47,12 +48,14 @@ describe('chromeSessionGate (LIVOS-064 Task 1)', () => {
 	it('Test 1b: empty cookies object (no LIVINITY_SESSION) -> 401', async () => {
 		const gate = await chromeSessionGate({}, verifyOk)
 		expect(gate.ok).toBe(false)
+		if (gate.ok) throw new Error('expected gate to fail')
 		expect(gate.status).toBe(401)
 	})
 
 	it('Test 2: cookie present but verifier rejects (null) -> 401', async () => {
 		const gate = await chromeSessionGate({LIVINITY_SESSION: 'tok'}, verifyReject)
 		expect(gate.ok).toBe(false)
+		if (gate.ok) throw new Error('expected gate to fail')
 		expect(gate.status).toBe(401)
 		expect(gate.body).toEqual({error: 'unauthorized'})
 	})
@@ -60,6 +63,7 @@ describe('chromeSessionGate (LIVOS-064 Task 1)', () => {
 	it('Test 3: verifier THROWS -> 401 fail-closed (never proceeds)', async () => {
 		const gate = await chromeSessionGate({LIVINITY_SESSION: 'tok'}, verifyThrow)
 		expect(gate.ok).toBe(false)
+		if (gate.ok) throw new Error('expected gate to fail')
 		expect(gate.status).toBe(401)
 	})
 
