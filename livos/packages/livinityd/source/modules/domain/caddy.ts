@@ -534,7 +534,7 @@ ${WS_TRANSPORT_BODY}
 \t}
 \t@liv_ws path /ws /ws/*
 \thandle @liv_ws {
-${LIV_GATE_BODY}
+\t\t# Phase 262-01 follow-up: NO forward_auth on WS. forward_auth's auth subrequest inherits the Upgrade:websocket header; livinityd's server.on('upgrade') hijacks it at :8080/auth/verify (Express route never runs) -> socket reset -> 502 on every /ws. AionUi self-auths via aionui-session (mintable only through the gated /liv-login + /liv/api/*). Mirrors @webapp_stream_ws (ssh-sessions/docker-exec also gate at the WS handler, not forward_auth).
 \t\treverse_proxy 127.0.0.1:3020 {
 \t\t\theader_down -X-Frame-Options
 \t\t\theader_down -Content-Security-Policy
@@ -582,7 +582,7 @@ ${WS_TRANSPORT_BODY}
  */
 const LIVOS_TERMINAL_WS_HANDLE = `\t@livos_terminal_ws path /livos/terminal/ws
 \thandle @livos_terminal_ws {
-${LIV_GATE_BODY}
+\t\t# Phase 262-01 follow-up: NO forward_auth on WS (breaks the upgrade — see @liv_ws). Already gated at the pty-sessions WS handler (JWT cookie + feature flag).
 \t\treverse_proxy 127.0.0.1:8080 {
 \t\t\theader_down -X-Frame-Options
 \t\t\theader_down -Content-Security-Policy
