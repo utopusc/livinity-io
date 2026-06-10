@@ -74,7 +74,7 @@
 		"@parcel/watcher": "^2.5.1",
 		"@supabase/supabase-js": "^2.105.4",
 		"@trpc/client": "^11.1.1",
-		"@trpc/server": "^11.1.1",
+		"@trpc/server": "^11.17.0",
 		"@tsconfig/node22": "^22.0.0",
 		"@types/busboy": "^1.5.4",
 		"@types/cookie-parser": "^1.4.7",
@@ -141,7 +141,7 @@
 		"tsx": "^4.7.1",
 		"uuidv7": "^1.2.1",
 		"valid-filename": "^4.0.0",
-		"ws": "^8.16.0",
+		"ws": "^8.21.0",
 		"zod": "^3.21.4"
 	}
 }
