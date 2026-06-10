@@ -9,7 +9,7 @@
 
 import {describe, expect, test} from 'vitest'
 
-import {parseLogsParams} from './docker-logs-socket.js'
+import createDockerLogsHandler, {parseLogsParams} from './docker-logs-socket.js'
 
 describe('parseLogsParams', () => {
 	test('A: ?container=foo&tail=200 → tail honoured, envId null', () => {
@@ -88,5 +88,166 @@ describe('parseLogsParams', () => {
 			'/ws/docker/logs?container=foo&envId=local&token=abc.def.ghi',
 		)
 		expect(Object.keys(out).sort()).toEqual(['containerName', 'envId', 'tail'])
+	})
+})
+
+// ───────────────────────────────────────────────────────────────────────────
+// Phase 263-03 (L-062) — RBAC gate at the docker-logs WS handler boundary.
+//
+// Mirrors the docker-exec gate: the generic WS upgrade gate does verifyToken
+// ONLY — ANY valid token used to tail ANY container's logs. Pin the handler-
+// boundary re-verify + admin-OR-owner gate: non-owner member → ws.close(4403);
+// owner/admin/legacy proceed (asserted as the ABSENCE of a 4403 close).
+// ───────────────────────────────────────────────────────────────────────────
+
+interface FakeClose {
+	code: number
+	reason: string
+}
+
+function makeFakeWs() {
+	const closes: FakeClose[] = []
+	const ws = {
+		OPEN: 1,
+		readyState: 1,
+		closes,
+		close(code?: number, reason?: string) {
+			closes.push({code: code ?? 1000, reason: reason ?? ''})
+			ws.readyState = 3 // CLOSED
+		},
+		send() {},
+		on() {},
+		terminate() {},
+		ping() {},
+	}
+	return ws
+}
+
+function fakeLivinityd(verifyResult: unknown) {
+	return {
+		server: {
+			verifyToken: async (_token: string) => {
+				if (verifyResult instanceof Error) throw verifyResult
+				return verifyResult
+			},
+		},
+	} as never
+}
+
+const silentLogger = {
+	log() {},
+	verbose() {},
+	error() {},
+	warn() {},
+} as never
+
+function makeRequest(url: string) {
+	return {url} as never
+}
+
+const ADMIN = {id: 'admin-id', role: 'admin' as const}
+const MEMBER = {id: 'member-id', role: 'member' as const}
+
+describe('createDockerLogsHandler — RBAC gate (L-062)', () => {
+	test('Test 6: member token, container NOT owned → ws.close(4403); no logs', async () => {
+		let getClientCalled = false
+		const handler = createDockerLogsHandler({
+			livinityd: fakeLivinityd({userId: 'member-id'}),
+			logger: silentLogger,
+			findUserByIdFn: async () => MEMBER,
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => false,
+			getDockerClientFn: async () => {
+				getClientCalled = true
+				throw new Error('should not reach docker')
+			},
+		})
+		const ws = makeFakeWs()
+		await handler(ws as never, makeRequest('/ws/docker/logs?container=other-app&token=t'))
+		expect(ws.closes.some((c) => c.code === 4403)).toBe(true)
+		expect(getClientCalled).toBe(false)
+	})
+
+	test('Test 7: member token, container OWNED → proceeds past gate (no 4403)', async () => {
+		const handler = createDockerLogsHandler({
+			livinityd: fakeLivinityd({userId: 'member-id'}),
+			logger: silentLogger,
+			findUserByIdFn: async () => MEMBER,
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => true,
+			getDockerClientFn: async () => {
+				throw new Error('docker-down')
+			},
+		})
+		const ws = makeFakeWs()
+		await handler(ws as never, makeRequest('/ws/docker/logs?container=my-app&token=t'))
+		expect(ws.closes.some((c) => c.code === 4403)).toBe(false)
+	})
+
+	test('Test 8: admin token → proceeds for ANY container (ownership not consulted)', async () => {
+		let ownershipConsulted = false
+		const handler = createDockerLogsHandler({
+			livinityd: fakeLivinityd({userId: 'admin-id'}),
+			logger: silentLogger,
+			findUserByIdFn: async () => ADMIN,
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => {
+				ownershipConsulted = true
+				return false
+			},
+			getDockerClientFn: async () => {
+				throw new Error('docker-down')
+			},
+		})
+		const ws = makeFakeWs()
+		await handler(ws as never, makeRequest('/ws/docker/logs?container=anyones-app&token=t'))
+		expect(ws.closes.some((c) => c.code === 4403)).toBe(false)
+		expect(ownershipConsulted).toBe(false)
+	})
+
+	test('Test 9: no token / invalid token → ws.close(4403)', async () => {
+		const handlerNoToken = createDockerLogsHandler({
+			livinityd: fakeLivinityd({userId: 'member-id'}),
+			logger: silentLogger,
+			findUserByIdFn: async () => MEMBER,
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => false,
+			getDockerClientFn: async () => {
+				throw new Error('should not reach docker')
+			},
+		})
+		const ws1 = makeFakeWs()
+		await handlerNoToken(ws1 as never, makeRequest('/ws/docker/logs?container=app'))
+		expect(ws1.closes.some((c) => c.code === 4403)).toBe(true)
+
+		const handlerBadToken = createDockerLogsHandler({
+			livinityd: fakeLivinityd(new Error('bad sig')),
+			logger: silentLogger,
+			findUserByIdFn: async () => MEMBER,
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => false,
+			getDockerClientFn: async () => {
+				throw new Error('should not reach docker')
+			},
+		})
+		const ws2 = makeFakeWs()
+		await handlerBadToken(ws2 as never, makeRequest('/ws/docker/logs?container=app&token=bad'))
+		expect(ws2.closes.some((c) => c.code === 4403)).toBe(true)
+	})
+
+	test('Test 10: legacy {loggedIn:true} token → resolves to admin → proceeds', async () => {
+		const handler = createDockerLogsHandler({
+			livinityd: fakeLivinityd({loggedIn: true}),
+			logger: silentLogger,
+			findUserByIdFn: async (id: string) => (id === 'admin-id' ? ADMIN : null),
+			getAdminUserFn: async () => ADMIN,
+			userOwnsContainerFn: async () => false,
+			getDockerClientFn: async () => {
+				throw new Error('docker-down')
+			},
+		})
+		const ws = makeFakeWs()
+		await handler(ws as never, makeRequest('/ws/docker/logs?container=any&token=legacy'))
+		expect(ws.closes.some((c) => c.code === 4403)).toBe(false)
 	})
 })
