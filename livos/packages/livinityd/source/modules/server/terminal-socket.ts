@@ -7,6 +7,15 @@ import {type WebSocket} from 'ws'
 import type Livinityd from '../../index.js'
 import type createLogger from '../utilities/logger.js'
 
+/**
+ * Phase 263-03 (L-062) — minimal user shape returned by findUserById /
+ * getAdminUser. Only `id` and `role` are consulted at this boundary.
+ */
+interface DatabaseUserShape {
+	id: string
+	role: 'admin' | 'member' | 'guest'
+}
+
 const DEFAULT_SHELL_CONTAINERS: Record<string, string> = {
 	bitcoin: 'bitcoind',
 	lightning: 'lnd',
@@ -26,11 +35,72 @@ export default function createTerminalWebSocketHandler({
 	livinityd: Livinityd
 	logger: ReturnType<typeof createLogger>
 }) {
+	async function resolveDb(): Promise<{
+		findUserById: (id: string) => Promise<DatabaseUserShape | null>
+		getAdminUser: () => Promise<DatabaseUserShape | null>
+		userOwnsContainer: (userId: string, containerName: string) => Promise<boolean>
+	}> {
+		return (await import('../database/index.js')) as never
+	}
+
 	return async function (ws: WebSocket, request: http.IncomingMessage) {
 		try {
 			const appId = new URL(`https://localhost/${request.url}`).searchParams.get('appId')
 			const cols = Number(new URL(`https://localhost/${request.url}`).searchParams.get('cols'))
 			const rows = Number(new URL(`https://localhost/${request.url}`).searchParams.get('rows'))
+
+			// ── Phase 263-03 (L-062) — RBAC gate at the handler boundary ──────
+			// WS upgrades are OUTSIDE the Express chain; the generic upgrade gate
+			// (index.ts) does verifyToken ONLY — no role, no ownership. Re-verify
+			// here and resolve the user. The host-shell branch (no appId) spawns
+			// `sudo --user <username> --login bash` on the HOST — admin only. The
+			// app branch requires admin OR ownership of the target container.
+			// Mirrors ssh-sessions/ws-handler.ts:169-221.
+			let user: DatabaseUserShape
+			let userId: string
+			try {
+				const token = new URL(`https://localhost/${request.url}`).searchParams.get('token')
+				if (!token) {
+					ws.close(4403, 'missing token')
+					return
+				}
+				const payload = (await livinityd.server.verifyToken(token)) as {
+					userId?: string
+					loggedIn?: boolean
+				}
+				const db = await resolveDb()
+				let resolvedId: string | null = null
+				if (typeof payload.userId === 'string') {
+					resolvedId = payload.userId
+				} else if (payload.loggedIn === true) {
+					const admin = await db.getAdminUser()
+					if (!admin) {
+						ws.close(4403, 'admin role required')
+						return
+					}
+					resolvedId = admin.id
+				} else {
+					ws.close(4403, 'unauthorized')
+					return
+				}
+				const found = await db.findUserById(resolvedId)
+				if (!found) {
+					ws.close(4403, 'unauthorized')
+					return
+				}
+				user = found
+				userId = resolvedId
+			} catch (err) {
+				logger.error(`Terminal socket — token verify failed`, err)
+				ws.close(4403, 'unauthorized')
+				return
+			}
+
+			// HOST-shell branch (no appId) is ADMIN ONLY — it spawns a host shell.
+			if (!appId && user.role !== 'admin') {
+				ws.close(4403, 'admin role required')
+				return
+			}
 
 			let ptyProcess: IPty
 
@@ -53,6 +123,18 @@ export default function createTerminalWebSocketHandler({
 				if (!container) {
 					container = Object.values(compose.services!).filter((service) => service.image && service.container_name)[0]
 						?.container_name as string
+				}
+
+				// Phase 263-03 (L-062) — a non-admin may only open a terminal into
+				// a container they own. Run the ownership check now that the target
+				// `container` is resolved, BEFORE pty.spawn.
+				if (user.role !== 'admin') {
+					const db = await resolveDb()
+					const owns = container ? await db.userOwnsContainer(userId, container) : false
+					if (!owns) {
+						ws.close(4403, 'forbidden: not owner')
+						return
+					}
 				}
 
 				// Launch terminal with interactive docker shell
