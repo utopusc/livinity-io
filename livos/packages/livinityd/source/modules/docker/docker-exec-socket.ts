@@ -3,7 +3,33 @@ import type http from 'node:http'
 import {type WebSocket} from 'ws'
 
 import {getDockerClient} from './docker-clients.js'
+import type Livinityd from '../../index.js'
 import type createLogger from '../utilities/logger.js'
+
+/**
+ * Phase 263-03 (L-062) — minimal user shape returned by findUserById /
+ * getAdminUser. Only `id` and `role` are consulted at this boundary.
+ */
+interface DatabaseUserShape {
+	id: string
+	role: 'admin' | 'member' | 'guest'
+}
+
+/**
+ * Phase 263-03 (L-062) — DI surface for the RBAC gate. Production resolves the
+ * three *Fn from `../database/index.js` (and the docker client from
+ * `./docker-clients.js`); tests inject fakes so the gate can be driven without
+ * PG / jwt / a real Docker socket. Mirrors ssh-sessions/ws-handler.ts
+ * CreateHandlerDeps.
+ */
+export interface CreateDockerExecHandlerDeps {
+	livinityd: Livinityd
+	logger: ReturnType<typeof createLogger>
+	findUserByIdFn?: (id: string) => Promise<DatabaseUserShape | null>
+	getAdminUserFn?: () => Promise<DatabaseUserShape | null>
+	userOwnsContainerFn?: (userId: string, containerName: string) => Promise<boolean>
+	getDockerClientFn?: typeof getDockerClient
+}
 
 /**
  * Parsed query-string surface for the WS handler. `envId` is optional and
@@ -76,7 +102,37 @@ export function parseExecParams(rawUrl: string): ExecParams {
  * pattern verbatim — `[env-not-found]` → 1008, `[agent-not-implemented]` →
  * 1011, anything else propagates.
  */
-export default function createDockerExecHandler({logger}: {logger: ReturnType<typeof createLogger>}) {
+export default function createDockerExecHandler(deps: CreateDockerExecHandlerDeps) {
+	const {livinityd, logger} = deps
+
+	async function resolveFindUserById(): Promise<(id: string) => Promise<DatabaseUserShape | null>> {
+		if (deps.findUserByIdFn) return deps.findUserByIdFn
+		const mod = (await import('../database/index.js')) as {
+			findUserById: (id: string) => Promise<DatabaseUserShape | null>
+		}
+		return mod.findUserById
+	}
+
+	async function resolveGetAdminUser(): Promise<() => Promise<DatabaseUserShape | null>> {
+		if (deps.getAdminUserFn) return deps.getAdminUserFn
+		const mod = (await import('../database/index.js')) as {
+			getAdminUser: () => Promise<DatabaseUserShape | null>
+		}
+		return mod.getAdminUser
+	}
+
+	async function resolveUserOwnsContainer(): Promise<
+		(userId: string, containerName: string) => Promise<boolean>
+	> {
+		if (deps.userOwnsContainerFn) return deps.userOwnsContainerFn
+		const mod = (await import('../database/index.js')) as {
+			userOwnsContainer: (userId: string, containerName: string) => Promise<boolean>
+		}
+		return mod.userOwnsContainer
+	}
+
+	const getClient = deps.getDockerClientFn ?? getDockerClient
+
 	return async function (ws: WebSocket, request: http.IncomingMessage) {
 		try {
 			const {containerName, shell, user, envId} = parseExecParams(request.url ?? '')
@@ -85,6 +141,61 @@ export default function createDockerExecHandler({logger}: {logger: ReturnType<ty
 			if (!containerName) {
 				ws.close(1008, 'Missing container')
 				return
+			}
+
+			// ── Phase 263-03 (L-062) — RBAC gate at the handler boundary ──────
+			// WS upgrades are OUTSIDE the Express chain; the generic upgrade gate
+			// (index.ts) does verifyToken ONLY — no role, no ownership. Re-verify
+			// here and require admin OR container-ownership, else close 4403.
+			// Mirrors ssh-sessions/ws-handler.ts:169-221. containerName is already
+			// parsed above (needed for the ownership check).
+			{
+				let userId: string | null = null
+				try {
+					const url = new URL(`https://localhost${request.url ?? '/'}`)
+					const token = url.searchParams.get('token')
+					if (!token) {
+						ws.close(4403, 'missing token')
+						return
+					}
+					const payload = (await livinityd.server.verifyToken(token)) as {
+						userId?: string
+						loggedIn?: boolean
+					}
+					if (typeof payload.userId === 'string') {
+						userId = payload.userId
+					} else if (payload.loggedIn === true) {
+						const getAdminUser = await resolveGetAdminUser()
+						const admin = await getAdminUser()
+						if (!admin) {
+							ws.close(4403, 'admin role required')
+							return
+						}
+						userId = admin.id
+					} else {
+						ws.close(4403, 'unauthorized')
+						return
+					}
+				} catch (err) {
+					logger.error(`Exec handler — token verify failed`, err)
+					ws.close(4403, 'unauthorized')
+					return
+				}
+
+				const findUserById = await resolveFindUserById()
+				const user2 = await findUserById(userId)
+				if (!user2) {
+					ws.close(4403, 'unauthorized')
+					return
+				}
+				if (user2.role !== 'admin') {
+					const userOwnsContainer = await resolveUserOwnsContainer()
+					const owns = await userOwnsContainer(userId, containerName)
+					if (!owns) {
+						ws.close(4403, 'forbidden: not owner')
+						return
+					}
+				}
 			}
 
 			// Validate shell is one of the allowed options
@@ -103,7 +214,7 @@ export default function createDockerExecHandler({logger}: {logger: ReturnType<ty
 			// LivOS host).
 			let docker
 			try {
-				docker = await getDockerClient(envId)
+				docker = await getClient(envId)
 			} catch (err: any) {
 				const msg = err?.message ?? ''
 				if (msg.startsWith('[env-not-found]')) {
