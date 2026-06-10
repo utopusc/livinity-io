@@ -37,6 +37,11 @@ import {parseSsoReturnTarget, sanitizeSsoPath} from './sso-handshake.js'
 // the unauth 401 gate + the two no-shell url sinks (URL-encoded CDP fetch +
 // argv spawn). See chrome-launch.ts for the threat rationale.
 import {chromeSessionGate, buildCdpNewTabUrl, buildChromeLaunchArgv} from './chrome-launch.js'
+// Phase 263-02 (L-073 Critical) — fail-closed Host-allowlist middleware factory.
+// Closes the apex session gate's fail-open posture for non-apex Hosts: any Host
+// NOT in {apex ∪ enabled subdomains ∪ native-app subdomains ∪ approved custom
+// domains} gets 403/302 BEFORE the app gateway, never next(). See host-allowlist.ts.
+import {makeHostAllowlistMiddleware} from './host-allowlist.js'
 import {attachVncBridge} from '../streaming/vnc-bridge.js'
 import {trpcExpressHandler, trpcWssHandler} from './trpc/index.js'
 import createTerminalWebSocketHandler from './terminal-socket.js'
@@ -277,6 +282,34 @@ class Server {
 	}
 
 	/**
+	 * Phase 263-02 (L-073) — Host-allowlist MEMBERSHIP check for an approved
+	 * custom domain (DOM-06), WITHOUT performing the proxy. Reads the SAME source
+	 * `routeCustomDomain` consults: the `livos:custom_domain:<host>` Redis key,
+	 * with the same parent-domain fallback (`blog.mysite.com` -> `mysite.com`),
+	 * and applies the same `status === 'dns_changed'` exclusion routeCustomDomain
+	 * uses to bail. Used by the fail-closed Host-allowlist middleware so an
+	 * approved custom-domain Host is admitted (and gets proxied later by the
+	 * app-gateway middleware), while an unknown Host is 403'd. Returns false on
+	 * any error (fail-closed by the caller's allowlist semantics).
+	 */
+	private async isApprovedCustomDomain(host: string): Promise<boolean> {
+		// Exact-host mapping first.
+		let raw = await this.livinityd.ai.redis.get(`livos:custom_domain:${host}`)
+		if (!raw) {
+			// Parent-domain fallback (sub-prefix on a registered apex).
+			const parts = host.split('.')
+			if (parts.length > 2) {
+				const parent = parts.slice(1).join('.')
+				raw = await this.livinityd.ai.redis.get(`livos:custom_domain:${parent}`)
+			}
+		}
+		if (!raw) return false
+		const info = JSON.parse(raw) as {status?: string}
+		// `dns_changed` is the same disqualifier routeCustomDomain bails on.
+		return info.status !== 'dns_changed'
+	}
+
+	/**
 	 * Route a request to a Docker container based on custom domain mapping.
 	 * Returns true if the request was handled, false if not a custom domain.
 	 * Custom domain traffic is public-facing — no LivOS auth required.
@@ -469,6 +502,32 @@ class Server {
 			this.logger.verbose(`${request.method} ${request.path}`)
 			next()
 		})
+
+		// ── L-073 — Fail-closed Host allowlist (daemon-side, defense-in-depth) ────
+		// The apex session gate below (search "Apex Session Gate") is fail-OPEN
+		// for non-apex Hosts (host !== domain -> next()). This middleware closes
+		// that: any Host NOT in {apex ∪ enabled subdomains ∪ native-app
+		// subdomains ∪ approved custom domains} gets 403 here, BEFORE the app
+		// gateway, NEVER next().
+		//
+		// Layered defenses (this daemon owns layer 1):
+		//   1. THIS middleware (code-side guarantee — holds on every cloud user PC).
+		//   2. Caddy: 12 explicit named site blocks, NO catch-all (an unmatched Host
+		//      gets Caddy's own empty 200, never proxied to :8080).
+		//   3. CF Tunnel per-user ingress array (apex + {app}-{username} hostnames +
+		//      http_status:404 catch-all) — OPERATOR/DASHBOARD config, token mode,
+		//      NOT on-box. The L-073 fix's "restrict CF Tunnel ingress" item is an
+		//      operator verification, not a code change here.
+		// NEVER treat Caddy/CF as the only Host gate (Pitfall 3, LIVOS-041 lesson).
+		this.app.use(
+			makeHostAllowlistMiddleware({
+				redis: this.livinityd.ai.redis,
+				getNativeSubdomains: () =>
+					this.livinityd.apps.nativeInstances.map((app) => app.subdomain),
+				isApprovedCustomDomain: (host) => this.isApprovedCustomDomain(host),
+				logError: (message, error) => this.logger.error(message, error),
+			}),
+		)
 
 		// ── App Gateway ──────────────────────────────────────────────────────
 		// Dynamic per-user subdomain routing for multi-user mode.
