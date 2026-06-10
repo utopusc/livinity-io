@@ -2029,6 +2029,9 @@ class Server {
 				if (!uid && payload?.loggedIn === true) uid = (await getAdminUser())?.id
 				const u = uid ? await findUserById(uid) : null
 				if (!u) return response.status(401).json({error: 'unauthorized'})
+				// WR-02: reject deactivated/revoked tenants immediately (the users
+				// row carries is_active) instead of honoring a still-valid JWT.
+				if (u.isActive === false) return response.status(403).json({error: 'account inactive'})
 				if (u.role !== 'admin' && !(await userOwnsContainer(uid!, name))) {
 					return response.status(403).json({error: 'forbidden: not owner'})
 				}
@@ -2089,6 +2092,9 @@ class Server {
 				if (!uid && payload?.loggedIn === true) uid = (await getAdminUser())?.id
 				const u = uid ? await findUserById(uid) : null
 				if (!u) return response.status(401).json({error: 'unauthorized'})
+				// WR-02: reject deactivated/revoked tenants immediately (the users
+				// row carries is_active) instead of honoring a still-valid JWT.
+				if (u.isActive === false) return response.status(403).json({error: 'account inactive'})
 				if (u.role !== 'admin' && !(await userOwnsContainer(uid!, name))) {
 					return response.status(403).json({error: 'forbidden: not owner'})
 				}

@@ -101,4 +101,22 @@ describe('createTerminalWebSocketHandler — RBAC gate (L-062)', () => {
 		await handler(ws as never, makeRequest('/terminal?cols=80&rows=24&token=t'))
 		expect(ws.closes.some((c) => c.code === 4403)).toBe(true)
 	})
+
+	test('WR-02: deactivated user (isActive:false) → ws.close(4403) before any shell', async () => {
+		// Uses the dbFn test seam to inject a deactivated member. The gate must
+		// close BEFORE the host-shell admin check / app lookup.
+		const handler = createTerminalWebSocketHandler({
+			livinityd: fakeLivinityd({verify: {userId: 'member-id'}, user: MEMBER}),
+			logger: silentLogger,
+			dbFn: async () => ({
+				findUserById: async () => ({...MEMBER, isActive: false}),
+				getAdminUser: async () => ADMIN,
+				userOwnsContainer: async () => true, // owns it, but inactive trumps
+			}),
+		})
+		const ws = makeFakeWs()
+		await handler(ws as never, makeRequest('/terminal?appId=my-app&cols=80&rows=24&token=t'))
+		expect(ws.closes.some((c) => c.code === 4403)).toBe(true)
+		expect(ws.closes.some((c) => c.reason === 'account inactive')).toBe(true)
+	})
 })
