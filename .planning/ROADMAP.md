@@ -4720,7 +4720,7 @@ Mini PC + every user PC. Platform (L-066/067 under `platform/`) → CODE ONLY; *
 
 Plans:
 - [x] 263-01-PLAN.md — L-064 chrome unauth RCE: session-gate /api/chrome/* + argv spawn (no shell on url) + @trpc/server/ws CVE bumps (Wave 1) ✅ CODE-COMPLETE 2026-06-10 (commits 8c46294d/b7cfbc04/a9143705; live curl verify deferred to 263-06)
-- [ ] 263-02-PLAN.md — L-073 apex fail-open: fail-CLOSED daemon Host allowlist before the app gateway + CF-Tunnel-ingress operator note (Wave 2)
+- [x] 263-02-PLAN.md — L-073 apex fail-open: fail-CLOSED daemon Host allowlist before the app gateway + CF-Tunnel-ingress operator note (Wave 2) ✅ CODE-COMPLETE 2026-06-10 (commits f3ea4013/56190d0c; 15/15 vitest green; new host-allowlist.ts factory 403s/302s any Host not in {apex∪enabled-subs∪native-subs∪approved-custom-domains}, registered before app gateway; isApprovedCustomDomain reads livos:custom_domain:<host>; live curl matrix deferred to 263-06)
 - [ ] 263-03-PLAN.md — L-062 container/host RBAC: ssh-sessions pattern on terminal/docker-exec/docker-logs/docker-file + userOwnsContainer ownership (Wave 3)
 - [x] 263-04-PLAN.md — L-066 hyphen-username ban across 3 live chokepoints (username-validator/auth/cf-saas) + next/drizzle CVE bumps (Wave 1) ✅ CODE-COMPLETE 2026-06-10 (commits a7e527f0/26e35bcb/eb29ea91; 20/20 tests green; A1 Supabase re-query deferred to operator at deploy — MCP not callable this session)
 - [x] 263-05-PLAN.md — L-067 fail-closed DEVICE_JWT_SECRET read + aud/iss-bound sign + .env.example (Wave 1) ✅ CODE-COMPLETE 2026-06-10 (commits 11a728b4/7a7143e2/4205bde3; 3/3 node:test green; committed default fallback removed, lazy in-signer fail-closed, aud=livinity-device/iss=livinity-web bound; operator sets DEVICE_JWT_SECRET in Vercel env)
