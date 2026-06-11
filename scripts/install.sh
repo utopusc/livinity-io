@@ -80,7 +80,11 @@ source "$SCRIPT_DIR/show-banner.sh"
 on_error() {
     local exit_code=$?
     local line=$1
-    fail "install.sh aborted at line ${line} (exit=${exit_code})" "$exit_code"
+    # BASH_SOURCE[1] = the file the failing command lives in — with set -E the
+    # trap fires inside sourced helper FUNCTIONS too, where "install.sh line
+    # N" would point at the wrong file (field-test finding 2026-06-11).
+    local src="${BASH_SOURCE[1]:-install.sh}"
+    fail "install aborted at ${src##*/}:${line} (exit=${exit_code})" "$exit_code"
 }
 trap 'on_error $LINENO' ERR
 
