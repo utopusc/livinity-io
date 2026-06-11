@@ -17,6 +17,26 @@ install_common_deps() {
     # cloud-mode parity. This file ships the smallest possible shared layer so
     # plans 104-03/04/06 can extend per-mode with confidence.
     export DEBIAN_FRONTEND=noninteractive
+
+    # Field bug 2026-06-11: a previous failed run (or a manual cloudflared
+    # attempt) can leave /etc/apt/sources.list.d/cloudflared.list pointing at
+    # a suite Cloudflare doesn't publish (e.g. non-LTS Ubuntu 'plucky') —
+    # "does not have a Release file" then poisons EVERY apt-get update,
+    # including ours, so re-runs die here in common-deps. Probe the suite and
+    # quarantine a broken list; mode-tunnel.sh re-creates it later with a
+    # supported suite (it has the matching fallback logic).
+    local cf_list=/etc/apt/sources.list.d/cloudflared.list
+    if [[ -f "$cf_list" ]]; then
+        local cf_suite
+        cf_suite=$(grep -m1 'pkg\.cloudflare\.com/cloudflared' "$cf_list" \
+            | sed -E 's|.*pkg\.cloudflare\.com/cloudflared[[:space:]]+([^[:space:]]+).*|\1|')
+        if [[ -n "$cf_suite" ]] \
+                && ! curl -fsI --max-time 10 "https://pkg.cloudflare.com/cloudflared/dists/${cf_suite}/Release" >/dev/null 2>&1; then
+            info "Quarantining stale cloudflared.list (suite '${cf_suite}' not published by Cloudflare)"
+            mv -f "$cf_list" "${cf_list}.disabled"
+        fi
+    fi
+
     apt-get update -qq
     apt-get install -y -qq \
         ca-certificates curl gnupg2 wget jq dnsutils openssl \
