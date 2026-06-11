@@ -37,7 +37,14 @@ install_common_deps() {
         fi
     fi
 
-    apt-get update -qq
+    # Field bug 2026-06-11 (#2): apt-get update exits non-zero when ANY
+    # configured source fails — user boxes routinely carry broken third-party
+    # repos (seen live: a Kali kali-rolling repo with NO_PUBKEY on an Ubuntu
+    # 25.04 box). apt still refreshes every OTHER source, so a partial-update
+    # is fine for us: our own installs below fail loudly if OUR repos were
+    # affected. Warn-and-continue instead of dying on someone else's repo.
+    apt-get update -qq \
+        || warn "apt-get update reported errors (likely a pre-existing third-party repo on this box) — continuing; LivOS package installs will fail loudly if our repos are affected"
     apt-get install -y -qq \
         ca-certificates curl gnupg2 wget jq dnsutils openssl \
         debian-keyring debian-archive-keyring apt-transport-https \
@@ -58,7 +65,10 @@ install_common_deps() {
             | gpg --dearmor --no-tty --batch --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
             | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
-        apt-get update -qq
+        # Same warn-and-continue as above — the caddy install next line is
+        # the loud failure point if the caddy repo itself didn't refresh.
+        apt-get update -qq \
+            || warn "apt-get update reported errors — continuing to caddy install"
         apt-get install -y -qq caddy
         ok "Caddy installed"
     fi
