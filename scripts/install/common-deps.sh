@@ -88,10 +88,19 @@ EOF
         # gpg-agent tries to attach to a TTY for pinentry / first-time agent
         # setup. --no-tty + --batch + --yes makes the dearmor strictly non-
         # interactive. Idempotent (--yes overwrites existing keyring).
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-            | gpg --dearmor --no-tty --batch --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
-            | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
+        # WSL field test 2026-06-11 run 3b: a transient cloudsmith hiccup fed
+        # gpg EMPTY input → "no valid OpenPGP data" → hard abort. Retry, and
+        # fail with a pointed message instead of gpg's cryptic one.
+        if ! curl -1sLf --retry 3 --retry-delay 2 --max-time 30 \
+                'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+            | gpg --dearmor --no-tty --batch --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg; then
+            fail "Failed to fetch/dearmor the Caddy signing key from dl.cloudsmith.io — check network egress and re-run." 75
+        fi
+        if ! curl -1sLf --retry 3 --retry-delay 2 --max-time 30 \
+                'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+            | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null; then
+            fail "Failed to fetch the Caddy apt source list from dl.cloudsmith.io — check network egress and re-run." 75
+        fi
         # Same warn-and-continue as above — the caddy install next line is
         # the loud failure point if the caddy repo itself didn't refresh.
         apt-get update -qq \
