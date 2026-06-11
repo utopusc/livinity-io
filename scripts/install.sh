@@ -17,7 +17,11 @@
 # /api/me/tunnel-token. parse-cli + mode-tunnel handle the new args; install.sh
 # itself just passes args through unchanged (no dispatcher change needed).
 
-set -euo pipefail
+# -E (errtrace): without it the ERR trap below does NOT fire inside sourced
+# helper FUNCTIONS — a failing command there killed the install with zero
+# output (field bug 2026-06-11: silent death at the pnpm step). With -E every
+# abort prints "install.sh aborted at line N (exit=C)".
+set -Eeuo pipefail
 
 # ── Resolve helper directory ──────────────────────────────────
 # Three modes (Phase 132-03 self-bootstrap):

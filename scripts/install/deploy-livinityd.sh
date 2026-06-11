@@ -96,11 +96,42 @@ _dld_install_system_packages() {
 
     export DEBIAN_FRONTEND=noninteractive
 
-    # Node.js 22 LTS via NodeSource (idempotent — script no-ops on already-configured repo)
+    # Node.js 22 LTS via NodeSource (idempotent — re-runs no-op on the repo write)
+    #
+    # Field bug 2026-06-11 (Ubuntu 25.04 box with a broken third-party repo):
+    # the piped setup_22.x script runs its own `apt-get update` under set -e —
+    # ANY broken repo on the box (Kali NO_PUBKEY in the field case) killed it
+    # BEFORE the nodesource list landed. apt then resolved Ubuntu's npm-less
+    # archive nodejs (20.x + libnodeXXX) and the pnpm step below died silently
+    # (output swallowed; set -e without -E fires no ERR trap inside functions).
+    # Write the repo ourselves — NodeSource's 'nodistro' suite is codename-
+    # independent — and verify loudly at each step.
     if ! command -v node &>/dev/null || ! node --version 2>/dev/null | grep -qE '^v(2[2-9]|[3-9][0-9])\.'; then
-        info "Installing Node.js 22 LTS via NodeSource"
-        curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
-        apt-get install -y -qq nodejs
+        info "Installing Node.js 22 LTS via NodeSource (nodistro repo)"
+        # Ubuntu's archive nodejs stack (libnodeXXX-based) conflicts with
+        # NodeSource's self-contained deb — remove it first if present (also
+        # heals boxes where a previous run installed the archive nodejs).
+        if dpkg -l 'libnode*' 2>/dev/null | grep -q '^ii'; then
+            info "Removing Ubuntu-archive nodejs stack before NodeSource install"
+            apt-get remove -y -qq nodejs nodejs-doc 'libnode*' 2>/dev/null \
+                || warn "removal of archive nodejs reported errors — continuing"
+        fi
+        mkdir -p /etc/apt/keyrings
+        if ! curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+                | gpg --dearmor --no-tty --batch --yes -o /etc/apt/keyrings/nodesource.gpg; then
+            fail "failed to fetch + dearmor NodeSource GPG key" 75
+        fi
+        chmod 0644 /etc/apt/keyrings/nodesource.gpg
+        echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+            > /etc/apt/sources.list.d/nodesource.list
+        apt-get update -qq \
+            || warn "apt-get update reported errors (third-party repos?) — continuing to nodejs install"
+        apt-get install -y -qq nodejs || fail "apt-get install nodejs failed" 75
+        # Belt-and-suspenders: if apt still resolved an npm-less <22 nodejs,
+        # fail HERE with a pointed message instead of dying mysteriously later.
+        if ! node --version 2>/dev/null | grep -qE '^v(2[2-9]|[3-9][0-9])\.'; then
+            fail "nodejs $(node --version 2>/dev/null || echo '<none>') installed but >=22 required — NodeSource repo did not take effect (check /etc/apt/sources.list.d/nodesource.list and apt output above)" 75
+        fi
         ok "Node.js installed: $(node --version 2>/dev/null)"
     else
         ok "Node.js already installed: $(node --version 2>/dev/null)"
@@ -108,8 +139,14 @@ _dld_install_system_packages() {
 
     # pnpm via npm global install (idempotent)
     if ! command -v pnpm &>/dev/null; then
+        if ! command -v npm &>/dev/null; then
+            fail "npm not found next to node $(node --version 2>/dev/null) — Ubuntu's archive nodejs ships without npm; the NodeSource install above should have provided it" 75
+        fi
         info "Installing pnpm via npm -g"
-        npm install -g pnpm@latest >/dev/null 2>&1
+        # Keep stdout quiet but let stderr THROUGH — the old 2>&1 swallow made
+        # this step die with zero output when npm was missing.
+        npm install -g pnpm@latest >/dev/null \
+            || fail "npm install -g pnpm failed" 75
         ok "pnpm installed: $(pnpm --version 2>/dev/null)"
     else
         ok "pnpm already installed: $(pnpm --version 2>/dev/null)"
