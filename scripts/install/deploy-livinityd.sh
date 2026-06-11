@@ -672,13 +672,22 @@ _dld_install_docker() {
             ok "Docker already installed + daemon reachable: $(docker --version 2>/dev/null)"
             return 0
         fi
-        warn "docker CLI present but daemon not reachable — enabling docker.service"
-        systemctl enable --now docker 2>/dev/null || true
-        if docker info >/dev/null 2>&1; then
-            ok "Docker daemon started: $(docker --version 2>/dev/null)"
-            return 0
+        # CLI answers but no daemon. Only try to start docker.service when the
+        # ENGINE unit actually exists — a CLI WITHOUT a unit means there is no
+        # engine at all (docker-ce-cli-only installs, partial removals, WSL
+        # boxes where the Windows docker.exe shim leaks in via PATH — caught
+        # live in test run 6). Fall through and install the real engine; apt's
+        # /usr/bin/docker takes PATH precedence over such shims.
+        if systemctl list-unit-files docker.service 2>/dev/null | grep -q '^docker\.service'; then
+            warn "docker CLI present but daemon not reachable — enabling docker.service"
+            systemctl enable --now docker 2>/dev/null || true
+            if docker info >/dev/null 2>&1; then
+                ok "Docker daemon started: $(docker --version 2>/dev/null)"
+                return 0
+            fi
+            fail "docker CLI + docker.service exist but the daemon won't start — check 'journalctl -u docker -n 30'" 75
         fi
-        fail "docker CLI exists but the daemon won't start — check 'journalctl -u docker'" 75
+        warn "docker CLI found ($(command -v docker)) but NO docker.service unit — engine missing; installing Docker CE"
     fi
 
     local os_id codename
