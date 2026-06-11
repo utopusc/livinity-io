@@ -18,6 +18,19 @@ install_common_deps() {
     # plans 104-03/04/06 can extend per-mode with confidence.
     export DEBIAN_FRONTEND=noninteractive
 
+    # Install-hardening audit 2026-06-11 (P0): fresh-boot boxes run
+    # unattended-upgrades/apt-daily which hold the dpkg lock for minutes — the
+    # first apt call used to die with "Could not get lock". The Lock::Timeout
+    # makes EVERY apt call in this run wait up to 10 min (apt >= 1.9.11, all
+    # targets). The Dpkg options suppress conffile prompts — stdin under
+    # curl|bash is the SCRIPT STREAM itself, so a prompt would consume script
+    # text as its answer. Drop-in is removed at the end of install.sh.
+    mkdir -p /etc/apt/apt.conf.d
+    cat > /etc/apt/apt.conf.d/90livos-install <<'EOF'
+DPkg::Lock::Timeout "600";
+Dpkg::Options { "--force-confdef"; "--force-confold"; };
+EOF
+
     # Field bug 2026-06-11: a previous failed run (or a manual cloudflared
     # attempt) can leave /etc/apt/sources.list.d/cloudflared.list pointing at
     # a suite Cloudflare doesn't publish (e.g. non-LTS Ubuntu 'plucky') —
@@ -49,6 +62,17 @@ install_common_deps() {
         ca-certificates curl gnupg2 wget jq dnsutils openssl \
         debian-keyring debian-archive-keyring apt-transport-https \
         redis-tools
+
+    # Install-hardening audit 2026-06-11 (P1): a pre-existing web server on
+    # :80 (nginx/apache/pi-hole…) makes Caddy fail to bind — the install used
+    # to "succeed" with a dead domain (502 at the CF edge) behind an
+    # unconditional "Caddy started" ok. Fail early and name the squatter.
+    local port80_owner
+    port80_owner=$(ss -ltnpH 'sport = :80' 2>/dev/null | grep -v '"caddy"' \
+        | grep -oE 'users:\(\("[^"]+"' | head -1 | cut -d'"' -f2)
+    if [[ -n "${port80_owner:-}" ]]; then
+        fail "Port 80 is held by '${port80_owner}' — LivOS needs Caddy on :80. Stop and disable it (e.g. 'sudo systemctl disable --now ${port80_owner}'), then re-run the install." 75
+    fi
 
     # Caddy (idempotent — `command -v` short-circuits when present)
     if command -v caddy &>/dev/null; then

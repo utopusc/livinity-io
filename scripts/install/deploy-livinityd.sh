@@ -70,7 +70,10 @@ _DLD_SYSTEMD_LIV_CORE_UNIT="/etc/systemd/system/liv-core.service"
 _DLD_SYSTEMD_LIV_WORKER_UNIT="/etc/systemd/system/liv-worker.service"
 _DLD_SYSTEMD_LIV_MEMORY_UNIT="/etc/systemd/system/liv-memory.service"
 _DLD_REPO_URL="https://github.com/utopusc/livinity-io.git"
-_DLD_STAGE_DIR="/tmp/livos-install-stage"
+# Install-hardening audit 2026-06-11 (P1): /var/tmp, NOT /tmp — Debian 13
+# defaults /tmp to tmpfs (RAM-backed); a ~1.5GB clone there competes with the
+# build chain for memory. /var/tmp is disk-backed on all targets.
+_DLD_STAGE_DIR="/var/tmp/livos-install-stage"
 # 105-01: alias matching update.sh:174-178 naming convention; persistent semantics preserved.
 # Plan 105-02 (G7) will swap to PID-scoped /tmp/livinity-update-$$ + add cleanup.
 _DLD_TEMP_DIR="$_DLD_STAGE_DIR"
@@ -275,8 +278,19 @@ _dld_setup_postgres() {
     # Ensure service is running
     systemctl enable postgresql.service 2>/dev/null || true
     systemctl start postgresql.service 2>/dev/null || true
-    if ! systemctl is-active --quiet postgresql.service; then
-        fail "PostgreSQL failed to start; check journalctl -u postgresql -n 30"
+    # Install-hardening audit 2026-06-11 (P1): postgresql.service on Debian/
+    # Ubuntu is a oneshot WRAPPER that reports active even when every cluster
+    # is down — the old is-active gate was a no-op. Gate on pg_isready.
+    local _pg_up=0 _pg_try
+    for _pg_try in $(seq 1 15); do
+        if sudo -u postgres pg_isready -q 2>/dev/null; then
+            _pg_up=1
+            break
+        fi
+        sleep 1
+    done
+    if (( _pg_up == 0 )); then
+        fail "PostgreSQL is not accepting connections (pg_isready failed for 15s) — check 'pg_lsclusters' and 'journalctl -u postgresql@* -n 30' (a cluster may be down or on a non-default port)"
     fi
 
     # Determine the password: reuse from .env if present, else generate
@@ -300,11 +314,16 @@ _dld_setup_postgres() {
     if [[ "$role_exists" != "1" ]]; then
         info "Creating PostgreSQL role 'livos'"
         # Quote the password — postgres treats this as a literal string
-        sudo -u postgres psql -c "CREATE USER livos WITH PASSWORD '${pg_pass}';" >/dev/null
+        sudo -u postgres psql -c "CREATE USER livos WITH PASSWORD '${pg_pass}';" >/dev/null \
+            || fail "CREATE USER livos failed — see psql error above"
         ok "PostgreSQL role 'livos' created"
     else
-        # Role exists; ensure password matches our .env value (rotation idempotency)
-        sudo -u postgres psql -c "ALTER USER livos WITH PASSWORD '${pg_pass}';" >/dev/null 2>&1 || true
+        # Role exists; ensure password matches our .env value (rotation
+        # idempotency). Audit P1: this used to be `|| true` — a swallowed
+        # ALTER USER left .env and the DB credential permanently diverged
+        # (daemon degrades to YAML-only and NEVER converges on re-runs).
+        sudo -u postgres psql -c "ALTER USER livos WITH PASSWORD '${pg_pass}';" >/dev/null \
+            || fail "ALTER USER livos failed — cannot align the DB credential with .env"
         ok "PostgreSQL role 'livos' already exists (password aligned with .env)"
     fi
 
@@ -314,10 +333,18 @@ _dld_setup_postgres() {
         "SELECT 1 FROM pg_database WHERE datname='livos'" 2>/dev/null || echo "")
     if [[ "$db_exists" != "1" ]]; then
         info "Creating PostgreSQL database 'livos'"
-        sudo -u postgres psql -c "CREATE DATABASE livos OWNER livos;" >/dev/null
+        sudo -u postgres psql -c "CREATE DATABASE livos OWNER livos;" >/dev/null \
+            || fail "CREATE DATABASE livos failed — see psql error above"
         ok "PostgreSQL database 'livos' created"
     else
         ok "PostgreSQL database 'livos' already exists"
+    fi
+
+    # Audit P1: verify the livos credential actually works over TCP BEFORE it
+    # gets written into .env — livinityd connects via 127.0.0.1, and a wedged
+    # credential used to surface only as a daemon-side YAML degradation.
+    if ! PGPASSWORD="$pg_pass" psql -h 127.0.0.1 -U livos -d livos -tAc "SELECT 1" >/dev/null 2>&1; then
+        fail "livos credential check over 127.0.0.1 FAILED — pg_hba.conf likely lacks a scram/md5 'host' rule for 127.0.0.1, or another cluster owns :5432 (pg_lsclusters). livinityd cannot connect like this."
     fi
 
     # Apply schema (idempotent — every CREATE TABLE uses IF NOT EXISTS)
@@ -326,13 +353,18 @@ _dld_setup_postgres() {
     if [[ -f "$schema_file" ]]; then
         info "Applying schema.sql"
         # PGPASSWORD env so password never lands on argv (T-104-11-1 mitigation)
-        if PGPASSWORD="$pg_pass" psql -h 127.0.0.1 -U livos -d livos -f "$schema_file" >/dev/null 2>&1; then
+        if PGPASSWORD="$pg_pass" psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U livos -d livos -f "$schema_file" >/dev/null 2>&1; then
             ok "Schema applied"
         else
-            # Schema apply via TCP may fail on default pg_hba (peer auth); fall back to sudo -u postgres
-            warn "TCP psql failed; retrying via sudo -u postgres"
-            sudo -u postgres psql -d livos -f "$schema_file" >/dev/null
-            ok "Schema applied (via sudo -u postgres fallback)"
+            # Audit P1: the old fallback ran as SUPERUSER — objects landed
+            # postgres-owned and the livos role had zero rights on them (the
+            # daemon degraded to YAML-only forever). SET ROLE keeps ownership
+            # on livos; ON_ERROR_STOP surfaces real SQL errors instead of a
+            # green half-applied schema.
+            warn "TCP psql failed; retrying via sudo -u postgres (SET ROLE livos)"
+            sudo -u postgres psql -v ON_ERROR_STOP=1 -d livos -c "SET ROLE livos" -f "$schema_file" >/dev/null \
+                || fail "schema.sql apply failed even via the superuser fallback — see psql error above"
+            ok "Schema applied (via sudo -u postgres fallback, livos-owned)"
         fi
     else
         warn "schema.sql not found at $schema_file — skipping schema apply"
@@ -356,6 +388,24 @@ _dld_setup_redis() {
     local redis_conf="/etc/redis/redis.conf"
     local redis_pass=""
 
+    # Install-hardening audit 2026-06-11 (P1): don't silently hijack a
+    # PRE-EXISTING Redis. On a FIRST install (no LivOS .env), an instance
+    # that refuses unauthenticated ping has a foreign requirepass — it
+    # belongs to another application; taking it over breaks that app AND
+    # leaves us unable to read its config. A reachable instance holding
+    # keys gets a loud adoption warning instead.
+    if [[ ! -f "$_DLD_ENV_FILE" ]]; then
+        local _redis_ping _redis_keys
+        _redis_ping=$(redis-cli -h 127.0.0.1 ping 2>/dev/null || true)
+        if [[ "$_redis_ping" != "PONG" ]]; then
+            fail "Redis on 127.0.0.1:6379 refuses unauthenticated ping and no LivOS .env exists — it likely belongs to another application (foreign requirepass). Remove/repoint that Redis, then re-run." 75
+        fi
+        _redis_keys=$(redis-cli -h 127.0.0.1 dbsize 2>/dev/null | tr -dc '0-9' || true)
+        if [[ -n "${_redis_keys:-}" ]] && (( _redis_keys > 0 )); then
+            warn "Existing Redis holds ${_redis_keys} keys — LivOS is adopting this instance and will set requirepass (other local consumers will need the new password)"
+        fi
+    fi
+
     # Reuse from .env if present
     if [[ -f "$_DLD_ENV_FILE" ]]; then
         redis_pass=$(grep -E '^REDIS_URL=' "$_DLD_ENV_FILE" 2>/dev/null \
@@ -374,7 +424,9 @@ _dld_setup_redis() {
         # Strip any existing requirepass lines (commented or not), then append ours
         sed -i -E '/^[[:space:]]*#?[[:space:]]*requirepass[[:space:]]/d' "$redis_conf"
         echo "requirepass ${redis_pass}" >> "$redis_conf"
-        systemctl restart redis-server.service
+        # `|| true` so the crafted diagnostic below fires — a bare failing
+        # restart used to abort via the ERR trap BEFORE reaching it (audit P1).
+        systemctl restart redis-server.service || true
         sleep 1
         if systemctl is-active --quiet redis-server.service; then
             ok "Redis configured with requirepass + restarted"
@@ -607,6 +659,14 @@ _dld_clone_source() {
 _dld_install_docker() {
     step "Installing Docker engine (fresh boxes ship without it)"
 
+    # Install-hardening audit 2026-06-11 (P1): SNAP-packaged Docker passes
+    # `docker info` but its strict confinement cannot bind-mount /opt paths —
+    # every LivOS app would break at runtime behind a green install. Refuse
+    # early with remediation. (Check BEFORE the command -v short-circuit.)
+    if command -v snap >/dev/null 2>&1 && snap list docker >/dev/null 2>&1; then
+        fail "Docker is installed via SNAP — its confinement breaks LivOS app mounts. Run: 'sudo snap remove docker', then re-run this install (it will install Docker CE properly)." 75
+    fi
+
     if command -v docker >/dev/null 2>&1; then
         if docker info >/dev/null 2>&1; then
             ok "Docker already installed + daemon reachable: $(docker --version 2>/dev/null)"
@@ -709,8 +769,23 @@ _dld_setup_docker_images() {
         fi
 
         info "Pulling $src..."
-        if ! docker pull "$src" 2>&1 | tail -3; then
-            fail "Failed to pull $src — check internet egress to Docker Hub or retry"
+        # Install-hardening audit 2026-06-11 (P1): retry transient Hub hiccups
+        # (CGNAT-shared-IP 429s, flaky wifi) instead of aborting the install
+        # after the heavy build. Final failure is WARN, not fail — these
+        # images are needed at first APP install, not first boot, and a
+        # re-run (or the daemon's own pull) can fetch them later.
+        local pull_ok=0 attempt
+        for attempt in 1 2 3; do
+            if docker pull "$src" 2>&1 | tail -3; then
+                pull_ok=1
+                break
+            fi
+            warn "docker pull $src failed (attempt ${attempt}/3) — retrying in $((attempt * 5))s"
+            sleep $((attempt * 5))
+        done
+        if (( pull_ok == 0 )); then
+            warn "Failed to pull $src after 3 attempts — continuing; apps needing it will pull on first install (check Docker Hub egress / rate limits)"
+            continue
         fi
 
         info "Tagging $src → $dst"
@@ -742,18 +817,27 @@ _dld_install_streaming_packages() {
     fi
 
     info "Ensuring streaming subsystem apt packages are installed..."
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        x11vnc xdotool x11-xserver-utils \
-        ydotool maim scrot gnome-screenshot \
-        websockify vncsnapshot \
-        ffmpeg \
-        gstreamer1.0-tools \
-        gstreamer1.0-plugins-good \
-        gstreamer1.0-plugins-bad \
-        gstreamer1.0-plugins-ugly \
-        xdg-desktop-portal-gnome \
-        xvfb fluxbox \
-        2>&1 | tail -5 || warn "Some streaming packages failed to install (non-fatal)"
+    # Install-hardening audit 2026-06-11 (P1): apt installs a transaction as
+    # all-or-NOTHING — one missing package name (e.g. ydotool not in Debian 13
+    # main) used to silently zero out the whole 16-package set. Try the fast
+    # batch first; on failure fall back to per-package so one bad name can't
+    # take down x11vnc/ffmpeg/Xvfb/fluxbox with it.
+    local _streaming_pkgs=(
+        x11vnc xdotool x11-xserver-utils
+        ydotool maim scrot gnome-screenshot
+        websockify vncsnapshot ffmpeg
+        gstreamer1.0-tools gstreamer1.0-plugins-good
+        gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
+        xdg-desktop-portal-gnome xvfb fluxbox
+    )
+    local _pkg
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${_streaming_pkgs[@]}" 2>&1 | tail -5; then
+        warn "Batch streaming install failed — retrying per-package"
+        for _pkg in "${_streaming_pkgs[@]}"; do
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$_pkg" >/dev/null 2>&1 \
+                || warn "  package unavailable on this distro: ${_pkg} (continuing)"
+        done
+    fi
 
     # VAAPI userspace — separate group so an Intel-iGPU-less host doesn't fail the run.
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
@@ -762,9 +846,15 @@ _dld_install_streaming_packages() {
 
     # Phase 252 portability — luse display-lifecycle + terminal binaries the
     # v44/250-hotfix code now hard-requires but were never on the apt list.
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        xserver-xephyr xterm gnome-terminal x11-utils xclip wmctrl \
-        2>&1 | tail -5 || warn "Some luse display/terminal packages failed (non-fatal)"
+    # Same batch→per-package fallback as above (audit P1).
+    local _luse_pkgs=(xserver-xephyr xterm gnome-terminal x11-utils xclip wmctrl)
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${_luse_pkgs[@]}" 2>&1 | tail -5; then
+        warn "Batch luse display/terminal install failed — retrying per-package"
+        for _pkg in "${_luse_pkgs[@]}"; do
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$_pkg" >/dev/null 2>&1 \
+                || warn "  package unavailable on this distro: ${_pkg} (continuing)"
+        done
+    fi
 
     # Verify the critical streaming binaries are present after install
     local streaming_missing=()
@@ -842,6 +932,26 @@ _dld_install_google_chrome() {
     fi
 
     info "Adding Google Chrome stable apt repo (signed keyring)"
+    # Install-hardening audit 2026-06-11 (P1): google-chrome-stable is
+    # amd64-ONLY — on arm64 the repo add "succeeds" but the package can't
+    # resolve, and livinityd's Chrome spawn ENOENT-crash-loops behind a green
+    # install. Install chromium and alias it at the spawn path instead.
+    if [[ "$(dpkg --print-architecture 2>/dev/null)" != "amd64" ]]; then
+        info "Non-amd64 arch — installing chromium instead of google-chrome-stable"
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq chromium 2>&1 | tail -3 \
+            || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq chromium-browser 2>&1 | tail -3 \
+            || true
+        local chromium_bin
+        chromium_bin=$(command -v chromium || command -v chromium-browser || true)
+        if [[ -n "$chromium_bin" ]]; then
+            ln -sf "$chromium_bin" /usr/bin/google-chrome
+            ok "chromium installed + aliased to /usr/bin/google-chrome ($("$chromium_bin" --version 2>/dev/null))"
+        else
+            warn "chromium install failed — WebApp/streaming Chrome features will be dead on this host"
+        fi
+        return 0
+    fi
+
     # Dearmor signing key into a dedicated keyring (apt-key is deprecated).
     # --yes overwrites existing keyring without prompt → idempotent on re-run.
     if ! curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub \
@@ -2330,15 +2440,47 @@ _dld_fix_permissions() {
 # the daemon touches are already bruce-owned. Re-runs detect marker + exit 0.
 _dld_run_bruce_migration() {
     step "Phase 192-02 — bruce user migration (idempotent)"
-    local migration_script="${_DLD_LIVOS_DIR}/scripts/migrate-to-bruce-user.sh"
+    # Install-hardening audit 2026-06-11 (P0): the script was looked up ONLY
+    # under /opt/livos, which the rsync never populates with the repo-root
+    # scripts/ tree — the warn branch fired on 100% of FRESH installs and
+    # /etc/sudoers.d/livinityd never landed (Update button / streaming /
+    # WebApp / timedatectl sudo paths all dead behind a green install).
+    # Prefer the stage clone (full repo checkout, still alive here).
+    local migration_script="${_DLD_STAGE_DIR}/scripts/migrate-to-bruce-user.sh"
+    local repo_root="${_DLD_STAGE_DIR}"
+    if [[ ! -f "$migration_script" ]]; then
+        migration_script="${_DLD_LIVOS_DIR}/scripts/migrate-to-bruce-user.sh"
+        repo_root="${_DLD_LIVOS_DIR}"
+    fi
     if [[ -f "$migration_script" ]]; then
-        if REPO_ROOT="${_DLD_LIVOS_DIR}" bash "$migration_script"; then
+        if REPO_ROOT="$repo_root" bash "$migration_script"; then
             ok "bruce migration applied"
         else
             warn "migrate-to-bruce-user.sh exited non-zero — proceeding (systemd unit may fail with User=bruce until script is re-run successfully)"
         fi
     else
         warn "migrate-to-bruce-user.sh missing at $migration_script — skipping migration (livos.service will fail with User=bruce until script lands)"
+    fi
+    # Marker-lock self-heal: a pre-existing /opt/livos/data/.bruce-migrated
+    # makes the migration exit 0 WITHOUT (re)installing the sudoers fragment.
+    # Post-condition: the fragment MUST exist after this step — everything
+    # sudo-scoped in the daemon depends on it.
+    if [[ ! -f /etc/sudoers.d/livinityd ]]; then
+        local frag="${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livinityd"
+        [[ -f "$frag" ]] || frag="${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/livinityd"
+        if [[ -f "$frag" ]] && visudo -cf "$frag" >/dev/null 2>&1; then
+            install -m 0440 -o root -g root "$frag" /etc/sudoers.d/livinityd
+            ok "sudoers fragment installed directly from ${frag} (marker-lock self-heal)"
+        else
+            fail "/etc/sudoers.d/livinityd missing and no valid fragment at ${frag} — daemon sudo paths (update/streaming/WebApps) would be dead" 75
+        fi
+    fi
+    # Re-run/update parity: the stage dir dies at cleanup — keep copies where
+    # the legacy lookup path (and update.sh) expect them.
+    if [[ -f "${_DLD_STAGE_DIR}/scripts/migrate-to-bruce-user.sh" && ! -f "${_DLD_LIVOS_DIR}/scripts/migrate-to-bruce-user.sh" ]]; then
+        mkdir -p "${_DLD_LIVOS_DIR}/scripts/install/sudoers.d"
+        cp -f "${_DLD_STAGE_DIR}/scripts/migrate-to-bruce-user.sh" "${_DLD_LIVOS_DIR}/scripts/" 2>/dev/null || true
+        cp -f "${_DLD_STAGE_DIR}/scripts/install/sudoers.d/livinityd" "${_DLD_LIVOS_DIR}/scripts/install/sudoers.d/" 2>/dev/null || true
     fi
 }
 

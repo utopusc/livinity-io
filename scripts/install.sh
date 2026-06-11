@@ -101,6 +101,33 @@ if [[ $EUID -ne 0 ]]; then
     fail "install.sh must run as root (apt-get install requires it). Try: sudo bash scripts/install.sh --mode $MODE" 1
 fi
 
+# ── Install-hardening audit 2026-06-11 — environment gates ──────────────────
+# systemd-as-PID1: WSL2 (default config) and containers have no systemd —
+# without this gate the install dies ~10 min in with misleading CF-token/
+# postgres errors. Gate BEFORE any mutation.
+if [[ ! -d /run/systemd/system ]]; then
+    fail "systemd is not running (WSL2/container?). LivOS needs systemd. On WSL2: add '[boot]\\nsystemd=true' to /etc/wsl.conf, run 'wsl --shutdown', then retry." 65
+fi
+# Disk: footprint is ~5-9GB (node_modules + builds + docker images) — ENOSPC
+# mid-pnpm dies cryptically after heavy mutations. Gate early.
+_free_gb=$(df -BG --output=avail / 2>/dev/null | tail -1 | tr -dc '0-9')
+if [[ -n "${_free_gb:-}" ]]; then
+    if (( _free_gb < 15 )); then
+        fail "Only ${_free_gb}GB free on / — LivOS needs at least 15GB (25GB recommended). Free up space and re-run." 75
+    elif (( _free_gb < 25 )); then
+        warn "${_free_gb}GB free on / — tight but workable (25GB+ recommended)"
+    else
+        ok "Disk: ${_free_gb}GB free on /"
+    fi
+fi
+# needrestart (Ubuntu Server default) can pop dialogs mid-apt despite
+# DEBIAN_FRONTEND; suspend it for this run.
+export NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1
+# Under curl|bash, stdin IS the script stream — any stray prompt downstream
+# would consume script text as its answer. Nothing after parse_cli reads
+# stdin; detach it.
+exec </dev/null
+
 # ── Shared deps (every mode needs Caddy + apt prereqs) ──
 install_common_deps
 
@@ -134,5 +161,8 @@ else
 fi
 
 # ── Done ──
+# Drop the install-scoped apt policy (lock timeout + conffile force) so the
+# user's box keeps its normal apt behavior after we're done.
+rm -f /etc/apt/apt.conf.d/90livos-install 2>/dev/null || true
 print_banner "$MODE"
 exit 0

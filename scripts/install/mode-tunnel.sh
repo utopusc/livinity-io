@@ -412,7 +412,14 @@ EOF
         ok "Caddy reloaded (tunnel mode: HTTP-only :80 → livinityd :8080)"
     else
         systemctl enable --now caddy 2>&1 || warn "caddy enable --now returned non-zero"
-        ok "Caddy started (tunnel mode: HTTP-only :80 → livinityd :8080)"
+        # Audit P1: the ok below used to be UNCONDITIONAL — a Caddy that
+        # failed to bind :80 sailed through as "started" and the install
+        # ended green with a dead domain (502 at the CF edge).
+        if systemctl is-active caddy &>/dev/null; then
+            ok "Caddy started (tunnel mode: HTTP-only :80 → livinityd :8080)"
+        else
+            fail "Caddy did NOT start — check 'journalctl -u caddy -n 30' (is something else holding port 80?)"
+        fi
     fi
 }
 

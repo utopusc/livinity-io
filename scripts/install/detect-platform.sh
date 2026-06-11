@@ -11,15 +11,30 @@ ARCH=""
 HOST_IP=""
 
 detect_os() {
+    local os_like=""
     if [[ -f /etc/os-release ]]; then
         # shellcheck disable=SC1091
         . /etc/os-release
         OS_ID="${ID:-unknown}"
         OS_VERSION_ID="${VERSION_ID:-unknown}"
+        os_like="${ID_LIKE:-}"
     fi
     case "$OS_ID" in
         ubuntu|debian) ok "Detected OS: $OS_ID $OS_VERSION_ID" ;;
-        *) fail "Unsupported OS '$OS_ID'. install.sh requires Ubuntu/Debian." 65 ;;
+        # Install-hardening audit 2026-06-11 (P0): Mint/Pop!_OS/etc. are
+        # apt+systemd Ubuntu derivatives and rollout targets — downstream is
+        # derivative-safe (third-party repos are codename-probed with LTS
+        # fallback, or codename-agnostic: Caddy any-version, NodeSource
+        # nodistro, Chrome stable). Hard-rejecting them at the first gate was
+        # the only blocker.
+        linuxmint|pop|zorin|elementary|neon)
+            ok "Detected OS: $OS_ID $OS_VERSION_ID (Ubuntu/Debian derivative)" ;;
+        *)
+            if [[ " ${os_like} " == *ubuntu* || " ${os_like} " == *debian* ]]; then
+                warn "Untested Ubuntu/Debian derivative '$OS_ID' (ID_LIKE='${os_like}') — continuing best-effort"
+            else
+                fail "Unsupported OS '$OS_ID'. install.sh requires Ubuntu/Debian (or a derivative)." 65
+            fi ;;
     esac
 }
 
