@@ -2106,6 +2106,15 @@ _dld_install_liv_assistant() {
         warn "liv-assistant.service unit not in stage dir — skipping unit install"
         return 0
     fi
+    # Fresh-box fix (WSL field test run 8, 2026-06-11): the unit's
+    # ReadWritePaths used to be FATAL on missing dirs (226/NAMESPACE crash
+    # loop ×16 on a box where the Gemini agent never ran). The unit now
+    # `-`-prefixes them, but the ACP agents also need these writable at
+    # runtime under ProtectHome=read-only — pre-create them bruce-owned.
+    install -d -o "${_DLD_DESKTOP_USER}" -g "${_DLD_DESKTOP_USER}" \
+        "/home/${_DLD_DESKTOP_USER}/.claude" "/home/${_DLD_DESKTOP_USER}/.gemini" \
+        "/home/${_DLD_DESKTOP_USER}/.cache" "/home/${_DLD_DESKTOP_USER}/.bun" 2>/dev/null \
+        || warn "could not pre-create ${_DLD_DESKTOP_USER} ACP dirs (.claude/.gemini/.cache/.bun)"
     if [[ ! -f "$unit_dst" ]] || ! cmp -s "$unit_src" "$unit_dst"; then
         install -m 0644 -o root -g root "$unit_src" "$unit_dst"
         systemctl daemon-reload
