@@ -65,6 +65,21 @@ _install_cloudflared_for_tunnel() {
 
     local codename
     codename=$(lsb_release -cs 2>/dev/null || echo noble)
+    # Field bug 2026-06-11: Cloudflare only publishes suites for LTS/stable
+    # codenames (jammy, noble, bookworm…). On non-LTS Ubuntu (plucky 25.04,
+    # oracular 24.10…) or Debian testing there is NO Release file for
+    # $(lsb_release -cs) → `apt-get update` hard-fails and the install dies.
+    # Probe the suite first; if absent, fall back to the newest supported
+    # suite for the distro family (cloudflared is a static Go binary — the
+    # noble/bookworm pool installs fine on newer releases).
+    if ! curl -fsI --max-time 10 "https://pkg.cloudflare.com/cloudflared/dists/${codename}/Release" >/dev/null 2>&1; then
+        local os_id fallback
+        os_id=$(. /etc/os-release 2>/dev/null && echo "${ID:-ubuntu}")
+        fallback=noble
+        [[ "$os_id" == "debian" ]] && fallback=bookworm
+        info "pkg.cloudflare.com has no '${codename}' suite — using '${fallback}' instead"
+        codename=$fallback
+    fi
     cat > "$list" <<EOF
 deb [signed-by=${keyring}] https://pkg.cloudflare.com/cloudflared ${codename} main
 EOF
