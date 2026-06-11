@@ -28,9 +28,17 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 let migrationActive = true
 let terminalPanelEnabled = false
 const openWindowSpy = vi.fn()
+const openCommandPaletteSpy = vi.fn()
 
 vi.mock('@/hooks/use-v42-migration-active', () => ({
 	useV42MigrationActive: () => migrationActive,
+}))
+
+// Dock+Launchpad Phase 1 — dock.tsx imports openCommandPalette for the
+// "Apps" tile. Mock the whole cmdk module so the test doesn't pull the
+// real command-palette chain (cmdk lib, shadcn command, i18n) into jsdom.
+vi.mock('@/components/cmdk', () => ({
+	openCommandPalette: () => openCommandPaletteSpy(),
 }))
 
 vi.mock('@/hooks/use-terminal-panel-enabled', () => ({
@@ -44,21 +52,23 @@ vi.mock('@/providers/window-manager', () => ({
 vi.mock('@/providers/apps', () => ({
 	// Phase 234-02 — LIVINITY_liv-ai removed (Section G.1 cleanup);
 	// LIVINITY_liv-assistant icon swapped to dock-ai-chat.svg.
+	// Dock+Launchpad Phase 4 — `name` added (the data-driven dock renders
+	// window titles from systemAppsKeyed[id].name; mirrors apps.tsx).
 	systemAppsKeyed: {
-		'LIVINITY_files': {icon: '/figma-exports/dock-files-new.svg', systemAppTo: '/files/Home'},
-		'LIVINITY_settings': {icon: '/figma-exports/dock-settings-new.svg', systemAppTo: '/settings'},
-		'LIVINITY_live-usage': {icon: '/figma-exports/dock-live-usage.png', systemAppTo: '?dialog=live-usage'},
-		'LIVINITY_app-store': {icon: '/figma-exports/dock-app-store.png', systemAppTo: '/app-store'},
-		'LIVINITY_server-control': {icon: '/figma-exports/dock-server.svg', systemAppTo: '/server-control'},
-		'LIVINITY_my-devices': {icon: '/figma-exports/dock-settings.png', systemAppTo: '/my-devices'},
-		'LIVINITY_terminal': {icon: '/figma-exports/dock-terminal.svg', systemAppTo: '/terminal'},
+		'LIVINITY_files': {name: 'Files', icon: '/figma-exports/dock-files-new.svg', systemAppTo: '/files/Home'},
+		'LIVINITY_settings': {name: 'Settings', icon: '/figma-exports/dock-settings-new.svg', systemAppTo: '/settings'},
+		'LIVINITY_live-usage': {name: 'Live Usage', icon: '/figma-exports/dock-live-usage.png', systemAppTo: '?dialog=live-usage'},
+		'LIVINITY_app-store': {name: 'App Store', icon: '/figma-exports/dock-app-store.png', systemAppTo: '/app-store'},
+		'LIVINITY_server-control': {name: 'Server Management', icon: '/figma-exports/dock-server.svg', systemAppTo: '/server-control'},
+		'LIVINITY_my-devices': {name: 'Devices', icon: '/figma-exports/dock-settings.png', systemAppTo: '/my-devices'},
+		'LIVINITY_terminal': {name: 'Terminal', icon: '/figma-exports/dock-terminal.svg', systemAppTo: '/terminal'},
 		// Phase 235 — apps.tsx icon string carries a ?v cache-bust query
 		// so operator browsers that cached the pre-Plan-234-02 404 refetch
 		// the now-present SVG. Mock mirrors production exactly.
 		// Phase 238.5 — bumped to v238_5 (Livinity-themed SVG swap).
-		'LIVINITY_liv-assistant': {icon: '/figma-exports/dock-ai-chat.svg?v=238_7', systemAppTo: '/liv-assistant'},
+		'LIVINITY_liv-assistant': {name: 'Liv AI', icon: '/figma-exports/dock-ai-chat.svg?v=238_7', systemAppTo: '/liv-assistant'},
 	},
-	useApps: () => ({userAppsKeyed: {}}),
+	useApps: () => ({userAppsKeyed: {}, userApps: [], webapps: []}),
 }))
 
 vi.mock('@/hooks/use-query-params', () => ({
@@ -77,6 +87,13 @@ vi.mock('@/trpc/trpc', () => ({
 	trpcReact: {
 		apps: {
 			recentlyOpened: {useQuery: () => ({data: []})},
+			// Dock+Launchpad Phase 4 — native pins resolve against this list.
+			native: {list: {useQuery: () => ({data: []})}},
+		},
+		// Dock+Launchpad Phase 4 — useDockPins persistence (preferences k/v).
+		preferences: {
+			get: {useQuery: () => ({data: undefined})},
+			set: {useMutation: () => ({mutate: () => undefined})},
 		},
 	},
 }))
@@ -140,8 +157,11 @@ beforeEach(() => {
 	document.body.appendChild(container)
 	root = createRoot(container)
 	openWindowSpy.mockReset()
+	openCommandPaletteSpy.mockReset()
 	migrationActive = true
 	terminalPanelEnabled = false
+	// Phase 4 — useDockPins reads localStorage; isolate per test.
+	localStorage.clear()
 })
 
 afterEach(() => {
@@ -215,6 +235,60 @@ describe('Dock — Liv Assistant entry (Phase 227-02)', () => {
 		// The bare appId literal is also absent from any data-* attribute the
 		// DockItem might surface.
 		expect(html).not.toMatch(/data-test-dock-item=["']terminal["']/)
+	})
+
+	it('Dock+Launchpad Phase 1 — renders the Apps (Launchpad) tile', () => {
+		act(() => {
+			root!.render(<Dock />)
+		})
+		const tile = container!.querySelector('[data-test-dock-item="launchpad"]')
+		expect(tile).not.toBeNull()
+	})
+
+	it('Dock+Launchpad Phase 1 — clicking the Apps tile opens the Launchpad overlay (openCommandPalette), not a window', () => {
+		act(() => {
+			root!.render(<Dock />)
+		})
+		const tile = container!.querySelector('[data-test-dock-item="launchpad"]')
+		expect(tile).not.toBeNull()
+		const clickable = (tile as HTMLElement).querySelector('button, a') as HTMLElement | null
+		expect(clickable).not.toBeNull()
+		act(() => {
+			clickable!.click()
+		})
+		expect(openCommandPaletteSpy).toHaveBeenCalledTimes(1)
+		expect(openWindowSpy).not.toHaveBeenCalled()
+	})
+
+	it('Dock+Launchpad Phase 4 — default pins render data-driven', () => {
+		act(() => {
+			root!.render(<Dock />)
+		})
+		for (const seam of ['launchpad', 'files', 'settings', 'app-store', 'server-control', 'liv-assistant']) {
+			expect(
+				container!.querySelector(`[data-test-dock-item="${seam}"]`),
+				`expected dock tile "${seam}"`,
+			).not.toBeNull()
+		}
+	})
+
+	it('Dock+Launchpad Phase 4 — persisted localStorage pin order drives the dock', () => {
+		localStorage.setItem(
+			'livinity-dock-pins',
+			JSON.stringify([
+				{kind: 'system', id: 'LIVINITY_settings'},
+				{kind: 'system', id: 'LIVINITY_files'},
+			]),
+		)
+		act(() => {
+			root!.render(<Dock />)
+		})
+		const seams = [...container!.querySelectorAll('[data-test-dock-item]')].map((el) =>
+			el.getAttribute('data-test-dock-item'),
+		)
+		// Apps tile fixed first, then the stored order; default-only pins
+		// (app-store / server-control / liv-assistant) are gone.
+		expect(seams).toEqual(['launchpad', 'settings', 'files'])
 	})
 
 	it('Phase 231 retirement — legacy chat-iframe dock tiles are absent', () => {

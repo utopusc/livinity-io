@@ -1,10 +1,10 @@
-import {AnimatePresence, motion} from 'framer-motion'
+import {AnimatePresence, motion, useReducedMotion} from 'framer-motion'
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {ErrorBoundary} from 'react-error-boundary'
-import {TbChevronRight, TbDevices2, TbFolder, TbLayoutGrid, TbMessage, TbSearch, TbServer, TbSettings} from 'react-icons/tb'
+import {TbChevronRight, TbFolder, TbLayoutGrid, TbSearch, TbServer, TbSettings} from 'react-icons/tb'
 import {useNavigate} from 'react-router-dom'
 
-import {cmdkSearchProviders} from '@/components/cmdk-providers'
+import {LaunchpadGrid} from '@/components/launchpad-grid'
 import {ErrorBoundaryCardFallback} from '@/components/ui/error-boundary-card-fallback'
 import {
 	APPS_PATH as FILES_APPS_PATH,
@@ -12,22 +12,13 @@ import {
 	TRASH_PATH as FILES_TRASH_PATH,
 } from '@/features/files/constants'
 import {useQueryParams} from '@/hooks/use-query-params'
-import {useLaunchApp} from '@/hooks/use-launch-app'
-import {systemAppsKeyed, useApps} from '@/providers/apps'
-import {useWindowManagerOptional} from '@/providers/window-manager'
+import {systemAppsKeyed} from '@/providers/apps'
 import {cn} from '@/shadcn-lib/utils'
-import {AppState, trpcReact} from '@/trpc/trpc'
 import {t} from '@/utils/i18n'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-interface Shortcut {
-	label: string
-	icon: React.ReactNode
-	onSelect: () => void
-}
 
 interface SearchResult {
 	icon: React.ReactNode
@@ -53,16 +44,6 @@ const SVGFilter = () => (
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function ShortcutButton({icon, onSelect}: {icon: React.ReactNode; onSelect: () => void}) {
-	return (
-		<button type='button' onClick={onSelect}>
-			<div className='cursor-pointer rounded-full opacity-30 transition-[opacity,shadow] duration-200 hover:opacity-100 hover:shadow-lg'>
-				<div className='flex aspect-square size-16 items-center justify-center'>{icon}</div>
-			</div>
-		</button>
-	)
-}
 
 function SpotlightPlaceholder({text, className}: {text: string; className?: string}) {
 	return (
@@ -220,47 +201,38 @@ interface AppleSpotlightProps {
 	onClose: () => void
 }
 
-function appStateToDescription(state: AppState): string {
-	const map: Record<AppState, string> = {
-		'not-installed': 'Not installed',
-		installing: 'Installing...',
-		ready: 'Open app',
-		running: 'Open app',
-		starting: 'Starting...',
-		restarting: 'Restarting...',
-		stopping: 'Stopping...',
-		updating: 'Updating...',
-		uninstalling: 'Uninstalling...',
-		unknown: 'Offline',
-		stopped: 'Stopped',
-		loading: 'Loading...',
-	}
-	return map[state] ?? ''
-}
-
 export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
-	const [hovered, setHovered] = useState(false)
 	const [hoveredSearchResult, setHoveredSearchResult] = useState<number | null>(null)
-	const [hoveredShortcut, setHoveredShortcut] = useState<number | null>(null)
 	const [searchValue, setSearchValue] = useState('')
 	const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 	const navigate = useNavigate()
 	const {addLinkSearchParams} = useQueryParams()
-	const launchApp = useLaunchApp()
-	const {userApps, userAppsKeyed, isLoading: appsLoading} = useApps()
-	const windowManager = useWindowManagerOptional()
 	const listRef = useRef<HTMLDivElement>(null)
+	const reduceMotion = useReducedMotion()
+	// Phase 3 — set by LaunchpadGrid; Enter in the pill launches the first
+	// filtered grid tile (the dropdown only carries system actions now).
+	const launchFirstRef = useRef<(() => boolean) | null>(null)
+	// Review fix 2026-06-10 — AnimatePresence keeps the subtree mounted
+	// (live listeners + frozen props) during the ~300ms exit animation.
+	// This ref flips true the moment a close is requested so every input
+	// path (pill Enter, grid keydown, tile clicks) goes inert immediately.
+	// A ref (stable identity) pierces the frozen-props problem.
+	const closingRef = useRef(false)
 
 	// Reset state when opening/closing
 	useEffect(() => {
 		if (isOpen) {
+			closingRef.current = false
 			setSearchValue('')
 			setHoveredSearchResult(null)
-			setHoveredShortcut(null)
 			setSelectedIndex(null)
-			setHovered(false)
 		}
 	}, [isOpen])
+
+	const requestClose = useCallback(() => {
+		closingRef.current = true
+		onClose()
+	}, [onClose])
 
 	// Close on Escape
 	useEffect(() => {
@@ -268,109 +240,27 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') {
+				// Radix dismissable layers (the grid's "Keep in Dock" context
+				// menus) preventDefault on the document listener when they
+				// consume Escape — menu closes first, overlay stays (review
+				// fix 2026-06-10, macOS layering).
+				if (e.defaultPrevented) return
 				e.preventDefault()
-				onClose()
+				requestClose()
 			}
 		}
 		window.addEventListener('keydown', handleKeyDown)
 		return () => window.removeEventListener('keydown', handleKeyDown)
-	}, [isOpen, onClose])
+	}, [isOpen, requestClose])
 
-	// Shortcuts — quick-access buttons that appear when hovering the search bar
-	const shortcuts: Shortcut[] = useMemo(
-		() => [
-			{
-				label: 'Files',
-				icon: <TbFolder className='text-neutral-600' />,
-				onSelect: () => {
-					const lastFilesPath = sessionStorage.getItem('lastFilesPath')
-					if (windowManager) {
-						windowManager.openWindow(
-							'LIVINITY_files',
-							lastFilesPath || '/files/Home',
-							'Files',
-							systemAppsKeyed['LIVINITY_files'].icon,
-						)
-					} else {
-						navigate(lastFilesPath || systemAppsKeyed['LIVINITY_files'].systemAppTo)
-					}
-					onClose()
-				},
-			},
-			{
-				label: 'Settings',
-				icon: <TbSettings className='text-neutral-600' />,
-				onSelect: () => {
-					if (windowManager) {
-						windowManager.openWindow(
-							'LIVINITY_settings',
-							'/settings',
-							'Settings',
-							systemAppsKeyed['LIVINITY_settings'].icon,
-						)
-					} else {
-						navigate(systemAppsKeyed['LIVINITY_settings'].systemAppTo)
-					}
-					onClose()
-				},
-			},
-			{
-				// Phase 24-01 — replaces the legacy 'Server' app entry.
-				label: 'Docker',
-				icon: <TbServer className='text-neutral-600' />,
-				onSelect: () => {
-					if (windowManager) {
-						windowManager.openWindow(
-							'LIVINITY_docker',
-							'/docker',
-							'Docker',
-							systemAppsKeyed['LIVINITY_docker'].icon,
-						)
-					} else {
-						navigate(systemAppsKeyed['LIVINITY_docker'].systemAppTo)
-					}
-					onClose()
-				},
-			},
-			{
-				label: 'Server Management',
-				icon: <TbServer className='text-neutral-600' />,
-				onSelect: () => {
-					if (windowManager) {
-						windowManager.openWindow(
-							'LIVINITY_server-control',
-							'/server-control',
-							'Server Management',
-							systemAppsKeyed['LIVINITY_server-control'].icon,
-						)
-					} else {
-						navigate(systemAppsKeyed['LIVINITY_server-control'].systemAppTo)
-					}
-					onClose()
-				},
-			},
-			{
-				label: 'Devices',
-				icon: <TbDevices2 className='text-neutral-600' />,
-				onSelect: () => {
-					if (windowManager) {
-						windowManager.openWindow(
-							'LIVINITY_my-devices',
-							'/my-devices',
-							'Devices',
-							systemAppsKeyed['LIVINITY_my-devices'].icon,
-						)
-					} else {
-						navigate(systemAppsKeyed['LIVINITY_my-devices'].systemAppTo)
-					}
-					onClose()
-				},
-			},
-		],
-		[navigate, onClose, windowManager],
-	)
+	// Phase 3 — the legacy hover "shortcut bubbles" (Files/Settings/Docker/
+	// Server/Devices circles flying out of the pill) were removed: the
+	// Launchpad grid below the pill IS the shortcut surface now, and the
+	// bubbles duplicated it with extra layout churn.
 
-	// Build search results from all available data
+	// Build search results — SYSTEM ACTIONS only (navigation/settings).
+	// App results were removed in Phase 3: typing now filters the grid
+	// itself, so listing apps here duplicated the tiles right above.
 	const searchResults: SearchResult[] = useMemo(() => {
 		if (!searchValue.trim()) return []
 
@@ -501,63 +391,22 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 			}
 		}
 
-		// Ready user apps (can be launched)
-		if (userApps) {
-			const readyApps = userApps.filter((app) => app.state === 'ready')
-			for (const app of readyApps) {
-				if (app.name.toLowerCase().includes(query)) {
-					results.push({
-						icon: <img src={app.icon} alt='' className='h-6 w-6 rounded-lg' />,
-						label: app.name,
-						description: 'Open app',
-						onSelect: () => {
-							launchApp(app.id)
-							onClose()
-						},
-					})
-				}
-			}
+		// (App entries removed Phase 3 — the Launchpad grid below filters
+		// live and shows them as tiles; only actions live in this dropdown.)
 
-			// Unready user apps
-			const unreadyApps = userApps.filter((app) => app.state !== 'ready')
-			for (const app of unreadyApps) {
-				if (app.name.toLowerCase().includes(query)) {
-					results.push({
-						icon: <img src={app.icon} alt='' className='h-6 w-6 rounded-lg opacity-50' />,
-						label: app.name,
-						description: appStateToDescription(app.state),
-						onSelect: () => {
-							// Phase 107 (2026-05-13): /app-store/<id> route was removed
-							// when Phase 108 reverted — open the App Store iframe window
-							// so user can navigate to the app from there.
-							const appStoreApp = systemAppsKeyed['LIVINITY_app-store']
-							if (appStoreApp) {
-								windowManager?.openWindow('LIVINITY_app-store', '/app-store', 'App Store', appStoreApp.icon)
-							}
-							onClose()
-						},
-					})
-				}
-			}
-		}
+		return results.slice(0, 8)
+	}, [searchValue, navigate, onClose, addLinkSearchParams])
 
-		// Phase 107.1 (2026-05-13): "Available in App Store" suggestions removed.
-		// Mini PC's local livinity-apps clone exposes 304 manifests (Umbrel-era
-		// leftovers like Akaunting, Audiobookshelf, Bitcoin Knots etc.) but the
-		// App Store iframe shows only 26 curated apps from Server5 PG. Surfacing
-		// the broader local list here was confusing — Spotlight teased an app
-		// name, the App Store window had nothing matching. Discovery now
-		// happens exclusively via the App Store iframe.
-
-		return results.slice(0, 15) // Cap at 15 results
-	}, [searchValue, userApps, userAppsKeyed, navigate, windowManager, onClose, launchApp, addLinkSearchParams])
-
-	// Keyboard navigation
+	// Keyboard navigation — ArrowUp/Down walks the action dropdown; Enter
+	// prefers (1) an explicitly selected action, then (2) the first
+	// filtered grid tile (launchFirstRef, set by LaunchpadGrid), then
+	// (3) the first action result. Arrow keys on an EMPTY query are left
+	// alone — the grid's own listener handles tile navigation.
 	const handleKeyDown = useCallback(
 		(e: React.KeyboardEvent) => {
-			if (!searchResults.length) return
-
-			if (e.key === 'ArrowDown') {
+			// Inert while the close/exit animation runs (review fix 2026-06-10).
+			if (closingRef.current) return
+			if (e.key === 'ArrowDown' && searchResults.length) {
 				e.preventDefault()
 				setSelectedIndex((prev) => {
 					const next = prev === null ? 0 : Math.min(prev + 1, searchResults.length - 1)
@@ -566,7 +415,7 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 					el?.scrollIntoView({block: 'nearest'})
 					return next
 				})
-			} else if (e.key === 'ArrowUp') {
+			} else if (e.key === 'ArrowUp' && searchResults.length) {
 				e.preventDefault()
 				setSelectedIndex((prev) => {
 					const next = prev === null ? 0 : Math.max(prev - 1, 0)
@@ -574,17 +423,29 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 					el?.scrollIntoView({block: 'nearest'})
 					return next
 				})
-			} else if (e.key === 'Enter' && selectedIndex !== null && searchResults[selectedIndex]) {
+			} else if (e.key === 'Enter' && searchValue.trim()) {
+				// .trim() — a whitespace-only query looks identical to the
+				// empty state but used to launch the first app of the FULL
+				// superset (review fix 2026-06-10).
 				e.preventDefault()
-				searchResults[selectedIndex].onSelect()
+				// Honor the mouse-hovered action row too — it carries the
+				// visible highlight (effectiveSelected), so Enter must match.
+				const sel =
+					hoveredSearchResult !== null && searchResults[hoveredSearchResult] ? hoveredSearchResult : selectedIndex
+				if (sel !== null && searchResults[sel]) {
+					searchResults[sel].onSelect()
+				} else if (!launchFirstRef.current?.()) {
+					searchResults[0]?.onSelect()
+				}
 			}
 		},
-		[searchResults, selectedIndex],
+		[searchResults, selectedIndex, searchValue, hoveredSearchResult],
 	)
 
-	// Reset selection when search changes
+	// Reset selection when search changes — default stays null so Enter
+	// targets the grid's first match unless an action was arrow-selected.
 	useEffect(() => {
-		setSelectedIndex(searchValue ? 0 : null)
+		setSelectedIndex(null)
 	}, [searchValue])
 
 	const effectiveSelected = hoveredSearchResult !== null ? hoveredSearchResult : selectedIndex
@@ -593,29 +454,41 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 		<AnimatePresence mode='wait'>
 			{isOpen && (
 				<motion.div
-					initial={{opacity: 0, filter: 'blur(20px)', scaleX: 1.3, scaleY: 1.1, y: -10}}
-					animate={{opacity: 1, filter: 'blur(0px)', scaleX: 1, scaleY: 1, y: 0}}
-					exit={{opacity: 0, filter: 'blur(20px)', scaleX: 1.3, scaleY: 1.1, y: 10}}
-					transition={{stiffness: 550, damping: 50, type: 'spring'}}
-					className='fixed inset-0 z-[999] flex flex-col items-center justify-start pt-[12vh]'
-					onClick={onClose}
+					key='launchpad'
+					className='fixed inset-0 z-[999] flex flex-col items-center justify-start pt-[6vh]'
+					onClick={requestClose}
 				>
 					<SVGFilter />
 
-					{/* Backdrop */}
+					{/* Backdrop — Launchpad shell (Dock+Launchpad Phase 1): deep dim +
+					    heavy blur (was bg-black/5 backdrop-blur-sm) so the full-screen
+					    content grid reads as macOS Launchpad: dark dimmed desktop,
+					    everything in front. MUST stay a sibling of the animated content
+					    wrapper below — an ancestor `filter`/`transform` (the old outer
+					    blur/scale entrance) voids descendant backdrop-filter (isolated
+					    backdrop root), which is why the blur never visibly applied. */}
 					<motion.div
-						className='fixed inset-0 bg-black/5 backdrop-blur-sm'
+						className='fixed inset-0 bg-black/40 backdrop-blur-xl'
 						initial={{opacity: 0}}
 						animate={{opacity: 1}}
 						exit={{opacity: 0}}
 					/>
 
+					{/* Content wrapper — macOS Launchpad zoom: the whole surface
+					    settles DOWN from a slightly larger scale on open and zooms
+					    back out on close. Kept as a sibling of the backdrop (an
+					    ancestor filter/transform would void backdrop-filter) and
+					    deliberately filter-free for the same reason. Reduced
+					    motion: opacity only. */}
+					<motion.div
+						initial={reduceMotion ? {opacity: 0} : {opacity: 0, scale: 1.12}}
+						animate={reduceMotion ? {opacity: 1} : {opacity: 1, scale: 1}}
+						exit={reduceMotion ? {opacity: 0} : {opacity: 0, scale: 1.12}}
+						transition={{type: 'spring', stiffness: 380, damping: 32}}
+						className='flex min-h-0 w-full flex-1 flex-col items-center justify-start'
+					>
+
 					<div
-						onMouseEnter={() => setHovered(true)}
-						onMouseLeave={() => {
-							setHovered(false)
-							setHoveredShortcut(null)
-						}}
 						onClick={(e) => e.stopPropagation()}
 						style={{filter: 'url(#blob)'}}
 						className={cn(
@@ -640,11 +513,9 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 							>
 								<SpotlightInput
 									placeholder={
-										hoveredShortcut !== null
-											? shortcuts[hoveredShortcut].label
-											: hoveredSearchResult !== null && searchResults[hoveredSearchResult]
-												? searchResults[hoveredSearchResult].label
-												: t('search')
+										hoveredSearchResult !== null && searchResults[hoveredSearchResult]
+											? searchResults[hoveredSearchResult].label
+											: t('search')
 									}
 									placeholderClassName={hoveredSearchResult !== null ? 'text-neutral-800' : 'text-neutral-400'}
 									hidePlaceholder={!(hoveredSearchResult !== null || !searchValue)}
@@ -664,47 +535,35 @@ export function AppleSpotlight({isOpen, onClose}: AppleSpotlightProps) {
 										listRef={listRef}
 									/>
 								)}
-
-								{searchValue && searchResults.length === 0 && !appsLoading && (
-									<motion.div
-										layout
-										className='border-t border-dash-line bg-white px-5 py-6 text-center text-[13px] text-neutral-400'
-									>
-										{t('no-results-found')}
-									</motion.div>
-								)}
+								{/* Phase 3 — the dropdown's no-results block and the hover
+								    "shortcut bubbles" were removed: the grid below filters
+								    live (with its own empty state) and IS the shortcut
+								    surface. */}
 							</motion.div>
-
-							{/* Shortcut bubbles */}
-							{hovered &&
-								!searchValue &&
-								shortcuts.map((shortcut, index) => (
-									<motion.div
-										key={`shortcut-${index}`}
-										onMouseEnter={() => setHoveredShortcut(index)}
-										layout
-										initial={{scale: 0.7, x: -1 * (64 * (index + 1))}}
-										animate={{scale: 1, x: 0}}
-										exit={{
-											scale: 0.7,
-											x:
-												1 *
-												(16 * (shortcuts.length - index - 1) +
-													64 * (shortcuts.length - index - 1)),
-										}}
-										transition={{
-											duration: 0.8,
-											type: 'spring',
-											bounce: 0.2,
-											delay: index * 0.05,
-										}}
-										className='cursor-pointer rounded-full'
-									>
-										<ShortcutButton icon={shortcut.icon} onSelect={shortcut.onSelect} />
-									</motion.div>
-								))}
 						</AnimatePresence>
 					</div>
+
+					{/* Launchpad grid area — Phase 2+3: the full content superset
+					    (user apps + system apps + webapps + native + file
+					    shortcuts + desktop folders), live-filtered by the query.
+					    No stopPropagation on the empty space on purpose: clicks
+					    fall through to the outer onClick={onClose}, matching
+					    macOS Launchpad dismissal. */}
+					<div className='livinity-hide-scrollbar z-10 mt-8 min-h-0 w-full max-w-6xl flex-1 overflow-y-auto px-8 pb-16'>
+						<ErrorBoundary FallbackComponent={ErrorBoundaryCardFallback}>
+							<LaunchpadGrid
+								query={searchValue}
+								onClose={requestClose}
+								launchFirstRef={launchFirstRef}
+								closingRef={closingRef}
+								// When the action dropdown has matches, the grid's
+								// "No apps match" line right under it reads
+								// contradictory — suppress it (review fix 2026-06-10).
+								hideEmptyState={!!searchValue.trim() && searchResults.length > 0}
+							/>
+						</ErrorBoundary>
+					</div>
+					</motion.div>
 				</motion.div>
 			)}
 		</AnimatePresence>

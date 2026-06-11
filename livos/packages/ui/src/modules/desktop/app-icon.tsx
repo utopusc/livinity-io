@@ -5,7 +5,7 @@ import {FaRegCirclePause} from 'react-icons/fa6'
 import {Link, useNavigate} from 'react-router-dom'
 import {arrayIncludes} from 'ts-extras'
 
-import {FadeInImg} from '@/components/ui/fade-in-img'
+import {LauncherIcon} from '@/components/launcher-icon'
 import {useAppInstall} from '@/hooks/use-app-install'
 import {useLaunchApp} from '@/hooks/use-launch-app'
 import {LIVINITY_APP_STORE_ID} from '@/modules/app-store/constants'
@@ -25,6 +25,7 @@ import {useCurrentUser} from '@/hooks/use-current-user'
 import {ShareAppDialog} from './share-app-dialog'
 import {UninstallConfirmationDialog} from './uninstall-confirmation-dialog'
 import {UninstallTheseFirstDialog} from './uninstall-these-first-dialog'
+import {useDockPins} from './use-dock-pins'
 
 export const APP_ICON_PLACEHOLDER_SRC = '/figma-exports/app-icon-placeholder.svg'
 
@@ -41,8 +42,6 @@ export function AppIcon({
 	state?: AppStateOrLoading
 	progress?: number
 }) {
-	const [appIconSrc, setAppIconSrc] = useState(src)
-
 	const inProgress = arrayIncludes(progressStates, state)
 	const isStopped = state === 'stopped'
 
@@ -71,24 +70,18 @@ export function AppIcon({
 				damping: 30,
 			}}
 		>
+			{/* Icon-tile Phase 2 (2026-06-11, operator-picked C2 "Frameless
+			    Frost" in /icon-lab): the legacy translucent bg-neutral-100/60
+			    backdrop-blur chrome is replaced by LauncherIcon — full-bleed
+			    icons cover the tile (appear exactly as themselves), transparent
+			    logos sit at 80% on a frameless frosted squircle. Hover/progress
+			    /stopped chrome unchanged. */}
 			<div
 				className={cn(
-					'relative aspect-square w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-100/60 bg-cover bg-center shadow-sm backdrop-blur-sm transition-all duration-300 group-hover:scale-105 group-hover:shadow-[0_0_16px_rgba(255,255,255,0.5)] group-hover:ring-2 group-hover:ring-white/60 group-focus-visible:ring-2 group-focus-visible:ring-white/60 group-active:scale-95 group-data-[state=open]:ring-2 group-data-[state=open]:ring-white/60 md:w-16 md:rounded-2xl',
+					'relative aspect-square w-12 shrink-0 overflow-hidden rounded-xl shadow-sm transition-all duration-300 group-hover:scale-105 group-hover:shadow-[0_0_16px_rgba(255,255,255,0.5)] group-hover:ring-2 group-hover:ring-white/60 group-focus-visible:ring-2 group-focus-visible:ring-white/60 group-active:scale-95 group-data-[state=open]:ring-2 group-data-[state=open]:ring-white/60 md:w-16 md:rounded-2xl',
 				)}
 			>
-				{appIconSrc && (
-					<FadeInImg
-						src={appIconSrc}
-						alt={label}
-						onError={() => setAppIconSrc(APP_ICON_PLACEHOLDER_SRC)}
-						className={cn(
-							'h-full w-full duration-500',
-							(inProgress || isStopped) && 'brightness-50',
-							!inProgress && !isStopped && 'animate-in fade-in',
-						)}
-						draggable={false}
-					/>
-				)}
+				<LauncherIcon src={src} imgClassName={cn((inProgress || isStopped) && 'brightness-50')} />
 				{inProgress && (
 					<div className='absolute inset-0 flex items-center justify-center'>
 						<div className='relative h-1.5 w-[75%] overflow-hidden rounded-full bg-white/30'>
@@ -171,6 +164,9 @@ export function AppIconConnected({appId}: {appId: string}) {
 	const launchApp = useLaunchApp()
 	const linkToDialog = useLinkToDialog()
 	const {isAdmin} = useCurrentUser()
+	// Dock+Launchpad Phase 4 — pin/unpin this app from the desktop context menu.
+	const {isPinned, pin, unpin} = useDockPins()
+	const pinnedInDock = isPinned('app', appId)
 
 	const uninstall = async () => {
 		const res = await appInstall.uninstall()
@@ -251,6 +247,13 @@ export function AppIconConnected({appId}: {appId: string}) {
 						<ContextMenuItem asChild>
 							<Link to={linkToDialog('app-settings', {for: appId})}>{t('desktop.app.context.settings')}</Link>
 						</ContextMenuItem>
+
+					{/* Dock+Launchpad Phase 4 — Keep in Dock / Remove from Dock */}
+					<ContextMenuItem
+						onSelect={() => (pinnedInDock ? unpin('app', appId) : pin({kind: 'app', id: appId}))}
+					>
+						{pinnedInDock ? 'Remove from Dock' : 'Keep in Dock'}
+					</ContextMenuItem>
 
 					{/* Share (admin only) */}
 					{isAdmin && (
