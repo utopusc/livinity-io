@@ -123,10 +123,11 @@ fi
 # needrestart (Ubuntu Server default) can pop dialogs mid-apt despite
 # DEBIAN_FRONTEND; suspend it for this run.
 export NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1
-# Under curl|bash, stdin IS the script stream — any stray prompt downstream
-# would consume script text as its answer. Nothing after parse_cli reads
-# stdin; detach it.
-exec </dev/null
+# NOTE — do NOT `exec </dev/null` here: under curl|bash THE SCRIPT ITSELF is
+# stdin; closing it makes bash read EOF as "rest of the script" and exit 0
+# silently right here (caught live in the 2026-06-11 WSL fresh-box test).
+# Prompt protection is handled per-mechanism instead: DEBIAN_FRONTEND +
+# NEEDRESTART_* envs + the 90livos-install Dpkg force-confdef/confold drop-in.
 
 # ── Shared deps (every mode needs Caddy + apt prereqs) ──
 install_common_deps
