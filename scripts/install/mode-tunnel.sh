@@ -85,7 +85,11 @@ deb [signed-by=${keyring}] https://pkg.cloudflare.com/cloudflared ${codename} ma
 EOF
     chmod 0644 "$list"
 
-    apt-get update -qq
+    # Warn-and-continue on partial update (broken third-party repos on user
+    # boxes — same hardening as common-deps.sh). The install below is the
+    # loud failure point if the cloudflared repo itself didn't refresh.
+    apt-get update -qq \
+        || warn "apt-get update reported errors — continuing to cloudflared install"
     if ! apt-get install -y -qq cloudflared; then
         fail "apt-get install cloudflared failed — check ${list} and CF repo availability"
     fi
