@@ -67,14 +67,19 @@ EOF
     # :80 (nginx/apache/pi-hole…) makes Caddy fail to bind — the install used
     # to "succeed" with a dead domain (502 at the CF edge) behind an
     # unconditional "Caddy started" ok. Fail early and name the squatter.
-    local port80_owner
+    local port80_line port80_owner
     # `|| true` — grep exits 1 on no-match (the NORMAL fresh-box case: nothing
     # on :80) and set -e/pipefail would kill the run (caught live, WSL test
-    # run 2 2026-06-11).
+    # run 2 2026-06-11). Test run 5 follow-up: ALSO catch OWNERLESS listeners
+    # (no users:() field = socket bound outside our namespace — WSL-mirrored
+    # host ports, some container setups) — they block the bind just the same.
+    port80_line=$(ss -ltnH 'sport = :80' 2>/dev/null | head -1 || true)
     port80_owner=$(ss -ltnpH 'sport = :80' 2>/dev/null | grep -v '"caddy"' \
         | grep -oE 'users:\(\("[^"]+"' | head -1 | cut -d'"' -f2 || true)
     if [[ -n "${port80_owner:-}" ]]; then
         fail "Port 80 is held by '${port80_owner}' — LivOS needs Caddy on :80. Stop and disable it (e.g. 'sudo systemctl disable --now ${port80_owner}'), then re-run the install." 75
+    elif [[ -n "${port80_line:-}" ]] && ! ss -ltnpH 'sport = :80' 2>/dev/null | grep -q '"caddy"'; then
+        fail "Port 80 is held by a process OUTSIDE this namespace (container port-mapping? WSL-mirrored Windows port?) — LivOS needs Caddy on :80. Free the port, then re-run the install." 75
     fi
 
     # Caddy (idempotent — `command -v` short-circuits when present)
