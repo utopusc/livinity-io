@@ -120,7 +120,7 @@ _dld_install_system_packages() {
                 || warn "removal of archive nodejs reported errors — continuing"
         fi
         mkdir -p /etc/apt/keyrings
-        if ! curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+        if ! curl -fsSL --retry 3 --retry-delay 2 --max-time 30 https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
                 | gpg --dearmor --no-tty --batch --yes -o /etc/apt/keyrings/nodesource.gpg; then
             fail "failed to fetch + dearmor NodeSource GPG key" 75
         fi
@@ -696,7 +696,7 @@ _dld_install_docker() {
 
     info "Adding download.docker.com apt repo (${os_id} ${codename})"
     mkdir -p /etc/apt/keyrings
-    if curl -fsSL "https://download.docker.com/linux/${os_id}/gpg" \
+    if curl -fsSL --retry 3 --retry-delay 2 --max-time 30 "https://download.docker.com/linux/${os_id}/gpg" \
             | gpg --dearmor --no-tty --batch --yes -o /etc/apt/keyrings/docker.gpg; then
         chmod 0644 /etc/apt/keyrings/docker.gpg
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${os_id} ${codename} stable" \
@@ -954,7 +954,7 @@ _dld_install_google_chrome() {
 
     # Dearmor signing key into a dedicated keyring (apt-key is deprecated).
     # --yes overwrites existing keyring without prompt → idempotent on re-run.
-    if ! curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub \
+    if ! curl -fsSL --retry 3 --retry-delay 2 --max-time 30 https://dl-ssl.google.com/linux/linux_signing_key.pub \
             | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null; then
         warn "Failed to download/dearmor Google Chrome signing key — skipping chrome install (Bug #9 will recur)"
         return 0
