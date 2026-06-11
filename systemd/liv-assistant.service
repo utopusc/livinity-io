@@ -73,7 +73,12 @@ ProtectSystem=full
 ProtectHome=read-only
 # Phase 253 GC-E — /home/bruce/.gemini added so the Gemini ACP agent can write
 # its state.json / history under ProtectHome=read-only.
-ReadWritePaths=/opt/liv-assistant/data /home/bruce/.claude /home/bruce/.bun /home/bruce/.cache /home/bruce/.gemini
+# Fresh-box fix (WSL field test 2026-06-11): `-` prefix = ignore-if-missing.
+# Without it, systemd treats a missing path as FATAL namespace failure
+# (226/NAMESPACE crash loop ×∞) — /home/bruce/.gemini does not exist on a
+# fresh install until the Gemini agent first runs. The installer also
+# pre-creates these bruce-owned so they're actually writable on day one.
+ReadWritePaths=/opt/liv-assistant/data -/home/bruce/.claude -/home/bruce/.bun -/home/bruce/.cache -/home/bruce/.gemini
 
 [Install]
 WantedBy=multi-user.target
