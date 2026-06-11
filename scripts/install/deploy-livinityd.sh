@@ -595,6 +595,78 @@ _dld_clone_source() {
     fi
 }
 
+# ── 4b'. Docker engine (field bug 2026-06-11) ────────────────────────────────
+# The Mini PC + early UAT boxes all had Docker pre-installed, so the pipeline
+# only ever CONSUMED docker (_dld_setup_docker_images below hard-fails without
+# it). A fresh user PC ships with no Docker at all → install it here, BEFORE
+# _dld_create_desktop_user (so the `docker` group exists when the user is
+# created) and _dld_setup_docker_images. Official Docker apt repo first
+# (codename probe + LTS fallback — same pattern as cloudflared in
+# mode-tunnel.sh); distro-archive docker.io as the fallback channel. Both
+# provide the `docker compose` v2 plugin livinityd's Apps module needs.
+_dld_install_docker() {
+    step "Installing Docker engine (fresh boxes ship without it)"
+
+    if command -v docker >/dev/null 2>&1; then
+        if docker info >/dev/null 2>&1; then
+            ok "Docker already installed + daemon reachable: $(docker --version 2>/dev/null)"
+            return 0
+        fi
+        warn "docker CLI present but daemon not reachable — enabling docker.service"
+        systemctl enable --now docker 2>/dev/null || true
+        if docker info >/dev/null 2>&1; then
+            ok "Docker daemon started: $(docker --version 2>/dev/null)"
+            return 0
+        fi
+        fail "docker CLI exists but the daemon won't start — check 'journalctl -u docker'" 75
+    fi
+
+    local os_id codename
+    os_id=$(. /etc/os-release 2>/dev/null && echo "${ID:-ubuntu}")
+    [[ "$os_id" != "debian" ]] && os_id=ubuntu
+    codename=$(lsb_release -cs 2>/dev/null || echo noble)
+    # download.docker.com publishes per-codename suites; non-LTS codenames can
+    # be missing or lag — probe and fall back to the newest LTS.
+    if ! curl -fsI --max-time 10 "https://download.docker.com/linux/${os_id}/dists/${codename}/Release" >/dev/null 2>&1; then
+        local fallback=noble
+        [[ "$os_id" == "debian" ]] && fallback=bookworm
+        info "download.docker.com has no '${codename}' suite for ${os_id} — using '${fallback}'"
+        codename=$fallback
+    fi
+
+    info "Adding download.docker.com apt repo (${os_id} ${codename})"
+    mkdir -p /etc/apt/keyrings
+    if curl -fsSL "https://download.docker.com/linux/${os_id}/gpg" \
+            | gpg --dearmor --no-tty --batch --yes -o /etc/apt/keyrings/docker.gpg; then
+        chmod 0644 /etc/apt/keyrings/docker.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${os_id} ${codename} stable" \
+            > /etc/apt/sources.list.d/docker.list
+        apt-get update -qq \
+            || warn "apt-get update reported errors (third-party repos?) — continuing to docker install"
+        if apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+            ok "Docker CE installed from download.docker.com"
+        else
+            warn "docker-ce install failed — falling back to the distro's docker.io"
+            rm -f /etc/apt/sources.list.d/docker.list
+            apt-get update -qq || true
+            apt-get install -y -qq docker.io docker-compose-v2 \
+                || fail "could not install Docker via docker-ce OR docker.io — install Docker manually, then re-run install" 75
+            ok "Docker installed from the distro archive (docker.io)"
+        fi
+    else
+        warn "could not fetch Docker's GPG key — falling back to the distro's docker.io"
+        apt-get install -y -qq docker.io docker-compose-v2 \
+            || fail "could not install Docker via docker-ce OR docker.io — install Docker manually, then re-run install" 75
+        ok "Docker installed from the distro archive (docker.io)"
+    fi
+
+    systemctl enable --now docker 2>/dev/null || true
+    if ! docker info >/dev/null 2>&1; then
+        fail "Docker installed but daemon not reachable — check 'journalctl -u docker', then re-run install" 75
+    fi
+    ok "Docker engine ready: $(docker --version 2>/dev/null)"
+}
+
 # ── 4c. LivOS Docker images (Phase 105-05 UAT Bug #6 fix) ───────────────────
 # Mirror of Mini PC's livos/install.sh:408-443 setup_docker_images() helper.
 # legacy-compat/docker-compose.yml references `livos/auth-server:1.0.5` and
@@ -2365,6 +2437,7 @@ deploy_livinityd() {
     info "Scope: livinityd (Plan 104-11) + liv-core/liv-worker/liv-memory (Plan 104-12) + update.sh 1:1 port (105-02) + MCP seed (109) + domain-config seed (112)."
 
     _dld_install_system_packages
+    _dld_install_docker                   # field bug 2026-06-11 — fresh user PCs ship without Docker; BEFORE desktop-user (docker group) + docker-images
     _dld_setup_postgres
     _dld_setup_redis
     _dld_create_desktop_user              # 106 Bug #10 / 262 WS3 — bruce user + sudo + docker groups (scoped sudoers fragment only)
