@@ -247,7 +247,13 @@ parse_cli() {
         info "Resolving subdomain from --api-key via https://livinity.io/api/me/profile (Plan 145-01)"
         local _resp _http _resolved _domain_label
         # -L follows Vercel's apex→www 307 redirect post-Phase 146 cutover.
-        _resp=$(curl -fsSL -o /tmp/livos-profile-resp.json -w "%{http_code}" \
+        # Install-hardening audit 2026-06-11 (P1): NO -f here — with -f, curl
+        # exits non-zero on HTTP 401/403 so the || arm clobbered the captured
+        # status with "000" and an expired api-key was reported as a NETWORK
+        # error (the 401 branch below was dead code). Without -f curl exits 0
+        # on HTTP errors and the real status reaches the case statement.
+        _resp=$(curl -sSL -o /tmp/livos-profile-resp.json -w "%{http_code}" \
+            --max-time 15 --retry 2 --retry-delay 2 \
             -H "X-API-Key: $LIVOS_API_KEY" \
             "https://livinity.io/api/me/profile" 2>/dev/null) || _resp="000"
         _http="$_resp"
