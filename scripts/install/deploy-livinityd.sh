@@ -2569,7 +2569,8 @@ _dld_check_ports() {
     for port in 8080 3010 3020 3200; do
         line=$(ss -ltnpH "sport = :${port}" 2>/dev/null | head -1)
         [[ -z "$line" ]] && continue
-        owner=$(grep -oE 'users:\(\("[^"]+"' <<<"$line" | head -1 | cut -d'"' -f2)
+        # `|| true` — grep no-match must not kill the run under set -e/pipefail.
+        owner=$(grep -oE 'users:\(\("[^"]+"' <<<"$line" | head -1 | cut -d'"' -f2 || true)
         if (( livos_running )); then
             info "port ${port} held by '${owner:-unknown}' (LivOS services active — OK on re-run)"
             continue
