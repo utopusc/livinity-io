@@ -36,8 +36,8 @@ interface DesktopFolderProps {
 	icon?: string
 }
 
-/** macOS-style folder icon shape */
-function FolderShape({color, icon, size = 'desktop'}: {color?: string; icon?: string; size?: 'desktop' | 'picker'}) {
+/** macOS-style folder icon shape — exported for the Launchpad grid tiles. */
+export function FolderShape({color, icon, size = 'desktop'}: {color?: string; icon?: string; size?: 'desktop' | 'picker'}) {
 	// Parse color - support both old bg-xxx format and new hex format
 	const colorSet = FOLDER_COLORS.find((c) => c.body === color || c.name === color) || FOLDER_COLORS[0]
 	const isOldFormat = color?.startsWith('bg-')

@@ -106,3 +106,16 @@ export function IconTerminal(props: GlyphProps) {
 		</svg>
 	)
 }
+
+// Launchpad ("Apps") — 2×2 grid of rounded squares, the macOS app-grid
+// signature. Opens the unified Launchpad/Spotlight overlay from the dock.
+export function IconLaunchpad(props: GlyphProps) {
+	return (
+		<svg {...base} strokeWidth={1.5} {...props}>
+			<rect x='4' y='4' width='6.5' height='6.5' rx='2' />
+			<rect x='13.5' y='4' width='6.5' height='6.5' rx='2' />
+			<rect x='4' y='13.5' width='6.5' height='6.5' rx='2' />
+			<rect x='13.5' y='13.5' width='6.5' height='6.5' rx='2' />
+		</svg>
+	)
+}

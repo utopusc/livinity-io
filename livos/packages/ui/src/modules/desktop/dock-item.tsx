@@ -10,6 +10,7 @@ import {
 	TbCalendarTime,
 } from 'react-icons/tb'
 
+import {LauncherIcon} from '@/components/launcher-icon'
 import {NotificationBadge} from '@/components/ui/notification-badge'
 import {useTheme} from '@/hooks/use-theme'
 import {cn} from '@/shadcn-lib/utils'
@@ -25,13 +26,14 @@ import {
 	IconAppStore,
 	IconDevices,
 	IconFiles,
+	IconLaunchpad,
 	IconLiv,
 	IconServer,
 	IconSettings,
 	IconTerminal,
 } from './dock-glyphs'
 
-type DockGlyph = (props: SVGProps<SVGSVGElement>) => JSX.Element
+export type DockGlyph = (props: SVGProps<SVGSVGElement>) => JSX.Element
 
 // Phase 101-07 Task 3 — Dock composes both WebApps and native apps. The
 // actual data-driven rendering of NativeAppIcon happens in the dock host
@@ -45,6 +47,7 @@ export {NativeAppIcon} from '../dock/native-app-icon'
 
 // Map app IDs to their display names
 const DOCK_LABELS: Record<string, string> = {
+	'LIVINITY_launchpad': 'Apps',
 	'LIVINITY_home': 'Home',
 	'LIVINITY_files': 'Files',
 	'LIVINITY_app-store': 'App Store',
@@ -69,6 +72,7 @@ const DOCK_LABELS: Record<string, string> = {
 // Agents, Schedules, Chrome, Gmail) so they render until those get
 // their own claude-design treatment.
 const DOCK_ICONS: Record<string, DockGlyph> = {
+	'LIVINITY_launchpad': IconLaunchpad,
 	'LIVINITY_home': TbHome2 as unknown as DockGlyph,
 	'LIVINITY_files': IconFiles,
 	'LIVINITY_app-store': IconAppStore,
@@ -95,6 +99,7 @@ const DOCK_ICONS: Record<string, DockGlyph> = {
 // surface remains identifiable without painting every icon a different
 // colour (which the v36 monochrome-pass had been rejected for).
 const DOCK_TINTS: Record<string, string> = {
+	'LIVINITY_launchpad': 'rgba(140, 130, 255, 0.30)',
 	'LIVINITY_files': 'rgba(255, 138, 101, 0.35)',
 	'LIVINITY_settings': 'rgba(110, 110, 115, 0.25)',
 	'LIVINITY_live-usage': 'rgba(91, 141, 239, 0.30)',
@@ -114,6 +119,83 @@ const DOCK_TINTS: Record<string, string> = {
 // others. Add an app id here if a future surface wants the inverted
 // treatment.
 const DOCK_INVERTED = new Set<string>()
+
+// ── Shared squircle-tile surface (dock + Launchpad) ──────────────────
+//
+// Dock+Launchpad icon-consistency pass (operator 2026-06-10): the
+// Launchpad grid must render system tiles EXACTLY like the dock
+// (frosted squircle + stroke glyph), not the legacy figma-export
+// images. These helpers are the single source of truth for the tile
+// surface; DockItem consumes them for the magnified dock tile and
+// DockGlyphTile is the static variant the Launchpad grid uses.
+
+/** The squircle tile surface styles (gradient, hairline, shadows). */
+export function dockTileStyle(size: number, useDarkTile: boolean, isInverted = false): React.CSSProperties {
+	return {
+		width: size,
+		height: size,
+		borderRadius: size * 0.28,
+		background: isInverted
+			? 'linear-gradient(180deg, #2a2a2f 0%, #0a0a0c 100%)'
+			: useDarkTile
+				? 'linear-gradient(180deg, rgba(40,40,46,0.95) 0%, rgba(24,24,28,0.92) 100%)'
+				: 'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(245,245,247,0.86) 100%)',
+		border: useDarkTile ? '1px solid rgba(255,255,255,0.10)' : '1px solid rgba(0,0,0,0.08)',
+		boxShadow: useDarkTile
+			? 'inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3), 0 4px 10px -4px rgba(0,0,0,0.5)'
+			: 'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.04), 0 1px 1px rgba(0,0,0,0.04), 0 4px 10px -4px rgba(0,0,0,0.10)',
+	}
+}
+
+function tileSheenBackground(useDarkTile: boolean): string {
+	return useDarkTile
+		? 'linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 40%)'
+		: 'linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 40%)'
+}
+
+/** Does this appId have a custom dock glyph (vs. an image icon)? */
+export function hasDockGlyph(appId: string): boolean {
+	return appId in DOCK_ICONS
+}
+
+/**
+ * Static dock-style tile — same squircle surface + glyph treatment as
+ * the dock, without magnification/tooltip/bounce. Used by the Launchpad
+ * grid so system tiles look identical in both surfaces. Pass `glyph`
+ * to render an arbitrary stroke icon (e.g. the Downloads/Recents/Trash
+ * file shortcuts) on the same surface.
+ */
+export function DockGlyphTile({
+	appId,
+	glyph,
+	size,
+	className,
+}: {
+	appId?: string
+	glyph?: DockGlyph
+	size: number
+	className?: string
+}) {
+	const Icon = glyph ?? (appId ? DOCK_ICONS[appId] : undefined)
+	const isInverted = appId ? DOCK_INVERTED.has(appId) : false
+	const {resolvedTheme} = useTheme()
+	const useDarkTile = isInverted || resolvedTheme === 'dark'
+
+	if (!Icon) return null
+
+	return (
+		<div
+			className={cn('relative isolate flex items-center justify-center overflow-hidden', className)}
+			style={dockTileStyle(size, useDarkTile, isInverted)}
+		>
+			<div
+				className='pointer-events-none absolute inset-0 z-[1]'
+				style={{background: tileSheenBackground(useDarkTile), borderRadius: 'inherit'}}
+			/>
+			<Icon className={cn('relative z-[2] h-[58%] w-[58%]', useDarkTile ? 'text-white' : 'text-[#1d1d1f]')} />
+		</div>
+	)
+}
 
 type HTMLDivProps = HTMLMotionProps<'div'>
 type DockItemProps = {
@@ -250,30 +332,14 @@ export function DockItem({
 				)}
 				whileHover={{translateY: -6, transition: {duration: 0.18, ease: [0.2, 0.7, 0.2, 1]}}}
 				style={{
-					width: iconSize,
-					height: iconSize,
 					scale: transform,
-					borderRadius: iconSize * 0.28,
-					// Tile background — Liv always uses the deepest dark; in
-					// dark theme, every tile flips to the dark gradient. Light
-					// theme keeps the frosted-white default.
-					background: Icon
-						? isInverted
-							? 'linear-gradient(180deg, #2a2a2f 0%, #0a0a0c 100%)'
-							: useDarkTile
-								? 'linear-gradient(180deg, rgba(40,40,46,0.95) 0%, rgba(24,24,28,0.92) 100%)'
-								: 'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(245,245,247,0.86) 100%)'
-						: undefined,
-					border: Icon
-						? useDarkTile
-							? '1px solid rgba(255,255,255,0.10)'
-							: '1px solid rgba(0,0,0,0.08)'
-						: undefined,
-					boxShadow: Icon
-						? useDarkTile
-							? 'inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3), 0 4px 10px -4px rgba(0,0,0,0.5)'
-							: 'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.04), 0 1px 1px rgba(0,0,0,0.04), 0 4px 10px -4px rgba(0,0,0,0.10)'
-						: undefined,
+					// Tile surface — shared with DockGlyphTile (the Launchpad
+					// grid) via dockTileStyle so the two surfaces can't drift.
+					// Liv always uses the deepest dark; dark theme flips every
+					// tile to the dark gradient; light theme keeps frosted-white.
+					...(Icon
+						? dockTileStyle(iconSize, useDarkTile, isInverted)
+						: {width: iconSize, height: iconSize, borderRadius: iconSize * 0.28}),
 					...style,
 				}}
 				onClick={(e) => {
@@ -291,9 +357,7 @@ export function DockItem({
 					<div
 						className='pointer-events-none absolute inset-0 z-[1]'
 						style={{
-							background: useDarkTile
-								? 'linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 40%)'
-								: 'linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 40%)',
+							background: tileSheenBackground(useDarkTile),
 							borderRadius: 'inherit',
 						}}
 					/>
@@ -325,10 +389,11 @@ export function DockItem({
 						)}
 					/>
 				) : bg ? (
-					<div
-						className='h-full w-full bg-cover bg-center'
-						style={{backgroundImage: `url(${bg})`, borderRadius: 'inherit'}}
-					/>
+					// Icon-tile Phase 2 (2026-06-11, C2 "Frameless Frost" from
+					// /icon-lab): user-app/webapp/native dock icons go through
+					// LauncherIcon — transparent logos get the frameless frosted
+					// squircle, full-bleed art covers it (unchanged look).
+					<LauncherIcon src={bg} />
 				) : (
 					<div
 						className='h-full w-full bg-gradient-to-br from-surface-2 to-surface-3'

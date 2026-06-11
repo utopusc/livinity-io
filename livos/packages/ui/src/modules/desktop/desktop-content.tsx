@@ -62,7 +62,9 @@ function saveLayoutLocal(layout: DesktopLayout) {
 
 // ── Hooks ────────────────────────────────────────────────
 
-function useDesktopFolders() {
+// Exported for the Launchpad grid (components/launchpad-grid.tsx) which
+// renders the same persisted desktop folders inside the ⌘K/Apps overlay.
+export function useDesktopFolders() {
 	const [folders, setFolders] = useState<FolderMeta[]>(loadFoldersLocal)
 	const serverSynced = useRef(false)
 

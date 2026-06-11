@@ -53,6 +53,11 @@ const InviteAcceptPage = React.lazy(() => import('./routes/invite'))
 // Single visual reference for every primitive shipped by Plans 66-01..66-04.
 // Hidden from main nav (D-21); reachable only via direct URL.
 const LivDesignSystemPlayground = React.lazy(() => import('./routes/playground/liv-design-system'))
+// 2026-06-11 — TEMPORARY icon-treatment comparison lab (Phase 1 of
+// .planning/ICON-TILE-PLAN.md). Operator picks A/B/C/D at /icon-lab, then
+// Phase 2 applies the winner to desktop/dock/Launchpad. Remove (or gate
+// behind DebugOnly) after the decision.
+const IconLab = React.lazy(() => import('./routes/icon-lab'))
 // v32-redo-stage1a: /playground/v32-theme, /playground/v32-tool-views, /ai-chat-v2,
 // /marketplace, /agents, /agents/:id routes REMOVED. Source dirs deleted.
 // /agent-marketplace kept for deep-links.
@@ -126,6 +131,12 @@ export const router = createBrowserRouter([
 			{
 				path: 'playground/liv-design-system',
 				element: <LivDesignSystemPlayground />,
+				ErrorBoundary: ErrorBoundaryComponentFallback,
+			},
+			// TEMPORARY — icon-treatment lab (see lazy import note above).
+			{
+				path: 'icon-lab',
+				element: <IconLab />,
 				ErrorBoundary: ErrorBoundaryComponentFallback,
 			},
 			// v32-redo-stage1a: /playground/v32-theme, /playground/v32-tool-views,
