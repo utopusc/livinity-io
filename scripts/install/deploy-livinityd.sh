@@ -2047,18 +2047,14 @@ _dld_health_check() {
         # Probe a route that livinityd serves — any 2xx/3xx/4xx response proves
         # the port is bound (we don't care about auth status here; 401/404 are
         # also OK because they mean "Node is listening").
-        if curl -fsS -o /dev/null -w "%{http_code}" --max-time 2 \
+        # Audit P1: ALSO require livos.service active in the same iteration —
+        # an answer on :8080 alone could be a foreign app (the port preflight
+        # guards fresh installs; this guards races + re-runs).
+        if systemctl is-active --quiet livos.service \
+                && curl -fsS -o /dev/null -w "%{http_code}" --max-time 2 \
                 http://127.0.0.1:8080/ 2>/dev/null | grep -qE '^[234]'; then
-            ok "livinityd is up on :8080 (after ${elapsed}s)"
+            ok "livinityd is up on :8080 + livos.service active (after ${elapsed}s)"
             return 0
-        fi
-        # Also accept ANY HTTP response (curl exit 0 means TCP+HTTP succeeded)
-        if curl -s -o /dev/null --max-time 2 -w '' http://127.0.0.1:8080/ 2>/dev/null; then
-            local rc=$?
-            if [[ $rc -eq 0 ]]; then
-                ok "livinityd is up on :8080 (curl rc=0 after ${elapsed}s)"
-                return 0
-            fi
         fi
         sleep 2
         elapsed=$((elapsed + 2))
@@ -2505,6 +2501,84 @@ _dld_run_vault_v35_to_v38_migration() {
     ok "Phase 173-01 — vault rename migration script completed"
 }
 
+# ── 12b. Build-memory guard (install-hardening audit 2026-06-11, P1) ────────
+# The vite/tsup/tsc/Next build chain OOMs on 4-8GB swapless boxes — the kernel
+# kills node (exit 137) and the `tail -5` log filters masked the cause. A
+# temporary swapfile absorbs the peak; NODE_OPTIONS caps V8 heap below the
+# OOM line. Swapfile is removed in _dld_cleanup_temp_dir (re-runs reuse a
+# leftover one if a previous attempt died mid-way).
+_DLD_TMP_SWAPFILE=""
+_dld_ensure_build_memory() {
+    step "Build-memory guard (RAM+swap vs the vite/Next build chain)"
+    local mem_kb swap_kb total_mb
+    mem_kb=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null || echo 0)
+    swap_kb=$(awk '/^SwapTotal:/{print $2}' /proc/meminfo 2>/dev/null || echo 0)
+    total_mb=$(( (mem_kb + swap_kb) / 1024 ))
+    if (( total_mb > 0 && total_mb < 6144 )); then
+        warn "RAM+swap = ${total_mb}MB (<6GB) — adding a temporary 4GB swapfile for the build"
+        _DLD_TMP_SWAPFILE="/var/tmp/livos-install-swap"
+        if [[ ! -f "$_DLD_TMP_SWAPFILE" ]]; then
+            fallocate -l 4G "$_DLD_TMP_SWAPFILE" 2>/dev/null \
+                || dd if=/dev/zero of="$_DLD_TMP_SWAPFILE" bs=1M count=4096 status=none 2>/dev/null \
+                || { warn "could not create swapfile (disk space?) — builds may OOM"; _DLD_TMP_SWAPFILE=""; }
+        fi
+        if [[ -n "$_DLD_TMP_SWAPFILE" && -f "$_DLD_TMP_SWAPFILE" ]]; then
+            chmod 600 "$_DLD_TMP_SWAPFILE"
+            mkswap "$_DLD_TMP_SWAPFILE" >/dev/null 2>&1 || true
+            if swapon "$_DLD_TMP_SWAPFILE" 2>/dev/null; then
+                ok "temporary swapfile active (auto-removed after install)"
+            else
+                # Already-active from a previous run is fine; anything else isn't.
+                if swapon --show 2>/dev/null | grep -q "$_DLD_TMP_SWAPFILE"; then
+                    ok "temporary swapfile already active (previous run)"
+                else
+                    warn "swapon failed — builds may OOM"
+                    rm -f "$_DLD_TMP_SWAPFILE"
+                    _DLD_TMP_SWAPFILE=""
+                fi
+            fi
+        fi
+    else
+        ok "RAM+swap = ${total_mb}MB — no swapfile needed"
+    fi
+    # Cap V8 heap to ~75% of available RAM (clamped 2-8GB) so a single build
+    # step can't walk into the kernel OOM-killer on tight boxes.
+    local avail_mb heap_mb
+    avail_mb=$(awk '/^MemAvailable:/{print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 4096)
+    heap_mb=$(( avail_mb * 3 / 4 ))
+    (( heap_mb < 2048 )) && heap_mb=2048
+    (( heap_mb > 8192 )) && heap_mb=8192
+    export NODE_OPTIONS="--max-old-space-size=${heap_mb}"
+    info "NODE_OPTIONS=${NODE_OPTIONS} (build-scoped; systemd units unaffected)"
+}
+
+# ── 12c. Port preflight (install-hardening audit 2026-06-11, P1) ─────────────
+# livinityd:8080, Liv-AI dashboard:3010, AionUi:3020, liv-core:3200. A foreign
+# process on any of these surfaces later as an obscure bind failure — or worse,
+# the :8080 health check FALSE-PASSES against the foreign app and the user's
+# public domain gets wired to it while livinityd crash-loops.
+_dld_check_ports() {
+    step "Port preflight (8080 / 3010 / 3020 / 3200)"
+    local livos_running=0
+    if systemctl is-active --quiet livos.service 2>/dev/null \
+            || systemctl is-active --quiet liv-core.service 2>/dev/null \
+            || systemctl is-active --quiet liv-assistant.service 2>/dev/null; then
+        livos_running=1   # re-run on a live box — our own units hold the ports
+    fi
+    local port line owner
+    for port in 8080 3010 3020 3200; do
+        line=$(ss -ltnpH "sport = :${port}" 2>/dev/null | head -1)
+        [[ -z "$line" ]] && continue
+        owner=$(grep -oE 'users:\(\("[^"]+"' <<<"$line" | head -1 | cut -d'"' -f2)
+        if (( livos_running )); then
+            info "port ${port} held by '${owner:-unknown}' (LivOS services active — OK on re-run)"
+            continue
+        fi
+        fail "Port ${port} is already in use by '${owner:-unknown}' — LivOS needs it. Stop/disable that service, then re-run install." 75
+    done
+    ok "Ports 8080/3010/3020/3200 are free (or held by LivOS services)"
+}
+
 # ── 13. Cleanup + .deployed-sha (105-02 G7+G9 — update.sh:657-682) ──────────
 # Stage dir preservation matches 104-11 reuse semantics (faster re-runs).
 # Operators wanting strict update.sh parity: `export _DLD_CLEAR_STAGE=1` to
@@ -2513,6 +2587,13 @@ _dld_run_vault_v35_to_v38_migration() {
 # logs FROM_SHA=unknown (cosmetic).
 _dld_cleanup_temp_dir() {
     step "105-02 (G7+G9) — cleanup + .deployed-sha (update.sh:657-682)"
+
+    # Audit P1 — drop the temporary build swapfile (no-op when none was made).
+    if [[ -n "${_DLD_TMP_SWAPFILE:-}" && -f "$_DLD_TMP_SWAPFILE" ]]; then
+        swapoff "$_DLD_TMP_SWAPFILE" 2>/dev/null || true
+        rm -f "$_DLD_TMP_SWAPFILE"
+        ok "temporary build swapfile removed"
+    fi
 
     # G9: .deployed-sha write — read SHA from stage dir BEFORE optional purge
     if [[ -d "$_DLD_STAGE_DIR/.git" ]]; then
@@ -2580,6 +2661,8 @@ deploy_livinityd() {
 
     _dld_install_system_packages
     _dld_install_docker                   # field bug 2026-06-11 — fresh user PCs ship without Docker; BEFORE desktop-user (docker group) + docker-images
+    _dld_ensure_build_memory              # audit P1 — temp swapfile + NODE_OPTIONS so vite/Next builds can't OOM on 4-8GB boxes
+    _dld_check_ports                      # audit P1 — 8080/3010/3020/3200 must be free (or LivOS-owned on re-runs)
     _dld_setup_postgres
     _dld_setup_redis
     _dld_create_desktop_user              # 106 Bug #10 / 262 WS3 — bruce user + sudo + docker groups (scoped sudoers fragment only)
