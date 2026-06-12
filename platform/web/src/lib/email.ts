@@ -34,6 +34,43 @@ export async function sendVerificationEmail(to: string, token: string): Promise<
   `);
 }
 
+export async function sendTrialEndingEmail(to: string, trialEndsAt: Date | null): Promise<void> {
+  const dateLabel = trialEndsAt
+    ? trialEndsAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+    : 'soon';
+
+  await sendEmail(to, 'Your Livinity trial is ending', `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+      <h2 style="font-size: 20px; font-weight: 700; color: #111; margin-bottom: 16px;">Your free trial ends ${trialEndsAt ? `on ${dateLabel}` : dateLabel}</h2>
+      <p style="color: #555; line-height: 1.6; margin-bottom: 24px;">Your Livinity Pro subscription will start automatically when the trial ends. If you'd rather not continue, you can cancel anytime from your billing settings.</p>
+      <a href="${BASE_URL}/dashboard" style="display: inline-block; background: #111; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Manage Billing</a>
+      <p style="color: #999; font-size: 13px; margin-top: 24px;">Cancel before the trial ends and you won't be charged.</p>
+    </div>
+  `);
+}
+
+export async function sendPaymentFailedEmail(to: string): Promise<void> {
+  await sendEmail(to, 'Payment failed — action needed', `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+      <h2 style="font-size: 20px; font-weight: 700; color: #111; margin-bottom: 16px;">We couldn't process your payment</h2>
+      <p style="color: #555; line-height: 1.6; margin-bottom: 24px;">Your latest Livinity Pro payment didn't go through. Please update your payment method within 3 days to keep your server online — we'll retry automatically in the meantime.</p>
+      <a href="${BASE_URL}/dashboard" style="display: inline-block; background: #111; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Update Payment Method</a>
+      <p style="color: #999; font-size: 13px; margin-top: 24px;">If payment keeps failing, access to your Livinity subdomain will be paused until billing is resolved.</p>
+    </div>
+  `);
+}
+
+export async function sendAccessPausedEmail(to: string, username: string): Promise<void> {
+  await sendEmail(to, 'Your Livinity server has been paused', `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+      <h2 style="font-size: 20px; font-weight: 700; color: #111; margin-bottom: 16px;">${username}.livinity.io is paused</h2>
+      <p style="color: #555; line-height: 1.6; margin-bottom: 24px;">Your subscription is no longer active, so access to your Livinity subdomain has been paused. Your server and data are untouched — resubscribe and it comes right back online.</p>
+      <a href="${BASE_URL}/pricing" style="display: inline-block; background: #111; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Resubscribe</a>
+      <p style="color: #999; font-size: 13px; margin-top: 24px;">Questions? Just reply to this email.</p>
+    </div>
+  `);
+}
+
 export async function sendPasswordResetEmail(to: string, token: string): Promise<void> {
   const link = `${BASE_URL}/reset-password?token=${token}`;
 

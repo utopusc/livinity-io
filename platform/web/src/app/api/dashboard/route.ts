@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 import pool from '@/lib/db';
 import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth';
+import { getSubscriptionStatus } from '@/lib/subscription';
 import { getSupabaseService, presenceChannelName } from '@/lib/supabase-server';
 
 // Phase 146: online check moved to Supabase Realtime presence on tunnel:<userId>.
@@ -123,12 +124,25 @@ export async function GET(req: NextRequest) {
     // devices table may not exist yet
   }
 
+  // Billing status drives the dashboard billing widget + the gated
+  // "Generate API key" button state.
+  const billing = await getSubscriptionStatus(user.userId);
+
   return NextResponse.json({
     user: {
       id: user.userId,
       username: user.username,
       email: user.email,
       emailVerified: user.emailVerified,
+    },
+    billing: {
+      active: billing.active,
+      plan: billing.plan,
+      status: billing.stripeStatus,
+      currentPeriodEnd: billing.currentPeriodEnd,
+      cancelAtPeriodEnd: billing.cancelAtPeriodEnd,
+      legacyFree: billing.legacyFree,
+      reason: billing.reason ?? null,
     },
     apiKey: {
       hasKey: hasApiKey,
@@ -155,6 +169,16 @@ export async function POST(req: NextRequest) {
 
   if (!user.emailVerified) {
     return NextResponse.json({ error: 'Please verify your email before generating an API key' }, { status: 403 });
+  }
+
+  // Billing gate: api-key issuance is the PRIMARY access gate — no install key
+  // without an active trial/subscription (or legacy_free grandfather).
+  const access = await getSubscriptionStatus(user.userId);
+  if (!access.active) {
+    return NextResponse.json(
+      { error: 'subscription_required', reason: access.reason },
+      { status: 403 },
+    );
   }
 
   const { action } = await req.json();

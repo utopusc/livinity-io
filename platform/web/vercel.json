@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/enforce-subscriptions",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}

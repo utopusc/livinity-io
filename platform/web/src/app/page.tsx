@@ -146,7 +146,7 @@ function HeroSection() {
 
         <div className="mt-10 flex items-center justify-center gap-4">
           <Link href="/register" className="group inline-flex items-center gap-2 rounded-full bg-black px-7 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-800">
-            Create Free Account
+            Start Free Trial
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </Link>
           <a href="#desktop" className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-7 py-3.5 text-sm font-semibold text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-neutral-50">
@@ -164,7 +164,7 @@ function HeroSection() {
               </code>
             </div>
           </div>
-          <p className="mt-3 text-xs text-neutral-400">Free tier: 50GB/month. No credit card required.</p>
+          <p className="mt-3 text-xs text-neutral-400">3-day free trial, then $7.99/month. Cancel anytime.</p>
         </div>
       </div>
     </section>
@@ -620,7 +620,7 @@ function PricingSection() {
         <InView variants={{ hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0 } }} transition={{ duration: 0.5 }} viewOptions={{ once: true }}>
           <div className="mb-16 text-center">
             <SectionLabel>Pricing</SectionLabel>
-            <SectionTitle>Start free, scale when ready</SectionTitle>
+            <SectionTitle>Try it free for 3 days</SectionTitle>
           </div>
         </InView>
 
@@ -629,14 +629,15 @@ function PricingSection() {
             <div className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
               <BorderTrail size={100} transition={{ duration: 6, repeat: Infinity }} style={{ boxShadow: '0px 0px 60px 20px rgba(0,0,0,0.06)' }} />
               <div className="text-center">
-                <p className="text-xs font-semibold tracking-[0.2em] text-neutral-400 uppercase">Free</p>
+                <p className="text-xs font-semibold tracking-[0.2em] text-neutral-400 uppercase">Livinity Pro</p>
                 <div className="mt-3 flex items-baseline justify-center gap-1">
-                  <span className="text-5xl font-bold text-black">$0</span>
+                  <span className="text-5xl font-bold text-black">$7.99</span>
                   <span className="text-neutral-400">/month</span>
                 </div>
+                <p className="mt-2 text-sm text-neutral-400">or $69.99/year — save 27%</p>
               </div>
               <ul className="mt-8 space-y-3">
-                {['50 GB/month bandwidth', 'Personal subdomain', 'Unlimited apps', 'AI assistant', 'Multi-user', 'Automatic HTTPS'].map((item) => (
+                {['3-day free trial', 'Personal subdomain', 'Unlimited apps', 'AI assistant', 'Custom domains', 'Automatic HTTPS'].map((item) => (
                   <li key={item} className="flex items-center gap-3 text-sm text-neutral-600">
                     <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-100">
                       <Check className="h-3 w-3 text-black" />
@@ -646,8 +647,9 @@ function PricingSection() {
                 ))}
               </ul>
               <Link href="/register" className="mt-8 flex w-full items-center justify-center gap-2 rounded-full bg-black py-3.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-800">
-                Get Started Free <ArrowRight className="h-4 w-4" />
+                Start Free Trial <ArrowRight className="h-4 w-4" />
               </Link>
+              <p className="mt-3 text-center text-xs text-neutral-400">Cancel anytime during the trial — you won&apos;t be charged.</p>
             </div>
           </InView>
         </div>
@@ -666,7 +668,7 @@ function CTASection() {
           <p className="mx-auto mt-4 max-w-md text-neutral-500">Turn any machine into your personal, AI-powered server — accessible from anywhere.</p>
           <div className="mt-8">
             <Link href="/register" className="group inline-flex items-center gap-2 rounded-full bg-black px-7 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-800">
-              Create Free Account <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              Start Free Trial <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
           </div>
         </InView>
