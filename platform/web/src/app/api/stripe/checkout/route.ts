@@ -93,8 +93,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ url: checkout.url });
   } catch (err) {
     console.error('[stripe-checkout] Stripe API error:', err);
+    // Surface the Stripe error CODE only (e.g. authentication_error /
+    // resource_missing) — safe to expose, decisive for ops diagnosis.
+    const e = err as { type?: string; code?: string; statusCode?: number; message?: string };
     return NextResponse.json(
-      { error: 'Payment service is temporarily unavailable. Please try again.' },
+      {
+        error: 'Payment service is temporarily unavailable. Please try again.',
+        hint: e?.code || e?.type || (e?.message ? e.message.slice(0, 80) : null),
+      },
       { status: 502 },
     );
   }
