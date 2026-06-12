@@ -63,6 +63,37 @@ EOF
         debian-keyring debian-archive-keyring apt-transport-https \
         redis-tools
 
+    # Field bug 2026-06-11 (jack box, App Store D1): the legacy-compat
+    # app-script hard-requires mikefarah yq v4 (`yq e ...` eval syntax) —
+    # its check_dependencies exits 1 BEFORE any compose work, so EVERY App
+    # Store install fails on a fresh box ("This script requires \"yq\" to be
+    # installed", visible only in the child process journal line). The Mini
+    # PC has yq from its history, which is why this never reproduced there.
+    # apt's `yq` is the python/jq wrapper WITHOUT the `e` subcommand — NOT a
+    # substitute. Install the static Go binary to /usr/local/bin (PATH-wins
+    # over a pre-existing python-yq at /usr/bin). Pinned version; same
+    # retry-curl pattern as the repo-key fetches; idempotent fast-skip.
+    if yq --version 2>/dev/null | grep -q mikefarah; then
+        ok "yq (mikefarah) already installed: $(yq --version 2>&1 | head -1)"
+    else
+        info "Installing yq v4 (mikefarah) — required by the App Store app-script"
+        local yq_arch
+        case "$(dpkg --print-architecture 2>/dev/null || uname -m)" in
+            arm64|aarch64) yq_arch=arm64 ;;
+            *) yq_arch=amd64 ;;
+        esac
+        if curl -fsSL --retry 3 --retry-delay 2 --max-time 60 \
+                "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_${yq_arch}" \
+                -o /usr/local/bin/.yq.tmp; then
+            chmod 0755 /usr/local/bin/.yq.tmp
+            mv -f /usr/local/bin/.yq.tmp /usr/local/bin/yq
+            ok "yq installed: $(/usr/local/bin/yq --version 2>&1 | head -1)"
+        else
+            rm -f /usr/local/bin/.yq.tmp
+            warn "yq v4 download failed — App Store installs will fail until 'yq' (mikefarah v4) is installed manually"
+        fi
+    fi
+
     # Install-hardening audit 2026-06-11 (P1): a pre-existing web server on
     # :80 (nginx/apache/pi-hole…) makes Caddy fail to bind — the install used
     # to "succeed" with a dead domain (502 at the CF edge) behind an
