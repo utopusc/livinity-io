@@ -81,7 +81,9 @@ export async function POST(req: NextRequest) {
         metadata: { userId: session.userId },
       },
       allow_promotion_codes: true,
-      success_url: `${baseUrl()}/dashboard?checkout=success`,
+      // Land on the install wizard: it polls billing until the webhook hits,
+      // then auto-mints the API key — pay → install command in one flow.
+      success_url: `${baseUrl()}/dashboard/install?checkout=success`,
       cancel_url: `${baseUrl()}/pricing?checkout=cancelled`,
     });
 

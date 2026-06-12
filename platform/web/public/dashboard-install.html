@@ -125,7 +125,27 @@
               // existing key + mints a new one — which silently invalidates the
               // install command the user already pasted onto their Mini PC.
               const dashRes = await fetch("/api/dashboard", { credentials: "same-origin" });
-              const dashData = await dashRes.json().catch(() => ({}));
+              let dashData = await dashRes.json().catch(() => ({}));
+
+              // Billing gate: minting requires an active trial/subscription.
+              // Fresh from Stripe Checkout (?checkout=success) the webhook can
+              // lag a few seconds — poll before giving up; otherwise → /pricing.
+              if (dashData && dashData.billing && !dashData.billing.active) {
+                const justCheckedOut =
+                  new URLSearchParams(window.location.search).get("checkout") === "success";
+                let billingOk = false;
+                if (justCheckedOut) {
+                  setGen({ status: "minting" });
+                  for (let i = 0; i < 10; i++) {
+                    await new Promise((r) => setTimeout(r, 2000));
+                    const retry = await fetch("/api/dashboard", { credentials: "same-origin" });
+                    dashData = await retry.json().catch(() => ({}));
+                    if (dashData && dashData.billing && dashData.billing.active) { billingOk = true; break; }
+                  }
+                }
+                if (!billingOk) { window.location.href = "/pricing"; return; }
+              }
+
               if (dashData && dashData.apiKey && dashData.apiKey.hasKey) {
                 setGen({
                   status: "exists",
@@ -144,6 +164,7 @@
               });
               const body = await res.json().catch(() => ({}));
               if (!res.ok || !body.apiKey) {
+                if (body.error === "subscription_required") { window.location.href = "/pricing"; return; }
                 setGen({ status: "error", error: body.error || ("HTTP " + res.status) });
                 return;
               }
@@ -174,6 +195,7 @@
             });
             const body = await res.json().catch(() => ({}));
             if (!res.ok || !body.apiKey) {
+              if (body.error === "subscription_required") { window.location.href = "/pricing"; return; }
               setGen({ status: "error", error: body.error || ("HTTP " + res.status) });
               return;
             }
