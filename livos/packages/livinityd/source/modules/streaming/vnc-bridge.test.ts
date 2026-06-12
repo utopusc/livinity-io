@@ -25,6 +25,11 @@ import {
 	attachVncBridge,
 	BACKPRESSURE_BYTES,
 } from './vnc-bridge.js'
+// WS1 (2026-06-11): the `-u <user>` argv element now resolves to the desktop
+// user (getDesktopUser() = the process's own login) instead of a hardcoded
+// 'bruce'. Assert against the resolver so the test passes on any runner
+// (CI/dev = the runner's login; Mini PC = bruce; jack box = jack).
+import {getDesktopUser} from '../system/desktop-user.js'
 
 // ---------- Mock helpers ----------
 
@@ -71,7 +76,7 @@ describe('vnc-bridge — spawnVncForWindow', () => {
 		expect(args).toEqual([
 			'-n',
 			'-u',
-			'bruce',
+			getDesktopUser(),
 			'DISPLAY=:1',
 			'/usr/bin/x11vnc',
 			'-id',

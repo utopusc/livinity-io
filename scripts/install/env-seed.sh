@@ -24,19 +24,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 step "Phase 196-02 — env + secrets seed"
 
 if [[ $EUID -ne 0 ]]; then
-    fail "env-seed: must run as root (writes under /opt/livos with bruce ownership)" 77
+    fail "env-seed: must run as root (writes under /opt/livos with desktop-user ownership)" 77
 fi
+
+# WS1 (2026-06-11) — the desktop user that owns /opt/livos/data + secrets.
+# Derives from LIVOS_DESKTOP_USER (exported by parse-cli.sh from the platform
+# username); falls back to `bruce` for legacy / no-api-key installs. If the
+# resolved user doesn't exist yet (env-seed can run before user creation on
+# some orderings), fall back to bruce so the chown doesn't error — the later
+# migration re-chowns to the real user idempotently.
+_ES_USER="${LIVOS_DESKTOP_USER:-bruce}"
+id "$_ES_USER" >/dev/null 2>&1 || _ES_USER="bruce"
 
 # ── Secrets dir ─────────────────────────────────────────────────────────────
 _secrets_dir="/opt/livos/data/secrets"
 if [[ -d "$_secrets_dir" ]]; then
     ok "✓ ${_secrets_dir} already present"
 else
-    info "Creating ${_secrets_dir} (mode 0700 owner bruce:bruce)"
+    info "Creating ${_secrets_dir} (mode 0700 owner ${_ES_USER}:${_ES_USER})"
     mkdir -p "$_secrets_dir"
 fi
 # Always reconcile ownership + mode (cheap, defensive).
-chown -R bruce:bruce /opt/livos/data 2>/dev/null || true
+chown -R "${_ES_USER}:${_ES_USER}" /opt/livos/data 2>/dev/null || true
 chmod 0700 "$_secrets_dir" || true
 
 # ── JWT secret ─────────────────────────────────────────────────────────────
@@ -49,7 +58,7 @@ else
     umask 0177
     head -c 64 /dev/urandom | base64 -w0 > "$_jwt_file"
     umask 0022
-    chown bruce:bruce "$_jwt_file"
+    chown "${_ES_USER}:${_ES_USER}" "$_jwt_file"
     chmod 0600 "$_jwt_file"
     ok "JWT secret written ($(wc -c < "$_jwt_file") bytes)"
 fi
@@ -78,7 +87,7 @@ JWT_SECRET_FILE=/opt/livos/data/secrets/jwt
 LIV_API_KEY=${_liv_api_key}
 ENV
     umask 0022
-    chown bruce:bruce "$_env_file"
+    chown "${_ES_USER}:${_ES_USER}" "$_env_file"
     chmod 0640 "$_env_file"
     # NEVER echo the generated secrets — only confirm they were written.
     unset _pg_pass _redis_pass _liv_api_key
@@ -93,7 +102,7 @@ if [[ -f "$_env_file" ]] && ! grep -q '^LIV_API_KEY=' "$_env_file"; then
     umask 0177
     echo "LIV_API_KEY=$(openssl rand -hex 32)" >> "$_env_file"
     umask 0022
-    chown bruce:bruce "$_env_file" 2>/dev/null || true
+    chown "${_ES_USER}:${_ES_USER}" "$_env_file" 2>/dev/null || true
     chmod 0640 "$_env_file" 2>/dev/null || true
     ok "✓ LIV_API_KEY seeded into existing ${_env_file}"
 fi

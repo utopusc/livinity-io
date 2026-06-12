@@ -42,6 +42,7 @@ import {chromeSessionGate, buildCdpNewTabUrl, buildChromeLaunchArgv} from './chr
 // NOT in {apex ∪ enabled subdomains ∪ native-app subdomains ∪ approved custom
 // domains} gets 403/302 BEFORE the app gateway, never next(). See host-allowlist.ts.
 import {makeHostAllowlistMiddleware} from './host-allowlist.js'
+import {getDesktopUser} from '../system/desktop-user.js'
 import {attachVncBridge} from '../streaming/vnc-bridge.js'
 import {trpcExpressHandler, trpcWssHandler} from './trpc/index.js'
 import createTerminalWebSocketHandler from './terminal-socket.js'
@@ -2197,7 +2198,7 @@ class Server {
 				await new Promise(r => setTimeout(r, 1500))
 
 				// Resolve desktop user + Xauthority
-				const desktopUser = (await this.livinityd.ai.redis.get('livos:desktop:user').catch(() => null)) || 'bruce'
+				const desktopUser = (await this.livinityd.ai.redis.get('livos:desktop:user').catch(() => null)) || getDesktopUser()
 				const {stdout: uidStr} = await $({shell: true, reject: false})`id -u ${desktopUser}`
 				const uid = uidStr.trim() || '1000'
 				const xauth = (await $({shell: true, reject: false})`find /run/user/${uid}/gdm -name 'Xauthority' 2>/dev/null | head -1`).stdout.trim()

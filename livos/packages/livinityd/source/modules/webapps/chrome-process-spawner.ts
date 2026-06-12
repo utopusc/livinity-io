@@ -32,6 +32,7 @@
  */
 
 import {spawn as nodeSpawn, type ChildProcess, type SpawnOptions} from 'node:child_process'
+import {getDesktopUser} from '../system/desktop-user.js'
 
 /**
  * userDataDir regex — either `/tmp/livos-chrome-app-<uuid v4>` (per-app)
@@ -224,7 +225,7 @@ export async function spawnChromeProcess(
 ): Promise<ChromeProcessHandle> {
 	validateInputs(opts)
 
-	const user = opts.user ?? 'bruce'
+	const user = opts.user ?? getDesktopUser()
 	const bin = opts.chromeBinary ?? 'google-chrome'
 	const spawnFn = opts.spawnFn ?? (nodeSpawn as ChromeSpawnFn)
 	const log = opts.logger

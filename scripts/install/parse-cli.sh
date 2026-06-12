@@ -60,6 +60,21 @@ LIVOS_CF_ZONE_ID="${LIVOS_CF_ZONE_ID:-}"
 # an error unless backward-compat --domain is also supplied.
 LIVOS_SUBDOMAIN="${LIVOS_SUBDOMAIN:-}"
 
+# WS1 (2026-06-11) — the local Linux desktop user that runs LivOS (systemd
+# User=, sudo+docker groups, /home/<user>, sudoers scope). Historically a
+# hardcoded `bruce` EVERYWHERE; now derived from the platform username so a
+# fresh box for user "jack" gets the Linux user "jack". Resolution order:
+#   1. explicit --desktop-user <name>  (operator override; highest priority)
+#   2. the api-key owner's username     (auto-resolved below, sanitized)
+#   3. ultimate fallback `bruce`        (no api-key / legacy / back-compat)
+# Existing boxes keep their already-present user (deploy-livinityd.sh detects it
+# via `id -u`); this var only drives the name a FRESH install creates.
+LIVOS_DESKTOP_USER="${LIVOS_DESKTOP_USER:-}"
+# Tracks whether --desktop-user was given explicitly (so the api-key resolve
+# below does NOT override an operator's deliberate choice).
+_LIVOS_DESKTOP_USER_EXPLICIT=0
+[[ -n "$LIVOS_DESKTOP_USER" ]] && _LIVOS_DESKTOP_USER_EXPLICIT=1
+
 # Plan 104-09 — tunnel-mode CF Tunnel token (DIFFERENT thing from LIVOS_CF_TOKEN;
 # the tunnel token comes from the CF dashboard > Zero Trust > Networks > Tunnels
 # panel as a long opaque blob, whereas LIVOS_CF_TOKEN is a Cloudflare API token
@@ -180,6 +195,33 @@ CGNAT note:
 HELP
 }
 
+# WS1 (2026-06-11) — sanitize a platform username into a valid Linux login name.
+# Linux NAME_REGEX is roughly ^[a-z_][a-z0-9_-]*$ (≤32 chars). Lowercase,
+# drop disallowed chars, ensure a valid leading char, truncate. Echoes the
+# cleaned name (possibly empty if the input was all-invalid).
+_sanitize_desktop_user() {
+    local raw="${1:-}" out
+    out=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')
+    case "$out" in
+        [a-z_]*) ;;
+        '') ;;                # leave empty → caller falls back
+        *) out="u${out}" ;;   # starts with a digit/dash → prefix a letter
+    esac
+    printf '%s' "${out:0:32}"
+}
+
+# WS1 — refuse system / reserved names so we never useradd over root, a daemon
+# account, or a service user the box already owns. Empty also counts reserved
+# (forces the bruce fallback). Returns 0 (reserved) / 1 (ok to use).
+_is_reserved_user() {
+    case "${1:-}" in
+        ''|root|daemon|bin|sys|sync|games|man|lp|mail|news|uucp|proxy|backup|list|irc|gnats|nobody|sshd|messagebus|caddy|redis|postgres|postgresql|docker|www-data|ubuntu|admin|administrator)
+            return 0 ;;
+        systemd-*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 parse_cli() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -190,6 +232,9 @@ parse_cli() {
             --cf-zone-id) LIVOS_CF_ZONE_ID="${2:-}"; shift 2 ;;
             --cf-tunnel-token) LIVOS_CF_TUNNEL_TOKEN="${2:-}"; shift 2 ;;
             --api-key) LIVOS_API_KEY="${2:-}"; shift 2 ;;
+            # WS1 — operator override for the local Linux desktop user (else
+            # derived from the api-key owner; else `bruce`).
+            --desktop-user) LIVOS_DESKTOP_USER="${2:-}"; _LIVOS_DESKTOP_USER_EXPLICIT=1; shift 2 ;;
             --skip-deploy) SKIP_DEPLOY=1; shift ;;
             --help|-h) print_help; exit 0 ;;
             --) shift; break ;;
@@ -272,6 +317,14 @@ parse_cli() {
                         fail "api-key resolver returned malformed username '$_resolved' (no dots, spaces, or leading/trailing dashes)" 1
                         ;;
                 esac
+                # WS1 (2026-06-11) — derive the local desktop user from the
+                # api-key owner unless the operator passed --desktop-user. The
+                # final sanitize + reserved-name guard runs in the export block
+                # below (so a reserved/empty resolution still falls back to bruce).
+                if [[ "${_LIVOS_DESKTOP_USER_EXPLICIT:-0}" -eq 0 && -z "$LIVOS_DESKTOP_USER" ]]; then
+                    LIVOS_DESKTOP_USER="$_resolved"
+                    info "desktop user will derive from api-key owner: '$_resolved' (WS1; override with --desktop-user)"
+                fi
                 # Plan 145-01: conflict-WARN BEGIN
                 if [[ -z "$LIVOS_SUBDOMAIN" && -z "$LIVOS_DOMAIN" ]]; then
                     # Input shape (1) — no domain hints, fill them in.
@@ -451,7 +504,27 @@ parse_cli() {
     # Plan 104-09 — export tunnel-mode + api-key vars too.
     # Plan 104-11 — export SKIP_DEPLOY too (read by install.sh tail dispatch).
     # Plan 140-07 — export LIVOS_SUBDOMAIN for logging / banner consumption.
+    # WS1 (2026-06-11) — finalize the desktop user. Sanitize whatever was set
+    # (--desktop-user, api-key owner, or empty), reject reserved/system names,
+    # and fall back to `bruce` so no-api-key / legacy installs are unchanged.
+    # Existing boxes are NOT renamed — deploy-livinityd.sh detects the present
+    # user via `id -u`; this value only names the user a fresh install creates.
+    if [[ -n "$LIVOS_DESKTOP_USER" ]]; then
+        local _du
+        _du=$(_sanitize_desktop_user "$LIVOS_DESKTOP_USER")
+        if _is_reserved_user "$_du"; then
+            warn "desktop user '$LIVOS_DESKTOP_USER' sanitized to '$_du' is empty/reserved — falling back to 'bruce'"
+            LIVOS_DESKTOP_USER="bruce"
+        else
+            [[ "$_du" != "$LIVOS_DESKTOP_USER" ]] && info "desktop user normalized '$LIVOS_DESKTOP_USER' → '$_du'"
+            LIVOS_DESKTOP_USER="$_du"
+        fi
+    else
+        LIVOS_DESKTOP_USER="bruce"
+    fi
+    info "Desktop user: $LIVOS_DESKTOP_USER (the local Linux login LivOS runs as)"
+
     export LIVOS_DOMAIN LIVOS_SUBDOMAIN LIVOS_CF_TOKEN LIVOS_CF_ZONE_ID \
-           LIVOS_CF_TUNNEL_TOKEN LIVOS_API_KEY \
+           LIVOS_CF_TUNNEL_TOKEN LIVOS_API_KEY LIVOS_DESKTOP_USER \
            SKIP_DEPLOY
 }

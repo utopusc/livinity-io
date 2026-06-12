@@ -358,7 +358,7 @@ _configure_caddy_for_tunnel() {
                 versions 1.1
             }
         }
-        header Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
+        header Content-Security-Policy "frame-ancestors 'self' https://${LIVOS_DOMAIN:-bruce.livinity.io}"
     }
     @livos_terminal_ws path /livos/terminal/ws
     handle @livos_terminal_ws {
@@ -407,7 +407,7 @@ _configure_caddy_for_tunnel() {
                 versions 1.1
             }
         }
-        header Content-Security-Policy "frame-ancestors 'self' https://bruce.livinity.io"
+        header Content-Security-Policy "frame-ancestors 'self' https://${LIVOS_DOMAIN:-bruce.livinity.io}"
     }
     handle {
         reverse_proxy 127.0.0.1:8080

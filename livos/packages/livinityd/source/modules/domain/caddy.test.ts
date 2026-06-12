@@ -452,6 +452,28 @@ describe('Phase 226-04 — /liv reverse-proxy handle (regen-survivable)', () => 
 		)
 	})
 
+	// WS1 (2026-06-11) — the CSP frame-ancestors domain must FOLLOW the operator's
+	// mainDomain, not the hardcoded bruce.livinity.io literal. On a jack box the
+	// allow-listed embedder must be jack.livinity.io; the literal was dead/wrong
+	// on every non-bruce box (worked only because 'self' covered the iframe).
+	it('CSP frame-ancestors follows the operator mainDomain, not a hardcoded bruce literal', () => {
+		const out = generateFullCaddyfile(
+			{mainDomain: 'jack.livinity.io', subdomains: []},
+			false,
+			false,
+			[],
+		)
+		expect(out).toContain("frame-ancestors 'self' https://jack.livinity.io")
+		expect(out).not.toContain('bruce.livinity.io')
+	})
+
+	it('CSP frame-ancestors drops the bogus domain entirely when no mainDomain is configured', () => {
+		const out = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expect(out).toContain('frame-ancestors \'self\'')
+		expect(out).not.toContain('bruce.livinity.io')
+		expect(out).not.toContain("frame-ancestors 'self' https://")
+	})
+
 	it('apex /liv handle appears BEFORE the catch-all handle to :8080 (first-match-wins)', () => {
 		const out = generateFullCaddyfile(
 			{mainDomain: 'bruce.livinity.io', subdomains: []},

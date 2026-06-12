@@ -31,7 +31,11 @@ fi
 
 # ── AC-192-02-2: source-grep — required keywords present ─────────────────────
 info "AC-192-02-2: source-grep keywords"
-grep -q "chown -R bruce:bruce" "$SCRIPT" && pass "chown -R bruce:bruce present" || fail "chown -R bruce:bruce missing"
+# WS1 (2026-06-11): the chown target is now the parameterized $DESKTOP_USER
+# (derives from the platform username, defaults to bruce) — assert the
+# parameterized form, not a literal bruce.
+grep -q 'chown -R \$DESKTOP_USER:\$DESKTOP_USER' "$SCRIPT" && pass "chown -R \$DESKTOP_USER:\$DESKTOP_USER present" || fail "parameterized chown -R \$DESKTOP_USER missing"
+grep -q 'DESKTOP_USER=' "$SCRIPT" && pass "DESKTOP_USER var defined (platform-username-derived)" || fail "DESKTOP_USER var missing"
 grep -q "bruce-migrated" "$SCRIPT" && pass "idempotency marker keyword present" || fail "marker missing"
 grep -q "install -m 0440" "$SCRIPT" && pass "sudoers install -m 0440 present" || fail "sudoers install missing"
 grep -q "usermod -aG docker" "$SCRIPT" && pass "docker group add present" || fail "docker group add missing"

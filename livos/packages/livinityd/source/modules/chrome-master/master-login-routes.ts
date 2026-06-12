@@ -100,6 +100,7 @@ const execFile = promisify(execFileCb)
 import {router, adminProcedure, privateProcedure} from '../server/trpc/trpc.js'
 import {spawnXvfb} from '../streaming/xvfb-spawner.js'
 import {spawnChromeProcess} from '../webapps/chrome-process-spawner.js'
+import {getDesktopUser} from '../system/desktop-user.js'
 import {startFluxbox, type FluxboxHandle} from '../webapps/fluxbox-wm.js'
 import {spawnVncForDisplay} from '../streaming/vnc-bridge.js'
 import {
@@ -524,7 +525,8 @@ async function ensureMasterDirWritableByBruce(
 	logger?: MasterLoginInjectables['logger'],
 ): Promise<void> {
 	try {
-		await chownExecFn('chown', ['bruce:bruce', dir])
+		const _du = getDesktopUser()
+		await chownExecFn('chown', [`${_du}:${_du}`, dir])
 	} catch (err) {
 		logger?.warn?.(
 			`[chrome-master] ensureMasterDirWritableByBruce: chown ${dir} failed (non-fatal — Chrome may fail to start)`,

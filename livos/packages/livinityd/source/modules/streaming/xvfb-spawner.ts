@@ -28,6 +28,7 @@ import {
 	type SpawnOptions,
 } from 'node:child_process'
 import {promisify} from 'node:util'
+import {getDesktopUser} from '../system/desktop-user.js'
 
 const defaultExecFile = promisify(nodeExecFile)
 
@@ -130,7 +131,7 @@ export async function spawnXvfb(opts: XvfbSpawnOpts): Promise<XvfbHandle> {
 	const width = opts.width ?? 1280
 	const height = opts.height ?? 720
 	const depth = opts.depth ?? 24
-	const user = opts.user ?? 'bruce'
+	const user = opts.user ?? getDesktopUser()
 	const pollIntervalMs = opts.pollIntervalMs ?? 200
 	const readyTimeoutMs = opts.readyTimeoutMs ?? 5000
 	const graceMs = opts.graceMs ?? 2000

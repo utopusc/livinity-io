@@ -42,8 +42,15 @@ VERSION_DIR="${INSTALL_ROOT}/aionui-web-${AIONUI_VERSION}"
 CURRENT_LINK="${INSTALL_ROOT}/current"
 DATA_DIR="${INSTALL_ROOT}/data"
 
-BRUCE_USER="bruce"
-BRUCE_HOME="/home/bruce"
+# WS1 (2026-06-11) — the desktop user LivOS runs as. Derives from
+# LIVOS_DESKTOP_USER / DESKTOP_USER (passed by deploy-livinityd.sh from the
+# platform username), defaulting to `bruce` for legacy installs. Variable name
+# kept BRUCE_USER to avoid churn across the ~5 downstream references; only the
+# VALUE is now dynamic. BRUCE_HOME resolves from the user's real passwd entry
+# (its home may not be /home/<user> on every box).
+BRUCE_USER="${LIVOS_DESKTOP_USER:-${DESKTOP_USER:-bruce}}"
+BRUCE_HOME="$(getent passwd "${BRUCE_USER}" 2>/dev/null | cut -d: -f6)"
+[[ -n "${BRUCE_HOME}" ]] || BRUCE_HOME="/home/${BRUCE_USER}"
 BUN_DIR="${BRUCE_HOME}/.bun"
 BUN_BIN="${BUN_DIR}/bin/bun"
 

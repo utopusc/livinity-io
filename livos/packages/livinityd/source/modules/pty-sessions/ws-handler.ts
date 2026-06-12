@@ -45,6 +45,7 @@ import {
 	isTerminalPanelEnabled,
 	type TerminalFlagRedisClient,
 } from './feature-flag.js'
+import {getDesktopUser} from '../system/desktop-user.js'
 import {
 	writeSessionMetadata,
 	deleteSessionMetadata,
@@ -325,11 +326,13 @@ export function createPtyTerminalWsHandler(deps: CreateHandlerDeps) {
 		}
 
 		// ─── Resolve desktop user (R4, Phase 252-02) ──────────────────────
-		// Mirror server/index.ts:1774 — resolve the OS user the PTY runs as
-		// from Redis `livos:desktop:user` so a non-bruce box gets a working
-		// terminal. Fail-soft to 'bruce'. Resolved here (async handler scope)
-		// because the `init` branch runs inside a synchronous ws.on('message').
-		let desktopUser = 'bruce'
+		// Mirror server/index.ts — resolve the OS user the PTY runs as from Redis
+		// `livos:desktop:user` so a non-bruce box gets a working terminal.
+		// WS1: fail-soft to getDesktopUser() (the process's own user) instead of a
+		// hardcoded 'bruce', so it's correct even when the Redis key is unseeded.
+		// Resolved here (async handler scope) because the `init` branch runs
+		// inside a synchronous ws.on('message').
+		let desktopUser = getDesktopUser()
 		try {
 			const u = await (deps.redis as {get?: (k: string) => Promise<string | null>})
 				.get?.('livos:desktop:user')

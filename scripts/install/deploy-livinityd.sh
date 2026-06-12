@@ -82,7 +82,14 @@ _DLD_CADDYFILE="/etc/caddy/Caddyfile"
 # privileges ONLY via the scoped sudoers.d/livinityd Cmnd_Alias fragment).
 # The human-friendly login the operator uses for GUI sessions + sudo elevation,
 # AND the User= the livos/liv-* systemd units run as.
-_DLD_DESKTOP_USER="${_DLD_DESKTOP_USER:-bruce}"
+# WS1 (2026-06-11): the desktop user derives from the platform username
+# (LIVOS_DESKTOP_USER, set by parse-cli.sh from the api-key owner / --desktop-user)
+# so a fresh box for "jack" gets the Linux user "jack". Ultimate fallback `bruce`
+# keeps no-api-key / legacy installs unchanged. On an EXISTING box the user is
+# already present; _dld_create_desktop_user re-resolves the actual uid via `id -u`
+# (never assumes 1000 — a real desktop Ubuntu owner already holds uid 1000, so a
+# fresh livinityd user lands at 1001+).
+_DLD_DESKTOP_USER="${_DLD_DESKTOP_USER:-${LIVOS_DESKTOP_USER:-bruce}}"
 _DLD_DESKTOP_UID="${_DLD_DESKTOP_UID:-1000}"
 
 # UAT 252 G7: owner for chown -R of /opt/livos + /opt/liv. MUST equal the
@@ -474,17 +481,28 @@ _dld_create_desktop_user() {
     if id -u "$user" >/dev/null 2>&1; then
         ok "Desktop user '${user}' already exists (uid=$(id -u "$user"))"
     else
-        info "Creating desktop user '${user}' (uid=${uid})"
-        # -m: create home dir, -s: shell, -u: explicit uid (allows :1000 if free)
+        info "Creating desktop user '${user}' (preferred uid=${uid})"
+        # -m: create home dir, -s: shell, -u: explicit uid (allows :1000 if free).
+        # WS1: on a real desktop Ubuntu the human owner already holds uid 1000, so
+        # the explicit-uid attempt fails and we fall back to an auto-assigned uid
+        # (1001+). We capture the ACTUAL uid below — never assume 1000 downstream.
         if useradd -m -u "$uid" -s /bin/bash "$user" 2>&1; then
             ok "Desktop user '${user}' created (uid=${uid})"
         else
             # uid may be taken — retry without explicit uid
-            warn "useradd with uid=${uid} failed — retrying with auto-assigned uid"
+            warn "useradd with uid=${uid} failed (uid likely held by the box owner) — retrying with auto-assigned uid"
             useradd -m -s /bin/bash "$user" 2>&1 \
                 || { warn "Failed to create user '${user}' — Bug #10 NOT fixed on this host"; return 0; }
             ok "Desktop user '${user}' created (auto-assigned uid=$(id -u "$user"))"
         fi
+    fi
+
+    # WS1 (2026-06-11) — pin _DLD_DESKTOP_UID to the user's REAL uid (existing or
+    # freshly-created, possibly ≠1000) so every downstream consumer
+    # (XDG_RUNTIME_DIR /run/user/<uid>, Xauthority, luse seed) uses the right one.
+    if id -u "$user" >/dev/null 2>&1; then
+        _DLD_DESKTOP_UID="$(id -u "$user")"
+        export _DLD_DESKTOP_UID
     fi
 
     # Add to sudo + docker groups. usermod -aG is no-op on existing membership.
@@ -1935,12 +1953,13 @@ Requires=postgresql.service redis-server.service
 
 [Service]
 Type=simple
-# Phase 192-02 — livinityd runs as bruce (was root, see 192-CONTEXT.md).
+# Phase 192-02 — livinityd runs as the desktop user (was root, see 192-CONTEXT.md).
 # Root cause of v38.2 bug class (claude --dangerously-skip-permissions refusal
-# under uid=0, vault path split between /root/ and /home/bruce/). Migration
-# script chowns /opt/livos/data + .env* to bruce:bruce before this unit starts.
-User=bruce
-Group=bruce
+# under uid=0, vault path split between /root/ and /home/<user>/). Migration
+# script chowns /opt/livos/data + .env* to the desktop user before this unit
+# starts. WS1: User= derives from ${_DLD_DESKTOP_USER} (was literal bruce).
+User=${_DLD_DESKTOP_USER}
+Group=${_DLD_DESKTOP_USER}
 WorkingDirectory=${_DLD_LIVOS_DIR}
 EnvironmentFile=${_DLD_ENV_FILE}
 # Phase 173-04 — v38 vault rename: Phase 171 vault-root-resolver.ts reads LIV_VAULT_ROOT; default fallback /root/livinity-vault is now a back-compat symlink (Plan 173-01)
@@ -2036,9 +2055,10 @@ Requires=postgresql.service redis-server.service
 
 [Service]
 Type=simple
-# Phase 192-02 — liv-${pkg} runs as bruce (shares /opt/livos/.env via EnvironmentFile)
-User=bruce
-Group=bruce
+# Phase 192-02 — liv-${pkg} runs as the desktop user (shares /opt/livos/.env via EnvironmentFile)
+# WS1: User= derives from ${_DLD_DESKTOP_USER} (was literal bruce).
+User=${_DLD_DESKTOP_USER}
+Group=${_DLD_DESKTOP_USER}
 WorkingDirectory=${pkg_dir}
 EnvironmentFile=${_DLD_ENV_FILE}
 ExecStart=${node_bin} ${entry}
@@ -2127,7 +2147,8 @@ _dld_install_liv_assistant() {
         warn "install-liv-assistant.sh not in stage dir ($_DLD_STAGE_DIR) — skipping Liv AI install (/liv will 404)"
         return 0
     fi
-    if bash "$installer" 2>&1 | tail -10; then
+    # WS1: pass the resolved desktop user (was implicit bruce inside the script).
+    if LIVOS_DESKTOP_USER="$_DLD_DESKTOP_USER" DESKTOP_USER="$_DLD_DESKTOP_USER" bash "$installer" 2>&1 | tail -10; then
         ok "liv-assistant binary installed (/opt/liv-assistant/current)"
     else
         warn "install-liv-assistant.sh failed — Liv AI (/liv) unavailable until re-run (SHA/network/disk?)"
@@ -2149,10 +2170,22 @@ _dld_install_liv_assistant() {
         "/home/${_DLD_DESKTOP_USER}/.claude" "/home/${_DLD_DESKTOP_USER}/.gemini" \
         "/home/${_DLD_DESKTOP_USER}/.cache" "/home/${_DLD_DESKTOP_USER}/.bun" 2>/dev/null \
         || warn "could not pre-create ${_DLD_DESKTOP_USER} ACP dirs (.claude/.gemini/.cache/.bun)"
-    if [[ ! -f "$unit_dst" ]] || ! cmp -s "$unit_src" "$unit_dst"; then
-        install -m 0644 -o root -g root "$unit_src" "$unit_dst"
+    # WS1 (2026-06-11): the repo unit hardcodes User=bruce/Group=bruce +
+    # /home/bruce in PATH/HOME/ReadWritePaths. Substitute the desktop user when
+    # installing (no-op on a bruce box). Use a temp file + atomic install so a
+    # half-written unit never lands. `_bru_home` (resolved below) is the real
+    # home; substitute the literal /home/bruce → that path.
+    local _liv_home
+    _liv_home=$(getent passwd "$_DLD_DESKTOP_USER" 2>/dev/null | cut -d: -f6 || true)
+    [[ -n "$_liv_home" ]] || _liv_home="/home/$_DLD_DESKTOP_USER"
+    local _unit_tmp="${unit_dst}.tmp.$$"
+    sed -E "s/^(User=)bruce$/\1${_DLD_DESKTOP_USER}/; s/^(Group=)bruce$/\1${_DLD_DESKTOP_USER}/; s#/home/bruce#${_liv_home}#g" \
+        "$unit_src" > "$_unit_tmp"
+    if [[ ! -f "$unit_dst" ]] || ! cmp -s "$_unit_tmp" "$unit_dst"; then
+        install -m 0644 -o root -g root "$_unit_tmp" "$unit_dst"
         systemctl daemon-reload
     fi
+    rm -f "$_unit_tmp"
     # UAT 252 (G10): the unit's ReadWritePaths binds /home/<user>/.claude +
     # .cache + .bun under ProtectHome=read-only. systemd fails the start with
     # status=226/NAMESPACE if any of those dirs is MISSING (fresh box has no
@@ -2304,6 +2337,16 @@ _dld_update_caddy_to_livinityd() {
     }
 LIVAI_HANDLES
 
+    # WS1 (2026-06-11) — the heredoc above is single-quoted (literals preserved so
+    # the @liv_api_subresource Referer regex's `$` stays intact), so the CSP
+    # frame-ancestors domain can't interpolate inline. Substitute the operator's
+    # actual domain post-read. bruce boxes (LIVOS_DOMAIN=bruce.livinity.io) are a
+    # no-op; on every other box the bootstrap Caddyfile now allow-lists the real
+    # embedder. (livinityd's runtime caddy.ts regen also fixes this, but the
+    # bootstrap file must be correct for the window before the first regen.)
+    local _dld_csp_domain="${LIVOS_DOMAIN:-${DOMAIN:-bruce.livinity.io}}"
+    _DLD_LIV_AI_HANDLES="${_DLD_LIV_AI_HANDLES//https:\/\/bruce.livinity.io/https://${_dld_csp_domain}}"
+
     case "${MODE:-hybrid}" in
         hybrid|tunnel)
             # Phase 134 — hybrid + tunnel both use CF Tunnel transport. CF
@@ -2374,11 +2417,12 @@ CADDYFILE
     # / boot regen paths (Apps#rebuildCaddyFromState). Phase 86 moved
     # livinityd from root → bruce, but the Caddyfile stayed root-owned, so
     # every dynamic regen has been silently EACCES'ing since. Hand ownership
-    # to bruce so the regen path actually lands; Caddy reads via 0644 either
-    # way. Defensive: only chown if `bruce` exists (factory-reset runs first
-    # on fresh installs and may pre-stage this script before user creation).
-    if id bruce >/dev/null 2>&1; then
-        chown bruce:bruce "$_DLD_CADDYFILE" 2>/dev/null || true
+    # to the desktop user so the regen path actually lands; Caddy reads via 0644
+    # either way. Defensive: only chown if the user exists (factory-reset runs
+    # first on fresh installs and may pre-stage this script before user creation).
+    # WS1: ${_DLD_DESKTOP_USER} (was literal bruce).
+    if id "$_DLD_DESKTOP_USER" >/dev/null 2>&1; then
+        chown "${_DLD_DESKTOP_USER}:${_DLD_DESKTOP_USER}" "$_DLD_CADDYFILE" 2>/dev/null || true
     fi
 
     # Validate config before reload
@@ -2541,8 +2585,11 @@ _dld_run_bruce_migration() {
         repo_root="${_DLD_LIVOS_DIR}"
     fi
     if [[ -f "$migration_script" ]]; then
-        if REPO_ROOT="$repo_root" bash "$migration_script"; then
-            ok "bruce migration applied"
+        # WS1 (2026-06-11): pass the resolved desktop user so the migration
+        # creates/chowns/sudoers-templates for the right account (was implicit
+        # bruce). bash subshell does not inherit shell-locals, so pass explicitly.
+        if REPO_ROOT="$repo_root" DESKTOP_USER="$_DLD_DESKTOP_USER" bash "$migration_script"; then
+            ok "desktop-user migration applied (user=${_DLD_DESKTOP_USER})"
         else
             warn "migrate-to-bruce-user.sh exited non-zero — proceeding (systemd unit may fail with User=bruce until script is re-run successfully)"
         fi
