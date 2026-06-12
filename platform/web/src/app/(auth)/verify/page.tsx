@@ -36,8 +36,9 @@ function VerifyContent() {
       .then((data) => {
         if (data.success) {
           setStatus('success');
-          // Auto-redirect to install wizard after a brief success message.
-          setTimeout(() => router.push('/dashboard/install'), 1500);
+          // Billing-first onboarding: choose a plan before the install wizard.
+          // (/dashboard/install re-checks billing and bounces back if skipped.)
+          setTimeout(() => router.push('/pricing'), 1500);
         } else {
           setStatus('error');
           setError(data.error || 'Verification failed');
@@ -60,7 +61,9 @@ function VerifyContent() {
           return;
         }
         if (data.user.emailVerified) {
-          router.push('/dashboard/install');
+          // Already verified — let the dashboard's billing redirect decide
+          // between /pricing (no subscription) and the normal dashboard.
+          router.push('/dashboard');
           return;
         }
         setEmail(data.user.email);
@@ -99,7 +102,7 @@ function VerifyContent() {
           <h2 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">Check your email</h2>
           <p className="mb-1 text-sm text-zinc-500">We sent a verification link to</p>
           <p className="mb-4 text-sm font-medium text-zinc-900 dark:text-zinc-50">{email}</p>
-          <p className="mb-6 text-xs text-zinc-500">Click the link in the email to activate your account. The next step (install command) opens automatically after you click it.</p>
+          <p className="mb-6 text-xs text-zinc-500">Click the link in the email to activate your account. You&apos;ll then pick a plan (3-day free trial) and get your install command.</p>
           <button
             onClick={handleResend}
             disabled={resending}
@@ -114,9 +117,9 @@ function VerifyContent() {
       {status === 'success' && (
         <>
           <h2 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">Email verified!</h2>
-          <p className="mb-4 text-sm text-zinc-500">Redirecting to your install command…</p>
-          <Link href="/dashboard/install" className="text-sm font-medium text-zinc-900 hover:underline dark:text-zinc-50">
-            Continue to install
+          <p className="mb-4 text-sm text-zinc-500">Redirecting to choose your plan…</p>
+          <Link href="/pricing" className="text-sm font-medium text-zinc-900 hover:underline dark:text-zinc-50">
+            Continue to pricing
           </Link>
         </>
       )}
