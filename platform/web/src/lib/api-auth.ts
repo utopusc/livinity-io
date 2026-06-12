@@ -27,8 +27,12 @@ export async function validateApiKey(req: NextRequest): Promise<ApiKeyResult> {
     return { valid: false, error: 'Invalid API key', status: 401 };
   }
 
+  // Narrow by the stored 14-char prefix (written at key creation) instead of
+  // bcrypt-comparing every key in the table — O(1) lookup + one compare
+  // instead of O(n) bcrypts per request.
   const result = await pool.query<{ key_hash: string; user_id: string }>(
-    'SELECT key_hash, user_id FROM api_keys'
+    'SELECT key_hash, user_id FROM api_keys WHERE prefix = $1',
+    [apiKey.substring(0, 14)],
   );
 
   for (const row of result.rows) {

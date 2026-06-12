@@ -23,11 +23,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { validateApiKey, unauthorizedResponse } from '@/lib/api-auth';
+import { hasActiveAccess } from '@/lib/subscription';
 
 export async function GET(req: NextRequest) {
   const auth = await validateApiKey(req);
   if (!auth.valid) {
     return unauthorizedResponse(auth.error);
+  }
+
+  // Billing gate: install.sh resolves the subdomain here — refuse so a fresh
+  // install can't proceed without an active trial/subscription.
+  if (!(await hasActiveAccess(auth.userId))) {
+    return NextResponse.json(
+      { error: 'Subscription required', code: 'SUBSCRIPTION_REQUIRED' },
+      { status: 402 },
+    );
   }
 
   const result = await pool.query<{ username: string; email: string }>(

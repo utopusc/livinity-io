@@ -24,8 +24,19 @@ interface DeviceInfo {
   lastSeen: string | null;
 }
 
+interface BillingInfo {
+  active: boolean;
+  plan: 'free' | 'trialing' | 'active' | 'past_due' | 'inactive';
+  status: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  legacyFree: boolean;
+  reason: string | null;
+}
+
 interface DashboardData {
   user: { id: string; username: string; email: string; emailVerified: boolean };
+  billing?: BillingInfo;
   apiKey: { hasKey: boolean; prefix: string | null };
   server: { online: boolean; url: string };
   bandwidth: { usedBytes: number; limitBytes: number; usedPercent: number };
@@ -66,6 +77,29 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
+function daysUntil(dateStr: string): number {
+  return Math.max(0, Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000));
+}
+
+function getBillingBadge(billing: BillingInfo) {
+  if (billing.legacyFree) return { label: 'Legacy Free', color: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300' };
+  switch (billing.plan) {
+    case 'trialing': {
+      const days = billing.currentPeriodEnd ? daysUntil(billing.currentPeriodEnd) : null;
+      return {
+        label: days !== null ? `Trial · ${days} day${days === 1 ? '' : 's'} left` : 'Trial',
+        color: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+      };
+    }
+    case 'active':
+      return { label: 'Active', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' };
+    case 'past_due':
+      return { label: 'Past Due', color: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+    default:
+      return { label: 'No Subscription', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300' };
+  }
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -85,6 +119,8 @@ export default function DashboardPage() {
   const [newKey, setNewKey] = useState<string | null>(null);
   const [installCmd, setInstallCmd] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   // Domain state
   const [domains, setDomains] = useState<DomainRecord[]>([]);
@@ -154,10 +190,25 @@ export default function DashboardPage() {
     try {
       const res = await fetch('/api/dashboard');
       if (res.status === 401) { router.push('/login'); return; }
-      const d = await res.json();
+      const d: DashboardData = await res.json();
+      // Onboarding: verified users who never subscribed go to /pricing — UNLESS
+      // they just came back from Checkout (webhook may lag a few seconds; the
+      // 10s poll flips billing once it lands).
+      const justCheckedOut = typeof window !== 'undefined'
+        && new URLSearchParams(window.location.search).get('checkout') === 'success';
+      if (
+        d.user?.emailVerified &&
+        d.billing && !d.billing.active && d.billing.reason === 'no_subscription' &&
+        !justCheckedOut
+      ) {
+        // Keep the loading spinner up while the navigation completes (no
+        // setLoading(false) on redirect paths — avoids a blank-page flash).
+        router.push('/pricing');
+        return;
+      }
       setData(d);
+      setLoading(false);
     } catch { router.push('/login'); }
-    finally { setLoading(false); }
   }, [router]);
 
   useEffect(() => { fetchData(); fetchDomains(); }, [fetchData, fetchDomains]);
@@ -170,6 +221,7 @@ export default function DashboardPage() {
 
   async function generateKey(action: string) {
     setGenerating(true);
+    setKeyError(null);
     try {
       const res = await fetch('/api/dashboard', {
         method: 'POST',
@@ -181,8 +233,26 @@ export default function DashboardPage() {
         setNewKey(d.apiKey);
         setInstallCmd(d.installCommand);
         await fetchData();
+      } else if (d.error === 'subscription_required') {
+        setKeyError('An active subscription is required to generate an API key.');
+      } else if (d.error) {
+        setKeyError(d.error);
       }
     } finally { setGenerating(false); }
+  }
+
+  async function openPortal() {
+    setPortalLoading(true);
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' });
+      const d = await res.json();
+      if (res.ok && d.url) {
+        window.location.href = d.url;
+        return;
+      }
+      if (res.status === 404) router.push('/pricing');
+    } catch {}
+    finally { setPortalLoading(false); }
   }
 
   async function handleLogout() {
@@ -248,6 +318,54 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Billing */}
+        {data.billing && !data.billing.legacyFree && (
+          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Billing</h2>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getBillingBadge(data.billing).color}`}>
+                  {getBillingBadge(data.billing).label}
+                </span>
+              </div>
+              {data.billing.status ? (
+                <button
+                  onClick={openPortal}
+                  disabled={portalLoading}
+                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                >
+                  {portalLoading ? 'Opening…' : 'Manage Billing'}
+                </button>
+              ) : (
+                <a href="/pricing" className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200">
+                  Subscribe
+                </a>
+              )}
+            </div>
+            <div className="mt-3 space-y-1 text-sm">
+              {data.billing.plan === 'past_due' && (
+                <p className="text-red-600 dark:text-red-400">
+                  Your last payment failed. Update your payment method to keep your server online.
+                </p>
+              )}
+              {data.billing.currentPeriodEnd && data.billing.plan !== 'inactive' && (
+                <p className="text-zinc-500">
+                  {data.billing.cancelAtPeriodEnd
+                    ? `Cancels on ${new Date(data.billing.currentPeriodEnd).toLocaleDateString()}`
+                    : data.billing.plan === 'trialing'
+                      ? `Trial ends ${new Date(data.billing.currentPeriodEnd).toLocaleDateString()} — your subscription starts automatically`
+                      : `Renews on ${new Date(data.billing.currentPeriodEnd).toLocaleDateString()}`}
+                </p>
+              )}
+              {!data.billing.active && (
+                <p className="text-yellow-700 dark:text-yellow-400">
+                  Subscribe to generate API keys and keep {data.user.username}.livinity.io online.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Server Status */}
         <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex items-center justify-between">
@@ -284,13 +402,20 @@ export default function DashboardPage() {
           {!data.apiKey.hasKey ? (
             <div>
               <p className="mb-4 text-sm text-zinc-500">Generate an API key to connect your LivOS server.</p>
-              <button
-                onClick={() => generateKey('generate-key')}
-                disabled={generating || !data.user.emailVerified}
-                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
-              >
-                {generating ? 'Generating...' : 'Generate API Key'}
-              </button>
+              {data.billing && !data.billing.active ? (
+                <a href="/pricing" className="inline-block rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200">
+                  Subscribe to get started
+                </a>
+              ) : (
+                <button
+                  onClick={() => generateKey('generate-key')}
+                  disabled={generating || !data.user.emailVerified}
+                  className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                >
+                  {generating ? 'Generating...' : 'Generate API Key'}
+                </button>
+              )}
+              {keyError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{keyError}</p>}
             </div>
           ) : (
             <div>
@@ -304,6 +429,7 @@ export default function DashboardPage() {
               >
                 {generating ? 'Regenerating...' : 'Regenerate Key'}
               </button>
+              {keyError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{keyError}</p>}
             </div>
           )}
         </div>

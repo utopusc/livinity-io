@@ -31,6 +31,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { validateApiKey, unauthorizedResponse } from '@/lib/api-auth';
+import { hasActiveAccess } from '@/lib/subscription';
 import { decryptToken } from '@/lib/token-encryption';
 
 export async function GET(req: NextRequest) {
@@ -38,6 +39,15 @@ export async function GET(req: NextRequest) {
   const auth = await validateApiKey(req);
   if (!auth.valid) {
     return unauthorizedResponse(auth.error);
+  }
+
+  // Billing gate: no connector token without an active trial/subscription
+  // (or legacy_free grandfather). install.sh's curl -f stops on the 402.
+  if (!(await hasActiveAccess(auth.userId))) {
+    return NextResponse.json(
+      { error: 'Subscription required', code: 'SUBSCRIPTION_REQUIRED' },
+      { status: 402 },
+    );
   }
 
   // TODO(140-05): rate limit to 10 req/min per api-key once a shared
