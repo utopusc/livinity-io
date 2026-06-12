@@ -1,0 +1,224 @@
+<!doctype html>
+<!-- /pricing static page — design parity with dashboard-install.html / verify.html -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>Pricing — Livinity</title>
+    <meta name="description" content="Livinity Pro — $7.99/month or $69.99/year. Try it free for 3 days." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600;700;800&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="styles.css" />
+
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+    <style>
+      :root { --dash-radius: 18px; --dash-line: rgba(0,0,0,0.07); --dash-line-strong: rgba(0,0,0,0.12); --card-bg: #ffffff; --card-bg-2: #fafafa; --card-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 24px 60px -34px rgba(0,0,0,0.18); --accent-green: #16a34a; --accent-amber: #d97706; --accent-red: #dc2626; --font-mono: "Geist Mono", ui-monospace, monospace; --font-serif: "Instrument Serif", serif; }
+      body.dark { --dash-line: rgba(255,255,255,0.08); --dash-line-strong: rgba(255,255,255,0.16); --card-bg: #0f0f11; --card-bg-2: #08080a; --card-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 24px 60px -28px rgba(0,0,0,0.8); }
+      body { background: var(--bg); color: var(--fg); font-family: "Geist", -apple-system, sans-serif; }
+      body.dark { background: #050507; color: #f5f5f7; }
+
+      .install-shell { max-width: 720px; margin: 0 auto; padding: 32px 28px 80px; }
+      .install-nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; margin-bottom: 12px; }
+      .install-nav .brand { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg); text-decoration: none; }
+      .install-nav .right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+      .install-nav .uname { font-size: 13px; color: var(--fg-mute); font-family: var(--font-mono); }
+
+      .h-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 16px; border-radius: 12px; background: transparent; border: 1px solid var(--dash-line-strong); color: var(--fg); font-size: 13.5px; font-weight: 500; font-family: inherit; cursor: pointer; transition: all 0.18s ease; text-decoration: none; }
+      .h-btn:hover { background: rgba(0,0,0,0.04); transform: translateY(-1px); }
+      body.dark .h-btn:hover { background: rgba(255,255,255,0.05); }
+      .h-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+      .h-btn.solid { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+      .h-btn.solid:hover { opacity: 0.92; background: var(--fg); }
+      .h-btn.ghost { border: none; padding: 9px 6px; }
+
+      .install-hero { margin-bottom: 24px; text-align: center; }
+      .install-hero .step-pill { display: inline-block; padding: 4px 11px; border-radius: 999px; background: var(--card-bg); border: 1px solid var(--dash-line); font-size: 11.5px; font-family: var(--font-mono); color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px; }
+      .install-hero h1 { font-size: clamp(28px, 4.5vw, 40px); font-weight: 600; letter-spacing: -0.025em; line-height: 1.05; margin: 0 0 10px; }
+      .install-hero h1 em { font-family: var(--font-serif); font-weight: 400; font-style: italic; color: var(--fg-mute); }
+      .install-hero p { font-size: 15px; color: var(--fg-mute); margin: 0 auto; max-width: 460px; line-height: 1.5; }
+
+      /* Interval toggle */
+      .interval-toggle { display: flex; justify-content: center; margin: 26px 0 22px; }
+      .interval-toggle .box { display: inline-flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--card-bg); border: 1px solid var(--dash-line); box-shadow: var(--card-shadow); }
+      .interval-toggle button { padding: 8px 18px; border-radius: 10px; border: none; background: transparent; color: var(--fg-mute); font-size: 13.5px; font-weight: 500; font-family: inherit; cursor: pointer; transition: all 0.18s ease; }
+      .interval-toggle button.active { background: var(--fg); color: var(--bg); }
+      .interval-toggle button .save { font-family: var(--font-mono); font-size: 11px; color: var(--accent-green); margin-left: 6px; }
+      .interval-toggle button.active .save { color: inherit; opacity: 0.75; }
+
+      /* Plan card */
+      .plan-card { max-width: 480px; margin: 0 auto; background: var(--card-bg); border: 1px solid var(--dash-line); border-radius: 22px; padding: 32px; box-shadow: var(--card-shadow); }
+      .plan-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+      .plan-head .name { font-size: 13px; font-weight: 600; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
+      .trial-pill { display: inline-block; padding: 4px 11px; border-radius: 999px; background: rgba(22,163,74,0.10); border: 1px solid rgba(22,163,74,0.25); color: var(--accent-green); font-size: 11.5px; font-family: var(--font-mono); letter-spacing: 0.06em; }
+      .plan-price { display: flex; align-items: baseline; gap: 6px; }
+      .plan-price .amount { font-size: 52px; font-weight: 600; letter-spacing: -0.03em; line-height: 1; }
+      .plan-price .per { font-size: 15px; color: var(--fg-mute); font-family: var(--font-serif); font-style: italic; }
+      .plan-price-note { font-size: 12.5px; color: var(--fg-mute); font-family: var(--font-mono); margin-top: 8px; min-height: 16px; }
+
+      .feat-list { list-style: none; margin: 22px 0 26px; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+      .feat-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--fg-dim); line-height: 1.45; }
+      .feat-list li .tick { color: var(--accent-green); flex-shrink: 0; font-weight: 600; }
+
+      .cta-btn { width: 100%; padding: 13px 16px; font-size: 14.5px; font-weight: 600; border-radius: 14px; }
+      .cta-err { font-size: 12.5px; font-family: var(--font-mono); color: var(--accent-red); text-align: center; margin-top: 12px; min-height: 16px; }
+      .fine-print { font-size: 11.5px; font-family: var(--font-mono); color: var(--fg-faint); text-align: center; margin-top: 16px; line-height: 1.6; }
+
+      .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--dash-line-strong); border-top-color: var(--bg); border-radius: 999px; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      @media (max-width: 480px) { .install-shell { padding: 16px 14px 60px; } .plan-card { padding: 24px 20px; } .plan-price .amount { font-size: 44px; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      const FEATURES = [
+        "Your own {username}.livinity.io subdomain",
+        "Secure Cloudflare Tunnel — no port forwarding",
+        "One-line LivOS install on your own hardware",
+        "App Store: self-host 200+ apps with one click",
+        "Liv AI assistant built in",
+        "Custom domains (up to 3)",
+        "Remote access from anywhere",
+      ];
+
+      function App() {
+        useEffect(() => {
+          try {
+            const saved = localStorage.getItem("liv_theme");
+            if (saved === "dark") document.body.classList.add("dark");
+          } catch (e) {}
+        }, []);
+
+        const [user, setUser] = useState(null);
+        const [interval, setIntervalChoice] = useState("monthly");
+        const [starting, setStarting] = useState(false);
+        const [error, setError] = useState(null);
+
+        // Auth-aware nav (pricing itself is public — no redirect when logged out).
+        useEffect(() => {
+          (async () => {
+            try {
+              const me = await fetch("/api/auth/me", { credentials: "same-origin" });
+              if (!me.ok) return;
+              const data = await me.json();
+              if (data && data.user) setUser(data.user);
+            } catch (e) {}
+          })();
+        }, []);
+
+        async function startCheckout() {
+          setStarting(true);
+          setError(null);
+          try {
+            const res = await fetch("/api/stripe/checkout", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ interval }),
+            });
+            if (res.status === 401) { window.location.href = "/register"; return; }
+            if (res.status === 409) { window.location.href = "/dashboard"; return; }
+            const d = await res.json().catch(() => ({}));
+            if (res.ok && d.url) { window.location.href = d.url; return; }
+            if (d.error === "Verify your email first") {
+              window.location.href = "/verify";
+              return;
+            }
+            setError(d.error || "Could not start checkout. Please try again.");
+          } catch (e) {
+            setError("Network error. Please try again.");
+          } finally {
+            setStarting(false);
+          }
+        }
+
+        const yearly = interval === "yearly";
+
+        return (
+          <div className="install-shell">
+            <nav className="install-nav">
+              <a href="/" className="brand">Livinity</a>
+              <div className="right">
+                {user ? (
+                  <>
+                    <span className="uname">{user.username}</span>
+                    <a href="/dashboard" className="h-btn ghost">Dashboard</a>
+                  </>
+                ) : (
+                  <>
+                    <a href="/login" className="h-btn ghost">Sign in</a>
+                    <a href="/register" className="h-btn">Get started</a>
+                  </>
+                )}
+              </div>
+            </nav>
+
+            <header className="install-hero">
+              <span className="step-pill">Pricing</span>
+              <h1>Simple <em>pricing.</em></h1>
+              <p>Try Livinity Pro free for 3 days. Cancel anytime during the trial — you won't be charged.</p>
+            </header>
+
+            <div className="interval-toggle">
+              <div className="box">
+                <button className={!yearly ? "active" : ""} onClick={() => setIntervalChoice("monthly")}>Monthly</button>
+                <button className={yearly ? "active" : ""} onClick={() => setIntervalChoice("yearly")}>
+                  Yearly<span className="save">−27%</span>
+                </button>
+              </div>
+            </div>
+
+            <section className="plan-card">
+              <div className="plan-head">
+                <span className="name">Livinity Pro</span>
+                <span className="trial-pill">3 days free</span>
+              </div>
+
+              <div className="plan-price">
+                <span className="amount">{yearly ? "$69.99" : "$7.99"}</span>
+                <span className="per">/{yearly ? "year" : "month"}</span>
+              </div>
+              <div className="plan-price-note">{yearly ? "≈ $5.83/month — 2+ months free" : " "}</div>
+
+              <ul className="feat-list">
+                {FEATURES.map((f) => (
+                  <li key={f}><span className="tick">✓</span>{f}</li>
+                ))}
+              </ul>
+
+              <button className="h-btn solid cta-btn" onClick={startCheckout} disabled={starting}>
+                {starting && <span className="spinner"></span>}
+                {starting ? "Redirecting…" : "Start 3-day free trial"}
+              </button>
+              {error && <div className="cta-err">{error}</div>}
+
+              <p className="fine-print">
+                Card required · {yearly ? "$69.99/year" : "$7.99/month"} after the trial unless you cancel
+                <br />Cancel anytime from your dashboard
+              </p>
+            </section>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>

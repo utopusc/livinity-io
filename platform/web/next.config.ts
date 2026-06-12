@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
         { source: '/', destination: '/index.html' },
         { source: '/dashboard', destination: '/dashboard.html' },
         { source: '/dashboard/install', destination: '/dashboard-install.html' },
+        { source: '/pricing', destination: '/pricing.html' },
         { source: '/login', destination: '/auth.html' },
         { source: '/register', destination: '/auth.html' },
         { source: '/profile', destination: '/profile.html' },

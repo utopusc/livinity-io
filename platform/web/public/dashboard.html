@@ -603,6 +603,18 @@
                 devArr = Array.isArray(d.devices) ? d.devices : (Array.isArray(d) ? d : []);
                 setDevices(devArr);
               }
+              // Billing-first onboarding: verified users with no subscription
+              // go to /pricing (legacy_free + trialing/active pass through).
+              // ?checkout=success tolerates webhook lag — install wizard polls.
+              try {
+                const sp0 = new URLSearchParams(window.location.search);
+                const justCheckedOut = sp0.get("checkout") === "success";
+                const b = dashJson && dashJson.billing;
+                if (b && !b.active && b.reason === "no_subscription" && !justCheckedOut) {
+                  window.location.replace("/pricing");
+                  return;
+                }
+              } catch (e) {}
               // First-run redirect: zero devices + no API key -> /dashboard/install.
               // ?skipFirstRun=1 bypasses (Skip-for-now button on the wizard sets this).
               try {

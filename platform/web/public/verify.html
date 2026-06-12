@@ -119,7 +119,9 @@
               const data = await res.json().catch(() => ({}));
               if (data.success) {
                 setStatus("success");
-                setTimeout(() => { window.location.href = "/dashboard/install"; }, 1500);
+                // Billing-first onboarding: choose a plan, then the install
+                // wizard (/dashboard/install re-checks billing if skipped).
+                setTimeout(() => { window.location.href = "/pricing"; }, 1500);
               } else {
                 setStatus("error");
                 setError(data.error || "Verification failed");
@@ -195,7 +197,7 @@
                 <header className="install-hero">
                   <span className="step-pill">Verify</span>
                   <h1>Check your <em>inbox.</em></h1>
-                  <p>We sent a verification link. Click it to activate your account — the install command opens right after.</p>
+                  <p>We sent a verification link. Click it to activate your account — you'll then pick a plan (3-day free trial) and get your install command.</p>
                 </header>
 
                 <section className="panel">
@@ -226,14 +228,14 @@
                 <header className="install-hero">
                   <span className="step-pill">Verified</span>
                   <h1>Email <em>verified.</em></h1>
-                  <p>Your account is now active. Taking you to the install command…</p>
+                  <p>Your account is now active. Taking you to choose your plan…</p>
                 </header>
 
                 <section className="panel" style={{ textAlign: "center" }}>
                   <div className="ok-icon">✓</div>
                   <h2 style={{ textAlign: "center" }}>All set</h2>
-                  <p className="sub" style={{ textAlign: "center" }}>Redirecting to your install command…</p>
-                  <a href="/dashboard/install" className="h-btn solid" style={{ marginTop: 8 }}>Continue now</a>
+                  <p className="sub" style={{ textAlign: "center" }}>Redirecting to pricing — start your 3-day free trial…</p>
+                  <a href="/pricing" className="h-btn solid" style={{ marginTop: 8 }}>Continue now</a>
                 </section>
               </>
             )}
