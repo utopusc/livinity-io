@@ -838,6 +838,20 @@ _dld_install_streaming_packages() {
         gstreamer1.0-tools gstreamer1.0-plugins-good
         gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
         xdg-desktop-portal-gnome xvfb fluxbox
+        # feh — branded-shell.ts sets the LivOS :1 wallpaper via `feh
+        # --bg-fill`; not previously on the list (it happened to be pulled in
+        # as a transitive dep on some boxes). Explicit now so the wallpaper
+        # path is deterministic; a missing feh is also non-fatal post the
+        # branded-shell async-spawn-error fix (degrades to xsetroot).
+        feh
+        # WSL field test 2026-06-11 (P0): livinityd's host-desktop streaming
+        # path spawns `tint2` (fluxbox panel) and DOES NOT catch the spawn
+        # error — a missing tint2 → ENOENT → unhandled 'error' event → the
+        # whole daemon crashes on boot → livos.service crash-loops forever
+        # (counter hit 1437 in the test) → UI NEVER loads behind a green
+        # install. The Mini PC had tint2 from an earlier manual step; fresh
+        # boxes don't. This is the single most important streaming package.
+        tint2
     )
     local _pkg
     if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${_streaming_pkgs[@]}" 2>&1 | tail -5; then

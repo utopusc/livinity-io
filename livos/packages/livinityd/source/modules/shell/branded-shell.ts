@@ -175,6 +175,18 @@ export async function bootBrandedShell(opts?: BootBrandedShellOpts): Promise<voi
 				stdio: ['ignore', 'pipe', 'pipe'],
 				env: childEnv,
 			}) as ChildProcess
+			// WSL field test 2026-06-11 (P0): `spawn <bin> ENOENT` (missing
+			// binary, e.g. tint2 not installed) is an ASYNCHRONOUS 'error'
+			// event, NOT a synchronous throw — the try/catch below does NOT
+			// catch it. With no 'error' listener, Node treats it as an
+			// unhandled 'error' and CRASHES the whole livinityd process →
+			// livos.service crash-loops forever and the UI never loads. Attach
+			// the handler FIRST so a missing/un-spawnable branded-shell binary
+			// degrades to a warning (T-255-17 "NEVER throws" now also holds for
+			// async spawn failures, not just sync ones).
+			;(child as unknown as EventEmitter).on('error', (err: unknown) => {
+				logger?.warn?.(`branded-shell: ${bin} spawn error on ${display} (degrading)`, err)
+			})
 			child.stderr?.on('data', (chunk: Buffer | string) => {
 				const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
 				logger?.warn?.(`${bin} stderr: ${text.trim()}`)
