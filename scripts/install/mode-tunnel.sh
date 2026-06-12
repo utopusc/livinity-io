@@ -371,10 +371,31 @@ _configure_caddy_for_tunnel() {
             }
         }
     }
-    # Phase 262 WS1 (LIVOS-054): the /liv/trpc/* → livinityd :8080 bridge was REMOVED.
+    # Phase 262 WS1 (LIVOS-054): the broad /liv/trpc/* → livinityd :8080 bridge was REMOVED.
     # The framed AionUi SPA must NOT reach the full LivOS tRPC API with the operator's
-    # same-origin cookie auto-attached. (The dynamic livinityd Caddy regen no longer emits
-    # this bridge either; the in-repo cliInstaller consumer breakage is accepted/LOCKED.)
+    # same-origin cookie auto-attached.
+    # 2026-06-11 carve-out (operator-accepted trade-off): ONLY the three cliInstaller
+    # procedures route to :8080 so the Liv AI "Local Agents" panel works. EXACT paths,
+    # NOT cliInstaller.* — a trailing wildcard would match tRPC comma-batch URLs
+    # (cliInstaller.detect,users.create?batch=1) and re-open the full API. forward_auth
+    # gates it (mirrors the runtime caddy.ts LIV_CLI_INSTALLER_HANDLE shape).
+    @liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth
+    handle @liv_cli_installer {
+        forward_auth 127.0.0.1:8080 {
+            uri /auth/verify
+            @bad status 401
+            handle_response @bad {
+                redir https://{host}/login?redirect={scheme}://{host}{uri} 302
+            }
+        }
+        uri strip_prefix /liv
+        reverse_proxy 127.0.0.1:8080 {
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+    }
     @liv path /liv /liv/*
     handle @liv {
         uri strip_prefix /liv

@@ -392,9 +392,35 @@ const LIV_GATE_BODY = `\t\tforward_auth 127.0.0.1:8080 {
 // (path /liv/trpc + /liv/trpc/*, strip /liv → :8080) is DELETED. It let the
 // same-origin framed AionUi SPA (sandbox `allow-same-origin allow-scripts`)
 // drive the FULL LivOS tRPC API with the operator's cookie auto-attached.
-// The in-repo consumer (scripts/aionui-patches/local-agents-install-section.js
-// cliInstaller.* calls) breaks by design — LOCKED decision; the full
-// origin-split is the deferred WS6 follow-up.
+// The full origin-split is the deferred WS6 follow-up.
+//
+// 2026-06-11 (post-262 carve-out — operator ACCEPTED the trade-off): the
+// LIVOS-054 deletion also broke the Liv AI "Local Agents" install panel
+// (scripts/aionui-patches/local-agents-install-section.js) — its
+// cliInstaller.* calls strip-prefixed to /trpc/* and hit AionUi :3020, which
+// answered with its SPA index.html → `Unexpected token '<'` in the panel,
+// Claude detection permanently "Failed", and no Claude agent ever registered.
+// Re-open ONLY the three cliInstaller procedures (detect/install/auth) to
+// :8080. Bounded surface: all three are adminProcedure
+// (cli-installer-router.ts) + whitelist-bounded to the 20 fixed CLI names in
+// install-scripts.ts (the D-239-07 RCE boundary) + forward_auth-gated here.
+//
+// ⚠ Matcher is EXACT 3 paths, deliberately NOT `path /liv/trpc/cliInstaller.*`:
+// tRPC's HTTP transport accepts comma-batched procedure paths
+// (`/trpc/cliInstaller.detect,users.create?batch=1`). A trailing-wildcard
+// matcher would match that path (it begins with `cliInstaller.`) and re-open
+// the FULL tRPC API through the batch — exactly what LIVOS-054 closed. Exact
+// path matching makes a comma-bearing path fall through to @liv (:3020,
+// harmless SPA html). caddy.test.ts locks this (no wildcard form allowed).
+const LIV_CLI_INSTALLER_HANDLE = `\t@liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth
+\thandle @liv_cli_installer {
+${LIV_GATE_BODY}
+\t\turi strip_prefix /liv
+\t\treverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY}
+\t\t}
+\t}`
+
 const LIV_ASSISTANT_HANDLE = `\t@liv path /liv /liv/*
 \thandle @liv {
 ${LIV_GATE_BODY}
@@ -624,6 +650,7 @@ ${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
+${LIV_CLI_INSTALLER_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 ${LIV_LOGIN_HANDLE}
 	handle {
@@ -659,6 +686,7 @@ ${apexCacheHeader}${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
+${LIV_CLI_INSTALLER_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 ${LIV_LOGIN_HANDLE}
 	handle {
@@ -709,6 +737,7 @@ ${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
+${LIV_CLI_INSTALLER_HANDLE}
 ${LIV_ASSISTANT_HANDLE}
 ${LIV_LOGIN_HANDLE}
 	handle {

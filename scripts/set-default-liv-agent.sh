@@ -59,6 +59,20 @@ for c in curl python3; do
   command -v "$c" >/dev/null 2>&1 || { log "WARN: missing $c; skipping default-agent step"; exit 0; }
 done
 
+# Step 0 — fresh-install guard (2026-06-11, WS2 Concern C): on a box where
+# Claude Code is not yet a REGISTERED AionUi agent (fresh install before the
+# cliInstaller detect/install path has run), setting it as default AND hiding
+# the built-in aionrs would leave ZERO usable agents in the picker. No-op
+# until the Claude agent id shows up in /api/agents — the next update.sh /
+# installer re-run flips the default once Claude is registered. A substring
+# check keeps this tolerant of the /api/agents response shape; a curl failure
+# (empty body) also lands here, which is the safe direction.
+AGENTS_RAW="$(curl -sS --max-time "${PROBE_TIMEOUT}" "${API}/api/agents" 2>/dev/null || echo "")"
+if [[ "${AGENTS_RAW}" != *"${DESIRED_AGENT_ID}"* ]]; then
+  log "Claude Code agent ${DESIRED_AGENT_ID} not (yet) in /api/agents — leaving defaults untouched (no-op)"
+  exit 0
+fi
+
 # Step 1 — read current value
 CURRENT="$(curl -sS --max-time "${PROBE_TIMEOUT}" "${API}/api/settings/client" 2>/dev/null \
   | python3 -c 'import json,sys
