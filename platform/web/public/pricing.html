@@ -140,7 +140,7 @@
               window.location.href = "/verify";
               return;
             }
-            setError(d.error || "Could not start checkout. Please try again.");
+            setError((d.error || "Could not start checkout. Please try again.") + (d.hint ? " [" + d.hint + "]" : ""));
           } catch (e) {
             setError("Network error. Please try again.");
           } finally {
