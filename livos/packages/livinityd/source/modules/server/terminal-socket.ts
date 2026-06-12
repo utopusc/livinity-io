@@ -6,6 +6,7 @@ import {type WebSocket} from 'ws'
 
 import type Livinityd from '../../index.js'
 import type createLogger from '../utilities/logger.js'
+import {getDesktopUser} from '../system/desktop-user.js'
 
 /**
  * Phase 263-03 (L-062) — minimal user shape returned by findUserById /
@@ -183,15 +184,20 @@ export default function createTerminalWebSocketHandler({
 					},
 				)
 			} else {
-				// Try to get username of first non-root user on the system (UID 1000)
-				// Fall back to root if UID 1000 doesn't exist
-				let username = 'root'
+				// WS1 (2026-06-11): resolve the desktop user the terminal runs as.
+				// Was a hardcoded `id -nu 1000` lookup, which is wrong when the
+				// LivOS user is not uid 1000 (a real desktop box's human owner
+				// already holds 1000, so the livinityd user lands at 1001+).
+				// getDesktopUser() is the process's own login (livinityd runs AS
+				// the desktop user post Phase 192). Fall back to root only if that
+				// somehow fails to resolve to a usable account.
+				let username = getDesktopUser()
 				try {
-					const result = await $`id -nu 1000`
-					username = result.stdout.trim()
+					// Confirm the resolved user actually exists; else fall back to root.
+					await $`id -u ${username}`
 				} catch {
-					// UID 1000 doesn't exist, use root
-					logger.log('No user with UID 1000, using root for terminal')
+					logger.log(`Desktop user '${username}' not found, using root for terminal`)
+					username = 'root'
 				}
 
 				// Launch terminal

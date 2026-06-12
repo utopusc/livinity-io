@@ -44,6 +44,7 @@ import {access, mkdir, writeFile} from 'node:fs/promises'
 import {constants as fsConstants} from 'node:fs'
 import {randomUUID} from 'node:crypto'
 import {promisify} from 'node:util'
+import {getDesktopUser} from '../system/desktop-user.js'
 
 // Phase 102 r13 — minimal `Default/Preferences` JSON that primes a fresh
 // per-app user-data-dir so Chrome's profile-setup ("Welcome! Add a name or
@@ -288,9 +289,10 @@ export function createProfileSeeder(opts: ProfileSeederOpts = {}): ProfileSeeder
 			// dev box where livinityd runs as non-root), Chrome would have
 			// the right perms already.
 			try {
-				await execP('chown', ['-R', 'bruce:bruce', appDir])
+				const _du = getDesktopUser()
+				await execP('chown', ['-R', `${_du}:${_du}`, appDir])
 			} catch (err) {
-				log.warn?.(`profile-seeder: chown ${appDir} → bruce failed (non-fatal — only required when livinityd is root)`, err)
+				log.warn?.(`profile-seeder: chown ${appDir} → ${getDesktopUser()} failed (non-fatal — only required when livinityd is root)`, err)
 			}
 
 			// Phase 102 r13 — suppress Chrome's first-launch profile-setup
@@ -313,7 +315,8 @@ export function createProfileSeeder(opts: ProfileSeederOpts = {}): ProfileSeeder
 					await mkFn(defaultDir, {recursive: true})
 					await writeFile(prefsPath, DEFAULT_PREFERENCES_JSON, {encoding: 'utf8'})
 					try {
-						await execP('chown', ['bruce:bruce', defaultDir, prefsPath])
+						const _du = getDesktopUser()
+						await execP('chown', [`${_du}:${_du}`, defaultDir, prefsPath])
 					} catch (err) {
 						log.warn?.(`profile-seeder: chown Default/Preferences failed (non-fatal)`, err)
 					}

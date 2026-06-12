@@ -69,15 +69,19 @@ describe('fluxbox-wm', () => {
 		expect(env.DISPLAY).toBe(':1')
 	})
 
-	it('spawns under sudo -n -u bruce by default', async () => {
+	it('spawns under sudo -n -u <desktop-user> by default', async () => {
 		vi.useFakeTimers()
+		// WS1 (2026-06-11): the default user is getDesktopUser() (the process's own
+		// login) not a hardcoded 'bruce'. Assert against the resolver so the test
+		// is runner-agnostic (Mini PC=bruce, jack box=jack, CI/dev=runner login).
+		const {getDesktopUser} = await import('../system/desktop-user.js')
 		const {startFluxbox} = await import('./fluxbox-wm.js')
 		const p = startFluxbox({})
 		await vi.advanceTimersByTimeAsync(600)
 		await p
 		expect(spawnCalls[0]?.cmd).toBe('sudo')
 		const userIdx = spawnCalls[0]!.args.indexOf('-u')
-		expect(spawnCalls[0]!.args[userIdx + 1]).toBe('bruce')
+		expect(spawnCalls[0]!.args[userIdx + 1]).toBe(getDesktopUser())
 	})
 
 	it('stop() sends SIGTERM then SIGKILL after 2s', async () => {

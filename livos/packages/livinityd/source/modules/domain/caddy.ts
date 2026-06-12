@@ -639,6 +639,22 @@ ${WS_TRANSPORT_BODY}
 export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tunnel = false, nativeApps: Array<{subdomain: string; port: number; streaming?: boolean}> = []): string {
 	const blocks: string[] = []
 
+	// WS1 (2026-06-11) — the /liv-family CSP `frame-ancestors` literal was
+	// hardcoded to `https://bruce.livinity.io` in the handle constants
+	// (LIV_ASSISTANT_HANDLE, LIV_ASSISTANT_SUBRESOURCE_HANDLE). On every
+	// non-bruce box that domain is wrong — it worked only because the sibling
+	// `'self'` token already covers the same-origin shell iframe. Resolve the
+	// embedder domain at emit time from the operator's actual mainDomain so the
+	// explicit allow-listed origin is correct per box (and drop the bogus
+	// literal entirely when no domain is configured). Single post-process pass:
+	// the literal appears ONLY in CSP headers in the emitted output (comments
+	// carrying it are not part of the generated file).
+	const applyCsp = (out: string): string =>
+		out.replaceAll(
+			"frame-ancestors 'self' https://bruce.livinity.io",
+			config.mainDomain ? `frame-ancestors 'self' https://${config.mainDomain}` : "frame-ancestors 'self'",
+		)
+
 	if (!config.mainDomain) {
 		// No domain configured — minimal :80 fallback. Multi-user / subdomain
 		// routing requires a domain. Phase 231 retirement — legacy openclaw
@@ -662,7 +678,7 @@ ${WS_TRANSPORT_BODY}
 		// Phase 219 hotfix — CF global block harmless even without a domain (no
 		// auto-HTTPS kicks in on :80-only configs) but keeps the file structure
 		// consistent.
-		return CADDY_GLOBAL_BLOCK + '\n' + blocks.join('\n\n') + '\n'
+		return applyCsp(CADDY_GLOBAL_BLOCK + '\n' + blocks.join('\n\n') + '\n')
 	}
 
 	// Phase 134+ — when Cloudflare Tunnel terminates TLS at the edge and forwards
@@ -905,7 +921,7 @@ ${WS_TRANSPORT_BODY}
 	// every operator running LivOS behind Cloudflare (proxy on, SSL Flexible
 	// or even Full) is protected from the 308 redirect loop that breaks the
 	// login page. Harmless when CF is not in front.
-	return CADDY_GLOBAL_BLOCK + '\n' + blocks.join('\n\n') + '\n'
+	return applyCsp(CADDY_GLOBAL_BLOCK + '\n' + blocks.join('\n\n') + '\n')
 }
 
 // ─── Phase 104 plan 104-03 — local-lan generator RETIRED in Phase 142-01 ──

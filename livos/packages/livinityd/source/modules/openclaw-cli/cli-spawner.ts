@@ -39,6 +39,7 @@ import {
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import {getDesktopHome} from '../system/desktop-user.js'
 
 // ─── Typed errors ────────────────────────────────────────────────────────────
 
@@ -175,8 +176,9 @@ export function buildOpenclawEnv(
 		...base,
 		OPENCLAW_STATE_DIR:
 			base.OPENCLAW_STATE_DIR ?? DEFAULT_OPENCLAW_STATE_DIR,
-		// HOME defaults to bruce's home on Mini PC; allow override for tests.
-		HOME: base.HOME ?? '/home/bruce',
+		// HOME defaults to the desktop user's home; allow override for tests.
+		// WS1: was hardcoded /home/bruce — resolve from the process's own user.
+		HOME: base.HOME ?? getDesktopHome(),
 		// Disable color output so JSON parsing doesn't trip on ANSI codes.
 		NO_COLOR: '1',
 	}

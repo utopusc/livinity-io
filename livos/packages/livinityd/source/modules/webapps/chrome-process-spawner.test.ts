@@ -35,6 +35,10 @@ import {
 	spawnChromeProcess,
 	ChromeProcessSpawnError,
 } from './chrome-process-spawner.js'
+// WS1 (2026-06-11): the `-u <user>` default now resolves to the desktop user
+// (getDesktopUser()) instead of a hardcoded 'bruce'. makeValidOpts() leaves
+// opts.user unset, so assert against the resolver to stay runner-agnostic.
+import {getDesktopUser} from '../system/desktop-user.js'
 
 // ─── Test primitives ────────────────────────────────────────────────────────
 
@@ -90,7 +94,7 @@ describe('102-02-01 ChromeProcessSpawner', () => {
 				expect.arrayContaining([
 					'-n',
 					'-u',
-					'bruce',
+					getDesktopUser(),
 					`DISPLAY=${VALID_DISPLAY}`,
 					'google-chrome',
 					`--user-data-dir=${VALID_USERDATADIR}`,

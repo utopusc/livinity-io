@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # scripts/install/__tests__/test-systemd-user-bruce.sh
-# Phase 192-02 — verify deploy-livinityd.sh emits User=bruce + Group=bruce in
-# all 4 systemd unit heredocs and invokes _dld_run_bruce_migration before
-# _dld_write_systemd_unit in the main flow.
+# Phase 192-02 — verify deploy-livinityd.sh emits the desktop user as User= +
+# Group= in all 4 systemd unit heredocs and invokes _dld_run_bruce_migration
+# before _dld_write_systemd_unit in the main flow.
+#
+# WS1 (2026-06-11): the heredocs no longer hardcode `User=bruce` — they emit
+# `User=${_DLD_DESKTOP_USER}` (which derives from the platform username,
+# defaulting to bruce). Assert the parameterized form, NOT a literal bruce, and
+# ALSO assert no literal `User=bruce` regressed back in.
 
 set -uo pipefail
 
@@ -25,23 +30,31 @@ else
     exit 1
 fi
 
-# ── AC-192-02-T2-2: User=bruce count ≥ 2 (livos + ≥1 liv-*) ──────────────────
-info "AC-192-02-T2-2: User=bruce appearances"
-# Heredoc lines look like `User=bruce` at column 0 (heredoc body indentation).
-user_bruce_count=$(grep -cE "^User=bruce" "$DEPLOY_SH" || echo 0)
-if (( user_bruce_count >= 2 )); then
-    pass "User=bruce in ≥2 heredocs ($user_bruce_count occurrences)"
+# ── AC-192-02-T2-2: User=${_DLD_DESKTOP_USER} count ≥ 2 (livos + ≥1 liv-*) ────
+info "AC-192-02-T2-2: parameterized User= appearances"
+# WS1: heredoc lines are `User=${_DLD_DESKTOP_USER}` at column 0 (the var
+# expands at install time to the resolved desktop user).
+user_count=$(grep -cE '^User=\$\{_DLD_DESKTOP_USER\}' "$DEPLOY_SH" || echo 0)
+if (( user_count >= 2 )); then
+    pass "User=\${_DLD_DESKTOP_USER} in ≥2 heredocs ($user_count occurrences)"
 else
-    fail "User=bruce in only $user_bruce_count locations (expected ≥2 for livos + liv-*)"
+    fail "User=\${_DLD_DESKTOP_USER} in only $user_count locations (expected ≥2 for livos + liv-*)"
+fi
+# WS1 regression guard: a literal `User=bruce` must NOT come back (that would
+# hardcode the user again and break non-bruce boxes).
+if grep -qE "^User=bruce$" "$DEPLOY_SH"; then
+    fail "literal User=bruce regressed back into a heredoc (must be \${_DLD_DESKTOP_USER})"
+else
+    pass "no literal User=bruce heredoc (parameterized)"
 fi
 
-# ── AC-192-02-T2-3: Group=bruce present ──────────────────────────────────────
-info "AC-192-02-T2-3: Group=bruce present"
-if grep -qE "^Group=bruce" "$DEPLOY_SH"; then
-    group_count=$(grep -cE "^Group=bruce" "$DEPLOY_SH")
-    pass "Group=bruce present ($group_count occurrences)"
+# ── AC-192-02-T2-3: Group=${_DLD_DESKTOP_USER} present ───────────────────────
+info "AC-192-02-T2-3: parameterized Group= present"
+if grep -qE '^Group=\$\{_DLD_DESKTOP_USER\}' "$DEPLOY_SH"; then
+    group_count=$(grep -cE '^Group=\$\{_DLD_DESKTOP_USER\}' "$DEPLOY_SH")
+    pass "Group=\${_DLD_DESKTOP_USER} present ($group_count occurrences)"
 else
-    fail "Group=bruce missing"
+    fail "Group=\${_DLD_DESKTOP_USER} missing"
 fi
 
 # ── AC-192-02-T2-4: User=root NOT in active heredocs ─────────────────────────

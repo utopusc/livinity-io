@@ -35,6 +35,7 @@
 import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
 import {writeFileSync} from 'node:fs'
 import type {EventEmitter} from 'node:events'
+import {getDesktopUser} from '../system/desktop-user.js'
 
 /** Absolute deployed path of the wallpaper asset on the Mini PC. Ships via the
  * wholesale livinityd `source/` rsync (binary survives `rsync -a`). MUST stay
@@ -143,7 +144,7 @@ export interface BootBrandedShellOpts {
  */
 export async function bootBrandedShell(opts?: BootBrandedShellOpts): Promise<void> {
 	const display = opts?.display ?? ':1'
-	const user = opts?.user ?? 'bruce'
+	const user = opts?.user ?? getDesktopUser()
 	const wallpaperPath = opts?.wallpaperPath ?? DEFAULT_WALLPAPER_PATH
 	const stylePath = opts?.stylePath ?? '/tmp/livos-fluxbox-style'
 	const tint2RcPath = opts?.tint2RcPath ?? '/tmp/livos-tint2rc'

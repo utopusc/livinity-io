@@ -31,10 +31,11 @@
  */
 import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
 import {writeFileSync} from 'node:fs'
+import {getDesktopUser} from '../system/desktop-user.js'
 
 export interface StartFluxboxOpts {
 	display?: string                // default ':1'
-	user?: string                   // default 'bruce'
+	user?: string                   // default: the desktop user (getDesktopUser())
 	rcPath?: string                 // default '/tmp/livos-fluxbox.cfg'
 	spawnFn?: typeof nodeSpawn
 	logger?: {info: (m: string) => void; warn: (m: string, e?: unknown) => void; error: (m: string, e?: unknown) => void}
@@ -73,7 +74,7 @@ session.screen0.allowRemoteActions: false
 
 export async function startFluxbox(opts: StartFluxboxOpts = {}): Promise<FluxboxHandle> {
 	const display = opts.display ?? ':1'
-	const user = opts.user ?? 'bruce'
+	const user = opts.user ?? getDesktopUser()
 	const rcPath = opts.rcPath ?? '/tmp/livos-fluxbox.cfg'
 	const spawnFn = opts.spawnFn ?? nodeSpawn
 	const logger = opts.logger

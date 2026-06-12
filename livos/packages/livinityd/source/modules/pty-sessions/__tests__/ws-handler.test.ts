@@ -21,6 +21,11 @@
 import {beforeEach, describe, expect, test, vi} from 'vitest'
 
 import {createPtyTerminalWsHandler} from '../ws-handler.js'
+// WS1 (2026-06-11): when livos:desktop:user is UNSET the handler now falls back
+// to getDesktopUser() (the process's own login) instead of a hardcoded 'bruce'.
+// Tests that want a deterministic username set desktopUser explicitly; the
+// unset-fallback test asserts against the resolver.
+import {getDesktopUser} from '../../system/desktop-user.js'
 
 // ─── Fakes ──────────────────────────────────────────────────────────────
 
@@ -257,7 +262,7 @@ describe('createPtyTerminalWsHandler — auth + feature-flag gates', () => {
 
 describe('createPtyTerminalWsHandler — init + spawn happy path', () => {
 	test('4. init msg → sessionManager.create called with username:"bruce", cols, rows, cwd', async () => {
-		const ctx = build({cookie: VALID_COOKIE, flag: true})
+		const ctx = build({cookie: VALID_COOKIE, flag: true, desktopUser: 'bruce'})
 		await ctx.handler(ctx.ws as never, ctx.request as never)
 		ctx.ws._emit(
 			'message',
@@ -288,7 +293,7 @@ describe('createPtyTerminalWsHandler — init + spawn happy path', () => {
 		expect(args.username).toBe('alice')
 	})
 
-	test('4c. (R4) livos:desktop:user unset → falls back to username:"bruce"', async () => {
+	test('4c. (R4) livos:desktop:user unset → falls back to getDesktopUser()', async () => {
 		const ctx = build({cookie: VALID_COOKIE, flag: true, desktopUser: null})
 		await ctx.handler(ctx.ws as never, ctx.request as never)
 		ctx.ws._emit(
@@ -297,7 +302,8 @@ describe('createPtyTerminalWsHandler — init + spawn happy path', () => {
 		)
 		await new Promise((resolve) => setImmediate(resolve))
 		const args = ctx.sessionManager.create.mock.calls[0][0]
-		expect(args.username).toBe('bruce')
+		// WS1: fallback is the process's own login (was hardcoded 'bruce').
+		expect(args.username).toBe(getDesktopUser())
 	})
 
 	test('5. after session create → ws.send was called with JSON {type:"ready",sessionId}', async () => {
@@ -564,7 +570,7 @@ describe('createPtyTerminalWsHandler — Phase 246-03 attach branch', () => {
 
 describe('createPtyTerminalWsHandler — Phase 246-03 create branch + scrollback', () => {
 	test('18. create branch calls sessionManager.create with opts (NOT raw PtySession)', async () => {
-		const ctx = build({cookie: VALID_COOKIE, flag: true})
+		const ctx = build({cookie: VALID_COOKIE, flag: true, desktopUser: 'bruce'})
 		await ctx.handler(ctx.ws as never, ctx.request as never)
 		ctx.ws._emit(
 			'message',

@@ -21,6 +21,9 @@ import {EventEmitter} from 'node:events'
 import {describe, it, expect, vi} from 'vitest'
 
 import {spawnXvfb, XvfbReadyTimeoutError} from './xvfb-spawner.js'
+// WS1 (2026-06-11): the `-u <user>` default is getDesktopUser() (the process's
+// own login) not a hardcoded 'bruce'. Assert against the resolver — runner-agnostic.
+import {getDesktopUser} from '../system/desktop-user.js'
 
 // ─── Test primitives ────────────────────────────────────────────────────────
 
@@ -60,7 +63,7 @@ describe('102-01-02 XvfbSpawner', () => {
 		expect(args).toEqual([
 			'-n',
 			'-u',
-			'bruce',
+			getDesktopUser(),
 			'Xvfb',
 			':10',
 			'-screen',

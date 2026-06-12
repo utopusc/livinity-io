@@ -38,6 +38,7 @@ import {spawn as nodeSpawn, type ChildProcess, type SpawnOptions} from 'node:chi
 import {connect as nodeNetConnect, type Socket} from 'node:net'
 
 import {WEBAPPS_X11_ENV} from '../webapps/window-discovery.js'
+import {getDesktopUser, getDesktopUid} from '../system/desktop-user.js'
 
 /** 4 MB — matches Fmp4Fanout default (fmp4-fanout.ts broadcast threshold). */
 export const BACKPRESSURE_BYTES = 4 * 1024 * 1024
@@ -143,17 +144,19 @@ export function spawnVncForWindow(opts: SpawnVncOpts): ChildProcess {
 	// EXCEPTION — the host `:0` is the GDM-managed GNOME/Ubuntu Xorg, which is
 	// access-control PROTECTED (NOT started with -ac like the Xvfb displays), so
 	// x11vnc must present the GDM session cookie via -auth or it fails to open
-	// the display. bruce is uid 1000 (autologin), so the cookie lives at
-	// /run/user/1000/gdm/Xauthority. Only `:0` gets this; -ac Xvfb displays
+	// the display. The desktop user's GDM cookie lives at
+	// /run/user/<uid>/gdm/Xauthority. Only `:0` gets this; -ac Xvfb displays
 	// (:1/:10/:60…) keep the cookie-free path. Verified: x11vnc -display :0
 	// -auth … binds + serves the live GNOME desktop.
-	const GDM_XAUTHORITY = '/run/user/1000/gdm/Xauthority'
+	// WS1 (2026-06-11): resolve the desktop uid/user at runtime — the autologin
+	// owner may NOT be uid 1000 on a real desktop box (the human owner holds it).
+	const GDM_XAUTHORITY = `/run/user/${getDesktopUid()}/gdm/Xauthority`
 	const authFlags: string[] =
 		opts.display === ':0' ? ['-auth', GDM_XAUTHORITY] : []
 	const args = [
 		'-n',
 		'-u',
-		'bruce',
+		getDesktopUser(),
 		`DISPLAY=${displayForEnv}`,
 		...(opts.display === ':0' ? [`XAUTHORITY=${GDM_XAUTHORITY}`] : []),
 		'/usr/bin/x11vnc',

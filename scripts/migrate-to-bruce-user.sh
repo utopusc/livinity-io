@@ -28,6 +28,12 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 SUDOERS_SRC="$REPO_ROOT/scripts/install/sudoers.d/livinityd"
 SUDOERS_DEST="${SUDOERS_DEST:-/etc/sudoers.d/livinityd}"
 DRY_RUN="${DRY_RUN:-0}"
+# WS1 (2026-06-11) — the desktop user LivOS runs as. Derives from
+# LIVOS_DESKTOP_USER / DESKTOP_USER (passed by deploy-livinityd.sh from the
+# platform username), defaulting to `bruce` so legacy + the Mini PC are
+# unchanged. The .bruce-migrated marker filename is kept stable (it's an
+# idempotency flag, not a username) so existing boxes don't re-migrate.
+DESKTOP_USER="${DESKTOP_USER:-${LIVOS_DESKTOP_USER:-bruce}}"
 
 log() { echo "[migrate-to-bruce] $*"; }
 do_cmd() {
@@ -55,41 +61,41 @@ fi
 # ── 3. Ensure bruce user exists ─────────────────────────────────────────────
 # In TEST_ROOT mode we skip user creation (CI may not have useradd).
 if [[ -z "${TEST_ROOT:-}" ]]; then
-    if ! id bruce >/dev/null 2>&1; then
-        log "bruce user does not exist — creating with useradd -m -s /bin/bash"
-        do_cmd "useradd -m -s /bin/bash bruce" || {
-            log "ERROR: useradd bruce failed — aborting migration"
+    if ! id "$DESKTOP_USER" >/dev/null 2>&1; then
+        log "$DESKTOP_USER user does not exist — creating with useradd -m -s /bin/bash"
+        do_cmd "useradd -m -s /bin/bash $DESKTOP_USER" || {
+            log "ERROR: useradd $DESKTOP_USER failed — aborting migration"
             exit 1
         }
     else
-        log "bruce user exists (uid=$(id -u bruce))"
+        log "$DESKTOP_USER user exists (uid=$(id -u "$DESKTOP_USER"))"
     fi
 else
-    log "TEST_ROOT mode — skipping bruce user creation"
+    log "TEST_ROOT mode — skipping $DESKTOP_USER user creation"
 fi
 
 # ── 4. Chown -R /opt/livos/data → bruce:bruce ───────────────────────────────
 if [[ -d "$LIVOS_DATA_DIR" ]]; then
-    log "chown -R bruce:bruce $LIVOS_DATA_DIR"
+    log "chown -R $DESKTOP_USER:$DESKTOP_USER $LIVOS_DATA_DIR"
     if [[ -z "${TEST_ROOT:-}" ]]; then
-        do_cmd "chown -R bruce:bruce $LIVOS_DATA_DIR"
+        do_cmd "chown -R $DESKTOP_USER:$DESKTOP_USER $LIVOS_DATA_DIR"
     else
         log "TEST_ROOT mode — skipping actual chown"
     fi
 else
-    log "WARN: $LIVOS_DATA_DIR does not exist — creating + chowning bruce:bruce"
+    log "WARN: $LIVOS_DATA_DIR does not exist — creating + chowning $DESKTOP_USER:$DESKTOP_USER"
     do_cmd "mkdir -p $LIVOS_DATA_DIR"
     if [[ -z "${TEST_ROOT:-}" ]]; then
-        do_cmd "chown bruce:bruce $LIVOS_DATA_DIR"
+        do_cmd "chown $DESKTOP_USER:$DESKTOP_USER $LIVOS_DATA_DIR"
     fi
 fi
 
 # ── 5. Chown .env* files → bruce:bruce mode 0640 ────────────────────────────
 for f in "$LIVOS_ENV_FILE" "$LIVOS_ENV_FILE.local"; do
     if [[ -f "$f" ]]; then
-        log "chown bruce:bruce $f + chmod 0640"
+        log "chown $DESKTOP_USER:$DESKTOP_USER $f + chmod 0640"
         if [[ -z "${TEST_ROOT:-}" ]]; then
-            do_cmd "chown bruce:bruce $f"
+            do_cmd "chown $DESKTOP_USER:$DESKTOP_USER $f"
             do_cmd "chmod 0640 $f"
         else
             log "TEST_ROOT mode — skipping actual chown/chmod on $f"
@@ -100,11 +106,11 @@ done
 # ── 6. Add bruce to docker group (if docker installed) ──────────────────────
 if [[ -z "${TEST_ROOT:-}" ]]; then
     if [[ -S /var/run/docker.sock ]] || command -v docker >/dev/null 2>&1; then
-        if ! id -nG bruce 2>/dev/null | grep -qw docker; then
-            log "adding bruce to docker group"
-            do_cmd "usermod -aG docker bruce"
+        if ! id -nG "$DESKTOP_USER" 2>/dev/null | grep -qw docker; then
+            log "adding $DESKTOP_USER to docker group"
+            do_cmd "usermod -aG docker $DESKTOP_USER"
         else
-            log "bruce already in docker group"
+            log "$DESKTOP_USER already in docker group"
         fi
     else
         log "docker not installed — skipping docker group add"
@@ -118,6 +124,18 @@ if [[ -f "$SUDOERS_SRC" ]]; then
     log "installing $SUDOERS_SRC → $SUDOERS_DEST (0440 root:root)"
     if [[ -z "${TEST_ROOT:-}" ]]; then
         do_cmd "install -m 0440 -o root -g root $SUDOERS_SRC $SUDOERS_DEST"
+        # 7a. WS1 (2026-06-11) — the repo fragment hardcodes the user-spec subject
+        # `bruce` (sudoers does NOT expand env vars, so it must be templated at
+        # install time). Rewrite ONLY the user-spec subject (`^bruce ALL=`) and the
+        # self-target Runas (`=(bruce)`) to the actual desktop user. The
+        # `chown -R 1000:1000` Cmnd_Alias is deliberately UNTOUCHED — that 1000 is
+        # the Tor/app CONTAINER's internal uid, not the host desktop user. No-op on
+        # a bruce box (bruce→bruce). RCE boundary: visudo -c re-validates below; a
+        # botched substitution removes the file rather than leaving broken sudoers.
+        if [[ "$DESKTOP_USER" != "bruce" ]]; then
+            log "templating sudoers user-spec: bruce → $DESKTOP_USER"
+            do_cmd "sed -i -E 's/^bruce([[:space:]]+ALL=)/${DESKTOP_USER}\\1/; s/=\\(bruce\\)/=(${DESKTOP_USER})/g' $SUDOERS_DEST"
+        fi
         # 7b. visudo syntax check — if it fails, REMOVE the file (broken sudoers
         # bricks sudo entirely; aborting with a removed file is safe).
         if command -v visudo >/dev/null 2>&1; then
@@ -138,7 +156,7 @@ fi
 do_cmd "mkdir -p $LIVOS_DATA_DIR"
 do_cmd "touch $MARKER"
 if [[ -z "${TEST_ROOT:-}" ]]; then
-    do_cmd "chown bruce:bruce $MARKER"
+    do_cmd "chown $DESKTOP_USER:$DESKTOP_USER $MARKER"
 fi
 
 log "MIGRATION COMPLETE — restart livos.service to apply User=bruce"
