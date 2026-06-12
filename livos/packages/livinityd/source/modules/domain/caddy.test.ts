@@ -773,7 +773,12 @@ describe('Phase 237 — split subresource matchers (@liv_ws + @liv_api_subresour
 		)
 		const idx = out.indexOf('handle @liv_ws {')
 		expect(idx).toBeGreaterThan(-1)
-		const blockTail = out.slice(idx, idx + 400)
+		// Slice to the next matcher, not a fixed window — the handle body now
+		// opens with the long "NO forward_auth on WS" rationale comment
+		// (2026-06-10 hotfix e336afdd) which alone exceeds 400 chars.
+		const endIdx = out.indexOf('@liv_api_subresource', idx)
+		expect(endIdx).toBeGreaterThan(idx)
+		const blockTail = out.slice(idx, endIdx)
 		expect(blockTail).toContain('reverse_proxy 127.0.0.1:3020')
 		expect(blockTail).toContain('header_down -X-Frame-Options')
 		expect(blockTail).toContain('header_down -Content-Security-Policy')
@@ -1660,26 +1665,101 @@ describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', (
 		expectGatedHandle(apexOut(), 'handle @liv {')
 	})
 
-	it('handle @liv_ws carries forward_auth before its :3020 proxy', () => {
-		expectGatedHandle(apexOut(), 'handle @liv_ws {')
+	// 2026-06-10 hotfix e336afdd (LIVOS-041 follow-up): forward_auth on a WS
+	// handle breaks the upgrade — the auth subrequest inherits the
+	// `Upgrade: websocket` header, livinityd's server.on('upgrade') hijacks it
+	// at :8080/auth/verify (the Express route never runs) → socket reset →
+	// 502 on EVERY /ws. WS surfaces gate at their own layer instead
+	// (AionUi's aionui-session; the pty WS handler JWT). NEVER re-gate these.
+	it('handle @liv_ws is UNGATED — forward_auth on WS breaks the upgrade (e336afdd)', () => {
+		const out = apexOut()
+		const idx = out.indexOf('handle @liv_ws {')
+		expect(idx).toBeGreaterThan(-1)
+		const end = out.indexOf('@liv_api_subresource', idx)
+		expect(end).toBeGreaterThan(idx)
+		// Match the directive form — the handle body's rationale COMMENT
+		// legitimately mentions the word forward_auth.
+		expect(out.slice(idx, end)).not.toContain('forward_auth 127.0.0.1')
 	})
 
 	it('handle @liv_api_subresource carries forward_auth before its :3020 proxy', () => {
 		expectGatedHandle(apexOut(), 'handle @liv_api_subresource {')
 	})
 
-	it('handle @livos_terminal_ws carries forward_auth before its :8080 proxy', () => {
-		expectGatedHandle(apexOut(), 'handle @livos_terminal_ws {')
+	it('handle @livos_terminal_ws is UNGATED — gates at the pty WS handler JWT (e336afdd)', () => {
+		const out = apexOut()
+		const idx = out.indexOf('handle @livos_terminal_ws {')
+		expect(idx).toBeGreaterThan(-1)
+		const end = out.indexOf('@liv_cli_installer', idx)
+		expect(end).toBeGreaterThan(idx)
+		expect(out.slice(idx, end)).not.toContain('forward_auth 127.0.0.1')
 	})
 
 	it('handle @liv_login carries forward_auth before its :8080 proxy', () => {
 		expectGatedHandle(apexOut(), 'handle @liv_login {')
 	})
 
-	it('LIVOS-054 — the /liv/trpc → :8080 bridge is GONE', () => {
+	it('LIVOS-054 — the broad /liv/trpc → :8080 bridge stays GONE (only the exact cliInstaller carve-out remains)', () => {
 		const out = apexOut()
 		expect(out).not.toContain('@liv_trpc')
-		expect(out).not.toContain('path /liv/trpc')
+		// 2026-06-11 carve-out: the ONLY permitted /liv/trpc surface is the
+		// @liv_cli_installer exact-path matcher. Strip its lines, then assert
+		// no other /liv/trpc emission exists — so the broad bridge (bare
+		// /liv/trpc, /liv/trpc/*, or any new matcher) can never silently return.
+		const withoutCarveOut = out
+			.split('\n')
+			.filter((l) => !l.includes('@liv_cli_installer'))
+			.join('\n')
+		expect(withoutCarveOut).not.toContain('/liv/trpc')
+	})
+
+	it('cliInstaller carve-out — matcher is EXACT 3 paths, no wildcard (tRPC comma-batch bypass lock)', () => {
+		const out = apexOut()
+		// A trailing-wildcard matcher (path /liv/trpc/cliInstaller.*) would also
+		// match tRPC comma-batched paths like
+		// /liv/trpc/cliInstaller.detect,users.create?batch=1 and re-open the
+		// FULL tRPC API through the batch — exactly what LIVOS-054 closed.
+		expect(out).toContain(
+			'@liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth',
+		)
+		expect(out).not.toContain('cliInstaller.*')
+		expect(out).not.toContain('/liv/trpc/*')
+	})
+
+	it('cliInstaller carve-out — forward_auth-gated, strips /liv, proxies to :8080', () => {
+		const out = apexOut()
+		const idx = out.indexOf('handle @liv_cli_installer {')
+		expect(idx).toBeGreaterThan(-1)
+		// Body ends where the adjacent @liv matcher begins (carve-out is emitted
+		// immediately before LIV_ASSISTANT_HANDLE).
+		const end = out.indexOf('@liv path /liv /liv/*', idx)
+		expect(end).toBeGreaterThan(idx)
+		const body = out.slice(idx, end)
+		expect(body).toContain('forward_auth 127.0.0.1:8080')
+		expect(body).toContain('uri /auth/verify')
+		const stripIdx = body.indexOf('uri strip_prefix /liv')
+		const proxyIdx = body.indexOf('reverse_proxy 127.0.0.1:8080')
+		expect(stripIdx).toBeGreaterThan(-1)
+		expect(proxyIdx).toBeGreaterThan(stripIdx)
+	})
+
+	it('cliInstaller carve-out — emits in all three site shapes (fallback :80 + apex + multi-user)', () => {
+		const apex = apexOut()
+		expect(apex).toContain('@liv_cli_installer path /liv/trpc/cliInstaller.detect')
+		const fallback = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expect(fallback).toContain('@liv_cli_installer path /liv/trpc/cliInstaller.detect')
+		const multi = generateFullCaddyfile(
+			{
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			},
+			true,
+			false,
+			[],
+		)
+		const subStart = multi.indexOf('bruce.livinity.io {')
+		expect(subStart).toBeGreaterThan(-1)
+		expect(multi.indexOf('@liv_cli_installer path /liv/trpc/cliInstaller.detect', subStart)).toBeGreaterThan(subStart)
 	})
 
 	it('LIVOS-047 — no Referer header matcher anywhere in the output', () => {

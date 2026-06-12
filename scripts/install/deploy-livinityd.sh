@@ -645,6 +645,20 @@ _dld_clone_source() {
     else
         warn "repo/scripts/install/cli/ not in stage dir — CLI Tools onboarding installs will exit 127 (G12)"
     fi
+
+    # 2026-06-11 (WS2 Concern C): ship set-default-liv-agent.sh — repo-root
+    # scripts/ is NOT covered by the livos/ rsync (same gap as G12 above), so
+    # fresh boxes were missing it at /opt/livos/scripts/ and only update.sh
+    # boxes ever got the Claude-default normalization. The script self-guards:
+    # it no-ops until Claude Code is a registered AionUi agent, so shipping +
+    # running it on a fresh box can never hide the only working agent.
+    if [[ -f "$_DLD_STAGE_DIR/scripts/set-default-liv-agent.sh" ]]; then
+        install -m 0755 "$_DLD_STAGE_DIR/scripts/set-default-liv-agent.sh" \
+            "$_DLD_LIVOS_DIR/scripts/set-default-liv-agent.sh"
+        ok "set-default-liv-agent.sh deployed → $_DLD_LIVOS_DIR/scripts/"
+    else
+        warn "scripts/set-default-liv-agent.sh not in stage dir — default-agent normalization unavailable"
+    fi
 }
 
 # ── 4b'. Docker engine (field bug 2026-06-11) ────────────────────────────────
@@ -2150,6 +2164,26 @@ _dld_install_liv_assistant() {
     else
         warn "liv-assistant.service failed to start — check journalctl -u liv-assistant -n 30 (/liv will 502 until fixed)"
     fi
+
+    # 2026-06-11 (WS2 Concern C): default-agent normalization — mirror
+    # update.sh's post-restart call site. The helper self-guards (no-op until
+    # Claude Code is registered in /api/agents) and never fails the deploy.
+    local _dla="$_DLD_LIVOS_DIR/scripts/set-default-liv-agent.sh"
+    [[ -f "$_dla" ]] || _dla="$_DLD_STAGE_DIR/scripts/set-default-liv-agent.sh"
+    if [[ -f "$_dla" ]]; then
+        # systemctl restart returns before :3020 binds — give AionUi a short
+        # window to come up so the helper's probes don't all time out.
+        local _i
+        for _i in 1 2 3 4 5; do
+            curl -fsS --max-time 2 http://127.0.0.1:3020/api/auth/status >/dev/null 2>&1 && break
+            sleep 2
+        done
+        if bash "$_dla" 2>&1 | tail -3; then
+            ok "default-agent normalization ran (no-op until Claude Code registers)"
+        else
+            warn "set-default-liv-agent.sh exited non-zero — non-fatal, re-run via update.sh"
+        fi
+    fi
 }
 
 # ── 10. Caddy reverse_proxy 127.0.0.1:8080 ──────────────────────────────────
@@ -2223,6 +2257,26 @@ _dld_update_caddy_to_livinityd() {
         reverse_proxy 127.0.0.1:8080 {
             header_down -X-Frame-Options
             header_down -Content-Security-Policy
+            flush_interval -1
+            transport http {
+                versions 1.1
+            }
+        }
+    }
+    # 2026-06-11 LIVOS-054 carve-out: ONLY the 3 cliInstaller procedures reach :8080
+    # (Liv AI Local Agents panel). EXACT paths — a cliInstaller.* wildcard would match
+    # tRPC comma-batch URLs and re-open the full API. Mirrors caddy.ts LIV_CLI_INSTALLER_HANDLE.
+    @liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth
+    handle @liv_cli_installer {
+        forward_auth 127.0.0.1:8080 {
+            uri /auth/verify
+            @bad status 401
+            handle_response @bad {
+                redir https://{host}/login?redirect={scheme}://{host}{uri} 302
+            }
+        }
+        uri strip_prefix /liv
+        reverse_proxy 127.0.0.1:8080 {
             flush_interval -1
             transport http {
                 versions 1.1
