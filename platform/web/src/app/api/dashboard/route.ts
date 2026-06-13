@@ -6,6 +6,8 @@ import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth';
 import { getSubscriptionStatus } from '@/lib/subscription';
 import { reconcileThrottled, isLiveStatus } from '@/lib/stripe-sync';
 import { getSupabaseService, presenceChannelName } from '@/lib/supabase-server';
+import { getMonthlyUsage } from '@/lib/bandwidth';
+import { bandwidthLimitFor } from '@/lib/plan';
 
 // Webhook-independent healing: if a user has a Stripe customer but no mirrored
 // status (a missed/failed webhook), pull state from Stripe on dashboard load.
@@ -121,11 +123,6 @@ export async function GET(req: NextRequest) {
     console.error('[146/dashboard] presence read failed for', user.userId, err);
   }
 
-  // Phase 147 carryover: bandwidth metering will read from Supabase bandwidth_usage
-  // table (currently on Server5 platform DB, restored to Supabase via W1-T1). For
-  // Phase 146 cutover, hardcode zeros so the dashboard widget renders without errors.
-  const bandwidth = { usedBytes: 0, limitBytes: 53_687_091_200, allowed: true };
-
   // Get user's registered devices
   let devices: { deviceId: string; deviceName: string; platform: string; createdAt: string; lastSeen: string | null }[] = [];
   try {
@@ -158,6 +155,20 @@ export async function GET(req: NextRequest) {
   // "Generate API key" button state.
   const billing = await getSubscriptionStatus(user.userId);
 
+  // WS3: real bandwidth meter. Limit depends on tier (1 TB paid / 50 GB legacy),
+  // so it's computed after billing is known. usedBytes comes from the
+  // bandwidth_usage table (populated hourly by /api/cron/refresh-bandwidth);
+  // make it non-fatal so a DB hiccup never breaks the dashboard.
+  const limitBytes = bandwidthLimitFor(billing.legacyFree);
+  let usedBytes = 0;
+  try {
+    const usage = await getMonthlyUsage(user.userId);
+    usedBytes = usage.usedBytes;
+  } catch (err) {
+    console.error('[dashboard] bandwidth usage read failed for', user.userId, err);
+  }
+  const usedPercent = limitBytes > 0 ? Math.round((usedBytes / limitBytes) * 100) : 0;
+
   return NextResponse.json({
     user: {
       id: user.userId,
@@ -184,9 +195,9 @@ export async function GET(req: NextRequest) {
       provisioned: cfProvisioned,
     },
     bandwidth: {
-      usedBytes: bandwidth.usedBytes,
-      limitBytes: bandwidth.limitBytes,
-      usedPercent: Math.round((bandwidth.usedBytes / bandwidth.limitBytes) * 100),
+      usedBytes,
+      limitBytes,
+      usedPercent,
     },
     devices,
   });
