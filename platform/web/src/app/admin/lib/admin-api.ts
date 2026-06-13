@@ -315,6 +315,11 @@ export type AdminUserRow = {
   email_verified: boolean;
   created_at: string;
   last_seen_at: string | null;
+  // AUM additions (list view surfaces billing state inline)
+  subscription_status: string | null;
+  legacy_free: boolean;
+  suspended: boolean;
+  plan_label: string;
 };
 
 export type UsersListResult = {
@@ -413,10 +418,13 @@ export function getRecentActivity(opts: { limit?: number } = {}): Promise<Activi
   return adminGet<ActivityResult>(`/api/admin/activity/recent${qs ? `?${qs}` : ''}`);
 }
 
-export function listAdminUsers(opts: { limit?: number; offset?: number } = {}): Promise<UsersListResult> {
+export function listAdminUsers(
+  opts: { limit?: number; offset?: number; q?: string } = {},
+): Promise<UsersListResult> {
   const params = new URLSearchParams();
   if (opts.limit != null) params.set('limit', String(opts.limit));
   if (opts.offset != null) params.set('offset', String(opts.offset));
+  if (opts.q != null && opts.q !== '') params.set('q', opts.q);
   const qs = params.toString();
   return adminGet<UsersListResult>(`/api/admin/users${qs ? `?${qs}` : ''}`);
 }
@@ -468,12 +476,60 @@ export async function syncCatalog(opts: { limit?: number; offset?: number } = {}
   return res.json() as Promise<SyncCatalogResult>;
 }
 
+// ---------------------------------------------------------------------------
+// AUM: admin-action audit log row + result shapes
+// ---------------------------------------------------------------------------
+export type AdminActionRow = {
+  id: string;
+  admin_user_id: string | null;
+  admin_username: string | null;
+  target_user_id: string | null;
+  target_username: string | null;
+  action: string;
+  detail: unknown;
+  created_at: string;
+};
+
+export type AuditResult = {
+  actions: AdminActionRow[];
+  limit: number;
+};
+
+// Union of every action the POST /api/admin/users/[id]/actions endpoint accepts.
+export type AdminActionName =
+  | 'grant_comp'
+  | 'remove_comp'
+  | 'revoke'
+  | 'restore'
+  | 'cancel_subscription'
+  | 'resume_subscription'
+  | 'make_admin'
+  | 'remove_admin'
+  | 'verify_email'
+  | 'suspend'
+  | 'unsuspend'
+  | 'set_note'
+  | 'delete_user';
+
 // CARRY-P213-USERS-DRILLDOWN — full per-user detail.
 export type AdminUserDetail = {
   user: AdminUserRow & {
     cf_tunnel_id: string | null;
     cf_provisioned_at: string | null;
+    // AUM: billing + moderation columns surfaced for the actions panel.
+    subscription_status: string | null;
+    legacy_free: boolean;
+    has_used_trial: boolean;
+    cancel_at_period_end: boolean;
+    current_period_end: string | null;
+    past_due_since: string | null;
+    access_revoked_at: string | null;
+    stripe_customer_id: string | null;
+    stripe_subscription_id: string | null;
+    suspended_at: string | null;
+    admin_note: string | null;
   };
+  admin_actions: AdminActionRow[];
   install_history: {
     id: string;
     app_id: string | null;
@@ -522,6 +578,46 @@ export type AdminUserDetail = {
 
 export function getAdminUserDetail(userId: string): Promise<AdminUserDetail> {
   return adminGet<AdminUserDetail>(`/api/admin/users/${encodeURIComponent(userId)}`);
+}
+
+// ---------------------------------------------------------------------------
+// AUM: per-user moderation/billing actions + global audit log
+// ---------------------------------------------------------------------------
+
+export type UserActionResult = { ok?: boolean; error?: string; [k: string]: unknown };
+
+// POST /api/admin/users/{id}/actions  body { action, ...params }.
+// Throws on non-2xx with the server-provided error text.
+export async function userAction(
+  userId: string,
+  action: AdminActionName,
+  params: Record<string, unknown> = {},
+): Promise<UserActionResult> {
+  const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/actions`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    credentials: 'same-origin',
+    body: JSON.stringify({ action, ...params }),
+  });
+  let data: UserActionResult;
+  try {
+    data = (await res.json()) as UserActionResult;
+  } catch {
+    data = {};
+  }
+  if (!res.ok) {
+    throw new Error(data.error || `userAction ${action} ${res.status}`);
+  }
+  return data;
+}
+
+// GET /api/admin/audit?limit=&userId=
+export function getAuditLog(opts: { limit?: number; userId?: string } = {}): Promise<AuditResult> {
+  const params = new URLSearchParams();
+  if (opts.limit != null) params.set('limit', String(opts.limit));
+  if (opts.userId != null && opts.userId !== '') params.set('userId', opts.userId);
+  const qs = params.toString();
+  return adminGet<AuditResult>(`/api/admin/audit${qs ? `?${qs}` : ''}`);
 }
 
 export function listInstallFailures(opts: { limit?: number } = {}): Promise<InstallFailuresResult> {
