@@ -494,11 +494,41 @@
         } catch (e) { return null; }
       }
 
+      function formatDay(iso) {
+        if (!iso) return null;
+        try {
+          return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        } catch (e) { return null; }
+      }
+
+      function daysLeft(iso) {
+        if (!iso) return null;
+        try { return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000)); }
+        catch (e) { return null; }
+      }
+
+      // Returns { label, cls } for the billing status pill.
+      function billingBadge(b) {
+        if (!b) return { label: "—", cls: "" };
+        if (b.legacyFree) return { label: "Free", cls: "ok" };
+        switch (b.plan) {
+          case "trialing": {
+            const d = daysLeft(b.currentPeriodEnd);
+            return { label: d != null ? ("Trial · " + d + (d === 1 ? " day" : " days") + " left") : "Trial", cls: "ok" };
+          }
+          case "active":   return { label: "Active", cls: "ok" };
+          case "past_due": return { label: "Past due", cls: "warn" };
+          default:         return { label: "No subscription", cls: "warn" };
+        }
+      }
+
       function App() {
         const [user, setUser] = useState(null);
         const [loading, setLoading] = useState(true);
         const [devices, setDevices] = useState([]);
         const [apiKeyPrefix, setApiKeyPrefix] = useState(null);
+        const [billing, setBilling] = useState(null);
+        const [portalLoading, setPortalLoading] = useState(false);
         const [active, setActive] = useState("account");
         const [toast, setToast] = useState(null);
         const [regenerating, setRegenerating] = useState(false);
@@ -541,6 +571,7 @@
               if (dashRes && dashRes.ok) {
                 const d = await dashRes.json();
                 if (d.apiKey && d.apiKey.prefix) setApiKeyPrefix(d.apiKey.prefix);
+                if (d.billing) setBilling(d.billing);
               }
               if (devRes && devRes.ok) {
                 const d = await devRes.json();
@@ -560,7 +591,7 @@
         // Sync active section to scroll position
         useEffect(() => {
           if (loading) return;
-          const ids = ["account", "create-computer", "security", "danger"];
+          const ids = ["account", "billing", "create-computer", "security", "danger"];
           const onScroll = () => {
             for (const id of ids) {
               const el = document.getElementById(id);
@@ -661,6 +692,22 @@
           } catch (e) { showToast("Copy failed"); }
         }, []);
 
+        const openPortal = useCallback(async () => {
+          if (portalLoading) return;
+          setPortalLoading(true);
+          try {
+            const res = await fetch("/api/stripe/portal", { method: "POST", credentials: "same-origin" });
+            const d = await res.json().catch(() => ({}));
+            if (res.ok && d.url) { window.location.href = d.url; return; }
+            if (res.status === 404) { window.location.href = "/pricing"; return; }
+            showToast(d.error || "Couldn't open billing portal");
+          } catch (e) {
+            showToast("Network error — try again");
+          } finally {
+            setPortalLoading(false);
+          }
+        }, [portalLoading]);
+
         if (loading) {
           return <main className="p-loading"><p>Loading your profile…</p></main>;
         }
@@ -668,6 +715,7 @@
 
         const sections = [
           { id: "account",         label: "Account" },
+          { id: "billing",         label: "Billing" },
           { id: "create-computer", label: "Create computer" },
           { id: "security",        label: "Security" },
           { id: "danger",          label: "Danger zone" },
@@ -745,10 +793,82 @@
                     </div>
                   </section>
 
+                  {/* ============ Billing ============ */}
+                  <section className="p-section" id="billing">
+                    <div className="p-section-head">
+                      <div className="p-section-eyebrow">02 · Billing</div>
+                      <h2 className="p-section-title">Your <em>plan.</em></h2>
+                      <p className="p-section-sub">
+                        Manage your Livinity Pro subscription, update your card, cancel, and
+                        download invoices — all from the secure billing portal.
+                      </p>
+                    </div>
+                    {(() => {
+                      const b = billing;
+                      const badge = billingBadge(b);
+                      const hasSub = !!(b && b.status);
+                      const renew = b && b.currentPeriodEnd ? formatDay(b.currentPeriodEnd) : null;
+                      return (
+                        <div className="p-card">
+                          <div className="p-row">
+                            <span className="lbl">Plan</span>
+                            <span className="val">
+                              {b && b.legacyFree ? "Legacy (free)" : "Livinity Pro"}
+                              <span className={"pill " + (badge.cls || "ok")}>{badge.label}</span>
+                            </span>
+                            <span/>
+                          </div>
+                          {hasSub && renew && (
+                            <div className="p-row">
+                              <span className="lbl">
+                                {b.cancelAtPeriodEnd ? "Cancels on" : b.plan === "trialing" ? "Trial ends" : "Renews on"}
+                              </span>
+                              <span className="val">
+                                {renew}
+                                {b.plan === "trialing" && !b.cancelAtPeriodEnd &&
+                                  <span className="sub">your subscription starts automatically unless you cancel</span>}
+                                {b.cancelAtPeriodEnd &&
+                                  <span className="sub">you'll keep access until this date</span>}
+                              </span>
+                              <span/>
+                            </div>
+                          )}
+                          {b && b.plan === "past_due" && (
+                            <div className="p-row">
+                              <span className="lbl">Payment</span>
+                              <span className="val" style={{ color: "var(--red)" }}>
+                                Last payment failed
+                                <span className="sub">update your card to keep your server online</span>
+                              </span>
+                              <span/>
+                            </div>
+                          )}
+                          <div className="p-row">
+                            <span className="lbl">Manage</span>
+                            <span className="val">
+                              {b && b.legacyFree
+                                ? <span className="sub">You're on a grandfathered free plan — nothing to manage.</span>
+                                : hasSub
+                                  ? <span className="sub">Update card, view & download invoices, or cancel anytime.</span>
+                                  : <span className="sub">Start your 3-day free trial to activate your server.</span>}
+                            </span>
+                            {b && b.legacyFree
+                              ? <span/>
+                              : hasSub
+                                ? <button className="p-btn solid" onClick={openPortal} disabled={portalLoading}>
+                                    {portalLoading ? "Opening…" : "Manage billing"}
+                                  </button>
+                                : <a className="p-btn solid" href="/pricing">Start free trial</a>}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </section>
+
                   {/* ============ Create computer (Coming soon) ============ */}
                   <section className="p-section" id="create-computer">
                     <div className="p-section-head">
-                      <div className="p-section-eyebrow">02 · Create your computer</div>
+                      <div className="p-section-eyebrow">03 · Create your computer</div>
                       <h2 className="p-section-title">Spin up a <em>Cloud PC.</em></h2>
                       <p className="p-section-sub">
                         A dedicated Linux machine, pre-loaded with Liv. We're polishing the
@@ -815,7 +935,7 @@
                   {/* ============ Security ============ */}
                   <section className="p-section" id="security">
                     <div className="p-section-head">
-                      <div className="p-section-eyebrow">03 · Security</div>
+                      <div className="p-section-eyebrow">04 · Security</div>
                       <h2 className="p-section-title">Keys and <em>sessions.</em></h2>
                     </div>
                     <div className="p-card">
@@ -859,7 +979,7 @@
                   {/* ============ Danger zone ============ */}
                   <section className="p-section" id="danger">
                     <div className="p-section-head">
-                      <div className="p-section-eyebrow">04 · Danger zone</div>
+                      <div className="p-section-eyebrow">05 · Danger zone</div>
                       <h2 className="p-section-title">Things that <em>can't be undone.</em></h2>
                     </div>
                     <div className="p-card">

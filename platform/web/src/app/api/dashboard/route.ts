@@ -4,7 +4,33 @@ import bcrypt from 'bcryptjs';
 import pool from '@/lib/db';
 import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth';
 import { getSubscriptionStatus } from '@/lib/subscription';
+import { reconcileThrottled, isLiveStatus } from '@/lib/stripe-sync';
 import { getSupabaseService, presenceChannelName } from '@/lib/supabase-server';
+
+// Webhook-independent healing: if a user has a Stripe customer but no mirrored
+// status (a missed/failed webhook), pull state from Stripe on dashboard load.
+// Throttled per-user (shared bounded map) so the dashboard's 10s poll doesn't
+// hammer the Stripe API.
+const RECONCILE_THROTTLE_MS = 30_000;
+
+async function maybeReconcileBilling(userId: string): Promise<void> {
+  const row = await pool.query<{ stripe_customer_id: string | null; subscription_status: string | null; legacy_free: boolean | null }>(
+    'SELECT stripe_customer_id, subscription_status, legacy_free FROM users WHERE id = $1',
+    [userId],
+  );
+  const u = row.rows[0];
+  // Only reconcile the "subscribed in Stripe but not mirrored here" window:
+  // a customer exists, the account isn't grandfathered, and we have no live
+  // status. Once mirrored to trialing/active this stops firing.
+  if (!u || u.legacy_free || !u.stripe_customer_id) return;
+  if (isLiveStatus(u.subscription_status)) return;
+
+  try {
+    await reconcileThrottled(userId, RECONCILE_THROTTLE_MS);
+  } catch (err) {
+    console.error('[dashboard] billing reconcile failed for', userId, err);
+  }
+}
 
 // Phase 146: online check moved to Supabase Realtime presence on tunnel:<userId>.
 // Replaces the Phase 141-07 CF Tunnel connections API path AND the legacy
@@ -123,6 +149,10 @@ export async function GET(req: NextRequest) {
   } catch {
     // devices table may not exist yet
   }
+
+  // Heal a missed webhook before reading billing so the dashboard never shows
+  // a paying user as "no subscription".
+  await maybeReconcileBilling(user.userId);
 
   // Billing status drives the dashboard billing widget + the gated
   // "Generate API key" button state.

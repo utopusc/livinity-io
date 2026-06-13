@@ -129,21 +129,31 @@
 
               // Billing gate: minting requires an active trial/subscription.
               // Fresh from Stripe Checkout (?checkout=success) the webhook can
-              // lag a few seconds — poll before giving up; otherwise → /pricing.
+              // lag — POST /api/billing/sync pulls state straight from Stripe
+              // (webhook-independent), so we don't depend on a delivered event.
               if (dashData && dashData.billing && !dashData.billing.active) {
                 const justCheckedOut =
                   new URLSearchParams(window.location.search).get("checkout") === "success";
                 let billingOk = false;
                 if (justCheckedOut) {
                   setGen({ status: "minting" });
-                  for (let i = 0; i < 10; i++) {
-                    await new Promise((r) => setTimeout(r, 2000));
-                    const retry = await fetch("/api/dashboard", { credentials: "same-origin" });
-                    dashData = await retry.json().catch(() => ({}));
-                    if (dashData && dashData.billing && dashData.billing.active) { billingOk = true; break; }
+                  for (let i = 0; i < 12; i++) {
+                    const sync = await fetch("/api/billing/sync", { method: "POST", credentials: "same-origin" });
+                    const sd = await sync.json().catch(() => ({}));
+                    if (sd && sd.active) { billingOk = true; break; }
+                    await new Promise((r) => setTimeout(r, 2500));
                   }
                 }
-                if (!billingOk) { window.location.href = "/pricing"; return; }
+                if (!billingOk) {
+                  // A user who JUST paid must never be bounced back to pricing —
+                  // show a "setup in progress" state they can retry instead.
+                  if (justCheckedOut) {
+                    setGen({ status: "billing_pending" });
+                    return;
+                  }
+                  window.location.href = "/pricing";
+                  return;
+                }
               }
 
               if (dashData && dashData.apiKey && dashData.apiKey.hasKey) {
@@ -247,6 +257,20 @@
                 <div>
                   <p className="availability err" style={{ marginBottom: 12 }}>✗ Couldn't mint API key — {gen.error}</p>
                   <button className="h-btn" onClick={handleRegenerate}>Retry</button>
+                </div>
+              )}
+
+              {gen.status === "billing_pending" && (
+                <div>
+                  <h2>Payment received ✓</h2>
+                  <p className="sub" style={{ marginBottom: 14 }}>
+                    We're activating your subscription — this usually takes a few seconds.
+                    Refresh to pick up your install command, or open your dashboard.
+                  </p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button className="h-btn solid" onClick={() => window.location.reload()}>Refresh</button>
+                    <a className="h-btn" href="/dashboard">Go to dashboard</a>
+                  </div>
                 </div>
               )}
 
