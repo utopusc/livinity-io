@@ -22,7 +22,7 @@ export interface SubscriptionStatus {
   cancelAtPeriodEnd: boolean;
   legacyFree: boolean;
   /** Machine-readable reason when active=false (for 402/403 responses + UI). */
-  reason?: 'no_subscription' | 'trial_or_subscription_expired' | 'past_due_expired' | 'canceled' | 'user_not_found';
+  reason?: 'no_subscription' | 'trial_or_subscription_expired' | 'past_due_expired' | 'canceled' | 'suspended' | 'user_not_found';
 }
 
 interface UserBillingRow {
@@ -31,14 +31,33 @@ interface UserBillingRow {
   cancel_at_period_end: boolean | null;
   past_due_since: Date | null;
   legacy_free: boolean | null;
+  suspended_at?: Date | null;
 }
 
 export async function getSubscriptionStatus(userId: string): Promise<SubscriptionStatus> {
-  const res = await pool.query<UserBillingRow>(
-    `SELECT subscription_status, current_period_end, cancel_at_period_end, past_due_since, legacy_free
-       FROM users WHERE id = $1`,
-    [userId],
-  );
+  // DEFENSIVE: users.suspended_at may not exist yet (the operator runs the
+  // ALTER separately, possibly AFTER this deploys). Try the SELECT WITH
+  // suspended_at; if Postgres reports 42703 (undefined_column), retry the
+  // SAME SELECT WITHOUT it so the gate keeps working (suspended treated as
+  // false). Only 42703 is swallowed here — any other error rethrows.
+  let res;
+  try {
+    res = await pool.query<UserBillingRow>(
+      `SELECT subscription_status, current_period_end, cancel_at_period_end, past_due_since, legacy_free, suspended_at
+         FROM users WHERE id = $1`,
+      [userId],
+    );
+  } catch (err) {
+    if ((err as { code?: string })?.code === '42703') {
+      res = await pool.query<UserBillingRow>(
+        `SELECT subscription_status, current_period_end, cancel_at_period_end, past_due_since, legacy_free
+           FROM users WHERE id = $1`,
+        [userId],
+      );
+    } else {
+      throw err;
+    }
+  }
 
   if (res.rows.length === 0) {
     return {
@@ -53,6 +72,19 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   const currentPeriodEnd = row.current_period_end;
   const cancelAtPeriodEnd = !!row.cancel_at_period_end;
   const legacyFree = !!row.legacy_free;
+  // suspended_at is undefined when the column doesn't exist yet (42703 retry
+  // path above) — treat that as "not suspended".
+  const suspended = !!row.suspended_at;
+
+  // Admin suspension (ban) overrides EVERYTHING: a suspended user has no access
+  // even if comped (legacy_free) or actively paying (trialing/active). Must be
+  // checked before legacy_free and before the trialing/active branch.
+  if (suspended) {
+    return {
+      active: false, plan: 'inactive', stripeStatus: status, currentPeriodEnd,
+      cancelAtPeriodEnd, legacyFree, reason: 'suspended',
+    };
+  }
 
   // Grandfathered legacy accounts always have access.
   if (legacyFree) {
