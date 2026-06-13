@@ -747,4 +747,12 @@ export const httpOnlyPaths = [
 	// (e.g. V42 migration) masked the same WS bug. Force HTTP so the
 	// terminal dock entry survives WS hang.
 	'config.getTerminalPanelEnabled',
+	// Feedback proxy — feedback.submit forwards the UI's feedback payload to
+	// the central platform (https://livinity.io/api/feedback) with the box-owner
+	// API key added server-side. The mutation does an outbound HTTP POST (up to
+	// 10s via AbortController) and must NOT silently hang on a half-broken WS
+	// after `systemctl restart livos` (memory pitfall B-12 / X-04 — same
+	// rationale as webapp.extractMetadata + cliInstaller.install). HTTP delivery
+	// also surfaces upstream status/text to the toast handler immediately.
+	'feedback.submit',
 ] as const
