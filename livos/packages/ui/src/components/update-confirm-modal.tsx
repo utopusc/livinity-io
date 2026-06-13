@@ -32,6 +32,10 @@ export function UpdateConfirmModal({
 		version?: string
 		shortSha: string
 		message: string
+		// Phase 266 — release changelog (the release body) + link, present when
+		// detection is release-based. Optional so non-release callers still type.
+		notes?: string
+		releaseUrl?: string
 	} | null
 }) {
 	const {update, updatePending} = useGlobalSystemState()
@@ -61,10 +65,27 @@ export function UpdateConfirmModal({
 					</AlertDialogTitle>
 					<AlertDialogDescription className='space-y-3'>
 						{latestVersion?.message && (
-							<span className='block text-sm text-zinc-700'>
+							<span className='block text-sm font-medium text-zinc-700'>
 								{latestVersion.message.split('\n')[0].slice(0, 200)}
 							</span>
 						)}
+						{/* Phase 266 — release changelog (release notes). Plain-text
+						    preview in a scroll box; full notes via the link below. */}
+						{latestVersion?.notes ? (
+							<span className='block max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg border border-border-default bg-surface-base p-3 text-left text-xs leading-relaxed text-text-secondary'>
+								{latestVersion.notes.slice(0, 4000)}
+							</span>
+						) : null}
+						{latestVersion?.releaseUrl ? (
+							<a
+								href={latestVersion.releaseUrl}
+								target='_blank'
+								rel='noreferrer noopener'
+								className='block text-xs font-medium text-accent-blue hover:underline'
+							>
+								View full release notes ↗
+							</a>
+						) : null}
 						<span className='block text-sm text-zinc-500'>
 							This will rebuild Livinity from the latest source and restart services. The
 							process takes 2–4 minutes; your session is preserved (no reboot).
