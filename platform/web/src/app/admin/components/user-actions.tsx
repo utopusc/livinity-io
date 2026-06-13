@@ -50,7 +50,8 @@ export function UserActions({ user, currentAdminId, onChanged }: UserActionsProp
   const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
   const [pending, setPending] = useState<PendingConfirm | null>(null);
   const [note, setNote] = useState<string>(user.admin_note ?? '');
-  const [customDays, setCustomDays] = useState<string>('');
+  const [customAmount, setCustomAmount] = useState<string>('');
+  const [customUnit, setCustomUnit] = useState<'months' | 'days'>('months');
 
   const isSelf = user.id === currentAdminId;
   const suspended = user.suspended_at != null;
@@ -60,6 +61,19 @@ export function UserActions({ user, currentAdminId, onChanged }: UserActionsProp
   // A grant is "active" only when it parses AND lies in the future.
   const compUntilMs = user.comp_until ? new Date(user.comp_until).getTime() : NaN;
   const compActive = !Number.isNaN(compUntilMs) && compUntilMs > Date.now();
+
+  // Custom grant: enter any amount + unit. The backend extends from
+  // max(now, existing future comp_until); months 1..60, days 1..3650 (server clamp).
+  const customN = parseInt(customAmount, 10);
+  const customValid =
+    Number.isFinite(customN) && customN > 0 && customN <= (customUnit === 'months' ? 60 : 3650);
+  const customPreview = (() => {
+    if (!customValid) return null;
+    const end = compActive ? new Date(compUntilMs) : new Date();
+    if (customUnit === 'months') end.setMonth(end.getMonth() + customN);
+    else end.setDate(end.getDate() + customN);
+    return end;
+  })();
 
   async function run(action: AdminActionName, params?: Record<string, unknown>) {
     setBusy(action);
@@ -87,11 +101,10 @@ export function UserActions({ user, currentAdminId, onChanged }: UserActionsProp
     void run(action, params);
   }
 
-  function grantCustomDays() {
-    const days = parseInt(customDays, 10);
-    if (!Number.isFinite(days) || days <= 0) return;
-    void run('grant_access', { days });
-    setCustomDays('');
+  function grantCustom() {
+    if (!customValid) return;
+    void run('grant_access', customUnit === 'months' ? { months: customN } : { days: customN });
+    setCustomAmount('');
   }
 
   const disabled = busy != null;
@@ -137,22 +150,36 @@ export function UserActions({ user, currentAdminId, onChanged }: UserActionsProp
             type="number"
             min={1}
             inputMode="numeric"
-            placeholder="Custom days"
-            value={customDays}
-            onChange={(e) => setCustomDays(e.target.value)}
+            placeholder="Amount"
+            value={customAmount}
+            onChange={(e) => setCustomAmount(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') grantCustomDays();
+              if (e.key === 'Enter') grantCustom();
             }}
           />
+          <select
+            className="form-select sm"
+            value={customUnit}
+            onChange={(e) => setCustomUnit(e.target.value as 'months' | 'days')}
+            disabled={disabled}
+          >
+            <option value="months">months</option>
+            <option value="days">days</option>
+          </select>
           <button
             type="button"
             className="btn ghost sm"
-            disabled={disabled || !(parseInt(customDays, 10) > 0)}
-            onClick={grantCustomDays}
+            disabled={disabled || !customValid}
+            onClick={grantCustom}
           >
             Grant
           </button>
         </div>
+        {customPreview ? (
+          <div className="grant-preview">
+            → active until {formatDate(customPreview.toISOString())}
+          </div>
+        ) : null}
       </div>
 
       {/* ACCESS — legacy comp flag + manual revoke/restore */}
