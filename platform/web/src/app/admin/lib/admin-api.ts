@@ -203,6 +203,7 @@ export const CATEGORY_OPTIONS = [
 // ---------------------------------------------------------------------------
 
 export type MetricsSummary = {
+  // Existing 7 — unchanged (contract A keeps these).
   users_total: number;
   users_active_24h: number;
   tunnels_online: number;
@@ -210,6 +211,100 @@ export type MetricsSummary = {
   installs_failed_24h: number;
   bandwidth_total_bytes: number;
   apps_total: number;
+  // Phase AV2 superset additions (contract A).
+  signups_today: number;
+  signups_7d: number;
+  signups_30d: number;
+  subs_trialing: number;
+  subs_active: number;
+  subs_past_due: number;
+  subs_canceled: number;
+  subs_cancelling: number;
+  legacy_free_count: number;
+  revoked_count: number;
+  trials_ending_3d: number;
+  mrr_usd: number;
+  arr_usd: number;
+  provisioned_total: number;
+  bandwidth_this_month_bytes: number;
+  installs_24h: number;
+  installs_7d: number;
+};
+
+// ---- Contract B: GET /api/admin/metrics/timeseries -------------------------
+export type TimeseriesResult = {
+  signups_daily: { date: string; count: number }[];
+  cumulative_users: { date: string; total: number }[];
+  installs_daily: { date: string; count: number }[];
+  bandwidth_monthly: { period: string; bytes: number }[];
+};
+
+// ---- Contract C: GET /api/admin/billing/summary ----------------------------
+export type BillingSummary = {
+  counts: {
+    trialing: number;
+    active: number;
+    past_due: number;
+    canceled: number;
+    inactive: number;
+    legacy_free: number;
+    revoked: number;
+    cancelling: number;
+  };
+  mrr_usd: number;
+  arr_usd: number;
+  paying: number;
+  trialing: number;
+  conversion_rate: number | null;
+  trials_ending: {
+    user_id: string;
+    username: string;
+    email: string | null;
+    current_period_end: string;
+    days_left: number;
+  }[];
+  recently_canceled: {
+    user_id: string;
+    username: string;
+    email: string | null;
+    current_period_end: string | null;
+    access_revoked_at: string | null;
+  }[];
+};
+
+// ---- Contract D: GET /api/admin/billing/subscribers ------------------------
+export type Subscriber = {
+  user_id: string;
+  username: string;
+  email: string | null;
+  subscription_status: string | null;
+  plan_label: string;
+  legacy_free: boolean;
+  cancel_at_period_end: boolean;
+  current_period_end: string | null;
+  past_due_since: string | null;
+  access_revoked_at: string | null;
+  mrr_usd: number;
+  created_at: string;
+  has_tunnel: boolean;
+};
+
+export type SubscribersResult = {
+  subscribers: Subscriber[];
+  limit: number;
+};
+
+// ---- Contract E: GET /api/admin/activity/recent ----------------------------
+export type ActivityEvent = {
+  type: 'signup' | 'install' | 'uninstall' | 'tunnel';
+  title: string;
+  sublabel: string;
+  at: string;
+};
+
+export type ActivityResult = {
+  events: ActivityEvent[];
+  limit: number;
 };
 
 export type AdminUserRow = {
@@ -292,6 +387,30 @@ async function adminGet<T>(url: string): Promise<T> {
 
 export function getMetricsSummary(): Promise<MetricsSummary> {
   return adminGet<MetricsSummary>('/api/admin/metrics/summary');
+}
+
+// ---- Phase AV2 client fns (contracts B-E) ----------------------------------
+
+export function getMetricsTimeseries(): Promise<TimeseriesResult> {
+  return adminGet<TimeseriesResult>('/api/admin/metrics/timeseries');
+}
+
+export function getBillingSummary(): Promise<BillingSummary> {
+  return adminGet<BillingSummary>('/api/admin/billing/summary');
+}
+
+export function listSubscribers(opts: { limit?: number } = {}): Promise<SubscribersResult> {
+  const params = new URLSearchParams();
+  if (opts.limit != null) params.set('limit', String(opts.limit));
+  const qs = params.toString();
+  return adminGet<SubscribersResult>(`/api/admin/billing/subscribers${qs ? `?${qs}` : ''}`);
+}
+
+export function getRecentActivity(opts: { limit?: number } = {}): Promise<ActivityResult> {
+  const params = new URLSearchParams();
+  if (opts.limit != null) params.set('limit', String(opts.limit));
+  const qs = params.toString();
+  return adminGet<ActivityResult>(`/api/admin/activity/recent${qs ? `?${qs}` : ''}`);
 }
 
 export function listAdminUsers(opts: { limit?: number; offset?: number } = {}): Promise<UsersListResult> {

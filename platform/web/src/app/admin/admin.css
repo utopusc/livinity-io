@@ -793,3 +793,268 @@
     padding-left: 8px;
   }
 }
+
+/* ===========================================================================
+ * Phase AV2: reusable chart / billing / analytics primitives
+ * (Section, KpiCard extras, AreaChart, StatusBar, ProgressMeter, ActivityFeed)
+ * =========================================================================== */
+
+/* Section card wrapper */
+.admin-section {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 20px 22px;
+}
+.admin-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.admin-section-title {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0;
+  color: var(--fg);
+  letter-spacing: -0.005em;
+}
+.admin-section-meta {
+  font-size: 12px;
+  color: var(--fg-mute);
+  margin-top: 3px;
+}
+.admin-section-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* KPI card extras */
+.kpi-tone-blue .kpi-value { color: #2563eb; }
+
+.kpi-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.kpi-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: var(--r-full);
+  background: var(--bg-2);
+  color: var(--fg-mute);
+  letter-spacing: 0.01em;
+}
+.kpi-delta-up { color: var(--green); background: rgba(22, 163, 74, 0.1); }
+.kpi-delta-down { color: var(--red); background: rgba(220, 38, 38, 0.1); }
+.kpi-delta-flat { color: var(--fg-faint); }
+.kpi-spark {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.85;
+}
+
+.spark { display: block; }
+
+/* Area chart */
+.area-chart { width: 100%; }
+.area-svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.area-xlabels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+.area-xlabel {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--fg-faint);
+  letter-spacing: 0.02em;
+}
+
+/* BarList (generalized) — reuses .bar-list/.bar-track/.bar-fill above */
+.bar-chart-inner { width: 100%; }
+
+/* Status distribution bar + legend */
+.status-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.status-bar {
+  display: flex;
+  height: 10px;
+  border-radius: var(--r-full);
+  overflow: hidden;
+  background: var(--bg-2);
+}
+.status-seg {
+  height: 100%;
+  transition: width 320ms var(--ease-out);
+}
+.status-seg-empty { background: var(--bg-2); }
+.status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+.status-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--fg-dim);
+}
+.status-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-legend-label { color: var(--fg-mute); }
+.status-legend-value {
+  color: var(--fg);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status badge color variants (extend the existing .badge palette) */
+.badge-blue { background: rgba(37, 99, 235, 0.12); color: #2563eb; }
+.badge-mute { background: var(--bg-2); color: var(--fg-mute); }
+
+/* Progress meter */
+.progress-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.progress-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--fg-mute);
+}
+.progress-pct {
+  color: var(--fg);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.progress-track {
+  height: 8px;
+  background: var(--bg-2);
+  border-radius: var(--r-full);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--fg);
+  opacity: 0.82;
+  border-radius: var(--r-full);
+  transition: width 320ms var(--ease-out);
+}
+.progress-fill-ok { background: var(--green); opacity: 0.85; }
+.progress-fill-amber { background: var(--amber); opacity: 0.9; }
+.progress-fill-red { background: var(--red); opacity: 0.9; }
+
+/* Activity feed */
+.activity-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.activity-item:last-child { border-bottom: 0; }
+.activity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--fg-faint);
+}
+.activity-dot-signup { background: var(--green); }
+.activity-dot-install { background: #2563eb; }
+.activity-dot-uninstall { background: var(--amber); }
+.activity-dot-tunnel { background: var(--fg-mute); }
+.activity-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.activity-title {
+  font-size: 13.5px;
+  color: var(--fg);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-sub {
+  font-size: 11.5px;
+  color: var(--fg-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-time {
+  font-size: 11.5px;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Layout helpers */
+.kpi-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.metrics-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.admin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--fg-mute);
+}
+.admin-toolbar .admin-toolbar-stamp {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 980px) {
+  .kpi-grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .metrics-2col { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .kpi-grid-4 { grid-template-columns: 1fr; }
+}
