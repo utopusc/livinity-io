@@ -482,6 +482,7 @@
         };
         const I = {
           dash: <svg className="pp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>,
+          bill: <svg className="pp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>,
           set:  <svg className="pp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
           out:  <svg className="pp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>,
         };
@@ -501,6 +502,7 @@
                     {user.email && <div className="pp-email">{user.email}</div>}
                   </div>
                   <a className="pp-item" href="/dashboard">{I.dash}Dashboard</a>
+                  <a className="pp-item" href="/profile#billing">{I.bill}Billing</a>
                   <a className="pp-item" href="/profile">{I.set}Settings</a>
                   <div className="pp-sep"/>
                   <button className="pp-item danger" onClick={logout}>{I.out}Log out</button>
@@ -648,6 +650,20 @@
         const [keyGen, setKeyGen] = useState(false);
         const [newKey, setNewKey] = useState(null);
         const [installCmd, setInstallCmd] = useState(null);
+        const [portalLoading, setPortalLoading] = useState(false);
+
+        const openPortal = useCallback(async () => {
+          if (portalLoading) return;
+          setPortalLoading(true);
+          try {
+            const res = await fetch("/api/stripe/portal", { method: "POST", credentials: "same-origin" });
+            const d = await res.json().catch(() => ({}));
+            if (res.ok && d.url) { window.location.href = d.url; return; }
+            if (res.status === 404) { window.location.href = "/pricing"; return; }
+            showToast(d.error || "Couldn't open billing portal");
+          } catch (e) { showToast("Network error."); }
+          finally { setPortalLoading(false); }
+        }, [portalLoading]);
 
         const generateKey = useCallback(async (action) => {
           if (keyGen) return;
@@ -739,6 +755,31 @@
 
         const deviceCount = devices.length;
         const domainLimit = 3;
+
+        const billing = dashData && dashData.billing ? dashData.billing : null;
+        const billDaysLeft = (iso) => {
+          if (!iso) return null;
+          try { return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000)); } catch (e) { return null; }
+        };
+        const billDay = (iso) => {
+          if (!iso) return null;
+          try { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); } catch (e) { return null; }
+        };
+        const BADGE_TONE = {
+          green: { background: "rgba(22,163,74,0.12)", color: "var(--accent-green)" },
+          red:   { background: "rgba(220,38,38,0.12)", color: "var(--accent-red)" },
+          amber: { background: "rgba(217,119,6,0.13)", color: "var(--accent-amber)" },
+        };
+        const billBadge = (() => {
+          if (!billing) return { label: "—", tone: BADGE_TONE.green };
+          if (billing.legacyFree) return { label: "Free", tone: BADGE_TONE.green };
+          switch (billing.plan) {
+            case "trialing": { const d = billDaysLeft(billing.currentPeriodEnd); return { label: d != null ? ("Trial · " + d + "d left") : "Trial", tone: BADGE_TONE.green }; }
+            case "active":   return { label: "Active", tone: BADGE_TONE.green };
+            case "past_due": return { label: "Past due", tone: BADGE_TONE.red };
+            default:         return { label: "No subscription", tone: BADGE_TONE.amber };
+          }
+        })();
 
         return (
           <>
@@ -859,6 +900,36 @@
                         </button>
                       </div>
                     </div>
+
+                    {/* Billing */}
+                    {billing && !billing.legacyFree && (
+                      <div className="b-card span-6">
+                        <div className="b-head">
+                          <span className="b-title">Billing</span>
+                          <span style={{ fontSize: "10.5px", fontFamily: "var(--font-mono)", padding: "3px 8px", borderRadius: "999px", textTransform: "uppercase", letterSpacing: "0.06em", ...billBadge.tone }}>
+                            {billBadge.label}
+                          </span>
+                        </div>
+                        <div className="ak-meta" style={{ marginTop: 10 }}>
+                          {billing.plan === "past_due"
+                            ? "Your last payment failed — update your card to keep your server online."
+                            : billing.currentPeriodEnd && billing.status
+                              ? (billing.cancelAtPeriodEnd
+                                  ? ("Cancels on " + billDay(billing.currentPeriodEnd) + " — you keep access until then.")
+                                  : billing.plan === "trialing"
+                                    ? ("Trial ends " + billDay(billing.currentPeriodEnd) + " — your subscription starts automatically.")
+                                    : ("Renews on " + billDay(billing.currentPeriodEnd) + "."))
+                              : "Start your 3-day free trial to activate your server."}
+                        </div>
+                        <div className="ak-actions">
+                          {billing.status
+                            ? <button className="h-btn" onClick={openPortal} disabled={portalLoading}>
+                                {portalLoading ? "Opening…" : "Manage billing"}
+                              </button>
+                            : <a className="h-btn solid" href="/pricing">Start free trial</a>}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Custom Domains */}
                     <div className="b-card span-6">

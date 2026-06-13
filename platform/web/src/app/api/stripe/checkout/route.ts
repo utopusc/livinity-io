@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getSession, SESSION_COOKIE_NAME } from '@/lib/auth';
 import { stripe, priceIdForInterval, TRIAL_PERIOD_DAYS, type BillingInterval } from '@/lib/stripe';
-import { mirrorSubscription } from '@/lib/stripe-sync';
+import { mirrorSubscription, isLiveStatus } from '@/lib/stripe-sync';
 
 export const runtime = 'nodejs';
 
@@ -32,15 +32,19 @@ export async function POST(req: NextRequest) {
   }
 
   // Already-subscribed users shouldn't double-subscribe — send them to the portal.
-  const existing = await pool.query<{ stripe_customer_id: string | null; subscription_status: string | null }>(
-    'SELECT stripe_customer_id, subscription_status FROM users WHERE id = $1',
+  const existing = await pool.query<{
+    stripe_customer_id: string | null;
+    subscription_status: string | null;
+    has_used_trial: boolean | null;
+  }>(
+    'SELECT stripe_customer_id, subscription_status, has_used_trial FROM users WHERE id = $1',
     [session.userId],
   );
   if (existing.rows.length === 0) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
   const row = existing.rows[0];
-  if (row.subscription_status && ['trialing', 'active', 'past_due'].includes(row.subscription_status)) {
+  if (isLiveStatus(row.subscription_status)) {
     return NextResponse.json({ error: 'already_subscribed' }, { status: 409 });
   }
 
@@ -54,7 +58,7 @@ export async function POST(req: NextRequest) {
         status: 'all',
         limit: 5,
       });
-      const live = subs.data.find((s) => ['trialing', 'active', 'past_due'].includes(s.status));
+      const live = subs.data.find((s) => isLiveStatus(s.status));
       if (live) {
         await mirrorSubscription(live);
         return NextResponse.json({ error: 'already_subscribed' }, { status: 409 });
@@ -72,20 +76,36 @@ export async function POST(req: NextRequest) {
       await pool.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, session.userId]);
     }
 
-    const checkout = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer: customerId,
-      line_items: [{ price: priceIdForInterval(interval), quantity: 1 }],
-      subscription_data: {
-        trial_period_days: TRIAL_PERIOD_DAYS,
-        metadata: { userId: session.userId },
+    // One free trial per account: grant the 3-day trial only if this account
+    // has never had a subscription. Cancel → resubscribe is charged immediately.
+    const grantTrial = !row.has_used_trial;
+    const subscriptionData: Record<string, unknown> = { metadata: { userId: session.userId } };
+    if (grantTrial) {
+      subscriptionData.trial_period_days = TRIAL_PERIOD_DAYS;
+    }
+
+    // Idempotency: a double-click or a lost-response retry within the same 15s
+    // bucket returns the SAME checkout session instead of creating a second one
+    // (which could yield two subscriptions / two trials for one user).
+    const idempotencyKey = `checkout:${session.userId}:${interval}:${Math.floor(Date.now() / 15000)}`;
+
+    const checkout = await stripe.checkout.sessions.create(
+      {
+        mode: 'subscription',
+        customer: customerId,
+        line_items: [{ price: priceIdForInterval(interval), quantity: 1 }],
+        subscription_data: subscriptionData,
+        // Returning subscribers without a trial pay now — make sure Stripe always
+        // collects a payment method.
+        payment_method_collection: 'always',
+        allow_promotion_codes: true,
+        // Land on the install wizard: it polls billing until the webhook hits,
+        // then auto-mints the API key — pay → install command in one flow.
+        success_url: `${baseUrl()}/dashboard/install?checkout=success`,
+        cancel_url: `${baseUrl()}/pricing?checkout=cancelled`,
       },
-      allow_promotion_codes: true,
-      // Land on the install wizard: it polls billing until the webhook hits,
-      // then auto-mints the API key — pay → install command in one flow.
-      success_url: `${baseUrl()}/dashboard/install?checkout=success`,
-      cancel_url: `${baseUrl()}/pricing?checkout=cancelled`,
-    });
+      { idempotencyKey },
+    );
 
     if (!checkout.url) {
       return NextResponse.json({ error: 'Could not create checkout session' }, { status: 500 });
