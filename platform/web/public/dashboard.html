@@ -532,8 +532,7 @@
               <div className="nav-links">
                 <a href="/dashboard" className="on">Dashboard</a>
                 <a href="/dashboard/install">Install</a>
-                <a href="https://changelog.livinity.io" target="_blank" rel="noreferrer">Changelog</a>
-                <a href="/store">Store</a>
+                <a href="https://github.com/utopusc/livinity-io/releases" target="_blank" rel="noreferrer">Changelog</a>
               </div>
               <div className="nav-cta">
                 <a className="btn btn-ghost btn-icon" href="https://github.com/utopusc/livinity-io" target="_blank" rel="noreferrer" aria-label="GitHub">
@@ -780,6 +779,18 @@
             default:         return { label: "No subscription", tone: BADGE_TONE.amber };
           }
         })();
+        // Honest plan label for the hero quick-stat (no fabricated values).
+        const planLabel = (() => {
+          if (!billing) return "—";
+          if (billing.legacyFree) return "Free";
+          switch (billing.plan) {
+            case "trialing": { const d = billDaysLeft(billing.currentPeriodEnd); return d != null ? ("Trialing · " + d + "d") : "Trialing"; }
+            case "active":   return "Active";
+            case "past_due": return "Past due";
+            case "free":     return "Free";
+            default:         return "Inactive";
+          }
+        })();
 
         return (
           <>
@@ -813,10 +824,10 @@
                         </>
                       ) : (
                         <>
-                          <p className="hero-sub" style={{ marginTop: 8, color: "var(--fg-mute)" }}>Finish your install to see your computer's URL here.</p>
+                          <p className="hero-sub" style={{ marginTop: 8, color: "var(--fg-mute)" }}>Run the install command on your hardware to see your computer's URL here.</p>
                           <div className="hero-cta-row">
-                            <a className="h-btn solid" href="/dashboard/install">Go to install wizard <Ic.arrow/></a>
-                            <a className="h-btn" href="/profile">Profile</a>
+                            <a className="h-btn solid" href="/dashboard/install">Get your install command <Ic.arrow/></a>
+                            <a className="h-btn" href="/download">Download</a>
                           </div>
                         </>
                       )}
@@ -833,12 +844,12 @@
                       </div>
                       <div className="hr-quick">
                         <div className="item">
-                          <span className="lbl">Devices</span>
-                          <span className="val">{deviceCount}</span>
+                          <span className="lbl">Bandwidth</span>
+                          <span className="val">{bw ? formatBytes(bw.usedBytes) : "—"}<span style={{ fontSize: 11, color: "var(--fg-mute)", fontFamily: "var(--font-mono)", fontWeight: 400 }}> / {bw ? formatBytes(bw.limitBytes) : "—"}</span></span>
                         </div>
                         <div className="item">
-                          <span className="lbl">Domains</span>
-                          <span className="val">{domains.length}/{domainLimit}</span>
+                          <span className="lbl">Plan</span>
+                          <span className="val">{planLabel}</span>
                         </div>
                         <div className="item">
                           <span className="lbl">Status</span>
@@ -852,35 +863,6 @@
 
                   {/* BENTO GRID */}
                   <div className="bento">
-
-                    {/* Devices */}
-                    <div className="b-card span-6">
-                      <div className="b-head">
-                        <span className="b-title">Devices</span>
-                        <span className="b-sub">{deviceCount} registered</span>
-                      </div>
-                      {deviceCount === 0 ? (
-                        <div className="dev-empty">
-                          No devices yet. Register one from the LivOS Desktop app.
-                        </div>
-                      ) : (
-                        <div className="dev-list">
-                          {devices.slice(0, 4).map((d, i) => {
-                            const IconComp = platformIcon(d.platform);
-                            return (
-                              <div className="dev-row" key={d.deviceId || d.device_id || i}>
-                                <div className="dev-icon"><IconComp size={16}/></div>
-                                <div>
-                                  <div className="dev-name">{d.deviceName || d.device_name || "Unnamed"}</div>
-                                  <div className="dev-meta">{d.platform || "—"}</div>
-                                </div>
-                                <div className="dev-status">{timeAgo(d.lastSeen || d.last_seen || d.createdAt || d.created_at)}</div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
 
                     {/* API key */}
                     <div className="b-card span-6">
@@ -930,49 +912,6 @@
                         </div>
                       </div>
                     )}
-
-                    {/* Custom Domains */}
-                    <div className="b-card span-6">
-                      <div className="b-head">
-                        <span className="b-title">Custom Domains</span>
-                        <span className="b-sub">{domains.length} / {domainLimit}</span>
-                      </div>
-                      {domains.length === 0 ? (
-                        <div className="dev-empty">No custom domains. Add one to use your own URL.</div>
-                      ) : (
-                        <div className="dom-list">
-                          {domains.map((d) => {
-                            const st = d.status || "pending_dns";
-                            const cls = st === "active" || st === "dns_verified" ? "active"
-                              : st === "dns_failed" || st === "error" ? "failed" : "pending";
-                            return (
-                              <div className="dom-row" key={d.id}>
-                                <span className="d-name">{d.domain}</span>
-                                <span className={"d-status " + cls}>
-                                  {cls === "active" ? "active" : cls === "failed" ? "failed" : "pending DNS"}
-                                </span>
-                                <button className="d-del" onClick={() => removeDomain(d.id)} aria-label="Remove">×</button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                      {domains.length < domainLimit && (
-                        <form className="dom-add" onSubmit={addDomain}>
-                          <input
-                            type="text"
-                            placeholder="yourdomain.com"
-                            value={domainInput}
-                            onChange={(e) => setDomainInput(e.target.value)}
-                            disabled={addingDomain}
-                          />
-                          <button className="h-btn solid" type="submit" disabled={addingDomain || !domainInput.trim()}>
-                            {addingDomain ? "Adding…" : "Add"}
-                          </button>
-                        </form>
-                      )}
-                      <div className="dom-limit">DNS verification + auto SSL.</div>
-                    </div>
 
                     {/* Cloud plans (Coming soon) */}
                     <div className="b-card span-6">
@@ -1077,7 +1016,7 @@
 
               <div className="dash-foot">
                 <span>open-source · <a href="/">livinity.io</a></span>
-                <span><a href="https://changelog.livinity.io" target="_blank" rel="noreferrer">Changelog →</a></span>
+                <span><a href="https://github.com/utopusc/livinity-io/releases" target="_blank" rel="noreferrer">Changelog →</a></span>
               </div>
             </main>
 
