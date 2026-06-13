@@ -38,6 +38,11 @@ export async function mirrorSubscription(sub: Stripe.Subscription): Promise<void
   // checkout) — otherwise a user who never finished paying loses trial
   // eligibility forever. It stays TRUE for canceled/unpaid/paused so cancel →
   // resubscribe is correctly denied a second free trial.
+  // NOTE: status is passed TWICE — $2 for the direct varchar assignment and $7
+  // for the CASE/IN text comparisons. Reusing a single $2 in both contexts makes
+  // Postgres deduce conflicting types (varchar vs text) → SQLSTATE 42P08
+  // (ambiguous_parameter). A separate param gives each a single inference
+  // context. (Verified against the live DB via PREPARE.)
   const res = await pool.query(
     `UPDATE users SET
        stripe_subscription_id = $1,
@@ -45,10 +50,10 @@ export async function mirrorSubscription(sub: Stripe.Subscription): Promise<void
        stripe_price_id        = $3,
        current_period_end     = $4,
        cancel_at_period_end   = $5,
-       past_due_since = CASE WHEN $2 = 'past_due' THEN COALESCE(past_due_since, NOW()) ELSE NULL END,
-       has_used_trial = CASE WHEN $2 IN ('incomplete', 'incomplete_expired') THEN has_used_trial ELSE TRUE END
+       past_due_since = CASE WHEN $7 = 'past_due' THEN COALESCE(past_due_since, NOW()) ELSE NULL END,
+       has_used_trial = CASE WHEN $7 IN ('incomplete', 'incomplete_expired') THEN has_used_trial ELSE TRUE END
      WHERE stripe_customer_id = $6`,
-    [sub.id, sub.status, priceId, currentPeriodEnd, sub.cancel_at_period_end, customerId],
+    [sub.id, sub.status, priceId, currentPeriodEnd, sub.cancel_at_period_end, customerId, sub.status],
   );
   if (res.rowCount === 0) {
     // Subscription for a customer we don't know (e.g. created manually in the
