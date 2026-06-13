@@ -185,26 +185,34 @@ export function UserActions({ user, currentAdminId, onChanged }: UserActionsProp
       {/* ACCESS — legacy comp flag + manual revoke/restore */}
       <div className="ua-section">
         <div className="ua-section-label">Access</div>
-        <div className="ua-actions">
-          {user.legacy_free ? (
+        {user.legacy_free ? (
+          <div className="ua-current">
+            <span className="ua-current-text">
+              <strong>Legacy</strong> — free forever
+            </span>
             <button
               type="button"
               className="btn ghost sm"
               disabled={disabled}
               onClick={() => void run('remove_comp')}
             >
-              Remove comp
+              Remove
             </button>
-          ) : (
+          </div>
+        ) : (
+          <div className="ua-current ua-current-empty">Not legacy</div>
+        )}
+        <div className="ua-actions">
+          {!user.legacy_free ? (
             <button
               type="button"
               className="btn ghost sm"
               disabled={disabled}
               onClick={() => void run('grant_comp')}
             >
-              Grant comp
+              Make legacy (free forever)
             </button>
-          )}
+          ) : null}
           {!revoked ? (
             <button
               type="button"
