@@ -856,7 +856,13 @@ if [[ -f "$_LIV_ASSISTANT_INSTALLER_SRC" ]]; then
     if bash "$_LIV_ASSISTANT_INSTALLER_SRC" 2>&1 | tail -10; then
         ok "liv-assistant install ensured (vendored AionUi v2.1.14 at /opt/liv-assistant/current)"
     else
-        fail "install-liv-assistant.sh failed — see output above (SHA mismatch / network / disk?)"
+        # 2026-06-13: was a hard `fail` (abort). But liv-assistant (AionUi) is the
+        # OPTIONAL Liv AI subsystem — exactly the "OPTIONAL polish, NOT core" class
+        # the `set +e` block below (lines ~865-872) was created for. A SHA/network/
+        # disk hiccup here must NOT throw away an otherwise-good core LivOS update
+        # (UI + livinityd + liv core) and leave the box stuck on the old version.
+        # Warn + continue; the core build/restart + SHA recording still happen.
+        warn "install-liv-assistant.sh failed (SHA mismatch / network / disk?) — Liv AI may be degraded, but NOT aborting the core LivOS update. Re-run later or check the output above."
     fi
 else
     info "scripts/install-liv-assistant.sh not in TEMP_DIR or LIVOS_DIR — skipping (pre-Phase 223-01 deploy)"
@@ -1636,7 +1642,15 @@ if [[ -f /etc/systemd/system/liv-assistant.service || -f /usr/lib/systemd/system
         warn "liv-assistant /api/auth/status probe non-2xx; collecting diagnostics..."
         curl -sS -o /dev/null -w 'HTTP %{http_code} (curl exit %{exitcode}, time %{time_total}s)\n' --max-time 5 http://127.0.0.1:3020/api/auth/status 2>&1 || true
         journalctl -u liv-assistant -n 20 --no-pager 2>/dev/null || true
-        fail "liv-assistant health probe FAILED (http://127.0.0.1:3020/api/auth/status did not return 200/204 within 5s). Deploy aborted."
+        # 2026-06-13: was a hard `fail` (Deploy aborted). This 5s post-restart probe
+        # of an OPTIONAL subsystem (AionUi :3020) was killing the ENTIRE update on
+        # boxes where AionUi cold-boots slower than 5s OR is mid-restart-loop (the
+        # known Claude-Code-version-pin deadlock → 502/524). Worse, .deployed-sha is
+        # recorded AFTER this step, so aborting here discards an already-successful
+        # core update and the box stays on the OLD version (operator sees "update
+        # failed" with no version change). Liv AI health must never block the core
+        # update — warn + continue so the SHA gets recorded; fix AionUi separately.
+        warn "liv-assistant health probe did not return 200/204 within 5s (slow cold-boot or AionUi issue) — NOT aborting: the core LivOS update already succeeded and will be recorded. Fix Liv AI separately: journalctl -u liv-assistant -n 30"
     fi
 
     # ── Phase 225 — first-boot password capture (race-tolerant) ─────────────────
@@ -1730,7 +1744,14 @@ if [[ -f /etc/caddy/conf.d/liv-assistant.caddy ]]; then
         ls -la /etc/caddy/conf.d/liv-assistant.caddy 2>&1 || true
         # Show caddy's most recent errors.
         journalctl -u caddy -n 20 --no-pager 2>/dev/null || true
-        fail "/liv proxy smoke FAILED (https://bruce.livinity.io/liv/api/auth/status returned $_LIV_PROXY_CODE, expected 200/204). Deploy aborted."
+        # 2026-06-13: was a hard `fail` (Deploy aborted). Two problems: (1) this
+        # smokes an OPTIONAL subsystem (Liv AI /liv proxy) and must not discard a
+        # successful core update; (2) the URL is HARDCODED to bruce.livinity.io, so
+        # on ANY other operator's box the loopback Host never matches a Caddy site
+        # block → always non-2xx → every update on a non-bruce box aborted here and
+        # stayed on the old version. Warn + continue (the box-specific domain fix
+        # for this smoke is tracked separately; for now it must never gate deploys).
+        warn "/liv proxy smoke returned $_LIV_PROXY_CODE (expected 200/204) — NOT aborting (Liv AI /liv proxy only; core update already succeeded). Note: this loopback smoke is hardcoded to the bruce.livinity.io Host and is not meaningful on other operator domains."
     fi
 else
     info "/etc/caddy/conf.d/liv-assistant.caddy not installed — skipping caddy reload + /liv smoke (pre-Phase 226 deploy)"
