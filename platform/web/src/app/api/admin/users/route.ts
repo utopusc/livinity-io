@@ -6,7 +6,7 @@ const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 const UNDEFINED_COLUMN = '42703';
 
-type PlanLabel = 'Legacy' | 'Pro' | 'Trial' | 'Past due' | 'Canceled' | 'Suspended' | 'None';
+type PlanLabel = 'Legacy' | 'Comp' | 'Pro' | 'Trial' | 'Past due' | 'Canceled' | 'Suspended' | 'None';
 
 interface UserListRow {
   id: string;
@@ -19,11 +19,23 @@ interface UserListRow {
   subscription_status: string | null;
   legacy_free: boolean | null;
   suspended_at: string | null;
+  comp_until: string | null;
 }
 
-/** Derive the display plan label from billing state + suspension. */
-function computePlanLabel(row: { suspended_at: string | null; legacy_free: boolean | null; subscription_status: string | null }): PlanLabel {
+/**
+ * Derive the display plan label from billing state + suspension + comp grant.
+ * Priority: Suspended > Comp (active grant) > Legacy > Stripe state.
+ */
+function computePlanLabel(row: {
+  suspended_at: string | null;
+  legacy_free: boolean | null;
+  subscription_status: string | null;
+  comp_until: string | null;
+}): PlanLabel {
   if (row.suspended_at) return 'Suspended';
+  // Active time-boxed comp grant (comp_until in the future) — below Suspended,
+  // above Legacy/Trial/Pro. Absent column → comp_until null → skipped.
+  if (row.comp_until && new Date(row.comp_until).getTime() > Date.now()) return 'Comp';
   if (row.legacy_free) return 'Legacy';
   switch (row.subscription_status) {
     case 'active': return 'Pro';
@@ -52,12 +64,14 @@ export async function GET(req: NextRequest) {
   // Build the WHERE clause + ordered param list once so the list + count stay in sync.
   const whereSql = hasQuery ? `WHERE (username ILIKE $1 OR email ILIKE $1)` : '';
 
-  // suspended_at is operator-applied separately. Try WITH it; on undefined_column
-  // (42703) retry WITHOUT it and synthesize suspended_at=null (suspended=false).
-  async function runList(includeSuspended: boolean) {
-    const suspendedCol = includeSuspended ? 'suspended_at' : 'NULL::timestamptz AS suspended_at';
+  // suspended_at is applied live; comp_until is operator-applied SEPARATELY and
+  // may still be absent. Try WITH comp_until; on undefined_column (42703) retry
+  // substituting NULL for comp_until (suspended_at stays real). Either way the
+  // list keeps working before the comp_until migration.
+  async function runList(includeComp: boolean) {
+    const compCol = includeComp ? 'comp_until' : 'NULL::timestamptz AS comp_until';
     const baseSelect = `SELECT id, username, email, is_admin, email_verified, created_at,
-                               last_seen_at, subscription_status, legacy_free, ${suspendedCol}
+                               last_seen_at, subscription_status, legacy_free, suspended_at, ${compCol}
                           FROM users ${whereSql}
                           ORDER BY created_at DESC
                           LIMIT $${hasQuery ? 2 : 1} OFFSET $${hasQuery ? 3 : 2}`;

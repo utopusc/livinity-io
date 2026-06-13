@@ -28,12 +28,18 @@ interface DetailUser {
   cf_dns_record_id_apex: string | null;
   suspended_at: string | null;
   admin_note: string | null;
+  comp_until: string | null;
 }
 
 /**
- * Load the detail user row defensively: suspended_at + admin_note are
- * operator-applied separately. On undefined_column (42703) retry WITHOUT them
- * and synthesize nulls so a normal admin path never 500s before the migration.
+ * Load the detail user row defensively. suspended_at + admin_note are already
+ * applied live; comp_until is operator-applied SEPARATELY and may still be
+ * absent. Cascade the SELECT so whichever optional column exists is still read
+ * and the missing one(s) default to null:
+ *   1. all three (suspended_at, admin_note, comp_until)
+ *   2. on 42703 → suspended_at + admin_note only (comp_until → null)
+ *   3. on a further 42703 → base only (all three → null)
+ * A normal admin path never 500s before the comp_until migration.
  */
 async function loadDetailUser(id: string): Promise<DetailUser | null> {
   const baseCols = `id, username, email, is_admin, email_verified, created_at,
@@ -44,20 +50,30 @@ async function loadDetailUser(id: string): Promise<DetailUser | null> {
                     cf_dns_record_id_apex`;
   try {
     const res = await pool.query<DetailUser>(
-      `SELECT ${baseCols}, suspended_at, admin_note FROM users WHERE id = $1 LIMIT 1`,
+      `SELECT ${baseCols}, suspended_at, admin_note, comp_until FROM users WHERE id = $1 LIMIT 1`,
       [id],
     );
     return res.rows[0] ?? null;
   } catch (err) {
-    if ((err as { code?: string })?.code === UNDEFINED_COLUMN) {
-      const res = await pool.query<Omit<DetailUser, 'suspended_at' | 'admin_note'>>(
+    if ((err as { code?: string })?.code !== UNDEFINED_COLUMN) throw err;
+    // comp_until missing → retry with the already-applied optional columns.
+    try {
+      const res = await pool.query<Omit<DetailUser, 'comp_until'>>(
+        `SELECT ${baseCols}, suspended_at, admin_note FROM users WHERE id = $1 LIMIT 1`,
+        [id],
+      );
+      const row = res.rows[0];
+      return row ? { ...row, comp_until: null } : null;
+    } catch (err2) {
+      if ((err2 as { code?: string })?.code !== UNDEFINED_COLUMN) throw err2;
+      // Fully pre-migration schema → base columns only.
+      const res = await pool.query<Omit<DetailUser, 'suspended_at' | 'admin_note' | 'comp_until'>>(
         `SELECT ${baseCols} FROM users WHERE id = $1 LIMIT 1`,
         [id],
       );
       const row = res.rows[0];
-      return row ? { ...row, suspended_at: null, admin_note: null } : null;
+      return row ? { ...row, suspended_at: null, admin_note: null, comp_until: null } : null;
     }
-    throw err;
   }
 }
 
