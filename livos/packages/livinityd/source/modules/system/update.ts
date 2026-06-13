@@ -248,6 +248,12 @@ export async function getLatestRelease(livinityd: Livinityd) {
 		}
 	}
 
+	// Resolve the release tag's commit SHA (cheap — reuses the tags cache). Used
+	// both for the pre-266 SHA compare AND as the returned `sha` so the
+	// UpdateNotification card's `shasDiffer` guard (current vs latest sha) keeps
+	// working: the LATEST release tag is always the newest tag, so it resolves.
+	const releaseSha = await resolveTagSha(release.tag_name, livinityd)
+
 	// A release exists — is THIS box behind it?
 	let available: boolean
 	if (deployedRelease) {
@@ -259,16 +265,15 @@ export async function getLatestRelease(livinityd: Livinityd) {
 		// to the deployed commit so a box already ON the release's code doesn't
 		// flash a false "update available". If the tag SHA can't be resolved,
 		// default to available so the operator at least sees the first release.
-		const releaseSha = await resolveTagSha(release.tag_name, livinityd)
 		available = releaseSha ? releaseSha !== deployedSha : true
 	}
 
 	return {
 		available,
-		// `sha`/`shortSha` describe the CURRENT deployed commit (the tag compare
-		// above is what drives `available`); kept for backward-compat consumers.
-		sha: deployedSha,
-		shortSha: deployedSha ? deployedSha.slice(0, 7) : '',
+		// The RELEASE's commit (NOT the deployed one) so UpdateNotification's
+		// shasDiffer guard shows the card when behind + hides it when current.
+		sha: releaseSha || deployedSha,
+		shortSha: (releaseSha || deployedSha).slice(0, 7),
 		version: release.tag_name,
 		message: release.name || release.tag_name,
 		author: '',
