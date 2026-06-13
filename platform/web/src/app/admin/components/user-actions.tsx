@@ -1,10 +1,11 @@
 'use client';
 
-// Per-user moderation + billing action panel. Renders grouped buttons that
-// adapt to the target user's current state. Each button calls the
-// POST /api/admin/users/{id}/actions endpoint via userAction(); destructive
-// actions are gated behind a ConfirmDialog. On success onChanged() is called
-// so the parent page refetches the (now stale) user row.
+// Per-user moderation + billing action RAIL. Renders a vertical stack of
+// grouped action sections (small-caps labels + full-width stacked buttons)
+// designed to live in the sticky LEFT rail of the two-column user-detail
+// workspace. Each button calls POST /api/admin/users/{id}/actions via
+// userAction(); destructive actions are gated behind a ConfirmDialog. On
+// success onChanged() is called so the parent page refetches the user row.
 
 import { useState } from 'react';
 import {
@@ -14,6 +15,7 @@ import {
 } from '../lib/admin-api';
 import { ConfirmDialog } from './confirm-dialog';
 import { Toast } from './toast';
+import { formatDate } from './format';
 
 type DetailUser = AdminUserDetail['user'];
 
@@ -34,16 +36,30 @@ type PendingConfirm = {
   requireText?: string;
 };
 
+// Preset comp-grant durations rendered as .chip pills.
+const GRANT_PRESETS: { label: string; params: Record<string, unknown> }[] = [
+  { label: '+1 month', params: { months: 1 } },
+  { label: '+3 months', params: { months: 3 } },
+  { label: '+6 months', params: { months: 6 } },
+  { label: '+1 year', params: { months: 12 } },
+];
+
 export function UserActions({ user, currentAdminId, onChanged }: UserActionsProps) {
   // Which action is currently in flight (disables all buttons while busy).
   const [busy, setBusy] = useState<AdminActionName | null>(null);
   const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
   const [pending, setPending] = useState<PendingConfirm | null>(null);
   const [note, setNote] = useState<string>(user.admin_note ?? '');
+  const [customDays, setCustomDays] = useState<string>('');
 
   const isSelf = user.id === currentAdminId;
   const suspended = user.suspended_at != null;
   const revoked = user.access_revoked_at != null;
+
+  // DEFENSIVE-SCHEMA: comp_until may be null (column absent or no grant).
+  // A grant is "active" only when it parses AND lies in the future.
+  const compUntilMs = user.comp_until ? new Date(user.comp_until).getTime() : NaN;
+  const compActive = !Number.isNaN(compUntilMs) && compUntilMs > Date.now();
 
   async function run(action: AdminActionName, params?: Record<string, unknown>) {
     setBusy(action);
@@ -71,14 +87,78 @@ export function UserActions({ user, currentAdminId, onChanged }: UserActionsProp
     void run(action, params);
   }
 
+  function grantCustomDays() {
+    const days = parseInt(customDays, 10);
+    if (!Number.isFinite(days) || days <= 0) return;
+    void run('grant_access', { days });
+    setCustomDays('');
+  }
+
   const disabled = busy != null;
 
   return (
-    <div className="user-actions">
-      {/* ACCESS — comp grant + manual revoke/restore */}
-      <div className="ua-group">
-        <div className="ua-group-label">Access</div>
-        <div className="ua-buttons">
+    <div className="ua-rail">
+      {/* GRANT ACCESS — time-boxed comp window (users.comp_until) */}
+      <div className="ua-section">
+        <div className="ua-section-label">Grant access</div>
+        {compActive ? (
+          <div className="ua-current">
+            <span className="ua-current-text">
+              Comped until <strong>{formatDate(user.comp_until)}</strong>
+            </span>
+            <button
+              type="button"
+              className="btn ghost sm"
+              disabled={disabled}
+              onClick={() => void run('clear_grant')}
+            >
+              Clear
+            </button>
+          </div>
+        ) : (
+          <div className="ua-current ua-current-empty">No active grant</div>
+        )}
+        <div className="grant-chips">
+          {GRANT_PRESETS.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              className="chip"
+              disabled={disabled}
+              onClick={() => void run('grant_access', p.params)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="grant-custom">
+          <input
+            className="form-input sm"
+            type="number"
+            min={1}
+            inputMode="numeric"
+            placeholder="Custom days"
+            value={customDays}
+            onChange={(e) => setCustomDays(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') grantCustomDays();
+            }}
+          />
+          <button
+            type="button"
+            className="btn ghost sm"
+            disabled={disabled || !(parseInt(customDays, 10) > 0)}
+            onClick={grantCustomDays}
+          >
+            Grant
+          </button>
+        </div>
+      </div>
+
+      {/* ACCESS — legacy comp flag + manual revoke/restore */}
+      <div className="ua-section">
+        <div className="ua-section-label">Access</div>
+        <div className="ua-actions">
           {user.legacy_free ? (
             <button
               type="button"
@@ -129,9 +209,9 @@ export function UserActions({ user, currentAdminId, onChanged }: UserActionsProp
 
       {/* SUBSCRIPTION — Stripe cancel/resume */}
       {user.stripe_subscription_id ? (
-        <div className="ua-group">
-          <div className="ua-group-label">Subscription</div>
-          <div className="ua-buttons">
+        <div className="ua-section">
+          <div className="ua-section-label">Subscription</div>
+          <div className="ua-actions">
             {!user.cancel_at_period_end ? (
               <>
                 <button
@@ -174,9 +254,9 @@ export function UserActions({ user, currentAdminId, onChanged }: UserActionsProp
       ) : null}
 
       {/* ACCOUNT — admin role, email verification, suspension */}
-      <div className="ua-group">
-        <div className="ua-group-label">Account</div>
-        <div className="ua-buttons">
+      <div className="ua-section">
+        <div className="ua-section-label">Account</div>
+        <div className="ua-actions">
           {!user.is_admin ? (
             <button
               type="button"
@@ -243,8 +323,8 @@ export function UserActions({ user, currentAdminId, onChanged }: UserActionsProp
       </div>
 
       {/* NOTE — free-text admin note */}
-      <div className="ua-group">
-        <div className="ua-group-label">Note</div>
+      <div className="ua-section">
+        <div className="ua-section-label">Note</div>
         <div className="ua-note">
           <textarea
             className="form-textarea"
@@ -253,24 +333,22 @@ export function UserActions({ user, currentAdminId, onChanged }: UserActionsProp
             onChange={(e) => setNote(e.target.value)}
             rows={3}
           />
-          <div className="ua-buttons">
-            <button
-              type="button"
-              className="btn primary sm"
-              disabled={disabled || note === (user.admin_note ?? '')}
-              onClick={() => void run('set_note', { note })}
-            >
-              Save note
-            </button>
-          </div>
+          <button
+            type="button"
+            className="btn primary sm"
+            disabled={disabled || note === (user.admin_note ?? '')}
+            onClick={() => void run('set_note', { note })}
+          >
+            Save note
+          </button>
         </div>
       </div>
 
       {/* DANGER — irreversible delete */}
       {!isSelf && !user.is_admin ? (
-        <div className="ua-group ua-group-danger">
-          <div className="ua-group-label">Danger</div>
-          <div className="ua-buttons">
+        <div className="ua-section ua-section-danger">
+          <div className="ua-section-label">Danger</div>
+          <div className="ua-actions">
             <button
               type="button"
               className="btn danger sm"
@@ -316,6 +394,10 @@ function labelFor(action: AdminActionName): string {
       return 'Granted comp';
     case 'remove_comp':
       return 'Removed comp';
+    case 'grant_access':
+      return 'Granted access';
+    case 'clear_grant':
+      return 'Cleared grant';
     case 'revoke':
       return 'Revoked access';
     case 'restore':
