@@ -634,3 +634,61 @@ export function listInstallFailures(opts: { limit?: number } = {}): Promise<Inst
   const qs = params.toString();
   return adminGet<InstallFailuresResult>(`/api/admin/install-failures${qs ? `?${qs}` : ''}`);
 }
+
+// ---------------------------------------------------------------------------
+// FB-Central: user-reported feedback (bugs / requests / questions).
+// Backed by the Supabase `feedback` table — both routes are DEFENSIVE: if the
+// table is missing the list returns { items: [], counts: {} } (never a 500).
+// ---------------------------------------------------------------------------
+export type FeedbackItem = {
+  id: string;
+  user_id: string | null;
+  username: string | null;
+  type: string;
+  severity: string | null;
+  area: string | null;
+  title: string | null;
+  message: string;
+  steps: string | null;
+  contact: string | null;
+  app_version: string | null;
+  user_agent: string | null;
+  page_url: string | null;
+  status: string;
+  admin_note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type FeedbackListResult = {
+  items: FeedbackItem[];
+  limit: number;
+  counts?: Record<string, number>;
+};
+
+export function getFeedback(
+  opts: { status?: string; limit?: number } = {},
+): Promise<FeedbackListResult> {
+  const params = new URLSearchParams();
+  if (opts.status != null && opts.status !== '') params.set('status', opts.status);
+  if (opts.limit != null) params.set('limit', String(opts.limit));
+  const qs = params.toString();
+  return adminGet<FeedbackListResult>(`/api/admin/feedback${qs ? `?${qs}` : ''}`);
+}
+
+export async function updateFeedback(
+  id: string,
+  body: { status?: string; admin_note?: string },
+): Promise<FeedbackItem> {
+  const res = await fetch(`/api/admin/feedback/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `updateFeedback ${res.status}`);
+  }
+  return res.json() as Promise<FeedbackItem>;
+}

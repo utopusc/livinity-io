@@ -39,6 +39,7 @@ const NAV_CATALOG: NavItem[] = [
 
 const NAV_OPERATIONS: NavItem[] = [
   { href: '/admin/users', label: 'Users' },
+  { href: '/admin/feedback', label: 'Feedback' },
   { href: '/admin/audit', label: 'Audit' },
   { href: '/admin/tunnels', label: 'Tunnels' },
   { href: '/admin/walkthrough', label: 'Walkthrough' },
