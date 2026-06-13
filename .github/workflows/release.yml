@@ -1,0 +1,41 @@
+# Phase 266 — release-based LivOS update automation.
+#
+# When a `vX.Y` (or `vX.Y.Z`) tag is pushed, publish a GitHub Release for it with
+# auto-generated notes. `/releases/latest` then returns this tag, which both the
+# livinityd detection (`system/update.ts` → getLatestRelease) and `update.sh`
+# (clones the release tag, not bare master) key off of. Result: boxes update to
+# curated, intentional releases instead of every master commit.
+#
+# Cut a release:
+#   git tag v44.1 && git push origin v44.1     # this workflow publishes it
+#
+# Manual fallback (no workflow run, e.g. retro-releasing an existing tag):
+#   gh release create v44.1 --generate-notes --latest
+name: Publish Release on tag
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # required to create the Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history so notes can diff against the previous tag)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          # Non-prerelease + latest so api.github.com/.../releases/latest returns it.
+          prerelease: false
+          make_latest: true
