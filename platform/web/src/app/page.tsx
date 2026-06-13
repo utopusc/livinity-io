@@ -688,7 +688,7 @@ function Footer() {
             <Link href="/download" className="transition-colors hover:text-black">Download</Link>
             <Link href="/login" className="transition-colors hover:text-black">Sign in</Link>
             <Link href="/register" className="transition-colors hover:text-black">Sign up</Link>
-            <a href="https://changelog.livinity.io" className="transition-colors hover:text-black">Changelog</a>
+            <a href="https://github.com/utopusc/livinity-io/releases" target="_blank" rel="noreferrer" className="transition-colors hover:text-black">Changelog</a>
             <a href="https://github.com/livinity" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-black">GitHub</a>
           </div>
         </div>

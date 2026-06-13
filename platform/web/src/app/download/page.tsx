@@ -334,7 +334,9 @@ function Footer() {
               Sign up
             </Link>
             <a
-              href="https://changelog.livinity.io"
+              href="https://github.com/utopusc/livinity-io/releases"
+              target="_blank"
+              rel="noreferrer"
               className="transition-colors hover:text-black"
             >
               Changelog
