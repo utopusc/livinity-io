@@ -67,11 +67,30 @@ export async function mirrorSubscription(sub: Stripe.Subscription): Promise<void
   // Re-subscribe after enforcement cut DNS: restore inline so a paying user
   // doesn't wait for the next cron sweep. Best-effort — the cron is the retry.
   if (sub.status === 'trialing' || sub.status === 'active') {
-    const revokedRow = await pool.query<{ id: string; username: string; cf_tunnel_id: string | null }>(
-      `SELECT id, username, cf_tunnel_id FROM users
-        WHERE stripe_customer_id = $1 AND access_revoked_at IS NOT NULL`,
-      [customerId],
-    );
+    // A suspended (admin-banned) user who pays must STAY out — exclude them
+    // from the restore candidate set. DEFENSIVE: users.suspended_at may not
+    // exist yet (operator runs the ALTER separately). Try the SELECT WITH the
+    // `suspended_at IS NULL` predicate; on 42703 (undefined_column) fall back
+    // to the original query without it. Only 42703 is swallowed — others throw.
+    type RevokedRow = { id: string; username: string; cf_tunnel_id: string | null };
+    let revokedRow;
+    try {
+      revokedRow = await pool.query<RevokedRow>(
+        `SELECT id, username, cf_tunnel_id FROM users
+          WHERE stripe_customer_id = $1 AND access_revoked_at IS NOT NULL AND suspended_at IS NULL`,
+        [customerId],
+      );
+    } catch (err) {
+      if ((err as { code?: string })?.code === '42703') {
+        revokedRow = await pool.query<RevokedRow>(
+          `SELECT id, username, cf_tunnel_id FROM users
+            WHERE stripe_customer_id = $1 AND access_revoked_at IS NOT NULL`,
+          [customerId],
+        );
+      } else {
+        throw err;
+      }
+    }
     if (revokedRow.rows.length > 0) {
       try {
         await restoreUserAccess(revokedRow.rows[0]);

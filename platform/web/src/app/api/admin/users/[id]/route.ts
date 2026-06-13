@@ -4,6 +4,85 @@ import { requireAdmin } from '@/lib/auth-admin';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+const UNDEFINED_COLUMN = '42703';
+
+interface DetailUser {
+  id: string;
+  username: string;
+  email: string | null;
+  is_admin: boolean;
+  email_verified: boolean;
+  created_at: string;
+  last_seen_at: string | null;
+  cf_tunnel_id: string | null;
+  cf_provisioned_at: string | null;
+  subscription_status: string | null;
+  legacy_free: boolean | null;
+  has_used_trial: boolean | null;
+  cancel_at_period_end: boolean | null;
+  current_period_end: string | null;
+  past_due_since: string | null;
+  access_revoked_at: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  cf_dns_record_id_apex: string | null;
+  suspended_at: string | null;
+  admin_note: string | null;
+}
+
+/**
+ * Load the detail user row defensively: suspended_at + admin_note are
+ * operator-applied separately. On undefined_column (42703) retry WITHOUT them
+ * and synthesize nulls so a normal admin path never 500s before the migration.
+ */
+async function loadDetailUser(id: string): Promise<DetailUser | null> {
+  const baseCols = `id, username, email, is_admin, email_verified, created_at,
+                    last_seen_at, cf_tunnel_id, cf_provisioned_at,
+                    subscription_status, legacy_free, has_used_trial,
+                    cancel_at_period_end, current_period_end, past_due_since,
+                    access_revoked_at, stripe_customer_id, stripe_subscription_id,
+                    cf_dns_record_id_apex`;
+  try {
+    const res = await pool.query<DetailUser>(
+      `SELECT ${baseCols}, suspended_at, admin_note FROM users WHERE id = $1 LIMIT 1`,
+      [id],
+    );
+    return res.rows[0] ?? null;
+  } catch (err) {
+    if ((err as { code?: string })?.code === UNDEFINED_COLUMN) {
+      const res = await pool.query<Omit<DetailUser, 'suspended_at' | 'admin_note'>>(
+        `SELECT ${baseCols} FROM users WHERE id = $1 LIMIT 1`,
+        [id],
+      );
+      const row = res.rows[0];
+      return row ? { ...row, suspended_at: null, admin_note: null } : null;
+    }
+    throw err;
+  }
+}
+
+/** Target-user admin-action history. Empty list if admin_actions absent. */
+async function loadUserAuditHistory(id: string): Promise<unknown[]> {
+  try {
+    const res = await pool.query(
+      `SELECT id, admin_user_id, admin_username, target_user_id, target_username,
+              action, detail, created_at
+         FROM admin_actions
+         WHERE target_user_id = $1
+         ORDER BY created_at DESC
+         LIMIT 50`,
+      [id],
+    );
+    return res.rows;
+  } catch (err) {
+    console.warn(
+      '[admin/users/:id] audit history skipped (table may not exist yet):',
+      (err as Error)?.message ?? err,
+    );
+    return [];
+  }
+}
+
 export async function GET(req: NextRequest, ctxParam: RouteContext) {
   const ctx = await requireAdmin(req);
   if (ctx instanceof NextResponse) return ctx;
@@ -16,29 +95,15 @@ export async function GET(req: NextRequest, ctxParam: RouteContext) {
   }
 
   const [
-    userResult,
+    user,
     installsResult,
     bandwidthResult,
     tunnelsResult,
     subdomainsResult,
     installCommandsResult,
+    adminActions,
   ] = await Promise.all([
-    pool.query<{
-      id: string;
-      username: string;
-      email: string | null;
-      is_admin: boolean;
-      email_verified: boolean;
-      created_at: string;
-      last_seen_at: string | null;
-      cf_tunnel_id: string | null;
-      cf_provisioned_at: string | null;
-    }>(
-      `SELECT id, username, email, is_admin, email_verified, created_at,
-              last_seen_at, cf_tunnel_id, cf_provisioned_at
-         FROM users WHERE id = $1 LIMIT 1`,
-      [id],
-    ),
+    loadDetailUser(id),
     pool.query(
       `SELECT ih.id, ih.app_id, a.slug AS app_slug, a.name AS app_name,
               ih.action, ih.instance_name, ih.created_at
@@ -86,13 +151,13 @@ export async function GET(req: NextRequest, ctxParam: RouteContext) {
          LIMIT 50`,
       [id],
     ),
+    loadUserAuditHistory(id),
   ]);
 
-  if (userResult.rows.length === 0) {
+  if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
 
-  const user = userResult.rows[0];
   const bandwidth = bandwidthResult.rows.map((r) => ({
     period_month: r.period_month,
     bytes_in: Number(r.bytes_in),
@@ -107,5 +172,6 @@ export async function GET(req: NextRequest, ctxParam: RouteContext) {
     bandwidth,
     tunnel_sessions: tunnelsResult.rows,
     subdomains: subdomainsResult.rows,
+    admin_actions: adminActions,
   });
 }
