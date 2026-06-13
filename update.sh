@@ -346,12 +346,45 @@ step "Pulling latest code"
 TEMP_DIR="/tmp/livinity-update-$$"
 rm -rf "$TEMP_DIR"
 
-info "Cloning latest from GitHub..."
-git clone --depth 1 "$REPO_URL" "$TEMP_DIR" || fail "Failed to clone repository"
+# ── Phase 266 — RELEASE-based deploy ──────────────────────────────────────
+# Resolve the latest PUBLISHED GitHub Release tag and deploy THAT curated tag
+# instead of bleeding master HEAD, so "update" means an intentional, verified
+# release. If no release exists yet (/releases/latest → 404) OR GitHub is
+# unreachable, fall back to master so a release-less repo / offline box still
+# updates (no regression). jq-optional: grep/sed extracts .tag_name when jq is
+# absent (fresh boxes may not have jq during early bootstrap).
+RELEASE_TAG=""
+_REL_JSON=$(curl -fsSL --max-time 10 \
+    -H "User-Agent: LivOS-update" \
+    -H "Accept: application/vnd.github+json" \
+    https://api.github.com/repos/utopusc/livinity-io/releases/latest 2>/dev/null || echo "")
+if [[ -n "$_REL_JSON" ]]; then
+    if command -v jq >/dev/null 2>&1; then
+        RELEASE_TAG=$(echo "$_REL_JSON" | jq -r '.tag_name // empty' 2>/dev/null || echo "")
+    else
+        RELEASE_TAG=$(echo "$_REL_JSON" | grep -m1 '"tag_name"' \
+            | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' || echo "")
+    fi
+fi
+
+if [[ -n "$RELEASE_TAG" ]]; then
+    info "Latest GitHub Release: $RELEASE_TAG — deploying that tag (not bare master)"
+    if git clone --depth 1 --branch "$RELEASE_TAG" "$REPO_URL" "$TEMP_DIR" 2>/dev/null; then
+        ok "Cloned release tag $RELEASE_TAG"
+    else
+        warn "Shallow clone of tag $RELEASE_TAG failed — falling back to master HEAD"
+        RELEASE_TAG=""
+        rm -rf "$TEMP_DIR"
+        git clone --depth 1 "$REPO_URL" "$TEMP_DIR" || fail "Failed to clone repository"
+    fi
+else
+    info "No published release (or GitHub unreachable) — deploying master HEAD"
+    git clone --depth 1 "$REPO_URL" "$TEMP_DIR" || fail "Failed to clone repository"
+fi
 # ── Phase 33 OBS-01 prep: capture target SHA for log filename rename ──
 LIVOS_UPDATE_TO_SHA=$(git -C "$TEMP_DIR" rev-parse HEAD 2>/dev/null || echo "")
 
-ok "Latest code fetched"
+ok "Latest code fetched${RELEASE_TAG:+ ($RELEASE_TAG)}"
 
 # ── Phase 257-01 WS-B (LIVOS-011): verify-before-deploy commit pin ─────────
 # The fetched HEAD is rsync'd + built + restarted as ROOT. With no pin/signature
@@ -1790,8 +1823,21 @@ if [[ -d "$TEMP_DIR/.git" ]]; then
     else
         warn "Could not record deployed SHA (livinityd update notifications may be inaccurate)"
     fi
+    # ── Phase 266 — record the deployed RELEASE TAG ───────────────────────
+    # livinityd's getLatestRelease() compares this tag against the latest
+    # published release; writing it clears the "update available" flag once the
+    # box is on the release. If we deployed bare master (no release / clone
+    # fallback), clear any stale tag so detection falls back to a SHA compare.
+    if [[ -n "${RELEASE_TAG:-}" ]]; then
+        echo "$RELEASE_TAG" > /opt/livos/.deployed-release 2>/dev/null || true
+        chmod 644 /opt/livos/.deployed-release 2>/dev/null || true
+        ok "Deployed release recorded: $RELEASE_TAG"
+    else
+        rm -f /opt/livos/.deployed-release 2>/dev/null || true
+        info "No release tag deployed (master HEAD) — .deployed-release cleared"
+    fi
 else
-    warn "TEMP_DIR/.git not found; skipping .deployed-sha write"
+    warn "TEMP_DIR/.git not found; skipping .deployed-sha/.deployed-release write"
 fi
 
 # ── Step 9: Cleanup ───────────────────────────────────────

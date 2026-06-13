@@ -7,20 +7,38 @@ import Livinityd from '../../index.js'
 
 type UpdateStatus = ProgressStatus
 
-const GITHUB_COMMITS_URL = 'https://api.github.com/repos/utopusc/livinity-io/commits/master'
 const GITHUB_TAGS_URL = 'https://api.github.com/repos/utopusc/livinity-io/tags?per_page=20'
+// Phase 266 — release-based detection. /releases/latest returns the newest
+// NON-prerelease published Release, or 404 when none exist yet (graceful).
+const GITHUB_RELEASES_LATEST_URL =
+	'https://api.github.com/repos/utopusc/livinity-io/releases/latest'
 const DEPLOYED_SHA_PATH = '/opt/livos/.deployed-sha'
+// Phase 266 — update.sh records the deployed RELEASE TAG here (next to
+// .deployed-sha) so detection can compare tags, not just commit SHAs.
+const DEPLOYED_RELEASE_PATH = '/opt/livos/.deployed-release'
 
 // Phase 30 hot-patch round 9: in-memory cache to dampen GitHub rate-limit
 // pressure (60 req/hr unauth per IP). Without these caches the UI page-load
 // burst of {checkUpdate query + version query + windowFocus refetch + manual
 // "Check for updates" click} can issue 4-6 requests in seconds and exhaust
 // the quota. With caches, repeated calls reuse the same response until TTL.
-const COMMITS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes — checkUpdate hot path
 const TAGS_CACHE_TTL_MS = 60 * 60 * 1000   // 1 hour — tags rarely change
+const RELEASES_CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes — releases change rarely
 
-let commitsCache: {at: number; data: any} | null = null
 let tagsCache: {at: number; data: Array<{name: string; commit: {sha: string}}>} | null = null
+
+// Phase 266 — shape captured from /releases/latest. `data: null` is a VALID
+// cached value meaning "GitHub returned 404 — no releases published yet" (the
+// graceful-fallback state, NOT an error) so we don't re-hammer the API.
+type ReleaseData = {
+	tag_name: string
+	name: string | null
+	body: string | null
+	html_url: string
+	published_at: string | null
+	target_commitish: string
+}
+let releasesCache: {at: number; data: ReleaseData | null} | null = null
 
 // Phase 30 hot-patch round 5: resolve a human-friendly version label.
 // Strategy: pull the most recent tags from GitHub, find the tag whose commit SHA
@@ -37,6 +55,89 @@ export async function readDeployedSha(): Promise<string | null> {
 		if (err.code === 'ENOENT') return null
 		throw err
 	}
+}
+
+// Phase 266 — the release tag update.sh last deployed (e.g. "v44.0"). Null on
+// pre-266 boxes (file never written) → detection falls back to a SHA compare.
+export async function readDeployedRelease(): Promise<string | null> {
+	try {
+		const v = (await fs.readFile(DEPLOYED_RELEASE_PATH, 'utf8')).trim()
+		return v || null
+	} catch (err: any) {
+		if (err.code === 'ENOENT') return null
+		throw err
+	}
+}
+
+// Phase 266 — fetch the latest published GitHub Release. NEVER throws: a 404
+// (no releases yet) returns null and is cached as null; rate-limit/5xx/network
+// serve the last good value (which may itself be null) so the UI degrades to a
+// quiet "On latest" instead of an error toast. Mirrors the commits/tags cache.
+async function fetchLatestRelease(livinityd: Livinityd): Promise<ReleaseData | null> {
+	if (releasesCache && Date.now() - releasesCache.at < RELEASES_CACHE_TTL_MS) {
+		return releasesCache.data
+	}
+	try {
+		const response = await fetch(GITHUB_RELEASES_LATEST_URL, {
+			headers: {
+				'User-Agent': `LivOS-${livinityd.version}`,
+				Accept: 'application/vnd.github+json',
+			},
+		})
+		if (response.status === 404) {
+			// No releases published yet — the graceful-fallback state, not an error.
+			releasesCache = {at: Date.now(), data: null}
+			return null
+		}
+		if (response.ok) {
+			const data = (await response.json()) as ReleaseData
+			releasesCache = {at: Date.now(), data}
+			return data
+		}
+		// Rate-limit / 5xx → serve stale (incl. a previously-cached null).
+		if (releasesCache) {
+			livinityd.logger.log(
+				`GitHub releases API ${response.status} on checkUpdate; serving cached value`,
+			)
+			return releasesCache.data
+		}
+		return null
+	} catch (err) {
+		// Network/DNS failure → stale or null. Never propagate.
+		if (releasesCache) return releasesCache.data
+		livinityd.logger.log(`GitHub releases API unreachable on checkUpdate: ${String(err)}`)
+		return null
+	}
+}
+
+// Phase 266 — resolve a release tag (e.g. "v44.0") to its commit SHA via the
+// (cached) tags list. Used only when a box has no .deployed-release recorded
+// yet (pre-266) so we can compare the release's commit against .deployed-sha
+// and avoid a one-time false "update available" on a box already on that code.
+async function resolveTagSha(tagName: string, livinityd: Livinityd): Promise<string | null> {
+	let tags: Array<{name: string; commit: {sha: string}}> | null =
+		tagsCache && Date.now() - tagsCache.at < TAGS_CACHE_TTL_MS ? tagsCache.data : null
+	if (!tags) {
+		try {
+			const response = await fetch(GITHUB_TAGS_URL, {
+				headers: {
+					'User-Agent': `LivOS-${livinityd.version}`,
+					Accept: 'application/vnd.github+json',
+				},
+			})
+			if (response.ok) {
+				tags = (await response.json()) as Array<{name: string; commit: {sha: string}}>
+				tagsCache = {at: Date.now(), data: tags}
+			} else if (tagsCache) {
+				tags = tagsCache.data
+			}
+		} catch {
+			if (tagsCache) tags = tagsCache.data
+		}
+	}
+	if (!tags) return null
+	const match = tags.find((t) => t.name === tagName)
+	return match ? match.commit.sha : null
 }
 
 export async function resolveVersionLabel(
@@ -110,82 +211,72 @@ export function getUpdateStatus() {
 }
 
 export async function getLatestRelease(livinityd: Livinityd) {
-	// 1. Read locally deployed SHA. ENOENT on first run is expected (update.sh
-	// hasn't recorded it yet) — treat as empty so the UI advertises an update.
-	let localSha = ''
+	// Phase 266 — RELEASE-based detection. Compare the latest PUBLISHED GitHub
+	// Release tag against the release this box last deployed (.deployed-release),
+	// with a commit-SHA fallback for pre-266 boxes that never recorded one.
+	// Read the deployed release tag + commit SHA.
+	const deployedRelease = await readDeployedRelease() // tag (e.g. "v44.0") or null
+	let deployedSha = ''
 	try {
-		localSha = (await fs.readFile(DEPLOYED_SHA_PATH, 'utf8')).trim()
+		deployedSha = (await fs.readFile(DEPLOYED_SHA_PATH, 'utf8')).trim()
 	} catch (err: any) {
 		if (err.code !== 'ENOENT') throw err
 	}
 
-	// 2. Fetch latest commit on master. Round 9: in-memory cache (5 min TTL)
-	// dampens GitHub rate-limit pressure when the UI bursts requests on
-	// page load + window focus + manual check.
-	type CommitData = {
-		sha: string
-		commit: {message: string; author: {name: string; email: string; date: string}}
-	}
-	let data: CommitData | null = null
-	if (commitsCache && Date.now() - commitsCache.at < COMMITS_CACHE_TTL_MS) {
-		data = commitsCache.data
-	} else {
-		const response = await fetch(GITHUB_COMMITS_URL, {
-			headers: {
-				'User-Agent': `LivOS-${livinityd.version}`,
-				Accept: 'application/vnd.github+json',
-			},
-		})
-		if (response.ok) {
-			data = (await response.json()) as CommitData
-			commitsCache = {at: Date.now(), data}
-		} else if (commitsCache) {
-			// Round 9: rate-limit / 5xx → serve stale cache rather than fail
-			data = commitsCache.data
-			livinityd.logger.log(
-				`GitHub API returned ${response.status} on checkUpdate; serving cached response`,
-			)
-		} else {
-			// Round 10: cold-start cache miss + GitHub fail → graceful fallback.
-			// Return empty/safe defaults instead of throwing. The UI will compute
-			// available=false (no SHA to compare), avoiding the "Failed to check
-			// for updates" toast spam during rate-limit windows. Cache populates
-			// on the next successful call once GitHub quota resets.
-			livinityd.logger.log(
-				`GitHub API ${response.status} on cold checkUpdate; returning empty stub (will retry on next call)`,
-			)
-			data = {
-				sha: '',
-				commit: {
-					message: '',
-					author: {name: '', email: '', date: new Date().toISOString()},
-				},
-			}
-		}
-	}
-	if (!data) {
-		// Should be unreachable now, but keep the safety net.
-		data = {
-			sha: '',
-			commit: {message: '', author: {name: '', email: '', date: new Date().toISOString()}},
+	const release = await fetchLatestRelease(livinityd)
+
+	// No release published yet (404) OR the API is down on a cold cache.
+	// Graceful fallback: advertise NO update + show a sensible current-version
+	// label (deployed release tag if known, else resolved from the commit). This
+	// preserves the old behaviour for a release-less repo: quiet "On latest",
+	// NO throw, NO error toast.
+	if (!release) {
+		const fallbackLabel =
+			deployedRelease ||
+			(deployedSha ? await resolveVersionLabel(deployedSha, livinityd) : '')
+		return {
+			available: false,
+			sha: deployedSha,
+			shortSha: deployedSha ? deployedSha.slice(0, 7) : '',
+			version: fallbackLabel,
+			message: '',
+			author: '',
+			committedAt: '',
+			notes: '',
+			publishedAt: '',
+			releaseUrl: '',
 		}
 	}
 
-	// Round 5: human-friendly version label (e.g. "v28.0.1" or "v28.0.1+30bacc28").
-	// Round 10: skip resolveVersionLabel entirely if data.sha is empty (cold-start
-	// fallback) to avoid burning a tags-API call when commits API already failed.
-	const version = data.sha ? await resolveVersionLabel(data.sha, livinityd) : ''
+	// A release exists — is THIS box behind it?
+	let available: boolean
+	if (deployedRelease) {
+		// Steady state: a tag-vs-tag compare. "update available" only fires when
+		// the operator cuts a NEW release (not on every master commit).
+		available = release.tag_name !== deployedRelease
+	} else {
+		// Pre-266 box (no .deployed-release yet): compare the release tag's commit
+		// to the deployed commit so a box already ON the release's code doesn't
+		// flash a false "update available". If the tag SHA can't be resolved,
+		// default to available so the operator at least sees the first release.
+		const releaseSha = await resolveTagSha(release.tag_name, livinityd)
+		available = releaseSha ? releaseSha !== deployedSha : true
+	}
 
 	return {
-		// Round 10: empty SHA (cold-start fallback) → available=false so the UI
-		// quietly shows "On latest" instead of misfiring an update prompt.
-		available: data.sha !== '' && data.sha !== localSha,
-		sha: data.sha,
-		shortSha: data.sha.slice(0, 7),
-		version,
-		message: data.commit.message,
-		author: data.commit.author.name,
-		committedAt: data.commit.author.date,
+		available,
+		// `sha`/`shortSha` describe the CURRENT deployed commit (the tag compare
+		// above is what drives `available`); kept for backward-compat consumers.
+		sha: deployedSha,
+		shortSha: deployedSha ? deployedSha.slice(0, 7) : '',
+		version: release.tag_name,
+		message: release.name || release.tag_name,
+		author: '',
+		committedAt: release.published_at || '',
+		// Phase 266 — release notes/changelog + link, consumed by 266-02 UI.
+		notes: release.body || '',
+		publishedAt: release.published_at || '',
+		releaseUrl: release.html_url,
 	}
 }
 
