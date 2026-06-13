@@ -499,6 +499,10 @@ export type AuditResult = {
 export type AdminActionName =
   | 'grant_comp'
   | 'remove_comp'
+  // CMP: time-boxed comp grant (users.comp_until) — grant_access extends an
+  // existing window by { months?, days? }; clear_grant zeroes comp_until.
+  | 'grant_access'
+  | 'clear_grant'
   | 'revoke'
   | 'restore'
   | 'cancel_subscription'
@@ -528,6 +532,10 @@ export type AdminUserDetail = {
     stripe_subscription_id: string | null;
     suspended_at: string | null;
     admin_note: string | null;
+    // CMP: time-boxed admin grant end. DEFENSIVE-SCHEMA — the column may not
+    // yet exist server-side (the detail route catches 42703 and returns null),
+    // so consumers MUST treat null as "no active grant".
+    comp_until: string | null;
   };
   admin_actions: AdminActionRow[];
   install_history: {
