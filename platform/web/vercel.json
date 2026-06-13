@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/enforce-subscriptions",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/refresh-bandwidth",
+      "schedule": "0 * * * *"
     }
   ]
 }
