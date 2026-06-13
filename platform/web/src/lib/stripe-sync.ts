@@ -7,7 +7,9 @@
 import type Stripe from 'stripe';
 import pool from '@/lib/db';
 import { stripe } from '@/lib/stripe';
-import { restoreUserAccess } from '@/lib/billing-enforcement';
+import { restoreUserAccess, revokeUserAccess } from '@/lib/billing-enforcement';
+import { hasActiveAccess } from '@/lib/subscription';
+import { sendAccessPausedEmail } from '@/lib/email';
 
 /** Statuses that mean "this account is (or was) a real paying/trialing sub". */
 export const LIVE_STATUSES = ['trialing', 'active', 'past_due'];
@@ -75,6 +77,48 @@ export async function mirrorSubscription(sub: Stripe.Subscription): Promise<void
         await restoreUserAccess(revokedRow.rows[0]);
       } catch (err) {
         console.error('[stripe-sync] inline restore failed (cron will retry):', err);
+      }
+    }
+  }
+
+  // Instant revoke: when a sub goes canceled/unpaid/incomplete_expired/paused
+  // (anything NOT trialing/active), cut DNS in seconds via EVERY path that
+  // mirrors (webhook + checkout self-heal + dashboard reconcile) instead of
+  // waiting for the next 15-min cron sweep. hasActiveAccess() respects the
+  // 3-day past_due grace, so a past_due user still inside the window is NOT
+  // cut here. Idempotent (skipped once access_revoked_at is set) and fully
+  // best-effort — a CF/email failure must NEVER throw out of mirrorSubscription
+  // and 500 the webhook; the enforce cron is the retry.
+  if (sub.status !== 'trialing' && sub.status !== 'active') {
+    const candidate = await pool.query<{
+      id: string;
+      username: string;
+      email: string;
+      cf_tunnel_id: string | null;
+      cf_dns_record_id_apex: string | null;
+      legacy_free: boolean | null;
+      access_revoked_at: Date | null;
+    }>(
+      `SELECT id, username, email, cf_tunnel_id, cf_dns_record_id_apex, legacy_free, access_revoked_at
+         FROM users WHERE stripe_customer_id = $1`,
+      [customerId],
+    );
+    const row = candidate.rows[0];
+    if (
+      row &&
+      row.legacy_free === false &&
+      row.cf_tunnel_id !== null &&
+      row.access_revoked_at === null
+    ) {
+      // past_due inside the grace window keeps access — don't cut early.
+      const active = await hasActiveAccess(row.id);
+      if (!active) {
+        try {
+          await revokeUserAccess(row);
+          await sendAccessPausedEmail(row.email, row.username);
+        } catch (err) {
+          console.error('[stripe-sync] instant revoke failed (cron will retry):', err);
+        }
       }
     }
   }
