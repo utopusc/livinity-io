@@ -16,6 +16,12 @@ import eventBus from '../../event-bus/routes.js'
 import backups from '../../backups/routes.js'
 import usage from '../../usage-tracking/routes.js'
 import domain from '../../domain/routes.js'
+// Feedback proxy router — `feedback.submit`. The UI posts a feedback payload;
+// livinityd adds the box-owner API key (process.env.LIV_API_KEY) server-side
+// and forwards it to the central platform (https://livinity.io/api/feedback).
+// The browser never holds the key. The single procedure path is added to
+// httpOnlyPaths in ./common.ts (mutation must not hang on a disconnected WS).
+import feedback from '../../feedback/routes.js'
 // Phase 104 plan 104-03 — local-lan mode tRPC routes (local.{getStatus,activate,getCaCert}).
 // All 3 paths route via HTTP per common.ts httpOnlyPaths — local.activate does
 // systemctl reload + file I/O (1-5s) that must survive `systemctl restart livos`.
@@ -298,6 +304,11 @@ export function createAppRouter(opts: {
 		backups,
 		usage,
 		domain,
+		// Feedback proxy namespace: feedback.submit forwards the UI's
+		// feedback payload to the central platform with the box-owner API
+		// key added server-side (see feedback/routes.ts). Path is in
+		// httpOnlyPaths (./common.ts) so the mutation survives a WS reconnect.
+		feedback,
 		// Phase 104 plan 104-03 — local-lan mode namespace.
 		local: localDns,
 		docker,
