@@ -20,6 +20,16 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // Postgres SQLSTATEs we degrade on (defensive-schema rule).
 const UNDEFINED_COLUMN = '42703';
 
+/**
+ * Coerce an untrusted JSON value to an integer clamped to [min, max].
+ * Non-finite / missing → min (the floor). Used for comp-grant durations.
+ */
+function clampInt(value: unknown, min: number, max: number): number {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, n));
+}
+
 /** Full target-user row, including the MAYBE-ABSENT suspended_at column. */
 interface TargetUser {
   id: string;
@@ -131,6 +141,67 @@ export async function POST(req: NextRequest, ctxParam: RouteContext) {
         await pool.query('UPDATE users SET legacy_free = false WHERE id = $1', [user.id]);
         await audit('remove_comp');
         return NextResponse.json({ ok: true, legacy_free: false });
+      }
+
+      // ── Time-boxed comp grant (comp_until MAYBE-ABSENT) ──────────────────
+      case 'grant_access': {
+        // Clamp inputs: months 0..60 (5y), days 0..3650 (10y); at least one > 0.
+        const months = clampInt(body.months, 0, 60);
+        const days = clampInt(body.days, 0, 3650);
+        if (months + days <= 0) {
+          return NextResponse.json(
+            { error: 'Provide a positive months and/or days duration' },
+            { status: 400 },
+          );
+        }
+        // Extend an existing grant rather than overwriting: anchor at the later
+        // of (current comp_until, NOW()) then add the interval.
+        let compUntil: Date;
+        try {
+          const res = await pool.query<{ comp_until: Date }>(
+            `UPDATE users
+                SET comp_until = GREATEST(COALESCE(comp_until, NOW()), NOW())
+                                 + make_interval(months => $2, days => $3)
+              WHERE id = $1
+              RETURNING comp_until`,
+            [user.id, months, days],
+          );
+          compUntil = res.rows[0].comp_until;
+        } catch (err) {
+          if ((err as { code?: string })?.code === UNDEFINED_COLUMN) {
+            return NextResponse.json(
+              { error: 'Comp grant is unavailable — run the comp_until column migration first' },
+              { status: 409 },
+            );
+          }
+          throw err;
+        }
+        // If access was previously revoked, restore it now (the grant is active).
+        if (user.access_revoked_at !== null) {
+          try {
+            await restoreUserAccess(toEnforceable(user));
+          } catch (err) {
+            console.error('[admin-actions] grant_access restore failed:', err);
+          }
+        }
+        await audit('grant_access', { months, days, comp_until: compUntil.toISOString() });
+        return NextResponse.json({ ok: true, comp_until: compUntil.toISOString() });
+      }
+
+      case 'clear_grant': {
+        try {
+          await pool.query('UPDATE users SET comp_until = NULL WHERE id = $1', [user.id]);
+        } catch (err) {
+          if ((err as { code?: string })?.code === UNDEFINED_COLUMN) {
+            return NextResponse.json(
+              { error: 'Comp grant is unavailable — run the comp_until column migration first' },
+              { status: 409 },
+            );
+          }
+          throw err;
+        }
+        await audit('clear_grant');
+        return NextResponse.json({ ok: true, comp_until: null });
       }
 
       // ── Access revoke / restore ──────────────────────────────────────────

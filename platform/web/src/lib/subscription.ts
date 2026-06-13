@@ -11,7 +11,7 @@
 import pool from '@/lib/db';
 import { PAST_DUE_GRACE_DAYS } from '@/lib/stripe';
 
-export type SubscriptionPlan = 'free' | 'trialing' | 'active' | 'past_due' | 'inactive';
+export type SubscriptionPlan = 'free' | 'comp' | 'trialing' | 'active' | 'past_due' | 'inactive';
 
 export interface SubscriptionStatus {
   /** Whether the user may currently use the tunnel/install. */
@@ -32,25 +32,28 @@ interface UserBillingRow {
   past_due_since: Date | null;
   legacy_free: boolean | null;
   suspended_at?: Date | null;
+  comp_until?: Date | null;
 }
 
 export async function getSubscriptionStatus(userId: string): Promise<SubscriptionStatus> {
-  // DEFENSIVE: users.suspended_at may not exist yet (the operator runs the
-  // ALTER separately, possibly AFTER this deploys). Try the SELECT WITH
-  // suspended_at; if Postgres reports 42703 (undefined_column), retry the
-  // SAME SELECT WITHOUT it so the gate keeps working (suspended treated as
-  // false). Only 42703 is swallowed here — any other error rethrows.
+  // DEFENSIVE: users.suspended_at is applied live, but users.comp_until may not
+  // exist yet (the operator runs that ALTER separately, possibly AFTER this
+  // deploys). Try the SELECT WITH BOTH suspended_at and comp_until; if Postgres
+  // reports 42703 (undefined_column — the missing one is comp_until in practice),
+  // retry the SAME SELECT WITHOUT comp_until so the gate keeps working
+  // (comp_until treated as null/absent → no comp grant). The gate must NEVER 500
+  // before comp_until exists. Only 42703 is swallowed here — any other rethrows.
   let res;
   try {
     res = await pool.query<UserBillingRow>(
-      `SELECT subscription_status, current_period_end, cancel_at_period_end, past_due_since, legacy_free, suspended_at
+      `SELECT subscription_status, current_period_end, cancel_at_period_end, past_due_since, legacy_free, suspended_at, comp_until
          FROM users WHERE id = $1`,
       [userId],
     );
   } catch (err) {
     if ((err as { code?: string })?.code === '42703') {
       res = await pool.query<UserBillingRow>(
-        `SELECT subscription_status, current_period_end, cancel_at_period_end, past_due_since, legacy_free
+        `SELECT subscription_status, current_period_end, cancel_at_period_end, past_due_since, legacy_free, suspended_at
            FROM users WHERE id = $1`,
         [userId],
       );
@@ -75,6 +78,9 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   // suspended_at is undefined when the column doesn't exist yet (42703 retry
   // path above) — treat that as "not suspended".
   const suspended = !!row.suspended_at;
+  // comp_until is undefined when the column doesn't exist yet (42703 retry path
+  // above) — treat that as "no comp grant".
+  const compUntil = row.comp_until ?? null;
 
   // Admin suspension (ban) overrides EVERYTHING: a suspended user has no access
   // even if comped (legacy_free) or actively paying (trialing/active). Must be
@@ -89,6 +95,18 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   // Grandfathered legacy accounts always have access.
   if (legacyFree) {
     return { active: true, plan: 'free', stripeStatus: status, currentPeriodEnd, cancelAtPeriodEnd, legacyFree: true };
+  }
+
+  // Time-boxed admin comp grant: while comp_until is in the future the user has
+  // access regardless of Stripe (auto-expires — the enforce cron re-checks this
+  // gate and revokes once comp_until passes). Surface comp_until as the period
+  // end so the user/admin sees when the grant ends. Below legacy_free, above any
+  // Stripe state. Absent column → compUntil null → this branch is skipped.
+  if (compUntil && compUntil.getTime() > now.getTime()) {
+    return {
+      active: true, plan: 'comp', stripeStatus: status, currentPeriodEnd: compUntil,
+      cancelAtPeriodEnd, legacyFree: false,
+    };
   }
 
   // Never subscribed.
