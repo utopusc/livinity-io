@@ -2,7 +2,7 @@ import {useEffect, useMemo, useRef, useState, type RefObject} from 'react'
 import {AnimatePresence, motion, useAnimationControls, type Variants} from 'framer-motion'
 import {useNavigate} from 'react-router-dom'
 import {TbBrandDocker, TbLogout, TbPalette, TbPencil, TbRefresh} from 'react-icons/tb'
-import {Activity, Maximize2, Minimize2, Monitor, Moon, Search, Sun, Terminal} from 'lucide-react'
+import {Activity, Bug, Maximize2, Minimize2, Monitor, Moon, Search, Sun, Terminal} from 'lucide-react'
 
 import {trpcReact} from '@/trpc/trpc'
 import {useCurrentUser} from '@/hooks/use-current-user'
@@ -15,6 +15,7 @@ import {systemAppsKeyed} from '@/providers/apps'
 import {useTheme} from '@/hooks/use-theme'
 import {openCommandPalette} from '@/components/cmdk'
 import {DisplaysSurfaceLive} from './displays-surface'
+import {FeedbackDialog} from './feedback-dialog'
 import {greeting, wmoGlyph} from './clock-helpers'
 import {cn} from '@/shadcn-lib/utils'
 import {
@@ -156,6 +157,9 @@ function TopBarDesktop() {
 
 	const [showChangeName, setShowChangeName] = useState(false)
 	const [showChangeIcon, setShowChangeIcon] = useState(false)
+	// Report-a-problem / feedback dialog (opened from the Bug button in the LEFT
+	// quick-controls cluster).
+	const [showFeedback, setShowFeedback] = useState(false)
 	const [isHoverExpanded, setIsHoverExpanded] = useState(false)
 	const profileWrapRef = useRef<HTMLDivElement>(null)
 	// Phase 260.2 — nav element ref for the hover-collapse safety net (bug fix).
@@ -518,6 +522,18 @@ function TopBarDesktop() {
 									>
 										<Search className='h-4 w-4' />
 									</motion.button>
+
+									{/* Report a problem — opens the feedback dialog. */}
+									<motion.button
+										variants={navUtilItem}
+										type='button'
+										aria-label='Report a problem'
+										title='Report a problem'
+										onClick={() => setShowFeedback(true)}
+										className='grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--fg)] transition-colors hover:bg-[color:var(--bg-2)]'
+									>
+										<Bug className='h-4 w-4' />
+									</motion.button>
 								</motion.div>
 							)}
 						</AnimatePresence>
@@ -693,6 +709,7 @@ function TopBarDesktop() {
 
 			<ChangeNamePopup open={showChangeName} onOpenChange={setShowChangeName} />
 			<ChangeIconPopup open={showChangeIcon} onOpenChange={setShowChangeIcon} userId={userId} />
+			<FeedbackDialog open={showFeedback} onOpenChange={setShowFeedback} />
 		</>
 	)
 }
