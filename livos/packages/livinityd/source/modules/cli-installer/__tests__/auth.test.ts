@@ -426,18 +426,26 @@ describe('authCli — drift-lock constants', () => {
 		expect(keys.length).toBe(20)
 	})
 
-	test('Test 15: Wave C install-only CLIs have null auth (authHidden — AUTH_UNSUPPORTED)', () => {
-		for (const name of [
-			'kimi-cli',
-			'mistral-vibe',
-			'hermes-agent',
-			'nanobot',
-			'snow-cli',
-			'kiro',
-		] as const) {
+	test('Test 15: api-key-only / n-a Wave-C CLIs stay null (AUTH_UNSUPPORTED short-circuit)', () => {
+		// Phase 267-01 — these authenticate via cliInstaller.setApiKey (api-key
+		// write), NOT a login spawn, so their canonical-login argv stays null.
+		for (const name of ['mistral-vibe', 'nanobot', 'snow-cli'] as const) {
 			expect(CLI_AUTH_COMMANDS[name]).toBeNull()
 		}
+		// aion-cli is genuinely unsupported (AionUi embedded backend).
+		expect(CLI_AUTH_COMMANDS['aion-cli']).toBeNull()
 		// cursor-agent's auth bin MUST equal its install/detector binary (BLOCKER 1).
 		expect(CLI_AUTH_COMMANDS['cursor-agent']).toEqual(['cursor-agent', ['login']])
+	})
+
+	test('Test 15b: Phase 267-01 — auth-able Wave-C CLIs got a real login argv', () => {
+		// Device-flow logins (the no-terminal streaming path consumes these).
+		expect(CLI_AUTH_COMMANDS['kimi-cli']).toEqual(['kimi', ['login']])
+		expect(CLI_AUTH_COMMANDS['kiro']).toEqual(['kiro-cli', ['login']])
+		// hermes-agent device portal (api-key is the other path via setApiKey).
+		expect(CLI_AUTH_COMMANDS['hermes-agent']).toEqual([
+			'hermes',
+			['setup', '--portal'],
+		])
 	})
 })
