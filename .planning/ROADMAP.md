@@ -4817,9 +4817,9 @@ Plans:
 > Builds on 267-04 / 268-04 / 269 (the panel JS + agent-logos + the WS3 overlay + agents-overlay.ts aion-hide). Constraint: the panel is vanilla-DOM AionUi-patch JS (no React); preserve the 269-01 "Apply changes" bar, the 268/269 Install/Auth/Remove/paste-back wiring, and the 269-04 icon cascade. CODE ONLY; deploy is release-based (cut a tag → update.sh). Confirm whether the panel's agent source is `/liv/api/agents` (overlay-covered) or another endpoint — that determines whether the aion fix is "route panel through overlay" or "filter in the panel JS too".
 **Requirements**: single unified Local Agents list (installed + not-installed in one place, no separate Detected strip); per-row state (Install for not-installed, Auth/Remove for installed); identify the panel's agent data source; Aion CLI hidden in the panel too (consistent with 269.1); preserve Apply bar + Install/Auth/Remove/paste-back + icon cascade; live-verify Aion gone from picker AND panel.
 **Depends on:** Phase 269
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 270 to break down)
+- [ ] 270-01-PLAN.md — unify Local Agents into one list: exclude aion-cli from the LivOS grid (VISIBLE_CLIS, byte-consistent with 269.1) + hide AionUi native Detected strip (hideNativeStrip + .liv-270-native-hidden CSS); preserve Apply bar + Install/Auth/Remove/paste-back + icon cascade; node --check gate + operator live-UAT [wave 1, autonomous:false]
 
 ---
