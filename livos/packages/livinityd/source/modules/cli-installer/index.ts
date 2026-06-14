@@ -46,3 +46,12 @@ export {
 	type WriteApiKeyDeps,
 	type WriteApiKeyResult,
 } from './api-key-writer.js'
+// Phase 267-03 Task 1 — debounced, best-effort liv-assistant restart so AionUi
+// re-PATH-scans and a freshly-authed CLI flips Failed→ready (no terminal).
+export {
+	scheduleAgentRefresh,
+	agentRefreshStatusKey,
+	DEFAULT_AGENT_REFRESH_DEBOUNCE_MS,
+	type ScheduleAgentRefreshDeps,
+	type AgentRefreshExecFn,
+} from './agent-refresh.js'
