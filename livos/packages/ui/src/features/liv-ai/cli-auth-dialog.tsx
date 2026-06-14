@@ -1,0 +1,625 @@
+/* =========================================================
+   CliAuthDialog — Phase 267-02 (the no-terminal CLI install + auth dialog).
+
+   Replaces the old `use-cli-auth-bridge.ts` Terminal-routing flow. The Liv AI
+   "Local Agents" panel (and the onboarding CLI step) used to open the LivOS
+   Terminal and run `bash …/cli/<name>.sh` / `<cli> auth login` in a PTY tab.
+   The operator wants that GONE. This dialog drives the WHOLE flow over tRPC:
+
+     1. INSTALL  — `cliInstaller.install({name})` with a spinner. No terminal.
+     2. AUTH     — branched by `cliInstaller.getAuthMethod(name).branch`:
+        • device  — call `cliInstaller.auth({name})` (a long-running mutation
+                    that resolves with {ok} when the login process exits — THAT
+                    resolution is the completion signal; there is NO separate
+                    status-read route). WHILE it runs we poll
+                    `cliInstaller.getDeviceCode({name})` for the live {url,code}
+                    that authCli parses out of the login's own stdout/stderr
+                    (267-01) and render an "Open link ↗" button + the code.
+                    SECURITY: the URL is server-parsed from the CLI's stdout,
+                    NOT user input — but we STILL require an explicit user click
+                    before navigating to it (no auto-redirect; 267-02 threat
+                    model). When the auth mutation resolves ok → success state →
+                    auto-close after ~1.4s.
+        • apikey  — a <PasswordInput> "API key" field → `setApiKey({name,key})`
+                    → re-`detect` to confirm. The key is NEVER echoed back,
+                    never logged, never stored in localStorage (267-02 threat
+                    model: type=password, sent only to setApiKey).
+        • browser — open the login URL in the LivOS embedded browser window
+                    (window-manager) on an explicit click, with an api-key
+                    paste fallback (apiKeyEnv) for headless boxes.
+        • n/a     — not auth-able (aion-cli); show an explanatory message.
+
+   3. ADVANCED  — every branch shows a small "Advanced: run in Terminal
+      instead" affordance that falls back to the OLD bridge behavior (the
+      Terminal path is DEMOTED, not deleted, so power users keep it). It calls
+      the exported `runCliInTerminalFallback` from use-cli-auth-bridge.ts.
+
+   MOUNTING: this dialog self-mounts in the desktop shell and owns its own open
+   state by listening for the `CLI_AUTH_DIALOG_EVENT` window CustomEvent. The
+   bridge hook (use-cli-auth-bridge.ts) dispatches that event from its origin-
+   validated postMessage handler, so the RCE boundary (NAME-only) is unchanged
+   and the hook keeps its `(): void` signature.
+   ========================================================= */
+
+import {useCallback, useEffect, useRef, useState} from 'react'
+
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@/shadcn-components/ui/dialog'
+import {Button} from '@/shadcn-components/ui/button'
+import {PasswordInput} from '@/shadcn-components/ui/input'
+import {useWindowManagerOptional} from '@/providers/window-manager'
+import {trpcReact, type RouterOutput} from '@/trpc/trpc'
+
+import {runCliInTerminalFallback} from '@/hooks/use-cli-auth-bridge'
+
+// The branch discriminant the dialog switches on (mirror of the backend
+// CLI_AUTH_METHODS.branch — see auth-methods.ts). Derived from the tRPC output
+// type so a backend contract change surfaces here at compile time.
+type AuthMethod = RouterOutput['cliInstaller']['getAuthMethod']
+
+/**
+ * Window CustomEvent that opens the dialog. The bridge hook dispatches it after
+ * validating the iframe postMessage origin + mapping to a known CLI NAME. The
+ * detail carries the CLI name and which flow the trigger asked for ('install'
+ * vs 'auth'); the dialog still re-derives the real flow from getAuthMethod +
+ * detect, so 'mode' is only the initial intent.
+ */
+export const CLI_AUTH_DIALOG_EVENT = 'livos:cli-auth-dialog'
+
+export interface CliAuthDialogDetail {
+	cli: string
+	/** 'install' opens on the install step; 'auth' jumps toward auth. */
+	mode?: 'install' | 'auth'
+}
+
+/** Imperatively open the dialog from anywhere (onboarding, panels). */
+export function openCliAuthDialog(detail: CliAuthDialogDetail): void {
+	window.dispatchEvent(new CustomEvent(CLI_AUTH_DIALOG_EVENT, {detail}))
+}
+
+// ── Display labels (UI-only; the backend whitelist is the security boundary) ──
+const CLI_LABELS: Readonly<Record<string, string>> = {
+	'claude-code': 'Claude Code',
+	opencode: 'OpenCode',
+	gemini: 'Gemini',
+	openclaw: 'OpenClaw',
+	'aion-cli': 'Aion CLI',
+	codex: 'Codex',
+	'qwen-code': 'Qwen Code',
+	augment: 'Augment',
+	'github-copilot': 'GitHub Copilot',
+	codebuddy: 'CodeBuddy',
+	'qoder-cli': 'Qoder',
+	goose: 'Goose',
+	'factory-droid': 'Factory Droid',
+	'cursor-agent': 'Cursor Agent',
+	'kimi-cli': 'Kimi CLI',
+	'mistral-vibe': 'Mistral Vibe',
+	'hermes-agent': 'Hermes Agent',
+	nanobot: 'Nanobot',
+	'snow-cli': 'Snow CLI',
+	kiro: 'Kiro',
+}
+
+function labelFor(cli: string): string {
+	return CLI_LABELS[cli] ?? cli
+}
+
+// Safely render the host of a device URL so the user can sanity-check WHERE the
+// "Open link" button will take them (267-02 phishing/open-redirect mitigation).
+function hostOf(url: string): string {
+	try {
+		return new URL(url).host
+	} catch {
+		return url
+	}
+}
+
+type Phase =
+	| {kind: 'loading'} // resolving getAuthMethod + detect
+	| {kind: 'install'} // not installed → show Install button
+	| {kind: 'installing'}
+	| {kind: 'install-failed'; message: string}
+	| {kind: 'auth-device'} // device flow running, polling for code + completion
+	| {kind: 'auth-apikey'} // apikey paste field
+	| {kind: 'auth-browser'} // browser flow (open url) + apikey fallback
+	| {kind: 'auth-na'} // not auth-able
+	| {kind: 'authenticating'} // apikey submit in flight
+	| {kind: 'auth-failed'; message: string}
+	| {kind: 'success'; message: string}
+
+// ── The inner dialog body — remounted per CLI via `key` so all hooks reset ──
+function CliAuthDialogBody({
+	cli,
+	mode,
+	onClose,
+}: {
+	cli: string
+	mode: 'install' | 'auth'
+	onClose: () => void
+}) {
+	const windowManager = useWindowManagerOptional()
+	const utils = trpcReact.useUtils()
+
+	const [phase, setPhase] = useState<Phase>({kind: 'loading'})
+	const [apiKey, setApiKey] = useState('')
+	const [apiKeyError, setApiKeyError] = useState<string | undefined>(undefined)
+	const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+	const authMethodQ = trpcReact.cliInstaller.getAuthMethod.useQuery(
+		{name: cli},
+		{retry: false, staleTime: 60_000},
+	)
+	const detectQ = trpcReact.cliInstaller.detect.useQuery(
+		{name: cli},
+		{retry: false, staleTime: 10_000},
+	)
+
+	const method: AuthMethod | undefined = authMethodQ.data
+
+	// Device-code poll — ONLY enabled while the device flow is live so we don't
+	// hammer Redis for non-device CLIs. authCli sets liv:cli:auth:url:<name>
+	// (EX 600) the instant the login prints the verification URL + code.
+	const deviceCodeQ = trpcReact.cliInstaller.getDeviceCode.useQuery(
+		{name: cli},
+		{
+			enabled: phase.kind === 'auth-device',
+			refetchInterval: phase.kind === 'auth-device' ? 1500 : false,
+			retry: false,
+		},
+	)
+
+	const installM = trpcReact.cliInstaller.install.useMutation()
+	const authM = trpcReact.cliInstaller.auth.useMutation()
+	const setApiKeyM = trpcReact.cliInstaller.setApiKey.useMutation()
+
+	// Pick the auth phase for the resolved branch.
+	const branchToAuthPhase = useCallback((m: AuthMethod): Phase => {
+		switch (m.branch) {
+			case 'device':
+				return {kind: 'auth-device'}
+			case 'apikey':
+				return {kind: 'auth-apikey'}
+			case 'browser':
+				return {kind: 'auth-browser'}
+			case 'n/a':
+			default:
+				return {kind: 'auth-na'}
+		}
+	}, [])
+
+	// Resolve the initial phase once both queries land: not-installed → install;
+	// installed → the branch's auth phase.
+	useEffect(() => {
+		if (phase.kind !== 'loading') return
+		if (!method || detectQ.data === undefined) return
+		const installed = detectQ.data.detected
+		if (!installed && mode !== 'auth') {
+			setPhase({kind: 'install'})
+			return
+		}
+		setPhase(branchToAuthPhase(method))
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [method, detectQ.data, mode])
+
+	// When we enter the device phase, kick off the (long-running) auth mutation
+	// exactly once. Its resolution {ok} IS the completion signal.
+	const deviceStarted = useRef(false)
+	useEffect(() => {
+		if (phase.kind !== 'auth-device') return
+		if (deviceStarted.current) return
+		deviceStarted.current = true
+		authM
+			.mutateAsync({name: cli})
+			.then((res) => {
+				if (res.ok) {
+					setPhase({kind: 'success', message: `${labelFor(cli)} authenticated`})
+				} else {
+					const tail = (res.output ?? '')
+						.split('\n')
+						.slice(-3)
+						.join('\n')
+						.slice(0, 400)
+					setPhase({
+						kind: 'auth-failed',
+						message: tail || `Login failed (exit ${res.exitCode})`,
+					})
+				}
+			})
+			.catch((err) => {
+				setPhase({
+					kind: 'auth-failed',
+					message: err instanceof Error ? err.message : 'Login failed',
+				})
+			})
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [phase.kind, cli])
+
+	// On success, auto-close after a short beat so the user sees the ✓.
+	useEffect(() => {
+		if (phase.kind !== 'success') return
+		closeTimer.current = setTimeout(() => onClose(), 1400)
+		return () => {
+			if (closeTimer.current) clearTimeout(closeTimer.current)
+		}
+	}, [phase.kind, onClose])
+
+	const handleInstall = useCallback(async () => {
+		setPhase({kind: 'installing'})
+		try {
+			const res = await installM.mutateAsync({name: cli})
+			if (res.ok) {
+				// Refresh detect, then advance to the auth branch.
+				await utils.cliInstaller.detect.invalidate({name: cli})
+				setPhase(method ? branchToAuthPhase(method) : {kind: 'loading'})
+			} else {
+				const tail = (res.output ?? '')
+					.split('\n')
+					.slice(-3)
+					.join('\n')
+					.slice(0, 400)
+				setPhase({
+					kind: 'install-failed',
+					message: tail || `Install failed (exit ${res.exitCode})`,
+				})
+			}
+		} catch (err) {
+			setPhase({
+				kind: 'install-failed',
+				message: err instanceof Error ? err.message : 'Install failed',
+			})
+		}
+	}, [cli, installM, method, branchToAuthPhase, utils])
+
+	const handleSubmitApiKey = useCallback(async () => {
+		const key = apiKey.trim()
+		if (!key) {
+			setApiKeyError('Enter an API key')
+			return
+		}
+		setApiKeyError(undefined)
+		setPhase({kind: 'authenticating'})
+		try {
+			const res = await setApiKeyM.mutateAsync({name: cli, key})
+			if (!res.ok) {
+				setApiKey('')
+				setPhase({kind: 'auth-apikey'})
+				setApiKeyError('Could not save the key')
+				return
+			}
+			// Confirm the CLI now detects (best-effort — key write is the real win).
+			await utils.cliInstaller.detect.invalidate({name: cli})
+			// Clear the key from component state immediately after use.
+			setApiKey('')
+			setPhase({kind: 'success', message: `${labelFor(cli)} key saved`})
+		} catch (err) {
+			setApiKey('')
+			setPhase({kind: 'auth-apikey'})
+			setApiKeyError(err instanceof Error ? err.message : 'Could not save the key')
+		}
+	}, [apiKey, cli, setApiKeyM, utils])
+
+	// EXPLICIT user click → open the device/login URL. NEVER auto-navigated.
+	const openUrl = useCallback(
+		(url: string) => {
+			window.open(url, '_blank', 'noopener,noreferrer')
+		},
+		[],
+	)
+
+	// browser branch — open the login URL in the LivOS embedded browser window.
+	const openInLivosBrowser = useCallback(
+		(url: string) => {
+			if (windowManager) {
+				windowManager.openWindow(
+					'LIVINITY_browser',
+					`/browser?url=${encodeURIComponent(url)}`,
+					'Browser',
+					'',
+				)
+			} else {
+				openUrl(url)
+			}
+		},
+		[windowManager, openUrl],
+	)
+
+	// Advanced: run in Terminal instead (the demoted OLD bridge behavior).
+	const runInTerminal = useCallback(
+		(type: 'cli-install' | 'cli-auth') => {
+			runCliInTerminalFallback(windowManager, type, cli)
+			onClose()
+		},
+		[windowManager, cli, onClose],
+	)
+
+	const deviceCode = deviceCodeQ.data ?? null
+
+	return (
+		<DialogContent>
+			<DialogHeader>
+				<DialogTitle>
+					{phase.kind === 'install' || phase.kind === 'installing'
+						? `Install ${labelFor(cli)}`
+						: `Connect ${labelFor(cli)}`}
+				</DialogTitle>
+				<DialogDescription>
+					{phase.kind === 'success'
+						? 'Done.'
+						: 'Set up this CLI agent from here — no Terminal required.'}
+				</DialogDescription>
+			</DialogHeader>
+
+			<div className='space-y-4 py-2'>
+				{phase.kind === 'loading' && (
+					<p className='text-sm text-text-tertiary'>Checking status…</p>
+				)}
+
+				{/* ── Install step ── */}
+				{phase.kind === 'install' && (
+					<p className='text-sm text-text-secondary'>
+						{labelFor(cli)} is not installed yet. Install it now to continue.
+					</p>
+				)}
+				{phase.kind === 'installing' && (
+					<div className='flex items-center gap-2 text-sm text-text-secondary'>
+						<Spinner /> Installing {labelFor(cli)}…
+					</div>
+				)}
+				{phase.kind === 'install-failed' && (
+					<p className='whitespace-pre-wrap text-sm text-destructive2-lightest'>
+						{phase.message}
+					</p>
+				)}
+
+				{/* ── Device branch ── */}
+				{phase.kind === 'auth-device' && (
+					<div className='space-y-3'>
+						<p className='text-sm text-text-secondary'>
+							Sign in to {labelFor(cli)} in your browser, then come back —
+							this dialog finishes automatically.
+						</p>
+						{deviceCode ? (
+							<div className='space-y-3 rounded-radius-lg border border-border-default bg-surface-base p-3'>
+								<div className='space-y-1'>
+									<div className='text-caption text-text-tertiary'>
+										1 · Open this link
+									</div>
+									<div className='flex items-center gap-2'>
+										<code className='truncate text-xs text-text-secondary'>
+											{hostOf(deviceCode.url)}
+										</code>
+										<Button
+											size='sm'
+											variant='default'
+											onClick={() => openUrl(deviceCode.url)}
+										>
+											Open link ↗
+										</Button>
+									</div>
+								</div>
+								<div className='space-y-1'>
+									<div className='text-caption text-text-tertiary'>
+										2 · Enter this code
+									</div>
+									<div className='flex items-center gap-2'>
+										<code className='select-all rounded bg-surface-1 px-2 py-1 text-sm font-semibold tracking-widest text-text-primary'>
+											{deviceCode.code}
+										</code>
+										<Button
+											size='sm'
+											variant='default'
+											onClick={() =>
+												void navigator.clipboard?.writeText(deviceCode.code)
+											}
+										>
+											Copy
+										</Button>
+									</div>
+								</div>
+							</div>
+						) : (
+							<div className='flex items-center gap-2 text-sm text-text-tertiary'>
+								<Spinner /> Waiting for the sign-in code…
+							</div>
+						)}
+					</div>
+				)}
+
+				{/* ── API-key branch ── */}
+				{(phase.kind === 'auth-apikey' || phase.kind === 'authenticating') && (
+					<div className='space-y-2'>
+						<p className='text-sm text-text-secondary'>
+							Paste your {labelFor(cli)} API key
+							{method?.apiKeyEnv ? (
+								<>
+									{' '}
+									(<code className='text-xs'>{method.apiKeyEnv}</code>)
+								</>
+							) : null}
+							. It is stored only in this CLI&apos;s config on your server.
+						</p>
+						<PasswordInput
+							label='API key'
+							value={apiKey}
+							onValueChange={setApiKey}
+							error={apiKeyError}
+							autoFocus
+							sizeVariant='short'
+						/>
+					</div>
+				)}
+
+				{/* ── Browser branch ── */}
+				{phase.kind === 'auth-browser' && (
+					<div className='space-y-3'>
+						<p className='text-sm text-text-secondary'>
+							{labelFor(cli)} signs in through a browser. Open the login page,
+							or paste an API key instead.
+						</p>
+						{method?.loginArgv ? (
+							<Button
+								variant='default'
+								onClick={() =>
+									openInLivosBrowser(
+										`https://www.google.com/search?q=${encodeURIComponent(
+											`${labelFor(cli)} cli login`,
+										)}`,
+									)
+								}
+							>
+								Open sign-in in browser ↗
+							</Button>
+						) : null}
+						{method?.apiKeyEnv ? (
+							<div className='space-y-2 border-t border-border-default pt-3'>
+								<p className='text-sm text-text-secondary'>
+									Or paste an API key (
+									<code className='text-xs'>{method.apiKeyEnv}</code>):
+								</p>
+								<PasswordInput
+									label='API key'
+									value={apiKey}
+									onValueChange={setApiKey}
+									error={apiKeyError}
+									sizeVariant='short'
+								/>
+							</div>
+						) : null}
+					</div>
+				)}
+
+				{/* ── Not auth-able ── */}
+				{phase.kind === 'auth-na' && (
+					<p className='text-sm text-text-secondary'>
+						{labelFor(cli)} does not require a separate sign-in.
+					</p>
+				)}
+
+				{phase.kind === 'authenticating' && (
+					<div className='flex items-center gap-2 text-sm text-text-secondary'>
+						<Spinner /> Saving…
+					</div>
+				)}
+
+				{phase.kind === 'auth-failed' && (
+					<p className='whitespace-pre-wrap text-sm text-destructive2-lightest'>
+						{phase.message}
+					</p>
+				)}
+
+				{phase.kind === 'success' && (
+					<p className='text-sm font-medium text-success-light'>
+						✓ {phase.message}
+					</p>
+				)}
+
+				{/* Advanced fallback — keep the OLD Terminal path for power users. */}
+				{phase.kind !== 'success' && phase.kind !== 'loading' && (
+					<button
+						type='button'
+						className='text-caption text-text-tertiary underline-offset-2 hover:underline'
+						onClick={() =>
+							runInTerminal(
+								phase.kind === 'install' || phase.kind === 'installing'
+									? 'cli-install'
+									: 'cli-auth',
+							)
+						}
+					>
+						Advanced: run in Terminal instead
+					</button>
+				)}
+			</div>
+
+			<DialogFooter>
+				{phase.kind === 'install' && (
+					<Button variant='primary' onClick={handleInstall}>
+						Install
+					</Button>
+				)}
+				{phase.kind === 'install-failed' && (
+					<Button variant='primary' onClick={handleInstall}>
+						Retry install
+					</Button>
+				)}
+				{(phase.kind === 'auth-apikey' || phase.kind === 'auth-browser') &&
+					(method?.apiKeyEnv || phase.kind === 'auth-apikey') && (
+						<Button variant='primary' onClick={handleSubmitApiKey}>
+							Save key
+						</Button>
+					)}
+				{phase.kind === 'auth-failed' && (
+					<Button
+						variant='primary'
+						onClick={() => {
+							deviceStarted.current = false
+							setPhase(method ? branchToAuthPhase(method) : {kind: 'loading'})
+						}}
+					>
+						Retry
+					</Button>
+				)}
+				<Button variant='default' onClick={onClose}>
+					{phase.kind === 'success' ? 'Done' : 'Close'}
+				</Button>
+			</DialogFooter>
+		</DialogContent>
+	)
+}
+
+function Spinner() {
+	return (
+		<span
+			className='inline-block'
+			style={{
+				width: 14,
+				height: 14,
+				borderRadius: '50%',
+				border: '2px solid var(--fg-mute, currentColor)',
+				borderTopColor: 'transparent',
+				animation: 'spin 0.8s linear infinite',
+			}}
+		/>
+	)
+}
+
+/**
+ * Self-mounting host. Drop ONE `<CliAuthDialog />` in the desktop shell; it
+ * listens for `CLI_AUTH_DIALOG_EVENT` and renders the body keyed by CLI name so
+ * every open starts from a clean hook state.
+ */
+export function CliAuthDialog() {
+	const [state, setState] = useState<CliAuthDialogDetail | null>(null)
+
+	useEffect(() => {
+		function onOpen(e: Event) {
+			const detail = (e as CustomEvent<CliAuthDialogDetail>).detail
+			if (!detail || typeof detail.cli !== 'string' || !detail.cli) return
+			setState({cli: detail.cli, mode: detail.mode ?? 'auth'})
+		}
+		window.addEventListener(CLI_AUTH_DIALOG_EVENT, onOpen)
+		return () => window.removeEventListener(CLI_AUTH_DIALOG_EVENT, onOpen)
+	}, [])
+
+	const close = useCallback(() => setState(null), [])
+
+	return (
+		<Dialog open={state !== null} onOpenChange={(o) => !o && close()}>
+			{state && (
+				<CliAuthDialogBody
+					key={state.cli}
+					cli={state.cli}
+					mode={state.mode ?? 'auth'}
+					onClose={close}
+				/>
+			)}
+		</Dialog>
+	)
+}
