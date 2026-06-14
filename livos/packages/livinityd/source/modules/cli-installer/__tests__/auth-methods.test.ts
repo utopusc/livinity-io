@@ -17,9 +17,17 @@ import {
 	DEVICE_CODE_RE,
 	type AuthBranch,
 } from '../auth-methods.js'
+import {CLI_AUTH_COMMANDS} from '../auth.js'
 import {SUPPORTED_CLIS} from '../install-scripts.js'
 
-const VALID_BRANCHES: readonly AuthBranch[] = ['apikey', 'device', 'browser', 'n/a']
+// Phase 268-01 — 'paste-back' is now a valid AuthBranch (orthogonal capability).
+const VALID_BRANCHES: readonly AuthBranch[] = [
+	'apikey',
+	'device',
+	'browser',
+	'paste-back',
+	'n/a',
+]
 
 describe('CLI_AUTH_METHODS — drift-lock', () => {
 	test('has exactly one entry per SUPPORTED_CLIS name (=== 20)', () => {
@@ -71,6 +79,45 @@ describe('CLI_AUTH_METHODS — drift-lock', () => {
 		expect(deviceNames).toEqual(
 			['github-copilot', 'kimi-cli', 'kiro', 'qoder-cli'].sort(),
 		)
+	})
+})
+
+// Phase 268-01 Task 1 — 'paste-back' AuthBranch + claude-code reclassification.
+describe('AuthBranch — paste-back capability (Phase 268-01)', () => {
+	test("the AuthBranch type permits 'paste-back'", () => {
+		// Compiles ONLY if 'paste-back' is a member of the union (TS-level proof).
+		const b: AuthBranch = 'paste-back'
+		expect(b).toBe('paste-back')
+	})
+
+	test("VALID_BRANCHES includes 'paste-back'", () => {
+		expect(VALID_BRANCHES).toContain('paste-back')
+	})
+
+	test('adding the union member does NOT change the matrix key count (still 20)', () => {
+		// A new union member is orthogonal to the matrix — no CLI is forced onto
+		// paste-back in this task; the drift-lock must still read exactly 20.
+		expect(Object.keys(CLI_AUTH_METHODS).length).toBe(SUPPORTED_CLIS.length)
+		expect(Object.keys(CLI_AUTH_METHODS).length).toBe(20)
+	})
+})
+
+describe('claude-code reclassification — bare login paste-back (Phase 268-01)', () => {
+	test("claude-code branch stays 'apikey' (reliable headless default)", () => {
+		expect(CLI_AUTH_METHODS['claude-code'].branch).toBe('apikey')
+		expect(CLI_AUTH_METHODS['claude-code'].apiKeyEnv).toBe('ANTHROPIC_API_KEY')
+	})
+
+	test("claude-code loginArgv is bare ['claude', []] (NOT ['claude', ['setup-token']])", () => {
+		// setup-token's localhost callback fails headless; the bare `claude` login
+		// prompts `Paste code here if prompted` (the paste-back flow).
+		expect(CLI_AUTH_METHODS['claude-code'].loginArgv).toEqual(['claude', []])
+	})
+
+	test("auth.ts CLI_AUTH_COMMANDS['claude-code'] deep-equals ['claude', []] (mirrors loginArgv)", () => {
+		// auth-methods.ts loginArgv is the UI mirror; auth.ts CLI_AUTH_COMMANDS is
+		// what authCli actually spawns. Both MUST agree for claude-code (RESEARCH §A).
+		expect(CLI_AUTH_COMMANDS['claude-code']).toEqual(['claude', []])
 	})
 })
 
