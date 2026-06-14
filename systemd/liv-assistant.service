@@ -63,6 +63,14 @@ ExecStart=/opt/liv-assistant/current/aionui-web start --port 3020 --data-dir /op
 ExecStartPost=/bin/bash -c 'for i in $(seq 1 30); do ss -ltnH "sport = :3020" | grep -q . && break; sleep 1; done; if ss -ltnH "sport = :3020" | grep ":3020" | grep -vq "127.0.0.1:3020"; then echo "FATAL: aionui-web bound non-loopback on :3020" >&2; exit 1; fi'
 Restart=on-failure
 RestartSec=5
+# Phase 269 hotfix — aionui-web ignores SIGTERM, so on `systemctl restart` systemd
+# waited the FULL default TimeoutStopSec (90s) before SIGKILL → every restart was a
+# ~90s TOTAL Liv AI outage (/liv/api/* 502, "AionUi çöktü açılmıyor"). This was the
+# root cause of every restart-window outage across Phases 267-269 (deploy AND the
+# 269-01 manual "Apply changes" restart). Bound the stop to 10s so the unresponsive
+# process is SIGKILLed quickly → a restart now takes ~12s (10s stop + port re-listen)
+# instead of ~92s. The ExecStopPost/ExecStartPre pkill reapers still clean ACP orphans.
+TimeoutStopSec=10
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=liv-assistant
