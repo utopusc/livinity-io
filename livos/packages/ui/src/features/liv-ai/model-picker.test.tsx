@@ -4,7 +4,7 @@
 //
 // 7 cases lock the LivAiModelPicker contract:
 //
-//   1. Trigger renders the current model name for value='grok-4.20-0309-fast'.
+//   1. Trigger renders the current model name for value='grok-4.20-0309-non-reasoning'.
 //   2. Trigger renders 'Grok 4.3' for value='grok-4.3'.
 //   3. Clicking the trigger opens the menu (4 items appear).
 //   4. Clicking the grok-4.3 item fires onChange once with 'grok-4.3'.
@@ -119,15 +119,15 @@ function clickItem(el: HTMLElement): void {
 }
 
 describe('LivAiModelPicker (Phase 199-04)', () => {
-	it('Test 1: renders trigger with current model name for value=grok-4.20-0309-fast', () => {
+	it('Test 1: renders trigger with current model name for value=grok-4.20-0309-non-reasoning', () => {
 		const onChange = vi.fn()
 		act(() => {
 			root.render(
-				<LivAiModelPicker value='grok-4.20-0309-fast' onChange={onChange} />,
+				<LivAiModelPicker value='grok-4.20-0309-non-reasoning' onChange={onChange} />,
 			)
 		})
 		const trigger = findTrigger()
-		expect(trigger.textContent).toContain('Grok 4.20 Fast')
+		expect(trigger.textContent).toContain('Grok 4.20')
 	})
 
 	it('Test 2: renders trigger with Grok 4.3 for value=grok-4.3', () => {
@@ -139,18 +139,17 @@ describe('LivAiModelPicker (Phase 199-04)', () => {
 		expect(trigger.textContent).toContain('Grok 4.3')
 	})
 
-	it('Test 3: clicking trigger opens menu with all 4 item testids', () => {
+	it('Test 3: clicking trigger opens menu with all 3 item testids', () => {
 		const onChange = vi.fn()
 		act(() => {
 			root.render(
-				<LivAiModelPicker value='grok-4.20-0309-fast' onChange={onChange} />,
+				<LivAiModelPicker value='grok-4.20-0309-non-reasoning' onChange={onChange} />,
 			)
 		})
 		openMenu()
 
 		// Radix renders the content in a portal attached to document.body.
 		const ids = [
-			'grok-4.20-0309-fast',
 			'grok-4.20-0309-non-reasoning',
 			'grok-4.20-0309-reasoning',
 			'grok-4.3',
@@ -167,7 +166,7 @@ describe('LivAiModelPicker (Phase 199-04)', () => {
 		const onChange = vi.fn()
 		act(() => {
 			root.render(
-				<LivAiModelPicker value='grok-4.20-0309-fast' onChange={onChange} />,
+				<LivAiModelPicker value='grok-4.20-0309-non-reasoning' onChange={onChange} />,
 			)
 		})
 		openMenu()
@@ -186,7 +185,7 @@ describe('LivAiModelPicker (Phase 199-04)', () => {
 		const onChange = vi.fn()
 		act(() => {
 			root.render(
-				<LivAiModelPicker value='grok-4.20-0309-fast' onChange={onChange} />,
+				<LivAiModelPicker value='grok-4.20-0309-non-reasoning' onChange={onChange} />,
 			)
 		})
 		openMenu()
@@ -217,7 +216,7 @@ describe('LivAiModelPicker (Phase 199-04)', () => {
 			'[data-testid="liv-ai-model-picker-item-grok-4.3"]',
 		) as HTMLElement
 		const unselected = document.querySelector(
-			'[data-testid="liv-ai-model-picker-item-grok-4.20-0309-fast"]',
+			'[data-testid="liv-ai-model-picker-item-grok-4.20-0309-non-reasoning"]',
 		) as HTMLElement
 		expect(selected).not.toBeNull()
 		expect(unselected).not.toBeNull()
@@ -232,7 +231,7 @@ describe('LivAiModelPicker (Phase 199-04)', () => {
 		expect(selectedPolyline).not.toBeNull()
 		expect(selectedPolyline!.getAttribute('points')).toBe('20 6 9 17 4 12')
 
-		// Unselected (grok-4.20-0309-fast) -> Zap icon -> <polygon points starts with "13 2 3 14">.
+		// Unselected (grok-4.20-0309-non-reasoning) -> Zap icon -> <polygon points starts with "13 2 3 14">.
 		const unselectedPolygon = unselectedFirstSvg!.querySelector('polygon')
 		expect(unselectedPolygon).not.toBeNull()
 		const zapPoints = unselectedPolygon!.getAttribute('points') ?? ''
@@ -246,7 +245,7 @@ describe('LivAiModelPicker (Phase 199-04)', () => {
 		const onChange = vi.fn()
 		act(() => {
 			root.render(
-				<LivAiModelPicker value='grok-4.20-0309-fast' onChange={onChange} />,
+				<LivAiModelPicker value='grok-4.20-0309-non-reasoning' onChange={onChange} />,
 			)
 		})
 		openMenu()

@@ -21,7 +21,7 @@
 // loaded as images — no script execution), NEVER via dangerouslySetInnerHTML.
 // Do not inline untrusted SVG here.
 
-import {useState} from 'react'
+import {useState, type ComponentType} from 'react'
 
 /** Public URL of a brand SVG under `public/agent-logos/`. Served at the LivOS
  * origin root (e.g. `/agent-logos/claude.svg`). `undefined` ⇒ monogram. */
@@ -136,6 +136,14 @@ export interface AgentLogoProps {
 	size?: number
 	/** Extra className on the wrapper. */
 	className?: string
+	/**
+	 * Optional fallback glyph (e.g. a lucide icon) rendered INSTEAD of the
+	 * monogram when the key has no brand asset AND is unknown to AGENT_LOGOS.
+	 * Lets a surface that already has its own icons (e.g. the model picker's
+	 * Grok lucide icons) keep them while still uniformly rendering <AgentLogo>.
+	 * Receives `{size, className}`-compatible props.
+	 */
+	fallbackIcon?: ComponentType<{size?: number; className?: string}>
 }
 
 /**
@@ -148,13 +156,27 @@ export interface AgentLogoProps {
  * The `<img>` `onError` flips to the monogram, so even a missing/renamed asset
  * degrades gracefully instead of showing the browser's broken-image glyph.
  */
-export function AgentLogo({backend, name, size = 20, className}: AgentLogoProps) {
+export function AgentLogo({
+	backend,
+	name,
+	size = 20,
+	className,
+	fallbackIcon: FallbackIcon,
+}: AgentLogoProps) {
 	const key = (backend ?? name ?? '').toString()
+	const known = Boolean(AGENT_LOGOS[normaliseKey(key)])
 	const entry = agentLogoFor(key)
 	const [imgFailed, setImgFailed] = useState(false)
 
 	const dim = `${size}px`
 	const radius = `${Math.round(size * 0.28)}px`
+
+	// A caller-supplied fallback glyph wins over the monogram, but ONLY when the
+	// key is genuinely unknown to AGENT_LOGOS (so a registered brand that simply
+	// lacks an SVG still gets its branded monogram, not a generic icon).
+	if (FallbackIcon && !known) {
+		return <FallbackIcon size={size} className={className} />
+	}
 
 	// Monogram avatar — used when there is no asset OR the asset failed to load.
 	if (!entry.src || imgFailed) {

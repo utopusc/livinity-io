@@ -45,33 +45,48 @@
   // GC-D — each CLI gets a brand-coloured monogram avatar (offline-safe, no
   // external logo fetch that could 404 on the box) + a card row. `color` is the
   // avatar background; `icon` is the 1-2 char monogram.
+  //
+  // Phase 267-04 — `logo` is the filename (sans .svg) of a STATIC brand SVG
+  // shipped under the LivOS UI `public/agent-logos/` dir (served at
+  // `/agent-logos/<logo>.svg`). The row renders that brand <img> when present;
+  // an `onerror` flips back to the monogram avatar so a missing/renamed asset
+  // (or an offline box) NEVER shows a broken image. CLIs without a `logo`
+  // render the monogram directly — same graceful-degradation contract as the
+  // React <AgentLogo> in features/liv-ai/agent-logos.tsx.
   var CLI_META = {
-    'claude-code':    { label: 'Claude Code',    icon: 'CC', color: '#d97757' },
-    'opencode':       { label: 'OpenCode',       icon: 'OC', color: '#0f766e' },
-    'gemini':         { label: 'Gemini',         icon: 'G',  color: '#4285f4' },
+    'claude-code':    { label: 'Claude Code',    icon: 'CC', color: '#d97757', logo: 'claude' },
+    'opencode':       { label: 'OpenCode',       icon: 'OC', color: '#0f766e', logo: 'opencode' },
+    'gemini':         { label: 'Gemini',         icon: 'G',  color: '#4285f4', logo: 'gemini' },
     'openclaw':       { label: 'OpenClaw',       icon: 'CL', color: '#f59e0b' },
     'aion-cli':       { label: 'Aion CLI',       icon: 'AI', color: '#7c3aed', authHidden: true },
     // Wave A
-    'codex':          { label: 'Codex',          icon: 'CX', color: '#10a37f' },
-    'qwen-code':      { label: 'Qwen Code',      icon: 'QW', color: '#6d28d9' },
+    'codex':          { label: 'Codex',          icon: 'CX', color: '#10a37f', logo: 'codex' },
+    'qwen-code':      { label: 'Qwen Code',      icon: 'QW', color: '#6d28d9', logo: 'qwen' },
     'augment':        { label: 'Augment',        icon: 'AG', color: '#0ea5e9' },
-    'github-copilot': { label: 'GitHub Copilot', icon: 'GH', color: '#24292f' },
+    'github-copilot': { label: 'GitHub Copilot', icon: 'GH', color: '#24292f', logo: 'github-copilot' },
     'codebuddy':      { label: 'CodeBuddy',      icon: 'CB', color: '#e11d48' },
     'qoder-cli':      { label: 'Qoder',          icon: 'QO', color: '#2563eb' },
     // Wave B
-    'goose':          { label: 'Goose',          icon: 'GS', color: '#16a34a' },
+    'goose':          { label: 'Goose',          icon: 'GS', color: '#16a34a', logo: 'goose' },
     'factory-droid':  { label: 'Factory Droid',  icon: 'FD', color: '#db2777' },
-    'cursor-agent':   { label: 'Cursor Agent',   icon: 'CA', color: '#334155' },
+    'cursor-agent':   { label: 'Cursor Agent',   icon: 'CA', color: '#334155', logo: 'cursor' },
     // Wave C — Phase 267-02: real auth method via the no-terminal dialog
     // (device for kimi-cli/kiro; apikey via setApiKey for the rest). Auth
     // button now RENDERED (authHidden removed). aion-cli above stays hidden.
-    'kimi-cli':       { label: 'Kimi CLI',       icon: 'KM', color: '#4f46e5' },
-    'mistral-vibe':   { label: 'Mistral Vibe',   icon: 'MV', color: '#f97316' },
+    'kimi-cli':       { label: 'Kimi CLI',       icon: 'KM', color: '#4f46e5', logo: 'kimi' },
+    'mistral-vibe':   { label: 'Mistral Vibe',   icon: 'MV', color: '#f97316', logo: 'mistral' },
     'hermes-agent':   { label: 'Hermes Agent',   icon: 'HM', color: '#0d9488' },
     'nanobot':        { label: 'Nanobot',        icon: 'NB', color: '#475569' },
     'snow-cli':       { label: 'Snow CLI',       icon: 'SN', color: '#0891b2' },
     'kiro':           { label: 'Kiro',           icon: 'KI', color: '#9333ea' }
   };
+
+  // Phase 267-04 — base path of the static brand SVGs. They live in the LivOS
+  // UI `public/agent-logos/` dir and are served at the LivOS origin root
+  // (NOT under /liv — that prefix is the AionUi reverse-proxy). The panel runs
+  // inside the AionUi iframe which is same-origin with the LivOS shell, so a
+  // root-relative `/agent-logos/...` resolves against the LivOS host.
+  var LOGO_BASE = '/agent-logos/';
 
   // Locale-aware Local Agents label fallbacks (5 most common locales in
   // AionUi's i18n maps per 240-02-INVESTIGATION.md Section E).
@@ -172,13 +187,44 @@
     return e;
   }
 
-  function renderRow(name) {
-    var meta = CLI_META[name];
-    var icon = el('div', { className: 'liv-240-icon', textContent: meta.icon });
+  // Phase 267-04 — build the row avatar: a brand <img> (static SVG from
+  // public/agent-logos/) when the CLI has a `logo`, with an `onerror` that
+  // swaps in the monogram avatar so a missing/renamed asset (or an offline
+  // box) NEVER shows a broken image. CLIs without a `logo` get the monogram
+  // directly. Mirrors the React <AgentLogo> graceful-degradation contract.
+  function monogramIcon(meta) {
+    var icon = el('div', { className: 'liv-240-icon liv-240-icon-monogram', textContent: meta.icon });
     if (meta.color) {
       icon.style.background = meta.color;
       icon.style.color = '#fff';
     }
+    return icon;
+  }
+
+  function renderIcon(meta) {
+    if (!meta.logo) return monogramIcon(meta);
+    // Wrapper holds the <img>; on error we replace it with the monogram so
+    // the broken-image glyph never renders. STATIC vetted asset, <img src>
+    // (sandboxed) — never inline/untrusted SVG (267-04 threat model).
+    var img = el('img', {
+      className: 'liv-240-icon liv-240-icon-logo',
+      src: LOGO_BASE + meta.logo + '.svg',
+      alt: meta.label,
+      width: '32',
+      height: '32',
+      loading: 'lazy',
+      decoding: 'async'
+    });
+    img.addEventListener('error', function () {
+      var mono = monogramIcon(meta);
+      if (img.parentNode) img.parentNode.replaceChild(mono, img);
+    });
+    return img;
+  }
+
+  function renderRow(name) {
+    var meta = CLI_META[name];
+    var icon = renderIcon(meta);
     var row = el('div', { className: 'liv-240-row', 'data-cli': name }, [
       icon,
       el('div', { className: 'liv-240-label' }, [
