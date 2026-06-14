@@ -568,6 +568,11 @@ export async function authCli(
 			return
 		}
 
+		// WR-02 (advisory): this is a SECOND 300s SIGKILL timer on the SAME child —
+		// registerLiveAuth also set one. Both fire on timeout; the kill is redundant
+		// (best-effort, harmless). They serve DIFFERENT purposes: registerLiveAuth's
+		// timer REAPS the live-child map (stranded paste-back login), while THIS one
+		// RESOLVES the authCli promise. Both are intentionally kept.
 		const timeoutHandle = setTimeout(() => {
 			if (settled) return
 			settled = true

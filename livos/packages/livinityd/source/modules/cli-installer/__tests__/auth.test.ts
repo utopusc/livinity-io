@@ -9,11 +9,12 @@
  *
  * D-239-07 RCE boundary still applies: the whitelist guard MUST throw before
  * any spawn fires (Test 1) and aion-cli MUST short-circuit (Test 2) — the
- * 5-tuple SUPPORTED_CLIS contract is preserved.
+ * SUPPORTED_CLIS contract is preserved.
  *
  * Drift-locks (Tests 13 + 14):
  *   - AUTH_TIMEOUT_MS === 300_000 (matches INSTALL_TIMEOUT_MS magnitude)
- *   - CLI_AUTH_COMMANDS has exactly 5 keys matching SUPPORTED_CLIS
+ *   - CLI_AUTH_COMMANDS has exactly 20 keys matching SUPPORTED_CLIS
+ *     (IN-01 — was "5"; the tuple expanded to 20 in Phase 253-04)
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
