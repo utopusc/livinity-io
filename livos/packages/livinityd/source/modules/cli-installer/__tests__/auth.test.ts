@@ -308,6 +308,112 @@ describe('authCli — redisStatusKey echoed in result', () => {
 	})
 })
 
+// Phase 267-01 Task 3 — streaming device-code surfacing.
+describe('authCli — streaming device-code (Phase 267-01)', () => {
+	test('Test 16: onChunk fires with {url, code} BEFORE the exit event', async () => {
+		const child = makeFakeChild()
+		const spawnFn = vi.fn(() => child as any)
+		const redis = makeRedis()
+		const order: string[] = []
+		const onChunk = vi.fn((payload: {url?: string; code?: string}) => {
+			order.push(`onChunk:${payload.url}:${payload.code}`)
+		})
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			spawnFn: spawnFn as any,
+			redis: redis as any,
+			onChunk: onChunk as any,
+		}
+		// github-copilot is a device CLI with a non-null login argv (spawns today);
+		// kimi-cli/kiro device argv land in Task 4 — streaming is CLI-agnostic.
+		const p = authCli({name: 'github-copilot'}, deps)
+		setImmediate(() => {
+			// A device login prints the URL + code early, then keeps polling.
+			child.stderr.emit(
+				'data',
+				Buffer.from('Visit https://kimi.com/device and enter code CODE-1234\n'),
+			)
+			// Simulate the user finishing in the browser → process exits later.
+			setImmediate(() => {
+				order.push('exit')
+				child.emit('exit', 0)
+			})
+		})
+		const result = await p
+		expect(result.ok).toBe(true)
+		// onChunk MUST have fired, and BEFORE exit.
+		expect(onChunk).toHaveBeenCalled()
+		const firstArg = onChunk.mock.calls[0][0] as {url?: string; code?: string}
+		expect(firstArg.url).toBe('https://kimi.com/device')
+		expect(firstArg.code).toBe('CODE-1234')
+		expect(order[0]).toBe('onChunk:https://kimi.com/device:CODE-1234')
+		expect(order).toContain('exit')
+		expect(order.indexOf('onChunk:https://kimi.com/device:CODE-1234')).toBeLessThan(
+			order.indexOf('exit'),
+		)
+	})
+
+	test('Test 17: publishes {url, code} to liv:cli:auth:stream:<name> + sets url key', async () => {
+		const child = makeFakeChild()
+		const spawnFn = vi.fn(() => child as any)
+		const redis = makeRedis()
+		const publish = vi.fn().mockResolvedValue(1)
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			spawnFn: spawnFn as any,
+			redis: redis as any,
+			redisPub: {publish} as any,
+		}
+		const p = authCli({name: 'github-copilot'}, deps)
+		setImmediate(() => {
+			child.stdout.emit(
+				'data',
+				Buffer.from('Open https://github.com/login/device — code ABCD-9999\n'),
+			)
+			child.emit('exit', 0)
+		})
+		await p
+		// pub/sub channel carried the payload
+		expect(publish).toHaveBeenCalled()
+		const [channel, payload] = publish.mock.calls[0] as [string, string]
+		expect(channel).toBe('liv:cli:auth:stream:github-copilot')
+		const decoded = JSON.parse(payload)
+		expect(decoded.url).toBe('https://github.com/login/device')
+		expect(decoded.code).toBe('ABCD-9999')
+		// A late-poll url key was SET with an EX TTL.
+		const urlKeySet = redis.set.mock.calls.find(
+			(c: unknown[]) => c[0] === 'liv:cli:auth:url:github-copilot',
+		)
+		expect(urlKeySet).toBeDefined()
+		const decodedKey = JSON.parse(urlKeySet![1] as string)
+		expect(decodedKey.url).toBe('https://github.com/login/device')
+		expect(decodedKey.code).toBe('ABCD-9999')
+		expect(urlKeySet![2]).toBe('EX')
+	})
+
+	test('Test 18: onChunk fires only ONCE even if the URL+code repeats in later chunks', async () => {
+		const child = makeFakeChild()
+		const spawnFn = vi.fn(() => child as any)
+		const redis = makeRedis()
+		const onChunk = vi.fn()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			spawnFn: spawnFn as any,
+			redis: redis as any,
+			onChunk: onChunk as any,
+		}
+		const p = authCli({name: 'github-copilot'}, deps)
+		setImmediate(() => {
+			const line = 'go https://kimi.com/device code AAAA-1111\n'
+			child.stderr.emit('data', Buffer.from(line))
+			child.stderr.emit('data', Buffer.from(line))
+			child.emit('exit', 0)
+		})
+		await p
+		expect(onChunk).toHaveBeenCalledTimes(1)
+	})
+})
+
 describe('authCli — drift-lock constants', () => {
 	test('Test 13: AUTH_TIMEOUT_MS exported as 300_000', () => {
 		expect(AUTH_TIMEOUT_MS).toBe(300_000)
