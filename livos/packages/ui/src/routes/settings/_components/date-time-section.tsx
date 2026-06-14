@@ -25,7 +25,7 @@
    the onboarding LocationStep + the setup-router validation use).
    ========================================================= */
 
-import {useEffect, useMemo, useState} from 'react'
+import {useEffect, useMemo, useRef, useState} from 'react'
 import {Loader2} from 'lucide-react'
 import {TbClock} from 'react-icons/tb'
 
@@ -64,11 +64,18 @@ function suggestFromBrowser(): {country: string; city: string} | null {
 	return null
 }
 
+type HourCycle = 'h12' | 'h23'
+
 export function DateTimeSection() {
 	const suggestion = useMemo(() => suggestFromBrowser(), [])
 
 	// Live, read-only display value for the current system time zone.
 	const sysInfoQ = trpcReact.system.info.useQuery()
+
+	// Phase 271 — read back the saved location + clock format.
+	const locationQ = trpcReact.setup.getLocation.useQuery(undefined, {
+		retry: false,
+	})
 
 	// No getter for the saved locale — seed the picker from the browser.
 	const [country, setCountry] = useState<string>(suggestion?.country ?? 'TR')
@@ -77,6 +84,27 @@ export function DateTimeSection() {
 	const setLocation = trpcReact.setup.setLocation.useMutation({
 		onSuccess: () => sysInfoQ.refetch(),
 	})
+
+	// Phase 271 — 24h⇄AM/PM. Seeded from the saved hour_cycle (getLocation) once
+	// it loads; writes via setClockFormat.
+	const utils = trpcReact.useUtils()
+	const [hourCycle, setHourCycle] = useState<HourCycle>('h23')
+	const hourCycleHydratedRef = useRef(false)
+	useEffect(() => {
+		if (hourCycleHydratedRef.current) return
+		if (!locationQ.data) return
+		hourCycleHydratedRef.current = true
+		setHourCycle(locationQ.data.hourCycle)
+	}, [locationQ.data])
+
+	const setClockFormat = trpcReact.setup.setClockFormat.useMutation({
+		onSuccess: () => utils.setup.getLocation.invalidate(),
+	})
+
+	function pickHourCycle(next: HourCycle) {
+		setHourCycle(next)
+		setClockFormat.mutate({hourCycle: next})
+	}
 
 	// When country changes, reset city to that country's first city if the
 	// current city doesn't belong to it.
@@ -217,6 +245,44 @@ export function DateTimeSection() {
 						System clock updated.
 					</div>
 				)}
+			</FieldCard>
+
+			{/* Phase 271 — 24h⇄AM/PM clock format. Read via getLocation, write via
+			    setClockFormat. Applies immediately to the navbar clock. */}
+			<FieldCard>
+				<FieldRow
+					label='Clock format'
+					value={
+						<div role='radiogroup' aria-label='Clock format' className='flex gap-2'>
+							{(
+								[
+									{value: 'h12' as const, label: 'AM/PM (12-hour)'},
+									{value: 'h23' as const, label: '24-hour'},
+								]
+							).map((opt) => {
+								const active = hourCycle === opt.value
+								return (
+									<button
+										key={opt.value}
+										type='button'
+										role='radio'
+										aria-checked={active}
+										aria-label={opt.label}
+										onClick={() => pickHourCycle(opt.value)}
+										className={
+											'rounded-radius-sm border px-3 py-1.5 text-[13px] transition-colors ' +
+											(active
+												? 'border-brand bg-brand/15 text-text-primary'
+												: 'border-border-default text-text-secondary hover:bg-surface-base')
+										}
+									>
+										{opt.label}
+									</button>
+								)
+							})}
+						</div>
+					}
+				/>
 			</FieldCard>
 		</div>
 	)

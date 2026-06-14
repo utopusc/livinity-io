@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useRef, useState, type RefObject} from 'react'
+import {useEffect, useRef, useState, type RefObject} from 'react'
 import {AnimatePresence, motion, useAnimationControls, type Variants} from 'framer-motion'
 import {useNavigate} from 'react-router-dom'
 import {TbBrandDocker, TbLogout, TbPalette, TbPencil, TbRefresh} from 'react-icons/tb'
@@ -9,6 +9,8 @@ import {useCurrentUser} from '@/hooks/use-current-user'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useLinkToDialog} from '@/utils/dialog'
 import {useUserName} from '@/hooks/use-user-name'
+import {useClockPrefs} from '@/hooks/use-clock-prefs'
+import {formatClockParts} from '@/lib/intl'
 import {onWindowDragDrop, setDisplaysButtonRect, useWindowDragState} from '@/providers/window-drag-state'
 import {useWindowManagerOptional} from '@/providers/window-manager'
 import {systemAppsKeyed} from '@/providers/apps'
@@ -726,24 +728,17 @@ function TopBarDesktop() {
 // ── Clock + Location ────────────────────────────────────────────────
 
 /**
- * Pulls the user's city from the IANA timezone ("Europe/Istanbul" →
- * "Istanbul") and fetches the current temperature from open-meteo.com
- * (free, no API key, no auth). The fetch is one-shot per mount with a
- * localStorage cache + 1-hour TTL so the network call doesn't repeat
- * on every render. Failures fall back gracefully to just the city,
- * then to no location row at all.
+ * Fetches the current temperature for the supplied `city` from open-meteo.com
+ * (free, no API key, no auth). The fetch is one-shot per city with a
+ * localStorage cache + 1-hour TTL so the network call doesn't repeat on every
+ * render. Failures fall back gracefully to just the city, then to no location
+ * row at all.
+ *
+ * Phase 271 — `city` is the SELECTED city from useClockPrefs (was browser-tz
+ * derived). A null/empty city short-circuits the geocode.
  */
-function useLocationWeather() {
-	const city = useMemo(() => {
-		try {
-			const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-			const parts = tz.split('/')
-			const tail = parts[parts.length - 1] ?? ''
-			return tail.replace(/_/g, ' ').trim() || null
-		} catch {
-			return null
-		}
-	}, [])
+function useLocationWeather(cityInput: string | null) {
+	const city = cityInput && cityInput.trim() ? cityInput.trim() : null
 	const [tempC, setTempC] = useState<number | null>(null)
 	// Phase 255-04 — additive: WMO weather_code + is_day power the navbar
 	// glow-up (glyph + day/night accent). Both nullable; a missing field never
@@ -808,7 +803,9 @@ function useLocationWeather() {
 
 function ClockWithLocation() {
 	const [now, setNow] = useState(() => new Date())
-	const {city, tempC, weatherCode, isDay} = useLocationWeather()
+	// Phase 271 — the SELECTED location + clock format drive the navbar clock.
+	const {city, timezone, hourCycle, locale} = useClockPrefs()
+	const {tempC, weatherCode, isDay} = useLocationWeather(city)
 	// Phase 255-04 — additive: source the operator name from the SAME cached
 	// tRPC query the profile button uses (no new fetch) so the greeting reads
 	// e.g. "Good evening, Bruce". Falls back to the bare greeting if absent.
@@ -821,17 +818,31 @@ function ClockWithLocation() {
 		return () => window.clearInterval(id)
 	}, [])
 
-	// 12-hour with AM/PM badge per user direction 2026-05-15 ("pm am kullan").
-	const h24 = now.getHours()
-	const h12 = ((h24 + 11) % 12) + 1
-	const hh = String(h12).padStart(2, '0')
-	const mm = String(now.getMinutes()).padStart(2, '0')
-	const ampm = h24 >= 12 ? 'PM' : 'AM'
+	// Phase 271 — render the time in the SELECTED timezone honoring the chosen
+	// hour-cycle. formatClockParts returns HH:MM + an AM/PM badge ONLY when
+	// hourCycle === 'h12' (null otherwise → no stray badge in 24-hour mode).
+	const {time, dayPeriod} = formatClockParts(now, {locale, timeZone: timezone, hourCycle})
 
-	// Phase 255-04 — additive glow-up (D-255-NAVBAR-ADDITIVE): a small Turkish
-	// greeting line, a weather glyph beside the temp, and a day/night accent
-	// tint on the greeting/glyph text ONLY. Layout (pill/donut/profile + the
-	// existing hh:mm/AM-PM + city/temp rows) stays structurally intact.
+	// Greeting / day-night accent need the hour IN THE SELECTED TIMEZONE, not the
+	// browser's. Pull it from a 24h-forced formatter so the band logic is sound.
+	const h24 = (() => {
+		try {
+			const hourStr = new Intl.DateTimeFormat('en-US', {
+				timeZone: timezone,
+				hour: '2-digit',
+				hourCycle: 'h23',
+			}).format(now)
+			const parsed = Number.parseInt(hourStr, 10)
+			return Number.isFinite(parsed) ? parsed : now.getHours()
+		} catch {
+			return now.getHours()
+		}
+	})()
+
+	// Phase 255-04 — additive glow-up (D-255-NAVBAR-ADDITIVE): a small greeting
+	// line, a weather glyph beside the temp, and a day/night accent tint on the
+	// greeting/glyph text ONLY. Layout (pill/donut/profile + the time + city/temp
+	// rows) stays structurally intact.
 	const dayLike = isDay !== null ? isDay === 1 : h24 >= 6 && h24 < 20
 	// Warmer tint by day, cooler tint by night — text-color swap only.
 	const accentColor = dayLike ? '#f5b042' : '#7aa2ff'
@@ -842,8 +853,10 @@ function ClockWithLocation() {
 				{greeting(h24, userName)}
 			</span>
 			<span className='whitespace-nowrap font-mono text-[14.5px] font-medium tracking-[-0.01em] text-[color:var(--fg)] tabular-nums'>
-				{hh}:{mm}
-				<span className='ml-1 text-[10.5px] font-medium text-[color:var(--fg-mute)]'>{ampm}</span>
+				{time}
+				{dayPeriod && (
+					<span className='ml-1 text-[10.5px] font-medium text-[color:var(--fg-mute)]'>{dayPeriod}</span>
+				)}
 			</span>
 			{city && (
 				<span className='inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-normal text-[color:var(--fg-mute)]'>
