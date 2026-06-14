@@ -46,12 +46,27 @@ export {
 	type AuthMethod,
 } from './auth-methods.js'
 // Phase 267-01 Task 2 — no-spawn per-CLI API-key writer (0600, whitelist-guarded).
+// Phase 268-02 — WRITE_TARGETS (+ WriteTarget) exported so cli-uninstall can
+// delete each CLI's 267 secret on uninstall.
 export {
 	writeApiKey,
+	WRITE_TARGETS,
+	type WriteTarget,
 	type WriteApiKeyInput,
 	type WriteApiKeyDeps,
 	type WriteApiKeyResult,
 } from './api-key-writer.js'
+// Phase 268-02 — per-install-method CLI uninstall: drift-locked CLI_UNINSTALL
+// map + whitelist-guarded uninstallCli (npm-global / rm-bin / pip / rm-paths /
+// none) that also deletes the 267 api-key file + config dirs.
+export {
+	UNINSTALL_TIMEOUT_MS,
+	CLI_UNINSTALL,
+	uninstallCli,
+	type UninstallSpec,
+	type UninstallCliDeps,
+	type UninstallResult,
+} from './cli-uninstall.js'
 // Phase 267-03 Task 1 — debounced, best-effort liv-assistant restart so AionUi
 // re-PATH-scans and a freshly-authed CLI flips Failed→ready (no terminal).
 export {
