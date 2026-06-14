@@ -74,6 +74,9 @@ let getDeviceCodeFn: ReturnType<typeof vi.fn>
 // Phase 267-03 — debounced liv-assistant restart + status seams
 let scheduleAgentRefreshFn: ReturnType<typeof vi.fn>
 let getAgentRefreshStatusFn: ReturnType<typeof vi.fn>
+// Phase 268 — paste-back stdin write + CLI uninstall seams
+let sendAuthInputFn: ReturnType<typeof vi.fn>
+let uninstallFn: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
 	installFn = vi.fn().mockResolvedValue({
@@ -107,6 +110,15 @@ beforeEach(() => {
 		)
 	scheduleAgentRefreshFn = vi.fn()
 	getAgentRefreshStatusFn = vi.fn().mockResolvedValue('restarting')
+	// Phase 268 — sendAuthInput writes the pasted code to the live login child's
+	// stdin (returns {ok}); uninstall removes the CLI per its static method.
+	sendAuthInputFn = vi.fn().mockResolvedValue({ok: true})
+	uninstallFn = vi.fn().mockResolvedValue({
+		ok: true,
+		output: 'removed',
+		exitCode: 0,
+		durationMs: 21,
+	})
 })
 
 function build(opts: {withAudit?: boolean} = {}) {
@@ -119,6 +131,8 @@ function build(opts: {withAudit?: boolean} = {}) {
 		getDeviceCodeFn: getDeviceCodeFn as any,
 		scheduleAgentRefreshFn: scheduleAgentRefreshFn as any,
 		getAgentRefreshStatusFn: getAgentRefreshStatusFn as any,
+		sendAuthInputFn: sendAuthInputFn as any,
+		uninstallFn: uninstallFn as any,
 		auditLogFactory: opts.withAudit
 			? (auditLogFactory as any)
 			: undefined,
@@ -196,7 +210,7 @@ describe('cli-installer-router — happy path', () => {
 })
 
 describe('cli-installer-router — contract drift-locks', () => {
-	test('T7 — router exposes install + detect + auth + the Phase 267-01 trio + 267-03 status', () => {
+	test('T7 — router exposes install + detect + auth + the Phase 267-01 trio + 267-03 status + the Phase 268 pair', () => {
 		const r = build()
 		const procNames = Object.keys(r._def.procedures ?? {}).sort()
 		expect(procNames).toEqual(
@@ -208,15 +222,19 @@ describe('cli-installer-router — contract drift-locks', () => {
 				'install',
 				'setApiKey',
 				'agentRefreshStatus',
+				// Phase 268 — paste-back stdin write + CLI uninstall.
+				'sendAuthInput',
+				'uninstall',
 			].sort(),
 		)
 	})
 
-	test('T14 — drift-lock: declaration order = [detect, install, auth, setApiKey, getAuthMethod, getDeviceCode, agentRefreshStatus]', () => {
+	test('T14 — drift-lock: declaration order = [detect, install, auth, setApiKey, getAuthMethod, getDeviceCode, agentRefreshStatus, sendAuthInput, uninstall]', () => {
 		const r = build()
 		// Insertion order of router({...}) literal — pinned by Plan 240-01 (first
 		// three) + Phase 267-01 (the additive trio appended after auth) + Phase
-		// 267-03 (agentRefreshStatus appended last).
+		// 267-03 (agentRefreshStatus appended last) + Phase 268 (sendAuthInput +
+		// uninstall appended last, additive).
 		const procNames = Object.keys(r._def.procedures ?? {})
 		expect(procNames).toEqual([
 			'detect',
@@ -226,6 +244,8 @@ describe('cli-installer-router — contract drift-locks', () => {
 			'getAuthMethod',
 			'getDeviceCode',
 			'agentRefreshStatus',
+			'sendAuthInput',
+			'uninstall',
 		])
 	})
 
@@ -487,5 +507,129 @@ describe('cli-installer-router — agent refresh on success (Phase 267-03)', () 
 		const caller = r.createCaller(makeAdminCtx() as any)
 		const s = await caller.agentRefreshStatus()
 		expect(s).toEqual({status: 'done'})
+	})
+})
+
+// Phase 268-03 Task 1 — paste-back stdin write (sendAuthInput) + CLI uninstall
+// (uninstall) procedures. sendAuthInput must NOT fire agent-refresh (success
+// arrives later on the login child's own exit); uninstall MUST fire it on
+// result.ok so the removed agent drops out of /api/agents.
+describe('cli-installer-router — sendAuthInput (Phase 268-03)', () => {
+	test('T40 — sendAuthInput({name:"evil"}) rejects with BAD_REQUEST + no sendAuthInputFn call', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await expect(
+			caller.sendAuthInput({name: 'evil', code: 'X'}),
+		).rejects.toMatchObject({code: 'BAD_REQUEST'})
+		expect(sendAuthInputFn).not.toHaveBeenCalled()
+	})
+
+	test('T41 — sendAuthInput({name:"claude-code",code}) delegates once + returns {ok}', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.sendAuthInput({
+			name: 'claude-code',
+			code: 'ABC-123',
+		})
+		expect(sendAuthInputFn).toHaveBeenCalledTimes(1)
+		const [arg] = sendAuthInputFn.mock.calls[0] as [{name: string; code: string}]
+		expect(arg.name).toBe('claude-code')
+		expect(arg.code).toBe('ABC-123')
+		expect(result).toEqual({ok: true})
+	})
+
+	test('T42 — sendAuthInput ok:true does NOT schedule an agent refresh (success arrives later on the child exit)', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await caller.sendAuthInput({name: 'claude-code', code: 'ABC-123'})
+		expect(scheduleAgentRefreshFn).not.toHaveBeenCalled()
+	})
+
+	test('T43 — sendAuthInput rejects an over-long code (zod max 4096) + an empty code (zod min 1)', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await expect(
+			caller.sendAuthInput({name: 'claude-code', code: 'x'.repeat(4097)}),
+		).rejects.toThrow()
+		await expect(
+			caller.sendAuthInput({name: 'claude-code', code: ''}),
+		).rejects.toThrow()
+		expect(sendAuthInputFn).not.toHaveBeenCalled()
+	})
+
+	test('T44 — empty-injection stub sendAuthInput throws PRECONDITION_FAILED', async () => {
+		const caller = cliInstallerRouter.createCaller(makeAdminCtx() as any)
+		await expect(
+			caller.sendAuthInput({name: 'claude-code', code: 'ABC-123'}),
+		).rejects.toMatchObject({code: 'PRECONDITION_FAILED'})
+	})
+
+	test('T45 — non-admin caller rejected from sendAuthInput before sendAuthInputFn fires', async () => {
+		const r = build()
+		const caller = r.createCaller(makeNonAdminCtx() as any)
+		await expect(
+			caller.sendAuthInput({name: 'claude-code', code: 'ABC-123'}),
+		).rejects.toThrow()
+		expect(sendAuthInputFn).not.toHaveBeenCalled()
+	})
+})
+
+describe('cli-installer-router — uninstall (Phase 268-03)', () => {
+	test('T50 — uninstall({name:"evil"}) rejects with BAD_REQUEST + no uninstallFn call', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await expect(caller.uninstall({name: 'evil'})).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+		})
+		expect(uninstallFn).not.toHaveBeenCalled()
+	})
+
+	test('T51 — uninstall({name:"claude-code"}) delegates once + returns the UninstallResult', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.uninstall({name: 'claude-code'})
+		expect(uninstallFn).toHaveBeenCalledTimes(1)
+		const [arg] = uninstallFn.mock.calls[0] as [{name: string}]
+		expect(arg.name).toBe('claude-code')
+		expect(result).toEqual({
+			ok: true,
+			output: 'removed',
+			exitCode: 0,
+			durationMs: 21,
+		})
+	})
+
+	test('T52 — uninstall ok:true schedules the agent refresh exactly once (removed agent disappears)', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await caller.uninstall({name: 'claude-code'})
+		expect(scheduleAgentRefreshFn).toHaveBeenCalledTimes(1)
+	})
+
+	test('T53 — uninstall ok:false does NOT schedule a refresh (a failed uninstall must not churn AionUi)', async () => {
+		uninstallFn.mockResolvedValueOnce({
+			ok: false,
+			output: 'npm error',
+			exitCode: 1,
+			durationMs: 12,
+		})
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await caller.uninstall({name: 'claude-code'})
+		expect(scheduleAgentRefreshFn).not.toHaveBeenCalled()
+	})
+
+	test('T54 — empty-injection stub uninstall throws PRECONDITION_FAILED', async () => {
+		const caller = cliInstallerRouter.createCaller(makeAdminCtx() as any)
+		await expect(
+			caller.uninstall({name: 'claude-code'}),
+		).rejects.toMatchObject({code: 'PRECONDITION_FAILED'})
+	})
+
+	test('T55 — non-admin caller rejected from uninstall before uninstallFn fires', async () => {
+		const r = build()
+		const caller = r.createCaller(makeNonAdminCtx() as any)
+		await expect(caller.uninstall({name: 'claude-code'})).rejects.toThrow()
+		expect(uninstallFn).not.toHaveBeenCalled()
 	})
 })
