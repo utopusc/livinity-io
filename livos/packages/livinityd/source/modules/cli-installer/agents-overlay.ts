@@ -43,8 +43,14 @@ export const BIN_TO_CLI_NAME: Readonly<Record<string, CliName>> = Object.fromEnt
 	(Object.entries(CLI_BIN_NAMES) as Array<[CliName, string]>).map(([cli, bin]) => [bin, cli]),
 ) as Record<string, CliName>
 
-/** AionUi's built-in 'aionrs' agent — hidden unconditionally (operator 269.1). */
+// AionUi's built-in Aion agent is hidden unconditionally (operator 269.1). It is
+// an INTERNAL agent — agent_type 'aionrs', agent_source 'internal' — with NO
+// binary_name (agent_source_info is {}). The original 269.1 predicate matched
+// `binary_name === 'aion'`, which NEVER matched this shape, so Aion was never
+// actually hidden (caught in Phase 270 live-UAT: it stayed the default-selected
+// agent and 404'd on /api/fs/browse). Match the real internal-agent shape below.
 const AION_BINARY_NAME = 'aion'
+const AION_AGENT_TYPE = 'aionrs'
 
 /**
  * The subset of AionUi's /api/agents agent object that the overlay reads.
@@ -56,6 +62,11 @@ export interface AionuiAgent {
 	agent_source_info?: {binary_name?: string} | null
 	available?: boolean
 	enabled?: boolean
+	// AionUi's built-in Aion agent is identified by agent_type 'aionrs' (it has NO
+	// binary_name — see isAionAgent). Declared so the predicate is type-clean.
+	agent_type?: string
+	agent_source?: string
+	name?: string
 	// AionUi ships more (icon, name, …); kept as-is on the object.
 	[key: string]: unknown
 }
@@ -69,15 +80,25 @@ function binaryNameOf(a: AionuiAgent): string {
 }
 
 /**
+ * True when the agent is AionUi's built-in Aion agent, however AionUi shapes it.
+ * Primary signal is `agent_type === 'aionrs'` (the internal agent has NO
+ * binary_name); the binary_name fallback keeps backward-compat with any shape
+ * that ever reports it as a 'aion' CLI.
+ */
+function isAionAgent(a: AionuiAgent): boolean {
+	return a.agent_type === AION_AGENT_TYPE || binaryNameOf(a) === AION_BINARY_NAME
+}
+
+/**
  * Is this agent presented as READY (usable) given AionUi's own flags + the
  * LivOS auth status? See the module header for the rule + the TTL gotcha.
  */
 function isReady(a: AionuiAgent, authMap: Map<CliName, string>): boolean {
 	const bin = binaryNameOf(a)
 
-	// aion-cli is hidden unconditionally in buildAgentsOverlay (operator 269.1);
+	// Aion is hidden unconditionally in buildAgentsOverlay (operator 269.1);
 	// defensive guard here in case isReady is ever called on it directly.
-	if (bin === AION_BINARY_NAME) return false
+	if (isAionAgent(a)) return false
 
 	const cliName = BIN_TO_CLI_NAME[bin]
 	// Unknown binary_name → a non-LivOS agent we don't manage → keep unfiltered.
@@ -110,7 +131,9 @@ export function buildAgentsOverlay(
 ): AionuiAgent[] {
 	// Phase 269.1 (operator request) — Aion CLI is hidden UNCONDITIONALLY. Drop
 	// it FIRST, before the fail-open path, so it is gone even when Redis is down.
-	const visible = aionuiAgents.filter((a) => binaryNameOf(a) !== AION_BINARY_NAME)
+	// Phase 270 fix: match the internal 'aionrs' agent_type (the original
+	// binary_name predicate never matched — Aion has no binary_name).
+	const visible = aionuiAgents.filter((a) => !isAionAgent(a))
 
 	// FAIL-OPEN: Redis unavailable → return the (aion-stripped) list VERBATIM so
 	// the picker is never emptied by an infra hiccup (P-3).
