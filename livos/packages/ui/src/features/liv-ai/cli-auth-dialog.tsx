@@ -127,6 +127,14 @@ type Phase =
 	| {kind: 'installing'}
 	| {kind: 'install-failed'; message: string}
 	| {kind: 'auth-device'} // device flow running, polling for code + completion
+	// Phase 268-04 — paste-back flow: the bare login prints a URL (device-style,
+	// shown via the SAME getDeviceCode poll) AND blocks on stdin. We render the
+	// "Open link" URL block + a masked code paste field → cliInstaller.sendAuthInput.
+	// The login child stays alive across the round-trip (the live-child registry,
+	// plan 01); its eventual {ok} resolution (the authM mutation below) flips us to
+	// 'ready'. The pasted code is a bearer-like secret — cleared from React state
+	// the instant it is submitted (never echoed/stored; E-9).
+	| {kind: 'auth-paste-back'}
 	| {kind: 'auth-apikey'} // apikey paste field
 	| {kind: 'auth-browser'} // browser flow (open url) + apikey fallback
 	| {kind: 'auth-na'} // not auth-able
@@ -155,6 +163,11 @@ function CliAuthDialogBody({
 	const [phase, setPhase] = useState<Phase>({kind: 'loading'})
 	const [apiKey, setApiKey] = useState('')
 	const [apiKeyError, setApiKeyError] = useState<string | undefined>(undefined)
+	// Phase 268-04 — paste-back code field (a bearer-like secret; cleared the
+	// instant it is submitted) + the inline Uninstall confirm gate.
+	const [pasteCode, setPasteCode] = useState('')
+	const [pasteError, setPasteError] = useState<string | undefined>(undefined)
+	const [confirmUninstall, setConfirmUninstall] = useState(false)
 
 	const authMethodQ = trpcReact.cliInstaller.getAuthMethod.useQuery(
 		{name: cli},
@@ -167,14 +180,19 @@ function CliAuthDialogBody({
 
 	const method: AuthMethod | undefined = authMethodQ.data
 
-	// Device-code poll — ONLY enabled while the device flow is live so we don't
-	// hammer Redis for non-device CLIs. authCli sets liv:cli:auth:url:<name>
-	// (EX 600) the instant the login prints the verification URL + code.
+	// Device-code poll — enabled while the device flow OR the paste-back flow is
+	// live so we don't hammer Redis for non-device CLIs. authCli sets
+	// liv:cli:auth:url:<name> (EX 600) the instant the login prints the
+	// verification URL + code; the bare paste-back login prints the URL the same
+	// way (267-01 stdout parse), so paste-back reuses this exact poll to render
+	// the "Open link" block (then it ALSO shows a code paste field).
+	const devicePolling =
+		phase.kind === 'auth-device' || phase.kind === 'auth-paste-back'
 	const deviceCodeQ = trpcReact.cliInstaller.getDeviceCode.useQuery(
 		{name: cli},
 		{
-			enabled: phase.kind === 'auth-device',
-			refetchInterval: phase.kind === 'auth-device' ? 1500 : false,
+			enabled: devicePolling,
+			refetchInterval: devicePolling ? 1500 : false,
 			retry: false,
 		},
 	)
@@ -182,6 +200,10 @@ function CliAuthDialogBody({
 	const installM = trpcReact.cliInstaller.install.useMutation()
 	const authM = trpcReact.cliInstaller.auth.useMutation()
 	const setApiKeyM = trpcReact.cliInstaller.setApiKey.useMutation()
+	// Phase 268-04 — write the operator-pasted code to the live login's stdin;
+	// remove a detected CLI (behind a confirm).
+	const sendAuthInputM = trpcReact.cliInstaller.sendAuthInput.useMutation()
+	const uninstallM = trpcReact.cliInstaller.uninstall.useMutation()
 
 	// Phase 267-03 — poll the debounced liv-assistant restart status ONLY while
 	// we're in the post-success "ready" state and the restart hasn't been
@@ -206,6 +228,10 @@ function CliAuthDialogBody({
 				return {kind: 'auth-apikey'}
 			case 'browser':
 				return {kind: 'auth-browser'}
+			// Phase 268-04 — the CLI prints a login URL AND blocks on stdin; we show
+			// the URL ("Open link", explicit click) + a code paste field.
+			case 'paste-back':
+				return {kind: 'auth-paste-back'}
 			case 'n/a':
 			default:
 				return {kind: 'auth-na'}
@@ -233,6 +259,49 @@ function CliAuthDialogBody({
 		if (phase.kind !== 'auth-device') return
 		if (deviceStarted.current) return
 		deviceStarted.current = true
+		authM
+			.mutateAsync({name: cli})
+			.then((res) => {
+				if (res.ok) {
+					setPhase({
+						kind: 'ready',
+						message: `${labelFor(cli)} authenticated`,
+						applied: false,
+					})
+				} else {
+					const tail = (res.output ?? '')
+						.split('\n')
+						.slice(-3)
+						.join('\n')
+						.slice(0, 400)
+					setPhase({
+						kind: 'auth-failed',
+						message: tail || `Login failed (exit ${res.exitCode})`,
+					})
+				}
+			})
+			.catch((err) => {
+				setPhase({
+					kind: 'auth-failed',
+					message: err instanceof Error ? err.message : 'Login failed',
+				})
+			})
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [phase.kind, cli])
+
+	// Phase 268-04 — when we enter the paste-back phase, kick off the (long-
+	// running) auth mutation exactly once, EXACTLY like the device effect above.
+	// Its resolution {ok} is the FINAL completion signal: the bare login prints
+	// the URL (surfaced via the getDeviceCode poll), then BLOCKS on stdin until
+	// sendAuthInput writes the operator-pasted code; once it consumes the code and
+	// exits, this mutation resolves and we flip to 'ready'. The live-child registry
+	// (plan 01) keeps the login alive across the browser round-trip. A separate ref
+	// guards the fire-once so the device + paste-back effects never cross-trigger.
+	const pasteStarted = useRef(false)
+	useEffect(() => {
+		if (phase.kind !== 'auth-paste-back') return
+		if (pasteStarted.current) return
+		pasteStarted.current = true
 		authM
 			.mutateAsync({name: cli})
 			.then((res) => {
@@ -347,6 +416,62 @@ function CliAuthDialogBody({
 			setApiKeyError(err instanceof Error ? err.message : 'Could not save the key')
 		}
 	}, [apiKey, cli, setApiKeyM, utils])
+
+	// Phase 268-04 — submit the operator-pasted code to the live login's stdin.
+	// Mirrors handleSubmitApiKey: trim, error-state, call the mutation, then CLEAR
+	// the value from React state IMMEDIATELY after submit (the code may be a bearer
+	// token — E-9; never log it, never persist it, never echo it). We stay in the
+	// 'auth-paste-back' phase: the authM effect's resolution (the login child
+	// exiting after it consumes the code) is what flips us to 'ready'.
+	const handleSubmitPasteCode = useCallback(async () => {
+		const code = pasteCode.trim()
+		if (!code) {
+			setPasteError('Paste the code from your browser')
+			return
+		}
+		setPasteError(undefined)
+		try {
+			const res = await sendAuthInputM.mutateAsync({name: cli, code})
+			// Clear the code the instant it leaves the field — success OR failure.
+			setPasteCode('')
+			if (!res.ok) {
+				setPasteError('No sign-in is waiting for a code — try again')
+			}
+		} catch (err) {
+			setPasteCode('')
+			setPasteError(err instanceof Error ? err.message : 'Could not submit the code')
+		}
+	}, [pasteCode, cli, sendAuthInputM])
+
+	// Phase 268-04 — remove a detected CLI (behind the inline confirm). Mirrors
+	// handleInstall: try/catch around the mutation; on ok land in the EXISTING
+	// 267-03 {kind:'ready', applied:false} state so the agentRefreshStatus poll
+	// shows "Applying…" → "ready" while the removed agent disappears from
+	// /api/agents (the router fires the debounced agent-refresh on uninstall ok; E-6).
+	const handleUninstall = useCallback(async () => {
+		setConfirmUninstall(false)
+		setPhase({kind: 'authenticating'})
+		try {
+			const res = await uninstallM.mutateAsync({name: cli})
+			if (res.ok) {
+				setPhase({
+					kind: 'ready',
+					message: `${labelFor(cli)} removed`,
+					applied: false,
+				})
+			} else {
+				setPhase({
+					kind: 'auth-failed',
+					message: res.output?.slice(-400) || 'Could not remove',
+				})
+			}
+		} catch (err) {
+			setPhase({
+				kind: 'auth-failed',
+				message: err instanceof Error ? err.message : 'Could not remove',
+			})
+		}
+	}, [cli, uninstallM])
 
 	// EXPLICIT user click → open the device/login URL. NEVER auto-navigated.
 	const openUrl = useCallback(
@@ -495,6 +620,53 @@ function CliAuthDialogBody({
 					</div>
 				)}
 
+				{/* ── Paste-back branch (268-04) — URL open-link + masked code field ── */}
+				{phase.kind === 'auth-paste-back' && (
+					<div className='space-y-3'>
+						<p className='text-sm text-text-secondary'>
+							Sign in at the link below, then paste the code it shows back here.
+						</p>
+						{deviceCode ? (
+							<div className='space-y-3 rounded-radius-lg border border-border-default bg-surface-base p-3'>
+								<div className='space-y-1'>
+									<div className='text-caption text-text-tertiary'>
+										1 · Open this link
+									</div>
+									<div className='flex items-center gap-2'>
+										<code className='truncate text-xs text-text-secondary'>
+											{hostOf(deviceCode.url)}
+										</code>
+										<Button
+											size='sm'
+											variant='default'
+											onClick={() => openUrl(deviceCode.url)}
+										>
+											Open link ↗
+										</Button>
+									</div>
+								</div>
+								<div className='space-y-2'>
+									<div className='text-caption text-text-tertiary'>
+										2 · Paste the code from your browser
+									</div>
+									<PasswordInput
+										label='Code'
+										value={pasteCode}
+										onValueChange={setPasteCode}
+										error={pasteError}
+										autoFocus
+										sizeVariant='short'
+									/>
+								</div>
+							</div>
+						) : (
+							<div className='flex items-center gap-2 text-sm text-text-tertiary'>
+								<Spinner /> Waiting for the sign-in link…
+							</div>
+						)}
+					</div>
+				)}
+
 				{/* ── API-key branch ── */}
 				{(phase.kind === 'auth-apikey' || phase.kind === 'authenticating') && (
 					<div className='space-y-2'>
@@ -595,6 +767,41 @@ function CliAuthDialogBody({
 					</div>
 				)}
 
+				{/* ── Uninstall affordance (268-04) — only on a DETECTED CLI, on the
+				    auth and install-failed steps (NOT mid-install/auth/ready).
+				    Two-step confirm guards against a destructive misclick (T-268-19).
+				    On confirm → handleUninstall → the 267-03 ready/Applying poll runs
+				    while the removed agent disappears from /api/agents. */}
+				{detectQ.data?.detected === true &&
+					phase.kind !== 'installing' &&
+					phase.kind !== 'authenticating' &&
+					phase.kind !== 'ready' &&
+					phase.kind !== 'install' &&
+					phase.kind !== 'loading' &&
+					(!confirmUninstall ? (
+						<button
+							type='button'
+							className='block text-caption text-destructive2-lightest underline-offset-2 hover:underline'
+							onClick={() => setConfirmUninstall(true)}
+						>
+							Remove {labelFor(cli)}
+						</button>
+					) : (
+						<div className='flex items-center gap-2 text-caption text-destructive2-lightest'>
+							<span>Remove {labelFor(cli)} from this server?</span>
+							<Button size='sm' variant='destructive' onClick={handleUninstall}>
+								Remove
+							</Button>
+							<Button
+								size='sm'
+								variant='default'
+								onClick={() => setConfirmUninstall(false)}
+							>
+								Cancel
+							</Button>
+						</div>
+					))}
+
 				{/* Advanced fallback — keep the OLD Terminal path for power users. */}
 				{phase.kind !== 'ready' && phase.kind !== 'loading' && (
 					<button
@@ -630,11 +837,22 @@ function CliAuthDialogBody({
 							Save key
 						</Button>
 					)}
+				{/* 268-04 — submit the pasted code to the live login's stdin. */}
+				{phase.kind === 'auth-paste-back' && (
+					<Button variant='primary' onClick={handleSubmitPasteCode}>
+						Submit code
+					</Button>
+				)}
 				{phase.kind === 'auth-failed' && (
 					<Button
 						variant='primary'
 						onClick={() => {
 							deviceStarted.current = false
+							// 268-04 — let a failed paste-back login restart cleanly too.
+							pasteStarted.current = false
+							setConfirmUninstall(false)
+							setPasteError(undefined)
+							setPasteCode('')
 							setPhase(method ? branchToAuthPhase(method) : {kind: 'loading'})
 						}}
 					>
