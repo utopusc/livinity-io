@@ -102,7 +102,7 @@ describe('authCli — aion-cli short-circuit (AUTH_UNSUPPORTED)', () => {
 })
 
 describe('authCli — spawn happy path', () => {
-	test('Test 3: claude-code spawns with argv ["claude", ["auth","login"]] and exits 0', async () => {
+	test('Test 3: claude-code spawns with bare argv ["claude", []] and exits 0 (Phase 268 paste-back)', async () => {
 		const child = makeFakeChild()
 		const spawnFn = vi.fn(() => child as any)
 		const redis = makeRedis()
@@ -122,7 +122,8 @@ describe('authCli — spawn happy path', () => {
 		expect(spawnFn).toHaveBeenCalledTimes(1)
 		const [cmd, args] = spawnFn.mock.calls[0] as unknown as [string, string[]]
 		expect(cmd).toBe('claude')
-		expect(args).toEqual(['auth', 'login'])
+		// 268 — reclassified from ['auth','login'] to the bare paste-back login.
+		expect(args).toEqual([])
 	})
 
 	test('Test 4: captures combined stdout+stderr tail-truncated to OUTPUT_CAP_BYTES', async () => {
