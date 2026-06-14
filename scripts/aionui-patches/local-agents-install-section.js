@@ -53,32 +53,43 @@
   // (or an offline box) NEVER shows a broken image. CLIs without a `logo`
   // render the monogram directly — same graceful-degradation contract as the
   // React <AgentLogo> in features/liv-ai/agent-logos.tsx.
+  //
+  // Phase 269-04 — `aionuiLogo` is the `{category}/{name}.{svg,png}` path into
+  // AionUi's AUTHORITATIVE embedded logo set, served at
+  // `/liv/api/assets/logos/<aionuiLogo>` (the panel runs inside the AionUi
+  // iframe, same-origin with the LivOS shell, so BOTH `/liv/api/assets/...` and
+  // the root `/agent-logos/...` resolve). renderIcon tries it FIRST; on a 404 the
+  // onerror cascade falls through to the 267 `/agent-logos/<logo>.svg`, then to
+  // the monogram. Several AionUi assets are 404 (qwen/copilot/goose/kimi) and
+  // some are unprobed guesses — adding a candidate is SAFE because the cascade
+  // covers every miss (assumption A4). `<name>` is the AionUi backend short-name
+  // (copilot not github-copilot, qwen not qwen-code, cursor not cursor-agent).
   var CLI_META = {
-    'claude-code':    { label: 'Claude Code',    icon: 'CC', color: '#d97757', logo: 'claude' },
-    'opencode':       { label: 'OpenCode',       icon: 'OC', color: '#0f766e', logo: 'opencode' },
-    'gemini':         { label: 'Gemini',         icon: 'G',  color: '#4285f4', logo: 'gemini' },
-    'openclaw':       { label: 'OpenClaw',       icon: 'CL', color: '#f59e0b' },
-    'aion-cli':       { label: 'Aion CLI',       icon: 'AI', color: '#7c3aed', authHidden: true },
+    'claude-code':    { label: 'Claude Code',    icon: 'CC', color: '#d97757', logo: 'claude',         aionuiLogo: 'ai-major/claude.svg' },
+    'opencode':       { label: 'OpenCode',       icon: 'OC', color: '#0f766e', logo: 'opencode',       aionuiLogo: 'tools/coding/opencode.svg' },
+    'gemini':         { label: 'Gemini',         icon: 'G',  color: '#4285f4', logo: 'gemini',         aionuiLogo: 'ai-major/gemini.svg' },
+    'openclaw':       { label: 'OpenClaw',       icon: 'CL', color: '#f59e0b',                         aionuiLogo: 'tools/coding/openclaw.svg' },
+    'aion-cli':       { label: 'Aion CLI',       icon: 'AI', color: '#7c3aed', authHidden: true,       aionuiLogo: 'brand/aion.svg' },
     // Wave A
-    'codex':          { label: 'Codex',          icon: 'CX', color: '#10a37f', logo: 'codex' },
-    'qwen-code':      { label: 'Qwen Code',      icon: 'QW', color: '#6d28d9', logo: 'qwen' },
-    'augment':        { label: 'Augment',        icon: 'AG', color: '#0ea5e9' },
-    'github-copilot': { label: 'GitHub Copilot', icon: 'GH', color: '#24292f', logo: 'github-copilot' },
-    'codebuddy':      { label: 'CodeBuddy',      icon: 'CB', color: '#e11d48' },
-    'qoder-cli':      { label: 'Qoder',          icon: 'QO', color: '#2563eb' },
+    'codex':          { label: 'Codex',          icon: 'CX', color: '#10a37f', logo: 'codex',          aionuiLogo: 'tools/coding/codex.svg' },
+    'qwen-code':      { label: 'Qwen Code',      icon: 'QW', color: '#6d28d9', logo: 'qwen',           aionuiLogo: 'tools/coding/qwen.svg' },
+    'augment':        { label: 'Augment',        icon: 'AG', color: '#0ea5e9',                         aionuiLogo: 'tools/coding/auggie.svg' },
+    'github-copilot': { label: 'GitHub Copilot', icon: 'GH', color: '#24292f', logo: 'github-copilot', aionuiLogo: 'tools/coding/copilot.svg' },
+    'codebuddy':      { label: 'CodeBuddy',      icon: 'CB', color: '#e11d48',                         aionuiLogo: 'tools/coding/codebuddy.svg' },
+    'qoder-cli':      { label: 'Qoder',          icon: 'QO', color: '#2563eb',                         aionuiLogo: 'tools/coding/qodercli.svg' },
     // Wave B
-    'goose':          { label: 'Goose',          icon: 'GS', color: '#16a34a', logo: 'goose' },
-    'factory-droid':  { label: 'Factory Droid',  icon: 'FD', color: '#db2777' },
-    'cursor-agent':   { label: 'Cursor Agent',   icon: 'CA', color: '#334155', logo: 'cursor' },
+    'goose':          { label: 'Goose',          icon: 'GS', color: '#16a34a', logo: 'goose',          aionuiLogo: 'tools/coding/goose.svg' },
+    'factory-droid':  { label: 'Factory Droid',  icon: 'FD', color: '#db2777',                         aionuiLogo: 'tools/coding/droid.svg' },
+    'cursor-agent':   { label: 'Cursor Agent',   icon: 'CA', color: '#334155', logo: 'cursor',         aionuiLogo: 'tools/coding/cursor.png' },
     // Wave C — Phase 267-02: real auth method via the no-terminal dialog
     // (device for kimi-cli/kiro; apikey via setApiKey for the rest). Auth
     // button now RENDERED (authHidden removed). aion-cli above stays hidden.
-    'kimi-cli':       { label: 'Kimi CLI',       icon: 'KM', color: '#4f46e5', logo: 'kimi' },
-    'mistral-vibe':   { label: 'Mistral Vibe',   icon: 'MV', color: '#f97316', logo: 'mistral' },
-    'hermes-agent':   { label: 'Hermes Agent',   icon: 'HM', color: '#0d9488' },
-    'nanobot':        { label: 'Nanobot',        icon: 'NB', color: '#475569' },
-    'snow-cli':       { label: 'Snow CLI',       icon: 'SN', color: '#0891b2' },
-    'kiro':           { label: 'Kiro',           icon: 'KI', color: '#9333ea' }
+    'kimi-cli':       { label: 'Kimi CLI',       icon: 'KM', color: '#4f46e5', logo: 'kimi',           aionuiLogo: 'brand/kimi.svg' },
+    'mistral-vibe':   { label: 'Mistral Vibe',   icon: 'MV', color: '#f97316', logo: 'mistral',        aionuiLogo: 'tools/coding/vibe.svg' },
+    'hermes-agent':   { label: 'Hermes Agent',   icon: 'HM', color: '#0d9488',                         aionuiLogo: 'tools/coding/hermes.svg' },
+    'nanobot':        { label: 'Nanobot',        icon: 'NB', color: '#475569',                         aionuiLogo: 'tools/coding/nanobot.svg' },
+    'snow-cli':       { label: 'Snow CLI',       icon: 'SN', color: '#0891b2',                         aionuiLogo: 'tools/coding/snow.svg' },
+    'kiro':           { label: 'Kiro',           icon: 'KI', color: '#9333ea',                         aionuiLogo: 'tools/coding/kiro.svg' }
   };
 
   // Phase 267-04 — base path of the static brand SVGs. They live in the LivOS
@@ -87,6 +98,14 @@
   // inside the AionUi iframe which is same-origin with the LivOS shell, so a
   // root-relative `/agent-logos/...` resolves against the LivOS host.
   var LOGO_BASE = '/agent-logos/';
+
+  // Phase 269-04 — base path of AionUi's AUTHORITATIVE embedded logo set,
+  // served by aioncore at `/api/assets/logos/...` and reachable from the LivOS
+  // shell under the `/liv` prefix (Caddy `@aionui_assets` / `@liv_api_subresource`
+  // both route `/liv/api/assets/*` → :3020). renderIcon tries `<aionuiLogo>` here
+  // FIRST; on a 404 the onerror cascade falls through to LOGO_BASE then to the
+  // monogram, so a guessed/missing AionUi asset NEVER shows a broken image.
+  var AIONUI_LOGO_BASE = '/liv/api/assets/logos/';
 
   // Locale-aware Local Agents label fallbacks (5 most common locales in
   // AionUi's i18n maps per 240-02-INVESTIGATION.md Section E).
@@ -209,14 +228,33 @@
     return icon;
   }
 
+  // Phase 269-04 — build the ordered candidate-URL list for a CLI's icon. The
+  // cascade is AionUi-first, then the 267 static SVG, then (exhausted ⇒) the
+  // monogram. A CLI may have neither field — then the list is empty and
+  // renderIcon draws the monogram directly.
+  //   1. `/liv/api/assets/logos/<aionuiLogo>` — AionUi's authoritative asset.
+  //   2. `/agent-logos/<logo>.svg`            — the 267 static fallback SVG.
+  function logoCandidates(meta) {
+    var urls = [];
+    if (meta.aionuiLogo) urls.push(AIONUI_LOGO_BASE + meta.aionuiLogo);
+    if (meta.logo) urls.push(LOGO_BASE + meta.logo + '.svg');
+    return urls;
+  }
+
+  // Phase 269-04 — a 3-tier <img> cascade driven by the candidate-URL list.
+  // The FIRST candidate is rendered as a STATIC <img src> (sandboxed — never
+  // inline/untrusted SVG, 267-04 threat model); each `error` event advances the
+  // src to the NEXT candidate, and when the list is exhausted the <img> is
+  // replaced by the monogram avatar — so a 404 (the expected qwen/copilot/goose/
+  // kimi misses + the unprobed guesses) NEVER renders a broken-image glyph.
   function renderIcon(meta) {
-    if (!meta.logo) return monogramIcon(meta);
-    // Wrapper holds the <img>; on error we replace it with the monogram so
-    // the broken-image glyph never renders. STATIC vetted asset, <img src>
-    // (sandboxed) — never inline/untrusted SVG (267-04 threat model).
+    var candidates = logoCandidates(meta);
+    if (candidates.length === 0) return monogramIcon(meta);
+
+    var idx = 0;
     var img = el('img', {
       className: 'liv-240-icon liv-240-icon-logo',
-      src: LOGO_BASE + meta.logo + '.svg',
+      src: candidates[idx],
       alt: meta.label,
       width: '32',
       height: '32',
@@ -224,8 +262,15 @@
       decoding: 'async'
     });
     img.addEventListener('error', function () {
-      var mono = monogramIcon(meta);
-      if (img.parentNode) img.parentNode.replaceChild(mono, img);
+      idx += 1;
+      if (idx < candidates.length) {
+        // Advance to the next tier (e.g. AionUi 404 → 267 static SVG).
+        img.src = candidates[idx];
+      } else {
+        // List exhausted → the monogram is the terminal tier (no broken image).
+        var mono = monogramIcon(meta);
+        if (img.parentNode) img.parentNode.replaceChild(mono, img);
+      }
     });
     return img;
   }
