@@ -39,3 +39,10 @@ export {
 	type AuthBranch,
 	type AuthMethod,
 } from './auth-methods.js'
+// Phase 267-01 Task 2 — no-spawn per-CLI API-key writer (0600, whitelist-guarded).
+export {
+	writeApiKey,
+	type WriteApiKeyInput,
+	type WriteApiKeyDeps,
+	type WriteApiKeyResult,
+} from './api-key-writer.js'
