@@ -2059,6 +2059,18 @@ export default class Livinityd {
 						// liv:cli:auth:<name> running|ok|failed completion contract.
 						redisPub: livRedis,
 						auditLog: deps.auditLog,
+						// Phase 269-02 — claude-code (branch 'paste-back') login now runs
+						// under node-pty (a REAL TTY): the bare `claude` login under a
+						// child_process PIPE drops into `--print` mode and errors, so only a
+						// TTY renders the `Paste code here if prompted` prompt. authCli's
+						// `ptyFactory` default IS already real `pty.spawn` (DEFAULT_PTY_FACTORY,
+						// mirrors pty-sessions/session.ts), so prod needs NO explicit seam
+						// here — the default applies. Device-poll CLIs (codex/kimi/…) stay on
+						// child_process (RESEARCH P-5). The operator-pasted OAuth code is
+						// written to the pty as DATA (CR-terminated) via sendAuthInput — never
+						// an argv (D-239-07). The ANTHROPIC_API_KEY fallback (writeApiKeyFn,
+						// wired just below) stays the GUARANTEED path given upstream claude
+						// code-paste regressions (#47994).
 					}),
 				// Phase 267-01 — no-spawn API-key write path. writeApiKey resolves the
 				// real home dir + fs internally; it NEVER logs/returns the key (only
@@ -2179,7 +2191,7 @@ export default class Livinityd {
 				},
 			})
 			webappLogger.info(
-				'Phase 239-01 + 240-01 + 267-01 + 268 + 269-01 (manual apply — no restart storm) — cliInstaller.* tRPC router wired (install / detect / auth / setApiKey / getAuthMethod / getDeviceCode / agentRefreshStatus / sendAuthInput / uninstall / hasPendingAgentChanges / applyAgentChanges; whitelist=20; D-239-07 RCE boundary; audit + Redis status keys + live device-code stream; auth/setApiKey/uninstall SET liv:cli:agent-changes-pending, applyAgentChanges fires ONE restart + DELs it)',
+				'Phase 239-01 + 240-01 + 267-01 + 268 + 269-01 (manual apply — no restart storm) + 269-02 (claude paste-back via node-pty TTY) — cliInstaller.* tRPC router wired (install / detect / auth / setApiKey / getAuthMethod / getDeviceCode / agentRefreshStatus / sendAuthInput / uninstall / hasPendingAgentChanges / applyAgentChanges; whitelist=20; D-239-07 RCE boundary; audit + Redis status keys + live device-code stream; auth/setApiKey/uninstall SET liv:cli:agent-changes-pending, applyAgentChanges fires ONE restart + DELs it; claude-code login runs under node-pty so the Paste-code prompt renders, sendAuthInput writes the code to the pty as DATA, ANTHROPIC_API_KEY fallback stays the guaranteed path)',
 			)
 
 			// Phase 246-03 — wire the pty-sessions admin sub-router against the
