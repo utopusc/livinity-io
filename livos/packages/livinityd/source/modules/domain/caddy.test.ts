@@ -1789,6 +1789,77 @@ describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', (
 		expect(multi.indexOf('@liv_cli_installer path /liv/trpc/cliInstaller.detect', subStart)).toBeGreaterThan(subStart)
 	})
 
+	// ─── Phase 269-03 (WS3) — @liv_agents auth-gated agent-list carve-out ───
+	//
+	// `/liv/api/agents` must route to livinityd :8080 (NOT AionUi :3020) so the
+	// overlay route can filter unauthed agents. EXACT single path (no wildcard —
+	// the broader /liv/api/* re-opens AionUi), forward_auth-gated with the
+	// ABSOLUTE redir (LIVOS-041), strips /liv, proxies to :8080. String-level
+	// tests CANNOT prove the gate fails-closed live (that's the operator curl
+	// matrix) — but they lock the SHAPE so a future edit can't silently drop the
+	// forward_auth, widen the matcher, or re-point it at :3020.
+	it('@liv_agents carve-out — EXACT path /liv/api/agents, no wildcard', () => {
+		const out = apexOut()
+		expect(out).toContain('@liv_agents path /liv/api/agents')
+		// A wildcard (/liv/api/agents/* or /liv/api/*) on THIS handle would
+		// re-open broader AionUi surface through the :8080 gate — forbidden.
+		expect(out).not.toContain('@liv_agents path /liv/api/agents/*')
+		expect(out).not.toContain('@liv_agents path /liv/api/*')
+	})
+
+	it('@liv_agents carve-out — forward_auth-gated (ABSOLUTE redir), strips /liv, proxies to :8080', () => {
+		const out = apexOut()
+		const idx = out.indexOf('handle @liv_agents {')
+		expect(idx).toBeGreaterThan(-1)
+		// Body ends where the adjacent @aionui_assets matcher begins (the
+		// carve-out is emitted immediately before LIV_ASSISTANT_SUBRESOURCE_HANDLE,
+		// whose first matcher is @aionui_assets).
+		const end = out.indexOf('@aionui_assets', idx)
+		expect(end).toBeGreaterThan(idx)
+		const body = out.slice(idx, end)
+		// forward_auth → /auth/verify (the gate) BEFORE the proxy.
+		expect(body).toContain('forward_auth 127.0.0.1:8080')
+		expect(body).toContain('uri /auth/verify')
+		// LIVOS-041: the 401 redir MUST be ABSOLUTE (a relative redir does not
+		// terminate forward_auth → the route would be reachable unauthenticated).
+		expect(body).toContain('redir https://{host}/login?redirect={scheme}://{host}{uri} 302')
+		// 386b33e7: NO copy_headers Cookie (it clobbers LIVINITY_SESSION).
+		expect(body).not.toContain('copy_headers Cookie')
+		const stripIdx = body.indexOf('uri strip_prefix /liv')
+		const proxyIdx = body.indexOf('reverse_proxy 127.0.0.1:8080')
+		expect(stripIdx).toBeGreaterThan(-1)
+		expect(proxyIdx).toBeGreaterThan(stripIdx)
+		// Routes to livinityd :8080, NOT AionUi :3020.
+		expect(body).not.toContain('reverse_proxy 127.0.0.1:3020')
+	})
+
+	it('@liv_agents emits BEFORE @liv_api_subresource in every site block (exact path wins; diff-clear ordering)', () => {
+		const apex = apexOut()
+		const agentsIdx = apex.indexOf('@liv_agents path /liv/api/agents')
+		const subresourceIdx = apex.indexOf('@liv_api_subresource path /liv/api/*')
+		expect(agentsIdx).toBeGreaterThan(-1)
+		expect(subresourceIdx).toBeGreaterThan(agentsIdx)
+	})
+
+	it('@liv_agents carve-out — emits in all three site shapes (fallback :80 + apex + multi-user)', () => {
+		const apex = apexOut()
+		expect(apex).toContain('@liv_agents path /liv/api/agents')
+		const fallback = generateFullCaddyfile({mainDomain: null, subdomains: []}, false, false, [])
+		expect(fallback).toContain('@liv_agents path /liv/api/agents')
+		const multi = generateFullCaddyfile(
+			{
+				mainDomain: 'livinity.io',
+				subdomains: [{subdomain: 'bruce', appId: 'gw', port: 8080, enabled: true}],
+			},
+			true,
+			false,
+			[],
+		)
+		const subStart = multi.indexOf('bruce.livinity.io {')
+		expect(subStart).toBeGreaterThan(-1)
+		expect(multi.indexOf('@liv_agents path /liv/api/agents', subStart)).toBeGreaterThan(subStart)
+	})
+
 	it('LIVOS-047 — no Referer header matcher anywhere in the output', () => {
 		const out = apexOut()
 		expect(out).not.toContain('header_regexp Referer')

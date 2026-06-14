@@ -424,6 +424,44 @@ ${WS_TRANSPORT_BODY}
 \t\t}
 \t}`
 
+/**
+ * Phase 269-03 (WS3) — auth-gated AionUi agent list carve-out.
+ *
+ * `/liv/api/*` is reverse-proxied to AionUi :3020 by @liv_api_subresource (it
+ * lives inside LIV_ASSISTANT_SUBRESOURCE_HANDLE), so `/liv/api/agents` normally
+ * hits AionUi directly and livinityd never sees it. AionUi lists EVERY installed
+ * CLI regardless of LivOS auth state — unauthed agents show in the picker and
+ * then fail in chat. To filter them we must route just this ONE request back to
+ * livinityd, where Redis (`liv:cli:auth:<name>`) + CLI_BIN_NAMES live.
+ *
+ * @liv_agents is an EXACT single-path matcher (`path /liv/api/agents`) — Caddy
+ * v2 routes by matcher specificity, so an exact path beats the broader
+ * `/liv/api/*`. It is ALSO emitted source-order-BEFORE
+ * LIV_ASSISTANT_SUBRESOURCE_HANDLE (which carries @liv_api_subresource) at every
+ * emit site for diff clarity + defence in depth. The livinityd overlay route
+ * (`GET /api/agents`, server/index.ts) fetches AionUi's real list, joins the
+ * auth status, and FILTERS the unauthed ones (fail-OPEN on any error).
+ *
+ * Gate — carries the SAME LIV_GATE_BODY forward_auth → /auth/verify with the
+ * ABSOLUTE `https://{host}/login?...` redir (NEVER a relative redir — LIVOS-041:
+ * a relative redir does NOT terminate forward_auth and the request falls through
+ * to the backend, leaving the route reachable unauthenticated). This is an HTTP
+ * JSON GET, NOT a WS path, so forward_auth is SAFE here — unlike @liv_ws, where
+ * the auth subrequest inherits `Upgrade: websocket` and livinityd's
+ * server.on('upgrade') hijacks it (the e336afdd 502 regression). We deliberately
+ * do NOT add `copy_headers Cookie` here — it would clobber LIVINITY_SESSION (the
+ * 386b33e7 regression). EXACT path only — no `/liv/api/agents/*` wildcard.
+ * caddy.test.ts locks the exact path + no-wildcard + the gate + the :8080 proxy.
+ */
+const LIV_AGENTS_HANDLE = `\t@liv_agents path /liv/api/agents
+\thandle @liv_agents {
+${LIV_GATE_BODY}
+\t\turi strip_prefix /liv
+\t\treverse_proxy 127.0.0.1:8080 {
+${WS_TRANSPORT_BODY}
+\t\t}
+\t}`
+
 const LIV_ASSISTANT_HANDLE = `\t@liv path /liv /liv/*
 \thandle @liv {
 ${LIV_GATE_BODY}
@@ -667,6 +705,7 @@ export function generateFullCaddyfile(config: CaddyConfig, multiUser = false, tu
 		blocks.push(`:80 {
 ${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
+${LIV_AGENTS_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_CLI_INSTALLER_HANDLE}
@@ -703,6 +742,7 @@ ${WS_TRANSPORT_BODY}
 	blocks.push(`${prefix}${config.mainDomain} {
 ${apexCacheHeader}${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
+${LIV_AGENTS_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_CLI_INSTALLER_HANDLE}
@@ -754,6 +794,7 @@ ${WS_TRANSPORT_BODY}
 			blocks.push(`${fullDomain} {
 ${LIV_AI_APP_HANDLE}
 ${LIV_BRANDING_HANDLE}
+${LIV_AGENTS_HANDLE}
 ${LIV_ASSISTANT_SUBRESOURCE_HANDLE}
 ${LIVOS_TERMINAL_WS_HANDLE}
 ${LIV_CLI_INSTALLER_HANDLE}
