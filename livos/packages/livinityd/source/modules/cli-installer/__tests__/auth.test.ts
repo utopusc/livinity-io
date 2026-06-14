@@ -26,18 +26,28 @@ import {
 	AUTH_TIMEOUT_MS,
 	authCli,
 	CLI_AUTH_COMMANDS,
+	registerLiveAuth,
+	sendAuthInput,
+	_resetLiveAuthsForTests,
 	type AuthCliDeps,
+	type SendAuthInputDeps,
 } from '../auth.js'
 import {SUPPORTED_CLIS} from '../install-scripts.js'
-import type {InstallerLogger} from '../types.js'
+import type {CliName, InstallerLogger} from '../types.js'
 
 function makeLogger(): InstallerLogger {
 	return {info: vi.fn(), warn: vi.fn(), error: vi.fn()}
 }
 
+interface FakeStdin {
+	write: ReturnType<typeof vi.fn>
+	destroyed: boolean
+}
+
 interface FakeChild extends EventEmitter {
 	stdout: EventEmitter
 	stderr: EventEmitter
+	stdin: FakeStdin
 	kill: ReturnType<typeof vi.fn>
 	killed: boolean
 }
@@ -46,6 +56,7 @@ function makeFakeChild(): FakeChild {
 	const child = new EventEmitter() as FakeChild
 	child.stdout = new EventEmitter()
 	child.stderr = new EventEmitter()
+	child.stdin = {write: vi.fn(() => true), destroyed: false}
 	child.killed = false
 	child.kill = vi.fn((_sig?: string) => {
 		child.killed = true
@@ -64,6 +75,7 @@ function makeRedis(): MockRedis {
 
 afterEach(() => {
 	vi.useRealTimers()
+	_resetLiveAuthsForTests()
 })
 
 describe('authCli — whitelist guard (D-239-07 RCE boundary)', () => {
@@ -444,6 +456,178 @@ describe('authCli — streaming device-code (Phase 267-01)', () => {
 		const firstArg = onChunk.mock.calls[0][0] as {url?: string; code?: string}
 		expect(firstArg.url).toBe('https://kimi.com/device')
 		expect(firstArg.code).toBe('CODE-1234')
+	})
+})
+
+// Phase 268-01 Task 2 — live-child registry + registerLiveAuth + sendAuthInput.
+function makeSendDeps(): SendAuthInputDeps {
+	return {logger: makeLogger()}
+}
+
+describe('sendAuthInput — whitelist guard FIRST (D-239-07 RCE boundary)', () => {
+	test('rejects unknown CLI name BEFORE any registry lookup', async () => {
+		// A child IS registered under a real name — the throw must happen before
+		// the registry is even consulted (whitelist guard is the first statement).
+		const child = makeFakeChild()
+		registerLiveAuth('claude-code', child as any)
+		await expect(
+			sendAuthInput({name: 'not-a-cli' as CliName, code: 'X'}, makeSendDeps()),
+		).rejects.toThrow(/not in whitelist|CLI not in whitelist/i)
+		// The registered child's stdin was NOT touched.
+		expect(child.stdin.write).not.toHaveBeenCalled()
+	})
+})
+
+describe('sendAuthInput — write to live child stdin', () => {
+	test("writes 'ABC123\\n' to the registered child's stdin exactly once → {ok:true}", async () => {
+		const child = makeFakeChild()
+		registerLiveAuth('claude-code', child as any)
+		const res = await sendAuthInput(
+			{name: 'claude-code', code: 'ABC123'},
+			makeSendDeps(),
+		)
+		expect(res).toEqual({ok: true})
+		expect(child.stdin.write).toHaveBeenCalledTimes(1)
+		expect(child.stdin.write).toHaveBeenCalledWith('ABC123\n')
+	})
+
+	test('with NO registered child for the name → {ok:false}, does not throw', async () => {
+		const res = await sendAuthInput(
+			{name: 'opencode', code: 'X'},
+			makeSendDeps(),
+		)
+		expect(res).toEqual({ok: false})
+	})
+
+	test('with a registered child whose stdin.destroyed === true → {ok:false}', async () => {
+		const child = makeFakeChild()
+		child.stdin.destroyed = true
+		registerLiveAuth('claude-code', child as any)
+		const res = await sendAuthInput(
+			{name: 'claude-code', code: 'X'},
+			makeSendDeps(),
+		)
+		expect(res).toEqual({ok: false})
+		expect(child.stdin.write).not.toHaveBeenCalled()
+	})
+})
+
+describe('sendAuthInput — never log the pasted code (it may be a bearer token)', () => {
+	test('logs ONLY the char length, never the literal code string', async () => {
+		const child = makeFakeChild()
+		registerLiveAuth('claude-code', child as any)
+		const deps = makeSendDeps()
+		await sendAuthInput({name: 'claude-code', code: 'ABC123'}, deps)
+		const allLogArgs = [
+			...(deps.logger.info as ReturnType<typeof vi.fn>).mock.calls,
+			...(deps.logger.warn as ReturnType<typeof vi.fn>).mock.calls,
+			...(deps.logger.error as ReturnType<typeof vi.fn>).mock.calls,
+		].flat()
+		// The secret never appears in any log arg.
+		for (const arg of allLogArgs) {
+			expect(String(arg)).not.toContain('ABC123')
+		}
+		// But the length (6) IS logged.
+		const infoJoined = (deps.logger.info as ReturnType<typeof vi.fn>).mock.calls
+			.flat()
+			.join(' ')
+		expect(infoJoined).toContain('6')
+	})
+})
+
+describe('sendAuthInput — defensive bounds', () => {
+	test('strips trailing CR/LF → writes exactly one trailing newline', async () => {
+		const child = makeFakeChild()
+		registerLiveAuth('claude-code', child as any)
+		await sendAuthInput(
+			{name: 'claude-code', code: 'CODE-99\r\n'},
+			makeSendDeps(),
+		)
+		expect(child.stdin.write).toHaveBeenCalledWith('CODE-99\n')
+	})
+
+	test('caps a > 4096-char code to 4096 before appending the newline', async () => {
+		const child = makeFakeChild()
+		registerLiveAuth('claude-code', child as any)
+		const huge = 'A'.repeat(5000)
+		await sendAuthInput({name: 'claude-code', code: huge}, makeSendDeps())
+		const written = (child.stdin.write as ReturnType<typeof vi.fn>).mock
+			.calls[0][0] as string
+		expect(written.length).toBe(4097) // 4096 chars + one '\n'
+		expect(written.endsWith('\n')).toBe(true)
+		expect(written.slice(0, 4096)).toBe('A'.repeat(4096))
+	})
+})
+
+describe('registerLiveAuth — single-in-flight per CLI', () => {
+	test('registering a second child for the same name SIGKILLs the prior child', async () => {
+		const childA = makeFakeChild()
+		const childB = makeFakeChild()
+		registerLiveAuth('claude-code', childA as any)
+		registerLiveAuth('claude-code', childB as any)
+		// Prior child killed.
+		expect(childA.kill).toHaveBeenCalledWith('SIGKILL')
+		// Registry now holds childB — a write lands on childB, not childA.
+		await sendAuthInput({name: 'claude-code', code: 'XY'}, makeSendDeps())
+		expect(childB.stdin.write).toHaveBeenCalledWith('XY\n')
+		expect(childA.stdin.write).not.toHaveBeenCalled()
+	})
+})
+
+describe('registerLiveAuth — natural-exit cleanup', () => {
+	test("emitting 'exit' removes the child from the registry", async () => {
+		const child = makeFakeChild()
+		registerLiveAuth('claude-code', child as any)
+		// Natural exit → registry entry dropped.
+		child.emit('exit', 0)
+		const res = await sendAuthInput(
+			{name: 'claude-code', code: 'X'},
+			makeSendDeps(),
+		)
+		expect(res).toEqual({ok: false})
+	})
+})
+
+describe('registerLiveAuth — stranded-child timeout teardown', () => {
+	test('after AUTH_TIMEOUT_MS the child is SIGKILLed and removed from the registry', async () => {
+		vi.useFakeTimers()
+		const child = makeFakeChild()
+		registerLiveAuth('claude-code', child as any)
+		await vi.advanceTimersByTimeAsync(AUTH_TIMEOUT_MS + 1000)
+		expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+		// Registry no longer holds it.
+		const res = await sendAuthInput(
+			{name: 'claude-code', code: 'X'},
+			makeSendDeps(),
+		)
+		expect(res).toEqual({ok: false})
+	})
+})
+
+// Phase 268-01 — the spawn site registers the live child.
+describe('authCli — registers the live child the instant it spawns', () => {
+	test('a write via sendAuthInput reaches the child authCli spawned', async () => {
+		const child = makeFakeChild()
+		const spawnFn = vi.fn(() => child as any)
+		const redis = makeRedis()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			spawnFn: spawnFn as any,
+			redis: redis as any,
+		}
+		// Start the login (claude-code now spawns the bare paste-back login).
+		const p = authCli({name: 'claude-code'}, deps)
+		// BEFORE the child exits, the operator pastes a code — it must reach stdin.
+		const sendRes = await sendAuthInput(
+			{name: 'claude-code', code: 'PASTE9'},
+			makeSendDeps(),
+		)
+		expect(sendRes).toEqual({ok: true})
+		expect(child.stdin.write).toHaveBeenCalledWith('PASTE9\n')
+		// Let the login finish.
+		child.emit('exit', 0)
+		const result = await p
+		expect(result.ok).toBe(true)
 	})
 })
 
