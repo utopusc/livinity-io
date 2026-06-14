@@ -11,6 +11,13 @@
 //               can render them WHILE the login keeps polling.
 //   'browser' — the CLI opens a localhost OAuth flow in a real browser; the
 //               UI falls back to an apikey paste (apiKeyEnv) when headless.
+//   'paste-back' (Phase 268) — the CLI prints a login URL, the user authorizes
+//               in a browser, then PASTES a code BACK into the CLI's stdin — the
+//               login blocks until stdin receives it. The UI shows the URL
+//               ('open link') AND a paste field; the field reveals only when the
+//               login is blocked on a stdin prompt (orthogonal capability — see
+//               268-RESEARCH §A note; the live-child registry + sendAuthInput in
+//               auth.ts are the stdin write-back seam).
 //   'n/a'     — not auth-able (e.g. aion-cli is AionUi's embedded Rust backend,
 //               not a standalone CLI — no install/auth path exists).
 //
@@ -27,7 +34,7 @@ import {SUPPORTED_CLIS} from './install-scripts.js'
 import type {CliName} from './types.js'
 
 /** UI-branch discriminant — the one thing the auth dialog switches on. */
-export type AuthBranch = 'apikey' | 'device' | 'browser' | 'n/a'
+export type AuthBranch = 'apikey' | 'device' | 'browser' | 'paste-back' | 'n/a'
 
 /**
  * Per-CLI auth classification.
@@ -50,8 +57,9 @@ export interface AuthMethod {
  * THE matrix. 20 keys, one per SUPPORTED_CLIS name (drift-locked below).
  *
  * Classification rationale (267-RESEARCH "Per-CLI auth matrix"):
- *   - claude-code: apikey (ANTHROPIC_API_KEY) primary; device via
- *     `claude setup-token` is the secondary path (loginArgv kept for the UI).
+ *   - claude-code: apikey (ANTHROPIC_API_KEY) primary; bare `claude` login is
+ *     the paste-back secondary (268 — `setup-token`'s localhost callback fails
+ *     headless, the bare login prompts `Paste code here if prompted`).
  *   - gemini: apikey (Google-OAuth headless is unstable → paste GEMINI_API_KEY).
  *   - opencode: apikey (write auth.json); Copilot/ChatGPT device is secondary.
  *   - openclaw: apikey (ANTHROPIC_API_KEY…); `openclaw onboard` device secondary.
@@ -77,7 +85,10 @@ export const CLI_AUTH_METHODS: Readonly<Record<CliName, AuthMethod>> = {
 	'claude-code': {
 		branch: 'apikey',
 		apiKeyEnv: 'ANTHROPIC_API_KEY',
-		loginArgv: ['claude', ['setup-token']],
+		// 268 — bare `claude` first-launch login is the paste-back secondary.
+		// `setup-token`'s localhost callback fails headless; the bare login prints
+		// a URL + prompts `Paste code here if prompted` in SSH/container/headless.
+		loginArgv: ['claude', []],
 	},
 	opencode: {branch: 'apikey', apiKeyEnv: 'OPENAI_API_KEY'},
 	gemini: {branch: 'apikey', apiKeyEnv: 'GEMINI_API_KEY'},

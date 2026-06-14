@@ -107,10 +107,11 @@ function parseDeviceCode(text: string): {url: string; code: string} | null {
 export const CLI_AUTH_COMMANDS: Readonly<
 	Record<CliName, readonly [string, readonly string[]] | null>
 > = {
-	// G13g — was ['code','login'] (Phase 224 typo); `claude` treats "code login"
-	// as a prompt → "Input must be provided …" error. The real subcommand group
-	// is `claude auth login` (verified via `claude auth --help`: login/logout/status).
-	'claude-code': ['claude', ['auth', 'login']],
+	// G13g/268 — bare `claude` first-launch login prints a URL + prompts `Paste
+	// code here if prompted` in SSH/container/headless (the paste-back flow).
+	// `setup-token`'s localhost callback fails headless; `auth login` was the 253
+	// device argv. Bare argv → paste-back.
+	'claude-code': ['claude', []],
 	opencode: ['opencode', ['auth', 'login']],
 	gemini: ['gemini', ['auth', 'login']],
 	openclaw: ['openclaw', ['auth', 'login']],
