@@ -412,6 +412,38 @@ describe('authCli — streaming device-code (Phase 267-01)', () => {
 		await p
 		expect(onChunk).toHaveBeenCalledTimes(1)
 	})
+
+	test('Test 19 (WR-01): an uppercase banner token BEFORE the URL is not mistaken for the code', async () => {
+		const child = makeFakeChild()
+		const spawnFn = vi.fn(() => child as any)
+		const redis = makeRedis()
+		const onChunk = vi.fn()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			spawnFn: spawnFn as any,
+			redis: redis as any,
+			onChunk: onChunk as any,
+		}
+		const p = authCli({name: 'github-copilot'}, deps)
+		setImmediate(() => {
+			// A startup banner prints uppercase tokens (WELCOME / BUILD / A1B2C3)
+			// BEFORE the device prompt. The bare [A-Z0-9]{4,8} regex would match
+			// "WELCOME" first on the full tail and, via the fire-once guard,
+			// permanently shadow the real code. The URL-line anchor must win.
+			child.stderr.emit(
+				'data',
+				Buffer.from(
+					'WELCOME to FooCLI v1.2.3 BUILD A1B2C3\nVisit https://kimi.com/device and enter code CODE-1234\n',
+				),
+			)
+			child.emit('exit', 0)
+		})
+		await p
+		expect(onChunk).toHaveBeenCalled()
+		const firstArg = onChunk.mock.calls[0][0] as {url?: string; code?: string}
+		expect(firstArg.url).toBe('https://kimi.com/device')
+		expect(firstArg.code).toBe('CODE-1234')
+	})
 })
 
 describe('authCli — drift-lock constants', () => {
