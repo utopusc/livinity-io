@@ -5,20 +5,22 @@
    AccountSection / WallpaperSection shape: a top
    <SettingsPageHeader/> followed by FieldCard content.
 
-   Backend contract (write-only — there is NO getter for the
-   saved locale):
+   Backend contract:
      - Live display: `system.info` exposes `.region` (e.g.
        'Istanbul · UTC+3'). Shown read-only as the current
        time zone.
+     - Saved read-back: `setup.getLocation` returns the persisted
+       {country, city, hourCycle}. We seed the Country/City picker
+       from it (one-time hydration) so it reflects what was saved,
+       falling back to the browser's resolved IANA time zone
+       (suggestFromBrowser) only when no saved location exists.
      - Save: `setup.setLocation` takes EXACTLY {country, city}
        and derives + sets timezone + locale + region server-side.
        On success we refetch system.info so the "Current" row
        reflects the new clock.
 
-   Because there is no saved-locale read-back, the picker is
-   seeded from the browser's resolved IANA time zone
-   (suggestFromBrowser) and we surface system.info.region as the
-   live value — we never fabricate a "saved" locale read.
+   We surface system.info.region as the live value for the
+   read-only "Time zone" row.
 
    COUNTRIES / getCountry are imported from the shared
    livinityd locale catalog (single source of truth, same module
@@ -77,9 +79,26 @@ export function DateTimeSection() {
 		retry: false,
 	})
 
-	// No getter for the saved locale — seed the picker from the browser.
+	// Seed the picker from the browser's resolved IANA time zone as a sane
+	// default; the saved location (getLocation) hydrates over this once below.
 	const [country, setCountry] = useState<string>(suggestion?.country ?? 'TR')
 	const [city, setCity] = useState<string>(suggestion?.city ?? 'Istanbul')
+
+	// Phase 272 — one-time hydration from the SAVED location. When getLocation
+	// returns a persisted country/city, seed the selects from it (reflecting
+	// what's actually saved, not just a browser guess). Falls back to the
+	// browser suggestion when there's no saved country/city. A ref guards it
+	// so a slow read-back can't clobber the user's in-progress selection.
+	const countryCityHydratedRef = useRef(false)
+	useEffect(() => {
+		if (countryCityHydratedRef.current) return
+		if (!locationQ.data) return
+		countryCityHydratedRef.current = true
+		const savedCountry = locationQ.data.country
+		const savedCity = locationQ.data.city
+		if (savedCountry) setCountry(savedCountry)
+		if (savedCity) setCity(savedCity)
+	}, [locationQ.data])
 
 	const setLocation = trpcReact.setup.setLocation.useMutation({
 		onSuccess: () => sysInfoQ.refetch(),
