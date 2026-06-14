@@ -1735,15 +1735,20 @@ describe('Phase 262-01 — /liv-family forward_auth gate (LIVOS-041/047/054)', (
 		expect(withoutCarveOut).not.toContain('/liv/trpc')
 	})
 
-	it('cliInstaller carve-out — matcher is EXACT 3 paths, no wildcard (tRPC comma-batch bypass lock)', () => {
+	it('cliInstaller carve-out — matcher is EXACT 5 paths, no wildcard (tRPC comma-batch bypass lock)', () => {
 		const out = apexOut()
 		// A trailing-wildcard matcher (path /liv/trpc/cliInstaller.*) would also
 		// match tRPC comma-batched paths like
 		// /liv/trpc/cliInstaller.detect,users.create?batch=1 and re-open the
 		// FULL tRPC API through the batch — exactly what LIVOS-054 closed.
+		// Phase 269-01 appended applyAgentChanges + hasPendingAgentChanges (the
+		// panel's manual-apply calls) — still EXACT paths, still no wildcard.
 		expect(out).toContain(
-			'@liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth',
+			'@liv_cli_installer path /liv/trpc/cliInstaller.detect /liv/trpc/cliInstaller.install /liv/trpc/cliInstaller.auth /liv/trpc/cliInstaller.applyAgentChanges /liv/trpc/cliInstaller.hasPendingAgentChanges',
 		)
+		// Phase 269-01 — the 2 new manual-apply paths are present as EXACT entries.
+		expect(out).toContain('/liv/trpc/cliInstaller.applyAgentChanges')
+		expect(out).toContain('/liv/trpc/cliInstaller.hasPendingAgentChanges')
 		expect(out).not.toContain('cliInstaller.*')
 		expect(out).not.toContain('/liv/trpc/*')
 	})
