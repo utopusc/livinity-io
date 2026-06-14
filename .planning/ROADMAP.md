@@ -4803,9 +4803,12 @@ Plans:
 > Research-needed: (WS2) exact node-pty spawn + prompt/URL detection + completion signal for the claude login; (WS3) the seam to filter/badge AionUi's vendored agent list by auth status (post-process /api/agents, or a LivOS-side overlay); (WS4) enumerate AionUi's `/api/assets/logos/...` paths + naming per CLI. Builds on 267-03 (agent-refresh), 267-04 (agent-logos), 268-01 (live-child registry/sendAuthInput), 268-03 (router), 268-04 (dialog/panel). D-239-07 name-only RCE boundary preserved.
 **Requirements**: remove auto-restart from auth/setApiKey/uninstall; pending-changes tracker; applyAgentChanges tRPC route + Apply button (one restart); node-pty-backed claude login (real TTY); sendAuthInput writes to pty; URL+completion detection under pty; keep api-key fallback; auth-gated/badged agent list (hide unauthed); use AionUi /api/assets/logos icons in panel + picker with fallback.
 **Depends on:** Phase 268
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 269 to break down)
+- [ ] 269-01-PLAN.md — WS1 manual apply: kill the restart storm (pending flag + applyAgentChanges/hasPendingAgentChanges + Apply button in dialog + panel) [wave 1]
+- [ ] 269-02-PLAN.md — WS2 claude OAuth paste-back via node-pty (real TTY; child|pty registry union; api-key fallback intact) [wave 2]
+- [ ] 269-03-PLAN.md — WS3 auth-gated agent list (Caddy @liv_agents carve-out + livinityd overlay route, fail-open; operator live-verify) [wave 3, autonomous:false]
+- [ ] 269-04-PLAN.md — WS4 use AionUi /api/assets/logos icons in <AgentLogo> + panel renderIcon with onerror cascade [wave 4]
 
 ---
