@@ -23,10 +23,11 @@ import {createHash} from 'node:crypto'
 import {spawn as nodeSpawn, type ChildProcess} from 'node:child_process'
 import os from 'node:os'
 
+import pty from 'node-pty'
 import type {Redis} from 'ioredis'
 
 import {SUPPORTED_CLIS_SET} from './install-scripts.js'
-import {DEVICE_CODE_RE} from './auth-methods.js'
+import {CLI_AUTH_METHODS, DEVICE_CODE_RE} from './auth-methods.js'
 import type {MinimalPty} from '../pty-sessions/session.js'
 import type {CliName, InstallerLogger} from './types.js'
 
@@ -407,11 +408,39 @@ export interface AuthCliDeps {
 	 * separate pub connection is conventional with ioredis subscribe mode.)
 	 */
 	redisPub?: Pick<Redis, 'publish'>
+	/**
+	 * Phase 269-02 — optional node-pty spawn override for the PASTE-BACK branch
+	 * (claude-code). The bare `claude` login under a child_process PIPE stdin
+	 * drops into `--print` mode and errors; only a real TTY renders the `Paste
+	 * code here if prompted` prompt. When a paste-back CLI is auth'd, authCli
+	 * spawns it via this factory (a node-pty IPty) instead of `spawnFn`. Tests
+	 * inject a fake pty so NOTHING actually spawns; production uses the default
+	 * (real `pty.spawn`, below — mirroring pty-sessions/session.ts
+	 * DEFAULT_PTY_FACTORY). Device-poll CLIs ignore this seam and stay on
+	 * child_process (RESEARCH P-5).
+	 */
+	ptyFactory?: (
+		file: string,
+		args: string[],
+		opts: {name: string; cols: number; rows: number; cwd?: string; env?: NodeJS.ProcessEnv},
+	) => MinimalPty
 }
 
 export interface AuthCliInput {
 	name: CliName
 }
+
+/**
+ * Phase 269-02 — production default pty factory. Mirrors pty-sessions/session.ts
+ * DEFAULT_PTY_FACTORY: real node-pty `pty.spawn` cast to the MinimalPty surface.
+ * Only the paste-back (claude) branch uses it; device-poll CLIs stay on
+ * child_process.
+ */
+const DEFAULT_PTY_FACTORY: NonNullable<AuthCliDeps['ptyFactory']> = (
+	file,
+	args,
+	opts,
+) => pty.spawn(file, args, opts) as unknown as MinimalPty
 
 /**
  * Combine accumulated stdout + stderr chunks into a single output string,
@@ -584,7 +613,109 @@ export async function authCli(
 			}
 		}
 
-		// 4. Argv-array spawn (no shell, no string interpolation).
+		// Shared timeout resolver — fires on AUTH_TIMEOUT_MS for BOTH backings.
+		// `killFn` reaps whichever backing is live (child SIGKILL vs pty.kill()).
+		const makeTimeout = (killFn: () => void): NodeJS.Timeout =>
+			setTimeout(() => {
+				if (settled) return
+				settled = true
+				try {
+					killFn()
+				} catch {
+					/* swallow — best-effort kill */
+				}
+				const durationMs = Date.now() - startMs
+				const tail = joinTail([...stdoutChunks, ...stderrChunks])
+				deps.logger.warn(
+					`[cli-installer] auth TIMEOUT after ${AUTH_TIMEOUT_MS}ms: ${input.name}`,
+				)
+				resolve({
+					ok: false,
+					output: `===TIMEOUT=== ${input.name} exceeded ${AUTH_TIMEOUT_MS}ms\n${tail}`,
+					exitCode: -1,
+					durationMs,
+					redisStatusKey,
+				})
+			}, AUTH_TIMEOUT_MS)
+
+		// Shared completion resolver — exitCode===0 → ok. The final Redis SET
+		// 'ok'|'failed' (below the Promise) is shared by both backings.
+		const resolveOnExit = (exitCode: number, timeoutHandle: NodeJS.Timeout): void => {
+			if (settled) return
+			settled = true
+			clearTimeout(timeoutHandle)
+			const durationMs = Date.now() - startMs
+			const output = joinTail([...stdoutChunks, ...stderrChunks])
+			deps.logger.info(
+				`[cli-installer] auth exit ${exitCode} for ${input.name} (${durationMs}ms)`,
+			)
+			resolve({
+				ok: exitCode === 0,
+				output,
+				exitCode,
+				durationMs,
+				redisStatusKey,
+			})
+		}
+
+		// 4. Spawn. PASTE-BACK CLIs (claude-code) run under a REAL TTY via node-pty
+		//    — the bare `claude` login under a child_process PIPE drops into
+		//    `--print` mode and errors; only a TTY renders `Paste code here if
+		//    prompted` (RESEARCH WS2). Device-poll CLIs stay on child_process — a
+		//    pipe is fine (they print URL+code and self-poll to exit) and a pty
+		//    would inject TUI escape noise into parseDeviceCode (RESEARCH P-5).
+		//    Branch source of truth: CLI_AUTH_METHODS[name].branch === 'paste-back'.
+		//
+		//    R269-7 — the ANTHROPIC_API_KEY fallback is UNTOUCHED here: the dialog's
+		//    "Use an API key instead" branch routes through cliInstaller.setApiKey →
+		//    writeApiKey (api-key-writer.ts), never this spawn. It stays the
+		//    GUARANTEED path given upstream claude code-paste regressions (#47994).
+		const isPasteBack = CLI_AUTH_METHODS[input.name].branch === 'paste-back'
+
+		if (isPasteBack) {
+			// ─── node-pty (real TTY) path ───────────────────────────────────────
+			const ptyFactory = deps.ptyFactory ?? DEFAULT_PTY_FACTORY
+			let ptyChild: MinimalPty
+			try {
+				ptyChild = ptyFactory(bin, args as string[], {
+					name: 'xterm-color',
+					// Wide enough that the prompt/URL aren't wrapped mid-token.
+					cols: 120,
+					rows: 40,
+					cwd: authHome,
+					env: authEnv,
+				})
+				// Keep the pty reachable so sendAuthInput can write the pasted code
+				// to it (CR-terminated). Registered as a {kind:'pty'} backing.
+				registerLiveAuth(input.name, {kind: 'pty', pty: ptyChild})
+			} catch (spawnErr) {
+				const durationMs = Date.now() - startMs
+				deps.logger.error(
+					`[cli-installer] auth pty spawn failed for ${input.name}`,
+					spawnErr,
+				)
+				resolve({
+					ok: false,
+					output: `===SPAWN-FAILED=== ${spawnErr instanceof Error ? spawnErr.message : String(spawnErr)}`,
+					exitCode: -1,
+					durationMs,
+					redisStatusKey,
+				})
+				return
+			}
+			const timeoutHandle = makeTimeout(() => ptyChild.kill())
+			// node-pty's onData is a SINGLE stream that MERGES stdout+stderr — the
+			// 267 device-code parser runs on it exactly as it ran on stdout/stderr.
+			ptyChild.onData((chunk: string) => {
+				stdoutChunks.push(Buffer.from(chunk))
+				handleChunkForDeviceCode(joinTail(stdoutChunks))
+			})
+			// Completion = pty exit (robust; do NOT string-match a banner — A6).
+			ptyChild.onExit(({exitCode}) => resolveOnExit(exitCode, timeoutHandle))
+			return
+		}
+
+		// ─── child_process (device-poll) path — UNCHANGED ───────────────────────
 		let child: ChildProcess
 		try {
 			child = spawn(bin, args as string[], {env: authEnv})
@@ -592,8 +723,6 @@ export async function authCli(
 			// write the operator-pasted code to its stdin (paste-back). Purely
 			// additive: the registry's own exit listener coexists with the
 			// resolve-on-exit listener below (Node allows multiple listeners).
-			// Phase 269-02 — registered as a {kind:'child'} backing; the paste-back
-			// (claude) branch added in Task 2 registers a {kind:'pty'} backing.
 			registerLiveAuth(input.name, {kind: 'child', child})
 		} catch (spawnErr) {
 			const durationMs = Date.now() - startMs
@@ -616,27 +745,7 @@ export async function authCli(
 		// (best-effort, harmless). They serve DIFFERENT purposes: registerLiveAuth's
 		// timer REAPS the live-child map (stranded paste-back login), while THIS one
 		// RESOLVES the authCli promise. Both are intentionally kept.
-		const timeoutHandle = setTimeout(() => {
-			if (settled) return
-			settled = true
-			try {
-				child.kill('SIGKILL')
-			} catch {
-				/* swallow — best-effort kill */
-			}
-			const durationMs = Date.now() - startMs
-			const tail = joinTail([...stdoutChunks, ...stderrChunks])
-			deps.logger.warn(
-				`[cli-installer] auth TIMEOUT after ${AUTH_TIMEOUT_MS}ms: ${input.name}`,
-			)
-			resolve({
-				ok: false,
-				output: `===TIMEOUT=== ${input.name} exceeded ${AUTH_TIMEOUT_MS}ms\n${tail}`,
-				exitCode: -1,
-				durationMs,
-				redisStatusKey,
-			})
-		}, AUTH_TIMEOUT_MS)
+		const timeoutHandle = makeTimeout(() => child.kill('SIGKILL'))
 
 		child.stdout?.on('data', (chunk: Buffer | string) => {
 			stdoutChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
@@ -651,22 +760,7 @@ export async function authCli(
 		})
 
 		;(child as unknown as NodeJS.EventEmitter).on('exit', (code: number | null) => {
-			if (settled) return
-			settled = true
-			clearTimeout(timeoutHandle)
-			const exitCode = typeof code === 'number' ? code : -1
-			const durationMs = Date.now() - startMs
-			const output = joinTail([...stdoutChunks, ...stderrChunks])
-			deps.logger.info(
-				`[cli-installer] auth exit ${exitCode} for ${input.name} (${durationMs}ms)`,
-			)
-			resolve({
-				ok: exitCode === 0,
-				output,
-				exitCode,
-				durationMs,
-				redisStatusKey,
-			})
+			resolveOnExit(typeof code === 'number' ? code : -1, timeoutHandle)
 		})
 
 		;(child as unknown as NodeJS.EventEmitter).on('error', (err: Error) => {
