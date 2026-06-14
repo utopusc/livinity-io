@@ -4755,4 +4755,32 @@ exec persistence), **L-070** (smb.conf injection), **L-071** (portal Caddyfile i
 Plans:
 - [ ] TBD
 
+### Phase 266: Release-based LivOS update mechanism with in-UI and Settings update check
+
+**Goal:** Switch LivOS self-update from commit/tag-based to **GitHub Release-based** (operator-chosen Option A), and surface updates in the desktop UI + Settings. (1) **Detection** — change `livos/packages/livinityd/source/modules/system/update.ts` (`getLatestRelease`/`resolveVersionLabel`) to read the GitHub **Releases** API (`/repos/utopusc/livinity-io/releases/latest`): "update available" = latest *published* release tag ≠ deployed version (today it compares master HEAD commit-SHA to `/opt/livos/.deployed-sha` → every commit looks like an update). Add a releases cache mirroring the existing 60-req/hr rate-limit dampening + graceful degradation. (2) **Apply** — `update.sh` (root) deploys the **latest release tag** (checkout tag / release tarball) instead of bare `git clone --depth 1` master; reuse the existing `livos_verify_fetched_ref` pin (`scripts/install/EXPECTED_RELEASE` → `refs/tags/<tag>`) so release-pin + verify-before-deploy unify. (3) **UI** — surface "update available" via the existing `update-confirm-modal.tsx` + version display (NOT `livos-version-banner.tsx`, which is a separate bundle-changed refresh prompt). (4) **Settings** — a "Check for updates" control: manual check, current-vs-latest **release** version + release notes/changelog, Update button (reuses `performUpdate` → detached `sudo update.sh`, keep SECTION_PROGRESS intact). (5) **Release automation** — a GitHub Action that publishes a Release (with notes) on `vX.Y` tag push.
+> ⚠️ **PREREQUISITE/BLOCKER:** the repo currently has **ZERO published GitHub Releases** (`/releases/latest` → 404; only tags v43.0…). Release-based update cannot function until ≥1 Release exists — the plan creates the first release (v43.0 from master) + the automation. Until then, detection must degrade gracefully (no false "update available", no error toasts).
+**Requirements**: Release-based update detection; release-pinned deploy via update.sh; in-UI update notification; Settings "Check for updates" + changelog; automated release publishing; graceful no-releases fallback; preserve GitHub rate-limit caching + performUpdate behavior.
+**Depends on:** Phase 265
+**Plans:** 2 plans
+
+Plans:
+- [ ] 266-01-PLAN.md — Release-based detection (update.ts → /releases/latest + cache + graceful fallback) + release-pinned deploy (update.sh checkout latest release tag, reuse EXPECTED_RELEASE) + GitHub Action release automation + create first release v43.0 [wave 1]
+- [ ] 266-02-PLAN.md — In-UI "update available" (update-confirm-modal + version display) + Settings "Updates" section (check button, current/latest release, changelog, Update via performUpdate) [wave 2, depends_on 266-01 detection contract]
+
+---
+
+### Phase 267: UI-driven CLI install + auth (no terminal) + agent auto-appear + model logos
+
+**Goal:** Let a LivOS user **install AND authenticate every AionUi CLI agent entirely from the UI — with NO terminal at any point** — and have the agent appear as **added + ready + directly usable** in the AionUi picker the moment auth completes. Plus: add **brand logos** to the "models"/agents section where many CLIs render logo-less. Today (Phase 252 G17, `hooks/use-cli-auth-bridge.ts`) Install + Auth both route to the **in-browser LivOS Terminal** (opens Terminal, runs `bash …/cli/<name>.sh` / `<cli> auth login` in a PTY tab) — the operator wants that GONE. (1) **Backend** (`cli-installer/auth.ts` + new `api-key-writer.ts`/`auth-methods.ts`): `authCli` today returns output only on EXIT so a device-flow login's URL+code never reach the UI in time → **stream** early stdout/stderr + parse the verification URL+code (Redis `liv:cli:auth:stream:<name>`); add **`cliInstaller.setApiKey({name,key})`** that writes the key to the CLI's own config/env file (0600, never logged) for Tier-1 api-key CLIs; classify all 20 SUPPORTED_CLIS as apikey|device|browser|n/a; give the auth-able Wave-C CLIs (kimi/kiro device, mistral/nanobot/hermes api-key) real auth instead of `null`/AUTH_UNSUPPORTED. (2) **Frontend** (`features/liv-ai/cli-auth-dialog.tsx`): a pure-UI install+auth dialog branched by `getAuthMethod` — device-code panel (show URL+code, Open-link, poll to success) / api-key paste field / browser-redirect — replacing the terminal route (demoted to an explicit "advanced" fallback). (3) **Auto-appear** (`cli-installer/agent-refresh.ts`): AionUi PATH-scans only at startup (no runtime refresh) → on auth success, debounced `systemctl restart liv-assistant` so the agent flips Failed→ready in `/api/agents`; UI reflects live. (4) **Logos** (`features/liv-ai/agent-logos.tsx` + `public/agent-logos/*.svg`): brand SVG per CLI/agent in the picker + Local Agents panel, monogram fallback.
+> Research-heavy phase (2 web-research agents + live codebase/AionUi). Auth matrix + AionUi internals + current-state gaps in `267-RESEARCH.md`. AionUi is a vendored binary (v2.1.14) — driven via its HTTP surface + a post-auth restart, NOT forked. RCE boundary D-239-07 (name-only, never a raw command) preserved throughout.
+**Requirements**: streaming device-code to UI; api-key write path; per-CLI auth-method matrix; extend Wave-C auth; UI install+auth dialog (no terminal); device-code panel; api-key paste panel; live agent status; auto-appear after auth (debounced liv-assistant restart); usable immediately; CLI/agent brand logos.
+**Depends on:** Phase 266
+**Plans:** 4 plans
+
+Plans:
+- [x] 267-01-PLAN.md — Backend: streaming auth (device URL+code) + `setApiKey` per-CLI 0600 writer + `auth-methods.ts` matrix + extend Wave-C auth + tRPC surface [wave 1] — ✅ CODE-COMPLETE 2026-06-13, commits `012ca734`+`2d08b86f`+`ec1c0055`+`eb3c40fd`+`91725bfb`+`85de39bd`, SUMMARY in phase dir; 74/74 vitest, tsc baseline-identical (zero net new). CODE ONLY — operator deploys via update.sh; 267-02 wires the UI
+- [ ] 267-02-PLAN.md — Frontend: `cli-auth-dialog.tsx` (device-code / api-key / browser branches) replacing the terminal route + onboarding + Local Agents panel wiring [wave 2, depends_on 267-01]
+- [ ] 267-03-PLAN.md — Auto-appear: debounced `liv-assistant` restart on auth success → agent Failed→ready in `/api/agents` + dialog "ready" state + Mini-PC UAT [wave 3, depends_on 267-01/02]
+- [ ] 267-04-PLAN.md — CLI/agent brand logos (`agent-logos.tsx` + `public/agent-logos/*.svg`) in the models picker + Local Agents panel, monogram fallback [wave 3]
+
 ---
