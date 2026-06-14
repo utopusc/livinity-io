@@ -4820,6 +4820,6 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 270-01-PLAN.md — unify Local Agents into one list: exclude aion-cli from the LivOS grid (VISIBLE_CLIS, byte-consistent with 269.1) + hide AionUi native Detected strip (hideNativeStrip + .liv-270-native-hidden CSS); preserve Apply bar + Install/Auth/Remove/paste-back + icon cascade; node --check gate + operator live-UAT [wave 1, autonomous:false]
+- [ ] 270-01-PLAN.md — unify Local Agents into one list: exclude aion-cli from the LivOS grid (VISIBLE_CLIS, byte-consistent with 269.1) + hide AionUi native Detected strip (hideNativeStrip + .liv-270-native-hidden CSS); preserve Apply bar + Install/Auth/Remove/paste-back + icon cascade; node --check gate + operator live-UAT [wave 1, autonomous:false] — ⏸️ CODE DONE 2026-06-14 (Tasks 1&2: `3a278d85` JS + `b5d59991` CSS; node --check EXIT 0, CSS-RULE-OK, all greps green, ZERO livos/ diff); Task 3 = operator live-UAT checkpoint AWAITING DEPLOY+OPERATOR (box stays unchecked until "approved")
 
 ---
