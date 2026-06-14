@@ -39,14 +39,41 @@ const DEVICE_URL_TTL_SECONDS = 600
 
 /**
  * Parse a stdout/stderr chunk for a device-flow verification URL + user code.
- * Returns `{url, code}` only when BOTH match in the same accumulated text;
- * otherwise null. The caller surfaces the FIRST hit live (see authCli).
+ * Returns `{url, code}` only when BOTH match; otherwise null. The caller
+ * surfaces the FIRST hit live (see authCli).
+ *
+ * WR-01 (267 code review): the code is matched from the text AROUND the URL,
+ * NOT the full 32KB tail. An unrelated uppercase token printed earlier in the
+ * stream (startup banner, version string, hex/env-var fragment) would otherwise
+ * win the `[A-Z0-9]{4,8}` match and, via the fire-once guard in authCli,
+ * permanently shadow the real device code. Device CLIs (github-copilot, kimi,
+ * kiro …) print the URL and the code on the SAME line ("visit <URL> … code
+ * XXXX"), so the URL's own line is tried first; a tight ±2-line window is the
+ * fallback for CLIs that split them across adjacent lines. Lines further away
+ * are never consulted. The URL itself is stripped so the code can never be
+ * matched inside the URL path.
  */
 function parseDeviceCode(text: string): {url: string; code: string} | null {
 	const urlMatch = text.match(DEVICE_CODE_RE.url)
-	const codeMatch = text.match(DEVICE_CODE_RE.code)
-	if (urlMatch?.[1] && codeMatch?.[1]) {
-		return {url: urlMatch[1], code: codeMatch[1]}
+	if (!urlMatch?.[1] || urlMatch.index === undefined) return null
+	const url = urlMatch[1]
+
+	const stripUrl = (s: string): string => s.split(url).join(' ')
+	const lines = text.split(/\r?\n/)
+	const urlLineIdx = lines.findIndex((line) => line.includes(url))
+	const windows =
+		urlLineIdx === -1
+			? [text]
+			: [
+					lines[urlLineIdx],
+					lines.slice(Math.max(0, urlLineIdx - 2), urlLineIdx + 3).join('\n'),
+				]
+
+	for (const window of windows) {
+		const codeMatch = stripUrl(window).match(DEVICE_CODE_RE.code)
+		if (codeMatch?.[1]) {
+			return {url, code: codeMatch[1]}
+		}
 	}
 	return null
 }
