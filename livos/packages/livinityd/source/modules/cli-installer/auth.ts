@@ -99,13 +99,22 @@ export const CLI_AUTH_COMMANDS: Readonly<
 	goose: ['goose', ['configure']],
 	'factory-droid': ['droid', ['login']],
 	'cursor-agent': ['cursor-agent', ['login']],
-	// Wave C (install-only / authHidden — null short-circuits to AUTH_UNSUPPORTED)
-	'kimi-cli': null,
-	'mistral-vibe': null,
-	'hermes-agent': null,
-	nanobot: null,
-	'snow-cli': null,
-	kiro: null,
+	// Wave C — Phase 267-01 gave the auth-able Wave-C CLIs a real login argv.
+	// Device-flow: kimi-cli (`kimi login` → stderr URL+code), kiro
+	// (`kiro-cli login` Builder ID/Google/GitHub). hermes-agent has a device
+	// portal (`hermes setup --portal`) AS WELL AS an api-key path — keep the
+	// login argv so the device branch works; the api-key path goes via
+	// cliInstaller.setApiKey (writeApiKey → ~/.hermes/.env). The remaining
+	// Wave-C names stay null (no canonical login spawn): mistral-vibe / nanobot
+	// / snow-cli authenticate ONLY via setApiKey (api-key write, no login);
+	// aion-cli is genuinely unsupported (AionUi embedded backend). null →
+	// AUTH_UNSUPPORTED short-circuit (no spawn).
+	'kimi-cli': ['kimi', ['login']],
+	'mistral-vibe': null, // api-key only → cliInstaller.setApiKey
+	'hermes-agent': ['hermes', ['setup', '--portal']],
+	nanobot: null, // api-key only → cliInstaller.setApiKey
+	'snow-cli': null, // api-key only → cliInstaller.setApiKey
+	kiro: ['kiro-cli', ['login']],
 }
 
 /**
