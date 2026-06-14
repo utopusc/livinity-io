@@ -856,3 +856,220 @@ describe('authCli — drift-lock constants', () => {
 		])
 	})
 })
+
+// ───────────────────────────────────────────────────────────────────────────
+// Phase 269-02 Task 2 — pty-backed authCli spawn branch (claude-code only).
+// claude-code (branch 'paste-back') spawns via the injected ptyFactory (real TTY)
+// — NOT child_process. Device URL/code parse off the merged pty `onData` stream;
+// completion via pty `onExit(exitCode)`. Device-poll CLIs (codex/kimi/…) STILL
+// use child_process spawn (the ptyFactory is NOT called for them). The api-key
+// fallback (ANTHROPIC_API_KEY writeApiKey path) is untouched (R269-7).
+// ───────────────────────────────────────────────────────────────────────────
+describe('authCli — pty-backed paste-back login (Phase 269-02)', () => {
+	test('claude-code spawns via the pty factory (NOT child_process) with xterm-color opts', async () => {
+		const pty = makeFakePty()
+		const ptyFactory = vi.fn(() => pty)
+		const spawnFn = vi.fn(() => makeFakeChild() as any)
+		const redis = makeRedis()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			spawnFn: spawnFn as any,
+			ptyFactory: ptyFactory as any,
+			redis: redis as any,
+		}
+		const p = authCli({name: 'claude-code'}, deps)
+		await vi.waitFor(() => expect(ptyFactory).toHaveBeenCalled())
+		// child_process spawn was NOT used for the paste-back CLI.
+		expect(spawnFn).not.toHaveBeenCalled()
+		// argv is name-derived (bare `claude`), NOT from any pasted code (D-239-07).
+		const [bin, args, opts] = ptyFactory.mock.calls[0] as unknown as [
+			string,
+			string[],
+			{name: string; cols: number; rows: number; cwd?: string; env?: unknown},
+		]
+		expect(bin).toBe('claude')
+		expect(args).toEqual([])
+		expect(opts.name).toBe('xterm-color')
+		expect(typeof opts.cols).toBe('number')
+		expect(typeof opts.rows).toBe('number')
+		expect(opts.env).toBeDefined()
+		// Finish the login so the promise resolves.
+		pty.emitExit(0)
+		await p
+	})
+
+	test('device URL+code on the pty onData stream SETs liv:cli:auth:url:claude-code', async () => {
+		const pty = makeFakePty()
+		const ptyFactory = vi.fn(() => pty)
+		const redis = makeRedis()
+		const onChunk = vi.fn()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			ptyFactory: ptyFactory as any,
+			redis: redis as any,
+			onChunk: onChunk as any,
+		}
+		const p = authCli({name: 'claude-code'}, deps)
+		await vi.waitFor(() => expect(ptyFactory).toHaveBeenCalled())
+		pty.emitData('Visit https://claude.ai/device and enter code CODE-1234\n')
+		pty.emitExit(0)
+		await p
+		// onChunk fired with the parsed URL+code off the merged pty stream.
+		expect(onChunk).toHaveBeenCalled()
+		const firstArg = onChunk.mock.calls[0][0] as {url?: string; code?: string}
+		expect(firstArg.url).toBe('https://claude.ai/device')
+		expect(firstArg.code).toBe('CODE-1234')
+		// The 267 late-poll url key was SET.
+		const urlKeySet = redis.set.mock.calls.find(
+			(c: unknown[]) => c[0] === 'liv:cli:auth:url:claude-code',
+		)
+		expect(urlKeySet).toBeDefined()
+	})
+
+	test('pty onExit(0) → AuthResult ok:true + SET liv:cli:auth:claude-code = ok', async () => {
+		const pty = makeFakePty()
+		const ptyFactory = vi.fn(() => pty)
+		const redis = makeRedis()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			ptyFactory: ptyFactory as any,
+			redis: redis as any,
+		}
+		const p = authCli({name: 'claude-code'}, deps)
+		await vi.waitFor(() => expect(ptyFactory).toHaveBeenCalled())
+		pty.emitExit(0)
+		const result = await p
+		expect(result.ok).toBe(true)
+		expect(result.exitCode).toBe(0)
+		const lastCall = redis.set.mock.calls[redis.set.mock.calls.length - 1]
+		expect(lastCall).toEqual(['liv:cli:auth:claude-code', 'ok', 'EX', 3600])
+	})
+
+	test('pty onExit(1) → AuthResult ok:false + SET liv:cli:auth:claude-code = failed', async () => {
+		const pty = makeFakePty()
+		const ptyFactory = vi.fn(() => pty)
+		const redis = makeRedis()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			ptyFactory: ptyFactory as any,
+			redis: redis as any,
+		}
+		const p = authCli({name: 'claude-code'}, deps)
+		await vi.waitFor(() => expect(ptyFactory).toHaveBeenCalled())
+		pty.emitExit(1)
+		const result = await p
+		expect(result.ok).toBe(false)
+		expect(result.exitCode).toBe(1)
+		const lastCall = redis.set.mock.calls[redis.set.mock.calls.length - 1]
+		expect(lastCall).toEqual(['liv:cli:auth:claude-code', 'failed', 'EX', 3600])
+	})
+
+	test('a paste via sendAuthInput reaches the pty (CR) while the login is live', async () => {
+		const pty = makeFakePty()
+		const ptyFactory = vi.fn(() => pty)
+		const redis = makeRedis()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			ptyFactory: ptyFactory as any,
+			redis: redis as any,
+		}
+		const p = authCli({name: 'claude-code'}, deps)
+		await vi.waitFor(() => expect(ptyFactory).toHaveBeenCalled())
+		const sendRes = await sendAuthInput(
+			{name: 'claude-code', code: 'PASTE9'},
+			makeSendDeps(),
+		)
+		expect(sendRes).toEqual({ok: true})
+		expect(pty.write).toHaveBeenCalledWith('PASTE9\r')
+		pty.emitExit(0)
+		const result = await p
+		expect(result.ok).toBe(true)
+	})
+
+	test('the AUTH_TIMEOUT_MS race kills the pty via .kill() (no SIGKILL string)', async () => {
+		vi.useFakeTimers()
+		const pty = makeFakePty()
+		const ptyFactory = vi.fn(() => pty)
+		const redis = makeRedis()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			ptyFactory: ptyFactory as any,
+			redis: redis as any,
+		}
+		const p = authCli({name: 'claude-code'}, deps)
+		await vi.waitFor(() => expect(ptyFactory).toHaveBeenCalled())
+		await vi.advanceTimersByTimeAsync(AUTH_TIMEOUT_MS + 1000)
+		const result = await p
+		expect(result.ok).toBe(false)
+		expect(result.output).toMatch(/===TIMEOUT===/)
+		expect(pty.kill).toHaveBeenCalled()
+	})
+})
+
+describe('authCli — device-poll CLIs STAY on child_process (Phase 269-02, P-5)', () => {
+	test('codex (branch apikey/device, not paste-back) does NOT call the pty factory', async () => {
+		const ptyFactory = vi.fn(() => makeFakePty())
+		const child = makeFakeChild()
+		const spawnFn = vi.fn(() => child as any)
+		const redis = makeRedis()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			spawnFn: spawnFn as any,
+			ptyFactory: ptyFactory as any,
+			redis: redis as any,
+		}
+		const p = authCli({name: 'codex'}, deps)
+		setImmediate(() => child.emit('exit', 0))
+		await p
+		// child_process spawn was used; the pty factory was NEVER called.
+		expect(spawnFn).toHaveBeenCalledTimes(1)
+		expect(ptyFactory).not.toHaveBeenCalled()
+	})
+
+	test('kimi-cli (device) does NOT call the pty factory either', async () => {
+		const ptyFactory = vi.fn(() => makeFakePty())
+		const child = makeFakeChild()
+		const spawnFn = vi.fn(() => child as any)
+		const redis = makeRedis()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			spawnFn: spawnFn as any,
+			ptyFactory: ptyFactory as any,
+			redis: redis as any,
+		}
+		const p = authCli({name: 'kimi-cli'}, deps)
+		setImmediate(() => child.emit('exit', 0))
+		await p
+		expect(spawnFn).toHaveBeenCalledTimes(1)
+		expect(ptyFactory).not.toHaveBeenCalled()
+	})
+
+	test('github-copilot (device) stays child_process — the existing stdout/stderr handlers still parse', async () => {
+		const ptyFactory = vi.fn(() => makeFakePty())
+		const child = makeFakeChild()
+		const spawnFn = vi.fn(() => child as any)
+		const redis = makeRedis()
+		const onChunk = vi.fn()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			spawnFn: spawnFn as any,
+			ptyFactory: ptyFactory as any,
+			redis: redis as any,
+			onChunk: onChunk as any,
+		}
+		const p = authCli({name: 'github-copilot'}, deps)
+		setImmediate(() => {
+			child.stderr.emit(
+				'data',
+				Buffer.from('Visit https://github.com/login/device and enter code ABCD-1234\n'),
+			)
+			child.emit('exit', 0)
+		})
+		await p
+		expect(ptyFactory).not.toHaveBeenCalled()
+		// The device-code stream still works on the child stderr path (unchanged).
+		expect(onChunk).toHaveBeenCalled()
+		const firstArg = onChunk.mock.calls[0][0] as {url?: string}
+		expect(firstArg.url).toBe('https://github.com/login/device')
+	})
+})
