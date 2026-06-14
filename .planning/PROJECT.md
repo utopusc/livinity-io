@@ -709,5 +709,6 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
+*Last updated: 2026-06-13 — v45.0 "Security Hardening": Phase 268 (interactive CLI auth — paste-back/device login + CLI uninstall) CODE-COMPLETE, 4/4 plans + 5 code-review fixes (WR-04 made the paste-back flow reachable: claude-code → `branch:'paste-back'`), verification `human_needed` (3 live-box UAT items in `268-HUMAN-UAT.md`). Builds on Phase 267. Prior footers retained below.*
 *Last updated: 2026-06-13 — v45.0 "Security Hardening": Phase 267 (UI-driven CLI install + auth, no terminal + agent auto-appear + brand logos) CODE-COMPLETE, 4/4 plans, verification `human_needed` (3 live-box operator UAT items tracked in `267-HUMAN-UAT.md`). Prior footer retained below.*
 *Last updated: 2026-05-26 — v41 "Admin Panel + Store Hardening + Subdomain Reliability" opened (9 phases P209-P217 drafted at `.planning/v41-DRAFT.md` with 3 research artifacts at `.planning/research/2026-05-26-store-admin/`). 5 operator gating decisions locked: admin seed=hello@bruceoz.com, static HTML kept, bandwidth=Supabase rollups, relay state to be probed in P210 entry, CF cert audit deferred to P216. Sacred SHA `f3538e1d811992b782a9bb057d1b7f0a0189f95f` continues across v41.*
