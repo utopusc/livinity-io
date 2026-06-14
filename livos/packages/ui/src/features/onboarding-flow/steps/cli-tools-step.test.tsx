@@ -5,21 +5,26 @@
 // RTL absent — same `react-dom/client + act + vi.mock` harness used by
 // locale-timezone-step.test.tsx / region-step.test.tsx (D-NO-NEW-DEPS).
 //
-// Coverage (>=9 it() blocks per acceptance criteria):
+// Coverage:
 //   1. Renders exactly 5 cards in document order (drift-lock vs Plan 239-01 SUPPORTED_CLIS)
 //   2. Each card initial state = "Install" button when detect resolves {detected:false}
 //   3. Card with detect {detected:true, version} shows "Installed" pill + hides Install button
-//   4. Clicking Install dispatches cliInstaller.install.mutateAsync with that exact name + transitions to Installing state
-//   5. Successful install transitions to "Installed" + appends to data.cliInstalled via setData
-//   6. Failed install (ok:false) transitions to "Failed" with Retry button + tooltip-accessible error
-//   7. Retry transitions back to not-installed (Install button visible again)
-//   8. Continue button ENABLED on initial render with no installs (D-239-14)
-//   9. Continue click invokes onContinue prop
-//  10. Drift-lock: SUPPORTED_CLI_DISPLAY has exactly 5 entries in fixed order
+//   4. Clicking Install opens the no-terminal CliAuthDialog (Phase 267-02) with the
+//      exact CLI name + shows the optimistic Installing state (NO inline install)
+//   5. Clicking Install records the pick in data.cliInstalled via setData
+//   6. A detected CLI shows Installed and never opens the dialog
+//   7. Continue button ENABLED on initial render with no installs (D-239-14)
+//   8. Continue click invokes onContinue prop
+//   9. Drift-lock: SUPPORTED_CLI_DISPLAY has exactly 5 entries in fixed order
+//
+// Phase 267-02 changed the install action: the onboarding step opens the
+// no-terminal CliAuthDialog (install + device/apikey/browser auth in one flow)
+// instead of installing inline. The old inline mutation/failure/retry tests
+// were replaced to reflect that contract.
 //
 // References:
 //   - .planning/phases/239-onboarding-cli-tools/239-02-PLAN.md (Task 2)
-//   - .planning/phases/239-onboarding-cli-tools/239-01-SUMMARY.md (cliInstaller contract)
+//   - .planning/phases/267-ui-cli-install-auth-no-terminal/267-02-PLAN.md (Task 3)
 
 import {act} from 'react'
 import {createRoot, type Root} from 'react-dom/client'
@@ -55,6 +60,17 @@ vi.mock('@/trpc/trpc', () => ({
 	},
 }))
 
+// Phase 267-02 — the Install button now opens the no-terminal CliAuthDialog
+// (install + auth in one flow) instead of installing inline. Mock the dialog
+// opener so we can assert the click dispatches it with the right CLI name and
+// don't pull the whole dialog component tree into this jsdom harness.
+const openCliAuthDialogMock = vi.fn()
+
+vi.mock('@/features/liv-ai/cli-auth-dialog', () => ({
+	openCliAuthDialog: (detail: {cli: string; mode?: string}) =>
+		openCliAuthDialogMock(detail),
+}))
+
 // Component import AFTER vi.mock to ensure hoisting.
 import {CliToolsStep, SUPPORTED_CLI_DISPLAY} from './cli-tools-step'
 
@@ -66,6 +82,7 @@ beforeEach(() => {
 	document.body.appendChild(container)
 	root = createRoot(container)
 	installMock.mockReset()
+	openCliAuthDialogMock.mockReset()
 	for (const k of Object.keys(detectMap)) delete detectMap[k]
 })
 
@@ -193,20 +210,14 @@ describe('CliToolsStep — already-installed card', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────
-// 4. Click Install → mutateAsync called + Installing spinner state
+// 4. Click Install → opens the no-terminal CliAuthDialog + optimistic Installing
+//    (Phase 267-02: onboarding no longer installs inline — the dialog drives
+//    install + auth with no Terminal.)
 // ─────────────────────────────────────────────────────────────────────
 
-describe('CliToolsStep — install dispatch', () => {
-	it('clicking Install dispatches cliInstaller.install.mutateAsync({name}) and transitions to Installing state', async () => {
+describe('CliToolsStep — install opens the dialog', () => {
+	it('clicking Install opens CliAuthDialog with that CLI name and shows the Installing state', async () => {
 		detectMap['gemini'] = {detected: false}
-		// Never-resolving promise so we can observe the Installing state.
-		let resolveInstall: ((v: {ok: boolean; output: string; exitCode: number; durationMs: number}) => void) | null = null
-		installMock.mockImplementation(
-			() =>
-				new Promise((res) => {
-					resolveInstall = res
-				}),
-		)
 		const {container} = renderStep()
 		const btn = container.querySelector('[data-testid="cli-install-gemini"]') as HTMLButtonElement
 		expect(btn).not.toBeNull()
@@ -214,38 +225,32 @@ describe('CliToolsStep — install dispatch', () => {
 			btn.click()
 			await flushMicrotasks()
 		})
-		expect(installMock).toHaveBeenCalledTimes(1)
-		expect(installMock).toHaveBeenCalledWith({name: 'gemini'})
+		// Opens the no-terminal dialog with the exact CLI name (NAME-only) and
+		// NEVER installs inline (no install mutation fired).
+		expect(openCliAuthDialogMock).toHaveBeenCalledTimes(1)
+		expect(openCliAuthDialogMock).toHaveBeenCalledWith({cli: 'gemini', mode: 'install'})
+		expect(installMock).not.toHaveBeenCalled()
+		// Card optimistically shows Installing while the dialog is open.
 		const installing = container.querySelector('[data-testid="cli-installing-gemini"]')
 		expect(installing).not.toBeNull()
-		// Cleanup — resolve the dangling promise to avoid unhandled rejection.
-		const r = resolveInstall as
-			| ((v: {ok: boolean; output: string; exitCode: number; durationMs: number}) => void)
-			| null
-		if (r !== null) r({ok: true, output: '', exitCode: 0, durationMs: 1})
 	})
 })
 
 // ─────────────────────────────────────────────────────────────────────
-// 5. Successful install → Installed + setData appends cliInstalled
+// 5. Click Install → records the pick in data.cliInstalled (Continue intent)
 // ─────────────────────────────────────────────────────────────────────
 
-describe('CliToolsStep — install success', () => {
-	it('on ok:true mutation result transitions to Installed and calls setData with cliInstalled appended', async () => {
+describe('CliToolsStep — install records the pick', () => {
+	it('clicking Install appends the CLI to data.cliInstalled via setData', async () => {
 		detectMap['openclaw'] = {detected: false}
-		installMock.mockResolvedValue({ok: true, output: 'installed ok', exitCode: 0, durationMs: 1234})
 		const setData = vi.fn()
 		const {container} = renderStep({setData})
 		const btn = container.querySelector('[data-testid="cli-install-openclaw"]') as HTMLButtonElement
 		await act(async () => {
 			btn.click()
 			await flushMicrotasks()
-			await flushMicrotasks()
 		})
-		// Installed pill rendered.
-		const installed = container.querySelector('[data-testid="cli-installed-openclaw"]')
-		expect(installed).not.toBeNull()
-		// setData called with cliInstalled containing 'openclaw'.
+		expect(openCliAuthDialogMock).toHaveBeenCalledWith({cli: 'openclaw', mode: 'install'})
 		expect(setData).toHaveBeenCalled()
 		const lastCall = setData.mock.calls[setData.mock.calls.length - 1][0] as OnboardingData
 		expect(lastCall.cliInstalled).toContain('openclaw')
@@ -253,63 +258,22 @@ describe('CliToolsStep — install success', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────
-// 6. Failed install → Failed state with Retry button + tooltip
+// 6. Already-detected CLI shows Installed and never offers an Install button
+//    (detect-sync drives the installed state; the dialog is for not-installed).
 // ─────────────────────────────────────────────────────────────────────
 
-describe('CliToolsStep — install failure', () => {
-	it('on ok:false mutation result transitions to Failed with Retry button and tooltip-accessible error text', async () => {
-		detectMap['aion-cli'] = {detected: false}
-		installMock.mockResolvedValue({
-			ok: false,
-			output: 'line1\nline2\nfatal: install refused\n',
-			exitCode: 1,
-			durationMs: 200,
-		})
+describe('CliToolsStep — detected CLI stays installed', () => {
+	it('a detected CLI shows the Installed pill and no Install button (no dialog)', async () => {
+		detectMap['claude-code'] = {detected: true, version: '1.2.3'}
 		const {container} = renderStep()
-		const btn = container.querySelector('[data-testid="cli-install-aion-cli"]') as HTMLButtonElement
 		await act(async () => {
-			btn.click()
-			await flushMicrotasks()
 			await flushMicrotasks()
 		})
-		const failedPanel = container.querySelector('[data-testid="cli-failed-aion-cli"]')
-		expect(failedPanel).not.toBeNull()
-		// Retry button visible.
-		const retryBtn = container.querySelector(
-			'[data-testid="cli-retry-aion-cli"]',
-		) as HTMLButtonElement
-		expect(retryBtn).not.toBeNull()
-		// Tooltip-accessible error text via title attribute.
-		const failedLabel = failedPanel!.querySelector('[title]')
-		expect(failedLabel).not.toBeNull()
-		expect(failedLabel!.getAttribute('title')).toContain('fatal: install refused')
-	})
-})
-
-// ─────────────────────────────────────────────────────────────────────
-// 7. Retry returns to not-installed
-// ─────────────────────────────────────────────────────────────────────
-
-describe('CliToolsStep — retry', () => {
-	it('Retry button transitions card back to not-installed (Install button visible)', async () => {
-		detectMap['aion-cli'] = {detected: false}
-		installMock.mockResolvedValue({ok: false, output: 'boom', exitCode: 1, durationMs: 1})
-		const {container} = renderStep()
-		const btn = container.querySelector('[data-testid="cli-install-aion-cli"]') as HTMLButtonElement
-		await act(async () => {
-			btn.click()
-			await flushMicrotasks()
-			await flushMicrotasks()
-		})
-		const retryBtn = container.querySelector(
-			'[data-testid="cli-retry-aion-cli"]',
-		) as HTMLButtonElement
-		await act(async () => {
-			retryBtn.click()
-			await flushMicrotasks()
-		})
-		const reinstallBtn = container.querySelector('[data-testid="cli-install-aion-cli"]')
-		expect(reinstallBtn).not.toBeNull()
+		const installBtn = container.querySelector('[data-testid="cli-install-claude-code"]')
+		expect(installBtn).toBeNull()
+		const installed = container.querySelector('[data-testid="cli-installed-claude-code"]')
+		expect(installed).not.toBeNull()
+		expect(openCliAuthDialogMock).not.toHaveBeenCalled()
 	})
 })
 

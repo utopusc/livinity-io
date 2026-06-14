@@ -24,6 +24,7 @@
 
 import {useCallback, useEffect, useReducer} from 'react'
 
+import {openCliAuthDialog} from '@/features/liv-ai/cli-auth-dialog'
 import {trpcReact} from '@/trpc/trpc'
 
 import {FooterBar} from '../footer-bar'
@@ -88,7 +89,6 @@ const INITIAL_CARDS: CardsState = {
 
 export function CliToolsStep({data, setData, onContinue, onSkip, onBack}: Props) {
 	const [cards, dispatch] = useReducer(cardsReducer, INITIAL_CARDS)
-	const installM = trpcReact.cliInstaller.install.useMutation()
 
 	// Fixed-shape fan-out: 5 unconditional detect queries so React rules-of-hooks
 	// stays satisfied. `retry:false` + `staleTime:30s` prevents detect storms.
@@ -132,36 +132,21 @@ export function CliToolsStep({data, setData, onContinue, onSkip, onBack}: Props)
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [detectClaude.data, detectOpencode.data, detectGemini.data, detectOpenclaw.data, detectAion.data])
 
+	// Phase 267-02 — onboarding no longer installs inline; the Install button
+	// opens the no-terminal CliAuthDialog (install + the device/apikey/browser
+	// auth branch in one flow). The card optimistically shows 'installing' while
+	// the dialog is open; the detect-sync effect above flips it to 'installed'
+	// once the dialog finishes and the detect query refetches. We also record
+	// the pick in data.cliInstalled so Continue carries the operator's intent.
 	const handleInstall = useCallback(
-		async (id: CliId) => {
+		(id: CliId) => {
+			openCliAuthDialog({cli: id, mode: 'install'})
 			dispatch({type: 'set', id, state: {kind: 'installing'}})
-			try {
-				const result = await installM.mutateAsync({name: id})
-				if (result.ok) {
-					dispatch({type: 'set', id, state: {kind: 'installed'}})
-					const next = new Set(data.cliInstalled ?? [])
-					next.add(id)
-					setData({...data, cliInstalled: Array.from(next)})
-				} else {
-					// T-239-02-02 mitigation: tail-truncate output to last 3 lines + 400
-					// chars max. No secrets expected in install scripts but defense in
-					// depth keeps any future log additions safe-by-default.
-					const tail = (result.output ?? '').split('\n').slice(-3).join('\n').slice(0, 400)
-					dispatch({
-						type: 'set',
-						id,
-						state: {
-							kind: 'failed',
-							message: tail || `Install failed (exit ${result.exitCode})`,
-						},
-					})
-				}
-			} catch (err) {
-				const msg = err instanceof Error ? err.message : 'Install failed'
-				dispatch({type: 'set', id, state: {kind: 'failed', message: msg}})
-			}
+			const next = new Set(data.cliInstalled ?? [])
+			next.add(id)
+			setData({...data, cliInstalled: Array.from(next)})
 		},
-		[data, installM, setData],
+		[data, setData],
 	)
 
 	const handleRetry = useCallback((id: CliId) => {
