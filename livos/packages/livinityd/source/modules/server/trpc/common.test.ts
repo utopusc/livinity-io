@@ -327,7 +327,41 @@ function runTests() {
 		ok('Test 18: bare/half-namespaced getActiveModel/setActiveModel absent (mastra.agent.* convention preserved)')
 	}
 
-	console.log('\nAll common.test.ts tests passed (18/18)')
+	// Phase 268-03 — cliInstaller.sendAuthInput (paste-back stdin write) +
+	// cliInstaller.uninstall (npm uninstall / fs.rm) added to httpOnlyPaths.
+	// Same WS-reconnect-survival rationale as the 267-01 cliInstaller.* cluster
+	// (common.ts lines 730-745): both are long-ish admin mutations; a half-broken
+	// WS after `systemctl restart livos` would silently hang them (memory pitfall
+	// B-12 / X-04).
+	// Test 19: 'cliInstaller.sendAuthInput' + 'cliInstaller.uninstall' present
+	{
+		assert.ok(
+			httpOnlyPaths.includes('cliInstaller.sendAuthInput' as any),
+			"httpOnlyPaths must include 'cliInstaller.sendAuthInput' (Phase 268-03 — the operator-pasted login code is written to the live child's stdin; a half-broken WS after `systemctl restart livos` would silently hang the paste-back)",
+		)
+		assert.ok(
+			httpOnlyPaths.includes('cliInstaller.uninstall' as any),
+			"httpOnlyPaths must include 'cliInstaller.uninstall' (Phase 268-03 — npm uninstall / fs.rm is a long-ish admin mutation; same WS-survival rationale as cliInstaller.install/auth)",
+		)
+		ok("Test 19: 'cliInstaller.sendAuthInput' + 'cliInstaller.uninstall' present in httpOnlyPaths")
+	}
+
+	// Test 20: bare-name footgun guard for Phase 268-03 entries. Mirrors Tests
+	// 4 / 7 / 9 / 12 / 14 / 16 / 18 — every existing entry follows the
+	// <router>.<route> namespace convention.
+	{
+		assert.ok(
+			!httpOnlyPaths.includes('sendAuthInput' as any),
+			"httpOnlyPaths must NOT include bare 'sendAuthInput' (must be namespaced as 'cliInstaller.sendAuthInput')",
+		)
+		assert.ok(
+			!httpOnlyPaths.includes('uninstall' as any),
+			"httpOnlyPaths must NOT include bare 'uninstall' (must be namespaced as 'cliInstaller.uninstall')",
+		)
+		ok('Test 20: bare sendAuthInput/uninstall absent (cliInstaller.* convention preserved)')
+	}
+
+	console.log('\nAll common.test.ts tests passed (20/20)')
 }
 
 runTests()
