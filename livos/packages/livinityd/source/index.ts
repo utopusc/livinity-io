@@ -223,7 +223,12 @@ import {createCliInstallerRouter} from './modules/server/trpc/cli-installer-rout
 // Phase 240-01 — authCli is the per-CLI canonical login spawn wrapper
 // (needs Redis for status-key writes). The router does NOT pull this in
 // directly so it remains test-isolated; the boot block below wires it in.
-import {authCli, writeApiKey} from './modules/cli-installer/index.js'
+import {
+	authCli,
+	writeApiKey,
+	scheduleAgentRefresh,
+	agentRefreshStatusKey,
+} from './modules/cli-installer/index.js'
 // Phase 224 — `config.*` namespace production wire. Builds the
 // getV42MigrationActive procedure against the live ioredis client; the
 // default empty-injection stub throws PRECONDITION_FAILED until this
@@ -2067,6 +2072,26 @@ export default class Livinityd {
 				// liv:cli:auth:url:<name> (EX 600). Returns the raw JSON or null.
 				getDeviceCodeFn: async (name) =>
 					livRedis.get(`liv:cli:auth:url:${name}`),
+				// Phase 267-03 — on auth/setApiKey SUCCESS, schedule the debounced
+				// (4s default) best-effort `sudo -n systemctl restart liv-assistant`
+				// so AionUi re-PATH-scans and the freshly-authed CLI flips
+				// Failed→ready with NO terminal. A burst of installs coalesces into
+				// ONE restart. The restart is fire-and-forget + non-throwing — it can
+				// never invalidate the already-recorded auth/key write. livRedis is
+				// threaded so the refresh can SET liv:cli:agent-refresh
+				// 'restarting'→'done' (the UI polls agentRefreshStatus for "Applying…").
+				scheduleAgentRefreshFn: () =>
+					scheduleAgentRefresh({
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) => this.logger.error(msg, err),
+							error: (msg, err) => this.logger.error(msg, err),
+						},
+						redis: livRedis,
+					}),
+				// Phase 267-03 — read liv:cli:agent-refresh ('restarting'|'done'|null)
+				// so the dialog can show "Applying…" then "ready — open Liv AI".
+				getAgentRefreshStatusFn: async () => livRedis.get(agentRefreshStatusKey),
 				auditLogFactory: (ctx: unknown) => async (row) => {
 					try {
 						const pool = getPool()

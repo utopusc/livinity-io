@@ -71,6 +71,9 @@ let auditLogFactory: ReturnType<typeof vi.fn>
 // Phase 267-01 — setApiKey + getDeviceCode DI seams
 let writeApiKeyFn: ReturnType<typeof vi.fn>
 let getDeviceCodeFn: ReturnType<typeof vi.fn>
+// Phase 267-03 — debounced liv-assistant restart + status seams
+let scheduleAgentRefreshFn: ReturnType<typeof vi.fn>
+let getAgentRefreshStatusFn: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
 	installFn = vi.fn().mockResolvedValue({
@@ -102,6 +105,8 @@ beforeEach(() => {
 		.mockResolvedValue(
 			JSON.stringify({url: 'https://kimi.com/device', code: 'CODE-1234'}),
 		)
+	scheduleAgentRefreshFn = vi.fn()
+	getAgentRefreshStatusFn = vi.fn().mockResolvedValue('restarting')
 })
 
 function build(opts: {withAudit?: boolean} = {}) {
@@ -112,6 +117,8 @@ function build(opts: {withAudit?: boolean} = {}) {
 		authFn: authFn as any,
 		writeApiKeyFn: writeApiKeyFn as any,
 		getDeviceCodeFn: getDeviceCodeFn as any,
+		scheduleAgentRefreshFn: scheduleAgentRefreshFn as any,
+		getAgentRefreshStatusFn: getAgentRefreshStatusFn as any,
 		auditLogFactory: opts.withAudit
 			? (auditLogFactory as any)
 			: undefined,
@@ -189,18 +196,27 @@ describe('cli-installer-router — happy path', () => {
 })
 
 describe('cli-installer-router — contract drift-locks', () => {
-	test('T7 — router exposes install + detect + auth + the Phase 267-01 trio', () => {
+	test('T7 — router exposes install + detect + auth + the Phase 267-01 trio + 267-03 status', () => {
 		const r = build()
 		const procNames = Object.keys(r._def.procedures ?? {}).sort()
 		expect(procNames).toEqual(
-			['auth', 'detect', 'getAuthMethod', 'getDeviceCode', 'install', 'setApiKey'].sort(),
+			[
+				'auth',
+				'detect',
+				'getAuthMethod',
+				'getDeviceCode',
+				'install',
+				'setApiKey',
+				'agentRefreshStatus',
+			].sort(),
 		)
 	})
 
-	test('T14 — drift-lock: declaration order = [detect, install, auth, setApiKey, getAuthMethod, getDeviceCode]', () => {
+	test('T14 — drift-lock: declaration order = [detect, install, auth, setApiKey, getAuthMethod, getDeviceCode, agentRefreshStatus]', () => {
 		const r = build()
 		// Insertion order of router({...}) literal — pinned by Plan 240-01 (first
-		// three) + Phase 267-01 (the additive trio appended after auth).
+		// three) + Phase 267-01 (the additive trio appended after auth) + Phase
+		// 267-03 (agentRefreshStatus appended last).
 		const procNames = Object.keys(r._def.procedures ?? {})
 		expect(procNames).toEqual([
 			'detect',
@@ -209,6 +225,7 @@ describe('cli-installer-router — contract drift-locks', () => {
 			'setApiKey',
 			'getAuthMethod',
 			'getDeviceCode',
+			'agentRefreshStatus',
 		])
 	})
 
@@ -396,5 +413,79 @@ describe('cli-installer-router — getDeviceCode (Phase 267-01)', () => {
 		await expect(caller.getDeviceCode({name: 'foo'})).rejects.toMatchObject({
 			code: 'BAD_REQUEST',
 		})
+	})
+})
+
+// Phase 267-03 Task 2 — schedule the debounced liv-assistant restart ONLY on
+// auth/setApiKey SUCCESS + expose agentRefreshStatus.
+describe('cli-installer-router — agent refresh on success (Phase 267-03)', () => {
+	test('T31 — auth ok:true schedules the agent refresh exactly once', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await caller.auth({name: 'claude-code'})
+		expect(scheduleAgentRefreshFn).toHaveBeenCalledTimes(1)
+	})
+
+	test('T32 — auth ok:false does NOT schedule a refresh (failed login must not churn AionUi)', async () => {
+		authFn.mockResolvedValueOnce({
+			ok: false,
+			output: 'login failed',
+			exitCode: 1,
+			durationMs: 12,
+			redisStatusKey: 'liv:cli:auth:claude-code',
+		})
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await caller.auth({name: 'claude-code'})
+		expect(scheduleAgentRefreshFn).not.toHaveBeenCalled()
+	})
+
+	test('T33 — setApiKey ok:true schedules the agent refresh exactly once', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await caller.setApiKey({name: 'gemini', key: 'sk-xyz'})
+		expect(scheduleAgentRefreshFn).toHaveBeenCalledTimes(1)
+	})
+
+	test('T34 — setApiKey ok:false does NOT schedule a refresh', async () => {
+		writeApiKeyFn.mockResolvedValueOnce({ok: false, path: ''})
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await caller.setApiKey({name: 'gemini', key: 'sk-xyz'})
+		expect(scheduleAgentRefreshFn).not.toHaveBeenCalled()
+	})
+
+	test('T35 — a throwing scheduleAgentRefreshFn NEVER invalidates the auth result (best-effort)', async () => {
+		scheduleAgentRefreshFn.mockImplementationOnce(() => {
+			throw new Error('refresh scheduling blew up')
+		})
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		// The auth result must still come back ok — the refresh failure is swallowed.
+		const result = await caller.auth({name: 'claude-code'})
+		expect(result.ok).toBe(true)
+	})
+
+	test('T36 — agentRefreshStatus maps restarting → {status:"restarting"}', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const s = await caller.agentRefreshStatus()
+		expect(s).toEqual({status: 'restarting'})
+	})
+
+	test('T37 — agentRefreshStatus maps a null/unknown value → {status:"idle"}', async () => {
+		getAgentRefreshStatusFn.mockResolvedValueOnce(null)
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const s = await caller.agentRefreshStatus()
+		expect(s).toEqual({status: 'idle'})
+	})
+
+	test('T38 — agentRefreshStatus maps done → {status:"done"}', async () => {
+		getAgentRefreshStatusFn.mockResolvedValueOnce('done')
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const s = await caller.agentRefreshStatus()
+		expect(s).toEqual({status: 'done'})
 	})
 })
