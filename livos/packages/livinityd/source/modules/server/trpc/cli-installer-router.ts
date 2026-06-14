@@ -96,6 +96,23 @@ export interface CliInstallerRouterDeps {
 	 * returns null (no device-code available).
 	 */
 	getDeviceCodeFn?: (name: CliName) => Promise<string | null>
+	/**
+	 * Phase 267-03 — DI seam for the debounced liv-assistant restart. Called
+	 * (best-effort, fire-and-forget) AFTER `auth` resolves `ok:true` OR
+	 * `setApiKey` resolves `ok:true`, so AionUi re-PATH-scans and the freshly-
+	 * authed CLI flips Failed→ready with no terminal. Prod wires
+	 * `scheduleAgentRefresh` closed over the live redis client. Default stub is a
+	 * no-op (tests inject a spy; Phase 239/240 callers without the seam are
+	 * unaffected). It MUST be synchronous + non-throwing — the success result is
+	 * already locked in and must never be invalidated by a refresh failure.
+	 */
+	scheduleAgentRefreshFn?: () => void
+	/**
+	 * Phase 267-03 — DI seam for `agentRefreshStatus`. Prod wires a Redis GET
+	 * over `liv:cli:agent-refresh` (set 'restarting'→'done' by the refresh). The
+	 * UI polls this to show "Applying…". Default stub returns null.
+	 */
+	getAgentRefreshStatusFn?: () => Promise<string | null>
 }
 
 // 64-char ceiling keeps the value well under any path/buffer limits a script
@@ -158,12 +175,48 @@ const defaultWriteApiKeyFn = async (): Promise<WriteApiKeyResult> => {
  */
 const defaultGetDeviceCodeFn = async (): Promise<string | null> => null
 
+/**
+ * Default `scheduleAgentRefreshFn` fallback — a no-op. Production injects
+ * `scheduleAgentRefresh` (closed over the redis client). When unset (Phase
+ * 239/240 callers / tests without the seam) auth/setApiKey behave exactly as
+ * before — no restart is triggered.
+ */
+const defaultScheduleAgentRefreshFn = (): void => {}
+
+/**
+ * Default `getAgentRefreshStatusFn` fallback — returns null. Production injects
+ * a Redis GET over `liv:cli:agent-refresh`.
+ */
+const defaultGetAgentRefreshStatusFn = async (): Promise<string | null> => null
+
 export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 	const install = deps.installFn ?? installCli
 	const detect = deps.detectFn ?? detectCli
 	const auth = deps.authFn ?? defaultAuthFn
 	const writeApiKey = deps.writeApiKeyFn ?? defaultWriteApiKeyFn
 	const getDeviceCode = deps.getDeviceCodeFn ?? defaultGetDeviceCodeFn
+	const scheduleAgentRefresh =
+		deps.scheduleAgentRefreshFn ?? defaultScheduleAgentRefreshFn
+	const getAgentRefreshStatus =
+		deps.getAgentRefreshStatusFn ?? defaultGetAgentRefreshStatusFn
+
+	/**
+	 * Phase 267-03 — fire the debounced liv-assistant restart, best-effort. The
+	 * auth/setApiKey result is ALREADY locked in by the time this runs; a refresh
+	 * scheduling failure must NEVER bubble up and invalidate that success. Any
+	 * throw is caught + logged + swallowed here (scheduleAgentRefresh itself is
+	 * designed to be non-throwing, but this is defense-in-depth).
+	 */
+	const triggerAgentRefresh = (): void => {
+		try {
+			scheduleAgentRefresh()
+		} catch (err) {
+			deps.logger.warn(
+				'[cli-installer] scheduleAgentRefresh threw (non-fatal — auth/key write already succeeded)',
+				err,
+			)
+		}
+	}
 	// Plan 240-01 drift-lock T14: declaration order = [detect, install, auth].
 	// Phase 267-01 appends [setApiKey, getAuthMethod, getDeviceCode] (additive).
 	return router({
@@ -179,7 +232,13 @@ export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 		auth: adminProcedure.input(NameInput).mutation(async ({input, ctx}) => {
 			assertWhitelisted(input.name)
 			const auditLog = deps.auditLogFactory ? deps.auditLogFactory(ctx) : undefined
-			return auth({name: input.name}, {logger: deps.logger, auditLog})
+			const result = await auth({name: input.name}, {logger: deps.logger, auditLog})
+			// Phase 267-03 — ONLY on a genuinely successful device-flow login do we
+			// schedule the (debounced, best-effort) liv-assistant restart so AionUi
+			// re-scans and the agent flips Failed→ready. A failed/timed-out auth must
+			// NOT churn AionUi.
+			if (result.ok) triggerAgentRefresh()
+			return result
 		}),
 		// Phase 267-01 — write an operator-pasted API key to the CLI's own
 		// config/env file (writeApiKey; 0600; no spawn). The whitelist guard runs
@@ -189,7 +248,13 @@ export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 			.input(SetApiKeyInput)
 			.mutation(async ({input}) => {
 				assertWhitelisted(input.name)
-				return writeApiKey({name: input.name, key: input.key})
+				const result = await writeApiKey({name: input.name, key: input.key})
+				// Phase 267-03 — on a successful key write, schedule the debounced
+				// restart too (api-key CLIs PATH-resolve the same way; AionUi must
+				// re-scan to flip them Failed→ready). Best-effort; the key write stands
+				// regardless of the restart outcome.
+				if (result.ok) triggerAgentRefresh()
+				return result
 			}),
 		// Phase 267-01 — the UI branch contract (apikey | device | browser | n/a)
 		// + the canonical login argv / api-key env label for the given CLI.
@@ -217,6 +282,19 @@ export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 				}
 				return null
 			}),
+		// Phase 267-03 — the UI polls this after auth/setApiKey success to show
+		// "Applying…" while the debounced liv-assistant restart is in flight.
+		// Reads `liv:cli:agent-refresh` ('restarting' | 'done' | null). No input —
+		// the refresh is a single process-wide debounce, not per-CLI.
+		agentRefreshStatus: adminProcedure.query(
+			async (): Promise<{status: 'restarting' | 'done' | 'idle'}> => {
+				const raw = await getAgentRefreshStatus()
+				if (raw === 'restarting' || raw === 'done') {
+					return {status: raw}
+				}
+				return {status: 'idle'}
+			},
+		),
 	})
 }
 

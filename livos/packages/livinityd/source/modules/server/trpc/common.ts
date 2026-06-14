@@ -738,6 +738,11 @@ export const httpOnlyPaths = [
 	'cliInstaller.setApiKey',
 	'cliInstaller.getAuthMethod',
 	'cliInstaller.getDeviceCode',
+	// Phase 267-03 — agentRefreshStatus: polled by the dialog after auth/setApiKey
+	// success to show "Applying…" while the debounced liv-assistant restart runs.
+	// HTTP for namespace locality with the rest of cliInstaller.* (precedent
+	// above); a flaky WS post-`systemctl restart livos` would stall the poll.
+	'cliInstaller.agentRefreshStatus',
 	// Phase 246-03 — pty-sessions admin namespace (listSessions + killSession).
 	// adminProcedure-gated mutations from the future "Active terminals"
 	// admin UI (deferred to Phase 246-05). HTTP-only per the standard
