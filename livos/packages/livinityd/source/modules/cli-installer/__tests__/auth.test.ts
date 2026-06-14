@@ -66,6 +66,44 @@ function makeFakeChild(): FakeChild {
 	return child
 }
 
+// Phase 269-02 — a fake MinimalPty for the pty-backed (paste-back / claude) path.
+// node-pty's surface is onData/onExit/write/resize/kill — a PTY has NO `.stdin`
+// stream (you write to the handle itself). The fake records data/exit callbacks so
+// tests can drive the merged stream + completion, and spies `write`/`kill`.
+interface FakePty {
+	onData: ReturnType<typeof vi.fn>
+	onExit: ReturnType<typeof vi.fn>
+	write: ReturnType<typeof vi.fn>
+	resize: ReturnType<typeof vi.fn>
+	kill: ReturnType<typeof vi.fn>
+	// test drivers (call the captured callbacks)
+	emitData(chunk: string): void
+	emitExit(exitCode: number, signal?: string | null): void
+}
+
+function makeFakePty(): FakePty {
+	let dataCb: ((chunk: string) => void) | null = null
+	let exitCb: ((info: {exitCode: number; signal: string | null}) => void) | null = null
+	const pty: FakePty = {
+		onData: vi.fn((cb: (chunk: string) => void) => {
+			dataCb = cb
+		}),
+		onExit: vi.fn((cb: (info: {exitCode: number; signal: string | null}) => void) => {
+			exitCb = cb
+		}),
+		write: vi.fn((_data: string) => undefined),
+		resize: vi.fn((_c: number, _r: number) => undefined),
+		kill: vi.fn(() => undefined),
+		emitData(chunk: string) {
+			dataCb?.(chunk)
+		},
+		emitExit(exitCode: number, signal: string | null = null) {
+			exitCb?.({exitCode, signal})
+		},
+	}
+	return pty
+}
+
 interface MockRedis {
 	set: ReturnType<typeof vi.fn>
 }
@@ -470,7 +508,7 @@ describe('sendAuthInput — whitelist guard FIRST (D-239-07 RCE boundary)', () =
 		// A child IS registered under a real name — the throw must happen before
 		// the registry is even consulted (whitelist guard is the first statement).
 		const child = makeFakeChild()
-		registerLiveAuth('claude-code', child as any)
+		registerLiveAuth('claude-code', {kind: 'child', child: child as any})
 		await expect(
 			sendAuthInput({name: 'not-a-cli' as CliName, code: 'X'}, makeSendDeps()),
 		).rejects.toThrow(/not in whitelist|CLI not in whitelist/i)
@@ -482,7 +520,7 @@ describe('sendAuthInput — whitelist guard FIRST (D-239-07 RCE boundary)', () =
 describe('sendAuthInput — write to live child stdin', () => {
 	test("writes 'ABC123\\n' to the registered child's stdin exactly once → {ok:true}", async () => {
 		const child = makeFakeChild()
-		registerLiveAuth('claude-code', child as any)
+		registerLiveAuth('claude-code', {kind: 'child', child: child as any})
 		const res = await sendAuthInput(
 			{name: 'claude-code', code: 'ABC123'},
 			makeSendDeps(),
@@ -503,7 +541,7 @@ describe('sendAuthInput — write to live child stdin', () => {
 	test('with a registered child whose stdin.destroyed === true → {ok:false}', async () => {
 		const child = makeFakeChild()
 		child.stdin.destroyed = true
-		registerLiveAuth('claude-code', child as any)
+		registerLiveAuth('claude-code', {kind: 'child', child: child as any})
 		const res = await sendAuthInput(
 			{name: 'claude-code', code: 'X'},
 			makeSendDeps(),
@@ -516,7 +554,7 @@ describe('sendAuthInput — write to live child stdin', () => {
 describe('sendAuthInput — never log the pasted code (it may be a bearer token)', () => {
 	test('logs ONLY the char length, never the literal code string', async () => {
 		const child = makeFakeChild()
-		registerLiveAuth('claude-code', child as any)
+		registerLiveAuth('claude-code', {kind: 'child', child: child as any})
 		const deps = makeSendDeps()
 		await sendAuthInput({name: 'claude-code', code: 'ABC123'}, deps)
 		const allLogArgs = [
@@ -539,7 +577,7 @@ describe('sendAuthInput — never log the pasted code (it may be a bearer token)
 describe('sendAuthInput — defensive bounds', () => {
 	test('strips trailing CR/LF → writes exactly one trailing newline', async () => {
 		const child = makeFakeChild()
-		registerLiveAuth('claude-code', child as any)
+		registerLiveAuth('claude-code', {kind: 'child', child: child as any})
 		await sendAuthInput(
 			{name: 'claude-code', code: 'CODE-99\r\n'},
 			makeSendDeps(),
@@ -549,7 +587,7 @@ describe('sendAuthInput — defensive bounds', () => {
 
 	test('caps a > 4096-char code to 4096 before appending the newline', async () => {
 		const child = makeFakeChild()
-		registerLiveAuth('claude-code', child as any)
+		registerLiveAuth('claude-code', {kind: 'child', child: child as any})
 		const huge = 'A'.repeat(5000)
 		await sendAuthInput({name: 'claude-code', code: huge}, makeSendDeps())
 		const written = (child.stdin.write as ReturnType<typeof vi.fn>).mock
@@ -564,8 +602,8 @@ describe('registerLiveAuth — single-in-flight per CLI', () => {
 	test('registering a second child for the same name SIGKILLs the prior child', async () => {
 		const childA = makeFakeChild()
 		const childB = makeFakeChild()
-		registerLiveAuth('claude-code', childA as any)
-		registerLiveAuth('claude-code', childB as any)
+		registerLiveAuth('claude-code', {kind: 'child', child: childA as any})
+		registerLiveAuth('claude-code', {kind: 'child', child: childB as any})
 		// Prior child killed.
 		expect(childA.kill).toHaveBeenCalledWith('SIGKILL')
 		// Registry now holds childB — a write lands on childB, not childA.
@@ -578,7 +616,7 @@ describe('registerLiveAuth — single-in-flight per CLI', () => {
 describe('registerLiveAuth — natural-exit cleanup', () => {
 	test("emitting 'exit' removes the child from the registry", async () => {
 		const child = makeFakeChild()
-		registerLiveAuth('claude-code', child as any)
+		registerLiveAuth('claude-code', {kind: 'child', child: child as any})
 		// Natural exit → registry entry dropped.
 		child.emit('exit', 0)
 		const res = await sendAuthInput(
@@ -593,7 +631,7 @@ describe('registerLiveAuth — stranded-child timeout teardown', () => {
 	test('after AUTH_TIMEOUT_MS the child is SIGKILLed and removed from the registry', async () => {
 		vi.useFakeTimers()
 		const child = makeFakeChild()
-		registerLiveAuth('claude-code', child as any)
+		registerLiveAuth('claude-code', {kind: 'child', child: child as any})
 		await vi.advanceTimersByTimeAsync(AUTH_TIMEOUT_MS + 1000)
 		expect(child.kill).toHaveBeenCalledWith('SIGKILL')
 		// Registry no longer holds it.
@@ -602,6 +640,154 @@ describe('registerLiveAuth — stranded-child timeout teardown', () => {
 			makeSendDeps(),
 		)
 		expect(res).toEqual({ok: false})
+	})
+})
+
+// ───────────────────────────────────────────────────────────────────────────
+// Phase 269-02 Task 1 — LiveAuth child|pty discriminated union.
+// The registry now backs a login with EITHER a child_process (device-poll CLIs,
+// unchanged) OR a node-pty (paste-back CLIs like claude that need a real TTY).
+// sendAuthInput writes `code + '\r'` to a pty (TTY line discipline submits on CR)
+// and the existing `code + '\n'` to a child's stdin. All teardown (single-in-
+// flight kill, 300s timeout, natural-exit cleanup) works for BOTH backings.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe('Phase 269-02 — registerLiveAuth accepts a pty backing', () => {
+	test("registering a {kind:'pty'} backing lets sendAuthInput write to it", async () => {
+		const pty = makeFakePty()
+		registerLiveAuth('claude-code', {kind: 'pty', pty: pty as any})
+		const res = await sendAuthInput(
+			{name: 'claude-code', code: 'PTYCODE'},
+			makeSendDeps(),
+		)
+		expect(res).toEqual({ok: true})
+		expect(pty.write).toHaveBeenCalledTimes(1)
+	})
+
+	test('a second login for the same name kills the prior PTY backing (single-in-flight)', async () => {
+		const ptyA = makeFakePty()
+		const ptyB = makeFakePty()
+		registerLiveAuth('claude-code', {kind: 'pty', pty: ptyA as any})
+		registerLiveAuth('claude-code', {kind: 'pty', pty: ptyB as any})
+		// Prior pty killed via MinimalPty.kill() (NOT child.kill('SIGKILL')).
+		expect(ptyA.kill).toHaveBeenCalledTimes(1)
+		// Registry now holds ptyB — a write lands on ptyB.
+		await sendAuthInput({name: 'claude-code', code: 'XY'}, makeSendDeps())
+		expect(ptyB.write).toHaveBeenCalledWith('XY\r')
+		expect(ptyA.write).not.toHaveBeenCalled()
+	})
+
+	test('a child backing replacing a prior PTY backing kills the pty via .kill()', async () => {
+		const pty = makeFakePty()
+		const child = makeFakeChild()
+		registerLiveAuth('claude-code', {kind: 'pty', pty: pty as any})
+		registerLiveAuth('claude-code', {kind: 'child', child: child as any})
+		expect(pty.kill).toHaveBeenCalledTimes(1)
+	})
+
+	test('a pty backing replacing a prior CHILD backing SIGKILLs the child', async () => {
+		const child = makeFakeChild()
+		const pty = makeFakePty()
+		registerLiveAuth('claude-code', {kind: 'child', child: child as any})
+		registerLiveAuth('claude-code', {kind: 'pty', pty: pty as any})
+		expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+	})
+
+	test('_resetLiveAuthsForTests kills a pty backing too', async () => {
+		const pty = makeFakePty()
+		registerLiveAuth('claude-code', {kind: 'pty', pty: pty as any})
+		_resetLiveAuthsForTests()
+		expect(pty.kill).toHaveBeenCalledTimes(1)
+		// Registry empty afterwards.
+		const res = await sendAuthInput(
+			{name: 'claude-code', code: 'X'},
+			makeSendDeps(),
+		)
+		expect(res).toEqual({ok: false})
+	})
+
+	test('after AUTH_TIMEOUT_MS a stranded PTY login is killed + removed', async () => {
+		vi.useFakeTimers()
+		const pty = makeFakePty()
+		registerLiveAuth('claude-code', {kind: 'pty', pty: pty as any})
+		await vi.advanceTimersByTimeAsync(AUTH_TIMEOUT_MS + 1000)
+		expect(pty.kill).toHaveBeenCalledTimes(1)
+		const res = await sendAuthInput(
+			{name: 'claude-code', code: 'X'},
+			makeSendDeps(),
+		)
+		expect(res).toEqual({ok: false})
+	})
+})
+
+describe('Phase 269-02 — sendAuthInput writes CR to a pty, LF to a child', () => {
+	test("pty backing → writes exactly `code + '\\r'` (CR, not LF)", async () => {
+		const pty = makeFakePty()
+		registerLiveAuth('claude-code', {kind: 'pty', pty: pty as any})
+		const res = await sendAuthInput(
+			{name: 'claude-code', code: 'ABC123'},
+			makeSendDeps(),
+		)
+		expect(res).toEqual({ok: true})
+		expect(pty.write).toHaveBeenCalledTimes(1)
+		expect(pty.write).toHaveBeenCalledWith('ABC123\r')
+	})
+
+	test('pty backing → strips trailing CR/LF before appending exactly one CR', async () => {
+		const pty = makeFakePty()
+		registerLiveAuth('claude-code', {kind: 'pty', pty: pty as any})
+		await sendAuthInput(
+			{name: 'claude-code', code: 'CODE-99\r\n'},
+			makeSendDeps(),
+		)
+		expect(pty.write).toHaveBeenCalledWith('CODE-99\r')
+	})
+
+	test('pty backing → caps a > 4096-char code to 4096 before the CR', async () => {
+		const pty = makeFakePty()
+		registerLiveAuth('claude-code', {kind: 'pty', pty: pty as any})
+		const huge = 'A'.repeat(5000)
+		await sendAuthInput({name: 'claude-code', code: huge}, makeSendDeps())
+		const written = (pty.write as ReturnType<typeof vi.fn>).mock
+			.calls[0][0] as string
+		expect(written.length).toBe(4097) // 4096 chars + one '\r'
+		expect(written.endsWith('\r')).toBe(true)
+		expect(written.slice(0, 4096)).toBe('A'.repeat(4096))
+	})
+
+	test("child backing STILL writes `code + '\\n'` (LF) — unchanged behavior", async () => {
+		const child = makeFakeChild()
+		registerLiveAuth('claude-code', {kind: 'child', child: child as any})
+		await sendAuthInput({name: 'claude-code', code: 'ABC123'}, makeSendDeps())
+		expect(child.stdin.write).toHaveBeenCalledWith('ABC123\n')
+	})
+
+	test('pty backing → never logs the pasted code, only its char length', async () => {
+		const pty = makeFakePty()
+		registerLiveAuth('claude-code', {kind: 'pty', pty: pty as any})
+		const deps = makeSendDeps()
+		await sendAuthInput({name: 'claude-code', code: 'SECRET99'}, deps)
+		const allLogArgs = [
+			...(deps.logger.info as ReturnType<typeof vi.fn>).mock.calls,
+			...(deps.logger.warn as ReturnType<typeof vi.fn>).mock.calls,
+			...(deps.logger.error as ReturnType<typeof vi.fn>).mock.calls,
+		].flat()
+		for (const arg of allLogArgs) {
+			expect(String(arg)).not.toContain('SECRET99')
+		}
+		const infoJoined = (deps.logger.info as ReturnType<typeof vi.fn>).mock.calls
+			.flat()
+			.join(' ')
+		expect(infoJoined).toContain('8') // 'SECRET99'.length === 8
+	})
+
+	test('whitelist guard is STILL first — unknown name throws before pty lookup', async () => {
+		const pty = makeFakePty()
+		registerLiveAuth('claude-code', {kind: 'pty', pty: pty as any})
+		await expect(
+			sendAuthInput({name: 'not-a-cli' as CliName, code: 'X'}, makeSendDeps()),
+		).rejects.toThrow(/not in whitelist|CLI not in whitelist/i)
+		expect(pty.write).not.toHaveBeenCalled()
 	})
 })
 
