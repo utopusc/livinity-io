@@ -4809,6 +4809,6 @@ Plans:
 - [x] 269-01-PLAN.md — WS1 manual apply: kill the restart storm (pending flag + applyAgentChanges/hasPendingAgentChanges + Apply button in dialog + panel) [wave 1] — ✅ DONE 2026-06-14 (4 commits `8cc4ce01`..`378cdb5e`; router 56/56 + caddy 128/128 vitest + vite gate exit 0; CODE ONLY)
 - [x] 269-02-PLAN.md — WS2 claude OAuth paste-back via node-pty (real TTY; child|pty registry union; api-key fallback intact) [wave 2] — ✅ DONE 2026-06-14 (5 commits `8c3fc74b`..`23c20668`; TDD RED→GREEN ×2 + wiring; cli-installer vitest 161/161; tsc 320 baseline zero delta; CODE ONLY)
 - [x] 269-03-PLAN.md — WS3 auth-gated agent list (Caddy @liv_agents carve-out + livinityd overlay route, fail-open; operator live-verify) [wave 3, autonomous:false] — ✅ DONE 2026-06-14 (4 commits `f0b6c586`..`420a5b0b`; TDD RED→GREEN + 2 feat; agents-overlay 12/12 + caddy 132/132 + cli-installer 173/173 = 305 tests; tsc 320 baseline zero delta; CODE ONLY — operator curl-matrix live-verify DEFERRED)
-- [ ] 269-04-PLAN.md — WS4 use AionUi /api/assets/logos icons in <AgentLogo> + panel renderIcon with onerror cascade [wave 4]
+- [x] 269-04-PLAN.md — WS4 use AionUi /api/assets/logos icons in <AgentLogo> + panel renderIcon with onerror cascade [wave 4] — ✅ DONE 2026-06-14 (2 commits `b4f53a71`,`10c2fe4f`; aionuiSrc 2-step cascade in <AgentLogo> + 3-tier renderIcon (AionUi → /agent-logos/<logo>.svg → monogram) + aionuiLogo on all 20 CLI_META; `pnpm config+ui` vite gate exit 0 + `node --check` PASS; 269-01 Apply-bar untouched; CODE ONLY, FRONTEND) — **Phase 269 COMPLETE**
 
 ---
