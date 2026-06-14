@@ -16,8 +16,11 @@
 //     `=== 'ok'` would wrongly re-hide a still-working agent (pitfall P-2). The
 //     POSITIVE 'ok' signal is weak; the NEGATIVE 'failed' signal is the only
 //     reliable "definitely not signed in" marker. So key-ABSENCE means "kept".
-//   - aion-cli (binary_name 'aion') is the built-in Liv backend — it has no
-//     external auth and is ALWAYS shown.
+//   - aion-cli (binary_name 'aion') is AionUi's built-in 'aionrs' agent. Per
+//     operator request (269.1) it is hidden UNCONDITIONALLY — it must never
+//     appear in the Liv AI picker (even on the fail-open path). update.sh sets
+//     the default selected agent to Claude Code, so hiding aion never strands
+//     the chat.
 //   - An agent whose binary_name is not in BIN_TO_CLI_NAME is a non-LivOS agent
 //     the operator added manually — we show what we don't manage (assumption A3).
 //   - FAIL-OPEN (pitfall P-3): the I/O caller (the Express overlay route, Task 3)
@@ -40,7 +43,7 @@ export const BIN_TO_CLI_NAME: Readonly<Record<string, CliName>> = Object.fromEnt
 	(Object.entries(CLI_BIN_NAMES) as Array<[CliName, string]>).map(([cli, bin]) => [bin, cli]),
 ) as Record<string, CliName>
 
-/** The built-in Liv backend — no external auth, always shown. */
+/** AionUi's built-in 'aionrs' agent — hidden unconditionally (operator 269.1). */
 const AION_BINARY_NAME = 'aion'
 
 /**
@@ -72,8 +75,9 @@ function binaryNameOf(a: AionuiAgent): string {
 function isReady(a: AionuiAgent, authMap: Map<CliName, string>): boolean {
 	const bin = binaryNameOf(a)
 
-	// aion-cli is the built-in Liv backend — always ready.
-	if (bin === AION_BINARY_NAME) return true
+	// aion-cli is hidden unconditionally in buildAgentsOverlay (operator 269.1);
+	// defensive guard here in case isReady is ever called on it directly.
+	if (bin === AION_BINARY_NAME) return false
 
 	const cliName = BIN_TO_CLI_NAME[bin]
 	// Unknown binary_name → a non-LivOS agent we don't manage → keep unfiltered.
@@ -104,17 +108,21 @@ export function buildAgentsOverlay(
 	authMap: Map<CliName, string> | null,
 	mode: OverlayMode = 'filter',
 ): AionuiAgent[] {
-	// FAIL-OPEN: Redis unavailable → return the AionUi list VERBATIM (same array
-	// reference) so the picker is never emptied by an infra hiccup (P-3).
-	if (authMap === null) return aionuiAgents
+	// Phase 269.1 (operator request) — Aion CLI is hidden UNCONDITIONALLY. Drop
+	// it FIRST, before the fail-open path, so it is gone even when Redis is down.
+	const visible = aionuiAgents.filter((a) => binaryNameOf(a) !== AION_BINARY_NAME)
+
+	// FAIL-OPEN: Redis unavailable → return the (aion-stripped) list VERBATIM so
+	// the picker is never emptied by an infra hiccup (P-3).
+	if (authMap === null) return visible
 
 	if (mode === 'badge') {
 		// Annotate each agent with a `liv_not_authed` flag; never hide. This is
 		// the future vendored-picker pass — the route ships 'filter' today.
-		return aionuiAgents.map((a) =>
+		return visible.map((a) =>
 			isReady(a, authMap) ? a : {...a, liv_not_authed: true},
 		)
 	}
 
-	return aionuiAgents.filter((a) => isReady(a, authMap))
+	return visible.filter((a) => isReady(a, authMap))
 }
