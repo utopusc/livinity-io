@@ -636,24 +636,24 @@ export const httpOnlyPaths = [
 	'auth.xai.status',
 	'auth.xai.waitForCompletion',
 	'auth.xai.disconnect',
-	// Phase 196-04 — `setup.setRegion` onboarding mutation. Persists the
-	// operator's region selection (and optionally a country sub-pick) to
-	// Redis. HTTP-only so the mutation survives a WS reconnect mid-
-	// onboarding (memory pitfall B-12 / X-04 cluster — same rationale as
-	// the auth.xai.* family directly above).
-	'setup.setRegion',
-	// Phase 196-05 — `setup.setLocaleTimezone` onboarding mutation.
-	// Invokes systemd timedatectl via the narrow sudoers TIMEDATECTL
-	// Cmnd_Alias + double-writes liv:user:timezone + liv:user:locale.
-	// The execFile call can take 1-3s on a cold Mini PC; HTTP-only so
-	// the mutation survives WS reconnect (memory pitfall B-12 / X-04
-	// cluster — same rationale as setup.setRegion directly above).
-	'setup.setLocaleTimezone',
 	// Phase 196.1 — `setup.setLocation` merged Country+City onboarding mutation.
-	// Same systemd timedatectl propagation as setLocaleTimezone plus 5-key
-	// Redis batch persist. HTTP-only for the same reason — survives WS
-	// reconnect across systemctl restart livos windows.
+	// Invokes systemd timedatectl via the narrow sudoers TIMEDATECTL Cmnd_Alias
+	// plus a 5-key Redis batch persist; the execFile call can take 1-3s on a
+	// cold Mini PC. HTTP-only so the mutation survives a WS reconnect mid-
+	// onboarding (memory pitfall B-12 / X-04 cluster — same rationale as the
+	// auth.xai.* family directly above).
+	// (Phase 271 removed the dead setup.setRegion + setup.setLocaleTimezone
+	//  entries — both procedures were deleted from setup-router.ts.)
 	'setup.setLocation',
+	// Phase 271 — `setup.getLocation` read-back QUERY (navbar clock + Settings
+	// Date & Time render the SELECTED city/timezone + hour-cycle). Page-render
+	// dependency kept on HTTP to avoid the WS-handshake-delay flicker
+	// (precedent: webapp.list / agents.list).
+	'setup.getLocation',
+	// Phase 271 — `setup.setClockFormat` 24h⇄AM/PM mutation. Writes
+	// liv:user:hour_cycle. HTTP-only so it survives WS reconnect across the
+	// systemctl restart livos window (same rationale as setup.setLocation).
+	'setup.setClockFormat',
 	// Phase 197-05 — Liv AI Mastra tRPC namespace. 5 adminProcedure routes
 	// (mastra.agent.stream / approve / cancel / threads.list / threads.delete).
 	// All 5 paths route via HTTP because:
