@@ -1445,6 +1445,7 @@ class Server {
 			// if the join/filter step is what failed.
 			let aionuiBody: unknown
 			let aionuiIsWrapped = false
+			let aionuiDataWrapped = false
 			let aionuiAgents: AionuiAgent[] = []
 			try {
 				const res = await fetch('http://127.0.0.1:3020/api/agents')
@@ -1455,8 +1456,12 @@ class Server {
 					return response.status(res.status).type('application/json').send(text)
 				}
 				aionuiBody = await res.json()
-				// AionUi returns EITHER a bare array OR {agents:[...]} (mirror the
-				// agent-refresh.ts probe's body-shape handling).
+				// AionUi returns one of: a bare array, {agents:[...]}, OR
+				// {success, data:[...]} (the ACTUAL vendored v2.1.14 shape). The
+				// original 269-03 only handled the first two, so the real
+				// {success,data} body fell through to the verbatim path below and
+				// the overlay NEVER filtered — leaving Aion + unauthed agents in
+				// the picker (caught in Phase 270 live-UAT). Handle all three.
 				if (Array.isArray(aionuiBody)) {
 					aionuiAgents = aionuiBody as AionuiAgent[]
 				} else if (
@@ -1466,6 +1471,13 @@ class Server {
 				) {
 					aionuiIsWrapped = true
 					aionuiAgents = (aionuiBody as {agents: AionuiAgent[]}).agents
+				} else if (
+					aionuiBody &&
+					typeof aionuiBody === 'object' &&
+					Array.isArray((aionuiBody as {data?: unknown[]}).data)
+				) {
+					aionuiDataWrapped = true
+					aionuiAgents = (aionuiBody as {data: AionuiAgent[]}).data
 				} else {
 					// Unrecognized shape — return it verbatim (fail-open).
 					return response.json(aionuiBody)
@@ -1514,6 +1526,9 @@ class Server {
 			const filtered = buildAgentsOverlay(aionuiAgents, authMap, 'filter')
 
 			// Return AionUi's OWN shape so the SPA is none the wiser.
+			if (aionuiDataWrapped) {
+				return response.json({...(aionuiBody as object), data: filtered})
+			}
 			if (aionuiIsWrapped) {
 				return response.json({...(aionuiBody as object), agents: filtered})
 			}
