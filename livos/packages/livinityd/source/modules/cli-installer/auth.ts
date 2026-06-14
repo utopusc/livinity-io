@@ -113,6 +113,22 @@ export function registerLiveAuth(name: CliName, child: ChildProcess): void {
 		}
 	}, AUTH_TIMEOUT_MS)
 	;(timeout as {unref?: () => void}).unref?.()
+	// WR-01 (crash safety): attach a best-effort 'error' listener to the child's
+	// stdin so a broken pipe (the login process exits between sendAuthInput's
+	// !destroyed guard and the write) emits a HANDLED error event instead of an
+	// uncaught one that would crash livinityd. The pasted code is never in scope
+	// here, so nothing secret can be logged. Guarded for the fake-child test stdin
+	// (a plain {write,destroyed} object with no EventEmitter surface).
+	const stdin = child.stdin as {on?: (ev: string, cb: (err: Error) => void) => void} | null
+	if (stdin && typeof stdin.on === 'function') {
+		stdin.on('error', (err) => {
+			// Swallow/log only — NEVER the pasted code (not in scope here anyway),
+			// only the CLI name + the stream error message. registerLiveAuth has no
+			// injected logger, so console.warn is the best-effort sink (the write
+			// side in sendAuthInput also try/catches as belt-and-suspenders).
+			console.warn(`[cli-installer] live-auth stdin error for ${name}: ${err.message}`)
+		})
+	}
 	liveAuths.set(name, {child, createdAt: Date.now(), timeout})
 	child.on('exit', () => {
 		const cur = liveAuths.get(name)
@@ -160,7 +176,19 @@ export async function sendAuthInput(
 	}
 	// 2. Strip trailing CR/LF (we append exactly one '\n') + cap length defensively.
 	const safe = input.code.replace(/[\r\n]+$/g, '').slice(0, MAX_PASTE_CODE_CHARS)
-	live.child.stdin.write(safe + '\n')
+	// WR-01 (crash safety): the stdin stream can be destroyed AFTER the !destroyed
+	// guard above (the login process exits in that narrow window) — `write` then
+	// throws synchronously on a broken pipe. Wrap it so we resolve {ok:false}
+	// instead of letting the throw escape. The catch NEVER logs the code (bearer
+	// token) — only the CLI name + the error message.
+	try {
+		live.child.stdin.write(safe + '\n')
+	} catch (err) {
+		deps.logger.warn(
+			`[cli-installer] sendAuthInput stdin write failed for ${input.name}: ${err instanceof Error ? err.message : String(err)}`,
+		)
+		return {ok: false}
+	}
 	// NEVER log the code (it may be a bearer token) — only its char length.
 	deps.logger.info(
 		`[cli-installer] sendAuthInput wrote ${safe.length} chars to ${input.name} stdin`,
