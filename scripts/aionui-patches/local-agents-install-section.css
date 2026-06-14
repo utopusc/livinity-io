@@ -231,3 +231,18 @@ html[data-theme="dark"] #liv-240-install-section .liv-240-row {
 html[data-theme="dark"] #liv-240-install-section .liv-240-row:hover {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Phase 270 — hide AionUi's OWN native Local Agents agent cards so the LivOS
+ * #liv-240-install-section grid is the SOLE list ("one place", operator v44.6).
+ * The JS (local-agents-install-section.js hideNativeStrip → mount) adds this
+ * class to every direct child of the Local Agents tabpanel EXCEPT our own
+ * #liv-240-install-section, so only AionUi's native "Detected" strip is
+ * hidden — never our grid. Unique phase-prefixed class = no arco collision
+ * (MEMORY: feedback_css_class_collision_namespace). !important overrides
+ * AionUi's inline/arco display. Fail-safe: if the JS marks nothing (no native
+ * cards found), this rule simply matches nothing and the grid still renders.
+ * ───────────────────────────────────────────────────────────────────────── */
+.liv-270-native-hidden {
+  display: none !important;
+}
