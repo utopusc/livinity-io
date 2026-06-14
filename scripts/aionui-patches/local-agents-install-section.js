@@ -35,6 +35,16 @@
     'kimi-cli', 'mistral-vibe', 'hermes-agent', 'nanobot', 'snow-cli', 'kiro'
   ];
 
+  // -------------------------------------------------------------------------
+  // Phase 270 — Aion CLI is hidden in the panel, byte-consistent with the
+  // 269.1 picker overlay (agents-overlay.ts:47,113 → AION_BINARY_NAME='aion';
+  // drift-lock CLI_BIN_NAMES['aion-cli']==='aion'). aion-cli STAYS in the
+  // canonical SUPPORTED_CLIS 20-tuple (drift-lock with install-scripts.ts);
+  // we exclude it ONLY at render/hydrate time so no row is built or wired.
+  // -------------------------------------------------------------------------
+  var HIDDEN_CLIS = { 'aion-cli': true };
+  var VISIBLE_CLIS = SUPPORTED_CLIS.filter(function (c) { return !HIDDEN_CLIS[c]; });
+
   // CLI display metadata. authHidden:true => no Auth button rendered.
   // Phase 267-02: the Wave-C CLIs now have a real auth method (the dialog
   // branches on cliInstaller.getAuthMethod — device for kimi-cli/kiro, apikey
@@ -458,7 +468,7 @@
     wireApplyBar(section);
     refreshApplyBar(section);
     window.addEventListener('focus', function () { refreshApplyBar(section); });
-    for (var i = 0; i < SUPPORTED_CLIS.length; i++) {
+    for (var i = 0; i < VISIBLE_CLIS.length; i++) {
       (function (name) {
         var row = section.querySelector('[data-cli="' + name + '"]');
         if (!row) return;
@@ -537,7 +547,7 @@
         if (redetectBtn) {
           redetectBtn.addEventListener('click', function () { reDetect(); });
         }
-      })(SUPPORTED_CLIS[i]);
+      })(VISIBLE_CLIS[i]);
     }
   }
 
@@ -568,8 +578,8 @@
       }, ['Apply changes'])
     ]);
     section.appendChild(applyBar);
-    for (var i = 0; i < SUPPORTED_CLIS.length; i++) {
-      section.appendChild(renderRow(SUPPORTED_CLIS[i]));
+    for (var i = 0; i < VISIBLE_CLIS.length; i++) {
+      section.appendChild(renderRow(VISIBLE_CLIS[i]));
     }
     return section;
   }
@@ -600,10 +610,31 @@
     return null;
   }
 
+  // Phase 270 — hide AionUi's OWN native Local Agents agent cards so the LivOS
+  // #liv-240-install-section grid is the SOLE list (operator: "one place").
+  // Resilient + fail-safe (R3/R9): we mark every DIRECT child of the located
+  // tabpanel that is NOT our section (and not already marked) with the
+  // CSS-hide class. Our sentinel section is always skipped, so re-mounts and
+  // the MutationObserver self-heal stay safe. If the panel has no other
+  // children, nothing is hidden and our grid still renders correctly.
+  function hideNativeStrip(panel) {
+    if (!panel || !panel.children) return;
+    var kids = panel.children;
+    for (var i = 0; i < kids.length; i++) {
+      var k = kids[i];
+      if (!k || k.id === SENTINEL_ID) continue;            // never our own grid
+      if (k.classList && !k.classList.contains('liv-270-native-hidden')) {
+        k.classList.add('liv-270-native-hidden');
+      }
+    }
+  }
+
   function mount() {
-    if (document.getElementById(SENTINEL_ID)) return true;
-    var panel = findTabPanel();
+    var existing = document.getElementById(SENTINEL_ID);
+    var panel = existing ? existing.parentElement : findTabPanel();
     if (!panel) return false;
+    hideNativeStrip(panel);
+    if (existing) return true;
     var section = renderSection();
     panel.appendChild(section);
     hydrate(section);
