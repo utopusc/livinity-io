@@ -31,13 +31,17 @@
     'codex', 'qwen-code', 'augment', 'github-copilot', 'codebuddy', 'qoder-cli',
     // Wave B (curl-installer)
     'goose', 'factory-droid', 'cursor-agent',
-    // Wave C (install-only / authHidden)
+    // Wave C — Phase 267-02: now auth-able via the no-terminal dialog
     'kimi-cli', 'mistral-vibe', 'hermes-agent', 'nanobot', 'snow-cli', 'kiro'
   ];
 
-  // CLI display metadata. authHidden:true => no Auth button rendered (Plan
-  // 240-01 AUTH_UNSUPPORTED short-circuit). aion-cli + the 6 Wave C CLIs are
-  // authHidden (null CLI_AUTH_COMMANDS in auth.ts).
+  // CLI display metadata. authHidden:true => no Auth button rendered.
+  // Phase 267-02: the Wave-C CLIs now have a real auth method (the dialog
+  // branches on cliInstaller.getAuthMethod — device for kimi-cli/kiro, apikey
+  // for mistral-vibe/nanobot/hermes-agent/snow-cli via setApiKey), so their
+  // Auth button is RENDERED and routes to the no-terminal CliAuthDialog. Only
+  // aion-cli stays authHidden — it is genuinely not auth-able (n/a branch,
+  // AionUi's embedded backend, no install/auth path).
   // GC-D — each CLI gets a brand-coloured monogram avatar (offline-safe, no
   // external logo fetch that could 404 on the box) + a card row. `color` is the
   // avatar background; `icon` is the 1-2 char monogram.
@@ -58,13 +62,15 @@
     'goose':          { label: 'Goose',          icon: 'GS', color: '#16a34a' },
     'factory-droid':  { label: 'Factory Droid',  icon: 'FD', color: '#db2777' },
     'cursor-agent':   { label: 'Cursor Agent',   icon: 'CA', color: '#334155' },
-    // Wave C (install-only / authHidden)
-    'kimi-cli':       { label: 'Kimi CLI',       icon: 'KM', color: '#4f46e5', authHidden: true },
-    'mistral-vibe':   { label: 'Mistral Vibe',   icon: 'MV', color: '#f97316', authHidden: true },
-    'hermes-agent':   { label: 'Hermes Agent',   icon: 'HM', color: '#0d9488', authHidden: true },
-    'nanobot':        { label: 'Nanobot',        icon: 'NB', color: '#475569', authHidden: true },
-    'snow-cli':       { label: 'Snow CLI',       icon: 'SN', color: '#0891b2', authHidden: true },
-    'kiro':           { label: 'Kiro',           icon: 'KI', color: '#9333ea', authHidden: true }
+    // Wave C — Phase 267-02: real auth method via the no-terminal dialog
+    // (device for kimi-cli/kiro; apikey via setApiKey for the rest). Auth
+    // button now RENDERED (authHidden removed). aion-cli above stays hidden.
+    'kimi-cli':       { label: 'Kimi CLI',       icon: 'KM', color: '#4f46e5' },
+    'mistral-vibe':   { label: 'Mistral Vibe',   icon: 'MV', color: '#f97316' },
+    'hermes-agent':   { label: 'Hermes Agent',   icon: 'HM', color: '#0d9488' },
+    'nanobot':        { label: 'Nanobot',        icon: 'NB', color: '#475569' },
+    'snow-cli':       { label: 'Snow CLI',       icon: 'SN', color: '#0891b2' },
+    'kiro':           { label: 'Kiro',           icon: 'KI', color: '#9333ea' }
   };
 
   // Locale-aware Local Agents label fallbacks (5 most common locales in
@@ -269,7 +275,10 @@
     }
   }
 
-  // Show the "running in Terminal — finish there, then Re-detect" affordance.
+  // Phase 267-02 — show the "opened in the setup dialog — finish there, then
+  // Re-detect" affordance. The shell now opens the no-terminal CliAuthDialog
+  // (NOT the Terminal) in response to our postMessage; the Re-detect button
+  // lets the operator refresh the row once the dialog flow completes.
   function setTerminalPending(row, message) {
     row.classList.remove('installing', 'authing', 'failed');
     row.classList.add('terminal');
@@ -300,39 +309,41 @@
         // Initial detect
         reDetect();
 
-        // Install handler — GC-B: run the install SCRIPT in the LivOS Terminal
-        // (a fresh tab) instead of the old headless livinityd spawn, so the
-        // operator SEES and can answer interactive install prompts. The shell
-        // maps the name → `bash /opt/livos/scripts/install/cli/<name>.sh`.
+        // Install handler — Phase 267-02: posts the CLI NAME to the shell,
+        // which opens the no-terminal CliAuthDialog (install + auth in one
+        // flow). No Terminal, no headless livinityd spawn. RCE boundary
+        // unchanged: we send only the NAME.
         var installBtn = row.querySelector('.liv-240-btn-install');
         if (installBtn) {
           installBtn.addEventListener('click', function () {
             if (postToShell('cli-install', name)) {
-              setTerminalPending(row, 'Installing in Terminal — finish there, then Re-detect');
-              installBtn.textContent = 'Open Terminal again';
+              setTerminalPending(row, 'Setup opened — finish in the dialog, then Re-detect');
+              installBtn.textContent = 'Open setup again';
             } else {
-              setRowState(row, 'failed', 'Could not open Terminal');
+              setRowState(row, 'failed', 'Could not open the setup dialog');
             }
           });
         }
 
-        // Auth handler (skipped for authHidden CLIs). G17 — interactive CLI
-        // login (OAuth / device-code) needs a real TTY; open the Terminal and
-        // run the whitelisted login command there.
+        // Auth handler (skipped only for authHidden = aion-cli). Phase 267-02:
+        // posts the CLI NAME to the shell, which opens the no-terminal
+        // CliAuthDialog. The dialog branches on cliInstaller.getAuthMethod
+        // (device shows the verification URL+code; apikey shows a paste field)
+        // — no real TTY required.
         var authBtn = row.querySelector('.liv-240-btn-auth');
         if (authBtn) {
           authBtn.addEventListener('click', function () {
             if (postToShell('cli-auth', name)) {
-              setTerminalPending(row, 'Login opened in Terminal — finish there, then Re-detect');
-              authBtn.textContent = 'Open Terminal again';
+              setTerminalPending(row, 'Sign-in opened — finish in the dialog, then Re-detect');
+              authBtn.textContent = 'Open setup again';
               authBtn.disabled = false;
             } else {
-              setRowState(row, 'failed', 'Could not open Terminal');
+              setRowState(row, 'failed', 'Could not open the setup dialog');
             }
           });
         }
 
-        // Re-detect handler — refresh row status after a terminal install/auth.
+        // Re-detect handler — refresh row status after the dialog flow.
         var redetectBtn = row.querySelector('.liv-240-btn-redetect');
         if (redetectBtn) {
           redetectBtn.addEventListener('click', function () { reDetect(); });
@@ -348,7 +359,7 @@
     var section = el('section', { id: SENTINEL_ID, className: 'liv-240-section' });
     section.appendChild(el('h3', { className: 'liv-240-heading' }, ['Available to Install']));
     section.appendChild(el('p', { className: 'liv-240-hint' }, [
-      'One-click install for the 20 supported CLI agents. Install and Auth both open the LivOS Terminal so you can answer any interactive prompts; click Re-detect when you are done.'
+      'One-click install + sign-in for the 20 supported CLI agents. Install and Auth open a guided setup dialog (no Terminal) — paste an API key or follow a device-code link right there; click Re-detect when you are done.'
     ]));
     for (var i = 0; i < SUPPORTED_CLIS.length; i++) {
       section.appendChild(renderRow(SUPPORTED_CLIS[i]));
