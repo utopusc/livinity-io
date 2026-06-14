@@ -302,32 +302,48 @@ function CliAuthDialogBody({
 		if (phase.kind !== 'auth-paste-back') return
 		if (pasteStarted.current) return
 		pasteStarted.current = true
+		// FIX 2 — if the user took the "Use an API key instead" fallback while this
+		// (possibly-stalled) login was still in flight, a late/timed-out resolution
+		// must NOT clobber the api-key success/state. Apply the result ONLY while
+		// we're still in the paste-back phase (functional updater reads live phase).
 		authM
 			.mutateAsync({name: cli})
 			.then((res) => {
 				if (res.ok) {
-					setPhase({
-						kind: 'ready',
-						message: `${labelFor(cli)} authenticated`,
-						applied: false,
-					})
+					setPhase((p) =>
+						p.kind === 'auth-paste-back'
+							? {
+									kind: 'ready',
+									message: `${labelFor(cli)} authenticated`,
+									applied: false,
+								}
+							: p,
+					)
 				} else {
 					const tail = (res.output ?? '')
 						.split('\n')
 						.slice(-3)
 						.join('\n')
 						.slice(0, 400)
-					setPhase({
-						kind: 'auth-failed',
-						message: tail || `Login failed (exit ${res.exitCode})`,
-					})
+					setPhase((p) =>
+						p.kind === 'auth-paste-back'
+							? {
+									kind: 'auth-failed',
+									message: tail || `Login failed (exit ${res.exitCode})`,
+								}
+							: p,
+					)
 				}
 			})
 			.catch((err) => {
-				setPhase({
-					kind: 'auth-failed',
-					message: err instanceof Error ? err.message : 'Login failed',
-				})
+				setPhase((p) =>
+					p.kind === 'auth-paste-back'
+						? {
+								kind: 'auth-failed',
+								message: err instanceof Error ? err.message : 'Login failed',
+							}
+						: p,
+				)
 			})
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [phase.kind, cli])
@@ -664,6 +680,25 @@ function CliAuthDialogBody({
 								<Spinner /> Waiting for the sign-in link…
 							</div>
 						)}
+						{/* 268 (FIX 2) — graceful, user-initiated fallback. If the bare
+						    headless login never prints its URL/prompt under a pipe (TTY-only
+						    — RESEARCH Open Question 1), the poll above sits on "Waiting…"
+						    forever. This subtle secondary action switches to the API-key
+						    paste flow so claude auth still works. NOT auto-switched. */}
+						{method?.apiKeyEnv ? (
+							<button
+								type='button'
+								className='block text-caption text-text-tertiary underline-offset-2 hover:underline'
+								onClick={() => {
+									pasteStarted.current = false
+									setPasteError(undefined)
+									setPasteCode('')
+									setPhase({kind: 'auth-apikey'})
+								}}
+							>
+								Use an API key instead
+							</button>
+						) : null}
 					</div>
 				)}
 

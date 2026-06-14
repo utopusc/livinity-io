@@ -184,15 +184,22 @@ export async function writeApiKey(
 		throw new Error(`CLI not in whitelist: ${String(input.name)}`)
 	}
 
-	// 2. Only apikey-branch CLIs have a key-write target.
+	// 2. Only CLIs with a real api-key write path may take a pasted key. That is
+	//    every 'apikey'-branch CLI, PLUS a 'paste-back'-branch CLI that ALSO has a
+	//    static WRITE_TARGETS entry — i.e. a CLI whose primary flow is paste-back
+	//    but that keeps an API-key FALLBACK (268 WR-04: claude-code is paste-back
+	//    with an ANTHROPIC_API_KEY → .claude/.env fallback the dialog can offer).
+	//    device/browser/n-a CLIs (no WRITE_TARGETS entry) still throw.
 	const method = CLI_AUTH_METHODS[input.name]
-	if (method.branch !== 'apikey') {
+	const target = WRITE_TARGETS[input.name]
+	const keyWriteAllowed =
+		method.branch === 'apikey' || (method.branch === 'paste-back' && !!target)
+	if (!keyWriteAllowed) {
 		throw new Error(
 			`API key not supported for ${input.name} (branch=${method.branch} — use the device/browser auth flow)`,
 		)
 	}
 
-	const target = WRITE_TARGETS[input.name]
 	if (!target) {
 		throw new Error(`No API-key write target configured for ${input.name}`)
 	}
