@@ -132,7 +132,12 @@ type Phase =
 	| {kind: 'auth-na'} // not auth-able
 	| {kind: 'authenticating'} // apikey submit in flight
 	| {kind: 'auth-failed'; message: string}
-	| {kind: 'success'; message: string}
+	// Phase 267-03 — terminal SUCCESS state. The auth/key-write already
+	// succeeded; now we wait (gracefully) for the debounced liv-assistant restart
+	// so AionUi re-scans and the agent flips Failed→ready. `applied=false` →
+	// "Applying…"; `applied=true` (restart done OR graceful timeout) → "ready —
+	// open Liv AI to use it" + an Open Liv AI button.
+	| {kind: 'ready'; message: string; applied: boolean}
 
 // ── The inner dialog body — remounted per CLI via `key` so all hooks reset ──
 function CliAuthDialogBody({
@@ -150,7 +155,6 @@ function CliAuthDialogBody({
 	const [phase, setPhase] = useState<Phase>({kind: 'loading'})
 	const [apiKey, setApiKey] = useState('')
 	const [apiKeyError, setApiKeyError] = useState<string | undefined>(undefined)
-	const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
 	const authMethodQ = trpcReact.cliInstaller.getAuthMethod.useQuery(
 		{name: cli},
@@ -178,6 +182,20 @@ function CliAuthDialogBody({
 	const installM = trpcReact.cliInstaller.install.useMutation()
 	const authM = trpcReact.cliInstaller.auth.useMutation()
 	const setApiKeyM = trpcReact.cliInstaller.setApiKey.useMutation()
+
+	// Phase 267-03 — poll the debounced liv-assistant restart status ONLY while
+	// we're in the post-success "ready" state and the restart hasn't been
+	// confirmed applied yet. authCli/setApiKey success schedules the restart
+	// server-side; agentRefreshStatus flips 'restarting' → 'done' as AionUi
+	// re-scans. We degrade gracefully (see the effect below) if it never flips.
+	const ready = phase.kind === 'ready'
+	const pollingRefresh = ready && !phase.applied
+	const agentRefreshStatusQ =
+		trpcReact.cliInstaller.agentRefreshStatus.useQuery(undefined, {
+			enabled: pollingRefresh,
+			refetchInterval: pollingRefresh ? 1200 : false,
+			retry: false,
+		})
 
 	// Pick the auth phase for the resolved branch.
 	const branchToAuthPhase = useCallback((m: AuthMethod): Phase => {
@@ -219,7 +237,11 @@ function CliAuthDialogBody({
 			.mutateAsync({name: cli})
 			.then((res) => {
 				if (res.ok) {
-					setPhase({kind: 'success', message: `${labelFor(cli)} authenticated`})
+					setPhase({
+						kind: 'ready',
+						message: `${labelFor(cli)} authenticated`,
+						applied: false,
+					})
 				} else {
 					const tail = (res.output ?? '')
 						.split('\n')
@@ -241,14 +263,31 @@ function CliAuthDialogBody({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [phase.kind, cli])
 
-	// On success, auto-close after a short beat so the user sees the ✓.
+	// Phase 267-03 — while in the "ready" state and not yet applied, flip to
+	// applied=true the moment agentRefreshStatus reports 'done'. GRACEFUL
+	// DEGRADE: never hard-block on the restart — if it doesn't confirm within
+	// ~12s (slow AionUi cold-boot, or the status key never landed), flip to
+	// applied=true anyway. The auth ALREADY succeeded; the restart is a
+	// best-effort convenience, so we always reach the usable "Open Liv AI" state.
+	const readyApplied = phase.kind === 'ready' && phase.applied
 	useEffect(() => {
-		if (phase.kind !== 'success') return
-		closeTimer.current = setTimeout(() => onClose(), 1400)
-		return () => {
-			if (closeTimer.current) clearTimeout(closeTimer.current)
+		if (phase.kind !== 'ready' || phase.applied) return
+		const status = agentRefreshStatusQ.data?.status
+		if (status === 'done') {
+			setPhase({kind: 'ready', message: phase.message, applied: true})
+			return
 		}
-	}, [phase.kind, onClose])
+		// Graceful timeout: don't make the user stare at "Applying…" forever.
+		const t = setTimeout(() => {
+			setPhase((p) =>
+				p.kind === 'ready' && !p.applied
+					? {kind: 'ready', message: p.message, applied: true}
+					: p,
+			)
+		}, 12_000)
+		return () => clearTimeout(t)
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [phase.kind, readyApplied, agentRefreshStatusQ.data?.status])
 
 	const handleInstall = useCallback(async () => {
 		setPhase({kind: 'installing'})
@@ -297,7 +336,11 @@ function CliAuthDialogBody({
 			await utils.cliInstaller.detect.invalidate({name: cli})
 			// Clear the key from component state immediately after use.
 			setApiKey('')
-			setPhase({kind: 'success', message: `${labelFor(cli)} key saved`})
+			setPhase({
+				kind: 'ready',
+				message: `${labelFor(cli)} key saved`,
+				applied: false,
+			})
 		} catch (err) {
 			setApiKey('')
 			setPhase({kind: 'auth-apikey'})
@@ -330,6 +373,26 @@ function CliAuthDialogBody({
 		[windowManager, openUrl],
 	)
 
+	// Phase 267-03 — open (or focus) the Liv AI window so the user can use the
+	// newly-ready agent immediately. Mirrors the systemApps registry entry
+	// (id 'LIVINITY_liv-assistant', route '/liv-assistant', name 'Liv AI').
+	// window-manager.openWindow focuses an already-open window instead of
+	// duplicating it. Falls back to a same-tab navigation if no window manager
+	// is mounted (e.g. onboarding flow).
+	const openLivAi = useCallback(() => {
+		if (windowManager) {
+			windowManager.openWindow(
+				'LIVINITY_liv-assistant',
+				'/liv-assistant',
+				'Liv AI',
+				'/figma-exports/dock-ai-chat.svg?v=chat_2026_06_02',
+			)
+		} else {
+			window.location.assign('/liv-assistant')
+		}
+		onClose()
+	}, [windowManager, onClose])
+
 	// Advanced: run in Terminal instead (the demoted OLD bridge behavior).
 	const runInTerminal = useCallback(
 		(type: 'cli-install' | 'cli-auth') => {
@@ -350,7 +413,7 @@ function CliAuthDialogBody({
 						: `Connect ${labelFor(cli)}`}
 				</DialogTitle>
 				<DialogDescription>
-					{phase.kind === 'success'
+					{phase.kind === 'ready'
 						? 'Done.'
 						: 'Set up this CLI agent from here — no Terminal required.'}
 				</DialogDescription>
@@ -514,14 +577,26 @@ function CliAuthDialogBody({
 					</p>
 				)}
 
-				{phase.kind === 'success' && (
-					<p className='text-sm font-medium text-success-light'>
-						✓ {phase.message}
-					</p>
+				{/* ── Terminal SUCCESS / "ready — open Liv AI" state (267-03) ── */}
+				{phase.kind === 'ready' && (
+					<div className='space-y-3'>
+						<p className='text-sm font-medium text-success-light'>
+							✓ {phase.message}
+						</p>
+						{!phase.applied ? (
+							<div className='flex items-center gap-2 text-sm text-text-tertiary'>
+								<Spinner /> Applying… (a few seconds)
+							</div>
+						) : (
+							<p className='text-sm text-text-secondary'>
+								{labelFor(cli)} is ready — open Liv AI to use it.
+							</p>
+						)}
+					</div>
 				)}
 
 				{/* Advanced fallback — keep the OLD Terminal path for power users. */}
-				{phase.kind !== 'success' && phase.kind !== 'loading' && (
+				{phase.kind !== 'ready' && phase.kind !== 'loading' && (
 					<button
 						type='button'
 						className='text-caption text-text-tertiary underline-offset-2 hover:underline'
@@ -566,8 +641,19 @@ function CliAuthDialogBody({
 						Retry
 					</Button>
 				)}
+				{/* 267-03 — open the now-ready agent. Enabled once applied (or after
+				    the graceful timeout); disabled while still "Applying…". */}
+				{phase.kind === 'ready' && (
+					<Button
+						variant='primary'
+						onClick={openLivAi}
+						disabled={!phase.applied}
+					>
+						Open Liv AI
+					</Button>
+				)}
 				<Button variant='default' onClick={onClose}>
-					{phase.kind === 'success' ? 'Done' : 'Close'}
+					{phase.kind === 'ready' ? 'Done' : 'Close'}
 				</Button>
 			</DialogFooter>
 		</DialogContent>
