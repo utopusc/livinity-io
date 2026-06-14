@@ -42,12 +42,15 @@ import {
 	SUPPORTED_CLIS_SET,
 	installCli,
 	detectCli,
+	CLI_AUTH_METHODS,
 	type AuditLogFn,
 	type AuthResult,
+	type AuthMethod,
 	type DetectResult,
 	type InstallResult,
 	type InstallerLogger,
 	type CliName,
+	type WriteApiKeyResult,
 } from '../../cli-installer/index.js'
 import {adminProcedure, router} from './trpc.js'
 
@@ -76,12 +79,37 @@ export interface CliInstallerRouterDeps {
 	 * without audit), behaviour is unchanged.
 	 */
 	auditLogFactory?: (ctx: unknown) => AuditLogFn
+	/**
+	 * Phase 267-01 — DI seam for `setApiKey`. Prod wires a wrapper that calls
+	 * `writeApiKey` with the live home dir + fs (the router stays fs-free for
+	 * testability). The key NEVER appears in logs/returns — writeApiKey returns
+	 * only {ok, path}. Default stub throws PRECONDITION_FAILED.
+	 */
+	writeApiKeyFn?: (input: {
+		name: CliName
+		key: string
+	}) => Promise<WriteApiKeyResult>
+	/**
+	 * Phase 267-01 — DI seam for `getDeviceCode`. Prod wires a Redis GET over
+	 * `liv:cli:auth:url:<name>` (the late-poll key authCli sets when it parses a
+	 * device URL+code). Returns the raw JSON string or null. Default stub
+	 * returns null (no device-code available).
+	 */
+	getDeviceCodeFn?: (name: CliName) => Promise<string | null>
 }
 
 // 64-char ceiling keeps the value well under any path/buffer limits a script
 // resolution could hit; the real validity check is the SUPPORTED_CLIS_SET
 // gate below.
 const NameInput = z.object({name: z.string().min(1).max(64)})
+
+// Phase 267-01 — setApiKey input. `key` is bounded 1..8000 chars (OAuth tokens
+// + long provider keys fit; an 8KB ceiling caps abuse). The key is never
+// logged; the whitelist guard on `name` is the RCE boundary.
+const SetApiKeyInput = z.object({
+	name: z.string().min(1).max(64),
+	key: z.string().min(1).max(8000),
+})
 
 /**
  * D-239-07 RCE boundary guard. Throws TRPCError BAD_REQUEST with the
@@ -111,11 +139,33 @@ const defaultAuthFn = async (): Promise<AuthResult> => {
 	})
 }
 
+/**
+ * Default `writeApiKeyFn` fallback — throws PRECONDITION_FAILED. Production boot
+ * injects a wrapper closed over the live home dir + fs (writeApiKey needs a
+ * filesystem the router cannot construct itself). Tests inject a vi.fn() mock.
+ */
+const defaultWriteApiKeyFn = async (): Promise<WriteApiKeyResult> => {
+	throw new TRPCError({
+		code: 'PRECONDITION_FAILED',
+		message:
+			'cliInstaller.setApiKey requires production wire-up (writeApiKeyFn DI seam unfilled)',
+	})
+}
+
+/**
+ * Default `getDeviceCodeFn` fallback — returns null (no device code available).
+ * Production injects a Redis GET over `liv:cli:auth:url:<name>`.
+ */
+const defaultGetDeviceCodeFn = async (): Promise<string | null> => null
+
 export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 	const install = deps.installFn ?? installCli
 	const detect = deps.detectFn ?? detectCli
 	const auth = deps.authFn ?? defaultAuthFn
+	const writeApiKey = deps.writeApiKeyFn ?? defaultWriteApiKeyFn
+	const getDeviceCode = deps.getDeviceCodeFn ?? defaultGetDeviceCodeFn
 	// Plan 240-01 drift-lock T14: declaration order = [detect, install, auth].
+	// Phase 267-01 appends [setApiKey, getAuthMethod, getDeviceCode] (additive).
 	return router({
 		detect: adminProcedure.input(NameInput).query(async ({input}) => {
 			assertWhitelisted(input.name)
@@ -131,6 +181,42 @@ export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 			const auditLog = deps.auditLogFactory ? deps.auditLogFactory(ctx) : undefined
 			return auth({name: input.name}, {logger: deps.logger, auditLog})
 		}),
+		// Phase 267-01 — write an operator-pasted API key to the CLI's own
+		// config/env file (writeApiKey; 0600; no spawn). The whitelist guard runs
+		// FIRST (assertWhitelisted) — same RCE boundary as install/auth. The key
+		// is NEVER logged or echoed back; only {ok, path} is returned.
+		setApiKey: adminProcedure
+			.input(SetApiKeyInput)
+			.mutation(async ({input}) => {
+				assertWhitelisted(input.name)
+				return writeApiKey({name: input.name, key: input.key})
+			}),
+		// Phase 267-01 — the UI branch contract (apikey | device | browser | n/a)
+		// + the canonical login argv / api-key env label for the given CLI.
+		getAuthMethod: adminProcedure
+			.input(NameInput)
+			.query(async ({input}): Promise<AuthMethod> => {
+				assertWhitelisted(input.name)
+				return CLI_AUTH_METHODS[input.name]
+			}),
+		// Phase 267-01 — late-poll fallback: read liv:cli:auth:url:<name> (set by
+		// authCli when it parses a device URL+code). Returns {url, code} | null.
+		getDeviceCode: adminProcedure
+			.input(NameInput)
+			.query(async ({input}): Promise<{url: string; code: string} | null> => {
+				assertWhitelisted(input.name)
+				const raw = await getDeviceCode(input.name)
+				if (!raw) return null
+				try {
+					const parsed = JSON.parse(raw) as {url?: string; code?: string}
+					if (parsed.url && parsed.code) {
+						return {url: parsed.url, code: parsed.code}
+					}
+				} catch {
+					/* malformed cache value — treat as no device code */
+				}
+				return null
+			}),
 	})
 }
 

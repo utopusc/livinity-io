@@ -223,7 +223,7 @@ import {createCliInstallerRouter} from './modules/server/trpc/cli-installer-rout
 // Phase 240-01 — authCli is the per-CLI canonical login spawn wrapper
 // (needs Redis for status-key writes). The router does NOT pull this in
 // directly so it remains test-isolated; the boot block below wires it in.
-import {authCli} from './modules/cli-installer/index.js'
+import {authCli, writeApiKey} from './modules/cli-installer/index.js'
 // Phase 224 — `config.*` namespace production wire. Builds the
 // getV42MigrationActive procedure against the live ioredis client; the
 // default empty-injection stub throws PRECONDITION_FAILED until this
@@ -2043,8 +2043,30 @@ export default class Livinityd {
 					authCli(input, {
 						logger: deps.logger,
 						redis: livRedis,
+						// Phase 267-01 — stream the device URL+code live (pub + late-poll
+						// key). `livRedis` doubles as the publish client; a UI subscribed
+						// to liv:cli:auth:stream:<name> gets {url,code} the instant the
+						// login prints it, while authCli keeps the existing
+						// liv:cli:auth:<name> running|ok|failed completion contract.
+						redisPub: livRedis,
 						auditLog: deps.auditLog,
 					}),
+				// Phase 267-01 — no-spawn API-key write path. writeApiKey resolves the
+				// real home dir + fs internally; it NEVER logs/returns the key (only
+				// {ok, path}). The router re-asserts the SUPPORTED_CLIS whitelist
+				// before delegating here (RCE boundary).
+				writeApiKeyFn: async (input) =>
+					writeApiKey(input, {
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) => this.logger.error(msg, err),
+							error: (msg, err) => this.logger.error(msg, err),
+						},
+					}),
+				// Phase 267-01 — late-poll of the device URL+code authCli cached at
+				// liv:cli:auth:url:<name> (EX 600). Returns the raw JSON or null.
+				getDeviceCodeFn: async (name) =>
+					livRedis.get(`liv:cli:auth:url:${name}`),
 				auditLogFactory: (ctx: unknown) => async (row) => {
 					try {
 						const pool = getPool()
@@ -2081,7 +2103,7 @@ export default class Livinityd {
 				},
 			})
 			webappLogger.info(
-				'Phase 239-01 + 240-01 — cliInstaller.* tRPC router wired (install / detect / auth; whitelist=5; D-239-07 RCE boundary; audit + Redis status keys live)',
+				'Phase 239-01 + 240-01 + 267-01 — cliInstaller.* tRPC router wired (install / detect / auth / setApiKey / getAuthMethod / getDeviceCode; whitelist=20; D-239-07 RCE boundary; audit + Redis status keys + live device-code stream)',
 			)
 
 			// Phase 246-03 — wire the pty-sessions admin sub-router against the
