@@ -1,44 +1,38 @@
 /**
- * Phase 196-04 / 196-05 — `setup.*` tRPC namespace.
+ * Phase 196-04 / 196-05 / 196.1 / 271 — `setup.*` tRPC namespace.
  *
- * Two procedures today (after 196-05):
+ * Procedures today (after Phase 271):
  *
- *   - `setup.setRegion` (Plan 196-04) — adminProcedure mutation.
- *     Zod schema gates region values against the canonical 6-element
- *     REGIONS allow-list from `../../locale/region-suggestion.ts`. A
- *     client sending `region: 'mars'` is rejected with BAD_REQUEST
- *     before the procedure body runs (T-196-04-01 Tampering mitigation).
- *     Optional `country` field: zod `regex(/^[A-Z]{2}$/)` enforces a
- *     2-letter uppercase ISO-3166-1 code (T-196-04-02 path-traversal
- *     defense-in-depth). Persists to Redis keys `liv:user:region`
- *     (always) and `liv:user:country` (only if present in input).
+ *   - `setup.setLocation` (Plan 196.1) — adminProcedure mutation. Merged
+ *     Country + City picker. Resolves (country, city) → {region, timezone,
+ *     locale} via the curated COUNTRIES catalog, persists all five Redis
+ *     keys (country, city, region, timezone, locale) and propagates the
+ *     timezone to the system clock via the narrow sudoers TIMEDATECTL
+ *     Cmnd_Alias.
  *
- *   - `setup.setLocaleTimezone` (Plan 196-05) — adminProcedure mutation.
- *     Zod gates timezone (non-empty string) + locale (z.enum of 6
- *     supported codes). Body re-validates timezone via
- *     `timezoneService.validate()` (defense-in-depth — even if a future
- *     caller bypasses zod, the Intl gate still fires before timedatectl).
- *     On success: `timezoneService.setSystemTimezone(zone)` runs `sudo
- *     /usr/bin/timedatectl set-timezone <zone>` via the narrow sudoers
- *     Cmnd_Alias extended in this same plan, then persists to
- *     `liv:user:timezone` + `liv:user:locale`.
+ *   - `setup.getLocation` (Phase 271) — adminProcedure QUERY. Reads back the
+ *     persisted `liv:user:{country,city,region,timezone,locale,hour_cycle}`
+ *     keys so the navbar clock + Settings Date & Time can render the SELECTED
+ *     city/timezone and the operator's chosen hour-cycle. `hourCycle` is
+ *     resolved from `liv:user:hour_cycle` when set, else derived from the
+ *     persisted locale via Intl, else 'h23'.
  *
- * Future plans (e.g. `setup.setProvider`) extend this namespace too —
- * the empty-injection default proxy pattern mirrors xai-auth-router.ts
- * exactly so production livinityd boot can swap in a real
- * `createSetupRouter({redis, timezoneService})` via
- * `setProductionAppRouter(createAppRouter({chromeMaster, xaiAuth, setup}))`.
+ *   - `setup.setClockFormat` (Phase 271) — adminProcedure mutation. Persists
+ *     the operator's 24h⇄AM/PM choice to `liv:user:hour_cycle`.
  *
- * D-196-04-DI / D-196-05-DI: the router takes a `{redis, timezoneService}`
- * dep object. Production livinityd boot (Plan 196-05 Task 5) constructs
- * both deps and injects them; the bare `setupRouter` default throws on
- * access until that swap lands.
+ * Phase 271 REMOVED the dead `setup.setRegion` (Plan 196-04) and
+ * `setup.setLocaleTimezone` (Plan 196-05) procedures + their input schemas —
+ * both were superseded by the merged `setLocation` and had no remaining live
+ * UI callers.
  *
- * D-196-04-HTTP-ONLY / D-196-05-HTTP-ONLY: both procedures are in
- * `httpOnlyPaths` in ./common.ts because the onboarding mutation must
- * survive WS reconnect across the systemctl restart livos window
- * (memory pitfall B-12 / X-04 cluster — same rationale as `auth.xai.*`
- * family in 195-03).
+ * D-196.1-DI: the router takes a `{redis, timezoneService}` dep object.
+ * Production livinityd boot constructs both deps and injects them; the bare
+ * `setupRouter` default throws on access until that swap lands.
+ *
+ * D-HTTP-ONLY: `setLocation`, `getLocation` and `setClockFormat` are all in
+ * `httpOnlyPaths` in ./common.ts so the onboarding mutations survive WS
+ * reconnect across the systemctl restart livos window (memory pitfall B-12 /
+ * X-04 cluster — same rationale as the `auth.xai.*` family).
  */
 
 import {TRPCError} from '@trpc/server'
@@ -47,9 +41,7 @@ import {z} from 'zod'
 import {adminProcedure, router} from './trpc.js'
 import {
 	COUNTRIES,
-	REGIONS,
 	resolveLocation,
-	type Region,
 	type TimezoneService,
 } from '../../locale/index.js'
 
@@ -58,70 +50,56 @@ import {
 /**
  * Minimal Redis client surface the setup router needs. Matches both
  * the ioredis `Redis` runtime shape and the redis-mock test double —
- * we only call `.set(key, value)`.
+ * we call `.set(key, value)` (writes) and `.get(key)` (getLocation read).
  */
 export interface SetupRedisClient {
 	set(key: string, value: string): Promise<unknown>
+	get(key: string): Promise<string | null>
 }
 
 export interface SetupRouterDeps {
 	redis: SetupRedisClient
 	/**
-	 * Phase 196-05 — TimezoneService for `setup.setLocaleTimezone`.
-	 * Production wire-up at livinityd/source/index.ts constructs via
-	 * `createTimezoneService()`; tests inject a mock.
+	 * TimezoneService for `setup.setLocation`. Production wire-up at
+	 * livinityd/source/index.ts constructs via `createTimezoneService()`;
+	 * tests inject a mock.
 	 */
 	timezoneService: TimezoneService
 }
 
+// ─── hour-cycle helpers ──────────────────────────────────────────────────
+
+export type HourCycle = 'h12' | 'h23'
+
+/**
+ * Phase 271 — normalize any of the four Intl hour-cycle codes (h11/h12/h23/h24)
+ * to the two-way axis the UI cares about: 12-hour (with AM/PM) vs 24-hour.
+ */
+function normalizeHourCycle(hc: string | null | undefined): HourCycle | null {
+	if (hc === 'h11' || hc === 'h12') return 'h12'
+	if (hc === 'h23' || hc === 'h24') return 'h23'
+	return null
+}
+
+/**
+ * Phase 271 — derive an hour-cycle from a BCP-47 locale via Intl. Returns
+ * 'h23' when the locale is MISSING (per the contract: explicit override →
+ * locale-derived → 'h23'; a never-configured box has no locale and must NOT
+ * inherit en-US's 12-hour default), and 'h23' on any Intl failure.
+ */
+function deriveHourCycleFromLocale(locale: string | null | undefined): HourCycle {
+	if (!locale) return 'h23'
+	try {
+		const resolved = new Intl.DateTimeFormat(locale, {
+			hour: 'numeric',
+		}).resolvedOptions().hourCycle
+		return normalizeHourCycle(resolved) ?? 'h23'
+	} catch {
+		return 'h23'
+	}
+}
+
 // ─── Input schemas ───────────────────────────────────────────────────────
-
-/**
- * T-196-04-01 mitigation — `region` MUST be one of the 6 canonical
- * values from the locale module. `z.enum([...REGIONS])` spreads the
- * frozen array into a tuple of literal-string members so zod constructs
- * a real enum schema, and any future addition to REGIONS automatically
- * extends the wire-format enum without a separate edit here.
- *
- * T-196-04-02 mitigation — `country` is optional but, when present,
- * must match `^[A-Z]{2}$`: exactly two uppercase ASCII letters. Defeats
- * `country: '../etc/passwd'` and similar path-traversal-flavoured input.
- */
-const setRegionInput = z.object({
-	region: z.enum(REGIONS as readonly [Region, ...Region[]]),
-	country: z
-		.string()
-		.regex(/^[A-Z]{2}$/)
-		.optional(),
-})
-
-/**
- * Phase 196-05 — `setup.setLocaleTimezone` input schema.
- *
- * T-196-05-01 Tampering mitigation (layer 1 — zod): the locale field is
- * a hard z.enum of 6 supported codes. The timezone field is a non-empty
- * string but the SHAPE of valid IANA zones (a few hundred) is too large
- * to embed as a zod enum without bloating the wire-format types, so
- * runtime validation is delegated to the timezoneService.validate()
- * gate inside the procedure body (layer 2 — Intl set membership).
- *
- * The two-layer design means even a future caller that bypasses this
- * zod schema entirely still cannot reach `execFile('sudo', ...)` with
- * an unvalidated zone — see timezone-service.test.ts T6 + T8 for the
- * defense-in-depth regression-lock.
- */
-const SUPPORTED_LOCALES = [
-	'en-US',
-	'tr-TR',
-	'de-DE',
-	'fr-FR',
-	'es-ES',
-	'ar-SA',
-] as const
-const setLocaleTimezoneInput = z.object({
-	timezone: z.string().min(1),
-	locale: z.enum(SUPPORTED_LOCALES),
-})
 
 /**
  * Phase 196.1 — `setup.setLocation` input schema.
@@ -131,8 +109,8 @@ const setLocaleTimezoneInput = z.object({
  * server-side via `resolveLocation()` from the canonical curated catalog;
  * unknown country or city values are rejected with BAD_REQUEST.
  *
- * The 2-letter country regex defense-in-depth against path-traversal-flavoured
- * input mirrors the Phase 196-04 setRegion gate.
+ * The 2-letter country regex is defense-in-depth against path-traversal-
+ * flavoured input.
  */
 const VALID_COUNTRY_CODES = COUNTRIES.map((c) => c.code) as readonly string[]
 const setLocationInput = z.object({
@@ -143,84 +121,43 @@ const setLocationInput = z.object({
 	city: z.string().min(1).max(64),
 })
 
+/**
+ * Phase 271 — `setup.setClockFormat` input schema. The operator's 24h⇄AM/PM
+ * choice, normalized to the two-way hour-cycle axis.
+ */
+const setClockFormatInput = z.object({
+	hourCycle: z.enum(['h12', 'h23']),
+})
+
 // ─── Factory ─────────────────────────────────────────────────────────────
 
 /**
- * Production wire-up — invoked from livinityd start() (Plan 196-05) after
- * the Redis client is available:
+ * Production wire-up — invoked from livinityd start() after the Redis client
+ * is available:
  *
- *   const setup = createSetupRouter({redis: livinityd.redis})
+ *   const setup = createSetupRouter({redis: livinityd.redis, timezoneService})
  *   const appRouter = createAppRouter({chromeMaster, xaiAuth, setup})
  *   setProductionAppRouter(appRouter)
  */
 export function createSetupRouter(deps: SetupRouterDeps) {
 	return router({
 		/**
-		 * Persist the operator's region selection (and optionally a country
-		 * sub-pick) to Redis. adminProcedure-gated (T-196-04-04 EoP —
-		 * only authenticated admin operators may call).
-		 */
-		setRegion: adminProcedure.input(setRegionInput).mutation(async ({input}) => {
-			await deps.redis.set('liv:user:region', input.region)
-			if (input.country) {
-				await deps.redis.set('liv:user:country', input.country)
-			}
-			return {ok: true as const}
-		}),
-
-		/**
-		 * Phase 196-05 — Persist the operator's locale + timezone selection
-		 * AND propagate the timezone to the system clock via the narrow
-		 * sudoers TIMEDATECTL Cmnd_Alias.
-		 *
-		 * Defense-in-depth ordering:
-		 *   1. zod (above) — locale enum + timezone non-empty string
-		 *   2. timezoneService.validate — Intl set membership for the timezone
-		 *   3. timezoneService.setSystemTimezone — execFile (argv-array, no
-		 *      shell) + 10s timeout
-		 *   4. redis.set — only after the system clock change succeeds, so a
-		 *      timedatectl failure does NOT leave Redis claiming a zone that
-		 *      isn't actually live
-		 *
-		 * adminProcedure-gated (T-196-05-03 EoP — mirrors setRegion).
-		 */
-		setLocaleTimezone: adminProcedure
-			.input(setLocaleTimezoneInput)
-			.mutation(async ({input}) => {
-				// Defense-in-depth: re-validate via Intl even though the UI
-				// only offers values from `Intl.supportedValuesOf('timeZone')`.
-				if (!deps.timezoneService.validate(input.timezone)) {
-					throw new TRPCError({
-						code: 'BAD_REQUEST',
-						message: 'Phase 196-05: invalid IANA timezone',
-					})
-				}
-				// Propagate to the system clock BEFORE persisting to Redis —
-				// failures bubble up as TRPCError surfaces so the UI can show
-				// "permission denied" / "timedatectl exit 1" inline.
-				await deps.timezoneService.setSystemTimezone(input.timezone)
-				await deps.redis.set('liv:user:timezone', input.timezone)
-				await deps.redis.set('liv:user:locale', input.locale)
-				return {ok: true as const, timezone: input.timezone, locale: input.locale}
-			}),
-
-		/**
 		 * Phase 196.1 — `setup.setLocation` merged Country+City procedure.
 		 *
 		 * Resolves (country, city) → {region, timezone, locale} via the
 		 * curated COUNTRIES catalog, then persists ALL FIVE Redis keys
 		 * (country, city, region, timezone, locale) and propagates the
-		 * timezone to the system clock via the same narrow sudoers
-		 * TIMEDATECTL Cmnd_Alias as setLocaleTimezone.
+		 * timezone to the system clock via the narrow sudoers TIMEDATECTL
+		 * Cmnd_Alias.
 		 *
-		 * Defense-in-depth ordering (same as setLocaleTimezone but extended):
+		 * Defense-in-depth ordering:
 		 *   1. zod — country regex + COUNTRIES membership; city non-empty
 		 *   2. resolveLocation — (country, city) pair must exist in catalog
 		 *   3. timezoneService.validate — Intl set membership for the timezone
 		 *   4. timezoneService.setSystemTimezone — execFile (argv-array, no shell)
 		 *   5. redis.set — only after the system clock change succeeds
 		 *
-		 * adminProcedure-gated (matches setRegion / setLocaleTimezone).
+		 * adminProcedure-gated.
 		 */
 		setLocation: adminProcedure.input(setLocationInput).mutation(async ({input}) => {
 			const resolved = resolveLocation(input.country, input.city)
@@ -247,6 +184,56 @@ export function createSetupRouter(deps: SetupRouterDeps) {
 			await deps.redis.set('liv:user:locale', resolved.locale)
 			return {ok: true as const, ...resolved}
 		}),
+
+		/**
+		 * Phase 271 — `setup.getLocation` read-back query.
+		 *
+		 * Reads the persisted `liv:user:{country,city,region,timezone,locale,
+		 * hour_cycle}` keys. Resolves `hourCycle` from the explicit
+		 * `liv:user:hour_cycle` override when set, else derives it from the
+		 * persisted locale via Intl, else falls back to 'h23'. All location
+		 * fields are nullable — a fresh box that never ran the Location step
+		 * returns nulls and the UI falls back to browser defaults.
+		 *
+		 * adminProcedure-gated (same gate as setLocation).
+		 */
+		getLocation: adminProcedure.query(async () => {
+			const [country, city, region, timezone, locale, hourCycleRaw] =
+				await Promise.all([
+					deps.redis.get('liv:user:country'),
+					deps.redis.get('liv:user:city'),
+					deps.redis.get('liv:user:region'),
+					deps.redis.get('liv:user:timezone'),
+					deps.redis.get('liv:user:locale'),
+					deps.redis.get('liv:user:hour_cycle'),
+				])
+
+			const hourCycle: HourCycle =
+				normalizeHourCycle(hourCycleRaw) ?? deriveHourCycleFromLocale(locale)
+
+			return {
+				country: country ?? null,
+				city: city ?? null,
+				region: region ?? null,
+				timezone: timezone ?? null,
+				locale: locale ?? null,
+				hourCycle,
+			}
+		}),
+
+		/**
+		 * Phase 271 — `setup.setClockFormat` mutation. Persists the operator's
+		 * 24h⇄AM/PM choice to `liv:user:hour_cycle`. The zod enum is the only
+		 * gate — the value is a closed two-element set, not user free-text.
+		 *
+		 * adminProcedure-gated (same gate as setLocation).
+		 */
+		setClockFormat: adminProcedure
+			.input(setClockFormatInput)
+			.mutation(async ({input}) => {
+				await deps.redis.set('liv:user:hour_cycle', input.hourCycle)
+				return {ok: true as const, hourCycle: input.hourCycle}
+			}),
 	})
 }
 
@@ -256,7 +243,8 @@ export function createSetupRouter(deps: SetupRouterDeps) {
  * Default export that throws on any service access. Used by
  * `createAppRouter` when no `setup` slot is supplied so the type-inference
  * path in common.ts / `AppRouter` still works. Production livinityd boot
- * replaces this via `createSetupRouter({redis})` + setProductionAppRouter.
+ * replaces this via `createSetupRouter({redis, timezoneService})` +
+ * setProductionAppRouter.
  *
  * Mirrors the xaiAuthRouter / chromeMasterRouter empty-injection pattern.
  */
@@ -272,8 +260,6 @@ export const setupRouter = createSetupRouter({
 			return emptyInjectionStub('redis')
 		},
 	}),
-	// Phase 196-05 — timezoneService stub. Throws on any access until
-	// production createSetupRouter({timezoneService}) injection lands.
 	timezoneService: new Proxy({} as TimezoneService, {
 		get() {
 			return emptyInjectionStub('timezoneService')
