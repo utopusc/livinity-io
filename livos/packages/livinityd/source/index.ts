@@ -2122,6 +2122,27 @@ export default class Livinityd {
 							error: (msg, err) => this.logger.error(msg, err),
 						},
 					}),
+				// Phase 269-01 — MANUAL APPLY (kill the restart storm). auth/setApiKey/
+				// uninstall SUCCESS now SETs this flag instead of restarting
+				// liv-assistant on every action (which took AionUi :3020 down ~40s →
+				// a 502 storm). The operator batches actions then clicks "Apply
+				// changes" → applyAgentChanges fires ONE debounced restart + DELs the
+				// flag. EX 86400 self-expires a never-applied flag. The SET/GET/DEL are
+				// best-effort (the router swallows failures — the flag is a UX nicety,
+				// never a correctness gate).
+				markAgentChangesPendingFn: async () => {
+					await livRedis.set(
+						'liv:cli:agent-changes-pending',
+						'1',
+						'EX',
+						86400,
+					)
+				},
+				getPendingAgentChangesFn: async () =>
+					(await livRedis.get('liv:cli:agent-changes-pending')) === '1',
+				clearPendingAgentChangesFn: async () => {
+					await livRedis.del('liv:cli:agent-changes-pending')
+				},
 				auditLogFactory: (ctx: unknown) => async (row) => {
 					try {
 						const pool = getPool()
@@ -2158,7 +2179,7 @@ export default class Livinityd {
 				},
 			})
 			webappLogger.info(
-				'Phase 239-01 + 240-01 + 267-01 + 268 (sendAuthInput stdin write-back + uninstall) — cliInstaller.* tRPC router wired (install / detect / auth / setApiKey / getAuthMethod / getDeviceCode / agentRefreshStatus / sendAuthInput / uninstall; whitelist=20; D-239-07 RCE boundary; audit + Redis status keys + live device-code stream)',
+				'Phase 239-01 + 240-01 + 267-01 + 268 + 269-01 (manual apply — no restart storm) — cliInstaller.* tRPC router wired (install / detect / auth / setApiKey / getAuthMethod / getDeviceCode / agentRefreshStatus / sendAuthInput / uninstall / hasPendingAgentChanges / applyAgentChanges; whitelist=20; D-239-07 RCE boundary; audit + Redis status keys + live device-code stream; auth/setApiKey/uninstall SET liv:cli:agent-changes-pending, applyAgentChanges fires ONE restart + DELs it)',
 			)
 
 			// Phase 246-03 — wire the pty-sessions admin sub-router against the

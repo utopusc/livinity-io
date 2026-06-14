@@ -750,6 +750,16 @@ export const httpOnlyPaths = [
 	// `systemctl restart livos` would silently hang them).
 	'cliInstaller.sendAuthInput',
 	'cliInstaller.uninstall',
+	// Phase 269-01 — manual apply (kill the restart storm). The panel's
+	// `/liv/trpc/cliInstaller.{applyAgentChanges,hasPendingAgentChanges}` calls
+	// + the dialog's applyAgentChanges mutation MUST ride HTTP, not WS — a
+	// half-broken WS after `systemctl restart livos` would silently hang the
+	// Apply click / the pending-flag poll (memory pitfall B-12 / X-04, same
+	// rationale as cliInstaller.agentRefreshStatus above). applyAgentChanges is
+	// the single user-triggered liv-assistant restart; hasPendingAgentChanges
+	// gates the Apply button's visibility.
+	'cliInstaller.applyAgentChanges',
+	'cliInstaller.hasPendingAgentChanges',
 	// Phase 246-03 — pty-sessions admin namespace (listSessions + killSession).
 	// adminProcedure-gated mutations from the future "Active terminals"
 	// admin UI (deferred to Phase 246-05). HTTP-only per the standard
