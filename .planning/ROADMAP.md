@@ -4789,9 +4789,12 @@ Plans:
 > Research-heavy: each CLI's real auth subcommand + flow type (device-poll / paste-back / localhost-redirect) and the safe uninstall command per install method must be confirmed before classification. Builds directly on Phase 267 (`auth.ts`, `auth-methods.ts`, `cli-installer-router.ts`, `cli-auth-dialog.tsx`, `agent-refresh.ts`). RCE boundary D-239-07 (name-only, never a raw command) preserved throughout; stdin write-back is a NEW trust surface — treat the pasted code as untrusted input written only to a known-CLI process.
 **Requirements**: per-CLI auth-flow research + reclassification; live-process lifecycle + stdin write-back channel; sendAuthInput tRPC mutation (secure, whitelist-guarded); paste-back UI branch (URL → browser → paste code back); preserve 267 device/apikey branches + agent-refresh; CLI uninstall backend (per install method); uninstall tRPC mutation (admin, confirm); uninstall UI button; removed agent disappears from /api/agents.
 **Depends on:** Phase 267
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 268 to break down)
+- [ ] 268-01-PLAN.md — backend paste-back foundation: 'paste-back' AuthBranch + claude bare loginArgv + live-child registry + sendAuthInput (TDD)
+- [ ] 268-02-PLAN.md — CLI uninstall backend: CLI_UNINSTALL map + uninstallCli (npm/rm/pip, static-paths-only, aion-cli refused) (TDD)
+- [ ] 268-03-PLAN.md — router + transport: cliInstaller.sendAuthInput + cliInstaller.uninstall adminProcedures + httpOnlyPaths + index.ts wiring (uninstall fires agent-refresh)
+- [ ] 268-04-PLAN.md — UI: dialog paste-back phase (URL + code field) + Uninstall button+confirm + bridge 'cli-uninstall' case + panel Remove button
 
 ---
