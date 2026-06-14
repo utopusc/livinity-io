@@ -617,6 +617,9 @@ describe('authCli — registers the live child the instant it spawns', () => {
 		}
 		// Start the login (claude-code now spawns the bare paste-back login).
 		const p = authCli({name: 'claude-code'}, deps)
+		// authCli awaits the redis 'running' SET before spawning — yield until the
+		// spawn (and registerLiveAuth) has actually run.
+		await vi.waitFor(() => expect(spawnFn).toHaveBeenCalled())
 		// BEFORE the child exits, the operator pastes a code — it must reach stdin.
 		const sendRes = await sendAuthInput(
 			{name: 'claude-code', code: 'PASTE9'},
