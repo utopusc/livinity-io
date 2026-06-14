@@ -228,6 +228,10 @@ import {
 	writeApiKey,
 	scheduleAgentRefresh,
 	agentRefreshStatusKey,
+	// Phase 268-03 — paste-back stdin write (sendAuthInput) + per-method CLI
+	// uninstall (uninstallCli). Both flow through the cli-installer barrel.
+	sendAuthInput,
+	uninstallCli,
 } from './modules/cli-installer/index.js'
 // Phase 224 — `config.*` namespace production wire. Builds the
 // getV42MigrationActive procedure against the live ioredis client; the
@@ -2092,6 +2096,32 @@ export default class Livinityd {
 				// Phase 267-03 — read liv:cli:agent-refresh ('restarting'|'done'|null)
 				// so the dialog can show "Applying…" then "ready — open Liv AI".
 				getAgentRefreshStatusFn: async () => livRedis.get(agentRefreshStatusKey),
+				// Phase 268-03 — write the operator-pasted code to the live paste-back
+				// login's stdin. sendAuthInput is a stateless module fn (the live-child
+				// registry is module-level state inside auth.ts) — mirror writeApiKeyFn
+				// (no redis closure). The router re-asserts the SUPPORTED_CLIS whitelist
+				// before delegating (RCE boundary); the code is NEVER logged/returned.
+				sendAuthInputFn: async (input) =>
+					sendAuthInput(input, {
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) => this.logger.error(msg, err),
+							error: (msg, err) => this.logger.error(msg, err),
+						},
+					}),
+				// Phase 268-03 — uninstall the CLI per its static method. uninstallCli
+				// reuses the authEnv PATH-prepend internally so npm/pip resolve under
+				// livinityd's systemd PATH. On result.ok the router fires
+				// scheduleAgentRefreshFn (already wired above) so AionUi re-scans and
+				// the removed agent drops out of /api/agents.
+				uninstallFn: async (input) =>
+					uninstallCli(input, {
+						logger: {
+							info: (msg) => webappLogger.info(msg),
+							warn: (msg, err) => this.logger.error(msg, err),
+							error: (msg, err) => this.logger.error(msg, err),
+						},
+					}),
 				auditLogFactory: (ctx: unknown) => async (row) => {
 					try {
 						const pool = getPool()
@@ -2128,7 +2158,7 @@ export default class Livinityd {
 				},
 			})
 			webappLogger.info(
-				'Phase 239-01 + 240-01 + 267-01 — cliInstaller.* tRPC router wired (install / detect / auth / setApiKey / getAuthMethod / getDeviceCode; whitelist=20; D-239-07 RCE boundary; audit + Redis status keys + live device-code stream)',
+				'Phase 239-01 + 240-01 + 267-01 + 268 (sendAuthInput stdin write-back + uninstall) — cliInstaller.* tRPC router wired (install / detect / auth / setApiKey / getAuthMethod / getDeviceCode / agentRefreshStatus / sendAuthInput / uninstall; whitelist=20; D-239-07 RCE boundary; audit + Redis status keys + live device-code stream)',
 			)
 
 			// Phase 246-03 — wire the pty-sessions admin sub-router against the
