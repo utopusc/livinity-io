@@ -21,15 +21,21 @@ export {
 } from './installer.js'
 export {detectCli, type DetectCliDeps, type DetectCliInput} from './detector.js'
 // Phase 240-01 Task 1 — authCli + AuthResult + drift-lock constants.
+// Phase 268-01 Task 2 — paste-back stdin write-back seam: live-child registry
+// (registerLiveAuth) + sendAuthInput + the test-only registry reset.
 export {
 	AUTH_TIMEOUT_MS,
 	CLI_AUTH_COMMANDS,
 	authCli,
+	registerLiveAuth,
+	sendAuthInput,
+	_resetLiveAuthsForTests,
 	type AuthCliDeps,
 	type AuthCliInput,
 	type AuthResult,
 	type AuditLogRow,
 	type AuditLogFn,
+	type SendAuthInputDeps,
 } from './auth.js'
 // Phase 267-01 Task 1 — per-CLI auth-method classification matrix (the UI
 // branch contract) + the device-code transcript parser.

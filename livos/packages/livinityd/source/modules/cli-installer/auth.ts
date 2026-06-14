@@ -36,6 +36,137 @@ const OUTPUT_CAP_BYTES = 32 * 1024
 const REDIS_TTL_SECONDS = 3600
 /** TTL for the late-poll device-code key `liv:cli:auth:url:<name>` (10 min). */
 const DEVICE_URL_TTL_SECONDS = 600
+/** Max chars accepted from a pasted code (OAuth codes are short; cap blocks pipe-flood). */
+const MAX_PASTE_CODE_CHARS = 4096
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 268-01 — live-child registry + stdin write-back seam (paste-back auth).
+//
+// 267's authCli is read-only: it spawns, reads stdout/stderr, and resolves+kills
+// on exit — there is NO way for a later request to write to the child's stdin.
+// Paste-back auth (the bare `claude` login `Paste code here if prompted` prompt
+// in headless/SSH/container sessions — exactly the LivOS server) needs the child
+// to stay ALIVE with a writable stdin. This registry keeps the spawned login
+// child reachable so `sendAuthInput({name, code})` can write the operator-pasted
+// code to its stdin as DATA. The argv is STILL name-derived (D-239-07); the
+// pasted code never builds a command — it only selects (by name) which
+// already-running child receives the stdin write.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface LiveAuth {
+	child: ChildProcess
+	createdAt: number
+	timeout: NodeJS.Timeout
+}
+
+/** One live login child per CLI name (single-in-flight). ≤1 child per CLI (≤20). */
+const liveAuths = new Map<CliName, LiveAuth>()
+
+/**
+ * Test-only registry reset for suite isolation. SIGKILLs any live children and
+ * clears their teardown timers so a leaked login can't bleed into the next test.
+ * Mirrors agent-refresh's `_resetAgentRefreshForTests`.
+ */
+export function _resetLiveAuthsForTests(): void {
+	for (const v of liveAuths.values()) {
+		try {
+			v.child.kill('SIGKILL')
+		} catch {
+			/* best-effort */
+		}
+		clearTimeout(v.timeout)
+	}
+	liveAuths.clear()
+}
+
+/**
+ * Register a freshly-spawned login child so `sendAuthInput` can write to its
+ * stdin. Guarantees teardown three ways:
+ *   - single-in-flight: kills any prior live child for the SAME name before
+ *     registering this one (prevents two concurrent logins fighting over stdin);
+ *   - timeout: after AUTH_TIMEOUT_MS (300s) SIGKILLs + deletes IF the entry is
+ *     still this child (stranded — user never pasted). `.unref()`'d so the timer
+ *     never holds the event loop open;
+ *   - natural exit: clears the timer + deletes the entry IF it's still this
+ *     child (coexists with authCli's own resolve-on-exit listener — Node allows
+ *     multiple listeners).
+ */
+export function registerLiveAuth(name: CliName, child: ChildProcess): void {
+	const prior = liveAuths.get(name)
+	if (prior) {
+		try {
+			prior.child.kill('SIGKILL')
+		} catch {
+			/* best-effort */
+		}
+		clearTimeout(prior.timeout)
+	}
+	const timeout = setTimeout(() => {
+		const cur = liveAuths.get(name)
+		if (cur?.child === child) {
+			try {
+				child.kill('SIGKILL')
+			} catch {
+				/* best-effort */
+			}
+			liveAuths.delete(name)
+		}
+	}, AUTH_TIMEOUT_MS)
+	;(timeout as {unref?: () => void}).unref?.()
+	liveAuths.set(name, {child, createdAt: Date.now(), timeout})
+	child.on('exit', () => {
+		const cur = liveAuths.get(name)
+		if (cur?.child === child) {
+			clearTimeout(cur.timeout)
+			liveAuths.delete(name)
+		}
+	})
+}
+
+/** DI surface for sendAuthInput — tests inject a spy logger; production wires the real one. */
+export interface SendAuthInputDeps {
+	logger: InstallerLogger
+}
+
+/**
+ * Write an operator-pasted login code to a live login child's stdin (the
+ * paste-back primitive). The pasted `code` is UNTRUSTED stdin DATA — it is
+ * NEVER used to build an argv, shell string, path, or spawn call (D-239-07 /
+ * RESEARCH §B security analysis). It only selects (by `name`) which
+ * ALREADY-running child receives the write.
+ *
+ * Returns `{ok:false}` (never throws) when no live login is awaiting input for
+ * this CLI (no registered child, or its stdin is gone/destroyed). Throws ONLY
+ * the whitelist guard so the tRPC layer can map it to BAD_REQUEST.
+ *
+ * The pasted code may be a bearer token (claude OAuth) — it is NEVER logged or
+ * returned; only its char length is logged (mirrors writeApiKey's never-log
+ * contract). Completion still arrives via the child's eventual exit, which SETs
+ * `liv:cli:auth:<name>` = ok|failed (267 contract — unchanged).
+ */
+export async function sendAuthInput(
+	input: {name: CliName; code: string},
+	deps: SendAuthInputDeps,
+): Promise<{ok: boolean}> {
+	// 1. D-239-07 RCE BOUNDARY — whitelist guard MUST be the first statement.
+	//    The `code` is NEVER used to build an argv/path/command — it only selects
+	//    (by name) an ALREADY-running child and is written as stdin DATA.
+	if (!SUPPORTED_CLIS_SET.has(input.name)) {
+		throw new Error(`CLI not in whitelist: ${String(input.name)}`)
+	}
+	const live = liveAuths.get(input.name)
+	if (!live || !live.child.stdin || live.child.stdin.destroyed) {
+		return {ok: false} // no live login awaiting input
+	}
+	// 2. Strip trailing CR/LF (we append exactly one '\n') + cap length defensively.
+	const safe = input.code.replace(/[\r\n]+$/g, '').slice(0, MAX_PASTE_CODE_CHARS)
+	live.child.stdin.write(safe + '\n')
+	// NEVER log the code (it may be a bearer token) — only its char length.
+	deps.logger.info(
+		`[cli-installer] sendAuthInput wrote ${safe.length} chars to ${input.name} stdin`,
+	)
+	return {ok: true}
+}
 
 /**
  * Parse a stdout/stderr chunk for a device-flow verification URL + user code.
@@ -388,6 +519,11 @@ export async function authCli(
 		let child: ChildProcess
 		try {
 			child = spawn(bin, args as string[], {env: authEnv})
+			// Phase 268-01 — keep the login child reachable so sendAuthInput can
+			// write the operator-pasted code to its stdin (paste-back). Purely
+			// additive: the registry's own exit listener coexists with the
+			// resolve-on-exit listener below (Node allows multiple listeners).
+			registerLiveAuth(input.name, child)
 		} catch (spawnErr) {
 			const durationMs = Date.now() - startMs
 			deps.logger.error(
