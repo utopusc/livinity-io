@@ -45,6 +45,27 @@ function suggestFromBrowser(): {country: string; city: string} | null {
 	return null
 }
 
+type HourCycle = 'h12' | 'h23'
+
+/** Normalize any Intl hour-cycle code to the two-way 12h/24h axis. */
+function normalizeHourCycle(hc: string | null | undefined): HourCycle | null {
+	if (hc === 'h11' || hc === 'h12') return 'h12'
+	if (hc === 'h23' || hc === 'h24') return 'h23'
+	return null
+}
+
+/** Phase 271 — derive the default hour-cycle from a locale (US → h12, TR → h23). */
+function deriveHourCycle(locale: string): HourCycle {
+	try {
+		const resolved = new Intl.DateTimeFormat(locale || 'en-US', {
+			hour: 'numeric',
+		}).resolvedOptions().hourCycle
+		return normalizeHourCycle(resolved) ?? 'h23'
+	} catch {
+		return 'h23'
+	}
+}
+
 export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props) {
 	const suggestion = useMemo(() => suggestFromBrowser(), [])
 
@@ -57,6 +78,17 @@ export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props)
 	const [error, setError] = useState<string | null>(null)
 
 	const setLocation = trpcReact.setup.setLocation.useMutation()
+	const setClockFormat = trpcReact.setup.setClockFormat.useMutation()
+
+	// Phase 271 — 24h⇄AM/PM. Defaults to the selected country's locale default
+	// (US/en → h12 AM/PM, TR → h23 24h). Once the operator touches the toggle
+	// their explicit choice sticks (we stop auto-deriving).
+	const [hourCycle, setHourCycle] = useState<HourCycle>(
+		data.hourCycle ?? deriveHourCycle(data.locale ?? 'en-US'),
+	)
+	const [hourCycleTouched, setHourCycleTouched] = useState<boolean>(
+		data.hourCycle != null,
+	)
 
 	// When country changes, reset city to that country's first city if the
 	// current city doesn't belong to it.
@@ -74,12 +106,34 @@ export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props)
 	const derivedTimezone = cities.find((c) => c.name === city)?.timezone ?? ''
 	const derivedLocale = countryEntry?.defaultLocale ?? 'en-US'
 
+	// Auto-derive the hour-cycle from the selected country's locale until the
+	// operator overrides it manually (then their choice is sticky).
+	useEffect(() => {
+		if (hourCycleTouched) return
+		setHourCycle(deriveHourCycle(derivedLocale))
+	}, [derivedLocale, hourCycleTouched])
+
+	function pickHourCycle(next: HourCycle) {
+		setHourCycleTouched(true)
+		setHourCycle(next)
+		// Best-effort persist — the click is immediate feedback; the canonical
+		// write also happens on Continue alongside setLocation.
+		setClockFormat.mutate({hourCycle: next})
+	}
+
 	const canContinue = !!country && !!city && !!derivedTimezone && !setLocation.isPending
 
 	async function handleContinue() {
 		setError(null)
 		try {
 			const result = await setLocation.mutateAsync({country, city})
+			// Persist the clock-format choice (the default if untouched, or the
+			// operator's pick). Non-fatal — a failure here must not block the step.
+			try {
+				await setClockFormat.mutateAsync({hourCycle})
+			} catch {
+				// ignore — location already saved; clock format is best-effort.
+			}
 			setData({
 				...data,
 				country: result.country,
@@ -87,6 +141,7 @@ export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props)
 				region: result.region as OnboardingData['region'],
 				timezone: result.timezone,
 				locale: result.locale as OnboardingData['locale'],
+				hourCycle,
 			})
 			onContinue()
 		} catch (e) {
@@ -98,7 +153,7 @@ export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props)
 	return (
 		<div style={{display: 'flex', flexDirection: 'column', gap: 18}}>
 			<div className='fade-up'>
-				<div className='onb-eyebrow'>06 · Location</div>
+				<div className='onb-eyebrow'>05 · Location</div>
 				<h1 className='onb-title' style={{marginTop: 8}}>
 					Where are you?
 				</h1>
@@ -178,6 +233,51 @@ export function LocationStep({data, setData, onContinue, onSkip, onBack}: Props)
 							</option>
 						))}
 					</select>
+				</div>
+
+				{/* Phase 271 — 24h⇄AM/PM toggle. Defaults to the country's locale. */}
+				<div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
+					<label
+						className='onb-label'
+						style={{fontSize: 13, color: 'var(--fg-mute)'}}
+					>
+						Clock format
+					</label>
+					<div
+						role='radiogroup'
+						aria-label='Clock format'
+						style={{display: 'flex', gap: 8}}
+					>
+						{([
+							{value: 'h12' as const, label: 'AM/PM (12-hour)'},
+							{value: 'h23' as const, label: '24-hour'},
+						]).map((opt) => {
+							const active = hourCycle === opt.value
+							return (
+								<button
+									key={opt.value}
+									type='button'
+									role='radio'
+									aria-checked={active}
+									data-testid={`clock-format-${opt.value}`}
+									onClick={() => pickHourCycle(opt.value)}
+									style={{
+										flex: 1,
+										padding: '10px 14px',
+										borderRadius: 10,
+										border: `1px solid ${active ? 'var(--accent, #6aa1ff)' : 'var(--line)'}`,
+										background: active ? 'var(--accent-soft, rgba(106,161,255,0.12))' : 'var(--surface)',
+										color: active ? 'var(--fg)' : 'var(--fg-mute)',
+										fontSize: 14,
+										fontWeight: active ? 600 : 400,
+										cursor: 'pointer',
+									}}
+								>
+									{opt.label}
+								</button>
+							)
+						})}
+					</div>
 				</div>
 
 				{derivedTimezone && (

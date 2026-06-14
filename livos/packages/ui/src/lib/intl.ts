@@ -28,9 +28,55 @@ export function formatDate(date: Date | number | string, locale: string): string
  * Format a Date / timestamp / ISO string using the short time style
  * for the supplied locale. Returns the formatted string verbatim
  * (`"14:30"` for tr-TR, `"2:30 PM"` for en-US).
+ *
+ * Phase 271 — optional `{timeZone, hourCycle}` overrides let callers render the
+ * time in a SELECTED IANA zone with an explicit 12h/24h cycle (defaults to the
+ * locale's own short-time style when omitted — backward compatible).
  */
-export function formatTime(date: Date | number | string, locale: string): string {
-	return new Intl.DateTimeFormat(locale, {timeStyle: 'short'}).format(new Date(date))
+export function formatTime(
+	date: Date | number | string,
+	locale: string,
+	opts?: {timeZone?: string; hourCycle?: 'h12' | 'h23'},
+): string {
+	return new Intl.DateTimeFormat(locale, {
+		timeStyle: 'short',
+		timeZone: opts?.timeZone,
+		hourCycle: opts?.hourCycle,
+	}).format(new Date(date))
+}
+
+/**
+ * Phase 271 — split a time into its HH:MM body and an optional AM/PM badge.
+ *
+ * The navbar clock renders `{time}` (e.g. "09:41" or "21:41") plus a separate
+ * small AM/PM badge. `dayPeriod` is returned ONLY when `hourCycle === 'h12'`
+ * (otherwise null) so 24-hour layouts never render a stray badge.
+ *
+ * Uses `formatToParts` so we can pluck hour + minute (joined with a literal
+ * ':') independently of the locale's own separator/ordering, and read the
+ * `dayPeriod` part for the AM/PM string.
+ */
+export function formatClockParts(
+	date: Date,
+	o: {locale: string; timeZone?: string; hourCycle?: 'h12' | 'h23'},
+): {time: string; dayPeriod: string | null} {
+	const parts = new Intl.DateTimeFormat(o.locale, {
+		timeZone: o.timeZone,
+		hourCycle: o.hourCycle,
+		hour: '2-digit',
+		minute: '2-digit',
+	}).formatToParts(date)
+
+	const hour = parts.find((p) => p.type === 'hour')?.value ?? '00'
+	const minute = parts.find((p) => p.type === 'minute')?.value ?? '00'
+	const time = `${hour}:${minute}`
+
+	const dayPeriod =
+		o.hourCycle === 'h12'
+			? parts.find((p) => p.type === 'dayPeriod')?.value ?? null
+			: null
+
+	return {time, dayPeriod}
 }
 
 /**
