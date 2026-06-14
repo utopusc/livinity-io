@@ -162,6 +162,14 @@
   function installCli(name) { return trpcMutate('install', { name: name }); } // cliInstaller.install
   function authCli(name)    { return trpcMutate('auth',    { name: name }); } // cliInstaller.auth
 
+  // Phase 269-01 — manual apply (kill the restart storm). hasPendingAgentChanges
+  // (no input → {} body) reports whether any auth/setApiKey/uninstall happened
+  // since the last apply; applyAgentChanges (no input → {} body) fires the SINGLE
+  // debounced liv-assistant restart + clears the flag. Both ride /liv/trpc via the
+  // Phase 269-01 Caddy EXACT-path carve-out (no wildcard — LIVOS-054).
+  function hasPendingAgentChanges() { return trpcQuery('hasPendingAgentChanges', {}); } // cliInstaller.hasPendingAgentChanges
+  function applyAgentChanges()      { return trpcMutate('applyAgentChanges', {}); }      // cliInstaller.applyAgentChanges
+
   // -------------------------------------------------------------------------
   // DOM rendering
   // -------------------------------------------------------------------------
@@ -355,7 +363,53 @@
     if (redetectBtn) { redetectBtn.style.display = ''; redetectBtn.disabled = false; }
   }
 
+  // Phase 269-01 — show/hide the panel-level Apply bar based on the server
+  // pending flag. Called on hydration AND after any install/auth/uninstall
+  // round-trip (the postMessage opens the dialog where the actual action runs,
+  // so we also re-check on a short delay + when the window regains focus).
+  // Fail-safe: on any error leave the bar in its current state (never throw into
+  // the panel; a missing flag just means "nothing to apply").
+  function refreshApplyBar(section) {
+    var bar = section.querySelector('#liv-269-apply-bar');
+    if (!bar) return;
+    hasPendingAgentChanges().then(function (out) {
+      bar.style.display = out && out.pending ? '' : 'none';
+    }).catch(function () { /* leave as-is on error */ });
+  }
+
+  function wireApplyBar(section) {
+    var bar = section.querySelector('#liv-269-apply-bar');
+    if (!bar) return;
+    var btn = bar.querySelector('#liv-269-apply-btn');
+    var status = bar.querySelector('#liv-269-apply-status');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.textContent = 'Applying…';
+      if (status) status.textContent = 'Applying… Liv AI is refreshing.';
+      applyAgentChanges().then(function () {
+        // The restart was scheduled + the flag cleared server-side; re-check to
+        // hide the bar (and reset the button for any future pending changes).
+        btn.disabled = false;
+        btn.textContent = 'Apply changes';
+        if (status) status.textContent = 'Changes pending — apply to refresh Liv AI.';
+        refreshApplyBar(section);
+      }).catch(function () {
+        // Best-effort: re-enable so the operator can retry; keep the bar visible.
+        btn.disabled = false;
+        btn.textContent = 'Apply changes';
+        if (status) status.textContent = 'Could not apply — try again.';
+      });
+    });
+  }
+
   function hydrate(section) {
+    // Phase 269-01 — wire + prime the panel-level Apply bar, then re-check the
+    // pending flag whenever the operator returns to this tab (after finishing an
+    // action in the dialog the flag is now set server-side).
+    wireApplyBar(section);
+    refreshApplyBar(section);
+    window.addEventListener('focus', function () { refreshApplyBar(section); });
     for (var i = 0; i < SUPPORTED_CLIS.length; i++) {
       (function (name) {
         var row = section.querySelector('[data-cli="' + name + '"]');
@@ -384,6 +438,9 @@
             if (postToShell('cli-install', name)) {
               setTerminalPending(row, 'Setup opened — finish in the dialog, then Re-detect');
               installBtn.textContent = 'Open setup again';
+              // Phase 269-01 — the dialog's install/auth may mark changes pending;
+              // re-check the Apply bar shortly after (the focus listener also covers it).
+              setTimeout(function () { refreshApplyBar(section); }, 4000);
             } else {
               setRowState(row, 'failed', 'Could not open the setup dialog');
             }
@@ -402,6 +459,8 @@
               setTerminalPending(row, 'Sign-in opened — finish in the dialog, then Re-detect');
               authBtn.textContent = 'Open setup again';
               authBtn.disabled = false;
+              // Phase 269-01 — re-check the Apply bar after the dialog's auth runs.
+              setTimeout(function () { refreshApplyBar(section); }, 4000);
             } else {
               setRowState(row, 'failed', 'Could not open the setup dialog');
             }
@@ -417,6 +476,8 @@
           uninstallBtn.addEventListener('click', function () {
             if (postToShell('cli-uninstall', name)) {
               setTerminalPending(row, 'Remove opened — confirm in the dialog, then Re-detect');
+              // Phase 269-01 — a confirmed uninstall marks changes pending; re-check.
+              setTimeout(function () { refreshApplyBar(section); }, 4000);
             } else {
               setRowState(row, 'failed', 'Could not open the remove dialog');
             }
@@ -441,6 +502,24 @@
     section.appendChild(el('p', { className: 'liv-240-hint' }, [
       'One-click install + sign-in for the 20 supported CLI agents. Install and Auth open a guided setup dialog (no Terminal) — paste an API key or follow a device-code link right there; click Re-detect when you are done.'
     ]));
+    // Phase 269-01 — panel-level "Apply changes" bar (NOT per-row). Auth /
+    // install-dialog / uninstall actions no longer auto-restart Liv AI (that
+    // caused the 502 storm); instead the operator batches them and clicks Apply
+    // ONCE here. Hidden until hasPendingAgentChanges reports true; clicking it
+    // fires the single debounced restart, then the bar shows a brief "Applying…"
+    // status and re-checks the flag to hide itself when cleared.
+    var applyBar = el('div', { className: 'liv-240-apply-bar', id: 'liv-269-apply-bar', style: 'display:none' }, [
+      el('span', { className: 'liv-240-apply-status', id: 'liv-269-apply-status' }, [
+        'Changes pending — apply to refresh Liv AI.'
+      ]),
+      el('button', {
+        className: 'liv-240-btn liv-240-btn-apply',
+        id: 'liv-269-apply-btn',
+        type: 'button',
+        title: 'Refresh Liv AI once so your installed/authed/removed agents take effect'
+      }, ['Apply changes'])
+    ]);
+    section.appendChild(applyBar);
     for (var i = 0; i < SUPPORTED_CLIS.length; i++) {
       section.appendChild(renderRow(SUPPORTED_CLIS[i]));
     }

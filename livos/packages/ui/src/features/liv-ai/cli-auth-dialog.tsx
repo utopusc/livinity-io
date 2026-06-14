@@ -141,11 +141,15 @@ type Phase =
 	| {kind: 'authenticating'} // apikey submit in flight
 	| {kind: 'auth-failed'; message: string}
 	// Phase 267-03 — terminal SUCCESS state. The auth/key-write already
-	// succeeded; now we wait (gracefully) for the debounced liv-assistant restart
-	// so AionUi re-scans and the agent flips Failed→ready. `applied=false` →
-	// "Applying…"; `applied=true` (restart done OR graceful timeout) → "ready —
-	// open Liv AI to use it" + an Open Liv AI button.
-	| {kind: 'ready'; message: string; applied: boolean}
+	// succeeded. Phase 269-01 (kill the restart storm): the success NO LONGER
+	// auto-restarts liv-assistant — it just landed here with the change marked
+	// pending server-side. `applying=false` → show an "Apply changes (refresh Liv
+	// AI)" button (NO auto-poll). Clicking it calls cliInstaller.applyAgentChanges
+	// (the ONE debounced restart) then flips `applying=true`, which arms the
+	// EXISTING agentRefreshStatus poll: `applied=false` → "Applying…";
+	// `applied=true` (restart done OR graceful timeout) → "ready — open Liv AI to
+	// use it" + an Open Liv AI button.
+	| {kind: 'ready'; message: string; applied: boolean; applying: boolean}
 
 // ── The inner dialog body — remounted per CLI via `key` so all hooks reset ──
 function CliAuthDialogBody({
@@ -204,14 +208,19 @@ function CliAuthDialogBody({
 	// remove a detected CLI (behind a confirm).
 	const sendAuthInputM = trpcReact.cliInstaller.sendAuthInput.useMutation()
 	const uninstallM = trpcReact.cliInstaller.uninstall.useMutation()
+	// Phase 269-01 — the single, user-triggered "Apply changes" restart. auth/
+	// setApiKey/uninstall no longer auto-restart liv-assistant; the operator
+	// clicks Apply once to fire ONE debounced restart (no 502 storm).
+	const applyAgentChangesM = trpcReact.cliInstaller.applyAgentChanges.useMutation()
 
-	// Phase 267-03 — poll the debounced liv-assistant restart status ONLY while
-	// we're in the post-success "ready" state and the restart hasn't been
-	// confirmed applied yet. authCli/setApiKey success schedules the restart
-	// server-side; agentRefreshStatus flips 'restarting' → 'done' as AionUi
-	// re-scans. We degrade gracefully (see the effect below) if it never flips.
+	// Phase 269-01 — poll the debounced liv-assistant restart status ONLY after
+	// the operator clicked "Apply changes" (phase.applying) and the restart hasn't
+	// been confirmed applied yet. The success itself NO LONGER schedules a restart
+	// (that caused the 502 storm); applyAgentChanges does, on the explicit click.
+	// agentRefreshStatus flips 'restarting' → 'done' as AionUi re-scans. We degrade
+	// gracefully (see the effect below) if it never flips.
 	const ready = phase.kind === 'ready'
-	const pollingRefresh = ready && !phase.applied
+	const pollingRefresh = ready && phase.applying && !phase.applied
 	const agentRefreshStatusQ =
 		trpcReact.cliInstaller.agentRefreshStatus.useQuery(undefined, {
 			enabled: pollingRefresh,
@@ -267,6 +276,7 @@ function CliAuthDialogBody({
 						kind: 'ready',
 						message: `${labelFor(cli)} authenticated`,
 						applied: false,
+						applying: false,
 					})
 				} else {
 					const tail = (res.output ?? '')
@@ -316,6 +326,7 @@ function CliAuthDialogBody({
 									kind: 'ready',
 									message: `${labelFor(cli)} authenticated`,
 									applied: false,
+									applying: false,
 								}
 							: p,
 					)
@@ -356,17 +367,25 @@ function CliAuthDialogBody({
 	// best-effort convenience, so we always reach the usable "Open Liv AI" state.
 	const readyApplied = phase.kind === 'ready' && phase.applied
 	useEffect(() => {
-		if (phase.kind !== 'ready' || phase.applied) return
+		// Phase 269-01 — only run the apply poll AFTER the operator clicked Apply
+		// (phase.applying). Before that the success state just shows the Apply
+		// button — no restart was scheduled.
+		if (phase.kind !== 'ready' || !phase.applying || phase.applied) return
 		const status = agentRefreshStatusQ.data?.status
 		if (status === 'done') {
-			setPhase({kind: 'ready', message: phase.message, applied: true})
+			setPhase({
+				kind: 'ready',
+				message: phase.message,
+				applied: true,
+				applying: true,
+			})
 			return
 		}
 		// Graceful timeout: don't make the user stare at "Applying…" forever.
 		const t = setTimeout(() => {
 			setPhase((p) =>
-				p.kind === 'ready' && !p.applied
-					? {kind: 'ready', message: p.message, applied: true}
+				p.kind === 'ready' && p.applying && !p.applied
+					? {kind: 'ready', message: p.message, applied: true, applying: true}
 					: p,
 			)
 		}, 12_000)
@@ -425,6 +444,7 @@ function CliAuthDialogBody({
 				kind: 'ready',
 				message: `${labelFor(cli)} key saved`,
 				applied: false,
+				applying: false,
 			})
 		} catch (err) {
 			setApiKey('')
@@ -474,6 +494,7 @@ function CliAuthDialogBody({
 					kind: 'ready',
 					message: `${labelFor(cli)} removed`,
 					applied: false,
+					applying: false,
 				})
 			} else {
 				setPhase({
@@ -488,6 +509,27 @@ function CliAuthDialogBody({
 			})
 		}
 	}, [cli, uninstallM])
+
+	// Phase 269-01 — the operator clicked "Apply changes (refresh Liv AI)". Fire
+	// the single debounced liv-assistant restart (cliInstaller.applyAgentChanges),
+	// THEN flip `applying=true` which arms the EXISTING agentRefreshStatus poll
+	// (the L351-375 effect) → "Applying…" → "ready — open Liv AI". The auth/key
+	// write/uninstall ALREADY succeeded; this only triggers the deferred restart.
+	const handleApplyChanges = useCallback(async () => {
+		// Optimistically arm the poll so the UI shows "Applying…" immediately; the
+		// restart status flips it to applied (or the graceful 12s timeout does).
+		setPhase((p) =>
+			p.kind === 'ready' && !p.applying
+				? {kind: 'ready', message: p.message, applied: false, applying: true}
+				: p,
+		)
+		try {
+			await applyAgentChangesM.mutateAsync()
+		} catch {
+			// Best-effort: even if the apply call errors, the poll's graceful timeout
+			// still reaches the usable "Open Liv AI" state — never hard-block the user.
+		}
+	}, [applyAgentChangesM])
 
 	// EXPLICIT user click → open the device/login URL. NEVER auto-navigated.
 	const openUrl = useCallback(
@@ -784,13 +826,27 @@ function CliAuthDialogBody({
 					</p>
 				)}
 
-				{/* ── Terminal SUCCESS / "ready — open Liv AI" state (267-03) ── */}
+				{/* ── Terminal SUCCESS / "Apply changes → ready" state (267-03 + 269-01) ── */}
 				{phase.kind === 'ready' && (
 					<div className='space-y-3'>
 						<p className='text-sm font-medium text-success-light'>
 							✓ {phase.message}
 						</p>
-						{!phase.applied ? (
+						{/* Phase 269-01 — the success no longer auto-restarts Liv AI. Show an
+						    explicit "Apply changes (refresh Liv AI)" button; clicking it
+						    fires the ONE debounced restart, then the Applying…/ready poll
+						    runs. Batches: the operator can do several actions and apply once. */}
+						{!phase.applied && !phase.applying ? (
+							<div className='space-y-2'>
+								<p className='text-sm text-text-secondary'>
+									Apply your changes to refresh Liv AI so {labelFor(cli)} shows
+									up. You can do this once after several changes.
+								</p>
+								<Button variant='primary' onClick={handleApplyChanges}>
+									Apply changes (refresh Liv AI)
+								</Button>
+							</div>
+						) : !phase.applied ? (
 							<div className='flex items-center gap-2 text-sm text-text-tertiary'>
 								<Spinner /> Applying… (a few seconds)
 							</div>
