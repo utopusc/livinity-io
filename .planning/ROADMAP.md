@@ -4775,7 +4775,7 @@ Plans:
 > Research-heavy phase (2 web-research agents + live codebase/AionUi). Auth matrix + AionUi internals + current-state gaps in `267-RESEARCH.md`. AionUi is a vendored binary (v2.1.14) — driven via its HTTP surface + a post-auth restart, NOT forked. RCE boundary D-239-07 (name-only, never a raw command) preserved throughout.
 **Requirements**: streaming device-code to UI; api-key write path; per-CLI auth-method matrix; extend Wave-C auth; UI install+auth dialog (no terminal); device-code panel; api-key paste panel; live agent status; auto-appear after auth (debounced liv-assistant restart); usable immediately; CLI/agent brand logos.
 **Depends on:** Phase 266
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 267-01-PLAN.md — Backend: streaming auth (device URL+code) + `setApiKey` per-CLI 0600 writer + `auth-methods.ts` matrix + extend Wave-C auth + tRPC surface [wave 1] — ✅ CODE-COMPLETE 2026-06-13, commits `012ca734`+`2d08b86f`+`ec1c0055`+`eb3c40fd`+`91725bfb`+`85de39bd`, SUMMARY in phase dir; 74/74 vitest, tsc baseline-identical (zero net new). CODE ONLY — operator deploys via update.sh; 267-02 wires the UI

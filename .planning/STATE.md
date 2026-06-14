@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
-status: executing
+status: ready_to_plan
 last_updated: "2026-06-14T01:02:00.000Z"
 last_activity: 2026-06-14
 progress:
   total_phases: 181
-  completed_phases: 91
+  completed_phases: 92
   total_plans: 618
   completed_plans: 529
-  percent: 86
+  percent: 51
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
@@ -668,7 +668,7 @@ Status: Ready for Phase 214 (Store admin-only gate + UX polish)
 - CARRY-P212-RLS-POLICIES — real RLS policies on 4 tables → P214
 - CARRY-P212-LEGACY-ADMIN-UNIFY — migrate legacy api-key admin routes to cookie path (cosmetic)
 
-Last activity: 2026-06-13
+Last activity: 2026-06-14
 
 ### ✅ Phase 209 SHIPPED (commit `8ad89ee6`)
 
@@ -736,7 +736,7 @@ Previously: Phase 203 Plan 203-01 ✅ COMPLETE 2026-05-23 — Branch A (openclaw
 ## Next Planned Phase
 
 - **Phase:** 999.1
-- **Status:** Executing Phase --phase
+- **Status:** Ready to plan
 - **Plan count:** 5
 - **CONTEXT:** .planning/phases/248-luse-display-lifecycle/248-CONTEXT.md
 - **Wave plan:** Wave 1 (248-01 backend display-manager ✅) → Wave 2 (248-02 MCP tool registrations ✅) → Wave 3 (248-03 TTL GC sweep — NEXT) → Wave 4 (248-04 canonical docs + shim sync) → Wave 5 (248-05 Mini PC deploy + UAT)
