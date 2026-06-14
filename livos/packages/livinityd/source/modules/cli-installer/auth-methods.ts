@@ -57,9 +57,11 @@ export interface AuthMethod {
  * THE matrix. 20 keys, one per SUPPORTED_CLIS name (drift-locked below).
  *
  * Classification rationale (267-RESEARCH "Per-CLI auth matrix"):
- *   - claude-code: apikey (ANTHROPIC_API_KEY) primary; bare `claude` login is
- *     the paste-back secondary (268 — `setup-token`'s localhost callback fails
- *     headless, the bare login prompts `Paste code here if prompted`).
+ *   - claude-code: paste-back (268, WR-04) — the bare `claude` headless login
+ *     prints a URL + prompts `Paste code here if prompted`; the operator
+ *     authorizes in a browser and pastes the OAuth code back into stdin.
+ *     `setup-token`'s localhost callback fails headless. ANTHROPIC_API_KEY is the
+ *     FALLBACK (apiKeyEnv kept; the dialog offers "Use an API key instead").
  *   - gemini: apikey (Google-OAuth headless is unstable → paste GEMINI_API_KEY).
  *   - opencode: apikey (write auth.json); Copilot/ChatGPT device is secondary.
  *   - openclaw: apikey (ANTHROPIC_API_KEY…); `openclaw onboard` device secondary.
@@ -83,11 +85,16 @@ export interface AuthMethod {
  */
 export const CLI_AUTH_METHODS: Readonly<Record<CliName, AuthMethod>> = {
 	'claude-code': {
-		branch: 'apikey',
+		// 268 (WR-04 fix) — paste-back is now the PRIMARY claude-code auth flow:
+		// the bare `claude` headless login prints a URL + prompts `Paste code here
+		// if prompted` (the operator authorizes in a browser, then pastes the OAuth
+		// code back into the login's stdin). `setup-token`'s localhost callback
+		// fails headless, so this replaces it. The ANTHROPIC_API_KEY path stays as
+		// the FALLBACK (apiKeyEnv kept) — the dialog offers "Use an API key instead"
+		// if the headless login never emits its URL under a pipe (TTY-only risk).
+		branch: 'paste-back',
 		apiKeyEnv: 'ANTHROPIC_API_KEY',
-		// 268 — bare `claude` first-launch login is the paste-back secondary.
-		// `setup-token`'s localhost callback fails headless; the bare login prints
-		// a URL + prompts `Paste code here if prompted` in SSH/container/headless.
+		// Bare `claude` login (no subcommand) — mirrors CLI_AUTH_COMMANDS in auth.ts.
 		loginArgv: ['claude', []],
 	},
 	opencode: {branch: 'apikey', apiKeyEnv: 'OPENAI_API_KEY'},

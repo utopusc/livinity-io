@@ -102,9 +102,13 @@ describe('AuthBranch — paste-back capability (Phase 268-01)', () => {
 	})
 })
 
-describe('claude-code reclassification — bare login paste-back (Phase 268-01)', () => {
-	test("claude-code branch stays 'apikey' (reliable headless default)", () => {
-		expect(CLI_AUTH_METHODS['claude-code'].branch).toBe('apikey')
+describe('claude-code reclassification — bare login paste-back (Phase 268-01 / WR-04)', () => {
+	test("claude-code branch is 'paste-back' (the bare headless login is the primary flow)", () => {
+		// WR-04 fix: the dialog reaches the paste-back UI ONLY when the branch is
+		// 'paste-back'; claude-code was the lone paste-back CLI but was still tagged
+		// 'apikey', leaving the entire 268-04 paste-back path as dead code. The
+		// ANTHROPIC_API_KEY env stays as the fallback the dialog can switch to.
+		expect(CLI_AUTH_METHODS['claude-code'].branch).toBe('paste-back')
 		expect(CLI_AUTH_METHODS['claude-code'].apiKeyEnv).toBe('ANTHROPIC_API_KEY')
 	})
 
