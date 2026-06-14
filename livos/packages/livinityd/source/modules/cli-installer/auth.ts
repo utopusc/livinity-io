@@ -27,6 +27,7 @@ import type {Redis} from 'ioredis'
 
 import {SUPPORTED_CLIS_SET} from './install-scripts.js'
 import {DEVICE_CODE_RE} from './auth-methods.js'
+import type {MinimalPty} from '../pty-sessions/session.js'
 import type {CliName, InstallerLogger} from './types.js'
 
 /** 5-minute auth timeout (drift-locked; same magnitude as INSTALL_TIMEOUT_MS). */
@@ -53,90 +54,114 @@ const MAX_PASTE_CODE_CHARS = 4096
 // already-running child receives the stdin write.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Phase 269-02 — the registry now backs a login with EITHER a child_process
+// (device-poll CLIs — github-copilot/codex/kimi/kiro/…, UNCHANGED) OR a node-pty
+// (paste-back CLIs that need a real TTY — claude). The bare `claude` login under a
+// PIPE stdin drops into `--print` mode and errors; only a real TTY renders the
+// `Paste code here if prompted` prompt (RESEARCH WS2). A pty has NO `.stdin`
+// stream — you write to the handle itself (`pty.write(code + '\r')`), so the
+// backing must be a discriminated union to write correctly per-kind.
+type LiveAuthBacking =
+	| {kind: 'child'; child: ChildProcess}
+	| {kind: 'pty'; pty: MinimalPty}
+
 interface LiveAuth {
-	child: ChildProcess
+	backing: LiveAuthBacking
 	createdAt: number
 	timeout: NodeJS.Timeout
 }
 
-/** One live login child per CLI name (single-in-flight). ≤1 child per CLI (≤20). */
+/** Kill whichever backing kind an entry holds (SIGKILL a child, kill() a pty). */
+function killBacking(backing: LiveAuthBacking): void {
+	try {
+		if (backing.kind === 'child') {
+			backing.child.kill('SIGKILL')
+		} else {
+			backing.pty.kill()
+		}
+	} catch {
+		/* best-effort */
+	}
+}
+
+/** One live login per CLI name (single-in-flight). ≤1 backing per CLI (≤20). */
 const liveAuths = new Map<CliName, LiveAuth>()
 
 /**
- * Test-only registry reset for suite isolation. SIGKILLs any live children and
- * clears their teardown timers so a leaked login can't bleed into the next test.
- * Mirrors agent-refresh's `_resetAgentRefreshForTests`.
+ * Test-only registry reset for suite isolation. Kills any live login (child or
+ * pty) and clears their teardown timers so a leaked login can't bleed into the
+ * next test. Mirrors agent-refresh's `_resetAgentRefreshForTests`.
  */
 export function _resetLiveAuthsForTests(): void {
 	for (const v of liveAuths.values()) {
-		try {
-			v.child.kill('SIGKILL')
-		} catch {
-			/* best-effort */
-		}
+		killBacking(v.backing)
 		clearTimeout(v.timeout)
 	}
 	liveAuths.clear()
 }
 
 /**
- * Register a freshly-spawned login child so `sendAuthInput` can write to its
- * stdin. Guarantees teardown three ways:
- *   - single-in-flight: kills any prior live child for the SAME name before
- *     registering this one (prevents two concurrent logins fighting over stdin);
- *   - timeout: after AUTH_TIMEOUT_MS (300s) SIGKILLs + deletes IF the entry is
- *     still this child (stranded — user never pasted). `.unref()`'d so the timer
+ * Register a freshly-spawned login backing (a child_process for device-poll CLIs
+ * or a node-pty for paste-back CLIs) so `sendAuthInput` can write the pasted code
+ * to it. Guarantees teardown three ways (identical for BOTH backing kinds):
+ *   - single-in-flight: kills any prior live backing for the SAME name before
+ *     registering this one (prevents two concurrent logins fighting over input);
+ *   - timeout: after AUTH_TIMEOUT_MS (300s) kills + deletes IF the entry is still
+ *     this backing (stranded — user never pasted). `.unref()`'d so the timer
  *     never holds the event loop open;
  *   - natural exit: clears the timer + deletes the entry IF it's still this
- *     child (coexists with authCli's own resolve-on-exit listener — Node allows
- *     multiple listeners).
+ *     backing. For a child this is `child.on('exit')` (coexists with authCli's
+ *     own resolve-on-exit listener — Node allows multiple listeners); for a pty
+ *     it is `pty.onExit(...)`.
  */
-export function registerLiveAuth(name: CliName, child: ChildProcess): void {
+export function registerLiveAuth(name: CliName, backing: LiveAuthBacking): void {
 	const prior = liveAuths.get(name)
 	if (prior) {
-		try {
-			prior.child.kill('SIGKILL')
-		} catch {
-			/* best-effort */
-		}
+		killBacking(prior.backing)
 		clearTimeout(prior.timeout)
 	}
 	const timeout = setTimeout(() => {
 		const cur = liveAuths.get(name)
-		if (cur?.child === child) {
-			try {
-				child.kill('SIGKILL')
-			} catch {
-				/* best-effort */
-			}
+		if (cur?.backing === backing) {
+			killBacking(backing)
 			liveAuths.delete(name)
 		}
 	}, AUTH_TIMEOUT_MS)
 	;(timeout as {unref?: () => void}).unref?.()
-	// WR-01 (crash safety): attach a best-effort 'error' listener to the child's
-	// stdin so a broken pipe (the login process exits between sendAuthInput's
-	// !destroyed guard and the write) emits a HANDLED error event instead of an
-	// uncaught one that would crash livinityd. The pasted code is never in scope
-	// here, so nothing secret can be logged. Guarded for the fake-child test stdin
-	// (a plain {write,destroyed} object with no EventEmitter surface).
-	const stdin = child.stdin as {on?: (ev: string, cb: (err: Error) => void) => void} | null
-	if (stdin && typeof stdin.on === 'function') {
-		stdin.on('error', (err) => {
-			// Swallow/log only — NEVER the pasted code (not in scope here anyway),
-			// only the CLI name + the stream error message. registerLiveAuth has no
-			// injected logger, so console.warn is the best-effort sink (the write
-			// side in sendAuthInput also try/catches as belt-and-suspenders).
-			console.warn(`[cli-installer] live-auth stdin error for ${name}: ${err.message}`)
+	liveAuths.set(name, {backing, createdAt: Date.now(), timeout})
+	if (backing.kind === 'child') {
+		const child = backing.child
+		// WR-01 (crash safety): attach a best-effort 'error' listener to the
+		// child's stdin so a broken pipe (the login process exits between
+		// sendAuthInput's !destroyed guard and the write) emits a HANDLED error
+		// event instead of an uncaught one that would crash livinityd. The pasted
+		// code is never in scope here, so nothing secret can be logged. Guarded for
+		// the fake-child test stdin (a plain {write,destroyed} object with no
+		// EventEmitter surface). node-pty's `write` no-ops on a dead pty (no throw),
+		// so the pty path needs no equivalent stdin 'error' listener.
+		const stdin = child.stdin as {on?: (ev: string, cb: (err: Error) => void) => void} | null
+		if (stdin && typeof stdin.on === 'function') {
+			stdin.on('error', (err) => {
+				console.warn(`[cli-installer] live-auth stdin error for ${name}: ${err.message}`)
+			})
+		}
+		child.on('exit', () => {
+			const cur = liveAuths.get(name)
+			if (cur?.backing === backing) {
+				clearTimeout(cur.timeout)
+				liveAuths.delete(name)
+			}
+		})
+	} else {
+		// pty backing — register cleanup via onExit instead of child.on('exit').
+		backing.pty.onExit(() => {
+			const cur = liveAuths.get(name)
+			if (cur?.backing === backing) {
+				clearTimeout(cur.timeout)
+				liveAuths.delete(name)
+			}
 		})
 	}
-	liveAuths.set(name, {child, createdAt: Date.now(), timeout})
-	child.on('exit', () => {
-		const cur = liveAuths.get(name)
-		if (cur?.child === child) {
-			clearTimeout(cur.timeout)
-			liveAuths.delete(name)
-		}
-	})
 }
 
 /** DI surface for sendAuthInput — tests inject a spy logger; production wires the real one. */
@@ -171,27 +196,43 @@ export async function sendAuthInput(
 		throw new Error(`CLI not in whitelist: ${String(input.name)}`)
 	}
 	const live = liveAuths.get(input.name)
-	if (!live || !live.child.stdin || live.child.stdin.destroyed) {
-		return {ok: false} // no live login awaiting input
+	if (!live) {
+		return {ok: false} // no registered backing awaiting input
 	}
-	// 2. Strip trailing CR/LF (we append exactly one '\n') + cap length defensively.
+	// For a child backing the stdin can be gone/destroyed — guard it (UNCHANGED).
+	// A pty has no `.stdin` stream; its `write` no-ops on a dead pty so no
+	// equivalent pre-guard is needed (the try/catch below is belt-and-suspenders).
+	if (live.backing.kind === 'child') {
+		const stdin = live.backing.child.stdin
+		if (!stdin || stdin.destroyed) {
+			return {ok: false}
+		}
+	}
+	// 2. Strip trailing CR/LF + cap length defensively. We append exactly ONE
+	//    terminator below — '\n' for a child's stdin, '\r' for a pty (TTY line
+	//    discipline submits on CARRIAGE RETURN, not newline — RESEARCH P-4).
 	const safe = input.code.replace(/[\r\n]+$/g, '').slice(0, MAX_PASTE_CODE_CHARS)
-	// WR-01 (crash safety): the stdin stream can be destroyed AFTER the !destroyed
+	// WR-01 (crash safety): a child's stdin can be destroyed AFTER the !destroyed
 	// guard above (the login process exits in that narrow window) — `write` then
 	// throws synchronously on a broken pipe. Wrap it so we resolve {ok:false}
-	// instead of letting the throw escape. The catch NEVER logs the code (bearer
-	// token) — only the CLI name + the error message.
+	// instead of letting the throw escape. node-pty's `write` does not throw on a
+	// dead pty (it no-ops), but the catch covers it defensively too. The catch
+	// NEVER logs the code (bearer token) — only the CLI name + the error message.
 	try {
-		live.child.stdin.write(safe + '\n')
+		if (live.backing.kind === 'pty') {
+			live.backing.pty.write(safe + '\r')
+		} else {
+			live.backing.child.stdin!.write(safe + '\n')
+		}
 	} catch (err) {
 		deps.logger.warn(
-			`[cli-installer] sendAuthInput stdin write failed for ${input.name}: ${err instanceof Error ? err.message : String(err)}`,
+			`[cli-installer] sendAuthInput write failed for ${input.name}: ${err instanceof Error ? err.message : String(err)}`,
 		)
 		return {ok: false}
 	}
 	// NEVER log the code (it may be a bearer token) — only its char length.
 	deps.logger.info(
-		`[cli-installer] sendAuthInput wrote ${safe.length} chars to ${input.name} stdin`,
+		`[cli-installer] sendAuthInput wrote ${safe.length} chars to ${input.name}`,
 	)
 	return {ok: true}
 }
@@ -551,7 +592,9 @@ export async function authCli(
 			// write the operator-pasted code to its stdin (paste-back). Purely
 			// additive: the registry's own exit listener coexists with the
 			// resolve-on-exit listener below (Node allows multiple listeners).
-			registerLiveAuth(input.name, child)
+			// Phase 269-02 — registered as a {kind:'child'} backing; the paste-back
+			// (claude) branch added in Task 2 registers a {kind:'pty'} backing.
+			registerLiveAuth(input.name, {kind: 'child', child})
 		} catch (spawnErr) {
 			const durationMs = Date.now() - startMs
 			deps.logger.error(
