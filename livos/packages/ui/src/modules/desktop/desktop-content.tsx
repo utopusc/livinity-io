@@ -2,6 +2,7 @@ import {motion, Variant} from 'framer-motion'
 import {useLocation} from 'react-router-dom'
 import {useState, useEffect, useCallback, useMemo, useRef} from 'react'
 
+import {CliAuthDialog} from '@/features/liv-ai/cli-auth-dialog'
 import {useCliAuthBridge} from '@/hooks/use-cli-auth-bridge'
 import {useIsMobile} from '@/hooks/use-is-mobile'
 import {useMobileApp} from '@/modules/mobile/mobile-app-context'
@@ -409,6 +410,10 @@ export function DesktopContent({onSearchClick}: {onSearchClick?: () => void}) {
 				<AppGrid items={gridItems} layout={layout} onLayoutChange={updateLayout} />
 			</div>
 			<DockSpacer />
+			{/* Phase 267-02 — the no-terminal CLI install/auth dialog. Self-mounts
+			    (listens for CLI_AUTH_DIALOG_EVENT); the bridge hook above
+			    dispatches that event from the Liv AI iframe postMessage. */}
+			<CliAuthDialog />
 		</motion.div>
 	)
 }
