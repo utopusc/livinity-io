@@ -108,13 +108,14 @@ describe('buildAgentsOverlay — join + filter', () => {
 		expect(binNames(out)).toEqual(['claude'])
 	})
 
-	test("ALWAYS keeps aion-cli (binary_name 'aion') regardless of auth", () => {
-		// Even with a 'failed' status AND unavailable, aion is the built-in
-		// Liv backend and must never vanish.
-		const list = [agent('aion', {available: false, enabled: false})]
-		const authMap = new Map<CliName, string>([['aion-cli', 'failed']])
-		const out = buildAgentsOverlay(list, authMap)
-		expect(binNames(out)).toEqual(['aion'])
+	test("ALWAYS hides aion-cli (binary_name 'aion') — operator 269.1, even fail-open", () => {
+		// Aion CLI is now hidden unconditionally: even available+enabled, and
+		// even on the fail-open path (authMap null), it must never appear.
+		const list = [agent('aion', {available: true, enabled: true}), agent('claude')]
+		const okMap = new Map<CliName, string>([['claude-code', 'ok']])
+		expect(binNames(buildAgentsOverlay(list, okMap))).toEqual(['claude'])
+		// fail-open (Redis down) still strips aion; the rest is verbatim
+		expect(binNames(buildAgentsOverlay(list, null))).toEqual(['claude'])
 	})
 
 	test('keeps an agent whose binary_name is NOT in BIN_TO_CLI_NAME unfiltered (non-LivOS agent — A3)', () => {
@@ -129,9 +130,10 @@ describe('buildAgentsOverlay — join + filter', () => {
 	test('FAIL-OPEN: returns the AionUi list VERBATIM when authMap is null (Redis unavailable — P-3)', () => {
 		const list = [agent('claude', {available: false}), agent('gemini', {enabled: false})]
 		const out = buildAgentsOverlay(list, null)
-		// Even the unavailable/disabled ones are returned — fail-open is the
-		// SAME object array, never a filtered subset.
-		expect(out).toBe(list)
+		// Even the unavailable/disabled ones are returned — fail-open never
+		// auth-filters. (269.1: aion is stripped first, so this is now a new
+		// array with identical content rather than the same reference.)
+		expect(out).toStrictEqual(list)
 	})
 
 	test("mode='badge' annotates instead of hiding (future picker pass) — still ships 'filter' by default", () => {
