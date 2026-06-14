@@ -166,12 +166,22 @@ export function useCliAuthBridge(): void {
 			// but we gate here too so an unknown name never opens anything.
 			if (!/^[a-z0-9-]+$/.test(cli) || !INSTALLABLE_CLIS.has(cli)) return
 
-			// Two message types share this bridge:
-			//   cli-install → open the dialog on the install step
-			//   cli-auth    → open the dialog toward the auth branch
+			// Three message types share this bridge:
+			//   cli-install   → open the dialog on the install step
+			//   cli-auth      → open the dialog toward the auth branch
+			//   cli-uninstall → open the dialog on the detected CLI (it shows the
+			//                   Uninstall confirm)
 			if (data.type === 'cli-install') {
 				openCliAuthDialog({cli, mode: 'install'})
 			} else if (data.type === 'cli-auth') {
+				openCliAuthDialog({cli, mode: 'auth'})
+			} else if (data.type === 'cli-uninstall') {
+				// Phase 268-04 — the Remove button in the panel posts cli-uninstall;
+				// we open the dialog on the detected CLI (it shows the Uninstall
+				// confirm + calls cliInstaller.uninstall). NAME-only RCE boundary
+				// unchanged: the /^[a-z0-9-]+$/ && INSTALLABLE_CLIS gate above already
+				// ran. mode:'auth' keeps the CliAuthDialogDetail union ('install'|'auth')
+				// unchanged — the dialog detects the CLI and surfaces Remove.
 				openCliAuthDialog({cli, mode: 'auth'})
 			} else {
 				// Unknown message type — ignore.
