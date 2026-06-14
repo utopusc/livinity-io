@@ -129,11 +129,37 @@ export interface CliInstallerRouterDeps {
 	/**
 	 * Phase 268-03 — DI seam for `uninstall`. Prod wires `uninstallCli` (reuses
 	 * the authEnv PATH-prepend internally so npm/pip resolve under livinityd's
-	 * stripped systemd PATH). The router fires the debounced agent-refresh on
-	 * `result.ok` so AionUi re-PATH-scans and the removed agent drops out of
-	 * /api/agents. Default stub throws PRECONDITION_FAILED.
+	 * stripped systemd PATH). On `result.ok` the router marks agent changes
+	 * pending (Phase 269-01 — NO LONGER an auto-restart) so the operator can
+	 * batch removals and apply ONE restart. Default stub throws PRECONDITION_FAILED.
 	 */
 	uninstallFn?: (input: {name: CliName}) => Promise<UninstallResult>
+	/**
+	 * Phase 269-01 — MANUAL APPLY (kill the restart storm). Marks that an
+	 * agent-affecting change happened (auth / setApiKey / uninstall SUCCESS) so
+	 * the UI can surface a single "Apply changes (refresh Liv AI)" button instead
+	 * of restarting liv-assistant on EVERY action (which took AionUi :3020 down
+	 * ~40s → a 502 storm). Prod wires a Redis `SET liv:cli:agent-changes-pending
+	 * '1' EX 86400`. Best-effort: a failure here MUST NEVER invalidate the
+	 * already-locked-in auth/key/uninstall success (the flag is a UX nicety, never
+	 * a correctness gate). Default fallback is a no-op async (Phase 239/240/267/268
+	 * callers / tests without the seam behave as before — no restart, no flag).
+	 */
+	markAgentChangesPendingFn?: () => Promise<void>
+	/**
+	 * Phase 269-01 — reads the pending flag for `hasPendingAgentChanges`. Prod
+	 * wires `(await livRedis.get('liv:cli:agent-changes-pending')) === '1'`.
+	 * Default fallback resolves false (nothing pending).
+	 */
+	getPendingAgentChangesFn?: () => Promise<boolean>
+	/**
+	 * Phase 269-01 — clears the pending flag after the explicit applyAgentChanges
+	 * restart. Prod wires `livRedis.del('liv:cli:agent-changes-pending')`.
+	 * Best-effort: a clear failure must NOT fail the apply (the restart already
+	 * fired; the flag self-expires via its EX 86400 TTL anyway). Default fallback
+	 * is a no-op async.
+	 */
+	clearPendingAgentChangesFn?: () => Promise<void>
 }
 
 // 64-char ceiling keeps the value well under any path/buffer limits a script
@@ -244,6 +270,26 @@ const defaultUninstallFn = async (): Promise<UninstallResult> => {
 	})
 }
 
+/**
+ * Phase 269-01 — default `markAgentChangesPendingFn` fallback: a no-op async.
+ * When unset (Phase 239/240/267/268 callers / tests without the seam) auth /
+ * setApiKey / uninstall behave exactly as before — no flag is set.
+ */
+const defaultMarkAgentChangesPendingFn = async (): Promise<void> => {}
+
+/**
+ * Phase 269-01 — default `getPendingAgentChangesFn` fallback: resolves false
+ * (nothing pending). Production injects a Redis GET over
+ * `liv:cli:agent-changes-pending`.
+ */
+const defaultGetPendingAgentChangesFn = async (): Promise<boolean> => false
+
+/**
+ * Phase 269-01 — default `clearPendingAgentChangesFn` fallback: a no-op async.
+ * Production injects a Redis DEL over `liv:cli:agent-changes-pending`.
+ */
+const defaultClearPendingAgentChangesFn = async (): Promise<void> => {}
+
 export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 	const install = deps.installFn ?? installCli
 	const detect = deps.detectFn ?? detectCli
@@ -256,20 +302,51 @@ export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 		deps.getAgentRefreshStatusFn ?? defaultGetAgentRefreshStatusFn
 	const sendAuthInput = deps.sendAuthInputFn ?? defaultSendAuthInputFn
 	const uninstall = deps.uninstallFn ?? defaultUninstallFn
+	// Phase 269-01 — manual-apply pending-flag seams (kill the restart storm).
+	const markAgentChangesPendingFn =
+		deps.markAgentChangesPendingFn ?? defaultMarkAgentChangesPendingFn
+	const getPendingAgentChanges =
+		deps.getPendingAgentChangesFn ?? defaultGetPendingAgentChangesFn
+	const clearPendingAgentChanges =
+		deps.clearPendingAgentChangesFn ?? defaultClearPendingAgentChangesFn
 
 	/**
 	 * Phase 267-03 — fire the debounced liv-assistant restart, best-effort. The
-	 * auth/setApiKey result is ALREADY locked in by the time this runs; a refresh
-	 * scheduling failure must NEVER bubble up and invalidate that success. Any
-	 * throw is caught + logged + swallowed here (scheduleAgentRefresh itself is
-	 * designed to be non-throwing, but this is defense-in-depth).
+	 * result is ALREADY locked in by the time this runs; a refresh scheduling
+	 * failure must NEVER bubble up and invalidate that success. Any throw is
+	 * caught + logged + swallowed here (scheduleAgentRefresh itself is designed
+	 * to be non-throwing, but this is defense-in-depth).
+	 *
+	 * Phase 269-01 — its ONLY caller is now `applyAgentChanges` (the explicit,
+	 * user-triggered apply). auth / setApiKey / uninstall NO LONGER call it —
+	 * they mark changes pending instead (see markAgentChangesPending below).
 	 */
 	const triggerAgentRefresh = (): void => {
 		try {
 			scheduleAgentRefresh()
 		} catch (err) {
 			deps.logger.warn(
-				'[cli-installer] scheduleAgentRefresh threw (non-fatal — auth/key write already succeeded)',
+				'[cli-installer] scheduleAgentRefresh threw (non-fatal — apply already requested)',
+				err,
+			)
+		}
+	}
+
+	/**
+	 * Phase 269-01 — best-effort mark-changes-pending. Called on auth / setApiKey
+	 * / uninstall SUCCESS to flag that AionUi needs a (deferred, user-triggered)
+	 * re-scan. REPLACES the old per-action auto-restart so the operator can batch
+	 * actions and fire exactly ONE restart via applyAgentChanges. A Redis-write
+	 * failure here MUST NEVER invalidate the already-locked-in success — the flag
+	 * is a UX nicety, not a correctness gate (T-269-04) — so every throw is
+	 * caught + logged + swallowed.
+	 */
+	const markAgentChangesPending = async (): Promise<void> => {
+		try {
+			await markAgentChangesPendingFn()
+		} catch (err) {
+			deps.logger.warn(
+				'[cli-installer] markAgentChangesPending threw (non-fatal — the auth/key write/uninstall already succeeded; Apply will still restart on demand)',
 				err,
 			)
 		}
@@ -290,11 +367,12 @@ export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 			assertWhitelisted(input.name)
 			const auditLog = deps.auditLogFactory ? deps.auditLogFactory(ctx) : undefined
 			const result = await auth({name: input.name}, {logger: deps.logger, auditLog})
-			// Phase 267-03 — ONLY on a genuinely successful device-flow login do we
-			// schedule the (debounced, best-effort) liv-assistant restart so AionUi
-			// re-scans and the agent flips Failed→ready. A failed/timed-out auth must
-			// NOT churn AionUi.
-			if (result.ok) triggerAgentRefresh()
+			// Phase 269-01 — ONLY on a genuinely successful login do we MARK changes
+			// pending (no auto-restart — that caused the 502 storm). The operator
+			// applies one restart later via applyAgentChanges. A failed/timed-out auth
+			// must NOT mark anything. Best-effort: the flag write never invalidates the
+			// already-recorded auth success.
+			if (result.ok) await markAgentChangesPending()
 			return result
 		}),
 		// Phase 267-01 — write an operator-pasted API key to the CLI's own
@@ -306,11 +384,11 @@ export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 			.mutation(async ({input}) => {
 				assertWhitelisted(input.name)
 				const result = await writeApiKey({name: input.name, key: input.key})
-				// Phase 267-03 — on a successful key write, schedule the debounced
-				// restart too (api-key CLIs PATH-resolve the same way; AionUi must
-				// re-scan to flip them Failed→ready). Best-effort; the key write stands
-				// regardless of the restart outcome.
-				if (result.ok) triggerAgentRefresh()
+				// Phase 269-01 — on a successful key write, MARK changes pending (no
+				// auto-restart). api-key CLIs PATH-resolve the same way; AionUi re-scans
+				// when the operator clicks Apply. Best-effort; the key write stands
+				// regardless of the flag-write outcome.
+				if (result.ok) await markAgentChangesPending()
 				return result
 			}),
 		// Phase 267-01 — the UI branch contract (apikey | device | browser | n/a)
@@ -364,16 +442,47 @@ export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 				return sendAuthInput({name: input.name, code: input.code})
 			}),
 		// Phase 268-03 — uninstall the locally-installed CLI per its static method
-		// (npm/rm/pip). assertWhitelisted FIRST. On success fire the debounced
-		// liv-assistant restart so AionUi re-PATH-scans and the removed agent
-		// DISAPPEARS from /api/agents (E-6). A failed uninstall does NOT fire it
-		// (must not churn AionUi).
+		// (npm/rm/pip). assertWhitelisted FIRST. Phase 269-01: on success MARK
+		// changes pending (no auto-restart) so the removed agent DISAPPEARS from
+		// /api/agents only after the operator clicks Apply (E-6). A failed uninstall
+		// does NOT mark anything (must not churn AionUi).
 		uninstall: adminProcedure.input(NameInput).mutation(async ({input}) => {
 			assertWhitelisted(input.name)
 			const result = await uninstall({name: input.name})
-			if (result.ok) triggerAgentRefresh()
+			if (result.ok) await markAgentChangesPending()
 			return result
 		}),
+		// Phase 269-01 — MANUAL APPLY (kill the restart storm). Reports whether an
+		// agent-affecting change (auth / setApiKey / uninstall) happened since the
+		// last apply, so the dialog + panel can show/hide the single "Apply changes
+		// (refresh Liv AI)" button. adminProcedure-gated (V4); NO input (the flag is
+		// process-wide, not per-CLI) so no assertWhitelisted (no untrusted name).
+		hasPendingAgentChanges: adminProcedure.query(
+			async (): Promise<{pending: boolean}> => ({
+				pending: await getPendingAgentChanges(),
+			}),
+		),
+		// Phase 269-01 — the EXPLICIT, user-triggered apply. Fires the debounced
+		// liv-assistant restart EXACTLY ONCE (via the existing triggerAgentRefresh
+		// helper — the 4s debounce coalesces a burst to one restart) THEN clears the
+		// pending flag. This is the ONLY route that restarts liv-assistant now (T-269-01:
+		// adminProcedure-gated, NO untrusted input, reuses the existing NOPASSWD
+		// sudoers entry — no new sudo grant). The clear is best-effort (the restart
+		// already fired; the flag self-expires via EX 86400 anyway).
+		applyAgentChanges: adminProcedure.mutation(
+			async (): Promise<{ok: true}> => {
+				triggerAgentRefresh()
+				try {
+					await clearPendingAgentChanges()
+				} catch (err) {
+					deps.logger.warn(
+						'[cli-installer] clearPendingAgentChanges threw (non-fatal — the restart was scheduled; the flag self-expires)',
+						err,
+					)
+				}
+				return {ok: true}
+			},
+		),
 	})
 }
 
