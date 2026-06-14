@@ -19,6 +19,7 @@ import {
 	DropdownMenuTrigger,
 } from '@/shadcn-components/ui/dropdown-menu'
 
+import {AgentLogo} from './agent-logos'
 import {LIV_AI_MODELS, type LivAiModelId} from './models'
 
 export interface LivAiModelPickerProps {
@@ -28,7 +29,6 @@ export interface LivAiModelPickerProps {
 
 export function LivAiModelPicker({value, onChange}: LivAiModelPickerProps) {
 	const current = LIV_AI_MODELS.find((m) => m.id === value) ?? LIV_AI_MODELS[0]
-	const CurrentIcon = current.Icon
 
 	return (
 		<DropdownMenu>
@@ -37,13 +37,24 @@ export function LivAiModelPicker({value, onChange}: LivAiModelPickerProps) {
 				aria-label='Select model'
 				data-testid='liv-ai-model-picker-trigger'
 			>
-				<CurrentIcon className='size-3.5' />
+				{/*
+				 * Phase 267-04 — render each row icon through <AgentLogo> keyed by
+				 * the model/agent id. Branded CLI agents (claude/gemini/cursor/…)
+				 * resolve to their real brand SVG from AGENT_LOGOS; the 3 Grok
+				 * MODELS are NOT in the brand map, so `fallbackIcon` keeps their
+				 * existing lucide glyph (those are xAI models, not CLI agents).
+				 */}
+				<AgentLogo
+					name={current.id}
+					size={14}
+					className='size-3.5'
+					fallbackIcon={current.Icon}
+				/>
 				<span>{current.name}</span>
 				<ChevronDown className='size-3.5 opacity-50' />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align='end' className='w-64'>
 				{LIV_AI_MODELS.map((m) => {
-					const ModelIcon = m.Icon
 					const selected = m.id === value
 					return (
 						<DropdownMenuItem
@@ -55,7 +66,12 @@ export function LivAiModelPicker({value, onChange}: LivAiModelPickerProps) {
 							{selected ? (
 								<Check className='mt-0.5 size-4 shrink-0' />
 							) : (
-								<ModelIcon className='mt-0.5 size-4 shrink-0 opacity-50' />
+								<AgentLogo
+									name={m.id}
+									size={16}
+									className='mt-0.5 size-4 shrink-0 opacity-50'
+									fallbackIcon={m.Icon}
+								/>
 							)}
 							<div className='flex flex-col'>
 								<span className='text-sm font-medium'>{m.name}</span>

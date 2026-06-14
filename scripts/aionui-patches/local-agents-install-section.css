@@ -70,6 +70,19 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
+/* Phase 267-04 — brand-logo avatar. Static SVG from public/agent-logos/ shown
+ * inside the same 40x40 avatar box as the monogram. `object-fit: contain` +
+ * padding keep the mark centred and uncropped; a neutral surface keeps
+ * monochrome/brand-coloured marks legible (no inline brand-colour background,
+ * unlike the monogram). On <img> error the JS swaps the element for the
+ * monogram (.liv-240-icon-monogram), so this never shows a broken image. */
+#liv-240-install-section img.liv-240-icon-logo {
+  background: var(--color-bg-2, #fff);
+  object-fit: contain;
+  padding: 6px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
 #liv-240-install-section .liv-240-label {
   min-width: 0;
 }
