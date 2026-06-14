@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
-status: planning
+status: ready_to_plan
 last_updated: "2026-06-14T07:50:58.492Z"
 last_activity: 2026-06-14
 progress:
   total_phases: 183
-  completed_phases: 94
+  completed_phases: 95
   total_plans: 626
   completed_plans: 540
-  percent: 86
+  percent: 52
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨

@@ -4803,7 +4803,7 @@ Plans:
 > Research-needed: (WS2) exact node-pty spawn + prompt/URL detection + completion signal for the claude login; (WS3) the seam to filter/badge AionUi's vendored agent list by auth status (post-process /api/agents, or a LivOS-side overlay); (WS4) enumerate AionUi's `/api/assets/logos/...` paths + naming per CLI. Builds on 267-03 (agent-refresh), 267-04 (agent-logos), 268-01 (live-child registry/sendAuthInput), 268-03 (router), 268-04 (dialog/panel). D-239-07 name-only RCE boundary preserved.
 **Requirements**: remove auto-restart from auth/setApiKey/uninstall; pending-changes tracker; applyAgentChanges tRPC route + Apply button (one restart); node-pty-backed claude login (real TTY); sendAuthInput writes to pty; URL+completion detection under pty; keep api-key fallback; auth-gated/badged agent list (hide unauthed); use AionUi /api/assets/logos icons in panel + picker with fallback.
 **Depends on:** Phase 268
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 269-01-PLAN.md — WS1 manual apply: kill the restart storm (pending flag + applyAgentChanges/hasPendingAgentChanges + Apply button in dialog + panel) [wave 1] — ✅ DONE 2026-06-14 (4 commits `8cc4ce01`..`378cdb5e`; router 56/56 + caddy 128/128 vitest + vite gate exit 0; CODE ONLY)
