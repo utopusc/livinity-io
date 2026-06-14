@@ -132,6 +132,15 @@ export interface AgentLogoProps {
 	backend?: string
 	/** cli-installer `CliName` (claude-code / cursor-agent / …). Alias of backend. */
 	name?: string
+	/**
+	 * Phase 269-04 — an AUTHORITATIVE AionUi asset URL tried BEFORE the static
+	 * `AGENT_LOGOS` SVG (e.g. an enumerated `agent.icon` prefixed with `/liv`, or
+	 * a per-CLI candidate like `/liv/api/assets/logos/ai-major/claude.svg`). When
+	 * it loads, that brand asset wins; on a 404/error the cascade falls through to
+	 * the 267 static SVG, then to the monogram — so a guessed/missing AionUi asset
+	 * NEVER shows a broken image. Same `<img src>` sandbox contract as `src`.
+	 */
+	aionuiSrc?: string
 	/** Square px size. Default 20. */
 	size?: number
 	/** Extra className on the wrapper. */
@@ -147,18 +156,25 @@ export interface AgentLogoProps {
 }
 
 /**
- * Renders a brand logo for a CLI/agent. Resolution order:
- *   1. `backend` ?? `name` → `agentLogoFor(...)`.
- *   2. If the entry has `src` AND the `<img>` loads → the brand SVG.
- *   3. Otherwise (no `src`, or the asset 404s at runtime) → a deterministic
- *      monogram avatar (first letter on `brandColor`). NEVER a broken image.
+ * Renders a brand logo for a CLI/agent. Phase 269-04 — a 3-TIER `<img>` cascade
+ * (advanced by `onError`), so a guessed/missing asset never shows the browser's
+ * broken-image glyph:
+ *   1. `aionuiSrc` (the AUTHORITATIVE AionUi `/liv/api/assets/logos/...` URL, when
+ *      supplied) → on error advances to tier 2.
+ *   2. `entry.src` (the 267 static `AGENT_LOGOS` SVG, when present) → on error
+ *      advances to tier 3.
+ *   3. A deterministic monogram avatar (first letter on `brandColor`). NEVER a
+ *      broken image — this is the terminal tier.
  *
- * The `<img>` `onError` flips to the monogram, so even a missing/renamed asset
- * degrades gracefully instead of showing the browser's broken-image glyph.
+ * `backend` ?? `name` resolves the `AGENT_LOGOS` entry (label/brandColor/static
+ * src). `FallbackIcon` (when supplied) still wins over the monogram ONLY for a
+ * key genuinely unknown to AGENT_LOGOS. The `<img src>` sandbox contract from
+ * 267-04 is preserved for both the aionuiSrc and the static tier (no inline SVG).
  */
 export function AgentLogo({
 	backend,
 	name,
+	aionuiSrc,
 	size = 20,
 	className,
 	fallbackIcon: FallbackIcon,
@@ -166,10 +182,29 @@ export function AgentLogo({
 	const key = (backend ?? name ?? '').toString()
 	const known = Boolean(AGENT_LOGOS[normaliseKey(key)])
 	const entry = agentLogoFor(key)
-	const [imgFailed, setImgFailed] = useState(false)
+	// 269-04 — a 2-step onError cascade (NOT a single boolean): the AionUi asset
+	// fails over to the 267 static SVG, which fails over to the monogram.
+	const [aionuiFailed, setAionuiFailed] = useState(false)
+	const [staticFailed, setStaticFailed] = useState(false)
 
 	const dim = `${size}px`
 	const radius = `${Math.round(size * 0.28)}px`
+
+	// The currently-active source for this render, following the cascade:
+	//   aionuiSrc (until it errors) → entry.src (until it errors) → null (monogram).
+	const activeSrc =
+		aionuiSrc && !aionuiFailed
+			? aionuiSrc
+			: entry.src && !staticFailed
+				? entry.src
+				: null
+	// `onError` advances to the NEXT tier: while showing the AionUi asset, flag it
+	// failed (next render tries entry.src); while showing entry.src, flag IT failed
+	// (next render falls to the monogram).
+	const handleError =
+		aionuiSrc && !aionuiFailed
+			? () => setAionuiFailed(true)
+			: () => setStaticFailed(true)
 
 	// A caller-supplied fallback glyph wins over the monogram, but ONLY when the
 	// key is genuinely unknown to AGENT_LOGOS (so a registered brand that simply
@@ -178,8 +213,9 @@ export function AgentLogo({
 		return <FallbackIcon size={size} className={className} />
 	}
 
-	// Monogram avatar — used when there is no asset OR the asset failed to load.
-	if (!entry.src || imgFailed) {
+	// Monogram avatar — the terminal tier: no asset to try (neither an AionUi src
+	// nor a static src remains), so render the deterministic monogram.
+	if (!activeSrc) {
 		return (
 			<span
 				className={className}
@@ -207,18 +243,27 @@ export function AgentLogo({
 		)
 	}
 
-	// Brand SVG — sandboxed external image (no script execution), static asset.
+	// Brand asset — sandboxed external image (no script execution). `activeSrc` is
+	// the current cascade tier (AionUi asset OR the 267 static SVG); `onError`
+	// advances to the next tier (267-04 threat-model contract: static <img src>,
+	// never inline/untrusted SVG). `data-agent-logo` reports which tier rendered.
 	return (
 		<img
+			// Remount on each tier change so the browser re-attempts the load and
+			// fires a fresh `error` for the next-tier src (a bare src-attr swap can
+			// skip the error event in some browsers).
+			key={activeSrc}
 			className={className}
-			src={entry.src}
+			src={activeSrc}
 			alt={entry.label}
 			width={size}
 			height={size}
-			data-agent-logo='asset'
+			data-agent-logo={
+				aionuiSrc && !aionuiFailed ? 'aionui' : 'asset'
+			}
 			loading='lazy'
 			decoding='async'
-			onError={() => setImgFailed(true)}
+			onError={handleError}
 			style={{
 				width: dim,
 				height: dim,
