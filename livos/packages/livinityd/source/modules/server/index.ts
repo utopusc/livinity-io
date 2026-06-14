@@ -55,6 +55,12 @@ import {
 	writeFile as writeContainerFile,
 } from '../docker/container-files.js'
 import {createAgentWsHandler, startAgentRevocationSubscriber} from './agent-socket.js'
+// Phase 269-03 (WS3) — auth-gated AionUi agent list. The overlay route below
+// (GET /api/agents, reached ONLY via the forward_auth-gated @liv_agents Caddy
+// carve-out) fetches AionUi's real list and filters unauthed agents using the
+// pure join/filter module (no untrusted input — D-239-07 preserved).
+import {buildAgentsOverlay, BIN_TO_CLI_NAME, type AionuiAgent} from '../cli-installer/agents-overlay.js'
+import type {CliName} from '../cli-installer/types.js'
 import {
 	getGitStack,
 	updateGitStackSyncSha,
@@ -1411,6 +1417,107 @@ class Server {
 				error: 'local-lan mode retired (Phase 142-01)',
 				hint: 'Use --mode portal (Phase 142-02) — Cloudflare-issued cert at the edge',
 			})
+		})
+
+		// Phase 269-03 (WS3) — auth-gated AionUi agent list overlay.
+		//
+		// AionUi's /api/agents lists EVERY installed CLI regardless of LivOS
+		// auth state, so an unauthed CLI shows in the picker as "ready" and then
+		// fails in chat. This route fetches AionUi's REAL list (loopback :3020),
+		// joins the LivOS `liv:cli:auth:<CliName>` status (one MGET), and FILTERS
+		// the agents that are definitely not signed in (buildAgentsOverlay).
+		//
+		// Reached ONLY via the Caddy @liv_agents EXACT-path carve-out
+		// (caddy.ts), which forward_auth-gates the request — so an admin session
+		// is required before :8080. The apex `/api/agents` is not otherwise a
+		// livinityd route (apex `/api/*` falls through to the catch-all), so this
+		// adds no new public surface. D-239-07: this route takes NO untrusted
+		// input that shapes a command — it reads AionUi's own loopback JSON +
+		// Redis only; the filter is driven entirely by those + the static
+		// BIN_TO_CLI_NAME map.
+		//
+		// FAIL-OPEN (pitfall P-3): wrapped in try/catch. On ANY error (AionUi
+		// unreachable, Redis down, JSON parse fail) we return AionUi's list
+		// VERBATIM — never an empty/500 picker. Hiding is a UX nicety; a Redis
+		// hiccup must never hide a working agent.
+		this.app.get('/api/agents', async (_request, response) => {
+			// Hold AionUi's raw body so the catch-all can return it verbatim even
+			// if the join/filter step is what failed.
+			let aionuiBody: unknown
+			let aionuiIsWrapped = false
+			let aionuiAgents: AionuiAgent[] = []
+			try {
+				const res = await fetch('http://127.0.0.1:3020/api/agents')
+				if (!res.ok) {
+					// AionUi answered non-2xx — proxy its status + body through
+					// (fail-open to whatever AionUi would have returned).
+					const text = await res.text().catch(() => '')
+					return response.status(res.status).type('application/json').send(text)
+				}
+				aionuiBody = await res.json()
+				// AionUi returns EITHER a bare array OR {agents:[...]} (mirror the
+				// agent-refresh.ts probe's body-shape handling).
+				if (Array.isArray(aionuiBody)) {
+					aionuiAgents = aionuiBody as AionuiAgent[]
+				} else if (
+					aionuiBody &&
+					typeof aionuiBody === 'object' &&
+					Array.isArray((aionuiBody as {agents?: unknown[]}).agents)
+				) {
+					aionuiIsWrapped = true
+					aionuiAgents = (aionuiBody as {agents: AionuiAgent[]}).agents
+				} else {
+					// Unrecognized shape — return it verbatim (fail-open).
+					return response.json(aionuiBody)
+				}
+			} catch (error) {
+				// Could not even reach/parse AionUi — there's nothing to filter
+				// AND nothing to return. Surface an empty-but-shaped body so the
+				// SPA degrades gracefully (never a 500). If AionUi is down the
+				// picker has no agents to show anyway.
+				this.livinityd.logger.error('[269-03] /api/agents — AionUi fetch failed (fail-open)', error)
+				return response.json([])
+			}
+
+			// Build the auth map from Redis (one MGET, fail-open to null on error).
+			let authMap: Map<CliName, string> | null = null
+			try {
+				// Derive the distinct CliNames present in AionUi's list via the
+				// inverted bin→cli map (skip agents we don't manage).
+				const cliNames: CliName[] = []
+				for (const a of aionuiAgents) {
+					const bin = a.agent_source_info?.binary_name ?? a.backend ?? ''
+					const cli = BIN_TO_CLI_NAME[bin]
+					if (cli && !cliNames.includes(cli)) cliNames.push(cli)
+				}
+				if (cliNames.length > 0) {
+					const keys = cliNames.map((n) => `liv:cli:auth:${n}`)
+					const values = await this.livinityd.ai.redis.mget(...keys)
+					authMap = new Map<CliName, string>()
+					cliNames.forEach((n, i) => {
+						const v = values[i]
+						if (typeof v === 'string' && v.length > 0) authMap!.set(n, v)
+					})
+				} else {
+					// No LivOS-managed agents to join — an empty (but present) map
+					// means "Redis is up, nothing failed" → keep everything.
+					authMap = new Map<CliName, string>()
+				}
+			} catch (error) {
+				// Redis unavailable — fail-OPEN: authMap stays null →
+				// buildAgentsOverlay returns the list verbatim.
+				this.livinityd.logger.error('[269-03] /api/agents — Redis MGET failed (fail-open)', error)
+				authMap = null
+			}
+
+			// Join + FILTER (ship 'filter'; a future badge pass can flip this).
+			const filtered = buildAgentsOverlay(aionuiAgents, authMap, 'filter')
+
+			// Return AionUi's OWN shape so the SPA is none the wiser.
+			if (aionuiIsWrapped) {
+				return response.json({...(aionuiBody as object), agents: filtered})
+			}
+			return response.json(filtered)
 		})
 
 		// Phase 256-04 (LIVOS-008) — forward_auth target for the Caddy subdomain
