@@ -153,25 +153,31 @@ describe('authCli — aion-cli short-circuit (AUTH_UNSUPPORTED)', () => {
 })
 
 describe('authCli — spawn happy path', () => {
-	test('Test 3: claude-code spawns with bare argv ["claude", []] and exits 0 (Phase 268 paste-back)', async () => {
-		const child = makeFakeChild()
-		const spawnFn = vi.fn(() => child as any)
+	test('Test 3: claude-code spawns with bare argv ["claude", []] via the PTY factory and exits 0 (Phase 269-02 paste-back/TTY)', async () => {
+		// Phase 269-02 — claude-code (branch paste-back) now spawns under node-pty
+		// (a real TTY), NOT child_process. The bare-argv contract is unchanged; only
+		// the backing moved from a pipe to a pty.
+		const pty = makeFakePty()
+		const ptyFactory = vi.fn(() => pty)
+		const spawnFn = vi.fn(() => makeFakeChild() as any)
 		const redis = makeRedis()
 		const deps: AuthCliDeps = {
 			logger: makeLogger(),
 			spawnFn: spawnFn as any,
+			ptyFactory: ptyFactory as any,
 			redis: redis as any,
 		}
 		const p = authCli({name: 'claude-code'}, deps)
-		setImmediate(() => {
-			child.stdout.emit('data', Buffer.from('login-url=https://example.com\n'))
-			child.emit('exit', 0)
-		})
+		await vi.waitFor(() => expect(ptyFactory).toHaveBeenCalled())
+		pty.emitData('login-url=https://example.com\n')
+		pty.emitExit(0)
 		const result = await p
 		expect(result.ok).toBe(true)
 		expect(result.exitCode).toBe(0)
-		expect(spawnFn).toHaveBeenCalledTimes(1)
-		const [cmd, args] = spawnFn.mock.calls[0] as unknown as [string, string[]]
+		// child_process spawn was NOT used for the paste-back CLI.
+		expect(spawnFn).not.toHaveBeenCalled()
+		expect(ptyFactory).toHaveBeenCalledTimes(1)
+		const [cmd, args] = ptyFactory.mock.calls[0] as unknown as [string, string[]]
 		expect(cmd).toBe('claude')
 		// 268 — reclassified from ['auth','login'] to the bare paste-back login.
 		expect(args).toEqual([])
@@ -224,10 +230,32 @@ describe('authCli — timeout', () => {
 })
 
 describe('authCli — spawn ENOENT', () => {
-	test('Test 6: spawn throws ENOENT → structured ===SPAWN-FAILED=== result', async () => {
-		const spawnFn = vi.fn(() => {
+	test('Test 6: pty spawn throws ENOENT → structured ===SPAWN-FAILED=== result (claude-code paste-back)', async () => {
+		// Phase 269-02 — claude-code spawns via the pty factory; a throwing factory
+		// (ENOENT) must resolve the same structured ===SPAWN-FAILED=== marker.
+		const ptyFactory = vi.fn(() => {
 			const err: NodeJS.ErrnoException = new Error(
 				'spawn claude ENOENT',
+			) as NodeJS.ErrnoException
+			err.code = 'ENOENT'
+			throw err
+		})
+		const redis = makeRedis()
+		const deps: AuthCliDeps = {
+			logger: makeLogger(),
+			ptyFactory: ptyFactory as any,
+			redis: redis as any,
+		}
+		const result = await authCli({name: 'claude-code'}, deps)
+		expect(result.ok).toBe(false)
+		expect(result.exitCode).toBe(-1)
+		expect(result.output.startsWith('===SPAWN-FAILED===')).toBe(true)
+	})
+
+	test('Test 6b: child_process spawn throws ENOENT → ===SPAWN-FAILED=== (device-poll CLI)', async () => {
+		const spawnFn = vi.fn(() => {
+			const err: NodeJS.ErrnoException = new Error(
+				'spawn codex ENOENT',
 			) as NodeJS.ErrnoException
 			err.code = 'ENOENT'
 			throw err
@@ -238,7 +266,7 @@ describe('authCli — spawn ENOENT', () => {
 			spawnFn: spawnFn as any,
 			redis: redis as any,
 		}
-		const result = await authCli({name: 'claude-code'}, deps)
+		const result = await authCli({name: 'codex'}, deps)
 		expect(result.ok).toBe(false)
 		expect(result.exitCode).toBe(-1)
 		expect(result.output.startsWith('===SPAWN-FAILED===')).toBe(true)
@@ -246,17 +274,18 @@ describe('authCli — spawn ENOENT', () => {
 })
 
 describe('authCli — Redis status key writes', () => {
-	test("Test 7: SET 'liv:cli:auth:claude-code' = 'running' on dispatch", async () => {
-		const child = makeFakeChild()
-		const spawnFn = vi.fn(() => child as any)
+	test("Test 7: SET 'liv:cli:auth:claude-code' = 'running' on dispatch (pty path)", async () => {
+		const pty = makeFakePty()
+		const ptyFactory = vi.fn(() => pty)
 		const redis = makeRedis()
 		const deps: AuthCliDeps = {
 			logger: makeLogger(),
-			spawnFn: spawnFn as any,
+			ptyFactory: ptyFactory as any,
 			redis: redis as any,
 		}
 		const p = authCli({name: 'claude-code'}, deps)
-		setImmediate(() => child.emit('exit', 0))
+		await vi.waitFor(() => expect(ptyFactory).toHaveBeenCalled())
+		pty.emitExit(0)
 		await p
 		// First call must be the 'running' write
 		expect(redis.set).toHaveBeenCalled()
@@ -264,34 +293,36 @@ describe('authCli — Redis status key writes', () => {
 		expect(firstCall).toEqual(['liv:cli:auth:claude-code', 'running', 'EX', 3600])
 	})
 
-	test("Test 8: SET 'liv:cli:auth:claude-code' = 'ok' on success", async () => {
-		const child = makeFakeChild()
-		const spawnFn = vi.fn(() => child as any)
+	test("Test 8: SET 'liv:cli:auth:claude-code' = 'ok' on success (pty path)", async () => {
+		const pty = makeFakePty()
+		const ptyFactory = vi.fn(() => pty)
 		const redis = makeRedis()
 		const deps: AuthCliDeps = {
 			logger: makeLogger(),
-			spawnFn: spawnFn as any,
+			ptyFactory: ptyFactory as any,
 			redis: redis as any,
 		}
 		const p = authCli({name: 'claude-code'}, deps)
-		setImmediate(() => child.emit('exit', 0))
+		await vi.waitFor(() => expect(ptyFactory).toHaveBeenCalled())
+		pty.emitExit(0)
 		await p
 		// Last call must be the 'ok' write
 		const lastCall = redis.set.mock.calls[redis.set.mock.calls.length - 1]
 		expect(lastCall).toEqual(['liv:cli:auth:claude-code', 'ok', 'EX', 3600])
 	})
 
-	test("Test 9: SET 'liv:cli:auth:claude-code' = 'failed' on non-zero exit", async () => {
-		const child = makeFakeChild()
-		const spawnFn = vi.fn(() => child as any)
+	test("Test 9: SET 'liv:cli:auth:claude-code' = 'failed' on non-zero exit (pty path)", async () => {
+		const pty = makeFakePty()
+		const ptyFactory = vi.fn(() => pty)
 		const redis = makeRedis()
 		const deps: AuthCliDeps = {
 			logger: makeLogger(),
-			spawnFn: spawnFn as any,
+			ptyFactory: ptyFactory as any,
 			redis: redis as any,
 		}
 		const p = authCli({name: 'claude-code'}, deps)
-		setImmediate(() => child.emit('exit', 13))
+		await vi.waitFor(() => expect(ptyFactory).toHaveBeenCalled())
+		pty.emitExit(13)
 		await p
 		const lastCall = redis.set.mock.calls[redis.set.mock.calls.length - 1]
 		expect(lastCall).toEqual(['liv:cli:auth:claude-code', 'failed', 'EX', 3600])
@@ -299,19 +330,20 @@ describe('authCli — Redis status key writes', () => {
 })
 
 describe('authCli — auditLog DI seam', () => {
-	test('Test 10: auditLog called once on completion with structured row', async () => {
-		const child = makeFakeChild()
-		const spawnFn = vi.fn(() => child as any)
+	test('Test 10: auditLog called once on completion with structured row (pty path)', async () => {
+		const pty = makeFakePty()
+		const ptyFactory = vi.fn(() => pty)
 		const redis = makeRedis()
 		const auditLog = vi.fn().mockResolvedValue(undefined)
 		const deps: AuthCliDeps = {
 			logger: makeLogger(),
-			spawnFn: spawnFn as any,
+			ptyFactory: ptyFactory as any,
 			redis: redis as any,
 			auditLog: auditLog as any,
 		}
 		const p = authCli({name: 'claude-code'}, deps)
-		setImmediate(() => child.emit('exit', 0))
+		await vi.waitFor(() => expect(ptyFactory).toHaveBeenCalled())
+		pty.emitExit(0)
 		await p
 		expect(auditLog).toHaveBeenCalledTimes(1)
 		const expectedDigest = createHash('sha256')
@@ -791,8 +823,11 @@ describe('Phase 269-02 — sendAuthInput writes CR to a pty, LF to a child', () 
 	})
 })
 
-// Phase 268-01 — the spawn site registers the live child.
-describe('authCli — registers the live child the instant it spawns', () => {
+// Phase 268-01 — the device-poll spawn site registers the live CHILD so a paste
+// via sendAuthInput reaches its stdin (LF). (claude-code's paste-back/pty path is
+// covered by "a paste via sendAuthInput reaches the pty (CR)" above — Phase
+// 269-02.) Uses a device-poll CLI (codex) which STAYS on child_process.
+describe('authCli — registers the live child the instant it spawns (device-poll)', () => {
 	test('a write via sendAuthInput reaches the child authCli spawned', async () => {
 		const child = makeFakeChild()
 		const spawnFn = vi.fn(() => child as any)
@@ -802,14 +837,14 @@ describe('authCli — registers the live child the instant it spawns', () => {
 			spawnFn: spawnFn as any,
 			redis: redis as any,
 		}
-		// Start the login (claude-code now spawns the bare paste-back login).
-		const p = authCli({name: 'claude-code'}, deps)
+		// codex (device, NOT paste-back) spawns via child_process.
+		const p = authCli({name: 'codex'}, deps)
 		// authCli awaits the redis 'running' SET before spawning — yield until the
 		// spawn (and registerLiveAuth) has actually run.
 		await vi.waitFor(() => expect(spawnFn).toHaveBeenCalled())
 		// BEFORE the child exits, the operator pastes a code — it must reach stdin.
 		const sendRes = await sendAuthInput(
-			{name: 'claude-code', code: 'PASTE9'},
+			{name: 'codex', code: 'PASTE9'},
 			makeSendDeps(),
 		)
 		expect(sendRes).toEqual({ok: true})
