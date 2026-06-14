@@ -727,6 +727,17 @@ export const httpOnlyPaths = [
 	// Mounted under the same cliInstaller.* namespace as the install + detect
 	// routes (cli-installer-router.ts declaration order [detect, install, auth]).
 	'cliInstaller.auth',
+	// Phase 267-01 — no-terminal auth surface. cliInstaller.setApiKey writes the
+	// operator-pasted key to the CLI's own config/env file (filesystem I/O); a
+	// half-broken WS after `systemctl restart livos` would silently drop the
+	// save (memory pitfall B-12 / X-04 — same rationale as cliInstaller.auth +
+	// provider.config.set above). getAuthMethod (the UI branch contract) +
+	// getDeviceCode (late-poll of the device URL+code) are queries but ride HTTP
+	// for namespace locality with the mutation + first-paint flicker avoidance
+	// (precedent: mcp.config.list, cliInstaller.detect).
+	'cliInstaller.setApiKey',
+	'cliInstaller.getAuthMethod',
+	'cliInstaller.getDeviceCode',
 	// Phase 246-03 — pty-sessions admin namespace (listSessions + killSession).
 	// adminProcedure-gated mutations from the future "Active terminals"
 	// admin UI (deferred to Phase 246-05). HTTP-only per the standard

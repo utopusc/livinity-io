@@ -68,6 +68,9 @@ let detectFn: ReturnType<typeof vi.fn>
 let authFn: ReturnType<typeof vi.fn>
 let auditLogFn: ReturnType<typeof vi.fn>
 let auditLogFactory: ReturnType<typeof vi.fn>
+// Phase 267-01 — setApiKey + getDeviceCode DI seams
+let writeApiKeyFn: ReturnType<typeof vi.fn>
+let getDeviceCodeFn: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
 	installFn = vi.fn().mockResolvedValue({
@@ -90,6 +93,15 @@ beforeEach(() => {
 	})
 	auditLogFn = vi.fn().mockResolvedValue(undefined)
 	auditLogFactory = vi.fn((_ctx: unknown) => auditLogFn)
+	writeApiKeyFn = vi.fn().mockResolvedValue({
+		ok: true,
+		path: '/home/test/.gemini/.env',
+	})
+	getDeviceCodeFn = vi
+		.fn()
+		.mockResolvedValue(
+			JSON.stringify({url: 'https://kimi.com/device', code: 'CODE-1234'}),
+		)
 })
 
 function build(opts: {withAudit?: boolean} = {}) {
@@ -98,6 +110,8 @@ function build(opts: {withAudit?: boolean} = {}) {
 		installFn: installFn as any,
 		detectFn: detectFn as any,
 		authFn: authFn as any,
+		writeApiKeyFn: writeApiKeyFn as any,
+		getDeviceCodeFn: getDeviceCodeFn as any,
 		auditLogFactory: opts.withAudit
 			? (auditLogFactory as any)
 			: undefined,
@@ -175,17 +189,27 @@ describe('cli-installer-router — happy path', () => {
 })
 
 describe('cli-installer-router — contract drift-locks', () => {
-	test('T7 — router exposes exactly install + detect + auth procedures', () => {
+	test('T7 — router exposes install + detect + auth + the Phase 267-01 trio', () => {
 		const r = build()
 		const procNames = Object.keys(r._def.procedures ?? {}).sort()
-		expect(procNames).toEqual(['auth', 'detect', 'install'])
+		expect(procNames).toEqual(
+			['auth', 'detect', 'getAuthMethod', 'getDeviceCode', 'install', 'setApiKey'].sort(),
+		)
 	})
 
-	test('T14 — drift-lock: router procedure list (in declaration order) = [detect, install, auth]', () => {
+	test('T14 — drift-lock: declaration order = [detect, install, auth, setApiKey, getAuthMethod, getDeviceCode]', () => {
 		const r = build()
-		// Insertion order of router({...}) literal — pinned by Plan 240-01.
+		// Insertion order of router({...}) literal — pinned by Plan 240-01 (first
+		// three) + Phase 267-01 (the additive trio appended after auth).
 		const procNames = Object.keys(r._def.procedures ?? {})
-		expect(procNames).toEqual(['detect', 'install', 'auth'])
+		expect(procNames).toEqual([
+			'detect',
+			'install',
+			'auth',
+			'setApiKey',
+			'getAuthMethod',
+			'getDeviceCode',
+		])
 	})
 
 	test('default cliInstallerRouter (empty-injection stub) throws PRECONDITION_FAILED', async () => {
@@ -273,5 +297,104 @@ describe('cli-installer-router — audit-log hook (Phase 240-01)', () => {
 		expect(auditLogFactory).toHaveBeenCalledTimes(1)
 		const [, deps] = authFn.mock.calls[0] as [unknown, {auditLog: unknown}]
 		expect(deps.auditLog).toBeDefined()
+	})
+})
+
+// Phase 267-01 Task 5 — setApiKey / getAuthMethod / getDeviceCode procedures.
+describe('cli-installer-router — setApiKey (Phase 267-01)', () => {
+	test('T20 — setApiKey({name:"foo"}) rejects with BAD_REQUEST + no writeApiKeyFn call', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await expect(
+			caller.setApiKey({name: 'foo', key: 'k'}),
+		).rejects.toMatchObject({code: 'BAD_REQUEST'})
+		expect(writeApiKeyFn).not.toHaveBeenCalled()
+	})
+
+	test('T21 — setApiKey({name:"gemini",key}) delegates to writeApiKeyFn + returns {ok,path}', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.setApiKey({name: 'gemini', key: 'sk-xyz'})
+		expect(writeApiKeyFn).toHaveBeenCalledTimes(1)
+		const [arg] = writeApiKeyFn.mock.calls[0] as [{name: string; key: string}]
+		expect(arg.name).toBe('gemini')
+		expect(arg.key).toBe('sk-xyz')
+		expect(result).toEqual({ok: true, path: '/home/test/.gemini/.env'})
+	})
+
+	test('T22 — setApiKey rejects an over-long key (zod max 8000)', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await expect(
+			caller.setApiKey({name: 'gemini', key: 'x'.repeat(8001)}),
+		).rejects.toThrow()
+		expect(writeApiKeyFn).not.toHaveBeenCalled()
+	})
+
+	test('T23 — non-admin caller rejected from setApiKey before writeApiKeyFn fires', async () => {
+		const r = build()
+		const caller = r.createCaller(makeNonAdminCtx() as any)
+		await expect(
+			caller.setApiKey({name: 'gemini', key: 'k'}),
+		).rejects.toThrow()
+		expect(writeApiKeyFn).not.toHaveBeenCalled()
+	})
+})
+
+describe('cli-installer-router — getAuthMethod (Phase 267-01)', () => {
+	test('T24 — getAuthMethod({name:"gemini"}) returns the apikey branch classification', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const method = await caller.getAuthMethod({name: 'gemini'})
+		expect(method.branch).toBe('apikey')
+		expect(method.apiKeyEnv).toBe('GEMINI_API_KEY')
+	})
+
+	test('T25 — getAuthMethod({name:"kimi-cli"}) returns the device branch', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const method = await caller.getAuthMethod({name: 'kimi-cli'})
+		expect(method.branch).toBe('device')
+	})
+
+	test('T26 — getAuthMethod({name:"foo"}) rejects with BAD_REQUEST', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await expect(caller.getAuthMethod({name: 'foo'})).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+		})
+	})
+})
+
+describe('cli-installer-router — getDeviceCode (Phase 267-01)', () => {
+	test('T27 — getDeviceCode parses the cached JSON into {url, code}', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const dc = await caller.getDeviceCode({name: 'kimi-cli'})
+		expect(dc).toEqual({url: 'https://kimi.com/device', code: 'CODE-1234'})
+	})
+
+	test('T28 — getDeviceCode returns null when no cache value is present', async () => {
+		getDeviceCodeFn.mockResolvedValueOnce(null)
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const dc = await caller.getDeviceCode({name: 'kimi-cli'})
+		expect(dc).toBeNull()
+	})
+
+	test('T29 — getDeviceCode returns null on a malformed cache value', async () => {
+		getDeviceCodeFn.mockResolvedValueOnce('not-json{')
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const dc = await caller.getDeviceCode({name: 'kimi-cli'})
+		expect(dc).toBeNull()
+	})
+
+	test('T30 — getDeviceCode({name:"foo"}) rejects with BAD_REQUEST', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await expect(caller.getDeviceCode({name: 'foo'})).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+		})
 	})
 })
