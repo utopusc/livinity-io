@@ -246,7 +246,20 @@
           type: 'button',
           title: 'Re-check whether this CLI is installed',
           style: 'display:none'
-        }, ['Re-detect'])
+        }, ['Re-detect']),
+        // Phase 268-04 — Remove button: posts cli-uninstall (NAME only) to the
+        // shell, which opens the CliAuthDialog's Uninstall confirm. Hidden until
+        // the row is detected/installed (like the Auth button). Gated on
+        // !authHidden so aion-cli — which is genuinely not auth-able AND not
+        // uninstallable (its UninstallSpec is kind:'none' -> UNINSTALL_REFUSED
+        // server-side) — never renders a Remove affordance (operator hard rule:
+        // aion-cli is not uninstallable).
+        meta.authHidden ? null : el('button', {
+          className: 'liv-240-btn liv-240-btn-uninstall',
+          type: 'button',
+          title: 'Remove this CLI from the server',
+          style: 'display:none'
+        }, ['Remove'])
       ])
     ]);
     var err = el('div', { className: 'liv-240-error' });
@@ -260,6 +273,8 @@
     var installBtn = row.querySelector('.liv-240-btn-install');
     var authBtn = row.querySelector('.liv-240-btn-auth');
     var redetectBtn = row.querySelector('.liv-240-btn-redetect');
+    // Phase 268-04 — Remove button (absent on aion-cli's row).
+    var uninstallBtn = row.querySelector('.liv-240-btn-uninstall');
     var errEl = row.querySelector('.liv-240-error');
     row.classList.remove('detected', 'installing', 'installed', 'failed', 'authing', 'authed', 'terminal');
     // GC-B — Re-detect is only meaningful after a terminal-driven install/auth;
@@ -270,11 +285,15 @@
       if (statusEl) statusEl.textContent = 'Installed ✓';
       if (installBtn) installBtn.style.display = 'none';
       if (authBtn) authBtn.style.display = '';
+      // 268-04 — a detected/installed CLI can be removed.
+      if (uninstallBtn) uninstallBtn.style.display = '';
       if (errEl) errEl.style.display = 'none';
     } else if (state === 'undetected') {
       if (statusEl) statusEl.textContent = 'Not installed';
       if (installBtn) installBtn.style.display = '';
       if (authBtn) authBtn.style.display = 'none';
+      // 268-04 — nothing to remove when it's not installed.
+      if (uninstallBtn) uninstallBtn.style.display = 'none';
       if (errEl) errEl.style.display = 'none';
     } else if (state === 'installing') {
       row.classList.add('installing');
@@ -385,6 +404,21 @@
               authBtn.disabled = false;
             } else {
               setRowState(row, 'failed', 'Could not open the setup dialog');
+            }
+          });
+        }
+
+        // Remove handler — Phase 268-04: posts the CLI NAME to the shell, which
+        // opens the no-terminal CliAuthDialog where the operator confirms the
+        // uninstall (two-step confirm -> cliInstaller.uninstall). RCE boundary
+        // unchanged: we post ONLY the NAME, exactly like the Auth button.
+        var uninstallBtn = row.querySelector('.liv-240-btn-uninstall');
+        if (uninstallBtn) {
+          uninstallBtn.addEventListener('click', function () {
+            if (postToShell('cli-uninstall', name)) {
+              setTerminalPending(row, 'Remove opened — confirm in the dialog, then Re-detect');
+            } else {
+              setRowState(row, 'failed', 'Could not open the remove dialog');
             }
           });
         }
