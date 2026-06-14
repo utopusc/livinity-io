@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v45.0
 milestone_name: Security Hardening
-status: ready_to_plan
-last_updated: "2026-06-14T01:02:00.000Z"
+status: planning
+last_updated: "2026-06-14T03:38:07.896Z"
 last_activity: 2026-06-14
 progress:
-  total_phases: 181
+  total_phases: 182
   completed_phases: 92
-  total_plans: 618
-  completed_plans: 529
-  percent: 51
+  total_plans: 622
+  completed_plans: 532
+  percent: 86
 ---
 
 ## 🚨 RESUME AFTER /clear — READ FIRST 🚨
@@ -1776,7 +1776,7 @@ Lifecycle: ◆ Code-complete; awaiting user-walked Mini PC UAT signoff. After UA
   - `.planning/phases/85-agent-management/85-SCHEMA-SUMMARY.md`
   - `.planning/phases/87-hermes-background-runtime/87-SUMMARY.md`
 
-**Planned Phase:** 263 (Commercial-Launch Security — research + P0 launch-blockers) — 6 plans — 2026-06-10T18:27:52.504Z
+**Planned Phase:** 268 (interactive-cli-auth-paste-back-device-login-cli-uninstall) — 4 plans — 2026-06-14T03:38:07.853Z
 
 **Planned Phase:** 100 (Multi-Stream + Stream-Window Redesign) — 5 plans — 2026-05-08T16:05:00.000Z (waves 1→2→3→4→5; sacred SHA hook installed in 100-01; v33 ✅ Shipped flip in 100-05)
 
