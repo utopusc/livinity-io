@@ -51,6 +51,7 @@ import {
 	type InstallerLogger,
 	type CliName,
 	type WriteApiKeyResult,
+	type UninstallResult,
 } from '../../cli-installer/index.js'
 import {adminProcedure, router} from './trpc.js'
 
@@ -113,6 +114,26 @@ export interface CliInstallerRouterDeps {
 	 * UI polls this to show "Applying…". Default stub returns null.
 	 */
 	getAgentRefreshStatusFn?: () => Promise<string | null>
+	/**
+	 * Phase 268-03 — DI seam for `sendAuthInput`. Prod wires the module-level
+	 * `sendAuthInput` (the live-child registry is module-state inside auth.ts —
+	 * stateless from the router's view, like writeApiKeyFn; no Redis closure).
+	 * The pasted `code` reaches the process ONLY as the live login child's stdin
+	 * DATA — never an argv/path/shell — and is NEVER logged/returned (the module
+	 * fn returns only {ok}). Default stub throws PRECONDITION_FAILED.
+	 */
+	sendAuthInputFn?: (input: {
+		name: CliName
+		code: string
+	}) => Promise<{ok: boolean}>
+	/**
+	 * Phase 268-03 — DI seam for `uninstall`. Prod wires `uninstallCli` (reuses
+	 * the authEnv PATH-prepend internally so npm/pip resolve under livinityd's
+	 * stripped systemd PATH). The router fires the debounced agent-refresh on
+	 * `result.ok` so AionUi re-PATH-scans and the removed agent drops out of
+	 * /api/agents. Default stub throws PRECONDITION_FAILED.
+	 */
+	uninstallFn?: (input: {name: CliName}) => Promise<UninstallResult>
 }
 
 // 64-char ceiling keeps the value well under any path/buffer limits a script
@@ -126,6 +147,14 @@ const NameInput = z.object({name: z.string().min(1).max(64)})
 const SetApiKeyInput = z.object({
 	name: z.string().min(1).max(64),
 	key: z.string().min(1).max(8000),
+})
+
+// Phase 268-03 — the pasted code is bounded 1..4096 (OAuth codes are short; 4KB
+// caps abuse). NEVER logged; the whitelist guard on `name` is the RCE boundary;
+// `code` is written to the live child's stdin as DATA, never argv.
+const SendAuthInputInput = z.object({
+	name: z.string().min(1).max(64),
+	code: z.string().min(1).max(4096),
 })
 
 /**
@@ -189,6 +218,32 @@ const defaultScheduleAgentRefreshFn = (): void => {}
  */
 const defaultGetAgentRefreshStatusFn = async (): Promise<string | null> => null
 
+/**
+ * Default `sendAuthInputFn` fallback — throws PRECONDITION_FAILED. Production
+ * boot injects the module-level `sendAuthInput` (closed over the boot logger).
+ * An un-wired router can NEVER silently no-op the paste-back.
+ */
+const defaultSendAuthInputFn = async (): Promise<{ok: boolean}> => {
+	throw new TRPCError({
+		code: 'PRECONDITION_FAILED',
+		message:
+			'cliInstaller.sendAuthInput requires production wire-up (sendAuthInputFn DI seam unfilled)',
+	})
+}
+
+/**
+ * Default `uninstallFn` fallback — throws PRECONDITION_FAILED. Production boot
+ * injects `uninstallCli` (closed over the boot logger; it resolves home/fs/PATH
+ * internally). An un-wired router can NEVER silently no-op an uninstall.
+ */
+const defaultUninstallFn = async (): Promise<UninstallResult> => {
+	throw new TRPCError({
+		code: 'PRECONDITION_FAILED',
+		message:
+			'cliInstaller.uninstall requires production wire-up (uninstallFn DI seam unfilled)',
+	})
+}
+
 export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 	const install = deps.installFn ?? installCli
 	const detect = deps.detectFn ?? detectCli
@@ -199,6 +254,8 @@ export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 		deps.scheduleAgentRefreshFn ?? defaultScheduleAgentRefreshFn
 	const getAgentRefreshStatus =
 		deps.getAgentRefreshStatusFn ?? defaultGetAgentRefreshStatusFn
+	const sendAuthInput = deps.sendAuthInputFn ?? defaultSendAuthInputFn
+	const uninstall = deps.uninstallFn ?? defaultUninstallFn
 
 	/**
 	 * Phase 267-03 — fire the debounced liv-assistant restart, best-effort. The
@@ -295,6 +352,28 @@ export function createCliInstallerRouter(deps: CliInstallerRouterDeps) {
 				return {status: 'idle'}
 			},
 		),
+		// Phase 268-03 — write the operator-pasted code to the live paste-back
+		// login's stdin. assertWhitelisted FIRST (RCE boundary). The code is NEVER
+		// logged/echoed — the module fn returns only {ok}. NO agent-refresh here:
+		// paste-back success arrives LATER on the login child's own exit
+		// (liv:cli:auth:<name> = ok), not on this stdin write.
+		sendAuthInput: adminProcedure
+			.input(SendAuthInputInput)
+			.mutation(async ({input}) => {
+				assertWhitelisted(input.name)
+				return sendAuthInput({name: input.name, code: input.code})
+			}),
+		// Phase 268-03 — uninstall the locally-installed CLI per its static method
+		// (npm/rm/pip). assertWhitelisted FIRST. On success fire the debounced
+		// liv-assistant restart so AionUi re-PATH-scans and the removed agent
+		// DISAPPEARS from /api/agents (E-6). A failed uninstall does NOT fire it
+		// (must not churn AionUi).
+		uninstall: adminProcedure.input(NameInput).mutation(async ({input}) => {
+			assertWhitelisted(input.name)
+			const result = await uninstall({name: input.name})
+			if (result.ok) triggerAgentRefresh()
+			return result
+		}),
 	})
 }
 
@@ -320,6 +399,22 @@ export const cliInstallerRouter = createCliInstallerRouter({
 		})
 	},
 	authFn: async () => {
+		throw new TRPCError({
+			code: 'PRECONDITION_FAILED',
+			message:
+				'cli-installer-router not yet injected — livinityd boot did not wire production deps',
+		})
+	},
+	// Phase 268-03 — the un-wired router must throw, never silently no-op the
+	// paste-back stdin write or the uninstall.
+	sendAuthInputFn: async () => {
+		throw new TRPCError({
+			code: 'PRECONDITION_FAILED',
+			message:
+				'cli-installer-router not yet injected — livinityd boot did not wire production deps',
+		})
+	},
+	uninstallFn: async () => {
 		throw new TRPCError({
 			code: 'PRECONDITION_FAILED',
 			message:

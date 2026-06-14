@@ -743,6 +743,13 @@ export const httpOnlyPaths = [
 	// HTTP for namespace locality with the rest of cliInstaller.* (precedent
 	// above); a flaky WS post-`systemctl restart livos` would stall the poll.
 	'cliInstaller.agentRefreshStatus',
+	// Phase 268 — sendAuthInput (the operator-pasted login code is written to the
+	// live paste-back child's stdin) + uninstall (npm uninstall / fs.rm) are
+	// long-ish admin mutations; same WS-survival rationale as cliInstaller.auth /
+	// install above (memory pitfall B-12 / X-04 — a half-broken WS after
+	// `systemctl restart livos` would silently hang them).
+	'cliInstaller.sendAuthInput',
+	'cliInstaller.uninstall',
 	// Phase 246-03 — pty-sessions admin namespace (listSessions + killSession).
 	// adminProcedure-gated mutations from the future "Active terminals"
 	// admin UI (deferred to Phase 246-05). HTTP-only per the standard
