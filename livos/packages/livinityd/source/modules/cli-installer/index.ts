@@ -31,3 +31,11 @@ export {
 	type AuditLogRow,
 	type AuditLogFn,
 } from './auth.js'
+// Phase 267-01 Task 1 — per-CLI auth-method classification matrix (the UI
+// branch contract) + the device-code transcript parser.
+export {
+	CLI_AUTH_METHODS,
+	DEVICE_CODE_RE,
+	type AuthBranch,
+	type AuthMethod,
+} from './auth-methods.js'
