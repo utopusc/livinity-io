@@ -32,8 +32,14 @@ import type {CliName, InstallerLogger} from './types.js'
 /** 0600 — owner read/write only. Secrets MUST NOT be group/world readable. */
 const SECRET_MODE = 0o600
 
-/** Target descriptor per apikey CLI. */
-type WriteTarget =
+/**
+ * Target descriptor per apikey CLI.
+ *
+ * Phase 268-02 EXPORTS this (and WRITE_TARGETS below) so cli-uninstall.ts can
+ * reuse each CLI's secret-file `relPath` to delete the 267 api-key on uninstall
+ * (a re-install must not be silently pre-authed with a stale key).
+ */
+export type WriteTarget =
 	| {kind: 'env'; relPath: string; envKey: string}
 	| {kind: 'json'; relPath: string; keyPath: readonly string[]}
 	| {kind: 'goose-yaml'; relPath: string; envKey: string}
@@ -45,7 +51,7 @@ type WriteTarget =
  *
  * Paths are relative to the resolved home dir (deps.homeDir ?? os.homedir()).
  */
-const WRITE_TARGETS: Partial<Record<CliName, WriteTarget>> = {
+export const WRITE_TARGETS: Partial<Record<CliName, WriteTarget>> = {
 	// dotenv-style (single ENV=key line)
 	gemini: {kind: 'env', relPath: '.gemini/.env', envKey: 'GEMINI_API_KEY'},
 	'mistral-vibe': {kind: 'env', relPath: '.vibe/.env', envKey: 'MISTRAL_API_KEY'},
