@@ -4779,7 +4779,7 @@ Plans:
 
 Plans:
 - [x] 267-01-PLAN.md — Backend: streaming auth (device URL+code) + `setApiKey` per-CLI 0600 writer + `auth-methods.ts` matrix + extend Wave-C auth + tRPC surface [wave 1] — ✅ CODE-COMPLETE 2026-06-13, commits `012ca734`+`2d08b86f`+`ec1c0055`+`eb3c40fd`+`91725bfb`+`85de39bd`, SUMMARY in phase dir; 74/74 vitest, tsc baseline-identical (zero net new). CODE ONLY — operator deploys via update.sh; 267-02 wires the UI
-- [ ] 267-02-PLAN.md — Frontend: `cli-auth-dialog.tsx` (device-code / api-key / browser branches) replacing the terminal route + onboarding + Local Agents panel wiring [wave 2, depends_on 267-01]
+- [x] 267-02-PLAN.md — Frontend: `cli-auth-dialog.tsx` (device-code / api-key / browser branches) replacing the terminal route + onboarding + Local Agents panel wiring [wave 2, depends_on 267-01] — ✅ CODE-COMPLETE 2026-06-14, commits `71f3da3b`+`fd29d673`+`ac2bf95d`, SUMMARY in phase dir; `pnpm --filter ui build` (vite) exit 0; device branch = `auth` mutation `{ok}` resolution + `getDeviceCode` poll, explicit-click Open-link (no auto-nav), apikey `PasswordInput`→`setApiKey` never echoed; default postMessage opens the dialog (Terminal demoted to `runCliInTerminalFallback`); onboarding+panel wired; aion-cli sole authHidden; cli-tools-step.test 9/9. CODE ONLY — operator deploys via update.sh + clear PWA SW
 - [ ] 267-03-PLAN.md — Auto-appear: debounced `liv-assistant` restart on auth success → agent Failed→ready in `/api/agents` + dialog "ready" state + Mini-PC UAT [wave 3, depends_on 267-01/02]
 - [ ] 267-04-PLAN.md — CLI/agent brand logos (`agent-logos.tsx` + `public/agent-logos/*.svg`) in the models picker + Local Agents panel, monogram fallback [wave 3]
 
