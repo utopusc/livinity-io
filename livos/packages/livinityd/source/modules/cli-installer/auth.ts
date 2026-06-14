@@ -26,6 +26,7 @@ import os from 'node:os'
 import type {Redis} from 'ioredis'
 
 import {SUPPORTED_CLIS_SET} from './install-scripts.js'
+import {DEVICE_CODE_RE} from './auth-methods.js'
 import type {CliName, InstallerLogger} from './types.js'
 
 /** 5-minute auth timeout (drift-locked; same magnitude as INSTALL_TIMEOUT_MS). */
@@ -33,6 +34,22 @@ export const AUTH_TIMEOUT_MS = 300_000
 
 const OUTPUT_CAP_BYTES = 32 * 1024
 const REDIS_TTL_SECONDS = 3600
+/** TTL for the late-poll device-code key `liv:cli:auth:url:<name>` (10 min). */
+const DEVICE_URL_TTL_SECONDS = 600
+
+/**
+ * Parse a stdout/stderr chunk for a device-flow verification URL + user code.
+ * Returns `{url, code}` only when BOTH match in the same accumulated text;
+ * otherwise null. The caller surfaces the FIRST hit live (see authCli).
+ */
+function parseDeviceCode(text: string): {url: string; code: string} | null {
+	const urlMatch = text.match(DEVICE_CODE_RE.url)
+	const codeMatch = text.match(DEVICE_CODE_RE.code)
+	if (urlMatch?.[1] && codeMatch?.[1]) {
+		return {url: urlMatch[1], code: codeMatch[1]}
+	}
+	return null
+}
 
 /**
  * Per-CLI canonical login argv. `null` = explicitly unsupported (no canonical
@@ -138,6 +155,21 @@ export interface AuthCliDeps {
 	spawnFn?: typeof nodeSpawn
 	/** Optional audit-log writer (production wires via auditLogFactory). */
 	auditLog?: AuditLogFn
+	/**
+	 * Phase 267-01 — optional live device-code seam. The FIRST time a device
+	 * verification URL + user code are parsed out of the login's stdout/stderr
+	 * (while the process is still running, polling for the user to finish in a
+	 * browser), authCli calls `onChunk({raw, url, code})`. Tests inject a spy;
+	 * production may use it to push over a websocket/SSE.
+	 */
+	onChunk?: (payload: {raw: string; url?: string; code?: string}) => void
+	/**
+	 * Phase 267-01 — optional ioredis pub client. The same first device-code hit
+	 * is best-effort published to `liv:cli:auth:stream:<name>` so a subscribed UI
+	 * receives {url, code} live. (`redis` above is the status-key SET client; a
+	 * separate pub connection is conventional with ioredis subscribe mode.)
+	 */
+	redisPub?: Pick<Redis, 'publish'>
 }
 
 export interface AuthCliInput {
@@ -251,6 +283,69 @@ export async function authCli(
 		let settled = false
 		const stdoutChunks: Buffer[] = []
 		const stderrChunks: Buffer[] = []
+		// Phase 267-01 — fire the device-code seam at most ONCE, the instant the
+		// login prints the verification URL + user code (well before exit).
+		let deviceCodeSurfaced = false
+		const handleChunkForDeviceCode = (raw: string): void => {
+			if (deviceCodeSurfaced) return
+			const parsed = parseDeviceCode(raw)
+			if (!parsed) return
+			deviceCodeSurfaced = true
+			const {url, code} = parsed
+			// (a) onChunk DI seam — synchronous, never throws into the stream.
+			try {
+				deps.onChunk?.({raw, url, code})
+			} catch (err) {
+				deps.logger.warn(
+					`[cli-installer] onChunk seam threw for ${input.name}`,
+					err,
+				)
+			}
+			const payload = JSON.stringify({url, code})
+			// (b) best-effort pub/sub for a subscribed UI (fire-and-forget).
+			try {
+				const pub = deps.redisPub?.publish(
+					`liv:cli:auth:stream:${input.name}`,
+					payload,
+				)
+				if (pub && typeof (pub as Promise<unknown>).catch === 'function') {
+					;(pub as Promise<unknown>).catch((err) =>
+						deps.logger.warn(
+							`[cli-installer] redis publish device-code failed for ${input.name}`,
+							err,
+						),
+					)
+				}
+			} catch (err) {
+				deps.logger.warn(
+					`[cli-installer] redis publish device-code threw for ${input.name}`,
+					err,
+				)
+			}
+			// (c) late-poll fallback key so a UI that connects AFTER the print
+			//     still gets the code (EX 600s).
+			try {
+				const setP = deps.redis.set(
+					`liv:cli:auth:url:${input.name}`,
+					payload,
+					'EX',
+					DEVICE_URL_TTL_SECONDS,
+				)
+				if (setP && typeof (setP as Promise<unknown>).catch === 'function') {
+					;(setP as Promise<unknown>).catch((err) =>
+						deps.logger.warn(
+							`[cli-installer] redis SET device-code url key failed for ${input.name}`,
+							err,
+						),
+					)
+				}
+			} catch (err) {
+				deps.logger.warn(
+					`[cli-installer] redis SET device-code url key threw for ${input.name}`,
+					err,
+				)
+			}
+		}
 
 		// 4. Argv-array spawn (no shell, no string interpolation).
 		let child: ChildProcess
@@ -296,9 +391,14 @@ export async function authCli(
 
 		child.stdout?.on('data', (chunk: Buffer | string) => {
 			stdoutChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+			// Parse against the accumulated stdout tail so a URL+code split across
+			// chunk boundaries still resolves (Phase 267-01 device-code streaming).
+			handleChunkForDeviceCode(joinTail(stdoutChunks))
 		})
 		child.stderr?.on('data', (chunk: Buffer | string) => {
 			stderrChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+			// kimi-cli (and others) print the device URL+code to STDERR — parse it too.
+			handleChunkForDeviceCode(joinTail(stderrChunks))
 		})
 
 		;(child as unknown as NodeJS.EventEmitter).on('exit', (code: number | null) => {
