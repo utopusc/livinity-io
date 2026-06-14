@@ -77,6 +77,10 @@ let getAgentRefreshStatusFn: ReturnType<typeof vi.fn>
 // Phase 268 — paste-back stdin write + CLI uninstall seams
 let sendAuthInputFn: ReturnType<typeof vi.fn>
 let uninstallFn: ReturnType<typeof vi.fn>
+// Phase 269-01 — manual-apply pending-flag seams (kill the restart storm)
+let markAgentChangesPendingFn: ReturnType<typeof vi.fn>
+let getPendingAgentChangesFn: ReturnType<typeof vi.fn>
+let clearPendingAgentChangesFn: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
 	installFn = vi.fn().mockResolvedValue({
@@ -119,6 +123,13 @@ beforeEach(() => {
 		exitCode: 0,
 		durationMs: 21,
 	})
+	// Phase 269-01 — markAgentChangesPending SETs the Redis pending flag on
+	// auth/setApiKey/uninstall success (REPLACING the old auto-restart);
+	// getPendingAgentChanges reads it; clearPendingAgentChanges DELs it after
+	// the single explicit applyAgentChanges restart.
+	markAgentChangesPendingFn = vi.fn().mockResolvedValue(undefined)
+	getPendingAgentChangesFn = vi.fn().mockResolvedValue(true)
+	clearPendingAgentChangesFn = vi.fn().mockResolvedValue(undefined)
 })
 
 function build(opts: {withAudit?: boolean} = {}) {
@@ -133,6 +144,9 @@ function build(opts: {withAudit?: boolean} = {}) {
 		getAgentRefreshStatusFn: getAgentRefreshStatusFn as any,
 		sendAuthInputFn: sendAuthInputFn as any,
 		uninstallFn: uninstallFn as any,
+		markAgentChangesPendingFn: markAgentChangesPendingFn as any,
+		getPendingAgentChangesFn: getPendingAgentChangesFn as any,
+		clearPendingAgentChangesFn: clearPendingAgentChangesFn as any,
 		auditLogFactory: opts.withAudit
 			? (auditLogFactory as any)
 			: undefined,
@@ -210,7 +224,7 @@ describe('cli-installer-router — happy path', () => {
 })
 
 describe('cli-installer-router — contract drift-locks', () => {
-	test('T7 — router exposes install + detect + auth + the Phase 267-01 trio + 267-03 status + the Phase 268 pair', () => {
+	test('T7 — router exposes install + detect + auth + the Phase 267-01 trio + 267-03 status + the Phase 268 pair + the Phase 269 manual-apply pair', () => {
 		const r = build()
 		const procNames = Object.keys(r._def.procedures ?? {}).sort()
 		expect(procNames).toEqual(
@@ -225,16 +239,20 @@ describe('cli-installer-router — contract drift-locks', () => {
 				// Phase 268 — paste-back stdin write + CLI uninstall.
 				'sendAuthInput',
 				'uninstall',
+				// Phase 269-01 — manual apply (kill the restart storm).
+				'hasPendingAgentChanges',
+				'applyAgentChanges',
 			].sort(),
 		)
 	})
 
-	test('T14 — drift-lock: declaration order = [detect, install, auth, setApiKey, getAuthMethod, getDeviceCode, agentRefreshStatus, sendAuthInput, uninstall]', () => {
+	test('T14 — drift-lock: declaration order = [detect, install, auth, setApiKey, getAuthMethod, getDeviceCode, agentRefreshStatus, sendAuthInput, uninstall, hasPendingAgentChanges, applyAgentChanges]', () => {
 		const r = build()
 		// Insertion order of router({...}) literal — pinned by Plan 240-01 (first
 		// three) + Phase 267-01 (the additive trio appended after auth) + Phase
 		// 267-03 (agentRefreshStatus appended last) + Phase 268 (sendAuthInput +
-		// uninstall appended last, additive).
+		// uninstall appended last, additive) + Phase 269-01 (hasPendingAgentChanges
+		// + applyAgentChanges appended last, additive).
 		const procNames = Object.keys(r._def.procedures ?? {})
 		expect(procNames).toEqual([
 			'detect',
@@ -246,6 +264,8 @@ describe('cli-installer-router — contract drift-locks', () => {
 			'agentRefreshStatus',
 			'sendAuthInput',
 			'uninstall',
+			'hasPendingAgentChanges',
+			'applyAgentChanges',
 		])
 	})
 
@@ -436,17 +456,20 @@ describe('cli-installer-router — getDeviceCode (Phase 267-01)', () => {
 	})
 })
 
-// Phase 267-03 Task 2 — schedule the debounced liv-assistant restart ONLY on
-// auth/setApiKey SUCCESS + expose agentRefreshStatus.
-describe('cli-installer-router — agent refresh on success (Phase 267-03)', () => {
-	test('T31 — auth ok:true schedules the agent refresh exactly once', async () => {
+// Phase 269-01 Task 1 — MANUAL APPLY (kill the restart storm). auth/setApiKey/
+// uninstall SUCCESS no longer auto-restarts liv-assistant; instead it SETs the
+// `liv:cli:agent-changes-pending` flag via markAgentChangesPendingFn. The
+// debounced restart now fires ONLY from the explicit applyAgentChanges route.
+describe('cli-installer-router — manual apply: pending flag on success (Phase 269-01)', () => {
+	test('T31 — auth ok:true marks changes pending exactly once + does NOT auto-restart', async () => {
 		const r = build()
 		const caller = r.createCaller(makeAdminCtx() as any)
 		await caller.auth({name: 'claude-code'})
-		expect(scheduleAgentRefreshFn).toHaveBeenCalledTimes(1)
+		expect(markAgentChangesPendingFn).toHaveBeenCalledTimes(1)
+		expect(scheduleAgentRefreshFn).not.toHaveBeenCalled()
 	})
 
-	test('T32 — auth ok:false does NOT schedule a refresh (failed login must not churn AionUi)', async () => {
+	test('T32 — auth ok:false marks NEITHER pending nor a refresh (failed login must not churn AionUi)', async () => {
 		authFn.mockResolvedValueOnce({
 			ok: false,
 			output: 'login failed',
@@ -457,31 +480,34 @@ describe('cli-installer-router — agent refresh on success (Phase 267-03)', () 
 		const r = build()
 		const caller = r.createCaller(makeAdminCtx() as any)
 		await caller.auth({name: 'claude-code'})
+		expect(markAgentChangesPendingFn).not.toHaveBeenCalled()
 		expect(scheduleAgentRefreshFn).not.toHaveBeenCalled()
 	})
 
-	test('T33 — setApiKey ok:true schedules the agent refresh exactly once', async () => {
+	test('T33 — setApiKey ok:true marks changes pending exactly once + does NOT auto-restart', async () => {
 		const r = build()
 		const caller = r.createCaller(makeAdminCtx() as any)
 		await caller.setApiKey({name: 'gemini', key: 'sk-xyz'})
-		expect(scheduleAgentRefreshFn).toHaveBeenCalledTimes(1)
+		expect(markAgentChangesPendingFn).toHaveBeenCalledTimes(1)
+		expect(scheduleAgentRefreshFn).not.toHaveBeenCalled()
 	})
 
-	test('T34 — setApiKey ok:false does NOT schedule a refresh', async () => {
+	test('T34 — setApiKey ok:false marks NEITHER pending nor a refresh', async () => {
 		writeApiKeyFn.mockResolvedValueOnce({ok: false, path: ''})
 		const r = build()
 		const caller = r.createCaller(makeAdminCtx() as any)
 		await caller.setApiKey({name: 'gemini', key: 'sk-xyz'})
+		expect(markAgentChangesPendingFn).not.toHaveBeenCalled()
 		expect(scheduleAgentRefreshFn).not.toHaveBeenCalled()
 	})
 
-	test('T35 — a throwing scheduleAgentRefreshFn NEVER invalidates the auth result (best-effort)', async () => {
-		scheduleAgentRefreshFn.mockImplementationOnce(() => {
-			throw new Error('refresh scheduling blew up')
-		})
+	test('T35 — a throwing markAgentChangesPendingFn NEVER invalidates the auth result (best-effort)', async () => {
+		markAgentChangesPendingFn.mockRejectedValueOnce(
+			new Error('redis SET blew up'),
+		)
 		const r = build()
 		const caller = r.createCaller(makeAdminCtx() as any)
-		// The auth result must still come back ok — the refresh failure is swallowed.
+		// The auth result must still come back ok — the flag write is best-effort.
 		const result = await caller.auth({name: 'claude-code'})
 		expect(result.ok).toBe(true)
 	})
@@ -599,14 +625,15 @@ describe('cli-installer-router — uninstall (Phase 268-03)', () => {
 		})
 	})
 
-	test('T52 — uninstall ok:true schedules the agent refresh exactly once (removed agent disappears)', async () => {
+	test('T52 — uninstall ok:true marks changes pending exactly once + does NOT auto-restart (Phase 269-01)', async () => {
 		const r = build()
 		const caller = r.createCaller(makeAdminCtx() as any)
 		await caller.uninstall({name: 'claude-code'})
-		expect(scheduleAgentRefreshFn).toHaveBeenCalledTimes(1)
+		expect(markAgentChangesPendingFn).toHaveBeenCalledTimes(1)
+		expect(scheduleAgentRefreshFn).not.toHaveBeenCalled()
 	})
 
-	test('T53 — uninstall ok:false does NOT schedule a refresh (a failed uninstall must not churn AionUi)', async () => {
+	test('T53 — uninstall ok:false marks NEITHER pending nor a refresh (a failed uninstall must not churn AionUi)', async () => {
 		uninstallFn.mockResolvedValueOnce({
 			ok: false,
 			output: 'npm error',
@@ -616,6 +643,7 @@ describe('cli-installer-router — uninstall (Phase 268-03)', () => {
 		const r = build()
 		const caller = r.createCaller(makeAdminCtx() as any)
 		await caller.uninstall({name: 'claude-code'})
+		expect(markAgentChangesPendingFn).not.toHaveBeenCalled()
 		expect(scheduleAgentRefreshFn).not.toHaveBeenCalled()
 	})
 
@@ -631,5 +659,79 @@ describe('cli-installer-router — uninstall (Phase 268-03)', () => {
 		const caller = r.createCaller(makeNonAdminCtx() as any)
 		await expect(caller.uninstall({name: 'claude-code'})).rejects.toThrow()
 		expect(uninstallFn).not.toHaveBeenCalled()
+	})
+})
+
+// Phase 269-01 Task 1 — manual apply: the explicit applyAgentChanges route fires
+// the (debounced) restart ONCE + clears the pending flag; hasPendingAgentChanges
+// reports the flag so the dialog + panel can show/hide the Apply button.
+describe('cli-installer-router — applyAgentChanges + hasPendingAgentChanges (Phase 269-01)', () => {
+	test('T60 — applyAgentChanges schedules the agent refresh exactly once AND clears the pending flag', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.applyAgentChanges()
+		expect(scheduleAgentRefreshFn).toHaveBeenCalledTimes(1)
+		expect(clearPendingAgentChangesFn).toHaveBeenCalledTimes(1)
+		expect(result).toEqual({ok: true})
+	})
+
+	test('T61 — applyAgentChanges does NOT mark changes pending (it CLEARS them)', async () => {
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		await caller.applyAgentChanges()
+		expect(markAgentChangesPendingFn).not.toHaveBeenCalled()
+	})
+
+	test('T62 — a throwing scheduleAgentRefreshFn NEVER fails applyAgentChanges (best-effort restart)', async () => {
+		scheduleAgentRefreshFn.mockImplementationOnce(() => {
+			throw new Error('refresh scheduling blew up')
+		})
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.applyAgentChanges()
+		expect(result).toEqual({ok: true})
+	})
+
+	test('T63 — a throwing clearPendingAgentChangesFn NEVER fails applyAgentChanges (best-effort clear)', async () => {
+		clearPendingAgentChangesFn.mockRejectedValueOnce(
+			new Error('redis DEL blew up'),
+		)
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.applyAgentChanges()
+		// The restart still fired; the result is still ok despite the clear failing.
+		expect(scheduleAgentRefreshFn).toHaveBeenCalledTimes(1)
+		expect(result).toEqual({ok: true})
+	})
+
+	test('T64 — non-admin caller rejected from applyAgentChanges before any restart fires', async () => {
+		const r = build()
+		const caller = r.createCaller(makeNonAdminCtx() as any)
+		await expect(caller.applyAgentChanges()).rejects.toThrow()
+		expect(scheduleAgentRefreshFn).not.toHaveBeenCalled()
+		expect(clearPendingAgentChangesFn).not.toHaveBeenCalled()
+	})
+
+	test('T65 — hasPendingAgentChanges returns {pending:true} when the flag is set', async () => {
+		getPendingAgentChangesFn.mockResolvedValueOnce(true)
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.hasPendingAgentChanges()
+		expect(result).toEqual({pending: true})
+	})
+
+	test('T66 — hasPendingAgentChanges returns {pending:false} when the flag is clear', async () => {
+		getPendingAgentChangesFn.mockResolvedValueOnce(false)
+		const r = build()
+		const caller = r.createCaller(makeAdminCtx() as any)
+		const result = await caller.hasPendingAgentChanges()
+		expect(result).toEqual({pending: false})
+	})
+
+	test('T67 — non-admin caller rejected from hasPendingAgentChanges before the flag is read', async () => {
+		const r = build()
+		const caller = r.createCaller(makeNonAdminCtx() as any)
+		await expect(caller.hasPendingAgentChanges()).rejects.toThrow()
+		expect(getPendingAgentChangesFn).not.toHaveBeenCalled()
 	})
 })
