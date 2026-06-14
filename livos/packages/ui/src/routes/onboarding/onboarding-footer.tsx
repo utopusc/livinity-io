@@ -17,7 +17,11 @@ interface OnboardingFooterProps {
 
 export function OnboardingFooter({action}: OnboardingFooterProps) {
 	const isCreateAccount = action === OnboardingAction.CREATE_ACCOUNT
-	const route = isCreateAccount ? '/onboarding/create-account' : '/onboarding/restore'
+	// Phase 271 — `/onboarding/create-account` (+ index/account-created) routes
+	// were deleted; the create-account flow now lives at the `/onboarding`
+	// wizard index (setup-wizard-v2). The CREATE_ACCOUNT branch (rendered by
+	// the restore page's "create instead" link) points there.
+	const route = isCreateAccount ? '/onboarding' : '/onboarding/restore'
 	const Icon = isCreateAccount ? TbUser : TbHistory
 
 	return (

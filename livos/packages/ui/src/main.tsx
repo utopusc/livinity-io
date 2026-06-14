@@ -13,7 +13,6 @@ import {AuthBootstrap} from './providers/auth-bootstrap'
 import {GlobalFilesProvider} from './providers/global-files'
 import {KeyboardShortcutsProvider} from './providers/keyboard-shortcuts-provider'
 import {RemoteLanguageInjector} from './providers/language'
-import {OnboardingPersonalizationSync} from './providers/onboarding-sync'
 import {Prefetcher} from './providers/prefetch'
 import {ThemeProvider} from './providers/theme-provider'
 import {RemoteWallpaperInjector, WallpaperProviderConnected} from './providers/wallpaper'
@@ -39,7 +38,6 @@ init(
 				</GlobalSystemStateProvider>
 			</ConfirmationProvider>
 		</WallpaperProviderConnected>
-		<OnboardingPersonalizationSync />
 		<Prefetcher />
 	</TrpcProvider>
 	</KeyboardShortcutsProvider>

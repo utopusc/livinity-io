@@ -5,13 +5,11 @@ import {HelpBubble, ParallaxOrbs, SoundProvider, useSound} from '@/features/onbo
 import {ResumeBanner} from '@/features/onboarding-flow/resume-banner'
 import {Step} from '@/features/onboarding-flow/step'
 import {AccountStep} from '@/features/onboarding-flow/steps/account-step'
-import {CliToolsStep} from '@/features/onboarding-flow/steps/cli-tools-step'
 import {DoneStep} from '@/features/onboarding-flow/steps/done-step'
 import {LocationStep} from '@/features/onboarding-flow/steps/location-step'
 import {PersonalizeStep} from '@/features/onboarding-flow/steps/personalize-step'
 import {WallpaperStep} from '@/features/onboarding-flow/steps/wallpaper-step'
 import {WelcomeStep} from '@/features/onboarding-flow/steps/welcome-step'
-import {FooterBar} from '@/features/onboarding-flow/footer-bar'
 import {TopBar} from '@/features/onboarding-flow/top-bar'
 import {useDebouncedCallback} from '@/features/onboarding-flow/use-debounced-callback'
 import {useStepper} from '@/features/onboarding-flow/use-stepper'
@@ -171,20 +169,6 @@ function WizardInner() {
 
 	const eta = etaSeconds(stepper.idx)
 
-	// Phase 239 D-239-15 / UAT 252 — feature flag `livos.v43.onboarding_cli_section`
-	// controls which step renders at slot 4. Per the v43/R10 policy (shipped v43
-	// features are ON for a fresh box) this now DEFAULTS TRUE; localStorage is an
-	// explicit OFF/preview override only:
-	//   window.localStorage.setItem('livos.v43.onboarding_cli_section', 'false')
-	// NOTE: there is NO Redis→localStorage bridge — the Redis key is never read
-	// here — so seeding Redis is inert; this code default is the load-bearing
-	// switch (a backend bridge was deferred to a Phase 239-04 micro-plan).
-	let cliSectionFlagEnabled = true
-	if (typeof window !== 'undefined') {
-		if (window.localStorage.getItem('livos.v43.onboarding_cli_section') === 'false')
-			cliSectionFlagEnabled = false
-	}
-
 	return (
 		<>
 			<div className='onb-ambient' aria-hidden='true'>
@@ -234,48 +218,6 @@ function WizardInner() {
 							/>
 						</Step>
 						<Step stepIndex={4} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
-							{cliSectionFlagEnabled ? (
-								<CliToolsStep
-									data={data}
-									setData={setData}
-									onContinue={() => {
-										sound.play('success')
-										stepper.next()
-									}}
-									onSkip={stepper.next}
-									onBack={stepper.back}
-								/>
-							) : (
-								<div
-									className='fade-up'
-									style={{display: 'flex', flexDirection: 'column', gap: 18}}
-								>
-									<div className='onb-eyebrow'>05 · CLI Tools</div>
-									<h1 className='onb-title' style={{marginTop: 8}}>
-										This step is turned off
-									</h1>
-									<p className='onb-sub' style={{marginTop: 10}}>
-										The CLI Tools step is ON by default. It was turned off on
-										this browser via the override{' '}
-										<code>
-											window.localStorage.setItem('livos.v43.onboarding_cli_section','false')
-										</code>
-										. Remove that key (or set it to <code>'true'</code>) in
-										DevTools and reload to see the install grid. Skip is enabled
-										below so onboarding still completes.
-									</p>
-									<FooterBar
-										onBack={stepper.back}
-										onContinue={stepper.next}
-										onSkip={stepper.next}
-										continueLabel='Skip'
-										continueDisabled={false}
-										hint='Feature flag disabled — skipping'
-									/>
-								</div>
-							)}
-						</Step>
-						<Step stepIndex={5} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<LocationStep
 								data={data}
 								setData={setData}
@@ -284,10 +226,10 @@ function WizardInner() {
 								onBack={stepper.back}
 							/>
 						</Step>
-						<Step stepIndex={6} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
+						<Step stepIndex={5} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<DoneStep
 								data={data}
-								isActive={stepper.idx === 6}
+								isActive={stepper.idx === 5}
 								onEnter={() => {
 									try {
 										localStorage.removeItem(STORAGE_KEY)
