@@ -136,6 +136,37 @@ describe('uninstallCli — npm-global kind (codex)', () => {
 	})
 })
 
+describe('uninstallCli — npm-global config-dir cleanup (github-copilot, WR-03)', () => {
+	test('npm-global uninstall ALSO rm -rf its config dir (~/.copilot)', async () => {
+		const {spawnFn} = makeFakeSpawn(0)
+		const fs = makeFakeFs()
+		const result = await uninstallCli(
+			{name: 'github-copilot'},
+			{logger: makeLogger(), homeDir: HOME, fs: fs as any, spawnFn: spawnFn as any},
+		)
+		expect(result.ok).toBe(true)
+		// Still spawns the npm uninstall…
+		expect(spawnFn).toHaveBeenCalledTimes(1)
+		const [cmd, args] = spawnFn.mock.calls[0] as unknown as [string, string[]]
+		expect(cmd).toBe('npm')
+		expect(args).toEqual([
+			'uninstall',
+			'-g',
+			'--prefix',
+			path.join(HOME, '.npm-global'),
+			'@github/copilot',
+		])
+		// …AND removes the config dir so a re-install isn't silently pre-authed.
+		const rmPaths = fs.rm.mock.calls.map((c) => c[0] as string)
+		expect(rmPaths).toContain(path.join(HOME, '.copilot'))
+		// The config-dir rm is recursive.
+		const copilotCall = fs.rm.mock.calls.find(
+			(c) => c[0] === path.join(HOME, '.copilot'),
+		)
+		expect((copilotCall?.[1] as {recursive?: boolean})?.recursive).toBe(true)
+	})
+})
+
 describe('uninstallCli — rm-bin kind (claude-code)', () => {
 	test('rm bin path + config dir + the 267 .claude/.env secret', async () => {
 		const {spawnFn} = makeFakeSpawn()

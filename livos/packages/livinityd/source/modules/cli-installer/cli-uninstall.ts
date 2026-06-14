@@ -54,9 +54,9 @@ const OUTPUT_CAP_BYTES = 32 * 1024
  * are always home-relative dirs removed recursively.
  */
 export type UninstallSpec =
-	| {kind: 'npm-global'; pkg: string}
+	| {kind: 'npm-global'; pkg: string; configRelDirs?: readonly string[]}
 	| {kind: 'rm-bin'; binRelPaths: readonly string[]; configRelDirs?: readonly string[]}
-	| {kind: 'pip'; pkg: string}
+	| {kind: 'pip'; pkg: string; configRelDirs?: readonly string[]}
 	| {kind: 'rm-paths'; relPaths: readonly string[]; configRelDirs?: readonly string[]}
 	| {kind: 'none'; reason: string}
 
@@ -83,7 +83,10 @@ export const CLI_UNINSTALL: Readonly<Record<CliName, UninstallSpec>> = {
 	codex: {kind: 'npm-global', pkg: '@openai/codex'},
 	'qwen-code': {kind: 'npm-global', pkg: '@qwen-code/qwen-code'},
 	augment: {kind: 'npm-global', pkg: '@augmentcode/auggie'},
-	'github-copilot': {kind: 'npm-global', pkg: '@github/copilot'},
+	// WR-03 — the standalone `@github/copilot` CLI stores its login token under
+	// ~/.copilot; remove it so a re-install isn't silently pre-authed (it has no
+	// WRITE_TARGETS api-key entry, so the config dir is the only stale-cred path).
+	'github-copilot': {kind: 'npm-global', pkg: '@github/copilot', configRelDirs: ['.copilot']},
 	codebuddy: {kind: 'npm-global', pkg: '@tencent-ai/codebuddy-code'},
 	'qoder-cli': {kind: 'npm-global', pkg: '@qoder-ai/qodercli'},
 	// Wave B — rm-bin (curl-installer → ~/.local/bin) + config dir
@@ -303,8 +306,12 @@ export async function uninstallCli(
 			deps.logger.warn(`[cli-installer] best-effort secret rm failed for ${input.name}`, err)
 		}
 	}
-	const configRelDirs =
-		spec.kind === 'rm-bin' || spec.kind === 'rm-paths' ? (spec.configRelDirs ?? []) : []
+	// WR-03 — config-dir cleanup runs for EVERY kind that declares configRelDirs
+	// (npm-global + pip CLIs keep tokens in their own config dirs too — e.g.
+	// github-copilot's ~/.copilot). Previously this was gated to rm-bin/rm-paths,
+	// so re-installing an npm-global CLI could be silently pre-authed by a stale
+	// token dir. `none` (aion-cli) has no configRelDirs → no-op (untouched).
+	const configRelDirs = 'configRelDirs' in spec ? (spec.configRelDirs ?? []) : []
 	for (const dir of configRelDirs) {
 		const dirAbs = path.join(home, dir)
 		try {
