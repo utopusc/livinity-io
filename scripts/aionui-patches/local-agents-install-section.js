@@ -440,10 +440,13 @@
         if (status) status.textContent = 'Changes pending — apply to refresh Liv AI.';
         refreshApplyBar(section);
       }).catch(function () {
-        // Best-effort: re-enable so the operator can retry; keep the bar visible.
+        // Best-effort: re-enable so the operator can retry. Re-sync the bar with
+        // the real server state (WR-04) — if the flag was in fact cleared despite
+        // a transient blip, refreshApplyBar hides the bar instead of stranding it.
         btn.disabled = false;
         btn.textContent = 'Apply changes';
         if (status) status.textContent = 'Could not apply — try again.';
+        refreshApplyBar(section);
       });
     });
   }
