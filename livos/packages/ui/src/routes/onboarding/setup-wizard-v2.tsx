@@ -7,7 +7,6 @@ import {Step} from '@/features/onboarding-flow/step'
 import {AccountStep} from '@/features/onboarding-flow/steps/account-step'
 import {DoneStep} from '@/features/onboarding-flow/steps/done-step'
 import {LocationStep} from '@/features/onboarding-flow/steps/location-step'
-import {PersonalizeStep} from '@/features/onboarding-flow/steps/personalize-step'
 import {WallpaperStep} from '@/features/onboarding-flow/steps/wallpaper-step'
 import {WelcomeStep} from '@/features/onboarding-flow/steps/welcome-step'
 import {TopBar} from '@/features/onboarding-flow/top-bar'
@@ -209,15 +208,6 @@ function WizardInner() {
 							<WallpaperStep data={data} setData={setData} onContinue={stepper.next} onBack={stepper.back} />
 						</Step>
 						<Step stepIndex={3} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
-							<PersonalizeStep
-								data={data}
-								setData={setData}
-								onContinue={stepper.next}
-								onSkip={stepper.next}
-								onBack={stepper.back}
-							/>
-						</Step>
-						<Step stepIndex={4} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<LocationStep
 								data={data}
 								setData={setData}
@@ -226,10 +216,10 @@ function WizardInner() {
 								onBack={stepper.back}
 							/>
 						</Step>
-						<Step stepIndex={5} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
+						<Step stepIndex={4} current={stepper.idx} prev={stepper.prev} dir={stepper.dir}>
 							<DoneStep
 								data={data}
-								isActive={stepper.idx === 5}
+								isActive={stepper.idx === 4}
 								onEnter={() => {
 									try {
 										localStorage.removeItem(STORAGE_KEY)
