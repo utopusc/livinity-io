@@ -1716,14 +1716,36 @@ fi
 
 if [[ -f "$_LIV_ASSISTANT_UNIT_SRC" ]]; then
     _LIV_ASSISTANT_UNIT_DST="/etc/systemd/system/liv-assistant.service"
-    if [[ ! -f "$_LIV_ASSISTANT_UNIT_DST" ]] || ! cmp -s "$_LIV_ASSISTANT_UNIT_SRC" "$_LIV_ASSISTANT_UNIT_DST"; then
-        install -m 0644 -o root -g root "$_LIV_ASSISTANT_UNIT_SRC" "$_LIV_ASSISTANT_UNIT_DST"
+    # WS (2026-06-15): the repo unit hardcodes User=bruce/Group=bruce + /home/bruce
+    # (PATH/HOME/ReadWritePaths). update.sh USED to `install` it VERBATIM — which on
+    # a non-bruce box (e.g. "murphy") pinned AionUi to user bruce / HOME=/home/bruce,
+    # so AionUi's startup $PATH scan never saw the operator's own ~/.local/bin claude
+    # → only the bundled Aion CLI showed in the picker. Mirror deploy-livinityd.sh's
+    # desktop-user substitution: derive the run-user from the ALREADY-installed
+    # livos.service (source of truth for who LivOS runs as), fall back to the first
+    # uid>=1000 login, then bruce. Atomic temp-file install so a half-written unit
+    # never lands.
+    _LA_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/livos.service 2>/dev/null | head -1)
+    [[ -n "$_LA_USER" ]] || _LA_USER=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}')
+    [[ -n "$_LA_USER" ]] || _LA_USER=bruce
+    _LA_HOME=$(getent passwd "$_LA_USER" 2>/dev/null | cut -d: -f6)
+    [[ -n "$_LA_HOME" ]] || _LA_HOME="/home/$_LA_USER"
+    _LA_TMP="${_LIV_ASSISTANT_UNIT_DST}.tmp.$$"
+    sed -E "s/^(User=)bruce$/\1${_LA_USER}/; s/^(Group=)bruce$/\1${_LA_USER}/; s#/home/bruce#${_LA_HOME}#g" \
+        "$_LIV_ASSISTANT_UNIT_SRC" > "$_LA_TMP"
+    if [[ ! -f "$_LIV_ASSISTANT_UNIT_DST" ]] || ! cmp -s "$_LA_TMP" "$_LIV_ASSISTANT_UNIT_DST"; then
+        install -m 0644 -o root -g root "$_LA_TMP" "$_LIV_ASSISTANT_UNIT_DST"
         systemctl daemon-reload
         systemctl enable liv-assistant.service 2>/dev/null || true
-        ok "liv-assistant.service installed at $_LIV_ASSISTANT_UNIT_DST"
+        # Restart so the corrected User=/PATH takes effect AND AionUi re-scans $PATH
+        # (it only discovers CLIs at startup) — this is what makes a newly-installed
+        # claude appear in the picker.
+        systemctl restart liv-assistant.service 2>/dev/null || true
+        ok "liv-assistant.service installed (User=${_LA_USER}, HOME=${_LA_HOME}) at $_LIV_ASSISTANT_UNIT_DST"
     else
-        ok "liv-assistant.service already byte-identical"
+        ok "liv-assistant.service already current (User=${_LA_USER})"
     fi
+    rm -f "$_LA_TMP"
 else
     info "liv-assistant.service unit source not found — skipping install (the unit may already be installed from a prior Phase 223-05 deploy)"
 fi

@@ -10,7 +10,12 @@ Type=simple
 User=bruce
 Group=bruce
 WorkingDirectory=/opt/liv-assistant/current
-Environment="PATH=/home/bruce/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+# PATH includes the run-user's ~/.local/bin (claude.ai/install.sh + cli/*.sh land
+# CLIs there) and ~/.npm-global/bin so AionUi's startup $PATH scan can DISCOVER
+# them — otherwise a `claude` at ~/.local/bin is invisible to the agent picker
+# (only the bundled Aion CLI shows). The installer rewrites /home/bruce → the real
+# desktop-user home, so on a "murphy" box this becomes /home/murphy/.local/bin.
+Environment="PATH=/home/bruce/.local/bin:/home/bruce/.npm-global/bin:/home/bruce/.bun/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="HOME=/home/bruce"
 # Phase 245.2 hotfix — extend MCP init timeout for 6 parallel `npx tsx` cold-starts.
 # Default Claude Code MCP timeout is too short; without this, only aionui-team-guide
