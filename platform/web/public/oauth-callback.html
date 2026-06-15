@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>Signing you in… — Livinity</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="styles.css" />
+    <!-- Self-hosted (same-origin): this is the auth-critical bundle that runs the
+         PKCE code exchange and holds the GoTrue access token. No third-party CDN. -->
+    <script src="/vendor/supabase-js-2.105.4.umd.js"></script>
+    <style>
+      html, body { background: var(--bg); color: var(--fg); height: 100%; }
+      .cb-wrap {
+        min-height: 100vh;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 22px; padding: 24px; text-align: center;
+      }
+      .cb-mark {
+        width: 64px; height: 64px; border-radius: 50%;
+        background: var(--fg); position: relative;
+        animation: cbBreathe 2.4s ease-in-out infinite;
+      }
+      .cb-mark::after { content: ""; position: absolute; inset: 19px; border-radius: 50%; background: var(--bg); }
+      @keyframes cbBreathe { 0%,100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.07); opacity: 1; } }
+      .cb-title { font-size: 20px; font-weight: 500; letter-spacing: -0.02em; }
+      .cb-sub { font-size: 14px; color: var(--fg-mute); max-width: 40ch; line-height: 1.5; }
+      .cb-err {
+        display: none;
+        margin-top: 4px; padding: 12px 16px; max-width: 42ch;
+        background: rgba(220, 38, 38, 0.07);
+        border: 1px solid rgba(220, 38, 38, 0.18);
+        border-radius: 10px; color: #b91c1c; font-size: 13px; line-height: 1.45;
+      }
+      body.dark .cb-err { background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.22); color: #fca5a5; }
+      .cb-back {
+        display: none;
+        margin-top: 4px; padding: 12px 22px;
+        background: var(--fg); color: var(--bg);
+        border-radius: 12px; font-size: 14px; font-weight: 500; text-decoration: none;
+      }
+      body.dark .cb-back { background: #f5f5f7; color: #050507; }
+    </style>
+  </head>
+  <body>
+    <div class="cb-wrap">
+      <div class="cb-mark" id="mark"></div>
+      <div class="cb-title" id="title">Signing you in…</div>
+      <div class="cb-sub" id="sub">Finishing the secure handshake with your provider.</div>
+      <div class="cb-err" id="err"></div>
+      <a class="cb-back" id="back" href="/login">Back to sign in</a>
+    </div>
+
+    <script>
+      (function () {
+        var $ = function (id) { return document.getElementById(id); };
+
+        function fail(msg) {
+          $('mark').style.animation = 'none';
+          $('mark').style.opacity = '0.25';
+          $('title').textContent = "Couldn't sign you in";
+          $('sub').style.display = 'none';
+          var e = $('err'); e.textContent = msg || 'Something went wrong. Please try again.'; e.style.display = 'block';
+          $('back').style.display = 'inline-block';
+        }
+
+        function redirect(isNew) {
+          window.location.replace(isNew ? '/pricing' : '/dashboard');
+        }
+
+        async function run() {
+          try {
+            var params = new URL(window.location.href).searchParams;
+            // Provider/Supabase reported an error before we even got a code.
+            var pErr = params.get('error_description') || params.get('error');
+            if (pErr) { fail(decodeURIComponent(pErr)); return; }
+
+            var code = params.get('code');
+            if (!code) { fail('No sign-in code was returned. Please start again.'); return; }
+
+            if (!window.supabase || !window.supabase.createClient) {
+              fail('Could not load the sign-in library. Check your connection and try again.');
+              return;
+            }
+
+            var cfgRes = await fetch('/api/public-config', { credentials: 'same-origin' });
+            if (!cfgRes.ok) { fail('Sign-in is temporarily unavailable. Please try again shortly.'); return; }
+            var cfg = await cfgRes.json();
+            if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) { fail('Sign-in is temporarily unavailable.'); return; }
+
+            // SAME client config as auth.html so the PKCE code-verifier stored
+            // there (localStorage, same origin) is found here.
+            var client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+              auth: { flowType: 'pkce', detectSessionInUrl: false, persistSession: true, autoRefreshToken: false },
+            });
+
+            var exch = await client.auth.exchangeCodeForSession(code);
+            if (exch.error || !exch.data || !exch.data.session) {
+              fail('We could not complete the sign-in. Please try again.');
+              return;
+            }
+            var accessToken = exch.data.session.access_token;
+
+            var bridgeRes = await fetch('/api/auth/oauth/bridge', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ supabaseAccessToken: accessToken }),
+            });
+            var data = await bridgeRes.json().catch(function () { return {}; });
+
+            // Drop the now-unneeded GoTrue session regardless of outcome — the
+            // app authorizes only off liv_session.
+            try { await client.auth.signOut({ scope: 'local' }); } catch (e) {}
+
+            if (!bridgeRes.ok || !data.ok) {
+              fail(data.error || 'We could not complete the sign-in. Please try again.');
+              return;
+            }
+
+            $('title').textContent = 'Welcome to Livinity';
+            $('sub').textContent = data.isNew ? 'Setting up your account…' : 'Waking up your computer…';
+            redirect(!!data.isNew);
+          } catch (e) {
+            fail('Something went wrong while signing you in. Please try again.');
+          }
+        }
+
+        // Mirror auth.html's theme if it was persisted (best-effort, non-fatal).
+        try {
+          var saved = localStorage.getItem('liv_theme');
+          if (saved === 'dark') document.body.classList.add('dark');
+        } catch (e) {}
+
+        run();
+      })();
+    </script>
+  </body>
+</html>
