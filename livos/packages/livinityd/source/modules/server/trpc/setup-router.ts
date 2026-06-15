@@ -1,14 +1,22 @@
 /**
  * Phase 196-04 / 196-05 / 196.1 / 271 — `setup.*` tRPC namespace.
  *
- * Procedures today (after Phase 271):
+ * Procedures today:
  *
- *   - `setup.setLocation` (Plan 196.1) — adminProcedure mutation. Merged
- *     Country + City picker. Resolves (country, city) → {region, timezone,
- *     locale} via the curated COUNTRIES catalog, persists all five Redis
- *     keys (country, city, region, timezone, locale) and propagates the
- *     timezone to the system clock via the narrow sudoers TIMEDATECTL
- *     Cmnd_Alias.
+ *   - `setup.getCountries` / `getStates` / `getCities` — adminProcedure
+ *     QUERIES backing the cascading country → (state) → city picker. Data comes
+ *     from the @countrystatecity/countries dataset (backend-only); the UI reaches
+ *     it ONLY through these queries (the 55MB dataset never enters the UI bundle).
+ *
+ *   - `setup.setLocation` — adminProcedure mutation. Comprehensive country →
+ *     (state) → city picker. Submits by `cityId` (numeric dataset id, dodges
+ *     duplicate-name collisions). Resolves (country, state?, cityId) → {region,
+ *     timezone, locale} via `resolveCity`, persists the Redis keys (country,
+ *     city, region, timezone, locale + optional state) and propagates the
+ *     timezone to the system clock via the narrow sudoers TIMEDATECTL Cmnd_Alias.
+ *     The timezone is read straight off the dataset city (county-accurate, incl.
+ *     US split-states); region via regionFor(dataset region/subregion); locale
+ *     via COUNTRY_LOCALE.
  *
  *   - `setup.getLocation` (Phase 271) — adminProcedure QUERY. Reads back the
  *     persisted `liv:user:{country,city,region,timezone,locale,hour_cycle}`
@@ -40,8 +48,10 @@ import {z} from 'zod'
 
 import {adminProcedure, router} from './trpc.js'
 import {
-	COUNTRIES,
-	resolveLocation,
+	listCountries,
+	listStates,
+	listCities,
+	resolveCity,
 	type TimezoneService,
 } from '../../locale/index.js'
 
@@ -102,23 +112,38 @@ function deriveHourCycleFromLocale(locale: string | null | undefined): HourCycle
 // ─── Input schemas ───────────────────────────────────────────────────────
 
 /**
- * Phase 196.1 — `setup.setLocation` input schema.
+ * `setup.setLocation` input schema — comprehensive country → (state) → city.
  *
- * Replaces the Phase 196-04 (setRegion) + Phase 196-05 (setLocaleTimezone)
- * two-step flow with a single Country + City picker. The pair is resolved
- * server-side via `resolveLocation()` from the canonical curated catalog;
- * unknown country or city values are rejected with BAD_REQUEST.
+ * Submits by `cityId` (the dataset's stable numeric city id) rather than a
+ * city NAME, which avoids the duplicate-name collisions that a 156k-city
+ * dataset is rife with (e.g. dozens of "Springfield"s). The (country, state?,
+ * cityId) triple is resolved server-side via `resolveCity()`; an unresolvable
+ * triple is rejected with BAD_REQUEST.
  *
  * The 2-letter country regex is defense-in-depth against path-traversal-
- * flavoured input.
+ * flavoured input. `state` is optional (states-less countries omit it).
  */
-const VALID_COUNTRY_CODES = COUNTRIES.map((c) => c.code) as readonly string[]
 const setLocationInput = z.object({
 	country: z
 		.string()
-		.regex(/^[A-Z]{2}$/, 'country must be a 2-letter uppercase ISO code')
-		.refine((c) => VALID_COUNTRY_CODES.includes(c), 'unknown country'),
-	city: z.string().min(1).max(64),
+		.regex(/^[A-Z]{2}$/, 'country must be a 2-letter uppercase ISO code'),
+	state: z.string().min(1).max(16).optional(),
+	cityId: z.string().min(1).max(32),
+})
+
+/** `setup.getStates` input — a single country code. */
+const getStatesInput = z.object({
+	country: z
+		.string()
+		.regex(/^[A-Z]{2}$/, 'country must be a 2-letter uppercase ISO code'),
+})
+
+/** `setup.getCities` input — a country code + optional state code. */
+const getCitiesInput = z.object({
+	country: z
+		.string()
+		.regex(/^[A-Z]{2}$/, 'country must be a 2-letter uppercase ISO code'),
+	state: z.string().min(1).max(16).optional(),
 })
 
 /**
@@ -142,38 +167,73 @@ const setClockFormatInput = z.object({
 export function createSetupRouter(deps: SetupRouterDeps) {
 	return router({
 		/**
-		 * Phase 196.1 — `setup.setLocation` merged Country+City procedure.
+		 * `setup.getCountries` — all 250 countries as {code, name, region},
+		 * sorted by name. Backs the onboarding + Settings Country select.
+		 * Read-only; adminProcedure-gated for parity with the rest of setup.*.
+		 */
+		getCountries: adminProcedure.query(async () => {
+			return listCountries()
+		}),
+
+		/**
+		 * `setup.getStates` — states/provinces for a country as {code, name},
+		 * sorted by name. Returns [] for states-less countries; the UI hides the
+		 * State select on an empty array and drives the City select straight off
+		 * getCities({country}) instead. adminProcedure-gated.
+		 */
+		getStates: adminProcedure.input(getStatesInput).query(async ({input}) => {
+			return listStates(input.country)
+		}),
+
+		/**
+		 * `setup.getCities` — cities for a (country, state?) pair as
+		 * {id, name, timezone}, sorted by name. Each option carries its dataset
+		 * id (submitted by setLocation) + resolved IANA timezone (so the UI can
+		 * preview the zone without a round-trip). adminProcedure-gated.
+		 */
+		getCities: adminProcedure.input(getCitiesInput).query(async ({input}) => {
+			return listCities(input.country, input.state)
+		}),
+
+		/**
+		 * `setup.setLocation` — comprehensive country → (state) → city procedure.
 		 *
-		 * Resolves (country, city) → {region, timezone, locale} via the
-		 * curated COUNTRIES catalog, then persists ALL FIVE Redis keys
-		 * (country, city, region, timezone, locale) and propagates the
-		 * timezone to the system clock via the narrow sudoers TIMEDATECTL
-		 * Cmnd_Alias.
+		 * Resolves (country, state?, cityId) → {region, timezone, locale} via the
+		 * @countrystatecity dataset (`resolveCity`), then persists the Redis keys
+		 * (country, city, region, timezone, locale + optional state) and
+		 * propagates the timezone to the system clock via the narrow sudoers
+		 * TIMEDATECTL Cmnd_Alias.
 		 *
 		 * Defense-in-depth ordering:
-		 *   1. zod — country regex + COUNTRIES membership; city non-empty
-		 *   2. resolveLocation — (country, city) pair must exist in catalog
-		 *   3. timezoneService.validate — Intl set membership for the timezone
+		 *   1. zod — country regex; cityId non-empty; state optional
+		 *   2. resolveCity — the (country, state?, cityId) triple must resolve
+		 *   3. timezoneService.validate — Intl resolve-check for the timezone
 		 *   4. timezoneService.setSystemTimezone — execFile (argv-array, no shell)
 		 *   5. redis.set — only after the system clock change succeeds
 		 *
 		 * adminProcedure-gated.
 		 */
 		setLocation: adminProcedure.input(setLocationInput).mutation(async ({input}) => {
-			const resolved = resolveLocation(input.country, input.city)
+			const cityId = Number(input.cityId)
+			if (!Number.isInteger(cityId) || cityId <= 0) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: `setLocation: cityId must be a positive integer: ${input.cityId}`,
+				})
+			}
+			const resolved = await resolveCity(input.country, input.state, cityId)
 			if (!resolved) {
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
-					message: `Phase 196.1: unknown (country, city) pair: ${input.country} / ${input.city}`,
+					message: `setLocation: unresolvable (country, state, cityId): ${input.country} / ${input.state ?? '—'} / ${input.cityId}`,
 				})
 			}
-			// Defense-in-depth: even though resolveLocation only returns
-			// timezones we ship, re-validate via Intl before invoking
-			// timedatectl.
+			// Defense-in-depth: re-validate the dataset's timezone via Intl before
+			// invoking timedatectl.
 			if (!deps.timezoneService.validate(resolved.timezone)) {
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
-					message: `Phase 196.1: catalog timezone not in Intl set: ${resolved.timezone}`,
+					message: `setLocation: resolved timezone failed Intl validation: ${resolved.timezone}`,
 				})
 			}
 			await deps.timezoneService.setSystemTimezone(resolved.timezone)
@@ -182,7 +242,11 @@ export function createSetupRouter(deps: SetupRouterDeps) {
 			await deps.redis.set('liv:user:region', resolved.region)
 			await deps.redis.set('liv:user:timezone', resolved.timezone)
 			await deps.redis.set('liv:user:locale', resolved.locale)
-			return {ok: true as const, ...resolved}
+			// Optional state read-back key — written when the country has states.
+			if (input.state) {
+				await deps.redis.set('liv:user:state', input.state)
+			}
+			return {ok: true as const, state: input.state ?? null, ...resolved}
 		}),
 
 		/**
@@ -198,9 +262,10 @@ export function createSetupRouter(deps: SetupRouterDeps) {
 		 * adminProcedure-gated (same gate as setLocation).
 		 */
 		getLocation: adminProcedure.query(async () => {
-			const [country, city, region, timezone, locale, hourCycleRaw] =
+			const [country, state, city, region, timezone, locale, hourCycleRaw] =
 				await Promise.all([
 					deps.redis.get('liv:user:country'),
+					deps.redis.get('liv:user:state'),
 					deps.redis.get('liv:user:city'),
 					deps.redis.get('liv:user:region'),
 					deps.redis.get('liv:user:timezone'),
@@ -213,6 +278,7 @@ export function createSetupRouter(deps: SetupRouterDeps) {
 
 			return {
 				country: country ?? null,
+				state: state ?? null,
 				city: city ?? null,
 				region: region ?? null,
 				timezone: timezone ?? null,

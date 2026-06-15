@@ -637,7 +637,16 @@ export const httpOnlyPaths = [
 	'auth.xai.status',
 	'auth.xai.waitForCompletion',
 	'auth.xai.disconnect',
-	// Phase 196.1 — `setup.setLocation` merged Country+City onboarding mutation.
+	// Country → (state) → city picker queries (backed by @countrystatecity).
+	// getCountries hydrates the Country select on first paint; getStates/getCities
+	// fire on each cascade step. Page-render dependencies kept on HTTP to avoid
+	// the WS-handshake-delay flicker (precedent: setup.getLocation / webapp.list /
+	// agents.list). getCities also returns larger payloads (hundreds of cities) —
+	// HTTP is the better transport for those bodies.
+	'setup.getCountries',
+	'setup.getStates',
+	'setup.getCities',
+	// Phase 196.1 — `setup.setLocation` Country → (state) → city onboarding mutation.
 	// Invokes systemd timedatectl via the narrow sudoers TIMEDATECTL Cmnd_Alias
 	// plus a 5-key Redis batch persist; the execFile call can take 1-3s on a
 	// cold Mini PC. HTTP-only so the mutation survives a WS reconnect mid-

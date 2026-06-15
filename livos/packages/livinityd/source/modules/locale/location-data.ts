@@ -1,20 +1,34 @@
 /**
- * Phase 196.1 — curated country/city catalog for the merged LocationStep.
+ * Location data — comprehensive country → (state) → city picker.
  *
- * Replaces the Phase 196-04 6-region cards + Phase 196-05 IANA timezone list
- * with a single Country + City picker. From the chosen (country, city) we
- * derive timezone (IANA), locale (BCP-47 from SUPPORTED_LOCALES), and region
- * (continent — kept for back-compat with `liv:user:region` consumers).
+ * Phase 196.1 shipped a hand-curated 27-country / ~80-city catalog. This module
+ * replaces it with the `@countrystatecity/countries` dataset (250 countries,
+ * 5k states, 156k cities; every city carries a populated IANA `timezone`). The
+ * dataset stays BACKEND-ONLY — the UI never imports this file; it reaches the
+ * data through three new tRPC queries (`setup.getCountries/getStates/getCities`).
  *
- * Design notes:
- *   - ~25 countries × 1-5 cities = ~80 entries. Hand-curated, not exhaustive.
- *   - Every city maps to a real IANA zone present in `Intl.supportedValuesOf('timeZone')`.
- *   - Every country maps to one of the 6 SUPPORTED_LOCALES; for languages outside
- *     the supported set (Italian, Japanese, etc.) we fall back to en-US so the
- *     UI still renders cleanly. Phase 197+ i18n can broaden this.
- *   - Single source of truth — frontend LocationStep imports COUNTRIES + CITIES;
- *     backend setup-router validates against the same shape.
+ * From the chosen (country, state?, cityId) we derive:
+ *   - timezone — read straight off `city.timezone` (accurate to county level,
+ *     incl. US split-states like America/Indiana/Indianapolis); fall back to the
+ *     country's primary zone (`getCountryTimezones(cc)[0]`) on the rare null.
+ *   - region  — `regionFor(country.region, country.subregion)` maps the dataset's
+ *     region/subregion onto the existing 6-value LocationRegion union.
+ *   - locale  — `COUNTRY_LOCALE[iso2]` (BCP-47 from SUPPORTED_LOCALES), default en-US.
+ *
+ * The async dataset API is verified against the installed package types
+ * (@countrystatecity/countries@1.0.7): getCountries / getStatesOfCountry /
+ * getCitiesOfState / getAllCitiesOfCountry / getCityById / getCountryTimezones.
  */
+
+import {
+	getCountries,
+	getStatesOfCountry,
+	getCitiesOfState,
+	getAllCitiesOfCountry,
+	getCityById,
+	getCountryTimezones,
+	type ICity,
+} from '@countrystatecity/countries'
 
 export const SUPPORTED_LOCALES = [
 	'en-US',
@@ -34,313 +48,213 @@ export type LocationRegion =
 	| 'africa'
 	| 'oceania'
 
-export interface CountryEntry {
-	/** ISO-3166-1 alpha-2 (uppercase). */
-	code: string
-	/** English display label. */
-	name: string
-	region: LocationRegion
-	defaultLocale: SupportedLocale
-	cities: CityEntry[]
+// ─── Country → locale map ────────────────────────────────────────────────
+//
+// Ports the locales the old Phase-196.1 catalog encoded in each country's
+// `defaultLocale`. Everything not listed defaults to 'en-US'. This is the UI
+// language allow-list (SUPPORTED_LOCALES) only — NOT an exhaustive
+// country→language table. Phase 197+ i18n can broaden it.
+export const COUNTRY_LOCALE: Record<string, SupportedLocale> = {
+	// Turkish
+	TR: 'tr-TR',
+	// German
+	DE: 'de-DE',
+	AT: 'de-DE',
+	CH: 'de-DE',
+	// French
+	FR: 'fr-FR',
+	// Spanish (Spain + Latin America from the old catalog: MX/AR/BR mapped es-ES)
+	ES: 'es-ES',
+	MX: 'es-ES',
+	AR: 'es-ES',
+	BR: 'es-ES',
+	CO: 'es-ES',
+	CL: 'es-ES',
+	PE: 'es-ES',
+	// Arabic
+	SA: 'ar-SA',
+	AE: 'ar-SA',
+	EG: 'ar-SA',
+	QA: 'ar-SA',
+	KW: 'ar-SA',
+	// English-speaking (explicit; everything unlisted also falls through to en-US)
+	US: 'en-US',
+	GB: 'en-US',
+	CA: 'en-US',
+	AU: 'en-US',
+	NZ: 'en-US',
+	IE: 'en-US',
+	IN: 'en-US',
+	ZA: 'en-US',
+	NG: 'en-US',
 }
 
-export interface CityEntry {
-	/** Display name (English-friendly form). */
-	name: string
-	/** IANA Olson zone. MUST be present in `Intl.supportedValuesOf('timeZone')`. */
-	timezone: string
-}
-
-export const COUNTRIES: readonly CountryEntry[] = [
-	{
-		code: 'TR',
-		name: 'Türkiye',
-		region: 'europe',
-		defaultLocale: 'tr-TR',
-		cities: [
-			{name: 'Istanbul', timezone: 'Europe/Istanbul'},
-			{name: 'Ankara', timezone: 'Europe/Istanbul'},
-			{name: 'Izmir', timezone: 'Europe/Istanbul'},
-			{name: 'Bursa', timezone: 'Europe/Istanbul'},
-			{name: 'Antalya', timezone: 'Europe/Istanbul'},
-		],
-	},
-	{
-		code: 'US',
-		name: 'United States',
-		region: 'north-america',
-		defaultLocale: 'en-US',
-		cities: [
-			{name: 'New York', timezone: 'America/New_York'},
-			{name: 'Los Angeles', timezone: 'America/Los_Angeles'},
-			{name: 'Chicago', timezone: 'America/Chicago'},
-			{name: 'Denver', timezone: 'America/Denver'},
-			{name: 'San Francisco', timezone: 'America/Los_Angeles'},
-		],
-	},
-	{
-		code: 'DE',
-		name: 'Germany',
-		region: 'europe',
-		defaultLocale: 'de-DE',
-		cities: [
-			{name: 'Berlin', timezone: 'Europe/Berlin'},
-			{name: 'Munich', timezone: 'Europe/Berlin'},
-			{name: 'Hamburg', timezone: 'Europe/Berlin'},
-			{name: 'Frankfurt', timezone: 'Europe/Berlin'},
-		],
-	},
-	{
-		code: 'GB',
-		name: 'United Kingdom',
-		region: 'europe',
-		defaultLocale: 'en-US',
-		cities: [
-			{name: 'London', timezone: 'Europe/London'},
-			{name: 'Manchester', timezone: 'Europe/London'},
-			{name: 'Edinburgh', timezone: 'Europe/London'},
-		],
-	},
-	{
-		code: 'FR',
-		name: 'France',
-		region: 'europe',
-		defaultLocale: 'fr-FR',
-		cities: [
-			{name: 'Paris', timezone: 'Europe/Paris'},
-			{name: 'Lyon', timezone: 'Europe/Paris'},
-			{name: 'Marseille', timezone: 'Europe/Paris'},
-		],
-	},
-	{
-		code: 'ES',
-		name: 'Spain',
-		region: 'europe',
-		defaultLocale: 'es-ES',
-		cities: [
-			{name: 'Madrid', timezone: 'Europe/Madrid'},
-			{name: 'Barcelona', timezone: 'Europe/Madrid'},
-			{name: 'Valencia', timezone: 'Europe/Madrid'},
-		],
-	},
-	{
-		code: 'IT',
-		name: 'Italy',
-		region: 'europe',
-		defaultLocale: 'en-US',
-		cities: [
-			{name: 'Rome', timezone: 'Europe/Rome'},
-			{name: 'Milan', timezone: 'Europe/Rome'},
-			{name: 'Naples', timezone: 'Europe/Rome'},
-		],
-	},
-	{
-		code: 'NL',
-		name: 'Netherlands',
-		region: 'europe',
-		defaultLocale: 'en-US',
-		cities: [
-			{name: 'Amsterdam', timezone: 'Europe/Amsterdam'},
-			{name: 'Rotterdam', timezone: 'Europe/Amsterdam'},
-		],
-	},
-	{
-		code: 'SE',
-		name: 'Sweden',
-		region: 'europe',
-		defaultLocale: 'en-US',
-		cities: [{name: 'Stockholm', timezone: 'Europe/Stockholm'}],
-	},
-	{
-		code: 'PL',
-		name: 'Poland',
-		region: 'europe',
-		defaultLocale: 'en-US',
-		cities: [{name: 'Warsaw', timezone: 'Europe/Warsaw'}],
-	},
-	{
-		code: 'RU',
-		name: 'Russia',
-		region: 'europe',
-		defaultLocale: 'en-US',
-		cities: [
-			{name: 'Moscow', timezone: 'Europe/Moscow'},
-			{name: 'Saint Petersburg', timezone: 'Europe/Moscow'},
-		],
-	},
-	{
-		code: 'AE',
-		name: 'United Arab Emirates',
-		region: 'asia',
-		defaultLocale: 'ar-SA',
-		cities: [
-			{name: 'Dubai', timezone: 'Asia/Dubai'},
-			{name: 'Abu Dhabi', timezone: 'Asia/Dubai'},
-		],
-	},
-	{
-		code: 'SA',
-		name: 'Saudi Arabia',
-		region: 'asia',
-		defaultLocale: 'ar-SA',
-		cities: [
-			{name: 'Riyadh', timezone: 'Asia/Riyadh'},
-			{name: 'Jeddah', timezone: 'Asia/Riyadh'},
-		],
-	},
-	{
-		code: 'IN',
-		name: 'India',
-		region: 'asia',
-		defaultLocale: 'en-US',
-		cities: [
-			{name: 'Mumbai', timezone: 'Asia/Kolkata'},
-			{name: 'New Delhi', timezone: 'Asia/Kolkata'},
-			{name: 'Bangalore', timezone: 'Asia/Kolkata'},
-		],
-	},
-	{
-		code: 'CN',
-		name: 'China',
-		region: 'asia',
-		defaultLocale: 'en-US',
-		cities: [
-			{name: 'Beijing', timezone: 'Asia/Shanghai'},
-			{name: 'Shanghai', timezone: 'Asia/Shanghai'},
-			{name: 'Shenzhen', timezone: 'Asia/Shanghai'},
-		],
-	},
-	{
-		code: 'JP',
-		name: 'Japan',
-		region: 'asia',
-		defaultLocale: 'en-US',
-		cities: [
-			{name: 'Tokyo', timezone: 'Asia/Tokyo'},
-			{name: 'Osaka', timezone: 'Asia/Tokyo'},
-		],
-	},
-	{
-		code: 'KR',
-		name: 'South Korea',
-		region: 'asia',
-		defaultLocale: 'en-US',
-		cities: [{name: 'Seoul', timezone: 'Asia/Seoul'}],
-	},
-	{
-		code: 'AU',
-		name: 'Australia',
-		region: 'oceania',
-		defaultLocale: 'en-US',
-		cities: [
-			{name: 'Sydney', timezone: 'Australia/Sydney'},
-			{name: 'Melbourne', timezone: 'Australia/Melbourne'},
-			{name: 'Brisbane', timezone: 'Australia/Brisbane'},
-			{name: 'Perth', timezone: 'Australia/Perth'},
-		],
-	},
-	{
-		code: 'NZ',
-		name: 'New Zealand',
-		region: 'oceania',
-		defaultLocale: 'en-US',
-		cities: [{name: 'Auckland', timezone: 'Pacific/Auckland'}],
-	},
-	{
-		code: 'BR',
-		name: 'Brazil',
-		region: 'south-america',
-		defaultLocale: 'es-ES',
-		cities: [
-			{name: 'São Paulo', timezone: 'America/Sao_Paulo'},
-			{name: 'Rio de Janeiro', timezone: 'America/Sao_Paulo'},
-		],
-	},
-	{
-		code: 'AR',
-		name: 'Argentina',
-		region: 'south-america',
-		defaultLocale: 'es-ES',
-		cities: [{name: 'Buenos Aires', timezone: 'America/Argentina/Buenos_Aires'}],
-	},
-	{
-		code: 'MX',
-		name: 'Mexico',
-		region: 'north-america',
-		defaultLocale: 'es-ES',
-		cities: [
-			{name: 'Mexico City', timezone: 'America/Mexico_City'},
-			{name: 'Guadalajara', timezone: 'America/Mexico_City'},
-		],
-	},
-	{
-		code: 'CA',
-		name: 'Canada',
-		region: 'north-america',
-		defaultLocale: 'en-US',
-		cities: [
-			{name: 'Toronto', timezone: 'America/Toronto'},
-			{name: 'Vancouver', timezone: 'America/Vancouver'},
-			{name: 'Montreal', timezone: 'America/Toronto'},
-		],
-	},
-	{
-		code: 'ZA',
-		name: 'South Africa',
-		region: 'africa',
-		defaultLocale: 'en-US',
-		cities: [{name: 'Johannesburg', timezone: 'Africa/Johannesburg'}],
-	},
-	{
-		code: 'EG',
-		name: 'Egypt',
-		region: 'africa',
-		defaultLocale: 'ar-SA',
-		cities: [{name: 'Cairo', timezone: 'Africa/Cairo'}],
-	},
-	{
-		code: 'NG',
-		name: 'Nigeria',
-		region: 'africa',
-		defaultLocale: 'en-US',
-		cities: [{name: 'Lagos', timezone: 'Africa/Lagos'}],
-	},
-] as const
-
-const COUNTRY_INDEX = new Map<string, CountryEntry>(
-	COUNTRIES.map((c) => [c.code, c] as const),
-)
-
-export function getCountry(code: string): CountryEntry | undefined {
-	return COUNTRY_INDEX.get(code.toUpperCase())
+/** Resolve the UI locale for an ISO2 country code. Defaults to en-US. */
+export function localeFor(iso2: string): SupportedLocale {
+	return COUNTRY_LOCALE[iso2.toUpperCase()] ?? 'en-US'
 }
 
 /**
- * Resolve a (countryCode, cityName) pair to the full derived shape.
+ * Map the dataset's region/subregion onto the 6-value LocationRegion union.
  *
- * Returns null if either lookup misses. Defense in depth — the
- * `setup.setLocation` tRPC procedure layers a zod gate before this call,
- * and the timezoneService.validate() Intl gate is layered after.
+ *   Europe   → europe
+ *   Asia     → asia
+ *   Africa   → africa
+ *   Oceania  → oceania
+ *   Americas → south-america when subregion === 'South America', else north-america
+ *   (empty / Polar / unknown) → oceania (defensive default; matches the old
+ *     catalog's habit of never leaving region unset).
  */
-export function resolveLocation(
-	countryCode: string,
-	cityName: string,
-): {
+export function regionFor(region: string, subregion: string): LocationRegion {
+	switch (region) {
+		case 'Europe':
+			return 'europe'
+		case 'Asia':
+			return 'asia'
+		case 'Africa':
+			return 'africa'
+		case 'Oceania':
+			return 'oceania'
+		case 'Americas':
+			return subregion === 'South America' ? 'south-america' : 'north-america'
+		default:
+			// '', 'Polar', or any future/unknown region.
+			return 'oceania'
+	}
+}
+
+// ─── Async dataset-backed helpers ────────────────────────────────────────
+
+export interface CountryListItem {
+	/** ISO-3166-1 alpha-2 (uppercase). */
+	code: string
+	name: string
+	region: LocationRegion
+}
+
+export interface StateListItem {
+	/** State code (the dataset's IState.iso2 — e.g. 'CA', 'IN'). */
+	code: string
+	name: string
+}
+
+export interface CityListItem {
+	/** Dataset city id (number; serialized as-is over tRPC). */
+	id: number
+	name: string
+	/** IANA Olson zone (resolved with the country fallback already applied). */
+	timezone: string
+}
+
+export interface ResolvedCity {
 	country: string
 	city: string
 	region: LocationRegion
 	timezone: string
 	locale: SupportedLocale
-} | null {
-	const country = getCountry(countryCode)
-	if (!country) return null
-	const city = country.cities.find((c) => c.name === cityName)
+}
+
+/** All countries, mapped to {code, name, region} and sorted by name. */
+export async function listCountries(): Promise<CountryListItem[]> {
+	const countries = await getCountries()
+	return countries
+		.map((c) => ({
+			code: c.iso2.toUpperCase(),
+			name: c.name,
+			region: regionFor(c.region, c.subregion),
+		}))
+		.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * States/provinces for a country, mapped to {code, name} and sorted by name.
+ * Returns [] for states-less countries (the UI hides the State select when this
+ * is empty and the City select then drives off getAllCitiesOfCountry).
+ */
+export async function listStates(country: string): Promise<StateListItem[]> {
+	const cc = country.toUpperCase()
+	const states = await getStatesOfCountry(cc)
+	return states
+		.map((s) => ({code: s.iso2, name: s.name}))
+		.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** Resolve a primary country zone for the rare null-timezone city fallback. */
+async function countryFallbackZone(country: string): Promise<string> {
+	try {
+		const zones = await getCountryTimezones(country.toUpperCase())
+		return zones[0] ?? 'UTC'
+	} catch {
+		return 'UTC'
+	}
+}
+
+/**
+ * Cities for a (country, state?) pair, mapped to {id, name, timezone} and
+ * sorted by name. When `state` is omitted (states-less country) we load every
+ * city in the country via getAllCitiesOfCountry. The timezone is read straight
+ * off the city; the country's primary zone is substituted when a city's
+ * timezone is ever null.
+ */
+export async function listCities(
+	country: string,
+	state?: string,
+): Promise<CityListItem[]> {
+	const cc = country.toUpperCase()
+	const cities: ICity[] = state
+		? await getCitiesOfState(cc, state)
+		: await getAllCitiesOfCountry(cc)
+
+	let fallback: string | null = null
+	const out: CityListItem[] = []
+	for (const c of cities) {
+		let tz = c.timezone
+		if (!tz) {
+			if (fallback === null) fallback = await countryFallbackZone(cc)
+			tz = fallback
+		}
+		out.push({id: c.id, name: c.name, timezone: tz})
+	}
+	return out.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * Resolve a (country, state?, cityId) selection to the full derived shape used
+ * by `setup.setLocation`. Returns null when the country or city lookup misses.
+ *
+ * Defense-in-depth: the tRPC procedure layers a zod gate before this call and
+ * the timezoneService.validate() Intl gate after.
+ */
+export async function resolveCity(
+	country: string,
+	state: string | undefined,
+	cityId: number,
+): Promise<ResolvedCity | null> {
+	const cc = country.toUpperCase()
+
+	const countries = await getCountries()
+	const countryRow = countries.find((c) => c.iso2.toUpperCase() === cc)
+	if (!countryRow) return null
+
+	// getCityById requires a state code. For states-less countries (or when the
+	// caller didn't pass one) fall back to scanning all cities of the country.
+	let city: ICity | null = null
+	if (state) {
+		city = await getCityById(cc, state, cityId)
+	}
+	if (!city) {
+		const all = await getAllCitiesOfCountry(cc)
+		city = all.find((c) => c.id === cityId) ?? null
+	}
 	if (!city) return null
+
+	const timezone = city.timezone ?? (await countryFallbackZone(cc))
+
 	return {
-		country: country.code,
+		country: cc,
 		city: city.name,
-		region: country.region,
-		timezone: city.timezone,
-		locale: country.defaultLocale,
+		region: regionFor(countryRow.region, countryRow.subregion),
+		timezone,
+		locale: localeFor(cc),
 	}
 }

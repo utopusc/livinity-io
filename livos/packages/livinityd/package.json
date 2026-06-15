@@ -60,6 +60,7 @@
 	},
 	"dependencies": {
 		"@ai-sdk/openai-compatible": "2.0.47",
+		"@countrystatecity/countries": "^1.0.7",
 		"@ai-sdk/xai": "3.0.91",
 		"@anthropic-ai/claude-agent-sdk": "^0.2.85",
 		"@anthropic-ai/sdk": "^0.80.0",
