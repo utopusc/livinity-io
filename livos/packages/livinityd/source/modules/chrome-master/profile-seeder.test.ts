@@ -332,4 +332,76 @@ describe('102-03-01 MasterProfileSeeder', () => {
 			expect(r.appDir).toBe(`${APP_PROFILE_PREFIX}${VALID_UUID}`)
 		})
 	})
+
+	describe('seed() — WS2 copyFromUuid (additional WebApp instance)', () => {
+		const BASE_UUID = 'abcdabcd-abcd-abcd-abcd-abcdabcdabcd'
+		const BASE_DIR = `${WEBAPP_PROFILE_DIR}/${BASE_UUID}`
+
+		it('copies from the base webapp profile (NOT master) into a throwaway /tmp dir', async () => {
+			const execFn = makeOkExec()
+			// makeOkAccess resolves the base-dir existence probe → copy from base.
+			const seeder = createProfileSeeder({
+				execFileFn: execFn as never,
+				accessFn: makeOkAccess() as never,
+				mkdirFn: makeOkMkdir() as never,
+				uuidFn: () => VALID_UUID,
+			})
+			const r = await seeder.seed({copyFromUuid: BASE_UUID})
+			// Throwaway target (not persistent) so close() cleans it up.
+			expect(r.persistent).toBe(false)
+			expect(r.appDir).toBe(`${APP_PROFILE_PREFIX}${VALID_UUID}`)
+			// cp source is the BASE webapp profile, not the master.
+			const cpCall = execFn.mock.calls.find(
+				(c) => c[0] === 'cp' && (c[1] as string[]).includes('--reflink=auto'),
+			)
+			expect(cpCall).toBeDefined()
+			expect(cpCall![1]).toEqual([
+				'-r',
+				'--reflink=auto',
+				BASE_DIR,
+				`${APP_PROFILE_PREFIX}${VALID_UUID}`,
+			])
+		})
+
+		it('falls back to master when the base profile dir does not exist yet', async () => {
+			const execFn = makeOkExec()
+			// Reject ONLY the base-dir probe; master + prefs resolve.
+			const accessFn = vi.fn(async (p: string) => {
+				if (p === BASE_DIR) throw Object.assign(new Error('ENOENT'), {code: 'ENOENT'})
+			})
+			const seeder = createProfileSeeder({
+				execFileFn: execFn as never,
+				accessFn: accessFn as never,
+				mkdirFn: makeOkMkdir() as never,
+				uuidFn: () => VALID_UUID,
+			})
+			const r = await seeder.seed({copyFromUuid: BASE_UUID})
+			expect(r.persistent).toBe(false)
+			const cpCall = execFn.mock.calls.find(
+				(c) => c[0] === 'cp' && (c[1] as string[]).includes('--reflink=auto'),
+			)
+			expect(cpCall).toBeDefined()
+			// Fell back to the master profile (also logged in) as the copy source.
+			expect(cpCall![1]).toEqual([
+				'-r',
+				'--reflink=auto',
+				MASTER_PROFILE_DIR,
+				`${APP_PROFILE_PREFIX}${VALID_UUID}`,
+			])
+		})
+
+		it('rejects an invalid copyFromUuid with ProfileSeederInputError; cp never called', async () => {
+			const execFn = makeOkExec()
+			const seeder = createProfileSeeder({
+				execFileFn: execFn as never,
+				accessFn: makeOkAccess() as never,
+				mkdirFn: makeOkMkdir() as never,
+				uuidFn: () => VALID_UUID,
+			})
+			await expect(seeder.seed({copyFromUuid: '../../etc'})).rejects.toThrow(
+				ProfileSeederInputError,
+			)
+			expect(execFn.mock.calls.find((c) => c[0] === 'cp')).toBeUndefined()
+		})
+	})
 })

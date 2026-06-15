@@ -190,7 +190,13 @@ export default function WebAppStreamWindow({webappId, windowId}: WebAppStreamWin
 		if (!webapp) return
 		setSpawnError(null)
 		spawnMutationRef.current.mutate(
-			{webappId, url: webapp.url, expectedTitle: webapp.title ?? undefined},
+			// WS2 (WebApp multi-instance) — pass the per-window instanceId (the
+			// WindowManager windowId) so each window of the same webappId spawns
+			// its OWN Chrome/Xvfb/stream: a 2nd click opens a 2nd independent
+			// screen rather than mirroring the first. When windowId is absent
+			// (component rendered outside the WindowManager tree) the backend
+			// falls back to single-instance keying on webappId.
+			{webappId, url: webapp.url, expectedTitle: webapp.title ?? undefined, instanceId: windowId},
 			{
 				onSuccess: (res) => {
 					setWsUrl(res.wsUrl)
@@ -205,7 +211,7 @@ export default function WebAppStreamWindow({webappId, windowId}: WebAppStreamWin
 				},
 			},
 		)
-	}, [webapp, webappId])
+	}, [webapp, webappId, windowId])
 
 	useEffect(() => {
 		if (!webapp || wsUrl || spawnError) return
@@ -247,7 +253,10 @@ export default function WebAppStreamWindow({webappId, windowId}: WebAppStreamWin
 		}
 		const handler = async () => {
 			try {
-				await closeMutationRef.current.mutateAsync({webappId})
+				// WS2 — close THIS window's instance (windowId is the instanceId),
+				// not every window of the webappId. Present here because the
+				// registry path only runs when windowId is defined.
+				await closeMutationRef.current.mutateAsync({webappId, instanceId: windowId})
 			} catch {
 				// Non-blocking — reaper-style backstop owns retries
 			}

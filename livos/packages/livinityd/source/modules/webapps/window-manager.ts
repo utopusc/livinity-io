@@ -4,7 +4,10 @@
  * Orchestrator class. Composes window-discovery + StreamManager + per-app
  * primitives (DisplayAllocator + spawnXvfb + ProfileSeeder + spawnChromeProcess
  * + PortAllocator) into the spawn / focus / close / list surface for WebApps.
- * Owns Map<webappId, ActiveWebApp> and the idle-cleanup poller (5s xprop poll).
+ * Owns Map<instanceId, ActiveWebApp> and the idle-cleanup poller (5s xprop
+ * poll). WS2 — the map is keyed by per-window instanceId (the UI windowId), so
+ * multiple windows of the SAME webappId run as independent instances; legacy
+ * callers that omit instanceId fall back to webappId-keying (single-instance).
  *
  * Algorithm — spawn() (Phase 102-04 per-app-display):
  *   1. Idempotency check (existing alive entry → return existing handle).
@@ -278,6 +281,17 @@ export type WebAppWindowManagerOpts = {
 
 type ActiveWebApp = {
 	webappId: string
+	/**
+	 * WS2 — per-window instance key (the active map key). Equals the UI
+	 * windowId for multi-instance launches, or webappId for legacy callers.
+	 */
+	instanceId: string
+	/**
+	 * WS2 — true when this is the PRIMARY instance of its webappId (binds the
+	 * persistent base profile directly). Additional instances are copies.
+	 * Mirrors `profilePersistent` today but kept distinct for clarity/logging.
+	 */
+	isPrimary: boolean
 	userId: string
 	/**
 	 * Phase 102-04 — vestigial wid field. Always 0 under per-app-display
@@ -322,6 +336,21 @@ export type SpawnOpts = {
 	url: string
 	expectedTitle?: string
 	desktopUid?: number
+	/**
+	 * WS2 (WebApp multi-instance, Option A) — per-WINDOW identity. The active
+	 * map is keyed on this so each window of the SAME webappId gets its OWN
+	 * Xvfb + Chrome + stream (a second click opens a second independent screen,
+	 * not a mirror of the first). The UI passes the WindowManager windowId
+	 * (unique per window). When omitted, defaults to webappId — preserving the
+	 * pre-WS2 single-instance, idempotent-on-webappId behavior for legacy
+	 * callers and unit tests.
+	 *
+	 * The FIRST live instance of a (userId, webappId) is the PRIMARY: it binds
+	 * the persistent base profile directly (read-write, login persists). Every
+	 * additional concurrent instance gets a throwaway COPY of that base so it
+	 * starts logged in without sharing a --user-data-dir.
+	 */
+	instanceId?: string
 }
 
 export type SpawnResult = {
@@ -333,6 +362,15 @@ export type SpawnResult = {
 
 export class WebAppWindowManager {
 	private readonly active = new Map<string, ActiveWebApp>()
+	/**
+	 * WS2 — synchronous "primary reservation" set keyed by `${userId}::${webappId}`.
+	 * spawn() determines whether it's the PRIMARY (base-profile-binding) instance
+	 * by checking the active map; but two windows opened near-simultaneously both
+	 * pass that check before either's entry lands (there are awaits before step 10).
+	 * Reserving the slot synchronously here makes the SECOND concurrent spawn fall
+	 * through to the copy path, so they never collide on the one base --user-data-dir.
+	 */
+	private readonly primaryInFlight = new Set<string>()
 	private idleTimer: ReturnType<typeof setInterval> | null = null
 	private readonly streamManager: WebAppWindowManagerOpts['streamManager']
 	private readonly spawnFactory: SpawnFactory
@@ -424,8 +462,16 @@ export class WebAppWindowManager {
 	 * so the display.release() at the end ALWAYS runs.
 	 */
 	async spawn(opts: SpawnOpts): Promise<SpawnResult> {
-		// 1. Idempotency check — return existing entry if still alive.
-		const existing = this.active.get(opts.webappId)
+		// WS2 — per-window instance key. Each window of the same webappId gets its
+		// own entry (and thus its own Xvfb/Chrome/stream). Legacy callers omit
+		// instanceId → key falls back to webappId (single-instance, unchanged).
+		const instanceKey = opts.instanceId ?? opts.webappId
+
+		// 1. Idempotency check — return existing entry if still alive. Keyed on the
+		// per-window instanceKey so a re-fired spawn for the SAME window (component
+		// remount) reuses the handle, while a NEW window (new instanceKey) spawns a
+		// fresh instance.
+		const existing = this.active.get(instanceKey)
 		if (existing && existing.userId === opts.userId) {
 			return {
 				webappId: existing.webappId,
@@ -435,11 +481,23 @@ export class WebAppWindowManager {
 			}
 		}
 
-		// 2. Per-user webapp cap (STRIDE D).
+		// 2. Per-user webapp cap (STRIDE D) — now counts INSTANCES, not webapps.
 		const userActive = Array.from(this.active.values()).filter((a) => a.userId === opts.userId)
 		if (userActive.length >= this.webappCap) {
 			throw new WebappCapExceededError(this.webappCap)
 		}
+
+		// WS2 — PRIMARY determination. The first live instance of a (userId,
+		// webappId) binds the persistent base profile directly (read-write, login
+		// persists); additional instances get a throwaway COPY of that base. The
+		// check + reservation are synchronous (no await between) so two concurrent
+		// first-opens don't both claim primary and collide on one --user-data-dir.
+		const sibKey = `${opts.userId}::${opts.webappId}`
+		const hasLiveSibling = Array.from(this.active.values()).some(
+			(a) => a.webappId === opts.webappId && a.userId === opts.userId,
+		)
+		const isPrimary = !hasLiveSibling && !this.primaryInFlight.has(sibKey)
+		if (isPrimary) this.primaryInFlight.add(sibKey)
 
 		// 3. Allocate a display number.
 		const displayN = this.displayAllocator.allocate()
@@ -480,13 +538,16 @@ export class WebAppWindowManager {
 				}
 			}
 
-			// 6. Seed master profile (uuid = webappId for traceability).
-			// Phase 259 — PERSISTENT per-WebApp profile: keyed by webappId (a UUID),
-			// it lives on the livos data volume and is REUSED on the next open so the
-			// WebApp's login + state survive close + reboot (operator requirement:
-			// "kapanınca veri gitmesin"). webappId idempotency (step 1) + the unique
-			// key mean two concurrent opens never collide on one --user-data-dir.
-			seed = await this.profileSeeder.seed({uuid: opts.webappId, persistent: true})
+			// 6. Seed the profile. WS2: the PRIMARY instance binds the PERSISTENT
+			// per-WebApp profile (/opt/livos/data/chrome-webapps/<webappId>) directly —
+			// REUSED across opens so the WebApp's login + state survive close + reboot
+			// (operator requirement "kapanınca veri gitmesin"). ADDITIONAL instances
+			// get a THROWAWAY copy of that base (copyFromUuid) so each extra window
+			// starts logged in WITHOUT sharing the base --user-data-dir (Chrome's
+			// process-singleton would otherwise merge the windows into one).
+			seed = isPrimary
+				? await this.profileSeeder.seed({uuid: opts.webappId, persistent: true})
+				: await this.profileSeeder.seed({persistent: false, copyFromUuid: opts.webappId})
 
 			// 7. Spawn per-app Chrome subprocess on :N with seeded profile.
 			chrome = await this.chromeSpawnFn({
@@ -509,9 +570,11 @@ export class WebAppWindowManager {
 				target: {display},
 			})
 
-			// 10. Insert ActiveWebApp map entry.
+			// 10. Insert ActiveWebApp map entry (keyed on instanceKey under WS2).
 			const entry: ActiveWebApp = {
 				webappId: opts.webappId,
+				instanceId: instanceKey,
+				isPrimary,
 				userId: opts.userId,
 				wid: 0, // vestigial under 102-04 — display is identity
 				displayN,
@@ -528,9 +591,13 @@ export class WebAppWindowManager {
 				geometryTracker: null,
 				url: opts.url,
 			}
-			this.active.set(opts.webappId, entry)
+			this.active.set(instanceKey, entry)
+			// WS2 — the entry now satisfies the live-sibling check, so release the
+			// synchronous primary reservation (a concurrent spawn already settled
+			// its own isPrimary before reaching this point).
+			if (isPrimary) this.primaryInFlight.delete(sibKey)
 			this.logger?.info?.(
-				`webapp ${opts.webappId} spawned (user=${opts.userId} display=${display} chromePid=${chrome.pid} streamId=${entry.streamId})`,
+				`webapp ${opts.webappId} spawned (user=${opts.userId} instance=${instanceKey} primary=${isPrimary} display=${display} chromePid=${chrome.pid} streamId=${entry.streamId})`,
 			)
 
 			// Phase 255-03 (D-255-WEBAPP-REGISTER) — adopt the already-running
@@ -600,6 +667,8 @@ export class WebAppWindowManager {
 				wsUrl: entry.wsUrl,
 			}
 		} catch (err) {
+			// WS2 — release the primary reservation so a retry can reclaim it.
+			if (isPrimary) this.primaryInFlight.delete(sibKey)
 			// Compensating cleanup — REVERSE order. Each step try/catch so a
 			// failure in (e.g.) chrome.stop() doesn't prevent display.release().
 			if (chrome) {
@@ -655,7 +724,12 @@ export class WebAppWindowManager {
 	}
 
 	async focus(opts: {webappId: string; userId: string}): Promise<{ok: boolean; code?: string}> {
-		const entry = this.active.get(opts.webappId)
+		// WS2 — the active map is keyed by instanceId; resolve webappId → any live
+		// instance owned by the user (focus is a no-op under per-app display, so
+		// the first match is sufficient).
+		const entry = Array.from(this.active.values()).find(
+			(a) => a.webappId === opts.webappId && a.userId === opts.userId,
+		)
 		if (!entry || entry.userId !== opts.userId) return {ok: false, code: 'NOT_FOUND'}
 		// Phase 102-04 — under per-app-display, the wid is always 0. The legacy
 		// isWindowAlive(wid) check is meaningless; treat the entry as alive
@@ -708,15 +782,19 @@ export class WebAppWindowManager {
 		webappId: string
 		userId: string
 		killWindow?: boolean
+		instanceId?: string
 	}): Promise<{ok: boolean}> {
-		const entry = this.active.get(opts.webappId)
+		// WS2 — close a specific INSTANCE (window). Falls back to webappId for
+		// legacy callers (single-instance), mirroring spawn()'s keying.
+		const instanceKey = opts.instanceId ?? opts.webappId
+		const entry = this.active.get(instanceKey)
 		if (!entry) return {ok: true} // idempotent — no-op for missing entries
 		if (entry.userId !== opts.userId) return {ok: false}
 
 		// Eagerly remove from active so a concurrent close() races short-circuits
 		// on the missing-entry path above. All teardown work happens AFTER this
 		// line; failures don't put the entry back.
-		this.active.delete(opts.webappId)
+		this.active.delete(instanceKey)
 
 		// 1. Chrome SIGTERM → 2s grace → SIGKILL (handle owns the kill ladder).
 		if (entry.chromeHandle) {
@@ -953,8 +1031,12 @@ export class WebAppWindowManager {
 	 * Returns null if the user has no live entry for this webappId.
 	 */
 	getWidForWebapp(webappId: string, userId: string): number | null {
-		const entry = this.active.get(webappId)
-		if (!entry || entry.userId !== userId) return null
+		// WS2 — active map is keyed by instanceId; resolve webappId → first live
+		// instance for the user (vestigial post-270-RFB; wid is always 0).
+		const entry = Array.from(this.active.values()).find(
+			(a) => a.webappId === webappId && a.userId === userId,
+		)
+		if (!entry) return null
 		return entry.wid
 	}
 
@@ -967,8 +1049,12 @@ export class WebAppWindowManager {
 	 * Returns null if the user has no live entry for this webappId.
 	 */
 	getDisplayForWebapp(webappId: string, userId: string): string | null {
-		const entry = this.active.get(webappId)
-		if (!entry || entry.userId !== userId) return null
+		// WS2 — active map is keyed by instanceId; resolve webappId → first live
+		// instance for the user (vestigial post-270-RFB input dispatch removal).
+		const entry = Array.from(this.active.values()).find(
+			(a) => a.webappId === webappId && a.userId === userId,
+		)
+		if (!entry) return null
 		return entry.display
 	}
 
@@ -988,16 +1074,18 @@ export class WebAppWindowManager {
 
 	list(filter: {userId: string}): Array<{
 		webappId: string
-		windowId: number
+		instanceId: string
 		streamId: string
+		windowId: number
 		wsUrl: string
 		mode: 'pipewire-fd' | 'window-crop' | 'vnc-window'
 		url: string
 	}> {
 		const out: Array<{
 			webappId: string
-			windowId: number
+			instanceId: string
 			streamId: string
+			windowId: number
 			wsUrl: string
 			mode: 'pipewire-fd' | 'window-crop' | 'vnc-window'
 			url: string
@@ -1006,6 +1094,10 @@ export class WebAppWindowManager {
 			if (a.userId !== filter.userId) continue
 			out.push({
 				webappId: a.webappId,
+				// WS2 — per-window instance key (distinguishes multiple windows of
+				// the same webappId). Additive field; existing consumers that match
+				// on webappId still resolve the first instance.
+				instanceId: a.instanceId,
 				windowId: a.wid,
 				streamId: a.streamId,
 				wsUrl: a.wsUrl,
@@ -1022,17 +1114,24 @@ export class WebAppWindowManager {
 		// with a display-alive (`xdpyinfo :N`) check. For 102-04 the poller is
 		// a no-op stub.
 		const stale: string[] = []
-		for (const [webappId, entry] of this.active) {
+		for (const [instanceKey, entry] of this.active) {
 			if (entry.wid > 0) {
 				const alive = await this.discovery.isWindowAlive(entry.wid).catch(() => false)
-				if (!alive) stale.push(webappId)
+				if (!alive) stale.push(instanceKey)
 			}
 		}
-		for (const webappId of stale) {
-			const entry = this.active.get(webappId)
+		for (const instanceKey of stale) {
+			const entry = this.active.get(instanceKey)
 			if (!entry) continue
-			this.logger?.verbose?.(`webapp ${webappId}: idle-cleanup detected window-gone`)
-			await this.close({webappId, userId: entry.userId, killWindow: false})
+			this.logger?.verbose?.(
+				`webapp ${entry.webappId} (instance ${instanceKey}): idle-cleanup detected window-gone`,
+			)
+			await this.close({
+				webappId: entry.webappId,
+				userId: entry.userId,
+				killWindow: false,
+				instanceId: instanceKey,
+			})
 		}
 	}
 

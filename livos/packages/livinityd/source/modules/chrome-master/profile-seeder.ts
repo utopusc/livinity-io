@@ -148,6 +148,20 @@ export interface SeedOpts {
 	 * When false/absent → the legacy throwaway /tmp/livos-chrome-app-<uuid>.
 	 */
 	persistent?: boolean
+	/**
+	 * WS2 (WebApp multi-instance, Option A) — copy the seed FROM an existing
+	 * PERSISTENT per-WebApp profile (/opt/livos/data/chrome-webapps/<copyFromUuid>)
+	 * instead of from the master. Used for ADDITIONAL (non-primary) WebApp
+	 * instances: the primary window binds the persistent base dir directly
+	 * (read-write), and each extra window gets a THROWAWAY copy of that base so
+	 * it starts LOGGED IN yet never shares a --user-data-dir (Chrome's
+	 * process-singleton would otherwise merge them). MUST match RFC 4122 v4.
+	 * Only honored when `persistent` is falsy (the copy is always throwaway).
+	 * If the base dir does not yet exist (e.g. two windows opened concurrently
+	 * before the primary finished seeding), seed() falls back to the master —
+	 * which is also a logged-in Google profile, so the window is still logged in.
+	 */
+	copyFromUuid?: string
 }
 
 export interface ProfileSeederHandle {
@@ -237,24 +251,56 @@ export function createProfileSeeder(opts: ProfileSeederOpts = {}): ProfileSeeder
 				}
 			}
 
+			// WS2 (Option A) — the copy SOURCE. Defaults to master; additional
+			// WebApp instances override it to the base webapp profile via
+			// copyFromUuid (clone the already-logged-in persistent dir). Declared
+			// here so the success log below can report the real source.
+			let copySource = masterDir
 			if (!reused) {
-				// Master must exist BEFORE we attempt cp. Without this guard, cp
-				// would surface a less-actionable ENOENT.
-				try {
-					await accFn(masterDir, fsConstants.R_OK | fsConstants.X_OK)
-				} catch {
-					throw new MasterProfileMissingError(masterDir)
+				if (!persistent && seedOpts.copyFromUuid) {
+					// T-102-03 — validate BEFORE filesystem interpolation.
+					if (!UUID_RE.test(seedOpts.copyFromUuid)) {
+						throw new ProfileSeederInputError(
+							'PROFILE_INVALID_UUID',
+							`copyFromUuid must match RFC 4122 v4 (got: ${JSON.stringify(seedOpts.copyFromUuid)})`,
+						)
+					}
+					const baseDir = `${webappDir}/${seedOpts.copyFromUuid}`
+					try {
+						await accFn(baseDir, fsConstants.R_OK | fsConstants.X_OK)
+						copySource = baseDir
+					} catch {
+						// Base not seeded yet (e.g. two windows opened concurrently
+						// before the primary finished its first seed) — fall back to
+						// master, which is also a logged-in profile so the extra
+						// window still starts logged in.
+						log.warn?.(
+							`profile-seeder: copyFromUuid base ${baseDir} missing — falling back to master`,
+						)
+						copySource = masterDir
+					}
+				}
+
+				// The master (or fallback) must exist BEFORE we attempt cp.
+				// Without this guard, cp would surface a less-actionable ENOENT.
+				// A copy from an existing base dir was already access-checked above.
+				if (copySource === masterDir) {
+					try {
+						await accFn(masterDir, fsConstants.R_OK | fsConstants.X_OK)
+					} catch {
+						throw new MasterProfileMissingError(masterDir)
+					}
 				}
 
 				// A1 — CoW reflink first; fall back to plain cp -r on rejection.
 				try {
-					await execP('cp', ['-r', '--reflink=auto', masterDir, appDir])
+					await execP('cp', ['-r', '--reflink=auto', copySource, appDir])
 				} catch (err) {
 					log.warn?.(
 						`profile-seeder: cp --reflink=auto failed (likely non-CoW fs) — retrying plain cp -r`,
 						err,
 					)
-					await execP('cp', ['-r', masterDir, appDir])
+					await execP('cp', ['-r', copySource, appDir])
 				}
 			}
 
@@ -329,7 +375,7 @@ export function createProfileSeeder(opts: ProfileSeederOpts = {}): ProfileSeeder
 			log.info?.(
 				reused
 					? `profile-seeder: reused persistent ${appDir} in ${Date.now() - t0}ms`
-					: `profile-seeder: seeded ${appDir} from ${masterDir} in ${Date.now() - t0}ms`,
+					: `profile-seeder: seeded ${appDir} from ${copySource} in ${Date.now() - t0}ms`,
 			)
 			return {uuid, appDir, persistent}
 		},
