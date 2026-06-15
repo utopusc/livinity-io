@@ -97,11 +97,11 @@ const MODES: ReadonlyArray<{id: WebAppDrawerMode; label: string; Icon: LucideIco
 	{id: 'teach', label: 'Teach', Icon: GraduationCap},
 ]
 
-// Phase 159 — native windows render Chat-only (no Teach). Teach
-// recorder is webapp-DOM-scoped (uses webapp.input.* tRPC dispatch
-// against a Chrome canvas); native binaries are XTest-driven via
-// x11vnc with no DOM to record clicks against. Architectural omission
-// per RESEARCH A5.
+// Phase 159 — native windows render Chat-only (no Teach). The Teach
+// recorder is webapp-DOM-scoped: it passively observes capture-phase
+// clicks/keys on the noVNC canvas to record a skill. Native binaries are
+// XTest-driven via x11vnc with the same kind of canvas, but Teach was
+// scoped to WebApps only. Architectural omission per RESEARCH A5.
 const NATIVE_MODES: ReadonlyArray<{id: WebAppDrawerMode; label: string; Icon: LucideIcon}> = [
 	{id: 'chat', label: 'Chat', Icon: MessageCircle},
 ]

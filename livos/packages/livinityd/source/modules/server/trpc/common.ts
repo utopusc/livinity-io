@@ -449,15 +449,10 @@ export const httpOnlyPaths = [
 	'webapp.window.focus',
 	'webapp.window.close',
 	'webapp.window.list',
-	// Phase 100-07 — input dispatch routes. HTTP-only (per the same
-	// WS-reconnect-survival rationale as the rest of the webapp.* mutation
-	// cluster). High call rate during interactive use is OK — each call is
-	// a small POST.
-	'webapp.input.click',
-	'webapp.input.move',    // Phase 270-DRAG — bare pointer-move during a drag gesture (button held by prior mousedown)
-	'webapp.input.keypress',
-	'webapp.input.type',
-	'webapp.input.scroll',  // Phase 100-09-02 — wheel scroll events (deltaY/deltaX → button 4/5/6/7)
+	// Phase 270-RFB — the webapp.input.{click,move,keypress,type,scroll}
+	// HTTP-only entries were REMOVED. WebApp streams now forward real
+	// pointer/keyboard/scroll events over RFB (noVNC viewOnly:false), so
+	// there are no tRPC input routes left to register.
 	// v33 Phase 94 — webapp CRUD on the persisted `webapps` Postgres table
 	// (V33-WEBAPP-94-01). All four paths route via HTTP because:
 	//   - Mutations (create/delete/update) are autosave-adjacent — the

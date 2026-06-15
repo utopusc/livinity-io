@@ -1,16 +1,25 @@
 /**
- * Phase 100-07 — Input dispatcher for WebApp streams.
+ * Phase 100-07 — xdotool-based input dispatcher.
+ *
+ * Phase 270-RFB note: WebApp streams NO LONGER use this dispatcher. They now
+ * forward real pointer/keyboard/scroll events over RFB (noVNC viewOnly:false)
+ * straight into each WebApp's own Xvfb via x11vnc XTest — same model as native
+ * app streams. The webapp.input.* tRPC routes (and `dispatchMove`) were
+ * retired with that change.
+ *
+ * The remaining exports (`dispatchPointer`, `dispatchKey`, `dispatchType`,
+ * `dispatchScroll`) are kept for the Master Chrome Login feature
+ * (chrome-master/master-login-routes.ts), which drives a headless master
+ * Chrome on a dedicated display by wid via xdotool.
  *
  * Bypasses x11vnc input forwarding (which dispatches XTestFakeKey/MotionEvent
  * against the X11 display, defaulting to the focused window — wrong wid for
- * multi-stream). Instead, every click / move / key event lands here and is
- * routed through `xdotool --window <wid>` so it ALWAYS targets the captured
- * Chrome window for that WebApp, independent of X11 focus.
+ * multi-window). Instead, every click / key event lands here and is routed
+ * through an `xdotool windowactivate + click/key` chain so it ALWAYS targets
+ * the bound Chrome window, independent of X11 focus.
  *
- * Coordinates are in the captured framebuffer's pixel space (0..wid_w,
- * 0..wid_h). The frontend computes them from the canvas mouse event using
- * `getBoundingClientRect()` and the known `--window-size=1280,720` Chrome
- * spawn (Phase 100-06.1).
+ * Coordinates are in the framebuffer's pixel space (0..wid_w, 0..wid_h),
+ * known from the `--window-size=1280,720` Chrome spawn (Phase 100-06.1).
  *
  * Sacred SHA: liv/packages/core/src/sdk-agent-runner.ts unchanged.
  */
@@ -62,23 +71,13 @@ export type ClickKind = 'click' | 'mousedown' | 'mouseup' | 'doubleclick'
 /**
  * Dispatch a click (or mousedown/up) at (x, y) inside the given X11 wid.
  *
- * Phase 270-DRAG — drag-gesture support. `kind` now selects the xdotool
- * sub-command:
+ * `kind` selects the xdotool sub-command:
  *   - `'click'`       → `click <btn>`        (mousedown+mouseup atomic; tap)
  *   - `'doubleclick'` → `doubleclick <btn>`  (two clicks)
  *   - `'mousedown'`   → `mousedown <btn>`    (PRESS & HOLD button — stays
  *                        held at the X server across separate xdotool
- *                        invocations; the start of a drag gesture)
- *   - `'mouseup'`     → `mouseup <btn>`      (RELEASE the held button — the
- *                        end of a drag gesture)
- *
- * For a drag the frontend forwards: mousedown (at press point) → one or
- * more `dispatchMove` (cursor moves while button is held → content drags)
- * → mouseup (at release point). The held button persists between these
- * separate xdotool calls because XTEST button state is server-global, NOT
- * per-invocation. The activate/focus prefix is harmless mid-drag (it
- * raises/focuses the already-active wid; it does NOT release the held
- * button).
+ *                        invocations)
+ *   - `'mouseup'`     → `mouseup <btn>`      (RELEASE the held button)
  *
  * **Why `windowactivate` instead of `--window` on click:** Chrome (and many
  * GTK apps) ignore synthetic XSendEvent — `xdotool click --window <wid>`
@@ -169,70 +168,6 @@ export async function dispatchPointer(
 			'windowfocus', '--sync', widStr,
 			...mousemoveArgs,
 			kind, '--clearmodifiers', String(button),
-		],
-		optsForWidPath,
-	)
-}
-
-/**
- * Phase 270-DRAG — Dispatch a bare pointer MOVE to (x, y) inside the given
- * wid. ONLY moves the cursor — no button press/release. Used mid-drag: a
- * prior `dispatchPointer(..., 'mousedown')` has the button held down at the
- * X server, so moving the cursor here drags the held content along the
- * path. The frontend throttles these so we don't flood xdotool.
- *
- * Mirrors `dispatchPointer`'s display/wid resolution and the Chrome
- * XSendEvent-filter mitigation, but emits NO `click`/`mousedown`/`mouseup`
- * sub-command — just the activate/focus/move chain. Re-activating the wid
- * before each move is intentional and harmless: it keeps the dragged-onto
- * window focused and does NOT release the button held by the prior
- * mousedown (XTEST button state is server-global, independent of focus).
- */
-export async function dispatchMove(
-	wid: number,
-	x: number,
-	y: number,
-	display?: string,
-): Promise<void> {
-	if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error('invalid coords')
-	const ix = Math.max(0, Math.round(x))
-	const iy = Math.max(0, Math.round(y))
-
-	// Display-mode (per-app Xvfb, wid=0): discover the visible chrome window
-	// on :N and move the cursor. No button command — the drag button is
-	// already held from the prior mousedown.
-	if ((wid === 0 || !Number.isInteger(wid)) && display && /^:[1-9][0-9]?$/.test(display)) {
-		await execFileAsync(
-			'xdotool',
-			[
-				'search', '--onlyvisible', '--limit', '1', '--class', 'chrome',
-				'windowactivate', '--sync', '%@',
-				'windowfocus', '--sync', '%@',
-				'mousemove', String(ix), String(iy),
-			],
-			{timeout: DEFAULT_TIMEOUT_MS, display},
-		)
-		return
-	}
-
-	if (!Number.isInteger(wid) || wid <= 0) throw new Error(`invalid wid: ${wid}`)
-	const widStr = String(wid)
-	const optsForWidPath = display && /^:[1-9][0-9]?$/.test(display)
-		? {timeout: DEFAULT_TIMEOUT_MS, display}
-		: {timeout: DEFAULT_TIMEOUT_MS}
-	// Phase 103.1-9 — skip `mousemove --window --sync` on cross-display
-	// dispatch (it hangs on per-app Xvfb); absolute coords are correct
-	// because every LivOS Chrome sits at (0,0) on its own display.
-	const mousemoveArgs =
-		display && /^:[1-9][0-9]?$/.test(display)
-			? ['mousemove', String(ix), String(iy)]
-			: ['mousemove', '--window', widStr, '--sync', String(ix), String(iy)]
-	await execFileAsync(
-		'xdotool',
-		[
-			'windowactivate', '--sync', widStr,
-			'windowfocus', '--sync', widStr,
-			...mousemoveArgs,
 		],
 		optsForWidPath,
 	)
